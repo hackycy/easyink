@@ -1,0 +1,6 @@
+export { renderBarcode } from './barcode'
+export { renderImage } from './image'
+export { renderLine } from './line'
+export { renderRect } from './rect'
+export { renderTable } from './table'
+export { renderText } from './text'

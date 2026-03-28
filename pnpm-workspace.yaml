@@ -25,6 +25,7 @@ catalogs:
   inlined:
     '@antfu/utils': ^9.3.0
   testing:
+    happy-dom: ^17.4.4
     tinyexec: ^1.0.2
     vitest: ^4.0.7
     vitest-package-exports: ^0.1.1

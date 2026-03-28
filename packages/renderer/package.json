@@ -25,5 +25,8 @@
   "dependencies": {
     "@easyink/core": "workspace:*",
     "@easyink/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "happy-dom": "catalog:testing"
   }
 }
