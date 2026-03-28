@@ -133,6 +133,24 @@ export interface UpdatePageSettingsParams {
   newSettings: PageSettings
 }
 
+/**
+ * 切换元素显示/隐藏命令参数
+ */
+export interface UpdateVisibilityParams {
+  elementId: string
+  oldHidden: boolean
+  newHidden: boolean
+}
+
+/**
+ * 切换元素锁定命令参数
+ */
+export interface UpdateLockParams {
+  elementId: string
+  oldLocked: boolean
+  newLocked: boolean
+}
+
 // ─── Schema 操作回调（由 SchemaEngine 注入） ───
 
 /**
@@ -142,9 +160,12 @@ export interface UpdatePageSettingsParams {
 export interface SchemaOperations {
   getElement: (id: string) => ElementNode | undefined
   updateElementLayout: (id: string, layout: Partial<ElementLayout>) => void
+  updateElementLock: (id: string, locked: boolean) => void
   updateElementProps: (id: string, props: Record<string, unknown>) => void
   updateElementStyle: (id: string, style: Partial<ElementStyle>) => void
+  updateElementVisibility: (id: string, hidden: boolean) => void
   updateElementBinding: (id: string, binding?: DataBinding) => void
+  updateExtensions: (key: string, value: unknown) => void
   addElement: (element: ElementNode, index: number) => void
   removeElement: (id: string) => ElementNode | undefined
   reorderElement: (id: string, newIndex: number) => void

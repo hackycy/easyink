@@ -1,9 +1,13 @@
 import type { EasyInkEngine, ElementTypeDefinition, TemplateSchema } from '@easyink/core'
 import type { ScreenRenderer } from '@easyink/renderer'
 import type { InjectionKey, Ref, ShallowRef } from 'vue'
+import type { useBatchOperations } from './composables/use-batch-operations'
 import type { useCanvas } from './composables/use-canvas'
+import type { useGuides } from './composables/use-guides'
 import type { useInteraction } from './composables/use-interaction'
+import type { useMarquee } from './composables/use-marquee'
 import type { useSelection } from './composables/use-selection'
+import type { useSnapping } from './composables/use-snapping'
 import type { useLocale } from './locale/use-locale'
 
 // ─── 设计器配置 ───
@@ -57,6 +61,10 @@ export interface DesignerContext {
   canvas: ReturnType<typeof useCanvas>
   interaction: ReturnType<typeof useInteraction>
   locale: ReturnType<typeof useLocale>
+  marquee: ReturnType<typeof useMarquee>
+  batchOperations: ReturnType<typeof useBatchOperations>
+  snapping: ReturnType<typeof useSnapping>
+  guides: ReturnType<typeof useGuides>
   canUndo: Ref<boolean>
   canRedo: Ref<boolean>
   elementTypes: Ref<ElementTypeDefinition[]>
@@ -64,6 +72,14 @@ export interface DesignerContext {
   removeSelected: () => void
   undo: () => void
   redo: () => void
+}
+
+// ─── 辅助线 ───
+
+export interface GuideLineData {
+  id: string
+  orientation: 'horizontal' | 'vertical'
+  position: number
 }
 
 // ─── 注入键 ───

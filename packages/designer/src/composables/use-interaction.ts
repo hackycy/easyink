@@ -2,6 +2,7 @@ import type { EasyInkEngine } from '@easyink/core'
 import type { ResizeHandlePosition } from '../types'
 import type { useCanvas } from './use-canvas'
 import type { useSelection } from './use-selection'
+import type { useSnapping } from './use-snapping'
 import {
   createMoveElementCommand,
   createResizeElementCommand,
@@ -13,6 +14,7 @@ export function useInteraction(
   engine: EasyInkEngine,
   selection: ReturnType<typeof useSelection>,
   canvas: ReturnType<typeof useCanvas>,
+  snapping?: ReturnType<typeof useSnapping>,
 ) {
   const isDragging = ref(false)
   const isResizing = ref(false)
@@ -25,6 +27,8 @@ export function useInteraction(
   let _startElW = 0
   let _startElH = 0
   let _dragElementId = ''
+  let _isMultiDrag = false
+  let _multiDragStarts: Array<{ height: number, id: string, width: number, x: number, y: number }> = []
 
   function _pxToUnit(px: number): number {
     const unit = engine.schema.schema.page.unit
@@ -39,13 +43,52 @@ export function useInteraction(
       return
     }
 
+    // Check if this element is part of a multi-selection
+    const ids = selection.selectedIds.value
+    if (ids.length > 1 && ids.includes(elementId)) {
+      _startMultiDrag(e)
+      return
+    }
+
+    _isMultiDrag = false
     _dragElementId = elementId
     _startMouseX = e.clientX
     _startMouseY = e.clientY
     _startElX = el.layout.x ?? 0
     _startElY = el.layout.y ?? 0
+    _startElW = typeof el.layout.width === 'number' ? el.layout.width : 100
+    _startElH = typeof el.layout.height === 'number' ? el.layout.height : 60
     isDragging.value = true
 
+    document.addEventListener('mousemove', _onDragMove)
+    document.addEventListener('mouseup', _onDragEnd)
+  }
+
+  function _startMultiDrag(e: MouseEvent): void {
+    _isMultiDrag = true
+    _startMouseX = e.clientX
+    _startMouseY = e.clientY
+    _multiDragStarts = []
+
+    for (const id of selection.selectedIds.value) {
+      const el = engine.schema.getElementById(id)
+      if (!el || el.locked) {
+        continue
+      }
+      _multiDragStarts.push({
+        height: typeof el.layout.height === 'number' ? el.layout.height : 60,
+        id: el.id,
+        width: typeof el.layout.width === 'number' ? el.layout.width : 100,
+        x: el.layout.x ?? 0,
+        y: el.layout.y ?? 0,
+      })
+    }
+
+    if (_multiDragStarts.length === 0) {
+      return
+    }
+
+    isDragging.value = true
     document.addEventListener('mousemove', _onDragMove)
     document.addEventListener('mouseup', _onDragEnd)
   }
@@ -57,11 +100,51 @@ export function useInteraction(
     const dx = _pxToUnit(e.clientX - _startMouseX)
     const dy = _pxToUnit(e.clientY - _startMouseY)
 
-    // 实时更新（直接操作 Schema，不走 Command 避免栈膨胀）
-    engine.schema.operations.updateElementLayout(_dragElementId, {
-      x: _startElX + dx,
-      y: _startElY + dy,
-    })
+    if (_isMultiDrag) {
+      // Multi-element drag: apply snapping to bounding box
+      let adjustedDx = dx
+      let adjustedDy = dy
+      if (snapping && _multiDragStarts.length > 0) {
+        const bounds = _getMultiBounds(_multiDragStarts)
+        const result = snapping.calculateSnap(
+          '',
+          bounds.x + dx,
+          bounds.y + dy,
+          bounds.width,
+          bounds.height,
+          _multiDragStarts.map(s => s.id),
+        )
+        adjustedDx = result.adjustedX - bounds.x
+        adjustedDy = result.adjustedY - bounds.y
+      }
+      for (const start of _multiDragStarts) {
+        engine.schema.operations.updateElementLayout(start.id, {
+          x: start.x + adjustedDx,
+          y: start.y + adjustedDy,
+        })
+      }
+    }
+    else {
+      // Single element drag with snapping
+      let newX = _startElX + dx
+      let newY = _startElY + dy
+      if (snapping) {
+        const result = snapping.calculateSnap(
+          _dragElementId,
+          newX,
+          newY,
+          _startElW,
+          _startElH,
+          [_dragElementId],
+        )
+        newX = result.adjustedX
+        newY = result.adjustedY
+      }
+      engine.schema.operations.updateElementLayout(_dragElementId, {
+        x: newX,
+        y: newY,
+      })
+    }
   }
 
   function _onDragEnd(e: MouseEvent): void {
@@ -72,6 +155,7 @@ export function useInteraction(
       return
     }
     isDragging.value = false
+    snapping?.clearSnap()
 
     const dx = _pxToUnit(e.clientX - _startMouseX)
     const dy = _pxToUnit(e.clientY - _startMouseY)
@@ -79,19 +163,80 @@ export function useInteraction(
       return
     }
 
-    // 撤销实时变更然后用 Command 重做（保证 undo 正确）
-    engine.schema.operations.updateElementLayout(_dragElementId, {
-      x: _startElX,
-      y: _startElY,
-    })
-    const cmd = createMoveElementCommand({
-      elementId: _dragElementId,
-      newX: _startElX + dx,
-      newY: _startElY + dy,
-      oldX: _startElX,
-      oldY: _startElY,
-    }, engine.operations)
-    engine.execute(cmd)
+    if (_isMultiDrag) {
+      // Final snapped positions
+      let adjustedDx = dx
+      let adjustedDy = dy
+      if (snapping && _multiDragStarts.length > 0) {
+        const bounds = _getMultiBounds(_multiDragStarts)
+        const result = snapping.calculateSnap(
+          '',
+          bounds.x + dx,
+          bounds.y + dy,
+          bounds.width,
+          bounds.height,
+          _multiDragStarts.map(s => s.id),
+        )
+        adjustedDx = result.adjustedX - bounds.x
+        adjustedDy = result.adjustedY - bounds.y
+      }
+      // Revert all live changes
+      for (const start of _multiDragStarts) {
+        engine.schema.operations.updateElementLayout(start.id, {
+          x: start.x,
+          y: start.y,
+        })
+      }
+      // Execute as transaction
+      engine.commands.beginTransaction('批量移动')
+      for (const start of _multiDragStarts) {
+        const cmd = createMoveElementCommand({
+          elementId: start.id,
+          newX: start.x + adjustedDx,
+          newY: start.y + adjustedDy,
+          oldX: start.x,
+          oldY: start.y,
+        }, engine.operations)
+        engine.execute(cmd)
+      }
+      engine.commands.commitTransaction()
+    }
+    else {
+      // Single element: compute final snapped position
+      let newX = _startElX + dx
+      let newY = _startElY + dy
+      if (snapping) {
+        const result = snapping.calculateSnap(
+          _dragElementId,
+          newX,
+          newY,
+          _startElW,
+          _startElH,
+          [_dragElementId],
+        )
+        newX = result.adjustedX
+        newY = result.adjustedY
+      }
+
+      // Revert live changes
+      engine.schema.operations.updateElementLayout(_dragElementId, {
+        x: _startElX,
+        y: _startElY,
+      })
+
+      if (newX === _startElX && newY === _startElY) {
+        return
+      }
+
+      const cmd = createMoveElementCommand({
+        elementId: _dragElementId,
+        newX,
+        newY,
+        oldX: _startElX,
+        oldY: _startElY,
+      }, engine.operations)
+      engine.execute(cmd)
+    }
   }
 
   // ── Resize ──
@@ -172,6 +317,7 @@ export function useInteraction(
     }
     isResizing.value = false
     activeHandle.value = null
+    snapping?.clearSnap()
 
     const r = _computeResize(e)
     const noChange = r.x === _startElX && r.y === _startElY
@@ -208,6 +354,30 @@ export function useInteraction(
       oldWidth: _startElW,
     }, engine.operations)
     engine.execute(resizeCmd)
+  }
+
+  // ── Helpers ──
+
+  function _getMultiBounds(starts: typeof _multiDragStarts) {
+    let minX = Infinity
+    let minY = Infinity
+    let maxX = -Infinity
+    let maxY = -Infinity
+    for (const s of starts) {
+      if (s.x < minX) {
+        minX = s.x
+      }
+      if (s.y < minY) {
+        minY = s.y
+      }
+      if (s.x + s.width > maxX) {
+        maxX = s.x + s.width
+      }
+      if (s.y + s.height > maxY) {
+        maxY = s.y + s.height
+      }
+    }
+    return { height: maxY - minY, width: maxX - minX, x: minX, y: minY }
   }
 
   return { activeHandle, isDragging, isResizing, startDrag, startResize }

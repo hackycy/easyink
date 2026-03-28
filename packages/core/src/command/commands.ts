@@ -8,9 +8,11 @@ import type {
   RotateElementParams,
   SchemaOperations,
   UpdateBindingParams,
+  UpdateLockParams,
   UpdatePageSettingsParams,
   UpdatePropsParams,
   UpdateStyleParams,
+  UpdateVisibilityParams,
 } from './types'
 import { generateId } from '@easyink/shared'
 
@@ -296,6 +298,46 @@ export function createUpdatePageSettingsCommand(
     },
     undo() {
       ops.updatePageSettings(params.oldSettings)
+    },
+  }
+}
+
+/**
+ * 切换元素显示/隐藏命令
+ */
+export function createToggleLockCommand(
+  params: UpdateLockParams,
+  ops: SchemaOperations,
+): Command {
+  return {
+    id: generateId(),
+    type: 'toggle-lock',
+    description: `切换锁定 ${params.elementId}`,
+    execute() {
+      ops.updateElementLock(params.elementId, params.newLocked)
+    },
+    undo() {
+      ops.updateElementLock(params.elementId, params.oldLocked)
+    },
+  }
+}
+
+/**
+ * 切换元素显示/隐藏命令
+ */
+export function createToggleVisibilityCommand(
+  params: UpdateVisibilityParams,
+  ops: SchemaOperations,
+): Command {
+  return {
+    id: generateId(),
+    type: 'toggle-visibility',
+    description: `切换显示 ${params.elementId}`,
+    execute() {
+      ops.updateElementVisibility(params.elementId, params.newHidden)
+    },
+    undo() {
+      ops.updateElementVisibility(params.elementId, params.oldHidden)
     },
   }
 }

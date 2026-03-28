@@ -1,5 +1,10 @@
+import { createUpdateBindingCommand, toPixels } from '@easyink/core'
 import { defineComponent, h, inject, nextTick, onMounted, ref, watch } from 'vue'
 import { DESIGNER_INJECTION_KEY } from '../types'
+import { AlignmentGuides } from './AlignmentGuides'
+import { GuideLines } from './GuideLines'
+import { RulerHorizontal } from './RulerHorizontal'
+import { RulerVertical } from './RulerVertical'
 import { SelectionOverlay } from './SelectionOverlay'
 
 export const DesignCanvas = defineComponent({
@@ -8,6 +13,7 @@ export const DesignCanvas = defineComponent({
     const ctx = inject(DESIGNER_INJECTION_KEY)!
     const viewportRef = ref<HTMLElement | null>(null)
     const renderTargetRef = ref<HTMLElement | null>(null)
+    const pageWrapperRef = ref<HTMLElement | null>(null)
     let spaceHeld = false
 
     // ── 渲染 ──
@@ -48,7 +54,7 @@ export const DesignCanvas = defineComponent({
       ctx.canvas.setZoom(ctx.canvas.zoom.value + delta)
     }
 
-    // ── 平移 ──
+    // ── 键盘 ──
 
     function onKeydown(e: KeyboardEvent): void {
       if (e.code === 'Space' && !spaceHeld) {
@@ -58,6 +64,10 @@ export const DesignCanvas = defineComponent({
       if (e.code === 'Delete' || e.code === 'Backspace') {
         ctx.removeSelected()
       }
+      if ((e.ctrlKey || e.metaKey) && e.code === 'KeyA') {
+        e.preventDefault()
+        ctx.selection.selectAll()
+      }
     }
 
     function onKeyup(e: KeyboardEvent): void {
@@ -66,6 +76,8 @@ export const DesignCanvas = defineComponent({
         ctx.canvas.isPanning.value = false
       }
     }
+
+    // ── 平移 ──
 
     let panStartX = 0
     let panStartY = 0
@@ -99,7 +111,6 @@ export const DesignCanvas = defineComponent({
     // ── 元素选择（点击命中检测） ──
 
     function onCanvasClick(e: MouseEvent): void {
-      // 不处理平移中的点击
       if (ctx.canvas.isPanning.value) {
         return
       }
@@ -109,7 +120,12 @@ export const DesignCanvas = defineComponent({
       while (target && target !== renderTargetRef.value) {
         const id = target.dataset?.elementId
         if (id) {
-          ctx.selection.select(id)
+          if (e.shiftKey) {
+            ctx.selection.toggleSelect(id)
+          }
+          else {
+            ctx.selection.select(id)
+          }
           return
         }
         target = target.parentElement
@@ -119,13 +135,105 @@ export const DesignCanvas = defineComponent({
       ctx.selection.deselect()
     }
 
+    // ── 框选 ──
+
+    function onPageWrapperMousedown(e: MouseEvent): void {
+      if (ctx.canvas.isPanning.value) {
+        return
+      }
+      // Only start marquee on left-click directly on page wrapper (not on elements)
+      if (e.button !== 0) {
+        return
+      }
+      // Check if click is on an element
+      let target = e.target as HTMLElement | null
+      while (target && target !== pageWrapperRef.value) {
+        if (target.dataset?.elementId) {
+          return // Click on element, don't start marquee
+        }
+        target = target.parentElement
+      }
+
+      const wrapper = pageWrapperRef.value
+      if (!wrapper) {
+        return
+      }
+      const rect = wrapper.getBoundingClientRect()
+      ctx.marquee.startMarquee(e, rect.left, rect.top)
+    }
+
+    // ── 数据绑定拖放 ──
+
+    function onPageDragover(e: DragEvent): void {
+      if (e.dataTransfer?.types.includes('application/easyink-binding')) {
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'link'
+      }
+    }
+
+    function onPageDrop(e: DragEvent): void {
+      const raw = e.dataTransfer?.getData('application/easyink-binding')
+      if (!raw) {
+        return
+      }
+      e.preventDefault()
+
+      let binding: { path: string }
+      try {
+        binding = JSON.parse(raw)
+      }
+      catch {
+        return
+      }
+
+      // Find target element
+      let target = e.target as HTMLElement | null
+      while (target && target !== renderTargetRef.value) {
+        const id = target.dataset?.elementId
+        if (id) {
+          const el = ctx.engine.schema.getElementById(id)
+          if (el) {
+            const cmd = createUpdateBindingCommand({
+              elementId: id,
+              newBinding: { path: binding.path },
+              oldBinding: el.binding,
+            }, ctx.engine.operations)
+            ctx.engine.execute(cmd)
+          }
+          return
+        }
+        target = target.parentElement
+      }
+    }
+
     return () => {
+      const marqueeRect = ctx.marquee.marqueeRect.value
+      const unit = ctx.engine.schema.schema.page.unit
+      const zoom = ctx.canvas.zoom.value
+
+      // Marquee overlay (in page coordinates)
+      const marqueeDiv = marqueeRect
+        ? h('div', {
+            class: 'easyink-marquee',
+            style: {
+              height: `${toPixels(marqueeRect.height, unit, 96, zoom)}px`,
+              left: `${toPixels(marqueeRect.x, unit, 96, zoom)}px`,
+              top: `${toPixels(marqueeRect.y, unit, 96, zoom)}px`,
+              width: `${toPixels(marqueeRect.width, unit, 96, zoom)}px`,
+            },
+          })
+        : null
+
       return h('div', {
         class: 'easyink-canvas-area',
         tabindex: 0,
         onKeydown,
         onKeyup,
       }, [
+        // Grid layout: ruler-corner + horizontal ruler + vertical ruler + viewport
+        h('div', { class: 'easyink-ruler-corner' }),
+        h(RulerHorizontal),
+        h(RulerVertical),
         h('div', {
           class: 'easyink-canvas-viewport',
           ref: viewportRef,
@@ -147,11 +255,18 @@ export const DesignCanvas = defineComponent({
               h('div', {
                 class: 'easyink-canvas-page-wrapper',
                 onClick: onCanvasClick,
+                onDragover: onPageDragover,
+                onDrop: onPageDrop,
+                onMousedown: onPageWrapperMousedown,
+                ref: pageWrapperRef,
               }, [
                 h('div', {
                   ref: renderTargetRef,
                 }),
                 h(SelectionOverlay),
+                h(AlignmentGuides),
+                h(GuideLines),
+                marqueeDiv,
               ]),
             ]),
           ]),

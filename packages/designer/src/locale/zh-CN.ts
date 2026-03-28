@@ -11,6 +11,14 @@ export const zhCN: LocaleMessages = {
     undo: '撤销',
     redo: '重做',
     delete: '删除',
+    alignLeft: '左对齐',
+    alignRight: '右对齐',
+    alignTop: '顶对齐',
+    alignBottom: '底对齐',
+    alignHCenter: '水平居中',
+    alignVCenter: '垂直居中',
+    distributeH: '水平均分',
+    distributeV: '垂直均分',
   },
   property: {
     title: '属性',
@@ -35,5 +43,22 @@ export const zhCN: LocaleMessages = {
   statusBar: {
     zoom: '缩放',
     unit: '单位',
+  },
+  sidebar: {
+    layers: '图层',
+    dataSource: '数据源',
+  },
+  layer: {
+    empty: '暂无元素',
+    visibility: '显示/隐藏',
+    lock: '锁定/解锁',
+  },
+  dataSource: {
+    empty: '暂无数据源',
+    dragHint: '拖拽字段到画布元素上绑定数据',
+  },
+  ruler: {
+    horizontal: '水平标尺',
+    vertical: '垂直标尺',
   },
 }

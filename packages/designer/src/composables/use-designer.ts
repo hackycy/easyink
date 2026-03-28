@@ -9,9 +9,13 @@ import { ScreenRenderer } from '@easyink/renderer'
 import { generateId } from '@easyink/shared'
 import { computed, onUnmounted, ref, shallowRef } from 'vue'
 import { useLocale } from '../locale/use-locale'
+import { useBatchOperations } from './use-batch-operations'
 import { useCanvas } from './use-canvas'
+import { useGuides } from './use-guides'
 import { useInteraction } from './use-interaction'
+import { useMarquee } from './use-marquee'
 import { useSelection } from './use-selection'
+import { useSnapping } from './use-snapping'
 
 export function useDesigner(options?: DesignerOptions) {
   // 1. 创建引擎
@@ -39,7 +43,11 @@ export function useDesigner(options?: DesignerOptions) {
   const selection = useSelection(engine)
   const canvas = useCanvas({ initialZoom: options?.zoom })
   const locale = useLocale(options?.locale)
-  const interaction = useInteraction(engine, selection, canvas)
+  const snapping = useSnapping(engine, canvas)
+  const interaction = useInteraction(engine, selection, canvas, snapping)
+  const marquee = useMarquee(engine, selection, canvas)
+  const batchOperations = useBatchOperations(engine, selection)
+  const guides = useGuides(engine)
 
   // 5. undo/redo 状态
   const canUndo = ref(engine.commands.canUndo)
@@ -87,6 +95,12 @@ export function useDesigner(options?: DesignerOptions) {
   }
 
   function removeSelected(): void {
+    // Multi-select: use batch delete
+    if (selection.selectedIds.value.length > 1) {
+      batchOperations.batchDelete()
+      return
+    }
+
     const el = selection.selectedElement.value
     if (!el) {
       return
@@ -111,18 +125,22 @@ export function useDesigner(options?: DesignerOptions) {
 
   return {
     addElement,
+    batchOperations,
     canRedo,
     canUndo,
     canvas,
     elementTypes,
     engine,
+    guides,
     interaction,
     locale,
+    marquee,
     redo,
     removeSelected,
     renderer: screenRenderer,
     schema,
     selection,
+    snapping,
     undo,
   }
 }

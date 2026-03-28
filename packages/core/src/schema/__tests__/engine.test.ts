@@ -719,6 +719,89 @@ describe('schemaEngine', () => {
     })
   })
 
+  describe('updateElementVisibility', () => {
+    it('should set element hidden', () => {
+      const el = createElement({ id: 'e1' })
+      const engine = createEngineWithElements([el])
+
+      engine.updateElementVisibility('e1', true)
+
+      expect(el.hidden).toBe(true)
+    })
+
+    it('should unset element hidden', () => {
+      const el = createElement({ id: 'e1', hidden: true })
+      const engine = createEngineWithElements([el])
+
+      engine.updateElementVisibility('e1', false)
+
+      expect(el.hidden).toBe(false)
+    })
+
+    it('should trigger schemaChanged', () => {
+      const hooks = createPluginHooks()
+      const callback = vi.fn()
+      hooks.schemaChanged.on('test', callback)
+      const el = createElement({ id: 'e1' })
+      const engine = createEngineWithElements([el], { hooks })
+
+      engine.updateElementVisibility('e1', true)
+
+      expect(callback).toHaveBeenCalledOnce()
+    })
+  })
+
+  describe('updateElementLock', () => {
+    it('should set element locked', () => {
+      const el = createElement({ id: 'e1' })
+      const engine = createEngineWithElements([el])
+
+      engine.updateElementLock('e1', true)
+
+      expect(el.locked).toBe(true)
+    })
+
+    it('should unset element locked', () => {
+      const el = createElement({ id: 'e1', locked: true })
+      const engine = createEngineWithElements([el])
+
+      engine.updateElementLock('e1', false)
+
+      expect(el.locked).toBe(false)
+    })
+  })
+
+  describe('updateExtensions', () => {
+    it('should set extension key', () => {
+      const engine = new SchemaEngine()
+
+      engine.updateExtensions('guides', [{ id: 'g1', position: 10 }])
+
+      expect(engine.schema.extensions?.guides).toEqual([{ id: 'g1', position: 10 }])
+    })
+
+    it('should create extensions object if not present', () => {
+      const schema = createDefaultSchema()
+      delete schema.extensions
+      const engine = new SchemaEngine({ schema })
+
+      engine.updateExtensions('foo', 'bar')
+
+      expect(engine.schema.extensions).toEqual({ foo: 'bar' })
+    })
+
+    it('should trigger schemaChanged', () => {
+      const hooks = createPluginHooks()
+      const callback = vi.fn()
+      hooks.schemaChanged.on('test', callback)
+      const engine = new SchemaEngine({ hooks })
+
+      engine.updateExtensions('test', 123)
+
+      expect(callback).toHaveBeenCalledOnce()
+    })
+  })
+
   describe('operations', () => {
     it('should return SchemaOperations object', () => {
       const engine = new SchemaEngine()
@@ -729,9 +812,12 @@ describe('schemaEngine', () => {
       expect(ops.removeElement).toBeTypeOf('function')
       expect(ops.reorderElement).toBeTypeOf('function')
       expect(ops.updateElementLayout).toBeTypeOf('function')
+      expect(ops.updateElementLock).toBeTypeOf('function')
       expect(ops.updateElementProps).toBeTypeOf('function')
       expect(ops.updateElementStyle).toBeTypeOf('function')
+      expect(ops.updateElementVisibility).toBeTypeOf('function')
       expect(ops.updateElementBinding).toBeTypeOf('function')
+      expect(ops.updateExtensions).toBeTypeOf('function')
       expect(ops.getPageSettings).toBeTypeOf('function')
       expect(ops.updatePageSettings).toBeTypeOf('function')
     })

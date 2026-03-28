@@ -89,8 +89,11 @@ export class SchemaEngine {
       reorderElement: (id, newIndex) => this.reorderElement(id, newIndex),
       updateElementBinding: (id, binding) => this.updateElementBinding(id, binding),
       updateElementLayout: (id, layout) => this.updateElementLayout(id, layout),
+      updateElementLock: (id, locked) => this.updateElementLock(id, locked),
       updateElementProps: (id, props) => this.updateElementProps(id, props),
       updateElementStyle: (id, style) => this.updateElementStyle(id, style),
+      updateElementVisibility: (id, hidden) => this.updateElementVisibility(id, hidden),
+      updateExtensions: (key, value) => this.updateExtensions(key, value),
       updatePageSettings: settings => this.updatePageSettings(settings),
     }
   }
@@ -266,6 +269,55 @@ export class SchemaEngine {
       type: 'update',
       oldValue: oldSettings,
       newValue: settings,
+    })
+  }
+
+  /**
+   * 更新元素显示/隐藏
+   */
+  updateElementVisibility(id: string, hidden: boolean): void {
+    const element = this.getElementById(id)
+    if (!element)
+      return
+
+    element.hidden = hidden
+
+    this._notifyChanged({
+      type: 'update',
+      elementId: id,
+      newValue: hidden,
+    })
+  }
+
+  /**
+   * 更新元素锁定状态
+   */
+  updateElementLock(id: string, locked: boolean): void {
+    const element = this.getElementById(id)
+    if (!element)
+      return
+
+    element.locked = locked
+
+    this._notifyChanged({
+      type: 'update',
+      elementId: id,
+      newValue: locked,
+    })
+  }
+
+  /**
+   * 更新 Schema 扩展字段
+   */
+  updateExtensions(key: string, value: unknown): void {
+    if (!this._schema.extensions) {
+      this._schema.extensions = {}
+    }
+    this._schema.extensions[key] = value
+
+    this._notifyChanged({
+      type: 'update',
+      newValue: value,
     })
   }
 

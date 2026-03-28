@@ -8,6 +8,8 @@ import {
   createReorderElementCommand,
   createResizeElementCommand,
   createRotateElementCommand,
+  createToggleLockCommand,
+  createToggleVisibilityCommand,
   createUpdateBindingCommand,
   createUpdatePageSettingsCommand,
   createUpdatePropsCommand,
@@ -16,15 +18,18 @@ import {
 
 function createMockOps(): SchemaOperations {
   return {
-    getElement: vi.fn(),
-    updateElementLayout: vi.fn(),
-    updateElementProps: vi.fn(),
-    updateElementStyle: vi.fn(),
-    updateElementBinding: vi.fn(),
     addElement: vi.fn(),
+    getElement: vi.fn(),
+    getPageSettings: vi.fn(),
     removeElement: vi.fn(),
     reorderElement: vi.fn(),
-    getPageSettings: vi.fn(),
+    updateElementBinding: vi.fn(),
+    updateElementLayout: vi.fn(),
+    updateElementLock: vi.fn(),
+    updateElementProps: vi.fn(),
+    updateElementStyle: vi.fn(),
+    updateElementVisibility: vi.fn(),
+    updateExtensions: vi.fn(),
     updatePageSettings: vi.fn(),
   }
 }
@@ -299,5 +304,59 @@ describe('createUpdatePageSettingsCommand', () => {
 
     cmd.undo()
     expect(ops.updatePageSettings).toHaveBeenCalledWith(oldSettings)
+  })
+})
+
+describe('createToggleVisibilityCommand', () => {
+  it('should toggle hidden on execute and undo', () => {
+    const ops = createMockOps()
+    const cmd = createToggleVisibilityCommand(
+      { elementId: 'el-1', oldHidden: false, newHidden: true },
+      ops,
+    )
+
+    cmd.execute()
+    expect(ops.updateElementVisibility).toHaveBeenCalledWith('el-1', true)
+
+    cmd.undo()
+    expect(ops.updateElementVisibility).toHaveBeenCalledWith('el-1', false)
+  })
+
+  it('should have correct type and description', () => {
+    const ops = createMockOps()
+    const cmd = createToggleVisibilityCommand(
+      { elementId: 'el-1', oldHidden: false, newHidden: true },
+      ops,
+    )
+
+    expect(cmd.type).toBe('toggle-visibility')
+    expect(cmd.description).toContain('el-1')
+  })
+})
+
+describe('createToggleLockCommand', () => {
+  it('should toggle locked on execute and undo', () => {
+    const ops = createMockOps()
+    const cmd = createToggleLockCommand(
+      { elementId: 'el-1', oldLocked: false, newLocked: true },
+      ops,
+    )
+
+    cmd.execute()
+    expect(ops.updateElementLock).toHaveBeenCalledWith('el-1', true)
+
+    cmd.undo()
+    expect(ops.updateElementLock).toHaveBeenCalledWith('el-1', false)
+  })
+
+  it('should have correct type and description', () => {
+    const ops = createMockOps()
+    const cmd = createToggleLockCommand(
+      { elementId: 'el-1', oldLocked: false, newLocked: true },
+      ops,
+    )
+
+    expect(cmd.type).toBe('toggle-lock')
+    expect(cmd.description).toContain('el-1')
   })
 })

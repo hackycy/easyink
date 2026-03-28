@@ -5,6 +5,8 @@ export {
   createReorderElementCommand,
   createResizeElementCommand,
   createRotateElementCommand,
+  createToggleLockCommand,
+  createToggleVisibilityCommand,
   createUpdateBindingCommand,
   createUpdatePageSettingsCommand,
   createUpdatePropsCommand,
@@ -22,7 +24,9 @@ export type {
   RotateElementParams,
   SchemaOperations,
   UpdateBindingParams,
+  UpdateLockParams,
   UpdatePageSettingsParams,
   UpdatePropsParams,
   UpdateStyleParams,
+  UpdateVisibilityParams,
 } from './types'
