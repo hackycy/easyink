@@ -1,4 +1,5 @@
 export * from './command'
+export * from './datasource'
 export * from './plugin'
 export * from './schema'
 export * from './units'
