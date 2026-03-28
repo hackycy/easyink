@@ -181,7 +181,6 @@ describe('createPluginHooks', () => {
     const hooks = createPluginHooks()
     expect(hooks.beforeRender).toBeDefined()
     expect(hooks.afterRender).toBeDefined()
-    expect(hooks.beforePaginate).toBeDefined()
     expect(hooks.beforeExport).toBeDefined()
     expect(hooks.beforeElementCreate).toBeDefined()
     expect(hooks.beforeDataResolve).toBeDefined()
@@ -189,7 +188,6 @@ describe('createPluginHooks', () => {
     expect(hooks.schemaChanged).toBeDefined()
     expect(hooks.selectionChanged).toBeDefined()
     expect(hooks.exportCompleted).toBeDefined()
-    expect(hooks.paginateCompleted).toBeDefined()
     expect(hooks.designerReady).toBeDefined()
   })
 

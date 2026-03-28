@@ -1,6 +1,7 @@
 export * from './command'
 export * from './datasource'
 export * from './elements'
+export * from './engine'
 export * from './expression'
 export * from './layout'
 export * from './plugin'

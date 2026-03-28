@@ -18,11 +18,6 @@ export function createDefaultSchema(): TemplateSchema {
       margins: { top: 10, right: 10, bottom: 10, left: 10 },
       unit: 'mm',
     },
-    regions: [
-      { type: 'header', height: 0, elementIds: [] },
-      { type: 'body', height: 'auto', elementIds: [] },
-      { type: 'footer', height: 0, elementIds: [] },
-    ],
     elements: [],
   }
 }

@@ -15,8 +15,6 @@ export interface CompiledExpression {
 export interface ExpressionContext {
   /** 数据源数据（标量 + 对象数组混合） */
   data: Record<string, unknown>
-  /** 页面信息 */
-  page: { number: number, total: number }
   /** 白名单工具函数（由引擎实现者控制可访问范围） */
   helpers: Record<string, (...args: unknown[]) => unknown>
 }
@@ -76,7 +74,7 @@ export const DEFAULT_SANDBOX_CONFIG: Readonly<SandboxConfig> = Object.freeze({
  * ```ts
  * const engine: ExpressionEngine = createMyExpressionEngine({ sandbox: DEFAULT_SANDBOX_CONFIG })
  * const compiled = engine.compile('price * quantity')
- * const result = engine.execute(compiled, { data: { price: 10, quantity: 3 }, page: { number: 1, total: 1 }, helpers: {} })
+ * const result = engine.execute(compiled, { data: { price: 10, quantity: 3 }, helpers: {} })
  * // result === 30
  * ```
  */

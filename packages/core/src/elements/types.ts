@@ -74,6 +74,4 @@ export interface ElementTypeDefinition {
   isContainer?: boolean
   /** 该元素类型是否支持数据循环 */
   supportsRepeat?: boolean
-  /** 该元素类型是否支持内容溢出分页 */
-  supportsPageBreak?: boolean
 }

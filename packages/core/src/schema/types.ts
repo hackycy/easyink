@@ -12,8 +12,6 @@ export interface TemplateSchema {
   meta: TemplateMeta
   /** 页面设置 */
   page: PageSettings
-  /** 页面区域定义 */
-  regions: RegionDefinition[]
   /** 元素树 */
   elements: ElementNode[]
   /** 扩展字段，供插件使用 */
@@ -50,6 +48,19 @@ export interface PageSettings {
   unit: 'mm' | 'inch' | 'pt'
   /** 背景 */
   background?: BackgroundStyle
+  /**
+   * 内容溢出策略（默认 'clip'）
+   * - 'clip'：固定纸张尺寸，超出部分裁切隐藏
+   * - 'auto-extend'：纸张高度随内容自动延长（适用于热敏纸连续打印）
+   *
+   * Schema 中的纸张声明（paper.height）始终不变，
+   * auto-extend 仅在渲染层按实际内容高度输出。
+   * 设计器画布始终显示声明高度。
+   *
+   * auto-extend 模式下，所有绝对定位元素的 y 坐标
+   * 会在渲染时加上流式内容实际高度与声明高度的 delta 值。
+   */
+  overflow?: 'clip' | 'auto-extend'
 }
 
 /**
@@ -78,22 +89,6 @@ export interface LabelPaper {
   height: number
 }
 
-// ─── 区域模型 ───
-
-/**
- * 区域定义 — 页面分为 header / body / footer 三个区域
- */
-export interface RegionDefinition {
-  /** 区域类型 */
-  type: 'header' | 'body' | 'footer'
-  /** 区域高度（使用页面单位） */
-  height: number | 'auto'
-  /** 该区域内的元素 ID 列表 */
-  elementIds: string[]
-  /** 是否每页重复（header/footer 默认 true） */
-  repeatOnPage?: boolean
-}
-
 // ─── 元素节点 ───
 
 /**
@@ -118,8 +113,6 @@ export interface ElementNode {
   condition?: ConditionConfig
   /** 子元素（仅容器类型） */
   children?: ElementNode[]
-  /** 分页行为 */
-  pagination?: ElementPaginationConfig
   /** 锁定状态 */
   locked?: boolean
   /** 隐藏状态 */
@@ -207,18 +200,4 @@ export interface FormatterConfig {
 export interface ConditionConfig {
   /** 条件表达式 */
   expression: string
-}
-
-// ─── 分页配置 ───
-
-/**
- * 元素分页配置
- */
-export interface ElementPaginationConfig {
-  /** 分页行为 */
-  behavior: 'normal' | 'fixed' | 'locked-to-last-page' | 'locked-to-every-page'
-  /** 跨页时是否保持可见（如表格的表头续打） */
-  repeatOnBreak?: boolean
-  /** 禁止在此元素内部分页（如签名区） */
-  avoidBreakInside?: boolean
 }

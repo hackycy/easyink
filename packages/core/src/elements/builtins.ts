@@ -191,13 +191,6 @@ export const tableElementType: ElementTypeDefinition = {
       editorOptions: { min: 0 },
     },
     {
-      key: 'repeatHeaderOnBreak',
-      label: '续打表头',
-      editor: 'switch',
-      group: '表格',
-      defaultValue: true,
-    },
-    {
       key: 'emptyBehavior',
       label: '空数据行为',
       editor: 'select',
@@ -221,7 +214,6 @@ export const tableElementType: ElementTypeDefinition = {
     bordered: true,
     striped: false,
     rowHeight: 'auto',
-    repeatHeaderOnBreak: true,
     emptyBehavior: 'placeholder',
     minRows: 1,
     emptyText: '暂无数据',
@@ -233,7 +225,6 @@ export const tableElementType: ElementTypeDefinition = {
   },
   isContainer: true,
   supportsRepeat: true,
-  supportsPageBreak: true,
 }
 
 // ─── Barcode 条形码/二维码 ───

@@ -70,7 +70,6 @@ describe('expression types', () => {
       const ctx: ExpressionContext = {
         data: { price: 42 },
         helpers: {},
-        page: { number: 1, total: 1 },
       }
       expect(mockEngine.execute(compiled, ctx)).toBe(42)
 
@@ -124,9 +123,7 @@ describe('expression types', () => {
           round: (v: unknown) => Math.round(v as number),
           sum: (...args: unknown[]) => (args as number[]).reduce((a, b) => a + b, 0),
         },
-        page: { number: 2, total: 10 },
       }
-      expect(ctx.page.number).toBe(2)
       expect(ctx.helpers.round(3.7)).toBe(4)
       expect(ctx.helpers.sum(1, 2, 3)).toBe(6)
     })

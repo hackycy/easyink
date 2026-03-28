@@ -140,10 +140,9 @@ describe('built-in element types', () => {
       expect(tableElementType.name).toBe('表格')
     })
 
-    it('should be a container that supports repeat and page break', () => {
+    it('should be a container that supports repeat', () => {
       expect(tableElementType.isContainer).toBe(true)
       expect(tableElementType.supportsRepeat).toBe(true)
-      expect(tableElementType.supportsPageBreak).toBe(true)
     })
 
     it('should default to flow positioning', () => {

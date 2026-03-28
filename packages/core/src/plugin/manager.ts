@@ -9,7 +9,6 @@ export function createPluginHooks(): PluginHooks {
     // 同步钩子
     beforeRender: new SyncWaterfallHook(),
     afterRender: new SyncWaterfallHook(),
-    beforePaginate: new SyncWaterfallHook(),
     beforeExport: new SyncWaterfallHook(),
     beforeElementCreate: new SyncWaterfallHook(),
     beforeDataResolve: new SyncWaterfallHook(),
@@ -18,7 +17,6 @@ export function createPluginHooks(): PluginHooks {
     schemaChanged: new AsyncEvent(),
     selectionChanged: new AsyncEvent(),
     exportCompleted: new AsyncEvent(),
-    paginateCompleted: new AsyncEvent(),
     designerReady: new AsyncEvent(),
   }
 }

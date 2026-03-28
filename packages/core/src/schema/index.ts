@@ -11,13 +11,11 @@ export type {
   DataBinding,
   ElementLayout,
   ElementNode,
-  ElementPaginationConfig,
   ElementStyle,
   FormatterConfig,
   LabelPaper,
   PageSettings,
   PaperPreset,
-  RegionDefinition,
   TemplateMeta,
   TemplateSchema,
 } from './types'

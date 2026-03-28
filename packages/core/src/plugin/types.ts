@@ -25,8 +25,6 @@ export interface SchemaChangeEvent {
 export interface RenderContext {
   /** 数据源数据 */
   data: Record<string, unknown>
-  /** 页码信息 */
-  page: { number: number, total: number }
 }
 
 /**
@@ -35,20 +33,10 @@ export interface RenderContext {
 export interface ExportContext {
   /** 导出格式 */
   format: 'pdf' | 'image' | 'print'
-  /** 渲染后的页面 DOM 列表 */
-  pages: HTMLElement[]
+  /** 渲染后的页面 DOM 节点（单页输出） */
+  page: HTMLElement
   /** 导出配置 */
   options: Record<string, unknown>
-}
-
-/**
- * 分页选项
- */
-export interface PaginateOptions {
-  /** 起始页码 */
-  startPage?: number
-  /** 可用区域高度覆盖 */
-  availableHeight?: number
 }
 
 /**
@@ -59,43 +47,6 @@ export interface ExportResult {
   format: string
   /** 导出产物 */
   data: Blob | ArrayBuffer
-}
-
-/**
- * 分页结果
- */
-export interface PageBreakResult {
-  /** 分页后各页的元素列表 */
-  pages: PageContent[]
-  /** 总页数 */
-  totalPages: number
-}
-
-/**
- * 单页内容
- */
-export interface PageContent {
-  /** 页码（从 1 开始） */
-  pageNumber: number
-  /** 该页包含的元素及其计算位置 */
-  elements: PageElement[]
-  /** 该页的 header 元素 */
-  headerElements: PageElement[]
-  /** 该页的 footer 元素 */
-  footerElements: PageElement[]
-}
-
-/**
- * 页面元素（带计算后坐标）
- */
-export interface PageElement {
-  /** 元素节点 */
-  node: ElementNode
-  /** 计算后的坐标（页面单位） */
-  x: number
-  y: number
-  width: number
-  height: number
 }
 
 // ─── 插件钩子集合 ───
@@ -113,8 +64,6 @@ export interface PluginHooks {
   beforeRender: SyncWaterfallHook<[ElementNode, RenderContext]>
   /** 渲染后 — 可修改生成的 DOM 节点 */
   afterRender: SyncWaterfallHook<[HTMLElement, ElementNode]>
-  /** 分页前 — 可修改分页参数 */
-  beforePaginate: SyncWaterfallHook<[PaginateOptions]>
   /** 导出前 — 可修改导出配置或注入内容 */
   beforeExport: SyncWaterfallHook<[ExportContext]>
   /** 元素创建前 — 可修改默认属性 */
@@ -132,8 +81,6 @@ export interface PluginHooks {
   selectionChanged: AsyncEvent<[string[]]>
   /** 导出完成 */
   exportCompleted: AsyncEvent<[ExportResult]>
-  /** 分页完成 */
-  paginateCompleted: AsyncEvent<[PageBreakResult]>
   /** 设计器初始化完成 */
   designerReady: AsyncEvent<[]>
 }
@@ -162,8 +109,6 @@ export interface EasyInkPlugin {
 
 /**
  * 插件上下文 — 插件 install 时接收的 API 集合
- *
- * 初版仅暴露 hooks，随后续模块完成逐步扩展
  */
 export interface PluginContext {
   /** 钩子系统 */
