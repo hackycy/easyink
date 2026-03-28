@@ -22,6 +22,8 @@ catalogs:
     tsx: ^4.20.6
     typescript: ^5.9.3
     vite: ^7.2.1
+  framework:
+    vue: ^3.5.0
   inlined:
     '@antfu/utils': ^9.3.0
   testing:

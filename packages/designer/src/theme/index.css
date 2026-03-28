@@ -1,0 +1,317 @@
+:root,
+.easyink-designer {
+  /* ── Layout ── */
+  --easyink-toolbar-height: 48px;
+  --easyink-panel-width: 280px;
+  --easyink-statusbar-height: 32px;
+
+  /* ── Colors ── */
+  --easyink-bg: #f5f5f5;
+  --easyink-bg-panel: #ffffff;
+  --easyink-bg-toolbar: #ffffff;
+  --easyink-bg-canvas: #e8e8e8;
+  --easyink-text: #333333;
+  --easyink-text-secondary: #666666;
+  --easyink-text-disabled: #bdbdbd;
+  --easyink-border: #e0e0e0;
+  --easyink-primary: #1890ff;
+  --easyink-primary-light: rgba(24, 144, 255, 0.1);
+  --easyink-danger: #ff4d4f;
+  --easyink-selection: #1890ff;
+  --easyink-handle-size: 8px;
+  --easyink-handle-color: #ffffff;
+  --easyink-handle-border: #1890ff;
+
+  /* ── Typography ── */
+  --easyink-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --easyink-font-size: 13px;
+  --easyink-font-size-small: 12px;
+
+  /* ── Spacing ── */
+  --easyink-gap-xs: 4px;
+  --easyink-gap-sm: 8px;
+  --easyink-gap-md: 12px;
+  --easyink-gap-lg: 16px;
+
+  /* ── Transitions ── */
+  --easyink-transition: 150ms ease;
+}
+
+/* ── Designer Shell ── */
+
+.easyink-designer {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  font-family: var(--easyink-font-family);
+  font-size: var(--easyink-font-size);
+  color: var(--easyink-text);
+  background: var(--easyink-bg);
+  overflow: hidden;
+  user-select: none;
+}
+
+.easyink-designer * {
+  box-sizing: border-box;
+}
+
+/* ── Toolbar ── */
+
+.easyink-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--easyink-gap-sm);
+  height: var(--easyink-toolbar-height);
+  padding: 0 var(--easyink-gap-md);
+  background: var(--easyink-bg-toolbar);
+  border-bottom: 1px solid var(--easyink-border);
+  flex-shrink: 0;
+}
+
+.easyink-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: var(--easyink-gap-xs);
+}
+
+.easyink-toolbar-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--easyink-border);
+  margin: 0 var(--easyink-gap-xs);
+}
+
+.easyink-toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--easyink-gap-xs);
+  height: 32px;
+  padding: 0 var(--easyink-gap-sm);
+  border: 1px solid var(--easyink-border);
+  border-radius: 4px;
+  background: var(--easyink-bg-panel);
+  color: var(--easyink-text);
+  cursor: pointer;
+  font-size: var(--easyink-font-size-small);
+  transition: background var(--easyink-transition), border-color var(--easyink-transition);
+}
+
+.easyink-toolbar-btn:hover {
+  border-color: var(--easyink-primary);
+  background: var(--easyink-primary-light);
+}
+
+.easyink-toolbar-btn:disabled {
+  color: var(--easyink-text-disabled);
+  cursor: not-allowed;
+  border-color: var(--easyink-border);
+  background: var(--easyink-bg-panel);
+}
+
+/* ── Body (left + canvas + right) ── */
+
+.easyink-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ── Canvas ── */
+
+.easyink-canvas-area {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  background: var(--easyink-bg-canvas);
+}
+
+.easyink-canvas-viewport {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+}
+
+.easyink-canvas-scroll {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.easyink-canvas-zoom {
+  transform-origin: 0 0;
+  position: relative;
+}
+
+.easyink-canvas-page-wrapper {
+  padding: 40px;
+  display: inline-block;
+}
+
+/* ── Selection Overlay ── */
+
+.easyink-selection-box {
+  position: absolute;
+  border: 2px solid var(--easyink-selection);
+  pointer-events: none;
+  z-index: 1000;
+}
+
+.easyink-selection-box--draggable {
+  pointer-events: auto;
+  cursor: move;
+}
+
+.easyink-handle {
+  position: absolute;
+  width: var(--easyink-handle-size);
+  height: var(--easyink-handle-size);
+  background: var(--easyink-handle-color);
+  border: 2px solid var(--easyink-handle-border);
+  border-radius: 1px;
+  pointer-events: auto;
+  z-index: 1001;
+}
+
+.easyink-handle--top-left { cursor: nwse-resize; }
+.easyink-handle--top { cursor: ns-resize; }
+.easyink-handle--top-right { cursor: nesw-resize; }
+.easyink-handle--left { cursor: ew-resize; }
+.easyink-handle--right { cursor: ew-resize; }
+.easyink-handle--bottom-left { cursor: nesw-resize; }
+.easyink-handle--bottom { cursor: ns-resize; }
+.easyink-handle--bottom-right { cursor: nwse-resize; }
+
+/* ── Property Panel ── */
+
+.easyink-property-panel {
+  width: var(--easyink-panel-width);
+  background: var(--easyink-bg-panel);
+  border-left: 1px solid var(--easyink-border);
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.easyink-property-panel__header {
+  padding: var(--easyink-gap-sm) var(--easyink-gap-md);
+  font-weight: 600;
+  border-bottom: 1px solid var(--easyink-border);
+}
+
+.easyink-property-panel__empty {
+  padding: var(--easyink-gap-lg);
+  color: var(--easyink-text-secondary);
+  text-align: center;
+}
+
+.easyink-property-group {
+  border-bottom: 1px solid var(--easyink-border);
+}
+
+.easyink-property-group__title {
+  padding: var(--easyink-gap-sm) var(--easyink-gap-md);
+  font-size: var(--easyink-font-size-small);
+  font-weight: 600;
+  color: var(--easyink-text-secondary);
+  text-transform: uppercase;
+}
+
+.easyink-property-row {
+  display: flex;
+  align-items: center;
+  padding: var(--easyink-gap-xs) var(--easyink-gap-md);
+  gap: var(--easyink-gap-sm);
+}
+
+.easyink-property-row__label {
+  width: 72px;
+  flex-shrink: 0;
+  font-size: var(--easyink-font-size-small);
+  color: var(--easyink-text-secondary);
+}
+
+.easyink-property-row__editor {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── Editors ── */
+
+.easyink-editor {
+  width: 100%;
+  height: 28px;
+  padding: 0 var(--easyink-gap-sm);
+  border: 1px solid var(--easyink-border);
+  border-radius: 4px;
+  font-size: var(--easyink-font-size-small);
+  font-family: var(--easyink-font-family);
+  color: var(--easyink-text);
+  background: var(--easyink-bg-panel);
+  outline: none;
+  transition: border-color var(--easyink-transition);
+}
+
+.easyink-editor:focus {
+  border-color: var(--easyink-primary);
+}
+
+.easyink-editor-select {
+  appearance: auto;
+}
+
+.easyink-editor-color {
+  padding: 2px;
+  cursor: pointer;
+}
+
+.easyink-editor-switch {
+  width: 36px;
+  height: 20px;
+  appearance: auto;
+  cursor: pointer;
+}
+
+/* ── Status Bar ── */
+
+.easyink-statusbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--easyink-statusbar-height);
+  padding: 0 var(--easyink-gap-md);
+  background: var(--easyink-bg-toolbar);
+  border-top: 1px solid var(--easyink-border);
+  font-size: var(--easyink-font-size-small);
+  color: var(--easyink-text-secondary);
+  flex-shrink: 0;
+}
+
+.easyink-statusbar__right {
+  display: flex;
+  align-items: center;
+  gap: var(--easyink-gap-sm);
+}
+
+.easyink-statusbar__zoom-slider {
+  width: 100px;
+}
+
+.easyink-statusbar__zoom-btn {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--easyink-border);
+  border-radius: 4px;
+  background: var(--easyink-bg-panel);
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--easyink-text);
+}
+
+.easyink-statusbar__zoom-btn:hover {
+  border-color: var(--easyink-primary);
+}

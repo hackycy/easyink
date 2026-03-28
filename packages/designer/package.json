@@ -17,14 +17,21 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsdown",
+    "build": "tsdown && cp src/theme/index.css dist/style.css",
     "dev": "tsdown --watch",
     "test": "vitest",
     "typecheck": "tsc"
+  },
+  "peerDependencies": {
+    "vue": "^3.5.0"
   },
   "dependencies": {
     "@easyink/core": "workspace:*",
     "@easyink/renderer": "workspace:*",
     "@easyink/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "happy-dom": "catalog:testing",
+    "vue": "catalog:framework"
   }
 }
