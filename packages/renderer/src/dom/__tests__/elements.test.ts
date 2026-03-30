@@ -309,16 +309,17 @@ describe('renderTable', () => {
     }).toThrow(/same data source prefix/)
   })
 
-  it('should throw when column resolves to non-array', () => {
+  it('should treat non-array binding as empty column', () => {
     const badColumns = [
       { key: 'a', title: 'A', width: 100, binding: { path: 'scalar' } },
     ]
-    expect(() => {
-      renderTable(
-        createNode({ type: 'table', props: { columns: badColumns } }),
-        createContext({ data: { scalar: 'not-an-array' } }),
-      )
-    }).toThrow(/must resolve to an array/)
+    const el = renderTable(
+      createNode({ type: 'table', props: { columns: badColumns } }),
+      createContext({ data: { scalar: 'not-an-array' } }),
+    )
+    const tbody = el.querySelector('tbody')!
+    // 无数据行，显示空状态占位
+    expect(tbody.querySelector('td')!.textContent).toBe('暂无数据')
   })
 
   it('should render summary row with aggregate', () => {

@@ -161,7 +161,9 @@ function resolveColumns(
     }
     const resolved = context.resolver.resolve(col.binding.path, context.data)
     if (!Array.isArray(resolved)) {
-      throw new TypeError(`Table column "${col.key}" binding "${col.binding.path}" must resolve to an array, got ${typeof resolved}`)
+      // 数据未提供时（设计时/切换模板时）视为空列
+      result.push([])
+      continue
     }
     result.push(resolved)
     rowCount = Math.max(rowCount, resolved.length)
