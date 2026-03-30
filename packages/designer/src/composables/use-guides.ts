@@ -1,13 +1,28 @@
 import type { EasyInkEngine } from '@easyink/core'
 import type { GuideLineData } from '../types'
 import { generateId } from '@easyink/shared'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+
+export interface GuidePreview {
+  orientation: 'horizontal' | 'vertical'
+  position: number
+}
 
 export function useGuides(engine: EasyInkEngine) {
   const guides = computed<GuideLineData[]>(() => {
     const ext = engine.schema.schema.extensions
     return (ext?.guides as GuideLineData[] | undefined) ?? []
   })
+
+  const previewGuide = ref<GuidePreview | null>(null)
+
+  function setPreview(preview: GuidePreview): void {
+    previewGuide.value = preview
+  }
+
+  function clearPreview(): void {
+    previewGuide.value = null
+  }
 
   function _updateGuides(newGuides: GuideLineData[]): void {
     const oldGuides = guides.value.slice()
@@ -45,5 +60,5 @@ export function useGuides(engine: EasyInkEngine) {
     ))
   }
 
-  return { addGuide, guides, removeGuide, updateGuidePosition }
+  return { addGuide, clearPreview, guides, previewGuide, removeGuide, setPreview, updateGuidePosition }
 }

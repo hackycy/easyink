@@ -6,15 +6,27 @@
   height: 100%;
   pointer-events: none;
   z-index: 999;
+  overflow: visible;
 }
 
 .easyink-guide-line {
   pointer-events: auto;
-  background: var(--easyink-guide-color);
+  background: transparent;
+  border-color: var(--easyink-guide-color);
   opacity: 0.7;
 
   &:hover {
     opacity: 1;
+  }
+
+  &--preview {
+    pointer-events: none;
+    opacity: 0.5;
+  }
+
+  &--deleting {
+    border-color: var(--easyink-guide-delete-color, #f44336);
+    opacity: 0.4;
   }
 }
 

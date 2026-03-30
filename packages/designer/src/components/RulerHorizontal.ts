@@ -1,5 +1,5 @@
 import type { DesignerContext } from '../types'
-import { toPixels } from '@easyink/core'
+import { fromPixels, toPixels } from '@easyink/core'
 import { defineComponent, h, inject, onMounted, ref, watch } from 'vue'
 import { DESIGNER_INJECTION_KEY } from '../types'
 
@@ -28,8 +28,6 @@ export const RulerHorizontal = defineComponent({
       const height = rect.height
 
       c.clearRect(0, 0, width, height)
-      c.fillStyle = 'var(--easyink-ruler-bg, #f5f5f5)'
-      c.fillRect(0, 0, width, height)
 
       const unit = ctx.engine.schema.schema.page.unit
       const zoom = ctx.canvas.zoom.value
@@ -61,12 +59,16 @@ export const RulerHorizontal = defineComponent({
 
       c.strokeStyle = '#999'
       c.fillStyle = '#666'
-      c.font = '10px sans-serif'
+      c.font = '9px sans-serif'
       c.textAlign = 'center'
+      c.textBaseline = 'top'
 
       // Draw ticks
       const startUnit = Math.floor(-offset / majorPx) * majorStep - majorStep
       const endUnit = startUnit + (width / majorPx + 2) * majorStep
+
+      // Skip labels when too dense: ensure at least ~40px between labels
+      const labelEvery = majorPx >= 40 ? 1 : Math.ceil(40 / majorPx)
 
       for (let val = startUnit; val <= endUnit; val += minorStep) {
         const px = toPixels(val, unit, 96, zoom) + offset
@@ -78,16 +80,20 @@ export const RulerHorizontal = defineComponent({
 
         c.beginPath()
         if (isMajor) {
+          const majorIndex = Math.round(val / majorStep)
+          const showLabel = majorIndex % labelEvery === 0
           c.lineWidth = 1
           c.moveTo(px, height)
-          c.lineTo(px, height * 0.3)
+          c.lineTo(px, height * 0.4)
           c.stroke()
-          c.fillText(String(Math.round(val)), px, height * 0.25)
+          if (showLabel) {
+            c.fillText(String(Math.round(val)), px, 1)
+          }
         }
         else if (drawMinor) {
           c.lineWidth = 0.5
           c.moveTo(px, height)
-          c.lineTo(px, height * 0.6)
+          c.lineTo(px, height * 0.65)
           c.stroke()
         }
       }
@@ -113,47 +119,39 @@ export const RulerHorizontal = defineComponent({
       draw()
     })
 
-    function onMousedown(e: MouseEvent): void {
-      e.preventDefault()
-      // Start dragging a new horizontal guide
-      const startY = e.clientY
-
-      function onMove(me: MouseEvent): void {
-        // Visual feedback could be added here
-        void me
+    function getPageX(clientX: number): number {
+      const canvas = canvasRef.value
+      if (!canvas) {
+        return 0
       }
+      const rect = canvas.getBoundingClientRect()
+      const unit = ctx.engine.schema.schema.page.unit
+      const zoom = ctx.canvas.zoom.value
+      const panX = ctx.canvas.panX.value
+      return fromPixels(clientX - rect.left - panX, unit, 96, zoom)
+    }
 
-      function onUp(me: MouseEvent): void {
-        document.removeEventListener('mousemove', onMove)
-        document.removeEventListener('mouseup', onUp)
+    function onMousemove(e: MouseEvent): void {
+      const pageX = getPageX(e.clientX)
+      ctx.guides.setPreview({ orientation: 'vertical', position: pageX })
+    }
 
-        const deltaY = me.clientY - startY
-        if (deltaY > 10) {
-          // Dragged downward into canvas - create horizontal guide
-          const zoom = ctx.canvas.zoom.value
-          const panY = ctx.canvas.panY.value
-          // Convert mouse Y to page units
-          const canvasEl = canvasRef.value
-          if (!canvasEl) {
-            return
-          }
-          const rect = canvasEl.getBoundingClientRect()
-          const pageY = (me.clientY - rect.bottom - panY) / (96 / 25.4) / zoom
-          if (pageY >= 0) {
-            ctx.guides.addGuide('horizontal', pageY)
-          }
-        }
-      }
+    function onMouseleave(): void {
+      ctx.guides.clearPreview()
+    }
 
-      document.addEventListener('mousemove', onMove)
-      document.addEventListener('mouseup', onUp)
+    function onClick(e: MouseEvent): void {
+      const pageX = getPageX(e.clientX)
+      ctx.guides.addGuide('vertical', pageX)
     }
 
     return () => h('canvas', {
       class: 'easyink-ruler-h',
-      onMousedown,
+      onClick,
+      onMouseleave,
+      onMousemove,
       ref: canvasRef,
-      style: { cursor: 'row-resize', display: 'block', height: '100%', width: '100%' },
+      style: { cursor: 'pointer', display: 'block', height: '100%', width: '100%' },
     })
   },
 })

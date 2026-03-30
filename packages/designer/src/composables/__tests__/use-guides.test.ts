@@ -81,4 +81,20 @@ describe('useGuides', () => {
       [{ id: 'g1', orientation: 'horizontal', position: 99 }],
     )
   })
+
+  it('setPreview sets preview guide and clearPreview clears it', () => {
+    const engine = makeEngine()
+    const { clearPreview, previewGuide, setPreview } = useGuides(engine)
+
+    expect(previewGuide.value).toBeNull()
+
+    setPreview({ orientation: 'vertical', position: 50 })
+    expect(previewGuide.value).toEqual({ orientation: 'vertical', position: 50 })
+
+    setPreview({ orientation: 'horizontal', position: 100 })
+    expect(previewGuide.value).toEqual({ orientation: 'horizontal', position: 100 })
+
+    clearPreview()
+    expect(previewGuide.value).toBeNull()
+  })
 })

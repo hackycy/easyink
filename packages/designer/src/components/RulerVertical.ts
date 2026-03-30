@@ -1,5 +1,5 @@
 import type { DesignerContext } from '../types'
-import { toPixels } from '@easyink/core'
+import { fromPixels, toPixels } from '@easyink/core'
 import { defineComponent, h, inject, onMounted, ref, watch } from 'vue'
 import { DESIGNER_INJECTION_KEY } from '../types'
 
@@ -56,10 +56,13 @@ export const RulerVertical = defineComponent({
 
       c.strokeStyle = '#999'
       c.fillStyle = '#666'
-      c.font = '10px sans-serif'
+      c.font = '9px sans-serif'
 
       const startUnit = Math.floor(-offset / majorPx) * majorStep - majorStep
       const endUnit = startUnit + (height / majorPx + 2) * majorStep
+
+      // Skip labels when too dense: ensure at least ~40px between labels
+      const labelEvery = majorPx >= 40 ? 1 : Math.ceil(40 / majorPx)
 
       for (let val = startUnit; val <= endUnit; val += minorStep) {
         const px = toPixels(val, unit, 96, zoom) + offset
@@ -71,22 +74,26 @@ export const RulerVertical = defineComponent({
 
         c.beginPath()
         if (isMajor) {
+          const majorIndex = Math.round(val / majorStep)
+          const showLabel = majorIndex % labelEvery === 0
           c.lineWidth = 1
           c.moveTo(width, px)
-          c.lineTo(width * 0.3, px)
+          c.lineTo(width * 0.4, px)
           c.stroke()
-          // Rotated text
-          c.save()
-          c.translate(width * 0.2, px)
-          c.rotate(-Math.PI / 2)
-          c.textAlign = 'center'
-          c.fillText(String(Math.round(val)), 0, 0)
-          c.restore()
+          if (showLabel) {
+            c.save()
+            c.translate(width * 0.15, px)
+            c.rotate(-Math.PI / 2)
+            c.textAlign = 'center'
+            c.textBaseline = 'top'
+            c.fillText(String(Math.round(val)), 0, 0)
+            c.restore()
+          }
         }
         else if (drawMinor) {
           c.lineWidth = 0.5
           c.moveTo(width, px)
-          c.lineTo(width * 0.6, px)
+          c.lineTo(width * 0.65, px)
           c.stroke()
         }
       }
@@ -112,43 +119,39 @@ export const RulerVertical = defineComponent({
       draw()
     })
 
-    function onMousedown(e: MouseEvent): void {
-      e.preventDefault()
-      const startX = e.clientX
-
-      function onMove(me: MouseEvent): void {
-        void me
+    function getPageY(clientY: number): number {
+      const canvas = canvasRef.value
+      if (!canvas) {
+        return 0
       }
+      const rect = canvas.getBoundingClientRect()
+      const unit = ctx.engine.schema.schema.page.unit
+      const zoom = ctx.canvas.zoom.value
+      const panY = ctx.canvas.panY.value
+      return fromPixels(clientY - rect.top - panY, unit, 96, zoom)
+    }
 
-      function onUp(me: MouseEvent): void {
-        document.removeEventListener('mousemove', onMove)
-        document.removeEventListener('mouseup', onUp)
+    function onMousemove(e: MouseEvent): void {
+      const pageY = getPageY(e.clientY)
+      ctx.guides.setPreview({ orientation: 'horizontal', position: pageY })
+    }
 
-        const deltaX = me.clientX - startX
-        if (deltaX > 10) {
-          const zoom = ctx.canvas.zoom.value
-          const panX = ctx.canvas.panX.value
-          const canvasEl = canvasRef.value
-          if (!canvasEl) {
-            return
-          }
-          const rect = canvasEl.getBoundingClientRect()
-          const pageX = (me.clientX - rect.right - panX) / (96 / 25.4) / zoom
-          if (pageX >= 0) {
-            ctx.guides.addGuide('vertical', pageX)
-          }
-        }
-      }
+    function onMouseleave(): void {
+      ctx.guides.clearPreview()
+    }
 
-      document.addEventListener('mousemove', onMove)
-      document.addEventListener('mouseup', onUp)
+    function onClick(e: MouseEvent): void {
+      const pageY = getPageY(e.clientY)
+      ctx.guides.addGuide('horizontal', pageY)
     }
 
     return () => h('canvas', {
       class: 'easyink-ruler-v',
-      onMousedown,
+      onClick,
+      onMouseleave,
+      onMousemove,
       ref: canvasRef,
-      style: { cursor: 'col-resize', display: 'block', height: '100%', width: '100%' },
+      style: { cursor: 'pointer', display: 'block', height: '100%', width: '100%' },
     })
   },
 })
