@@ -1,3 +1,4 @@
+import type { BackgroundLayer } from '@easyink/shared'
 import type { SchemaOperations } from '../command'
 import type { ElementRegistry } from '../elements'
 import type { MigrationRegistry } from '../migration'
@@ -88,11 +89,15 @@ export class SchemaEngine {
   /** 获取 SchemaOperations 对象（传给 command 工厂函数） */
   get operations(): SchemaOperations {
     return {
+      addBackgroundLayer: (layer, index) => this.addBackgroundLayer(layer, index),
       addElement: (element, index) => this.addElement(element, index),
       getElement: id => this.getElement(id),
       getPageSettings: () => this.getPageSettings(),
+      removeBackgroundLayer: index => this.removeBackgroundLayer(index),
       removeElement: id => this.removeElement(id),
+      reorderBackgroundLayer: (from, to) => this.reorderBackgroundLayer(from, to),
       reorderElement: (id, newIndex) => this.reorderElement(id, newIndex),
+      updateBackgroundLayer: (index, layer) => this.updateBackgroundLayer(index, layer),
       updateElementBinding: (id, binding) => this.updateElementBinding(id, binding),
       updateElementLayout: (id, layout) => this.updateElementLayout(id, layout),
       updateElementLock: (id, locked) => this.updateElementLock(id, locked),
@@ -276,6 +281,70 @@ export class SchemaEngine {
       oldValue: oldSettings,
       newValue: settings,
     })
+  }
+
+  /**
+   * 添加背景层
+   * @param layer - 背景层
+   * @param index - 插入位置，-1 表示末尾
+   */
+  addBackgroundLayer(layer: BackgroundLayer, index: number): void {
+    if (!this._schema.page.background) {
+      this._schema.page.background = { layers: [] }
+    }
+    const layers = this._schema.page.background.layers
+    if (index === -1 || index >= layers.length) {
+      layers.push(layer)
+    }
+    else {
+      layers.splice(index, 0, layer)
+    }
+
+    this._notifyChanged({ type: 'add', newValue: layer })
+  }
+
+  /**
+   * 删除背景层
+   * @returns 被删除的层，不存在时返回 undefined
+   */
+  removeBackgroundLayer(index: number): BackgroundLayer | undefined {
+    const layers = this._schema.page.background?.layers
+    if (!layers || index < 0 || index >= layers.length)
+      return undefined
+
+    const [removed] = layers.splice(index, 1)
+
+    this._notifyChanged({ type: 'remove', oldValue: removed })
+
+    return removed
+  }
+
+  /**
+   * 更新背景层（整体替换指定索引的层）
+   */
+  updateBackgroundLayer(index: number, layer: BackgroundLayer): void {
+    const layers = this._schema.page.background?.layers
+    if (!layers || index < 0 || index >= layers.length)
+      return
+
+    const oldLayer = layers[index]
+    layers[index] = layer
+
+    this._notifyChanged({ type: 'update', oldValue: oldLayer, newValue: layer })
+  }
+
+  /**
+   * 调整背景层顺序
+   */
+  reorderBackgroundLayer(fromIndex: number, toIndex: number): void {
+    const layers = this._schema.page.background?.layers
+    if (!layers || fromIndex < 0 || fromIndex >= layers.length)
+      return
+
+    const [layer] = layers.splice(fromIndex, 1)
+    layers.splice(toIndex, 0, layer)
+
+    this._notifyChanged({ type: 'reorder' })
   }
 
   /**

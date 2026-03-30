@@ -1,12 +1,16 @@
 import type {
+  AddBackgroundLayerParams,
   AddElementParams,
   Command,
   MoveElementParams,
+  RemoveBackgroundLayerParams,
   RemoveElementParams,
+  ReorderBackgroundLayerParams,
   ReorderElementParams,
   ResizeElementParams,
   RotateElementParams,
   SchemaOperations,
+  UpdateBackgroundLayerParams,
   UpdateBindingParams,
   UpdateLockParams,
   UpdatePageSettingsParams,
@@ -338,6 +342,86 @@ export function createToggleVisibilityCommand(
     },
     undo() {
       ops.updateElementVisibility(params.elementId, params.oldHidden)
+    },
+  }
+}
+
+/**
+ * 添加背景层命令
+ */
+export function createAddBackgroundLayerCommand(
+  params: AddBackgroundLayerParams,
+  ops: SchemaOperations,
+): Command {
+  return {
+    id: generateId(),
+    type: 'add-background-layer',
+    description: '添加背景层',
+    execute() {
+      ops.addBackgroundLayer(params.layer, params.index)
+    },
+    undo() {
+      ops.removeBackgroundLayer(params.index)
+    },
+  }
+}
+
+/**
+ * 删除背景层命令
+ */
+export function createRemoveBackgroundLayerCommand(
+  params: RemoveBackgroundLayerParams,
+  ops: SchemaOperations,
+): Command {
+  return {
+    id: generateId(),
+    type: 'remove-background-layer',
+    description: '删除背景层',
+    execute() {
+      ops.removeBackgroundLayer(params.index)
+    },
+    undo() {
+      ops.addBackgroundLayer(params.layer, params.index)
+    },
+  }
+}
+
+/**
+ * 修改背景层命令
+ */
+export function createUpdateBackgroundLayerCommand(
+  params: UpdateBackgroundLayerParams,
+  ops: SchemaOperations,
+): Command {
+  return {
+    id: generateId(),
+    type: 'update-background-layer',
+    description: '修改背景层',
+    execute() {
+      ops.updateBackgroundLayer(params.index, params.newLayer)
+    },
+    undo() {
+      ops.updateBackgroundLayer(params.index, params.oldLayer)
+    },
+  }
+}
+
+/**
+ * 调整背景层顺序命令
+ */
+export function createReorderBackgroundLayerCommand(
+  params: ReorderBackgroundLayerParams,
+  ops: SchemaOperations,
+): Command {
+  return {
+    id: generateId(),
+    type: 'reorder-background-layer',
+    description: '调整背景层顺序',
+    execute() {
+      ops.reorderBackgroundLayer(params.fromIndex, params.toIndex)
+    },
+    undo() {
+      ops.reorderBackgroundLayer(params.toIndex, params.fromIndex)
     },
   }
 }

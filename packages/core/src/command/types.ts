@@ -1,3 +1,4 @@
+import type { BackgroundLayer } from '@easyink/shared'
 import type { DataBinding, ElementLayout, ElementNode, ElementStyle, PageSettings } from '../schema'
 
 // ─── Command 接口 ───
@@ -151,6 +152,39 @@ export interface UpdateLockParams {
   newLocked: boolean
 }
 
+/**
+ * 添加背景层命令参数
+ */
+export interface AddBackgroundLayerParams {
+  layer: BackgroundLayer
+  index: number
+}
+
+/**
+ * 删除背景层命令参数
+ */
+export interface RemoveBackgroundLayerParams {
+  layer: BackgroundLayer
+  index: number
+}
+
+/**
+ * 修改背景层命令参数
+ */
+export interface UpdateBackgroundLayerParams {
+  index: number
+  oldLayer: BackgroundLayer
+  newLayer: BackgroundLayer
+}
+
+/**
+ * 调整背景层顺序命令参数
+ */
+export interface ReorderBackgroundLayerParams {
+  fromIndex: number
+  toIndex: number
+}
+
 // ─── Schema 操作回调（由 SchemaEngine 注入） ───
 
 /**
@@ -171,4 +205,8 @@ export interface SchemaOperations {
   reorderElement: (id: string, newIndex: number) => void
   getPageSettings: () => PageSettings
   updatePageSettings: (settings: PageSettings) => void
+  addBackgroundLayer: (layer: BackgroundLayer, index: number) => void
+  removeBackgroundLayer: (index: number) => BackgroundLayer | undefined
+  updateBackgroundLayer: (index: number, layer: BackgroundLayer) => void
+  reorderBackgroundLayer: (fromIndex: number, toIndex: number) => void
 }

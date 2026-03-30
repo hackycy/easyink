@@ -1,3 +1,4 @@
+import type { BackgroundLayer } from '@easyink/shared'
 import type { PluginHooks } from '../../plugin'
 import type { ElementNode, TemplateSchema } from '../types'
 import { describe, expect, it, vi } from 'vitest'
@@ -809,23 +810,218 @@ describe('schemaEngine', () => {
     })
   })
 
+  describe('addBackgroundLayer', () => {
+    it('should auto-initialize background when not present', () => {
+      const engine = new SchemaEngine()
+
+      const layer: BackgroundLayer = { type: 'color', color: '#fff' }
+      engine.addBackgroundLayer(layer, -1)
+
+      expect(engine.schema.page.background).toBeDefined()
+      expect(engine.schema.page.background!.layers).toHaveLength(1)
+      expect(engine.schema.page.background!.layers[0]).toBe(layer)
+    })
+
+    it('should insert at specified index', () => {
+      const schema = createDefaultSchema()
+      schema.page.background = {
+        layers: [
+          { type: 'color', color: '#000' },
+          { type: 'color', color: '#fff' },
+        ],
+      }
+      const engine = new SchemaEngine({ schema })
+
+      const newLayer: BackgroundLayer = { type: 'image', url: 'test.png' }
+      engine.addBackgroundLayer(newLayer, 1)
+
+      expect(engine.schema.page.background!.layers).toHaveLength(3)
+      expect(engine.schema.page.background!.layers[1]).toBe(newLayer)
+    })
+
+    it('should append when index is -1', () => {
+      const schema = createDefaultSchema()
+      schema.page.background = { layers: [{ type: 'color', color: '#000' }] }
+      const engine = new SchemaEngine({ schema })
+
+      const newLayer: BackgroundLayer = { type: 'color', color: '#fff' }
+      engine.addBackgroundLayer(newLayer, -1)
+
+      expect(engine.schema.page.background!.layers).toHaveLength(2)
+      expect(engine.schema.page.background!.layers[1]).toBe(newLayer)
+    })
+
+    it('should trigger schemaChanged', () => {
+      const hooks = createPluginHooks()
+      const callback = vi.fn()
+      hooks.schemaChanged.on('test', callback)
+      const engine = new SchemaEngine({ hooks })
+
+      engine.addBackgroundLayer({ type: 'color', color: '#fff' }, -1)
+
+      expect(callback).toHaveBeenCalledOnce()
+    })
+  })
+
+  describe('removeBackgroundLayer', () => {
+    it('should remove layer at index and return it', () => {
+      const layer: BackgroundLayer = { type: 'color', color: '#000' }
+      const schema = createDefaultSchema()
+      schema.page.background = { layers: [layer, { type: 'color', color: '#fff' }] }
+      const engine = new SchemaEngine({ schema })
+
+      const removed = engine.removeBackgroundLayer(0)
+
+      expect(removed).toBe(layer)
+      expect(engine.schema.page.background!.layers).toHaveLength(1)
+    })
+
+    it('should return undefined when no background', () => {
+      const engine = new SchemaEngine()
+
+      expect(engine.removeBackgroundLayer(0)).toBeUndefined()
+    })
+
+    it('should return undefined for out-of-range index', () => {
+      const schema = createDefaultSchema()
+      schema.page.background = { layers: [{ type: 'color', color: '#000' }] }
+      const engine = new SchemaEngine({ schema })
+
+      expect(engine.removeBackgroundLayer(5)).toBeUndefined()
+      expect(engine.removeBackgroundLayer(-1)).toBeUndefined()
+    })
+
+    it('should trigger schemaChanged', () => {
+      const hooks = createPluginHooks()
+      const callback = vi.fn()
+      hooks.schemaChanged.on('test', callback)
+      const schema = createDefaultSchema()
+      schema.page.background = { layers: [{ type: 'color', color: '#000' }] }
+      const engine = new SchemaEngine({ schema, hooks })
+
+      engine.removeBackgroundLayer(0)
+
+      expect(callback).toHaveBeenCalledOnce()
+    })
+  })
+
+  describe('updateBackgroundLayer', () => {
+    it('should replace layer at index', () => {
+      const schema = createDefaultSchema()
+      schema.page.background = { layers: [{ type: 'color', color: '#000' }] }
+      const engine = new SchemaEngine({ schema })
+
+      const newLayer: BackgroundLayer = { type: 'color', color: '#fff', opacity: 0.5 }
+      engine.updateBackgroundLayer(0, newLayer)
+
+      expect(engine.schema.page.background!.layers[0]).toBe(newLayer)
+    })
+
+    it('should do nothing when no background', () => {
+      const engine = new SchemaEngine()
+
+      engine.updateBackgroundLayer(0, { type: 'color', color: '#fff' })
+
+      expect(engine.schema.page.background).toBeUndefined()
+    })
+
+    it('should do nothing for out-of-range index', () => {
+      const schema = createDefaultSchema()
+      schema.page.background = { layers: [{ type: 'color', color: '#000' }] }
+      const engine = new SchemaEngine({ schema })
+
+      engine.updateBackgroundLayer(5, { type: 'color', color: '#fff' })
+
+      expect(engine.schema.page.background!.layers).toHaveLength(1)
+      expect(engine.schema.page.background!.layers[0].type).toBe('color')
+    })
+
+    it('should trigger schemaChanged', () => {
+      const hooks = createPluginHooks()
+      const callback = vi.fn()
+      hooks.schemaChanged.on('test', callback)
+      const schema = createDefaultSchema()
+      schema.page.background = { layers: [{ type: 'color', color: '#000' }] }
+      const engine = new SchemaEngine({ schema, hooks })
+
+      engine.updateBackgroundLayer(0, { type: 'color', color: '#fff' })
+
+      expect(callback).toHaveBeenCalledOnce()
+    })
+  })
+
+  describe('reorderBackgroundLayer', () => {
+    it('should move layer from one position to another', () => {
+      const schema = createDefaultSchema()
+      const layerA: BackgroundLayer = { type: 'color', color: '#aaa' }
+      const layerB: BackgroundLayer = { type: 'color', color: '#bbb' }
+      const layerC: BackgroundLayer = { type: 'color', color: '#ccc' }
+      schema.page.background = { layers: [layerA, layerB, layerC] }
+      const engine = new SchemaEngine({ schema })
+
+      engine.reorderBackgroundLayer(0, 2)
+
+      expect(engine.schema.page.background!.layers).toEqual([layerB, layerC, layerA])
+    })
+
+    it('should do nothing when no background', () => {
+      const engine = new SchemaEngine()
+
+      engine.reorderBackgroundLayer(0, 1)
+
+      expect(engine.schema.page.background).toBeUndefined()
+    })
+
+    it('should do nothing for out-of-range fromIndex', () => {
+      const schema = createDefaultSchema()
+      schema.page.background = { layers: [{ type: 'color', color: '#000' }] }
+      const engine = new SchemaEngine({ schema })
+
+      engine.reorderBackgroundLayer(5, 0)
+
+      expect(engine.schema.page.background!.layers).toHaveLength(1)
+    })
+
+    it('should trigger schemaChanged', () => {
+      const hooks = createPluginHooks()
+      const callback = vi.fn()
+      hooks.schemaChanged.on('test', callback)
+      const schema = createDefaultSchema()
+      schema.page.background = {
+        layers: [
+          { type: 'color', color: '#000' },
+          { type: 'color', color: '#fff' },
+        ],
+      }
+      const engine = new SchemaEngine({ schema, hooks })
+
+      engine.reorderBackgroundLayer(0, 1)
+
+      expect(callback).toHaveBeenCalledOnce()
+    })
+  })
+
   describe('operations', () => {
     it('should return SchemaOperations object', () => {
       const engine = new SchemaEngine()
       const ops = engine.operations
 
-      expect(ops.getElement).toBeTypeOf('function')
+      expect(ops.addBackgroundLayer).toBeTypeOf('function')
       expect(ops.addElement).toBeTypeOf('function')
+      expect(ops.getElement).toBeTypeOf('function')
+      expect(ops.getPageSettings).toBeTypeOf('function')
+      expect(ops.removeBackgroundLayer).toBeTypeOf('function')
       expect(ops.removeElement).toBeTypeOf('function')
+      expect(ops.reorderBackgroundLayer).toBeTypeOf('function')
       expect(ops.reorderElement).toBeTypeOf('function')
+      expect(ops.updateBackgroundLayer).toBeTypeOf('function')
+      expect(ops.updateElementBinding).toBeTypeOf('function')
       expect(ops.updateElementLayout).toBeTypeOf('function')
       expect(ops.updateElementLock).toBeTypeOf('function')
       expect(ops.updateElementProps).toBeTypeOf('function')
       expect(ops.updateElementStyle).toBeTypeOf('function')
       expect(ops.updateElementVisibility).toBeTypeOf('function')
-      expect(ops.updateElementBinding).toBeTypeOf('function')
       expect(ops.updateExtensions).toBeTypeOf('function')
-      expect(ops.getPageSettings).toBeTypeOf('function')
       expect(ops.updatePageSettings).toBeTypeOf('function')
     })
 
