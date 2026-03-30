@@ -4,6 +4,7 @@ import {
   createMoveElementCommand,
   createRemoveElementCommand,
 } from '@easyink/core'
+import { cloneDeep } from '@easyink/shared'
 
 export function useBatchOperations(
   engine: EasyInkEngine,
@@ -40,7 +41,7 @@ export function useBatchOperations(
       .map((id) => {
         const idx = elements.findIndex(el => el.id === id)
         const el = elements[idx]
-        return idx >= 0 && el ? { element: structuredClone(el), id, index: idx } : null
+        return idx >= 0 && el ? { element: cloneDeep(el), id, index: idx } : null
       })
       .filter((e): e is NonNullable<typeof e> => e !== null)
       .sort((a, b) => b.index - a.index)

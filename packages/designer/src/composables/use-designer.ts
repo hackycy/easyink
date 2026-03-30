@@ -6,7 +6,7 @@ import {
   EasyInkEngine,
 } from '@easyink/core'
 import { ScreenRenderer } from '@easyink/renderer'
-import { generateId } from '@easyink/shared'
+import { cloneDeep, generateId } from '@easyink/shared'
 import { computed, onUnmounted, ref, shallowRef } from 'vue'
 import { useLocale } from '../locale/use-locale'
 import { useBatchOperations } from './use-batch-operations'
@@ -107,7 +107,7 @@ export function useDesigner(options?: DesignerOptions) {
     const elements = engine.schema.schema.elements
     const index = elements.indexOf(el)
     const cmd = createRemoveElementCommand(
-      { element: structuredClone(el), index },
+      { element: cloneDeep(el), index },
       engine.operations,
     )
     engine.execute(cmd)

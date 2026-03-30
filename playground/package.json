@@ -10,9 +10,11 @@
     "@easyink/core": "workspace:*",
     "@easyink/designer": "workspace:*",
     "@easyink/renderer": "workspace:*",
+    "lodash-es": "catalog:inlined",
     "vue": "catalog:framework"
   },
   "devDependencies": {
+    "@types/lodash-es": "catalog:types",
     "@vitejs/plugin-vue": "catalog:cli",
     "vite": "catalog:cli"
   }

@@ -21,5 +21,11 @@
     "dev": "tsdown --watch",
     "test": "vitest",
     "typecheck": "tsc"
+  },
+  "dependencies": {
+    "lodash-es": "catalog:inlined"
+  },
+  "devDependencies": {
+    "@types/lodash-es": "catalog:types"
   }
 }

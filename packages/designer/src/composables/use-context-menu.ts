@@ -5,7 +5,7 @@ import {
   createReorderElementCommand,
   createToggleLockCommand,
 } from '@easyink/core'
-import { generateId } from '@easyink/shared'
+import { cloneDeep, generateId } from '@easyink/shared'
 import { ref } from 'vue'
 
 export interface ContextMenuItem {
@@ -33,7 +33,7 @@ export function useContextMenu(
     if (elements.length === 0) {
       return
     }
-    _clipboard = elements.map(el => structuredClone(el))
+    _clipboard = elements.map(el => cloneDeep(el))
   }
 
   function _paste(): void {
@@ -41,7 +41,7 @@ export function useContextMenu(
       return
     }
     if (_clipboard.length === 1) {
-      const cloned = structuredClone(_clipboard[0])
+      const cloned: ElementNode = cloneDeep(_clipboard[0])
       cloned.id = generateId()
       if (cloned.layout.x != null) {
         cloned.layout.x += 5
@@ -60,7 +60,7 @@ export function useContextMenu(
       const newIds: string[] = []
       engine.commands.beginTransaction('粘贴')
       for (const el of _clipboard) {
-        const cloned = structuredClone(el)
+        const cloned: ElementNode = cloneDeep(el)
         cloned.id = generateId()
         if (cloned.layout.x != null) {
           cloned.layout.x += 5

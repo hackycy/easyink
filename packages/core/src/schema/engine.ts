@@ -10,6 +10,7 @@ import type {
   PageSettings,
   TemplateSchema,
 } from './types'
+import { cloneDeep } from '@easyink/shared'
 import { createDefaultSchema, SCHEMA_VERSION } from './defaults'
 
 // ─── 类型定义 ───
@@ -452,7 +453,7 @@ export class SchemaEngine {
    * 导出 Schema 深拷贝（修改输出不影响内部状态）
    */
   toJSON(): TemplateSchema {
-    return structuredClone(this._schema)
+    return cloneDeep(this._schema)
   }
 
   /**
