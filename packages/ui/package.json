@@ -25,6 +25,7 @@
     "vue": "^3"
   },
   "dependencies": {
+    "@easyink/core": "workspace:*",
     "@easyink/shared": "workspace:*"
   },
   "devDependencies": {

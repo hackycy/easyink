@@ -335,6 +335,9 @@ importers:
 
   packages/ui:
     dependencies:
+      '@easyink/core':
+        specifier: workspace:*
+        version: link:../core
       '@easyink/shared':
         specifier: workspace:*
         version: link:../shared

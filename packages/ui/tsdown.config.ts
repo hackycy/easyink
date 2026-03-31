@@ -8,5 +8,5 @@ export default defineConfig({
   },
   exports: true,
   publint: true,
-  external: ['vue'],
+  external: ['vue', '@easyink/core', '@easyink/shared'],
 })

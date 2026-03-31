@@ -1,0 +1,455 @@
+/**
+ * EasyInk UI Editor Components Styles
+ *
+ * Compact mode optimized for property panels.
+ * All classes use `.ei-` prefix.
+ */
+
+/* ─── Shared base ─── */
+.ei-editor {
+  box-sizing: border-box;
+  font-family: inherit;
+  font-size: var(--ei-font-size-md);
+  color: var(--ei-color-text);
+  transition: border-color var(--ei-transition-duration), box-shadow var(--ei-transition-duration);
+}
+
+.ei-editor:disabled {
+  color: var(--ei-color-text-disabled);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* ─── Input ─── */
+.ei-input {
+  display: block;
+  width: 100%;
+  height: var(--ei-control-height);
+  padding: 0 var(--ei-spacing-sm);
+  border: 1px solid var(--ei-color-border);
+  border-radius: var(--ei-radius-sm);
+  background: var(--ei-color-bg);
+  outline: none;
+}
+
+.ei-input:hover:not(:disabled) {
+  border-color: var(--ei-color-border-hover);
+}
+
+.ei-input:focus:not(:disabled) {
+  border-color: var(--ei-color-primary);
+  box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.1);
+}
+
+.ei-input--error {
+  border-color: var(--ei-color-error);
+}
+
+.ei-input--error:focus {
+  box-shadow: 0 0 0 2px rgba(255, 77, 79, 0.1);
+}
+
+/* ─── Number Input ─── */
+.ei-number-input {
+  display: flex;
+  align-items: center;
+  height: var(--ei-control-height);
+  border: 1px solid var(--ei-color-border);
+  border-radius: var(--ei-radius-sm);
+  background: var(--ei-color-bg);
+  overflow: hidden;
+}
+
+.ei-number-input:hover:not(.ei-number-input--disabled) {
+  border-color: var(--ei-color-border-hover);
+}
+
+.ei-number-input:focus-within:not(.ei-number-input--disabled) {
+  border-color: var(--ei-color-primary);
+  box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.1);
+}
+
+.ei-number-input__inner {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0 var(--ei-spacing-sm);
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: var(--ei-font-size-md);
+  color: var(--ei-color-text);
+  -moz-appearance: textfield;
+}
+
+.ei-number-input__inner::-webkit-inner-spin-button,
+.ei-number-input__inner::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.ei-number-input__controls {
+  display: flex;
+  flex-direction: column;
+  width: 20px;
+  border-left: 1px solid var(--ei-color-border);
+}
+
+.ei-number-input__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: 0;
+  border: none;
+  background: var(--ei-color-bg-secondary);
+  cursor: pointer;
+  font-size: 10px;
+  color: var(--ei-color-text-secondary);
+  line-height: 1;
+}
+
+.ei-number-input__btn:hover {
+  background: var(--ei-color-bg-hover);
+  color: var(--ei-color-primary);
+}
+
+.ei-number-input__btn:first-child {
+  border-bottom: 1px solid var(--ei-color-border);
+}
+
+.ei-number-input__btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+/* ─── Select ─── */
+.ei-select {
+  display: block;
+  width: 100%;
+  height: var(--ei-control-height);
+  padding: 0 var(--ei-spacing-sm);
+  padding-right: 24px;
+  border: 1px solid var(--ei-color-border);
+  border-radius: var(--ei-radius-sm);
+  background: var(--ei-color-bg);
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24'%3E%3Cpath fill='%238c8c8c' d='m12 15.4l-6-6L7.4 8l4.6 4.6L16.6 8L18 9.4z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+  background-size: 12px;
+  font-size: var(--ei-font-size-md);
+  color: var(--ei-color-text);
+}
+
+.ei-select:hover:not(:disabled) {
+  border-color: var(--ei-color-border-hover);
+}
+
+.ei-select:focus:not(:disabled) {
+  border-color: var(--ei-color-primary);
+  box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.1);
+}
+
+/* ─── Switch ─── */
+.ei-switch {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+  cursor: pointer;
+}
+
+.ei-switch__input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.ei-switch__track {
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+  background: var(--ei-color-border);
+  transition: background var(--ei-transition-duration);
+}
+
+.ei-switch__input:checked + .ei-switch__track {
+  background: var(--ei-color-primary);
+}
+
+.ei-switch__thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: transform var(--ei-transition-duration);
+}
+
+.ei-switch__input:checked ~ .ei-switch__thumb {
+  transform: translateX(16px);
+}
+
+.ei-switch__input:disabled + .ei-switch__track {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ei-switch__input:disabled ~ .ei-switch__thumb {
+  cursor: not-allowed;
+}
+
+/* ─── Color Picker ─── */
+.ei-color-picker {
+  display: flex;
+  align-items: center;
+  gap: var(--ei-spacing-xs);
+  height: var(--ei-control-height);
+}
+
+.ei-color-picker__swatch {
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--ei-color-border);
+  border-radius: var(--ei-radius-sm);
+  padding: 0;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.ei-color-picker__swatch::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.ei-color-picker__swatch::-webkit-color-swatch {
+  border: none;
+}
+
+.ei-color-picker__text {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0 var(--ei-spacing-sm);
+  border: 1px solid var(--ei-color-border);
+  border-radius: var(--ei-radius-sm);
+  background: var(--ei-color-bg);
+  outline: none;
+  font-size: var(--ei-font-size-md);
+  color: var(--ei-color-text);
+  font-family: monospace;
+}
+
+.ei-color-picker__text:focus {
+  border-color: var(--ei-color-primary);
+  box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.1);
+}
+
+/* ─── Slider ─── */
+.ei-slider {
+  display: flex;
+  align-items: center;
+  gap: var(--ei-spacing-sm);
+  height: var(--ei-control-height);
+}
+
+.ei-slider__track {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--ei-color-border);
+  outline: none;
+}
+
+.ei-slider__track::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--ei-color-primary);
+  cursor: pointer;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.ei-slider__track::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--ei-color-primary);
+  cursor: pointer;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.ei-slider__value {
+  min-width: 32px;
+  text-align: right;
+  font-size: var(--ei-font-size-sm);
+  color: var(--ei-color-text-secondary);
+}
+
+/* ─── Font Selector ─── */
+.ei-font-selector {
+  display: block;
+  width: 100%;
+}
+
+.ei-font-selector .ei-select {
+  width: 100%;
+}
+
+/* ─── PropForm ─── */
+.ei-prop-form {
+  display: flex;
+  flex-direction: column;
+}
+
+.ei-prop-form__group {
+  border-bottom: 1px solid var(--ei-color-border);
+}
+
+.ei-prop-form__group:last-child {
+  border-bottom: none;
+}
+
+.ei-prop-form__group-header {
+  display: flex;
+  align-items: center;
+  gap: var(--ei-spacing-xs);
+  padding: var(--ei-spacing-sm) 0;
+  cursor: pointer;
+  font-size: var(--ei-font-size-md);
+  font-weight: 500;
+  color: var(--ei-color-text);
+  user-select: none;
+}
+
+.ei-prop-form__group-header:hover {
+  color: var(--ei-color-primary);
+}
+
+.ei-prop-form__group-arrow {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid currentColor;
+  transition: transform var(--ei-transition-duration);
+}
+
+.ei-prop-form__group-arrow--collapsed {
+  transform: rotate(-90deg);
+}
+
+.ei-prop-form__group-body {
+  padding-bottom: var(--ei-spacing-sm);
+}
+
+.ei-prop-form__row {
+  display: flex;
+  align-items: center;
+  gap: var(--ei-spacing-sm);
+  min-height: var(--ei-control-height);
+  padding: var(--ei-spacing-xs) 0;
+}
+
+.ei-prop-form__label {
+  flex-shrink: 0;
+  width: 72px;
+  font-size: var(--ei-font-size-sm);
+  color: var(--ei-color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ei-prop-form__editor {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ─── Array Editor ─── */
+.ei-array-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ei-spacing-xs);
+}
+
+.ei-array-editor__item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ei-spacing-xs);
+  padding: var(--ei-spacing-sm);
+  border: 1px solid var(--ei-color-border);
+  border-radius: var(--ei-radius-sm);
+  background: var(--ei-color-bg-secondary);
+}
+
+.ei-array-editor__item-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.ei-array-editor__item-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.ei-array-editor__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--ei-color-border);
+  border-radius: var(--ei-radius-sm);
+  background: var(--ei-color-bg);
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--ei-color-text-secondary);
+  line-height: 1;
+}
+
+.ei-array-editor__btn:hover {
+  border-color: var(--ei-color-primary);
+  color: var(--ei-color-primary);
+}
+
+.ei-array-editor__btn--danger:hover {
+  border-color: var(--ei-color-error);
+  color: var(--ei-color-error);
+}
+
+.ei-array-editor__add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ei-spacing-xs);
+  height: var(--ei-control-height);
+  border: 1px dashed var(--ei-color-border);
+  border-radius: var(--ei-radius-sm);
+  background: transparent;
+  cursor: pointer;
+  font-size: var(--ei-font-size-sm);
+  color: var(--ei-color-text-secondary);
+  width: 100%;
+}
+
+.ei-array-editor__add:hover {
+  border-color: var(--ei-color-primary);
+  color: var(--ei-color-primary);
+}
