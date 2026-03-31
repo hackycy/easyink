@@ -1,6 +1,6 @@
 /// <reference lib="dom" />
 
-import type { ElementNode, TemplateSchema } from '../schema'
+import type { MaterialNode, TemplateSchema } from '../schema'
 import type { AsyncEvent, SyncBailHook, SyncWaterfallHook } from './hooks'
 
 // ─── 钩子事件载荷 ───
@@ -11,8 +11,8 @@ import type { AsyncEvent, SyncBailHook, SyncWaterfallHook } from './hooks'
 export interface SchemaChangeEvent {
   /** 变更类型 */
   type: 'add' | 'remove' | 'update' | 'reorder'
-  /** 受影响的元素 ID（如有） */
-  elementId?: string
+  /** 受影响的物料 ID（如有） */
+  materialId?: string
   /** 变更前的值（部分场景） */
   oldValue?: unknown
   /** 变更后的值（部分场景） */
@@ -60,14 +60,14 @@ export interface ExportResult {
 export interface PluginHooks {
   // ─── 同步钩子（可拦截/修改） ───
 
-  /** 渲染前 — 可修改待渲染元素的属性 */
-  beforeRender: SyncWaterfallHook<[ElementNode, RenderContext]>
+  /** 渲染前 — 可修改待渲染物料的属性 */
+  beforeRender: SyncWaterfallHook<[MaterialNode, RenderContext]>
   /** 渲染后 — 可修改生成的 DOM 节点 */
-  afterRender: SyncWaterfallHook<[HTMLElement, ElementNode]>
+  afterRender: SyncWaterfallHook<[HTMLElement, MaterialNode]>
   /** 导出前 — 可修改导出配置或注入内容 */
   beforeExport: SyncWaterfallHook<[ExportContext]>
-  /** 元素创建前 — 可修改默认属性 */
-  beforeElementCreate: SyncWaterfallHook<[ElementNode]>
+  /** 物料创建前 — 可修改默认属性 */
+  beforeMaterialCreate: SyncWaterfallHook<[MaterialNode]>
   /** 数据解析前 — 可修改数据上下文 */
   beforeDataResolve: SyncWaterfallHook<[Record<string, unknown>]>
   /** Schema 变更前 — 可拦截或修改变更 */
@@ -77,7 +77,7 @@ export interface PluginHooks {
 
   /** Schema 已变更 */
   schemaChanged: AsyncEvent<[TemplateSchema]>
-  /** 选中元素变更 */
+  /** 选中物料变更 */
   selectionChanged: AsyncEvent<[string[]]>
   /** 导出完成 */
   exportCompleted: AsyncEvent<[ExportResult]>

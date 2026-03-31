@@ -51,8 +51,8 @@ export interface ComputedLayout {
  * 整体布局计算结果
  */
 export interface LayoutResult {
-  /** 每个元素的计算后布局，key 为元素 ID */
-  elements: Map<string, ComputedLayout>
+  /** 每个物料的计算后布局，key 为物料 ID */
+  materials: Map<string, ComputedLayout>
   /** 流式元素的总内容高度（供 auto-extend 溢出判断） */
   bodyContentHeight: number
 }

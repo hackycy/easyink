@@ -1,4 +1,4 @@
-import type { ElementNode, PageSettings, TemplateSchema } from '../../schema'
+import type { MaterialNode, PageSettings, TemplateSchema } from '../../schema'
 import type { ContentArea } from '../types'
 import { describe, expect, it } from 'vitest'
 import { createDefaultSchema } from '../../schema'
@@ -7,7 +7,7 @@ import { PAPER_SIZES } from '../types'
 
 // ── 辅助函数 ──
 
-function createElement(overrides?: Partial<ElementNode>): ElementNode {
+function createElement(overrides?: Partial<MaterialNode>): MaterialNode {
   return {
     id: `el-${Math.random().toString(36).slice(2, 8)}`,
     type: 'text',
@@ -18,7 +18,7 @@ function createElement(overrides?: Partial<ElementNode>): ElementNode {
   }
 }
 
-function createFlowElement(overrides?: Partial<ElementNode>): ElementNode {
+function createFlowElement(overrides?: Partial<MaterialNode>): MaterialNode {
   return createElement({
     layout: { position: 'flow', width: 'auto', height: 'auto' },
     ...overrides,
@@ -26,11 +26,11 @@ function createFlowElement(overrides?: Partial<ElementNode>): ElementNode {
 }
 
 function createSchemaWithElements(
-  elements: ElementNode[],
+  elements: MaterialNode[],
   page?: Partial<PageSettings>,
 ): TemplateSchema {
   const schema = createDefaultSchema()
-  schema.elements = elements
+  schema.materials = elements
   if (page)
     Object.assign(schema.page, page)
   return schema
@@ -255,7 +255,7 @@ describe('layoutEngine', () => {
       const schema = createSchemaWithElements([el])
       const result = engine.calculate(schema)
 
-      const computed = result.elements.get('abs1')!
+      const computed = result.materials.get('abs1')!
       expect(computed.x).toBe(50)
       expect(computed.y).toBe(80)
       expect(computed.width).toBe(100)
@@ -271,7 +271,7 @@ describe('layoutEngine', () => {
       const schema = createSchemaWithElements([el])
       const result = engine.calculate(schema)
 
-      const computed = result.elements.get('abs2')!
+      const computed = result.materials.get('abs2')!
       expect(computed.x).toBe(0)
       expect(computed.y).toBe(0)
     })
@@ -285,7 +285,7 @@ describe('layoutEngine', () => {
       const contentArea = getContentArea(schema)
       const result = engine.calculate(schema)
 
-      const computed = result.elements.get('abs3')!
+      const computed = result.materials.get('abs3')!
       expect(computed.width).toBe(contentArea.width)
       expect(computed.needsMeasure).toBe(true)
     })
@@ -298,7 +298,7 @@ describe('layoutEngine', () => {
       const schema = createSchemaWithElements([el])
       const result = engine.calculate(schema)
 
-      const computed = result.elements.get('abs4')!
+      const computed = result.materials.get('abs4')!
       expect(computed.height).toBe(30) // defaultFlowHeight
       expect(computed.needsMeasure).toBe(true)
     })
@@ -311,7 +311,7 @@ describe('layoutEngine', () => {
       const schema = createSchemaWithElements([el])
       const result = engine.calculate(schema)
 
-      const computed = result.elements.get('abs5')!
+      const computed = result.materials.get('abs5')!
       expect(computed.boundingBox.width).toBeCloseTo(50, 5)
       expect(computed.boundingBox.height).toBeCloseTo(100, 5)
     })
@@ -349,8 +349,8 @@ describe('layoutEngine', () => {
       const contentArea = getContentArea(schema)
       const result = engine.calculate(schema)
 
-      const c1 = result.elements.get('flow1')!
-      const c2 = result.elements.get('flow2')!
+      const c1 = result.materials.get('flow1')!
+      const c2 = result.materials.get('flow2')!
 
       expect(c1.x).toBe(contentArea.x)
       expect(c1.y).toBe(contentArea.y)
@@ -370,7 +370,7 @@ describe('layoutEngine', () => {
       const contentArea = getContentArea(schema)
       const result = engine.calculate(schema)
 
-      expect(result.elements.get('flow3')!.width).toBe(contentArea.width)
+      expect(result.materials.get('flow3')!.width).toBe(contentArea.width)
     })
 
     it('should use explicit width when specified', () => {
@@ -381,7 +381,7 @@ describe('layoutEngine', () => {
       const schema = createSchemaWithElements([el])
       const result = engine.calculate(schema)
 
-      expect(result.elements.get('flow4')!.width).toBe(150)
+      expect(result.materials.get('flow4')!.width).toBe(150)
     })
 
     it('should resolve auto height with needsMeasure', () => {
@@ -389,7 +389,7 @@ describe('layoutEngine', () => {
       const schema = createSchemaWithElements([el])
       const result = engine.calculate(schema)
 
-      const computed = result.elements.get('flow5')!
+      const computed = result.materials.get('flow5')!
       expect(computed.height).toBe(30) // defaultFlowHeight
       expect(computed.needsMeasure).toBe(true)
     })
@@ -402,7 +402,7 @@ describe('layoutEngine', () => {
       const schema = createSchemaWithElements([el])
       const result = engine.calculate(schema)
 
-      expect(result.elements.get('flow6')!.needsMeasure).toBe(false)
+      expect(result.materials.get('flow6')!.needsMeasure).toBe(false)
     })
 
     it('should calculate bodyContentHeight as sum of flow heights', () => {
@@ -441,7 +441,7 @@ describe('layoutEngine', () => {
       const result = engine.calculate(schema)
 
       // flow element should start at contentArea.y, not after absolute
-      expect(result.elements.get('flow')!.y).toBe(contentArea.y)
+      expect(result.materials.get('flow')!.y).toBe(contentArea.y)
       expect(result.bodyContentHeight).toBe(50)
     })
 
@@ -464,12 +464,12 @@ describe('layoutEngine', () => {
       const result = engine.calculate(schema)
 
       // f1 at contentArea.y
-      expect(result.elements.get('f1')!.y).toBe(contentArea.y)
+      expect(result.materials.get('f1')!.y).toBe(contentArea.y)
       // a1 at declared position
-      expect(result.elements.get('a1')!.x).toBe(50)
-      expect(result.elements.get('a1')!.y).toBe(50)
+      expect(result.materials.get('a1')!.x).toBe(50)
+      expect(result.materials.get('a1')!.y).toBe(50)
       // f2 stacks after f1
-      expect(result.elements.get('f2')!.y).toBe(contentArea.y + 30)
+      expect(result.materials.get('f2')!.y).toBe(contentArea.y + 30)
       expect(result.bodyContentHeight).toBe(70)
     })
   })
@@ -486,8 +486,8 @@ describe('layoutEngine', () => {
       ])
       const result = engine.calculate(schema)
 
-      expect(result.elements.has('visible')).toBe(true)
-      expect(result.elements.has('hidden1')).toBe(false)
+      expect(result.materials.has('visible')).toBe(true)
+      expect(result.materials.has('hidden1')).toBe(false)
     })
 
     it('should not count hidden flow elements in bodyContentHeight', () => {
@@ -505,7 +505,7 @@ describe('layoutEngine', () => {
       const result = engine.calculate(schema)
 
       expect(result.bodyContentHeight).toBe(40)
-      expect(result.elements.size).toBe(1)
+      expect(result.materials.size).toBe(1)
     })
 
     it('should skip hidden children', () => {
@@ -527,8 +527,8 @@ describe('layoutEngine', () => {
       const schema = createSchemaWithElements([parent])
       const result = engine.calculate(schema)
 
-      expect(result.elements.has('child-visible')).toBe(true)
-      expect(result.elements.has('child-hidden')).toBe(false)
+      expect(result.materials.has('child-visible')).toBe(true)
+      expect(result.materials.has('child-hidden')).toBe(false)
     })
   })
 
@@ -541,7 +541,7 @@ describe('layoutEngine', () => {
       const schema = createDefaultSchema()
       const result = engine.calculate(schema)
 
-      expect(result.elements.size).toBe(0)
+      expect(result.materials.size).toBe(0)
       expect(result.bodyContentHeight).toBe(0)
     })
   })
@@ -565,7 +565,7 @@ describe('layoutEngine', () => {
       const schema = createSchemaWithElements([parent])
       const result = engine.calculate(schema)
 
-      const child = result.elements.get('child1')!
+      const child = result.materials.get('child1')!
       expect(child.x).toBe(60) // parent.x + child.x
       expect(child.y).toBe(120) // parent.y + child.y
       expect(child.width).toBe(80)
@@ -586,7 +586,7 @@ describe('layoutEngine', () => {
       const schema = createSchemaWithElements([parent])
       const result = engine.calculate(schema)
 
-      const child = result.elements.get('child-auto-w')!
+      const child = result.materials.get('child-auto-w')!
       expect(child.width).toBe(200) // parent width
       expect(child.needsMeasure).toBe(true)
     })
@@ -605,7 +605,7 @@ describe('layoutEngine', () => {
       const schema = createSchemaWithElements([parent])
       const result = engine.calculate(schema)
 
-      const child = result.elements.get('rotated-child')!
+      const child = result.materials.get('rotated-child')!
       expect(child.boundingBox.width).toBeCloseTo(50, 5)
       expect(child.boundingBox.height).toBeCloseTo(100, 5)
     })
@@ -634,7 +634,7 @@ describe('layoutEngine', () => {
       const schema = createSchemaWithElements([table])
       const result = engine.calculate(schema, data)
 
-      const computed = result.elements.get('table1')!
+      const computed = result.materials.get('table1')!
       // headerHeight(25) + 3 rows * 25 = 100
       expect(computed.height).toBe(100)
       expect(computed.needsMeasure).toBe(true)
@@ -657,7 +657,7 @@ describe('layoutEngine', () => {
       const schema = createSchemaWithElements([table])
       const result = engine.calculate(schema, data)
 
-      const computed = result.elements.get('table2')!
+      const computed = result.materials.get('table2')!
       // header(20) + 2 * 20 = 60
       expect(computed.height).toBe(60)
     })
@@ -674,7 +674,7 @@ describe('layoutEngine', () => {
       const schema = createSchemaWithElements([table])
       const result = engine.calculate(schema, data)
 
-      const computed = result.elements.get('table3')!
+      const computed = result.materials.get('table3')!
       // default 30: header(30) + 2 * 30 = 90
       expect(computed.height).toBe(90)
     })
@@ -690,7 +690,7 @@ describe('layoutEngine', () => {
       const schema = createSchemaWithElements([table])
       const result = engine.calculate(schema)
 
-      const computed = result.elements.get('table4')!
+      const computed = result.materials.get('table4')!
       expect(computed.height).toBe(30) // defaultFlowHeight
       expect(computed.needsMeasure).toBe(true)
     })
@@ -700,8 +700,8 @@ describe('layoutEngine', () => {
       const schema = createSchemaWithElements([el])
       const result = engine.calculate(schema)
 
-      expect(result.elements.get('text1')!.height).toBe(30)
-      expect(result.elements.get('text1')!.needsMeasure).toBe(true)
+      expect(result.materials.get('text1')!.height).toBe(30)
+      expect(result.materials.get('text1')!.needsMeasure).toBe(true)
     })
 
     it('should use custom defaultFlowHeight from options', () => {
@@ -710,7 +710,7 @@ describe('layoutEngine', () => {
       const schema = createSchemaWithElements([el])
       const result = customEngine.calculate(schema)
 
-      expect(result.elements.get('custom1')!.height).toBe(50)
+      expect(result.materials.get('custom1')!.height).toBe(50)
     })
 
     it('should use defaultFlowHeight when data source is not an array', () => {
@@ -725,7 +725,7 @@ describe('layoutEngine', () => {
       const schema = createSchemaWithElements([table])
       const result = engine.calculate(schema, data)
 
-      expect(result.elements.get('table5')!.height).toBe(30)
+      expect(result.materials.get('table5')!.height).toBe(30)
     })
   })
 
@@ -744,7 +744,7 @@ describe('layoutEngine', () => {
       })
       const result = engine.calculate(schema)
 
-      const computed = result.elements.get('margined')!
+      const computed = result.materials.get('margined')!
       expect(computed.x).toBe(15) // margins.left
       expect(computed.y).toBe(20) // margins.top
       expect(computed.width).toBe(210 - 15 - 15) // A4 width - left - right
@@ -764,9 +764,9 @@ describe('layoutEngine', () => {
       ])
       const result = engine.calculate(schema)
 
-      expect(result.elements.size).toBe(2)
-      expect(result.elements.has('a')).toBe(true)
-      expect(result.elements.has('b')).toBe(true)
+      expect(result.materials.size).toBe(2)
+      expect(result.materials.has('a')).toBe(true)
+      expect(result.materials.has('b')).toBe(true)
     })
 
     it('should include all ComputedLayout fields', () => {
@@ -777,7 +777,7 @@ describe('layoutEngine', () => {
         }),
       ])
       const result = engine.calculate(schema)
-      const computed = result.elements.get('full')!
+      const computed = result.materials.get('full')!
 
       expect(computed).toHaveProperty('x')
       expect(computed).toHaveProperty('y')
@@ -801,7 +801,7 @@ describe('layoutEngine', () => {
       const schema = createSchemaWithElements([el])
       const result = engine.calculate(schema)
 
-      expect(result.elements.get('def1')!.height).toBe(30)
+      expect(result.materials.get('def1')!.height).toBe(30)
     })
 
     it('should accept custom defaultFlowHeight', () => {
@@ -810,7 +810,7 @@ describe('layoutEngine', () => {
       const schema = createSchemaWithElements([el])
       const result = engine.calculate(schema)
 
-      expect(result.elements.get('custom-h')!.height).toBe(100)
+      expect(result.materials.get('custom-h')!.height).toBe(100)
     })
   })
 
@@ -852,9 +852,9 @@ describe('layoutEngine', () => {
       const contentArea = getContentArea(schema)
       const result = engine.calculate(schema, data)
 
-      const t1 = result.elements.get('title')!
-      const tbl = result.elements.get('data-table')!
-      const t2 = result.elements.get('footer-text')!
+      const t1 = result.materials.get('title')!
+      const tbl = result.materials.get('data-table')!
+      const t2 = result.materials.get('footer-text')!
 
       // title at top
       expect(t1.y).toBe(contentArea.y)
@@ -888,11 +888,11 @@ describe('layoutEngine', () => {
       const result = engine.calculate(schema)
 
       // Stamp at declared position
-      expect(result.elements.get('stamp')!.x).toBe(120)
-      expect(result.elements.get('stamp')!.y).toBe(180)
+      expect(result.materials.get('stamp')!.x).toBe(120)
+      expect(result.materials.get('stamp')!.y).toBe(180)
 
       // Flow content starts at contentArea.y (unaffected by stamp)
-      expect(result.elements.get('content')!.y).toBe(contentArea.y)
+      expect(result.materials.get('content')!.y).toBe(contentArea.y)
 
       // Only flow contributes to bodyContentHeight
       expect(result.bodyContentHeight).toBe(200)

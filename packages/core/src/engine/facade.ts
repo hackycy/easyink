@@ -10,9 +10,9 @@ import type {
 import type { TemplateSchema } from '../schema'
 import { CommandManager } from '../command'
 import { DataResolver, DataSourceManager, registerBuiltinFormatters } from '../datasource'
-import { builtinElementTypes, ElementRegistry } from '../elements'
 import { FontManager } from '../font'
 import { LayoutEngine } from '../layout'
+import { builtinMaterialTypes, MaterialRegistry } from '../materials'
 import { createPluginHooks, PluginManager } from '../plugin'
 import { SchemaEngine } from '../schema'
 
@@ -55,7 +55,7 @@ export interface EasyInkEngineOptions {
  *
  * 构造顺序：
  * 1. hooks（钩子实例化）
- * 2. elementRegistry（注册内置元素类型）
+ * 2. materialRegistry（注册内置物料类型）
  * 3. schemaEngine（持有 Schema 状态）
  * 4. commandManager（撤销/重做栈）
  * 5. dataSourceManager + dataResolver（数据源注册与解析）
@@ -70,7 +70,7 @@ export class EasyInkEngine {
   readonly dataSource: DataSourceManager
   readonly dataResolver: DataResolver
   readonly layout: LayoutEngine
-  readonly elementRegistry: ElementRegistry
+  readonly materialRegistry: MaterialRegistry
   readonly font: FontManager
   readonly migration: MigrationRegistry | undefined
 
@@ -82,9 +82,9 @@ export class EasyInkEngine {
     // 1. 创建钩子实例
     this._hooks = createPluginHooks()
 
-    // 2. 元素注册中心（注册内置类型）
-    this.elementRegistry = new ElementRegistry()
-    this.elementRegistry.registerAll(builtinElementTypes)
+    // 2. 物料注册中心（注册内置类型）
+    this.materialRegistry = new MaterialRegistry()
+    this.materialRegistry.registerAll(builtinMaterialTypes)
 
     // 3. 迁移注册表
     this.migration = options?.migrationRegistry
@@ -93,7 +93,7 @@ export class EasyInkEngine {
     this.schema = new SchemaEngine({
       schema: options?.schema,
       hooks: this._hooks,
-      elementRegistry: this.elementRegistry,
+      materialRegistry: this.materialRegistry,
       migrationRegistry: this.migration,
     })
 
@@ -292,7 +292,7 @@ export class EasyInkEngine {
     this.dataSource.clear()
     this.dataResolver.clear()
     this.commands.clear()
-    this.elementRegistry.clear()
+    this.materialRegistry.clear()
     this.font.clear()
     this._data = {}
     this._destroyed = true

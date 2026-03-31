@@ -1,23 +1,23 @@
-import type { ElementTypeDefinition } from '../types'
+import type { MaterialTypeDefinition } from '../types'
 import { describe, expect, it } from 'vitest'
-import { ElementRegistry } from '../registry'
+import { MaterialRegistry } from '../registry'
 
-function createTestDefinition(overrides?: Partial<ElementTypeDefinition>): ElementTypeDefinition {
+function createTestDefinition(overrides?: Partial<MaterialTypeDefinition>): MaterialTypeDefinition {
   return {
     type: 'test-element',
     name: '测试元素',
     icon: 'test-icon',
-    propDefinitions: [],
+    propSchemas: [],
     defaultProps: {},
     defaultLayout: { position: 'absolute', width: 100, height: 50 },
     ...overrides,
   }
 }
 
-describe('elementRegistry', () => {
+describe('materialRegistry', () => {
   describe('register', () => {
     it('should register an element type', () => {
-      const registry = new ElementRegistry()
+      const registry = new MaterialRegistry()
       const def = createTestDefinition()
 
       registry.register(def)
@@ -27,7 +27,7 @@ describe('elementRegistry', () => {
     })
 
     it('should overwrite existing definition with same type', () => {
-      const registry = new ElementRegistry()
+      const registry = new MaterialRegistry()
       const def1 = createTestDefinition({ name: '旧定义' })
       const def2 = createTestDefinition({ name: '新定义' })
 
@@ -39,7 +39,7 @@ describe('elementRegistry', () => {
     })
 
     it('should throw TypeError if type is empty string', () => {
-      const registry = new ElementRegistry()
+      const registry = new MaterialRegistry()
       const def = createTestDefinition({ type: '' })
 
       expect(() => registry.register(def)).toThrow(TypeError)
@@ -47,7 +47,7 @@ describe('elementRegistry', () => {
     })
 
     it('should register multiple different types', () => {
-      const registry = new ElementRegistry()
+      const registry = new MaterialRegistry()
 
       registry.register(createTestDefinition({ type: 'text' }))
       registry.register(createTestDefinition({ type: 'image' }))
@@ -61,7 +61,7 @@ describe('elementRegistry', () => {
 
   describe('registerAll', () => {
     it('should register multiple definitions at once', () => {
-      const registry = new ElementRegistry()
+      const registry = new MaterialRegistry()
       const defs = [
         createTestDefinition({ type: 'a' }),
         createTestDefinition({ type: 'b' }),
@@ -74,7 +74,7 @@ describe('elementRegistry', () => {
     })
 
     it('should throw TypeError if any definition has empty type', () => {
-      const registry = new ElementRegistry()
+      const registry = new MaterialRegistry()
       const defs = [
         createTestDefinition({ type: 'a' }),
         createTestDefinition({ type: '' }),
@@ -86,7 +86,7 @@ describe('elementRegistry', () => {
 
   describe('unregister', () => {
     it('should unregister an existing type', () => {
-      const registry = new ElementRegistry()
+      const registry = new MaterialRegistry()
       registry.register(createTestDefinition())
 
       const result = registry.unregister('test-element')
@@ -96,7 +96,7 @@ describe('elementRegistry', () => {
     })
 
     it('should return false for non-existing type', () => {
-      const registry = new ElementRegistry()
+      const registry = new MaterialRegistry()
 
       const result = registry.unregister('non-existing')
 
@@ -106,13 +106,13 @@ describe('elementRegistry', () => {
 
   describe('get', () => {
     it('should return undefined for non-existing type', () => {
-      const registry = new ElementRegistry()
+      const registry = new MaterialRegistry()
 
       expect(registry.get('non-existing')).toBeUndefined()
     })
 
     it('should return the registered definition', () => {
-      const registry = new ElementRegistry()
+      const registry = new MaterialRegistry()
       const def = createTestDefinition()
       registry.register(def)
 
@@ -122,13 +122,13 @@ describe('elementRegistry', () => {
 
   describe('has', () => {
     it('should return false for non-existing type', () => {
-      const registry = new ElementRegistry()
+      const registry = new MaterialRegistry()
 
       expect(registry.has('non-existing')).toBe(false)
     })
 
     it('should return true for registered type', () => {
-      const registry = new ElementRegistry()
+      const registry = new MaterialRegistry()
       registry.register(createTestDefinition())
 
       expect(registry.has('test-element')).toBe(true)
@@ -137,13 +137,13 @@ describe('elementRegistry', () => {
 
   describe('list', () => {
     it('should return empty array when no types registered', () => {
-      const registry = new ElementRegistry()
+      const registry = new MaterialRegistry()
 
       expect(registry.list()).toEqual([])
     })
 
     it('should return all registered definitions', () => {
-      const registry = new ElementRegistry()
+      const registry = new MaterialRegistry()
       const defs = [
         createTestDefinition({ type: 'a' }),
         createTestDefinition({ type: 'b' }),
@@ -158,7 +158,7 @@ describe('elementRegistry', () => {
     })
 
     it('should return a copy (modifying result does not affect registry)', () => {
-      const registry = new ElementRegistry()
+      const registry = new MaterialRegistry()
       registry.register(createTestDefinition())
 
       const result = registry.list()
@@ -170,13 +170,13 @@ describe('elementRegistry', () => {
 
   describe('types', () => {
     it('should return empty array when no types registered', () => {
-      const registry = new ElementRegistry()
+      const registry = new MaterialRegistry()
 
       expect(registry.types()).toEqual([])
     })
 
     it('should return all registered type identifiers', () => {
-      const registry = new ElementRegistry()
+      const registry = new MaterialRegistry()
       registry.register(createTestDefinition({ type: 'text' }))
       registry.register(createTestDefinition({ type: 'image' }))
 
@@ -186,7 +186,7 @@ describe('elementRegistry', () => {
 
   describe('clear', () => {
     it('should remove all registered types', () => {
-      const registry = new ElementRegistry()
+      const registry = new MaterialRegistry()
       registry.register(createTestDefinition({ type: 'a' }))
       registry.register(createTestDefinition({ type: 'b' }))
 

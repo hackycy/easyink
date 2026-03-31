@@ -156,7 +156,7 @@ describe('pluginManager', () => {
     const manager = new PluginManager(hooks)
     const plugin = createTestPlugin('modifier', {
       install: (ctx) => {
-        ctx.hooks.beforeElementCreate.tap('modifier', (node) => {
+        ctx.hooks.beforeMaterialCreate.tap('modifier', (node) => {
           return { ...node, name: `[modified] ${node.name}` }
         })
       },
@@ -164,7 +164,7 @@ describe('pluginManager', () => {
 
     manager.install(plugin)
 
-    const result = hooks.beforeElementCreate.call({
+    const result = hooks.beforeMaterialCreate.call({
       id: '1',
       type: 'text',
       name: 'test',
@@ -182,7 +182,7 @@ describe('createPluginHooks', () => {
     expect(hooks.beforeRender).toBeDefined()
     expect(hooks.afterRender).toBeDefined()
     expect(hooks.beforeExport).toBeDefined()
-    expect(hooks.beforeElementCreate).toBeDefined()
+    expect(hooks.beforeMaterialCreate).toBeDefined()
     expect(hooks.beforeDataResolve).toBeDefined()
     expect(hooks.beforeSchemaChange).toBeDefined()
     expect(hooks.schemaChanged).toBeDefined()
@@ -194,9 +194,9 @@ describe('createPluginHooks', () => {
   it('should create independent instances', () => {
     const hooks1 = createPluginHooks()
     const hooks2 = createPluginHooks()
-    hooks1.beforeElementCreate.tap('test', node => node)
+    hooks1.beforeMaterialCreate.tap('test', node => node)
     // hooks2 should be unaffected
-    const result = hooks2.beforeElementCreate.call({
+    const result = hooks2.beforeMaterialCreate.call({
       id: '1',
       type: 'text',
       layout: { position: 'absolute', width: 100, height: 50 },

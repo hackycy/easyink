@@ -18,6 +18,6 @@ export function createDefaultSchema(): TemplateSchema {
       margins: { top: 10, right: 10, bottom: 10, left: 10 },
       unit: 'mm',
     },
-    elements: [],
+    materials: [],
   }
 }

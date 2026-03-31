@@ -1,5 +1,5 @@
 import type {
-  ElementNode,
+  MaterialNode,
   PageSettings,
   TemplateSchema,
 } from '../schema'
@@ -48,15 +48,15 @@ export class LayoutEngine {
       height: pageDimensions.height - margins.top - margins.bottom,
     }
 
-    const elements = new Map<string, ComputedLayout>()
+    const materials = new Map<string, ComputedLayout>()
     let flowCursor = contentArea.y
 
-    for (const element of schema.elements) {
+    for (const element of schema.materials) {
       if (element.hidden)
         continue
 
       const result = this._layoutElement(element, contentArea, flowCursor, data)
-      elements.set(element.id, result.computed)
+      materials.set(element.id, result.computed)
 
       if (element.layout.position === 'flow')
         flowCursor = result.nextFlowY
@@ -68,13 +68,13 @@ export class LayoutEngine {
             continue
 
           const childResult = this._layoutChild(child, result.computed)
-          elements.set(child.id, childResult)
+          materials.set(child.id, childResult)
         }
       }
     }
 
     return {
-      elements,
+      materials,
       bodyContentHeight: flowCursor - contentArea.y,
     }
   }
@@ -113,7 +113,7 @@ export class LayoutEngine {
    * 估算 auto height 元素的高度
    */
   resolveAutoHeight(
-    element: ElementNode,
+    element: MaterialNode,
     _contentArea: ContentArea,
     data?: Record<string, unknown>,
   ): { height: number, needsMeasure: boolean } {
@@ -172,7 +172,7 @@ export class LayoutEngine {
   // ── 内部方法 ──
 
   private _layoutElement(
-    element: ElementNode,
+    element: MaterialNode,
     contentArea: ContentArea,
     flowCursor: number,
     data?: Record<string, unknown>,
@@ -187,7 +187,7 @@ export class LayoutEngine {
   }
 
   private _layoutAbsolute(
-    element: ElementNode,
+    element: MaterialNode,
     contentArea: ContentArea,
   ): { computed: ComputedLayout, nextFlowY: number } {
     const { layout } = element
@@ -223,7 +223,7 @@ export class LayoutEngine {
   }
 
   private _layoutFlow(
-    element: ElementNode,
+    element: MaterialNode,
     contentArea: ContentArea,
     flowCursor: number,
     data?: Record<string, unknown>,
@@ -263,7 +263,7 @@ export class LayoutEngine {
    * children 的坐标系以父元素左上角为原点。
    */
   private _layoutChild(
-    child: ElementNode,
+    child: MaterialNode,
     parentLayout: ComputedLayout,
   ): ComputedLayout {
     const { layout } = child

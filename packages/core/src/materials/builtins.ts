@@ -1,37 +1,49 @@
-import type { ElementTypeDefinition } from './types'
+import type { MaterialTypeDefinition } from './types'
 
 // ─── Text 文本 ───
 
-export const textElementType: ElementTypeDefinition = {
+export const textMaterialType: MaterialTypeDefinition = {
   type: 'text',
   name: '文本',
   icon: 'text',
   category: 'basic',
-  propDefinitions: [
-    { key: 'content', label: '内容', editor: 'text', group: '文本', defaultValue: '' },
+  propSchemas: [
+    { key: 'content', label: '内容', type: 'string', group: '文本', defaultValue: '' },
     {
       key: 'verticalAlign',
       label: '垂直对齐',
-      editor: 'select',
+      type: 'select',
       group: '文本',
       defaultValue: 'top',
-      editorOptions: { options: ['top', 'middle', 'bottom'] },
+      enum: [
+        { label: 'top', value: 'top' },
+        { label: 'middle', value: 'middle' },
+        { label: 'bottom', value: 'bottom' },
+      ],
     },
     {
       key: 'wordBreak',
       label: '换行',
-      editor: 'select',
+      type: 'select',
       group: '文本',
       defaultValue: 'normal',
-      editorOptions: { options: ['normal', 'break-all', 'break-word'] },
+      enum: [
+        { label: 'normal', value: 'normal' },
+        { label: 'break-all', value: 'break-all' },
+        { label: 'break-word', value: 'break-word' },
+      ],
     },
     {
       key: 'overflow',
       label: '溢出',
-      editor: 'select',
+      type: 'select',
       group: '文本',
       defaultValue: 'visible',
-      editorOptions: { options: ['visible', 'hidden', 'ellipsis'] },
+      enum: [
+        { label: 'visible', value: 'visible' },
+        { label: 'hidden', value: 'hidden' },
+        { label: 'ellipsis', value: 'ellipsis' },
+      ],
     },
   ],
   defaultProps: {
@@ -53,22 +65,27 @@ export const textElementType: ElementTypeDefinition = {
 
 // ─── Image 图片 ───
 
-export const imageElementType: ElementTypeDefinition = {
+export const imageMaterialType: MaterialTypeDefinition = {
   type: 'image',
   name: '图片',
   icon: 'image',
   category: 'basic',
-  propDefinitions: [
-    { key: 'src', label: '图片地址', editor: 'text', group: '图片', defaultValue: '' },
+  propSchemas: [
+    { key: 'src', label: '图片地址', type: 'string', group: '图片', defaultValue: '' },
     {
       key: 'fit',
       label: '填充模式',
-      editor: 'select',
+      type: 'select',
       group: '图片',
       defaultValue: 'contain',
-      editorOptions: { options: ['contain', 'cover', 'fill', 'none'] },
+      enum: [
+        { label: 'contain', value: 'contain' },
+        { label: 'cover', value: 'cover' },
+        { label: 'fill', value: 'fill' },
+        { label: 'none', value: 'none' },
+      ],
     },
-    { key: 'alt', label: '替代文本', editor: 'text', group: '图片', defaultValue: '' },
+    { key: 'alt', label: '替代文本', type: 'string', group: '图片', defaultValue: '' },
   ],
   defaultProps: {
     src: '',
@@ -84,21 +101,21 @@ export const imageElementType: ElementTypeDefinition = {
 
 // ─── Rect 矩形 ───
 
-export const rectElementType: ElementTypeDefinition = {
+export const rectMaterialType: MaterialTypeDefinition = {
   type: 'rect',
   name: '矩形',
   icon: 'rect',
   category: 'basic',
-  propDefinitions: [
+  propSchemas: [
     {
       key: 'borderRadius',
       label: '圆角',
-      editor: 'number',
+      type: 'number',
       group: '矩形',
       defaultValue: 0,
-      editorOptions: { min: 0 },
+      min: 0,
     },
-    { key: 'fill', label: '填充色', editor: 'color', group: '矩形', defaultValue: 'transparent' },
+    { key: 'fill', label: '填充色', type: 'color', group: '矩形', defaultValue: 'transparent' },
   ],
   defaultProps: {
     borderRadius: 0,
@@ -113,48 +130,57 @@ export const rectElementType: ElementTypeDefinition = {
 
 // ─── Line 线条 ───
 
-export const lineElementType: ElementTypeDefinition = {
+export const lineMaterialType: MaterialTypeDefinition = {
   type: 'line',
   name: '线条',
   icon: 'line',
   category: 'basic',
-  propDefinitions: [
+  propSchemas: [
     {
       key: 'direction',
       label: '方向',
-      editor: 'select',
+      type: 'select',
       group: '线条',
       defaultValue: 'horizontal',
-      editorOptions: { options: ['horizontal', 'vertical', 'custom'] },
+      enum: [
+        { label: 'horizontal', value: 'horizontal' },
+        { label: 'vertical', value: 'vertical' },
+        { label: 'custom', value: 'custom' },
+      ],
     },
     {
       key: 'strokeWidth',
       label: '线宽',
-      editor: 'number',
+      type: 'number',
       group: '线条',
       defaultValue: 1,
-      editorOptions: { min: 0.5, step: 0.5 },
+      min: 0.5,
+      step: 0.5,
     },
-    { key: 'strokeColor', label: '颜色', editor: 'color', group: '线条', defaultValue: '#000000' },
+    { key: 'strokeColor', label: '颜色', type: 'color', group: '线条', defaultValue: '#000000' },
     {
       key: 'strokeStyle',
       label: '样式',
-      editor: 'select',
+      type: 'select',
       group: '线条',
       defaultValue: 'solid',
-      editorOptions: { options: ['solid', 'dashed', 'dotted'] },
+      enum: [
+        { label: 'solid', value: 'solid' },
+        { label: 'dashed', value: 'dashed' },
+        { label: 'dotted', value: 'dotted' },
+      ],
     },
     {
       key: 'endX',
       label: '终点X偏移',
-      editor: 'number',
+      type: 'number',
       group: '线条',
       visible: (props: Record<string, unknown>) => props.direction === 'custom',
     },
     {
       key: 'endY',
       label: '终点Y偏移',
-      editor: 'number',
+      type: 'number',
       group: '线条',
       visible: (props: Record<string, unknown>) => props.direction === 'custom',
     },
@@ -174,23 +200,23 @@ export const lineElementType: ElementTypeDefinition = {
 
 // ─── DataTable 数据表格（动态，绑定数据源数组） ───
 
-export const dataTableElementType: ElementTypeDefinition = {
+export const dataTableMaterialType: MaterialTypeDefinition = {
   type: 'data-table',
   name: '数据表格',
   icon: 'data-table',
   category: 'table',
-  propDefinitions: [
-    { key: 'bordered', label: '显示边框', editor: 'switch', group: '表格', defaultValue: true },
-    { key: 'striped', label: '斑马纹', editor: 'switch', group: '表格', defaultValue: false },
+  propSchemas: [
+    { key: 'bordered', label: '显示边框', type: 'boolean', group: '表格', defaultValue: true },
+    { key: 'striped', label: '斑马纹', type: 'boolean', group: '表格', defaultValue: false },
     {
       key: 'rowHeight',
       label: '行高',
-      editor: 'number',
+      type: 'number',
       group: '表格',
       defaultValue: 'auto',
-      editorOptions: { min: 0 },
+      min: 0,
     },
-    { key: 'showHeader', label: '显示表头', editor: 'switch', group: '表格', defaultValue: true },
+    { key: 'showHeader', label: '显示表头', type: 'boolean', group: '表格', defaultValue: true },
   ],
   defaultProps: {
     columns: [],
@@ -210,20 +236,24 @@ export const dataTableElementType: ElementTypeDefinition = {
 
 // ─── Table 静态表格（手动编辑数据） ───
 
-export const tableElementType: ElementTypeDefinition = {
+export const tableMaterialType: MaterialTypeDefinition = {
   type: 'table',
   name: '表格',
   icon: 'table',
   category: 'table',
-  propDefinitions: [
-    { key: 'bordered', label: '显示边框', editor: 'switch', group: '表格', defaultValue: true },
+  propSchemas: [
+    { key: 'bordered', label: '显示边框', type: 'boolean', group: '表格', defaultValue: true },
     {
       key: 'borderStyle',
       label: '边框样式',
-      editor: 'select',
+      type: 'select',
       group: '表格',
       defaultValue: 'solid',
-      editorOptions: { options: ['solid', 'dashed', 'dotted'] },
+      enum: [
+        { label: 'solid', value: 'solid' },
+        { label: 'dashed', value: 'dashed' },
+        { label: 'dotted', value: 'dotted' },
+      ],
     },
   ],
   defaultProps: {
@@ -247,53 +277,58 @@ export const tableElementType: ElementTypeDefinition = {
 
 // ─── Barcode 条形码/二维码 ───
 
-export const barcodeElementType: ElementTypeDefinition = {
+export const barcodeMaterialType: MaterialTypeDefinition = {
   type: 'barcode',
   name: '条形码',
   icon: 'barcode',
   category: 'data',
-  propDefinitions: [
+  propSchemas: [
     {
       key: 'format',
       label: '编码格式',
-      editor: 'select',
+      type: 'select',
       group: '条形码',
       defaultValue: 'CODE128',
-      editorOptions: {
-        options: [
-          'CODE128',
-          'EAN13',
-          'EAN8',
-          'UPC',
-          'CODE39',
-          'ITF14',
-          'QR',
-        ],
-      },
+      enum: [
+        { label: 'CODE128', value: 'CODE128' },
+        { label: 'EAN13', value: 'EAN13' },
+        { label: 'EAN8', value: 'EAN8' },
+        { label: 'UPC', value: 'UPC' },
+        { label: 'CODE39', value: 'CODE39' },
+        { label: 'ITF14', value: 'ITF14' },
+        { label: 'QR', value: 'QR' },
+      ],
     },
-    { key: 'value', label: '内容', editor: 'text', group: '条形码', defaultValue: '' },
+    { key: 'value', label: '内容', type: 'string', group: '条形码', defaultValue: '' },
     {
       key: 'displayValue',
       label: '显示文字',
-      editor: 'switch',
+      type: 'boolean',
       group: '条形码',
       defaultValue: true,
     },
     {
       key: 'barWidth',
       label: '线条宽度',
-      editor: 'number',
+      type: 'number',
       group: '条形码',
       defaultValue: 2,
-      editorOptions: { min: 1, max: 5, step: 0.5 },
+      min: 1,
+      max: 5,
+      step: 0.5,
     },
     {
       key: 'errorCorrectionLevel',
       label: '纠错级别',
-      editor: 'select',
+      type: 'select',
       group: '条形码',
       defaultValue: 'M',
-      editorOptions: { options: ['L', 'M', 'Q', 'H'] },
+      enum: [
+        { label: 'L', value: 'L' },
+        { label: 'M', value: 'M' },
+        { label: 'Q', value: 'Q' },
+        { label: 'H', value: 'H' },
+      ],
       visible: (props: Record<string, unknown>) => props.format === 'QR',
     },
   ],
@@ -311,20 +346,20 @@ export const barcodeElementType: ElementTypeDefinition = {
   },
 }
 
-// ─── 全部内置元素类型 ───
+// ─── 全部内置物料类型 ───
 
 /**
- * 所有内置元素类型定义列表
+ * 所有内置物料类型定义列表
  *
  * 不含 render 函数，仅声明元信息和默认值。
  * 渲染函数由 renderer/designer 包在注册时附加。
  */
-export const builtinElementTypes: ElementTypeDefinition[] = [
-  barcodeElementType,
-  dataTableElementType,
-  imageElementType,
-  lineElementType,
-  rectElementType,
-  tableElementType,
-  textElementType,
+export const builtinMaterialTypes: MaterialTypeDefinition[] = [
+  barcodeMaterialType,
+  dataTableMaterialType,
+  imageMaterialType,
+  lineMaterialType,
+  rectMaterialType,
+  tableMaterialType,
+  textMaterialType,
 ]

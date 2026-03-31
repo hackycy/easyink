@@ -1,19 +1,19 @@
 import type {
   AddBackgroundLayerParams,
-  AddElementParams,
+  AddMaterialParams,
   Command,
   DeleteTableColumnParams,
   DeleteTableRowParams,
   EditTableCellParams,
   InsertTableColumnParams,
   InsertTableRowParams,
-  MoveElementParams,
+  MoveMaterialParams,
   RemoveBackgroundLayerParams,
-  RemoveElementParams,
+  RemoveMaterialParams,
   ReorderBackgroundLayerParams,
-  ReorderElementParams,
-  ResizeElementParams,
-  RotateElementParams,
+  ReorderMaterialParams,
+  ResizeMaterialParams,
+  RotateMaterialParams,
   SchemaOperations,
   UpdateBackgroundLayerParams,
   UpdateBindingParams,
@@ -26,125 +26,125 @@ import type {
 import { generateId } from '@easyink/shared'
 
 /**
- * 移动元素命令
+ * 移动物料命令
  * mergeable: 连续拖拽合并
  */
-export function createMoveElementCommand(
-  params: MoveElementParams,
+export function createMoveMaterialCommand(
+  params: MoveMaterialParams,
   ops: SchemaOperations,
 ): Command {
   return {
     id: generateId(),
-    type: 'move-element',
-    description: `移动元素 ${params.elementId}`,
+    type: 'move-material',
+    description: `移动物料 ${params.materialId}`,
     mergeable: true,
     execute() {
-      ops.updateElementLayout(params.elementId, {
+      ops.updateMaterialLayout(params.materialId, {
         x: params.newX,
         y: params.newY,
       })
     },
     undo() {
-      ops.updateElementLayout(params.elementId, {
+      ops.updateMaterialLayout(params.materialId, {
         x: params.oldX,
         y: params.oldY,
       })
     },
     merge(next: Command) {
-      if (next.type !== 'move-element')
+      if (next.type !== 'move-material')
         return null
-      const nextParams = (next as any)._params as MoveElementParams
-      if (nextParams.elementId !== params.elementId)
+      const nextParams = (next as any)._params as MoveMaterialParams
+      if (nextParams.materialId !== params.materialId)
         return null
-      return createMoveElementCommand(
+      return createMoveMaterialCommand(
         { ...params, newX: nextParams.newX, newY: nextParams.newY },
         ops,
       )
     },
     get _params() { return params },
-  } as Command & { _params: MoveElementParams }
+  } as Command & { _params: MoveMaterialParams }
 }
 
 /**
- * 调整元素尺寸命令
+ * 调整物料尺寸命令
  * mergeable: 连续缩放合并
  */
-export function createResizeElementCommand(
-  params: ResizeElementParams,
+export function createResizeMaterialCommand(
+  params: ResizeMaterialParams,
   ops: SchemaOperations,
 ): Command {
   return {
     id: generateId(),
-    type: 'resize-element',
-    description: `调整元素尺寸 ${params.elementId}`,
+    type: 'resize-material',
+    description: `调整物料尺寸 ${params.materialId}`,
     mergeable: true,
     execute() {
-      ops.updateElementLayout(params.elementId, {
+      ops.updateMaterialLayout(params.materialId, {
         width: params.newWidth,
         height: params.newHeight,
       })
     },
     undo() {
-      ops.updateElementLayout(params.elementId, {
+      ops.updateMaterialLayout(params.materialId, {
         width: params.oldWidth,
         height: params.oldHeight,
       })
     },
     merge(next: Command) {
-      if (next.type !== 'resize-element')
+      if (next.type !== 'resize-material')
         return null
-      const nextParams = (next as any)._params as ResizeElementParams
-      if (nextParams.elementId !== params.elementId)
+      const nextParams = (next as any)._params as ResizeMaterialParams
+      if (nextParams.materialId !== params.materialId)
         return null
-      return createResizeElementCommand(
+      return createResizeMaterialCommand(
         { ...params, newWidth: nextParams.newWidth, newHeight: nextParams.newHeight },
         ops,
       )
     },
     get _params() { return params },
-  } as Command & { _params: ResizeElementParams }
+  } as Command & { _params: ResizeMaterialParams }
 }
 
 /**
- * 旋转元素命令
+ * 旋转物料命令
  * mergeable: 连续旋转合并
  */
-export function createRotateElementCommand(
-  params: RotateElementParams,
+export function createRotateMaterialCommand(
+  params: RotateMaterialParams,
   ops: SchemaOperations,
 ): Command {
   return {
     id: generateId(),
-    type: 'rotate-element',
-    description: `旋转元素 ${params.elementId}`,
+    type: 'rotate-material',
+    description: `旋转物料 ${params.materialId}`,
     mergeable: true,
     execute() {
-      ops.updateElementLayout(params.elementId, {
+      ops.updateMaterialLayout(params.materialId, {
         rotation: params.newRotation,
       })
     },
     undo() {
-      ops.updateElementLayout(params.elementId, {
+      ops.updateMaterialLayout(params.materialId, {
         rotation: params.oldRotation,
       })
     },
     merge(next: Command) {
-      if (next.type !== 'rotate-element')
+      if (next.type !== 'rotate-material')
         return null
-      const nextParams = (next as any)._params as RotateElementParams
-      if (nextParams.elementId !== params.elementId)
+      const nextParams = (next as any)._params as RotateMaterialParams
+      if (nextParams.materialId !== params.materialId)
         return null
-      return createRotateElementCommand(
+      return createRotateMaterialCommand(
         { ...params, newRotation: nextParams.newRotation },
         ops,
       )
     },
     get _params() { return params },
-  } as Command & { _params: RotateElementParams }
+  } as Command & { _params: RotateMaterialParams }
 }
 
 /**
- * 修改元素属性命令
+ * 修改物料属性命令
  * mergeable: 同属性连续修改合并
  */
 export function createUpdatePropsCommand(
@@ -154,19 +154,19 @@ export function createUpdatePropsCommand(
   return {
     id: generateId(),
     type: 'update-props',
-    description: `修改元素属性 ${params.elementId}`,
+    description: `修改物料属性 ${params.materialId}`,
     mergeable: true,
     execute() {
-      ops.updateElementProps(params.elementId, params.newProps)
+      ops.updateMaterialProps(params.materialId, params.newProps)
     },
     undo() {
-      ops.updateElementProps(params.elementId, params.oldProps)
+      ops.updateMaterialProps(params.materialId, params.oldProps)
     },
     merge(next: Command) {
       if (next.type !== 'update-props')
         return null
       const nextParams = (next as any)._params as UpdatePropsParams
-      if (nextParams.elementId !== params.elementId)
+      if (nextParams.materialId !== params.materialId)
         return null
       return createUpdatePropsCommand(
         { ...params, newProps: nextParams.newProps },
@@ -178,7 +178,7 @@ export function createUpdatePropsCommand(
 }
 
 /**
- * 修改元素样式命令
+ * 修改物料样式命令
  * mergeable: 同样式连续修改合并
  */
 export function createUpdateStyleCommand(
@@ -188,19 +188,19 @@ export function createUpdateStyleCommand(
   return {
     id: generateId(),
     type: 'update-style',
-    description: `修改元素样式 ${params.elementId}`,
+    description: `修改物料样式 ${params.materialId}`,
     mergeable: true,
     execute() {
-      ops.updateElementStyle(params.elementId, params.newStyle)
+      ops.updateMaterialStyle(params.materialId, params.newStyle)
     },
     undo() {
-      ops.updateElementStyle(params.elementId, params.oldStyle)
+      ops.updateMaterialStyle(params.materialId, params.oldStyle)
     },
     merge(next: Command) {
       if (next.type !== 'update-style')
         return null
       const nextParams = (next as any)._params as UpdateStyleParams
-      if (nextParams.elementId !== params.elementId)
+      if (nextParams.materialId !== params.materialId)
         return null
       return createUpdateStyleCommand(
         { ...params, newStyle: nextParams.newStyle },
@@ -212,41 +212,41 @@ export function createUpdateStyleCommand(
 }
 
 /**
- * 添加元素命令
+ * 添加物料命令
  */
-export function createAddElementCommand(
-  params: AddElementParams,
+export function createAddMaterialCommand(
+  params: AddMaterialParams,
   ops: SchemaOperations,
 ): Command {
   return {
     id: generateId(),
-    type: 'add-element',
-    description: `添加元素 ${params.element.type}`,
+    type: 'add-material',
+    description: `添加物料 ${params.material.type}`,
     execute() {
-      ops.addElement(params.element, params.index)
+      ops.addMaterial(params.material, params.index)
     },
     undo() {
-      ops.removeElement(params.element.id)
+      ops.removeMaterial(params.material.id)
     },
   }
 }
 
 /**
- * 删除元素命令
+ * 删除物料命令
  */
-export function createRemoveElementCommand(
-  params: RemoveElementParams,
+export function createRemoveMaterialCommand(
+  params: RemoveMaterialParams,
   ops: SchemaOperations,
 ): Command {
   return {
     id: generateId(),
-    type: 'remove-element',
-    description: `删除元素 ${params.element.type}`,
+    type: 'remove-material',
+    description: `删除物料 ${params.material.type}`,
     execute() {
-      ops.removeElement(params.element.id)
+      ops.removeMaterial(params.material.id)
     },
     undo() {
-      ops.addElement(params.element, params.index)
+      ops.addMaterial(params.material, params.index)
     },
   }
 }
@@ -254,19 +254,19 @@ export function createRemoveElementCommand(
 /**
  * 调整层级命令
  */
-export function createReorderElementCommand(
-  params: ReorderElementParams,
+export function createReorderMaterialCommand(
+  params: ReorderMaterialParams,
   ops: SchemaOperations,
 ): Command {
   return {
     id: generateId(),
-    type: 'reorder-element',
-    description: `调整层级 ${params.elementId}`,
+    type: 'reorder-material',
+    description: `调整层级 ${params.materialId}`,
     execute() {
-      ops.reorderElement(params.elementId, params.newIndex)
+      ops.reorderMaterial(params.materialId, params.newIndex)
     },
     undo() {
-      ops.reorderElement(params.elementId, params.oldIndex)
+      ops.reorderMaterial(params.materialId, params.oldIndex)
     },
   }
 }
@@ -281,12 +281,12 @@ export function createUpdateBindingCommand(
   return {
     id: generateId(),
     type: 'update-binding',
-    description: `修改数据绑定 ${params.elementId}`,
+    description: `修改数据绑定 ${params.materialId}`,
     execute() {
-      ops.updateElementBinding(params.elementId, params.newBinding)
+      ops.updateMaterialBinding(params.materialId, params.newBinding)
     },
     undo() {
-      ops.updateElementBinding(params.elementId, params.oldBinding)
+      ops.updateMaterialBinding(params.materialId, params.oldBinding)
     },
   }
 }
@@ -312,7 +312,7 @@ export function createUpdatePageSettingsCommand(
 }
 
 /**
- * 切换元素显示/隐藏命令
+ * 切换物料显示/隐藏命令
  */
 export function createToggleLockCommand(
   params: UpdateLockParams,
@@ -321,18 +321,18 @@ export function createToggleLockCommand(
   return {
     id: generateId(),
     type: 'toggle-lock',
-    description: `切换锁定 ${params.elementId}`,
+    description: `切换锁定 ${params.materialId}`,
     execute() {
-      ops.updateElementLock(params.elementId, params.newLocked)
+      ops.updateMaterialLock(params.materialId, params.newLocked)
     },
     undo() {
-      ops.updateElementLock(params.elementId, params.oldLocked)
+      ops.updateMaterialLock(params.materialId, params.oldLocked)
     },
   }
 }
 
 /**
- * 切换元素显示/隐藏命令
+ * 切换物料显示/隐藏命令
  */
 export function createToggleVisibilityCommand(
   params: UpdateVisibilityParams,
@@ -341,12 +341,12 @@ export function createToggleVisibilityCommand(
   return {
     id: generateId(),
     type: 'toggle-visibility',
-    description: `切换显示 ${params.elementId}`,
+    description: `切换显示 ${params.materialId}`,
     execute() {
-      ops.updateElementVisibility(params.elementId, params.newHidden)
+      ops.updateMaterialVisibility(params.materialId, params.newHidden)
     },
     undo() {
-      ops.updateElementVisibility(params.elementId, params.oldHidden)
+      ops.updateMaterialVisibility(params.materialId, params.oldHidden)
     },
   }
 }
@@ -447,22 +447,22 @@ export function createInsertTableRowCommand(
     type: 'insert-table-row',
     description: `插入表格行 ${params.rowIndex}`,
     execute() {
-      const el = ops.getElement(params.elementId)
+      const el = ops.getMaterial(params.materialId)
       if (!el)
         return
       const cells = { ...(el.props.cells as Record<string, unknown> ?? {}) }
       const rowCount = (el.props.rowCount as number) ?? 0
       const shifted = shiftCellsForInsertRow(cells, params.rowIndex)
-      ops.updateElementProps(params.elementId, { cells: shifted, rowCount: rowCount + 1 })
+      ops.updateMaterialProps(params.materialId, { cells: shifted, rowCount: rowCount + 1 })
     },
     undo() {
-      const el = ops.getElement(params.elementId)
+      const el = ops.getMaterial(params.materialId)
       if (!el)
         return
       const cells = { ...(el.props.cells as Record<string, unknown> ?? {}) }
       const rowCount = (el.props.rowCount as number) ?? 0
       const shifted = shiftCellsForDeleteRow(cells, params.rowIndex)
-      ops.updateElementProps(params.elementId, { cells: shifted, rowCount: rowCount - 1 })
+      ops.updateMaterialProps(params.materialId, { cells: shifted, rowCount: rowCount - 1 })
     },
   }
 }
@@ -479,16 +479,16 @@ export function createDeleteTableRowCommand(
     type: 'delete-table-row',
     description: `删除表格行 ${params.rowIndex}`,
     execute() {
-      const el = ops.getElement(params.elementId)
+      const el = ops.getMaterial(params.materialId)
       if (!el)
         return
       const cells = { ...(el.props.cells as Record<string, unknown> ?? {}) }
       const rowCount = (el.props.rowCount as number) ?? 0
       const shifted = shiftCellsForDeleteRow(cells, params.rowIndex)
-      ops.updateElementProps(params.elementId, { cells: shifted, rowCount: rowCount - 1 })
+      ops.updateMaterialProps(params.materialId, { cells: shifted, rowCount: rowCount - 1 })
     },
     undo() {
-      const el = ops.getElement(params.elementId)
+      const el = ops.getMaterial(params.materialId)
       if (!el)
         return
       const cells = { ...(el.props.cells as Record<string, unknown> ?? {}) }
@@ -498,7 +498,7 @@ export function createDeleteTableRowCommand(
       for (const [key, cell] of Object.entries(params.deletedCells)) {
         shifted[key] = cell
       }
-      ops.updateElementProps(params.elementId, { cells: shifted, rowCount: rowCount + 1 })
+      ops.updateMaterialProps(params.materialId, { cells: shifted, rowCount: rowCount + 1 })
     },
   }
 }
@@ -515,24 +515,24 @@ export function createInsertTableColumnCommand(
     type: 'insert-table-column',
     description: `插入表格列 ${params.colIndex}`,
     execute() {
-      const el = ops.getElement(params.elementId)
+      const el = ops.getMaterial(params.materialId)
       if (!el)
         return
       const columns = [...(el.props.columns as Array<{ key: string, title: string, width: number }> ?? [])]
       const cells = { ...(el.props.cells as Record<string, unknown> ?? {}) }
       columns.splice(params.colIndex, 0, params.column)
       const shifted = shiftCellsForInsertCol(cells, params.colIndex)
-      ops.updateElementProps(params.elementId, { columns, cells: shifted })
+      ops.updateMaterialProps(params.materialId, { columns, cells: shifted })
     },
     undo() {
-      const el = ops.getElement(params.elementId)
+      const el = ops.getMaterial(params.materialId)
       if (!el)
         return
       const columns = [...(el.props.columns as Array<{ key: string, title: string, width: number }> ?? [])]
       const cells = { ...(el.props.cells as Record<string, unknown> ?? {}) }
       columns.splice(params.colIndex, 1)
       const shifted = shiftCellsForDeleteCol(cells, params.colIndex)
-      ops.updateElementProps(params.elementId, { columns, cells: shifted })
+      ops.updateMaterialProps(params.materialId, { columns, cells: shifted })
     },
   }
 }
@@ -549,17 +549,17 @@ export function createDeleteTableColumnCommand(
     type: 'delete-table-column',
     description: `删除表格列 ${params.colIndex}`,
     execute() {
-      const el = ops.getElement(params.elementId)
+      const el = ops.getMaterial(params.materialId)
       if (!el)
         return
       const columns = [...(el.props.columns as Array<{ key: string, title: string, width: number }> ?? [])]
       const cells = { ...(el.props.cells as Record<string, unknown> ?? {}) }
       columns.splice(params.colIndex, 1)
       const shifted = shiftCellsForDeleteCol(cells, params.colIndex)
-      ops.updateElementProps(params.elementId, { columns, cells: shifted })
+      ops.updateMaterialProps(params.materialId, { columns, cells: shifted })
     },
     undo() {
-      const el = ops.getElement(params.elementId)
+      const el = ops.getMaterial(params.materialId)
       if (!el)
         return
       const columns = [...(el.props.columns as Array<{ key: string, title: string, width: number }> ?? [])]
@@ -569,7 +569,7 @@ export function createDeleteTableColumnCommand(
       for (const [key, cell] of Object.entries(params.deletedCells)) {
         shifted[key] = cell
       }
-      ops.updateElementProps(params.elementId, { columns, cells: shifted })
+      ops.updateMaterialProps(params.materialId, { columns, cells: shifted })
     },
   }
 }
@@ -587,7 +587,7 @@ export function createEditTableCellCommand(
     description: `编辑单元格 ${params.cellKey}`,
     mergeable: true,
     execute() {
-      const el = ops.getElement(params.elementId)
+      const el = ops.getMaterial(params.materialId)
       if (!el)
         return
       const cells = { ...(el.props.cells as Record<string, unknown> ?? {}) }
@@ -597,10 +597,10 @@ export function createEditTableCellCommand(
       else {
         delete cells[params.cellKey]
       }
-      ops.updateElementProps(params.elementId, { cells })
+      ops.updateMaterialProps(params.materialId, { cells })
     },
     undo() {
-      const el = ops.getElement(params.elementId)
+      const el = ops.getMaterial(params.materialId)
       if (!el)
         return
       const cells = { ...(el.props.cells as Record<string, unknown> ?? {}) }
@@ -610,13 +610,13 @@ export function createEditTableCellCommand(
       else {
         delete cells[params.cellKey]
       }
-      ops.updateElementProps(params.elementId, { cells })
+      ops.updateMaterialProps(params.materialId, { cells })
     },
     merge(next: Command) {
       if (next.type !== 'edit-table-cell')
         return null
       const nextParams = (next as any)._params as EditTableCellParams
-      if (nextParams.elementId !== params.elementId || nextParams.cellKey !== params.cellKey)
+      if (nextParams.materialId !== params.materialId || nextParams.cellKey !== params.cellKey)
         return null
       return createEditTableCellCommand(
         { ...params, newCell: nextParams.newCell },

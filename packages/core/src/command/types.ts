@@ -1,5 +1,5 @@
 import type { BackgroundLayer } from '@easyink/shared'
-import type { DataBinding, ElementLayout, ElementNode, ElementStyle, PageSettings, StaticTableCell } from '../schema'
+import type { DataBinding, MaterialLayout, MaterialNode, MaterialStyle, PageSettings, StaticTableCell } from '../schema'
 
 // ─── Command 接口 ───
 
@@ -42,10 +42,10 @@ export interface CommandManagerEvents {
 // ─── 内置命令参数 ───
 
 /**
- * 移动元素命令参数
+ * 移动物料命令参数
  */
-export interface MoveElementParams {
-  elementId: string
+export interface MoveMaterialParams {
+  materialId: string
   oldX: number
   oldY: number
   newX: number
@@ -53,10 +53,10 @@ export interface MoveElementParams {
 }
 
 /**
- * 调整元素尺寸命令参数
+ * 调整物料尺寸命令参数
  */
-export interface ResizeElementParams {
-  elementId: string
+export interface ResizeMaterialParams {
+  materialId: string
   oldWidth: number | 'auto'
   oldHeight: number | 'auto'
   newWidth: number | 'auto'
@@ -64,46 +64,46 @@ export interface ResizeElementParams {
 }
 
 /**
- * 旋转元素命令参数
+ * 旋转物料命令参数
  */
-export interface RotateElementParams {
-  elementId: string
+export interface RotateMaterialParams {
+  materialId: string
   oldRotation: number
   newRotation: number
 }
 
 /**
- * 修改元素属性命令参数
+ * 修改物料属性命令参数
  */
 export interface UpdatePropsParams {
-  elementId: string
+  materialId: string
   oldProps: Record<string, unknown>
   newProps: Record<string, unknown>
 }
 
 /**
- * 修改元素样式命令参数
+ * 修改物料样式命令参数
  */
 export interface UpdateStyleParams {
-  elementId: string
-  oldStyle: Partial<ElementStyle>
-  newStyle: Partial<ElementStyle>
+  materialId: string
+  oldStyle: Partial<MaterialStyle>
+  newStyle: Partial<MaterialStyle>
 }
 
 /**
- * 添加元素命令参数
+ * 添加物料命令参数
  */
-export interface AddElementParams {
-  element: ElementNode
+export interface AddMaterialParams {
+  material: MaterialNode
   /** 插入位置索引，-1 表示末尾 */
   index: number
 }
 
 /**
- * 删除元素命令参数
+ * 删除物料命令参数
  */
-export interface RemoveElementParams {
-  element: ElementNode
+export interface RemoveMaterialParams {
+  material: MaterialNode
   /** 被删除前的位置索引 */
   index: number
 }
@@ -111,8 +111,8 @@ export interface RemoveElementParams {
 /**
  * 调整层级命令参数
  */
-export interface ReorderElementParams {
-  elementId: string
+export interface ReorderMaterialParams {
+  materialId: string
   oldIndex: number
   newIndex: number
 }
@@ -121,7 +121,7 @@ export interface ReorderElementParams {
  * 修改数据绑定命令参数
  */
 export interface UpdateBindingParams {
-  elementId: string
+  materialId: string
   oldBinding?: DataBinding
   newBinding?: DataBinding
 }
@@ -135,19 +135,19 @@ export interface UpdatePageSettingsParams {
 }
 
 /**
- * 切换元素显示/隐藏命令参数
+ * 切换物料显示/隐藏命令参数
  */
 export interface UpdateVisibilityParams {
-  elementId: string
+  materialId: string
   oldHidden: boolean
   newHidden: boolean
 }
 
 /**
- * 切换元素锁定命令参数
+ * 切换物料锁定命令参数
  */
 export interface UpdateLockParams {
-  elementId: string
+  materialId: string
   oldLocked: boolean
   newLocked: boolean
 }
@@ -191,7 +191,7 @@ export interface ReorderBackgroundLayerParams {
  * 插入表格行命令参数
  */
 export interface InsertTableRowParams {
-  elementId: string
+  materialId: string
   rowIndex: number
 }
 
@@ -199,7 +199,7 @@ export interface InsertTableRowParams {
  * 删除表格行命令参数
  */
 export interface DeleteTableRowParams {
-  elementId: string
+  materialId: string
   rowIndex: number
   /** undo 时恢复的该行 cells */
   deletedCells: Record<string, StaticTableCell>
@@ -209,7 +209,7 @@ export interface DeleteTableRowParams {
  * 插入表格列命令参数
  */
 export interface InsertTableColumnParams {
-  elementId: string
+  materialId: string
   colIndex: number
   column: { key: string, title: string, width: number }
 }
@@ -218,7 +218,7 @@ export interface InsertTableColumnParams {
  * 删除表格列命令参数
  */
 export interface DeleteTableColumnParams {
-  elementId: string
+  materialId: string
   colIndex: number
   /** undo 时恢复的列定义 */
   deletedColumn: { key: string, title: string, width: number }
@@ -230,7 +230,7 @@ export interface DeleteTableColumnParams {
  * 编辑表格单元格命令参数
  */
 export interface EditTableCellParams {
-  elementId: string
+  materialId: string
   cellKey: string
   oldCell?: StaticTableCell
   newCell?: StaticTableCell
@@ -243,17 +243,17 @@ export interface EditTableCellParams {
  * 而是通过回调接口，让命令定义时绑定具体操作
  */
 export interface SchemaOperations {
-  getElement: (id: string) => ElementNode | undefined
-  updateElementLayout: (id: string, layout: Partial<ElementLayout>) => void
-  updateElementLock: (id: string, locked: boolean) => void
-  updateElementProps: (id: string, props: Record<string, unknown>) => void
-  updateElementStyle: (id: string, style: Partial<ElementStyle>) => void
-  updateElementVisibility: (id: string, hidden: boolean) => void
-  updateElementBinding: (id: string, binding?: DataBinding) => void
+  getMaterial: (id: string) => MaterialNode | undefined
+  updateMaterialLayout: (id: string, layout: Partial<MaterialLayout>) => void
+  updateMaterialLock: (id: string, locked: boolean) => void
+  updateMaterialProps: (id: string, props: Record<string, unknown>) => void
+  updateMaterialStyle: (id: string, style: Partial<MaterialStyle>) => void
+  updateMaterialVisibility: (id: string, hidden: boolean) => void
+  updateMaterialBinding: (id: string, binding?: DataBinding) => void
   updateExtensions: (key: string, value: unknown) => void
-  addElement: (element: ElementNode, index: number) => void
-  removeElement: (id: string) => ElementNode | undefined
-  reorderElement: (id: string, newIndex: number) => void
+  addMaterial: (material: MaterialNode, index: number) => void
+  removeMaterial: (id: string) => MaterialNode | undefined
+  reorderMaterial: (id: string, newIndex: number) => void
   getPageSettings: () => PageSettings
   updatePageSettings: (settings: PageSettings) => void
   addBackgroundLayer: (layer: BackgroundLayer, index: number) => void

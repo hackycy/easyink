@@ -12,8 +12,8 @@ export interface TemplateSchema {
   meta: TemplateMeta
   /** 页面设置 */
   page: PageSettings
-  /** 元素树 */
-  elements: ElementNode[]
+  /** 物料树 */
+  materials: MaterialNode[]
   /** 扩展字段，供插件使用 */
   extensions?: Record<string, unknown>
 }
@@ -89,30 +89,30 @@ export interface LabelPaper {
   height: number
 }
 
-// ─── 元素节点 ───
+// ─── 物料节点 ───
 
 /**
- * 元素节点 — Schema 中的元素定义
+ * 物料节点 — Schema 中的物料定义
  */
-export interface ElementNode {
+export interface MaterialNode {
   /** 全局唯一 ID */
   id: string
-  /** 元素类型标识（可被插件扩展） */
+  /** 物料类型标识（可被插件扩展） */
   type: string
   /** 显示名称（图层面板显示） */
   name?: string
   /** 定位与尺寸 */
-  layout: ElementLayout
-  /** 元素类型特有属性（由元素类型定义声明） */
+  layout: MaterialLayout
+  /** 物料类型特有属性（由物料类型定义声明） */
   props: Record<string, unknown>
   /** 样式属性 */
-  style: ElementStyle
+  style: MaterialStyle
   /** 数据绑定配置 */
   binding?: DataBinding
   /** 条件渲染（由表达式插件提供） */
   condition?: ConditionConfig
-  /** 子元素（仅容器类型） */
-  children?: ElementNode[]
+  /** 子物料（仅容器类型） */
+  children?: MaterialNode[]
   /** 锁定状态 */
   locked?: boolean
   /** 隐藏状态 */
@@ -122,9 +122,9 @@ export interface ElementNode {
 }
 
 /**
- * 元素布局
+ * 物料布局
  */
-export interface ElementLayout {
+export interface MaterialLayout {
   /** 定位模式 */
   position: 'absolute' | 'flow'
   /** absolute 模式下的坐标（使用页面单位） */
@@ -140,9 +140,9 @@ export interface ElementLayout {
 }
 
 /**
- * 元素样式
+ * 物料样式
  */
-export interface ElementStyle {
+export interface MaterialStyle {
   /** 字体 */
   fontFamily?: string
   fontSize?: number

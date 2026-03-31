@@ -10,7 +10,7 @@ export function createPluginHooks(): PluginHooks {
     beforeRender: new SyncWaterfallHook(),
     afterRender: new SyncWaterfallHook(),
     beforeExport: new SyncWaterfallHook(),
-    beforeElementCreate: new SyncWaterfallHook(),
+    beforeMaterialCreate: new SyncWaterfallHook(),
     beforeDataResolve: new SyncWaterfallHook(),
     beforeSchemaChange: new SyncBailHook(),
     // 异步事件

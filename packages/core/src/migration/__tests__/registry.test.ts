@@ -48,7 +48,7 @@ describe('migrationRegistry', () => {
         version: '0.0.1',
         meta: { name: 'test' },
         page: { paper: 'A4', orientation: 'portrait', margins: { top: 10, right: 10, bottom: 10, left: 10 }, unit: 'mm' },
-        elements: [],
+        materials: [],
       }
       const result = registry.migrate(input)
       expect(result.version).toBe(SCHEMA_VERSION)
@@ -61,14 +61,14 @@ describe('migrationRegistry', () => {
         version: '0.0.1',
         meta: { name: 'test', description: 'desc' },
         page: { paper: 'A4', orientation: 'portrait', margins: { top: 5, right: 5, bottom: 5, left: 5 }, unit: 'mm' },
-        elements: [
+        materials: [
           { id: 'el-1', type: 'text', layout: { position: 'absolute', x: 0, y: 0, width: 100, height: 50 }, props: { content: 'hello' }, style: {} },
         ],
       }
       const result = registry.migrate(input)
       expect(result.version).toBe(SCHEMA_VERSION)
-      expect(result.elements).toHaveLength(1)
-      expect(result.elements[0].id).toBe('el-1')
+      expect(result.materials).toHaveLength(1)
+      expect(result.materials[0].id).toBe('el-1')
       expect(result.meta.description).toBe('desc')
     })
 
@@ -78,7 +78,7 @@ describe('migrationRegistry', () => {
         version: SCHEMA_VERSION,
         meta: { name: 'current' },
         page: { paper: 'A4', orientation: 'portrait', margins: { top: 10, right: 10, bottom: 10, left: 10 }, unit: 'mm' },
-        elements: [],
+        materials: [],
       }
       const result = registry.migrate(input)
       expect(result.version).toBe(SCHEMA_VERSION)
@@ -189,13 +189,13 @@ describe('migrationRegistry', () => {
         version: '0.0.1',
         meta: { name: 'v0.0.1' },
         page: { paper: 'A4', orientation: 'portrait', margins: { top: 10, right: 10, bottom: 10, left: 10 }, unit: 'mm' },
-        elements: [],
+        materials: [],
       }
       const input2 = {
         version: '0.0.9',
         meta: { name: 'v0.0.9' },
         page: { paper: 'A4', orientation: 'portrait', margins: { top: 10, right: 10, bottom: 10, left: 10 }, unit: 'mm' },
-        elements: [],
+        materials: [],
       }
 
       const result1 = registry.migrate(input1)

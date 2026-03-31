@@ -1,13 +1,13 @@
 import type { BackgroundLayer } from '@easyink/shared'
 import type { SchemaOperations } from '../command'
-import type { ElementRegistry } from '../elements'
+import type { MaterialRegistry } from '../materials'
 import type { MigrationRegistry } from '../migration'
 import type { PluginHooks, SchemaChangeEvent } from '../plugin'
 import type {
   DataBinding,
-  ElementLayout,
-  ElementNode,
-  ElementStyle,
+  MaterialLayout,
+  MaterialNode,
+  MaterialStyle,
   PageSettings,
   TemplateSchema,
 } from './types'
@@ -24,8 +24,8 @@ export interface SchemaEngineOptions {
   schema?: TemplateSchema
   /** 插件钩子，不传则不触发钩子（纯 headless 使用） */
   hooks?: PluginHooks
-  /** 元素类型注册中心，不传则 validate 跳过类型检查 */
-  elementRegistry?: ElementRegistry
+  /** 物料类型注册中心，不传则 validate 跳过类型检查 */
+  materialRegistry?: MaterialRegistry
   /** 迁移注册表，传入后 loadSchema 可自动迁移旧版 Schema */
   migrationRegistry?: MigrationRegistry
 }
@@ -38,8 +38,8 @@ export interface SchemaValidationIssue {
   level: 'error' | 'warning'
   /** 问题描述 */
   message: string
-  /** 相关元素 ID */
-  elementId?: string
+  /** 相关物料 ID */
+  materialId?: string
   /** 问题字段路径 */
   path?: string
 }
@@ -67,13 +67,13 @@ export interface SchemaValidationResult {
 export class SchemaEngine {
   private _schema: TemplateSchema
   private _hooks?: PluginHooks
-  private _elementRegistry?: ElementRegistry
+  private _materialRegistry?: MaterialRegistry
   private _migrationRegistry?: MigrationRegistry
 
   constructor(options?: SchemaEngineOptions) {
     this._schema = options?.schema ?? createDefaultSchema()
     this._hooks = options?.hooks
-    this._elementRegistry = options?.elementRegistry
+    this._materialRegistry = options?.materialRegistry
     this._migrationRegistry = options?.migrationRegistry
   }
 
@@ -90,39 +90,39 @@ export class SchemaEngine {
   get operations(): SchemaOperations {
     return {
       addBackgroundLayer: (layer, index) => this.addBackgroundLayer(layer, index),
-      addElement: (element, index) => this.addElement(element, index),
-      getElement: id => this.getElement(id),
+      addMaterial: (material, index) => this.addMaterial(material, index),
+      getMaterial: id => this.getMaterial(id),
       getPageSettings: () => this.getPageSettings(),
       removeBackgroundLayer: index => this.removeBackgroundLayer(index),
-      removeElement: id => this.removeElement(id),
+      removeMaterial: id => this.removeMaterial(id),
       reorderBackgroundLayer: (from, to) => this.reorderBackgroundLayer(from, to),
-      reorderElement: (id, newIndex) => this.reorderElement(id, newIndex),
+      reorderMaterial: (id, newIndex) => this.reorderMaterial(id, newIndex),
       updateBackgroundLayer: (index, layer) => this.updateBackgroundLayer(index, layer),
-      updateElementBinding: (id, binding) => this.updateElementBinding(id, binding),
-      updateElementLayout: (id, layout) => this.updateElementLayout(id, layout),
-      updateElementLock: (id, locked) => this.updateElementLock(id, locked),
-      updateElementProps: (id, props) => this.updateElementProps(id, props),
-      updateElementStyle: (id, style) => this.updateElementStyle(id, style),
-      updateElementVisibility: (id, hidden) => this.updateElementVisibility(id, hidden),
+      updateMaterialBinding: (id, binding) => this.updateMaterialBinding(id, binding),
+      updateMaterialLayout: (id, layout) => this.updateMaterialLayout(id, layout),
+      updateMaterialLock: (id, locked) => this.updateMaterialLock(id, locked),
+      updateMaterialProps: (id, props) => this.updateMaterialProps(id, props),
+      updateMaterialStyle: (id, style) => this.updateMaterialStyle(id, style),
+      updateMaterialVisibility: (id, hidden) => this.updateMaterialVisibility(id, hidden),
       updateExtensions: (key, value) => this.updateExtensions(key, value),
       updatePageSettings: settings => this.updatePageSettings(settings),
     }
   }
 
-  // ── 元素 CRUD（实现 SchemaOperations） ──
+  // ── 物料 CRUD（实现 SchemaOperations） ──
 
   /**
-   * 获取一级元素（不递归 children）
+   * 获取一级物料（不递归 children）
    */
-  getElement(id: string): ElementNode | undefined {
-    return this._schema.elements.find(el => el.id === id)
+  getMaterial(id: string): MaterialNode | undefined {
+    return this._schema.materials.find(el => el.id === id)
   }
 
   /**
-   * 深层查找元素（含 children 递归）
+   * 深层查找物料（含 children 递归）
    */
-  getElementById(id: string): ElementNode | undefined {
-    let found: ElementNode | undefined
+  getMaterialById(id: string): MaterialNode | undefined {
+    let found: MaterialNode | undefined
     this.traverse((node) => {
       if (node.id === id) {
         found = node
@@ -133,44 +133,44 @@ export class SchemaEngine {
   }
 
   /**
-   * 添加元素到 schema.elements
-   * @param element - 元素节点
+   * 添加物料到 schema.materials
+   * @param material - 物料节点
    * @param index - 插入位置，-1 表示末尾
    */
-  addElement(element: ElementNode, index: number): void {
-    // 触发 beforeElementCreate waterfall hook
-    const finalElement = this._hooks
-      ? this._hooks.beforeElementCreate.call(element)
-      : element
+  addMaterial(material: MaterialNode, index: number): void {
+    // 触发 beforeMaterialCreate waterfall hook
+    const finalMaterial = this._hooks
+      ? this._hooks.beforeMaterialCreate.call(material)
+      : material
 
-    if (index === -1 || index >= this._schema.elements.length) {
-      this._schema.elements.push(finalElement)
+    if (index === -1 || index >= this._schema.materials.length) {
+      this._schema.materials.push(finalMaterial)
     }
     else {
-      this._schema.elements.splice(index, 0, finalElement)
+      this._schema.materials.splice(index, 0, finalMaterial)
     }
 
     this._notifyChanged({
       type: 'add',
-      elementId: finalElement.id,
-      newValue: finalElement,
+      materialId: finalMaterial.id,
+      newValue: finalMaterial,
     })
   }
 
   /**
-   * 删除元素
-   * @returns 被删除的元素，不存在时返回 undefined
+   * 删除物料
+   * @returns 被删除的物料，不存在时返回 undefined
    */
-  removeElement(id: string): ElementNode | undefined {
-    const index = this._findElementIndex(id)
+  removeMaterial(id: string): MaterialNode | undefined {
+    const index = this._findMaterialIndex(id)
     if (index === -1)
       return undefined
 
-    const [removed] = this._schema.elements.splice(index, 1)
+    const [removed] = this._schema.materials.splice(index, 1)
 
     this._notifyChanged({
       type: 'remove',
-      elementId: id,
+      materialId: id,
       oldValue: removed,
     })
 
@@ -178,86 +178,86 @@ export class SchemaEngine {
   }
 
   /**
-   * 调整元素在 elements 数组中的位置
+   * 调整物料在 materials 数组中的位置
    */
-  reorderElement(id: string, newIndex: number): void {
-    const oldIndex = this._findElementIndex(id)
+  reorderMaterial(id: string, newIndex: number): void {
+    const oldIndex = this._findMaterialIndex(id)
     if (oldIndex === -1)
       return
 
-    const [element] = this._schema.elements.splice(oldIndex, 1)
-    this._schema.elements.splice(newIndex, 0, element)
+    const [material] = this._schema.materials.splice(oldIndex, 1)
+    this._schema.materials.splice(newIndex, 0, material)
 
     this._notifyChanged({
       type: 'reorder',
-      elementId: id,
+      materialId: id,
     })
   }
 
   /**
-   * 更新元素布局（合并 Partial）
+   * 更新物料布局（合并 Partial）
    */
-  updateElementLayout(id: string, layout: Partial<ElementLayout>): void {
-    const element = this.getElementById(id)
-    if (!element)
+  updateMaterialLayout(id: string, layout: Partial<MaterialLayout>): void {
+    const material = this.getMaterialById(id)
+    if (!material)
       return
 
-    Object.assign(element.layout, layout)
+    Object.assign(material.layout, layout)
 
     this._notifyChanged({
       type: 'update',
-      elementId: id,
-      newValue: element.layout,
+      materialId: id,
+      newValue: material.layout,
     })
   }
 
   /**
-   * 更新元素属性（合并）
+   * 更新物料属性（合并）
    */
-  updateElementProps(id: string, props: Record<string, unknown>): void {
-    const element = this.getElementById(id)
-    if (!element)
+  updateMaterialProps(id: string, props: Record<string, unknown>): void {
+    const material = this.getMaterialById(id)
+    if (!material)
       return
 
-    Object.assign(element.props, props)
+    Object.assign(material.props, props)
 
     this._notifyChanged({
       type: 'update',
-      elementId: id,
-      newValue: element.props,
+      materialId: id,
+      newValue: material.props,
     })
   }
 
   /**
-   * 更新元素样式（合并 Partial）
+   * 更新物料样式（合并 Partial）
    */
-  updateElementStyle(id: string, style: Partial<ElementStyle>): void {
-    const element = this.getElementById(id)
-    if (!element)
+  updateMaterialStyle(id: string, style: Partial<MaterialStyle>): void {
+    const material = this.getMaterialById(id)
+    if (!material)
       return
 
-    Object.assign(element.style, style)
+    Object.assign(material.style, style)
 
     this._notifyChanged({
       type: 'update',
-      elementId: id,
-      newValue: element.style,
+      materialId: id,
+      newValue: material.style,
     })
   }
 
   /**
-   * 更新元素数据绑定
+   * 更新物料数据绑定
    */
-  updateElementBinding(id: string, binding?: DataBinding): void {
-    const element = this.getElementById(id)
-    if (!element)
+  updateMaterialBinding(id: string, binding?: DataBinding): void {
+    const material = this.getMaterialById(id)
+    if (!material)
       return
 
-    element.binding = binding
+    material.binding = binding
 
     this._notifyChanged({
       type: 'update',
-      elementId: id,
+      materialId: id,
       newValue: binding,
     })
   }
@@ -348,35 +348,35 @@ export class SchemaEngine {
   }
 
   /**
-   * 更新元素显示/隐藏
+   * 更新物料显示/隐藏
    */
-  updateElementVisibility(id: string, hidden: boolean): void {
-    const element = this.getElementById(id)
-    if (!element)
+  updateMaterialVisibility(id: string, hidden: boolean): void {
+    const material = this.getMaterialById(id)
+    if (!material)
       return
 
-    element.hidden = hidden
+    material.hidden = hidden
 
     this._notifyChanged({
       type: 'update',
-      elementId: id,
+      materialId: id,
       newValue: hidden,
     })
   }
 
   /**
-   * 更新元素锁定状态
+   * 更新物料锁定状态
    */
-  updateElementLock(id: string, locked: boolean): void {
-    const element = this.getElementById(id)
-    if (!element)
+  updateMaterialLock(id: string, locked: boolean): void {
+    const material = this.getMaterialById(id)
+    if (!material)
       return
 
-    element.locked = locked
+    material.locked = locked
 
     this._notifyChanged({
       type: 'update',
-      elementId: id,
+      materialId: id,
       newValue: locked,
     })
   }
@@ -399,22 +399,22 @@ export class SchemaEngine {
   // ── 遍历 ──
 
   /**
-   * 遍历所有元素（含 children 递归）
+   * 遍历所有物料（含 children 递归）
    * @param callback - 回调，返回 false 停止遍历
    */
   traverse(
-    callback: (node: ElementNode, parent?: ElementNode) => boolean | void,
+    callback: (node: MaterialNode, parent?: MaterialNode) => boolean | void,
   ): void {
-    this._traverseNodes(this._schema.elements, undefined, callback)
+    this._traverseNodes(this._schema.materials, undefined, callback)
   }
 
   /**
-   * 查找第一个满足条件的元素（含 children 递归）
+   * 查找第一个满足条件的物料（含 children 递归）
    */
   find(
-    predicate: (node: ElementNode) => boolean,
-  ): ElementNode | undefined {
-    let found: ElementNode | undefined
+    predicate: (node: MaterialNode) => boolean,
+  ): MaterialNode | undefined {
+    let found: MaterialNode | undefined
     this.traverse((node) => {
       if (predicate(node)) {
         found = node
@@ -425,10 +425,10 @@ export class SchemaEngine {
   }
 
   /**
-   * 查找所有指定类型的元素（含 children 递归）
+   * 查找所有指定类型的物料（含 children 递归）
    */
-  findByType(type: string): ElementNode[] {
-    const result: ElementNode[] = []
+  findByType(type: string): MaterialNode[] {
+    const result: MaterialNode[] = []
     this.traverse((node) => {
       if (node.type === type)
         result.push(node)
@@ -453,15 +453,15 @@ export class SchemaEngine {
       })
     }
 
-    // 元素校验
+    // 元素校验 -> 物料校验
     const seenIds = new Set<string>()
     this.traverse((node) => {
       // 缺少 id
       if (!node.id) {
         issues.push({
           level: 'error',
-          message: 'Element is missing id',
-          path: 'elements',
+          message: 'Material is missing id',
+          path: 'materials',
         })
         return
       }
@@ -470,9 +470,9 @@ export class SchemaEngine {
       if (seenIds.has(node.id)) {
         issues.push({
           level: 'error',
-          message: `Duplicate element id: ${node.id}`,
-          elementId: node.id,
-          path: 'elements',
+          message: `Duplicate material id: ${node.id}`,
+          materialId: node.id,
+          path: 'materials',
         })
       }
       else {
@@ -483,9 +483,9 @@ export class SchemaEngine {
       if (!node.type) {
         issues.push({
           level: 'error',
-          message: `Element "${node.id}" is missing type`,
-          elementId: node.id,
-          path: `elements.${node.id}.type`,
+          message: `Material "${node.id}" is missing type`,
+          materialId: node.id,
+          path: `materials.${node.id}.type`,
         })
       }
 
@@ -493,19 +493,19 @@ export class SchemaEngine {
       if (!node.layout) {
         issues.push({
           level: 'error',
-          message: `Element "${node.id}" is missing layout`,
-          elementId: node.id,
-          path: `elements.${node.id}.layout`,
+          message: `Material "${node.id}" is missing layout`,
+          materialId: node.id,
+          path: `materials.${node.id}.layout`,
         })
       }
 
       // 未注册类型（warning）
-      if (this._elementRegistry && node.type && !this._elementRegistry.has(node.type)) {
+      if (this._materialRegistry && node.type && !this._materialRegistry.has(node.type)) {
         issues.push({
           level: 'warning',
-          message: `Element type "${node.type}" is not registered`,
-          elementId: node.id,
-          path: `elements.${node.id}.type`,
+          message: `Material type "${node.type}" is not registered`,
+          materialId: node.id,
+          path: `materials.${node.id}.type`,
         })
       }
     })
@@ -566,14 +566,14 @@ export class SchemaEngine {
 
   // ── 内部方法 ──
 
-  private _findElementIndex(id: string): number {
-    return this._schema.elements.findIndex(el => el.id === id)
+  private _findMaterialIndex(id: string): number {
+    return this._schema.materials.findIndex(el => el.id === id)
   }
 
   private _traverseNodes(
-    nodes: ElementNode[],
-    parent: ElementNode | undefined,
-    callback: (node: ElementNode, parent?: ElementNode) => boolean | void,
+    nodes: MaterialNode[],
+    parent: MaterialNode | undefined,
+    callback: (node: MaterialNode, parent?: MaterialNode) => boolean | void,
   ): boolean {
     for (const node of nodes) {
       const result = callback(node, parent)

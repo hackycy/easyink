@@ -1,17 +1,17 @@
 import type { BackgroundLayer } from '@easyink/shared'
-import type { ElementNode, PageSettings } from '../../schema'
+import type { MaterialNode, PageSettings } from '../../schema'
 import type { SchemaOperations } from '../types'
 import { describe, expect, it, vi } from 'vitest'
 import {
   createAddBackgroundLayerCommand,
-  createAddElementCommand,
-  createMoveElementCommand,
+  createAddMaterialCommand,
+  createMoveMaterialCommand,
   createRemoveBackgroundLayerCommand,
-  createRemoveElementCommand,
+  createRemoveMaterialCommand,
   createReorderBackgroundLayerCommand,
-  createReorderElementCommand,
-  createResizeElementCommand,
-  createRotateElementCommand,
+  createReorderMaterialCommand,
+  createResizeMaterialCommand,
+  createRotateMaterialCommand,
   createToggleLockCommand,
   createToggleVisibilityCommand,
   createUpdateBackgroundLayerCommand,
@@ -24,67 +24,67 @@ import {
 function createMockOps(): SchemaOperations {
   return {
     addBackgroundLayer: vi.fn(),
-    addElement: vi.fn(),
-    getElement: vi.fn(),
+    addMaterial: vi.fn(),
+    getMaterial: vi.fn(),
     getPageSettings: vi.fn(),
     removeBackgroundLayer: vi.fn(),
-    removeElement: vi.fn(),
+    removeMaterial: vi.fn(),
     reorderBackgroundLayer: vi.fn(),
-    reorderElement: vi.fn(),
+    reorderMaterial: vi.fn(),
     updateBackgroundLayer: vi.fn(),
-    updateElementBinding: vi.fn(),
-    updateElementLayout: vi.fn(),
-    updateElementLock: vi.fn(),
-    updateElementProps: vi.fn(),
-    updateElementStyle: vi.fn(),
-    updateElementVisibility: vi.fn(),
+    updateMaterialBinding: vi.fn(),
+    updateMaterialLayout: vi.fn(),
+    updateMaterialLock: vi.fn(),
+    updateMaterialProps: vi.fn(),
+    updateMaterialStyle: vi.fn(),
+    updateMaterialVisibility: vi.fn(),
     updateExtensions: vi.fn(),
     updatePageSettings: vi.fn(),
   }
 }
 
-describe('createMoveElementCommand', () => {
+describe('createMoveMaterialCommand', () => {
   it('should execute and undo move', () => {
     const ops = createMockOps()
-    const cmd = createMoveElementCommand(
-      { elementId: 'el-1', oldX: 0, oldY: 0, newX: 10, newY: 20 },
+    const cmd = createMoveMaterialCommand(
+      { materialId: 'el-1', oldX: 0, oldY: 0, newX: 10, newY: 20 },
       ops,
     )
 
     cmd.execute()
-    expect(ops.updateElementLayout).toHaveBeenCalledWith('el-1', { x: 10, y: 20 })
+    expect(ops.updateMaterialLayout).toHaveBeenCalledWith('el-1', { x: 10, y: 20 })
 
     cmd.undo()
-    expect(ops.updateElementLayout).toHaveBeenCalledWith('el-1', { x: 0, y: 0 })
+    expect(ops.updateMaterialLayout).toHaveBeenCalledWith('el-1', { x: 0, y: 0 })
   })
 
   it('should merge consecutive moves for same element', () => {
     const ops = createMockOps()
-    const cmd1 = createMoveElementCommand(
-      { elementId: 'el-1', oldX: 0, oldY: 0, newX: 5, newY: 5 },
+    const cmd1 = createMoveMaterialCommand(
+      { materialId: 'el-1', oldX: 0, oldY: 0, newX: 5, newY: 5 },
       ops,
     )
-    const cmd2 = createMoveElementCommand(
-      { elementId: 'el-1', oldX: 5, oldY: 5, newX: 10, newY: 20 },
+    const cmd2 = createMoveMaterialCommand(
+      { materialId: 'el-1', oldX: 5, oldY: 5, newX: 10, newY: 20 },
       ops,
     )
 
     const merged = cmd1.merge!(cmd2)
     expect(merged).not.toBeNull()
     merged!.execute()
-    expect(ops.updateElementLayout).toHaveBeenCalledWith('el-1', { x: 10, y: 20 })
+    expect(ops.updateMaterialLayout).toHaveBeenCalledWith('el-1', { x: 10, y: 20 })
     merged!.undo()
-    expect(ops.updateElementLayout).toHaveBeenCalledWith('el-1', { x: 0, y: 0 })
+    expect(ops.updateMaterialLayout).toHaveBeenCalledWith('el-1', { x: 0, y: 0 })
   })
 
   it('should not merge moves for different elements', () => {
     const ops = createMockOps()
-    const cmd1 = createMoveElementCommand(
-      { elementId: 'el-1', oldX: 0, oldY: 0, newX: 5, newY: 5 },
+    const cmd1 = createMoveMaterialCommand(
+      { materialId: 'el-1', oldX: 0, oldY: 0, newX: 5, newY: 5 },
       ops,
     )
-    const cmd2 = createMoveElementCommand(
-      { elementId: 'el-2', oldX: 0, oldY: 0, newX: 10, newY: 20 },
+    const cmd2 = createMoveMaterialCommand(
+      { materialId: 'el-2', oldX: 0, oldY: 0, newX: 10, newY: 20 },
       ops,
     )
 
@@ -93,69 +93,69 @@ describe('createMoveElementCommand', () => {
   })
 })
 
-describe('createResizeElementCommand', () => {
+describe('createResizeMaterialCommand', () => {
   it('should execute and undo resize', () => {
     const ops = createMockOps()
-    const cmd = createResizeElementCommand(
-      { elementId: 'el-1', oldWidth: 100, oldHeight: 50, newWidth: 200, newHeight: 100 },
+    const cmd = createResizeMaterialCommand(
+      { materialId: 'el-1', oldWidth: 100, oldHeight: 50, newWidth: 200, newHeight: 100 },
       ops,
     )
 
     cmd.execute()
-    expect(ops.updateElementLayout).toHaveBeenCalledWith('el-1', { width: 200, height: 100 })
+    expect(ops.updateMaterialLayout).toHaveBeenCalledWith('el-1', { width: 200, height: 100 })
 
     cmd.undo()
-    expect(ops.updateElementLayout).toHaveBeenCalledWith('el-1', { width: 100, height: 50 })
+    expect(ops.updateMaterialLayout).toHaveBeenCalledWith('el-1', { width: 100, height: 50 })
   })
 
   it('should merge consecutive resizes for same element', () => {
     const ops = createMockOps()
-    const cmd1 = createResizeElementCommand(
-      { elementId: 'el-1', oldWidth: 100, oldHeight: 50, newWidth: 150, newHeight: 75 },
+    const cmd1 = createResizeMaterialCommand(
+      { materialId: 'el-1', oldWidth: 100, oldHeight: 50, newWidth: 150, newHeight: 75 },
       ops,
     )
-    const cmd2 = createResizeElementCommand(
-      { elementId: 'el-1', oldWidth: 150, oldHeight: 75, newWidth: 200, newHeight: 100 },
+    const cmd2 = createResizeMaterialCommand(
+      { materialId: 'el-1', oldWidth: 150, oldHeight: 75, newWidth: 200, newHeight: 100 },
       ops,
     )
 
     const merged = cmd1.merge!(cmd2)
     expect(merged).not.toBeNull()
     merged!.undo()
-    expect(ops.updateElementLayout).toHaveBeenCalledWith('el-1', { width: 100, height: 50 })
+    expect(ops.updateMaterialLayout).toHaveBeenCalledWith('el-1', { width: 100, height: 50 })
   })
 })
 
-describe('createRotateElementCommand', () => {
+describe('createRotateMaterialCommand', () => {
   it('should execute and undo rotation', () => {
     const ops = createMockOps()
-    const cmd = createRotateElementCommand(
-      { elementId: 'el-1', oldRotation: 0, newRotation: 45 },
+    const cmd = createRotateMaterialCommand(
+      { materialId: 'el-1', oldRotation: 0, newRotation: 45 },
       ops,
     )
 
     cmd.execute()
-    expect(ops.updateElementLayout).toHaveBeenCalledWith('el-1', { rotation: 45 })
+    expect(ops.updateMaterialLayout).toHaveBeenCalledWith('el-1', { rotation: 45 })
 
     cmd.undo()
-    expect(ops.updateElementLayout).toHaveBeenCalledWith('el-1', { rotation: 0 })
+    expect(ops.updateMaterialLayout).toHaveBeenCalledWith('el-1', { rotation: 0 })
   })
 
   it('should merge consecutive rotations', () => {
     const ops = createMockOps()
-    const cmd1 = createRotateElementCommand(
-      { elementId: 'el-1', oldRotation: 0, newRotation: 15 },
+    const cmd1 = createRotateMaterialCommand(
+      { materialId: 'el-1', oldRotation: 0, newRotation: 15 },
       ops,
     )
-    const cmd2 = createRotateElementCommand(
-      { elementId: 'el-1', oldRotation: 15, newRotation: 45 },
+    const cmd2 = createRotateMaterialCommand(
+      { materialId: 'el-1', oldRotation: 15, newRotation: 45 },
       ops,
     )
 
     const merged = cmd1.merge!(cmd2)
     expect(merged).not.toBeNull()
     merged!.undo()
-    expect(ops.updateElementLayout).toHaveBeenCalledWith('el-1', { rotation: 0 })
+    expect(ops.updateMaterialLayout).toHaveBeenCalledWith('el-1', { rotation: 0 })
   })
 })
 
@@ -163,15 +163,15 @@ describe('createUpdatePropsCommand', () => {
   it('should execute and undo prop update', () => {
     const ops = createMockOps()
     const cmd = createUpdatePropsCommand(
-      { elementId: 'el-1', oldProps: { content: 'old' }, newProps: { content: 'new' } },
+      { materialId: 'el-1', oldProps: { content: 'old' }, newProps: { content: 'new' } },
       ops,
     )
 
     cmd.execute()
-    expect(ops.updateElementProps).toHaveBeenCalledWith('el-1', { content: 'new' })
+    expect(ops.updateMaterialProps).toHaveBeenCalledWith('el-1', { content: 'new' })
 
     cmd.undo()
-    expect(ops.updateElementProps).toHaveBeenCalledWith('el-1', { content: 'old' })
+    expect(ops.updateMaterialProps).toHaveBeenCalledWith('el-1', { content: 'old' })
   })
 })
 
@@ -179,20 +179,20 @@ describe('createUpdateStyleCommand', () => {
   it('should execute and undo style update', () => {
     const ops = createMockOps()
     const cmd = createUpdateStyleCommand(
-      { elementId: 'el-1', oldStyle: { color: 'red' }, newStyle: { color: 'blue' } },
+      { materialId: 'el-1', oldStyle: { color: 'red' }, newStyle: { color: 'blue' } },
       ops,
     )
 
     cmd.execute()
-    expect(ops.updateElementStyle).toHaveBeenCalledWith('el-1', { color: 'blue' })
+    expect(ops.updateMaterialStyle).toHaveBeenCalledWith('el-1', { color: 'blue' })
 
     cmd.undo()
-    expect(ops.updateElementStyle).toHaveBeenCalledWith('el-1', { color: 'red' })
+    expect(ops.updateMaterialStyle).toHaveBeenCalledWith('el-1', { color: 'red' })
   })
 })
 
-describe('createAddElementCommand', () => {
-  const mockElement: ElementNode = {
+describe('createAddMaterialCommand', () => {
+  const mockElement: MaterialNode = {
     id: 'el-new',
     type: 'text',
     layout: { position: 'absolute', x: 0, y: 0, width: 100, height: 50 },
@@ -202,18 +202,18 @@ describe('createAddElementCommand', () => {
 
   it('should add element on execute and remove on undo', () => {
     const ops = createMockOps()
-    const cmd = createAddElementCommand({ element: mockElement, index: 0 }, ops)
+    const cmd = createAddMaterialCommand({ material: mockElement, index: 0 }, ops)
 
     cmd.execute()
-    expect(ops.addElement).toHaveBeenCalledWith(mockElement, 0)
+    expect(ops.addMaterial).toHaveBeenCalledWith(mockElement, 0)
 
     cmd.undo()
-    expect(ops.removeElement).toHaveBeenCalledWith('el-new')
+    expect(ops.removeMaterial).toHaveBeenCalledWith('el-new')
   })
 })
 
-describe('createRemoveElementCommand', () => {
-  const mockElement: ElementNode = {
+describe('createRemoveMaterialCommand', () => {
+  const mockElement: MaterialNode = {
     id: 'el-del',
     type: 'text',
     layout: { position: 'absolute', x: 10, y: 20, width: 100, height: 50 },
@@ -223,29 +223,29 @@ describe('createRemoveElementCommand', () => {
 
   it('should remove element on execute and re-add on undo', () => {
     const ops = createMockOps()
-    const cmd = createRemoveElementCommand({ element: mockElement, index: 2 }, ops)
+    const cmd = createRemoveMaterialCommand({ material: mockElement, index: 2 }, ops)
 
     cmd.execute()
-    expect(ops.removeElement).toHaveBeenCalledWith('el-del')
+    expect(ops.removeMaterial).toHaveBeenCalledWith('el-del')
 
     cmd.undo()
-    expect(ops.addElement).toHaveBeenCalledWith(mockElement, 2)
+    expect(ops.addMaterial).toHaveBeenCalledWith(mockElement, 2)
   })
 })
 
-describe('createReorderElementCommand', () => {
+describe('createReorderMaterialCommand', () => {
   it('should reorder on execute and undo', () => {
     const ops = createMockOps()
-    const cmd = createReorderElementCommand(
-      { elementId: 'el-1', oldIndex: 0, newIndex: 3 },
+    const cmd = createReorderMaterialCommand(
+      { materialId: 'el-1', oldIndex: 0, newIndex: 3 },
       ops,
     )
 
     cmd.execute()
-    expect(ops.reorderElement).toHaveBeenCalledWith('el-1', 3)
+    expect(ops.reorderMaterial).toHaveBeenCalledWith('el-1', 3)
 
     cmd.undo()
-    expect(ops.reorderElement).toHaveBeenCalledWith('el-1', 0)
+    expect(ops.reorderMaterial).toHaveBeenCalledWith('el-1', 0)
   })
 })
 
@@ -254,7 +254,7 @@ describe('createUpdateBindingCommand', () => {
     const ops = createMockOps()
     const cmd = createUpdateBindingCommand(
       {
-        elementId: 'el-1',
+        materialId: 'el-1',
         oldBinding: { path: 'order.name' },
         newBinding: { path: 'order.customer.name' },
       },
@@ -262,17 +262,17 @@ describe('createUpdateBindingCommand', () => {
     )
 
     cmd.execute()
-    expect(ops.updateElementBinding).toHaveBeenCalledWith('el-1', { path: 'order.customer.name' })
+    expect(ops.updateMaterialBinding).toHaveBeenCalledWith('el-1', { path: 'order.customer.name' })
 
     cmd.undo()
-    expect(ops.updateElementBinding).toHaveBeenCalledWith('el-1', { path: 'order.name' })
+    expect(ops.updateMaterialBinding).toHaveBeenCalledWith('el-1', { path: 'order.name' })
   })
 
   it('should handle removing binding (undo re-adds)', () => {
     const ops = createMockOps()
     const cmd = createUpdateBindingCommand(
       {
-        elementId: 'el-1',
+        materialId: 'el-1',
         oldBinding: { path: 'order.name' },
         newBinding: undefined,
       },
@@ -280,10 +280,10 @@ describe('createUpdateBindingCommand', () => {
     )
 
     cmd.execute()
-    expect(ops.updateElementBinding).toHaveBeenCalledWith('el-1', undefined)
+    expect(ops.updateMaterialBinding).toHaveBeenCalledWith('el-1', undefined)
 
     cmd.undo()
-    expect(ops.updateElementBinding).toHaveBeenCalledWith('el-1', { path: 'order.name' })
+    expect(ops.updateMaterialBinding).toHaveBeenCalledWith('el-1', { path: 'order.name' })
   })
 })
 
@@ -320,21 +320,21 @@ describe('createToggleVisibilityCommand', () => {
   it('should toggle hidden on execute and undo', () => {
     const ops = createMockOps()
     const cmd = createToggleVisibilityCommand(
-      { elementId: 'el-1', oldHidden: false, newHidden: true },
+      { materialId: 'el-1', oldHidden: false, newHidden: true },
       ops,
     )
 
     cmd.execute()
-    expect(ops.updateElementVisibility).toHaveBeenCalledWith('el-1', true)
+    expect(ops.updateMaterialVisibility).toHaveBeenCalledWith('el-1', true)
 
     cmd.undo()
-    expect(ops.updateElementVisibility).toHaveBeenCalledWith('el-1', false)
+    expect(ops.updateMaterialVisibility).toHaveBeenCalledWith('el-1', false)
   })
 
   it('should have correct type and description', () => {
     const ops = createMockOps()
     const cmd = createToggleVisibilityCommand(
-      { elementId: 'el-1', oldHidden: false, newHidden: true },
+      { materialId: 'el-1', oldHidden: false, newHidden: true },
       ops,
     )
 
@@ -347,21 +347,21 @@ describe('createToggleLockCommand', () => {
   it('should toggle locked on execute and undo', () => {
     const ops = createMockOps()
     const cmd = createToggleLockCommand(
-      { elementId: 'el-1', oldLocked: false, newLocked: true },
+      { materialId: 'el-1', oldLocked: false, newLocked: true },
       ops,
     )
 
     cmd.execute()
-    expect(ops.updateElementLock).toHaveBeenCalledWith('el-1', true)
+    expect(ops.updateMaterialLock).toHaveBeenCalledWith('el-1', true)
 
     cmd.undo()
-    expect(ops.updateElementLock).toHaveBeenCalledWith('el-1', false)
+    expect(ops.updateMaterialLock).toHaveBeenCalledWith('el-1', false)
   })
 
   it('should have correct type and description', () => {
     const ops = createMockOps()
     const cmd = createToggleLockCommand(
-      { elementId: 'el-1', oldLocked: false, newLocked: true },
+      { materialId: 'el-1', oldLocked: false, newLocked: true },
       ops,
     )
 

@@ -30,8 +30,8 @@ function createMockCommand(ops: SchemaOperations): Command {
     id: 'cmd-1',
     type: 'addElement',
     description: 'Add element',
-    execute: () => ops.addElement(element, -1),
-    undo: () => ops.removeElement(element.id),
+    execute: () => ops.addMaterial(element, -1),
+    undo: () => ops.removeMaterial(element.id),
   }
 }
 
@@ -48,7 +48,7 @@ describe('easyInkEngine', () => {
       expect(engine.dataSource).toBeDefined()
       expect(engine.dataResolver).toBeDefined()
       expect(engine.layout).toBeDefined()
-      expect(engine.elementRegistry).toBeDefined()
+      expect(engine.materialRegistry).toBeDefined()
       expect(engine.hooks).toBeDefined()
       expect(engine.destroyed).toBe(false)
     })
@@ -87,12 +87,12 @@ describe('easyInkEngine', () => {
     it('should register builtin element types', () => {
       const engine = new EasyInkEngine()
 
-      expect(engine.elementRegistry.has('text')).toBe(true)
-      expect(engine.elementRegistry.has('image')).toBe(true)
-      expect(engine.elementRegistry.has('table')).toBe(true)
-      expect(engine.elementRegistry.has('barcode')).toBe(true)
-      expect(engine.elementRegistry.has('rect')).toBe(true)
-      expect(engine.elementRegistry.has('line')).toBe(true)
+      expect(engine.materialRegistry.has('text')).toBe(true)
+      expect(engine.materialRegistry.has('image')).toBe(true)
+      expect(engine.materialRegistry.has('table')).toBe(true)
+      expect(engine.materialRegistry.has('barcode')).toBe(true)
+      expect(engine.materialRegistry.has('rect')).toBe(true)
+      expect(engine.materialRegistry.has('line')).toBe(true)
     })
 
     it('should register builtin formatters', () => {
@@ -136,13 +136,13 @@ describe('easyInkEngine', () => {
       const result = engine.calculateLayout()
 
       expect(result).toBeDefined()
-      expect(result.elements).toBeInstanceOf(Map)
+      expect(result.materials).toBeInstanceOf(Map)
       expect(typeof result.bodyContentHeight).toBe('number')
     })
 
     it('should compute layout for elements', () => {
       const schema = createDefaultSchema()
-      schema.elements = [
+      schema.materials = [
         {
           id: 'el-1',
           type: 'text',
@@ -154,8 +154,8 @@ describe('easyInkEngine', () => {
       const engine = new EasyInkEngine({ schema })
       const result = engine.calculateLayout()
 
-      expect(result.elements.has('el-1')).toBe(true)
-      const el = result.elements.get('el-1')!
+      expect(result.materials.has('el-1')).toBe(true)
+      const el = result.materials.get('el-1')!
       expect(el.x).toBe(10)
       expect(el.y).toBe(20)
       expect(el.width).toBe(50)
@@ -188,8 +188,8 @@ describe('easyInkEngine', () => {
       const cmd = createMockCommand(engine.operations)
 
       engine.execute(cmd)
-      expect(engine.schema.schema.elements).toHaveLength(1)
-      expect(engine.schema.schema.elements[0].id).toBe('el-1')
+      expect(engine.schema.schema.materials).toHaveLength(1)
+      expect(engine.schema.schema.materials[0].id).toBe('el-1')
     })
 
     it('should undo a command', () => {
@@ -198,7 +198,7 @@ describe('easyInkEngine', () => {
 
       engine.execute(cmd)
       engine.undo()
-      expect(engine.schema.schema.elements).toHaveLength(0)
+      expect(engine.schema.schema.materials).toHaveLength(0)
     })
 
     it('should redo a command', () => {
@@ -208,7 +208,7 @@ describe('easyInkEngine', () => {
       engine.execute(cmd)
       engine.undo()
       engine.redo()
-      expect(engine.schema.schema.elements).toHaveLength(1)
+      expect(engine.schema.schema.materials).toHaveLength(1)
     })
 
     it('should intercept command via beforeSchemaChange hook', () => {
@@ -221,7 +221,7 @@ describe('easyInkEngine', () => {
       engine.execute(cmd)
 
       // Command should NOT have been executed
-      expect(engine.schema.schema.elements).toHaveLength(0)
+      expect(engine.schema.schema.materials).toHaveLength(0)
     })
 
     it('should pass through when beforeSchemaChange returns undefined', () => {
@@ -233,16 +233,16 @@ describe('easyInkEngine', () => {
       const cmd = createMockCommand(engine.operations)
       engine.execute(cmd)
 
-      expect(engine.schema.schema.elements).toHaveLength(1)
+      expect(engine.schema.schema.materials).toHaveLength(1)
     })
 
     it('should provide operations getter', () => {
       const engine = new EasyInkEngine()
       const ops = engine.operations
 
-      expect(ops.addElement).toBeTypeOf('function')
-      expect(ops.removeElement).toBeTypeOf('function')
-      expect(ops.getElement).toBeTypeOf('function')
+      expect(ops.addMaterial).toBeTypeOf('function')
+      expect(ops.removeMaterial).toBeTypeOf('function')
+      expect(ops.getMaterial).toBeTypeOf('function')
       expect(ops.getPageSettings).toBeTypeOf('function')
     })
   })
@@ -255,7 +255,7 @@ describe('easyInkEngine', () => {
       engine.on('schema:change', listener)
 
       // Trigger schema change through schema engine
-      engine.schema.addElement({
+      engine.schema.addMaterial({
         id: 'el-1',
         type: 'text',
         layout: { position: 'absolute', width: 100, height: 30 },
@@ -273,7 +273,7 @@ describe('easyInkEngine', () => {
       engine.on('schema:change', listener)
       engine.off('schema:change', listener)
 
-      engine.schema.addElement({
+      engine.schema.addMaterial({
         id: 'el-1',
         type: 'text',
         layout: { position: 'absolute', width: 100, height: 30 },
@@ -347,12 +347,12 @@ describe('easyInkEngine', () => {
       const tapFn = vi.fn(node => node)
       const plugin = createMockPlugin('hook-test', {
         install: (ctx) => {
-          ctx.hooks.beforeElementCreate.tap('hook-test', tapFn)
+          ctx.hooks.beforeMaterialCreate.tap('hook-test', tapFn)
         },
       })
       const engine = new EasyInkEngine({ plugins: [plugin] })
 
-      engine.schema.addElement({
+      engine.schema.addMaterial({
         id: 'el-1',
         type: 'text',
         layout: { position: 'absolute', width: 100, height: 30 },
@@ -395,7 +395,7 @@ describe('easyInkEngine', () => {
 
       expect(dispose).toHaveBeenCalledOnce()
       expect(engine.plugins.list()).toEqual([])
-      expect(engine.elementRegistry.types()).toEqual([])
+      expect(engine.materialRegistry.types()).toEqual([])
       expect(engine.getData()).toEqual({})
     })
 
