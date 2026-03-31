@@ -16,6 +16,8 @@ import type { useLocale } from './locale/use-locale'
 export interface DesignerOptions {
   /** 初始 Schema */
   schema?: import('@easyink/core').TemplateSchema
+  /** 初始渲染数据 */
+  data?: Record<string, unknown>
   /** 插件列表 */
   plugins?: import('@easyink/core').EasyInkPlugin[]
   /** 数据源注册列表 */

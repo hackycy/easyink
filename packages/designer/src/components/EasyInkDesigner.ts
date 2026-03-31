@@ -1,5 +1,5 @@
 import type { DesignerContext, DesignerOptions } from '../types'
-import { defineComponent, h, provide, watch } from 'vue'
+import { defineComponent, h, provide, triggerRef, watch } from 'vue'
 import { useDesigner } from '../composables/use-designer'
 import { DESIGNER_INJECTION_KEY } from '../types'
 import { ContextMenu } from './ContextMenu'
@@ -12,6 +12,7 @@ import { ToolbarPanel } from './ToolbarPanel'
 export const EasyInkDesigner = defineComponent({
   name: 'EasyInkDesigner',
   props: {
+    data: { default: undefined, type: Object },
     dataSources: { default: undefined, type: Array },
     defaultFlowHeight: { default: undefined, type: Number },
     locale: { default: undefined, type: Object },
@@ -52,6 +53,11 @@ export const EasyInkDesigner = defineComponent({
     watch(designer.schema, (newSchema) => {
       emit('update:schema', newSchema)
     })
+
+    watch(() => props.data, (newData) => {
+      designer.engine.setData((newData ?? {}) as Record<string, unknown>)
+      triggerRef(designer.schema)
+    }, { deep: true, immediate: true })
 
     return () => {
       return h('div', { class: 'easyink-designer' }, [

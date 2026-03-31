@@ -26,6 +26,7 @@ export function useDesigner(options?: DesignerOptions) {
     plugins: options?.plugins,
     schema: options?.schema,
   })
+  engine.setData(options?.data ?? {})
 
   // 2. 创建渲染器
   const screenRenderer = new ScreenRenderer({

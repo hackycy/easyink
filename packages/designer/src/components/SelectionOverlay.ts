@@ -1,5 +1,4 @@
 import type { ResizeHandlePosition } from '../types'
-import { toPixels } from '@easyink/core'
 import { computed, defineComponent, h, inject } from 'vue'
 import { DESIGNER_INJECTION_KEY } from '../types'
 
@@ -21,78 +20,182 @@ const CORNER_HANDLES: ResizeHandlePosition[] = [
   'bottom-right',
 ]
 
+interface OverlayBox {
+  bounds: { height: number, width: number, x: number, y: number }
+  height: number
+  id: string
+  rotation: number
+  width: number
+  x: number
+  y: number
+}
+
 export const SelectionOverlay = defineComponent({
   name: 'SelectionOverlay',
   setup() {
     const ctx = inject(DESIGNER_INJECTION_KEY)!
 
-    function toPx(v: number): number {
-      const unit = ctx.engine.schema.schema.page.unit
-      return toPixels(v, unit, 96, ctx.canvas.zoom.value)
+    function parsePx(value?: string): number {
+      return Number.parseFloat(value ?? '') || 0
     }
 
-    function getPageWrapperPadding(): { x: number, y: number } {
-      const wrapper = document.querySelector('.easyink-canvas-page-wrapper')
-      if (!wrapper) {
-        return { x: 0, y: 0 }
+    function parseRotation(transform?: string): number {
+      if (!transform) {
+        return 0
       }
+      const match = /rotate\(([-\d.]+)deg\)/.exec(transform)
+      return match ? Number.parseFloat(match[1]) || 0 : 0
+    }
+
+    function getPageWrapper(): HTMLElement | null {
+      return document.querySelector('.easyink-canvas-page-wrapper') as HTMLElement | null
+    }
+
+    function getWrapperPadding(wrapper: HTMLElement): { x: number, y: number } {
       const styles = getComputedStyle(wrapper)
       return {
-        x: Number.parseFloat(styles.paddingLeft) || 0,
-        y: Number.parseFloat(styles.paddingTop) || 0,
+        x: parsePx(styles.paddingLeft),
+        y: parsePx(styles.paddingTop),
       }
     }
 
-    const contentOffset = computed(() => {
-      const { margins } = ctx.engine.schema.schema.page
-      const padding = getPageWrapperPadding()
+    function getElementBounds(element: HTMLElement, wrapper: HTMLElement): { height: number, width: number, x: number, y: number } {
+      const elementRect = element.getBoundingClientRect()
+      const wrapperRect = wrapper.getBoundingClientRect()
+      const scaleX = wrapper.offsetWidth > 0 ? wrapperRect.width / wrapper.offsetWidth : 1
+      const scaleY = wrapper.offsetHeight > 0 ? wrapperRect.height / wrapper.offsetHeight : 1
       return {
-        x: padding.x + toPx(margins.left),
-        y: padding.y + toPx(margins.top),
+        height: scaleY > 0 ? elementRect.height / scaleY : elementRect.height,
+        width: scaleX > 0 ? elementRect.width / scaleX : elementRect.width,
+        x: scaleX > 0 ? (elementRect.left - wrapperRect.left) / scaleX : elementRect.left - wrapperRect.left,
+        y: scaleY > 0 ? (elementRect.top - wrapperRect.top) / scaleY : elementRect.top - wrapperRect.top,
       }
-    })
+    }
 
-    const primaryBox = computed(() => {
-      const el = ctx.selection.selectedElement.value
-      if (!el || ctx.selection.selectedIds.value.length !== 1) {
+    function hasTransformedAncestor(element: HTMLElement, wrapper: HTMLElement): boolean {
+      let current = element.parentElement
+      while (current && current !== wrapper) {
+        if (current.classList.contains('easyink-element') && current.style.transform) {
+          return true
+        }
+        current = current.parentElement
+      }
+      return false
+    }
+
+    function getMeasuredBox(id: string): OverlayBox | null {
+      const wrapper = getPageWrapper()
+      if (!wrapper) {
         return null
       }
 
-      const layout = el.layout
-      return {
-        height: toPx(typeof layout.height === 'number' ? layout.height : 60),
-        rotation: layout.rotation ?? 0,
-        width: toPx(typeof layout.width === 'number' ? layout.width : 100),
-        x: toPx(layout.x ?? 0),
-        y: toPx(layout.y ?? 0),
+      const element = Array.from(wrapper.querySelectorAll('.easyink-element')).find(node => (node as HTMLElement).dataset.elementId === id) as HTMLElement | undefined
+      if (!element) {
+        return null
       }
+
+      const bounds = getElementBounds(element, wrapper)
+      const baseWidth = parsePx(element.style.width)
+      const baseHeight = parsePx(element.style.height)
+
+      if (hasTransformedAncestor(element, wrapper) || (!baseWidth && !baseHeight)) {
+        return {
+          bounds,
+          height: bounds.height,
+          id,
+          rotation: 0,
+          width: bounds.width,
+          x: bounds.x,
+          y: bounds.y,
+        }
+      }
+
+      const padding = getWrapperPadding(wrapper)
+      let x = padding.x
+      let y = padding.y
+      let reachedContent = false
+      let current: HTMLElement | null = element
+
+      while (current && current !== wrapper) {
+        if (current.classList.contains('easyink-content') || current.classList.contains('easyink-element')) {
+          x += parsePx(current.style.left)
+          y += parsePx(current.style.top)
+          if (current.classList.contains('easyink-content')) {
+            reachedContent = true
+          }
+        }
+        current = current.parentElement
+      }
+
+      if (!reachedContent) {
+        return {
+          bounds,
+          height: bounds.height,
+          id,
+          rotation: 0,
+          width: bounds.width,
+          x: bounds.x,
+          y: bounds.y,
+        }
+      }
+
+      return {
+        bounds,
+        height: baseHeight || bounds.height,
+        id,
+        rotation: parseRotation(element.style.transform),
+        width: baseWidth || bounds.width,
+        x,
+        y,
+      }
+    }
+
+    const primaryBox = computed(() => {
+      const renderVersion = ctx.canvas.renderVersion.value
+      const ids = ctx.selection.selectedIds.value
+      void renderVersion
+      if (ids.length !== 1) {
+        return null
+      }
+      return getMeasuredBox(ids[0])
     })
 
     const isMulti = computed(() => ctx.selection.selectedIds.value.length > 1)
 
     const multiBoxes = computed(() => {
+      const renderVersion = ctx.canvas.renderVersion.value
+      void renderVersion
       if (!isMulti.value) {
         return []
       }
-      return ctx.selection.selectedElements.value.map(el => ({
-        height: toPx(typeof el.layout.height === 'number' ? el.layout.height : 60),
-        id: el.id,
-        width: toPx(typeof el.layout.width === 'number' ? el.layout.width : 100),
-        x: toPx(el.layout.x ?? 0),
-        y: toPx(el.layout.y ?? 0),
-      }))
+      return ctx.selection.selectedIds.value
+        .map(id => getMeasuredBox(id))
+        .filter((box): box is OverlayBox => box !== null)
     })
 
     const multiBounds = computed(() => {
-      const bounds = ctx.selection.selectionBounds.value
-      if (!bounds || !isMulti.value) {
+      const boxes = multiBoxes.value
+      if (!isMulti.value || boxes.length === 0) {
         return null
       }
+
+      let minX = Infinity
+      let minY = Infinity
+      let maxX = -Infinity
+      let maxY = -Infinity
+
+      for (const box of boxes) {
+        minX = Math.min(minX, box.bounds.x)
+        minY = Math.min(minY, box.bounds.y)
+        maxX = Math.max(maxX, box.bounds.x + box.bounds.width)
+        maxY = Math.max(maxY, box.bounds.y + box.bounds.height)
+      }
+
       return {
-        height: toPx(bounds.height),
-        width: toPx(bounds.width),
-        x: toPx(bounds.x),
-        y: toPx(bounds.y),
+        height: maxY - minY,
+        width: maxX - minX,
+        x: minX,
+        y: minY,
       }
     })
 
@@ -249,13 +352,7 @@ export const SelectionOverlay = defineComponent({
         return null
       }
 
-      return h('div', {
-        class: 'easyink-selection-overlay',
-        style: {
-          left: `${contentOffset.value.x}px`,
-          top: `${contentOffset.value.y}px`,
-        },
-      }, children)
+      return h('div', { class: 'easyink-selection-overlay' }, children)
     }
   },
 })

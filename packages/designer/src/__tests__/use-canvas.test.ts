@@ -58,4 +58,11 @@ describe('useCanvas', () => {
     expect(panX.value).toBe(100)
     expect(panY.value).toBe(200)
   })
+
+  it('markRendered increments renderVersion', () => {
+    const { markRendered, renderVersion } = useCanvas()
+    markRendered()
+    markRendered()
+    expect(renderVersion.value).toBe(2)
+  })
 })

@@ -7,6 +7,10 @@ function uid(): string {
   return `tpl-${Date.now().toString(36)}-${(++_counter).toString(36)}`
 }
 
+function pxToMm(value: number): number {
+  return Number((value * 25.4 / 96).toFixed(3))
+}
+
 export interface PresetTemplate {
   name: string
   description: string
@@ -59,7 +63,7 @@ function createReceiptTemplate(): PresetTemplate {
         name: '店名',
         layout: { position: 'flow', width: 'auto', height: 10 },
         props: { content: 'ACME 科技有限公司', verticalAlign: 'middle', wordBreak: 'normal', overflow: 'visible' },
-        style: { fontSize: 18, fontWeight: 'bold', textAlign: 'center', color: '#000000' },
+        style: { fontSize: pxToMm(18), fontWeight: 'bold', textAlign: 'center', color: '#000000' },
         binding: { path: 'companyName' },
       },
       // 分隔线 1
@@ -68,7 +72,7 @@ function createReceiptTemplate(): PresetTemplate {
         type: 'line',
         name: '分隔线',
         layout: { position: 'flow', width: contentWidth, height: 0 },
-        props: { direction: 'horizontal', strokeWidth: 1, strokeColor: '#000000', strokeStyle: 'dashed' },
+        props: { direction: 'horizontal', strokeWidth: pxToMm(1), strokeColor: '#000000', strokeStyle: 'dashed' },
         style: {},
       },
       // 订单号
@@ -78,7 +82,7 @@ function createReceiptTemplate(): PresetTemplate {
         name: '订单号',
         layout: { position: 'flow', width: 'auto', height: 6 },
         props: { content: '订单号：', verticalAlign: 'middle', wordBreak: 'normal', overflow: 'visible' },
-        style: { fontSize: 10, color: '#000000' },
+        style: { fontSize: pxToMm(10), color: '#000000' },
         binding: { path: 'orderNo' },
       },
       // 日期
@@ -88,7 +92,7 @@ function createReceiptTemplate(): PresetTemplate {
         name: '下单日期',
         layout: { position: 'flow', width: 'auto', height: 6 },
         props: { content: '日期：', verticalAlign: 'middle', wordBreak: 'normal', overflow: 'visible' },
-        style: { fontSize: 10, color: '#000000' },
+        style: { fontSize: pxToMm(10), color: '#000000' },
         binding: { path: 'orderDate' },
       },
       // 分隔线 2
@@ -97,7 +101,7 @@ function createReceiptTemplate(): PresetTemplate {
         type: 'line',
         name: '分隔线',
         layout: { position: 'flow', width: contentWidth, height: 0 },
-        props: { direction: 'horizontal', strokeWidth: 1, strokeColor: '#000000', strokeStyle: 'dashed' },
+        props: { direction: 'horizontal', strokeWidth: pxToMm(1), strokeColor: '#000000', strokeStyle: 'dashed' },
         style: {},
       },
       // 商品明细表格
@@ -120,7 +124,7 @@ function createReceiptTemplate(): PresetTemplate {
           minRows: 1,
           emptyText: '暂无数据',
         },
-        style: { fontSize: 10 },
+        style: { fontSize: pxToMm(10) },
       },
       // 分隔线 3
       {
@@ -128,7 +132,7 @@ function createReceiptTemplate(): PresetTemplate {
         type: 'line',
         name: '分隔线',
         layout: { position: 'flow', width: contentWidth, height: 0 },
-        props: { direction: 'horizontal', strokeWidth: 1, strokeColor: '#000000', strokeStyle: 'solid' },
+        props: { direction: 'horizontal', strokeWidth: pxToMm(1), strokeColor: '#000000', strokeStyle: 'solid' },
         style: {},
       },
       // 合计
@@ -138,7 +142,7 @@ function createReceiptTemplate(): PresetTemplate {
         name: '合计',
         layout: { position: 'flow', width: 'auto', height: 8 },
         props: { content: '合计：¥580', verticalAlign: 'middle', wordBreak: 'normal', overflow: 'visible' },
-        style: { fontSize: 14, fontWeight: 'bold', textAlign: 'right', color: '#000000' },
+        style: { fontSize: pxToMm(14), fontWeight: 'bold', textAlign: 'right', color: '#000000' },
         binding: { path: 'orderTotal' },
       },
       // 分隔线 4
@@ -147,7 +151,7 @@ function createReceiptTemplate(): PresetTemplate {
         type: 'line',
         name: '分隔线',
         layout: { position: 'flow', width: contentWidth, height: 0 },
-        props: { direction: 'horizontal', strokeWidth: 1, strokeColor: '#000000', strokeStyle: 'dashed' },
+        props: { direction: 'horizontal', strokeWidth: pxToMm(1), strokeColor: '#000000', strokeStyle: 'dashed' },
         style: {},
       },
       // 谢谢惠顾
@@ -157,7 +161,7 @@ function createReceiptTemplate(): PresetTemplate {
         name: '底部感谢',
         layout: { position: 'flow', width: 'auto', height: 8 },
         props: { content: '谢谢惠顾，欢迎下次光临！', verticalAlign: 'middle', wordBreak: 'normal', overflow: 'visible' },
-        style: { fontSize: 10, textAlign: 'center', color: '#666666' },
+        style: { fontSize: pxToMm(10), textAlign: 'center', color: '#666666' },
       },
     ],
   }
@@ -212,7 +216,7 @@ function createLabelTemplate(): PresetTemplate {
         name: '商品名称',
         layout: { position: 'absolute', x: 0, y: 0, width: 56, height: 8 },
         props: { content: '无线蓝牙耳机 Pro Max', verticalAlign: 'middle', wordBreak: 'break-word', overflow: 'hidden' },
-        style: { fontSize: 12, fontWeight: 'bold', color: '#000000' },
+        style: { fontSize: pxToMm(12), fontWeight: 'bold', color: '#000000' },
         binding: { path: 'productName' },
       },
       // 规格
@@ -222,7 +226,7 @@ function createLabelTemplate(): PresetTemplate {
         name: '商品规格',
         layout: { position: 'absolute', x: 0, y: 8, width: 56, height: 5 },
         props: { content: '黑色 / 标准版', verticalAlign: 'middle', wordBreak: 'normal', overflow: 'hidden' },
-        style: { fontSize: 8, color: '#666666' },
+        style: { fontSize: pxToMm(8), color: '#666666' },
         binding: { path: 'productSpec' },
       },
       // 价格
@@ -232,7 +236,7 @@ function createLabelTemplate(): PresetTemplate {
         name: '价格',
         layout: { position: 'absolute', x: 0, y: 14, width: 56, height: 10 },
         props: { content: '¥ 299.00', verticalAlign: 'middle', wordBreak: 'normal', overflow: 'visible' },
-        style: { fontSize: 20, fontWeight: 'bold', color: '#e00000' },
+        style: { fontSize: pxToMm(20), fontWeight: 'bold', color: '#e00000' },
         binding: { path: 'productPrice' },
       },
       // 分隔线
@@ -241,7 +245,7 @@ function createLabelTemplate(): PresetTemplate {
         type: 'line',
         name: '分隔线',
         layout: { position: 'absolute', x: 0, y: 24, width: 56, height: 0 },
-        props: { direction: 'horizontal', strokeWidth: 0.5, strokeColor: '#cccccc', strokeStyle: 'solid' },
+        props: { direction: 'horizontal', strokeWidth: pxToMm(0.5), strokeColor: '#cccccc', strokeStyle: 'solid' },
         style: {},
       },
       // 条形码
@@ -290,7 +294,7 @@ function createDeliveryNoteTemplate(): PresetTemplate {
         name: '公司名称',
         layout: { position: 'flow', width: 'auto', height: 12 },
         props: { content: 'ACME 科技有限公司', verticalAlign: 'middle', wordBreak: 'normal', overflow: 'visible' },
-        style: { fontSize: 22, fontWeight: 'bold', textAlign: 'center', color: '#000000' },
+        style: { fontSize: pxToMm(22), fontWeight: 'bold', textAlign: 'center', color: '#000000' },
         binding: { path: 'companyName' },
       },
       // 公司地址
@@ -300,7 +304,7 @@ function createDeliveryNoteTemplate(): PresetTemplate {
         name: '公司地址',
         layout: { position: 'flow', width: 'auto', height: 6 },
         props: { content: '上海市浦东新区陆家嘴环路999号', verticalAlign: 'middle', wordBreak: 'normal', overflow: 'visible' },
-        style: { fontSize: 9, textAlign: 'center', color: '#666666' },
+        style: { fontSize: pxToMm(9), textAlign: 'center', color: '#666666' },
         binding: { path: 'companyAddress' },
       },
       // 公司电话
@@ -310,7 +314,7 @@ function createDeliveryNoteTemplate(): PresetTemplate {
         name: '公司电话',
         layout: { position: 'flow', width: 'auto', height: 6 },
         props: { content: '021-12345678', verticalAlign: 'middle', wordBreak: 'normal', overflow: 'visible' },
-        style: { fontSize: 9, textAlign: 'center', color: '#666666' },
+        style: { fontSize: pxToMm(9), textAlign: 'center', color: '#666666' },
         binding: { path: 'companyPhone' },
       },
       // 分隔线
@@ -319,7 +323,7 @@ function createDeliveryNoteTemplate(): PresetTemplate {
         type: 'line',
         name: '分隔线',
         layout: { position: 'flow', width: contentWidth, height: 0 },
-        props: { direction: 'horizontal', strokeWidth: 2, strokeColor: '#000000', strokeStyle: 'solid' },
+        props: { direction: 'horizontal', strokeWidth: pxToMm(2), strokeColor: '#000000', strokeStyle: 'solid' },
         style: {},
       },
       // 标题
@@ -329,7 +333,7 @@ function createDeliveryNoteTemplate(): PresetTemplate {
         name: '标题',
         layout: { position: 'flow', width: 'auto', height: 12 },
         props: { content: '送 货 单', verticalAlign: 'middle', wordBreak: 'normal', overflow: 'visible' },
-        style: { fontSize: 20, fontWeight: 'bold', textAlign: 'center', color: '#000000' },
+        style: { fontSize: pxToMm(20), fontWeight: 'bold', textAlign: 'center', color: '#000000' },
       },
       // 订单号
       {
@@ -338,7 +342,7 @@ function createDeliveryNoteTemplate(): PresetTemplate {
         name: '订单号',
         layout: { position: 'flow', width: 'auto', height: 7 },
         props: { content: '订单号：', verticalAlign: 'middle', wordBreak: 'normal', overflow: 'visible' },
-        style: { fontSize: 11, color: '#000000' },
+        style: { fontSize: pxToMm(11), color: '#000000' },
         binding: { path: 'orderNo' },
       },
       // 日期
@@ -348,7 +352,7 @@ function createDeliveryNoteTemplate(): PresetTemplate {
         name: '日期',
         layout: { position: 'flow', width: 'auto', height: 7 },
         props: { content: '日期：', verticalAlign: 'middle', wordBreak: 'normal', overflow: 'visible' },
-        style: { fontSize: 11, color: '#000000' },
+        style: { fontSize: pxToMm(11), color: '#000000' },
         binding: { path: 'orderDate' },
       },
       // 客户名称
@@ -358,7 +362,7 @@ function createDeliveryNoteTemplate(): PresetTemplate {
         name: '客户名称',
         layout: { position: 'flow', width: 'auto', height: 7 },
         props: { content: '客户：', verticalAlign: 'middle', wordBreak: 'normal', overflow: 'visible' },
-        style: { fontSize: 11, color: '#000000' },
+        style: { fontSize: pxToMm(11), color: '#000000' },
         binding: { path: 'customerName' },
       },
       // 客户电话
@@ -368,7 +372,7 @@ function createDeliveryNoteTemplate(): PresetTemplate {
         name: '联系电话',
         layout: { position: 'flow', width: 'auto', height: 7 },
         props: { content: '电话：', verticalAlign: 'middle', wordBreak: 'normal', overflow: 'visible' },
-        style: { fontSize: 11, color: '#000000' },
+        style: { fontSize: pxToMm(11), color: '#000000' },
         binding: { path: 'customerPhone' },
       },
       // 客户地址
@@ -378,7 +382,7 @@ function createDeliveryNoteTemplate(): PresetTemplate {
         name: '客户地址',
         layout: { position: 'flow', width: 'auto', height: 7 },
         props: { content: '地址：', verticalAlign: 'middle', wordBreak: 'normal', overflow: 'visible' },
-        style: { fontSize: 11, color: '#000000' },
+        style: { fontSize: pxToMm(11), color: '#000000' },
         binding: { path: 'customerAddress' },
       },
       // 商品明细表格
@@ -401,7 +405,7 @@ function createDeliveryNoteTemplate(): PresetTemplate {
           minRows: 1,
           emptyText: '暂无数据',
         },
-        style: { fontSize: 11 },
+        style: { fontSize: pxToMm(11) },
       },
       // 合计
       {
@@ -410,7 +414,7 @@ function createDeliveryNoteTemplate(): PresetTemplate {
         name: '合计金额',
         layout: { position: 'flow', width: 'auto', height: 8 },
         props: { content: '合计金额：¥580', verticalAlign: 'middle', wordBreak: 'normal', overflow: 'visible' },
-        style: { fontSize: 13, fontWeight: 'bold', textAlign: 'right', color: '#000000' },
+        style: { fontSize: pxToMm(13), fontWeight: 'bold', textAlign: 'right', color: '#000000' },
         binding: { path: 'orderTotal' },
       },
       // 分隔线
@@ -419,7 +423,7 @@ function createDeliveryNoteTemplate(): PresetTemplate {
         type: 'line',
         name: '分隔线',
         layout: { position: 'flow', width: contentWidth, height: 0 },
-        props: { direction: 'horizontal', strokeWidth: 1, strokeColor: '#cccccc', strokeStyle: 'solid' },
+        props: { direction: 'horizontal', strokeWidth: pxToMm(1), strokeColor: '#cccccc', strokeStyle: 'solid' },
         style: {},
       },
       // 签收人
@@ -429,7 +433,7 @@ function createDeliveryNoteTemplate(): PresetTemplate {
         name: '签收人',
         layout: { position: 'absolute', x: 0, y: 230, width: 80, height: 8 },
         props: { content: '签收人：__________', verticalAlign: 'middle', wordBreak: 'normal', overflow: 'visible' },
-        style: { fontSize: 11, color: '#000000' },
+        style: { fontSize: pxToMm(11), color: '#000000' },
       },
       // 签收日期
       {
@@ -438,7 +442,7 @@ function createDeliveryNoteTemplate(): PresetTemplate {
         name: '签收日期',
         layout: { position: 'absolute', x: 100, y: 230, width: 80, height: 8 },
         props: { content: '日期：__________', verticalAlign: 'middle', wordBreak: 'normal', overflow: 'visible' },
-        style: { fontSize: 11, color: '#000000' },
+        style: { fontSize: pxToMm(11), color: '#000000' },
       },
     ],
   }

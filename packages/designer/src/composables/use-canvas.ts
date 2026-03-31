@@ -12,6 +12,7 @@ export function useCanvas(options?: CanvasOptions) {
   const panX = ref(0)
   const panY = ref(0)
   const isPanning = ref(false)
+  const renderVersion = ref(0)
   const minZoom = options?.minZoom ?? 0.25
   const maxZoom = options?.maxZoom ?? 4
   const zoomStep = options?.zoomStep ?? 0.1
@@ -39,7 +40,11 @@ export function useCanvas(options?: CanvasOptions) {
     panY.value = y
   }
 
+  function markRendered(): void {
+    renderVersion.value += 1
+  }
+
   const zoomPercent = computed(() => Math.round(zoom.value * 100))
 
-  return { isPanning, panX, panY, resetZoom, setPan, setZoom, zoom, zoomIn, zoomOut, zoomPercent }
+  return { isPanning, markRendered, panX, panY, renderVersion, resetZoom, setPan, setZoom, zoom, zoomIn, zoomOut, zoomPercent }
 }

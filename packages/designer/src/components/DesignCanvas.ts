@@ -29,6 +29,7 @@ export const DesignCanvas = defineComponent({
         ctx.engine.getData(),
         target,
       )
+      ctx.canvas.markRendered()
     }
 
     onMounted(() => {

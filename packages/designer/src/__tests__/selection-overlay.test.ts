@@ -1,4 +1,3 @@
-import { toPixels } from '@easyink/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, h, provide, ref, render } from 'vue'
 import { SelectionOverlay } from '../components/SelectionOverlay'
@@ -18,6 +17,7 @@ function createContext() {
 
   return {
     canvas: {
+      renderVersion: ref(1),
       zoom: ref(1),
     },
     engine: {
@@ -52,7 +52,28 @@ function createContext() {
 function mountOverlay() {
   const container = document.createElement('div')
   container.className = 'easyink-canvas-page-wrapper'
+  container.style.position = 'relative'
   container.style.padding = '40px'
+
+  const page = document.createElement('div')
+  page.className = 'easyink-page'
+  const content = document.createElement('div')
+  content.className = 'easyink-content'
+  content.style.left = '18px'
+  content.style.position = 'relative'
+  content.style.top = '26px'
+  const element = document.createElement('div')
+  element.className = 'easyink-element easyink-text'
+  element.dataset.elementId = 'el-1'
+  element.style.height = '50px'
+  element.style.left = '120px'
+  element.style.position = 'absolute'
+  element.style.top = '80px'
+  element.style.width = '200px'
+  content.appendChild(element)
+  page.appendChild(content)
+  container.appendChild(page)
+
   document.body.appendChild(container)
   const ctx = createContext()
 
@@ -73,15 +94,14 @@ afterEach(() => {
 })
 
 describe('selectionOverlay', () => {
-  it('offsets the overlay to the page content area', () => {
+  it('measures rendered element positions instead of schema layout values', () => {
     const { container } = mountOverlay()
-    const overlay = container.querySelector('.easyink-selection-overlay') as HTMLElement
     const box = container.querySelector('.easyink-selection-box') as HTMLElement
 
-    expect(Number.parseFloat(overlay.style.left)).toBeCloseTo(40 + toPixels(5, 'mm', 96, 1))
-    expect(Number.parseFloat(overlay.style.top)).toBeCloseTo(40 + toPixels(7, 'mm', 96, 1))
-    expect(Number.parseFloat(box.style.left)).toBeCloseTo(toPixels(10, 'mm', 96, 1))
-    expect(Number.parseFloat(box.style.top)).toBeCloseTo(toPixels(20, 'mm', 96, 1))
+    expect(Number.parseFloat(box.style.left)).toBeCloseTo(178)
+    expect(Number.parseFloat(box.style.top)).toBeCloseTo(146)
+    expect(Number.parseFloat(box.style.width)).toBeCloseTo(200)
+    expect(Number.parseFloat(box.style.height)).toBeCloseTo(50)
   })
 
   it('uses the selection box rect as rotation center', () => {

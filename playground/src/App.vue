@@ -2,7 +2,7 @@
 import type { TemplateSchema } from '@easyink/core'
 import { ScreenRenderer } from '@easyink/renderer'
 import { EasyInkDesigner } from '@easyink/designer'
-import { nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { presetTemplates } from './templates'
 
 // ─── 模板切换 ───
@@ -40,6 +40,8 @@ function parsedData(): Record<string, unknown> {
     return currentTemplate().data
   }
 }
+
+const designerData = computed(() => parsedData())
 
 // ─── 导入/导出 ───
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -175,6 +177,7 @@ watch([() => schema.value, bottomOpen, activeTab, currentDataJson], async () => 
     <div class="designer-area">
       <EasyInkDesigner
         :key="designerKey"
+        :data="designerData"
         :schema="schema"
         :data-sources="currentTemplate().dataSources"
         @update:schema="onSchemaUpdate"
