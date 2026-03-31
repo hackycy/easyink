@@ -1,9 +1,46 @@
 <script setup lang="ts">
 import type { TemplateSchema } from '@easyink/core'
-import { ScreenRenderer } from '@easyink/renderer'
+import type { MaterialPlugin } from '@easyink/designer'
 import { EasyInkDesigner } from '@easyink/designer'
+import { barcodeDefinition } from '@easyink/material-barcode'
+import { renderBarcode } from '@easyink/material-barcode/render'
+import { barcodeInteractionStrategy } from '@easyink/material-barcode/interaction'
+import { dataTableDefinition } from '@easyink/material-data-table'
+import { renderDataTable } from '@easyink/material-data-table/render'
+import { dataTableInteractionStrategy } from '@easyink/material-data-table/interaction'
+import { imageDefinition } from '@easyink/material-image'
+import { renderImage } from '@easyink/material-image/render'
+import { imageInteractionStrategy } from '@easyink/material-image/interaction'
+import { lineDefinition } from '@easyink/material-line'
+import { renderLine } from '@easyink/material-line/render'
+import { lineInteractionStrategy } from '@easyink/material-line/interaction'
+import { rectDefinition } from '@easyink/material-rect'
+import { renderRect } from '@easyink/material-rect/render'
+import { rectInteractionStrategy } from '@easyink/material-rect/interaction'
+import { richTextDefinition } from '@easyink/material-rich-text'
+import { renderRichText } from '@easyink/material-rich-text/render'
+import { richTextInteractionStrategy } from '@easyink/material-rich-text/interaction'
+import { tableDefinition } from '@easyink/material-table'
+import { renderTable } from '@easyink/material-table/render'
+import { tableInteractionStrategy } from '@easyink/material-table/interaction'
+import { textDefinition } from '@easyink/material-text'
+import { renderText } from '@easyink/material-text/render'
+import { textInteractionStrategy } from '@easyink/material-text/interaction'
+import { ScreenRenderer } from '@easyink/renderer'
 import { computed, nextTick, ref, watch } from 'vue'
 import { presetTemplates } from './templates'
+
+// ─── 物料注册 ───
+const materials: MaterialPlugin[] = [
+  { definition: textDefinition, render: renderText, interaction: textInteractionStrategy },
+  { definition: richTextDefinition, render: renderRichText, interaction: richTextInteractionStrategy },
+  { definition: imageDefinition, render: renderImage, interaction: imageInteractionStrategy },
+  { definition: rectDefinition, render: renderRect, interaction: rectInteractionStrategy },
+  { definition: lineDefinition, render: renderLine, interaction: lineInteractionStrategy },
+  { definition: barcodeDefinition, render: renderBarcode, interaction: barcodeInteractionStrategy },
+  { definition: dataTableDefinition, render: renderDataTable, interaction: dataTableInteractionStrategy },
+  { definition: tableDefinition, render: renderTable, interaction: tableInteractionStrategy },
+]
 
 // ─── 模板切换 ───
 const templateIndex = ref(0)
@@ -178,6 +215,7 @@ watch([() => schema.value, bottomOpen, activeTab, currentDataJson], async () => 
       <EasyInkDesigner
         :key="designerKey"
         :data="designerData"
+        :materials="materials"
         :schema="schema"
         :data-sources="currentTemplate().dataSources"
         @update:schema="onSchemaUpdate"

@@ -1,5 +1,5 @@
 import type { EasyInkEngine, MaterialNode, MaterialTypeDefinition, TemplateSchema } from '@easyink/core'
-import type { ScreenRenderer } from '@easyink/renderer'
+import type { MaterialRenderFunction, ScreenRenderer } from '@easyink/renderer'
 import type { InjectionKey, Ref, ShallowRef } from 'vue'
 import type { useBatchOperations } from './composables/use-batch-operations'
 import type { useCanvas } from './composables/use-canvas'
@@ -9,8 +9,17 @@ import type { useInteraction } from './composables/use-interaction'
 import type { useMarquee } from './composables/use-marquee'
 import type { useSelection } from './composables/use-selection'
 import type { useSnapping } from './composables/use-snapping'
+import type { InteractionStrategy } from './interaction/strategy'
 import type { StrategyManager } from './interaction/strategy-manager'
 import type { useLocale } from './locale/use-locale'
+
+// ─── 物料插件 ───
+
+export interface MaterialPlugin {
+  definition: MaterialTypeDefinition
+  render?: MaterialRenderFunction
+  interaction?: InteractionStrategy
+}
 
 // ─── 设计器配置 ───
 
@@ -29,6 +38,8 @@ export interface DesignerOptions {
   locale?: import('./locale/types').LocaleMessages
   /** 初始缩放（默认 1） */
   zoom?: number
+  /** 物料插件列表 */
+  materials?: MaterialPlugin[]
 }
 
 // ─── 选择状态 ───

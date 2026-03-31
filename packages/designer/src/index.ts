@@ -62,6 +62,7 @@ export type {
   DesignerContext,
   DesignerOptions,
   GuideLineData,
+  MaterialPlugin,
   ResizeHandlePosition,
   SelectionState,
 } from './types'

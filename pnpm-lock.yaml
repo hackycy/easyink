@@ -366,6 +366,30 @@ importers:
       '@easyink/designer':
         specifier: workspace:*
         version: link:../packages/designer
+      '@easyink/material-barcode':
+        specifier: workspace:*
+        version: link:../packages/materials/barcode
+      '@easyink/material-data-table':
+        specifier: workspace:*
+        version: link:../packages/materials/data-table
+      '@easyink/material-image':
+        specifier: workspace:*
+        version: link:../packages/materials/image
+      '@easyink/material-line':
+        specifier: workspace:*
+        version: link:../packages/materials/line
+      '@easyink/material-rect':
+        specifier: workspace:*
+        version: link:../packages/materials/rect
+      '@easyink/material-rich-text':
+        specifier: workspace:*
+        version: link:../packages/materials/rich-text
+      '@easyink/material-table':
+        specifier: workspace:*
+        version: link:../packages/materials/table
+      '@easyink/material-text':
+        specifier: workspace:*
+        version: link:../packages/materials/text
       '@easyink/renderer':
         specifier: workspace:*
         version: link:../packages/renderer

@@ -76,6 +76,19 @@ export function useDesigner(options?: DesignerOptions) {
     () => selection.selectedElement.value,
   )
 
+  // 6.1 注册外部物料插件
+  if (options?.materials) {
+    for (const plugin of options.materials) {
+      engine.materialRegistry.register(plugin.definition)
+      if (plugin.render) {
+        screenRenderer.domRenderer.registry.register(plugin.definition.type, plugin.render)
+      }
+      if (plugin.interaction) {
+        strategyRegistry.register(plugin.definition.type, plugin.interaction)
+      }
+    }
+  }
+
   // 7. 物料操作
   function addMaterial(type: string, preMade?: MaterialNode): void {
     const def = engine.materialRegistry.get(type)

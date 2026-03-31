@@ -33,7 +33,7 @@ const blankTemplate: PresetTemplate = {
       margins: { top: 10, right: 10, bottom: 10, left: 10 },
       unit: 'mm',
     },
-    elements: [],
+    materials: [],
   },
   data: sampleData,
   dataSources: sampleDataSources,
@@ -55,7 +55,7 @@ function createReceiptTemplate(): PresetTemplate {
       unit: 'mm',
       overflow: 'auto-extend',
     },
-    elements: [
+    materials: [
       // 店名
       {
         id: uid(),
@@ -206,7 +206,7 @@ function createLabelTemplate(): PresetTemplate {
       unit: 'mm',
       overflow: 'clip',
     },
-    elements: [
+    materials: [
       // 商品名
       {
         id: uid(),
@@ -284,7 +284,7 @@ function createDeliveryNoteTemplate(): PresetTemplate {
       unit: 'mm',
       overflow: 'clip',
     },
-    elements: [
+    materials: [
       // 公司名称
       {
         id: uid(),

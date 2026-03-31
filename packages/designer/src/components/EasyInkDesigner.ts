@@ -19,6 +19,7 @@ export const EasyInkDesigner = defineComponent({
     dataSources: { default: undefined, type: Array },
     defaultFlowHeight: { default: undefined, type: Number },
     locale: { default: undefined, type: Object },
+    materials: { default: undefined, type: Array },
     plugins: { default: undefined, type: Array },
     schema: { default: undefined, type: Object },
     zoom: { default: 1, type: Number },
