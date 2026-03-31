@@ -19,7 +19,7 @@
 | 9 | [表达式引擎](./09-expression-engine.md) | 可插拔架构、沙箱化执行、格式化器 |
 | 10 | [插件系统](./10-plugin-system.md) | 插件定义、上下文 API、钩子体系 |
 | 11 | [设计器交互层](./11-designer-interaction.md) | 组件结构、交互特性、画布预览、属性面板 |
-| 12 | [物料体系](./12-element-system.md) | 物料概念、物料包结构、注册 API、DesignerBehavior、内置物料类型 |
+| 12 | [元素体系](./12-element-system.md) | 类型定义、内置元素（text/image/table/barcode 等） |
 | 13 | [Command 与撤销/重做](./13-command-undo-redo.md) | Command 模式、命令管理器、内置命令 |
 | 14 | [单位系统](./14-unit-system.md) | 单位存储、转换、渲染时转换公式 |
 | 15 | [字体管理](./15-font-management.md) | FontProvider 接口、FontManager |

@@ -185,8 +185,6 @@ importers:
         specifier: catalog:framework
         version: 3.5.31(typescript@5.9.3)
 
-  packages/icons: {}
-
   packages/renderer:
     dependencies:
       '@easyink/core':
