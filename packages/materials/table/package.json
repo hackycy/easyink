@@ -23,13 +23,17 @@
   },
   "peerDependencies": {
     "@easyink/designer": "workspace:*",
-    "@easyink/renderer": "workspace:*"
+    "@easyink/renderer": "workspace:*",
+    "vue": "^3"
   },
   "peerDependenciesMeta": {
     "@easyink/designer": {
       "optional": true
     },
     "@easyink/renderer": {
+      "optional": true
+    },
+    "vue": {
       "optional": true
     }
   },

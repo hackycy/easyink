@@ -226,6 +226,9 @@ importers:
       '@easyink/shared':
         specifier: workspace:*
         version: link:../../shared
+      vue:
+        specifier: ^3
+        version: 3.5.31(typescript@5.9.3)
 
   packages/materials/image:
     dependencies:
@@ -301,6 +304,9 @@ importers:
       '@easyink/shared':
         specifier: workspace:*
         version: link:../../shared
+      vue:
+        specifier: ^3
+        version: 3.5.31(typescript@5.9.3)
 
   packages/materials/text:
     dependencies:
