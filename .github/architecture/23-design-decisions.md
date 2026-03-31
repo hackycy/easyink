@@ -12,12 +12,12 @@
 | 8 | 多渲染器 | 多输出 / 多框架 / 两者 | **暂只多输出** | v1 专注 Vue，降低复杂度 |
 | 9 | ~~分页冲突~~ | ~~推开 / 锁定 / 带 slot~~ | **不适用** | 不分页，溢出策略由 PageSettings.overflow 控制（clip/auto-extend） |
 | 10 | Undo/Redo | 快照 / Command / Immer | **Command 模式** | 细粒度控制、可合并、支持事务 |
-| 11 | 元素类型 | 最小集 / 渐进 / 全内置 | **全内置**（条码+数据表格+静态表格+富文本） | 打印场景硬需求，数据表格和静态表格拆分各司其职 |
+| 11 | ~~元素类型~~ | ~~最小集 / 渐进 / 全内置~~ | ~~**全内置**~~ | 已迁移到物料系统（ADR #101），所有元素类型外置为独立物料包 |
 | 12 | 数据源 UX | 先定义/直接绑定/共存/开发方注册 | **开发方注册数据源** | 数据源由集成方注册字段树（递归 children），设计用户通过字段树拖拽绑定 |
 | 13 | Schema 迁移 | 版本+迁移 / 向后兼容 / 结合 | **SemVer 式结合** | 小版本兼容、大版本迁移 |
 | 14 | 目标用户 | 开发者 / 终端用户 / 分层 | **分层架构** | headless core + 完整 UI，类似 Tiptap |
 | 15 | 表格复杂度 | 简单 / 中等 / 完全 | **拆分为两种表格** | data-table 绑定数据源，table 纯静态；各自职责清晰，避免单一元素过于复杂 |
-| 16 | 包拆分 | 粗 / 细 / 渐进 | **粗粒度（4 个包）** | core / renderer / designer / shared |
+| 16 | 包拆分 | 粗 / 细 / 渐进 | **框架层 4 包 + 物料层 N 包** | core / renderer / designer / shared 为框架层；每个元素类型一个物料包（@easyink/material-*） |
 | 17 | 字体管理 | 系统字体 / 内置管理 / Provider | **FontProvider 接口** | 核心不关心存储，实集方自由实现 |
 | 18 | 数据预览 | 占位符 / 实时 / 智能模拟 | **占位符显示** | 设计器不填充实际数据；未绑定显示静态值，已绑定显示 {{path}} 占位符（灰色虚线框区分），data-table 显示表头+N行占位 |
 | 19 | 模板复用 | 不支持 / 引用 / 副本 | **不支持** | v1 保持简单 |
@@ -102,3 +102,40 @@
 | 98 | 绑定占位符视觉 | 同静态样式 / 虚线框区分 / 角标提示 | **灰色虚线框 + 不同文字颜色** | 明确区分绑定与静态内容 |
 | 99 | 绑定模式下静态值 | fallback / 完全覆盖 / 互斥 | **fallback** | 静态值在绑定后保留，运行时数据未填充时降级显示 |
 | 100 | 表格工具栏展示 | 分组下拉 / 并列按钮 / 二级菜单 | **并列两个按钮** | 数据表格和静态表格同在 table 分组，平铺展示 |
+| 101 | 元素类型组织 | 全内置 / 全物料化 / 混合 | **全物料化** | 所有元素类型（含基础 text/image/rect/line）均为独立物料包，core 层仅保留注册机制 |
+| 102 | 物料包粒度 | 每个一个包 / 合并一个包 / 分组包 | **每个物料一个 npm 包** | 如 @easyink/material-text、@easyink/material-barcode，最大灵活性 |
+| 103 | 物料包导出 | 三合一 / 按层拆子导出 / tree-shaking | **两个 subpath exports** | /headless（定义 + 渲染函数）、/designer（Vue 组件 + Behavior），按需导入 |
+| 104 | 物料注册 API | 复用 Plugin.install / 专用 useMaterial | **专用 useMaterial API** | 物料有独立的注册入口，与插件系统职责分离 |
+| 105 | 设计器行为声明 | 函数式 handler / 声明式 + 解释器 / trait 组合 | **声明式配置 + 解释器模式** | 物料声明字符串原语（如 'inline-edit'），框架解释执行 |
+| 106 | 行为原语集合 | 开放可扩展 / 严格封闭 / 混合 | **严格封闭** | 内置一组核心原语，物料只能选择，不能自定义注册新原语 |
+| 107 | 属性面板扩展 | 完全自定义面板 / propDefinitions + 插槽 / 混合 | **propDefinitions + custom editor** | 在 propDefinitions 中支持 editor: 'custom'，物料提供 Vue 组件作为属性编辑器 |
+| 108 | 设计器画布渲染 | 与渲染器共享 / 独立两套 | **独立两套渲染** | 设计器画布用物料的 Vue 组件渲染（占位符 + 交互），渲染器用渲染函数（数据填充后 DOM） |
+| 109 | core 层内置元素 | 保留最小集 / 清空 builtins | **清空 builtins** | core 保留 ElementRegistry + ElementTypeDefinition 接口，不包含任何内置元素定义 |
+| 110 | 物料 scaffolding | CLI 工具 / 模板仓库 / 纯文档 / 暂不做 | **暂不做** | 稳定后再建设工具链 |
+| 111 | 数据源拖入交互 | 简单绑定 / 弹出配置 / 元素自定义 | **保持简单拖拽绑定** | 拖入即绑定到默认 prop，不弹出额外配置 |
+| 112 | 物料与插件边界 | 物料即插件 / 完全分离 / 物料可依赖插件 | **完全分离** | 物料 = 元素全部实现（useMaterial），插件 = 全局扩展（use），职责不重叠 |
+| 113 | 内置物料消费方式 | 消费者单独安装 / 框架包内置 / 自动注册 | **框架包 dependencies + 自动注册** | 物料包是 renderer/designer 的 dependencies，消费者只装 @easyink/renderer 或 @easyink/designer 即可，初始化时自动注册所有内置物料 |
+| 114 | 物料层数 | 三层（core/renderer/designer） / 两层（headless/designer） | **两层** | headless = 定义 + 渲染函数（框架无关），designer = Vue 组件 + Behavior + 编辑器；减少一层拆分复杂度 |
+| 115 | 第三方物料注册 | 自动发现 / 手动 useMaterial / 配置声明 | **手动 useMaterial()** | 第三方物料通过 useMaterial() API 手动注册，内置物料自动注册不暴露给消费者 |
+| 116 | 复杂物料交互状态机 | 全框架管理 / 全物料管理 / 混合 | **混合：框架管高层 + 物料管内部** | 框架管理 idle/selected/editing 三层全局状态；editing 内的子状态（cell-editing/column-resizing 等）由物料 designerComponent 内部管理 |
+| 117 | 物料与框架通信 | 固定事件名 / 单一通用事件 / inject API | **单一通用事件 material:action** | 核心封闭 action（enter-edit/exit-edit/update-prop/sub-select/commit-change）+ 开放扩展（框架忽略未知 action，插件可监听） |
+| 118 | 物料上下文注入 | 精简 Props 仅传递 / 完整 provide/inject / 两者结合 | **精简 Props + 注入完整上下文** | Props 传 element/isSelected/isEditing/scale；provide/inject 注入 emitAction/panelController/commandManager/schemaEngine |
+| 119 | Overlay 分层 | 框架级在上 / 物料级在上 / 平级调度 | **三层分离** | 底层 designerComponent -> 中层物料 overlay（元素边界内）-> 顶层框架 SelectionOverlay（缩放/旋转 handle） |
+| 120 | 物料 Overlay 注册 | 声明式框架内置 / 物料提供自定义组件 / 混合 | **物料提供自定义 overlay Vue 组件** | MaterialDesignerExport 新增 overlay 字段，选中时创建、取消选中时销毁 |
+| 121 | 属性面板子级联动 | emit sub-select -> 框架存储 / 物料直接控制面板 / 物料内部共享状态 | **inject PropertyPanelController** | 物料通过注入的 controller 调用 setActiveGroup/setSubSelection/scrollToGroup 等方法直接控制面板 |
+| 122 | 表格 border 粒度 | 仅全局 / 全局+行列 / 全局+单元格 | **全局 + 行列级覆盖** | 全局 TableBorderConfig + 行/列级 Partial 覆盖，优先级：列级 > 行级 > 全局 |
+| 123 | 表格点击行为 | 单击=选中表格 / 单击=直接定位子区域 / 两步选中 | **单击直接定位子区域** | 点击表头=选中列，点击行侧=选中行，点击单元格=选中单元格；双击进入编辑 |
+| 124 | ESC 退出层级 | 逐层退出 / 一键退出 | **一键退出到 unselected** | ESC 直接退出到未选中状态，不做分层退出 |
+| 125 | Editing 态框架行为 | 禁用外层交互 / 物料自行防御 | **框架禁用外层交互** | enter-edit 后框架禁用拖动/缩放/旋转/全局快捷键，保留点击外部取消选中 |
+| 126 | 键盘事件路由 | 框架拦截+条件转发 / 物料 stopPropagation | **框架拦截 + 条件转发** | editing 状态下 Delete/Tab/Enter/方向键转发给物料处理，ESC/Ctrl+Z 仍由框架处理 |
+| 127 | 行为原语定位调整 | 通用模型 / 仅简单物料适用 / 废弃 | **原语用于简单物料，复杂物料自实现** | 行为原语作为简单物料的入口开关；复杂物料（table/data-table/rich-text）交互完全由 designerComponent + overlay + 事件合同自行实现 |
+| 128 | 多选时物料 overlay | 保留 / 隐藏 | **多选时隐藏** | 多元素选中时隐藏所有物料 overlay，仅显示框架多选 bounding box |
+| 129 | 外部点击退出编辑 | 框架触发 exit-edit / 物料 watch isSelected | **框架触发 exit-edit** | 点击外部时框架自动通知物料退出编辑，物料提交未完成编辑并清理状态 |
+| 130 | 物料层共享包 | 不共享 / overlay + 类型 + 工具 / 仅 overlay | **overlay + 类型 + 工具** | @easyink/material-shared 包含共用 overlay 组件（ColumnResizeOverlay）、共享类型（TableBorderConfig）、工具函数（列宽计算、border 合并） |
+| 131 | 表格缩放/旋转限制 | 无限制 / 禁止旋转 / 旋转时禁用内部交互 | **无限制** | 表格可缩放、可旋转，与其他元素一致 |
+| 132 | 物料子状态持久化 | 纯瞬态 / 框架 designerState | **纯瞬态** | 子选中状态仅存于物料 Vue 组件内部 ref，取消选中自动重置，不入 Schema |
+| 133 | Undo 策略（列宽拖拽） | 每 mousemove 提交 / throttle+合并 / mouseup 提交一次 | **mouseup 时提交一次 Command** | 拖拽过程仅更新视觉，mouseup 时生成单个 UpdateColumnWidthCommand |
+| 134 | 列宽拖拽 handle 实现 | designerComponent 内部 / 框架覆盖层 / 混合 | **designerComponent 内部** | 物料 Vue 组件自行渲染 resize handle 并处理拖拽，通过 emit 通知框架更新 Schema |
+| 135 | PropertyPanelController 接口 | 精简（setActiveGroup+setSubSelection+clear） / 扩展（+scrollTo+collapse+registerDynamic） | **扩展接口** | 完整接口含 setActiveGroup/setSubSelection/clearSubSelection/scrollToGroup/collapseAll/expandAll/registerDynamicGroup |
+| 136 | 共用 ColumnResizeOverlay 位置 | 框架内置 / 物料层共享包 / 跨物料直接依赖 | **物料层共享包** | 放在 @easyink/material-shared，data-table 和 table 共同依赖 |
+| 137 | data-table 双击行为 | 统一编辑所有单元格 / 按区域分别处理 | **按区域分别处理** | 双击表头=编辑列名，双击数据行=仅选中该行（数据来自绑定不可编辑） |

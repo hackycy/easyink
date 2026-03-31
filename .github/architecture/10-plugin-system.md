@@ -1,5 +1,7 @@
 # 10. 插件系统
 
+> **物料与插件的区别**：物料（Material）专注于「一个元素类型的全部实现」（定义 + 渲染 + 设计器交互），通过 `engine.useMaterial()` 注册。插件（Plugin）用于跨元素的全局扩展（钩子拦截、面板扩展、工具栏按钮、格式化器、PDF 生成器等），通过 `engine.use()` 注册。两者职责不重叠，互不替代。详见 [12-物料体系](./12-element-system.md)。
+
 ## 10.1 插件定义
 
 ```typescript
@@ -20,17 +22,20 @@ interface EasyInkPlugin {
 
 /**
  * 工厂函数模式（推荐的插件编写方式）
+ *
+ * 注意：元素类型注册已迁移到物料系统（engine.useMaterial），
+ * 插件不再负责注册元素。插件专注于全局扩展能力。
  */
-function barcodePlugin(options?: BarcodePluginOptions): EasyInkPlugin {
+function watermarkPlugin(options?: WatermarkPluginOptions): EasyInkPlugin {
   return {
-    name: 'barcode',
+    name: 'watermark',
     install(ctx) {
-      // 注册元素类型
-      ctx.elements.register(barcodeElementType)
-      // 注册属性编辑器
-      ctx.editors.register('barcode-editor', BarcodeEditor)
-      // 注册渲染钩子
-      ctx.hooks.beforeRender.tap('barcode', (element) => { /* ... */ })
+      // 注册渲染钩子（全局扩展，非元素特定）
+      ctx.hooks.afterRender.tap('watermark', (el, node) => {
+        // 在渲染后添加水印层
+      })
+      // 注册导出后处理器
+      ctx.export.addPostProcessor(watermarkProcessor)
     },
   }
 }
@@ -40,10 +45,8 @@ function barcodePlugin(options?: BarcodePluginOptions): EasyInkPlugin {
 
 ```typescript
 interface PluginContext {
-  // --- 元素注册 ---
+  // --- 元素查询（只读，注册已迁移到物料系统） ---
   elements: {
-    /** 注册自定义元素类型 */
-    register(definition: ElementTypeDefinition): void
     /** 获取已注册的元素类型 */
     get(type: string): ElementTypeDefinition | undefined
   }
