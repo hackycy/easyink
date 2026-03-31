@@ -12,8 +12,8 @@ interface TemplateSchema {
   meta: TemplateMeta
   /** 页面设置 */
   page: PageSettings
-  /** 元素树 */
-  elements: ElementNode[]
+  /** 物料树 */
+  materials: MaterialNode[]
   /** 扩展字段，供插件使用 */
   extensions?: Record<string, unknown>
 }
@@ -134,13 +134,13 @@ type BackgroundPosition =
 | **v1 层类型** | `color` + `image` |
 | **通用层属性** | `opacity`（0-1）+ `enabled`（可见性开关），支持快速切换而不删除 |
 | **层级顺序** | 数组索引 0 = 最底层，末尾 = 最上层（上层覆盖下层） |
-| **图片来源** | 仅 URL / base64 data URI（同 image 元素的 src 属性） |
+| **图片来源** | 仅 URL / base64 data URI（同 image 物料的 src 属性） |
 | **图片定位** | 9 宫格预设值（center / top / bottom / left / right / 四角） |
 | **渲染范围** | 全纸张（含 margin 区域），背景绘制在整个页面节点上 |
 | **auto-extend** | 颜色层自动延伸填充整个延长后的纸张；图片层也随纸张高度拉伸延长 |
 | **输出一致性** | 所有输出目标（屏幕预览 / iframe 打印 / PDF / 图片导出）行为完全一致 |
 | **图片加载失败** | 穿透到下层（自然降级），设计器中额外显示断裂图标提示用户 |
-| **元素级背景** | v1 不统一，ElementStyle.backgroundColor 保持 `string` 类型不变。新 BackgroundLayer 仅用于 PageSettings |
+| **物料级背景** | v1 不统一，MaterialStyle.backgroundColor 保持 `string` 类型不变。新 BackgroundLayer 仅用于 PageSettings |
 | **Undo 粒度** | 每个层操作（增/删/改属性/调序）独立 Command |
 
 #### 渲染层实现
@@ -166,28 +166,28 @@ type BackgroundPosition =
 - 拖拽排序改变层级
 - 删除按钮移除层
 
-## 5.3 元素节点
+## 5.3 物料节点
 
 ```typescript
-interface ElementNode {
+interface MaterialNode {
   /** 全局唯一 ID */
   id: string
-  /** 元素类型标识（可被插件扩展） */
+  /** 物料类型标识（可被插件扩展） */
   type: string
   /** 显示名称（图层面板显示） */
   name?: string
   /** 定位与尺寸 */
-  layout: ElementLayout
-  /** 元素类型特有属性（由元素类型定义声明） */
+  layout: MaterialLayout
+  /** 物料类型特有属性（由物料类型定义声明） */
   props: Record<string, unknown>
   /** 样式属性 */
-  style: ElementStyle
+  style: MaterialStyle
   /** 数据绑定配置 */
   binding?: DataBinding
   /** 条件渲染（由表达式插件提供） */
   condition?: ConditionConfig
-  /** 子元素（仅容器类型） */
-  children?: ElementNode[]
+  /** 子物料（仅容器类型） */
+  children?: MaterialNode[]
   /** 锁定/隐藏状态 */
   locked?: boolean
   hidden?: boolean
@@ -195,7 +195,7 @@ interface ElementNode {
   extensions?: Record<string, unknown>
 }
 
-interface ElementLayout {
+interface MaterialLayout {
   /** 定位模式 */
   position: 'absolute' | 'flow'
   /** absolute 模式下的坐标（使用页面单位） */
@@ -210,7 +210,7 @@ interface ElementLayout {
   zIndex?: number
 }
 
-interface ElementStyle {
+interface MaterialStyle {
   /** 字体 */
   fontFamily?: string
   fontSize?: number
@@ -246,10 +246,10 @@ interface DataBinding {
    * 解析策略：扁平优先（先查 key in data），fallback 到点路径拆解
    * 仅支持一层嵌套（arrayKey.field），不支持更深路径
    *
-   * 绑定统一：文本元素和 data-table 列都使用 binding.path，
+   * 绑定统一：文本物料和 data-table 列都使用 binding.path，
    * 运行时由数据类型决定行为（标量 vs 数组）。
    * data-table 列绑定的路径 resolve 后必须为数组，否则抛出错误。
-   * 文本元素 resolve 到数组时，由渲染器定义降级展示策略。
+   * 文本物料 resolve 到数组时，由渲染器定义降级展示策略。
    */
   path?: string
   /** 表达式（由表达式引擎插件解析） */
@@ -261,19 +261,21 @@ interface DataBinding {
 
 ### 绑定模式与静态值的关系
 
-绑定（`binding`）是元素级别的**可选**单一绑定。具体覆盖哪个 prop 由元素类型决定：
+绑定（`binding`）是物料级别的**可选**单一绑定。具体覆盖哪个 prop 由物料类型决定：
 
-| 元素类型 | 绑定覆盖的 prop | 静态 prop |
-|----------|----------------|-----------|
+| 物料类型 | 绑定覆盖的 prop | 静态 prop |
+|----------|----------------|----------|
 | text | `content` | `props.content` |
 | image | `src` | `props.src` |
 | barcode | `value` | `props.value` |
 | data-table | 各列独立 `binding` | 列标题等静态配置 |
 
 **fallback 机制**：
-- 元素无 `binding` 时，使用 `props` 中的静态值
-- 元素有 `binding` 时，运行时优先使用数据源值；若数据源未填充（resolve 返回 `undefined`），降级显示 `props` 中的静态值
-- 设计器中有 `binding` 的元素**始终显示 `{{path}}` 占位符**，不显示运行时数据
+- 物料无 `binding` 时，使用 `props` 中的静态值
+- 物料有 `binding` 时，运行时优先使用数据源值；若数据源未填充（resolve 返回 `undefined`），降级显示 `props` 中的静态值
+- 设计器中有 `binding` 的物料显示**绑定标签图层**覆盖在物料上方，需先删除绑定才能双击进入编辑
+- 删除绑定后，恢复显示 `props` 中的静态值（静态值始终保留不丢失）
+- 多次拖入不同数据源字段时，仅替换 `binding.path`，`props` 中的静态值不变
 
 ```typescript
   /** 格式化器类型（内置或插件注册） */

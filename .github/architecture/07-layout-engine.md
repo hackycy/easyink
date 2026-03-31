@@ -48,7 +48,7 @@ class LayoutEngine {
   resolvePageDimensions(page: PageSettings): { width: number, height: number }
 
   /** 估算 auto height（data-table 按行数估算，其他用默认值） */
-  resolveAutoHeight(element: ElementNode, contentArea: ContentArea, data?: Record<string, unknown>): { height: number, needsMeasure: boolean }
+  resolveAutoHeight(material: MaterialNode, contentArea: ContentArea, data?: Record<string, unknown>): { height: number, needsMeasure: boolean }
 
   /** 计算旋转后的轴对齐外接矩形 */
   computeBoundingBox(x: number, y: number, w: number, h: number, rotation?: number): BoundingBox

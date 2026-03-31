@@ -25,12 +25,12 @@ function barcodePlugin(options?: BarcodePluginOptions): EasyInkPlugin {
   return {
     name: 'barcode',
     install(ctx) {
-      // 注册元素类型
-      ctx.elements.register(barcodeElementType)
+      // 注册物料类型
+      ctx.materials.register(barcodeMaterialType)
       // 注册属性编辑器
       ctx.editors.register('barcode-editor', BarcodeEditor)
       // 注册渲染钩子
-      ctx.hooks.beforeRender.tap('barcode', (element) => { /* ... */ })
+      ctx.hooks.beforeRender.tap('barcode', (material) => { /* ... */ })
     },
   }
 }
@@ -40,12 +40,12 @@ function barcodePlugin(options?: BarcodePluginOptions): EasyInkPlugin {
 
 ```typescript
 interface PluginContext {
-  // --- 元素注册 ---
-  elements: {
-    /** 注册自定义元素类型 */
-    register(definition: ElementTypeDefinition): void
-    /** 获取已注册的元素类型 */
-    get(type: string): ElementTypeDefinition | undefined
+  // --- 物料注册 ---
+  materials: {
+    /** 注册自定义物料类型 */
+    register(definition: MaterialTypeDefinition): void
+    /** 获取已注册的物料类型 */
+    get(type: string): MaterialTypeDefinition | undefined
   }
 
   // --- 属性编辑器注册 ---
@@ -120,14 +120,14 @@ interface PluginContext {
 interface PluginHooks {
   // --- 同步钩子（可拦截/修改） ---
 
-  /** 渲染前 -- 可修改待渲染元素的属性 */
-  beforeRender: SyncWaterfallHook<[ElementNode, RenderContext]>
+  /** 渲染前 -- 可修改待渲染物料的属性 */
+  beforeRender: SyncWaterfallHook<[MaterialNode, RenderContext]>
   /** 渲染后 -- 可修改生成的 DOM 节点 */
-  afterRender: SyncWaterfallHook<[HTMLElement, ElementNode]>
+  afterRender: SyncWaterfallHook<[HTMLElement, MaterialNode]>
   /** 导出前 -- 可修改导出配置或注入内容（如水印） */
   beforeExport: SyncWaterfallHook<[ExportContext]>
-  /** 元素创建前 -- 可修改默认属性 */
-  beforeElementCreate: SyncWaterfallHook<[ElementNode]>
+  /** 物料创建前 -- 可修改默认属性 */
+  beforeMaterialCreate: SyncWaterfallHook<[MaterialNode]>
   /** 数据解析前 -- 可修改数据上下文 */
   beforeDataResolve: SyncWaterfallHook<[Record<string, unknown>]>
   /** Schema 变更前 -- 可拦截或修改变更 */

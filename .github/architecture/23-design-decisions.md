@@ -12,12 +12,12 @@
 | 8 | 多渲染器 | 多输出 / 多框架 / 两者 | **暂只多输出** | v1 专注 Vue，降低复杂度 |
 | 9 | ~~分页冲突~~ | ~~推开 / 锁定 / 带 slot~~ | **不适用** | 不分页，溢出策略由 PageSettings.overflow 控制（clip/auto-extend） |
 | 10 | Undo/Redo | 快照 / Command / Immer | **Command 模式** | 细粒度控制、可合并、支持事务 |
-| 11 | 元素类型 | 最小集 / 渐进 / 全内置 | **全内置**（条码+数据表格+静态表格+富文本） | 打印场景硬需求，数据表格和静态表格拆分各司其职 |
+| 11 | 物料类型 | 最小集 / 渐进 / 全内置 | **全内置**（条码+数据表格+静态表格+富文本） | 打印场景硬需求，数据表格和静态表格拆分各司其职 |
 | 12 | 数据源 UX | 先定义/直接绑定/共存/开发方注册 | **开发方注册数据源** | 数据源由集成方注册字段树（递归 children），设计用户通过字段树拖拽绑定 |
 | 13 | Schema 迁移 | 版本+迁移 / 向后兼容 / 结合 | **SemVer 式结合** | 小版本兼容、大版本迁移 |
 | 14 | 目标用户 | 开发者 / 终端用户 / 分层 | **分层架构** | headless core + 完整 UI，类似 Tiptap |
 | 15 | 表格复杂度 | 简单 / 中等 / 完全 | **拆分为两种表格** | data-table 绑定数据源，table 纯静态；各自职责清晰，避免单一元素过于复杂 |
-| 16 | 包拆分 | 粗 / 细 / 渐进 | **粗粒度（4 个包）** | core / renderer / designer / shared |
+| 16 | 包拆分 | 粗 / 细 / 渐进 | **混合（基础设施粗+物料细）** | 基础设施 core/renderer/designer/shared 粗粒度；物料每种独立包 @easyink/material-* |
 | 17 | 字体管理 | 系统字体 / 内置管理 / Provider | **FontProvider 接口** | 核心不关心存储，实集方自由实现 |
 | 18 | 数据预览 | 占位符 / 实时 / 智能模拟 | **占位符显示** | 设计器不填充实际数据；未绑定显示静态值，已绑定显示 {{path}} 占位符（灰色虚线框区分），data-table 显示表头+N行占位 |
 | 19 | 模板复用 | 不支持 / 引用 / 副本 | **不支持** | v1 保持简单 |
@@ -26,7 +26,7 @@
 | 22 | 表达式安全 | 沙箱 / 信任 / 可配置 | **沙箱化执行** | 防止模板注入攻击 |
 | 23 | API 风格 | Composable / Class / 混合 | **混合** | 核心 Class + Vue Composable 封装 |
 | 24 | 事件架构 | EventEmitter / 可拦截 / 分类 | **分类钩子** | 同步可拦截 + 异步只通知 |
-| 25 | 属性面板 | 可替换组件 / Schema 驱动 / 固定 | **Schema 驱动** | 元素类型定义声明属性，面板自动生成 |
+| 25 | 属性面板 | 可替换组件 / PropSchema 驱动 / 固定 | **PropSchema 驱动** | 物料类型定义声明属性 Schema，面板自动生成 |
 | 26 | 数据源格式 | JSON Schema / 样例推断 / 自定义 | **DataFieldNode 递归树** | 递归 children 结构，叶子节点有 key/title/description，仅做展示分组 |
 | 27 | 构建工具 | Vite / Rollup / tsdown | **tsdown + rollup-plugin-vue** | 零配置 + Vue SFC 支持 |
 | 28 | 输出格式 | ESM+CJS+UMD / ESM+CJS / ESM | **ESM only** | 现代工具链标准 |
@@ -62,7 +62,7 @@
 | 58 | 拖放到非 data-table 目标 | 校验拒绝 / 允许降级 | **允许拖任意位置** | 运行时由渲染器降级展示 |
 | 59 | DataFieldNode fullPath | 支持 / 不支持 | **叶子可自定义 fullPath** | 混合模式，兼容扁平和嵌套 |
 | 60 | resolve API 拆分 | 二元 / 统一 | **统一 resolve 返回原始值** | 调用方根据上下文判断类型 |
-| 61 | ElementTypeDefinition 渲染函数 | core 含 render / core 仅声明 / 泛型占位 | **core 仅声明** | core 是 headless 层，不含 DOM/Vue 依赖，render 由 renderer/designer 包附加 |
+| 61 | MaterialTypeDefinition 渲染函数 | core 含 render / core 仅声明 / 泛型占位 | **core 仅声明** | core 是 headless 层，不含 DOM/Vue 依赖，render 由 renderer/designer 包附加 |
 | 62 | icon 类型 | string \| Component / 仅 string / 泛型 | **仅 string** | core 框架无关，Vue Component 类型留给 designer 包扩展 |
 | 63 | 混合布局冲突 | 流式跳过绝对占位 / 绝对脱离文档流 | **绝对脱离文档流** | 同 CSS absolute 标准行为，实现简单可预测 |
 | 64 | auto height 策略 | 估算+needsMeasure / 仅标记 / 精确计算 | **估算+needsMeasure** | LayoutEngine headless 无 DOM 测量，表格按行数估算，渲染层二次精确测量 |
@@ -81,7 +81,7 @@
 | 77 | 背景 auto-extend 行为 | 颜色延伸+图片按 repeat / 图片也拉伸 / 图片固定 | **颜色+图片都随纸张延伸** | 颜色天然跟随容器；图片也拉伸延长（background-size 高度 100%） |
 | 78 | 背景输出一致性 | 所有输出一致 / 打印可跳过 / 按输出类型配置 | **所有输出完全一致** | 屏幕预览/iframe 打印/PDF/图片导出行为相同 |
 | 79 | 背景图片加载失败 | 穿透下层+提示 / 占位色块 / 静默忽略 | **穿透到下层 + 设计器提示** | 自然降级到下方层，设计器中额外显示断裂图标 |
-| 80 | 背景与元素级背景统一 | 统一 BackgroundStyle / 不统一 / 预留 v2 | **不统一** | v1 ElementStyle.backgroundColor 保持 string 不变，新类型仅用于 PageSettings |
+| 80 | 背景与物料级背景统一 | 统一 BackgroundStyle / 不统一 / 预留 v2 | **不统一** | v1 MaterialStyle.backgroundColor 保持 string 不变，新类型仅用于 PageSettings |
 | 81 | 背景 Undo 粒度 | 每层操作独立 Command / 复用 UpdatePageSettings / 属性可合并 | **每个层操作独立 Command** | 增/删/改属性/调序各为独立撤销步骤，粒度精细 |
 | 82 | 背景 UI 入口 | PropertyPanel 无选中时 / Toolbar 按钮 / SidebarPanel 标签 | **SidebarPanel 新增页面设置标签** | 与图层/数据源并列，集中管理所有 PageSettings |
 | 83 | 页面设置面板结构 | 单一标签页 / 纸张+样式子分组 / 折叠分组 | **单一页面设置标签页** | 所有 PageSettings 字段集中在一个标签页 |
@@ -90,7 +90,7 @@
 | 86 | 表格拆分 | 单一 table / data-table + table / data-table + static-table | **data-table + table** | data-table 绑定数据源（动态行数），table 为纯静态文本表格（固定行列） |
 | 87 | 静态表格存储 | 二维数组 rows[][] / 稀疏 cells[] / columns + rows | **稀疏 cells: { row, col, content }[]** | 支持未来合并单元格扩展，空单元格不占存储 |
 | 88 | 静态表格单元格 | 纯文本 / 可绑定 / 可嵌套子元素 | **纯文本** | v1 保持简单，不支持单元格级别数据绑定 |
-| 89 | 静态表格样式粒度 | 单元格级别 / 行列级别 / 全局统一 | **全局统一** | v1 不支持单元格独立样式，通过 ElementStyle 统一控制 |
+| 89 | 静态表格样式粒度 | 单元格级别 / 行列级别 / 全局统一 | **全局统一** | v1 不支持单元格独立样式，通过 MaterialStyle 统一控制 |
 | 90 | 静态表格行高 | 统一行高 / 每行独立 / auto | **auto** | 由内容撑开，适配不同文本长度 |
 | 91 | 静态表格合并 | 任意合并 / 仅表头 / 不支持 | **v1 不支持** | 后续版本扩展，v1 保持简单 |
 | 92 | 静态表格初始规格 | 2x2 / 3x3 / 弹窗选 | **3x3** | 常见打印单据表头通常 3 列以上 |
@@ -99,6 +99,32 @@
 | 95 | data-table emptyBehavior | 保留 / 移除 | **移除** | 空数据时仅渲染表头，简化配置 |
 | 96 | data-table header | 完整配置 / 简化 | **简化** | 仅保留列标题和基本样式，移除表头合并 |
 | 97 | data-table 预览行数 | 入 Schema / 纯设计器 | **纯设计器本地设置** | 默认 2 行，不入 Schema，不影响运行时 |
-| 98 | 绑定占位符视觉 | 同静态样式 / 虚线框区分 / 角标提示 | **灰色虚线框 + 不同文字颜色** | 明确区分绑定与静态内容 |
+| 98 | 绑定视觉 | 同静态样式 / 绑定标签图层 / 角标提示 | **绑定标签图层** | 绑定后显示标签覆盖物料，需删除绑定才能双击编辑 |
 | 99 | 绑定模式下静态值 | fallback / 完全覆盖 / 互斥 | **fallback** | 静态值在绑定后保留，运行时数据未填充时降级显示 |
 | 100 | 表格工具栏展示 | 分组下拉 / 并列按钮 / 二级菜单 | **并列两个按钮** | 数据表格和静态表格同在 table 分组，平铺展示 |
+| 101 | Element 重命名为 Material | 仅设计器层面 / 全栈重命名 / 混合 | **全栈重命名** | Schema 中 elements→materials，ElementNode→MaterialNode，ElementTypeDefinition→MaterialTypeDefinition，所有层统一 |
+| 102 | 物料面板位置 | 替换顶部工具栏 / 左侧新增面板 / 工具栏+侧边配合 | **顶部并列** | 物料栏和工具栏并列在顶部区域 |
+| 103 | 物料拖入画布定位策略 | 鼠标释放点 / 中心点 / 智能定位 | **智能定位** | absolute 物料释放点+吸附，flow 物料自动追加到流式区域末尾 |
+| 104 | 交互模式接口 | 声明式事件映射 / Strategy 策略对象 / Behavior 组合 | **Strategy 策略对象** | 每种物料返回 InteractionStrategy，含 activate/deactivate/enterEditing/exitEditing/handleEvent/renderOverlay |
+| 105 | PropDefinition 重构 | 保持现有 / JSON Schema 标准 / 自定义规范 | **受 JSON Schema 启发的自定义规范** | PropSchema 支持 type/enum/min/max/step/properties/items/visible/disabled/onChange，不引入外部校验库 |
+| 106 | 表单组件库 | designer 内部 / @easyink/ui 独立包 / 第三方 headless UI | **@easyink/ui 独立包** | 内部包不对外导出，统一表单编辑器视觉风格 |
+| 107 | 图标方案 | 自定义 SVG / Iconify 在线 / Iconify 离线 | **Iconify 离线打包** | @iconify/vue + 本地图标数据包，无网络依赖 |
+| 108 | 拖拽实现 | 原生 HTML5 DnD / 自实现 / 混合 | **原生 HTML5 DnD** | 物料拖入画布和数据源字段拖入绑定均使用浏览器原生 Drag & Drop API |
+| 109 | 交互策略生命周期 | 双击激活 / 选中即激活 / 分级激活 | **选中即激活（两级）** | 选中=activate（显示物料浮层如列宽手柄），双击=enterEditing（深度编辑如行内文本/单元格编辑），外部点击=exitEditing |
+| 110 | 物料交互图层 | Overlay 内 slot / 独立图层 / 替换 Overlay | **独立图层叠加** | 物料专属交互图层在通用 SelectionOverlay 之上渲染，双图层共存 |
+| 111 | 图层事件协调 | 物料图层拦截优先+通用 Overlay 降低优先级 | **双图层共存** | 物料图层在上方拦截事件，通用 Overlay 仍可见但优先级降低 |
+| 112 | 数据源绑定交互 | 整体替换 / 模板插入 / 两种共存 | **绑定标签图层** | 绑定后显示标签遮盖物料，需删除绑定才能双击编辑，多次拖入替换 binding.path，静态值保留 |
+| 113 | data-table 设计器三区域 | 表头+数据+样式 / 表头+交互+2行样式 / 自定义 | **表头1行+交互1行+样式1行** | 表头可双击编辑标题，交互行拖入数据源绑定列，样式行纯视觉预览 |
+| 114 | 静态表格表头 | 第一行即表头 / 独立表头区域 / 可切换 | **独立表头区域** | columns 定义 title 作为独立表头行，showHeader 控制显隐，隐藏时完全不渲染不可编辑 |
+| 115 | 表格列宽手柄位置 | Overlay 图层 / 表格 DOM 上 | **表格 DOM 上** | 列宽拖拽手柄直接渲染在表格 DOM 的列边界线上 |
+| 116 | 物料注册分层 | Core 层扩展 / Designer 层独立 / Plugin 层统一 | **Designer 层独立注册** | Core 保持 headless，Designer 通过 InteractionStrategyRegistry 独立注册交互策略 |
+| 117 | 物料分类体系 | 固定分类 / 自定义分组 / 标签+搜索 | **支持自定义分组** | category 为任意字符串，面板自动按 category 分组显示 |
+| 118 | 物料预设模板 | 支持 / 不考虑 | **不考虑** | v1 不支持物料预设模板 |
+| 119 | 拖拽 ghost 预览 | 浏览器默认 / 自定义 ghost | **自定义 ghost** | 拖拽时显示半透明卡片跟随鼠标 |
+| 120 | 静态表格列标题 | 在 columns 中 / 无标题 | **columns 含 title** | StaticTableColumn 增加 title 字段，表头行数据来自列定义 |
+| 121 | 物料包拆分策略 | core 内置 / 独立包 / preset 包 | **每种物料独立包** | `@easyink/material-*`，每个包三层子路径导出（definition/render/designer），基础设施包不依赖物料包避免循环依赖 |
+| 122 | 物料包导出方式 | 单一入口 / 多入口 / 子路径导出 | **三层子路径导出** | `.`（定义+PropSchema），`./render`（DOM 渲染），`./designer`（交互策略），确保各层只引入所需依赖 |
+| 123 | 物料注册时机 | 自动注册 / 手动注册 / 混合 | **手动注册** | 消费方显式导入物料包并注册到 MaterialRegistry/MaterialRendererRegistry/InteractionStrategyRegistry，保持按需引入 |
+| 124 | 物料包依赖方向 | 双向 / 物料→基础设施 / 基础设施→物料 | **物料→基础设施（单向）** | material-* 依赖 core+shared，peer dep renderer/designer；core/renderer/designer 不依赖任何 material-* 包 |
+| 125 | 物料包工作区配置 | packages/* / packages/materials/* | **新增 packages/materials/*** | pnpm-workspace.yaml 新增 `packages/materials/*` 路径，物料包平铺在 materials/ 目录下 |
+| 126 | 第三方物料对等性 | 特殊处理 / 与内置对等 | **完全对等** | 第三方物料包与内置物料遵循相同的包结构、导出规范和注册流程，无特殊 API |
