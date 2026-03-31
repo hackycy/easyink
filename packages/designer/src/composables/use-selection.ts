@@ -1,20 +1,20 @@
-import type { EasyInkEngine, ElementNode } from '@easyink/core'
+import type { EasyInkEngine, MaterialNode } from '@easyink/core'
 import { computed, ref } from 'vue'
 
 export function useSelection(engine: EasyInkEngine) {
   const selectedIds = ref<string[]>([])
 
-  const selectedElement = computed<ElementNode | undefined>(() => {
+  const selectedElement = computed<MaterialNode | undefined>(() => {
     if (selectedIds.value.length === 0) {
       return undefined
     }
-    return engine.schema.getElementById(selectedIds.value[0])
+    return engine.schema.getMaterialById(selectedIds.value[0])
   })
 
-  const selectedElements = computed<ElementNode[]>(() => {
+  const selectedElements = computed<MaterialNode[]>(() => {
     return selectedIds.value
-      .map(id => engine.schema.getElementById(id))
-      .filter((el): el is ElementNode => el !== undefined)
+      .map(id => engine.schema.getMaterialById(id))
+      .filter((el): el is MaterialNode => el !== undefined)
   })
 
   const selectionBounds = computed<{ height: number, width: number, x: number, y: number } | null>(() => {
@@ -88,7 +88,7 @@ export function useSelection(engine: EasyInkEngine) {
   }
 
   function selectAll(): void {
-    const ids = engine.schema.schema.elements
+    const ids = engine.schema.schema.materials
       .filter(el => !el.hidden && !el.locked)
       .map(el => el.id)
     selectedIds.value = ids

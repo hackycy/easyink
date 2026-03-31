@@ -55,6 +55,13 @@ export const zhCN: LocaleMessages = {
     visibility: '显示/隐藏',
     lock: '锁定/解锁',
   },
+  materialBar: {
+    title: '物料',
+    uncategorized: '未分类',
+  },
+  dataBinding: {
+    remove: '移除绑定',
+  },
   dataSource: {
     empty: '暂无数据源',
     dragHint: '拖拽字段到画布元素上绑定数据',

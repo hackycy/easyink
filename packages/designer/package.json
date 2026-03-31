@@ -27,7 +27,8 @@
   "dependencies": {
     "@easyink/core": "workspace:*",
     "@easyink/renderer": "workspace:*",
-    "@easyink/shared": "workspace:*"
+    "@easyink/shared": "workspace:*",
+    "@easyink/ui": "workspace:*"
   },
   "devDependencies": {
     "sass-embedded": "catalog:cli",

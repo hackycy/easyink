@@ -3,7 +3,10 @@ import { defineComponent, h, provide, triggerRef, watch } from 'vue'
 import { useDesigner } from '../composables/use-designer'
 import { DESIGNER_INJECTION_KEY } from '../types'
 import { ContextMenu } from './ContextMenu'
+import { DataBindingLayer } from './DataBindingLayer'
 import { DesignCanvas } from './DesignCanvas'
+import { MaterialBar } from './MaterialBar'
+import { MaterialInteractionLayer } from './MaterialInteractionLayer'
 import { PropertyPanel } from './PropertyPanel'
 import { SidebarPanel } from './SidebarPanel'
 import { StatusBar } from './StatusBar'
@@ -26,24 +29,25 @@ export const EasyInkDesigner = defineComponent({
 
     // 提供上下文给子组件
     const context: DesignerContext = {
-      addElement: designer.addElement,
+      addMaterial: designer.addMaterial,
       batchOperations: designer.batchOperations,
       canRedo: designer.canRedo,
       canUndo: designer.canUndo,
       canvas: designer.canvas,
       contextMenu: designer.contextMenu,
-      elementTypes: designer.elementTypes,
       engine: designer.engine,
       guides: designer.guides,
       interaction: designer.interaction,
       locale: designer.locale,
       marquee: designer.marquee,
+      materialTypes: designer.materialTypes,
       redo: designer.redo,
       removeSelected: designer.removeSelected,
       renderer: designer.renderer,
       schema: designer.schema,
       selection: designer.selection,
       snapping: designer.snapping,
+      strategyManager: designer.strategyManager,
       undo: designer.undo,
     }
 
@@ -63,8 +67,13 @@ export const EasyInkDesigner = defineComponent({
       return h('div', { class: 'easyink-designer' }, [
         h(ToolbarPanel),
         h('div', { class: 'easyink-body' }, [
+          h(MaterialBar),
           h(SidebarPanel),
-          h(DesignCanvas),
+          h('div', { class: 'easyink-canvas-area' }, [
+            h(DesignCanvas),
+            h(MaterialInteractionLayer),
+            h(DataBindingLayer),
+          ]),
           h(PropertyPanel),
         ]),
         h(StatusBar),

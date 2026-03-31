@@ -45,7 +45,7 @@ export function useSnapping(
     const hTargets: Array<{ position: number, type: SnapLine['type'] }> = []
 
     // Other elements
-    for (const el of schema.elements) {
+    for (const el of schema.materials) {
       if (excludeSet.has(el.id) || el.hidden) {
         continue
       }

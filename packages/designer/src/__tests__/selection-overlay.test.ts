@@ -64,7 +64,7 @@ function mountOverlay() {
   content.style.top = '26px'
   const element = document.createElement('div')
   element.className = 'easyink-element easyink-text'
-  element.dataset.elementId = 'el-1'
+  element.dataset.materialId = 'el-1'
   element.style.height = '50px'
   element.style.left = '120px'
   element.style.position = 'absolute'
@@ -104,7 +104,7 @@ function mountOverlayAtZoom(zoom: number) {
   content.style.top = '52px'
   const element = document.createElement('div')
   element.className = 'easyink-element easyink-text'
-  element.dataset.elementId = 'el-1'
+  element.dataset.materialId = 'el-1'
   element.style.height = '100px'
   element.style.left = '240px'
   element.style.position = 'absolute'

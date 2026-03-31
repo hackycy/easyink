@@ -28,9 +28,9 @@ function makeMockElement(
 
 function makeMockEngine(elements: MockElement[]) {
   const ops = {
-    addElement: vi.fn(),
-    removeElement: vi.fn(),
-    updateElementLayout: vi.fn(),
+    addMaterial: vi.fn(),
+    removeMaterial: vi.fn(),
+    updateMaterialLayout: vi.fn(),
   }
   const engine = {
     commands: {
@@ -42,12 +42,12 @@ function makeMockEngine(elements: MockElement[]) {
       return ops
     },
     schema: {
-      getElementById: vi.fn((id: string) =>
+      getMaterialById: vi.fn((id: string) =>
         elements.find(el => el.id === id) ?? null,
       ),
       operations: ops,
       schema: {
-        elements: elements.map(el => ({
+        materials: elements.map(el => ({
           id: el.id,
           layout: { ...el.layout },
           locked: el.locked,
@@ -94,7 +94,7 @@ describe('useBatchOperations', () => {
       expect(selection.deselect).toHaveBeenCalled()
 
       // Verify reverse index order: el-3 (index 2) removed before el-1 (index 0)
-      const removeIds = engine.schema.operations.removeElement.mock.calls.map(
+      const removeIds = engine.schema.operations.removeMaterial.mock.calls.map(
         (c: unknown[]) => c[0],
       )
       expect(removeIds).toEqual([
@@ -141,7 +141,7 @@ describe('useBatchOperations', () => {
     }
 
     function getLayoutUpdates(engine: ReturnType<typeof makeMockEngine>) {
-      return engine.schema.operations.updateElementLayout.mock.calls.map(
+      return engine.schema.operations.updateMaterialLayout.mock.calls.map(
         (c: unknown[]) => ({ id: c[0], layout: c[1] }),
       )
     }

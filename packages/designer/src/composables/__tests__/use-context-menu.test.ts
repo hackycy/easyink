@@ -9,21 +9,21 @@ function makeEngine(elements: any[] = []) {
     },
     execute: vi.fn((cmd: any) => cmd.execute()),
     operations: {
-      addElement: vi.fn(),
-      removeElement: vi.fn(),
-      reorderElement: vi.fn(),
-      updateElementLock: vi.fn(),
+      addMaterial: vi.fn(),
+      removeMaterial: vi.fn(),
+      reorderMaterial: vi.fn(),
+      updateMaterialLock: vi.fn(),
     },
     schema: {
-      getElementById: vi.fn((id: string) => elements.find(e => e.id === id)),
+      getMaterialById: vi.fn((id: string) => elements.find(e => e.id === id)),
       operations: {
-        addElement: vi.fn(),
-        removeElement: vi.fn(),
-        reorderElement: vi.fn(),
-        updateElementLock: vi.fn(),
+        addMaterial: vi.fn(),
+        removeMaterial: vi.fn(),
+        reorderMaterial: vi.fn(),
+        updateMaterialLock: vi.fn(),
       },
       schema: {
-        elements,
+        materials: elements,
       },
     },
   } as any

@@ -4,9 +4,9 @@ import type { useCanvas } from './use-canvas'
 import type { useSelection } from './use-selection'
 import type { useSnapping } from './use-snapping'
 import {
-  createMoveElementCommand,
-  createResizeElementCommand,
-  createRotateElementCommand,
+  createMoveMaterialCommand,
+  createResizeMaterialCommand,
+  createRotateMaterialCommand,
   fromPixels,
 } from '@easyink/core'
 import { ref } from 'vue'
@@ -39,21 +39,21 @@ export function useInteraction(
 
   // ── Drag to move ──
 
-  function startDrag(elementId: string, e: MouseEvent): void {
-    const el = engine.schema.getElementById(elementId)
+  function startDrag(materialId: string, e: MouseEvent): void {
+    const el = engine.schema.getMaterialById(materialId)
     if (!el || el.locked) {
       return
     }
 
     // Check if this element is part of a multi-selection
     const ids = selection.selectedIds.value
-    if (ids.length > 1 && ids.includes(elementId)) {
+    if (ids.length > 1 && ids.includes(materialId)) {
       _startMultiDrag(e)
       return
     }
 
     _isMultiDrag = false
-    _dragElementId = elementId
+    _dragElementId = materialId
     _startMouseX = e.clientX
     _startMouseY = e.clientY
     _startElX = el.layout.x ?? 0
@@ -73,7 +73,7 @@ export function useInteraction(
     _multiDragStarts = []
 
     for (const id of selection.selectedIds.value) {
-      const el = engine.schema.getElementById(id)
+      const el = engine.schema.getMaterialById(id)
       if (!el || el.locked) {
         continue
       }
@@ -120,7 +120,7 @@ export function useInteraction(
         adjustedDy = result.adjustedY - bounds.y
       }
       for (const start of _multiDragStarts) {
-        engine.schema.operations.updateElementLayout(start.id, {
+        engine.schema.operations.updateMaterialLayout(start.id, {
           x: start.x + adjustedDx,
           y: start.y + adjustedDy,
         })
@@ -142,7 +142,7 @@ export function useInteraction(
         newX = result.adjustedX
         newY = result.adjustedY
       }
-      engine.schema.operations.updateElementLayout(_dragElementId, {
+      engine.schema.operations.updateMaterialLayout(_dragElementId, {
         x: newX,
         y: newY,
       })
@@ -184,7 +184,7 @@ export function useInteraction(
       }
       // Revert all live changes
       for (const start of _multiDragStarts) {
-        engine.schema.operations.updateElementLayout(start.id, {
+        engine.schema.operations.updateMaterialLayout(start.id, {
           x: start.x,
           y: start.y,
         })
@@ -192,8 +192,8 @@ export function useInteraction(
       // Execute as transaction
       engine.commands.beginTransaction('批量移动')
       for (const start of _multiDragStarts) {
-        const cmd = createMoveElementCommand({
-          elementId: start.id,
+        const cmd = createMoveMaterialCommand({
+          materialId: start.id,
           newX: start.x + adjustedDx,
           newY: start.y + adjustedDy,
           oldX: start.x,
@@ -221,7 +221,7 @@ export function useInteraction(
       }
 
       // Revert live changes
-      engine.schema.operations.updateElementLayout(_dragElementId, {
+      engine.schema.operations.updateMaterialLayout(_dragElementId, {
         x: _startElX,
         y: _startElY,
       })
@@ -230,8 +230,8 @@ export function useInteraction(
         return
       }
 
-      const cmd = createMoveElementCommand({
-        elementId: _dragElementId,
+      const cmd = createMoveMaterialCommand({
+        materialId: _dragElementId,
         newX,
         newY,
         oldX: _startElX,
@@ -243,13 +243,13 @@ export function useInteraction(
 
   // ── Resize ──
 
-  function startResize(elementId: string, handle: ResizeHandlePosition, e: MouseEvent): void {
-    const el = engine.schema.getElementById(elementId)
+  function startResize(materialId: string, handle: ResizeHandlePosition, e: MouseEvent): void {
+    const el = engine.schema.getMaterialById(materialId)
     if (!el || el.locked) {
       return
     }
 
-    _dragElementId = elementId
+    _dragElementId = materialId
     activeHandle.value = handle
     _startMouseX = e.clientX
     _startMouseY = e.clientY
@@ -307,7 +307,7 @@ export function useInteraction(
       return
     }
     const r = _computeResize(e)
-    engine.schema.operations.updateElementLayout(_dragElementId, r)
+    engine.schema.operations.updateMaterialLayout(_dragElementId, r)
   }
 
   function _onResizeEnd(e: MouseEvent): void {
@@ -329,7 +329,7 @@ export function useInteraction(
     }
 
     // 撤销实时变更，用 Command 重做
-    engine.schema.operations.updateElementLayout(_dragElementId, {
+    engine.schema.operations.updateMaterialLayout(_dragElementId, {
       height: _startElH,
       width: _startElW,
       x: _startElX,
@@ -338,8 +338,8 @@ export function useInteraction(
 
     // 如果位置改了需要 move + resize，用 batch
     if (r.x !== _startElX || r.y !== _startElY) {
-      const moveCmd = createMoveElementCommand({
-        elementId: _dragElementId,
+      const moveCmd = createMoveMaterialCommand({
+        materialId: _dragElementId,
         newX: r.x,
         newY: r.y,
         oldX: _startElX,
@@ -348,8 +348,8 @@ export function useInteraction(
       engine.execute(moveCmd)
     }
 
-    const resizeCmd = createResizeElementCommand({
-      elementId: _dragElementId,
+    const resizeCmd = createResizeMaterialCommand({
+      materialId: _dragElementId,
       newHeight: r.height,
       newWidth: r.width,
       oldHeight: _startElH,
@@ -366,13 +366,13 @@ export function useInteraction(
   let _rotateCenterX = 0
   let _rotateCenterY = 0
 
-  function startRotate(elementId: string, e: MouseEvent, centerScreenX: number, centerScreenY: number): void {
-    const el = engine.schema.getElementById(elementId)
+  function startRotate(materialId: string, e: MouseEvent, centerScreenX: number, centerScreenY: number): void {
+    const el = engine.schema.getMaterialById(materialId)
     if (!el || el.locked) {
       return
     }
 
-    _rotateElementId = elementId
+    _rotateElementId = materialId
     _origRotation = el.layout.rotation ?? 0
     _rotateCenterX = centerScreenX
     _rotateCenterY = centerScreenY
@@ -407,7 +407,7 @@ export function useInteraction(
       newRotation = Math.round(newRotation / 15) * 15
     }
 
-    engine.schema.operations.updateElementLayout(_rotateElementId, {
+    engine.schema.operations.updateMaterialLayout(_rotateElementId, {
       rotation: newRotation,
     })
   }
@@ -439,12 +439,12 @@ export function useInteraction(
     }
 
     // Revert live change
-    engine.schema.operations.updateElementLayout(_rotateElementId, {
+    engine.schema.operations.updateMaterialLayout(_rotateElementId, {
       rotation: _origRotation,
     })
 
-    const cmd = createRotateElementCommand({
-      elementId: _rotateElementId,
+    const cmd = createRotateMaterialCommand({
+      materialId: _rotateElementId,
       newRotation,
       oldRotation: _origRotation,
     }, engine.operations)

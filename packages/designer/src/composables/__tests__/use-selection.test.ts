@@ -1,11 +1,11 @@
-import type { EasyInkEngine, ElementNode } from '@easyink/core'
+import type { EasyInkEngine, MaterialNode } from '@easyink/core'
 import { describe, expect, it, vi } from 'vitest'
 import { useSelection } from '../use-selection'
 
 function makeElement(
   id: string,
   opts: { height?: number, hidden?: boolean, locked?: boolean, width?: number, x?: number, y?: number } = {},
-): ElementNode {
+): MaterialNode {
   return {
     id,
     layout: {
@@ -20,10 +20,10 @@ function makeElement(
     type: 'rect',
     hidden: opts.hidden,
     locked: opts.locked,
-  } as ElementNode
+  } as MaterialNode
 }
 
-function makeEngine(elements: ElementNode[] = []) {
+function makeEngine(elements: MaterialNode[] = []) {
   const elementsMap = new Map(elements.map(el => [el.id, el]))
 
   return {
@@ -31,8 +31,8 @@ function makeEngine(elements: ElementNode[] = []) {
       selectionChanged: { emit: vi.fn() },
     },
     schema: {
-      getElementById: (id: string) => elementsMap.get(id),
-      schema: { elements },
+      getMaterialById: (id: string) => elementsMap.get(id),
+      schema: { materials: elements },
     },
   } as unknown as EasyInkEngine
 }

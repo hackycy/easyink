@@ -2,11 +2,11 @@ import { describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 import { useMarquee } from '../use-marquee'
 
-function makeEngine(elements: any[] = []) {
+function makeEngine(materials: any[] = []) {
   return {
     schema: {
       schema: {
-        elements,
+        materials,
         page: { unit: 'mm' },
       },
     },

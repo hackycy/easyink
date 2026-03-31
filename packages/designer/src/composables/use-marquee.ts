@@ -65,10 +65,10 @@ export function useMarquee(
     }
 
     const rect = marqueeRect.value
-    const elements = engine.schema.schema.elements
+    const materials = engine.schema.schema.materials
     const hitIds: string[] = []
 
-    for (const el of elements) {
+    for (const el of materials) {
       if (el.hidden || el.locked) {
         continue
       }

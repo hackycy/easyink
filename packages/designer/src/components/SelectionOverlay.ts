@@ -89,7 +89,7 @@ export const SelectionOverlay = defineComponent({
         return null
       }
 
-      const element = Array.from(wrapper.querySelectorAll('.easyink-element')).find(node => (node as HTMLElement).dataset.elementId === id) as HTMLElement | undefined
+      const element = Array.from(wrapper.querySelectorAll('.easyink-element')).find(node => (node as HTMLElement).dataset.materialId === id) as HTMLElement | undefined
       if (!element) {
         return null
       }

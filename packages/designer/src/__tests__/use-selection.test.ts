@@ -7,7 +7,7 @@ function makeEngine() {
 }
 
 function addEl(engine: EasyInkEngine, id: string, type = 'text') {
-  engine.schema.addElement({
+  engine.schema.addMaterial({
     id,
     layout: { height: 30, position: 'absolute', width: 100, x: 0, y: 0 },
     props: type === 'text' ? { content: 'hello' } : {},

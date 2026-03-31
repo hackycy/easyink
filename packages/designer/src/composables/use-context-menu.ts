@@ -1,8 +1,8 @@
-import type { EasyInkEngine, ElementNode } from '@easyink/core'
+import type { EasyInkEngine, MaterialNode } from '@easyink/core'
 import type { useSelection } from './use-selection'
 import {
-  createAddElementCommand,
-  createReorderElementCommand,
+  createAddMaterialCommand,
+  createReorderMaterialCommand,
   createToggleLockCommand,
 } from '@easyink/core'
 import { cloneDeep, generateId } from '@easyink/shared'
@@ -26,7 +26,7 @@ export function useContextMenu(
   const y = ref(0)
   const items = ref<ContextMenuItem[]>([])
 
-  let _clipboard: ElementNode[] = []
+  let _clipboard: MaterialNode[] = []
 
   function _copySelected(): void {
     const elements = selection.selectedElements.value
@@ -41,7 +41,7 @@ export function useContextMenu(
       return
     }
     if (_clipboard.length === 1) {
-      const cloned: ElementNode = cloneDeep(_clipboard[0])
+      const cloned: MaterialNode = cloneDeep(_clipboard[0])
       cloned.id = generateId()
       if (cloned.layout.x != null) {
         cloned.layout.x += 5
@@ -49,8 +49,8 @@ export function useContextMenu(
       if (cloned.layout.y != null) {
         cloned.layout.y += 5
       }
-      const cmd = createAddElementCommand(
-        { element: cloned, index: -1 },
+      const cmd = createAddMaterialCommand(
+        { material: cloned, index: -1 },
         engine.operations,
       )
       engine.execute(cmd)
@@ -60,7 +60,7 @@ export function useContextMenu(
       const newIds: string[] = []
       engine.commands.beginTransaction('粘贴')
       for (const el of _clipboard) {
-        const cloned: ElementNode = cloneDeep(el)
+        const cloned: MaterialNode = cloneDeep(el)
         cloned.id = generateId()
         if (cloned.layout.x != null) {
           cloned.layout.x += 5
@@ -68,8 +68,8 @@ export function useContextMenu(
         if (cloned.layout.y != null) {
           cloned.layout.y += 5
         }
-        const cmd = createAddElementCommand(
-          { element: cloned, index: -1 },
+        const cmd = createAddMaterialCommand(
+          { material: cloned, index: -1 },
           engine.operations,
         )
         engine.execute(cmd)
@@ -84,7 +84,7 @@ export function useContextMenu(
     const ids = selection.selectedIds.value
     const isSingle = ids.length === 1
     const isMulti = ids.length > 1
-    const elements = engine.schema.schema.elements
+    const materials = engine.schema.schema.materials
     const result: ContextMenuItem[] = []
 
     if (isSingle) {
@@ -111,8 +111,8 @@ export function useContextMenu(
       // 分隔线
       result.push({ action: () => {}, divider: true, key: 'div1', label: '' })
       // 层级操作
-      const currentIndex = elements.indexOf(el)
-      const maxIndex = elements.length - 1
+      const currentIndex = materials.indexOf(el)
+      const maxIndex = materials.length - 1
       result.push({
         action: () => _reorder(el.id, currentIndex, maxIndex),
         disabled: currentIndex === maxIndex,
@@ -186,16 +186,16 @@ export function useContextMenu(
     if (oldIndex === newIndex) {
       return
     }
-    const cmd = createReorderElementCommand(
-      { elementId, newIndex, oldIndex },
+    const cmd = createReorderMaterialCommand(
+      { materialId: elementId, newIndex, oldIndex },
       engine.operations,
     )
     engine.execute(cmd)
   }
 
-  function _toggleLock(el: ElementNode): void {
+  function _toggleLock(el: MaterialNode): void {
     const cmd = createToggleLockCommand(
-      { elementId: el.id, newLocked: !el.locked, oldLocked: !!el.locked },
+      { materialId: el.id, newLocked: !el.locked, oldLocked: !!el.locked },
       engine.operations,
     )
     engine.execute(cmd)
@@ -206,7 +206,7 @@ export function useContextMenu(
     for (const el of selection.selectedElements.value) {
       if (!!el.locked !== locked) {
         const cmd = createToggleLockCommand(
-          { elementId: el.id, newLocked: locked, oldLocked: !!el.locked },
+          { materialId: el.id, newLocked: locked, oldLocked: !!el.locked },
           engine.operations,
         )
         engine.execute(cmd)

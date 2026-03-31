@@ -177,6 +177,9 @@ importers:
       '@easyink/shared':
         specifier: workspace:*
         version: link:../shared
+      '@easyink/ui':
+        specifier: workspace:*
+        version: link:../ui
     devDependencies:
       sass-embedded:
         specifier: catalog:cli

@@ -1,11 +1,11 @@
-import type { PropDefinition } from '@easyink/core'
 import {
-  createMoveElementCommand,
-  createResizeElementCommand,
+  createMoveMaterialCommand,
+  createResizeMaterialCommand,
   createUpdateBindingCommand,
   createUpdatePropsCommand,
   createUpdateStyleCommand,
 } from '@easyink/core'
+import { EiPropForm } from '@easyink/ui'
 import { defineComponent, h, inject } from 'vue'
 import { getEditor } from '../editors/EditorRegistry'
 import { DESIGNER_INJECTION_KEY } from '../types'
@@ -44,8 +44,8 @@ export const PropertyPanel = defineComponent({
       function updateLayout(key: string, value: number): void {
         const oldLayout = { ...el.layout }
         if (key === 'x' || key === 'y') {
-          const cmd = createMoveElementCommand({
-            elementId: el.id,
+          const cmd = createMoveMaterialCommand({
+            materialId: el.id,
             newX: key === 'x' ? value : (layout.x ?? 0),
             newY: key === 'y' ? value : (layout.y ?? 0),
             oldX: oldLayout.x ?? 0,
@@ -54,8 +54,8 @@ export const PropertyPanel = defineComponent({
           ctx.engine.execute(cmd)
         }
         else {
-          const cmd = createResizeElementCommand({
-            elementId: el.id,
+          const cmd = createResizeMaterialCommand({
+            materialId: el.id,
             newHeight: key === 'height' ? value : layout.height,
             newWidth: key === 'width' ? value : layout.width,
             oldHeight: oldLayout.height,
@@ -81,7 +81,7 @@ export const PropertyPanel = defineComponent({
 
       function updateStyle(key: string, value: unknown): void {
         const cmd = createUpdateStyleCommand({
-          elementId: el.id,
+          materialId: el.id,
           newStyle: { ...style, [key]: value },
           oldStyle: { ...style },
         }, ctx.engine.operations)
@@ -114,55 +114,31 @@ export const PropertyPanel = defineComponent({
 
     function renderPropsSection() {
       const el = ctx.selection.selectedElement.value!
-      const def = ctx.engine.elementRegistry.get(el.type)
-      if (!def || def.propDefinitions.length === 0) {
+      const def = ctx.engine.materialRegistry.get(el.type)
+      if (!def || def.propSchemas.length === 0) {
         return null
       }
 
       const t = ctx.locale.t
 
-      // 按组分组
-      const groups = new Map<string, PropDefinition[]>()
-      for (const prop of def.propDefinitions) {
-        if (prop.visible && !prop.visible(el.props)) {
-          continue
-        }
-        const group = prop.group ?? t('property.props')
-        if (!groups.has(group)) {
-          groups.set(group, [])
-        }
-        groups.get(group)!.push(prop)
-      }
-
-      function updateProp(key: string, value: unknown): void {
+      function updateProps(newProps: Record<string, unknown>): void {
         const cmd = createUpdatePropsCommand({
-          elementId: el.id,
-          newProps: { ...el.props, [key]: value },
+          materialId: el.id,
+          newProps: { ...el.props, ...newProps },
           oldProps: { ...el.props },
         }, ctx.engine.operations)
         ctx.engine.execute(cmd)
       }
 
-      const sections: ReturnType<typeof h>[] = []
-      for (const [groupName, props] of groups) {
-        const rows = props.map(prop =>
-          renderEditorRow(
-            prop.label,
-            prop.editor,
-            el.props[prop.key] ?? prop.defaultValue,
-            prop.editorOptions ?? {},
-            v => updateProp(prop.key, v),
-          ),
-        )
-        sections.push(
-          h('div', { class: 'easyink-property-group', key: groupName }, [
-            h('div', { class: 'easyink-property-group__title' }, groupName),
-            ...rows,
-          ]),
-        )
-      }
-
-      return sections
+      return h('div', { class: 'easyink-property-group' }, [
+        h('div', { class: 'easyink-property-group__title' }, t('property.props')),
+        h(EiPropForm, {
+          'fontManager': ctx.engine.font,
+          'modelValue': el.props,
+          'schemas': def.propSchemas,
+          'onUpdate:modelValue': updateProps,
+        }),
+      ])
     }
 
     function renderBindingSection() {
@@ -172,7 +148,7 @@ export const PropertyPanel = defineComponent({
 
       function updateBinding(path: string): void {
         const cmd = createUpdateBindingCommand({
-          elementId: el.id,
+          materialId: el.id,
           newBinding: path ? { path } : undefined,
           oldBinding: binding ? { ...binding } : undefined,
         }, ctx.engine.operations)
@@ -196,11 +172,12 @@ export const PropertyPanel = defineComponent({
         ])
       }
 
+      const propsSection = renderPropsSection()
       const sections = [
         h('div', { class: 'easyink-property-panel__header' }, `${t('property.title')} - ${el.name ?? el.type}`),
         renderLayoutSection(),
         renderStyleSection(),
-        ...renderPropsSection() ?? [],
+        propsSection,
         renderBindingSection(),
       ]
 

@@ -1,8 +1,8 @@
 import type { EasyInkEngine } from '@easyink/core'
 import type { useSelection } from './use-selection'
 import {
-  createMoveElementCommand,
-  createRemoveElementCommand,
+  createMoveMaterialCommand,
+  createRemoveMaterialCommand,
 } from '@easyink/core'
 import { cloneDeep } from '@easyink/shared'
 
@@ -13,7 +13,7 @@ export function useBatchOperations(
   function _getSelectedLayouts() {
     return selection.selectedIds.value
       .map((id) => {
-        const el = engine.schema.getElementById(id)
+        const el = engine.schema.getMaterialById(id)
         if (!el || el.locked) {
           return null
         }
@@ -29,7 +29,7 @@ export function useBatchOperations(
   }
 
   function batchDelete(): void {
-    const elements = engine.schema.schema.elements
+    const materials = engine.schema.schema.materials
     const selectedIds = selection.selectedIds.value.slice()
     if (selectedIds.length === 0) {
       return
@@ -39,16 +39,16 @@ export function useBatchOperations(
     // Iterate in reverse index order to avoid index shift
     const entries = selectedIds
       .map((id) => {
-        const idx = elements.findIndex(el => el.id === id)
-        const el = elements[idx]
-        return idx >= 0 && el ? { element: cloneDeep(el), id, index: idx } : null
+        const idx = materials.findIndex(el => el.id === id)
+        const el = materials[idx]
+        return idx >= 0 && el ? { material: cloneDeep(el), id, index: idx } : null
       })
       .filter((e): e is NonNullable<typeof e> => e !== null)
       .sort((a, b) => b.index - a.index)
 
     for (const entry of entries) {
-      const cmd = createRemoveElementCommand(
-        { element: entry.element, index: entry.index },
+      const cmd = createRemoveMaterialCommand(
+        { material: entry.material, index: entry.index },
         engine.operations,
       )
       engine.execute(cmd)
@@ -69,8 +69,8 @@ export function useBatchOperations(
       if (newPos.x === item.x && newPos.y === item.y) {
         continue
       }
-      const cmd = createMoveElementCommand({
-        elementId: item.id,
+      const cmd = createMoveMaterialCommand({
+        materialId: item.id,
         newX: newPos.x,
         newY: newPos.y,
         oldX: item.x,
@@ -138,8 +138,8 @@ export function useBatchOperations(
     for (let i = 1; i < sorted.length - 1; i++) {
       const item = sorted[i]
       if (item.x !== currentX) {
-        const cmd = createMoveElementCommand({
-          elementId: item.id,
+        const cmd = createMoveMaterialCommand({
+          materialId: item.id,
           newX: currentX,
           newY: item.y,
           oldX: item.x,
@@ -169,8 +169,8 @@ export function useBatchOperations(
     for (let i = 1; i < sorted.length - 1; i++) {
       const item = sorted[i]
       if (item.y !== currentY) {
-        const cmd = createMoveElementCommand({
-          elementId: item.id,
+        const cmd = createMoveMaterialCommand({
+          materialId: item.id,
           newX: item.x,
           newY: currentY,
           oldX: item.x,

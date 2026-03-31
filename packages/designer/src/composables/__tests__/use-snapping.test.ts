@@ -3,14 +3,14 @@ import { describe, expect, it } from 'vitest'
 import { ref } from 'vue'
 import { useSnapping } from '../use-snapping'
 
-function makeEngine(elements: any[] = [], extensions?: Record<string, unknown>) {
+function makeEngine(materials: any[] = [], extensions?: Record<string, unknown>) {
   return {
     layout: {
       resolvePageDimensions: () => ({ height: 297, width: 210 }),
     },
     schema: {
       schema: {
-        elements,
+        materials,
         extensions,
         page: {
           margins: { bottom: 5, left: 5, right: 5, top: 5 },

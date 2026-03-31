@@ -18,7 +18,7 @@ describe('useDesigner', () => {
         designer = useDesigner({
           data,
           schema: {
-            elements: [],
+            materials: [],
             meta: { name: 'test' },
             page: {
               margins: { bottom: 10, left: 10, right: 10, top: 10 },

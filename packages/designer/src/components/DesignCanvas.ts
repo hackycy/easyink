@@ -1,4 +1,6 @@
-import { createMoveElementCommand, createUpdateBindingCommand, toPixels } from '@easyink/core'
+import type { MaterialNode } from '@easyink/core'
+import { createMoveMaterialCommand, createUpdateBindingCommand, toPixels } from '@easyink/core'
+import { generateId } from '@easyink/shared'
 import { defineComponent, h, inject, nextTick, onMounted, ref, watch } from 'vue'
 import { DESIGNER_INJECTION_KEY } from '../types'
 import { AlignmentGuides } from './AlignmentGuides'
@@ -128,14 +130,14 @@ export const DesignCanvas = defineComponent({
 
     function _nudgeElements(ids: string[], dx: number, dy: number): void {
       if (ids.length === 1) {
-        const el = ctx.engine.schema.getElementById(ids[0])
+        const el = ctx.engine.schema.getMaterialById(ids[0])
         if (!el || el.locked || el.hidden) {
           return
         }
         const oldX = el.layout.x ?? 0
         const oldY = el.layout.y ?? 0
-        const cmd = createMoveElementCommand({
-          elementId: el.id,
+        const cmd = createMoveMaterialCommand({
+          materialId: el.id,
           newX: oldX + dx,
           newY: oldY + dy,
           oldX,
@@ -145,7 +147,7 @@ export const DesignCanvas = defineComponent({
       }
       else {
         const movable = ids
-          .map(id => ctx.engine.schema.getElementById(id))
+          .map(id => ctx.engine.schema.getMaterialById(id))
           .filter((el): el is NonNullable<typeof el> => !!el && !el.locked && !el.hidden)
         if (movable.length === 0) {
           return
@@ -154,8 +156,8 @@ export const DesignCanvas = defineComponent({
         for (const el of movable) {
           const oldX = el.layout.x ?? 0
           const oldY = el.layout.y ?? 0
-          const cmd = createMoveElementCommand({
-            elementId: el.id,
+          const cmd = createMoveMaterialCommand({
+            materialId: el.id,
             newX: oldX + dx,
             newY: oldY + dy,
             oldX,
@@ -288,13 +290,23 @@ export const DesignCanvas = defineComponent({
     // ── 数据绑定拖放 ──
 
     function onPageDragover(e: DragEvent): void {
-      if (e.dataTransfer?.types.includes('application/easyink-binding')) {
+      if (e.dataTransfer?.types.includes('application/easyink-binding')
+        || e.dataTransfer?.types.includes('application/easyink-material')) {
         e.preventDefault()
-        e.dataTransfer.dropEffect = 'link'
+        e.dataTransfer.dropEffect = e.dataTransfer.types.includes('application/easyink-material') ? 'copy' : 'link'
       }
     }
 
     function onPageDrop(e: DragEvent): void {
+      // 处理物料拖放
+      const materialRaw = e.dataTransfer?.getData('application/easyink-material')
+      if (materialRaw) {
+        e.preventDefault()
+        _handleMaterialDrop(materialRaw, e)
+        return
+      }
+
+      // 处理数据绑定拖放
       const raw = e.dataTransfer?.getData('application/easyink-binding')
       if (!raw) {
         return
@@ -309,15 +321,15 @@ export const DesignCanvas = defineComponent({
         return
       }
 
-      // Find target element
+      // Find target material
       let target = e.target as HTMLElement | null
       while (target && target !== renderTargetRef.value) {
         const id = target.dataset?.elementId
         if (id) {
-          const el = ctx.engine.schema.getElementById(id)
+          const el = ctx.engine.schema.getMaterialById(id)
           if (el) {
             const cmd = createUpdateBindingCommand({
-              elementId: id,
+              materialId: id,
               newBinding: { path: binding.path },
               oldBinding: el.binding,
             }, ctx.engine.operations)
@@ -327,6 +339,62 @@ export const DesignCanvas = defineComponent({
         }
         target = target.parentElement
       }
+    }
+
+    function _handleMaterialDrop(raw: string, e: DragEvent): void {
+      let data: { type: string }
+      try {
+        data = JSON.parse(raw)
+      }
+      catch {
+        return
+      }
+
+      const def = ctx.engine.materialRegistry.get(data.type)
+      if (!def) {
+        return
+      }
+
+      // 计算放置坐标
+      const wrapper = pageWrapperRef.value
+      if (!wrapper) {
+        return
+      }
+      const wrapperRect = wrapper.getBoundingClientRect()
+      const _unit = ctx.engine.schema.schema.page.unit
+      const zoom = ctx.canvas.zoom.value
+      const padding = getPageWrapperPadding(wrapper)
+      const _dpi = 96
+
+      const dropX = (e.clientX - wrapperRect.left - padding.x) / zoom
+      const dropY = (e.clientY - wrapperRect.top - padding.y) / zoom
+
+      const defaultWidth = (def.defaultLayout.width as number) ?? 100
+      const defaultHeight = (def.defaultLayout.height as number) ?? 60
+
+      const material: MaterialNode = {
+        id: generateId(),
+        layout: {
+          height: defaultHeight,
+          position: def.defaultLayout.position ?? 'absolute',
+          width: defaultWidth,
+          x: dropX - defaultWidth / 2,
+          y: dropY - defaultHeight / 2,
+          ...def.defaultLayout,
+          // 覆盖位置为实际放置点
+          ...(def.defaultLayout.position !== 'relative'
+            ? {
+                x: dropX - defaultWidth / 2,
+                y: dropY - defaultHeight / 2,
+              }
+            : {}),
+        },
+        props: { ...def.defaultProps },
+        style: { ...def.defaultStyle },
+        type: def.type,
+      }
+
+      ctx.addMaterial(material.type, material)
     }
 
     return () => {

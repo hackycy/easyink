@@ -1,6 +1,6 @@
 import type { DesignerContext } from '../types'
 import {
-  createReorderElementCommand,
+  createReorderMaterialCommand,
   createToggleLockCommand,
   createToggleVisibilityCommand,
 } from '@easyink/core'
@@ -13,12 +13,12 @@ export const LayerPanel = defineComponent({
     const ctx = inject(DESIGNER_INJECTION_KEY) as DesignerContext
 
     function toggleVisibility(id: string): void {
-      const el = ctx.engine.schema.getElementById(id)
+      const el = ctx.engine.schema.getMaterialById(id)
       if (!el) {
         return
       }
       const cmd = createToggleVisibilityCommand({
-        elementId: id,
+        materialId: id,
         newHidden: !el.hidden,
         oldHidden: !!el.hidden,
       }, ctx.engine.operations)
@@ -26,12 +26,12 @@ export const LayerPanel = defineComponent({
     }
 
     function toggleLock(id: string): void {
-      const el = ctx.engine.schema.getElementById(id)
+      const el = ctx.engine.schema.getMaterialById(id)
       if (!el) {
         return
       }
       const cmd = createToggleLockCommand({
-        elementId: id,
+        materialId: id,
         newLocked: !el.locked,
         oldLocked: !!el.locked,
       }, ctx.engine.operations)
@@ -61,18 +61,18 @@ export const LayerPanel = defineComponent({
 
     function onDrop(index: number, e: DragEvent): void {
       e.preventDefault()
-      const elementId = e.dataTransfer?.getData('application/easyink-layer')
-      if (!elementId) {
+      const materialId = e.dataTransfer?.getData('application/easyink-layer')
+      if (!materialId) {
         return
       }
-      const elements = ctx.engine.schema.schema.elements
-      const oldIndex = elements.findIndex(el => el.id === elementId)
+      const materials = ctx.engine.schema.schema.materials
+      const oldIndex = materials.findIndex(el => el.id === materialId)
       if (oldIndex === -1 || oldIndex === index) {
         return
       }
 
-      const cmd = createReorderElementCommand({
-        elementId,
+      const cmd = createReorderMaterialCommand({
+        materialId,
         newIndex: index,
         oldIndex,
       }, ctx.engine.operations)
@@ -80,20 +80,20 @@ export const LayerPanel = defineComponent({
     }
 
     return () => {
-      const elements = ctx.engine.schema.schema.elements
+      const materials = ctx.engine.schema.schema.materials
       const t = ctx.locale.t
 
-      if (elements.length === 0) {
+      if (materials.length === 0) {
         return h('div', { class: 'easyink-layer-panel' }, [
           h('div', { class: 'easyink-layer-panel__empty' }, t('layer.empty')),
         ])
       }
 
       // Display in reverse order (topmost first)
-      const reversed = [...elements].reverse()
+      const reversed = [...materials].reverse()
 
       return h('div', { class: 'easyink-layer-panel' }, reversed.map((el, visualIndex) => {
-        const realIndex = elements.length - 1 - visualIndex
+        const realIndex = materials.length - 1 - visualIndex
         const isSelected = ctx.selection.isSelected(el.id)
         const classes = [
           'easyink-layer-item',
@@ -121,7 +121,7 @@ export const LayerPanel = defineComponent({
                 toggleVisibility(el.id)
               },
               title: t('layer.visibility'),
-            }, el.hidden ? '👁‍🗨' : '👁'),
+            }, el.hidden ? 'H' : 'V'),
             h('button', {
               class: `easyink-layer-item__btn ${el.locked ? 'easyink-layer-item__btn--active' : ''}`,
               onClick: (e: MouseEvent) => {
@@ -129,7 +129,7 @@ export const LayerPanel = defineComponent({
                 toggleLock(el.id)
               },
               title: t('layer.lock'),
-            }, el.locked ? '🔒' : '🔓'),
+            }, el.locked ? 'L' : 'U'),
           ]),
         ])
       }))

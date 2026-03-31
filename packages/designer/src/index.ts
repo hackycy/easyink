@@ -4,11 +4,14 @@ import './theme/index.scss'
 // ─── Components ───
 export { AlignmentGuides } from './components/AlignmentGuides'
 export { ContextMenu } from './components/ContextMenu'
+export { DataBindingLayer } from './components/DataBindingLayer'
 export { DataSourcePanel } from './components/DataSourcePanel'
 export { DesignCanvas } from './components/DesignCanvas'
 export { EasyInkDesigner } from './components/EasyInkDesigner'
 export { GuideLines } from './components/GuideLines'
 export { LayerPanel } from './components/LayerPanel'
+export { MaterialBar } from './components/MaterialBar'
+export { MaterialInteractionLayer } from './components/MaterialInteractionLayer'
 export { PropertyPanel } from './components/PropertyPanel'
 export { RulerHorizontal } from './components/RulerHorizontal'
 export { RulerVertical } from './components/RulerVertical'
@@ -42,6 +45,12 @@ export {
   SwitchEditor,
   TextEditor,
 } from './editors/index'
+
+// ─── Interaction ───
+export type { CanvasEvent, InteractionContext, InteractionState, InteractionStrategy } from './interaction'
+export { InteractionStrategyRegistry, useStrategyManager } from './interaction'
+export type { StrategyManager } from './interaction'
+
 export type { LocaleMessages } from './locale/types'
 
 // ─── Locale ───

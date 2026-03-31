@@ -9,23 +9,11 @@ export const ToolbarPanel = defineComponent({
     const selectedCount = computed(() => ctx.selection.selectedIds.value.length)
 
     return () => {
-      const types = ctx.elementTypes.value
       const t = ctx.locale.t
-
-      const elementButtons = types.map(def =>
-        h('button', {
-          class: 'easyink-toolbar-btn',
-          key: def.type,
-          title: def.name,
-          onClick: () => ctx.addElement(def.type),
-        }, [
-          h('span', { class: 'easyink-toolbar-btn__label' }, t(`toolbar.${def.type}`) || def.name),
-        ]),
-      )
 
       const alignButtons: ReturnType<typeof h>[] = []
 
-      // Show alignment buttons when ≥2 selected
+      // Show alignment buttons when >=2 selected
       if (selectedCount.value >= 2) {
         alignButtons.push(
           h('div', { class: 'easyink-toolbar-divider', key: 'align-divider' }),
@@ -64,7 +52,7 @@ export const ToolbarPanel = defineComponent({
         )
       }
 
-      // Show distribute buttons when ≥3 selected
+      // Show distribute buttons when >=3 selected
       if (selectedCount.value >= 3) {
         alignButtons.push(
           h('div', { class: 'easyink-toolbar-group', key: 'dist-group' }, [
@@ -83,8 +71,6 @@ export const ToolbarPanel = defineComponent({
       }
 
       return h('div', { class: 'easyink-toolbar' }, [
-        h('div', { class: 'easyink-toolbar-group' }, elementButtons),
-        h('div', { class: 'easyink-toolbar-divider' }),
         h('div', { class: 'easyink-toolbar-group' }, [
           h('button', {
             class: 'easyink-toolbar-btn',
