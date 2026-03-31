@@ -414,7 +414,7 @@ describe('renderTable', () => {
     )
     const tds = el.querySelectorAll('tbody td')
     expect(tds.length).toBe(1) // second cell covered by colspan
-    expect(tds[0].colSpan).toBe(2)
+    expect((tds[0] as HTMLTableCellElement).colSpan).toBe(2)
     expect(tds[0].textContent).toBe('合并单元格')
   })
 

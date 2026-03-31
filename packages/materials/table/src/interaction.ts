@@ -94,7 +94,7 @@ export const tableInteractionStrategy: InteractionStrategy = {
     // 使数据单元格可编辑
     const dataCells = tableEl.querySelectorAll('tbody td')
     dataCells.forEach((td) => {
-      const tdEl = td as HTMLElement
+      const tdEl = td as HTMLTableCellElement
       const row = tdEl.parentElement as HTMLTableRowElement
       if (!row)
         return

@@ -382,7 +382,7 @@ export const DesignCanvas = defineComponent({
           y: dropY - defaultHeight / 2,
           ...def.defaultLayout,
           // 覆盖位置为实际放置点
-          ...(def.defaultLayout.position !== 'relative'
+          ...(def.defaultLayout.position !== 'flow'
             ? {
                 x: dropX - defaultWidth / 2,
                 y: dropY - defaultHeight / 2,

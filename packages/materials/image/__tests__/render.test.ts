@@ -14,7 +14,7 @@ function createMockContext(overrides: Partial<MaterialRenderContext> = {}): Mate
     dpi: 96,
     zoom: 1,
     toPixels: (v: number) => v,
-    computedLayout: { x: 0, y: 0, width: 100, height: 100 },
+    computedLayout: { x: 0, y: 0, width: 100, height: 100, boundingBox: { x: 0, y: 0, width: 100, height: 100 }, needsMeasure: false },
     renderChild: () => document.createElement('div'),
     ...overrides,
   }

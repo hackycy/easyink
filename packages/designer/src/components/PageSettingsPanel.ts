@@ -89,7 +89,7 @@ export const PageSettingsPanel = defineComponent({
 
       // Custom/label width/height
       if (paperType === 'custom' || paperType === 'label') {
-        const paper = page.paper as { height: number, type: string, width: number }
+        const paper = page.paper as { height: number, type: 'custom' | 'label', width: number }
         rows.push(
           renderEditorRow(t('pageSettings.width'), 'number', paper.width, { min: 1, step: 1 }, (v) => {
             executeUpdate({ ...page, paper: { ...paper, width: v as number } })

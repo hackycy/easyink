@@ -1,4 +1,4 @@
-import type { ComputedLayout, ElementStyle } from '@easyink/core'
+import type { ComputedLayout, MaterialStyle } from '@easyink/core'
 import { describe, expect, it } from 'vitest'
 import { applyLayout, applyStyle } from '../style-applier'
 
@@ -11,7 +11,7 @@ const mmToPixels = (v: number): number => v * (96 / 25.4)
 describe('applyStyle', () => {
   it('should apply font properties', () => {
     const el = document.createElement('div')
-    const style: ElementStyle = {
+    const style: MaterialStyle = {
       fontFamily: 'Arial',
       fontSize: 10,
       fontWeight: 'bold',
@@ -26,7 +26,7 @@ describe('applyStyle', () => {
 
   it('should apply text properties', () => {
     const el = document.createElement('div')
-    const style: ElementStyle = {
+    const style: MaterialStyle = {
       color: '#333',
       textAlign: 'center',
       lineHeight: 1.5,

@@ -14,7 +14,7 @@ function createMockContext(): MaterialRenderContext {
     dpi: 96,
     zoom: 1,
     toPixels: (v: number) => v,
-    computedLayout: { x: 0, y: 0, width: 100, height: 0 },
+    computedLayout: { x: 0, y: 0, width: 100, height: 0, boundingBox: { x: 0, y: 0, width: 100, height: 0 }, needsMeasure: false },
     renderChild: () => document.createElement('div'),
   }
 }
