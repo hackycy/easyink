@@ -15,9 +15,6 @@ catalogs:
     '@tsdown/css':
       specifier: ^0.21.7
       version: 0.21.7
-    '@vitejs/plugin-vue':
-      specifier: ^6.0.5
-      version: 6.0.5
     bumpp:
       specifier: ^10.3.1
       version: 10.3.1
@@ -54,17 +51,10 @@ catalogs:
     vite:
       specifier: ^7.2.1
       version: 7.2.1
-  framework:
-    vue:
-      specifier: ^3.5.0
-      version: 3.5.31
   inlined:
     '@antfu/utils':
       specifier: ^9.3.0
       version: 9.3.0
-    lodash-es:
-      specifier: ^4.17.21
-      version: 4.17.23
   testing:
     happy-dom:
       specifier: ^20.8.9
@@ -82,9 +72,6 @@ catalogs:
       specifier: ^2.8.1
       version: 2.8.1
   types:
-    '@types/lodash-es':
-      specifier: ^4.17.12
-      version: 4.17.12
     '@types/node':
       specifier: ^24.10.0
       version: 24.10.0
@@ -159,256 +146,6 @@ importers:
       yaml:
         specifier: catalog:testing
         version: 2.8.1
-
-  packages/core:
-    dependencies:
-      '@easyink/shared':
-        specifier: workspace:*
-        version: link:../shared
-
-  packages/designer:
-    dependencies:
-      '@easyink/core':
-        specifier: workspace:*
-        version: link:../core
-      '@easyink/renderer':
-        specifier: workspace:*
-        version: link:../renderer
-      '@easyink/shared':
-        specifier: workspace:*
-        version: link:../shared
-      '@easyink/ui':
-        specifier: workspace:*
-        version: link:../ui
-    devDependencies:
-      sass-embedded:
-        specifier: catalog:cli
-        version: 1.98.0
-      vue:
-        specifier: catalog:framework
-        version: 3.5.31(typescript@5.9.3)
-
-  packages/icons:
-    dependencies:
-      '@iconify-json/lucide':
-        specifier: ^1.2.0
-        version: 1.2.101
-      '@iconify/vue':
-        specifier: ^4.3.0
-        version: 4.3.0(vue@3.5.31(typescript@5.9.3))
-
-  packages/materials/barcode:
-    dependencies:
-      '@easyink/core':
-        specifier: workspace:*
-        version: link:../../core
-      '@easyink/designer':
-        specifier: workspace:*
-        version: link:../../designer
-      '@easyink/renderer':
-        specifier: workspace:*
-        version: link:../../renderer
-      '@easyink/shared':
-        specifier: workspace:*
-        version: link:../../shared
-
-  packages/materials/data-table:
-    dependencies:
-      '@easyink/core':
-        specifier: workspace:*
-        version: link:../../core
-      '@easyink/designer':
-        specifier: workspace:*
-        version: link:../../designer
-      '@easyink/renderer':
-        specifier: workspace:*
-        version: link:../../renderer
-      '@easyink/shared':
-        specifier: workspace:*
-        version: link:../../shared
-      vue:
-        specifier: ^3
-        version: 3.5.31(typescript@5.9.3)
-
-  packages/materials/image:
-    dependencies:
-      '@easyink/core':
-        specifier: workspace:*
-        version: link:../../core
-      '@easyink/designer':
-        specifier: workspace:*
-        version: link:../../designer
-      '@easyink/renderer':
-        specifier: workspace:*
-        version: link:../../renderer
-      '@easyink/shared':
-        specifier: workspace:*
-        version: link:../../shared
-
-  packages/materials/line:
-    dependencies:
-      '@easyink/core':
-        specifier: workspace:*
-        version: link:../../core
-      '@easyink/designer':
-        specifier: workspace:*
-        version: link:../../designer
-      '@easyink/renderer':
-        specifier: workspace:*
-        version: link:../../renderer
-      '@easyink/shared':
-        specifier: workspace:*
-        version: link:../../shared
-
-  packages/materials/rect:
-    dependencies:
-      '@easyink/core':
-        specifier: workspace:*
-        version: link:../../core
-      '@easyink/designer':
-        specifier: workspace:*
-        version: link:../../designer
-      '@easyink/renderer':
-        specifier: workspace:*
-        version: link:../../renderer
-      '@easyink/shared':
-        specifier: workspace:*
-        version: link:../../shared
-
-  packages/materials/rich-text:
-    dependencies:
-      '@easyink/core':
-        specifier: workspace:*
-        version: link:../../core
-      '@easyink/designer':
-        specifier: workspace:*
-        version: link:../../designer
-      '@easyink/renderer':
-        specifier: workspace:*
-        version: link:../../renderer
-      '@easyink/shared':
-        specifier: workspace:*
-        version: link:../../shared
-
-  packages/materials/table:
-    dependencies:
-      '@easyink/core':
-        specifier: workspace:*
-        version: link:../../core
-      '@easyink/designer':
-        specifier: workspace:*
-        version: link:../../designer
-      '@easyink/renderer':
-        specifier: workspace:*
-        version: link:../../renderer
-      '@easyink/shared':
-        specifier: workspace:*
-        version: link:../../shared
-      vue:
-        specifier: ^3
-        version: 3.5.31(typescript@5.9.3)
-
-  packages/materials/text:
-    dependencies:
-      '@easyink/core':
-        specifier: workspace:*
-        version: link:../../core
-      '@easyink/designer':
-        specifier: workspace:*
-        version: link:../../designer
-      '@easyink/renderer':
-        specifier: workspace:*
-        version: link:../../renderer
-      '@easyink/shared':
-        specifier: workspace:*
-        version: link:../../shared
-
-  packages/renderer:
-    dependencies:
-      '@easyink/core':
-        specifier: workspace:*
-        version: link:../core
-      '@easyink/shared':
-        specifier: workspace:*
-        version: link:../shared
-
-  packages/shared:
-    dependencies:
-      lodash-es:
-        specifier: catalog:inlined
-        version: 4.17.23
-    devDependencies:
-      '@types/lodash-es':
-        specifier: catalog:types
-        version: 4.17.12
-
-  packages/ui:
-    dependencies:
-      '@easyink/core':
-        specifier: workspace:*
-        version: link:../core
-      '@easyink/shared':
-        specifier: workspace:*
-        version: link:../shared
-    devDependencies:
-      sass-embedded:
-        specifier: catalog:cli
-        version: 1.98.0
-      vue:
-        specifier: catalog:framework
-        version: 3.5.31(typescript@5.9.3)
-
-  playground:
-    dependencies:
-      '@easyink/core':
-        specifier: workspace:*
-        version: link:../packages/core
-      '@easyink/designer':
-        specifier: workspace:*
-        version: link:../packages/designer
-      '@easyink/material-barcode':
-        specifier: workspace:*
-        version: link:../packages/materials/barcode
-      '@easyink/material-data-table':
-        specifier: workspace:*
-        version: link:../packages/materials/data-table
-      '@easyink/material-image':
-        specifier: workspace:*
-        version: link:../packages/materials/image
-      '@easyink/material-line':
-        specifier: workspace:*
-        version: link:../packages/materials/line
-      '@easyink/material-rect':
-        specifier: workspace:*
-        version: link:../packages/materials/rect
-      '@easyink/material-rich-text':
-        specifier: workspace:*
-        version: link:../packages/materials/rich-text
-      '@easyink/material-table':
-        specifier: workspace:*
-        version: link:../packages/materials/table
-      '@easyink/material-text':
-        specifier: workspace:*
-        version: link:../packages/materials/text
-      '@easyink/renderer':
-        specifier: workspace:*
-        version: link:../packages/renderer
-      lodash-es:
-        specifier: catalog:inlined
-        version: 4.17.23
-      vue:
-        specifier: catalog:framework
-        version: 3.5.31(typescript@5.9.3)
-    devDependencies:
-      '@types/lodash-es':
-        specifier: catalog:types
-        version: 4.17.12
-      '@vitejs/plugin-vue':
-        specifier: catalog:cli
-        version: 6.0.5(vite@7.2.1(@types/node@24.10.0)(jiti@2.6.0)(lightningcss@1.32.0)(sass-embedded@1.98.0)(sass@1.98.0)(tsx@4.20.6)(yaml@2.8.1))(vue@3.5.31(typescript@5.9.3))
-      vite:
-        specifier: catalog:cli
-        version: 7.2.1(@types/node@24.10.0)(jiti@2.6.0)(lightningcss@1.32.0)(sass-embedded@1.98.0)(sass@1.98.0)(tsx@4.20.6)(yaml@2.8.1)
 
 packages:
 
@@ -781,17 +518,6 @@ packages:
     resolution: {integrity: sha512-xeO57FpIu4p1Ri3Jq/EXq4ClRm86dVF2z/+kvFnyqVYRavTZmaFaUBbWCOuuTh0o/g7DSsk6kc2vrS4Vl5oPOQ==}
     engines: {node: '>=18.18'}
 
-  '@iconify-json/lucide@1.2.101':
-    resolution: {integrity: sha512-JUN7uuSLRG3GK/9c5b8cK9e7sL6EAWDaASIwBOd0zUeKS0ACcokJubo2RMQHyVUVpd8mYkrR3Zd2mkH9ghhw1Q==}
-
-  '@iconify/types@2.0.0':
-    resolution: {integrity: sha512-+wluvCrRhXrhyOmRDJ3q8mux9JkKy5SJ/v8ol2tu4FVjyYvtEzkc/3pK15ET6RKg4b4w4BmTk1+gsCUhf21Ykg==}
-
-  '@iconify/vue@4.3.0':
-    resolution: {integrity: sha512-Xq0h6zMrHBbrW8jXJ9fISi+x8oDQllg5hTDkDuxnWiskJ63rpJu9CvJshj8VniHVTbsxCg9fVoPAaNp3RQI5OQ==}
-    peerDependencies:
-      vue: '>=3'
-
   '@jridgewell/gen-mapping@0.3.13':
     resolution: {integrity: sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA==}
 
@@ -1026,9 +752,6 @@ packages:
   '@rolldown/pluginutils@1.0.0-rc.12':
     resolution: {integrity: sha512-HHMwmarRKvoFsJorqYlFeFRzXZqCt2ETQlEDOb9aqssrnVBB1/+xgTGtuTrIk5vzLNX1MjMtTf7W9z3tsSbrxw==}
 
-  '@rolldown/pluginutils@1.0.0-rc.2':
-    resolution: {integrity: sha512-izyXV/v+cHiRfozX62W9htOAvwMo4/bXKDrQ+vom1L1qRuexPock/7VZDAhnpHCLNejd3NJ6hiab+tO0D44Rgw==}
-
   '@rollup/rollup-android-arm-eabi@4.52.0':
     resolution: {integrity: sha512-VxDYCDqOaR7NXzAtvRx7G1u54d2kEHopb28YH/pKzY6y0qmogP3gG7CSiWsq9WvDFxOQMpNEyjVAHZFXfH3o/A==}
     cpu: [arm]
@@ -1236,12 +959,6 @@ packages:
   '@types/json-schema@7.0.15':
     resolution: {integrity: sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA==}
 
-  '@types/lodash-es@4.17.12':
-    resolution: {integrity: sha512-0NgftHUcV4v34VhXm8QBSftKVXtbkBG3ViCjs6+eJ5a6y6Mi/jiFGPc1sC7QK+9BFhWrURE3EOggmWaSxL9OzQ==}
-
-  '@types/lodash@4.17.24':
-    resolution: {integrity: sha512-gIW7lQLZbue7lRSWEFql49QJJWThrTFFeIMJdp3eH4tKoxm1OvEPg02rm4wCCSHS0cL3/Fizimb35b7k8atwsQ==}
-
   '@types/mdast@4.0.4':
     resolution: {integrity: sha512-kGaNbPh1k7AFzgpud/gMdvIm5xuECykRR+JnWKQno9TAXVa6WIVCGTPvYGekIDL4uwCZQSYbUxNBSb1aUo79oA==}
 
@@ -1318,13 +1035,6 @@ packages:
   '@typescript-eslint/visitor-keys@8.46.2':
     resolution: {integrity: sha512-tUFMXI4gxzzMXt4xpGJEsBsTox0XbNQ1y94EwlD/CuZwFcQP79xfQqMhau9HsRc/J0cAPA/HZt1dZPtGn9V/7w==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
-
-  '@vitejs/plugin-vue@6.0.5':
-    resolution: {integrity: sha512-bL3AxKuQySfk1iGcBsQnoRVexTPJq0Z/ixFVM8OhVJAP6ZXXXLtM7NFKWhLl30Kg7uTBqIaPXbh+nuQCuBDedg==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    peerDependencies:
-      vite: ^5.0.0 || ^6.0.0 || ^7.0.0 || ^8.0.0
-      vue: ^3.2.25
 
   '@vitest/eslint-plugin@1.4.1':
     resolution: {integrity: sha512-eBMCLeUhKvQxH7nPihmLUJUWXxqKovVFEmxbGKqkY/aN6hTAXGiRid8traRUOvgr82NJFJL3KPpE19fElOR7bg==}
@@ -2212,9 +1922,6 @@ packages:
   locate-path@6.0.0:
     resolution: {integrity: sha512-iPZK6eYjbxRu3uB4/WZ3EsEIMJFMqAoopl3R+zuq0UjcAm/MO6KCweDgPfP3elTztoKP3KtnVHxTn2NHBSDVUw==}
     engines: {node: '>=10'}
-
-  lodash-es@4.17.23:
-    resolution: {integrity: sha512-kVI48u3PZr38HdYz98UmfPnXl2DXrpdctLrFLCd3kOx1xUkOmpFPx7gCWWM5MPkL/fD8zb+Ph0QzjGFs4+hHWg==}
 
   lodash.merge@4.6.2:
     resolution: {integrity: sha512-0KpjqXRVvrYyCsX1swR/XTK0va6VQkQM6MNo7PqW77ByjAhoARA8EfrP1N4+KlKj8YS0ZUCtRT/YUuhyYDujIQ==}
@@ -3542,17 +3249,6 @@ snapshots:
 
   '@humanwhocodes/retry@0.4.2': {}
 
-  '@iconify-json/lucide@1.2.101':
-    dependencies:
-      '@iconify/types': 2.0.0
-
-  '@iconify/types@2.0.0': {}
-
-  '@iconify/vue@4.3.0(vue@3.5.31(typescript@5.9.3))':
-    dependencies:
-      '@iconify/types': 2.0.0
-      vue: 3.5.31(typescript@5.9.3)
-
   '@jridgewell/gen-mapping@0.3.13':
     dependencies:
       '@jridgewell/sourcemap-codec': 1.5.5
@@ -3714,8 +3410,6 @@ snapshots:
 
   '@rolldown/pluginutils@1.0.0-rc.12': {}
 
-  '@rolldown/pluginutils@1.0.0-rc.2': {}
-
   '@rollup/rollup-android-arm-eabi@4.52.0':
     optional: true
 
@@ -3852,12 +3546,6 @@ snapshots:
 
   '@types/json-schema@7.0.15': {}
 
-  '@types/lodash-es@4.17.12':
-    dependencies:
-      '@types/lodash': 4.17.24
-
-  '@types/lodash@4.17.24': {}
-
   '@types/mdast@4.0.4':
     dependencies:
       '@types/unist': 3.0.3
@@ -3968,12 +3656,6 @@ snapshots:
     dependencies:
       '@typescript-eslint/types': 8.46.2
       eslint-visitor-keys: 4.2.1
-
-  '@vitejs/plugin-vue@6.0.5(vite@7.2.1(@types/node@24.10.0)(jiti@2.6.0)(lightningcss@1.32.0)(sass-embedded@1.98.0)(sass@1.98.0)(tsx@4.20.6)(yaml@2.8.1))(vue@3.5.31(typescript@5.9.3))':
-    dependencies:
-      '@rolldown/pluginutils': 1.0.0-rc.2
-      vite: 7.2.1(@types/node@24.10.0)(jiti@2.6.0)(lightningcss@1.32.0)(sass-embedded@1.98.0)(sass@1.98.0)(tsx@4.20.6)(yaml@2.8.1)
-      vue: 3.5.31(typescript@5.9.3)
 
   '@vitest/eslint-plugin@1.4.1(eslint@9.39.1(jiti@2.6.0))(typescript@5.9.3)(vitest@4.0.7(@types/debug@4.1.12)(@types/node@24.10.0)(happy-dom@20.8.9)(jiti@2.6.0)(lightningcss@1.32.0)(sass-embedded@1.98.0)(sass@1.98.0)(tsx@4.20.6)(yaml@2.8.1))':
     dependencies:
@@ -4900,8 +4582,6 @@ snapshots:
   locate-path@6.0.0:
     dependencies:
       p-locate: 5.0.0
-
-  lodash-es@4.17.23: {}
 
   lodash.merge@4.6.2: {}
 

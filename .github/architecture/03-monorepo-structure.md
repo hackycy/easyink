@@ -203,5 +203,5 @@ import { MaterialRegistry } from '@easyink/core'
 import { textDefinition } from '@easyink/material-text'
 ```
 
-- `@easyink/ui` 和 `@easyink/icons` 为内部包，不单独对外发布
+- `@easyink/ui` 和 `@easyink/icons` 为内部包，对外发布但不公开文档
 - 物料包对外发布，支持第三方按需安装

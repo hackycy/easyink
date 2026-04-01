@@ -5,17 +5,6 @@
     "baseUrl": ".",
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "paths": {
-      "@easyink/core": ["packages/core/src/index.ts"],
-      "@easyink/designer": ["packages/designer/src/index.ts"],
-      "@easyink/icons": ["packages/icons/src/index.ts"],
-      "@easyink/material-*": ["packages/materials/*/src/index.ts"],
-      "@easyink/material-*/designer": ["packages/materials/*/src/interaction.ts"],
-      "@easyink/material-*/render": ["packages/materials/*/src/render.ts"],
-      "@easyink/renderer": ["packages/renderer/src/index.ts"],
-      "@easyink/shared": ["packages/shared/src/index.ts"],
-      "@easyink/ui": ["packages/ui/src/index.ts"]
-    },
     "resolveJsonModule": true,
     "strict": true,
     "strictNullChecks": true,
