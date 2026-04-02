@@ -2,6 +2,7 @@
 
 ## 17.1 SemVer 语义
 
+- `TemplateSchema` 的版本语义服务于库内部持久化格式迁移，而不是面向外部生态的长期公共 DSL 兼容承诺。
 - **Patch**（0.0.x）：bug fix，Schema 完全兼容
 - **Minor**（0.x.0）：新增功能，Schema 向后兼容（additive only）
 - **Major**（x.0.0）：可能存在 breaking change，提供迁移函数
@@ -56,6 +57,7 @@ class MigrationRegistry {
  *    a. 有 MigrationRegistry → 自动链式迁移
  *    b. 无 MigrationRegistry → 抛出错误
  * 5. 迁移后更新 schema.version 为当前版本
+ * 6. 若迁移后仍存在未知 material.type 或缺失编辑器，不阻断加载；保留原节点并进入只读占位降级
  *
  * MigrationRegistry 通过 SchemaEngineOptions 或 EasyInkEngineOptions 传入。
  */

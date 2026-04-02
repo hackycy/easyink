@@ -48,8 +48,18 @@ interface RenderResult {
   contentBottom: number
   /** 是否超出声明纸张高度 */
   overflowed: boolean
+  /** 非阻断诊断（缺字段、类型不匹配、未知物料降级等） */
+  diagnostics: RenderDiagnostic[]
   /** 销毁函数 */
   dispose: () => void
+}
+
+interface RenderDiagnostic {
+  level: 'warning' | 'error'
+  code: string
+  message: string
+  materialId?: string
+  path?: string
 }
 ```
 
@@ -58,6 +68,8 @@ interface RenderResult {
 - 渲染器不内建打印适配器、PDF 生成器和图片导出器。
 - 渲染器不负责业务数据装配，只消费已经准备好的展示值对象。
 - 渲染器会暴露 `overflowed` 和测量结果，帮助业务方决定是否阻止打印或走自定义导出流程。
+- 对于缺失字段、绑定类型不匹配、未知物料、缺少自定义编辑器等问题，运行时优先保持页面可渲染，并通过 `diagnostics` 暴露非阻断问题。
+- 单值绑定 resolve 为 `undefined` 时，渲染结果为空白，不回退静态 `props`。
 
 ## 6.4 渲染前数据准备
 
@@ -90,6 +102,10 @@ const result = renderer.render(schema, preparedDisplayData, container)
 
 if (result.overflowed) {
   // 业务侧自行决定：告警、阻止提交、允许打印、另走导出链路
+}
+
+if (result.diagnostics.length) {
+  // 业务侧可记录缺失字段、绑定异常、未知物料等非阻断问题
 }
 
 // 业务侧如需 PDF / image：基于 result.page 自行组合 Puppeteer、Playwright、html-to-image 等方案

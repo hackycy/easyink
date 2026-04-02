@@ -19,6 +19,13 @@ interface TemplateSchema {
 }
 ```
 
+### 5.1.1 合同定位
+
+- `TemplateSchema` 的主要职责是库内部的模板持久化、导入导出和版本迁移。
+- 业务侧可以保存和回放 Schema，但当前不把它定义为稳定的外部手写 DSL 合同。
+- 未知顶层字段和 `extensions` 中的数据应尽量保留，避免导入导出链路无意丢失业务附加信息。
+- 若旧模板中的节点无法被当前库完整识别，优先保留原始节点并降级展示，而不是在加载阶段直接丢弃数据。
+
 ## 5.2 页面设置
 
 ```typescript
@@ -171,7 +178,7 @@ interface MaterialNode {
   style: MaterialStyle
   /** 数据绑定配置 */
   binding?: DataBinding
-  /** 子物料（仅容器类型） */
+  /** 子物料（仅未来受控容器类型；v1 不正式支持通用容器） */
   children?: MaterialNode[]
   /** 锁定/隐藏状态 */
   locked?: boolean
@@ -222,7 +229,9 @@ interface MaterialStyle {
 
 - 所有物料都以坐标形式存储，不再在 DSL 中区分传统 `absolute` / `flow` 两种布局模式。
 - 布局引擎会按 `y` 坐标升序处理物料；若前序物料实际高度超出估算值，则默认把后续未锁定物料整体向下推。
+- 旋转后的物料以轴对齐包围盒（AABB）参与碰撞、推移和溢出诊断，而不是仅按未旋转矩形参与计算。
 - `layout.lockedPosition = true` 表示该物料保持声明坐标，不受前序动态高度影响。
+- `layout.lockedPosition = true` 若与后续物料产生重叠，系统仅输出诊断，不自动让位或重排。
 - `MaterialNode.locked` 仍表示设计器中的编辑锁定，不复用为布局语义。
 
 ## 5.4 数据绑定
@@ -259,10 +268,11 @@ interface DataBinding {
 
 **fallback 机制**：
 - 物料无 `binding` 时，使用 `props` 中的静态值
-- 物料有 `binding` 时，运行时优先使用数据源值；若数据源未填充（resolve 返回 `undefined`），降级显示 `props` 中的静态值
+- 物料有 `binding` 时，运行时只使用数据源值；若数据源未填充（resolve 返回 `undefined`），该绑定值按空白处理，不回退到 `props` 中的静态值
 - 设计器中有 `binding` 的物料显示**绑定标签图层**覆盖在物料上方，需先删除绑定才能双击进入编辑
 - 删除绑定后，恢复显示 `props` 中的静态值（静态值始终保留不丢失）
 - 多次拖入不同数据源字段时，仅替换 `binding.path`，`props` 中的静态值不变
+- 运行时应同时产出非阻断诊断，帮助集成方定位缺失字段、类型不匹配和降级渲染原因
 
 ### 5.4.1 运行时边界
 

@@ -21,6 +21,7 @@
 - **禁止 key 含点号**：避免扁平 key 与点路径歧义。
 - **同 data-table 同源约束**：同一个 data-table 的所有列必须来自同一个对象数组前缀。
 - **不支持深层对象直绑**：复杂结构由业务方先拍平或预生成展示字段。
+- **字段冲突仅告警，不覆盖先注册项**：同名字段注册冲突时保留首个定义，避免历史模板绑定语义漂移。
 
 ## 8.3 注册 API
 
@@ -112,6 +113,12 @@ engine.registerDataSource({
 })
 ```
 
+### 8.2.1 字段冲突策略
+
+- 字段树注册阶段若出现同名叶子字段，应输出告警。
+- 告警后保留先注册字段，拒绝以静默覆盖改变既有绑定指向。
+- 该策略优先保护历史模板的可回放性，而不是优先照顾动态模块切换时的灵活覆盖。
+
 ## 8.4 运行时数据契约
 
 运行时传给渲染器的数据必须已经是展示值：
@@ -182,15 +189,21 @@ class DataResolver {
    *   → data[arrayKey] 必须为数组
    *   → 返回 data[arrayKey].map(item => item[field])
    */
-  resolve(path: string, data: Record<string, unknown>): unknown
+  resolve(path: string, data: Record<string, unknown>, report?: (diagnostic: DataResolveDiagnostic) => void): unknown
 
   /**
    * 容错策略：
    * - 字段不存在（扁平 + 点路径都 miss）：返回 undefined
-   * - 点路径的 arrayKey 对应值不是数组：抛出 Error
-   * - 点路径段数 > 2：抛出 Error（仅支持一层嵌套）
-   * - 路径段匹配原型链属性：返回 undefined + 警告
+   * - 点路径的 arrayKey 对应值不是数组：返回 undefined + 诊断
+   * - 点路径段数 > 2：返回 undefined + 诊断（仅支持一层嵌套）
+   * - 路径段匹配原型链属性：返回 undefined + 诊断
    */
+}
+
+interface DataResolveDiagnostic {
+  code: string
+  message: string
+  path: string
 }
 ```
 
@@ -199,7 +212,7 @@ class DataResolver {
 ```
 同源校验（设计时 + 运行时双重保障）：
 - 设计时：属性面板绑定列时，校验所有列的点路径前缀一致（如都是 orderItems.xxx）
-- 运行时：data-table 渲染器从各列 binding.path 提取前缀，检查一致性。不一致 → throw Error
+- 运行时：data-table 渲染器从各列 binding.path 提取前缀，检查一致性。不一致 → 输出诊断并降级为空表头
 - Schema 中不存储 sourceKey，data-table 仍为纯列容器
 
 数据解析流程：
@@ -211,4 +224,9 @@ class DataResolver {
 4. 按行索引逐行渲染：row[i] = 各列 array[i]
 5. 所有列为空数组 → 渲染空表格（仅表头）
    任一列有数据 → 正常渲染
+
+运行时降级原则：
+- 标量物料字段缺失 → 渲染空白 + diagnostics
+- data-table 列解析失败 / 非数组 / 同源不一致 → 渲染空表格（仅表头）+ diagnostics
+- 运行时尽量不因单个字段异常阻断整页渲染
 ```
