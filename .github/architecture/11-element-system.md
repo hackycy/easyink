@@ -270,6 +270,7 @@ class MaterialRegistry {
 
 - 旧模板中若存在当前 `MaterialRegistry` 未注册的 `material.type`，Schema 加载不应直接丢弃该节点。
 - 设计器中使用 unknown material 占位块展示其位置和尺寸，并限制为只读状态。
+- 运行时 renderer 若遇到未注册物料，也应在原声明位置输出明显占位 DOM 块，而不是静默跳过；占位块本身参与页面视觉结果，帮助打印前暴露问题。
 - 导入后重新导出 Schema 时，应尽量原样保留该节点的原始数据，等待后续补装物料包或迁移。
 
 ## 11.5 交互策略（Designer 层）

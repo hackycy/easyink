@@ -35,10 +35,24 @@
 ## 职责切分
 
 - `@easyink/core` 负责描述模板、解析绑定、计算布局，不承担模板动态计算和导出链路。
-- `@easyink/renderer` 只负责把 Schema 渲染为 DOM，并报告测量结果与溢出状态。
+- `@easyink/renderer` 只负责把 Schema 渲染为 DOM，并报告测量结果与溢出状态；它必须可以在不引入设计器的前提下单独消费。
 - `Consumer Application` 负责准备展示值数据，并基于 DOM 自行决定打印、导出 PDF 或图片。
 - `@easyink/designer` 负责提供开箱即用且默认美观的设计工作台，记录字段来源和静态属性，不在设计时填充真实数据。
 - 设计器中的窗口显示/隐藏、位置、激活态、最小化状态属于工作台偏好，不进入 Schema，也不进入撤销/重做栈。
+
+## 4.1 外部稳定面
+
+近两版对外只稳定最小消费面：
+
+- `@easyink/core` 的 Schema 加载、迁移与基础遍历能力
+- `@easyink/renderer` 的最小 DOM 渲染入口与诊断事件流
+- `@easyink/designer` 的基础设计器入口
+
+以下能力继续视为仓库内可演进抽象，不承诺近期稳定兼容：
+
+- `TemplateSchema` 的外部手写 DSL 语义
+- `PropSchema` 的函数式协议细节
+- 自定义编辑器注册、内部插件钩子、第三方物料包契约
 
 ## 设计器工作台子层
 
@@ -53,7 +67,7 @@
 核心层使用 Class 实例管理状态和生命周期，Vue 层提供 Composable 封装：
 
 ```typescript
-// --- Core 层：Class 实例 ---
+// --- Core / Renderer 层：最小运行时入口 ---
 import { EasyInkEngine } from '@easyink/core'
 import { DOMRenderer } from '@easyink/renderer'
 
@@ -64,6 +78,10 @@ const engine = new EasyInkEngine({
 engine.on('schema:change', (schema) => { /* ... */ })
 
 const renderer = new DOMRenderer({ engine })
+renderer.on('diagnostic', (event) => {
+  console.warn(event.code, event.message)
+})
+
 const result = renderer.render(loadedSchema, preparedDisplayData, container)
 
 if (result.overflowed) {

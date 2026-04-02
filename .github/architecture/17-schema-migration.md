@@ -51,17 +51,24 @@ class MigrationRegistry {
  * Schema 加载流程（SchemaEngine.loadSchema）：
  *
  * 1. 读取 schema.version
- * 2. 如果 version > currentVersion：拒绝加载，提示升级库版本
- * 3. 如果同 major 版本（含 minor/patch 差异）：直接使用（向后兼容）
- * 4. 如果 version major < currentVersion major：
+ * 2. 如果顶层结构损坏或关键字段不满足最小读取要求：拒绝加载
+ * 3. 如果 version > currentVersion：best-effort 打开，保留原始字段并发出 schema 诊断
+ * 4. 如果同 major 版本（含 minor/patch 差异）：直接使用（向后兼容）
+ * 5. 如果 version major < currentVersion major：
  *    a. 有 MigrationRegistry → 自动链式迁移
  *    b. 无 MigrationRegistry → 抛出错误
- * 5. 迁移后更新 schema.version 为当前版本
- * 6. 若迁移后仍存在未知 material.type 或缺失编辑器，不阻断加载；保留原节点并进入只读占位降级
+ * 6. 迁移后更新 schema.version 为当前版本
+ * 7. 若迁移后仍存在未知 material.type 或缺失编辑器，不阻断加载；保留原节点并进入只读占位降级
  *
  * MigrationRegistry 通过 SchemaEngineOptions 或 EasyInkEngineOptions 传入。
  */
 ```
+
+### 17.2.1 拒绝加载与 best-effort 的边界
+
+- 拒绝加载只用于两类情况：顶层结构已损坏到无法建立最小 `TemplateSchema` 视图，或解析过程中命中恶意路径等安全红线。
+- `schema.version` 高于当前库版本本身不再视为拒绝条件，只要顶层结构仍可读，就进入 best-effort 打开。
+- best-effort 模式下应尽量保留未知字段与未知节点，并通过诊断告知“当前库版本低于模板版本，结果仅为尽力回放”。
 
 > **设计决策**：`fromMajor` 使用 `number` 类型精确匹配 major 版本号，不引入 semver 库，保持 @easyink/core 零外部依赖。
 
