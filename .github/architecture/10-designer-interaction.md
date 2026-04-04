@@ -266,7 +266,115 @@ interface PanelToggleState {
 - 它与画布交互层不同级
 - 它会拦截顶栏和画布的输入焦点
 
-## 10.7 绑定交互
+### 10.6.1 模板库交互流
+
+模板库至少需要支持以下工作流：
+
+1. 用户从第一层顶栏点击模板库入口。
+2. 工作台进入 overlay opening。
+3. 模板列表请求开始，overlay 进入 loading。
+4. 请求成功后进入 list-ready，允许搜索、翻页、选择模板。
+5. 用户选择模板后进入 selecting-template。
+6. 工作台拉取模板内容并替换当前文档。
+7. overlay 关闭，画布、结构树、属性面板、状态栏同步刷新。
+
+如果当前环境处于静态示例模式，则搜索和翻页不是静默失效，而是：
+
+1. 用户执行搜索或翻页。
+2. overlay 进入 `backend-capability-check`。
+3. 工作台弹出显式提示。
+4. 用户确认后回到 `list-ready`，但列表内容不发生变化。
+
+### 10.6.2 模板库状态机
+
+```typescript
+interface TemplateLibraryState {
+	phase:
+		| 'closed'
+		| 'opening'
+		| 'loading-list'
+		| 'list-ready'
+		| 'static-demo-warning'
+		| 'selecting-template'
+		| 'loading-template'
+		| 'closing'
+	query: string
+	page: number
+	pageSize: number
+	backendMode: 'static-demo' | 'remote'
+	selectedTemplateId?: string
+}
+```
+
+边界要求：
+
+- `query/page/pageSize` 属于工作台状态，不进入模板 Schema
+- `selectedTemplateId` 只在 overlay 流程内短暂存在
+- 模板加载成功后，真正进入命令历史的是新模板文档，而不是 overlay 过程本身
+
+## 10.7 表格深度编辑
+
+表格交互不能按“选中一个元素”处理。对标产品已经证明它是层级式编辑流。
+
+### 10.7.1 表格交互流
+
+1. 页面空白处选中时，属性面板显示页面属性。
+2. 用户选中表格后，进入 table-selected，属性面板切到表格级属性。
+3. 用户继续点入格子后，进入 cell-selected。
+4. 画布出现格子级操作 affordance 和浮动工具条。
+5. 属性面板在保留表格级属性的同时，追加格子级属性分组。
+6. 用户可继续切换到标题、数据、合计、留白等区段上下文。
+7. 用户点击空白处或切换其他节点后，退出格子深度编辑态。
+
+### 10.7.2 表格状态机
+
+```typescript
+interface TableEditingState {
+	phase: 'idle' | 'table-selected' | 'band-selected' | 'cell-selected'
+	tableId?: string
+	band?: 'header' | 'title' | 'data' | 'summary' | 'footer' | 'blank'
+	cellPath?: {
+		row: number
+		col: number
+	}
+}
+```
+
+实现约束：
+
+- `table-selected` 显示表格壳层属性和结构属性
+- `band-selected` 用于标题、数据、合计、留白等逻辑区段
+- `cell-selected` 才允许出现分裂、合并、局部边框、内容位置、格子内边距等操作
+- `cellPath` 不能等价成普通元素 id，因为它依赖表格内部拓扑
+
+### 10.7.3 格子态 affordance
+
+进入 `cell-selected` 后，Designer 至少需要提供：
+
+- 绑定字段拖拽句柄
+- 删除当前绑定字段动作
+- 格子宽度拖拽
+- 格子高度拖拽
+- 表格浮动工具条
+
+表格浮动工具条至少要覆盖：
+
+- 添加/删除行列
+- 拆分单元格
+- 合并单元格
+- 单边边框显隐
+- 内容水平/垂直对齐
+
+### 10.7.4 属性壳层行为
+
+格子态下属性面板不应切换成“另一个单元格编辑器页面”，而应保持同一壳层：
+
+- 上半段仍是表格级属性
+- 下半段追加格子背景、格子尺寸、格子操作、格子内容、内容位置、内边距等局部属性
+
+这是同一属性壳层里的上下文递进，不是两个面板。
+
+## 10.8 绑定交互
 
 绑定不是改一个路径字符串，而是一组工作台动作。
 
@@ -290,7 +398,7 @@ interface PanelToggleState {
 2. 指定主数据源和数据区。
 3. 单元格再绑定相对字段或聚合规则。
 
-## 10.8 设计器与 Viewer 的预览关系
+## 10.9 设计器与 Viewer 的预览关系
 
 设计器预览仍由 iframe Viewer 承担，而不是在画布 DOM 上直接拼结果。
 
@@ -306,7 +414,7 @@ interface PanelToggleState {
 - 预览是工作台级动作，不是元素级动作
 - 预览后返回编辑态时应保持窗口布局和工作台状态
 
-## 10.9 状态栏
+## 10.10 状态栏
 
 状态栏应作为独立工作台层存在，至少承载：
 
@@ -317,7 +425,7 @@ interface PanelToggleState {
 
 状态栏必须允许显示成功和失败两种状态，而不是只有“正在保存”。对标产品里已经能看到自动保存失败提示，这意味着 EasyInk 也要把失败视作一级反馈对象。
 
-## 10.10 工作台状态边界
+## 10.11 工作台状态边界
 
 以下状态属于工作台状态，不进入模板历史：
 
@@ -334,16 +442,17 @@ interface PanelToggleState {
 - 数据绑定
 - 结构树变更
 - 表格单元格结构变更
-- 窗口位置和尺寸
-- 窗口折叠态
-- 窗口层级
-- 当前缩放比例
-- 顶部工具组编排
-- 模板库搜索和分页状态
+
+以下状态属于交互上下文状态，不进入 Schema，但可能进入工作台内存：
+
+- 当前表格编辑阶段
+- 当前区段选择
+- 当前格子坐标
+- 模板库搜索关键字和页码
 
 这些状态可以持久化为用户偏好，但不能污染 Schema。
 
-## 10.11 故障可见性
+## 10.12 故障可见性
 
 Designer 必须把问题直接呈现在画布或窗口中，而不是静默降级：
 
