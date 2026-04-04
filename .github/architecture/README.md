@@ -1,21 +1,25 @@
 # EasyInk Architecture
 
-> 前端打印模板设计器库 -- 基于 Vue 3 + TypeScript + pnpm monorepo
+> 对标通用文档/报表设计器的前端设计器框架 -- 基于 Vue 3 + TypeScript + pnpm monorepo
 
-本目录包含 EasyInk 的完整技术架构文档。2026-04-01 起，架构方向已收敛为：
+本目录记录 2026-04-03 基线重构后的 EasyInk 架构。经过对 `report-designer` 的深度实测，EasyInk 的方向从“极简打印模板库”调整为“通用文档/报表设计器框架”，首要目标是把设计器工作台、预览器、数据源系统和表格能力搭稳。
 
-- 运行时只保留 DOM 渲染与简单字段绑定
-- 动态计算、内建打印/PDF/图片导出不再属于核心承诺
-- 复杂展示值由业务方在渲染前预装配
-- 布局采用坐标驱动 + 按 y 排序的整体推移模型（设计器不做推移，纯坐标定位）
-- 渲染器根据 `page.unit` 直出对应 CSS 物理单位（mm/pt/in）DOM，async render 等待全部资源后返回
-- renderer/designer 内置所有内置物料，消费者无需手动注册
-- 数据源注册从 core 层移入 designer 层
+当前架构基线：
+
+- `designer` 是完整工作台，不只是画布组件
+- `designer` 采用顶层双栏 + 画布内窗口系统，而不是固定三栏布局
+- `viewer` 是独立运行时，可被设计器通过 iframe 嵌入，也可被宿主独立使用
+- Schema 是文档模型，覆盖页面、辅助线、元素、绑定、动画和分页语义
+- 数据源系统同时服务字段树展示、绑定、格式规则和批量投放元数据
+- data-table、container、chart、svg、relation 是一级物料类别
+- 模板库是覆盖式工作台能力，第二层工具栏是可配置工具组带
+- 工作台状态、模板状态、运行时状态明确分层，避免混写
 
 ## 目录
 
 | # | 文档 | 说明 |
 |---|------|------|
+| 0 | [对标产品分析](./00-benchmark-report-designer.md) | report-designer 实测结论与约束输入 |
 | 1 | [项目概览](./01-overview.md) | 设计原则、职责边界、技术栈 |
 | 2 | [核心场景](./02-core-scenarios.md) | 适用/不适用场景 |
 | 3 | [Monorepo 包结构](./03-monorepo-structure.md) | 包拆分、依赖关系、消费方式 |
@@ -37,46 +41,26 @@
 | 19 | [测试策略](./19-testing.md) | 单元测试、E2E 测试 |
 | 20 | [性能策略](./20-performance.md) | 架构层预留、性能目标 |
 | 21 | [安全模型](./21-security.md) | 数据路径安全、富文本安全、渲染安全 |
-| 22 | [关键设计决策记录](./22-design-decisions.md) | 历史 ADR + 2026-04-01 收敛增补 |
+| 22 | [关键设计决策记录](./22-design-decisions.md) | 当前统一 ADR 基线与已废弃前提 |
 
 ## 补充说明
 
-- `TemplateSchema` 是内部持久化格式，面向保存与复用，不承诺为外部手写 DSL 合同
-- 未识别物料、自定义编辑器缺失时采用只读占位降级，并保留原始 Schema 数据
-- 绑定缺失在设计器中继续显示占位标签，运行时统一渲染空白并输出非阻断诊断
-- 旋转后的物料以 AABB 参与推移与溢出判断；`lockedPosition` 冲突只做诊断不自动让位
-- `children`/容器能力在 v1 仅作接口预留，不作为正式通用能力
-- 外部图片、背景图、字体等资源只保存引用；上传、缓存、离线和失效恢复不属于框架职责
-- Schema 加载默认最大化可打开；仅顶层结构损坏或恶意路径触发拒绝加载
-- 高于当前库版本的 Schema 采用 best-effort 打开并给出诊断，而不是直接拒绝
-- 运行时 diagnostics 通过 `render()` 参数中的 `onDiagnostic` 回调逐条发出；`render()` 返回值保持 DOM 与测量结果导向
-- 设计器优先充当容错打开器；未知物料、缺失编辑器、资源失效等问题在画布上以明显占位块直接可见
-- 近两版仅稳定最小消费面；`@easyink/renderer` 必须可脱离 `@easyink/designer` 单独使用
-- 构建产物以 ESM 为主，额外提供 CDN 用 IIFE 兼容包，且以 renderer 为更高优先级
-- `render()` 为 async 方法，等待所有资源（字体、图片）加载后返回；单个资源加载失败不阻断，通过诊断回调通知
-- 渲染器根据 `page.unit` 直出对应 CSS 物理单位（mm -> `mm`、pt -> `pt`、inch -> `in`），并自动注入 `@page { size }` 打印样式，单位同样跟随 `page.unit`
-- 设计器使用 Shadow DOM 做样式隔离；渲染器使用局部 `<style>` + 哈希前缀 + 内联样式
-- 两阶段渲染：先在隐藏 DOM 容器中测量 auto-height 物料，再一次性渲染最终 DOM
-- renderer/designer 直接依赖所有内置物料包，消费者无需手动注册
-- 物料包作为独立 npm 内部包组织代码，保留三层子路径导出，但不推荐消费者直接使用
-- 设计器画布不做推移布局，纯坐标定位，也不做溢出诊断；运行时推移是运行时语义
-- 数据源字段树注册移入 designer 层，core 不再包含 DataSourceManager
-- 物料类型定义新增 `causesPush`（是否触发推移）和 `canRotate`（是否可旋转）声明
-- MaterialNode.id 使用 nanoid 生成
-- 跨模板复制粘贴时重新生成 ID，保留绑定路径
-- 设计器对外暴露为 Vue 组件 `<EasyInkDesigner />`，支持 v-model:schema
-- 工作台偏好持久化通过 PreferenceProvider 接口由消费者实现（异步 load/save）
-- 富文本物料 props.content 存储纯 HTML 字符串，属性面板中以源码编辑方式编辑
-- 富文本 sanitize 由业务方负责，框架不内置 sanitizer
-- 对齐/分布操作修改声明坐标，推移是运行时叠加效果
+- EasyInk 当前优先对齐 `fixed-page` 文档/报表场景，连续流式和标签模式保留在同一架构内扩展
+- 设计器中的工作台布局、面板开关、激活面板、模板库状态属于工作台状态，不进入 Schema
+- 预览器会独立完成字体加载、数据加载、分页、缩略图和打印导出，不复用画布 DOM
+- 数据绑定不再只记录裸路径；模板中应保存数据源引用、字段路径和格式规则元数据
+- 表格类物料拥有独立内部模型，不按“普通矩形元素 + 文本子元素”处理
+- 样例模板库是产品能力的一部分，同时也是回归测试资产库
+- 未识别物料、缺失数据、缺失字体、渲染失败都必须以可见诊断暴露，不允许静默吞掉
 
 ## 快速导航
 
+- **想先看为什么重构?** -> [00-benchmark-report-designer](./00-benchmark-report-designer.md)
 - **想了解项目定位?** -> [01-overview](./01-overview.md) + [02-core-scenarios](./02-core-scenarios.md)
 - **想了解代码结构?** -> [03-monorepo-structure](./03-monorepo-structure.md) + [04-layered-architecture](./04-layered-architecture.md)
-- **想了解数据与渲染边界?** -> [05-schema-dsl](./05-schema-dsl.md) + [06-render-pipeline](./06-render-pipeline.md) + [08-datasource](./08-datasource.md)
-- **想了解布局模型?** -> [07-layout-engine](./07-layout-engine.md)
-- **想了解设计器 UI?** -> [10-designer-interaction](./10-designer-interaction.md)
-- **想了解物料拖拽与交互策略?** -> [11-element-system](./11-element-system.md) + [10-designer-interaction](./10-designer-interaction.md)
-- **想了解输出职责边界?** -> [06-render-pipeline](./06-render-pipeline.md) + [15-pdf-pipeline](./15-pdf-pipeline.md)
-- **想了解历史决策?** -> [22-design-decisions](./22-design-decisions.md)
+- **想了解模板模型?** -> [05-schema-dsl](./05-schema-dsl.md) + [08-datasource](./08-datasource.md)
+- **想了解预览与分页?** -> [06-render-pipeline](./06-render-pipeline.md) + [07-layout-engine](./07-layout-engine.md)
+- **想了解设计器工作台?** -> [10-designer-interaction](./10-designer-interaction.md)
+- **想了解物料体系?** -> [11-element-system](./11-element-system.md)
+- **想了解命令与历史?** -> [12-command-undo-redo](./12-command-undo-redo.md)
+- **想了解关键取舍?** -> [22-design-decisions](./22-design-decisions.md)

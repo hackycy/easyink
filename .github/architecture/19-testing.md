@@ -6,9 +6,9 @@
 
 | 模块 | 测试重点 |
 |------|----------|
-| SchemaEngine | Schema CRUD、校验、遍历、序列化 |
-| LayoutEngine | y 排序、累计推移、位置锁定、auto height 估算、overflow 诊断 |
-| DataResolver | 扁平路径解析、点路径解析、同源约束、容错策略 |
+| SchemaStore | DocumentSchema CRUD、校验、遍历、序列化 |
+| PagePlanner / LayoutEngine | 页面计划、区域划分、表格分页、overflow 诊断 |
+| DataSourceResolver | 路径解析、usage 解释、数据源容错策略 |
 | CommandManager | 撤销/重做、命令合并、事务 |
 | UnitManager | 单位转换精度 |
 | MigrationRegistry | 版本迁移链路 |
@@ -18,19 +18,19 @@
 覆盖关键用户路径：
 
 ```
-1. 加载模板 → 传入展示值数据 → 渲染预览 → 验证 DOM 输出
-2. 设计器打开 → 添加物料 → 设置属性 → 导出 Schema
+1. 加载模板 → 传入数据源/调试数据 → 打开 Viewer → 验证页面预览输出
+2. 设计器打开 → 添加元素 → 设置属性 → 导出 Schema
 3. 设计器打开 → 绑定字段 → 删除绑定 → 验证静态值恢复显示
-4. 设计器打开 → data-table 绑定对象数组列 → 验证同源约束
-5. 加载动态高度模板 → 验证后续物料整体下推与 overflow 提示
+4. 设计器打开 → `table-data` 绑定集合字段 → 验证主数据源和相对字段约束
+5. 加载多页模板 → 验证 Viewer 分页结果、重复表头与 overflow 提示
 6. 设计器打开 → 多次操作 → 撤销/重做 → 验证状态
 ```
 
 ## 19.3 明确不测的核心职责
 
 - 模板动态计算
-- PDF 产物生成
-- 图片导出产物
+- 具体 PDF 引擎实现
+- 具体图片导出引擎实现
 - 物理打印设备可扫描性
 
 这些能力不属于当前核心承诺，应由各业务输出链路自行验证。
@@ -43,7 +43,7 @@
   "test": {
     "workspace": [
       "packages/core",
-      "packages/renderer",
+      "packages/viewer",
       "packages/designer"
     ]
   }

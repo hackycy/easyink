@@ -1,128 +1,103 @@
-# 7. 布局引擎
+# 7. 布局与分页引擎
 
-## 7.1 坐标推移布局模型
+EasyInk 的新布局引擎不再是“单页坐标推移器”，而是“页面计划 + 容器内部布局 + 表格分页器”的组合系统。
 
-EasyInk 不再区分传统意义上的 `absolute` 与 `flow` 两套 DSL。所有物料都存储明确的坐标和尺寸，但布局引擎在渲染时会基于 **y 坐标排序 + 累积高度差** 对后续物料做整体下推。
+## 7.1 三层布局职责
 
-核心语义：
+### 页面计划层
 
-- 每个物料都拥有基础坐标 `x / y`。
-- 默认情况下，内容变高的物料会把其后方物料整体向下推。
-- “后方”按 `y` 坐标升序判定；若 `y` 相同，则按 `materials` 数组顺序判定。
-- 推移不区分左右列，只要位于后方，就整体下移。
-- 旋转后的物料按轴对齐包围盒（AABB）参与碰撞、推移与 overflow 计算。
-- 需要固定不动的物料必须显式标记为位置锁定，否则默认参与推移。
-- 被锁定物料若与后续内容发生重叠，系统保留重叠结果并输出诊断，不自动尝试二次让位。
-- 不支持自动分页，也不支持纸张自动延长。
+- 决定文档是 `fixed`、`stack` 还是 `label`
+- 决定页数、分页断点、空白页策略、复制份数和标签列数
 
-```
-┌─────────────────────────────────────┐
-│  Page                               │
-│  ┌────────────────────────────────┐ │
-│  │  y=20   标题                    │ │
-│  │  y=40   数据表格（高度增长）      │ │
-│  │  y=90   签名区  ──被整体下推──▶  │ │
-│  │  y=110  备注区  ──被整体下推──▶  │ │
-│  └────────────────────────────────┘ │
-└─────────────────────────────────────┘
-```
+### 区域布局层
 
-## 7.2 布局计算流程
+- 在单页内部处理页头、正文、页尾、编辑区、多栏区域
+- 为容器、表格、图表等结构性物料划定可用区域
+
+### 物料布局层
+
+- 普通元素按绝对坐标放置
+- 容器内部管理子元素
+- data-table 自己负责行列布局、分页与重复头
+
+## 7.2 页面模式
 
 ```typescript
-class LayoutEngine {
-  constructor(options?: LayoutEngineOptions)
+type PageMode = 'fixed' | 'stack' | 'label'
+```
 
-  /**
-   * 1. 解析页面尺寸和内容区域
-   * 2. 按 y 坐标升序对物料排序
-   * 3. 处理 auto 尺寸：width auto → 内容区宽度，height auto → 估算值 + needsMeasure
-   * 4. 对未锁定物料应用前序累计 delta，得到最终 y
-   * 5. 计算旋转后的 bounding box
-   * 6. 统计内容底部并给出 overflow 诊断
-   */
-  calculate(schema: TemplateSchema, data?: Record<string, unknown>): LayoutResult
+### `fixed`
 
-  resolvePageDimensions(page: PageSettings): { width: number, height: number }
+- 典型合同、报表、多页文档
+- 页面高度固定
+- 支持缩略图与页切换
 
-  resolveAutoHeight(material: MaterialNode, contentArea: ContentArea, data?: Record<string, unknown>): { height: number, needsMeasure: boolean }
+### `stack`
 
-  computeBoundingBox(x: number, y: number, w: number, h: number, rotation?: number): BoundingBox
-}
+- 典型连续纸、小票、长文档流式排版
+- 允许内容按段连续堆叠
+- 可转成多段预览，但不以固定页为中心模型
 
-const PAPER_SIZES: Record<string, { width: number, height: number }>
+### `label`
 
-interface LayoutEngineOptions {
-  /** auto height 元素的默认估算高度（页面单位，默认 30） */
-  defaultAutoHeight?: number
-}
+- 标签纸、多栏批量打印
+- 需要列数、间距、复制份数
 
-interface LayoutResult {
-  elements: Map<string, ComputedLayout>
-  /** 内容实际底部位置 */
-  contentBottom: number
-  /** 是否超出声明纸张高度 */
-  overflowed: boolean
-  /** 布局诊断（锁定重叠、估算偏差、越界等） */
+## 7.3 data-table 专项布局
+
+data-table 需要独立的分页器，而不是依赖通用元素推移。
+
+它至少要解决：
+
+- 表头重复
+- 数据区逐页切分
+- 合计区尾页显示
+- 空行填充
+- 单行缩放
+- 动态列和列宽分配
+- 多栏排版下的表格宽度适配
+
+```typescript
+interface TableLayoutResult {
+  pages: TablePageSlice[]
   diagnostics: LayoutDiagnostic[]
 }
 
-interface LayoutDiagnostic {
-  code: string
-  message: string
-  materialId?: string
-  relatedMaterialIds?: string[]
-}
-
-interface ComputedLayout {
-  x: number
-  y: number
-  width: number
-  height: number
-  boundingBox: { x: number, y: number, width: number, height: number }
-  needsMeasure: boolean
-  /** 应用到该物料的累计推移量 */
-  deltaY: number
+interface TablePageSlice {
+  pageIndex: number
+  rows: TableRowSchema[]
+  includeHeader: boolean
+  includeTotal: boolean
 }
 ```
 
-## 7.3 锁定位置语义
+## 7.4 设计器与 Viewer 的布局差异
 
-- 位置锁定是布局语义，不等同于设计器中的编辑锁定。
-- 位置锁定物料保留声明坐标，不受前序动态高度影响。
-- 典型适用场景：页头徽标、背景章、固定角标。
-- 不建议对需要“贴底”语义的业务使用位置锁定，因为引擎不提供底部锚定模型。
+### 设计器画布
 
-## 7.4 causesPush 物料属性
+- 使用声明坐标编辑元素
+- 关注选区、吸附、辅助线和可视反馈
+- 不要求完整执行 Viewer 分页
 
-布局引擎通过物料类型定义上的 `causesPush` 属性判断物料是否会触发推移：
+### Viewer
 
-- `causesPush = true`：该物料的实际高度（AABB height）与声明高度的差值会作为 delta 传递给后续未锁定物料
-- `causesPush = false`：该物料不参与推移计算，无论其实际高度如何变化都不影响后续物料
-- 采用**白名单模式**：只有特定物料类型声明 causesPush=true，其他默认 false
+- 负责真实页面计划
+- 负责固定页、流式页和标签页的最终结果
+- 负责表格分页、重复头和空白页语义
 
-**内置物料 causesPush 配置：**
+这意味着设计器看到的是“编辑态几何”，Viewer 看到的是“运行态文档”。
 
-| 物料 | causesPush | 说明 |
-|--------|-----------|------|
-| text | true | 文本高度变化配合推移 |
-| rich-text | true | 富文本高度变化配合推移 |
-| image | true | 图片高度变化配合推移 |
-| barcode | true | 条码高度变化配合推移 |
-| data-table | true | 数据表格行数影响后续布局 |
-| table | true | 静态表格行高影响后续布局 |
-| rect | false | 装饰性物料，不影响布局 |
-| line | false | 装饰性物料，不影响布局 |
+## 7.5 诊断原则
 
-## 7.5 设计器与运行时的布局差异
+布局引擎的任务不是偷偷修复一切，而是：
 
-- **设计器画布不执行推移布局**，所有物料按声明坐标绝对定位。设计器的核心价值是绑定和属性编辑，不是布局预览。
-- **运行时渲染器执行完整推移计算**，包含两阶段渲染（离屏测量 + 最终渲染）。
-- 设计器中看到的布局可能与运行时不同（特别是有 auto-height 物料和数据驱动表格时），这是预期行为。
-- 对齐/分布等设计器操作修改声明坐标值，推移是运行时叠加效果。
+- 先给出稳定结果
+- 再把冲突暴露出来
 
-## 7.6 诊断优先于自动修复
+典型诊断包括：
 
-- 坐标推移模型优先追求规则简单、可预测，而不是在每类冲突上引入隐式智能修复。
-- `lockedPosition` 与后续内容重叠时，布局结果保持原样，由设计器可视提示和运行时诊断暴露风险。
-- auto-height 估算与真实测量长期偏差应通过优化物料估算逻辑修正，而不是引入第二套隐藏重排规则。
+- 容器溢出
+- 表格列宽无法分配
+- 页尾区域不足
+- label 模式下超出列数限制
+- 元素被裁切或越界

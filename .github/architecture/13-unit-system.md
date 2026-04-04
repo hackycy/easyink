@@ -2,18 +2,19 @@
 
 ## 13.1 设计决策
 
-**Schema 存储用户选择的单位值**，不做归一化转换。`page.unit` 声明了整个模板使用的单位，所有元素的坐标和尺寸数值都基于该单位。
+**Schema 存储用户选择的单位值**，不做归一化转换。顶层 `unit` 声明了整个文档使用的单位，所有元素的坐标和尺寸数值都基于该单位。
 
 ```typescript
 // Schema 中的存储方式
 {
+  unit: 'mm',
   page: {
-    unit: 'mm',            // 用户选择的单位
-    paper: { type: 'custom', width: 210, height: 297 },  // 值的单位是 mm
-    margins: { top: 10, right: 10, bottom: 10, left: 10 }, // 值的单位是 mm
+    width: 210,
+    height: 297,
   },
-  materials: [{
-    layout: { x: 15, y: 20, width: 50, height: 10 }, // 值的单位是 mm
+  elements: [{
+    x: 15, y: 20, width: 50, height: 10, // 值的单位是 mm
+    props: {},
   }]
 }
 ```
@@ -59,11 +60,11 @@ const UNIT_CONVERSIONS = {
 
 ## 13.3 渲染时转换
 
-> 渲染器根据 `page.unit` 直出对应 CSS 物理单位（mm -> CSS `mm`、pt -> CSS `pt`、inch -> CSS `in`），不做 px 换算。设计器画布同样跟随 page.unit 定位 + CSS `transform: scale()` 控制缩放。屏幕预览不做 DPI 补偿，打印保真是唯一硬目标。
+> Viewer 根据顶层 `unit` 直出对应 CSS 物理单位（mm -> CSS `mm`、pt -> CSS `pt`、inch -> CSS `in`），不做 px 换算。设计器画布同样跟随 `unit` 定位 + CSS `transform: scale()` 控制缩放。屏幕预览不做 DPI 补偿，打印保真是唯一硬目标。
 
-### 13.3.1 渲染器 CSS 物理单位直出
+### 13.3.1 Viewer CSS 物理单位直出
 
-渲染器输出的 DOM 中，所有坐标和尺寸直接使用 `page.unit` 对应的 CSS 单位：
+Viewer 输出的 DOM 中，所有坐标和尺寸直接使用顶层 `unit` 对应的 CSS 单位：
 
 ```css
 /* mm 模板的渲染产物 */
@@ -94,7 +95,7 @@ const UNIT_CONVERSIONS = {
 }
 ```
 
-| page.unit | CSS 单位后缀 | 打印精度 |
+| unit | CSS 单位后缀 | 打印精度 |
 |-----------|-------------|----------|
 | `mm`      | `mm`        | 浏览器原生支持，最可靠 |
 | `pt`      | `pt`        | 浏览器原生支持（1pt = 1/72in） |
@@ -107,7 +108,7 @@ const UNIT_CONVERSIONS = {
 
 ### 13.3.2 @page 打印样式
 
-渲染器自动注入 `@page` 规则，单位跟随 `page.unit`：
+Viewer 自动注入 `@page` 规则，单位跟随顶层 `unit`：
 
 ```css
 /* mm 模板 */
@@ -122,7 +123,7 @@ const UNIT_CONVERSIONS = {
 
 ### 13.3.3 设计器画布单位
 
-设计器画布元素跟随 `page.unit` 定位，通过 CSS `transform: scale(zoom)` 控制缩放倍率：
+设计器画布元素跟随顶层 `unit` 定位，通过 CSS `transform: scale(zoom)` 控制缩放倍率：
 
 ```
 画布容器 {
@@ -131,19 +132,19 @@ const UNIT_CONVERSIONS = {
 }
 
 /* 以 mm 模板为例 */
-物料元素 {
-  left: {layout.x}mm;
-  top: {layout.y}mm;
-  width: {layout.width}mm;
-  height: {layout.height}mm;
+元素节点 {
+  left: {x}mm;
+  top: {y}mm;
+  width: {width}mm;
+  height: {height}mm;
 }
 
 /* 以 pt 模板为例 */
-物料元素 {
-  left: {layout.x}pt;
-  top: {layout.y}pt;
-  width: {layout.width}pt;
-  height: {layout.height}pt;
+元素节点 {
+  left: {x}pt;
+  top: {y}pt;
+  width: {width}pt;
+  height: {height}pt;
 }
 ```
 
@@ -151,7 +152,7 @@ const UNIT_CONVERSIONS = {
 
 ### 13.3.4 鼠标坐标与页面单位互转
 
-设计器需要将屏幕像素坐标转换为 `page.unit` 对应的值。CSS 标准定义了固定映射：
+设计器需要将屏幕像素坐标转换为顶层 `unit` 对应的值。CSS 标准定义了固定映射：
 
 | 单位   | 与 CSS px 的关系    | unitFactor |
 |--------|--------------------|-----------|
@@ -160,11 +161,11 @@ const UNIT_CONVERSIONS = {
 | inch   | 1in = 96 px        | 1         |
 
 ```typescript
-// 屏幕 px -> page unit
+// 屏幕 px -> document unit
 const cssPixelsPerUnit = 96 / unitFactor  // mm: 3.7795, pt: 1.3333, in: 96
 const unitValue = (screenPx - canvasOffset + scrollOffset) / zoom / cssPixelsPerUnit
 
-// page unit -> 屏幕 px（用于标尺、吸附等）
+// document unit -> 屏幕 px（用于标尺、吸附等）
 const screenPx = unitValue * cssPixelsPerUnit * zoom + canvasOffset - scrollOffset
 ```
 
@@ -173,12 +174,12 @@ const screenPx = unitValue * cssPixelsPerUnit * zoom + canvasOffset - scrollOffs
 ### 13.3.5 UnitManager 保留用途
 
 UnitManager 仍用于：
-- 设计器鼠标交互坐标转换（屏幕 px <-> page unit）
+- 设计器鼠标交互坐标转换（屏幕 px <-> document unit）
 - 标尺刻度渲染（unit 值 -> 屏幕 px）
 - 属性面板数值显示与输入（格式化带单位后缀）
 - 单位切换时的 schema 数值批量转换
 
-但**渲染路径**不经过 UnitManager 的 toPixels() 转换，渲染器直接读 `page.unit` 输出对应 CSS 单位。
+但**渲染路径**不经过 UnitManager 的 toPixels() 转换，Viewer 直接读顶层 `unit` 输出对应 CSS 单位。
 
 ## 13.4 精度策略
 
@@ -190,13 +191,13 @@ UnitManager 仍用于：
 
 ### 13.4.2 CSS 标准反算公式
 
-两阶段渲染中，离屏测量用 `page.unit` 对应的 CSS 物理单位定位 DOM，测量后通过 `getBoundingClientRect()` 取 px 值反算回 page unit：
+两阶段渲染中，离屏测量用顶层 `unit` 对应的 CSS 物理单位定位 DOM，测量后通过 `getBoundingClientRect()` 取 px 值反算回 document unit：
 
 ```typescript
 // getBoundingClientRect 返回 CSS px
 const pxHeight = el.getBoundingClientRect().height
 
-// 反算回 page unit（保留 3 位小数）
+// 反算回 document unit（保留 3 位小数）
 const UNIT_FACTOR: Record<string, number> = { mm: 25.4, pt: 72, inch: 1 }
-const measuredHeight = Math.round(pxHeight * UNIT_FACTOR[pageUnit] / 96 * 1000) / 1000
+const measuredHeight = Math.round(pxHeight * UNIT_FACTOR[unit] / 96 * 1000) / 1000
 ```

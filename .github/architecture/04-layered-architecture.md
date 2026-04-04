@@ -1,152 +1,133 @@
 # 4. 分层架构
 
+EasyInk 新分层的关键点是：设计器和 Viewer 是两个明确协作的上层，而不是“设计器包套住一个渲染器包”。
+
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Consumer Application                  │
-├─────────────────────────────────────────────────────────┤
-│  @easyink/designer  (Vue 组件 + Composables)            │
-│  ┌──────────────────────────────────────────────────┐   │
-│  │  Workbench：顶部双栏、Logo、物料栏、系统操作栏    │   │
-│  │  Workspace：画布、浮动窗口、窗口状态、偏好持久化  │   │
-│  │  交互层：拖拽、对齐、选择、缩放、旋转、绑定       │   │
-│  └──────────────────────────────────────────────────┘   │
-├─────────────────────────────────────────────────────────┤
-│  @easyink/renderer  (DOM 渲染)                         │
-│  ┌──────────────────────────────────────────────────┐   │
-│  │  DOMRenderer：Schema + data → DOM 节点树         │   │
-│  │  MeasureLayer：文本/表格测量、溢出诊断           │   │
-│  │  MaterialRendererRegistry：物料渲染函数注册表     │   │
-│  └──────────────────────────────────────────────────┘   │
-├─────────────────────────────────────────────────────────┤
-│  @easyink/core  (框架无关的核心引擎)                   │
-│  ┌──────────────────────────────────────────────────┐   │
-│  │  SchemaEngine：Schema CRUD、校验、遍历           │   │
-│  │  LayoutEngine：坐标推移布局计算                  │   │
-│  │  CommandManager：撤销/重做栈                     │   │
-│  │  UnitManager：单位存储与转换                     │   │
-│  │  MaterialTypeDefinition / MaterialRegistry       │   │
-│  │  MigrationRegistry                               │   │
-│  └──────────────────────────────────────────────────┘   │
-├─────────────────────────────────────────────────────────┤
-│  @easyink/shared  (类型 + 工具)                       │
-└─────────────────────────────────────────────────────────┘
-```
-
-## 职责切分
-
-- `@easyink/core` 负责描述模板、计算布局，不承担模板动态计算、导出链路和数据源管理。
-- `@easyink/renderer` 只负责把 Schema 渲染为 DOM，并报告测量结果与溢出状态；它必须可以在不引入设计器的前提下单独消费。renderer 直接依赖所有内置物料包，消费者无需手动注册物料。
-- `Consumer Application` 负责准备展示值数据，并基于 DOM 自行决定打印、导出 PDF 或图片。
-- `@easyink/designer` 负责提供开箱即用且默认美观的设计工作台，记录字段来源和静态属性，不在设计时填充真实数据。designer 同样直接依赖所有内置物料包。数据源字段树注册在 designer 层完成。
-- 设计器中的窗口显示/隐藏、位置、激活态、最小化状态属于工作台偏好，不进入 Schema，也不进入撤销/重做栈。
-- 设计器画布不执行推移布局，所有物料按声明坐标绝对定位；推移仅在运行时渲染器中生效。
-
-## 4.1 外部稳定面
-
-近两版对外只稳定最小消费面：
-
-- `@easyink/core` 的 Schema 加载、迁移与基础遍历能力
-- `@easyink/renderer` 的最小 DOM 渲染入口与诊断事件流
-- `@easyink/designer` 的基础设计器入口
-
-以下能力继续视为仓库内可演进抽象，不承诺近期稳定兼容：
-
-- `TemplateSchema` 的外部手写 DSL 语义
-- `PropSchema` 的函数式协议细节
-- 自定义编辑器注册、内部插件钩子、第三方物料包契约
-
-## 设计器工作台子层
-
-`@easyink/designer` 在 UI 层内进一步拆为三个协作子层：
-
-- `WorkbenchChrome`：顶部双栏结构。左侧承载 Logo 与物料栏，右侧承载撤销、重做、删除、缩放以及各工作台窗口开关，默认采用高密度 Icon 按钮。
-- `CanvasWorkspace`：画布所在的主工作区，窗口仅允许在该区域内浮动与拖拽，不覆盖顶部栏。
-- `WorkspaceWindowSystem`：统一窗口壳层，承载属性、页面设置、结构树、数据源、历史记录、快捷帮助等操作面板；支持标题栏拖拽、点击置顶、最小化与关闭后重开。
-
-## API 暴露风格
-
-### Renderer：工厂函数 + async render
-
-```typescript
-import { createRenderer } from '@easyink/renderer'
-
-const renderer = createRenderer({
-  fontProvider: myFontProvider, // 可选
-})
-
-// render() 是 async 方法，等待所有资源（字体、图片）加载后返回
-// 单个资源加载失败不阻断，通过 onDiagnostic 回调通知
-const result = await renderer.render(schema, preparedDisplayData, container, {
-  onDiagnostic: (event) => {
-    console.warn(`[${event.phase}] ${event.code}`, event)
-  },
-})
-
-if (result.overflowed) {
-  console.warn('template content exceeds declared paper height')
-}
-
-// 使用完毕后释放
-result.dispose()
-renderer.destroy()
+┌─────────────────────────────────────────────────────────────┐
+│                    Consumer Application                    │
+├─────────────────────────────────────────────────────────────┤
+│  @easyink/designer                                         │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │ WorkbenchChrome   WindowSystem  CanvasWorkspace       │  │
+│  │ TemplateLibrary   StatusBar     RegionNavigator       │  │
+│  │ SelectionOverlay  Binding UX    PreviewHost(iframe)   │  │
+│  └───────────────────────────────────────────────────────┘  │
+├─────────────────────────────────────────────────────────────┤
+│  @easyink/viewer                                           │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │ ViewerRuntime   PagePlanner   ThumbnailPipeline       │  │
+│  │ DataLoader      FontLoader    Print/Export Surface    │  │
+│  └───────────────────────────────────────────────────────┘  │
+├───────────────────────────────┬─────────────────────────────┤
+│ @easyink/datasource           │ @easyink/core              │
+│ ┌───────────────────────────┐ │ ┌─────────────────────────┐ │
+│ │ FieldTree                 │ │ │ CommandManager          │ │
+│ │ BindingMeta               │ │ │ Selection / Guides      │ │
+│ │ UsageFormatter            │ │ │ Geometry / Snap         │ │
+│ │ DataAdapter               │ │ │ Pagination / Regions    │ │
+│ └───────────────────────────┘ │ └─────────────────────────┘ │
+├─────────────────────────────────────────────────────────────┤
+│  @easyink/schema + @easyink/material-* + @easyink/shared   │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-**设计要点：**
+## 4.1 分层职责
 
-- `createRenderer()` 返回轻量只读配置实例，无可变全局状态，可安全创建多个实例并发渲染
-- 所有内置物料渲染函数已自动包含，消费者无需手动注册
-- `render()` 返回 `Promise<RenderResult>`，内部依次完成：资源加载 -> 离屏 DOM 测量 -> 布局计算 -> 最终 DOM 渲染
-- diagnostic 通过 `render()` 参数中的 `onDiagnostic` 回调逐条发出
-- 渲染器使用 CSS mm 物理单位直出 DOM，并自动注入 `@page { size }` 打印样式
-- 样式隔离采用局部 `<style>` + 哈希前缀 + 内联样式，不使用 Shadow DOM
+### `schema` 层
 
-### Designer：Vue 组件
+- 只回答“模板长什么样”
+- 不回答“工作台怎么摆”“数据怎么取”“页面怎么打印”
+
+### `core` 层
+
+- 处理命令、历史、选区、几何、辅助线、分页计划、区域划分
+- 处理与 UI 无关的纯规则
+
+### `datasource` 层
+
+- 处理字段树、数据源引用、字段推荐、格式规则、聚合规则
+- 同时被 Designer 和 Viewer 使用
+
+### `viewer` 层
+
+- 接收 Schema 和数据，产出预览页面、缩略图、打印与导出能力
+- 运行时可单独接入宿主，不依赖 Designer
+
+### `designer` 层
+
+- 负责工作台壳层、画布编辑、窗口系统、模板库、状态栏、概览图、历史记录
+- 通过 iframe 预览宿主 Viewer，而不是把所有运行时行为塞在画布里
+
+## 4.2 三种状态模型
+
+EasyInk 明确区分三种状态：
+
+### 模板状态
+
+- 页面、辅助线、元素、绑定、动画、分页配置
+- 存在 Schema 中
+- 可导入导出、可迁移、可进入历史栈
+
+### 工作台状态
+
+- 窗口显隐、位置、尺寸、层级、折叠态、活动面板、模板库筛选、预览面板开关
+- 不进入 Schema
+- 不进入撤销/重做
+- 允许本地持久化
+
+### 运行时状态
+
+- Viewer 当前页、缩略图缓存、字体加载状态、数据请求状态、打印任务状态
+- 不回写模板
+- 生命周期短于模板状态
+
+## 4.3 设计器子层
+
+`@easyink/designer` 内部进一步拆分为：
+
+- `WorkbenchChrome`：两层顶部栏，包含物料直达入口、物料分组入口、全局动作和可配置工具组带
+- `CanvasWorkspace`：设计画布、标尺、辅助线、选区和拖拽层
+- `WindowSystem`：数据源、属性、结构树、历史、动画、调试、资源、暂存等可拖拽窗口
+- `TemplateLibrary`：以内嵌覆盖层形式出现的样例模板库
+- `StatusBar`：焦点、网络、暂存、自动保存等工作台状态反馈
+- `RegionNavigator`：多编辑区或区段型文档的区域切换与区块选择入口
+- `PreviewHost`：iframe Viewer 宿主
+
+## 4.4 对外 API
+
+### Designer
 
 ```vue
 <template>
   <EasyInkDesigner
     v-model:schema="schema"
     :data-sources="dataSources"
-    :font-provider="fontProvider"
+    :sample-library="sampleLibrary"
+    :viewer-adapter="viewerAdapter"
     :preference-provider="preferenceProvider"
-    :locale="locale"
   />
 </template>
-
-<script setup>
-import { EasyInkDesigner } from '@easyink/designer'
-import { ref } from 'vue'
-
-const schema = ref(initialSchema)
-const dataSources = [
-  {
-    displayName: '订单数据',
-    fields: [ /* DataFieldNode[] */ ],
-  },
-]
-</script>
 ```
 
-**设计要点：**
-
-- 设计器对外暴露为 Vue 组件 `<EasyInkDesigner />`
-- Schema 通过 `v-model:schema` 双向绑定，设计器内部修改 Schema 后自动通知消费者
-- 数据源字段树通过 `dataSources` prop 传入（从 core/Engine 层移入 designer 层）
-- 所有内置物料定义、交互策略、渲染函数已自动包含
-- 设计器使用 Shadow DOM 做样式隔离
-- 画布不执行推移布局，纯坐标绝对定位
-- 工作台偏好通过 PreferenceProvider 接口由消费者实现持久化
-
-### PreferenceProvider 接口
+### Viewer
 
 ```typescript
-interface PreferenceProvider {
-  load(): Promise<WorkspacePreferences | null>
-  save(state: WorkspacePreferences): Promise<void>
-}
+import { createViewer } from '@easyink/viewer'
 
-interface WorkspacePreferences {
-  windows: WorkspaceWindowState[]
-  activeWindowId?: string
-}
+const viewer = createViewer({ mode: 'fixed' })
+
+await viewer.open({
+  schema,
+  data,
+  dataSources,
+})
+
+await viewer.print()
+await viewer.exportDocument()
 ```
+
+API 设计要点：
+
+- `viewer` 是独立消费面
+- `designer` 内部复用 `viewer`，但不把 Viewer 细节暴露成 Designer 的内部实现细节
+- 数据源协议由 `datasource` 层统一，不再只通过 Designer 私有 props 传递
