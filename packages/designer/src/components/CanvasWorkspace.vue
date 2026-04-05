@@ -1,14 +1,19 @@
 <script setup lang="ts">
 import type { MarqueeRect } from '../composables/use-marquee-select'
 import type { ResizeHandle } from '../composables/use-element-resize'
-import { computed, onMounted, provide, ref } from 'vue'
+import { computed, onMounted, onUnmounted, provide, ref } from 'vue'
 import { useDesignerStore } from '../composables'
 import { useElementDrag } from '../composables/use-element-drag'
 import { useElementResize } from '../composables/use-element-resize'
+import { useElementRotate } from '../composables/use-element-rotate'
 import { useMarqueeSelect } from '../composables/use-marquee-select'
+import { useDatasourceDrop } from '../composables/use-datasource-drop'
 import { CANVAS_CONTAINER_KEY } from './canvas-container'
 import GridOverlay from './GridOverlay.vue'
 import SnapLineOverlay from './SnapLineOverlay.vue'
+import GuideOverlay from './GuideOverlay.vue'
+import CanvasRuler from './CanvasRuler.vue'
+import CanvasContextMenu from './CanvasContextMenu.vue'
 import WorkspaceWindow from './WorkspaceWindow.vue'
 import PropertiesPanel from './PropertiesPanel.vue'
 import StructureTree from './StructureTree.vue'
@@ -22,6 +27,11 @@ const containerRef = ref<HTMLElement | null>(null)
 const pageRef = ref<HTMLElement | null>(null)
 const scrollRef = ref<HTMLElement | null>(null)
 const marqueeRect = ref<MarqueeRect | null>(null)
+const guideOverlayRef = ref<InstanceType<typeof GuideOverlay> | null>(null)
+const contextMenuRef = ref<InstanceType<typeof CanvasContextMenu> | null>(null)
+const rulerRef = ref<InstanceType<typeof CanvasRuler> | null>(null)
+const cursorPos = ref<{ x: number, y: number } | null>(null)
+const rulerHover = ref<{ axis: 'x' | 'y', position: number } | null>(null)
 
 provide(CANVAS_CONTAINER_KEY, () => containerRef.value)
 
@@ -40,10 +50,20 @@ const { onHandlePointerDown } = useElementResize({
   getPageEl: () => pageRef.value,
 })
 
+const { onRotatePointerDown } = useElementRotate({
+  store,
+  getPageEl: () => pageRef.value,
+})
+
 const { onCanvasPointerDown } = useMarqueeSelect({
   store,
   getPageEl: () => pageRef.value,
   marqueeRef: marqueeRect,
+})
+
+const { onDragOver: onPageDragOver, onDrop: onPageDrop } = useDatasourceDrop({
+  store,
+  getPageEl: () => pageRef.value,
 })
 
 // ─── Computed ────────────────────────────────────────────────────
@@ -117,6 +137,10 @@ function handleResizePointerDown(e: PointerEvent, elementId: string, handle: Res
   onHandlePointerDown(e, elementId, handle)
 }
 
+function handleRotatePointerDown(e: PointerEvent, elementId: string) {
+  onRotatePointerDown(e, elementId)
+}
+
 function handleCursorForHandle(handle: ResizeHandle): string {
   const map: Record<ResizeHandle, string> = {
     nw: 'nwse-resize',
@@ -131,11 +155,51 @@ function handleCursorForHandle(handle: ResizeHandle): string {
   return map[handle]
 }
 
+function handleContextMenu(e: MouseEvent) {
+  contextMenuRef.value?.onContextMenu(e)
+}
+
+function handleGuideDragStart(direction: 'x' | 'y', e: PointerEvent) {
+  guideOverlayRef.value?.onGuideDragStart(direction, e)
+}
+
+function handleGuideCreate(axis: 'x' | 'y', position: number) {
+  guideOverlayRef.value?.createGuideAt(axis, position)
+}
+
+function handleScroll() {
+  const el = scrollRef.value
+  if (!el)
+    return
+  store.workbench.viewport.scrollLeft = el.scrollLeft
+  store.workbench.viewport.scrollTop = el.scrollTop
+}
+
+function handleMouseMove(e: MouseEvent) {
+  const el = containerRef.value
+  if (!el)
+    return
+  const rect = el.getBoundingClientRect()
+  cursorPos.value = {
+    x: e.clientX - rect.left,
+    y: e.clientY - rect.top,
+  }
+}
+
+function handleMouseLeave() {
+  cursorPos.value = null
+}
+
+function handleRulerHover(hover: { axis: 'x' | 'y', position: number } | null) {
+  rulerHover.value = hover
+}
+
 // ─── Lifecycle ───────────────────────────────────────────────────
 
 onMounted(() => {
   const el = containerRef.value
   if (!el) return
+  const rulerSize = 20
   const rect = el.getBoundingClientRect()
   for (const win of store.workbench.windows) {
     if (win.x < 0) {
@@ -144,20 +208,44 @@ onMounted(() => {
     if (win.y < 0) {
       win.y = rect.height - win.height - 12
     }
+    // Clamp so windows don't overlap the ruler area
+    win.x = Math.max(rulerSize, win.x)
+    win.y = Math.max(rulerSize, win.y)
   }
+  // Sync initial scroll position
+  if (scrollRef.value) {
+    handleScroll()
+  }
+})
+
+onUnmounted(() => {
+  cursorPos.value = null
 })
 </script>
 
 <template>
-  <div ref="containerRef" class="ei-canvas-workspace">
+  <div ref="containerRef" class="ei-canvas-workspace" @contextmenu="handleContextMenu" @mousemove="handleMouseMove" @mouseleave="handleMouseLeave">
+    <!-- Rulers -->
+    <CanvasRuler ref="rulerRef" :cursor-pos="cursorPos" @guide-drag-start="handleGuideDragStart" @guide-create="handleGuideCreate" @ruler-hover="handleRulerHover" />
+
     <div
       ref="scrollRef"
       class="ei-canvas-scroll"
       @pointerdown="handleScrollPointerDown"
+      @scroll="handleScroll"
     >
-      <div ref="pageRef" class="ei-canvas-page" :style="pageStyle">
+      <div
+        ref="pageRef"
+        class="ei-canvas-page"
+        :style="pageStyle"
+        @dragover="onPageDragOver"
+        @drop="onPageDrop"
+      >
         <!-- Grid overlay -->
         <GridOverlay />
+
+        <!-- Guide overlay -->
+        <GuideOverlay ref="guideOverlayRef" :preview-guide="rulerHover" />
 
         <!-- Elements -->
         <div
@@ -182,10 +270,16 @@ onMounted(() => {
           @click="handleElementClick($event, el.id)"
         >
           <div class="ei-canvas-element__content">
+            <!-- Binding badge -->
+            <span
+              v-if="el.binding"
+              class="ei-canvas-element__bind-badge"
+              :title="Array.isArray(el.binding) ? el.binding.map(b => b.fieldLabel || b.fieldPath).join(', ') : (el.binding.fieldLabel || el.binding.fieldPath)"
+            />
             {{ el.type }}
           </div>
 
-          <!-- Selection border & resize handles -->
+          <!-- Selection border, resize handles & rotation handle -->
           <template v-if="store.selection.has(el.id)">
             <div class="ei-canvas-element__selection-border" />
 
@@ -198,6 +292,15 @@ onMounted(() => {
               :style="{ cursor: handleCursorForHandle(handle) }"
               @pointerdown="handleResizePointerDown($event, el.id, handle)"
             />
+
+            <!-- Rotation handle -->
+            <div
+              class="ei-canvas-element__rotate-handle"
+              @pointerdown="handleRotatePointerDown($event, el.id)"
+            >
+              <div class="ei-canvas-element__rotate-line" />
+              <div class="ei-canvas-element__rotate-dot" />
+            </div>
           </template>
         </div>
 
@@ -234,6 +337,9 @@ onMounted(() => {
         </WorkspaceWindow>
       </template>
     </div>
+
+    <!-- Context menu -->
+    <CanvasContextMenu ref="contextMenuRef" />
   </div>
 </template>
 
@@ -246,13 +352,15 @@ onMounted(() => {
 }
 
 .ei-canvas-scroll {
-  padding: 40px;
+  padding: 40px 40px 40px 60px;
   display: inline-block;
   min-width: 100%;
   min-height: 100%;
   overflow: auto;
   position: absolute;
   inset: 0;
+  top: 20px;
+  left: 20px;
 }
 
 .ei-canvas-page {
@@ -286,10 +394,21 @@ onMounted(() => {
   border: 1px dashed var(--ei-border-color, #d0d0d0);
   box-sizing: border-box;
   overflow: hidden;
+  position: relative;
 }
 
 .ei-canvas-element--selected .ei-canvas-element__content {
   border-color: var(--ei-primary, #1890ff);
+}
+
+.ei-canvas-element__bind-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ei-success, #52c41a);
 }
 
 .ei-canvas-element__selection-border {
@@ -356,6 +475,35 @@ onMounted(() => {
   top: 50%;
   right: -4px;
   transform: translateY(-50%);
+}
+
+/* ─── Rotation Handle ────────────────────────────────────────── */
+
+.ei-canvas-element__rotate-handle {
+  position: absolute;
+  top: -30px;
+  left: 50%;
+  transform: translateX(-50%);
+  cursor: crosshair;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.ei-canvas-element__rotate-line {
+  width: 1px;
+  height: 20px;
+  background: var(--ei-primary, #1890ff);
+}
+
+.ei-canvas-element__rotate-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1.5px solid var(--ei-primary, #1890ff);
+  box-sizing: border-box;
 }
 
 /* ─── Marquee Selection ───────────────────────────────────────── */

@@ -25,10 +25,11 @@ export function useWindowDrag(
 
     function onMove(ev: PointerEvent) {
       const rect = container!.getBoundingClientRect()
+      const rulerSize = 20
       const maxX = rect.width - win.width
       const maxY = rect.height - 32 // keep at least titlebar visible
-      win.x = Math.max(0, Math.min(maxX, ev.clientX - startX))
-      win.y = Math.max(0, Math.min(maxY, ev.clientY - startY))
+      win.x = Math.max(rulerSize, Math.min(maxX, ev.clientX - startX))
+      win.y = Math.max(rulerSize, Math.min(maxY, ev.clientY - startY))
     }
 
     function onUp() {

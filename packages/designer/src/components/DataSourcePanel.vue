@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import type { DataSourceDescriptor } from '@easyink/datasource'
+import type { DataFieldNode, DataSourceDescriptor } from '@easyink/datasource'
+import type { DatasourceFieldDragData } from '../composables/use-datasource-drop'
 import { computed } from 'vue'
 import { useDesignerStore } from '../composables'
+import { DATASOURCE_DRAG_MIME } from '../composables/use-datasource-drop'
 
 const store = useDesignerStore()
 
@@ -10,6 +12,22 @@ const sources = computed<DataSourceDescriptor[]>(() => {
 })
 
 const hasData = computed(() => sources.value.length > 0)
+
+function onFieldDragStart(e: DragEvent, source: DataSourceDescriptor, field: DataFieldNode) {
+  if (!e.dataTransfer)
+    return
+  const data: DatasourceFieldDragData = {
+    sourceId: source.id,
+    sourceName: source.name,
+    sourceTag: source.tag,
+    fieldPath: field.path || field.name,
+    fieldKey: field.key,
+    fieldLabel: field.title || field.name,
+    use: field.use,
+  }
+  e.dataTransfer.setData(DATASOURCE_DRAG_MIME, JSON.stringify(data))
+  e.dataTransfer.effectAllowed = 'link'
+}
 </script>
 
 <template>
@@ -28,6 +46,7 @@ const hasData = computed(() => sources.value.length > 0)
           :key="field.name"
           class="ei-datasource-panel__field"
           draggable="true"
+          @dragstart="onFieldDragStart($event, source, field)"
         >
           <span class="ei-datasource-panel__field-name">{{ field.title || field.name }}</span>
           <span v-if="field.use" class="ei-datasource-panel__field-use">{{ field.use }}</span>

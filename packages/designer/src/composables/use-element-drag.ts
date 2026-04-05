@@ -93,6 +93,8 @@ export function useElementDrag(ctx: ElementDragContext) {
         const refY = refOrig.y + dy
 
         const threshold = snapState.threshold
+        let snappedAxisX = false
+        let snappedAxisY = false
 
         // Grid snap
         if (snapState.gridSnap && store.schema.page.grid?.enabled) {
@@ -103,26 +105,49 @@ export function useElementDrag(ctx: ElementDragContext) {
             const snappedY = snapToGrid(refY, gridH)
             if (Math.abs(snappedX - refX) <= threshold) {
               dx += snappedX - refX
+              snappedAxisX = true
             }
             if (Math.abs(snappedY - refY) <= threshold) {
               dy += snappedY - refY
+              snappedAxisY = true
             }
           }
         }
 
-        // Guide snap
-        if (snapState.guideSnap) {
+        // Guide snap (test left/center/right and top/center/bottom edges)
+        if (snapState.guideSnap && !snappedAxisX) {
           const guidesX = store.schema.guides.x
-          const guidesY = store.schema.guides.y
-          const snapX = snapToGuide(refOrig.x + dx, guidesX, threshold)
-          if (snapX != null) {
-            dx += snapX - (refOrig.x + dx)
-            activeLines.push({ axis: 'x', position: snapX })
+          if (guidesX.length > 0) {
+            const currentRefX = refOrig.x + dx
+            const currentRefCenterX = currentRefX + refNode.width / 2
+            const currentRefRight = currentRefX + refNode.width
+            for (const testX of [currentRefX, currentRefCenterX, currentRefRight]) {
+              const snap = snapToGuide(testX, guidesX, threshold)
+              if (snap != null) {
+                dx += snap - testX
+                activeLines.push({ axis: 'x', position: snap })
+                snappedAxisX = true
+                break
+              }
+            }
           }
-          const snapY = snapToGuide(refOrig.y + dy, guidesY, threshold)
-          if (snapY != null) {
-            dy += snapY - (refOrig.y + dy)
-            activeLines.push({ axis: 'y', position: snapY })
+        }
+
+        if (snapState.guideSnap && !snappedAxisY) {
+          const guidesY = store.schema.guides.y
+          if (guidesY.length > 0) {
+            const currentRefY = refOrig.y + dy
+            const currentRefCenterY = currentRefY + refNode.height / 2
+            const currentRefBottom = currentRefY + refNode.height
+            for (const testY of [currentRefY, currentRefCenterY, currentRefBottom]) {
+              const snap = snapToGuide(testY, guidesY, threshold)
+              if (snap != null) {
+                dy += snap - testY
+                activeLines.push({ axis: 'y', position: snap })
+                snappedAxisY = true
+                break
+              }
+            }
           }
         }
 
@@ -135,30 +160,32 @@ export function useElementDrag(ctx: ElementDragContext) {
             edgesY.push(other.y, other.y + other.height / 2, other.y + other.height)
           }
 
-          const currentRefX = refOrig.x + dx
-          const currentRefRight = currentRefX + refNode.width
-          const currentRefCenterX = currentRefX + refNode.width / 2
-          const currentRefY = refOrig.y + dy
-          const currentRefBottom = currentRefY + refNode.height
-          const currentRefCenterY = currentRefY + refNode.height / 2
-
-          // Try snap left, center, right edges
-          for (const testX of [currentRefX, currentRefCenterX, currentRefRight]) {
-            const snap = snapToGuide(testX, edgesX, threshold)
-            if (snap != null) {
-              dx += snap - testX
-              activeLines.push({ axis: 'x', position: snap })
-              break
+          // Skip axis if already snapped by grid or guide
+          if (!snappedAxisX) {
+            const currentRefX = refOrig.x + dx
+            const currentRefRight = currentRefX + refNode.width
+            const currentRefCenterX = currentRefX + refNode.width / 2
+            for (const testX of [currentRefX, currentRefCenterX, currentRefRight]) {
+              const snap = snapToGuide(testX, edgesX, threshold)
+              if (snap != null) {
+                dx += snap - testX
+                activeLines.push({ axis: 'x', position: snap })
+                break
+              }
             }
           }
 
-          // Try snap top, center, bottom edges
-          for (const testY of [currentRefY, currentRefCenterY, currentRefBottom]) {
-            const snap = snapToGuide(testY, edgesY, threshold)
-            if (snap != null) {
-              dy += snap - testY
-              activeLines.push({ axis: 'y', position: snap })
-              break
+          if (!snappedAxisY) {
+            const currentRefY = refOrig.y + dy
+            const currentRefBottom = currentRefY + refNode.height
+            const currentRefCenterY = currentRefY + refNode.height / 2
+            for (const testY of [currentRefY, currentRefCenterY, currentRefBottom]) {
+              const snap = snapToGuide(testY, edgesY, threshold)
+              if (snap != null) {
+                dy += snap - testY
+                activeLines.push({ axis: 'y', position: snap })
+                break
+              }
             }
           }
         }
