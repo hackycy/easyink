@@ -3,6 +3,7 @@ import type {
   PanelToggleState,
   PreviewWorkbenchState,
   SaveBranchMenuState,
+  SnapState,
   StatusBarState,
   TableEditingState,
   TemplateLibraryState,
@@ -20,6 +21,7 @@ export function createDefaultWorkbenchState(): WorkbenchState {
     preview: createDefaultPreview(),
     templateLibrary: createDefaultTemplateLibrary(),
     status: createDefaultStatus(),
+    snap: createDefaultSnap(),
   }
 }
 
@@ -159,5 +161,16 @@ export function createDefaultSaveBranchMenu(): SaveBranchMenuState {
   return {
     open: false,
     autoSaveEnabled: false,
+  }
+}
+
+function createDefaultSnap(): SnapState {
+  return {
+    enabled: true,
+    gridSnap: true,
+    guideSnap: true,
+    elementSnap: true,
+    threshold: 3,
+    activeLines: [],
   }
 }

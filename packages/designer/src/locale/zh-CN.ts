@@ -86,7 +86,7 @@ const zhCN: LocaleMessages = {
       print: '打印',
     },
     panel: {
-      dataSource: '数据源',
+      datasource: '数据源',
       properties: '属性',
       structureTree: '结构树',
       history: '历史记录',

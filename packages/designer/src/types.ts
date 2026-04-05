@@ -12,6 +12,22 @@ export interface WorkbenchState {
   preview: PreviewWorkbenchState
   templateLibrary: TemplateLibraryState
   status: StatusBarState
+  snap: SnapState
+}
+
+export interface SnapState {
+  enabled: boolean
+  gridSnap: boolean
+  guideSnap: boolean
+  elementSnap: boolean
+  threshold: number
+  /** Active snap lines to render (in document units) */
+  activeLines: SnapLine[]
+}
+
+export interface SnapLine {
+  axis: 'x' | 'y'
+  position: number
 }
 
 export interface WorkspaceWindowState {

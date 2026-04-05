@@ -1,2 +1,5 @@
 export { provideDesignerStore, useDesignerStore } from './use-designer-store'
+export { useElementDrag } from './use-element-drag'
+export { useElementResize } from './use-element-resize'
+export { useMarqueeSelect } from './use-marquee-select'
 export { useWindowDrag } from './use-window-drag'

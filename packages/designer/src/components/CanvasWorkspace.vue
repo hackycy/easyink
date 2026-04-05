@@ -1,7 +1,14 @@
 <script setup lang="ts">
+import type { MarqueeRect } from '../composables/use-marquee-select'
+import type { ResizeHandle } from '../composables/use-element-resize'
 import { computed, onMounted, provide, ref } from 'vue'
 import { useDesignerStore } from '../composables'
+import { useElementDrag } from '../composables/use-element-drag'
+import { useElementResize } from '../composables/use-element-resize'
+import { useMarqueeSelect } from '../composables/use-marquee-select'
 import { CANVAS_CONTAINER_KEY } from './canvas-container'
+import GridOverlay from './GridOverlay.vue'
+import SnapLineOverlay from './SnapLineOverlay.vue'
 import WorkspaceWindow from './WorkspaceWindow.vue'
 import PropertiesPanel from './PropertiesPanel.vue'
 import StructureTree from './StructureTree.vue'
@@ -12,8 +19,34 @@ import DebugPanel from './DebugPanel.vue'
 
 const store = useDesignerStore()
 const containerRef = ref<HTMLElement | null>(null)
+const pageRef = ref<HTMLElement | null>(null)
+const scrollRef = ref<HTMLElement | null>(null)
+const marqueeRect = ref<MarqueeRect | null>(null)
 
 provide(CANVAS_CONTAINER_KEY, () => containerRef.value)
+
+const resizeHandles: ResizeHandle[] = ['nw', 'n', 'ne', 'w', 'e', 'sw', 's', 'se']
+
+// ─── Composables ─────────────────────────────────────────────────
+
+const { onPointerDown: onElementPointerDown } = useElementDrag({
+  store,
+  getPageEl: () => pageRef.value,
+  getScrollEl: () => scrollRef.value,
+})
+
+const { onHandlePointerDown } = useElementResize({
+  store,
+  getPageEl: () => pageRef.value,
+})
+
+const { onCanvasPointerDown } = useMarqueeSelect({
+  store,
+  getPageEl: () => pageRef.value,
+  marqueeRef: marqueeRect,
+})
+
+// ─── Computed ────────────────────────────────────────────────────
 
 const pageStyle = computed(() => {
   const page = store.schema.page
@@ -30,6 +63,21 @@ const pageStyle = computed(() => {
 
 const elements = computed(() => store.getElements())
 
+const marqueeStyle = computed(() => {
+  if (!marqueeRect.value)
+    return null
+  const r = marqueeRect.value
+  const unit = store.schema.unit
+  return {
+    left: `${r.x}${unit}`,
+    top: `${r.y}${unit}`,
+    width: `${r.width}${unit}`,
+    height: `${r.height}${unit}`,
+  }
+})
+
+// ─── Helpers ─────────────────────────────────────────────────────
+
 function windowTitle(kind: string): string {
   const key = kind === 'structure-tree' ? 'structureTree' : kind
   return store.t(`designer.panel.${key}`)
@@ -39,21 +87,51 @@ function isResizable(kind: string): boolean {
   return kind !== 'minimap'
 }
 
-function handleCanvasClick(e: MouseEvent) {
-  if (e.target === e.currentTarget) {
-    store.selection.clear()
+function handleScrollPointerDown(e: PointerEvent) {
+  // Only trigger marquee on empty space (the scroll area or page background)
+  if (e.target === scrollRef.value || e.target === pageRef.value) {
+    onCanvasPointerDown(e)
   }
+}
+
+function handleElementPointerDown(e: PointerEvent, elementId: string) {
+  e.stopPropagation()
+  onElementPointerDown(e, elementId)
 }
 
 function handleElementClick(e: MouseEvent, elementId: string) {
   e.stopPropagation()
-  if (e.ctrlKey || e.metaKey) {
-    store.selection.toggle(elementId)
-  }
-  else {
-    store.selection.select(elementId)
+  // Selection is handled inside onElementPointerDown already.
+  // This is kept for cases where pointer was not captured (e.g., right-click).
+  if (!store.selection.has(elementId)) {
+    if (e.ctrlKey || e.metaKey) {
+      store.selection.toggle(elementId)
+    }
+    else {
+      store.selection.select(elementId)
+    }
   }
 }
+
+function handleResizePointerDown(e: PointerEvent, elementId: string, handle: ResizeHandle) {
+  onHandlePointerDown(e, elementId, handle)
+}
+
+function handleCursorForHandle(handle: ResizeHandle): string {
+  const map: Record<ResizeHandle, string> = {
+    nw: 'nwse-resize',
+    n: 'ns-resize',
+    ne: 'nesw-resize',
+    w: 'ew-resize',
+    e: 'ew-resize',
+    sw: 'nesw-resize',
+    s: 'ns-resize',
+    se: 'nwse-resize',
+  }
+  return map[handle]
+}
+
+// ─── Lifecycle ───────────────────────────────────────────────────
 
 onMounted(() => {
   const el = containerRef.value
@@ -72,8 +150,16 @@ onMounted(() => {
 
 <template>
   <div ref="containerRef" class="ei-canvas-workspace">
-    <div class="ei-canvas-scroll" @click="handleCanvasClick">
-      <div class="ei-canvas-page" :style="pageStyle">
+    <div
+      ref="scrollRef"
+      class="ei-canvas-scroll"
+      @pointerdown="handleScrollPointerDown"
+    >
+      <div ref="pageRef" class="ei-canvas-page" :style="pageStyle">
+        <!-- Grid overlay -->
+        <GridOverlay />
+
+        <!-- Elements -->
         <div
           v-for="el in elements"
           :key="el.id"
@@ -92,16 +178,38 @@ onMounted(() => {
             opacity: el.alpha ?? 1,
             zIndex: el.zIndex ?? 'auto',
           }"
+          @pointerdown="handleElementPointerDown($event, el.id)"
           @click="handleElementClick($event, el.id)"
         >
           <div class="ei-canvas-element__content">
             {{ el.type }}
           </div>
-          <div
-            v-if="store.selection.has(el.id)"
-            class="ei-canvas-element__selection-border"
-          />
+
+          <!-- Selection border & resize handles -->
+          <template v-if="store.selection.has(el.id)">
+            <div class="ei-canvas-element__selection-border" />
+
+            <!-- 8 resize handles -->
+            <div
+              v-for="handle in resizeHandles"
+              :key="handle"
+              class="ei-canvas-element__handle"
+              :class="`ei-canvas-element__handle--${handle}`"
+              :style="{ cursor: handleCursorForHandle(handle) }"
+              @pointerdown="handleResizePointerDown($event, el.id, handle)"
+            />
+          </template>
         </div>
+
+        <!-- Snap line overlay -->
+        <SnapLineOverlay />
+
+        <!-- Marquee selection rectangle -->
+        <div
+          v-if="marqueeStyle"
+          class="ei-canvas-marquee"
+          :style="marqueeStyle"
+        />
       </div>
     </div>
 
@@ -150,13 +258,17 @@ onMounted(() => {
 .ei-canvas-page {
   position: relative;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .ei-canvas-element {
   position: absolute;
   cursor: move;
   box-sizing: border-box;
+}
+
+.ei-canvas-element--locked {
+  cursor: default;
 }
 
 .ei-canvas-element--hidden {
@@ -186,6 +298,77 @@ onMounted(() => {
   border: 2px solid var(--ei-primary, #1890ff);
   pointer-events: none;
 }
+
+/* ─── Resize Handles ──────────────────────────────────────────── */
+
+.ei-canvas-element__handle {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: #fff;
+  border: 1.5px solid var(--ei-primary, #1890ff);
+  border-radius: 1px;
+  box-sizing: border-box;
+  z-index: 1;
+}
+
+/* Corner handles */
+.ei-canvas-element__handle--nw {
+  top: -4px;
+  left: -4px;
+}
+
+.ei-canvas-element__handle--ne {
+  top: -4px;
+  right: -4px;
+}
+
+.ei-canvas-element__handle--sw {
+  bottom: -4px;
+  left: -4px;
+}
+
+.ei-canvas-element__handle--se {
+  bottom: -4px;
+  right: -4px;
+}
+
+/* Edge handles */
+.ei-canvas-element__handle--n {
+  top: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.ei-canvas-element__handle--s {
+  bottom: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.ei-canvas-element__handle--w {
+  top: 50%;
+  left: -4px;
+  transform: translateY(-50%);
+}
+
+.ei-canvas-element__handle--e {
+  top: 50%;
+  right: -4px;
+  transform: translateY(-50%);
+}
+
+/* ─── Marquee Selection ───────────────────────────────────────── */
+
+.ei-canvas-marquee {
+  position: absolute;
+  border: 1px solid var(--ei-primary, #1890ff);
+  background: rgba(24, 144, 255, 0.08);
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* ─── Floating Windows ────────────────────────────────────────── */
 
 .ei-canvas-windows {
   position: absolute;
