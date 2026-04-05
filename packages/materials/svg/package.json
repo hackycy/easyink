@@ -1,0 +1,26 @@
+{
+  "name": "@easyink/material-svg",
+  "type": "module",
+  "version": "0.0.0",
+  "description": "EasyInk svg material",
+  "author": "hackycy <hackycy@outlook.com>",
+  "license": "MIT",
+  "sideEffects": false,
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/index.d.mts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch"
+  },
+  "dependencies": {
+    "@easyink/core": "workspace:*",
+    "@easyink/schema": "workspace:*",
+    "@easyink/shared": "workspace:*"
+  }
+}

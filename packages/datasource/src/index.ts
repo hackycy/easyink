@@ -1,3 +1,4 @@
+export { normalizeDataSource } from './normalize'
 export {
   DataSourceRegistry,
   resolveBindingValue,

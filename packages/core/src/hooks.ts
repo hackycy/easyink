@@ -3,6 +3,8 @@
  * No external dependencies. Serves only internal use cases.
  */
 
+import type { DocumentSchema } from '@easyink/schema'
+
 type SyncHookCallback<T extends unknown[]> = (...args: T) => void
 type SyncWaterfallCallback<T> = (value: T) => T
 type AsyncHookCallback<T extends unknown[]> = (...args: T) => void | Promise<void>
@@ -75,5 +77,55 @@ export class AsyncHook<T extends unknown[] = []> {
 
   clear(): void {
     this._callbacks = []
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Internal hooks – typed aggregate consumed by the workbench kernel
+// ---------------------------------------------------------------------------
+
+export interface PagePlanningContext {
+  schema: DocumentSchema
+  mode: string
+}
+
+export interface MaterialRenderPayload {
+  nodeId: string
+  type: string
+  props: Record<string, unknown>
+}
+
+export interface ViewerDiagnosticEvent {
+  category: string
+  severity: string
+  code: string
+  message: string
+  nodeId?: string
+  detail?: unknown
+}
+
+export interface CommandRecord {
+  id: string
+  type: string
+  description: string
+}
+
+export interface InternalHooks {
+  beforeSchemaNormalize: SyncWaterfallHook<DocumentSchema>
+  beforePagePlan: SyncWaterfallHook<PagePlanningContext>
+  beforeMaterialRender: SyncWaterfallHook<MaterialRenderPayload>
+  diagnosticsEmitted: AsyncHook<[ViewerDiagnosticEvent]>
+  commandCommitted: AsyncHook<[CommandRecord]>
+  workbenchReady: AsyncHook<[]>
+}
+
+export function createInternalHooks(): InternalHooks {
+  return {
+    beforeSchemaNormalize: new SyncWaterfallHook(),
+    beforePagePlan: new SyncWaterfallHook(),
+    beforeMaterialRender: new SyncWaterfallHook(),
+    diagnosticsEmitted: new AsyncHook(),
+    commandCommitted: new AsyncHook(),
+    workbenchReady: new AsyncHook(),
   }
 }

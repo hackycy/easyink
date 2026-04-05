@@ -216,6 +216,18 @@ importers:
         specifier: workspace:*
         version: link:../../shared
 
+  packages/materials/chart:
+    dependencies:
+      '@easyink/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@easyink/schema':
+        specifier: workspace:*
+        version: link:../../schema
+      '@easyink/shared':
+        specifier: workspace:*
+        version: link:../../shared
+
   packages/materials/container:
     dependencies:
       '@easyink/core':
@@ -277,6 +289,30 @@ importers:
         version: link:../../shared
 
   packages/materials/rect:
+    dependencies:
+      '@easyink/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@easyink/schema':
+        specifier: workspace:*
+        version: link:../../schema
+      '@easyink/shared':
+        specifier: workspace:*
+        version: link:../../shared
+
+  packages/materials/relation:
+    dependencies:
+      '@easyink/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@easyink/schema':
+        specifier: workspace:*
+        version: link:../../schema
+      '@easyink/shared':
+        specifier: workspace:*
+        version: link:../../shared
+
+  packages/materials/svg:
     dependencies:
       '@easyink/core':
         specifier: workspace:*

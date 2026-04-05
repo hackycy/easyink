@@ -5,6 +5,10 @@ import { CANVAS_CONTAINER_KEY } from './canvas-container'
 import WorkspaceWindow from './WorkspaceWindow.vue'
 import PropertiesPanel from './PropertiesPanel.vue'
 import StructureTree from './StructureTree.vue'
+import DataSourcePanel from './DataSourcePanel.vue'
+import HistoryPanel from './HistoryPanel.vue'
+import MinimapPanel from './MinimapPanel.vue'
+import DebugPanel from './DebugPanel.vue'
 
 const store = useDesignerStore()
 const containerRef = ref<HTMLElement | null>(null)
@@ -112,6 +116,10 @@ onMounted(() => {
         >
           <PropertiesPanel v-if="win.kind === 'properties'" />
           <StructureTree v-else-if="win.kind === 'structure-tree'" />
+          <DataSourcePanel v-else-if="win.kind === 'datasource'" />
+          <HistoryPanel v-else-if="win.kind === 'history'" />
+          <MinimapPanel v-else-if="win.kind === 'minimap'" />
+          <DebugPanel v-else-if="win.kind === 'debug'" />
           <div v-else class="ei-canvas-workspace__placeholder">
             {{ windowTitle(win.kind) }}
           </div>
