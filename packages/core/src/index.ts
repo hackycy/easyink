@@ -13,6 +13,7 @@ export {
   ResizeTableColumnCommand,
   RotateMaterialCommand,
   UnionDropCommand,
+  UpdateDocumentCommand,
   UpdateGuidesCommand,
   UpdateMaterialPropsCommand,
   UpdatePageCommand,

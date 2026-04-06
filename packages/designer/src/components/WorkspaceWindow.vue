@@ -163,6 +163,36 @@ function onResizeStart(e: PointerEvent) {
 .ei-workspace-window__body {
   overflow: auto;
   padding: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.2s;
+}
+
+.ei-workspace-window__body:hover {
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+}
+
+.ei-workspace-window__body::-webkit-scrollbar {
+  width: 2px;
+  height: 2px;
+}
+
+.ei-workspace-window__body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ei-workspace-window__body::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 2px;
+  transition: background 0.2s;
+}
+
+.ei-workspace-window__body:hover::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.ei-workspace-window__body:hover::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.35);
 }
 
 .ei-workspace-window__resize-handle {

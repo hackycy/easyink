@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { IconClose, IconDown, IconUp } from '@easyink/icons'
 
 const props = defineProps<{
   title: string
@@ -25,14 +26,15 @@ const collapsed = ref(false)
           class="ei-panel__action"
           @click="collapsed = !collapsed"
         >
-          {{ collapsed ? '+' : '-' }}
+          <IconUp v-if="collapsed" :size="14" />
+          <IconDown v-else :size="14" />
         </button>
         <button
           v-if="closable"
           class="ei-panel__action"
           @click="emit('close')"
         >
-          x
+          <IconClose :size="14" />
         </button>
       </div>
     </div>
@@ -62,9 +64,9 @@ const collapsed = ref(false)
 }
 
 .ei-panel__title {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
-  color: var(--ei-text, #333);
+  color: var(--ei-text, #666);
 }
 
 .ei-panel__actions {
@@ -82,7 +84,6 @@ const collapsed = ref(false)
   background: transparent;
   cursor: pointer;
   color: var(--ei-text-secondary, #999);
-  font-size: 14px;
   line-height: 1;
   border-radius: 2px;
 }

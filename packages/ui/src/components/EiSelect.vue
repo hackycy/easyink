@@ -49,7 +49,7 @@ defineEmits<{
 }
 
 .ei-select {
-  padding: 4px 8px;
+  padding: 4px 4px;
   border: 1px solid var(--ei-border-color, #d0d0d0);
   border-radius: 4px;
   font-size: 13px;

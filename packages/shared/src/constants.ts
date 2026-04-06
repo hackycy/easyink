@@ -39,3 +39,23 @@ export const FIELD_PATH_SEPARATOR = '/'
  * Prototype chain keys that must be blocked in path resolution.
  */
 export const BLOCKED_PATH_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
+
+/**
+ * Common paper size presets (dimensions in mm).
+ */
+export interface PaperPreset {
+  name: string
+  width: number
+  height: number
+}
+
+export const PAPER_PRESETS: PaperPreset[] = [
+  { name: 'A3', width: 297, height: 420 },
+  { name: 'A4', width: 210, height: 297 },
+  { name: 'A5', width: 148, height: 210 },
+  { name: 'A6', width: 105, height: 148 },
+  { name: 'B4', width: 250, height: 353 },
+  { name: 'B5', width: 176, height: 250 },
+  { name: 'Letter', width: 216, height: 279 },
+  { name: 'Legal', width: 216, height: 356 },
+]

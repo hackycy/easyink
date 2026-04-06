@@ -535,6 +535,31 @@ export class UpdateTableSectionCommand implements Command {
   }
 }
 
+export class UpdateDocumentCommand implements Command {
+  readonly id = generateId('cmd')
+  readonly type = 'update-document'
+  readonly description = 'Update document'
+  private oldValues: Partial<DocumentSchema> = {}
+
+  constructor(
+    private schema: DocumentSchema,
+    private updates: Partial<Pick<DocumentSchema, 'unit' | 'meta' | 'extensions' | 'compat'>>,
+  ) {}
+
+  execute(): void {
+    for (const key of Object.keys(this.updates) as Array<keyof typeof this.updates>) {
+      asRecord(this.oldValues)[key] = deepClone(asRecord(this.schema)[key])
+      asRecord(this.schema)[key] = deepClone(asRecord(this.updates)[key])
+    }
+  }
+
+  undo(): void {
+    for (const key of Object.keys(this.oldValues) as Array<keyof typeof this.oldValues>) {
+      asRecord(this.schema)[key] = asRecord(this.oldValues)[key]
+    }
+  }
+}
+
 export class ImportTemplateCommand implements Command {
   readonly id = generateId('cmd')
   readonly type = 'import-template'

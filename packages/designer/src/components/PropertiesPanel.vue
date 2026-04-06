@@ -1,11 +1,15 @@
 <script setup lang="ts">
 import type { PropSchema } from '../types'
-import { ClearBindingCommand, UpdateMaterialPropsCommand, UpdatePageCommand } from '@easyink/core'
-import { EiCheckbox, EiInput, EiPanel, EiSelect } from '@easyink/ui'
+import type { PagePropertyContext, PagePropertyDescriptor, PagePropertyGroup } from '../page-properties'
+import { ClearBindingCommand, UpdateDocumentCommand, UpdateMaterialPropsCommand, UpdatePageCommand } from '@easyink/core'
+import { PAPER_PRESETS } from '@easyink/shared'
+import { EiCheckbox, EiInput, EiPanel } from '@easyink/ui'
 import { computed, shallowRef, watchEffect } from 'vue'
 import { useDesignerStore } from '../composables'
 import { getPropSchemas, groupPropSchemas } from '../materials/prop-schemas'
+import { defaultDocumentPatch, defaultPagePatch, filterVisible, groupDescriptors, PAGE_PROPERTY_DESCRIPTORS, readPageProperty, splitPatch } from '../page-properties'
 import BindingSection from './BindingSection.vue'
+import PagePropertyEditor from './PagePropertyEditor.vue'
 import PropSchemaEditor from './PropSchemaEditor.vue'
 
 const store = useDesignerStore()
@@ -19,21 +23,81 @@ const selectedElement = computed(() =>
   selectedElements.value.length === 1 ? selectedElements.value[0] : undefined,
 )
 
-const page = computed(() => store.schema.page)
+// ─── Page property descriptor system ─────────────────────────────
 
-// PropSchema for current material type
+const pagePropertyContext = computed<PagePropertyContext>(() => ({
+  document: store.schema,
+  rawPage: store.schema.compat?.passthrough as Record<string, unknown> | undefined,
+  selectedElementId: selectedElement.value?.id,
+}))
+
+const visiblePageDescriptors = computed(() =>
+  filterVisible(PAGE_PROPERTY_DESCRIPTORS, pagePropertyContext.value),
+)
+
+const groupedPageDescriptors = computed(() =>
+  groupDescriptors(visiblePageDescriptors.value),
+)
+
+// Derive paper preset from current width/height
+const currentPaperPreset = computed(() => {
+  const { width, height } = store.schema.page
+  const match = PAPER_PRESETS.find(p => p.width === width && p.height === height)
+  return match ? match.name : 'custom'
+})
+
+function readPagePropValue(descriptor: PagePropertyDescriptor): unknown {
+  // Special: paperPreset is derived from width/height
+  if (descriptor.id === 'paperPreset') {
+    return currentPaperPreset.value
+  }
+  return readPageProperty(descriptor, pagePropertyContext.value)
+}
+
+const PAGE_GROUP_LABELS: Record<PagePropertyGroup, string> = {
+  document: 'designer.page.groupDocument',
+  paper: 'designer.page.groupPaper',
+  print: 'designer.page.groupPrint',
+  assist: 'designer.page.groupAssist',
+  background: 'designer.page.groupBackground',
+}
+
+function pageGroupLabel(group: PagePropertyGroup): string {
+  return store.t(PAGE_GROUP_LABELS[group])
+}
+
+function onPagePropertyChange(descriptor: PagePropertyDescriptor, value: unknown) {
+  const ctx = pagePropertyContext.value
+  const patch = descriptor.normalize
+    ? descriptor.normalize(value, ctx)
+    : descriptor.source === 'document'
+      ? defaultDocumentPatch(descriptor.path, value)
+      : defaultPagePatch(descriptor.path, value)
+
+  const { pageUpdates, documentUpdates } = splitPatch(patch)
+
+  if (pageUpdates && Object.keys(pageUpdates).length > 0) {
+    const cmd = new UpdatePageCommand(store.schema.page, pageUpdates)
+    store.commands.execute(cmd)
+  }
+
+  if (documentUpdates && Object.keys(documentUpdates).length > 0) {
+    const cmd = new UpdateDocumentCommand(store.schema, documentUpdates)
+    store.commands.execute(cmd)
+  }
+}
+
+// ─── Element PropSchema ──────────────────────────────────────────
+
 const materialSchemas = computed<PropSchema[]>(() => {
   if (!selectedElement.value)
     return []
-  // Check registered MaterialDefinition first
   const def = store.getMaterial(selectedElement.value.type)
   if (def && def.props.length > 0)
     return def.props
-  // Fallback to built-in registry
   return getPropSchemas(selectedElement.value.type)
 })
 
-// Visible schemas (evaluate visible() predicates)
 const visibleSchemas = computed(() => {
   const el = selectedElement.value
   if (!el)
@@ -42,14 +106,12 @@ const visibleSchemas = computed(() => {
   return materialSchemas.value.filter(s => !s.visible || s.visible(elProps))
 })
 
-// Group visible schemas
 const groupedSchemas = computed(() => groupPropSchemas(visibleSchemas.value))
 
 // Font list from FontManager (async)
 const fontList = shallowRef<Array<{ family: string, displayName: string }>>([])
 const fontManager = (store as unknown as Record<string, unknown>).fontManager
 watchEffect(async () => {
-  // Check if designer store exposes a font manager
   if (fontManager && typeof (fontManager as { listFonts?: () => Promise<unknown> }).listFonts === 'function') {
     try {
       const fonts = await (fontManager as { listFonts: () => Promise<Array<{ family: string, displayName: string }>> }).listFonts()
@@ -76,7 +138,7 @@ function groupLabel(group: string): string {
   return key ? store.t(key) : group
 }
 
-// ─── Command-wrapped updates ────────────────────────────────────────
+// ─── Command-wrapped updates ────────────────────────────────────
 
 function updateGeometry(key: string, value: number) {
   if (!selectedElement.value)
@@ -102,26 +164,10 @@ function updateProp(key: string, value: unknown) {
   store.commands.execute(cmd)
 }
 
-function updatePage(key: string, value: unknown) {
-  const cmd = new UpdatePageCommand(
-    store.schema.page,
-    { [key]: value } as never,
-  )
-  store.commands.execute(cmd)
-}
-
 function clearBinding(nodeId: string) {
   const cmd = new ClearBindingCommand(store.schema.elements, nodeId)
   store.commands.execute(cmd)
 }
-
-// ─── Page mode options ──────────────────────────────────────────────
-
-const pageModeOptions = [
-  { label: store.t('designer.page.fixed'), value: 'fixed' },
-  { label: store.t('designer.page.stack'), value: 'stack' },
-  { label: store.t('designer.page.label'), value: 'label' },
-]
 </script>
 
 <template>
@@ -218,31 +264,26 @@ const pageModeOptions = [
       </EiPanel>
     </template>
 
-    <!-- Page properties: only when no element is selected -->
-    <template v-if="!selectedElement">
-      <EiPanel :title="store.t('designer.page.title')" collapsible flat>
+    <!-- Page properties: always visible (descriptor-driven) -->
+    <EiPanel
+      v-for="[group, descriptors] in groupedPageDescriptors"
+      :key="group"
+      :title="pageGroupLabel(group)"
+      collapsible
+      flat
+    >
       <div class="ei-properties-panel__fields">
-        <EiInput
-          :label="store.t('designer.page.width')"
-          type="number"
-          :model-value="page.width"
-          @update:model-value="updatePage('width', Number($event))"
-        />
-        <EiInput
-          :label="store.t('designer.page.height')"
-          type="number"
-          :model-value="page.height"
-          @update:model-value="updatePage('height', Number($event))"
-        />
-        <EiSelect
-          :label="store.t('designer.page.mode')"
-          :model-value="page.mode"
-          :options="pageModeOptions"
-          @update:model-value="updatePage('mode', $event)"
+        <PagePropertyEditor
+          v-for="descriptor in descriptors"
+          :key="descriptor.id"
+          :descriptor="descriptor"
+          :value="readPagePropValue(descriptor)"
+          :fonts="fontList"
+          :t="store.t.bind(store)"
+          @change="onPagePropertyChange"
         />
       </div>
     </EiPanel>
-    </template>
   </div>
 </template>
 

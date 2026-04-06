@@ -693,7 +693,7 @@ function handleSnap() {
       <IconChevronRight :size="14" :stroke-width="1.5" />
     </button>
 
-    <div class="ei-topbar-b__spacer" />
+    <!-- <div class="ei-topbar-b__spacer" /> -->
 
     <div class="ei-topbar-b__zoom">
       <button
