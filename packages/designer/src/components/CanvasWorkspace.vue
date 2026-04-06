@@ -23,6 +23,7 @@ import HistoryPanel from './HistoryPanel.vue'
 import MinimapPanel from './MinimapPanel.vue'
 import DebugPanel from './DebugPanel.vue'
 import ToolbarManager from './ToolbarManager.vue'
+import MaterialPanel from './MaterialPanel.vue'
 
 const store = useDesignerStore()
 const containerRef = ref<HTMLElement | null>(null)
@@ -350,6 +351,7 @@ onUnmounted(() => {
           <MinimapPanel v-else-if="win.kind === 'minimap'" />
           <DebugPanel v-else-if="win.kind === 'debug'" />
           <ToolbarManager v-else-if="win.kind === 'toolbar-manager'" />
+          <MaterialPanel v-else-if="win.kind === 'materials'" />
           <div v-else class="ei-canvas-workspace__placeholder">
             {{ windowTitle(win.kind) }}
           </div>

@@ -130,6 +130,8 @@ const zhCN: LocaleMessages = {
       assets: '资源',
       debug: '调试',
       draft: '草稿',
+      materials: '物料',
+      quickMaterials: '基础',
     },
     page: {
       title: '页面设置',

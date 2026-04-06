@@ -28,12 +28,23 @@ export function createDefaultWorkbenchState(): WorkbenchState {
 function createDefaultWindows(): WorkspaceWindowState[] {
   return [
     {
+      id: 'materials',
+      kind: 'materials',
+      visible: true,
+      collapsed: false,
+      x: 32,
+      y: 32,
+      width: 240,
+      height: 420,
+      zIndex: 9,
+    },
+    {
       id: 'datasource',
       kind: 'datasource',
       visible: true,
       collapsed: false,
       x: 32,
-      y: 32,
+      y: 470,
       width: 240,
       height: 400,
       zIndex: 10,
