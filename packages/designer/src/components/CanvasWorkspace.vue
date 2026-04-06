@@ -21,6 +21,7 @@ import DataSourcePanel from './DataSourcePanel.vue'
 import HistoryPanel from './HistoryPanel.vue'
 import MinimapPanel from './MinimapPanel.vue'
 import DebugPanel from './DebugPanel.vue'
+import ToolbarManager from './ToolbarManager.vue'
 
 const store = useDesignerStore()
 const containerRef = ref<HTMLElement | null>(null)
@@ -99,6 +100,7 @@ const marqueeStyle = computed(() => {
 // ─── Helpers ─────────────────────────────────────────────────────
 
 function windowTitle(kind: string): string {
+  if (kind === 'toolbar-manager') return store.t('designer.toolbar.manager')
   const key = kind === 'structure-tree' ? 'structureTree' : kind
   return store.t(`designer.panel.${key}`)
 }
@@ -331,6 +333,7 @@ onUnmounted(() => {
           <HistoryPanel v-else-if="win.kind === 'history'" />
           <MinimapPanel v-else-if="win.kind === 'minimap'" />
           <DebugPanel v-else-if="win.kind === 'debug'" />
+          <ToolbarManager v-else-if="win.kind === 'toolbar-manager'" />
           <div v-else class="ei-canvas-workspace__placeholder">
             {{ windowTitle(win.kind) }}
           </div>

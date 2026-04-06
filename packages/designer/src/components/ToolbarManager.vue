@@ -1,10 +1,13 @@
 <script setup lang="ts">
+import {
+  IconAlignStart,
+  IconAlignCenterH,
+  IconAlignEnd,
+  IconClose,
+  IconRestoreDefault,
+} from '@easyink/icons'
 import { useDesignerStore } from '../composables'
 import { createDefaultWorkbenchState } from '../store/workbench'
-
-const emit = defineEmits<{
-  close: []
-}>()
 
 const store = useDesignerStore()
 const toolbar = store.workbench.toolbar
@@ -54,34 +57,33 @@ function groupLabelKey(id: string): string {
 </script>
 
 <template>
-  <div class="ei-toolbar-manager" @click.stop>
-    <div class="ei-toolbar-manager__header">
-      <span>{{ store.t('designer.toolbar.manager') }}</span>
-      <button class="ei-toolbar-manager__close" @click="emit('close')">
-        x
-      </button>
-    </div>
-
+  <div class="ei-toolbar-manager">
     <div class="ei-toolbar-manager__section">
       <span class="ei-toolbar-manager__label">{{ store.t('designer.toolbar.alignLeft') }}</span>
       <div class="ei-toolbar-manager__align-group">
         <button
+          class="ei-toolbar-manager__align-btn"
           :class="{ 'ei-toolbar-manager__align--active': toolbar.align === 'start' }"
+          :title="store.t('designer.toolbar.alignLeft')"
           @click="setAlign('start')"
         >
-          L
+          <IconAlignStart :size="14" :stroke-width="1.5" />
         </button>
         <button
+          class="ei-toolbar-manager__align-btn"
           :class="{ 'ei-toolbar-manager__align--active': toolbar.align === 'center' }"
+          :title="store.t('designer.toolbar.alignCenter')"
           @click="setAlign('center')"
         >
-          C
+          <IconAlignCenterH :size="14" :stroke-width="1.5" />
         </button>
         <button
+          class="ei-toolbar-manager__align-btn"
           :class="{ 'ei-toolbar-manager__align--active': toolbar.align === 'end' }"
+          :title="store.t('designer.toolbar.alignRight')"
           @click="setAlign('end')"
         >
-          R
+          <IconAlignEnd :size="14" :stroke-width="1.5" />
         </button>
       </div>
     </div>
@@ -113,7 +115,8 @@ function groupLabelKey(id: string): string {
 
     <div class="ei-toolbar-manager__footer">
       <button class="ei-toolbar-manager__restore" @click="restoreDefault">
-        {{ store.t('designer.toolbar.restoreDefault') }}
+        <IconRestoreDefault :size="14" :stroke-width="1.5" />
+        <span>{{ store.t('designer.toolbar.restoreDefault') }}</span>
       </button>
     </div>
   </div>
@@ -121,34 +124,7 @@ function groupLabelKey(id: string): string {
 
 <style scoped>
 .ei-toolbar-manager {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  z-index: 100;
-  width: 240px;
-  background: var(--ei-panel-bg, #fff);
-  border: 1px solid var(--ei-border-color, #e0e0e0);
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
   font-size: 12px;
-}
-
-.ei-toolbar-manager__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 10px;
-  font-weight: 500;
-  border-bottom: 1px solid var(--ei-border-color, #e0e0e0);
-}
-
-.ei-toolbar-manager__close {
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  color: var(--ei-text-secondary, #999);
-  font-size: 12px;
-  padding: 0 4px;
 }
 
 .ei-toolbar-manager__section {
@@ -168,13 +144,18 @@ function groupLabelKey(id: string): string {
   gap: 2px;
 }
 
-.ei-toolbar-manager__align-group button {
-  padding: 2px 8px;
+.ei-toolbar-manager__align-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 24px;
+  padding: 0;
   border: 1px solid var(--ei-border-color, #d0d0d0);
   border-radius: 3px;
   background: transparent;
   cursor: pointer;
-  font-size: 11px;
+  color: var(--ei-text, #333);
 }
 
 .ei-toolbar-manager__align--active {
@@ -214,6 +195,10 @@ function groupLabelKey(id: string): string {
 }
 
 .ei-toolbar-manager__restore {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   width: 100%;
   padding: 4px;
   border: 1px solid var(--ei-border-color, #d0d0d0);

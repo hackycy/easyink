@@ -82,6 +82,17 @@ function createDefaultWindows(): WorkspaceWindowState[] {
       height: 160,
       zIndex: 14,
     },
+    {
+      id: 'toolbar-manager',
+      kind: 'toolbar-manager',
+      visible: false,
+      collapsed: false,
+      x: 32,
+      y: 32,
+      width: 240,
+      height: 380,
+      zIndex: 15,
+    },
   ]
 }
 
