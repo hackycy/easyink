@@ -17,6 +17,8 @@ export interface PagePlanEntry {
   elements: MaterialNode[]
   isBlank?: boolean
   copyIndex?: number
+  /** Y offset in document coordinates — used by the render surface to position elements within the page. */
+  yOffset: number
 }
 
 export interface PagePlanDiagnostic {
@@ -70,6 +72,7 @@ function createFixedPagePlan(
       width: page.width,
       height: page.height,
       elements: pageElements,
+      yOffset: i * page.height,
     })
   }
 
@@ -81,6 +84,7 @@ function createFixedPagePlan(
       width: page.width,
       height: page.height,
       elements,
+      yOffset: 0,
     }
   }
 
@@ -102,6 +106,7 @@ function createFixedPagePlan(
           ...entry,
           index: entries.length,
           copyIndex: c,
+          yOffset: entry.yOffset,
         })
       }
     }
@@ -131,6 +136,7 @@ function createStackPagePlan(
       width: page.width,
       height: totalHeight,
       elements,
+      yOffset: 0,
     }],
     diagnostics,
   }
@@ -163,6 +169,7 @@ function createLabelPagePlan(
       height: page.height,
       elements,
       copyIndex: c,
+      yOffset: 0,
     })
   }
 

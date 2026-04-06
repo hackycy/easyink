@@ -1,18 +1,30 @@
-import type { DataSourceDescriptor } from '@easyink/datasource'
+import type { FontProvider } from '@easyink/core'
+import type { DataAdapter, DataSourceDescriptor, UsageResolver } from '@easyink/datasource'
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
-import type { DiagnosticCategory, DiagnosticSeverity, ExportEntry, ExportFormat, ExportPhase } from '@easyink/shared'
+import type { DiagnosticCategory, DiagnosticSeverity, ExportEntry, ExportFormat, ExportPhase, UsageRule } from '@easyink/shared'
+
+// ---------------------------------------------------------------------------
+// Viewer options & input
+// ---------------------------------------------------------------------------
 
 export interface ViewerOptions {
   mode?: 'fixed' | 'stack' | 'label'
   container?: HTMLElement
+  fontProvider?: FontProvider
 }
 
 export interface ViewerOpenInput {
   schema: DocumentSchema
   data?: Record<string, unknown>
   dataSources?: DataSourceDescriptor[]
+  dataAdapters?: DataAdapter[]
+  usageResolvers?: UsageResolver[]
   onDiagnostic?: (event: ViewerDiagnosticEvent) => void
 }
+
+// ---------------------------------------------------------------------------
+// Diagnostics
+// ---------------------------------------------------------------------------
 
 export interface ViewerDiagnosticEvent {
   category: DiagnosticCategory
@@ -22,6 +34,10 @@ export interface ViewerDiagnosticEvent {
   nodeId?: string
   detail?: unknown
 }
+
+// ---------------------------------------------------------------------------
+// Render result
+// ---------------------------------------------------------------------------
 
 export interface ViewerRenderResult {
   pages: ViewerPageResult[]
@@ -34,12 +50,17 @@ export interface ViewerPageResult {
   width: number
   height: number
   elementCount: number
+  element?: HTMLElement
 }
 
 export interface ThumbnailResult {
   pageIndex: number
   dataUrl?: string
 }
+
+// ---------------------------------------------------------------------------
+// Export & print adapters
+// ---------------------------------------------------------------------------
 
 export interface ExportAdapter {
   id: string
@@ -67,6 +88,10 @@ export interface PrintAdapter {
   print: (context: ViewerExportContext) => Promise<void>
 }
 
+// ---------------------------------------------------------------------------
+// Material viewer extension (per-material render contract)
+// ---------------------------------------------------------------------------
+
 export interface MaterialViewerExtension {
   render: (node: MaterialNode, context: ViewerRenderContext) => ViewerRenderOutput
   measure?: (node: MaterialNode, context: ViewerMeasureContext) => ViewerMeasureResult
@@ -74,6 +99,7 @@ export interface MaterialViewerExtension {
 
 export interface ViewerRenderContext {
   data: Record<string, unknown>
+  resolvedProps: Record<string, unknown>
   pageIndex: number
   unit: string
   zoom: number
@@ -93,4 +119,15 @@ export interface ViewerMeasureResult {
   width: number
   height: number
   overflow?: boolean
+}
+
+// ---------------------------------------------------------------------------
+// Binding projection
+// ---------------------------------------------------------------------------
+
+export interface ProjectedBinding {
+  bindIndex: number
+  rawValue: unknown
+  formattedValue: unknown
+  usage?: UsageRule
 }
