@@ -12,6 +12,15 @@ export interface Command {
 }
 
 /**
+ * Read-only snapshot of a history entry for UI consumption.
+ */
+export interface HistoryEntry {
+  id: string
+  type: string
+  description: string
+}
+
+/**
  * CommandManager manages the undo/redo stack and transactions.
  */
 export class CommandManager {
@@ -35,6 +44,53 @@ export class CommandManager {
 
   get redoDescription(): string | undefined {
     return this.redoStack[this.redoStack.length - 1]?.description
+  }
+
+  /** Current cursor position (number of applied commands). */
+  get cursor(): number {
+    return this.undoStack.length
+  }
+
+  /** Total number of commands across undo + redo stacks. */
+  get totalCount(): number {
+    return this.undoStack.length + this.redoStack.length
+  }
+
+  /** Ordered snapshot of all history entries (oldest first). Redo entries are in reverse stack order. */
+  get historyEntries(): HistoryEntry[] {
+    const entries: HistoryEntry[] = []
+    for (const cmd of this.undoStack) {
+      entries.push({ id: cmd.id, type: cmd.type, description: cmd.description })
+    }
+    for (let i = this.redoStack.length - 1; i >= 0; i--) {
+      const cmd = this.redoStack[i]!
+      entries.push({ id: cmd.id, type: cmd.type, description: cmd.description })
+    }
+    return entries
+  }
+
+  /** Jump to a specific history position by batching undo/redo calls. */
+  goTo(index: number): void {
+    if (index < 0 || index > this.totalCount || index === this.undoStack.length)
+      return
+
+    if (index < this.undoStack.length) {
+      const steps = this.undoStack.length - index
+      for (let i = 0; i < steps; i++) {
+        const command = this.undoStack.pop()!
+        command.undo()
+        this.redoStack.push(command)
+      }
+    }
+    else {
+      const steps = index - this.undoStack.length
+      for (let i = 0; i < steps; i++) {
+        const command = this.redoStack.pop()!
+        command.execute()
+        this.undoStack.push(command)
+      }
+    }
+    this.notify()
   }
 
   execute(command: Command): void {

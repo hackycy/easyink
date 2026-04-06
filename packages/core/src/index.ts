@@ -1,5 +1,5 @@
 export { CommandManager, createBatchCommand } from './command'
-export type { Command } from './command'
+export type { Command, HistoryEntry } from './command'
 export {
   AddMaterialCommand,
   BindFieldCommand,

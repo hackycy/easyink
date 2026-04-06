@@ -120,4 +120,108 @@ describe('commandManager', () => {
     expect(mgr.canUndo).toBe(false)
     expect(mgr.canRedo).toBe(false)
   })
+
+  it('historyEntries returns ordered list across undo and redo stacks', () => {
+    const mgr = new CommandManager()
+    const log: string[] = []
+    mgr.execute(makeCommand('a', log))
+    mgr.execute(makeCommand('b', log))
+    mgr.execute(makeCommand('c', log))
+    mgr.undo() // c moves to redo
+
+    const entries = mgr.historyEntries
+    expect(entries).toHaveLength(3)
+    expect(entries.map(e => e.id)).toEqual(['a', 'b', 'c'])
+  })
+
+  it('cursor tracks undo stack depth', () => {
+    const mgr = new CommandManager()
+    const log: string[] = []
+    expect(mgr.cursor).toBe(0)
+
+    mgr.execute(makeCommand('a', log))
+    expect(mgr.cursor).toBe(1)
+
+    mgr.execute(makeCommand('b', log))
+    expect(mgr.cursor).toBe(2)
+
+    mgr.undo()
+    expect(mgr.cursor).toBe(1)
+
+    mgr.redo()
+    expect(mgr.cursor).toBe(2)
+  })
+
+  it('totalCount returns sum of both stacks', () => {
+    const mgr = new CommandManager()
+    const log: string[] = []
+    mgr.execute(makeCommand('a', log))
+    mgr.execute(makeCommand('b', log))
+    mgr.undo()
+    expect(mgr.totalCount).toBe(2)
+  })
+
+  it('goTo jumps backward (batch undo)', () => {
+    const mgr = new CommandManager()
+    const log: string[] = []
+    mgr.execute(makeCommand('a', log))
+    mgr.execute(makeCommand('b', log))
+    mgr.execute(makeCommand('c', log))
+
+    mgr.goTo(1)
+    expect(mgr.cursor).toBe(1)
+    expect(log).toEqual(['exec:a', 'exec:b', 'exec:c', 'undo:c', 'undo:b'])
+  })
+
+  it('goTo jumps forward (batch redo)', () => {
+    const mgr = new CommandManager()
+    const log: string[] = []
+    mgr.execute(makeCommand('a', log))
+    mgr.execute(makeCommand('b', log))
+    mgr.execute(makeCommand('c', log))
+    mgr.goTo(0)
+
+    log.length = 0
+    mgr.goTo(2)
+    expect(mgr.cursor).toBe(2)
+    expect(log).toEqual(['exec:a', 'exec:b'])
+  })
+
+  it('goTo to current position is a no-op', () => {
+    const mgr = new CommandManager()
+    const log: string[] = []
+    mgr.execute(makeCommand('a', log))
+
+    const listenerCalls: number[] = []
+    mgr.onChange(() => {
+      listenerCalls.push(1)
+    })
+    mgr.goTo(1)
+    expect(listenerCalls).toHaveLength(0)
+  })
+
+  it('goTo notifies only once', () => {
+    const mgr = new CommandManager()
+    const log: string[] = []
+    mgr.execute(makeCommand('a', log))
+    mgr.execute(makeCommand('b', log))
+    mgr.execute(makeCommand('c', log))
+
+    const listenerCalls: number[] = []
+    mgr.onChange(() => {
+      listenerCalls.push(1)
+    })
+    mgr.goTo(0)
+    expect(listenerCalls).toHaveLength(1)
+  })
+
+  it('clear resets historyEntries and cursor', () => {
+    const mgr = new CommandManager()
+    mgr.execute(makeCommand('a', []))
+    mgr.execute(makeCommand('b', []))
+    mgr.clear()
+    expect(mgr.historyEntries).toHaveLength(0)
+    expect(mgr.cursor).toBe(0)
+    expect(mgr.totalCount).toBe(0)
+  })
 })

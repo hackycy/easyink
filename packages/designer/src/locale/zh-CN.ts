@@ -229,6 +229,7 @@ const zhCN: LocaleMessages = {
     },
     history: {
       title: '历史记录',
+      initialState: '初始状态',
       empty: '暂无操作记录',
       current: '当前',
       addMaterial: '添加元素',
@@ -243,6 +244,13 @@ const zhCN: LocaleMessages = {
       clearBinding: '清除绑定',
       importTemplate: '导入模板',
       batch: '批量操作',
+      unionDrop: '批量投放',
+      insertTableRow: '插入表格行',
+      removeTableRow: '删除表格行',
+      resizeTableColumn: '调整列宽',
+      updateTableCell: '修改单元格',
+      updateTableSection: '修改表格区段',
+      updateUsage: '修改显示格式',
     },
     animation: {
       title: '动画',
