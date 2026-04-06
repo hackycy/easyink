@@ -192,6 +192,45 @@ importers:
       '@easyink/icons':
         specifier: workspace:*
         version: link:../icons
+      '@easyink/material-barcode':
+        specifier: workspace:*
+        version: link:../materials/barcode
+      '@easyink/material-chart':
+        specifier: workspace:*
+        version: link:../materials/chart
+      '@easyink/material-container':
+        specifier: workspace:*
+        version: link:../materials/container
+      '@easyink/material-ellipse':
+        specifier: workspace:*
+        version: link:../materials/ellipse
+      '@easyink/material-image':
+        specifier: workspace:*
+        version: link:../materials/image
+      '@easyink/material-line':
+        specifier: workspace:*
+        version: link:../materials/line
+      '@easyink/material-qrcode':
+        specifier: workspace:*
+        version: link:../materials/qrcode
+      '@easyink/material-rect':
+        specifier: workspace:*
+        version: link:../materials/rect
+      '@easyink/material-relation':
+        specifier: workspace:*
+        version: link:../materials/relation
+      '@easyink/material-svg':
+        specifier: workspace:*
+        version: link:../materials/svg
+      '@easyink/material-table-data':
+        specifier: workspace:*
+        version: link:../materials/table-data
+      '@easyink/material-table-static':
+        specifier: workspace:*
+        version: link:../materials/table-static
+      '@easyink/material-text':
+        specifier: workspace:*
+        version: link:../materials/text
       '@easyink/schema':
         specifier: workspace:*
         version: link:../schema

@@ -5,6 +5,7 @@ import type { LocaleMessages, SampleLibraryProvider, ViewerAdapter, PreferencePr
 import { onBeforeUnmount, reactive, watch } from 'vue'
 import { provideDesignerStore } from '../composables'
 import { DesignerStore } from '../store/designer-store'
+import { registerBuiltinMaterials } from '../materials/registry'
 import TopBarA from './TopBarA.vue'
 import TopBarB from './TopBarB.vue'
 import CanvasWorkspace from './CanvasWorkspace.vue'
@@ -26,6 +27,7 @@ const emit = defineEmits<{
 
 const store = reactive(new DesignerStore(props.schema)) as DesignerStore
 provideDesignerStore(store)
+registerBuiltinMaterials(store)
 
 if (props.locale) {
   store.setLocale(props.locale)

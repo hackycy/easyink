@@ -8,6 +8,7 @@ import { useElementResize } from '../composables/use-element-resize'
 import { useElementRotate } from '../composables/use-element-rotate'
 import { useMarqueeSelect } from '../composables/use-marquee-select'
 import { useDatasourceDrop } from '../composables/use-datasource-drop'
+import { useMaterialDrop } from '../composables/use-material-drop'
 import { CANVAS_CONTAINER_KEY } from './canvas-container'
 import GridOverlay from './GridOverlay.vue'
 import SnapLineOverlay from './SnapLineOverlay.vue'
@@ -66,6 +67,21 @@ const { onDragOver: onPageDragOver, onDrop: onPageDrop } = useDatasourceDrop({
   store,
   getPageEl: () => pageRef.value,
 })
+
+const { onDragOver: onMaterialDragOver, onDrop: onMaterialDrop } = useMaterialDrop({
+  store,
+  getPageEl: () => pageRef.value,
+})
+
+function handlePageDragOver(e: DragEvent) {
+  onPageDragOver(e)
+  onMaterialDragOver(e)
+}
+
+function handlePageDrop(e: DragEvent) {
+  onPageDrop(e)
+  onMaterialDrop(e)
+}
 
 // ─── Computed ────────────────────────────────────────────────────
 
@@ -240,8 +256,8 @@ onUnmounted(() => {
         ref="pageRef"
         class="ei-canvas-page"
         :style="pageStyle"
-        @dragover="onPageDragOver"
-        @drop="onPageDrop"
+        @dragover="handlePageDragOver"
+        @drop="handlePageDrop"
       >
         <!-- Grid overlay -->
         <GridOverlay />
