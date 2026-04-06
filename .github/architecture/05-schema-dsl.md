@@ -126,6 +126,13 @@ interface PagePrintConfig {
 }
 ```
 
+注意：
+
+- `DocumentSchema.unit` 是文档级字段，因此属性面板里的“单位”是文档上下文展示，不重复落到 `page`
+- `常用纸张` 是根据 `width / height` 推导和反写的编辑器派生控件，不是规范模型字段
+- `pages` 不只是“页数”显示，它还要支撑多编辑区模板和固定分页模板的编辑上下文
+- `连续排版`、`底部留白`、`readonly`、`title`、`preformat` 这类 benchmark 页面项在公开样例里来源并不稳定；语义未被完全归一前，先进入 `page.extensions` 或 `compat.passthrough`，不要草率固定成规范字段
+
 与对标产品字段的对应关系：
 
 | benchmark 字段 | EasyInk 规范字段 |
@@ -133,24 +140,31 @@ interface PagePrintConfig {
 | `viewer` | `page.mode` |
 | `width` / `height` | `page.width` / `page.height` |
 | `pages` | `page.pages` |
-| `scale` | `page.scale` |
+| `scale` / `scaleType` | `page.scale` |
 | `radius` | `page.radius` |
 | `xOffset` / `yOffset` | `page.offsetX` / `page.offsetY` |
 | `copies` | `page.copies` |
-| `blank` | `page.blankPolicy` |
+| `blank`（字符串或数字） | `page.blankPolicy` |
 | `labelCol` / `labelGap` | `page.label.columns` / `page.label.gap` |
 | `font` | `page.font` |
 | `gridWidth` / `gridHeight` | `page.grid.width` / `page.grid.height` |
-| `background` | `page.background.color` 或 `page.background.image` |
-| `backgroundRepeat` | `page.background.repeat` |
+| `background` / `backgroundImage` | `page.background.color` 或 `page.background.image` |
+| `backgroundRepeat`（如 `full` / `no-repeat`） | `page.background.repeat` |
 | `backgroundWidth` / `backgroundHeight` | `page.background.width` / `page.background.height` |
-| `backgroundXOffset` / `backgroundYOffset` | `page.background.offsetX` / `page.background.offsetY` |
+| `backgroundX` / `backgroundY` / `backgroundXOffset` / `backgroundYOffset` | `page.background.offsetX` / `page.background.offsetY` |
+
+兼容策略补充：
+
+- codec 不能假设 benchmark 页面字段命名全局一致，必须接受别名并归一化
+- 当原始值无法安全归一时，先保留到 `compat.passthrough`，优先保证模板资产无损
+- `backgroundRepeat = 'no-repeat'` 这类原始值应在兼容层归一成规范枚举，而不是把原始历史命名直接扩散到内部公共类型
 
 设计约束：
 
 - `fixed` 仍是当前第一优先级
 - 标签纸和多栏打印能力不能靠运行时临时参数补，必须进入 `page`
 - 背景图的拉伸、平移和重复方式属于模板永久语义
+- 页面属性面板里的派生控件不应污染 schema；schema 只保存能稳定回放的文档语义
 
 ## 5.4 元素模型
 

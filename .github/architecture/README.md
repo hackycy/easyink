@@ -2,7 +2,7 @@
 
 > 对标通用文档/报表设计器的前端设计器框架 -- 基于 Vue 3 + TypeScript + pnpm monorepo
 
-本目录记录 2026-04-04 第二轮对标修订后的 EasyInk 架构基线。第一轮文档已经把方向从“极简打印模板库”纠正为“通用文档/报表设计器框架”，第二轮修订解决的是另一个问题：概念上对了，但协议和属性层还不够细，继续实现会在 schema、datasource、designer、viewer 四条线上反复返工。
+本目录记录 2026-04-06 第三轮对标修订后的 EasyInk 架构基线。第一轮文档已经把方向从“极简打印模板库”纠正为“通用文档/报表设计器框架”，第二轮修订解决的是另一个问题：概念上对了，但协议和属性层还不够细，继续实现会在 schema、datasource、designer、viewer 四条线上反复返工。第三轮补上的是页面设置窗口的实测事实，解决“字段看起来差不多，但属性面板协议、benchmark 原始别名和派生 UI 字段边界还不清楚”的问题。
 
 当前统一基线：
 
@@ -10,11 +10,12 @@
 - `designer` 采用顶层双栏 + 画布内窗口系统 + 独立状态栏，而不是固定三栏布局
 - `viewer` 是独立运行时，可被设计器通过 iframe 嵌入，也可被宿主独立使用
 - Schema 要区分“EasyInk 内部规范模型”和“对标产品兼容输入”，避免把历史原始 JSON 噪音直接扩散到内部实现
-- 页面模型必须完整覆盖 `viewer / width / height / pages / scale / radius / offsets / copies / blank / label / grid / background` 这组真实打印语义
+- 页面模型必须完整覆盖 `viewer / width / height / pages / scale / radius / offsets / copies / blank / label / grid / background` 这组真实打印语义，并容忍 `scale/scaleType`、背景偏移字段和空白页策略的历史别名
 - 数据源协议必须覆盖 `id / name / tag / title / expand / headless / fields / use / props / union / bindIndex`
 - 顶部物料栏必须建模为“高频直达物料 + 分组目录物料”的混合入口，不是单层列表
 - `table`、`container`、`chart`、`svg`、`relation` 都是一级结构系统，不按普通矩形补丁处理
 - 属性面板必须支持“元素属性 + 页面属性”共用同一窗口壳层
+- 页面属性面板必须区分“规范字段 / benchmark 兼容字段 / 派生 UI 字段”，不能退化成 `width / height / mode` 三项表单
 - 工作台状态、模板状态、运行时状态明确分层，避免混写
 - `viewer` 导出链路要按运行时适配器建模，明确 lazy load 第三方导出依赖
 
@@ -56,6 +57,7 @@
 - 样例模板库是产品能力的一部分，同时也是回归测试资产库
 - 未识别物料、缺失数据、缺失字体、渲染失败都必须以可见诊断暴露，不允许静默吞掉
 - 对标产品的原始 JSON 字段命名存在历史噪音，EasyInk 不照搬噪音，但必须提供无损兼容编解码层
+- `DocumentSchema.unit`、纸张预设、页面类型标签这类信息在属性面板中可见，但不应盲目全部固化进 `page` 规范字段
 
 ## 快速导航
 

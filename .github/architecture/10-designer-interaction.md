@@ -231,6 +231,56 @@ interface PanelToggleState {
 - 元素选中时，优先显示元素属性区，再显示页面属性区
 - 页面属性永远不进入元素撤销栈，元素属性永远不污染工作台状态
 
+#### 页面属性区必须是描述符驱动系统，而不是三个输入框
+
+第三轮实测后可以确认，页面属性区至少要覆盖四类信息：
+
+- 文档上下文：类型、单位、预览器
+- 纸张与编辑区：宽、高、编辑区、常用纸张、标签列数与间距、圆角
+- 打印与分页：水平位置、垂直位置、打印份数、空白页、连续排版、底部留白
+- 辅助与背景：网格开关和尺寸、全局字体、背景颜色、背景图片、背景重复/缩放/偏移
+
+这里面至少包含三种来源：
+
+- 规范字段：直接落在 `DocumentSchema` 或 `page`
+- 兼容字段：来自 benchmark 原始 JSON 的历史别名或未归一字段
+- 派生控件：例如 `常用纸张`、`单位`，它们是编辑器便利视图，不应该直接保存成 schema 噪音
+
+因此页面属性区不应继续硬编码成 `width / height / mode` 三项表单，而应抽象为描述符系统：
+
+```typescript
+interface PagePropertyDescriptor {
+	id: string
+	group: 'document' | 'paper' | 'print' | 'assist' | 'background'
+	source: 'document' | 'page' | 'compat' | 'derived'
+	path: string
+	persisted: 'schema' | 'compat' | 'derived'
+	editor: 'readonly' | 'number' | 'select' | 'switch' | 'color' | 'asset'
+	visible?: (ctx: PagePropertyContext) => boolean
+	normalize?: (value: unknown, ctx: PagePropertyContext) => PagePropertyPatch
+}
+
+interface PagePropertyContext {
+	document: DocumentSchema
+	rawPage?: Record<string, unknown>
+	selectedElementId?: string
+}
+
+interface PagePropertyPatch {
+	page?: Partial<PageSchema>
+	document?: Partial<DocumentSchema>
+	compat?: Record<string, unknown>
+}
+```
+
+设计约束：
+
+- 页面属性区仍属于同一属性窗口壳层，元素选中时也不能消失
+- 派生控件写回时必须经过 `normalize`，避免把 `A4`、`毫米(mm)` 这类展示值直接写进模板
+- benchmark 中尚未稳定归一的页面项，先走 `compat` 或 `extensions`，不要在 Designer 层偷偷丢掉
+
+当前 EasyInk 仓库的页面属性实现仍是 `width / height / mode` 最小版。这个差距说明我们缺的不是若干控件，而是页面属性协议和兼容映射层本身。
+
 ### 结构树窗口
 
 结构树不是纯图层列表，而是真正的递归树。

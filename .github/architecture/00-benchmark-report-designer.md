@@ -63,28 +63,47 @@
 
 空白选中时主要显示页面属性；选中元素时，会先显示元素属性，再显示页面属性。这个壳层设计会直接影响 EasyInk 的属性面板实现。
 
-### 0.2.5 页面属性远比当前文档抽象层更细
+### 0.2.5 页面设置窗口不是字段清单，而是“规范字段 + 派生控件 + 兼容别名”的混合层
 
-`example_62.json` 和属性面板共同表明页面级模型至少包含：
+浏览器实测空白选中后的属性窗口，页面级设置当前至少直接暴露：
 
-- `viewer`
-- `width`、`height`、`pages`、`scale`
-- `radius`
-- `xOffset`、`yOffset`
-- `copies`
-- `blank`
-- `labelCol`、`labelGap`
-- `font`
-- `gridWidth`、`gridHeight`
-- `background`
-- `backgroundRepeat`
-- `backgroundWidth`、`backgroundHeight`
-- `backgroundXOffset`、`backgroundYOffset`
+- `类型`：基础页面，只读上下文标签
+- `单位`：毫米(mm)，来自文档级单位展示
+- `预览器`
+- `宽`、`高`
+- `编辑区`
+- `常用纸张`
+- `水平位置`、`垂直位置`
+- `打印份数`
+- `连续排版`
+- `底部留白`
+- `空白页`
+- `网格`
+- `全局字体`
+- `背景颜色`
+- `背景图片`
+
+这几个字段不是同一层语义：
+
+- `编辑区` 本质上对应 `page.pages`，不是单纯显示文本
+- `常用纸张` 是由 `width / height` 反推和联动的派生控件，不是公开样例 JSON 中稳定存在的原始字段
+- `水平位置 / 垂直位置 / 打印份数 / 空白页` 对应真实模板语义
+- `连续排版 / 底部留白` 在 UI 中可见，但公开样例 JSON 没有稳定统一的字段命名，说明属性面板里还包含一层历史兼容或默认值推导
+- `网格` 在当前页面态默认只暴露开关，但公开样例 JSON 已保存 `gridWidth / gridHeight`
+
+公开样例 JSON 进一步说明页面原始协议并不稳定：
+
+- `example_60.json` 使用 `scale`、`blank: 2`、`backgroundX / backgroundY`
+- `example_52.json` 使用 `scaleType`、`blank: 'remove'`、`backgroundXOffset / backgroundYOffset`
+- `example_44.json` 还带有 `readonly`、`title`、`preformat`、`backgroundImage`
+- `backgroundRepeat` 公开值里同时出现 `no-repeat` 和 `full`
 
 结论：
 
 - 页面模型不能只停留在 `mode + width + height`
+- 页面属性面板不是 `PageSchema` 的平面镜像，而是“规范字段 + benchmark 原始别名 + 派生编辑器控件”的翻译层
 - 标签纸、多栏打印、背景缩放和平移都属于模板永久语义，不是运行时临时参数
+- 当前 EasyInk 仓库里页面属性仍只有 `width / height / mode` 最小实现，这和对标产品的差距本质上是协议层缺口，不是控件数量差一点
 
 ### 0.2.6 数据源不是简单字段树，而是拖拽协议
 
@@ -256,8 +275,10 @@
 1. `designer` 是完整工作台，不是单纯画布组件集合。
 2. `viewer` 是独立运行时层，能被设计器嵌入，也能被宿主应用单独调用。
 3. 属性窗口要支持“元素属性 + 页面属性”共用壳层，而不是把它们拆成两个系统。
-4. Schema 至少要完整覆盖页面打印语义、辅助线、结构物料、绑定、动画和分页行为。
-5. EasyInk 内部规范模型与对标产品原始 JSON 要明确区分，并通过 codec 做兼容，不直接把原始历史噪音扩散到内部 API。
+4. 页面属性系统要区分规范字段、兼容字段和派生控件，不能把纸张预设、单位展示这类编辑器便利字段直接固化成 schema 噪音。
+5. Schema 至少要完整覆盖页面打印语义、辅助线、结构物料、绑定、动画和分页行为。
+6. EasyInk 内部规范模型与对标产品原始 JSON 要明确区分，并通过 codec 做兼容，不直接把原始历史噪音扩散到内部 API。
+7. benchmark codec 必须接受 `scale/scaleType`、`backgroundX/backgroundY` 与 `backgroundXOffset/backgroundYOffset`、`background/backgroundImage`、数字和字符串两种 `blank` 等历史别名。
 6. 数据源层要支持字段树、数据源引用、推荐物料、格式规则、`union` 和 `bindIndex`。
 7. `table`、`container`、`chart`、`svg`、`relation` 等都应视为一级系统。
 8. Designer 工作台中的窗口系统必须支持拖拽、折叠、关闭、尺寸调整和状态持久化。
