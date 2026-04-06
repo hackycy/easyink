@@ -1,9 +1,9 @@
 <script setup lang="ts">
+import type { MaterialNode } from '@easyink/schema'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import {
   IconBold,
   IconClear,
-  IconClose,
   IconChevronLeft,
   IconChevronRight,
   IconCopy,
@@ -32,6 +32,17 @@ import {
   IconZoomIn,
   IconZoomOut,
 } from '@easyink/icons'
+import {
+  AddMaterialCommand,
+  MoveMaterialCommand,
+  RemoveMaterialCommand,
+  RotateMaterialCommand,
+  UpdateMaterialPropsCommand,
+  getBoundingRect,
+  normalizeRotation,
+} from '@easyink/core'
+import { deepClone, generateId } from '@easyink/shared'
+import { createDefaultSchema } from '@easyink/schema'
 import { useDesignerStore } from '../composables'
 
 const store = useDesignerStore()
@@ -43,6 +54,15 @@ const visibleGroups = computed(() =>
 )
 
 const alignClass = computed(() => `ei-topbar-b--align-${store.workbench.toolbar.align}`)
+
+// ─── Helpers ──────────────────────────────────────────────────
+const selectedNodes = computed<MaterialNode[]>(() =>
+  store.selection.ids
+    .map(id => store.getElementById(id))
+    .filter((n): n is MaterialNode => n != null),
+)
+
+const hasSelection = computed(() => !store.selection.isEmpty)
 
 // ─── Scroll carousel ────────────────────────────────────────────
 const groupsRef = ref<HTMLElement | null>(null)
@@ -79,7 +99,7 @@ onUnmounted(() => {
   resizeObserver?.disconnect()
 })
 
-// ─── Handlers ───────────────────────────────────────────────────
+// ─── Undo / Redo ─────────────────────────────────────────────
 function handleUndo() {
   store.commands.undo()
 }
@@ -88,11 +108,311 @@ function handleRedo() {
   store.commands.redo()
 }
 
+// ─── Toolbar Manager ─────────────────────────────────────────
 function openToolbarManager() {
   const win = store.workbench.windows.find(w => w.kind === 'toolbar-manager')
   if (win) {
     win.visible = !win.visible
   }
+}
+
+// ─── New / Clear ─────────────────────────────────────────────
+function handleNewTemplate() {
+  store.setSchema(createDefaultSchema())
+}
+
+function handleClear() {
+  if (store.schema.elements.length === 0) return
+  // eslint-disable-next-line no-alert
+  if (!confirm(store.t('designer.message.confirmClear'))) return
+  store.setSchema(createDefaultSchema())
+}
+
+// ─── Font Style (bold / italic / underline) ──────────────────
+function toggleFontProp(prop: 'fontWeight' | 'fontStyle' | 'textDecoration') {
+  const nodes = selectedNodes.value
+  if (nodes.length === 0) return
+
+  const elements = store.schema.elements
+  store.commands.beginTransaction(`Toggle ${prop}`)
+  for (const node of nodes) {
+    const current = node.props[prop]
+    let next: unknown
+    if (prop === 'fontWeight') {
+      next = current === 'bold' ? 'normal' : 'bold'
+    }
+    else if (prop === 'fontStyle') {
+      next = current === 'italic' ? 'normal' : 'italic'
+    }
+    else {
+      next = current === 'underline' ? 'none' : 'underline'
+    }
+    store.commands.execute(
+      new UpdateMaterialPropsCommand(elements, node.id, { [prop]: next }),
+    )
+  }
+  store.commands.commitTransaction()
+}
+
+function handleBold() { toggleFontProp('fontWeight') }
+function handleItalic() { toggleFontProp('fontStyle') }
+function handleUnderline() { toggleFontProp('textDecoration') }
+
+// ─── Rotation ────────────────────────────────────────────────
+function handleRotation() {
+  const nodes = selectedNodes.value
+  if (nodes.length === 0) return
+
+  const elements = store.schema.elements
+  store.commands.beginTransaction('Rotate +90')
+  for (const node of nodes) {
+    const next = normalizeRotation((node.rotation ?? 0) + 90)
+    store.commands.execute(
+      new RotateMaterialCommand(elements, node.id, next),
+    )
+  }
+  store.commands.commitTransaction()
+}
+
+// ─── Visibility ──────────────────────────────────────────────
+function handleVisibility() {
+  const nodes = selectedNodes.value
+  if (nodes.length === 0) return
+
+  for (const node of nodes) {
+    store.updateElement(node.id, { hidden: !node.hidden })
+  }
+}
+
+// ─── Select ──────────────────────────────────────────────────
+function handleSelectAll() {
+  store.selection.selectMultiple(store.schema.elements.map(el => el.id))
+}
+
+function handleSelectSameType() {
+  const nodes = selectedNodes.value
+  if (nodes.length === 0) return
+
+  const types = new Set(nodes.map(n => n.type))
+  const sameTypeIds = store.schema.elements
+    .filter(el => types.has(el.type))
+    .map(el => el.id)
+  store.selection.selectMultiple(sameTypeIds)
+}
+
+// ─── Distribute ──────────────────────────────────────────────
+function handleDistribute() {
+  const nodes = selectedNodes.value
+  if (nodes.length < 3) return
+
+  const sorted = [...nodes].sort((a, b) => a.x - b.x)
+  const first = sorted[0]!
+  const last = sorted[sorted.length - 1]!
+  const totalSpan = (last.x + last.width) - first.x
+  const totalWidth = sorted.reduce((sum, n) => sum + n.width, 0)
+  const gap = (totalSpan - totalWidth) / (sorted.length - 1)
+
+  const elements = store.schema.elements
+  store.commands.beginTransaction('Distribute horizontally')
+  let currentX = first.x + first.width + gap
+  for (let i = 1; i < sorted.length - 1; i++) {
+    const node = sorted[i]!
+    store.commands.execute(
+      new MoveMaterialCommand(elements, node.id, { x: currentX, y: node.y }),
+    )
+    currentX += node.width + gap
+  }
+  store.commands.commitTransaction()
+}
+
+// ─── Align ───────────────────────────────────────────────────
+function handleAlign(mode: 'left' | 'center' | 'right') {
+  const nodes = selectedNodes.value
+  if (nodes.length < 2) return
+
+  const rects = nodes.map(n => ({ x: n.x, y: n.y, width: n.width, height: n.height }))
+  const bounds = getBoundingRect(rects)
+  if (!bounds) return
+
+  const elements = store.schema.elements
+  store.commands.beginTransaction(`Align ${mode}`)
+  for (const node of nodes) {
+    let newX = node.x
+    if (mode === 'left') {
+      newX = bounds.x
+    }
+    else if (mode === 'center') {
+      newX = bounds.x + (bounds.width - node.width) / 2
+    }
+    else {
+      newX = bounds.x + bounds.width - node.width
+    }
+    if (newX !== node.x) {
+      store.commands.execute(
+        new MoveMaterialCommand(elements, node.id, { x: newX, y: node.y }),
+      )
+    }
+  }
+  store.commands.commitTransaction()
+}
+
+// ─── Layer ───────────────────────────────────────────────────
+function handleLayerUp() {
+  const nodes = selectedNodes.value
+  if (nodes.length === 0) return
+
+  const elements = store.schema.elements
+  for (const node of nodes) {
+    const currentZ = node.zIndex ?? 0
+    const above = elements
+      .filter(el => (el.zIndex ?? 0) > currentZ)
+      .sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0))
+    if (above.length > 0) {
+      const nextZ = above[0]!.zIndex ?? 0
+      store.updateElement(node.id, { zIndex: nextZ + 1 })
+    }
+  }
+}
+
+function handleLayerDown() {
+  const nodes = selectedNodes.value
+  if (nodes.length === 0) return
+
+  const elements = store.schema.elements
+  for (const node of nodes) {
+    const currentZ = node.zIndex ?? 0
+    const below = elements
+      .filter(el => (el.zIndex ?? 0) < currentZ)
+      .sort((a, b) => (b.zIndex ?? 0) - (a.zIndex ?? 0))
+    if (below.length > 0) {
+      const prevZ = below[0]!.zIndex ?? 0
+      store.updateElement(node.id, { zIndex: prevZ - 1 })
+    }
+  }
+}
+
+// ─── Group / Ungroup ─────────────────────────────────────────
+function handleGroup() {
+  const nodes = selectedNodes.value
+  if (nodes.length < 2) return
+
+  const rects = nodes.map(n => ({ x: n.x, y: n.y, width: n.width, height: n.height }))
+  const bounds = getBoundingRect(rects)
+  if (!bounds) return
+
+  const elements = store.schema.elements
+  const children: MaterialNode[] = nodes.map(n => ({
+    ...deepClone(n),
+    x: n.x - bounds.x,
+    y: n.y - bounds.y,
+  }))
+
+  store.commands.beginTransaction('Group')
+  for (const node of nodes) {
+    store.commands.execute(new RemoveMaterialCommand(elements, node.id))
+  }
+  const groupNode: MaterialNode = {
+    id: generateId('grp'),
+    type: 'group',
+    x: bounds.x,
+    y: bounds.y,
+    width: bounds.width,
+    height: bounds.height,
+    props: {},
+    children,
+  }
+  store.commands.execute(new AddMaterialCommand(elements, groupNode))
+  store.commands.commitTransaction()
+
+  store.selection.select(groupNode.id)
+}
+
+function handleUngroup() {
+  const nodes = selectedNodes.value
+  if (nodes.length === 0) return
+
+  const elements = store.schema.elements
+  const ungroupedIds: string[] = []
+
+  store.commands.beginTransaction('Ungroup')
+  for (const node of nodes) {
+    if (node.type !== 'group' || !node.children?.length) continue
+    const children = node.children.map(c => ({
+      ...deepClone(c),
+      id: generateId('el'),
+      x: c.x + node.x,
+      y: c.y + node.y,
+    }))
+    store.commands.execute(new RemoveMaterialCommand(elements, node.id))
+    for (const child of children) {
+      store.commands.execute(new AddMaterialCommand(elements, child))
+      ungroupedIds.push(child.id)
+    }
+  }
+  store.commands.commitTransaction()
+
+  if (ungroupedIds.length > 0) {
+    store.selection.selectMultiple(ungroupedIds)
+  }
+}
+
+// ─── Lock ────────────────────────────────────────────────────
+function handleLock() {
+  const nodes = selectedNodes.value
+  if (nodes.length === 0) return
+
+  const allLocked = nodes.every(n => n.locked)
+  for (const node of nodes) {
+    store.updateElement(node.id, { locked: !allLocked })
+  }
+}
+
+// ─── Clipboard ───────────────────────────────────────────────
+function handleCopy() {
+  const nodes = selectedNodes.value
+  if (nodes.length === 0) return
+  store.clipboard = nodes.map(n => deepClone(n))
+}
+
+function handlePaste() {
+  if (store.clipboard.length === 0) return
+
+  const elements = store.schema.elements
+  const offset = 10
+  const newIds: string[] = []
+
+  store.commands.beginTransaction('Paste')
+  for (const node of store.clipboard) {
+    const pasted: MaterialNode = {
+      ...deepClone(node),
+      id: generateId('el'),
+      x: node.x + offset,
+      y: node.y + offset,
+    }
+    store.commands.execute(new AddMaterialCommand(elements, pasted))
+    newIds.push(pasted.id)
+  }
+  store.commands.commitTransaction()
+
+  store.selection.selectMultiple(newIds)
+}
+
+function handleDelete() {
+  const nodes = selectedNodes.value
+  if (nodes.length === 0) return
+
+  const elements = store.schema.elements
+  store.commands.beginTransaction('Delete')
+  for (const node of nodes) {
+    store.commands.execute(new RemoveMaterialCommand(elements, node.id))
+  }
+  store.commands.commitTransaction()
+  store.selection.clear()
+}
+
+// ─── Snap ────────────────────────────────────────────────────
+function handleSnap() {
+  store.workbench.snap.enabled = !store.workbench.snap.enabled
 }
 </script>
 
@@ -143,111 +463,208 @@ function openToolbarManager() {
 
         <!-- new-clear -->
         <div v-else-if="group.id === 'new-clear'" class="ei-topbar-b__group">
-          <button class="ei-topbar-b__btn" :title="store.t('designer.toolbar.newTemplate')">
+          <button
+            class="ei-topbar-b__btn"
+            :title="store.t('designer.toolbar.newTemplate')"
+            @click="handleNewTemplate"
+          >
             <IconNewTemplate :size="16" :stroke-width="1.5" />
           </button>
-          <button class="ei-topbar-b__btn" :title="store.t('designer.toolbar.clear')">
+          <button
+            class="ei-topbar-b__btn"
+            :title="store.t('designer.toolbar.clear')"
+            @click="handleClear"
+          >
             <IconClear :size="16" :stroke-width="1.5" />
           </button>
         </div>
 
         <!-- font -->
         <div v-else-if="group.id === 'font'" class="ei-topbar-b__group">
-          <button class="ei-topbar-b__btn" :title="store.t('designer.toolbar.bold')">
+          <button
+            class="ei-topbar-b__btn"
+            :disabled="!hasSelection"
+            :title="store.t('designer.toolbar.bold')"
+            @click="handleBold"
+          >
             <IconBold :size="16" :stroke-width="1.5" />
           </button>
-          <button class="ei-topbar-b__btn" :title="store.t('designer.toolbar.italic')">
+          <button
+            class="ei-topbar-b__btn"
+            :disabled="!hasSelection"
+            :title="store.t('designer.toolbar.italic')"
+            @click="handleItalic"
+          >
             <IconItalic :size="16" :stroke-width="1.5" />
           </button>
-          <button class="ei-topbar-b__btn" :title="store.t('designer.toolbar.underline')">
+          <button
+            class="ei-topbar-b__btn"
+            :disabled="!hasSelection"
+            :title="store.t('designer.toolbar.underline')"
+            @click="handleUnderline"
+          >
             <IconUnderline :size="16" :stroke-width="1.5" />
           </button>
         </div>
 
         <!-- rotation -->
         <div v-else-if="group.id === 'rotation'" class="ei-topbar-b__group">
-          <button class="ei-topbar-b__btn" :title="store.t('designer.toolbar.rotation')">
+          <button
+            class="ei-topbar-b__btn"
+            :disabled="!hasSelection"
+            :title="store.t('designer.toolbar.rotation')"
+            @click="handleRotation"
+          >
             <IconRotation :size="16" :stroke-width="1.5" />
           </button>
         </div>
 
         <!-- visibility -->
         <div v-else-if="group.id === 'visibility'" class="ei-topbar-b__group">
-          <button class="ei-topbar-b__btn" :title="store.t('designer.property.hidden')">
+          <button
+            class="ei-topbar-b__btn"
+            :disabled="!hasSelection"
+            :title="store.t('designer.property.hidden')"
+            @click="handleVisibility"
+          >
             <IconVisibility :size="16" :stroke-width="1.5" />
           </button>
         </div>
 
         <!-- select -->
         <div v-else-if="group.id === 'select'" class="ei-topbar-b__group">
-          <button class="ei-topbar-b__btn" :title="store.t('designer.toolbar.selectAll')">
+          <button
+            class="ei-topbar-b__btn"
+            :title="store.t('designer.toolbar.selectAll')"
+            @click="handleSelectAll"
+          >
             <IconSelectAll :size="16" :stroke-width="1.5" />
           </button>
-          <button class="ei-topbar-b__btn" :title="store.t('designer.toolbar.selectSameType')">
+          <button
+            class="ei-topbar-b__btn"
+            :disabled="!hasSelection"
+            :title="store.t('designer.toolbar.selectSameType')"
+            @click="handleSelectSameType"
+          >
             <IconSelectSameType :size="16" :stroke-width="1.5" />
           </button>
         </div>
 
         <!-- distribute -->
         <div v-else-if="group.id === 'distribute'" class="ei-topbar-b__group">
-          <button class="ei-topbar-b__btn" :title="store.t('designer.toolbar.distribute')">
+          <button
+            class="ei-topbar-b__btn"
+            :disabled="selectedNodes.length < 3"
+            :title="store.t('designer.toolbar.distribute')"
+            @click="handleDistribute"
+          >
             <IconDistribute :size="16" :stroke-width="1.5" />
           </button>
         </div>
 
         <!-- align -->
         <div v-else-if="group.id === 'align'" class="ei-topbar-b__group">
-          <button class="ei-topbar-b__btn" :title="store.t('designer.toolbar.alignLeft')">
+          <button
+            class="ei-topbar-b__btn"
+            :disabled="selectedNodes.length < 2"
+            :title="store.t('designer.toolbar.alignLeft')"
+            @click="handleAlign('left')"
+          >
             <IconAlignLeft :size="16" :stroke-width="1.5" />
           </button>
-          <button class="ei-topbar-b__btn" :title="store.t('designer.toolbar.alignCenter')">
+          <button
+            class="ei-topbar-b__btn"
+            :disabled="selectedNodes.length < 2"
+            :title="store.t('designer.toolbar.alignCenter')"
+            @click="handleAlign('center')"
+          >
             <IconAlignCenter :size="16" :stroke-width="1.5" />
           </button>
-          <button class="ei-topbar-b__btn" :title="store.t('designer.toolbar.alignRight')">
+          <button
+            class="ei-topbar-b__btn"
+            :disabled="selectedNodes.length < 2"
+            :title="store.t('designer.toolbar.alignRight')"
+            @click="handleAlign('right')"
+          >
             <IconAlignRight :size="16" :stroke-width="1.5" />
           </button>
         </div>
 
         <!-- layer -->
         <div v-else-if="group.id === 'layer'" class="ei-topbar-b__group">
-          <button class="ei-topbar-b__btn" :title="store.t('designer.toolbar.layerUp')">
+          <button
+            class="ei-topbar-b__btn"
+            :disabled="!hasSelection"
+            :title="store.t('designer.toolbar.layerUp')"
+            @click="handleLayerUp"
+          >
             <IconLayerUp :size="16" :stroke-width="1.5" />
           </button>
-          <button class="ei-topbar-b__btn" :title="store.t('designer.toolbar.layerDown')">
+          <button
+            class="ei-topbar-b__btn"
+            :disabled="!hasSelection"
+            :title="store.t('designer.toolbar.layerDown')"
+            @click="handleLayerDown"
+          >
             <IconLayerDown :size="16" :stroke-width="1.5" />
           </button>
         </div>
 
         <!-- group -->
         <div v-else-if="group.id === 'group'" class="ei-topbar-b__group">
-          <button class="ei-topbar-b__btn" :title="store.t('designer.toolbar.group')">
+          <button
+            class="ei-topbar-b__btn"
+            :disabled="selectedNodes.length < 2"
+            :title="store.t('designer.toolbar.group')"
+            @click="handleGroup"
+          >
             <IconGroup :size="16" :stroke-width="1.5" />
           </button>
-          <button class="ei-topbar-b__btn" :title="store.t('designer.toolbar.ungroup')">
+          <button
+            class="ei-topbar-b__btn"
+            :disabled="!selectedNodes.some(n => n.type === 'group')"
+            :title="store.t('designer.toolbar.ungroup')"
+            @click="handleUngroup"
+          >
             <IconUngroup :size="16" :stroke-width="1.5" />
           </button>
         </div>
 
         <!-- lock -->
         <div v-else-if="group.id === 'lock'" class="ei-topbar-b__group">
-          <button class="ei-topbar-b__btn" :title="store.t('designer.toolbar.lock')">
+          <button
+            class="ei-topbar-b__btn"
+            :disabled="!hasSelection"
+            :title="selectedNodes.every(n => n.locked) ? store.t('designer.toolbar.unlock') : store.t('designer.toolbar.lock')"
+            @click="handleLock"
+          >
             <IconLock :size="16" :stroke-width="1.5" />
           </button>
         </div>
 
         <!-- clipboard -->
         <div v-else-if="group.id === 'clipboard'" class="ei-topbar-b__group">
-          <button class="ei-topbar-b__btn" :title="store.t('designer.toolbar.copy')">
+          <button
+            class="ei-topbar-b__btn"
+            :disabled="!hasSelection"
+            :title="store.t('designer.toolbar.copy')"
+            @click="handleCopy"
+          >
             <IconCopy :size="16" :stroke-width="1.5" />
           </button>
-          <button class="ei-topbar-b__btn" :title="store.t('designer.toolbar.paste')">
+          <button
+            class="ei-topbar-b__btn"
+            :disabled="store.clipboard.length === 0"
+            :title="store.t('designer.toolbar.paste')"
+            @click="handlePaste"
+          >
             <IconPaste :size="16" :stroke-width="1.5" />
           </button>
           <button
             class="ei-topbar-b__btn"
-            :disabled="store.selection.isEmpty"
+            :disabled="!hasSelection"
             :title="store.t('designer.toolbar.delete')"
-            @click="store.selection.ids.forEach(id => store.removeElement(id))"
+            @click="handleDelete"
           >
             <IconDelete :size="16" :stroke-width="1.5" />
           </button>
@@ -255,7 +672,12 @@ function openToolbarManager() {
 
         <!-- snap -->
         <div v-else-if="group.id === 'snap'" class="ei-topbar-b__group">
-          <button class="ei-topbar-b__btn" :title="store.t('designer.toolbar.snapToGrid')">
+          <button
+            class="ei-topbar-b__btn"
+            :class="{ 'ei-topbar-b__btn--active': store.workbench.snap.enabled }"
+            :title="store.t('designer.toolbar.snapToGrid')"
+            @click="handleSnap"
+          >
             <IconSnap :size="16" :stroke-width="1.5" />
           </button>
         </div>
@@ -349,6 +771,11 @@ function openToolbarManager() {
 .ei-topbar-b__btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+.ei-topbar-b__btn--active {
+  background: var(--ei-active-bg, #d0d0d0);
+  border-color: var(--ei-border-color, #e0e0e0);
 }
 
 .ei-topbar-b__scroll-btn {

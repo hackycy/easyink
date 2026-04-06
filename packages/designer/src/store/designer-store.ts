@@ -19,6 +19,9 @@ export class DesignerStore {
   readonly selection = new SelectionModel()
   readonly dataSourceRegistry = new DataSourceRegistry()
 
+  // ─── Clipboard (internal, not in Schema) ──────────────────────
+  clipboard: MaterialNode[] = []
+
   // ─── Workbench state (NOT in Schema, NOT in undo/redo) ───────
   readonly workbench = createDefaultWorkbenchState()
   readonly tableEditing = createDefaultTableEditing()
@@ -143,5 +146,6 @@ export class DesignerStore {
     this._materials.clear()
     this._materialDesignerExtensions.clear()
     this._catalog = []
+    this.clipboard = []
   }
 }
