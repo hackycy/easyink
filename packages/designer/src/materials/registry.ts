@@ -6,70 +6,82 @@ import {
   BARCODE_TYPE,
   createBarcodeNode,
   getBarcodeContextActions,
+  renderBarcodeContent,
 } from '@easyink/material-barcode'
 import {
   CHART_CAPABILITIES,
   CHART_TYPE,
   createChartNode,
   getChartContextActions,
+  renderChartContent,
 } from '@easyink/material-chart'
 import {
   CONTAINER_CAPABILITIES,
   CONTAINER_TYPE,
   createContainerNode,
   getContainerContextActions,
+  renderContainerContent,
 } from '@easyink/material-container'
 import {
   createEllipseNode,
   ELLIPSE_CAPABILITIES,
   ELLIPSE_TYPE,
   getEllipseContextActions,
+  renderEllipseContent,
 } from '@easyink/material-ellipse'
 import {
   createImageNode,
   getImageContextActions,
   IMAGE_CAPABILITIES,
   IMAGE_TYPE,
+  renderImageContent,
 } from '@easyink/material-image'
 import {
   createLineNode,
   getLineContextActions,
   LINE_CAPABILITIES,
   LINE_TYPE,
+  renderLineContent,
 } from '@easyink/material-line'
 import {
   createQrcodeNode,
   getQrcodeContextActions,
   QRCODE_CAPABILITIES,
   QRCODE_TYPE,
+  renderQrcodeContent,
 } from '@easyink/material-qrcode'
 import {
   createRectNode,
   getRectContextActions,
   RECT_CAPABILITIES,
   RECT_TYPE,
+  renderRectContent,
 } from '@easyink/material-rect'
 import {
   createRelationNode,
   getRelationContextActions,
   RELATION_CAPABILITIES,
   RELATION_TYPE,
+  renderRelationContent,
 } from '@easyink/material-relation'
 import {
   createSvgNode,
   getSvgContextActions,
+  renderSvgContent,
   SVG_CAPABILITIES,
   SVG_TYPE,
 } from '@easyink/material-svg'
 import {
   createTableDataNode,
   getTableDataContextActions,
+  renderTableDataContent,
   TABLE_DATA_CAPABILITIES,
   TABLE_DATA_TYPE,
 } from '@easyink/material-table-data'
 import {
   createTableStaticNode,
   getTableStaticContextActions,
+  renderTableStaticContent,
   TABLE_STATIC_CAPABILITIES,
   TABLE_STATIC_TYPE,
 } from '@easyink/material-table-static'
@@ -77,6 +89,7 @@ import {
   createTextNode,
   getTextContextActions,
   getTextToolbarActions,
+  renderTextContent,
   TEXT_CAPABILITIES,
   TEXT_TYPE,
 } from '@easyink/material-text'
@@ -103,6 +116,7 @@ const MATERIALS: MaterialEntry[] = [
     capabilities: TEXT_CAPABILITIES,
     createDefaultNode: createTextNode,
     extension: {
+      renderContent: renderTextContent,
       getToolbarActions: getTextToolbarActions,
       getContextActions: getTextContextActions,
     },
@@ -114,7 +128,7 @@ const MATERIALS: MaterialEntry[] = [
     category: 'basic',
     capabilities: IMAGE_CAPABILITIES,
     createDefaultNode: createImageNode,
-    extension: { getContextActions: getImageContextActions },
+    extension: { renderContent: renderImageContent, getContextActions: getImageContextActions },
   },
   {
     type: BARCODE_TYPE,
@@ -123,7 +137,7 @@ const MATERIALS: MaterialEntry[] = [
     category: 'basic',
     capabilities: BARCODE_CAPABILITIES,
     createDefaultNode: createBarcodeNode,
-    extension: { getContextActions: getBarcodeContextActions },
+    extension: { renderContent: renderBarcodeContent, getContextActions: getBarcodeContextActions },
   },
   {
     type: QRCODE_TYPE,
@@ -132,7 +146,7 @@ const MATERIALS: MaterialEntry[] = [
     category: 'basic',
     capabilities: QRCODE_CAPABILITIES,
     createDefaultNode: createQrcodeNode,
-    extension: { getContextActions: getQrcodeContextActions },
+    extension: { renderContent: renderQrcodeContent, getContextActions: getQrcodeContextActions },
   },
   {
     type: LINE_TYPE,
@@ -141,7 +155,7 @@ const MATERIALS: MaterialEntry[] = [
     category: 'basic',
     capabilities: LINE_CAPABILITIES,
     createDefaultNode: createLineNode,
-    extension: { getContextActions: getLineContextActions },
+    extension: { renderContent: renderLineContent, getContextActions: getLineContextActions },
   },
   {
     type: RECT_TYPE,
@@ -150,7 +164,7 @@ const MATERIALS: MaterialEntry[] = [
     category: 'basic',
     capabilities: RECT_CAPABILITIES,
     createDefaultNode: createRectNode,
-    extension: { getContextActions: getRectContextActions },
+    extension: { renderContent: renderRectContent, getContextActions: getRectContextActions },
   },
   {
     type: ELLIPSE_TYPE,
@@ -159,7 +173,7 @@ const MATERIALS: MaterialEntry[] = [
     category: 'basic',
     capabilities: ELLIPSE_CAPABILITIES,
     createDefaultNode: createEllipseNode,
-    extension: { getContextActions: getEllipseContextActions },
+    extension: { renderContent: renderEllipseContent, getContextActions: getEllipseContextActions },
   },
   {
     type: CONTAINER_TYPE,
@@ -168,7 +182,7 @@ const MATERIALS: MaterialEntry[] = [
     category: 'layout',
     capabilities: CONTAINER_CAPABILITIES,
     createDefaultNode: createContainerNode,
-    extension: { getContextActions: getContainerContextActions },
+    extension: { renderContent: renderContainerContent, getContextActions: getContainerContextActions },
   },
   {
     type: TABLE_STATIC_TYPE,
@@ -177,7 +191,7 @@ const MATERIALS: MaterialEntry[] = [
     category: 'data',
     capabilities: TABLE_STATIC_CAPABILITIES,
     createDefaultNode: createTableStaticNode,
-    extension: { getContextActions: getTableStaticContextActions },
+    extension: { renderContent: renderTableStaticContent, getContextActions: getTableStaticContextActions },
   },
   {
     type: TABLE_DATA_TYPE,
@@ -186,7 +200,7 @@ const MATERIALS: MaterialEntry[] = [
     category: 'data',
     capabilities: TABLE_DATA_CAPABILITIES,
     createDefaultNode: createTableDataNode,
-    extension: { getContextActions: getTableDataContextActions },
+    extension: { renderContent: renderTableDataContent, getContextActions: getTableDataContextActions },
   },
   {
     type: CHART_TYPE,
@@ -195,7 +209,7 @@ const MATERIALS: MaterialEntry[] = [
     category: 'chart',
     capabilities: CHART_CAPABILITIES,
     createDefaultNode: createChartNode,
-    extension: { getContextActions: getChartContextActions },
+    extension: { renderContent: renderChartContent, getContextActions: getChartContextActions },
   },
   {
     type: SVG_TYPE,
@@ -204,7 +218,7 @@ const MATERIALS: MaterialEntry[] = [
     category: 'svg',
     capabilities: SVG_CAPABILITIES,
     createDefaultNode: createSvgNode,
-    extension: { getContextActions: getSvgContextActions },
+    extension: { renderContent: renderSvgContent, getContextActions: getSvgContextActions },
   },
   {
     type: RELATION_TYPE,
@@ -213,7 +227,7 @@ const MATERIALS: MaterialEntry[] = [
     category: 'relation',
     capabilities: RELATION_CAPABILITIES,
     createDefaultNode: createRelationNode,
-    extension: { getContextActions: getRelationContextActions },
+    extension: { renderContent: renderRelationContent, getContextActions: getRelationContextActions },
   },
 ]
 

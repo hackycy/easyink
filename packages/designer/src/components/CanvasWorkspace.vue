@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import type { DesignerRenderContext, DesignerRenderOutput } from '../types'
 import type { MarqueeRect } from '../composables/use-marquee-select'
 import type { ResizeHandle } from '../composables/use-element-resize'
+import type { BindingRef, MaterialNode } from '@easyink/schema'
 import { computed, onMounted, onUnmounted, provide, ref } from 'vue'
 import { useDesignerStore } from '../composables'
 import { useElementDrag } from '../composables/use-element-drag'
@@ -100,6 +102,29 @@ const pageStyle = computed(() => {
 })
 
 const elements = computed(() => store.getElements())
+
+const renderContext: DesignerRenderContext = {
+  unit: store.schema.unit,
+  getBindingLabel(binding: BindingRef): string {
+    return binding.fieldLabel || binding.fieldPath || ''
+  },
+}
+
+const renderedContentMap = computed(() => {
+  const map = new Map<string, DesignerRenderOutput>()
+  for (const el of elements.value) {
+    const ext = store.getDesignerExtension(el.type)
+    if (ext?.renderContent) {
+      renderContext.unit = store.schema.unit
+      map.set(el.id, ext.renderContent(el, renderContext))
+    }
+  }
+  return map
+})
+
+function getRenderedContent(el: MaterialNode): DesignerRenderOutput | undefined {
+  return renderedContentMap.value.get(el.id)
+}
 
 const marqueeStyle = computed(() => {
   if (!marqueeRect.value)
@@ -295,7 +320,14 @@ onUnmounted(() => {
               class="ei-canvas-element__bind-badge"
               :title="Array.isArray(el.binding) ? el.binding.map(b => b.fieldLabel || b.fieldPath).join(', ') : (el.binding.fieldLabel || el.binding.fieldPath)"
             />
-            {{ el.type }}
+            <!-- Design-time rendering -->
+            <div
+              v-if="getRenderedContent(el)"
+              class="ei-canvas-element__render"
+              v-html="getRenderedContent(el)!.html"
+            />
+            <!-- Fallback: type name placeholder -->
+            <span v-else class="ei-canvas-element__type-label">{{ el.type }}</span>
           </div>
 
           <!-- Selection border, resize handles & rotation handle -->
@@ -412,14 +444,28 @@ onUnmounted(() => {
   justify-content: center;
   font-size: 11px;
   color: var(--ei-text-secondary, #999);
-  border: 1px dashed var(--ei-border-color, #d0d0d0);
   box-sizing: border-box;
   overflow: hidden;
   position: relative;
 }
 
-.ei-canvas-element--selected .ei-canvas-element__content {
+.ei-canvas-element__content:not(:has(.ei-canvas-element__render)) {
+  border: 1px dashed var(--ei-border-color, #d0d0d0);
+}
+
+.ei-canvas-element--selected .ei-canvas-element__content:not(:has(.ei-canvas-element__render)) {
   border-color: var(--ei-primary, #1890ff);
+}
+
+.ei-canvas-element__render {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.ei-canvas-element__type-label {
+  user-select: none;
+  pointer-events: none;
 }
 
 .ei-canvas-element__bind-badge {

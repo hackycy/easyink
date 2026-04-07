@@ -179,7 +179,18 @@ export interface ContextAction {
   destructive?: boolean
 }
 
+export interface DesignerRenderContext {
+  unit: import('@easyink/shared').UnitType
+  getBindingLabel: (binding: import('@easyink/schema').BindingRef) => string
+}
+
+export interface DesignerRenderOutput {
+  html: string
+  editable?: boolean
+}
+
 export interface MaterialDesignerExtension {
+  renderContent?: (node: MaterialNode, context: DesignerRenderContext) => DesignerRenderOutput
   getToolbarActions?: (node: MaterialNode) => ToolbarAction[]
   getContextActions?: (node: MaterialNode) => ContextAction[]
   renderOverlay?: (node: MaterialNode, state: DesignerMaterialState) => unknown
