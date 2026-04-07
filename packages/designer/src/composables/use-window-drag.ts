@@ -28,8 +28,9 @@ export function useWindowDrag(
       const rulerSize = 20
       const maxX = rect.width - win.width
       const maxY = rect.height - 32 // keep at least titlebar visible
-      win.x = Math.max(rulerSize, Math.min(maxX, ev.clientX - startX))
-      win.y = Math.max(rulerSize, Math.min(maxY, ev.clientY - startY))
+      // If window is larger than container, pin to left/top edge
+      win.x = maxX <= rulerSize ? rulerSize : Math.max(rulerSize, Math.min(maxX, ev.clientX - startX))
+      win.y = maxY <= rulerSize ? rulerSize : Math.max(rulerSize, Math.min(maxY, ev.clientY - startY))
     }
 
     function onUp() {

@@ -157,6 +157,7 @@ function handleDragStart(e: DragEvent, entry: MaterialCatalogEntry) {
 .ei-material-panel__item:hover {
   background: var(--ei-hover-bg, #f0f0f0);
   border-color: var(--ei-primary, #1890ff);
+  color: var(--ei-primary, #1890ff);
 }
 
 .ei-material-panel__item:active {
@@ -173,7 +174,7 @@ function handleDragStart(e: DragEvent, entry: MaterialCatalogEntry) {
 }
 
 .ei-material-panel__label {
-  font-size: 11px;
+  font-size: 10px;
   line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;

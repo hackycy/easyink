@@ -238,12 +238,28 @@ function handleRulerHover(hover: { axis: 'x' | 'y', position: number } | null) {
   rulerHover.value = hover
 }
 
+// ─── Window position clamping ────────────────────────────────────
+
+function clampWindowPositions() {
+  const el = containerRef.value
+  if (!el) return
+  const rect = el.getBoundingClientRect()
+  const rulerSize = 20
+  for (const win of store.workbench.windows) {
+    const maxX = rect.width - win.width
+    const maxY = rect.height - 32
+    win.x = maxX <= rulerSize ? rulerSize : Math.max(rulerSize, Math.min(win.x, maxX))
+    win.y = maxY <= rulerSize ? rulerSize : Math.max(rulerSize, Math.min(win.y, maxY))
+  }
+}
+
+const containerObserver = new ResizeObserver(clampWindowPositions)
+
 // ─── Lifecycle ───────────────────────────────────────────────────
 
 onMounted(() => {
   const el = containerRef.value
   if (!el) return
-  const rulerSize = 20
   const rect = el.getBoundingClientRect()
   for (const win of store.workbench.windows) {
     if (win.x < 0) {
@@ -252,10 +268,9 @@ onMounted(() => {
     if (win.y < 0) {
       win.y = rect.height - win.height - 12
     }
-    // Clamp so windows don't overlap the ruler area
-    win.x = Math.max(rulerSize, win.x)
-    win.y = Math.max(rulerSize, win.y)
   }
+  clampWindowPositions()
+  containerObserver.observe(el)
   // Sync initial scroll position
   if (scrollRef.value) {
     handleScroll()
@@ -263,6 +278,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  containerObserver.disconnect()
   cursorPos.value = null
 })
 </script>
