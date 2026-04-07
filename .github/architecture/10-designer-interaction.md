@@ -385,20 +385,23 @@ interface TemplateLibraryState {
 3. 用户继续点入格子后，进入 cell-selected。
 4. 画布出现格子级操作 affordance 和浮动工具条。
 5. 属性面板在保留表格级属性的同时，追加格子级属性分组。
-6. 用户可继续切换到标题、数据、合计、留白等区段上下文。
-7. 用户点击空白处或切换其他节点后，退出格子深度编辑态。
+6. 用户点入格子内内容（如表头文本）后，进入 content-editing，内容在格子内部原位编辑。
+7. `content-editing` 期间属性面板仍保持表格壳层，不切成独立文本面板。
+8. 用户可继续切换到标题、数据、合计、留白等区段上下文。
+9. 用户点击空白处或切换其他节点后，退出格子深度编辑态。
 
 ### 10.7.2 表格状态机
 
 ```typescript
 interface TableEditingState {
-	phase: 'idle' | 'table-selected' | 'band-selected' | 'cell-selected'
+	phase: 'idle' | 'table-selected' | 'band-selected' | 'cell-selected' | 'content-editing'
 	tableId?: string
 	band?: 'header' | 'title' | 'data' | 'summary' | 'footer' | 'blank'
 	cellPath?: {
 		row: number
 		col: number
 	}
+	contentNodeId?: string
 }
 ```
 
@@ -407,7 +410,9 @@ interface TableEditingState {
 - `table-selected` 显示表格壳层属性和结构属性
 - `band-selected` 用于标题、数据、合计、留白等逻辑区段
 - `cell-selected` 才允许出现分裂、合并、局部边框、内容位置、格子内边距等操作
+- `content-editing` 用于格子内文本或富文本的原位编辑，但仍从属于当前 `tableId + cellPath`
 - `cellPath` 不能等价成普通元素 id，因为它依赖表格内部拓扑
+- `contentNodeId` 指向格子内容槽中的节点，而不是脱离表格上下文的全局主选区
 
 ### 10.7.3 格子态 affordance
 
@@ -435,6 +440,17 @@ interface TableEditingState {
 - 下半段追加格子背景、格子尺寸、格子操作、格子内容、内容位置、内边距等局部属性
 
 这是同一属性壳层里的上下文递进，不是两个面板。
+
+### 10.7.5 格子内容编辑
+
+实测表格表头文本点击后会直接在格子里进入输入框，但右侧属性面板仍显示 `表格 / 数据表格` 的壳层属性，而不是跳到独立文本属性页。
+
+设计约束：
+
+- 格子内容必须建模为 `cell content slot`，允许承载文本、图片、子表格等子元素
+- 文本内容默认支持原位编辑；编辑 host 运行在格子内部 overlay，而不是弹出第二个面板
+- 进入 `content-editing` 不改变右侧主类型标签，保持表格上下文连续
+- 只有用户显式执行“编辑子物料”动作时，才允许脱离表格壳层进入子元素独立属性页
 
 ## 10.8 绑定交互
 
@@ -525,7 +541,7 @@ CanvasWorkspace 遍历 elements
 部分物料支持双击进入内容编辑态（由 `renderContent` 返回 `editable: true` 标记）：
 
 - 文本：双击进入富文本编辑
-- 表格：双击进入单元格编辑（与 10.7 表格深度编辑衔接）
+- 表格：先进入格子态，再由格子内内容触发原位编辑（与 10.7 表格深度编辑衔接）
 
 编辑态下，交互层（手柄、选区边框）退到背景或隐藏，聚焦在内容操作上。
 

@@ -309,9 +309,21 @@ interface TableNode extends MaterialNode {
 }
 
 interface TableSchema {
+  kind: 'static' | 'data' | 'flex'
   layout: TableLayoutConfig
-  sections: TableSectionSchema[]
+  topology: TableTopologySchema
+  bands?: TableBandSchema[]
+  data?: TableDataSemantics
   diagnostics?: LayoutDiagnostic[]
+}
+
+interface TableTopologySchema {
+  columns?: TableColumnSchema[]
+  rows: TableRowSchema[]
+}
+
+interface TableColumnSchema {
+  width: number
 }
 
 interface TableLayoutConfig {
@@ -323,11 +335,24 @@ interface TableLayoutConfig {
   borderColor?: string
 }
 
-interface TableSectionSchema {
-  kind: 'title' | 'header' | 'data' | 'total' | 'footer'
+interface TableBandSchema {
+  id: string
+  kind: 'title' | 'header' | 'data' | 'summary' | 'footer' | 'blank' | 'body'
   repeatOnEachPage?: boolean
   hidden?: boolean
-  rows: TableRowSchema[]
+  rowRange: {
+    start: number
+    end: number
+  }
+}
+
+interface TableDataSemantics {
+  source?: BindingRef
+  rowBinding?: BindingRef
+  fillBlankRows?: boolean
+  keepPlaceholderSpace?: boolean
+  repeatHeader?: boolean
+  showSummaryOnLastPage?: boolean
 }
 
 interface TableRowSchema {
@@ -342,15 +367,22 @@ interface TableCellSchema {
   height?: number
   border?: CellBorderSchema
   padding?: BoxSpacing
+  content: TableCellContentSlot
   props?: Record<string, unknown>
   binding?: BindingRef | BindingRef[]
-  elements?: MaterialNode[]
+}
+
+interface TableCellContentSlot {
+  elements: MaterialNode[]
+  editMode?: 'inline-text' | 'rich-text' | 'hosted'
 }
 ```
 
 这个模型要解决的是：
 
-- 让设计器支持单元格选区与局部属性编辑
+- 让 `table-static` 与 `table-data` 共享表壳、格子和内容槽，而不是复制两套实现
+- 把集合绑定、区段、分页、空行填充等数据语义隔离到 `data` 层，不污染静态表格
+- 让设计器支持表壳、区段、格子、格子内容四层编辑上下文
 - 让结构树能表达“表格里还有表格/文本/图形”的关系
 - 让 Viewer 支持分页、重复头、留白、空行填充、单元格内容递归渲染
 
