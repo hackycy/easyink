@@ -264,26 +264,28 @@ function clearBinding(nodeId: string) {
       </EiPanel>
     </template>
 
-    <!-- Page properties: always visible (descriptor-driven) -->
-    <EiPanel
-      v-for="[group, descriptors] in groupedPageDescriptors"
-      :key="group"
-      :title="pageGroupLabel(group)"
-      collapsible
-      flat
-    >
-      <div class="ei-properties-panel__fields">
-        <PagePropertyEditor
-          v-for="descriptor in descriptors"
-          :key="descriptor.id"
-          :descriptor="descriptor"
-          :value="readPagePropValue(descriptor)"
-          :fonts="fontList"
-          :t="store.t.bind(store)"
-          @change="onPagePropertyChange"
-        />
-      </div>
-    </EiPanel>
+    <!-- Page properties: only when no element is selected -->
+    <template v-else>
+      <EiPanel
+        v-for="[group, descriptors] in groupedPageDescriptors"
+        :key="group"
+        :title="pageGroupLabel(group)"
+        collapsible
+        flat
+      >
+        <div class="ei-properties-panel__fields">
+          <PagePropertyEditor
+            v-for="descriptor in descriptors"
+            :key="descriptor.id"
+            :descriptor="descriptor"
+            :value="readPagePropValue(descriptor)"
+            :fonts="fontList"
+            :t="store.t.bind(store)"
+            @change="onPagePropertyChange"
+          />
+        </div>
+      </EiPanel>
+    </template>
   </div>
 </template>
 
