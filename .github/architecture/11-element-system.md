@@ -290,11 +290,67 @@ interface PropSchema {
 
 ```typescript
 interface MaterialDesignerExtension {
+  /** 设计态内容渲染：返回元素在画布中的视觉 HTML */
+  renderContent?(node: MaterialNode, context: DesignerRenderContext): DesignerRenderOutput
   getToolbarActions?(node: MaterialNode): ToolbarAction[]
   getContextActions?(node: MaterialNode): ContextAction[]
   renderOverlay?(node: MaterialNode, state: DesignerMaterialState): unknown
   enterEditMode?(node: MaterialNode): boolean
 }
+
+interface DesignerRenderContext {
+  unit: UnitType
+  /** 获取绑定字段的显示标签（非真实数据） */
+  getBindingLabel: (binding: BindingRef) => string
+}
+
+interface DesignerRenderOutput {
+  html: string
+  /** 是否支持双击进入内容编辑态（如文本直接编辑） */
+  editable?: boolean
+}
+```
+
+### 11.6.1 设计态渲染（Design-time Rendering）
+
+设计态渲染是画布中物料的视觉内容呈现，与 Viewer 渲染是两套独立实现。
+
+**为什么不复用 Viewer 渲染器：**
+
+- 设计态不执行数据绑定解析，绑定值显示为字段标签（如 `{{订单编号}}`）
+- 设计态不执行分页、字体加载、数据源拉取等运行时流程
+- 复杂物料（图表、关系图）在设计态使用静态缩略图或简化占位，不引入第三方渲染库
+- 设计态需要响应编辑交互（悬停、选中、编辑态样式变化），Viewer 渲染器不关心这些
+- 设计态渲染运行在画布主线程，必须轻量快速
+
+**各类物料的设计态渲染策略：**
+
+| 物料类别 | 设计态渲染 | 与 Viewer 的差异 |
+|---|---|---|
+| text | 根据 props 渲染文字样式（字号/字体/颜色/对齐）；绑定值显示为 `{{字段标签}}` | Viewer 会替换为真实数据 |
+| image | 有 src 时显示图片缩略图，无 src 时显示图标占位 | 无差异 |
+| barcode / qrcode | 显示静态示意图 + 值标签 | Viewer 调用渲染库生成真实码 |
+| line / rect / ellipse | 根据 props 直接渲染图形（颜色、边框、圆角） | 基本无差异 |
+| table-static | 渲染表格格线结构和静态内容 | 基本无差异 |
+| table-data | 渲染表格格线结构；数据区显示字段标签而非真实行 | Viewer 执行数据展开、分页、重复头 |
+| container | 渲染容器边界 + 递归渲染子元素 | 基本无差异 |
+| chart | 显示图表类型图标 + 静态缩略图占位 | Viewer 调用图表库渲染真实图表 |
+| svg | 直接渲染 SVG 内容 | 基本无差异 |
+| relation | 显示关系类型图标 + 结构占位 | Viewer 渲染完整连线和锚点 |
+
+**回退策略：**
+
+- 如果物料未提供 `renderContent()`，画布显示类型名占位块（当前行为）
+- 未知物料始终显示诊断占位，不静默消失
+
+**画布调用流程：**
+
+```
+CanvasWorkspace 遍历 elements
+  → 查找 MaterialDesignerExtension.renderContent
+  → 有：调用并渲染返回的 HTML
+  → 无：显示类型名占位
+  → 叠加选区边框、拖拽手柄、绑定角标等交互层
 ```
 
 对于结构物料，还需要支持：

@@ -14,7 +14,9 @@
 - 数据源协议必须覆盖 `id / name / tag / title / expand / headless / fields / use / props / union / bindIndex`
 - 顶部物料栏必须建模为“高频直达物料 + 分组目录物料”的混合入口，不是单层列表
 - `table`、`container`、`chart`、`svg`、`relation` 都是一级结构系统，不按普通矩形补丁处理
-- 属性面板必须支持“元素属性 + 页面属性”共用同一窗口壳层
+- 属性面板必须支持”元素属性 + 页面属性”共用同一窗口壳层
+- 画布中的每个物料必须根据 props 展示近似真实的视觉效果（设计态渲染），而不是只显示类型名标签
+- 设计态渲染（`MaterialDesignerExtension.renderContent`）与 Viewer 渲染（`MaterialViewerExtension.render`）是两套独立实现，服务于不同场景
 - 页面属性面板必须区分“规范字段 / benchmark 兼容字段 / 派生 UI 字段”，不能退化成 `width / height / mode` 三项表单
 - 工作台状态、模板状态、运行时状态明确分层，避免混写
 - `viewer` 导出链路要按运行时适配器建模，明确 lazy load 第三方导出依赖

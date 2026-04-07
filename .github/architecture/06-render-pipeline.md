@@ -66,7 +66,21 @@ interface ViewerOpenInput {
 }
 ```
 
-## 6.4 设计器与 Viewer 的关系
+## 6.4 设计态渲染与 Viewer 渲染的分层
+
+EasyInk 存在两套独立的物料渲染能力，不共享实现代码：
+
+| | 设计态渲染 | Viewer 渲染 |
+|---|---|---|
+| 接口 | `MaterialDesignerExtension.renderContent()` | `MaterialViewerExtension.render()` |
+| 运行场景 | Designer 画布内 | Viewer 运行时（预览/打印/导出） |
+| 数据 | 无真实数据，绑定显示为字段标签 | 真实数据绑定 + 格式化 |
+| 性能要求 | 主线程同步渲染，必须轻量 | 可异步，可引入重量级第三方库 |
+| 输出 | HTML 注入画布元素容器 | DOM/SVG 页面 + 缩略图 |
+
+详细设计见 [10.9 画布设计态渲染](./10-designer-interaction.md) 和 [11.6 Designer 扩展面](./11-element-system.md)。
+
+## 6.5 设计器与 Viewer 的全量预览关系
 
 设计器预览时：
 
@@ -79,7 +93,7 @@ interface ViewerOpenInput {
 - 设计器不会把自己的编辑态 DOM 误当成真实预览
 - 宿主应用与设计器内预览共享同一运行时路径
 
-## 6.5 数据与格式规则处理
+## 6.6 数据与格式规则处理
 
 Viewer 在渲染前执行：
 
@@ -94,7 +108,7 @@ Viewer 在渲染前执行：
 - 任意 JavaScript 表达式
 - 来自模板的自定义函数
 
-## 6.6 页面输出
+## 6.7 页面输出
 
 Viewer 的输出不再只有一个 `page` DOM 节点，而是页面集合：
 
@@ -113,7 +127,7 @@ interface ViewerPageResult {
 }
 ```
 
-## 6.7 样式与承载策略
+## 6.8 样式与承载策略
 
 ### 设计器
 
@@ -128,7 +142,7 @@ interface ViewerPageResult {
 - 内部仍以 DOM/SVG 为主要输出
 - 自动生成页面样式、打印样式和缩略图容器
 
-## 6.8 导出依赖装载
+## 6.9 导出依赖装载
 
 对标产品预览时已经验证 `viewer` 会动态加载：
 
@@ -144,7 +158,7 @@ interface ViewerPageResult {
 - 第三方导出依赖按需装载
 - 装载失败时给出可见诊断，而不是让整个 Viewer 崩溃
 
-## 6.9 诊断机制
+## 6.10 诊断机制
 
 诊断事件至少覆盖：
 
