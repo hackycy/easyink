@@ -1,6 +1,7 @@
 import type { BindingRef, DocumentSchema, GuideSchema, MaterialNode, PageSchema, TableBandSchema, TableCellSchema, TableNode, TableRowSchema } from '@easyink/schema'
 import type { UsageRule } from '@easyink/shared'
 import type { Command } from './command'
+import { isTableNode } from '@easyink/schema'
 import { deepClone, generateId } from '@easyink/shared'
 
 function findNode(elements: MaterialNode[], id: string): MaterialNode | undefined {
@@ -113,11 +114,13 @@ export class ResizeMaterialCommand implements Command {
   private oldY = 0
   private oldWidth = 0
   private oldHeight = 0
+  private oldRowHeights: number[] | null = null
 
   constructor(
     private elements: MaterialNode[],
     private nodeId: string,
     private to: { x: number, y: number, width: number, height: number },
+    private rowHeights: number[] | null = null,
   ) {}
 
   execute(): void {
@@ -132,6 +135,15 @@ export class ResizeMaterialCommand implements Command {
     node.y = this.to.y
     node.width = this.to.width
     node.height = this.to.height
+
+    // Scale table row heights when provided
+    if (this.rowHeights && isTableNode(node)) {
+      const rows = node.table.topology.rows
+      this.oldRowHeights = rows.map(r => r.height)
+      for (let i = 0; i < rows.length && i < this.rowHeights.length; i++) {
+        rows[i]!.height = this.rowHeights[i]!
+      }
+    }
   }
 
   undo(): void {
@@ -142,6 +154,13 @@ export class ResizeMaterialCommand implements Command {
     node.y = this.oldY
     node.width = this.oldWidth
     node.height = this.oldHeight
+
+    if (this.oldRowHeights && isTableNode(node)) {
+      const rows = node.table.topology.rows
+      for (let i = 0; i < rows.length && i < this.oldRowHeights.length; i++) {
+        rows[i]!.height = this.oldRowHeights[i]!
+      }
+    }
   }
 
   merge(next: Command): Command | null {
@@ -150,11 +169,12 @@ export class ResizeMaterialCommand implements Command {
     const other = next as ResizeMaterialCommand
     if (other.nodeId !== this.nodeId)
       return null
-    const merged = new ResizeMaterialCommand(this.elements, this.nodeId, other.to)
+    const merged = new ResizeMaterialCommand(this.elements, this.nodeId, other.to, other.rowHeights)
     merged.oldX = this.oldX
     merged.oldY = this.oldY
     merged.oldWidth = this.oldWidth
     merged.oldHeight = this.oldHeight
+    merged.oldRowHeights = this.oldRowHeights
     return merged
   }
 }

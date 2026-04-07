@@ -20,8 +20,8 @@ export const TABLE_DATA_DEFAULTS: TableDataProps = {
   borderWidth: 1,
   borderColor: '#000000',
   borderType: 'solid',
-  cellPadding: 4,
-  fontSize: 12,
+  cellPadding: 2,
+  fontSize: 9,
   color: '#000000',
   headerBackground: '#f0f0f0',
   summaryBackground: '#f9f9f9',
@@ -31,7 +31,7 @@ export const TABLE_DATA_DEFAULTS: TableDataProps = {
 
 function createDefaultDataTable(): TableSchema {
   const cols = 3
-  const rowHeight = 24
+  const rowHeight = 8
   const ratio = 1 / cols
 
   // 3 rows: header(row 0), data(row 1), summary(row 2)
@@ -65,8 +65,8 @@ export function createTableDataNode(partial?: Partial<MaterialNode>): MaterialNo
     id: generateId('td'),
     x: 0,
     y: 0,
-    width: 240,
-    height: 72,
+    width: 180,
+    height: 24,
     props: { ...TABLE_DATA_DEFAULTS },
     ...rest,
     type: 'table-data',

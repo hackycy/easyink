@@ -1,5 +1,6 @@
 import type { DesignerStore } from '../store/designer-store'
 import { ResizeMaterialCommand, UnitManager } from '@easyink/core'
+import { isTableNode } from '@easyink/schema'
 
 export type ResizeHandle
   = 'nw' | 'n' | 'ne'
@@ -52,6 +53,11 @@ export function useElementResize(ctx: ElementResizeContext) {
     const origY = node.y
     const origW = node.width
     const origH = node.height
+
+    // For table nodes, snapshot original row heights so we can scale them proportionally
+    const tableInfo = isTableNode(node)
+      ? { node, origRowHeights: node.table.topology.rows.map(r => r.height) }
+      : null
 
     const MIN_SIZE = 1
 
@@ -111,19 +117,34 @@ export function useElementResize(ctx: ElementResizeContext) {
       node!.y = newY
       node!.width = newW
       node!.height = newH
+
+      // Scale table row heights proportionally to maintain topology invariant
+      if (tableInfo && newH !== origH) {
+        const scale = newH / origH
+        const { rows } = tableInfo.node.table.topology
+        for (let i = 0; i < rows.length; i++) {
+          rows[i]!.height = tableInfo.origRowHeights[i]! * scale
+        }
+      }
     }
 
     function onUp() {
       el.removeEventListener('pointermove', onMove)
       el.removeEventListener('pointerup', onUp)
 
-      if (!moved)
+      if (!moved) {
         return
+      }
 
       const finalX = node!.x
       const finalY = node!.y
       const finalW = node!.width
       const finalH = node!.height
+
+      // Snapshot final row heights before reset
+      const finalRowHeights = tableInfo
+        ? tableInfo.node.table.topology.rows.map(r => r.height)
+        : null
 
       // Reset to original before command
       node!.x = origX
@@ -131,10 +152,18 @@ export function useElementResize(ctx: ElementResizeContext) {
       node!.width = origW
       node!.height = origH
 
+      if (tableInfo) {
+        const { rows } = tableInfo.node.table.topology
+        for (let i = 0; i < rows.length; i++) {
+          rows[i]!.height = tableInfo.origRowHeights[i]!
+        }
+      }
+
       const cmd = new ResizeMaterialCommand(
         store.schema.elements,
         elementId,
         { x: finalX, y: finalY, width: finalW, height: finalH },
+        finalRowHeights,
       )
       store.commands.execute(cmd)
     }

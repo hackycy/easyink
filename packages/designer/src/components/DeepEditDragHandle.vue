@@ -55,7 +55,7 @@ function handlePointerDown(e: PointerEvent) {
 <style scoped>
 .ei-deep-edit-drag-handle {
   position: absolute;
-  transform: translate(-20px, -20px);
+  transform: translate(-16px, -16px);
   width: 14px;
   height: 14px;
   cursor: move;

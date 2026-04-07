@@ -178,8 +178,12 @@ function handleScrollPointerDown(e: PointerEvent) {
   }
 }
 
+/** Guards against the click event routing to cell selection when deep editing was just entered on pointerdown. */
+let deepEditEnteredOnPointerDown = false
+
 function handleElementPointerDown(e: PointerEvent, elementId: string) {
   e.stopPropagation()
+  deepEditEnteredOnPointerDown = false
   // During deep editing, don't start element drag for the edited element
   if (store.isInDeepEditing && store.deepEditingNodeId === elementId) {
     return
@@ -188,39 +192,57 @@ function handleElementPointerDown(e: PointerEvent, elementId: string) {
   if (store.isInDeepEditing && store.deepEditingNodeId !== elementId) {
     onOutsideClick()
   }
+  // For deep-edit-capable elements (tables), enter deep editing immediately
+  // on pointerdown to avoid resize handle flash between pointerdown and click
+  if (!(e.ctrlKey || e.metaKey)) {
+    const def = store.getMaterial(store.getElementById(elementId)?.type ?? '')
+    if (def?.capabilities.hasDeepEditing) {
+      store.enterDeepEditing(elementId)
+      deepEditEnteredOnPointerDown = true
+      return
+    }
+  }
   onElementPointerDown(e, elementId)
 }
 
 function handleElementClick(e: MouseEvent, elementId: string) {
   e.stopPropagation()
 
+  // Skip cell routing if deep editing was just entered on this same pointerdown->click cycle
+  if (deepEditEnteredOnPointerDown) {
+    deepEditEnteredOnPointerDown = false
+    return
+  }
+
   // If already in deep editing for this element, route to cell selection
   if (store.isInDeepEditing && store.deepEditingNodeId === elementId) {
     const node = store.getElementById(elementId)
     if (node && isTableNode(node)) {
+      // If in content-editing, exit it first so blur/commit fires before cell switch
+      if (store.tableEditing.phase === 'content-editing') {
+        store.exitContentEditing()
+      }
       const elementEl = (e.currentTarget as HTMLElement)
       onTableCellClick(e as unknown as PointerEvent, node, elementEl)
     }
     return
   }
 
-  // If element is already selected and has deep editing capability, enter deep editing on second click
-  if (store.selection.has(elementId) && store.selection.count === 1) {
-    const def = store.getMaterial(store.getElementById(elementId)?.type ?? '')
-    if (def?.capabilities.hasDeepEditing) {
-      store.enterDeepEditing(elementId)
-      return
-    }
+  // Normal selection / narrow-down logic
+  if (e.ctrlKey || e.metaKey) {
+    store.selection.toggle(elementId)
+    return
   }
 
-  // Normal selection logic
-  if (!store.selection.has(elementId)) {
-    if (e.ctrlKey || e.metaKey) {
-      store.selection.toggle(elementId)
-    }
-    else {
-      store.selection.select(elementId)
-    }
+  // Enter deep editing for deep-edit elements (fallback for click without prior pointerdown entry)
+  const def = store.getMaterial(store.getElementById(elementId)?.type ?? '')
+  if (def?.capabilities.hasDeepEditing) {
+    store.enterDeepEditing(elementId)
+    return
+  }
+
+  if (!store.selection.has(elementId) || store.selection.count > 1) {
+    store.selection.select(elementId)
   }
 }
 
@@ -228,6 +250,8 @@ function handleElementDblClick(e: MouseEvent, elementId: string) {
   if (store.isInDeepEditing && store.deepEditingNodeId === elementId) {
     const node = store.getElementById(elementId)
     if (node && isTableNode(node)) {
+      // Prevent browser text selection from interfering with editor focus
+      e.preventDefault()
       onTableCellDoubleClick(e as unknown as PointerEvent, node)
     }
   }
@@ -404,8 +428,13 @@ onUnmounted(() => {
             <span v-else class="ei-canvas-element__type-label">{{ el.type }}</span>
           </div>
 
-          <!-- Selection border, resize handles & rotation handle (hidden during deep editing) -->
-          <template v-if="store.selection.has(el.id) && store.deepEditingNodeId !== el.id">
+          <!-- Selection border, resize handles & rotation handle -->
+          <!--
+            Show during normal selection OR during table-selected phase of deep editing.
+            Architecture 10.7.1: table-selected shows element-level resize handles + drag handle.
+            cell-selected and content-editing hide generic handles (overlay takes over).
+          -->
+          <template v-if="store.selection.has(el.id) && (store.deepEditingNodeId !== el.id || store.tableEditing.phase === 'table-selected')">
             <div class="ei-canvas-element__selection-border" />
 
             <!-- 8 resize handles -->
@@ -418,8 +447,9 @@ onUnmounted(() => {
               @pointerdown="handleResizePointerDown($event, el.id, handle)"
             />
 
-            <!-- Rotation handle -->
+            <!-- Rotation handle (hidden for non-rotatable materials like tables) -->
             <div
+              v-if="store.getMaterial(el.type)?.capabilities.rotatable !== false"
               class="ei-canvas-element__rotate-handle"
               @pointerdown="handleRotatePointerDown($event, el.id)"
             >

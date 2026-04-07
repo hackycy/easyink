@@ -16,15 +16,15 @@ export const TABLE_STATIC_DEFAULTS: TableStaticProps = {
   borderWidth: 1,
   borderColor: '#000000',
   borderType: 'solid',
-  cellPadding: 4,
-  fontSize: 12,
+  cellPadding: 2,
+  fontSize: 9,
   color: '#000000',
 }
 
 function createDefaultTable(): TableSchema {
   const cols = 3
   const rowCount = 3
-  const rowHeight = 24
+  const rowHeight = 8
   const ratio = 1 / cols
 
   return {
@@ -58,7 +58,7 @@ export function createTableStaticNode(partial?: Partial<MaterialNode>): Material
     x: 0,
     y: 0,
     width: 180,
-    height: 72,
+    height: 24,
     props: { ...TABLE_STATIC_DEFAULTS },
     ...rest,
     type: 'table-static',

@@ -1,4 +1,5 @@
 import type { BindingRef, MaterialNode, TableBandSchema } from '@easyink/schema'
+import type { UnitType } from '@easyink/shared'
 import type { TableDataProps } from './schema'
 import { isTableNode } from '@easyink/schema'
 
@@ -26,7 +27,7 @@ function getBandForRow(bands: TableBandSchema[], rowIndex: number): TableBandSch
 
 export function renderTableDataContent(
   node: MaterialNode,
-  context: { getBindingLabel: (binding: BindingRef) => string },
+  context: { unit: UnitType, getBindingLabel: (binding: BindingRef) => string },
 ): { html: string } {
   const p = node.props as unknown as TableDataProps
   if (!isTableNode(node)) {
@@ -38,11 +39,18 @@ export function renderTableDataContent(
   const bc = escapeAttr(p.borderColor || '#000')
   const bt = p.borderType || 'solid'
   const pad = p.cellPadding ?? 4
+  const unit = context.unit
 
-  // Build colgroup
+  // Build colgroup (normalize ratios so sum=100%)
+  let totalRatio = 0
+  for (const col of topology.columns)
+    totalRatio += col.ratio
+  if (totalRatio === 0)
+    totalRatio = 1
+
   let colgroup = '<colgroup>'
   for (const col of topology.columns) {
-    colgroup += `<col style="width:${(col.ratio * 100).toFixed(2)}%">`
+    colgroup += `<col style="width:${((col.ratio / totalRatio) * 100).toFixed(2)}%">`
   }
   colgroup += '</colgroup>'
 
@@ -74,10 +82,10 @@ export function renderTableDataContent(
 
       cells += `<td${rs}${cs} style="border:${bw}px ${bt} ${bc};padding:${pad}px;font-size:${p.fontSize}pt;color:${p.color}${sectionBg ? `;background:${sectionBg}` : ''}">${content}</td>`
     }
-    rows += `<tr style="height:${row.height}px">${cells}</tr>`
+    rows += `<tr style="height:${row.height}${unit}">${cells}</tr>`
   }
 
-  const html = `<table style="width:100%;height:100%;border-collapse:collapse;table-layout:fixed">${colgroup}${rows}</table>`
+  const html = `<table style="width:100%;border-collapse:collapse;table-layout:fixed">${colgroup}${rows}</table>`
   return { html }
 }
 

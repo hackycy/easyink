@@ -33,31 +33,48 @@ const tableNode = computed<TableNode | null>(() => {
 
 const unit = computed(() => store.schema.unit)
 
+/** Sum of all column ratios (may != 1 after column resize). */
+const totalColRatio = computed(() => {
+  const node = tableNode.value
+  if (!node)
+    return 1
+  let sum = 0
+  for (const col of node.table.topology.columns)
+    sum += col.ratio
+  return sum || 1
+})
+
 /** Column border X positions (between columns, excludes left edge and right edge). */
 const colBorderXList = computed(() => {
   const node = tableNode.value
   if (!node)
     return []
   const { columns } = node.table.topology
+  const total = totalColRatio.value
   const positions: number[] = []
   let accX = 0
   for (let i = 0; i < columns.length - 1; i++) {
-    accX += columns[i]!.ratio * node.width
+    accX += (columns[i]!.ratio / total) * node.width
     positions.push(accX)
   }
   return positions
 })
 
-/** Row border Y positions (between rows, excludes top edge and bottom edge). */
+/** Row border Y positions (between rows, excludes top edge and bottom edge).
+ *  Uses proportional distribution to match browser table layout (height:100%). */
 const rowBorderYList = computed(() => {
   const node = tableNode.value
   if (!node)
     return []
   const { rows } = node.table.topology
+  let totalRowHeight = 0
+  for (const row of rows)
+    totalRowHeight += row.height
+  const scale = totalRowHeight > 0 ? node.height / totalRowHeight : 1
   const positions: number[] = []
   let accY = 0
   for (let i = 0; i < rows.length - 1; i++) {
-    accY += rows[i]!.height
+    accY += rows[i]!.height * scale
     positions.push(accY)
   }
   return positions
@@ -75,13 +92,21 @@ const cellHighlight = computed(() => {
   if (row >= rows.length || col >= columns.length)
     return null
 
+  const total = totalColRatio.value
+
+  // Proportional row scale to match browser table layout (height:100%)
+  let totalRowHeight = 0
+  for (const r of rows)
+    totalRowHeight += r.height
+  const rowScale = totalRowHeight > 0 ? node.height / totalRowHeight : 1
+
   let x = 0
   for (let c = 0; c < col; c++)
-    x += columns[c]!.ratio * node.width
+    x += (columns[c]!.ratio / total) * node.width
 
   let y = 0
   for (let r = 0; r < row; r++)
-    y += rows[r]!.height
+    y += rows[r]!.height * rowScale
 
   const cell = rows[row]!.cells[col]
   const colSpan = cell?.colSpan ?? 1
@@ -89,11 +114,11 @@ const cellHighlight = computed(() => {
 
   let w = 0
   for (let c = col; c < Math.min(col + colSpan, columns.length); c++)
-    w += columns[c]!.ratio * node.width
+    w += (columns[c]!.ratio / total) * node.width
 
   let h = 0
   for (let r = row; r < Math.min(row + rowSpan, rows.length); r++)
-    h += rows[r]!.height
+    h += rows[r]!.height * rowScale
 
   return { x, y, w, h }
 })

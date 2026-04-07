@@ -62,6 +62,7 @@ export class DesignerStore {
     this._schema = schema
     this.selection.clear()
     this.commands.clear()
+    this.exitDeepEditing()
   }
 
   // ─── Element operations ───────────────────────────────────────
@@ -84,6 +85,10 @@ export class DesignerStore {
       return undefined
     const [removed] = this._schema.elements.splice(idx, 1)
     this.selection.remove(id)
+    // Exit deep editing if the removed element was being edited
+    if (this.tableEditing.tableId === id) {
+      this.exitDeepEditing()
+    }
     return removed
   }
 
