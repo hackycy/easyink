@@ -1,36 +1,80 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, type Component } from 'vue'
+import {
+  IconCircleDot,
+  IconMonitor,
+  IconPanelLeft,
+  IconMessageSquare,
+  IconWifi,
+  IconLoader,
+  IconWifiOff,
+  IconFileCheck,
+  IconFilePen,
+  IconCheck,
+  IconCircleAlert,
+  IconSave,
+} from '@easyink/icons'
 import { useDesignerStore } from '../composables'
 
 const store = useDesignerStore()
 
 const status = computed(() => store.workbench.status)
 
+const focusIconMap: Record<string, Component> = {
+  canvas: IconMonitor,
+  panel: IconPanelLeft,
+  dialog: IconMessageSquare,
+  none: IconCircleDot,
+}
+
+const networkIconMap: Record<string, Component> = {
+  idle: IconWifi,
+  loading: IconLoader,
+  error: IconWifiOff,
+}
+
+const draftIconMap: Record<string, Component> = {
+  clean: IconFileCheck,
+  modified: IconFilePen,
+}
+
+const autoSaveIconMap: Record<string, Component> = {
+  saving: IconSave,
+  success: IconCheck,
+  failed: IconCircleAlert,
+}
+
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
-function statusText(prefix: string, value: string): string {
+function statusTitle(prefix: string, value: string): string {
   return store.t(`designer.status.${prefix}${capitalize(value)}`)
 }
 </script>
 
 <template>
   <div class="ei-status-bar">
-    <span class="ei-status-bar__item">
-      {{ statusText('focus', status.focus) }}
+    <span class="ei-status-bar__item" :title="statusTitle('focus', status.focus)">
+      <component :is="focusIconMap[status.focus]" :size="12" />
     </span>
     <span
       class="ei-status-bar__item"
       :class="{ 'ei-status-bar__item--error': status.network === 'error' }"
+      :title="statusTitle('network', status.network)"
     >
-      {{ statusText('network', status.network) }}
+      <component
+        :is="networkIconMap[status.network]"
+        :size="12"
+        :class="{ 'ei-status-bar__spin': status.network === 'loading' }"
+      />
     </span>
     <span
       class="ei-status-bar__item"
       :class="{ 'ei-status-bar__item--warning': status.draft === 'modified' }"
+      :title="statusTitle('draft', status.draft)"
     >
-      {{ statusText('draft', status.draft) }}
+      <component :is="draftIconMap[status.draft]" :size="12" />
     </span>
     <span
       v-if="status.autoSave !== 'idle'"
@@ -39,8 +83,13 @@ function statusText(prefix: string, value: string): string {
         'ei-status-bar__item--success': status.autoSave === 'success',
         'ei-status-bar__item--error': status.autoSave === 'failed',
       }"
+      :title="status.autoSaveMessage || statusTitle('autoSave', status.autoSave)"
     >
-      {{ status.autoSaveMessage || statusText('autoSave', status.autoSave) }}
+      <component
+        :is="autoSaveIconMap[status.autoSave]"
+        :size="12"
+        :class="{ 'ei-status-bar__spin': status.autoSave === 'saving' }"
+      />
     </span>
     <span class="ei-status-bar__spacer" />
     <span class="ei-status-bar__item">
@@ -74,6 +123,8 @@ function statusText(prefix: string, value: string): string {
 }
 
 .ei-status-bar__item {
+  display: flex;
+  align-items: center;
   user-select: none;
 }
 
@@ -87,5 +138,18 @@ function statusText(prefix: string, value: string): string {
 
 .ei-status-bar__item--success {
   color: var(--ei-success, #52c41a);
+}
+
+@keyframes ei-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.ei-status-bar__spin {
+  animation: ei-spin 1s linear infinite;
 }
 </style>

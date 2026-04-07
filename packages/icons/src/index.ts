@@ -1,3 +1,6 @@
+export { createIcon } from './createIcon'
+export type { CreateIconOptions } from './createIcon'
+
 export {
   AlignEndVertical as IconAlignBottom,
   AlignCenter as IconAlignCenter,
@@ -12,8 +15,11 @@ export {
   Bold as IconBold,
   Bug as IconBug,
   BarChart3 as IconChart,
+  Check as IconCheck,
   ChevronLeft as IconChevronLeft,
   ChevronRight as IconChevronRight,
+  CircleAlert as IconCircleAlert,
+  CircleDot as IconCircleDot,
   Eraser as IconClear,
   X as IconClose,
   ChevronsUpDown as IconCollapse,
@@ -26,6 +32,8 @@ export {
   Circle as IconEllipse,
   ChevronsRightLeft as IconExpand,
   Download as IconExport,
+  FileCheck as IconFileCheck,
+  FilePen as IconFilePen,
   Grid3x3 as IconGrid,
   Group as IconGroup,
   EyeOff as IconHidden,
@@ -36,12 +44,16 @@ export {
   ArrowUp as IconLayerUp,
   Minus as IconLine,
   ListTree as IconListTree,
+  Loader as IconLoader,
   Lock as IconLock,
   Settings as IconManager,
   Map as IconMap,
   Maximize2 as IconMaximize,
+  MessageSquare as IconMessageSquare,
   Minus as IconMinimize,
+  Monitor as IconMonitor,
   FilePlus as IconNewTemplate,
+  PanelLeft as IconPanelLeft,
   Blocks as IconPanelMaterials,
   ClipboardPaste as IconPaste,
   Plus as IconPlus,
@@ -68,6 +80,8 @@ export {
   Unlock as IconUnlock,
   ChevronUp as IconUp,
   EyeOff as IconVisibility,
+  Wifi as IconWifi,
+  WifiOff as IconWifiOff,
   ZoomIn as IconZoomIn,
   ZoomOut as IconZoomOut,
 } from 'lucide-vue-next'

@@ -293,6 +293,7 @@ function clearBinding(nodeId: string) {
   font-size: 13px;
   display: flex;
   flex-direction: column;
+  padding: 0 4px;
   gap: 4px;
 }
 

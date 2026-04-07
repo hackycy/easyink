@@ -1,21 +1,23 @@
 <script setup lang="ts">
 import type { MaterialNode } from '@easyink/schema'
 import type { ContextAction } from '../types'
-import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useDesignerStore } from '../composables'
 import {
+  AddMaterialCommand,
   RemoveMaterialCommand,
-  MoveMaterialCommand,
-  RotateMaterialCommand,
   ClearBindingCommand,
 } from '@easyink/core'
+import { deepClone, generateId } from '@easyink/shared'
 
 const store = useDesignerStore()
 
 const visible = ref(false)
 const menuX = ref(0)
 const menuY = ref(0)
-const targetNodeId = ref<string | undefined>()
+
+// Snapshot the actions at open time so selection changes don't cause menu flicker
+const snapshotActions = ref<ContextAction[]>([])
 
 const selectedNodes = computed<MaterialNode[]>(() => {
   return store.selection.ids
@@ -23,9 +25,9 @@ const selectedNodes = computed<MaterialNode[]>(() => {
     .filter((n): n is MaterialNode => n != null)
 })
 
-const builtinActions = computed<ContextAction[]>(() => {
+function buildActions(isBlank: boolean): ContextAction[] {
   const nodes = selectedNodes.value
-  if (nodes.length === 0) {
+  if (isBlank || nodes.length === 0) {
     return [
       { id: 'paste', label: store.t('designer.context.paste') },
       { id: 'select-all', label: store.t('designer.context.selectAll') },
@@ -55,35 +57,25 @@ const builtinActions = computed<ContextAction[]>(() => {
     if (node.binding) {
       actions.push({ id: 'clear-binding', label: store.t('designer.context.clearBinding') })
     }
+
+    const ext = store.getDesignerExtension(node.type)
+    const extActions = ext?.getContextActions?.(node) ?? []
+    actions.push(...extActions)
   }
 
   return actions
-})
-
-const materialActions = computed<ContextAction[]>(() => {
-  if (selectedNodes.value.length !== 1)
-    return []
-  const node = selectedNodes.value[0]!
-  const ext = store.getDesignerExtension(node.type)
-  return ext?.getContextActions?.(node) ?? []
-})
-
-const allActions = computed(() => [...builtinActions.value, ...materialActions.value])
+}
 
 function onContextMenu(e: MouseEvent) {
   e.preventDefault()
   menuX.value = e.clientX
   menuY.value = e.clientY
 
-  // Check if right-clicking on a specific element
   const target = e.target as HTMLElement
-  const elDiv = target.closest('.ei-canvas-element') as HTMLElement | null
-  if (elDiv) {
-    // Find element id from sibling data or iteration context
-    // In the current architecture the element id is not stored as data attribute.
-    // We'll leave the selection as-is (the pointerdown already selected it).
-  }
+  const isBlank = !target.closest('.ei-canvas-element')
 
+  // Snapshot actions at open time — immune to later selection changes
+  snapshotActions.value = buildActions(isBlank)
   visible.value = true
 }
 
@@ -94,12 +86,53 @@ function handleAction(action: ContextAction) {
   const elements = store.schema.elements
 
   switch (action.id) {
-    case 'delete':
-      for (const node of nodes) {
-        const cmd = new RemoveMaterialCommand(elements, node.id)
-        store.commands.execute(cmd)
+    case 'copy':
+      if (nodes.length > 0) {
+        store.clipboard = nodes.map(n => deepClone(n))
       }
-      store.selection.clear()
+      break
+
+    case 'cut':
+      if (nodes.length > 0) {
+        store.clipboard = nodes.map(n => deepClone(n))
+        store.commands.beginTransaction('Cut')
+        for (const node of nodes) {
+          store.commands.execute(new RemoveMaterialCommand(elements, node.id))
+        }
+        store.commands.commitTransaction()
+        store.selection.clear()
+      }
+      break
+
+    case 'paste':
+      if (store.clipboard.length > 0) {
+        const offset = 10
+        const newIds: string[] = []
+        store.commands.beginTransaction('Paste')
+        for (const node of store.clipboard) {
+          const pasted: MaterialNode = {
+            ...deepClone(node),
+            id: generateId('el'),
+            x: node.x + offset,
+            y: node.y + offset,
+          }
+          store.commands.execute(new AddMaterialCommand(elements, pasted))
+          newIds.push(pasted.id)
+        }
+        store.commands.commitTransaction()
+        store.selection.selectMultiple(newIds)
+      }
+      break
+
+    case 'delete':
+      if (nodes.length > 0) {
+        store.commands.beginTransaction('Delete')
+        for (const node of nodes) {
+          store.commands.execute(new RemoveMaterialCommand(elements, node.id))
+        }
+        store.commands.commitTransaction()
+        store.selection.clear()
+      }
       break
 
     case 'bring-front':
@@ -141,35 +174,27 @@ function handleAction(action: ContextAction) {
       store.selection.selectMultiple(elements.map(el => el.id))
       break
 
-    default: {
-      // Material extension actions -- delegate back to extension
-      if (nodes.length === 1) {
-        const ext = store.getDesignerExtension(nodes[0]!.type)
-        if (ext?.getContextActions) {
-          // Extension handles its own action via the store
-        }
-      }
+    default:
       break
-    }
   }
 }
 
-function closeMenu() {
+// Use pointerdown in capture phase — fires before workspace clears selection
+function onDocumentPointerDown(e: Event) {
+  if (!visible.value)
+    return
+  const target = e.target as HTMLElement
+  if (target.closest('.ei-context-menu'))
+    return
   visible.value = false
 }
 
-// Close menu on any click outside
-function onDocumentClick() {
-  if (visible.value)
-    visible.value = false
-}
-
 onMounted(() => {
-  document.addEventListener('click', onDocumentClick)
+  document.addEventListener('pointerdown', onDocumentPointerDown, true)
 })
 
 onUnmounted(() => {
-  document.removeEventListener('click', onDocumentClick)
+  document.removeEventListener('pointerdown', onDocumentPointerDown, true)
 })
 
 defineExpose({ onContextMenu })
@@ -184,7 +209,7 @@ defineExpose({ onContextMenu })
       @click.stop
     >
       <div
-        v-for="action in allActions"
+        v-for="action in snapshotActions"
         :key="action.id"
         class="ei-context-menu__item"
         :class="{
@@ -195,7 +220,7 @@ defineExpose({ onContextMenu })
       >
         {{ action.label || action.id }}
       </div>
-      <div v-if="allActions.length === 0" class="ei-context-menu__empty">
+      <div v-if="snapshotActions.length === 0" class="ei-context-menu__empty">
         {{ store.t('designer.context.noActions') }}
       </div>
     </div>
