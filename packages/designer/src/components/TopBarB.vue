@@ -1,29 +1,37 @@
 <script setup lang="ts">
 import type { MaterialNode } from '@easyink/schema'
+import type { Component } from 'vue'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import {
   IconBold,
+  IconBug,
   IconClear,
   IconChevronLeft,
   IconChevronRight,
   IconCopy,
+  IconDatabase,
   IconDelete,
   IconDistribute,
   IconGroup,
+  IconHistory,
   IconItalic,
   IconAlignLeft,
   IconAlignCenter,
   IconAlignRight,
   IconLayerUp,
   IconLayerDown,
+  IconListTree,
   IconLock,
   IconManager,
+  IconMap,
   IconNewTemplate,
+  IconPanelMaterials,
   IconPaste,
   IconRedo,
   IconRotation,
   IconSelectAll,
   IconSelectSameType,
+  IconSliders,
   IconSnap,
   IconUnderline,
   IconUndo,
@@ -46,6 +54,34 @@ import { createDefaultSchema } from '@easyink/schema'
 import { useDesignerStore } from '../composables'
 
 const store = useDesignerStore()
+
+// ─── Window Toggle Definitions ─────────────────────────────────
+
+interface WindowToggle {
+  kind: string
+  labelKey: string
+  icon: Component
+}
+
+const windowToggles: WindowToggle[] = [
+  { kind: 'materials', labelKey: 'designer.panel.materials', icon: IconPanelMaterials },
+  { kind: 'datasource', labelKey: 'designer.panel.datasource', icon: IconDatabase },
+  { kind: 'properties', labelKey: 'designer.panel.properties', icon: IconSliders },
+  { kind: 'structure-tree', labelKey: 'designer.panel.structureTree', icon: IconListTree },
+  { kind: 'history', labelKey: 'designer.panel.history', icon: IconHistory },
+  { kind: 'minimap', labelKey: 'designer.panel.minimap', icon: IconMap },
+  { kind: 'debug', labelKey: 'designer.panel.debug', icon: IconBug },
+]
+
+function isWindowVisible(kind: string): boolean {
+  const win = store.workbench.windows.find(w => w.kind === kind)
+  return win ? win.visible : false
+}
+
+function toggleWindow(kind: string) {
+  const win = store.workbench.windows.find(w => w.kind === kind)
+  if (win) win.visible = !win.visible
+}
 
 const visibleGroups = computed(() =>
   store.workbench.toolbar.groups
@@ -428,6 +464,22 @@ function handleSnap() {
 
     <div class="ei-topbar-b__divider" />
 
+    <!-- Window toggle buttons -->
+    <div class="ei-topbar-b__group ei-topbar-b__window-toggles">
+      <button
+        v-for="wt in windowToggles"
+        :key="wt.kind"
+        class="ei-topbar-b__btn"
+        :class="{ 'ei-topbar-b__btn--active': isWindowVisible(wt.kind) }"
+        :title="store.t(wt.labelKey)"
+        @click="toggleWindow(wt.kind)"
+      >
+        <component :is="wt.icon" :size="16" :stroke-width="1.5" />
+      </button>
+    </div>
+
+    <div class="ei-topbar-b__divider" />
+
     <!-- Scroll left arrow -->
     <button
       v-show="canScrollLeft"
@@ -748,6 +800,12 @@ function handleSnap() {
   display: flex;
   gap: 1px;
   flex-shrink: 0;
+}
+
+.ei-topbar-b__window-toggles {
+  overflow: hidden;
+  flex-shrink: 1;
+  min-width: 0;
 }
 
 .ei-topbar-b__btn {
