@@ -192,7 +192,8 @@ function groupLabelKey(id: string): string {
 }
 
 .ei-toolbar-manager__footer {
-  padding: 6px 10px;
+  padding: 6px 0;
+  margin: 0 10px;
   border-top: 1px solid var(--ei-border-color, #eee);
 }
 

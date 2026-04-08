@@ -134,7 +134,7 @@ function childKey(source: DataSourceDescriptor, child: DataFieldNode): string {
 
 .ei-datasource-panel__source-icon {
   flex-shrink: 0;
-  color: var(--ei-primary, #1890ff);
+  color: var(--ei-text-secondary, #999);
 }
 
 .ei-datasource-panel__source-name {
