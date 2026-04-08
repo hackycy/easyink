@@ -30,9 +30,6 @@ export const TABLE_BASE_CAPABILITIES = {
   supportsChildren: false,
   supportsAnimation: false,
   supportsUnionDrop: false,
-  hasDeepEditing: true,
-  hasOverlay: true,
-  hasContentEditing: true,
 } as const
 
 /** Rectangle result from geometry calculations. */

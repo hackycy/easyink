@@ -1,11 +1,12 @@
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
-import type { LocaleMessages, MaterialCatalogEntry, MaterialDefinition, MaterialDesignerExtension, PreferenceProvider } from '../types'
+import type { DeepEditingRuntimeState, LocaleMessages, MaterialCatalogEntry, MaterialDefinition, MaterialDesignerExtension, MaterialExtensionFactory, PreferenceProvider } from '../types'
 import { CommandManager, SelectionModel } from '@easyink/core'
 import { DataSourceRegistry } from '@easyink/datasource'
-import { createDefaultSchema, isTableNode } from '@easyink/schema'
+import { createDefaultSchema } from '@easyink/schema'
 import { markRaw } from 'vue'
+import { createMaterialExtensionContext } from '../materials/extension-context'
 import { applyPersistedWorkbench, loadWorkbenchPreferences } from './preference-persistence'
-import { createDefaultSaveBranchMenu, createDefaultTableEditing, createDefaultWorkbenchState } from './workbench'
+import { createDefaultDeepEditing, createDefaultSaveBranchMenu, createDefaultWorkbenchState } from './workbench'
 
 /**
  * DesignerStore is the central state manager for the designer.
@@ -25,13 +26,16 @@ export class DesignerStore {
 
   // ─── Workbench state (NOT in Schema, NOT in undo/redo) ───────
   readonly workbench = createDefaultWorkbenchState()
-  readonly tableEditing = createDefaultTableEditing()
   readonly saveBranch = createDefaultSaveBranchMenu()
 
   // ─── Material registry ────────────────────────────────────────
   private _materials = new Map<string, MaterialDefinition>()
-  private _materialDesignerExtensions = new Map<string, MaterialDesignerExtension>()
+  private _materialFactories = new Map<string, MaterialExtensionFactory>()
+  private _cachedExtensions = new Map<string, MaterialDesignerExtension>()
   private _catalog: MaterialCatalogEntry[] = []
+
+  // ─── Generic deep editing ─────────────────────────────────────
+  readonly deepEditing: DeepEditingRuntimeState = createDefaultDeepEditing()
 
   // ─── Locale ───────────────────────────────────────────────────
   private _locale?: LocaleMessages
@@ -39,7 +43,8 @@ export class DesignerStore {
   constructor(schema?: DocumentSchema, preferenceProvider?: PreferenceProvider) {
     this._schema = schema || createDefaultSchema()
     markRaw(this._materials)
-    markRaw(this._materialDesignerExtensions)
+    markRaw(this._materialFactories)
+    markRaw(this._cachedExtensions)
     markRaw(this.dataSourceRegistry)
 
     // Apply persisted workbench state if available
@@ -84,8 +89,7 @@ export class DesignerStore {
       return undefined
     const [removed] = this._schema.elements.splice(idx, 1)
     this.selection.remove(id)
-    // Exit deep editing if the removed element was being edited
-    if (this.tableEditing.tableId === id) {
+    if (this.deepEditing.nodeId === id) {
       this.exitDeepEditing()
     }
     return removed
@@ -108,14 +112,6 @@ export class DesignerStore {
     return this._materials.get(type)
   }
 
-  registerDesignerExtension(type: string, ext: MaterialDesignerExtension): void {
-    this._materialDesignerExtensions.set(type, ext)
-  }
-
-  getDesignerExtension(type: string): MaterialDesignerExtension | undefined {
-    return this._materialDesignerExtensions.get(type)
-  }
-
   registerCatalogEntry(entry: MaterialCatalogEntry): void {
     this._catalog.push(entry)
   }
@@ -130,6 +126,28 @@ export class DesignerStore {
 
   getGroupedMaterials(group: string): MaterialCatalogEntry[] {
     return this._catalog.filter(e => e.group === group && e.priority !== 'quick')
+  }
+
+  // ─── Extension Factory Registry ─────────────────────────────────
+
+  registerDesignerFactory(type: string, factory: MaterialExtensionFactory): void {
+    this._materialFactories.set(type, factory)
+  }
+
+  /** Get or lazily instantiate an extension from its factory. */
+  getDesignerExtension(type: string): MaterialDesignerExtension | undefined {
+    let ext = this._cachedExtensions.get(type)
+    if (ext)
+      return ext
+
+    const factory = this._materialFactories.get(type)
+    if (!factory)
+      return undefined
+
+    const context = createMaterialExtensionContext(this)
+    ext = factory(context)
+    this._cachedExtensions.set(type, ext)
+    return ext
   }
 
   // ─── Locale ───────────────────────────────────────────────────
@@ -153,70 +171,50 @@ export class DesignerStore {
 
   // ─── Deep Editing ───────────────────────────────────────────────
 
+  /** Whether a deep editing session is active. */
   get isInDeepEditing(): boolean {
-    return this.tableEditing.phase !== 'idle'
+    return this.deepEditing.nodeId !== undefined
   }
 
+  /** Get the node ID being deep-edited. */
   get deepEditingNodeId(): string | undefined {
-    return this.tableEditing.tableId
+    return this.deepEditing.nodeId
   }
 
-  /** Enter deep editing for a table element. Validates capability, clears multi-selection. */
+  /** Enter deep editing for an element with a declared FSM. */
   enterDeepEditing(nodeId: string): boolean {
     const node = this.getElementById(nodeId)
     if (!node)
       return false
 
-    const def = this.getMaterial(node.type)
-    if (!def?.capabilities.hasDeepEditing)
+    const ext = this.getDesignerExtension(node.type)
+    if (!ext?.deepEditing)
       return false
 
     // Deep editing and multi-selection are mutually exclusive
     this.selection.clear()
     this.selection.add(nodeId)
 
-    this.tableEditing.phase = 'table-selected'
-    this.tableEditing.tableId = nodeId
-    this.tableEditing.rowRole = undefined
-    this.tableEditing.cellPath = undefined
+    this.deepEditing.nodeId = nodeId
+    this.deepEditing.materialType = node.type
+    this.deepEditing.currentPhase = ext.deepEditing.initialPhase
+    this.deepEditing.materialState = undefined
     return true
   }
 
   /** Exit deep editing, reset to idle. */
   exitDeepEditing(): void {
-    this.tableEditing.phase = 'idle'
-    this.tableEditing.tableId = undefined
-    this.tableEditing.rowRole = undefined
-    this.tableEditing.cellPath = undefined
+    this.deepEditing.nodeId = undefined
+    this.deepEditing.materialType = undefined
+    this.deepEditing.currentPhase = undefined
+    this.deepEditing.materialState = undefined
   }
 
-  /** Select a cell in the current deep-editing table. */
-  selectCell(row: number, col: number): void {
-    if (!this.tableEditing.tableId)
+  /** Transition to a specific phase within the active deep editing FSM. */
+  transitionPhase(phaseId: string): void {
+    if (!this.deepEditing.nodeId)
       return
-
-    this.tableEditing.phase = 'cell-selected'
-    this.tableEditing.cellPath = { row, col }
-
-    // Infer row role directly from row schema
-    const node = this.getElementById(this.tableEditing.tableId)
-    if (node && isTableNode(node)) {
-      this.tableEditing.rowRole = node.table.topology.rows[row]?.role
-    }
-  }
-
-  /** Enter content editing mode for the currently selected cell. */
-  enterContentEditing(): void {
-    if (this.tableEditing.phase !== 'cell-selected' || !this.tableEditing.cellPath)
-      return
-    this.tableEditing.phase = 'content-editing'
-  }
-
-  /** Exit content editing back to cell-selected. */
-  exitContentEditing(): void {
-    if (this.tableEditing.phase !== 'content-editing')
-      return
-    this.tableEditing.phase = 'cell-selected'
+    this.deepEditing.currentPhase = phaseId
   }
 
   // ─── Cleanup ──────────────────────────────────────────────────
@@ -226,8 +224,10 @@ export class DesignerStore {
     this.selection.clear()
     this.dataSourceRegistry.clear()
     this._materials.clear()
-    this._materialDesignerExtensions.clear()
+    this._materialFactories.clear()
+    this._cachedExtensions.clear()
     this._catalog = []
     this.clipboard = []
+    this.exitDeepEditing()
   }
 }

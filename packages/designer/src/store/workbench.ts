@@ -1,11 +1,11 @@
 import type {
   CanvasViewportState,
+  DeepEditingRuntimeState,
   PanelToggleState,
   PreviewWorkbenchState,
   SaveBranchMenuState,
   SnapState,
   StatusBarState,
-  TableEditingState,
   TemplateLibraryState,
   ToolbarLayoutState,
   WorkbenchState,
@@ -175,8 +175,8 @@ function createDefaultStatus(): StatusBarState {
   }
 }
 
-export function createDefaultTableEditing(): TableEditingState {
-  return { phase: 'idle' }
+export function createDefaultDeepEditing(): DeepEditingRuntimeState {
+  return {}
 }
 
 export function createDefaultSaveBranchMenu(): SaveBranchMenuState {

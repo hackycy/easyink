@@ -1,95 +1,81 @@
 import type { DesignerStore } from '../store/designer-store'
-import type { MaterialCapabilities, MaterialCatalogEntry, MaterialDefinition, MaterialDesignerExtension } from '../types'
+import type { MaterialCapabilities, MaterialCatalogEntry, MaterialDefinition, MaterialExtensionFactory } from '../types'
 
 import {
   BARCODE_CAPABILITIES,
   BARCODE_TYPE,
+  createBarcodeExtension,
   createBarcodeNode,
-  getBarcodeContextActions,
-  renderBarcodeContent,
 } from '@easyink/material-barcode'
 import {
   CHART_CAPABILITIES,
   CHART_TYPE,
+  createChartExtension,
   createChartNode,
-  getChartContextActions,
-  renderChartContent,
 } from '@easyink/material-chart'
 import {
   CONTAINER_CAPABILITIES,
   CONTAINER_TYPE,
+  createContainerExtension,
   createContainerNode,
-  getContainerContextActions,
-  renderContainerContent,
 } from '@easyink/material-container'
 import {
+  createEllipseExtension,
   createEllipseNode,
   ELLIPSE_CAPABILITIES,
   ELLIPSE_TYPE,
-  getEllipseContextActions,
-  renderEllipseContent,
 } from '@easyink/material-ellipse'
 import {
+  createImageExtension,
   createImageNode,
-  getImageContextActions,
   IMAGE_CAPABILITIES,
   IMAGE_TYPE,
-  renderImageContent,
 } from '@easyink/material-image'
 import {
+  createLineExtension,
   createLineNode,
-  getLineContextActions,
   LINE_CAPABILITIES,
   LINE_TYPE,
-  renderLineContent,
 } from '@easyink/material-line'
 import {
+  createQrcodeExtension,
   createQrcodeNode,
-  getQrcodeContextActions,
   QRCODE_CAPABILITIES,
   QRCODE_TYPE,
-  renderQrcodeContent,
 } from '@easyink/material-qrcode'
 import {
+  createRectExtension,
   createRectNode,
-  getRectContextActions,
   RECT_CAPABILITIES,
   RECT_TYPE,
-  renderRectContent,
 } from '@easyink/material-rect'
 import {
+  createRelationExtension,
   createRelationNode,
-  getRelationContextActions,
   RELATION_CAPABILITIES,
   RELATION_TYPE,
-  renderRelationContent,
 } from '@easyink/material-relation'
 import {
+  createSvgExtension,
   createSvgNode,
-  getSvgContextActions,
-  renderSvgContent,
   SVG_CAPABILITIES,
   SVG_TYPE,
 } from '@easyink/material-svg'
 import {
+  createTableDataExtension,
   createTableDataNode,
-  getTableDataContextActions,
-  renderTableDataContent,
   TABLE_DATA_CAPABILITIES,
   TABLE_DATA_TYPE,
 } from '@easyink/material-table-data'
 import {
+  createTableStaticExtension,
   createTableStaticNode,
-  getTableStaticContextActions,
-  renderTableStaticContent,
   TABLE_STATIC_CAPABILITIES,
   TABLE_STATIC_TYPE,
 } from '@easyink/material-table-static'
 import {
+  createTextExtension,
   createTextNode,
-  getTextContextActions,
-  getTextToolbarActions,
-  renderTextContent,
   TEXT_CAPABILITIES,
   TEXT_TYPE,
 } from '@easyink/material-text'
@@ -104,7 +90,7 @@ interface MaterialEntry {
   category: MaterialDefinition['category']
   capabilities: MaterialCapabilities
   createDefaultNode: MaterialDefinition['createDefaultNode']
-  extension: MaterialDesignerExtension
+  factory: MaterialExtensionFactory
 }
 
 const MATERIALS: MaterialEntry[] = [
@@ -115,11 +101,7 @@ const MATERIALS: MaterialEntry[] = [
     category: 'basic',
     capabilities: TEXT_CAPABILITIES,
     createDefaultNode: createTextNode,
-    extension: {
-      renderContent: renderTextContent,
-      getToolbarActions: getTextToolbarActions,
-      getContextActions: getTextContextActions,
-    },
+    factory: createTextExtension,
   },
   {
     type: IMAGE_TYPE,
@@ -128,7 +110,7 @@ const MATERIALS: MaterialEntry[] = [
     category: 'basic',
     capabilities: IMAGE_CAPABILITIES,
     createDefaultNode: createImageNode,
-    extension: { renderContent: renderImageContent, getContextActions: getImageContextActions },
+    factory: createImageExtension,
   },
   {
     type: BARCODE_TYPE,
@@ -137,7 +119,7 @@ const MATERIALS: MaterialEntry[] = [
     category: 'basic',
     capabilities: BARCODE_CAPABILITIES,
     createDefaultNode: createBarcodeNode,
-    extension: { renderContent: renderBarcodeContent, getContextActions: getBarcodeContextActions },
+    factory: createBarcodeExtension,
   },
   {
     type: QRCODE_TYPE,
@@ -146,7 +128,7 @@ const MATERIALS: MaterialEntry[] = [
     category: 'basic',
     capabilities: QRCODE_CAPABILITIES,
     createDefaultNode: createQrcodeNode,
-    extension: { renderContent: renderQrcodeContent, getContextActions: getQrcodeContextActions },
+    factory: createQrcodeExtension,
   },
   {
     type: LINE_TYPE,
@@ -155,7 +137,7 @@ const MATERIALS: MaterialEntry[] = [
     category: 'basic',
     capabilities: LINE_CAPABILITIES,
     createDefaultNode: createLineNode,
-    extension: { renderContent: renderLineContent, getContextActions: getLineContextActions },
+    factory: createLineExtension,
   },
   {
     type: RECT_TYPE,
@@ -164,7 +146,7 @@ const MATERIALS: MaterialEntry[] = [
     category: 'basic',
     capabilities: RECT_CAPABILITIES,
     createDefaultNode: createRectNode,
-    extension: { renderContent: renderRectContent, getContextActions: getRectContextActions },
+    factory: createRectExtension,
   },
   {
     type: ELLIPSE_TYPE,
@@ -173,7 +155,7 @@ const MATERIALS: MaterialEntry[] = [
     category: 'basic',
     capabilities: ELLIPSE_CAPABILITIES,
     createDefaultNode: createEllipseNode,
-    extension: { renderContent: renderEllipseContent, getContextActions: getEllipseContextActions },
+    factory: createEllipseExtension,
   },
   {
     type: CONTAINER_TYPE,
@@ -182,7 +164,7 @@ const MATERIALS: MaterialEntry[] = [
     category: 'layout',
     capabilities: CONTAINER_CAPABILITIES,
     createDefaultNode: createContainerNode,
-    extension: { renderContent: renderContainerContent, getContextActions: getContainerContextActions },
+    factory: createContainerExtension,
   },
   {
     type: TABLE_STATIC_TYPE,
@@ -191,12 +173,7 @@ const MATERIALS: MaterialEntry[] = [
     category: 'data',
     capabilities: TABLE_STATIC_CAPABILITIES,
     createDefaultNode: createTableStaticNode,
-    extension: {
-      renderContent: renderTableStaticContent,
-      getContextActions: getTableStaticContextActions,
-      renderOverlay: () => null,
-      enterEditMode: () => true,
-    },
+    factory: createTableStaticExtension,
   },
   {
     type: TABLE_DATA_TYPE,
@@ -205,12 +182,7 @@ const MATERIALS: MaterialEntry[] = [
     category: 'data',
     capabilities: TABLE_DATA_CAPABILITIES,
     createDefaultNode: createTableDataNode,
-    extension: {
-      renderContent: renderTableDataContent,
-      getContextActions: getTableDataContextActions,
-      renderOverlay: () => null,
-      enterEditMode: () => true,
-    },
+    factory: createTableDataExtension,
   },
   {
     type: CHART_TYPE,
@@ -219,7 +191,7 @@ const MATERIALS: MaterialEntry[] = [
     category: 'chart',
     capabilities: CHART_CAPABILITIES,
     createDefaultNode: createChartNode,
-    extension: { renderContent: renderChartContent, getContextActions: getChartContextActions },
+    factory: createChartExtension,
   },
   {
     type: SVG_TYPE,
@@ -228,7 +200,7 @@ const MATERIALS: MaterialEntry[] = [
     category: 'svg',
     capabilities: SVG_CAPABILITIES,
     createDefaultNode: createSvgNode,
-    extension: { renderContent: renderSvgContent, getContextActions: getSvgContextActions },
+    factory: createSvgExtension,
   },
   {
     type: RELATION_TYPE,
@@ -237,7 +209,7 @@ const MATERIALS: MaterialEntry[] = [
     category: 'relation',
     capabilities: RELATION_CAPABILITIES,
     createDefaultNode: createRelationNode,
-    extension: { renderContent: renderRelationContent, getContextActions: getRelationContextActions },
+    factory: createRelationExtension,
   },
 ]
 
@@ -286,7 +258,7 @@ export function registerBuiltinMaterials(store: DesignerStore): void {
     }
 
     store.registerMaterial(definition)
-    store.registerDesignerExtension(entry.type, entry.extension)
+    store.registerDesignerFactory(entry.type, entry.factory)
   }
 
   // Register quick material catalog entries

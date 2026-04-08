@@ -1,4 +1,4 @@
-import type { MaterialNode } from '@easyink/schema'
+import type { MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
 import type { ChartProps } from './schema'
 
 function escapeHtml(str: string): string {
@@ -13,17 +13,27 @@ const CHART_ICONS: Record<string, string> = {
   scatter: '<circle cx="20" cy="60" r="4" fill="#1890ff"/><circle cx="35" cy="40" r="4" fill="#1890ff"/><circle cx="50" cy="50" r="4" fill="#1890ff"/><circle cx="65" cy="25" r="4" fill="#1890ff"/><circle cx="80" cy="35" r="4" fill="#1890ff"/>',
 }
 
-export function renderChartContent(node: MaterialNode): { html: string } {
-  const p = node.props as unknown as ChartProps
-  const icon = CHART_ICONS[p.chartType] || CHART_ICONS.bar
-
-  const html = `<div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:${p.backgroundColor || '#fff'};border:1px solid #e8e8e8;box-sizing:border-box">`
+function buildHtml(props: ChartProps): string {
+  const icon = CHART_ICONS[props.chartType] || CHART_ICONS.bar
+  return `<div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:${props.backgroundColor || '#fff'};border:1px solid #e8e8e8;box-sizing:border-box">`
     + `<svg width="60%" height="60%" viewBox="0 0 100 90" xmlns="http://www.w3.org/2000/svg">${icon}</svg>`
-    + `<span style="font-size:10px;color:#999;margin-top:4px">${escapeHtml(p.chartType)}</span>`
+    + `<span style="font-size:10px;color:#999;margin-top:4px">${escapeHtml(props.chartType)}</span>`
     + `</div>`
-  return { html }
 }
 
-export function getChartContextActions(_node: MaterialNode) {
-  return []
+export function createChartExtension(_context: MaterialExtensionContext): MaterialDesignerExtension {
+  return {
+    renderContent(nodeSignal, container) {
+      function render() {
+        const node = nodeSignal.get()
+        container.innerHTML = buildHtml(node.props as unknown as ChartProps)
+      }
+      render()
+      const unsub = nodeSignal.subscribe(render)
+      return unsub
+    },
+    getContextActions() {
+      return []
+    },
+  }
 }

@@ -390,6 +390,9 @@ importers:
 
   packages/materials/table-data:
     dependencies:
+      '@easyink/core':
+        specifier: workspace:*
+        version: link:../../core
       '@easyink/datasource':
         specifier: workspace:*
         version: link:../../datasource
@@ -414,6 +417,9 @@ importers:
 
   packages/materials/table-static:
     dependencies:
+      '@easyink/core':
+        specifier: workspace:*
+        version: link:../../core
       '@easyink/material-table-kernel':
         specifier: workspace:*
         version: link:../table-kernel

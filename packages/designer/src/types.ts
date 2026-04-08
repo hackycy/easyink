@@ -1,7 +1,6 @@
 import type { DataSourceDescriptor } from '@easyink/datasource'
 import type { MaterialNode } from '@easyink/schema'
-import type { MaterialCategory, PropSchemaType, TableRowRole, TemplateBackendMode, TemplateLibraryPhase } from '@easyink/shared'
-import type { Component, VNode } from 'vue'
+import type { MaterialCategory, PropSchemaType, TemplateBackendMode, TemplateLibraryPhase } from '@easyink/shared'
 
 // ─── Workbench State ───────────────────────────────────────────────
 
@@ -98,19 +97,6 @@ export interface TemplateLibraryState {
   selectedTemplateId?: string
 }
 
-// ─── Table Editing ─────────────────────────────────────────────────
-
-export interface TableEditingState {
-  phase: 'idle' | 'table-selected' | 'cell-selected' | 'content-editing'
-  tableId?: string
-  /** Inferred from row.role, not independently selectable */
-  rowRole?: TableRowRole
-  cellPath?: {
-    row: number
-    col: number
-  }
-}
-
 // ─── Material Definition ───────────────────────────────────────────
 
 export interface MaterialDefinition {
@@ -132,18 +118,6 @@ export interface MaterialCapabilities {
   supportsUnionDrop?: boolean
   pageAware?: boolean
   multiBinding?: boolean
-  /**
-   * Element supports deep editing mode (table, container).
-   * Uses external drag handle; element body no longer responds to drag.
-   */
-  hasDeepEditing?: boolean
-  /**
-   * Element has custom overlay (column/row resize handles, cell selection).
-   * CanvasWorkspace calls renderOverlay() when set.
-   */
-  hasOverlay?: boolean
-  /** Element supports in-place content editing (text double-click, table cell text editing). */
-  hasContentEditing?: boolean
   /** Maintain aspect ratio during element-level resize handle drag. */
   keepAspectRatio?: boolean
 }
@@ -178,49 +152,37 @@ export interface MaterialCatalogEntry {
   priority?: 'quick' | 'grouped'
 }
 
-// ─── Material Extensions ───────────────────────────────────────────
+// ─── Material Extensions (re-exported from @easyink/core) ─────────
 
-export interface ToolbarAction {
-  id: string
-  label: string
-  icon?: string
-  disabled?: boolean
-}
+export type {
+  ContextAction,
+  DeepEditingDefinition,
+  DeepEditingPhase,
+  InternalResizeHandle,
+  InternalResizeHandler,
+  KeyboardRouteHandler,
+  MaterialDesignerExtension,
+  MaterialExtensionContext,
+  MaterialExtensionFactory,
+  NodeSignal,
+  PhaseContainers,
+  PhaseTransition,
+  PropertyPanelRequest,
+  SelectionSnapshot,
+  SubSelectionHandler,
+  SubSelectionResult,
+  ToolbarAction,
+} from '@easyink/core'
 
-export interface ContextAction {
-  id: string
-  label: string
-  icon?: string
-  disabled?: boolean
-  destructive?: boolean
-}
+// ─── Deep Editing Runtime State ───────────────────────────────────
 
-export interface DesignerRenderContext {
-  unit: import('@easyink/shared').UnitType
-  getBindingLabel: (binding: import('@easyink/schema').BindingRef) => string
-}
-
-export interface DesignerRenderOutput {
-  html: string
-  editable?: boolean
-}
-
-export interface MaterialDesignerExtension {
-  renderContent?: (node: MaterialNode, context: DesignerRenderContext) => DesignerRenderOutput
-  getToolbarActions?: (node: MaterialNode) => ToolbarAction[]
-  getContextActions?: (node: MaterialNode) => ContextAction[]
-  renderOverlay?: (node: MaterialNode, state: DesignerMaterialState) => VNode | Component | null
-  enterEditMode?: (node: MaterialNode) => boolean
-}
-
-export interface DesignerMaterialState {
-  selected: boolean
-  hovered: boolean
-  editing: boolean
-  /** Deep editing phase, only for hasDeepEditing elements */
-  deepEditPhase?: string
-  /** Current selected cell path in table deep editing */
-  cellPath?: { row: number, col: number }
+/** Deep editing runtime state managed by the designer store. */
+export interface DeepEditingRuntimeState {
+  nodeId?: string
+  materialType?: string
+  currentPhase?: string
+  /** Opaque state managed by the material FSM */
+  materialState?: unknown
 }
 
 // ─── Designer Panel / Toolbar ──────────────────────────────────────

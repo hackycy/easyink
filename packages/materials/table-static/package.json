@@ -19,6 +19,7 @@
     "dev": "tsdown --watch"
   },
   "dependencies": {
+    "@easyink/core": "workspace:*",
     "@easyink/material-table-kernel": "workspace:*",
     "@easyink/schema": "workspace:*",
     "@easyink/shared": "workspace:*"

@@ -2,7 +2,6 @@
 import type { PropSchema } from '../types'
 import type { PagePropertyContext, PagePropertyDescriptor, PagePropertyGroup } from '../page-properties'
 import { ClearBindingCommand, UpdateDocumentCommand, UpdateMaterialPropsCommand, UpdatePageCommand } from '@easyink/core'
-import { isTableNode } from '@easyink/schema'
 import { PAPER_PRESETS } from '@easyink/shared'
 import { EiCheckbox, EiInput, EiPanel } from '@easyink/ui'
 import { computed, shallowRef, watchEffect } from 'vue'
@@ -138,12 +137,6 @@ const GROUP_LABELS: Record<string, string> = {
   'table-appearance': 'designer.property.appearance',
 }
 
-/** Whether the selected element is a table in deep editing mode. */
-const isTableDeepEditing = computed(() => {
-  const el = selectedElement.value
-  return el && isTableNode(el) && store.isInDeepEditing && store.deepEditingNodeId === el.id
-})
-
 function groupLabel(group: string): string {
   const key = GROUP_LABELS[group]
   return key ? store.t(key) : group
@@ -224,16 +217,6 @@ function clearBinding(nodeId: string) {
             :model-value="selectedElement.alpha ?? 1"
             @update:model-value="updateGeometry('alpha', Number($event))"
           />
-        </div>
-      </EiPanel>
-
-      <!-- Table editing info -->
-      <EiPanel v-if="isTableDeepEditing && store.tableEditing.cellPath" :title="store.t('designer.property.cellInfo')" collapsible flat>
-        <div class="ei-properties-panel__fields">
-          <span class="ei-properties-panel__cell-label">
-            {{ store.t('designer.table.row') }}: {{ store.tableEditing.cellPath.row + 1 }},
-            {{ store.t('designer.table.col') }}: {{ store.tableEditing.cellPath.col + 1 }}
-          </span>
         </div>
       </EiPanel>
 

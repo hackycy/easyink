@@ -8,4 +8,5 @@
 
 禁止使用`structuredClone`
 禁止使用unicode字符表情
+禁止tsconfig.json配置paths，通过pnpm workspace引入包
 确保项目`pnpm lint`和`pnpm typecheck`和`pnpm build`通过

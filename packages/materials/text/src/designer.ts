@@ -1,14 +1,12 @@
-import type { BindingRef, MaterialNode } from '@easyink/schema'
+import type { MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
+import type { MaterialNode } from '@easyink/schema'
 import type { TextProps } from './schema'
 
 function escapeHtml(str: string): string {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
-export function renderTextContent(
-  node: MaterialNode,
-  context: { getBindingLabel: (binding: BindingRef) => string },
-): { html: string, editable: boolean } {
+function buildHtml(node: MaterialNode, context: MaterialExtensionContext): string {
   const p = node.props as unknown as TextProps
   const prefix = p.prefix ? escapeHtml(p.prefix) : ''
   const suffix = p.suffix ? escapeHtml(p.suffix) : ''
@@ -41,20 +39,23 @@ export function renderTextContent(
     p.overflow === 'ellipsis' ? 'text-overflow:ellipsis' : '',
   ].filter(Boolean).join(';')
 
-  const html = `<div style="${style}"><span style="width:100%;text-align:${p.textAlign}">${display || '&nbsp;'}</span></div>`
-  return { html, editable: true }
+  return `<div style="${style}"><span style="width:100%;text-align:${p.textAlign}">${display || '&nbsp;'}</span></div>`
 }
 
-export function getTextToolbarActions(_node: MaterialNode) {
-  return [
-    { id: 'bold', label: 'B' },
-    { id: 'italic', label: 'I' },
-    { id: 'underline', label: 'U' },
-  ]
-}
-
-export function getTextContextActions(_node: MaterialNode) {
-  return [
-    { id: 'edit-text', label: 'Edit Text' },
-  ]
+export function createTextExtension(context: MaterialExtensionContext): MaterialDesignerExtension {
+  return {
+    renderContent(nodeSignal, container) {
+      function render() {
+        container.innerHTML = buildHtml(nodeSignal.get(), context)
+      }
+      render()
+      const unsub = nodeSignal.subscribe(render)
+      return unsub
+    },
+    getContextActions() {
+      return [
+        { id: 'edit-text', label: 'Edit Text' },
+      ]
+    },
+  }
 }

@@ -1,7 +1,8 @@
+import type { MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { ContainerProps } from './schema'
 
-export function renderContainerContent(node: MaterialNode): { html: string } {
+function buildHtml(node: MaterialNode): string {
   const p = node.props as unknown as ContainerProps
 
   const childCount = node.children?.length || 0
@@ -13,12 +14,23 @@ export function renderContainerContent(node: MaterialNode): { html: string } {
     ? `border:${p.borderWidth}px ${p.borderType} ${p.borderColor};`
     : `border:1px dashed #d0d0d0;`
 
-  const html = `<div style="width:100%;height:100%;box-sizing:border-box;display:flex;flex-direction:${p.direction};align-items:center;justify-content:center;padding:${p.padding}px;gap:${p.gap}px;background:${p.fillColor || 'transparent'};${borderStyle}">${childHint}</div>`
-  return { html }
+  return `<div style="width:100%;height:100%;box-sizing:border-box;display:flex;flex-direction:${p.direction};align-items:center;justify-content:center;padding:${p.padding}px;gap:${p.gap}px;background:${p.fillColor || 'transparent'};${borderStyle}">${childHint}</div>`
 }
 
-export function getContainerContextActions(_node: MaterialNode) {
-  return [
-    { id: 'add-child', label: 'Add Child' },
-  ]
+export function createContainerExtension(_context: MaterialExtensionContext): MaterialDesignerExtension {
+  return {
+    renderContent(nodeSignal, container) {
+      function render() {
+        container.innerHTML = buildHtml(nodeSignal.get())
+      }
+      render()
+      const unsub = nodeSignal.subscribe(render)
+      return unsub
+    },
+    getContextActions() {
+      return [
+        { id: 'add-child', label: 'Add Child' },
+      ]
+    },
+  }
 }
