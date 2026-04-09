@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { PagePropertyContext, PagePropertyDescriptor } from '../page-properties'
-import { EiCheckbox, EiColorPicker, EiFontPicker, EiInput, EiSelect } from '@easyink/ui'
+import { EiCheckbox, EiColorPicker, EiFontPicker, EiInput, EiSelect, EiSwitch } from '@easyink/ui'
 import { computed } from 'vue'
 
 const props = defineProps<{
@@ -65,7 +65,7 @@ function onUpdate(val: unknown) {
     />
 
     <!-- switch -->
-    <EiCheckbox
+    <EiSwitch
       v-else-if="descriptor.editor === 'switch'"
       :label="label"
       :model-value="(value as boolean) ?? false"

@@ -3,7 +3,7 @@ import type { PropSchema } from '../types'
 import type { PagePropertyContext, PagePropertyDescriptor, PagePropertyGroup } from '../page-properties'
 import { ClearBindingCommand, UpdateDocumentCommand, UpdateMaterialPropsCommand, UpdatePageCommand } from '@easyink/core'
 import { PAPER_PRESETS } from '@easyink/shared'
-import { EiCheckbox, EiInput, EiPanel } from '@easyink/ui'
+import { EiInput, EiPanel, EiSwitch } from '@easyink/ui'
 import { computed, shallowRef, watchEffect } from 'vue'
 import { useDesignerStore } from '../composables'
 import { getPropSchemas, groupPropSchemas } from '../materials/prop-schemas'
@@ -254,12 +254,12 @@ function clearBinding(nodeId: string) {
       <!-- Visibility / Lock -->
       <EiPanel :title="store.t('designer.property.style')" collapsible flat>
         <div class="ei-properties-panel__fields">
-          <EiCheckbox
+          <EiSwitch
             :label="store.t('designer.property.hidden')"
             :model-value="selectedElement.hidden ?? false"
             @update:model-value="updateElementMeta('hidden', $event)"
           />
-          <EiCheckbox
+          <EiSwitch
             :label="store.t('designer.property.locked')"
             :model-value="selectedElement.locked ?? false"
             @update:model-value="updateElementMeta('locked', $event)"

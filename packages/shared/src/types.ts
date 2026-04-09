@@ -93,6 +93,8 @@ export type PropSchemaType
   = | 'string'
     | 'number'
     | 'boolean'
+    | 'switch'
+    | 'textarea'
     | 'color'
     | 'enum'
     | 'object'

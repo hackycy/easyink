@@ -3,10 +3,10 @@ import type { PropSchema } from '../types'
 // ─── Text ────────────────────────────────────────────────────────────
 
 const TEXT_PROP_SCHEMAS: PropSchema[] = [
-  { key: 'content', label: 'designer.property.content', type: 'string', group: 'content' },
+  { key: 'content', label: 'designer.property.content', type: 'textarea', group: 'content' },
   { key: 'prefix', label: 'designer.property.prefix', type: 'string', group: 'content' },
   { key: 'suffix', label: 'designer.property.suffix', type: 'string', group: 'content' },
-  { key: 'richText', label: 'designer.property.richText', type: 'boolean', group: 'content' },
+  { key: 'richText', label: 'designer.property.richText', type: 'switch', group: 'content' },
   { key: 'fontFamily', label: 'designer.property.font', type: 'font', group: 'typography' },
   { key: 'fontSize', label: 'designer.property.fontSize', type: 'number', group: 'typography', min: 1, max: 200, step: 1 },
   { key: 'fontWeight', label: 'designer.property.fontWeight', type: 'enum', group: 'typography', enum: [
@@ -29,7 +29,7 @@ const TEXT_PROP_SCHEMAS: PropSchema[] = [
   ] },
   { key: 'lineHeight', label: 'designer.property.lineHeight', type: 'number', group: 'typography', min: 0.5, max: 5, step: 0.1 },
   { key: 'letterSpacing', label: 'designer.property.letterSpacing', type: 'number', group: 'typography', min: -5, max: 20, step: 0.5 },
-  { key: 'autoWrap', label: 'designer.property.autoWrap', type: 'boolean', group: 'typography' },
+  { key: 'autoWrap', label: 'designer.property.autoWrap', type: 'switch', group: 'typography' },
   { key: 'overflow', label: 'designer.property.overflow', type: 'enum', group: 'typography', enum: [
     { label: 'Visible', value: 'visible' },
     { label: 'Hidden', value: 'hidden' },
@@ -64,7 +64,7 @@ const BARCODE_PROP_SCHEMAS: PropSchema[] = [
     { label: 'UPC', value: 'UPC' },
     { label: 'ITF14', value: 'ITF14' },
   ] },
-  { key: 'showText', label: 'designer.property.showText', type: 'boolean', group: 'content' },
+  { key: 'showText', label: 'designer.property.showText', type: 'switch', group: 'content' },
   { key: 'lineWidth', label: 'designer.property.lineWidth', type: 'number', group: 'appearance', min: 1, max: 5, step: 1 },
   { key: 'lineColor', label: 'designer.property.lineColor', type: 'color', group: 'appearance' },
   { key: 'backgroundColor', label: 'designer.property.background', type: 'color', group: 'appearance' },
@@ -216,7 +216,7 @@ const TABLE_DATA_TABLE_PROPS: PropSchema[] = [
   { key: 'color', label: 'designer.property.color', type: 'color', group: 'table-typography' },
   { key: 'headerBackground', label: 'designer.property.headerBackground', type: 'color', group: 'table-appearance' },
   { key: 'summaryBackground', label: 'designer.property.summaryBackground', type: 'color', group: 'table-appearance' },
-  { key: 'stripedRows', label: 'designer.property.stripedRows', type: 'boolean', group: 'table-appearance' },
+  { key: 'stripedRows', label: 'designer.property.stripedRows', type: 'switch', group: 'table-appearance' },
   { key: 'stripedColor', label: 'designer.property.stripedColor', type: 'color', group: 'table-appearance', visible: props => !!props.stripedRows },
 ]
 

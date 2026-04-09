@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { PropSchema } from '../types'
-import { EiCheckbox, EiColorPicker, EiFontPicker, EiInput, EiSelect } from '@easyink/ui'
+import { EiCheckbox, EiColorPicker, EiFontPicker, EiInput, EiSelect, EiSwitch, EiTextarea } from '@easyink/ui'
 import { computed } from 'vue'
 
 const props = defineProps<{
@@ -64,6 +64,25 @@ function onUpdate(val: unknown) {
       :label="label"
       :model-value="(value as boolean) ?? false"
       :disabled="disabled"
+      @update:model-value="onUpdate"
+    />
+
+    <!-- switch -->
+    <EiSwitch
+      v-else-if="schema.type === 'switch'"
+      :label="label"
+      :model-value="(value as boolean) ?? false"
+      :disabled="disabled"
+      @update:model-value="onUpdate"
+    />
+
+    <!-- textarea -->
+    <EiTextarea
+      v-else-if="schema.type === 'textarea'"
+      :label="label"
+      :model-value="(value as string) ?? ''"
+      :disabled="disabled"
+      :rows="(schema.editorOptions?.rows as number) ?? 3"
       @update:model-value="onUpdate"
     />
 
