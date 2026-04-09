@@ -53,6 +53,28 @@ export function renderTableHtml(options: RenderTableHtmlOptions): string {
   const pad = props.cellPadding ?? 4
 
   const colgroup = buildColgroup(topology)
+  const numCols = topology.columns.length
+
+  // Pre-compute cells covered by another cell's colSpan/rowSpan — these must
+  // NOT emit a <td> because the spanning cell already occupies those slots.
+  const spanned = new Set<number>()
+  for (let ri = 0; ri < topology.rows.length; ri++) {
+    const rowCells = topology.rows[ri]!.cells
+    for (let ci = 0; ci < rowCells.length; ci++) {
+      const cell = rowCells[ci]!
+      const rs = cell.rowSpan ?? 1
+      const cs = cell.colSpan ?? 1
+      if (rs > 1 || cs > 1) {
+        for (let dr = 0; dr < rs; dr++) {
+          for (let dc = 0; dc < cs; dc++) {
+            if (dr === 0 && dc === 0)
+              continue
+            spanned.add((ri + dr) * numCols + (ci + dc))
+          }
+        }
+      }
+    }
+  }
 
   let rows = ''
   for (let ri = 0; ri < topology.rows.length; ri++) {
@@ -73,6 +95,8 @@ export function renderTableHtml(options: RenderTableHtmlOptions): string {
 
     let cells = ''
     for (let ci = 0; ci < row.cells.length; ci++) {
+      if (spanned.has(ri * numCols + ci))
+        continue
       const cell = row.cells[ci]!
       const rs = cell.rowSpan && cell.rowSpan > 1 ? ` rowspan="${cell.rowSpan}"` : ''
       const cs = cell.colSpan && cell.colSpan > 1 ? ` colspan="${cell.colSpan}"` : ''
