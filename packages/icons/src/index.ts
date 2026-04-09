@@ -28,6 +28,7 @@ export {
   Database as IconDatabase,
   Trash2 as IconDelete,
   AlignHorizontalSpaceBetween as IconDistribute,
+  SeparatorVertical as IconDivider,
   ChevronDown as IconDown,
   Circle as IconEllipse,
   ChevronsRightLeft as IconExpand,

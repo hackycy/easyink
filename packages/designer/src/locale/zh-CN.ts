@@ -59,6 +59,10 @@ const zhCN: LocaleMessages = {
       manager: '工具栏管理',
       restoreDefault: '恢复默认编排',
       windowToggles: '浮动窗口',
+      showGroup: '显示分组',
+      hideGroup: '隐藏分组',
+      showDivider: '显示分隔线',
+      hideDivider: '隐藏分隔线',
     },
     property: {
       position: '位置',
