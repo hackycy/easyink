@@ -6,21 +6,40 @@ import { computed } from 'vue'
 const props = defineProps<{
   element: MaterialNode
   t: (key: string) => string
+  /** External binding override (from overlay). When provided, overrides element.binding. */
+  externalBinding?: BindingRef | BindingRef[] | null
+  /** Whether external binding is explicitly set (to distinguish undefined from not-provided) */
+  hasExternalBinding?: boolean
 }>()
 
 const emit = defineEmits<{
   clearBinding: [nodeId: string]
+  clearExternalBinding: [bindIndex?: number]
 }>()
 
 const bindings = computed<BindingRef[]>(() => {
+  // When overlay provides binding context, use it
+  if (props.hasExternalBinding) {
+    if (props.externalBinding === null || props.externalBinding === undefined)
+      return []
+    return Array.isArray(props.externalBinding) ? props.externalBinding : [props.externalBinding]
+  }
+  // Default: element-level binding
   const b = props.element.binding
   if (!b)
     return []
   return Array.isArray(b) ? b : [b]
 })
 
+const isExternal = computed(() => props.hasExternalBinding && props.externalBinding !== null)
+
 function handleClear() {
-  emit('clearBinding', props.element.id)
+  if (isExternal.value) {
+    emit('clearExternalBinding')
+  }
+  else {
+    emit('clearBinding', props.element.id)
+  }
 }
 </script>
 

@@ -1,5 +1,5 @@
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
-import type { DeepEditingRuntimeState, LocaleMessages, MaterialCatalogEntry, MaterialDefinition, MaterialDesignerExtension, MaterialExtensionFactory, PreferenceProvider } from '../types'
+import type { DeepEditingRuntimeState, LocaleMessages, MaterialCatalogEntry, MaterialDefinition, MaterialDesignerExtension, MaterialExtensionFactory, PreferenceProvider, PropertyPanelOverlay } from '../types'
 import { CommandManager, SelectionModel } from '@easyink/core'
 import { DataSourceRegistry } from '@easyink/datasource'
 import { createDefaultSchema } from '@easyink/schema'
@@ -38,6 +38,9 @@ export class DesignerStore {
   readonly deepEditing: DeepEditingRuntimeState = createDefaultDeepEditing()
   /** Registered callback for FSM-level cleanup before resetting deep editing state. */
   private _deepEditingCleanup: (() => void) | null = null
+
+  // ─── Property panel overlay (pushed by materials) ────────────
+  private _propertyOverlay: PropertyPanelOverlay | null = null
 
   // ─── Page element provider (for coordinate conversion) ──────
   private _pageElProvider: () => HTMLElement | null = () => null
@@ -230,6 +233,7 @@ export class DesignerStore {
     if (this._deepEditingCleanup) {
       this._deepEditingCleanup()
     }
+    this._propertyOverlay = null
     this.deepEditing.nodeId = undefined
     this.deepEditing.materialType = undefined
     this.deepEditing.currentPhase = undefined
@@ -248,6 +252,18 @@ export class DesignerStore {
     this.deepEditing.currentPhase = phaseId
   }
 
+  // ─── Property Panel Overlay ──────────────────────────────────
+
+  /** Set or clear the property panel overlay (called by material extensions). */
+  setPropertyOverlay(overlay: PropertyPanelOverlay | null): void {
+    this._propertyOverlay = overlay
+  }
+
+  /** Current active overlay pushed by a material extension. */
+  get propertyOverlay(): PropertyPanelOverlay | null {
+    return this._propertyOverlay
+  }
+
   // ─── Cleanup ──────────────────────────────────────────────────
 
   destroy(): void {
@@ -259,6 +275,7 @@ export class DesignerStore {
     this._cachedExtensions.clear()
     this._catalog = []
     this.clipboard = []
+    this._propertyOverlay = null
     this.exitDeepEditing()
   }
 }

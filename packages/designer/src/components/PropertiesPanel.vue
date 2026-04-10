@@ -1,11 +1,12 @@
 <script setup lang="ts">
+import type { Component } from 'vue'
 import type { PropSchema } from '../types'
 import type { PagePropertyContext, PagePropertyDescriptor, PagePropertyGroup } from '../page-properties'
 import { ClearBindingCommand, getByPath, UpdateDocumentCommand, UpdateMaterialPropsCommand, UpdatePageCommand, UpdateTableVisibilityCommand } from '@easyink/core'
 import { PAPER_PRESETS } from '@easyink/shared'
 import { isTableNode } from '@easyink/schema'
 import { EiInput, EiPanel, EiSwitch } from '@easyink/ui'
-import { computed, shallowRef, watchEffect } from 'vue'
+import { computed, shallowRef, watch, watchEffect } from 'vue'
 import { useDesignerStore } from '../composables'
 import { getPropSchemas, groupPropSchemas } from '../materials/prop-schemas'
 import { defaultDocumentPatch, defaultPagePatch, filterVisible, groupDescriptors, PAGE_PROPERTY_DESCRIPTORS, readPageProperty, splitPatch } from '../page-properties'
@@ -23,6 +24,76 @@ const selectedElements = computed(() => {
 const selectedElement = computed(() =>
   selectedElements.value.length === 1 ? selectedElements.value[0] : undefined,
 )
+
+// ─── Property Panel Overlay ────────────────────────────────────
+
+const overlay = computed(() => store.propertyOverlay)
+
+// Auto-clear overlay when deep editing state changes
+watch(
+  () => ({
+    nodeId: store.deepEditing.nodeId,
+    phase: store.deepEditing.currentPhase,
+  }),
+  (newState, oldState) => {
+    if (!newState.nodeId || newState.nodeId !== oldState?.nodeId
+      || newState.phase !== oldState?.phase) {
+      store.setPropertyOverlay(null)
+    }
+  },
+)
+
+// Overlay schemas grouped by group field
+const overlayGroupedSchemas = computed(() => {
+  if (!overlay.value)
+    return new Map<string, PropSchema[]>()
+  return groupPropSchemas(overlay.value.schemas as PropSchema[])
+})
+
+function readOverlayValue(schema: PropSchema): unknown {
+  return overlay.value?.readValue(schema.key)
+}
+
+function readOverlayInheritedValue(schema: PropSchema): unknown {
+  return overlay.value?.readInheritedValue?.(schema.key)
+}
+
+function updateOverlayProp(key: string, value: unknown) {
+  overlay.value?.writeValue(key, value)
+}
+
+function clearOverlayOverride(key: string) {
+  overlay.value?.clearOverride?.(key)
+}
+
+const overlayCustomEditors = computed<Record<string, Component> | undefined>(() => {
+  return overlay.value?.editors as Record<string, Component> | undefined
+})
+
+// ─── BindingSection context ─────────────────────────────────────
+
+/** Whether the overlay explicitly defines a binding context */
+const hasOverlayBinding = computed(() =>
+  overlay.value !== null && overlay.value !== undefined && 'binding' in overlay.value,
+)
+
+/** Should the BindingSection be hidden entirely? */
+const hideBindingSection = computed(() => {
+  // Overlay explicitly hides binding
+  if (hasOverlayBinding.value && overlay.value?.binding === null)
+    return true
+  // Material has no bindable capability and no overlay binding
+  if (!hasOverlayBinding.value && selectedElement.value) {
+    const def = store.getMaterial(selectedElement.value.type)
+    if (def?.capabilities.bindable === false)
+      return true
+  }
+  return false
+})
+
+function handleClearExternalBinding(bindIndex?: number) {
+  overlay.value?.clearBinding?.(bindIndex)
+}
 
 // ─── Page property descriptor system ─────────────────────────────
 
@@ -263,12 +334,42 @@ function readPropValue(schema: PropSchema): unknown {
         </div>
       </EiPanel>
 
+      <!-- Overlay layer: deep editing context properties -->
+      <template v-if="overlay">
+        <EiPanel
+          v-for="[group, schemas] in overlayGroupedSchemas"
+          :key="`overlay-${group}`"
+          :title="overlay.title ? `${overlay.title} - ${groupLabel(group)}` : groupLabel(group)"
+          collapsible
+          flat
+        >
+          <div class="ei-properties-panel__fields">
+            <PropSchemaEditor
+              v-for="schema in schemas"
+              :key="schema.key"
+              :schema="schema"
+              :value="readOverlayValue(schema)"
+              :inherited-value="readOverlayInheritedValue(schema)"
+              :can-clear-override="!!overlay.clearOverride"
+              :custom-editors="overlayCustomEditors"
+              :fonts="fontList"
+              :t="store.t.bind(store)"
+              @change="updateOverlayProp"
+              @clear-override="clearOverlayOverride"
+            />
+          </div>
+        </EiPanel>
+      </template>
+
       <!-- Data binding -->
-      <EiPanel :title="store.t('designer.property.dataBinding')" collapsible flat>
+      <EiPanel v-if="!hideBindingSection" :title="store.t('designer.property.dataBinding')" collapsible flat>
         <BindingSection
           :element="selectedElement"
           :t="store.t.bind(store)"
+          :external-binding="hasOverlayBinding ? overlay!.binding : undefined"
+          :has-external-binding="hasOverlayBinding"
           @clear-binding="clearBinding"
+          @clear-external-binding="handleClearExternalBinding"
         />
       </EiPanel>
 

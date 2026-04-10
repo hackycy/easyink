@@ -1,6 +1,7 @@
+import type { PropertyPanelOverlay } from '@easyink/core'
 import type { BindingRef } from '@easyink/schema'
 import type { DesignerStore } from '../store/designer-store'
-import type { MaterialExtensionContext, PropertyPanelRequest } from '../types'
+import type { MaterialExtensionContext } from '../types'
 
 /**
  * Create a MaterialExtensionContext that delegates to the DesignerStore.
@@ -33,9 +34,8 @@ export function createMaterialExtensionContext(store: DesignerStore): MaterialEx
       store.commands.execute(command)
     },
 
-    requestPropertyPanel(_descriptor: PropertyPanelRequest) {
-      // Property panel integration is handled by the workbench layer.
-      // Materials emit a request; the workbench listens and updates the active panel.
+    requestPropertyPanel(overlay: PropertyPanelOverlay | null) {
+      store.setPropertyOverlay(overlay)
     },
 
     emit(event: string, payload: unknown) {

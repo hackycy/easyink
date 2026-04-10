@@ -54,7 +54,7 @@ export interface MaterialExtensionContext {
   getSelection: () => SelectionSnapshot
   getBindingLabel: (binding: BindingRef) => string
   commitCommand: (command: Command) => void
-  requestPropertyPanel: (descriptor: PropertyPanelRequest) => void
+  requestPropertyPanel: (overlay: PropertyPanelOverlay | null) => void
   emit: (event: string, payload: unknown) => void
   on: (event: string, handler: (...args: unknown[]) => void) => () => void
   /** Current viewport zoom level (1 = 100%). */
@@ -75,6 +75,52 @@ export interface PropertyPanelRequest {
   type: string
   nodeId: string
   phase?: string
+}
+
+/**
+ * Overlay descriptor pushed by materials via `requestPropertyPanel`.
+ * The properties panel renders this as an additional section below base-layer schemas.
+ */
+export interface PropertyPanelOverlay {
+  /** Overlay id (same id = update, different id = replace) */
+  id: string
+  /** Section header title */
+  title?: string
+  /** Property schema declarations for the overlay */
+  schemas: PropSchemaLike[]
+  /** Read property value; panel calls this on each render */
+  readValue: (key: string) => unknown
+  /** Write property value; material handles command generation */
+  writeValue: (key: string, value: unknown) => void
+  /** Read inherited value for placeholder display (optional) */
+  readInheritedValue?: (key: string) => unknown
+  /** Clear override, restoring to inherited state (optional) */
+  clearOverride?: (key: string) => void
+  /** Binding context: BindingRef = show, null = hide, undefined = default element binding */
+  binding?: BindingRef | BindingRef[] | null
+  /** Clear binding callback */
+  clearBinding?: (bindIndex?: number) => void
+  /** Custom editor component map: key = PropSchema.editor value, value = component */
+  editors?: Record<string, unknown>
+}
+
+/**
+ * Minimal PropSchema shape used in PropertyPanelOverlay to avoid circular dependency.
+ * The actual PropSchema is defined in @easyink/designer; at runtime the same objects are passed.
+ */
+export interface PropSchemaLike {
+  key: string
+  label: string
+  type: string
+  group?: string
+  default?: unknown
+  enum?: Array<{ label: string, value: unknown }>
+  min?: number
+  max?: number
+  step?: number
+  editor?: string
+  editorOptions?: Record<string, unknown>
+  [extra: string]: unknown
 }
 
 // ─── Deep Editing FSM ─────────────────────────────────────────────
