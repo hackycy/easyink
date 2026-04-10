@@ -101,7 +101,9 @@ export function renderTableHtml(options: RenderTableHtmlOptions): string {
       const rs = cell.rowSpan && cell.rowSpan > 1 ? ` rowspan="${cell.rowSpan}"` : ''
       const cs = cell.colSpan && cell.colSpan > 1 ? ` colspan="${cell.colSpan}"` : ''
       const content = cellRenderer(cell, ri, ci)
-      cells += `<td${rs}${cs} style="border:${bw}px ${bt} ${bc};padding:${pad}px;font-size:${props.fontSize}pt;color:${props.color}${cellStyle}">${content}</td>`
+      const align = (cell.props as Record<string, unknown> | undefined)?.textAlign
+      const alignStyle = align ? `;text-align:${align}` : ''
+      cells += `<td${rs}${cs} style="border:${bw}px ${bt} ${bc};padding:${pad}px;font-size:${props.fontSize}pt;color:${props.color}${cellStyle}${alignStyle}">${content}</td>`
     }
     rows += `<tr style="height:${row.height}${unit}${rowExtraStyle}">${cells}</tr>`
   }

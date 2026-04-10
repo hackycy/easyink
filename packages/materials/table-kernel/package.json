@@ -19,6 +19,7 @@
     "dev": "tsdown --watch"
   },
   "dependencies": {
+    "@easyink/icons": "workspace:*",
     "@easyink/schema": "workspace:*",
     "@easyink/shared": "workspace:*"
   }

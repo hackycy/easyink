@@ -8,6 +8,7 @@
   "sideEffects": false,
   "exports": {
     ".": "./dist/index.mjs",
+    "./svg-strings": "./dist/svg-strings.mjs",
     "./package.json": "./package.json"
   },
   "types": "./dist/index.d.mts",
@@ -22,6 +23,7 @@
     "vue": "catalog:framework"
   },
   "dependencies": {
+    "lucide-static": "catalog:framework",
     "lucide-vue-next": "catalog:framework"
   }
 }

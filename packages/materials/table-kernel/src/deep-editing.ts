@@ -1,5 +1,18 @@
 import type { TableNode } from '@easyink/schema'
 import type { CellRect } from './types'
+import {
+  IconTableInsertColLeft,
+  IconTableInsertColRight,
+  IconTableInsertRowAbove,
+  IconTableInsertRowBelow,
+  IconTableMerge,
+  IconTableRemoveCol,
+  IconTableRemoveRow,
+  IconTableSplit,
+  IconTextAlignCenter,
+  IconTextAlignLeft,
+  IconTextAlignRight,
+} from '@easyink/icons/svg-strings'
 import { computeCellRect, hitTestGridCell } from './geometry'
 import { resolveMergeOwner } from './topology'
 
@@ -620,7 +633,7 @@ function renderToolbar(
   const initNode = getNode()
 
   // Row operations
-  addBtn(t('designer.table.insertRowAbove'), '<svg width="16" height="16" viewBox="0 0 16 16"><path d="M3 8h10M8 3v10" stroke="currentColor" fill="none" stroke-width="1.5"/><path d="M3 3h10v3H3z" fill="currentColor" opacity="0.2"/></svg>', () => {
+  addBtn(t('designer.table.insertRowAbove'), IconTableInsertRowAbove, () => {
     const n = getNode()
     if (!n || !shared.selectedCell)
       return
@@ -629,7 +642,7 @@ function renderToolbar(
     containers.requestTransition('cell-selected')
   })
 
-  addBtn(t('designer.table.insertRowBelow'), '<svg width="16" height="16" viewBox="0 0 16 16"><path d="M3 8h10M8 3v10" stroke="currentColor" fill="none" stroke-width="1.5"/><path d="M3 10h10v3H3z" fill="currentColor" opacity="0.2"/></svg>', () => {
+  addBtn(t('designer.table.insertRowBelow'), IconTableInsertRowBelow, () => {
     const n = getNode()
     if (!n || !shared.selectedCell)
       return
@@ -637,7 +650,7 @@ function renderToolbar(
     containers.requestTransition('cell-selected')
   })
 
-  addBtn(t('designer.table.removeRow'), '<svg width="16" height="16" viewBox="0 0 16 16"><path d="M3 8h10" stroke="currentColor" fill="none" stroke-width="1.5"/></svg>', () => {
+  addBtn(t('designer.table.removeRow'), IconTableRemoveRow, () => {
     const n = getNode()
     if (!n || !shared.selectedCell || n.table.topology.rows.length <= 1)
       return
@@ -649,7 +662,7 @@ function renderToolbar(
 
   addSep()
 
-  addBtn(t('designer.table.insertColLeft'), '<svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10" stroke="currentColor" fill="none" stroke-width="1.5"/><path d="M3 3h3v10H3z" fill="currentColor" opacity="0.2"/></svg>', () => {
+  addBtn(t('designer.table.insertColLeft'), IconTableInsertColLeft, () => {
     const n = getNode()
     if (!n || !shared.selectedCell)
       return
@@ -658,7 +671,7 @@ function renderToolbar(
     containers.requestTransition('cell-selected')
   })
 
-  addBtn(t('designer.table.insertColRight'), '<svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10" stroke="currentColor" fill="none" stroke-width="1.5"/><path d="M10 3h3v10h-3z" fill="currentColor" opacity="0.2"/></svg>', () => {
+  addBtn(t('designer.table.insertColRight'), IconTableInsertColRight, () => {
     const n = getNode()
     if (!n || !shared.selectedCell)
       return
@@ -666,7 +679,7 @@ function renderToolbar(
     containers.requestTransition('cell-selected')
   })
 
-  addBtn(t('designer.table.removeCol'), '<svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 3v10" stroke="currentColor" fill="none" stroke-width="1.5"/><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" fill="none" stroke-width="1"/></svg>', () => {
+  addBtn(t('designer.table.removeCol'), IconTableRemoveCol, () => {
     const n = getNode()
     if (!n || !shared.selectedCell || n.table.topology.columns.length <= 1)
       return
@@ -678,7 +691,7 @@ function renderToolbar(
 
   addSep()
 
-  addBtn(t('designer.table.mergeRight'), '<svg width="16" height="16" viewBox="0 0 16 16"><path d="M6 5h4l-2 3 2 3H6" stroke="currentColor" fill="none" stroke-width="1.5"/></svg>', () => {
+  addBtn(t('designer.table.mergeRight'), IconTableMerge, () => {
     const n = getNode()
     if (!n || !shared.selectedCell)
       return
@@ -692,7 +705,7 @@ function renderToolbar(
     containers.requestTransition('cell-selected')
   })
 
-  addBtn(t('designer.table.mergeDown'), '<svg width="16" height="16" viewBox="0 0 16 16"><path d="M5 6v4l3-2 3 2V6" stroke="currentColor" fill="none" stroke-width="1.5"/></svg>', () => {
+  addBtn(t('designer.table.mergeDown'), IconTableMerge, () => {
     const n = getNode()
     if (!n || !shared.selectedCell)
       return
@@ -710,7 +723,7 @@ function renderToolbar(
     const cp = shared.selectedCell
     const cell = initNode.table.topology.rows[cp.row]?.cells[cp.col]
     if ((cell?.colSpan ?? 1) > 1 || (cell?.rowSpan ?? 1) > 1) {
-      addBtn(t('designer.table.split'), '<svg width="16" height="16" viewBox="0 0 16 16"><path d="M4 8h8M8 4v8" stroke="currentColor" fill="none" stroke-width="1.5" stroke-dasharray="2 1"/></svg>', () => {
+      addBtn(t('designer.table.split'), IconTableSplit, () => {
         const n = getNode()
         if (!n || !shared.selectedCell)
           return
@@ -719,6 +732,39 @@ function renderToolbar(
       })
     }
   }
+
+  addSep()
+
+  // Content alignment
+  addBtn(t('designer.table.alignLeft'), IconTextAlignLeft, () => {
+    const n = getNode()
+    if (!n || !shared.selectedCell)
+      return
+    shared.delegate.commitCellUpdate(n, shared.selectedCell.row, shared.selectedCell.col, {
+      props: { textAlign: 'left' },
+    })
+    containers.requestTransition('cell-selected')
+  })
+
+  addBtn(t('designer.table.alignCenter'), IconTextAlignCenter, () => {
+    const n = getNode()
+    if (!n || !shared.selectedCell)
+      return
+    shared.delegate.commitCellUpdate(n, shared.selectedCell.row, shared.selectedCell.col, {
+      props: { textAlign: 'center' },
+    })
+    containers.requestTransition('cell-selected')
+  })
+
+  addBtn(t('designer.table.alignRight'), IconTextAlignRight, () => {
+    const n = getNode()
+    if (!n || !shared.selectedCell)
+      return
+    shared.delegate.commitCellUpdate(n, shared.selectedCell.row, shared.selectedCell.col, {
+      props: { textAlign: 'right' },
+    })
+    containers.requestTransition('cell-selected')
+  })
 
   containers.toolbar.appendChild(row)
   cleanupFns.push(() => row.remove())

@@ -61,6 +61,9 @@ catalogs:
     jsbarcode:
       specifier: ^3.12.3
       version: 3.12.3
+    lucide-static:
+      specifier: ^1.0.0
+      version: 1.8.0
     lucide-vue-next:
       specifier: ^1.0.0
       version: 1.0.0
@@ -255,6 +258,9 @@ importers:
 
   packages/icons:
     dependencies:
+      lucide-static:
+        specifier: catalog:framework
+        version: 1.8.0
       lucide-vue-next:
         specifier: catalog:framework
         version: 1.0.0(vue@3.5.31(typescript@6.0.2))
@@ -408,6 +414,9 @@ importers:
 
   packages/materials/table-kernel:
     dependencies:
+      '@easyink/icons':
+        specifier: workspace:*
+        version: link:../../icons
       '@easyink/schema':
         specifier: workspace:*
         version: link:../../schema
@@ -2327,6 +2336,9 @@ packages:
 
   longest-streak@3.1.0:
     resolution: {integrity: sha512-9Ri+o0JYgehTaVBBDoMqIl8GXtbWg711O3srftcHhZ0dqnETqLaoIK0x17fUw9rFSlK/0NlsKe0Ahhyl5pXE2g==}
+
+  lucide-static@1.8.0:
+    resolution: {integrity: sha512-eQJCJuDg3tyQrjP0PwD5eIA4ePd5CMdxkrfyqk3iUQA4VOtsJ0v5T6IBJ5UyR3SYHzUn8HOAEL+I+SLVnOJNIA==}
 
   lucide-vue-next@1.0.0:
     resolution: {integrity: sha512-V6SPvx1IHTj/UY+FrIYWV5faISsPSb8BnWSFDxAtezWKvWc9ZZ40PDrdu1/Qb5vg4lHWr1hs1BAMGVGm6V1Xdg==}
@@ -5045,6 +5057,8 @@ snapshots:
       wrap-ansi: 9.0.0
 
   longest-streak@3.1.0: {}
+
+  lucide-static@1.8.0: {}
 
   lucide-vue-next@1.0.0(vue@3.5.31(typescript@6.0.2)):
     dependencies:
