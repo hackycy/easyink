@@ -157,24 +157,30 @@ interface MaterialCapabilities {
 
 以下物料必须按一级系统建设，而不是当成普通盒子补丁处理。
 
+> **v2 重设计**：table-static 和 table-data 经过 breaking change 重设计，详见 [23-table-v2-redesign](./23-table-v2-redesign.md)。
+
 ### `table-static`
 
 它需要：
 
-- 固定行列拓扑
-- 合并与拆分单元格
+- 固定行列拓扑，无 role 概念（所有行强制 `normal`）
+- 任意方向合并与拆分单元格
 - 格子尺寸和局部边框编辑
-- 格子内容子树
-- 格子内联内容编辑
+- 每个格子独立排版属性（`cell.typography`，回退到表级 `typography` 默认值）
+- 格子内联内容编辑（深度编辑 content-editing 阶段，工具栏 + 属性面板设置文本属性）
+- 独立数据源绑定（`cell.staticBinding`），每个 cell 可绑定不同 source 的字段，与手动编辑互斥
 
 ### `table-data`
 
 它需要：
 
 - 表级主数据源绑定（`TableDataSchema.source`），指向集合字段
-- Row role 标记 (normal/header/footer/repeat-template)
+- Row role 标记 (normal/header/footer/repeat-template)，header 和 footer 各强制单行（schema + 命令层双层强制）
+- 头尾可见性控制（`showHeader` / `showFooter`），隐藏时 Viewer 完全不渲染对应行
 - Cell 绑定自动继承 table.source 的 sourceId（严格单源）
-- 表头编辑
+- 表头/尾编辑：支持手动编辑或拖拽数据源，仅允许左右列方向合并
+- 数据区编辑：设计态展示 3 行（1 行编辑区 + 2 行灰色占位），编辑区仅接受数据源绑定，不允许手动编辑和合并
+- 数据区占位行：纯渲染层虚拟行，不存在于 schema，完全惰性不可交互
 - Row 级 repeat：repeat-template 行按 table.source.fieldPath 集合数据逐项重复
 
 分页切片、重复头、合计区、空行填充由 Viewer/PagePlanner 负责，不属于 table-data 职责。Cell 仅包含文本内容，不支持子物料嵌套。
@@ -186,11 +192,44 @@ interface MaterialCapabilities {
 ### 表格 capabilities
 
 ```
-table-static:  rotatable=false, resizable=true
+table-static:  rotatable=false, resizable=true, bindable=true, multiBinding=true
 table-data:    rotatable=false, resizable=true, bindable=true, multiBinding=true
 ```
 
 深度编辑能力通过扩展协议的 `deepEditing` FSM 定义声明，不再通过 capability 标志。
+
+### 深度编辑工具栏
+
+table-static 和 table-data 使用独立的工具栏配置，不再共用：
+
+**table-static 工具栏**：
+- 插入行（上/下）、删除行
+- 插入列（左/右）、删除列
+- 合并右 / 合并下 / 拆分（任意方向均可用）
+- 对齐（左/中/右/上/中/下）
+
+**table-data 工具栏**（根据选中 cell 所在区域动态调整）：
+
+Header/Footer 区域选中时：
+- 插入列（左/右）、删除列
+- 合并右 / 拆分（仅列方向）
+- 对齐
+- 头/尾可见性切换
+
+数据区选中时：
+- 插入列（左/右）、删除列
+- 对齐
+- 无合并/拆分、无手动编辑入口
+
+### 数据区占位行渲染
+
+table-data 的 Designer Extension 在 repeat-template 行下方额外渲染 2 行纯视觉占位区域：
+
+- 占位行高度 = repeat-template 行的 `row.height`
+- 占位行单元格边框/宽度克隆自 repeat-template 行对应 cell
+- 占位行整体施加灰色半透明叠加层（如 `background: rgba(0,0,0,0.04)`）
+- 占位行不参与 hit-test、不可选中、不可编辑（完全惰性）
+- schema 中 element.height 仅反映实际行（不含虚拟行），占位行仅影响设计态视觉高度
 
 ### 深度编辑元素的通用交互模型
 
@@ -277,10 +316,10 @@ interface PropSchema {
 
 表格物料属性按三层上下文组织：
 
-- 表级属性：格子均分、边框外观、格子间距、边框宽度、边框类型、边框颜色、主数据源（仅 table-data，显示当前绑定的集合字段路径）
-- 行属性：行角色 (normal/header/footer/repeat-template)、行高
-- 单元格属性：跨度、边框、内边距、尺寸、局部操作、绑定字段（仅 fieldPath + fieldLabel）
-- 内容属性：格子文本内容、内容对齐、内联文本编辑入口
+- 表级属性：格子均分、边框外观、格子间距、边框宽度、边框类型、边框颜色、排版默认值（`typography`：字号、颜色、粗体、斜体、行高、字间距、对齐、垂直对齐）、主数据源（仅 table-data）、头尾可见性（仅 table-data，`showHeader` / `showFooter`）
+- 行属性：行角色（仅 table-data 显示）、行高
+- 单元格属性：跨度、边框（四侧独立 width/color/type）、内边距、排版（`cell.typography`：字段缺失时显示表级默认值 + "重置为默认"按钮）、绑定字段（table-data: `binding`，table-static: `staticBinding`）
+- 内容属性：格子文本内容（仅无绑定时可编辑）、内联文本编辑入口
 
 内容层不是另一套独立属性面板。它必须挂在表格壳层之下，避免编辑文字时丢失当前表格上下文。
 
@@ -301,6 +340,7 @@ interface PropSchema {
 - `barcode`
 - `qrcode`
 - `datetime`
+- `table-static`（cell 级独立绑定，每 cell 可绑不同 source）
 
 ### 结构绑定
 
@@ -444,8 +484,8 @@ Designer 内部将 Vue computed 包装为 `NodeSignal` 接口，extension 代码
 | image | 有 src 时显示图片缩略图，无 src 时显示图标占位 | 无差异 |
 | barcode / qrcode | 显示静态示意图 + 值标签 | Viewer 调用渲染库生成真实码 |
 | line / rect / ellipse | 根据 props 直接渲染图形（颜色、边框、圆角） | 基本无差异 |
-| table-static | 渲染表格格线结构和格子内容；格子内容保持设计态占位 | 基本无差异 |
-| table-data | 渲染表格格线结构和格子内容槽；数据区显示字段标签而非真实行 | Viewer 执行数据展开、分页、重复头 |
+| table-static | 渲染表格格线结构和格子内容；有 staticBinding 的 cell 显示 `{#字段标签}`，无绑定的 cell 显示手动编辑文本 | Viewer 替换为真实数据 |
+| table-data | 渲染表格格线结构；header/footer 显示文本或绑定标签；数据区编辑行显示绑定标签，下方 2 行灰色占位 | Viewer 执行数据展开、分页、重复头 |
 | container | 渲染容器边界 + 递归渲染子元素 | 基本无差异 |
 | chart | 显示图表类型图标 + 静态缩略图占位 | Viewer 调用图表库渲染真实图表 |
 | svg | 直接渲染 SVG 内容 | 基本无差异 |

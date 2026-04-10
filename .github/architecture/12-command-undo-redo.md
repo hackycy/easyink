@@ -95,20 +95,25 @@ class CommandManager {
 - `UnionDropCommand`
 - `BindTableSourceCommand`（设置 table-data 的主数据源 table.source，首次拖入字段时自动触发）
 - `ClearTableSourceCommand`（解除 table.source 并清除所有 cell binding，通过 CompositeCommand 打包）
+- `BindStaticCellCommand`（v2 新增：设置 table-static cell 的 staticBinding，同时清除 content.text）
+- `ClearStaticCellBindingCommand`（v2 新增：清除 table-static cell 的 staticBinding，恢复可手动编辑状态）
 
 ### 表格相关命令
 
-- `InsertTableRowCommand`
+> **v2 更新**：命令层新增合并双层防护校验和单行约束校验，详见 [23-table-v2-redesign](./23-table-v2-redesign.md)。
+
+- `InsertTableRowCommand`（v2 更新：table-data 中若 header/footer 区域已有 1 行则拒绝在该区域插入）
 - `RemoveTableRowCommand`
 - `InsertTableColumnCommand`
 - `RemoveTableColumnCommand`
 - `ResizeTableColumnCommand`（列 ratio 修改，支持 merge）
 - `ResizeTableRowCommand`（行高修改，支持 merge）
-- `MergeTableCellsCommand`（合并单元格，修改 colSpan/rowSpan。必须校验选区内所有行 role 一致，跨 role 合并拒绝执行）
+- `MergeTableCellsCommand`（v2 更新：双层防护。校验选区内所有行 role 一致，跨 role 合并拒绝执行。table-data 数据区(repeat-template)完全禁止合并。table-data header/footer 仅允许列方向合并(rowSpan 必须为 1)）
 - `SplitTableCellCommand`（拆分已合并单元格）
-- `UpdateTableCellCommand`
+- `UpdateTableCellCommand`（v2 更新：支持写入 cell.typography 字段）
 - `UpdateTableCellBorderCommand`（单边边框显隐）
-- `UpdateTableRowRoleCommand`（修改行角色，仅 table-data）
+- `UpdateTableRowRoleCommand`（修改行角色，仅 table-data。v2 更新：修改后若违反单行约束则拒绝执行）
+- `UpdateTableVisibilityCommand`（v2 新增：切换 table-data 的 showHeader/showFooter）
 
 ### 组合命令
 

@@ -45,13 +45,15 @@ type PageMode = 'fixed' | 'stack' | 'label'
 
 ## 7.3 table-data 专项布局
 
+> **v2 更新**：新增 `showHeader`/`showFooter` 可见性标志对分页的影响，详见 [23-table-v2-redesign](./23-table-v2-redesign.md)。
+
 table-data 需要独立的分页器，而不是依赖通用元素推移。
 
 它至少要解决：
 
-- 表头重复
+- 表头重复（`showHeader=true` 时每页重复，`showHeader=false` 时不重复且不占空间）
 - 数据区逐页切分
-- 合计区尾页显示
+- 合计区尾页显示（`showFooter=true` 时末页显示，`showFooter=false` 时不显示且不占空间）
 - 空行填充
 - 单行缩放
 - 动态列和列宽分配
@@ -97,9 +99,11 @@ interface TableMeasureResult {
   expandedRows: TablePageRowEntry[]
   /** 每行的高度（文档 unit），与 expandedRows 一一对应 */
   rowHeights: number[]
-  /** header 行的总高度，用于 PagePlanner 在每页开头预留空间 */
+  /** header 行的总高度，用于 PagePlanner 在每页开头预留空间。
+   *  当 showHeader=false 时返回 0，PagePlanner 不注入 header 重复 */
   headerHeight: number
-  /** footer 行的总高度，用于 PagePlanner 在末页预留空间 */
+  /** footer 行的总高度，用于 PagePlanner 在末页预留空间。
+   *  当 showFooter=false 时返回 0，PagePlanner 不在末页追加 footer */
   footerHeight: number
 }
 
@@ -132,7 +136,9 @@ ViewerRuntime                        PagePlanner                     表格 View
     |                                    |                                   |
     |                                    |-- 根据页面高度切分行序列          |
     |                                    |-- 在切分点注入 header 行重复      |
+    |                                    |   (仅 showHeader=true 时)         |
     |                                    |-- 末页追加 footer 行              |
+    |                                    |   (仅 showFooter=true 时)         |
     |                                    |-- 空行填充（如启用）              |
     |                                    |                                   |
     |                                    |-- 为每页生成虚拟 TableNode ------>|

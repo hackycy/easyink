@@ -48,6 +48,7 @@
 | 20 | [性能策略](./20-performance.md) | 架构层预留、性能目标 |
 | 21 | [安全模型](./21-security.md) | 数据路径安全、富文本安全、渲染安全 |
 | 22 | [关键设计决策记录](./22-design-decisions.md) | 当前统一 ADR 基线与已废弃前提 |
+| 23 | [表格物料体系 v2 重设计](./23-table-v2-redesign.md) | table-static/table-data breaking change 重设计：typography、staticBinding、单行约束、双层防护、占位行 |
 
 ## 补充说明
 

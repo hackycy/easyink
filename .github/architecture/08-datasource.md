@@ -302,7 +302,57 @@ const tableSource: BindingRef = {
 - 解除 table.source 时，清除所有 cell 的 binding，通过 CompositeCommand 打包实现，支持整体 undo
 - 更换 source 等价于先解除再重新绑定
 
-## 8.12 Designer 与 Viewer 共享协议
+## 8.12 table-static 独立绑定模型
+
+> **v2 新增**：详见 [23-table-v2-redesign](./23-table-v2-redesign.md)
+
+table-static 原本不支持数据源绑定（`bindable=false`）。v2 重设计后，table-static 支持单元格级独立绑定，与 table-data 的表级严格单源模型完全不同。
+
+### 绑定字段
+
+table-static 使用 `cell.staticBinding`（而非 `cell.binding`），类型复用 `BindingRef`：
+
+```typescript
+// table-static cell 绑定示例
+const cell: TableCellSchema = {
+  content: { text: '' },
+  staticBinding: {
+    sourceId: 'order',
+    fieldPath: 'customer/name',
+    fieldLabel: '客户姓名',
+  },
+}
+```
+
+### 与 table-data binding 的差异
+
+| | table-static staticBinding | table-data binding |
+|---|---|---|
+| 约束 | 无表级 source 约束，每 cell 可绑不同 sourceId | 严格单源，所有 cell 的 sourceId 必须与 table.source 一致 |
+| 路径语义 | 绝对路径，从数据源根解析 | repeat-template 行相对路径，其他行绝对路径 |
+| 集合展开 | 不展开，单值解析 | repeat-template 行按集合数据逐项展开 |
+| 与 content 关系 | 互斥。有 staticBinding 时文本由数据源填充，清除后恢复手动编辑 | repeat-template 行不允许手动编辑，header/footer 行互斥 |
+
+### Viewer 解析
+
+Viewer 的 `resolveAllBindings` 阶段检测到 table-static 节点时：
+
+1. 遍历所有行的所有 cell，查找 `staticBinding` 字段
+2. 对每个有 `staticBinding` 的 cell，调用 `resolveBindingValue(staticBinding, data)`（绝对路径，无 scope）
+3. 结果存入 `ResolvedCellBindings`，key 格式 `${nodeId}:${rowIndex}:${colIndex}`
+
+### Designer 交互
+
+- 拖拽字段到 table-static cell 时，直接写入 `cell.staticBinding`，无需检查表级 source
+- 属性面板显示当前 cell 的绑定字段标签，提供"清除绑定"操作
+- 设计态渲染：有 staticBinding 的 cell 显示 `{#fieldLabel}`，无 staticBinding 的 cell 显示手动编辑的 content.text
+
+### 命令
+
+- `BindStaticCellCommand`：设置 `cell.staticBinding`，同时清除 `cell.content.text`
+- `ClearStaticCellBindingCommand`：清除 `cell.staticBinding`，恢复 cell 为可手动编辑状态
+
+## 8.13 Designer 与 Viewer 共享协议
 
 新的原则是：
 
