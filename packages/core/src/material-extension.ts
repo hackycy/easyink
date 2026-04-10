@@ -40,6 +40,8 @@ export interface MaterialDesignerExtension {
   renderContent: (nodeSignal: NodeSignal, container: HTMLElement) => () => void
   /** Declarative FSM for deep editing (optional, only complex materials) */
   deepEditing?: DeepEditingDefinition
+  /** Total visual height in the designer when the material renders virtual content beyond node.height (e.g. placeholder rows). */
+  getVisualHeight?: (node: MaterialNode) => number
 }
 
 /** Factory that receives a context and returns a material extension instance. */

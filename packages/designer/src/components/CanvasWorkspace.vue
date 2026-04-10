@@ -10,8 +10,6 @@ import { useElementRotate } from '../composables/use-element-rotate'
 import { useMarqueeSelect } from '../composables/use-marquee-select'
 import { useDatasourceDrop } from '../composables/use-datasource-drop'
 import { useMaterialDrop } from '../composables/use-material-drop'
-import { computeRowScale } from '@easyink/material-table-kernel'
-import { isTableNode } from '@easyink/schema'
 import { CANVAS_CONTAINER_KEY } from './canvas-container'
 import GridOverlay from './GridOverlay.vue'
 import SnapLineOverlay from './SnapLineOverlay.vue'
@@ -130,14 +128,7 @@ const deepEditOverlayHeight = computed(() => {
   const node = deepEditNode.value
   if (!node)
     return 0
-  if (node.type === 'table-data' && isTableNode(node)) {
-    const repeatRow = node.table.topology.rows.find(r => r.role === 'repeat-template')
-    if (repeatRow) {
-      const scale = computeRowScale(node.table.topology.rows, node.height)
-      return node.height + repeatRow.height * scale * 2
-    }
-  }
-  return node.height
+  return store.getVisualHeight(node)
 })
 
 const marqueeStyle = computed(() => {
@@ -392,7 +383,7 @@ onUnmounted(() => {
             left: `${el.x}${store.schema.unit}`,
             top: `${el.y}${store.schema.unit}`,
             width: `${el.width}${store.schema.unit}`,
-            height: `${el.height}${store.schema.unit}`,
+            height: `${store.getVisualHeight(el)}${store.schema.unit}`,
             transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
             opacity: el.alpha ?? 1,
             zIndex: el.zIndex ?? 'auto',

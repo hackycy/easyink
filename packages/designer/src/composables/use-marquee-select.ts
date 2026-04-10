@@ -85,7 +85,7 @@ export function useMarqueeSelect(ctx: MarqueeSelectContext) {
       for (const el of elements) {
         if (el.hidden || el.locked)
           continue
-        if (rectsIntersect(rect, { x: el.x, y: el.y, width: el.width, height: el.height })) {
+        if (rectsIntersect(rect, { x: el.x, y: el.y, width: el.width, height: store.getVisualHeight(el) })) {
           hitIds.push(el.id)
         }
       }

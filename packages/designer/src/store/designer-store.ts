@@ -174,6 +174,14 @@ export class DesignerStore {
     return typeof current === 'string' ? current : key
   }
 
+  // ─── Visual geometry ─────────────────────────────────────────────
+
+  /** Visual height in the designer, accounting for virtual content (e.g. placeholder rows). Falls back to node.height. */
+  getVisualHeight(node: MaterialNode): number {
+    const ext = this.getDesignerExtension(node.type)
+    return ext?.getVisualHeight?.(node) ?? node.height
+  }
+
   // ─── Deep Editing ───────────────────────────────────────────────
 
   /** Register the page DOM element provider (called by CanvasWorkspace on mount). */

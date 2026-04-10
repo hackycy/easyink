@@ -136,9 +136,10 @@ export function useElementDrag(ctx: ElementDragContext) {
         if (snapState.guideSnap && !snappedAxisY) {
           const guidesY = store.schema.guides.y
           if (guidesY.length > 0) {
+            const refVisualH = store.getVisualHeight(refNode)
             const currentRefY = refOrig.y + dy
-            const currentRefCenterY = currentRefY + refNode.height / 2
-            const currentRefBottom = currentRefY + refNode.height
+            const currentRefCenterY = currentRefY + refVisualH / 2
+            const currentRefBottom = currentRefY + refVisualH
             for (const testY of [currentRefY, currentRefCenterY, currentRefBottom]) {
               const snap = snapToGuide(testY, guidesY, threshold)
               if (snap != null) {
@@ -156,8 +157,9 @@ export function useElementDrag(ctx: ElementDragContext) {
           const edgesX: number[] = []
           const edgesY: number[] = []
           for (const other of otherNodes) {
+            const otherVisualH = store.getVisualHeight(other)
             edgesX.push(other.x, other.x + other.width / 2, other.x + other.width)
-            edgesY.push(other.y, other.y + other.height / 2, other.y + other.height)
+            edgesY.push(other.y, other.y + otherVisualH / 2, other.y + otherVisualH)
           }
 
           // Skip axis if already snapped by grid or guide
@@ -176,9 +178,10 @@ export function useElementDrag(ctx: ElementDragContext) {
           }
 
           if (!snappedAxisY) {
+            const refVisualH2 = store.getVisualHeight(refNode)
             const currentRefY = refOrig.y + dy
-            const currentRefBottom = currentRefY + refNode.height
-            const currentRefCenterY = currentRefY + refNode.height / 2
+            const currentRefBottom = currentRefY + refVisualH2
+            const currentRefCenterY = currentRefY + refVisualH2 / 2
             for (const testY of [currentRefY, currentRefCenterY, currentRefBottom]) {
               const snap = snapToGuide(testY, edgesY, threshold)
               if (snap != null) {

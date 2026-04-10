@@ -175,5 +175,14 @@ export function createTableDataExtension(context: MaterialExtensionContext): Mat
       return nodeSignal.subscribe(render)
     },
     deepEditing: buildDeepEditing(delegate),
+    getVisualHeight(node) {
+      if (!isTableNode(node))
+        return node.height
+      const repeatRow = node.table.topology.rows.find(r => r.role === 'repeat-template')
+      if (!repeatRow)
+        return node.height
+      const scale = computeRowScale(node.table.topology.rows, node.height)
+      return node.height + repeatRow.height * scale * 2
+    },
   }
 }
