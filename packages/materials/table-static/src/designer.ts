@@ -33,7 +33,7 @@ function buildHtml(node: MaterialNode, unit: UnitType, context: MaterialExtensio
     cellRenderer: (cell) => {
       if (cell.staticBinding) {
         const label = context.getBindingLabel(cell.staticBinding)
-        return `<span style="color:#1890ff">{#${escapeHtml(label)}}</span>`
+        return `<span style="">{#${escapeHtml(label)}}</span>`
       }
       return cell.content?.text || ''
     },

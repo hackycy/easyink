@@ -14,6 +14,7 @@ import {
   IconSvg,
   IconTable,
   IconText,
+  IconDataTable
 } from '@easyink/icons'
 import { AddMaterialCommand } from '@easyink/core'
 import { computed } from 'vue'
@@ -32,7 +33,7 @@ const ICON_MAP: Record<string, Component> = {
   'ellipse': IconEllipse,
   'container': IconContainer,
   'table-static': IconTable,
-  'table-data': IconTable,
+  'table-data': IconDataTable,
   'chart': IconChart,
   'svg': IconSvg,
   'relation': IconRelation,

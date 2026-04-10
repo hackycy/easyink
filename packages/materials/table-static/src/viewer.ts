@@ -20,7 +20,7 @@ export function renderTableStatic(node: MaterialNode) {
     cellRenderer: (cell) => {
       if (cell.staticBinding) {
         const label = cell.staticBinding.fieldLabel || cell.staticBinding.fieldPath
-        return `<span style="color:#1890ff">{#${escapeHtml(label)}}</span>`
+        return `<span style="">{#${escapeHtml(label)}}</span>`
       }
       return cell.content?.text || ''
     },

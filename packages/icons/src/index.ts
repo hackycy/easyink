@@ -27,6 +27,7 @@ export {
   Copy as IconCopy,
   CopyPlus as IconCopyPlus,
   Database as IconDatabase,
+  Table2 as IconDataTable,
   Trash2 as IconDelete,
   AlignHorizontalSpaceBetween as IconDistribute,
   SeparatorVertical as IconDivider,
