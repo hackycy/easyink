@@ -15,7 +15,7 @@ function buildHtml(node: MaterialNode, context: MaterialExtensionContext): strin
   if (node.binding) {
     const b = Array.isArray(node.binding) ? node.binding[0] : node.binding
     const label = context.getBindingLabel(b)
-    display = `${prefix}<span style="color:#1890ff">{{${escapeHtml(label)}}}</span>${suffix}`
+    display = `${prefix}{#${escapeHtml(label)}}${suffix}`
   }
   else {
     display = p.content ? `${prefix}${escapeHtml(p.content)}${suffix}` : ''
@@ -25,7 +25,7 @@ function buildHtml(node: MaterialNode, context: MaterialExtensionContext): strin
   const DASH_MAP: Record<string, string> = { dashed: 'dashed', dotted: 'dotted' }
   const style = [
     'width:100%;height:100%',
-    'display:flex',
+    'display:flex;position:relative',
     `align-items:${vAlignMap[p.verticalAlign] || 'flex-start'}`,
     'box-sizing:border-box;overflow:hidden',
     `font-size:${p.fontSize}pt`,

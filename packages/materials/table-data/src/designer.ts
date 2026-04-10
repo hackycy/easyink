@@ -37,7 +37,7 @@ function buildHtml(node: MaterialNode, unit: UnitType, context: MaterialExtensio
     cellRenderer: (cell) => {
       if (cell.binding) {
         const label = context.getBindingLabel(cell.binding)
-        return `<span style="color:#1890ff">{{${escapeHtml(label)}}}</span>`
+        return `<span style="color:#1890ff">{#${escapeHtml(label)}}</span>`
       }
       return cell.content?.text || ''
     },

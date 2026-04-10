@@ -24,7 +24,7 @@ function buildHtml(node: MaterialNode, context: MaterialExtensionContext): strin
   let label: string | undefined
   if (node.binding) {
     const b = Array.isArray(node.binding) ? node.binding[0] : node.binding
-    label = `{{${escapeHtml(context.getBindingLabel(b))}}}`
+    label = `{#${escapeHtml(context.getBindingLabel(b))}}`
   }
 
   const value = p.value || ''

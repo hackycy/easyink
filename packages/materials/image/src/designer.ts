@@ -16,7 +16,7 @@ function buildHtml(node: MaterialNode, context: MaterialExtensionContext): strin
     const b = Array.isArray(node.binding) ? node.binding[0] : node.binding
     const label = context.getBindingLabel(b)
     return `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;${bgStyle || 'background:#f5f5f5;'}color:#1890ff;font-size:11px;overflow:hidden;box-sizing:border-box;${borderStyle}">`
-      + `<span>{{${escapeAttr(label)}}}</span></div>`
+      + `<span>{#${escapeAttr(label)}}</span></div>`
   }
 
   if (p.src) {

@@ -249,7 +249,7 @@ export const invoiceWithTableTemplate: DocumentSchema = {
       width: 100,
       height: 10,
       props: {
-        content: '{{公司名称}}',
+        content: '{#公司名称}',
         fontSize: 18,
         fontWeight: 'bold',
         color: '#333333',
@@ -270,7 +270,7 @@ export const invoiceWithTableTemplate: DocumentSchema = {
       width: 100,
       height: 6,
       props: {
-        content: '{{地址}}',
+        content: '{#地址}',
         fontSize: 9,
         color: '#666666',
         verticalAlign: 'middle',
@@ -307,7 +307,7 @@ export const invoiceWithTableTemplate: DocumentSchema = {
       width: 60,
       height: 6,
       props: {
-        content: '{{发票编号}}',
+        content: '{#发票编号}',
         fontSize: 9,
         textAlign: 'right',
         color: '#666666',
@@ -328,7 +328,7 @@ export const invoiceWithTableTemplate: DocumentSchema = {
       width: 60,
       height: 6,
       props: {
-        content: '{{开票日期}}',
+        content: '{#开票日期}',
         fontSize: 9,
         textAlign: 'right',
         color: '#666666',
@@ -363,7 +363,7 @@ export const invoiceWithTableTemplate: DocumentSchema = {
       width: 100,
       height: 6,
       props: {
-        content: '致：{{客户名称}}',
+        content: '致：{#客户名称}',
         fontSize: 10,
         color: '#333333',
         verticalAlign: 'middle',
@@ -385,7 +385,7 @@ export const invoiceWithTableTemplate: DocumentSchema = {
       width: 60,
       height: 8,
       props: {
-        content: '合计：{{合计}}',
+        content: '合计：{#合计}',
         fontSize: 14,
         fontWeight: 'bold',
         textAlign: 'right',
@@ -407,7 +407,7 @@ export const invoiceWithTableTemplate: DocumentSchema = {
       width: 190,
       height: 12,
       props: {
-        content: '{{备注}}',
+        content: '{#备注}',
         fontSize: 9,
         color: '#999999',
         verticalAlign: 'middle',
