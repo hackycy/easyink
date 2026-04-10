@@ -1,3 +1,5 @@
+import type { TableTypography } from '@easyink/schema'
+
 /**
  * Shared table base props -- the property fields common to all table types.
  * table-static uses this as-is; table-data extends it with additional fields.
@@ -7,9 +9,19 @@ export interface TableBaseProps {
   borderColor: string
   borderType: 'solid' | 'dashed' | 'dotted'
   cellPadding: number
-  fontSize: number
-  color: string
+  typography: TableTypography
   equalizeCells: boolean
+}
+
+export const TABLE_TYPOGRAPHY_DEFAULTS: TableTypography = {
+  fontSize: 9,
+  color: '#000000',
+  fontWeight: 'normal',
+  fontStyle: 'normal',
+  lineHeight: 1.2,
+  letterSpacing: 0,
+  textAlign: 'left',
+  verticalAlign: 'top',
 }
 
 export const TABLE_BASE_DEFAULTS: TableBaseProps = {
@@ -17,8 +29,7 @@ export const TABLE_BASE_DEFAULTS: TableBaseProps = {
   borderColor: '#000000',
   borderType: 'solid',
   cellPadding: 2,
-  fontSize: 9,
-  color: '#000000',
+  typography: { ...TABLE_TYPOGRAPHY_DEFAULTS },
   equalizeCells: false,
 }
 

@@ -20,7 +20,11 @@ export {
   UpdatePageCommand,
 } from './document'
 
+export { getByPath } from './helpers'
+
 export {
+  BindStaticCellCommand,
+  ClearStaticCellBindingCommand,
   InsertTableColumnCommand,
   InsertTableRowCommand,
   MergeTableCellsCommand,
@@ -32,4 +36,6 @@ export {
   UpdateTableCellBorderCommand,
   UpdateTableCellCommand,
   UpdateTableRowRoleCommand,
+  UpdateTableVisibilityCommand,
+  validateMerge,
 } from './table'

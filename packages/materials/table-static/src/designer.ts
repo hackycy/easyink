@@ -15,10 +15,10 @@ import {
   UnitManager,
   UpdateTableCellCommand,
 } from '@easyink/core'
-import { createTableDeepEditing, renderTableHtml } from '@easyink/material-table-kernel'
+import { createTableDeepEditing, escapeHtml, renderTableHtml } from '@easyink/material-table-kernel'
 import { isTableNode } from '@easyink/schema'
 
-function buildHtml(node: MaterialNode, unit: UnitType): string {
+function buildHtml(node: MaterialNode, unit: UnitType, context: MaterialExtensionContext): string {
   if (!isTableNode(node)) {
     return `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#999;font-size:11px">table-static</div>`
   }
@@ -28,8 +28,15 @@ function buildHtml(node: MaterialNode, unit: UnitType): string {
     topology: node.table.topology,
     props: p,
     unit,
+    elementHeight: node.height,
     tableStyle: 'height:100%',
-    cellRenderer: cell => cell.content?.text || '',
+    cellRenderer: (cell) => {
+      if (cell.staticBinding) {
+        const label = context.getBindingLabel(cell.staticBinding)
+        return `<span style="color:#1890ff">{#${escapeHtml(label)}}</span>`
+      }
+      return cell.content?.text || ''
+    },
   })
 }
 
@@ -74,12 +81,14 @@ function createDelegate(context: MaterialExtensionContext): TableDeepEditingDele
       const node = context.getNode(nodeId)
       return node && isTableNode(node) ? node : undefined
     },
+    getTableKind: () => 'static' as const,
     screenToDoc(screenVal, screenOrigin, zoom) {
       return unitManager.screenToDocument(screenVal, screenOrigin, 0, zoom)
     },
     getZoom: () => context.getZoom(),
     getPageEl: () => context.getPageEl(),
     getUnit: () => context.getSchema().unit,
+    getPlaceholderRowCount: () => 0,
     t: (key: string) => context.t(key),
   }
 }
@@ -101,7 +110,7 @@ export function createTableStaticExtension(context: MaterialExtensionContext): M
     renderContent(nodeSignal, container) {
       function render() {
         const schema = context.getSchema()
-        container.innerHTML = buildHtml(nodeSignal.get(), schema.unit)
+        container.innerHTML = buildHtml(nodeSignal.get(), schema.unit, context)
       }
       render()
       return nodeSignal.subscribe(render)

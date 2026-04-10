@@ -166,7 +166,7 @@ const invoiceTableNode: TableNode = {
   x: 10,
   y: 56,
   width: 190,
-  height: 32,
+  height: 24,
   props: {
     headerBackground: '#f5f5f5',
     summaryBackground: '#fafafa',
@@ -381,7 +381,7 @@ export const invoiceWithTableTemplate: DocumentSchema = {
       id: 'inv_grand_total',
       type: 'text',
       x: 140,
-      y: 94,
+      y: 100,
       width: 60,
       height: 8,
       props: {
@@ -403,7 +403,7 @@ export const invoiceWithTableTemplate: DocumentSchema = {
       id: 'inv_notes',
       type: 'text',
       x: 10,
-      y: 108,
+      y: 110,
       width: 190,
       height: 12,
       props: {

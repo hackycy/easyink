@@ -1,4 +1,4 @@
-import type { DocumentSchema, TableColumnSchema, TableRowSchema, TableSchema } from './types'
+import type { DocumentSchema, TableCellSchema, TableColumnSchema, TableRowSchema, TableSchema } from './types'
 import { isObject } from '@easyink/shared'
 import { isTableNode } from './types'
 
@@ -224,6 +224,11 @@ function decodeBenchmarkElement(input: BenchmarkElementInput): DocumentSchema['e
     if (tableSchema) {
       ;(node as unknown as Record<string, unknown>).table = tableSchema
     }
+  }
+
+  // Apply v2 migrations for table nodes
+  if (isTable) {
+    migrateTableV2(node as unknown as Record<string, unknown>, type || '')
   }
 
   return node
@@ -490,5 +495,95 @@ function encodeTableSchema(table: TableSchema): Record<string, unknown> {
     kind: table.kind,
     topology: table.topology,
     layout: table.layout,
+  }
+}
+
+// ─── v2 Migration Helpers ──────────────────────────────────────────
+
+/** table-static: force all row roles to 'normal'. */
+function migrateTableStaticRows(rows: TableRowSchema[]): TableRowSchema[] {
+  return rows.map(row => ({
+    ...row,
+    role: 'normal' as const,
+  }))
+}
+
+/** table-data: only keep first header/footer row, convert extras to 'normal'. */
+function migrateTableDataRows(rows: TableRowSchema[]): TableRowSchema[] {
+  let headerSeen = false
+  let footerSeen = false
+  return rows.map((row) => {
+    if (row.role === 'header') {
+      if (headerSeen)
+        return { ...row, role: 'normal' as const }
+      headerSeen = true
+    }
+    if (row.role === 'footer') {
+      if (footerSeen)
+        return { ...row, role: 'normal' as const }
+      footerSeen = true
+    }
+    return row
+  })
+}
+
+/** Migrate flat fontSize/color to typography object. */
+function migrateTablePropsTypography(node: Record<string, unknown>): void {
+  const props = node.props as Record<string, unknown> | undefined
+  if (!props)
+    return
+  // Skip if already migrated
+  if (props.typography)
+    return
+  const fontSize = props.fontSize
+  const color = props.color
+  props.typography = {
+    fontSize: fontSize ?? 9,
+    color: color ?? '#000000',
+    fontWeight: 'normal',
+    fontStyle: 'normal',
+    lineHeight: 1.2,
+    letterSpacing: 0,
+    textAlign: 'left',
+    verticalAlign: 'top',
+  }
+  delete props.fontSize
+  delete props.color
+}
+
+/** Migrate cell.props.textAlign to cell.typography.textAlign. */
+function migrateCellTypography(cell: TableCellSchema): void {
+  const textAlign = (cell.props as Record<string, unknown> | undefined)?.textAlign
+  if (textAlign && typeof textAlign === 'string') {
+    if (!cell.typography)
+      cell.typography = {}
+    cell.typography.textAlign = textAlign as 'left' | 'center' | 'right'
+    const p = cell.props as Record<string, unknown>
+    delete p.textAlign
+  }
+}
+
+/** Apply v2 migrations to a decoded table element. */
+function migrateTableV2(node: Record<string, unknown>, tableType: string): void {
+  const table = node.table as TableSchema | undefined
+  if (!table)
+    return
+
+  // Row role migrations
+  if (tableType === 'table-static') {
+    table.topology.rows = migrateTableStaticRows(table.topology.rows)
+  }
+  else if (tableType === 'table-data') {
+    table.topology.rows = migrateTableDataRows(table.topology.rows)
+  }
+
+  // Props typography migration
+  migrateTablePropsTypography(node)
+
+  // Cell typography migration
+  for (const row of table.topology.rows) {
+    for (const cell of row.cells) {
+      migrateCellTypography(cell)
+    }
   }
 }

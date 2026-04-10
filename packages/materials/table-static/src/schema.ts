@@ -33,6 +33,6 @@ export function createTableStaticNode(partial?: Partial<MaterialNode>): Material
 
 export const TABLE_STATIC_CAPABILITIES = {
   ...TABLE_BASE_CAPABILITIES,
-  bindable: false,
-  multiBinding: false,
+  bindable: true,
+  multiBinding: true,
 }

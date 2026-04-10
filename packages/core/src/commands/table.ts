@@ -1,10 +1,42 @@
-import type { TableCellSchema, TableNode, TableRowSchema } from '@easyink/schema'
+import type { BindingRef, TableCellSchema, TableDataSchema, TableNode, TableRowSchema } from '@easyink/schema'
 import type { TableRowRole } from '@easyink/shared'
 import type { Command } from '../command'
+import { isTableDataNode } from '@easyink/schema'
 import { deepClone, generateId } from '@easyink/shared'
 import { asRecord } from './helpers'
 
 // ─── Table Commands ─────────────────────────────────────────────────
+
+/** Validate merge operation: cross-role check + table-data zone restrictions. */
+export function validateMerge(node: TableNode, anchorRow: number, _anchorCol: number, rowSpan: number, _colSpan: number): boolean {
+  const rows = node.table.topology.rows
+
+  // 1. Cross-role check: all rows in selection must have the same role
+  const roles = new Set<string>()
+  for (let r = anchorRow; r < anchorRow + rowSpan && r < rows.length; r++) {
+    roles.add(rows[r]!.role)
+  }
+  if (roles.size > 1)
+    return false
+
+  // 2. table-data specific constraints
+  if (isTableDataNode(node)) {
+    const role = rows[anchorRow]!.role
+    // Data area: merge completely forbidden
+    if (role === 'repeat-template')
+      return false
+    // Header/footer: only column-direction merge allowed
+    if ((role === 'header' || role === 'footer') && rowSpan > 1)
+      return false
+  }
+
+  return true
+}
+
+/** Count rows with a given role in a table. */
+function countRowsWithRole(node: TableNode, role: TableRowRole): number {
+  return node.table.topology.rows.filter(r => r.role === role).length
+}
 
 /** Insert a row into the table topology. New row inherits role from adjacent row. */
 export class InsertTableRowCommand implements Command {
@@ -18,12 +50,24 @@ export class InsertTableRowCommand implements Command {
     private row: TableRowSchema,
   ) {}
 
+  private rejected = false
+
   execute(): void {
+    // table-data: reject if inserting a header/footer row and one already exists
+    if (isTableDataNode(this.node)) {
+      const role = this.row.role
+      if ((role === 'header' || role === 'footer') && countRowsWithRole(this.node, role) >= 1) {
+        this.rejected = true
+        return
+      }
+    }
     this.node.table.topology.rows.splice(this.rowIndex, 0, this.row)
     this.node.height += this.row.height
   }
 
   undo(): void {
+    if (this.rejected)
+      return
     this.node.table.topology.rows.splice(this.rowIndex, 1)
     this.node.height -= this.row.height
   }
@@ -331,6 +375,7 @@ export class UpdateTableRowRoleCommand implements Command {
   readonly type = 'update-table-row-role'
   readonly description = 'Update row role'
   private oldRole: TableRowRole = 'normal'
+  private rejected = false
 
   constructor(
     private node: TableNode,
@@ -341,10 +386,19 @@ export class UpdateTableRowRoleCommand implements Command {
   execute(): void {
     const row = this.node.table.topology.rows[this.rowIndex]!
     this.oldRole = row.role
+    // Reject if changing to header/footer would violate single-row constraint
+    if (isTableDataNode(this.node) && (this.newRole === 'header' || this.newRole === 'footer')) {
+      if (countRowsWithRole(this.node, this.newRole) >= 1) {
+        this.rejected = true
+        return
+      }
+    }
     row.role = this.newRole
   }
 
   undo(): void {
+    if (this.rejected)
+      return
     const row = this.node.table.topology.rows[this.rowIndex]!
     row.role = this.oldRole
   }
@@ -385,6 +439,7 @@ export class MergeTableCellsCommand implements Command {
   readonly type = 'merge-table-cells'
   readonly description = 'Merge cells'
   private oldSpans: Array<{ rowIndex: number, cellIndex: number, colSpan?: number, rowSpan?: number }> = []
+  private rejected = false
 
   constructor(
     private node: TableNode,
@@ -395,6 +450,12 @@ export class MergeTableCellsCommand implements Command {
   ) {}
 
   execute(): void {
+    // Dual-layer protection: command validates before executing
+    if (!validateMerge(this.node, this.rowIndex, this.cellIndex, this.rowSpan, this.colSpan)) {
+      this.rejected = true
+      return
+    }
+
     const { rows } = this.node.table.topology
     this.oldSpans = []
 
@@ -414,6 +475,8 @@ export class MergeTableCellsCommand implements Command {
   }
 
   undo(): void {
+    if (this.rejected)
+      return
     const { rows } = this.node.table.topology
     for (const { rowIndex, cellIndex, colSpan, rowSpan } of this.oldSpans) {
       const cell = rows[rowIndex]!.cells[cellIndex]!
@@ -449,5 +512,86 @@ export class SplitTableCellCommand implements Command {
     const cell = this.node.table.topology.rows[this.rowIndex]!.cells[this.cellIndex]!
     cell.colSpan = this.oldColSpan
     cell.rowSpan = this.oldRowSpan
+  }
+}
+
+/** Bind a data source field to a table-static cell's staticBinding. */
+export class BindStaticCellCommand implements Command {
+  readonly id = generateId('cmd')
+  readonly type = 'bind-static-cell'
+  readonly description = 'Bind static cell'
+  private oldBinding: BindingRef | undefined
+  private oldContent: TableCellSchema['content']
+
+  constructor(
+    private node: TableNode,
+    private rowIndex: number,
+    private cellIndex: number,
+    private binding: BindingRef,
+  ) {}
+
+  execute(): void {
+    const cell = this.node.table.topology.rows[this.rowIndex]!.cells[this.cellIndex]!
+    this.oldBinding = cell.staticBinding ? deepClone(cell.staticBinding) : undefined
+    this.oldContent = cell.content ? deepClone(cell.content) : undefined
+    cell.staticBinding = deepClone(this.binding)
+    // Clear manual content when binding (mutual exclusion)
+    cell.content = undefined
+  }
+
+  undo(): void {
+    const cell = this.node.table.topology.rows[this.rowIndex]!.cells[this.cellIndex]!
+    cell.staticBinding = this.oldBinding
+    cell.content = this.oldContent
+  }
+}
+
+/** Clear a table-static cell's staticBinding. */
+export class ClearStaticCellBindingCommand implements Command {
+  readonly id = generateId('cmd')
+  readonly type = 'clear-static-cell-binding'
+  readonly description = 'Clear static cell binding'
+  private oldBinding: BindingRef | undefined
+
+  constructor(
+    private node: TableNode,
+    private rowIndex: number,
+    private cellIndex: number,
+  ) {}
+
+  execute(): void {
+    const cell = this.node.table.topology.rows[this.rowIndex]!.cells[this.cellIndex]!
+    this.oldBinding = cell.staticBinding ? deepClone(cell.staticBinding) : undefined
+    cell.staticBinding = undefined
+  }
+
+  undo(): void {
+    const cell = this.node.table.topology.rows[this.rowIndex]!.cells[this.cellIndex]!
+    cell.staticBinding = this.oldBinding
+  }
+}
+
+/** Toggle showHeader / showFooter on a table-data node. */
+export class UpdateTableVisibilityCommand implements Command {
+  readonly id = generateId('cmd')
+  readonly type = 'update-table-visibility'
+  readonly description = 'Update table visibility'
+  private oldValue: boolean | undefined
+
+  constructor(
+    private node: TableNode,
+    private field: 'showHeader' | 'showFooter',
+    private newValue: boolean,
+  ) {}
+
+  execute(): void {
+    const table = this.node.table as TableDataSchema
+    this.oldValue = table[this.field]
+    table[this.field] = this.newValue
+  }
+
+  undo(): void {
+    const table = this.node.table as TableDataSchema
+    table[this.field] = this.oldValue
   }
 }

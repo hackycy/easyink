@@ -1,5 +1,5 @@
 import type { TableBaseProps } from '@easyink/material-table-kernel'
-import type { MaterialNode, TableNode } from '@easyink/schema'
+import type { MaterialNode, TableDataSchema, TableNode } from '@easyink/schema'
 import { createDefaultLayout, createDefaultTopology, TABLE_BASE_CAPABILITIES, TABLE_BASE_DEFAULTS } from '@easyink/material-table-kernel'
 import { generateId } from '@easyink/shared'
 
@@ -24,6 +24,13 @@ export function createTableDataNode(partial?: Partial<MaterialNode>): MaterialNo
   const topology = createDefaultTopology(3, 3, 8, ['header', 'repeat-template', 'footer'])
   const layout = createDefaultLayout()
   const { type: _type, ...rest } = partial || {} as Partial<MaterialNode>
+  const table: TableDataSchema = {
+    kind: 'data',
+    topology,
+    layout,
+    showHeader: true,
+    showFooter: true,
+  }
   const node: TableNode = {
     id: generateId('td'),
     x: 0,
@@ -33,11 +40,7 @@ export function createTableDataNode(partial?: Partial<MaterialNode>): MaterialNo
     props: { ...TABLE_DATA_DEFAULTS },
     ...rest,
     type: 'table-data',
-    table: {
-      kind: 'data',
-      topology,
-      layout,
-    } as TableNode['table'],
+    table,
   }
   return node
 }

@@ -2,7 +2,7 @@ import type { DocumentSchema, GuideSchema, MaterialNode, PageSchema } from '@eas
 import type { Command } from '../command'
 import { isTableNode } from '@easyink/schema'
 import { deepClone, generateId } from '@easyink/shared'
-import { asRecord, findNode } from './helpers'
+import { asRecord, findNode, getByPath, setByPath } from './helpers'
 
 // ─── Document Commands ──────────────────────────────────────────────
 
@@ -227,8 +227,14 @@ export class UpdateMaterialPropsCommand implements Command {
     if (!node)
       return
     for (const key of Object.keys(this.updates)) {
-      this.oldValues[key] = deepClone(node.props[key])
-      node.props[key] = deepClone(this.updates[key])
+      if (key.includes('.')) {
+        this.oldValues[key] = deepClone(getByPath(node.props, key))
+        setByPath(node.props, key, deepClone(this.updates[key]))
+      }
+      else {
+        this.oldValues[key] = deepClone(node.props[key])
+        node.props[key] = deepClone(this.updates[key])
+      }
     }
   }
 
@@ -237,7 +243,10 @@ export class UpdateMaterialPropsCommand implements Command {
     if (!node)
       return
     for (const key of Object.keys(this.oldValues)) {
-      node.props[key] = this.oldValues[key]
+      if (key.includes('.'))
+        setByPath(node.props, key, this.oldValues[key])
+      else
+        node.props[key] = this.oldValues[key]
     }
   }
 }

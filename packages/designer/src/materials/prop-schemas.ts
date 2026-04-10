@@ -223,8 +223,28 @@ const TABLE_STATIC_TABLE_PROPS: PropSchema[] = [
     { label: 'Dotted', value: 'dotted' },
   ] },
   { key: 'cellPadding', label: 'designer.property.padding', type: 'number', group: 'table-layout', min: 0, max: 20, step: 1 },
-  { key: 'fontSize', label: 'designer.property.fontSize', type: 'number', group: 'table-typography', min: 1, max: 100, step: 1 },
-  { key: 'color', label: 'designer.property.color', type: 'color', group: 'table-typography' },
+  { key: 'typography.fontSize', label: 'designer.property.fontSize', type: 'number', group: 'table-typography', min: 1, max: 100, step: 1 },
+  { key: 'typography.color', label: 'designer.property.color', type: 'color', group: 'table-typography' },
+  { key: 'typography.fontWeight', label: 'designer.property.fontWeight', type: 'enum', group: 'table-typography', enum: [
+    { label: 'Normal', value: 'normal' },
+    { label: 'Bold', value: 'bold' },
+  ] },
+  { key: 'typography.fontStyle', label: 'designer.property.fontStyle', type: 'enum', group: 'table-typography', enum: [
+    { label: 'Normal', value: 'normal' },
+    { label: 'Italic', value: 'italic' },
+  ] },
+  { key: 'typography.textAlign', label: 'designer.property.textAlign', type: 'enum', group: 'table-typography', enum: [
+    { label: 'Left', value: 'left' },
+    { label: 'Center', value: 'center' },
+    { label: 'Right', value: 'right' },
+  ] },
+  { key: 'typography.verticalAlign', label: 'designer.property.verticalAlign', type: 'enum', group: 'table-typography', enum: [
+    { label: 'Top', value: 'top' },
+    { label: 'Middle', value: 'middle' },
+    { label: 'Bottom', value: 'bottom' },
+  ] },
+  { key: 'typography.lineHeight', label: 'designer.property.lineHeight', type: 'number', group: 'table-typography', min: 0.5, max: 5, step: 0.1 },
+  { key: 'typography.letterSpacing', label: 'designer.property.letterSpacing', type: 'number', group: 'table-typography', min: -5, max: 20, step: 0.5 },
 ]
 
 const TABLE_STATIC_PROP_SCHEMAS: PropSchema[] = [
@@ -243,8 +263,28 @@ const TABLE_DATA_TABLE_PROPS: PropSchema[] = [
     { label: 'Dotted', value: 'dotted' },
   ] },
   { key: 'cellPadding', label: 'designer.property.padding', type: 'number', group: 'table-layout', min: 0, max: 20, step: 1 },
-  { key: 'fontSize', label: 'designer.property.fontSize', type: 'number', group: 'table-typography', min: 1, max: 100, step: 1 },
-  { key: 'color', label: 'designer.property.color', type: 'color', group: 'table-typography' },
+  { key: 'typography.fontSize', label: 'designer.property.fontSize', type: 'number', group: 'table-typography', min: 1, max: 100, step: 1 },
+  { key: 'typography.color', label: 'designer.property.color', type: 'color', group: 'table-typography' },
+  { key: 'typography.fontWeight', label: 'designer.property.fontWeight', type: 'enum', group: 'table-typography', enum: [
+    { label: 'Normal', value: 'normal' },
+    { label: 'Bold', value: 'bold' },
+  ] },
+  { key: 'typography.fontStyle', label: 'designer.property.fontStyle', type: 'enum', group: 'table-typography', enum: [
+    { label: 'Normal', value: 'normal' },
+    { label: 'Italic', value: 'italic' },
+  ] },
+  { key: 'typography.textAlign', label: 'designer.property.textAlign', type: 'enum', group: 'table-typography', enum: [
+    { label: 'Left', value: 'left' },
+    { label: 'Center', value: 'center' },
+    { label: 'Right', value: 'right' },
+  ] },
+  { key: 'typography.verticalAlign', label: 'designer.property.verticalAlign', type: 'enum', group: 'table-typography', enum: [
+    { label: 'Top', value: 'top' },
+    { label: 'Middle', value: 'middle' },
+    { label: 'Bottom', value: 'bottom' },
+  ] },
+  { key: 'typography.lineHeight', label: 'designer.property.lineHeight', type: 'number', group: 'table-typography', min: 0.5, max: 5, step: 0.1 },
+  { key: 'typography.letterSpacing', label: 'designer.property.letterSpacing', type: 'number', group: 'table-typography', min: -5, max: 20, step: 0.5 },
   { key: 'headerBackground', label: 'designer.property.headerBackground', type: 'color', group: 'table-appearance' },
   { key: 'summaryBackground', label: 'designer.property.summaryBackground', type: 'color', group: 'table-appearance' },
   { key: 'stripedRows', label: 'designer.property.stripedRows', type: 'switch', group: 'table-appearance' },

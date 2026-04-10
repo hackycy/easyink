@@ -3,9 +3,12 @@ export type { Command, HistoryEntry } from './command'
 export {
   AddMaterialCommand,
   BindFieldCommand,
+  BindStaticCellCommand,
   BindTableSourceCommand,
   ClearBindingCommand,
+  ClearStaticCellBindingCommand,
   ClearTableSourceCommand,
+  getByPath,
   ImportTemplateCommand,
   InsertTableColumnCommand,
   InsertTableRowCommand,
@@ -27,7 +30,9 @@ export {
   UpdateTableCellBorderCommand,
   UpdateTableCellCommand,
   UpdateTableRowRoleCommand,
+  UpdateTableVisibilityCommand,
   UpdateUsageCommand,
+  validateMerge,
 } from './commands'
 
 export { FontManager } from './font'

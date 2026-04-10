@@ -1,4 +1,4 @@
-import type { TableNode } from '@easyink/schema'
+import type { TableDataSchema, TableNode } from '@easyink/schema'
 import type { CellRect } from './types'
 import {
   IconTableInsertColLeft,
@@ -13,7 +13,7 @@ import {
   IconTextAlignLeft,
   IconTextAlignRight,
 } from '@easyink/icons/svg-strings'
-import { computeCellRect, hitTestGridCell } from './geometry'
+import { computeCellRect, computeRowScale, hitTestGridCell } from './geometry'
 import { resolveMergeOwner } from './topology'
 
 // ─── Callback interface (avoids dependency on @easyink/designer, @easyink/core) ───
@@ -29,12 +29,16 @@ export interface TableDeepEditingDelegate {
   commitRemoveCol: (node: TableNode, colIndex: number) => void
   commitMergeCells: (node: TableNode, row: number, col: number, colSpan: number, rowSpan: number) => void
   commitSplitCell: (node: TableNode, row: number, col: number) => void
+  commitToggleVisibility?: (node: TableNode, field: 'showHeader' | 'showFooter', value: boolean) => void
   getNode: (nodeId: string) => TableNode | undefined
+  getTableKind: () => 'static' | 'data'
   getZoom: () => number
   getPageEl: () => HTMLElement | null
   screenToDoc: (screenVal: number, screenOrigin: number, zoom: number) => number
   /** Document unit string for CSS (e.g. 'mm', 'px'). */
   getUnit: () => string
+  /** The number of virtual placeholder rows rendered in designer (0 for table-static). */
+  getPlaceholderRowCount: () => number
   t: (key: string) => string
 }
 
@@ -83,6 +87,92 @@ interface SharedState {
 // ─── Factory ───────────────────────────────────────────────────────
 
 /**
+ * Compute the extra visual height added by virtual placeholder rows.
+ * Returns 0 for table-static (no placeholders).
+ */
+function computePlaceholderHeight(node: TableNode, delegate: TableDeepEditingDelegate): number {
+  const count = delegate.getPlaceholderRowCount()
+  if (count <= 0)
+    return 0
+  const repeatRow = node.table.topology.rows.find(r => r.role === 'repeat-template')
+  if (!repeatRow)
+    return 0
+  const rowScale = computeRowScale(node.table.topology.rows, node.height)
+  return repeatRow.height * rowScale * count
+}
+
+/**
+ * Compute cell rect adjusted for virtual placeholder rows.
+ * Footer cells (after repeat-template) are offset downward by placeholder height.
+ */
+function computeCellRectWithPlaceholders(
+  node: TableNode,
+  row: number,
+  col: number,
+  delegate: TableDeepEditingDelegate,
+): CellRect | null {
+  const rect = computeCellRect(node.table.topology, node.width, node.height, row, col)
+  if (!rect)
+    return null
+
+  const count = delegate.getPlaceholderRowCount()
+  if (count <= 0)
+    return rect
+
+  const repeatIdx = node.table.topology.rows.findIndex(r => r.role === 'repeat-template')
+  if (repeatIdx < 0 || row <= repeatIdx)
+    return rect
+
+  const ph = computePlaceholderHeight(node, delegate)
+  return { x: rect.x, y: rect.y + ph, w: rect.w, h: rect.h }
+}
+
+/**
+ * Hit-test adjusted for virtual placeholder rows.
+ * Clicks in the placeholder region return null; clicks in the footer region
+ * are remapped to schema coordinates by subtracting placeholder height.
+ */
+function hitTestWithPlaceholders(
+  node: TableNode,
+  relX: number,
+  relY: number,
+  delegate: TableDeepEditingDelegate,
+): { row: number, col: number } | null {
+  const count = delegate.getPlaceholderRowCount()
+  if (count <= 0)
+    return hitTestGridCell(node.table.topology, node.width, node.height, relX, relY)
+
+  const repeatIdx = node.table.topology.rows.findIndex(r => r.role === 'repeat-template')
+  if (repeatIdx < 0)
+    return hitTestGridCell(node.table.topology, node.width, node.height, relX, relY)
+
+  const ph = computePlaceholderHeight(node, delegate)
+  const rowScale = computeRowScale(node.table.topology.rows, node.height)
+
+  // Compute bottom edge of repeat-template row
+  let repeatBottom = 0
+  for (let i = 0; i <= repeatIdx; i++)
+    repeatBottom += node.table.topology.rows[i]!.height * rowScale
+
+  if (relY <= repeatBottom)
+    return hitTestGridCell(node.table.topology, node.width, node.height, relX, relY)
+
+  if (relY <= repeatBottom + ph)
+    return null // Click in placeholder rows — inert
+
+  // Click in footer region — remap to schema coordinates
+  return hitTestGridCell(node.table.topology, node.width, node.height, relX, relY - ph)
+}
+
+/** Resize the overlay container to include virtual placeholder rows. */
+function syncOverlaySize(overlay: HTMLElement, node: TableNode, delegate: TableDeepEditingDelegate): void {
+  const u = delegate.getUnit()
+  const extra = computePlaceholderHeight(node, delegate)
+  overlay.style.width = `${node.width}${u}`
+  overlay.style.height = `${node.height + extra}${u}`
+}
+
+/**
  * Create a table deep editing FSM definition.
  * Returns phases and initialPhase usable as a DeepEditingDefinition.
  *
@@ -116,6 +206,7 @@ function createTableSelectedPhase(shared: SharedState): TableDeepEditingPhase {
     onEnter(containers, node) {
       shared.currentNodeId = node.id
       shared.selectedCell = null
+      syncOverlaySize(containers.overlay, node, shared.delegate)
       renderTableIndicator(containers, node, shared, cleanupFns)
     },
     onExit() {
@@ -141,6 +232,7 @@ function createCellSelectedPhase(shared: SharedState): TableDeepEditingPhase {
     id: 'cell-selected',
     onEnter(containers, node) {
       shared.currentNodeId = node.id
+      syncOverlaySize(containers.overlay, node, shared.delegate)
       renderClickCatchLayer(containers, node, shared, cleanupFns)
       renderCellOverlay(containers, node, shared, cleanupFns)
       renderToolbar(containers, node, shared, cleanupFns)
@@ -151,11 +243,11 @@ function createCellSelectedPhase(shared: SharedState): TableDeepEditingPhase {
     },
     subSelection: {
       hitTest(point, node) {
-        const gridCell = hitTestGridCell(node.table.topology, node.width, node.height, point.x, point.y)
+        const gridCell = hitTestWithPlaceholders(node, point.x, point.y, shared.delegate)
         if (!gridCell)
           return null
         const owner = resolveMergeOwner(node.table.topology, gridCell.row, gridCell.col)
-        const rect = computeCellRect(node.table.topology, node.width, node.height, owner.row, owner.col)
+        const rect = computeCellRectWithPlaceholders(node, owner.row, owner.col, shared.delegate)
         return { path: owner, rect: rect ?? undefined }
       },
       getSelectedPath() {
@@ -195,7 +287,19 @@ function createCellSelectedPhase(shared: SharedState): TableDeepEditingPhase {
       },
     },
     transitions: [
-      { to: 'content-editing', trigger: 'double-click' as const },
+      {
+        to: 'content-editing',
+        trigger: 'double-click' as const,
+        guard: (_event: unknown, node: TableNode) => {
+          // table-data data-area cells cannot enter content-editing
+          if (shared.delegate.getTableKind() === 'data' && shared.selectedCell) {
+            const row = node.table.topology.rows[shared.selectedCell.row]
+            if (row && row.role === 'repeat-template')
+              return false
+          }
+          return true
+        },
+      },
       { to: 'table-selected', trigger: 'escape' as const },
     ],
   }
@@ -232,19 +336,15 @@ function createContentEditingPhase(shared: SharedState): TableDeepEditingPhase {
       committed = false
       exiting = false
 
+      syncOverlaySize(containers.overlay, node, shared.delegate)
+
       // Click-catch layer for clicking other cells during content editing
       renderClickCatchLayer(containers, node, shared, cleanupFns)
 
       if (!shared.selectedCell)
         return
 
-      const rect = computeCellRect(
-        node.table.topology,
-        node.width,
-        node.height,
-        shared.selectedCell.row,
-        shared.selectedCell.col,
-      )
+      const rect = computeCellRectWithPlaceholders(node, shared.selectedCell.row, shared.selectedCell.col, shared.delegate)
       if (!rect)
         return
 
@@ -263,7 +363,8 @@ function createContentEditingPhase(shared: SharedState): TableDeepEditingPhase {
       inputEl.type = 'text'
       inputEl.value = snapshotText
       const props = node.props as Record<string, unknown>
-      inputEl.style.cssText = `width:100%;height:100%;box-sizing:border-box;border:2px solid var(--ei-primary,#1890ff);background:#fff;outline:none;font-size:${props.fontSize ?? 12}pt;color:${props.color || '#000000'};padding:${props.cellPadding ?? 4}px;`
+      const typo = props.typography as Record<string, unknown> | undefined
+      inputEl.style.cssText = `width:100%;height:100%;box-sizing:border-box;border:2px solid var(--ei-primary,#1890ff);background:#fff;outline:none;font-size:${typo?.fontSize ?? 12}pt;color:${typo?.color || '#000000'};padding:${props.cellPadding ?? 4}px;`
 
       wrapper.appendChild(inputEl)
       containers.overlay.appendChild(wrapper)
@@ -436,13 +537,7 @@ function renderCellOverlay(
   if (!shared.selectedCell)
     return
 
-  const rect = computeCellRect(
-    node.table.topology,
-    node.width,
-    node.height,
-    shared.selectedCell.row,
-    shared.selectedCell.col,
-  )
+  const rect = computeCellRectWithPlaceholders(node, shared.selectedCell.row, shared.selectedCell.col, shared.delegate)
   if (!rect)
     return
 
@@ -475,19 +570,12 @@ function renderCellOverlay(
     const currentNode = shared.currentNodeId ? shared.delegate.getNode(shared.currentNodeId) : undefined
     if (!currentNode || !shared.selectedCell)
       return
-    const newRect = computeCellRect(
-      currentNode.table.topology,
-      currentNode.width,
-      currentNode.height,
-      shared.selectedCell.row,
-      shared.selectedCell.col,
-    )
+    const newRect = computeCellRectWithPlaceholders(currentNode, shared.selectedCell.row, shared.selectedCell.col, shared.delegate)
     if (!newRect)
       return
 
-    // Sync overlay container size with table size
-    containers.overlay.style.width = `${currentNode.width}${u}`
-    containers.overlay.style.height = `${currentNode.height}${u}`
+    // Sync overlay container size with table size (including placeholder rows)
+    syncOverlaySize(containers.overlay, currentNode, shared.delegate)
 
     // Sync highlight
     highlightEl.style.left = `${newRect.x}${u}`
@@ -564,13 +652,7 @@ function renderCellHighlight(
   if (!shared.selectedCell)
     return
 
-  const rect = computeCellRect(
-    node.table.topology,
-    node.width,
-    node.height,
-    shared.selectedCell.row,
-    shared.selectedCell.col,
-  )
+  const rect = computeCellRectWithPlaceholders(node, shared.selectedCell.row, shared.selectedCell.col, shared.delegate)
   if (!rect)
     return
 
@@ -591,6 +673,7 @@ function renderToolbar(
   cleanupFns: Array<() => void>,
 ): void {
   const t = shared.delegate.t
+  const kind = shared.delegate.getTableKind()
 
   const row = document.createElement('div')
   row.style.cssText = 'display:flex;align-items:center;gap:2px;background:#fff;border:1px solid var(--ei-border-color,#d0d0d0);border-radius:4px;padding:2px 4px;box-shadow:0 1px 4px rgba(0,0,0,0.1);'
@@ -632,36 +715,48 @@ function renderToolbar(
 
   const initNode = getNode()
 
-  // Row operations
-  addBtn(t('designer.table.insertRowAbove'), IconTableInsertRowAbove, () => {
-    const n = getNode()
-    if (!n || !shared.selectedCell)
-      return
-    shared.delegate.commitInsertRow(n, shared.selectedCell.row)
-    shared.selectedCell = { row: shared.selectedCell.row + 1, col: shared.selectedCell.col }
-    containers.requestTransition('cell-selected')
-  })
+  // Determine selected cell's role for table-data
+  let cellRole: string | null = null
+  if (kind === 'data' && initNode && shared.selectedCell) {
+    cellRole = initNode.table.topology.rows[shared.selectedCell.row]?.role ?? null
+  }
 
-  addBtn(t('designer.table.insertRowBelow'), IconTableInsertRowBelow, () => {
-    const n = getNode()
-    if (!n || !shared.selectedCell)
-      return
-    shared.delegate.commitInsertRow(n, shared.selectedCell.row + 1)
-    containers.requestTransition('cell-selected')
-  })
+  const isDataArea = kind === 'data' && cellRole === 'repeat-template'
+  const isHeaderFooter = kind === 'data' && (cellRole === 'header' || cellRole === 'footer')
 
-  addBtn(t('designer.table.removeRow'), IconTableRemoveRow, () => {
-    const n = getNode()
-    if (!n || !shared.selectedCell || n.table.topology.rows.length <= 1)
-      return
-    const cp = shared.selectedCell
-    shared.delegate.commitRemoveRow(n, cp.row)
-    shared.selectedCell = { row: Math.min(cp.row, n.table.topology.rows.length - 1), col: cp.col }
-    containers.requestTransition('cell-selected')
-  }, !initNode || initNode.table.topology.rows.length <= 1)
+  // ── Row operations (table-static only) ──
+  if (kind === 'static') {
+    addBtn(t('designer.table.insertRowAbove'), IconTableInsertRowAbove, () => {
+      const n = getNode()
+      if (!n || !shared.selectedCell)
+        return
+      shared.delegate.commitInsertRow(n, shared.selectedCell.row)
+      shared.selectedCell = { row: shared.selectedCell.row + 1, col: shared.selectedCell.col }
+      containers.requestTransition('cell-selected')
+    })
 
-  addSep()
+    addBtn(t('designer.table.insertRowBelow'), IconTableInsertRowBelow, () => {
+      const n = getNode()
+      if (!n || !shared.selectedCell)
+        return
+      shared.delegate.commitInsertRow(n, shared.selectedCell.row + 1)
+      containers.requestTransition('cell-selected')
+    })
 
+    addBtn(t('designer.table.removeRow'), IconTableRemoveRow, () => {
+      const n = getNode()
+      if (!n || !shared.selectedCell || n.table.topology.rows.length <= 1)
+        return
+      const cp = shared.selectedCell
+      shared.delegate.commitRemoveRow(n, cp.row)
+      shared.selectedCell = { row: Math.min(cp.row, n.table.topology.rows.length - 1), col: cp.col }
+      containers.requestTransition('cell-selected')
+    }, !initNode || initNode.table.topology.rows.length <= 1)
+
+    addSep()
+  }
+
+  // ── Column operations (all contexts) ──
   addBtn(t('designer.table.insertColLeft'), IconTableInsertColLeft, () => {
     const n = getNode()
     if (!n || !shared.selectedCell)
@@ -691,57 +786,68 @@ function renderToolbar(
 
   addSep()
 
-  addBtn(t('designer.table.mergeRight'), IconTableMerge, () => {
-    const n = getNode()
-    if (!n || !shared.selectedCell)
-      return
-    const cp = shared.selectedCell
-    const cell = n.table.topology.rows[cp.row]?.cells[cp.col]
-    const cs = cell?.colSpan ?? 1
-    const ncs = Math.min(cs + 1, n.table.topology.columns.length - cp.col)
-    if (ncs <= cs)
-      return
-    shared.delegate.commitMergeCells(n, cp.row, cp.col, ncs, cell?.rowSpan ?? 1)
-    containers.requestTransition('cell-selected')
-  })
+  // ── Merge/Split (table-static: any direction; table-data header/footer: column only; data area: hidden) ──
+  if (!isDataArea) {
+    // Merge right (all non-data-area contexts)
+    addBtn(t('designer.table.mergeRight'), IconTableMerge, () => {
+      const n = getNode()
+      if (!n || !shared.selectedCell)
+        return
+      const cp = shared.selectedCell
+      const cell = n.table.topology.rows[cp.row]?.cells[cp.col]
+      const cs = cell?.colSpan ?? 1
+      const ncs = Math.min(cs + 1, n.table.topology.columns.length - cp.col)
+      if (ncs <= cs)
+        return
+      shared.delegate.commitMergeCells(n, cp.row, cp.col, ncs, cell?.rowSpan ?? 1)
+      containers.requestTransition('cell-selected')
+    })
 
-  addBtn(t('designer.table.mergeDown'), IconTableMerge, () => {
-    const n = getNode()
-    if (!n || !shared.selectedCell)
-      return
-    const cp = shared.selectedCell
-    const cell = n.table.topology.rows[cp.row]?.cells[cp.col]
-    const rs = cell?.rowSpan ?? 1
-    const nrs = Math.min(rs + 1, n.table.topology.rows.length - cp.row)
-    if (nrs <= rs)
-      return
-    shared.delegate.commitMergeCells(n, cp.row, cp.col, cell?.colSpan ?? 1, nrs)
-    containers.requestTransition('cell-selected')
-  })
-
-  if (initNode && shared.selectedCell) {
-    const cp = shared.selectedCell
-    const cell = initNode.table.topology.rows[cp.row]?.cells[cp.col]
-    if ((cell?.colSpan ?? 1) > 1 || (cell?.rowSpan ?? 1) > 1) {
-      addBtn(t('designer.table.split'), IconTableSplit, () => {
+    // Merge down (table-static only, not header/footer)
+    if (kind === 'static') {
+      addBtn(t('designer.table.mergeDown'), IconTableMerge, () => {
         const n = getNode()
         if (!n || !shared.selectedCell)
           return
-        shared.delegate.commitSplitCell(n, shared.selectedCell.row, shared.selectedCell.col)
+        const cp = shared.selectedCell
+        const cell = n.table.topology.rows[cp.row]?.cells[cp.col]
+        const rs = cell?.rowSpan ?? 1
+        const nrs = Math.min(rs + 1, n.table.topology.rows.length - cp.row)
+        if (nrs <= rs)
+          return
+        shared.delegate.commitMergeCells(n, cp.row, cp.col, cell?.colSpan ?? 1, nrs)
         containers.requestTransition('cell-selected')
       })
     }
+
+    // Split (show when cell has any span)
+    if (initNode && shared.selectedCell) {
+      const cp = shared.selectedCell
+      const cell = initNode.table.topology.rows[cp.row]?.cells[cp.col]
+      const hasSpan = (cell?.colSpan ?? 1) > 1 || (cell?.rowSpan ?? 1) > 1
+      // For header/footer only show split if colSpan > 1
+      const showSplit = isHeaderFooter ? (cell?.colSpan ?? 1) > 1 : hasSpan
+      if (showSplit) {
+        addBtn(t('designer.table.split'), IconTableSplit, () => {
+          const n = getNode()
+          if (!n || !shared.selectedCell)
+            return
+          shared.delegate.commitSplitCell(n, shared.selectedCell.row, shared.selectedCell.col)
+          containers.requestTransition('cell-selected')
+        })
+      }
+    }
+
+    addSep()
   }
 
-  addSep()
-
-  // Content alignment
+  // ── Alignment (all contexts) ──
   addBtn(t('designer.table.alignLeft'), IconTextAlignLeft, () => {
     const n = getNode()
     if (!n || !shared.selectedCell)
       return
     shared.delegate.commitCellUpdate(n, shared.selectedCell.row, shared.selectedCell.col, {
-      props: { textAlign: 'left' },
+      typography: { textAlign: 'left' },
     })
     containers.requestTransition('cell-selected')
   })
@@ -751,7 +857,7 @@ function renderToolbar(
     if (!n || !shared.selectedCell)
       return
     shared.delegate.commitCellUpdate(n, shared.selectedCell.row, shared.selectedCell.col, {
-      props: { textAlign: 'center' },
+      typography: { textAlign: 'center' },
     })
     containers.requestTransition('cell-selected')
   })
@@ -761,10 +867,42 @@ function renderToolbar(
     if (!n || !shared.selectedCell)
       return
     shared.delegate.commitCellUpdate(n, shared.selectedCell.row, shared.selectedCell.col, {
-      props: { textAlign: 'right' },
+      typography: { textAlign: 'right' },
     })
     containers.requestTransition('cell-selected')
   })
+
+  // ── Visibility toggles (table-data header/footer only) ──
+  if (kind === 'data' && shared.delegate.commitToggleVisibility) {
+    addSep()
+    const tableData = initNode?.table as TableDataSchema | undefined
+    const headerVisible = tableData?.showHeader !== false
+    const footerVisible = tableData?.showFooter !== false
+
+    addBtn(
+      headerVisible ? t('designer.table.hideHeader') : t('designer.table.showHeader'),
+      headerVisible ? '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>' : '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>',
+      () => {
+        const n = getNode()
+        if (!n)
+          return
+        shared.delegate.commitToggleVisibility!(n, 'showHeader', !headerVisible)
+        containers.requestTransition('cell-selected')
+      },
+    )
+
+    addBtn(
+      footerVisible ? t('designer.table.hideFooter') : t('designer.table.showFooter'),
+      footerVisible ? '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>' : '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>',
+      () => {
+        const n = getNode()
+        if (!n)
+          return
+        shared.delegate.commitToggleVisibility!(n, 'showFooter', !footerVisible)
+        containers.requestTransition('cell-selected')
+      },
+    )
+  }
 
   containers.toolbar.appendChild(row)
   cleanupFns.push(() => row.remove())
@@ -877,7 +1015,7 @@ function hitTestFromScreenEvent(
   const relX = docX - tableNode.x
   const relY = docY - tableNode.y
 
-  const gridCell = hitTestGridCell(tableNode.table.topology, tableNode.width, tableNode.height, relX, relY)
+  const gridCell = hitTestWithPlaceholders(tableNode, relX, relY, shared.delegate)
   if (!gridCell)
     return null
 

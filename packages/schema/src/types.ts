@@ -196,6 +196,10 @@ export interface TableSchema {
 export interface TableDataSchema extends TableSchema {
   kind: 'data'
   source?: BindingRef
+  /** Header visibility. false = viewer skips header, pagination no repeat. Default true */
+  showHeader?: boolean
+  /** Footer visibility. false = viewer skips footer. Default true */
+  showFooter?: boolean
 }
 
 export interface TableTopologySchema {
@@ -237,6 +241,30 @@ export interface TableRowSchema {
   cells: TableCellSchema[]
 }
 
+/** Single-cell typography overrides. Missing fields fall back to table-level defaults. */
+export interface CellTypography {
+  fontSize?: number
+  color?: string
+  fontWeight?: 'normal' | 'bold'
+  fontStyle?: 'normal' | 'italic'
+  lineHeight?: number
+  letterSpacing?: number
+  textAlign?: 'left' | 'center' | 'right'
+  verticalAlign?: 'top' | 'middle' | 'bottom'
+}
+
+/** Table-level typography defaults. Symmetric to CellTypography but all fields required. */
+export interface TableTypography {
+  fontSize: number
+  color: string
+  fontWeight: 'normal' | 'bold'
+  fontStyle: 'normal' | 'italic'
+  lineHeight: number
+  letterSpacing: number
+  textAlign: 'left' | 'center' | 'right'
+  verticalAlign: 'top' | 'middle' | 'bottom'
+}
+
 export interface TableCellSchema {
   rowSpan?: number
   colSpan?: number
@@ -247,8 +275,12 @@ export interface TableCellSchema {
   border?: CellBorderSchema
   padding?: BoxSpacing
   content?: TableCellContentSlot
+  typography?: CellTypography
   props?: Record<string, unknown>
+  /** table-data: cell binding (relative path within table source) */
   binding?: BindingRef
+  /** table-static: independent per-cell binding (each cell can bind different sourceId) */
+  staticBinding?: BindingRef
 }
 
 export interface TableCellContentSlot {

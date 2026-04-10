@@ -1,4 +1,4 @@
-import type { MaterialNode } from '@easyink/schema'
+import type { MaterialNode, TableDataSchema } from '@easyink/schema'
 import type { TableDataProps } from './schema'
 import { renderTableHtml } from '@easyink/material-table-kernel'
 import { isTableNode } from '@easyink/schema'
@@ -11,17 +11,26 @@ export function renderTableData(node: MaterialNode) {
   }
 
   const props = node.props as unknown as TableDataProps
+  const tableData = node.table as TableDataSchema
+  const showHeader = tableData.showHeader !== false
+  const showFooter = tableData.showFooter !== false
 
   const html = renderTableHtml({
     topology: node.table.topology,
     props,
     unit: 'mm',
+    elementHeight: node.height,
     tableStyle: 'height:100%',
     cellRenderer: cell => cell.content?.text || '',
     rowDecorator: (ri) => {
       const row = node.table.topology.rows[ri]
       if (!row)
         return {}
+      // Viewer: skip hidden header/footer rows entirely
+      if (row.role === 'header' && !showHeader)
+        return { skip: true }
+      if (row.role === 'footer' && !showFooter)
+        return { skip: true }
       const bg = row.role === 'header'
         ? props.headerBackground
         : row.role === 'footer'

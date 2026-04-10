@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { PropSchema } from '../types'
 import type { PagePropertyContext, PagePropertyDescriptor, PagePropertyGroup } from '../page-properties'
-import { ClearBindingCommand, UpdateDocumentCommand, UpdateMaterialPropsCommand, UpdatePageCommand } from '@easyink/core'
+import { ClearBindingCommand, getByPath, UpdateDocumentCommand, UpdateMaterialPropsCommand, UpdatePageCommand } from '@easyink/core'
 import { PAPER_PRESETS } from '@easyink/shared'
 import { EiInput, EiPanel, EiSwitch } from '@easyink/ui'
 import { computed, shallowRef, watchEffect } from 'vue'
@@ -233,7 +233,7 @@ function clearBinding(nodeId: string) {
             v-for="schema in schemas"
             :key="schema.key"
             :schema="schema"
-            :value="(selectedElement.props as Record<string, unknown>)[schema.key]"
+            :value="getByPath(selectedElement.props as Record<string, unknown>, schema.key)"
             :disabled="schema.disabled ? schema.disabled(selectedElement.props as Record<string, unknown>) : false"
             :fonts="fontList"
             :t="store.t.bind(store)"
