@@ -1,6 +1,9 @@
-import type { TableDataSchema, TableNode } from '@easyink/schema'
+import type { TableNode } from '@easyink/schema'
 import type { CellRect } from './types'
 import {
+  IconAlignBottom,
+  IconAlignMiddle,
+  IconAlignTop,
   IconTableInsertColLeft,
   IconTableInsertColRight,
   IconTableInsertRowAbove,
@@ -872,37 +875,39 @@ function renderToolbar(
     containers.requestTransition('cell-selected')
   })
 
-  // ── Visibility toggles (table-data header/footer only) ──
-  if (kind === 'data' && shared.delegate.commitToggleVisibility) {
-    addSep()
-    const tableData = initNode?.table as TableDataSchema | undefined
-    const headerVisible = tableData?.showHeader !== false
-    const footerVisible = tableData?.showFooter !== false
+  addSep()
 
-    addBtn(
-      headerVisible ? t('designer.table.hideHeader') : t('designer.table.showHeader'),
-      headerVisible ? '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>' : '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>',
-      () => {
-        const n = getNode()
-        if (!n)
-          return
-        shared.delegate.commitToggleVisibility!(n, 'showHeader', !headerVisible)
-        containers.requestTransition('cell-selected')
-      },
-    )
+  addBtn(t('designer.table.alignTop'), IconAlignTop, () => {
+    const n = getNode()
+    if (!n || !shared.selectedCell)
+      return
+    shared.delegate.commitCellUpdate(n, shared.selectedCell.row, shared.selectedCell.col, {
+      typography: { verticalAlign: 'top' },
+    })
+    containers.requestTransition('cell-selected')
+  })
 
-    addBtn(
-      footerVisible ? t('designer.table.hideFooter') : t('designer.table.showFooter'),
-      footerVisible ? '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>' : '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>',
-      () => {
-        const n = getNode()
-        if (!n)
-          return
-        shared.delegate.commitToggleVisibility!(n, 'showFooter', !footerVisible)
-        containers.requestTransition('cell-selected')
-      },
-    )
-  }
+  addBtn(t('designer.table.alignMiddle'), IconAlignMiddle, () => {
+    const n = getNode()
+    if (!n || !shared.selectedCell)
+      return
+    shared.delegate.commitCellUpdate(n, shared.selectedCell.row, shared.selectedCell.col, {
+      typography: { verticalAlign: 'middle' },
+    })
+    containers.requestTransition('cell-selected')
+  })
+
+  addBtn(t('designer.table.alignBottom'), IconAlignBottom, () => {
+    const n = getNode()
+    if (!n || !shared.selectedCell)
+      return
+    shared.delegate.commitCellUpdate(n, shared.selectedCell.row, shared.selectedCell.col, {
+      typography: { verticalAlign: 'bottom' },
+    })
+    containers.requestTransition('cell-selected')
+  })
+
+  // ── end of toolbar ──
 
   containers.toolbar.appendChild(row)
   cleanupFns.push(() => row.remove())

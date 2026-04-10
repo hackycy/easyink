@@ -238,6 +238,9 @@ const zhCN: LocaleMessages = {
       alignLeft: '左对齐',
       alignCenter: '居中对齐',
       alignRight: '右对齐',
+      alignTop: '顶部对齐',
+      alignMiddle: '垂直居中',
+      alignBottom: '底部对齐',
     },
     context: {
       copy: '复制',

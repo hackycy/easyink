@@ -21,7 +21,7 @@ export const TABLE_TYPOGRAPHY_DEFAULTS: TableTypography = {
   lineHeight: 1.2,
   letterSpacing: 0,
   textAlign: 'left',
-  verticalAlign: 'top',
+  verticalAlign: 'middle',
 }
 
 export const TABLE_BASE_DEFAULTS: TableBaseProps = {
