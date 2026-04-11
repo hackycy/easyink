@@ -50,6 +50,7 @@
 | 22 | [关键设计决策记录](./22-design-decisions.md) | 当前统一 ADR 基线与已废弃前提 |
 | 23 | [表格物料体系 v2 重设计](./23-table-v2-redesign.md) | table-static/table-data breaking change 重设计：typography、staticBinding、单行约束、双层防护、占位行 |
 | 24 | [属性面板动态化](./24-dynamic-property-panel.md) | PropertyPanelOverlay 命令式推送、叠加层渲染、继承 placeholder、自定义编辑器、BindingSection 上下文切换 |
+| 25 | [数据源展示控制与拖拽绑定协议](./25-datasource-drop-protocol.md) | 物料驱动的面板 section 过滤、DatasourceDropHandler 通用拖拽协议、表格 drop 实现、视觉反馈 |
 
 ## 补充说明
 

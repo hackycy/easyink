@@ -42,6 +42,70 @@ export interface MaterialDesignerExtension {
   deepEditing?: DeepEditingDefinition
   /** Total visual height in the designer when the material renders virtual content beyond node.height (e.g. placeholder rows). */
   getVisualHeight?: (node: MaterialNode) => number
+  /**
+   * Datasource drag-and-drop handler. Materials implement this to take over
+   * dragOver detection and drop binding instead of the default BindFieldCommand.
+   * When absent, the designer falls back to default behavior (whole element as drop zone).
+   */
+  datasourceDrop?: DatasourceDropHandler
+}
+
+// ─── Datasource Drop Protocol ────────────────────────────────────
+
+/** Information about the field being dragged from the DataSourcePanel. */
+export interface DatasourceFieldInfo {
+  sourceId: string
+  sourceName?: string
+  sourceTag?: string
+  fieldPath: string
+  fieldKey?: string
+  fieldLabel?: string
+  use?: string
+}
+
+/**
+ * Drop zone descriptor returned by onDragOver.
+ * Designer uses this to render unified visual feedback.
+ */
+export interface DatasourceDropZone {
+  /** 'accepted' = green highlight, 'rejected' = red forbidden marker */
+  status: 'accepted' | 'rejected'
+  /** Highlight rectangle in material-local coordinates (relative to element top-left) */
+  rect: { x: number, y: number, w: number, h: number }
+  /** Optional hint text (field name, reject reason, etc.) */
+  label?: string
+}
+
+/**
+ * Handler that materials implement to control datasource drag-and-drop behavior.
+ * Designer calls onDragOver during hover to get visual feedback data,
+ * and onDrop when the user releases the mouse to execute the actual binding.
+ */
+export interface DatasourceDropHandler {
+  /**
+   * Called on dragOver. Material computes the drop zone and returns a descriptor.
+   * @param field - The datasource field being dragged
+   * @param point - Cursor position in material-local coordinates (relative to element top-left)
+   * @param node - Current material node
+   * @returns Drop zone descriptor, or null if this point does not accept a drop
+   */
+  onDragOver: (
+    field: DatasourceFieldInfo,
+    point: { x: number, y: number },
+    node: MaterialNode,
+  ) => DatasourceDropZone | null
+
+  /**
+   * Called on drop. Material executes the actual binding command.
+   * @param field - The datasource field being dropped
+   * @param point - Drop position in material-local coordinates
+   * @param node - Current material node
+   */
+  onDrop: (
+    field: DatasourceFieldInfo,
+    point: { x: number, y: number },
+    node: MaterialNode,
+  ) => void
 }
 
 /** Factory that receives a context and returns a material extension instance. */

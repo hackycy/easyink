@@ -1,5 +1,5 @@
 import type { DesignerStore } from '../store/designer-store'
-import type { MaterialCapabilities, MaterialCatalogEntry, MaterialDefinition, MaterialExtensionFactory } from '../types'
+import type { MaterialCapabilities, MaterialCatalogEntry, MaterialDefinition, MaterialExtensionFactory, PanelSectionId } from '../types'
 
 import {
   BARCODE_CAPABILITIES,
@@ -91,6 +91,17 @@ interface MaterialEntry {
   capabilities: MaterialCapabilities
   createDefaultNode: MaterialDefinition['createDefaultNode']
   factory: MaterialExtensionFactory
+  sectionFilter?: MaterialDefinition['sectionFilter']
+}
+
+/**
+ * Table materials hide element-level BindingSection.
+ * Cell-level binding is shown via PropertyPanelOverlay during deep editing.
+ */
+function tableSectionFilter(sectionId: PanelSectionId): boolean {
+  if (sectionId === 'binding')
+    return false
+  return true
 }
 
 const MATERIALS: MaterialEntry[] = [
@@ -174,6 +185,7 @@ const MATERIALS: MaterialEntry[] = [
     capabilities: TABLE_STATIC_CAPABILITIES,
     createDefaultNode: createTableStaticNode,
     factory: createTableStaticExtension,
+    sectionFilter: tableSectionFilter,
   },
   {
     type: TABLE_DATA_TYPE,
@@ -183,6 +195,7 @@ const MATERIALS: MaterialEntry[] = [
     capabilities: TABLE_DATA_CAPABILITIES,
     createDefaultNode: createTableDataNode,
     factory: createTableDataExtension,
+    sectionFilter: tableSectionFilter,
   },
   {
     type: CHART_TYPE,
@@ -255,6 +268,7 @@ export function registerBuiltinMaterials(store: DesignerStore): void {
       capabilities: entry.capabilities,
       props: getPropSchemas(entry.type),
       createDefaultNode: entry.createDefaultNode,
+      sectionFilter: entry.sectionFilter,
     }
 
     store.registerMaterial(definition)

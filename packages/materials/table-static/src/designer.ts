@@ -1,9 +1,10 @@
-import type { DeepEditingDefinition, MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
+import type { DatasourceDropHandler, DeepEditingDefinition, MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
 import type { TableDeepEditingDelegate } from '@easyink/material-table-kernel'
-import type { MaterialNode, TableNode } from '@easyink/schema'
+import type { BindingRef, MaterialNode, TableNode } from '@easyink/schema'
 import type { UnitType } from '@easyink/shared'
 import type { TableStaticProps } from './schema'
 import {
+  BindStaticCellCommand,
   ClearStaticCellBindingCommand,
   InsertTableColumnCommand,
   InsertTableRowCommand,
@@ -17,7 +18,7 @@ import {
   UpdateTableCellCommand,
   UpdateTableCellTypographyCommand,
 } from '@easyink/core'
-import { CELL_PROP_SCHEMAS, CellBorderEditor, createTableDeepEditing, escapeHtml, renderTableHtml } from '@easyink/material-table-kernel'
+import { CELL_PROP_SCHEMAS, CellBorderEditor, computeCellRect, createTableDeepEditing, escapeHtml, hitTestGridCell, renderTableHtml, resolveMergeOwner } from '@easyink/material-table-kernel'
 import { isTableNode } from '@easyink/schema'
 
 function buildHtml(node: MaterialNode, unit: UnitType, context: MaterialExtensionContext): string {
@@ -191,6 +192,46 @@ function createDelegate(context: MaterialExtensionContext): TableDeepEditingDele
   }
 }
 
+function createDatasourceDropHandler(context: MaterialExtensionContext): DatasourceDropHandler {
+  return {
+    onDragOver(field, point, node) {
+      if (!isTableNode(node))
+        return null
+
+      const gridCell = hitTestGridCell(node.table.topology, node.width, node.height, point.x, point.y)
+      if (!gridCell)
+        return null
+      const cell = resolveMergeOwner(node.table.topology, gridCell.row, gridCell.col)
+      const cellRect = computeCellRect(node.table.topology, node.width, node.height, cell.row, cell.col)
+      if (!cellRect)
+        return null
+
+      return { status: 'accepted', rect: cellRect, label: field.fieldLabel }
+    },
+
+    onDrop(field, point, node) {
+      if (!isTableNode(node))
+        return
+
+      const gridCell = hitTestGridCell(node.table.topology, node.width, node.height, point.x, point.y)
+      if (!gridCell)
+        return
+      const cell = resolveMergeOwner(node.table.topology, gridCell.row, gridCell.col)
+
+      const binding: BindingRef = {
+        sourceId: field.sourceId,
+        sourceName: field.sourceName,
+        sourceTag: field.sourceTag,
+        fieldPath: field.fieldPath,
+        fieldKey: field.fieldKey,
+        fieldLabel: field.fieldLabel,
+      }
+
+      context.commitCommand(new BindStaticCellCommand(node, cell.row, cell.col, binding))
+    },
+  }
+}
+
 /**
  * Adapt table-kernel phases to designer DeepEditingDefinition.
  * The phase interfaces are structurally identical (TableNode extends MaterialNode),
@@ -214,5 +255,6 @@ export function createTableStaticExtension(context: MaterialExtensionContext): M
       return nodeSignal.subscribe(render)
     },
     deepEditing: buildDeepEditing(delegate),
+    datasourceDrop: createDatasourceDropHandler(context),
   }
 }

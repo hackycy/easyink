@@ -58,6 +58,9 @@ export type { CommandRecord, InternalHooks, MaterialRenderPayload, PagePlanningC
 
 export type {
   ContextAction,
+  DatasourceDropHandler,
+  DatasourceDropZone,
+  DatasourceFieldInfo,
   DeepEditingDefinition,
   DeepEditingPhase,
   InternalResizeHandle,

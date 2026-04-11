@@ -1,9 +1,10 @@
-import type { DeepEditingDefinition, MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
+import type { DatasourceDropHandler, DeepEditingDefinition, MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
 import type { TableDeepEditingDelegate } from '@easyink/material-table-kernel'
-import type { MaterialNode, TableDataSchema, TableNode } from '@easyink/schema'
+import type { BindingRef, MaterialNode, TableDataSchema, TableNode } from '@easyink/schema'
 import type { UnitType } from '@easyink/shared'
 import type { TableDataProps } from './schema'
 import {
+  BindTableSourceCommand,
   InsertTableColumnCommand,
   InsertTableRowCommand,
   MergeTableCellsCommand,
@@ -16,7 +17,7 @@ import {
   UpdateTableCellCommand,
   UpdateTableCellTypographyCommand,
 } from '@easyink/core'
-import { CELL_PROP_SCHEMAS, CellBorderEditor, computeRowScale, createTableDeepEditing, escapeHtml, renderTableHtml } from '@easyink/material-table-kernel'
+import { CELL_PROP_SCHEMAS, CellBorderEditor, computeCellRect, computeRowHeights, computeRowScale, createTableDeepEditing, escapeHtml, hitTestGridCell, renderTableHtml, resolveMergeOwner } from '@easyink/material-table-kernel'
 import { isTableNode } from '@easyink/schema'
 
 const ROLE_BG_MAP: Record<string, keyof TableDataProps> = {
@@ -256,6 +257,158 @@ function createDelegate(context: MaterialExtensionContext): TableDeepEditingDele
   }
 }
 
+const PLACEHOLDER_ROW_COUNT = 2
+
+/**
+ * Compute the extra visual height added by virtual placeholder rows.
+ */
+function computePlaceholderHeight(node: TableNode): number {
+  const repeatRow = node.table.topology.rows.find(r => r.role === 'repeat-template')
+  if (!repeatRow)
+    return 0
+  const rowScale = computeRowScale(node.table.topology.rows, node.height)
+  return repeatRow.height * rowScale * PLACEHOLDER_ROW_COUNT
+}
+
+/**
+ * Hit-test adjusted for virtual placeholder rows.
+ * - Points in the placeholder region return null (inert)
+ * - Points in the footer region are remapped by subtracting placeholder height
+ */
+function hitTestWithPlaceholders(
+  node: TableNode,
+  relX: number,
+  relY: number,
+): { row: number, col: number } | null {
+  const repeatIdx = node.table.topology.rows.findIndex(r => r.role === 'repeat-template')
+  if (repeatIdx < 0)
+    return hitTestGridCell(node.table.topology, node.width, node.height, relX, relY)
+
+  const rowHeights = computeRowHeights(node.table.topology.rows, node.height)
+  let repeatBottom = 0
+  for (let i = 0; i <= repeatIdx; i++)
+    repeatBottom += rowHeights[i]!
+
+  // Above or within header + repeat-template rows: normal hit-test
+  if (relY <= repeatBottom)
+    return hitTestGridCell(node.table.topology, node.width, node.height, relX, relY)
+
+  const ph = computePlaceholderHeight(node)
+
+  // Within placeholder rows: inert zone, reject drop
+  if (relY <= repeatBottom + ph)
+    return null
+
+  // Below placeholders (footer region): remap Y by subtracting placeholder height
+  return hitTestGridCell(node.table.topology, node.width, node.height, relX, relY - ph)
+}
+
+/**
+ * Compute cell rect adjusted for placeholder rows.
+ * Footer cells (after repeat-template) are offset downward by placeholder height.
+ */
+function computeCellRectWithPlaceholders(
+  node: TableNode,
+  row: number,
+  col: number,
+): { x: number, y: number, w: number, h: number } | null {
+  const rect = computeCellRect(node.table.topology, node.width, node.height, row, col)
+  if (!rect)
+    return null
+
+  const repeatIdx = node.table.topology.rows.findIndex(r => r.role === 'repeat-template')
+  if (repeatIdx < 0 || row <= repeatIdx)
+    return rect
+
+  // Footer cells: offset Y by placeholder height
+  const ph = computePlaceholderHeight(node)
+  return { x: rect.x, y: rect.y + ph, w: rect.w, h: rect.h }
+}
+
+function createDatasourceDropHandler(context: MaterialExtensionContext): DatasourceDropHandler {
+  return {
+    onDragOver(field, point, node) {
+      if (!isTableNode(node))
+        return null
+      const table = node.table as TableDataSchema
+
+      // Reject mismatching sourceId (skip when sourceId is empty — browser blocks getData during dragover)
+      if (field.sourceId && table.source && table.source.sourceId !== field.sourceId) {
+        const ph = computePlaceholderHeight(node)
+        return {
+          status: 'rejected',
+          rect: { x: 0, y: 0, w: node.width, h: node.height + ph },
+          label: context.t('designer.dataSource.sourceConflict'),
+        }
+      }
+
+      // Hit-test cell (placeholder-aware)
+      const gridCell = hitTestWithPlaceholders(node, point.x, point.y)
+      if (!gridCell)
+        return null
+      const cell = resolveMergeOwner(table.topology, gridCell.row, gridCell.col)
+      const cellRect = computeCellRectWithPlaceholders(node, cell.row, cell.col)
+      if (!cellRect)
+        return null
+
+      return { status: 'accepted', rect: cellRect, label: field.fieldLabel }
+    },
+
+    onDrop(field, point, node) {
+      if (!isTableNode(node))
+        return
+      const table = node.table as TableDataSchema
+
+      // Auto-set table.source on first drop
+      if (!table.source) {
+        const collectionPath = getCollectionPath(field.fieldPath)
+        const sourceRef: BindingRef = {
+          sourceId: field.sourceId,
+          sourceName: field.sourceName,
+          sourceTag: field.sourceTag,
+          fieldPath: collectionPath,
+        }
+        context.commitCommand(new BindTableSourceCommand(node, sourceRef))
+      }
+      else if (table.source.sourceId !== field.sourceId) {
+        return
+      }
+
+      // Hit-test cell (placeholder-aware)
+      const gridCell = hitTestWithPlaceholders(node, point.x, point.y)
+      if (!gridCell)
+        return
+      const cell = resolveMergeOwner(table.topology, gridCell.row, gridCell.col)
+
+      // Re-read node after BindTableSourceCommand may have mutated it
+      const updatedNode = context.getNode(node.id)
+      if (!updatedNode || !isTableNode(updatedNode))
+        return
+      const currentSource = (updatedNode.table as TableDataSchema).source
+      if (!currentSource)
+        return
+
+      const cellBinding: BindingRef = {
+        sourceId: currentSource.sourceId,
+        sourceName: currentSource.sourceName,
+        sourceTag: currentSource.sourceTag,
+        fieldPath: field.fieldPath,
+        fieldKey: field.fieldKey,
+        fieldLabel: field.fieldLabel,
+      }
+
+      context.commitCommand(new UpdateTableCellCommand(updatedNode, cell.row, cell.col, { binding: cellBinding }))
+    },
+  }
+}
+
+/** Extract collection path from a field path (e.g. 'orders/items/name' -> 'orders/items') */
+function getCollectionPath(fieldPath: string): string {
+  const sep = fieldPath.includes('/') ? '/' : '.'
+  const lastSep = fieldPath.lastIndexOf(sep)
+  return lastSep > 0 ? fieldPath.substring(0, lastSep) : fieldPath
+}
+
 function buildDeepEditing(delegate: TableDeepEditingDelegate): DeepEditingDefinition {
   return createTableDeepEditing(delegate) as unknown as DeepEditingDefinition
 }
@@ -273,6 +426,7 @@ export function createTableDataExtension(context: MaterialExtensionContext): Mat
       return nodeSignal.subscribe(render)
     },
     deepEditing: buildDeepEditing(delegate),
+    datasourceDrop: createDatasourceDropHandler(context),
     getVisualHeight(node) {
       if (!isTableNode(node))
         return node.height

@@ -296,6 +296,7 @@ const zhCN: LocaleMessages = {
       field: '字段',
       path: '路径',
       usage: '显示格式',
+      sourceConflict: '数据源不匹配',
     },
     history: {
       title: '历史记录',

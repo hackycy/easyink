@@ -97,6 +97,17 @@ export interface TemplateLibraryState {
   selectedTemplateId?: string
 }
 
+// ─── Panel Section Filter ─────────────────────────────────────────
+
+/** Identifiers for the sections in PropertiesPanel. */
+export type PanelSectionId = 'geometry' | 'props' | 'overlay' | 'binding' | 'visibility'
+
+/** Context passed to MaterialDefinition.sectionFilter for dynamic decisions. */
+export interface SectionFilterContext {
+  node: MaterialNode
+  deepEditing: DeepEditingRuntimeState
+}
+
 // ─── Material Definition ───────────────────────────────────────────
 
 export interface MaterialDefinition {
@@ -107,6 +118,11 @@ export interface MaterialDefinition {
   capabilities: MaterialCapabilities
   props: PropSchema[]
   createDefaultNode: (input?: Partial<MaterialNode>) => MaterialNode
+  /**
+   * Dynamic filter for PropertiesPanel sections.
+   * Return false to hide a section. When absent, all sections are shown.
+   */
+  sectionFilter?: (sectionId: PanelSectionId, context: SectionFilterContext) => boolean
 }
 
 export interface MaterialCapabilities {
@@ -156,6 +172,9 @@ export interface MaterialCatalogEntry {
 
 export type {
   ContextAction,
+  DatasourceDropHandler,
+  DatasourceDropZone,
+  DatasourceFieldInfo,
   DeepEditingDefinition,
   DeepEditingPhase,
   InternalResizeHandle,

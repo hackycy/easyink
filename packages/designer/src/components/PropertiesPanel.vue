@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Component } from 'vue'
-import type { PropSchema } from '../types'
+import type { PanelSectionId, PropSchema } from '../types'
 import type { PagePropertyContext, PagePropertyDescriptor, PagePropertyGroup } from '../page-properties'
 import { ClearBindingCommand, getByPath, UpdateDocumentCommand, UpdateMaterialPropsCommand, UpdatePageCommand, UpdateTableVisibilityCommand } from '@easyink/core'
 import { PAPER_PRESETS } from '@easyink/shared'
@@ -94,6 +94,21 @@ const hideBindingSection = computed(() => {
 
 function handleClearExternalBinding(bindIndex?: number) {
   overlay.value?.clearBinding?.(bindIndex)
+}
+
+// ─── Section Filter ─────────────────────────────────────────────────
+
+function isSectionVisible(sectionId: PanelSectionId): boolean {
+  const el = selectedElement.value
+  if (!el)
+    return true
+  const def = store.getMaterial(el.type)
+  if (!def?.sectionFilter)
+    return true
+  return def.sectionFilter(sectionId, {
+    node: el,
+    deepEditing: store.deepEditing,
+  })
 }
 
 // ─── Page property descriptor system ─────────────────────────────
@@ -275,7 +290,7 @@ function readPropValue(schema: PropSchema): unknown {
     <!-- Element properties: only when a single element is selected -->
     <template v-if="selectedElement">
       <!-- Geometry -->
-      <EiPanel :title="`${store.t('designer.property.position')} / ${store.t('designer.property.size')}`" collapsible flat>
+      <EiPanel v-if="isSectionVisible('geometry')" :title="`${store.t('designer.property.position')} / ${store.t('designer.property.size')}`" collapsible flat>
         <div class="ei-properties-panel__grid">
           <EiInput
             label="X"
@@ -317,6 +332,7 @@ function readPropValue(schema: PropSchema): unknown {
       </EiPanel>
 
       <!-- Material-specific properties (PropSchema-driven) -->
+      <template v-if="isSectionVisible('props')">
       <EiPanel
         v-for="[group, schemas] in groupedSchemas"
         :key="group"
@@ -337,9 +353,10 @@ function readPropValue(schema: PropSchema): unknown {
           />
         </div>
       </EiPanel>
+      </template>
 
       <!-- Overlay layer: deep editing context properties -->
-      <template v-if="overlay">
+      <template v-if="overlay && isSectionVisible('overlay')">
         <EiPanel
           v-for="[group, schemas] in overlayGroupedSchemas"
           :key="`overlay-${group}`"
@@ -366,7 +383,7 @@ function readPropValue(schema: PropSchema): unknown {
       </template>
 
       <!-- Data binding -->
-      <EiPanel v-if="!hideBindingSection" :title="store.t('designer.property.dataBinding')" collapsible flat>
+      <EiPanel v-if="!hideBindingSection && isSectionVisible('binding')" :title="store.t('designer.property.dataBinding')" collapsible flat>
         <BindingSection
           :element="selectedElement"
           :t="store.t.bind(store)"
@@ -378,7 +395,7 @@ function readPropValue(schema: PropSchema): unknown {
       </EiPanel>
 
       <!-- Visibility / Lock -->
-      <EiPanel :title="store.t('designer.property.style')" collapsible flat>
+      <EiPanel v-if="isSectionVisible('visibility')" :title="store.t('designer.property.style')" collapsible flat>
         <div class="ei-properties-panel__fields">
           <EiSwitch
             :label="store.t('designer.property.hidden')"

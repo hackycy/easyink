@@ -67,7 +67,7 @@ const { onCanvasPointerDown } = useMarqueeSelect({
   marqueeRef: marqueeRect,
 })
 
-const { onDragOver: onPageDragOver, onDrop: onPageDrop } = useDatasourceDrop({
+const { onDragOver: onPageDragOver, onDrop: onPageDrop, onDragLeave: onPageDragLeave, cleanupOverlay } = useDatasourceDrop({
   store,
   getPageEl: () => pageRef.value,
 })
@@ -92,6 +92,10 @@ const deepEditing = useDeepEditing({
 function handlePageDragOver(e: DragEvent) {
   onPageDragOver(e)
   onMaterialDragOver(e)
+}
+
+function handlePageDragLeave(e: DragEvent) {
+  onPageDragLeave(e)
 }
 
 function handlePageDrop(e: DragEvent) {
@@ -341,6 +345,7 @@ onMounted(() => {
 onUnmounted(() => {
   containerObserver.disconnect()
   cursorPos.value = null
+  cleanupOverlay()
 })
 </script>
 
@@ -360,6 +365,7 @@ onUnmounted(() => {
         class="ei-canvas-page"
         :style="pageStyle"
         @dragover="handlePageDragOver"
+        @dragleave="handlePageDragLeave"
         @drop="handlePageDrop"
       >
         <!-- Grid overlay -->
