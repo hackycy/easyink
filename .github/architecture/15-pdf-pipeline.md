@@ -120,5 +120,5 @@ await exportRuntime.exportDocument({ schema, data, dataSources, entry: 'preview'
 
 - 不反向污染 `@easyink/core` 和 `@easyink/schema` 的数据模型
 - 不要求模板层重新引入动态计算 DSL 或导出专用 DSL
-- 输出适配器优先挂在独立导出运行时扩展面，而不是回退到旧 `renderer` 中心模型
+- 输出适配器挂在独立导出运行时扩展面
 - 导出依赖的加载失败要以诊断事件暴露给 Designer 和宿主

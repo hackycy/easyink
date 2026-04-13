@@ -1,6 +1,6 @@
 # 11. 物料体系
 
-EasyInk 的物料体系要覆盖报表设计器里的“内容元素”和“结构元素”两类对象，而不是只围绕文本、图片这类基础块。第一轮文档已经明确了 `table / container / chart / svg / relation` 是一级类别，第二轮修订要把“一级类别”继续拆成真实可实现的目录和属性矩阵。
+EasyInk 的物料体系覆盖”内容元素”和”结构元素”两类对象。`table / container / chart / svg / relation` 是一级类别。
 
 ## 11.1 物料定义
 
@@ -157,8 +157,6 @@ interface MaterialCapabilities {
 
 以下物料必须按一级系统建设，而不是当成普通盒子补丁处理。
 
-> **v2 重设计**：table-static 和 table-data 经过 breaking change 重设计，详见 [23-table-v2-redesign](./23-table-v2-redesign.md)。
-
 ### `table-static`
 
 它需要：
@@ -197,6 +195,20 @@ table-data:    rotatable=false, resizable=true, bindable=true, multiBinding=true
 ```
 
 深度编辑能力通过扩展协议的 `deepEditing` FSM 定义声明，不再通过 capability 标志。
+
+### 表格 DatasourceDropHandler 实现
+
+table-data 和 table-static 均实现 `DatasourceDropHandler` 协议：
+
+**table-data**：
+- `onDragOver`：hitTestGridCell -> resolveMergeOwner -> computeCellRect。repeat-template 行检查字段集合前缀一致性（`getFieldCollectionPrefix`），不一致返回 `rejected`；header/footer/normal 行直接 `accepted`。
+- `onDrop`：repeat-template 行通过 `UpdateTableCellCommand` 设置 `cell.binding`；header/footer/normal 行通过 `BindStaticCellCommand` 设置 `cell.staticBinding`。
+
+**table-static**：
+- `onDragOver`：hitTestGridCell -> resolveMergeOwner -> computeCellRect，无约束，直接 `accepted`。
+- `onDrop`：`BindStaticCellCommand` 设置 `cell.staticBinding`。
+
+复用 `@easyink/material-table-kernel` 的 `hitTestGridCell`、`resolveMergeOwner`、`computeCellRect` 函数。
 
 ### 深度编辑工具栏
 
@@ -377,7 +389,9 @@ interface MaterialExtensionContext {
   getSelection(): SelectionState
   /** 指令能力：提交 command、请求属性面板切换 */
   commitCommand(command: Command): void
-  requestPropertyPanel(descriptor: PropertyPanelRequest): void
+  /** 推送属性面板叠加层（PropertyPanelOverlay），用于 deep editing 阶段展示上下文相关属性。
+   *  推送 null 清除叠加层。详见 10-designer-interaction 10.5 节 PropertyPanelOverlay 动态叠加层。 */
+  requestPropertyPanel(overlay: PropertyPanelOverlay | null): void
   emit(event: string, payload: unknown): void
   on(event: string, handler: (...args: unknown[]) => void): () => void
 }
@@ -391,6 +405,36 @@ interface MaterialDesignerExtension {
 
   /** 声明式 FSM 定义（可选，仅复杂物料提供） */
   deepEditing?: DeepEditingDefinition
+
+  /** 数据源拖拽绑定协议（可选）。
+   *  未实现时自动回退到默认行为：整个元素作为 drop zone、drop 时 BindFieldCommand 绑定到 node.binding。
+   *  复杂物料（table/chart/container）通过此协议自定义 drop 行为。 */
+  datasourceDrop?: DatasourceDropHandler
+}
+
+/** 数据源拖拽处理器 */
+interface DatasourceDropHandler {
+  /** dragOver 时调用，返回 drop zone 描述符或 null（不接受） */
+  onDragOver(field: DatasourceFieldInfo, point: { x: number; y: number }, node: MaterialNode): DatasourceDropZone | null
+  /** drop 时调用，执行绑定命令 */
+  onDrop(field: DatasourceFieldInfo, point: { x: number; y: number }, node: MaterialNode): void
+}
+
+interface DatasourceDropZone {
+  status: 'accepted' | 'rejected'
+  /** 物料局部坐标的高亮矩形 */
+  rect: { x: number; y: number; w: number; h: number }
+  label?: string
+}
+
+interface DatasourceFieldInfo {
+  sourceId: string
+  sourceName: string
+  sourceTag: string
+  fieldPath: string
+  fieldKey: string
+  fieldLabel: string
+  use?: string
 }
 
 > **右键菜单**由 Designer 统一管理（`CanvasContextMenu`），提供通用操作（复制/剪切/粘贴/克隆/删除/层级/锁定），物料不参与右键菜单注册。物料特有的操作应通过深度编辑或属性面板暴露。

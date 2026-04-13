@@ -98,20 +98,18 @@ class CommandManager {
 
 ### 表格相关命令
 
-> **v2 更新**：命令层新增合并双层防护校验和单行约束校验，详见 [23-table-v2-redesign](./23-table-v2-redesign.md)。
-
-- `InsertTableRowCommand`（v2 更新：table-data 中若 header/footer 区域已有 1 行则拒绝在该区域插入）
+- `InsertTableRowCommand`（table-data 中若 header/footer 区域已有 1 行则拒绝在该区域插入）
 - `RemoveTableRowCommand`
 - `InsertTableColumnCommand`
 - `RemoveTableColumnCommand`
 - `ResizeTableColumnCommand`（列 ratio 修改，支持 merge）
 - `ResizeTableRowCommand`（行高修改，支持 merge）
-- `MergeTableCellsCommand`（v2 更新：双层防护。校验选区内所有行 role 一致，跨 role 合并拒绝执行。table-data 数据区(repeat-template)完全禁止合并。table-data header/footer 仅允许列方向合并(rowSpan 必须为 1)）
+- `MergeTableCellsCommand`（双层防护：校验选区内所有行 role 一致，跨 role 合并拒绝执行。table-data 数据区(repeat-template)完全禁止合并。table-data header/footer 仅允许列方向合并(rowSpan 必须为 1)）
 - `SplitTableCellCommand`（拆分已合并单元格）
-- `UpdateTableCellCommand`（v2 更新：支持写入 cell.typography 字段）
+- `UpdateTableCellCommand`（支持写入 cell.typography 字段）
 - `UpdateTableCellBorderCommand`（单边边框显隐）
-- `UpdateTableRowRoleCommand`（修改行角色，仅 table-data。v2 更新：修改后若违反单行约束则拒绝执行）
-- `UpdateTableVisibilityCommand`（v2 新增：切换 table-data 的 showHeader/showFooter）
+- `UpdateTableRowRoleCommand`（修改行角色，仅 table-data。修改后若违反单行约束则拒绝执行）
+- `UpdateTableVisibilityCommand`（切换 table-data 的 showHeader/showFooter）
 
 ### 组合命令
 

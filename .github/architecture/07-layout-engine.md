@@ -1,6 +1,6 @@
 # 7. 布局与分页引擎
 
-EasyInk 的新布局引擎不再是“单页坐标推移器”，而是“页面计划 + 容器内部布局 + 表格分页器”的组合系统。
+EasyInk 的布局引擎是”页面计划 + 容器内部布局 + 表格分页器”的组合系统。
 
 ## 7.1 三层布局职责
 
@@ -44,8 +44,6 @@ type PageMode = 'fixed' | 'stack' | 'label'
 - 需要列数、间距、复制份数
 
 ## 7.3 table-data 专项布局
-
-> **v2 更新**：新增 `showHeader`/`showFooter` 可见性标志对分页的影响，详见 [23-table-v2-redesign](./23-table-v2-redesign.md)。
 
 table-data 需要独立的分页器，而不是依赖通用元素推移。
 

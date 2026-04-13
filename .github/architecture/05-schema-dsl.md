@@ -73,7 +73,7 @@ interface BenchmarkDocumentInput {
 
 ## 5.3 页面模型
 
-第一轮文档只写了 `mode + width + height` 级别，这对复刻不够。当前页面模型应覆盖对标产品里已经被验证存在的字段族。
+页面模型覆盖打印、标签和背景语义的完整字段族。
 
 ```typescript
 interface PageSchema {
@@ -217,7 +217,7 @@ interface BenchmarkElementCompatState {
 
 ## 5.5 绑定模型
 
-当前绑定不再是只有 `path` 的最小对象，而是必须能回放 report-designer 的拖拽结果。
+绑定必须能完整回放拖拽结果，包含数据源引用、字段路径、显示格式和多参数绑定位次。
 
 ```typescript
 interface BindingRef {
@@ -301,8 +301,6 @@ const bwipBindings: BindingRef[] = [
 ## 5.6 结构物料不是普通 props
 
 数据表格、静态表格等结构物料要有独立结构模型，而不是让 `props` 自由生长。
-
-> **v2 重设计**：表格物料体系经过 breaking change 重设计，详见 [23-table-v2-redesign](./23-table-v2-redesign.md)。本节为重设计后的最新基线。
 
 ```typescript
 interface TableNode extends MaterialNode {

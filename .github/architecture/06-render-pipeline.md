@@ -27,9 +27,9 @@ MaterialRendererRegistry
   └── 打印 / 导出入口
 ```
 
-区别于旧设计的关键点：
+关键点：
 
-- 预览不是设计器画布的一部分，而是 Viewer 独立流程
+- 预览是 Viewer 独立流程，不在设计器画布中完成
 - 数据加载、字体加载、分页、缩略图生成都属于 Viewer
 - 设计器只负责嵌入和调度 Viewer
 
@@ -128,8 +128,6 @@ interface ResolvedCellBindings {
 这种预解析模式确保绑定解析集中在 Viewer pipeline 的单一阶段完成，表格 ViewerExtension 只消费解析结果，不自行调用 resolveBindingValue。
 
 ### 6.6.2 table-static staticBinding 预解析
-
-> **v2 新增**：详见 [23-table-v2-redesign](./23-table-v2-redesign.md)
 
 ViewerRuntime 在 `resolveAllBindings` 阶段检测到 table-static 节点时：
 

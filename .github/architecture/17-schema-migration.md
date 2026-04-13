@@ -77,7 +77,7 @@ class MigrationRegistry {
 ```typescript
 const registry = new MigrationRegistry()
 
-// 从 major 1 迁移到 v2：elements 从旧 materials/layout 结构迁移到当前模型
+// 从 major 1 迁移到 v2：将 materials/layout 结构迁移到当前 elements 模型
 registry.register(1, '2.0.0', (oldSchema) => {
   return {
     ...oldSchema,

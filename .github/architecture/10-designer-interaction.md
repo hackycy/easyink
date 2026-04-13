@@ -1,6 +1,6 @@
 # 10. 设计器交互层
 
-EasyInk 的 Designer 需要按“顶层双栏 + 画布内窗口系统 + 状态栏”的方式建模，而不是按固定三栏工作台建模。第一轮文档已经确立了这个方向，第二轮修订要把它落到真实交互对象和状态协议上。
+EasyInk 的 Designer 按”顶层双栏 + 画布内窗口系统 + 状态栏”的方式建模。
 
 ## 10.1 工作台骨架
 
@@ -282,7 +282,70 @@ interface PagePropertyPatch {
 - 派生控件写回时必须经过 `normalize`，避免把 `A4`、`毫米(mm)` 这类展示值直接写进模板
 - benchmark 中尚未稳定归一的页面项，先走 `compat` 或 `extensions`，不要在 Designer 层偷偷丢掉
 
-当前 EasyInk 仓库的页面属性实现仍是 `width / height / mode` 最小版。这个差距说明我们缺的不是若干控件，而是页面属性协议和兼容映射层本身。
+#### PropertyPanelOverlay 动态叠加层
+
+静态 `PropSchema[]` 无法覆盖 deep editing 阶段的动态属性需求（如表格 cell-selected 需要展示单元格级 typography/border/binding）。通过命令式推送叠加层解决：
+
+```typescript
+interface PropertyPanelOverlay {
+  id: string
+  title?: string
+  schemas: PropSchema[]
+  readValue: (key: string) => unknown
+  writeValue: (key: string, value: unknown) => void
+  readInheritedValue?: (key: string) => unknown
+  clearOverride?: (key: string) => void
+  binding?: BindingRef | BindingRef[] | null
+  clearBinding?: (bindIndex?: number) => void
+  editors?: Record<string, Component>
+}
+```
+
+物料通过 `ctx.requestPropertyPanel(overlay)` 推送，`null` 清除叠加层。
+
+**渲染模型**（从上到下）：
+
+1. **Geometry** -- 位置/尺寸，始终显示
+2. **基础层** -- `MaterialDefinition.props` 驱动，始终显示
+3. **叠加层** -- `PropertyPanelOverlay.schemas` 驱动，仅 deep editing 推送时显示。支持继承 placeholder（`readInheritedValue`）和清除覆盖（`clearOverride`）
+4. **BindingSection** -- 按规则显隐（见下）
+5. **可见性/锁定** -- 始终显示
+
+**BindingSection 显隐规则**：
+
+- overlay 提供 `binding` 且非 `null` → 展示推送的 binding
+- overlay 提供 `binding === null` → 隐藏 BindingSection
+- 无 overlay 且 `material.capabilities.bindable === false` → 隐藏
+- 否则 → 展示元素顶层 binding
+
+**自动清除**：PropertiesPanel watch `deepEditing` 状态，phase 变化或退出时自动 `setPropertyOverlay(null)`。物料在新 phase 的 `onEnter` 或 sub-selection 变化时重新推送。
+
+**自定义编辑器**：物料包可定义 Vue 组件，通过 `editors` 映射传入。面板按 `PropSchema.editor` 字段查找，匹配到自定义编辑器时渲染该组件。
+
+**sectionFilter 声明**：
+
+`MaterialDefinition` 可选声明 `sectionFilter` 控制面板 section 显隐：
+
+```typescript
+sectionFilter?: (sectionId: PanelSectionId, context: SectionFilterContext) => boolean
+// PanelSectionId = 'geometry' | 'props' | 'overlay' | 'binding' | 'visibility'
+// SectionFilterContext = { node: MaterialNode, deepEditing: DeepEditingRuntimeState }
+```
+
+返回 `false` 隐藏该 section。表格物料注册时声明 `sectionFilter: (id) => id !== 'binding'`，因为表格绑定粒度是单元格级而非元素级（cell 级 binding 通过 `PropertyPanelOverlay.binding` 在 cell-selected 阶段展示）。
+
+**状态管理**：
+
+```typescript
+// DesignerStore 新增 reactive 状态
+private _propertyOverlay: PropertyPanelOverlay | null = null
+setPropertyOverlay(overlay: PropertyPanelOverlay | null): void
+get propertyOverlay(): PropertyPanelOverlay | null
+```
+
+`MaterialExtensionContext.requestPropertyPanel(overlay)` 内部调用 `store.setPropertyOverlay(overlay)`。
+
+**约束**：当前仅支持单叠加层、仅 deep editing 上下文、仅单选、自定义编辑器限 Vue 组件。
 
 ### 结构树窗口
 
@@ -581,6 +644,16 @@ Cell 内容为纯文本，不支持嵌套子物料。
    - **repeat-template 行**：检查新字段的集合前缀是否与同行已有 cell 一致（`getFieldCollectionPrefix()` 校验），不一致则拒绝拖入并显示提示。通过 `UpdateTableCellCommand` 设置 `cell.binding`，fieldPath 为绝对路径（如 `items/name`）。
    - **header / footer / normal 行**：通过 `BindStaticCellCommand` 设置 `cell.staticBinding`，fieldPath 为绝对路径，无集合约束。
 4. 解除绑定时，repeat-template cell 通过 `UpdateTableCellCommand` 清除 `cell.binding`，header/footer cell 通过 `ClearStaticCellBindingCommand` 清除 `cell.staticBinding`。
+
+### 拖拽视觉反馈
+
+拖拽数据源字段到画布时，Designer 统一渲染 drop zone overlay（物料只返回数据描述符，不碰 DOM）：
+
+- `accepted`：绿色边框 + 半透明填充
+- `rejected`：红色边框 + 半透明填充
+- 可选 label 标签显示在矩形上方
+
+离开页面时（`onDragLeave`）隐藏 overlay。
 
 ## 10.9 画布设计态渲染
 

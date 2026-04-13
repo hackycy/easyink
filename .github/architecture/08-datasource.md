@@ -1,6 +1,6 @@
 # 8. 数据源系统
 
-EasyInk 的数据源系统是一条独立主线，不是 Designer 的字段树配件。第一轮文档已经把它从 UI 附属物里抽出来了，第二轮修订要解决的是协议深度不够的问题。
+EasyInk 的数据源系统是一条独立主线，同时服务 Designer 和 Viewer。
 
 ## 8.1 目标
 
@@ -342,9 +342,7 @@ Viewer 不再从 `table.source` 读取集合路径，而是在运行时推导：
 
 ## 8.12 table-static 独立绑定模型
 
-> **v2 新增**：详见 [23-table-v2-redesign](./23-table-v2-redesign.md)
-
-table-static 原本不支持数据源绑定（`bindable=false`）。v2 重设计后，table-static 支持单元格级独立绑定。table-data 的 header/footer/normal 行也复用同一机制。
+table-static 支持单元格级独立绑定。table-data 的 header/footer/normal 行也复用同一机制。
 
 ### 绑定字段
 
