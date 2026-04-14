@@ -132,7 +132,6 @@ const zhCN: LocaleMessages = {
       borderRight: '右',
       borderBottom: '下',
       borderLeft: '左',
-      clearOverride: '清除覆盖',
     },
     panel: {
       datasource: '数据源',

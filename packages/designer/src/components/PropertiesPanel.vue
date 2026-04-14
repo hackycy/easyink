@@ -55,16 +55,8 @@ function readOverlayValue(schema: PropSchema): unknown {
   return overlay.value?.readValue(schema.key)
 }
 
-function readOverlayInheritedValue(schema: PropSchema): unknown {
-  return overlay.value?.readInheritedValue?.(schema.key)
-}
-
 function updateOverlayProp(key: string, value: unknown) {
   overlay.value?.writeValue(key, value)
-}
-
-function clearOverlayOverride(key: string) {
-  overlay.value?.clearOverride?.(key)
 }
 
 const overlayCustomEditors = computed<Record<string, Component> | undefined>(() => {
@@ -370,13 +362,10 @@ function readPropValue(schema: PropSchema): unknown {
               :key="schema.key"
               :schema="schema"
               :value="readOverlayValue(schema)"
-              :inherited-value="readOverlayInheritedValue(schema)"
-              :can-clear-override="!!overlay.clearOverride"
               :custom-editors="overlayCustomEditors"
               :fonts="fontList"
               :t="store.t.bind(store)"
               @change="updateOverlayProp"
-              @clear-override="clearOverlayOverride"
             />
           </div>
         </EiPanel>

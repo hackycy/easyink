@@ -156,10 +156,6 @@ export interface PropertyPanelOverlay {
   readValue: (key: string) => unknown
   /** Write property value; material handles command generation */
   writeValue: (key: string, value: unknown) => void
-  /** Read inherited value for placeholder display (optional) */
-  readInheritedValue?: (key: string) => unknown
-  /** Clear override, restoring to inherited state (optional) */
-  clearOverride?: (key: string) => void
   /** Binding context: BindingRef = show, null = hide, undefined = default element binding */
   binding?: BindingRef | BindingRef[] | null
   /** Clear binding callback */

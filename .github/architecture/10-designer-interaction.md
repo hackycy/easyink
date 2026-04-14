@@ -293,8 +293,6 @@ interface PropertyPanelOverlay {
   schemas: PropSchema[]
   readValue: (key: string) => unknown
   writeValue: (key: string, value: unknown) => void
-  readInheritedValue?: (key: string) => unknown
-  clearOverride?: (key: string) => void
   binding?: BindingRef | BindingRef[] | null
   clearBinding?: (bindIndex?: number) => void
   editors?: Record<string, Component>
@@ -307,7 +305,7 @@ interface PropertyPanelOverlay {
 
 1. **Geometry** -- 位置/尺寸，始终显示
 2. **基础层** -- `MaterialDefinition.props` 驱动，始终显示
-3. **叠加层** -- `PropertyPanelOverlay.schemas` 驱动，仅 deep editing 推送时显示。支持继承 placeholder（`readInheritedValue`）和清除覆盖（`clearOverride`）
+3. **叠加层** -- `PropertyPanelOverlay.schemas` 驱动，仅 deep editing 推送时显示
 4. **BindingSection** -- 按规则显隐（见下）
 5. **可见性/锁定** -- 始终显示
 

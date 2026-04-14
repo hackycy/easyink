@@ -58,18 +58,6 @@ function createDelegate(context: MaterialExtensionContext): TableDeepEditingDele
         return undefined
       return n.table.topology.rows[row]?.cells[col]
     }
-    function getTableTypo() {
-      const n = context.getNode(nodeId)
-      if (!n)
-        return undefined
-      return (n.props as unknown as TableStaticProps).typography
-    }
-    function getTableProps() {
-      const n = context.getNode(nodeId)
-      if (!n)
-        return undefined
-      return n.props as unknown as TableStaticProps
-    }
     function getNode() {
       const n = context.getNode(nodeId)
       return n && isTableNode(n) ? n : undefined
@@ -89,14 +77,6 @@ function createDelegate(context: MaterialExtensionContext): TableDeepEditingDele
           return c.border
         return (c.typography as Record<string, unknown> | undefined)?.[key]
       },
-      readInheritedValue(key: string) {
-        if (key === 'border')
-          return undefined
-        if (key === 'padding')
-          return getTableProps()?.cellPadding
-        const typo = getTableTypo()
-        return typo ? (typo as unknown as Record<string, unknown>)[key] : undefined
-      },
       writeValue(key: string, value: unknown) {
         const n = getNode()
         if (!n)
@@ -111,20 +91,6 @@ function createDelegate(context: MaterialExtensionContext): TableDeepEditingDele
           return
         }
         context.commitCommand(new UpdateTableCellTypographyCommand(n, row, col, { [key]: value }))
-      },
-      clearOverride(key: string) {
-        const n = getNode()
-        if (!n)
-          return
-        if (key === 'padding') {
-          context.commitCommand(new UpdateTableCellCommand(n, row, col, { padding: undefined }))
-          return
-        }
-        if (key === 'border') {
-          context.commitCommand(new UpdateTableCellCommand(n, row, col, { border: undefined }))
-          return
-        }
-        context.commitCommand(new UpdateTableCellTypographyCommand(n, row, col, { [key]: undefined }))
       },
       get binding() {
         return getCell()?.staticBinding

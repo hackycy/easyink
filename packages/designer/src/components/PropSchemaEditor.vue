@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Component } from 'vue'
 import type { PropSchema } from '../types'
-import { EiBorderToggle, EiButton, EiCheckbox, EiColorPicker, EiFontPicker, EiInput, EiSelect, EiSwitch, EiTextarea } from '@easyink/ui'
+import { EiBorderToggle, EiCheckbox, EiColorPicker, EiFontPicker, EiInput, EiSelect, EiSwitch, EiTextarea } from '@easyink/ui'
 import { computed } from 'vue'
 
 const props = defineProps<{
@@ -10,17 +10,12 @@ const props = defineProps<{
   disabled?: boolean
   fonts?: Array<{ family: string, displayName: string }>
   t: (key: string) => string
-  /** Inherited value displayed as placeholder when value is undefined */
-  inheritedValue?: unknown
-  /** Whether to show "clear override" button */
-  canClearOverride?: boolean
   /** Custom editor component map: key = schema.editor value */
   customEditors?: Record<string, Component>
 }>()
 
 const emit = defineEmits<{
   change: [key: string, value: unknown]
-  clearOverride: [key: string]
 }>()
 
 const label = computed(() => props.t(props.schema.label))
@@ -42,16 +37,6 @@ const customEditorComponent = computed<Component | undefined>(() => {
   return props.customEditors[editorKey]
 })
 
-/** Whether to show inherited placeholder */
-const showInheritedPlaceholder = computed(() =>
-  props.value === undefined && props.inheritedValue !== undefined,
-)
-
-/** Whether to show the clear override button */
-const showClearOverride = computed(() =>
-  props.canClearOverride && props.value !== undefined,
-)
-
 function onUpdate(val: unknown) {
   let resolved = val
   if (props.schema.type === 'number') {
@@ -60,10 +45,6 @@ function onUpdate(val: unknown) {
       return
   }
   emit('change', props.schema.key, resolved)
-}
-
-function handleClearOverride() {
-  emit('clearOverride', props.schema.key)
 }
 </script>
 
@@ -75,7 +56,6 @@ function handleClearOverride() {
         :is="customEditorComponent"
         :schema="schema"
         :value="value"
-        :inherited-value="inheritedValue"
         :disabled="disabled"
         :fonts="fonts"
         :t="t"
@@ -90,7 +70,6 @@ function handleClearOverride() {
         :label="label"
         :model-value="(value as string) ?? ''"
         :disabled="disabled"
-        :placeholder="showInheritedPlaceholder ? String(inheritedValue) : undefined"
         @update:model-value="onUpdate"
       />
 
@@ -99,9 +78,8 @@ function handleClearOverride() {
         v-else-if="schema.type === 'number' || schema.type === 'unit'"
         :label="label"
         type="number"
-        :model-value="(value as number) ?? (showInheritedPlaceholder ? undefined : 0)"
+        :model-value="(value as number) ?? 0"
         :disabled="disabled"
-        :placeholder="showInheritedPlaceholder ? String(inheritedValue) : undefined"
         @update:model-value="onUpdate"
       />
 
@@ -188,26 +166,11 @@ function handleClearOverride() {
         @update:model-value="onUpdate"
       />
     </template>
-
-    <!-- Clear override button -->
-    <EiButton
-      v-if="showClearOverride"
-      size="sm"
-      class="ei-prop-editor__clear"
-      @click="handleClearOverride"
-    >
-      {{ t('designer.property.clearOverride') }}
-    </EiButton>
   </div>
 </template>
 
 <style scoped>
 .ei-prop-editor {
   width: 100%;
-}
-
-.ei-prop-editor__clear {
-  margin-top: 2px;
-  font-size: 11px;
 }
 </style>
