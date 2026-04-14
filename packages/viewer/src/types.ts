@@ -3,6 +3,8 @@ import type { DataAdapter, DataSourceDescriptor, UsageResolver } from '@easyink/
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import type { DiagnosticCategory, DiagnosticSeverity, ExportEntry, ExportFormat, ExportPhase, UsageRule } from '@easyink/shared'
 
+export type { DataAdapter, DataSourceDescriptor, DocumentSchema, UsageResolver }
+
 // ---------------------------------------------------------------------------
 // Viewer options & input
 // ---------------------------------------------------------------------------

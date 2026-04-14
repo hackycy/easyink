@@ -10,7 +10,7 @@
   "dependencies": {
     "@easyink/designer": "workspace:*",
     "@easyink/samples": "workspace:*",
-    "@easyink/schema": "workspace:*",
+    "@easyink/viewer": "workspace:*",
     "vue": "catalog:framework"
   },
   "devDependencies": {

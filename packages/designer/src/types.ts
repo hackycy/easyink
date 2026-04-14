@@ -1,6 +1,8 @@
 import type { DataSourceDescriptor } from '@easyink/datasource'
-import type { MaterialNode } from '@easyink/schema'
+import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import type { MaterialCategory, PropSchemaType, TemplateBackendMode, TemplateLibraryPhase } from '@easyink/shared'
+
+export type { DataSourceDescriptor, DocumentSchema }
 
 // ─── Workbench State ───────────────────────────────────────────────
 

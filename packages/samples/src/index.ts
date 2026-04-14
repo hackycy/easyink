@@ -1,6 +1,7 @@
 import type { DocumentSchema } from '@easyink/schema'
 import { SCHEMA_VERSION } from '@easyink/shared'
 
+export * from './adapter'
 export * from './datasources'
 
 export interface SampleTemplateEntry {
@@ -181,7 +182,7 @@ export const receiptTemplate: DocumentSchema = {
 /**
  * 发票示例数据。
  */
-export const invoiceDemoData = {
+export const invoiceDemoData: Record<string, unknown> = {
   company: {
     name: '示例科技有限公司',
     address: '北京市朝阳区示例街道123号',
@@ -190,12 +191,17 @@ export const invoiceDemoData = {
     number: 'INV-2026-001',
     date: '2026-04-05',
   },
+  customer: {
+    name: '测试客户公司',
+    address: '上海市浦东新区测试路456号',
+  },
   items: [
-    { name: '商品甲', qty: 10, price: 25.00 },
-    { name: '商品乙', qty: 5, price: 40.00 },
-    { name: '服务丙', qty: 1, price: 150.00 },
+    { name: '商品甲', qty: 10, price: 25.00, amount: 250.00 },
+    { name: '商品乙', qty: 5, price: 40.00, amount: 200.00 },
+    { name: '服务丙', qty: 1, price: 150.00, amount: 150.00 },
   ],
-  total: 600.00,
+  grandTotal: 600.00,
+  notes: '请于30天内付款。谢谢惠顾！',
 }
 
 /**

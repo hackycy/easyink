@@ -497,6 +497,45 @@ importers:
       '@easyink/datasource':
         specifier: workspace:*
         version: link:../datasource
+      '@easyink/material-barcode':
+        specifier: workspace:*
+        version: link:../materials/barcode
+      '@easyink/material-chart':
+        specifier: workspace:*
+        version: link:../materials/chart
+      '@easyink/material-container':
+        specifier: workspace:*
+        version: link:../materials/container
+      '@easyink/material-ellipse':
+        specifier: workspace:*
+        version: link:../materials/ellipse
+      '@easyink/material-image':
+        specifier: workspace:*
+        version: link:../materials/image
+      '@easyink/material-line':
+        specifier: workspace:*
+        version: link:../materials/line
+      '@easyink/material-qrcode':
+        specifier: workspace:*
+        version: link:../materials/qrcode
+      '@easyink/material-rect':
+        specifier: workspace:*
+        version: link:../materials/rect
+      '@easyink/material-relation':
+        specifier: workspace:*
+        version: link:../materials/relation
+      '@easyink/material-svg':
+        specifier: workspace:*
+        version: link:../materials/svg
+      '@easyink/material-table-data':
+        specifier: workspace:*
+        version: link:../materials/table-data
+      '@easyink/material-table-static':
+        specifier: workspace:*
+        version: link:../materials/table-static
+      '@easyink/material-text':
+        specifier: workspace:*
+        version: link:../materials/text
       '@easyink/schema':
         specifier: workspace:*
         version: link:../schema
@@ -512,9 +551,9 @@ importers:
       '@easyink/samples':
         specifier: workspace:*
         version: link:../packages/samples
-      '@easyink/schema':
+      '@easyink/viewer':
         specifier: workspace:*
-        version: link:../packages/schema
+        version: link:../packages/viewer
       vue:
         specifier: catalog:framework
         version: 3.5.31(typescript@6.0.2)
