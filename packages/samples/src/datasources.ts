@@ -160,81 +160,75 @@ export const sampleDataSources: DataSourceDescriptor[] = [
 // Invoice template with pre-bound text elements and table-data element
 // ---------------------------------------------------------------------------
 
-const invoiceTableNode: TableNode = {
-  id: 'inv_items_table',
-  type: 'table-data',
-  x: 10,
-  y: 56,
-  width: 190,
-  height: 24,
-  props: {
-    headerBackground: '#f5f5f5',
-    summaryBackground: '#fafafa',
-    stripedRows: false,
-    stripedColor: '#fafafa',
-    borderWidth: 0,
-  },
-  table: {
-    kind: 'data' as const,
-    topology: {
-      columns: [
-        { ratio: 0.4 },
-        { ratio: 0.15 },
-        { ratio: 0.2 },
-        { ratio: 0.25 },
-      ],
-      rows: [
-        {
-          height: 8,
-          role: 'header' as const,
-          cells: [
-            { content: { text: '品名' } },
-            { content: { text: '数量' } },
-            { content: { text: '单价' } },
-            { content: { text: '金额' } },
-          ],
-        },
-        {
-          height: 8,
-          role: 'repeat-template' as const,
-          cells: [
-            { binding: { sourceId: 'invoice', fieldPath: 'items/name', fieldLabel: '品名' } },
-            { binding: { sourceId: 'invoice', fieldPath: 'items/qty', fieldLabel: '数量' } },
-            { binding: { sourceId: 'invoice', fieldPath: 'items/price', fieldLabel: '单价' } },
-            { binding: { sourceId: 'invoice', fieldPath: 'items/amount', fieldLabel: '金额' } },
-          ],
-        },
-        {
-          height: 8,
-          role: 'footer' as const,
-          cells: [
-            { content: { text: '合计' }, colSpan: 3 },
-            {},
-            {},
-            { staticBinding: { sourceId: 'invoice', fieldPath: 'grandTotal', fieldLabel: '合计' } },
-          ],
-        },
-      ],
+function createInvoiceTableNode(): TableNode {
+  return {
+    id: 'inv_items_table',
+    type: 'table-data',
+    x: 10,
+    y: 56,
+    width: 190,
+    height: 24,
+    props: {
+      headerBackground: '#f5f5f5',
+      summaryBackground: '#fafafa',
+      stripedRows: false,
+      stripedColor: '#fafafa',
+      borderWidth: 0,
     },
-    layout: {
-      borderAppearance: 'all' as const,
-      borderWidth: 0.5,
-      borderType: 'solid' as const,
-      borderColor: '#cccccc',
-    },
-  } as TableNode['table'],
+    table: {
+      kind: 'data' as const,
+      topology: {
+        columns: [
+          { ratio: 0.4 },
+          { ratio: 0.15 },
+          { ratio: 0.2 },
+          { ratio: 0.25 },
+        ],
+        rows: [
+          {
+            height: 8,
+            role: 'header' as const,
+            cells: [
+              { content: { text: '品名' } },
+              { content: { text: '数量' } },
+              { content: { text: '单价' } },
+              { content: { text: '金额' } },
+            ],
+          },
+          {
+            height: 8,
+            role: 'repeat-template' as const,
+            cells: [
+              { binding: { sourceId: 'invoice', fieldPath: 'items/name', fieldLabel: '品名' } },
+              { binding: { sourceId: 'invoice', fieldPath: 'items/qty', fieldLabel: '数量' } },
+              { binding: { sourceId: 'invoice', fieldPath: 'items/price', fieldLabel: '单价' } },
+              { binding: { sourceId: 'invoice', fieldPath: 'items/amount', fieldLabel: '金额' } },
+            ],
+          },
+          {
+            height: 8,
+            role: 'footer' as const,
+            cells: [
+              { content: { text: '合计' }, colSpan: 3 },
+              {},
+              {},
+              { staticBinding: { sourceId: 'invoice', fieldPath: 'grandTotal', fieldLabel: '合计' } },
+            ],
+          },
+        ],
+      },
+      layout: {
+        borderAppearance: 'all' as const,
+        borderWidth: 0.5,
+        borderType: 'solid' as const,
+        borderColor: '#cccccc',
+      },
+    } as TableNode['table'],
+  }
 }
 
-export const invoiceWithTableTemplate: DocumentSchema = {
-  version: SCHEMA_VERSION,
-  unit: 'mm',
-  page: {
-    mode: 'fixed',
-    width: 210,
-    height: 297,
-  },
-  guides: { x: [], y: [] },
-  elements: [
+function createInvoiceElements(): DocumentSchema['elements'] {
+  return [
     // 公司名称（绑定）
     {
       id: 'inv_company',
@@ -370,7 +364,7 @@ export const invoiceWithTableTemplate: DocumentSchema = {
       },
     },
     // 明细表格（table-data 绑定）
-    invoiceTableNode,
+    createInvoiceTableNode(),
     // 合计（绑定）
     {
       id: 'inv_grand_total',
@@ -413,5 +407,23 @@ export const invoiceWithTableTemplate: DocumentSchema = {
         fieldLabel: '备注',
       },
     },
-  ],
+  ]
 }
+
+function createInvoiceTemplate(mode: DocumentSchema['page']['mode']): DocumentSchema {
+  return {
+    version: SCHEMA_VERSION,
+    unit: 'mm',
+    page: {
+      mode,
+      width: 210,
+      height: 297,
+    },
+    guides: { x: [], y: [] },
+    elements: createInvoiceElements(),
+  }
+}
+
+export const invoiceWithTableTemplate: DocumentSchema = createInvoiceTemplate('fixed')
+
+export const flowInvoiceTemplate: DocumentSchema = createInvoiceTemplate('stack')

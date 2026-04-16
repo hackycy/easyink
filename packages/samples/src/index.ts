@@ -1,5 +1,6 @@
 import type { DocumentSchema } from '@easyink/schema'
 import { SCHEMA_VERSION } from '@easyink/shared'
+import { flowInvoiceTemplate } from './datasources'
 
 export * from './datasources'
 
@@ -33,7 +34,7 @@ export const simpleInvoiceTemplate: DocumentSchema = {
   version: SCHEMA_VERSION,
   unit: 'mm',
   page: {
-    mode: 'fixed',
+    mode: 'stack',
     width: 210,
     height: 297,
   },
@@ -219,6 +220,12 @@ export const sampleTemplates: SampleTemplateEntry[] = [
     name: '简单发票',
     category: 'business',
     schema: simpleInvoiceTemplate,
+  },
+  {
+    id: 'flow-invoice',
+    name: '流式发票',
+    category: 'business',
+    schema: flowInvoiceTemplate,
   },
   {
     id: 'label-3col',

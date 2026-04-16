@@ -265,6 +265,7 @@ const GROUP_LABELS: Record<string, string> = {
   appearance: 'designer.property.appearance',
   border: 'designer.property.border',
   layout: 'designer.property.layout',
+  pagination: 'designer.property.pagination',
   general: 'designer.property.style',
   'table-border': 'designer.property.border',
   'table-layout': 'designer.property.layout',
@@ -371,9 +372,10 @@ function readPropValue(schema: PropSchema): unknown {
   if (schema.key.startsWith('table:')) {
     const field = schema.key.slice(6)
     const table = (el as unknown as Record<string, unknown>).table as Record<string, unknown> | undefined
-    return table ? table[field] ?? true : true
+    return table ? table[field] ?? schema.default ?? true : schema.default ?? true
   }
-  return getByPath(el.props as Record<string, unknown>, schema.key)
+  const value = getByPath(el.props as Record<string, unknown>, schema.key)
+  return value ?? schema.default
 }
 </script>
 

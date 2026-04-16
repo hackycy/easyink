@@ -421,11 +421,7 @@ export function createTableDataExtension(context: MaterialExtensionContext): Mat
     getVisualHeight(node) {
       if (!isTableNode(node))
         return node.height
-      const repeatRow = node.table.topology.rows.find(r => r.role === 'repeat-template')
-      if (!repeatRow)
-        return node.height
-      const scale = computeRowScale(node.table.topology.rows, node.height)
-      return node.height + repeatRow.height * scale * 2
+      return node.height + computePlaceholderHeight(node)
     },
   }
 }

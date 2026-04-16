@@ -1,5 +1,15 @@
 import type { PropSchema } from '../types'
 
+const STACK_LAYOUT_PROP_SCHEMAS: PropSchema[] = [
+  { key: 'layoutMode', label: 'designer.property.layoutMode', type: 'enum', group: 'layout', default: 'flow', enum: [
+    { label: 'designer.property.flow', value: 'flow' },
+    { label: 'designer.property.fixed', value: 'fixed' },
+  ] },
+  { key: 'keepTogether', label: 'designer.property.keepTogether', type: 'switch', group: 'pagination', visible: props => props.layoutMode !== 'fixed' },
+  { key: 'pageBreakBefore', label: 'designer.property.pageBreakBefore', type: 'switch', group: 'pagination', visible: props => props.layoutMode !== 'fixed' },
+  { key: 'pageBreakAfter', label: 'designer.property.pageBreakAfter', type: 'switch', group: 'pagination', visible: props => props.layoutMode !== 'fixed' },
+]
+
 // ─── Text ────────────────────────────────────────────────────────────
 
 const TEXT_PROP_SCHEMAS: PropSchema[] = [
@@ -316,7 +326,8 @@ const PROP_SCHEMA_REGISTRY: Record<string, PropSchema[]> = {
 }
 
 export function getPropSchemas(materialType: string): PropSchema[] {
-  return PROP_SCHEMA_REGISTRY[materialType] ?? []
+  const base = PROP_SCHEMA_REGISTRY[materialType] ?? []
+  return [...base, ...STACK_LAYOUT_PROP_SCHEMAS]
 }
 
 /**

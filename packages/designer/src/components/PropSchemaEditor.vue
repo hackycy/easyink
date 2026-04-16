@@ -25,7 +25,7 @@ const enumOptions = computed(() => {
   if (!props.schema.enum)
     return []
   return props.schema.enum.map(e => ({
-    label: String(e.label),
+    label: props.t(String(e.label)),
     value: e.value as string | number,
   }))
 })

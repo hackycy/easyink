@@ -1,6 +1,6 @@
 # 7. 布局与分页引擎
 
-EasyInk 的布局引擎是”页面计划 + 容器内部布局 + 表格分页器”的组合系统。
+EasyInk 的布局引擎是“测量回流 + 页面计划 + 容器内部布局 + 表格分页器”的组合系统。
 
 ## 7.1 三层布局职责
 
@@ -8,6 +8,12 @@ EasyInk 的布局引擎是”页面计划 + 容器内部布局 + 表格分页器
 
 - 决定文档是 `fixed`、`stack` 还是 `label`
 - 决定页数、分页断点、空白页策略、复制份数和标签列数
+
+### 运行时回流层
+
+- 对 table-data 等动态物料先做运行态测量
+- 在 `stack` 模式下把后续 flow 元素按内容变化做整体下推或上移
+- 对固定层元素保持原始文档坐标，并输出冲突诊断
 
 ### 区域布局层
 
@@ -38,6 +44,14 @@ type PageMode = 'fixed' | 'stack' | 'label'
 - 允许内容按段连续堆叠
 - 可转成多段预览，但不以固定页为中心模型
 
+首版流式堆叠约束：
+
+- 只在 `stack` 模式启用自动回流
+- 默认所有元素都参与 flow；显式 `layoutMode='fixed'` 的元素保留原始坐标
+- 回流规则只看文档纵向顺序：原始 `y` 更靠后的 flow 元素整体平移，保留原始间距
+- 同一原始 `y` 带内的元素互不推动，避免并排元素因排序差异互相串扰
+- `keepTogether`、`pageBreakBefore`、`pageBreakAfter` 先入 schema / UI，首版不生效
+
 ### `label`
 
 - 标签纸、多栏批量打印
@@ -61,10 +75,11 @@ table-data 需要独立的分页器，而不是依赖通用元素推移。
 
 Viewer 的 PagePlanner 与表格物料的 ViewerExtension 采用协作模式：
 
-1. PagePlanner 在布局阶段检测到 table-data 元素时，调用其 ViewerExtension 的 `measure()` 方法
+1. ViewerRuntime 在测量阶段检测到 table-data 元素时，调用其 ViewerExtension 的 `measure()` 方法
 2. 表格 ViewerExtension 负责展开 repeat-template 行（按绑定集合数据逐项生成），返回展开后的行序列和每行高度
-3. PagePlanner 根据页面剩余空间和行高决定切分点，在切分点处注入 header 行重复
-4. 最终的 `TablePagePlan` 传回表格 ViewerExtension 用于渲染
+3. `stack` 模式下，ViewerRuntime 把测量后的高度差折算为后续 flow 元素的整体平移量
+4. PagePlanner 再根据回流后的几何结果和页面高度决定切分点，在切分点处注入 header 行重复
+5. 最终的 `TablePagePlan` 传回表格 ViewerExtension 用于渲染
 
 ```typescript
 interface TablePagePlan {
@@ -120,19 +135,22 @@ interface TableMeasureContext {
 协作流程：
 
 ```
-ViewerRuntime                        PagePlanner                     表格 ViewerExtension
+ViewerRuntime                  FlowResolver             PagePlanner                     表格 ViewerExtension
     |                                    |                                   |
     |-- resolveAllBindings ------------>  |                                   |
     |   (预解析 cell binding,            |                                   |
     |    extractCollectionPath           |                                   |
     |    推导集合路径并取出数据)          |                                   |
     |                                    |                                   |
-    |-- 传递 TableMeasureContext -------->|                                   |
-    |                                    |-- measure(context) ------------->  |
-    |                                    |                                   |-- 计算每行高度
-    |                                    |                                   |-- 生成展开行序列
-    |                                    |<-- TableMeasureResult ------------|
+    |-- 传递 TableMeasureContext ------------------------------------------->  |
+    |                                                                        |-- 计算每行高度
+    |                                                                        |-- 生成展开行序列
+    |<------------------------------- TableMeasureResult ---------------------|
     |                                    |                                   |
+    |-- stack flow resolve ------------->|                                   |
+    |   (按高度差下推后续 flow 元素)     |                                   |
+    |<------------------------------- 回流后几何 -----------------------------|
+    |                                    |                                   |-- 计算每行高度
     |                                    |-- 根据页面高度切分行序列          |
     |                                    |-- 在切分点注入 header 行重复      |
     |                                    |   (仅 showHeader=true 时)         |
@@ -155,6 +173,26 @@ PagePlanner 切分完成后，为每页生成一个虚拟 `TableNode`：
 - repeat-template 行的展开结果作为具象行写入虚拟节点（不再是模板行）
 - 虚拟节点的 `width/height` 调整为当页实际尺寸
 - 表格 `ViewerExtension.render()` 接收虚拟节点，按标准 `render(node)` 接口渲染，无需感知分页逻辑
+
+## 7.3.1 stack 流式堆叠模型
+
+节点级排版属性挂在 `MaterialNode.props`：
+
+```typescript
+interface StackFlowProps {
+  layoutMode?: 'flow' | 'fixed'
+  keepTogether?: boolean
+  pageBreakBefore?: boolean
+  pageBreakAfter?: boolean
+}
+```
+
+首版解释：
+
+- `layoutMode` 缺省视为 `flow`
+- `fixed` 元素不参与下推，也不会阻止 flow 元素穿过；如果回流后发生重叠，输出 `STACK_FLOW_FIXED_OVERLAP` 诊断
+- 回流是双向的：动态内容变高时下推，变矮时上移
+- 多个动态元素允许级联，前一个元素产生的高度差会继续传递给后面的 flow 元素
 
 ## 7.4 设计器与 Viewer 的布局差异
 

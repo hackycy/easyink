@@ -17,6 +17,7 @@ import { applyBindingsToProps, projectBindings } from './binding-projector'
 import { collectFontFamilies, loadAndInjectFonts } from './font-loader'
 import { MaterialRendererRegistry } from './material-registry'
 import { renderPages } from './render-surface'
+import { applyStackFlowLayout } from './stack-flow-layout'
 
 export class ViewerRuntime {
   private _options: ViewerOptions
@@ -95,7 +96,8 @@ export class ViewerRuntime {
     this._hooks.beforePagePlan.call({ schema: this._schema, mode: this._schema.page.mode })
 
     // Stage 3.5: Measure elements that need expansion (e.g., table-data)
-    const measuredSchema = this.applyMeasure()
+    const { schema: measuredSchema, diagnostics: layoutDiagnostics } = this.applyMeasureAndLayout()
+    diagnostics.push(...layoutDiagnostics)
 
     // Stage 4: Page planning
     const plan = createPagePlan(measuredSchema)
@@ -366,14 +368,15 @@ export class ViewerRuntime {
   // Internal pipeline stages
   // ---------------------------------------------------------------------------
 
-  private applyMeasure(): DocumentSchema {
+  private applyMeasureAndLayout(): { schema: DocumentSchema, diagnostics: ViewerDiagnosticEvent[] } {
     if (!this._schema)
-      return this._schema!
+      return { schema: this._schema!, diagnostics: [] }
 
     const measureCtx: ViewerMeasureContext = { data: this._data, unit: this._schema.unit }
     let modified = false
+    const diagnostics: ViewerDiagnosticEvent[] = []
 
-    const elements = this._schema.elements.map((node) => {
+    let elements = this._schema.elements.map((node) => {
       const result = this._materialRegistry.measure(node, measureCtx)
       if (!result || (result.width === node.width && result.height === node.height))
         return node
@@ -381,9 +384,21 @@ export class ViewerRuntime {
       return { ...node, height: result.height, width: result.width }
     })
 
+    if (this._schema.page.mode === 'stack') {
+      const flowResult = applyStackFlowLayout(this._schema.elements, elements)
+      elements = flowResult.elements
+      diagnostics.push(...flowResult.diagnostics)
+      if (!modified) {
+        modified = elements.some((node, index) => {
+          const original = this._schema!.elements[index]
+          return !!original && (node.y !== original.y || node.height !== original.height || node.width !== original.width)
+        })
+      }
+    }
+
     if (!modified)
-      return this._schema
-    return { ...this._schema, elements }
+      return { schema: this._schema, diagnostics }
+    return { schema: { ...this._schema, elements }, diagnostics }
   }
 
   private async loadFonts(diagnostics: ViewerDiagnosticEvent[]): Promise<void> {
