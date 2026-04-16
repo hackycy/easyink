@@ -10,8 +10,10 @@ export interface QrcodeSvgOptions {
  * Generate a real QR code as an inline SVG string.
  * Uses a single `<path>` for all dark modules for optimal rendering performance.
  */
-export function generateQrcodeSvg(value: string, options: QrcodeSvgOptions): string {
-  const { errorCorrectionLevel, foreground, background } = options
+export function generateQrcodeSvg(value: string, options: Partial<QrcodeSvgOptions>): string {
+  const errorCorrectionLevel = options.errorCorrectionLevel || 'M'
+  const foreground = options.foreground || '#000000'
+  const background = options.background || '#ffffff'
 
   const qr = qrcode(0, errorCorrectionLevel)
   qr.addData(value)

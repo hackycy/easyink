@@ -1,6 +1,8 @@
 import type { DataSourceDescriptor } from '@easyink/datasource'
 import type { DocumentSchema, TableNode } from '@easyink/schema'
 import { SCHEMA_VERSION } from '@easyink/shared'
+import { badgeDataSource } from './templates/badge'
+import { certificateDataSource } from './templates/certificate'
 
 // ---------------------------------------------------------------------------
 // A. 发票数据源
@@ -154,6 +156,8 @@ export const sampleDataSources: DataSourceDescriptor[] = [
   invoiceDataSource,
   productDataSource,
   orderListDataSource,
+  certificateDataSource,
+  badgeDataSource,
 ]
 
 // ---------------------------------------------------------------------------

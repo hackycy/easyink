@@ -33,8 +33,11 @@ function encode(value: string, format: string): BarcodeEncoding[] {
  * Uses JsBarcode internal encoders to get the binary bar pattern,
  * then renders it as SVG rects.
  */
-export function generateBarcodeSvg(value: string, options: BarcodeSvgOptions): string {
-  const { lineWidth, lineColor, backgroundColor, showText } = options
+export function generateBarcodeSvg(value: string, options: Partial<BarcodeSvgOptions> & { format: string }): string {
+  const lineWidth = options.lineWidth || 2
+  const lineColor = options.lineColor || '#000000'
+  const backgroundColor = options.backgroundColor || '#ffffff'
+  const showText = options.showText ?? true
 
   const encodings = encode(value, options.format)
 

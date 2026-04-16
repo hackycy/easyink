@@ -1,8 +1,12 @@
 import type { DocumentSchema } from '@easyink/schema'
 import { SCHEMA_VERSION } from '@easyink/shared'
 import { flowInvoiceTemplate } from './datasources'
+import { badgeTemplate } from './templates/badge'
+import { certificateTemplate } from './templates/certificate'
 
 export * from './datasources'
+export { badgeDataSource, badgeDemoData, badgeTemplate } from './templates/badge'
+export { certificateDataSource, certificateDemoData, certificateTemplate } from './templates/certificate'
 
 export interface SampleTemplateEntry {
   id: string
@@ -238,5 +242,17 @@ export const sampleTemplates: SampleTemplateEntry[] = [
     name: '收据',
     category: 'receipt',
     schema: receiptTemplate,
+  },
+  {
+    id: 'certificate',
+    name: '培训证书',
+    category: 'certificate',
+    schema: certificateTemplate,
+  },
+  {
+    id: 'badge',
+    name: '工牌',
+    category: 'badge',
+    schema: badgeTemplate,
   },
 ]
