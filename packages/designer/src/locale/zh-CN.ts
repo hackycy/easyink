@@ -20,7 +20,6 @@ const zhCN: LocaleMessages = {
       undo: '撤销',
       redo: '重做',
       save: '保存',
-      preview: '预览',
       newTemplate: '新建',
       clear: '清空',
       print: '打印',
@@ -221,13 +220,6 @@ const zhCN: LocaleMessages = {
       autoSaveSaving: '保存中...',
       autoSaveSuccess: '已自动保存',
       autoSaveFailed: '保存失败',
-    },
-    templateLibrary: {
-      title: '模板库',
-      search: '搜索模板...',
-      empty: '暂无模板',
-      loading: '加载中...',
-      staticDemoWarning: '当前为静态示例模式，搜索和分页功能不可用',
     },
     table: {
       addRow: '添加行',

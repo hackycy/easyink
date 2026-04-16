@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { DocumentSchema } from '@easyink/schema'
 import type { DataSourceDescriptor } from '@easyink/datasource'
-import type { LocaleMessages, SampleLibraryProvider, ViewerAdapter, PreferenceProvider } from '../types'
+import type { LocaleMessages, PreferenceProvider } from '../types'
 import { onBeforeUnmount, reactive, watch } from 'vue'
 import { provideDesignerStore } from '../composables'
 import { useWorkbenchPersistence } from '../composables/use-workbench-persistence'
@@ -10,13 +10,10 @@ import { registerBuiltinMaterials } from '../materials/registry'
 import TopBarB from './TopBarB.vue'
 import CanvasWorkspace from './CanvasWorkspace.vue'
 import StatusBar from './StatusBar.vue'
-import TemplateLibraryOverlay from './TemplateLibraryOverlay.vue'
 
 const props = defineProps<{
   schema: DocumentSchema
   dataSources?: DataSourceDescriptor[]
-  sampleLibrary?: SampleLibraryProvider
-  viewerAdapter?: ViewerAdapter
   preferenceProvider?: PreferenceProvider
   locale?: LocaleMessages
 }>()
@@ -65,7 +62,6 @@ onBeforeUnmount(() => {
     <TopBarB />
     <CanvasWorkspace />
     <StatusBar />
-    <TemplateLibraryOverlay v-if="store.workbench.templateLibrary.phase !== 'closed'" />
   </div>
 </template>
 

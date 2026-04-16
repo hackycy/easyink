@@ -72,7 +72,7 @@ class CommandManager {
 - union 一拖多投放
 - 多选对齐/分布
 - 批量删除
-- 模板库导入模板
+- 宿主触发的模板替换
 
 ## 12.5 关键命令类型
 
@@ -116,7 +116,6 @@ class CommandManager {
 
 - `CompositeCommand` -- 将多个子命令打包成一条原子操作，undo/redo 时整体回滚/重做
 - `BatchCommand`
-- `ImportTemplateCommand`
 
 ## 12.6 CompositeCommand 模型
 

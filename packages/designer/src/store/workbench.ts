@@ -2,11 +2,9 @@ import type {
   CanvasViewportState,
   DeepEditingRuntimeState,
   PanelToggleState,
-  PreviewWorkbenchState,
   SaveBranchMenuState,
   SnapState,
   StatusBarState,
-  TemplateLibraryState,
   ToolbarLayoutState,
   WorkbenchState,
   WorkspaceWindowState,
@@ -18,8 +16,6 @@ export function createDefaultWorkbenchState(): WorkbenchState {
     toolbar: createDefaultToolbarLayout(),
     viewport: createDefaultViewport(),
     panels: createDefaultPanels(),
-    preview: createDefaultPreview(),
-    templateLibrary: createDefaultTemplateLibrary(),
     status: createDefaultStatus(),
     snap: createDefaultSnap(),
   }
@@ -147,22 +143,6 @@ function createDefaultPanels(): PanelToggleState {
     assets: false,
     debug: false,
     draft: false,
-  }
-}
-
-function createDefaultPreview(): PreviewWorkbenchState {
-  return {
-    visible: false,
-  }
-}
-
-function createDefaultTemplateLibrary(): TemplateLibraryState {
-  return {
-    phase: 'closed',
-    query: '',
-    page: 1,
-    pageSize: 20,
-    backendMode: 'static-demo',
   }
 }
 

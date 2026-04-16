@@ -133,24 +133,6 @@ export type ExportPhase
 export type ExportEntry = 'save-menu' | 'preview' | 'api'
 
 /**
- * Template library backend mode.
- */
-export type TemplateBackendMode = 'static-demo' | 'remote'
-
-/**
- * Template library state phase.
- */
-export type TemplateLibraryPhase
-  = | 'closed'
-    | 'opening'
-    | 'loading-list'
-    | 'list-ready'
-    | 'static-demo-warning'
-    | 'selecting-template'
-    | 'loading-template'
-    | 'closing'
-
-/**
  * Table editing phases in designer.
  * idle -> table-selected -> cell-selected -> content-editing
  */

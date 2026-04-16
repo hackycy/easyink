@@ -13,7 +13,7 @@ easyink/
 │   ├── designer/               # @easyink/designer — 设计器工作台 Vue 组件
 │   ├── ui/                     # @easyink/ui — 面板、表单、工作台基础组件
 │   ├── icons/                  # @easyink/icons — 图标资产
-│   ├── samples/                # @easyink/samples — 内置模板库与演示数据
+│   ├── samples/                # @easyink/samples — 示例 schema、data 与 datasource
 │   └── materials/
 │       ├── text/
 │       ├── image/
@@ -62,9 +62,9 @@ easyink/
 
 ### `@easyink/designer`
 
-- 顶部工具栏、画布、面板系统、模板库、概览图、历史记录
+- 顶部工具栏、画布、面板系统、概览图、历史记录
 - 管理设计态工作台状态
-- 通过 `ViewerAdapter` 接口与外部 Viewer 桥接预览，不在包级直接依赖 `@easyink/viewer`
+- 通过插槽和 `useDesignerStore()` 暴露宿主集成点，不在包级直接依赖 `@easyink/viewer`
 
 ### `@easyink/material-*`
 
@@ -102,12 +102,12 @@ material-* ── core + schema + shared (+ datasource 按需)
   ↑
 designer ─── core + datasource + schema + shared + ui + icons + material-*
   ↑
-playground ── designer + samples + schema
+playground ── designer + viewer + samples + schema
 ```
 
 依赖原则：
 
-- `designer` 依赖全部 `material-*` 包（设计态注册），不直接依赖 `viewer`（预览通过宿主适配器桥接）
+- `designer` 依赖全部 `material-*` 包（设计态注册），不直接依赖 `viewer`（预览由宿主自行引入 `viewer`）
 - `viewer` 依赖 `core`、`datasource`、`schema`、`shared`，不依赖 `material-*`（Viewer 物料渲染器由调用方注册）
 - `ui` 依赖 `icons` 和 `shared`，不依赖 `designer`；方向为 designer 依赖 ui
 - `samples` 依赖 `datasource`、`schema`、`shared`，不依赖 `designer`
@@ -125,4 +125,4 @@ await viewer.open({ schema, data })
 公开入口的目标是两个：
 
 - 宿主可单独使用 `viewer`
-- 宿主可直接挂载 `designer`，并在内部复用同一套 Viewer 能力
+- 宿主可直接挂载 `designer`，再按需引入 `viewer` 组成预览/打印工作流

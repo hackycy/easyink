@@ -30,8 +30,9 @@ function openPreview() {
   >
     <template #topbar>
       <div class="playground-topbar">
+        <span class="playground-topbar__hint">宿主自行维护模板来源，并按需引入 @easyink/viewer。</span>
         <button class="playground-preview-btn" @click="openPreview">
-          预览
+          预览 / 打印 / 导出
         </button>
       </div>
     </template>
@@ -49,10 +50,16 @@ function openPreview() {
 .playground-topbar {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
+  gap: 12px;
   padding: 4px 12px;
   background: #f8f8f8;
   border-bottom: 1px solid #e0e0e0;
+}
+
+.playground-topbar__hint {
+  color: #666;
+  font-size: 13px;
 }
 
 .playground-preview-btn {

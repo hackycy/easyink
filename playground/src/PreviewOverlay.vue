@@ -4,6 +4,8 @@ import type { ViewerRuntime } from '@easyink/viewer'
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { createViewer, registerBuiltinViewerMaterials } from '@easyink/viewer'
 
+const EXPORT_FORMAT = 'playground-demo-json'
+
 const props = defineProps<{
   schema: DocumentSchema
   data: Record<string, unknown>
@@ -22,6 +24,16 @@ onMounted(async () => {
 
   viewer = createViewer({ container: containerRef.value })
   registerBuiltinViewerMaterials(viewer)
+  viewer.registerExportAdapter({
+    id: 'playground-demo-export',
+    format: EXPORT_FORMAT,
+    async export(context) {
+      return new Blob(
+        [JSON.stringify({ schema: context.schema, data: context.data ?? {} }, null, 2)],
+        { type: 'application/json' },
+      )
+    },
+  })
   await viewer.open({
     schema: props.schema,
     data: props.data,
@@ -36,11 +48,29 @@ onBeforeUnmount(() => {
 async function handlePrint() {
   await viewer?.print()
 }
+
+async function handleExport() {
+  const blob = await viewer?.exportDocument(EXPORT_FORMAT)
+  if (!(blob instanceof Blob)) {
+    return
+  }
+
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = 'easyink-preview-export.json'
+  anchor.click()
+  URL.revokeObjectURL(url)
+}
 </script>
 
 <template>
   <div class="preview-overlay">
     <div class="preview-toolbar">
+      <span class="preview-hint">宿主注入 schema、data 与导出适配器；designer 只负责编辑。</span>
+      <button class="preview-btn" @click="handleExport">
+        导出
+      </button>
       <button class="preview-btn" @click="handlePrint">
         打印
       </button>
@@ -65,11 +95,16 @@ async function handlePrint() {
 .preview-toolbar {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 8px;
   padding: 8px 16px;
   background: #fff;
   border-bottom: 1px solid #e0e0e0;
+}
+
+.preview-hint {
+  color: #666;
+  font-size: 13px;
 }
 
 .preview-btn {

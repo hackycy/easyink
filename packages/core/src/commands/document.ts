@@ -342,41 +342,6 @@ export class UpdateDocumentCommand implements Command {
   }
 }
 
-export class ImportTemplateCommand implements Command {
-  readonly id = generateId('cmd')
-  readonly type = 'import-template'
-  readonly description = 'Import template'
-  private oldElements: MaterialNode[] = []
-  private oldPage: PageSchema | undefined
-  private oldGuides: GuideSchema | undefined
-
-  constructor(
-    private schema: DocumentSchema,
-    private imported: DocumentSchema,
-  ) {}
-
-  execute(): void {
-    this.oldElements = deepClone(this.schema.elements)
-    this.oldPage = deepClone(this.schema.page)
-    this.oldGuides = deepClone(this.schema.guides)
-    this.schema.elements.length = 0
-    for (const el of this.imported.elements)
-      this.schema.elements.push(deepClone(el))
-    Object.assign(this.schema.page, deepClone(this.imported.page))
-    this.schema.guides = deepClone(this.imported.guides)
-  }
-
-  undo(): void {
-    this.schema.elements.length = 0
-    for (const el of this.oldElements)
-      this.schema.elements.push(el)
-    if (this.oldPage)
-      Object.assign(this.schema.page, this.oldPage)
-    if (this.oldGuides)
-      this.schema.guides = this.oldGuides
-  }
-}
-
 type GeometryKey = 'x' | 'y' | 'width' | 'height' | 'rotation' | 'alpha'
 
 export class UpdateGeometryCommand implements Command {

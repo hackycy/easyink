@@ -1,6 +1,6 @@
 import type { DataSourceDescriptor } from '@easyink/datasource'
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
-import type { MaterialCategory, PropSchemaType, TemplateBackendMode, TemplateLibraryPhase } from '@easyink/shared'
+import type { MaterialCategory, PropSchemaType } from '@easyink/shared'
 
 export type { DataSourceDescriptor, DocumentSchema }
 
@@ -11,8 +11,6 @@ export interface WorkbenchState {
   toolbar: ToolbarLayoutState
   viewport: CanvasViewportState
   panels: PanelToggleState
-  preview: PreviewWorkbenchState
-  templateLibrary: TemplateLibraryState
   status: StatusBarState
   snap: SnapState
 }
@@ -75,28 +73,12 @@ export interface PanelToggleState {
   draft: boolean
 }
 
-export interface PreviewWorkbenchState {
-  visible: boolean
-  iframeUrl?: string
-}
-
 export interface StatusBarState {
   focus: 'canvas' | 'panel' | 'dialog' | 'none'
   network: 'idle' | 'loading' | 'error'
   draft: 'clean' | 'modified'
   autoSave: 'idle' | 'saving' | 'success' | 'failed'
   autoSaveMessage?: string
-}
-
-// ─── Template Library ──────────────────────────────────────────────
-
-export interface TemplateLibraryState {
-  phase: TemplateLibraryPhase
-  query: string
-  page: number
-  pageSize: number
-  backendMode: TemplateBackendMode
-  selectedTemplateId?: string
 }
 
 // ─── Panel Section Filter ─────────────────────────────────────────
@@ -247,26 +229,8 @@ export interface SaveBranchMenuState {
 export interface EasyInkDesignerProps {
   schema: import('@easyink/schema').DocumentSchema
   dataSources?: DataSourceDescriptor[]
-  sampleLibrary?: SampleLibraryProvider
-  viewerAdapter?: ViewerAdapter
   preferenceProvider?: PreferenceProvider
   locale?: LocaleMessages
-}
-
-export interface SampleLibraryProvider {
-  list: (query: string, page: number, pageSize: number) => Promise<SampleTemplate[]>
-  load: (id: string) => Promise<import('@easyink/schema').DocumentSchema>
-}
-
-export interface SampleTemplate {
-  id: string
-  name: string
-  thumbnail?: string
-  category?: string
-}
-
-export interface ViewerAdapter {
-  getPreviewUrl: () => string
 }
 
 export interface PreferenceProvider {

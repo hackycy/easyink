@@ -20,7 +20,7 @@ export function useWorkbenchPersistence(
     }, 500)
   }
 
-  // Only watch the persistable slices, skip status / templateLibrary / snap.activeLines
+  // Only watch the persistable slices, skip status and ephemeral snap guides.
   watch(
     [
       () => workbench.windows,

@@ -6,7 +6,6 @@ export {
 
 export {
   AddMaterialCommand,
-  ImportTemplateCommand,
   MoveMaterialCommand,
   RemoveMaterialCommand,
   ResizeMaterialCommand,

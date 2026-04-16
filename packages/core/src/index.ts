@@ -13,7 +13,6 @@ export {
   ClearBindingCommand,
   ClearStaticCellBindingCommand,
   getByPath,
-  ImportTemplateCommand,
   InsertTableColumnCommand,
   InsertTableRowCommand,
   MergeTableCellsCommand,
