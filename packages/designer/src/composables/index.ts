@@ -1,5 +1,4 @@
 export { useDatasourceDrop } from './use-datasource-drop'
-export { useDeepEditing } from './use-deep-editing'
 export { provideDesignerStore, useDesignerStore } from './use-designer-store'
 export { useElementDrag } from './use-element-drag'
 export { useElementResize } from './use-element-resize'

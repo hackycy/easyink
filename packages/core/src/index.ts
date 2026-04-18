@@ -1,44 +1,57 @@
+export { keyboardCursorMiddleware, selectionMiddleware, undoBoundaryMiddleware } from './behaviors'
+
 export {
   extractCollectionPath,
   resolveBindingValue,
   resolveFieldFromRecord,
   resolveNodeBindings,
 } from './binding-utils'
+
 export { CommandManager, CompositeCommand, createBatchCommand } from './command'
 export type { Command, HistoryEntry } from './command'
 export {
   AddMaterialCommand,
   BindFieldCommand,
-  BindStaticCellCommand,
   ClearBindingCommand,
-  ClearStaticCellBindingCommand,
   getByPath,
-  InsertTableColumnCommand,
-  InsertTableRowCommand,
-  MergeTableCellsCommand,
   MoveMaterialCommand,
   RemoveMaterialCommand,
-  RemoveTableColumnCommand,
-  RemoveTableRowCommand,
   ResizeMaterialCommand,
-  ResizeTableColumnCommand,
-  ResizeTableRowCommand,
   RotateMaterialCommand,
   setByPath,
-  SplitTableCellCommand,
   UnionDropCommand,
   UpdateDocumentCommand,
   UpdateGeometryCommand,
   UpdateGuidesCommand,
   UpdateMaterialPropsCommand,
   UpdatePageCommand,
-  UpdateTableCellBorderCommand,
-  UpdateTableCellCommand,
-  UpdateTableCellTypographyCommand,
-  UpdateTableRowRoleCommand,
   UpdateTableVisibilityCommand,
   validateMerge,
 } from './commands'
+
+// ─── Editing Behavior Architecture (Chapter 22) ───────────────────
+
+export type {
+  BehaviorContext,
+  BehaviorEvent,
+  BehaviorMiddleware,
+  BehaviorRegistration,
+  ContentLayout,
+  EditingSessionRef,
+  EphemeralPanelDef,
+  GeometryService,
+  MaterialGeometry,
+  Selection,
+  SelectionDecorationDef,
+  SelectionStore,
+  SelectionType,
+  SubPropertySchema,
+  SurfacesAPI,
+  TransactionAPI,
+  TxOptions,
+} from './editing-session'
+
+// ─── Core Services ────────────────────────────────────────────────
 
 export { FontManager } from './font'
 
@@ -65,23 +78,14 @@ export type {
   DatasourceDropHandler,
   DatasourceDropZone,
   DatasourceFieldInfo,
-  DeepEditingDefinition,
-  DeepEditingPhase,
-  InternalResizeHandle,
-  InternalResizeHandler,
-  KeyboardRouteHandler,
   MaterialDesignerExtension,
   MaterialExtensionContext,
   MaterialExtensionFactory,
   NodeSignal,
-  PhaseContainers,
-  PhaseTransition,
   PropertyPanelOverlay,
   PropertyPanelRequest,
   PropSchemaLike,
   SelectionSnapshot,
-  SubSelectionHandler,
-  SubSelectionResult,
   ToolbarAction,
 } from './material-extension'
 
@@ -96,6 +100,10 @@ export type {
 export { createPagePlan } from './page-planner'
 
 export type { PagePlan, PagePlanDiagnostic, PagePlanEntry } from './page-planner'
+
+export { applyJsonPatches, PatchCommand } from './patch-command'
+export type { PatchCommandOptions } from './patch-command'
+
 export { SelectionModel } from './selection'
 
 export { UnitManager } from './unit'

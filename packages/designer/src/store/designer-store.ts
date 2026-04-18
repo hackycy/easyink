@@ -1,12 +1,14 @@
+import type { EphemeralPanelDef, PropertyPanelOverlay } from '@easyink/core'
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
-import type { DeepEditingRuntimeState, LocaleMessages, MaterialCatalogEntry, MaterialDefinition, MaterialDesignerExtension, MaterialExtensionFactory, PreferenceProvider, PropertyPanelOverlay } from '../types'
+import type { LocaleMessages, MaterialCatalogEntry, MaterialDefinition, MaterialDesignerExtension, MaterialExtensionFactory, PreferenceProvider } from '../types'
 import { CommandManager, SelectionModel } from '@easyink/core'
 import { DataSourceRegistry } from '@easyink/datasource'
 import { createDefaultSchema } from '@easyink/schema'
 import { markRaw } from 'vue'
+import { EditingSessionManager } from '../editing/editing-session-manager'
 import { createMaterialExtensionContext } from '../materials/extension-context'
 import { applyPersistedWorkbench, loadWorkbenchPreferences } from './preference-persistence'
-import { createDefaultDeepEditing, createDefaultSaveBranchMenu, createDefaultWorkbenchState } from './workbench'
+import { createDefaultSaveBranchMenu, createDefaultWorkbenchState } from './workbench'
 
 /**
  * DesignerStore is the central state manager for the designer.
@@ -34,13 +36,12 @@ export class DesignerStore {
   private _cachedExtensions = new Map<string, MaterialDesignerExtension>()
   private _catalog: MaterialCatalogEntry[] = []
 
-  // ─── Generic deep editing ─────────────────────────────────────
-  readonly deepEditing: DeepEditingRuntimeState = createDefaultDeepEditing()
-  /** Registered callback for FSM-level cleanup before resetting deep editing state. */
-  private _deepEditingCleanup: (() => void) | null = null
+  // ─── Editing Session Manager ─────────────────────────────────────
+  readonly editingSession: EditingSessionManager
 
-  // ─── Property panel overlay (pushed by materials) ────────────
+  // ─── Property panel overlay / ephemeral panel ──────────────────
   private _propertyOverlay: PropertyPanelOverlay | null = null
+  private _ephemeralPanel: EphemeralPanelDef | null = null
 
   // ─── Page element provider (for coordinate conversion) ──────
   private _pageElProvider: () => HTMLElement | null = () => null
@@ -50,6 +51,9 @@ export class DesignerStore {
 
   constructor(schema?: DocumentSchema, preferenceProvider?: PreferenceProvider) {
     this._schema = schema || createDefaultSchema()
+    // Mark editing session manager as raw: it owns Vue refs internally and
+    // must not be auto-unwrapped by the surrounding reactive(store) proxy.
+    this.editingSession = markRaw(new EditingSessionManager(this))
     markRaw(this._materials)
     markRaw(this._materialFactories)
     markRaw(this._cachedExtensions)
@@ -74,7 +78,7 @@ export class DesignerStore {
     this._schema = schema
     this.selection.clear()
     this.commands.clear()
-    this.exitDeepEditing()
+    this.editingSession.exit()
   }
 
   // ─── Element operations ───────────────────────────────────────
@@ -97,8 +101,8 @@ export class DesignerStore {
       return undefined
     const [removed] = this._schema.elements.splice(idx, 1)
     this.selection.remove(id)
-    if (this.deepEditing.nodeId === id) {
-      this.exitDeepEditing()
+    if (this.editingSession.activeNodeId === id) {
+      this.editingSession.exit()
     }
     return removed
   }
@@ -185,7 +189,7 @@ export class DesignerStore {
     return ext?.getVisualHeight?.(node) ?? node.height
   }
 
-  // ─── Deep Editing ───────────────────────────────────────────────
+  // ─── Editing Session ────────────────────────────────────────────
 
   /** Register the page DOM element provider (called by CanvasWorkspace on mount). */
   setPageElProvider(provider: () => HTMLElement | null): void {
@@ -197,62 +201,17 @@ export class DesignerStore {
     return this._pageElProvider()
   }
 
-  /** Whether a deep editing session is active. */
+  /** Whether an editing session is active. */
   get isInDeepEditing(): boolean {
-    return this.deepEditing.nodeId !== undefined
+    return this.editingSession.isActive
   }
 
-  /** Get the node ID being deep-edited. */
+  /** Get the node ID being edited. */
   get deepEditingNodeId(): string | undefined {
-    return this.deepEditing.nodeId
+    return this.editingSession.activeNodeId
   }
 
-  /** Enter deep editing for an element with a declared FSM. */
-  enterDeepEditing(nodeId: string): boolean {
-    const node = this.getElementById(nodeId)
-    if (!node)
-      return false
-
-    const ext = this.getDesignerExtension(node.type)
-    if (!ext?.deepEditing)
-      return false
-
-    // Deep editing and multi-selection are mutually exclusive
-    this.selection.clear()
-    this.selection.add(nodeId)
-
-    this.deepEditing.nodeId = nodeId
-    this.deepEditing.materialType = node.type
-    this.deepEditing.currentPhase = ext.deepEditing.initialPhase
-    this.deepEditing.materialState = undefined
-    return true
-  }
-
-  /** Exit deep editing, reset to idle. */
-  exitDeepEditing(): void {
-    if (this._deepEditingCleanup) {
-      this._deepEditingCleanup()
-    }
-    this._propertyOverlay = null
-    this.deepEditing.nodeId = undefined
-    this.deepEditing.materialType = undefined
-    this.deepEditing.currentPhase = undefined
-    this.deepEditing.materialState = undefined
-  }
-
-  /** Register a callback for FSM-level phase cleanup (called before state reset in exitDeepEditing). */
-  setDeepEditingCleanup(fn: (() => void) | null): void {
-    this._deepEditingCleanup = fn
-  }
-
-  /** Transition to a specific phase within the active deep editing FSM. */
-  transitionPhase(phaseId: string): void {
-    if (!this.deepEditing.nodeId)
-      return
-    this.deepEditing.currentPhase = phaseId
-  }
-
-  // ─── Property Panel Overlay ──────────────────────────────────
+  // ─── Property Panel Overlay / Ephemeral Panel ─────────────────
 
   /** Set or clear the property panel overlay (called by material extensions). */
   setPropertyOverlay(overlay: PropertyPanelOverlay | null): void {
@@ -262,6 +221,16 @@ export class DesignerStore {
   /** Current active overlay pushed by a material extension. */
   get propertyOverlay(): PropertyPanelOverlay | null {
     return this._propertyOverlay
+  }
+
+  /** Set or clear the ephemeral panel (called by editing session). */
+  setEphemeralPanel(panel: EphemeralPanelDef | null): void {
+    this._ephemeralPanel = panel
+  }
+
+  /** Current active ephemeral panel. */
+  get ephemeralPanel(): EphemeralPanelDef | null {
+    return this._ephemeralPanel
   }
 
   // ─── Cleanup ──────────────────────────────────────────────────
@@ -276,6 +245,7 @@ export class DesignerStore {
     this._catalog = []
     this.clipboard = []
     this._propertyOverlay = null
-    this.exitDeepEditing()
+    this._ephemeralPanel = null
+    this.editingSession.exit()
   }
 }

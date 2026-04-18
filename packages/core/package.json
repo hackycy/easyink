@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@easyink/schema": "workspace:*",
-    "@easyink/shared": "workspace:*"
+    "@easyink/shared": "workspace:*",
+    "mutative": "catalog:"
   }
 }

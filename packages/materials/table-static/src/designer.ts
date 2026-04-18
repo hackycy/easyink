@@ -1,26 +1,30 @@
-import type { DatasourceDropHandler, DeepEditingDefinition, MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
-import type { TableDeepEditingDelegate } from '@easyink/material-table-kernel'
+import type { DatasourceDropHandler, MaterialDesignerExtension, MaterialExtensionContext, SelectionType } from '@easyink/core'
+import type { TableEditingDelegate } from '@easyink/material-table-kernel'
 import type { BindingRef, MaterialNode, TableNode } from '@easyink/schema'
 import type { UnitType } from '@easyink/shared'
 import type { TableStaticProps } from './schema'
 import {
-  BindStaticCellCommand,
-  ClearStaticCellBindingCommand,
-  InsertTableColumnCommand,
-  InsertTableRowCommand,
-  MergeTableCellsCommand,
-  RemoveTableColumnCommand,
-  RemoveTableRowCommand,
-  ResizeTableColumnCommand,
-  ResizeTableRowCommand,
-  SplitTableCellCommand,
+  keyboardCursorMiddleware,
+  selectionMiddleware,
+  undoBoundaryMiddleware,
   UnitManager,
-  UpdateTableCellCommand,
-  UpdateTableCellTypographyCommand,
 } from '@easyink/core'
-import { CELL_PROP_SCHEMAS, computeCellRect, createTableDeepEditing, escapeHtml, hitTestGridCell, renderTableHtml, resolveMergeOwner } from '@easyink/material-table-kernel'
+import {
+  computeCellRect,
+  createTableCellDecorationComponent,
+  createTableCellEditBehavior,
+  createTableCellSelectBehavior,
+  createTableCellSelectionType,
+  createTableCommandHandlerBehavior,
+  createTableGeometry,
+  createTableKeyboardNavBehavior,
+  createTableResizeBehavior,
+  escapeHtml,
+  hitTestGridCell,
+  renderTableHtml,
+  resolveMergeOwner,
+} from '@easyink/material-table-kernel'
 import { isTableNode } from '@easyink/schema'
-import { convertUnit } from '@easyink/shared'
 
 function buildHtml(node: MaterialNode, unit: UnitType, context: MaterialExtensionContext): string {
   if (!isTableNode(node)) {
@@ -44,101 +48,10 @@ function buildHtml(node: MaterialNode, unit: UnitType, context: MaterialExtensio
   })
 }
 
-function createDelegate(context: MaterialExtensionContext): TableDeepEditingDelegate {
+function createDelegate(context: MaterialExtensionContext): TableEditingDelegate {
   const unitManager = new UnitManager(context.getSchema().unit)
 
-  function pushCellOverlay(node: TableNode, row: number, col: number) {
-    const cell = node.table.topology.rows[row]?.cells[col]
-    if (!cell)
-      return
-    const nodeId = node.id
-
-    function getCell() {
-      const n = context.getNode(nodeId)
-      if (!n || !isTableNode(n))
-        return undefined
-      return n.table.topology.rows[row]?.cells[col]
-    }
-    function getNode() {
-      const n = context.getNode(nodeId)
-      return n && isTableNode(n) ? n : undefined
-    }
-
-    context.requestPropertyPanel({
-      id: 'table-cell',
-      title: context.t('designer.property.cellProperties'),
-      schemas: [...CELL_PROP_SCHEMAS],
-      readValue(key: string) {
-        const c = getCell()
-        if (!c)
-          return undefined
-        if (key === 'padding')
-          return c.padding?.top
-        if (key === 'border')
-          return c.border
-        return (c.typography as Record<string, unknown> | undefined)?.[key]
-      },
-      writeValue(key: string, value: unknown) {
-        const n = getNode()
-        if (!n)
-          return
-        if (key === 'padding') {
-          const v = typeof value === 'number' ? value : 0
-          context.commitCommand(new UpdateTableCellCommand(n, row, col, { padding: { top: v, right: v, bottom: v, left: v } }))
-          return
-        }
-        if (key === 'border') {
-          context.commitCommand(new UpdateTableCellCommand(n, row, col, { border: value as Record<string, unknown> }))
-          return
-        }
-        context.commitCommand(new UpdateTableCellTypographyCommand(n, row, col, { [key]: value }))
-      },
-      get binding() {
-        return getCell()?.staticBinding
-      },
-      clearBinding() {
-        const n = getNode()
-        if (!n)
-          return
-        context.commitCommand(new ClearStaticCellBindingCommand(n, row, col))
-      },
-    })
-  }
-
   return {
-    commitCellUpdate(node, row, col, updates) {
-      context.commitCommand(new UpdateTableCellCommand(node, row, col, updates))
-    },
-    commitColumnResize(node, colIndex, newRatio, newWidth) {
-      context.commitCommand(new ResizeTableColumnCommand(node, colIndex, newRatio, newWidth))
-    },
-    commitRowResize(node, rowIndex, newHeight) {
-      context.commitCommand(new ResizeTableRowCommand(node, rowIndex, newHeight))
-    },
-    commitInsertRow(node, rowIndex) {
-      const colCount = node.table.topology.columns.length
-      const avgHeight = node.table.topology.rows[rowIndex]?.height ?? convertUnit(8, 'mm', context.getSchema().unit)
-      context.commitCommand(new InsertTableRowCommand(node, rowIndex, {
-        height: avgHeight,
-        role: 'normal',
-        cells: Array.from({ length: colCount }, () => ({})),
-      }))
-    },
-    commitInsertCol(node, colIndex) {
-      context.commitCommand(new InsertTableColumnCommand(node, colIndex))
-    },
-    commitRemoveRow(node, rowIndex) {
-      context.commitCommand(new RemoveTableRowCommand(node, rowIndex))
-    },
-    commitRemoveCol(node, colIndex) {
-      context.commitCommand(new RemoveTableColumnCommand(node, colIndex))
-    },
-    commitMergeCells(node, row, col, colSpan, rowSpan) {
-      context.commitCommand(new MergeTableCellsCommand(node, row, col, colSpan, rowSpan))
-    },
-    commitSplitCell(node, row, col) {
-      context.commitCommand(new SplitTableCellCommand(node, row, col))
-    },
     getNode(nodeId) {
       const node = context.getNode(nodeId)
       return node && isTableNode(node) ? node : undefined
@@ -152,7 +65,6 @@ function createDelegate(context: MaterialExtensionContext): TableDeepEditingDele
     getUnit: () => context.getSchema().unit,
     getPlaceholderRowCount: () => 0,
     t: (key: string) => context.t(key),
-    onCellSelected: pushCellOverlay,
   }
 }
 
@@ -191,23 +103,20 @@ function createDatasourceDropHandler(context: MaterialExtensionContext): Datasou
         fieldLabel: field.fieldLabel,
       }
 
-      context.commitCommand(new BindStaticCellCommand(node, cell.row, cell.col, binding))
+      context.tx.run(node.id, (draft) => {
+        const d = draft as unknown as TableNode
+        const c = d.table.topology.rows[cell.row]!.cells[cell.col]!
+        c.staticBinding = { ...binding }
+        c.content = undefined
+      }, { label: 'Bind static field' })
     },
   }
 }
 
-/**
- * Adapt table-kernel phases to designer DeepEditingDefinition.
- * The phase interfaces are structurally identical (TableNode extends MaterialNode),
- * so the cast is safe.
- */
-function buildDeepEditing(delegate: TableDeepEditingDelegate): DeepEditingDefinition {
-  const result = createTableDeepEditing(delegate)
-  return result as unknown as DeepEditingDefinition
-}
-
 export function createTableStaticExtension(context: MaterialExtensionContext): MaterialDesignerExtension {
   const delegate = createDelegate(context)
+  const tableGeometry = createTableGeometry(delegate)
+  const cellSelectionType = createTableCellSelectionType(delegate)
 
   return {
     renderContent(nodeSignal, container) {
@@ -218,7 +127,25 @@ export function createTableStaticExtension(context: MaterialExtensionContext): M
       render()
       return nodeSignal.subscribe(render)
     },
-    deepEditing: buildDeepEditing(delegate),
+
+    enterTrigger: 'click',
+    geometry: tableGeometry,
+    selectionTypes: [cellSelectionType as SelectionType<unknown>],
+    behaviors: [
+      selectionMiddleware(),
+      undoBoundaryMiddleware({ groupBy: 'cell' }),
+      createTableCellSelectBehavior(delegate),
+      createTableKeyboardNavBehavior(delegate),
+      createTableCellEditBehavior(delegate),
+      createTableResizeBehavior(delegate),
+      createTableCommandHandlerBehavior(delegate),
+      keyboardCursorMiddleware(),
+    ],
+    decorations: [{
+      selectionTypes: ['table.cell'],
+      component: createTableCellDecorationComponent(delegate),
+      layer: 'above-content',
+    }],
     datasourceDrop: createDatasourceDropHandler(context),
   }
 }

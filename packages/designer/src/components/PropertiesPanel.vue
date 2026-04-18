@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { SubPropertySchema } from '@easyink/core'
 import type { Component } from 'vue'
 import type { PanelSectionId, PropSchema } from '../types'
 import type { PagePropertyContext, PagePropertyDescriptor, PagePropertyGroup } from '../page-properties'
@@ -25,62 +26,75 @@ const selectedElement = computed(() =>
   selectedElements.value.length === 1 ? selectedElements.value[0] : undefined,
 )
 
-// ─── Property Panel Overlay ────────────────────────────────────
+// ─── Sub-Property Schema (auto-derived from editing session selection) ──
 
-const overlay = computed(() => store.propertyOverlay)
+const subPropertySchema = computed<SubPropertySchema | null>(() => {
+  const session = store.editingSession.activeSession
+  if (!session)
+    return null
 
-// Auto-clear overlay when deep editing state changes
-watch(
-  () => ({
-    nodeId: store.deepEditing.nodeId,
-    phase: store.deepEditing.currentPhase,
-  }),
-  (newState, oldState) => {
-    if (!newState.nodeId || newState.nodeId !== oldState?.nodeId
-      || newState.phase !== oldState?.phase) {
-      store.setPropertyOverlay(null)
-    }
-  },
-  { flush: 'sync' },
-)
+  const sel = session.selectionStore.selection
+  if (!sel)
+    return null
 
-// Overlay schemas grouped by group field
-const overlayGroupedSchemas = computed(() => {
-  if (!overlay.value)
-    return new Map<string, PropSchema[]>()
-  return groupPropSchemas(overlay.value.schemas as PropSchema[])
+  const node = store.getElementById(sel.nodeId)
+  if (!node)
+    return null
+
+  const ext = store.getDesignerExtension(node.type)
+  if (!ext?.selectionTypes)
+    return null
+
+  const selType = ext.selectionTypes.find(t => t.id === sel.type)
+  if (!selType?.getPropertySchema)
+    return null
+
+  return selType.getPropertySchema(sel, node)
 })
 
-function readOverlayValue(schema: PropSchema): unknown {
-  return overlay.value?.readValue(schema.key)
+// Sub-property schemas grouped by group field
+const subGroupedSchemas = computed(() => {
+  if (!subPropertySchema.value)
+    return new Map<string, PropSchema[]>()
+  return groupPropSchemas(subPropertySchema.value.schemas as PropSchema[])
+})
+
+function readSubValue(schema: PropSchema): unknown {
+  return subPropertySchema.value?.read(schema.key)
 }
 
-function previewOverlayProp(_key: string, value: unknown) {
-  overlay.value?.writeValue(_key, value)
+function previewSubProp(_key: string, value: unknown) {
+  const session = store.editingSession.activeSession
+  if (!session || !subPropertySchema.value)
+    return
+  subPropertySchema.value.write(_key, value, session.tx)
 }
 
-function updateOverlayProp(key: string, value: unknown) {
-  overlay.value?.writeValue(key, value)
+function updateSubProp(key: string, value: unknown) {
+  const session = store.editingSession.activeSession
+  if (!session || !subPropertySchema.value)
+    return
+  subPropertySchema.value.write(key, value, session.tx)
 }
 
-const overlayCustomEditors = computed<Record<string, Component> | undefined>(() => {
-  return overlay.value?.editors as Record<string, Component> | undefined
+const subCustomEditors = computed<Record<string, Component> | undefined>(() => {
+  return subPropertySchema.value?.editors as Record<string, Component> | undefined
 })
 
 // ─── BindingSection context ─────────────────────────────────────
 
-/** Whether the overlay explicitly defines a binding context */
-const hasOverlayBinding = computed(() =>
-  overlay.value !== null && overlay.value !== undefined && 'binding' in overlay.value,
+/** Whether the sub-property explicitly defines a binding context */
+const hasSubBinding = computed(() =>
+  subPropertySchema.value !== null && 'binding' in (subPropertySchema.value ?? {}),
 )
 
 /** Should the BindingSection be hidden entirely? */
 const hideBindingSection = computed(() => {
-  // Overlay explicitly hides binding
-  if (hasOverlayBinding.value && overlay.value?.binding === null)
+  // Sub-property explicitly hides binding
+  if (hasSubBinding.value && subPropertySchema.value?.binding === null)
     return true
-  // Material has no bindable capability and no overlay binding
-  if (!hasOverlayBinding.value && selectedElement.value) {
+  // Material has no bindable capability and no sub-property binding
+  if (!hasSubBinding.value && selectedElement.value) {
     const def = store.getMaterial(selectedElement.value.type)
     if (def?.capabilities.bindable === false)
       return true
@@ -89,7 +103,10 @@ const hideBindingSection = computed(() => {
 })
 
 function handleClearExternalBinding(bindIndex?: number) {
-  overlay.value?.clearBinding?.(bindIndex)
+  const session = store.editingSession.activeSession
+  if (!session || !subPropertySchema.value?.clearBinding)
+    return
+  subPropertySchema.value.clearBinding(session.tx, bindIndex)
 }
 
 // ─── Section Filter ─────────────────────────────────────────────────
@@ -103,7 +120,7 @@ function isSectionVisible(sectionId: PanelSectionId): boolean {
     return true
   return def.sectionFilter(sectionId, {
     node: el,
-    deepEditing: store.deepEditing,
+    isEditing: store.editingSession.activeNodeId === el.id,
   })
 }
 
@@ -456,12 +473,12 @@ function readPropValue(schema: PropSchema): unknown {
       </EiPanel>
       </template>
 
-      <!-- Overlay layer: deep editing context properties -->
-      <template v-if="overlay && isSectionVisible('overlay')">
+      <!-- Sub-property layer: auto-derived from editing session selection -->
+      <template v-if="subPropertySchema && isSectionVisible('overlay')">
         <EiPanel
-          v-for="[group, schemas] in overlayGroupedSchemas"
-          :key="`overlay-${group}`"
-          :title="overlay.title ? `${overlay.title} - ${groupLabel(group)}` : groupLabel(group)"
+          v-for="[group, schemas] in subGroupedSchemas"
+          :key="`sub-${group}`"
+          :title="subPropertySchema.title ? `${subPropertySchema.title} - ${groupLabel(group)}` : groupLabel(group)"
           collapsible
           flat
         >
@@ -470,24 +487,24 @@ function readPropValue(schema: PropSchema): unknown {
               v-for="schema in schemas"
               :key="schema.key"
               :schema="schema"
-              :value="readOverlayValue(schema)"
-              :custom-editors="overlayCustomEditors"
+              :value="readSubValue(schema)"
+              :custom-editors="subCustomEditors"
               :fonts="fontList"
               :t="store.t.bind(store)"
-              @preview="previewOverlayProp"
-              @change="updateOverlayProp"
+              @preview="previewSubProp"
+              @change="updateSubProp"
             />
           </div>
         </EiPanel>
       </template>
 
       <!-- Data binding -->
-      <EiPanel v-if="!hideBindingSection && (isSectionVisible('binding') || hasOverlayBinding)" :title="store.t('designer.property.dataBinding')" collapsible flat>
+      <EiPanel v-if="!hideBindingSection && (isSectionVisible('binding') || hasSubBinding)" :title="store.t('designer.property.dataBinding')" collapsible flat>
         <BindingSection
           :element="selectedElement"
           :t="store.t.bind(store)"
-          :external-binding="hasOverlayBinding ? overlay!.binding : undefined"
-          :has-external-binding="hasOverlayBinding"
+          :external-binding="hasSubBinding ? subPropertySchema!.binding : undefined"
+          :has-external-binding="hasSubBinding"
           @clear-binding="clearBinding"
           @clear-external-binding="handleClearExternalBinding"
         />

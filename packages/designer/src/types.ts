@@ -89,7 +89,8 @@ export type PanelSectionId = 'geometry' | 'props' | 'overlay' | 'binding' | 'vis
 /** Context passed to MaterialDefinition.sectionFilter for dynamic decisions. */
 export interface SectionFilterContext {
   node: MaterialNode
-  deepEditing: DeepEditingRuntimeState
+  /** Whether an editing session is active for this node */
+  isEditing: boolean
 }
 
 // ─── Material Definition ───────────────────────────────────────────
@@ -155,40 +156,39 @@ export interface MaterialCatalogEntry {
 // ─── Material Extensions (re-exported from @easyink/core) ─────────
 
 export type {
+  BehaviorContext,
+  BehaviorEvent,
+  BehaviorMiddleware,
+  BehaviorRegistration,
+  ContentLayout,
   ContextAction,
   DatasourceDropHandler,
   DatasourceDropZone,
   DatasourceFieldInfo,
-  DeepEditingDefinition,
-  DeepEditingPhase,
-  InternalResizeHandle,
-  InternalResizeHandler,
-  KeyboardRouteHandler,
+  EditingSessionRef,
+  EphemeralPanelDef,
+  GeometryService,
   MaterialDesignerExtension,
   MaterialExtensionContext,
   MaterialExtensionFactory,
+  MaterialGeometry,
   NodeSignal,
-  PhaseContainers,
-  PhaseTransition,
   PropertyPanelOverlay,
   PropertyPanelRequest,
   PropSchemaLike,
+  Selection,
+  SelectionDecorationDef,
   SelectionSnapshot,
-  SubSelectionHandler,
-  SubSelectionResult,
+  SelectionStore,
+  SelectionType,
+  SubPropertySchema,
+  SurfacesAPI,
   ToolbarAction,
+  TransactionAPI,
+  TxOptions,
 } from '@easyink/core'
 
-// ─── Deep Editing Runtime State ───────────────────────────────────
-
-/** Deep editing runtime state managed by the designer store. */
-export interface DeepEditingRuntimeState {
-  nodeId?: string
-  materialType?: string
-  currentPhase?: string
-  /** Opaque state managed by the material FSM */
-  materialState?: unknown
-}
+// (DeepEditingRuntimeState removed — replaced by EditingSessionManager)
 
 // ─── Designer Panel / Toolbar ──────────────────────────────────────
 

@@ -41,6 +41,7 @@
     "@easyink/schema": "workspace:*",
     "@easyink/shared": "workspace:*",
     "@easyink/ui": "workspace:*",
+    "mutative": "catalog:",
     "vue": "catalog:framework"
   }
 }

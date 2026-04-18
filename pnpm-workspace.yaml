@@ -4,6 +4,8 @@ packages:
   - packages/*
   - packages/materials/*
   - examples/*
+catalog:
+  mutative: ^1.3.0
 catalogMode: prefer
 
 catalogs:

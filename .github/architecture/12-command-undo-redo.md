@@ -94,23 +94,16 @@ class CommandManager {
 - `ClearBindingCommand`
 - `UpdateUsageCommand`
 - `UnionDropCommand`
-- `BindStaticCellCommand`（设置 cell 的 staticBinding，同时清除 content.text。用于 table-static 和 table-data 的 header/footer/normal 行）
-- `ClearStaticCellBindingCommand`（清除 cell 的 staticBinding，恢复可手动编辑状态）
 
 ### 表格相关命令
 
-- `InsertTableRowCommand`（table-data 中若 header/footer 区域已有 1 行则拒绝在该区域插入）
-- `RemoveTableRowCommand`
-- `InsertTableColumnCommand`
-- `RemoveTableColumnCommand`
-- `ResizeTableColumnCommand`（列 ratio 修改，支持 merge）
-- `ResizeTableRowCommand`（行高修改，支持 merge）
-- `MergeTableCellsCommand`（双层防护：校验选区内所有行 role 一致，跨 role 合并拒绝执行。table-data 数据区(repeat-template)完全禁止合并。table-data header/footer 仅允许列方向合并(rowSpan 必须为 1)）
-- `SplitTableCellCommand`（拆分已合并单元格）
-- `UpdateTableCellCommand`（支持写入 cell.typography 字段）
-- `UpdateTableCellBorderCommand`（单边边框显隐）
-- `UpdateTableRowRoleCommand`（修改行角色，仅 table-data。修改后若违反单行约束则拒绝执行）
-- `UpdateTableVisibilityCommand`（切换 table-data 的 showHeader/showFooter）
+> **注意**：所有表格相关命令（包括 DatasourceDrop 绑定操作）已全部迁移至 [22 章 编辑行为架构](./22-editing-behavior.md) 的 `tx.run()` 模式，不再作为独立 Command 类存在。
+>
+> - behavior 中间件通过 `ctx.tx.run(nodeId, draft => { ... })` 修改 draft
+> - DatasourceDrop 通过 `context.tx.run(nodeId, draft => { ... })` 修改 draft
+> - `TransactionAPI` 自动生成 `PatchCommand` 进入历史栈
+
+原有独立命令的操作语义（insert-row, remove-col, merge-cells, bind-cell 等）现在由 `table.command-handler` behavior 中间件和 `DatasourceDropHandler.onDrop` 内的 `tx.run()` 实现。
 
 ### 组合命令
 
@@ -161,7 +154,57 @@ class CompositeCommand implements Command {
 
 `CompositeCommand` 是命令组合，在 execute 之前就确定了所有子命令。事务（`beginTransaction/commitTransaction`）适用于运行时才能确定步骤的场景（如拖拽投放多个元素）。两者不冲突，事务提交时可以将收集到的命令包装成 `CompositeCommand`。
 
-## 12.7 `@easyink/ui` 表单组件事件协议
+## 12.7 PatchCommand 与 TransactionAPI
+
+22 章编辑行为架构引入了 `TransactionAPI`，它是 behavior 中间件修改文档的标准方式。
+
+### 工作流程
+
+```
+ctx.tx.run(nodeId, draft => { draft.props.color = 'red' })
+       |
+       v
+  mutative create(state, recipe, { enablePatches: true })
+       |
+       v
+  patches + inversePatches
+       |
+       v
+  new PatchCommand(getNode, patches, inversePatches, options)
+       |
+       v
+  commitCommand(patchCmd) --> 进入 CommandManager 历史栈
+```
+
+### PatchCommand
+
+```typescript
+class PatchCommand implements Command {
+  execute(): void   // applyJsonPatches(node, patches)
+  undo(): void      // applyJsonPatches(node, inversePatches)
+  merge(next): Command | null  // 同 mergeKey + 时间窗口内合并
+}
+```
+
+### mergeKey 合并
+
+连续的同类操作（如拖拽 resize 每帧产生一次 `tx.run`）通过 `mergeKey` 合并为一条历史记录：
+
+```typescript
+ctx.tx.run(nodeId, draft => {
+  draft.table.topology.columns[colIndex].ratio = newRatio
+}, { mergeKey: `resize-col-${colIndex}`, mergeWindowMs: 300 })
+```
+
+### batch
+
+`tx.batch(() => { ... })` 将多次 `tx.run` 合并为一条 `CompositeCommand`。
+
+### 与旧 Command 类的关系
+
+所有表格 Command 类（InsertTableRow, MergeTableCells, BindStaticCellCommand, UpdateTableCellCommand 等）已全部迁移至 `tx.run()` 调用——behavior 中间件使用 `ctx.tx.run()`，DatasourceDrop 使用 `context.tx.run()`。
+
+## 12.8 `@easyink/ui` 表单组件事件协议
 
 所有 `@easyink/ui` 包中的 `Ei*` 表单组件必须同时暴露两个事件：
 
@@ -196,7 +239,7 @@ class CompositeCommand implements Command {
 
 由于 preview 路径直接修改了 node.props / page / document，commit 时创建 Command 需要知道编辑前的原始值。`UpdateMaterialPropsCommand`、`UpdatePageCommand`、`UpdateDocumentCommand`、`UpdateGeometryCommand` 均接受可选的 `precomputedOldValues` 参数。上层在首次 preview 时快照原始值，commit 时传入 Command 构造函数。
 
-## 12.8 历史面板
+## 12.9 历史面板
 
 Designer 底部历史面板至少提供：
 
@@ -211,7 +254,7 @@ Designer 底部历史面板至少提供：
 - 选区刷新
 - Viewer 预览刷新
 
-## 12.9 失败语义
+## 12.10 失败语义
 
 命令执行失败时：
 

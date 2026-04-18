@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import type { MarqueeRect } from '../composables/use-marquee-select'
 import type { ResizeHandle } from '../composables/use-element-resize'
-import { computed, nextTick, onMounted, onUnmounted, provide, ref } from 'vue'
+import { computed, onMounted, onUnmounted, provide, ref } from 'vue'
+import { UnitManager } from '@easyink/core'
 import { useDesignerStore } from '../composables'
-import { useDeepEditing } from '../composables/use-deep-editing'
 import { useElementDrag } from '../composables/use-element-drag'
 import { useElementResize } from '../composables/use-element-resize'
 import { useElementRotate } from '../composables/use-element-rotate'
@@ -27,6 +27,8 @@ import ToolbarManager from './ToolbarManager.vue'
 import MaterialPanel from './MaterialPanel.vue'
 import DeepEditDragHandle from './DeepEditDragHandle.vue'
 import CanvasElementContent from './CanvasElementContent.vue'
+import SelectionOverlay from './SelectionOverlay.vue'
+import EphemeralPanelHost from './EphemeralPanelHost.vue'
 
 const store = useDesignerStore()
 const containerRef = ref<HTMLElement | null>(null)
@@ -77,18 +79,6 @@ const { onDragOver: onMaterialDragOver, onDrop: onMaterialDrop } = useMaterialDr
   getPageEl: () => pageRef.value,
 })
 
-// ─── Deep Editing ────────────────────────────────────────────────
-const deepEditOverlayRef = ref<HTMLElement | null>(null)
-const deepEditToolbarRef = ref<HTMLElement | null>(null)
-
-const deepEditing = useDeepEditing({
-  store,
-  getPageEl: () => pageRef.value,
-  getScrollEl: () => scrollRef.value,
-  getOverlayEl: () => deepEditOverlayRef.value,
-  getToolbarEl: () => deepEditToolbarRef.value,
-})
-
 function handlePageDragOver(e: DragEvent) {
   onPageDragOver(e)
   onMaterialDragOver(e)
@@ -120,19 +110,13 @@ const pageStyle = computed(() => {
 
 const elements = computed(() => store.getElements())
 
-const deepEditNode = computed(() => {
-  const nodeId = store.deepEditing.nodeId
-  if (!nodeId)
-    return null
-  return store.getElementById(nodeId) ?? null
-})
+const editingNodeId = computed(() => store.editingSession.activeNodeId)
 
-/** Visual height of the deep-edit overlay, accounting for virtual placeholder rows in table-data. */
-const deepEditOverlayHeight = computed(() => {
-  const node = deepEditNode.value
-  if (!node)
-    return 0
-  return store.getVisualHeight(node)
+const editingNode = computed(() => {
+  const id = editingNodeId.value
+  if (!id)
+    return null
+  return store.getElementById(id) ?? null
 })
 
 const marqueeStyle = computed(() => {
@@ -163,21 +147,21 @@ function isResizable(kind: string): boolean {
 function handleScrollPointerDown(e: PointerEvent) {
   // Only trigger marquee on empty space (the scroll area or page background)
   if (e.target === scrollRef.value || e.target === pageRef.value) {
-    if (deepEditing.isActive()) {
-      deepEditing.exit()
+    if (store.editingSession.isActive) {
+      store.editingSession.exit()
     }
     onCanvasPointerDown(e)
   }
 }
 
-/** Guards against the click event routing to cell selection when deep editing was just entered on pointerdown. */
-let deepEditEnteredOnPointerDown = false
+/** Guards against the click event routing to cell selection when editing was just entered on pointerdown. */
+let editEnteredOnPointerDown = false
 
 function handleElementPointerDown(e: PointerEvent, elementId: string) {
   e.stopPropagation()
-  deepEditEnteredOnPointerDown = false
+  editEnteredOnPointerDown = false
 
-  // Right-click: preserve current selection for context menu, skip deep editing and drag
+  // Right-click: preserve current selection for context menu, skip editing and drag
   if (e.button === 2) {
     if (!store.selection.has(elementId)) {
       store.selection.select(elementId)
@@ -185,25 +169,44 @@ function handleElementPointerDown(e: PointerEvent, elementId: string) {
     return
   }
 
-  // During deep editing for this element, don't start element drag
-  if (deepEditing.isActive() && deepEditing.getNodeId() === elementId) {
+  const activeNodeId = store.editingSession.activeNodeId
+
+  // During editing for this element, dispatch pointer event to session
+  if (store.editingSession.isActive && activeNodeId === elementId) {
+    const pageEl = pageRef.value
+    if (pageEl) {
+      const rect = pageEl.getBoundingClientRect()
+      const zoom = store.workbench.viewport.zoom
+      const um = new UnitManager(store.schema.unit)
+      const x = um.screenToDocument(e.clientX, rect.left, 0, zoom)
+      const y = um.screenToDocument(e.clientY, rect.top, 0, zoom)
+      store.editingSession.dispatch({ kind: 'pointer-down', point: { x, y }, originalEvent: e })
+    }
     return
   }
-  // If deep editing another element, exit first
-  if (deepEditing.isActive() && deepEditing.getNodeId() !== elementId) {
-    deepEditing.exit()
+  // If editing another element, exit first
+  if (store.editingSession.isActive && activeNodeId !== elementId) {
+    store.editingSession.exit()
   }
 
-  // For deep-edit-capable elements, enter deep editing immediately
+  // For edit-capable elements, enter editing session based on enterTrigger
   if (!(e.ctrlKey || e.metaKey)) {
-    const ext = store.getDesignerExtension(store.getElementById(elementId)?.type ?? '')
-    if (ext?.deepEditing) {
-      // Step 1: set store state (triggers reactive updates for overlay positioning)
-      if (deepEditing.enter(elementId)) {
-        deepEditEnteredOnPointerDown = true
-        // Step 2: after Vue renders the overlay/toolbar, mount the FSM phase
-        nextTick(() => deepEditing.mountCurrentPhase())
-        return
+    const node = store.getElementById(elementId)
+    const ext = node ? store.getDesignerExtension(node.type) : undefined
+    if (ext?.geometry && ext.enterTrigger === 'click') {
+      const pageEl = pageRef.value
+      if (pageEl) {
+        const rect = pageEl.getBoundingClientRect()
+        const zoom = store.workbench.viewport.zoom
+        const um = new UnitManager(store.schema.unit)
+        const initialPoint = {
+          x: um.screenToDocument(e.clientX, rect.left, 0, zoom),
+          y: um.screenToDocument(e.clientY, rect.top, 0, zoom),
+        }
+        if (store.editingSession.enter(elementId, ext, initialPoint)) {
+          editEnteredOnPointerDown = true
+          return
+        }
       }
     }
   }
@@ -213,9 +216,9 @@ function handleElementPointerDown(e: PointerEvent, elementId: string) {
 function handleElementClick(e: MouseEvent, elementId: string) {
   e.stopPropagation()
 
-  // Skip cell routing if deep editing was just entered on this same pointerdown->click cycle
-  if (deepEditEnteredOnPointerDown) {
-    deepEditEnteredOnPointerDown = false
+  // Skip cell routing if editing was just entered on this same pointerdown->click cycle
+  if (editEnteredOnPointerDown) {
+    editEnteredOnPointerDown = false
     return
   }
 
@@ -227,6 +230,40 @@ function handleElementClick(e: MouseEvent, elementId: string) {
 
   if (!store.selection.has(elementId) || store.selection.count > 1) {
     store.selection.select(elementId)
+  }
+}
+
+function handleElementDblClick(e: MouseEvent, elementId: string) {
+  e.stopPropagation()
+
+  // If this element is already being edited, treat dblclick as a request to
+  // enter the material's "content edit" mode for the currently-selected sub-target
+  // (e.g. text editing a table cell). The preceding pointerdown/click cycle has
+  // already updated selection via the framework's selectionMiddleware.
+  if (store.editingSession.isActive && store.editingSession.activeNodeId === elementId) {
+    store.editingSession.dispatch({ kind: 'command', command: 'enter-edit' })
+    return
+  }
+
+  const node = store.getElementById(elementId)
+  const ext = node ? store.getDesignerExtension(node.type) : undefined
+  // Default enterTrigger is 'dblclick'
+  if (ext?.geometry && (ext.enterTrigger ?? 'dblclick') === 'dblclick') {
+    const pageEl = pageRef.value
+    if (pageEl) {
+      const rect = pageEl.getBoundingClientRect()
+      const zoom = store.workbench.viewport.zoom
+      const um = new UnitManager(store.schema.unit)
+      const initialPoint = {
+        x: um.screenToDocument(e.clientX, rect.left, 0, zoom),
+        y: um.screenToDocument(e.clientY, rect.top, 0, zoom),
+      }
+      const session = store.editingSession.enter(elementId, ext, initialPoint)
+      // If a cell selection was hit, also enter content edit mode immediately
+      if (session && session.selectionStore.selection) {
+        store.editingSession.dispatch({ kind: 'command', command: 'enter-edit' })
+      }
+    }
   }
 }
 
@@ -288,10 +325,17 @@ function handleMouseLeave() {
 }
 
 function handleKeyDown(e: KeyboardEvent) {
-  if (deepEditing.isActive()) {
-    const handled = deepEditing.handleKeyDown(e)
-    if (handled)
-      return
+  if (store.editingSession.isActive) {
+    store.editingSession.dispatch({
+      kind: 'key-down',
+      key: e.key,
+      originalEvent: e,
+    })
+    // Workbench fallback: Escape exits editing session only if not consumed by behaviors
+    if (e.key === 'Escape' && !e.defaultPrevented && store.editingSession.isActive) {
+      store.editingSession.exit()
+      e.preventDefault()
+    }
   }
 }
 
@@ -383,7 +427,7 @@ onUnmounted(() => {
             'ei-canvas-element--selected': store.selection.has(el.id),
             'ei-canvas-element--locked': el.locked,
             'ei-canvas-element--hidden': el.hidden,
-            'ei-canvas-element--deep-editing': store.deepEditing.nodeId === el.id,
+            'ei-canvas-element--deep-editing': editingNodeId === el.id,
           }"
           :style="{
             left: `${el.x}${store.schema.unit}`,
@@ -396,13 +440,14 @@ onUnmounted(() => {
           }"
           @pointerdown="handleElementPointerDown($event, el.id)"
           @click="handleElementClick($event, el.id)"
+          @dblclick="handleElementDblClick($event, el.id)"
         >
           <div class="ei-canvas-element__content">
             <CanvasElementContent :node-id="el.id" />
           </div>
 
           <!-- Selection border, resize handles & rotation handle -->
-          <template v-if="store.selection.has(el.id) && store.deepEditing.nodeId !== el.id">
+          <template v-if="store.selection.has(el.id) && editingNodeId !== el.id">
             <div class="ei-canvas-element__selection-border" />
 
             <!-- 8 resize handles -->
@@ -430,28 +475,13 @@ onUnmounted(() => {
         <!-- Snap line overlay -->
         <SnapLineOverlay />
 
-        <!-- Deep editing containers (always in DOM; v-show controls visibility) -->
-        <div
-          ref="deepEditOverlayRef"
-          v-show="store.isInDeepEditing && deepEditNode"
-          class="ei-deep-edit-overlay"
-          :style="deepEditNode ? {
-            left: `${deepEditNode.x}${store.schema.unit}`,
-            top: `${deepEditNode.y}${store.schema.unit}`,
-            width: `${deepEditNode.width}${store.schema.unit}`,
-            height: `${deepEditOverlayHeight}${store.schema.unit}`,
-          } : undefined"
-        />
-        <div
-          ref="deepEditToolbarRef"
-          v-show="store.isInDeepEditing && deepEditNode"
-          class="ei-deep-edit-toolbar"
-          :style="deepEditNode ? {
-            left: `${deepEditNode.x}${store.schema.unit}`,
-            top: `${deepEditNode.y}${store.schema.unit}`,
-          } : undefined"
-        />
-        <DeepEditDragHandle v-if="store.isInDeepEditing && deepEditNode" :get-page-el="() => pageRef" :get-scroll-el="() => scrollRef" />
+        <!-- Selection overlay (decorations from editing session) -->
+        <SelectionOverlay />
+
+        <!-- Ephemeral panel host -->
+        <EphemeralPanelHost />
+
+        <DeepEditDragHandle v-if="store.isInDeepEditing && editingNode" :get-page-el="() => pageRef" :get-scroll-el="() => scrollRef" />
 
         <!-- Marquee selection rectangle -->
         <div
@@ -699,18 +729,4 @@ onUnmounted(() => {
   font-size: 12px;
 }
 
-/* ─── Deep Editing Containers ────────────────────────────────── */
-
-.ei-deep-edit-overlay {
-  position: absolute;
-  pointer-events: none;
-  z-index: 10;
-}
-
-.ei-deep-edit-toolbar {
-  position: absolute;
-  transform: translateY(-32px);
-  z-index: 12;
-  pointer-events: auto;
-}
-</style>
+/* ─── Floating Windows ────────────────────────────────────────── */</style>

@@ -1,6 +1,5 @@
 import type {
   CanvasViewportState,
-  DeepEditingRuntimeState,
   PanelToggleState,
   SaveBranchMenuState,
   SnapState,
@@ -153,10 +152,6 @@ function createDefaultStatus(): StatusBarState {
     draft: 'clean',
     autoSave: 'idle',
   }
-}
-
-export function createDefaultDeepEditing(): DeepEditingRuntimeState {
-  return {}
 }
 
 export function createDefaultSaveBranchMenu(): SaveBranchMenuState {

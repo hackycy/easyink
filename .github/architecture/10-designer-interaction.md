@@ -547,7 +547,7 @@ v1 表格格子内容仅支持纯文本：
 - 双击单元格后，在单元格位置覆盖一个原生 input 元素
 - input 的位置和尺寸与单元格对齐，由 overlay 层管理
 - 回车键确认编辑，Esc 退出到 `cell-selected`
-- 编辑完成后通过 `UpdateTableCellCommand` 写入 cell 的 content
+- 编辑完成后通过 `tx.run()` 写入 cell 的 content（见 [22 章](./22-editing-behavior.md) `commit-cell-text` 命令）
 - 右侧属性面板仍显示表格壳层属性，不切成独立文本属性页
 
 Cell 内容为纯文本，不支持嵌套子物料。
@@ -586,9 +586,9 @@ Cell 内容为纯文本，不支持嵌套子物料。
 1. 从数据源树拖拽字段到表格上方。
 2. 当前悬停的单元格显示 drop zone 高亮，并指示类型兼容性。
 3. 根据目标 cell 所在行的 role 区分处理：
-   - **repeat-template 行**：检查新字段的集合前缀是否与同行已有 cell 一致（`getFieldCollectionPrefix()` 校验），不一致则拒绝拖入并显示提示。通过 `UpdateTableCellCommand` 设置 `cell.binding`，fieldPath 为绝对路径（如 `items/name`）。
-   - **header / footer / normal 行**：通过 `BindStaticCellCommand` 设置 `cell.staticBinding`，fieldPath 为绝对路径，无集合约束。
-4. 解除绑定时，repeat-template cell 通过 `UpdateTableCellCommand` 清除 `cell.binding`，header/footer cell 通过 `ClearStaticCellBindingCommand` 清除 `cell.staticBinding`。
+   - **repeat-template 行**：检查新字段的集合前缀是否与同行已有 cell 一致（`getFieldCollectionPrefix()` 校验），不一致则拒绝拖入并显示提示。通过 `context.tx.run()` 设置 `cell.binding`，fieldPath 为绝对路径（如 `items/name`）。
+   - **header / footer / normal 行**：通过 `context.tx.run()` 设置 `cell.staticBinding`，fieldPath 为绝对路径，无集合约束。
+4. 解除绑定时，repeat-template cell 通过 `tx.run()` 清除 `cell.binding`，header/footer cell 通过 `tx.run()` 清除 `cell.staticBinding`。所有表格绑定操作均通过 `TransactionAPI` 产生 `PatchCommand` 进入历史栈（见 [22 章](./22-editing-behavior.md)）。
 
 ### 拖拽视觉反馈
 

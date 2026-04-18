@@ -23,6 +23,10 @@ const emit = defineEmits<{
 }>()
 
 const store = reactive(new DesignerStore(props.schema, props.preferenceProvider)) as DesignerStore
+// EditingSessionManager was constructed before the reactive proxy existed;
+// re-target it at the proxy so mutations made through tx.run trigger Vue
+// reactivity (otherwise patches mutate the raw store and templates stay stale).
+store.editingSession.setStore(store)
 provideDesignerStore(store)
 registerBuiltinMaterials(store)
 

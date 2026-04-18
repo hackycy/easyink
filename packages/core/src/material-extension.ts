@@ -1,5 +1,6 @@
 import type { BindingRef, DocumentSchema, MaterialNode } from '@easyink/schema'
 import type { Command } from './command'
+import type { BehaviorRegistration, MaterialGeometry, SelectionDecorationDef, SelectionType, TransactionAPI } from './editing-session'
 
 // ─── Material Extensions ───────────────────────────────────────────
 
@@ -30,7 +31,7 @@ export interface NodeSignal {
 }
 
 /**
- * Material designer extension contract: imperative DOM rendering + declarative FSM deep editing.
+ * Material designer extension contract.
  */
 export interface MaterialDesignerExtension {
   /**
@@ -38,8 +39,6 @@ export interface MaterialDesignerExtension {
    * Returns a cleanup function called when the element is removed from the canvas.
    */
   renderContent: (nodeSignal: NodeSignal, container: HTMLElement) => () => void
-  /** Declarative FSM for deep editing (optional, only complex materials) */
-  deepEditing?: DeepEditingDefinition
   /** Total visual height in the designer when the material renders virtual content beyond node.height (e.g. placeholder rows). */
   getVisualHeight?: (node: MaterialNode) => number
   /**
@@ -48,6 +47,19 @@ export interface MaterialDesignerExtension {
    * When absent, the designer falls back to default behavior (whole element as drop zone).
    */
   datasourceDrop?: DatasourceDropHandler
+
+  // ─── Editing Behavior Protocol (Chapter 22) ─────────────────────
+
+  /** Declarative trigger for entering an editing session. Default: 'dblclick'. */
+  enterTrigger?: 'dblclick' | 'click'
+  /** Geometry protocol: material declares hit-test, layout, and selection-to-rect mapping. */
+  geometry?: MaterialGeometry
+  /** Selection types this material supports (e.g. 'table.cell'). */
+  selectionTypes?: SelectionType<unknown>[]
+  /** Behavior middleware chain (Koa-style). */
+  behaviors?: BehaviorRegistration[]
+  /** Selection decoration definitions (framework auto-renders). */
+  decorations?: SelectionDecorationDef[]
 }
 
 // ─── Datasource Drop Protocol ────────────────────────────────────
@@ -118,6 +130,8 @@ export interface MaterialExtensionContext {
   getSelection: () => SelectionSnapshot
   getBindingLabel: (binding: BindingRef) => string
   commitCommand: (command: Command) => void
+  /** Transaction API for draft-based mutations (generates PatchCommand). */
+  tx: TransactionAPI
   requestPropertyPanel: (overlay: PropertyPanelOverlay | null) => void
   emit: (event: string, payload: unknown) => void
   on: (event: string, handler: (...args: unknown[]) => void) => () => void
@@ -183,71 +197,4 @@ export interface PropSchemaLike {
   [extra: string]: unknown
 }
 
-// ─── Deep Editing FSM ─────────────────────────────────────────────
-
-/** Declarative finite state machine definition for deep editing. */
-export interface DeepEditingDefinition {
-  /** Material-internal phases + transition rules */
-  phases: DeepEditingPhase[]
-  /** Phase to enter when deep editing starts */
-  initialPhase: string
-}
-
-export interface DeepEditingPhase {
-  id: string
-  /** Called when entering this phase; mount overlay/toolbar content into the provided containers. */
-  onEnter: (containers: PhaseContainers, node: MaterialNode) => void
-  /** Called when exiting this phase; cleanup mounted content. */
-  onExit: () => void
-  /** Sub-selection protocol: material declares sub-element selection logic (e.g. table cells). */
-  subSelection?: SubSelectionHandler
-  /** Internal resize protocol: material declares internally resizable regions (e.g. column borders). */
-  internalResize?: InternalResizeHandler
-  /** Keyboard routing: material handles key events while in this phase. */
-  keyboardHandler?: KeyboardRouteHandler
-  /** Transition rules: which phases can be reached from this one and how. */
-  transitions: PhaseTransition[]
-}
-
-/** DOM containers provided by Designer for material-owned UI during deep editing. */
-export interface PhaseContainers {
-  /** Overlay container (positioned over the element, absolute positioning) */
-  overlay: HTMLElement
-  /** Toolbar container (floating region above the element) */
-  toolbar: HTMLElement
-  /** Request a phase transition from within the current phase (e.g. toolbar actions). */
-  requestTransition: (phaseId: string) => void
-}
-
-export interface PhaseTransition {
-  to: string
-  trigger: 'click' | 'double-click' | 'escape' | 'custom'
-  guard?: (event: unknown, node: MaterialNode) => boolean
-}
-
-export interface SubSelectionHandler {
-  hitTest: (point: { x: number, y: number }, node: MaterialNode) => SubSelectionResult | null
-  getSelectedPath: () => unknown
-  clearSelection: () => void
-}
-
-export interface SubSelectionResult {
-  path: unknown
-  rect?: { x: number, y: number, w: number, h: number }
-}
-
-export interface InternalResizeHandler {
-  getResizeHandles: (node: MaterialNode) => InternalResizeHandle[]
-  onResize: (handle: InternalResizeHandle, delta: { dx: number, dy: number }) => void
-  onResizeEnd: (handle: InternalResizeHandle) => void
-}
-
-export interface InternalResizeHandle {
-  id: string
-  cursor: string
-  position: { x: number, y: number }
-}
-
-export interface KeyboardRouteHandler {
-  handleKey: (event: KeyboardEvent, node: MaterialNode) => boolean
-}
+// (Old deep editing FSM protocol removed — replaced by Chapter 22 Editing Behavior Architecture)

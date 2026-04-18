@@ -181,11 +181,11 @@ table-data 和 table-static 均实现 `DatasourceDropHandler` 协议：
 
 **table-data**：
 - `onDragOver`：hitTestGridCell -> resolveMergeOwner -> computeCellRect。repeat-template 行检查字段集合前缀一致性（`getFieldCollectionPrefix`），不一致返回 `rejected`；header/footer/normal 行直接 `accepted`。
-- `onDrop`：repeat-template 行通过 `UpdateTableCellCommand` 设置 `cell.binding`；header/footer/normal 行通过 `BindStaticCellCommand` 设置 `cell.staticBinding`。
+- `onDrop`：通过 `context.tx.run(nodeId, draft => { ... })` 修改 draft。repeat-template 行设置 `cell.binding`；header/footer/normal 行设置 `cell.staticBinding`。
 
 **table-static**：
 - `onDragOver`：hitTestGridCell -> resolveMergeOwner -> computeCellRect，无约束，直接 `accepted`。
-- `onDrop`：`BindStaticCellCommand` 设置 `cell.staticBinding`。
+- `onDrop`：通过 `context.tx.run(nodeId, draft => { ... })` 设置 `cell.staticBinding`。
 
 复用 `@easyink/material-table-kernel` 的 `hitTestGridCell`、`resolveMergeOwner`、`computeCellRect` 函数。
 

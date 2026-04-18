@@ -328,14 +328,14 @@ Viewer 不再从 `table.source` 读取集合路径，而是在运行时推导：
 
 ### 拖拽绑定交互
 
-- repeat-template 行的单元格：拖入字段时执行 `UpdateTableCellCommand` 设置 `cell.binding`
-- header / footer / normal 行的单元格：拖入字段时执行 `BindStaticCellCommand` 设置 `cell.staticBinding`
+- repeat-template 行的单元格：拖入字段时通过 `context.tx.run()` 设置 `cell.binding`
+- header / footer / normal 行的单元格：拖入字段时通过 `context.tx.run()` 设置 `cell.staticBinding`
 - 不存在首次拖入自动设置 source 的流程，每个 cell 独立绑定
 
 ### 解除绑定
 
-- repeat-template 行 cell：通过 `UpdateTableCellCommand` 清除 `cell.binding`
-- header / footer / normal 行 cell：通过 `ClearStaticCellBindingCommand` 清除 `cell.staticBinding`
+- repeat-template 行 cell：通过 `tx.run()` 清除 `cell.binding`
+- header / footer / normal 行 cell：通过 `tx.run()` 清除 `cell.staticBinding`
 - 不存在解除 table.source 的整表清除流程
 
 ## 8.12 table-static 独立绑定模型
@@ -384,8 +384,7 @@ Viewer 的 `resolveAllBindings` 阶段检测到 table-static 节点时：
 
 ### 命令
 
-- `BindStaticCellCommand`：设置 `cell.staticBinding`，同时清除 `cell.content.text`（用于 table-static 和 table-data 的 header/footer/normal 行）
-- `ClearStaticCellBindingCommand`：清除 `cell.staticBinding`，恢复 cell 为可手动编辑状态
+所有表格绑定操作均通过 `TransactionAPI.run()` 实现，自动产生 `PatchCommand` 进入历史栈（见 [22 章](./22-editing-behavior.md)）。
 
 ## 8.13 Designer 与 Viewer 的边界
 
