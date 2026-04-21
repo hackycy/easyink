@@ -316,7 +316,7 @@ interface PropertyPanelOverlay {
 - 无 overlay 且 `material.capabilities.bindable === false` → 隐藏
 - 否则 → 展示元素顶层 binding
 
-**自动清除**：PropertiesPanel watch `deepEditing` 状态，phase 变化或退出时自动 `setPropertyOverlay(null)`。物料在新 phase 的 `onEnter` 或 sub-selection 变化时重新推送。
+**自动清除**：PropertiesPanel watch editing session 状态，session 退出时自动 `setPropertyOverlay(null)`。90% 场景由 `selectionType.getPropertySchema` 自动派生（见 [22 章 S22.6.3](./22-editing-behavior.md)），仅 EphemeralPanel 场景需要手动推送。
 
 **自定义编辑器**：物料包可定义 Vue 组件，通过 `editors` 映射传入。面板按 `PropSchema.editor` 字段查找，匹配到自定义编辑器时渲染该组件。
 
@@ -327,7 +327,7 @@ interface PropertyPanelOverlay {
 ```typescript
 sectionFilter?: (sectionId: PanelSectionId, context: SectionFilterContext) => boolean
 // PanelSectionId = 'geometry' | 'props' | 'overlay' | 'binding' | 'visibility'
-// SectionFilterContext = { node: MaterialNode, deepEditing: DeepEditingRuntimeState }
+// SectionFilterContext = { node: MaterialNode, isEditing: boolean }
 ```
 
 返回 `false` 隐藏该 section。表格物料注册时声明 `sectionFilter: (id) => id !== 'binding'`，因为表格绑定粒度是单元格级而非元素级（cell 级 binding 通过 `PropertyPanelOverlay.binding` 在 cell-selected 阶段展示）。
@@ -387,18 +387,18 @@ get propertyOverlay(): PropertyPanelOverlay | null
 
 ## 10.7 深度编辑（Deep Editing）
 
-深度编辑不是表格专属能力。所有复杂物料（table/chart/container/relation）通过同一套扩展协议进入深度编辑模式。
+深度编辑不是表格专属能力。所有复杂物料（table/chart/container/relation）通过同一套扩展协议进入深度编辑模式。编辑行为的正式协议已迁移至 [22 章 编辑行为架构](./22-editing-behavior.md)，本节保留设计器侧顶层交互模型和物料级示例。
 
-### 10.7.1 统一深度编辑协议
+### 10.7.1 统一编辑会话协议
 
-Designer 提供基础状态机，包含三个顶层阶段：`idle`、`selected`、`deep-editing`。
+Designer 提供 `EditingSessionManager`，包含三个顶层阶段：`idle`、`selected`、`editing-session`。
 
-当物料在其 extension 中声明 `deepEditing` 时，进入 `deep-editing` 阶段后控制权委托给物料自身的 FSM：
+物料在 extension 中声明 `geometry / selectionTypes / behaviors / decorations`（见 [22 章](./22-editing-behavior.md)）时，可通过 `enterTrigger`（默认 `'dblclick'`，表格为 `'click'`）进入编辑会话：
 
 ```
 idle --click element--> selected
-selected --trigger deep edit--> deep-editing (delegate to material FSM)
-deep-editing --click outside / exit--> idle
+selected --enterTrigger--> editing-session (delegate to behavior chain)
+editing-session --click outside / Esc--> idle
 ```
 
 职责划分：
@@ -408,73 +408,82 @@ deep-editing --click outside / exit--> idle
 - element 级 resize handle
 - 对齐辅助线
 - 拖拽移动（drag movement）
-- deep-editing 的进入/退出生命周期
-- overlay 容器和 toolbar 容器的 DOM 分配
+- editing session 的进入/退出生命周期
+- `SelectionDecoration` 自动定位渲染（基于 `resolveLocation` 返回的矩形）
 
-**物料 FSM 管理：**
-- 内容渲染（content rendering）
-- overlay 渲染（自行挂载到 Designer 提供的 overlay DOM 容器）
-- toolbar 渲染（自行挂载到 Designer 提供的 toolbar DOM 容器）
-- 内部 resize handle（如列/行边线手柄）
-- 子选中（sub-selection，如单元格选中）
-- 键盘路由（进入 deep-editing 后键盘事件先经过物料 FSM）
+**物料通过 22 章协议声明：**
+- 内容渲染（`renderContent`）
+- overlay 渲染（`SelectionDecoration` Vue 组件，框架自动定位）
+- toolbar 渲染（物料自管，可在 `SelectionDecoration` 中渲染或用 `EphemeralPanel`）
+- 内部 resize handle（如列/行边线手柄，在 `SelectionDecoration` 中实现）
+- 子选中（`SelectionStore` 持有类型化 `Selection`，物料只读）
+- 键盘路由（`behaviors` 中间件链，Koa 风格 `(ctx, next)`）
 
-进入 deep-editing 时：
+进入 editing session 时：
 - element 级 8 个 resize handle 和 rotate handle 隐藏
 - 外部拖拽把手保持显示，用于移动元素
-- overlay DOM 通过 teleport 挂载到页面级专用 overlay 容器，绝对定位基于元素在页面上的位置计算
+- `SelectionDecoration` 由框架自动挂载到页面级 overlay 容器，定位基于 `resolveLocation` 返回的画布坐标
 - 提升元素 z-index，确保 overlay 不被其他元素遮挡
-- 同一时刻只有一个元素可进入 deep-editing
-- 多选元素状态与 deep-editing 互斥：进入前必须先取消多选
+- 同一时刻只有一个 `EditingSession` 活动（互斥约束）
+- 多选元素状态与 editing session 互斥：进入前必须先取消多选
 
-### 10.7.2 深度编辑运行时状态
+### 10.7.2 编辑会话运行时状态
 
 ```typescript
-interface DeepEditingState {
-	nodeId: string
-	materialType: string
-	currentPhase: string
-	materialState: unknown  // 不透明状态，由物料 FSM 自行管理
+// EditingSession runtime state (not in Schema, not in undo/redo)
+// Managed by EditingSessionManager (see packages/designer/src/editing/)
+interface EditingSessionState {
+  nodeId: string
+  selection: Selection | null  // from SelectionStore, typed & JSON-safe
+  meta: Record<string, unknown>  // reactive, for decoration/toolbar communication
 }
 ```
 
-注意：Schema 不感知 FSM -- 此状态纯粹属于运行时/交互上下文，不进入 Schema 也不进入命令历史。
+注意：Schema 不感知编辑会话 -- 此状态纯粹属于运行时/交互上下文，不进入 Schema 也不进入命令历史。
 
-### 10.7.3 示例：表格物料的 FSM 实现
+### 10.7.3 示例：表格物料的 Behavior 实现
 
-> 以下是表格物料内部的阶段定义，属于物料自身的 FSM，不是 Designer 级协议。其他复杂物料（chart/container/relation）各自定义自己的内部阶段。
+> 以下是表格物料内部的行为实现，通过 22 章 behavior middleware 注册。其他复杂物料（chart/container/relation）各自定义自己的 behavior 链。
 
-表格物料声明三个内部阶段：
+表格物料注册以下 behavior middleware（按 priority 排序执行）：
 
-**`table-selected`：**
-- 显示表格级属性，element resize handle 可见
-- 尚未进入 deep-editing（仍在 Designer 的 `selected` 阶段）
-- overlay 仅渲染微妙的虚线边框指示器（无 grid lines、无 resize handles），表明已进入深度编辑
-- 点击任意单元格区域触发转换到 `cell-selected`
+**`selectionMiddleware`（框架级，priority -100）：**
+- 调用 `materialGeometry.hitTest()` 产出 Selection 候选
+- 更新 `selectionStore`
 
-**`cell-selected`：**
-- 进入 deep-editing
-- overlay 由两层构成：
-  - **透明点击捕获层**：覆盖整个表格区域，负责路由对其他单元格的点击事件，无视觉效果
-  - **单元格 overlay**：仅覆盖被选中的单元格区域，包含蓝色高亮边框+背景、该单元格右列边和下行边的 resize 手柄（手柄长度仅等于单元格宽/高）
-- resize 手柄在拖拽过程中命令式同步更新位置和尺寸（overlay 容器、高亮区、手柄位置在 pointermove 回调中实时更新）
-- element 级 handle 隐藏
-- 浮动工具条挂载到 toolbar 容器（固定在表格上方，不随单元格移动）
-- 属性面板在表格级属性基础上动态追加格子级属性分组
+**`table.cell-select`（priority 10）：**
+- pointer-down 时解析合并单元格 owner
+- 更新 selection 为 `{ type: 'table.cell', payload: { row, col } }`
 
-**`content-editing`：**
-- onEnter 在单元格位置创建原生 input overlay 进行原位文本编辑
-- 同样使用透明点击捕获层 + 单元格高亮（无 resize 手柄）
-- 属性面板仍保持表格壳层
+**`table.keyboard-nav`（priority 10，仅 `table.cell` selection）：**
+- Tab/Shift+Tab：行优先导航
+- 方向键：4 向导航
+- Delete：清除单元格内容
 
-阶段转换：
+**`table.cell-edit`（priority 20，仅 `table.cell` selection）：**
+- Enter/F2：进入内联编辑（设置 `session.meta.editingCell`）
+- `SelectionDecoration` 组件 watch `meta.editingCell` 渲染 textarea
+
+**`table.resize`（priority 30）：**
+- 列/行 resize 命令，使用 `mergeKey` coalesce 连续拖拽
+
+**`table.command-handler`（priority 50）：**
+- 插入/删除行列、合并/拆分、对齐、commit-cell-text 等
+
+表格的 `SelectionDecoration` 组件渲染：
+- 单元格高亮边框 + 背景
+- 列/行 resize 手柄
+- toolbar 容器（物料自管 DOM）
+- 内联编辑 textarea（当 `meta.editingCell` 匹配当前选区时）
+
+交互流程：
 
 ```
-table-selected --click cell--> cell-selected
-cell-selected --double-click cell--> content-editing
-cell-selected --Esc--> table-selected
-content-editing --Esc--> cell-selected
-任意阶段 --click outside table--> Designer 退出 deep-editing（回到 idle）
+editing-session 进入 --hitTest--> selection = { type: 'table.cell', row, col }
+click 另一格子 --> selectionStore 更新 --> decoration 重渲染
+Enter/F2 --> meta.editingCell 设置 --> decoration 渲染 textarea
+Enter (textarea) --> commit-cell-text command --> meta.editingCell 清除
+Esc --> keyboardCursorMiddleware 退出 editing session
 ```
 
 ### 10.7.4 示例：表格事件分发
@@ -531,7 +540,7 @@ content-editing --Esc--> cell-selected
 格子态下属性面板不应切换成”另一个单元格编辑器页面”，而应保持同一壳层：
 
 - 上半段仍是表格级属性
-- 下半段根据 `DeepEditingState.currentPhase` 动态追加格子背景、格子操作、格子内容等局部属性组
+- 下半段根据 editing session 的 selection 状态（由 `selectionType.getPropertySchema` 自动派生，见 [22 章 S22.6.3](./22-editing-behavior.md)）动态追加格子级属性组
 - `cell-selected` 时自动追加格子属性组
 - `table-selected` 时仅显示表格级属性
 - 属性面板使用展开/折叠组分离不同层级的属性
@@ -663,7 +672,7 @@ CanvasWorkspace 遍历 elements
 
 ### 10.9.4 编辑态过渡
 
-部分物料支持双击进入内容编辑态（物料 extension 声明 `deepEditing` 能力）：
+部分物料支持双击进入内容编辑态（物料 extension 声明 `geometry / behaviors / decorations` 协议，见 [22 章](./22-editing-behavior.md)）：
 
 - 文本：双击进入富文本编辑
 - 表格：先进入格子态，再由格子内内容触发原位编辑（与 10.7 表格深度编辑衔接）
@@ -716,9 +725,8 @@ CanvasWorkspace 遍历 elements
 
 以下状态属于交互上下文状态，不进入 Schema，但可能进入工作台内存：
 
-- 当前深度编辑阶段（DeepEditingState）
+- 当前编辑会话状态（EditingSession: nodeId / selection / meta）
 - 当前区段选择
-- 物料 FSM 内部状态（materialState）
 
 这些状态可以持久化为用户偏好，但不能污染 Schema。
 

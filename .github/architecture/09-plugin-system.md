@@ -65,7 +65,7 @@ interface InternalExtensionContext {
   hooks: InternalHooks
 }
 
-// factory 在需要时被调用，返回包含 renderContent / deepEditing(可选，声明式 FSM) 的扩展实例
+// factory 在需要时被调用，返回包含 renderContent / geometry / behaviors / decorations(可选，见 22 章) 的扩展实例
 type MaterialExtensionFactory = (context: MaterialExtensionContext) => MaterialDesignerExtension
 
 interface MaterialExtensionRegistry {

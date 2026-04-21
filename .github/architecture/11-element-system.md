@@ -497,7 +497,7 @@ CanvasWorkspace 遍历 elements
 - 表壳、格子、格子内容三层编辑上下文
 - 格子内文本进入内联编辑时，属性壳层仍保持 `table-static/table-data` 上下文
 - 表格浮动工具条与属性面板共享同一份表格编辑状态，而不是各自维护一套临时状态
-- 深度编辑 phase 的 overlay/toolbar 通过 `PhaseContainers` 挂载，由 Designer 管理定位
+- 深度编辑的 overlay 通过 [22 章 SelectionDecoration](./22-editing-behavior.md) 声明式渲染，框架自动定位；toolbar 由物料自管（见 22 章 S22.6.1）
 
 ## 11.7 Viewer 扩展面
 
