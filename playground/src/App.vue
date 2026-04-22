@@ -164,16 +164,16 @@ function handleDataUpdate(data: Record<string, unknown>) {
     :preference-provider="preferenceProvider"
   >
     <template #topbar>
-      <div class="playground-topbar">
-        <button class="playground-template-btn" @click="showTemplateGallery = true">
+      <div class="flex items-center gap-2 px-3 py-1 bg-bg-secondary border-b border-border">
+        <button class="flex items-center gap-1 px-2.5 py-1 text-[13px] font-medium border border-border-dark rounded bg-white cursor-pointer text-text-secondary hover:bg-bg-tertiary" @click="showTemplateGallery = true">
           {{ currentTemplate?.name ?? '选择模板' }}
-          <span class="playground-template-arrow">&#9662;</span>
+          <span class="text-[10px] text-text-quaternary">&#9662;</span>
         </button>
-        <div class="playground-topbar__spacer" />
-        <button class="playground-action-btn" @click="openDataEditor">
+        <div class="flex-1" />
+        <button class="px-3.5 py-1 text-[13px] border border-border-dark rounded bg-white cursor-pointer text-text-secondary hover:bg-bg-hover" @click="openDataEditor">
           数据
         </button>
-        <button class="playground-action-btn playground-action-btn--primary" @click="openPreview">
+        <button class="px-3.5 py-1 text-[13px] border border-primary rounded bg-primary cursor-pointer text-white hover:bg-primary-hover hover:border-primary-hover" @click="openPreview">
           预览
         </button>
       </div>
@@ -212,65 +212,3 @@ export default {
 }
 </script>
 
-<style scoped>
-.playground-topbar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 12px;
-  background: #f8f8f8;
-  border-bottom: 1px solid #e0e0e0;
-}
-
-.playground-template-btn {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
-  font-size: 13px;
-  font-weight: 500;
-  border: 1px solid #d0d0d0;
-  border-radius: 4px;
-  background: #fff;
-  cursor: pointer;
-  color: #333;
-}
-
-.playground-template-btn:hover {
-  background: #f0f0f0;
-}
-
-.playground-template-arrow {
-  font-size: 10px;
-  color: #999;
-}
-
-.playground-topbar__spacer {
-  flex: 1;
-}
-
-.playground-action-btn {
-  padding: 4px 14px;
-  font-size: 13px;
-  border: 1px solid #d0d0d0;
-  border-radius: 4px;
-  background: #fff;
-  cursor: pointer;
-  color: #333;
-}
-
-.playground-action-btn:hover {
-  background: #e8e8e8;
-}
-
-.playground-action-btn--primary {
-  background: #1677ff;
-  border-color: #1677ff;
-  color: #fff;
-}
-
-.playground-action-btn--primary:hover {
-  background: #4096ff;
-  border-color: #4096ff;
-}
-</style>

@@ -16,7 +16,11 @@
     "vue": "catalog:framework"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "catalog:cli",
     "@vitejs/plugin-vue": "catalog:cli",
+    "autoprefixer": "catalog:cli",
+    "postcss": "catalog:cli",
+    "tailwindcss": "catalog:cli",
     "vite": "catalog:cli"
   }
 }

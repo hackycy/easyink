@@ -84,45 +84,44 @@ function getModeLabel(mode: string): string {
 </script>
 
 <template>
-  <div class="tg-overlay" @click="handleOverlayClick">
-    <div class="tg-modal">
-      <div class="tg-header">
-        <h2 class="tg-title">选择模板</h2>
-        <div class="tg-header-actions">
-          <button class="tg-btn tg-btn--primary" @click="emit('createBlank')">
+  <div class="fixed inset-0 z-[10000] flex items-center justify-center bg-bg-overlay" @click="handleOverlayClick">
+    <div class="w-[720px] max-w-[90vw] max-h-[80vh] flex flex-col bg-white rounded-lg shadow-modal">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-border-light">
+        <h2 class="m-0 text-base font-semibold text-text-primary">选择模板</h2>
+        <div class="flex items-center gap-2">
+          <button class="px-3.5 py-1.5 text-[13px] border border-primary rounded bg-primary cursor-pointer text-white hover:bg-primary-hover hover:border-primary-hover" @click="emit('createBlank')">
             新建空白
           </button>
-          <button class="tg-close" @click="emit('close')">
+          <button class="w-7 h-7 flex items-center justify-center border-none bg-transparent text-xl text-text-quaternary cursor-pointer rounded hover:bg-border-light hover:text-text-secondary" @click="emit('close')">
             &times;
           </button>
         </div>
       </div>
 
-      <div class="tg-body">
-        <!-- 我的模板 -->
-        <section v-if="userTemplates.length > 0" class="tg-section">
-          <h3 class="tg-section-title">我的模板</h3>
-          <div class="tg-grid">
+      <div class="flex-1 overflow-y-auto px-5 py-4">
+        <section v-if="userTemplates.length > 0" class="mb-5 last:mb-0">
+          <h3 class="m-0 mb-3 text-[13px] font-semibold text-text-tertiary">我的模板</h3>
+          <div class="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3">
             <div
               v-for="t in userTemplates"
               :key="t.id"
-              class="tg-card"
-              :class="{ 'tg-card--active': t.id === currentId }"
+              class="border border-border-light rounded-md cursor-pointer overflow-hidden transition-all hover:border-primary hover:shadow-card"
+              :class="{ 'border-primary shadow-active': t.id === currentId }"
               @click="handleSelectUser(t)"
             >
-              <div class="tg-card-preview">
-                <span class="tg-card-mode">{{ getModeLabel(t.schema.page.mode) }}</span>
+              <div class="h-[100px] bg-bg-quaternary flex items-center justify-center relative">
+                <span class="absolute top-1.5 right-1.5 px-1.5 py-0.5 text-[11px] bg-black/[0.06] rounded-sm text-text-tertiary">{{ getModeLabel(t.schema.page.mode) }}</span>
               </div>
-              <div class="tg-card-info">
-                <span class="tg-card-name">{{ t.name }}</span>
-                <span class="tg-card-meta">{{ t.schema.page.width }}x{{ t.schema.page.height }}{{ t.schema.unit }}</span>
-                <span class="tg-card-date">{{ formatDate(t.updatedAt) }}</span>
+              <div class="px-2.5 py-2 flex flex-col gap-0.5">
+                <span class="text-[13px] font-medium text-text-primary overflow-hidden text-ellipsis whitespace-nowrap">{{ t.name }}</span>
+                <span class="text-[11px] text-text-quaternary">{{ t.schema.page.width }}x{{ t.schema.page.height }}{{ t.schema.unit }}</span>
+                <span class="text-[11px] text-text-disabled">{{ formatDate(t.updatedAt) }}</span>
               </div>
-              <div class="tg-card-actions">
-                <button class="tg-card-btn" title="复制" @click="handleDuplicate(t, $event)">
+              <div class="px-2.5 pb-2 flex gap-1.5">
+                <button class="px-2 py-0.5 text-[11px] border border-border-dark rounded-sm bg-white cursor-pointer text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary" title="复制" @click="handleDuplicate(t, $event)">
                   复制
                 </button>
-                <button class="tg-card-btn tg-card-btn--danger" title="删除" @click="handleDelete(t, $event)">
+                <button class="px-2 py-0.5 text-[11px] border border-border-dark rounded-sm bg-white cursor-pointer text-text-tertiary hover:text-danger hover:border-danger hover:bg-danger-bg" title="删除" @click="handleDelete(t, $event)">
                   删除
                 </button>
               </div>
@@ -130,22 +129,21 @@ function getModeLabel(mode: string): string {
           </div>
         </section>
 
-        <!-- 示例模板 -->
-        <section class="tg-section">
-          <h3 class="tg-section-title">示例模板</h3>
-          <div class="tg-grid">
+        <section class="mb-5 last:mb-0">
+          <h3 class="m-0 mb-3 text-[13px] font-semibold text-text-tertiary">示例模板</h3>
+          <div class="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3">
             <div
               v-for="s in sampleEntries"
               :key="s.id"
-              class="tg-card"
+              class="border border-border-light rounded-md cursor-pointer overflow-hidden transition-all hover:border-primary hover:shadow-card"
               @click="handleSelectSample(s.id)"
             >
-              <div class="tg-card-preview">
-                <span class="tg-card-mode">{{ getModeLabel(s.mode) }}</span>
+              <div class="h-[100px] bg-bg-quaternary flex items-center justify-center relative">
+                <span class="absolute top-1.5 right-1.5 px-1.5 py-0.5 text-[11px] bg-black/[0.06] rounded-sm text-text-tertiary">{{ getModeLabel(s.mode) }}</span>
               </div>
-              <div class="tg-card-info">
-                <span class="tg-card-name">{{ s.name }}</span>
-                <span class="tg-card-meta">{{ s.size }}</span>
+              <div class="px-2.5 py-2 flex flex-col gap-0.5">
+                <span class="text-[13px] font-medium text-text-primary overflow-hidden text-ellipsis whitespace-nowrap">{{ s.name }}</span>
+                <span class="text-[11px] text-text-quaternary">{{ s.size }}</span>
               </div>
             </div>
           </div>
@@ -155,208 +153,3 @@ function getModeLabel(mode: string): string {
   </div>
 </template>
 
-<style scoped>
-.tg-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 10000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.45);
-}
-
-.tg-modal {
-  width: 720px;
-  max-width: 90vw;
-  max-height: 80vh;
-  display: flex;
-  flex-direction: column;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-}
-
-.tg-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px;
-  border-bottom: 1px solid #eee;
-}
-
-.tg-title {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: #1a1a1a;
-}
-
-.tg-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.tg-close {
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  background: none;
-  font-size: 20px;
-  color: #999;
-  cursor: pointer;
-  border-radius: 4px;
-}
-
-.tg-close:hover {
-  background: #f0f0f0;
-  color: #333;
-}
-
-.tg-btn {
-  padding: 6px 14px;
-  font-size: 13px;
-  border: 1px solid #d0d0d0;
-  border-radius: 4px;
-  background: #fff;
-  cursor: pointer;
-  color: #333;
-}
-
-.tg-btn:hover {
-  background: #f5f5f5;
-}
-
-.tg-btn--primary {
-  background: #1677ff;
-  border-color: #1677ff;
-  color: #fff;
-}
-
-.tg-btn--primary:hover {
-  background: #4096ff;
-  border-color: #4096ff;
-}
-
-.tg-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 16px 20px;
-}
-
-.tg-section {
-  margin-bottom: 20px;
-}
-
-.tg-section:last-child {
-  margin-bottom: 0;
-}
-
-.tg-section-title {
-  margin: 0 0 12px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #666;
-}
-
-.tg-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 12px;
-}
-
-.tg-card {
-  border: 1px solid #e8e8e8;
-  border-radius: 6px;
-  cursor: pointer;
-  overflow: hidden;
-  transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-.tg-card:hover {
-  border-color: #1677ff;
-  box-shadow: 0 2px 8px rgba(22, 119, 255, 0.1);
-}
-
-.tg-card--active {
-  border-color: #1677ff;
-  box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.2);
-}
-
-.tg-card-preview {
-  height: 100px;
-  background: #f7f8fa;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-}
-
-.tg-card-mode {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  padding: 1px 6px;
-  font-size: 11px;
-  background: rgba(0, 0, 0, 0.06);
-  border-radius: 3px;
-  color: #666;
-}
-
-.tg-card-info {
-  padding: 8px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.tg-card-name {
-  font-size: 13px;
-  font-weight: 500;
-  color: #1a1a1a;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.tg-card-meta {
-  font-size: 11px;
-  color: #999;
-}
-
-.tg-card-date {
-  font-size: 11px;
-  color: #bbb;
-}
-
-.tg-card-actions {
-  padding: 4px 10px 8px;
-  display: flex;
-  gap: 6px;
-}
-
-.tg-card-btn {
-  padding: 2px 8px;
-  font-size: 11px;
-  border: 1px solid #d0d0d0;
-  border-radius: 3px;
-  background: #fff;
-  cursor: pointer;
-  color: #666;
-}
-
-.tg-card-btn:hover {
-  background: #f5f5f5;
-  color: #333;
-}
-
-.tg-card-btn--danger:hover {
-  color: #ff4d4f;
-  border-color: #ff4d4f;
-  background: #fff2f0;
-}
-</style>

@@ -12,14 +12,18 @@ catalogs:
   cli:
     '@antfu/eslint-config': ^6.2.0
     '@antfu/ni': ^27.0.1
+    '@tailwindcss/postcss': ^4.1.6
     '@tsdown/css': ^0.21.7
     '@vitejs/plugin-vue': ^6.0.5
+    autoprefixer: ^10.4.20
     bumpp: ^10.3.1
     eslint: ^9.39.1
     lint-staged: ^16.2.6
+    postcss: ^8.5.1
     publint: ^0.3.17
     sass-embedded: ^1.98.0
     simple-git-hooks: ^2.13.1
+    tailwindcss: ^4.1.6
     tsdown: ^0.21.7
     tsx: ^4.20.6
     turbo: ^2.8.21

@@ -175,41 +175,39 @@ async function handleExport() {
 
 <template>
   <Transition name="preview-fade">
-    <div class="preview-overlay">
-      <div class="preview-toolbar">
-        <div class="preview-toolbar__left">
-          <!-- Page navigation -->
-          <button class="preview-tool-btn" :disabled="currentPage <= 1" @click="prevPage">
+    <div class="fixed inset-0 z-[9999] flex flex-col bg-black/60">
+      <div class="flex items-center justify-between px-4 py-1.5 bg-white border-b border-border gap-2">
+        <div class="flex items-center gap-1">
+          <button class="w-7 h-7 flex items-center justify-center border border-border rounded bg-white cursor-pointer text-[#555] text-xs disabled:opacity-35 disabled:cursor-not-allowed hover:bg-bg-tertiary hover:text-text-secondary" :disabled="currentPage <= 1" @click="prevPage">
             &#9664;
           </button>
-          <span class="preview-page-info">{{ currentPage }} / {{ totalPages }}</span>
-          <button class="preview-tool-btn" :disabled="currentPage >= totalPages" @click="nextPage">
+          <span class="text-xs text-text-tertiary min-w-[48px] text-center select-none">{{ currentPage }} / {{ totalPages }}</span>
+          <button class="w-7 h-7 flex items-center justify-center border border-border rounded bg-white cursor-pointer text-[#555] text-xs disabled:opacity-35 disabled:cursor-not-allowed hover:bg-bg-tertiary hover:text-text-secondary" :disabled="currentPage >= totalPages" @click="nextPage">
             &#9654;
           </button>
 
-          <span class="preview-divider" />
+          <span class="w-px h-[18px] bg-border mx-1" />
 
-          <!-- Zoom controls -->
-          <button class="preview-tool-btn" @click="zoomOut">
+          <button class="w-7 h-7 flex items-center justify-center border border-border rounded bg-white cursor-pointer text-[#555] text-xs hover:bg-bg-tertiary hover:text-text-secondary" @click="zoomOut">
             -
           </button>
-          <span class="preview-zoom-info">{{ zoom }}%</span>
-          <button class="preview-tool-btn" @click="zoomIn">
+          <span class="text-xs text-text-tertiary min-w-[48px] text-center select-none">{{ zoom }}%</span>
+          <button class="w-7 h-7 flex items-center justify-center border border-border rounded bg-white cursor-pointer text-[#555] text-xs hover:bg-bg-tertiary hover:text-text-secondary" @click="zoomIn">
             +
           </button>
-          <button class="preview-tool-btn preview-tool-btn--text" @click="zoomFit">
+          <button class="w-auto h-7 px-2 flex items-center justify-center border border-border rounded bg-white cursor-pointer text-xs hover:bg-bg-tertiary hover:text-text-secondary" @click="zoomFit">
             适应宽度
           </button>
         </div>
 
-        <div class="preview-toolbar__right">
-          <button class="preview-btn" @click="handleExport">
+        <div class="flex items-center gap-1">
+          <button class="px-3.5 py-1 text-[13px] border border-border-dark rounded bg-white cursor-pointer text-text-secondary hover:bg-bg-tertiary" @click="handleExport">
             导出 JSON
           </button>
-          <button class="preview-btn preview-btn--primary" @click="handlePrint">
+          <button class="px-3.5 py-1 text-[13px] border border-primary rounded bg-primary cursor-pointer text-white hover:bg-primary-hover" @click="handlePrint">
             打印
           </button>
-          <button class="preview-close" @click="emit('close')">
+          <button class="w-8 h-8 flex items-center justify-center border-none bg-transparent text-[22px] text-text-quaternary cursor-pointer rounded ml-1 hover:bg-border-light hover:text-text-secondary" @click="emit('close')">
             &times;
           </button>
         </div>
@@ -217,7 +215,7 @@ async function handleExport() {
 
       <div
         ref="containerRef"
-        class="preview-content"
+        class="flex-1 overflow-auto px-8 py-6 bg-[#525659]"
         @wheel="handleWheel"
         @scroll="handleScroll"
       />
@@ -226,129 +224,6 @@ async function handleExport() {
 </template>
 
 <style scoped>
-.preview-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  display: flex;
-  flex-direction: column;
-  background: rgba(0, 0, 0, 0.6);
-}
-
-.preview-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 6px 16px;
-  background: #fff;
-  border-bottom: 1px solid #e0e0e0;
-  gap: 8px;
-}
-
-.preview-toolbar__left,
-.preview-toolbar__right {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.preview-tool-btn {
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  background: #fff;
-  cursor: pointer;
-  color: #555;
-  font-size: 12px;
-}
-
-.preview-tool-btn:hover:not(:disabled) {
-  background: #f5f5f5;
-  color: #333;
-}
-
-.preview-tool-btn:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
-.preview-tool-btn--text {
-  width: auto;
-  padding: 0 8px;
-  font-size: 12px;
-}
-
-.preview-page-info,
-.preview-zoom-info {
-  font-size: 12px;
-  color: #666;
-  min-width: 48px;
-  text-align: center;
-  user-select: none;
-}
-
-.preview-divider {
-  width: 1px;
-  height: 18px;
-  background: #e0e0e0;
-  margin: 0 4px;
-}
-
-.preview-btn {
-  padding: 4px 14px;
-  font-size: 13px;
-  border: 1px solid #d0d0d0;
-  border-radius: 4px;
-  background: #fff;
-  cursor: pointer;
-  color: #333;
-}
-
-.preview-btn:hover {
-  background: #f5f5f5;
-}
-
-.preview-btn--primary {
-  background: #1677ff;
-  border-color: #1677ff;
-  color: #fff;
-}
-
-.preview-btn--primary:hover {
-  background: #4096ff;
-}
-
-.preview-close {
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  background: none;
-  font-size: 22px;
-  color: #999;
-  cursor: pointer;
-  border-radius: 4px;
-  margin-left: 4px;
-}
-
-.preview-close:hover {
-  background: #f0f0f0;
-  color: #333;
-}
-
-.preview-content {
-  flex: 1;
-  overflow: auto;
-  padding: 24px 32px;
-  background: #525659;
-}
-
 .preview-fade-enter-active,
 .preview-fade-leave-active {
   transition: opacity 0.2s ease;

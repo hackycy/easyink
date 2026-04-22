@@ -135,41 +135,42 @@ const hasError = computed(() => parseError.value !== '')
 </script>
 
 <template>
-  <div class="de-overlay" @click="handleOverlayClick">
-    <div class="de-modal">
-      <div class="de-header">
-        <h2 class="de-title">数据编辑器</h2>
-        <div class="de-header-actions">
-          <button class="de-btn" @click="handleFormat">
+  <div class="fixed inset-0 z-[10000] flex items-center justify-center bg-bg-overlay" @click="handleOverlayClick">
+    <div class="w-[860px] max-w-[90vw] h-[600px] max-h-[80vh] flex flex-col bg-white rounded-lg shadow-modal">
+      <div class="flex items-center justify-between px-5 py-3 border-b border-border-light">
+        <h2 class="m-0 text-base font-semibold text-text-primary">数据编辑器</h2>
+        <div class="flex items-center gap-2">
+          <button class="px-3.5 py-1.5 text-[13px] border border-border-dark rounded bg-white cursor-pointer text-text-secondary hover:bg-bg-tertiary" @click="handleFormat">
             格式化
           </button>
-          <button class="de-btn de-btn--primary" :disabled="hasError" @click="handleApply">
+          <button class="px-3.5 py-1.5 text-[13px] border border-primary rounded bg-primary cursor-pointer text-white hover:bg-primary-hover disabled:bg-[#d9d9d9] disabled:border-[#d9d9d9] disabled:cursor-not-allowed" :disabled="hasError" @click="handleApply">
             应用
           </button>
-          <button class="de-close" @click="emit('close')">
+          <button class="w-7 h-7 flex items-center justify-center border-none bg-transparent text-xl text-text-quaternary cursor-pointer rounded hover:bg-border-light hover:text-text-secondary" @click="emit('close')">
             &times;
           </button>
         </div>
       </div>
 
-      <div class="de-body">
-        <div class="de-editor-pane">
-          <div class="de-pane-title">JSON 数据</div>
+      <div class="flex-1 flex min-h-0">
+        <div class="flex-1 flex flex-col border-r border-border-light relative">
+          <div class="px-3 py-2 text-xs font-semibold text-text-quaternary border-b border-border-light">JSON 数据</div>
           <textarea
             ref="editorRef"
             v-model="jsonText"
-            class="de-textarea"
+            class="flex-1 m-0 px-3 py-3 border-none outline-none resize-none font-mono text-[13px] leading-relaxed text-text-primary bg-bg-quaternary"
+            style="tab-size: 2;"
             spellcheck="false"
             autocomplete="off"
           />
-          <div v-if="parseError" class="de-error">
+          <div v-if="parseError" class="px-3 py-1.5 text-xs text-danger bg-danger-bg border-t border-danger-border">
             {{ parseError }}
           </div>
         </div>
 
-        <div class="de-tree-pane">
-          <div class="de-pane-title">字段树预览</div>
-          <div class="de-tree">
+        <div class="w-[280px] flex flex-col">
+          <div class="px-3 py-2 text-xs font-semibold text-text-quaternary border-b border-border-light">字段树预览</div>
+          <div class="flex-1 overflow-y-auto py-1">
             <template v-if="fieldTree.length > 0">
               <FieldTreeNodeView
                 v-for="node in fieldTree"
@@ -179,7 +180,7 @@ const hasError = computed(() => parseError.value !== '')
                 @toggle="toggleNode"
               />
             </template>
-            <div v-else class="de-tree-empty">
+            <div v-else class="px-3 py-5 text-xs text-text-disabled text-center">
               输入有效 JSON 后显示字段树
             </div>
           </div>
@@ -209,13 +210,13 @@ const FieldTreeNodeView = defineComponent({
 
       elements.push(
         h('div', {
-          class: 'de-tree-node',
+          class: 'flex items-center gap-1 px-2 py-0.5 cursor-default text-xs leading-snug hover:bg-bg-tertiary',
           style: { paddingLeft: indent },
           onClick: () => hasChildren && emit('toggle', node),
         }, [
-          h('span', { class: 'de-tree-arrow' }, hasChildren ? (node.expanded ? '\u25BC' : '\u25B6') : '\u00B7'),
-          h('span', { class: 'de-tree-name' }, node.name),
-          h('span', { class: 'de-tree-type' }, node.type),
+          h('span', { class: 'w-3 text-[9px] text-[#ccc] text-center flex-shrink-0' }, hasChildren ? (node.expanded ? '\u25BC' : '\u25B6') : '\u00B7'),
+          h('span', { class: 'text-text-primary font-medium' }, node.name),
+          h('span', { class: 'text-text-quaternary text-[11px] ml-auto' }, node.type),
         ]),
       )
 
@@ -242,193 +243,3 @@ export default {
 }
 </script>
 
-<style scoped>
-.de-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 10000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.45);
-}
-
-.de-modal {
-  width: 860px;
-  max-width: 90vw;
-  height: 600px;
-  max-height: 80vh;
-  display: flex;
-  flex-direction: column;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-}
-
-.de-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 20px;
-  border-bottom: 1px solid #eee;
-}
-
-.de-title {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: #1a1a1a;
-}
-
-.de-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.de-close {
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  background: none;
-  font-size: 20px;
-  color: #999;
-  cursor: pointer;
-  border-radius: 4px;
-}
-
-.de-close:hover {
-  background: #f0f0f0;
-  color: #333;
-}
-
-.de-btn {
-  padding: 5px 14px;
-  font-size: 13px;
-  border: 1px solid #d0d0d0;
-  border-radius: 4px;
-  background: #fff;
-  cursor: pointer;
-  color: #333;
-}
-
-.de-btn:hover {
-  background: #f5f5f5;
-}
-
-.de-btn--primary {
-  background: #1677ff;
-  border-color: #1677ff;
-  color: #fff;
-}
-
-.de-btn--primary:hover {
-  background: #4096ff;
-}
-
-.de-btn--primary:disabled {
-  background: #d9d9d9;
-  border-color: #d9d9d9;
-  cursor: not-allowed;
-}
-
-.de-body {
-  flex: 1;
-  display: flex;
-  min-height: 0;
-}
-
-.de-editor-pane {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  border-right: 1px solid #eee;
-  position: relative;
-}
-
-.de-tree-pane {
-  width: 280px;
-  display: flex;
-  flex-direction: column;
-}
-
-.de-pane-title {
-  padding: 8px 12px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #999;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.de-textarea {
-  flex: 1;
-  margin: 0;
-  padding: 12px;
-  border: none;
-  outline: none;
-  resize: none;
-  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-  font-size: 13px;
-  line-height: 1.5;
-  color: #1a1a1a;
-  background: #fafafa;
-  tab-size: 2;
-}
-
-.de-error {
-  padding: 6px 12px;
-  font-size: 12px;
-  color: #ff4d4f;
-  background: #fff2f0;
-  border-top: 1px solid #ffccc7;
-}
-
-.de-tree {
-  flex: 1;
-  overflow-y: auto;
-  padding: 4px 0;
-}
-
-.de-tree-empty {
-  padding: 20px 12px;
-  font-size: 12px;
-  color: #bbb;
-  text-align: center;
-}
-
-:deep(.de-tree-node) {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 8px;
-  cursor: default;
-  font-size: 12px;
-  line-height: 1.4;
-}
-
-:deep(.de-tree-node:hover) {
-  background: #f5f5f5;
-}
-
-:deep(.de-tree-arrow) {
-  width: 12px;
-  font-size: 9px;
-  color: #ccc;
-  text-align: center;
-  flex-shrink: 0;
-}
-
-:deep(.de-tree-name) {
-  color: #1a1a1a;
-  font-weight: 500;
-}
-
-:deep(.de-tree-type) {
-  color: #999;
-  font-size: 11px;
-  margin-left: auto;
-}
-</style>
