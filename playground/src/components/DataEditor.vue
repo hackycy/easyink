@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { jsonToDataSource } from '../utils/json-to-datasource'
 
 const props = defineProps<{
   initialData: Record<string, unknown>
@@ -11,7 +10,6 @@ const emit = defineEmits<{
   close: []
 }>()
 
-const editorRef = ref<HTMLTextAreaElement>()
 const jsonText = ref('')
 const parseError = ref('')
 const fieldTree = ref<FieldTreeNode[]>([])
@@ -22,6 +20,11 @@ interface FieldTreeNode {
   type: string
   children?: FieldTreeNode[]
   expanded?: boolean
+}
+
+interface VisibleFieldTreeNode {
+  node: FieldTreeNode
+  depth: number
 }
 
 onMounted(() => {
@@ -132,6 +135,21 @@ function toggleNode(node: FieldTreeNode) {
 }
 
 const hasError = computed(() => parseError.value !== '')
+
+const visibleFieldTree = computed(() => flattenVisibleNodes(fieldTree.value, 0))
+
+function flattenVisibleNodes(nodes: FieldTreeNode[], depth: number): VisibleFieldTreeNode[] {
+  const visibleNodes: VisibleFieldTreeNode[] = []
+
+  for (const node of nodes) {
+    visibleNodes.push({ node, depth })
+    if (node.expanded && node.children?.length) {
+      visibleNodes.push(...flattenVisibleNodes(node.children, depth + 1))
+    }
+  }
+
+  return visibleNodes
+}
 </script>
 
 <template>
@@ -171,15 +189,19 @@ const hasError = computed(() => parseError.value !== '')
         <div class="w-[280px] flex flex-col">
           <div class="px-3 py-2 text-xs font-semibold text-text-quaternary border-b border-border-light">字段树预览</div>
           <div class="flex-1 overflow-y-auto py-1">
-            <template v-if="fieldTree.length > 0">
-              <FieldTreeNodeView
-                v-for="node in fieldTree"
-                :key="node.path"
-                :node="node"
-                :depth="0"
-                @toggle="toggleNode"
-              />
-            </template>
+            <div v-if="visibleFieldTree.length > 0">
+              <div
+                v-for="entry in visibleFieldTree"
+                :key="entry.node.path"
+                class="flex items-center gap-1 px-2 py-0.5 cursor-default text-xs leading-snug hover:bg-bg-tertiary"
+                :style="{ paddingLeft: `${entry.depth * 16 + 8}px` }"
+                @click="entry.node.children?.length && toggleNode(entry.node)"
+              >
+                <span class="w-3 text-[9px] text-[#ccc] text-center flex-shrink-0">{{ entry.node.children?.length ? (entry.node.expanded ? '▼' : '▶') : '·' }}</span>
+                <span class="text-text-primary font-medium">{{ entry.node.name }}</span>
+                <span class="text-text-quaternary text-[11px] ml-auto">{{ entry.node.type }}</span>
+              </div>
+            </div>
             <div v-else class="px-3 py-5 text-xs text-text-disabled text-center">
               输入有效 JSON 后显示字段树
             </div>
@@ -189,57 +211,4 @@ const hasError = computed(() => parseError.value !== '')
     </div>
   </div>
 </template>
-
-<script lang="ts">
-import { defineComponent, h } from 'vue'
-
-const FieldTreeNodeView = defineComponent({
-  name: 'FieldTreeNodeView',
-  props: {
-    node: { type: Object, required: true },
-    depth: { type: Number, default: 0 },
-  },
-  emits: ['toggle'],
-  setup(props, { emit }) {
-    return () => {
-      const node = props.node as FieldTreeNode
-      const hasChildren = node.children && node.children.length > 0
-      const indent = `${props.depth * 16 + 8}px`
-
-      const elements = []
-
-      elements.push(
-        h('div', {
-          class: 'flex items-center gap-1 px-2 py-0.5 cursor-default text-xs leading-snug hover:bg-bg-tertiary',
-          style: { paddingLeft: indent },
-          onClick: () => hasChildren && emit('toggle', node),
-        }, [
-          h('span', { class: 'w-3 text-[9px] text-[#ccc] text-center flex-shrink-0' }, hasChildren ? (node.expanded ? '\u25BC' : '\u25B6') : '\u00B7'),
-          h('span', { class: 'text-text-primary font-medium' }, node.name),
-          h('span', { class: 'text-text-quaternary text-[11px] ml-auto' }, node.type),
-        ]),
-      )
-
-      if (hasChildren && node.expanded) {
-        for (const child of node.children!) {
-          elements.push(
-            h(FieldTreeNodeView, {
-              key: child.path,
-              node: child,
-              depth: props.depth + 1,
-              onToggle: (n: FieldTreeNode) => emit('toggle', n),
-            }),
-          )
-        }
-      }
-
-      return h('div', null, elements)
-    }
-  },
-})
-
-export default {
-  components: { FieldTreeNodeView },
-}
-</script>
 

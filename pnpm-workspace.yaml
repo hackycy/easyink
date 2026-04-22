@@ -13,6 +13,7 @@ catalogs:
     '@antfu/eslint-config': ^6.2.0
     '@antfu/ni': ^27.0.1
     '@tailwindcss/postcss': ^4.1.6
+    '@tailwindcss/vite': ^4.2.4
     '@tsdown/css': ^0.21.7
     '@vitejs/plugin-vue': ^6.0.5
     autoprefixer: ^10.4.20

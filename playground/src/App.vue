@@ -7,12 +7,11 @@ import { EasyInkDesigner } from '@easyink/designer'
 import { createLocalStoragePreferenceProvider } from '@easyink/designer'
 import zhCN from '@easyink/designer/locale/zh-CN'
 import { blankA4Template, flowInvoiceTemplate, invoiceDemoData, sampleDataSources } from '@easyink/samples'
+import DataEditorModal from './components/DataEditor.vue'
 import TemplateGallery from './components/TemplateGallery.vue'
 import PreviewOverlay from './PreviewOverlay.vue'
 import { getLastTemplateId, getTemplate, listTemplates, saveTemplate, setLastTemplateId } from './storage/template-store'
 import { jsonToDataSource } from './utils/json-to-datasource'
-
-import '@easyink/designer/index.css'
 
 const schema = ref<DocumentSchema>(blankA4Template)
 const preferenceProvider = createLocalStoragePreferenceProvider()
@@ -203,12 +202,4 @@ function handleDataUpdate(data: Record<string, unknown>) {
     @close="showDataEditor = false"
   />
 </template>
-
-<script lang="ts">
-import DataEditorModal from './components/DataEditor.vue'
-
-export default {
-  components: { DataEditorModal },
-}
-</script>
 
