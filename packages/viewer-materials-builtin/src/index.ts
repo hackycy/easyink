@@ -1,4 +1,4 @@
-import type { ViewerRuntime } from './runtime'
+import type { ViewerRuntime } from '@easyink/viewer'
 
 import { BARCODE_TYPE, renderBarcode } from '@easyink/material-barcode'
 import { CHART_TYPE, renderChart } from '@easyink/material-chart'

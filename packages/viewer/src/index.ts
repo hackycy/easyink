@@ -8,7 +8,6 @@ export function createViewer(options?: ViewerOptions): ViewerRuntime {
 export { applyBindingsToProps, projectBindings } from './binding-projector'
 export { collectFontFamilies, loadAndInjectFonts } from './font-loader'
 export { MaterialRendererRegistry } from './material-registry'
-export { registerBuiltinViewerMaterials } from './register-materials'
 export { renderPages } from './render-surface'
 export type { PageDOM, RenderSurfaceOptions } from './render-surface'
 export { ViewerRuntime } from './runtime'

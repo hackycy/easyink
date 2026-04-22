@@ -1,8 +1,19 @@
 import type { DocumentSchema, MaterialNode, TableNode } from '@easyink/schema'
-import { getTableDataDesignerVisualHeight } from '@easyink/material-table-data'
+import type { ViewerRuntime } from './runtime'
+import { LINE_TYPE, renderLine } from '@easyink/material-line'
+import { getTableDataDesignerVisualHeight, measureTableData, renderTableData, TABLE_DATA_TYPE } from '@easyink/material-table-data'
 import { describe, expect, it } from 'vitest'
-import { createViewer, registerBuiltinViewerMaterials } from './index'
+import { createViewer } from './index'
 import { applyStackFlowLayout } from './stack-flow-layout'
+
+// Helper function to register materials needed for tests
+function registerTestMaterials(viewer: ViewerRuntime): void {
+  viewer.registerMaterial(LINE_TYPE, { render: (node, ctx) => renderLine(node, ctx) })
+  viewer.registerMaterial(TABLE_DATA_TYPE, {
+    render: (node, ctx) => renderTableData(node, ctx),
+    measure: (node, ctx) => measureTableData(node, ctx),
+  })
+}
 
 function makeNode(id: string, overrides: Partial<MaterialNode> = {}): MaterialNode {
   return {
@@ -151,7 +162,7 @@ describe('viewer runtime stack reflow', () => {
   it('repositions elements below table-data after measure', async () => {
     const container = document.createElement('div')
     const viewer = createViewer({ container })
-    registerBuiltinViewerMaterials(viewer)
+    registerTestMaterials(viewer)
 
     const schema: DocumentSchema = {
       version: '1.0.0',
@@ -194,7 +205,7 @@ describe('viewer runtime stack reflow', () => {
   it('keeps legacy line templates visible by promoting lineWidth into render height', async () => {
     const container = document.createElement('div')
     const viewer = createViewer({ container })
-    registerBuiltinViewerMaterials(viewer)
+    registerTestMaterials(viewer)
 
     const schema: DocumentSchema = {
       version: '1.0.0',

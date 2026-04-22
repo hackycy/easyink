@@ -1,16 +1,14 @@
 {
-  "name": "@easyink/designer",
+  "name": "@easyink/viewer-materials-builtin",
   "type": "module",
   "version": "0.0.0",
-  "description": "EasyInk document/report designer workbench",
+  "description": "Built-in material bundle for EasyInk Viewer",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",
   "sideEffects": false,
   "exports": {
     ".": "./dist/index.mjs",
-    "./locale/zh-CN": "./dist/locale/zh-CN.mjs",
-    "./package.json": "./package.json",
-    "./index.css": "./dist/index.css"
+    "./package.json": "./package.json"
   },
   "types": "./dist/index.d.mts",
   "files": [
@@ -21,9 +19,6 @@
     "dev": "tsdown --watch"
   },
   "dependencies": {
-    "@easyink/core": "workspace:*",
-    "@easyink/datasource": "workspace:*",
-    "@easyink/icons": "workspace:*",
     "@easyink/material-barcode": "workspace:*",
     "@easyink/material-chart": "workspace:*",
     "@easyink/material-container": "workspace:*",
@@ -35,14 +30,8 @@
     "@easyink/material-rect": "workspace:*",
     "@easyink/material-svg": "workspace:*",
     "@easyink/material-table-data": "workspace:*",
-    "@easyink/material-table-kernel": "workspace:*",
     "@easyink/material-table-static": "workspace:*",
     "@easyink/material-text": "workspace:*",
-    "@easyink/schema": "workspace:*",
-    "@easyink/shared": "workspace:*",
-    "@easyink/ui": "workspace:*",
-    "@easyink/viewer-materials-builtin": "workspace:*",
-    "mutative": "catalog:",
-    "vue": "catalog:framework"
+    "@easyink/viewer": "workspace:*"
   }
 }

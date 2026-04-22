@@ -20,19 +20,8 @@
   },
   "dependencies": {
     "@easyink/core": "workspace:*",
-    "@easyink/material-barcode": "workspace:*",
-    "@easyink/material-chart": "workspace:*",
-    "@easyink/material-container": "workspace:*",
-    "@easyink/material-ellipse": "workspace:*",
-    "@easyink/material-image": "workspace:*",
     "@easyink/material-line": "workspace:*",
-    "@easyink/material-page-number": "workspace:*",
-    "@easyink/material-qrcode": "workspace:*",
-    "@easyink/material-rect": "workspace:*",
-    "@easyink/material-svg": "workspace:*",
     "@easyink/material-table-data": "workspace:*",
-    "@easyink/material-table-static": "workspace:*",
-    "@easyink/material-text": "workspace:*",
     "@easyink/schema": "workspace:*",
     "@easyink/shared": "workspace:*"
   }

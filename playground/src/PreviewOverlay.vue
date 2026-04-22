@@ -2,7 +2,8 @@
 import type { DocumentSchema } from '@easyink/viewer'
 import type { ViewerRuntime } from '@easyink/viewer'
 import { onBeforeUnmount, onMounted, ref } from 'vue'
-import { createViewer, registerBuiltinViewerMaterials } from '@easyink/viewer'
+import { createViewer } from '@easyink/viewer'
+import { registerBuiltinViewerMaterials } from '@easyink/viewer-materials-builtin'
 
 const EXPORT_FORMAT = 'playground-demo-json'
 
