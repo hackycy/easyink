@@ -5,6 +5,7 @@ import type { ViewerDiagnosticEvent, ViewerRenderContext } from './types'
 import { getLineThickness, LINE_TYPE } from '@easyink/material-line'
 import { isTableNode } from '@easyink/schema'
 import { UNIT_FACTOR } from '@easyink/shared'
+import { isErrorSentinel, safeRender } from './diagnostic-middleware'
 
 export interface RenderSurfaceOptions {
   container: HTMLElement
@@ -58,21 +59,27 @@ export function renderPages(
       const resolved = resolvedPropsMap.get(node.id) ?? node.props
       context.resolvedProps = resolved
 
-      // Render through the material registry
+      // Render through the material registry, wrapped by unified diagnostic middleware.
       const nodeForRender: MaterialNode = { ...node, props: resolved }
-      let output
-      try {
-        output = registry.render(nodeForRender, context)
-      }
-      catch (err) {
-        diagnostics.push({
-          category: 'material',
-          severity: 'error',
+      const fallbackHtml = `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#fff3f3;border:1px dashed #ff4d4f;color:#ff4d4f;font-size:11px;box-sizing:border-box;" title="Render failed">&#x26A0; [${escapeHtml(node.type)}]</div>`
+
+      const safeResult = safeRender(
+        () => registry.render(nodeForRender, context),
+        {
+          scope: 'material',
           code: 'MATERIAL_RENDER_ERROR',
-          message: `Failed to render ${node.type} (${node.id}): ${err instanceof Error ? err.message : String(err)}`,
           nodeId: node.id,
-        })
-        output = { html: `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#fff3f3;border:1px dashed #ff4d4f;color:#ff4d4f;font-size:11px;box-sizing:border-box;">[Render Error]</div>` }
+          placeholderHtml: fallbackHtml,
+        },
+        diagnostics,
+      )
+
+      let output
+      if (isErrorSentinel(safeResult)) {
+        output = { html: safeResult.html }
+      }
+      else {
+        output = safeResult
       }
 
       const elWrapper = createElementWrapper(node, page, unit)
@@ -243,4 +250,12 @@ function getPxFactorForLayout(unit: string): number {
   if (!factor)
     return 1
   return 96 / factor
+}
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
 }

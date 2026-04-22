@@ -58,11 +58,16 @@ export async function loadAndInjectFonts(
       injectFontFace(result.value.family, result.value.source, target)
     }
     else {
+      const cause = result.reason instanceof Error
+        ? { name: result.reason.name, message: result.reason.message, stack: result.reason.stack }
+        : result.reason
       diagnostics.push({
         category: 'viewer',
         severity: 'warning',
         code: 'FONT_LOAD_FAILED',
         message: `Failed to load font: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`,
+        scope: 'font',
+        cause,
       })
     }
   }

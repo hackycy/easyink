@@ -196,11 +196,67 @@ interface ViewerPageResult {
 
 诊断事件至少覆盖：
 
-- schema：缺字段、未知元素、迁移降级
-- datasource：数据源缺失、路径无效、字段类型不匹配
-- viewer：字体加载失败、图片加载失败、页面计划冲突
-- material：单个物料渲染失败
-- print：打印或导出失败
-- export-adapter：第三方依赖加载失败、格式不支持、宿主能力缺失
+| scope | category | 触发场景 |
+|---|---|---|
+| schema | schema | 缺字段、未知元素、迁移降级 |
+| datasource | datasource | 数据源缺失、路径无效、字段类型不匹配 |
+| font | viewer | 字体加载失败 |
+| material | viewer | 单个物料渲染异常 |
+| print | print | 打印 DOM 操作或 window.print() 失败 |
+| export-adapter | export-adapter | 第三方依赖加载失败、格式不支持 |
 
 所有问题默认都应该是可见的、可追踪的，而不是静默跳过。
+
+### 6.10.1 统一诊断中间件
+
+Viewer 渲染管线通过 `diagnostic-middleware.ts` 中的 `safeRender` 统一处理所有阶段的异常：
+
+```typescript
+// packages/viewer/src/diagnostic-middleware.ts
+export function safeRender<T>(
+  fn: () => T,
+  options: SafeRenderOptions,
+  diagnostics: ViewerDiagnosticEvent[],
+): T | ErrorSentinel
+```
+
+`SafeRenderOptions` 定义：
+
+```typescript
+interface SafeRenderOptions {
+  scope: 'schema' | 'datasource' | 'font' | 'material' | 'print' | 'export-adapter'
+  code: string
+  nodeId?: string
+  placeholderHtml?: string
+}
+```
+
+异常处理流程：
+1. 捕获所有同步异常
+2. 提取 `err.name / err.message / err.stack` 存入 `cause` 字段
+3. 组装 `ViewerDiagnosticEvent`（含 `scope` + `cause`）推入 `diagnostics[]`
+4. 通过 `emitDiagnostic()` 触发 `diagnosticsEmitted` hook
+5. 若提供了 `placeholderHtml`，返回 `ErrorSentinel`，调用方通过 `isErrorSentinel()` 检测并渲染降级占位
+
+`emitDiagnostic` 连接 `diagnosticsEmitted` hook：
+
+```typescript
+private emitDiagnostic(event: ViewerDiagnosticEvent): void {
+  this._diagnosticHandler?.(event)
+  this._hooks.diagnosticsEmitted.call(event).catch(() => {
+    // hook 失败不应阻断渲染
+  })
+}
+```
+
+### 6.10.2 诊断阶段覆盖
+
+| 阶段 | 文件 | 诊断码 |
+|---|---|---|
+| schema 校验 | `runtime.ts` | `INVALID_SCHEMA` |
+| datasource/binding | `runtime.ts` | `BINDING_RESOLVE_ERROR` |
+| font 加载 | `font-loader.ts` | `FONT_LOAD_FAILED` |
+| material 渲染 | `render-surface.ts` | `MATERIAL_RENDER_ERROR` |
+| stack-flow 布局 | `stack-flow-layout.ts` | `STACK_FLOW_FIXED_OVERLAP` |
+| print | `runtime.ts` | `PRINT_ERROR` |
+| export-adapter | `runtime.ts` | `NO_EXPORT_ADAPTER` |

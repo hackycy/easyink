@@ -52,6 +52,7 @@ export class ViewerRuntime {
         severity: 'error',
         code: 'INVALID_SCHEMA',
         message: errors.join('; '),
+        scope: 'schema',
       }
       input.onDiagnostic?.(event)
       throw new Error(`Invalid schema: ${errors.join('; ')}`)
@@ -175,7 +176,7 @@ export class ViewerRuntime {
     // Fallback: window.print with DOM isolation
     if (typeof window !== 'undefined') {
       if (this._options.container) {
-        this.printWithIsolation()
+        await this.printWithIsolation()
       }
       else {
         window.print()
@@ -183,34 +184,49 @@ export class ViewerRuntime {
     }
   }
 
-  private printWithIsolation(): void {
+  private async printWithIsolation(): Promise<void> {
     const container = this._options.container!
     const doc = container.ownerDocument
 
-    // Mark ancestor chain so print CSS can hide everything else
-    const ancestors: HTMLElement[] = []
-    let el: HTMLElement | null = container.parentElement
-    while (el) {
-      el.setAttribute('data-ei-print-ancestor', '')
-      ancestors.push(el)
-      if (el === doc.body)
-        break
-      el = el.parentElement
+    try {
+      // Mark ancestor chain so print CSS can hide everything else
+      const ancestors: HTMLElement[] = []
+      let el: HTMLElement | null = container.parentElement
+      while (el) {
+        el.setAttribute('data-ei-print-ancestor', '')
+        ancestors.push(el)
+        if (el === doc.body)
+          break
+        el = el.parentElement
+      }
+      container.setAttribute('data-ei-printing', '')
+
+      // Inject print stylesheet
+      const style = doc.createElement('style')
+      style.textContent = this.buildPrintStyles()
+      doc.head.appendChild(style)
+
+      window.print()
+
+      // Cleanup
+      style.remove()
+      container.removeAttribute('data-ei-printing')
+      for (const a of ancestors) {
+        a.removeAttribute('data-ei-print-ancestor')
+      }
     }
-    container.setAttribute('data-ei-printing', '')
-
-    // Inject print stylesheet
-    const style = doc.createElement('style')
-    style.textContent = this.buildPrintStyles()
-    doc.head.appendChild(style)
-
-    window.print()
-
-    // Cleanup
-    style.remove()
-    container.removeAttribute('data-ei-printing')
-    for (const a of ancestors) {
-      a.removeAttribute('data-ei-print-ancestor')
+    catch (err) {
+      const cause = err instanceof Error
+        ? { name: err.name, message: err.message, stack: err.stack }
+        : err
+      this.emitDiagnostic({
+        category: 'print',
+        severity: 'error',
+        code: 'PRINT_ERROR',
+        message: `Print failed: ${err instanceof Error ? err.message : String(err)}`,
+        scope: 'print',
+        cause,
+      })
     }
   }
 
@@ -316,6 +332,7 @@ export class ViewerRuntime {
         severity: 'error',
         code: 'NO_EXPORT_ADAPTER',
         message: `No export adapter found for format: ${format || 'default'}`,
+        scope: 'export-adapter',
       })
       return
     }
@@ -509,12 +526,17 @@ export class ViewerRuntime {
         resolvedMap.set(node.id, resolvedProps)
       }
       catch (err) {
+        const cause = err instanceof Error
+          ? { name: err.name, message: err.message, stack: err.stack }
+          : err
         diagnostics.push({
           category: 'datasource',
           severity: 'warning',
           code: 'BINDING_RESOLVE_ERROR',
           message: `Binding resolution failed for ${node.id}: ${err instanceof Error ? err.message : String(err)}`,
           nodeId: node.id,
+          scope: 'datasource',
+          cause,
         })
         resolvedMap.set(node.id, node.props)
       }
@@ -579,5 +601,8 @@ export class ViewerRuntime {
 
   private emitDiagnostic(event: ViewerDiagnosticEvent): void {
     this._diagnosticHandler?.(event)
+    this._hooks.diagnosticsEmitted.call(event).catch(() => {
+      // hook 失败不应阻断渲染
+    })
   }
 }

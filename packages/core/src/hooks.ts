@@ -102,6 +102,10 @@ export interface ViewerDiagnosticEvent {
   message: string
   nodeId?: string
   detail?: unknown
+  /** 6.10: 诊断来源阶段 */
+  scope?: 'schema' | 'datasource' | 'font' | 'material' | 'print' | 'export-adapter'
+  /** 6.10: 原始异常对象，用于根因追踪 */
+  cause?: unknown
 }
 
 export interface CommandRecord {

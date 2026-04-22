@@ -129,6 +129,7 @@ function collectFixedOverlapDiagnostics(
         code: 'STACK_FLOW_FIXED_OVERLAP',
         message: `Flow element ${flowNode.id} overlaps fixed element ${fixedNode.id} after stack reflow`,
         nodeId: flowNode.id,
+        scope: 'material',
         detail: { flowNodeId: flowNode.id, fixedNodeId: fixedNode.id },
       })
     }
