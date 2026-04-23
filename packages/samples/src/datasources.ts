@@ -1,5 +1,5 @@
 import type { DataSourceDescriptor } from '@easyink/datasource'
-import type { DocumentSchema, TableNode } from '@easyink/schema'
+import type { DocumentSchema, TableDataSchema, TableNode } from '@easyink/schema'
 import { SCHEMA_VERSION } from '@easyink/shared'
 import { badgeDataSource } from './templates/badge'
 import { certificateDataSource } from './templates/certificate'
@@ -43,6 +43,7 @@ export const invoiceDataSource: DataSourceDescriptor = {
       name: 'customer',
       title: '客户',
       path: 'customer',
+      expand: true,
       fields: [
         { name: 'name', title: '客户名称', path: 'customer/name', use: 'text' },
         { name: 'address', title: '客户地址', path: 'customer/address', use: 'text' },
@@ -98,6 +99,7 @@ export const productDataSource: DataSourceDescriptor = {
       name: 'specs',
       title: '规格参数',
       path: 'specs',
+      expand: true,
       fields: [
         { name: 'weight', title: '重量', path: 'specs/weight', use: 'text' },
         { name: 'dimension', title: '尺寸', path: 'specs/dimension', use: 'text' },
@@ -136,6 +138,7 @@ export const orderListDataSource: DataSourceDescriptor = {
           title: '订单明细',
           path: 'orders/items',
           tag: 'collection',
+          expand: true,
           fields: [
             { name: 'productName', title: '商品名称', path: 'orders/items/productName', use: 'text' },
             { name: 'qty', title: '数量', path: 'orders/items/qty', use: 'text' },
@@ -194,6 +197,8 @@ function createInvoiceTableNode(): TableNode {
     },
     table: {
       kind: 'data' as const,
+      showHeader: true,
+      showFooter: true,
       topology: {
         columns: [
           { ratio: 0.4 },
@@ -240,7 +245,7 @@ function createInvoiceTableNode(): TableNode {
         borderType: 'solid' as const,
         borderColor: '#cccccc',
       },
-    } as TableNode['table'],
+    } as TableDataSchema,
   }
 }
 

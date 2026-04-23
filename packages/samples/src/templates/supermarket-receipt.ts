@@ -1,5 +1,5 @@
 import type { DataSourceDescriptor } from '@easyink/datasource'
-import type { DocumentSchema, TableNode } from '@easyink/schema'
+import type { DocumentSchema, TableDataSchema, TableNode } from '@easyink/schema'
 import { SCHEMA_VERSION } from '@easyink/shared'
 
 // ---------------------------------------------------------------------------
@@ -59,6 +59,7 @@ export const supermarketDataSource: DataSourceDescriptor = {
       name: 'member',
       title: '会员信息',
       path: 'member',
+      expand: true,
       fields: [
         { name: 'no', title: '会员号', path: 'member/no', use: 'text' },
         { name: 'earnedPoints', title: '本次积分', path: 'member/earnedPoints', use: 'text' },
@@ -137,6 +138,8 @@ function createReceiptItemsTable(): TableNode {
     },
     table: {
       kind: 'data' as const,
+      showHeader: true,
+      showFooter: false,
       topology: {
         columns: [
           { ratio: 0.44 },
@@ -173,7 +176,7 @@ function createReceiptItemsTable(): TableNode {
         borderType: 'solid' as const,
         borderColor: '#cccccc',
       },
-    } as TableNode['table'],
+    } as TableDataSchema,
   }
 }
 
