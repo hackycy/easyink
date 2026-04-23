@@ -117,7 +117,7 @@ function createReceiptItemsTable(): TableNode {
     x: 4,
     y: 52,
     width: 72,
-    height: 8,
+    height: 12,
     props: {
       headerBackground: '#f5f5f5',
       summaryBackground: '#fafafa',
@@ -186,7 +186,7 @@ export const supermarketReceiptTemplate: DocumentSchema = {
   page: {
     mode: 'stack',
     width: 80,
-    height: 300,
+    height: 200,
   },
   guides: { x: [], y: [] },
   elements: [
