@@ -46,7 +46,7 @@
 | 20 | [性能策略](./20-performance.md) | 架构层预留、性能目标 |
 | 21 | [安全模型](./21-security.md) | 数据路径安全、富文本安全、渲染安全 |
 | 22 | [编辑行为架构](./22-editing-behavior.md) | EditingSession、类型化 Selection、Geometry 协议、Behavior 中间件、Surfaces 与 Transaction |
-| 23 | [MCP 集成架构](./23-mcp-integration.md) | MCP Client、Server Registry、Schema Validator、AI 模板生成 |
+| 23 | [MCP 集成架构](./23-mcp-integration.md) | MCP Client/Server、LLM Provider、Docker 部署、AI 模板生成 |
 
 ## 补充说明
 
@@ -59,7 +59,7 @@
 - 未识别物料、缺失数据、缺失字体、渲染失败都必须以可见诊断暴露，不允许静默吞掉
 - 对标产品的原始 JSON 字段命名存在历史噪音，EasyInk 提供无损兼容编解码层
 - `DocumentSchema.unit`、纸张预设、页面类型标签这类信息在属性面板中可见，但不固化进 `page` 规范字段
-- MCP (Model Context Protocol) 集成通过 `@easyink/mcp` 包实现，支持 AI 驱动的模板生成
+- MCP (Model Context Protocol) 集成通过 `@easyink/mcp`（Client）和 `@easyink/mcp-server`（Server，可 Docker 部署）两个包实现，支持 AI 驱动的模板生成
 - 数据源系统支持运行时动态注册，通过 Provider Factory 模式支持 MCP 数据源注入
 
 ## 快速导航

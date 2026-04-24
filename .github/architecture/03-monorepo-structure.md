@@ -13,7 +13,8 @@ easyink/
 │   ├── designer/               # @easyink/designer — 设计器工作台 Vue 组件
 │   ├── ui/                     # @easyink/ui — 面板、表单、工作台基础组件
 │   ├── icons/                  # @easyink/icons — 图标资产
-│   ├── mcp/                    # @easyink/mcp — MCP Client、Server Registry、Schema Validator、DataSource Aligner
+│   ├── mcp/                    # @easyink/mcp — MCP Client、Server Registry、Schema Validator、DataSource Aligner、MCPPanel
+│   ├── mcp-server/             # @easyink/mcp-server — MCP Server、LLM Provider、Docker 部署
 │   ├── samples/                # @easyink/samples — 示例 schema、data 与 datasource
 │   └── materials/
 │       ├── text/
@@ -74,12 +75,24 @@ easyink/
 
 ### `@easyink/mcp`
 
-- MCP (Model Context Protocol) 客户端实现
-- Server Registry：动态服务器配置管理，支持 localStorage 持久化
-- Schema Validator：Schema 校验器，支持 Auto-fix 策略
+- MCP (Model Context Protocol) 客户端实现，通过 `@modelcontextprotocol/sdk` 连接远程 MCP Server
+- Server Registry：动态服务器配置管理，支持 localStorage 持久化，服务器信息单一来源
+- Schema Validator：Schema 三层校验器（structure / semantic / binding），autoFix 方法操作 deep clone，`validate()` 无副作用
 - DataSource Aligner：数据源字段对齐工具，支持模糊匹配
-- MCPPanel：AI 模板生成面板组件（位于 `@easyink/designer`）
-- 依赖 `datasource`、`schema`、`shared`，不依赖 `designer`（面板组件除外）
+- MCPPanel：AI 模板生成面板组件，从本包导出供 designer 按需加载
+- 依赖 `datasource`、`schema`、`shared`、`vue`、`@modelcontextprotocol/sdk`
+
+### `@easyink/mcp-server`
+
+- MCP Server 实现（基于 `@modelcontextprotocol/sdk` 的 `McpServer`），支持 stdio 和 HTTP/SSE 两种 transport
+- LLM Provider 抽象层：通过 async factory pattern 动态加载 Claude / OpenAI SDK，避免 `require()`
+- 物料知识通过 `config/materials.json` 注入 system prompt
+- 暴露 `generateSchema` 和 `generateDataSource` 两个 MCP Tool
+- 无状态设计：schema 进出，无文件 IO，单机无认证
+- 依赖 `datasource`、`schema`、`shared`、`mcp`、`@modelcontextprotocol/sdk`、`zod`
+- LLM SDK（`@anthropic-ai/sdk`、`openai`）为 optionalDependencies，用户按需安装
+- Docker 部署：多阶段构建 + `pnpm deploy`，`docker-compose.yml` 一键启动
+- CLI 入口：`npx easyink-mcp-server`，通过 `MCP_TRANSPORT` 环境变量选择传输模式
 
 ## 3.2 物料包内部结构
 
@@ -113,6 +126,8 @@ designer ─── core + datasource + schema + shared + ui + icons + material-*
   ↑           ↑
 mcp ──────────┘           (mcp 依赖 datasource + schema + shared)
   ↑
+mcp-server ─── mcp + datasource + schema + shared
+
 playground ── designer + viewer + samples + schema + mcp
 ```
 
@@ -122,7 +137,8 @@ playground ── designer + viewer + samples + schema + mcp
 - `viewer` 依赖 `core`、`datasource`、`schema`、`shared`，不依赖 `material-*`（Viewer 物料渲染器由调用方注册）
 - `ui` 依赖 `icons` 和 `shared`，不依赖 `designer`；方向为 designer 依赖 ui
 - `samples` 依赖 `datasource`、`schema`、`shared`，不依赖 `designer`
-- `mcp` 依赖 `datasource`、`schema`、`shared`，不依赖 `designer`（但 MCPPanel 组件在 designer 包内）
+- `mcp` 依赖 `datasource`、`schema`、`shared`、`vue`、`@modelcontextprotocol/sdk`。MCPPanel 组件由 `@easyink/mcp` 导出，designer 通过 `defineAsyncComponent` 按需加载
+- `mcp-server` 依赖 `mcp`、`datasource`、`schema`、`shared`、`@modelcontextprotocol/sdk`、`zod`。LLM SDK 为 optionalDependencies（`@anthropic-ai/sdk`、`openai`），按运行时环境变量选择加载
 
 ## 3.4 对外消费方式
 

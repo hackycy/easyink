@@ -131,25 +131,18 @@ export class SchemaValidator {
 
     // Check required top-level fields
     if (!s.version) {
-      if (this.options.autoFix) {
-        const original = schema
-        const fixed = { ...s, version: '1.0.0' }
-        autoFixed.push({
-          original,
-          fixed,
-          reason: 'Added missing version field with default value',
-          path: 'version',
-        })
-        Object.assign(schema, { version: '1.0.0' })
-      }
-      else {
-        errors.push({
-          code: 'MISSING_VERSION',
-          message: 'Missing required field: version',
-          path: 'version',
-          autoFixable: true,
-        })
-      }
+      autoFixed.push({
+        original: s.version,
+        fixed: '1.0.0',
+        reason: 'Added missing version field with default value',
+        path: 'version',
+      })
+      errors.push({
+        code: 'MISSING_VERSION',
+        message: 'Missing required field: version',
+        path: 'version',
+        autoFixable: true,
+      })
     }
 
     if (!s.page) {
@@ -162,23 +155,18 @@ export class SchemaValidator {
     }
 
     if (!Array.isArray(s.elements)) {
-      if (this.options.autoFix) {
-        autoFixed.push({
-          original: s.elements,
-          fixed: [],
-          reason: 'Initialized elements array',
-          path: 'elements',
-        })
-        Object.assign(schema, { elements: [] })
-      }
-      else {
-        errors.push({
-          code: 'INVALID_ELEMENTS',
-          message: 'elements must be an array',
-          path: 'elements',
-          autoFixable: true,
-        })
-      }
+      autoFixed.push({
+        original: s.elements,
+        fixed: [],
+        reason: 'Initialized elements array',
+        path: 'elements',
+      })
+      errors.push({
+        code: 'INVALID_ELEMENTS',
+        message: 'elements must be an array',
+        path: 'elements',
+        autoFixable: true,
+      })
     }
 
     // Check page structure
@@ -190,9 +178,12 @@ export class SchemaValidator {
           message: 'Page mode not specified, assuming fixed',
           location: 'page.mode',
         })
-        if (this.options.autoFix) {
-          Object.assign(schema, { page: { ...page, mode: 'fixed' } })
-        }
+        autoFixed.push({
+          original: page.mode,
+          fixed: 'fixed',
+          reason: 'Added default page mode',
+          path: 'page.mode',
+        })
       }
     }
 

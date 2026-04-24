@@ -12,67 +12,77 @@ import type {
 import { generateId } from '@easyink/shared'
 
 /**
- * MCP Client for connecting to remote MCP servers.
- * Supports both stdio and http transport modes.
+ * MCP Client for connecting to remote MCP servers via HTTP/SSE transport.
+ * Browser-compatible. Uses StreamableHTTPClientTransport from @modelcontextprotocol/sdk.
  */
 export class MCPClient {
-  private servers = new Map<string, MCPServerConfig>()
+  private clients = new Map<string, import('@modelcontextprotocol/sdk/client/index.js').Client>()
+  private transports = new Map<string, import('@modelcontextprotocol/sdk/client/streamableHttp.js').StreamableHTTPClientTransport>()
   private sessionHistories = new Map<string, SessionMessage[]>()
   private serverStatuses = new Map<string, ServerStatus>()
 
-  constructor() {
-    // Initialize with empty maps
-  }
-
   /**
-   * Register a new MCP server configuration.
+   * Connect to an MCP server.
+   * Only HTTP transport is supported in the browser.
    */
-  registerServer(config: MCPServerConfig): void {
-    this.servers.set(config.id, config)
+  async connect(config: MCPServerConfig): Promise<void> {
+    if (config.type === 'stdio') {
+      throw new Error('Stdio transport is not supported in browser. Use HTTP transport.')
+    }
+
+    if (!config.url) {
+      throw new Error('Server URL is required for HTTP transport')
+    }
+
     this.serverStatuses.set(config.id, {
       serverId: config.id,
-      state: 'disconnected',
+      state: 'connecting',
     })
-  }
 
-  /**
-   * Update an existing server configuration.
-   */
-  updateServer(id: string, config: Partial<MCPServerConfig>): void {
-    const existing = this.servers.get(id)
-    if (existing) {
-      this.servers.set(id, { ...existing, ...config })
+    try {
+      const { Client } = await import('@modelcontextprotocol/sdk/client/index.js')
+      const { StreamableHTTPClientTransport } = await import('@modelcontextprotocol/sdk/client/streamableHttp.js')
+
+      const transport = new StreamableHTTPClientTransport(new URL(config.url))
+      const client = new Client(
+        { name: 'easyink-designer', version: '0.0.0' },
+        { capabilities: {} },
+      )
+
+      await client.connect(transport)
+
+      this.clients.set(config.id, client)
+      this.transports.set(config.id, transport)
+      this.serverStatuses.set(config.id, {
+        serverId: config.id,
+        state: 'connected',
+        lastConnected: Date.now(),
+      })
+    }
+    catch (error) {
+      this.serverStatuses.set(config.id, {
+        serverId: config.id,
+        state: 'error',
+        error: error instanceof Error ? error.message : 'Connection failed',
+      })
+      throw error
     }
   }
 
   /**
-   * Remove a server configuration.
+   * Disconnect from an MCP server.
    */
-  removeServer(id: string): void {
-    this.servers.delete(id)
-    this.sessionHistories.delete(id)
-    this.serverStatuses.delete(id)
-  }
-
-  /**
-   * Get all registered servers.
-   */
-  getServers(): MCPServerConfig[] {
-    return [...this.servers.values()]
-  }
-
-  /**
-   * Get all enabled servers.
-   */
-  getEnabledServers(): MCPServerConfig[] {
-    return this.getServers().filter(s => s.enabled)
-  }
-
-  /**
-   * Get a specific server config.
-   */
-  getServer(id: string): MCPServerConfig | undefined {
-    return this.servers.get(id)
+  async disconnect(serverId: string): Promise<void> {
+    const transport = this.transports.get(serverId)
+    if (transport) {
+      await transport.close()
+      this.transports.delete(serverId)
+    }
+    this.clients.delete(serverId)
+    this.serverStatuses.set(serverId, {
+      serverId,
+      state: 'disconnected',
+    })
   }
 
   /**
@@ -90,7 +100,7 @@ export class MCPClient {
   }
 
   /**
-   * Create or get a session for a server.
+   * Get session messages for a server.
    */
   getSession(serverId: string): SessionMessage[] {
     if (!this.sessionHistories.has(serverId)) {
@@ -100,7 +110,7 @@ export class MCPClient {
   }
 
   /**
-   * Clear a session history.
+   * Clear session history.
    */
   clearSession(serverId: string): void {
     this.sessionHistories.set(serverId, [])
@@ -109,7 +119,10 @@ export class MCPClient {
   /**
    * Add a message to the session history.
    */
-  addSessionMessage(serverId: string, message: Omit<SessionMessage, 'id' | 'timestamp'>): SessionMessage {
+  addSessionMessage(
+    serverId: string,
+    message: Omit<SessionMessage, 'id' | 'timestamp'>,
+  ): SessionMessage {
     const session = this.getSession(serverId)
     const msg: SessionMessage = {
       ...message,
@@ -121,15 +134,15 @@ export class MCPClient {
   }
 
   /**
-   * Generate a template using the MCP server.
-   * This method handles the AI-orchestrated multi-tool call flow.
+   * Generate a template using the connected MCP server.
+   * Calls the generateSchema tool via MCP protocol.
    */
   async generate(options: GenerateOptions): Promise<GenerateResult> {
-    const { serverId, prompt, currentSchema, context: _context, signal } = options
+    const { serverId, prompt, currentSchema, signal } = options
 
-    const server = this.servers.get(serverId)
-    if (!server) {
-      throw new Error(`MCP server "${serverId}" not found`)
+    const client = this.clients.get(serverId)
+    if (!client) {
+      throw new Error(`Not connected to MCP server "${serverId}". Call connect() first.`)
     }
 
     // Add user message to session
@@ -140,25 +153,70 @@ export class MCPClient {
     })
 
     try {
-      // In a real implementation, this would:
-      // 1. Connect to the MCP server using the SDK
-      // 2. Send the prompt as a tool call request
-      // 3. Handle multi-tool orchestration (getSchema + getDataSource)
-      // 4. Parse and validate the responses
-      // 5. Align schema and data source
+      const result = await client.callTool(
+        {
+          name: 'generateSchema',
+          arguments: {
+            prompt,
+            currentSchema: currentSchema ?? undefined,
+          },
+        },
+        undefined,
+        { signal },
+      )
 
-      // For now, we simulate the flow
-      const result = await this.simulateGenerateFlow(serverId, prompt, currentSchema, signal)
+      // Parse the text content from the tool result
+      const content = result.content as Array<{ type: string, text?: string }>
+      const textBlock = content.find(c => c.type === 'text')
+      if (!textBlock || textBlock.type !== 'text' || !textBlock.text) {
+        throw new Error('Server returned no text content')
+      }
 
-      // Add assistant message to session
+      const data = JSON.parse(textBlock.text) as {
+        schema: DocumentSchema
+        expectedDataSource: { name: string, fields: Array<Record<string, unknown>> }
+        validation?: { valid: boolean, errors?: Array<Record<string, unknown>>, warnings?: Array<Record<string, unknown>> }
+        error?: string
+      }
+
+      if (data.error) {
+        throw new Error(`Schema generation failed: ${data.error}`)
+      }
+
+      // Build a DataSourceDescriptor from the expectedDataSource
+      const dataSource: DataSourceDescriptor = {
+        id: generateId('ds'),
+        name: data.expectedDataSource.name,
+        tag: 'mcp-generated',
+        title: `AI Generated: ${data.expectedDataSource.name}`,
+        fields: this.convertExpectedFields(data.expectedDataSource.fields),
+        meta: {
+          namespace: '__mcp__',
+          generatedBy: 'mcp-client',
+          prompt,
+        },
+      }
+
+      // Add success message to session
       this.addSessionMessage(serverId, {
         role: 'assistant',
         content: 'Schema and DataSource generated successfully',
-        toolsUsed: result.toolsUsed,
-        schemaSnapshot: result.schema,
+        toolsUsed: ['generateSchema'],
+        schemaSnapshot: data.schema,
       })
 
-      return result
+      return {
+        schema: data.schema,
+        dataSource,
+        sessionId: generateId('session'),
+        serverId,
+        toolsUsed: ['generateSchema'],
+        metadata: {
+          generatedAt: Date.now(),
+          prompt,
+          validation: data.validation,
+        },
+      }
     }
     catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error'
@@ -172,128 +230,29 @@ export class MCPClient {
   }
 
   /**
-   * Simulate the generate flow for development/testing.
-   * In production, this would be replaced with actual MCP protocol calls.
-   */
-  private async simulateGenerateFlow(
-    serverId: string,
-    prompt: string,
-    currentSchema?: DocumentSchema,
-    signal?: AbortSignal,
-  ): Promise<GenerateResult> {
-    // Simulate async operation
-    await new Promise(resolve => setTimeout(resolve, 500))
-
-    if (signal?.aborted) {
-      throw new Error('Generation cancelled')
-    }
-
-    // Generate mock schema and data source based on prompt
-    const mockSchema = this.generateMockSchema(prompt, currentSchema)
-    const mockDataSource = this.generateMockDataSource(prompt)
-
-    return {
-      schema: mockSchema,
-      dataSource: mockDataSource,
-      sessionId: generateId('session'),
-      serverId,
-      toolsUsed: ['getSchema', 'getDataSource'],
-      metadata: {
-        generatedAt: Date.now(),
-        prompt,
-      },
-    }
-  }
-
-  /**
-   * Generate a mock schema based on the prompt.
-   * This is a placeholder for actual AI-generated content.
-   */
-  private generateMockSchema(prompt: string, currentSchema?: DocumentSchema): DocumentSchema {
-    // Default to a simple template structure
-    const base = currentSchema ?? {
-      version: '1.0.0',
-      unit: 'mm' as const,
-      page: {
-        mode: 'fixed' as const,
-        width: 210,
-        height: 297,
-        background: {},
-      },
-      guides: { x: [], y: [] },
-      elements: [],
-    }
-
-    // Add MCP metadata
-    return {
-      ...base,
-      extensions: {
-        ...base.extensions,
-        mcp: {
-          dataSources: [],
-          templateHistory: [],
-        },
-      },
-    }
-  }
-
-  /**
-   * Generate a mock data source based on the prompt.
-   * This is a placeholder for actual AI-generated content.
-   */
-  private generateMockDataSource(prompt: string): DataSourceDescriptor {
-    // Generate a simple data source structure
-    return {
-      id: generateId('ds'),
-      name: 'MCP Generated Data',
-      title: 'AI Generated Data Source',
-      tag: 'mcp-generated',
-      expand: true,
-      fields: [
-        {
-          name: 'items',
-          path: 'items',
-          tag: 'collection',
-          expand: true,
-          fields: [
-            { name: 'name', path: 'items/name', title: 'Item Name' },
-            { name: 'quantity', path: 'items/quantity', title: 'Quantity' },
-            { name: 'price', path: 'items/price', title: 'Price' },
-          ],
-        },
-      ],
-      meta: {
-        namespace: '__mcp__',
-        generatedBy: 'mcp-client',
-        prompt,
-      },
-    }
-  }
-
-  /**
    * Call a specific MCP tool directly.
    */
   async callTool(
     serverId: string,
     toolName: string,
-    _args: Record<string, unknown>,
+    args: Record<string, unknown>,
   ): Promise<MCPToolResult> {
-    const server = this.servers.get(serverId)
-    if (!server) {
+    const client = this.clients.get(serverId)
+    if (!client) {
       return {
         success: false,
-        error: `Server "${serverId}" not found`,
+        error: `Not connected to server "${serverId}"`,
         toolName,
       }
     }
 
     try {
-      // In production, this would use the actual MCP SDK
-      // For now, return a mock success response
+      const result = await client.callTool({ name: toolName, arguments: args })
       return {
-        success: true,
-        content: { message: 'Tool called successfully' },
+        success: !result.isError,
+        content: result.content,
         toolName,
+        error: result.isError ? 'Tool returned error' : undefined,
       }
     }
     catch (error) {
@@ -306,54 +265,40 @@ export class MCPClient {
   }
 
   /**
-   * List available tools from a server.
+   * List available tools from a connected server.
    */
   async listTools(serverId: string): Promise<MCPTool[]> {
-    const server = this.servers.get(serverId)
-    if (!server) {
+    const client = this.clients.get(serverId)
+    if (!client)
+      return []
+
+    try {
+      const result = await client.listTools()
+      return result.tools.map(t => ({
+        name: t.name,
+        description: t.description,
+        inputSchema: t.inputSchema as Record<string, unknown>,
+      }))
+    }
+    catch {
       return []
     }
-
-    // In production, this would query the server for available tools
-    // Return mock tools for development
-    return [
-      {
-        name: 'getSchema',
-        description: 'Generate a document schema based on user description',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            prompt: { type: 'string' },
-            currentSchema: { type: 'object' },
-          },
-        },
-      },
-      {
-        name: 'getDataSource',
-        description: 'Generate a data source descriptor based on schema requirements',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            schemaRequirements: { type: 'object' },
-          },
-        },
-      },
-    ]
   }
 
   /**
-   * Export all server configurations.
+   * Convert ExpectedField items from AI response into DataFieldNode tree.
    */
-  exportConfigs(): MCPServerConfig[] {
-    return this.getServers()
-  }
-
-  /**
-   * Import server configurations.
-   */
-  importConfigs(configs: MCPServerConfig[]): void {
-    for (const config of configs) {
-      this.registerServer(config)
-    }
+  private convertExpectedFields(
+    fields: Array<Record<string, unknown>>,
+  ): import('@easyink/datasource').DataFieldNode[] {
+    return fields.map(f => ({
+      name: f.name as string,
+      path: f.path as string,
+      title: f.name as string,
+      expand: (f.type as string) === 'array' || (f.type as string) === 'object',
+      ...(f.children
+        ? { fields: this.convertExpectedFields(f.children as Array<Record<string, unknown>>) }
+        : {}),
+    }))
   }
 }

@@ -1,0 +1,42 @@
+{
+  "name": "@easyink/mcp-server",
+  "type": "module",
+  "version": "0.0.0",
+  "description": "MCP server for EasyInk template generation via LLM",
+  "author": "hackycy <hackycy@outlook.com>",
+  "license": "MIT",
+  "sideEffects": false,
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./bin/server": "./dist/bin/server.mjs",
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/index.d.mts",
+  "bin": {
+    "easyink-mcp-server": "./dist/bin/server.mjs"
+  },
+  "files": [
+    "config",
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch"
+  },
+  "dependencies": {
+    "@easyink/datasource": "workspace:*",
+    "@easyink/mcp": "workspace:*",
+    "@easyink/schema": "workspace:*",
+    "@easyink/shared": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^3.24.0"
+  },
+  "optionalDependencies": {
+    "@anthropic-ai/sdk": "^0.55.0",
+    "openai": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:types",
+    "tsdown": "catalog:cli"
+  }
+}

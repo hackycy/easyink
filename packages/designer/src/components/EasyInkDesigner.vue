@@ -26,8 +26,10 @@ const emit = defineEmits<{
   'update:schema': [schema: DocumentSchema]
 }>()
 
-// Async component for MCP Panel to avoid circular dependencies
-const MCPPanel = defineAsyncComponent(() => import('./mcp/MCPPanel.vue'))
+// Async component for MCP Panel, loaded from @easyink/mcp on demand
+const MCPPanel = defineAsyncComponent(
+  () => import('@easyink/mcp').then(m => m.MCPPanel),
+)
 
 const store = reactive(new DesignerStore(props.schema, props.preferenceProvider)) as DesignerStore
 // EditingSessionManager was constructed before the reactive proxy existed;
@@ -82,11 +84,24 @@ function handleSchemaApply(schema: DocumentSchema, versionId: string) {
     metadata: { versionId },
   })
 
+  // Persist MCP history to schema.extensions.mcp
+  const enriched: DocumentSchema = {
+    ...schema,
+    extensions: {
+      ...schema.extensions,
+      mcp: {
+        ...schema.extensions?.mcp,
+        currentVersionId: versionId,
+        templateHistory: templateHistory.value.exportVersions(),
+      },
+    },
+  }
+
   // Emit schema update
-  emit('update:schema', schema)
+  emit('update:schema', enriched)
 
   // Also update store directly
-  store.setSchema(schema)
+  store.setSchema(enriched)
 }
 
 function handleDatasourceRegister(dataSource: DataSourceDescriptor, namespace: string) {
@@ -97,6 +112,31 @@ function handleDatasourceRegister(dataSource: DataSourceDescriptor, namespace: s
     resolve: async () => dataSource,
   }
   store.dataSourceRegistry.registerProviderFactory(factory)
+
+  // Persist to schema.extensions.mcp
+  const currentSchema = store.schema
+  const existingDS = currentSchema.extensions?.mcp?.dataSources ?? []
+
+  store.setSchema({
+    ...currentSchema,
+    extensions: {
+      ...currentSchema.extensions,
+      mcp: {
+        ...currentSchema.extensions?.mcp,
+        dataSources: [...existingDS, {
+          id: dataSource.id,
+          name: dataSource.name,
+          tag: dataSource.tag,
+          fields: dataSource.fields,
+          meta: dataSource.meta,
+        }],
+        providerFactories: [
+          ...(currentSchema.extensions?.mcp?.providerFactories ?? []),
+          { id: dataSource.id, namespace },
+        ],
+      },
+    },
+  })
 }
 
 function handleMCPError(error: { message: string, canRetry: boolean }) {

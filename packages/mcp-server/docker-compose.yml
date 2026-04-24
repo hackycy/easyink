@@ -1,0 +1,15 @@
+services:
+  mcp-server:
+    build:
+      context: ../..
+      dockerfile: packages/mcp-server/Dockerfile
+    ports:
+      - '3000:3000'
+    environment:
+      - MCP_PROVIDER=${MCP_PROVIDER:-claude}
+      - MCP_API_KEY=${MCP_API_KEY}
+      - MCP_MODEL=${MCP_MODEL:-}
+      - MCP_BASE_URL=${MCP_BASE_URL:-}
+      - MCP_TRANSPORT=http
+      - MCP_HTTP_PORT=3000
+    restart: unless-stopped

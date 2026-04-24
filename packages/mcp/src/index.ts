@@ -1,9 +1,11 @@
 // MCP Client
 export { MCPClient } from './client/mcp-client'
 
+// Components
+export { default as MCPPanel } from './components/MCPPanel.vue'
+
 // Server Registry
 export { ServerRegistry, validateServerConfig } from './config/server-registry'
-
 // Types
 export type {
   ConnectionState,
@@ -17,11 +19,11 @@ export type {
   ServerStatus,
   SessionMessage,
 } from './types/mcp-types'
+
 // Utils
 export { DataSourceAligner } from './utils/datasource-aligner'
-
 export type { AlignmentResult, UnalignedBinding } from './utils/datasource-aligner'
+
 // Validation
 export { SchemaValidator } from './validation/schema-validator'
-
 export type { AutoFixedIssue, ValidationError, ValidationResult, ValidationWarning } from './validation/schema-validator'

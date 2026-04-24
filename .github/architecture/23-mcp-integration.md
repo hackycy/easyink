@@ -1,458 +1,382 @@
 # 23. MCP 集成架构
 
-本文档描述 EasyInk 设计器如何通过 MCP (Model Context Protocol) 接入 AI 能力，实现「用 AI 做文本输入后直出 schema 和 datasource」的功能。
+本文档描述 EasyInk 如何通过 MCP (Model Context Protocol) 实现 AI 驱动的模板生成。架构分 Client 和 Server 两侧：`@easyink/mcp` 作为浏览器端 MCP Client，`@easyink/mcp-server` 作为 Node.js 端 MCP Server（可 Docker 部署）。
 
 ## 23.1 目标与场景
 
 ### 核心目标
 
-- 用户通过自然语言描述需求，AI 自动生成文档模板
-- AI 生成 schema 和 datasource，设计器直接应用
-- 支持多 MCP Server 动态配置
-- 支持模板版本历史管理
+- 用户在设计师中通过自然语言描述需求，AI 自动生成文档模板（schema + datasource）
+- 支持多 LLM Provider（Claude / OpenAI），通过环境变量切换
+- MCP Server 支持 Docker 单命令部署，也支持 npx 本地运行
+- Designer 通过 `enableMCP` prop 动态启用 MCP 面板，无需全量加载
 
 ### 使用场景
 
-1. **快速生成**：用户输入"生成一个销售发票模板"，AI 返回完整 schema 和 datasource
-2. **迭代优化**：用户可以在 AI 生成的基础上继续对话调整
-3. **数据绑定**：生成 schema 时自动绑定到 AI 提供的数据源字段
+1. **对话生成**：用户在 MCPPanel 输入"生成一个销售发票模板"，AI 返回完整 schema 和 datasource
+2. **迭代优化**：用户传入 currentSchema，AI 在已有模板基础上修改
+3. **服务部署**：MCP Server 可独立部署为 HTTP 服务，供多个 designer 实例或外部 MCP Host 使用
 
 ## 23.2 架构概览
 
-```mermaid
-flowchart TB
-    subgraph MCP["MCP 接入层"]
-        AI["AI Panel\n(MCPPanel)"]
-        MCPClient["MCPClient\n(Gateway 模式)"]
-        ServerConfig["ServerRegistry\n(动态配置)"]
-    end
-
-    subgraph MCPUtils["MCP 工具"]
-        SchemaValidator["SchemaValidator\n(校验 + Auto-fix)"]
-        DSAligner["DataSourceAligner\n(字段对齐)"]
-    end
-
-    subgraph DesignerCore["Designer 核心"]
-        DSRegistry["DataSourceRegistry\n(Provider Factory)"]
-        TemplateHistory["TemplateHistoryManager"]
-        DesignerStore["DesignerStore"]
-    end
-
-    subgraph Persistence["持久化层"]
-        SchemaExt["Schema.extensions.mcp"]
-        LocalStorage["localStorage"]
-    end
-
-    AI -->|"Prompt|Result"| MCPClient
-    MCPClient -->|"Server Config"| ServerConfig
-    ServerConfig -.->|"Remote MCP"| ExtServer["External MCP Server\n(Remote)"]
-    MCPClient -->|"Schema"| SchemaValidator
-    MCPClient -->|"DataSource"| DSAligner
-    SchemaValidator -->|"Validated Schema"| DesignerStore
-    DSAligner -->|"Aligned DataSource"| DSRegistry
-    DesignerStore -->|"Schema 版本"| TemplateHistory
-    TemplateHistory -->|"持久化"| SchemaExt
-    TemplateHistory -->|"持久化"| LocalStorage
-    DSRegistry -->|"Provider Factory"| DSAligner
 ```
+┌──────────────────────────────────────────────────────┐
+│ Browser (Designer)                                   │
+│  ┌───────────────────────────────────────────────┐   │
+│  │ MCPPanel (defineAsyncComponent 按需加载)       │   │
+│  │  用户输入 prompt → 展示结果                    │   │
+│  └──────────────┬────────────────────────────────┘   │
+│                 │                                     │
+│  ┌──────────────▼────────────────────────────────┐   │
+│  │ @easyink/mcp (Client)                         │   │
+│  │  - MCPClient (StreamableHTTPClientTransport)  │   │
+│  │  - ServerRegistry (localStorage 持久化)        │   │
+│  │  - SchemaValidator / DataSourceAligner         │   │
+│  └──────────────┬────────────────────────────────┘   │
+│                 │ MCP Protocol (HTTP+SSE)             │
+└─────────────────┼────────────────────────────────────┘
+                  │
+┌─────────────────▼────────────────────────────────────┐
+│ Docker / npx / PM2                                   │
+│  ┌───────────────────────────────────────────────┐   │
+│  │ @easyink/mcp-server                           │   │
+│  │  - McpServer (stdio + StreamableHTTP)         │   │
+│  │  - LLM Provider (Claude / OpenAI, env 切换)   │   │
+│  │  - SchemaValidator + AutoFix                  │   │
+│  │  - System Prompt Builder (物料配置注入)        │   │
+│  │  - config/materials.json                      │   │
+│  └───────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────┘
+```
+
+**核心流程**：
+
+1. 用户在 MCPPanel 输入自然语言描述
+2. MCPClient 通过 HTTP/SSE 向 MCP Server 发送 `generateSchema` tool call
+3. MCP Server 加载物料配置，构建 system prompt，调用 LLM 生成 schema + expectedDataSource
+4. Server 侧执行 SchemaValidator 校验 + autoFix
+5. 结果返回 designer，通过 `store.setSchema()` 应用到画布，通过 `DataSourceRegistry.registerProviderFactory()` 注册数据源
+6. `extensions.mcp` 持久化 dataSources、templateHistory、currentVersionId
 
 ## 23.3 核心组件
 
 ### 23.3.1 MCPClient (`@easyink/mcp`)
 
-MCP 客户端核心，负责与远程 MCP Server 通信。
+浏览器端 MCP 客户端，使用 `@modelcontextprotocol/sdk` 的 `Client` + `StreamableHTTPClientTransport` 连接远程 MCP Server。
 
 ```typescript
 class MCPClient {
-  // 服务器管理
-  registerServer(config: MCPServerConfig): void
-  updateServer(id: string, config: Partial<MCPServerConfig>): void
-  removeServer(id: string): void
-  getServers(): MCPServerConfig[]
+  // 连接管理
+  connect(config: MCPServerConfig): Promise<void>
+  disconnect(serverId: string): Promise<void>
+  getServerStatus(id: string): ServerStatus | undefined
 
-  // 会话管理
+  // 会话历史（客户端本地维护）
   getSession(serverId: string): SessionMessage[]
-  addSessionMessage(serverId: string, message: SessionMessage): void
+  addSessionMessage(serverId: string, message: ...): SessionMessage
   clearSession(serverId: string): void
 
-  // 模板生成
-  async generate(options: GenerateOptions): Promise<GenerateResult>
+  // MCP 协议调用
+  generate(options: GenerateOptions): Promise<GenerateResult>
+  callTool(serverId: string, toolName: string, args: Record<string, unknown>): Promise<MCPToolResult>
+  listTools(serverId: string): Promise<MCPTool[]>
 }
 ```
 
+**关键设计**：
+- MCPClient 不持有 server 列表。Server 管理由 ServerRegistry 单一负责
+- 仅支持 HTTP transport（stdio 在浏览器不可用）
+- `connect()` 时创建 SDK Client + StreamableHTTPClientTransport，`disconnect()` 时关闭
+- `generate()` 内部调用 `client.callTool({ name: 'generateSchema', arguments: { prompt, currentSchema } })`，解析返回的 JSON 文本
+
 ### 23.3.2 ServerRegistry (`@easyink/mcp`)
 
-服务器配置管理，支持动态添加/编辑/删除 MCP Server。
+服务器配置管理，localStorage 持久化。是服务器信息的唯一数据源。
 
 ```typescript
 class ServerRegistry {
-  // 内置服务器
-  getBuiltinServers(): MCPServerConfig[]
-  setEnabled(id: string, enabled: boolean): boolean
-
-  // 用户服务器
   addServer(config: MCPServerConfig): void
   updateServer(id: string, updates: Partial<MCPServerConfig>): boolean
   removeServer(id: string): boolean
-
-  // 持久化
-  save(): void
-  load(): void
+  getServer(id: string): MCPServerConfig | undefined
+  getServers(): MCPServerConfig[]
+  getEnabledServers(): MCPServerConfig[]
+  setEnabled(id: string, enabled: boolean): boolean
+  importServers(configs: MCPServerConfig[]): void
+  exportServers(): MCPServerConfig[]
 }
 ```
 
 ### 23.3.3 SchemaValidator (`@easyink/mcp`)
 
-Schema 校验器，支持自动修复。
+Schema 三层校验器。**`validate()` 为纯读操作，不修改入参**。Auto-fix 仅在 `autoFix()` 方法中执行（操作 deep clone）。
 
 ```typescript
 class SchemaValidator {
   constructor(options?: SchemaValidatorOptions)
 
-  // 完整校验
+  // 完整校验（只读）
   validate(schema: unknown): ValidationResult
 
-  // 分层校验
+  // 分层校验（只读）
   validateStructure(schema: unknown): ValidationResult
   validateSemantics(schema: DocumentSchema): ValidationResult
   validateBindings(schema: DocumentSchema): ValidationResult
 
-  // 自动修复
+  // 自动修复（操作 deep clone）
   autoFix(schema: DocumentSchema): { fixed: DocumentSchema, issues: AutoFixedIssue[] }
 }
 ```
 
 ### 23.3.4 DataSourceAligner (`@easyink/mcp`)
 
-数据源字段对齐工具，确保 schema 中的 binding 字段与 datasource 中的字段匹配。
+数据源字段对齐工具。检查 schema binding 的 fieldPath 与 datasource fields 是否匹配，支持模糊匹配和自动修正。
 
 ```typescript
 class DataSourceAligner {
   align(schema: DocumentSchema, dataSource: DataSourceDescriptor): AlignmentResult
-
-  // 字段提取
   extractFieldPaths(fields: DataFieldNode[]): Set<string>
-  extractBindings(schema: DocumentSchema): BindingRef[]
-
-  // 模糊匹配
+  extractBindings(schema: DocumentSchema): Array<{ binding: BindingRef, elementId: string }>
   findFuzzyMatch(path: string, availablePaths: Set<string>): MatchResult | undefined
+  applyAlignment(schema: DocumentSchema, alignment: AlignmentResult): DocumentSchema
 }
 ```
 
-### 23.3.5 TemplateHistoryManager (`@easyink/designer`)
+### 23.3.5 McpServer + LLM Provider (`@easyink/mcp-server`)
 
-模板版本历史管理器。
+Server 端核心。使用 `@modelcontextprotocol/sdk` 的 `McpServer` 创建 MCP Server 实例，注册两个 Tool。
+
+**LLM Provider 架构**：
 
 ```typescript
-class TemplateHistoryManager {
-  // 版本管理
-  saveVersion(schema: DocumentSchema, metadata: VersionMetadata): string
-  getVersion(id: string): TemplateVersion | undefined
-  switchTo(id: string): DocumentSchema | undefined
-
-  // 历史查询
-  getHistory(options?: HistoryQuery): TemplateVersion[]
-  getMcpVersions(): TemplateVersion[]
-  getUserVersions(): TemplateVersion[]
-
-  // 持久化
-  save(): void
-  load(): void
+interface LLMProvider {
+  readonly name: string
+  generateSchema: (input: SchemaGenerationInput) => Promise<SchemaGenerationOutput>
+  generateDataSource: (input: DataSourceGenerationInput) => Promise<DataSourceGenerationOutput>
 }
 ```
 
-## 23.4 MCP 协议集成
+- `ClaudeProvider` — 使用 Anthropic tool_use 约束 JSON 输出
+- `OpenAIProvider` — 使用 `response_format: json_object` 约束输出
+- 两者均通过 async static factory (`ClaudeProvider.create(config)`) 创建，动态 `import()` LLM SDK，避免 `require()`
+- LLM SDK（`@anthropic-ai/sdk`、`openai`）为 optionalDependencies
 
-### 23.4.1 连接模式
+**MCP Tools**：
 
-采用 **Gateway 模式**，设计器作为 MCP Client 连接远程 MCP Server：
+| Tool | 参数 | 返回 |
+|------|------|------|
+| `generateSchema` | `prompt: string`, `currentSchema?: object` | `{ schema, expectedDataSource, validation }` |
+| `generateDataSource` | `expectedDataSource: ExpectedDataSource` | `{ dataSource }` |
 
-```typescript
-interface MCPServerConfig {
-  id: string
-  name: string
-  type: 'stdio' | 'http'
-  command?: string    // stdio 模式
-  args?: string[]
-  url?: string       // http 模式
-  env?: Record<string, string>
-  auth?: {
-    type: 'bearer' | 'apikey'
-    token?: string
-  }
-  enabled: boolean
+`generateSchema` 一次调用同时返回 schema 和 expectedDataSource，减少 round-trip。
+
+### 23.3.6 物料配置注入 (`config/materials.json`)
+
+MCP Server 启动时加载 `config/materials.json`，包含所有物料类型描述、属性列表和绑定规则。这些信息通过 `system-builder.ts` 拼入 LLM system prompt，使 AI 了解 EasyInk 的能力边界。
+
+```json
+{
+  "materialTypes": {
+    "text": { "description": "...", "properties": ["fontSize", "color", ...] },
+    "table": { "description": "...", "properties": ["columns", ...] }
+  },
+  "bindingRules": { ... }
 }
 ```
 
-### 23.4.2 工具定义
+### 23.3.7 传输层
 
-MCP Server 应暴露以下工具：
+**Server 端**支持两种 transport，通过 `MCP_TRANSPORT` 环境变量切换：
 
-| 工具名 | 描述 | 参数 |
-|--------|------|------|
-| `getSchema` | 根据用户描述生成 schema | `{ prompt: string, currentSchema?: DocumentSchema }` |
-| `getDataSource` | 根据 schema 需求生成 datasource | `{ schemaRequirements?: ExpectedDataSource }` |
+| Transport | 用途 | 实现 |
+|-----------|------|------|
+| stdio | npx 本地运行、Claude Desktop 集成 | `StdioServerTransport` |
+| HTTP | Docker 部署、远程访问 | `StreamableHTTPServerTransport` + Node.js 内置 `http` 模块 |
 
-### 23.4.3 AI 编排策略
+**Client 端**仅支持 HTTP transport（浏览器限制），使用 `StreamableHTTPClientTransport`。
 
-采用 **AI 编排 + Schema-First** 策略：
+## 23.4 数据流
 
-1. AI 调用 `getSchema` 返回 schema，同时附带 `extensions.mcp.expectedDataSource`
-2. AI 调用 `getDataSource` 时必须遵循 `expectedDataSource` 结构
-3. Client 端进行字段对齐校验
+### 23.4.1 生成流程
 
-## 23.5 数据流
-
-### 23.5.1 生成流程
-
-```mermaid
-sequenceDiagram
-    participant User as 用户
-    participant Panel as MCPPanel
-    participant Client as MCPClient
-    participant Server as MCP Server
-    participant Validator as SchemaValidator
-    participant Aligner as DataSourceAligner
-    participant Registry as DataSourceRegistry
-    participant Store as DesignerStore
-
-    User->>Panel: 输入 Prompt
-    Panel->>Client: generate(prompt, schema)
-    Client->>Server: 调用 getSchema + getDataSource
-    Server-->>Client: schema + dataSource
-    Client-->>Validator: validate(schema)
-    Validator-->>Client: ValidationResult
-    alt 校验失败
-        Client-->>Panel: 抛出错误
-    end
-    Client-->>Aligner: align(schema, dataSource)
-    Aligner-->>Client: AlignmentResult
-    Client-->>Registry: registerProviderFactory(dataSource)
-    Registry-->>Registry: 存储 Provider Factory
-    Client-->>Store: setSchema(schema)
-    Store-->>Panel: Schema 已应用
-    Panel-->>User: 显示成功
+```
+用户输入 prompt
+  → MCPPanel.handleGenerate()
+    → MCPClient.connect(config)        // 按需建连
+    → MCPClient.generate({ prompt, currentSchema })
+      → client.callTool({ name: 'generateSchema', arguments: { prompt, currentSchema } })
+        → [MCP Protocol: HTTP POST /mcp]
+          → McpServer Tool Handler
+            → loadMaterialsConfig()     // 加载物料知识
+            → buildSystemPrompt()       // 构建 system prompt
+            → llmProvider.generateSchema()  // 调用 LLM
+            → SchemaValidator.validate()    // 校验
+            → SchemaValidator.autoFix()     // 修复
+            → 返回 { schema, expectedDataSource, validation }
+        ← [MCP Protocol: JSON response]
+      ← GenerateResult { schema, dataSource }
+    → MCPClient 解析结果，转换 expectedDataSource → DataSourceDescriptor
+  → emit('schemaApply', schema, versionId)
+  → emit('datasourceRegister', dataSource, namespace)
+    → EasyInkDesigner: store.setSchema(enriched)
+    → EasyInkDesigner: store.dataSourceRegistry.registerProviderFactory(factory)
+    → EasyInkDesigner: extensions.mcp 持久化
 ```
 
-### 23.5.2 校验与修复
+### 23.4.2 Server 内部流程
 
-```mermaid
-flowchart LR
-    subgraph 校验阶段
-        S[Schema] -->|结构校验| V1{有效?}
-        V1 -->|否| AF1[Auto-fix]
-        AF1 -->|重校验| V1
-        V1 -->|是| V2{语义校验}
-        V2 -->|否| AF2[Auto-fix]
-        AF2 -->|重校验| V2
-        V2 -->|是| V3{绑定校验}
-        V3 -->|否| AF3[Auto-fix]
-        AF3 -->|重校验| V3
-    end
+```
+generateSchema Tool Handler
+  1. loadMaterialsConfig()           // 从 config/materials.json 加载
+  2. buildSystemPrompt(materialCtx)  // 拼 system prompt
+  3. llmProvider.generateSchema({    // 调用 LLM
+       prompt, currentSchema, systemPrompt
+     })
+  4. SchemaValidator.validate()      // 结构+语义+绑定 三层校验
+  5. if (!valid) → return isError
+  6. SchemaValidator.autoFix()       // 修复缺 version/id/elements 等问题
+  7. return { schema, expectedDataSource, validation }
 ```
 
-## 23.6 数据源命名空间
+## 23.5 Schema 持久化
 
-### 23.6.1 命名空间隔离
+### 23.5.1 MCP 扩展字段
 
-MCP 生成的数据源自动分配到 `__mcp__` 命名空间：
-
-```typescript
-// @easyink/datasource
-export const MCP_NAMESPACE = '__mcp__'
-export const DEFAULT_NAMESPACE = 'default'
-
-// 工具函数
-export function isMcpNamespace(ns?: string): boolean
-export function getNamespacedId(id: string, namespace?: string): string
-export function parseNamespacedId(fullId: string): { namespace, id } | null
-```
-
-### 23.6.2 稳定命名策略
-
-BindingRef 中的 `sourceName` 和 `sourceTag` 作为稳定标识，用于 datasource 替换后的重匹配：
-
-```typescript
-interface BindingRef {
-  sourceId: string        // 可变，datasource 替换后重新生成
-  sourceName: string      // 稳定，数据源名称
-  sourceTag?: string      // 稳定，数据源标签
-  fieldPath: string
-  // ...
-}
-```
-
-## 23.7 Schema 持久化扩展
-
-### 23.7.1 MCP 扩展字段
-
-`DocumentSchema.extensions.mcp` 存储 MCP 相关数据：
+`DocumentSchema.extensions.mcp` 在 designer 端写入：
 
 ```typescript
 interface MCPExtensions {
-  // MCP 数据源快照
-  dataSources?: DataSourceDescriptor[]
-
-  // Provider Factory 快照
+  dataSources?: DataSourceSnapshot[]
   providerFactories?: ProviderFactorySnapshot[]
-
-  // 模板版本历史
   templateHistory?: TemplateVersion[]
-
-  // 当前版本 ID
   currentVersionId?: string
-
-  // 期望的数据源结构（Schema-First）
-  expectedDataSource?: ExpectedDataSource
-}
-
-interface TemplateVersion {
-  id: string
-  schema: DocumentSchema
-  prompt?: string
-  source: 'user' | 'mcp' | 'template'
-  timestamp: number
-  parentId?: string
 }
 ```
 
-## 23.8 用户界面
+- `handleSchemaApply` 写入 `currentVersionId` 和 `templateHistory`
+- `handleDatasourceRegister` 写入 `dataSources` 和 `providerFactories`
 
-### 23.8.1 MCPPanel
+### 23.5.2 TemplateHistoryManager
 
-独立面板形态，通过 emit 与 Designer 通信：
+模板版本历史管理器（`@easyink/designer`），通过 `easyink_template_history` localStorage key 持久化。支持按 `source` 过滤：`'mcp' | 'user' | 'template'`。
 
-```
-┌─────────────────────────────────┐
-│ AI 模板生成                    × │
-├─────────────────────────────────┤
-│ 选择服务器                      │
-│ ┌─────────────────────────────┐ │
-│ │ Mock AI Server        ✓   │ │
-│ └─────────────────────────────┘ │
-├─────────────────────────────────┤
-│ 描述你的模板                    │
-│ ┌─────────────────────────────┐ │
-│ │ 例如：生成一个销售发票模板...│ │
-│ │                             │ │
-│ └─────────────────────────────┘ │
-│                    Ctrl+Enter   │
-│                       [生成模板] │
-├─────────────────────────────────┤
-│ 会话历史                        │
-│ ┌─────────────────────────────┐ │
-│ │ 你: 生成发票模板             │ │
-│ │ AI: ✓ 已生成                │ │
-│ └─────────────────────────────┘ │
-└─────────────────────────────────┘
+## 23.6 部署
+
+### 23.6.1 Docker
+
+```bash
+cd packages/mcp-server
+MCP_API_KEY=your-key docker compose up
 ```
 
-### 23.8.2 TopBar 集成
+`docker-compose.yml` 通过多阶段构建 + `pnpm deploy` 生成独立部署目录。默认 HTTP 模式，端口 3000。
 
-工具栏右侧添加 MCP 按钮，点击打开面板：
+### 23.6.2 npx
 
-```vue
-<TopBarB @toggle-mcp-panel="toggleMCPPanel" />
+```bash
+MCP_PROVIDER=claude MCP_API_KEY=your-key npx easyink-mcp-server
 ```
 
-### 23.8.3 Designer Props
+默认 stdio 模式。设置 `MCP_TRANSPORT=http` 切换为 HTTP 模式。
+
+### 23.6.3 环境变量
+
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| `MCP_PROVIDER` | LLM provider：`claude` / `openai` | `claude` |
+| `MCP_API_KEY` | LLM API Key | 必填 |
+| `MCP_MODEL` | 模型名称 | provider 默认 |
+| `MCP_BASE_URL` | API Base URL | provider 默认 |
+| `MCP_TRANSPORT` | 传输模式：`stdio` / `http` | `stdio` |
+| `MCP_HTTP_PORT` | HTTP 模式端口 | `3000` |
+
+## 23.7 Designer 集成
+
+### 23.7.1 动态注册
+
+Designer 通过 `enableMCP` prop（默认 `false`）控制 MCP 功能：
 
 ```typescript
 interface EasyInkDesignerProps {
-  schema: DocumentSchema
-  dataSources?: DataSourceDescriptor[]
-  preferenceProvider?: PreferenceProvider
-  locale?: LocaleMessages
-  enableMCP?: boolean  // MCP 功能开关，默认 false
+  enableMCP?: boolean  // 默认 false
 }
 ```
 
-## 23.9 错误处理
-
-### 23.9.1 校验错误
-
-| 错误码 | 描述 | 处理方式 |
-|--------|------|---------|
-| `SCHEMA_NULL` | Schema 为空 | 拒绝 |
-| `MISSING_VERSION` | 缺少版本字段 | Auto-fix |
-| `UNKNOWN_MATERIAL_TYPE` | 未知物料类型 | 拒绝 |
-| `BINDING_BLOCKED_PATH` | 绑定路径包含危险字符 | 拒绝 |
-
-### 23.9.2 运行时错误
-
-| 错误类型 | 处理策略 |
-|---------|---------|
-| 网络错误 | 手动重试按钮 |
-| MCP Server 不可用 | 降级到内置模板选择器 |
-| 解析错误 | 显示原始错误，允许用户修改 prompt |
-
-## 23.10 安全考虑
-
-1. **数据隔离**：MCP 数据源使用独立命名空间 `__mcp__`
-2. **路径安全**：`BLOCKED_PATH_KEYS` 阻止原型链污染攻击
-3. **认证支持**：支持 Bearer Token 和 API Key 认证
-4. **Schema 校验**：拒绝未知物料类型，防止注入攻击
-
-## 23.11 配置管理
-
-### 23.11.1 服务器配置存储
-
-服务器配置保存在 `localStorage` 中：
+MCPPanel 通过 `defineAsyncComponent` 按需从 `@easyink/mcp` 加载：
 
 ```typescript
-// Key: 'easyink_mcp_servers'
-const config = {
-  servers: MCPServerConfig[],
-  currentServerId?: string
-}
+const MCPPanel = defineAsyncComponent(
+  () => import('@easyink/mcp').then(m => m.MCPPanel)
+)
 ```
 
-### 23.11.2 预置服务器
+### 23.7.2 TopBar 集成
 
-框架内置模板生成服务（默认禁用）：
+工具栏右侧 MCP 按钮始终渲染，通过 `toggleMCPPanel` 事件切换面板显隐。面板实际挂载由 `v-if="enableMCP && showMCPPanel"` 控制。
 
-```typescript
-const BUILTIN_SERVERS: MCPServerConfig[] = [
-  {
-    id: 'template-generator',
-    name: '模板生成服务',
-    type: 'http',
-    url: 'http://localhost:3001/mcp',
-    enabled: false
-  }
-]
-```
-
-## 23.12 包结构
+## 23.8 包结构
 
 ```
-packages/mcp/
+packages/mcp/                         # @easyink/mcp — Client
 ├── src/
-│   ├── index.ts                    # 导出入口
-│   ├── client/
-│   │   └── mcp-client.ts           # MCP Client 核心
-│   ├── config/
-│   │   └── server-registry.ts     # 服务器配置管理
-│   ├── validation/
-│   │   └── schema-validator.ts     # Schema 校验器
-│   ├── types/
-│   │   └── mcp-types.ts           # MCP 相关类型
-│   └── utils/
-│       └── datasource-aligner.ts   # 数据源对齐工具
+│   ├── index.ts                      # 桶导出（含 MCPPanel）
+│   ├── client/mcp-client.ts          # MCPClient（真实 SDK transport）
+│   ├── config/server-registry.ts     # ServerRegistry（localStorage）
+│   ├── validation/schema-validator.ts # SchemaValidator（无副作用）
+│   ├── types/mcp-types.ts            # MCP 类型定义
+│   ├── utils/datasource-aligner.ts   # DataSourceAligner
+│   └── components/MCPPanel.vue       # AI 模板生成面板
+└── package.json
+
+packages/mcp-server/                  # @easyink/mcp-server — Server
+├── src/
+│   ├── index.ts                      # 桶导出
+│   ├── server.ts                     # McpServer 创建 + transport
+│   ├── bin/server.ts                 # CLI 入口
+│   ├── tools/                        # MCP Tool 注册
+│   │   ├── generate-schema.ts
+│   │   └── generate-datasource.ts
+│   ├── llm/                          # LLM Provider 抽象
+│   │   ├── types.ts
+│   │   ├── claude-provider.ts
+│   │   └── openai-provider.ts
+│   ├── config/material-loader.ts     # 物料配置加载
+│   └── prompts/system-builder.ts     # System prompt 构建
+├── config/materials.json             # 物料知识配置
+├── Dockerfile
+├── docker-compose.yml
 └── package.json
 ```
 
-## 23.13 依赖关系
+## 23.9 依赖关系
 
 ```
 @easyink/mcp
   ├── @easyink/datasource   (DataSourceDescriptor, DataFieldNode)
   ├── @easyink/schema       (DocumentSchema, BindingRef)
-  ├── @easyink/shared       (generateId, deepClone)
-  └── @modelcontextprotocol/sdk  (MCP 协议实现)
+  ├── @easyink/shared       (generateId, BLOCKED_PATH_KEYS)
+  ├── @modelcontextprotocol/sdk  (Client, StreamableHTTPClientTransport)
+  └── vue                   (MCPPanel 组件)
+
+@easyink/mcp-server
+  ├── @easyink/datasource   (data source types)
+  ├── @easyink/mcp          (SchemaValidator, DataSourceAligner, types)
+  ├── @easyink/schema       (DocumentSchema, ExpectedDataSource)
+  ├── @easyink/shared       (generateId)
+  ├── @modelcontextprotocol/sdk  (McpServer, transports)
+  ├── zod                   (Tool 参数校验)
+  ├── @anthropic-ai/sdk     (optional — Claude provider)
+  └── openai                (optional — OpenAI provider)
 
 @easyink/designer
   ├── @easyink/mcp          (MCPPanel 组件)
-  ├── @easyink/datasource   (MCP_NAMESPACE, ProviderFactory)
   └── ...
 ```
+
+## 23.10 安全考虑
+
+1. **命名空间隔离**：MCP 数据源使用 `__mcp__` 命名空间
+2. **路径安全**：`BLOCKED_PATH_KEYS` 阻止原型链污染
+3. **Server 无状态**：不持有 schema 文件，无文件 IO，单次调用即完成
+4. **单机部署**：无需认证，通过内网或 localhost 访问
+5. **LLM API Key**：通过环境变量注入，不写入代码或配置

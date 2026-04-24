@@ -1,0 +1,76 @@
+{
+  "version": "1.0.0",
+  "schemaVersion": "1.0.0",
+  "pageDefaults": {
+    "mode": "fixed",
+    "width": 210,
+    "height": 297,
+    "unit": "mm"
+  },
+  "materialTypes": {
+    "text": {
+      "description": "Single-line or multi-line text element. Supports data binding for dynamic content.",
+      "properties": ["fontFamily", "fontSize", "fontWeight", "fontStyle", "color", "textAlign", "lineHeight", "letterSpacing", "textDecoration"]
+    },
+    "image": {
+      "description": "Static or dynamic image element. Supports jpg, png, svg, webp. Can bind to data field for dynamic image URLs.",
+      "properties": ["src", "fit", "opacity", "borderRadius"]
+    },
+    "rect": {
+      "description": "Rectangle shape. Can be used for borders, backgrounds, and decorative elements.",
+      "properties": ["fill", "stroke", "strokeWidth", "cornerRadius", "opacity"]
+    },
+    "ellipse": {
+      "description": "Circle or ellipse shape. Can be used for decorative elements.",
+      "properties": ["fill", "stroke", "strokeWidth", "opacity"]
+    },
+    "line": {
+      "description": "Horizontal or vertical line. Used for separators and borders.",
+      "properties": ["stroke", "strokeWidth", "lineStyle", "x1", "y1", "x2", "y2"]
+    },
+    "qrcode": {
+      "description": "QR code generated from data binding. Encodes text or URLs from data source fields.",
+      "properties": ["content", "size", "errorCorrectionLevel", "foreground", "background"]
+    },
+    "barcode": {
+      "description": "Barcode generated from data binding. Supports multiple barcode formats (CODE128, EAN13, etc.).",
+      "properties": ["content", "format", "height", "width", "showText", "fontSize"]
+    },
+    "container": {
+      "description": "Container element that holds child elements. Used for grouping and layout.",
+      "properties": ["layout", "gap", "padding", "background"]
+    },
+    "table": {
+      "description": "Data-bound table with header, footer, and repeat-template data rows. Supports cell-level data binding.",
+      "properties": ["columns", "headerStyle", "rowStyle", "borderStyle"]
+    },
+    "page-number": {
+      "description": "Auto page number display. Shows current page and total pages.",
+      "properties": ["format", "startAt", "fontSize", "color"]
+    },
+    "svg": {
+      "description": "Inline SVG element for custom vector graphics.",
+      "properties": ["content", "viewBox", "width", "height"]
+    },
+    "rich-text": {
+      "description": "Rich text element supporting styled content with multiple formatting options.",
+      "properties": ["content", "fontSize", "color", "lineHeight"]
+    },
+    "chart": {
+      "description": "Chart element for data visualization. Supports bar, line, pie, and other chart types.",
+      "properties": ["chartType", "data", "colors", "showLegend", "title"]
+    }
+  },
+  "bindingRules": {
+    "fieldPathFormat": "Slash-separated path from data source root (e.g., 'items/name', 'company/address')",
+    "sourceIdFormat": "References a DataSource by its id field",
+    "bindingTypes": [
+      { "type": "binding", "description": "Standard data binding on an element. Used for repeat-template table cells.", "fields": ["sourceId", "sourceName", "sourceTag", "fieldPath", "fieldLabel"] },
+      { "type": "staticBinding", "description": "Static data binding on table header/footer cells. Single value, no collection expansion.", "fields": ["sourceId", "fieldPath", "fieldLabel"] }
+    ],
+    "tableRules": {
+      "repeatTemplateBinding": "Repeat-template row cells use 'binding' field. All cells in same row must share same collection prefix (e.g., all items/* paths).",
+      "staticBindingUsage": "Header, footer, and normal row cells use 'staticBinding'. Each cell can bind to different data sources."
+    }
+  }
+}
