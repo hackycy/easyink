@@ -1,7 +1,7 @@
 import type { BindingRef, MaterialNode, TableCellSchema, TableDataSchema, TableRowSchema } from '@easyink/schema'
 import type { TableDataProps } from './schema'
 import { extractCollectionPath, resolveBindingValue, resolveFieldFromRecord } from '@easyink/core'
-import { computeRowScale, renderTableHtml } from '@easyink/material-table-kernel'
+import { computeAutoRowHeights, computeRowScale, renderTableHtml } from '@easyink/material-table-kernel'
 import { isTableNode } from '@easyink/schema'
 
 interface ViewerRenderContext {
@@ -42,30 +42,83 @@ function filterVisibleRows(rows: TableRowSchema[], showHeader: boolean, showFoot
 }
 
 /**
+ * Cache resolved runtime layout per table-data schema instance, keyed by
+ * `node.table` (object identity). Render needs the same per-row heights
+ * the measure pass produced, but ViewerRuntime overwrites `node.height`
+ * after measure — so re-deriving the baseline scale from the post-measure
+ * `node.height` would multiply the heights again. The runtime preserves
+ * `node.table` by reference across the spread, so this WeakMap survives
+ * the measure→render hop with zero schema mutation.
+ */
+interface ResolvedRuntimeLayout {
+  rows: TableRowSchema[]
+  rowHeights: number[]
+  totalHeight: number
+}
+
+const runtimeLayoutCache = new WeakMap<TableDataSchema, ResolvedRuntimeLayout>()
+
+/**
+ * Resolve the visible row sequence + per-row heights for a data table
+ * under the runtime data context. This is the table-data viewer's
+ * independent source of truth: it expands repeat-template rows, hides
+ * header/footer when configured, then runs the kernel's auto-row-height
+ * pass so wrapping text gets the vertical space it needs.
+ *
+ * `declaredElementHeight` MUST be the original schema element height
+ * (pre-measure), so that the designer-applied row scale survives.
+ *
+ * Architecture ref: 07-layout-engine.md §7.3
+ */
+function resolveRuntimeLayout(
+  node: MaterialNode & { table: TableDataSchema },
+  data: Record<string, unknown>,
+  declaredElementHeight: number,
+): ResolvedRuntimeLayout {
+  const tableData = node.table
+  const showHeader = tableData.showHeader !== false
+  const showFooter = tableData.showFooter !== false
+
+  const expandedRows = expandRepeatTemplateRows(node.table.topology.rows, data)
+  const visibleRows = filterVisibleRows(expandedRows, showHeader, showFooter)
+
+  // Baseline scale from ORIGINAL declared topology + ORIGINAL element height.
+  // Each row keeps its declared visual size after repeat-template expansion.
+  const baselineScale = computeRowScale(node.table.topology.rows, declaredElementHeight)
+  const baselineHeights = visibleRows.map(row => row.height * baselineScale)
+
+  const props = (node.props ?? {}) as unknown as TableDataProps
+  const rowHeights = computeAutoRowHeights({
+    topology: { columns: node.table.topology.columns, rows: visibleRows },
+    elementWidth: node.width,
+    baselineHeights,
+    props,
+  })
+  let totalHeight = 0
+  for (const h of rowHeights)
+    totalHeight += h
+
+  return { rows: visibleRows, rowHeights, totalHeight }
+}
+
+/**
  * Measure the table-data element's expanded dimensions after data binding.
  * Called by ViewerRuntime before page planning to adjust the element height.
+ * Owns the runtime auto-row-height calculation independently from the
+ * designer's static layout.
  * Architecture ref: 07-layout-engine.md §7.3
  */
 export function measureTableData(node: MaterialNode, context: ViewerMeasureContext): ViewerMeasureResult {
   if (!isTableNode(node)) {
     return { width: node.width, height: node.height }
   }
-
-  const tableData = node.table as TableDataSchema
-  const showHeader = tableData.showHeader !== false
-  const showFooter = tableData.showFooter !== false
   const data = context.data ?? {}
-
-  const expandedRows = expandRepeatTemplateRows(node.table.topology.rows, data)
-  const visibleRows = filterVisibleRows(expandedRows, showHeader, showFooter)
-  const originalRowScale = computeRowScale(node.table.topology.rows, node.height)
-
-  let expandedHeight = 0
-  for (const row of visibleRows) {
-    expandedHeight += row.height * originalRowScale
-  }
-
-  return { width: node.width, height: expandedHeight }
+  const tableNode = node as MaterialNode & { table: TableDataSchema }
+  const layout = resolveRuntimeLayout(tableNode, data, node.height)
+  // Cache so render() reuses the exact same per-row heights without
+  // re-deriving baseline scale from the (about to be overwritten) node.height.
+  runtimeLayoutCache.set(tableNode.table, layout)
+  return { width: node.width, height: layout.totalHeight }
 }
 
 export function renderTableData(node: MaterialNode, context?: ViewerRenderContext): ViewerRenderOutput {
@@ -76,25 +129,30 @@ export function renderTableData(node: MaterialNode, context?: ViewerRenderContex
   }
 
   const props = node.props as unknown as TableDataProps
-  const tableData = node.table as TableDataSchema
-  const showHeader = tableData.showHeader !== false
-  const showFooter = tableData.showFooter !== false
   const data = context?.data ?? {}
+  const tableNode = node as MaterialNode & { table: TableDataSchema }
 
-  // Expand repeat-template rows and filter to visible rows only
-  const expandedRows = expandRepeatTemplateRows(node.table.topology.rows, data)
-  const visibleRows = filterVisibleRows(expandedRows, showHeader, showFooter)
+  // Prefer the layout produced by measure() — `node.height` has been
+  // overwritten by ViewerRuntime, so we cannot recompute baseline scale
+  // from it here. Fall back to a direct compute when render is called
+  // without a prior measure (e.g. unit tests).
+  const cached = runtimeLayoutCache.get(tableNode.table)
+  const { rows: visibleRows, rowHeights, totalHeight } = cached
+    ?? resolveRuntimeLayout(tableNode, data, node.height)
 
-  // node.height is already adjusted by measure() — use it directly.
-  // renderTableHtml will scale rows proportionally to fit exactly in this height.
+  const sizedRows: TableRowSchema[] = visibleRows.map((row, i) => ({
+    ...row,
+    height: rowHeights[i] ?? row.height,
+  }))
+
   const html = renderTableHtml({
-    topology: { columns: node.table.topology.columns, rows: visibleRows },
+    topology: { columns: node.table.topology.columns, rows: sizedRows },
     props,
     unit: context?.unit ?? 'mm',
-    elementHeight: node.height,
+    elementHeight: totalHeight,
     cellRenderer: cell => cell.content?.text || '',
     rowDecorator: (ri) => {
-      const row = visibleRows[ri]
+      const row = sizedRows[ri]
       if (!row)
         return {}
       const bg = row.role === 'header'
