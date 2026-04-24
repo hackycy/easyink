@@ -112,7 +112,7 @@ function onResizeStart(e: PointerEvent) {
 .ei-workspace-window__titlebar {
   display: flex;
   align-items: center;
-  height: 32px;
+  height: 26px;
   padding: 0 8px;
   background: var(--ei-panel-header-bg, #fafafa);
   border-bottom: 1px solid var(--ei-border-color, #e0e0e0);
@@ -141,8 +141,8 @@ function onResizeStart(e: PointerEvent) {
 }
 
 .ei-workspace-window__action {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   border: none;
   border-radius: 3px;
   background: transparent;
