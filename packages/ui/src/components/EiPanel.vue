@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref } from 'vue'
 import { IconClose, IconDown, IconUp } from '@easyink/icons'
+import { ref } from 'vue'
 
-const props = defineProps<{
+defineProps<{
   title: string
   collapsible?: boolean
   closable?: boolean

@@ -18,9 +18,30 @@ const PANEL_H = 150
 const BAR_H = 12
 
 const DEFAULT_PRESETS = [
-  '#000000', '#333333', '#666666', '#999999', '#cccccc', '#ffffff', '#ff0000', '#ff6600',
-  '#ffcc00', '#33cc00', '#00cccc', '#0066ff', '#6633ff', '#cc00cc', '#ff3366', '#ff9999',
-  '#ffcc99', '#ffff99', '#ccff99', '#99ffcc', '#99ccff', '#cc99ff', '#ff99cc', '#336699',
+  '#000000',
+  '#333333',
+  '#666666',
+  '#999999',
+  '#cccccc',
+  '#ffffff',
+  '#ff0000',
+  '#ff6600',
+  '#ffcc00',
+  '#33cc00',
+  '#00cccc',
+  '#0066ff',
+  '#6633ff',
+  '#cc00cc',
+  '#ff3366',
+  '#ff9999',
+  '#ffcc99',
+  '#ffff99',
+  '#ccff99',
+  '#99ffcc',
+  '#99ccff',
+  '#cc99ff',
+  '#ff99cc',
+  '#336699',
 ]
 
 // state

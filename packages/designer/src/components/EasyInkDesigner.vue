@@ -1,15 +1,15 @@
 <script setup lang="ts">
-import type { DocumentSchema } from '@easyink/schema'
 import type { DataSourceDescriptor } from '@easyink/datasource'
+import type { DocumentSchema } from '@easyink/schema'
 import type { LocaleMessages, PreferenceProvider } from '../types'
 import { onBeforeUnmount, reactive, watch } from 'vue'
 import { provideDesignerStore } from '../composables'
 import { useWorkbenchPersistence } from '../composables/use-workbench-persistence'
-import { DesignerStore } from '../store/designer-store'
 import { registerBuiltinMaterials } from '../materials/registry'
-import TopBarB from './TopBarB.vue'
+import { DesignerStore } from '../store/designer-store'
 import CanvasWorkspace from './CanvasWorkspace.vue'
 import StatusBar from './StatusBar.vue'
+import TopBarB from './TopBarB.vue'
 
 const props = defineProps<{
   schema: DocumentSchema
@@ -18,7 +18,7 @@ const props = defineProps<{
   locale?: LocaleMessages
 }>()
 
-const emit = defineEmits<{
+defineEmits<{
   'update:schema': [schema: DocumentSchema]
 }>()
 
@@ -52,7 +52,8 @@ watch(() => props.schema, (newSchema) => {
 })
 
 watch(() => props.locale, (newLocale) => {
-  if (newLocale) store.setLocale(newLocale)
+  if (newLocale)
+    store.setLocale(newLocale)
 })
 
 onBeforeUnmount(() => {

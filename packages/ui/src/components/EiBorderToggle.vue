@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import type { BorderSides } from './border-types'
 
-const SIDES = ['top', 'right', 'bottom', 'left'] as const
-
 const props = defineProps<{
   modelValue?: BorderSides
   label?: string
@@ -14,12 +12,15 @@ const emit = defineEmits<{
   'commit': [value: BorderSides]
 }>()
 
+const SIDES = ['top', 'right', 'bottom', 'left'] as const
+
 function isActive(side: typeof SIDES[number]): boolean {
   return props.modelValue?.[side] !== false
 }
 
 function toggle(side: typeof SIDES[number]) {
-  if (props.disabled) return
+  if (props.disabled)
+    return
   const current = isActive(side)
   const val = {
     ...props.modelValue,

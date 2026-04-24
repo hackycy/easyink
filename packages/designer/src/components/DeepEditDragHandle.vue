@@ -3,12 +3,12 @@ import { computed } from 'vue'
 import { useDesignerStore } from '../composables'
 import { useElementDrag } from '../composables/use-element-drag'
 
-const store = useDesignerStore()
-
 const props = defineProps<{
   getPageEl: () => HTMLElement | null
   getScrollEl: () => HTMLElement | null
 }>()
+
+const store = useDesignerStore()
 
 const { onPointerDown } = useElementDrag({
   store,

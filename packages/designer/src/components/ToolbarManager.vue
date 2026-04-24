@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import {
-  IconAlignStart,
   IconAlignCenterH,
   IconAlignEnd,
+  IconAlignStart,
   IconDivider,
   IconHidden,
   IconPreview,
@@ -22,12 +22,14 @@ function setAlign(align: 'start' | 'center' | 'end') {
 
 function toggleGroup(id: string) {
   const group = toolbar.groups.find(g => g.id === id)
-  if (group) group.hidden = !group.hidden
+  if (group)
+    group.hidden = !group.hidden
 }
 
 function toggleDivider(id: string) {
   const group = toolbar.groups.find(g => g.id === id)
-  if (group) group.hideDivider = !group.hideDivider
+  if (group)
+    group.hideDivider = !group.hideDivider
 }
 
 function restoreDefault() {

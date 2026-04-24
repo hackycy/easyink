@@ -40,22 +40,29 @@ watch(() => props.modelValue, (val) => {
 
 const inputAttrs = computed(() => {
   const attrs: Record<string, unknown> = {}
-  if (props.min != null) attrs.min = props.min
-  if (props.max != null) attrs.max = props.max
-  if (props.step != null) attrs.step = props.step
-  else if (props.precision != null && props.precision > 0) attrs.step = 1 / (10 ** props.precision)
+  if (props.min != null)
+    attrs.min = props.min
+  if (props.max != null)
+    attrs.max = props.max
+  if (props.step != null)
+    attrs.step = props.step
+  else if (props.precision != null && props.precision > 0)
+    attrs.step = 1 / (10 ** props.precision)
   return attrs
 })
 
 function clamp(val: number): number {
   let result = val
-  if (props.min != null && result < props.min) result = props.min
-  if (props.max != null && result > props.max) result = props.max
+  if (props.min != null && result < props.min)
+    result = props.min
+  if (props.max != null && result > props.max)
+    result = props.max
   return result
 }
 
 function roundToPrecision(val: number): number {
-  if (props.precision == null) return val
+  if (props.precision == null)
+    return val
   const factor = 10 ** props.precision
   return Math.round(val * factor) / factor
 }

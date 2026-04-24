@@ -1,11 +1,8 @@
 <script setup lang="ts">
-import type { DocumentSchema } from '@easyink/viewer'
-import type { ViewerRuntime } from '@easyink/viewer'
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import type { DocumentSchema, ViewerRuntime } from '@easyink/viewer'
 import { createViewer } from '@easyink/viewer'
 import { registerBuiltinViewerMaterials } from '@easyink/viewer-materials-builtin'
-
-const EXPORT_FORMAT = 'playground-demo-json'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 
 const props = defineProps<{
   schema: DocumentSchema
@@ -15,6 +12,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: []
 }>()
+
+const EXPORT_FORMAT = 'playground-demo-json'
 
 const containerRef = ref<HTMLDivElement>()
 let viewer: ViewerRuntime | undefined
@@ -175,53 +174,51 @@ async function handleExport() {
 </script>
 
 <template>
-  <Transition name="preview-fade">
-    <div class="fixed inset-0 z-[9999] flex flex-col bg-black/60">
-      <div class="flex items-center justify-between px-4 py-1.5 bg-white border-b border-border gap-2">
-        <div class="flex items-center gap-1">
-          <button class="w-7 h-7 flex items-center justify-center border border-border rounded bg-white cursor-pointer text-[#555] text-xs disabled:opacity-35 disabled:cursor-not-allowed hover:bg-bg-tertiary hover:text-text-secondary" :disabled="currentPage <= 1" @click="prevPage">
-            &#9664;
-          </button>
-          <span class="text-xs text-text-tertiary min-w-[48px] text-center select-none">{{ currentPage }} / {{ totalPages }}</span>
-          <button class="w-7 h-7 flex items-center justify-center border border-border rounded bg-white cursor-pointer text-[#555] text-xs disabled:opacity-35 disabled:cursor-not-allowed hover:bg-bg-tertiary hover:text-text-secondary" :disabled="currentPage >= totalPages" @click="nextPage">
-            &#9654;
-          </button>
+  <div class="fixed inset-0 z-[9999] flex flex-col bg-black/60">
+    <div class="flex items-center justify-between px-4 py-1.5 bg-white border-b border-border gap-2">
+      <div class="flex items-center gap-1">
+        <button class="w-7 h-7 flex items-center justify-center border border-border rounded bg-white cursor-pointer text-[#555] text-xs disabled:opacity-35 disabled:cursor-not-allowed hover:bg-bg-tertiary hover:text-text-secondary" :disabled="currentPage <= 1" @click="prevPage">
+          &#9664;
+        </button>
+        <span class="text-xs text-text-tertiary min-w-[48px] text-center select-none">{{ currentPage }} / {{ totalPages }}</span>
+        <button class="w-7 h-7 flex items-center justify-center border border-border rounded bg-white cursor-pointer text-[#555] text-xs disabled:opacity-35 disabled:cursor-not-allowed hover:bg-bg-tertiary hover:text-text-secondary" :disabled="currentPage >= totalPages" @click="nextPage">
+          &#9654;
+        </button>
 
-          <span class="w-px h-[18px] bg-border mx-1" />
+        <span class="w-px h-[18px] bg-border mx-1" />
 
-          <button class="w-7 h-7 flex items-center justify-center border border-border rounded bg-white cursor-pointer text-[#555] text-xs hover:bg-bg-tertiary hover:text-text-secondary" @click="zoomOut">
-            -
-          </button>
-          <span class="text-xs text-text-tertiary min-w-[48px] text-center select-none">{{ zoom }}%</span>
-          <button class="w-7 h-7 flex items-center justify-center border border-border rounded bg-white cursor-pointer text-[#555] text-xs hover:bg-bg-tertiary hover:text-text-secondary" @click="zoomIn">
-            +
-          </button>
-          <button class="w-auto h-7 px-2 flex items-center justify-center border border-border rounded bg-white cursor-pointer text-xs hover:bg-bg-tertiary hover:text-text-secondary" @click="zoomFit">
-            适应宽度
-          </button>
-        </div>
-
-        <div class="flex items-center gap-1">
-          <button class="px-3.5 py-1 text-[13px] border border-border-dark rounded bg-white cursor-pointer text-text-secondary hover:bg-bg-tertiary" @click="handleExport">
-            导出 JSON
-          </button>
-          <button class="px-3.5 py-1 text-[13px] border border-primary rounded bg-primary cursor-pointer text-white hover:bg-primary-hover" @click="handlePrint">
-            打印
-          </button>
-          <button class="w-8 h-8 flex items-center justify-center border-none bg-transparent text-[22px] text-text-quaternary cursor-pointer rounded ml-1 hover:bg-border-light hover:text-text-secondary" @click="emit('close')">
-            &times;
-          </button>
-        </div>
+        <button class="w-7 h-7 flex items-center justify-center border border-border rounded bg-white cursor-pointer text-[#555] text-xs hover:bg-bg-tertiary hover:text-text-secondary" @click="zoomOut">
+          -
+        </button>
+        <span class="text-xs text-text-tertiary min-w-[48px] text-center select-none">{{ zoom }}%</span>
+        <button class="w-7 h-7 flex items-center justify-center border border-border rounded bg-white cursor-pointer text-[#555] text-xs hover:bg-bg-tertiary hover:text-text-secondary" @click="zoomIn">
+          +
+        </button>
+        <button class="w-auto h-7 px-2 flex items-center justify-center border border-border rounded bg-white cursor-pointer text-xs hover:bg-bg-tertiary hover:text-text-secondary" @click="zoomFit">
+          适应宽度
+        </button>
       </div>
 
-      <div
-        ref="containerRef"
-        class="flex-1 overflow-auto px-8 py-6 bg-[#525659]"
-        @wheel="handleWheel"
-        @scroll="handleScroll"
-      />
+      <div class="flex items-center gap-1">
+        <button class="px-3.5 py-1 text-[13px] border border-border-dark rounded bg-white cursor-pointer text-text-secondary hover:bg-bg-tertiary" @click="handleExport">
+          导出 JSON
+        </button>
+        <button class="px-3.5 py-1 text-[13px] border border-primary rounded bg-primary cursor-pointer text-white hover:bg-primary-hover" @click="handlePrint">
+          打印
+        </button>
+        <button class="w-8 h-8 flex items-center justify-center border-none bg-transparent text-[22px] text-text-quaternary cursor-pointer rounded ml-1 hover:bg-border-light hover:text-text-secondary" @click="emit('close')">
+          &times;
+        </button>
+      </div>
     </div>
-  </Transition>
+
+    <div
+      ref="containerRef"
+      class="flex-1 overflow-auto px-8 py-6 bg-[#525659]"
+      @wheel="handleWheel"
+      @scroll="handleScroll"
+    />
+  </div>
 </template>
 
 <style scoped>

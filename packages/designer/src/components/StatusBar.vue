@@ -1,19 +1,20 @@
 <script setup lang="ts">
-import { computed, type Component } from 'vue'
+import type { Component } from 'vue'
 import {
-  IconCircleDot,
-  IconMonitor,
-  IconPanelLeft,
-  IconMessageSquare,
-  IconWifi,
-  IconLoader,
-  IconWifiOff,
-  IconFileCheck,
-  IconFilePen,
   IconCheck,
   IconCircleAlert,
+  IconCircleDot,
+  IconFileCheck,
+  IconFilePen,
+  IconLoader,
+  IconMessageSquare,
+  IconMonitor,
+  IconPanelLeft,
   IconSave,
+  IconWifi,
+  IconWifiOff,
 } from '@easyink/icons'
+import { computed } from 'vue'
 import { useDesignerStore } from '../composables'
 
 const store = useDesignerStore()

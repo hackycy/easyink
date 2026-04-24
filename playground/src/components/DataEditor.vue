@@ -156,7 +156,9 @@ function flattenVisibleNodes(nodes: FieldTreeNode[], depth: number): VisibleFiel
   <div class="fixed inset-0 z-[10000] flex items-center justify-center bg-bg-overlay" @click="handleOverlayClick">
     <div class="w-[860px] max-w-[90vw] h-[600px] max-h-[80vh] flex flex-col bg-white rounded-lg shadow-modal">
       <div class="flex items-center justify-between px-5 py-3 border-b border-border-light">
-        <h2 class="m-0 text-base font-semibold text-text-primary">数据编辑器</h2>
+        <h2 class="m-0 text-base font-semibold text-text-primary">
+          数据编辑器
+        </h2>
         <div class="flex items-center gap-2">
           <button class="px-3.5 py-1.5 text-[13px] border border-border-dark rounded bg-white cursor-pointer text-text-secondary hover:bg-bg-tertiary" @click="handleFormat">
             格式化
@@ -172,9 +174,10 @@ function flattenVisibleNodes(nodes: FieldTreeNode[], depth: number): VisibleFiel
 
       <div class="flex-1 flex min-h-0">
         <div class="flex-1 flex flex-col border-r border-border-light relative">
-          <div class="px-3 py-2 text-xs font-semibold text-text-quaternary border-b border-border-light">JSON 数据</div>
+          <div class="px-3 py-2 text-xs font-semibold text-text-quaternary border-b border-border-light">
+            JSON 数据
+          </div>
           <textarea
-            ref="editorRef"
             v-model="jsonText"
             class="flex-1 m-0 px-3 py-3 border-none outline-none resize-none font-mono text-[13px] leading-relaxed text-text-primary bg-bg-quaternary"
             style="tab-size: 2;"
@@ -187,7 +190,9 @@ function flattenVisibleNodes(nodes: FieldTreeNode[], depth: number): VisibleFiel
         </div>
 
         <div class="w-[280px] flex flex-col">
-          <div class="px-3 py-2 text-xs font-semibold text-text-quaternary border-b border-border-light">字段树预览</div>
+          <div class="px-3 py-2 text-xs font-semibold text-text-quaternary border-b border-border-light">
+            字段树预览
+          </div>
           <div class="flex-1 overflow-y-auto py-1">
             <div v-if="visibleFieldTree.length > 0">
               <div
@@ -211,4 +216,3 @@ function flattenVisibleNodes(nodes: FieldTreeNode[], depth: number): VisibleFiel
     </div>
   </div>
 </template>
-

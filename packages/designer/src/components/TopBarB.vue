@@ -1,13 +1,24 @@
 <script setup lang="ts">
 import type { MaterialNode } from '@easyink/schema'
 import type { Component } from 'vue'
-import { computed, onMounted, onUnmounted, ref } from 'vue'
 import {
+  AddMaterialCommand,
+  getBoundingRect,
+  MoveMaterialCommand,
+  normalizeRotation,
+  RemoveMaterialCommand,
+  RotateMaterialCommand,
+  UpdateMaterialPropsCommand,
+} from '@easyink/core'
+import {
+  IconAlignCenter,
+  IconAlignLeft,
+  IconAlignRight,
   IconBold,
   IconBug,
-  IconClear,
   IconChevronLeft,
   IconChevronRight,
+  IconClear,
   IconCopy,
   IconDatabase,
   IconDelete,
@@ -15,11 +26,8 @@ import {
   IconGroup,
   IconHistory,
   IconItalic,
-  IconAlignLeft,
-  IconAlignCenter,
-  IconAlignRight,
-  IconLayerUp,
   IconLayerDown,
+  IconLayerUp,
   IconListTree,
   IconLock,
   IconManager,
@@ -40,17 +48,9 @@ import {
   IconZoomIn,
   IconZoomOut,
 } from '@easyink/icons'
-import {
-  AddMaterialCommand,
-  MoveMaterialCommand,
-  RemoveMaterialCommand,
-  RotateMaterialCommand,
-  UpdateMaterialPropsCommand,
-  getBoundingRect,
-  normalizeRotation,
-} from '@easyink/core'
-import { deepClone, generateId } from '@easyink/shared'
 import { createDefaultSchema } from '@easyink/schema'
+import { deepClone, generateId } from '@easyink/shared'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useDesignerStore } from '../composables'
 
 const store = useDesignerStore()
@@ -80,7 +80,8 @@ function isWindowVisible(kind: string): boolean {
 
 function toggleWindow(kind: string) {
   const win = store.workbench.windows.find(w => w.kind === kind)
-  if (win) win.visible = !win.visible
+  if (win)
+    win.visible = !win.visible
 }
 
 const visibleGroups = computed(() =>
@@ -107,14 +108,16 @@ const canScrollRight = ref(false)
 
 function updateScrollState() {
   const el = groupsRef.value
-  if (!el) return
+  if (!el)
+    return
   canScrollLeft.value = el.scrollLeft > 1
   canScrollRight.value = el.scrollLeft < el.scrollWidth - el.clientWidth - 1
 }
 
 function scrollBy(dir: -1 | 1) {
   const el = groupsRef.value
-  if (!el) return
+  if (!el)
+    return
   el.scrollBy({ left: dir * 120, behavior: 'smooth' })
 }
 
@@ -122,7 +125,8 @@ let resizeObserver: ResizeObserver | null = null
 
 onMounted(() => {
   const el = groupsRef.value
-  if (!el) return
+  if (!el)
+    return
   updateScrollState()
   el.addEventListener('scroll', updateScrollState, { passive: true })
   resizeObserver = new ResizeObserver(updateScrollState)
@@ -131,7 +135,8 @@ onMounted(() => {
 
 onUnmounted(() => {
   const el = groupsRef.value
-  if (el) el.removeEventListener('scroll', updateScrollState)
+  if (el)
+    el.removeEventListener('scroll', updateScrollState)
   resizeObserver?.disconnect()
 })
 
@@ -158,16 +163,19 @@ function handleNewTemplate() {
 }
 
 function handleClear() {
-  if (store.schema.elements.length === 0) return
+  if (store.schema.elements.length === 0)
+    return
   // eslint-disable-next-line no-alert
-  if (!confirm(store.t('designer.message.confirmClear'))) return
+  if (!confirm(store.t('designer.message.confirmClear')))
+    return
   store.setSchema(createDefaultSchema())
 }
 
 // ─── Font Style (bold / italic / underline) ──────────────────
 function toggleFontProp(prop: 'fontWeight' | 'fontStyle' | 'textDecoration') {
   const nodes = selectedNodes.value
-  if (nodes.length === 0) return
+  if (nodes.length === 0)
+    return
 
   const elements = store.schema.elements
   store.commands.beginTransaction(`Toggle ${prop}`)
@@ -190,14 +198,21 @@ function toggleFontProp(prop: 'fontWeight' | 'fontStyle' | 'textDecoration') {
   store.commands.commitTransaction()
 }
 
-function handleBold() { toggleFontProp('fontWeight') }
-function handleItalic() { toggleFontProp('fontStyle') }
-function handleUnderline() { toggleFontProp('textDecoration') }
+function handleBold() {
+  toggleFontProp('fontWeight')
+}
+function handleItalic() {
+  toggleFontProp('fontStyle')
+}
+function handleUnderline() {
+  toggleFontProp('textDecoration')
+}
 
 // ─── Rotation ────────────────────────────────────────────────
 function handleRotation() {
   const nodes = selectedNodes.value
-  if (nodes.length === 0) return
+  if (nodes.length === 0)
+    return
 
   const elements = store.schema.elements
   store.commands.beginTransaction('Rotate +90')
@@ -213,7 +228,8 @@ function handleRotation() {
 // ─── Visibility ──────────────────────────────────────────────
 function handleVisibility() {
   const nodes = selectedNodes.value
-  if (nodes.length === 0) return
+  if (nodes.length === 0)
+    return
 
   for (const node of nodes) {
     store.updateElement(node.id, { hidden: !node.hidden })
@@ -227,7 +243,8 @@ function handleSelectAll() {
 
 function handleSelectSameType() {
   const nodes = selectedNodes.value
-  if (nodes.length === 0) return
+  if (nodes.length === 0)
+    return
 
   const types = new Set(nodes.map(n => n.type))
   const sameTypeIds = store.schema.elements
@@ -239,7 +256,8 @@ function handleSelectSameType() {
 // ─── Distribute ──────────────────────────────────────────────
 function handleDistribute() {
   const nodes = selectedNodes.value
-  if (nodes.length < 3) return
+  if (nodes.length < 3)
+    return
 
   const sorted = [...nodes].sort((a, b) => a.x - b.x)
   const first = sorted[0]!
@@ -264,11 +282,13 @@ function handleDistribute() {
 // ─── Align ───────────────────────────────────────────────────
 function handleAlign(mode: 'left' | 'center' | 'right') {
   const nodes = selectedNodes.value
-  if (nodes.length < 2) return
+  if (nodes.length < 2)
+    return
 
   const rects = nodes.map(n => ({ x: n.x, y: n.y, width: n.width, height: n.height }))
   const bounds = getBoundingRect(rects)
-  if (!bounds) return
+  if (!bounds)
+    return
 
   const elements = store.schema.elements
   store.commands.beginTransaction(`Align ${mode}`)
@@ -295,7 +315,8 @@ function handleAlign(mode: 'left' | 'center' | 'right') {
 // ─── Layer ───────────────────────────────────────────────────
 function handleLayerUp() {
   const nodes = selectedNodes.value
-  if (nodes.length === 0) return
+  if (nodes.length === 0)
+    return
 
   const elements = store.schema.elements
   for (const node of nodes) {
@@ -312,7 +333,8 @@ function handleLayerUp() {
 
 function handleLayerDown() {
   const nodes = selectedNodes.value
-  if (nodes.length === 0) return
+  if (nodes.length === 0)
+    return
 
   const elements = store.schema.elements
   for (const node of nodes) {
@@ -330,11 +352,13 @@ function handleLayerDown() {
 // ─── Group / Ungroup ─────────────────────────────────────────
 function handleGroup() {
   const nodes = selectedNodes.value
-  if (nodes.length < 2) return
+  if (nodes.length < 2)
+    return
 
   const rects = nodes.map(n => ({ x: n.x, y: n.y, width: n.width, height: n.height }))
   const bounds = getBoundingRect(rects)
-  if (!bounds) return
+  if (!bounds)
+    return
 
   const elements = store.schema.elements
   const children: MaterialNode[] = nodes.map(n => ({
@@ -365,14 +389,16 @@ function handleGroup() {
 
 function handleUngroup() {
   const nodes = selectedNodes.value
-  if (nodes.length === 0) return
+  if (nodes.length === 0)
+    return
 
   const elements = store.schema.elements
   const ungroupedIds: string[] = []
 
   store.commands.beginTransaction('Ungroup')
   for (const node of nodes) {
-    if (node.type !== 'group' || !node.children?.length) continue
+    if (node.type !== 'group' || !node.children?.length)
+      continue
     const children = node.children.map(c => ({
       ...deepClone(c),
       id: generateId('el'),
@@ -395,7 +421,8 @@ function handleUngroup() {
 // ─── Lock ────────────────────────────────────────────────────
 function handleLock() {
   const nodes = selectedNodes.value
-  if (nodes.length === 0) return
+  if (nodes.length === 0)
+    return
 
   const allLocked = nodes.every(n => n.locked)
   for (const node of nodes) {
@@ -406,12 +433,14 @@ function handleLock() {
 // ─── Clipboard ───────────────────────────────────────────────
 function handleCopy() {
   const nodes = selectedNodes.value
-  if (nodes.length === 0) return
+  if (nodes.length === 0)
+    return
   store.clipboard = nodes.map(n => deepClone(n))
 }
 
 function handlePaste() {
-  if (store.clipboard.length === 0) return
+  if (store.clipboard.length === 0)
+    return
 
   const elements = store.schema.elements
   const offset = 10
@@ -435,7 +464,8 @@ function handlePaste() {
 
 function handleDelete() {
   const nodes = selectedNodes.value
-  if (nodes.length === 0) return
+  if (nodes.length === 0)
+    return
 
   const elements = store.schema.elements
   store.commands.beginTransaction('Delete')

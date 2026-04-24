@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import type { Component } from 'vue'
 import type { MaterialCatalogEntry } from '../types'
+import { AddMaterialCommand } from '@easyink/core'
 import {
   IconBarcode,
   IconChart,
   IconContainer,
+  IconDataTable,
   IconEllipse,
   IconImage,
   IconLine,
@@ -14,9 +16,7 @@ import {
   IconSvg,
   IconTable,
   IconText,
-  IconDataTable
 } from '@easyink/icons'
-import { AddMaterialCommand } from '@easyink/core'
 import { computed } from 'vue'
 import { useDesignerStore } from '../composables'
 import { MATERIAL_DRAG_MIME } from '../composables/use-material-drop'
@@ -56,7 +56,8 @@ function getIcon(iconKey: string): Component | undefined {
 
 function handleAddMaterial(entry: MaterialCatalogEntry) {
   const definition = store.getMaterial(entry.materialType)
-  if (!definition) return
+  if (!definition)
+    return
   const node = definition.createDefaultNode({
     x: 50,
     y: 50,
@@ -67,7 +68,8 @@ function handleAddMaterial(entry: MaterialCatalogEntry) {
 }
 
 function handleDragStart(e: DragEvent, entry: MaterialCatalogEntry) {
-  if (!e.dataTransfer) return
+  if (!e.dataTransfer)
+    return
   e.dataTransfer.effectAllowed = 'copy'
   e.dataTransfer.setData(MATERIAL_DRAG_MIME, entry.materialType)
 }

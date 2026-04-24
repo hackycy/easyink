@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import type { SubPropertySchema } from '@easyink/core'
+import type { BindingRef } from '@easyink/schema'
 import type { Component } from 'vue'
-import type { PanelSectionId, PropSchema } from '../types'
 import type { PagePropertyContext, PagePropertyDescriptor, PagePropertyGroup } from '../page-properties'
+import type { PanelSectionId, PropSchema } from '../types'
 import { ClearBindingCommand, getByPath, setByPath, UpdateDocumentCommand, UpdateGeometryCommand, UpdateMaterialPropsCommand, UpdatePageCommand, UpdateTableVisibilityCommand } from '@easyink/core'
-import { deepClone, PAPER_PRESETS } from '@easyink/shared'
 import { isTableNode } from '@easyink/schema'
+import { deepClone, PAPER_PRESETS } from '@easyink/shared'
 import { EiNumberInput, EiPanel, EiSwitch } from '@easyink/ui'
-import { computed, shallowRef, watch, watchEffect } from 'vue'
+import { computed, shallowRef, watchEffect } from 'vue'
 import { useDesignerStore } from '../composables'
 import { getPropSchemas, groupPropSchemas } from '../materials/prop-schemas'
 import { defaultDocumentPatch, defaultPagePatch, filterVisible, groupDescriptors, PAGE_PROPERTY_DESCRIPTORS, readPageProperty, splitPatch } from '../page-properties'
@@ -87,6 +88,12 @@ const subCustomEditors = computed<Record<string, Component> | undefined>(() => {
 const hasSubBinding = computed(() =>
   subPropertySchema.value !== null && 'binding' in (subPropertySchema.value ?? {}),
 )
+
+const externalBinding = computed<BindingRef | BindingRef[] | null | undefined>(() => {
+  if (!hasSubBinding.value)
+    return undefined
+  return subPropertySchema.value?.binding as BindingRef | BindingRef[] | null | undefined
+})
 
 /** Should the BindingSection be hidden entirely? */
 const hideBindingSection = computed(() => {
@@ -277,13 +284,13 @@ watchEffect(async () => {
 
 // Group label i18n
 const GROUP_LABELS: Record<string, string> = {
-  content: 'designer.property.content',
-  typography: 'designer.property.typography',
-  appearance: 'designer.property.appearance',
-  border: 'designer.property.border',
-  layout: 'designer.property.layout',
-  pagination: 'designer.property.pagination',
-  general: 'designer.property.style',
+  'content': 'designer.property.content',
+  'typography': 'designer.property.typography',
+  'appearance': 'designer.property.appearance',
+  'border': 'designer.property.border',
+  'layout': 'designer.property.layout',
+  'pagination': 'designer.property.pagination',
+  'general': 'designer.property.style',
   'table-border': 'designer.property.border',
   'table-layout': 'designer.property.layout',
   'table-typography': 'designer.property.typography',
@@ -449,14 +456,14 @@ function readPropValue(schema: PropSchema): unknown {
             @commit="commitGeometry('y', $event ?? 0)"
           />
           <EiNumberInput
-            :label="'W'"
+            label="W"
             :model-value="selectedElement.width"
             :min="0"
             @update:model-value="previewGeometry('width', $event ?? 0)"
             @commit="commitGeometry('width', $event ?? 0)"
           />
           <EiNumberInput
-            :label="'H'"
+            label="H"
             :model-value="selectedElement.height"
             :min="0"
             @update:model-value="previewGeometry('height', $event ?? 0)"
@@ -483,27 +490,27 @@ function readPropValue(schema: PropSchema): unknown {
 
       <!-- Material-specific properties (PropSchema-driven) -->
       <template v-if="isSectionVisible('props')">
-      <EiPanel
-        v-for="[group, schemas] in groupedSchemas"
-        :key="group"
-        :title="groupLabel(group)"
-        collapsible
-        flat
-      >
-        <div class="ei-properties-panel__fields">
-          <PropSchemaEditor
-            v-for="schema in schemas"
-            :key="schema.key"
-            :schema="schema"
-            :value="readPropValue(schema)"
-            :disabled="schema.disabled ? schema.disabled(selectedElement.props as Record<string, unknown>) : false"
-            :fonts="fontList"
-            :t="store.t.bind(store)"
-            @preview="previewProp"
-            @change="updateProp"
-          />
-        </div>
-      </EiPanel>
+        <EiPanel
+          v-for="[group, schemas] in groupedSchemas"
+          :key="group"
+          :title="groupLabel(group)"
+          collapsible
+          flat
+        >
+          <div class="ei-properties-panel__fields">
+            <PropSchemaEditor
+              v-for="schema in schemas"
+              :key="schema.key"
+              :schema="schema"
+              :value="readPropValue(schema)"
+              :disabled="schema.disabled ? schema.disabled(selectedElement.props as Record<string, unknown>) : false"
+              :fonts="fontList"
+              :t="store.t.bind(store)"
+              @preview="previewProp"
+              @change="updateProp"
+            />
+          </div>
+        </EiPanel>
       </template>
 
       <!-- Sub-property layer: auto-derived from editing session selection -->
@@ -536,7 +543,7 @@ function readPropValue(schema: PropSchema): unknown {
         <BindingSection
           :element="selectedElement"
           :t="store.t.bind(store)"
-          :external-binding="hasSubBinding ? subPropertySchema!.binding : undefined"
+          :external-binding="externalBinding"
           :has-external-binding="hasSubBinding"
           @clear-binding="clearBinding"
           @clear-external-binding="handleClearExternalBinding"

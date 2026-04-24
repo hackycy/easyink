@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import type { StoredTemplate } from '../storage/template-store'
-import { computed, onMounted, ref } from 'vue'
 import { sampleTemplates } from '@easyink/samples'
+import { computed, onMounted, ref } from 'vue'
 import { deleteTemplate, listTemplates } from '../storage/template-store'
 
-const props = defineProps<{
+defineProps<{
   currentId?: string
 }>()
 
@@ -62,13 +62,15 @@ function handleSelectSample(sampleId: string) {
 }
 
 function confirmUseDemoData() {
-  if (!pending.value) return
+  if (!pending.value)
+    return
   emit('select', pending.value.template, pending.value.demoData)
   pending.value = null
 }
 
 function confirmKeepCurrentData() {
-  if (!pending.value) return
+  if (!pending.value)
+    return
   emit('select', pending.value.template)
   pending.value = null
 }
@@ -109,7 +111,9 @@ function getModeLabel(mode: string): string {
   <div class="fixed inset-0 z-[10000] flex items-center justify-center bg-bg-overlay" @click="handleOverlayClick">
     <div class="w-[720px] max-w-[90vw] max-h-[80vh] flex flex-col bg-white rounded-lg shadow-modal relative">
       <div class="flex items-center justify-between px-5 py-4 border-b border-border-light">
-        <h2 class="m-0 text-base font-semibold text-text-primary">选择模板</h2>
+        <h2 class="m-0 text-base font-semibold text-text-primary">
+          选择模板
+        </h2>
         <div class="flex items-center gap-2">
           <button class="px-3.5 py-1.5 text-[13px] border border-primary rounded bg-primary cursor-pointer text-white hover:bg-primary-hover hover:border-primary-hover" @click="emit('createBlank')">
             新建空白
@@ -122,7 +126,9 @@ function getModeLabel(mode: string): string {
 
       <div class="flex-1 overflow-y-auto px-5 py-4">
         <section v-if="userTemplates.length > 0" class="mb-5 last:mb-0">
-          <h3 class="m-0 mb-3 text-[13px] font-semibold text-text-tertiary">我的模板</h3>
+          <h3 class="m-0 mb-3 text-[13px] font-semibold text-text-tertiary">
+            我的模板
+          </h3>
           <div class="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3">
             <div
               v-for="t in userTemplates"
@@ -152,7 +158,9 @@ function getModeLabel(mode: string): string {
         </section>
 
         <section class="mb-5 last:mb-0">
-          <h3 class="m-0 mb-3 text-[13px] font-semibold text-text-tertiary">示例模板</h3>
+          <h3 class="m-0 mb-3 text-[13px] font-semibold text-text-tertiary">
+            示例模板
+          </h3>
           <div class="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3">
             <div
               v-for="s in sampleEntries"
@@ -179,8 +187,12 @@ function getModeLabel(mode: string): string {
       >
         <div class="w-[320px] bg-white rounded-lg shadow-modal px-6 py-5 flex flex-col gap-4">
           <div>
-            <p class="m-0 text-[14px] font-semibold text-text-primary">是否使用示例数据？</p>
-            <p class="m-0 mt-1.5 text-[13px] text-text-tertiary leading-relaxed">该模板附带示例数据，可直接看到真实打印效果。使用后将替换当前数据编辑器中的内容。</p>
+            <p class="m-0 text-[14px] font-semibold text-text-primary">
+              是否使用示例数据？
+            </p>
+            <p class="m-0 mt-1.5 text-[13px] text-text-tertiary leading-relaxed">
+              该模板附带示例数据，可直接看到真实打印效果。使用后将替换当前数据编辑器中的内容。
+            </p>
           </div>
           <div class="flex justify-end gap-2">
             <button

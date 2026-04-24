@@ -15,13 +15,16 @@ let cleanup: (() => void) | null = null
 function mount() {
   unmount()
   const container = containerRef.value
-  if (!container) return
+  if (!container)
+    return
 
   const node = store.getElementById(props.nodeId)
-  if (!node) return
+  if (!node)
+    return
 
   const ext = store.getDesignerExtension(node.type)
-  if (!ext) return
+  if (!ext)
+    return
 
   const nodeSignal = createNodeSignal(store, props.nodeId)
   cleanup = ext.renderContent(nodeSignal, container)

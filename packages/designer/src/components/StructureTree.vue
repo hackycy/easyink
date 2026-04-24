@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import type { Component } from 'vue'
 import type { MaterialNode } from '@easyink/schema'
 import type { TreeNode } from '@easyink/ui'
+import type { Component } from 'vue'
 import {
   IconBarcode,
   IconChart,
   IconContainer,
+  IconDataTable,
   IconEllipse,
   IconHidden,
   IconImage,
@@ -17,7 +18,6 @@ import {
   IconSvg,
   IconTable,
   IconText,
-  IconDataTable
 } from '@easyink/icons'
 import { EiIcon, EiTree } from '@easyink/ui'
 import { computed } from 'vue'
@@ -42,9 +42,11 @@ const ICON_MAP: Record<string, Component> = {
 const store = useDesignerStore()
 
 function getNodeLabel(node: MaterialNode): string {
-  if (node.name) return node.name
+  if (node.name)
+    return node.name
   const def = store.getMaterial(node.type)
-  if (def) return store.t(def.name)
+  if (def)
+    return store.t(def.name)
   return `${node.type} (${node.id.slice(0, 8)})`
 }
 

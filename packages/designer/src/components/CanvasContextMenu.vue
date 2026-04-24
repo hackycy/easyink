@@ -1,13 +1,10 @@
 <script setup lang="ts">
 import type { MaterialNode } from '@easyink/schema'
 import type { Component } from 'vue'
-import { computed, h, ref, onMounted, onUnmounted } from 'vue'
-import { useDesignerStore } from '../composables'
 import {
   AddMaterialCommand,
   RemoveMaterialCommand,
 } from '@easyink/core'
-import { deepClone, generateId } from '@easyink/shared'
 import {
   IconCopy,
   IconCopyPlus,
@@ -22,6 +19,9 @@ import {
   IconSelectAll,
   IconUnlock,
 } from '@easyink/icons'
+import { deepClone, generateId } from '@easyink/shared'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { useDesignerStore } from '../composables'
 
 interface ContextMenuItem {
   id: string

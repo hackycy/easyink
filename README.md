@@ -22,10 +22,10 @@ EasyInk 是一个面向开发者的文档/报表编辑框架，核心原则是�
 
 ```vue
 <script setup lang="ts">
-import { ref } from 'vue'
-import { EasyInkDesigner } from '@easyink/designer'
 import type { DocumentSchema } from '@easyink/designer'
+import { EasyInkDesigner } from '@easyink/designer'
 import { flowInvoiceTemplate, invoiceDemoData, sampleDataSources } from '@easyink/samples'
+import { ref } from 'vue'
 import PreviewOverlay from './PreviewOverlay.vue'
 
 const schema = ref<DocumentSchema>(flowInvoiceTemplate)
@@ -58,8 +58,8 @@ function openPreview() {
 
 ```vue
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
 import { createViewer, registerBuiltinViewerMaterials } from '@easyink/viewer'
+import { onMounted, ref } from 'vue'
 
 const props = defineProps<{
   schema: import('@easyink/viewer').DocumentSchema

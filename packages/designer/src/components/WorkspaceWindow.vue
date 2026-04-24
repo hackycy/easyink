@@ -2,14 +2,18 @@
 import type { WorkspaceWindowState } from '../types'
 import { IconClose, IconMaximize, IconMinimize } from '@easyink/icons'
 import { inject } from 'vue'
-import { useWindowDrag } from '../composables/use-window-drag'
 import { useDesignerStore } from '../composables/use-designer-store'
+import { useWindowDrag } from '../composables/use-window-drag'
 import { CANVAS_CONTAINER_KEY } from './canvas-container'
 
 const props = defineProps<{
   windowState: WorkspaceWindowState
   title: string
   resizable?: boolean
+}>()
+
+const emit = defineEmits<{
+  updateWindowState: [patch: Partial<WorkspaceWindowState>]
 }>()
 
 const store = useDesignerStore()
@@ -22,6 +26,18 @@ const drag = useWindowDrag(
 )
 
 const TITLEBAR_HEIGHT = 32
+
+function toggleCollapsed() {
+  emit('updateWindowState', {
+    collapsed: !props.windowState.collapsed,
+  })
+}
+
+function closeWindow() {
+  emit('updateWindowState', {
+    visible: false,
+  })
+}
 
 function onResizeStart(e: PointerEvent) {
   const win = props.windowState
@@ -67,7 +83,7 @@ function onResizeStart(e: PointerEvent) {
         <button
           class="ei-workspace-window__action"
           @pointerdown.stop
-          @click="windowState.collapsed = !windowState.collapsed"
+          @click="toggleCollapsed"
         >
           <IconMaximize v-if="windowState.collapsed" :size="12" />
           <IconMinimize v-else :size="12" />
@@ -75,7 +91,7 @@ function onResizeStart(e: PointerEvent) {
         <button
           class="ei-workspace-window__action"
           @pointerdown.stop
-          @click="windowState.visible = false"
+          @click="closeWindow"
         >
           <IconClose :size="12" />
         </button>

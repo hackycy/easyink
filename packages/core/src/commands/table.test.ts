@@ -1,4 +1,4 @@
-import type { TableNode } from '@easyink/schema'
+import type { TableDataSchema, TableNode } from '@easyink/schema'
 import { describe, expect, it } from 'vitest'
 import { UpdateTableVisibilityCommand } from './table'
 
@@ -29,13 +29,17 @@ function makeDataTableNode(overrides?: Partial<TableNode>): TableNode {
   } as TableNode
 }
 
+function getTableDataSchema(node: TableNode): TableDataSchema {
+  return node.table as TableDataSchema
+}
+
 describe('updateTableVisibilityCommand', () => {
   it('hide header reduces node.height by header scaled height', () => {
     const node = makeDataTableNode() // height=24, all visible, scale=1
     const cmd = new UpdateTableVisibilityCommand(node, 'showHeader', false)
     cmd.execute()
     expect(node.height).toBe(16)
-    expect((node.table as { showHeader: boolean }).showHeader).toBe(false)
+    expect(getTableDataSchema(node).showHeader).toBe(false)
   })
 
   it('hide then show header restores original height', () => {
@@ -67,10 +71,10 @@ describe('updateTableVisibilityCommand', () => {
     const cmd = new UpdateTableVisibilityCommand(node, 'showFooter', false)
     cmd.execute()
     expect(node.height).not.toBe(30)
-    expect((node.table as { showFooter: boolean }).showFooter).toBe(false)
+    expect(getTableDataSchema(node).showFooter).toBe(false)
     cmd.undo()
     expect(node.height).toBe(30)
-    expect((node.table as { showFooter: boolean }).showFooter).toBe(true)
+    expect(getTableDataSchema(node).showFooter).toBe(true)
   })
 
   it('toggle to current value is a no-op for height', () => {
@@ -82,7 +86,7 @@ describe('updateTableVisibilityCommand', () => {
 
   it('show previously-hidden header expands height by header * current scale', () => {
     const node = makeDataTableNode({ height: 16 }) // header pre-hidden
-    ;(node.table as { showHeader: boolean }).showHeader = false
+    getTableDataSchema(node).showHeader = false
     // current visible: repeat+footer = 16 schema, scale = 1
     const cmd = new UpdateTableVisibilityCommand(node, 'showHeader', true)
     cmd.execute()

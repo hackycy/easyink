@@ -1,4 +1,4 @@
-import type { MaterialNode } from '@easyink/schema'
+import type { BindingRef, MaterialNode } from '@easyink/schema'
 import type { Point, Rect } from './geometry'
 import type { DatasourceFieldInfo, PropSchemaLike } from './material-extension'
 
@@ -126,7 +126,7 @@ export interface SubPropertySchema {
   /** Write property value via transaction */
   write: (key: string, value: unknown, tx: TransactionAPI) => void
   /** Binding context */
-  binding?: unknown | unknown[] | null
+  binding?: BindingRef | BindingRef[] | null
   /** Clear binding via transaction */
   clearBinding?: (tx: TransactionAPI, bindIndex?: number) => void
   /** Custom editor components */

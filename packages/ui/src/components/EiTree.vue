@@ -9,9 +9,9 @@ const props = withDefaults(defineProps<{
   iconMap?: Record<string, Component>
   defaultExpandAll?: boolean
   /** Internal: depth level for recursive rendering */
-  _depth?: number
+  depth?: number
 }>(), {
-  _depth: 0,
+  depth: 0,
 })
 
 const emit = defineEmits<{
@@ -43,13 +43,13 @@ function expandAll() {
 }
 
 onMounted(() => {
-  if (props.defaultExpandAll && props._depth === 0) {
+  if (props.defaultExpandAll && props.depth === 0) {
     expandAll()
   }
 })
 
 watch(() => props.nodes, () => {
-  if (props.defaultExpandAll && props._depth === 0) {
+  if (props.defaultExpandAll && props.depth === 0) {
     expandAll()
   }
 })
@@ -69,7 +69,7 @@ function isExpanded(id: string): boolean {
 </script>
 
 <template>
-  <div class="ei-tree" :class="{ 'ei-tree--root': _depth === 0 }">
+  <div class="ei-tree" :class="{ 'ei-tree--root': depth === 0 }">
     <template v-for="node in nodes" :key="node.id">
       <div
         class="ei-tree__node"
@@ -116,7 +116,7 @@ function isExpanded(id: string): boolean {
           :nodes="node.children"
           :selected-id="selectedId"
           :icon-map="iconMap"
-          :_depth="_depth + 1"
+          :depth="depth + 1"
           @select="emit('select', $event)"
         >
           <template #suffix="slotProps">

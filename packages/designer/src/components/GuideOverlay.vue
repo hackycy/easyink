@@ -1,9 +1,9 @@
 <script setup lang="ts">
+import { UnitManager, UpdateGuidesCommand } from '@easyink/core'
 import { computed, ref } from 'vue'
 import { useDesignerStore } from '../composables'
-import { UpdateGuidesCommand, UnitManager } from '@easyink/core'
 
-const props = defineProps<{
+defineProps<{
   previewGuide?: { axis: 'x' | 'y', position: number } | null
 }>()
 

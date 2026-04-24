@@ -1,10 +1,16 @@
 <script setup lang="ts">
+import { UnitManager } from '@easyink/core'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useDesignerStore } from '../composables'
-import { UnitManager } from '@easyink/core'
 
 const props = defineProps<{
   cursorPos?: { x: number, y: number } | null
+}>()
+
+const emit = defineEmits<{
+  guideDragStart: [direction: 'x' | 'y', e: PointerEvent]
+  guideCreate: [axis: 'x' | 'y', position: number]
+  rulerHover: [hover: { axis: 'x' | 'y', position: number } | null]
 }>()
 
 const store = useDesignerStore()
@@ -210,12 +216,6 @@ onUnmounted(() => {
 
 defineExpose({ redraw })
 
-const emit = defineEmits<{
-  'guide-drag-start': [direction: 'x' | 'y', e: PointerEvent]
-  'guide-create': [axis: 'x' | 'y', position: number]
-  'ruler-hover': [hover: { axis: 'x' | 'y', position: number } | null]
-}>()
-
 /**
  * Compute the document-unit position at a screen coordinate on a ruler.
  */
@@ -261,7 +261,7 @@ function handleRulerPointerDown(rulerDir: 'horizontal' | 'vertical', e: PointerE
       cleanup()
       // Drag: horizontal ruler drags to create horizontal guide ('y'),
       // vertical ruler drags to create vertical guide ('x')
-      emit('guide-drag-start', isH ? 'y' : 'x', e)
+      emit('guideDragStart', isH ? 'y' : 'x', e)
     }
   }
 
@@ -273,7 +273,7 @@ function handleRulerPointerDown(rulerDir: 'horizontal' | 'vertical', e: PointerE
     // vertical ruler creates horizontal guide ('y')
     const position = rulerPxToDocUnit(rulerDir, ev.clientX, ev.clientY)
     if (position != null && position >= 0) {
-      emit('guide-create', isH ? 'x' : 'y', position)
+      emit('guideCreate', isH ? 'x' : 'y', position)
     }
   }
 
@@ -293,11 +293,11 @@ function handleRulerHover(direction: 'horizontal' | 'vertical', e: MouseEvent) {
     return
   // Horizontal ruler measures X coordinates -> vertical preview line (axis='x')
   // Vertical ruler measures Y coordinates -> horizontal preview line (axis='y')
-  emit('ruler-hover', { axis: isH ? 'x' : 'y', position })
+  emit('rulerHover', { axis: isH ? 'x' : 'y', position })
 }
 
 function handleRulerLeave() {
-  emit('ruler-hover', null)
+  emit('rulerHover', null)
 }
 </script>
 

@@ -1,34 +1,35 @@
 <script setup lang="ts">
-import type { MarqueeRect } from '../composables/use-marquee-select'
 import type { ResizeHandle } from '../composables/use-element-resize'
-import { computed, onMounted, onUnmounted, provide, ref } from 'vue'
+import type { MarqueeRect } from '../composables/use-marquee-select'
+import type { WorkspaceWindowState } from '../types'
 import { UnitManager } from '@easyink/core'
+import { computed, onMounted, onUnmounted, provide, ref } from 'vue'
 import { useDesignerStore } from '../composables'
+import { useDatasourceDrop } from '../composables/use-datasource-drop'
 import { useElementDrag } from '../composables/use-element-drag'
 import { useElementResize } from '../composables/use-element-resize'
 import { useElementRotate } from '../composables/use-element-rotate'
 import { useMarqueeSelect } from '../composables/use-marquee-select'
-import { useDatasourceDrop } from '../composables/use-datasource-drop'
 import { useMaterialDrop } from '../composables/use-material-drop'
 import { CANVAS_CONTAINER_KEY } from './canvas-container'
-import GridOverlay from './GridOverlay.vue'
-import SnapLineOverlay from './SnapLineOverlay.vue'
-import GuideOverlay from './GuideOverlay.vue'
-import CanvasRuler from './CanvasRuler.vue'
 import CanvasContextMenu from './CanvasContextMenu.vue'
-import WorkspaceWindow from './WorkspaceWindow.vue'
-import PropertiesPanel from './PropertiesPanel.vue'
-import StructureTree from './StructureTree.vue'
-import DataSourcePanel from './DataSourcePanel.vue'
-import HistoryPanel from './HistoryPanel.vue'
-import MinimapPanel from './MinimapPanel.vue'
-import DebugPanel from './DebugPanel.vue'
-import ToolbarManager from './ToolbarManager.vue'
-import MaterialPanel from './MaterialPanel.vue'
-import DeepEditDragHandle from './DeepEditDragHandle.vue'
 import CanvasElementContent from './CanvasElementContent.vue'
-import SelectionOverlay from './SelectionOverlay.vue'
+import CanvasRuler from './CanvasRuler.vue'
+import DataSourcePanel from './DataSourcePanel.vue'
+import DebugPanel from './DebugPanel.vue'
+import DeepEditDragHandle from './DeepEditDragHandle.vue'
 import EphemeralPanelHost from './EphemeralPanelHost.vue'
+import GridOverlay from './GridOverlay.vue'
+import GuideOverlay from './GuideOverlay.vue'
+import HistoryPanel from './HistoryPanel.vue'
+import MaterialPanel from './MaterialPanel.vue'
+import MinimapPanel from './MinimapPanel.vue'
+import PropertiesPanel from './PropertiesPanel.vue'
+import SelectionOverlay from './SelectionOverlay.vue'
+import SnapLineOverlay from './SnapLineOverlay.vue'
+import StructureTree from './StructureTree.vue'
+import ToolbarManager from './ToolbarManager.vue'
+import WorkspaceWindow from './WorkspaceWindow.vue'
 
 const store = useDesignerStore()
 const containerRef = ref<HTMLElement | null>(null)
@@ -38,6 +39,10 @@ const marqueeRect = ref<MarqueeRect | null>(null)
 const guideOverlayRef = ref<InstanceType<typeof GuideOverlay> | null>(null)
 const contextMenuRef = ref<InstanceType<typeof CanvasContextMenu> | null>(null)
 const rulerRef = ref<InstanceType<typeof CanvasRuler> | null>(null)
+
+function updateWindowState(windowState: WorkspaceWindowState, patch: Partial<WorkspaceWindowState>) {
+  Object.assign(windowState, patch)
+}
 const cursorPos = ref<{ x: number, y: number } | null>(null)
 const rulerHover = ref<{ axis: 'x' | 'y', position: number } | null>(null)
 
@@ -135,7 +140,8 @@ const marqueeStyle = computed(() => {
 // ─── Helpers ─────────────────────────────────────────────────────
 
 function windowTitle(kind: string): string {
-  if (kind === 'toolbar-manager') return store.t('designer.toolbar.manager')
+  if (kind === 'toolbar-manager')
+    return store.t('designer.toolbar.manager')
   const key = kind === 'structure-tree' ? 'structureTree' : kind
   return store.t(`designer.panel.${key}`)
 }
@@ -347,7 +353,8 @@ function handleRulerHover(hover: { axis: 'x' | 'y', position: number } | null) {
 
 function clampWindowPositions() {
   const el = containerRef.value
-  if (!el) return
+  if (!el)
+    return
   const rect = el.getBoundingClientRect()
   const rulerSize = 20
   for (const win of store.workbench.windows) {
@@ -364,7 +371,8 @@ const containerObserver = new ResizeObserver(clampWindowPositions)
 
 onMounted(() => {
   const el = containerRef.value
-  if (!el) return
+  if (!el)
+    return
 
   // Register page element provider so material extensions can do coordinate conversion
   store.setPageElProvider(() => pageRef.value)
@@ -500,6 +508,7 @@ onUnmounted(() => {
           :window-state="win"
           :title="windowTitle(win.kind)"
           :resizable="isResizable(win.kind)"
+          @update-window-state="updateWindowState(win, $event)"
         >
           <PropertiesPanel v-if="win.kind === 'properties'" />
           <StructureTree v-else-if="win.kind === 'structure-tree'" />
@@ -515,8 +524,6 @@ onUnmounted(() => {
         </WorkspaceWindow>
       </template>
     </div>
-
-    <!-- Context menu -->
     <CanvasContextMenu ref="contextMenuRef" />
   </div>
 </template>
@@ -729,4 +736,5 @@ onUnmounted(() => {
   font-size: 12px;
 }
 
-/* ─── Floating Windows ────────────────────────────────────────── */</style>
+/* ─── Floating Windows ────────────────────────────────────────── */
+</style>
