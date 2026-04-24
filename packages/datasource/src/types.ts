@@ -50,3 +50,26 @@ export interface DataUnionBinding {
   offsetY?: number
   props?: Record<string, unknown>
 }
+
+/**
+ * Provider factory for async data source resolution.
+ * Used for dynamically registered external data sources.
+ */
+export interface DataSourceProviderFactory {
+  /** Unique identifier for this provider factory */
+  readonly id: string
+  /** Namespace for isolation (e.g., '__mcp__' for MCP sources) */
+  readonly namespace: string
+  /** Resolve the data source asynchronously */
+  resolve: () => Promise<DataSourceDescriptor>
+}
+
+/**
+ * Resolved data source entry with metadata.
+ */
+export interface ResolvedDataSourceEntry {
+  source: DataSourceDescriptor
+  namespace: string
+  resolvedAt: number
+  provider?: DataSourceProviderFactory
+}

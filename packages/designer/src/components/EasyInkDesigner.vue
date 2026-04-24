@@ -2,25 +2,32 @@
 import type { DataSourceDescriptor } from '@easyink/datasource'
 import type { DocumentSchema } from '@easyink/schema'
 import type { LocaleMessages, PreferenceProvider } from '../types'
-import { onBeforeUnmount, reactive, watch } from 'vue'
+import { defineAsyncComponent, onBeforeUnmount, reactive, ref, shallowRef, watch } from 'vue'
 import { provideDesignerStore } from '../composables'
 import { useWorkbenchPersistence } from '../composables/use-workbench-persistence'
 import { registerBuiltinMaterials } from '../materials/registry'
 import { DesignerStore } from '../store/designer-store'
+import { TemplateHistoryManager } from '../store/template-history'
 import CanvasWorkspace from './CanvasWorkspace.vue'
 import StatusBar from './StatusBar.vue'
 import TopBarB from './TopBarB.vue'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   schema: DocumentSchema
   dataSources?: DataSourceDescriptor[]
   preferenceProvider?: PreferenceProvider
   locale?: LocaleMessages
-}>()
+  enableMCP?: boolean
+}>(), {
+  enableMCP: false,
+})
 
-defineEmits<{
+const emit = defineEmits<{
   'update:schema': [schema: DocumentSchema]
 }>()
+
+// Async component for MCP Panel to avoid circular dependencies
+const MCPPanel = defineAsyncComponent(() => import('./mcp/MCPPanel.vue'))
 
 const store = reactive(new DesignerStore(props.schema, props.preferenceProvider)) as DesignerStore
 // EditingSessionManager was constructed before the reactive proxy existed;
@@ -45,6 +52,12 @@ if (props.dataSources) {
   }
 }
 
+// Template History Manager
+const templateHistory = shallowRef(new TemplateHistoryManager())
+
+// MCP Panel state
+const showMCPPanel = ref(false)
+
 watch(() => props.schema, (newSchema) => {
   if (newSchema !== store.schema) {
     store.setSchema(newSchema)
@@ -59,14 +72,70 @@ watch(() => props.locale, (newLocale) => {
 onBeforeUnmount(() => {
   store.destroy()
 })
+
+// MCP Panel event handlers
+function handleSchemaApply(schema: DocumentSchema, versionId: string) {
+  // Save to template history
+  templateHistory.value.saveVersion(schema, {
+    source: 'mcp',
+    prompt: 'MCP generated template',
+    metadata: { versionId },
+  })
+
+  // Emit schema update
+  emit('update:schema', schema)
+
+  // Also update store directly
+  store.setSchema(schema)
+}
+
+function handleDatasourceRegister(dataSource: DataSourceDescriptor, namespace: string) {
+  // Register via Provider Factory pattern
+  const factory = {
+    id: dataSource.id,
+    namespace,
+    resolve: async () => dataSource,
+  }
+  store.dataSourceRegistry.registerProviderFactory(factory)
+}
+
+function handleMCPError(error: { message: string, canRetry: boolean }) {
+  console.error('MCP generation error:', error.message)
+}
+
+function toggleMCPPanel() {
+  showMCPPanel.value = !showMCPPanel.value
+}
 </script>
 
 <template>
   <div class="ei-designer">
     <slot name="topbar" />
-    <TopBarB />
+    <TopBarB @toggle-mcp-panel="toggleMCPPanel" />
     <CanvasWorkspace />
     <StatusBar />
+
+    <!-- MCP Panel (conditionally rendered when enabled) -->
+    <div
+      v-if="enableMCP && showMCPPanel"
+      class="ei-designer__mcp-overlay"
+    >
+      <Suspense>
+        <MCPPanel
+          :open="showMCPPanel"
+          :current-schema="store.schema"
+          @update:open="showMCPPanel = $event"
+          @schema-apply="handleSchemaApply"
+          @datasource-register="handleDatasourceRegister"
+          @error="handleMCPError"
+        />
+        <template #fallback>
+          <div class="ei-designer__mcp-loading">
+            Loading MCP Panel...
+          </div>
+        </template>
+      </Suspense>
+    </div>
   </div>
 </template>
 
@@ -81,5 +150,31 @@ onBeforeUnmount(() => {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   overflow: hidden;
   position: relative;
+}
+
+.ei-designer__mcp-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  pointer-events: none;
+}
+
+.ei-designer__mcp-overlay > * {
+  pointer-events: auto;
+}
+
+.ei-designer__mcp-loading {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 400px;
+  height: 100vh;
+  background: var(--ei-bg, #fff);
+  border-left: 1px solid var(--ei-border, #e5e7eb);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ei-text-secondary, #6b7280);
+  font-size: 14px;
 }
 </style>

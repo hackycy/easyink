@@ -13,6 +13,7 @@ easyink/
 │   ├── designer/               # @easyink/designer — 设计器工作台 Vue 组件
 │   ├── ui/                     # @easyink/ui — 面板、表单、工作台基础组件
 │   ├── icons/                  # @easyink/icons — 图标资产
+│   ├── mcp/                    # @easyink/mcp — MCP Client、Server Registry、Schema Validator、DataSource Aligner
 │   ├── samples/                # @easyink/samples — 示例 schema、data 与 datasource
 │   └── materials/
 │       ├── text/
@@ -71,6 +72,15 @@ easyink/
 - 包内同时提供 Schema 默认值、属性描述、Designer 交互、Viewer 渲染器
 - 先服务内置体系，第三方开放后再稳定契约
 
+### `@easyink/mcp`
+
+- MCP (Model Context Protocol) 客户端实现
+- Server Registry：动态服务器配置管理，支持 localStorage 持久化
+- Schema Validator：Schema 校验器，支持 Auto-fix 策略
+- DataSource Aligner：数据源字段对齐工具，支持模糊匹配
+- MCPPanel：AI 模板生成面板组件（位于 `@easyink/designer`）
+- 依赖 `datasource`、`schema`、`shared`，不依赖 `designer`（面板组件除外）
+
 ## 3.2 物料包内部结构
 
 以 `@easyink/material-table-data` 为例：
@@ -100,8 +110,10 @@ core        datasource
 material-* ── core + schema + shared (+ datasource 按需)
   ↑
 designer ─── core + datasource + schema + shared + ui + icons + material-*
+  ↑           ↑
+mcp ──────────┘           (mcp 依赖 datasource + schema + shared)
   ↑
-playground ── designer + viewer + samples + schema
+playground ── designer + viewer + samples + schema + mcp
 ```
 
 依赖原则：
@@ -110,6 +122,7 @@ playground ── designer + viewer + samples + schema
 - `viewer` 依赖 `core`、`datasource`、`schema`、`shared`，不依赖 `material-*`（Viewer 物料渲染器由调用方注册）
 - `ui` 依赖 `icons` 和 `shared`，不依赖 `designer`；方向为 designer 依赖 ui
 - `samples` 依赖 `datasource`、`schema`、`shared`，不依赖 `designer`
+- `mcp` 依赖 `datasource`、`schema`、`shared`，不依赖 `designer`（但 MCPPanel 组件在 designer 包内）
 
 ## 3.4 对外消费方式
 

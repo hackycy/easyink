@@ -1,0 +1,29 @@
+{
+  "name": "@easyink/mcp",
+  "type": "module",
+  "version": "0.0.0",
+  "description": "MCP (Model Context Protocol) client and tools for EasyInk designer",
+  "author": "EasyInk Team",
+  "license": "MIT",
+  "sideEffects": false,
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/index.d.mts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch"
+  },
+  "dependencies": {
+    "@easyink/datasource": "workspace:*",
+    "@easyink/schema": "workspace:*",
+    "@easyink/shared": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@vueuse/core": "^10.0.0",
+    "vue": "catalog:framework"
+  }
+}

@@ -3,6 +3,7 @@ import type {
   BlankPolicy,
   BorderAppearance,
   BorderType,
+  MaterialUseToken,
   PageMode,
   PageScale,
   PrintBehavior,
@@ -19,7 +20,7 @@ export interface DocumentSchema {
   page: PageSchema
   guides: GuideSchema
   elements: MaterialNode[]
-  extensions?: Record<string, unknown>
+  extensions?: DocumentSchemaExtensions
   compat?: BenchmarkCompatState
 }
 
@@ -29,6 +30,128 @@ export interface DocumentMeta {
   author?: string
   createdAt?: string
   updatedAt?: string
+}
+
+/**
+ * Extended fields stored in DocumentSchema.extensions.mcp.
+ * Enables persistence of MCP-generated data sources and template history.
+ */
+export interface MCPExtensions {
+  /** MCP-generated data sources stored with the schema */
+  dataSources?: DataSourceSnapshot[]
+  /** Provider factory snapshots for re-resolving data sources */
+  providerFactories?: ProviderFactorySnapshot[]
+  /** Template version history */
+  templateHistory?: TemplateVersion[]
+  /** Current template version ID */
+  currentVersionId?: string
+  /** Expected data source structure (for schema-first alignment) */
+  expectedDataSource?: ExpectedDataSource
+}
+
+/**
+ * Serializable data source snapshot stored inside schema extensions.
+ * Kept local to the schema package so MCP persistence does not invert package dependencies.
+ */
+export interface DataSourceSnapshot {
+  id: string
+  name: string
+  tag?: string
+  title?: string
+  icon?: string
+  expand?: boolean
+  headless?: boolean
+  fields: DataFieldSnapshot[]
+  meta?: Record<string, unknown>
+}
+
+/**
+ * Serializable field-tree node for persisted MCP data source snapshots.
+ */
+export interface DataFieldSnapshot {
+  name: string
+  key?: string
+  path?: string
+  title?: string
+  id?: string
+  tag?: string
+  use?: MaterialUseToken
+  props?: Record<string, unknown>
+  bindIndex?: number
+  union?: DataUnionBindingSnapshot[]
+  expand?: boolean
+  fields?: DataFieldSnapshot[]
+  meta?: Record<string, unknown>
+}
+
+/**
+ * Serializable one-drag-multi-create binding snapshot.
+ */
+export interface DataUnionBindingSnapshot {
+  name?: string
+  key?: string
+  path?: string
+  title?: string
+  id?: string
+  tag?: string
+  use?: string
+  offsetX?: number
+  offsetY?: number
+  props?: Record<string, unknown>
+}
+
+/**
+ * Snapshot of a provider factory for serialization.
+ */
+export interface ProviderFactorySnapshot {
+  id: string
+  namespace: string
+  meta?: Record<string, unknown>
+}
+
+/**
+ * A saved version of a template.
+ */
+export interface TemplateVersion {
+  id: string
+  schema: DocumentSchema
+  prompt?: string
+  source: 'user' | 'mcp' | 'template'
+  timestamp: number
+  parentId?: string
+  metadata?: Record<string, unknown>
+}
+
+/**
+ * Expected data source structure for schema-first alignment.
+ * Returned by getSchema tool, consumed by getDataSource tool.
+ */
+export interface ExpectedDataSource {
+  /** Expected data source name */
+  name: string
+  /** Expected field structure with types */
+  fields: ExpectedField[]
+  /** Sample data for validation */
+  sampleData?: Record<string, unknown>
+}
+
+/**
+ * Expected field in the data source.
+ */
+export interface ExpectedField {
+  name: string
+  type: 'string' | 'number' | 'boolean' | 'array' | 'object'
+  required?: boolean
+  path: string
+  children?: ExpectedField[]
+}
+
+/**
+ * Union type for all possible extensions.
+ */
+export interface DocumentSchemaExtensions {
+  mcp?: MCPExtensions
+  [key: string]: unknown
 }
 
 // ─── Guide Schema ──────────────────────────────────────────────────

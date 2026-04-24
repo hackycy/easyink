@@ -177,6 +177,7 @@ function handleDataUpdate(data: Record<string, unknown>) {
     :data-sources="mergedDataSources"
     :locale="zhCN"
     :preference-provider="preferenceProvider"
+    :enable-mcp="true"
   >
     <template #topbar>
       <div class="flex items-center gap-2 px-3 py-1 bg-bg-secondary border-b border-border">

@@ -53,6 +53,11 @@ import { deepClone, generateId } from '@easyink/shared'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useDesignerStore } from '../composables'
 
+// MCP Panel toggle
+const emit = defineEmits<{
+  toggleMcpPanel: []
+}>()
+
 const store = useDesignerStore()
 
 // ─── Window Toggle Definitions ─────────────────────────────────
@@ -506,6 +511,24 @@ function handleSnap() {
       >
         <component :is="wt.icon" :size="16" :stroke-width="1.5" />
       </button>
+      <button
+        class="ei-topbar-b__btn ei-topbar-b__btn--mcp"
+        title="AI 模板生成"
+        @click="emit('toggleMcpPanel')"
+      >
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+        >
+          <path d="M12 2L2 7l10 5 10-5-10-5z" />
+          <path d="M2 17l10 5 10-5" />
+          <path d="M2 12l10 5 10-5" />
+        </svg>
+      </button>
     </div>
 
     <div class="ei-topbar-b__divider" />
@@ -864,6 +887,14 @@ function handleSnap() {
 .ei-topbar-b__btn--active {
   background: var(--ei-active-bg, #d0d0d0);
   border-color: var(--ei-border-color, #e0e0e0);
+}
+
+.ei-topbar-b__btn--mcp {
+  color: var(--ei-primary, #4f46e5);
+}
+
+.ei-topbar-b__btn--mcp:hover {
+  background: var(--ei-primary-light, rgba(79, 70, 229, 0.1));
 }
 
 .ei-topbar-b__scroll-btn {

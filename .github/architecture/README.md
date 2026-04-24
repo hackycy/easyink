@@ -31,7 +31,7 @@
 | 5 | [Schema DSL 设计](./05-schema-dsl.md) | 规范模型、兼容编解码、页面字段、结构物料与绑定 |
 | 6 | [渲染管线](./06-render-pipeline.md) | 统一 DOM 渲染、溢出诊断、输出边界 |
 | 7 | [布局引擎](./07-layout-engine.md) | 坐标推移布局模型、计算流程 |
-| 8 | [数据源系统](./08-datasource.md) | 字段树协议、推荐物料、union、bindIndex、运行时取数契约 |
+| 8 | [数据源系统](./08-datasource.md) | 字段树协议、推荐物料、union、bindIndex、Provider Factory、MCP 集成 |
 | 9 | [内部扩展机制](./09-plugin-system.md) | 仓库内扩展点、上下文 API、钩子体系 |
 | 10 | [设计器交互层](./10-designer-interaction.md) | 工作台布局、工具组带、窗口系统、结构树、属性壳层、PropertyPanelOverlay、sectionFilter |
 | 11 | [物料体系](./11-element-system.md) | 物料目录、属性矩阵、Designer/Viewer 合约、DatasourceDropHandler 协议、分阶段交付 |
@@ -45,7 +45,8 @@
 | 19 | [测试策略](./19-testing.md) | 单元测试、E2E 测试 |
 | 20 | [性能策略](./20-performance.md) | 架构层预留、性能目标 |
 | 21 | [安全模型](./21-security.md) | 数据路径安全、富文本安全、渲染安全 |
-| 22 | [编辑行为架构](./22-editing-behavior.md) | EditingSession、类型化 Selection、Geometry 协议、Behavior 中间件、Surfaces 与 Transaction（替代旧 deepEditing FSM） |
+| 22 | [编辑行为架构](./22-editing-behavior.md) | EditingSession、类型化 Selection、Geometry 协议、Behavior 中间件、Surfaces 与 Transaction |
+| 23 | [MCP 集成架构](./23-mcp-integration.md) | MCP Client、Server Registry、Schema Validator、AI 模板生成 |
 
 ## 补充说明
 
@@ -58,6 +59,8 @@
 - 未识别物料、缺失数据、缺失字体、渲染失败都必须以可见诊断暴露，不允许静默吞掉
 - 对标产品的原始 JSON 字段命名存在历史噪音，EasyInk 提供无损兼容编解码层
 - `DocumentSchema.unit`、纸张预设、页面类型标签这类信息在属性面板中可见，但不固化进 `page` 规范字段
+- MCP (Model Context Protocol) 集成通过 `@easyink/mcp` 包实现，支持 AI 驱动的模板生成
+- 数据源系统支持运行时动态注册，通过 Provider Factory 模式支持 MCP 数据源注入
 
 ## 快速导航
 
@@ -68,3 +71,4 @@
 - **想了解设计器工作台?** -> [10-designer-interaction](./10-designer-interaction.md)
 - **想了解物料体系?** -> [11-element-system](./11-element-system.md)
 - **想了解命令与历史?** -> [12-command-undo-redo](./12-command-undo-redo.md)
+- **想了解 MCP AI 集成?** -> [23-mcp-integration](./23-mcp-integration.md)
