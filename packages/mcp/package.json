@@ -23,8 +23,8 @@
     "@easyink/datasource": "workspace:*",
     "@easyink/schema": "workspace:*",
     "@easyink/shared": "workspace:*",
-    "@modelcontextprotocol/sdk": "^1.0.0",
-    "@vueuse/core": "^10.0.0",
+    "@modelcontextprotocol/sdk": "catalog:framework",
+    "@vueuse/core": "catalog:framework",
     "vue": "catalog:framework"
   }
 }
