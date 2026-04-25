@@ -6,6 +6,7 @@
     "build": "vite build"
   },
   "dependencies": {
+    "@easyink/ai": "workspace:*",
     "@easyink/datasource": "workspace:*",
     "@easyink/designer": "workspace:*",
     "@easyink/samples": "workspace:*",

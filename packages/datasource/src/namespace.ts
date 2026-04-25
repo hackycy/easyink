@@ -1,7 +1,9 @@
 /**
- * MCP namespace constant for data source isolation.
+ * Default namespace constant used by AI/contribution-driven sources.
+ * Owned semantically by `@easyink/ai`; lives here only as a string constant
+ * so designer/datasource utilities can recognise the namespace.
  */
-export const MCP_NAMESPACE = '__mcp__'
+export const AI_NAMESPACE = '__ai__'
 
 /**
  * Default namespace for user-registered data sources.
@@ -9,10 +11,10 @@ export const MCP_NAMESPACE = '__mcp__'
 export const DEFAULT_NAMESPACE = 'default'
 
 /**
- * Check if a namespace is the MCP namespace.
+ * Check if a namespace is the AI namespace.
  */
-export function isMcpNamespace(ns?: string): boolean {
-  return ns === MCP_NAMESPACE
+export function isAINamespace(ns?: string): boolean {
+  return ns === AI_NAMESPACE
 }
 
 /**
@@ -25,11 +27,11 @@ export function isDefaultNamespace(ns?: string): boolean {
 /**
  * Generate a full namespaced source ID.
  * @param id - The source ID
- * @param namespace - The namespace (defaults to MCP_NAMESPACE)
+ * @param namespace - The namespace; defaults to {@link DEFAULT_NAMESPACE}
  * @returns Full qualified ID in format "namespace:id"
  */
 export function getNamespacedId(id: string, namespace?: string): string {
-  const ns = namespace ?? MCP_NAMESPACE
+  const ns = namespace ?? DEFAULT_NAMESPACE
   if (isDefaultNamespace(ns)) {
     return id
   }

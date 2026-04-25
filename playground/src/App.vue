@@ -2,6 +2,7 @@
 import type { DataSourceDescriptor } from '@easyink/datasource'
 import type { DocumentSchema } from '@easyink/designer'
 import type { StoredTemplate } from './storage/template-store'
+import { createAIContribution } from '@easyink/ai'
 import { createLocalStoragePreferenceProvider, EasyInkDesigner } from '@easyink/designer'
 import zhCN from '@easyink/designer/locale/zh-CN'
 import { blankA4Template, flowInvoiceTemplate, invoiceDemoData, sampleDataSources, sampleTemplates } from '@easyink/samples'
@@ -169,6 +170,8 @@ function openDataEditor() {
 function handleDataUpdate(data: Record<string, unknown>) {
   applyDemoData(data)
 }
+
+const contributions = [createAIContribution()]
 </script>
 
 <template>
@@ -177,7 +180,7 @@ function handleDataUpdate(data: Record<string, unknown>) {
     :data-sources="mergedDataSources"
     :locale="zhCN"
     :preference-provider="preferenceProvider"
-    :enable-mcp="true"
+    :contributions="contributions"
   >
     <template #topbar>
       <div class="flex items-center gap-2 px-3 py-1 bg-bg-secondary border-b border-border">

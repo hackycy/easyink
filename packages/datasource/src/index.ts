@@ -1,10 +1,10 @@
 export {
+  AI_NAMESPACE,
   DEFAULT_NAMESPACE,
   getNamespacedId,
   getSourceNamespace,
+  isAINamespace,
   isDefaultNamespace,
-  isMcpNamespace,
-  MCP_NAMESPACE,
   parseNamespacedId,
   setSourceNamespace,
 } from './namespace'

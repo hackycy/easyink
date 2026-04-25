@@ -1,8 +1,8 @@
 {
-  "name": "@easyink/mcp",
+  "name": "@easyink/ai",
   "type": "module",
   "version": "0.0.0",
-  "description": "MCP (Model Context Protocol) client and tools for EasyInk designer",
+  "description": "AI integration for EasyInk designer (chat, MCP, prompt templates)",
   "author": "EasyInk Team",
   "license": "MIT",
   "sideEffects": false,
@@ -21,7 +21,9 @@
   },
   "dependencies": {
     "@easyink/datasource": "workspace:*",
+    "@easyink/designer": "workspace:*",
     "@easyink/schema": "workspace:*",
+    "@easyink/schema-tools": "workspace:*",
     "@easyink/shared": "workspace:*",
     "@modelcontextprotocol/sdk": "catalog:framework",
     "@vueuse/core": "catalog:framework",

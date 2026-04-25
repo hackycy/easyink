@@ -1,32 +1,24 @@
 <script setup lang="ts">
-import type { DataSourceDescriptor } from '@easyink/datasource'
-import type { DocumentSchema } from '@easyink/schema'
-import type { MCPServerConfig, SessionMessage } from '../types/mcp-types'
-import { MCP_NAMESPACE } from '@easyink/datasource'
+import type { DesignerStore } from '@easyink/designer'
+import type { MCPServerConfig, SessionMessage } from '../types'
+import { AI_NAMESPACE } from '@easyink/datasource'
+import { DataSourceAligner, SchemaValidator } from '@easyink/schema-tools'
 import { generateId } from '@easyink/shared'
 import { computed, onMounted, ref } from 'vue'
-import { MCPClient } from '../client/mcp-client'
-import { ServerRegistry, validateServerConfig } from '../config/server-registry'
-import { DataSourceAligner } from '../utils/datasource-aligner'
-import { SchemaValidator } from '../validation/schema-validator'
+import { MCPClient } from '../mcp-client'
+import { ServerRegistry, validateServerConfig } from '../server-registry'
 
-// Props
 const props = defineProps<{
-  /** Whether the panel is open */
+  /** Designer store, injected automatically by EasyInkDesigner. */
+  store: DesignerStore
+  /** Whether the panel is open (controlled by toggle command). */
   open: boolean
-  /** Current schema to use as context */
-  currentSchema?: DocumentSchema
-  /** Known material types for validation */
+  /** Known material types for validation. */
   knownMaterialTypes?: Set<string>
 }>()
 
-// Emits
 const emit = defineEmits<{
   'update:open': [open: boolean]
-  'schemaApply': [schema: DocumentSchema, versionId: string]
-  'datasourceRegister': [dataSource: DataSourceDescriptor, namespace: string]
-  'error': [error: { message: string, canRetry: boolean }]
-  'historyUpdate': [messages: SessionMessage[]]
 }>()
 
 // MCP Client and Registry
@@ -85,7 +77,7 @@ async function handleGenerate() {
       role: 'user',
       content: prompt.value,
       timestamp: Date.now(),
-      schemaSnapshot: props.currentSchema,
+      schemaSnapshot: props.store.schema,
     }
     sessionMessages.value.push(userMsg)
 
@@ -93,7 +85,7 @@ async function handleGenerate() {
     const result = await mcpClient.generate({
       serverId: selectedServerId.value!,
       prompt: prompt.value,
-      currentSchema: props.currentSchema,
+      currentSchema: props.store.schema,
       context: {
         sessionHistory: sessionMessages.value,
       },
@@ -122,17 +114,44 @@ async function handleGenerate() {
     const aligner = new DataSourceAligner()
     const alignment = aligner.align(finalSchema, result.dataSource)
 
-    // Show alignment warnings
     if (alignment.warnings.length > 0) {
-      console.warn('Alignment warnings:', alignment.warnings)
+      console.warn('[ai] Alignment warnings:', alignment.warnings)
     }
 
-    // 6. Register datasource with MCP namespace
-    emit('datasourceRegister', alignment.dataSource, MCP_NAMESPACE)
+    // 6. Register data source via store (Provider Factory pattern)
+    props.store.dataSourceRegistry.registerProviderFactory({
+      id: alignment.dataSource.id,
+      namespace: AI_NAMESPACE,
+      resolve: async () => alignment.dataSource,
+    })
 
-    // 7. Save as new template version
+    // 7. Apply schema and persist AI metadata under `extensions.ai`
     const versionId = generateId('ver')
-    emit('schemaApply', alignment.schema, versionId)
+    props.store.setSchema(alignment.schema)
+
+    const existing = (props.store.getExtension('ai') ?? {}) as {
+      dataSources?: Array<{ id: string, name: string, tag?: string, fields: unknown, meta?: Record<string, unknown> }>
+      providerFactories?: Array<{ id: string, namespace: string }>
+      currentVersionId?: string
+    }
+    props.store.setExtension('ai', {
+      ...existing,
+      currentVersionId: versionId,
+      dataSources: [
+        ...(existing.dataSources ?? []),
+        {
+          id: alignment.dataSource.id,
+          name: alignment.dataSource.name,
+          tag: alignment.dataSource.tag,
+          fields: alignment.dataSource.fields,
+          meta: alignment.dataSource.meta,
+        },
+      ],
+      providerFactories: [
+        ...(existing.providerFactories ?? []),
+        { id: alignment.dataSource.id, namespace: AI_NAMESPACE },
+      ],
+    })
 
     // 8. Add success message
     const assistantMsg: SessionMessage = {
@@ -145,10 +164,7 @@ async function handleGenerate() {
     }
     sessionMessages.value.push(assistantMsg)
 
-    // 9. Notify history update
-    emit('historyUpdate', sessionMessages.value)
-
-    // 10. Clear prompt on success
+    // 9. Clear prompt on success
     prompt.value = ''
   }
   catch (err) {
@@ -156,7 +172,6 @@ async function handleGenerate() {
     error.value = message
     canRetry.value = true
 
-    // Add error message
     const errorMsg: SessionMessage = {
       id: generateId('msg'),
       role: 'assistant',
@@ -165,8 +180,6 @@ async function handleGenerate() {
       error: message,
     }
     sessionMessages.value.push(errorMsg)
-
-    emit('error', { message, canRetry: true })
   }
   finally {
     isGenerating.value = false

@@ -1,4 +1,4 @@
-import type { MCPServerConfig } from '../types/mcp-types'
+import type { MCPServerConfig } from './types'
 
 const STORAGE_KEY = 'easyink_mcp_servers'
 

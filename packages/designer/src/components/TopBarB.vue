@@ -50,13 +50,12 @@ import {
 } from '@easyink/icons'
 import { createDefaultSchema } from '@easyink/schema'
 import { deepClone, generateId } from '@easyink/shared'
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, inject, onMounted, onUnmounted, ref } from 'vue'
 import { useDesignerStore } from '../composables'
+import { CONTRIBUTION_REGISTRY_KEY } from '../contributions/injection'
 
-// MCP Panel toggle
-const emit = defineEmits<{
-  toggleMcpPanel: []
-}>()
+const contributionRegistry = inject(CONTRIBUTION_REGISTRY_KEY, undefined)
+const toolbarActions = computed(() => contributionRegistry?.registry.toolbarActions ?? [])
 
 const store = useDesignerStore()
 
@@ -512,22 +511,13 @@ function handleSnap() {
         <component :is="wt.icon" :size="16" :stroke-width="1.5" />
       </button>
       <button
-        class="ei-topbar-b__btn ei-topbar-b__btn--mcp"
-        title="AI 模板生成"
-        @click="emit('toggleMcpPanel')"
+        v-for="action in toolbarActions"
+        :key="action.id"
+        class="ei-topbar-b__btn ei-topbar-b__btn--contribution"
+        :title="action.label"
+        @click="contributionRegistry && action.onClick(contributionRegistry.context)"
       >
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.5"
-        >
-          <path d="M12 2L2 7l10 5 10-5-10-5z" />
-          <path d="M2 17l10 5 10-5" />
-          <path d="M2 12l10 5 10-5" />
-        </svg>
+        <component :is="action.icon" :size="16" :stroke-width="1.5" />
       </button>
     </div>
 
@@ -889,11 +879,11 @@ function handleSnap() {
   border-color: var(--ei-border-color, #e0e0e0);
 }
 
-.ei-topbar-b__btn--mcp {
+.ei-topbar-b__btn--contribution {
   color: var(--ei-primary, #4f46e5);
 }
 
-.ei-topbar-b__btn--mcp:hover {
+.ei-topbar-b__btn--contribution:hover {
   background: var(--ei-primary-light, rgba(79, 70, 229, 0.1));
 }
 

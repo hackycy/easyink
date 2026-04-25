@@ -197,6 +197,33 @@ importers:
         specifier: catalog:testing
         version: 2.8.1
 
+  packages/ai:
+    dependencies:
+      '@easyink/datasource':
+        specifier: workspace:*
+        version: link:../datasource
+      '@easyink/designer':
+        specifier: workspace:*
+        version: link:../designer
+      '@easyink/schema':
+        specifier: workspace:*
+        version: link:../schema
+      '@easyink/schema-tools':
+        specifier: workspace:*
+        version: link:../schema-tools
+      '@easyink/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@modelcontextprotocol/sdk':
+        specifier: catalog:framework
+        version: 1.29.0(zod@4.3.6)
+      '@vueuse/core':
+        specifier: catalog:framework
+        version: 14.2.1(vue@3.5.31(typescript@6.0.2))
+      vue:
+        specifier: catalog:framework
+        version: 3.5.31(typescript@6.0.2)
+
   packages/core:
     dependencies:
       '@easyink/schema':
@@ -268,9 +295,6 @@ importers:
       '@easyink/material-text':
         specifier: workspace:*
         version: link:../materials/text
-      '@easyink/mcp':
-        specifier: workspace:*
-        version: link:../mcp
       '@easyink/schema':
         specifier: workspace:*
         version: link:../schema
@@ -491,38 +515,17 @@ importers:
         specifier: workspace:*
         version: link:../../shared
 
-  packages/mcp:
-    dependencies:
-      '@easyink/datasource':
-        specifier: workspace:*
-        version: link:../datasource
-      '@easyink/schema':
-        specifier: workspace:*
-        version: link:../schema
-      '@easyink/shared':
-        specifier: workspace:*
-        version: link:../shared
-      '@modelcontextprotocol/sdk':
-        specifier: catalog:framework
-        version: 1.29.0(zod@4.3.6)
-      '@vueuse/core':
-        specifier: catalog:framework
-        version: 14.2.1(vue@3.5.31(typescript@6.0.2))
-      vue:
-        specifier: catalog:framework
-        version: 3.5.31(typescript@6.0.2)
-
   packages/mcp-server:
     dependencies:
       '@easyink/datasource':
         specifier: workspace:*
         version: link:../datasource
-      '@easyink/mcp':
-        specifier: workspace:*
-        version: link:../mcp
       '@easyink/schema':
         specifier: workspace:*
         version: link:../schema
+      '@easyink/schema-tools':
+        specifier: workspace:*
+        version: link:../schema-tools
       '@easyink/shared':
         specifier: workspace:*
         version: link:../shared
@@ -561,6 +564,18 @@ importers:
 
   packages/schema:
     dependencies:
+      '@easyink/shared':
+        specifier: workspace:*
+        version: link:../shared
+
+  packages/schema-tools:
+    dependencies:
+      '@easyink/datasource':
+        specifier: workspace:*
+        version: link:../datasource
+      '@easyink/schema':
+        specifier: workspace:*
+        version: link:../schema
       '@easyink/shared':
         specifier: workspace:*
         version: link:../shared
@@ -644,6 +659,9 @@ importers:
 
   playground:
     dependencies:
+      '@easyink/ai':
+        specifier: workspace:*
+        version: link:../packages/ai
       '@easyink/datasource':
         specifier: workspace:*
         version: link:../packages/datasource

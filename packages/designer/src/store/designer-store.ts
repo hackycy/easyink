@@ -81,6 +81,30 @@ export class DesignerStore {
     this.editingSession.exit()
   }
 
+  // ─── Generic extensions API ───────────────────────────────────
+  // Read/write `schema.extensions[key]` without designer needing to
+  // know about specific extension namespaces (e.g. ai, comments).
+
+  /** Get an extension value by key. */
+  getExtension<T = unknown>(key: string): T | undefined {
+    return this._schema.extensions?.[key] as T | undefined
+  }
+
+  /** Set an extension value by key (mutates current schema reactively). */
+  setExtension(key: string, value: unknown): void {
+    if (!this._schema.extensions) {
+      this._schema.extensions = {}
+    }
+    this._schema.extensions[key] = value
+  }
+
+  /** Delete an extension value by key. */
+  deleteExtension(key: string): void {
+    if (this._schema.extensions) {
+      delete this._schema.extensions[key]
+    }
+  }
+
   // ─── Element operations ───────────────────────────────────────
 
   getElements(): MaterialNode[] {

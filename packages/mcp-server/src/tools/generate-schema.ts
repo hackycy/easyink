@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { LLMProvider, SchemaGenerationInput } from '../llm/types'
-import { SchemaValidator } from '@easyink/mcp'
+import { SchemaValidator } from '@easyink/schema-tools'
 import { z } from 'zod'
 import { buildMaterialContext, getMaterialTypes, loadMaterialsConfig } from '../config/material-loader'
 import { buildSystemPrompt } from '../prompts/system-builder'

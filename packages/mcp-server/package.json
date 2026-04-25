@@ -25,8 +25,8 @@
   },
   "dependencies": {
     "@easyink/datasource": "workspace:*",
-    "@easyink/mcp": "workspace:*",
     "@easyink/schema": "workspace:*",
+    "@easyink/schema-tools": "workspace:*",
     "@easyink/shared": "workspace:*",
     "@modelcontextprotocol/sdk": "catalog:framework",
     "zod": "catalog:framework"

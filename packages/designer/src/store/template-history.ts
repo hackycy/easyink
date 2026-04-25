@@ -92,7 +92,7 @@ export class TemplateHistoryManager {
    * Get history with optional filtering.
    */
   getHistory(options?: {
-    source?: TemplateVersion['source']
+    source?: string
     limit?: number
     offset?: number
   }): TemplateVersion[] {
@@ -106,27 +106,6 @@ export class TemplateHistoryManager {
     const limit = options?.limit ?? this._maxVersions
 
     return list.slice(offset, offset + limit)
-  }
-
-  /**
-   * Get MCP-generated versions.
-   */
-  getMcpVersions(): TemplateVersion[] {
-    return this.getHistory({ source: 'mcp' })
-  }
-
-  /**
-   * Get user-created versions.
-   */
-  getUserVersions(): TemplateVersion[] {
-    return this.getHistory({ source: 'user' })
-  }
-
-  /**
-   * Get template-based versions.
-   */
-  getTemplateVersions(): TemplateVersion[] {
-    return this.getHistory({ source: 'template' })
   }
 
   /**

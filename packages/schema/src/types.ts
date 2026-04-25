@@ -33,25 +33,9 @@ export interface DocumentMeta {
 }
 
 /**
- * Extended fields stored in DocumentSchema.extensions.mcp.
- * Enables persistence of MCP-generated data sources and template history.
- */
-export interface MCPExtensions {
-  /** MCP-generated data sources stored with the schema */
-  dataSources?: DataSourceSnapshot[]
-  /** Provider factory snapshots for re-resolving data sources */
-  providerFactories?: ProviderFactorySnapshot[]
-  /** Template version history */
-  templateHistory?: TemplateVersion[]
-  /** Current template version ID */
-  currentVersionId?: string
-  /** Expected data source structure (for schema-first alignment) */
-  expectedDataSource?: ExpectedDataSource
-}
-
-/**
  * Serializable data source snapshot stored inside schema extensions.
- * Kept local to the schema package so MCP persistence does not invert package dependencies.
+ * Kept local to the schema package so contribution-driven persistence does
+ * not invert package dependencies.
  */
 export interface DataSourceSnapshot {
   id: string
@@ -111,12 +95,14 @@ export interface ProviderFactorySnapshot {
 
 /**
  * A saved version of a template.
+ * `source` is an open string so contributions can label history origins.
+ * Conventional values: 'user', 'template', 'ai'.
  */
 export interface TemplateVersion {
   id: string
   schema: DocumentSchema
   prompt?: string
-  source: 'user' | 'mcp' | 'template'
+  source: string
   timestamp: number
   parentId?: string
   metadata?: Record<string, unknown>
@@ -147,10 +133,10 @@ export interface ExpectedField {
 }
 
 /**
- * Union type for all possible extensions.
+ * Open extension namespace map. Contributions own their own top-level keys
+ * (e.g. `ai`, `comments`) and store arbitrary serialisable values under them.
  */
 export interface DocumentSchemaExtensions {
-  mcp?: MCPExtensions
   [key: string]: unknown
 }
 

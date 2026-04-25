@@ -8,7 +8,7 @@ import type {
   MCPToolResult,
   ServerStatus,
   SessionMessage,
-} from '../types/mcp-types'
+} from './types'
 import { generateId } from '@easyink/shared'
 
 /**
