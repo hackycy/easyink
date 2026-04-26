@@ -143,7 +143,9 @@ packages/schema-tools/src/
 
 服务端 MCP 实现保持不变，仅切换内部依赖：原 `@easyink/mcp` -> `@easyink/schema-tools`。
 
-`McpServer` 注册两个 Tool：`generateSchema`（LLM -> schema + expectedDataSource -> autoFix）和 `generateDataSource`。Transport 通过 `MCP_TRANSPORT` 环境变量在 stdio / HTTP 间切换；LLM Provider 通过 `MCP_PROVIDER` 在 Claude / OpenAI 间切换。详见 `packages/mcp-server/README.md`。
+`McpServer` 的主工具是 `generateSchema`（plan -> TemplateIntent -> deterministic schema/expectedDataSource/DataSourceDescriptor -> repair/validate）。同时注册研发调试工具：`resolvePlan`、`generateIntent`、`buildSchemaFromIntent`、`validateGeneratedSchema`，用于定位生成偏差发生在 plan、intent、确定性构建还是校验阶段。`generateDataSource` 保留为兼容工具，但现在只做确定性 `ExpectedDataSource -> DataSourceDescriptor` 转换，不再额外调用 LLM。
+
+Transport 通过 `MCP_TRANSPORT` 在 stdio / HTTP 间切换；LLM Provider 通过 `MCP_PROVIDER` 在 Claude / OpenAI 间切换。HTTP 默认只监听 `127.0.0.1`，默认只允许 localhost 开发 Origin；内网部署需要显式设置 `MCP_HTTP_HOST`、`MCP_HTTP_ALLOWED_ORIGINS`，并可通过 `MCP_HTTP_API_KEY` 要求浏览器客户端发送 `X-EasyInk-MCP-Key`。结构化输出默认开启，`MCP_STRICT_OUTPUTS=false` 可回退到 JSON mode 兼容 OpenAI-like provider。详见 `packages/mcp-server/README.md`。
 
 ## 23.6 命名空间
 
@@ -182,6 +184,8 @@ Contribution API 不绑定 AI；后续若引入“审计面板”“素材市场
 - **行业纸张启发式先于 LLM**：AI 面板和 MCP server 共用 `inferAIGenerationPlan()`。例如“商超小票/超市小票/小票”推断为 `page.mode = "stack"`、`width = 80`、`height = 200`，明细数组使用 `table-data`；发票/报价单/订单默认 A4 fixed；标签类默认 label mode。
 - **非阻塞生成假设**：AI 面板从 prompt 推断 plan 并直接调用 MCP，不再阻塞确认；生成假设在面板内作为可解释摘要展示。没有前端 plan 时，server 端会重新推断。
 - **Intent-first 生成链路**：MCP server 不要求 LLM 一次性产出完整 `DocumentSchema`。LLM 先产出 `TemplateIntent`，描述领域、字段、区块、数组表格列等意图；`@easyink/schema-tools` 再确定性生成 schema，避免模型遗漏 `table-data.table.topology.rows[].role = "repeat-template"` 等内部 DSL 细节。
+- **严格结构化输出优先**：OpenAI provider 默认使用 JSON Schema structured output，Claude provider 默认启用 strict tool 定义；兼容 OpenAI-like endpoint 时可用 `MCP_STRICT_OUTPUTS=false` 回退 JSON mode，但仍保留后置修复与校验。
 - **同源 sampleData**：`generateSchema` 要求 `expectedDataSource.sampleData` 与 `expectedDataSource.fields` 同源，避免 schema 是 receipt 而预览数据仍是 invoice/company/customer 的错配。当前前端暂不消费 sampleData，只通过 MCP 返回和 metadata 保留。
+- **Server 统一数据源描述**：`generateSchema` 返回完整 `DataSourceDescriptor`，并保持 `dataSource.id === schema binding.sourceId` 的稳定 slug；AI client 只在兼容旧服务时从 `expectedDataSource` 本地转换。
 - **确定性表格构建优先**：数组/明细字段由 Intent builder 生成合法 `table-data`，固定包含 header row 与 repeat-template row。生成后仍只对直接 LLM schema 做低风险修复；表格结构不再依赖模型临场拼装。
 - **字段命名规范**：中文需求下，字段 path 使用英文 camelCase/斜杠路径，`fieldLabel`/`title` 使用中文。例如 `store/name` + `店铺名称`、`items/subtotal` + `小计`。

@@ -606,6 +606,8 @@ function collectScalarLeaves(fields: TemplateIntentField[]): TemplateIntentField
 function toExpectedField(field: TemplateIntentField): ExpectedField {
   return {
     name: field.name,
+    title: field.title,
+    fieldLabel: field.fieldLabel,
     type: field.type ?? 'string',
     required: field.required,
     path: field.path!,

@@ -2,6 +2,7 @@ import type { AIGenerationPlan } from '@easyink/shared'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { LLMProvider, SchemaGenerationInput } from '../llm/types'
 import {
+  buildDataSourceDescriptor,
   buildSchemaFromTemplateIntent,
   coerceLLMPlan,
   inferAIGenerationPlan,
@@ -193,31 +194,40 @@ export function registerGenerateSchemaTool(
           finalSchema = fixed
         }
 
+        const dataSource = buildDataSourceDescriptor(result.expectedDataSource, {
+          id: result.expectedDataSource.name,
+          prompt,
+        })
+
+        const payload = {
+          schema: finalSchema,
+          expectedDataSource: result.expectedDataSource,
+          dataSource,
+          assumptions: plan,
+          intent,
+          attempts: attempt,
+          validation: {
+            valid: validation.valid,
+            errors: validation.errors,
+            warnings: validation.warnings,
+            autoFixed: [
+              ...repaired.issues.map(issue => ({
+                path: issue.path,
+                reason: issue.message,
+              })),
+              ...validation.autoFixed.map(af => ({
+                path: af.path,
+                reason: af.reason,
+              })),
+            ],
+          },
+        }
+
         return {
+          structuredContent: payload,
           content: [{
             type: 'text' as const,
-            text: JSON.stringify({
-              schema: finalSchema,
-              expectedDataSource: result.expectedDataSource,
-              assumptions: plan,
-              intent,
-              attempts: attempt,
-              validation: {
-                valid: validation.valid,
-                errors: validation.errors,
-                warnings: validation.warnings,
-                autoFixed: [
-                  ...repaired.issues.map(issue => ({
-                    path: issue.path,
-                    reason: issue.message,
-                  })),
-                  ...validation.autoFixed.map(af => ({
-                    path: af.path,
-                    reason: af.reason,
-                  })),
-                ],
-              },
-            }),
+            text: JSON.stringify(payload),
           }],
         }
       }
@@ -233,7 +243,7 @@ export function registerGenerateSchemaTool(
  * inference on failure or when the LLM output cannot be coerced. The
  * fallback path keeps generation working even when the plan tool fails.
  */
-async function resolvePlan(
+export async function resolvePlan(
   prompt: string,
   llmProvider: LLMProvider,
   relay: ReturnType<typeof createProgressRelay>,
@@ -258,7 +268,7 @@ async function resolvePlan(
   }
 }
 
-function isGenerationPlan(value: unknown): value is AIGenerationPlan {
+export function isGenerationPlan(value: unknown): value is AIGenerationPlan {
   if (typeof value !== 'object' || value === null)
     return false
   const record = value as Record<string, unknown>

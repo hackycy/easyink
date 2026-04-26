@@ -33,7 +33,7 @@ function startCreate() {
 }
 
 function startEdit(s: MCPServerConfig) {
-  form.value = { ...s }
+  form.value = { ...s, auth: s.auth ? { ...s.auth } : undefined }
   errors.value = []
   mode.value = 'edit'
 }
@@ -140,6 +140,15 @@ function badgeText(id: string): { text: string, kind: 'ok' | 'err' | 'warn' | 'i
           <div v-if="form.type === 'http'" class="ai-form__group">
             <label>服务地址</label>
             <input v-model="form.url" type="url" placeholder="http://localhost:3001/mcp">
+          </div>
+          <div v-if="form.type === 'http'" class="ai-form__group">
+            <label>API Key</label>
+            <input
+              :value="form.auth?.token || ''"
+              type="password"
+              placeholder="X-EasyInk-MCP-Key"
+              @input="(e) => form.auth = { type: 'apikey', token: (e.target as HTMLInputElement).value }"
+            >
           </div>
           <div v-if="form.type === 'stdio'" class="ai-form__group">
             <label>启动命令</label>

@@ -146,6 +146,8 @@ Your task is to convert the user's natural language request into a compact Templ
 7. When the user request implies repeating items (商品/明细/菜品/服务), include an array field with the typical columns; do not skip it.
 8. Trust the resolved domain: when the plan domain is supermarket-receipt / restaurant-receipt, include items + total at minimum, since the deterministic builder treats them as required.
 9. When asked to fix issues from a previous attempt, address every listed issue without dropping previously included fields.
+10. If a current schema is supplied, treat it as context for a complete replacement, not a patch. Preserve user-visible intent, data fields, and important layout signals when relevant, but still return a full TemplateIntent.
+11. For strict structured output compatibility, use null for absent scalar/object fields and [] for absent arrays. Never omit required keys in the tool/JSON shape.
 
 ## TemplateIntent Shape
 \`\`\`json

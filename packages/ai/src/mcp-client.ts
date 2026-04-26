@@ -44,7 +44,9 @@ export class MCPClient {
       const { Client } = await import('@modelcontextprotocol/sdk/client/index.js')
       const { StreamableHTTPClientTransport } = await import('@modelcontextprotocol/sdk/client/streamableHttp.js')
 
-      const transport = new StreamableHTTPClientTransport(new URL(config.url))
+      const transport = new StreamableHTTPClientTransport(new URL(config.url), {
+        requestInit: buildRequestInit(config),
+      })
       const client = new Client(
         { name: 'easyink-designer', version: '0.0.0' },
         { capabilities: {} },
@@ -194,6 +196,7 @@ export class MCPClient {
       const data = JSON.parse(textBlock.text) as {
         schema: DocumentSchema
         expectedDataSource: { name: string, fields: Array<Record<string, unknown>>, sampleData?: Record<string, unknown> }
+        dataSource?: DataSourceDescriptor
         assumptions?: Record<string, unknown>
         intent?: Record<string, unknown>
         validation?: { valid: boolean, errors?: Array<Record<string, unknown>>, warnings?: Array<Record<string, unknown>> }
@@ -204,19 +207,7 @@ export class MCPClient {
         throw new Error(`Schema generation failed: ${data.error}`)
       }
 
-      // Build a DataSourceDescriptor from the expectedDataSource
-      const dataSource: DataSourceDescriptor = {
-        id: generateId('ds'),
-        name: data.expectedDataSource.name,
-        tag: 'mcp-generated',
-        title: `AI Generated: ${data.expectedDataSource.name}`,
-        fields: this.convertExpectedFields(data.expectedDataSource.fields),
-        meta: {
-          namespace: AI_NAMESPACE,
-          generatedBy: 'ai-mcp-client',
-          prompt,
-        },
-      }
+      const dataSource = data.dataSource ?? this.buildFallbackDataSource(data.expectedDataSource, prompt)
 
       // Add success message to session
       this.addSessionMessage(serverId, {
@@ -312,18 +303,46 @@ export class MCPClient {
   /**
    * Convert ExpectedField items from AI response into DataFieldNode tree.
    */
+  private buildFallbackDataSource(
+    expectedDataSource: { name: string, fields: Array<Record<string, unknown>> },
+    prompt: string,
+  ): DataSourceDescriptor {
+    return {
+      id: expectedDataSource.name,
+      name: expectedDataSource.name,
+      tag: 'ai-generated',
+      title: `AI Generated: ${expectedDataSource.name}`,
+      fields: this.convertExpectedFields(expectedDataSource.fields),
+      meta: {
+        namespace: AI_NAMESPACE,
+        generatedBy: 'ai-mcp-client-fallback',
+        prompt,
+      },
+    }
+  }
+
   private convertExpectedFields(
     fields: Array<Record<string, unknown>>,
   ): import('@easyink/datasource').DataFieldNode[] {
     return fields.map(f => ({
       name: f.name as string,
       path: f.path as string,
-      title: f.name as string,
+      title: (f.title ?? f.fieldLabel ?? f.name) as string,
       expand: (f.type as string) === 'array' || (f.type as string) === 'object',
       ...(f.children
         ? { fields: this.convertExpectedFields(f.children as Array<Record<string, unknown>>) }
         : {}),
     }))
+  }
+}
+
+function buildRequestInit(config: MCPServerConfig): RequestInit | undefined {
+  if (config.auth?.type !== 'apikey' || !config.auth.token)
+    return undefined
+  return {
+    headers: {
+      'X-EasyInk-MCP-Key': config.auth.token,
+    },
   }
 }
 

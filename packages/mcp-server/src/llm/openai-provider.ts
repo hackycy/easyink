@@ -1,5 +1,7 @@
 import type { TemplateGenerationIntent } from '@easyink/schema-tools'
+import type { ResponseFormatJSONObject, ResponseFormatJSONSchema } from 'openai/resources/shared'
 import type { DataSourceGenerationInput, DataSourceGenerationOutput, LLMConfig, LLMProgressEvent, LLMProvider, PlanGenerationInput, PlanGenerationOutput, SchemaGenerationInput, SchemaGenerationOutput, TemplateIntentGenerationInput } from './types'
+import { openAIJsonSchemaResponseFormat, PLAN_JSON_SCHEMA, TEMPLATE_INTENT_JSON_SCHEMA } from './structured-output'
 
 /** Minimum interval between `llm-delta` progress emissions, in ms. */
 const PROGRESS_THROTTLE_MS = 1000
@@ -9,10 +11,12 @@ export class OpenAIProvider implements LLMProvider {
   readonly supportsStreaming = true
   private client: import('openai').OpenAI
   private model: string
+  private strictOutput: boolean
 
   private constructor(config: LLMConfig, OpenAIClass: typeof import('openai').OpenAI) {
     this.client = new OpenAIClass({ apiKey: config.apiKey, baseURL: config.baseUrl })
     this.model = config.model ?? 'gpt-4o'
+    this.strictOutput = config.strictOutput ?? true
   }
 
   static async create(config: LLMConfig): Promise<OpenAIProvider> {
@@ -31,7 +35,7 @@ export class OpenAIProvider implements LLMProvider {
           { role: 'system', content: systemPrompt },
           { role: 'user', content: `User request: ${prompt}` },
         ],
-        response_format: { type: 'json_object' },
+        response_format: this.responseFormat('easyink_generation_plan', PLAN_JSON_SCHEMA),
       },
       signal,
       onProgress,
@@ -64,7 +68,7 @@ export class OpenAIProvider implements LLMProvider {
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userContent },
       ],
-      response_format: { type: 'json_object' },
+      response_format: this.responseFormat('easyink_template_intent', TEMPLATE_INTENT_JSON_SCHEMA),
     }
     if (typeof temperature === 'number')
       params.temperature = temperature
@@ -201,5 +205,11 @@ export class OpenAIProvider implements LLMProvider {
 
     onProgress?.({ phase: 'llm-done', tokens: chunks, message: `Total ${buffer.length} chars` })
     return buffer
+  }
+
+  private responseFormat(name: string, schema: Record<string, unknown>): ResponseFormatJSONSchema | ResponseFormatJSONObject {
+    return this.strictOutput
+      ? openAIJsonSchemaResponseFormat(name, schema)
+      : { type: 'json_object' as const }
   }
 }

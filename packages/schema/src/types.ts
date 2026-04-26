@@ -126,6 +126,8 @@ export interface ExpectedDataSource {
  */
 export interface ExpectedField {
   name: string
+  title?: string
+  fieldLabel?: string
   type: 'string' | 'number' | 'boolean' | 'array' | 'object'
   required?: boolean
   path: string

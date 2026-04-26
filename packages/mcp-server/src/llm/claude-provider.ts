@@ -115,10 +115,12 @@ export class ClaudeProvider implements LLMProvider {
   readonly supportsStreaming = true
   private client: Anthropic
   private model: string
+  private strictOutput: boolean
 
   private constructor(config: LLMConfig, AnthropicClass: typeof Anthropic) {
     this.client = new AnthropicClass({ apiKey: config.apiKey, baseURL: config.baseUrl })
     this.model = config.model ?? 'claude-sonnet-4-6'
+    this.strictOutput = config.strictOutput ?? true
   }
 
   static async create(config: LLMConfig): Promise<ClaudeProvider> {
@@ -135,7 +137,7 @@ export class ClaudeProvider implements LLMProvider {
         max_tokens: 1024,
         system: systemPrompt,
         messages: [{ role: 'user', content: `User request: ${prompt}` }],
-        tools: [TOOL_GENERATE_PLAN],
+        tools: [this.toolDefinition(TOOL_GENERATE_PLAN)],
         tool_choice: { type: 'tool', name: 'generate_plan' },
       },
       'generate_plan',
@@ -163,7 +165,7 @@ export class ClaudeProvider implements LLMProvider {
       max_tokens: 4096,
       system: systemPrompt,
       messages: [{ role: 'user', content: userContent }],
-      tools: [TOOL_GENERATE_TEMPLATE_INTENT],
+      tools: [this.toolDefinition(TOOL_GENERATE_TEMPLATE_INTENT)],
       tool_choice: { type: 'tool', name: 'generate_template_intent' },
     }
     if (typeof temperature === 'number')
@@ -194,7 +196,7 @@ export class ClaudeProvider implements LLMProvider {
         max_tokens: 8192,
         system: systemPrompt,
         messages: [{ role: 'user', content: userContent }],
-        tools: [TOOL_GENERATE_SCHEMA],
+        tools: [this.toolDefinition(TOOL_GENERATE_SCHEMA)],
         tool_choice: { type: 'tool', name: 'generate_schema' },
       },
       'generate_schema',
@@ -225,7 +227,7 @@ export class ClaudeProvider implements LLMProvider {
           role: 'user',
           content: `Generate a complete DataSourceDescriptor based on this expected structure:\n${JSON.stringify(expectedDataSource, null, 2)}`,
         }],
-        tools: [TOOL_GENERATE_DATASOURCE],
+        tools: [this.toolDefinition(TOOL_GENERATE_DATASOURCE)],
         tool_choice: { type: 'tool', name: 'generate_datasource' },
       },
       'generate_datasource',
@@ -286,5 +288,9 @@ export class ClaudeProvider implements LLMProvider {
       throw new Error(`Claude did not return a tool_use block for ${expectedToolName}`)
     }
     return toolBlock.input
+  }
+
+  private toolDefinition<T extends Record<string, unknown>>(tool: T): T {
+    return this.strictOutput ? { ...tool, strict: true } : tool
   }
 }

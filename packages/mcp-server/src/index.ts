@@ -9,4 +9,4 @@ export type {
 } from './llm/types'
 export { createMCPServer, startHTTPServer, startStdioServer } from './server'
 export type { MCPServerOptions } from './server'
-export { registerGenerateDataSourceTool, registerGenerateSchemaTool } from './tools'
+export { registerDebugTools, registerGenerateDataSourceTool, registerGenerateSchemaTool } from './tools'

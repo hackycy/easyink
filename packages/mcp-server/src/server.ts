@@ -3,7 +3,7 @@ import type { LLMProvider } from './llm/types'
 import { Buffer } from 'node:buffer'
 import process from 'node:process'
 import { ClaudeProvider, OpenAIProvider } from './llm'
-import { registerGenerateDataSourceTool, registerGenerateSchemaTool } from './tools'
+import { registerDebugTools, registerGenerateDataSourceTool, registerGenerateSchemaTool } from './tools'
 
 export interface MCPServerOptions {
   name?: string
@@ -12,7 +12,24 @@ export interface MCPServerOptions {
   apiKey?: string
   model?: string
   baseUrl?: string
+  strictOutput?: boolean
 }
+
+export interface MCPHTTPServerOptions {
+  host?: string
+  port?: number
+  allowedOrigins?: string[]
+  apiKey?: string
+}
+
+const DEFAULT_ALLOWED_ORIGINS = new Set([
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+])
+
+const API_KEY_HEADER = 'X-EasyInk-MCP-Key'
 
 async function createProvider(options: MCPServerOptions): Promise<LLMProvider> {
   const providerType = options.provider
@@ -31,6 +48,7 @@ async function createProvider(options: MCPServerOptions): Promise<LLMProvider> {
     apiKey,
     model: options.model ?? process.env.MCP_MODEL,
     baseUrl: options.baseUrl ?? process.env.MCP_BASE_URL,
+    strictOutput: options.strictOutput ?? process.env.MCP_STRICT_OUTPUTS !== 'false',
   }
 
   switch (config.provider) {
@@ -66,6 +84,7 @@ export async function createMCPServer(
 
   registerGenerateSchemaTool(server, provider)
   registerGenerateDataSourceTool(server, provider)
+  registerDebugTools(server, provider)
 
   return server
 }
@@ -81,31 +100,55 @@ export async function startStdioServer(server: McpServerType): Promise<void> {
 export async function startHTTPServer(
   serverFactory: () => Promise<McpServerType>,
   port?: number,
+  options: MCPHTTPServerOptions = {},
 ): Promise<void> {
   const { createServer } = await import('node:http')
   const { StreamableHTTPServerTransport } = await import(
     '@modelcontextprotocol/sdk/server/streamableHttp.js',
   )
 
-  const port_ = port ?? (Number(process.env.MCP_HTTP_PORT) || 3000)
+  const port_ = port ?? options.port ?? (Number(process.env.MCP_HTTP_PORT) || 3000)
+  const host = options.host ?? process.env.MCP_HTTP_HOST ?? '127.0.0.1'
+  const allowedOrigins = new Set([
+    ...DEFAULT_ALLOWED_ORIGINS,
+    ...parseList(process.env.MCP_HTTP_ALLOWED_ORIGINS),
+    ...(options.allowedOrigins ?? []),
+  ])
+  const requiredApiKey = options.apiKey ?? process.env.MCP_HTTP_API_KEY
 
   const httpServer = createServer(async (req, res) => {
-    // Permissive CORS: this server is intended for local/dev use by browser clients.
-    const origin = req.headers.origin ?? '*'
-    res.setHeader('Access-Control-Allow-Origin', origin)
+    const origin = req.headers.origin
+    const originAllowed = origin === undefined || allowedOrigins.has(origin)
+
+    if (origin && originAllowed) {
+      res.setHeader('Access-Control-Allow-Origin', origin)
+    }
     res.setHeader('Vary', 'Origin')
-    res.setHeader('Access-Control-Allow-Credentials', 'true')
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
     res.setHeader(
       'Access-Control-Allow-Headers',
       req.headers['access-control-request-headers']
-      ?? 'Content-Type, Authorization, mcp-session-id, mcp-protocol-version, last-event-id',
+      ?? `Content-Type, Authorization, ${API_KEY_HEADER}, mcp-session-id, mcp-protocol-version, last-event-id`,
     )
     res.setHeader('Access-Control-Expose-Headers', 'mcp-session-id, mcp-protocol-version')
     res.setHeader('Access-Control-Max-Age', '86400')
 
     if (req.method === 'OPTIONS') {
-      res.writeHead(204).end()
+      res.writeHead(originAllowed ? 204 : 403).end()
+      return
+    }
+
+    if (!originAllowed) {
+      res.writeHead(403).end('Forbidden Origin')
+      return
+    }
+
+    if (requiredApiKey && req.headers[API_KEY_HEADER] !== requiredApiKey) {
+      res.writeHead(401, { 'Content-Type': 'application/json' }).end(JSON.stringify({
+        jsonrpc: '2.0',
+        error: { code: -32001, message: 'Missing or invalid MCP API key.' },
+        id: null,
+      }))
       return
     }
 
@@ -159,7 +202,11 @@ export async function startHTTPServer(
     }
   })
 
-  httpServer.listen(port_, () => {
-    process.stderr.write(`EasyInk MCP Server listening on http://localhost:${port_}/mcp\n`)
+  httpServer.listen(port_, host, () => {
+    process.stderr.write(`EasyInk MCP Server listening on http://${host}:${port_}/mcp\n`)
   })
+}
+
+function parseList(value: string | undefined): string[] {
+  return value?.split(',').map(item => item.trim()).filter(Boolean) ?? []
 }

@@ -1,8 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { LLMProvider } from '../llm/types'
+import { buildDataSourceDescriptor } from '@easyink/schema-tools'
 import { z } from 'zod'
-import { buildMaterialContext, loadMaterialsConfig } from '../config/material-loader'
-import { buildDataSourceSystemPrompt } from '../prompts/system-builder'
 import { createProgressRelay } from './progress'
 
 const expectedFieldSchema = z.object({
@@ -44,18 +43,13 @@ export function registerGenerateDataSourceTool(
         provider: llmProvider,
       })
       try {
-        const materialsConfig = loadMaterialsConfig()
-        const materialContext = buildMaterialContext(materialsConfig)
-        const systemPrompt = buildDataSourceSystemPrompt(materialContext)
-
-        const dataSource = await llmProvider.generateDataSource({
-          systemPrompt,
-          expectedDataSource,
-          signal: relay.signal,
-          onProgress: relay.onProgress,
+        relay.notify('Building deterministic data source descriptor...')
+        const dataSource = buildDataSourceDescriptor(expectedDataSource, {
+          id: expectedDataSource.name,
         })
 
         return {
+          structuredContent: { dataSource },
           content: [{
             type: 'text' as const,
             text: JSON.stringify({ dataSource }),
