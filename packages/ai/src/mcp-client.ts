@@ -9,6 +9,7 @@ import type {
   ServerStatus,
   SessionMessage,
 } from './types'
+import { AI_NAMESPACE } from '@easyink/datasource'
 import { generateId } from '@easyink/shared'
 
 /**
@@ -147,7 +148,7 @@ export class MCPClient {
    *     calls.
    */
   async generate(options: GenerateOptions): Promise<GenerateResult> {
-    const { serverId, prompt, currentSchema, signal, onProgress } = options
+    const { serverId, prompt, currentSchema, generationPlan, signal, onProgress } = options
 
     const client = this.clients.get(serverId)
     if (!client) {
@@ -168,6 +169,7 @@ export class MCPClient {
           arguments: {
             prompt,
             currentSchema: currentSchema ?? undefined,
+            generationPlan: generationPlan ?? undefined,
           },
         },
         undefined,
@@ -191,7 +193,9 @@ export class MCPClient {
 
       const data = JSON.parse(textBlock.text) as {
         schema: DocumentSchema
-        expectedDataSource: { name: string, fields: Array<Record<string, unknown>> }
+        expectedDataSource: { name: string, fields: Array<Record<string, unknown>>, sampleData?: Record<string, unknown> }
+        assumptions?: Record<string, unknown>
+        intent?: Record<string, unknown>
         validation?: { valid: boolean, errors?: Array<Record<string, unknown>>, warnings?: Array<Record<string, unknown>> }
         error?: string
       }
@@ -208,8 +212,8 @@ export class MCPClient {
         title: `AI Generated: ${data.expectedDataSource.name}`,
         fields: this.convertExpectedFields(data.expectedDataSource.fields),
         meta: {
-          namespace: '__mcp__',
-          generatedBy: 'mcp-client',
+          namespace: AI_NAMESPACE,
+          generatedBy: 'ai-mcp-client',
           prompt,
         },
       }
@@ -231,6 +235,9 @@ export class MCPClient {
         metadata: {
           generatedAt: Date.now(),
           prompt,
+          assumptions: data.assumptions,
+          intent: data.intent,
+          sampleData: data.expectedDataSource.sampleData,
           validation: data.validation,
         },
       }

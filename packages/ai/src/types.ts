@@ -1,5 +1,6 @@
 import type { DataSourceDescriptor } from '@easyink/datasource'
 import type { DocumentSchema } from '@easyink/schema'
+import type { AIGenerationPlan } from '@easyink/shared'
 
 /**
  * MCP Server connection configuration.
@@ -73,6 +74,8 @@ export interface SessionMessage {
   schemaSnapshot?: DocumentSchema
   /** Error if any */
   error?: string
+  /** Non-blocking generation assumptions shown after generation */
+  assumptions?: Record<string, unknown>
 }
 
 /**
@@ -111,6 +114,8 @@ export interface GenerateOptions {
   prompt: string
   /** Current schema context (optional) */
   currentSchema?: DocumentSchema
+  /** User-confirmed deterministic generation plan */
+  generationPlan?: AIGenerationPlan
   /** Additional context */
   context?: GenerateContext
   /** Cancellation signal */

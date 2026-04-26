@@ -113,9 +113,12 @@ packages/ai/src/
 ```
 用户输入 prompt
   -> AIPanel.handleGenerate()
-    -> MCPClient.connect(config) / generate({ prompt, currentSchema })
-      -> MCP Tool call (HTTP+SSE) -> mcp-server -> LLM Provider
-    <- { schema, expectedDataSource, validation }
+    -> inferAIGenerationPlan(prompt)，非阻塞展示生成假设
+    -> MCPClient.connect(config) / generate({ prompt, currentSchema, generationPlan })
+      -> MCP Tool call (HTTP+SSE) -> mcp-server
+      -> LLM Provider 生成 TemplateIntent（字段、区块、数组表格意图）
+      -> schema-tools 确定性构建 DocumentSchema + expectedDataSource
+    <- { schema, expectedDataSource, intent, validation }
     -> SchemaValidator.validate() / DataSourceAligner.align()
     -> store.dataSourceRegistry.registerProviderFactory(factory)
     -> store.setSchema(alignment.schema)
@@ -131,6 +134,7 @@ packages/schema-tools/src/
   index.ts
   schema-validator.ts     # 三层校验（结构/语义/绑定）+ autoFix（操作 deep clone）
   datasource-aligner.ts   # 字段路径对齐与模糊匹配
+  template-intent.ts      # TemplateIntent 归一化 + 确定性 schema/dataSource 构建
 ```
 
 被 `@easyink/ai`（生成结果二次校验）与 `@easyink/mcp-server`（LLM 输出兜底校验）共同消费。无 Vue 依赖，可以在 Node 与浏览器双端运行。
@@ -168,3 +172,16 @@ const contributions = [createAIContribution()]
 ## 23.8 后续扩展
 
 Contribution API 不绑定 AI；后续若引入“审计面板”“素材市场”“云协作”等能力，统一通过新增 `createXxxContribution()` 工厂注入。Designer 自身不需要为新能力新增 prop 或 event。
+
+## 23.9 AI 生成准确性协议
+
+为避免 MCP 生成结果偏离真实物料、纸张和数据源，AI 生成链路新增以下约束：
+
+- **物料事实源归属物料包**：每个真实物料在 `packages/materials/*/src/ai.ts` 导出纯数据 AI 描述，`@easyink/mcp-server` 通过 `pnpm -F @easyink/mcp-server build:materials` 生成 `config/materials.json`。`prebuild` 自动执行生成，根 `pnpm test` 前执行 `check:materials` 防止配置过期。
+- **只生成 canonical type**：提示词允许把 `table -> table-data`、`rich-text -> text` 等作为修复别名，但模型必须生成真实物料名，例如 `table-data`、`table-static`、`text`、`line`。旧结构 `type: "table"`、`props.columns`、`repeatTemplate` 不再视为合法表格 schema。
+- **行业纸张启发式先于 LLM**：AI 面板和 MCP server 共用 `inferAIGenerationPlan()`。例如“商超小票/超市小票/小票”推断为 `page.mode = "stack"`、`width = 80`、`height = 200`，明细数组使用 `table-data`；发票/报价单/订单默认 A4 fixed；标签类默认 label mode。
+- **非阻塞生成假设**：AI 面板从 prompt 推断 plan 并直接调用 MCP，不再阻塞确认；生成假设在面板内作为可解释摘要展示。没有前端 plan 时，server 端会重新推断。
+- **Intent-first 生成链路**：MCP server 不要求 LLM 一次性产出完整 `DocumentSchema`。LLM 先产出 `TemplateIntent`，描述领域、字段、区块、数组表格列等意图；`@easyink/schema-tools` 再确定性生成 schema，避免模型遗漏 `table-data.table.topology.rows[].role = "repeat-template"` 等内部 DSL 细节。
+- **同源 sampleData**：`generateSchema` 要求 `expectedDataSource.sampleData` 与 `expectedDataSource.fields` 同源，避免 schema 是 receipt 而预览数据仍是 invoice/company/customer 的错配。当前前端暂不消费 sampleData，只通过 MCP 返回和 metadata 保留。
+- **确定性表格构建优先**：数组/明细字段由 Intent builder 生成合法 `table-data`，固定包含 header row 与 repeat-template row。生成后仍只对直接 LLM schema 做低风险修复；表格结构不再依赖模型临场拼装。
+- **字段命名规范**：中文需求下，字段 path 使用英文 camelCase/斜杠路径，`fieldLabel`/`title` 使用中文。例如 `store/name` + `店铺名称`、`items/subtotal` + `小计`。

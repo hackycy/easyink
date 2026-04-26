@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import type { DesignerStore } from '@easyink/designer'
+import type { AIGenerationPlan } from '@easyink/shared'
 import type { MCPServerConfig, SessionMessage } from '../types'
 import { AI_NAMESPACE } from '@easyink/datasource'
 import { DataSourceAligner, SchemaValidator } from '@easyink/schema-tools'
-import { generateId } from '@easyink/shared'
+import { generateId, inferAIGenerationPlan } from '@easyink/shared'
 import { computed, onMounted, ref } from 'vue'
 import { MCPClient } from '../mcp-client'
 import { ServerRegistry, validateServerConfig } from '../server-registry'
@@ -32,6 +33,7 @@ const error = ref<string | null>(null)
 const canRetry = ref(false)
 const sessionMessages = ref<SessionMessage[]>([])
 const showServerConfig = ref(false)
+const lastGenerationPlan = ref<AIGenerationPlan | null>(null)
 const selectedServerId = ref<string | null>(null)
 
 /**
@@ -127,10 +129,37 @@ function handlePromptKeydown(e: KeyboardEvent) {
   }
 }
 
+function formatDomain(domain: AIGenerationPlan['domain']): string {
+  const labels: Record<AIGenerationPlan['domain'], string> = {
+    'supermarket-receipt': '商超/便利店小票',
+    'restaurant-receipt': '餐饮小票',
+    'shipping-label': '快递/商品标签',
+    'business-document': '发票/报价单/订单',
+    'certificate': '证书/奖状',
+    'generic': '通用文档',
+  }
+  return labels[domain]
+}
+
+function formatTableStrategy(strategy: AIGenerationPlan['tableStrategy']): string {
+  const labels: Record<AIGenerationPlan['tableStrategy'], string> = {
+    'table-data-for-arrays': '明细数组使用 table-data',
+    'table-static-for-fixed': '固定网格使用 table-static',
+    'avoid-table': '优先不用表格物料',
+  }
+  return labels[strategy]
+}
+
 async function handleGenerate() {
   if (!canGenerate.value)
     return
 
+  const generationPlan = inferAIGenerationPlan(prompt.value)
+  lastGenerationPlan.value = generationPlan
+  await runGenerate(generationPlan)
+}
+
+async function runGenerate(generationPlan: AIGenerationPlan) {
   isGenerating.value = true
   error.value = null
   canRetry.value = false
@@ -165,6 +194,7 @@ async function handleGenerate() {
       serverId: selectedServerId.value!,
       prompt: prompt.value,
       currentSchema: props.store.schema,
+      generationPlan,
       context: {
         sessionHistory: sessionMessages.value,
       },
@@ -242,10 +272,11 @@ async function handleGenerate() {
     const assistantMsg: SessionMessage = {
       id: generateId('msg'),
       role: 'assistant',
-      content: 'Schema and DataSource generated successfully',
+      content: `模板已生成: ${generationPlan.domain}`,
       timestamp: Date.now(),
       toolsUsed: result.toolsUsed,
       schemaSnapshot: alignment.schema,
+      assumptions: result.metadata?.assumptions as Record<string, unknown> | undefined,
     }
     sessionMessages.value.push(assistantMsg)
 
@@ -461,6 +492,21 @@ onMounted(() => {
         >
           生成模板
         </button>
+      </div>
+    </div>
+
+    <!-- Non-blocking Assumption Summary -->
+    <div
+      v-if="lastGenerationPlan"
+      class="mcp-panel__assumption-inline"
+    >
+      <div class="mcp-panel__assumption-inline-row">
+        <span>{{ formatDomain(lastGenerationPlan.domain) }}</span>
+        <strong>{{ lastGenerationPlan.page.width }}mm x {{ lastGenerationPlan.page.height }}mm · {{ lastGenerationPlan.page.mode }}</strong>
+      </div>
+      <div class="mcp-panel__assumption-inline-row">
+        <span>{{ formatTableStrategy(lastGenerationPlan.tableStrategy) }}</span>
+        <strong>英文路径 + 中文标题</strong>
       </div>
     </div>
 
@@ -825,6 +871,35 @@ onMounted(() => {
   cursor: not-allowed;
 }
 
+.mcp-panel__assumption-inline {
+  margin: 0 16px 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--ei-border, #e5e7eb);
+  border-radius: 6px;
+  background: var(--ei-bg-secondary, #f9fafb);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mcp-panel__assumption-inline-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+}
+
+.mcp-panel__assumption-inline-row span {
+  color: var(--ei-text-secondary, #6b7280);
+}
+
+.mcp-panel__assumption-inline-row strong {
+  color: var(--ei-text, #111827);
+  font-weight: 600;
+  text-align: right;
+}
+
 .mcp-panel__input-actions {
   display: flex;
   align-items: center;
@@ -1122,6 +1197,45 @@ onMounted(() => {
 
 .mcp-panel__form-errors p + p {
   margin-top: 4px;
+}
+
+.mcp-panel__assumptions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mcp-panel__assumption-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--ei-bg-secondary, #f9fafb);
+  border: 1px solid var(--ei-border, #e5e7eb);
+  border-radius: 6px;
+}
+
+.mcp-panel__assumption-row span {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--ei-text-secondary, #6b7280);
+}
+
+.mcp-panel__assumption-row strong {
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ei-text, #111827);
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.mcp-panel__assumption-reason {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ei-text-secondary, #6b7280);
 }
 
 .mcp-panel__modal-actions {

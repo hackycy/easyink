@@ -1,5 +1,7 @@
 import type { DataSourceDescriptor } from '@easyink/datasource'
 import type { DocumentSchema, ExpectedDataSource } from '@easyink/schema'
+import type { TemplateGenerationIntent } from '@easyink/schema-tools'
+import type { AIGenerationPlan } from '@easyink/shared'
 
 export interface LLMConfig {
   provider: 'claude' | 'openai'
@@ -24,9 +26,19 @@ export interface SchemaGenerationInput {
   prompt: string
   currentSchema?: DocumentSchema
   systemPrompt: string
+  generationPlan?: AIGenerationPlan
   /** Cancellation signal propagated to the underlying HTTP request. */
   signal?: AbortSignal
   /** Throttling is the provider's responsibility (~once per second). */
+  onProgress?: (event: LLMProgressEvent) => void
+}
+
+export interface TemplateIntentGenerationInput {
+  prompt: string
+  currentSchema?: DocumentSchema
+  systemPrompt: string
+  generationPlan?: AIGenerationPlan
+  signal?: AbortSignal
   onProgress?: (event: LLMProgressEvent) => void
 }
 
@@ -52,6 +64,7 @@ export interface LLMProvider {
    * time-based heartbeat.
    */
   readonly supportsStreaming: boolean
+  generateTemplateIntent: (input: TemplateIntentGenerationInput) => Promise<TemplateGenerationIntent>
   generateSchema: (input: SchemaGenerationInput) => Promise<SchemaGenerationOutput>
   generateDataSource: (
     input: DataSourceGenerationInput,

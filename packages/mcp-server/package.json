@@ -20,6 +20,9 @@
     "dist"
   ],
   "scripts": {
+    "build:materials": "tsx scripts/generate-materials-config.ts",
+    "check:materials": "tsx scripts/generate-materials-config.ts --check",
+    "prebuild": "pnpm build:materials",
     "build": "tsdown",
     "dev": "tsdown --watch",
     "start:stdio": "tsx src/bin/server.ts",

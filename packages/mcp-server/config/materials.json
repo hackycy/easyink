@@ -1,76 +1,386 @@
 {
   "version": "1.0.0",
   "schemaVersion": "1.0.0",
+  "generatedFrom": "packages/materials/*/src/ai.ts",
   "pageDefaults": {
     "mode": "fixed",
     "width": 210,
     "height": 297,
     "unit": "mm"
   },
+  "materialAliases": {
+    "table": "table-data",
+    "richText": "text",
+    "rich-text": "text",
+    "tableData": "table-data",
+    "tableStatic": "table-static",
+    "pageNumber": "page-number",
+    "qr": "qrcode",
+    "qrCode": "qrcode",
+    "qr-code": "qrcode"
+  },
+  "generationRules": {
+    "fieldNaming": "Use English camelCase field paths and Chinese fieldLabel/title for Chinese prompts.",
+    "sampleData": "expectedDataSource.sampleData is required and must match the generated fields.",
+    "pageInference": "Use deterministic domain profiles supplied by the client/server plan; do not default receipts or labels to A4.",
+    "tableData": "Array/detail-list fields must use table-data with table.topology rows/cells, not legacy props.columns or repeatTemplate."
+  },
   "materialTypes": {
     "text": {
-      "description": "Single-line or multi-line text element. Supports data binding for dynamic content.",
-      "properties": ["fontFamily", "fontSize", "fontWeight", "fontStyle", "color", "textAlign", "lineHeight", "letterSpacing", "textDecoration"]
-    },
-    "image": {
-      "description": "Static or dynamic image element. Supports jpg, png, svg, webp. Can bind to data field for dynamic image URLs.",
-      "properties": ["src", "fit", "opacity", "borderRadius"]
-    },
-    "rect": {
-      "description": "Rectangle shape. Can be used for borders, backgrounds, and decorative elements.",
-      "properties": ["fill", "stroke", "strokeWidth", "cornerRadius", "opacity"]
-    },
-    "ellipse": {
-      "description": "Circle or ellipse shape. Can be used for decorative elements.",
-      "properties": ["fill", "stroke", "strokeWidth", "opacity"]
+      "description": "Text block for static labels and data-bound scalar fields.",
+      "properties": [
+        "content",
+        "fontSize",
+        "fontFamily",
+        "fontWeight",
+        "fontStyle",
+        "color",
+        "backgroundColor",
+        "textAlign",
+        "verticalAlign",
+        "lineHeight",
+        "letterSpacing",
+        "autoWrap",
+        "overflow",
+        "richText",
+        "prefix",
+        "suffix",
+        "borderWidth",
+        "borderColor",
+        "borderType"
+      ],
+      "requiredProps": [
+        "content",
+        "fontSize",
+        "textAlign",
+        "verticalAlign",
+        "color"
+      ],
+      "binding": "single",
+      "usage": [
+        "Use props.content for static text and placeholders such as {#fieldLabel}.",
+        "Use binding for dynamic scalar fields; keep fieldPath slash-separated."
+      ],
+      "schemaRules": [],
+      "examples": []
     },
     "line": {
-      "description": "Horizontal or vertical line. Used for separators and borders.",
-      "properties": ["stroke", "strokeWidth", "lineStyle", "x1", "y1", "x2", "y2"]
+      "description": "Straight separator line. The element width and height define line length and thickness.",
+      "properties": [
+        "lineColor",
+        "lineType"
+      ],
+      "requiredProps": [
+        "lineColor",
+        "lineType"
+      ],
+      "binding": "none",
+      "usage": [
+        "Use for receipt separators, section rules, and simple borders.",
+        "Do not use legacy stroke, strokeWidth, x1, y1, x2, or y2 props."
+      ],
+      "schemaRules": [],
+      "examples": []
+    },
+    "table-data": {
+      "description": "Dynamic data table for arrays such as receipt items, invoice lines, and order details.",
+      "properties": [
+        "headerBackground",
+        "summaryBackground",
+        "stripedRows",
+        "stripedColor",
+        "borderWidth",
+        "cellPadding",
+        "typography"
+      ],
+      "requiredProps": [
+        "typography",
+        "borderWidth",
+        "cellPadding"
+      ],
+      "binding": "multi",
+      "usage": [
+        "Use table-data whenever the template has an array/detail-list field.",
+        "Header cells use content.text. Repeat-template cells use binding with absolute slash-separated paths such as items/name.",
+        "Do not use legacy type table, props.columns, props.repeatTemplate, headerStyle, rowStyle, or borderStyle."
+      ],
+      "schemaRules": [
+        "Element must include table.kind = data.",
+        "Element must include table.topology.columns as normalized ratios that sum to 1.",
+        "Element must include table.topology.rows with a header row and a repeat-template row for array data.",
+        "Element must include table.layout with borderAppearance, borderWidth, borderType, and borderColor."
+      ],
+      "examples": []
+    },
+    "table-static": {
+      "description": "Fixed table for forms, headers, and non-repeating grid layouts.",
+      "properties": [
+        "borderWidth",
+        "cellPadding",
+        "typography"
+      ],
+      "requiredProps": [
+        "typography",
+        "borderWidth",
+        "cellPadding"
+      ],
+      "binding": "multi",
+      "usage": [
+        "Use table-static only when row count is fixed and not driven by an array.",
+        "Cells use content.text for static labels or staticBinding for independent scalar fields."
+      ],
+      "schemaRules": [
+        "Element must include table.kind = static.",
+        "Element must include table.topology.columns and table.topology.rows."
+      ],
+      "examples": []
+    },
+    "image": {
+      "description": "Image block for logos, product images, stamps, and externally supplied image URLs.",
+      "properties": [
+        "src",
+        "fit",
+        "alt",
+        "backgroundColor",
+        "borderWidth",
+        "borderColor",
+        "borderType"
+      ],
+      "requiredProps": [
+        "src",
+        "fit",
+        "alt"
+      ],
+      "binding": "single",
+      "usage": [
+        "Use fit contain for logos and cover for cropped photos.",
+        "Bind image fields only when the data source provides an image URL."
+      ],
+      "schemaRules": [],
+      "examples": []
     },
     "qrcode": {
-      "description": "QR code generated from data binding. Encodes text or URLs from data source fields.",
-      "properties": ["content", "size", "errorCorrectionLevel", "foreground", "background"]
+      "description": "QR code generated from props.value or a bound text/URL field.",
+      "properties": [
+        "value",
+        "size",
+        "errorCorrectionLevel",
+        "foreground",
+        "background",
+        "borderWidth",
+        "borderColor",
+        "borderType"
+      ],
+      "requiredProps": [
+        "value",
+        "size",
+        "errorCorrectionLevel",
+        "foreground",
+        "background"
+      ],
+      "binding": "single",
+      "usage": [
+        "Use for payment URLs, receipt verification URLs, and label traceability links.",
+        "Keep width and height equal for square codes."
+      ],
+      "schemaRules": [],
+      "examples": []
     },
     "barcode": {
-      "description": "Barcode generated from data binding. Supports multiple barcode formats (CODE128, EAN13, etc.).",
-      "properties": ["content", "format", "height", "width", "showText", "fontSize"]
+      "description": "Barcode generated from props.value or a bound code field.",
+      "properties": [
+        "value",
+        "format",
+        "showText",
+        "lineWidth",
+        "lineColor",
+        "backgroundColor",
+        "borderWidth",
+        "borderColor",
+        "borderType"
+      ],
+      "requiredProps": [
+        "value",
+        "format",
+        "showText",
+        "lineWidth",
+        "lineColor",
+        "backgroundColor"
+      ],
+      "binding": "single",
+      "usage": [
+        "Use CODE128 for generic order numbers and EAN13/EAN8 for retail goods codes."
+      ],
+      "schemaRules": [],
+      "examples": []
+    },
+    "rect": {
+      "description": "Rectangle shape for borders, backgrounds, frames, and simple visual blocks.",
+      "properties": [
+        "fillColor",
+        "borderWidth",
+        "borderColor",
+        "borderType",
+        "borderRadius"
+      ],
+      "requiredProps": [
+        "fillColor",
+        "borderWidth",
+        "borderColor",
+        "borderType"
+      ],
+      "binding": "none",
+      "usage": [
+        "Use fillColor and borderColor; do not use legacy fill or stroke props."
+      ],
+      "schemaRules": [],
+      "examples": []
+    },
+    "ellipse": {
+      "description": "Ellipse or circle shape for badges, seals, and simple decoration.",
+      "properties": [
+        "fillColor",
+        "borderWidth",
+        "borderColor",
+        "borderType"
+      ],
+      "requiredProps": [
+        "fillColor",
+        "borderWidth",
+        "borderColor",
+        "borderType"
+      ],
+      "binding": "none",
+      "usage": [
+        "Use sparingly; prefer text, line, and table-data for document structure."
+      ],
+      "schemaRules": [],
+      "examples": []
     },
     "container": {
-      "description": "Container element that holds child elements. Used for grouping and layout.",
-      "properties": ["layout", "gap", "padding", "background"]
-    },
-    "table": {
-      "description": "Data-bound table with header, footer, and repeat-template data rows. Supports cell-level data binding.",
-      "properties": ["columns", "headerStyle", "rowStyle", "borderStyle"]
+      "description": "Container that owns child material nodes for grouped layout.",
+      "properties": [
+        "padding",
+        "gap",
+        "direction",
+        "fillColor",
+        "borderWidth",
+        "borderColor",
+        "borderType"
+      ],
+      "requiredProps": [
+        "padding",
+        "gap",
+        "direction"
+      ],
+      "binding": "none",
+      "usage": [
+        "Use children for grouped elements only when hierarchy is needed.",
+        "Absolute positioning still applies to the container itself."
+      ],
+      "schemaRules": [],
+      "examples": []
     },
     "page-number": {
-      "description": "Auto page number display. Shows current page and total pages.",
-      "properties": ["format", "startAt", "fontSize", "color"]
+      "description": "Automatic page number display for paginated fixed documents.",
+      "properties": [
+        "format",
+        "fontSize",
+        "fontFamily",
+        "fontWeight",
+        "fontStyle",
+        "color",
+        "backgroundColor",
+        "textAlign",
+        "verticalAlign",
+        "lineHeight",
+        "letterSpacing"
+      ],
+      "requiredProps": [
+        "format",
+        "fontSize",
+        "textAlign",
+        "verticalAlign",
+        "color"
+      ],
+      "binding": "none",
+      "usage": [
+        "Use for A4 reports, invoices, and documents that can span pages.",
+        "Usually unnecessary for narrow receipts and labels."
+      ],
+      "schemaRules": [],
+      "examples": []
     },
     "svg": {
-      "description": "Inline SVG element for custom vector graphics.",
-      "properties": ["content", "viewBox", "width", "height"]
-    },
-    "rich-text": {
-      "description": "Rich text element supporting styled content with multiple formatting options.",
-      "properties": ["content", "fontSize", "color", "lineHeight"]
+      "description": "Inline SVG vector block for simple custom marks and decorative vectors.",
+      "properties": [
+        "content",
+        "viewBox",
+        "preserveAspectRatio",
+        "fillColor"
+      ],
+      "requiredProps": [
+        "content",
+        "viewBox",
+        "preserveAspectRatio"
+      ],
+      "binding": "none",
+      "usage": [
+        "Use only when a simple vector mark is needed; prefer built-in shape materials for basic geometry."
+      ],
+      "schemaRules": [],
+      "examples": []
     },
     "chart": {
-      "description": "Chart element for data visualization. Supports bar, line, pie, and other chart types.",
-      "properties": ["chartType", "data", "colors", "showLegend", "title"]
+      "description": "Chart visualization for report templates with numeric series data.",
+      "properties": [
+        "chartType",
+        "data",
+        "options",
+        "backgroundColor"
+      ],
+      "requiredProps": [
+        "chartType",
+        "data",
+        "options"
+      ],
+      "binding": "multi",
+      "usage": [
+        "Use only for analytic reports; do not use for receipts, invoices, labels, or plain tables."
+      ],
+      "schemaRules": [],
+      "examples": []
     }
   },
   "bindingRules": {
-    "fieldPathFormat": "Slash-separated path from data source root (e.g., 'items/name', 'company/address')",
-    "sourceIdFormat": "References a DataSource by its id field",
+    "fieldPathFormat": "Slash-separated path from data source root, for example items/name or store/address.",
+    "sourceIdFormat": "References a DataSourceDescriptor id. Use one stable generated sourceId consistently in schema bindings.",
     "bindingTypes": [
-      { "type": "binding", "description": "Standard data binding on an element. Used for repeat-template table cells.", "fields": ["sourceId", "sourceName", "sourceTag", "fieldPath", "fieldLabel"] },
-      { "type": "staticBinding", "description": "Static data binding on table header/footer cells. Single value, no collection expansion.", "fields": ["sourceId", "fieldPath", "fieldLabel"] }
+      {
+        "type": "binding",
+        "description": "Standard element or table-data repeat-template cell binding.",
+        "fields": [
+          "sourceId",
+          "sourceName",
+          "sourceTag",
+          "fieldPath",
+          "fieldLabel"
+        ]
+      },
+      {
+        "type": "staticBinding",
+        "description": "table-static cell binding for fixed independent scalar values.",
+        "fields": [
+          "sourceId",
+          "sourceName",
+          "fieldPath",
+          "fieldLabel"
+        ]
+      }
     ],
     "tableRules": {
-      "repeatTemplateBinding": "Repeat-template row cells use 'binding' field. All cells in same row must share same collection prefix (e.g., all items/* paths).",
-      "staticBindingUsage": "Header, footer, and normal row cells use 'staticBinding'. Each cell can bind to different data sources."
+      "repeatTemplateBinding": "table-data repeat-template cells use binding. Header cells use content.text. All repeat-template cell paths should share the same array prefix, such as items/*.",
+      "staticBindingUsage": "table-static cells use staticBinding only when a fixed cell needs data. Do not put staticBinding on normal text elements."
     }
   }
 }

@@ -24,7 +24,8 @@
     "typecheck": "tsc",
     "prepare": "simple-git-hooks",
     "open:packages": "npx open-packages-on-npm",
-    "catalog": "pnpx codemod pnpm/catalog"
+    "catalog": "pnpx codemod pnpm/catalog",
+    "pretest": "pnpm -F @easyink/mcp-server check:materials"
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:cli",

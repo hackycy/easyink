@@ -1,4 +1,5 @@
-import type { DataSourceGenerationInput, DataSourceGenerationOutput, LLMConfig, LLMProgressEvent, LLMProvider, SchemaGenerationInput, SchemaGenerationOutput } from './types'
+import type { TemplateGenerationIntent } from '@easyink/schema-tools'
+import type { DataSourceGenerationInput, DataSourceGenerationOutput, LLMConfig, LLMProgressEvent, LLMProvider, SchemaGenerationInput, SchemaGenerationOutput, TemplateIntentGenerationInput } from './types'
 
 /** Minimum interval between `llm-delta` progress emissions, in ms. */
 const PROGRESS_THROTTLE_MS = 1000
@@ -19,12 +20,45 @@ export class OpenAIProvider implements LLMProvider {
     return new OpenAIProvider(config, OpenAIClass)
   }
 
-  async generateSchema(input: SchemaGenerationInput): Promise<SchemaGenerationOutput> {
-    const { prompt, currentSchema, systemPrompt, signal, onProgress } = input
+  async generateTemplateIntent(input: TemplateIntentGenerationInput): Promise<TemplateGenerationIntent> {
+    const { prompt, currentSchema, systemPrompt, generationPlan, signal, onProgress } = input
 
-    const userContent = currentSchema
-      ? `Current schema context:\n${JSON.stringify(currentSchema, null, 2)}\n\nUser request: ${prompt}`
-      : prompt
+    const userContent = [
+      currentSchema ? `Current schema context:\n${JSON.stringify(currentSchema, null, 2)}` : undefined,
+      generationPlan ? `EasyInk generation plan:\n${JSON.stringify(generationPlan, null, 2)}` : undefined,
+      `User request: ${prompt}`,
+    ].filter(Boolean).join('\n\n')
+
+    const content = await this.streamJSON(
+      {
+        model: this.model,
+        max_tokens: 4096,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userContent },
+        ],
+        response_format: { type: 'json_object' },
+      },
+      signal,
+      onProgress,
+    )
+
+    try {
+      return JSON.parse(content) as TemplateGenerationIntent
+    }
+    catch {
+      throw new Error(`OpenAI returned invalid TemplateIntent JSON: ${content.slice(0, 200)}`)
+    }
+  }
+
+  async generateSchema(input: SchemaGenerationInput): Promise<SchemaGenerationOutput> {
+    const { prompt, currentSchema, systemPrompt, generationPlan, signal, onProgress } = input
+
+    const userContent = [
+      currentSchema ? `Current schema context:\n${JSON.stringify(currentSchema, null, 2)}` : undefined,
+      generationPlan ? `EasyInk generation plan:\n${JSON.stringify(generationPlan, null, 2)}` : undefined,
+      `User request: ${prompt}`,
+    ].filter(Boolean).join('\n\n')
 
     const content = await this.streamJSON(
       {

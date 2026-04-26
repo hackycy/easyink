@@ -5,6 +5,11 @@ import { fileURLToPath } from 'node:url'
 export interface MaterialTypeConfig {
   description: string
   properties: string[]
+  requiredProps?: string[]
+  binding?: 'none' | 'single' | 'multi'
+  usage?: string[]
+  schemaRules?: string[]
+  examples?: Array<Record<string, unknown>>
 }
 
 export interface MaterialConfig {
@@ -16,6 +21,9 @@ export interface MaterialConfig {
     height: number
     unit: string
   }
+  generatedFrom?: string
+  materialAliases?: Record<string, string>
+  generationRules?: Record<string, string>
   materialTypes: Record<string, MaterialTypeConfig>
   bindingRules: {
     fieldPathFormat: string
@@ -60,6 +68,33 @@ export function buildMaterialContext(config: MaterialConfig): string {
     lines.push(`### ${type}`)
     lines.push(`- ${meta.description}`)
     lines.push(`- Properties: ${meta.properties.join(', ')}`)
+    if (meta.requiredProps && meta.requiredProps.length > 0)
+      lines.push(`- Required props: ${meta.requiredProps.join(', ')}`)
+    if (meta.binding)
+      lines.push(`- Binding: ${meta.binding}`)
+    for (const usage of meta.usage ?? []) {
+      lines.push(`- Usage: ${usage}`)
+    }
+    for (const rule of meta.schemaRules ?? []) {
+      lines.push(`- Schema rule: ${rule}`)
+    }
+    lines.push('')
+  }
+
+  if (config.materialAliases && Object.keys(config.materialAliases).length > 0) {
+    lines.push('## Material Aliases')
+    lines.push('- The aliases below are accepted only as repair hints. Generate the canonical material type, never the alias.')
+    for (const [alias, canonical] of Object.entries(config.materialAliases)) {
+      lines.push(`- ${alias} -> ${canonical}`)
+    }
+    lines.push('')
+  }
+
+  if (config.generationRules && Object.keys(config.generationRules).length > 0) {
+    lines.push('## Generation Rules From Material Config')
+    for (const [name, rule] of Object.entries(config.generationRules)) {
+      lines.push(`- ${name}: ${rule}`)
+    }
     lines.push('')
   }
 
@@ -82,4 +117,8 @@ export function buildMaterialContext(config: MaterialConfig): string {
 
 export function getMaterialTypes(config: MaterialConfig): Set<string> {
   return new Set(Object.keys(config.materialTypes))
+}
+
+export function getMaterialAliases(config: MaterialConfig): Record<string, string> {
+  return config.materialAliases ?? {}
 }

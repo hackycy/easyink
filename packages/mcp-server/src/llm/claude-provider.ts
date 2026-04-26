@@ -1,5 +1,6 @@
 import type { Anthropic } from '@anthropic-ai/sdk'
-import type { DataSourceGenerationInput, DataSourceGenerationOutput, LLMConfig, LLMProgressEvent, LLMProvider, SchemaGenerationInput, SchemaGenerationOutput } from './types'
+import type { TemplateGenerationIntent } from '@easyink/schema-tools'
+import type { DataSourceGenerationInput, DataSourceGenerationOutput, LLMConfig, LLMProgressEvent, LLMProvider, SchemaGenerationInput, SchemaGenerationOutput, TemplateIntentGenerationInput } from './types'
 
 const PROGRESS_THROTTLE_MS = 1000
 
@@ -37,6 +38,25 @@ const TOOL_GENERATE_SCHEMA = {
       },
     },
     required: ['schema', 'expectedDataSource'],
+  },
+}
+
+const TOOL_GENERATE_TEMPLATE_INTENT = {
+  name: 'generate_template_intent',
+  description: 'Generate a compact EasyInk TemplateIntent. Do not generate DocumentSchema.',
+  input_schema: {
+    type: 'object' as const,
+    properties: {
+      name: { type: 'string' },
+      domain: { type: 'string' },
+      dataSourceName: { type: 'string' },
+      page: { type: 'object' },
+      fields: { type: 'array', items: { type: 'object' } },
+      sections: { type: 'array', items: { type: 'object' } },
+      sampleData: { type: 'object' },
+      warnings: { type: 'array', items: { type: 'string' } },
+    },
+    required: ['fields', 'sections'],
   },
 }
 
@@ -79,12 +99,40 @@ export class ClaudeProvider implements LLMProvider {
     return new ClaudeProvider(config, AnthropicClass)
   }
 
-  async generateSchema(input: SchemaGenerationInput): Promise<SchemaGenerationOutput> {
-    const { prompt, currentSchema, systemPrompt, signal, onProgress } = input
+  async generateTemplateIntent(input: TemplateIntentGenerationInput): Promise<TemplateGenerationIntent> {
+    const { prompt, currentSchema, systemPrompt, generationPlan, signal, onProgress } = input
 
-    const userContent = currentSchema
-      ? `Current schema context:\n${JSON.stringify(currentSchema, null, 2)}\n\nUser request: ${prompt}`
-      : prompt
+    const userContent = [
+      currentSchema ? `Current schema context:\n${JSON.stringify(currentSchema, null, 2)}` : undefined,
+      generationPlan ? `EasyInk generation plan:\n${JSON.stringify(generationPlan, null, 2)}` : undefined,
+      `User request: ${prompt}`,
+    ].filter(Boolean).join('\n\n')
+
+    const toolInput = await this.streamToolUse(
+      {
+        model: this.model,
+        max_tokens: 4096,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userContent }],
+        tools: [TOOL_GENERATE_TEMPLATE_INTENT],
+        tool_choice: { type: 'tool', name: 'generate_template_intent' },
+      },
+      'generate_template_intent',
+      signal,
+      onProgress,
+    )
+
+    return toolInput as TemplateGenerationIntent
+  }
+
+  async generateSchema(input: SchemaGenerationInput): Promise<SchemaGenerationOutput> {
+    const { prompt, currentSchema, systemPrompt, generationPlan, signal, onProgress } = input
+
+    const userContent = [
+      currentSchema ? `Current schema context:\n${JSON.stringify(currentSchema, null, 2)}` : undefined,
+      generationPlan ? `EasyInk generation plan:\n${JSON.stringify(generationPlan, null, 2)}` : undefined,
+      `User request: ${prompt}`,
+    ].filter(Boolean).join('\n\n')
 
     const toolInput = await this.streamToolUse(
       {
