@@ -208,6 +208,9 @@ importers:
       '@easyink/designer':
         specifier: workspace:*
         version: link:../designer
+      '@easyink/icons':
+        specifier: workspace:*
+        version: link:../icons
       '@easyink/schema':
         specifier: workspace:*
         version: link:../schema

@@ -55,6 +55,20 @@ watch(schema, () => {
   scheduleSave()
 }, { deep: true })
 
+// Bridge: when AI panel writes a fresh sampleData snapshot to the schema's
+// `extensions.ai.latestSampleData`, mirror it into the playground's preview
+// data so the runtime preview reflects the AI-generated values.
+watch(() => {
+  const ai = (schema.value.extensions as { ai?: { latestSampleData?: Record<string, unknown>, latestSampleDataAt?: number } } | undefined)?.ai
+  return ai?.latestSampleDataAt ?? 0
+}, (ts) => {
+  if (!ts)
+    return
+  const ai = (schema.value.extensions as { ai?: { latestSampleData?: Record<string, unknown> } } | undefined)?.ai
+  if (ai?.latestSampleData)
+    applyDemoData(ai.latestSampleData)
+})
+
 onBeforeUnmount(() => {
   if (saveTimer)
     clearTimeout(saveTimer)

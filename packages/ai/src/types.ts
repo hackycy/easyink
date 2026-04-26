@@ -72,10 +72,21 @@ export interface SessionMessage {
   toolsUsed?: string[]
   /** Schema snapshot at this point */
   schemaSnapshot?: DocumentSchema
+  /** Data source snapshot, used by "回到此版本" to re-register the source */
+  dataSourceSnapshot?: DataSourceDescriptor
+  /** Sample data attached to the data source at generation time */
+  sampleDataSnapshot?: Record<string, unknown>
+  /** Prompt that produced this assistant reply, used by "重新生成" */
+  sourcePrompt?: string
   /** Error if any */
   error?: string
   /** Non-blocking generation assumptions shown after generation */
   assumptions?: Record<string, unknown>
+  /**
+   * Live progress lines appended while the assistant message is streaming.
+   * Not persisted; populated only for in-flight generations.
+   */
+  progressLog?: string[]
 }
 
 /**

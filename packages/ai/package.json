@@ -22,6 +22,7 @@
   "dependencies": {
     "@easyink/datasource": "workspace:*",
     "@easyink/designer": "workspace:*",
+    "@easyink/icons": "workspace:*",
     "@easyink/schema": "workspace:*",
     "@easyink/schema-tools": "workspace:*",
     "@easyink/shared": "workspace:*",
