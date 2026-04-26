@@ -9,6 +9,7 @@ const props = defineProps<{
   servers: MCPServerConfig[]
   serverStates: Record<string, 'disconnected' | 'connecting' | 'connected' | 'error'>
   serverErrors: Record<string, string | undefined>
+  providerApiKeys: Record<string, string | undefined>
 }>()
 
 const emit = defineEmits<{
@@ -25,15 +26,36 @@ const form = ref<Partial<MCPServerConfig>>({ type: 'http', enabled: true })
 const errors = ref<string[]>([])
 
 const title = computed(() => mode.value === 'list' ? 'MCP 服务器' : (form.value.id && props.servers.some(s => s.id === form.value.id) ? '编辑服务器' : '新建服务器'))
+const providerConfig = computed({
+  get() {
+    return form.value.providerConfig ?? createDefaultProviderConfig()
+  },
+  set(value) {
+    form.value.providerConfig = value
+  },
+})
 
 function startCreate() {
-  form.value = { type: 'http', enabled: true, id: generateId('server') }
+  form.value = {
+    type: 'http',
+    enabled: true,
+    id: generateId('server'),
+    providerConfig: createDefaultProviderConfig(),
+  }
   errors.value = []
   mode.value = 'edit'
 }
 
 function startEdit(s: MCPServerConfig) {
-  form.value = { ...s, auth: s.auth ? { ...s.auth } : undefined }
+  form.value = {
+    ...s,
+    auth: undefined,
+    providerConfig: {
+      ...createDefaultProviderConfig(),
+      ...s.providerConfig,
+      apiKey: s.providerConfig?.apiKey ?? props.providerApiKeys[s.id],
+    },
+  }
   errors.value = []
   mode.value = 'edit'
 }
@@ -44,12 +66,13 @@ function cancelEdit() {
 }
 
 function save() {
-  const errs = validateServerConfig(form.value)
+  const config = normalizeServerConfig(form.value)
+  const errs = validateServerConfig(config)
   if (errs.length) {
     errors.value = errs
     return
   }
-  emit('save', form.value as MCPServerConfig)
+  emit('save', config as MCPServerConfig)
   mode.value = 'list'
 }
 
@@ -62,6 +85,38 @@ function badgeText(id: string): { text: string, kind: 'ok' | 'err' | 'warn' | 'i
   if (state === 'error')
     return { text: '连接失败', kind: 'err' }
   return { text: '未连接', kind: 'idle' }
+}
+
+function createDefaultProviderConfig() {
+  return {
+    useUserProviderConfig: false,
+    provider: 'claude' as const,
+    apiKey: '',
+    rememberApiKey: false,
+    model: '',
+    baseUrl: '',
+  }
+}
+
+function normalizeServerConfig(config: Partial<MCPServerConfig>): Partial<MCPServerConfig> {
+  const provider = config.providerConfig
+    ? {
+        ...config.providerConfig,
+        apiKey: config.providerConfig.apiKey?.trim(),
+        model: config.providerConfig.model?.trim(),
+        baseUrl: config.providerConfig.baseUrl?.trim(),
+      }
+    : undefined
+
+  return {
+    ...config,
+    id: config.id?.trim(),
+    name: config.name?.trim(),
+    url: config.url?.trim(),
+    command: config.command?.trim(),
+    auth: undefined,
+    providerConfig: provider,
+  }
 }
 </script>
 
@@ -142,14 +197,42 @@ function badgeText(id: string): { text: string, kind: 'ok' | 'err' | 'warn' | 'i
             <input v-model="form.url" type="url" placeholder="http://localhost:3001/mcp">
           </div>
           <div v-if="form.type === 'http'" class="ai-form__group">
-            <label>API Key</label>
-            <input
-              :value="form.auth?.token || ''"
-              type="password"
-              placeholder="X-EasyInk-MCP-Key"
-              @input="(e) => form.auth = { type: 'apikey', token: (e.target as HTMLInputElement).value }"
-            >
+            <label class="ai-form__check">
+              <input v-model="providerConfig.useUserProviderConfig" type="checkbox"> 使用我的 Provider 凭证
+            </label>
           </div>
+          <template v-if="form.type === 'http'">
+            <div class="ai-form__row">
+              <div class="ai-form__group">
+                <label>Provider</label>
+                <select v-model="providerConfig.provider" :disabled="!providerConfig.useUserProviderConfig">
+                  <option value="claude">
+                    Claude
+                  </option>
+                  <option value="openai">
+                    OpenAI Compatible
+                  </option>
+                </select>
+              </div>
+              <div class="ai-form__group">
+                <label>Model</label>
+                <input v-model="providerConfig.model" :disabled="!providerConfig.useUserProviderConfig" type="text" placeholder="provider default">
+              </div>
+            </div>
+            <div class="ai-form__group">
+              <label>Provider API Key</label>
+              <input v-model="providerConfig.apiKey" :disabled="!providerConfig.useUserProviderConfig" type="password" placeholder="sk-...">
+            </div>
+            <div class="ai-form__group">
+              <label>Base URL</label>
+              <input v-model="providerConfig.baseUrl" :disabled="!providerConfig.useUserProviderConfig" type="url" placeholder="https://api.openai.com/v1">
+            </div>
+            <div class="ai-form__group">
+              <label class="ai-form__check">
+                <input v-model="providerConfig.rememberApiKey" :disabled="!providerConfig.useUserProviderConfig" type="checkbox"> 记住 key
+              </label>
+            </div>
+          </template>
           <div v-if="form.type === 'stdio'" class="ai-form__group">
             <label>启动命令</label>
             <input v-model="form.command" type="text" placeholder="npx">
@@ -331,6 +414,7 @@ function badgeText(id: string): { text: string, kind: 'ok' | 'err' | 'warn' | 'i
 
 .ai-form { display: flex; flex-direction: column; gap: 12px; }
 .ai-form__group { display: flex; flex-direction: column; gap: 4px; }
+.ai-form__row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .ai-form__group label { font-size: 12px; font-weight: 500; color: var(--ei-text, #111827); }
 .ai-form__check { flex-direction: row; align-items: center; gap: 6px; display: flex; }
 
@@ -349,6 +433,13 @@ function badgeText(id: string): { text: string, kind: 'ok' | 'err' | 'warn' | 'i
   outline: none;
   border-color: var(--ei-primary, #4f46e5);
   box-shadow: 0 0 0 3px var(--ei-primary-light, rgba(79, 70, 229, 0.1));
+}
+
+.ai-form__group input:disabled,
+.ai-form__group select:disabled {
+  background: var(--ei-bg-secondary, #f9fafb);
+  color: var(--ei-text-quaternary, #9ca3af);
+  cursor: not-allowed;
 }
 
 .ai-form__errors {

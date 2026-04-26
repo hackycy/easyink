@@ -8,7 +8,7 @@
  *
  * 环境变量（由 server 子进程通过 dotenv 自动从 packages/mcp-server/.env 加载，
  * 也可直接在 shell 中 export）:
- *   MCP_API_KEY   必填，LLM API key
+ *   MCP_API_KEY   调用 LLM 工具时必填，LLM API key
  *   MCP_PROVIDER  可选，claude | openai (默认 claude)
  *   MCP_MODEL     可选
  *   MCP_BASE_URL  可选

@@ -16,6 +16,7 @@ export type {
   GenerateOptions,
   GenerateResult,
   MCPAuthConfig,
+  MCPProviderConfig,
   MCPServerConfig,
   MCPTool,
   MCPToolResult,

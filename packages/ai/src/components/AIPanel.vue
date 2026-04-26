@@ -47,6 +47,7 @@ let streamingId: string | null = null
 const servers = ref<MCPServerConfig[]>(serverRegistry.getServers())
 const serverStates = ref<Record<string, 'disconnected' | 'connecting' | 'connected' | 'error'>>({})
 const serverErrors = ref<Record<string, string | undefined>>({})
+const providerApiKeys = ref<Record<string, string | undefined>>({})
 
 // ─── computed ────────────────────────────────────────────────────────────
 const enabledServers = computed(() => servers.value.filter(s => s.enabled))
@@ -111,11 +112,12 @@ async function ensureConnected(serverId: string): Promise<void> {
     throw new Error(`服务器配置不存在: ${serverId}`)
   if (!config.enabled)
     throw new Error(`服务器已禁用: ${config.name}`)
+  const runtimeConfig = withRuntimeProviderApiKey(config)
 
   serverStates.value = { ...serverStates.value, [serverId]: 'connecting' }
   serverErrors.value = { ...serverErrors.value, [serverId]: undefined }
   try {
-    await mcpClient.connect(config)
+    await mcpClient.connect(runtimeConfig)
     serverStates.value = { ...serverStates.value, [serverId]: 'connected' }
   }
   catch (err) {
@@ -144,7 +146,8 @@ async function handleToggleEnabled(id: string, enabled: boolean) {
 }
 
 function handleSaveServer(config: MCPServerConfig) {
-  serverRegistry.addServer(config)
+  const persistable = toPersistableServerConfig(config)
+  serverRegistry.addServer(persistable)
   // Drop any existing connection so next generate reconnects with new config.
   mcpClient.disconnect(config.id).catch(() => {})
   serverStates.value = { ...serverStates.value, [config.id]: 'disconnected' }
@@ -154,11 +157,58 @@ function handleSaveServer(config: MCPServerConfig) {
 
 function handleRemoveServer(id: string) {
   serverRegistry.removeServer(id)
+  const nextProviderApiKeys = { ...providerApiKeys.value }
+  delete nextProviderApiKeys[id]
+  providerApiKeys.value = nextProviderApiKeys
   mcpClient.disconnect(id).catch(() => {})
   serverStates.value = { ...serverStates.value, [id]: 'disconnected' }
   refreshServers()
   if (selectedServerId.value === id)
     selectedServerId.value = enabledServers.value[0]?.id ?? null
+}
+
+function withRuntimeProviderApiKey(config: MCPServerConfig): MCPServerConfig {
+  const providerConfig = config.providerConfig
+  if (!providerConfig?.useUserProviderConfig || providerConfig.apiKey)
+    return config
+  const apiKey = providerApiKeys.value[config.id]
+  if (!apiKey)
+    return config
+  return {
+    ...config,
+    providerConfig: {
+      ...providerConfig,
+      apiKey,
+    },
+  }
+}
+
+function toPersistableServerConfig(config: MCPServerConfig): MCPServerConfig {
+  const providerConfig = config.providerConfig
+  const next: MCPServerConfig = {
+    ...config,
+    auth: undefined,
+    providerConfig: providerConfig ? { ...providerConfig } : undefined,
+  }
+
+  if (!next.providerConfig?.useUserProviderConfig) {
+    const nextProviderApiKeys = { ...providerApiKeys.value }
+    delete nextProviderApiKeys[config.id]
+    providerApiKeys.value = nextProviderApiKeys
+    return next
+  }
+
+  const apiKey = next.providerConfig.apiKey?.trim()
+  if (apiKey && !next.providerConfig.rememberApiKey) {
+    providerApiKeys.value = { ...providerApiKeys.value, [config.id]: apiKey }
+    next.providerConfig.apiKey = undefined
+  }
+  else if (apiKey) {
+    providerApiKeys.value = { ...providerApiKeys.value, [config.id]: apiKey }
+    next.providerConfig.apiKey = apiKey
+  }
+
+  return next
 }
 
 // ─── generate ────────────────────────────────────────────────────────────
@@ -493,6 +543,7 @@ watch(() => props.open, (open) => {
       :servers="servers"
       :server-states="serverStates"
       :server-errors="serverErrors"
+      :provider-api-keys="providerApiKeys"
       @close="showServerManager = false"
       @save="handleSaveServer"
       @remove="handleRemoveServer"

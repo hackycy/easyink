@@ -27,7 +27,7 @@ async function main(): Promise<void> {
   switch (transport) {
     case 'http':
       // Stateless HTTP requires a fresh server per request.
-      await startHTTPServer(() => createMCPServer())
+      await startHTTPServer(requestOptions => createMCPServer(requestOptions))
       break
     case 'stdio':
     default:

@@ -9,22 +9,29 @@ pnpm -F @easyink/mcp-server start:stdio
 pnpm -F @easyink/mcp-server start:http
 ```
 
-HTTP mode defaults to `http://127.0.0.1:3000/mcp` and is intended to be explicitly configured before sharing on an intranet.
+HTTP mode defaults to `http://0.0.0.0:3000/mcp` and allows browser requests from any Origin.
 
 ## Environment
 
 | Name | Required | Default | Description |
 | --- | --- | --- | --- |
-| `MCP_API_KEY` | yes | - | LLM provider API key. |
-| `MCP_PROVIDER` | no | `claude` | `claude` or `openai`. |
-| `MCP_MODEL` | no | provider default | Model name. |
-| `MCP_BASE_URL` | no | provider default | Custom provider-compatible endpoint. |
+| `MCP_API_KEY` | no | request header | LLM provider API key fallback when `X-EasyInk-Provider-Key` is not sent. Required for stdio calls that invoke LLM tools. |
+| `MCP_PROVIDER` | no | `claude` | `claude` or `openai`; fallback when `X-EasyInk-Provider` is not sent. |
+| `MCP_MODEL` | no | provider default | Model name fallback when `X-EasyInk-Model` is not sent. |
+| `MCP_BASE_URL` | no | provider default | Custom provider-compatible endpoint fallback when `X-EasyInk-Base-URL` is not sent. |
 | `MCP_STRICT_OUTPUTS` | no | `true` | Set to `false` to fall back from strict structured output to JSON mode where supported. |
 | `MCP_TRANSPORT` | no | `stdio` | `stdio` or `http`. |
-| `MCP_HTTP_HOST` | no | `127.0.0.1` | HTTP bind host. Use `0.0.0.0` only with explicit Origin and API key configuration. |
+| `MCP_HTTP_HOST` | no | `0.0.0.0` | HTTP bind host. |
 | `MCP_HTTP_PORT` | no | `3000` | HTTP port. |
-| `MCP_HTTP_ALLOWED_ORIGINS` | no | localhost dev origins | Comma-separated Origin allowlist for browser clients. |
-| `MCP_HTTP_API_KEY` | no | - | If set, HTTP requests must include `X-EasyInk-MCP-Key`. |
+
+HTTP clients may provide request-scoped provider settings with these headers:
+
+| Header | Description |
+| --- | --- |
+| `X-EasyInk-Provider` | `claude` or `openai`. |
+| `X-EasyInk-Provider-Key` | LLM provider API key. |
+| `X-EasyInk-Model` | Optional model override. |
+| `X-EasyInk-Base-URL` | Optional provider-compatible HTTPS endpoint. |
 
 ## Tool Surface
 
@@ -55,14 +62,6 @@ The generation path is intent-first:
 
 `currentSchema` is used as context for a complete replacement. Patch-level editing is intentionally not part of this server contract yet.
 
-## HTTP Security
+## HTTP Mode
 
-HTTP mode validates browser Origin and supports API key authentication. The default Origin allowlist only covers local development origins. For intranet deployment, set both:
-
-```bash
-MCP_HTTP_HOST=0.0.0.0
-MCP_HTTP_ALLOWED_ORIGINS=https://designer.internal.example
-MCP_HTTP_API_KEY=change-me
-```
-
-Then configure the AI panel server entry with the same API key; the client sends it as `X-EasyInk-MCP-Key`.
+HTTP mode responds with `Access-Control-Allow-Origin: *` and does not expose an Origin allowlist or MCP-level API key setting. The AI panel can either rely on the server environment variables above or send provider settings per request with `X-EasyInk-*` headers.

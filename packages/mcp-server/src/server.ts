@@ -1,4 +1,5 @@
 import type { McpServer as McpServerType } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { IncomingHttpHeaders } from 'node:http'
 import type { LLMProvider } from './llm/types'
 import { Buffer } from 'node:buffer'
 import process from 'node:process'
@@ -18,36 +19,41 @@ export interface MCPServerOptions {
 export interface MCPHTTPServerOptions {
   host?: string
   port?: number
-  allowedOrigins?: string[]
-  apiKey?: string
 }
 
-const DEFAULT_ALLOWED_ORIGINS = new Set([
-  'http://localhost:5173',
-  'http://127.0.0.1:5173',
-  'http://localhost:3000',
-  'http://127.0.0.1:3000',
-])
-
-const API_KEY_HEADER = 'X-EasyInk-MCP-Key'
+const PROVIDER_HEADER = 'x-easyink-provider'
+const PROVIDER_KEY_HEADER = 'x-easyink-provider-key'
+const MODEL_HEADER = 'x-easyink-model'
+const BASE_URL_HEADER = 'x-easyink-base-url'
+const CORS_ALLOWED_HEADERS = [
+  'Content-Type',
+  'Authorization',
+  'mcp-session-id',
+  'mcp-protocol-version',
+  'last-event-id',
+  'X-EasyInk-Provider',
+  'X-EasyInk-Provider-Key',
+  'X-EasyInk-Model',
+  'X-EasyInk-Base-URL',
+].join(', ')
 
 async function createProvider(options: MCPServerOptions): Promise<LLMProvider> {
   const providerType = options.provider
-    ?? (process.env.MCP_PROVIDER as 'claude' | 'openai')
+    ?? parseProvider(process.env.MCP_PROVIDER)
     ?? 'claude'
-  const apiKey = options.apiKey ?? process.env.MCP_API_KEY
+  const apiKey = options.apiKey ?? emptyToUndefined(process.env.MCP_API_KEY)
 
   if (!apiKey) {
     throw new Error(
-      'MCP_API_KEY environment variable is required. Set it to your LLM provider API key.',
+      'LLM provider API key is required. Set MCP_API_KEY or send X-EasyInk-Provider-Key.',
     )
   }
 
   const config = {
     provider: providerType,
     apiKey,
-    model: options.model ?? process.env.MCP_MODEL,
-    baseUrl: options.baseUrl ?? process.env.MCP_BASE_URL,
+    model: options.model ?? emptyToUndefined(process.env.MCP_MODEL),
+    baseUrl: options.baseUrl ?? emptyToUndefined(process.env.MCP_BASE_URL),
     strictOutput: options.strictOutput ?? process.env.MCP_STRICT_OUTPUTS !== 'false',
   }
 
@@ -98,7 +104,7 @@ export async function startStdioServer(server: McpServerType): Promise<void> {
 }
 
 export async function startHTTPServer(
-  serverFactory: () => Promise<McpServerType>,
+  serverFactory: (options?: MCPServerOptions) => Promise<McpServerType>,
   port?: number,
   options: MCPHTTPServerOptions = {},
 ): Promise<void> {
@@ -108,52 +114,39 @@ export async function startHTTPServer(
   )
 
   const port_ = port ?? options.port ?? (Number(process.env.MCP_HTTP_PORT) || 3000)
-  const host = options.host ?? process.env.MCP_HTTP_HOST ?? '127.0.0.1'
-  const allowedOrigins = new Set([
-    ...DEFAULT_ALLOWED_ORIGINS,
-    ...parseList(process.env.MCP_HTTP_ALLOWED_ORIGINS),
-    ...(options.allowedOrigins ?? []),
-  ])
-  const requiredApiKey = options.apiKey ?? process.env.MCP_HTTP_API_KEY
+  const host = options.host ?? process.env.MCP_HTTP_HOST ?? '0.0.0.0'
 
   const httpServer = createServer(async (req, res) => {
-    const origin = req.headers.origin
-    const originAllowed = origin === undefined || allowedOrigins.has(origin)
-
-    if (origin && originAllowed) {
-      res.setHeader('Access-Control-Allow-Origin', origin)
-    }
-    res.setHeader('Vary', 'Origin')
+    res.setHeader('Access-Control-Allow-Origin', '*')
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
     res.setHeader(
       'Access-Control-Allow-Headers',
       req.headers['access-control-request-headers']
-      ?? `Content-Type, Authorization, ${API_KEY_HEADER}, mcp-session-id, mcp-protocol-version, last-event-id`,
+      ?? CORS_ALLOWED_HEADERS,
     )
     res.setHeader('Access-Control-Expose-Headers', 'mcp-session-id, mcp-protocol-version')
     res.setHeader('Access-Control-Max-Age', '86400')
 
     if (req.method === 'OPTIONS') {
-      res.writeHead(originAllowed ? 204 : 403).end()
-      return
-    }
-
-    if (!originAllowed) {
-      res.writeHead(403).end('Forbidden Origin')
-      return
-    }
-
-    if (requiredApiKey && req.headers[API_KEY_HEADER] !== requiredApiKey) {
-      res.writeHead(401, { 'Content-Type': 'application/json' }).end(JSON.stringify({
-        jsonrpc: '2.0',
-        error: { code: -32001, message: 'Missing or invalid MCP API key.' },
-        id: null,
-      }))
+      res.writeHead(204).end()
       return
     }
 
     if (req.url !== '/mcp') {
       res.writeHead(404).end('Not Found')
+      return
+    }
+
+    let serverOptions: MCPServerOptions
+    try {
+      serverOptions = readRequestProviderOptions(req.headers)
+    }
+    catch (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json' }).end(JSON.stringify({
+        jsonrpc: '2.0',
+        error: { code: -32602, message: err instanceof Error ? err.message : 'Invalid provider request headers.' },
+        id: null,
+      }))
       return
     }
 
@@ -176,7 +169,7 @@ export async function startHTTPServer(
     })
     let server: McpServerType | null = null
     try {
-      server = await serverFactory()
+      server = await serverFactory(serverOptions)
       res.on('close', () => {
         transport.close().catch(() => {})
         server?.close().catch(() => {})
@@ -207,6 +200,45 @@ export async function startHTTPServer(
   })
 }
 
-function parseList(value: string | undefined): string[] {
-  return value?.split(',').map(item => item.trim()).filter(Boolean) ?? []
+function readRequestProviderOptions(headers: IncomingHttpHeaders): MCPServerOptions {
+  const provider = readHeader(headers, PROVIDER_HEADER)
+  const apiKey = readHeader(headers, PROVIDER_KEY_HEADER)
+  const model = readHeader(headers, MODEL_HEADER)
+  const baseUrl = readHeader(headers, BASE_URL_HEADER)
+
+  if (provider && provider !== 'claude' && provider !== 'openai') {
+    throw new Error('X-EasyInk-Provider must be either "claude" or "openai".')
+  }
+
+  if (baseUrl) {
+    const parsed = new URL(baseUrl)
+    if (parsed.protocol !== 'https:')
+      throw new Error('X-EasyInk-Base-URL must be an https URL.')
+  }
+
+  return {
+    provider: provider as MCPServerOptions['provider'],
+    apiKey,
+    model,
+    baseUrl,
+  }
+}
+
+function readHeader(headers: IncomingHttpHeaders, name: string): string | undefined {
+  const raw = headers[name]
+  const value = Array.isArray(raw) ? raw[0] : raw
+  const trimmed = value?.trim()
+  return trimmed || undefined
+}
+
+function emptyToUndefined(value: string | undefined): string | undefined {
+  const trimmed = value?.trim()
+  return trimmed || undefined
+}
+
+function parseProvider(value: string | undefined): MCPServerOptions['provider'] | undefined {
+  const trimmed = emptyToUndefined(value)
+  if (trimmed === 'claude' || trimmed === 'openai')
+    return trimmed
+  return undefined
 }

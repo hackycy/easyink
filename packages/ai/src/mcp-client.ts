@@ -337,11 +337,16 @@ export class MCPClient {
 }
 
 function buildRequestInit(config: MCPServerConfig): RequestInit | undefined {
-  if (config.auth?.type !== 'apikey' || !config.auth.token)
+  const providerConfig = config.providerConfig
+  if (!providerConfig?.useUserProviderConfig)
     return undefined
+
   return {
     headers: {
-      'X-EasyInk-MCP-Key': config.auth.token,
+      'X-EasyInk-Provider': providerConfig.provider,
+      'X-EasyInk-Provider-Key': providerConfig.apiKey ?? '',
+      'X-EasyInk-Model': providerConfig.model ?? '',
+      'X-EasyInk-Base-URL': providerConfig.baseUrl ?? '',
     },
   }
 }

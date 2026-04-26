@@ -22,6 +22,8 @@ export interface MCPServerConfig {
   env?: Record<string, string>
   /** Authentication configuration */
   auth?: MCPAuthConfig
+  /** Request-scoped LLM provider configuration for HTTP servers */
+  providerConfig?: MCPProviderConfig
   /** Whether this server is enabled */
   enabled: boolean
   /** Optional description */
@@ -36,6 +38,23 @@ export interface MCPServerConfig {
 export interface MCPAuthConfig {
   type: 'bearer' | 'apikey' | 'none'
   token?: string
+}
+
+/**
+ * Request-scoped provider settings sent to EasyInk MCP HTTP servers.
+ */
+export interface MCPProviderConfig {
+  /** Send provider headers instead of relying on the server environment. */
+  useUserProviderConfig: boolean
+  provider: 'claude' | 'openai'
+  /** LLM provider API key. Persisted only when rememberApiKey is true. */
+  apiKey?: string
+  /** Persist apiKey in localStorage when saving the server config. */
+  rememberApiKey?: boolean
+  /** Optional model override. */
+  model?: string
+  /** Optional provider-compatible HTTPS endpoint. */
+  baseUrl?: string
 }
 
 /**

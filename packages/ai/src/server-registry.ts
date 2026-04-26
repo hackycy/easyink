@@ -218,5 +218,24 @@ export function validateServerConfig(config: Partial<MCPServerConfig>): string[]
     }
   }
 
+  const providerConfig = config.providerConfig
+  if (config.type === 'http' && providerConfig?.useUserProviderConfig) {
+    if (providerConfig.provider !== 'claude' && providerConfig.provider !== 'openai')
+      errors.push('Provider must be claude or openai')
+    if (!providerConfig.apiKey?.trim())
+      errors.push('Provider API key is required when using user provider credentials')
+    if (providerConfig.baseUrl?.trim() && !isHttpsUrl(providerConfig.baseUrl))
+      errors.push('Provider base URL must be an https URL')
+  }
+
   return errors
+}
+
+function isHttpsUrl(value: string): boolean {
+  try {
+    return new URL(value).protocol === 'https:'
+  }
+  catch {
+    return false
+  }
 }
