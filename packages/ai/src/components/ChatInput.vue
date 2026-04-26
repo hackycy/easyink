@@ -85,7 +85,7 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
 <style scoped>
 .ai-input {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 8px;
   padding: 10px 12px;
   border: 1px solid var(--ei-border, #d1d5db);
