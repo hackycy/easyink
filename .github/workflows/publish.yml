@@ -4,18 +4,73 @@ on:
   push:
     tags:
       - '**'
-  workflow_dispatch:
 
 concurrency:
   group: publish-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  publish:
+  release-context:
+    runs-on: ubuntu-latest
+    outputs:
+      mcp_server_version: ${{ steps.mcp_server_version.outputs.version }}
+      should_publish_docker: ${{ steps.docker_release.outputs.should_publish }}
+      image_name: ${{ steps.image.outputs.name }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Read mcp-server version
+        id: mcp_server_version
+        shell: bash
+        run: echo "version=$(node --print \"require('./packages/mcp-server/package.json').version\")" >> "$GITHUB_OUTPUT"
+
+      - name: Detect docker release
+        id: docker_release
+        env:
+          CURRENT_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          current_version='${{ steps.mcp_server_version.outputs.version }}'
+          previous_tag=$(git for-each-ref --sort=-creatordate --format='%(refname:strip=2)' refs/tags | grep -Fvx "$CURRENT_TAG" | head -n 1 || true)
+          previous_version=''
+          should_publish=true
+
+          if [ -n "$previous_tag" ]; then
+            previous_package_json=$(git show "$previous_tag:packages/mcp-server/package.json" 2>/dev/null || true)
+
+            if [ -n "$previous_package_json" ]; then
+              previous_version=$(printf '%s' "$previous_package_json" | node --input-type=module -e "import fs from 'node:fs'; const pkg = JSON.parse(fs.readFileSync(0, 'utf8')); process.stdout.write(pkg.version ?? '')")
+
+              if [ "$current_version" = "$previous_version" ]; then
+                should_publish=false
+              fi
+            fi
+          fi
+
+          echo "previous_tag=$previous_tag" >> "$GITHUB_OUTPUT"
+          echo "previous_version=$previous_version" >> "$GITHUB_OUTPUT"
+          echo "should_publish=$should_publish" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve container image name
+        id: image
+        shell: bash
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/easyink-mcp-server" >> "$GITHUB_OUTPUT"
+
+  publish-npm:
+    needs: release-context
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      id-token: write
+      packages: write
 
     steps:
       - name: Checkout
@@ -40,11 +95,54 @@ jobs:
       - name: Build packages
         run: pnpm build
 
-      # Each published package must be manually published once, then configured on npmjs.com
-      # with this repository and workflow file as its Trusted Publisher. NODE_AUTH_TOKEN is
-      # intentionally omitted so npm authenticates through GitHub OIDC.
-      - name: Publish to npm
-        run: pnpm changeset:publish
+      # Each published package must be manually published once, then granted publish
+      # access for the configured NPM_TOKEN on npmjs.com.
+      - name: Publish packages to npm
+        uses: changesets/action@v1
+        with:
+          publish: pnpm changeset:publish
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_ACCESS: public
-          NPM_CONFIG_PROVENANCE: true
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-docker:
+    needs: release-context
+    if: needs.release-context.outputs.should_publish_docker == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate Docker metadata
+        id: docker_meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ needs.release-context.outputs.image_name }}
+          tags: |
+            type=raw,value=${{ needs.release-context.outputs.mcp_server_version }}
+            type=sha
+
+      - name: Build and publish mcp-server image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: packages/mcp-server/Dockerfile
+          push: true
+          tags: ${{ steps.docker_meta.outputs.tags }}
+          labels: ${{ steps.docker_meta.outputs.labels }}

@@ -24,6 +24,6 @@
   "dependencies": {
     "@easyink/schema": "workspace:*",
     "@easyink/shared": "workspace:*",
-    "mutative": "catalog:"
+    "mutative": "catalog:framework"
   }
 }

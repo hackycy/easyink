@@ -1,3 +1,4 @@
+import { cloneDeep } from 'lodash-es'
 import { BLOCKED_PATH_KEYS, FIELD_PATH_SEPARATOR } from './constants'
 
 let _idCounter = 0
@@ -13,17 +14,7 @@ export function generateId(prefix = 'ei'): string {
  * Deep clone an object. Does NOT use structuredClone per project rules.
  */
 export function deepClone<T>(obj: T): T {
-  if (obj === null || typeof obj !== 'object') {
-    return obj
-  }
-  if (Array.isArray(obj)) {
-    return obj.map(item => deepClone(item)) as T
-  }
-  const result: Record<string, unknown> = {}
-  for (const key of Object.keys(obj as Record<string, unknown>)) {
-    result[key] = deepClone((obj as Record<string, unknown>)[key])
-  }
-  return result as T
+  return cloneDeep(obj) as T
 }
 
 /**

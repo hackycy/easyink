@@ -98,6 +98,8 @@ export interface DatasourceDropHandler {
    * Called on dragOver. Material computes the drop zone and returns a descriptor.
    * @param field - The datasource field being dragged
    * @param point - Cursor position in material-local coordinates (relative to element top-left)
+   * @param point.x - Horizontal offset in material-local coordinates
+   * @param point.y - Vertical offset in material-local coordinates
    * @param node - Current material node
    * @returns Drop zone descriptor, or null if this point does not accept a drop
    */
@@ -111,6 +113,8 @@ export interface DatasourceDropHandler {
    * Called on drop. Material executes the actual binding command.
    * @param field - The datasource field being dropped
    * @param point - Drop position in material-local coordinates
+   * @param point.x - Horizontal offset in material-local coordinates
+   * @param point.y - Vertical offset in material-local coordinates
    * @param node - Current material node
    */
   onDrop: (

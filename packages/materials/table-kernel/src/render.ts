@@ -76,7 +76,7 @@ export function renderTableHtml(options: RenderTableHtmlOptions): string {
 
   // Pre-compute which rows are skipped so row scaling uses only visible rows.
   // This matches the geometry layer (computeRowScale with hidden mask).
-  const skippedMask: boolean[] = Array.from({ length: topology.rows.length }, () => false)
+  const skippedMask = Array.from({ length: topology.rows.length }).fill(false) as boolean[]
   const decoratorResults: Array<{ cellStyle?: string, rowStyle?: string, skip?: boolean } | null> = []
   if (rowDecorator) {
     for (let ri = 0; ri < topology.rows.length; ri++) {

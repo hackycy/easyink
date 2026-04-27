@@ -18,7 +18,7 @@
     "dev": "turbo dev --filter='./packages/**' --concurrency 30",
     "play": "pnpm -F ./playground dev",
     "lint": "eslint --cache .",
-    "prepublishOnly": "nr build",
+    "prepublishOnly": "pnpm build",
     "release": "bumpp -r",
     "test": "vitest run --dom",
     "typecheck": "tsc",
@@ -33,7 +33,6 @@
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:cli",
-    "@antfu/ni": "catalog:cli",
     "@antfu/utils": "catalog:inlined",
     "@changesets/changelog-github": "catalog:cli",
     "@changesets/cli": "catalog:cli",

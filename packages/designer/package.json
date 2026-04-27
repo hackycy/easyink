@@ -45,7 +45,7 @@
     "@easyink/shared": "workspace:*",
     "@easyink/ui": "workspace:*",
     "@easyink/viewer-materials-builtin": "workspace:*",
-    "mutative": "catalog:",
+    "mutative": "catalog:framework",
     "vue": "catalog:framework"
   }
 }

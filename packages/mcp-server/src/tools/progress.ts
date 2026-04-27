@@ -81,7 +81,7 @@ export function createProgressRelay(ctx: RelayContext): RelayHandle {
   // Cheap insurance against silent providers blocking the SDK timeout.
   let heartbeatTimer: ReturnType<typeof setInterval> | undefined
   if (!provider.supportsStreaming && progressToken !== undefined) {
-    heartbeatTimer = setInterval(() => sendProgress('still working...'), HEARTBEAT_INTERVAL_MS)
+    heartbeatTimer = setInterval(sendProgress, HEARTBEAT_INTERVAL_MS, 'still working...')
   }
 
   return {
