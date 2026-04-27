@@ -12,6 +12,7 @@
 | [@easyink/core](packages/core) | [![npm][core-npm-version-src]][core-npm-version-href] |
 | [@easyink/datasource](packages/datasource) | [![npm][datasource-npm-version-src]][datasource-npm-version-href] |
 | [@easyink/designer](packages/designer) | [![npm][designer-npm-version-src]][designer-npm-version-href] |
+| [@easyink/designer-materials-builtin](packages/designer-materials-builtin) | [![npm][designer-materials-builtin-npm-version-src]][designer-materials-builtin-npm-version-href] |
 | [@easyink/icons](packages/icons) | [![npm][icons-npm-version-src]][icons-npm-version-href] |
 | [@easyink/mcp-server](packages/mcp-server) | [![npm][mcp-server-npm-version-src]][mcp-server-npm-version-href] |
 | [@easyink/samples](packages/samples) | [![npm][samples-npm-version-src]][samples-npm-version-href] |
@@ -35,6 +36,32 @@
 | [@easyink/material-table-kernel](packages/materials/table-kernel) | [![npm][material-table-kernel-npm-version-src]][material-table-kernel-npm-version-href] |
 | [@easyink/material-table-static](packages/materials/table-static) | [![npm][material-table-static-npm-version-src]][material-table-static-npm-version-href] |
 | [@easyink/material-text](packages/materials/text) | [![npm][material-text-npm-version-src]][material-text-npm-version-href] |
+
+## Built-in Material Bundles
+
+`@easyink/viewer` and `@easyink/designer` are now both core runtimes. Built-in materials are provided by separate bundle packages so hosts can choose between the default set and custom registrations.
+
+```vue
+<script setup lang="ts">
+import { EasyInkDesigner } from '@easyink/designer'
+import { registerBuiltinDesignerMaterials } from '@easyink/designer-materials-builtin'
+</script>
+
+<template>
+  <EasyInkDesigner
+    v-model:schema="schema"
+    :setup-store="registerBuiltinDesignerMaterials"
+  />
+</template>
+```
+
+```ts
+import { createViewer } from '@easyink/viewer'
+import { registerBuiltinViewerMaterials } from '@easyink/viewer-materials-builtin'
+
+const viewer = createViewer({ mode: 'fixed' })
+registerBuiltinViewerMaterials(viewer)
+```
 
 ## Development
 
@@ -60,6 +87,8 @@ pnpm build
 [datasource-npm-version-href]: https://npmjs.com/package/@easyink/datasource
 [designer-npm-version-src]: https://img.shields.io/npm/v/@easyink/designer?style=flat&colorA=080f12&colorB=1fa669
 [designer-npm-version-href]: https://npmjs.com/package/@easyink/designer
+[designer-materials-builtin-npm-version-src]: https://img.shields.io/npm/v/@easyink/designer-materials-builtin?style=flat&colorA=080f12&colorB=1fa669
+[designer-materials-builtin-npm-version-href]: https://npmjs.com/package/@easyink/designer-materials-builtin
 [icons-npm-version-src]: https://img.shields.io/npm/v/@easyink/icons?style=flat&colorA=080f12&colorB=1fa669
 [icons-npm-version-href]: https://npmjs.com/package/@easyink/icons
 [mcp-server-npm-version-src]: https://img.shields.io/npm/v/@easyink/mcp-server?style=flat&colorA=080f12&colorB=1fa669

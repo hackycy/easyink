@@ -232,7 +232,10 @@ export interface EasyInkDesignerProps {
   dataSources?: DataSourceDescriptor[]
   preferenceProvider?: PreferenceProvider
   locale?: LocaleMessages
+  setupStore?: StoreSetup
 }
+
+export type StoreSetup = (store: import('./store/designer-store').DesignerStore) => void
 
 export interface PreferenceProvider {
   get: (key: string) => unknown

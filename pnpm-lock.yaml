@@ -264,6 +264,30 @@ importers:
       '@easyink/icons':
         specifier: workspace:*
         version: link:../icons
+      '@easyink/material-table-kernel':
+        specifier: workspace:*
+        version: link:../materials/table-kernel
+      '@easyink/schema':
+        specifier: workspace:*
+        version: link:../schema
+      '@easyink/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@easyink/ui':
+        specifier: workspace:*
+        version: link:../ui
+      mutative:
+        specifier: catalog:framework
+        version: 1.3.0
+      vue:
+        specifier: catalog:framework
+        version: 3.5.31(typescript@6.0.2)
+
+  packages/designer-materials-builtin:
+    dependencies:
+      '@easyink/designer':
+        specifier: workspace:*
+        version: link:../designer
       '@easyink/material-barcode':
         specifier: workspace:*
         version: link:../materials/barcode
@@ -297,33 +321,12 @@ importers:
       '@easyink/material-table-data':
         specifier: workspace:*
         version: link:../materials/table-data
-      '@easyink/material-table-kernel':
-        specifier: workspace:*
-        version: link:../materials/table-kernel
       '@easyink/material-table-static':
         specifier: workspace:*
         version: link:../materials/table-static
       '@easyink/material-text':
         specifier: workspace:*
         version: link:../materials/text
-      '@easyink/schema':
-        specifier: workspace:*
-        version: link:../schema
-      '@easyink/shared':
-        specifier: workspace:*
-        version: link:../shared
-      '@easyink/ui':
-        specifier: workspace:*
-        version: link:../ui
-      '@easyink/viewer-materials-builtin':
-        specifier: workspace:*
-        version: link:../viewer-materials-builtin
-      mutative:
-        specifier: catalog:framework
-        version: 1.3.0
-      vue:
-        specifier: catalog:framework
-        version: 3.5.31(typescript@6.0.2)
 
   packages/icons:
     dependencies:
@@ -692,6 +695,9 @@ importers:
       '@easyink/designer':
         specifier: workspace:*
         version: link:../packages/designer
+      '@easyink/designer-materials-builtin':
+        specifier: workspace:*
+        version: link:../packages/designer-materials-builtin
       '@easyink/samples':
         specifier: workspace:*
         version: link:../packages/samples

@@ -1,89 +1,10 @@
 import type { DesignerStore } from '../store/designer-store'
 import type { MaterialCapabilities, MaterialCatalogEntry, MaterialDefinition, MaterialExtensionFactory, PanelSectionId } from '../types'
-
-import {
-  BARCODE_CAPABILITIES,
-  BARCODE_TYPE,
-  createBarcodeExtension,
-  createBarcodeNode,
-} from '@easyink/material-barcode'
-import {
-  CHART_CAPABILITIES,
-  CHART_TYPE,
-  createChartExtension,
-  createChartNode,
-} from '@easyink/material-chart'
-import {
-  CONTAINER_CAPABILITIES,
-  CONTAINER_TYPE,
-  createContainerExtension,
-  createContainerNode,
-} from '@easyink/material-container'
-import {
-  createEllipseExtension,
-  createEllipseNode,
-  ELLIPSE_CAPABILITIES,
-  ELLIPSE_TYPE,
-} from '@easyink/material-ellipse'
-import {
-  createImageExtension,
-  createImageNode,
-  IMAGE_CAPABILITIES,
-  IMAGE_TYPE,
-} from '@easyink/material-image'
-import {
-  createLineExtension,
-  createLineNode,
-  LINE_CAPABILITIES,
-  LINE_TYPE,
-} from '@easyink/material-line'
-import {
-  createPageNumberExtension,
-  createPageNumberNode,
-  PAGE_NUMBER_CAPABILITIES,
-  PAGE_NUMBER_TYPE,
-} from '@easyink/material-page-number'
-import {
-  createQrcodeExtension,
-  createQrcodeNode,
-  QRCODE_CAPABILITIES,
-  QRCODE_TYPE,
-} from '@easyink/material-qrcode'
-import {
-  createRectExtension,
-  createRectNode,
-  RECT_CAPABILITIES,
-  RECT_TYPE,
-} from '@easyink/material-rect'
-import {
-  createSvgExtension,
-  createSvgNode,
-  SVG_CAPABILITIES,
-  SVG_TYPE,
-} from '@easyink/material-svg'
-import {
-  createTableDataExtension,
-  createTableDataNode,
-  TABLE_DATA_CAPABILITIES,
-  TABLE_DATA_TYPE,
-} from '@easyink/material-table-data'
-import {
-  createTableStaticExtension,
-  createTableStaticNode,
-  TABLE_STATIC_CAPABILITIES,
-  TABLE_STATIC_TYPE,
-} from '@easyink/material-table-static'
-import {
-  createTextExtension,
-  createTextNode,
-  TEXT_CAPABILITIES,
-  TEXT_TYPE,
-} from '@easyink/material-text'
 import { getPropSchemas } from './prop-schemas'
 
 // ─── Material definitions ────────────────────────────────────────────
 
-interface MaterialEntry {
+export interface DesignerMaterialRegistration {
   type: string
   name: string
   icon: string
@@ -92,6 +13,17 @@ interface MaterialEntry {
   createDefaultNode: MaterialDefinition['createDefaultNode']
   factory: MaterialExtensionFactory
   sectionFilter?: MaterialDefinition['sectionFilter']
+}
+
+export interface DesignerCatalogRegistration {
+  type: string
+  group: MaterialCatalogEntry['group']
+}
+
+export interface DesignerMaterialBundle {
+  materials: DesignerMaterialRegistration[]
+  quickMaterialTypes: string[]
+  groupedCatalog: DesignerCatalogRegistration[]
 }
 
 /**
@@ -104,162 +36,17 @@ function tableSectionFilter(sectionId: PanelSectionId): boolean {
   return true
 }
 
-const MATERIALS: MaterialEntry[] = [
-  {
-    type: TEXT_TYPE,
-    name: 'designer.toolbar.text',
-    icon: 'text',
-    category: 'basic',
-    capabilities: TEXT_CAPABILITIES,
-    createDefaultNode: createTextNode,
-    factory: createTextExtension,
-  },
-  {
-    type: IMAGE_TYPE,
-    name: 'designer.toolbar.image',
-    icon: 'image',
-    category: 'basic',
-    capabilities: IMAGE_CAPABILITIES,
-    createDefaultNode: createImageNode,
-    factory: createImageExtension,
-  },
-  {
-    type: BARCODE_TYPE,
-    name: 'designer.toolbar.barcode',
-    icon: 'barcode',
-    category: 'basic',
-    capabilities: BARCODE_CAPABILITIES,
-    createDefaultNode: createBarcodeNode,
-    factory: createBarcodeExtension,
-  },
-  {
-    type: QRCODE_TYPE,
-    name: 'designer.toolbar.qrcode',
-    icon: 'qrcode',
-    category: 'basic',
-    capabilities: QRCODE_CAPABILITIES,
-    createDefaultNode: createQrcodeNode,
-    factory: createQrcodeExtension,
-  },
-  {
-    type: LINE_TYPE,
-    name: 'designer.toolbar.line',
-    icon: 'line',
-    category: 'basic',
-    capabilities: LINE_CAPABILITIES,
-    createDefaultNode: createLineNode,
-    factory: createLineExtension,
-  },
-  {
-    type: RECT_TYPE,
-    name: 'designer.toolbar.rect',
-    icon: 'rect',
-    category: 'basic',
-    capabilities: RECT_CAPABILITIES,
-    createDefaultNode: createRectNode,
-    factory: createRectExtension,
-  },
-  {
-    type: ELLIPSE_TYPE,
-    name: 'designer.toolbar.ellipse',
-    icon: 'ellipse',
-    category: 'basic',
-    capabilities: ELLIPSE_CAPABILITIES,
-    createDefaultNode: createEllipseNode,
-    factory: createEllipseExtension,
-  },
-  {
-    type: CONTAINER_TYPE,
-    name: 'designer.toolbar.container',
-    icon: 'container',
-    category: 'layout',
-    capabilities: CONTAINER_CAPABILITIES,
-    createDefaultNode: createContainerNode,
-    factory: createContainerExtension,
-  },
-  {
-    type: TABLE_STATIC_TYPE,
-    name: 'designer.toolbar.table',
-    icon: 'table-static',
-    category: 'data',
-    capabilities: TABLE_STATIC_CAPABILITIES,
-    createDefaultNode: createTableStaticNode,
-    factory: createTableStaticExtension,
-    sectionFilter: tableSectionFilter,
-  },
-  {
-    type: TABLE_DATA_TYPE,
-    name: 'designer.toolbar.dataTable',
-    icon: 'table-data',
-    category: 'data',
-    capabilities: TABLE_DATA_CAPABILITIES,
-    createDefaultNode: createTableDataNode,
-    factory: createTableDataExtension,
-    sectionFilter: tableSectionFilter,
-  },
-  {
-    type: CHART_TYPE,
-    name: 'designer.toolbar.chart',
-    icon: 'chart',
-    category: 'chart',
-    capabilities: CHART_CAPABILITIES,
-    createDefaultNode: createChartNode,
-    factory: createChartExtension,
-  },
-  {
-    type: SVG_TYPE,
-    name: 'designer.toolbar.svg',
-    icon: 'svg',
-    category: 'svg',
-    capabilities: SVG_CAPABILITIES,
-    createDefaultNode: createSvgNode,
-    factory: createSvgExtension,
-  },
-  {
-    type: PAGE_NUMBER_TYPE,
-    name: 'designer.toolbar.pageNumber',
-    icon: 'page-number',
-    category: 'utility',
-    capabilities: PAGE_NUMBER_CAPABILITIES,
-    createDefaultNode: createPageNumberNode,
-    factory: createPageNumberExtension,
-  },
-]
-
-// ─── Catalog entries ─────────────────────────────────────────────────
-
-// Architecture 10.2: quick materials = line, rect, ellipse, text, image, qrcode, barcode
-const QUICK_MATERIAL_TYPES = [
-  LINE_TYPE,
-  RECT_TYPE,
-  ELLIPSE_TYPE,
-  TEXT_TYPE,
-  IMAGE_TYPE,
-  QRCODE_TYPE,
-  BARCODE_TYPE,
-]
-
-// Grouped catalog: data / chart / svg / utility
-const GROUPED_CATALOG: Array<{ type: string, group: MaterialCatalogEntry['group'] }> = [
-  { type: TABLE_STATIC_TYPE, group: 'data' },
-  { type: TABLE_DATA_TYPE, group: 'data' },
-  { type: CONTAINER_TYPE, group: 'data' },
-  { type: CHART_TYPE, group: 'chart' },
-  { type: SVG_TYPE, group: 'svg' },
-  { type: PAGE_NUMBER_TYPE, group: 'utility' },
-]
-
 // ─── Registration function ───────────────────────────────────────────
 
 /**
- * Registers all built-in materials, designer extensions, and catalog entries
+ * Registers a material bundle, its designer extensions, and its catalog entries
  * on the given DesignerStore.
  *
  * Architecture ref: 11.1 (MaterialDefinition), 11.2 (catalog hierarchy),
  *                   10.2 (quick + grouped material bar)
  */
-export function registerBuiltinMaterials(store: DesignerStore): void {
-  for (const entry of MATERIALS) {
+export function registerMaterialBundle(store: DesignerStore, bundle: DesignerMaterialBundle): void {
+  for (const entry of bundle.materials) {
     const definition: MaterialDefinition = {
       type: entry.type,
       name: entry.name,
@@ -276,7 +63,7 @@ export function registerBuiltinMaterials(store: DesignerStore): void {
   }
 
   // Register quick material catalog entries
-  for (const type of QUICK_MATERIAL_TYPES) {
+  for (const type of bundle.quickMaterialTypes) {
     const def = store.getMaterial(type)
     if (!def)
       continue
@@ -291,7 +78,7 @@ export function registerBuiltinMaterials(store: DesignerStore): void {
   }
 
   // Register grouped material catalog entries
-  for (const { type, group } of GROUPED_CATALOG) {
+  for (const { type, group } of bundle.groupedCatalog) {
     const def = store.getMaterial(type)
     if (!def)
       continue
@@ -305,3 +92,5 @@ export function registerBuiltinMaterials(store: DesignerStore): void {
     })
   }
 }
+
+export { tableSectionFilter }

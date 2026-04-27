@@ -2,13 +2,12 @@
 import type { DataSourceDescriptor } from '@easyink/datasource'
 import type { DocumentSchema } from '@easyink/schema'
 import type { Contribution } from '../contributions'
-import type { LocaleMessages, PreferenceProvider } from '../types'
+import type { LocaleMessages, PreferenceProvider, StoreSetup } from '../types'
 import { onBeforeUnmount, provide, reactive, shallowRef, watch } from 'vue'
 import { provideDesignerStore } from '../composables'
 import { useWorkbenchPersistence } from '../composables/use-workbench-persistence'
 import { ContributionRegistry } from '../contributions/contribution-registry'
 import { CONTRIBUTION_REGISTRY_KEY } from '../contributions/injection'
-import { registerBuiltinMaterials } from '../materials/registry'
 import { DesignerStore } from '../store/designer-store'
 import CanvasWorkspace from './CanvasWorkspace.vue'
 import StatusBar from './StatusBar.vue'
@@ -19,6 +18,7 @@ const props = defineProps<{
   dataSources?: DataSourceDescriptor[]
   preferenceProvider?: PreferenceProvider
   locale?: LocaleMessages
+  setupStore?: StoreSetup
   contributions?: Contribution[]
 }>()
 
@@ -31,8 +31,8 @@ const store = reactive(new DesignerStore(props.schema, props.preferenceProvider)
 // re-target it at the proxy so mutations made through tx.run trigger Vue
 // reactivity (otherwise patches mutate the raw store and templates stay stale).
 store.editingSession.setStore(store)
+props.setupStore?.(store)
 provideDesignerStore(store)
-registerBuiltinMaterials(store)
 
 // Wire workbench persistence (debounced save on state changes + flush on unmount)
 if (props.preferenceProvider) {

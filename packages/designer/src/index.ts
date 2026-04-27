@@ -10,7 +10,12 @@ export type {
   PanelDescriptor,
   ToolbarActionDescriptor,
 } from './contributions'
-export { registerBuiltinMaterials } from './materials/registry'
+export { registerMaterialBundle, tableSectionFilter } from './materials/registry'
+export type {
+  DesignerCatalogRegistration,
+  DesignerMaterialBundle,
+  DesignerMaterialRegistration,
+} from './materials/registry'
 export { DesignerStore } from './store/designer-store'
 export { createLocalStoragePreferenceProvider } from './store/preference-persistence'
 export type { PersistableWorkbenchState } from './store/preference-persistence'

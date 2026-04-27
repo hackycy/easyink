@@ -50,6 +50,10 @@ const groupedCategories = computed(() => {
   })).filter(g => g.items.length > 0)
 })
 
+const hasRegisteredMaterials = computed(() =>
+  quickMaterials.value.length > 0 || groupedCategories.value.length > 0,
+)
+
 function getIcon(iconKey: string): Component | undefined {
   return ICON_MAP[iconKey]
 }
@@ -77,6 +81,15 @@ function handleDragStart(e: DragEvent, entry: MaterialCatalogEntry) {
 
 <template>
   <div class="ei-material-panel">
+    <div v-if="!hasRegisteredMaterials" class="ei-material-panel__empty">
+      <div class="ei-material-panel__empty-title">
+        {{ store.t('designer.panel.materialsNotRegistered') }}
+      </div>
+      <div class="ei-material-panel__empty-text">
+        {{ store.t('designer.panel.materialsRegistrationHint') }}
+      </div>
+    </div>
+
     <div class="ei-material-panel__section">
       <div class="ei-material-panel__section-title">
         {{ store.t('designer.panel.quickMaterials') }}
@@ -124,6 +137,27 @@ function handleDragStart(e: DragEvent, entry: MaterialCatalogEntry) {
 <style scoped>
 .ei-material-panel {
   overflow-y: auto;
+}
+
+.ei-material-panel__empty {
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid var(--ei-border-color, #e0e0e0);
+  border-radius: 6px;
+  background: var(--ei-hover-bg, #f7f7f7);
+}
+
+.ei-material-panel__empty-title {
+  margin-bottom: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ei-text, #333);
+}
+
+.ei-material-panel__empty-text {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--ei-text-secondary, #666);
 }
 
 .ei-material-panel__section {

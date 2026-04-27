@@ -1,0 +1,40 @@
+{
+  "name": "@easyink/designer-materials-builtin",
+  "type": "module",
+  "version": "0.0.3",
+  "description": "Built-in material bundle for EasyInk Designer",
+  "author": "hackycy <hackycy@outlook.com>",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/index.d.mts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch"
+  },
+  "dependencies": {
+    "@easyink/designer": "workspace:*",
+    "@easyink/material-barcode": "workspace:*",
+    "@easyink/material-chart": "workspace:*",
+    "@easyink/material-container": "workspace:*",
+    "@easyink/material-ellipse": "workspace:*",
+    "@easyink/material-image": "workspace:*",
+    "@easyink/material-line": "workspace:*",
+    "@easyink/material-page-number": "workspace:*",
+    "@easyink/material-qrcode": "workspace:*",
+    "@easyink/material-rect": "workspace:*",
+    "@easyink/material-svg": "workspace:*",
+    "@easyink/material-table-data": "workspace:*",
+    "@easyink/material-table-static": "workspace:*",
+    "@easyink/material-text": "workspace:*"
+  }
+}

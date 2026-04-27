@@ -152,6 +152,8 @@ const zhCN: LocaleMessages = {
       draft: '草稿',
       materials: '物料',
       quickMaterials: '基础',
+      materialsNotRegistered: '未注册任何物料',
+      materialsRegistrationHint: '请通过 setupStore 显式接入 @easyink/designer-materials-builtin 或自定义物料包。',
     },
     page: {
       title: '页面设置',
