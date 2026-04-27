@@ -31,7 +31,9 @@ jobs:
       - name: Read mcp-server version
         id: mcp_server_version
         shell: bash
-        run: echo "version=$(node --print \"require('./packages/mcp-server/package.json').version\")" >> "$GITHUB_OUTPUT"
+        run: |
+          version=$(node --input-type=module -e "import fs from 'node:fs'; const pkg = JSON.parse(fs.readFileSync('./packages/mcp-server/package.json', 'utf8')); console.log(pkg.version)")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Detect docker release
         id: docker_release
