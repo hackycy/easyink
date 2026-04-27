@@ -1,7 +1,7 @@
 {
   "name": "@easyink/schema",
   "type": "module",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Schema types, defaults, migration, and serialization for EasyInk",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",

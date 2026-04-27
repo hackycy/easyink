@@ -1,7 +1,7 @@
 {
   "name": "@easyink/material-chart",
   "type": "module",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "EasyInk chart material",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",

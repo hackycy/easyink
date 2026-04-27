@@ -1,7 +1,7 @@
 {
   "name": "@easyink/material-page-number",
   "type": "module",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "EasyInk page-number material",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",

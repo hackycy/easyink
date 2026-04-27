@@ -1,7 +1,7 @@
 {
   "name": "@easyink/material-image",
   "type": "module",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "EasyInk image material",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",

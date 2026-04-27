@@ -1,7 +1,7 @@
 {
   "name": "@easyink/schema-tools",
   "type": "module",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Schema validation and data source alignment utilities for EasyInk",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",

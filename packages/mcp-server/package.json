@@ -1,7 +1,7 @@
 {
   "name": "@easyink/mcp-server",
   "type": "module",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "MCP server for EasyInk template generation via LLM",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",
