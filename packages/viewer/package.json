@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@easyink/core": "workspace:*",
+    "@easyink/datasource": "workspace:*",
     "@easyink/material-line": "workspace:*",
     "@easyink/material-table-data": "workspace:*",
     "@easyink/schema": "workspace:*",

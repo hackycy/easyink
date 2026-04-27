@@ -16,4 +16,4 @@ export { createLocalStoragePreferenceProvider } from './store/preference-persist
 export type { PersistableWorkbenchState } from './store/preference-persistence'
 export { TemplateHistoryManager } from './store/template-history'
 export { createDefaultSaveBranchMenu, createDefaultWorkbenchState } from './store/workbench'
-export type * from './types'
+export * from './types'

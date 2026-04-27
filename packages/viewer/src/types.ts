@@ -1,8 +1,9 @@
 import type { FontProvider, MaterialViewerExtension, ViewerMeasureContext, ViewerMeasureResult, ViewerRenderContext, ViewerRenderOutput } from '@easyink/core'
-import type { DocumentSchema, MaterialNode } from '@easyink/schema'
+import type { DocumentSchema } from '@easyink/schema'
 import type { DiagnosticCategory, DiagnosticSeverity, ExportEntry, ExportFormat, ExportPhase } from '@easyink/shared'
 
-export type { DocumentSchema, MaterialNode }
+export * from '@easyink/datasource'
+export * from '@easyink/schema'
 
 // Re-export viewer-material contract types from core so host code can import from one place.
 export type { MaterialViewerExtension, ViewerMeasureContext, ViewerMeasureResult, ViewerRenderContext, ViewerRenderOutput }

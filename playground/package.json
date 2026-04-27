@@ -7,10 +7,8 @@
   },
   "dependencies": {
     "@easyink/ai": "workspace:*",
-    "@easyink/datasource": "workspace:*",
     "@easyink/designer": "workspace:*",
     "@easyink/samples": "workspace:*",
-    "@easyink/schema": "workspace:*",
     "@easyink/viewer": "workspace:*",
     "@easyink/viewer-materials-builtin": "workspace:*",
     "vue": "catalog:framework"

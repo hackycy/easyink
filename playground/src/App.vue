@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import type { DataSourceDescriptor } from '@easyink/datasource'
-import type { DocumentSchema } from '@easyink/designer'
+import type { DataSourceDescriptor, DocumentSchema } from '@easyink/designer'
 import type { StoredTemplate } from './storage/template-store'
 import { createAIContribution } from '@easyink/ai'
 import { createLocalStoragePreferenceProvider, EasyInkDesigner } from '@easyink/designer'

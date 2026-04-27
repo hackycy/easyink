@@ -1,8 +1,39 @@
-import type { DataSourceDescriptor } from '@easyink/datasource'
-import type { DocumentSchema, MaterialNode } from '@easyink/schema'
+import type { MaterialNode } from '@easyink/schema'
 import type { MaterialCategory, PropSchemaType } from '@easyink/shared'
 
-export type { DataSourceDescriptor, DocumentSchema }
+export type {
+  BehaviorContext,
+  BehaviorEvent,
+  BehaviorMiddleware,
+  BehaviorRegistration,
+  ContentLayout,
+  ContextAction,
+  DatasourceDropHandler,
+  DatasourceDropZone,
+  DatasourceFieldInfo,
+  EditingSessionRef,
+  EphemeralPanelDef,
+  GeometryService,
+  MaterialDesignerExtension,
+  MaterialExtensionContext,
+  MaterialExtensionFactory,
+  MaterialGeometry,
+  NodeSignal,
+  PropertyPanelOverlay,
+  PropertyPanelRequest,
+  PropSchemaLike,
+  Selection,
+  SelectionDecorationDef,
+  SelectionSnapshot,
+  SelectionStore,
+  SelectionType,
+  SubPropertySchema,
+  SurfacesAPI,
+  ToolbarAction,
+  TransactionAPI,
+  TxOptions,
+} from '@easyink/core'
+export * from '@easyink/datasource'
 
 // ─── Workbench State ───────────────────────────────────────────────
 
@@ -155,38 +186,7 @@ export interface MaterialCatalogEntry {
 
 // ─── Material Extensions (re-exported from @easyink/core) ─────────
 
-export type {
-  BehaviorContext,
-  BehaviorEvent,
-  BehaviorMiddleware,
-  BehaviorRegistration,
-  ContentLayout,
-  ContextAction,
-  DatasourceDropHandler,
-  DatasourceDropZone,
-  DatasourceFieldInfo,
-  EditingSessionRef,
-  EphemeralPanelDef,
-  GeometryService,
-  MaterialDesignerExtension,
-  MaterialExtensionContext,
-  MaterialExtensionFactory,
-  MaterialGeometry,
-  NodeSignal,
-  PropertyPanelOverlay,
-  PropertyPanelRequest,
-  PropSchemaLike,
-  Selection,
-  SelectionDecorationDef,
-  SelectionSnapshot,
-  SelectionStore,
-  SelectionType,
-  SubPropertySchema,
-  SurfacesAPI,
-  ToolbarAction,
-  TransactionAPI,
-  TxOptions,
-} from '@easyink/core'
+export * from '@easyink/schema'
 
 // (DeepEditingRuntimeState removed — replaced by EditingSessionManager)
 

@@ -611,6 +611,9 @@ importers:
       '@easyink/core':
         specifier: workspace:*
         version: link:../core
+      '@easyink/datasource':
+        specifier: workspace:*
+        version: link:../datasource
       '@easyink/material-line':
         specifier: workspace:*
         version: link:../materials/line
@@ -674,18 +677,12 @@ importers:
       '@easyink/ai':
         specifier: workspace:*
         version: link:../packages/ai
-      '@easyink/datasource':
-        specifier: workspace:*
-        version: link:../packages/datasource
       '@easyink/designer':
         specifier: workspace:*
         version: link:../packages/designer
       '@easyink/samples':
         specifier: workspace:*
         version: link:../packages/samples
-      '@easyink/schema':
-        specifier: workspace:*
-        version: link:../packages/schema
       '@easyink/viewer':
         specifier: workspace:*
         version: link:../packages/viewer
