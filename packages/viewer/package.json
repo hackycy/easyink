@@ -1,7 +1,7 @@
 {
   "name": "@easyink/viewer",
   "type": "module",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Viewer runtime for EasyInk: preview, print, export",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",

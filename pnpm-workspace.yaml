@@ -9,7 +9,6 @@ catalogMode: prefer
 catalogs:
   cli:
     '@antfu/eslint-config': ^8.2.0
-    '@changesets/changelog-github': ^0.6.0
     '@changesets/cli': ^2.31.0
     '@tailwindcss/postcss': ^4.1.6
     '@tailwindcss/vite': ^4.2.4

@@ -34,7 +34,6 @@
   "devDependencies": {
     "@antfu/eslint-config": "catalog:cli",
     "@antfu/utils": "catalog:inlined",
-    "@changesets/changelog-github": "catalog:cli",
     "@changesets/cli": "catalog:cli",
     "@tsdown/css": "catalog:cli",
     "@types/node": "catalog:types",

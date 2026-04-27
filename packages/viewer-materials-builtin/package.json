@@ -1,7 +1,7 @@
 {
   "name": "@easyink/viewer-materials-builtin",
   "type": "module",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Built-in material bundle for EasyInk Viewer",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",
