@@ -1,4 +1,5 @@
 {
+  "name": "@easyink/playground",
   "type": "module",
   "private": true,
   "scripts": {

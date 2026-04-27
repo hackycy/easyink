@@ -25,12 +25,18 @@
     "prepare": "simple-git-hooks",
     "open:packages": "npx open-packages-on-npm",
     "catalog": "pnpx codemod pnpm/catalog",
-    "pretest": "pnpm -F @easyink/mcp-server check:materials"
+    "pretest": "pnpm -F @easyink/mcp-server check:materials",
+    "changeset": "changeset",
+    "changeset:version": "changeset version",
+    "changeset:status": "changeset status",
+    "changeset:publish": "changeset publish"
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:cli",
     "@antfu/ni": "catalog:cli",
     "@antfu/utils": "catalog:inlined",
+    "@changesets/changelog-github": "catalog:cli",
+    "@changesets/cli": "catalog:cli",
     "@tsdown/css": "catalog:cli",
     "@types/node": "catalog:types",
     "bumpp": "catalog:cli",

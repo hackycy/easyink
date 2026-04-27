@@ -1,0 +1,45 @@
+name: Changeset Status
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: changeset-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Skip changeset status
+        if: contains(github.event.pull_request.labels.*.name, 'no-changeset-needed') || startsWith(github.event.pull_request.head.ref, 'changeset-release/')
+        run: echo "Skipping changeset status for an explicitly exempted PR."
+
+      - name: Checkout
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'no-changeset-needed') && !startsWith(github.event.pull_request.head.ref, 'changeset-release/') }}
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'no-changeset-needed') && !startsWith(github.event.pull_request.head.ref, 'changeset-release/') }}
+        uses: pnpm/action-setup@v5
+
+      - name: Setup Node.js
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'no-changeset-needed') && !startsWith(github.event.pull_request.head.ref, 'changeset-release/') }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'no-changeset-needed') && !startsWith(github.event.pull_request.head.ref, 'changeset-release/') }}
+        run: pnpm install --frozen-lockfile
+
+      - name: Show changeset status
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'no-changeset-needed') && !startsWith(github.event.pull_request.head.ref, 'changeset-release/') }}
+        run: pnpm changeset status --verbose

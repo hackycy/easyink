@@ -5,6 +5,9 @@
   "description": "Schema types, defaults, migration, and serialization for EasyInk",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "sideEffects": false,
   "exports": {
     ".": "./dist/index.mjs",

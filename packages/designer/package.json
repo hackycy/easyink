@@ -5,6 +5,9 @@
   "description": "EasyInk document/report designer workbench",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "sideEffects": false,
   "exports": {
     ".": "./dist/index.mjs",

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config@3.0.0/schema.json",
+  "changelog": "@changesets/changelog-github",
+  "commit": false,
+  "fixed": [
+    [
+      "@easyink/material-barcode",
+      "@easyink/material-chart",
+      "@easyink/material-container",
+      "@easyink/material-ellipse",
+      "@easyink/material-image",
+      "@easyink/material-line",
+      "@easyink/material-page-number",
+      "@easyink/material-qrcode",
+      "@easyink/material-rect",
+      "@easyink/material-svg",
+      "@easyink/material-table-data",
+      "@easyink/material-table-kernel",
+      "@easyink/material-table-static",
+      "@easyink/material-text"
+    ]
+  ],
+  "linked": [],
+  "access": "public",
+  "baseBranch": "main",
+  "updateInternalDependencies": "patch",
+  "ignore": ["@easyink/playground"]
+}

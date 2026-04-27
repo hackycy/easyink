@@ -5,6 +5,9 @@
   "description": "Schema validation and data source alignment utilities for EasyInk",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "sideEffects": false,
   "exports": {
     ".": "./dist/index.mjs",

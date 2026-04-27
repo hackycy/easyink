@@ -5,6 +5,9 @@
   "description": "MCP server for EasyInk template generation via LLM",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "sideEffects": false,
   "exports": {
     ".": "./dist/index.mjs",

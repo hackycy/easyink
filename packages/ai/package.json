@@ -5,6 +5,9 @@
   "description": "AI integration for EasyInk designer (chat, MCP, prompt templates)",
   "author": "EasyInk Team",
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "sideEffects": false,
   "exports": {
     ".": "./dist/index.mjs",

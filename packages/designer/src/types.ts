@@ -1,3 +1,4 @@
+import type { DataSourceDescriptor } from '@easyink/datasource'
 import type { MaterialNode } from '@easyink/schema'
 import type { MaterialCategory, PropSchemaType } from '@easyink/shared'
 
