@@ -1,6 +1,4 @@
-import type { DesignerMaterialBundle, DesignerStore } from '@easyink/designer'
-
-import { registerMaterialBundle, tableSectionFilter } from '@easyink/designer'
+import type { BuiltinDesignerMaterialBundle, BuiltinPanelSectionId } from './types'
 import {
   BARCODE_CAPABILITIES,
   BARCODE_TYPE,
@@ -80,7 +78,11 @@ import {
   TEXT_TYPE,
 } from '@easyink/material-text'
 
-export const builtinDesignerMaterialBundle: DesignerMaterialBundle = {
+function tableSectionFilter(sectionId: BuiltinPanelSectionId): boolean {
+  return sectionId !== 'binding'
+}
+
+export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
   materials: [
     {
       type: TEXT_TYPE,
@@ -219,8 +221,4 @@ export const builtinDesignerMaterialBundle: DesignerMaterialBundle = {
     { type: SVG_TYPE, group: 'svg' },
     { type: PAGE_NUMBER_TYPE, group: 'utility' },
   ],
-}
-
-export function registerBuiltinDesignerMaterials(store: DesignerStore): void {
-  registerMaterialBundle(store, builtinDesignerMaterialBundle)
 }

@@ -24,6 +24,7 @@
     "dev": "tsdown --watch"
   },
   "dependencies": {
+    "@easyink/builtin": "workspace:*",
     "@easyink/core": "workspace:*",
     "@easyink/datasource": "workspace:*",
     "@easyink/icons": "workspace:*",

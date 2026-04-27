@@ -9,10 +9,8 @@
   "dependencies": {
     "@easyink/ai": "workspace:*",
     "@easyink/designer": "workspace:*",
-    "@easyink/designer-materials-builtin": "workspace:*",
     "@easyink/samples": "workspace:*",
     "@easyink/viewer": "workspace:*",
-    "@easyink/viewer-materials-builtin": "workspace:*",
     "vue": "catalog:framework"
   },
   "devDependencies": {

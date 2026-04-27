@@ -3,7 +3,6 @@ import type { DataSourceDescriptor, DocumentSchema } from '@easyink/designer'
 import type { StoredTemplate } from './storage/template-store'
 import { createAIContribution } from '@easyink/ai'
 import { createLocalStoragePreferenceProvider, EasyInkDesigner } from '@easyink/designer'
-import { registerBuiltinDesignerMaterials } from '@easyink/designer-materials-builtin'
 import zhCN from '@easyink/designer/locale/zh-CN'
 import { blankA4Template, flowInvoiceTemplate, invoiceDemoData, sampleDataSources, sampleTemplates } from '@easyink/samples'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
@@ -194,7 +193,6 @@ const contributions = [createAIContribution()]
     :data-sources="mergedDataSources"
     :locale="zhCN"
     :preference-provider="preferenceProvider"
-    :setup-store="registerBuiltinDesignerMaterials"
     :contributions="contributions"
   >
     <template #topbar>

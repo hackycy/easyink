@@ -1,8 +1,8 @@
 {
-  "name": "@easyink/designer-materials-builtin",
+  "name": "@easyink/builtin",
   "type": "module",
   "version": "0.0.3",
-  "description": "Built-in material bundle for EasyInk Designer",
+  "description": "Internal built-in material registry for EasyInk runtimes",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",
   "publishConfig": {
@@ -22,7 +22,7 @@
     "dev": "tsdown --watch"
   },
   "dependencies": {
-    "@easyink/designer": "workspace:*",
+    "@easyink/core": "workspace:*",
     "@easyink/material-barcode": "workspace:*",
     "@easyink/material-chart": "workspace:*",
     "@easyink/material-container": "workspace:*",
@@ -35,6 +35,8 @@
     "@easyink/material-svg": "workspace:*",
     "@easyink/material-table-data": "workspace:*",
     "@easyink/material-table-static": "workspace:*",
-    "@easyink/material-text": "workspace:*"
+    "@easyink/material-text": "workspace:*",
+    "@easyink/schema": "workspace:*",
+    "@easyink/shared": "workspace:*"
   }
 }

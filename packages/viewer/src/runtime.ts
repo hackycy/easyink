@@ -10,6 +10,7 @@ import type {
   ViewerOptions,
   ViewerRenderResult,
 } from './types'
+import { registerBuiltinViewerMaterials } from '@easyink/builtin'
 import { createInternalHooks, createPagePlan, FontManager } from '@easyink/core'
 import { traverseNodes, validateSchema } from '@easyink/schema'
 import { UNIT_FACTOR } from '@easyink/shared'
@@ -35,6 +36,9 @@ export class ViewerRuntime {
     this._options = options
     this._fontManager = new FontManager(options.fontProvider)
     this._hooks = createInternalHooks()
+    registerBuiltinViewerMaterials((type, extension) => {
+      this.registerMaterial(type, extension)
+    })
   }
 
   // ---------------------------------------------------------------------------

@@ -3,35 +3,9 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
-import { barcodeAIMaterialDescriptor } from '../../materials/barcode/src/ai'
-import { chartAIMaterialDescriptor } from '../../materials/chart/src/ai'
-import { containerAIMaterialDescriptor } from '../../materials/container/src/ai'
-import { ellipseAIMaterialDescriptor } from '../../materials/ellipse/src/ai'
-import { imageAIMaterialDescriptor } from '../../materials/image/src/ai'
-import { lineAIMaterialDescriptor } from '../../materials/line/src/ai'
-import { pageNumberAIMaterialDescriptor } from '../../materials/page-number/src/ai'
-import { qrcodeAIMaterialDescriptor } from '../../materials/qrcode/src/ai'
-import { rectAIMaterialDescriptor } from '../../materials/rect/src/ai'
-import { svgAIMaterialDescriptor } from '../../materials/svg/src/ai'
-import { tableDataAIMaterialDescriptor } from '../../materials/table-data/src/ai'
-import { tableStaticAIMaterialDescriptor } from '../../materials/table-static/src/ai'
-import { textAIMaterialDescriptor } from '../../materials/text/src/ai'
+import { builtinAIMaterialDescriptors } from '@easyink/builtin'
 
-const descriptors: AIMaterialDescriptor[] = [
-  textAIMaterialDescriptor,
-  lineAIMaterialDescriptor,
-  tableDataAIMaterialDescriptor,
-  tableStaticAIMaterialDescriptor,
-  imageAIMaterialDescriptor,
-  qrcodeAIMaterialDescriptor,
-  barcodeAIMaterialDescriptor,
-  rectAIMaterialDescriptor,
-  ellipseAIMaterialDescriptor,
-  containerAIMaterialDescriptor,
-  pageNumberAIMaterialDescriptor,
-  svgAIMaterialDescriptor,
-  chartAIMaterialDescriptor,
-]
+const descriptors: AIMaterialDescriptor[] = builtinAIMaterialDescriptors
 
 const config = {
   version: '1.0.0',

@@ -4,13 +4,15 @@
   "fixed": [
     [
       "@easyink/material-*",
-      "@easyink/viewer-materials-builtin"
+      "@easyink/builtin",
+      "@easyink/designer",
+      "@easyink/viewer",
+      "@easyink/mcp-server"
     ]
   ],
   "linked": [
     [
       "@easyink/ai",
-      "@easyink/designer",
       "@easyink/icons",
       "@easyink/ui"
     ]

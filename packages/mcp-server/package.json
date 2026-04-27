@@ -33,6 +33,7 @@
     "test:local": "tsx scripts/test-local.ts"
   },
   "dependencies": {
+    "@easyink/builtin": "workspace:*",
     "@easyink/datasource": "workspace:*",
     "@easyink/schema": "workspace:*",
     "@easyink/schema-tools": "workspace:*",

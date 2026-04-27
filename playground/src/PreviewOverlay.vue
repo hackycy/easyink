@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { DocumentSchema, ViewerRuntime } from '@easyink/viewer'
 import { createViewer } from '@easyink/viewer'
-import { registerBuiltinViewerMaterials } from '@easyink/viewer-materials-builtin'
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 
 const props = defineProps<{
@@ -27,7 +26,6 @@ onMounted(async () => {
     return
 
   viewer = createViewer({ container: containerRef.value })
-  registerBuiltinViewerMaterials(viewer)
   viewer.registerExportAdapter({
     id: 'playground-demo-export',
     format: EXPORT_FORMAT,

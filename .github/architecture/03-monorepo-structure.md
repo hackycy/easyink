@@ -10,9 +10,8 @@ easyink/
 │   ├── core/                   # @easyink/core — 命令、选择、几何、分页、辅助线、历史
 │   ├── datasource/             # @easyink/datasource — 字段树、数据源引用、绑定规则、格式规则
 │   ├── viewer/                 # @easyink/viewer — iframe Viewer、预览、打印、导出、缩略图
-│   ├── viewer-materials-builtin/ # @easyink/viewer-materials-builtin — Viewer 内置物料注册包
+│   ├── builtin/                # @easyink/builtin — 内置物料注册与清单汇总包（内部装配层）
 │   ├── designer/               # @easyink/designer — 设计器工作台 Vue 组件
-│   ├── designer-materials-builtin/ # @easyink/designer-materials-builtin — Designer 内置物料注册包
 │   ├── ui/                     # @easyink/ui — 面板、表单、工作台基础组件
 │   ├── icons/                  # @easyink/icons — 图标资产
 │   ├── ai/                     # @easyink/ai — AI 对话面板、MCP Client、Server Registry、Designer Contribution
@@ -50,36 +49,30 @@ easyink/
 - 历史（undo/redo）由 CommandManager 内部栈管理，无独立 HistoryModel
 - 几何计算、辅助线、吸附、分页计划、区域模型
 
-### `@easyink/viewer-materials-builtin`
+### `@easyink/builtin`
 
-- 汇总内置物料的 Viewer 渲染注册
-- 让 `viewer` 核心保持对具体物料零编译期依赖
-
-- 不直接渲染 DOM，不依赖 Vue
+- 汇总内置物料的 Designer 注册元数据、Viewer 渲染注册以及 MCP Server 物料描述符
+- 作为内部装配层被 `designer`、`viewer`、`mcp-server` 消费，不作为宿主应用主入口推荐
+- 统一维护默认物料清单，避免 Designer / Viewer / Server 三处漂移
 
 ### `@easyink/datasource`
 
 - 通过插槽、`setupStore` 和 `useDesignerStore()` 暴露宿主集成点，不在包级直接依赖 `@easyink/viewer` 或具体物料包
 - 数据源引用与适配器注册
 
-### `@easyink/designer-materials-builtin`
-
-- 汇总内置物料的 Designer 注册、目录分组和默认 factory
-- 让 `designer` 核心只负责工作台与注册协议，不直接吃下所有 `material-*` 依赖
-- 绑定格式规则、聚合规则、批量投放元数据
-- 给 `designer` 和 `viewer` 共用，而不是只属于其中一边
-
 ### `@easyink/viewer`
 - 包内同时提供 Schema 默认值、Designer 交互、Viewer 渲染器
 - 独立 Viewer 运行时
 - 负责预览、缩略图、打印、导出文档入口
 - 负责数据加载、字体加载、页面计划与最终页面渲染
+- 默认注册内置物料；宿主后续注册同类型物料时以后注册覆盖默认注册
 
 ### `@easyink/designer`
 
 - 顶部工具栏、画布、面板系统、概览图、历史记录
 - 管理设计态工作台状态
-- 通过插槽和 `useDesignerStore()` 暴露宿主集成点，不在包级直接依赖 `@easyink/viewer`
+- 通过插槽、`setupStore` 和 `useDesignerStore()` 暴露宿主集成点，不在包级直接依赖 `@easyink/viewer`
+- 默认注册内置物料；宿主通过 `setupStore` 追加注册时以后注册覆盖默认注册
 - 暴露 **Contribution API**（`Contribution` / `ContributionRegistry`）作为唯一外部扩展协议；不直接依赖 `@easyink/ai` 或 `@easyink/schema-tools`
 
 ### `@easyink/material-*`
@@ -142,44 +135,39 @@ core        datasource
   │
 material-* ── core + schema + shared (+ datasource 按需)
   ↑
-viewer-materials-builtin ─── viewer + material-*
-designer-materials-builtin ─ designer + material-*
+builtin ───── designer + viewer + mcp-server + material-*
 
-designer ─── core + datasource + schema + shared + ui + icons + material-table-kernel
-viewer ─── core + datasource + schema + shared
+designer ─── builtin + core + datasource + schema + shared + ui + icons + material-table-kernel
+viewer ─── builtin + core + datasource + schema + shared
   ↑
 ai ──────── designer (仅类型) + datasource + schema + schema-tools + shared + vue + @modelcontextprotocol/sdk
 
-mcp-server ─── schema-tools + datasource + schema + shared + @modelcontextprotocol/sdk + zod
+mcp-server ─── builtin + schema-tools + datasource + schema + shared + @modelcontextprotocol/sdk + zod
 
-playground ── designer + designer-materials-builtin + ai + viewer + viewer-materials-builtin + samples + schema
+playground ── designer + ai + viewer + samples + schema
 ```
 
 依赖原则：
 
-- `designer` 依赖 `core`、`datasource`、`schema`、`shared`、`ui`、`icons` 与 `material-table-kernel`，不直接依赖具体物料包；设计态物料由调用方通过 `setupStore` 注册
-- `designer-materials-builtin` 依赖 `designer` 和全部内置 `material-*` 包，提供默认 Designer 物料集
-- `viewer` 依赖 `core`、`datasource`、`schema`、`shared`，不依赖 `material-*`（Viewer 物料渲染器由调用方注册）
-- `viewer-materials-builtin` 依赖 `viewer` 和全部内置 `material-*` 包，提供默认 Viewer 物料集
+- `designer` 依赖 `builtin`、`core`、`datasource`、`schema`、`shared`、`ui`、`icons` 与 `material-table-kernel`，默认启用内置物料；调用方可通过 `setupStore` 继续扩展或覆盖
+- `viewer` 依赖 `builtin`、`core`、`datasource`、`schema`、`shared`，默认启用内置物料；调用方可通过 `viewer.registerMaterial()` 继续扩展或覆盖
+- `builtin` 依赖全部内置 `material-*` 包，集中维护 Designer / Viewer / MCP Server 三侧共享的默认物料清单
 - `ui` 依赖 `icons` 和 `shared`，不依赖 `designer`；方向为 designer 依赖 ui
 - `samples` 依赖 `datasource`、`schema`、`shared`，不依赖 `designer`
 - `schema-tools` 仅依赖 `datasource`、`schema`、`shared`；无 Vue 依赖；可在 Node 与浏览器双端运行
 - `ai` 依赖 `schema-tools`（校验/对齐）、`designer`（仅 `Contribution` 与 `DesignerStore` 类型）、`vue`、`@modelcontextprotocol/sdk`；通过 `createAIContribution()` 注入 designer，**designer 不反向依赖 ai**
-- `mcp-server` 依赖 `schema-tools`（兜底校验）、`datasource`、`schema`、`shared`、`@modelcontextprotocol/sdk`、`zod`。LLM SDK 为 optionalDependencies（`@anthropic-ai/sdk`、`openai`），按运行时环境变量选择加载
+- `mcp-server` 依赖 `builtin` 与 `schema-tools`（兜底校验）、`datasource`、`schema`、`shared`、`@modelcontextprotocol/sdk`、`zod`。LLM SDK 为 optionalDependencies（`@anthropic-ai/sdk`、`openai`），按运行时环境变量选择加载
 
 ## 3.4 对外消费方式
 
 ```typescript
 import { EasyInkDesigner } from '@easyink/designer'
-import { registerBuiltinDesignerMaterials } from '@easyink/designer-materials-builtin'
 import { createViewer } from '@easyink/viewer'
-import { registerBuiltinViewerMaterials } from '@easyink/viewer-materials-builtin'
 
 // Vue template
-// <EasyInkDesigner :setup-store="registerBuiltinDesignerMaterials" />
+// <EasyInkDesigner v-model:schema="schema" />
 
 const viewer = createViewer({ mode: 'fixed' })
-registerBuiltinViewerMaterials(viewer)
 await viewer.open({ schema, data })
 ```
 

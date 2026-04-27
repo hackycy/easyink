@@ -153,7 +153,7 @@ const zhCN: LocaleMessages = {
       materials: '物料',
       quickMaterials: '基础',
       materialsNotRegistered: '未注册任何物料',
-      materialsRegistrationHint: '请通过 setupStore 显式接入 @easyink/designer-materials-builtin 或自定义物料包。',
+      materialsRegistrationHint: '内置物料默认已启用；如需覆盖或扩展，请通过 setupStore 注册自定义物料。',
     },
     page: {
       title: '页面设置',
