@@ -11,7 +11,8 @@
     "@easyink/designer": "workspace:*",
     "@easyink/samples": "workspace:*",
     "@easyink/viewer": "workspace:*",
-    "vue": "catalog:framework"
+    "vue": "catalog:framework",
+    "vue-plugin-hiprint": "catalog:testing"
   },
   "devDependencies": {
     "@tailwindcss/vite": "catalog:cli",
