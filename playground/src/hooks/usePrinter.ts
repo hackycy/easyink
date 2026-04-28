@@ -74,18 +74,18 @@ export interface PrinterConfig {
  *
  * @description https://github.com/CcSimple/vue-plugin-hiprint/blob/main/src/index.js
  */
-export function usePrinter() {
+export function usePrinter(initialConfig?: PrinterConfig) {
   // isConnected 代表打印服务连接状态，不要手动修改
   const { isConnected } = initHiPrint()
 
   const getConnected = computed(() => isConnected.value)
 
   const systemConfigStore = reactive<PrinterConfig>({
-    enablePrinterService: false,
-    printerDevice: undefined,
-    printerPaperSize: undefined,
-    printCopies: undefined,
-    printerServiceUrl: undefined,
+    enablePrinterService: initialConfig?.enablePrinterService ?? false,
+    printerDevice: initialConfig?.printerDevice,
+    printerPaperSize: initialConfig?.printerPaperSize,
+    printCopies: initialConfig?.printCopies,
+    printerServiceUrl: initialConfig?.printerServiceUrl,
   })
 
   const getPrinterEnabled = computed(
@@ -118,9 +118,10 @@ export function usePrinter() {
    * 连接打印服务
    */
   function connectService() {
+    const namespace = import.meta.env?.VITE_APP_NAMESPACE || 'easyink-playground'
     hiprint.hiwebSocket.setHost(
       getPrinterServiceUrl.value,
-      `vue-plugin-hiprint-${import.meta.env.VITE_APP_NAMESPACE}`,
+      `vue-plugin-hiprint-${namespace}`,
       (connect: boolean) => {
         if (!connect) {
           return
@@ -296,6 +297,30 @@ export function usePrinter() {
     })
   }
 
+  /**
+   * 更新配置
+   */
+  function updateConfig(config: PrinterConfig) {
+    systemConfigStore.enablePrinterService = config.enablePrinterService
+    systemConfigStore.printerDevice = config.printerDevice
+    systemConfigStore.printerPaperSize = config.printerPaperSize
+    systemConfigStore.printCopies = config.printCopies
+    systemConfigStore.printerServiceUrl = config.printerServiceUrl
+  }
+
+  /**
+   * 获取当前配置
+   */
+  function getConfig(): PrinterConfig {
+    return {
+      enablePrinterService: systemConfigStore.enablePrinterService,
+      printerDevice: systemConfigStore.printerDevice,
+      printerPaperSize: systemConfigStore.printerPaperSize,
+      printCopies: systemConfigStore.printCopies,
+      printerServiceUrl: systemConfigStore.printerServiceUrl,
+    }
+  }
+
   return {
     getPrinterEnabled,
     getConnected,
@@ -312,5 +337,7 @@ export function usePrinter() {
     getPrinterDevicesCache,
     getHiprintInstance,
     printHtml,
+    updateConfig,
+    getConfig,
   }
 }
