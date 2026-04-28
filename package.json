@@ -1,6 +1,5 @@
 {
   "type": "module",
-  "version": "0.0.0",
   "private": true,
   "packageManager": "pnpm@10.33.0",
   "author": "hackycy <hackycy@outlook.com>",
