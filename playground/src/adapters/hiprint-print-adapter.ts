@@ -12,7 +12,7 @@ export function createHiPrintAdapter(): PrintAdapter {
 
   return {
     id: 'hiprint-adapter',
-    async print(context: ViewerExportContext) {
+    async print(_context: ViewerExportContext) {
       if (!printer.getPrinterEnabled.value) {
         throw new Error('打印服务未启用')
       }
