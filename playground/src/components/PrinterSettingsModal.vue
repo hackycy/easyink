@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import type { PrinterConfig, PrinterDevice } from '../hooks/usePrinter'
-import { computed, onBeforeUnmount, onMounted, reactive } from 'vue'
+import type { AcceptableValue } from 'reka-ui'
+import { computed } from 'vue'
+import { toast } from 'vue-sonner'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
@@ -19,167 +19,159 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
-import { DEFAULT_PRINTER_COPIES, DEFAULT_PRINTER_HOST, DEFAULT_PRINTER_PAGE_SIZE } from '../hooks/usePrinter'
-
-const props = defineProps<{
-  config: PrinterConfig
-  isConnected: boolean
-  printerDevices: PrinterDevice[]
-}>()
+import { usePrinter } from '../hooks/usePrinter'
 
 const emit = defineEmits<{
-  save: [config: PrinterConfig]
-  connect: []
-  disconnect: []
-  refreshDevices: []
   close: []
 }>()
 
-const localConfig = reactive<PrinterConfig>({
-  enablePrinterService: props.config.enablePrinterService,
-  printerDevice: props.config.printerDevice,
-  printerPaperSize: props.config.printerPaperSize ?? DEFAULT_PRINTER_PAGE_SIZE,
-  printCopies: props.config.printCopies ?? DEFAULT_PRINTER_COPIES,
-  printerServiceUrl: props.config.printerServiceUrl ?? DEFAULT_PRINTER_HOST,
-})
+const printer = usePrinter()
 
-const connectionStatus = computed(() => {
-  if (!localConfig.enablePrinterService)
-    return 'disabled'
-  return props.isConnected ? 'connected' : 'disconnected'
-})
-
-const connectionStatusText = computed(() => {
-  switch (connectionStatus.value) {
-    case 'connected':
-      return '已连接'
-    case 'disconnected':
-      return '未连接'
-    case 'disabled':
-      return '未启用'
-    default:
-      return '未知状态'
+const statusText = computed(() => {
+  if (!printer.enabled.value)
+    return '未启用'
+  switch (printer.connectionState.value) {
+    case 'connected': return '已连接'
+    case 'connecting': return '连接中…'
+    case 'error': return printer.lastError.value || '连接失败'
+    default: return '未连接'
   }
 })
 
-const connectionStatusColor = computed(() => {
-  switch (connectionStatus.value) {
-    case 'connected':
-      return 'text-green-600'
-    case 'disconnected':
-      return 'text-red-500'
-    case 'disabled':
-      return 'text-muted-foreground'
-    default:
-      return 'text-muted-foreground'
+const statusColor = computed(() => {
+  if (!printer.enabled.value)
+    return 'text-muted-foreground'
+  switch (printer.connectionState.value) {
+    case 'connected': return 'text-green-600'
+    case 'connecting': return 'text-amber-500'
+    case 'error': return 'text-red-500'
+    default: return 'text-red-500'
   }
 })
 
 function handleToggleService(checked: boolean) {
-  localConfig.enablePrinterService = checked
-  if (checked && !props.isConnected) {
-    emit('connect')
+  printer.setEnabled(checked)
+}
+
+async function handleConnect() {
+  try {
+    await printer.connect()
+    toast.success('已连接到打印服务')
   }
-  else if (!checked && props.isConnected) {
-    emit('disconnect')
-  }
-}
-
-function handleConnect() {
-  emit('connect')
-}
-
-function handleRefreshDevices() {
-  emit('refreshDevices')
-}
-
-function handleSave() {
-  emit('save', { ...localConfig })
-}
-
-function handleKeyDown(e: KeyboardEvent) {
-  if (e.key === 'Escape') {
-    emit('close')
+  catch (e) {
+    toast.error(e instanceof Error ? e.message : '连接失败')
   }
 }
 
-onMounted(() => {
-  document.addEventListener('keydown', handleKeyDown)
-})
+async function handleRefreshDevices() {
+  try {
+    const list = await printer.refreshDevices()
+    if (list.length === 0)
+      toast.info('未发现可用打印机')
+    else
+      toast.success(`发现 ${list.length} 台打印机`)
+  }
+  catch (e) {
+    toast.error(e instanceof Error ? e.message : '刷新失败')
+  }
+}
 
-onBeforeUnmount(() => {
-  document.removeEventListener('keydown', handleKeyDown)
-})
+function handleUrlInput(e: Event) {
+  printer.updateConfig({ printerServiceUrl: (e.target as HTMLInputElement).value })
+}
+
+function handlePaperSizeInput(e: Event) {
+  const v = Number((e.target as HTMLInputElement).value)
+  printer.updateConfig({ printerPaperSize: Number.isFinite(v) && v > 0 ? v : 1 })
+}
+
+function handleCopiesInput(e: Event) {
+  const v = Number((e.target as HTMLInputElement).value)
+  printer.updateConfig({ printCopies: Number.isFinite(v) && v >= 1 ? v : 1 })
+}
+
+function handleDeviceChange(val: AcceptableValue) {
+  const printerDevice = typeof val === 'string' || typeof val === 'number' || typeof val === 'bigint'
+    ? String(val)
+    : undefined
+
+  printer.updateConfig({ printerDevice })
+}
 </script>
 
 <template>
   <Dialog :open="true" @update:open="(val) => { if (!val) emit('close') }">
-    <DialogContent class="max-w-[560px]">
+    <DialogContent
+      class="max-w-[560px]"
+      sr-description="配置 HiPrint 打印服务连接、打印机、纸张和份数"
+    >
       <DialogHeader>
         <DialogTitle>打印机设置</DialogTitle>
       </DialogHeader>
 
       <div class="space-y-4 py-2">
-        <!-- Enable Printer Service -->
+        <!-- Enable -->
         <div class="flex items-center justify-between">
           <Label>启用打印服务</Label>
           <Switch
-            :checked="localConfig.enablePrinterService"
-            @update:checked="handleToggleService"
+            :model-value="printer.enabled.value"
+            @update:model-value="handleToggleService"
           />
         </div>
 
-        <!-- Connection Status -->
+        <!-- Status -->
         <div class="space-y-1.5">
           <Label>连接状态</Label>
           <div class="flex items-center gap-2">
-            <span class="text-sm" :class="connectionStatusColor">{{ connectionStatusText }}</span>
+            <span class="text-sm" :class="statusColor">{{ statusText }}</span>
             <Button
-              v-if="localConfig.enablePrinterService && !isConnected"
+              v-if="printer.enabled.value && printer.connectionState.value !== 'connected'"
               variant="outline"
               size="xs"
+              :disabled="printer.isConnecting.value"
               @click="handleConnect"
             >
-              连接
+              {{ printer.isConnecting.value ? '连接中…' : '连接' }}
             </Button>
           </div>
         </div>
 
-        <!-- Printer Service URL -->
+        <!-- Service URL -->
         <div class="space-y-1.5">
           <Label>打印服务地址</Label>
           <Input
-            v-model="localConfig.printerServiceUrl"
-            :disabled="!localConfig.enablePrinterService"
+            :value="printer.serviceUrl.value"
+            :disabled="!printer.enabled.value"
             placeholder="http://localhost:17521"
+            @input="handleUrlInput"
           />
         </div>
 
-        <!-- Printer Device -->
+        <!-- Device -->
         <div class="space-y-1.5">
           <div class="flex items-center justify-between">
             <Label>打印机</Label>
             <Button
-              v-if="localConfig.enablePrinterService"
+              v-if="printer.enabled.value"
               variant="outline"
               size="xs"
-              :disabled="!isConnected"
+              :disabled="!printer.isConnected.value"
               @click="handleRefreshDevices"
             >
               刷新
             </Button>
           </div>
           <Select
-            :model-value="localConfig.printerDevice ?? ''"
-            :disabled="!localConfig.enablePrinterService || !isConnected || printerDevices.length === 0"
-            @update:model-value="(val) => localConfig.printerDevice = String(val) || undefined"
+            :model-value="printer.printerDevice.value ?? ''"
+            :disabled="!printer.enabled.value || !printer.isConnected.value || printer.devices.value.length === 0"
+            @update:model-value="handleDeviceChange"
           >
             <SelectTrigger>
               <SelectValue placeholder="请选择打印机" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem
-                v-for="d in printerDevices"
+                v-for="d in printer.devices.value"
                 :key="d.name"
                 :value="d.name"
               >
@@ -187,6 +179,12 @@ onBeforeUnmount(() => {
               </SelectItem>
             </SelectContent>
           </Select>
+          <p
+            v-if="printer.enabled.value && printer.isConnected.value && printer.devices.value.length === 0"
+            class="text-xs text-muted-foreground"
+          >
+            未发现打印机，请检查打印机是否在线后点击刷新
+          </p>
         </div>
 
         <!-- Paper Size -->
@@ -194,35 +192,26 @@ onBeforeUnmount(() => {
           <Label>纸张宽度 (mm)</Label>
           <Input
             type="number"
-            :value="localConfig.printerPaperSize"
+            :value="printer.paperSize.value"
             :min="1"
-            :disabled="!localConfig.enablePrinterService"
-            @input="(e: Event) => localConfig.printerPaperSize = Number((e.target as HTMLInputElement).value)"
+            :disabled="!printer.enabled.value"
+            @input="handlePaperSizeInput"
           />
         </div>
 
-        <!-- Print Copies -->
+        <!-- Copies -->
         <div class="space-y-1.5">
           <Label>打印份数</Label>
           <Input
             type="number"
-            :value="localConfig.printCopies"
+            :value="printer.copies.value"
             :min="1"
             :max="99"
-            :disabled="!localConfig.enablePrinterService"
-            @input="(e: Event) => localConfig.printCopies = Number((e.target as HTMLInputElement).value)"
+            :disabled="!printer.enabled.value"
+            @input="handleCopiesInput"
           />
         </div>
       </div>
-
-      <DialogFooter>
-        <Button variant="outline" @click="emit('close')">
-          取消
-        </Button>
-        <Button @click="handleSave">
-          保存
-        </Button>
-      </DialogFooter>
     </DialogContent>
   </Dialog>
 </template>

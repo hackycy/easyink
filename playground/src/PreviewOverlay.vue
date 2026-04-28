@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { DocumentSchema, ViewerRuntime } from '@easyink/viewer'
-import type { PrinterConfig } from './hooks/usePrinter'
 import { IconChevronLeft, IconChevronRight, IconClose, IconMinimize, IconPlus } from '@easyink/icons'
 import { createViewer } from '@easyink/viewer'
 import { onBeforeUnmount, onMounted, ref } from 'vue'
@@ -15,7 +14,6 @@ import {
   DropdownMenuTrigger,
 } from './components/ui/dropdown-menu'
 import { usePrinter } from './hooks/usePrinter'
-import { loadPrinterConfig, savePrinterConfig } from './storage/printer-config-store'
 
 const props = defineProps<{
   schema: DocumentSchema
@@ -36,14 +34,11 @@ const currentPage = ref(1)
 const totalPages = ref(1)
 
 // Printer integration
-const printerConfig = ref<PrinterConfig>(loadPrinterConfig())
-const printer = usePrinter(printerConfig.value)
+const printer = usePrinter()
 const showPrinterSettings = ref(false)
+const isPrinting = ref(false)
 
-// Auto-connect if enabled
-if (printerConfig.value.enablePrinterService) {
-  printer.connectService()
-}
+// Auto-connect handled inside usePrinter() singleton based on persisted config.
 
 onMounted(async () => {
   if (!containerRef.value)
@@ -182,19 +177,28 @@ async function handleBrowserPrint() {
 }
 
 async function handleHiPrintPrint() {
-  if (!printer.getPrinterEnabled.value) {
+  if (!printer.enabled.value) {
     toast.error('请先在设置中启用打印服务')
     showPrinterSettings.value = true
     return
   }
 
-  if (!printer.getConnected.value) {
-    toast.error('打印服务未连接，请检查打印服务是否启动')
-    return
+  if (!printer.isConnected.value) {
+    const t = toast.loading('正在连接打印服务…')
+    try {
+      await printer.connect()
+      toast.dismiss(t)
+    }
+    catch (e) {
+      toast.dismiss(t)
+      toast.error(e instanceof Error ? e.message : '连接打印服务失败')
+      showPrinterSettings.value = true
+      return
+    }
   }
 
-  if (!printer.getPrinterDevice.value) {
-    toast.error('请先在设置中选择打印机')
+  if (!printer.printerDevice.value) {
+    toast.error('请在设置中选择打印机')
     showPrinterSettings.value = true
     return
   }
@@ -202,68 +206,51 @@ async function handleHiPrintPrint() {
   if (!containerRef.value)
     return
 
+  const pages = Array.from(
+    containerRef.value.querySelectorAll<HTMLElement>('.ei-viewer-page'),
+  )
+  if (pages.length === 0) {
+    toast.error('没有可打印的页面')
+    return
+  }
+
+  const printerDevice = printer.printerDevice.value
+  const { width: pageWidth, height: pageHeight } = props.schema.page
+  const { unit } = props.schema
+
+  const UNIT_TO_MM = { mm: 1, cm: 10, in: 25.4, pt: 0.352778 }
+  const factor = UNIT_TO_MM[unit as keyof typeof UNIT_TO_MM] || 1
+  const width = pageWidth * factor
+  const height = pageHeight * factor
+
+  isPrinting.value = true
+  const progressId = pages.length > 1 ? toast.loading(`打印中 0 / ${pages.length}`) : undefined
+
   try {
-    const pages = containerRef.value.querySelectorAll<HTMLElement>('.ei-viewer-page')
-    if (pages.length === 0) {
-      toast.error('没有可打印的页面')
-      return
-    }
-
-    const printerDevice = printer.getPrinterDevice.value
-    const { width: pageWidth, height: pageHeight } = props.schema.page
-    const { unit } = props.schema
-
-    // Convert page dimensions based on unit (assuming mm for HiPrint)
-    const UNIT_TO_MM = {
-      mm: 1,
-      cm: 10,
-      in: 25.4,
-      pt: 0.352778,
-    }
-    const factor = UNIT_TO_MM[unit as keyof typeof UNIT_TO_MM] || 1
-    const width = pageWidth * factor
-    const height = pageHeight * factor
-
-    for (const page of pages) {
-      const html = page.innerHTML
-
-      await printer.printHtml({
-        width,
-        height,
-        html,
-        printer: printerDevice,
-      })
-    }
+    await printer.printPages(
+      pages,
+      { width, height, printer: printerDevice },
+      ({ current, total }) => {
+        if (progressId !== undefined)
+          toast.loading(`打印中 ${current} / ${total}`, { id: progressId })
+      },
+    )
+    if (progressId !== undefined)
+      toast.dismiss(progressId)
+    toast.success(pages.length > 1 ? `已完成打印 (${pages.length} 页)` : '已发送到打印机')
   }
   catch (err) {
+    if (progressId !== undefined)
+      toast.dismiss(progressId)
     toast.error(`打印失败: ${err instanceof Error ? err.message : String(err)}`)
   }
-}
-
-function handleSavePrinterConfig(config: PrinterConfig) {
-  printerConfig.value = config
-  printer.updateConfig(config)
-  savePrinterConfig(config)
-  showPrinterSettings.value = false
-
-  if (config.enablePrinterService && !printer.getConnected.value) {
-    printer.connectService()
-  }
-  else if (!config.enablePrinterService && printer.getConnected.value) {
-    printer.disconnectService()
+  finally {
+    isPrinting.value = false
   }
 }
 
-function handleConnectPrinter() {
-  printer.connectService()
-}
-
-function handleDisconnectPrinter() {
-  printer.disconnectService()
-}
-
-function handleRefreshPrinterDevices() {
-  printer.refreshPrinterDevicesCache()
+function openPrinterSettings() {
+  showPrinterSettings.value = true
 }
 
 async function handleExport() {
@@ -317,14 +304,14 @@ async function handleExport() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent class="z-[10002]">
-            <DropdownMenuItem @click="handleBrowserPrint">
+            <DropdownMenuItem :disabled="isPrinting" @click="handleBrowserPrint">
               浏览器打印
             </DropdownMenuItem>
-            <DropdownMenuItem @click="handleHiPrintPrint">
+            <DropdownMenuItem :disabled="isPrinting" @click="handleHiPrintPrint">
               HiPrint 打印
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem @click="showPrinterSettings = true">
+            <DropdownMenuItem @click="openPrinterSettings">
               打印设置
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -345,13 +332,6 @@ async function handleExport() {
 
   <PrinterSettingsModal
     v-if="showPrinterSettings"
-    :config="printerConfig"
-    :is-connected="printer.getConnected.value"
-    :printer-devices="printer.getPrinterDevicesCache.value"
-    @save="handleSavePrinterConfig"
-    @connect="handleConnectPrinter"
-    @disconnect="handleDisconnectPrinter"
-    @refresh-devices="handleRefreshPrinterDevices"
     @close="showPrinterSettings = false"
   />
 </template>

@@ -1,17 +1,8 @@
 <script setup lang="ts">
+import type { SampleTemplateEntry } from '@easyink/samples'
 import type { StoredTemplate } from '../storage/template-store'
 import { sampleTemplates } from '@easyink/samples'
 import { computed, onMounted, ref } from 'vue'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -24,7 +15,8 @@ defineProps<{
 }>()
 
 const emit = defineEmits<{
-  select: [template: StoredTemplate, demoData?: Record<string, unknown>]
+  select: [template: StoredTemplate]
+  previewSample: [sample: SampleTemplateEntry]
   createBlank: []
   duplicate: [template: StoredTemplate]
   close: []
@@ -33,9 +25,6 @@ const emit = defineEmits<{
 const userTemplates = ref<StoredTemplate[]>([])
 const loading = ref(true)
 const activeTab = ref<'all' | 'my' | 'samples'>('all')
-
-// Pending sample selection waiting for confirm
-const pending = ref<{ template: StoredTemplate, demoData: Record<string, unknown> } | null>(null)
 
 onMounted(async () => {
   userTemplates.value = await listTemplates()
@@ -50,7 +39,6 @@ const sampleEntries = computed(() =>
     mode: s.schema.page.mode,
     size: `${s.schema.page.width}×${s.schema.page.height} ${s.schema.unit}`,
     page: s.schema.page,
-    isSample: true as const,
   })),
 )
 
@@ -64,38 +52,7 @@ function handleSelectSample(sampleId: string) {
   const sample = sampleTemplates.find(s => s.id === sampleId)
   if (!sample)
     return
-
-  const now = Date.now()
-  const template: StoredTemplate = {
-    id: `user-${now}`,
-    name: `${sample.name} (副本)`,
-    category: sample.category,
-    schema: JSON.parse(JSON.stringify(sample.schema)),
-    createdAt: now,
-    updatedAt: now,
-    fromSample: sample.id,
-  }
-
-  if (sample.demoData && Object.keys(sample.demoData).length > 0) {
-    pending.value = { template, demoData: sample.demoData }
-  }
-  else {
-    emit('select', template)
-  }
-}
-
-function confirmUseDemoData() {
-  if (!pending.value)
-    return
-  emit('select', pending.value.template, pending.value.demoData)
-  pending.value = null
-}
-
-function confirmKeepCurrentData() {
-  if (!pending.value)
-    return
-  emit('select', pending.value.template)
-  pending.value = null
+  emit('previewSample', sample)
 }
 
 function handleSelectUser(template: StoredTemplate) {
@@ -141,7 +98,11 @@ function handleOpenChange(val: boolean) {
 
 <template>
   <Dialog :open="open" @update:open="handleOpenChange">
-    <DialogContent class="max-w-[860px] p-0 gap-0 overflow-hidden">
+    <DialogContent
+      class="max-w-[860px] p-0 gap-0 overflow-hidden"
+      sr-title="模板库"
+      sr-description="选择我的模板、预览示例模板或创建新模板"
+    >
       <div class="flex h-[560px]">
         <!-- Sidebar -->
         <nav class="w-[164px] shrink-0 border-r border-border flex flex-col p-2.5 bg-muted/20">
@@ -282,24 +243,4 @@ function handleOpenChange(val: boolean) {
       </div>
     </DialogContent>
   </Dialog>
-
-  <!-- Confirm dialog: reset data? -->
-  <AlertDialog :open="!!pending" @update:open="(val) => { if (!val) pending = null }">
-    <AlertDialogContent>
-      <AlertDialogHeader>
-        <AlertDialogTitle>是否使用示例数据？</AlertDialogTitle>
-        <AlertDialogDescription>
-          该模板附带示例数据，可直接看到真实打印效果。使用后将替换当前数据编辑器中的内容。
-        </AlertDialogDescription>
-      </AlertDialogHeader>
-      <AlertDialogFooter>
-        <AlertDialogCancel @click="confirmKeepCurrentData">
-          保留当前数据
-        </AlertDialogCancel>
-        <AlertDialogAction @click="confirmUseDemoData">
-          使用示例数据
-        </AlertDialogAction>
-      </AlertDialogFooter>
-    </AlertDialogContent>
-  </AlertDialog>
 </template>

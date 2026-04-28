@@ -1,11 +1,14 @@
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { hiprint } from 'vue-plugin-hiprint'
 
 export const DEFAULT_PRINTER_HOST = 'http://localhost:17521'
-// 默认58mm 纸张宽度
 export const DEFAULT_PRINTER_PAGE_SIZE = 58
-// 默认打印份数
 export const DEFAULT_PRINTER_COPIES = 1
+
+const PRINTER_CONFIG_KEY = 'easyink:printerConfig'
+const CONNECT_TIMEOUT_MS = 4000
+const REFRESH_DELAY_MS = 300
+const REFRESH_TIMEOUT_MS = 2500
 
 export interface PrinterDevice {
   description: string
@@ -25,42 +28,6 @@ export interface PrintHTMLOptions {
   paperHeader?: number
 }
 
-// 单例模式
-function ensureHiPrintInit() {
-  let isInitialized = false
-
-  // 打印服务连接状态
-  const openedRef = ref(false)
-
-  return function getHiWebSocket() {
-    if (!isInitialized) {
-      hiprint.init()
-
-      // hook hiwebSocket.opened
-      Object.defineProperty(hiprint.hiwebSocket, 'opened', {
-        get() {
-          return openedRef.value
-        },
-        set(value: boolean) {
-          openedRef.value = value
-        },
-        enumerable: true,
-        configurable: true,
-      })
-
-      isInitialized = true
-    }
-
-    return { isConnected: openedRef }
-  }
-}
-
-// 初始化 HiPrint，只执行一次
-export const initHiPrint = ensureHiPrintInit()
-
-// 设备列表缓存，避免频繁调用获取设备接口
-const printerDevicesCache = ref<PrinterDevice[]>([])
-
 export interface PrinterConfig {
   enablePrinterService: boolean
   printerDevice?: string
@@ -69,275 +36,284 @@ export interface PrinterConfig {
   printerServiceUrl?: string
 }
 
-/**
- * 打印机相关 Hook
- *
- * @description https://github.com/CcSimple/vue-plugin-hiprint/blob/main/src/index.js
- */
-export function usePrinter(initialConfig?: PrinterConfig) {
-  // isConnected 代表打印服务连接状态，不要手动修改
-  const { isConnected } = initHiPrint()
+export type ConnectionState = 'idle' | 'connecting' | 'connected' | 'error'
 
-  const getConnected = computed(() => isConnected.value)
-
-  const systemConfigStore = reactive<PrinterConfig>({
-    enablePrinterService: initialConfig?.enablePrinterService ?? false,
-    printerDevice: initialConfig?.printerDevice,
-    printerPaperSize: initialConfig?.printerPaperSize,
-    printCopies: initialConfig?.printCopies,
-    printerServiceUrl: initialConfig?.printerServiceUrl,
-  })
-
-  const getPrinterEnabled = computed(
-    () => systemConfigStore.enablePrinterService,
-  )
-
-  const getPrinterDevice = computed(() => systemConfigStore.printerDevice)
-  const getPrinterPaperSize = computed(
-    () => systemConfigStore.printerPaperSize || DEFAULT_PRINTER_PAGE_SIZE,
-  )
-  const getPrintCopies = computed(
-    () => systemConfigStore.printCopies || DEFAULT_PRINTER_COPIES,
-  )
-  const getPrinterServiceUrl = computed(
-    () => systemConfigStore.printerServiceUrl || DEFAULT_PRINTER_HOST,
-  )
-  const getPrinterDevicesCache = computed(() => printerDevicesCache.value)
-
-  /**
-   * 断开服务连接
-   */
-  function disconnectService() {
-    // 关闭WebSocket连接
-    hiprint.hiwebSocket
-    && hiprint.hiwebSocket.hasIo()
-    && hiprint.hiwebSocket.stop()
+function loadConfig(): PrinterConfig {
+  try {
+    const stored = localStorage.getItem(PRINTER_CONFIG_KEY)
+    if (!stored)
+      return defaultConfig()
+    const parsed = JSON.parse(stored) as Partial<PrinterConfig>
+    return {
+      enablePrinterService: parsed.enablePrinterService ?? false,
+      printerDevice: parsed.printerDevice,
+      printerPaperSize: parsed.printerPaperSize ?? DEFAULT_PRINTER_PAGE_SIZE,
+      printCopies: parsed.printCopies ?? DEFAULT_PRINTER_COPIES,
+      printerServiceUrl: parsed.printerServiceUrl ?? DEFAULT_PRINTER_HOST,
+    }
   }
+  catch {
+    return defaultConfig()
+  }
+}
 
-  /**
-   * 连接打印服务
-   */
-  function connectService() {
-    const namespace = import.meta.env?.VITE_APP_NAMESPACE || 'easyink-playground'
+function defaultConfig(): PrinterConfig {
+  return {
+    enablePrinterService: false,
+    printerDevice: undefined,
+    printerPaperSize: DEFAULT_PRINTER_PAGE_SIZE,
+    printCopies: DEFAULT_PRINTER_COPIES,
+    printerServiceUrl: DEFAULT_PRINTER_HOST,
+  }
+}
+
+function persistConfig(snapshot: PrinterConfig) {
+  try {
+    localStorage.setItem(PRINTER_CONFIG_KEY, JSON.stringify(snapshot))
+  }
+  catch { /* quota exceeded */ }
+}
+
+// ---------- singleton state ----------
+
+const config = reactive<PrinterConfig>(loadConfig())
+const connectionState = ref<ConnectionState>('idle')
+const lastError = ref<string>('')
+const devices = ref<PrinterDevice[]>([])
+let initialized = false
+let connectPromise: Promise<void> | null = null
+let saveTimer: ReturnType<typeof setTimeout> | undefined
+
+watch(config, (val) => {
+  if (saveTimer)
+    clearTimeout(saveTimer)
+  saveTimer = setTimeout(persistConfig, 200, { ...val })
+}, { deep: true })
+
+function ensureInit() {
+  if (initialized)
+    return
+  hiprint.init()
+  // route hiprint websocket open status into our reactive ref
+  Object.defineProperty(hiprint.hiwebSocket, 'opened', {
+    get() {
+      return connectionState.value === 'connected'
+    },
+    set(value: boolean) {
+      if (value) {
+        connectionState.value = 'connected'
+        lastError.value = ''
+      }
+      else if (connectionState.value === 'connected') {
+        connectionState.value = 'idle'
+      }
+    },
+    enumerable: true,
+    configurable: true,
+  })
+  initialized = true
+}
+
+function namespace(): string {
+  return import.meta.env?.VITE_APP_NAMESPACE || 'easyink-playground'
+}
+
+function disconnect(): void {
+  try {
+    if (hiprint.hiwebSocket?.hasIo?.())
+      hiprint.hiwebSocket.stop()
+  }
+  catch { /* ignore */ }
+  connectionState.value = 'idle'
+  connectPromise = null
+}
+
+function connect(): Promise<void> {
+  ensureInit()
+
+  if (connectionState.value === 'connected')
+    return Promise.resolve()
+  if (connectPromise)
+    return connectPromise
+
+  connectionState.value = 'connecting'
+  lastError.value = ''
+
+  connectPromise = new Promise<void>((resolve, reject) => {
+    const url = config.printerServiceUrl || DEFAULT_PRINTER_HOST
+    let settled = false
+
+    const timer = setTimeout(() => {
+      if (settled)
+        return
+      settled = true
+      connectionState.value = 'error'
+      lastError.value = `连接超时 (${url})`
+      try {
+        if (hiprint.hiwebSocket?.hasIo?.())
+          hiprint.hiwebSocket.stop()
+      }
+      catch { /* ignore */ }
+      connectPromise = null
+      reject(new Error(lastError.value))
+    }, CONNECT_TIMEOUT_MS)
+
     hiprint.hiwebSocket.setHost(
-      getPrinterServiceUrl.value,
-      `vue-plugin-hiprint-${namespace}`,
-      (connect: boolean) => {
-        if (!connect) {
+      url,
+      `vue-plugin-hiprint-${namespace()}`,
+      (connected: boolean) => {
+        if (settled)
           return
+        if (connected) {
+          settled = true
+          clearTimeout(timer)
+          connectionState.value = 'connected'
+          connectPromise = null
+          refreshDevices().catch(() => { /* ignore */ })
+          resolve()
         }
-
-        // 连接成功后设置默认打印机
-        refreshPrinterDevicesCache()
       },
     )
 
-    // 连接打印机服务
-    hiprint.hiwebSocket
-    && !hiprint.hiwebSocket.hasIo()
-    && hiprint.hiwebSocket.start()
+    if (!hiprint.hiwebSocket?.hasIo?.())
+      hiprint.hiwebSocket.start()
+  })
+
+  return connectPromise
+}
+
+async function refreshDevices(): Promise<PrinterDevice[]> {
+  if (connectionState.value !== 'connected') {
+    devices.value = []
+    return []
   }
 
-  /**
-   * 获取服务连接状态
-   */
-  function getServiceOpened() {
-    return hiprint.hiwebSocket.opened
-  }
+  const list = await new Promise<PrinterDevice[]>((resolve) => {
+    let done = false
+    const timer = setTimeout(() => {
+      done = true
+      resolve([])
+    }, REFRESH_DELAY_MS + REFRESH_TIMEOUT_MS)
 
-  /**
-   * 获取 HiPrint 实例
-   */
-  function getHiprintInstance(): Record<string, any> {
-    return hiprint
-  }
-
-  /**
-   * 同步获取打印机设备列表
-   */
-  function getPrinterDevicesSync(): PrinterDevice[] {
-    return printerDevicesCache.value
-  }
-
-  async function refreshPrinterDevicesCache() {
-    try {
-      const devices = await getPrinterDevicesAsync()
-      printerDevicesCache.value = devices
-    }
-    catch {
-      printerDevicesCache.value = []
-    }
-
-    // 设置默认打印机
-    const devices = printerDevicesCache.value
-
-    if (devices.length <= 0) {
-      systemConfigStore.printerDevice = undefined
-      return
-    }
-
-    const defaultDevice = devices.find(d => d.isDefault) || devices[0]
-
-    if (!defaultDevice) {
-      return
-    }
-
-    if (!systemConfigStore.printerDevice) {
-      // 如果当前没有选择打印机，则设置为默认打印机
-      systemConfigStore.printerDevice = defaultDevice.name
-    }
-    else if (
-      devices.every(d => d.name !== systemConfigStore.printerDevice)
-    ) {
-      // 如果当前选择的打印机不存在，则设置为默认打印机
-      systemConfigStore.printerDevice = defaultDevice.name
-    }
-  }
-
-  /**
-   * 异步获取打印机设备列表
-   */
-  async function getPrinterDevicesAsync(): Promise<PrinterDevice[]> {
-    return new Promise((resolve) => {
-      let isTimeout = false
-
-      // 避免连接刚建立时立即获取打印机列表失败，稍作延时
-      setTimeout(() => {
-        // 设置超时，避免长时间等待
-        setTimeout(() => {
-          isTimeout = true
-          resolve([])
-        }, 2000)
-
-        hiprint.refreshPrinterList((devices: PrinterDevice[]) => {
-          if (isTimeout) {
-            return
-          }
-          resolve(devices)
-        })
-      }, 500)
-    })
-  }
-
-  /**
-   * 打印 HTML 内容
-   */
-  async function printHtml({
-    width,
-    height,
-    html,
-    printer,
-    paperFooter = 340,
-    paperHeader = 46,
-  }: PrintHTMLOptions) {
-    return new Promise<void>((resolve, reject) => {
-      if (!systemConfigStore.enablePrinterService) {
-        // 未启用打印服务，直接返回成功
-        reject(new Error('打印服务未启用'))
-        return
-      }
-
-      if (!printer) {
-        reject(new Error('未选择打印机'))
-        return
-      }
-
-      if (getConnected.value) {
-        // 打印服务已连接，开始打印
-        resolve()
-      }
-      else {
-        // 打印服务未连接，则尝试重连
-        connectService()
-
-        // 等待打印服务连接成功
-        setTimeout(() => {
-          if (getConnected.value) {
-            resolve()
-          }
-          else {
-            reject(new Error('打印服务未连接'))
-          }
-        }, 1000)
-      }
-    }).then(() => {
-      return new Promise<void>((resolve, reject) => {
-        const hiprintTemplate = new hiprint.PrintTemplate()
-
-        const panel = hiprintTemplate.addPrintPanel({
-          width,
-          height,
-          paperFooter,
-          paperHeader,
-          paperNumberDisabled: true,
-        })
-
-        panel.addPrintHtml({
-          options: { content: html },
-        })
-
-        hiprintTemplate.on('printSuccess', () => {
-          resolve()
-        })
-
-        hiprintTemplate.on('printError', () => {
-          reject(new Error('打印失败'))
-        })
-
-        hiprintTemplate.print2(
-          {},
-          {
-            printer,
-            margins: {
-              marginType: 'none',
-            },
-          },
-        )
+    setTimeout(() => {
+      hiprint.refreshPrinterList((res: PrinterDevice[]) => {
+        if (done)
+          return
+        clearTimeout(timer)
+        resolve(Array.isArray(res) ? res : [])
       })
-    })
-  }
+    }, REFRESH_DELAY_MS)
+  })
 
-  /**
-   * 更新配置
-   */
-  function updateConfig(config: PrinterConfig) {
-    systemConfigStore.enablePrinterService = config.enablePrinterService
-    systemConfigStore.printerDevice = config.printerDevice
-    systemConfigStore.printerPaperSize = config.printerPaperSize
-    systemConfigStore.printCopies = config.printCopies
-    systemConfigStore.printerServiceUrl = config.printerServiceUrl
-  }
+  devices.value = list
 
-  /**
-   * 获取当前配置
-   */
-  function getConfig(): PrinterConfig {
-    return {
-      enablePrinterService: systemConfigStore.enablePrinterService,
-      printerDevice: systemConfigStore.printerDevice,
-      printerPaperSize: systemConfigStore.printerPaperSize,
-      printCopies: systemConfigStore.printCopies,
-      printerServiceUrl: systemConfigStore.printerServiceUrl,
-    }
+  if (list.length === 0) {
+    config.printerDevice = undefined
+    return list
   }
+  const fallback = list.find(d => d.isDefault) || list[0]!
+  if (!config.printerDevice || list.every(d => d.name !== config.printerDevice))
+    config.printerDevice = fallback.name
 
-  return {
-    getPrinterEnabled,
-    getConnected,
-    getPrinterDevice,
-    getPrinterPaperSize,
-    getPrintCopies,
-    getPrinterServiceUrl,
-    connectService,
-    disconnectService,
-    getServiceOpened,
-    getPrinterDevicesSync,
-    getPrinterDevicesAsync,
-    refreshPrinterDevicesCache,
-    getPrinterDevicesCache,
-    getHiprintInstance,
-    printHtml,
-    updateConfig,
-    getConfig,
+  return list
+}
+
+function setEnabled(enabled: boolean): void {
+  config.enablePrinterService = enabled
+  if (enabled) {
+    connect().catch(() => { /* surfaced via state */ })
+  }
+  else {
+    disconnect()
   }
 }
+
+function updateConfig(patch: Partial<PrinterConfig>): void {
+  Object.assign(config, patch)
+}
+
+async function printHtml(opts: PrintHTMLOptions): Promise<void> {
+  if (!config.enablePrinterService)
+    throw new Error('打印服务未启用')
+  if (!opts.printer)
+    throw new Error('未选择打印机')
+  if (connectionState.value !== 'connected')
+    await connect()
+
+  return new Promise<void>((resolve, reject) => {
+    const tpl = new hiprint.PrintTemplate()
+    const panel = tpl.addPrintPanel({
+      width: opts.width,
+      height: opts.height,
+      paperFooter: opts.paperFooter ?? 340,
+      paperHeader: opts.paperHeader ?? 46,
+      paperNumberDisabled: true,
+    })
+    panel.addPrintHtml({ options: { content: opts.html } })
+
+    tpl.on('printSuccess', () => resolve())
+    tpl.on('printError', (e: unknown) => {
+      reject(new Error(e instanceof Error ? e.message : '打印失败'))
+    })
+
+    tpl.print2({}, {
+      printer: opts.printer,
+      margins: { marginType: 'none' },
+    })
+  })
+}
+
+export interface PrintPagesProgress {
+  current: number
+  total: number
+}
+
+async function printPages(
+  pages: HTMLElement[],
+  opts: { width: number, height: number, printer: string },
+  onProgress?: (p: PrintPagesProgress) => void,
+): Promise<void> {
+  for (let i = 0; i < pages.length; i++) {
+    onProgress?.({ current: i + 1, total: pages.length })
+    await printHtml({
+      width: opts.width,
+      height: opts.height,
+      html: pages[i]!.innerHTML,
+      printer: opts.printer,
+    })
+  }
+}
+
+// auto-connect if previously enabled
+if (config.enablePrinterService) {
+  Promise.resolve().then(() => connect().catch(() => { /* surfaced via state */ }))
+}
+
+// ---------- public API ----------
+
+export function usePrinter() {
+  return {
+    config,
+    connectionState: computed(() => connectionState.value),
+    isConnected: computed(() => connectionState.value === 'connected'),
+    isConnecting: computed(() => connectionState.value === 'connecting'),
+    isError: computed(() => connectionState.value === 'error'),
+    lastError: computed(() => lastError.value),
+    devices: computed(() => devices.value),
+    enabled: computed(() => config.enablePrinterService),
+    printerDevice: computed(() => config.printerDevice),
+    paperSize: computed(() => config.printerPaperSize ?? DEFAULT_PRINTER_PAGE_SIZE),
+    copies: computed(() => config.printCopies ?? DEFAULT_PRINTER_COPIES),
+    serviceUrl: computed(() => config.printerServiceUrl ?? DEFAULT_PRINTER_HOST),
+
+    connect,
+    disconnect,
+    setEnabled,
+    updateConfig,
+    refreshDevices,
+    printHtml,
+    printPages,
+  }
+}
+
+export type PrinterStore = ReturnType<typeof usePrinter>

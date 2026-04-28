@@ -6,16 +6,31 @@ import { X } from 'lucide-vue-next'
 import {
   DialogClose,
   DialogContent,
+  DialogDescription,
   DialogOverlay,
   DialogPortal,
+  DialogTitle,
   useForwardPropsEmits,
+  VisuallyHidden,
 } from 'reka-ui'
 import { cn } from '@/lib/utils'
 
-const props = defineProps<DialogContentProps & { class?: HTMLAttributes['class'] }>()
+const props = defineProps<DialogContentProps & {
+  class?: HTMLAttributes['class']
+  /**
+   * Visually-hidden accessible name. Provide when the dialog body
+   * has no visible <DialogTitle> child to satisfy a11y requirements.
+   */
+  srTitle?: string
+  /**
+   * Visually-hidden accessible description. Provide when the dialog body
+   * has no visible <DialogDescription> child.
+   */
+  srDescription?: string
+}>()
 const emits = defineEmits<DialogContentEmits>()
 
-const delegatedProps = reactiveOmit(props, 'class')
+const delegatedProps = reactiveOmit(props, 'class', 'srTitle', 'srDescription')
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
 </script>
@@ -33,6 +48,13 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
           props.class,
         )"
     >
+      <VisuallyHidden v-if="srTitle">
+        <DialogTitle>{{ srTitle }}</DialogTitle>
+      </VisuallyHidden>
+      <VisuallyHidden v-if="srDescription">
+        <DialogDescription>{{ srDescription }}</DialogDescription>
+      </VisuallyHidden>
+
       <slot />
 
       <DialogClose

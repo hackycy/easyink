@@ -5,6 +5,8 @@ export interface StoredTemplate {
   name: string
   category: string
   schema: DocumentSchema
+  /** Per-template preview data; persisted alongside schema. */
+  data?: Record<string, unknown>
   createdAt: number
   updatedAt: number
   fromSample?: string
