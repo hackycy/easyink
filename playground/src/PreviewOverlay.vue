@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { DocumentSchema, ViewerRuntime } from '@easyink/viewer'
 import type { PrinterConfig } from './hooks/usePrinter'
+import { IconChevronLeft, IconChevronRight, IconClose, IconExport, IconManager, IconMaximize, IconMinimize, IconPlus, IconPrint } from '@easyink/icons'
 import { createViewer } from '@easyink/viewer'
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import PrinterSettingsModal from './components/PrinterSettingsModal.vue'
@@ -29,7 +30,6 @@ const totalPages = ref(1)
 const printerConfig = ref<PrinterConfig>(loadPrinterConfig())
 const printer = usePrinter(printerConfig.value)
 const showPrinterSettings = ref(false)
-const showPrintMenu = ref(false)
 
 // Auto-connect if enabled
 if (printerConfig.value.enablePrinterService) {
@@ -168,18 +168,23 @@ function handleScroll() {
   currentPage.value = closest
 }
 
-async function handlePrint() {
-  showPrintMenu.value = !showPrintMenu.value
+function handleMenuClick({ key }: { key: string }) {
+  if (key === 'browser') {
+    handleBrowserPrint()
+  }
+  else if (key === 'hiprint') {
+    handleHiPrintPrint()
+  }
+  else if (key === 'settings') {
+    showPrinterSettings.value = true
+  }
 }
 
 async function handleBrowserPrint() {
-  showPrintMenu.value = false
   await viewer?.print()
 }
 
 async function handleHiPrintPrint() {
-  showPrintMenu.value = false
-
   if (!printer.getPrinterEnabled.value) {
     alert('请先在设置中启用打印服务')
     showPrinterSettings.value = true
@@ -281,53 +286,72 @@ async function handleExport() {
   <div class="fixed inset-0 z-[9999] flex flex-col bg-black/60">
     <div class="flex items-center justify-between px-4 py-1.5 bg-white border-b border-border gap-2">
       <div class="flex items-center gap-1">
-        <button class="w-7 h-7 flex items-center justify-center border border-border rounded bg-white cursor-pointer text-[#555] text-xs disabled:opacity-35 disabled:cursor-not-allowed hover:bg-bg-tertiary hover:text-text-secondary" :disabled="currentPage <= 1" @click="prevPage">
-          &#9664;
-        </button>
+        <a-button :disabled="currentPage <= 1" @click="prevPage">
+          <template #icon>
+            <IconChevronLeft :size="16" />
+          </template>
+        </a-button>
         <span class="text-xs text-text-tertiary min-w-[48px] text-center select-none">{{ currentPage }} / {{ totalPages }}</span>
-        <button class="w-7 h-7 flex items-center justify-center border border-border rounded bg-white cursor-pointer text-[#555] text-xs disabled:opacity-35 disabled:cursor-not-allowed hover:bg-bg-tertiary hover:text-text-secondary" :disabled="currentPage >= totalPages" @click="nextPage">
-          &#9654;
-        </button>
+        <a-button :disabled="currentPage >= totalPages" @click="nextPage">
+          <template #icon>
+            <IconChevronRight :size="16" />
+          </template>
+        </a-button>
 
         <span class="w-px h-[18px] bg-border mx-1" />
 
-        <button class="w-7 h-7 flex items-center justify-center border border-border rounded bg-white cursor-pointer text-[#555] text-xs hover:bg-bg-tertiary hover:text-text-secondary" @click="zoomOut">
-          -
-        </button>
+        <a-button @click="zoomOut">
+          <template #icon>
+            <IconMinimize :size="16" />
+          </template>
+        </a-button>
         <span class="text-xs text-text-tertiary min-w-[48px] text-center select-none">{{ zoom }}%</span>
-        <button class="w-7 h-7 flex items-center justify-center border border-border rounded bg-white cursor-pointer text-[#555] text-xs hover:bg-bg-tertiary hover:text-text-secondary" @click="zoomIn">
-          +
-        </button>
-        <button class="w-auto h-7 px-2 flex items-center justify-center border border-border rounded bg-white cursor-pointer text-xs hover:bg-bg-tertiary hover:text-text-secondary" @click="zoomFit">
+        <a-button @click="zoomIn">
+          <template #icon>
+            <IconPlus :size="16" />
+          </template>
+        </a-button>
+        <a-button @click="zoomFit">
+          <template #icon>
+            <IconMaximize :size="16" />
+          </template>
           适应宽度
-        </button>
+        </a-button>
       </div>
 
       <div class="flex items-center gap-1">
-        <button class="px-3.5 py-1 text-[13px] border border-border-dark rounded bg-white cursor-pointer text-text-secondary hover:bg-bg-tertiary" @click="handleExport">
+        <a-button @click="handleExport">
+          <template #icon>
+            <IconExport :size="16" />
+          </template>
           导出 JSON
-        </button>
-        <div class="relative">
-          <button class="px-3.5 py-1 text-[13px] border border-primary rounded bg-primary cursor-pointer text-white hover:bg-primary-hover flex items-center gap-1" @click.stop="handlePrint">
+        </a-button>
+        <a-dropdown>
+          <a-button type="primary">
+            <template #icon>
+              <IconPrint :size="16" />
+            </template>
             打印
-            <span class="text-[10px]">&#9662;</span>
-          </button>
-          <div v-if="showPrintMenu" class="absolute right-0 top-full mt-1 bg-white border border-border rounded shadow-lg min-w-[160px] z-10" @click.stop>
-            <button class="w-full px-4 py-2 text-left text-sm hover:bg-bg-tertiary" @click="handleBrowserPrint">
-              浏览器打印
-            </button>
-            <button class="w-full px-4 py-2 text-left text-sm hover:bg-bg-tertiary" @click="handleHiPrintPrint">
-              HiPrint 打印
-            </button>
-            <div class="border-t border-border" />
-            <button class="w-full px-4 py-2 text-left text-sm hover:bg-bg-tertiary" @click="showPrinterSettings = true; showPrintMenu = false">
-              打印设置
-            </button>
-          </div>
-        </div>
-        <button class="w-8 h-8 flex items-center justify-center border-none bg-transparent text-[22px] text-text-quaternary cursor-pointer rounded ml-1 hover:bg-border-light hover:text-text-secondary" @click="emit('close')">
-          &times;
-        </button>
+          </a-button>
+          <template #overlay>
+            <a-menu @click="handleMenuClick">
+              <a-menu-item key="browser">浏览器打印</a-menu-item>
+              <a-menu-item key="hiprint">HiPrint 打印</a-menu-item>
+              <a-menu-divider />
+              <a-menu-item key="settings">
+                <template #icon>
+                  <IconManager :size="14" />
+                </template>
+                打印设置
+              </a-menu-item>
+            </a-menu>
+          </template>
+        </a-dropdown>
+        <a-button @click="emit('close')">
+          <template #icon>
+            <IconClose :size="16" />
+          </template>
+        </a-button>
       </div>
     </div>
 
@@ -336,7 +360,6 @@ async function handleExport() {
       class="flex-1 overflow-auto px-8 py-6 bg-[#525659]"
       @wheel="handleWheel"
       @scroll="handleScroll"
-      @click="showPrintMenu = false"
     />
   </div>
 

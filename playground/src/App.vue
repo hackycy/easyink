@@ -4,6 +4,7 @@ import type { StoredTemplate } from './storage/template-store'
 import { createAIContribution } from '@easyink/ai'
 import { createLocalStoragePreferenceProvider, EasyInkDesigner } from '@easyink/designer'
 import zhCN from '@easyink/designer/locale/zh-CN'
+import { IconDatabase, IconPreview } from '@easyink/icons'
 import { blankA4Template, flowInvoiceTemplate, invoiceDemoData, sampleDataSources, sampleTemplates } from '@easyink/samples'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import DataEditorModal from './components/DataEditor.vue'
@@ -197,17 +198,23 @@ const contributions = [createAIContribution()]
   >
     <template #topbar>
       <div class="flex items-center gap-2 px-3 py-1 bg-bg-secondary border-b border-border">
-        <button class="flex items-center gap-1 px-2.5 py-1 text-[13px] font-medium border border-border-dark rounded bg-white cursor-pointer text-text-secondary hover:bg-bg-tertiary" @click="showTemplateGallery = true">
+        <a-button class="flex items-center gap-1" @click="showTemplateGallery = true">
           {{ currentTemplate?.name ?? '选择模板' }}
           <span class="text-[10px] text-text-quaternary">&#9662;</span>
-        </button>
+        </a-button>
         <div class="flex-1" />
-        <button class="px-3.5 py-1 text-[13px] border border-border-dark rounded bg-white cursor-pointer text-text-secondary hover:bg-bg-hover" @click="openDataEditor">
+        <a-button @click="openDataEditor">
+          <template #icon>
+            <IconDatabase :size="16" />
+          </template>
           数据
-        </button>
-        <button class="px-3.5 py-1 text-[13px] border border-primary rounded bg-primary cursor-pointer text-white hover:bg-primary-hover hover:border-primary-hover" @click="openPreview">
+        </a-button>
+        <a-button type="primary" @click="openPreview">
+          <template #icon>
+            <IconPreview :size="16" />
+          </template>
           预览
-        </button>
+        </a-button>
       </div>
     </template>
   </EasyInkDesigner>

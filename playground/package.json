@@ -9,8 +9,10 @@
   "dependencies": {
     "@easyink/ai": "workspace:*",
     "@easyink/designer": "workspace:*",
+    "@easyink/icons": "workspace:*",
     "@easyink/samples": "workspace:*",
     "@easyink/viewer": "workspace:*",
+    "ant-design-vue": "catalog:framework",
     "vue": "catalog:framework",
     "vue-plugin-hiprint": "catalog:testing"
   },
