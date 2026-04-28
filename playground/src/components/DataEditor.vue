@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { IconClose } from '@easyink/icons'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 const props = defineProps<{
@@ -124,12 +125,6 @@ function handleFormat() {
   }
 }
 
-function handleOverlayClick(event: Event) {
-  if (event.target === event.currentTarget) {
-    emit('close')
-  }
-}
-
 function toggleNode(node: FieldTreeNode) {
   node.expanded = !node.expanded
 }
@@ -153,66 +148,62 @@ function flattenVisibleNodes(nodes: FieldTreeNode[], depth: number): VisibleFiel
 </script>
 
 <template>
-  <div class="fixed inset-0 z-[10000] flex items-center justify-center bg-bg-overlay" @click="handleOverlayClick">
-    <div class="w-[860px] max-w-[90vw] h-[600px] max-h-[80vh] flex flex-col bg-white rounded-lg shadow-modal">
-      <div class="flex items-center justify-between px-5 py-3 border-b border-border-light">
-        <h2 class="m-0 text-base font-semibold text-text-primary">
-          数据编辑器
-        </h2>
-        <div class="flex items-center gap-2">
-          <button class="px-3.5 py-1.5 text-[13px] border border-border-dark rounded bg-white cursor-pointer text-text-secondary hover:bg-bg-tertiary" @click="handleFormat">
+  <a-modal
+    :open="true"
+    title="数据编辑器"
+    width="860px"
+    :footer="null"
+    @cancel="emit('close')"
+  >
+    <div class="flex h-[520px]">
+      <div class="flex-1 flex flex-col border-r border-border-light relative">
+        <div class="px-3 py-2 text-xs font-semibold text-text-quaternary border-b border-border-light">
+          JSON 数据
+        </div>
+        <textarea
+          v-model="jsonText"
+          class="flex-1 m-0 px-3 py-3 border-none outline-none resize-none font-mono text-[13px] leading-relaxed text-text-primary bg-bg-quaternary"
+          style="tab-size: 2;"
+          spellcheck="false"
+          autocomplete="off"
+        />
+        <div v-if="parseError" class="px-3 py-1.5 text-xs text-danger bg-danger-bg border-t border-danger-border">
+          {{ parseError }}
+        </div>
+        <div class="flex items-center gap-2 px-3 py-2 border-t border-border-light">
+          <a-button @click="handleFormat">
             格式化
-          </button>
-          <button class="px-3.5 py-1.5 text-[13px] border border-primary rounded bg-primary cursor-pointer text-white hover:bg-primary-hover disabled:bg-[#d9d9d9] disabled:border-[#d9d9d9] disabled:cursor-not-allowed" :disabled="hasError" @click="handleApply">
+          </a-button>
+          <div class="flex-1" />
+          <a-button type="primary" :disabled="hasError" @click="handleApply">
             应用
-          </button>
-          <button class="w-7 h-7 flex items-center justify-center border-none bg-transparent text-xl text-text-quaternary cursor-pointer rounded hover:bg-border-light hover:text-text-secondary" @click="emit('close')">
-            &times;
-          </button>
+          </a-button>
         </div>
       </div>
 
-      <div class="flex-1 flex min-h-0">
-        <div class="flex-1 flex flex-col border-r border-border-light relative">
-          <div class="px-3 py-2 text-xs font-semibold text-text-quaternary border-b border-border-light">
-            JSON 数据
-          </div>
-          <textarea
-            v-model="jsonText"
-            class="flex-1 m-0 px-3 py-3 border-none outline-none resize-none font-mono text-[13px] leading-relaxed text-text-primary bg-bg-quaternary"
-            style="tab-size: 2;"
-            spellcheck="false"
-            autocomplete="off"
-          />
-          <div v-if="parseError" class="px-3 py-1.5 text-xs text-danger bg-danger-bg border-t border-danger-border">
-            {{ parseError }}
-          </div>
+      <div class="w-[280px] flex flex-col">
+        <div class="px-3 py-2 text-xs font-semibold text-text-quaternary border-b border-border-light">
+          字段树预览
         </div>
-
-        <div class="w-[280px] flex flex-col">
-          <div class="px-3 py-2 text-xs font-semibold text-text-quaternary border-b border-border-light">
-            字段树预览
+        <div class="flex-1 overflow-y-auto py-1">
+          <div v-if="visibleFieldTree.length > 0">
+            <div
+              v-for="entry in visibleFieldTree"
+              :key="entry.node.path"
+              class="flex items-center gap-1 px-2 py-0.5 cursor-default text-xs leading-snug hover:bg-bg-tertiary"
+              :style="{ paddingLeft: `${entry.depth * 16 + 8}px` }"
+              @click="entry.node.children?.length && toggleNode(entry.node)"
+            >
+              <span class="w-3 text-[9px] text-[#ccc] text-center flex-shrink-0">{{ entry.node.children?.length ? (entry.node.expanded ? '▼' : '▶') : '·' }}</span>
+              <span class="text-text-primary font-medium">{{ entry.node.name }}</span>
+              <span class="text-text-quaternary text-[11px] ml-auto">{{ entry.node.type }}</span>
+            </div>
           </div>
-          <div class="flex-1 overflow-y-auto py-1">
-            <div v-if="visibleFieldTree.length > 0">
-              <div
-                v-for="entry in visibleFieldTree"
-                :key="entry.node.path"
-                class="flex items-center gap-1 px-2 py-0.5 cursor-default text-xs leading-snug hover:bg-bg-tertiary"
-                :style="{ paddingLeft: `${entry.depth * 16 + 8}px` }"
-                @click="entry.node.children?.length && toggleNode(entry.node)"
-              >
-                <span class="w-3 text-[9px] text-[#ccc] text-center flex-shrink-0">{{ entry.node.children?.length ? (entry.node.expanded ? '▼' : '▶') : '·' }}</span>
-                <span class="text-text-primary font-medium">{{ entry.node.name }}</span>
-                <span class="text-text-quaternary text-[11px] ml-auto">{{ entry.node.type }}</span>
-              </div>
-            </div>
-            <div v-else class="px-3 py-5 text-xs text-text-disabled text-center">
-              输入有效 JSON 后显示字段树
-            </div>
+          <div v-else class="px-3 py-5 text-xs text-text-disabled text-center">
+            输入有效 JSON 后显示字段树
           </div>
         </div>
       </div>
     </div>
-  </div>
+  </a-modal>
 </template>

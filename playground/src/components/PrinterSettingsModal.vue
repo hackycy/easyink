@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { PrinterConfig, PrinterDevice } from '../hooks/usePrinter'
+import { IconClose } from '@easyink/icons'
 import { computed, onBeforeUnmount, onMounted, reactive } from 'vue'
 import { DEFAULT_PRINTER_COPIES, DEFAULT_PRINTER_HOST, DEFAULT_PRINTER_PAGE_SIZE } from '../hooks/usePrinter'
 
@@ -95,133 +96,94 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50" @click.self="emit('close')">
-    <div class="w-full max-w-lg bg-white rounded-lg shadow-xl">
-      <div class="flex items-center justify-between px-4 py-3 border-b border-border">
-        <h2 class="text-base font-semibold text-text-primary">
-          打印机设置
-        </h2>
-        <button
-          class="w-6 h-6 flex items-center justify-center text-text-quaternary hover:text-text-secondary"
-          @click="emit('close')"
-        >
-          &times;
-        </button>
-      </div>
+  <a-modal
+    :open="true"
+    title="打印机设置"
+    width="540px"
+    @cancel="emit('close')"
+    @ok="handleSave"
+  >
+    <a-form layout="vertical" class="space-y-4">
+      <!-- Enable Printer Service -->
+      <a-form-item label="启用打印服务">
+        <a-switch
+          :checked="localConfig.enablePrinterService"
+          @change="(checked: boolean) => handleToggleService(checked)"
+        />
+      </a-form-item>
 
-      <div class="px-4 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
-        <!-- Enable Printer Service -->
-        <div class="flex items-center justify-between">
-          <label class="text-sm font-medium text-text-secondary">启用打印服务</label>
-          <label class="relative inline-flex items-center cursor-pointer">
-            <input
-              type="checkbox"
-              class="sr-only peer"
-              :checked="localConfig.enablePrinterService"
-              @change="(e) => handleToggleService((e.target as HTMLInputElement).checked)"
-            >
-            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary" />
-          </label>
-        </div>
-
-        <!-- Connection Status -->
-        <div class="flex items-center justify-between">
-          <label class="text-sm font-medium text-text-secondary">连接状态</label>
-          <div class="flex items-center gap-2">
-            <span class="text-sm" :class="connectionStatusColor">{{ connectionStatusText }}</span>
-            <button
-              v-if="localConfig.enablePrinterService && !isConnected"
-              class="px-2 py-1 text-xs border border-border rounded bg-white hover:bg-bg-tertiary"
-              @click="handleConnect"
-            >
-              连接
-            </button>
-          </div>
-        </div>
-
-        <!-- Printer Service URL -->
-        <div class="space-y-1.5">
-          <label class="text-sm font-medium text-text-secondary">打印服务地址</label>
-          <input
-            v-model="localConfig.printerServiceUrl"
-            type="text"
-            class="w-full px-3 py-2 text-sm border border-border rounded focus:outline-none focus:border-primary"
-            :disabled="!localConfig.enablePrinterService"
-            placeholder="http://localhost:17521"
+      <!-- Connection Status -->
+      <a-form-item label="连接状态">
+        <div class="flex items-center gap-2">
+          <span class="text-sm" :class="connectionStatusColor">{{ connectionStatusText }}</span>
+          <a-button
+            v-if="localConfig.enablePrinterService && !isConnected"
+            size="small"
+            @click="handleConnect"
           >
+            连接
+          </a-button>
         </div>
+      </a-form-item>
 
-        <!-- Printer Device -->
-        <div class="space-y-1.5">
-          <div class="flex items-center justify-between">
-            <label class="text-sm font-medium text-text-secondary">打印机</label>
-            <button
-              v-if="localConfig.enablePrinterService"
-              class="px-2 py-1 text-xs border border-border rounded bg-white hover:bg-bg-tertiary"
-              :disabled="!isConnected"
-              @click="handleRefreshDevices"
-            >
-              刷新
-            </button>
-          </div>
-          <select
-            v-model="localConfig.printerDevice"
-            class="w-full px-3 py-2 text-sm border border-border rounded focus:outline-none focus:border-primary"
-            :disabled="!localConfig.enablePrinterService || !isConnected || printerDevices.length === 0"
+      <!-- Printer Service URL -->
+      <a-form-item label="打印服务地址">
+        <a-input
+          v-model:value="localConfig.printerServiceUrl"
+          :disabled="!localConfig.enablePrinterService"
+          placeholder="http://localhost:17521"
+        />
+      </a-form-item>
+
+      <!-- Printer Device -->
+      <a-form-item label="打印机">
+        <template #extra>
+          <a-button
+            v-if="localConfig.enablePrinterService"
+            size="small"
+            :disabled="!isConnected"
+            @click="handleRefreshDevices"
           >
-            <option v-if="printerDevices.length === 0" :value="undefined">
-              {{ isConnected ? '无可用打印机' : '请先连接打印服务' }}
-            </option>
-            <option
-              v-for="device in printerDevices"
-              :key="device.name"
-              :value="device.name"
-            >
-              {{ device.displayName }}{{ device.isDefault ? ' (默认)' : '' }}
-            </option>
-          </select>
-        </div>
+            刷新
+          </a-button>
+        </template>
+        <a-select
+          v-model:value="localConfig.printerDevice"
+          :disabled="!localConfig.enablePrinterService || !isConnected || printerDevices.length === 0"
+          :options="printerDevices.map(d => ({ label: `${d.displayName}${d.isDefault ? ' (默认)' : ''}`, value: d.name }))"
+          placeholder="请选择打印机"
+        />
+      </a-form-item>
 
-        <!-- Paper Size -->
-        <div class="space-y-1.5">
-          <label class="text-sm font-medium text-text-secondary">纸张宽度 (mm)</label>
-          <input
-            v-model.number="localConfig.printerPaperSize"
-            type="number"
-            min="1"
-            class="w-full px-3 py-2 text-sm border border-border rounded focus:outline-none focus:border-primary"
-            :disabled="!localConfig.enablePrinterService"
-          >
-        </div>
+      <!-- Paper Size -->
+      <a-form-item label="纸张宽度 (mm)">
+        <a-input-number
+          v-model:value="localConfig.printerPaperSize"
+          :min="1"
+          :disabled="!localConfig.enablePrinterService"
+          class="w-full"
+        />
+      </a-form-item>
 
-        <!-- Print Copies -->
-        <div class="space-y-1.5">
-          <label class="text-sm font-medium text-text-secondary">打印份数</label>
-          <input
-            v-model.number="localConfig.printCopies"
-            type="number"
-            min="1"
-            max="99"
-            class="w-full px-3 py-2 text-sm border border-border rounded focus:outline-none focus:border-primary"
-            :disabled="!localConfig.enablePrinterService"
-          >
-        </div>
-      </div>
+      <!-- Print Copies -->
+      <a-form-item label="打印份数">
+        <a-input-number
+          v-model:value="localConfig.printCopies"
+          :min="1"
+          :max="99"
+          :disabled="!localConfig.enablePrinterService"
+          class="w-full"
+        />
+      </a-form-item>
+    </a-form>
 
-      <div class="flex items-center justify-end gap-2 px-4 py-3 border-t border-border">
-        <button
-          class="px-4 py-2 text-sm border border-border rounded bg-white hover:bg-bg-tertiary"
-          @click="emit('close')"
-        >
-          取消
-        </button>
-        <button
-          class="px-4 py-2 text-sm border border-primary rounded bg-primary text-white hover:bg-primary-hover"
-          @click="handleSave"
-        >
-          保存
-        </button>
-      </div>
-    </div>
-  </div>
+    <template #footer>
+      <a-button @click="emit('close')">
+        取消
+      </a-button>
+      <a-button type="primary" @click="handleSave">
+        保存
+      </a-button>
+    </template>
+  </a-modal>
 </template>
