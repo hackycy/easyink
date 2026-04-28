@@ -169,7 +169,7 @@ function handleScroll() {
 }
 
 async function handlePrint() {
-  showPrintMenu.value = true
+  showPrintMenu.value = !showPrintMenu.value
 }
 
 async function handleBrowserPrint() {
@@ -308,11 +308,11 @@ async function handleExport() {
           导出 JSON
         </button>
         <div class="relative">
-          <button class="px-3.5 py-1 text-[13px] border border-primary rounded bg-primary cursor-pointer text-white hover:bg-primary-hover flex items-center gap-1" @click="handlePrint">
+          <button class="px-3.5 py-1 text-[13px] border border-primary rounded bg-primary cursor-pointer text-white hover:bg-primary-hover flex items-center gap-1" @click.stop="handlePrint">
             打印
             <span class="text-[10px]">&#9662;</span>
           </button>
-          <div v-if="showPrintMenu" class="absolute right-0 top-full mt-1 bg-white border border-border rounded shadow-lg min-w-[160px] z-10">
+          <div v-if="showPrintMenu" class="absolute right-0 top-full mt-1 bg-white border border-border rounded shadow-lg min-w-[160px] z-10" @click.stop>
             <button class="w-full px-4 py-2 text-left text-sm hover:bg-bg-tertiary" @click="handleBrowserPrint">
               浏览器打印
             </button>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { PrinterConfig, PrinterDevice } from '../hooks/usePrinter'
 import { DEFAULT_PRINTER_COPIES, DEFAULT_PRINTER_HOST, DEFAULT_PRINTER_PAGE_SIZE } from '../hooks/usePrinter'
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive } from 'vue'
 
 const props = defineProps<{
   config: PrinterConfig
@@ -83,6 +83,10 @@ function handleKeyDown(e: KeyboardEvent) {
 
 onMounted(() => {
   document.addEventListener('keydown', handleKeyDown)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('keydown', handleKeyDown)
 })
 </script>
 
