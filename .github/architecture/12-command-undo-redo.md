@@ -81,12 +81,24 @@ class CommandManager {
 - `AddMaterialCommand`
 - `RemoveMaterialCommand`
 - `MoveMaterialCommand`
-- `ResizeMaterialCommand`
+- `ResizeMaterialCommand`（仅几何 + 一个不透明的 `MaterialResizeSideEffect`；详见下方说明）
 - `RotateMaterialCommand`
 - `UpdateMaterialPropsCommand`
 - `UpdatePageCommand`
 - `UpdateGuidesCommand`
 - `UpdateGeometryCommand`（属性面板 X/Y/W/H/rotation/opacity 修改，支持 merge 和 precomputedOldValues）
+
+#### `ResizeMaterialCommand` 与物料 side-effect
+
+`ResizeMaterialCommand` 只负责设置 `node.{x, y, width, height}`，不感知任何物料私有数据。
+当物料需要在缩放时同步修改私有字段（例如表格行高），由该物料的 `MaterialResizeAdapter`（[11.6.1](./11-element-system.md#1161-resize-协议)）在 commit 阶段产出 `MaterialResizeSideEffect { apply, undo }`，命令在构造时持有该 side-effect：
+
+- `execute()` 先写入新几何，然后调用 `sideEffect.apply(node)`；
+- `undo()` 先恢复旧几何，然后调用 `sideEffect.undo(node)`；
+- 同 element 的连续 resize 通过 `merge()` 合并最终值（保留最新 side-effect）。
+
+这保持了 `@easyink/core` 与具体物料解耦：core 中没有任何 `isTableNode` / `rowHeights` 字段。
+
 
 ### 数据相关命令
 
@@ -104,6 +116,9 @@ class CommandManager {
 > - `TransactionAPI` 自动生成 `PatchCommand` 进入历史栈
 
 原有独立命令的操作语义（insert-row, remove-col, merge-cells, bind-cell 等）现在由 `table.command-handler` behavior 中间件和 `DatasourceDropHandler.onDrop` 内的 `tx.run()` 实现。
+
+仍以传统命令形式存在的表格命令（例如 `UpdateTableVisibilityCommand` 对应 `showHeader/showFooter` 切换、`validateMerge` 校验函数）已从 `@easyink/core` 移出，**位于 `@easyink/material-table-kernel`**。`@easyink/core` 不再包含任何表格特化的命令、类型或字符串前缀；属性面板对这些命令的调用通过 [`PropSchema.commit`](./11-element-system.md#1141-propschemaread--commit-钩子) 钩子完成，PropertiesPanel 不再硬编码 `import { isTableNode }` 或 `'table:'` 前缀分支。
+
 
 ### 组合命令
 

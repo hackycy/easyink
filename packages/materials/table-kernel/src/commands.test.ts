@@ -1,6 +1,6 @@
 import type { TableDataSchema, TableNode } from '@easyink/schema'
 import { describe, expect, it } from 'vitest'
-import { UpdateTableVisibilityCommand } from './table'
+import { UpdateTableVisibilityCommand } from './commands'
 
 function makeDataTableNode(overrides?: Partial<TableNode>): TableNode {
   return {

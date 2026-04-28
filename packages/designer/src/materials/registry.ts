@@ -1,5 +1,5 @@
 import type { DesignerStore } from '../store/designer-store'
-import type { MaterialCapabilities, MaterialCatalogEntry, MaterialDefinition, MaterialExtensionFactory, PanelSectionId } from '../types'
+import type { MaterialCapabilities, MaterialCatalogEntry, MaterialDefinition, MaterialExtensionFactory, PanelSectionId, PropSchema } from '../types'
 import { getPropSchemas } from './prop-schemas'
 
 // ─── Material definitions ────────────────────────────────────────────
@@ -12,6 +12,8 @@ export interface DesignerMaterialRegistration {
   capabilities: MaterialCapabilities
   createDefaultNode: MaterialDefinition['createDefaultNode']
   factory: MaterialExtensionFactory
+  /** Material-owned PropSchemas appended to designer's static registry entries. */
+  propSchemas?: PropSchema[]
   sectionFilter?: MaterialDefinition['sectionFilter']
 }
 
@@ -47,13 +49,17 @@ function tableSectionFilter(sectionId: PanelSectionId): boolean {
  */
 export function registerMaterialBundle(store: DesignerStore, bundle: DesignerMaterialBundle): void {
   for (const entry of bundle.materials) {
+    const baseProps = getPropSchemas(entry.type)
+    const mergedProps = entry.propSchemas
+      ? [...baseProps, ...entry.propSchemas]
+      : baseProps
     const definition: MaterialDefinition = {
       type: entry.type,
       name: entry.name,
       icon: entry.icon,
       category: entry.category,
       capabilities: entry.capabilities,
-      props: getPropSchemas(entry.type),
+      props: mergedProps,
       createDefaultNode: entry.createDefaultNode,
       sectionFilter: entry.sectionFilter,
     }

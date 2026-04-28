@@ -311,8 +311,6 @@ const TABLE_DATA_TABLE_PROPS: PropSchema[] = [
   { key: 'summaryBackground', label: 'designer.property.summaryBackground', type: 'color', group: 'table-appearance' },
   { key: 'stripedRows', label: 'designer.property.stripedRows', type: 'switch', group: 'table-appearance' },
   { key: 'stripedColor', label: 'designer.property.stripedColor', type: 'color', group: 'table-appearance', visible: props => !!props.stripedRows },
-  { key: 'table:showHeader', label: 'designer.property.showHeader', type: 'switch', group: 'table-appearance' },
-  { key: 'table:showFooter', label: 'designer.property.showFooter', type: 'switch', group: 'table-appearance' },
 ]
 
 const TABLE_DATA_PROP_SCHEMAS: PropSchema[] = [

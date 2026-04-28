@@ -1,4 +1,4 @@
-import type { MaterialExtensionFactory, MaterialViewerExtension } from '@easyink/core'
+import type { MaterialExtensionFactory, MaterialViewerExtension, PropSchema } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { MaterialCategory } from '@easyink/shared'
 
@@ -24,6 +24,8 @@ export interface BuiltinDesignerMaterialRegistration {
   capabilities: BuiltinMaterialCapabilities
   createDefaultNode: (input?: Partial<MaterialNode>, unit?: string) => MaterialNode
   factory: MaterialExtensionFactory
+  /** Material-owned PropSchemas appended to the designer's static registry entries. */
+  propSchemas?: PropSchema[]
   sectionFilter?: (sectionId: BuiltinPanelSectionId) => boolean
 }
 

@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import type { SubPropertySchema } from '@easyink/core'
+import type { PropCommitContext, SubPropertySchema } from '@easyink/core'
 import type { BindingRef } from '@easyink/schema'
 import type { Component } from 'vue'
 import type { PagePropertyContext, PagePropertyDescriptor, PagePropertyGroup } from '../page-properties'
 import type { PanelSectionId, PropSchema } from '../types'
-import { ClearBindingCommand, getByPath, setByPath, UpdateDocumentCommand, UpdateGeometryCommand, UpdateMaterialPropsCommand, UpdatePageCommand, UpdateTableVisibilityCommand } from '@easyink/core'
-import { isTableNode } from '@easyink/schema'
+import { ClearBindingCommand, getByPath, setByPath, UpdateDocumentCommand, UpdateGeometryCommand, UpdateMaterialPropsCommand, UpdatePageCommand } from '@easyink/core'
 import { deepClone, PAPER_PRESETS } from '@easyink/shared'
 import { EiNumberInput, EiPanel, EiSwitch } from '@easyink/ui'
 import { computed, shallowRef, watchEffect } from 'vue'
@@ -313,6 +312,11 @@ function previewProp(key: string, value: unknown) {
   const el = selectedElement.value
   if (!el)
     return
+  // Schemas with a custom commit own the entire write path; skip the default
+  // props-bag preview to avoid writing into the wrong location (e.g. table fields).
+  const schema = materialSchemas.value.find(s => s.key === key)
+  if (schema?.commit)
+    return
   // Snapshot before first preview
   if (!propSnapshots.has(key)) {
     propSnapshots.set(key, deepClone(getByPath(el.props as Record<string, unknown>, key)))
@@ -328,47 +332,27 @@ function updateProp(key: string, value: unknown) {
   const el = selectedElement.value
   if (!el)
     return
-  if (key.startsWith('table:')) {
-    const field = key.slice(6) as 'showHeader' | 'showFooter'
-    if (isTableNode(el)) {
-      // Force-commit any in-progress inline edit before mutating visibility.
-      // The cell-edit textarea has an onBlur handler that dispatches
-      // commit-cell-text — blurring the active element triggers it
-      // synchronously so the text is preserved before we possibly hide the row.
-      const active = document.activeElement as HTMLElement | null
-      if (active && typeof active.blur === 'function')
-        active.blur()
+  const schema = materialSchemas.value.find(s => s.key === key)
 
-      const targetRole = field === 'showHeader' ? 'header' : 'footer'
-      const cmd = new UpdateTableVisibilityCommand(el, field, value as boolean)
-      store.commands.execute(cmd)
-
-      // If hiding and the active editing session points at a row of this role,
-      // exit the session so its decoration / textarea / cell selection are removed.
-      if (value === false) {
-        const session = store.editingSession.activeSession
-        if (session && session.nodeId === el.id) {
-          const sel = session.selection
-          let shouldExit = false
-          if (sel && sel.type === 'table.cell') {
-            const payload = sel.payload as { row: number, col: number }
-            const row = el.table.topology.rows[payload.row]
-            if (row && row.role === targetRole)
-              shouldExit = true
-          }
-          const editingCell = session.meta.editingCell as { row: number, col: number } | undefined
-          if (editingCell) {
-            const editingRow = el.table.topology.rows[editingCell.row]
-            if (editingRow && editingRow.role === targetRole)
-              shouldExit = true
-          }
-          if (shouldExit)
-            store.editingSession.exit()
-        }
-      }
+  // PropSchema can override the default props-bag commit path (e.g. table.showHeader
+  // lives on `node.table` and needs UpdateTableVisibilityCommand + session cleanup).
+  if (schema?.commit) {
+    const ctx: PropCommitContext = {
+      flushPendingEdits: () => {
+        const active = document.activeElement as HTMLElement | null
+        if (active && typeof active.blur === 'function')
+          active.blur()
+      },
+      activeEditingSession: store.editingSession.activeSession,
+      exitEditingSession: () => store.editingSession.exit(),
     }
+    const cmd = schema.commit(el, value, ctx)
+    if (cmd)
+      store.commands.execute(cmd)
+    propSnapshots.delete(key)
     return
   }
+
   const oldValue = propSnapshots.get(key)
   propSnapshots.delete(key)
   const cmd = new UpdateMaterialPropsCommand(
@@ -426,10 +410,9 @@ function readPropValue(schema: PropSchema): unknown {
   const el = selectedElement.value
   if (!el)
     return undefined
-  if (schema.key.startsWith('table:')) {
-    const field = schema.key.slice(6)
-    const table = (el as unknown as Record<string, unknown>).table as Record<string, unknown> | undefined
-    return table ? table[field] ?? schema.default ?? true : schema.default ?? true
+  if (schema.read) {
+    const v = schema.read(el)
+    return v ?? schema.default
   }
   const value = getByPath(el.props as Record<string, unknown>, schema.key)
   return value ?? schema.default

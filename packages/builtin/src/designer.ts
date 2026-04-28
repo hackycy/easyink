@@ -64,6 +64,7 @@ import {
   createTableDataNode,
   TABLE_DATA_CAPABILITIES,
   TABLE_DATA_TYPE,
+  tableDataDesignerPropSchemas,
 } from '@easyink/material-table-data'
 import {
   createTableStaticExtension,
@@ -174,6 +175,7 @@ export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
       capabilities: TABLE_DATA_CAPABILITIES,
       createDefaultNode: createTableDataNode,
       factory: createTableDataExtension,
+      propSchemas: tableDataDesignerPropSchemas,
       sectionFilter: tableSectionFilter,
     },
     {

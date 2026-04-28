@@ -1,6 +1,6 @@
 import type { DocumentSchema, GuideSchema, MaterialNode, PageSchema } from '@easyink/schema'
 import type { Command } from '../command'
-import { isTableNode } from '@easyink/schema'
+import type { MaterialResizeSideEffect } from '../material-extension'
 import { deepClone, generateId } from '@easyink/shared'
 import { asRecord, findNode, getByPath, setByPath } from './helpers'
 
@@ -106,13 +106,16 @@ export class ResizeMaterialCommand implements Command {
   private oldY = 0
   private oldWidth = 0
   private oldHeight = 0
-  private oldRowHeights: number[] | null = null
 
   constructor(
     private elements: MaterialNode[],
     private nodeId: string,
     private to: { x: number, y: number, width: number, height: number },
-    private rowHeights: number[] | null = null,
+    /**
+     * Optional material-private side-effect produced by `MaterialResizeAdapter.commitResize`.
+     * Bundled here so the framework can apply / revert it together with the geometry mutation.
+     */
+    private sideEffect: MaterialResizeSideEffect | null = null,
   ) {}
 
   execute(): void {
@@ -128,14 +131,7 @@ export class ResizeMaterialCommand implements Command {
     node.width = this.to.width
     node.height = this.to.height
 
-    // Scale table row heights when provided
-    if (this.rowHeights && isTableNode(node)) {
-      const rows = node.table.topology.rows
-      this.oldRowHeights = rows.map(r => r.height)
-      for (let i = 0; i < rows.length && i < this.rowHeights.length; i++) {
-        rows[i]!.height = this.rowHeights[i]!
-      }
-    }
+    this.sideEffect?.apply(node)
   }
 
   undo(): void {
@@ -147,12 +143,7 @@ export class ResizeMaterialCommand implements Command {
     node.width = this.oldWidth
     node.height = this.oldHeight
 
-    if (this.oldRowHeights && isTableNode(node)) {
-      const rows = node.table.topology.rows
-      for (let i = 0; i < rows.length && i < this.oldRowHeights.length; i++) {
-        rows[i]!.height = this.oldRowHeights[i]!
-      }
-    }
+    this.sideEffect?.undo(node)
   }
 
   merge(next: Command): Command | null {
@@ -161,12 +152,13 @@ export class ResizeMaterialCommand implements Command {
     const other = next as ResizeMaterialCommand
     if (other.nodeId !== this.nodeId)
       return null
-    const merged = new ResizeMaterialCommand(this.elements, this.nodeId, other.to, other.rowHeights)
+    // Last-writer-wins on side effect: continuous resize replaces the side
+    // effect each frame, so the latest commit reflects the final material state.
+    const merged = new ResizeMaterialCommand(this.elements, this.nodeId, other.to, other.sideEffect)
     merged.oldX = this.oldX
     merged.oldY = this.oldY
     merged.oldWidth = this.oldWidth
     merged.oldHeight = this.oldHeight
-    merged.oldRowHeights = this.oldRowHeights
     return merged
   }
 }

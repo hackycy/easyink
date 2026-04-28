@@ -273,8 +273,38 @@ interface PropSchema {
   disabled?: (props: Record<string, unknown>) => boolean
   editor?: string
   editorOptions?: Record<string, unknown>
+
+  /** 自定义读写钩子：用于属性不在 `node.props` 路径下的物料（例如表格的 `node.table.showHeader`）。
+   *  PropertiesPanel 优先调用 `read` 取值、`commit` 提交命令，不再硬编码任何物料类型分支。
+   *  详见 §11.4.1 与 22.x 编辑行为章节。 */
+  read?: (node: MaterialNode) => unknown
+  commit?: (node: MaterialNode, value: unknown, ctx: PropCommitContext) => Command | null
+}
+
+/** PropertiesPanel 在调用 `commit` 时注入的上下文。 */
+interface PropCommitContext {
+  /** 让任何挂起的 IME / blur 写回先提交，再生成新命令。 */
+  flushPendingEdits: () => void
+  /** 当前活跃的深度编辑会话（若有）。 */
+  activeEditingSession: EditingSessionRef | null
+  /** 退出当前深度编辑会话——例如表格隐藏 header/footer 时，正在编辑该 cell 的会话需先退出。 */
+  exitEditingSession: () => void
 }
 ```
+
+### 11.4.1 PropSchema.read / commit 钩子
+
+通用 PropertiesPanel 不允许包含任何物料类型分支（例如 `if (isTableNode(node))`）。
+当物料的某个属性不存在于 `node.props` 上、或在写入前需要做副作用（退出深度编辑、刷新 IME 等）时，
+该物料在自己的 PropSchema 中提供 `read` / `commit`：
+
+- `read(node)` 返回属性当前值，PropertiesPanel 直接显示；
+- `commit(node, value, ctx)` 由 PropertiesPanel 在 `confirmProp` 时调用，物料决定如何构造 Command（甚至决定是否需要先退出会话），返回的 Command 走统一 `commitCommand` 通道。
+- 拥有 `commit` 的 schema 不会触发 `previewProp`（避免预览时跑副作用）。
+
+例：`@easyink/material-table-data` 暴露 `tableDataDesignerPropSchemas`，包含 `showHeader / showFooter` 两个 entry，
+内部使用 `UpdateTableVisibilityCommand`（位于 `@easyink/material-table-kernel`）。
+PropertiesPanel 既不需要 `import { UpdateTableVisibilityCommand }`，也不需要 `import { isTableNode }`。
 
 ### 所有物料的公共属性组
 
@@ -383,6 +413,31 @@ interface MaterialDesignerExtension {
    *  未实现时自动回退到默认行为：整个元素作为 drop zone、drop 时 BindFieldCommand 绑定到 node.binding。
    *  复杂物料（table/chart/container）通过此协议自定义 drop 行为。 */
   datasourceDrop?: DatasourceDropHandler
+
+  /** Resize 协议（可选）。框架负责驱动 x/y/w/h，物料通过 adapter 同步私有数据
+   *  （例如表格行高），并产出 undo-safe 的 side-effect 与 ResizeMaterialCommand 绑定。
+   *  详见 §11.6.1。 */
+  resize?: MaterialResizeAdapter
+}
+
+/** Resize 适配器：所有快照按 unknown 传递，物料内部窄化。 */
+interface MaterialResizeAdapter {
+  beginResize(node: MaterialNode): unknown
+  applyResize(node: MaterialNode, snapshot: unknown, params: MaterialResizeParams): void
+  commitResize(node: MaterialNode, snapshot: unknown): MaterialResizeSideEffect | null
+}
+
+interface MaterialResizeParams {
+  originalWidth: number
+  originalHeight: number
+  newWidth: number
+  newHeight: number
+}
+
+/** 命令在 redo 时调用 apply、在 undo 时调用 undo，由 ResizeMaterialCommand 持有。 */
+interface MaterialResizeSideEffect {
+  apply(node: MaterialNode): void
+  undo(node: MaterialNode): void
 }
 
 /** 数据源拖拽处理器 */
@@ -486,6 +541,23 @@ CanvasWorkspace 遍历 elements
 - 格子内文本进入内联编辑时，属性壳层仍保持 `table-static/table-data` 上下文
 - 表格浮动工具条与属性面板共享同一份表格编辑状态，而不是各自维护一套临时状态
 - 深度编辑的 overlay 通过 [22 章 SelectionDecoration](./22-editing-behavior.md) 声明式渲染，框架自动定位；toolbar 由物料自管（见 22 章 S22.6.1）
+
+### 11.6.1 Resize 协议
+
+通用 element resize handle 由 Designer 拥有；它驱动 `node.{x,y,width,height}` 的几何变化，但**不**了解任何物料私有数据（表格行高、容器内子节点缩放等）。物料如果需要在缩放时同步更新私有数据，就实现 `MaterialResizeAdapter`：
+
+| 阶段 | 框架动作 | adapter 动作 |
+| --- | --- | --- |
+| pointerdown | 调用 `beginResize(node)`，拿到不透明 snapshot | 物料快照初始几何 + 私有数据（如行高数组、隐藏 mask） |
+| pointermove | 更新 node 几何后，调用 `applyResize(node, snapshot, params)` | 按比例同步可见行高/子节点尺寸；隐藏行保持原值 |
+| pointerup | 调用 `commitResize(node, snapshot)`，拿到 side-effect；先把 node 几何与私有数据**回滚**到 pointerdown 状态，然后构造 `new ResizeMaterialCommand(elements, id, geometry, sideEffect)` 提交事务 | side-effect 暴露 `apply(node)` / `undo(node)`，分别在 redo / undo 时被命令调用 |
+
+这样：
+- `ResizeMaterialCommand` 不再包含任何 `rowHeights / isTableNode` 这类物料相关字段；
+- 物料的私有副作用与命令一一对应，撤销/重做天然正确；
+- 新增可缩放物料只需在自己的 `MaterialDesignerExtension.resize` 上实现协议，无需修改 Designer。
+
+参考实现：`@easyink/material-table-kernel` 暴露 `createTableResizeAdapter({ getHiddenRowMask })`，被 `material-table-data` 与 `material-table-static` 复用。
 
 ## 11.7 Viewer 扩展面
 

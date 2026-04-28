@@ -18,8 +18,3 @@ export {
 } from './document'
 
 export { getByPath, setByPath } from './helpers'
-
-export {
-  UpdateTableVisibilityCommand,
-  validateMerge,
-} from './table'

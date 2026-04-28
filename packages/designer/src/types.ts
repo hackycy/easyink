@@ -1,6 +1,7 @@
+import type { PropSchema } from '@easyink/core'
 import type { DataSourceDescriptor } from '@easyink/datasource'
 import type { MaterialNode } from '@easyink/schema'
-import type { MaterialCategory, PropSchemaType } from '@easyink/shared'
+import type { MaterialCategory } from '@easyink/shared'
 
 export type {
   BehaviorContext,
@@ -19,9 +20,14 @@ export type {
   MaterialExtensionContext,
   MaterialExtensionFactory,
   MaterialGeometry,
+  MaterialResizeAdapter,
+  MaterialResizeParams,
+  MaterialResizeSideEffect,
   NodeSignal,
+  PropCommitContext,
   PropertyPanelOverlay,
   PropertyPanelRequest,
+  PropSchema,
   PropSchemaLike,
   Selection,
   SelectionDecorationDef,
@@ -153,24 +159,6 @@ export interface MaterialCapabilities {
   multiBinding?: boolean
   /** Maintain aspect ratio during element-level resize handle drag. */
   keepAspectRatio?: boolean
-}
-
-export interface PropSchema {
-  key: string
-  label: string
-  type: PropSchemaType
-  group?: string
-  default?: unknown
-  enum?: Array<{ label: string, value: unknown }>
-  min?: number
-  max?: number
-  step?: number
-  properties?: PropSchema[]
-  items?: PropSchema
-  visible?: (props: Record<string, unknown>) => boolean
-  disabled?: (props: Record<string, unknown>) => boolean
-  editor?: string
-  editorOptions?: Record<string, unknown>
 }
 
 // ─── Material Catalog ──────────────────────────────────────────────

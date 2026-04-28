@@ -1,5 +1,5 @@
+import type { Command } from '@easyink/core'
 import type { TableDataSchema, TableNode } from '@easyink/schema'
-import type { Command } from '../command'
 import { isTableDataNode } from '@easyink/schema'
 import { generateId } from '@easyink/shared'
 

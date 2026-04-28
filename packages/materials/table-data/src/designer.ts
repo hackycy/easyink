@@ -20,6 +20,7 @@ import {
   createTableCommandHandlerBehavior,
   createTableGeometry,
   createTableKeyboardNavBehavior,
+  createTableResizeAdapter,
   createTableResizeBehavior,
   escapeHtml,
   hitTestWithPlaceholders,
@@ -297,6 +298,7 @@ export function createTableDataExtension(context: MaterialExtensionContext): Mat
       layer: 'above-content',
     }],
     datasourceDrop: createDatasourceDropHandler(context),
+    resize: createTableResizeAdapter({ getHiddenRowMask }),
 
     getVisualHeight(node) {
       if (!isTableNode(node))

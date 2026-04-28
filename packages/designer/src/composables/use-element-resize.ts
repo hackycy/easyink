@@ -1,7 +1,5 @@
-import type { TableDataSchema } from '@easyink/schema'
 import type { DesignerStore } from '../store/designer-store'
 import { ResizeMaterialCommand, UnitManager } from '@easyink/core'
-import { isTableNode } from '@easyink/schema'
 
 export type ResizeHandle
   = 'nw' | 'n' | 'ne'
@@ -21,6 +19,10 @@ export interface ElementResizeContext {
  * - Minimum size enforcement (1 unit)
  * - Grid snapping on resize
  * - Command merge for continuous resize (single undo entry)
+ *
+ * Material-private side effects (e.g. table row height scaling) are delegated
+ * to `MaterialDesignerExtension.resize` (MaterialResizeAdapter) — designer code
+ * remains material-agnostic.
  */
 export function useElementResize(ctx: ElementResizeContext) {
   function onHandlePointerDown(e: PointerEvent, elementId: string, handle: ResizeHandle) {
@@ -35,6 +37,9 @@ export function useElementResize(ctx: ElementResizeContext) {
     const material = store.getMaterial(node.type)
     if (material && material.capabilities.resizable === false)
       return
+
+    const designerExt = store.getDesignerExtension(node.type)
+    const resizeAdapter = designerExt?.resize
 
     const unitManager = new UnitManager(store.schema.unit)
     const zoom = store.workbench.viewport.zoom
@@ -55,25 +60,7 @@ export function useElementResize(ctx: ElementResizeContext) {
     const origW = node.width
     const origH = node.height
 
-    // For table nodes, snapshot original row heights so we can scale them proportionally.
-    // table-data with hidden header/footer: those rows' schema heights stay frozen during
-    // resize (so reopening them later restores the same proportions).
-    const tableInfo = isTableNode(node)
-      ? {
-          node,
-          origRowHeights: node.table.topology.rows.map(r => r.height),
-          hiddenMask: node.type === 'table-data'
-            ? node.table.topology.rows.map((r) => {
-                const td = node.table as TableDataSchema
-                if (r.role === 'header' && td.showHeader === false)
-                  return true
-                if (r.role === 'footer' && td.showFooter === false)
-                  return true
-                return false
-              })
-            : node.table.topology.rows.map(() => false),
-        }
-      : null
+    const adapterSnapshot = resizeAdapter ? resizeAdapter.beginResize(node) : undefined
 
     const MIN_SIZE = 1
 
@@ -134,16 +121,13 @@ export function useElementResize(ctx: ElementResizeContext) {
       node!.width = newW
       node!.height = newH
 
-      // Scale table row heights proportionally to maintain topology invariant.
-      // Hidden rows are frozen — their schema height does not change.
-      if (tableInfo && newH !== origH) {
-        const scale = newH / origH
-        const { rows } = tableInfo.node.table.topology
-        for (let i = 0; i < rows.length; i++) {
-          if (tableInfo.hiddenMask[i])
-            continue
-          rows[i]!.height = tableInfo.origRowHeights[i]! * scale
-        }
+      if (resizeAdapter) {
+        resizeAdapter.applyResize(node!, adapterSnapshot, {
+          originalWidth: origW,
+          originalHeight: origH,
+          newWidth: newW,
+          newHeight: newH,
+        })
       }
     }
 
@@ -151,40 +135,34 @@ export function useElementResize(ctx: ElementResizeContext) {
       el.removeEventListener('pointermove', onMove)
       el.removeEventListener('pointerup', onUp)
 
-      if (!moved) {
+      if (!moved)
         return
-      }
 
       const finalX = node!.x
       const finalY = node!.y
       const finalW = node!.width
       const finalH = node!.height
 
-      // Snapshot final row heights before reset
-      const finalRowHeights = tableInfo
-        ? tableInfo.node.table.topology.rows.map(r => r.height)
+      // Capture material-private side effect (e.g. row heights) before we reset
+      // node fields to original; commitResize must be able to read post-resize state.
+      const sideEffect = resizeAdapter
+        ? resizeAdapter.commitResize(node!, adapterSnapshot)
         : null
 
-      // Reset to original before command
+      // Reset to original before command (the command re-applies geometry + side effect).
       node!.x = origX
       node!.y = origY
       node!.width = origW
       node!.height = origH
 
-      if (tableInfo) {
-        const { rows } = tableInfo.node.table.topology
-        for (let i = 0; i < rows.length; i++) {
-          if (tableInfo.hiddenMask[i])
-            continue
-          rows[i]!.height = tableInfo.origRowHeights[i]!
-        }
-      }
+      // Revert material-private state so command.execute() applies cleanly from origin.
+      sideEffect?.undo(node!)
 
       const cmd = new ResizeMaterialCommand(
         store.schema.elements,
         elementId,
         { x: finalX, y: finalY, width: finalW, height: finalH },
-        finalRowHeights,
+        sideEffect,
       )
       store.commands.execute(cmd)
     }

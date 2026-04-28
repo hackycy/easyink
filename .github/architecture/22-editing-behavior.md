@@ -267,6 +267,13 @@ const tableExt: MaterialDesignerExtension = {
 - 直接 push 命令到 history（必须走 tx）
 - 跨 session 状态（用 store）
 
+### 22.5.5 与其它扩展协议的关系
+
+`MaterialDesignerExtension` 上还有两个与"编辑期"相关、但**不**走 behavior 中间件总线的扩展点；它们的设计动机与本章一致——把物料特化逻辑收敛到物料包内、保持 `@easyink/core` 与 PropertiesPanel 的中立：
+
+- **`resize?: MaterialResizeAdapter`**（详见 [11.6.1](./11-element-system.md#1161-resize-协议)）：覆盖 element resize handle 期间的物料私有数据同步（如表格行高），并通过 `MaterialResizeSideEffect` 与 `ResizeMaterialCommand` 一起进入 history。
+- **`PropSchema.read / commit`**（详见 [11.4.1](./11-element-system.md#1141-propschemaread--commit-钩子)）：覆盖属性面板的取值与提交。`commit` 接收的 `PropCommitContext` 提供 `flushPendingEdits / activeEditingSession / exitEditingSession`，所以例如"隐藏表头时退出当前 cell 编辑会话"这类副作用由物料自己声明，不再让 PropertiesPanel 硬编码 `if (isTableNode) ...`。
+
 ## 22.6 Surfaces：声明式叠加层
 
 ### 22.6.1 三类 Surface

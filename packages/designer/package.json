@@ -28,7 +28,6 @@
     "@easyink/core": "workspace:*",
     "@easyink/datasource": "workspace:*",
     "@easyink/icons": "workspace:*",
-    "@easyink/material-table-kernel": "workspace:*",
     "@easyink/schema": "workspace:*",
     "@easyink/shared": "workspace:*",
     "@easyink/ui": "workspace:*",

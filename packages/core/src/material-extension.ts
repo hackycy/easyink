@@ -1,6 +1,7 @@
 import type { BindingRef, DocumentSchema, MaterialNode } from '@easyink/schema'
+import type { PropSchemaType } from '@easyink/shared'
 import type { Command } from './command'
-import type { BehaviorRegistration, MaterialGeometry, SelectionDecorationDef, SelectionType, TransactionAPI } from './editing-session'
+import type { BehaviorRegistration, EditingSessionRef, MaterialGeometry, SelectionDecorationDef, SelectionType, TransactionAPI } from './editing-session'
 
 // ─── Material Extensions ───────────────────────────────────────────
 
@@ -60,6 +61,57 @@ export interface MaterialDesignerExtension {
   behaviors?: BehaviorRegistration[]
   /** Selection decoration definitions (framework auto-renders). */
   decorations?: SelectionDecorationDef[]
+
+  // ─── Resize Side-Effect Protocol ────────────────────────────────
+
+  /**
+   * Resize adapter: lets a material participate in element resize operations.
+   * The framework drives the geometry; the adapter mutates material-private
+   * data (e.g. table row heights) in lockstep, and produces an undo-safe
+   * side-effect that bundles into ResizeMaterialCommand.
+   */
+  resize?: MaterialResizeAdapter
+}
+
+// ─── Resize Adapter Protocol ─────────────────────────────────────
+
+/**
+ * Adapter that lets a material participate in resize operations.
+ *
+ * Lifecycle:
+ *   1. designer captures `snapshot = beginResize(node)` at pointerdown.
+ *   2. on each pointermove, designer calls `applyResize(node, snapshot, params)`
+ *      after updating node x/y/w/h. The adapter mutates material-private
+ *      fields proportionally.
+ *   3. at pointerup, designer calls `commitResize(node, snapshot)` which returns
+ *      a `MaterialResizeSideEffect` describing how to re-apply / revert the
+ *      mutation. The framework attaches it to ResizeMaterialCommand for
+ *      undo-safe history; the adapter never hits ResizeMaterialCommand directly.
+ *
+ * Snapshot is typed `unknown` to keep the framework material-agnostic — each
+ * adapter narrows it internally.
+ */
+export interface MaterialResizeAdapter {
+  beginResize: (node: MaterialNode) => unknown
+  applyResize: (node: MaterialNode, snapshot: unknown, params: MaterialResizeParams) => void
+  commitResize: (node: MaterialNode, snapshot: unknown) => MaterialResizeSideEffect | null
+}
+
+export interface MaterialResizeParams {
+  originalWidth: number
+  originalHeight: number
+  newWidth: number
+  newHeight: number
+}
+
+/**
+ * Side-effect bundled into ResizeMaterialCommand. `apply()` runs after the
+ * geometry change in `execute`; `undo()` runs after geometry restore in `undo`.
+ * Both must be deterministic and self-contained.
+ */
+export interface MaterialResizeSideEffect {
+  apply: (node: MaterialNode) => void
+  undo: (node: MaterialNode) => void
 }
 
 // ─── Datasource Drop Protocol ────────────────────────────────────
@@ -199,6 +251,62 @@ export interface PropSchemaLike {
   editor?: string
   editorOptions?: Record<string, unknown>
   [extra: string]: unknown
+}
+
+// ─── Property Schema (canonical) ─────────────────────────────────
+
+/**
+ * Material property schema entry. Drives the PropertiesPanel form rendering
+ * and (optionally) overrides the default node.props read/write path.
+ *
+ * Default behavior (no `read`/`commit`):
+ *   - read:   `node.props[key]` (with dot-path support via getByPath)
+ *   - commit: dispatches `UpdateMaterialPropsCommand({ [key]: value })`
+ *
+ * Materials whose property lives outside `node.props` (e.g. table-data's
+ * `node.table.showHeader`) declare a custom `read` and `commit` to integrate
+ * with the standard panel without leaking material types into PropertiesPanel.
+ */
+export interface PropSchema {
+  key: string
+  label: string
+  type: PropSchemaType
+  group?: string
+  default?: unknown
+  enum?: Array<{ label: string, value: unknown }>
+  min?: number
+  max?: number
+  step?: number
+  properties?: PropSchema[]
+  items?: PropSchema
+  visible?: (props: Record<string, unknown>) => boolean
+  disabled?: (props: Record<string, unknown>) => boolean
+  editor?: string
+  editorOptions?: Record<string, unknown>
+  /** Override default `node.props[key]` read. Returns the value to display. */
+  read?: (node: MaterialNode) => unknown
+  /**
+   * Override default `UpdateMaterialPropsCommand` commit. Return the Command
+   * to push into the history (or `null` to skip). Side-effects like
+   * `flushPendingEdits()` / `editingSession.exit()` belong here.
+   */
+  commit?: (node: MaterialNode, value: unknown, ctx: PropCommitContext) => Command | null
+}
+
+/**
+ * Context passed to `PropSchema.commit`. Provides hooks the panel cannot
+ * reach without leaking material-specific knowledge.
+ */
+export interface PropCommitContext {
+  /**
+   * Force any in-progress inline editor (e.g. cell <textarea>) to commit its
+   * value synchronously. Implementations typically blur `document.activeElement`.
+   */
+  flushPendingEdits: () => void
+  /** Currently active editing session (or null if none). */
+  activeEditingSession: EditingSessionRef | null
+  /** Exit the active editing session, if any. */
+  exitEditingSession: () => void
 }
 
 // (Old deep editing FSM protocol removed — replaced by Chapter 22 Editing Behavior Architecture)

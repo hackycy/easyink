@@ -318,9 +318,6 @@ importers:
       '@easyink/icons':
         specifier: workspace:*
         version: link:../icons
-      '@easyink/material-table-kernel':
-        specifier: workspace:*
-        version: link:../materials/table-kernel
       '@easyink/schema':
         specifier: workspace:*
         version: link:../schema

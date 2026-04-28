@@ -18,6 +18,7 @@ import {
   createTableCommandHandlerBehavior,
   createTableGeometry,
   createTableKeyboardNavBehavior,
+  createTableResizeAdapter,
   createTableResizeBehavior,
   escapeHtml,
   hitTestGridCell,
@@ -147,5 +148,6 @@ export function createTableStaticExtension(context: MaterialExtensionContext): M
       layer: 'above-content',
     }],
     datasourceDrop: createDatasourceDropHandler(context),
+    resize: createTableResizeAdapter({ getHiddenRowMask: node => node.table.topology.rows.map(() => false) }),
   }
 }

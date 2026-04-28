@@ -25,8 +25,6 @@ export {
   UpdateGuidesCommand,
   UpdateMaterialPropsCommand,
   UpdatePageCommand,
-  UpdateTableVisibilityCommand,
-  validateMerge,
 } from './commands'
 
 // ─── Editing Behavior Architecture (Chapter 22) ───────────────────
@@ -81,9 +79,14 @@ export type {
   MaterialDesignerExtension,
   MaterialExtensionContext,
   MaterialExtensionFactory,
+  MaterialResizeAdapter,
+  MaterialResizeParams,
+  MaterialResizeSideEffect,
   NodeSignal,
+  PropCommitContext,
   PropertyPanelOverlay,
   PropertyPanelRequest,
+  PropSchema,
   PropSchemaLike,
   SelectionSnapshot,
   ToolbarAction,
