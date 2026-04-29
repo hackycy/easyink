@@ -93,6 +93,17 @@ function handleDeviceChange(value: AcceptableValue) {
   printer.updateConfig({ printerDevice })
 }
 
+const forcePageSize = computed(() =>
+  printer.isForcePageSize(printer.printerDevice.value),
+)
+
+function handleToggleForcePageSize(checked: boolean) {
+  const device = printer.printerDevice.value
+  if (!device)
+    return
+  printer.setForcePageSize(device, checked)
+}
+
 async function syncPrinterForm() {
   if (!printer.enabled.value)
     return
@@ -213,6 +224,22 @@ onMounted(() => {
             :disabled="!printer.enabled.value"
             @update:model-value="handleCopiesChange"
           />
+        </div>
+
+        <!-- Force pageSize (per device) -->
+        <div class="space-y-1.5">
+          <div class="flex items-center justify-between">
+            <Label>强制使用模板纸张尺寸</Label>
+            <Switch
+              :model-value="forcePageSize"
+              :disabled="!printer.enabled.value || !printer.printerDevice.value"
+              @update:model-value="handleToggleForcePageSize"
+            />
+          </div>
+          <p class="text-xs text-muted-foreground">
+            默认关闭: 由打印机驱动选择当前介质 (小票机、连续纸、普通打印机需要保持关闭,
+            与浏览器打印一致)。 DELI 等标签机驱动会回退到 A4 缩印, 请为该设备开启。
+          </p>
         </div>
       </div>
     </DialogContent>

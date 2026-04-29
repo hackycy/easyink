@@ -25,6 +25,13 @@ export interface PrintHTMLOptions {
   width: number
   paperFooter?: number
   paperHeader?: number
+  /**
+   * 是否向 electron-hiprint 显式传递 pageSize / landscape / scaleFactor。
+   * 仅用于驱动会忽略模板尺寸、退回 A4 缩印的打印机 (例如 DELI 标签机)。
+   * 普通小票机 / 连续纸打印机必须保持 false, 否则驱动会用最近的预设介质
+   * 替换我们的自定义尺寸, 导致内容被截断。
+   */
+  forcePageSize?: boolean
 }
 
 export interface PrinterConfig {
@@ -32,6 +39,8 @@ export interface PrinterConfig {
   printerDevice?: string
   printCopies?: number
   printerServiceUrl?: string
+  /** 按设备名记录是否强制传 pageSize (DELI 等标签机需要打开)。 */
+  forcePageSizeByDevice?: Record<string, boolean>
 }
 
 export type ConnectionState = 'idle' | 'connecting' | 'connected' | 'error'
@@ -47,6 +56,7 @@ function loadConfig(): PrinterConfig {
       printerDevice: parsed.printerDevice,
       printCopies: parsed.printCopies ?? DEFAULT_PRINTER_COPIES,
       printerServiceUrl: parsed.printerServiceUrl ?? DEFAULT_PRINTER_HOST,
+      forcePageSizeByDevice: parsed.forcePageSizeByDevice ?? {},
     }
   }
   catch {
@@ -60,6 +70,7 @@ function defaultConfig(): PrinterConfig {
     printerDevice: undefined,
     printCopies: DEFAULT_PRINTER_COPIES,
     printerServiceUrl: DEFAULT_PRINTER_HOST,
+    forcePageSizeByDevice: {},
   }
 }
 
@@ -252,25 +263,36 @@ async function printHtml(opts: PrintHTMLOptions): Promise<void> {
       reject(new Error(e instanceof Error ? e.message : '打印失败'))
     })
 
-    // 关键: 必须显式向 electron-hiprint 传入 pageSize / landscape / scaleFactor。
-    // 否则 electron-hiprint 在调用 Electron `webContents.print()` 时会回退到
-    // 默认 A4 纸张, 部分打印机驱动 (如 DELI 标签机) 会按驱动的实际介质进行
-    // "缩放以适合", 导致内容被整体缩印到纸张中央, 出现明显的左右留白。
-    // 单位为微米 (1mm = 1000μm)。
-    const widthMicrons = Math.round(opts.width * 1000)
-    const heightMicrons = Math.round(opts.height * 1000)
-    const landscape = opts.width > opts.height
-
-    tpl.print2({}, {
+    // pageSize 处理策略 (经踩坑总结):
+    //
+    // 1) 不传 pageSize  ->  Chromium 走 OS 打印通道, 由打印机驱动选择当前介质
+    //    (小票机的连续卷纸 / 普通打印机的当前纸盒)。这与浏览器直接打印的行为一致,
+    //    小票机和连续纸打印机必须走这条路, 否则驱动找不到匹配介质会替换为最近的
+    //    预设尺寸, 把超出驱动 form length 的内容裁掉。
+    //
+    // 2) 传自定义 pageSize -> Chromium 强制按该尺寸排版并请求驱动接受。
+    //    DELI 等标签机驱动如果不收到 pageSize 会回退到 A4 然后把模板缩印到纸张中央,
+    //    所以这类打印机必须显式传。
+    //
+    // 因此 pageSize 改为按设备 opt-in: 默认关闭, 用户在打印机设置里为 DELI 这类
+    // 标签机单独开启 (vue-plugin-hiprint 官方示例也是默认不传 pageSize)。
+    const printOptions: Record<string, unknown> = {
       printer: opts.printer,
       margins: { marginType: 'none' },
+    }
+    if (opts.forcePageSize) {
+      const widthMicrons = Math.round(opts.width * 1000) // 1mm = 1000μm
+      const heightMicrons = Math.round(opts.height * 1000)
+      const landscape = opts.width > opts.height
       // 物理纸张方向始终以短边为宽。landscape=true 时 Electron 会自动旋转。
-      pageSize: landscape
+      printOptions.pageSize = landscape
         ? { width: heightMicrons, height: widthMicrons }
-        : { width: widthMicrons, height: heightMicrons },
-      landscape,
-      scaleFactor: 100,
-    })
+        : { width: widthMicrons, height: heightMicrons }
+      printOptions.landscape = landscape
+      printOptions.scaleFactor = 100
+    }
+
+    tpl.print2({}, printOptions)
   })
 }
 
@@ -281,7 +303,7 @@ export interface PrintPagesProgress {
 
 async function printPages(
   pages: HTMLElement[],
-  opts: { width: number, height: number, printer: string },
+  opts: { width: number, height: number, printer: string, forcePageSize?: boolean },
   onProgress?: (p: PrintPagesProgress) => void,
 ): Promise<void> {
   for (let i = 0; i < pages.length; i++) {
@@ -291,8 +313,24 @@ async function printPages(
       height: opts.height,
       html: pages[i]!.innerHTML,
       printer: opts.printer,
+      forcePageSize: opts.forcePageSize,
     })
   }
+}
+
+function setForcePageSize(deviceName: string, value: boolean): void {
+  const map = { ...(config.forcePageSizeByDevice ?? {}) }
+  if (value)
+    map[deviceName] = true
+  else
+    delete map[deviceName]
+  config.forcePageSizeByDevice = map
+}
+
+function isForcePageSize(deviceName: string | undefined): boolean {
+  if (!deviceName)
+    return false
+  return Boolean(config.forcePageSizeByDevice?.[deviceName])
 }
 
 // auto-connect if previously enabled
@@ -323,6 +361,8 @@ export function usePrinter() {
     refreshDevices,
     printHtml,
     printPages,
+    setForcePageSize,
+    isForcePageSize,
   }
 }
 

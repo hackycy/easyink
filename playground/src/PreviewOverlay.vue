@@ -229,7 +229,12 @@ async function handleHiPrintPrint() {
   try {
     await printer.printPages(
       pages,
-      { width, height, printer: printerDevice },
+      {
+        width,
+        height,
+        printer: printerDevice,
+        forcePageSize: printer.isForcePageSize(printerDevice),
+      },
       ({ current, total }) => {
         if (progressId !== undefined)
           toast.loading(`打印中 ${current} / ${total}`, { id: progressId })
