@@ -37,7 +37,7 @@ const sampleEntries = computed(() =>
     name: s.name,
     category: s.category,
     mode: s.schema.page.mode,
-    size: `${s.schema.page.width}×${s.schema.page.height} ${s.schema.unit}`,
+    size: `${s.schema.page.width}x${s.schema.page.height} ${s.schema.unit}`,
     page: s.schema.page,
   })),
 )

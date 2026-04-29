@@ -52,7 +52,8 @@ export function createHiPrintAdapter(): PrintAdapter {
 
       const firstPage = pages[0]!
       const printerDevice = printer.printerDevice.value
-      let width = context.schema.page.width
+      let width = toMillimeters(`${context.schema.page.width}${context.schema.unit}`, context.schema.unit)
+      // 标签模式下宽度由内容决定，使用页面样式中的宽度（已转换为毫米）
       if (context.schema.page.mode === 'label') {
         width = toMillimeters(firstPage.style.width, context.schema.unit)
       }
