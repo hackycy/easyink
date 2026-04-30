@@ -9,6 +9,7 @@ import { useDatasourceDrop } from '../composables/use-datasource-drop'
 import { useElementDrag } from '../composables/use-element-drag'
 import { useElementResize } from '../composables/use-element-resize'
 import { useElementRotate } from '../composables/use-element-rotate'
+import { useKeyboardShortcuts } from '../composables/use-keyboard-shortcuts'
 import { useMarqueeSelect } from '../composables/use-marquee-select'
 import { useMaterialDrop } from '../composables/use-material-drop'
 import { getSelectionBox } from '../snap'
@@ -73,6 +74,11 @@ const { onCanvasPointerDown } = useMarqueeSelect({
   store,
   getPageEl: () => pageRef.value,
   marqueeRef: marqueeRect,
+})
+
+useKeyboardShortcuts({
+  store,
+  getContainer: () => containerRef.value,
 })
 
 const { onDragOver: onPageDragOver, onDrop: onPageDrop, onDragLeave: onPageDragLeave, cleanupOverlay } = useDatasourceDrop({
@@ -785,7 +791,7 @@ onUnmounted(() => {
 
 .ei-canvas-marquee {
   position: absolute;
-  border: 1px solid var(--ei-primary, #1890ff);
+  border: 1px dashed var(--ei-primary, #1890ff);
   background: rgba(24, 144, 255, 0.08);
   pointer-events: none;
   z-index: 9999;

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createSelectionStore } from './selection-store'
 
 describe('createSelectionStore', () => {
@@ -49,17 +49,23 @@ describe('createSelectionStore', () => {
     expect(JSON.parse(JSON.stringify(stored))).toEqual({})
   })
 
-  it('throws on circular reference payload', () => {
+  it('rejects circular reference payload (logs + nulls selection, never throws)', () => {
     const store = createSelectionStore()
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const circular: Record<string, unknown> = { a: 1 }
     circular.self = circular
+    // Pre-seed with a valid selection to verify rejection clears it.
+    store.set({ type: 'test', nodeId: 'n1', payload: { ok: true } })
     expect(() => {
       store.set({
         type: 'test',
         nodeId: 'n1',
         payload: circular,
       })
-    }).toThrow()
+    }).not.toThrow()
+    expect(store.selection).toBeNull()
+    expect(errSpy).toHaveBeenCalled()
+    errSpy.mockRestore()
   })
 
   it('accepts valid anchor', () => {
@@ -75,8 +81,9 @@ describe('createSelectionStore', () => {
     expect(store.selection?.anchor).toEqual({ row: 2, col: 3 })
   })
 
-  it('throws on circular reference anchor', () => {
+  it('rejects circular reference anchor (logs + nulls selection, never throws)', () => {
     const store = createSelectionStore()
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const circular: Record<string, unknown> = { row: 0 }
     circular.self = circular
     expect(() => {
@@ -86,7 +93,10 @@ describe('createSelectionStore', () => {
         payload: { row: 0, col: 0 },
         anchor: circular,
       })
-    }).toThrow()
+    }).not.toThrow()
+    expect(store.selection).toBeNull()
+    expect(errSpy).toHaveBeenCalled()
+    errSpy.mockRestore()
   })
 
   it('preserves selection payload through JSON round-trip', () => {

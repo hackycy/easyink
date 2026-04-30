@@ -1,6 +1,6 @@
 import type { Ref } from 'vue'
 import type { DesignerStore } from '../store/designer-store'
-import { getRotatedAABB, rectsIntersect, UnitManager } from '@easyink/core'
+import { getRotatedAABB, isInteractable, rectsIntersect, UnitManager } from '@easyink/core'
 
 export interface MarqueeRect {
   x: number
@@ -41,6 +41,13 @@ const MARQUEE_ACTIVATION_DISTANCE = 1
  * - In additive mode (Ctrl/Meta), the original selection is preserved on
  *   pointerdown and re-merged with each frame's hits; the original selection
  *   is never cleared.
+ * - Hit-test is always intersection (any overlap selects). Tried direction-
+ *   based enclosure-vs-intersection (AutoCAD convention) but it conflicted
+ *   with the dominant top-left → bottom-right gesture habit of designer/
+ *   PowerPoint/Figma users — they expect partial-overlap to count, and
+ *   enclosure mode silently dropped half the hits. If we ever want a
+ *   strict-containment mode, gate it on an explicit modifier (e.g. Alt) and
+ *   show a distinct cursor; do NOT infer it from drag direction.
  */
 export function useMarqueeSelect(ctx: MarqueeSelectContext) {
   function onCanvasPointerDown(e: PointerEvent) {
@@ -84,7 +91,7 @@ export function useMarqueeSelect(ctx: MarqueeSelectContext) {
       const elements = store.getElements()
       const hitIds: string[] = []
       for (const node of elements) {
-        if (node.hidden || node.locked)
+        if (!isInteractable(node))
           continue
         const visual = store.getVisualSize(node)
         const aabb = getRotatedAABB(

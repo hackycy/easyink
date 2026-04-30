@@ -4,6 +4,7 @@ import type { Component } from 'vue'
 import {
   AddMaterialCommand,
   RemoveMaterialCommand,
+  UnitManager,
 } from '@easyink/core'
 import {
   IconCopy,
@@ -166,7 +167,7 @@ function handleAction(item: ContextMenuItem) {
 
     case 'paste':
       if (store.clipboard.length > 0) {
-        const offset = 10
+        const offset = pasteOffset()
         const newIds: string[] = []
         store.commands.beginTransaction('Paste')
         for (const node of store.clipboard) {
@@ -186,7 +187,7 @@ function handleAction(item: ContextMenuItem) {
 
     case 'duplicate':
       if (nodes.length > 0) {
-        const offset = 10
+        const offset = pasteOffset()
         const newIds: string[] = []
         store.commands.beginTransaction('Duplicate')
         for (const node of nodes) {
@@ -272,12 +273,32 @@ function handleAction(item: ContextMenuItem) {
       break
 
     case 'select-all':
-      store.selection.selectMultiple(elements.map(el => el.id))
+      // Exclude hidden elements: select-all is the canonical "operate on every
+      // visible element" gesture. Including hidden nodes would let downstream
+      // group operations (drag/delete) silently mutate things the user can't
+      // see and didn't intend to touch.
+      store.selection.selectMultiple(
+        elements.filter(el => !el.hidden).map(el => el.id),
+      )
       break
 
     default:
+      // Surface unknown actions as a warning rather than silently swallowing
+      // them — architecture README requires diagnostics over silent failure.
+      console.warn('[CanvasContextMenu] Unknown action:', item.id)
       break
   }
+}
+
+/**
+ * Paste / duplicate offset, expressed in current document units. Anchored to
+ * a fixed screen-pixel value (~10px at zoom 1) so the visual offset is
+ * consistent regardless of unit (mm / px / pt) — a literal `10` would be
+ * one screen pixel in mm but a finger-width in px.
+ */
+function pasteOffset(): number {
+  const um = new UnitManager(store.schema.unit)
+  return um.fromPixels(10, 96, 1)
 }
 
 // Use pointerdown in capture phase -- fires before workspace clears selection

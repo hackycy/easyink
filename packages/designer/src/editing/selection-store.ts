@@ -28,9 +28,22 @@ export function createSelectionStore(): SelectionStore {
 
     set(selection: Selection | null): void {
       if (selection) {
-        validateJsonSafe(selection.payload)
-        if (selection.anchor !== undefined) {
-          validateJsonSafe(selection.anchor)
+        try {
+          validateJsonSafe(selection.payload)
+          if (selection.anchor !== undefined) {
+            validateJsonSafe(selection.anchor)
+          }
+        }
+        catch (err) {
+          // Boundary policy: surface the diagnostic loudly but do NOT throw
+          // into Vue's reactive effect chain. A throw here would leave any
+          // upstream watcher in a half-applied state and (depending on Vue's
+          // scheduler) silently break further selection updates. Instead we
+          // log + drop the bad payload so the user sees "selection cleared"
+          // rather than a frozen UI.
+          console.error('[SelectionStore] Rejected non-JSON-safe selection:', err, selection)
+          _selection.value = null
+          return
         }
       }
       _selection.value = selection

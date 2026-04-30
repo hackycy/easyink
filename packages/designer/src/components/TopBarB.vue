@@ -8,6 +8,7 @@ import {
   normalizeRotation,
   RemoveMaterialCommand,
   RotateMaterialCommand,
+  UnitManager,
   UpdateMaterialPropsCommand,
 } from '@easyink/core'
 import {
@@ -449,7 +450,8 @@ function handlePaste() {
     return
 
   const elements = store.schema.elements
-  const offset = 10
+  // Anchor offset to ~10 screen px so visual displacement is unit-agnostic.
+  const offset = new UnitManager(store.schema.unit).fromPixels(10, 96, 1)
   const newIds: string[] = []
 
   store.commands.beginTransaction('Paste')

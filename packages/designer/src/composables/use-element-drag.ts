@@ -1,6 +1,6 @@
 import type { MaterialNode } from '@easyink/schema'
 import type { DesignerStore } from '../store/designer-store'
-import { MoveMaterialCommand, UnitManager } from '@easyink/core'
+import { isInteractable, MoveMaterialCommand, UnitManager } from '@easyink/core'
 import { markRaw, ref } from 'vue'
 import { collectSnapCandidates, computeSnap, getSelectionBox } from '../snap'
 
@@ -36,7 +36,7 @@ export function useElementDrag(ctx: ElementDragContext) {
   function onPointerDown(e: PointerEvent, elementId: string) {
     const { store } = ctx
     const node = store.getElementById(elementId)
-    if (!node || node.locked)
+    if (!node || !isInteractable(node))
       return
 
     if (!store.selection.has(elementId)) {
@@ -49,7 +49,7 @@ export function useElementDrag(ctx: ElementDragContext) {
     const selectedIds = store.selection.ids
     const selectedNodes = selectedIds
       .map(id => store.getElementById(id))
-      .filter((n): n is MaterialNode => n != null && !n.locked)
+      .filter((n): n is MaterialNode => n != null && isInteractable(n))
 
     if (selectedNodes.length === 0)
       return
@@ -76,7 +76,7 @@ export function useElementDrag(ctx: ElementDragContext) {
       return
 
     const otherNodes = store.getElements().filter(
-      el => !store.selection.has(el.id) && !el.hidden && !el.locked,
+      el => !store.selection.has(el.id) && isInteractable(el),
     )
 
     // Collect snap candidates ONCE at pointerdown — element set and their

@@ -4,6 +4,25 @@
 >
 > 适用范围：所有需要"在物料内部继续编辑"的复杂物料——表格（table-static / table-data / cell-free）、容器（container 子元素 in-place 编辑）、图表（chart 内图例/坐标轴/系列编辑）、SVG 路径/锚点编辑，以及未来扩展的表单、看板等。
 
+## 22.0 两种 selection 的边界
+
+EasyInk 里有两套同名但不同语义的 selection 模型，必须在阅读本章前区分清楚：
+
+| 维度 | `SelectionModel`（画布层） | `EditingSession.selection` / `Selection<T>`（物料内部） |
+|---|---|---|
+| 位置 | `@easyink/core/selection.ts` | 22.3 协议 + `@easyink/designer/editing/selection-store.ts` |
+| 单位 | 画布上的**整个元素**（id 集合） | 物料**内部**的子结构（cell / anchor / legend …） |
+| 多选 | 原生 `Set<string>`，框选/Ctrl 点击/全选都改它 | 单值 `Selection \| null`，范围用 `payload + anchor` 表达 |
+| 是否进入历史 | 否，纯 UI 状态 | 否，session 关闭即丢弃 |
+| 是否可序列化 | id 字符串集合，天然 JSON-safe | 协议强制 JSON-safe（22.3） |
+
+**互斥**：进入 `EditingSession`（双击表格、点击 SVG 锚点等）时，画布层 `SelectionModel` 会坍缩为 session 所属物料的单选；session 退出后才能恢复多选。`CanvasWorkspace` 的 marquee 启动会主动 `editingSession.exit()`，`useElementDrag` 的多选拖动也仅在没有活跃 session 时进入；不允许出现"画布上多选 + 某个物料正在编辑"的混合状态。
+
+**面向新代码**：
+- 操作"哪些元素被选中"用 `store.selection`（`SelectionModel`）。
+- 操作"表格里哪个 cell / SVG 里哪个锚点"用 `session.selectionStore`（`Selection<T>`）。
+- 不要把 `SelectionModel.ids` 写成 `Selection<unknown>`——它们职责不同，后者依赖 `nodeId` 把 selection 锁定到具体物料。
+
 ## 22.1 设计动机
 
 旧协议在表格落地后暴露的根本问题：

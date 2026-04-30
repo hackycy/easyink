@@ -1,6 +1,16 @@
 import type { MaterialNode } from '@easyink/schema'
 
 /**
+ * Single source of truth for "can this node participate in interactive
+ * selection / drag / nudge / resize". Used by marquee, element-drag, keyboard
+ * shortcuts, select-all, etc. so locked/hidden filtering stays consistent
+ * across every entry point — divergence here was a real audit finding.
+ */
+export function isInteractable(node: MaterialNode): boolean {
+  return !node.locked && !node.hidden
+}
+
+/**
  * SelectionModel tracks which elements are currently selected in the designer.
  */
 export class SelectionModel {
@@ -91,7 +101,14 @@ export class SelectionModel {
 
   onChange(listener: () => void): () => void {
     this._listeners.push(listener)
+    let disposed = false
     return () => {
+      // Idempotent: callers may dispose defensively in multiple lifecycle
+      // hooks (e.g. onUnmounted + watcher cleanup); a second call must not
+      // remove a coincidentally-matching listener registered later.
+      if (disposed)
+        return
+      disposed = true
       const idx = this._listeners.indexOf(listener)
       if (idx >= 0)
         this._listeners.splice(idx, 1)
