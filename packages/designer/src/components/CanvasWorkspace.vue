@@ -54,7 +54,7 @@ const resizeHandles: ResizeHandle[] = ['nw', 'n', 'ne', 'w', 'e', 'sw', 's', 'se
 
 // ─── Composables ─────────────────────────────────────────────────
 
-const { onPointerDown: onElementPointerDown, dragJustOccurred } = useElementDrag({
+const { onPointerDown: onElementPointerDown, dragJustOccurred, consumeModifierSelectionPrime } = useElementDrag({
   store,
   getPageEl: () => pageRef.value,
   getScrollEl: () => scrollRef.value,
@@ -285,6 +285,8 @@ function handleElementClick(e: MouseEvent, elementId: string) {
 
   // Normal selection / narrow-down logic
   if (e.ctrlKey || e.metaKey) {
+    if (consumeModifierSelectionPrime(elementId))
+      return
     store.selection.toggle(elementId)
     return
   }

@@ -30,6 +30,7 @@ interface FakeStore {
     has: (id: string) => boolean
     select: (id: string) => void
     add: (id: string) => void
+    toggle: (id: string) => void
   }
   commands: {
     execute: ReturnType<typeof vi.fn>
@@ -78,6 +79,12 @@ function makeStore(elements: MaterialNode[], selected: string[]): FakeStore {
       },
       add(id: string) {
         sel.add(id)
+      },
+      toggle(id: string) {
+        if (sel.has(id))
+          sel.delete(id)
+        else
+          sel.add(id)
       },
     },
     commands: {
@@ -130,6 +137,18 @@ function startDrag(target: HTMLElement, drag: ReturnType<typeof useElementDrag>,
   const down = pdEvent('pointerdown', x, y)
   Object.defineProperty(down, 'currentTarget', { value: target, configurable: true })
   drag.onPointerDown(down, (target as HTMLElement & { dataset: { id: string } }).dataset.id)
+}
+
+function applyModifierClickSelection(
+  drag: ReturnType<typeof useElementDrag>,
+  store: FakeStore,
+  elementId: string,
+) {
+  if (drag.dragJustOccurred.value)
+    return
+  if (drag.consumeModifierSelectionPrime(elementId))
+    return
+  store.selection.toggle(elementId)
 }
 
 describe('useElementDrag', () => {
@@ -286,5 +305,46 @@ describe('useElementDrag', () => {
     expect(node.y).toBe(20)
     expect(store.snapActiveLines).toHaveLength(0)
     expect(store.commands.execute).not.toHaveBeenCalled()
+  })
+
+  it('preserves a modifier add-select on click release after pointerdown primed it for drag', () => {
+    const a = makeNode('a', 0, 0)
+    const b = makeNode('b', 100, 100)
+    const store = makeStore([a, b], ['a'])
+    const drag = useElementDrag(makeCtx(store))
+
+    const target = document.createElement('div')
+    target.dataset.id = 'b'
+    document.body.appendChild(target)
+
+    const down = pdEvent('pointerdown', 100, 100, { meta: true })
+    Object.defineProperty(down, 'currentTarget', { value: target, configurable: true })
+    drag.onPointerDown(down, 'b')
+    window.dispatchEvent(pdEvent('pointerup', 100, 100, { meta: true }))
+
+    applyModifierClickSelection(drag, store, 'b')
+
+    expect(store.selection.ids).toEqual(['a', 'b'])
+    expect(drag.consumeModifierSelectionPrime('b')).toBe(false)
+  })
+
+  it('still toggles off an already-selected element on modifier click release', () => {
+    const a = makeNode('a', 0, 0)
+    const b = makeNode('b', 100, 100)
+    const store = makeStore([a, b], ['a', 'b'])
+    const drag = useElementDrag(makeCtx(store))
+
+    const target = document.createElement('div')
+    target.dataset.id = 'b'
+    document.body.appendChild(target)
+
+    const down = pdEvent('pointerdown', 100, 100, { meta: true })
+    Object.defineProperty(down, 'currentTarget', { value: target, configurable: true })
+    drag.onPointerDown(down, 'b')
+    window.dispatchEvent(pdEvent('pointerup', 100, 100, { meta: true }))
+
+    applyModifierClickSelection(drag, store, 'b')
+
+    expect(store.selection.ids).toEqual(['a'])
   })
 })

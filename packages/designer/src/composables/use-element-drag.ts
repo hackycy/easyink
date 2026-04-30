@@ -32,18 +32,46 @@ export function useElementDrag(ctx: ElementDragContext) {
    * to a single element on release.
    */
   const dragJustOccurred = ref(false)
+  const modifierSelectionPrimedElementId = ref<string | null>(null)
+
+  function scheduleTransientStateReset(resetDragFlag: boolean) {
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => {
+        modifierSelectionPrimedElementId.value = null
+        if (resetDragFlag)
+          dragJustOccurred.value = false
+      })
+      return
+    }
+
+    modifierSelectionPrimedElementId.value = null
+    if (resetDragFlag)
+      dragJustOccurred.value = false
+  }
+
+  function consumeModifierSelectionPrime(elementId: string): boolean {
+    if (modifierSelectionPrimedElementId.value !== elementId)
+      return false
+
+    modifierSelectionPrimedElementId.value = null
+    return true
+  }
 
   function onPointerDown(e: PointerEvent, elementId: string) {
     const { store } = ctx
+    modifierSelectionPrimedElementId.value = null
     const node = store.getElementById(elementId)
     if (!node || !isInteractable(node))
       return
 
     if (!store.selection.has(elementId)) {
-      if (e.ctrlKey || e.metaKey)
+      if (e.ctrlKey || e.metaKey) {
         store.selection.add(elementId)
-      else
+        modifierSelectionPrimedElementId.value = elementId
+      }
+      else {
         store.selection.select(elementId)
+      }
     }
 
     const selectedIds = store.selection.ids
@@ -185,6 +213,7 @@ export function useElementDrag(ctx: ElementDragContext) {
         return
       teardown()
       store.snapActiveLines = []
+      modifierSelectionPrimedElementId.value = null
       rollback()
     }
 
@@ -194,8 +223,10 @@ export function useElementDrag(ctx: ElementDragContext) {
       teardown()
       store.snapActiveLines = []
 
-      if (!moved)
+      if (!moved) {
+        scheduleTransientStateReset(false)
         return
+      }
 
       // Mark that a drag just completed so the synthesised click event can
       // skip its "collapse multi-selection to single" branch.
@@ -203,14 +234,7 @@ export function useElementDrag(ctx: ElementDragContext) {
       // Auto-clear on the next animation frame: the click event always fires
       // synchronously after pointerup in the same task, so by next frame any
       // legitimate consumer has already read the flag.
-      if (typeof requestAnimationFrame === 'function') {
-        requestAnimationFrame(() => {
-          dragJustOccurred.value = false
-        })
-      }
-      else {
-        dragJustOccurred.value = false
-      }
+      scheduleTransientStateReset(true)
 
       // Group every per-node MoveMaterialCommand into a single undo step so
       // multi-selection moves are reversed by one Cmd+Z. Single-selection
@@ -242,5 +266,5 @@ export function useElementDrag(ctx: ElementDragContext) {
     window.addEventListener('pointercancel', onCancel)
   }
 
-  return { onPointerDown, dragJustOccurred }
+  return { onPointerDown, dragJustOccurred, consumeModifierSelectionPrime }
 }
