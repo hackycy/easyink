@@ -20,12 +20,16 @@ export class SelectionModel {
   }
 
   select(id: string): void {
+    if (this._ids.size === 1 && this._ids.has(id))
+      return
     this._ids.clear()
     this._ids.add(id)
     this.notify()
   }
 
   selectMultiple(ids: string[]): void {
+    if (sameSet(this._ids, ids))
+      return
     this._ids.clear()
     for (const id of ids) {
       this._ids.add(id)
@@ -44,11 +48,15 @@ export class SelectionModel {
   }
 
   add(id: string): void {
+    if (this._ids.has(id))
+      return
     this._ids.add(id)
     this.notify()
   }
 
   remove(id: string): void {
+    if (!this._ids.has(id))
+      return
     this._ids.delete(id)
     this.notify()
   }
@@ -69,15 +77,16 @@ export class SelectionModel {
    */
   reconcile(nodes: MaterialNode[]): void {
     const existing = new Set(nodes.map(n => n.id))
-    let changed = false
+    const stale: string[] = []
     for (const id of this._ids) {
-      if (!existing.has(id)) {
-        this._ids.delete(id)
-        changed = true
-      }
+      if (!existing.has(id))
+        stale.push(id)
     }
-    if (changed)
-      this.notify()
+    if (stale.length === 0)
+      return
+    for (const id of stale)
+      this._ids.delete(id)
+    this.notify()
   }
 
   onChange(listener: () => void): () => void {
@@ -94,4 +103,17 @@ export class SelectionModel {
       listener()
     }
   }
+}
+
+function sameSet(set: Set<string>, ids: readonly string[]): boolean {
+  if (set.size !== ids.length)
+    return false
+  for (const id of ids) {
+    if (!set.has(id))
+      return false
+  }
+  // Guard against duplicates in `ids` masking a real change (e.g. set has [a]
+  // and ids is [a, a] — same length & every element present, but the resulting
+  // set after replacement would still be {a}, so equality holds anyway).
+  return true
 }

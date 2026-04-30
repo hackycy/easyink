@@ -1,7 +1,7 @@
 import type { MaterialNode } from '@easyink/schema'
 import type { DesignerStore } from '../store/designer-store'
 import { MoveMaterialCommand, UnitManager } from '@easyink/core'
-import { markRaw } from 'vue'
+import { markRaw, ref } from 'vue'
 import { collectSnapCandidates, computeSnap, getSelectionBox } from '../snap'
 
 export interface ElementDragContext {
@@ -25,6 +25,14 @@ export interface ElementDragContext {
  *   boundaries; `pointercancel` rolls back geometry and skips command commit.
  */
 export function useElementDrag(ctx: ElementDragContext) {
+  /**
+   * True for the brief window between a drag's `pointerup` (with movement) and
+   * the synthesised `click` event that follows. Click handlers consult this to
+   * skip selection-collapse logic so a multi-selection drag does not collapse
+   * to a single element on release.
+   */
+  const dragJustOccurred = ref(false)
+
   function onPointerDown(e: PointerEvent, elementId: string) {
     const { store } = ctx
     const node = store.getElementById(elementId)
@@ -189,16 +197,43 @@ export function useElementDrag(ctx: ElementDragContext) {
       if (!moved)
         return
 
-      for (const orig of origPositions) {
-        const n = store.getElementById(orig.id)
-        if (!n)
-          continue
-        const finalX = n.x
-        const finalY = n.y
-        n.x = orig.x
-        n.y = orig.y
-        const cmd = new MoveMaterialCommand(store.schema.elements, orig.id, { x: finalX, y: finalY })
-        store.commands.execute(cmd)
+      // Mark that a drag just completed so the synthesised click event can
+      // skip its "collapse multi-selection to single" branch.
+      dragJustOccurred.value = true
+      // Auto-clear on the next animation frame: the click event always fires
+      // synchronously after pointerup in the same task, so by next frame any
+      // legitimate consumer has already read the flag.
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(() => {
+          dragJustOccurred.value = false
+        })
+      }
+      else {
+        dragJustOccurred.value = false
+      }
+
+      // Group every per-node MoveMaterialCommand into a single undo step so
+      // multi-selection moves are reversed by one Cmd+Z. Single-selection
+      // drags also benefit (the batch wraps a single command, which the
+      // command manager collapses transparently).
+      store.commands.beginTransaction('Move')
+      try {
+        for (const orig of origPositions) {
+          const n = store.getElementById(orig.id)
+          if (!n)
+            continue
+          const finalX = n.x
+          const finalY = n.y
+          n.x = orig.x
+          n.y = orig.y
+          const cmd = new MoveMaterialCommand(store.schema.elements, orig.id, { x: finalX, y: finalY })
+          store.commands.execute(cmd)
+        }
+        store.commands.commitTransaction()
+      }
+      catch (err) {
+        store.commands.rollbackTransaction()
+        throw err
       }
     }
 
@@ -207,5 +242,5 @@ export function useElementDrag(ctx: ElementDragContext) {
     window.addEventListener('pointercancel', onCancel)
   }
 
-  return { onPointerDown }
+  return { onPointerDown, dragJustOccurred }
 }

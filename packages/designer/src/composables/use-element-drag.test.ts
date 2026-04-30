@@ -31,7 +31,12 @@ interface FakeStore {
     select: (id: string) => void
     add: (id: string) => void
   }
-  commands: { execute: ReturnType<typeof vi.fn> }
+  commands: {
+    execute: ReturnType<typeof vi.fn>
+    beginTransaction: ReturnType<typeof vi.fn>
+    commitTransaction: ReturnType<typeof vi.fn>
+    rollbackTransaction: ReturnType<typeof vi.fn>
+  }
   getElementById: (id: string) => MaterialNode | undefined
   getElements: () => MaterialNode[]
   getVisualHeight: (n: MaterialNode) => number
@@ -75,7 +80,12 @@ function makeStore(elements: MaterialNode[], selected: string[]): FakeStore {
         sel.add(id)
       },
     },
-    commands: { execute: vi.fn() },
+    commands: {
+      execute: vi.fn(),
+      beginTransaction: vi.fn(),
+      commitTransaction: vi.fn(),
+      rollbackTransaction: vi.fn(),
+    },
     getElementById: (id: string) => elements.find(e => e.id === id),
     getElements: () => elements,
     getVisualHeight: (n: MaterialNode) => n.height,
@@ -160,6 +170,64 @@ describe('useElementDrag', () => {
     expect(a.y).toBe(30)
     expect(b.x).toBe(120)
     expect(b.y).toBe(130)
+  })
+
+  it('multi-selection drag commits a single transaction', () => {
+    const a = makeNode('a', 0, 0)
+    const b = makeNode('b', 100, 100)
+    const c = makeNode('c', 200, 200)
+    const store = makeStore([a, b, c], ['a', 'b', 'c'])
+    const drag = useElementDrag(makeCtx(store))
+
+    const target = document.createElement('div')
+    target.dataset.id = 'a'
+    document.body.appendChild(target)
+
+    startDrag(target, drag, 0, 0)
+    window.dispatchEvent(pdEvent('pointermove', 10, 10))
+    window.dispatchEvent(pdEvent('pointerup', 10, 10))
+
+    // Three MoveMaterialCommand executions, but exactly one undo entry.
+    expect(store.commands.beginTransaction).toHaveBeenCalledOnce()
+    expect(store.commands.commitTransaction).toHaveBeenCalledOnce()
+    expect(store.commands.execute).toHaveBeenCalledTimes(3)
+  })
+
+  it('drag without movement does not open a transaction', () => {
+    const node = makeNode('n1', 10, 20)
+    const store = makeStore([node], ['n1'])
+    const drag = useElementDrag(makeCtx(store))
+
+    const target = document.createElement('div')
+    target.dataset.id = 'n1'
+    document.body.appendChild(target)
+
+    startDrag(target, drag, 0, 0)
+    window.dispatchEvent(pdEvent('pointerup', 0, 0))
+
+    expect(store.commands.beginTransaction).not.toHaveBeenCalled()
+    expect(store.commands.execute).not.toHaveBeenCalled()
+  })
+
+  it('exposes dragJustOccurred for one frame after a moved drag', async () => {
+    const node = makeNode('n1', 0, 0)
+    const store = makeStore([node], ['n1'])
+    const drag = useElementDrag(makeCtx(store))
+
+    const target = document.createElement('div')
+    target.dataset.id = 'n1'
+    document.body.appendChild(target)
+
+    expect(drag.dragJustOccurred.value).toBe(false)
+
+    startDrag(target, drag, 0, 0)
+    window.dispatchEvent(pdEvent('pointermove', 5, 5))
+    window.dispatchEvent(pdEvent('pointerup', 5, 5))
+
+    expect(drag.dragJustOccurred.value).toBe(true)
+
+    await new Promise(r => requestAnimationFrame(() => r(null)))
+    expect(drag.dragJustOccurred.value).toBe(false)
   })
 
   it('zoom scales the document delta consistently', () => {

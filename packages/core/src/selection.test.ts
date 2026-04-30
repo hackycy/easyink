@@ -79,4 +79,68 @@ describe('selectionModel', () => {
     expect(sel.has('b')).toBe(false)
     expect(sel.count).toBe(2)
   })
+
+  describe('change notification short-circuit', () => {
+    function trackedSelection() {
+      const sel = new SelectionModel()
+      let count = 0
+      sel.onChange(() => {
+        count++
+      })
+      return { sel, calls: () => count }
+    }
+
+    it('select(sameId) does not notify', () => {
+      const { sel, calls } = trackedSelection()
+      sel.select('a')
+      expect(calls()).toBe(1)
+      sel.select('a')
+      expect(calls()).toBe(1)
+    })
+
+    it('selectMultiple with same set does not notify', () => {
+      const { sel, calls } = trackedSelection()
+      sel.selectMultiple(['a', 'b'])
+      expect(calls()).toBe(1)
+      sel.selectMultiple(['b', 'a'])
+      expect(calls()).toBe(1)
+    })
+
+    it('selectMultiple([]) on empty selection does not notify', () => {
+      const { sel, calls } = trackedSelection()
+      sel.selectMultiple([])
+      expect(calls()).toBe(0)
+    })
+
+    it('add(existing) does not notify', () => {
+      const { sel, calls } = trackedSelection()
+      sel.select('a')
+      expect(calls()).toBe(1)
+      sel.add('a')
+      expect(calls()).toBe(1)
+    })
+
+    it('remove(missing) does not notify', () => {
+      const { sel, calls } = trackedSelection()
+      sel.remove('a')
+      expect(calls()).toBe(0)
+    })
+
+    it('clear() on empty selection does not notify', () => {
+      const { sel, calls } = trackedSelection()
+      sel.clear()
+      expect(calls()).toBe(0)
+    })
+
+    it('reconcile() with no stale ids does not notify', () => {
+      const { sel, calls } = trackedSelection()
+      sel.selectMultiple(['a', 'b'])
+      expect(calls()).toBe(1)
+      sel.reconcile([
+        { id: 'a', type: 'text', x: 0, y: 0, width: 10, height: 10, props: {} },
+        { id: 'b', type: 'text', x: 0, y: 0, width: 10, height: 10, props: {} },
+      ])
+      expect(calls()).toBe(1)
+    })
+  })
 })

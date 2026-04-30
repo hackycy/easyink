@@ -11,6 +11,7 @@ import { useElementResize } from '../composables/use-element-resize'
 import { useElementRotate } from '../composables/use-element-rotate'
 import { useMarqueeSelect } from '../composables/use-marquee-select'
 import { useMaterialDrop } from '../composables/use-material-drop'
+import { getSelectionBox } from '../snap'
 import { CANVAS_CONTAINER_KEY } from './canvas-container'
 import CanvasContextMenu from './CanvasContextMenu.vue'
 import CanvasElementContent from './CanvasElementContent.vue'
@@ -52,7 +53,7 @@ const resizeHandles: ResizeHandle[] = ['nw', 'n', 'ne', 'w', 'e', 'sw', 's', 'se
 
 // ─── Composables ─────────────────────────────────────────────────
 
-const { onPointerDown: onElementPointerDown } = useElementDrag({
+const { onPointerDown: onElementPointerDown, dragJustOccurred } = useElementDrag({
   store,
   getPageEl: () => pageRef.value,
   getScrollEl: () => scrollRef.value,
@@ -151,6 +152,34 @@ const marqueeStyle = computed(() => {
   }
 })
 
+// Group selection frame: a single bounding-box overlay rendered when more
+// than one element is selected. Per-element resize / rotate handles are
+// suppressed in that case (they would visually clash and have no defined
+// group-transform semantics yet). The frame is purely visual; it conveys
+// the aggregated extent so users can see what they're about to drag/copy/
+// delete as a group.
+const isMultiSelection = computed(() => store.selection.count > 1)
+
+const groupSelectionFrame = computed(() => {
+  if (!isMultiSelection.value)
+    return null
+  const nodes = store.selection.ids
+    .map(id => store.getElementById(id))
+    .filter((n): n is NonNullable<typeof n> => n != null)
+  if (nodes.length < 2)
+    return null
+  const box = getSelectionBox(nodes, n => store.getVisualSize(n))
+  if (!box)
+    return null
+  const unit = store.schema.unit
+  return {
+    left: `${box.x}${unit}`,
+    top: `${box.y}${unit}`,
+    width: `${box.width}${unit}`,
+    height: `${box.height}${unit}`,
+  }
+})
+
 // ─── Helpers ─────────────────────────────────────────────────────
 
 function windowTitle(kind: string): string {
@@ -241,6 +270,12 @@ function handleElementClick(e: MouseEvent, elementId: string) {
     editEnteredOnPointerDown = false
     return
   }
+
+  // A drag just completed: pointerdown preserved the multi-selection so every
+  // selected node could be moved together. Collapsing here would discard that
+  // intent immediately after the user lifted the pointer.
+  if (dragJustOccurred.value)
+    return
 
   // Normal selection / narrow-down logic
   if (e.ctrlKey || e.metaKey) {
@@ -473,27 +508,38 @@ onUnmounted(() => {
             <template v-if="store.selection.has(el.id) && editingNodeId !== el.id">
               <div class="ei-canvas-element__selection-border" />
 
-              <!-- 8 resize handles -->
-              <div
-                v-for="handle in resizeHandles"
-                :key="handle"
-                class="ei-canvas-element__handle"
-                :class="`ei-canvas-element__handle--${handle}`"
-                :style="{ cursor: handleCursorForHandle(handle) }"
-                @pointerdown="handleResizePointerDown($event, el.id, handle)"
-              />
+              <!-- Per-element transform handles only in single-selection mode.
+                   Multi-selection renders a single group frame outside this loop. -->
+              <template v-if="!isMultiSelection">
+                <!-- 8 resize handles -->
+                <div
+                  v-for="handle in resizeHandles"
+                  :key="handle"
+                  class="ei-canvas-element__handle"
+                  :class="`ei-canvas-element__handle--${handle}`"
+                  :style="{ cursor: handleCursorForHandle(handle) }"
+                  @pointerdown="handleResizePointerDown($event, el.id, handle)"
+                />
 
-              <!-- Rotation handle (hidden for non-rotatable materials like tables) -->
-              <div
-                v-if="store.getMaterial(el.type)?.capabilities.rotatable !== false"
-                class="ei-canvas-element__rotate-handle"
-                @pointerdown="handleRotatePointerDown($event, el.id)"
-              >
-                <div class="ei-canvas-element__rotate-dot" />
-                <div class="ei-canvas-element__rotate-line" />
-              </div>
+                <!-- Rotation handle (hidden for non-rotatable materials like tables) -->
+                <div
+                  v-if="store.getMaterial(el.type)?.capabilities.rotatable !== false"
+                  class="ei-canvas-element__rotate-handle"
+                  @pointerdown="handleRotatePointerDown($event, el.id)"
+                >
+                  <div class="ei-canvas-element__rotate-dot" />
+                  <div class="ei-canvas-element__rotate-line" />
+                </div>
+              </template>
             </template>
           </div>
+
+          <!-- Group selection frame (multi-selection only) -->
+          <div
+            v-if="groupSelectionFrame"
+            class="ei-canvas-group-frame"
+            :style="groupSelectionFrame"
+          />
 
           <!-- Snap line overlay -->
           <SnapLineOverlay />
@@ -743,6 +789,15 @@ onUnmounted(() => {
   background: rgba(24, 144, 255, 0.08);
   pointer-events: none;
   z-index: 9999;
+}
+
+.ei-canvas-group-frame {
+  position: absolute;
+  // Dashed outline distinguishes the aggregate frame from per-element solid borders.
+  border: 1px dashed var(--ei-primary, #1890ff);
+  pointer-events: none;
+  // Sit above element selection-borders but below transient overlays (snap lines, marquee).
+  z-index: 100;
 }
 
 .ei-canvas-windows {
