@@ -1,6 +1,7 @@
 import type { DesignerStore } from '../store/designer-store'
 import type { SnapLine } from '../types'
 import { ResizeMaterialCommand, UnitManager } from '@easyink/core'
+import { markRaw } from 'vue'
 import { collectSnapCandidates, pickBestSnap } from '../snap'
 
 export type ResizeHandle
@@ -91,6 +92,25 @@ export function useElementResize(ctx: ElementResizeContext) {
     const el = e.currentTarget as HTMLElement
     el.setPointerCapture(pointerId)
 
+    // Pre-compute snap candidates ONCE at pointerdown. The set of other
+    // elements (and their geometry) doesn't change during a resize, so
+    // re-collecting per pointermove would burn O(n) allocation each frame.
+    const snapStateAtStart = store.workbench.snap
+    const otherNodes = store.getElements().filter(
+      n => n.id !== elementId && !n.hidden && !n.locked,
+    )
+    const snapCandidates = collectSnapCandidates({
+      page: store.schema.page,
+      guidesX: store.schema.guides.x,
+      guidesY: store.schema.guides.y,
+      otherNodes,
+      getVisualSize: n => store.getVisualSize(n),
+      enabled: true,
+      gridSnap: snapStateAtStart.gridSnap,
+      guideSnap: snapStateAtStart.guideSnap,
+      elementSnap: snapStateAtStart.elementSnap,
+    })
+
     function teardown() {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
@@ -124,20 +144,6 @@ export function useElementResize(ctx: ElementResizeContext) {
       if (bypass || !snapState.enabled)
         return { dx, dy, lines: [] }
 
-      const otherNodes = store.getElements().filter(
-        n => n.id !== elementId && !n.hidden && !n.locked,
-      )
-      const candidates = collectSnapCandidates({
-        page: store.schema.page,
-        guidesX: store.schema.guides.x,
-        guidesY: store.schema.guides.y,
-        otherNodes,
-        getVisualHeight: n => store.getVisualHeight(n),
-        enabled: true,
-        gridSnap: snapState.gridSnap,
-        guideSnap: snapState.guideSnap,
-        elementSnap: snapState.elementSnap,
-      })
       const grid = snapState.gridSnap && store.schema.page.grid?.enabled ? store.schema.page.grid : undefined
       const threshold = snapState.threshold / Math.max(zoom, 0.0001)
       const lines: SnapLine[] = []
@@ -149,7 +155,7 @@ export function useElementResize(ctx: ElementResizeContext) {
         const edgeX = movingX === 'min' ? origX + dx : origX + origW + dx
         const pick = pickBestSnap(
           [edgeX],
-          candidates.x,
+          snapCandidates.x,
           threshold,
           grid && grid.width > 0 ? { step: grid.width } : undefined,
         )
@@ -173,7 +179,7 @@ export function useElementResize(ctx: ElementResizeContext) {
         const edgeY = movingY === 'min' ? origY + dy : origY + origH + dy
         const pick = pickBestSnap(
           [edgeY],
-          candidates.y,
+          snapCandidates.y,
           threshold,
           grid && grid.height > 0 ? { step: grid.height } : undefined,
         )
@@ -214,7 +220,9 @@ export function useElementResize(ctx: ElementResizeContext) {
       const snapped = applySnap(dx, dy, ev)
       dx = snapped.dx
       dy = snapped.dy
-      store.workbench.snap.activeLines = snapped.lines
+      // markRaw avoids deep-tracking each SnapLine through the reactive
+      // store proxy; only the property reassignment is reactive.
+      store.snapActiveLines = markRaw(snapped.lines)
 
       let newX = origX
       let newY = origY
@@ -268,7 +276,7 @@ export function useElementResize(ctx: ElementResizeContext) {
       if (ev.pointerId !== pointerId)
         return
       teardown()
-      store.workbench.snap.activeLines = []
+      store.snapActiveLines = []
       rollback()
     }
 
@@ -276,7 +284,7 @@ export function useElementResize(ctx: ElementResizeContext) {
       if (ev.pointerId !== pointerId)
         return
       teardown()
-      store.workbench.snap.activeLines = []
+      store.snapActiveLines = []
 
       if (!moved)
         return

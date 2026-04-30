@@ -42,6 +42,8 @@ export interface MaterialDesignerExtension {
   renderContent: (nodeSignal: NodeSignal, container: HTMLElement) => () => void
   /** Total visual height in the designer when the material renders virtual content beyond node.height (e.g. placeholder rows). */
   getVisualHeight?: (node: MaterialNode) => number
+  /** Total visual width in the designer when it differs from `node.width` (rare, mirror of `getVisualHeight`). */
+  getVisualWidth?: (node: MaterialNode) => number
   /**
    * Datasource drag-and-drop handler. Materials implement this to take over
    * dragOver detection and drop binding instead of the default BindFieldCommand.

@@ -57,6 +57,7 @@ export type { FontDescriptor, FontProvider, FontSource } from './font'
 export {
   distance,
   getBoundingRect,
+  getRotatedAABB,
   normalizeRotation,
   pointInRect,
   rectContains,

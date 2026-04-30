@@ -168,6 +168,5 @@ function createDefaultSnap(): SnapState {
     guideSnap: true,
     elementSnap: true,
     threshold: 3,
-    activeLines: [],
   }
 }

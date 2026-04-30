@@ -1,7 +1,8 @@
 import type { MaterialNode } from '@easyink/schema'
 import type { DesignerStore } from '../store/designer-store'
 import { MoveMaterialCommand, UnitManager } from '@easyink/core'
-import { computeSnap, getSelectionBox } from '../snap'
+import { markRaw } from 'vue'
+import { collectSnapCandidates, computeSnap, getSelectionBox } from '../snap'
 
 export interface ElementDragContext {
   store: DesignerStore
@@ -62,13 +63,30 @@ export function useElementDrag(ctx: ElementDragContext) {
 
     const origPositions = selectedNodes.map(n => ({ id: n.id, x: n.x, y: n.y }))
 
-    const selectionBox = getSelectionBox(selectedNodes, n => store.getVisualHeight(n))
+    const selectionBox = getSelectionBox(selectedNodes, n => store.getVisualSize(n))
     if (!selectionBox)
       return
 
     const otherNodes = store.getElements().filter(
       el => !store.selection.has(el.id) && !el.hidden && !el.locked,
     )
+
+    // Collect snap candidates ONCE at pointerdown — element set and their
+    // geometry don't change during a drag, so re-collecting per pointermove
+    // would burn O(n) allocation each frame on dense canvases. Toggles are
+    // captured at drag start (changing them mid-drag is not a supported flow).
+    const snapStateAtStart = store.workbench.snap
+    const snapCandidates = collectSnapCandidates({
+      page: store.schema.page,
+      guidesX: store.schema.guides.x,
+      guidesY: store.schema.guides.y,
+      otherNodes,
+      getVisualSize: n => store.getVisualSize(n),
+      enabled: true,
+      gridSnap: snapStateAtStart.gridSnap,
+      guideSnap: snapStateAtStart.guideSnap,
+      elementSnap: snapStateAtStart.elementSnap,
+    })
 
     let moved = false
     const pointerId = e.pointerId
@@ -112,7 +130,7 @@ export function useElementDrag(ctx: ElementDragContext) {
               guidesX: store.schema.guides.x,
               guidesY: store.schema.guides.y,
               otherNodes,
-              getVisualHeight: n => store.getVisualHeight(n),
+              getVisualSize: n => store.getVisualSize(n),
               enabled: snapState.enabled,
               gridSnap: snapState.gridSnap,
               guideSnap: snapState.guideSnap,
@@ -123,13 +141,17 @@ export function useElementDrag(ctx: ElementDragContext) {
               dx,
               dy,
               threshold: snapState.threshold / Math.max(zoom, 0.0001),
+              precomputedCandidates: snapCandidates,
             },
           )
         : { dx, dy, lines: [] }
 
       dx = snapResult.dx
       dy = snapResult.dy
-      store.workbench.snap.activeLines = snapResult.lines
+      // markRaw on the new array prevents the surrounding reactive(store)
+      // proxy from deep-walking each SnapLine; only the property write
+      // itself is reactive (sufficient for the overlay).
+      store.snapActiveLines = markRaw(snapResult.lines)
 
       for (const orig of origPositions) {
         const n = store.getElementById(orig.id)
@@ -154,7 +176,7 @@ export function useElementDrag(ctx: ElementDragContext) {
       if (ev.pointerId !== pointerId)
         return
       teardown()
-      store.workbench.snap.activeLines = []
+      store.snapActiveLines = []
       rollback()
     }
 
@@ -162,7 +184,7 @@ export function useElementDrag(ctx: ElementDragContext) {
       if (ev.pointerId !== pointerId)
         return
       teardown()
-      store.workbench.snap.activeLines = []
+      store.snapActiveLines = []
 
       if (!moved)
         return

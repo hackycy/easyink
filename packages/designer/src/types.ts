@@ -65,8 +65,6 @@ export interface SnapState {
    * pull radius stays constant across zoom levels.
    */
   threshold: number
-  /** Active snap lines to render (in document units) */
-  activeLines: SnapLine[]
 }
 
 /** Origin of a snap candidate. Higher priority sources break ties. */

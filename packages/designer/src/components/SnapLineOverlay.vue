@@ -7,11 +7,11 @@ const store = useDesignerStore()
 const unit = computed(() => store.schema.unit)
 
 const verticalLines = computed(() =>
-  store.workbench.snap.activeLines.filter(l => l.orientation === 'vertical'),
+  store.snapActiveLines.filter(l => l.orientation === 'vertical'),
 )
 
 const horizontalLines = computed(() =>
-  store.workbench.snap.activeLines.filter(l => l.orientation === 'horizontal'),
+  store.snapActiveLines.filter(l => l.orientation === 'horizontal'),
 )
 </script>
 

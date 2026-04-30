@@ -135,7 +135,7 @@ export function applyPersistedWorkbench(workbench: WorkbenchState, persisted: Pe
     workbench.viewport.zoom = persisted.viewport.zoom
   }
 
-  // Snap: settings only, not activeLines
+  // Snap: persisted settings only (active feedback lines live on the store as a ShallowRef).
   if (persisted.snap) {
     const boolKeys = ['enabled', 'gridSnap', 'guideSnap', 'elementSnap'] as const
     for (const key of boolKeys) {

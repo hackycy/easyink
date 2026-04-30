@@ -1,7 +1,7 @@
 import type { Rect } from '@easyink/core'
 import type { MaterialNode, PageSchema } from '@easyink/schema'
 import type { SnapLine, SnapSource } from '../types'
-import { snapToGrid } from '@easyink/core'
+import { getRotatedAABB, snapToGrid } from '@easyink/core'
 
 /**
  * Snap engine: candidate-collection + best-pick model.
@@ -49,7 +49,13 @@ export interface SnapEngineContext {
   guidesY: number[]
   /** Other elements (those not being moved) to align with. */
   otherNodes: MaterialNode[]
-  getVisualHeight: (n: MaterialNode) => number
+  /**
+   * Visual size of a node (may differ from `node.width / node.height` for
+   * materials with virtual content, e.g. table placeholder rows). Used both
+   * for selection-box assembly and for emitting snap candidates so rotated
+   * elements get a true AABB.
+   */
+  getVisualSize: (n: MaterialNode) => { width: number, height: number }
   enabled: boolean
   gridSnap: boolean
   guideSnap: boolean
@@ -84,20 +90,26 @@ export function collectSnapCandidates(ctx: SnapEngineContext): SnapCandidates {
 
   if (ctx.elementSnap) {
     for (const node of ctx.otherNodes) {
-      const vh = ctx.getVisualHeight(node)
-      const xMin = node.x
-      const xMax = node.x + node.width
-      const yMin = node.y
-      const yMax = node.y + vh
+      const size = ctx.getVisualSize(node)
+      // Use the rotated AABB so candidates align with the element's true
+      // visual extent. `getRotatedAABB` short-circuits when rotation is 0.
+      const aabb = getRotatedAABB(
+        { x: node.x, y: node.y, width: size.width, height: size.height },
+        node.rotation,
+      )
+      const xMin = aabb.x
+      const xMax = aabb.x + aabb.width
+      const yMin = aabb.y
+      const yMax = aabb.y + aabb.height
       const yExtent = { min: yMin, max: yMax }
       const xExtent = { min: xMin, max: xMax }
       // Vertical lines (left, center, right of the element)
       x.push({ value: xMin, source: 'element', targetId: node.id, segmentExtent: yExtent })
-      x.push({ value: xMin + node.width / 2, source: 'element', targetId: node.id, segmentExtent: yExtent })
+      x.push({ value: (xMin + xMax) / 2, source: 'element', targetId: node.id, segmentExtent: yExtent })
       x.push({ value: xMax, source: 'element', targetId: node.id, segmentExtent: yExtent })
       // Horizontal lines (top, middle, bottom of the element)
       y.push({ value: yMin, source: 'element', targetId: node.id, segmentExtent: xExtent })
-      y.push({ value: yMin + vh / 2, source: 'element', targetId: node.id, segmentExtent: xExtent })
+      y.push({ value: (yMin + yMax) / 2, source: 'element', targetId: node.id, segmentExtent: xExtent })
       y.push({ value: yMax, source: 'element', targetId: node.id, segmentExtent: xExtent })
     }
   }
@@ -188,6 +200,13 @@ export interface SnapComputeInput {
    */
   sidesX?: ('min' | 'center' | 'max')[]
   sidesY?: ('min' | 'center' | 'max')[]
+  /**
+   * Pre-computed candidates from `collectSnapCandidates(ctx)`. When provided,
+   * `computeSnap` skips re-collecting; callers that drive a long-lived
+   * pointer interaction (drag/resize) cache these once at pointerdown to
+   * avoid an O(n) allocation every pointermove frame.
+   */
+  precomputedCandidates?: SnapCandidates
 }
 
 export interface SnapComputeResult {
@@ -288,7 +307,7 @@ export function computeSnap(
     return { dx: input.dx, dy: input.dy, lines: [] }
   }
 
-  const candidates = collectSnapCandidates(ctx)
+  const candidates = input.precomputedCandidates ?? collectSnapCandidates(ctx)
   const grid = ctx.gridSnap && ctx.page.grid?.enabled ? ctx.page.grid : undefined
   const sidesX = input.sidesX ?? DEFAULT_SIDES
   const sidesY = input.sidesY ?? DEFAULT_SIDES

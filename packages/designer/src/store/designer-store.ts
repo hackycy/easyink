@@ -1,6 +1,6 @@
 import type { EphemeralPanelDef, PropertyPanelOverlay } from '@easyink/core'
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
-import type { LocaleMessages, MaterialCatalogEntry, MaterialDefinition, MaterialDesignerExtension, MaterialExtensionFactory, PreferenceProvider } from '../types'
+import type { LocaleMessages, MaterialCatalogEntry, MaterialDefinition, MaterialDesignerExtension, MaterialExtensionFactory, PreferenceProvider, SnapLine } from '../types'
 import { CommandManager, SelectionModel } from '@easyink/core'
 import { DataSourceRegistry } from '@easyink/datasource'
 import { createDefaultSchema } from '@easyink/schema'
@@ -29,6 +29,16 @@ export class DesignerStore {
   // ─── Workbench state (NOT in Schema, NOT in undo/redo) ───────
   readonly workbench = createDefaultWorkbenchState()
   readonly saveBranch = createDefaultSaveBranchMenu()
+
+  /**
+   * Active snap-line feedback for the overlay. Held as a top-level field
+   * (outside `workbench.snap`) and reassigned each frame with a `markRaw`
+   * array so the surrounding `reactive(store)` proxy notifies on the
+   * single property write but never deep-tracks individual SnapLine
+   * fields. Reading sites consume this directly; the property reassignment
+   * itself is reactive.
+   */
+  snapActiveLines: readonly SnapLine[] = []
 
   // ─── Material registry ────────────────────────────────────────
   private _materials = new Map<string, MaterialDefinition>()
@@ -211,6 +221,25 @@ export class DesignerStore {
   getVisualHeight(node: MaterialNode): number {
     const ext = this.getDesignerExtension(node.type)
     return ext?.getVisualHeight?.(node) ?? node.height
+  }
+
+  /** Visual width counterpart to {@link getVisualHeight}. Falls back to node.width. */
+  getVisualWidth(node: MaterialNode): number {
+    const ext = this.getDesignerExtension(node.type)
+    return ext?.getVisualWidth?.(node) ?? node.width
+  }
+
+  /**
+   * Combined visual size lookup. Snap engine and selection-box assembly
+   * use this so both axes go through one ext lookup and no caller has to
+   * remember to query height vs width separately.
+   */
+  getVisualSize(node: MaterialNode): { width: number, height: number } {
+    const ext = this.getDesignerExtension(node.type)
+    return {
+      width: ext?.getVisualWidth?.(node) ?? node.width,
+      height: ext?.getVisualHeight?.(node) ?? node.height,
+    }
   }
 
   // ─── Editing Session ────────────────────────────────────────────

@@ -11,7 +11,7 @@ const baseCtx = {
   guidesX: [],
   guidesY: [],
   otherNodes: [] as MaterialNode[],
-  getVisualHeight: (n: MaterialNode) => n.height,
+  getVisualSize: (n: MaterialNode) => ({ width: n.width, height: n.height }),
   enabled: true,
   gridSnap: false,
   guideSnap: false,
@@ -157,5 +157,44 @@ describe('computeSnap', () => {
     expect(r.dy).toBe(60)
     expect(r.lines).toHaveLength(2)
     expect(r.lines.map(l => l.orientation).sort()).toEqual(['horizontal', 'vertical'])
+  })
+
+  it('uses precomputedCandidates when provided and skips re-collecting', () => {
+    // Build candidates separately so we can prove computeSnap reused them
+    // (the ctx.otherNodes is intentionally empty — without precomputed
+    // candidates, no element snap would fire).
+    const precomputed = collectSnapCandidates({
+      ...baseCtx,
+      elementSnap: true,
+      otherNodes: [elem('a', 99, 0, 10, 10)],
+    })
+    const r = computeSnap(
+      { ...baseCtx, elementSnap: true, otherNodes: [] },
+      {
+        selectionBox: { x: 0, y: 0, width: 10, height: 10 },
+        dx: 98,
+        dy: 0,
+        threshold: 5,
+        precomputedCandidates: precomputed,
+      },
+    )
+    expect(r.dx).toBe(99)
+    expect(r.lines[0]).toMatchObject({ source: 'element', position: 99, targetId: 'a' })
+  })
+
+  it('emits rotated AABB candidates for rotated elements', () => {
+    // 10×10 square rotated 90° still has 10×10 AABB (centered at original
+    // center). Test with a 10×30 rectangle rotated 90° → AABB becomes 30×10
+    // around the same center (originally centered at (15, 15)) so the
+    // rotated AABB spans x ∈ [0, 30], y ∈ [10, 20].
+    const node = elem('r', 10, 0, 10, 30)
+    ;(node as MaterialNode & { rotation?: number }).rotation = 90
+    const c = collectSnapCandidates({
+      ...baseCtx,
+      elementSnap: true,
+      otherNodes: [node],
+    })
+    expect(c.x.map(p => p.value)).toEqual([0, 15, 30])
+    expect(c.y.map(p => p.value)).toEqual([10, 15, 20])
   })
 })

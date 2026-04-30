@@ -22,9 +22,9 @@ interface FakeStore {
       guideSnap: boolean
       elementSnap: boolean
       threshold: number
-      activeLines: unknown[]
     }
   }
+  snapActiveLines: readonly unknown[]
   selection: {
     ids: string[]
     has: (id: string) => boolean
@@ -35,6 +35,7 @@ interface FakeStore {
   getElementById: (id: string) => MaterialNode | undefined
   getElements: () => MaterialNode[]
   getVisualHeight: (n: MaterialNode) => number
+  getVisualSize: (n: MaterialNode) => { width: number, height: number }
 }
 
 function makeNode(id: string, x: number, y: number, w = 50, h = 50): MaterialNode {
@@ -58,9 +59,9 @@ function makeStore(elements: MaterialNode[], selected: string[]): FakeStore {
         guideSnap: false,
         elementSnap: false,
         threshold: 3,
-        activeLines: [],
       },
     },
+    snapActiveLines: [],
     selection: {
       get ids() {
         return [...sel]
@@ -78,6 +79,7 @@ function makeStore(elements: MaterialNode[], selected: string[]): FakeStore {
     getElementById: (id: string) => elements.find(e => e.id === id),
     getElements: () => elements,
     getVisualHeight: (n: MaterialNode) => n.height,
+    getVisualSize: (n: MaterialNode) => ({ width: n.width, height: n.height }),
   }
 }
 
@@ -196,7 +198,7 @@ describe('useElementDrag', () => {
 
     // Snap bypassed, position is exact delta
     expect(target1.x).toBe(99)
-    expect(store.workbench.snap.activeLines).toHaveLength(0)
+    expect(store.snapActiveLines).toHaveLength(0)
   })
 
   it('pointercancel rolls back position and skips command', () => {
@@ -214,7 +216,7 @@ describe('useElementDrag', () => {
 
     expect(node.x).toBe(10)
     expect(node.y).toBe(20)
-    expect(store.workbench.snap.activeLines).toHaveLength(0)
+    expect(store.snapActiveLines).toHaveLength(0)
     expect(store.commands.execute).not.toHaveBeenCalled()
   })
 })

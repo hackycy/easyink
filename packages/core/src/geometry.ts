@@ -99,6 +99,33 @@ export function normalizeRotation(degrees: number): number {
 }
 
 /**
+ * Compute the axis-aligned bounding box of a rectangle rotated around its center.
+ *
+ * Used by snap candidate collection so that rotated elements emit alignment
+ * targets at their true visual extent rather than the un-rotated AABB.
+ *
+ * `rotationDeg` is in degrees; multiples of 360 short-circuit to the input.
+ */
+export function getRotatedAABB(rect: Rect, rotationDeg: number | undefined): Rect {
+  const r = rotationDeg ? normalizeRotation(rotationDeg) : 0
+  if (r === 0)
+    return rect
+  const rad = (r * Math.PI) / 180
+  const cos = Math.abs(Math.cos(rad))
+  const sin = Math.abs(Math.sin(rad))
+  const w = rect.width * cos + rect.height * sin
+  const h = rect.width * sin + rect.height * cos
+  const cx = rect.x + rect.width / 2
+  const cy = rect.y + rect.height / 2
+  return {
+    x: cx - w / 2,
+    y: cy - h / 2,
+    width: w,
+    height: h,
+  }
+}
+
+/**
  * Snap a value to the nearest grid step.
  */
 export function snapToGrid(value: number, gridSize: number): number {
