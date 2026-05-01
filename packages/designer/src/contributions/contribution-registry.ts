@@ -32,6 +32,14 @@ export class ContributionRegistry {
       executeCommand: <TArgs = unknown, TResult = unknown>(id: string, args?: TArgs) =>
         this.executeCommand<TArgs, TResult>(id, args, ctx),
       onDispose: fn => this._disposers.push(fn),
+      onDiagnostic: (fn) => {
+        const unsubscribe = store.diagnostics.subscribe(fn)
+        // Auto-unsubscribe on designer dispose so a host that forgets to
+        // call the returned function does not leak listeners across
+        // remounts (HMR, embedded scenarios).
+        this._disposers.push(unsubscribe)
+        return unsubscribe
+      },
     }
     this._context = ctx
     for (const contribution of contributions) {

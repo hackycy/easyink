@@ -2,6 +2,7 @@ import type { EditingSessionRef, Rect, Selection } from '@easyink/core'
 import type { MaterialNode, TableNode } from '@easyink/schema'
 import type { TableCellPayload, TableEditingDelegate } from './types'
 import { isTableNode } from '@easyink/schema'
+import { createPointerGesture } from '@easyink/shared'
 import { computed, defineComponent, h, onMounted, onUnmounted, ref, watch } from 'vue'
 import { createTableToolbar } from './toolbar'
 
@@ -133,29 +134,30 @@ export function createTableCellDecorationComponent(delegate: TableEditingDelegat
         props.session.setMeta('resize', { active: true, handle: 'col', index: colIndex })
 
         const el = e.currentTarget as HTMLElement
-        el.setPointerCapture(e.pointerId)
-
         let lastX = e.clientX
 
-        function onMove(ev: PointerEvent) {
-          const delta = ev.clientX - lastX
-          lastX = ev.clientX
-          props.session.dispatch({
-            kind: 'command',
-            command: 'resize-column',
-            payload: { index: colIndex, delta, screenDelta: true },
-          })
-        }
-
-        function onUp(ev: PointerEvent) {
-          el.releasePointerCapture(ev.pointerId)
-          el.removeEventListener('pointermove', onMove)
-          el.removeEventListener('pointerup', onUp)
-          props.session.setMeta('resize', undefined)
-        }
-
-        el.addEventListener('pointermove', onMove)
-        el.addEventListener('pointerup', onUp)
+        // Use the shared gesture helper so pointercancel (system gesture
+        // interruption, capture loss, device switch) tears down the
+        // resize meta exactly like a normal pointerup. Without this the
+        // session.meta.resize would stick on, leaving every subsequent
+        // gesture filtered through a stale "resize active" flag — see
+        // audit/202605011431.md item 3.
+        createPointerGesture({
+          target: el,
+          event: e,
+          onMove(ev) {
+            const delta = ev.clientX - lastX
+            lastX = ev.clientX
+            props.session.dispatch({
+              kind: 'command',
+              command: 'resize-column',
+              payload: { index: colIndex, delta, screenDelta: true },
+            })
+          },
+          onEnd() {
+            props.session.setMeta('resize', undefined)
+          },
+        })
       }
 
       function onRowResizePointerDown(e: PointerEvent) {
@@ -168,29 +170,24 @@ export function createTableCellDecorationComponent(delegate: TableEditingDelegat
         props.session.setMeta('resize', { active: true, handle: 'row', index: rowIndex })
 
         const el = e.currentTarget as HTMLElement
-        el.setPointerCapture(e.pointerId)
-
         let lastY = e.clientY
 
-        function onMove(ev: PointerEvent) {
-          const delta = ev.clientY - lastY
-          lastY = ev.clientY
-          props.session.dispatch({
-            kind: 'command',
-            command: 'resize-row',
-            payload: { index: rowIndex, delta, screenDelta: true },
-          })
-        }
-
-        function onUp(ev: PointerEvent) {
-          el.releasePointerCapture(ev.pointerId)
-          el.removeEventListener('pointermove', onMove)
-          el.removeEventListener('pointerup', onUp)
-          props.session.setMeta('resize', undefined)
-        }
-
-        el.addEventListener('pointermove', onMove)
-        el.addEventListener('pointerup', onUp)
+        createPointerGesture({
+          target: el,
+          event: e,
+          onMove(ev) {
+            const delta = ev.clientY - lastY
+            lastY = ev.clientY
+            props.session.dispatch({
+              kind: 'command',
+              command: 'resize-row',
+              payload: { index: rowIndex, delta, screenDelta: true },
+            })
+          },
+          onEnd() {
+            props.session.setMeta('resize', undefined)
+          },
+        })
       }
 
       // ─── Inline edit handlers ─────────────────────────────────

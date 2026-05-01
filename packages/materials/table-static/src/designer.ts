@@ -129,7 +129,6 @@ export function createTableStaticExtension(context: MaterialExtensionContext): M
       return nodeSignal.subscribe(render)
     },
 
-    enterTrigger: 'click',
     geometry: tableGeometry,
     selectionTypes: [cellSelectionType as SelectionType<unknown>],
     behaviors: [

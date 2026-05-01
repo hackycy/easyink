@@ -56,6 +56,7 @@ import { EiNumberInput, EiPopover, EiSwitch } from '@easyink/ui'
 import { computed, inject, onMounted, onUnmounted, ref } from 'vue'
 import { useDesignerStore } from '../composables'
 import { CONTRIBUTION_REGISTRY_KEY } from '../contributions/injection'
+import { clearSelection, selectMany, selectOne } from '../interactions/selection-api'
 
 const contributionRegistry = inject(CONTRIBUTION_REGISTRY_KEY, undefined)
 const toolbarActions = computed(() => contributionRegistry?.registry.toolbarActions ?? [])
@@ -245,7 +246,7 @@ function handleVisibility() {
 
 // ─── Select ──────────────────────────────────────────────────
 function handleSelectAll() {
-  store.selection.selectMultiple(store.schema.elements.map(el => el.id))
+  selectMany(store, store.schema.elements.map(el => el.id))
 }
 
 function handleSelectSameType() {
@@ -257,7 +258,7 @@ function handleSelectSameType() {
   const sameTypeIds = store.schema.elements
     .filter(el => types.has(el.type))
     .map(el => el.id)
-  store.selection.selectMultiple(sameTypeIds)
+  selectMany(store, sameTypeIds)
 }
 
 // ─── Distribute ──────────────────────────────────────────────
@@ -391,7 +392,7 @@ function handleGroup() {
   store.commands.execute(new AddMaterialCommand(elements, groupNode))
   store.commands.commitTransaction()
 
-  store.selection.select(groupNode.id)
+  selectOne(store, groupNode.id)
 }
 
 function handleUngroup() {
@@ -421,7 +422,7 @@ function handleUngroup() {
   store.commands.commitTransaction()
 
   if (ungroupedIds.length > 0) {
-    store.selection.selectMultiple(ungroupedIds)
+    selectMany(store, ungroupedIds)
   }
 }
 
@@ -467,7 +468,7 @@ function handlePaste() {
   }
   store.commands.commitTransaction()
 
-  store.selection.selectMultiple(newIds)
+  selectMany(store, newIds)
 }
 
 function handleDelete() {
@@ -481,7 +482,7 @@ function handleDelete() {
     store.commands.execute(new RemoveMaterialCommand(elements, node.id))
   }
   store.commands.commitTransaction()
-  store.selection.clear()
+  clearSelection(store)
 }
 
 // ─── Snap ────────────────────────────────────────────────────

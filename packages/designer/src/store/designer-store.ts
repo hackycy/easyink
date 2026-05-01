@@ -7,6 +7,7 @@ import { createDefaultSchema } from '@easyink/schema'
 import { markRaw } from 'vue'
 import { EditingSessionManager } from '../editing/editing-session-manager'
 import { createMaterialExtensionContext } from '../materials/extension-context'
+import { DiagnosticsChannel } from './diagnostics'
 import { applyPersistedWorkbench, loadWorkbenchPreferences } from './preference-persistence'
 import { createDefaultSaveBranchMenu, createDefaultWorkbenchState } from './workbench'
 
@@ -21,8 +22,13 @@ export class DesignerStore {
   // ─── Core services ────────────────────────────────────────────
   readonly commands = new CommandManager()
   readonly selection = new SelectionModel()
-  readonly dataSourceRegistry = new DataSourceRegistry()
-
+  readonly dataSourceRegistry = new DataSourceRegistry() /**
+                                                          * Designer-level diagnostics channel. Recoverable errors (rejected
+                                                          * selection payload, behavior middleware throws, transaction rollback)
+                                                          * push here so the workbench DebugPanel and host Contributions can both
+                                                          * surface them. See `./diagnostics.ts` for rationale.
+                                                          */
+  readonly diagnostics = new DiagnosticsChannel()
   // ─── Clipboard (internal, not in Schema) ──────────────────────
   clipboard: MaterialNode[] = []
 
@@ -68,6 +74,7 @@ export class DesignerStore {
     markRaw(this._materialFactories)
     markRaw(this._cachedExtensions)
     markRaw(this.dataSourceRegistry)
+    markRaw(this.diagnostics)
 
     // Apply persisted workbench state if available
     if (preferenceProvider) {

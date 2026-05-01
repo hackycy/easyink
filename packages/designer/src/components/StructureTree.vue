@@ -22,6 +22,7 @@ import {
 import { EiIcon, EiTree } from '@easyink/ui'
 import { computed } from 'vue'
 import { useDesignerStore } from '../composables'
+import { selectOne } from '../interactions/selection-api'
 
 const ICON_MAP: Record<string, Component> = {
   'text': IconText,
@@ -70,7 +71,7 @@ const selectedId = computed(() => {
 })
 
 function handleSelect(node: TreeNode) {
-  store.selection.select(node.id)
+  selectOne(store, node.id)
 }
 </script>
 

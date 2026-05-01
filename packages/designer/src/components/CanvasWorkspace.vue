@@ -18,7 +18,6 @@ import CanvasElementContent from './CanvasElementContent.vue'
 import CanvasRuler from './CanvasRuler.vue'
 import DataSourcePanel from './DataSourcePanel.vue'
 import DebugPanel from './DebugPanel.vue'
-import DeepEditDragHandle from './DeepEditDragHandle.vue'
 import EphemeralPanelHost from './EphemeralPanelHost.vue'
 import GridOverlay from './GridOverlay.vue'
 import GuideOverlay from './GuideOverlay.vue'
@@ -64,7 +63,6 @@ const {
   handleElementClick,
   handleElementDblClick,
   handleScrollPointerDown: controllerHandleScrollPointerDown,
-  handleDeepEditHandlePointerDown,
 } = useCanvasInteractionController({
   store,
   getPageEl: () => pageRef.value,
@@ -143,13 +141,6 @@ const wrapperStyle = computed(() => {
 const elements = computed(() => store.getElements())
 
 const editingNodeId = computed(() => store.editingSession.activeNodeId)
-
-const editingNode = computed(() => {
-  const id = editingNodeId.value
-  if (!id)
-    return null
-  return store.getElementById(id) ?? null
-})
 
 const marqueeStyle = computed(() => {
   if (!marqueeRect.value)
@@ -436,8 +427,6 @@ onUnmounted(() => {
 
           <!-- Ephemeral panel host -->
           <EphemeralPanelHost />
-
-          <DeepEditDragHandle v-if="store.isInDeepEditing && editingNode" :on-pointer-down="handleDeepEditHandlePointerDown" />
 
           <!-- Marquee selection rectangle -->
           <div

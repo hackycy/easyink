@@ -1,5 +1,6 @@
 import type { Component } from 'vue'
 import type { DesignerStore } from '../store/designer-store'
+import type { Diagnostic } from '../store/diagnostics'
 
 /**
  * Descriptor for a panel contributed to the designer overlay layer.
@@ -50,6 +51,13 @@ export interface ContributionContext {
   executeCommand: <TArgs = unknown, TResult = unknown>(id: string, args?: TArgs) => Promise<TResult>
   /** Register a cleanup callback fired when the designer unmounts. */
   onDispose: (fn: () => void) => void
+  /**
+   * Subscribe to designer-level diagnostics (recoverable errors from
+   * SelectionStore / behavior dispatcher / transaction service). Hosts use
+   * this to forward into Sentry / toasts. Returns an unsubscribe function;
+   * the registry also auto-unsubscribes on dispose.
+   */
+  onDiagnostic: (fn: (entry: Diagnostic) => void) => () => void
 }
 
 /**

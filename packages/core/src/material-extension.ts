@@ -53,8 +53,12 @@ export interface MaterialDesignerExtension {
 
   // ─── Editing Behavior Protocol (Chapter 22) ─────────────────────
 
-  /** Declarative trigger for entering an editing session. Default: 'dblclick'. */
-  enterTrigger?: 'dblclick' | 'click'
+  // Entry trigger is unified to dblclick. The previous `enterTrigger` field
+  // (with a 'click' value for tables) was removed because the resulting
+  // "pointerdown enters editing" path stole the first gesture from canvas
+  // selection/drag, breaking parity with non-table materials and producing
+  // the bug class called out in audit/202605011431.md item 1.
+
   /** Geometry protocol: material declares hit-test, layout, and selection-to-rect mapping. */
   geometry?: MaterialGeometry
   /** Selection types this material supports (e.g. 'table.cell'). */

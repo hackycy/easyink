@@ -12,6 +12,7 @@ import type {
   TransactionAPI,
 } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
+import type { DiagnosticsChannel } from '../store/diagnostics'
 import { reactive } from 'vue'
 import { dispatchBehaviorEvent } from './behavior-dispatcher'
 
@@ -34,6 +35,7 @@ export class EditingSession implements EditingSessionRef {
   private getNode: () => MaterialNode | undefined
   private _ephemeralPanel: EphemeralPanelDef | null = null
   private _onEphemeralPanelChange?: (panel: EphemeralPanelDef | null) => void
+  private _diagnostics?: DiagnosticsChannel
 
   constructor(opts: {
     nodeId: string
@@ -44,6 +46,7 @@ export class EditingSession implements EditingSessionRef {
     tx: TransactionAPI
     getNode: () => MaterialNode | undefined
     onEphemeralPanelChange?: (panel: EphemeralPanelDef | null) => void
+    diagnostics?: DiagnosticsChannel
   }) {
     this.nodeId = opts.nodeId
     this.extension = opts.extension
@@ -55,6 +58,7 @@ export class EditingSession implements EditingSessionRef {
     this.meta = reactive({})
     this.behaviors = opts.extension.behaviors ?? []
     this._onEphemeralPanelChange = opts.onEphemeralPanelChange
+    this._diagnostics = opts.diagnostics
 
     this.surfaces = {
       requestPanel: (panel: EphemeralPanelDef | null) => {
@@ -86,7 +90,7 @@ export class EditingSession implements EditingSessionRef {
       selectionStore: this.selectionStore,
       surfaces: this.surfaces,
       session: this,
-    })
+    }, this._diagnostics)
   }
 
   setMeta(key: string, value: unknown): void {

@@ -21,31 +21,28 @@ export interface CanvasInteractionControllerContext {
 }
 
 /**
- * CanvasInteractionController \u2014 the single decision point that translates
+ * CanvasInteractionController — the single decision point that translates
  * raw pointer / click events on the canvas into explicit intents.
  *
- * Responsibilities (and only these):
- * 1. Open a GestureContext on every pointerdown.
- * 2. Decide which SelectionIntent to apply, whether to enter an editing
- *    session, and whether to delegate to the drag executor.
- * 3. Read the GestureContext on click to decide whether to ignore (drag
- *    happened, edit was just entered, modifier-add already applied), or to
- *    apply a follow-up SelectionIntent.
+ * Entry trigger uniformity (audit/202605011431.md item 1)
+ * --------------------------------------------------------
+ * Editing-session entry is dblclick-only for every material. The previous
+ * `enterTrigger: 'click'` path on table materials made pointerdown silently
+ * enter the session, which (a) stole the first gesture from canvas-level
+ * select / drag, and (b) forced the click handler to compensate with cross-
+ * event boolean locks. Removing that path means single-click on every
+ * material — table, rect, text alike — produces the same canvas semantics:
+ * select + drag-eligible. dblclick uniformly opens the editing session.
  *
- * Things this controller deliberately does NOT do:
- * - Marquee math (lives in useMarqueeSelect, called via the background hook).
- * - Drag math / snap / undo grouping (lives in useElementDrag).
- * - Editing-session lifecycle (delegated to store.editingSession).
- *
- * Why the central decision point:
- * Before this collapse, the "interpretation" of one gesture was distributed
- * across CanvasWorkspace.vue, useElementDrag, useMarqueeSelect and
- * EditingSessionManager.enter. Each of them maintained a private flag (or
- * silently mutated SelectionModel). Bugs of the form "Cmd+click added then
- * the click toggled it off" or "click-trigger material entered editing twice"
- * trace back to that distribution. Centralising the decision \u2014 plus enforcing
- * `applySelectionIntent` as the only canvas-side write path \u2014 eliminates the
- * class.
+ * Deep-edit move policy (audit item 2)
+ * ------------------------------------
+ * While an editing-session is active, the element root's pointerdown is
+ * routed entirely into the session (see `handleElementPointerDown` early
+ * return). Moving the element while in deep-edit requires exiting first
+ * (Esc / click outside), matching Figma / PowerPoint semantics. The prior
+ * external `DeepEditDragHandle` (a 14×14 hit target sitting outside the
+ * element) was removed: a small hidden affordance on the wrong axis is
+ * worse than no affordance at all.
  */
 export function useCanvasInteractionController(ctx: CanvasInteractionControllerContext) {
   const { store } = ctx
@@ -93,7 +90,9 @@ export function useCanvasInteractionController(ctx: CanvasInteractionControllerC
     const activeNodeId = store.editingSession.activeNodeId
 
     // Inside an active editing session for this same node: route the pointer
-    // event into the session, do not touch top-level selection.
+    // event into the session, do not touch top-level selection. Element-
+    // range pointerdown is fully owned by the session — moving the element
+    // requires exiting first.
     if (store.editingSession.isActive && activeNodeId === elementId) {
       const point = pointToDocument(e)
       if (point) {
@@ -108,24 +107,9 @@ export function useCanvasInteractionController(ctx: CanvasInteractionControllerC
       store.editingSession.exit()
     }
 
-    // Enter editing-session for click-trigger materials when no modifier is
-    // held. Modifier+click is reserved for multi-select \u2014 it must not enter
-    // editing (would be a cross-purpose gesture).
-    if (!gesture.modifier) {
-      const node = store.getElementById(elementId)
-      const ext = node ? store.getDesignerExtension(node.type) : undefined
-      if (ext?.geometry && ext.enterTrigger === 'click') {
-        const initialPoint = pointToDocument(e)
-        if (initialPoint && store.editingSession.enter(elementId, ext, initialPoint)) {
-          gesture.editEntered = true
-          return
-        }
-      }
-    }
-
     // Decide top-level selection BEFORE handing off to the drag executor.
-    // Drag is now a pure executor that reads `store.selection` to know what
-    // to move; it does not write to the model.
+    // Drag is a pure executor that reads `store.selection` to know what to
+    // move; it does not write to the model.
     const node = store.getElementById(elementId)
     if (!node || !isInteractable(node))
       return
@@ -149,7 +133,7 @@ export function useCanvasInteractionController(ctx: CanvasInteractionControllerC
     const gesture = currentGesture.value
 
     // No matching gesture: synthesised click without a paired pointerdown
-    // (rare \u2014 e.g. keyboard-driven activation). Fall through to the default
+    // (rare — e.g. keyboard-driven activation). Fall through to the default
     // single-select path.
     if (!gesture || gesture.targetElementId !== elementId) {
       applySelectionIntent(store, { kind: 'single', elementId })
@@ -158,10 +142,8 @@ export function useCanvasInteractionController(ctx: CanvasInteractionControllerC
 
     // Order matters: each early-exit corresponds to a pointerdown decision
     // that already wrote what was needed. This is what the GestureContext
-    // exists for \u2014 click does not have to re-derive intent from scratch.
+    // exists for — click does not have to re-derive intent from scratch.
     if (gesture.dragMoved)
-      return
-    if (gesture.editEntered)
       return
     if (gesture.selectionAddedViaPrime)
       return
@@ -187,7 +169,11 @@ export function useCanvasInteractionController(ctx: CanvasInteractionControllerC
 
     const node = store.getElementById(elementId)
     const ext = node ? store.getDesignerExtension(node.type) : undefined
-    if (ext?.geometry && (ext.enterTrigger ?? 'dblclick') === 'dblclick') {
+    // Uniform dblclick entry: any material that declares a `geometry`
+    // protocol (table / chart / svg / container …) is openable via
+    // dblclick. Materials without geometry have nothing to edit and remain
+    // inert here.
+    if (ext?.geometry) {
       const initialPoint = pointToDocument(e)
       if (!initialPoint)
         return
@@ -213,26 +199,11 @@ export function useCanvasInteractionController(ctx: CanvasInteractionControllerC
     ctx.onCanvasBackgroundPointerDown?.(e)
   }
 
-  /**
-   * Exposed for DeepEditDragHandle: it shares the same drag executor
-   * instance as the main canvas, eliminating the prior duplicate `useElementDrag`
-   * call site that owned its own private `dragJustOccurred` ref.
-   */
-  function handleDeepEditHandlePointerDown(e: PointerEvent, elementId: string) {
-    e.stopPropagation()
-    const gesture = createGestureContext(elementId, e)
-    currentGesture.value = gesture
-    // The deep-edit handle is only visible when the element is already the
-    // single selection / session owner; no selection mutation is needed.
-    drag.onPointerDown(e, elementId)
-  }
-
   return {
     handleElementPointerDown,
     handleElementClick,
     handleElementDblClick,
     handleScrollPointerDown,
-    handleDeepEditHandlePointerDown,
     /** Exposed only for tests / debug. Production code MUST NOT read this. */
     _currentGesture: currentGesture,
   }

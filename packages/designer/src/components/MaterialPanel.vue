@@ -20,6 +20,7 @@ import {
 import { computed } from 'vue'
 import { useDesignerStore } from '../composables'
 import { MATERIAL_DRAG_MIME } from '../composables/use-material-drop'
+import { selectOne } from '../interactions/selection-api'
 
 const store = useDesignerStore()
 
@@ -68,7 +69,7 @@ function handleAddMaterial(entry: MaterialCatalogEntry) {
   }, store.schema.unit)
   const cmd = new AddMaterialCommand(store.schema.elements, node)
   store.commands.execute(cmd)
-  store.selection.select(node.id)
+  selectOne(store, node.id)
 }
 
 function handleDragStart(e: DragEvent, entry: MaterialCatalogEntry) {

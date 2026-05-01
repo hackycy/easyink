@@ -37,11 +37,6 @@ export interface GestureContext {
    * click toggles it off).
    */
   selectionAddedViaPrime: boolean
-  /**
-   * Pointerdown entered an editing-session (click-trigger material). The
-   * matching click MUST NOT re-interpret as a top-level selection change.
-   */
-  editEntered: boolean
   /** Drag executor reports whether the pointer actually moved. */
   dragMoved: boolean
 }
@@ -52,7 +47,6 @@ export function createGestureContext(targetElementId: string | null, e: PointerE
     modifier: e.ctrlKey || e.metaKey,
     rightButton: e.button === 2,
     selectionAddedViaPrime: false,
-    editEntered: false,
     dragMoved: false,
   }
 }

@@ -1,5 +1,6 @@
 import type { DesignerStore } from '../store/designer-store'
 import { AddMaterialCommand, UnitManager } from '@easyink/core'
+import { selectOne } from '../interactions/selection-api'
 
 /**
  * MIME type used when dragging a material type from the toolbar.
@@ -59,7 +60,7 @@ export function useMaterialDrop(ctx: MaterialDropContext) {
 
     const cmd = new AddMaterialCommand(store.schema.elements, node)
     store.commands.execute(cmd)
-    store.selection.select(node.id)
+    selectOne(store, node.id)
   }
 
   return { onDragOver, onDrop }

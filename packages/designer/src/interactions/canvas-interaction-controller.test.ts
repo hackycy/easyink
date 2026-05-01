@@ -2,12 +2,22 @@
  * @vitest-environment happy-dom
  *
  * Decision-level tests for CanvasInteractionController. These specifically
- * cover the bug classes the audit (.github/audit/202605010152.md) identified:
+ * cover the bug classes the audits identified:
  *
+ * From .github/audit/202605010152.md:
  * 1. Cmd/Ctrl click on an unselected element MUST add (not toggle off).
  * 2. Click that follows a moved drag MUST be ignored (no collapse to single).
  * 3. Cmd/Ctrl on an already-selected element MUST toggle off.
  * 4. Right-click MUST NOT enter editing-session and MUST NOT start a drag.
+ *
+ * From .github/audit/202605011431.md:
+ * 5. Editing-session entry is dblclick-only — pointerdown on a material
+ *    with `geometry` MUST NOT enter the session.
+ * 6. dblclick on a material with `geometry` opens the editing session.
+ * 7. Background pointerdown exits an active editing session before the
+ *    marquee hook fires.
+ * 8. Within an active session, pointerdown on the active element routes
+ *    into the session and does NOT start a drag.
  *
  * The controller depends on the real DesignerStore (selection model + editing
  * session manager + extension registry) so we go through the public API rather
@@ -15,7 +25,7 @@
  * against.
  */
 import type { MaterialDesignerExtension } from '@easyink/core'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { DesignerStore } from '../store/designer-store'
 import { useCanvasInteractionController } from './canvas-interaction-controller'
 
@@ -25,10 +35,9 @@ function plainExtension(): MaterialDesignerExtension {
   } as unknown as MaterialDesignerExtension
 }
 
-function clickTriggerExtension(): MaterialDesignerExtension {
+function geometryExtension(): MaterialDesignerExtension {
   return {
     renderContent: () => undefined,
-    enterTrigger: 'click',
     geometry: {
       hitTest: () => ({ kind: 'cell', payload: { row: 0, col: 0 } }),
       canvasToLocal: (p: { x: number, y: number }) => p,
@@ -76,7 +85,11 @@ function clickEvent(x: number, y: number, opts: { meta?: boolean, ctrl?: boolean
   })
 }
 
-function setup() {
+function dblClickEvent(x: number, y: number): MouseEvent {
+  return new MouseEvent('dblclick', { clientX: x, clientY: y, bubbles: true })
+}
+
+function setup(opts: { onBgPointerDown?: (e: PointerEvent) => void } = {}) {
   const store = new DesignerStore()
   store.registerDesignerFactory('rect', () => plainExtension())
   store.schema.elements.push(
@@ -90,12 +103,13 @@ function setup() {
     store,
     getPageEl: () => pageEl,
     getScrollEl: () => pageEl,
+    onCanvasBackgroundPointerDown: opts.onBgPointerDown,
   })
   function pdOn(elementId: string, e: PointerEvent) {
     Object.defineProperty(e, 'currentTarget', { value: target, configurable: true })
     controller.handleElementPointerDown(e, elementId)
   }
-  return { store, controller, pdOn }
+  return { store, controller, pdOn, pageEl }
 }
 
 describe('useCanvasInteractionController', () => {
@@ -152,37 +166,67 @@ describe('useCanvasInteractionController', () => {
     expect(store.selection.ids).toEqual(['b'])
   })
 
-  it('click on a click-trigger material enters editing-session and the click does not re-select', () => {
-    const { store, controller, pdOn } = setup()
-    store.registerDesignerFactory('cell-table', () => clickTriggerExtension())
+  it('pointerdown on a material with geometry does NOT enter editing-session (dblclick is uniform entry)', () => {
+    const { store, pdOn } = setup()
+    store.registerDesignerFactory('cell-table', () => geometryExtension())
     store.schema.elements.push(
       { id: 't', type: 'cell-table', x: 200, y: 0, width: 80, height: 80, rotation: 0, props: {} } as never,
     )
 
     pdOn('t', pdEvent('pointerdown', 210, 10))
-    expect(store.editingSession.isActive).toBe(true)
-    expect(store.editingSession.activeNodeId).toBe('t')
-    expect(store.selection.ids).toEqual(['t'])
 
-    window.dispatchEvent(pdEvent('pointerup', 210, 10))
-    controller.handleElementClick(clickEvent(210, 10), 't')
-
-    // Still in session, selection unchanged
-    expect(store.editingSession.isActive).toBe(true)
+    expect(store.editingSession.isActive).toBe(false)
     expect(store.selection.ids).toEqual(['t'])
   })
 
-  it('cmd-click on a click-trigger material multi-selects instead of entering editing-session', () => {
-    const { store, pdOn } = setup()
-    store.registerDesignerFactory('cell-table', () => clickTriggerExtension())
+  it('dblclick on a material with geometry opens the editing-session', () => {
+    const { store, controller } = setup()
+    store.registerDesignerFactory('cell-table', () => geometryExtension())
     store.schema.elements.push(
       { id: 't', type: 'cell-table', x: 200, y: 0, width: 80, height: 80, rotation: 0, props: {} } as never,
     )
-    store.selection.select('a')
 
-    pdOn('t', pdEvent('pointerdown', 210, 10, { meta: true }))
+    controller.handleElementDblClick(dblClickEvent(210, 10), 't')
+
+    expect(store.editingSession.isActive).toBe(true)
+    expect(store.editingSession.activeNodeId).toBe('t')
+  })
+
+  it('within an active session, pointerdown on the active element routes into session and does NOT start a drag', () => {
+    const { store, controller, pdOn } = setup()
+    store.registerDesignerFactory('cell-table', () => geometryExtension())
+    store.schema.elements.push(
+      { id: 't', type: 'cell-table', x: 200, y: 0, width: 80, height: 80, rotation: 0, props: {} } as never,
+    )
+    controller.handleElementDblClick(dblClickEvent(210, 10), 't')
+    expect(store.editingSession.isActive).toBe(true)
+
+    const dispatchSpy = vi.spyOn(store.editingSession, 'dispatch')
+    pdOn('t', pdEvent('pointerdown', 215, 15))
+
+    expect(store.editingSession.isActive).toBe(true)
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'pointer-down' }),
+    )
+  })
+
+  it('background pointerdown exits an active editing-session before the marquee hook fires', () => {
+    const calls: string[] = []
+    const { store, controller, pageEl } = setup({
+      onBgPointerDown: () => calls.push(`bg|active=${store.editingSession.isActive}`),
+    })
+    store.registerDesignerFactory('cell-table', () => geometryExtension())
+    store.schema.elements.push(
+      { id: 't', type: 'cell-table', x: 200, y: 0, width: 80, height: 80, rotation: 0, props: {} } as never,
+    )
+    controller.handleElementDblClick(dblClickEvent(210, 10), 't')
+    expect(store.editingSession.isActive).toBe(true)
+
+    const evt = pdEvent('pointerdown', 500, 500)
+    Object.defineProperty(evt, 'target', { value: pageEl, configurable: true })
+    controller.handleScrollPointerDown(evt)
 
     expect(store.editingSession.isActive).toBe(false)
-    expect(store.selection.ids.sort()).toEqual(['a', 't'])
+    expect(calls).toEqual(['bg|active=false'])
   })
 })

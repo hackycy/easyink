@@ -9,6 +9,7 @@ import {
 } from '@easyink/core'
 import { deepClone, generateId } from '@easyink/shared'
 import { onMounted, onUnmounted } from 'vue'
+import { clearSelection, selectMany } from '../interactions/selection-api'
 
 export interface KeyboardShortcutsContext {
   store: DesignerStore
@@ -68,9 +69,7 @@ export function useKeyboardShortcuts(ctx: KeyboardShortcutsContext) {
   function selectAll() {
     // Mirrors CanvasContextMenu: hidden elements stay out of selection so
     // bulk drag/delete cannot mutate invisible nodes.
-    store.selection.selectMultiple(
-      store.schema.elements.filter(el => !el.hidden).map(el => el.id),
-    )
+    selectMany(store, store.schema.elements.filter(el => !el.hidden).map(el => el.id))
   }
 
   function copy() {
@@ -96,7 +95,7 @@ export function useKeyboardShortcuts(ctx: KeyboardShortcutsContext) {
       store.commands.rollbackTransaction()
       throw err
     }
-    store.selection.clear()
+    clearSelection(store)
   }
 
   function paste() {
@@ -123,7 +122,7 @@ export function useKeyboardShortcuts(ctx: KeyboardShortcutsContext) {
       store.commands.rollbackTransaction()
       throw err
     }
-    store.selection.selectMultiple(newIds)
+    selectMany(store, newIds)
   }
 
   function duplicate() {
@@ -151,7 +150,7 @@ export function useKeyboardShortcuts(ctx: KeyboardShortcutsContext) {
       store.commands.rollbackTransaction()
       throw err
     }
-    store.selection.selectMultiple(newIds)
+    selectMany(store, newIds)
   }
 
   function remove() {
@@ -169,7 +168,7 @@ export function useKeyboardShortcuts(ctx: KeyboardShortcutsContext) {
       store.commands.rollbackTransaction()
       throw err
     }
-    store.selection.clear()
+    clearSelection(store)
   }
 
   function nudge(dx: number, dy: number) {

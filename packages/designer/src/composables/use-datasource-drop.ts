@@ -2,6 +2,7 @@ import type { DatasourceDropZone, DatasourceFieldInfo } from '@easyink/core'
 import type { BindingRef } from '@easyink/schema'
 import type { DesignerStore } from '../store/designer-store'
 import { BindFieldCommand, pointInRect, UnitManager } from '@easyink/core'
+import { selectOne } from '../interactions/selection-api'
 
 /**
  * MIME type used for datasource field drag data.
@@ -272,7 +273,7 @@ export function useDatasourceDrop(ctx: DatasourceDropContext) {
       const localX = docX - target.x
       const localY = docY - target.y
       ext.datasourceDrop.onDrop(toFieldInfo(fieldData), { x: localX, y: localY }, target)
-      store.selection.select(target.id)
+      selectOne(store, target.id)
       return
     }
 
@@ -288,7 +289,7 @@ export function useDatasourceDrop(ctx: DatasourceDropContext) {
 
     const cmd = new BindFieldCommand(store.schema.elements, target.id, binding)
     store.commands.execute(cmd)
-    store.selection.select(target.id)
+    selectOne(store, target.id)
   }
 
   return { onDragOver, onDragLeave, onDrop, cleanupOverlay }

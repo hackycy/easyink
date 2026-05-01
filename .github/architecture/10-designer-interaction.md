@@ -395,13 +395,17 @@ get propertyOverlay(): PropertyPanelOverlay | null
 
 Designer 提供 `EditingSessionManager`，包含三个顶层阶段：`idle`、`selected`、`editing-session`。
 
-物料在 extension 中声明 `geometry / selectionTypes / behaviors / decorations`（见 [22 章](./22-editing-behavior.md)）时，可通过 `enterTrigger`（默认 `'dblclick'`，表格为 `'click'`）进入编辑会话：
+物料在 extension 中声明 `geometry / selectionTypes / behaviors / decorations`（见 [22 章](./22-editing-behavior.md)）时，统一通过 **dblclick** 进入编辑会话（无 `enterTrigger` 配置项 — 见 [audit/202605011431.md item 1](../audit/202605011431.md)）：
 
 ```
 idle --click element--> selected
-selected --enterTrigger--> editing-session (delegate to behavior chain)
+selected --dblclick--> editing-session (delegate to behavior chain)
 editing-session --click outside / Esc--> idle
 ```
+
+> **进入触发统一为 dblclick 的理由**：历史上表格使用 `enterTrigger: 'click'`，导致 pointerdown 直接进入会话，剥夺了画布层"点选 + 拖拽"语义；为补偿，click handler 引入了跨事件布尔锁，进一步增加了状态空间。统一为 dblclick 后，每种物料的 single-click 行为完全对齐（select + drag-eligible），dblclick 是开启深度编辑的唯一入口。
+
+> **深度编辑下移动元素**：进入编辑会话后，元素根的 pointerdown 完全归会话所有；要移动元素必须先退出会话（Esc / 点击外部）。这与 Figma / PowerPoint 一致 — 见 [audit/202605011431.md item 2](../audit/202605011431.md)，先前的 `DeepEditDragHandle`（14×14 外置手柄）已删除。
 
 职责划分：
 

@@ -1,4 +1,5 @@
 export { useCanvasInteractionController } from './canvas-interaction-controller'
 export type { CanvasInteractionControllerContext } from './canvas-interaction-controller'
 export { createGestureContext, type GestureContext } from './gesture-context'
+export { clearSelection, selectMany, selectOne } from './selection-api'
 export { applySelectionIntent, type SelectionIntent } from './selection-intent'

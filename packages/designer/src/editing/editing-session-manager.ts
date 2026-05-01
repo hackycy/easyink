@@ -69,11 +69,12 @@ export class EditingSessionManager {
     // across every site that opens a session.
     applySelectionIntent(this._store, { kind: 'collapse-to-session-owner', elementId: nodeId })
 
-    const selectionStore = createSelectionStore()
+    const selectionStore = createSelectionStore(this._store.diagnostics)
     const geometry = createGeometryService(this._store)
     const tx = createTransactionService(
       id => this._store.getElementById(id),
       this._store.commands,
+      this._store.diagnostics,
     )
 
     const session = new EditingSession({
@@ -88,6 +89,7 @@ export class EditingSessionManager {
         // Notify store for rendering
         this._store.setEphemeralPanel(panel)
       },
+      diagnostics: this._store.diagnostics,
     })
 
     this._activeSession.value = session

@@ -1,27 +1,28 @@
 import type { DesignerStore } from '../store/designer-store'
 
 /**
- * SelectionIntent — single, declarative entry point for every canvas-driven
- * mutation of the top-level SelectionModel.
+ * SelectionIntent — declarative entry point for **canvas pointer gesture**
+ * mutations of the top-level SelectionModel.
  *
- * Why this exists
- * ---------------
- * Before this collapse point the SelectionModel was being written by at least
- * four distinct sites (CanvasWorkspace click handler, useElementDrag pointer-
- * down, useMarqueeSelect, EditingSessionManager.enter), and each site had a
- * private interpretation of "what does this gesture mean". The result was the
- * exact bug class the audit calls out: a single physical gesture mutating the
- * model multiple times with different intents.
+ * Scope rule (audit/202605011431.md item 5)
+ * -----------------------------------------
+ * - Canvas pointer interpretation (controller, drag, marquee, editing-
+ *   session lifecycle): MUST go through `applySelectionIntent`.
+ * - Non-canvas surfaces (TopBar buttons, CanvasContextMenu actions,
+ *   keyboard shortcuts, structure-tree picker, MaterialPanel, datasource
+ *   drop, paste/duplicate): use the named wrappers in `selection-api.ts`
+ *   instead. They keep the exception list explicit and auditable.
+ * - Direct `store.selection.{select,add,toggle,clear,selectMultiple}`:
+ *   forbidden everywhere (PR-blocking).
  *
- * Rule
- * ----
- * Canvas-layer interaction code (controller, drag, marquee, editing-session
- * lifecycle) MUST go through `applySelectionIntent`. It must NOT call
- * `store.selection.{select,add,toggle,clear,selectMultiple}` directly.
- *
- * Keyboard-shortcut and programmatic APIs (delete, paste, structure-tree
- * picker) are explicitly out of scope: they do not race with pointer gesture
- * interpretation and can mutate the model directly.
+ * Why two surfaces instead of one
+ * -------------------------------
+ * The canvas-pointer enum is intentionally narrow: every kind maps to a
+ * single physical gesture outcome. Forcing TopBar/keyboard/etc. through
+ * the same enum either pollutes it with pointer-irrelevant kinds or hides
+ * the call site behind a misleading name. Splitting the surfaces lets
+ * each one keep a tight, self-explanatory API while still routing every
+ * write through a documented entry point.
  */
 export type SelectionIntent
   = | { kind: 'single', elementId: string }

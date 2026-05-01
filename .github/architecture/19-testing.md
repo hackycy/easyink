@@ -49,3 +49,14 @@
   }
 }
 ```
+
+## 19.5 强制覆盖（核心交互回归）
+
+下列测试是 PR 准入护栏，删除或绕过将被拒绝合并：
+
+- `packages/designer/src/interactions/canvas-interaction-controller.test.ts` — 覆盖画布手势仲裁全部决策路径（Cmd 多选、drag-then-click、dblclick 进入 editing-session、pointerdown 不进入、background pointerdown 退出顺序、右键保留、editing-session 路由 owner pointerdown）。对应审计 `.github/audit/202605010152.md` 与 `202605011431.md`。
+- `packages/shared/src/pointer-gesture.test.ts` — 覆盖 pointercancel 与 pointerup 走同一 teardown 路径，capture acquire/release throw 不影响 onEnd 单次触发。对应 `202605011431.md` item 3。
+- `packages/designer/src/editing/transaction-service.test.ts` / `behavior-dispatcher.test.ts` — 校验失败路径推送到 `DiagnosticsChannel` 而不是 silent console.error。
+- `packages/core/src/page-planner.test.ts` / `binding-utils.test.ts` / `font.test.ts` — 协议边界回归。
+
+新增交互/行为类协议时必须同步加测试；只改实现不加用例的 PR 默认拒绝。

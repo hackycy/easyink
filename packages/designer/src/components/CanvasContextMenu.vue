@@ -23,6 +23,7 @@ import {
 import { deepClone, generateId } from '@easyink/shared'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useDesignerStore } from '../composables'
+import { clearSelection, selectMany } from '../interactions/selection-api'
 
 interface ContextMenuItem {
   id: string
@@ -161,7 +162,7 @@ function handleAction(item: ContextMenuItem) {
           store.commands.execute(new RemoveMaterialCommand(elements, node.id))
         }
         store.commands.commitTransaction()
-        store.selection.clear()
+        clearSelection(store)
       }
       break
 
@@ -181,7 +182,7 @@ function handleAction(item: ContextMenuItem) {
           newIds.push(pasted.id)
         }
         store.commands.commitTransaction()
-        store.selection.selectMultiple(newIds)
+        selectMany(store, newIds)
       }
       break
 
@@ -201,7 +202,7 @@ function handleAction(item: ContextMenuItem) {
           newIds.push(dup.id)
         }
         store.commands.commitTransaction()
-        store.selection.selectMultiple(newIds)
+        selectMany(store, newIds)
       }
       break
 
@@ -212,7 +213,7 @@ function handleAction(item: ContextMenuItem) {
           store.commands.execute(new RemoveMaterialCommand(elements, node.id))
         }
         store.commands.commitTransaction()
-        store.selection.clear()
+        clearSelection(store)
       }
       break
 
@@ -277,9 +278,7 @@ function handleAction(item: ContextMenuItem) {
       // visible element" gesture. Including hidden nodes would let downstream
       // group operations (drag/delete) silently mutate things the user can't
       // see and didn't intend to touch.
-      store.selection.selectMultiple(
-        elements.filter(el => !el.hidden).map(el => el.id),
-      )
+      selectMany(store, elements.filter(el => !el.hidden).map(el => el.id))
       break
 
     default:

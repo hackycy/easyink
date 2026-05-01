@@ -279,7 +279,6 @@ export function createTableDataExtension(context: MaterialExtensionContext): Mat
       return nodeSignal.subscribe(render)
     },
 
-    enterTrigger: 'click',
     geometry: tableGeometry,
     selectionTypes: [cellSelectionType as SelectionType<unknown>],
     behaviors: [

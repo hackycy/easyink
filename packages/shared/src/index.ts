@@ -1,4 +1,5 @@
 export * from './ai-generation'
 export * from './constants'
+export * from './pointer-gesture'
 export * from './types'
 export * from './utils'

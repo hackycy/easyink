@@ -49,12 +49,16 @@ describe('createSelectionStore', () => {
     expect(JSON.parse(JSON.stringify(stored))).toEqual({})
   })
 
-  it('rejects circular reference payload (logs + nulls selection, never throws)', () => {
-    const store = createSelectionStore()
-    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  it('rejects circular reference payload (rolls back to last valid + emits diagnostic, never throws)', () => {
+    const diagnostics: Array<{ severity: string, source: string }> = []
+    const store = createSelectionStore({
+      push: (d: { severity: string, source: string }) => diagnostics.push(d),
+    } as never)
     const circular: Record<string, unknown> = { a: 1 }
     circular.self = circular
-    // Pre-seed with a valid selection to verify rejection clears it.
+    // Pre-seed with a valid selection to verify rejection rolls back to it
+    // (audit/202605011431.md item 5: invalid payload preserves last valid
+    // selection rather than silently nulling the user's working state).
     store.set({ type: 'test', nodeId: 'n1', payload: { ok: true } })
     expect(() => {
       store.set({
@@ -63,9 +67,8 @@ describe('createSelectionStore', () => {
         payload: circular,
       })
     }).not.toThrow()
-    expect(store.selection).toBeNull()
-    expect(errSpy).toHaveBeenCalled()
-    errSpy.mockRestore()
+    expect(store.selection).toEqual({ type: 'test', nodeId: 'n1', payload: { ok: true } })
+    expect(diagnostics.some(d => d.source === 'selection-store' && d.severity === 'error')).toBe(true)
   })
 
   it('accepts valid anchor', () => {
