@@ -6,12 +6,12 @@ describe('dataSourceRegistry', () => {
     const reg = new DataSourceRegistry()
     const source = { id: 's1', name: 'Source 1', fields: [] }
     reg.registerSource(source)
-    expect(reg.getSource('s1')).toBe(source)
+    expect(reg.getSourceSync('s1')).toBe(source)
   })
 
   it('returns undefined for unknown source', () => {
     const reg = new DataSourceRegistry()
-    expect(reg.getSource('unknown')).toBeUndefined()
+    expect(reg.getSourceSync('unknown')).toBeUndefined()
   })
 
   it('finds source by tag', () => {
@@ -37,7 +37,7 @@ describe('dataSourceRegistry', () => {
     const reg = new DataSourceRegistry()
     reg.registerSource({ id: 's1', name: 'A', fields: [] })
     reg.unregisterSource('s1')
-    expect(reg.getSource('s1')).toBeUndefined()
+    expect(reg.getSourceSync('s1')).toBeUndefined()
   })
 
   it('clear removes everything', () => {
@@ -45,5 +45,19 @@ describe('dataSourceRegistry', () => {
     reg.registerSource({ id: 's1', name: 'A', fields: [] })
     reg.clear()
     expect(reg.getSources()).toHaveLength(0)
+  })
+
+  it('resolves a provider factory on async access', async () => {
+    const reg = new DataSourceRegistry()
+    const source = { id: 'remote', name: 'Remote Source', fields: [] }
+
+    reg.registerProviderFactory({
+      id: 'remote',
+      namespace: 'external',
+      resolve: async () => source,
+    })
+
+    await expect(reg.getSource('remote')).resolves.toBe(source)
+    expect(reg.getSourceSync('remote')).toBe(source)
   })
 })
