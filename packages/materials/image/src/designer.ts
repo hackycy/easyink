@@ -1,13 +1,14 @@
 import type { MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { ImageProps } from './schema'
+import { getNodeProps } from '@easyink/schema'
 
 function escapeAttr(str: string): string {
   return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
 function buildHtml(node: MaterialNode, context: MaterialExtensionContext): string {
-  const p = node.props as unknown as ImageProps
+  const p = getNodeProps<ImageProps>(node)
   const unit = context.getSchema().unit
   const DASH_MAP: Record<string, string> = { dashed: 'dashed', dotted: 'dotted' }
   const borderStyle = p.borderWidth ? `border:${p.borderWidth}${unit} ${DASH_MAP[p.borderType] || 'solid'} ${p.borderColor};` : ''
@@ -35,7 +36,7 @@ function buildHtml(node: MaterialNode, context: MaterialExtensionContext): strin
 }
 
 function getContentKey(node: MaterialNode): string {
-  const p = node.props as unknown as ImageProps
+  const p = getNodeProps<ImageProps>(node)
   const binding = node.binding ? JSON.stringify(node.binding) : ''
   return `${p.src}\0${p.fit}\0${p.alt}\0${p.backgroundColor}\0${p.borderWidth}\0${p.borderColor}\0${p.borderType}\0${binding}`
 }

@@ -1,10 +1,11 @@
 import type { MaterialNode } from '@easyink/schema'
 import type { SvgProps } from './schema'
+import { getNodeProps } from '@easyink/schema'
 import { escapeHtml } from '@easyink/shared'
 import { sanitizeSvgContent } from './sanitize'
 
 export function renderSvg(node: MaterialNode) {
-  const props = node.props as unknown as SvgProps
+  const props = getNodeProps<SvgProps>(node)
   const content = sanitizeSvgContent(props.content || '')
 
   return {

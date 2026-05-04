@@ -1,6 +1,7 @@
 import type { DocumentSchema } from '@easyink/schema'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { LLMProvider, SchemaGenerationInput } from '../llm/types'
+import { validateSchema } from '@easyink/schema'
 import {
   buildDataSourceDescriptor,
   buildSchemaFromTemplateIntent,
@@ -130,7 +131,9 @@ function registerValidateGeneratedSchemaTool(server: McpServer): void {
       const allowedMaterialTypes = getMaterialTypes(materialsConfig)
       const materialAliases = getMaterialAliases(materialsConfig)
       const plan = isGenerationPlan(generationPlan) ? generationPlan : undefined
-      const repaired = repairGeneratedSchema(schema as unknown as DocumentSchema, {
+      if (!isValidDocumentSchema(schema))
+        return toolPayload({ errors: validateSchema(schema) }, true)
+      const repaired = repairGeneratedSchema(schema, {
         allowedMaterialTypes,
         materialAliases,
         plan,
@@ -149,6 +152,10 @@ function registerValidateGeneratedSchemaTool(server: McpServer): void {
       return toolPayload({ repaired, accuracyIssues, validation })
     },
   )
+}
+
+function isValidDocumentSchema(schema: unknown): schema is DocumentSchema {
+  return validateSchema(schema).length === 0
 }
 
 function toolPayload(payload: Record<string, unknown>, isError = false) {

@@ -98,9 +98,9 @@ export function createProgressRelay(ctx: RelayContext): RelayHandle {
 /** Combine multiple AbortSignals into one that aborts when any input aborts. */
 function anySignal(signals: readonly AbortSignal[]): AbortSignal {
   // Prefer the standard helper when available (Node 20+).
-  const anyFn = (AbortSignal as unknown as { any?: (s: readonly AbortSignal[]) => AbortSignal }).any
+  const anyFn = AbortSignal.any
   if (typeof anyFn === 'function') {
-    return anyFn(signals)
+    return anyFn([...signals])
   }
   const controller = new AbortController()
   const onAbort = (s: AbortSignal): void => {

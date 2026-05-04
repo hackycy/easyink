@@ -1,6 +1,7 @@
 import type { ViewerRenderContext } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { LineProps } from './schema'
+import { getNodeProps } from '@easyink/schema'
 
 import { getLineThickness } from './schema'
 
@@ -27,7 +28,7 @@ function buildShapeMarkup(lineType: LineProps['lineType'] | undefined, width: nu
 }
 
 export function renderLine(node: MaterialNode, _context: ViewerRenderContext) {
-  const p = node.props as Partial<LineProps>
+  const p = getNodeProps<Partial<LineProps>>(node)
   const lineColor = p.lineColor || '#000000'
   const lineType = p.lineType || 'solid'
   const thickness = Math.max(0.1, getLineThickness(node))

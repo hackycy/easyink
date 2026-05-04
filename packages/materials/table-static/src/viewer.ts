@@ -2,7 +2,7 @@ import type { MaterialNode } from '@easyink/schema'
 import type { TableStaticProps } from './schema'
 import { formatBindingDisplayValue, resolveBindingValue } from '@easyink/core'
 import { renderPlainTextCell, renderTableHtml } from '@easyink/material-table-kernel'
-import { isTableNode } from '@easyink/schema'
+import { getNodeProps, isTableNode } from '@easyink/schema'
 
 interface ViewerRenderContext {
   data: Record<string, unknown>
@@ -20,7 +20,7 @@ export function renderTableStatic(node: MaterialNode, contextOrUnit: ViewerRende
     }
   }
 
-  const props = node.props as unknown as TableStaticProps
+  const props = getNodeProps<TableStaticProps>(node)
   const html = renderTableHtml({
     topology: node.table.topology,
     props,

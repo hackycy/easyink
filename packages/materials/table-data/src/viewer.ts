@@ -2,7 +2,7 @@ import type { BindingRef, MaterialNode, TableCellSchema, TableDataSchema, TableR
 import type { TableDataProps } from './schema'
 import { extractCollectionPath, formatBindingDisplayValue, resolveBindingValue, resolveFieldFromRecord } from '@easyink/core'
 import { computeAutoRowHeights, computeRowScale, renderPlainTextCell, renderTableHtml } from '@easyink/material-table-kernel'
-import { isTableNode } from '@easyink/schema'
+import { getNodeProps, isTableNode } from '@easyink/schema'
 
 interface ViewerRenderContext {
   data: Record<string, unknown>
@@ -90,7 +90,7 @@ function resolveRuntimeLayout(
   const baselineScale = computeRowScale(node.table.topology.rows, declaredElementHeight)
   const baselineHeights = visibleRows.map(row => row.height * baselineScale)
 
-  const props = (node.props ?? {}) as unknown as TableDataProps
+  const props = getNodeProps<TableDataProps>(node)
   const rowHeights = computeAutoRowHeights({
     topology: { columns: node.table.topology.columns, rows: visibleRows },
     elementWidth: node.width,
@@ -131,7 +131,7 @@ export function renderTableData(node: MaterialNode, context?: ViewerRenderContex
     }
   }
 
-  const props = node.props as unknown as TableDataProps
+  const props = getNodeProps<TableDataProps>(node)
   const data = context?.data ?? {}
   const tableNode = node as MaterialNode & { table: TableDataSchema }
 

@@ -23,7 +23,7 @@ export function getLineThickness(node: Pick<MaterialNode, 'height' | 'props'>): 
   if (height != null)
     return height
 
-  const legacyLineWidth = readPositiveNumber((node.props as Record<string, unknown>).lineWidth)
+  const legacyLineWidth = readPositiveNumber(node.props.lineWidth)
   if (legacyLineWidth != null)
     return legacyLineWidth
 

@@ -1,10 +1,11 @@
 import type { MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { LineProps } from './schema'
+import { getNodeProps } from '@easyink/schema'
 import { getLineThickness } from './schema'
 
 function buildHtml(node: MaterialNode, unit: string): string {
-  const props = node.props as Partial<LineProps>
+  const props = getNodeProps<Partial<LineProps>>(node)
   const lineColor = props.lineColor || '#000000'
   const lineType = props.lineType || 'solid'
   let fillStyle = `background-color:${lineColor};`

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { PropCommitContext, SubPropertySchema } from '@easyink/core'
-import type { BindingRef } from '@easyink/schema'
+import type { BindingRef, DocumentSchema, MaterialNode, PageSchema } from '@easyink/schema'
 import type { BindingDisplayFormat } from '@easyink/shared'
 import type { Component } from 'vue'
 import type { PagePropertyContext, PagePropertyDescriptor, PagePropertyGroup } from '../page-properties'
@@ -135,7 +135,7 @@ function isSectionVisible(sectionId: PanelSectionId): boolean {
 
 const pagePropertyContext = computed<PagePropertyContext>(() => ({
   document: store.schema,
-  rawPage: store.schema.compat?.passthrough as Record<string, unknown> | undefined,
+  rawPage: store.schema.compat?.passthrough,
   selectedElementId: selectedElement.value?.id,
 }))
 
@@ -176,7 +176,34 @@ function pageGroupLabel(group: PagePropertyGroup): string {
 
 // ─── Page property preview/commit snapshots ─────────────────────
 
-const pageSnapshots = new Map<string, { page?: Record<string, unknown>, document?: Record<string, unknown> }>()
+type DocumentPageSnapshot = Partial<Pick<DocumentSchema, 'unit' | 'meta' | 'extensions' | 'compat'>>
+
+const pageSnapshots = new Map<string, { page?: Partial<PageSchema>, document?: DocumentPageSnapshot }>()
+
+type GeometryKey = 'x' | 'y' | 'width' | 'height' | 'rotation' | 'alpha'
+
+function readPageSnapshotValue(page: PageSchema, key: string): unknown {
+  return page[key as keyof PageSchema]
+}
+
+function readDocumentSnapshotValue(schema: DocumentSchema, key: string): unknown {
+  return schema[key as keyof Pick<DocumentSchema, 'unit' | 'meta' | 'extensions' | 'compat'>]
+}
+
+function isGeometryKey(key: string): key is GeometryKey {
+  return key === 'x' || key === 'y' || key === 'width' || key === 'height' || key === 'rotation' || key === 'alpha'
+}
+
+function readGeometryValue(node: MaterialNode, key: GeometryKey): number | undefined {
+  switch (key) {
+    case 'x': return node.x
+    case 'y': return node.y
+    case 'width': return node.width
+    case 'height': return node.height
+    case 'rotation': return node.rotation
+    case 'alpha': return node.alpha
+  }
+}
 
 function previewPageProperty(descriptor: PagePropertyDescriptor, value: unknown) {
   const ctx = pagePropertyContext.value
@@ -190,17 +217,17 @@ function previewPageProperty(descriptor: PagePropertyDescriptor, value: unknown)
 
   // Snapshot before first preview
   if (!pageSnapshots.has(descriptor.id)) {
-    const snapshot: { page?: Record<string, unknown>, document?: Record<string, unknown> } = {}
+    const snapshot: { page?: Partial<PageSchema>, document?: DocumentPageSnapshot } = {}
     if (pageUpdates && Object.keys(pageUpdates).length > 0) {
       snapshot.page = {}
       for (const key of Object.keys(pageUpdates)) {
-        (snapshot.page as Record<string, unknown>)[key] = deepClone((store.schema.page as unknown as Record<string, unknown>)[key])
+        snapshot.page[key] = deepClone(readPageSnapshotValue(store.schema.page, key))
       }
     }
     if (documentUpdates && Object.keys(documentUpdates).length > 0) {
       snapshot.document = {}
       for (const key of Object.keys(documentUpdates)) {
-        (snapshot.document as Record<string, unknown>)[key] = deepClone((store.schema as unknown as Record<string, unknown>)[key])
+        snapshot.document[key] = deepClone(readDocumentSnapshotValue(store.schema, key))
       }
     }
     pageSnapshots.set(descriptor.id, snapshot)
@@ -231,7 +258,7 @@ function onPagePropertyChange(descriptor: PagePropertyDescriptor, value: unknown
     const cmd = new UpdatePageCommand(
       store.schema.page,
       pageUpdates,
-      snapshot?.page as Record<string, unknown> | undefined,
+      snapshot?.page,
     )
     store.commands.execute(cmd)
   }
@@ -240,7 +267,7 @@ function onPagePropertyChange(descriptor: PagePropertyDescriptor, value: unknown
     const cmd = new UpdateDocumentCommand(
       store.schema,
       documentUpdates,
-      snapshot?.document as Record<string, unknown> | undefined,
+      snapshot?.document,
     )
     store.commands.execute(cmd)
   }
@@ -261,7 +288,7 @@ const visibleSchemas = computed(() => {
   const el = selectedElement.value
   if (!el)
     return []
-  const elProps = el.props as Record<string, unknown>
+  const elProps = el.props
   return materialSchemas.value.filter(s => !s.visible || s.visible(elProps))
 })
 
@@ -269,11 +296,11 @@ const groupedSchemas = computed(() => groupPropSchemas(visibleSchemas.value))
 
 // Font list from FontManager (async)
 const fontList = shallowRef<Array<{ family: string, displayName: string }>>([])
-const fontManager = (store as unknown as Record<string, unknown>).fontManager
+const fontManager = store.fontManager
 watchEffect(async () => {
-  if (fontManager && typeof (fontManager as { listFonts?: () => Promise<unknown> }).listFonts === 'function') {
+  if (fontManager) {
     try {
-      const fonts = await (fontManager as { listFonts: () => Promise<Array<{ family: string, displayName: string }>> }).listFonts()
+      const fonts = await fontManager.listFonts()
       fontList.value = fonts
     }
     catch {
@@ -320,13 +347,13 @@ function previewProp(key: string, value: unknown) {
     return
   // Snapshot before first preview
   if (!propSnapshots.has(key)) {
-    propSnapshots.set(key, deepClone(getByPath(el.props as Record<string, unknown>, key)))
+    propSnapshots.set(key, deepClone(getByPath(el.props, key)))
   }
   // Direct mutation for preview (no command)
   if (key.includes('.'))
-    setByPath(el.props as Record<string, unknown>, key, value)
+    setByPath(el.props, key, value)
   else
-    (el.props as Record<string, unknown>)[key] = value
+    el.props[key] = value
 }
 
 function updateProp(key: string, value: unknown) {
@@ -370,24 +397,24 @@ function updateProp(key: string, value: unknown) {
 const geoSnapshots = new Map<string, number>()
 
 function previewGeometry(key: string, value: number) {
-  if (!selectedElement.value)
+  if (!selectedElement.value || !isGeometryKey(key))
     return
   if (!geoSnapshots.has(key)) {
-    geoSnapshots.set(key, (selectedElement.value as unknown as Record<string, number>)[key])
+    geoSnapshots.set(key, readGeometryValue(selectedElement.value, key) ?? 0)
   }
   store.updateElement(selectedElement.value.id, { [key]: value })
 }
 
 function commitGeometry(key: string, value: number) {
   const el = selectedElement.value
-  if (!el)
+  if (!el || !isGeometryKey(key))
     return
   const oldValue = geoSnapshots.get(key)
   geoSnapshots.delete(key)
   if (oldValue !== undefined && oldValue === value)
     return
-  const updates = { [key]: value } as Record<string, number>
-  const olds = oldValue !== undefined ? { [key]: oldValue } as Record<string, number> : undefined
+  const updates: Partial<Record<GeometryKey, number>> = { [key]: value }
+  const olds: Partial<Record<GeometryKey, number>> | undefined = oldValue !== undefined ? { [key]: oldValue } : undefined
   const cmd = new UpdateGeometryCommand(store.schema.elements, el.id, updates, olds)
   store.commands.execute(cmd)
 }
@@ -429,7 +456,7 @@ function readPropValue(schema: PropSchema): unknown {
     const v = schema.read(el)
     return v ?? schema.default
   }
-  const value = getByPath(el.props as Record<string, unknown>, schema.key)
+  const value = getByPath(el.props, schema.key)
   return value ?? schema.default
 }
 </script>
@@ -501,7 +528,7 @@ function readPropValue(schema: PropSchema): unknown {
               :key="schema.key"
               :schema="schema"
               :value="readPropValue(schema)"
-              :disabled="schema.disabled ? schema.disabled(selectedElement.props as Record<string, unknown>) : false"
+              :disabled="schema.disabled ? schema.disabled(selectedElement.props) : false"
               :fonts="fontList"
               :t="store.t.bind(store)"
               @preview="previewProp"

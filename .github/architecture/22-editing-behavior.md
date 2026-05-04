@@ -481,14 +481,14 @@ interface TransactionAPI {
    * 一个 tx.run 调用 = 一条进入历史的 Command。
    * draft 是 node 的 immer-style 可变副本，框架对比生成 patch。
    */
-  run: (
+  run: <TNode extends MaterialNode = MaterialNode>(
     nodeId: string,
-    mutator: (draft: MaterialNode) => void,
+    mutator: (draft: TNode) => void,
     options?: TxOptions,
-  ) => Promise<void>
+  ) => void
 
   /** 手动开启批量域，期间多次 run() 合并为一条 Command */
-  batch: <T>(fn: () => Promise<T>) => Promise<T>
+  batch: <T>(fn: () => T) => T
 }
 
 interface TxOptions {
@@ -503,6 +503,8 @@ interface TxOptions {
   label?: string
 }
 ```
+
+`TNode` 是物料侧的编译期声明，例如表格行为使用 `tx.run<TableNode>(nodeId, draft => {...})`。框架不在运行时替物料校验私有 schema；进入 `tx.run` 前必须已经通过 `isTableNode`、selection type 或等价协议确认节点类型。
 
 ### 22.7.2 与现有 Command 系统的关系
 

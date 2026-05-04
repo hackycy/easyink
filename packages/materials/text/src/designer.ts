@@ -1,10 +1,11 @@
 import type { MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { TextProps } from './schema'
+import { getNodeProps } from '@easyink/schema'
 import { escapeHtml } from '@easyink/shared'
 
 function buildHtml(node: MaterialNode, context: MaterialExtensionContext): string {
-  const p = node.props as unknown as TextProps
+  const p = getNodeProps<TextProps>(node)
   const unit = context.getSchema().unit
   const prefix = p.prefix ? escapeHtml(p.prefix) : ''
   const suffix = p.suffix ? escapeHtml(p.suffix) : ''

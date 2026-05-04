@@ -231,7 +231,7 @@ export interface PagePrintConfig {
 
 // ─── Material Node ─────────────────────────────────────────────────
 
-export interface MaterialNode {
+export interface MaterialNode<TProps extends object = Record<string, unknown>> {
   id: string
   type: string
   name?: string
@@ -246,7 +246,7 @@ export interface MaterialNode {
   hidden?: boolean
   locked?: boolean
   print?: PrintBehavior
-  props: Record<string, unknown>
+  props: TProps
   binding?: BindingRef | BindingRef[]
   animations?: AnimationSchema[]
   children?: MaterialNode[]
@@ -296,9 +296,17 @@ export interface NodeDiagnosticState {
 
 // ─── Table Schema ──────────────────────────────────────────────────
 
-export interface TableNode extends MaterialNode {
+export interface TableNode<TProps extends object = Record<string, unknown>> extends MaterialNode<TProps> {
   type: 'table-static' | 'table-data'
   table: TableSchema
+}
+
+/**
+ * Typed props view for material-owned code. Schema loading keeps props open;
+ * material packages own the compile-time shape for their own node type.
+ */
+export function getNodeProps<TProps extends object>(node: MaterialNode): TProps {
+  return node.props as TProps
 }
 
 export interface TableSchema {

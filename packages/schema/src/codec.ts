@@ -1,4 +1,4 @@
-import type { DocumentSchema, TableCellSchema, TableColumnSchema, TableRowSchema, TableSchema } from './types'
+import type { DocumentSchema, MaterialNode, PageSchema, TableCellSchema, TableColumnSchema, TableNode, TableRowSchema, TableSchema } from './types'
 import { isObject } from '@easyink/shared'
 import { isTableNode } from './types'
 
@@ -28,7 +28,7 @@ export interface BenchmarkElementInput {
 /**
  * Page field mapping from benchmark -> canonical.
  */
-const PAGE_FIELD_MAP: Record<string, string> = {
+const PAGE_FIELD_MAP: Record<string, keyof PageSchema> = {
   viewer: 'mode',
   width: 'width',
   height: 'height',
@@ -187,7 +187,7 @@ function decodeBenchmarkElement(input: BenchmarkElementInput): DocumentSchema['e
     props[key] = value
   }
 
-  const node: DocumentSchema['elements'][number] = {
+  const node: MaterialNode = {
     id: id || `el_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
     type: type || 'unknown',
     x,
@@ -217,21 +217,25 @@ function decodeBenchmarkElement(input: BenchmarkElementInput): DocumentSchema['e
   }
 
   // Table elements: convert extensions.table to node.table
-  const isTable = type === 'table-static' || type === 'table-data'
-  if (isTable && rest.extensions && isObject(rest.extensions)) {
+  let decodedNode: MaterialNode | TableNode = node
+  if (isBenchmarkTableType(type) && rest.extensions && isObject(rest.extensions)) {
     const ext = rest.extensions as Record<string, unknown>
     const tableSchema = decodeTableExtensions(ext, type || '')
     if (tableSchema) {
-      ;(node as unknown as Record<string, unknown>).table = tableSchema
+      decodedNode = { ...node, type, table: tableSchema }
     }
   }
 
   // Apply v2 migrations for table nodes
-  if (isTable) {
-    migrateTableV2(node as unknown as Record<string, unknown>, type || '')
+  if (isBenchmarkTableType(type)) {
+    migrateTableV2(decodedNode, type)
   }
 
-  return node
+  return decodedNode
+}
+
+function isBenchmarkTableType(type: string | undefined): type is TableNode['type'] {
+  return type === 'table-static' || type === 'table-data'
 }
 
 /**
@@ -241,13 +245,14 @@ export function encodeToBenchmark(schema: DocumentSchema): BenchmarkDocumentInpu
   const page: Record<string, unknown> = {}
 
   // Reverse page field mapping
-  const reversePageMap: Record<string, string> = {}
+  const reversePageMap: Partial<Record<keyof PageSchema, string>> = {}
   for (const [rawKey, canonicalKey] of Object.entries(PAGE_FIELD_MAP)) {
     reversePageMap[canonicalKey] = rawKey
   }
 
-  for (const [canKey, rawKey] of Object.entries(reversePageMap)) {
-    const value = (schema.page as unknown as Record<string, unknown>)[canKey]
+  for (const canKey of Object.keys(reversePageMap) as Array<keyof PageSchema>) {
+    const rawKey = reversePageMap[canKey]!
+    const value = schema.page[canKey]
     if (value !== undefined) {
       page[rawKey] = value
     }
@@ -353,12 +358,12 @@ function decodeTableExtensions(ext: Record<string, unknown>, tableType: string):
   const rawTable = raw as Record<string, unknown>
 
   // Already in new format (has topology + kind)?
-  if (rawTable.topology && isObject(rawTable.topology) && rawTable.kind) {
-    return rawTable as unknown as TableSchema
+  if (isTableSchema(raw)) {
+    return raw
   }
 
   // Already in intermediate format (has topology + bands but no kind)?
-  if (rawTable.topology && isObject(rawTable.topology) && rawTable.bands && Array.isArray(rawTable.bands)) {
+  if (isBandsTableInput(rawTable)) {
     return migrateBandsToRowRole(rawTable, tableType)
   }
 
@@ -443,24 +448,21 @@ function decodeTableExtensions(ext: Record<string, unknown>, tableType: string):
   })
 
   // Layout from table-level properties
-  const layout: TableSchema['layout'] = {}
-  if (rawTable.borderWidth !== undefined)
-    layout.borderWidth = rawTable.borderWidth as number
-  if (rawTable.borderColor !== undefined)
-    layout.borderColor = rawTable.borderColor as string
-  if (rawTable.borderType !== undefined)
-    layout.borderType = rawTable.borderType as TableSchema['layout']['borderType']
-  if (rawTable.borderAppearance !== undefined)
-    layout.borderAppearance = rawTable.borderAppearance as TableSchema['layout']['borderAppearance']
+  const layout = readTableLayout(rawTable)
 
-  const kind = tableType === 'table-data' ? 'data' : 'static'
-  return { kind, topology: { columns, rows }, layout } as TableSchema
+  const kind: TableSchema['kind'] = tableType === 'table-data' ? 'data' : 'static'
+  return { kind, topology: { columns, rows }, layout }
 }
 
 /** Migrate intermediate format (topology + bands) to new format (topology + row.role). */
-function migrateBandsToRowRole(rawTable: Record<string, unknown>, tableType: string): TableSchema {
-  const topology = rawTable.topology as { columns: TableColumnSchema[], rows: Array<Record<string, unknown>> }
-  const bands = rawTable.bands as Array<{ kind: string, rowRange: { start: number, end: number } }>
+interface BandsTableInput {
+  topology: { columns: TableColumnSchema[], rows: Array<Partial<TableRowSchema>> }
+  bands: Array<{ kind: string, rowRange: { start: number, end: number } }>
+  layout?: unknown
+}
+
+function migrateBandsToRowRole(rawTable: BandsTableInput, tableType: string): TableSchema {
+  const { topology, bands } = rawTable
 
   const BAND_KIND_TO_ROLE: Record<string, TableRowSchema['role']> = {
     header: 'header',
@@ -479,12 +481,59 @@ function migrateBandsToRowRole(rawTable: Record<string, unknown>, tableType: str
         break
       }
     }
-    return { ...row, role, cells: row.cells || [] } as unknown as TableRowSchema
+    return {
+      height: typeof row.height === 'number' ? row.height : 24,
+      role,
+      cells: row.cells || [],
+    }
   })
 
-  const layout = (rawTable.layout || {}) as TableSchema['layout']
-  const kind = tableType === 'table-data' ? 'data' : 'static'
-  return { kind, topology: { columns: topology.columns, rows }, layout } as TableSchema
+  const layout = isObject(rawTable.layout) ? readTableLayout(rawTable.layout) : {}
+  const kind: TableSchema['kind'] = tableType === 'table-data' ? 'data' : 'static'
+  return { kind, topology: { columns: topology.columns, rows }, layout }
+}
+
+function isTableSchema(value: unknown): value is TableSchema {
+  if (!isObject(value))
+    return false
+  if (value.kind !== 'static' && value.kind !== 'data')
+    return false
+  if (!isObject(value.topology))
+    return false
+  return Array.isArray(value.topology.columns)
+    && Array.isArray(value.topology.rows)
+    && isObject(value.layout)
+}
+
+function isBandsTableInput(value: Record<string, unknown>): value is Record<string, unknown> & BandsTableInput {
+  if (!isObject(value.topology) || !Array.isArray(value.topology.columns) || !Array.isArray(value.topology.rows))
+    return false
+  if (!Array.isArray(value.bands))
+    return false
+  return value.bands.every((band): band is { kind: string, rowRange: { start: number, end: number } } => {
+    if (!isObject(band) || typeof band.kind !== 'string' || !isObject(band.rowRange))
+      return false
+    return typeof band.rowRange.start === 'number' && typeof band.rowRange.end === 'number'
+  })
+}
+
+function readTableLayout(raw: Record<string, unknown>): TableSchema['layout'] {
+  const layout: TableSchema['layout'] = {}
+  if (typeof raw.equalizeCells === 'boolean')
+    layout.equalizeCells = raw.equalizeCells
+  if (typeof raw.gap === 'number')
+    layout.gap = raw.gap
+  if (raw.borderAppearance === 'all' || raw.borderAppearance === 'outer' || raw.borderAppearance === 'inner' || raw.borderAppearance === 'none')
+    layout.borderAppearance = raw.borderAppearance
+  if (typeof raw.borderWidth === 'number')
+    layout.borderWidth = raw.borderWidth
+  if (raw.borderType === 'solid' || raw.borderType === 'dashed' || raw.borderType === 'dotted')
+    layout.borderType = raw.borderType
+  if (typeof raw.borderColor === 'string')
+    layout.borderColor = raw.borderColor
+  if (typeof raw.fillBlankRows === 'boolean')
+    layout.fillBlankRows = raw.fillBlankRows
+  return layout
 }
 
 /**
@@ -528,8 +577,8 @@ function migrateTableDataRows(rows: TableRowSchema[]): TableRowSchema[] {
 }
 
 /** Migrate flat fontSize/color to typography object. */
-function migrateTablePropsTypography(node: Record<string, unknown>): void {
-  const props = node.props as Record<string, unknown> | undefined
+function migrateTablePropsTypography(node: MaterialNode): void {
+  const props = node.props
   if (!props)
     return
   // Skip if already migrated
@@ -553,19 +602,18 @@ function migrateTablePropsTypography(node: Record<string, unknown>): void {
 
 /** Migrate cell.props.textAlign to cell.typography.textAlign. */
 function migrateCellTypography(cell: TableCellSchema): void {
-  const textAlign = (cell.props as Record<string, unknown> | undefined)?.textAlign
+  const textAlign = cell.props?.textAlign
   if (textAlign && typeof textAlign === 'string') {
     if (!cell.typography)
       cell.typography = {}
     cell.typography.textAlign = textAlign as 'left' | 'center' | 'right'
-    const p = cell.props as Record<string, unknown>
-    delete p.textAlign
+    delete cell.props?.textAlign
   }
 }
 
 /** Apply v2 migrations to a decoded table element. */
-function migrateTableV2(node: Record<string, unknown>, tableType: string): void {
-  const table = node.table as TableSchema | undefined
+function migrateTableV2(node: MaterialNode & { table?: TableSchema }, tableType: string): void {
+  const table = node.table
   if (!table)
     return
 

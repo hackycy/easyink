@@ -1,10 +1,11 @@
 import type { MaterialNode } from '@easyink/schema'
 import type { BarcodeProps } from './schema'
+import { getNodeProps } from '@easyink/schema'
 import { escapeHtml } from '@easyink/shared'
 import { generateBarcodeSvg } from './render'
 
 export function renderBarcode(node: MaterialNode) {
-  const props = node.props as unknown as BarcodeProps
+  const props = getNodeProps<BarcodeProps>(node)
   const value = props.value || ''
 
   if (!value) {

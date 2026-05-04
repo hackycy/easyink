@@ -1,7 +1,7 @@
 import type { EphemeralPanelDef, PropertyPanelOverlay } from '@easyink/core'
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import type { LocaleMessages, MaterialCatalogEntry, MaterialDefinition, MaterialDesignerExtension, MaterialExtensionFactory, PreferenceProvider, SnapLine } from '../types'
-import { CommandManager, SelectionModel } from '@easyink/core'
+import { CommandManager, FontManager, SelectionModel } from '@easyink/core'
 import { DataSourceRegistry } from '@easyink/datasource'
 import { createDefaultSchema } from '@easyink/schema'
 import { markRaw } from 'vue'
@@ -29,6 +29,7 @@ export class DesignerStore {
                                                           * surface them. See `./diagnostics.ts` for rationale.
                                                           */
   readonly diagnostics = new DiagnosticsChannel()
+  readonly fontManager = new FontManager()
   // ─── Clipboard (internal, not in Schema) ──────────────────────
   clipboard: MaterialNode[] = []
 

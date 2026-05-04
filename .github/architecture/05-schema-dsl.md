@@ -171,7 +171,7 @@ interface PagePrintConfig {
 规范模型中，EasyInk 仍然把公共几何字段提升到节点根部，避免所有物料都把 `x/y/width/height` 藏在 `props` 里。
 
 ```typescript
-interface MaterialNode {
+interface MaterialNode<TProps extends object = Record<string, unknown>> {
   id: string
   type: string
   name?: string
@@ -186,7 +186,7 @@ interface MaterialNode {
   hidden?: boolean
   locked?: boolean
   print?: PrintBehavior
-  props: Record<string, unknown>
+  props: TProps
   binding?: BindingRef | BindingRef[]
   animations?: AnimationSchema[]
   children?: MaterialNode[]
@@ -203,6 +203,8 @@ interface BenchmarkElementCompatState {
   passthrough?: Record<string, unknown>
 }
 ```
+
+`MaterialNode` 的泛型只表达编译期所有权：schema 层仍把外部输入视为开放对象，具体物料在自己的包内通过 `MaterialNode<TextProps>` 或 `getNodeProps<TextProps>(node)` 获得类型化 props。不要在业务代码中使用 `as unknown as XxxProps` 穿透类型系统；如果数据来自 codec / MCP / migration 等不可信边界，先做最小形状校验，再进入规范模型。
 
 为什么保留 `children`：
 
@@ -303,7 +305,7 @@ const bwipBindings: BindingRef[] = [
 数据表格、静态表格等结构物料要有独立结构模型，而不是让 `props` 自由生长。
 
 ```typescript
-interface TableNode extends MaterialNode {
+interface TableNode<TProps extends object = Record<string, unknown>> extends MaterialNode<TProps> {
   type: 'table-static' | 'table-data'
   table: TableSchema | TableDataSchema
 }
@@ -531,7 +533,7 @@ TableCellSchema.typography (单元格级别)
 
 ### TableNode 类型访问
 
-schema 包通过 TypeScript 类型拓展声明 `TableNode extends MaterialNode`，其中 `table` 字段类型为 `TableSchema | TableDataSchema`。运行时通过判别函数 `isTableNode(node)` 访问 `node.table`，通过 `isTableDataNode(node)` 进一步窄化为 `TableDataSchema`（含 `showHeader`、`showFooter` 字段）。不破坏 `MaterialNode` 基础类型，但类型层明确。实际存储中表格数据位于 `node.table` 顶层字段，不再使用 `node.extensions.table`。
+schema 包通过 TypeScript 类型拓展声明 `TableNode<TProps = Record<string, unknown>> extends MaterialNode<TProps>`，其中 `table` 字段类型为 `TableSchema | TableDataSchema`。运行时通过判别函数 `isTableNode(node)` 访问 `node.table`，通过 `isTableDataNode(node)` 进一步窄化为 `TableDataSchema`（含 `showHeader`、`showFooter` 字段）。不破坏 `MaterialNode` 基础类型，但类型层明确。实际存储中表格数据位于 `node.table` 顶层字段，不再使用 `node.extensions.table`。
 
 ## 5.7 动画与扩展
 

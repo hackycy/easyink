@@ -5,86 +5,35 @@ import type { MaterialNode } from '@easyink/schema'
 import type { ElementDragContext } from './use-element-drag'
 import { MoveMaterialCommand } from '@easyink/core'
 import { describe, expect, it, vi } from 'vitest'
+import { DesignerStore } from '../store/designer-store'
 import { useElementDrag } from './use-element-drag'
-
-interface FakeStore {
-  schema: {
-    unit: 'px'
-    page: { width: number, height: number, grid?: { enabled: boolean, width: number, height: number } }
-    guides: { x: number[], y: number[] }
-    elements: MaterialNode[]
-  }
-  workbench: {
-    viewport: { zoom: number }
-    snap: {
-      enabled: boolean
-      gridSnap: boolean
-      guideSnap: boolean
-      elementSnap: boolean
-      threshold: number
-    }
-  }
-  snapActiveLines: readonly unknown[]
-  selection: {
-    ids: string[]
-    has: (id: string) => boolean
-  }
-  commands: {
-    execute: ReturnType<typeof vi.fn>
-    beginTransaction: ReturnType<typeof vi.fn>
-    commitTransaction: ReturnType<typeof vi.fn>
-    rollbackTransaction: ReturnType<typeof vi.fn>
-  }
-  getElementById: (id: string) => MaterialNode | undefined
-  getElements: () => MaterialNode[]
-  getVisualHeight: (n: MaterialNode) => number
-  getVisualSize: (n: MaterialNode) => { width: number, height: number }
-}
 
 function makeNode(id: string, x: number, y: number, w = 50, h = 50): MaterialNode {
   return { id, type: 'rect', x, y, width: w, height: h, props: {} } as MaterialNode
 }
 
-function makeStore(elements: MaterialNode[], selected: string[]): FakeStore {
-  const sel = new Set(selected)
-  return {
-    schema: {
-      unit: 'px',
-      page: { width: 1000, height: 1000 },
-      guides: { x: [], y: [] },
-      elements,
-    },
-    workbench: {
-      viewport: { zoom: 1 },
-      snap: {
-        enabled: true,
-        gridSnap: false,
-        guideSnap: false,
-        elementSnap: false,
-        threshold: 3,
-      },
-    },
-    snapActiveLines: [],
-    selection: {
-      get ids() {
-        return [...sel]
-      },
-      has: (id: string) => sel.has(id),
-    },
-    commands: {
-      execute: vi.fn(),
-      beginTransaction: vi.fn(),
-      commitTransaction: vi.fn(),
-      rollbackTransaction: vi.fn(),
-    },
-    getElementById: (id: string) => elements.find(e => e.id === id),
-    getElements: () => elements,
-    getVisualHeight: (n: MaterialNode) => n.height,
-    getVisualSize: (n: MaterialNode) => ({ width: n.width, height: n.height }),
-  }
+function makeStore(elements: MaterialNode[], selected: string[]): DesignerStore {
+  const store = new DesignerStore({
+    version: '1.0.0',
+    unit: 'px',
+    page: { mode: 'fixed', width: 1000, height: 1000 },
+    guides: { x: [], y: [] },
+    elements,
+  })
+  store.workbench.snap.enabled = true
+  store.workbench.snap.gridSnap = false
+  store.workbench.snap.guideSnap = false
+  store.workbench.snap.elementSnap = false
+  store.workbench.snap.threshold = 3
+  store.selection.selectMultiple(selected)
+  vi.spyOn(store.commands, 'execute')
+  vi.spyOn(store.commands, 'beginTransaction')
+  vi.spyOn(store.commands, 'commitTransaction')
+  vi.spyOn(store.commands, 'rollbackTransaction')
+  return store
 }
 
-function makeCtx(store: FakeStore, onDragMoved?: () => void): ElementDragContext {
+function makeCtx(store: DesignerStore, onDragMoved?: () => void): ElementDragContext {
   const pageEl = document.createElement('div')
   // page rect at (0, 0) 1000x1000 — getBoundingClientRect in happy-dom defaults to zeroes
   pageEl.getBoundingClientRect = () => ({
@@ -100,7 +49,7 @@ function makeCtx(store: FakeStore, onDragMoved?: () => void): ElementDragContext
   })
   document.body.appendChild(pageEl)
   return {
-    store: store as unknown as ElementDragContext['store'],
+    store,
     getPageEl: () => pageEl,
     getScrollEl: () => pageEl,
     onDragMoved,
@@ -142,7 +91,7 @@ describe('useElementDrag', () => {
 
     window.dispatchEvent(pdEvent('pointerup', 30, 40))
     expect(store.commands.execute).toHaveBeenCalledOnce()
-    expect(store.commands.execute.mock.calls[0]![0]).toBeInstanceOf(MoveMaterialCommand)
+    expect(vi.mocked(store.commands.execute).mock.calls[0]![0]).toBeInstanceOf(MoveMaterialCommand)
   })
 
   it('multi-selection moves every selected node by the same delta', () => {

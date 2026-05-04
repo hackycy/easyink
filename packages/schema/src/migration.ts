@@ -1,5 +1,6 @@
 import type { DocumentSchema } from './types'
 import { SCHEMA_VERSION } from '@easyink/shared'
+import { validateSchema } from './validation'
 
 export type MigrationFunction = (schema: Record<string, unknown>) => DocumentSchema
 
@@ -53,7 +54,7 @@ export class MigrationRegistry {
     const currentMajor = parseMajor(SCHEMA_VERSION)
 
     if (fromMajor >= currentMajor) {
-      return schema as unknown as DocumentSchema
+      return toDocumentSchema(schema)
     }
 
     let current: Record<string, unknown> = schema
@@ -64,11 +65,11 @@ export class MigrationRegistry {
       if (!entry) {
         throw new Error(`No migration registered for major version ${major}`)
       }
-      current = entry.migrate(current) as unknown as Record<string, unknown>
+      current = { ...entry.migrate(current) }
       major = parseMajor(entry.to)
     }
 
-    const result = current as unknown as DocumentSchema
+    const result = toDocumentSchema(current)
     result.version = SCHEMA_VERSION
     return result
   }
@@ -76,6 +77,17 @@ export class MigrationRegistry {
   clear(): void {
     this.migrations = []
   }
+}
+
+function toDocumentSchema(schema: Record<string, unknown>): DocumentSchema {
+  assertDocumentSchema(schema)
+  return schema
+}
+
+function assertDocumentSchema(schema: Record<string, unknown>): asserts schema is Record<string, unknown> & DocumentSchema {
+  const errors = validateSchema(schema)
+  if (errors.length > 0)
+    throw new Error(`Invalid schema after migration: ${errors.join('; ')}`)
 }
 
 function parseMajor(version: string): number {

@@ -136,8 +136,7 @@ export function createTableKeyboardNavBehavior(delegate: TableEditingDelegate): 
       if (event.key === 'Delete') {
         event.originalEvent.preventDefault()
         event.originalEvent.stopPropagation()
-        ctx.tx.run(node.id, (draft) => {
-          const d = draft as unknown as TableNode
+        ctx.tx.run<TableNode>(node.id, (d) => {
           const cell = d.table.topology.rows[payload.row]?.cells[payload.col]
           if (cell) {
             cell.content = { text: '' }
@@ -233,8 +232,7 @@ export function createTableResizeBehavior(delegate: TableEditingDelegate): Behav
         const widths = cols.map(c => c.ratio * node.width)
         widths[p.index] = Math.max(minColWidth, widths[p.index]! + docDelta)
         const newTableWidth = widths.reduce((s, w) => s + w, 0)
-        ctx.tx.run(node.id, (draft) => {
-          const d = draft as unknown as TableNode
+        ctx.tx.run<TableNode>(node.id, (d) => {
           d.width = newTableWidth
           for (let i = 0; i < d.table.topology.columns.length; i++)
             d.table.topology.columns[i]!.ratio = widths[i]! / newTableWidth
@@ -258,8 +256,7 @@ export function createTableResizeBehavior(delegate: TableEditingDelegate): Behav
         const heights = rows.map(r => r.height * oldScale)
         heights[p.index] = Math.max(minRowHeight, heights[p.index]! + docDelta)
         const newTableHeight = heights.reduce((s, h) => s + h, 0)
-        ctx.tx.run(node.id, (draft) => {
-          const d = draft as unknown as TableNode
+        ctx.tx.run<TableNode>(node.id, (d) => {
           d.height = newTableHeight
           for (let i = 0; i < d.table.topology.rows.length; i++)
             d.table.topology.rows[i]!.height = heights[i]!
@@ -291,8 +288,7 @@ export function createTableCommandHandlerBehavior(delegate: TableEditingDelegate
           const p = event.payload as { row: number, col: number, text: string }
           if (!p)
             break
-          ctx.tx.run(node.id, (draft) => {
-            const d = draft as unknown as TableNode
+          ctx.tx.run<TableNode>(node.id, (d) => {
             const c = d.table.topology.rows[p.row]?.cells[p.col]
             if (c) {
               if (!c.content)
@@ -304,8 +300,7 @@ export function createTableCommandHandlerBehavior(delegate: TableEditingDelegate
         }
 
         case 'insert-row-above':
-          ctx.tx.run(node.id, (draft) => {
-            const d = draft as unknown as TableNode
+          ctx.tx.run<TableNode>(node.id, (d) => {
             const colCount = d.table.topology.columns.length
             const avgHeight = d.table.topology.rows[row]?.height ?? convertUnit(8, 'mm', delegate.getUnit())
             d.table.topology.rows.splice(row, 0, {
@@ -323,8 +318,7 @@ export function createTableCommandHandlerBehavior(delegate: TableEditingDelegate
           break
 
         case 'insert-row-below':
-          ctx.tx.run(node.id, (draft) => {
-            const d = draft as unknown as TableNode
+          ctx.tx.run<TableNode>(node.id, (d) => {
             const colCount = d.table.topology.columns.length
             const avgHeight = d.table.topology.rows[row]?.height ?? convertUnit(8, 'mm', delegate.getUnit())
             d.table.topology.rows.splice(row + 1, 0, {
@@ -341,8 +335,7 @@ export function createTableCommandHandlerBehavior(delegate: TableEditingDelegate
             break
           const removedHeight = node.table.topology.rows[row]?.height ?? 0
           const rowScale = computeRowScale(node.table.topology.rows, node.height)
-          ctx.tx.run(node.id, (draft) => {
-            const d = draft as unknown as TableNode
+          ctx.tx.run<TableNode>(node.id, (d) => {
             d.table.topology.rows.splice(row, 1)
             d.height -= removedHeight * rowScale
           }, { label: 'Remove row' })
@@ -356,8 +349,7 @@ export function createTableCommandHandlerBehavior(delegate: TableEditingDelegate
         }
 
         case 'insert-col-left':
-          ctx.tx.run(node.id, (draft) => {
-            const d = draft as unknown as TableNode
+          ctx.tx.run<TableNode>(node.id, (d) => {
             const totalRatio = d.table.topology.columns.reduce((s, c) => s + c.ratio, 0)
             const newRatio = totalRatio / d.table.topology.columns.length
             d.table.topology.columns.splice(col, 0, { ratio: newRatio })
@@ -374,8 +366,7 @@ export function createTableCommandHandlerBehavior(delegate: TableEditingDelegate
           break
 
         case 'insert-col-right':
-          ctx.tx.run(node.id, (draft) => {
-            const d = draft as unknown as TableNode
+          ctx.tx.run<TableNode>(node.id, (d) => {
             const totalRatio = d.table.topology.columns.reduce((s, c) => s + c.ratio, 0)
             const newRatio = totalRatio / d.table.topology.columns.length
             d.table.topology.columns.splice(col + 1, 0, { ratio: newRatio })
@@ -391,8 +382,7 @@ export function createTableCommandHandlerBehavior(delegate: TableEditingDelegate
             break
           const removedRatio = node.table.topology.columns[col]?.ratio ?? 0
           const totalRatio = node.table.topology.columns.reduce((s, c) => s + c.ratio, 0)
-          ctx.tx.run(node.id, (draft) => {
-            const d = draft as unknown as TableNode
+          ctx.tx.run<TableNode>(node.id, (d) => {
             d.table.topology.columns.splice(col, 1)
             for (const r of d.table.topology.rows) {
               r.cells.splice(col, 1)
@@ -417,8 +407,7 @@ export function createTableCommandHandlerBehavior(delegate: TableEditingDelegate
           const rs = cell?.rowSpan ?? 1
           if (!validateMerge(node, row, col, rs, ncs))
             break
-          ctx.tx.run(node.id, (draft) => {
-            const d = draft as unknown as TableNode
+          ctx.tx.run<TableNode>(node.id, (d) => {
             const draftRow = d.table.topology.rows[row]
             const c = draftRow?.cells[col]
             if (!c)
@@ -437,8 +426,7 @@ export function createTableCommandHandlerBehavior(delegate: TableEditingDelegate
           const cs = cell?.colSpan ?? 1
           if (!validateMerge(node, row, col, nrs, cs))
             break
-          ctx.tx.run(node.id, (draft) => {
-            const d = draft as unknown as TableNode
+          ctx.tx.run<TableNode>(node.id, (d) => {
             const draftRow = d.table.topology.rows[row]
             const c = draftRow?.cells[col]
             if (!c)
@@ -452,8 +440,7 @@ export function createTableCommandHandlerBehavior(delegate: TableEditingDelegate
           const cell = node.table.topology.rows[row]?.cells[col]
           if (!cell || ((cell.colSpan ?? 1) <= 1 && (cell.rowSpan ?? 1) <= 1))
             break
-          ctx.tx.run(node.id, (draft) => {
-            const d = draft as unknown as TableNode
+          ctx.tx.run<TableNode>(node.id, (d) => {
             const draftRow = d.table.topology.rows[row]
             const c = draftRow?.cells[col]
             if (!c)
@@ -468,8 +455,7 @@ export function createTableCommandHandlerBehavior(delegate: TableEditingDelegate
         case 'align-center':
         case 'align-right': {
           const align = event.command.replace('align-', '') as 'left' | 'center' | 'right'
-          ctx.tx.run(node.id, (draft) => {
-            const d = draft as unknown as TableNode
+          ctx.tx.run<TableNode>(node.id, (d) => {
             const draftRow = d.table.topology.rows[row]
             const c = draftRow?.cells[col]
             if (!c)
@@ -485,8 +471,7 @@ export function createTableCommandHandlerBehavior(delegate: TableEditingDelegate
         case 'valign-middle':
         case 'valign-bottom': {
           const valign = event.command.replace('valign-', '') as 'top' | 'middle' | 'bottom'
-          ctx.tx.run(node.id, (draft) => {
-            const d = draft as unknown as TableNode
+          ctx.tx.run<TableNode>(node.id, (d) => {
             const draftRow = d.table.topology.rows[row]
             const c = draftRow?.cells[col]
             if (!c)

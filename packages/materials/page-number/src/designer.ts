@@ -1,10 +1,11 @@
 import type { MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { PageNumberProps } from './schema'
+import { getNodeProps } from '@easyink/schema'
 import { escapeHtml } from '@easyink/shared'
 
 function buildHtml(node: MaterialNode, unit: string): string {
-  const p = node.props as unknown as PageNumberProps
+  const p = getNodeProps<PageNumberProps>(node)
   const display = escapeHtml(p.format || '{current}/{total}')
 
   const vAlignMap: Record<string, string> = { top: 'flex-start', middle: 'center', bottom: 'flex-end' }

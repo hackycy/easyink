@@ -8,13 +8,14 @@ function makeNode(): MaterialNode {
 }
 
 function makeContext(selection: { type: string, nodeId: string, payload: unknown } | null = null): Omit<BehaviorContext, 'event' | 'meta'> {
+  const selectionStore: SelectionStore = { selection, set: vi.fn() }
   return {
     selection,
     node: makeNode(),
     materialGeometry: {} as MaterialGeometry,
     tx: {} as TransactionAPI,
     geometry: {} as GeometryService,
-    selectionStore: { selection, set: vi.fn() } as unknown as SelectionStore,
+    selectionStore,
     surfaces: {} as SurfacesAPI,
     session: {} as EditingSessionRef,
   }

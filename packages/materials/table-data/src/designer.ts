@@ -28,11 +28,16 @@ import {
   renderTableHtml,
   resolveMergeOwner,
 } from '@easyink/material-table-kernel'
-import { isTableNode } from '@easyink/schema'
+import { getNodeProps, isTableNode } from '@easyink/schema'
 
 const ROLE_BG_MAP: Record<string, keyof TableDataProps> = {
   header: 'headerBackground',
   footer: 'summaryBackground',
+}
+
+function readRowBackground(props: TableDataProps, key: keyof TableDataProps): string {
+  const value = props[key]
+  return typeof value === 'string' ? value : ''
 }
 
 /**
@@ -57,7 +62,7 @@ function buildHtml(node: MaterialNode, unit: UnitType, context: MaterialExtensio
     return `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#999;font-size:11px">table-data</div>`
   }
 
-  const p = node.props as unknown as TableDataProps
+  const p = getNodeProps<TableDataProps>(node)
   const hidden = getHiddenRowMask(node)
 
   // Find the repeat-template row for placeholder rendering
@@ -130,7 +135,7 @@ function buildHtml(node: MaterialNode, unit: UnitType, context: MaterialExtensio
       if (hidden[ri])
         return { skip: true }
       const bgKey = ROLE_BG_MAP[row.role]
-      const bg = bgKey ? (p as unknown as Record<string, string>)[bgKey] || '' : ''
+      const bg = bgKey ? readRowBackground(p, bgKey) : ''
       if (bg)
         return { cellStyle: `;background:${bg}` }
       if (p.stripedRows && p.stripedColor && !bgKey && ri % 2 === 1)
@@ -234,14 +239,12 @@ function createDatasourceDropHandler(context: MaterialExtensionContext): Datasou
         if (existingPrefixes.length > 0 && existingPrefixes[0] !== incomingPrefix)
           return
 
-        context.tx.run(node.id, (draft) => {
-          const d = draft as unknown as TableNode
+        context.tx.run<TableNode>(node.id, (d) => {
           d.table.topology.rows[cell.row]!.cells[cell.col]!.binding = { ...binding }
         }, { label: 'Bind data field' })
       }
       else {
-        context.tx.run(node.id, (draft) => {
-          const d = draft as unknown as TableNode
+        context.tx.run<TableNode>(node.id, (d) => {
           const c = d.table.topology.rows[cell.row]!.cells[cell.col]!
           c.staticBinding = { ...binding }
           c.content = undefined

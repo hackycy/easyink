@@ -1,6 +1,7 @@
 import type { MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { BarcodeProps } from './schema'
+import { getNodeProps } from '@easyink/schema'
 import { escapeHtml } from '@easyink/shared'
 import { generateBarcodeSvg } from './render'
 
@@ -37,7 +38,7 @@ function buildErrorPlaceholder(p: BarcodeProps, value: string): string {
 }
 
 function buildHtml(node: MaterialNode, context: MaterialExtensionContext): string {
-  const p = node.props as unknown as BarcodeProps
+  const p = getNodeProps<BarcodeProps>(node)
   const unit = context.getSchema().unit
   const DASH_MAP: Record<string, string> = { dashed: 'dashed', dotted: 'dotted' }
   const borderStyle = p.borderWidth ? `border:${p.borderWidth}${unit} ${DASH_MAP[p.borderType] || 'solid'} ${p.borderColor};box-sizing:border-box;` : ''

@@ -1,9 +1,10 @@
 import type { MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { ContainerProps } from './schema'
+import { getNodeProps } from '@easyink/schema'
 
 function buildHtml(node: MaterialNode, unit: string): string {
-  const p = node.props as unknown as ContainerProps
+  const p = getNodeProps<ContainerProps>(node)
 
   const childCount = node.children?.length || 0
   const childHint = childCount > 0

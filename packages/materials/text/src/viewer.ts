@@ -1,9 +1,10 @@
 import type { MaterialNode } from '@easyink/schema'
 import type { TextProps } from './schema'
+import { getNodeProps } from '@easyink/schema'
 import { escapeHtml } from '@easyink/shared'
 
 export function renderText(node: MaterialNode, _data?: Record<string, unknown>, unit = 'mm') {
-  const props = node.props as unknown as TextProps
+  const props = getNodeProps<TextProps>(node)
   const prefix = props.prefix ? escapeHtml(props.prefix) : ''
   const suffix = props.suffix ? escapeHtml(props.suffix) : ''
   const raw = props.content || ''

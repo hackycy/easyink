@@ -1,8 +1,9 @@
 import type { MaterialNode } from '@easyink/schema'
 import type { ContainerProps } from './schema'
+import { getNodeProps } from '@easyink/schema'
 
 export function renderContainer(node: MaterialNode, unit = 'mm') {
-  const props = node.props as unknown as ContainerProps
+  const props = getNodeProps<ContainerProps>(node)
   const border = props.borderWidth > 0
     ? `border:${props.borderWidth}${unit} ${props.borderType} ${props.borderColor};`
     : ''

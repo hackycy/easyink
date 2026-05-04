@@ -26,14 +26,14 @@ import {
   renderTableHtml,
   resolveMergeOwner,
 } from '@easyink/material-table-kernel'
-import { isTableNode } from '@easyink/schema'
+import { getNodeProps, isTableNode } from '@easyink/schema'
 
 function buildHtml(node: MaterialNode, unit: UnitType, context: MaterialExtensionContext): string {
   if (!isTableNode(node)) {
     return `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#999;font-size:11px">table-static</div>`
   }
 
-  const p = node.props as unknown as TableStaticProps
+  const p = getNodeProps<TableStaticProps>(node)
   return renderTableHtml({
     topology: node.table.topology,
     props: p,
@@ -106,8 +106,7 @@ function createDatasourceDropHandler(context: MaterialExtensionContext): Datasou
         format: field.format,
       }
 
-      context.tx.run(node.id, (draft) => {
-        const d = draft as unknown as TableNode
+      context.tx.run<TableNode>(node.id, (d) => {
         const c = d.table.topology.rows[cell.row]!.cells[cell.col]!
         c.staticBinding = { ...binding }
         c.content = undefined

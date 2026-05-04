@@ -31,19 +31,19 @@ import { useCanvasInteractionController } from './canvas-interaction-controller'
 
 function plainExtension(): MaterialDesignerExtension {
   return {
-    renderContent: () => undefined,
-  } as unknown as MaterialDesignerExtension
+    renderContent: () => () => {},
+  }
 }
 
 function geometryExtension(): MaterialDesignerExtension {
   return {
-    renderContent: () => undefined,
+    renderContent: () => () => {},
     geometry: {
-      hitTest: () => ({ kind: 'cell', payload: { row: 0, col: 0 } }),
-      canvasToLocal: (p: { x: number, y: number }) => p,
-      localToCanvas: (p: { x: number, y: number }) => p,
+      getContentLayout: () => ({ contentBox: { x: 0, y: 0, width: 100, height: 50 } }),
+      resolveLocation: () => [],
+      hitTest: (_point, node) => ({ type: 'test.cell', nodeId: node.id, payload: { row: 0, col: 0 } }),
     },
-  } as unknown as MaterialDesignerExtension
+  }
 }
 
 function makePageEl(): HTMLElement {

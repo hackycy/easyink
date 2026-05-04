@@ -1,9 +1,10 @@
 import type { MaterialNode } from '@easyink/schema'
 import type { QrcodeProps } from './schema'
+import { getNodeProps } from '@easyink/schema'
 import { generateQrcodeSvg } from './render'
 
 export function renderQrcode(node: MaterialNode) {
-  const props = node.props as unknown as QrcodeProps
+  const props = getNodeProps<QrcodeProps>(node)
   const value = props.value || ''
 
   if (!value) {

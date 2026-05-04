@@ -155,7 +155,7 @@ export interface EphemeralPanelDef {
 /** Transaction API for draft-based mutations. */
 export interface TransactionAPI {
   /** Run a mutation on a node. Generates patches and creates a PatchCommand. */
-  run: (nodeId: string, mutator: (draft: MaterialNode) => void, options?: TxOptions) => void
+  run: <TNode extends MaterialNode = MaterialNode>(nodeId: string, mutator: (draft: TNode) => void, options?: TxOptions) => void
   /** Batch multiple run() calls into a single Command. */
   batch: <T>(fn: () => T) => T
 }

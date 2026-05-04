@@ -21,7 +21,7 @@ export function createTransactionService(
   diagnostics?: DiagnosticsChannel,
 ): TransactionAPI {
   return {
-    run(nodeId: string, mutator: (draft: MaterialNode) => void, options?: TxOptions): void {
+    run<TNode extends MaterialNode = MaterialNode>(nodeId: string, mutator: (draft: TNode) => void, options?: TxOptions): void {
       const node = getNode(nodeId)
       if (!node) {
         throw new Error(`[EasyInk] tx.run: node "${nodeId}" not found`)
@@ -31,7 +31,7 @@ export function createTransactionService(
       const [, patches, inversePatches] = create(
         node,
         (draft) => {
-          mutator(draft as MaterialNode)
+          mutator(draft as TNode)
         },
         { enablePatches: true },
       )

@@ -16,8 +16,8 @@ function pdEvent(name: string, x = 0, y = 0): PointerEvent {
 function makeTarget(): HTMLElement {
   const el = document.createElement('div')
   // happy-dom: stub capture API so the helper exercises its real path.
-  ;(el as unknown as { setPointerCapture: (id: number) => void }).setPointerCapture = () => {}
-  ;(el as unknown as { releasePointerCapture: (id: number) => void }).releasePointerCapture = () => {}
+  el.setPointerCapture = () => {}
+  el.releasePointerCapture = () => {}
   document.body.appendChild(el)
   return el
 }
@@ -75,10 +75,10 @@ describe('createPointerGesture', () => {
 
   it('survives a setPointerCapture that throws', () => {
     const target = document.createElement('div')
-    ;(target as unknown as { setPointerCapture: () => void }).setPointerCapture = () => {
+    target.setPointerCapture = () => {
       throw new Error('no capture')
     }
-    ;(target as unknown as { releasePointerCapture: () => void }).releasePointerCapture = () => {}
+    target.releasePointerCapture = () => {}
     document.body.appendChild(target)
     const onEnd = vi.fn()
 

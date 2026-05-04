@@ -336,6 +336,39 @@ export class UpdateDocumentCommand implements Command {
 
 type GeometryKey = 'x' | 'y' | 'width' | 'height' | 'rotation' | 'alpha'
 
+function readGeometryValue(node: MaterialNode, key: GeometryKey): number | undefined {
+  switch (key) {
+    case 'x': return node.x
+    case 'y': return node.y
+    case 'width': return node.width
+    case 'height': return node.height
+    case 'rotation': return node.rotation
+    case 'alpha': return node.alpha
+  }
+}
+
+function writeGeometryValue(node: MaterialNode, key: GeometryKey, value: number): void {
+  switch (key) {
+    case 'x':
+      node.x = value
+      return
+    case 'y':
+      node.y = value
+      return
+    case 'width':
+      node.width = value
+      return
+    case 'height':
+      node.height = value
+      return
+    case 'rotation':
+      node.rotation = value
+      return
+    case 'alpha':
+      node.alpha = value
+  }
+}
+
 export class UpdateGeometryCommand implements Command {
   readonly id = generateId('cmd')
   readonly type = 'update-geometry'
@@ -359,8 +392,8 @@ export class UpdateGeometryCommand implements Command {
       return
     for (const key of Object.keys(this.updates) as GeometryKey[]) {
       if (!(key in this.oldValues))
-        this.oldValues[key] = (node as unknown as Record<string, number>)[key]
-      ;(node as unknown as Record<string, number>)[key] = this.updates[key]!
+        this.oldValues[key] = readGeometryValue(node, key)
+      writeGeometryValue(node, key, this.updates[key]!)
     }
   }
 
@@ -369,7 +402,7 @@ export class UpdateGeometryCommand implements Command {
     if (!node)
       return
     for (const key of Object.keys(this.oldValues) as GeometryKey[]) {
-      (node as unknown as Record<string, number>)[key] = this.oldValues[key]!
+      writeGeometryValue(node, key, this.oldValues[key]!)
     }
   }
 

@@ -1,5 +1,6 @@
 import type { MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
 import type { ChartProps } from './schema'
+import { getNodeProps } from '@easyink/schema'
 import { escapeHtml } from '@easyink/shared'
 
 const CHART_ICONS: Record<string, string> = {
@@ -23,7 +24,7 @@ export function createChartExtension(_context: MaterialExtensionContext): Materi
     renderContent(nodeSignal, container) {
       function render() {
         const node = nodeSignal.get()
-        container.innerHTML = buildHtml(node.props as unknown as ChartProps)
+        container.innerHTML = buildHtml(getNodeProps<ChartProps>(node))
       }
       render()
       const unsub = nodeSignal.subscribe(render)

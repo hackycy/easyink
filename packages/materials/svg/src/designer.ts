@@ -1,5 +1,6 @@
 import type { MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
 import type { SvgProps } from './schema'
+import { getNodeProps } from '@easyink/schema'
 import { escapeHtml } from '@easyink/shared'
 import { sanitizeSvgContent } from './sanitize'
 
@@ -20,7 +21,7 @@ export function createSvgExtension(_context: MaterialExtensionContext): Material
     renderContent(nodeSignal, container) {
       function render() {
         const node = nodeSignal.get()
-        container.innerHTML = buildHtml(node.props as unknown as SvgProps)
+        container.innerHTML = buildHtml(getNodeProps<SvgProps>(node))
       }
       render()
       const unsub = nodeSignal.subscribe(render)

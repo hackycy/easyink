@@ -2,10 +2,26 @@ import type { DocumentSchema } from './types'
 import { describe, expect, it } from 'vitest'
 import { MigrationRegistry } from './migration'
 
+function toUnit(value: unknown): DocumentSchema['unit'] {
+  return value === 'mm' || value === 'pt' || value === 'px' ? value : 'mm'
+}
+
+function createMigratedSchema(schema: Record<string, unknown>, extra?: Record<string, unknown>): DocumentSchema {
+  const migrated = {
+    version: '1.0.0',
+    unit: toUnit(schema.unit),
+    page: { mode: 'fixed' as const, width: 210, height: 297 },
+    guides: { x: [], y: [] },
+    elements: [],
+    ...extra,
+  }
+  return migrated
+}
+
 describe('migrationRegistry', () => {
   it('registers a migration', () => {
     const reg = new MigrationRegistry()
-    reg.register(0, '1.0.0', schema => schema as unknown as DocumentSchema)
+    reg.register(0, '1.0.0', schema => createMigratedSchema(schema))
     expect(reg.canMigrate('0.1.0')).toBe(true)
   })
 
@@ -26,28 +42,19 @@ describe('migrationRegistry', () => {
 
   it('getMigrationPath returns the chain of versions', () => {
     const reg = new MigrationRegistry()
-    reg.register(0, '1.0.0', schema => schema as unknown as DocumentSchema)
+    reg.register(0, '1.0.0', schema => createMigratedSchema(schema))
     const path = reg.getMigrationPath('0.5.0')
     expect(path).toEqual(['0.5.0', '1.0.0'])
   })
 
   it('migrate runs the migration chain', () => {
     const reg = new MigrationRegistry()
-    reg.register(0, '1.0.0', (schema) => {
-      return {
-        version: '1.0.0',
-        unit: (schema.unit as string) || 'mm',
-        page: { mode: 'fixed', width: 210, height: 297 },
-        guides: { x: [], y: [] },
-        elements: [],
-        migrated: true,
-      } as unknown as DocumentSchema
-    })
+    reg.register(0, '1.0.0', schema => createMigratedSchema(schema, { migrated: true }))
 
     const input = { version: '0.1.0', unit: 'pt' }
-    const result = reg.migrate(input) as unknown as Record<string, unknown>
+    const result = reg.migrate(input)
     expect(result.version).toBe('1.0.0')
-    expect(result.migrated).toBe(true)
+    expect(result).toMatchObject({ migrated: true })
     expect(result.unit).toBe('pt')
   })
 

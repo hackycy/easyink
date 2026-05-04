@@ -1,10 +1,11 @@
 import type { MaterialNode } from '@easyink/schema'
 import type { RectProps } from './schema'
+import { getNodeProps } from '@easyink/schema'
 
 const DASH_MAP: Record<string, string> = { dashed: '6 3', dotted: '2 2' }
 
 export function renderRect(node: MaterialNode, unit = 'mm') {
-  const props = node.props as unknown as RectProps
+  const props = getNodeProps<RectProps>(node)
   const bw = props.borderWidth || 0
   const bc = props.borderColor || 'transparent'
   const dash = DASH_MAP[props.borderType] || ''

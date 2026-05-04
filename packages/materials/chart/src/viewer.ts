@@ -1,8 +1,9 @@
 import type { MaterialNode } from '@easyink/schema'
 import type { ChartProps } from './schema'
+import { getNodeProps } from '@easyink/schema'
 
 export function renderChart(node: MaterialNode) {
-  const props = node.props as unknown as ChartProps
+  const props = getNodeProps<ChartProps>(node)
 
   return {
     html: `<div style="

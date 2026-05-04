@@ -1,5 +1,6 @@
 import type { MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
 import type { RectProps } from './schema'
+import { getNodeProps } from '@easyink/schema'
 
 const DASH_MAP: Record<string, string> = { dashed: '6 3', dotted: '2 2' }
 
@@ -20,7 +21,7 @@ export function createRectExtension(context: MaterialExtensionContext): Material
     renderContent(nodeSignal, container) {
       function render() {
         const node = nodeSignal.get()
-        container.innerHTML = buildHtml(node.props as unknown as RectProps, context.getSchema().unit)
+        container.innerHTML = buildHtml(getNodeProps<RectProps>(node), context.getSchema().unit)
       }
       render()
       const unsub = nodeSignal.subscribe(render)
