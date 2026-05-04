@@ -419,7 +419,10 @@ export function createTableCommandHandlerBehavior(delegate: TableEditingDelegate
             break
           ctx.tx.run(node.id, (draft) => {
             const d = draft as unknown as TableNode
-            const c = d.table.topology.rows[row]!.cells[col]!
+            const draftRow = d.table.topology.rows[row]
+            const c = draftRow?.cells[col]
+            if (!c)
+              return
             c.colSpan = ncs
           }, { label: 'Merge right' })
           break
@@ -436,7 +439,10 @@ export function createTableCommandHandlerBehavior(delegate: TableEditingDelegate
             break
           ctx.tx.run(node.id, (draft) => {
             const d = draft as unknown as TableNode
-            const c = d.table.topology.rows[row]!.cells[col]!
+            const draftRow = d.table.topology.rows[row]
+            const c = draftRow?.cells[col]
+            if (!c)
+              return
             c.rowSpan = nrs
           }, { label: 'Merge down' })
           break
@@ -448,7 +454,10 @@ export function createTableCommandHandlerBehavior(delegate: TableEditingDelegate
             break
           ctx.tx.run(node.id, (draft) => {
             const d = draft as unknown as TableNode
-            const c = d.table.topology.rows[row]!.cells[col]!
+            const draftRow = d.table.topology.rows[row]
+            const c = draftRow?.cells[col]
+            if (!c)
+              return
             c.colSpan = undefined
             c.rowSpan = undefined
           }, { label: 'Split cell' })
@@ -461,7 +470,10 @@ export function createTableCommandHandlerBehavior(delegate: TableEditingDelegate
           const align = event.command.replace('align-', '') as 'left' | 'center' | 'right'
           ctx.tx.run(node.id, (draft) => {
             const d = draft as unknown as TableNode
-            const c = d.table.topology.rows[row]!.cells[col]!
+            const draftRow = d.table.topology.rows[row]
+            const c = draftRow?.cells[col]
+            if (!c)
+              return
             if (!c.typography)
               c.typography = {}
             c.typography.textAlign = align
@@ -475,7 +487,10 @@ export function createTableCommandHandlerBehavior(delegate: TableEditingDelegate
           const valign = event.command.replace('valign-', '') as 'top' | 'middle' | 'bottom'
           ctx.tx.run(node.id, (draft) => {
             const d = draft as unknown as TableNode
-            const c = d.table.topology.rows[row]!.cells[col]!
+            const draftRow = d.table.topology.rows[row]
+            const c = draftRow?.cells[col]
+            if (!c)
+              return
             if (!c.typography)
               c.typography = {}
             c.typography.verticalAlign = valign
