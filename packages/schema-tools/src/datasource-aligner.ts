@@ -1,6 +1,6 @@
 import type { DataFieldNode, DataSourceDescriptor } from '@easyink/datasource'
 import type { BindingRef, DocumentSchema, MaterialNode } from '@easyink/schema'
-import { FIELD_PATH_SEPARATOR } from '@easyink/shared'
+import { deepClone, FIELD_PATH_SEPARATOR } from '@easyink/shared'
 
 /**
  * Alignment result.
@@ -306,7 +306,7 @@ export class DataSourceAligner {
       return schema
     }
 
-    const fixedSchema = JSON.parse(JSON.stringify(schema)) as DocumentSchema
+    const fixedSchema = deepClone(schema)
 
     // Extract available paths
     const dsFieldPaths = this.extractFieldPaths(alignment.dataSource.fields)

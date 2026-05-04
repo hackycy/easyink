@@ -1,5 +1,5 @@
 import type { BindingRef, DocumentSchema, MaterialNode } from '@easyink/schema'
-import { BLOCKED_PATH_KEYS, FIELD_PATH_SEPARATOR, generateId } from '@easyink/shared'
+import { BLOCKED_PATH_KEYS, deepClone, FIELD_PATH_SEPARATOR, generateId } from '@easyink/shared'
 
 /**
  * Validation error.
@@ -352,10 +352,8 @@ export class SchemaValidator {
    * Auto-fix a schema.
    */
   autoFix(schema: DocumentSchema): { fixed: DocumentSchema, issues: AutoFixedIssue[] } {
-    const fixed = JSON.parse(JSON.stringify(schema)) as DocumentSchema
+    const fixed = deepClone(schema)
     const issues: AutoFixedIssue[] = []
-
-    // Fix version
     if (!fixed.version) {
       const original = fixed.version
       fixed.version = '1.0.0'
@@ -400,7 +398,7 @@ export class SchemaValidator {
  * Normalize all field paths in a schema to use canonical separator.
  */
 export function normalizeAllFieldPaths(schema: DocumentSchema): DocumentSchema {
-  const fixed = JSON.parse(JSON.stringify(schema)) as DocumentSchema
+  const fixed = deepClone(schema)
 
   const traverse = (elements: MaterialNode[]): void => {
     for (const element of elements) {

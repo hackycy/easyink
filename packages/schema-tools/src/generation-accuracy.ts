@@ -1,6 +1,6 @@
 import type { BindingRef, DocumentSchema, MaterialNode } from '@easyink/schema'
 import type { AIGenerationPlan } from '@easyink/shared'
-import { FIELD_PATH_SEPARATOR } from '@easyink/shared'
+import { deepClone, FIELD_PATH_SEPARATOR } from '@easyink/shared'
 
 export interface GenerationRepairIssue {
   code: string
@@ -26,7 +26,7 @@ export function repairGeneratedSchema(
   schema: DocumentSchema,
   options: GenerationAccuracyOptions,
 ): { schema: DocumentSchema, issues: GenerationRepairIssue[] } {
-  const fixed = JSON.parse(JSON.stringify(schema)) as DocumentSchema
+  const fixed = deepClone(schema)
   const issues: GenerationRepairIssue[] = []
 
   applyPagePlan(fixed, options.plan, issues)
