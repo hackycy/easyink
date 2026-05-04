@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { BindingRef, MaterialNode } from '@easyink/schema'
 import type { BindingDisplayFormat, BindingFormatPresetType, BindingPresetFormat } from '@easyink/shared'
-import { IconCheck } from '@easyink/icons'
+import { IconCheck, IconSliders } from '@easyink/icons'
 import { EiButton, EiDialog, EiIcon, EiInput } from '@easyink/ui'
 import { computed, defineAsyncComponent, ref } from 'vue'
 
@@ -325,29 +325,37 @@ function isSamePreset(a: BindingPresetFormat, b: BindingPresetFormat): boolean {
         :key="idx"
         class="ei-binding-section__item"
       >
-        <div class="ei-binding-section__ctx">
-          <div class="ei-binding-section__ctx-pair">
-            <span class="ei-binding-section__ctx-key">{{ t('designer.dataSource.source') }}</span>
-            <span class="ei-binding-section__ctx-val">{{ binding.sourceName || binding.sourceId }}</span>
-          </div>
-          <span class="ei-binding-section__ctx-sep" />
-          <div class="ei-binding-section__ctx-pair">
-            <span class="ei-binding-section__ctx-key">{{ t('designer.dataSource.field') }}</span>
-            <span class="ei-binding-section__ctx-val">{{ binding.fieldLabel || binding.fieldPath }}</span>
+        <div class="ei-binding-section__row">
+          <span class="ei-binding-section__k">{{ t('designer.dataSource.source') }}</span>
+          <span class="ei-binding-section__v">{{ binding.sourceName || binding.sourceId }}</span>
+        </div>
+        <div class="ei-binding-section__row">
+          <span class="ei-binding-section__k">{{ t('designer.dataSource.field') }}</span>
+          <div class="ei-binding-section__field">
+            <span class="ei-binding-section__v">{{ binding.fieldLabel || binding.fieldPath }}</span>
+            <span
+              v-if="binding.fieldLabel"
+              class="ei-binding-section__path"
+              :title="binding.fieldPath"
+            >{{ binding.fieldPath }}</span>
           </div>
         </div>
-        <div class="ei-binding-section__fmt-row">
-          <span
-            class="ei-binding-section__fmt-badge"
-            :data-mode="modeOf(binding)"
-          >{{ modeOf(binding) === 'preset' ? '预设' : modeOf(binding) === 'custom' ? '自定义' : '原始' }}</span>
-          <span class="ei-binding-section__fmt-text">{{ formatSummary(binding) }}</span>
+        <div class="ei-binding-section__row ei-binding-section__row--fmt">
+          <span class="ei-binding-section__k">格式</span>
+          <div class="ei-binding-section__fmt-body">
+            <span
+              class="ei-binding-section__fmt-badge"
+              :data-mode="modeOf(binding)"
+            >{{ modeOf(binding) === 'preset' ? '预设' : modeOf(binding) === 'custom' ? '自定义' : '原始' }}</span>
+            <span class="ei-binding-section__fmt-text">{{ formatSummary(binding) }}</span>
+          </div>
           <button
             class="ei-binding-section__fmt-btn"
             type="button"
+            :title="t('designer.bindingFormat.configure')"
             @click="openFormatDialog(binding, idx)"
           >
-            {{ t('designer.bindingFormat.configure') }}
+            <EiIcon :icon="IconSliders" :size="12" />
           </button>
         </div>
       </div>
@@ -370,100 +378,82 @@ function isSamePreset(a: BindingPresetFormat, b: BindingPresetFormat): boolean {
         @confirm="confirmFormatDialog"
       >
         <div class="ei-bfd">
-          <!-- Context strip -->
-          <div v-if="activeBinding" class="ei-bfd__ctx">
-            <div class="ei-bfd__ctx-item">
-              <span class="ei-bfd__ctx-key">{{ t('designer.dataSource.source') }}</span>
-              <span class="ei-bfd__ctx-val">{{ activeBinding.sourceName || activeBinding.sourceId }}</span>
-            </div>
-            <span class="ei-bfd__ctx-sep" />
-            <div class="ei-bfd__ctx-item">
-              <span class="ei-bfd__ctx-key">{{ t('designer.dataSource.field') }}</span>
-              <span class="ei-bfd__ctx-val">{{ activeBinding.fieldLabel || activeBinding.fieldPath }}</span>
-            </div>
+          <!-- Tab switcher -->
+          <div class="ei-bfd__tabs">
+            <button
+              v-for="option in modeOptions"
+              :key="option.value"
+              class="ei-bfd__tab"
+              :class="{ 'ei-bfd__tab--active': activeTab === option.value }"
+              type="button"
+              @click="updateDraftMode(option.value)"
+            >
+              {{ option.label }}
+            </button>
           </div>
 
-          <!-- Format section -->
-          <div class="ei-bfd__block">
-            <div class="ei-bfd__block-head">
-              <span class="ei-bfd__block-title">转换格式</span>
-              <div class="ei-bfd__seg">
+          <!-- Preset mode -->
+          <div v-if="activeTab === 'preset'" class="ei-bfd__preset-content">
+            <!-- Prefix -->
+            <div class="ei-bfd__affix-row">
+              <span class="ei-bfd__affix-label">{{ t('designer.bindingFormat.prefix') }}</span>
+              <EiInput
+                :model-value="draftFormat.prefix || ''"
+                @update:model-value="value => updateDraftTextField('prefix', value)"
+              />
+            </div>
+
+            <!-- Preset groups -->
+            <div
+              v-for="group in presetGroups"
+              :key="group.label"
+              class="ei-bfd__group"
+            >
+              <div class="ei-bfd__group-label">
+                {{ group.label }}
+              </div>
+              <div class="ei-bfd__chips">
                 <button
-                  v-for="option in modeOptions"
-                  :key="option.value"
-                  class="ei-bfd__seg-btn"
-                  :class="{ 'ei-bfd__seg-btn--active': activeTab === option.value }"
+                  v-for="choice in group.choices"
+                  :key="choice.id"
+                  class="ei-bfd__chip"
+                  :class="{ 'ei-bfd__chip--active': activePresetChoiceId() === choice.id }"
                   type="button"
-                  @click="updateDraftMode(option.value)"
+                  :title="choice.hint"
+                  @click="applyPresetChoice(choice)"
                 >
-                  {{ option.label }}
+                  <span class="ei-bfd__chip-label">{{ choice.label }}</span>
+                  <span v-if="choice.hint" class="ei-bfd__chip-hint">{{ choice.hint }}</span>
+                  <EiIcon
+                    v-if="activePresetChoiceId() === choice.id"
+                    :icon="IconCheck"
+                    :size="11"
+                    class="ei-bfd__chip-check"
+                  />
                 </button>
               </div>
             </div>
 
-            <!-- Preset mode -->
-            <div v-if="activeTab === 'preset'" class="ei-bfd__preset-content">
-              <!-- Prefix -->
-              <div class="ei-bfd__affix-row">
-                <span class="ei-bfd__affix-label">{{ t('designer.bindingFormat.prefix') }}</span>
-                <EiInput
-                  :model-value="draftFormat.prefix || ''"
-                  @update:model-value="value => updateDraftTextField('prefix', value)"
-                />
-              </div>
-
-              <!-- Preset groups -->
-              <div
-                v-for="group in presetGroups"
-                :key="group.label"
-                class="ei-bfd__group"
-              >
-                <div class="ei-bfd__group-label">
-                  {{ group.label }}
-                </div>
-                <div class="ei-bfd__chips">
-                  <button
-                    v-for="choice in group.choices"
-                    :key="choice.id"
-                    class="ei-bfd__chip"
-                    :class="{ 'ei-bfd__chip--active': activePresetChoiceId() === choice.id }"
-                    type="button"
-                    :title="choice.hint"
-                    @click="applyPresetChoice(choice)"
-                  >
-                    <span class="ei-bfd__chip-label">{{ choice.label }}</span>
-                    <span v-if="choice.hint" class="ei-bfd__chip-hint">{{ choice.hint }}</span>
-                    <EiIcon
-                      v-if="activePresetChoiceId() === choice.id"
-                      :icon="IconCheck"
-                      :size="11"
-                      class="ei-bfd__chip-check"
-                    />
-                  </button>
-                </div>
-              </div>
-
-              <!-- Suffix -->
-              <div class="ei-bfd__affix-row">
-                <span class="ei-bfd__affix-label">{{ t('designer.bindingFormat.suffix') }}</span>
-                <EiInput
-                  :model-value="draftFormat.suffix || ''"
-                  @update:model-value="value => updateDraftTextField('suffix', value)"
-                />
-              </div>
-            </div>
-
-            <!-- Custom mode -->
-            <div v-if="activeTab === 'custom'" class="ei-bfd__custom-body">
-              <p class="ei-bfd__custom-desc">
-                输入返回转换结果的箭头函数，参数 <code>value</code> 为字段原始值。函数完全控制输出，前缀、后缀、默认值均由函数自行处理。
-              </p>
-              <BindingCodeEditor
-                :model-value="draftFormat.custom?.source || '(value) => String(value ?? \'\')'"
-                :placeholder="t('designer.bindingFormat.customSource')"
-                @update:model-value="updateDraftCustomSource"
+            <!-- Suffix -->
+            <div class="ei-bfd__affix-row">
+              <span class="ei-bfd__affix-label">{{ t('designer.bindingFormat.suffix') }}</span>
+              <EiInput
+                :model-value="draftFormat.suffix || ''"
+                @update:model-value="value => updateDraftTextField('suffix', value)"
               />
             </div>
+          </div>
+
+          <!-- Custom mode -->
+          <div v-if="activeTab === 'custom'" class="ei-bfd__custom-body">
+            <p class="ei-bfd__custom-desc">
+              输入返回转换结果的箭头函数，参数 <code>value</code> 为字段原始值。函数完全控制输出，前缀、后缀、默认值均由函数自行处理。
+            </p>
+            <BindingCodeEditor
+              :model-value="draftFormat.custom?.source || '(value) => String(value ?? \'\')'"
+              :placeholder="t('designer.bindingFormat.customSource')"
+              @update:model-value="updateDraftCustomSource"
+            />
           </div>
 
           <!-- Validation error -->
@@ -497,61 +487,77 @@ function isSamePreset(a: BindingPresetFormat, b: BindingPresetFormat): boolean {
   }
 
   &__item {
-    border: 1px solid var(--ei-border-color, #e4e4e4);
-    border-radius: 5px;
-    overflow: hidden;
-    margin-bottom: 4px;
+    padding: 6px 0;
+
+    & + & {
+      border-top: 1px solid #f0f0f0;
+    }
   }
 
-  /* Context row: source + separator + field */
-  &__ctx {
+  /* Label-value rows */
+  &__row {
     display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 9px;
-    background: var(--ei-panel-header-bg, #f6f6f6);
-    border-bottom: 1px solid var(--ei-border-color, #e4e4e4);
+    align-items: flex-start;
+    gap: 6px;
+
+    & + & {
+      margin-top: 3px;
+    }
+
+    &--fmt {
+      align-items: center;
+      margin-top: 5px;
+    }
   }
 
-  &__ctx-pair {
-    display: flex;
-    align-items: baseline;
-    gap: 4px;
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-  }
-
-  &__ctx-key {
-    font-size: 11px;
-    color: var(--ei-text-secondary, #bbb);
+  /* Row label (来源 / 字段 / 格式) */
+  &__k {
+    width: 28px;
     flex-shrink: 0;
+    font-size: 10px;
+    color: var(--ei-text-secondary, #c8c8c8);
+    padding-top: 1px;
   }
 
-  &__ctx-val {
+  /* Row main value */
+  &__v {
     font-size: 12px;
     font-weight: 500;
     color: var(--ei-text, #333);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    flex: 1;
+    min-width: 0;
   }
 
-  &__ctx-sep {
-    display: block;
-    width: 1px;
-    height: 10px;
-    background: var(--ei-border-color, #d4d4d4);
-    flex-shrink: 0;
-    align-self: center;
+  /* Field label + path stacked */
+  &__field {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    flex: 1;
+    min-width: 0;
   }
 
-  /* Format summary row */
-  &__fmt-row {
+  /* Technical field path */
+  &__path {
+    font-size: 10px;
+    color: var(--ei-text-secondary, #c0c0c0);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Format row: badge + summary */
+  &__fmt-body {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 6px 9px;
+    gap: 5px;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
   }
 
   &__fmt-badge {
@@ -576,34 +582,38 @@ function isSamePreset(a: BindingPresetFormat, b: BindingPresetFormat): boolean {
   }
 
   &__fmt-text {
-    flex: 1;
-    font-size: 12px;
-    color: var(--ei-text-secondary, #666);
+    font-size: 11px;
+    color: var(--ei-text-secondary, #999);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    flex: 1;
     min-width: 0;
   }
 
   &__fmt-btn {
     flex-shrink: 0;
-    padding: 2px 8px;
-    font-size: 11px;
-    border: 1px solid var(--ei-border-color, #d0d0d0);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: none;
     border-radius: 3px;
-    background: var(--ei-bg, #fff);
-    color: var(--ei-text-secondary, #555);
+    background: transparent;
+    color: var(--ei-text-secondary, #bbb);
     cursor: pointer;
-    transition: border-color 0.12s, color 0.12s;
+    transition: background 0.12s, color 0.12s;
 
     &:hover {
-      border-color: var(--ei-primary, #1890ff);
-      color: var(--ei-primary, #1890ff);
+      background: var(--ei-panel-header-bg, #f0f0f0);
+      color: var(--ei-text, #555);
     }
   }
 
   &__footer {
-    margin-top: 4px;
+    margin-top: 6px;
   }
 
   &__empty {
@@ -617,116 +627,49 @@ function isSamePreset(a: BindingPresetFormat, b: BindingPresetFormat): boolean {
 .ei-bfd {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  min-height: 560px;
 
-  /* Context strip */
-  &__ctx {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 9px 14px;
-    background: var(--ei-panel-header-bg, #f7f7f7);
-    border: 1px solid var(--ei-border-color, #e8e8e8);
-    border-radius: 6px;
-  }
-
-  &__ctx-item {
-    display: flex;
-    align-items: baseline;
-    gap: 6px;
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-  }
-
-  &__ctx-key {
-    font-size: 11px;
-    color: var(--ei-text-secondary, #bbb);
-    flex-shrink: 0;
-  }
-
-  &__ctx-val {
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--ei-text, #333);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  &__ctx-sep {
-    display: block;
-    width: 1px;
-    height: 14px;
-    background: var(--ei-border-color, #d8d8d8);
-    flex-shrink: 0;
-    align-self: center;
-  }
-
-  /* Card-style blocks */
-  &__block {
-    border: 1px solid var(--ei-border-color, #e8e8e8);
-    border-radius: 6px;
-    overflow: hidden;
-  }
-
-  &__block-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 7px 14px;
-    background: var(--ei-panel-header-bg, #f7f7f7);
-    border-bottom: 1px solid var(--ei-border-color, #e8e8e8);
-    gap: 8px;
-  }
-
-  &__block-title {
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--ei-text-secondary, #aaa);
-  }
-
-  /* Segmented control */
-  &__seg {
+  /* Tab switcher */
+  &__tabs {
     display: inline-flex;
-    padding: 2px;
-    background: #ebebeb;
-    border-radius: 5px;
-    gap: 1px;
+    padding: 3px;
+    background: #efefef;
+    border-radius: 20px;
+    gap: 2px;
+    align-self: flex-start;
+    margin-bottom: 4px;
   }
 
-  &__seg-btn {
-    padding: 3px 14px;
+  &__tab {
+    padding: 3px 18px;
     border: none;
-    border-radius: 3px;
+    border-radius: 20px;
     background: transparent;
-    color: var(--ei-text-secondary, #666);
+    color: var(--ei-text-secondary, #999);
     font-size: 12px;
+    letter-spacing: 0.2px;
     cursor: pointer;
-    transition: background 0.12s, color 0.12s, box-shadow 0.12s;
+    transition: background 0.15s, color 0.15s;
 
     &--active {
-      background: var(--ei-bg, #fff);
-      color: var(--ei-text, #333);
+      background: var(--ei-primary, #1890ff);
+      color: #fff;
       font-weight: 500;
-      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
     }
 
     &:not(&--active):hover {
-      color: var(--ei-text, #444);
+      color: var(--ei-text, #555);
     }
   }
 
   /* Preset single-column content */
   &__preset-content {
     overflow-y: auto;
-    max-height: 320px;
-    padding: 14px 16px;
+    max-height: 440px;
+    padding: 12px 0 0;
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 0;
   }
 
   &__group {
@@ -741,8 +684,6 @@ function isSamePreset(a: BindingPresetFormat, b: BindingPresetFormat): boolean {
     letter-spacing: 0.9px;
     text-transform: uppercase;
     color: var(--ei-text-secondary, #bbb);
-    padding-bottom: 8px;
-    border-bottom: 1px solid var(--ei-border-color, #ececec);
   }
 
   /* Chip list */
@@ -812,10 +753,11 @@ function isSamePreset(a: BindingPresetFormat, b: BindingPresetFormat): boolean {
 
   /* Custom mode body */
   &__custom-body {
-    padding: 12px 14px;
+    padding: 12px 0 0;
     display: flex;
     flex-direction: column;
     gap: 8px;
+    flex: 1;
   }
 
   &__custom-desc {
@@ -850,6 +792,15 @@ function isSamePreset(a: BindingPresetFormat, b: BindingPresetFormat): boolean {
     letter-spacing: 0.9px;
     text-transform: uppercase;
     color: var(--ei-text-secondary, #bbb);
+  }
+
+  /* Dashed section dividers in preset content */
+  &__group + &__group,
+  &__affix-row + &__group,
+  &__group + &__affix-row {
+    margin-top: 8px;
+    padding-top: 12px;
+    border-top: 1px dashed rgba(0, 0, 0, 0.07);
   }
 
   /* Error bar */
