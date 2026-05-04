@@ -8,7 +8,6 @@ import {
   normalizeRotation,
   RemoveMaterialCommand,
   RotateMaterialCommand,
-  UnitManager,
   UpdateMaterialPropsCommand,
 } from '@easyink/core'
 import {
@@ -56,7 +55,8 @@ import { EiNumberInput, EiPopover, EiSwitch } from '@easyink/ui'
 import { computed, inject, onMounted, onUnmounted, ref } from 'vue'
 import { useDesignerStore } from '../composables'
 import { CONTRIBUTION_REGISTRY_KEY } from '../contributions/injection'
-import { clearSelection, selectMany, selectOne } from '../interactions/selection-api'
+import { createClipboardActions } from '../interactions/clipboard-actions'
+import { selectMany, selectOne } from '../interactions/selection-api'
 
 const contributionRegistry = inject(CONTRIBUTION_REGISTRY_KEY, undefined)
 const toolbarActions = computed(() => contributionRegistry?.registry.toolbarActions ?? [])
@@ -106,6 +106,8 @@ const selectedNodes = computed<MaterialNode[]>(() =>
     .map(id => store.getElementById(id))
     .filter((n): n is MaterialNode => n != null),
 )
+
+const clipboardActions = createClipboardActions(store, () => selectedNodes.value)
 
 const hasSelection = computed(() => !store.selection.isEmpty)
 
@@ -440,49 +442,15 @@ function handleLock() {
 
 // ─── Clipboard ───────────────────────────────────────────────
 function handleCopy() {
-  const nodes = selectedNodes.value
-  if (nodes.length === 0)
-    return
-  store.clipboard = nodes.map(n => deepClone(n))
+  clipboardActions.copySelection()
 }
 
 function handlePaste() {
-  if (store.clipboard.length === 0)
-    return
-
-  const elements = store.schema.elements
-  // Anchor offset to ~10 screen px so visual displacement is unit-agnostic.
-  const offset = new UnitManager(store.schema.unit).fromPixels(10, 96, 1)
-  const newIds: string[] = []
-
-  store.commands.beginTransaction('Paste')
-  for (const node of store.clipboard) {
-    const pasted: MaterialNode = {
-      ...deepClone(node),
-      id: generateId('el'),
-      x: node.x + offset,
-      y: node.y + offset,
-    }
-    store.commands.execute(new AddMaterialCommand(elements, pasted))
-    newIds.push(pasted.id)
-  }
-  store.commands.commitTransaction()
-
-  selectMany(store, newIds)
+  clipboardActions.pasteClipboard()
 }
 
 function handleDelete() {
-  const nodes = selectedNodes.value
-  if (nodes.length === 0)
-    return
-
-  const elements = store.schema.elements
-  store.commands.beginTransaction('Delete')
-  for (const node of nodes) {
-    store.commands.execute(new RemoveMaterialCommand(elements, node.id))
-  }
-  store.commands.commitTransaction()
-  clearSelection(store)
+  clipboardActions.deleteSelection()
 }
 
 // ─── Snap ────────────────────────────────────────────────────

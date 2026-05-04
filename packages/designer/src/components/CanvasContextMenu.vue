@@ -2,11 +2,6 @@
 import type { MaterialNode } from '@easyink/schema'
 import type { Component } from 'vue'
 import {
-  AddMaterialCommand,
-  RemoveMaterialCommand,
-  UnitManager,
-} from '@easyink/core'
-import {
   IconCopy,
   IconCopyPlus,
   IconDelete,
@@ -20,10 +15,10 @@ import {
   IconSelectAll,
   IconUnlock,
 } from '@easyink/icons'
-import { deepClone, generateId } from '@easyink/shared'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useDesignerStore } from '../composables'
-import { clearSelection, selectMany } from '../interactions/selection-api'
+import { createClipboardActions } from '../interactions/clipboard-actions'
+import { selectMany } from '../interactions/selection-api'
 
 interface ContextMenuItem {
   id: string
@@ -52,6 +47,8 @@ const selectedNodes = computed<MaterialNode[]>(() => {
     .map(id => store.getElementById(id))
     .filter((n): n is MaterialNode => n != null)
 })
+
+const clipboardActions = createClipboardActions(store, () => selectedNodes.value)
 
 const isMac = typeof navigator !== 'undefined' && /Mac/.test(navigator.userAgent)
 const modKey = isMac ? 'Cmd' : 'Ctrl'
@@ -149,72 +146,23 @@ function handleAction(item: ContextMenuItem) {
 
   switch (item.id) {
     case 'copy':
-      if (nodes.length > 0) {
-        store.clipboard = nodes.map(n => deepClone(n))
-      }
+      clipboardActions.copySelection()
       break
 
     case 'cut':
-      if (nodes.length > 0) {
-        store.clipboard = nodes.map(n => deepClone(n))
-        store.commands.beginTransaction('Cut')
-        for (const node of nodes) {
-          store.commands.execute(new RemoveMaterialCommand(elements, node.id))
-        }
-        store.commands.commitTransaction()
-        clearSelection(store)
-      }
+      clipboardActions.cutSelection()
       break
 
     case 'paste':
-      if (store.clipboard.length > 0) {
-        const offset = pasteOffset()
-        const newIds: string[] = []
-        store.commands.beginTransaction('Paste')
-        for (const node of store.clipboard) {
-          const pasted: MaterialNode = {
-            ...deepClone(node),
-            id: generateId('el'),
-            x: node.x + offset,
-            y: node.y + offset,
-          }
-          store.commands.execute(new AddMaterialCommand(elements, pasted))
-          newIds.push(pasted.id)
-        }
-        store.commands.commitTransaction()
-        selectMany(store, newIds)
-      }
+      clipboardActions.pasteClipboard()
       break
 
     case 'duplicate':
-      if (nodes.length > 0) {
-        const offset = pasteOffset()
-        const newIds: string[] = []
-        store.commands.beginTransaction('Duplicate')
-        for (const node of nodes) {
-          const dup: MaterialNode = {
-            ...deepClone(node),
-            id: generateId('el'),
-            x: node.x + offset,
-            y: node.y + offset,
-          }
-          store.commands.execute(new AddMaterialCommand(elements, dup))
-          newIds.push(dup.id)
-        }
-        store.commands.commitTransaction()
-        selectMany(store, newIds)
-      }
+      clipboardActions.duplicateSelection()
       break
 
     case 'delete':
-      if (nodes.length > 0) {
-        store.commands.beginTransaction('Delete')
-        for (const node of nodes) {
-          store.commands.execute(new RemoveMaterialCommand(elements, node.id))
-        }
-        store.commands.commitTransaction()
-        clearSelection(store)
-      }
+      clipboardActions.deleteSelection()
       break
 
     case 'bring-front':
@@ -287,17 +235,6 @@ function handleAction(item: ContextMenuItem) {
       console.warn('[CanvasContextMenu] Unknown action:', item.id)
       break
   }
-}
-
-/**
- * Paste / duplicate offset, expressed in current document units. Anchored to
- * a fixed screen-pixel value (~10px at zoom 1) so the visual offset is
- * consistent regardless of unit (mm / px / pt) — a literal `10` would be
- * one screen pixel in mm but a finger-width in px.
- */
-function pasteOffset(): number {
-  const um = new UnitManager(store.schema.unit)
-  return um.fromPixels(10, 96, 1)
 }
 
 // Use pointerdown in capture phase -- fires before workspace clears selection

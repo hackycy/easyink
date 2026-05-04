@@ -1,15 +1,13 @@
 import type { MaterialNode } from '@easyink/schema'
 import type { DesignerStore } from '../store/designer-store'
 import {
-  AddMaterialCommand,
   isInteractable,
   MoveMaterialCommand,
-  RemoveMaterialCommand,
   UnitManager,
 } from '@easyink/core'
-import { deepClone, generateId } from '@easyink/shared'
 import { onMounted, onUnmounted } from 'vue'
-import { clearSelection, selectMany } from '../interactions/selection-api'
+import { createClipboardActions } from '../interactions/clipboard-actions'
+import { selectMany } from '../interactions/selection-api'
 
 export interface KeyboardShortcutsContext {
   store: DesignerStore
@@ -29,6 +27,7 @@ export interface KeyboardShortcutsContext {
  */
 export function useKeyboardShortcuts(ctx: KeyboardShortcutsContext) {
   const { store } = ctx
+  const clipboardActions = createClipboardActions(store, selectedNodes)
 
   function isEditableTarget(target: EventTarget | null): boolean {
     if (!(target instanceof HTMLElement))
@@ -56,10 +55,6 @@ export function useKeyboardShortcuts(ctx: KeyboardShortcutsContext) {
       .filter((n): n is MaterialNode => n != null)
   }
 
-  function pasteOffset(): number {
-    return new UnitManager(store.schema.unit).fromPixels(10, 96, 1)
-  }
-
   function nudgeStep(big: boolean): number {
     // 1 / 10 screen px at zoom 1, converted to current unit. Keeps arrow
     // micro-moves visually consistent across mm/px/pt.
@@ -70,105 +65,6 @@ export function useKeyboardShortcuts(ctx: KeyboardShortcutsContext) {
     // Mirrors CanvasContextMenu: hidden elements stay out of selection so
     // bulk drag/delete cannot mutate invisible nodes.
     selectMany(store, store.schema.elements.filter(el => !el.hidden).map(el => el.id))
-  }
-
-  function copy() {
-    const nodes = selectedNodes()
-    if (nodes.length === 0)
-      return
-    store.clipboard = nodes.map(n => deepClone(n))
-  }
-
-  function cut() {
-    const nodes = selectedNodes()
-    if (nodes.length === 0)
-      return
-    store.clipboard = nodes.map(n => deepClone(n))
-    const elements = store.schema.elements
-    store.commands.beginTransaction('Cut')
-    try {
-      for (const node of nodes)
-        store.commands.execute(new RemoveMaterialCommand(elements, node.id))
-      store.commands.commitTransaction()
-    }
-    catch (err) {
-      store.commands.rollbackTransaction()
-      throw err
-    }
-    clearSelection(store)
-  }
-
-  function paste() {
-    if (store.clipboard.length === 0)
-      return
-    const elements = store.schema.elements
-    const offset = pasteOffset()
-    const newIds: string[] = []
-    store.commands.beginTransaction('Paste')
-    try {
-      for (const node of store.clipboard) {
-        const pasted: MaterialNode = {
-          ...deepClone(node),
-          id: generateId('el'),
-          x: node.x + offset,
-          y: node.y + offset,
-        }
-        store.commands.execute(new AddMaterialCommand(elements, pasted))
-        newIds.push(pasted.id)
-      }
-      store.commands.commitTransaction()
-    }
-    catch (err) {
-      store.commands.rollbackTransaction()
-      throw err
-    }
-    selectMany(store, newIds)
-  }
-
-  function duplicate() {
-    const nodes = selectedNodes()
-    if (nodes.length === 0)
-      return
-    const elements = store.schema.elements
-    const offset = pasteOffset()
-    const newIds: string[] = []
-    store.commands.beginTransaction('Duplicate')
-    try {
-      for (const node of nodes) {
-        const dup: MaterialNode = {
-          ...deepClone(node),
-          id: generateId('el'),
-          x: node.x + offset,
-          y: node.y + offset,
-        }
-        store.commands.execute(new AddMaterialCommand(elements, dup))
-        newIds.push(dup.id)
-      }
-      store.commands.commitTransaction()
-    }
-    catch (err) {
-      store.commands.rollbackTransaction()
-      throw err
-    }
-    selectMany(store, newIds)
-  }
-
-  function remove() {
-    const nodes = selectedNodes().filter(n => !n.locked)
-    if (nodes.length === 0)
-      return
-    const elements = store.schema.elements
-    store.commands.beginTransaction('Delete')
-    try {
-      for (const node of nodes)
-        store.commands.execute(new RemoveMaterialCommand(elements, node.id))
-      store.commands.commitTransaction()
-    }
-    catch (err) {
-      store.commands.rollbackTransaction()
-      throw err
-    }
-    clearSelection(store)
   }
 
   function nudge(dx: number, dy: number) {
@@ -213,19 +109,19 @@ export function useKeyboardShortcuts(ctx: KeyboardShortcutsContext) {
           return
         case 'c':
           e.preventDefault()
-          copy()
+          clipboardActions.copySelection()
           return
         case 'x':
           e.preventDefault()
-          cut()
+          clipboardActions.cutSelection()
           return
         case 'v':
           e.preventDefault()
-          paste()
+          clipboardActions.pasteClipboard()
           return
         case 'd':
           e.preventDefault()
-          duplicate()
+          clipboardActions.duplicateSelection()
           return
       }
     }
@@ -234,7 +130,7 @@ export function useKeyboardShortcuts(ctx: KeyboardShortcutsContext) {
       if (store.selection.isEmpty)
         return
       e.preventDefault()
-      remove()
+      clipboardActions.deleteSelection()
       return
     }
 
