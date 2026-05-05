@@ -1,6 +1,12 @@
 import type { PagePropertyDescriptor } from './types'
 import { PAPER_PRESETS } from '@easyink/shared'
 
+const UNIT_OPTIONS: NonNullable<PagePropertyDescriptor['enum']> = [
+  { label: 'designer.option.unitMillimeter', value: 'mm' },
+  { label: 'designer.option.unitPoint', value: 'pt' },
+  { label: 'designer.option.unitPixel', value: 'px' },
+]
+
 // ─── Document Group ─────────────────────────────────────────────
 
 const MODE_DESCRIPTOR: PagePropertyDescriptor = {
@@ -26,11 +32,7 @@ const UNIT_DESCRIPTOR: PagePropertyDescriptor = {
   label: 'designer.page.unit',
   persisted: 'derived',
   editor: 'select',
-  enum: [
-    { label: 'mm', value: 'mm' },
-    { label: 'pt', value: 'pt' },
-    { label: 'px', value: 'px' },
-  ],
+  enum: UNIT_OPTIONS,
   normalize(value) {
     return { document: { unit: value as 'mm' | 'pt' | 'px' } }
   },

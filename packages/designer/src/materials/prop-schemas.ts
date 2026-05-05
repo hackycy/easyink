@@ -1,5 +1,59 @@
 import type { PropSchema } from '../types'
 
+const FONT_WEIGHT_OPTIONS: NonNullable<PropSchema['enum']> = [
+  { label: 'designer.option.normal', value: 'normal' },
+  { label: 'designer.option.bold', value: 'bold' },
+]
+
+const FONT_STYLE_OPTIONS: NonNullable<PropSchema['enum']> = [
+  { label: 'designer.option.normal', value: 'normal' },
+  { label: 'designer.option.italic', value: 'italic' },
+]
+
+const HORIZONTAL_ALIGN_OPTIONS: NonNullable<PropSchema['enum']> = [
+  { label: 'designer.option.alignLeft', value: 'left' },
+  { label: 'designer.option.alignCenter', value: 'center' },
+  { label: 'designer.option.alignRight', value: 'right' },
+]
+
+const VERTICAL_ALIGN_OPTIONS: NonNullable<PropSchema['enum']> = [
+  { label: 'designer.option.alignTop', value: 'top' },
+  { label: 'designer.option.alignMiddle', value: 'middle' },
+  { label: 'designer.option.alignBottom', value: 'bottom' },
+]
+
+const OVERFLOW_OPTIONS: NonNullable<PropSchema['enum']> = [
+  { label: 'designer.option.overflowVisible', value: 'visible' },
+  { label: 'designer.option.overflowHidden', value: 'hidden' },
+  { label: 'designer.option.overflowEllipsis', value: 'ellipsis' },
+]
+
+const STROKE_STYLE_OPTIONS: NonNullable<PropSchema['enum']> = [
+  { label: 'designer.option.strokeSolid', value: 'solid' },
+  { label: 'designer.option.strokeDashed', value: 'dashed' },
+  { label: 'designer.option.strokeDotted', value: 'dotted' },
+]
+
+const IMAGE_FIT_OPTIONS: NonNullable<PropSchema['enum']> = [
+  { label: 'designer.option.imageFitContain', value: 'contain' },
+  { label: 'designer.option.imageFitCover', value: 'cover' },
+  { label: 'designer.option.imageFitFill', value: 'fill' },
+  { label: 'designer.option.imageFitNone', value: 'none' },
+]
+
+const DIRECTION_OPTIONS: NonNullable<PropSchema['enum']> = [
+  { label: 'designer.option.directionRow', value: 'row' },
+  { label: 'designer.option.directionColumn', value: 'column' },
+]
+
+const CHART_TYPE_OPTIONS: NonNullable<PropSchema['enum']> = [
+  { label: 'designer.option.chartBar', value: 'bar' },
+  { label: 'designer.option.chartLine', value: 'line' },
+  { label: 'designer.option.chartPie', value: 'pie' },
+  { label: 'designer.option.chartRadar', value: 'radar' },
+  { label: 'designer.option.chartScatter', value: 'scatter' },
+]
+
 const STACK_LAYOUT_PROP_SCHEMAS: PropSchema[] = [
   { key: 'layoutMode', label: 'designer.property.layoutMode', type: 'enum', group: 'layout', default: 'flow', enum: [
     { label: 'designer.property.flow', value: 'flow' },
@@ -19,62 +73,31 @@ const TEXT_PROP_SCHEMAS: PropSchema[] = [
   { key: 'richText', label: 'designer.property.richText', type: 'switch', group: 'content' },
   { key: 'fontFamily', label: 'designer.property.font', type: 'font', group: 'typography' },
   { key: 'fontSize', label: 'designer.property.fontSize', type: 'number', group: 'typography', min: 1, max: 200, step: 1 },
-  { key: 'fontWeight', label: 'designer.property.fontWeight', type: 'enum', group: 'typography', enum: [
-    { label: 'Normal', value: 'normal' },
-    { label: 'Bold', value: 'bold' },
-  ] },
-  { key: 'fontStyle', label: 'designer.property.fontStyle', type: 'enum', group: 'typography', enum: [
-    { label: 'Normal', value: 'normal' },
-    { label: 'Italic', value: 'italic' },
-  ] },
-  { key: 'textAlign', label: 'designer.property.textAlign', type: 'enum', group: 'typography', enum: [
-    { label: 'Left', value: 'left' },
-    { label: 'Center', value: 'center' },
-    { label: 'Right', value: 'right' },
-  ] },
-  { key: 'verticalAlign', label: 'designer.property.verticalAlign', type: 'enum', group: 'typography', enum: [
-    { label: 'Top', value: 'top' },
-    { label: 'Middle', value: 'middle' },
-    { label: 'Bottom', value: 'bottom' },
-  ] },
+  { key: 'fontWeight', label: 'designer.property.fontWeight', type: 'enum', group: 'typography', enum: FONT_WEIGHT_OPTIONS },
+  { key: 'fontStyle', label: 'designer.property.fontStyle', type: 'enum', group: 'typography', enum: FONT_STYLE_OPTIONS },
+  { key: 'textAlign', label: 'designer.property.textAlign', type: 'enum', group: 'typography', enum: HORIZONTAL_ALIGN_OPTIONS },
+  { key: 'verticalAlign', label: 'designer.property.verticalAlign', type: 'enum', group: 'typography', enum: VERTICAL_ALIGN_OPTIONS },
   { key: 'lineHeight', label: 'designer.property.lineHeight', type: 'number', group: 'typography', min: 0.5, max: 5, step: 0.1 },
   { key: 'letterSpacing', label: 'designer.property.letterSpacing', type: 'number', group: 'typography', min: -5, max: 20, step: 0.5 },
   { key: 'autoWrap', label: 'designer.property.autoWrap', type: 'switch', group: 'typography' },
-  { key: 'overflow', label: 'designer.property.overflow', type: 'enum', group: 'typography', enum: [
-    { label: 'Visible', value: 'visible' },
-    { label: 'Hidden', value: 'hidden' },
-    { label: 'Ellipsis', value: 'ellipsis' },
-  ] },
+  { key: 'overflow', label: 'designer.property.overflow', type: 'enum', group: 'typography', enum: OVERFLOW_OPTIONS },
   { key: 'color', label: 'designer.property.color', type: 'color', group: 'appearance' },
   { key: 'backgroundColor', label: 'designer.property.background', type: 'color', group: 'appearance' },
   { key: 'borderWidth', label: 'designer.property.borderWidth', type: 'number', group: 'border', min: 0, max: 20, step: 1 },
   { key: 'borderColor', label: 'designer.property.borderColor', type: 'color', group: 'border' },
-  { key: 'borderType', label: 'designer.property.borderType', type: 'enum', group: 'border', enum: [
-    { label: 'Solid', value: 'solid' },
-    { label: 'Dashed', value: 'dashed' },
-    { label: 'Dotted', value: 'dotted' },
-  ] },
+  { key: 'borderType', label: 'designer.property.borderType', type: 'enum', group: 'border', enum: STROKE_STYLE_OPTIONS },
 ]
 
 // ─── Image ───────────────────────────────────────────────────────────
 
 const IMAGE_PROP_SCHEMAS: PropSchema[] = [
   { key: 'src', label: 'designer.property.imageSrc', type: 'image', group: 'content' },
-  { key: 'fit', label: 'designer.property.imageFit', type: 'enum', group: 'content', enum: [
-    { label: 'Contain', value: 'contain' },
-    { label: 'Cover', value: 'cover' },
-    { label: 'Fill', value: 'fill' },
-    { label: 'None', value: 'none' },
-  ] },
+  { key: 'fit', label: 'designer.property.imageFit', type: 'enum', group: 'content', enum: IMAGE_FIT_OPTIONS },
   { key: 'alt', label: 'designer.property.imageAlt', type: 'string', group: 'content' },
   { key: 'backgroundColor', label: 'designer.property.background', type: 'color', group: 'appearance' },
   { key: 'borderWidth', label: 'designer.property.borderWidth', type: 'number', group: 'border', min: 0, max: 20, step: 1 },
   { key: 'borderColor', label: 'designer.property.borderColor', type: 'color', group: 'border' },
-  { key: 'borderType', label: 'designer.property.borderType', type: 'enum', group: 'border', enum: [
-    { label: 'Solid', value: 'solid' },
-    { label: 'Dashed', value: 'dashed' },
-    { label: 'Dotted', value: 'dotted' },
-  ] },
+  { key: 'borderType', label: 'designer.property.borderType', type: 'enum', group: 'border', enum: STROKE_STYLE_OPTIONS },
 ]
 
 // ─── Barcode ─────────────────────────────────────────────────────────
@@ -95,11 +118,7 @@ const BARCODE_PROP_SCHEMAS: PropSchema[] = [
   { key: 'backgroundColor', label: 'designer.property.background', type: 'color', group: 'appearance' },
   { key: 'borderWidth', label: 'designer.property.borderWidth', type: 'number', group: 'border', min: 0, max: 20, step: 1 },
   { key: 'borderColor', label: 'designer.property.borderColor', type: 'color', group: 'border' },
-  { key: 'borderType', label: 'designer.property.borderType', type: 'enum', group: 'border', enum: [
-    { label: 'Solid', value: 'solid' },
-    { label: 'Dashed', value: 'dashed' },
-    { label: 'Dotted', value: 'dotted' },
-  ] },
+  { key: 'borderType', label: 'designer.property.borderType', type: 'enum', group: 'border', enum: STROKE_STYLE_OPTIONS },
 ]
 
 // ─── QRCode ──────────────────────────────────────────────────────────
@@ -117,22 +136,14 @@ const QRCODE_PROP_SCHEMAS: PropSchema[] = [
   { key: 'background', label: 'designer.property.background', type: 'color', group: 'appearance' },
   { key: 'borderWidth', label: 'designer.property.borderWidth', type: 'number', group: 'border', min: 0, max: 20, step: 1 },
   { key: 'borderColor', label: 'designer.property.borderColor', type: 'color', group: 'border' },
-  { key: 'borderType', label: 'designer.property.borderType', type: 'enum', group: 'border', enum: [
-    { label: 'Solid', value: 'solid' },
-    { label: 'Dashed', value: 'dashed' },
-    { label: 'Dotted', value: 'dotted' },
-  ] },
+  { key: 'borderType', label: 'designer.property.borderType', type: 'enum', group: 'border', enum: STROKE_STYLE_OPTIONS },
 ]
 
 // ─── Line ────────────────────────────────────────────────────────────
 
 const LINE_PROP_SCHEMAS: PropSchema[] = [
   { key: 'lineColor', label: 'designer.property.lineColor', type: 'color', group: 'appearance' },
-  { key: 'lineType', label: 'designer.property.lineType', type: 'enum', group: 'appearance', enum: [
-    { label: 'Solid', value: 'solid' },
-    { label: 'Dashed', value: 'dashed' },
-    { label: 'Dotted', value: 'dotted' },
-  ] },
+  { key: 'lineType', label: 'designer.property.lineType', type: 'enum', group: 'appearance', enum: STROKE_STYLE_OPTIONS },
 ]
 
 // ─── Rect ────────────────────────────────────────────────────────────
@@ -141,11 +152,7 @@ const RECT_PROP_SCHEMAS: PropSchema[] = [
   { key: 'fillColor', label: 'designer.property.fillColor', type: 'color', group: 'appearance' },
   { key: 'borderWidth', label: 'designer.property.borderWidth', type: 'number', group: 'border', min: 0, max: 20, step: 1 },
   { key: 'borderColor', label: 'designer.property.borderColor', type: 'color', group: 'border' },
-  { key: 'borderType', label: 'designer.property.borderType', type: 'enum', group: 'border', enum: [
-    { label: 'Solid', value: 'solid' },
-    { label: 'Dashed', value: 'dashed' },
-    { label: 'Dotted', value: 'dotted' },
-  ] },
+  { key: 'borderType', label: 'designer.property.borderType', type: 'enum', group: 'border', enum: STROKE_STYLE_OPTIONS },
   { key: 'borderRadius', label: 'designer.property.borderRadius', type: 'number', group: 'border', min: 0, max: 100, step: 1 },
 ]
 
@@ -155,42 +162,25 @@ const ELLIPSE_PROP_SCHEMAS: PropSchema[] = [
   { key: 'fillColor', label: 'designer.property.fillColor', type: 'color', group: 'appearance' },
   { key: 'borderWidth', label: 'designer.property.borderWidth', type: 'number', group: 'border', min: 0, max: 20, step: 1 },
   { key: 'borderColor', label: 'designer.property.borderColor', type: 'color', group: 'border' },
-  { key: 'borderType', label: 'designer.property.borderType', type: 'enum', group: 'border', enum: [
-    { label: 'Solid', value: 'solid' },
-    { label: 'Dashed', value: 'dashed' },
-    { label: 'Dotted', value: 'dotted' },
-  ] },
+  { key: 'borderType', label: 'designer.property.borderType', type: 'enum', group: 'border', enum: STROKE_STYLE_OPTIONS },
 ]
 
 // ─── Container ───────────────────────────────────────────────────────
 
 const CONTAINER_PROP_SCHEMAS: PropSchema[] = [
-  { key: 'direction', label: 'designer.property.direction', type: 'enum', group: 'layout', enum: [
-    { label: 'Row', value: 'row' },
-    { label: 'Column', value: 'column' },
-  ] },
+  { key: 'direction', label: 'designer.property.direction', type: 'enum', group: 'layout', enum: DIRECTION_OPTIONS },
   { key: 'padding', label: 'designer.property.padding', type: 'number', group: 'layout', min: 0, max: 100, step: 1 },
   { key: 'gap', label: 'designer.property.gap', type: 'number', group: 'layout', min: 0, max: 100, step: 1 },
   { key: 'fillColor', label: 'designer.property.fillColor', type: 'color', group: 'appearance' },
   { key: 'borderWidth', label: 'designer.property.borderWidth', type: 'number', group: 'border', min: 0, max: 20, step: 1 },
   { key: 'borderColor', label: 'designer.property.borderColor', type: 'color', group: 'border' },
-  { key: 'borderType', label: 'designer.property.borderType', type: 'enum', group: 'border', enum: [
-    { label: 'Solid', value: 'solid' },
-    { label: 'Dashed', value: 'dashed' },
-    { label: 'Dotted', value: 'dotted' },
-  ] },
+  { key: 'borderType', label: 'designer.property.borderType', type: 'enum', group: 'border', enum: STROKE_STYLE_OPTIONS },
 ]
 
 // ─── Chart ───────────────────────────────────────────────────────────
 
 const CHART_PROP_SCHEMAS: PropSchema[] = [
-  { key: 'chartType', label: 'designer.property.chartType', type: 'enum', group: 'content', enum: [
-    { label: 'Bar', value: 'bar' },
-    { label: 'Line', value: 'line' },
-    { label: 'Pie', value: 'pie' },
-    { label: 'Radar', value: 'radar' },
-    { label: 'Scatter', value: 'scatter' },
-  ] },
+  { key: 'chartType', label: 'designer.property.chartType', type: 'enum', group: 'content', enum: CHART_TYPE_OPTIONS },
   { key: 'backgroundColor', label: 'designer.property.background', type: 'color', group: 'appearance' },
 ]
 
@@ -209,24 +199,10 @@ const PAGE_NUMBER_PROP_SCHEMAS: PropSchema[] = [
   { key: 'format', label: 'designer.property.format', type: 'string', group: 'content' },
   { key: 'fontFamily', label: 'designer.property.font', type: 'font', group: 'typography' },
   { key: 'fontSize', label: 'designer.property.fontSize', type: 'number', group: 'typography', min: 1, max: 200, step: 1 },
-  { key: 'fontWeight', label: 'designer.property.fontWeight', type: 'enum', group: 'typography', enum: [
-    { label: 'Normal', value: 'normal' },
-    { label: 'Bold', value: 'bold' },
-  ] },
-  { key: 'fontStyle', label: 'designer.property.fontStyle', type: 'enum', group: 'typography', enum: [
-    { label: 'Normal', value: 'normal' },
-    { label: 'Italic', value: 'italic' },
-  ] },
-  { key: 'textAlign', label: 'designer.property.textAlign', type: 'enum', group: 'typography', enum: [
-    { label: 'Left', value: 'left' },
-    { label: 'Center', value: 'center' },
-    { label: 'Right', value: 'right' },
-  ] },
-  { key: 'verticalAlign', label: 'designer.property.verticalAlign', type: 'enum', group: 'typography', enum: [
-    { label: 'Top', value: 'top' },
-    { label: 'Middle', value: 'middle' },
-    { label: 'Bottom', value: 'bottom' },
-  ] },
+  { key: 'fontWeight', label: 'designer.property.fontWeight', type: 'enum', group: 'typography', enum: FONT_WEIGHT_OPTIONS },
+  { key: 'fontStyle', label: 'designer.property.fontStyle', type: 'enum', group: 'typography', enum: FONT_STYLE_OPTIONS },
+  { key: 'textAlign', label: 'designer.property.textAlign', type: 'enum', group: 'typography', enum: HORIZONTAL_ALIGN_OPTIONS },
+  { key: 'verticalAlign', label: 'designer.property.verticalAlign', type: 'enum', group: 'typography', enum: VERTICAL_ALIGN_OPTIONS },
   { key: 'lineHeight', label: 'designer.property.lineHeight', type: 'number', group: 'typography', min: 0.5, max: 5, step: 0.1 },
   { key: 'letterSpacing', label: 'designer.property.letterSpacing', type: 'number', group: 'typography', min: -5, max: 20, step: 0.5 },
   { key: 'color', label: 'designer.property.color', type: 'color', group: 'appearance' },
@@ -239,32 +215,14 @@ const TABLE_STATIC_TABLE_PROPS: PropSchema[] = [
   { key: 'equalizeCells', label: 'designer.property.equalizeCells', type: 'switch', group: 'table-layout' },
   { key: 'borderWidth', label: 'designer.property.borderWidth', type: 'number', group: 'table-border', min: 0, max: 10, step: 1 },
   { key: 'borderColor', label: 'designer.property.borderColor', type: 'color', group: 'table-border' },
-  { key: 'borderType', label: 'designer.property.borderType', type: 'enum', group: 'table-border', enum: [
-    { label: 'Solid', value: 'solid' },
-    { label: 'Dashed', value: 'dashed' },
-    { label: 'Dotted', value: 'dotted' },
-  ] },
+  { key: 'borderType', label: 'designer.property.borderType', type: 'enum', group: 'table-border', enum: STROKE_STYLE_OPTIONS },
   { key: 'cellPadding', label: 'designer.property.padding', type: 'number', group: 'table-layout', min: 0, max: 20, step: 1 },
   { key: 'typography.fontSize', label: 'designer.property.fontSize', type: 'number', group: 'table-typography', min: 1, max: 100, step: 1 },
   { key: 'typography.color', label: 'designer.property.color', type: 'color', group: 'table-typography' },
-  { key: 'typography.fontWeight', label: 'designer.property.fontWeight', type: 'enum', group: 'table-typography', enum: [
-    { label: 'Normal', value: 'normal' },
-    { label: 'Bold', value: 'bold' },
-  ] },
-  { key: 'typography.fontStyle', label: 'designer.property.fontStyle', type: 'enum', group: 'table-typography', enum: [
-    { label: 'Normal', value: 'normal' },
-    { label: 'Italic', value: 'italic' },
-  ] },
-  { key: 'typography.textAlign', label: 'designer.property.textAlign', type: 'enum', group: 'table-typography', enum: [
-    { label: 'Left', value: 'left' },
-    { label: 'Center', value: 'center' },
-    { label: 'Right', value: 'right' },
-  ] },
-  { key: 'typography.verticalAlign', label: 'designer.property.verticalAlign', type: 'enum', group: 'table-typography', enum: [
-    { label: 'Top', value: 'top' },
-    { label: 'Middle', value: 'middle' },
-    { label: 'Bottom', value: 'bottom' },
-  ] },
+  { key: 'typography.fontWeight', label: 'designer.property.fontWeight', type: 'enum', group: 'table-typography', enum: FONT_WEIGHT_OPTIONS },
+  { key: 'typography.fontStyle', label: 'designer.property.fontStyle', type: 'enum', group: 'table-typography', enum: FONT_STYLE_OPTIONS },
+  { key: 'typography.textAlign', label: 'designer.property.textAlign', type: 'enum', group: 'table-typography', enum: HORIZONTAL_ALIGN_OPTIONS },
+  { key: 'typography.verticalAlign', label: 'designer.property.verticalAlign', type: 'enum', group: 'table-typography', enum: VERTICAL_ALIGN_OPTIONS },
   { key: 'typography.lineHeight', label: 'designer.property.lineHeight', type: 'number', group: 'table-typography', min: 0.5, max: 5, step: 0.1 },
   { key: 'typography.letterSpacing', label: 'designer.property.letterSpacing', type: 'number', group: 'table-typography', min: -5, max: 20, step: 0.5 },
 ]
@@ -279,32 +237,14 @@ const TABLE_DATA_TABLE_PROPS: PropSchema[] = [
   { key: 'equalizeCells', label: 'designer.property.equalizeCells', type: 'switch', group: 'table-layout' },
   { key: 'borderWidth', label: 'designer.property.borderWidth', type: 'number', group: 'table-border', min: 0, max: 10, step: 1 },
   { key: 'borderColor', label: 'designer.property.borderColor', type: 'color', group: 'table-border' },
-  { key: 'borderType', label: 'designer.property.borderType', type: 'enum', group: 'table-border', enum: [
-    { label: 'Solid', value: 'solid' },
-    { label: 'Dashed', value: 'dashed' },
-    { label: 'Dotted', value: 'dotted' },
-  ] },
+  { key: 'borderType', label: 'designer.property.borderType', type: 'enum', group: 'table-border', enum: STROKE_STYLE_OPTIONS },
   { key: 'cellPadding', label: 'designer.property.padding', type: 'number', group: 'table-layout', min: 0, max: 20, step: 1 },
   { key: 'typography.fontSize', label: 'designer.property.fontSize', type: 'number', group: 'table-typography', min: 1, max: 100, step: 1 },
   { key: 'typography.color', label: 'designer.property.color', type: 'color', group: 'table-typography' },
-  { key: 'typography.fontWeight', label: 'designer.property.fontWeight', type: 'enum', group: 'table-typography', enum: [
-    { label: 'Normal', value: 'normal' },
-    { label: 'Bold', value: 'bold' },
-  ] },
-  { key: 'typography.fontStyle', label: 'designer.property.fontStyle', type: 'enum', group: 'table-typography', enum: [
-    { label: 'Normal', value: 'normal' },
-    { label: 'Italic', value: 'italic' },
-  ] },
-  { key: 'typography.textAlign', label: 'designer.property.textAlign', type: 'enum', group: 'table-typography', enum: [
-    { label: 'Left', value: 'left' },
-    { label: 'Center', value: 'center' },
-    { label: 'Right', value: 'right' },
-  ] },
-  { key: 'typography.verticalAlign', label: 'designer.property.verticalAlign', type: 'enum', group: 'table-typography', enum: [
-    { label: 'Top', value: 'top' },
-    { label: 'Middle', value: 'middle' },
-    { label: 'Bottom', value: 'bottom' },
-  ] },
+  { key: 'typography.fontWeight', label: 'designer.property.fontWeight', type: 'enum', group: 'table-typography', enum: FONT_WEIGHT_OPTIONS },
+  { key: 'typography.fontStyle', label: 'designer.property.fontStyle', type: 'enum', group: 'table-typography', enum: FONT_STYLE_OPTIONS },
+  { key: 'typography.textAlign', label: 'designer.property.textAlign', type: 'enum', group: 'table-typography', enum: HORIZONTAL_ALIGN_OPTIONS },
+  { key: 'typography.verticalAlign', label: 'designer.property.verticalAlign', type: 'enum', group: 'table-typography', enum: VERTICAL_ALIGN_OPTIONS },
   { key: 'typography.lineHeight', label: 'designer.property.lineHeight', type: 'number', group: 'table-typography', min: 0.5, max: 5, step: 0.1 },
   { key: 'typography.letterSpacing', label: 'designer.property.letterSpacing', type: 'number', group: 'table-typography', min: -5, max: 20, step: 0.5 },
   { key: 'headerBackground', label: 'designer.property.headerBackground', type: 'color', group: 'table-appearance' },
