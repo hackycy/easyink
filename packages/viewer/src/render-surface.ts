@@ -3,7 +3,6 @@ import type { MaterialNode, PageBackground, PageSchema } from '@easyink/schema'
 import type { MaterialRendererRegistry } from './material-registry'
 import type { ViewerDiagnosticEvent, ViewerRenderContext } from './types'
 import { getLineThickness, LINE_TYPE } from '@easyink/material-line'
-import { isTableNode } from '@easyink/schema'
 import { escapeHtml, UNIT_FACTOR } from '@easyink/shared'
 import { isErrorSentinel, safeRender } from './diagnostic-middleware'
 
@@ -233,10 +232,7 @@ function createElementWrapper(
   wrapper.style.width = `${node.width}${unit}`
   const renderHeight = node.type === LINE_TYPE ? getLineThickness(node) : node.height
   wrapper.style.height = `${renderHeight}${unit}`
-  // Tables use border-collapse:collapse where outer borders overflow by half
-  // the border width. Use overflow:visible to avoid clipping bottom/right borders.
-  // Page-level overflow:hidden still prevents content from escaping the page.
-  wrapper.style.overflow = isTableNode(node) ? 'visible' : 'hidden'
+  wrapper.style.overflow = 'hidden'
 
   if (node.rotation) {
     wrapper.style.transform = `rotate(${node.rotation}deg)`

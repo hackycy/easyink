@@ -11,6 +11,8 @@ export function renderPlainTextCell(text?: string): string {
   return escapeHtml(text || '')
 }
 
+type BorderSide = 'top' | 'right' | 'bottom' | 'left'
+
 /**
  * Build `<colgroup>` from column ratios, normalizing to percentage widths.
  */
@@ -152,11 +154,11 @@ export function renderTableHtml(options: RenderTableHtmlOptions): string {
       const cs = cell.colSpan && cell.colSpan > 1 ? ` colspan="${cell.colSpan}"` : ''
       const content = cellRenderer(cell, ri, ci)
       const typo = resolveCellTypography(cell, props.typography ?? TABLE_TYPOGRAPHY_DEFAULTS)
-      const cb = cell.border
-      const borderTop = cb?.top !== false ? `${bw}${unit} ${bt} ${bc}` : 'none'
-      const borderRight = cb?.right !== false ? `${bw}${unit} ${bt} ${bc}` : 'none'
-      const borderBottom = cb?.bottom !== false ? `${bw}${unit} ${bt} ${bc}` : 'none'
-      const borderLeft = cb?.left !== false ? `${bw}${unit} ${bt} ${bc}` : 'none'
+      const borderVisibility = getRenderedCellBorders(topology, ri, ci, cell)
+      const borderTop = borderVisibility.top ? `${bw}${unit} ${bt} ${bc}` : 'none'
+      const borderRight = borderVisibility.right ? `${bw}${unit} ${bt} ${bc}` : 'none'
+      const borderBottom = borderVisibility.bottom ? `${bw}${unit} ${bt} ${bc}` : 'none'
+      const borderLeft = borderVisibility.left ? `${bw}${unit} ${bt} ${bc}` : 'none'
 
       // Inner block has explicit height = sum of scaled spanned row heights.
       // It is the source of truth for cell height; <td> padding is zeroed so
@@ -165,10 +167,12 @@ export function renderTableHtml(options: RenderTableHtmlOptions): string {
       let cellHeight = 0
       for (let r = ri; r < Math.min(ri + rowSpan, scaledRowHeights.length); r++)
         cellHeight += scaledRowHeights[r]!
+      const verticalBorderWidth = (borderVisibility.top ? bw : 0) + (borderVisibility.bottom ? bw : 0)
+      const innerHeight = Math.max(0, cellHeight - verticalBorderWidth)
       const justify = vAlignToJustify[typo.verticalAlign] ?? 'center'
-      const innerStyle = `display:flex;flex-direction:column;justify-content:${justify};box-sizing:border-box;height:${cellHeight}${unit};padding:${pad}${unit};overflow:hidden;text-align:${typo.textAlign}`
+      const innerStyle = `display:flex;flex-direction:column;justify-content:${justify};box-sizing:border-box;height:${innerHeight}${unit};padding:${pad}${unit};overflow:hidden;text-align:${typo.textAlign}`
 
-      cells += `<td${rs}${cs} style="border-top:${borderTop};border-right:${borderRight};border-bottom:${borderBottom};border-left:${borderLeft};padding:0;font-size:${typo.fontSize}${unit};color:${typo.color};font-weight:${typo.fontWeight};font-style:${typo.fontStyle};line-height:${typo.lineHeight};letter-spacing:${typo.letterSpacing}${unit};vertical-align:top${cellStyle}"><div style="${innerStyle}">${content}</div></td>`
+      cells += `<td${rs}${cs} style="box-sizing:border-box;height:${cellHeight}${unit};border-top:${borderTop};border-right:${borderRight};border-bottom:${borderBottom};border-left:${borderLeft};padding:0;font-size:${typo.fontSize}${unit};color:${typo.color};font-weight:${typo.fontWeight};font-style:${typo.fontStyle};line-height:${typo.lineHeight};letter-spacing:${typo.letterSpacing}${unit};vertical-align:top${cellStyle}"><div style="${innerStyle}">${content}</div></td>`
     }
     rows += `<tr style="height:${scaledHeight}${unit}${rowExtraStyle}">${cells}</tr>`
 
@@ -179,5 +183,38 @@ export function renderTableHtml(options: RenderTableHtmlOptions): string {
   }
 
   const extra = tableStyle ? `;${tableStyle}` : ''
-  return `<table style="width:100%;border-collapse:collapse;table-layout:fixed${extra}">${colgroup}${rows}</table>`
+  return `<table style="width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;box-sizing:border-box${extra}">${colgroup}${rows}</table>`
+}
+
+function getRenderedCellBorders(
+  topology: TableTopologySchema,
+  rowIndex: number,
+  colIndex: number,
+  cell: TableCellSchema,
+): Record<BorderSide, boolean> {
+  const rowSpan = cell.rowSpan ?? 1
+  const colSpan = cell.colSpan ?? 1
+  const lastCoveredRow = rowIndex + rowSpan - 1
+  const lastCoveredCol = colIndex + colSpan - 1
+  const isLastRow = lastCoveredRow >= topology.rows.length - 1
+  const isLastCol = lastCoveredCol >= topology.columns.length - 1
+
+  return {
+    top: rowIndex === 0
+      ? isCellBorderEnabled(cell, 'top')
+      : isCellBorderEnabled(cell, 'top') || isCellBorderEnabled(getCellAt(topology, rowIndex - 1, colIndex), 'bottom'),
+    left: colIndex === 0
+      ? isCellBorderEnabled(cell, 'left')
+      : isCellBorderEnabled(cell, 'left') || isCellBorderEnabled(getCellAt(topology, rowIndex, colIndex - 1), 'right'),
+    right: isLastCol && isCellBorderEnabled(cell, 'right'),
+    bottom: isLastRow && isCellBorderEnabled(cell, 'bottom'),
+  }
+}
+
+function isCellBorderEnabled(cell: TableCellSchema | undefined, side: BorderSide): boolean {
+  return cell?.border?.[side] !== false
+}
+
+function getCellAt(topology: TableTopologySchema, rowIndex: number, colIndex: number): TableCellSchema | undefined {
+  return topology.rows[rowIndex]?.cells[colIndex]
 }

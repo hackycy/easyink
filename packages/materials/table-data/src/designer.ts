@@ -91,13 +91,23 @@ function buildHtml(node: MaterialNode, unit: UnitType, context: MaterialExtensio
     // Wrap placeholder content in a fixed-height inner div to match the main
     // renderer — keeps <tr> from growing past schema row.height (otherwise
     // &nbsp; + padding can exceed the requested row height when small).
+    const hasVisibleRowsAfterRepeat = node.table.topology.rows.some((_, index) => index > repeatTemplateIndex && !hidden[index])
     for (let pr = 0; pr < 2; pr++) {
       let cells = ''
       for (let ci = 0; ci < repeatRow.cells.length; ci++) {
         const cell = repeatRow.cells[ci]!
         const cs = cell.colSpan && cell.colSpan > 1 ? ` colspan="${cell.colSpan}"` : ''
-        const innerStyle = `box-sizing:border-box;height:${scaledRepeatHeight}${unit};padding:${pad}${unit};overflow:hidden`
-        cells += `<td${cs} style="border:${bw}${unit} ${bt} ${bc};padding:0;background:rgba(0,0,0,0.04);vertical-align:top"><div style="${innerStyle}">&nbsp;</div></td>`
+        const colSpan = cell.colSpan ?? 1
+        const isLastCol = ci + colSpan >= repeatRow.cells.length
+        const isLastPreviewRow = pr === 1
+        const borderTop = `${bw}${unit} ${bt} ${bc}`
+        const borderRight = isLastCol ? `${bw}${unit} ${bt} ${bc}` : 'none'
+        const borderBottom = isLastPreviewRow && !hasVisibleRowsAfterRepeat ? `${bw}${unit} ${bt} ${bc}` : 'none'
+        const borderLeft = `${bw}${unit} ${bt} ${bc}`
+        const verticalBorderWidth = bw + (borderBottom === 'none' ? 0 : bw)
+        const innerHeight = Math.max(0, scaledRepeatHeight - verticalBorderWidth)
+        const innerStyle = `box-sizing:border-box;height:${innerHeight}${unit};padding:${pad}${unit};overflow:hidden`
+        cells += `<td${cs} style="box-sizing:border-box;height:${scaledRepeatHeight}${unit};border-top:${borderTop};border-right:${borderRight};border-bottom:${borderBottom};border-left:${borderLeft};padding:0;background:rgba(0,0,0,0.04);vertical-align:top"><div style="${innerStyle}">&nbsp;</div></td>`
       }
       placeholderRowsHtml += `<tr style="height:${scaledRepeatHeight}${unit};pointer-events:none">${cells}</tr>`
     }
