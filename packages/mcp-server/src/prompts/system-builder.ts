@@ -105,32 +105,91 @@ If 1 and 2 disagree on paper or table strategy, follow 1 ONLY when the user expl
       "id": "tbl-items",
       "type": "table-data",
       "x": 20, "y": 60, "width": 170, "height": 80,
-      "props": {},
+      "props": {
+        "borderWidth": 0.2,
+        "cellPadding": 1.5,
+        "typography": {
+          "fontSize": 10,
+          "color": "#111827",
+          "fontWeight": "normal",
+          "fontStyle": "normal",
+          "lineHeight": 1.25,
+          "letterSpacing": 0,
+          "textAlign": "left",
+          "verticalAlign": "middle"
+        }
+      },
       "table": {
         "kind": "data",
         "topology": {
           "columns": [
-            { "id": "col-name", "ratio": 4 },
-            { "id": "col-qty", "ratio": 1 },
-            { "id": "col-price", "ratio": 2 },
-            { "id": "col-amount", "ratio": 2 }
+            { "ratio": 0.44 },
+            { "ratio": 0.11 },
+            { "ratio": 0.22 },
+            { "ratio": 0.23 }
           ],
           "rows": [
-            { "id": "row-header", "kind": "header", "height": 8 },
-            { "id": "row-tpl", "kind": "repeat-template", "height": 7, "sourcePath": "items" }
+            {
+              "height": 8,
+              "role": "header",
+              "cells": [
+                { "content": { "text": "商品" }, "typography": { "fontWeight": "bold" } },
+                { "content": { "text": "数量" }, "typography": { "fontWeight": "bold", "textAlign": "right" } },
+                { "content": { "text": "单价" }, "typography": { "fontWeight": "bold", "textAlign": "right" } },
+                { "content": { "text": "金额" }, "typography": { "fontWeight": "bold", "textAlign": "right" } }
+              ]
+            },
+            {
+              "height": 7,
+              "role": "repeat-template",
+              "cells": [
+                {
+                  "binding": {
+                    "sourceId": "ds-001",
+                    "sourceName": "purchaseOrder",
+                    "fieldPath": "items/name",
+                    "fieldLabel": "商品"
+                  }
+                },
+                {
+                  "binding": {
+                    "sourceId": "ds-001",
+                    "sourceName": "purchaseOrder",
+                    "fieldPath": "items/quantity",
+                    "fieldLabel": "数量"
+                  },
+                  "typography": { "textAlign": "right" }
+                },
+                {
+                  "binding": {
+                    "sourceId": "ds-001",
+                    "sourceName": "purchaseOrder",
+                    "fieldPath": "items/unitPrice",
+                    "fieldLabel": "单价"
+                  },
+                  "typography": { "textAlign": "right" }
+                },
+                {
+                  "binding": {
+                    "sourceId": "ds-001",
+                    "sourceName": "purchaseOrder",
+                    "fieldPath": "items/amount",
+                    "fieldLabel": "金额"
+                  },
+                  "typography": { "textAlign": "right" }
+                }
+              ]
+            }
           ]
         },
-        "layout": { "borderColor": "#000000", "borderWidth": 0.2 },
-        "cells": [
-          { "rowId": "row-header", "columnId": "col-name", "content": { "text": "商品" } },
-          { "rowId": "row-header", "columnId": "col-qty", "content": { "text": "数量" } },
-          { "rowId": "row-header", "columnId": "col-price", "content": { "text": "单价" } },
-          { "rowId": "row-header", "columnId": "col-amount", "content": { "text": "金额" } },
-          { "rowId": "row-tpl", "columnId": "col-name", "binding": { "fieldPath": "items/name" } },
-          { "rowId": "row-tpl", "columnId": "col-qty", "binding": { "fieldPath": "items/quantity" } },
-          { "rowId": "row-tpl", "columnId": "col-price", "binding": { "fieldPath": "items/unitPrice" } },
-          { "rowId": "row-tpl", "columnId": "col-amount", "binding": { "fieldPath": "items/amount" } }
-        ]
+        "layout": {
+          "borderAppearance": "all",
+          "borderWidth": 0.2,
+          "borderType": "solid",
+          "borderColor": "#000000"
+        },
+        "showHeader": true,
+        "showFooter": false
       }
     }
   ]
@@ -145,20 +204,28 @@ If 1 and 2 disagree on paper or table strategy, follow 1 ONLY when the user expl
 - \`container\`: include \`children\` array; child coordinates are relative to the container.
 - \`qrcode\` / \`barcode\`: MUST have \`binding\` to a data field.
 
+## table-data special semantics
+- A \`table-data\` element has one real header band, one real repeat-template band, and optionally one real footer band.
+- The repeat-template row defines the data content area once. At runtime it expands into however many records exist in the bound array.
+- In the designer, EasyInk may show two virtual preview rows after the repeat-template row so the user can see the data area. Those preview rows are display-only and MUST NOT be emitted in \`table.topology.rows\`.
+- If the request asks for multiple example rows in a dynamic table, keep ONE repeat-template row in schema unless the user explicitly wants a fixed non-repeating table.
+
 ## Common Mistakes (and why they break things)
 - Using \`type: "table"\` — there is no such canonical type; the validator rejects it. Use \`table-data\` or \`table-static\`.
 - Setting \`staticBinding\` on a non-table element — \`staticBinding\` is reserved for cells inside \`table-static\`. On a normal element it gets stripped and the value is lost.
 - Putting an A4 page on a receipt — wastes thermal paper, breaks print drivers; receipts MUST use \`stack\` mode at 80mm width.
 - Reusing the previous turn's invoice/customer sample data for an unrelated domain (e.g. a label) — sampleData mismatched to fields fails accuracy validation.
 - Chinese \`title\` mixed with English sample values like "Sample" — confuses end users; keep them in the prompt's language.
-- Omitting required fields the plan listed under \`requiredFieldHints\` — the deterministic builder cannot recover items/total if the intent never declared them.
+- Omitting required fields the plan listed under \`generationPlan.requiredFieldHints\` — the deterministic builder cannot recover items/total if the intent never declared them.
 - Repeating row templates inside \`table-static\` — static tables have fixed rows; repeating data goes in \`table-data\` only.
+- Encoding the designer's two preview rows as real \`table-data\` rows — runtime expansion will duplicate the data area. Keep exactly one repeat-template row and let the designer render the preview rows.
 
 ## Pre-output self-check (reasoning only, do not emit)
 Before emitting JSON, silently verify:
 - page mirrors \`generationPlan.page\`?
 - every required field from \`generationPlan.requiredFieldHints\` is referenced by some element binding or table cell?
 - arrays are rendered via \`table-data\` whenever \`tableStrategy = table-data-for-arrays\`?
+- dynamic tables keep preview rows out of \`table.topology.rows\`?
 - sample data uses the same domain vocabulary as the prompt?
 - all fieldLabel/title strings share the prompt's language?
 
@@ -195,15 +262,18 @@ export function buildIntentSystemPrompt(): string {
 2. Describe document intent, fields, sections, and table columns. NEVER invent layout coordinates — that's the builder's job.
 3. English camelCase paths with \`/\` separators; \`title\` / \`fieldLabel\` follow the user's prompt language. Mixed languages allowed only for established proper nouns (SKU, QR Code, ID).
 4. For arrays/detail lists, declare an array field with \`children\` AND an \`array-table\` section pointing to the array path. Skipping either half breaks the builder.
-5. \`sampleData\` is optional, but if provided MUST match \`fields\` exactly (every leaf path, types align, domain-appropriate values).
-6. Trust the resolved domain. When the plan domain is supermarket-receipt / restaurant-receipt, items + total are NON-NEGOTIABLE.
-7. Every path listed in \`generationPlan.requiredFieldHints\` MUST appear in \`fields\` with the declared type. Keep the children when the hint declares them.
-8. When asked to fix issues from a previous attempt, address every listed issue WITHOUT dropping previously-included fields.
-9. For strict structured-output compatibility: use \`null\` for absent scalar/object fields and \`[]\` for absent arrays. Never omit required keys in the tool schema.
+5. An \`array-table\` section describes the real dynamic columns once. It does NOT enumerate sample rows.
+6. EasyInk's designer may display two virtual preview rows for a data table, but those preview rows are display-only. Do NOT create extra fields, columns, or sections for them.
+7. \`sampleData\` is optional, but if provided MUST match \`fields\` exactly (every leaf path, types align, domain-appropriate values).
+8. Trust the resolved domain. When the plan domain is supermarket-receipt / restaurant-receipt, items + total are NON-NEGOTIABLE.
+9. Every path listed in \`generationPlan.requiredFieldHints\` MUST appear in \`fields\` with the declared type. Keep the children when the hint declares them.
+10. When asked to fix issues from a previous attempt, address every listed issue WITHOUT dropping previously-included fields.
+11. For strict structured-output compatibility: use \`null\` for absent scalar/object fields and \`[]\` for absent arrays. Never omit required keys in the tool schema.
 
 ## Common Mistakes (and why they break things)
 - Skipping \`requiredFieldHints\` paths — the builder injects placeholders and triggers a retry, wasting a model call.
 - Declaring an array field but no \`array-table\` section (or vice versa) — the builder cannot render rows.
+- Treating the designer's two preview rows as real data rows — the builder already turns one \`array-table\` section into one repeat-template band, and the designer previews extra rows itself.
 - Mixing Chinese fieldLabel with English sampleData strings — end users see broken bilingual rows.
 - Reusing invoice/company sample data when the domain is a receipt or label — domain-mismatched data fails accuracy validation.
 - Padding fields with speculative additions when the user just asked to fix one issue — keeps the diff noisy and invites contradiction.
@@ -212,6 +282,7 @@ export function buildIntentSystemPrompt(): string {
 Before emitting JSON, silently verify:
 - every \`requiredFieldHints[].path\` is in \`fields\`?
 - arrays have a matching \`array-table\` section?
+- array tables describe columns once instead of inventing preview rows?
 - title/fieldLabel language matches the prompt?
 - sampleData (if present) covers every leaf path with domain-appropriate values?
 

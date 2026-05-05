@@ -53,6 +53,25 @@ describe('template intent builder', () => {
     ])
   })
 
+  it('keeps elements below table-data out of the designer preview area', () => {
+    const plan = inferAIGenerationPlan('生成一个商超小票模版，附带商品结账清单和合计')
+    const result = buildSchemaFromTemplateIntent({
+      name: '商超小票',
+      fields: [],
+      sections: [],
+    }, { prompt: '生成一个商超小票模版，附带商品结账清单和合计', plan })
+
+    const tableIndex = result.schema.elements.findIndex(element => element.type === 'table-data')
+    const table = result.schema.elements[tableIndex] as TableNode | undefined
+    const nextElement = result.schema.elements[tableIndex + 1]
+    const repeatRowHeight = table?.table.topology.rows.find(row => row.role === 'repeat-template')?.height ?? 0
+    const expectedDesignerBottom = (table?.y ?? 0) + (table?.height ?? 0) + repeatRowHeight * 2
+
+    expect(tableIndex).toBeGreaterThanOrEqual(0)
+    expect(nextElement).toBeTruthy()
+    expect(nextElement?.y).toBeGreaterThanOrEqual(expectedDesignerBottom)
+  })
+
   it('keeps element ids isolated to a single build invocation', () => {
     const prompt = '生成一个公告模板，包含两段说明文字'
     const plan = inferAIGenerationPlan(prompt)

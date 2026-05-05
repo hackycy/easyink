@@ -1,4 +1,4 @@
-import type { BindingRef, DocumentSchema, ExpectedDataSource, ExpectedField, MaterialNode, PageSchema } from '@easyink/schema'
+import type { BindingRef, DocumentSchema, ExpectedDataSource, ExpectedField, MaterialNode, PageSchema, TableDataSchema, TableNode } from '@easyink/schema'
 import type { AIGenerationPlan } from '@easyink/shared'
 import type { DomainFieldSpec, DomainProfile } from './domain-profile'
 import { BLOCKED_PATH_KEYS, FIELD_PATH_SEPARATOR } from '@easyink/shared'
@@ -62,6 +62,8 @@ export interface TemplateBuildResult {
    */
   missingRequiredPaths: string[]
 }
+
+const TABLE_DATA_DESIGNER_PREVIEW_ROW_COUNT = 2
 
 export function buildSchemaFromTemplateIntent(
   rawIntent: TemplateGenerationIntent,
@@ -281,7 +283,7 @@ function addArrayTable(
   const cellFontSize = layout.compact ? 2.6 : 3
   const rowHeight = cellFontSize * 1.8
   const tableHeight = rowHeight * 2
-  elements.push({
+  const tableNode = {
     id: layout.nextElementId('tbl-items'),
     type: 'table-data',
     x: layout.margin,
@@ -338,8 +340,31 @@ function addArrayTable(
       showHeader: true,
       showFooter: false,
     },
-  } as MaterialNode)
-  layout.y += tableHeight + 7
+  } as TableNode
+
+  elements.push(tableNode)
+  layout.y += getGeneratedTableDataVisualHeight(tableNode) + 7
+}
+
+function getGeneratedTableDataVisualHeight(node: TableNode): number {
+  const table = node.table as TableDataSchema
+  const visibleRows = table.topology.rows.filter((row) => {
+    if (row.role === 'header')
+      return table.showHeader !== false
+    if (row.role === 'footer')
+      return table.showFooter !== false
+    return true
+  })
+  const repeatRow = visibleRows.find(row => row.role === 'repeat-template')
+  if (!repeatRow)
+    return node.height
+
+  const visibleHeight = visibleRows.reduce((sum, row) => sum + row.height, 0)
+  if (visibleHeight <= 0)
+    return node.height
+
+  const rowScale = node.height / visibleHeight
+  return node.height + repeatRow.height * rowScale * TABLE_DATA_DESIGNER_PREVIEW_ROW_COUNT
 }
 
 function addCodePlaceholder(

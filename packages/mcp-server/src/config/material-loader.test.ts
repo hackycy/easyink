@@ -22,5 +22,7 @@ describe('materials config', () => {
     expect(aliases.table).toBe('table-data')
     expect(context).toContain('Generate the canonical material type, never the alias')
     expect(context).toContain('Do not use legacy type table')
+    expect(context).toContain('two virtual preview rows')
+    expect(context).toContain('display-only and must not be encoded as extra schema rows')
   })
 })
