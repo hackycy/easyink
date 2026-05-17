@@ -38,8 +38,18 @@ curl http://localhost:18080/api/printers
     {
       "name": "HP LaserJet Pro",
       "isDefault": true,
-      "isOnline": true,
-      "driverName": "HP Universal Printing PCL 6"
+      "status": {
+        "isReady": true,
+        "statusCode": "READY",
+        "message": "打印机就绪",
+        "isOnline": true,
+        "hasPaper": true,
+        "isPaperJam": false,
+        "printerState": "0"
+      },
+      "supportedPaperSizes": [
+        { "name": "A4", "width": 826, "height": 1169 }
+      ]
     }
   ]
 }
@@ -61,11 +71,13 @@ curl http://localhost:18080/api/printers/HP%20LaserJet/status
   "statusCode": "READY",
   "message": "打印机就绪",
   "isOnline": true,
-  "hasPaper": true
+  "hasPaper": true,
+  "isPaperJam": false,
+  "printerState": "0"
 }
 ```
 
-状态码：`READY` / `PRINTER_OFFLINE` / `PAPER_JAM` / `PAPER_OUT` / `PRINTER_STOPPED` / `PRINTER_ERROR` / `PRINTER_NOT_FOUND`
+状态码：`READY` / `PRINTER_OFFLINE` / `PAPER_JAM` / `PAPER_OUT` / `PRINTER_STOPPED` / `PRINTER_ERROR` / `PRINTER_NOT_FOUND` / `WMI_UNAVAILABLE`
 
 ### 打印
 
@@ -109,6 +121,7 @@ curl -X POST http://localhost:18080/api/print \
 | `paperSize` | object | 否 | PDF/模板纸张尺寸 `{width, height, unit}`；默认使用 PDF 原生尺寸 |
 | `forcePaperSize` | bool | 否 | 是否强制把 `paperSize` 作为驱动纸张参数，默认 `false` |
 | `offset` | object | 否 | 打印偏移 `{x, y}` |
+| `userData` | object | 否 | 用户数据，用于审计日志 `{userId, labelType}` |
 
 热敏小票机、连续纸默认保持 `forcePaperSize=false`，由驱动使用当前介质尺寸；标签机必须显式指定尺寸时再开启。
 
@@ -168,10 +181,13 @@ curl http://localhost:18080/api/jobs/550e8400-...
 ```json
 {
   "jobId": "550e8400-...",
-  "status": "Completed",
   "printerName": "HP LaserJet",
+  "status": "Completed",
   "createdAt": "2025-01-01T00:00:00Z",
-  "completedAt": "2025-01-01T00:00:01Z"
+  "startedAt": "2025-01-01T00:00:00Z",
+  "completedAt": "2025-01-01T00:00:01Z",
+  "errorMessage": null,
+  "result": { "id": "...", "success": true, "data": null, "errorInfo": null }
 }
 ```
 
@@ -184,7 +200,7 @@ curl http://localhost:18080/api/jobs/550e8400-...
 查询审计日志，支持筛选。
 
 ```bash
-curl "http://localhost:18080/api/logs?printerName=HP&status=completed&limit=50"
+curl "http://localhost:18080/api/logs?printerName=HP&status=completed&startTime=2025-01-01&endTime=2025-12-31&userId=user1&limit=50&offset=0"
 ```
 
 参数：
@@ -193,7 +209,11 @@ curl "http://localhost:18080/api/logs?printerName=HP&status=completed&limit=50"
 |------|------|
 | `printerName` | 按打印机名筛选（模糊匹配） |
 | `status` | 按状态筛选 |
-| `limit` | 返回条数上限 |
+| `startTime` | 开始时间（ISO 8601） |
+| `endTime` | 结束时间（ISO 8601） |
+| `userId` | 按用户 ID 筛选 |
+| `limit` | 返回条数上限，默认 100 |
+| `offset` | 偏移量，默认 0 |
 
 ### 服务状态
 
@@ -311,5 +331,13 @@ ws://localhost:18080/ws?apiKey=your-secret-key
 | `PRINT_FAILED` | 打印失败 |
 | `PRINT_TIMEOUT` | 打印超时 |
 | `INVALID_PDF_SOURCE` | PDF 来源无效 |
+| `CHUNK_TOO_LARGE` | PDF 分块过大（超过 2 MB） |
+| `PDF_TOO_LARGE` | PDF 文件过大（超过 50 MB） |
+| `INVALID_CHUNK` | 分块索引或元数据无效 |
+| `UPLOAD_NOT_FOUND` | 分块上传会话不存在或已过期（10 分钟 TTL） |
+| `UPLOAD_INCOMPLETE` | 分块上传未完成 |
+| `MESSAGE_TOO_LARGE` | WebSocket 消息过大 |
+| `INVALID_MESSAGE` | WebSocket 消息格式无效 |
+| `INTERNAL_ERROR` | 内部错误 |
 | `UNAUTHORIZED` | 认证失败 |
 | `NOT_FOUND` | 接口不存在 |

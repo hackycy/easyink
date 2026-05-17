@@ -18,11 +18,13 @@ EasyInk.Printer 是完整的 Windows 桌面打印服务应用，以内置 HTTP/W
     │  HTTP / WebSocket
     ▼
 EasyInk.Printer
-├── HttpServer         ← 路由 + API + CORS + 认证
-├── WebSocketHandler   ← 实时通信 + 分块上传
-├── EngineApi          ← 引用 EasyInk.Engine.dll
-├── AuditService       ← SQLite + Dapper
-└── WinForms UI        ← 系统托盘 + 管理窗口
+├── HttpServer              ← 路由 + API + CORS + 认证
+├── WebSocketHandler         ← 实时通信 + 二进制帧 + 分块上传
+├── WebSocketCommandHandler  ← 命令分发（print / getPrinters / uploadPdfChunk 等）
+├── EngineApi                ← 引用 EasyInk.Engine.dll
+├── AuditService             ← SQLite + Dapper
+├── PrintDebugLogService     ← 打印调试日志（请求/响应/PDF 摘要）
+└── WinForms UI              ← 系统托盘 + 管理窗口（仪表盘/打印机/任务/日志/设置）
 ```
 
 ## 安装
@@ -73,12 +75,27 @@ build-installer.bat 1.2.3-beta.1
   "startMinimized": true,
   "dbPath": null,
   "crashLogDir": null,
+  "printDebugLoggingEnabled": false,
+  "printDebugArtifactsDir": null,
   "trustAllOrigins": false,
   "apiKey": null,
+  "language": "",
+  "lowDpiPrintEnhancement": "boost",
+  "rawPrinterNames": [],
+  "rawPrintDpi": 203,
+  "rawPrintMaxDotsWidth": 576,
+  "sumatraPdfPath": null,
+  "sumatraTempDir": null,
+  "sumatraPrinterNames": [],
+  "sumatraPrintSettings": "fit",
+  "sumatraTimeoutSeconds": 60,
   "maxWebSocketConnections": 100,
   "maxQueueSize": 100,
   "printTimeoutSeconds": 30,
-  "maxConcurrentRequests": 50
+  "maxConcurrentRequests": 50,
+  "auditLogRetentionDays": 90,
+  "fileLogRetentionDays": 7,
+  "printDebugArtifactRetentionCount": 10
 }
 ```
 
@@ -90,12 +107,27 @@ build-installer.bat 1.2.3-beta.1
 | `startMinimized` | 启动时最小化 | `true` |
 | `dbPath` | 审计数据库路径（null 为默认位置） | `null` |
 | `crashLogDir` | 崩溃日志目录 | `null` |
+| `printDebugLoggingEnabled` | 启用打印调试日志 | `false` |
+| `printDebugArtifactsDir` | 打印调试产物目录 | `null` |
 | `trustAllOrigins` | 允许所有 CORS 来源 | `false` |
 | `apiKey` | API Key（null 为不启用认证） | `null` |
-| `maxWebSocketConnections` | WebSocket 最大连接数 | `100` |
-| `maxQueueSize` | 打印队列最大长度 | `100` |
-| `printTimeoutSeconds` | 单次打印超时（秒） | `30` |
-| `maxConcurrentRequests` | HTTP 最大并发请求数 | `50` |
+| `language` | 界面语言（空为系统默认） | `""` |
+| `lowDpiPrintEnhancement` | 低 DPI 小票打印位图增强模式：`normal` / `boost` / `monochrome` | `"boost"` |
+| `rawPrinterNames` | 使用 Raw ESC/POS 直发模式的打印机名列表（模糊匹配） | `[]` |
+| `rawPrintDpi` | Raw 打印 DPI | `203` |
+| `rawPrintMaxDotsWidth` | Raw 打印最大宽度（点数，576 = 80mm 纸宽 @ 8 dots/mm） | `576` |
+| `sumatraPdfPath` | SumatraPDF.exe 路径（null = 不启用 SumatraPDF fallback） | `null` |
+| `sumatraTempDir` | SumatraPDF 临时 PDF 目录 | `null` |
+| `sumatraPrinterNames` | 使用 SumatraPDF 的打印机名列表（模糊匹配） | `[]` |
+| `sumatraPrintSettings` | SumatraPDF -print-settings 参数 | `"fit"` |
+| `sumatraTimeoutSeconds` | SumatraPDF 超时时间（秒） | `60` |
+| `maxWebSocketConnections` | WebSocket 最大连接数（下限 10） | `100` |
+| `maxQueueSize` | 打印队列最大长度（下限 10） | `100` |
+| `printTimeoutSeconds` | 单次打印超时（秒，下限 5） | `30` |
+| `maxConcurrentRequests` | HTTP 最大并发请求数（下限 5） | `50` |
+| `auditLogRetentionDays` | 审计日志保留天数（1-3650） | `90` |
+| `fileLogRetentionDays` | 文件日志保留天数（1-3650） | `7` |
+| `printDebugArtifactRetentionCount` | 打印调试产物保留份数（下限 1） | `10` |
 
 ## 安全
 

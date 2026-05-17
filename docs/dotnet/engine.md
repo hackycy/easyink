@@ -5,7 +5,7 @@ EasyInk.Engine 是纯打印引擎 DLL，仅负责打印链路，不包含 UI、H
 ## 设计原则
 
 - **无 UI 依赖**：不引用 WinForms/WPF，可嵌入任何宿主
-- **无持久化**：日志通过静态事件 `EngineApi.Log` 回传，由宿主决定存储方式
+- **无持久化**：日志和打印完成通知通过实例事件回传，由宿主决定存储方式
 - **策略模式**：PDF 来源（Base64 / URL / Binary）通过 `IPdfProvider` 抽象，可扩展
 - **接口驱动**：`IPrinterService` 和 `IPrintService` 可替换默认实现
 
@@ -13,15 +13,19 @@ EasyInk.Engine 是纯打印引擎 DLL，仅负责打印链路，不包含 UI、H
 
 ```
 EngineApi (公共入口)
-├── IPrinterService          ← 打印机枚举/状态查询
-│   └── PrinterService       ← 默认实现：WMI 查询
-├── IPrintService            ← 打印执行
-│   └── PdfiumPrintService   ← 默认实现：Pdfium 渲染 + Windows Print Spooler
-├── PrintJobQueue            ← 异步队列（BlockingCollection + 后台线程）
-└── IPdfProvider             ← PDF 数据源策略
+├── IPrinterService              ← 打印机枚举/状态查询
+│   └── PrinterService           ← 默认实现：WMI 查询
+├── IPrintService                ← 打印执行
+│   └── RoutingPrintService      ← 路由层：按打印机名分发到不同实现
+│       ├── PdfiumPrintService   ← GDI 路径：Pdfium 渲染 + Win32 GDI 打印
+│       ├── EscPosRawPrintService← Raw 路径：位图转 ESC/POS 直发
+│       └── SumatraPdfPrintService← SumatraPDF 路径：外部 PDF 引擎打印
+├── PrintJobQueue                ← 异步队列（BlockingCollection + 后台线程）
+├── NativePrintApi               ← Win32 GDI 底层打印 API
+└── IPdfProvider                 ← PDF 数据源策略
     ├── Base64PdfProvider
     ├── BlobPdfProvider
-    └── UrlPdfProvider       ← 含 SSRF 防护（屏蔽私有 IP）
+    └── UrlPdfProvider           ← 含 SSRF 防护（屏蔽私有 IP）
 ```
 
 ## 引入方式
@@ -46,6 +50,22 @@ using EasyInk.Engine;
 
 // 创建引擎（默认使用 Pdfium + Windows Print Spooler）
 using var api = new EngineApi();
+
+// 构造函数完整签名：
+// EngineApi(
+//     IPrinterService? printerService = null,        // 打印机服务（null = WMI 默认）
+//     IPrintService? printService = null,            // 打印服务（null = RoutingPrintService）
+//     int? maxQueueSize = null,                      // 异步队列上限（null = 100）
+//     IEnumerable<string>? rawPrinterNames = null,   // 使用 ESC/POS raw 直发的打印机名列表
+//     int rawPrintDpi = 203,                         // Raw 打印 DPI
+//     int rawPrintMaxDotsWidth = 576,                // Raw 打印最大宽度（点数）
+//     string? sumatraPdfPath = null,                 // SumatraPDF.exe 路径
+//     IEnumerable<string>? sumatraPrinterNames = null,// 使用 SumatraPDF 的打印机名列表
+//     string? sumatraPrintSettings = null,           // SumatraPDF -print-settings 参数
+//     int sumatraTimeoutSeconds = 60,                // SumatraPDF 超时（秒）
+//     LowDpiPrintEnhancementMode lowDpiPrintEnhancementMode = LowDpiPrintEnhancementMode.Boost,
+//     string? sumatraTempDir = null                  // SumatraPDF 临时目录
+// )
 ```
 
 ## 核心 API
@@ -53,40 +73,28 @@ using var api = new EngineApi();
 ### 列出打印机
 
 ```csharp
-string printersJson = api.GetPrinters();
+PrinterResult result = api.GetPrinters();
 ```
 
-### 同步打印
-
-三种 PDF 来源任选其一：
+### 获取打印机状态
 
 ```csharp
-// Base64
-string result = api.Print("HP LaserJet", pdfBase64: "JVBERi0xLjQK...");
-
-// 远程 URL
-string result = api.Print("HP LaserJet", pdfUrl: "https://example.com/doc.pdf");
-
-// 二进制
-string result = api.Print("HP LaserJet", pdfBytes: File.ReadAllBytes("doc.pdf"));
+PrinterResult result = api.GetPrinterStatus("HP LaserJet");
 ```
 
-### 异步打印
-
-入队后立即返回 jobId，后台线程执行打印：
+### 查询任务
 
 ```csharp
-string queued = api.EnqueuePrint("HP LaserJet", pdfBase64: "...");
-
-// 解析 jobId 后轮询状态
-string status = api.GetJobStatus(jobId);
+PrinterResult result = api.GetJobStatus("jobId");
+PrinterResult all = api.GetAllJobs();
 ```
 
-### 命令协议
+### 命令协议（统一入口）
 
-通过 `HandleCommand` 以对象方式调用，避免 JSON 序列化往返：
+EngineApi 通过 `HandleCommand` 统一处理所有打印操作：
 
 ```csharp
+// 同步打印
 PrinterResult result = api.HandleCommand(new PrinterCommand {
     Command = "print",
     Id = "req-1",
@@ -96,6 +104,9 @@ PrinterResult result = api.HandleCommand(new PrinterCommand {
         ["copies"] = 2
     }
 });
+
+// 也可以通过 JSON 字符串调用
+PrinterResult result = api.HandleCommand(jsonString);
 ```
 
 支持的命令：
@@ -104,10 +115,10 @@ PrinterResult result = api.HandleCommand(new PrinterCommand {
 |------|------|------|
 | `getPrinters` | - | 获取打印机列表 |
 | `getPrinterStatus` | `printerName` | 获取打印机状态 |
-| `print` | `printerName`, `pdfBase64`/`pdfUrl`/`pdfBytes`, `copies`? | 同步打印 |
-| `printAsync` | 同上 | 异步打印 |
+| `print` | `printerName`, `pdfBase64`/`pdfUrl`/`pdfBytes`, `copies`?, `landscape`?, `dpi`?, `paperSize`?, `forcePaperSize`?, `offset`?, `userData`? | 同步打印 |
+| `printAsync` | 同上 | 异步打印，立即返回 jobId |
 | `getJobStatus` | `jobId` | 查询任务状态 |
-| `getAllJobs` | - | 所有任务 |
+| `getAllJobs` | - | 获取所有任务 |
 | `batchPrint` | `jobs[]` | 批量同步打印 |
 | `batchPrintAsync` | `jobs[]` | 批量异步打印 |
 
@@ -115,26 +126,47 @@ PrinterResult result = api.HandleCommand(new PrinterCommand {
 
 | 方法 | 说明 |
 |------|------|
-| `GetPrinters()` | 获取打印机列表（JSON） |
-| `GetPrinterStatus(printerName)` | 获取打印机状态（JSON） |
-| `Print(printerName, pdfBase64?, pdfUrl?, pdfBytes?, ...)` | 同步打印 |
-| `EnqueuePrint(printerName, pdfBase64?, pdfUrl?, pdfBytes?, ...)` | 入队打印 |
-| `BatchPrint(jobsJson)` | 批量同步打印 |
-| `EnqueueBatchPrint(jobsJson)` | 批量入队打印 |
+| `GetPrinters()` | 获取打印机列表 |
+| `GetPrinterStatus(printerName)` | 获取打印机状态 |
 | `GetJobStatus(jobId)` | 查询任务状态 |
 | `GetAllJobs()` | 获取所有任务 |
-| `HandleCommand(json)` | JSON 命令入口（字符串） |
-| `HandleCommand(command)` | 命令入口（对象） |
+| `HandleCommand(string json)` | JSON 命令入口 |
+| `HandleCommand(PrinterCommand command)` | 命令入口（对象），避免序列化往返 |
+| `Dispose()` | 释放资源（停止队列） |
 
-## 日志订阅
+## 事件
+
+### 日志订阅
 
 ```csharp
-EngineApi.Log += (level, message) =>
+// 基础日志
+api.Log += (level, message) =>
 {
-    // level: LogLevel.Info / LogLevel.Error
     Console.WriteLine($"[{level}] {message}");
 };
+
+// 带任务上下文的日志（jobId 可能为 null）
+api.LogWithContext += (level, message, jobId) =>
+{
+    Console.WriteLine($"[{level}][{jobId}] {message}");
+};
 ```
+
+`LogLevel` 枚举：`Info` / `Error`
+
+### 打印完成回调
+
+```csharp
+api.PrintCompleted += (requestId, requestParams, result) =>
+{
+    // requestId:   请求 ID
+    // requestParams: 原始打印请求参数
+    // result:       打印结果（Success + Data 或 ErrorInfo）
+    Console.WriteLine($"打印完成: {requestId}, 成功: {result.Success}");
+};
+```
+
+宿主应用通过 `PrintCompleted` 实现审计日志持久化，无需修改引擎代码。
 
 ## 数据模型
 
@@ -142,20 +174,21 @@ EngineApi.Log += (level, message) =>
 
 | 属性 | 类型 | 说明 |
 |------|------|------|
-| PrinterName | string | 打印机名称 |
-| PdfBase64 | string | Base64 编码的 PDF |
-| PdfUrl | string | 远程 PDF URL |
-| PdfBytes | byte[] | 二进制 PDF |
+| PrinterName | string | 打印机名称（必填） |
+| PdfBase64 | string? | Base64 编码的 PDF |
+| PdfUrl | string? | 远程 PDF URL |
+| PdfBytes | byte[]? | 二进制 PDF |
 | Copies | int | 份数，默认 1 |
-| Landscape | bool | 横向打印 |
-| Dpi | int | 分辨率，默认 300 |
-| PaperSize | PaperSizeParams | PDF/模板纸张尺寸 |
+| Landscape | bool | 横向打印，默认 false |
+| Dpi | int | 分辨率，默认 600 |
+| PaperSize | PaperSizeParams? | PDF/模板纸张尺寸 `{ Width, Height, Unit }` |
 | ForcePaperSize | bool | 是否强制把 PaperSize 下发为驱动纸张参数，默认 false |
-| Offset | OffsetParams | 打印偏移 |
+| Offset | OffsetParams? | 打印偏移 `{ X, Y }` |
+| UserData | UserDataParams? | 用户数据（用于审计日志）`{ UserId, LabelType }` |
 
 热敏小票机、连续纸建议保持 `ForcePaperSize=false`，让驱动使用当前介质。只有标签机等驱动不收到自定义尺寸会回退到 A4 时，才设为 `true`。
 
-三种 PDF 来源互斥，只能提供其一。
+三种 PDF 来源互斥，只能提供其一。`CreatePdfProvider()` 按 Base64 > URL > Bytes 优先级选择。
 
 ### PrinterResult
 
@@ -174,7 +207,7 @@ EngineApi.Log += (level, message) =>
 
 ### PrinterStatusCode
 
-`Ready` / `PrinterOffline` / `PaperJam` / `PaperOut` / `PrinterStopped` / `PrinterError` / `PrinterNotFound`
+`Ready` / `PrinterOffline` / `PaperJam` / `PaperOut` / `PrinterStopped` / `PrinterError` / `PrinterNotFound` / `WmiUnavailable`
 
 ## 扩展点
 
@@ -185,7 +218,8 @@ EngineApi.Log += (level, message) =>
 ```csharp
 public class MyPrintService : IPrintService
 {
-    public PrinterResult Print(string requestId, PrintRequestParams request)
+    public PrinterResult Print(string requestId, PrintRequestParams request,
+        CancellationToken cancellationToken = default)
     {
         // 自定义打印逻辑
         return PrinterResult.Ok(requestId, PrintResult.Success(requestId));
