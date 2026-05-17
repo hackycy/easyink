@@ -6,6 +6,8 @@ using EasyInk.Printer.Config;
 using EasyInk.Printer.Server;
 using EasyInk.Printer.Services;
 using EasyInk.Printer.Services.Abstractions;
+using EasyInk.Printer.UI.Presenters;
+using EasyInk.Printer.UI.Views;
 using EasyInk.Printer.UI;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -56,6 +58,16 @@ internal static class ServiceConfig
         services.AddSingleton<StatusController>();
 
         // UI
+        services.AddSingleton<DashboardPresenter>();
+        services.AddSingleton<PrintersPresenter>();
+        services.AddSingleton<JobsPresenter>();
+        services.AddSingleton<LogsPresenter>();
+        services.AddSingleton<SettingsPresenter>();
+        services.AddSingleton<DashboardView>();
+        services.AddSingleton<PrintersView>();
+        services.AddSingleton<JobsView>();
+        services.AddSingleton<LogsView>();
+        services.AddSingleton<SettingsView>();
         services.AddSingleton<MainWindow>();
         services.AddSingleton<TrayIcon>();
 
