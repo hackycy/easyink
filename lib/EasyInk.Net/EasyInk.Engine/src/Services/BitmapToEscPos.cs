@@ -18,7 +18,15 @@ internal static class BitmapToEscPos
     private const int DEFAULT_RASTER_BAND_HEIGHT = 256;
 
     public static byte[] CmdInit() => new byte[] { ESC, 0x40, ESC, 0x33, 0x18 }; // ESC @  ESC 3 24
-    public static byte[] CmdCut() => new byte[] { GS, 0x56, 0x01 };               // GS V 1
+    public static byte[] CmdCut() => new byte[] { GS, 0x56, 0x01 };               // GS V 1, no-feed cut
+
+    public static byte[] CmdFeedLines(int lines)
+    {
+        if (lines < 0 || lines > 255)
+            throw new ArgumentOutOfRangeException(nameof(lines), "Feed lines must be between 0 and 255.");
+
+        return new byte[] { ESC, 0x64, (byte)lines }; // ESC d n
+    }
 
     /// <summary>
     /// GS v 0 raster bit image: row-major, width is measured in bytes.

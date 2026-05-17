@@ -17,6 +17,8 @@ namespace EasyInk.Engine.Services;
 /// </summary>
 public class EscPosRawPrintService : IPrintService
 {
+    private const int CUT_FEED_LINES = 6;
+
     private readonly int _dpi;
     private readonly int _maxDotsWidth;
 
@@ -76,19 +78,22 @@ public class EscPosRawPrintService : IPrintService
         }
     }
 
-    private static byte[][] BuildPrintBatches(IReadOnlyList<byte[]> bands, int copies)
+    internal static byte[][] BuildPrintBatches(IReadOnlyList<byte[]> bands, int copies)
     {
         copies = Math.Max(copies, 1);
 
         var init = BitmapToEscPos.CmdInit();
+        var feedToCutter = BitmapToEscPos.CmdFeedLines(CUT_FEED_LINES);
         var cut = BitmapToEscPos.CmdCut();
-        var batches = new List<byte[]>(copies * (bands.Count + 2));
+        var batches = new List<byte[]>(copies * (bands.Count + 3));
 
         for (int copy = 0; copy < copies; copy++)
         {
             batches.Add(init);
             for (int i = 0; i < bands.Count; i++)
                 batches.Add(bands[i]);
+            // Move the final raster lines past the physical cutter before cutting.
+            batches.Add(feedToCutter);
             batches.Add(cut);
         }
 

@@ -46,4 +46,19 @@ public class BitmapToEscPosTests
         Assert.Equal(0xFF, strips[0][7]);
         Assert.Equal(0x0A, strips[0][8]);
     }
+
+    [Fact]
+    public void CmdFeedLines_UsesEscD()
+    {
+        var command = BitmapToEscPos.CmdFeedLines(6);
+
+        Assert.Equal(new byte[] { 0x1B, 0x64, 0x06 }, command);
+    }
+
+    [Fact]
+    public void CmdFeedLines_RejectsOutOfRangeLineCounts()
+    {
+        Assert.Throws<System.ArgumentOutOfRangeException>(() => BitmapToEscPos.CmdFeedLines(-1));
+        Assert.Throws<System.ArgumentOutOfRangeException>(() => BitmapToEscPos.CmdFeedLines(256));
+    }
 }
