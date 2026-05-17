@@ -4,7 +4,7 @@
 
 EasyInk 当前不把 PDF 生成器做成 `core` 的职责。导出能力由独立的 `@easyink/export-runtime`（运行时内核）+ `@easyink/export-plugin-*`（具体格式插件）承接，`viewer` 只提供页面预览、渲染尺寸、导出/打印调度入口和诊断桥接。运行时与插件都可被 `viewer` 使用，也可以被 `designer` 的工作台入口直接触发。也就是说，输出能力存在于产品架构中，只是不下沉到 Schema/Core 层。
 
-打印通道实现不再放在示例工程中。协议客户端和 Viewer PrintDriver 以 `packages/print/*` 独立包提供：`@easyink/print-core` 放共享纯逻辑，`@easyink/print-easyink` 对接 EasyInk.Printer，`@easyink/print-hiprint` 对接 electron-hiprint。
+打印通道实现不再放在示例工程中。协议客户端和 Viewer PrintDriver 以 `packages/print/*` 独立包提供：`@easyink/print-core` 放共享纯逻辑，`@easyink/print-integration-easyink-printer` 对接 EasyInk.Printer，`@easyink/print-integration-hiprint` 对接 electron-hiprint。
 
 这个调整的原因是：
 

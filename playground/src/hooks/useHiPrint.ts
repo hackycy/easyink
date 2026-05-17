@@ -1,5 +1,5 @@
-import type { HiPrintDevice, HiPrintProgress, PrintHtmlOptions } from '@easyink/print-hiprint'
-import { createHiPrintClient, DEFAULT_HIPRINT_URL } from '@easyink/print-hiprint'
+import type { HiPrintDevice, HiPrintProgress, PrintHtmlOptions } from '@easyink/print-integration-hiprint'
+import { createHiPrintClient, DEFAULT_HIPRINT_URL } from '@easyink/print-integration-hiprint'
 import { computed, reactive, ref, watch } from 'vue'
 
 export const DEFAULT_PRINTER_HOST = DEFAULT_HIPRINT_URL

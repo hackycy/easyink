@@ -15,9 +15,9 @@ easyink/
 │   │   └── plugin/
 │   │       └── dom-pdf/        # @easyink/export-plugin-dom-pdf — 浏览器 DOM 截图转 PDF 插件（html2canvas + jsPDF）
 │   ├── print/
-│   │   ├── core/               # @easyink/print-core — 打印驱动共享纯工具
-│   │   ├── easyink/            # @easyink/print-easyink — EasyInk.Printer 客户端与 Viewer 驱动
-│   │   └── hiprint/            # @easyink/print-hiprint — HiPrint 客户端与 Viewer 驱动
+│   │   ├── core/                           # @easyink/print-core — 打印驱动共享纯工具
+│   │   ├── integration-easyink-printer/   # @easyink/print-integration-easyink-printer — EasyInk.Printer 客户端与 Viewer 驱动
+│   │   └── integration-hiprint/           # @easyink/print-integration-hiprint — HiPrint 客户端与 Viewer 驱动
 │   ├── builtin/                # @easyink/builtin — 内置物料注册与清单汇总包（内部装配层）
 │   ├── designer/               # @easyink/designer — 设计器工作台 Vue 组件
 │   ├── ui/                     # @easyink/ui — 面板、表单、工作台基础组件
@@ -97,13 +97,13 @@ easyink/
 - 提供 Viewer 页面提取、打印尺寸解析、单位转换、方向/偏移解析和诊断桥接
 - 被官方打印驱动包消费，宿主通常不直接依赖
 
-### `@easyink/print-easyink`
+### `@easyink/print-integration-easyink-printer`
 
 - EasyInk.Printer 官方前端客户端和 Viewer PrintDriver
 - 封装 HTTP/WebSocket、PDF 分块上传、任务查询、默认打印机选择和 Viewer DOM 转 PDF
 - 驱动默认 `pageSizeMode: 'fixed'`
 
-### `@easyink/print-hiprint`
+### `@easyink/print-integration-hiprint`
 
 - HiPrint 官方前端客户端和 Viewer PrintDriver
 - 封装 electron-hiprint 连接、打印机发现、逐页 HTML 打印和按设备开启的 `pageSize` 策略

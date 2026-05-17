@@ -732,7 +732,7 @@ importers:
         specifier: workspace:*
         version: link:../../viewer
 
-  packages/print/easyink:
+  packages/print/integration-easyink-printer:
     dependencies:
       '@easyink/export-plugin-dom-pdf':
         specifier: workspace:*
@@ -750,7 +750,7 @@ importers:
         specifier: catalog:framework
         version: 3.5.31(typescript@6.0.2)
 
-  packages/print/hiprint:
+  packages/print/integration-hiprint:
     dependencies:
       '@easyink/print-core':
         specifier: workspace:*
@@ -857,12 +857,12 @@ importers:
       '@easyink/print-core':
         specifier: workspace:*
         version: link:../packages/print/core
-      '@easyink/print-easyink':
+      '@easyink/print-integration-easyink-printer':
         specifier: workspace:*
-        version: link:../packages/print/easyink
-      '@easyink/print-hiprint':
+        version: link:../packages/print/integration-easyink-printer
+      '@easyink/print-integration-hiprint':
         specifier: workspace:*
-        version: link:../packages/print/hiprint
+        version: link:../packages/print/integration-hiprint
       '@easyink/samples':
         specifier: workspace:*
         version: link:../packages/samples

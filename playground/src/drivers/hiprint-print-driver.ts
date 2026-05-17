@@ -1,5 +1,5 @@
 import type { PrintDriver } from '@easyink/viewer'
-import { createHiPrintDriver as createOfficialHiPrintDriver } from '@easyink/print-hiprint'
+import { createHiPrintDriver as createOfficialHiPrintDriver } from '@easyink/print-integration-hiprint'
 import { usePrinter } from '../hooks/useHiPrint'
 
 export function createHiPrintDriver(): PrintDriver {

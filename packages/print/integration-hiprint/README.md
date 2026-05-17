@@ -1,9 +1,9 @@
-# @easyink/print-hiprint
+# @easyink/print-integration-hiprint
 
 Official HiPrint client and Viewer print driver.
 
 ```ts
-import { createHiPrintClient, createHiPrintDriver } from '@easyink/print-hiprint'
+import { createHiPrintClient, createHiPrintDriver } from '@easyink/print-integration-hiprint'
 
 const hiPrint = createHiPrintClient()
 viewer.registerPrintDriver(createHiPrintDriver({ client: hiPrint }))

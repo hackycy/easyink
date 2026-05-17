@@ -6,7 +6,7 @@ HiPrint 通道适合跨平台静默打印，尤其适合标签、小票、卡片
 
 1. 启动 electron-hiprint。
 2. 确认本机能刷新到打印机列表。
-3. 前端注册 `@easyink/print-hiprint` 驱动。
+3. 前端注册 `@easyink/print-integration-hiprint` 驱动。
 4. 调用 `viewer.print()`。
 
 这篇文档只讲浏览器如何接入 HiPrint。electron-hiprint 本身的安装和系统打印驱动问题，仍然以它的发行包和操作系统配置为准。
@@ -20,7 +20,7 @@ HiPrint 通道适合跨平台静默打印，尤其适合标签、小票、卡片
 ## 第二步：安装依赖
 
 ```bash
-pnpm add @easyink/viewer @easyink/print-hiprint
+pnpm add @easyink/viewer @easyink/print-integration-hiprint
 ```
 
 ## 第三步：先验证能发现打印机
@@ -44,7 +44,7 @@ console.log(printers)
 ## 第四步：注册驱动并打印
 
 ```ts
-import { createHiPrintClient, createHiPrintDriver } from '@easyink/print-hiprint'
+import { createHiPrintClient, createHiPrintDriver } from '@easyink/print-integration-hiprint'
 import { createViewer } from '@easyink/viewer'
 
 const viewer = createViewer({ iframe })
@@ -129,7 +129,7 @@ await viewer.print({ driverId: 'hiprint' })
 Playground 已使用官方包集成：
 
 - [playground/src/hooks/useHiPrint.ts](../../playground/src/hooks/useHiPrint.ts) 只保留 Vue 状态和设置持久化
-- [playground/src/drivers/hiprint-print-driver.ts](../../playground/src/drivers/hiprint-print-driver.ts) 调用 `@easyink/print-hiprint`
+- [playground/src/drivers/hiprint-print-driver.ts](../../playground/src/drivers/hiprint-print-driver.ts) 调用 `@easyink/print-integration-hiprint`
 
 ## 常见问题
 

@@ -1,8 +1,8 @@
 {
-  "name": "@easyink/print-hiprint",
+  "name": "@easyink/print-integration-easyink-printer",
   "type": "module",
   "version": "0.0.10",
-  "description": "HiPrint client and viewer print driver for EasyInk",
+  "description": "Official EasyInk.Printer integration package for EasyInk Viewer",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",
   "publishConfig": {
@@ -22,8 +22,10 @@
     "dev": "tsdown --watch"
   },
   "dependencies": {
+    "@easyink/export-plugin-dom-pdf": "workspace:*",
     "@easyink/print-core": "workspace:*",
     "@easyink/viewer": "workspace:*",
-    "vue-plugin-hiprint": "catalog:testing"
+    "@vueuse/core": "catalog:framework",
+    "vue": "catalog:framework"
   }
 }

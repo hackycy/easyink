@@ -216,7 +216,7 @@ function createWsPrintDriver(wsUrl: string): PrintDriver {
 - `driver`：从 `ViewerPrintContext` 提取页面并调用 client
 - `settings store`：保存用户配置、同步 UI 状态
 
-官方的 `@easyink/print-easyink` 和 `@easyink/print-hiprint` 都是按这个分层实现的。自定义驱动也建议延续这个结构，因为它能把“业务设置变化”和“打印一次任务”解耦。
+官方的 `@easyink/print-integration-easyink-printer` 和 `@easyink/print-integration-hiprint` 都是按这个分层实现的。自定义驱动也建议延续这个结构，因为它能把“业务设置变化”和“打印一次任务”解耦。
 
 ## 单位转换不要省略
 
@@ -294,5 +294,5 @@ context.onDiagnostic?.({
 
 项目里已经有两份实际驱动包装，可以直接对照：
 
-- `playground/src/drivers/easyink-print-driver.ts`：把 Viewer 打印动作桥接到 `@easyink/print-easyink`
-- `playground/src/drivers/hiprint-print-driver.ts`：把 Viewer 打印动作桥接到 `@easyink/print-hiprint`
+- `playground/src/drivers/easyink-print-driver.ts`：把 Viewer 打印动作桥接到 `@easyink/print-integration-easyink-printer`
+- `playground/src/drivers/hiprint-print-driver.ts`：把 Viewer 打印动作桥接到 `@easyink/print-integration-hiprint`

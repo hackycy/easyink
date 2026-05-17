@@ -1,5 +1,5 @@
 import type { PrintDriver } from '@easyink/viewer'
-import { createEasyInkPrinterDriver as createOfficialEasyInkPrinterDriver } from '@easyink/print-easyink'
+import { createEasyInkPrinterDriver as createOfficialEasyInkPrinterDriver } from '@easyink/print-integration-easyink-printer'
 import { useEasyInkPrint } from '../hooks/useEasyInkPrint'
 
 export function createEasyInkPrintDriver(): PrintDriver {

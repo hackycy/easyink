@@ -1,9 +1,9 @@
-# @easyink/print-easyink
+# @easyink/print-integration-easyink-printer
 
 Official EasyInk.Printer client and Viewer print driver.
 
 ```ts
-import { createEasyInkPrinterClient, createEasyInkPrinterDriver } from '@easyink/print-easyink'
+import { createEasyInkPrinterClient, createEasyInkPrinterDriver } from '@easyink/print-integration-easyink-printer'
 
 const printer = createEasyInkPrinterClient({
   serviceUrl: 'http://localhost:18080',

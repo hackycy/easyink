@@ -1,12 +1,12 @@
 # 快速上手
 
-EasyInk Printer 是 Windows 本地静默打印服务，适合需要稳定 PDF 打印质量的浏览器应用。前端接入时直接使用 `@easyink/print-easyink`，业务代码不需要自己处理 PDF 生成、WebSocket 分块上传或任务轮询。
+EasyInk Printer 是 Windows 本地静默打印服务，适合需要稳定 PDF 打印质量的浏览器应用。前端接入时直接使用 `@easyink/print-integration-easyink-printer`，业务代码不需要自己处理 PDF 生成、WebSocket 分块上传或任务轮询。
 
 如果你只是想验证“这套链路能不能打出第一张单”，最短路径是：
 
 1. 在 Windows 机器上启动 `EasyInk.Printer.exe`。
 2. 确认服务已经能返回打印机列表。
-3. 前端注册 `@easyink/print-easyink` 驱动。
+3. 前端注册 `@easyink/print-integration-easyink-printer` 驱动。
 4. 调用 `viewer.print()`。
 
 这篇文档只覆盖浏览器如何接入本地打印服务。如果你要部署、配置端口或启用 API Key，继续看 [Printer 应用](./printer) 和 [API 参考](./api-reference)。
@@ -33,7 +33,7 @@ dotnet run --project EasyInk.Printer/src
 ## 第二步：安装依赖
 
 ```bash
-pnpm add @easyink/viewer @easyink/print-easyink
+pnpm add @easyink/viewer @easyink/print-integration-easyink-printer
 ```
 
 ## 第三步：先验证本地服务可用
@@ -61,7 +61,7 @@ curl http://localhost:18080/api/printers
 ## 第四步：注册驱动并打印
 
 ```ts
-import { createEasyInkPrinterClient, createEasyInkPrinterDriver } from '@easyink/print-easyink'
+import { createEasyInkPrinterClient, createEasyInkPrinterDriver } from '@easyink/print-integration-easyink-printer'
 import { createViewer } from '@easyink/viewer'
 
 const viewer = createViewer({ iframe })
@@ -137,7 +137,7 @@ printer.setPrinter(printers[0]?.name)
 
 ## 连接和重连
 
-`@easyink/print-easyink` 会同时管理 HTTP 超时和 WebSocket 重连。设置页或诊断页可以直接读取客户端状态：
+`@easyink/print-integration-easyink-printer` 会同时管理 HTTP 超时和 WebSocket 重连。设置页或诊断页可以直接读取客户端状态：
 
 ```ts
 const printer = createEasyInkPrinterClient({
@@ -209,7 +209,7 @@ viewer.registerPrintDriver(createEasyInkPrinterDriver({
 Playground 已使用官方包集成：
 
 - [playground/src/hooks/useEasyInkPrint.ts](../../playground/src/hooks/useEasyInkPrint.ts) 只保留 Vue 状态和设置持久化
-- [playground/src/drivers/easyink-print-driver.ts](../../playground/src/drivers/easyink-print-driver.ts) 调用 `@easyink/print-easyink`
+- [playground/src/drivers/easyink-print-driver.ts](../../playground/src/drivers/easyink-print-driver.ts) 调用 `@easyink/print-integration-easyink-printer`
 
 ## 常见问题
 

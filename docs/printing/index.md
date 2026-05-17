@@ -2,10 +2,10 @@
 
 EasyInk 的本地打印目标很明确：让业务代码只关心“打印什么”和“发给哪台打印机”，而不是自己处理 PDF 渲染、WebSocket 通信、分页 DOM 提取和任务轮询。
 
-如果你是第一次接入，优先走官方打印包：
+如果你是第一次接入，优先走官方打印集成包：
 
-- `@easyink/print-easyink`：对接 EasyInk Printer (.NET)，把 Viewer 页面转成 PDF 后发送到本地打印服务
-- `@easyink/print-hiprint`：对接 electron-hiprint，直接把 Viewer 页面 HTML 发送给 HiPrint
+- `@easyink/print-integration-easyink-printer`：对接 EasyInk.Printer (.NET)，把 Viewer 页面转成 PDF 后发送到本地打印服务
+- `@easyink/print-integration-hiprint`：对接 electron-hiprint，直接把 Viewer 页面 HTML 发送给 HiPrint
 
 这两个包都已经包含了“客户端 + Viewer 打印驱动”两层能力。大多数项目不需要自己重写 `PrintDriver`。
 
@@ -37,7 +37,7 @@ EasyInk 的本地打印目标很明确：让业务代码只关心“打印什么
 | **通信方式** | HTTP + WebSocket | WebSocket |
 | **典型场景** | 面单、正式报表、A4 文档 | 小票、标签、嵌入 Electron 的桌面应用 |
 | **前端驱动默认 pageSizeMode** | `fixed` | `driver` |
-| **官方包** | `@easyink/print-easyink` | `@easyink/print-hiprint` |
+| **官方包** | `@easyink/print-integration-easyink-printer` | `@easyink/print-integration-hiprint` |
 
 ## 如何选择
 
