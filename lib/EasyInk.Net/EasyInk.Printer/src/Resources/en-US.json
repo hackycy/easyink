@@ -201,12 +201,12 @@
   "Settings_LowDpiEnhancementMonochrome": "Monochrome",
   "Settings_LowDpiEnhancementDescription": "Only affects low-resolution receipt/thermal printers on the PDFium/GDI path. Boost darkens fine text gently; monochrome is sharper, but may lose image, light-gray background, and logo detail. Restart after saving.",
   "Settings_RawPrinterLabel": "Raw ESC/POS printers",
-  "Settings_RawPrinterDescription": "Printers in this list will bypass the Windows print driver and receive raw ESC/POS commands directly.\nIdeal for thermal receipt printers (XP-80C, Epson, Xprinter, etc.), avoiding driver clipping, offset, or scaling issues.\nSeparate multiple names with commas; matching is case-insensitive.\n\nLeave empty to use the standard print path for all printers.",
-  "Settings_SumatraPathLabel": "SumatraPDF",
+  "Settings_RawPrinterDescription": "Raw ESC/POS commands directly.\nIdeal for thermal receipt printers (XP-80C, Epson, Xprinter, etc.), avoiding driver clipping, offset, or scaling issues.\nSeparate multiple names with commas; matching is case-insensitive.\n\nLeave empty to use the standard print path for all printers.",
+  "Settings_SumatraPathLabel": "SumatraPDF path",
   "Settings_SumatraPrintersLabel": "PDF fallback printers",
   "Settings_SumatraSettingsLabel": "Print settings",
   "Settings_SumatraTimeoutLabel": "Timeout (sec)",
-  "Settings_SumatraDescription": "Matching printers will use SumatraPDF command-line printing: -silent -exit-on-print -print-to \"Printer\" -print-settings \"fit\".\nUse this for regular PDF printers where the built-in PDFium/GDI path still shifts, clips, or blurs output, while Chrome printing is correct.\nSet both SumatraPDF.exe path and printer names; restart the service after saving. For Win7, ship a fixed portable version that has been tested.",
+  "Settings_SumatraDescription": "Use this for regular PDF printers where the built-in PDFium/GDI path still shifts, clips, or blurs output, while Chrome printing is correct.\nSet both SumatraPDF.exe path and printer names; restart the service after saving.",
   "Dialog_SumatraPdfPath": "Select SumatraPDF.exe",
   "Dialog_ExeFileFilter": "Executable files (*.exe)|*.exe|All files (*.*)|*.*"
 }

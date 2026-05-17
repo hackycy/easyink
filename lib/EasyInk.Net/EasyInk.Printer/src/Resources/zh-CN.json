@@ -201,12 +201,12 @@
   "Settings_LowDpiEnhancementMonochrome": "黑白二值化",
   "Settings_LowDpiEnhancementDescription": "仅影响 PDFium/GDI 链路下的低分辨率小票/热敏打印机。增强会温和加黑细字；黑白二值化更锐利，但可能损失图片、浅灰背景和 logo 细节。保存后重启生效。",
   "Settings_RawPrinterLabel": "Raw 直发打印机",
-  "Settings_RawPrinterDescription": "在此列表中的打印机将绕过 Windows 打印驱动，直接发送 ESC/POS 原始指令。\n适用于热敏小票机（如 XP-80C、佳博、芯烨等），避免驱动导致的裁切、错位或缩放异常。\n多个名称用逗号分隔，支持模糊匹配（忽略大小写）。\n\n留空则所有打印机均走标准打印路径。",
-  "Settings_SumatraPathLabel": "SumatraPDF",
+  "Settings_RawPrinterDescription": "直接发送 ESC/POS 原始指令。\n适用于热敏小票机（如 XP-80C、佳博、芯烨等），避免驱动导致的裁切、错位或缩放异常。\n多个名称用逗号分隔，支持模糊匹配（忽略大小写）。\n\n留空则所有打印机均走标准打印路径。",
+  "Settings_SumatraPathLabel": "SumatraPDF 路径",
   "Settings_SumatraPrintersLabel": "PDF兼容打印机",
   "Settings_SumatraSettingsLabel": "打印参数",
   "Settings_SumatraTimeoutLabel": "超时(秒)",
-  "Settings_SumatraDescription": "命中的打印机将通过 SumatraPDF 命令行打印：-silent -exit-on-print -print-to \"Printer\" -print-settings \"fit\"。\n适用于内置 PDFium/GDI 链路仍错位、裁切或模糊，但 Chrome 打印正常的普通 PDF 打印机。\n需要填写 SumatraPDF.exe 路径和打印机名称；配置保存后重启服务生效。Win7 请固定使用实测可用的 portable 版本。",
+  "Settings_SumatraDescription": "适用于内置 PDFium/GDI 链路仍错位、裁切或模糊，但 Chrome 打印正常的普通 PDF 打印机。\n需要填写 SumatraPDF.exe 路径和打印机名称；配置保存后重启服务生效。",
   "Dialog_SumatraPdfPath": "选择 SumatraPDF.exe",
   "Dialog_ExeFileFilter": "可执行文件 (*.exe)|*.exe|所有文件 (*.*)|*.*"
 }
