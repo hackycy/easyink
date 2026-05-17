@@ -574,24 +574,36 @@ public class MainWindow : Form
             Margin = new Padding(0, 0, 0, 12)
         };
 
-        var flowLayout = new FlowLayoutPanel
+        var filterLayout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = false,
-            AutoSize = false,
+            ColumnCount = 5,
+            RowCount = 1,
             Padding = new Padding(0),
+            Margin = new Padding(0),
             BackColor = SectionBackColor
         };
+        filterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        filterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 154));
+        filterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        filterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 154));
+        filterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 82));
+        filterLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         var lblFrom = CreateInlineLabel(LangManager.Get("Logs_From"));
-        var dtpFrom = new DateTimePicker { Width = 140, Height = 28, Format = DateTimePickerFormat.Short, Margin = new Padding(0, 0, 14, 0), Value = DateTime.Today.AddDays(-7) };
+        var dtpFrom = CreateInlineDatePicker(DateTime.Today.AddDays(-7));
         var lblTo = CreateInlineLabel(LangManager.Get("Logs_To"));
-        var dtpTo = new DateTimePicker { Width = 140, Height = 28, Format = DateTimePickerFormat.Short, Margin = new Padding(0, 0, 14, 0), Value = DateTime.Now };
+        var dtpTo = CreateInlineDatePicker(DateTime.Now);
         var btnQuery = CreateCommandButton(LangManager.Get("Common_Query"), 78);
+        btnQuery.Anchor = AnchorStyles.Left;
+        btnQuery.Margin = new Padding(0);
 
-        flowLayout.Controls.AddRange(new Control[] { lblFrom, dtpFrom, lblTo, dtpTo, btnQuery });
-        filterPanel.Controls.Add(flowLayout);
+        filterLayout.Controls.Add(lblFrom, 0, 0);
+        filterLayout.Controls.Add(dtpFrom, 1, 0);
+        filterLayout.Controls.Add(lblTo, 2, 0);
+        filterLayout.Controls.Add(dtpTo, 3, 0);
+        filterLayout.Controls.Add(btnQuery, 4, 0);
+        filterPanel.Controls.Add(filterLayout);
 
         var listView = new ListView
         {
@@ -656,23 +668,17 @@ public class MainWindow : Form
 
         var panel = CreatePagePanel(new Padding(16));
         panel.AutoScroll = true;
+        var settingsLayout = CreateSettingsLayoutPanel();
+        panel.Controls.Add(settingsLayout);
+        UpdateSettingsLayoutWidth(panel, settingsLayout);
+        panel.Resize += (s, e) => UpdateSettingsLayoutWidth(panel, settingsLayout);
 
         // 基本设置组
         var grpBasic = CreateSettingsSection(LangManager.Get("Settings_Basic"));
 
-        var basicPanel = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 2,
-            RowCount = 2,
-            Padding = new Padding(4)
-        };
-        basicPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
-        basicPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        basicPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, FormRowHeight));
-        basicPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, FormRowHeight));
-
-        var lblPort = new Label { Text = LangManager.Get("Settings_HttpPort"), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
+        var basicPanel = CreateSettingsTable(
+            new ColumnStyle(SizeType.Absolute, 110),
+            new ColumnStyle(SizeType.Percent, 100));
         var numPort = new NumericUpDown
         {
             Width = 120,
@@ -682,37 +688,25 @@ public class MainWindow : Form
             Anchor = AnchorStyles.Left
         };
 
-        var lblAutoStart = new Label { Text = LangManager.Get("Settings_AutoStart"), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
-        var chkAutoStart = new CheckBox
+        var chkAutoStart = new NoFocusCheckBox
         {
             Text = "",
             Anchor = AnchorStyles.Left,
             Checked = HostConfig.GetAutoStartRegistry()
         };
 
-        basicPanel.Controls.Add(lblPort, 0, 0);
-        basicPanel.Controls.Add(numPort, 1, 0);
-        basicPanel.Controls.Add(lblAutoStart, 0, 1);
-        basicPanel.Controls.Add(chkAutoStart, 1, 1);
+        AddSettingRow(basicPanel, LangManager.Get("Settings_HttpPort"), numPort);
+        AddSettingRow(basicPanel, LangManager.Get("Settings_AutoStart"), chkAutoStart);
         grpBasic.ContentPanel.Controls.Add(basicPanel);
 
         // 显示设置组
         var grpDisplay = CreateSettingsSection(LangManager.Get("Settings_Display"));
 
-        var displayPanel = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 2,
-            RowCount = 3,
-            Padding = new Padding(4)
-        };
-        displayPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
-        displayPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        displayPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, FormRowHeight));
-        displayPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, FormRowHeight));
-        displayPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, FormRowHeight));
+        var displayPanel = CreateSettingsTable(
+            new ColumnStyle(SizeType.Absolute, 110),
+            new ColumnStyle(SizeType.Percent, 100));
 
-        var chkMinimizeToTray = new CheckBox
+        var chkMinimizeToTray = new NoFocusCheckBox
         {
             Text = LangManager.Get("Settings_MinimizeToTray"),
             Anchor = AnchorStyles.Left,
@@ -720,7 +714,7 @@ public class MainWindow : Form
             Checked = _config.MinimizeToTray
         };
 
-        var chkStartMinimized = new CheckBox
+        var chkStartMinimized = new NoFocusCheckBox
         {
             Text = LangManager.Get("Settings_StartMinimized"),
             Anchor = AnchorStyles.Left,
@@ -728,7 +722,6 @@ public class MainWindow : Form
             Checked = _config.StartMinimized
         };
 
-        var lblLang = new Label { Text = LangManager.Get("Settings_Language"), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
         var cmbLang = new ComboBox
         {
             Width = 120,
@@ -739,30 +732,19 @@ public class MainWindow : Form
         cmbLang.Items.Add(LangManager.Get("Settings_LanguageEnglish"));
         cmbLang.SelectedIndex = _config.Language == "en-US" ? 1 : 0;
 
-        displayPanel.Controls.Add(chkMinimizeToTray, 0, 0);
-        displayPanel.SetColumnSpan(chkMinimizeToTray, 2);
-        displayPanel.Controls.Add(chkStartMinimized, 0, 1);
-        displayPanel.SetColumnSpan(chkStartMinimized, 2);
-        displayPanel.Controls.Add(lblLang, 0, 2);
-        displayPanel.Controls.Add(cmbLang, 1, 2);
+        AddSettingWideRow(displayPanel, chkMinimizeToTray);
+        AddSettingWideRow(displayPanel, chkStartMinimized);
+        AddSettingRow(displayPanel, LangManager.Get("Settings_Language"), cmbLang);
         grpDisplay.ContentPanel.Controls.Add(displayPanel);
 
         // 安全设置组
         var grpSecurity = CreateSettingsSection(LangManager.Get("Settings_Security"));
 
-        var securityPanel = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 2,
-            RowCount = 2,
-            Padding = new Padding(4)
-        };
-        securityPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
-        securityPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        securityPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, FormRowHeight));
-        securityPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, FormRowHeight));
+        var securityPanel = CreateSettingsTable(
+            new ColumnStyle(SizeType.Absolute, 110),
+            new ColumnStyle(SizeType.Percent, 100));
 
-        var chkTrustAllOrigins = new CheckBox
+        var chkTrustAllOrigins = new NoFocusCheckBox
         {
             Text = LangManager.Get("Settings_TrustAllOrigins"),
             Anchor = AnchorStyles.Left,
@@ -770,7 +752,6 @@ public class MainWindow : Form
             Checked = _config.TrustAllOrigins
         };
 
-        var lblApiKey = new Label { Text = LangManager.Get("Settings_ApiKey"), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
         var txtApiKey = new TextBox
         {
             Text = _config.ApiKey ?? "",
@@ -803,34 +784,16 @@ public class MainWindow : Form
             }
         };
 
-        securityPanel.Controls.Add(chkTrustAllOrigins, 0, 0);
-        securityPanel.SetColumnSpan(chkTrustAllOrigins, 2);
-        securityPanel.Controls.Add(lblApiKey, 0, 1);
-        securityPanel.Controls.Add(txtApiKey, 1, 1);
+        AddSettingWideRow(securityPanel, chkTrustAllOrigins);
+        AddSettingRow(securityPanel, LangManager.Get("Settings_ApiKey"), txtApiKey);
         grpSecurity.ContentPanel.Controls.Add(securityPanel);
 
         // 打印兼容性设置组
         var grpPrinterCompat = CreateSettingsSection(LangManager.Get("Settings_PrinterCompat"));
 
-        var compatPanel = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 2,
-            RowCount = 8,
-            Padding = new Padding(4)
-        };
-        compatPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
-        compatPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        compatPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, FormRowHeight));
-        compatPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, FormRowHeight));
-        compatPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, FormRowHeight));
-        compatPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, FormRowHeight));
-        compatPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, FormRowHeight));
-        compatPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, FormRowHeight));
-        compatPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, FormRowHeight));
-        compatPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, FormRowHeight));
-
-        var lblLowDpiEnhancement = new Label { Text = LangManager.Get("Settings_LowDpiEnhancementLabel"), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
+        var compatPanel = CreateSettingsTable(
+            new ColumnStyle(SizeType.Absolute, 110),
+            new ColumnStyle(SizeType.Percent, 100));
         var cmbLowDpiEnhancement = new ComboBox
         {
             Width = 180,
@@ -842,39 +805,17 @@ public class MainWindow : Form
         cmbLowDpiEnhancement.Items.Add(LangManager.Get("Settings_LowDpiEnhancementMonochrome"));
         cmbLowDpiEnhancement.SelectedIndex = GetLowDpiEnhancementSelectedIndex(_config.LowDpiPrintEnhancement);
 
-        var lblLowDpiEnhancementDesc = new Label
-        {
-            Text = LangManager.Get("Settings_LowDpiEnhancementDescription"),
-            Dock = DockStyle.Fill,
-            TextAlign = ContentAlignment.TopLeft,
-            ForeColor = System.Drawing.SystemColors.GrayText
-        };
-
         // Raw printer names row
-        var lblRawPrinters = new Label { Text = LangManager.Get("Settings_RawPrinterLabel"), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
         var txtRawPrinters = new TextBox
         {
             Dock = DockStyle.Fill,
             Text = string.Join(", ", _config.RawPrinterNames)
         };
-        var lblRawPrintersDesc = new Label
-        {
-            Text = LangManager.Get("Settings_RawPrinterDescription"),
-            Dock = DockStyle.Fill,
-            TextAlign = ContentAlignment.TopLeft,
-            ForeColor = System.Drawing.SystemColors.GrayText
-        };
 
-        var lblSumatraPath = new Label { Text = LangManager.Get("Settings_SumatraPathLabel"), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
-        var pnlSumatraPath = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 2,
-            RowCount = 1,
-            Margin = new Padding(0)
-        };
-        pnlSumatraPath.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        pnlSumatraPath.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 64));
+        var pnlSumatraPath = CreateSettingsTable(
+            new ColumnStyle(SizeType.Percent, 100),
+            new ColumnStyle(SizeType.Absolute, 68));
+        pnlSumatraPath.Padding = new Padding(0);
         var txtSumatraPath = new TextBox
         {
             Dock = DockStyle.Fill,
@@ -898,20 +839,18 @@ public class MainWindow : Form
             if (dlg.ShowDialog() == DialogResult.OK)
                 txtSumatraPath.Text = dlg.FileName;
         };
-        pnlSumatraPath.Controls.Add(txtSumatraPath, 0, 0);
-        pnlSumatraPath.Controls.Add(btnBrowseSumatra, 1, 0);
+        AddSettingControlRow(pnlSumatraPath, txtSumatraPath, btnBrowseSumatra);
 
-        var lblSumatraPrinters = new Label { Text = LangManager.Get("Settings_SumatraPrintersLabel"), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
         var txtSumatraPrinters = new TextBox
         {
             Dock = DockStyle.Fill,
             Text = string.Join(", ", _config.SumatraPrinterNames)
         };
 
-        var lblSumatraSettings = new Label { Text = LangManager.Get("Settings_SumatraSettingsLabel"), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
         var pnlSumatraSettings = new FlowLayoutPanel
         {
-            Dock = DockStyle.Fill,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
             FlowDirection = FlowDirection.LeftToRight,
             WrapContents = false,
             Margin = new Padding(0)
@@ -939,50 +878,23 @@ public class MainWindow : Form
         pnlSumatraSettings.Controls.Add(lblSumatraTimeout);
         pnlSumatraSettings.Controls.Add(numSumatraTimeout);
 
-        var lblSumatraDesc = new Label
-        {
-            Text = LangManager.Get("Settings_SumatraDescription"),
-            Dock = DockStyle.Fill,
-            TextAlign = ContentAlignment.TopLeft,
-            ForeColor = System.Drawing.SystemColors.GrayText
-        };
-
-        compatPanel.Controls.Add(lblLowDpiEnhancement, 0, 0);
-        compatPanel.Controls.Add(cmbLowDpiEnhancement, 1, 0);
-        compatPanel.Controls.Add(lblLowDpiEnhancementDesc, 0, 1);
-        compatPanel.SetColumnSpan(lblLowDpiEnhancementDesc, 2);
-        compatPanel.Controls.Add(lblRawPrinters, 0, 2);
-        compatPanel.Controls.Add(txtRawPrinters, 1, 2);
-        compatPanel.Controls.Add(lblRawPrintersDesc, 0, 3);
-        compatPanel.SetColumnSpan(lblRawPrintersDesc, 2);
-        compatPanel.Controls.Add(lblSumatraPath, 0, 4);
-        compatPanel.Controls.Add(pnlSumatraPath, 1, 4);
-        compatPanel.Controls.Add(lblSumatraPrinters, 0, 5);
-        compatPanel.Controls.Add(txtSumatraPrinters, 1, 5);
-        compatPanel.Controls.Add(lblSumatraSettings, 0, 6);
-        compatPanel.Controls.Add(pnlSumatraSettings, 1, 6);
-        compatPanel.Controls.Add(lblSumatraDesc, 0, 7);
-        compatPanel.SetColumnSpan(lblSumatraDesc, 2);
+        AddSettingRow(compatPanel, LangManager.Get("Settings_LowDpiEnhancementLabel"), cmbLowDpiEnhancement);
+        AddSettingDescriptionRow(compatPanel, LangManager.Get("Settings_LowDpiEnhancementDescription"));
+        AddSettingRow(compatPanel, LangManager.Get("Settings_RawPrinterLabel"), txtRawPrinters);
+        AddSettingDescriptionRow(compatPanel, LangManager.Get("Settings_RawPrinterDescription"));
+        AddSettingRow(compatPanel, LangManager.Get("Settings_SumatraPathLabel"), pnlSumatraPath);
+        AddSettingRow(compatPanel, LangManager.Get("Settings_SumatraPrintersLabel"), txtSumatraPrinters);
+        AddSettingRow(compatPanel, LangManager.Get("Settings_SumatraSettingsLabel"), pnlSumatraSettings);
+        AddSettingDescriptionRow(compatPanel, LangManager.Get("Settings_SumatraDescription"));
         grpPrinterCompat.ContentPanel.Controls.Add(compatPanel);
 
         // 路径设置组
         var grpPath = CreateSettingsSection(LangManager.Get("Settings_Path"));
 
-        var pathPanel = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 3,
-            RowCount = 3,
-            Padding = new Padding(4)
-        };
-        pathPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
-        pathPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        pathPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 60));
-        pathPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, FormRowHeight));
-        pathPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, FormRowHeight));
-        pathPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, FormRowHeight));
-
-        var lblDbPath = new Label { Text = LangManager.Get("Settings_DbPath"), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
+        var pathPanel = CreateSettingsTable(
+            new ColumnStyle(SizeType.Absolute, 110),
+            new ColumnStyle(SizeType.Percent, 100),
+            new ColumnStyle(SizeType.Absolute, 64));
         var txtDbPath = new TextBox
         {
             Text = string.IsNullOrWhiteSpace(_config.DbPath) ? HostConfig.DefaultDbPath : _config.DbPath,
@@ -1004,7 +916,6 @@ public class MainWindow : Form
                 txtDbPath.Text = dlg.FileName;
         };
 
-        var lblCrashDir = new Label { Text = LangManager.Get("Settings_CrashLogDir"), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
         var txtCrashDir = new TextBox
         {
             Text = string.IsNullOrWhiteSpace(_config.CrashLogDir) ? HostConfig.DefaultCrashLogDir : _config.CrashLogDir,
@@ -1024,7 +935,6 @@ public class MainWindow : Form
                 txtCrashDir.Text = dlg.SelectedPath;
         };
 
-        var lblSumatraTempDir = new Label { Text = LangManager.Get("Settings_SumatraTempDir"), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
         var txtSumatraTempDir = new TextBox
         {
             Text = string.IsNullOrWhiteSpace(_config.SumatraTempDir)
@@ -1046,22 +956,25 @@ public class MainWindow : Form
                 txtSumatraTempDir.Text = dlg.SelectedPath;
         };
 
-        pathPanel.Controls.Add(lblDbPath, 0, 0);
-        pathPanel.Controls.Add(txtDbPath, 1, 0);
-        pathPanel.Controls.Add(btnBrowseDb, 2, 0);
-        pathPanel.Controls.Add(lblCrashDir, 0, 1);
-        pathPanel.Controls.Add(txtCrashDir, 1, 1);
-        pathPanel.Controls.Add(btnBrowseCrash, 2, 1);
-        pathPanel.Controls.Add(lblSumatraTempDir, 0, 2);
-        pathPanel.Controls.Add(txtSumatraTempDir, 1, 2);
-        pathPanel.Controls.Add(btnBrowseSumatraTemp, 2, 2);
+        AddSettingRow(pathPanel, LangManager.Get("Settings_DbPath"), txtDbPath, btnBrowseDb);
+        AddSettingRow(pathPanel, LangManager.Get("Settings_CrashLogDir"), txtCrashDir, btnBrowseCrash);
+        AddSettingRow(pathPanel, LangManager.Get("Settings_SumatraTempDir"), txtSumatraTempDir, btnBrowseSumatraTemp);
         grpPath.ContentPanel.Controls.Add(pathPanel);
 
         // 保存按钮
-        var btnSave = CreateCommandButton(LangManager.Get("Common_Save"), 0);
-        btnSave.Dock = DockStyle.Fill;
-        btnSave.Height = 34;
+        var btnSave = CreateCommandButton(LangManager.Get("Common_Save"), 84);
         btnSave.Margin = new Padding(0);
+        var saveBar = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            Dock = DockStyle.Top,
+            FlowDirection = FlowDirection.RightToLeft,
+            WrapContents = false,
+            Padding = new Padding(0),
+            BackColor = PageBackColor
+        };
+        saveBar.Controls.Add(btnSave);
         btnSave.Click += (s, e) =>
         {
             // 路径校验
@@ -1158,35 +1071,12 @@ public class MainWindow : Form
         StyleSettingsSection(grpPrinterCompat);
         StyleSettingsSection(grpPath);
 
-        var saveHost = CreateSectionHost(btnSave);
-        var pathHost = CreateSectionHost(grpPath);
-        var printerCompatHost = CreateSectionHost(grpPrinterCompat);
-        var securityHost = CreateSectionHost(grpSecurity);
-        var displayHost = CreateSectionHost(grpDisplay);
-        var basicHost = CreateSectionHost(grpBasic);
-
-        void RefreshSettingsLayout()
-        {
-            UpdateWrappedDescriptionRow(compatPanel, 1, lblLowDpiEnhancementDesc);
-            UpdateWrappedDescriptionRow(compatPanel, 3, lblRawPrintersDesc);
-            UpdateWrappedDescriptionRow(compatPanel, 7, lblSumatraDesc);
-
-            ResizeSettingsSection(basicHost, grpBasic, basicPanel);
-            ResizeSettingsSection(displayHost, grpDisplay, displayPanel);
-            ResizeSettingsSection(securityHost, grpSecurity, securityPanel);
-            ResizeSettingsSection(printerCompatHost, grpPrinterCompat, compatPanel);
-            ResizeSettingsSection(pathHost, grpPath, pathPanel);
-            ResizePlainSection(saveHost, btnSave.Height);
-        }
-
-        panel.Controls.Add(saveHost);
-        panel.Controls.Add(pathHost);
-        panel.Controls.Add(printerCompatHost);
-        panel.Controls.Add(securityHost);
-        panel.Controls.Add(displayHost);
-        panel.Controls.Add(basicHost);
-        panel.Resize += (s, e) => RefreshSettingsLayout();
-        RefreshSettingsLayout();
+        AddSettingsBlock(settingsLayout, grpBasic);
+        AddSettingsBlock(settingsLayout, grpDisplay);
+        AddSettingsBlock(settingsLayout, grpSecurity);
+        AddSettingsBlock(settingsLayout, grpPrinterCompat);
+        AddSettingsBlock(settingsLayout, grpPath);
+        AddSettingsBlock(settingsLayout, saveBar, 0);
         tab.Controls.Add(panel);
         return tab;
     }
@@ -1240,8 +1130,23 @@ public class MainWindow : Form
         {
             Text = text,
             AutoSize = true,
+            Anchor = AnchorStyles.Left,
             ForeColor = MutedTextColor,
-            Margin = new Padding(0, 5, 6, 0)
+            TextAlign = ContentAlignment.MiddleLeft,
+            Margin = new Padding(0, 0, 6, 0)
+        };
+    }
+
+    private static DateTimePicker CreateInlineDatePicker(DateTime value)
+    {
+        return new DateTimePicker
+        {
+            Width = 140,
+            Height = 28,
+            Format = DateTimePickerFormat.Short,
+            Value = value,
+            Anchor = AnchorStyles.Left,
+            Margin = new Padding(0, 0, 14, 0)
         };
     }
 
@@ -1305,8 +1210,165 @@ public class MainWindow : Form
     {
         return new SettingsSectionPanel(title)
         {
-            Dock = DockStyle.Top
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            Dock = DockStyle.Top,
+            Margin = new Padding(0)
         };
+    }
+
+    private static TableLayoutPanel CreateSettingsLayoutPanel()
+    {
+        var layout = new TableLayoutPanel
+        {
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            ColumnCount = 1,
+            RowCount = 0,
+            Padding = new Padding(0),
+            Margin = new Padding(0),
+            BackColor = PageBackColor
+        };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        return layout;
+    }
+
+    private static void UpdateSettingsLayoutWidth(Panel panel, Control layout)
+    {
+        var verticalScrollWidth = panel.VerticalScroll.Visible ? SystemInformation.VerticalScrollBarWidth : 0;
+        layout.Location = new Point(panel.Padding.Left, panel.Padding.Top);
+        layout.Width = Math.Max(320, panel.ClientSize.Width - panel.Padding.Horizontal - verticalScrollWidth);
+    }
+
+    private static TableLayoutPanel CreateSettingsTable(params ColumnStyle[] columnStyles)
+    {
+        var table = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            ColumnCount = columnStyles.Length,
+            RowCount = 0,
+            Padding = new Padding(4, 0, 4, 4),
+            Margin = new Padding(0),
+            BackColor = SectionBackColor
+        };
+
+        foreach (var columnStyle in columnStyles)
+            table.ColumnStyles.Add(columnStyle);
+
+        table.SizeChanged += (s, e) => UpdateSettingsTableWrapping(table);
+        return table;
+    }
+
+    private static void AddSettingsBlock(TableLayoutPanel layout, Control content, int bottomSpacing = 12)
+    {
+        var row = layout.RowCount;
+        layout.RowCount++;
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+        content.Dock = DockStyle.Fill;
+        content.Margin = new Padding(0, 0, 0, bottomSpacing);
+        layout.Controls.Add(content, 0, row);
+    }
+
+    private static void AddSettingRow(TableLayoutPanel table, string labelText, Control content)
+    {
+        var row = AddSettingsTableRow(table);
+        PrepareSettingContent(content);
+        table.Controls.Add(CreateSettingLabel(labelText), 0, row);
+        table.Controls.Add(content, 1, row);
+    }
+
+    private static void AddSettingRow(TableLayoutPanel table, string labelText, Control content, Control trailingContent)
+    {
+        var row = AddSettingsTableRow(table);
+        PrepareSettingContent(content);
+        PrepareSettingTrailingContent(trailingContent);
+        table.Controls.Add(CreateSettingLabel(labelText), 0, row);
+        table.Controls.Add(content, 1, row);
+        table.Controls.Add(trailingContent, 2, row);
+    }
+
+    private static void AddSettingControlRow(TableLayoutPanel table, Control firstContent, Control secondContent)
+    {
+        var row = AddSettingsTableRow(table);
+        PrepareSettingContent(firstContent);
+        PrepareSettingTrailingContent(secondContent);
+        table.Controls.Add(firstContent, 0, row);
+        table.Controls.Add(secondContent, 1, row);
+    }
+
+    private static void AddSettingWideRow(TableLayoutPanel table, Control content)
+    {
+        var row = AddSettingsTableRow(table);
+        PrepareSettingContent(content);
+        table.Controls.Add(content, 0, row);
+        table.SetColumnSpan(content, table.ColumnCount);
+    }
+
+    private static void PrepareSettingContent(Control content)
+    {
+        content.Dock = DockStyle.None;
+        content.Anchor = content is TextBox || content is TableLayoutPanel || content is Panel && content is not FlowLayoutPanel
+            ? AnchorStyles.Left | AnchorStyles.Right
+            : AnchorStyles.Left;
+
+        if (content.Margin == Padding.Empty)
+            content.Margin = new Padding(0, 3, 0, 3);
+    }
+
+    private static void PrepareSettingTrailingContent(Control content)
+    {
+        content.Dock = DockStyle.None;
+        content.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        content.Margin = new Padding(4, 3, 0, 3);
+    }
+
+    private static void AddSettingDescriptionRow(TableLayoutPanel table, string text)
+    {
+        var description = new Label
+        {
+            Text = text,
+            AutoSize = true,
+            Dock = DockStyle.Top,
+            ForeColor = MutedTextColor,
+            Margin = new Padding(0, 0, 0, 8),
+            Tag = "SettingsDescription"
+        };
+        AddSettingWideRow(table, description);
+        UpdateSettingsTableWrapping(table);
+    }
+
+    private static int AddSettingsTableRow(TableLayoutPanel table)
+    {
+        var row = table.RowCount;
+        table.RowCount++;
+        table.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        return row;
+    }
+
+    private static Label CreateSettingLabel(string text)
+    {
+        return new Label
+        {
+            Text = text,
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleLeft,
+            MinimumSize = new Size(0, FormRowHeight),
+            Margin = new Padding(0, 3, 10, 3)
+        };
+    }
+
+    private static void UpdateSettingsTableWrapping(TableLayoutPanel table)
+    {
+        var width = Math.Max(220, table.ClientSize.Width - table.Padding.Horizontal);
+        foreach (Control control in table.Controls)
+        {
+            if (Equals(control.Tag, "SettingsDescription"))
+                control.MaximumSize = new Size(width, 0);
+        }
     }
 
     private static Panel CreateSectionHost(Control content, int bottomPadding = 12)
@@ -1325,39 +1387,6 @@ public class MainWindow : Form
     private static void ResizePlainSection(Panel host, int contentHeight)
     {
         host.Height = contentHeight + host.Padding.Vertical;
-    }
-
-    private static void ResizeSettingsSection(Panel host, SettingsSectionPanel sectionPanel, TableLayoutPanel contentPanel)
-    {
-        var contentHeight = MeasureTableHeight(contentPanel);
-        sectionPanel.Height = contentHeight + sectionPanel.ContentPanel.Padding.Vertical + sectionPanel.HeaderHeight;
-        host.Height = sectionPanel.Height + host.Padding.Vertical;
-    }
-
-    private static int MeasureTableHeight(TableLayoutPanel table)
-    {
-        var height = table.Padding.Vertical;
-        foreach (RowStyle rowStyle in table.RowStyles)
-        {
-            if (rowStyle.SizeType == SizeType.Absolute)
-                height += (int)Math.Ceiling(rowStyle.Height);
-        }
-        return height;
-    }
-
-    private static void UpdateWrappedDescriptionRow(TableLayoutPanel table, int rowIndex, Label label)
-    {
-        var width = table.ClientSize.Width - table.Padding.Horizontal - 12;
-        if (width <= 0)
-            width = Math.Max(240, table.Width - table.Padding.Horizontal - 12);
-
-        var measured = TextRenderer.MeasureText(
-            label.Text,
-            label.Font,
-            new Size(width, int.MaxValue),
-            TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl | TextFormatFlags.NoPrefix);
-
-        table.RowStyles[rowIndex].Height = Math.Max(FormRowHeight, measured.Height + 10);
     }
 
     private static void StyleSettingsSection(Control root)
@@ -1392,29 +1421,29 @@ public class MainWindow : Form
 
         if (root is TextBox textBox)
         {
-            textBox.BorderStyle = BorderStyle.None;
-            textBox.BackColor = InputBackColor;
+            textBox.BorderStyle = BorderStyle.FixedSingle;
+            textBox.BackColor = Color.White;
             textBox.ForeColor = textBox.ForeColor == SystemColors.GrayText ? SystemColors.GrayText : TextColor;
-            textBox.Margin = new Padding(0, 4, 0, 0);
+            textBox.Margin = new Padding(0, 3, 0, 3);
             return;
         }
 
         if (root is ComboBox comboBox)
         {
-            comboBox.Margin = new Padding(0, 4, 0, 0);
+            comboBox.Margin = new Padding(0, 3, 0, 3);
             return;
         }
 
         if (root is NumericUpDown numericUpDown)
         {
-            numericUpDown.Margin = new Padding(0, 4, 0, 0);
+            numericUpDown.Margin = new Padding(0, 3, 0, 3);
             return;
         }
 
         if (root is CheckBox checkBox)
         {
             checkBox.ForeColor = TextColor;
-            checkBox.Margin = new Padding(0, 6, 0, 0);
+            checkBox.Margin = new Padding(0, 3, 0, 3);
         }
     }
 
@@ -1456,6 +1485,8 @@ public class MainWindow : Form
         public Color HoverBackColor { get; set; }
         public Color DownBackColor { get; set; }
 
+        protected override bool ShowFocusCues => false;
+
         protected override void OnMouseEnter(EventArgs e)
         {
             _hovered = true;
@@ -1495,6 +1526,7 @@ public class MainWindow : Form
         {
             pevent.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
             var fillColor = _pressed ? DownBackColor : (_hovered ? HoverBackColor : BackColor);
+            pevent.Graphics.Clear(Parent?.BackColor ?? BackColor);
 
             using var path = CreateRoundPath(new Rectangle(0, 0, Width - 1, Height - 1), Radius);
             using var brush = new SolidBrush(fillColor);
@@ -1518,6 +1550,11 @@ public class MainWindow : Form
         }
     }
 
+    private class NoFocusCheckBox : CheckBox
+    {
+        protected override bool ShowFocusCues => false;
+    }
+
     private class SettingsSectionPanel : RoundedPanel
     {
         public const int DefaultHeaderHeight = 36;
@@ -1526,16 +1563,32 @@ public class MainWindow : Form
 
         public SettingsSectionPanel(string title)
         {
+            AutoSize = true;
+            AutoSizeMode = AutoSizeMode.GrowAndShrink;
             BackColor = SectionBackColor;
             BorderColor = Color.Transparent;
             Radius = 8;
             Padding = new Padding(0);
 
+            var layout = new TableLayoutPanel
+            {
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Dock = DockStyle.Top,
+                ColumnCount = 1,
+                RowCount = 2,
+                Padding = new Padding(0),
+                Margin = new Padding(0),
+                BackColor = SectionBackColor
+            };
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, HeaderHeight));
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
             var titleLabel = new Label
             {
                 Text = title,
-                Dock = DockStyle.Top,
-                Height = HeaderHeight,
+                Dock = DockStyle.Fill,
                 Font = new Font("Microsoft YaHei UI", 9.5f, FontStyle.Bold),
                 ForeColor = TextColor,
                 BackColor = SectionBackColor,
@@ -1545,13 +1598,17 @@ public class MainWindow : Form
 
             ContentPanel = new Panel
             {
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 Dock = DockStyle.Fill,
                 Padding = new Padding(14, 0, 14, 14),
+                Margin = new Padding(0),
                 BackColor = SectionBackColor
             };
 
-            Controls.Add(ContentPanel);
-            Controls.Add(titleLabel);
+            layout.Controls.Add(titleLabel, 0, 0);
+            layout.Controls.Add(ContentPanel, 0, 1);
+            Controls.Add(layout);
         }
     }
 
