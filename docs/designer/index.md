@@ -121,7 +121,7 @@ const preferenceProvider = {
 
 ## Store 访问
 
-在组件外部通过 `useDesignerStore()` 获取 Store 实例。
+在 `EasyInkDesigner` 子组件内通过 `useDesignerStore()` 获取 Store 实例（基于 Vue `inject`，必须在组件树内调用）。
 
 ```ts
 import { useDesignerStore } from '@easyink/designer'

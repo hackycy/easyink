@@ -136,9 +136,9 @@ const policy = resolvePrintPolicy({
 interface ViewerPrintPolicy {
   pageMode: 'fixed' | 'stack' | 'label'
   pageSizeMode: 'driver' | 'fixed'
-  sheetSize?: { width: number; height: number; unit: string }
+  sheetSize?: { width: number; height: number; unit: string; source: string }
   orientation: 'portrait' | 'landscape' | 'auto'
-  pageBreakBehavior: { before: string; after: string }
+  pageBreakBehavior: { after: 'auto' | 'page'; inside: 'auto' | 'avoid' }
   offset: { horizontal: number; vertical: number; unit: string }
 }
 ```

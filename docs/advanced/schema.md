@@ -236,6 +236,13 @@ interface TableSchema {
   diagnostics?: LayoutDiagnostic[]
 }
 
+/** table-data 专用 Schema */
+interface TableDataSchema extends TableSchema {
+  kind: 'data'
+  showHeader?: boolean  // 是否显示表头，默认 true
+  showFooter?: boolean  // 是否显示表尾，默认 true
+}
+
 interface TableTopologySchema {
   columns: TableColumnSchema[]   // 列定义（ratio 为宽度比例）
   rows: TableRowSchema[]         // 行定义
@@ -250,13 +257,17 @@ interface TableRowSchema {
 interface TableCellSchema {
   rowSpan?: number
   colSpan?: number
+  border?: CellBorderSchema
+  padding?: BoxSpacing
   content?: {
     text?: string
     elements?: MaterialNode[]    // 单元格内嵌元素
     editMode?: 'inline-text' | 'rich-text' | 'hosted'
   }
-  binding?: BindingRef
   typography?: CellTypography
+  props?: Record<string, unknown>
+  binding?: BindingRef            // table-data 单元格绑定
+  staticBinding?: BindingRef      // table-static 独立单元格绑定
 }
 ```
 
@@ -275,7 +286,7 @@ getNodeProps<T>(node)  // 获取类型化的 props
 
 ```json
 {
-  "version": "1",
+  "version": "1.0.0",
   "unit": "mm",
   "page": {
     "mode": "fixed",

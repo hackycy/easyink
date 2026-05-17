@@ -13,17 +13,17 @@ const dataSources: DataSourceDescriptor[] = [{
   id: 'order',
   name: '订单数据',
   fields: [
-    { path: 'orderNo', title: '订单号' },
-    { path: 'customer', title: '客户', fields: [
-      { path: 'customer/name', title: '客户名称' },
-      { path: 'customer/phone', title: '联系电话' },
+    { name: 'orderNo', path: 'orderNo', title: '订单号' },
+    { name: 'customer', path: 'customer', title: '客户', fields: [
+      { name: 'name', path: 'customer/name', title: '客户名称' },
+      { name: 'phone', path: 'customer/phone', title: '联系电话' },
     ]},
-    { path: 'items', title: '商品列表', tag: 'collection', fields: [
-      { path: 'items/name', title: '商品名称' },
-      { path: 'items/qty', title: '数量' },
-      { path: 'items/price', title: '单价' },
+    { name: 'items', path: 'items', title: '商品列表', tag: 'collection', fields: [
+      { name: 'name', path: 'items/name', title: '商品名称' },
+      { name: 'qty', path: 'items/qty', title: '数量' },
+      { name: 'price', path: 'items/price', title: '单价' },
     ]},
-    { path: 'qrcode', title: '二维码' },
+    { name: 'qrcode', path: 'qrcode', title: '二维码' },
   ],
 }]
 ```

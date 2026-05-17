@@ -32,14 +32,15 @@ import '@easyink/designer/index.css'
 
 // 文档模板 -- 设计器的唯一数据源
 const schema = ref({
-  version: 1,
-  mode: 'fixed',
-  pages: [{
+  version: '1.0.0',
+  unit: 'mm',
+  page: {
+    mode: 'fixed',
     width: 210,
     height: 297,
-    unit: 'mm',
-    elements: [],
-  }],
+  },
+  guides: { x: [], y: [] },
+  elements: [],
 })
 
 // 偏好持久化（可选，保存面板布局、缩放等用户偏好）
@@ -68,9 +69,9 @@ const dataSources: DataSourceDescriptor[] = [{
   id: 'order',
   name: '订单数据',
   fields: [
-    { path: 'orderNo', label: '订单号', type: 'text' },
-    { path: 'customerName', label: '客户名称', type: 'text' },
-    { path: 'qrcode', label: '二维码', type: 'image' },
+    { name: 'orderNo', path: 'orderNo', title: '订单号', use: 'text' },
+    { name: 'customerName', path: 'customerName', title: '客户名称', use: 'text' },
+    { name: 'qrcode', path: 'qrcode', title: '二维码', use: 'image' },
   ],
 }]
 ```
