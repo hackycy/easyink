@@ -146,6 +146,40 @@ describe('hi print client', () => {
     }))
   })
 
+  it('maps EasyInk orientation to HiPrint panel orient values', async () => {
+    const client = new HiPrintClient({ printerName: 'Printer A' })
+    client.connectionState = 'connected'
+
+    await client.printHtml({
+      html: '<main>landscape</main>',
+      width: 80,
+      height: 60,
+      printerName: 'Printer A',
+      orientation: 'landscape',
+    })
+
+    await client.printHtml({
+      html: '<main>portrait</main>',
+      width: 80,
+      height: 60,
+      printerName: 'Printer A',
+      orientation: 'portrait',
+    })
+
+    expect(runtime.addedPanels[0]).toEqual(expect.objectContaining({
+      orient: 2,
+    }))
+    expect(runtime.addedPanels[1]).toEqual(expect.objectContaining({
+      orient: 1,
+    }))
+    expect(runtime.printOptions[0]).toEqual(expect.objectContaining({
+      landscape: true,
+    }))
+    expect(runtime.printOptions[1]).toEqual(expect.objectContaining({
+      landscape: false,
+    }))
+  })
+
   it('falls back to hiwebSocket printerList when refresh callback returns empty', async () => {
     const client = new HiPrintClient()
     client.connectionState = 'connected'

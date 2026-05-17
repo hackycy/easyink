@@ -321,6 +321,7 @@ export class HiPrintClient {
       const panel = template.addPrintPanel({
         width: options.width,
         height: options.height,
+        orient: resolveHiPrintOrient(options),
         // Panel width/height are millimeters, but panel internals use points.
         paperFooter: options.paperFooter ?? mmToPt(options.height),
         paperHeader: options.paperHeader ?? 0,
@@ -431,11 +432,7 @@ function buildHiPrintOptions(
     margins: options.margins ?? { marginType: 'none' },
   }
 
-  const explicitLandscape = options.orientation === 'landscape'
-    ? true
-    : options.orientation === 'portrait'
-      ? false
-      : undefined
+  const explicitLandscape = resolveExplicitLandscape(options)
   const landscape = explicitLandscape ?? options.width > options.height
   const forcePageSize = options.forcePageSize ?? defaultForcePageSize
 
@@ -454,6 +451,19 @@ function buildHiPrintOptions(
   }
 
   return printOptions
+}
+
+function resolveExplicitLandscape(options: PrintHtmlOptions): boolean | undefined {
+  return options.orientation === 'landscape'
+    ? true
+    : options.orientation === 'portrait'
+      ? false
+      : undefined
+}
+
+function resolveHiPrintOrient(options: PrintHtmlOptions): 1 | 2 {
+  const landscape = resolveExplicitLandscape(options) ?? options.width > options.height
+  return landscape ? 2 : 1
 }
 
 function mmToPt(value: number): number {

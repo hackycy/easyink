@@ -29,8 +29,10 @@ This package intentionally uses only the runtime APIs exposed by
 - `hiprint.hiwebSocket.printerList`
 
 The wrapper fields `printerName`, `copies`, `orientation`, and `forcePageSize`
-are EasyInk-level options. They are translated to `print2` options such as
-`printer`, `copies`, `landscape`, `pageSize`, and `scaleFactor`.
+are EasyInk-level options. `orientation` is translated to the upstream panel
+`orient` field (`1 = portrait`, `2 = landscape`) and to `print2.landscape`.
+Other fields are translated to `print2` options such as `printer`, `copies`,
+`pageSize`, and `scaleFactor`.
 
 `PrintHtmlOptions.width` and `PrintHtmlOptions.height` are millimeters. They
 come from `resolveViewerPrintSize()` when using `createHiPrintDriver()`.
