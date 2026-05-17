@@ -168,14 +168,15 @@ public class HostConfig
     private static readonly string ConfigPath = Path.Combine(ConfigDir, "config.json");
 
     private const string AutoStartRegKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
-    private const string AutoStartRegName = "EasyInkPrinterHost";
+    private const string AutoStartRegName = "EasyInkPrinter";
+    private const string LegacyAutoStartRegName = "EasyInkPrinterHost";
 
     public static bool GetAutoStartRegistry()
     {
         try
         {
             using var key = Registry.CurrentUser.OpenSubKey(AutoStartRegKey, false);
-            return key?.GetValue(AutoStartRegName) != null;
+            return HasAutoStartValue(key, AutoStartRegName) || HasAutoStartValue(key, LegacyAutoStartRegName);
         }
         catch
         {
@@ -185,6 +186,16 @@ public class HostConfig
 
     public static void SetAutoStartRegistry(bool enable)
     {
+        SetAutoStartRegistry(enable, Process.GetCurrentProcess().MainModule.FileName);
+    }
+
+    internal static string BuildAutoStartCommand(string exePath)
+    {
+        return $"\"{exePath}\" --autostart";
+    }
+
+    internal static void SetAutoStartRegistry(bool enable, string exePath)
+    {
         try
         {
             using var key = Registry.CurrentUser.OpenSubKey(AutoStartRegKey, true);
@@ -192,18 +203,32 @@ public class HostConfig
 
             if (enable)
             {
-                var exePath = Process.GetCurrentProcess().MainModule.FileName;
-                key.SetValue(AutoStartRegName, $"\"{exePath}\"");
+                key.SetValue(AutoStartRegName, BuildAutoStartCommand(exePath));
+                key.DeleteValue(LegacyAutoStartRegName, false);
             }
             else
             {
                 key.DeleteValue(AutoStartRegName, false);
+                key.DeleteValue(LegacyAutoStartRegName, false);
             }
         }
         catch (Exception ex)
         {
             EasyInk.Printer.SimpleLogger.Error("设置开机自启动失败", ex);
         }
+    }
+
+    public static void ReconcileAutoStartRegistry()
+    {
+        if (!GetAutoStartRegistry())
+            return;
+
+        SetAutoStartRegistry(true);
+    }
+
+    private static bool HasAutoStartValue(RegistryKey? key, string valueName)
+    {
+        return key?.GetValue(valueName) != null;
     }
 
     public static HostConfig Load()

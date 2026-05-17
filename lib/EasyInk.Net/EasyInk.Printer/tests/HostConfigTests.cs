@@ -82,4 +82,12 @@ public class HostConfigTests
     {
         Assert.Equal(HostConfig.DefaultCrashLogDir, HostConfig.ResolveCrashLogDir(null!));
     }
+
+    [Fact]
+    public void BuildAutoStartCommand_AddsAutoStartFlag()
+    {
+        var command = HostConfig.BuildAutoStartCommand(@"C:\Program Files\EasyInk Printer\EasyInk.Printer.exe");
+
+        Assert.Equal(@"""C:\Program Files\EasyInk Printer\EasyInk.Printer.exe"" --autostart", command);
+    }
 }

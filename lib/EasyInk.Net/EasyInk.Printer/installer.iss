@@ -37,8 +37,10 @@ Name: "{group}\Uninstall EasyInk Printer"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\EasyInk Printer"; Filename: "{app}\EasyInk.Printer.exe"; Tasks: desktopicon
 
 [Registry]
+; 清理旧版本程序内设置写入的重复自启动项，避免登录时启动两个实例
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: none; ValueName: "EasyInkPrinterHost"; Flags: deletevalue; Tasks: autostart
 ; 开机自启动
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "EasyInkPrinter"; ValueData: """{app}\EasyInk.Printer.exe"""; Flags: uninsdeletevalue; Tasks: autostart
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "EasyInkPrinter"; ValueData: """{app}\EasyInk.Printer.exe"" --autostart"; Flags: uninsdeletevalue; Tasks: autostart
 
 [Run]
 Filename: "{app}\EasyInk.Printer.exe"; Description: "Launch EasyInk Printer"; Flags: nowait postinstall skipifsilent

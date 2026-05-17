@@ -32,12 +32,17 @@ static class Program
             return;
         }
 
+        var launchedByAutoStart = IsAutoStartLaunch(args);
+
         bool createdNew;
         _mutex = new Mutex(true, "EasyInk.Printer.SingleInstance", out createdNew);
 
         if (!createdNew)
         {
-            MessageBox.Show(LangManager.Get("App_AlreadyRunning_Message"), LangManager.Get("App_AlreadyRunning_Title"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+            if (!launchedByAutoStart)
+            {
+                MessageBox.Show(LangManager.Get("App_AlreadyRunning_Message"), LangManager.Get("App_AlreadyRunning_Title"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
             return;
         }
 
@@ -55,6 +60,17 @@ static class Program
         }
     }
 
+    private static bool IsAutoStartLaunch(string[] args)
+    {
+        foreach (var arg in args)
+        {
+            if (string.Equals(arg, "--autostart", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
+
     private static void Run()
     {
         Application.EnableVisualStyles();
@@ -63,6 +79,7 @@ static class Program
 
         var config = HostConfig.Load();
         LangManager.Initialize(string.IsNullOrEmpty(config.Language) ? null : config.Language);
+        HostConfig.ReconcileAutoStartRegistry();
 
         var resolvedDbPath = HostConfig.ResolveDbPath(config.DbPath!);
         var logDir = Path.GetDirectoryName(resolvedDbPath);
