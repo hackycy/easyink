@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using EasyInk.Engine;
@@ -29,6 +31,21 @@ public class MainWindow : Form
     private readonly HashSet<int> _loadedTabs = new();
     private readonly HashSet<int> _refreshingTabs = new();
 
+    private static readonly Color PageBackColor = Color.FromArgb(242, 246, 250);
+    private static readonly Color SurfaceColor = Color.FromArgb(252, 254, 255);
+    private static readonly Color SectionBackColor = Color.FromArgb(248, 251, 255);
+    private static readonly Color InputBackColor = Color.FromArgb(247, 249, 252);
+    private static readonly Color BorderColor = Color.FromArgb(231, 236, 244);
+    private static readonly Color SoftBorderColor = Color.FromArgb(238, 242, 248);
+    private static readonly Color TextColor = Color.FromArgb(30, 41, 59);
+    private static readonly Color MutedTextColor = Color.FromArgb(100, 116, 139);
+    private static readonly Color PrimaryColor = Color.FromArgb(33, 111, 219);
+    private static readonly Color SuccessColor = Color.FromArgb(16, 139, 118);
+    private static readonly Color WarningColor = Color.FromArgb(217, 119, 6);
+    private static readonly Color ErrorColor = Color.FromArgb(220, 38, 38);
+    private static readonly Color InfoColor = Color.FromArgb(79, 70, 229);
+    private const int FormRowHeight = 34;
+
     public event Action? OnRestart;
 
     public MainWindow(HttpServer server, WebSocketHandler wsHandler, EngineApi api, HostConfig config, IAuditService auditService)
@@ -46,15 +63,18 @@ public class MainWindow : Form
     {
         Text = LangManager.Get("Window_Title");
         Icon = TrayIcon.LoadAppIcon();
-        Size = new Size(900, 640);
+        Size = new Size(980, 700);
         StartPosition = FormStartPosition.CenterScreen;
-        MinimumSize = new Size(700, 500);
+        MinimumSize = new Size(780, 560);
         Font = new Font("Microsoft YaHei UI", 9f);
+        BackColor = PageBackColor;
 
         _tabs = new TabControl
         {
             Dock = DockStyle.Fill,
-            Padding = new Point(12, 4)
+            Padding = new Point(16, 6),
+            Font = new Font("Microsoft YaHei UI", 9f),
+            HotTrack = true
         };
 
         _tabs.TabPages.Add(CreateDashboardTab());
@@ -78,66 +98,78 @@ public class MainWindow : Form
             case 1: // 打印机
                 _loadedTabs.Add(idx);
                 var printersTab = _tabs.TabPages[idx];
-                var printersLv = printersTab.Controls.OfType<ListView>().FirstOrDefault();
+                var printersLv = FindListView(printersTab);
                 if (printersLv != null) RefreshPrinters(printersLv);
                 break;
             case 2: // 任务
                 _loadedTabs.Add(idx);
                 var jobsTab = _tabs.TabPages[idx];
-                var jobsLv = jobsTab.Controls.OfType<ListView>().FirstOrDefault();
+                var jobsLv = FindListView(jobsTab);
                 if (jobsLv != null) RefreshJobs(jobsLv);
                 break;
             case 3: // 日志
                 _loadedTabs.Add(idx);
                 var logsTab = _tabs.TabPages[idx];
-                var logsLv = logsTab.Controls.OfType<ListView>().FirstOrDefault();
+                var logsLv = FindListView(logsTab);
                 if (logsLv != null) RefreshLogs(logsLv, DateTime.Today.AddDays(-7), DateTime.Now);
                 break;
         }
     }
 
+    private static ListView? FindListView(Control root)
+    {
+        foreach (Control child in root.Controls)
+        {
+            if (child is ListView listView)
+                return listView;
+
+            var nested = FindListView(child);
+            if (nested != null)
+                return nested;
+        }
+
+        return null;
+    }
+
     private TabPage CreateDashboardTab()
     {
         var tab = new TabPage(LangManager.Get("Dashboard_Tab"));
-        var panel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(16) };
+        var panel = CreatePagePanel(new Padding(18));
 
-        var titleFont = new Font("Microsoft YaHei UI", 9f);
+        var titleFont = new Font("Microsoft YaHei UI", 9f, FontStyle.Regular);
         var valueFont = new Font("Microsoft YaHei UI", 18f, FontStyle.Bold);
-        var cardSize = new Size(180, 90);
-
-        var colorRunning = Color.FromArgb(56, 142, 142);
-        var colorError = Color.FromArgb(211, 47, 47);
-        var colorPort = Color.FromArgb(63, 81, 181);
-        var colorWs = Color.FromArgb(255, 152, 0);
-        var colorIdle = Color.FromArgb(56, 142, 142);
-        var colorBusy = Color.FromArgb(255, 111, 0);
 
         var hasError = !_server.IsRunning && _server.LastError != null;
-        var statusColor = hasError ? colorError : colorRunning;
+        var statusColor = hasError ? ErrorColor : SuccessColor;
         var statusText = _server.IsRunning ? LangManager.Get("Dashboard_Status_Running") : (hasError ? LangManager.Get("Dashboard_Status_Error") : LangManager.Get("Dashboard_Status_Stopped"));
 
-        // -- 状态卡片 --
-        var cardsPanel = new FlowLayoutPanel
+        var cardsPanel = new TableLayoutPanel
         {
             Dock = DockStyle.Top,
             Height = 118,
-            FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = false,
-            Padding = new Padding(0, 0, 0, 8),
-            AutoSize = false
+            ColumnCount = 4,
+            RowCount = 1,
+            Padding = new Padding(0, 0, 0, 14),
+            BackColor = PageBackColor
         };
+        for (var i = 0; i < 4; i++)
+            cardsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+        cardsPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         Label lblStatusVal, lblPortVal, lblWsVal, lblQueueVal;
-        var cardStatus = CreateCardPanel(cardSize, statusColor, LangManager.Get("Dashboard_ServiceStatus"),
+        var cardStatus = CreateCardPanel(statusColor, LangManager.Get("Dashboard_ServiceStatus"),
             statusText, valueFont, statusColor, titleFont, out lblStatusVal);
-        var cardPort = CreateCardPanel(cardSize, colorPort, LangManager.Get("Dashboard_Port"),
-            _server.Port.ToString(), valueFont, colorPort, titleFont, out lblPortVal);
-        var cardWs = CreateCardPanel(cardSize, colorWs, LangManager.Get("Dashboard_WebSocket"),
-            _wsHandler.ConnectionCount.ToString(), valueFont, colorWs, titleFont, out lblWsVal);
-        var cardQueue = CreateCardPanel(cardSize, colorIdle, LangManager.Get("Dashboard_PrintQueue"),
-            LangManager.Get("Dashboard_Status_Idle"), valueFont, colorIdle, titleFont, out lblQueueVal);
+        var cardPort = CreateCardPanel(InfoColor, LangManager.Get("Dashboard_Port"),
+            _server.Port.ToString(), valueFont, InfoColor, titleFont, out lblPortVal);
+        var cardWs = CreateCardPanel(WarningColor, LangManager.Get("Dashboard_WebSocket"),
+            _wsHandler.ConnectionCount.ToString(), valueFont, WarningColor, titleFont, out lblWsVal);
+        var cardQueue = CreateCardPanel(SuccessColor, LangManager.Get("Dashboard_PrintQueue"),
+            LangManager.Get("Dashboard_Status_Idle"), valueFont, SuccessColor, titleFont, out lblQueueVal);
 
-        cardsPanel.Controls.AddRange(new Control[] { cardStatus, cardPort, cardWs, cardQueue });
+        cardsPanel.Controls.Add(cardStatus, 0, 0);
+        cardsPanel.Controls.Add(cardPort, 1, 0);
+        cardsPanel.Controls.Add(cardWs, 2, 0);
+        cardsPanel.Controls.Add(cardQueue, 3, 0);
 
         _wsHandler.ConnectionCountChanged += () =>
         {
@@ -148,29 +180,29 @@ public class MainWindow : Form
                 lblWsVal.Text = _wsHandler.ConnectionCount.ToString();
         };
 
-        // -- 设备信息区域 --
-        var infoPanel = new Panel
+        var infoPanel = new RoundedPanel
         {
             Dock = DockStyle.Top,
-            AutoSize = true,
-            BackColor = Color.White,
-            BorderStyle = BorderStyle.FixedSingle,
-            Padding = new Padding(16, 12, 16, 12),
+            Height = 178,
+            BackColor = SurfaceColor,
+            BorderColor = BorderColor,
+            Radius = 8,
+            Padding = new Padding(18, 16, 18, 16),
             Margin = new Padding(0, 0, 0, 12)
         };
 
         var infoTitleFont = new Font("Microsoft YaHei UI", 10f, FontStyle.Bold);
-        var infoKeyFont = new Font("Microsoft YaHei UI", 9f);
+        var infoKeyFont = new Font("Microsoft YaHei UI", 9f, FontStyle.Regular);
         var infoValFont = new Font("Microsoft YaHei UI", 9f, FontStyle.Bold);
-        var rowHeight = 24;
 
         var lblInfoTitle = new Label
         {
             Text = LangManager.Get("Dashboard_DeviceInfo"),
             Font = infoTitleFont,
-            ForeColor = Color.FromArgb(50, 50, 50),
+            ForeColor = TextColor,
             Dock = DockStyle.Top,
-            Height = 28
+            Height = 30,
+            TextAlign = ContentAlignment.MiddleLeft
         };
 
         var lanIps = NetworkHelper.GetLanIpv4Addresses();
@@ -191,58 +223,65 @@ public class MainWindow : Form
             new { Key = LangManager.Get("Dashboard_MacAddress"), Value = macText }
         };
 
-        foreach (var row in infoRows.Reverse())
+        var infoGrid = new TableLayoutPanel
         {
-            var rowPanel = new FlowLayoutPanel
-            {
-                Dock = DockStyle.Top,
-                Height = rowHeight,
-                FlowDirection = FlowDirection.LeftToRight,
-                WrapContents = false,
-                Padding = new Padding(0),
-                Margin = new Padding(0, 0, 0, 4)
-            };
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = infoRows.Length,
+            Padding = new Padding(0, 6, 0, 0),
+            BackColor = SurfaceColor
+        };
+        infoGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
+        infoGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        for (var i = 0; i < infoRows.Length; i++)
+            infoGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
 
+        for (var i = 0; i < infoRows.Length; i++)
+        {
+            var row = infoRows[i];
             var lblKey = new Label
             {
                 Text = row.Key,
                 Font = infoKeyFont,
-                ForeColor = Color.FromArgb(128, 128, 128),
-                AutoSize = true,
-                Margin = new Padding(0, 3, 8, 0)
+                ForeColor = MutedTextColor,
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleLeft,
+                Margin = new Padding(0)
             };
 
-            var lblVal = new Label
+            var txtVal = new TextBox
             {
                 Text = row.Value,
                 Font = infoValFont,
-                ForeColor = Color.FromArgb(50, 50, 50),
-                AutoSize = true,
-                MaximumSize = new Size(600, 0),
-                Margin = new Padding(0, 3, 0, 0)
+                ForeColor = TextColor,
+                BackColor = SurfaceColor,
+                BorderStyle = BorderStyle.None,
+                ReadOnly = true,
+                Dock = DockStyle.Fill,
+                Margin = new Padding(0, 6, 0, 0)
             };
-
-            rowPanel.Controls.Add(lblKey);
-            rowPanel.Controls.Add(lblVal);
-            infoPanel.Controls.Add(rowPanel);
+            infoGrid.Controls.Add(lblKey, 0, i);
+            infoGrid.Controls.Add(txtVal, 1, i);
         }
 
+        infoPanel.Controls.Add(infoGrid);
         infoPanel.Controls.Add(lblInfoTitle);
 
-        // -- 错误提示区域 --
-        var errorPanel = new Panel
+        var errorPanel = new RoundedPanel
         {
             Dock = DockStyle.Top,
             Height = 0,
             Visible = false,
-            BackColor = Color.FromArgb(255, 243, 224),
-            Padding = new Padding(12),
+            BackColor = Color.FromArgb(255, 247, 237),
+            BorderColor = Color.FromArgb(253, 186, 116),
+            Radius = 8,
+            Padding = new Padding(14, 10, 14, 10),
             Margin = new Padding(0, 0, 0, 8)
         };
         var lblError = new Label
         {
             Dock = DockStyle.Fill,
-            ForeColor = Color.FromArgb(191, 63, 0),
+            ForeColor = Color.FromArgb(154, 52, 18),
             Font = new Font("Microsoft YaHei UI", 9f)
         };
         errorPanel.Controls.Add(lblError);
@@ -250,24 +289,19 @@ public class MainWindow : Form
         if (hasError)
         {
             lblError.Text = LangManager.Get("Dashboard_StartupError", _server.LastError!);
-            errorPanel.Height = 40;
+            errorPanel.Height = 48;
             errorPanel.Visible = true;
         }
 
-        // -- 刷新按钮 --
-        var btnRefresh = new Button
-        {
-            Text = LangManager.Get("Common_Refresh"),
-            Size = new Size(72, 28),
-            Margin = new Padding(0)
-        };
+        var btnRefresh = CreateCommandButton(LangManager.Get("Common_Refresh"), 84);
         var btnBar = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 36,
+            Height = 42,
             FlowDirection = FlowDirection.LeftToRight,
             WrapContents = false,
-            Padding = new Padding(0, 4, 0, 0)
+            Padding = new Padding(0, 8, 0, 0),
+            BackColor = PageBackColor
         };
         btnBar.Controls.Add(btnRefresh);
 
@@ -276,19 +310,17 @@ public class MainWindow : Form
             // 刷新服务状态卡片
             var err = !_server.IsRunning && _server.LastError != null;
             lblStatusVal.Text = _server.IsRunning ? LangManager.Get("Dashboard_Status_Running") : (err ? LangManager.Get("Dashboard_Status_Error") : LangManager.Get("Dashboard_Status_Stopped"));
-            lblStatusVal.ForeColor = err ? colorError : colorRunning;
-            cardStatus.Controls[1].BackColor = err ? colorError : colorRunning;
+            lblStatusVal.ForeColor = err ? ErrorColor : SuccessColor;
+            SetCardAccent(cardStatus, err ? ErrorColor : SuccessColor);
             lblPortVal.Text = _server.Port.ToString();
             lblWsVal.Text = _wsHandler.ConnectionCount.ToString();
 
-            // 刷新打印队列状态
-            RefreshQueueStatus(lblQueueVal, cardQueue, colorIdle, colorBusy);
+            RefreshQueueStatus(lblQueueVal, cardQueue, SuccessColor, WarningColor);
 
-            // 刷新错误区域
             if (err)
             {
                 lblError.Text = LangManager.Get("Dashboard_StartupError", _server.LastError!);
-                errorPanel.Height = 40;
+                errorPanel.Height = 48;
                 errorPanel.Visible = true;
             }
             else
@@ -298,7 +330,6 @@ public class MainWindow : Form
             }
         };
 
-        // 添加顺序决定 Dock.Top 的视觉排列（后添加的更靠上）
         panel.Controls.Add(btnBar);
         panel.Controls.Add(errorPanel);
         panel.Controls.Add(infoPanel);
@@ -317,7 +348,7 @@ public class MainWindow : Form
 
             lblQueueVal.Text = hasActive ? LangManager.Get("Dashboard_Status_Busy") : LangManager.Get("Dashboard_Status_Idle");
             lblQueueVal.ForeColor = hasActive ? colorBusy : colorIdle;
-            cardQueue.Controls[1].BackColor = hasActive ? colorBusy : colorIdle;
+            SetCardAccent(cardQueue, hasActive ? colorBusy : colorIdle);
         }
         catch
         {
@@ -326,38 +357,41 @@ public class MainWindow : Form
         }
     }
 
-    private Panel CreateCardPanel(Size size, Color accentColor, string title, string value, Font valueFont, Color valueColor, Font titleFont, out Label valueLabel)
+    private Panel CreateCardPanel(Color accentColor, string title, string value, Font valueFont, Color valueColor, Font titleFont, out Label valueLabel)
     {
-        var card = new Panel
+        var card = new RoundedPanel
         {
-            BackColor = Color.White,
-            Size = size,
+            BackColor = SurfaceColor,
+            BorderColor = BorderColor,
+            Dock = DockStyle.Fill,
             Margin = new Padding(0, 0, 12, 0),
             Padding = new Padding(0),
-            BorderStyle = BorderStyle.FixedSingle
+            Radius = 8
         };
 
         var accentBar = new Panel
         {
             Dock = DockStyle.Top,
-            Height = 3,
-            BackColor = accentColor
+            Height = 4,
+            BackColor = accentColor,
+            Tag = "Accent"
         };
 
         var contentPanel = new Panel
         {
             Dock = DockStyle.Fill,
-            Padding = new Padding(8, 12, 8, 8)
+            Padding = new Padding(12, 14, 12, 10),
+            BackColor = SurfaceColor
         };
 
         var lblTitle = new Label
         {
             Text = title,
             Font = titleFont,
-            ForeColor = Color.FromArgb(128, 128, 128),
+            ForeColor = MutedTextColor,
             Dock = DockStyle.Top,
             TextAlign = ContentAlignment.MiddleCenter,
-            Height = 20,
+            Height = 24,
             Margin = new Padding(0)
         };
 
@@ -368,7 +402,7 @@ public class MainWindow : Form
             ForeColor = valueColor,
             Dock = DockStyle.Top,
             TextAlign = ContentAlignment.MiddleCenter,
-            Height = 40,
+            Height = 44,
             Margin = new Padding(0)
         };
 
@@ -383,40 +417,47 @@ public class MainWindow : Form
     private TabPage CreatePrintersTab()
     {
         var tab = new TabPage(LangManager.Get("Printers_Tab"));
+        var panel = CreatePagePanel(new Padding(16));
 
         var listView = new ListView
         {
             Dock = DockStyle.Fill,
             View = View.Details,
             FullRowSelect = true,
-            GridLines = true
+            GridLines = false
         };
+        StyleListView(listView);
+        EnableListCopy(listView);
         listView.Columns.Add(LangManager.Get("Printers_ColName"), 250);
         listView.Columns.Add(LangManager.Get("Printers_ColDefault"), 50);
         listView.Columns.Add(LangManager.Get("Printers_ColStatus"), 100);
         listView.Columns.Add(LangManager.Get("Printers_ColOnline"), 60);
         listView.Columns.Add(LangManager.Get("Printers_ColPaper"), 60);
 
-        var toolPanel = new Panel
-        {
-            Dock = DockStyle.Top,
-            Height = 44,
-            Padding = new Padding(8)
-        };
+        var toolPanel = CreateToolPanel(46);
 
-        var btnRefresh = new Button
-        {
-            Text = LangManager.Get("Common_Refresh"),
-            Dock = DockStyle.Left,
-            Width = 80
-        };
+        var btnRefresh = CreateCommandButton(LangManager.Get("Common_Refresh"), 84);
         btnRefresh.Click += (s, e) => RefreshPrinters(listView);
 
         toolPanel.Controls.Add(btnRefresh);
 
-        tab.Controls.Add(listView);
-        tab.Controls.Add(toolPanel);
+        panel.Controls.Add(listView);
+        panel.Controls.Add(toolPanel);
+        tab.Controls.Add(panel);
         return tab;
+    }
+
+    private FlowLayoutPanel CreateToolPanel(int height)
+    {
+        return new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            Height = height,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            Padding = new Padding(0, 0, 0, 12),
+            BackColor = PageBackColor
+        };
     }
 
     private bool TryBeginRefresh(int tabIndex)
@@ -488,51 +529,49 @@ public class MainWindow : Form
     private TabPage CreateJobsTab()
     {
         var tab = new TabPage(LangManager.Get("Jobs_Tab"));
+        var panel = CreatePagePanel(new Padding(16));
 
         var listView = new ListView
         {
             Dock = DockStyle.Fill,
             View = View.Details,
             FullRowSelect = true,
-            GridLines = true
+            GridLines = false
         };
+        StyleListView(listView);
+        EnableListCopy(listView);
         listView.Columns.Add(LangManager.Get("Jobs_ColJobId"), 200);
         listView.Columns.Add(LangManager.Get("Jobs_ColPrinter"), 150);
         listView.Columns.Add(LangManager.Get("Jobs_ColStatus"), 100);
         listView.Columns.Add(LangManager.Get("Jobs_ColCreatedTime"), 150);
         listView.Columns.Add(LangManager.Get("Jobs_ColError"), 200);
 
-        var toolPanel = new Panel
-        {
-            Dock = DockStyle.Top,
-            Height = 44,
-            Padding = new Padding(8)
-        };
-
-        var btnRefresh = new Button
-        {
-            Text = LangManager.Get("Common_Refresh"),
-            Dock = DockStyle.Left,
-            Width = 80
-        };
+        var toolPanel = CreateToolPanel(46);
+        var btnRefresh = CreateCommandButton(LangManager.Get("Common_Refresh"), 84);
         btnRefresh.Click += (s, e) => RefreshJobs(listView);
 
         toolPanel.Controls.Add(btnRefresh);
 
-        tab.Controls.Add(listView);
-        tab.Controls.Add(toolPanel);
+        panel.Controls.Add(listView);
+        panel.Controls.Add(toolPanel);
+        tab.Controls.Add(panel);
         return tab;
     }
 
     private TabPage CreateLogsTab()
     {
         var tab = new TabPage(LangManager.Get("Logs_Tab"));
+        var panel = CreatePagePanel(new Padding(16));
 
-        var filterPanel = new Panel
+        var filterPanel = new RoundedPanel
         {
-            Dock = DockStyle.Top,
-            Height = 44,
-            Padding = new Padding(8)
+            Dock = DockStyle.Fill,
+            Height = 58,
+            BackColor = SectionBackColor,
+            BorderColor = Color.Transparent,
+            Radius = 8,
+            Padding = new Padding(14, 12, 14, 10),
+            Margin = new Padding(0, 0, 0, 12)
         };
 
         var flowLayout = new FlowLayoutPanel
@@ -541,14 +580,15 @@ public class MainWindow : Form
             FlowDirection = FlowDirection.LeftToRight,
             WrapContents = false,
             AutoSize = false,
-            Padding = new Padding(0)
+            Padding = new Padding(0),
+            BackColor = SectionBackColor
         };
 
-        var lblFrom = new Label { Text = LangManager.Get("Logs_From"), AutoSize = true, Margin = new Padding(0, 4, 4, 0) };
-        var dtpFrom = new DateTimePicker { Width = 140, Format = DateTimePickerFormat.Short, Margin = new Padding(0, 0, 12, 0), Value = DateTime.Today.AddDays(-7) };
-        var lblTo = new Label { Text = LangManager.Get("Logs_To"), AutoSize = true, Margin = new Padding(0, 4, 4, 0) };
-        var dtpTo = new DateTimePicker { Width = 140, Format = DateTimePickerFormat.Short, Margin = new Padding(0, 0, 12, 0), Value = DateTime.Now };
-        var btnQuery = new Button { Text = LangManager.Get("Common_Query"), Width = 70, Margin = new Padding(0) };
+        var lblFrom = CreateInlineLabel(LangManager.Get("Logs_From"));
+        var dtpFrom = new DateTimePicker { Width = 140, Height = 28, Format = DateTimePickerFormat.Short, Margin = new Padding(0, 0, 14, 0), Value = DateTime.Today.AddDays(-7) };
+        var lblTo = CreateInlineLabel(LangManager.Get("Logs_To"));
+        var dtpTo = new DateTimePicker { Width = 140, Height = 28, Format = DateTimePickerFormat.Short, Margin = new Padding(0, 0, 14, 0), Value = DateTime.Now };
+        var btnQuery = CreateCommandButton(LangManager.Get("Common_Query"), 78);
 
         flowLayout.Controls.AddRange(new Control[] { lblFrom, dtpFrom, lblTo, dtpTo, btnQuery });
         filterPanel.Controls.Add(flowLayout);
@@ -558,8 +598,10 @@ public class MainWindow : Form
             Dock = DockStyle.Fill,
             View = View.Details,
             FullRowSelect = true,
-            GridLines = true
+            GridLines = false
         };
+        StyleListView(listView);
+        EnableListCopy(listView);
         listView.Columns.Add(LangManager.Get("Logs_ColTime"), 150);
         listView.Columns.Add(LangManager.Get("Logs_ColPrinter"), 150);
         listView.Columns.Add(LangManager.Get("Logs_ColStatus"), 80);
@@ -569,8 +611,12 @@ public class MainWindow : Form
 
         btnQuery.Click += (s, e) => RefreshLogs(listView, dtpFrom.Value, dtpTo.Value);
 
-        tab.Controls.Add(listView);
-        tab.Controls.Add(filterPanel);
+        var filterHost = CreateSectionHost(filterPanel, 14);
+        ResizePlainSection(filterHost, 58);
+
+        panel.Controls.Add(listView);
+        panel.Controls.Add(filterHost);
+        tab.Controls.Add(panel);
         return tab;
     }
 
@@ -608,16 +654,11 @@ public class MainWindow : Form
     {
         var tab = new TabPage(LangManager.Get("Settings_Tab"));
 
-        var panel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(16), AutoScroll = true };
+        var panel = CreatePagePanel(new Padding(16));
+        panel.AutoScroll = true;
 
         // 基本设置组
-        var grpBasic = new GroupBox
-        {
-            Text = LangManager.Get("Settings_Basic"),
-            Dock = DockStyle.Top,
-            Height = 100,
-            Padding = new Padding(12, 8, 12, 12)
-        };
+        var grpBasic = CreateSettingsSection(LangManager.Get("Settings_Basic"));
 
         var basicPanel = new TableLayoutPanel
         {
@@ -628,8 +669,8 @@ public class MainWindow : Form
         };
         basicPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
         basicPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        basicPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
-        basicPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+        basicPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, FormRowHeight));
+        basicPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, FormRowHeight));
 
         var lblPort = new Label { Text = LangManager.Get("Settings_HttpPort"), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
         var numPort = new NumericUpDown
@@ -653,16 +694,10 @@ public class MainWindow : Form
         basicPanel.Controls.Add(numPort, 1, 0);
         basicPanel.Controls.Add(lblAutoStart, 0, 1);
         basicPanel.Controls.Add(chkAutoStart, 1, 1);
-        grpBasic.Controls.Add(basicPanel);
+        grpBasic.ContentPanel.Controls.Add(basicPanel);
 
         // 显示设置组
-        var grpDisplay = new GroupBox
-        {
-            Text = LangManager.Get("Settings_Display"),
-            Dock = DockStyle.Top,
-            Height = 136,
-            Padding = new Padding(12, 8, 12, 12)
-        };
+        var grpDisplay = CreateSettingsSection(LangManager.Get("Settings_Display"));
 
         var displayPanel = new TableLayoutPanel
         {
@@ -673,9 +708,9 @@ public class MainWindow : Form
         };
         displayPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
         displayPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        displayPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
-        displayPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
-        displayPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+        displayPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, FormRowHeight));
+        displayPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, FormRowHeight));
+        displayPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, FormRowHeight));
 
         var chkMinimizeToTray = new CheckBox
         {
@@ -710,16 +745,10 @@ public class MainWindow : Form
         displayPanel.SetColumnSpan(chkStartMinimized, 2);
         displayPanel.Controls.Add(lblLang, 0, 2);
         displayPanel.Controls.Add(cmbLang, 1, 2);
-        grpDisplay.Controls.Add(displayPanel);
+        grpDisplay.ContentPanel.Controls.Add(displayPanel);
 
         // 安全设置组
-        var grpSecurity = new GroupBox
-        {
-            Text = LangManager.Get("Settings_Security"),
-            Dock = DockStyle.Top,
-            Height = 114,
-            Padding = new Padding(12, 8, 12, 12)
-        };
+        var grpSecurity = CreateSettingsSection(LangManager.Get("Settings_Security"));
 
         var securityPanel = new TableLayoutPanel
         {
@@ -730,8 +759,8 @@ public class MainWindow : Form
         };
         securityPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
         securityPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        securityPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
-        securityPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+        securityPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, FormRowHeight));
+        securityPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, FormRowHeight));
 
         var chkTrustAllOrigins = new CheckBox
         {
@@ -778,16 +807,10 @@ public class MainWindow : Form
         securityPanel.SetColumnSpan(chkTrustAllOrigins, 2);
         securityPanel.Controls.Add(lblApiKey, 0, 1);
         securityPanel.Controls.Add(txtApiKey, 1, 1);
-        grpSecurity.Controls.Add(securityPanel);
+        grpSecurity.ContentPanel.Controls.Add(securityPanel);
 
         // 打印兼容性设置组
-        var grpPrinterCompat = new GroupBox
-        {
-            Text = LangManager.Get("Settings_PrinterCompat"),
-            Dock = DockStyle.Top,
-            Height = 404,
-            Padding = new Padding(12, 8, 12, 12)
-        };
+        var grpPrinterCompat = CreateSettingsSection(LangManager.Get("Settings_PrinterCompat"));
 
         var compatPanel = new TableLayoutPanel
         {
@@ -798,14 +821,14 @@ public class MainWindow : Form
         };
         compatPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
         compatPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        compatPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));  // low dpi enhancement label
-        compatPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 50));  // low dpi enhancement description
-        compatPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));  // raw printer label
-        compatPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 56));  // raw printer description
-        compatPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));  // Sumatra path
-        compatPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));  // Sumatra printers
-        compatPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));  // Sumatra settings
-        compatPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 86));  // Sumatra description
+        compatPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, FormRowHeight));
+        compatPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, FormRowHeight));
+        compatPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, FormRowHeight));
+        compatPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, FormRowHeight));
+        compatPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, FormRowHeight));
+        compatPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, FormRowHeight));
+        compatPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, FormRowHeight));
+        compatPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, FormRowHeight));
 
         var lblLowDpiEnhancement = new Label { Text = LangManager.Get("Settings_LowDpiEnhancementLabel"), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
         var cmbLowDpiEnhancement = new ComboBox
@@ -859,11 +882,8 @@ public class MainWindow : Form
                 ? HostConfig.DefaultSumatraPdfPath
                 : _config.SumatraPdfPath
         };
-        var btnBrowseSumatra = new Button
-        {
-            Text = LangManager.Get("Common_Browse"),
-            Dock = DockStyle.Fill
-        };
+        var btnBrowseSumatra = CreateSecondaryButton(LangManager.Get("Common_Browse"), 64);
+        btnBrowseSumatra.Dock = DockStyle.Fill;
         btnBrowseSumatra.Click += (s, e) =>
         {
             using var dlg = new OpenFileDialog
@@ -873,7 +893,7 @@ public class MainWindow : Form
                 FileName = "SumatraPDF.exe",
                 InitialDirectory = string.IsNullOrWhiteSpace(txtSumatraPath.Text)
                     ? Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles)
-                    : Path.GetDirectoryName(txtSumatraPath.Text)
+                    : Path.GetDirectoryName(txtSumatraPath.Text) ?? Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles)
             };
             if (dlg.ShowDialog() == DialogResult.OK)
                 txtSumatraPath.Text = dlg.FileName;
@@ -943,16 +963,10 @@ public class MainWindow : Form
         compatPanel.Controls.Add(pnlSumatraSettings, 1, 6);
         compatPanel.Controls.Add(lblSumatraDesc, 0, 7);
         compatPanel.SetColumnSpan(lblSumatraDesc, 2);
-        grpPrinterCompat.Controls.Add(compatPanel);
+        grpPrinterCompat.ContentPanel.Controls.Add(compatPanel);
 
         // 路径设置组
-        var grpPath = new GroupBox
-        {
-            Text = LangManager.Get("Settings_Path"),
-            Dock = DockStyle.Top,
-            Height = 190,
-            Padding = new Padding(12, 8, 12, 12)
-        };
+        var grpPath = CreateSettingsSection(LangManager.Get("Settings_Path"));
 
         var pathPanel = new TableLayoutPanel
         {
@@ -964,9 +978,9 @@ public class MainWindow : Form
         pathPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
         pathPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         pathPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 60));
-        pathPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
-        pathPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
-        pathPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+        pathPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, FormRowHeight));
+        pathPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, FormRowHeight));
+        pathPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, FormRowHeight));
 
         var lblDbPath = new Label { Text = LangManager.Get("Settings_DbPath"), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
         var txtDbPath = new TextBox
@@ -975,12 +989,8 @@ public class MainWindow : Form
             Dock = DockStyle.Fill,
             Anchor = AnchorStyles.Left | AnchorStyles.Right
         };
-        var btnBrowseDb = new Button
-        {
-            Text = LangManager.Get("Common_Browse"),
-            Width = 52,
-            Anchor = AnchorStyles.Left
-        };
+        var btnBrowseDb = CreateSecondaryButton(LangManager.Get("Common_Browse"), 56);
+        btnBrowseDb.Anchor = AnchorStyles.Left;
         btnBrowseDb.Click += (s, e) =>
         {
             using var dlg = new SaveFileDialog
@@ -988,7 +998,7 @@ public class MainWindow : Form
                 Title = LangManager.Get("Dialog_DbFileLocation"),
                 Filter = LangManager.Get("Dialog_DbFileFilter"),
                 FileName = "audit.db",
-                InitialDirectory = Path.GetDirectoryName(txtDbPath.Text)
+                InitialDirectory = Path.GetDirectoryName(txtDbPath.Text) ?? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)
             };
             if (dlg.ShowDialog() == DialogResult.OK)
                 txtDbPath.Text = dlg.FileName;
@@ -1001,12 +1011,8 @@ public class MainWindow : Form
             Dock = DockStyle.Fill,
             Anchor = AnchorStyles.Left | AnchorStyles.Right
         };
-        var btnBrowseCrash = new Button
-        {
-            Text = LangManager.Get("Common_Browse"),
-            Width = 52,
-            Anchor = AnchorStyles.Left
-        };
+        var btnBrowseCrash = CreateSecondaryButton(LangManager.Get("Common_Browse"), 56);
+        btnBrowseCrash.Anchor = AnchorStyles.Left;
         btnBrowseCrash.Click += (s, e) =>
         {
             using var dlg = new FolderBrowserDialog
@@ -1027,12 +1033,8 @@ public class MainWindow : Form
             Dock = DockStyle.Fill,
             Anchor = AnchorStyles.Left | AnchorStyles.Right
         };
-        var btnBrowseSumatraTemp = new Button
-        {
-            Text = LangManager.Get("Common_Browse"),
-            Width = 52,
-            Anchor = AnchorStyles.Left
-        };
+        var btnBrowseSumatraTemp = CreateSecondaryButton(LangManager.Get("Common_Browse"), 56);
+        btnBrowseSumatraTemp.Anchor = AnchorStyles.Left;
         btnBrowseSumatraTemp.Click += (s, e) =>
         {
             using var dlg = new FolderBrowserDialog
@@ -1053,16 +1055,13 @@ public class MainWindow : Form
         pathPanel.Controls.Add(lblSumatraTempDir, 0, 2);
         pathPanel.Controls.Add(txtSumatraTempDir, 1, 2);
         pathPanel.Controls.Add(btnBrowseSumatraTemp, 2, 2);
-        grpPath.Controls.Add(pathPanel);
+        grpPath.ContentPanel.Controls.Add(pathPanel);
 
         // 保存按钮
-        var btnSave = new Button
-        {
-            Text = LangManager.Get("Common_Save"),
-            Dock = DockStyle.Top,
-            Height = 32,
-            Margin = new Padding(0, 12, 0, 0)
-        };
+        var btnSave = CreateCommandButton(LangManager.Get("Common_Save"), 0);
+        btnSave.Dock = DockStyle.Fill;
+        btnSave.Height = 34;
+        btnSave.Margin = new Padding(0);
         btnSave.Click += (s, e) =>
         {
             // 路径校验
@@ -1098,7 +1097,7 @@ public class MainWindow : Form
                 .ToList();
             _config.SumatraPdfPath = string.IsNullOrWhiteSpace(txtSumatraPath.Text)
                 ? HostConfig.DefaultSumatraPdfPath
-                : txtSumatraPath.Text.Trim();
+                : txtSumatraPath.Text?.Trim() ?? HostConfig.DefaultSumatraPdfPath;
             _config.SumatraPrinterNames = (txtSumatraPrinters.Text ?? "")
                 .Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
                 .Select(s => s.Trim())
@@ -1153,14 +1152,439 @@ public class MainWindow : Form
             }
         };
 
-        panel.Controls.Add(btnSave);
-        panel.Controls.Add(grpPath);
-        panel.Controls.Add(grpPrinterCompat);
-        panel.Controls.Add(grpSecurity);
-        panel.Controls.Add(grpDisplay);
-        panel.Controls.Add(grpBasic);
+        StyleSettingsSection(grpBasic);
+        StyleSettingsSection(grpDisplay);
+        StyleSettingsSection(grpSecurity);
+        StyleSettingsSection(grpPrinterCompat);
+        StyleSettingsSection(grpPath);
+
+        var saveHost = CreateSectionHost(btnSave);
+        var pathHost = CreateSectionHost(grpPath);
+        var printerCompatHost = CreateSectionHost(grpPrinterCompat);
+        var securityHost = CreateSectionHost(grpSecurity);
+        var displayHost = CreateSectionHost(grpDisplay);
+        var basicHost = CreateSectionHost(grpBasic);
+
+        void RefreshSettingsLayout()
+        {
+            UpdateWrappedDescriptionRow(compatPanel, 1, lblLowDpiEnhancementDesc);
+            UpdateWrappedDescriptionRow(compatPanel, 3, lblRawPrintersDesc);
+            UpdateWrappedDescriptionRow(compatPanel, 7, lblSumatraDesc);
+
+            ResizeSettingsSection(basicHost, grpBasic, basicPanel);
+            ResizeSettingsSection(displayHost, grpDisplay, displayPanel);
+            ResizeSettingsSection(securityHost, grpSecurity, securityPanel);
+            ResizeSettingsSection(printerCompatHost, grpPrinterCompat, compatPanel);
+            ResizeSettingsSection(pathHost, grpPath, pathPanel);
+            ResizePlainSection(saveHost, btnSave.Height);
+        }
+
+        panel.Controls.Add(saveHost);
+        panel.Controls.Add(pathHost);
+        panel.Controls.Add(printerCompatHost);
+        panel.Controls.Add(securityHost);
+        panel.Controls.Add(displayHost);
+        panel.Controls.Add(basicHost);
+        panel.Resize += (s, e) => RefreshSettingsLayout();
+        RefreshSettingsLayout();
         tab.Controls.Add(panel);
         return tab;
+    }
+
+    private static Panel CreatePagePanel(Padding padding)
+    {
+        return new Panel
+        {
+            Dock = DockStyle.Fill,
+            Padding = padding,
+            BackColor = PageBackColor
+        };
+    }
+
+    private static Button CreateCommandButton(string text, int width)
+    {
+        return CreateRoundedButton(text, width, PrimaryColor, Color.White, Color.FromArgb(25, 99, 203), Color.FromArgb(29, 78, 216));
+    }
+
+    private static Button CreateSecondaryButton(string text, int width)
+    {
+        return CreateRoundedButton(text, width, Color.FromArgb(229, 238, 252), Color.FromArgb(30, 64, 117), Color.FromArgb(217, 229, 248), Color.FromArgb(205, 221, 245));
+    }
+
+    private static Button CreateRoundedButton(string text, int width, Color backColor, Color foreColor, Color hoverColor, Color downColor)
+    {
+        var button = new RoundedButton
+        {
+            Text = text,
+            Height = 30,
+            Width = width > 0 ? width : 120,
+            Margin = new Padding(0, 0, 8, 0),
+            FlatStyle = FlatStyle.Flat,
+            BackColor = backColor,
+            ForeColor = foreColor,
+            TextAlign = ContentAlignment.MiddleCenter,
+            UseVisualStyleBackColor = false,
+            Radius = 8,
+            HoverBackColor = hoverColor,
+            DownBackColor = downColor
+        };
+        button.FlatAppearance.BorderSize = 0;
+        button.FlatAppearance.MouseOverBackColor = hoverColor;
+        button.FlatAppearance.MouseDownBackColor = downColor;
+        return button;
+    }
+
+    private static Label CreateInlineLabel(string text)
+    {
+        return new Label
+        {
+            Text = text,
+            AutoSize = true,
+            ForeColor = MutedTextColor,
+            Margin = new Padding(0, 5, 6, 0)
+        };
+    }
+
+    private static void StyleListView(ListView listView)
+    {
+        listView.BorderStyle = BorderStyle.None;
+        listView.BackColor = SurfaceColor;
+        listView.ForeColor = TextColor;
+        listView.HideSelection = false;
+        listView.MultiSelect = true;
+        listView.Font = new Font("Microsoft YaHei UI", 9f);
+        listView.SmallImageList = new ImageList { ImageSize = new Size(1, 28) };
+    }
+
+    private static void EnableListCopy(ListView listView)
+    {
+        listView.KeyDown += (s, e) =>
+        {
+            if (e.Control && e.KeyCode == Keys.C)
+            {
+                CopySelectedListRows(listView);
+                e.Handled = true;
+            }
+        };
+
+        var menu = new ContextMenuStrip();
+        menu.Items.Add(LangManager.Get("Common_Copy"), null, (s, e) => CopySelectedListRows(listView));
+        listView.ContextMenuStrip = menu;
+    }
+
+    private static void CopySelectedListRows(ListView listView)
+    {
+        if (listView.SelectedItems.Count == 0) return;
+
+        var rows = new List<ListViewItem>();
+        foreach (ListViewItem item in listView.SelectedItems)
+            rows.Add(item);
+        rows.Sort((left, right) => left.Index.CompareTo(right.Index));
+
+        var builder = new StringBuilder();
+        foreach (var item in rows)
+        {
+            for (var i = 0; i < item.SubItems.Count; i++)
+            {
+                if (i > 0) builder.Append('\t');
+                builder.Append(item.SubItems[i].Text);
+            }
+            builder.AppendLine();
+        }
+
+        try
+        {
+            Clipboard.SetText(builder.ToString().TrimEnd());
+        }
+        catch (System.Runtime.InteropServices.ExternalException)
+        {
+        }
+    }
+
+    private static SettingsSectionPanel CreateSettingsSection(string title)
+    {
+        return new SettingsSectionPanel(title)
+        {
+            Dock = DockStyle.Top
+        };
+    }
+
+    private static Panel CreateSectionHost(Control content, int bottomPadding = 12)
+    {
+        var host = new Panel
+        {
+            Dock = DockStyle.Top,
+            Padding = new Padding(0, 0, 0, bottomPadding),
+            BackColor = PageBackColor
+        };
+        content.Dock = DockStyle.Fill;
+        host.Controls.Add(content);
+        return host;
+    }
+
+    private static void ResizePlainSection(Panel host, int contentHeight)
+    {
+        host.Height = contentHeight + host.Padding.Vertical;
+    }
+
+    private static void ResizeSettingsSection(Panel host, SettingsSectionPanel sectionPanel, TableLayoutPanel contentPanel)
+    {
+        var contentHeight = MeasureTableHeight(contentPanel);
+        sectionPanel.Height = contentHeight + sectionPanel.ContentPanel.Padding.Vertical + sectionPanel.HeaderHeight;
+        host.Height = sectionPanel.Height + host.Padding.Vertical;
+    }
+
+    private static int MeasureTableHeight(TableLayoutPanel table)
+    {
+        var height = table.Padding.Vertical;
+        foreach (RowStyle rowStyle in table.RowStyles)
+        {
+            if (rowStyle.SizeType == SizeType.Absolute)
+                height += (int)Math.Ceiling(rowStyle.Height);
+        }
+        return height;
+    }
+
+    private static void UpdateWrappedDescriptionRow(TableLayoutPanel table, int rowIndex, Label label)
+    {
+        var width = table.ClientSize.Width - table.Padding.Horizontal - 12;
+        if (width <= 0)
+            width = Math.Max(240, table.Width - table.Padding.Horizontal - 12);
+
+        var measured = TextRenderer.MeasureText(
+            label.Text,
+            label.Font,
+            new Size(width, int.MaxValue),
+            TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl | TextFormatFlags.NoPrefix);
+
+        table.RowStyles[rowIndex].Height = Math.Max(FormRowHeight, measured.Height + 10);
+    }
+
+    private static void StyleSettingsSection(Control root)
+    {
+        foreach (Control child in root.Controls)
+            StyleSettingsSection(child);
+
+        if (root is SettingsSectionPanel)
+        {
+            return;
+        }
+
+        if (root is TableLayoutPanel table)
+        {
+            table.BackColor = SectionBackColor;
+            table.Margin = new Padding(0);
+            return;
+        }
+
+        if (root is FlowLayoutPanel flow)
+        {
+            flow.BackColor = SectionBackColor;
+            return;
+        }
+
+        if (root is Label label)
+        {
+            label.ForeColor = label.ForeColor == SystemColors.GrayText ? MutedTextColor : TextColor;
+            label.Font = new Font("Microsoft YaHei UI", 9f, label.Font.Style);
+            return;
+        }
+
+        if (root is TextBox textBox)
+        {
+            textBox.BorderStyle = BorderStyle.None;
+            textBox.BackColor = InputBackColor;
+            textBox.ForeColor = textBox.ForeColor == SystemColors.GrayText ? SystemColors.GrayText : TextColor;
+            textBox.Margin = new Padding(0, 4, 0, 0);
+            return;
+        }
+
+        if (root is ComboBox comboBox)
+        {
+            comboBox.Margin = new Padding(0, 4, 0, 0);
+            return;
+        }
+
+        if (root is NumericUpDown numericUpDown)
+        {
+            numericUpDown.Margin = new Padding(0, 4, 0, 0);
+            return;
+        }
+
+        if (root is CheckBox checkBox)
+        {
+            checkBox.ForeColor = TextColor;
+            checkBox.Margin = new Padding(0, 6, 0, 0);
+        }
+    }
+
+    private static void SetCardAccent(Panel card, Color color)
+    {
+        foreach (Control control in card.Controls)
+        {
+            if (Equals(control.Tag, "Accent"))
+            {
+                control.BackColor = color;
+                return;
+            }
+        }
+    }
+
+    private static GraphicsPath CreateRoundPath(Rectangle bounds, int radius)
+    {
+        var path = new GraphicsPath();
+        var diameter = Math.Max(1, Math.Min(radius * 2, Math.Min(bounds.Width, bounds.Height)));
+        var arc = new Rectangle(bounds.Location, new Size(diameter, diameter));
+
+        path.AddArc(arc, 180, 90);
+        arc.X = bounds.Right - diameter;
+        path.AddArc(arc, 270, 90);
+        arc.Y = bounds.Bottom - diameter;
+        path.AddArc(arc, 0, 90);
+        arc.X = bounds.Left;
+        path.AddArc(arc, 90, 90);
+        path.CloseFigure();
+        return path;
+    }
+
+    private class RoundedButton : Button
+    {
+        private bool _hovered;
+        private bool _pressed;
+
+        public int Radius { get; set; } = 8;
+        public Color HoverBackColor { get; set; }
+        public Color DownBackColor { get; set; }
+
+        protected override void OnMouseEnter(EventArgs e)
+        {
+            _hovered = true;
+            base.OnMouseEnter(e);
+            Invalidate();
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            _hovered = false;
+            _pressed = false;
+            base.OnMouseLeave(e);
+            Invalidate();
+        }
+
+        protected override void OnMouseDown(MouseEventArgs mevent)
+        {
+            _pressed = true;
+            base.OnMouseDown(mevent);
+            Invalidate();
+        }
+
+        protected override void OnMouseUp(MouseEventArgs mevent)
+        {
+            _pressed = false;
+            base.OnMouseUp(mevent);
+            Invalidate();
+        }
+
+        protected override void OnResize(EventArgs e)
+        {
+            base.OnResize(e);
+            UpdateRegion();
+        }
+
+        protected override void OnPaint(PaintEventArgs pevent)
+        {
+            pevent.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            var fillColor = _pressed ? DownBackColor : (_hovered ? HoverBackColor : BackColor);
+
+            using var path = CreateRoundPath(new Rectangle(0, 0, Width - 1, Height - 1), Radius);
+            using var brush = new SolidBrush(fillColor);
+            pevent.Graphics.FillPath(brush, path);
+
+            TextRenderer.DrawText(
+                pevent.Graphics,
+                Text,
+                Font,
+                ClientRectangle,
+                ForeColor,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix | TextFormatFlags.EndEllipsis);
+        }
+
+        private void UpdateRegion()
+        {
+            if (Width <= 0 || Height <= 0) return;
+
+            using var path = CreateRoundPath(new Rectangle(0, 0, Width, Height), Radius);
+            Region = new Region(path);
+        }
+    }
+
+    private class SettingsSectionPanel : RoundedPanel
+    {
+        public const int DefaultHeaderHeight = 36;
+        public int HeaderHeight => DefaultHeaderHeight;
+        public Panel ContentPanel { get; }
+
+        public SettingsSectionPanel(string title)
+        {
+            BackColor = SectionBackColor;
+            BorderColor = Color.Transparent;
+            Radius = 8;
+            Padding = new Padding(0);
+
+            var titleLabel = new Label
+            {
+                Text = title,
+                Dock = DockStyle.Top,
+                Height = HeaderHeight,
+                Font = new Font("Microsoft YaHei UI", 9.5f, FontStyle.Bold),
+                ForeColor = TextColor,
+                BackColor = SectionBackColor,
+                TextAlign = ContentAlignment.MiddleLeft,
+                Padding = new Padding(16, 2, 16, 0)
+            };
+
+            ContentPanel = new Panel
+            {
+                Dock = DockStyle.Fill,
+                Padding = new Padding(14, 0, 14, 14),
+                BackColor = SectionBackColor
+            };
+
+            Controls.Add(ContentPanel);
+            Controls.Add(titleLabel);
+        }
+    }
+
+    private class RoundedPanel : Panel
+    {
+        public int Radius { get; set; } = 8;
+        public Color BorderColor { get; set; } = Color.Transparent;
+
+        protected override void OnResize(EventArgs eventargs)
+        {
+            base.OnResize(eventargs);
+            UpdateRegion();
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+
+            using var path = MainWindow.CreateRoundPath(new Rectangle(0, 0, Width - 1, Height - 1), Radius);
+            using var pen = new Pen(BorderColor);
+            if (BorderColor.A > 0)
+                e.Graphics.DrawPath(pen, path);
+        }
+
+        private void UpdateRegion()
+        {
+            if (Width <= 0 || Height <= 0) return;
+
+            using var path = MainWindow.CreateRoundPath(new Rectangle(0, 0, Width, Height), Radius);
+            Region = new Region(path);
+            Invalidate();
+        }
     }
 
     private static int GetLowDpiEnhancementSelectedIndex(string? value)
