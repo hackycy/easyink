@@ -43,10 +43,13 @@ internal sealed class SettingsView : UserControl, ISettingsView, IActivatableTab
         Dock = DockStyle.Fill;
         BackColor = UiTheme.PageBackColor;
 
+        SuspendLayout();
         var panel = UiFactory.CreatePagePanel(new Padding(16));
+        panel.SuspendLayout();
         panel.AutoScroll = true;
 
         var settingsLayout = UiFactory.CreateSettingsLayoutPanel();
+        settingsLayout.SuspendLayout();
         panel.Controls.Add(settingsLayout);
         UiFactory.UpdateSettingsLayoutWidth(panel, settingsLayout);
         panel.Resize += (s, e) => UiFactory.UpdateSettingsLayoutWidth(panel, settingsLayout);
@@ -285,6 +288,12 @@ internal sealed class SettingsView : UserControl, ISettingsView, IActivatableTab
         Controls.Add(panel);
 
         _presenter.Attach(this);
+
+        settingsLayout.ResumeLayout(false);
+        settingsLayout.PerformLayout();
+        panel.ResumeLayout(false);
+        panel.PerformLayout();
+        ResumeLayout(false);
     }
 
     public string Title { get; }

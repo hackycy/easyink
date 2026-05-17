@@ -157,8 +157,14 @@ internal static class UiFactory
     public static void UpdateSettingsLayoutWidth(Panel panel, Control layout)
     {
         var verticalScrollWidth = panel.VerticalScroll.Visible ? SystemInformation.VerticalScrollBarWidth : 0;
-        layout.Location = new Point(panel.Padding.Left, panel.Padding.Top);
-        layout.Width = Math.Max(320, panel.ClientSize.Width - panel.Padding.Horizontal - verticalScrollWidth);
+        var targetLocation = new Point(panel.Padding.Left, panel.Padding.Top);
+        var targetWidth = Math.Max(320, panel.ClientSize.Width - panel.Padding.Horizontal - verticalScrollWidth);
+
+        if (layout.Location != targetLocation)
+            layout.Location = targetLocation;
+
+        if (layout.Width != targetWidth)
+            layout.Width = targetWidth;
     }
 
     public static TableLayoutPanel CreateSettingsTable(params ColumnStyle[] columnStyles)
@@ -408,8 +414,12 @@ internal static class UiFactory
         var width = Math.Max(220, table.ClientSize.Width - table.Padding.Horizontal);
         foreach (Control control in table.Controls)
         {
-            if (Equals(control.Tag, "SettingsDescription"))
-                control.MaximumSize = new Size(width, 0);
+            if (!Equals(control.Tag, "SettingsDescription"))
+                continue;
+
+            var maximumSize = new Size(width, 0);
+            if (control.MaximumSize != maximumSize)
+                control.MaximumSize = maximumSize;
         }
     }
 }
