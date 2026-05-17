@@ -61,7 +61,7 @@
   "Tray_Status_Running": "运行中 - 端口 {0}",
   "Tray_Status_Error": "异常 - 启动失败",
 
-  "Window_Title": "EasyInk Printer Host",
+  "Window_Title": "EasyInk Printer",
 
   "Dashboard_Tab": "仪表盘",
   "Dashboard_ServiceStatus": "服务状态",

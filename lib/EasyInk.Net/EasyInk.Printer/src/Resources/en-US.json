@@ -61,7 +61,7 @@
   "Tray_Status_Running": "Running - Port {0}",
   "Tray_Status_Error": "Error - Startup failed",
 
-  "Window_Title": "EasyInk Printer Host",
+  "Window_Title": "EasyInk Printer",
 
   "Dashboard_Tab": "Dashboard",
   "Dashboard_ServiceStatus": "Service Status",
