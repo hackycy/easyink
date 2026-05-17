@@ -1,207 +1,162 @@
 # EasyInk.Engine
 
-EasyInk 的打印引擎，纯 .NET 类库（DLL），仅负责打印链路，不包含 UI、HTTP 服务或持久化逻辑。
+EasyInk.Engine 是 EasyInk 的打印引擎类库，目标框架为 .NET Framework 4.8。它只处理打印链路，不包含 UI、HTTP 服务或持久化逻辑。
 
-## 设计原则
+## 职责边界
 
-- **无 UI 依赖**：不引用 WinForms/WPF，可嵌入任何宿主
-- **无持久化**：日志通过静态事件 `EngineApi.Log` 回传，由宿主决定存储方式
-- **策略模式**：PDF 来源（Base64/URL/Binary）通过 `IPdfProvider` 抽象，可扩展
-- **接口驱动**：`IPrinterService` 和 `IPrintService` 可替换默认实现
+- 打印机列表和状态查询。
+- PDF 来源读取：Base64、URL、二进制。
+- 同步打印、异步队列和批量打印。
+- 按打印机名称路由到 PDFium/GDI、SumatraPDF fallback 或 ESC/POS raw。
+- 通过事件把日志和打印完成结果交给宿主处理。
 
-## 架构
+## 核心结构
 
 ```
-EngineApi (公共入口)
-├── IPrinterService          ← 打印机枚举/状态查询
-│   └── PrinterService       ← 默认实现：WMI 查询
-├── IPrintService            ← 打印执行
-│   └── PdfiumPrintService   ← 默认实现：Pdfium 位图渲染 + Windows Print Spooler
-├── PrintJobQueue            ← 异步队列（BlockingCollection + 后台线程）
-└── IPdfProvider             ← PDF 数据源策略
+EngineApi
+├── PrinterService             WMI 打印机查询
+├── PrintJobQueue              异步打印队列
+├── RoutingPrintService        按打印机名称选择打印路径
+│   ├── PdfiumPrintService     默认 PDFium 位图渲染 + PrintDocument
+│   ├── SumatraPdfPrintService 可选 SumatraPDF 命令行 fallback
+│   └── EscPosRawPrintService  可选 ESC/POS raw 直发
+└── IPdfProvider
     ├── Base64PdfProvider
     ├── BlobPdfProvider
-    └── UrlPdfProvider       ← 含 SSRF 防护（屏蔽私有 IP）
+    └── UrlPdfProvider
 ```
 
-## 公共 API
-
-### EngineApi
+## EngineApi
 
 ```csharp
-// 使用默认实现（WMI + Pdfium/Spooler）
 using var api = new EngineApi();
 
-// 或注入自定义实现
-using var api = new EngineApi(printerService, printService);
+// 或注入服务、队列和路由配置
+using var api = new EngineApi(
+    printerService: null,
+    printService: null,
+    maxQueueSize: 100,
+    rawPrinterNames: new[] { "thermal" },
+    sumatraPdfPath: @"C:\EasyInk\SumatraPDF\SumatraPDF.exe",
+    sumatraPrinterNames: new[] { "HP" });
 ```
 
-#### 方法一览
+常用方法：
 
 | 方法 | 说明 |
 |------|------|
-| `GetPrinters()` | 获取打印机列表 |
-| `GetPrinterStatus(printerName)` | 获取打印机状态 |
-| `Print(printerName, pdfBase64?, pdfUrl?, pdfBytes?, ...)` | 同步打印 |
-| `EnqueuePrint(printerName, pdfBase64?, pdfUrl?, pdfBytes?, ...)` | 入队打印（立即返回 jobId） |
-| `BatchPrint(jobsJson)` | 批量同步打印 |
-| `EnqueueBatchPrint(jobsJson)` | 批量入队打印 |
-| `GetJobStatus(jobId)` | 查询任务状态 |
-| `GetAllJobs()` | 获取所有任务 |
-| `HandleCommand(json)` | JSON 命令入口（字符串） |
-| `HandleCommand(command)` | 命令入口（对象，避免序列化往返） |
+| `GetPrinters()` | 获取打印机列表。 |
+| `GetPrinterStatus(printerName)` | 获取打印机状态。 |
+| `HandleCommand(json)` | JSON 命令入口。 |
+| `HandleCommand(command)` | 对象命令入口，避免序列化往返。 |
+| `GetJobStatus(jobId)` | 查询异步任务状态。 |
+| `GetAllJobs()` | 获取队列中记录的任务。 |
 
-所有方法返回 JSON 字符串（`HandleCommand(PrinterCommand)` 返回 `PrinterResult` 对象）。
+所有直接入口返回 `PrinterResult`；`HandleCommand(string)` 会解析 JSON 后返回同一响应结构。
 
-### 命令协议
+## 命令协议
 
-`HandleCommand` 接收 `PrinterCommand`，支持以下命令：
+`PrinterCommand` 字段：
+
+| 字段 | 说明 |
+|------|------|
+| `command` | 命令名称。 |
+| `id` | 请求 ID，原样带回响应。 |
+| `params` | 命令参数。 |
+
+支持命令：
 
 | 命令 | 参数 | 说明 |
 |------|------|------|
-| `getPrinters` | - | 获取打印机列表 |
-| `getPrinterStatus` | `printerName` | 获取打印机状态 |
-| `print` | `printerName`, `pdfBase64`/`pdfUrl`/`pdfBytes`, `copies`? | 同步打印 |
-| `printAsync` | 同上 | 异步打印 |
-| `getJobStatus` | `jobId` | 查询任务 |
-| `getAllJobs` | - | 所有任务 |
-| `batchPrint` | `jobs[]` | 批量同步 |
-| `batchPrintAsync` | `jobs[]` | 批量异步 |
+| `getPrinters` | - | 获取打印机列表。 |
+| `getPrinterStatus` | `printerName` | 获取打印机状态。 |
+| `print` | `PrintRequestParams` | 同步打印。 |
+| `printAsync` | `PrintRequestParams` | 入队打印，返回 `jobId`。 |
+| `getJobStatus` | `jobId` | 查询异步任务。 |
+| `getAllJobs` | - | 获取所有任务记录。 |
+| `batchPrint` | `jobs[]` | 批量同步打印。 |
+| `batchPrintAsync` | `jobs[]` | 批量入队。 |
 
-## 数据模型
+## 打印参数
 
-### PrinterResult
+`PrintRequestParams`：
 
-统一响应格式：
+| 字段 | 默认值 | 说明 |
+|------|--------|------|
+| `printerName` | 必填 | 打印机名称。 |
+| `pdfBase64` | - | Base64 PDF。 |
+| `pdfUrl` | - | 远程 PDF URL，仅支持 http/https，会拦截 localhost、内网 IP 和重定向到内网的地址。 |
+| `pdfBytes` | - | PDF 二进制。 |
+| `copies` | `1` | 打印份数。 |
+| `paperSize` | `null` | 纸张尺寸，单位支持 `mm` 或 `inch`。 |
+| `forcePaperSize` | `false` | 是否强制把 `paperSize` 传给底层打印设置。 |
+| `dpi` | `600` | PDFium/GDI 渲染 DPI。 |
+| `offset` | `null` | 打印偏移，单位支持 `mm` 或 `inch`。 |
+| `landscape` | `false` | 是否横向。 |
+| `userData` | `null` | 宿主审计用数据。 |
 
-```csharp
+三种 PDF 来源互斥，必须提供其中一种。
+
+`pdfUrl` 下载超时为 30 秒，单个 PDF 上限为 50MB。
+
+## 打印路径
+
+### PDFium/GDI 默认路径
+
+- 使用 PdfiumViewer 渲染 PDF，再通过 `PrintDocument` 输出到 Windows Spooler。
+- 默认不强制纸张，按驱动当前默认纸张和 `PrintableArea` 等比适配。
+- 适合普通办公打印机和大多数 PDF 打印场景。
+
+### SumatraPDF fallback
+
+- 仅当传入 `sumatraPdfPath` 且 `sumatraPrinterNames` 非空时启用。
+- 打印机名称包含任一 `sumatraPrinterNames` 片段时命中，大小写不敏感。
+- 默认参数为 `fit`，默认超时 60 秒。
+- 适合默认路径受某些驱动影响而错位、裁切或模糊的打印机。
+
+### ESC/POS raw
+
+- 打印机名称包含任一 `rawPrinterNames` 片段时启用，大小写不敏感。
+- 将 PDF 渲染为光栅位图后生成 ESC/POS `GS v 0` 指令，通过 `WritePrinter` 直发。
+- 默认 `rawPrintDpi=203`、`rawPrintMaxDotsWidth=576`，适合 80mm 热敏小票打印机。
+
+## 响应模型
+
+```json
 {
-    Id: string,
-    Success: bool,
-    Data: object,
-    ErrorInfo: { Code: string, Message: string }
+  "id": "request-id",
+  "success": true,
+  "data": {},
+  "errorInfo": null
 }
 ```
 
-### PrintRequestParams
+常见状态与错误：
 
-| 属性 | 类型 | 说明 |
-|------|------|------|
-| PrinterName | string | 打印机名称 |
-| PdfBase64 | string | Base64 编码的 PDF |
-| PdfUrl | string | 远程 PDF URL |
-| PdfBytes | byte[] | 二进制 PDF |
-| Copies | int | 份数，默认 1 |
-| Landscape | bool | 横向打印 |
-| Dpi | int | 渲染分辨率，默认 600 |
-| PaperSize | PaperSizeParams | PDF/模板纸张尺寸 |
-| ForcePaperSize | bool | 是否强制把 PaperSize 下发为驱动纸张参数，默认 false |
-| Offset | OffsetParams | 打印偏移 |
-| UserData | UserDataParams | 自定义数据（用户ID、标签类型） |
+| 类型 | 值 |
+|------|----|
+| `JobStatus` | `Queued`、`Printing`、`Completed`、`Failed` |
+| `PrinterStatusCode` | `READY`、`PRINTER_OFFLINE`、`PAPER_JAM`、`PAPER_OUT`、`PRINTER_STOPPED`、`PRINTER_ERROR`、`PRINTER_NOT_FOUND`、`WMI_UNAVAILABLE` |
+| `ErrorCode` | `INVALID_PARAMS`、`INVALID_JSON`、`UNKNOWN_COMMAND`、`JOB_NOT_FOUND`、`QUEUE_FULL`、`PRINT_FAILED`、`PRINT_TIMEOUT`、`INVALID_PDF_SOURCE`、`UNAUTHORIZED`、`NOT_FOUND` 等 |
 
-三种 PDF 来源互斥，只能提供其一。
-
-## 打印适配策略
-
-### 默认 PDFium/Spooler 链路
-
-当前默认链路是：
-
-```
-PDF → PdfiumViewer 渲染为位图 → PrintDocument → Windows Spooler → 打印机驱动
-```
-
-该链路的目标是兼容 Win7 SP1，并尽量接近 Chrome 打印时的自动适配行为：
-
-- 默认不强制自定义纸张。`ForcePaperSize=false` 时，驱动使用打印机当前默认纸张。
-- 每页打印时读取 `PageSettings.PrintableArea`，把 PDF 内容等比缩放并居中到驱动报告的可打印区域内。
-- 渲染 DPI 默认 600，并参考驱动 `PrinterResolution`，最高限制到 1200；对 360 DPI 及以下的小票/热敏类低分辨率设备，默认贴合驱动原生 DPI 渲染，避免 600 DPI 位图再被 GDI/驱动下采样导致文字变软。
-
-不要为了修复某一台打印机的问题，把 `ForcePaperSize` 改成全局默认值。优先确认该打印机的 Windows 默认纸张、方向和驱动设置是否正确。
-
-### SumatraPDF fallback 链路
-
-对于默认链路仍然偏移、裁切或模糊，而 Chrome/浏览器打印正常的打印机，可按打印机配置外部 PDF 打印 fallback：
-
-```bat
-SumatraPDF.exe -silent -exit-on-print -print-to "PrinterName" -print-settings "fit" "file.pdf"
-```
-
-`fit` 由 SumatraPDF 负责将 PDF 页面缩放到驱动当前纸张的 printable area 内。该链路已作为 `SumatraPdfPrintService` 接入，并由 `RoutingPrintService` 按打印机名称选择。
-
-启用所需配置：
-
-- `sumatraPdfPath`：`SumatraPDF.exe` 的绝对路径；EasyInk.Printer 默认指向程序目录下的 `SumatraPDF\SumatraPDF.exe`。
-- `sumatraPrinterNames`：走 SumatraPDF 的打印机名称片段列表，大小写不敏感、模糊匹配。
-- `sumatraPrintSettings`：默认 `fit`。
-- `sumatraTimeoutSeconds`：默认 60。
-- `sumatraTempDir`：写入 SumatraPDF 命令行打印临时 PDF 的目录；EasyInk.Printer 默认使用 `%LocalAppData%\EasyInk.Printer\temp\sumatra`。
-
-注意事项：
-
-- SumatraPDF 依赖 Windows 打印机首选项中的默认纸张；纸张设错时，fit 也会按错误纸张计算。
-- Win7 需要固定一个经过实测的 portable 版本随包分发。
-- 它适合普通 PDF/办公打印机 fallback，不替代 ESC/POS、ZPL、TSPL 等原生命令打印。
-
-### PrinterStatus
-
-| 属性 | 说明 |
-|------|------|
-| IsReady | 是否就绪 |
-| StatusCode | 状态码（`READY`/`PRINTER_OFFLINE`/`PAPER_JAM` 等） |
-| Message | 人类可读描述 |
-| IsOnline | 是否在线 |
-| HasPaper | 是否有纸 |
-
-## 常量定义
-
-| 类 | 常量 | 用途 |
-|----|------|------|
-| `JobStatus` | `Queued`, `Printing`, `Completed`, `Failed` | 任务状态 |
-| `PrinterStatusCode` | `Ready`, `PrinterOffline`, `PaperJam`, `PaperOut`, `PrinterStopped`, `PrinterError`, `PrinterNotFound` | 打印机状态码 |
-| `ErrorCode` | `InvalidParams`, `InvalidJson`, `UnknownCommand`, `JobNotFound`, `QueueFull`, `PrintFailed`, `PrintTimeout`, `InvalidPdfSource`, `Unauthorized`, `NotFound` 等 | 错误码 |
-
-## 日志订阅
+## 事件
 
 ```csharp
-EngineApi.Log += (level, message) =>
-{
-    // level: LogLevel.Info / LogLevel.Error
-    Console.WriteLine($"[{level}] {message}");
-};
+api.Log += (level, message) => { };
+api.LogWithContext += (level, message, jobId) => { };
+api.PrintCompleted += (requestId, request, result) => { };
 ```
 
-## 扩展点
-
-### 自定义打印服务
-
-实现 `IPrintService` 接口可替换默认实现：
-
-```csharp
-public class MyPrintService : IPrintService
-{
-    public PrinterResult Print(string requestId, PrintRequestParams request)
-    {
-        // 自定义打印逻辑
-        return PrinterResult.Ok(requestId, PrintResult.Success(requestId));
-    }
-}
-
-using var api = new EngineApi(printService: new MyPrintService());
-```
-
-### 自定义打印机服务
-
-实现 `IPrinterService` 接口可替换 WMI 查询（例如远程打印机管理）。
+Engine 不写数据库、不持久化日志，宿主自行处理这些事件。
 
 ## 依赖
 
-| 包 | 说明 |
-|----|------|
-| Newtonsoft.Json | JSON 序列化 |
-| PdfiumViewer | PDF 渲染（Chromium 同款 PDF 引擎） |
-| System.Drawing | 图像处理 / 打印输出 |
-| System.Management | WMI 查询（打印机状态） |
+| 依赖 | 用途 |
+|------|------|
+| Newtonsoft.Json | JSON 命令和模型序列化。 |
+| PdfiumViewer + native pdfium | PDF 渲染。 |
+| System.Drawing | 位图处理和 GDI 打印。 |
+| System.Management | WMI 打印机查询。 |
 
 ## 构建
 
