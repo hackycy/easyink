@@ -99,6 +99,24 @@ function handleForcePageSizeChange(checked: boolean) {
   printService.updateConfig({ forcePageSize: checked })
 }
 
+function handleAuditUserIdChange(value: string | number) {
+  printService.updateConfig({
+    userData: {
+      ...printService.config.userData,
+      userId: String(value),
+    },
+  })
+}
+
+function handleAuditLabelTypeChange(value: string | number) {
+  printService.updateConfig({
+    userData: {
+      ...printService.config.userData,
+      labelType: String(value),
+    },
+  })
+}
+
 function handleDeviceChange(value: AcceptableValue) {
   const printerName = typeof value === 'string' || typeof value === 'number' || typeof value === 'bigint'
     ? String(value)
@@ -126,7 +144,7 @@ onMounted(() => {
   <Dialog :open="true" @update:open="(val) => { if (!val) emit('close') }">
     <DialogContent
       class="max-w-[560px]"
-      sr-description="配置 EasyInk Printer 服务地址、目标打印机和默认打印份数"
+      sr-description="配置 EasyInk Printer 服务地址、目标打印机、默认打印份数和审计演示字段"
     >
       <DialogHeader>
         <DialogTitle>EasyInk Printer 设置</DialogTitle>
@@ -245,6 +263,35 @@ onMounted(() => {
             :disabled="!printService.enabled.value"
             @update:model-value="handleForcePageSizeChange"
           />
+        </div>
+
+        <div class="space-y-3 rounded-lg border border-dashed border-border/80 bg-muted/30 p-3">
+          <div class="space-y-1">
+            <Label>审计演示</Label>
+            <p class="text-xs text-muted-foreground">
+              这里的 UserId 和 LabelType 会随打印请求一起发送，打印后可在 EasyInk Printer 审计日志中看到对应两列。留空则不发送。
+            </p>
+          </div>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <div class="space-y-1.5">
+              <Label>UserId</Label>
+              <Input
+                :model-value="printService.config.userData?.userId ?? ''"
+                :disabled="!printService.enabled.value"
+                placeholder="demo-user-001"
+                @update:model-value="handleAuditUserIdChange"
+              />
+            </div>
+            <div class="space-y-1.5">
+              <Label>LabelType</Label>
+              <Input
+                :model-value="printService.config.userData?.labelType ?? ''"
+                :disabled="!printService.enabled.value"
+                placeholder="shipping-label"
+                @update:model-value="handleAuditLabelTypeChange"
+              />
+            </div>
+          </div>
         </div>
 
         <!-- Active jobs -->

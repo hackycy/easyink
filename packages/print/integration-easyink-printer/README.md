@@ -27,6 +27,7 @@ await viewer.print({ driverId: 'easyink-printer' })
 - Automatic reconnect with configurable maximum attempts, backoff delay, and failure state.
 - PDF chunk upload over binary WebSocket frames.
 - Async job polling via `printPdfAndWait()` and live `jobStatusChanged` updates.
+- Optional `userData` forwarding for audit fields such as `UserId` and `LabelType`.
 
 `connectionState` is one of `idle`, `connecting`, `connected`, `reconnecting`, or `error`. Use `lastError` and `reconnectAttempts` in diagnostics or settings screens.
 
@@ -41,5 +42,13 @@ const printer = createEasyInkPrinterClient({
   reconnectDelayMs: 500,
   reconnectBackoffMultiplier: 2,
   maxReconnectDelayMs: 5000,
+})
+
+await printer.printPdf(pdfBlob, {
+  printerName: 'Zebra ZD421',
+  userData: {
+    userId: 'demo-user-001',
+    labelType: 'shipping-label',
+  },
 })
 ```

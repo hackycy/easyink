@@ -70,6 +70,12 @@ async function connectClient(client: EasyInkPrinterClient): Promise<MockWebSocke
   return socket!
 }
 
+function parseBinaryFrameMetadata(frame: ArrayBuffer): { id: string } {
+  const metadataLength = new DataView(frame).getUint32(0, false)
+  const metadataBytes = new Uint8Array(frame, 4, metadataLength)
+  return JSON.parse(new TextDecoder().decode(metadataBytes)) as { id: string }
+}
+
 describe('easy ink printer client', () => {
   it('disconnects and clears remote state when endpoint config changes', async () => {
     const client = new EasyInkPrinterClient({ serviceUrl: 'http://one.test', apiKey: 'old-key' })
@@ -116,6 +122,54 @@ describe('easy ink printer client', () => {
     await expect(client.printPdf(new Blob(['pdf']), { printerName: 'Printer A' }))
       .rejects
       .toMatchObject({ code: 'PRINTER_SEND_FAILED' })
+  })
+
+  it('forwards userData with printUploadedPdfAsync requests', async () => {
+    const client = new EasyInkPrinterClient({ responseTimeoutMs: 1000 })
+    const socket = await connectClient(client)
+
+    const printPromise = client.printPdf(new Blob(['pdf']), {
+      printerName: 'Printer A',
+      userData: {
+        userId: 'demo-user',
+        labelType: 'shipping-label',
+      },
+    })
+
+    await vi.waitFor(() => {
+      expect(socket.send).toHaveBeenCalledTimes(1)
+    })
+
+    const uploadMetadata = parseBinaryFrameMetadata(socket.send.mock.calls[0]![0] as ArrayBuffer)
+    socket.onmessage?.(new MessageEvent('message', {
+      data: JSON.stringify({ id: uploadMetadata.id, success: true, data: {} }),
+    }))
+
+    await vi.waitFor(() => {
+      expect(socket.send).toHaveBeenCalledTimes(2)
+    })
+
+    const submitPayload = JSON.parse(String(socket.send.mock.calls[1]![0])) as {
+      command: string
+      id: string
+      params: { userData?: { userId?: string, labelType?: string } }
+    }
+
+    expect(submitPayload.command).toBe('printUploadedPdfAsync')
+    expect(submitPayload.params.userData).toEqual({
+      userId: 'demo-user',
+      labelType: 'shipping-label',
+    })
+
+    socket.onmessage?.(new MessageEvent('message', {
+      data: JSON.stringify({
+        id: submitPayload.id,
+        success: true,
+        data: { jobId: 'job-123', status: 'queued' },
+      }),
+    }))
+
+    await expect(printPromise).resolves.toBe('job-123')
   })
 
   it('keeps timeout failure state when closing a stalled connection', async () => {

@@ -12,6 +12,7 @@ export {
   type EasyInkPrinterOffset,
   type EasyInkPrinterPaperSize,
   type EasyInkPrinterPrintPdfOptions,
+  type EasyInkPrinterUserData,
 } from './client'
 
 /**

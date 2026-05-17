@@ -11,5 +11,8 @@ export function createEasyInkPrintDriver(): PrintDriver {
     printerName: () => service.printerName.value,
     copies: () => service.copies.value,
     forcePageSize: () => service.forcePageSize.value,
+    resolveRequestOptions: () => ({
+      userData: service.userData.value ? { ...service.userData.value } : undefined,
+    }),
   })
 }

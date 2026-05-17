@@ -1,8 +1,12 @@
-import type { EasyInkPrinterDevice, EasyInkPrinterJob, EasyInkPrinterOffset, EasyInkPrinterPaperSize } from '@easyink/print-integration-easyink-printer'
+import type { EasyInkPrinterDevice, EasyInkPrinterJob, EasyInkPrinterOffset, EasyInkPrinterPaperSize, EasyInkPrinterPrintPdfOptions, EasyInkPrinterUserData } from '@easyink/print-integration-easyink-printer'
 import { createEasyInkPrinterClient, DEFAULT_EASYINK_PRINTER_URL } from '@easyink/print-integration-easyink-printer'
 import { computed, reactive, ref, watch } from 'vue'
 
 const CONFIG_KEY = 'easyink:printServiceConfig'
+const DEFAULT_AUDIT_USER_DATA: EasyInkPrinterUserData = {
+  userId: 'demo-user-001',
+  labelType: 'shipping-label',
+}
 
 export interface PrintServiceDevice extends EasyInkPrinterDevice {}
 
@@ -19,6 +23,7 @@ export interface PrintServiceConfig {
   printerName?: string
   copies: number
   forcePageSize?: boolean
+  userData?: EasyInkPrinterUserData
 }
 
 function defaultConfig(): PrintServiceConfig {
@@ -27,6 +32,24 @@ function defaultConfig(): PrintServiceConfig {
     serviceUrl: DEFAULT_EASYINK_PRINTER_URL,
     copies: 1,
     forcePageSize: false,
+    userData: { ...DEFAULT_AUDIT_USER_DATA },
+  }
+}
+
+function normalizeUserData(input: unknown): EasyInkPrinterUserData | undefined {
+  if (!input || typeof input !== 'object')
+    return undefined
+
+  const record = input as { userId?: unknown, labelType?: unknown }
+  const userId = typeof record.userId === 'string' ? record.userId.trim() : ''
+  const labelType = typeof record.labelType === 'string' ? record.labelType.trim() : ''
+
+  if (!userId && !labelType)
+    return undefined
+
+  return {
+    userId: userId || undefined,
+    labelType: labelType || undefined,
   }
 }
 
@@ -43,6 +66,7 @@ function loadConfig(): PrintServiceConfig {
       printerName: parsed.printerName,
       copies: parsed.copies ?? 1,
       forcePageSize: parsed.forcePageSize ?? false,
+      userData: normalizeUserData(parsed.userData),
     }
   }
   catch {
@@ -73,7 +97,10 @@ let saveTimer: ReturnType<typeof setTimeout> | undefined
 watch(config, (val) => {
   if (saveTimer)
     clearTimeout(saveTimer)
-  saveTimer = setTimeout(persistConfig, 200, { ...val })
+  saveTimer = setTimeout(persistConfig, 200, {
+    ...val,
+    userData: normalizeUserData(val.userData),
+  })
   const reconnect = val.serviceUrl !== client.serviceUrl || val.apiKey !== client.apiKey
   client.configure({
     serviceUrl: val.serviceUrl,
@@ -123,9 +150,12 @@ async function refreshDevices(): Promise<PrintServiceDevice[]> {
 
 async function printPdf(
   pdfBlob: Blob,
-  opts: { printerName: string, copies: number, paperSize?: PaperSizeParams, forcePageSize?: boolean, landscape?: boolean, offset?: OffsetParams },
+  opts: EasyInkPrinterPrintPdfOptions,
 ): Promise<string> {
-  const jobId = await client.printPdf(pdfBlob, opts)
+  const jobId = await client.printPdf(pdfBlob, {
+    ...opts,
+    userData: opts.userData ?? normalizeUserData(config.userData),
+  })
   syncState()
   return jobId
 }
@@ -147,7 +177,10 @@ function setEnabled(enabled: boolean) {
 }
 
 function updateConfig(patch: Partial<PrintServiceConfig>) {
-  Object.assign(config, patch)
+  Object.assign(config, {
+    ...patch,
+    userData: 'userData' in patch ? normalizeUserData(patch.userData) : config.userData,
+  })
 }
 
 if (config.enabled) {
@@ -170,6 +203,7 @@ export function useEasyInkPrint() {
     copies: computed(() => config.copies),
     serviceUrl: computed(() => config.serviceUrl),
     forcePageSize: computed(() => Boolean(config.forcePageSize)),
+    userData: computed(() => normalizeUserData(config.userData)),
 
     connect,
     disconnect,

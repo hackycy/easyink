@@ -64,6 +64,14 @@ export interface EasyInkPrinterOffset {
 }
 
 /**
+ * Audit metadata attached to a print job.
+ */
+export interface EasyInkPrinterUserData {
+  userId?: string
+  labelType?: string
+}
+
+/**
  * Normalized print job state returned by the EasyInk Printer service.
  */
 export interface EasyInkPrinterJob {
@@ -84,6 +92,7 @@ export interface EasyInkPrinterPrintPdfOptions {
   landscape?: boolean
   offset?: EasyInkPrinterOffset
   dpi?: number
+  userData?: EasyInkPrinterUserData
 }
 
 interface PendingRequest {
@@ -346,6 +355,7 @@ export class EasyInkPrinterClient {
       landscape: options.landscape,
       offset: options.offset,
       dpi: options.dpi,
+      userData: options.userData,
     })
 
     const jobId = data?.jobId ?? ''
