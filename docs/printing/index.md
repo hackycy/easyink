@@ -25,7 +25,7 @@ EasyInk 的本地打印目标很明确：让业务代码只关心“打印什么
 - 当前选中的打印机
 - 默认份数
 - 是否强制纸张尺寸
-- 连接状态和最近一次错误
+- 连接状态、重连次数和最近一次错误
 
 ## 方案对比
 
@@ -78,6 +78,7 @@ export function usePrintService() {
 		devices,
 		jobs,
 		connectionState,
+		reconnectAttempts,
 		lastError,
 	}
 }
@@ -87,6 +88,19 @@ export function usePrintService() {
 
 - Viewer 驱动只负责“本次打印怎么发”，不负责“配置存在哪、何时重连”。
 - 打印设置页、诊断页、预览页都能共享同一份连接状态。
+
+EasyInk Printer 官方客户端内部使用 VueUse `useWebSocket` 管理长连接。默认会自动重连 3 次，初始延迟 500ms，按 2 倍退避，最大延迟 5000ms；达到上限后进入 `error`，错误信息写入 `lastError`。
+
+```ts
+const client = createEasyInkPrinterClient({
+  serviceUrl: 'http://localhost:18080',
+  reconnect: true,
+  maxReconnectAttempts: 5,
+  reconnectDelayMs: 500,
+  reconnectBackoffMultiplier: 2,
+  maxReconnectDelayMs: 5000,
+})
+```
 
 ## 常见问题
 

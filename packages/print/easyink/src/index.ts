@@ -6,6 +6,7 @@ export {
   DEFAULT_EASYINK_PRINTER_URL,
   EasyInkPrinterClient,
   type EasyInkPrinterClientOptions,
+  type EasyInkPrinterConnectionState,
   type EasyInkPrinterDevice,
   type EasyInkPrinterJob,
   type EasyInkPrinterOffset,

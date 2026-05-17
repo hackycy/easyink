@@ -24,6 +24,8 @@
   "dependencies": {
     "@easyink/export-plugin-dom-pdf": "workspace:*",
     "@easyink/print-core": "workspace:*",
-    "@easyink/viewer": "workspace:*"
+    "@easyink/viewer": "workspace:*",
+    "@vueuse/core": "catalog:framework",
+    "vue": "catalog:framework"
   }
 }

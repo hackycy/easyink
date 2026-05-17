@@ -1,10 +1,19 @@
+import type { UseWebSocketReturn } from '@vueuse/core'
 import { EasyInkPrintError, normalizeJobStatus } from '@easyink/print-core'
+import { useWebSocket } from '@vueuse/core'
 
 export const DEFAULT_EASYINK_PRINTER_URL = 'http://localhost:18080'
 const DEFAULT_CONNECT_TIMEOUT_MS = 5000
 const DEFAULT_RESPONSE_TIMEOUT_MS = 15000
 const DEFAULT_JOB_TIMEOUT_MS = 60000
+const DEFAULT_RECONNECT = true
+const DEFAULT_MAX_RECONNECT_ATTEMPTS = 3
+const DEFAULT_RECONNECT_DELAY_MS = 500
+const DEFAULT_MAX_RECONNECT_DELAY_MS = 5000
+const DEFAULT_RECONNECT_BACKOFF_MULTIPLIER = 2
 const PDF_CHUNK_SIZE_BYTES = 1024 * 1024
+
+export type EasyInkPrinterConnectionState = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'error'
 
 /**
  * Configures how the EasyInk Printer client discovers and talks to the local
@@ -15,6 +24,11 @@ export interface EasyInkPrinterClientOptions {
   apiKey?: string
   connectTimeoutMs?: number
   responseTimeoutMs?: number
+  reconnect?: boolean
+  maxReconnectAttempts?: number
+  reconnectDelayMs?: number
+  maxReconnectDelayMs?: number
+  reconnectBackoffMultiplier?: number
   defaultCopies?: number
   printerName?: string
 }
@@ -78,6 +92,12 @@ interface PendingRequest {
   timer: ReturnType<typeof setTimeout>
 }
 
+interface PendingConnection {
+  resolve: () => void
+  reject: (err: Error) => void
+  timer: ReturnType<typeof setTimeout>
+}
+
 interface PrinterResultMessage {
   id?: string
   success?: boolean
@@ -91,15 +111,24 @@ export class EasyInkPrinterClient {
   apiKey?: string
   defaultCopies: number
   printerName?: string
-  connectionState: 'idle' | 'connecting' | 'connected' | 'error' = 'idle'
+  connectionState: EasyInkPrinterConnectionState = 'idle'
   lastError = ''
   devices: EasyInkPrinterDevice[] = []
   jobs = new Map<string, EasyInkPrinterJob>()
+  reconnectAttempts = 0
 
-  private ws: WebSocket | undefined
+  private transport: UseWebSocketReturn<string> | undefined
   private connectPromise: Promise<void> | undefined
-  private readonly connectTimeoutMs: number
-  private readonly responseTimeoutMs: number
+  private connectSettler: PendingConnection | undefined
+  private connectTimeoutMs: number
+  private responseTimeoutMs: number
+  private reconnect: boolean
+  private maxReconnectAttempts: number
+  private reconnectDelayMs: number
+  private maxReconnectDelayMs: number
+  private reconnectBackoffMultiplier: number
+  private manuallyDisconnected = false
+  private suppressNextDisconnect = false
   private readonly pendingRequests = new Map<string, PendingRequest>()
 
   /**
@@ -113,13 +142,21 @@ export class EasyInkPrinterClient {
     this.printerName = options.printerName
     this.connectTimeoutMs = options.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS
     this.responseTimeoutMs = options.responseTimeoutMs ?? DEFAULT_RESPONSE_TIMEOUT_MS
+    this.reconnect = options.reconnect ?? DEFAULT_RECONNECT
+    this.maxReconnectAttempts = options.maxReconnectAttempts ?? DEFAULT_MAX_RECONNECT_ATTEMPTS
+    this.reconnectDelayMs = options.reconnectDelayMs ?? DEFAULT_RECONNECT_DELAY_MS
+    this.maxReconnectDelayMs = options.maxReconnectDelayMs ?? DEFAULT_MAX_RECONNECT_DELAY_MS
+    this.reconnectBackoffMultiplier = options.reconnectBackoffMultiplier ?? DEFAULT_RECONNECT_BACKOFF_MULTIPLIER
   }
 
   /**
    * Indicates whether the underlying WebSocket is currently open.
    */
   get isConnected(): boolean {
-    return this.connectionState === 'connected' && this.ws?.readyState === WebSocket.OPEN
+    const ws = this.transport?.ws.value
+    return this.connectionState === 'connected'
+      && this.transport?.status.value === 'OPEN'
+      && ws?.readyState === WebSocket.OPEN
   }
 
   /**
@@ -131,9 +168,17 @@ export class EasyInkPrinterClient {
   configure(options: Partial<EasyInkPrinterClientOptions>): boolean {
     const endpointChanged = (options.serviceUrl !== undefined && options.serviceUrl !== this.serviceUrl)
       || (options.apiKey !== undefined && options.apiKey !== this.apiKey)
+    const reconnectChanged = (options.reconnect !== undefined && options.reconnect !== this.reconnect)
+      || (options.maxReconnectAttempts !== undefined && options.maxReconnectAttempts !== this.maxReconnectAttempts)
+      || (options.reconnectDelayMs !== undefined && options.reconnectDelayMs !== this.reconnectDelayMs)
+      || (options.maxReconnectDelayMs !== undefined && options.maxReconnectDelayMs !== this.maxReconnectDelayMs)
+      || (options.reconnectBackoffMultiplier !== undefined && options.reconnectBackoffMultiplier !== this.reconnectBackoffMultiplier)
+    const transportChanged = endpointChanged || reconnectChanged
+
+    if (transportChanged)
+      this.disconnect()
 
     if (endpointChanged) {
-      this.disconnect()
       this.devices = []
       this.jobs.clear()
       this.lastError = ''
@@ -143,12 +188,26 @@ export class EasyInkPrinterClient {
       this.serviceUrl = options.serviceUrl
     if (options.apiKey !== undefined)
       this.apiKey = options.apiKey
+    if (options.connectTimeoutMs !== undefined)
+      this.connectTimeoutMs = options.connectTimeoutMs
+    if (options.responseTimeoutMs !== undefined)
+      this.responseTimeoutMs = options.responseTimeoutMs
+    if (options.reconnect !== undefined)
+      this.reconnect = options.reconnect
+    if (options.maxReconnectAttempts !== undefined)
+      this.maxReconnectAttempts = options.maxReconnectAttempts
+    if (options.reconnectDelayMs !== undefined)
+      this.reconnectDelayMs = options.reconnectDelayMs
+    if (options.maxReconnectDelayMs !== undefined)
+      this.maxReconnectDelayMs = options.maxReconnectDelayMs
+    if (options.reconnectBackoffMultiplier !== undefined)
+      this.reconnectBackoffMultiplier = options.reconnectBackoffMultiplier
     if (options.defaultCopies !== undefined)
       this.defaultCopies = options.defaultCopies
     if (options.printerName !== undefined)
       this.printerName = options.printerName
 
-    return endpointChanged
+    return transportChanged
   }
 
   /**
@@ -162,62 +221,19 @@ export class EasyInkPrinterClient {
 
     this.connectionState = 'connecting'
     this.lastError = ''
+    this.reconnectAttempts = 0
+    this.manuallyDisconnected = false
+    if (!this.transport)
+      this.transport = this.createTransport()
 
     this.connectPromise = new Promise<void>((resolve, reject) => {
-      let settled = false
-      const socket = new WebSocket(this.wsUrl())
-      this.ws = socket
-
       const timeout = setTimeout(() => {
-        if (settled)
-          return
-        settled = true
-        this.connectionState = 'error'
-        this.lastError = `连接超时 (${this.serviceUrl})`
-        this.connectPromise = undefined
-        try {
-          socket.close()
-        }
-        catch { /* ignore */ }
-        reject(new EasyInkPrintError(this.lastError, 'PRINTER_CONNECT_TIMEOUT'))
+        this.failConnecting(new EasyInkPrintError(`连接超时 (${this.serviceUrl})`, 'PRINTER_CONNECT_TIMEOUT'))
+        this.closeTransport(true)
       }, this.connectTimeoutMs)
 
-      socket.onopen = () => {
-        if (settled)
-          return
-        settled = true
-        clearTimeout(timeout)
-        this.connectionState = 'connected'
-        this.lastError = ''
-        this.connectPromise = undefined
-        resolve()
-      }
-
-      socket.onmessage = (event) => {
-        if (typeof event.data === 'string')
-          this.handleMessage(event.data)
-      }
-
-      socket.onclose = () => {
-        this.rejectPending(new EasyInkPrintError('连接已断开', 'PRINTER_DISCONNECTED'))
-        this.ws = undefined
-        if (!settled) {
-          settled = true
-          clearTimeout(timeout)
-          this.connectionState = 'error'
-          this.lastError = '连接被关闭'
-          this.connectPromise = undefined
-          reject(new EasyInkPrintError(this.lastError, 'PRINTER_CONNECTION_CLOSED'))
-          return
-        }
-        if (this.connectionState === 'connected')
-          this.connectionState = 'idle'
-      }
-
-      socket.onerror = () => {
-        if (!settled)
-          this.lastError = '连接 EasyInk Printer 服务失败'
-      }
+      this.connectSettler = { resolve, reject, timer: timeout }
+      this.transport!.open()
     })
 
     return this.connectPromise
@@ -227,15 +243,12 @@ export class EasyInkPrinterClient {
    * Closes the current connection and rejects any in-flight requests.
    */
   disconnect(): void {
-    this.connectPromise = undefined
+    this.manuallyDisconnected = true
+    this.reconnectAttempts = 0
+    this.failConnecting(new EasyInkPrintError('连接已断开', 'PRINTER_DISCONNECTED'), false)
     this.rejectPending(new EasyInkPrintError('连接已断开', 'PRINTER_DISCONNECTED'))
-    if (this.ws) {
-      try {
-        this.ws.close()
-      }
-      catch { /* ignore */ }
-    }
-    this.ws = undefined
+    this.closeTransport()
+    this.transport = undefined
     this.connectionState = 'idle'
   }
 
@@ -403,9 +416,121 @@ export class EasyInkPrinterClient {
     return headers
   }
 
+  private createTransport(): UseWebSocketReturn<string> {
+    return useWebSocket<string>(this.wsUrl(), {
+      immediate: false,
+      autoConnect: false,
+      autoClose: false,
+      autoReconnect: this.reconnect
+        ? {
+            retries: this.maxReconnectAttempts,
+            delay: attempt => this.nextReconnectDelay(attempt),
+            onFailed: () => this.handleReconnectFailed(),
+          }
+        : false,
+      onConnected: () => this.handleConnected(),
+      onDisconnected: (_ws, event) => this.handleDisconnected(event),
+      onError: () => this.handleSocketError(),
+      onMessage: (_ws, event) => {
+        if (typeof event.data === 'string')
+          this.handleMessage(event.data)
+      },
+    })
+  }
+
+  private handleConnected(): void {
+    this.connectionState = 'connected'
+    this.lastError = ''
+    this.reconnectAttempts = 0
+    this.resolveConnecting()
+  }
+
+  private handleDisconnected(event: CloseEvent): void {
+    if (this.suppressNextDisconnect) {
+      this.suppressNextDisconnect = false
+      return
+    }
+
+    this.rejectPending(new EasyInkPrintError('连接已断开', 'PRINTER_DISCONNECTED'))
+
+    if (this.manuallyDisconnected) {
+      this.connectionState = 'idle'
+      return
+    }
+
+    const message = closeMessage(event)
+    if (this.reconnect) {
+      this.connectionState = 'reconnecting'
+      this.lastError = `${message}，正在重连`
+      return
+    }
+
+    const error = new EasyInkPrintError(message, 'PRINTER_CONNECTION_CLOSED')
+    this.connectionState = 'error'
+    this.lastError = error.message
+    this.failConnecting(error)
+  }
+
+  private handleSocketError(): void {
+    if (this.connectionState !== 'connected')
+      this.lastError = '连接 EasyInk Printer 服务失败'
+  }
+
+  private handleReconnectFailed(): void {
+    const maxAttempts = this.maxReconnectAttempts < 0 ? '无限' : String(this.maxReconnectAttempts)
+    const error = new EasyInkPrintError(`连接 EasyInk Printer 服务失败，已达到最大重连次数 (${maxAttempts})`, 'PRINTER_RECONNECT_FAILED')
+    this.connectionState = 'error'
+    this.lastError = error.message
+    this.failConnecting(error)
+  }
+
+  private nextReconnectDelay(attempt: number): number {
+    this.reconnectAttempts = attempt
+    if (!this.manuallyDisconnected)
+      this.connectionState = 'reconnecting'
+
+    const baseDelay = Math.max(0, this.reconnectDelayMs)
+    const multiplier = Math.max(1, this.reconnectBackoffMultiplier)
+    const maxDelay = Math.max(baseDelay, this.maxReconnectDelayMs)
+    return Math.min(maxDelay, Math.round(baseDelay * multiplier ** Math.max(0, attempt - 1)))
+  }
+
+  private closeTransport(suppressDisconnect = false): void {
+    if (suppressDisconnect && this.transport?.ws.value)
+      this.suppressNextDisconnect = true
+    try {
+      this.transport?.close()
+    }
+    catch { /* ignore */ }
+  }
+
+  private resolveConnecting(): void {
+    if (!this.connectSettler)
+      return
+    clearTimeout(this.connectSettler.timer)
+    this.connectSettler.resolve()
+    this.connectSettler = undefined
+    this.connectPromise = undefined
+  }
+
+  private failConnecting(error: Error, markError = true): void {
+    if (markError) {
+      this.connectionState = 'error'
+      this.lastError = error.message
+    }
+    if (!this.connectSettler) {
+      this.connectPromise = undefined
+      return
+    }
+    clearTimeout(this.connectSettler.timer)
+    this.connectSettler.reject(error)
+    this.connectSettler = undefined
+    this.connectPromise = undefined
+  }
+
   private sendCommand<T>(command: string, params?: Record<string, unknown>): Promise<T> {
     return new Promise<T>((resolve, reject) => {
-      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      if (!this.isConnected || !this.transport) {
         reject(new EasyInkPrintError('WebSocket 未连接', 'PRINTER_WS_NOT_CONNECTED'))
         return
       }
@@ -418,19 +543,24 @@ export class EasyInkPrinterClient {
 
       this.pendingRequests.set(id, { resolve: data => resolve(data as T), reject, timer })
       try {
-        this.ws.send(JSON.stringify({ command, id, params }))
+        const sent = this.transport.send(JSON.stringify({ command, id, params }), false)
+        if (!sent)
+          throw new EasyInkPrintError('WebSocket 未连接', 'PRINTER_WS_NOT_CONNECTED')
       }
       catch (cause) {
         clearTimeout(timer)
         this.pendingRequests.delete(id)
-        reject(new EasyInkPrintError(`发送打印请求失败: ${command}`, 'PRINTER_SEND_FAILED', cause))
+        if (cause instanceof EasyInkPrintError)
+          reject(cause)
+        else
+          reject(new EasyInkPrintError(`发送打印请求失败: ${command}`, 'PRINTER_SEND_FAILED', cause))
       }
     })
   }
 
   private sendBinaryCommand<T>(command: string, params: Record<string, unknown>, payload: Uint8Array): Promise<T> {
     return new Promise<T>((resolve, reject) => {
-      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      if (!this.isConnected || !this.transport) {
         reject(new EasyInkPrintError('WebSocket 未连接', 'PRINTER_WS_NOT_CONNECTED'))
         return
       }
@@ -443,12 +573,17 @@ export class EasyInkPrinterClient {
 
       this.pendingRequests.set(id, { resolve: data => resolve(data as T), reject, timer })
       try {
-        this.ws.send(encodeBinaryCommand(command, id, params, payload))
+        const sent = this.transport.send(encodeBinaryCommand(command, id, params, payload), false)
+        if (!sent)
+          throw new EasyInkPrintError('WebSocket 未连接', 'PRINTER_WS_NOT_CONNECTED')
       }
       catch (cause) {
         clearTimeout(timer)
         this.pendingRequests.delete(id)
-        reject(new EasyInkPrintError(`发送打印请求失败: ${command}`, 'PRINTER_SEND_FAILED', cause))
+        if (cause instanceof EasyInkPrintError)
+          reject(cause)
+        else
+          reject(new EasyInkPrintError(`发送打印请求失败: ${command}`, 'PRINTER_SEND_FAILED', cause))
       }
     })
   }
@@ -573,6 +708,10 @@ function toOptionalString(value: unknown): string | undefined {
 
 function isAbortError(value: unknown): boolean {
   return value instanceof DOMException && value.name === 'AbortError'
+}
+
+function closeMessage(event: CloseEvent): string {
+  return event.reason ? `连接被关闭: ${event.reason}` : '连接被关闭'
 }
 
 function createId(): string {

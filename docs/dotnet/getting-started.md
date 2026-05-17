@@ -67,6 +67,8 @@ import { createViewer } from '@easyink/viewer'
 const viewer = createViewer({ iframe })
 const printer = createEasyInkPrinterClient({
   serviceUrl: 'http://localhost:18080',
+  reconnect: true,
+  maxReconnectAttempts: 3,
 })
 
 viewer.registerPrintDriver(createEasyInkPrinterDriver({ client: printer }))
@@ -77,6 +79,8 @@ await viewer.print({ driverId: 'easyink-printer' })
 ```
 
 `createEasyInkPrinterDriver()` 默认使用 `pageSizeMode: 'fixed'`，会先把 Viewer 页面生成 PDF，再发送给 EasyInk.Printer。调用方不用再处理 PDF 导出插件、WebSocket 二进制帧、分块上传或任务轮询。
+
+客户端内部使用 VueUse 的 `useWebSocket` 管理长连接。连接意外断开时会进入 `reconnecting`，按配置重试；达到最大重连次数后进入 `error`，并把原因写入 `lastError`。
 
 如果这段代码跑通，意味着下面几层都已经工作正常：
 
@@ -130,6 +134,41 @@ printer.setPrinter(printers[0]?.name)
 
 - 初始化时传入：适合固定部署环境
 - 运行时选择：适合设置页、诊断页或多打印机业务场景
+
+## 连接和重连
+
+`@easyink/print-easyink` 会同时管理 HTTP 超时和 WebSocket 重连。设置页或诊断页可以直接读取客户端状态：
+
+```ts
+const printer = createEasyInkPrinterClient({
+  serviceUrl: 'http://localhost:18080',
+  connectTimeoutMs: 5000,
+  responseTimeoutMs: 15000,
+  reconnect: true,
+  maxReconnectAttempts: 5,
+  reconnectDelayMs: 500,
+  reconnectBackoffMultiplier: 2,
+  maxReconnectDelayMs: 5000,
+})
+
+await printer.connect()
+
+console.log(printer.connectionState)
+console.log(printer.reconnectAttempts)
+console.log(printer.lastError)
+```
+
+连接状态含义如下：
+
+| 状态 | 含义 |
+|------|------|
+| `idle` | 尚未连接，或已主动断开 |
+| `connecting` | 正在建立 WebSocket 连接 |
+| `connected` | WebSocket 已打开，可以提交打印命令 |
+| `reconnecting` | 连接意外断开，正在按退避策略重连 |
+| `error` | 连接超时、关闭或达到最大重连次数 |
+
+如果业务需要完全关闭自动重连，可以传 `reconnect: false`。如果用户修改服务地址、API Key 或重连参数，调用 `printer.configure(...)` 会断开旧连接并返回是否需要重新连接。
 
 ## 打印已有 PDF
 

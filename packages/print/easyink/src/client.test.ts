@@ -27,6 +27,11 @@ class MockWebSocket {
     this.readyState = MockWebSocket.OPEN
     this.onopen?.(new Event('open'))
   }
+
+  closeFromServer(reason = ''): void {
+    this.readyState = MockWebSocket.CLOSED
+    this.onclose?.(new CloseEvent('close', { reason }))
+  }
 }
 
 let originalWebSocket: typeof WebSocket
@@ -111,5 +116,72 @@ describe('easy ink printer client', () => {
     await expect(client.printPdf(new Blob(['pdf']), { printerName: 'Printer A' }))
       .rejects
       .toMatchObject({ code: 'PRINTER_SEND_FAILED' })
+  })
+
+  it('keeps timeout failure state when closing a stalled connection', async () => {
+    vi.useFakeTimers()
+    const client = new EasyInkPrinterClient({ connectTimeoutMs: 10 })
+
+    const connected = client.connect()
+    const assertion = expect(connected).rejects.toMatchObject({ code: 'PRINTER_CONNECT_TIMEOUT' })
+    await vi.advanceTimersByTimeAsync(10)
+
+    await assertion
+    expect(client.connectionState).toBe('error')
+    expect(client.lastError).toContain('连接超时')
+  })
+
+  it('reconnects dropped WebSocket connections with VueUse transport state', async () => {
+    vi.useFakeTimers()
+    const client = new EasyInkPrinterClient({
+      reconnectDelayMs: 10,
+      reconnectBackoffMultiplier: 1,
+      maxReconnectDelayMs: 10,
+      maxReconnectAttempts: 2,
+    })
+    const socket = await connectClient(client)
+
+    socket.closeFromServer('network lost')
+
+    expect(client.isConnected).toBe(false)
+    expect(client.connectionState).toBe('reconnecting')
+    expect(client.lastError).toContain('network lost')
+    expect(client.reconnectAttempts).toBe(1)
+
+    await vi.advanceTimersByTimeAsync(10)
+    const retrySocket = sockets[1]
+    expect(retrySocket).toBeDefined()
+    retrySocket!.open()
+
+    expect(client.isConnected).toBe(true)
+    expect(client.connectionState).toBe('connected')
+    expect(client.reconnectAttempts).toBe(0)
+  })
+
+  it('fails connect after the configured maximum reconnect attempts', async () => {
+    vi.useFakeTimers()
+    const client = new EasyInkPrinterClient({
+      connectTimeoutMs: 1000,
+      reconnectDelayMs: 10,
+      reconnectBackoffMultiplier: 1,
+      maxReconnectDelayMs: 10,
+      maxReconnectAttempts: 2,
+    })
+
+    const connected = client.connect()
+    sockets[0]!.closeFromServer()
+    expect(client.connectionState).toBe('reconnecting')
+    expect(client.reconnectAttempts).toBe(1)
+
+    await vi.advanceTimersByTimeAsync(10)
+    sockets[1]!.closeFromServer()
+    expect(client.reconnectAttempts).toBe(2)
+
+    await vi.advanceTimersByTimeAsync(10)
+    sockets[2]!.closeFromServer()
+
+    await expect(connected).rejects.toMatchObject({ code: 'PRINTER_RECONNECT_FAILED' })
+    expect(client.connectionState).toBe('error')
+    expect(client.lastError).toContain('最大重连次数')
   })
 })
