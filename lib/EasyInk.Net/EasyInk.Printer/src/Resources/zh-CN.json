@@ -106,6 +106,7 @@
   "Logs_ColPrinter": "打印机",
   "Logs_ColStatus": "状态",
   "Logs_ColUser": "用户",
+  "Logs_ColLabelType": "标签类型",
   "Logs_ColJobId": "任务ID",
   "Logs_ColError": "错误",
 

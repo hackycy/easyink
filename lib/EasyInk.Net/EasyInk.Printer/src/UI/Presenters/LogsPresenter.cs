@@ -91,6 +91,7 @@ internal sealed class LogsPresenter : IDisposable
                 log.PrinterName,
                 log.Status,
                 log.UserId ?? string.Empty,
+                log.LabelType ?? string.Empty,
                 log.JobId ?? string.Empty,
                 log.ErrorMessage ?? string.Empty));
         }
