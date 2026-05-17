@@ -154,6 +154,10 @@ jobs:
       - name: Restore solution
         run: dotnet restore lib/EasyInk.Net/EasyInk.Net.sln
 
+      - name: Download SumatraPDF
+        shell: pwsh
+        run: ./lib/EasyInk.Net/EasyInk.Printer/tools/download-sumatra.ps1
+
       - name: Build solution
         run: dotnet build lib/EasyInk.Net/EasyInk.Net.sln -c Release --no-restore --nologo /p:Version=${{ steps.version.outputs.printer_version }} /p:AssemblyVersion=${{ steps.version.outputs.assembly_version }} /p:FileVersion=${{ steps.version.outputs.assembly_version }} /p:InformationalVersion=${{ steps.version.outputs.informational_version }}
 
