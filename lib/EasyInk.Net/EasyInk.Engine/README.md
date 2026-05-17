@@ -135,6 +135,7 @@ SumatraPDF.exe -silent -exit-on-print -print-to "PrinterName" -print-settings "f
 - `sumatraPrinterNames`：走 SumatraPDF 的打印机名称片段列表，大小写不敏感、模糊匹配。
 - `sumatraPrintSettings`：默认 `fit`。
 - `sumatraTimeoutSeconds`：默认 60。
+- `sumatraTempDir`：写入 SumatraPDF 命令行打印临时 PDF 的目录；EasyInk.Printer 默认使用 `%LocalAppData%\EasyInk.Printer\temp\sumatra`。
 
 注意事项：
 

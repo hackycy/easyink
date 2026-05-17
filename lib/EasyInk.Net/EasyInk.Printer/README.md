@@ -106,6 +106,7 @@ EasyInk.Printer 调用 EasyInk.Engine 执行打印，当前默认链路是：
 配置方式：
 
 - 在设置页确认 `SumatraPDF.exe` 路径，默认是程序目录下的 `SumatraPDF\SumatraPDF.exe`。
+- 在路径设置中确认 PDF 临时目录，默认是 `%LocalAppData%\EasyInk.Printer\temp\sumatra`。
 - 在“PDF兼容打印机 / PDF fallback printers”中填写需要走 SumatraPDF 的打印机名称片段，多个用逗号分隔。
 - 打印参数默认 `fit`，超时默认 60 秒。
 - 保存后重启服务生效。

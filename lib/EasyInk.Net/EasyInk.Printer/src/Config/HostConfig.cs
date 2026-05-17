@@ -29,6 +29,11 @@ public class HostConfig
         "EasyInk.Printer",
         "data");
 
+    private static readonly string DefaultTempDir = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "EasyInk.Printer",
+        "temp");
+
     private static readonly string DefaultBundledSumatraPdfPath = Path.Combine(
         AppDomain.CurrentDomain.BaseDirectory,
         "SumatraPDF",
@@ -68,6 +73,11 @@ public class HostConfig
     /// SumatraPDF.exe 路径。为空时不启用 SumatraPDF fallback。
     /// </summary>
     public string? SumatraPdfPath { get; set; } = DefaultBundledSumatraPdfPath;
+
+    /// <summary>
+    /// SumatraPDF 打印前写入临时 PDF 的目录。为空时使用用户本机应用数据目录。
+    /// </summary>
+    public string? SumatraTempDir { get; set; } = DefaultSumatraTempDir;
 
     /// <summary>
     /// 使用 SumatraPDF fallback 的打印机名称列表（模糊匹配，忽略大小写）。
@@ -112,6 +122,8 @@ public class HostConfig
 
     public static string DefaultCrashLogDir => Path.Combine(DefaultDataDir, "crash");
 
+    public static string DefaultSumatraTempDir => Path.Combine(DefaultTempDir, "sumatra");
+
     public static string DefaultSumatraPdfPath => DefaultBundledSumatraPdfPath;
 
     public static string ResolveDbPath(string dbPath)
@@ -122,6 +134,11 @@ public class HostConfig
     public static string ResolveCrashLogDir(string dir)
     {
         return string.IsNullOrWhiteSpace(dir) ? DefaultCrashLogDir : dir;
+    }
+
+    public static string ResolveSumatraTempDir(string dir)
+    {
+        return string.IsNullOrWhiteSpace(dir) ? DefaultSumatraTempDir : dir;
     }
 
     public static bool IsValidFilePath(string path, out string? error)

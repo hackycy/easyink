@@ -60,6 +60,18 @@ public class HostConfigTests
     }
 
     [Fact]
+    public void DefaultSumatraTempDir_UsesLocalApplicationData()
+    {
+        var expected = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "EasyInk.Printer",
+            "temp",
+            "sumatra");
+
+        Assert.Equal(expected, HostConfig.DefaultSumatraTempDir);
+    }
+
+    [Fact]
     public void ResolveDbPath_Null_ReturnsDefault()
     {
         Assert.Equal(HostConfig.DefaultDbPath, HostConfig.ResolveDbPath(null!));
@@ -81,6 +93,18 @@ public class HostConfigTests
     public void ResolveCrashLogDir_Null_ReturnsDefault()
     {
         Assert.Equal(HostConfig.DefaultCrashLogDir, HostConfig.ResolveCrashLogDir(null!));
+    }
+
+    [Fact]
+    public void ResolveSumatraTempDir_Null_ReturnsDefault()
+    {
+        Assert.Equal(HostConfig.DefaultSumatraTempDir, HostConfig.ResolveSumatraTempDir(null!));
+    }
+
+    [Fact]
+    public void ResolveSumatraTempDir_Custom_ReturnsCustom()
+    {
+        Assert.Equal(@"D:\custom\temp", HostConfig.ResolveSumatraTempDir(@"D:\custom\temp"));
     }
 
     [Fact]

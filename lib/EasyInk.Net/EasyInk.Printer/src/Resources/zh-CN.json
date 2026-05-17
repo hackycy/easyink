@@ -126,6 +126,7 @@
   "Settings_Path": "路径设置",
   "Settings_DbPath": "数据库路径:",
   "Settings_CrashLogDir": "崩溃日志目录:",
+  "Settings_SumatraTempDir": "PDF临时目录:",
 
   "Common_Yes": "是",
   "Common_No": "否",
@@ -139,10 +140,12 @@
 
   "Dialog_DbFileLocation": "选择数据库文件位置",
   "Dialog_CrashLogDir": "选择崩溃日志目录",
+  "Dialog_SumatraTempDir": "选择 SumatraPDF 临时 PDF 目录",
   "Dialog_DbFileFilter": "SQLite 数据库|*.db|所有文件|*.*",
 
   "Error_DbPathInvalid": "数据库路径无效: {0}",
   "Error_CrashLogDirInvalid": "崩溃日志目录无效: {0}",
+  "Error_SumatraTempDirInvalid": "PDF临时目录无效: {0}",
   "Error_ConfigSaveFailed": "配置保存失败: {0}",
   "Error_QueryLogs": "查询日志失败: {0}",
   "Error_GetPrinters": "获取打印机列表失败: {0}",
@@ -206,7 +209,7 @@
   "Settings_SumatraPrintersLabel": "PDF兼容打印机",
   "Settings_SumatraSettingsLabel": "打印参数",
   "Settings_SumatraTimeoutLabel": "超时(秒)",
-  "Settings_SumatraDescription": "适用于内置 PDFium/GDI 链路仍错位、裁切或模糊，但 Chrome 打印正常的普通 PDF 打印机。\n需要填写 SumatraPDF.exe 路径和打印机名称；配置保存后重启服务生效。",
+  "Settings_SumatraDescription": "适用于普通 PDF 打印机。\n需要填写 SumatraPDF.exe 路径和打印机名称；配置保存后重启服务生效。",
   "Dialog_SumatraPdfPath": "选择 SumatraPDF.exe",
   "Dialog_ExeFileFilter": "可执行文件 (*.exe)|*.exe|所有文件 (*.*)|*.*"
 }

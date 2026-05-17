@@ -32,6 +32,7 @@ internal static class ServiceConfig
                 sumatraPrinterNames: config.SumatraPrinterNames,
                 sumatraPrintSettings: config.SumatraPrintSettings,
                 sumatraTimeoutSeconds: config.SumatraTimeoutSeconds,
+                sumatraTempDir: HostConfig.ResolveSumatraTempDir(config.SumatraTempDir!),
                 lowDpiPrintEnhancementMode: ParseLowDpiPrintEnhancement(config.LowDpiPrintEnhancement));
             return api;
         });

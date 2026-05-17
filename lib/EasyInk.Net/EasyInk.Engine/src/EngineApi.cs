@@ -62,10 +62,11 @@ public class EngineApi : IDisposable
         System.Collections.Generic.IEnumerable<string>? sumatraPrinterNames = null,
         string? sumatraPrintSettings = null,
         int sumatraTimeoutSeconds = 60,
-        LowDpiPrintEnhancementMode lowDpiPrintEnhancementMode = LowDpiPrintEnhancementMode.Boost)
+        LowDpiPrintEnhancementMode lowDpiPrintEnhancementMode = LowDpiPrintEnhancementMode.Boost,
+        string? sumatraTempDir = null)
         : this(null, null, maxQueueSize, rawPrinterNames, rawPrintDpi, rawPrintMaxDotsWidth,
             sumatraPdfPath, sumatraPrinterNames, sumatraPrintSettings, sumatraTimeoutSeconds,
-            lowDpiPrintEnhancementMode)
+            lowDpiPrintEnhancementMode, sumatraTempDir)
     {
     }
 
@@ -84,7 +85,8 @@ public class EngineApi : IDisposable
         System.Collections.Generic.IEnumerable<string>? sumatraPrinterNames = null,
         string? sumatraPrintSettings = null,
         int sumatraTimeoutSeconds = 60,
-        LowDpiPrintEnhancementMode lowDpiPrintEnhancementMode = LowDpiPrintEnhancementMode.Boost)
+        LowDpiPrintEnhancementMode lowDpiPrintEnhancementMode = LowDpiPrintEnhancementMode.Boost,
+        string? sumatraTempDir = null)
     {
         var logger = new EventLogger(this);
         _printerService = printerService ?? new PrinterService(logger);
@@ -107,7 +109,8 @@ public class EngineApi : IDisposable
                     sumatraPdfPath!,
                     sumatraPrintSettings,
                     Math.Max(sumatraTimeoutSeconds, 1) * 1000,
-                    logger);
+                    logger,
+                    sumatraTempDir);
             }
 
             _printService = new RoutingPrintService(

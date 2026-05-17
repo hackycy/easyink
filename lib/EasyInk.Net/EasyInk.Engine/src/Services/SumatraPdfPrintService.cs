@@ -15,19 +15,22 @@ namespace EasyInk.Engine.Services;
 public class SumatraPdfPrintService : IPrintService
 {
     private const int DefaultTimeoutMs = 60_000;
+    private static readonly TimeSpan StaleTempFileAge = TimeSpan.FromDays(1);
 
     private readonly IPrinterService _printerService;
     private readonly string _sumatraExePath;
     private readonly string _printSettings;
     private readonly int _timeoutMs;
     private readonly ILogger _logger;
+    private readonly string _tempDirectory;
 
     public SumatraPdfPrintService(
         IPrinterService printerService,
         string sumatraExePath,
         string? printSettings = null,
         int timeoutMs = DefaultTimeoutMs,
-        ILogger? logger = null)
+        ILogger? logger = null,
+        string? tempDirectory = null)
     {
         _printerService = printerService ?? throw new ArgumentNullException(nameof(printerService));
         _sumatraExePath = string.IsNullOrWhiteSpace(sumatraExePath)
@@ -36,6 +39,9 @@ public class SumatraPdfPrintService : IPrintService
         _printSettings = string.IsNullOrWhiteSpace(printSettings) ? "fit" : printSettings.Trim();
         _timeoutMs = timeoutMs > 0 ? timeoutMs : DefaultTimeoutMs;
         _logger = logger ?? new NullLogger();
+        _tempDirectory = string.IsNullOrWhiteSpace(tempDirectory)
+            ? Path.GetTempPath()
+            : tempDirectory.Trim();
     }
 
     public PrinterResult Print(string requestId, PrintRequestParams request, CancellationToken cancellationToken = default)
@@ -64,9 +70,13 @@ public class SumatraPdfPrintService : IPrintService
         if (pdfBytes == null || pdfBytes.Length == 0)
             return PrinterResult.Error(requestId, ErrorCode.InvalidPdfSource, "PDF 内容为空");
 
-        var tempFile = Path.Combine(Path.GetTempPath(), $"easyink-{Guid.NewGuid():N}.pdf");
+        var tempFile = "";
         try
         {
+            Directory.CreateDirectory(_tempDirectory);
+            CleanupStaleTempFiles(_tempDirectory, _logger);
+
+            tempFile = Path.Combine(_tempDirectory, $"easyink-{Guid.NewGuid():N}.pdf");
             File.WriteAllBytes(tempFile, pdfBytes);
             var args = BuildArguments(request.PrinterName, tempFile);
 
@@ -166,6 +176,33 @@ public class SumatraPdfPrintService : IPrintService
         }
         catch
         {
+        }
+    }
+
+    private static void CleanupStaleTempFiles(string directory, ILogger logger)
+    {
+        try
+        {
+            if (!Directory.Exists(directory))
+                return;
+
+            var cutoff = DateTime.UtcNow.Subtract(StaleTempFileAge);
+            foreach (var path in Directory.GetFiles(directory, "easyink-*.pdf"))
+            {
+                try
+                {
+                    if (File.GetLastWriteTimeUtc(path) < cutoff)
+                        File.Delete(path);
+                }
+                catch (Exception ex)
+                {
+                    logger.Log(LogLevel.Error, $"SumatraPDF 临时文件清理失败: {path}, {ex.Message}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.Log(LogLevel.Error, $"SumatraPDF 临时目录清理失败: {directory}, {ex.Message}");
         }
     }
 }

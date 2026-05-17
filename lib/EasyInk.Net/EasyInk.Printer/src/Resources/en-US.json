@@ -126,6 +126,7 @@
   "Settings_Path": "Path Settings",
   "Settings_DbPath": "Database Path:",
   "Settings_CrashLogDir": "Crash Log Directory:",
+  "Settings_SumatraTempDir": "PDF Temp Directory:",
 
   "Common_Yes": "Yes",
   "Common_No": "No",
@@ -139,10 +140,12 @@
 
   "Dialog_DbFileLocation": "Select Database File Location",
   "Dialog_CrashLogDir": "Select Crash Log Directory",
+  "Dialog_SumatraTempDir": "Select SumatraPDF temporary PDF directory",
   "Dialog_DbFileFilter": "SQLite Database|*.db|All Files|*.*",
 
   "Error_DbPathInvalid": "Invalid database path: {0}",
   "Error_CrashLogDirInvalid": "Invalid crash log directory: {0}",
+  "Error_SumatraTempDirInvalid": "Invalid PDF temporary directory: {0}",
   "Error_ConfigSaveFailed": "Failed to save configuration: {0}",
   "Error_QueryLogs": "Failed to query logs: {0}",
   "Error_GetPrinters": "Failed to get printer list: {0}",
@@ -206,7 +209,7 @@
   "Settings_SumatraPrintersLabel": "PDF fallback printers",
   "Settings_SumatraSettingsLabel": "Print settings",
   "Settings_SumatraTimeoutLabel": "Timeout (sec)",
-  "Settings_SumatraDescription": "Use this for regular PDF printers where the built-in PDFium/GDI path still shifts, clips, or blurs output, while Chrome printing is correct.\nSet both SumatraPDF.exe path and printer names; restart the service after saving.",
+  "Settings_SumatraDescription": "Use this for regular PDF printers.\nSet both SumatraPDF.exe path and printer names; restart the service after saving.",
   "Dialog_SumatraPdfPath": "Select SumatraPDF.exe",
   "Dialog_ExeFileFilter": "Executable files (*.exe)|*.exe|All files (*.*)|*.*"
 }

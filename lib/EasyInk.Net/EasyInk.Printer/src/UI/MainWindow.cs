@@ -950,7 +950,7 @@ public class MainWindow : Form
         {
             Text = LangManager.Get("Settings_Path"),
             Dock = DockStyle.Top,
-            Height = 165,
+            Height = 190,
             Padding = new Padding(12, 8, 12, 12)
         };
 
@@ -1018,12 +1018,41 @@ public class MainWindow : Form
                 txtCrashDir.Text = dlg.SelectedPath;
         };
 
+        var lblSumatraTempDir = new Label { Text = LangManager.Get("Settings_SumatraTempDir"), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
+        var txtSumatraTempDir = new TextBox
+        {
+            Text = string.IsNullOrWhiteSpace(_config.SumatraTempDir)
+                ? HostConfig.DefaultSumatraTempDir
+                : _config.SumatraTempDir,
+            Dock = DockStyle.Fill,
+            Anchor = AnchorStyles.Left | AnchorStyles.Right
+        };
+        var btnBrowseSumatraTemp = new Button
+        {
+            Text = LangManager.Get("Common_Browse"),
+            Width = 52,
+            Anchor = AnchorStyles.Left
+        };
+        btnBrowseSumatraTemp.Click += (s, e) =>
+        {
+            using var dlg = new FolderBrowserDialog
+            {
+                Description = LangManager.Get("Dialog_SumatraTempDir"),
+                SelectedPath = txtSumatraTempDir.Text
+            };
+            if (dlg.ShowDialog() == DialogResult.OK)
+                txtSumatraTempDir.Text = dlg.SelectedPath;
+        };
+
         pathPanel.Controls.Add(lblDbPath, 0, 0);
         pathPanel.Controls.Add(txtDbPath, 1, 0);
         pathPanel.Controls.Add(btnBrowseDb, 2, 0);
         pathPanel.Controls.Add(lblCrashDir, 0, 1);
         pathPanel.Controls.Add(txtCrashDir, 1, 1);
         pathPanel.Controls.Add(btnBrowseCrash, 2, 1);
+        pathPanel.Controls.Add(lblSumatraTempDir, 0, 2);
+        pathPanel.Controls.Add(txtSumatraTempDir, 1, 2);
+        pathPanel.Controls.Add(btnBrowseSumatraTemp, 2, 2);
         grpPath.Controls.Add(pathPanel);
 
         // 保存按钮
@@ -1050,6 +1079,14 @@ public class MainWindow : Form
             {
                 MessageBox.Show(LangManager.Get("Error_CrashLogDirInvalid", crashError!), LangManager.Get("Common_Error"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 txtCrashDir.Focus();
+                return;
+            }
+
+            var sumatraTempDirValue = (txtSumatraTempDir.Text ?? "").Trim();
+            if (!HostConfig.IsValidFilePath(sumatraTempDirValue + Path.DirectorySeparatorChar, out var sumatraTempError))
+            {
+                MessageBox.Show(LangManager.Get("Error_SumatraTempDirInvalid", sumatraTempError!), LangManager.Get("Common_Error"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                txtSumatraTempDir.Focus();
                 return;
             }
 
@@ -1085,6 +1122,8 @@ public class MainWindow : Form
                 ? null : dbPathValue;
             _config.CrashLogDir = string.Equals(crashDirValue, HostConfig.DefaultCrashLogDir, StringComparison.OrdinalIgnoreCase)
                 ? null : crashDirValue;
+            _config.SumatraTempDir = string.Equals(sumatraTempDirValue, HostConfig.DefaultSumatraTempDir, StringComparison.OrdinalIgnoreCase)
+                ? null : sumatraTempDirValue;
 
             try
             {
