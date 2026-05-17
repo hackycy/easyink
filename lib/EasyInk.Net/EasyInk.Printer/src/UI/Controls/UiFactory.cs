@@ -266,7 +266,9 @@ internal static class UiFactory
 
         if (root is Label label)
         {
-            label.ForeColor = label.ForeColor == SystemColors.GrayText ? UiTheme.MutedTextColor : UiTheme.TextColor;
+            label.ForeColor = Equals(label.Tag, "SettingsDescription") || label.ForeColor == SystemColors.GrayText
+                ? UiTheme.MutedTextColor
+                : UiTheme.TextColor;
             label.Font = new Font("Microsoft YaHei UI", 9f, label.Font.Style);
             return;
         }

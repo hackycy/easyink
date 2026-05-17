@@ -205,7 +205,7 @@
   "Settings_LowDpiEnhancementMonochrome": "Monochrome",
   "Settings_LowDpiEnhancementDescription": "Only affects low-resolution receipt/thermal printers on the PDFium/GDI path. Boost darkens fine text gently; monochrome is sharper, but may lose image, light-gray background, and logo detail. Restart after saving.",
   "Settings_RawPrinterLabel": "Raw ESC/POS printers",
-  "Settings_RawPrinterDescription": "Raw ESC/POS commands directly.\nIdeal for thermal receipt printers (XP-80C, Epson, Xprinter, etc.), avoiding driver clipping, offset, or scaling issues.\nSeparate multiple names with commas; matching is case-insensitive.\n\nLeave empty to use the standard print path for all printers.",
+  "Settings_RawPrinterDescription": "Raw ESC/POS commands directly.\nIdeal for thermal receipt printers (XP-80C, Epson, Xprinter, etc.), avoiding driver clipping, offset, or scaling issues.\nSeparate multiple names with commas; matching is case-insensitive.\nLeave empty to use the standard print path for all printers.",
   "Settings_SumatraPathLabel": "SumatraPDF path",
   "Settings_SumatraPrintersLabel": "PDF fallback printers",
   "Settings_SumatraSettingsLabel": "Print settings",

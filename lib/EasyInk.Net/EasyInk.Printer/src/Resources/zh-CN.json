@@ -205,7 +205,7 @@
   "Settings_LowDpiEnhancementMonochrome": "黑白二值化",
   "Settings_LowDpiEnhancementDescription": "仅影响 PDFium/GDI 链路下的低分辨率小票/热敏打印机。增强会温和加黑细字；黑白二值化更锐利，但可能损失图片、浅灰背景和 logo 细节。保存后重启生效。",
   "Settings_RawPrinterLabel": "Raw 直发打印机",
-  "Settings_RawPrinterDescription": "直接发送 ESC/POS 原始指令。\n适用于热敏小票机（如 XP-80C、佳博、芯烨等），避免驱动导致的裁切、错位或缩放异常。\n多个名称用逗号分隔，支持模糊匹配（忽略大小写）。\n\n留空则所有打印机均走标准打印路径。",
+  "Settings_RawPrinterDescription": "直接发送 ESC/POS 原始指令。\n适用于热敏小票机（如 XP-80C、佳博、芯烨等），避免驱动导致的裁切、错位或缩放异常。\n多个名称用逗号分隔，支持模糊匹配（忽略大小写）。\n留空则所有打印机均走标准打印路径。",
   "Settings_SumatraPathLabel": "SumatraPDF 路径",
   "Settings_SumatraPrintersLabel": "PDF兼容打印机",
   "Settings_SumatraSettingsLabel": "打印参数",
