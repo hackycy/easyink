@@ -96,6 +96,7 @@ await viewer.print({ driverId: 'easyink-printer' })
 ```ts
 const printer = createEasyInkPrinterClient({
   serviceUrl: settings.serviceUrl,
+  apiKey: settings.apiKey,
   printerName: settings.printerName,
   defaultCopies: settings.copies,
 })
@@ -107,11 +108,60 @@ viewer.registerPrintDriver(createEasyInkPrinterDriver({
   forcePageSize: () => settings.forcePageSize,
   resolveRequestOptions: () => ({
     dpi: settings.dpi,
+    userData: {
+      userId: settings.currentUserId,
+      labelType: settings.labelType,
+    },
   }),
 }))
 ```
 
 这里推荐传函数而不是静态值。原因是用户切换打印机或份数后，不需要重新注册驱动。
+
+这里的参数可以分成两类来看：
+
+- `serviceUrl`、`apiKey`、重连参数属于“怎么连服务”
+- `printerName`、`copies`、`forcePageSize`、`dpi`、`userData` 属于“这次打印怎么投递”
+
+如果服务端启用了 API Key，前端只需要在创建客户端时传 `apiKey`。SDK 会自动把它带到 HTTP Header 和 WebSocket 查询参数里，不需要业务代码自己拼认证逻辑。
+
+## 业务里最常用的打印参数
+
+`resolveRequestOptions()` 适合放那些会随业务场景变化、但又不属于 Viewer 通用打印策略的字段，比如 `dpi` 和 `userData`。
+
+### `dpi` 是什么，什么时候需要传
+
+`dpi` 表示后端把 PDF 渲染成打印位图时使用的分辨率。默认值是 `600`，更完整的数据模型可以看 [Engine](./engine)。
+
+不要把它理解成“越高越清晰”。实际打印效果取决于打印机本身的点密度：
+
+- 普通办公打印机：通常保持默认值即可
+- 203 dpi 热敏标签机：通常不传，或显式传 `203`
+- 300 dpi 标签机：可以传 `300`
+
+如果你不确定，就先不要改。只有当你已经确认设备分辨率、并且默认输出在清晰度或速度上不满足要求时，再显式设置 `dpi`。
+
+### `userData` 是什么，`labelType` 应该填什么
+
+`userData` 不参与排版、不决定纸张尺寸，也不影响打印机选择。它只用于审计日志，当前包含两个字段：
+
+- `userId`：是谁发起的打印
+- `labelType`：这张打印品在业务上属于哪一类
+
+`labelType` 应该填业务类型，而不是设备信息或物理尺寸。推荐值例如：
+
+- `shipping-label`
+- `picking-label`
+- `product-label`
+- `return-label`
+
+不推荐把这些值塞进 `labelType`：
+
+- `100x150`：这是尺寸，不是业务类型
+- `Zebra-ZD421`：这是打印机，不是标签类型
+- `A4`：这是纸型，不是标签类型
+
+一句话区分：`dpi` 解决“以什么分辨率渲染后再打印”，`labelType` 解决“这张打印单在业务上是什么”。
 
 ## 指定服务和打印机
 
@@ -181,6 +231,10 @@ const file = await fetch('/invoice.pdf').then(res => res.blob())
 await printer.printPdfAndWait(file, {
   printerName: 'HP LaserJet',
   copies: 1,
+  userData: {
+    userId: currentUser.id,
+    labelType: 'invoice',
+  },
 })
 ```
 
@@ -204,12 +258,23 @@ viewer.registerPrintDriver(createEasyInkPrinterDriver({
 
 判断标准不要反过来。不是“标签机就一定开启”，而是“只有当设备必须按模板尺寸输出，否则会缩放或错位时才开启”。
 
+## 如何验收审计链路
+
+如果你的目标不只是“打出来”，还包括“知道是谁打的、打的是什么类型”，那最小验收标准应该再多一步：
+
+1. 发送一笔带 `userData` 的打印请求
+2. 打开 `EasyInk.Printer` 桌面应用的日志页
+3. 确认日志列表里能看到对应的 `User` 和 `Label Type` 列值
+
+这一步的意义是把“前端已经把业务字段传出去了”和“后端审计真的落库并展示了”分开验证。
+
 ## Playground 示例
 
 Playground 已使用官方包集成：
 
 - [playground/src/hooks/useEasyInkPrint.ts](../../playground/src/hooks/useEasyInkPrint.ts) 只保留 Vue 状态和设置持久化
 - [playground/src/drivers/easyink-print-driver.ts](../../playground/src/drivers/easyink-print-driver.ts) 调用 `@easyink/print-integration-easyink-printer`
+- Playground 的 EasyInk Printer 设置面板里还提供了 `UserId` 和 `LabelType` 演示字段，方便直接验证审计日志链路
 
 ## 常见问题
 
