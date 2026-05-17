@@ -212,14 +212,14 @@
   "Settings_LowDpiEnhancementNormal": "普通",
   "Settings_LowDpiEnhancementBoost": "增强（默认）",
   "Settings_LowDpiEnhancementMonochrome": "黑白二值化",
-  "Settings_LowDpiEnhancementDescription": "仅影响 PDFium/GDI 链路下的低分辨率小票/热敏打印机。增强会温和加黑细字；黑白二值化更锐利，但可能损失图片、浅灰背景和 logo 细节。保存后重启生效。",
+  "Settings_LowDpiEnhancementDescription": "仅影响标准 PDFium/GDI 链路下的低分辨率小票/热敏打印机。增强会适度加黑细字；黑白二值化边缘更锐利，但可能损失图片、浅灰背景和 logo 细节。保存后重启生效。",
   "Settings_RawPrinterLabel": "Raw 直发打印机",
-  "Settings_RawPrinterDescription": "直接发送 ESC/POS 原始指令。\n适用于热敏小票机（如 XP-80C、佳博、芯烨等），避免驱动导致的裁切、错位或缩放异常。\n多个名称用逗号分隔，支持模糊匹配（忽略大小写）。\n留空则所有打印机均走标准打印路径。",
+  "Settings_RawPrinterDescription": "直接发送 ESC/POS 原始指令。\n适用于热敏小票机（如 XP-80C、佳博、芯烨等），可绕开驱动导致的裁切、错位或缩放异常。\n多个名称用逗号分隔，按打印机名称片段模糊匹配（忽略大小写）。\n留空则不启用 Raw 直发；若同一打印机也命中 PDF 兼容列表，优先使用 SumatraPDF。",
   "Settings_SumatraPathLabel": "SumatraPDF 路径",
-  "Settings_SumatraPrintersLabel": "PDF兼容打印机",
+  "Settings_SumatraPrintersLabel": "PDF 兼容打印机",
   "Settings_SumatraSettingsLabel": "打印参数",
   "Settings_SumatraTimeoutLabel": "超时(秒)",
-  "Settings_SumatraDescription": "适用于普通 PDF 打印机。\n需要填写 SumatraPDF.exe 路径和打印机名称；配置保存后重启服务生效。",
+  "Settings_SumatraDescription": "使用 SumatraPDF 命令行打印，适用于普通 PDF 打印机或默认链路下出现偏移、裁切、缩放异常的驱动。\n填写 SumatraPDF.exe 路径，并用逗号分隔多个打印机名称片段；匹配忽略大小写。\n同一打印机同时命中 Raw 和 PDF 兼容列表时，优先使用 SumatraPDF；保存后重启服务生效。",
   "Dialog_SumatraPdfPath": "选择 SumatraPDF.exe",
   "Dialog_ExeFileFilter": "可执行文件 (*.exe)|*.exe|所有文件 (*.*)|*.*"
 }

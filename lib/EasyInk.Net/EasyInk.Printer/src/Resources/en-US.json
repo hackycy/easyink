@@ -212,14 +212,14 @@
   "Settings_LowDpiEnhancementNormal": "Normal",
   "Settings_LowDpiEnhancementBoost": "Boost (default)",
   "Settings_LowDpiEnhancementMonochrome": "Monochrome",
-  "Settings_LowDpiEnhancementDescription": "Only affects low-resolution receipt/thermal printers on the PDFium/GDI path. Boost darkens fine text gently; monochrome is sharper, but may lose image, light-gray background, and logo detail. Restart after saving.",
+  "Settings_LowDpiEnhancementDescription": "Only affects low-resolution receipt/thermal printers on the standard PDFium/GDI path. Boost darkens fine text moderately; monochrome sharpens edges, but may lose image, light-gray background, and logo detail. Restart after saving.",
   "Settings_RawPrinterLabel": "Raw ESC/POS printers",
-  "Settings_RawPrinterDescription": "Raw ESC/POS commands directly.\nIdeal for thermal receipt printers (XP-80C, Epson, Xprinter, etc.), avoiding driver clipping, offset, or scaling issues.\nSeparate multiple names with commas; matching is case-insensitive.\nLeave empty to use the standard print path for all printers.",
+  "Settings_RawPrinterDescription": "Sends raw ESC/POS commands directly.\nUse for thermal receipt printers (XP-80C, Epson, Xprinter, etc.) to bypass driver clipping, offset, or scaling issues.\nSeparate multiple printer name fragments with commas; matching is case-insensitive.\nLeave empty to disable Raw printing. If the same printer also matches the PDF compatibility list, SumatraPDF takes priority.",
   "Settings_SumatraPathLabel": "SumatraPDF path",
-  "Settings_SumatraPrintersLabel": "PDF fallback printers",
+  "Settings_SumatraPrintersLabel": "PDF compatibility printers",
   "Settings_SumatraSettingsLabel": "Print settings",
   "Settings_SumatraTimeoutLabel": "Timeout (sec)",
-  "Settings_SumatraDescription": "Use this for regular PDF printers.\nSet both SumatraPDF.exe path and printer names; restart the service after saving.",
+  "Settings_SumatraDescription": "Prints through the SumatraPDF command line. Use for regular PDF printers or drivers that offset, clip, or scale incorrectly on the standard path.\nSet the SumatraPDF.exe path and separate multiple printer name fragments with commas; matching is case-insensitive.\nWhen a printer matches both Raw and PDF compatibility lists, SumatraPDF takes priority. Restart after saving.",
   "Dialog_SumatraPdfPath": "Select SumatraPDF.exe",
   "Dialog_ExeFileFilter": "Executable files (*.exe)|*.exe|All files (*.*)|*.*"
 }
