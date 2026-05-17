@@ -36,14 +36,19 @@ public class EngineApi : IDisposable
     public event Action<LogLevel, string>? Log;
 
     /// <summary>
+    /// 带任务上下文的日志回调事件，jobId 为空表示日志不属于某个打印任务。
+    /// </summary>
+    public event Action<LogLevel, string, string?>? LogWithContext;
+
+    /// <summary>
     /// 打印完成回调（requestId, 请求参数, 打印结果），用于审计等宿主层需求
     /// </summary>
     public event Action<string, PrintRequestParams, PrinterResult>? PrintCompleted;
 
-    internal void RaiseLog(LogLevel level, string message)
+    internal void RaiseLog(LogLevel level, string message, string? jobId = null)
     {
-        var handler = Log;
-        handler?.Invoke(level, message);
+        Log?.Invoke(level, message);
+        LogWithContext?.Invoke(level, message, jobId);
     }
 
     internal void RaisePrintCompleted(string requestId, PrintRequestParams request, PrinterResult result)
@@ -396,9 +401,9 @@ public class EngineApi : IDisposable
             _api = api;
         }
 
-        public void Log(LogLevel level, string message)
+        public void Log(LogLevel level, string message, string? jobId = null)
         {
-            _api.RaiseLog(level, message);
+            _api.RaiseLog(level, message, jobId);
         }
     }
 }

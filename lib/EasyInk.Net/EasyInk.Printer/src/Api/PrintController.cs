@@ -5,16 +5,19 @@ using Newtonsoft.Json.Linq;
 using EasyInk.Engine;
 using EasyInk.Engine.Models;
 using EasyInk.Printer;
+using EasyInk.Printer.Services;
 
 namespace EasyInk.Printer.Api;
 
 public class PrintController
 {
     private readonly EngineApi _api;
+    private readonly PrintDebugLogService? _debugLogService;
 
-    public PrintController(EngineApi api)
+    public PrintController(EngineApi api, PrintDebugLogService? debugLogService = null)
     {
         _api = api;
+        _debugLogService = debugLogService;
     }
 
     public PrinterResult Print(string body)
@@ -49,17 +52,23 @@ public class PrintController
 
     private PrinterResult ExecuteCommand(string command, string body)
     {
+        var id = Guid.NewGuid().ToString();
+        _debugLogService?.BeginPrintRequest(id, command, body, null);
         var cmd = new PrinterCommand
         {
             Command = command,
-            Id = Guid.NewGuid().ToString(),
+            Id = id,
             Params = ParseBodyToDictionary(body)
         };
-        return _api.HandleCommand(cmd);
+        var result = _api.HandleCommand(cmd);
+        _debugLogService?.WriteSubmitResult(id, result);
+        return result;
     }
 
     private PrinterResult ExecuteCommandWithBlob(string command, string body, byte[]? pdfBytes)
     {
+        var id = Guid.NewGuid().ToString();
+        _debugLogService?.BeginPrintRequest(id, command, body, pdfBytes);
         var parms = ParseBodyToDictionary(body) ?? new Dictionary<string, object>();
         if (pdfBytes != null)
             parms["pdfBytes"] = pdfBytes;
@@ -67,10 +76,12 @@ public class PrintController
         var cmd = new PrinterCommand
         {
             Command = command,
-            Id = Guid.NewGuid().ToString(),
+            Id = id,
             Params = parms
         };
-        return _api.HandleCommand(cmd);
+        var result = _api.HandleCommand(cmd);
+        _debugLogService?.WriteSubmitResult(id, result);
+        return result;
     }
 
     private PrinterResult ExecuteBatchCommand(string command, string body)

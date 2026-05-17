@@ -18,11 +18,20 @@ public class HostConfig
     private const int DefaultPrintTimeoutSeconds = 30;
     private const int MinConcurrentRequests = 5;
     private const int DefaultConcurrentRequests = 50;
+    private const int MinRetentionDays = 1;
+    private const int MaxRetentionDays = 3650;
+    private const int DefaultAuditLogRetentionDays = 90;
+    private const int DefaultFileLogRetentionDays = 7;
+    private const int MinPrintDebugArtifactRetentionCount = 1;
+    private const int DefaultPrintDebugArtifactRetentionCount = 10;
 
     private int _maxWebSocketConnections = DefaultWebSocketConnections;
     private int _maxQueueSize = DefaultQueueSize;
     private int _printTimeoutSeconds = DefaultPrintTimeoutSeconds;
     private int _maxConcurrentRequests = DefaultConcurrentRequests;
+    private int _auditLogRetentionDays = DefaultAuditLogRetentionDays;
+    private int _fileLogRetentionDays = DefaultFileLogRetentionDays;
+    private int _printDebugArtifactRetentionCount = DefaultPrintDebugArtifactRetentionCount;
 
     private static readonly string DefaultDataDir = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -33,6 +42,8 @@ public class HostConfig
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "EasyInk.Printer",
         "temp");
+
+    private static readonly string DefaultLogDir = Path.Combine(DefaultDataDir, "logs");
 
     private static readonly string DefaultBundledSumatraPdfPath = Path.Combine(
         AppDomain.CurrentDomain.BaseDirectory,
@@ -45,6 +56,8 @@ public class HostConfig
     public bool StartMinimized { get; set; } = true;
     public string? DbPath { get; set; }
     public string? CrashLogDir { get; set; }
+    public bool PrintDebugLoggingEnabled { get; set; } = false;
+    public string? PrintDebugArtifactsDir { get; set; }
     public bool TrustAllOrigins { get; set; } = false;
     public string? ApiKey { get; set; }
     public string Language { get; set; } = "";
@@ -118,9 +131,33 @@ public class HostConfig
         set => _maxConcurrentRequests = value < MinConcurrentRequests ? MinConcurrentRequests : value;
     }
 
+    public int AuditLogRetentionDays
+    {
+        get => _auditLogRetentionDays;
+        set => _auditLogRetentionDays = Clamp(value, MinRetentionDays, MaxRetentionDays);
+    }
+
+    public int FileLogRetentionDays
+    {
+        get => _fileLogRetentionDays;
+        set => _fileLogRetentionDays = Clamp(value, MinRetentionDays, MaxRetentionDays);
+    }
+
+    public int PrintDebugArtifactRetentionCount
+    {
+        get => _printDebugArtifactRetentionCount;
+        set => _printDebugArtifactRetentionCount = value < MinPrintDebugArtifactRetentionCount
+            ? MinPrintDebugArtifactRetentionCount
+            : value;
+    }
+
     public static string DefaultDbPath => Path.Combine(DefaultDataDir, "audit.db");
 
     public static string DefaultCrashLogDir => Path.Combine(DefaultDataDir, "crash");
+
+    public static string DefaultFileLogDir => DefaultLogDir;
+
+    public static string DefaultPrintDebugArtifactsDir => Path.Combine(DefaultLogDir, "print-debug");
 
     public static string DefaultSumatraTempDir => Path.Combine(DefaultTempDir, "sumatra");
 
@@ -134,6 +171,11 @@ public class HostConfig
     public static string ResolveCrashLogDir(string dir)
     {
         return string.IsNullOrWhiteSpace(dir) ? DefaultCrashLogDir : dir;
+    }
+
+    public static string ResolvePrintDebugArtifactsDir(string dir)
+    {
+        return string.IsNullOrWhiteSpace(dir) ? DefaultPrintDebugArtifactsDir : dir;
     }
 
     public static string ResolveSumatraTempDir(string dir)
@@ -246,6 +288,13 @@ public class HostConfig
     private static bool HasAutoStartValue(RegistryKey? key, string valueName)
     {
         return key?.GetValue(valueName) != null;
+    }
+
+    private static int Clamp(int value, int min, int max)
+    {
+        if (value < min) return min;
+        if (value > max) return max;
+        return value;
     }
 
     public static HostConfig Load()

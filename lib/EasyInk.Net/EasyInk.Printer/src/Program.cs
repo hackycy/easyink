@@ -81,9 +81,7 @@ static class Program
         LangManager.Initialize(string.IsNullOrEmpty(config.Language) ? null : config.Language);
         HostConfig.ReconcileAutoStartRegistry();
 
-        var resolvedDbPath = HostConfig.ResolveDbPath(config.DbPath!);
-        var logDir = Path.GetDirectoryName(resolvedDbPath);
-        SimpleLogger.Configure(logDir);
+        SimpleLogger.Configure(HostConfig.DefaultFileLogDir, config.PrintDebugLoggingEnabled, config.FileLogRetentionDays);
 
         _crashLogDir = HostConfig.ResolveCrashLogDir(config.CrashLogDir!);
         AppDomain.CurrentDomain.UnhandledException += (s, e) =>
@@ -99,6 +97,7 @@ static class Program
         var services = ServiceConfig.Configure(config);
         var engineApi = services.GetRequiredService<EngineApi>();
         var auditService = services.GetRequiredService<IAuditService>();
+        var debugLogService = services.GetRequiredService<Services.PrintDebugLogService>();
         var httpServer = services.GetRequiredService<HttpServer>();
         var wsHandler = services.GetRequiredService<WebSocketHandler>();
         var wsCommandHandler = services.GetRequiredService<WebSocketCommandHandler>();
@@ -106,7 +105,7 @@ static class Program
 
         wsHandler.SetCommandHandler(wsCommandHandler);
 
-        engineApi.Log += OnEngineLog;
+        engineApi.LogWithContext += (level, message, jobId) => OnEngineLog(debugLogService, level, message, jobId);
 
         engineApi.PrintCompleted += (requestId, request, result) =>
         {
@@ -131,6 +130,15 @@ static class Program
             catch (Exception ex)
             {
                 SimpleLogger.Error("审计日志写入失败", ex);
+            }
+
+            try
+            {
+                debugLogService.WriteCompletionResult(requestId, request, result);
+            }
+            catch (Exception ex)
+            {
+                SimpleLogger.Error("打印调试完成日志写入失败", ex);
             }
         };
 
@@ -260,12 +268,14 @@ static class Program
         Cleanup(httpServer, wsHandler, engineApi, trayIcon);
     }
 
-    private static void OnEngineLog(LogLevel level, string message)
+    private static void OnEngineLog(Services.PrintDebugLogService debugLogService, LogLevel level, string message, string? jobId)
     {
         if (level == LogLevel.Error)
             SimpleLogger.Error(message);
         else
             SimpleLogger.Info(message);
+
+        debugLogService.AppendEngineLog(jobId, level, message);
     }
 
     private static void Cleanup(HttpServer httpServer, WebSocketHandler wsHandler, EngineApi engineApi, TrayIcon trayIcon)

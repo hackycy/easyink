@@ -8,6 +8,7 @@ using Newtonsoft.Json.Linq;
 using EasyInk.Engine;
 using EasyInk.Engine.Models;
 using EasyInk.Printer;
+using EasyInk.Printer.Services;
 using EasyInk.Printer.Services.Abstractions;
 
 namespace EasyInk.Printer.Server;
@@ -21,13 +22,15 @@ public class WebSocketCommandHandler
     private readonly EngineApi _api;
     private readonly WebSocketHandler _wsHandler;
     private readonly IAuditService _auditService;
+    private readonly PrintDebugLogService? _debugLogService;
     private readonly ConcurrentDictionary<string, PdfUploadSession> _uploads = new();
 
-    public WebSocketCommandHandler(EngineApi api, WebSocketHandler wsHandler, IAuditService auditService)
+    public WebSocketCommandHandler(EngineApi api, WebSocketHandler wsHandler, IAuditService auditService, PrintDebugLogService? debugLogService = null)
     {
         _api = api;
         _wsHandler = wsHandler;
         _auditService = auditService;
+        _debugLogService = debugLogService;
     }
 
     public async Task HandleMessage(WebSocket ws, WebSocketMessage message)
@@ -144,10 +147,11 @@ public class WebSocketCommandHandler
 
     private PrinterResult ExecutePrintCommand(string id, string command, JObject? parameters, byte[]? pdfBytes)
     {
-        return ExecutePrintCommand(id, command, ConvertToDictionary(parameters), pdfBytes);
+        _debugLogService?.BeginPrintRequest(id, command, parameters, pdfBytes);
+        return ExecutePrintCommand(id, command, ConvertToDictionary(parameters), pdfBytes, debugAlreadyCaptured: true);
     }
 
-    private PrinterResult ExecutePrintCommand(string id, string command, Dictionary<string, object>? parameters, byte[]? pdfBytes)
+    private PrinterResult ExecutePrintCommand(string id, string command, Dictionary<string, object>? parameters, byte[]? pdfBytes, bool debugAlreadyCaptured = false)
     {
         var printParams = parameters ?? new Dictionary<string, object>();
         if (pdfBytes != null && pdfBytes.Length > 0)
@@ -160,12 +164,28 @@ public class WebSocketCommandHandler
         if (printParams.Count == 0)
             return PrinterResult.Error(id, ErrorCode.InvalidParams, LangManager.Get("Ws_MissingPrintParams"));
 
-        return _api.HandleCommand(new PrinterCommand
+        if (!debugAlreadyCaptured)
+            _debugLogService?.BeginPrintRequest(id, command, BuildDebugParameters(printParams), pdfBytes);
+        var result = _api.HandleCommand(new PrinterCommand
         {
             Command = command,
             Id = id,
             Params = printParams
         });
+        _debugLogService?.WriteSubmitResult(id, result);
+        return result;
+    }
+
+    private static JObject BuildDebugParameters(Dictionary<string, object> parameters)
+    {
+        var obj = new JObject();
+        foreach (var pair in parameters)
+        {
+            if (pair.Value is byte[])
+                continue;
+            obj[pair.Key] = pair.Value is JToken token ? token.DeepClone() : JToken.FromObject(pair.Value);
+        }
+        return obj;
     }
 
     private PrinterResult HandleGetPrinterStatus(WebSocketMessage message)

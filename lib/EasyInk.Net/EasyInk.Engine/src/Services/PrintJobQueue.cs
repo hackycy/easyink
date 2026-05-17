@@ -157,7 +157,7 @@ public class PrintJobQueue : IDisposable
                     jobInfo.ErrorMessage = ex.Message;
                 }
                 response = PrinterResult.Error(requestId, ErrorCode.InternalError, ex.Message);
-                _logger.Log(LogLevel.Error, $"打印任务 {requestId} 失败: {ex.Message}");
+                _logger.Log(LogLevel.Error, $"打印任务 {requestId} 失败: {ex.Message}", requestId);
             }
             finally
             {

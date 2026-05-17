@@ -55,23 +55,23 @@ public class EscPosRawPrintService : IPrintService
 
         try
         {
-            var bands = RenderPdfToEscPosBands(pdfBytes, cancellationToken);
+            var bands = RenderPdfToEscPosBands(requestId, pdfBytes, cancellationToken);
             var batches = BuildPrintBatches(bands, request.Copies);
 
             NativePrintApi.SendRawBatched(request.PrinterName, batches,
                 $"EasyInk-{requestId.Substring(0, Math.Min(8, requestId.Length))}", delayMs: 80);
 
-            _logger.Log(LogLevel.Info, $"Raw 打印成功: {request.PrinterName}, jobId={requestId}");
+            _logger.Log(LogLevel.Info, $"Raw 打印成功: {request.PrinterName}, jobId={requestId}", requestId);
             return PrinterResult.Ok(requestId, PrintResult.Success(requestId));
         }
         catch (OperationCanceledException)
         {
-            _logger.Log(LogLevel.Info, $"打印已取消: {request.PrinterName}, jobId={requestId}");
+            _logger.Log(LogLevel.Info, $"打印已取消: {request.PrinterName}, jobId={requestId}", requestId);
             return PrinterResult.Error(requestId, ErrorCode.PrintFailed, "打印已取消");
         }
         catch (Exception ex)
         {
-            _logger.Log(LogLevel.Error, $"Raw 打印失败: {request.PrinterName}, jobId={requestId}, {ex}");
+            _logger.Log(LogLevel.Error, $"Raw 打印失败: {request.PrinterName}, jobId={requestId}, {ex}", requestId);
             return PrinterResult.Error(requestId, ErrorCode.PrintFailed, "打印失败，请检查打印机状态后重试");
         }
     }
@@ -95,7 +95,7 @@ public class EscPosRawPrintService : IPrintService
         return batches.ToArray();
     }
 
-    private List<byte[]> RenderPdfToEscPosBands(byte[] pdfBytes, CancellationToken cancellationToken)
+    private List<byte[]> RenderPdfToEscPosBands(string requestId, byte[] pdfBytes, CancellationToken cancellationToken)
     {
         using var pdfStream = new MemoryStream(pdfBytes);
         using var pdfDoc = PdfDocument.Load(pdfStream);
@@ -131,11 +131,13 @@ public class EscPosRawPrintService : IPrintService
                 $" render={renderWidth}x{renderHeight}px@{_dpi}dpi" +
                 $" scale={scale:F3}" +
                 $" bands={pageBands.Count}" +
-                $" method=GS_v_0");
+                $" method=GS_v_0",
+                requestId);
         }
 
         _logger.Log(LogLevel.Info,
-            $"[RawPrint] pages={pageCount} totalBands={bands.Count} method=GS_v_0");
+            $"[RawPrint] pages={pageCount} totalBands={bands.Count} method=GS_v_0",
+            requestId);
 
         return bands;
     }

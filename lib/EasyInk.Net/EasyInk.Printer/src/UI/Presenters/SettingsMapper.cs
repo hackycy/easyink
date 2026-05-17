@@ -29,7 +29,14 @@ internal static class SettingsMapper
             SumatraTimeoutSeconds = Math.Max(5, Math.Min(300, config.SumatraTimeoutSeconds)),
             DbPath = string.IsNullOrWhiteSpace(config.DbPath) ? HostConfig.DefaultDbPath : config.DbPath!,
             CrashLogDir = string.IsNullOrWhiteSpace(config.CrashLogDir) ? HostConfig.DefaultCrashLogDir : config.CrashLogDir!,
-            SumatraTempDir = string.IsNullOrWhiteSpace(config.SumatraTempDir) ? HostConfig.DefaultSumatraTempDir : config.SumatraTempDir!
+            SumatraTempDir = string.IsNullOrWhiteSpace(config.SumatraTempDir) ? HostConfig.DefaultSumatraTempDir : config.SumatraTempDir!,
+            PrintDebugLoggingEnabled = config.PrintDebugLoggingEnabled,
+            AuditLogRetentionDays = config.AuditLogRetentionDays,
+            FileLogRetentionDays = config.FileLogRetentionDays,
+            PrintDebugArtifactRetentionCount = config.PrintDebugArtifactRetentionCount,
+            PrintDebugArtifactsDir = string.IsNullOrWhiteSpace(config.PrintDebugArtifactsDir)
+                ? HostConfig.DefaultPrintDebugArtifactsDir
+                : config.PrintDebugArtifactsDir!
         };
     }
 
@@ -47,6 +54,10 @@ internal static class SettingsMapper
         if (!HostConfig.IsValidFilePath(sumatraTempDirValue + Path.DirectorySeparatorChar, out var sumatraTempError))
             return SettingsValidationResult.Invalid(SettingsField.SumatraTempDir, LangManager.Get("Error_SumatraTempDirInvalid", sumatraTempError!));
 
+        var printDebugArtifactsDirValue = (model.PrintDebugArtifactsDir ?? string.Empty).Trim();
+        if (!HostConfig.IsValidFilePath(printDebugArtifactsDirValue + Path.DirectorySeparatorChar, out var debugArtifactsError))
+            return SettingsValidationResult.Invalid(SettingsField.PrintDebugArtifactsDir, LangManager.Get("Error_PrintDebugArtifactsDirInvalid", debugArtifactsError!));
+
         return SettingsValidationResult.Valid();
     }
 
@@ -55,6 +66,7 @@ internal static class SettingsMapper
         var dbPathValue = (model.DbPath ?? string.Empty).Trim();
         var crashDirValue = (model.CrashLogDir ?? string.Empty).Trim();
         var sumatraTempDirValue = (model.SumatraTempDir ?? string.Empty).Trim();
+        var printDebugArtifactsDirValue = (model.PrintDebugArtifactsDir ?? string.Empty).Trim();
 
         config.LowDpiPrintEnhancement = GetLowDpiEnhancementValue(model.LowDpiEnhancementIndex);
         config.RawPrinterNames = ParseNames(model.RawPrinterNamesText);
@@ -84,6 +96,13 @@ internal static class SettingsMapper
         config.SumatraTempDir = string.Equals(sumatraTempDirValue, HostConfig.DefaultSumatraTempDir, StringComparison.OrdinalIgnoreCase)
             ? null
             : sumatraTempDirValue;
+        config.PrintDebugLoggingEnabled = model.PrintDebugLoggingEnabled;
+        config.AuditLogRetentionDays = model.AuditLogRetentionDays;
+        config.FileLogRetentionDays = model.FileLogRetentionDays;
+        config.PrintDebugArtifactRetentionCount = model.PrintDebugArtifactRetentionCount;
+        config.PrintDebugArtifactsDir = string.Equals(printDebugArtifactsDirValue, HostConfig.DefaultPrintDebugArtifactsDir, StringComparison.OrdinalIgnoreCase)
+            ? null
+            : printDebugArtifactsDirValue;
     }
 
     public static int GetLowDpiEnhancementSelectedIndex(string? value)

@@ -74,17 +74,17 @@ public class PdfiumPrintService : IPrintService
         try
         {
             PrintWithSpooler(requestId, request, pdfBytes, cancellationToken);
-            _logger.Log(LogLevel.Info, $"打印成功: {request.PrinterName}, jobId={requestId}");
+            _logger.Log(LogLevel.Info, $"打印成功: {request.PrinterName}, jobId={requestId}", requestId);
             return PrinterResult.Ok(requestId, PrintResult.Success(requestId));
         }
         catch (OperationCanceledException)
         {
-            _logger.Log(LogLevel.Info, $"打印已取消: {request.PrinterName}, jobId={requestId}");
+            _logger.Log(LogLevel.Info, $"打印已取消: {request.PrinterName}, jobId={requestId}", requestId);
             return PrinterResult.Error(requestId, ErrorCode.PrintFailed, "打印已取消");
         }
         catch (Exception ex)
         {
-            _logger.Log(LogLevel.Error, $"打印失败: {request.PrinterName}, jobId={requestId}, {ex}");
+            _logger.Log(LogLevel.Error, $"打印失败: {request.PrinterName}, jobId={requestId}, {ex}", requestId);
             return PrinterResult.Error(requestId, ErrorCode.PrintFailed, "打印失败，请检查打印机状态后重试");
         }
     }
@@ -193,7 +193,8 @@ public class PdfiumPrintService : IPrintService
                         $" targetScale={targetScale:F3}" +
                         $" draw=({drawRect.X:F1},{drawRect.Y:F1} {drawRect.Width:F1}x{drawRect.Height:F1})" +
                         $" deviceSnap={renderResolution.MapsToDevicePixels}" +
-                        $" lowDpiEnhancement={renderResolution.EnhancementMode}");
+                        $" lowDpiEnhancement={renderResolution.EnhancementMode}",
+                        requestId);
                 }
 
                 ConfigureGraphicsQuality(e.Graphics, renderResolution.MapsToDevicePixels);

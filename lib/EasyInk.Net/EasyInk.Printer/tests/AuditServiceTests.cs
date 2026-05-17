@@ -20,6 +20,7 @@ public class AuditServiceTests : IDisposable
 
     public void Dispose()
     {
+        _service.Dispose();
         if (File.Exists(_dbPath))
             File.Delete(_dbPath);
     }
@@ -121,5 +122,36 @@ public class AuditServiceTests : IDisposable
     {
         var logs = _service.QueryLogs(printerName: "NonExistent");
         Assert.Empty(logs);
+    }
+
+    [Fact]
+    public void CleanupOldLogs_DeletesRowsOlderThanRetention()
+    {
+        var dbPath = Path.Combine(Path.GetTempPath(), $"audit_cleanup_{Guid.NewGuid():N}.db");
+        try
+        {
+            using var service = new AuditService(dbPath, retentionDays: 1, startCleanupTimer: false);
+            var now = DateTime.Now;
+            service.LogPrint(new PrintAuditLog
+            {
+                Timestamp = now.AddDays(-2), PrinterName = "Old", Status = "Success", JobId = "old"
+            });
+            service.LogPrint(new PrintAuditLog
+            {
+                Timestamp = now, PrinterName = "New", Status = "Success", JobId = "new"
+            });
+
+            var deleted = service.CleanupOldLogs(now);
+            var logs = service.QueryLogs(limit: 10);
+
+            Assert.Equal(1, deleted);
+            Assert.Single(logs);
+            Assert.Equal("new", logs[0].JobId);
+        }
+        finally
+        {
+            if (File.Exists(dbPath))
+                File.Delete(dbPath);
+        }
     }
 }

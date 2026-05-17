@@ -26,6 +26,11 @@ internal sealed class SettingsView : UserControl, ISettingsView, IActivatableTab
     private readonly TextBox _txtDbPath;
     private readonly TextBox _txtCrashDir;
     private readonly TextBox _txtSumatraTempDir;
+    private readonly NoFocusCheckBox _chkPrintDebugLogging;
+    private readonly NumericUpDown _numAuditLogRetentionDays;
+    private readonly NumericUpDown _numFileLogRetentionDays;
+    private readonly NumericUpDown _numPrintDebugArtifactRetentionCount;
+    private readonly TextBox _txtPrintDebugArtifactsDir;
     private readonly string _apiKeyPlaceholder;
 
     public event Action? RestartRequested;
@@ -203,6 +208,51 @@ internal sealed class SettingsView : UserControl, ISettingsView, IActivatableTab
         UiFactory.AddSettingRow(pathPanel, LangManager.Get("Settings_SumatraTempDir"), _txtSumatraTempDir, btnBrowseSumatraTemp);
         grpPath.ContentPanel.Controls.Add(pathPanel);
 
+        var grpLogging = UiFactory.CreateSettingsSection(LangManager.Get("Settings_Logging"));
+        var loggingPanel = UiFactory.CreateSettingsTable(
+            new ColumnStyle(SizeType.Absolute, 140),
+            new ColumnStyle(SizeType.Percent, 100),
+            new ColumnStyle(SizeType.Absolute, 64));
+        _chkPrintDebugLogging = new NoFocusCheckBox
+        {
+            Text = LangManager.Get("Settings_PrintDebugLogging"),
+            Anchor = AnchorStyles.Left,
+            AutoSize = true
+        };
+        _numAuditLogRetentionDays = new NumericUpDown
+        {
+            Width = 90,
+            Minimum = 1,
+            Maximum = 3650,
+            Anchor = AnchorStyles.Left
+        };
+        _numFileLogRetentionDays = new NumericUpDown
+        {
+            Width = 90,
+            Minimum = 1,
+            Maximum = 3650,
+            Anchor = AnchorStyles.Left
+        };
+        _numPrintDebugArtifactRetentionCount = new NumericUpDown
+        {
+            Width = 90,
+            Minimum = 1,
+            Maximum = 10000,
+            Anchor = AnchorStyles.Left
+        };
+        _txtPrintDebugArtifactsDir = new TextBox { Dock = DockStyle.Fill, Anchor = AnchorStyles.Left | AnchorStyles.Right };
+        var btnBrowsePrintDebugArtifacts = UiFactory.CreateSecondaryButton(LangManager.Get("Common_Browse"), 56);
+        btnBrowsePrintDebugArtifacts.Anchor = AnchorStyles.Left;
+        btnBrowsePrintDebugArtifacts.Click += (s, e) => BrowsePrintDebugArtifactsDir();
+
+        UiFactory.AddSettingWideRow(loggingPanel, _chkPrintDebugLogging);
+        UiFactory.AddSettingDescriptionRow(loggingPanel, LangManager.Get("Settings_PrintDebugLoggingDescription"));
+        UiFactory.AddSettingRow(loggingPanel, LangManager.Get("Settings_AuditRetentionDays"), _numAuditLogRetentionDays);
+        UiFactory.AddSettingRow(loggingPanel, LangManager.Get("Settings_FileLogRetentionDays"), _numFileLogRetentionDays);
+        UiFactory.AddSettingRow(loggingPanel, LangManager.Get("Settings_PrintDebugArtifactRetentionCount"), _numPrintDebugArtifactRetentionCount);
+        UiFactory.AddSettingRow(loggingPanel, LangManager.Get("Settings_PrintDebugArtifactsDir"), _txtPrintDebugArtifactsDir, btnBrowsePrintDebugArtifacts);
+        grpLogging.ContentPanel.Controls.Add(loggingPanel);
+
         var btnSave = UiFactory.CreateCommandButton(LangManager.Get("Common_Save"), 84);
         btnSave.Margin = new Padding(0);
         btnSave.Click += (s, e) => _presenter.Save();
@@ -223,12 +273,14 @@ internal sealed class SettingsView : UserControl, ISettingsView, IActivatableTab
         UiFactory.StyleSettingsSection(grpSecurity);
         UiFactory.StyleSettingsSection(grpPrinterCompat);
         UiFactory.StyleSettingsSection(grpPath);
+        UiFactory.StyleSettingsSection(grpLogging);
 
         UiFactory.AddSettingsBlock(settingsLayout, grpBasic);
         UiFactory.AddSettingsBlock(settingsLayout, grpDisplay);
         UiFactory.AddSettingsBlock(settingsLayout, grpSecurity);
         UiFactory.AddSettingsBlock(settingsLayout, grpPrinterCompat);
         UiFactory.AddSettingsBlock(settingsLayout, grpPath);
+        UiFactory.AddSettingsBlock(settingsLayout, grpLogging);
         UiFactory.AddSettingsBlock(settingsLayout, saveBar, 0);
         Controls.Add(panel);
 
@@ -260,6 +312,11 @@ internal sealed class SettingsView : UserControl, ISettingsView, IActivatableTab
         _txtDbPath.Text = model.DbPath;
         _txtCrashDir.Text = model.CrashLogDir;
         _txtSumatraTempDir.Text = model.SumatraTempDir;
+        _chkPrintDebugLogging.Checked = model.PrintDebugLoggingEnabled;
+        _numAuditLogRetentionDays.Value = model.AuditLogRetentionDays;
+        _numFileLogRetentionDays.Value = model.FileLogRetentionDays;
+        _numPrintDebugArtifactRetentionCount.Value = model.PrintDebugArtifactRetentionCount;
+        _txtPrintDebugArtifactsDir.Text = model.PrintDebugArtifactsDir;
         SetApiKey(model.ApiKey);
     }
 
@@ -282,7 +339,12 @@ internal sealed class SettingsView : UserControl, ISettingsView, IActivatableTab
             SumatraTimeoutSeconds = (int)_numSumatraTimeout.Value,
             DbPath = _txtDbPath.Text ?? string.Empty,
             CrashLogDir = _txtCrashDir.Text ?? string.Empty,
-            SumatraTempDir = _txtSumatraTempDir.Text ?? string.Empty
+            SumatraTempDir = _txtSumatraTempDir.Text ?? string.Empty,
+            PrintDebugLoggingEnabled = _chkPrintDebugLogging.Checked,
+            AuditLogRetentionDays = (int)_numAuditLogRetentionDays.Value,
+            FileLogRetentionDays = (int)_numFileLogRetentionDays.Value,
+            PrintDebugArtifactRetentionCount = (int)_numPrintDebugArtifactRetentionCount.Value,
+            PrintDebugArtifactsDir = _txtPrintDebugArtifactsDir.Text ?? string.Empty
         };
     }
 
@@ -373,6 +435,9 @@ internal sealed class SettingsView : UserControl, ISettingsView, IActivatableTab
             case SettingsField.SumatraTempDir:
                 _txtSumatraTempDir.Focus();
                 break;
+            case SettingsField.PrintDebugArtifactsDir:
+                _txtPrintDebugArtifactsDir.Focus();
+                break;
         }
     }
 
@@ -424,5 +489,16 @@ internal sealed class SettingsView : UserControl, ISettingsView, IActivatableTab
         };
         if (dlg.ShowDialog() == DialogResult.OK)
             _txtSumatraTempDir.Text = dlg.SelectedPath;
+    }
+
+    private void BrowsePrintDebugArtifactsDir()
+    {
+        using var dlg = new FolderBrowserDialog
+        {
+            Description = LangManager.Get("Dialog_PrintDebugArtifactsDir"),
+            SelectedPath = _txtPrintDebugArtifactsDir.Text
+        };
+        if (dlg.ShowDialog() == DialogResult.OK)
+            _txtPrintDebugArtifactsDir.Text = dlg.SelectedPath;
     }
 }

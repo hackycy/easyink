@@ -81,7 +81,8 @@ public class SumatraPdfPrintService : IPrintService
             var args = BuildArguments(request.PrinterName, tempFile);
 
             _logger.Log(LogLevel.Info,
-                $"SumatraPDF 打印开始: printer={request.PrinterName}, jobId={requestId}, settings={_printSettings}");
+                $"SumatraPDF 打印开始: printer={request.PrinterName}, jobId={requestId}, settings={_printSettings}",
+                requestId);
 
             using var process = new Process();
             process.StartInfo = new ProcessStartInfo
@@ -104,21 +105,22 @@ public class SumatraPdfPrintService : IPrintService
             if (process.ExitCode != 0)
             {
                 _logger.Log(LogLevel.Error,
-                    $"SumatraPDF 打印失败: printer={request.PrinterName}, jobId={requestId}, exitCode={process.ExitCode}");
+                    $"SumatraPDF 打印失败: printer={request.PrinterName}, jobId={requestId}, exitCode={process.ExitCode}",
+                    requestId);
                 return PrinterResult.Error(requestId, ErrorCode.PrintFailed, $"SumatraPDF 打印失败，退出码 {process.ExitCode}");
             }
 
-            _logger.Log(LogLevel.Info, $"SumatraPDF 打印成功: {request.PrinterName}, jobId={requestId}");
+            _logger.Log(LogLevel.Info, $"SumatraPDF 打印成功: {request.PrinterName}, jobId={requestId}", requestId);
             return PrinterResult.Ok(requestId, PrintResult.Success(requestId));
         }
         catch (OperationCanceledException)
         {
-            _logger.Log(LogLevel.Info, $"SumatraPDF 打印已取消: {request.PrinterName}, jobId={requestId}");
+            _logger.Log(LogLevel.Info, $"SumatraPDF 打印已取消: {request.PrinterName}, jobId={requestId}", requestId);
             return PrinterResult.Error(requestId, ErrorCode.PrintFailed, "打印已取消");
         }
         catch (Exception ex)
         {
-            _logger.Log(LogLevel.Error, $"SumatraPDF 打印异常: {request.PrinterName}, jobId={requestId}, {ex}");
+            _logger.Log(LogLevel.Error, $"SumatraPDF 打印异常: {request.PrinterName}, jobId={requestId}, {ex}", requestId);
             return PrinterResult.Error(requestId, ErrorCode.PrintFailed, "SumatraPDF 打印失败，请检查配置后重试");
         }
         finally

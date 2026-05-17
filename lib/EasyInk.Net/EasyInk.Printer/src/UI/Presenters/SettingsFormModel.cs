@@ -4,7 +4,8 @@ internal enum SettingsField
 {
     DbPath,
     CrashLogDir,
-    SumatraTempDir
+    SumatraTempDir,
+    PrintDebugArtifactsDir
 }
 
 internal sealed class SettingsFormModel
@@ -25,6 +26,11 @@ internal sealed class SettingsFormModel
     public string DbPath { get; set; } = string.Empty;
     public string CrashLogDir { get; set; } = string.Empty;
     public string SumatraTempDir { get; set; } = string.Empty;
+    public bool PrintDebugLoggingEnabled { get; set; }
+    public int AuditLogRetentionDays { get; set; }
+    public int FileLogRetentionDays { get; set; }
+    public int PrintDebugArtifactRetentionCount { get; set; }
+    public string PrintDebugArtifactsDir { get; set; } = string.Empty;
 }
 
 internal sealed class SettingsValidationResult

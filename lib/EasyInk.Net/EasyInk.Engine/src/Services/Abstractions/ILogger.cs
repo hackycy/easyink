@@ -10,10 +10,10 @@ public interface ILogger
     /// <summary>
     /// 记录指定级别的日志
     /// </summary>
-    void Log(LogLevel level, string message);
+    void Log(LogLevel level, string message, string? jobId = null);
 }
 
 internal sealed class NullLogger : ILogger
 {
-    public void Log(LogLevel level, string message) { }
+    public void Log(LogLevel level, string message, string? jobId = null) { }
 }

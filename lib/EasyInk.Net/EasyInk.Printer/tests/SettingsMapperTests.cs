@@ -33,6 +33,11 @@ public class SettingsMapperTests
         Assert.Equal("fit", model.SumatraPrintSettings);
         Assert.Equal(5, model.SumatraTimeoutSeconds);
         Assert.Equal("en-US", model.Language);
+        Assert.False(model.PrintDebugLoggingEnabled);
+        Assert.Equal(90, model.AuditLogRetentionDays);
+        Assert.Equal(7, model.FileLogRetentionDays);
+        Assert.Equal(10, model.PrintDebugArtifactRetentionCount);
+        Assert.Equal(HostConfig.DefaultPrintDebugArtifactsDir, model.PrintDebugArtifactsDir);
     }
 
     [Fact]
@@ -56,7 +61,12 @@ public class SettingsMapperTests
             SumatraTimeoutSeconds = 120,
             DbPath = HostConfig.DefaultDbPath,
             CrashLogDir = HostConfig.DefaultCrashLogDir,
-            SumatraTempDir = HostConfig.DefaultSumatraTempDir
+            SumatraTempDir = HostConfig.DefaultSumatraTempDir,
+            PrintDebugLoggingEnabled = true,
+            AuditLogRetentionDays = 45,
+            FileLogRetentionDays = 3,
+            PrintDebugArtifactRetentionCount = 8,
+            PrintDebugArtifactsDir = HostConfig.DefaultPrintDebugArtifactsDir
         };
 
         SettingsMapper.ApplyToConfig(config, model);
@@ -77,6 +87,11 @@ public class SettingsMapperTests
         Assert.Null(config.DbPath);
         Assert.Null(config.CrashLogDir);
         Assert.Null(config.SumatraTempDir);
+        Assert.True(config.PrintDebugLoggingEnabled);
+        Assert.Equal(45, config.AuditLogRetentionDays);
+        Assert.Equal(3, config.FileLogRetentionDays);
+        Assert.Equal(8, config.PrintDebugArtifactRetentionCount);
+        Assert.Null(config.PrintDebugArtifactsDir);
     }
 
     [Theory]

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data.SQLite;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using Dapper;
 using EasyInk.Printer.Config;
 using EasyInk.Printer.Models;
@@ -13,18 +14,22 @@ namespace EasyInk.Printer.Services;
 /// <summary>
 /// 审计日志服务，使用 SQLite 存储打印日志
 /// </summary>
-public class AuditService : IAuditService
+public class AuditService : IAuditService, IDisposable
 {
     private readonly string _connectionString;
+    private readonly int _retentionDays;
+    private readonly Timer? _cleanupTimer;
+    private int _cleanupRunning;
 
     /// <summary>
     /// 初始化审计服务
     /// </summary>
     /// <param name="dbPath">数据库文件路径，默认为当前用户本地应用数据目录下的 audit.db</param>
-    public AuditService(string? dbPath = null)
+    public AuditService(string? dbPath = null, int retentionDays = 90, bool startCleanupTimer = true)
     {
         var path = HostConfig.ResolveDbPath(dbPath!);
         _connectionString = $"Data Source={path}";
+        _retentionDays = Math.Max(1, retentionDays);
 
         var directory = Path.GetDirectoryName(path);
         if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
@@ -33,6 +38,10 @@ public class AuditService : IAuditService
         }
 
         InitializeDatabase();
+        TryCleanupOldLogs();
+
+        if (startCleanupTimer)
+            _cleanupTimer = new Timer(_ => TryCleanupOldLogs(), null, TimeSpan.FromDays(1), TimeSpan.FromDays(1));
     }
 
     private void InitializeDatabase()
@@ -131,5 +140,47 @@ public class AuditService : IAuditService
         parameters.Add("Offset", offset);
 
         return connection.Query<PrintAuditLog>(sql, parameters).ToList();
+    }
+
+    public int CleanupOldLogs(DateTime? now = null)
+    {
+        var cutoff = (now ?? DateTime.Now).AddDays(-_retentionDays);
+        using var connection = new SQLiteConnection(_connectionString);
+        connection.Open();
+        using var transaction = connection.BeginTransaction();
+        var deleted = connection.Execute(
+            "DELETE FROM PrintAuditLog WHERE Timestamp < @Cutoff",
+            new { Cutoff = cutoff },
+            transaction);
+        transaction.Commit();
+
+        if (deleted > 0)
+            connection.Execute("VACUUM");
+
+        return deleted;
+    }
+
+    private void TryCleanupOldLogs()
+    {
+        if (Interlocked.Exchange(ref _cleanupRunning, 1) == 1)
+            return;
+
+        try
+        {
+            CleanupOldLogs();
+        }
+        catch (Exception ex)
+        {
+            SimpleLogger.Error("审计日志清理失败", ex);
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _cleanupRunning, 0);
+        }
+    }
+
+    public void Dispose()
+    {
+        _cleanupTimer?.Dispose();
     }
 }

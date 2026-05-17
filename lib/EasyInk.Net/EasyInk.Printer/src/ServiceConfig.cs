@@ -41,6 +41,7 @@ internal static class ServiceConfig
 
         // Audit
         services.TryAddAuditService(config);
+        services.AddSingleton<PrintDebugLogService>();
 
         // Server
         services.AddSingleton<HttpServer>(sp =>
@@ -78,7 +79,7 @@ internal static class ServiceConfig
     {
         try
         {
-            var auditService = new AuditService(config.DbPath);
+            var auditService = new AuditService(config.DbPath, config.AuditLogRetentionDays);
             services.AddSingleton<IAuditService>(auditService);
         }
         catch
