@@ -8,21 +8,6 @@ const DEFAULT_REFRESH_TIMEOUT_MS = 2500
 const PT_PER_MM = 72 / 25.4
 
 /**
- * Configures how the HiPrint client connects to electron-hiprint and how it
- * chooses default device behavior.
- */
-export interface HiPrintClientOptions {
-  serviceUrl?: string
-  namespace?: string
-  printerName?: string
-  defaultCopies?: number
-  connectTimeoutMs?: number
-  refreshDelayMs?: number
-  refreshTimeoutMs?: number
-  forcePageSize?: boolean
-}
-
-/**
  * Describes a printer reported by the HiPrint runtime.
  */
 export interface HiPrintDevice {
@@ -86,16 +71,19 @@ export interface HiPrintProgress {
   total: number
 }
 
-interface HiPrintTemplate {
+export interface HiPrintTemplate {
   addPrintPanel: (options: Record<string, unknown>) => { addPrintHtml: (options: Record<string, unknown>) => void }
   on: (event: 'printSuccess' | 'printError', callback: (payload?: unknown) => void) => void
   print2: (data: Record<string, unknown>, options: Record<string, unknown>) => void
 }
 
-interface HiPrintRuntime {
+export interface HiPrintPrintRuntime {
+  PrintTemplate: new () => HiPrintTemplate
+}
+
+export interface HiPrintRuntime extends HiPrintPrintRuntime {
   init?: () => void
   refreshPrinterList: (callback?: (devices: HiPrintDevice[]) => void) => void
-  PrintTemplate: new () => HiPrintTemplate
   hiwebSocket: {
     setHost: (url: string, namespace: string, callback?: (connected: boolean) => void) => void
     hasIo?: () => boolean
@@ -106,9 +94,51 @@ interface HiPrintRuntime {
   }
 }
 
+export interface HiPrintClientLike {
+  printerName?: string
+  useDefaultPrinter?: () => string | undefined | Promise<string | undefined>
+  printHtml?: (options: PrintHtmlOptions) => Promise<void>
+  printPages: (
+    pages: HTMLElement[],
+    options: PrintPagesOptions,
+    onProgress?: (progress: HiPrintProgress) => void,
+  ) => Promise<void>
+}
+
+/**
+ * Configures how the official HiPrint client connects to electron-hiprint and
+ * how it chooses default device behavior.
+ */
+export interface HiPrintClientOptions {
+  serviceUrl?: string
+  namespace?: string
+  printerName?: string
+  defaultCopies?: number
+  connectTimeoutMs?: number
+  refreshDelayMs?: number
+  refreshTimeoutMs?: number
+  forcePageSize?: boolean
+}
+
+export type HiPrintPrinterNameResolver = () => string | undefined | Promise<string | undefined>
+
+/**
+ * Configures a light adapter around an application-owned HiPrint runtime.
+ *
+ * This client never initializes, connects, refreshes, or stops HiPrint. It only
+ * converts EasyInk-rendered pages into HiPrint template print calls.
+ */
+export interface HiPrintRuntimeClientOptions {
+  hiprint: HiPrintPrintRuntime
+  printerName?: string | HiPrintPrinterNameResolver
+  defaultCopies?: number
+  forcePageSize?: boolean
+  allowDefaultPrinter?: boolean
+}
+
 const hiprint = rawHiPrint as HiPrintRuntime
 
-export class HiPrintClient {
+export class HiPrintClient implements HiPrintClientLike {
   serviceUrl: string
   namespace: string
   printerName?: string
@@ -315,34 +345,10 @@ export class HiPrintClient {
       await this.connect()
 
     const printerName = await this.resolvePrinterName(options.printerName)
-
-    await new Promise<void>((resolve, reject) => {
-      const template = new hiprint.PrintTemplate()
-      const panel = template.addPrintPanel({
-        width: options.width,
-        height: options.height,
-        orient: resolveHiPrintOrient(options),
-        // Panel width/height are millimeters, but panel internals use points.
-        paperFooter: options.paperFooter ?? mmToPt(options.height),
-        paperHeader: options.paperHeader ?? 0,
-        paperNumberDisabled: true,
-      })
-      panel.addPrintHtml({
-        options: {
-          content: options.html,
-          height: mmToPt(options.height),
-          left: 0,
-          top: 0,
-          width: mmToPt(options.width),
-        },
-      })
-
-      template.on('printSuccess', () => resolve())
-      template.on('printError', (event: unknown) => {
-        reject(new EasyInkPrintError(event instanceof Error ? event.message : '打印失败', 'HIPRINT_PRINT_FAILED', event))
-      })
-
-      template.print2({}, buildHiPrintOptions(options, printerName, this.defaultCopies, this.isForcePageSize()))
+    await printHtmlWithHiPrintRuntime(hiprint, options, {
+      defaultCopies: this.defaultCopies,
+      forcePageSize: this.isForcePageSize(),
+      printerName,
     })
   }
 
@@ -401,6 +407,84 @@ export class HiPrintClient {
   }
 }
 
+export class HiPrintRuntimeClient implements HiPrintClientLike {
+  printerName?: string
+  defaultCopies: number
+  forcePageSize: boolean
+
+  private readonly hiprint: HiPrintPrintRuntime
+  private readonly printerNameResolver?: HiPrintPrinterNameResolver
+  private readonly allowDefaultPrinter: boolean
+
+  /**
+   * Creates a print-only adapter around an application-owned HiPrint runtime.
+   */
+  constructor(options: HiPrintRuntimeClientOptions) {
+    this.hiprint = options.hiprint
+    this.defaultCopies = options.defaultCopies ?? 1
+    this.forcePageSize = options.forcePageSize ?? false
+    this.allowDefaultPrinter = options.allowDefaultPrinter ?? false
+
+    if (typeof options.printerName === 'function')
+      this.printerNameResolver = options.printerName
+    else
+      this.printerName = options.printerName
+  }
+
+  async useDefaultPrinter(): Promise<string | undefined> {
+    if (this.printerNameResolver)
+      return await this.printerNameResolver()
+
+    return this.printerName
+  }
+
+  setPrinter(printerName: string | undefined): void {
+    this.printerName = printerName
+  }
+
+  setForcePageSize(value: boolean): void {
+    this.forcePageSize = value
+  }
+
+  isForcePageSize(): boolean {
+    return this.forcePageSize
+  }
+
+  async printHtml(options: PrintHtmlOptions): Promise<void> {
+    const printerName = await this.resolvePrinterName(options.printerName)
+    await printHtmlWithHiPrintRuntime(this.hiprint, options, {
+      defaultCopies: this.defaultCopies,
+      forcePageSize: this.isForcePageSize(),
+      printerName,
+    })
+  }
+
+  async printPages(
+    pages: HTMLElement[],
+    options: PrintPagesOptions,
+    onProgress?: (progress: HiPrintProgress) => void,
+  ): Promise<void> {
+    for (let pageIndex = 0; pageIndex < pages.length; pageIndex++) {
+      await this.printHtml({
+        ...options,
+        html: serializeViewerPage(pages[pageIndex]!),
+      })
+      onProgress?.({ current: pageIndex + 1, total: pages.length })
+    }
+  }
+
+  private async resolvePrinterName(printerName: string | undefined): Promise<string | undefined> {
+    if (printerName)
+      return printerName
+    if (this.printerName)
+      return this.printerName
+    const selected = await this.useDefaultPrinter()
+    if (selected || this.allowDefaultPrinter)
+      return selected
+    throw new EasyInkPrintError('未选择打印机', 'HIPRINT_PRINTER_NOT_SELECTED')
+  }
+}
+
 /**
  * Creates a client for applications that want the official HiPrint transport
  * without dealing with `vue-plugin-hiprint` directly.
@@ -409,9 +493,63 @@ export function createHiPrintClient(options?: HiPrintClientOptions): HiPrintClie
   return new HiPrintClient(options)
 }
 
+/**
+ * Creates a print-only client for applications that already own the HiPrint
+ * runtime and socket lifecycle.
+ */
+export function createHiPrintRuntimeClient(options: HiPrintRuntimeClientOptions): HiPrintRuntimeClient {
+  return new HiPrintRuntimeClient(options)
+}
+
+/**
+ * Compatibility alias for applications migrating legacy HiPrint wrappers.
+ */
+export function createLegacyHiPrintClient(options: HiPrintRuntimeClientOptions): HiPrintRuntimeClient {
+  return createHiPrintRuntimeClient(options)
+}
+
+export function printHtmlWithHiPrintRuntime(
+  runtime: HiPrintPrintRuntime,
+  options: PrintHtmlOptions,
+  defaults: {
+    printerName?: string
+    defaultCopies?: number
+    forcePageSize?: boolean
+  } = {},
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const template = new runtime.PrintTemplate()
+    const panel = template.addPrintPanel({
+      width: options.width,
+      height: options.height,
+      orient: resolveHiPrintOrient(options),
+      // Panel width/height are millimeters, but panel internals use points.
+      paperFooter: options.paperFooter ?? mmToPt(options.height),
+      paperHeader: options.paperHeader ?? 0,
+      paperNumberDisabled: true,
+    })
+    panel.addPrintHtml({
+      options: {
+        content: options.html,
+        height: mmToPt(options.height),
+        left: 0,
+        top: 0,
+        width: mmToPt(options.width),
+      },
+    })
+
+    template.on('printSuccess', () => resolve())
+    template.on('printError', (event: unknown) => {
+      reject(new EasyInkPrintError(event instanceof Error ? event.message : '打印失败', 'HIPRINT_PRINT_FAILED', event))
+    })
+
+    template.print2({}, buildHiPrintOptions(options, defaults.printerName, defaults.defaultCopies ?? 1, defaults.forcePageSize ?? false))
+  })
+}
+
 function buildHiPrintOptions(
   options: PrintHtmlOptions,
-  printerName: string,
+  printerName: string | undefined,
   defaultCopies: number,
   defaultForcePageSize: boolean,
 ): Record<string, unknown> {
@@ -427,10 +565,11 @@ function buildHiPrintOptions(
 
   const printOptions: Record<string, unknown> = {
     ...passthroughOptions,
-    printer: printerName,
     copies: options.copies ?? defaultCopies,
     margins: options.margins ?? { marginType: 'none' },
   }
+  if (printerName)
+    printOptions.printer = printerName
 
   const explicitLandscape = resolveExplicitLandscape(options)
   const landscape = explicitLandscape ?? options.width > options.height

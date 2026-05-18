@@ -1,12 +1,12 @@
 import type { PrintDriverBaseOptions } from '@easyink/print-core'
 import type { PrintDriver, ViewerPrintContext } from '@easyink/viewer'
-import type { HiPrintClient, PrintPagesOptions } from './client'
+import type { HiPrintClientLike, PrintPagesOptions } from './client'
 import { getViewerPages, resolvePrintDriverValue, resolveViewerPrintSize } from '@easyink/print-core'
 
 /**
  * Configures the official Viewer print driver for HiPrint.
  */
-export interface HiPrintDriverOptions extends PrintDriverBaseOptions<HiPrintClient, PrintPagesOptions> {}
+export interface HiPrintDriverOptions extends PrintDriverBaseOptions<HiPrintClientLike, PrintPagesOptions> {}
 
 /**
  * Creates a Viewer print driver that forwards rendered pages to HiPrint.
@@ -20,7 +20,7 @@ export function createHiPrintDriver(options: HiPrintDriverOptions): PrintDriver 
     async print(context: ViewerPrintContext) {
       const pages = getViewerPages(context.container)
       const { widthMm, heightMm } = resolveViewerPrintSize(context)
-      const printerName = resolvePrintDriverValue(options.printerName) ?? options.client.printerName ?? await options.client.useDefaultPrinter()
+      const printerName = resolvePrintDriverValue(options.printerName) ?? options.client.printerName ?? await options.client.useDefaultPrinter?.()
       const copies = resolvePrintDriverValue(options.copies)
       const forcePageSize = resolvePrintDriverValue(options.forcePageSize)
       const requestOptions = await options.resolveRequestOptions?.({

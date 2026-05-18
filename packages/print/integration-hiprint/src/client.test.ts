@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { HiPrintClient } from './client'
+import { createHiPrintRuntimeClient, HiPrintClient } from './client'
 
 const runtime = vi.hoisted(() => {
   const addedHtml: Record<string, unknown>[] = []
@@ -191,5 +191,58 @@ describe('hi print client', () => {
       isDefault: true,
       name: 'Cached Printer',
     })])
+  })
+
+  it('creates a print-only runtime client without owning the socket lifecycle', async () => {
+    let selectedPrinter = 'Runtime Printer'
+    const client = createHiPrintRuntimeClient({
+      hiprint: runtime as never,
+      printerName: () => selectedPrinter,
+      defaultCopies: 2,
+    })
+
+    await client.printHtml({
+      html: '<main>runtime</main>',
+      width: 80,
+      height: 60,
+      title: 'Runtime Job',
+    })
+
+    expect(runtime.init).not.toHaveBeenCalled()
+    expect(runtime.hiwebSocket.setHost).not.toHaveBeenCalled()
+    expect(runtime.hiwebSocket.stop).not.toHaveBeenCalled()
+    expect(runtime.printOptions[0]).toEqual(expect.objectContaining({
+      copies: 2,
+      printer: 'Runtime Printer',
+      title: 'Runtime Job',
+    }))
+
+    selectedPrinter = 'Runtime Printer 2'
+    await client.printHtml({
+      html: '<main>runtime 2</main>',
+      width: 80,
+      height: 60,
+    })
+
+    expect(runtime.printOptions[1]).toEqual(expect.objectContaining({
+      printer: 'Runtime Printer 2',
+    }))
+  })
+
+  it('lets the injected runtime use its default printer when explicitly allowed', async () => {
+    const client = createHiPrintRuntimeClient({
+      hiprint: runtime as never,
+      allowDefaultPrinter: true,
+    })
+
+    await client.printHtml({
+      html: '<main>default printer</main>',
+      width: 80,
+      height: 60,
+    })
+
+    expect(runtime.printOptions[0]).toEqual(expect.not.objectContaining({
+      printer: expect.anything(),
+    }))
   })
 })

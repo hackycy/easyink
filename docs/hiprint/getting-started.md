@@ -1,8 +1,11 @@
 # HiPrint 快速上手
 
-HiPrint 通道适合跨平台静默打印，尤其适合标签、小票、卡片这类由设备驱动控制纸张的场景。EasyInk 已经内置官方客户端和托管 Viewer 打印链路，业务侧不需要自己创建 Viewer、注册 `PrintDriver`、处理 WebSocket 连接或打印机发现。
+HiPrint 通道适合跨平台静默打印，尤其适合标签、小票、卡片这类由设备驱动控制纸张的场景。EasyInk 已经内置托管 Viewer 打印链路，并提供两种接入方式：
 
-如果你的目标只是先打出第一张单，最短路径是：
+- 官方 client：EasyInk 帮你连接 `electron-hiprint`、发现打印机并提交打印。
+- runtime adapter：业务已有自己的 hiprint 封装时，只把现成 `hiprint` 实例交给 EasyInk 做打印提交。
+
+如果你的目标只是先打出第一张单，且还没有自己的 HiPrint 封装，最短路径是：
 
 1. 启动 electron-hiprint。
 2. 确认本机能刷新到打印机列表。
@@ -68,9 +71,58 @@ await printer.print({ schema, data })
 - 当前机器能发现系统打印机
 - HiPrint 已经按页提交 HTML 到本地打印运行时
 
-## 一个更接近真实业务的写法
+## 已有 hiprint 封装时
 
-真正落业务时，打印机、份数和 `forcePageSize` 往往来自设置页，而不是写死在初始化里。
+很多项目已经基于 `vue-plugin-hiprint` 或 `electron-hiprint` 做了自己的连接、打印机选择、状态管理和异常处理。这种情况下不要再让 EasyInk 接管连接，使用 `createHiPrintRuntimeClient()` 注入现成的 `hiprint` 实例即可。
+
+```ts
+import { hiprint } from 'vue-plugin-hiprint'
+import {
+  createHiPrintPrintSdk,
+  createHiPrintRuntimeClient,
+} from '@easyink/print-integration-hiprint'
+
+const hiPrint = createHiPrintRuntimeClient({
+  hiprint,
+  printerName: () => settings.printerName,
+  defaultCopies: settings.copies,
+  forcePageSize: settings.forcePageSize,
+})
+
+const printer = createHiPrintPrintSdk({
+  client: hiPrint,
+  viewer: 'iframe',
+  resolveRequestOptions: () => ({
+    paperHeader: settings.paperHeader,
+    paperFooter: settings.paperFooter,
+  }),
+})
+
+await printer.print({ schema, data })
+```
+
+这个 adapter 只做打印相关处理：
+
+- 不调用 `hiprint.init()`
+- 不调用 `hiwebSocket.setHost()`
+- 不刷新打印机列表
+- 不停止已有 socket
+- 不接管 provider、设计器或模板编辑器
+
+如果你的封装希望由 HiPrint 运行时自己决定默认打印机，可以显式开启：
+
+```ts
+const hiPrint = createHiPrintRuntimeClient({
+  hiprint,
+  allowDefaultPrinter: true,
+})
+```
+
+`createLegacyHiPrintClient()` 也可作为同能力别名使用，适合把老项目里已有的 HiPrint 封装逐步迁移到 EasyInk Viewer 打印链路。
+
+## 一个更接近真实业务的官方 client 写法
+
+如果使用官方 client，真正落业务时，打印机、份数和 `forcePageSize` 往往来自设置页，而不是写死在初始化里。
 
 ```ts
 const hiPrint = createHiPrintClient({

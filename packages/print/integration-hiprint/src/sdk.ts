@@ -1,11 +1,11 @@
 import type { ManagedPrintInput, ManagedPrintViewer, ManagedPrintViewerOptions, PrintDriverRequestContext, PrintDriverValue } from '@easyink/print-core'
 import type { ViewerPrintPageSizeMode } from '@easyink/viewer'
-import type { HiPrintClient, PrintPagesOptions } from './client'
+import type { HiPrintClientLike, PrintPagesOptions } from './client'
 import { createManagedPrintViewer, resolvePrintDriverValue } from '@easyink/print-core'
 import { createHiPrintDriver } from './driver'
 
 export interface HiPrintPrintSdkOptions extends ManagedPrintViewerOptions {
-  client: HiPrintClient
+  client: HiPrintClientLike
   printerName?: PrintDriverValue<string>
   copies?: PrintDriverValue<number>
   forcePageSize?: PrintDriverValue<boolean>
@@ -26,7 +26,7 @@ export interface HiPrintPrintInput extends ManagedPrintInput {
 }
 
 export interface HiPrintPrintSdk {
-  readonly client: HiPrintClient
+  readonly client: HiPrintClientLike
   readonly viewer: ManagedPrintViewer
   print: (input: HiPrintPrintInput) => Promise<void>
   destroy: () => void

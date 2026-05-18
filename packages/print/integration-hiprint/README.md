@@ -1,6 +1,11 @@
 # @easyink/print-integration-hiprint
 
-Official HiPrint client and managed print SDK.
+Official HiPrint client, print-only runtime adapter, and managed print SDK.
+
+## Official client
+
+Use this when you want EasyInk to manage the `vue-plugin-hiprint` socket
+connection, printer discovery, and template submission.
 
 ```ts
 import { createHiPrintClient, createHiPrintPrintSdk } from '@easyink/print-integration-hiprint'
@@ -33,6 +38,44 @@ you want to reuse the managed viewer for batch printing, then call
 
 The HiPrint client connection remains application-owned. Call
 `hiPrint.disconnect()` when your app no longer wants to keep the HiPrint socket.
+
+## Runtime adapter
+
+Use this when your app already owns a mature HiPrint integration and you only
+want EasyInk to render schema/data and submit the rendered pages through an
+existing `hiprint` instance.
+
+```ts
+import {
+  createHiPrintPrintSdk,
+  createHiPrintRuntimeClient,
+} from '@easyink/print-integration-hiprint'
+import { hiprint } from 'vue-plugin-hiprint'
+
+const hiPrint = createHiPrintRuntimeClient({
+  hiprint,
+  printerName: () => settings.printerName,
+  defaultCopies: 1,
+})
+
+const printer = createHiPrintPrintSdk({
+  client: hiPrint,
+  viewer: 'iframe',
+})
+
+await printer.print({
+  schema,
+  data,
+  forcePageSize: settings.forcePageSize,
+})
+```
+
+`createHiPrintRuntimeClient()` does not call `hiprint.init()`, does not call
+`hiwebSocket.setHost()`, does not refresh printers, and does not stop the
+socket. The host application keeps ownership of those concerns.
+
+`createLegacyHiPrintClient()` is available as a compatibility alias for teams
+migrating existing HiPrint wrappers.
 
 ## Client API audit
 
