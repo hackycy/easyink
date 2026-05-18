@@ -26,10 +26,15 @@ public class WebSocketHandlerTests
         Assert.False(fired);
     }
 
-    [Fact]
-    public void IsExpectedDisconnectException_TreatsHttpListenerExceptionAsDisconnect()
+    [Theory]
+    [InlineData(64)]
+    [InlineData(995)]
+    [InlineData(10054)]
+    [InlineData(1229)]
+    [InlineData(1236)]
+    public void IsExpectedDisconnectException_TreatsKnownHttpListenerDisconnectCodesAsDisconnect(int errorCode)
     {
-        var exception = new HttpListenerException(64);
+        var exception = new HttpListenerException(errorCode);
 
         Assert.True(WebSocketHandler.IsExpectedDisconnectException(exception));
         Assert.True(WebSocketHandler.IsExpectedDisconnectException(new AggregateException(exception)));
@@ -39,10 +44,14 @@ public class WebSocketHandlerTests
     public void IsExpectedDisconnectException_DoesNotHideUnexpectedExceptions()
     {
         Assert.False(WebSocketHandler.IsExpectedDisconnectException(new InvalidOperationException("unexpected")));
+        Assert.False(WebSocketHandler.IsExpectedDisconnectException(new HttpListenerException(5)));
+        Assert.False(WebSocketHandler.IsExpectedDisconnectException(new AggregateException(
+            new HttpListenerException(64),
+            new InvalidOperationException("unexpected"))));
     }
 
     [Fact]
-    public async Task CloseQuietlyAsync_HttpListenerException_AbortsAndDisposesSocket()
+    public async Task CloseQuietlyAsync_AbortsAndDisposesSocketWithoutStartingCloseAsync()
     {
         var socket = new ThrowingCloseWebSocket(new HttpListenerException(64));
 
@@ -50,6 +59,7 @@ public class WebSocketHandlerTests
 
         Assert.True(socket.Aborted);
         Assert.True(socket.Disposed);
+        Assert.Equal(0, socket.CloseAsyncCalls);
     }
 }
 
@@ -64,6 +74,7 @@ internal sealed class ThrowingCloseWebSocket : WebSocket
 
     public bool Aborted { get; private set; }
     public bool Disposed { get; private set; }
+    public int CloseAsyncCalls { get; private set; }
     public override WebSocketCloseStatus? CloseStatus => null;
     public override string? CloseStatusDescription => null;
     public override WebSocketState State => WebSocketState.Open;
@@ -76,6 +87,7 @@ internal sealed class ThrowingCloseWebSocket : WebSocket
 
     public override Task CloseAsync(WebSocketCloseStatus closeStatus, string? statusDescription, CancellationToken cancellationToken)
     {
+        CloseAsyncCalls++;
         throw _closeException;
     }
 

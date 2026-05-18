@@ -2,8 +2,6 @@
 using System.Collections.Generic;
 using System.Drawing.Printing;
 using System.Management;
-using System.Threading;
-using System.Threading.Tasks;
 using EasyInk.Engine.Models;
 using EasyInk.Engine.Services.Abstractions;
 
@@ -41,15 +39,17 @@ public class PrinterService : IPrinterService
     /// </summary>
     public List<PrinterInfo> GetPrinters()
     {
-        var wmiStatusMap = QueryAllWmiStatus();
+        var wmiStatusSnapshot = QueryAllWmiStatus();
         var printers = new List<PrinterInfo>();
 
         foreach (string printerName in PrinterSettings.InstalledPrinters)
         {
             var settings = new PrinterSettings { PrinterName = printerName };
-            var status = wmiStatusMap.TryGetValue(printerName, out var s)
+            var status = wmiStatusSnapshot.Statuses.TryGetValue(printerName, out var s)
                 ? s
-                : GetPrinterStatus(printerName);
+                : wmiStatusSnapshot.IsAvailable
+                    ? GetPrinterStatus(printerName)
+                    : WmiUnavailableStatus();
             printers.Add(new PrinterInfo
             {
                 Name = printerName,
@@ -62,55 +62,52 @@ public class PrinterService : IPrinterService
         return printers;
     }
 
-    private Dictionary<string, PrinterStatus> QueryAllWmiStatus()
+    private (Dictionary<string, PrinterStatus> Statuses, bool IsAvailable) QueryAllWmiStatus()
     {
         var map = new Dictionary<string, PrinterStatus>(StringComparer.OrdinalIgnoreCase);
         try
         {
-            using (var cts = new CancellationTokenSource(WmiTimeoutMs))
+            using (var searcher = new ManagementObjectSearcher("SELECT Name, PrinterStatus, PrinterState, WorkOffline, PrinterPaperOutOfPaper FROM Win32_Printer"))
             {
-                var task = Task.Factory.StartNew(() =>
+                searcher.Options.ReturnImmediately = false;
+                searcher.Options.Timeout = TimeSpan.FromMilliseconds(WmiTimeoutMs);
+
+                using (var results = searcher.Get())
                 {
-                    using (var searcher = new ManagementObjectSearcher("SELECT Name, PrinterStatus, PrinterState, WorkOffline, PrinterPaperOutOfPaper FROM Win32_Printer"))
+                    foreach (ManagementObject printer in results)
                     {
-                        foreach (ManagementObject printer in searcher.Get())
+                        try
                         {
-                            cts.Token.ThrowIfCancellationRequested();
-                            try
-                            {
-                                var name = printer["Name"] as string;
-                                if (string.IsNullOrEmpty(name)) continue;
+                            var name = printer["Name"] as string;
+                            if (string.IsNullOrEmpty(name)) continue;
 
-                                var printerStatus = GetUInt32(printer, "PrinterStatus");
-                                var printerState = GetUInt32(printer, "PrinterState");
-                                var isOffline = GetBool(printer, "WorkOffline");
-                                var paperOut = GetBool(printer, "PrinterPaperOutOfPaper");
+                            var printerStatus = GetUInt32(printer, "PrinterStatus");
+                            var printerState = GetUInt32(printer, "PrinterState");
+                            var isOffline = GetBool(printer, "WorkOffline");
+                            var paperOut = GetBool(printer, "PrinterPaperOutOfPaper");
 
-                                map[name!] = MapPrinterStatus(printerStatus, printerState, isOffline, paperOut);
-                            }
-                            finally
-                            {
-                                printer.Dispose();
-                            }
+                            map[name!] = MapPrinterStatus(printerStatus, printerState, isOffline, paperOut);
+                        }
+                        finally
+                        {
+                            printer.Dispose();
                         }
                     }
-                }, cts.Token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
-
-                if (!task.Wait(WmiTimeoutMs))
-                {
-                    _logger.Log(LogLevel.Error, $"批量查询打印机状态超时({WmiTimeoutMs}ms)");
                 }
             }
+
+            return (map, true);
         }
-        catch (AggregateException ex) when (ex.InnerException is OperationCanceledException)
+        catch (ManagementException ex)
         {
-            _logger.Log(LogLevel.Error, "批量查询打印机状态超时");
+            _logger.Log(LogLevel.Info, $"批量查询打印机 WMI 状态不可用: {ex.Message}");
         }
         catch (Exception ex)
         {
-            _logger.Log(LogLevel.Error, $"批量查询打印机状态失败: {ex.Message}");
+            _logger.Log(LogLevel.Info, $"批量查询打印机 WMI 状态失败: {ex.Message}");
         }
-        return map;
+
+        return (map, false);
     }
 
     /// <summary>
@@ -156,32 +153,16 @@ public class PrinterService : IPrinterService
     {
         try
         {
-            using (var cts = new CancellationTokenSource(WmiTimeoutMs))
-            {
-                var task = Task.Factory.StartNew(
-                    () => QuerySingleWmiStatus(printerName),
-                    cts.Token,
-                    TaskCreationOptions.LongRunning,
-                    TaskScheduler.Default);
-
-                if (task.Wait(WmiTimeoutMs))
-                    return task.Result;
-
-                _logger.Log(LogLevel.Error, $"查询打印机 {printerName} WMI 状态超时({WmiTimeoutMs}ms)");
-                return ErrorStatus(PrinterStatusCode.PrinterError, $"WMI 查询超时({WmiTimeoutMs}ms)");
-            }
+            return QuerySingleWmiStatus(printerName);
         }
-        catch (AggregateException ex)
+        catch (ManagementException ex)
         {
-            var inner = ex.InnerException;
-            if (inner is OperationCanceledException)
-            {
-                _logger.Log(LogLevel.Error, $"查询打印机 {printerName} WMI 状态超时({WmiTimeoutMs}ms)");
-                return ErrorStatus(PrinterStatusCode.PrinterError, $"WMI 查询超时({WmiTimeoutMs}ms)");
-            }
-            if (inner is ManagementException)
-                return WmiUnavailableStatus();
-            return ErrorStatus(PrinterStatusCode.PrinterError, inner?.Message ?? ex.Message);
+            _logger.Log(LogLevel.Info, $"查询打印机 {printerName} WMI 状态不可用: {ex.Message}");
+            return WmiUnavailableStatus();
+        }
+        catch (Exception ex)
+        {
+            return ErrorStatus(PrinterStatusCode.PrinterError, ex.Message);
         }
     }
 
@@ -194,6 +175,7 @@ public class PrinterService : IPrinterService
         try
         {
             printer = new ManagementObject(printerPath);
+            printer.Options.Timeout = TimeSpan.FromMilliseconds(WmiTimeoutMs);
             try
             {
                 printer.Get();

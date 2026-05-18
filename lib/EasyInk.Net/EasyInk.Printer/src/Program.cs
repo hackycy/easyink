@@ -90,6 +90,13 @@ static class Program
             HandleFatalException(e.Exception, "Application.ThreadException");
         TaskScheduler.UnobservedTaskException += (s, e) =>
         {
+            if (TransportExceptionClassifier.IsExpectedDisconnect(e.Exception))
+            {
+                SimpleLogger.Debug("已忽略预期的后台网络断开异常", e.Exception);
+                e.SetObserved();
+                return;
+            }
+
             HandleFatalException(e.Exception, "TaskScheduler.UnobservedTaskException");
             e.SetObserved();
         };

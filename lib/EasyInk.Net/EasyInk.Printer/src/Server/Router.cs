@@ -105,6 +105,18 @@ public class Router
 
     public async Task HandleRequest(HttpListenerContext context)
     {
+        try
+        {
+            await HandleRequestCore(context);
+        }
+        catch (Exception ex) when (TransportExceptionClassifier.IsExpectedDisconnect(ex))
+        {
+            CloseResponseQuietly(context.Response);
+        }
+    }
+
+    private async Task HandleRequestCore(HttpListenerContext context)
+    {
         var request = context.Request;
         var response = context.Response;
 
@@ -144,6 +156,10 @@ public class Router
         {
             result = await RouteRequest(request);
         }
+        catch (Exception ex) when (TransportExceptionClassifier.IsExpectedDisconnect(ex))
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             SimpleLogger.Error("请求处理异常", ex);
@@ -155,6 +171,12 @@ public class Router
         response.ContentLength64 = buffer.Length;
         await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
         response.Close();
+    }
+
+    private static void CloseResponseQuietly(HttpListenerResponse response)
+    {
+        try { response.Close(); }
+        catch (Exception ex) when (TransportExceptionClassifier.IsExpectedDisconnect(ex)) { }
     }
 
     private async Task<PrinterResult> RouteRequest(HttpListenerRequest request)

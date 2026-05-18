@@ -265,15 +265,12 @@ public class WebSocketHandler : IDisposable
         await ws.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, cts.Token);
     }
 
-    internal static async Task CloseQuietlyAsync(WebSocket ws)
+    internal static Task CloseQuietlyAsync(WebSocket ws)
     {
         try
         {
-            if (ws.State == WebSocketState.Open || ws.State == WebSocketState.CloseReceived)
-            {
-                using var closeCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "", closeCts.Token);
-            }
+            if (ws.State != WebSocketState.Closed)
+                ws.Abort();
         }
         catch (Exception ex) when (IsExpectedDisconnectException(ex))
         {
@@ -283,30 +280,13 @@ public class WebSocketHandler : IDisposable
         {
             try { ws.Dispose(); } catch (Exception ex) when (IsExpectedDisconnectException(ex)) { }
         }
+
+        return Task.CompletedTask;
     }
 
     internal static bool IsExpectedDisconnectException(Exception ex)
     {
-        if (ex is OperationCanceledException ||
-            ex is ObjectDisposedException ||
-            ex is WebSocketException ||
-            ex is IOException ||
-            ex is HttpListenerException)
-        {
-            return true;
-        }
-
-        if (ex is AggregateException aggregateException)
-        {
-            foreach (var inner in aggregateException.InnerExceptions)
-            {
-                if (!IsExpectedDisconnectException(inner))
-                    return false;
-            }
-            return aggregateException.InnerExceptions.Count > 0;
-        }
-
-        return false;
+        return TransportExceptionClassifier.IsExpectedDisconnect(ex);
     }
 
     private void RaiseConnectionCountChanged()

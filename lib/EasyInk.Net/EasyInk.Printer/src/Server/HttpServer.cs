@@ -116,15 +116,14 @@ public class HttpServer
                         {
                             await handler(context);
                         }
+                        catch (Exception ex) when (TransportExceptionClassifier.IsExpectedDisconnect(ex))
+                        {
+                            CloseResponseQuietly(context);
+                        }
                         catch (Exception ex)
                         {
                             SimpleLogger.Error("请求处理异常", ex);
-                            try
-                            {
-                                context.Response.StatusCode = 500;
-                                context.Response.Close();
-                            }
-                            catch (Exception closeEx) { SimpleLogger.Debug("错误响应关闭异常", closeEx); }
+                            WriteInternalErrorQuietly(context);
                         }
                         finally
                         {
@@ -143,5 +142,22 @@ public class HttpServer
                 SimpleLogger.Error("监听异常", ex);
             }
         }
+    }
+
+    private static void WriteInternalErrorQuietly(HttpListenerContext context)
+    {
+        try
+        {
+            context.Response.StatusCode = 500;
+            context.Response.Close();
+        }
+        catch (Exception ex) when (TransportExceptionClassifier.IsExpectedDisconnect(ex)) { }
+        catch (Exception closeEx) { SimpleLogger.Debug("错误响应关闭异常", closeEx); }
+    }
+
+    private static void CloseResponseQuietly(HttpListenerContext context)
+    {
+        try { context.Response.Close(); }
+        catch (Exception ex) when (TransportExceptionClassifier.IsExpectedDisconnect(ex)) { }
     }
 }
