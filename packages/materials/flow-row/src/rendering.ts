@@ -349,7 +349,7 @@ function renderCell(
   layout: { width: string, display: string, paddingX: number, paddingY: number },
 ): string {
   const column = cell.column
-  const content = cell.placeholder ? '<span style="display:block;width:100%;height:1em;border-radius:2px;background:currentColor;opacity:.72">&nbsp;</span>' : cell.text ? escapeHtml(cell.text) : '&nbsp;'
+  const content = cell.placeholder ? '<span style="display:block;width:100%;height:1em;border-radius:2px;background:currentColor;opacity:.4">&nbsp;</span>' : cell.text ? escapeHtml(cell.text) : '&nbsp;'
   const label = column.binding ? ` data-flow-row-bound="${escapeAttr(column.binding.fieldLabel || column.binding.fieldPath)}"` : ''
   const alignItems = column.verticalAlign === 'bottom' ? 'flex-end' : column.verticalAlign === 'middle' ? 'center' : 'flex-start'
   const style = [

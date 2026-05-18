@@ -3,13 +3,13 @@ import { SCHEMA_VERSION } from '@easyink/shared'
 import { flowInvoiceTemplate } from './datasources'
 import { badgeDemoData, badgeTemplate } from './templates/badge'
 import { certificateDemoData, certificateTemplate } from './templates/certificate'
-import { supermarketDemoData, supermarketReceiptTemplate } from './templates/supermarket-receipt'
+import { supermarketDemoData, supermarketFlexRowReceiptTemplate, supermarketReceiptTemplate } from './templates/supermarket-receipt'
 import { verticalMixedTextDemoData, verticalMixedTextTemplate } from './templates/vertical-mixed-text'
 
 export * from './datasources'
 export { badgeDataSource, badgeDemoData, badgeTemplate } from './templates/badge'
 export { certificateDataSource, certificateDemoData, certificateTemplate } from './templates/certificate'
-export { supermarketDataSource, supermarketDemoData, supermarketReceiptTemplate } from './templates/supermarket-receipt'
+export { supermarketDataSource, supermarketDemoData, supermarketFlexRowReceiptTemplate, supermarketReceiptTemplate } from './templates/supermarket-receipt'
 export { verticalMixedTextDataSource, verticalMixedTextDemoData, verticalMixedTextTemplate } from './templates/vertical-mixed-text'
 
 export interface SampleTemplateEntry {
@@ -258,6 +258,13 @@ export const sampleTemplates: SampleTemplateEntry[] = [
     name: '超市小票',
     category: 'receipt',
     schema: supermarketReceiptTemplate,
+    demoData: supermarketDemoData,
+  },
+  {
+    id: 'supermarket-receipt-flex-row',
+    name: '超市小票（Flex Row）',
+    category: 'receipt',
+    schema: supermarketFlexRowReceiptTemplate,
     demoData: supermarketDemoData,
   },
   {

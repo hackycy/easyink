@@ -1,5 +1,5 @@
 import type { DataSourceDescriptor } from '@easyink/datasource'
-import type { DocumentSchema, TableDataSchema, TableNode } from '@easyink/schema'
+import type { DocumentSchema, MaterialNode, TableDataSchema, TableNode } from '@easyink/schema'
 import { SCHEMA_VERSION } from '@easyink/shared'
 
 // ---------------------------------------------------------------------------
@@ -178,6 +178,157 @@ function createReceiptItemsTable(): TableNode {
       },
     } as TableDataSchema,
   }
+}
+
+function createReceiptItemsFlowRow(): MaterialNode {
+  return {
+    id: 'smkt_items_flow_row',
+    type: 'flow-row',
+    x: 4,
+    y: 57,
+    width: 72,
+    height: 20,
+    binding: {
+      sourceId: 'supermarket',
+      fieldPath: 'items',
+      fieldLabel: '商品明细',
+    },
+    props: {
+      gap: 0.8,
+      paddingX: 0.6,
+      paddingY: 0.45,
+      backgroundColor: '',
+      typography: {
+        fontSize: 2.82,
+        color: '#1a1a1a',
+        fontWeight: 'normal',
+        fontStyle: 'normal',
+        lineHeight: 1.2,
+        letterSpacing: 0,
+        textAlign: 'left',
+        verticalAlign: 'top',
+      },
+      columns: [
+        {
+          ratio: 1,
+          textAlign: 'left',
+          verticalAlign: 'middle',
+          wrapMode: 'block',
+          binding: {
+            sourceId: 'supermarket',
+            fieldPath: 'items/name',
+            fieldLabel: '品名',
+          },
+        },
+        {
+          ratio: 0.40,
+          textAlign: 'left',
+          verticalAlign: 'middle',
+          wrapMode: 'inline',
+        },
+        {
+          ratio: 0.16,
+          textAlign: 'center',
+          verticalAlign: 'middle',
+          wrapMode: 'inline',
+          binding: {
+            sourceId: 'supermarket',
+            fieldPath: 'items/qty',
+            fieldLabel: '数量',
+          },
+        },
+        {
+          ratio: 0.20,
+          textAlign: 'center',
+          verticalAlign: 'middle',
+          wrapMode: 'inline',
+          binding: {
+            sourceId: 'supermarket',
+            fieldPath: 'items/unitPrice',
+            fieldLabel: '单价',
+          },
+        },
+        {
+          ratio: 0.24,
+          textAlign: 'right',
+          verticalAlign: 'middle',
+          wrapMode: 'inline',
+          binding: {
+            sourceId: 'supermarket',
+            fieldPath: 'items/subtotal',
+            fieldLabel: '小计',
+          },
+        },
+      ],
+    },
+  }
+}
+
+function createReceiptItemsStaticHeader(): TableNode {
+  return {
+    id: 'smkt_items_header_table',
+    type: 'table-static',
+    x: 4,
+    y: 52,
+    width: 72,
+    height: 4,
+    props: {
+      headerBackground: '#f5f5f5',
+      summaryBackground: '#fafafa',
+      stripedRows: false,
+      stripedColor: '#fafafa',
+      borderWidth: 0,
+      cellPadding: 0.35,
+      typography: {
+        fontSize: 2.82,
+        color: '#1a1a1a',
+        fontWeight: 'normal',
+        fontStyle: 'normal',
+        lineHeight: 1.2,
+        letterSpacing: 0,
+        textAlign: 'left',
+        verticalAlign: 'middle',
+      },
+    },
+    table: {
+      kind: 'static' as const,
+      topology: {
+        columns: [
+          { ratio: 0.44 },
+          { ratio: 0.12 },
+          { ratio: 0.20 },
+          { ratio: 0.24 },
+        ],
+        rows: [
+          {
+            height: 4,
+            role: 'normal' as const,
+            cells: [
+              { content: { text: '品名' } },
+              { content: { text: '数量' } },
+              { content: { text: '单价' }, typography: { textAlign: 'center' } },
+              {
+                content: { text: '小计' },
+                typography: {
+                  textAlign: 'right',
+                },
+              },
+            ],
+          },
+        ],
+      },
+      layout: {
+        borderAppearance: 'none' as const,
+        borderWidth: 0,
+        borderType: 'solid' as const,
+        borderColor: '#cccccc',
+      },
+    },
+  }
+}
+
+function cloneJson<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T
 }
 
 export const supermarketReceiptTemplate: DocumentSchema = {
@@ -808,4 +959,13 @@ export const supermarketReceiptTemplate: DocumentSchema = {
       },
     },
   ],
+}
+
+export const supermarketFlexRowReceiptTemplate: DocumentSchema = {
+  ...cloneJson(supermarketReceiptTemplate),
+  elements: supermarketReceiptTemplate.elements.flatMap(element =>
+    element.id === 'smkt_items_table'
+      ? [createReceiptItemsStaticHeader(), createReceiptItemsFlowRow()]
+      : [cloneJson(element)],
+  ),
 }
