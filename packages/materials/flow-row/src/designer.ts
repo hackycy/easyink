@@ -227,7 +227,7 @@ function createColumnKeyboardBehavior(): BehaviorRegistration {
 
       if (ctx.event.kind === 'command') {
         if (ctx.event.command === 'enter-edit') {
-          ctx.session.setMeta('editingColumn', { index: payload.index })
+          ctx.session.setSelectionScopedMeta('editingColumn', { index: payload.index }, ctx.selection)
           return
         }
         await next()
@@ -256,7 +256,7 @@ function createColumnKeyboardBehavior(): BehaviorRegistration {
       if (event.key === 'Enter' || event.key === 'F2') {
         event.originalEvent.preventDefault()
         event.originalEvent.stopPropagation()
-        ctx.session.setMeta('editingColumn', { index: payload.index })
+        ctx.session.setSelectionScopedMeta('editingColumn', { index: payload.index }, ctx.selection)
         return
       }
 
@@ -349,7 +349,7 @@ function createColumnCommandBehavior(): BehaviorRegistration {
 
       if (command === 'flow-row.commit-column-text') {
         const p = ctx.event.payload as { index: number, text: string }
-        ctx.session.setMeta('editingColumn', undefined)
+        ctx.session.clearMeta('editingColumn')
         ctx.tx.run<MaterialNode>(ctx.node.id, (draft) => {
           const props = getFlowRowProps(draft)
           const column = props.columns[p.index]
@@ -441,12 +441,18 @@ function createColumnDecorationComponent(context: MaterialExtensionContext) {
       const editingColumn = computed(() => props.session.meta.editingColumn as { index: number } | undefined)
       const isEditingThis = computed(() => editingColumn.value?.index === payload.value.index)
       const editText = ref('')
+      const activeEditTarget = ref<number | null>(null)
       let activeGesture: ReturnType<typeof createPointerGesture> | null = null
 
       watch(isEditingThis, (editing) => {
-        if (!editing)
+        if (!editing) {
+          if (activeEditTarget.value !== null)
+            commitEdit()
           return
-        const column = getFlowRowProps(props.node).columns[payload.value.index]
+        }
+        const targetIndex = payload.value.index
+        activeEditTarget.value = targetIndex
+        const column = getFlowRowProps(props.node).columns[targetIndex]
         editText.value = column?.content ?? ''
       }, { immediate: true })
 
@@ -456,19 +462,26 @@ function createColumnDecorationComponent(context: MaterialExtensionContext) {
       }
 
       onUnmounted(cleanupGesture)
+      onUnmounted(() => {
+        if (activeEditTarget.value !== null)
+          commitEdit()
+      })
 
       function commitEdit() {
-        if (!isEditingThis.value)
+        const targetIndex = activeEditTarget.value
+        if (targetIndex === null)
           return
+        activeEditTarget.value = null
         props.session.dispatch({
           kind: 'command',
           command: 'flow-row.commit-column-text',
-          payload: { index: payload.value.index, text: editText.value },
+          payload: { index: targetIndex, text: editText.value },
         })
       }
 
       function cancelEdit() {
-        props.session.setMeta('editingColumn', undefined)
+        activeEditTarget.value = null
+        props.session.clearMeta('editingColumn')
       }
 
       function onEditKeydown(event: KeyboardEvent) {

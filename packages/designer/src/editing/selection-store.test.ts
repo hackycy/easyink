@@ -110,4 +110,18 @@ describe('createSelectionStore', () => {
     // Payload should survive JSON round-trip
     expect(JSON.parse(JSON.stringify(stored))).toEqual(payload)
   })
+
+  it('notifies listeners on selection changes', () => {
+    const store = createSelectionStore()
+    const calls: Array<string | null> = []
+    const dispose = store.onChange?.(() => {
+      calls.push(store.selection?.type ?? null)
+    })
+
+    store.set({ type: 'table.cell', nodeId: 'n1', payload: { row: 0, col: 0 } })
+    store.set(null)
+    dispose?.()
+
+    expect(calls).toEqual(['table.cell', null])
+  })
 })

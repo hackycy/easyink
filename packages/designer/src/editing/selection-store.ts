@@ -26,6 +26,7 @@ import { shallowRef } from 'vue'
 export function createSelectionStore(diagnostics?: DiagnosticsChannel): SelectionStore {
   const _selection = shallowRef<Selection | null>(null)
   let _lastValid: Selection | null = null
+  const listeners = new Set<() => void>()
 
   function validateJsonSafe(payload: unknown): void {
     const json = JSON.stringify(payload)
@@ -79,6 +80,15 @@ export function createSelectionStore(diagnostics?: DiagnosticsChannel): Selectio
       }
       _selection.value = selection
       _lastValid = selection
+      for (const listener of listeners)
+        listener()
+    },
+
+    onChange(listener: () => void): () => void {
+      listeners.add(listener)
+      return () => {
+        listeners.delete(listener)
+      }
     },
   }
 }

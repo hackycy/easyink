@@ -233,7 +233,7 @@ export function createTableCellEditBehavior(delegate: TableEditingDelegate): Beh
       }
 
       // Request inline edit panel — the actual input UI is handled as an EphemeralPanel
-      ctx.session.setMeta('editingCell', { row: payload.row, col: payload.col })
+      ctx.session.setSelectionScopedMeta('editingCell', { row: payload.row, col: payload.col }, ctx.selection)
 
       return next()
     },

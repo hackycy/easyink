@@ -179,6 +179,8 @@ export interface SelectionStore {
   readonly selection: Selection | null
   /** Set selection with JSON-safe validation */
   set: (selection: Selection | null) => void
+  /** Subscribe to selection changes. Optional for lightweight mocks. */
+  onChange?: (listener: () => void) => () => void
 }
 
 // ─── GeometryService ────────────────────────────────────────────────
@@ -229,4 +231,11 @@ export interface EditingSessionRef {
   dispatch: (event: BehaviorEvent) => void
   /** Set a metadata value (reactive, triggers decoration updates) */
   setMeta: (key: string, value: unknown) => void
+  /** Clear a metadata value and its selection scope, if any. */
+  clearMeta: (key: string) => void
+  /**
+   * Store metadata that should be invalidated when the session selection
+   * changes away from the selection that was current at write time.
+   */
+  setSelectionScopedMeta: (key: string, value: unknown, selection?: Selection | null) => void
 }

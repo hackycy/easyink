@@ -16,6 +16,10 @@ import type { DiagnosticsChannel } from '../store/diagnostics'
 import { reactive } from 'vue'
 import { dispatchBehaviorEvent } from './behavior-dispatcher'
 
+function selectionSignature(selection: Selection | null): string {
+  return JSON.stringify(selection)
+}
+
 /**
  * Active editing session for a single material.
  * Holds all runtime state: selection, behavior chain, geometry, tx, surfaces.
@@ -36,6 +40,9 @@ export class EditingSession implements EditingSessionRef {
   private _ephemeralPanel: EphemeralPanelDef | null = null
   private _onEphemeralPanelChange?: (panel: EphemeralPanelDef | null) => void
   private _diagnostics?: DiagnosticsChannel
+  private _selectionChangeDispose?: () => void
+  private _selectionScopedMeta = new Map<string, string>()
+  private _destroyed = false
 
   constructor(opts: {
     nodeId: string
@@ -59,6 +66,10 @@ export class EditingSession implements EditingSessionRef {
     this.behaviors = opts.extension.behaviors ?? []
     this._onEphemeralPanelChange = opts.onEphemeralPanelChange
     this._diagnostics = opts.diagnostics
+
+    this._selectionChangeDispose = opts.selectionStore.onChange?.(() => {
+      this.pruneSelectionScopedMeta()
+    })
 
     this.surfaces = {
       requestPanel: (panel: EphemeralPanelDef | null) => {
@@ -94,10 +105,38 @@ export class EditingSession implements EditingSessionRef {
   }
 
   setMeta(key: string, value: unknown): void {
+    this._selectionScopedMeta.delete(key)
     this.meta[key] = value
   }
 
+  clearMeta(key: string): void {
+    this._selectionScopedMeta.delete(key)
+    delete this.meta[key]
+  }
+
+  setSelectionScopedMeta(key: string, value: unknown, selection: Selection | null = this.selectionStore.selection): void {
+    this.meta[key] = value
+    this._selectionScopedMeta.set(key, selectionSignature(selection))
+    this.pruneSelectionScopedMeta()
+  }
+
+  private pruneSelectionScopedMeta(): void {
+    if (this._destroyed || this._selectionScopedMeta.size === 0)
+      return
+    const currentSignature = selectionSignature(this.selectionStore.selection)
+    for (const [key, expectedSignature] of this._selectionScopedMeta) {
+      if (expectedSignature === currentSignature)
+        continue
+      this._selectionScopedMeta.delete(key)
+      delete this.meta[key]
+    }
+  }
+
   destroy(): void {
+    this._destroyed = true
+    this._selectionChangeDispose?.()
+    this._selectionChangeDispose = undefined
+    this._selectionScopedMeta.clear()
     this.selectionStore.set(null)
     this._ephemeralPanel = null
     this._onEphemeralPanelChange?.(null)

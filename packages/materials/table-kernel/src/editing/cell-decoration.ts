@@ -69,15 +69,21 @@ export function createTableCellDecorationComponent(delegate: TableEditingDelegat
       })
 
       const editText = ref('')
+      const activeEditTarget = ref<TableCellPayload | null>(null)
 
       // When entering edit mode, initialize text from cell content
       watch(isEditingThis, (editing) => {
         if (editing) {
+          const target = { row: payload.value.row, col: payload.value.col }
+          activeEditTarget.value = target
           const t = tableNode.value
           if (t) {
-            const cell = t.table.topology.rows[payload.value.row]?.cells[payload.value.col]
+            const cell = t.table.topology.rows[target.row]?.cells[target.col]
             editText.value = cell?.content?.text ?? ''
           }
+        }
+        else if (activeEditTarget.value) {
+          commitEdit()
         }
       }, { immediate: true })
 
@@ -106,6 +112,8 @@ export function createTableCellDecorationComponent(delegate: TableEditingDelegat
       })
 
       onUnmounted(() => {
+        if (activeEditTarget.value)
+          commitEdit()
         toolbar?.destroy()
         toolbar = null
       })
@@ -197,19 +205,22 @@ export function createTableCellDecorationComponent(delegate: TableEditingDelegat
       // ─── Inline edit handlers ─────────────────────────────────
 
       function commitEdit() {
-        if (!isEditingThis.value)
+        const target = activeEditTarget.value
+        if (!target)
           return
         const text = editText.value
-        props.session.setMeta('editingCell', undefined)
+        activeEditTarget.value = null
+        props.session.clearMeta('editingCell')
         props.session.dispatch({
           kind: 'command',
           command: 'commit-cell-text',
-          payload: { row: payload.value.row, col: payload.value.col, text },
+          payload: { row: target.row, col: target.col, text },
         })
       }
 
       function cancelEdit() {
-        props.session.setMeta('editingCell', undefined)
+        activeEditTarget.value = null
+        props.session.clearMeta('editingCell')
       }
 
       function onEditKeyDown(e: KeyboardEvent) {
