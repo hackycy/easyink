@@ -84,14 +84,20 @@ async function main() {
   try {
     await runCommandOrFail(
       gitBinary,
-      ['push', releaseRemote, '-u', releaseBranch, '--follow-tags'],
-      `git push ${releaseRemote} -u ${releaseBranch} --follow-tags`,
+      ['push', releaseRemote, '-u', releaseBranch],
+      `git push ${releaseRemote} -u ${releaseBranch}`,
+    )
+    await runCommandOrFail(
+      gitBinary,
+      ['push', releaseRemote, `refs/tags/${tagName}`],
+      `git push ${releaseRemote} refs/tags/${tagName}`,
     )
   }
   catch (error) {
     fail([
       '推送失败，脚本已停止。',
-      `当前 commit 已创建，tag ${tagName} 也可能已经在本地存在。`,
+      `当前 commit 已创建，本地 tag ${tagName} 也已经存在。`,
+      `如果分支已推送成功但 tag 推送失败，请先检查远端状态再决定是否单独补推 refs/tags/${tagName}。`,
       '请先人工检查本地仓库状态，再决定是否重新推送或回滚。',
       error instanceof Error ? error.message : String(error),
     ].join('\n'))
