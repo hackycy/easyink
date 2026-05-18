@@ -4,6 +4,8 @@
 
 ✨ EasyInk - Print is Easy!
 
+<img width="1920" height="1080" alt="hackycy github io_easyink_(Window (Normal))" src="https://github.com/user-attachments/assets/a88eefac-4a15-4bd4-828b-989b4832ddc6" />
+
 ## Packages
 
 | Package | Version |
