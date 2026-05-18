@@ -1,4 +1,4 @@
-name: deploy-pages
+name: Deploy GitHub Pages
 
 on:
   workflow_call:
