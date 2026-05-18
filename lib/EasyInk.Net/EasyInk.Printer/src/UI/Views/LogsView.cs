@@ -11,6 +11,7 @@ internal sealed class LogsView : UserControl, ILogsView, IActivatableTab
 {
     private readonly LogsPresenter _presenter;
     private readonly Button _queryButton;
+    private readonly Button _exportButton;
     private readonly ListView _listView;
     private readonly DateTimePicker _dtpFrom;
     private readonly DateTimePicker _dtpTo;
@@ -40,7 +41,7 @@ internal sealed class LogsView : UserControl, ILogsView, IActivatableTab
         var filterLayout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 5,
+            ColumnCount = 6,
             RowCount = 1,
             Padding = new Padding(0),
             Margin = new Padding(0),
@@ -51,6 +52,7 @@ internal sealed class LogsView : UserControl, ILogsView, IActivatableTab
         filterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         filterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 154));
         filterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 82));
+        filterLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 98));
         filterLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         _dtpFrom = UiFactory.CreateInlineDatePicker(DateTime.Today.AddDays(-7));
@@ -59,12 +61,17 @@ internal sealed class LogsView : UserControl, ILogsView, IActivatableTab
         _queryButton.Anchor = AnchorStyles.Left;
         _queryButton.Margin = new Padding(0);
         _queryButton.Click += async (s, e) => await RefreshAsync();
+        _exportButton = UiFactory.CreateSecondaryButton(LangManager.Get("Common_ExportCsv"), 90);
+        _exportButton.Anchor = AnchorStyles.Left;
+        _exportButton.Margin = new Padding(8, 0, 0, 0);
+        _exportButton.Click += async (s, e) => await ExportCsvAsync();
 
         filterLayout.Controls.Add(UiFactory.CreateInlineLabel(LangManager.Get("Logs_From")), 0, 0);
         filterLayout.Controls.Add(_dtpFrom, 1, 0);
         filterLayout.Controls.Add(UiFactory.CreateInlineLabel(LangManager.Get("Logs_To")), 2, 0);
         filterLayout.Controls.Add(_dtpTo, 3, 0);
         filterLayout.Controls.Add(_queryButton, 4, 0);
+        filterLayout.Controls.Add(_exportButton, 5, 0);
         filterPanel.Controls.Add(filterLayout);
 
         var filterHost = new Panel
@@ -134,6 +141,7 @@ internal sealed class LogsView : UserControl, ILogsView, IActivatableTab
     public void SetBusy(bool busy)
     {
         _queryButton.Enabled = !busy;
+        _exportButton.Enabled = !busy;
     }
 
     public void SetError(string? message)
@@ -174,5 +182,32 @@ internal sealed class LogsView : UserControl, ILogsView, IActivatableTab
     private Task RefreshAsync()
     {
         return _presenter.RefreshAsync(_dtpFrom.Value, _dtpTo.Value);
+    }
+
+    private async Task ExportCsvAsync()
+    {
+        var from = _dtpFrom.Value;
+        var to = _dtpTo.Value;
+        using var dlg = new SaveFileDialog
+        {
+            Title = LangManager.Get("Dialog_ExportLogsCsv"),
+            Filter = LangManager.Get("Dialog_CsvFileFilter"),
+            DefaultExt = "csv",
+            AddExtension = true,
+            OverwritePrompt = true,
+            FileName = $"easyink-logs-{from:yyyyMMdd}-{to:yyyyMMdd}.csv"
+        };
+
+        if (dlg.ShowDialog(this) != DialogResult.OK) return;
+
+        var count = await _presenter.ExportCsvAsync(from, to, dlg.FileName);
+        if (!count.HasValue) return;
+
+        MessageBox.Show(
+            this,
+            LangManager.Get("Prompt_ExportLogsSuccess", count.Value),
+            LangManager.Get("Common_Info"),
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Information);
     }
 }

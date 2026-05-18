@@ -1,5 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.Text;
 using System.Threading.Tasks;
 using EasyInk.Printer.Services.Abstractions;
 
@@ -15,9 +18,10 @@ internal interface ILogsView
 
 internal sealed class LogsPresenter : IDisposable
 {
+    private static readonly char[] CsvEscapeChars = { ',', '"', '\r', '\n' };
     private readonly IAuditService _auditService;
     private ILogsView? _view;
-    private bool _isRefreshing;
+    private bool _isBusy;
     private bool _disposed;
 
     public LogsPresenter(IAuditService auditService)
@@ -37,16 +41,11 @@ internal sealed class LogsPresenter : IDisposable
 
     public async Task RefreshAsync(DateTime from, DateTime to)
     {
-        if (_disposed || _isRefreshing || _view == null) return;
+        if (_disposed || _isBusy || _view == null) return;
 
-        if (from > to)
-        {
-            var tmp = from;
-            from = to;
-            to = tmp;
-        }
+        NormalizeRange(ref from, ref to);
 
-        _isRefreshing = true;
+        _isBusy = true;
         _view.SetBusy(true);
         _view.SetError(null);
         _view.SetRows(Array.Empty<ListViewRow>());
@@ -70,7 +69,39 @@ internal sealed class LogsPresenter : IDisposable
         finally
         {
             Post(view => view.SetBusy(false));
-            _isRefreshing = false;
+            _isBusy = false;
+        }
+    }
+
+    public async Task<int?> ExportCsvAsync(DateTime from, DateTime to, string filePath)
+    {
+        if (_disposed || _isBusy || _view == null) return null;
+
+        NormalizeRange(ref from, ref to);
+
+        _isBusy = true;
+        _view.SetBusy(true);
+        _view.SetError(null);
+
+        try
+        {
+            var count = await Task.Run(() => ExportRows(filePath, from, to)).ConfigureAwait(false);
+            Post(view => view.SetError(null));
+            return count;
+        }
+        catch (ObjectDisposedException)
+        {
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Post(view => view.SetError(LangManager.Get("Error_ExportLogs", ex.Message)));
+            return null;
+        }
+        finally
+        {
+            Post(view => view.SetBusy(false));
+            _isBusy = false;
         }
     }
 
@@ -97,6 +128,82 @@ internal sealed class LogsPresenter : IDisposable
         }
 
         return rows;
+    }
+
+    private int ExportRows(string filePath, DateTime from, DateTime to)
+    {
+        var directory = Path.GetDirectoryName(filePath);
+        if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+            Directory.CreateDirectory(directory);
+
+        using var stream = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.Read);
+        using var writer = new StreamWriter(stream, new UTF8Encoding(true), 64 * 1024);
+
+        WriteCsvRow(
+            writer,
+            LangManager.Get("Logs_ColTime"),
+            LangManager.Get("Logs_ColPrinter"),
+            LangManager.Get("Logs_ColStatus"),
+            LangManager.Get("Logs_ColUser"),
+            LangManager.Get("Logs_ColLabelType"),
+            LangManager.Get("Logs_ColJobId"),
+            LangManager.Get("Logs_ColError"));
+
+        var count = 0;
+        foreach (var log in _auditService.EnumerateLogs(from, to))
+        {
+            WriteCsvRow(
+                writer,
+                log.Timestamp.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+                log.PrinterName,
+                log.Status,
+                log.UserId ?? string.Empty,
+                log.LabelType ?? string.Empty,
+                log.JobId ?? string.Empty,
+                log.ErrorMessage ?? string.Empty);
+            count++;
+        }
+
+        return count;
+    }
+
+    private static void WriteCsvRow(TextWriter writer, params string?[] values)
+    {
+        for (var i = 0; i < values.Length; i++)
+        {
+            if (i > 0) writer.Write(',');
+            WriteCsvValue(writer, values[i]);
+        }
+
+        writer.WriteLine();
+    }
+
+    private static void WriteCsvValue(TextWriter writer, string? value)
+    {
+        value ??= string.Empty;
+        if (value.IndexOfAny(CsvEscapeChars) < 0)
+        {
+            writer.Write(value);
+            return;
+        }
+
+        writer.Write('"');
+        foreach (var ch in value)
+        {
+            if (ch == '"') writer.Write("\"\"");
+            else writer.Write(ch);
+        }
+
+        writer.Write('"');
+    }
+
+    private static void NormalizeRange(ref DateTime from, ref DateTime to)
+    {
+        if (from <= to) return;
+
+        var tmp = from;
+        from = to;
+        to = tmp;
     }
 
     private void Post(Action<ILogsView> update)

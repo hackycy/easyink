@@ -101,9 +101,38 @@ public class AuditService : IAuditService, IDisposable
         int offset = 0)
     {
         using var connection = new SQLiteConnection(_connectionString);
-
-        var sql = "SELECT * FROM PrintAuditLog WHERE 1=1";
         var parameters = new DynamicParameters();
+        var sql = BuildLogsQuery(parameters, startTime, endTime, printerName, userId, status, limit, offset);
+
+        return connection.Query<PrintAuditLog>(sql, parameters).ToList();
+    }
+
+    public IEnumerable<PrintAuditLog> EnumerateLogs(
+        DateTime? startTime = null,
+        DateTime? endTime = null,
+        string? printerName = null,
+        string? userId = null,
+        string? status = null)
+    {
+        using var connection = new SQLiteConnection(_connectionString);
+        var parameters = new DynamicParameters();
+        var sql = BuildLogsQuery(parameters, startTime, endTime, printerName, userId, status);
+
+        foreach (var log in connection.Query<PrintAuditLog>(sql, parameters, buffered: false))
+            yield return log;
+    }
+
+    private static string BuildLogsQuery(
+        DynamicParameters parameters,
+        DateTime? startTime,
+        DateTime? endTime,
+        string? printerName,
+        string? userId,
+        string? status,
+        int? limit = null,
+        int offset = 0)
+    {
+        var sql = "SELECT * FROM PrintAuditLog WHERE 1=1";
 
         if (startTime.HasValue)
         {
@@ -135,11 +164,15 @@ public class AuditService : IAuditService, IDisposable
             parameters.Add("Status", status);
         }
 
-        sql += " ORDER BY Timestamp DESC LIMIT @Limit OFFSET @Offset";
-        parameters.Add("Limit", limit);
-        parameters.Add("Offset", offset);
+        sql += " ORDER BY Timestamp DESC";
+        if (limit.HasValue)
+        {
+            sql += " LIMIT @Limit OFFSET @Offset";
+            parameters.Add("Limit", limit.Value);
+            parameters.Add("Offset", offset);
+        }
 
-        return connection.Query<PrintAuditLog>(sql, parameters).ToList();
+        return sql;
     }
 
     public int CleanupOldLogs(DateTime? now = null)

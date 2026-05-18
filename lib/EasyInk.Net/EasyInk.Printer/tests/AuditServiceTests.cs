@@ -125,6 +125,25 @@ public class AuditServiceTests : IDisposable
     }
 
     [Fact]
+    public void EnumerateLogs_FiltersByTimeRange()
+    {
+        var now = DateTime.UtcNow;
+        _service.LogPrint(new PrintAuditLog
+        {
+            Timestamp = now.AddHours(-2), PrinterName = "Old", Status = "Success", JobId = "old"
+        });
+        _service.LogPrint(new PrintAuditLog
+        {
+            Timestamp = now, PrinterName = "New", Status = "Success", JobId = "new"
+        });
+
+        var logs = _service.EnumerateLogs(startTime: now.AddHours(-1)).ToList();
+
+        Assert.Single(logs);
+        Assert.Equal("new", logs[0].JobId);
+    }
+
+    [Fact]
     public void CleanupOldLogs_DeletesRowsOlderThanRetention()
     {
         var dbPath = Path.Combine(Path.GetTempPath(), $"audit_cleanup_{Guid.NewGuid():N}.db");

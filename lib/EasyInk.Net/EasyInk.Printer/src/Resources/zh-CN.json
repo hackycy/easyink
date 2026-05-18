@@ -143,14 +143,17 @@
   "Common_Browse": "浏览",
   "Common_Save": "保存设置",
   "Common_Copy": "复制选中内容",
+  "Common_ExportCsv": "导出CSV",
   "Common_Confirm": "确认",
   "Common_Info": "提示",
   "Common_Error": "错误",
 
   "Dialog_DbFileLocation": "选择数据库文件位置",
+  "Dialog_ExportLogsCsv": "导出日志 CSV",
   "Dialog_CrashLogDir": "选择崩溃日志目录",
   "Dialog_SumatraTempDir": "选择 SumatraPDF 临时 PDF 目录",
   "Dialog_PrintDebugArtifactsDir": "选择打印调试附件目录",
+  "Dialog_CsvFileFilter": "CSV 文件|*.csv|所有文件|*.*",
   "Dialog_DbFileFilter": "SQLite 数据库|*.db|所有文件|*.*",
 
   "Error_DbPathInvalid": "数据库路径无效: {0}",
@@ -159,10 +162,12 @@
   "Error_PrintDebugArtifactsDirInvalid": "打印调试附件目录无效: {0}",
   "Error_ConfigSaveFailed": "配置保存失败: {0}",
   "Error_QueryLogs": "查询日志失败: {0}",
+  "Error_ExportLogs": "导出日志失败: {0}",
   "Error_GetPrinters": "获取打印机列表失败: {0}",
   "Error_GetJobs": "获取任务列表失败: {0}",
 
   "Prompt_SavedRestart": "设置已保存，是否立即重启程序使配置生效？",
+  "Prompt_ExportLogsSuccess": "导出完成，共 {0} 条。",
   "Prompt_DelayedApply": "部分设置将在下次启动程序后生效。",
 
   "Api_InvalidApiKey": "无效的 API Key",

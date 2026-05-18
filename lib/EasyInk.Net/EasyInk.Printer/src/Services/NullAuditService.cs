@@ -25,4 +25,14 @@ public class NullAuditService : IAuditService
     {
         return new List<PrintAuditLog>();
     }
+
+    public IEnumerable<PrintAuditLog> EnumerateLogs(
+        DateTime? startTime = null,
+        DateTime? endTime = null,
+        string? printerName = null,
+        string? userId = null,
+        string? status = null)
+    {
+        yield break;
+    }
 }

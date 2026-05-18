@@ -143,14 +143,17 @@
   "Common_Browse": "Browse",
   "Common_Save": "Save Settings",
   "Common_Copy": "Copy selection",
+  "Common_ExportCsv": "Export CSV",
   "Common_Confirm": "Confirm",
   "Common_Info": "Information",
   "Common_Error": "Error",
 
   "Dialog_DbFileLocation": "Select Database File Location",
+  "Dialog_ExportLogsCsv": "Export Logs CSV",
   "Dialog_CrashLogDir": "Select Crash Log Directory",
   "Dialog_SumatraTempDir": "Select SumatraPDF temporary PDF directory",
   "Dialog_PrintDebugArtifactsDir": "Select print debug artifacts directory",
+  "Dialog_CsvFileFilter": "CSV files|*.csv|All files|*.*",
   "Dialog_DbFileFilter": "SQLite Database|*.db|All Files|*.*",
 
   "Error_DbPathInvalid": "Invalid database path: {0}",
@@ -159,10 +162,12 @@
   "Error_PrintDebugArtifactsDirInvalid": "Invalid print debug artifacts directory: {0}",
   "Error_ConfigSaveFailed": "Failed to save configuration: {0}",
   "Error_QueryLogs": "Failed to query logs: {0}",
+  "Error_ExportLogs": "Failed to export logs: {0}",
   "Error_GetPrinters": "Failed to get printer list: {0}",
   "Error_GetJobs": "Failed to get job list: {0}",
 
   "Prompt_SavedRestart": "Settings saved. Restart now to apply changes?",
+  "Prompt_ExportLogsSuccess": "Export completed, {0} rows.",
   "Prompt_DelayedApply": "Some settings will take effect after restart.",
 
   "Api_InvalidApiKey": "Invalid API Key",
