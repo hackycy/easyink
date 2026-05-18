@@ -57,6 +57,25 @@ describe('table toolbar groups', () => {
     ])
   })
 
+  it('uses distinct icons for static table structural commands', () => {
+    const groups = createTableToolbarGroups({ row: 0, col: 0 }, createNode('static'), createDelegate('static'))
+    const structuralActions = groups
+      .filter(group => ['table.rows', 'table.columns', 'table.spans'].includes(group.id))
+      .flatMap(group => group.actions)
+
+    expect(structuralActions.map(action => action.command)).toEqual([
+      'insert-row-above',
+      'insert-row-below',
+      'remove-row',
+      'insert-col-left',
+      'insert-col-right',
+      'remove-col',
+      'merge-right',
+      'merge-down',
+    ])
+    expect(new Set(structuralActions.map(action => action.icon)).size).toBe(structuralActions.length)
+  })
+
   it('omits merge controls for table-data repeat-template cells', () => {
     const groups = createTableToolbarGroups({ row: 1, col: 0 }, createNode('data'), createDelegate('data'))
 

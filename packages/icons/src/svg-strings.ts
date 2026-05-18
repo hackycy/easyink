@@ -12,6 +12,13 @@ function normalize(svg: string): string {
     .replace('stroke-width="2"', 'stroke-width="1.5"')
 }
 
+// Keep custom table icons on lucide's native 24x24 grid. Do not draw at
+// 16x16 and scale with <g transform>; that scales the visual stroke weight
+// and makes custom icons look heavier than normalized lucide icons.
+function tableIcon(body: string): string {
+  return `<svg class="lucide lucide-easyink-table" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`
+}
+
 export const IconAlignBottom = /* @__PURE__ */ normalize(lucide.AlignEndVertical)
 export const IconAlignCenter = /* @__PURE__ */ normalize(lucide.AlignCenter)
 export const IconAlignCenterH = /* @__PURE__ */ normalize(lucide.AlignCenterHorizontal)
@@ -94,13 +101,15 @@ export const IconSliders = /* @__PURE__ */ normalize(lucide.SlidersHorizontal)
 export const IconSnap = /* @__PURE__ */ normalize(lucide.Magnet)
 export const IconSvg = /* @__PURE__ */ normalize(lucide.FileCode)
 export const IconTable = /* @__PURE__ */ normalize(lucide.Table)
-export const IconTableInsertColLeft = /* @__PURE__ */ normalize(lucide.BetweenVerticalStart)
-export const IconTableInsertColRight = /* @__PURE__ */ normalize(lucide.BetweenVerticalEnd)
-export const IconTableInsertRowAbove = /* @__PURE__ */ normalize(lucide.BetweenHorizontalStart)
-export const IconTableInsertRowBelow = /* @__PURE__ */ normalize(lucide.BetweenHorizontalEnd)
-export const IconTableMerge = /* @__PURE__ */ normalize(lucide.TableCellsMerge)
-export const IconTableRemoveCol = /* @__PURE__ */ normalize(lucide.TableColumnsSplit)
-export const IconTableRemoveRow = /* @__PURE__ */ normalize(lucide.TableRowsSplit)
+export const IconTableInsertColLeft = /* @__PURE__ */ tableIcon('<rect width="12" height="18" x="9" y="3" rx="2"/><path d="M15 3v18"/><path d="M9 9h12"/><path d="M9 15h12"/><path d="M5 9v6"/><path d="M2 12h6"/>')
+export const IconTableInsertColRight = /* @__PURE__ */ tableIcon('<rect width="12" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="M3 9h12"/><path d="M3 15h12"/><path d="M19 9v6"/><path d="M16 12h6"/>')
+export const IconTableInsertRowAbove = /* @__PURE__ */ tableIcon('<rect width="18" height="12" x="3" y="9" rx="2"/><path d="M3 15h18"/><path d="M9 9v12"/><path d="M15 9v12"/><path d="M9 5h6"/><path d="M12 2v6"/>')
+export const IconTableInsertRowBelow = /* @__PURE__ */ tableIcon('<rect width="18" height="12" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M9 3v12"/><path d="M15 3v12"/><path d="M9 19h6"/><path d="M12 16v6"/>')
+export const IconTableMergeRight = /* @__PURE__ */ tableIcon('<rect width="18" height="14" x="3" y="5" rx="2"/><path d="M12 5v14"/><path d="M3 12h18"/><path d="M8 12h7"/><path d="m12 9 3 3-3 3"/>')
+export const IconTableMergeDown = /* @__PURE__ */ tableIcon('<rect width="14" height="18" x="5" y="3" rx="2"/><path d="M5 12h14"/><path d="M12 3v18"/><path d="M12 8v7"/><path d="m9 12 3 3 3-3"/>')
+export const IconTableMerge = IconTableMergeRight
+export const IconTableRemoveCol = /* @__PURE__ */ tableIcon('<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="M15 3v18"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="m10 8 4 8"/><path d="m14 8-4 8"/>')
+export const IconTableRemoveRow = /* @__PURE__ */ tableIcon('<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/><path d="M15 3v18"/><path d="m8 10 8 4"/><path d="m16 10-8 4"/>')
 export const IconTableSplit = /* @__PURE__ */ normalize(lucide.TableCellsSplit)
 export const IconText = /* @__PURE__ */ normalize(lucide.Type)
 export const IconTextAlignCenter = /* @__PURE__ */ normalize(lucide.AlignCenter)

@@ -10,7 +10,8 @@ import {
   IconTableInsertColRight,
   IconTableInsertRowAbove,
   IconTableInsertRowBelow,
-  IconTableMerge,
+  IconTableMergeDown,
+  IconTableMergeRight,
   IconTableRemoveCol,
   IconTableRemoveRow,
   IconTableSplit,
@@ -87,10 +88,10 @@ export function createTableToolbarGroups(
     const hasSpan = (cell?.colSpan ?? 1) > 1 || (cell?.rowSpan ?? 1) > 1
     const showSplit = isHeaderFooter ? (cell?.colSpan ?? 1) > 1 : hasSpan
     const spanActions: MaterialToolbarGroup['actions'] = [
-      { id: 'merge-right', label: t('designer.table.mergeRight'), icon: IconTableMerge, command: 'merge-right' },
+      { id: 'merge-right', label: t('designer.table.mergeRight'), icon: IconTableMergeRight, command: 'merge-right' },
     ]
     if (kind === 'static')
-      spanActions.push({ id: 'merge-down', label: t('designer.table.mergeDown'), icon: IconTableMerge, command: 'merge-down' })
+      spanActions.push({ id: 'merge-down', label: t('designer.table.mergeDown'), icon: IconTableMergeDown, command: 'merge-down' })
     if (showSplit)
       spanActions.push({ id: 'split-cell', label: t('designer.table.split'), icon: IconTableSplit, command: 'split-cell' })
     groups.push({ id: 'table.spans', actions: spanActions })
