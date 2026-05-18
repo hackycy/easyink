@@ -20,11 +20,12 @@ import {
   IconUnlock,
 } from '@easyink/icons'
 import { generateId } from '@easyink/shared'
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { useDesignerStore } from '../composables'
 import { createClipboardActions } from '../interactions/clipboard-actions'
 import { hasGroupedElement, selectedLogicalGroupIds } from '../interactions/logical-groups'
 import { selectMany } from '../interactions/selection-api'
+import { resolveContextMenuPosition } from './context-menu-position'
 
 interface ContextMenuItem {
   id: string
@@ -45,6 +46,7 @@ const store = useDesignerStore()
 const visible = ref(false)
 const menuX = ref(0)
 const menuY = ref(0)
+const menuRef = ref<HTMLElement | null>(null)
 
 const snapshotGroups = ref<ContextMenuGroup[]>([])
 
@@ -152,6 +154,27 @@ function isHitElement(target: HTMLElement): boolean {
   return false
 }
 
+function updateMenuPosition(anchorX: number, anchorY: number) {
+  const menuEl = menuRef.value
+  if (!menuEl)
+    return
+
+  const rect = menuEl.getBoundingClientRect()
+  const pos = resolveContextMenuPosition(
+    { x: anchorX, y: anchorY },
+    {
+      width: rect.width || menuEl.offsetWidth,
+      height: rect.height || menuEl.offsetHeight,
+    },
+    {
+      width: window.innerWidth,
+      height: window.innerHeight,
+    },
+  )
+  menuX.value = pos.x
+  menuY.value = pos.y
+}
+
 function onContextMenu(e: MouseEvent) {
   e.preventDefault()
   menuX.value = e.clientX
@@ -162,6 +185,10 @@ function onContextMenu(e: MouseEvent) {
 
   snapshotGroups.value = buildGroups(isBlank)
   visible.value = true
+  nextTick(() => {
+    if (visible.value)
+      updateMenuPosition(e.clientX, e.clientY)
+  })
 }
 
 function handleAction(item: ContextMenuItem) {
@@ -329,6 +356,7 @@ defineExpose({ onContextMenu })
   <Teleport to="body">
     <div
       v-if="visible"
+      ref="menuRef"
       class="ei-context-menu"
       :style="{ left: `${menuX}px`, top: `${menuY}px` }"
       @click.stop
@@ -367,6 +395,8 @@ defineExpose({ onContextMenu })
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
   padding: 4px 0;
   min-width: 180px;
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
   font-size: 12px;
 
   &__divider {
