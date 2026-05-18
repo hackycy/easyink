@@ -292,7 +292,7 @@ context.onDiagnostic?.({
 
 ## Playground 参考
 
-项目里已经有两份实际驱动包装，可以直接对照：
+Playground 已迁移到高层 print SDK，不再维护业务侧驱动包装。可以直接对照两个 hook：
 
-- `playground/src/drivers/easyink-print-driver.ts`：把 Viewer 打印动作桥接到 `@easyink/print-integration-easyink-printer`
-- `playground/src/drivers/hiprint-print-driver.ts`：把 Viewer 打印动作桥接到 `@easyink/print-integration-hiprint`
+- `playground/src/hooks/useEasyInkPrint.ts`：创建 EasyInk Printer client 和托管 print SDK
+- `playground/src/hooks/useHiPrint.ts`：创建 HiPrint client 和托管 print SDK

@@ -1,5 +1,17 @@
 import type { ExportDiagnostic } from '@easyink/export-runtime'
-import type { ViewerDiagnosticEvent, ViewerPageMetrics, ViewerPrintContext, ViewerPrintPolicy, ViewerPrintSheetSize } from '@easyink/viewer'
+import type {
+  DocumentSchema,
+  PrintDriver,
+  ViewerDiagnosticEvent,
+  ViewerPageMetrics,
+  ViewerPrintContext,
+  ViewerPrintPageSizeMode,
+  ViewerPrintPolicy,
+  ViewerPrintSheetSize,
+  ViewerRuntime,
+  ViewerTaskCallbacks,
+} from '@easyink/viewer'
+import { createBrowserViewerHost, createIframeViewerHost, createViewer } from '@easyink/viewer'
 
 const UNIT_TO_MM = {
   cm: 10,
@@ -34,6 +46,35 @@ export interface PrintDriverBaseOptions<TClient, TRequestOptions> {
   resolveRequestOptions?: (
     context: PrintDriverRequestContext,
   ) => Partial<TRequestOptions> | undefined | Promise<Partial<TRequestOptions> | undefined>
+}
+
+/**
+ * Selects the managed rendering surface used by high-level print SDKs.
+ *
+ * - `iframe`: isolated document, default and recommended for production.
+ * - `dom`: regular DOM element in the current document, useful for tests or
+ *   environments where iframes are not available.
+ */
+export type ManagedPrintViewerKind = 'iframe' | 'dom'
+
+export interface ManagedPrintViewerOptions {
+  viewer?: ManagedPrintViewerKind
+  autoDestroy?: boolean
+  container?: HTMLElement
+  iframe?: HTMLIFrameElement
+  document?: Document
+}
+
+export interface ManagedPrintInput extends ViewerTaskCallbacks {
+  schema: DocumentSchema
+  data?: Record<string, unknown>
+  pageSizeMode?: ViewerPrintPageSizeMode
+}
+
+export interface ManagedPrintViewer {
+  readonly viewerKind: ManagedPrintViewerKind
+  printWithDriver: (input: ManagedPrintInput, driver: PrintDriver) => Promise<void>
+  destroy: () => void
 }
 
 /**
@@ -191,4 +232,164 @@ export function resolvePrintDriverValue<T>(value: PrintDriverValue<T> | undefine
   return typeof value === 'function'
     ? (value as () => T | undefined)()
     : value
+}
+
+/**
+ * Creates a small managed Viewer runtime for print SDKs. Application code can
+ * stay focused on client connection + print input while the SDK owns the
+ * transient render surface.
+ */
+export function createManagedPrintViewer(options: ManagedPrintViewerOptions = {}): ManagedPrintViewer {
+  return new ManagedPrintViewerRuntime(options)
+}
+
+class ManagedPrintViewerRuntime implements ManagedPrintViewer {
+  readonly viewerKind: ManagedPrintViewerKind
+
+  private viewerRuntime: ViewerRuntime | undefined
+  private ownedElement: HTMLElement | undefined
+
+  constructor(private readonly options: ManagedPrintViewerOptions) {
+    this.viewerKind = options.viewer ?? (options.container ? 'dom' : 'iframe')
+  }
+
+  async printWithDriver(input: ManagedPrintInput, driver: PrintDriver): Promise<void> {
+    const viewer = await this.ensureViewer()
+    viewer.registerPrintDriver(driver)
+    try {
+      await viewer.open({
+        schema: input.schema,
+        data: input.data,
+        onDiagnostic: input.onDiagnostic,
+      })
+      await viewer.print({
+        driverId: driver.id,
+        pageSizeMode: input.pageSizeMode,
+        throwOnError: input.throwOnError ?? true,
+        onPhase: input.onPhase,
+        onProgress: input.onProgress,
+        onDiagnostic: input.onDiagnostic,
+      })
+    }
+    finally {
+      if (this.options.autoDestroy !== false)
+        this.destroy()
+    }
+  }
+
+  destroy(): void {
+    this.viewerRuntime?.destroy()
+    this.viewerRuntime = undefined
+
+    if (this.ownedElement) {
+      this.ownedElement.remove()
+      this.ownedElement = undefined
+    }
+  }
+
+  private async ensureViewer(): Promise<ViewerRuntime> {
+    if (this.viewerRuntime)
+      return this.viewerRuntime
+
+    const doc = this.resolveDocument()
+    const host = this.viewerKind === 'iframe'
+      ? await this.createIframeHost(doc)
+      : this.createDomHost(doc)
+
+    this.viewerRuntime = createViewer({ host })
+    return this.viewerRuntime
+  }
+
+  private resolveDocument(): Document {
+    const doc = this.options.document ?? globalThis.document
+    if (!doc)
+      throw new EasyInkPrintError('当前环境不支持 DOM 打印渲染', 'PRINT_VIEWER_DOCUMENT_MISSING')
+    return doc
+  }
+
+  private createDomHost(doc: Document) {
+    const container = this.options.container ?? this.createManagedElement(doc, 'div')
+    if (!this.options.container)
+      this.ownedElement = container
+
+    container.id ||= 'easyink-viewer-root'
+    prepareManagedMount(container)
+    return createBrowserViewerHost(container)
+  }
+
+  private async createIframeHost(doc: Document) {
+    const iframe = this.options.iframe ?? this.createManagedElement(doc, 'iframe')
+    if (!this.options.iframe)
+      this.ownedElement = iframe
+
+    prepareManagedFrame(iframe)
+    await waitForIframeDocument(iframe)
+    const host = createIframeViewerHost(iframe)
+    prepareManagedDocument(host.document)
+    prepareManagedMount(host.mount)
+    return host
+  }
+
+  private createManagedElement<T extends keyof HTMLElementTagNameMap>(doc: Document, tag: T): HTMLElementTagNameMap[T] {
+    const element = doc.createElement(tag)
+    ensureDocumentBody(doc).appendChild(element)
+    return element
+  }
+}
+
+function prepareManagedFrame(iframe: HTMLIFrameElement): void {
+  const style = iframe.style
+  style.position = 'fixed'
+  style.left = '-100000px'
+  style.top = '0'
+  style.width = '1200px'
+  style.height = '1600px'
+  style.border = '0'
+  style.opacity = '0'
+  style.pointerEvents = 'none'
+}
+
+function prepareManagedDocument(doc: Document): void {
+  doc.documentElement.style.margin = '0'
+  doc.documentElement.style.background = '#ffffff'
+  ensureDocumentBody(doc)
+  doc.body.style.margin = '0'
+  doc.body.style.background = '#ffffff'
+}
+
+function ensureDocumentBody(doc: Document): HTMLElement {
+  if (!doc.body)
+    doc.documentElement.appendChild(doc.createElement('body'))
+  return doc.body
+}
+
+function prepareManagedMount(mount: HTMLElement): void {
+  const style = mount.style
+  style.width = '1200px'
+  style.minHeight = '1600px'
+  style.margin = '0'
+  style.padding = '0'
+  style.background = '#ffffff'
+  style.overflow = 'visible'
+  style.boxSizing = 'border-box'
+}
+
+function waitForIframeDocument(iframe: HTMLIFrameElement): Promise<void> {
+  if (iframe.contentDocument)
+    return Promise.resolve()
+
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      iframe.removeEventListener('load', handleLoad)
+      reject(new EasyInkPrintError('Viewer iframe document is not available', 'PRINT_VIEWER_IFRAME_UNAVAILABLE'))
+    }, 3000)
+
+    function handleLoad() {
+      clearTimeout(timeout)
+      iframe.removeEventListener('load', handleLoad)
+      resolve()
+    }
+
+    iframe.addEventListener('load', handleLoad, { once: true })
+  })
 }

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { ExportFormatPlugin, ExportProgress } from '@easyink/export-runtime'
-import type { DocumentSchema, ViewerDiagnosticEvent, ViewerHost, ViewerPageMetrics, ViewerRuntime } from '@easyink/viewer'
+import type { DocumentSchema, ViewerDiagnosticEvent, ViewerHost, ViewerPageMetrics, ViewerRuntime, ViewerTaskPhaseEvent, ViewerTaskProgressEvent } from '@easyink/viewer'
 import { createDomPdfExportPlugin } from '@easyink/export-plugin-dom-pdf'
 import { createExportRuntime } from '@easyink/export-runtime'
 import { IconChevronLeft, IconChevronRight, IconClose, IconDown, IconMinimize, IconPlus } from '@easyink/icons'
@@ -19,8 +19,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from './components/ui/dropdown-menu'
-import { createEasyInkPrintDriver } from './drivers/easyink-print-driver'
-import { createHiPrintDriver } from './drivers/hiprint-print-driver'
 import { useEasyInkPrint } from './hooks/useEasyInkPrint'
 import { usePrinter } from './hooks/useHiPrint'
 
@@ -36,8 +34,6 @@ const emit = defineEmits<{
 const EXPORT_FORMAT = 'playground-demo-json'
 const PDF_FORMAT = 'pdf'
 const BROWSER_PRINT_DRIVER_ID = 'browser'
-const HIPRINT_DRIVER_ID = 'hiprint-driver'
-const EASYINK_PRINT_DRIVER_ID = 'easyink-print-driver'
 
 const iframeRef = ref<HTMLIFrameElement>()
 let viewerHost: ViewerHost | undefined
@@ -133,9 +129,6 @@ function registerOutputIntegrations(runtime: ViewerRuntime) {
       })
     },
   })
-
-  runtime.registerPrintDriver(createHiPrintDriver())
-  runtime.registerPrintDriver(createEasyInkPrintDriver())
 }
 
 function createPlaygroundJsonExportPlugin(): ExportFormatPlugin<{ schema: DocumentSchema, data: Record<string, unknown> }, Blob> {
@@ -337,7 +330,7 @@ function showWarningDiagnostic(event: ViewerDiagnosticEvent) {
     toast.warning(event.message)
 }
 
-function updateProgressToast(progressId: string | number, progress: ExportProgress, label: string) {
+function updateProgressToast(progressId: string | number, progress: ExportProgress | ViewerTaskProgressEvent, label: string) {
   if (progress.current !== undefined && progress.total !== undefined)
     toast.loading(`${label} ${progress.current} / ${progress.total}`, { id: progressId })
 }
@@ -467,13 +460,55 @@ async function runViewerPrint(driverId: string, pageSizeMode: 'driver' | 'fixed'
 }
 
 async function handleHiPrintPrint() {
-  if (await ensureHiPrintReady())
-    await runViewerPrint(HIPRINT_DRIVER_ID, 'driver', 'HiPrint 打印')
+  if (await ensureHiPrintReady()) {
+    await runManagedPrint('HiPrint 打印', callbacks => hiPrint.print({
+      schema: props.schema,
+      data: props.data,
+      pageSizeMode: 'driver',
+      ...callbacks,
+    }))
+  }
 }
 
 async function handleEasyInkPrintPrint() {
-  if (await ensureEasyInkPrintReady())
-    await runViewerPrint(EASYINK_PRINT_DRIVER_ID, 'fixed', 'EasyInk Printer 打印')
+  if (await ensureEasyInkPrintReady()) {
+    await runManagedPrint('EasyInk Printer 打印', callbacks => easyInkPrint.print({
+      schema: props.schema,
+      data: props.data,
+      pageSizeMode: 'fixed',
+      ...callbacks,
+    }))
+  }
+}
+
+async function runManagedPrint(
+  label: string,
+  submit: (callbacks: {
+    throwOnError: true
+    onPhase: (event: ViewerTaskPhaseEvent) => void
+    onProgress: (progress: ViewerTaskProgressEvent) => void
+    onDiagnostic: (event: ViewerDiagnosticEvent) => void
+  }) => Promise<void>,
+) {
+  isPrinting.value = true
+  const progressId = toast.loading(`${label}中...`)
+  try {
+    await submit({
+      throwOnError: true,
+      onPhase: event => updatePhaseToast(progressId, event.message, `${label}中...`),
+      onProgress: progress => updateProgressToast(progressId, progress, label),
+      onDiagnostic: showWarningDiagnostic,
+    })
+    toast.dismiss(progressId)
+    toast.success('已发送到打印机')
+  }
+  catch (err) {
+    toast.dismiss(progressId)
+    toast.error(`${label}失败: ${err instanceof Error ? err.message : String(err)}`)
+  }
+  finally {
+    isPrinting.value = false
+  }
 }
 
 function openHiPrintSettings() {

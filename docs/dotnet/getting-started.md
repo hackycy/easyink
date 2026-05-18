@@ -1,13 +1,13 @@
 # 快速上手
 
-EasyInk Printer 是 Windows 本地静默打印服务，适合需要稳定 PDF 打印质量的浏览器应用。前端接入时直接使用 `@easyink/print-integration-easyink-printer`，业务代码不需要自己处理 PDF 生成、WebSocket 分块上传或任务轮询。
+EasyInk Printer 是 Windows 本地静默打印服务，适合需要稳定 PDF 打印质量的浏览器应用。前端接入时直接使用 `@easyink/print-integration-easyink-printer`，业务代码不需要自己创建 Viewer、处理 PDF 生成、WebSocket 分块上传或任务轮询。
 
 如果你只是想验证“这套链路能不能打出第一张单”，最短路径是：
 
 1. 在 Windows 机器上启动 `EasyInk.Printer.exe`。
 2. 确认服务已经能返回打印机列表。
-3. 前端注册 `@easyink/print-integration-easyink-printer` 驱动。
-4. 调用 `viewer.print()`。
+3. 前端创建 `@easyink/print-integration-easyink-printer` 的 print SDK。
+4. 调用 `printer.print({ schema, data })`。
 
 这篇文档只覆盖浏览器如何接入本地打印服务。如果你要部署、配置端口或启用 API Key，继续看 [Printer 应用](./printer) 和 [API 参考](./api-reference)。
 
@@ -33,7 +33,7 @@ dotnet run --project EasyInk.Printer/src
 ## 第二步：安装依赖
 
 ```bash
-pnpm add @easyink/viewer @easyink/print-integration-easyink-printer
+pnpm add @easyink/print-integration-easyink-printer
 ```
 
 ## 第三步：先验证本地服务可用
@@ -58,33 +58,33 @@ curl http://localhost:18080/api/printers
 - 端口是否被改过
 - 当前机器是否真的安装了打印机驱动
 
-## 第四步：注册驱动并打印
+## 第四步：创建 SDK 并打印
 
 ```ts
-import { createEasyInkPrinterClient, createEasyInkPrinterDriver } from '@easyink/print-integration-easyink-printer'
-import { createViewer } from '@easyink/viewer'
+import { createEasyInkPrinterClient, createEasyInkPrinterPrintSdk } from '@easyink/print-integration-easyink-printer'
 
-const viewer = createViewer({ iframe })
-const printer = createEasyInkPrinterClient({
+const client = createEasyInkPrinterClient({
   serviceUrl: 'http://localhost:18080',
   reconnect: true,
   maxReconnectAttempts: 3,
 })
 
-viewer.registerPrintDriver(createEasyInkPrinterDriver({ client: printer }))
+const printer = createEasyInkPrinterPrintSdk({
+  client,
+  viewer: 'iframe',
+})
 
-await viewer.open({ schema, data })
-await printer.useDefaultPrinter()
-await viewer.print({ driverId: 'easyink-printer' })
+await client.useDefaultPrinter()
+await printer.print({ schema, data })
 ```
 
-`createEasyInkPrinterDriver()` 默认使用 `pageSizeMode: 'fixed'`，会先把 Viewer 页面生成 PDF，再发送给 EasyInk.Printer。调用方不用再处理 PDF 导出插件、WebSocket 二进制帧、分块上传或任务轮询。
+`createEasyInkPrinterPrintSdk()` 默认使用 `pageSizeMode: 'fixed'`，会自动创建托管 Viewer、把页面生成 PDF，再发送给 EasyInk.Printer。调用方不用再处理 Viewer 生命周期、PDF 导出插件、WebSocket 二进制帧、分块上传或任务轮询。
 
 客户端内部使用 VueUse 的 `useWebSocket` 管理长连接。连接意外断开时会进入 `reconnecting`，按配置重试；达到最大重连次数后进入 `error`，并把原因写入 `lastError`。
 
 如果这段代码跑通，意味着下面几层都已经工作正常：
 
-- Viewer 已经渲染出页面
+- SDK 已经用托管 Viewer 渲染出页面
 - 前端能连接本地打印服务
 - 本地服务能选中打印机并创建任务
 - PDF 生成和上传链路没有问题
@@ -94,15 +94,16 @@ await viewer.print({ driverId: 'easyink-printer' })
 上面的例子适合验证链路。真正接业务设置页时，通常还需要把打印机、份数和纸张策略做成可变配置。
 
 ```ts
-const printer = createEasyInkPrinterClient({
+const client = createEasyInkPrinterClient({
   serviceUrl: settings.serviceUrl,
   apiKey: settings.apiKey,
   printerName: settings.printerName,
   defaultCopies: settings.copies,
 })
 
-viewer.registerPrintDriver(createEasyInkPrinterDriver({
-  client: printer,
+const printer = createEasyInkPrinterPrintSdk({
+  client,
+  viewer: 'iframe',
   printerName: () => settings.printerName,
   copies: () => settings.copies,
   forcePageSize: () => settings.forcePageSize,
@@ -113,10 +114,12 @@ viewer.registerPrintDriver(createEasyInkPrinterDriver({
       labelType: settings.labelType,
     },
   }),
-}))
+})
+
+await printer.print({ schema, data })
 ```
 
-这里推荐传函数而不是静态值。原因是用户切换打印机或份数后，不需要重新注册驱动。
+这里推荐传函数而不是静态值。原因是用户切换打印机或份数后，不需要重新创建 SDK。
 
 这里的参数可以分成两类来看：
 
@@ -250,10 +253,11 @@ await printer.printPdfAndWait(file, {
 标签机必须显式按模板尺寸打印时再开启：
 
 ```ts
-viewer.registerPrintDriver(createEasyInkPrinterDriver({
-  client: printer,
+const printer = createEasyInkPrinterPrintSdk({
+  client,
+  viewer: 'iframe',
   forcePageSize: true,
-}))
+})
 ```
 
 判断标准不要反过来。不是“标签机就一定开启”，而是“只有当设备必须按模板尺寸输出，否则会缩放或错位时才开启”。
@@ -273,7 +277,7 @@ viewer.registerPrintDriver(createEasyInkPrinterDriver({
 Playground 已使用官方包集成：
 
 - [playground/src/hooks/useEasyInkPrint.ts](../../playground/src/hooks/useEasyInkPrint.ts) 只保留 Vue 状态和设置持久化
-- [playground/src/drivers/easyink-print-driver.ts](../../playground/src/drivers/easyink-print-driver.ts) 调用 `@easyink/print-integration-easyink-printer`
+- 预览页调用 hook 暴露的 `easyInkPrint.print({ schema, data })`，由 SDK 自动创建和销毁托管 Viewer
 - Playground 的 EasyInk Printer 设置面板里还提供了 `UserId` 和 `LabelType` 演示字段，方便直接验证审计日志链路
 
 ## 常见问题

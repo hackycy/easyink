@@ -1,5 +1,20 @@
-import { describe, expect, it } from 'vitest'
-import { EasyInkPrintError, getViewerPages, resolvePrintLandscape, resolvePrintOffset, resolvePrintSize, toMillimeters } from './index'
+import type { DocumentSchema } from '@easyink/viewer'
+import { describe, expect, it, vi } from 'vitest'
+import { createManagedPrintViewer, EasyInkPrintError, getViewerPages, resolvePrintLandscape, resolvePrintOffset, resolvePrintSize, toMillimeters } from './index'
+
+function createFixedSchema(): DocumentSchema {
+  return {
+    version: '1.0.0',
+    unit: 'mm',
+    page: {
+      mode: 'fixed',
+      width: 80,
+      height: 60,
+    },
+    guides: { x: [], y: [] },
+    elements: [],
+  }
+}
 
 describe('print core utilities', () => {
   it('converts common units to millimeters', () => {
@@ -43,5 +58,23 @@ describe('print core utilities', () => {
     expect(getViewerPages(container)).toEqual([page])
     expect(() => getViewerPages(undefined)).toThrow(EasyInkPrintError)
     expect(() => getViewerPages(document.createElement('div'))).toThrow(EasyInkPrintError)
+  })
+
+  it('creates a managed DOM viewer and destroys owned nodes after printing', async () => {
+    const print = vi.fn(async () => {})
+    const managed = createManagedPrintViewer({ viewer: 'dom' })
+    const before = document.body.childElementCount
+
+    await managed.printWithDriver({
+      schema: createFixedSchema(),
+      data: {},
+    }, {
+      id: 'managed-test',
+      defaults: { pageSizeMode: 'fixed' },
+      print,
+    })
+
+    expect(print).toHaveBeenCalledTimes(1)
+    expect(document.body.childElementCount).toBe(before)
   })
 })

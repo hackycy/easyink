@@ -1,0 +1,71 @@
+import type { ManagedPrintInput, ManagedPrintViewer, ManagedPrintViewerOptions, PrintDriverRequestContext, PrintDriverValue } from '@easyink/print-core'
+import type { ViewerPrintPageSizeMode } from '@easyink/viewer'
+import type { EasyInkPrinterClient, EasyInkPrinterPrintPdfOptions } from './client'
+import { createManagedPrintViewer, resolvePrintDriverValue } from '@easyink/print-core'
+import { createEasyInkPrinterDriver } from './driver'
+
+export interface EasyInkPrinterPrintSdkOptions extends ManagedPrintViewerOptions {
+  client: EasyInkPrinterClient
+  printerName?: PrintDriverValue<string>
+  copies?: PrintDriverValue<number>
+  forcePageSize?: PrintDriverValue<boolean>
+  waitForCompletion?: boolean
+  resolveRequestOptions?: (
+    context: PrintDriverRequestContext,
+  ) => Partial<EasyInkPrinterPrintPdfOptions> | undefined | Promise<Partial<EasyInkPrinterPrintPdfOptions> | undefined>
+}
+
+export interface EasyInkPrinterPrintInput extends ManagedPrintInput {
+  printerName?: string
+  copies?: number
+  forcePageSize?: boolean
+  waitForCompletion?: boolean
+  pageSizeMode?: ViewerPrintPageSizeMode
+  requestOptions?: Partial<EasyInkPrinterPrintPdfOptions>
+  resolveRequestOptions?: (
+    context: PrintDriverRequestContext,
+  ) => Partial<EasyInkPrinterPrintPdfOptions> | undefined | Promise<Partial<EasyInkPrinterPrintPdfOptions> | undefined>
+}
+
+export interface EasyInkPrinterPrintSdk {
+  readonly client: EasyInkPrinterClient
+  readonly viewer: ManagedPrintViewer
+  print: (input: EasyInkPrinterPrintInput) => Promise<void>
+  destroy: () => void
+}
+
+/**
+ * Creates the high-level EasyInk Printer SDK. The SDK owns Viewer rendering,
+ * PDF generation, upload, and optional job completion waiting.
+ */
+export function createEasyInkPrinterPrintSdk(options: EasyInkPrinterPrintSdkOptions): EasyInkPrinterPrintSdk {
+  const viewer = createManagedPrintViewer(options)
+
+  return {
+    client: options.client,
+    viewer,
+    print(input) {
+      return viewer.printWithDriver({
+        ...input,
+        pageSizeMode: input.pageSizeMode ?? 'fixed',
+      }, createEasyInkPrinterDriver({
+        id: 'easyink-printer',
+        client: options.client,
+        printerName: () => input.printerName ?? resolvePrintDriverValue(options.printerName),
+        copies: () => input.copies ?? resolvePrintDriverValue(options.copies),
+        forcePageSize: () => input.forcePageSize ?? resolvePrintDriverValue(options.forcePageSize),
+        waitForCompletion: input.waitForCompletion ?? options.waitForCompletion,
+        async resolveRequestOptions(context) {
+          const base = await options.resolveRequestOptions?.(context)
+          const perPrint = input.resolveRequestOptions
+            ? await input.resolveRequestOptions(context)
+            : input.requestOptions
+          return { ...base, ...perPrint }
+        },
+      }))
+    },
+    destroy() {
+      viewer.destroy()
+    },
+  }
+}

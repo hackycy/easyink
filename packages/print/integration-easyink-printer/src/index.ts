@@ -1,6 +1,3 @@
-/**
- * Public entry for the EasyInk Printer integration.
- */
 export {
   createEasyInkPrinterClient,
   DEFAULT_EASYINK_PRINTER_URL,
@@ -15,7 +12,9 @@ export {
   type EasyInkPrinterUserData,
 } from './client'
 
-/**
- * Official Viewer print driver for EasyInk Printer.
- */
-export { createEasyInkPrinterDriver, type EasyInkPrinterDriverOptions } from './driver'
+export {
+  createEasyInkPrinterPrintSdk,
+  type EasyInkPrinterPrintInput,
+  type EasyInkPrinterPrintSdk,
+  type EasyInkPrinterPrintSdkOptions,
+} from './sdk'

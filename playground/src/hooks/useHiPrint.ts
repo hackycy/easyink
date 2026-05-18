@@ -1,5 +1,5 @@
-import type { HiPrintDevice, HiPrintProgress, PrintHtmlOptions } from '@easyink/print-integration-hiprint'
-import { createHiPrintClient, DEFAULT_HIPRINT_URL } from '@easyink/print-integration-hiprint'
+import type { HiPrintDevice, HiPrintPrintInput } from '@easyink/print-integration-hiprint'
+import { createHiPrintClient, createHiPrintPrintSdk, DEFAULT_HIPRINT_URL } from '@easyink/print-integration-hiprint'
 import { computed, reactive, ref, watch } from 'vue'
 
 export const DEFAULT_PRINTER_HOST = DEFAULT_HIPRINT_URL
@@ -8,17 +8,6 @@ export const DEFAULT_PRINTER_COPIES = 1
 const PRINTER_CONFIG_KEY = 'easyink:printerConfig'
 
 export interface PrinterDevice extends HiPrintDevice {}
-
-export interface PrintHTMLOptions {
-  height: number
-  html: string
-  orientation?: 'auto' | 'portrait' | 'landscape'
-  printer: string
-  width: number
-  paperFooter?: number
-  paperHeader?: number
-  forcePageSize?: boolean
-}
 
 export interface PrinterConfig {
   enablePrinterService: boolean
@@ -73,6 +62,13 @@ const client = createHiPrintClient({
   printerName: config.printerDevice,
   defaultCopies: config.printCopies ?? DEFAULT_PRINTER_COPIES,
   forcePageSize: config.forcePageSize,
+})
+const sdk = createHiPrintPrintSdk({
+  client,
+  viewer: 'iframe',
+  printerName: () => config.printerDevice,
+  copies: () => config.printCopies ?? DEFAULT_PRINTER_COPIES,
+  forcePageSize: () => config.forcePageSize ?? false,
 })
 const connectionState = ref<ConnectionState>(client.connectionState)
 const lastError = ref(client.lastError)
@@ -140,25 +136,13 @@ function updateConfig(patch: Partial<PrinterConfig>): void {
   Object.assign(config, patch)
 }
 
-async function printHtml(opts: PrintHTMLOptions): Promise<void> {
-  await client.printHtml(toHiPrintOptions(opts))
-  syncState()
-}
-
-export interface PrintPagesProgress extends HiPrintProgress {}
-
-async function printPages(
-  pages: HTMLElement[],
-  opts: { width: number, height: number, orientation?: 'auto' | 'portrait' | 'landscape', printer: string, forcePageSize?: boolean },
-  onProgress?: (p: PrintPagesProgress) => void,
-): Promise<void> {
-  await client.printPages(pages, {
-    width: opts.width,
-    height: opts.height,
-    orientation: opts.orientation,
-    printerName: opts.printer,
-    forcePageSize: opts.forcePageSize,
-  }, onProgress)
+async function print(input: HiPrintPrintInput): Promise<void> {
+  await sdk.print({
+    ...input,
+    printerName: input.printerName ?? config.printerDevice,
+    copies: input.copies ?? config.printCopies ?? DEFAULT_PRINTER_COPIES,
+    forcePageSize: input.forcePageSize ?? config.forcePageSize ?? false,
+  })
   syncState()
 }
 
@@ -178,6 +162,7 @@ if (config.enablePrinterService) {
 export function usePrinter() {
   return {
     client,
+    sdk,
     config,
     connectionState: computed(() => connectionState.value),
     isConnected: computed(() => connectionState.value === 'connected'),
@@ -196,24 +181,10 @@ export function usePrinter() {
     setEnabled,
     updateConfig,
     refreshDevices,
-    printHtml,
-    printPages,
+    print,
     setForcePageSize,
     isForcePageSize,
   }
 }
 
 export type PrinterStore = ReturnType<typeof usePrinter>
-
-function toHiPrintOptions(opts: PrintHTMLOptions): PrintHtmlOptions {
-  return {
-    html: opts.html,
-    width: opts.width,
-    height: opts.height,
-    orientation: opts.orientation,
-    printerName: opts.printer,
-    forcePageSize: opts.forcePageSize,
-    paperFooter: opts.paperFooter,
-    paperHeader: opts.paperHeader,
-  }
-}

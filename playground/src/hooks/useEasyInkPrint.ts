@@ -1,5 +1,5 @@
-import type { EasyInkPrinterDevice, EasyInkPrinterJob, EasyInkPrinterOffset, EasyInkPrinterPaperSize, EasyInkPrinterPrintPdfOptions, EasyInkPrinterUserData } from '@easyink/print-integration-easyink-printer'
-import { createEasyInkPrinterClient, DEFAULT_EASYINK_PRINTER_URL } from '@easyink/print-integration-easyink-printer'
+import type { EasyInkPrinterDevice, EasyInkPrinterJob, EasyInkPrinterOffset, EasyInkPrinterPaperSize, EasyInkPrinterPrintInput, EasyInkPrinterUserData } from '@easyink/print-integration-easyink-printer'
+import { createEasyInkPrinterClient, createEasyInkPrinterPrintSdk, DEFAULT_EASYINK_PRINTER_URL } from '@easyink/print-integration-easyink-printer'
 import { computed, reactive, ref, watch } from 'vue'
 
 const CONFIG_KEY = 'easyink:printServiceConfig'
@@ -88,6 +88,16 @@ const client = createEasyInkPrinterClient({
   printerName: config.printerName,
   defaultCopies: config.copies,
 })
+const sdk = createEasyInkPrinterPrintSdk({
+  client,
+  viewer: 'iframe',
+  printerName: () => config.printerName,
+  copies: () => config.copies,
+  forcePageSize: () => config.forcePageSize ?? false,
+  resolveRequestOptions: () => ({
+    userData: normalizeUserData(config.userData),
+  }),
+})
 const connectionState = ref(client.connectionState)
 const lastError = ref(client.lastError)
 const devices = ref<PrintServiceDevice[]>([])
@@ -148,16 +158,18 @@ async function refreshDevices(): Promise<PrintServiceDevice[]> {
   return list
 }
 
-async function printPdf(
-  pdfBlob: Blob,
-  opts: EasyInkPrinterPrintPdfOptions,
-): Promise<string> {
-  const jobId = await client.printPdf(pdfBlob, {
-    ...opts,
-    userData: opts.userData ?? normalizeUserData(config.userData),
+async function print(input: EasyInkPrinterPrintInput): Promise<void> {
+  await sdk.print({
+    ...input,
+    printerName: input.printerName ?? config.printerName,
+    copies: input.copies ?? config.copies,
+    forcePageSize: input.forcePageSize ?? config.forcePageSize ?? false,
+    requestOptions: {
+      userData: normalizeUserData(config.userData),
+      ...input.requestOptions,
+    },
   })
   syncState()
-  return jobId
 }
 
 async function waitForJob(jobId: string): Promise<PrintJobInfo> {
@@ -190,6 +202,7 @@ if (config.enabled) {
 export function useEasyInkPrint() {
   return {
     client,
+    sdk,
     config,
     connectionState: computed(() => connectionState.value),
     isConnected: computed(() => connectionState.value === 'connected'),
@@ -210,7 +223,7 @@ export function useEasyInkPrint() {
     setEnabled,
     updateConfig,
     refreshDevices,
-    printPdf,
+    print,
     waitForJob,
   }
 }

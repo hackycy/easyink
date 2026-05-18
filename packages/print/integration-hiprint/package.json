@@ -2,7 +2,7 @@
   "name": "@easyink/print-integration-hiprint",
   "type": "module",
   "version": "0.0.11",
-  "description": "Official HiPrint integration package for EasyInk Viewer",
+  "description": "Official HiPrint client and managed EasyInk print SDK",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",
   "publishConfig": {

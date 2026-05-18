@@ -7,7 +7,7 @@ EasyInk 的本地打印目标很明确：让业务代码只关心“打印什么
 - `@easyink/print-integration-easyink-printer`：对接 EasyInk.Printer (.NET)，把 Viewer 页面转成 PDF 后发送到本地打印服务
 - `@easyink/print-integration-hiprint`：对接 electron-hiprint，直接把 Viewer 页面 HTML 发送给 HiPrint
 
-这两个包都已经包含了“客户端 + Viewer 打印驱动”两层能力。大多数项目不需要自己重写 `PrintDriver`。
+这两个包都已经包含了“客户端 + 托管 Viewer 渲染 + 打印提交”完整链路。大多数项目不需要自己创建 Viewer，也不需要自己注册 `PrintDriver`。
 
 ## 你真正要做的事情
 
@@ -15,8 +15,8 @@ EasyInk 的本地打印目标很明确：让业务代码只关心“打印什么
 
 1. 安装对应的打印包。
 2. 创建打印客户端，管理连接地址、默认打印机和份数。
-3. 把官方驱动注册到 Viewer。
-4. 调用 `viewer.print()`。
+3. 创建对应的 print SDK，选择 `viewer: 'iframe'` 或 `viewer: 'dom'`。
+4. 调用 `printer.print({ schema, data })`。
 5. 在设置页暴露打印机列表、连接状态和错误信息。
 
 也就是说，业务系统真正需要维护的状态通常只有这些：
@@ -36,7 +36,7 @@ EasyInk 的本地打印目标很明确：让业务代码只关心“打印什么
 | **渲染质量** | 适合对矢量质量要求高的正式单据 | 适合标签、小票、跨平台打印 |
 | **通信方式** | HTTP + WebSocket | WebSocket |
 | **典型场景** | 面单、正式报表、A4 文档 | 小票、标签、嵌入 Electron 的桌面应用 |
-| **前端驱动默认 pageSizeMode** | `fixed` | `driver` |
+| **SDK 默认 pageSizeMode** | `fixed` | `driver` |
 | **官方包** | `@easyink/print-integration-easyink-printer` | `@easyink/print-integration-hiprint` |
 
 ## 如何选择
@@ -55,7 +55,7 @@ EasyInk 的本地打印目标很明确：让业务代码只关心“打印什么
 
 ### 不要自己实现驱动的情况
 
-如果你的打印目标只是“把 Viewer 已经渲染好的页面交给本地服务”，官方驱动已经覆盖了绝大多数需求。只有在下面这些情况才建议写自定义驱动：
+如果你的打印目标只是“把 schema/data 打给本地服务”，官方 SDK 已经覆盖了绝大多数需求。只有在下面这些情况才建议写自定义驱动：
 
 - 你有独立的企业打印网关，需要走自定义协议。
 - 你要接专用硬件或厂商 SDK。
@@ -67,10 +67,15 @@ EasyInk 的本地打印目标很明确：让业务代码只关心“打印什么
 
 ```ts
 const client = createEasyInkPrinterClient(...)
+const printer = createEasyInkPrinterPrintSdk({
+  client,
+  viewer: 'iframe',
+})
 
 export function usePrintService() {
 	return {
 		client,
+		printer,
 		connect,
 		disconnect,
 		refreshDevices,
@@ -86,7 +91,7 @@ export function usePrintService() {
 
 这样做的原因有两个：
 
-- Viewer 驱动只负责“本次打印怎么发”，不负责“配置存在哪、何时重连”。
+- print SDK 负责“本次 schema/data 如何渲染并提交”，不负责“配置存在哪、何时重连”。
 - 打印设置页、诊断页、预览页都能共享同一份连接状态。
 
 EasyInk Printer 官方客户端内部使用 VueUse `useWebSocket` 管理长连接。默认会自动重连 3 次，初始延迟 500ms，按 2 倍退避，最大延迟 5000ms；达到上限后进入 `error`，错误信息写入 `lastError`。
@@ -104,13 +109,13 @@ const client = createEasyInkPrinterClient({
 
 ## 常见问题
 
-### Viewer 已渲染成功，但没有打印输出
+### 调用了 print，但没有打印输出
 
 先检查三件事：
 
-1. 打印驱动是否已经注册，`driverId` 是否匹配。
-2. `context.container` 中是否真的存在 `.ei-viewer-page`。
-3. 本地打印服务是否在线，且打印机已经被选中。
+1. 本地打印服务是否在线。
+2. 当前打印机是否已经选中，并且仍然存在于设备列表。
+3. `printer.print()` 的 `onPhase` / `onDiagnostic` 是否报告渲染或提交错误。
 
 ### 为什么 EasyInk Printer 要先转 PDF
 
@@ -127,7 +132,7 @@ const client = createEasyInkPrinterClient({
 1. 先看连接状态是否为 `connected`。
 2. 再看打印机列表是否成功刷新。
 3. 再看当前打印机名称是否存在于设备列表。
-4. 再看 `viewer.print()` 期间的 `onPhase` 和 `onProgress` 事件。
+4. 再看 `printer.print()` 期间的 `onPhase` 和 `onProgress` 事件。
 5. 最后再查本地打印服务日志。
 
 这个顺序的原因是，大多数问题并不在模板渲染，而是在连接、选机和设备侧能力协商。

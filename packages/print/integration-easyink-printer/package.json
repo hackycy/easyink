@@ -2,7 +2,7 @@
   "name": "@easyink/print-integration-easyink-printer",
   "type": "module",
   "version": "0.0.11",
-  "description": "Official EasyInk.Printer integration package for EasyInk Viewer",
+  "description": "Official EasyInk Printer client and managed EasyInk print SDK",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",
   "publishConfig": {
