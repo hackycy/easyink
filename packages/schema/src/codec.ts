@@ -221,11 +221,6 @@ function decodeBenchmarkElement(input: BenchmarkElementInput): DocumentSchema['e
     }
   }
 
-  // Apply v2 migrations for table nodes
-  if (isBenchmarkTableType(type)) {
-    migrateTableV2(decodedNode, type)
-  }
-
   return decodedNode
 }
 
@@ -582,94 +577,5 @@ function encodeTableSchema(table: TableSchema): Record<string, unknown> {
     kind: table.kind,
     topology: table.topology,
     layout: table.layout,
-  }
-}
-
-// ─── v2 Migration Helpers ──────────────────────────────────────────
-
-/** table-static: force all row roles to 'normal'. */
-function migrateTableStaticRows(rows: TableRowSchema[]): TableRowSchema[] {
-  return rows.map(row => ({
-    ...row,
-    role: 'normal' as const,
-  }))
-}
-
-/** table-data: only keep first header/footer row, convert extras to 'normal'. */
-function migrateTableDataRows(rows: TableRowSchema[]): TableRowSchema[] {
-  let headerSeen = false
-  let footerSeen = false
-  return rows.map((row) => {
-    if (row.role === 'header') {
-      if (headerSeen)
-        return { ...row, role: 'normal' as const }
-      headerSeen = true
-    }
-    if (row.role === 'footer') {
-      if (footerSeen)
-        return { ...row, role: 'normal' as const }
-      footerSeen = true
-    }
-    return row
-  })
-}
-
-/** Migrate flat fontSize/color to typography object. */
-function migrateTablePropsTypography(node: MaterialNode): void {
-  const props = node.props
-  if (!props)
-    return
-  // Skip if already migrated
-  if (props.typography)
-    return
-  const fontSize = props.fontSize
-  const color = props.color
-  props.typography = {
-    fontSize: fontSize ?? 9,
-    color: color ?? '#000000',
-    fontWeight: 'normal',
-    fontStyle: 'normal',
-    lineHeight: 1.2,
-    letterSpacing: 0,
-    textAlign: 'left',
-    verticalAlign: 'top',
-  }
-  delete props.fontSize
-  delete props.color
-}
-
-/** Migrate cell.props.textAlign to cell.typography.textAlign. */
-function migrateCellTypography(cell: TableCellSchema): void {
-  const textAlign = cell.props?.textAlign
-  if (textAlign && typeof textAlign === 'string') {
-    if (!cell.typography)
-      cell.typography = {}
-    cell.typography.textAlign = textAlign as 'left' | 'center' | 'right'
-    delete cell.props?.textAlign
-  }
-}
-
-/** Apply v2 migrations to a decoded table element. */
-function migrateTableV2(node: MaterialNode & { table?: TableSchema }, tableType: string): void {
-  const table = node.table
-  if (!table)
-    return
-
-  // Row role migrations
-  if (tableType === 'table-static') {
-    table.topology.rows = migrateTableStaticRows(table.topology.rows)
-  }
-  else if (tableType === 'table-data') {
-    table.topology.rows = migrateTableDataRows(table.topology.rows)
-  }
-
-  // Props typography migration
-  migrateTablePropsTypography(node)
-
-  // Cell typography migration
-  for (const row of table.topology.rows) {
-    for (const cell of row.cells) {
-      migrateCellTypography(cell)
-    }
   }
 }
