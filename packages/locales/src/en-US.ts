@@ -1,4 +1,4 @@
-import type { LocaleMessages } from '../types'
+import type { LocaleMessages } from './types'
 
 const enUS: LocaleMessages = {
   designer: {

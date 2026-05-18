@@ -1,4 +1,4 @@
-import type { PropSchema } from '../types'
+import type { PropSchema } from '@easyink/core'
 
 const FONT_WEIGHT_OPTIONS: NonNullable<PropSchema['enum']> = [
   { label: 'designer.option.normal', value: 'normal' },

@@ -284,8 +284,8 @@ export interface PropertyPanelOverlay {
 }
 
 /**
- * Minimal PropSchema shape used in PropertyPanelOverlay to avoid circular dependency.
- * The actual PropSchema is defined in @easyink/designer; at runtime the same objects are passed.
+ * Minimal PropSchema shape used in PropertyPanelOverlay to avoid pulling designer-only
+ * schema registries into core. At runtime the same objects are passed.
  */
 export interface PropSchemaLike {
   key: string

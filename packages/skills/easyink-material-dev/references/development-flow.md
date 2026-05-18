@@ -120,6 +120,8 @@ Use `propSchemas` for simple `node.props` fields:
 - Labels should be i18n keys.
 - Group names should be one of the groups mapped in `PropertiesPanel.vue` or an intentionally visible custom group.
 
+Built-in base material schemas live in `@easyink/prop-schemas`. Material package `src/prop-schemas.ts` files should contain only material-owned additions or overrides that need to travel with that material package.
+
 Use a custom `read` and `commit` when the property is outside `node.props` or has side effects. `table-data` `showHeader` and `showFooter` are the model example: they live on `node.table`, flush active edits, potentially exit an editing session, and execute `UpdateTableVisibilityCommand`.
 
 Use `requestPropertyPanel()` or `SelectionType.getPropertySchema()` when:
@@ -139,7 +141,7 @@ For a new built-in material:
 4. Import and register Designer entry in `packages/builtin/src/designer.ts`.
 5. Import and register Viewer entry in `packages/builtin/src/viewer.ts`.
 6. Import and append the AI descriptor in `packages/builtin/src/ai.ts` when generation should know it.
-7. Add locale keys in `packages/designer/src/locale/zh-CN.ts` and `packages/designer/src/locale/en-US.ts` for material catalog labels, material-local toolbars, properties, table-kernel commands, history, or placeholders.
+7. Add locale keys in `packages/locales/src/zh-CN.ts` and `packages/locales/src/en-US.ts` for material catalog labels, material-local toolbars, properties, table-kernel commands, history, or placeholders.
 8. Update tests or snapshots affected by built-in type lists.
 9. Run `pnpm -F @easyink/mcp-server build:materials` or `pnpm -F @easyink/mcp-server check:materials` when AI descriptors changed.
 10. Run focused package tests and then `pnpm test` if the change touches shared Designer or Viewer behavior.

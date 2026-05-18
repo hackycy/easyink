@@ -37,6 +37,8 @@
     "@easyink/core": "workspace:*",
     "@easyink/datasource": "workspace:*",
     "@easyink/icons": "workspace:*",
+    "@easyink/locales": "workspace:*",
+    "@easyink/prop-schemas": "workspace:*",
     "@easyink/schema": "workspace:*",
     "@easyink/shared": "workspace:*",
     "@easyink/ui": "workspace:*",

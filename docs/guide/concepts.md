@@ -45,6 +45,15 @@ EasyInk 明确区分三种状态，避免混乱：
 
 物料通过 `capabilities` 声明自身能力：是否可绑定数据（`bindable`）、是否可旋转（`rotatable`）、是否可缩放（`resizable`）、是否支持子元素（`supportsChildren`）、是否支持动画（`supportsAnimation`）、是否支持联合拖放（`supportsUnionDrop`）、是否可分页感知（`pageAware`）、是否支持多重绑定（`multiBinding`）、是否保持宽高比（`keepAspectRatio`）。
 
+## Designer 包边界
+
+`@easyink/designer` 负责工作台、画布、属性面板、注册协议和状态管理。为了让维护边界更清楚，设计器相关的静态资源拆成独立包：
+
+- `@easyink/locales`：维护内置 `zhCN` / `enUS` 语言包。应用侧仍推荐从 `@easyink/designer/locale` 引入，设计器负责向外透出。
+- `@easyink/prop-schemas`：维护内置物料的基础属性 Schema，例如文本、图片、表格、条码等属性面板字段。
+
+因此，修改翻译或内置物料属性项通常只影响这些资源包；只有属性面板协议、注册流程、Store 行为、画布交互等变化才属于 Designer 核心层变化。
+
 ## 数据源（DataSource）
 
 数据源定义了可绑定到元素上的字段树。每个数据源包含一组字段，字段有路径、标签和类型（text/image/number 等）。

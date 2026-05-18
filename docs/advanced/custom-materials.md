@@ -166,10 +166,12 @@ registerMaterialBundle(store, {
 - `type`：Schema 里的稳定标识，发布后不要随意改。
 - `createDefaultNode`：拖入画布和某些自动创建路径都会走这里。
 - `factory`：返回 `MaterialDesignerExtension`，定义设计态内容。
-- `propSchemas`：只适合那些直接落在 `node.props` 上的属性。
+- `propSchemas`：追加到设计器基础属性 Schema 后面，只适合那些直接落在 `node.props` 上的属性。
 - `capabilities`：决定设计器是否显示绑定、旋转、缩放等能力。
 
 如果一个属性不应该直接写入 `node.props`，就不要硬塞进 `propSchemas`，而应该用自定义 overlay 或命令去管理。
+
+内置物料的基础属性 Schema 由 `@easyink/prop-schemas` 维护，设计器注册物料时会先读取这部分基础字段，再合并物料包自己通过 `propSchemas` 提供的扩展字段。自定义物料只需要在注册时传入自己的 `propSchemas`。
 
 ## 第三步：注册 Viewer 侧渲染器
 

@@ -1,6 +1,6 @@
 import type { DesignerStore } from '../store/designer-store'
 import type { MaterialCapabilities, MaterialCatalogEntry, MaterialDefinition, MaterialExtensionFactory, PanelSectionId, PropSchema } from '../types'
-import { getPropSchemas } from './prop-schemas'
+import { getPropSchemas } from '@easyink/prop-schemas'
 
 // ─── Material definitions ────────────────────────────────────────────
 

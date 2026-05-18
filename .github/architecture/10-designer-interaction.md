@@ -323,7 +323,7 @@ interface PropertyPanelOverlay {
 **渲染模型**（从上到下）：
 
 1. **Geometry** -- 位置/尺寸，始终显示
-2. **基础层** -- `MaterialDefinition.props` 驱动，始终显示
+2. **基础层** -- `MaterialDefinition.props` 驱动，始终显示；内置物料的基础字段由 `@easyink/prop-schemas` 提供，注册时再合并物料包自身的 `propSchemas`
 3. **叠加层** -- `PropertyPanelOverlay.schemas` 驱动，仅 deep editing 推送时显示
 4. **BindingSection** -- 按规则显隐（见下）
 5. **可见性/锁定** -- 始终显示
@@ -883,4 +883,3 @@ guide / grid 源也可以渲染为整页直线，由 overlay 决定。
 - 旋转元素的真实 OBB 包围盒吸附（仍按 AABB）
 - SnapLine 等距 / 距离标签
 - 吸附偏好独立 settings 面板（暂留在 popover 内）
-

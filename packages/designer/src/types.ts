@@ -1,5 +1,6 @@
 import type { PropSchema } from '@easyink/core'
 import type { DataSourceDescriptor } from '@easyink/datasource'
+import type { LocaleMessages } from '@easyink/locales'
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import type { MaterialCategory } from '@easyink/shared'
 import type { Component } from 'vue'
@@ -52,6 +53,7 @@ export type {
   TxOptions,
 } from '@easyink/core'
 export * from '@easyink/datasource'
+export type { LocaleMessages } from '@easyink/locales'
 
 // ─── Workbench State ───────────────────────────────────────────────
 
@@ -270,8 +272,4 @@ export type StoreSetup = (store: import('./store/designer-store').DesignerStore)
 export interface PreferenceProvider {
   get: (key: string) => unknown
   set: (key: string, value: unknown) => void
-}
-
-export interface LocaleMessages {
-  [key: string]: string | LocaleMessages
 }

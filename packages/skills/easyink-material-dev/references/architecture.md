@@ -123,7 +123,13 @@ If the request is to add a button, panel, command, diagnostic subscription, or h
 - `capabilities`: controls binding, rotation, resizing, children, animation, union drop, page-aware, multi-binding, aspect lock.
 - `createDefaultNode`: default schema factory.
 - `factory`: Designer extension factory.
-- `propSchemas`: material-owned property schemas appended to base registry.
+- `propSchemas`: material-owned property schemas appended to the base registry from `@easyink/prop-schemas`.
 - `sectionFilter`: hide or show property panel sections.
 
 `quickMaterialTypes` creates quick toolbar entries. `groupedCatalog` creates grouped catalog entries for data, chart, svg, and utility groups.
+
+Designer package boundaries:
+
+- `@easyink/designer` owns workbench behavior, registration, panels, store, canvas interactions, and the public `@easyink/designer/locale` facade.
+- `@easyink/locales` owns built-in locale message objects.
+- `@easyink/prop-schemas` owns built-in base PropSchema declarations. Material packages still own material-specific additions such as table visibility or SVG shape controls.

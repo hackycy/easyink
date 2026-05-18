@@ -411,6 +411,12 @@ importers:
       '@easyink/datasource':
         specifier: workspace:*
         version: link:../datasource
+      '@easyink/locales':
+        specifier: workspace:*
+        version: link:../locales
+      '@easyink/prop-schemas':
+        specifier: workspace:*
+        version: link:../prop-schemas
       '@easyink/icons':
         specifier: workspace:*
         version: link:../icons
@@ -432,6 +438,14 @@ importers:
       vue:
         specifier: catalog:framework
         version: 3.5.31(typescript@6.0.2)
+
+  packages/locales: {}
+
+  packages/prop-schemas:
+    dependencies:
+      '@easyink/core':
+        specifier: workspace:*
+        version: link:../core
 
   packages/export/plugin/dom-pdf:
     dependencies:

@@ -32,7 +32,7 @@ const preferenceProvider = createLocalStoragePreferenceProvider()
 |------|------|------|------|
 | `schema` | `DocumentSchemaInput` | 否 | 文档模板输入，支持 `v-model:schema` 双向绑定；缺失字段会自动补默认值 |
 | `dataSources` | `DataSourceDescriptor[]` | 否 | 数据源描述符列表，定义可绑定的字段树 |
-| `locale` | `LocaleMessages` | 否 | 国际化消息，如 `zhCN` / `enUS` |
+| `locale` | `LocaleMessages` | 否 | 国际化消息，如 `zhCN` / `enUS`；推荐从 `@easyink/designer/locale` 引入 |
 | `preferenceProvider` | `PreferenceProvider` | 否 | 用户偏好持久化 provider |
 | `autoSave` | `TemplateAutoSaveOptions` | 否 | 自动保存配置 |
 | `contributions` | `Contribution[]` | 否 | 贡献扩展列表（如 AI 面板） |
@@ -142,7 +142,7 @@ store.t('common.save')
 
 ## 国际化
 
-内置中英文语言包，也支持自定义。
+内置中英文语言包，也支持自定义。语言包实现位于独立的 `@easyink/locales` 包中，`@easyink/designer/locale` 会继续透出这些语言包，应用侧不需要直接依赖内部维护包。
 
 ```ts
 import { enUS, zhCN } from '@easyink/designer/locale'

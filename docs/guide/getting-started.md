@@ -56,7 +56,7 @@ const preferenceProvider = createLocalStoragePreferenceProvider()
 </template>
 ```
 
-设计器内置 `zhCN` 和 `enUS` 两套语言包，按需传给 `locale` 即可。
+设计器内置 `zhCN` 和 `enUS` 两套语言包，推荐继续从 `@easyink/designer/locale` 引入；语言包实现由独立的 `@easyink/locales` 包维护，并通过设计器透出。
 
 ### 添加数据源
 

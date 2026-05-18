@@ -20,6 +20,8 @@ easyink/
 │   │   └── integration-hiprint/           # @easyink/print-integration-hiprint — HiPrint 客户端与 Viewer 驱动
 │   ├── builtin/                # @easyink/builtin — 内置物料注册与清单汇总包（内部装配层）
 │   ├── designer/               # @easyink/designer — 设计器工作台 Vue 组件
+│   ├── locales/                # @easyink/locales — 设计器内置语言包
+│   ├── prop-schemas/           # @easyink/prop-schemas — 内置物料基础属性 Schema
 │   ├── ui/                     # @easyink/ui — 面板、表单、工作台基础组件
 │   ├── icons/                  # @easyink/icons — 图标资产
 │   ├── ai/                     # @easyink/ai — AI 对话面板、MCP Client、Server Registry、Designer Contribution
@@ -115,8 +117,22 @@ easyink/
 - 管理设计态工作台状态
 - 通过插槽、`setupStore` 和 `useDesignerStore()` 暴露宿主集成点，不在包级直接依赖 `@easyink/viewer`
 - 默认注册内置物料；宿主通过 `setupStore` 追加注册时以后注册覆盖默认注册
+- 依赖 `@easyink/locales` 和 `@easyink/prop-schemas` 获取内置语言包与基础属性 Schema；对外仍通过 `@easyink/designer/locale` 透出语言包
 - 暴露 **Contribution API**（`Contribution` / `ContributionRegistry`）作为唯一外部扩展协议；不直接依赖 `@easyink/ai` 或 `@easyink/schema-tools`
 - 对外发布时保持 `vue` 为 peerDependencies，避免宿主拿到重复 Vue runtime；`codemirror` 属于 designer 自身运行时组成部分，必须作为 dependencies 随包安装，保证开箱即用
+
+### `@easyink/locales`
+
+- 维护设计器内置 `zhCN` / `enUS` 语言包与 `LocaleMessages` 类型
+- 作为静态资源包被 `@easyink/designer` 消费；宿主应用推荐继续从 `@easyink/designer/locale` 引入，避免把资源包路径变成应用层长期合同
+- 翻译新增、改文案、补 locale key 通常只影响该包，不应被误判为 Designer 工作台行为变更
+
+### `@easyink/prop-schemas`
+
+- 维护内置物料的基础属性面板 Schema，例如 text / image / barcode / qrcode / table / flow-row 等公共字段矩阵
+- 只依赖 `@easyink/core` 的 `PropSchema` 类型，不反向依赖 `@easyink/designer`
+- 物料包仍可通过自身 `propSchemas` 提供 material-owned 追加项；Designer 注册时先取基础 Schema，再合并物料包追加 Schema
+- 属性字段、分组、枚举、显示条件等维护通常只影响该包；只有属性面板协议、Store、提交行为或画布交互变化才属于 Designer 核心层变化
 
 ### `@easyink/material-*`
 
@@ -180,7 +196,9 @@ material-* ── core + schema + shared (+ datasource 按需)
   ↑
 builtin ───── designer + viewer + mcp-server + material-*
 
-designer ─── builtin + core + datasource + schema + shared + ui + icons + material-table-kernel
+designer ─── builtin + core + datasource + schema + shared + ui + icons + locales + prop-schemas + material-table-kernel
+locales ─── (no runtime deps)
+prop-schemas ─── core
 viewer ─── builtin + core + datasource + schema + shared
 export-runtime ─── shared
 export-plugin-dom-pdf ─── export-runtime + shared + html2canvas + jspdf
@@ -197,7 +215,8 @@ playground ── designer + ai + viewer + export-runtime + samples + schema
 
 依赖原则：
 
-- `designer` 依赖 `builtin`、`core`、`datasource`、`schema`、`shared`、`ui`、`icons` 与 `material-table-kernel`，默认启用内置物料；调用方可通过 `setupStore` 继续扩展或覆盖
+- `designer` 依赖 `builtin`、`core`、`datasource`、`schema`、`shared`、`ui`、`icons`、`locales`、`prop-schemas` 与 `material-table-kernel`，默认启用内置物料；调用方可通过 `setupStore` 继续扩展或覆盖
+- `locales` 与 `prop-schemas` 是 Designer 静态资源边界包：前者维护内置语言包，后者维护基础属性 Schema。它们可独立构建、测试和发布，但应用层稳定入口仍优先使用 `@easyink/designer` 及其 `./locale` facade
 - 已被 designer 内部直接使用且宿主不应手动补齐的第三方运行时依赖（如 `codemirror`）必须声明为 `dependencies`；只有需要与宿主单例对齐的框架依赖（当前为 `vue`）才保留为 `peerDependencies`
 - `viewer` 依赖 `builtin`、`core`、`schema`、`shared`，默认启用内置物料；调用方可通过 `viewer.registerMaterial()` 继续扩展或覆盖。`viewer` 不依赖 `datasource`，不消费 Designer 的数据源描述符
 - `export-runtime` 仅依赖 `shared`，不绑定任何导出格式实现，不依赖 `viewer`、`designer` 或 Vue

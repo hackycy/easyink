@@ -14,8 +14,8 @@ Prefer locale keys over hardcoded labels for Designer-facing UI:
 
 Add keys to both:
 
-- `packages/designer/src/locale/zh-CN.ts`
-- `packages/designer/src/locale/en-US.ts`
+- `packages/locales/src/zh-CN.ts`
+- `packages/locales/src/en-US.ts`
 
 Material code can translate with:
 
