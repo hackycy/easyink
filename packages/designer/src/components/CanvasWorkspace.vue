@@ -12,6 +12,7 @@ import { useMarqueeSelect } from '../composables/use-marquee-select'
 import { useMaterialDrop } from '../composables/use-material-drop'
 import { useCanvasInteractionController } from '../interactions'
 import { isElementRotatable } from '../materials/capabilities'
+import { getVisibleResizeHandles } from '../materials/control-policy'
 import { getSelectionBox } from '../snap'
 import { clampWorkspaceWindows, hasUsableWorkspaceRect, resolveAnchoredWorkspaceWindows } from '../store/workspace-window-layout'
 import { CANVAS_CONTAINER_KEY } from './canvas-container'
@@ -49,8 +50,6 @@ const cursorPos = ref<{ x: number, y: number } | null>(null)
 const rulerHover = ref<{ axis: 'x' | 'y', position: number } | null>(null)
 
 provide(CANVAS_CONTAINER_KEY, () => containerRef.value)
-
-const resizeHandles: ResizeHandle[] = ['nw', 'n', 'ne', 'w', 'e', 'sw', 's', 'se']
 
 // ─── Composables ─────────────────────────────────────────────────
 
@@ -204,6 +203,13 @@ function handleScrollPointerDown(e: PointerEvent) {
 
 function handleResizePointerDown(e: PointerEvent, elementId: string, handle: ResizeHandle) {
   onHandlePointerDown(e, elementId, handle)
+}
+
+function getElementResizeHandles(elementId: string): ResizeHandle[] {
+  const el = store.getElementById(elementId)
+  if (!el)
+    return []
+  return getVisibleResizeHandles(store, el)
 }
 
 function handleRotatePointerDown(e: PointerEvent, elementId: string) {
@@ -397,7 +403,7 @@ onUnmounted(() => {
               <template v-if="!isMultiSelection && !el.locked && !el.hidden">
                 <!-- 8 resize handles -->
                 <div
-                  v-for="handle in resizeHandles"
+                  v-for="handle in getElementResizeHandles(el.id)"
                   :key="handle"
                   class="ei-canvas-element__handle"
                   :class="`ei-canvas-element__handle--${handle}`"

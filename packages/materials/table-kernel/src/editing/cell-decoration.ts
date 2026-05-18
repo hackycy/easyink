@@ -38,6 +38,8 @@ export function createTableCellDecorationComponent(delegate: TableEditingDelegat
         const cell = t.table.topology.rows[payload.value.row]?.cells[payload.value.col]
         const cs = cell?.colSpan ?? 1
         const rightCol = payload.value.col + cs - 1
+        if (delegate.canResizeColumn?.(t, rightCol) === false)
+          return false
         return rightCol < t.table.topology.columns.length - 1
       })
 
@@ -48,6 +50,8 @@ export function createTableCellDecorationComponent(delegate: TableEditingDelegat
         const cell = t.table.topology.rows[payload.value.row]?.cells[payload.value.col]
         const rs = cell?.rowSpan ?? 1
         const bottomRow = payload.value.row + rs - 1
+        if (delegate.canResizeRow?.(t, bottomRow) === false)
+          return false
         return bottomRow < t.table.topology.rows.length - 1
       })
 

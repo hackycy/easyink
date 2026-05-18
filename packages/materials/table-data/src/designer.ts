@@ -1,4 +1,4 @@
-import type { DatasourceDropHandler, MaterialDesignerExtension, MaterialExtensionContext, SelectionType } from '@easyink/core'
+import type { DatasourceDropHandler, MaterialControlPolicy, MaterialDesignerExtension, MaterialExtensionContext, SelectionType } from '@easyink/core'
 import type { TableEditingDelegate } from '@easyink/material-table-kernel'
 import type { BindingRef, MaterialNode, TableDataSchema, TableNode, TableRowSchema } from '@easyink/schema'
 import type { UnitType } from '@easyink/shared'
@@ -35,6 +35,15 @@ const ROLE_BG_MAP: Record<string, keyof TableDataProps> = {
 }
 
 const PLACEHOLDER_ROW_COUNT = 2
+
+const RUNTIME_HEIGHT_CONTROL_POLICY: MaterialControlPolicy = {
+  geometry: {
+    height: { state: 'disabled', reason: 'designer.reason.runtimeHeight' },
+  },
+  resize: {
+    height: { state: 'hidden', reason: 'designer.reason.runtimeHeight' },
+  },
+}
 
 function readRowBackground(props: TableDataProps, key: keyof TableDataProps): string {
   const value = props[key]
@@ -181,6 +190,7 @@ function createDelegate(context: MaterialExtensionContext): TableEditingDelegate
     getPlaceholderRowCount: () => PLACEHOLDER_ROW_COUNT,
     t: (key: string) => context.t(key),
     getHiddenRowMask: node => getHiddenRowMask(node),
+    canResizeRow: () => false,
   }
 }
 
@@ -299,6 +309,7 @@ export function createTableDataExtension(context: MaterialExtensionContext): Mat
       return nodeSignal.subscribe(render)
     },
 
+    resolveControlPolicy: () => RUNTIME_HEIGHT_CONTROL_POLICY,
     geometry: tableGeometry,
     selectionTypes: [cellSelectionType as SelectionType<unknown>],
     behaviors: [

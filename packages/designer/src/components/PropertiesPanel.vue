@@ -11,6 +11,7 @@ import { EiNumberInput, EiPanel, EiSwitch } from '@easyink/ui'
 import { computed, shallowRef, watchEffect } from 'vue'
 import { useDesignerStore } from '../composables'
 import { isElementRotatable } from '../materials/capabilities'
+import { canEditGeometry, isPropSchemaDisabled as isMaterialPropSchemaDisabled } from '../materials/control-policy'
 import { getPropSchemas, groupPropSchemas } from '../materials/prop-schemas'
 import { defaultDocumentPatch, defaultPagePatch, filterVisible, groupDescriptors, PAGE_PROPERTY_DESCRIPTORS, readPageProperty, splitPatch } from '../page-properties'
 import BindingSection from './BindingSection.vue'
@@ -422,6 +423,8 @@ function previewGeometry(key: string, value: number) {
     return
   if (key === 'rotation' && !isElementRotatable(store, selectedElement.value))
     return
+  if (!canEditGeometry(store, selectedElement.value, key))
+    return
   if (!geoSnapshots.has(key)) {
     geoSnapshots.set(key, readGeometryValue(selectedElement.value, key) ?? 0)
   }
@@ -433,6 +436,8 @@ function commitGeometry(key: string, value: number) {
   if (!el || !isGeometryKey(key))
     return
   if (key === 'rotation' && !isElementRotatable(store, el))
+    return
+  if (!canEditGeometry(store, el, key))
     return
   const oldValue = geoSnapshots.get(key)
   geoSnapshots.delete(key)
@@ -492,6 +497,18 @@ function readPropValue(schema: PropSchema): unknown {
   const value = getByPath(el.props, schema.key)
   return value ?? schema.default
 }
+
+function isGeometryInputDisabled(key: GeometryKey): boolean {
+  const el = selectedElement.value
+  return !el || !canEditGeometry(store, el, key)
+}
+
+function isPropInputDisabled(schema: PropSchema): boolean {
+  const el = selectedElement.value
+  if (!el)
+    return true
+  return isMaterialPropSchemaDisabled(store, el, schema)
+}
 </script>
 
 <template>
@@ -504,12 +521,14 @@ function readPropValue(schema: PropSchema): unknown {
           <EiNumberInput
             label="X"
             :model-value="selectedElement.x"
+            :disabled="isGeometryInputDisabled('x')"
             @update:model-value="previewGeometry('x', $event ?? 0)"
             @commit="commitGeometry('x', $event ?? 0)"
           />
           <EiNumberInput
             label="Y"
             :model-value="selectedElement.y"
+            :disabled="isGeometryInputDisabled('y')"
             @update:model-value="previewGeometry('y', $event ?? 0)"
             @commit="commitGeometry('y', $event ?? 0)"
           />
@@ -517,6 +536,7 @@ function readPropValue(schema: PropSchema): unknown {
             label="W"
             :model-value="selectedElement.width"
             :min="0"
+            :disabled="isGeometryInputDisabled('width')"
             @update:model-value="previewGeometry('width', $event ?? 0)"
             @commit="commitGeometry('width', $event ?? 0)"
           />
@@ -524,6 +544,7 @@ function readPropValue(schema: PropSchema): unknown {
             label="H"
             :model-value="selectedElement.height"
             :min="0"
+            :disabled="isGeometryInputDisabled('height')"
             @update:model-value="previewGeometry('height', $event ?? 0)"
             @commit="commitGeometry('height', $event ?? 0)"
           />
@@ -531,6 +552,7 @@ function readPropValue(schema: PropSchema): unknown {
             v-if="selectedElementRotatable"
             :label="store.t('designer.property.rotation')"
             :model-value="selectedElement.rotation ?? 0"
+            :disabled="isGeometryInputDisabled('rotation')"
             @update:model-value="previewGeometry('rotation', $event ?? 0)"
             @commit="commitGeometry('rotation', $event ?? 0)"
           />
@@ -541,6 +563,7 @@ function readPropValue(schema: PropSchema): unknown {
             :max="1"
             :step="0.1"
             :precision="2"
+            :disabled="isGeometryInputDisabled('alpha')"
             @update:model-value="previewGeometry('alpha', $event ?? 1)"
             @commit="commitGeometry('alpha', $event ?? 1)"
           />
@@ -562,7 +585,7 @@ function readPropValue(schema: PropSchema): unknown {
               :key="schema.key"
               :schema="schema"
               :value="readPropValue(schema)"
-              :disabled="schema.disabled ? schema.disabled(selectedElement.props) : false"
+              :disabled="isPropInputDisabled(schema)"
               :fonts="fontList"
               :t="store.t.bind(store)"
               @preview="previewProp"

@@ -33,4 +33,8 @@ export interface TableEditingDelegate {
    * `showHeader` / `showFooter`. Omitted/undefined means all rows visible.
    */
   getHiddenRowMask?: (node: TableNode) => readonly boolean[] | undefined
+  /** Whether a given row can be resized by the outer table control layer. */
+  canResizeRow?: (node: TableNode, rowIndex: number) => boolean
+  /** Whether a given column can be resized by the outer table control layer. */
+  canResizeColumn?: (node: TableNode, colIndex: number) => boolean
 }

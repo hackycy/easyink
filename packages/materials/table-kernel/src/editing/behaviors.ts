@@ -216,6 +216,8 @@ export function createTableResizeBehavior(delegate: TableEditingDelegate): Behav
         return next()
 
       if (event.command === 'resize-column') {
+        if (delegate.canResizeColumn?.(node, p.index) === false)
+          return
         const cols = node.table.topology.columns
         const col = cols[p.index]
         if (!col)
@@ -238,6 +240,8 @@ export function createTableResizeBehavior(delegate: TableEditingDelegate): Behav
         }, { mergeKey: `resize-col-${p.index}`, label: 'designer.history.resizeTableColumn' })
       }
       else {
+        if (delegate.canResizeRow?.(node, p.index) === false)
+          return
         const rows = node.table.topology.rows
         const row = rows[p.index]
         if (!row)

@@ -99,6 +99,10 @@ export function inferCollectionPath(node: MaterialNode, props: FlowRowProps): st
   return extractCollectionPath(columnPaths)
 }
 
+export function isFlowRowRuntimeRepeating(node: MaterialNode): boolean {
+  return Boolean(inferCollectionPath(node, getFlowRowProps(node)))
+}
+
 export function resolveFlowRows(node: MaterialNode, context: FlowRuntimeContext): FlowRowRenderModel {
   const props = getFlowRowProps(node)
   const collectionPath = inferCollectionPath(node, props)

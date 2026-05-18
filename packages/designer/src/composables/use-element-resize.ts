@@ -1,14 +1,13 @@
+import type { MaterialResizeHandle } from '@easyink/core'
 import type { DesignerStore } from '../store/designer-store'
 import type { SnapLine } from '../types'
 import { isInteractable, ResizeMaterialCommand } from '@easyink/core'
 import { markRaw } from 'vue'
 import { createGeometryService } from '../editing/geometry-service'
+import { canResizeHandle } from '../materials/control-policy'
 import { collectSnapCandidates, pickBestSnap } from '../snap'
 
-export type ResizeHandle
-  = 'nw' | 'n' | 'ne'
-    | 'w' | 'e'
-    | 'sw' | 's' | 'se'
+export type ResizeHandle = MaterialResizeHandle
 
 export interface ElementResizeContext {
   store: DesignerStore
@@ -45,8 +44,7 @@ export function useElementResize(ctx: ElementResizeContext) {
     if (!node || !isInteractable(node))
       return
 
-    const material = store.getMaterial(node.type)
-    if (material && material.capabilities.resizable === false)
+    if (!canResizeHandle(store, node, handle))
       return
 
     const designerExt = store.getDesignerExtension(node.type)

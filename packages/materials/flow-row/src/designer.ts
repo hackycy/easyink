@@ -2,6 +2,7 @@ import type {
   BehaviorRegistration,
   DatasourceDropHandler,
   EditingSessionRef,
+  MaterialControlPolicy,
   MaterialDesignerExtension,
   MaterialExtensionContext,
   MaterialGeometry,
@@ -26,6 +27,15 @@ import {
 
 const FLOW_COLUMN_SELECTION_TYPE = 'flow-row.column'
 const FLOW_ROW_PLACEHOLDER_ROW_COUNT = 2
+
+const RUNTIME_HEIGHT_CONTROL_POLICY: MaterialControlPolicy = {
+  geometry: {
+    height: { state: 'disabled', reason: 'designer.reason.runtimeHeight' },
+  },
+  resize: {
+    height: { state: 'hidden', reason: 'designer.reason.runtimeHeight' },
+  },
+}
 
 interface FlowColumnSelectionPayload {
   index: number
@@ -220,6 +230,11 @@ function createColumnKeyboardBehavior(): BehaviorRegistration {
           ctx.session.setMeta('editingColumn', { index: payload.index })
           return
         }
+        await next()
+        return
+      }
+
+      if (ctx.event.kind !== 'key-down') {
         await next()
         return
       }
@@ -642,6 +657,7 @@ export function createFlowRowExtension(context: MaterialExtensionContext): Mater
       render()
       return nodeSignal.subscribe(render)
     },
+    resolveControlPolicy: () => RUNTIME_HEIGHT_CONTROL_POLICY,
     geometry,
     selectionTypes: [selectionType as SelectionType<unknown>],
     behaviors: [

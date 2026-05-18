@@ -1,7 +1,7 @@
 import type { FlowRowProps } from './schema'
 import { readTrustedViewerHtml } from '@easyink/core'
 import { describe, expect, it } from 'vitest'
-import { renderFlowRowsHtml } from './rendering'
+import { isFlowRowRuntimeRepeating, renderFlowRowsHtml } from './rendering'
 import { createFlowRowNode, FLOW_ROW_DEFAULTS } from './schema'
 import { measureFlowRow, renderFlowRow } from './viewer'
 
@@ -24,7 +24,7 @@ describe('flow-row viewer', () => {
         },
       },
     }, 'pt')
-    const props = node.props as FlowRowProps
+    const props = node.props as unknown as FlowRowProps
 
     expect(node.width).toBeGreaterThan(72)
     expect(props.gap).toBe(2)
@@ -51,7 +51,7 @@ describe('flow-row viewer', () => {
 
   it('uses node height as the material frame and renders designer repeat placeholders', () => {
     const node = createFlowRowNode({ height: 32 })
-    const props = node.props as FlowRowProps
+    const props = node.props as unknown as FlowRowProps
     const model = {
       rows: [props.columns.map((column, index) => ({
         column,
@@ -105,5 +105,24 @@ describe('flow-row viewer', () => {
     expect(html).not.toContain('<b>Burger</b>')
     expect(html).toContain('Cola')
     expect(measured.height).toBeGreaterThan(node.height)
+  })
+
+  it('identifies runtime-repeating flow rows from element or column collection bindings', () => {
+    const elementBound = createFlowRowNode({
+      binding: { sourceId: 'receipt', fieldPath: 'items' },
+    })
+    const columnBound = createFlowRowNode({
+      props: {
+        columns: [
+          { ratio: 1, textAlign: 'left', wrapMode: 'block', binding: { sourceId: 'receipt', fieldPath: 'items/name' } },
+          { ratio: 1, textAlign: 'right', wrapMode: 'inline', binding: { sourceId: 'receipt', fieldPath: 'items/amount' } },
+        ],
+      },
+    })
+    const staticRow = createFlowRowNode()
+
+    expect(isFlowRowRuntimeRepeating(elementBound)).toBe(true)
+    expect(isFlowRowRuntimeRepeating(columnBound)).toBe(true)
+    expect(isFlowRowRuntimeRepeating(staticRow)).toBe(false)
   })
 })

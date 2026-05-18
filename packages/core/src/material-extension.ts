@@ -73,6 +73,52 @@ export interface MaterialDesignerExtension {
    * side-effect that bundles into ResizeMaterialCommand.
    */
   resize?: MaterialResizeAdapter
+
+  /**
+   * Dynamic design-time control policy. Materials use this to declare that
+   * some outer geometry controls, resize handles, or property fields are
+   * unavailable for the current node state (for example runtime-measured
+   * repeat rows whose height is content-owned).
+   */
+  resolveControlPolicy?: (node: MaterialNode, context: MaterialControlPolicyContext) => MaterialControlPolicy
+}
+
+// ─── Design-Time Control Policy ─────────────────────────────────
+
+export type MaterialControlStateKind = 'enabled' | 'disabled' | 'hidden'
+
+export interface MaterialControlState {
+  state: MaterialControlStateKind
+  reason?: string
+}
+
+export type MaterialGeometryControlKey = 'x' | 'y' | 'width' | 'height' | 'rotation' | 'alpha'
+
+export type MaterialResizeHandle
+  = 'nw' | 'n' | 'ne'
+    | 'w' | 'e'
+    | 'sw' | 's' | 'se'
+
+export interface MaterialResizeControlPolicy {
+  width?: MaterialControlState
+  height?: MaterialControlState
+  handles?: Partial<Record<MaterialResizeHandle, MaterialControlState>>
+}
+
+export interface MaterialPropsControlPolicy {
+  fields?: Partial<Record<string, MaterialControlState>>
+  groups?: Partial<Record<string, MaterialControlState>>
+}
+
+export interface MaterialControlPolicy {
+  geometry?: Partial<Record<MaterialGeometryControlKey, MaterialControlState>>
+  resize?: MaterialResizeControlPolicy
+  props?: MaterialPropsControlPolicy
+}
+
+export interface MaterialControlPolicyContext {
+  getSchema: () => DocumentSchema
+  t: (key: string) => string
 }
 
 // ─── Resize Adapter Protocol ─────────────────────────────────────
