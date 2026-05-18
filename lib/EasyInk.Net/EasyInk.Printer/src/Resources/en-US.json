@@ -4,8 +4,10 @@
   "App_AlreadyRunning_Message": "EasyInk Printer is already running.",
   "App_AlreadyRunning_Title": "Information",
 
-  "App_NeedUrlAcl_Message": "EasyInk Printer requires network listening permission to start the HTTP service.\n\nThis operation only needs to be performed once and requires administrator authorization.\nThe application will restart automatically after registration.",
+  "App_NeedUrlAcl_Message": "EasyInk Printer requires network listening permission to start the HTTP service, and a Windows Firewall inbound rule to support LAN access.\n\nThis operation only needs to be performed once and requires administrator authorization.\nThe application will restart automatically after registration.",
   "App_NeedUrlAcl_Title": "Network Permission Required",
+  "App_NeedFirewall_Message": "The EasyInk Printer HTTP service has started, but Windows Firewall does not have an inbound rule for port {0}.\n\nTo allow LAN devices to access the print service through this computer's IP address, allow the application to add a Private/Domain network inbound rule. Administrator authorization is required, and the application will restart automatically after registration.\n\nIf the current Windows network type is Public, switch it to Private first.",
+  "App_NeedFirewall_Title": "LAN Access Permission Required",
 
   "App_CloseConfirm_Message": "Closing the window will stop the print service and interrupt submitted print jobs.\nAre you sure you want to exit?",
   "App_CloseConfirm_Title": "Exit Confirmation",
@@ -41,8 +43,10 @@
   "App_ServerStartFailed": "Server failed to start: {0}",
 
   "App_AclSuccess": "Network permission registered successfully!\n\nThe application will restart.",
+  "App_NetworkAccessSuccess": "Network listening permission and the firewall inbound rule were configured successfully!\n\nThe application will restart.",
   "App_AclSuccess_Title": "EasyInk Printer",
   "App_AclFailure": "Network permission registration failed.\n\n{0}",
+  "App_NetworkAccessFailure": "LAN access configuration failed.\n\n{0}",
   "App_AclFailure_Title": "EasyInk Printer - Registration Failed",
   "App_AclException": "Network permission registration exception.\n\n{0}",
   "App_AclException_Title": "EasyInk Printer - Registration Exception",

@@ -32,6 +32,12 @@ static class Program
             return;
         }
 
+        if (args.Length >= 3 && args[0] == "--ensure-network-access" && int.TryParse(args[1], out var networkPort))
+        {
+            EnsureNetworkAccess(networkPort, args[2]);
+            return;
+        }
+
         var launchedByAutoStart = IsAutoStartLaunch(args);
 
         bool createdNew;
@@ -170,10 +176,15 @@ static class Program
 
                 if (result == DialogResult.OK)
                 {
-                    LaunchUrlAclRegistration(config.HttpPort);
+                    LaunchNetworkAccessRegistration(config.HttpPort);
                     return;
                 }
             }
+        }
+        else
+        {
+            if (PromptForFirewallRuleIfNeeded(config.HttpPort))
+                return;
         }
 
         var trayIcon = services.GetRequiredService<TrayIcon>();
@@ -214,7 +225,7 @@ static class Program
 
                     if (result == DialogResult.OK)
                     {
-                        LaunchUrlAclRegistration(config.HttpPort);
+                        LaunchNetworkAccessRegistration(config.HttpPort);
                         Application.Exit();
                         return;
                     }
@@ -222,6 +233,8 @@ static class Program
             }
             if (httpServer.IsRunning)
             {
+                if (PromptForFirewallRuleIfNeeded(config.HttpPort))
+                    return;
                 trayIcon.UpdateStatus(LangManager.Get("Tray_Status_Running", config.HttpPort));
                 trayIcon.ShowBalloon("EasyInk Printer", LangManager.Get("Tray_Balloon_Restarted"));
             }
@@ -477,60 +490,178 @@ static class Program
         }
     }
 
-    private static void LaunchUrlAclRegistration(int port)
+    private static bool PromptForFirewallRuleIfNeeded(int port)
+    {
+        if (IsFirewallRuleConfigured(port)) return false;
+
+        var result = MessageBox.Show(
+            LangManager.Get("App_NeedFirewall_Message", port),
+            LangManager.Get("App_NeedFirewall_Title"),
+            MessageBoxButtons.OKCancel,
+            MessageBoxIcon.Warning);
+
+        if (result == DialogResult.OK)
+        {
+            LaunchNetworkAccessRegistration(port);
+            Application.Exit();
+            return true;
+        }
+
+        return false;
+    }
+
+    private static void LaunchNetworkAccessRegistration(int port)
     {
         var user = $"{Environment.UserDomainName}\\{Environment.UserName}";
         Process.Start(new ProcessStartInfo
         {
             FileName = Application.ExecutablePath,
-            Arguments = $"--register-urlacl {port} \"{user}\"",
+            Arguments = $"--ensure-network-access {port} \"{user}\"",
             Verb = "runas",
             UseShellExecute = true
         });
+    }
+
+    private static bool IsFirewallRuleConfigured(int port)
+    {
+        var ruleName = GetFirewallRuleName(port);
+        try
+        {
+            var result = RunNetsh($"advfirewall firewall show rule name=\"{ruleName}\"");
+            return result.ExitCode == 0;
+        }
+        catch (Exception ex)
+        {
+            SimpleLogger.Debug("检查防火墙规则异常", ex);
+            return false;
+        }
+    }
+
+    private static string GetFirewallRuleName(int port)
+    {
+        return $"EasyInk Printer HTTP {port}";
+    }
+
+    private static void EnsureNetworkAccess(int port, string user)
+    {
+        try
+        {
+            var urlAcl = EnsureUrlAcl(port, user);
+            var firewall = EnsureFirewallRule(port);
+
+            if (urlAcl.Success && firewall.Success)
+            {
+                MessageBox.Show(
+                    LangManager.Get("App_NetworkAccessSuccess"),
+                    LangManager.Get("App_AclSuccess_Title"),
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+                RestartNonElevated();
+            }
+            else
+            {
+                var message = BuildCommandFailureMessage(urlAcl, firewall);
+                MessageBox.Show(
+                    LangManager.Get("App_NetworkAccessFailure", message),
+                    LangManager.Get("App_AclFailure_Title"),
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                LangManager.Get("App_AclException", ex.Message),
+                LangManager.Get("App_AclException_Title"),
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+    }
+
+    private static CommandResult EnsureUrlAcl(int port, string user)
+    {
+        var url = $"http://+:{port}/";
+        var show = RunNetsh($"http show urlacl url={url}");
+        if (show.ExitCode == 0 && show.Output.IndexOf(user, StringComparison.OrdinalIgnoreCase) >= 0)
+            return CommandResult.SuccessResult(show.Output);
+
+        if (show.ExitCode == 0)
+            RunNetsh($"http delete urlacl url={url}");
+
+        return RunNetsh($"http add urlacl url={url} user=\"{user}\"");
+    }
+
+    private static CommandResult EnsureFirewallRule(int port)
+    {
+        var ruleName = GetFirewallRuleName(port);
+        RunNetsh($"advfirewall firewall delete rule name=\"{ruleName}\"");
+        return RunNetsh($"advfirewall firewall add rule name=\"{ruleName}\" dir=in action=allow protocol=TCP localport={port} profile=private,domain");
+    }
+
+    private static string BuildCommandFailureMessage(params CommandResult[] results)
+    {
+        var sb = new StringBuilder();
+        foreach (var result in results)
+        {
+            if (result.Success) continue;
+            if (sb.Length > 0) sb.AppendLine();
+            sb.AppendLine(result.Command);
+            var message = string.IsNullOrWhiteSpace(result.Error) ? result.Output : result.Error;
+            sb.AppendLine(string.IsNullOrWhiteSpace(message) ? $"ExitCode: {result.ExitCode}" : message.Trim());
+        }
+
+        return sb.ToString();
+    }
+
+    private static CommandResult RunNetsh(string arguments)
+    {
+        using (var process = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = "netsh",
+                Arguments = arguments,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                StandardOutputEncoding = Encoding.Default,
+                StandardErrorEncoding = Encoding.Default
+            }
+        })
+        {
+            process.Start();
+            var error = process.StandardError.ReadToEnd();
+            var output = process.StandardOutput.ReadToEnd();
+            process.WaitForExit();
+
+            return new CommandResult(arguments, process.ExitCode, output, error);
+        }
     }
 
     private static void RegisterUrlAcl(int port, string user)
     {
         try
         {
-            using (var process = new Process
-            {
-                StartInfo = new ProcessStartInfo
-                {
-                    FileName = "netsh",
-                    Arguments = $"http add urlacl url=http://+:{port}/ user={user}",
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    StandardOutputEncoding = Encoding.Default,
-                    StandardErrorEncoding = Encoding.Default
-                }
-            })
-            {
-                process.Start();
-                var error = process.StandardError.ReadToEnd();
-                var output = process.StandardOutput.ReadToEnd();
-                process.WaitForExit();
+            var result = EnsureUrlAcl(port, user);
 
-                if (process.ExitCode == 0)
-                {
-                    MessageBox.Show(
-                        LangManager.Get("App_AclSuccess"),
-                        LangManager.Get("App_AclSuccess_Title"),
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Information);
-                    RestartNonElevated();
-                }
-                else
-                {
-                    var message = string.IsNullOrWhiteSpace(error) ? output : error;
-                    MessageBox.Show(
-                        LangManager.Get("App_AclFailure", message),
-                        LangManager.Get("App_AclFailure_Title"),
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Error);
-                }
+            if (result.ExitCode == 0)
+            {
+                MessageBox.Show(
+                    LangManager.Get("App_AclSuccess"),
+                    LangManager.Get("App_AclSuccess_Title"),
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+                RestartNonElevated();
+            }
+            else
+            {
+                var message = string.IsNullOrWhiteSpace(result.Error) ? result.Output : result.Error;
+                MessageBox.Show(
+                    LangManager.Get("App_AclFailure", message),
+                    LangManager.Get("App_AclFailure_Title"),
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
             }
         }
         catch (Exception ex)
@@ -551,5 +682,27 @@ static class Program
             Arguments = Application.ExecutablePath,
             UseShellExecute = false
         });
+    }
+
+    private sealed class CommandResult
+    {
+        public CommandResult(string command, int exitCode, string output, string error)
+        {
+            Command = command;
+            ExitCode = exitCode;
+            Output = output;
+            Error = error;
+        }
+
+        public string Command { get; }
+        public int ExitCode { get; }
+        public string Output { get; }
+        public string Error { get; }
+        public bool Success => ExitCode == 0;
+
+        public static CommandResult SuccessResult(string output)
+        {
+            return new CommandResult("", 0, output, "");
+        }
     }
 }
