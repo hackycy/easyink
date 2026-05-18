@@ -129,6 +129,10 @@ function getDesignerColumnRects(node: MaterialNode): FlowColumnLayoutRect[] {
   return cached?.signature === createLayoutSignature(node) ? cached.rects : computeFlowColumnRects(node)
 }
 
+function isColumnBound(node: MaterialNode, index: number): boolean {
+  return Boolean(getFlowRowProps(node).columns[index]?.binding)
+}
+
 function measureRenderedLayout(container: HTMLElement, node: MaterialNode): { rects: FlowColumnLayoutRect[], height: number } | null {
   const root = container.querySelector<HTMLElement>('[data-easyink-material="flow-row"]')
   if (!root)
@@ -350,6 +354,8 @@ function createColumnKeyboardBehavior(): BehaviorRegistration {
 
       if (ctx.event.kind === 'command') {
         if (ctx.event.command === 'enter-edit') {
+          if (isColumnBound(ctx.node, payload.index))
+            return
           ctx.session.setSelectionScopedMeta('editingColumn', { index: payload.index }, ctx.selection)
           return
         }
@@ -379,6 +385,8 @@ function createColumnKeyboardBehavior(): BehaviorRegistration {
       if (event.key === 'Enter' || event.key === 'F2') {
         event.originalEvent.preventDefault()
         event.originalEvent.stopPropagation()
+        if (isColumnBound(ctx.node, payload.index))
+          return
         ctx.session.setSelectionScopedMeta('editingColumn', { index: payload.index }, ctx.selection)
         return
       }
@@ -480,7 +488,7 @@ function createColumnCommandBehavior(): BehaviorRegistration {
         ctx.tx.run<MaterialNode>(ctx.node.id, (draft) => {
           const props = getFlowRowProps(draft)
           const column = props.columns[p.index]
-          if (column) {
+          if (column && !column.binding) {
             column.content = p.text
             column.binding = undefined
           }
@@ -600,7 +608,8 @@ function createColumnDecorationComponent(context: MaterialExtensionContext) {
       const rect = computed(() => props.rects[0])
       const payload = computed(() => props.selection.payload as FlowColumnSelectionPayload)
       const editingColumn = computed(() => props.session.meta.editingColumn as { index: number } | undefined)
-      const isEditingThis = computed(() => editingColumn.value?.index === payload.value.index)
+      const selectedColumn = computed(() => getFlowRowProps(props.node).columns[payload.value.index])
+      const isEditingThis = computed(() => editingColumn.value?.index === payload.value.index && !selectedColumn.value?.binding)
       const editText = ref('')
       const activeEditTarget = ref<number | null>(null)
       let activeGesture: ReturnType<typeof createPointerGesture> | null = null
@@ -719,7 +728,7 @@ function createColumnDecorationComponent(context: MaterialExtensionContext) {
           return null
         const u = props.unit
         const flowProps = getFlowRowProps(props.node)
-        const currentColumn = flowProps.columns[payload.value.index]
+        const currentColumn = selectedColumn.value
         const canRemoveColumn = flowProps.columns.length > 1
         const children = [
           h('div', {

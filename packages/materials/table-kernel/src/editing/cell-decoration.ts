@@ -13,6 +13,11 @@ import {
 import { computed, defineComponent, h, onUnmounted, ref, watch } from 'vue'
 import { createTableToolbarGroups } from './toolbar'
 
+function isCellBound(node: TableNode | null, row: number, col: number): boolean {
+  const cell = node?.table.topology.rows[row]?.cells[col]
+  return Boolean(cell?.binding || cell?.staticBinding)
+}
+
 /**
  * Create a TableCellDecoration component with the delegate captured in closure.
  * This allows toolbar and inline editing to access material-specific context
@@ -72,7 +77,7 @@ export function createTableCellDecorationComponent(delegate: TableEditingDelegat
         const ec = editingCell.value
         if (!ec)
           return false
-        return ec.row === payload.value.row && ec.col === payload.value.col
+        return ec.row === payload.value.row && ec.col === payload.value.col && !isCellBound(tableNode.value, payload.value.row, payload.value.col)
       })
 
       const editText = ref('')

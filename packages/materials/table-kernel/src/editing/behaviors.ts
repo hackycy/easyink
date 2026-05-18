@@ -224,6 +224,9 @@ export function createTableCellEditBehavior(delegate: TableEditingDelegate): Beh
       }
 
       const payload = ctx.selection.payload as TableCellPayload
+      const cell = node.table.topology.rows[payload.row]?.cells[payload.col]
+      if (cell?.binding || cell?.staticBinding)
+        return
 
       // table-data data-area cells cannot be inline-edited
       if (delegate.getTableKind() === 'data') {
@@ -345,6 +348,8 @@ export function createTableCommandHandlerBehavior(delegate: TableEditingDelegate
           ctx.tx.run<TableNode>(node.id, (d) => {
             const c = d.table.topology.rows[p.row]?.cells[p.col]
             if (c) {
+              if (c.binding || c.staticBinding)
+                return
               if (!c.content)
                 c.content = {}
               c.content.text = p.text
