@@ -3,8 +3,8 @@ import { FLOW_ROW_TYPE } from './schema'
 
 export const flowRowAIMaterialDescriptor = {
   type: FLOW_ROW_TYPE,
-  description: 'Receipt/detail row with mixed block and inline columns. Block columns take a full line; inline columns share a line by ratio.',
-  properties: ['columns', 'gap', 'typography', 'backgroundColor', 'binding'],
+  description: 'Receipt/detail row with mixed block and inline columns. Block columns take a full line; inline columns share a line by ratio, horizontal/vertical padding, and per-column alignment.',
+  properties: ['columns', 'gap', 'paddingX', 'paddingY', 'typography', 'backgroundColor', 'binding'],
   requiredProps: ['columns', 'gap', 'typography'],
   binding: 'multi',
   usage: [
@@ -14,7 +14,8 @@ export const flowRowAIMaterialDescriptor = {
   ],
   schemaRules: [
     'Element type must be flow-row.',
-    'props.columns must be a non-empty array of { ratio, textAlign, wrapMode, content?, binding? }.',
+    'props.columns must be a non-empty array of { ratio, textAlign, verticalAlign?, wrapMode, content?, binding? }.',
+    'Use props.paddingX and props.paddingY for horizontal and vertical cell content inset; legacy props.padding is read as both values.',
     'Column bindings may be absolute collection paths such as items/name; node.binding may point to items.',
     'Do not encode header/footer/table topology in flow-row; use table-data for table semantics.',
   ],

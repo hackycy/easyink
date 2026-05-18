@@ -27,6 +27,9 @@ describe('flow-row viewer', () => {
     const props = node.props as unknown as FlowRowProps
 
     expect(node.width).toBeGreaterThan(72)
+    expect(node.height).toBeGreaterThan(26)
+    expect(props.paddingX).toBeGreaterThan(2)
+    expect(props.paddingY).toBeGreaterThan(2)
     expect(props.gap).toBe(2)
     expect(props.typography.fontSize).toBe(9)
   })
@@ -60,16 +63,49 @@ describe('flow-row viewer', () => {
       }))],
     }
 
-    const html = renderFlowRowsHtml(node, model, 'mm', { designer: true, placeholderRows: 2 })
+    const html = renderFlowRowsHtml(node, model, 'mm', { designer: true, placeholderRows: 1 })
 
     expect(html).toContain('height:100%')
     expect(html).toContain('min-height:32mm')
     expect(html).toContain('data-flow-row-preview="1"')
-    expect(html).toContain('data-flow-row-preview="2"')
+    expect(html).not.toContain('data-flow-row-preview="2"')
+  })
+
+  it('renders padded cells with horizontal and vertical alignment', () => {
+    const node = createFlowRowNode({
+      props: {
+        paddingX: 2,
+        paddingY: 3,
+        columns: [
+          { ratio: 1, textAlign: 'center', verticalAlign: 'middle', wrapMode: 'inline', content: 'Centered' },
+          { ratio: 1, textAlign: 'right', verticalAlign: 'bottom', wrapMode: 'inline', content: 'Bottom' },
+        ],
+      },
+    })
+
+    const html = readTrustedViewerHtml(renderFlowRow(node, viewerContext).html!)
+
+    expect(html).toContain('text-align:center')
+    expect(html).toContain('justify-content:center')
+    expect(html).toContain('text-align:right')
+    expect(html).toContain('justify-content:flex-end')
+    expect(html).toContain('padding:3mm 2mm')
+  })
+
+  it('reads legacy padding as both horizontal and vertical padding', () => {
+    const node = createFlowRowNode({
+      props: {
+        padding: 4,
+      },
+    })
+    const html = readTrustedViewerHtml(renderFlowRow(node, viewerContext).html!)
+
+    expect(html).toContain('padding:4mm 4mm')
   })
 
   it('expands collection-bound rows and escapes resolved content', () => {
     const node = createFlowRowNode({
+      height: 10,
       binding: { sourceId: 'receipt', fieldPath: 'items' },
       props: {
         columns: [

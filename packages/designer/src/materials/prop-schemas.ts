@@ -261,6 +261,8 @@ const TABLE_DATA_PROP_SCHEMAS: PropSchema[] = [
 
 const FLOW_ROW_PROP_SCHEMAS: PropSchema[] = [
   { key: 'gap', label: 'designer.property.gap', type: 'number', group: 'layout', min: 0, max: 20, step: 0.5 },
+  { key: 'paddingX', label: 'designer.property.paddingHorizontal', type: 'number', group: 'layout', min: 0, max: 20, step: 0.5 },
+  { key: 'paddingY', label: 'designer.property.paddingVertical', type: 'number', group: 'layout', min: 0, max: 20, step: 0.5 },
   { key: 'typography.fontSize', label: 'designer.property.fontSize', type: 'number', group: 'typography', min: 1, max: 100, step: 1 },
   { key: 'typography.color', label: 'designer.property.color', type: 'color', group: 'typography' },
   { key: 'typography.fontWeight', label: 'designer.property.fontWeight', type: 'enum', group: 'typography', enum: FONT_WEIGHT_OPTIONS },

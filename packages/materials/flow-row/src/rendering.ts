@@ -18,7 +18,7 @@ interface FlowSegment {
   columns: Array<{ column: FlowColumnDef, index: number }>
 }
 
-interface FlowRenderCell {
+export interface FlowRenderCell {
   column: FlowColumnDef
   index: number
   text: string
@@ -37,9 +37,12 @@ export interface FlowRuntimeContext {
 
 export function getFlowRowProps(node: MaterialNode): FlowRowProps {
   const raw = getNodeProps<Partial<FlowRowProps>>(node)
+  const { padding: legacyPadding, ...rawProps } = raw
   return {
     ...FLOW_ROW_DEFAULTS,
-    ...raw,
+    ...rawProps,
+    paddingX: raw.paddingX ?? legacyPadding ?? FLOW_ROW_DEFAULTS.paddingX,
+    paddingY: raw.paddingY ?? legacyPadding ?? FLOW_ROW_DEFAULTS.paddingY,
     typography: {
       ...FLOW_ROW_TYPOGRAPHY_DEFAULTS,
       ...(raw.typography ?? {}),
@@ -53,10 +56,12 @@ export function normalizeColumns(columns: FlowColumnDef[] | undefined): FlowColu
   return source.map((column) => {
     const ratio = typeof column.ratio === 'number' && column.ratio > 0 ? column.ratio : 1
     const textAlign = column.textAlign === 'center' || column.textAlign === 'right' ? column.textAlign : 'left'
+    const verticalAlign = column.verticalAlign === 'top' || column.verticalAlign === 'bottom' ? column.verticalAlign : 'middle'
     const wrapMode = column.wrapMode === 'block' ? 'block' : 'inline'
     return {
       ratio,
       textAlign,
+      verticalAlign,
       wrapMode,
       content: typeof column.content === 'string' ? column.content : '',
       binding: column.binding ? { ...column.binding } : undefined,
@@ -173,11 +178,23 @@ export function measureFlowRows(node: MaterialNode, model: FlowRowRenderModel): 
   return computeFlowLayout(node.width, props, model.rows).height
 }
 
+export function createFlowRowPlaceholderRows(template: FlowRenderCell[] | undefined, count: number): FlowRenderCell[][] {
+  if (!template || count <= 0)
+    return []
+  return Array.from({ length: count }, () => template.map(cell => ({
+    ...cell,
+    text: '',
+    placeholder: true,
+  })))
+}
+
 function computeFlowLayout(width: number, props: FlowRowProps, rows: FlowRenderCell[][]): { height: number, rects: FlowColumnLayoutRect[] } {
   let y = 0
   const rects: FlowColumnLayoutRect[] = []
   const segments = buildSegments(props.columns)
   const gap = Math.max(0, props.gap || 0)
+  const paddingX = Math.max(0, props.paddingX || 0)
+  const paddingY = Math.max(0, props.paddingY || 0)
 
   rows.forEach((cells, rowIndex) => {
     if (rowIndex > 0)
@@ -187,7 +204,7 @@ function computeFlowLayout(width: number, props: FlowRowProps, rows: FlowRenderC
       if (segment.kind === 'block') {
         const item = segment.columns[0]!
         const cell = cells[item.index]!
-        const h = estimateTextHeight(cell.text, width, props)
+        const h = estimateTextHeight(cell.text, Math.max(0, width - paddingX * 2), props) + paddingY * 2
         rects.push({ index: item.index, x: 0, y, w: width, h })
         y += h + gap
         continue
@@ -202,7 +219,7 @@ function computeFlowLayout(width: number, props: FlowRowProps, rows: FlowRenderC
       for (const item of segment.columns) {
         const cell = cells[item.index]!
         const w = availableWidth * Math.max(0.0001, item.column.ratio) / ratioTotal
-        const h = estimateTextHeight(cell.text, w, props)
+        const h = estimateTextHeight(cell.text, Math.max(0, w - paddingX * 2), props) + paddingY * 2
         pending.push({ index: item.index, x, y, w, h })
         rowHeight = Math.max(rowHeight, h)
         x += w + gap
@@ -255,6 +272,8 @@ export function renderFlowRowsHtml(
   const segments = buildSegments(props.columns)
   const typography = props.typography
   const gap = Math.max(0, props.gap || 0)
+  const paddingX = Math.max(0, props.paddingX || 0)
+  const paddingY = Math.max(0, props.paddingY || 0)
   const bg = props.backgroundColor ? `background:${escapeAttr(props.backgroundColor)};` : ''
   const outerStyle = [
     'display:flex',
@@ -277,7 +296,7 @@ export function renderFlowRowsHtml(
 
   const rows = [
     ...model.rows,
-    ...createPlaceholderRows(model.rows[0], Math.max(0, options.placeholderRows ?? 0)),
+    ...createFlowRowPlaceholderRows(model.rows[0], Math.max(0, options.placeholderRows ?? 0)),
   ]
   const rowBlocks = rows.map((cells, rowIndex) => {
     const isPlaceholderRow = cells.some(cell => cell.placeholder)
@@ -288,6 +307,8 @@ export function renderFlowRowsHtml(
         return renderCell(cell, unit, {
           width: '100%',
           display: 'block',
+          paddingX,
+          paddingY,
         })
       }
 
@@ -298,6 +319,8 @@ export function renderFlowRowsHtml(
         return renderCell(cell, unit, {
           width: `${widthPct.toFixed(6)}%`,
           display: 'block',
+          paddingX,
+          paddingY,
         })
       }).join('')
       return `<div style="display:flex;gap:${gap}${unit};width:100%;box-sizing:border-box">${children}</div>`
@@ -320,26 +343,19 @@ export function renderFlowRowsHtml(
   return `<div data-easyink-material="flow-row" style="${outerStyle}">${content}</div>`
 }
 
-function createPlaceholderRows(template: FlowRenderCell[] | undefined, count: number): FlowRenderCell[][] {
-  if (!template || count <= 0)
-    return []
-  return Array.from({ length: count }, () => template.map(cell => ({
-    ...cell,
-    text: '',
-    placeholder: true,
-  })))
-}
-
 function renderCell(
   cell: FlowRenderCell,
   unit: string,
-  layout: { width: string, display: string },
+  layout: { width: string, display: string, paddingX: number, paddingY: number },
 ): string {
   const column = cell.column
-  const content = cell.placeholder ? '<span style="display:block;width:100%;height:1em;border-radius:2px;background:currentColor">&nbsp;</span>' : cell.text ? escapeHtml(cell.text) : '&nbsp;'
+  const content = cell.placeholder ? '<span style="display:block;width:100%;height:1em;border-radius:2px;background:currentColor;opacity:.72">&nbsp;</span>' : cell.text ? escapeHtml(cell.text) : '&nbsp;'
   const label = column.binding ? ` data-flow-row-bound="${escapeAttr(column.binding.fieldLabel || column.binding.fieldPath)}"` : ''
+  const alignItems = column.verticalAlign === 'bottom' ? 'flex-end' : column.verticalAlign === 'middle' ? 'center' : 'flex-start'
   const style = [
-    `display:${layout.display}`,
+    'display:flex',
+    'flex-direction:column',
+    `justify-content:${alignItems}`,
     `width:${layout.width}`,
     'min-width:0',
     'box-sizing:border-box',
@@ -347,9 +363,9 @@ function renderCell(
     'overflow-wrap:anywhere',
     'word-break:break-word',
     `text-align:${column.textAlign}`,
-    `padding:0${unit}`,
+    `padding:${layout.paddingY}${unit} ${layout.paddingX}${unit}`,
   ].join(';')
-  return `<div data-flow-row-column="${cell.index}"${label} style="${style}">${content}</div>`
+  return `<div data-flow-row-column="${cell.index}"${label} style="${style}"><span style="display:block;width:100%">${content}</span></div>`
 }
 
 function renderEmptyPlaceholder(): string {
