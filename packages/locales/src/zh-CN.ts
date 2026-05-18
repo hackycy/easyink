@@ -10,7 +10,7 @@ const zhCN: LocaleMessages = {
       image: '图片',
       table: '表格',
       dataTable: '数据表格',
-      flowRow: '流式明细行',
+      flowRow: '流动行',
       barcode: '条形码',
       qrcode: '二维码',
       line: '线条',
