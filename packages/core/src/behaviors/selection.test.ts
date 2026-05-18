@@ -2,6 +2,20 @@ import type { BehaviorContext, Selection } from '../editing-session'
 import { describe, expect, it, vi } from 'vitest'
 import { selectionMiddleware } from './selection'
 
+const geometry: BehaviorContext['geometry'] = {
+  getPageGeometry: () => ({
+    pageOffset: { x: 0, y: 0 },
+    zoom: 1,
+    scroll: { x: 0, y: 0 },
+    documentUnit: 'px',
+  }),
+  screenToDocument: point => point,
+  documentToScreen: point => point,
+  documentToLocal: point => point,
+  localToDocument: point => point,
+  getSelectionRects: () => [],
+}
+
 function createContext(hit: Selection | null): BehaviorContext {
   let currentSelection: Selection | null = {
     type: 'table.cell',
@@ -31,9 +45,7 @@ function createContext(hit: Selection | null): BehaviorContext {
       hitTest: () => hit,
     },
     tx: {} as BehaviorContext['tx'],
-    geometry: {
-      documentToLocal: point => point,
-    } as BehaviorContext['geometry'],
+    geometry,
     selectionStore: {
       get selection() {
         return currentSelection
