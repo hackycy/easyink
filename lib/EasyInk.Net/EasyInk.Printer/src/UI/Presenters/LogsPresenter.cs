@@ -199,11 +199,20 @@ internal sealed class LogsPresenter : IDisposable
 
     private static void NormalizeRange(ref DateTime from, ref DateTime to)
     {
-        if (from <= to) return;
+        var fromDate = from.Date;
+        var toDate = to.Date;
 
-        var tmp = from;
-        from = to;
-        to = tmp;
+        if (fromDate > toDate)
+        {
+            var tmp = fromDate;
+            fromDate = toDate;
+            toDate = tmp;
+        }
+
+        from = fromDate;
+        to = toDate >= DateTime.MaxValue.Date
+            ? DateTime.MaxValue
+            : toDate.AddDays(1).AddTicks(-1);
     }
 
     private void Post(Action<ILogsView> update)

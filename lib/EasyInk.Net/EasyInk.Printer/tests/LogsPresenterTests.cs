@@ -12,6 +12,22 @@ namespace EasyInk.Printer.Tests;
 public class LogsPresenterTests
 {
     [Fact]
+    public async Task RefreshAsync_UsesWholeDayRangeForDateOnlyFilters()
+    {
+        LangManager.Initialize("zh-CN");
+        var service = new FakeAuditService(Array.Empty<PrintAuditLog>());
+        var presenter = new LogsPresenter(service);
+        presenter.Attach(new TestLogsView());
+
+        await presenter.RefreshAsync(
+            new DateTime(2026, 5, 17, 15, 30, 0),
+            new DateTime(2026, 5, 18, 9, 45, 0));
+
+        Assert.Equal(new DateTime(2026, 5, 17, 0, 0, 0), service.LastStartTime);
+        Assert.Equal(new DateTime(2026, 5, 18, 23, 59, 59, 999).AddTicks(9999), service.LastEndTime);
+    }
+
+    [Fact]
     public async Task ExportCsvAsync_WritesCsvWithCurrentDateRangeAndEscaping()
     {
         LangManager.Initialize("zh-CN");
@@ -41,7 +57,7 @@ public class LogsPresenterTests
 
             Assert.Equal(1, count);
             Assert.Equal(startTime, service.LastStartTime);
-            Assert.Equal(endTime, service.LastEndTime);
+            Assert.Equal(new DateTime(2026, 5, 18, 23, 59, 59, 999).AddTicks(9999), service.LastEndTime);
             Assert.StartsWith("时间,打印机,状态,用户,标签类型,任务ID,错误", csv);
             Assert.Contains("\"Printer, A\"", csv);
             Assert.Contains("\"job\"\"1\"", csv);
@@ -79,6 +95,8 @@ public class LogsPresenterTests
             int limit = 100,
             int offset = 0)
         {
+            LastStartTime = startTime;
+            LastEndTime = endTime;
             return new List<PrintAuditLog>(_logs);
         }
 
