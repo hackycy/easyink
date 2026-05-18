@@ -7,7 +7,7 @@ import { cancel, confirm, intro, isCancel, outro } from '@clack/prompts'
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const gitBinary = 'git'
 const pnpmBinary = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
-const validationScripts = ['lint', 'typecheck', 'build']
+const validationScripts = ['lint', 'build', 'typecheck']
 const commitMessage = 'chore: bump version'
 const releaseBranch = 'main'
 const releaseRemote = 'origin'
