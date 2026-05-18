@@ -41,6 +41,7 @@ const RUNTIME_HEIGHT_CONTROL_POLICY: MaterialControlPolicy = {
     height: { state: 'disabled', reason: 'designer.reason.runtimeHeight' },
   },
   resize: {
+    width: { state: 'hidden', reason: 'designer.reason.runtimeHeight' },
     height: { state: 'hidden', reason: 'designer.reason.runtimeHeight' },
   },
 }
@@ -65,6 +66,11 @@ function getHiddenRowMask(node: TableNode): boolean[] {
       return footerHidden
     return false
   })
+}
+
+export function canResizeTableDataRow(node: TableNode, rowIndex: number): boolean {
+  const hidden = getHiddenRowMask(node)
+  return Boolean(node.table.topology.rows[rowIndex]) && !hidden[rowIndex]
 }
 
 function buildHtml(node: MaterialNode, unit: UnitType, context: MaterialExtensionContext): string {
@@ -190,7 +196,7 @@ function createDelegate(context: MaterialExtensionContext): TableEditingDelegate
     getPlaceholderRowCount: () => PLACEHOLDER_ROW_COUNT,
     t: (key: string) => context.t(key),
     getHiddenRowMask: node => getHiddenRowMask(node),
-    canResizeRow: () => false,
+    canResizeRow: (node, rowIndex) => canResizeTableDataRow(node, rowIndex),
   }
 }
 

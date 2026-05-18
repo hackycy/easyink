@@ -40,7 +40,7 @@ export function createTableCellDecorationComponent(delegate: TableEditingDelegat
         const rightCol = payload.value.col + cs - 1
         if (delegate.canResizeColumn?.(t, rightCol) === false)
           return false
-        return rightCol < t.table.topology.columns.length - 1
+        return rightCol >= 0 && rightCol < t.table.topology.columns.length
       })
 
       const rowResizeVisible = computed(() => {
@@ -52,7 +52,7 @@ export function createTableCellDecorationComponent(delegate: TableEditingDelegat
         const bottomRow = payload.value.row + rs - 1
         if (delegate.canResizeRow?.(t, bottomRow) === false)
           return false
-        return bottomRow < t.table.topology.rows.length - 1
+        return bottomRow >= 0 && bottomRow < t.table.topology.rows.length
       })
 
       const resizeMeta = computed(() => props.session.meta.resize as { active: boolean, handle: string, index: number } | undefined)
@@ -298,6 +298,38 @@ export function createTableCellDecorationComponent(delegate: TableEditingDelegat
                 (e.currentTarget as HTMLElement).style.background = ''
             },
           }))
+
+          const t = tableNode.value
+          const row = t?.table.topology.rows[payload.value.row]
+          const placeholderCount = delegate.getTableKind() === 'data'
+            ? delegate.getPlaceholderRowCount()
+            : 0
+          if (row?.role === 'repeat-template' && placeholderCount > 0) {
+            for (let extra = 1; extra <= placeholderCount; extra++) {
+              children.push(h('div', {
+                style: {
+                  position: 'absolute',
+                  left: `${r.x}${u}`,
+                  top: `${r.y + r.height * (extra + 1)}${u}`,
+                  width: `${r.width}${u}`,
+                  height: '6px',
+                  marginTop: '-3px',
+                  cursor: 'row-resize',
+                  pointerEvents: 'auto',
+                  zIndex: 12,
+                  background: resizeMeta.value?.handle === 'row' ? 'rgba(24, 144, 255, 0.15)' : undefined,
+                },
+                onPointerdown: onRowResizePointerDown,
+                onMouseenter: (e: MouseEvent) => {
+                  (e.currentTarget as HTMLElement).style.background = 'rgba(24, 144, 255, 0.15)'
+                },
+                onMouseleave: (e: MouseEvent) => {
+                  if (resizeMeta.value?.handle !== 'row')
+                    (e.currentTarget as HTMLElement).style.background = ''
+                },
+              }))
+            }
+          }
         }
 
         // Toolbar container (positioned below cell)

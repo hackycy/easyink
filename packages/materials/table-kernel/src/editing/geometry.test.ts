@@ -1,6 +1,7 @@
 import type { TableNode } from '@easyink/schema'
 import type { TableEditingDelegate } from './types'
 import { describe, expect, it } from 'vitest'
+import { computeTableRowResizeResult } from './behaviors'
 import {
   computeCellRectWithPlaceholders,
   computePlaceholderHeight,
@@ -302,5 +303,43 @@ describe('hidden row mask', () => {
     // hitTest in old header region picks up repeat-template
     expect(geo.hitTest({ x: 50, y: 5 }, node))
       .toEqual({ type: 'table.cell', nodeId: 'table1', payload: { row: 1, col: 0 } })
+  })
+})
+
+// ─── Row resize layout ───────────────────────────────────────────
+
+describe('computeTableRowResizeResult', () => {
+  it('includes table-data virtual preview rows when resizing repeat-template', () => {
+    const node = makeTableNode()
+
+    const result = computeTableRowResizeResult(node, 1, 6, 4, 2)
+
+    expect(result).toEqual({
+      rowHeights: [18, 24, 18],
+      totalHeight: 108,
+    })
+  })
+
+  it('keeps hidden rows frozen and excluded from material height', () => {
+    const node = makeTableNode({ height: 60 })
+    const hidden = [true, false, false]
+
+    const result = computeTableRowResizeResult(node, 1, 5, 4, 2, hidden)
+
+    expect(result).toEqual({
+      rowHeights: [30, 20, 15],
+      totalHeight: 75,
+    })
+  })
+
+  it('uses plain visible row heights for static tables', () => {
+    const node = makeStaticTableNode()
+
+    const result = computeTableRowResizeResult(node, 1, 10, 4)
+
+    expect(result).toEqual({
+      rowHeights: [30, 40],
+      totalHeight: 70,
+    })
   })
 })

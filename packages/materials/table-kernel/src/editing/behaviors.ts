@@ -4,9 +4,55 @@ import type { TableCellPayload, TableEditingDelegate } from './types'
 import { isTableNode } from '@easyink/schema'
 import { convertUnit } from '@easyink/shared'
 import { validateMerge } from '../commands'
-import { computeRowScale } from '../geometry'
+import { computeRowScale, computeRowScaleWithVirtualRows, normalizeColumnRatios } from '../geometry'
 import { resolveMergeOwner } from '../topology'
 import { hitTestWithPlaceholders } from './geometry'
+
+export interface TableRowResizeResult {
+  rowHeights: number[]
+  totalHeight: number
+}
+
+/**
+ * Resolve the post-drag row heights for a table node.
+ *
+ * table-data has one schema repeat-template row plus virtual designer preview
+ * rows. Resizing that semantic row must resize the preview rows too, so the
+ * material height includes the virtual row copies.
+ */
+export function computeTableRowResizeResult(
+  node: TableNode,
+  rowIndex: number,
+  delta: number,
+  minRowHeight: number,
+  placeholderCount = 0,
+  hidden?: readonly boolean[],
+): TableRowResizeResult | null {
+  const rows = node.table.topology.rows
+  const targetRow = rows[rowIndex]
+  if (!targetRow || hidden?.[rowIndex])
+    return null
+
+  const repeatIndex = rows.findIndex(row => row.role === 'repeat-template')
+  const virtualRows = repeatIndex >= 0 && placeholderCount > 0
+    ? { rowHeight: rows[repeatIndex]!.height, count: placeholderCount }
+    : undefined
+  const currentScale = computeRowScaleWithVirtualRows(rows, node.height, hidden, virtualRows)
+  const rowHeights = rows.map((row, index) => hidden?.[index] ? row.height : row.height * currentScale)
+
+  rowHeights[rowIndex] = Math.max(minRowHeight, rowHeights[rowIndex]! + delta)
+
+  let totalHeight = 0
+  for (let i = 0; i < rowHeights.length; i++) {
+    if (hidden?.[i])
+      continue
+    totalHeight += rowHeights[i]!
+  }
+  if (repeatIndex >= 0 && placeholderCount > 0 && !hidden?.[repeatIndex])
+    totalHeight += rowHeights[repeatIndex]! * placeholderCount
+
+  return { rowHeights, totalHeight }
+}
 
 // ─── Cell Select ──────────────────────────────────────────────────
 
@@ -230,7 +276,8 @@ export function createTableResizeBehavior(delegate: TableEditingDelegate): Behav
         // then re-derive table width and ratios. This keeps neighbour
         // columns visually stable and avoids ratio drift across multiple
         // pointermove dispatches.
-        const widths = cols.map(c => c.ratio * node.width)
+        const ratioTotal = normalizeColumnRatios(cols)
+        const widths = cols.map(c => (c.ratio / ratioTotal) * node.width)
         widths[p.index] = Math.max(minColWidth, widths[p.index]! + docDelta)
         const newTableWidth = widths.reduce((s, w) => s + w, 0)
         ctx.tx.run<TableNode>(node.id, (d) => {
@@ -250,19 +297,23 @@ export function createTableResizeBehavior(delegate: TableEditingDelegate): Behav
         const docDelta = p.screenDelta
           ? delegate.screenToDoc(p.delta, 0, delegate.getZoom())
           : p.delta
-        // Convert all rows to their currently rendered absolute heights,
-        // modify the dragged one, then sum to derive new table height.
-        // Stored row.height values are then set to those rendered heights so
-        // that the new computeRowScale() returns 1 — keeping neighbour rows
-        // visually stable across multiple pointermove dispatches.
-        const oldScale = computeRowScale(rows, node.height)
-        const heights = rows.map(r => r.height * oldScale)
-        heights[p.index] = Math.max(minRowHeight, heights[p.index]! + docDelta)
-        const newTableHeight = heights.reduce((s, h) => s + h, 0)
+        const placeholderCount = delegate.getTableKind() === 'data'
+          ? delegate.getPlaceholderRowCount()
+          : 0
+        const resizeResult = computeTableRowResizeResult(
+          node,
+          p.index,
+          docDelta,
+          minRowHeight,
+          placeholderCount,
+          delegate.getHiddenRowMask?.(node),
+        )
+        if (!resizeResult)
+          return
         ctx.tx.run<TableNode>(node.id, (d) => {
-          d.height = newTableHeight
+          d.height = resizeResult.totalHeight
           for (let i = 0; i < d.table.topology.rows.length; i++)
-            d.table.topology.rows[i]!.height = heights[i]!
+            d.table.topology.rows[i]!.height = resizeResult.rowHeights[i]!
         }, { mergeKey: `resize-row-${p.index}`, label: 'designer.history.resizeTableRow' })
       }
     },

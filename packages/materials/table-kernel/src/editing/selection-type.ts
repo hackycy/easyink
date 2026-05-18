@@ -29,6 +29,7 @@ export function createTableCellSelectionType(delegate: TableEditingDelegate): Se
         sel.payload.row,
         sel.payload.col,
         delegate.getPlaceholderRowCount(),
+        delegate.getHiddenRowMask?.(node as TableNode),
       )
       if (!rect)
         return []
