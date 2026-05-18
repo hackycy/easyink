@@ -500,7 +500,6 @@ const enUS: LocaleMessages = {
       importedSchema: 'Imported',
       exportSchema: 'Export JSON',
       exportedSchema: 'Exported',
-      confirmImportSchema: 'Import schema JSON? This will replace the current schema and clear undo history.',
       importSchemaFailed: 'Failed to import schema JSON.',
     },
     draft: {

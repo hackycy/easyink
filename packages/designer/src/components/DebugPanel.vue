@@ -105,14 +105,6 @@ async function importSchemaFile(event: Event) {
   if (!file)
     return
 
-  const message = text(
-    'designer.debug.confirmImportSchema',
-    'Import schema JSON? This will replace the current schema and clear undo history.',
-  )
-  // eslint-disable-next-line no-alert
-  if (!window.confirm(message))
-    return
-
   try {
     const parsed = JSON.parse(await file.text()) as unknown
     if (!isObject(parsed))

@@ -500,7 +500,6 @@ const zhCN: LocaleMessages = {
       importedSchema: '已导入',
       exportSchema: '导出 JSON',
       exportedSchema: '已导出',
-      confirmImportSchema: '导入 Schema JSON？这会替换当前 Schema 并清空撤销历史。',
       importSchemaFailed: '导入 Schema JSON 失败。',
     },
     draft: {
