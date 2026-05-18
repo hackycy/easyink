@@ -362,7 +362,6 @@ export interface TableColumnSchema {
 }
 
 export interface TableLayoutConfig {
-  equalizeCells?: boolean
   gap?: number
   borderAppearance?: BorderAppearance
   borderWidth?: number

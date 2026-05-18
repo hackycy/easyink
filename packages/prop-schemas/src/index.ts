@@ -212,7 +212,6 @@ const PAGE_NUMBER_PROP_SCHEMAS: PropSchema[] = [
 // ─── Table Static ────────────────────────────────────────────────────
 
 const TABLE_STATIC_TABLE_PROPS: PropSchema[] = [
-  { key: 'equalizeCells', label: 'designer.property.equalizeCells', type: 'switch', group: 'table-layout' },
   { key: 'borderWidth', label: 'designer.property.borderWidth', type: 'number', group: 'table-border', min: 0, max: 10, step: 1 },
   { key: 'borderColor', label: 'designer.property.borderColor', type: 'color', group: 'table-border' },
   { key: 'borderType', label: 'designer.property.borderType', type: 'enum', group: 'table-border', enum: STROKE_STYLE_OPTIONS },
@@ -234,7 +233,6 @@ const TABLE_STATIC_PROP_SCHEMAS: PropSchema[] = [
 // ─── Table Data ──────────────────────────────────────────────────────
 
 const TABLE_DATA_TABLE_PROPS: PropSchema[] = [
-  { key: 'equalizeCells', label: 'designer.property.equalizeCells', type: 'switch', group: 'table-layout' },
   { key: 'borderWidth', label: 'designer.property.borderWidth', type: 'number', group: 'table-border', min: 0, max: 10, step: 1 },
   { key: 'borderColor', label: 'designer.property.borderColor', type: 'color', group: 'table-border' },
   { key: 'borderType', label: 'designer.property.borderType', type: 'enum', group: 'table-border', enum: STROKE_STYLE_OPTIONS },

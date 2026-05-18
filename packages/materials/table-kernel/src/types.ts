@@ -10,7 +10,6 @@ export interface TableBaseProps {
   borderType: 'solid' | 'dashed' | 'dotted'
   cellPadding: number
   typography: TableTypography
-  equalizeCells: boolean
 }
 
 export const TABLE_TYPOGRAPHY_DEFAULTS: TableTypography = {
@@ -30,7 +29,6 @@ export const TABLE_BASE_DEFAULTS: TableBaseProps = {
   borderType: 'solid',
   cellPadding: 0.53,
   typography: { ...TABLE_TYPOGRAPHY_DEFAULTS },
-  equalizeCells: false,
 }
 
 /**

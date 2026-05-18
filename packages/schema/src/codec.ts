@@ -559,8 +559,6 @@ function isBandsTableInput(value: Record<string, unknown>): value is Record<stri
 
 function readTableLayout(raw: Record<string, unknown>): TableSchema['layout'] {
   const layout: TableSchema['layout'] = {}
-  if (typeof raw.equalizeCells === 'boolean')
-    layout.equalizeCells = raw.equalizeCells
   if (typeof raw.gap === 'number')
     layout.gap = raw.gap
   if (raw.borderAppearance === 'all' || raw.borderAppearance === 'outer' || raw.borderAppearance === 'inner' || raw.borderAppearance === 'none')
