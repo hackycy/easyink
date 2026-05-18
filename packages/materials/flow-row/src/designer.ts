@@ -423,15 +423,6 @@ function createColumnCommandBehavior(): BehaviorRegistration {
         return
       }
 
-      if (ctx.event.command === 'enter-edit' && !ctx.selection) {
-        ctx.selectionStore.set({
-          type: FLOW_COLUMN_SELECTION_TYPE,
-          nodeId: ctx.node.id,
-          payload: { index: 0 },
-        })
-        return
-      }
-
       if (!ctx.selection || ctx.selection.type !== FLOW_COLUMN_SELECTION_TYPE) {
         await next()
         return

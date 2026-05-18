@@ -177,9 +177,7 @@ export function useCanvasInteractionController(ctx: CanvasInteractionControllerC
       const initialPoint = pointToDocument(e)
       if (!initialPoint)
         return
-      const session = store.editingSession.enter(elementId, ext, initialPoint)
-      if (session && session.selectionStore.selection)
-        store.editingSession.dispatch({ kind: 'command', command: 'enter-edit' })
+      store.editingSession.enter(elementId, ext, initialPoint)
     }
   }
 

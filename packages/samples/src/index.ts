@@ -2,15 +2,42 @@ import type { DocumentSchema } from '@easyink/schema'
 import { SCHEMA_VERSION } from '@easyink/shared'
 import { flowInvoiceTemplate } from './datasources'
 import { badgeDemoData, badgeTemplate } from './templates/badge'
-import { certificateDemoData, certificateTemplate } from './templates/certificate'
-import { supermarketDemoData, supermarketFlexRowReceiptTemplate, supermarketReceiptTemplate } from './templates/supermarket-receipt'
-import { verticalMixedTextDemoData, verticalMixedTextTemplate } from './templates/vertical-mixed-text'
+import {
+  certificateDemoData,
+  certificateTemplate,
+} from './templates/certificate'
+import {
+  supermarketDemoData,
+  supermarketFlexRowReceiptTemplate,
+  supermarketReceiptTemplate,
+} from './templates/supermarket-receipt'
+import {
+  verticalMixedTextDemoData,
+  verticalMixedTextTemplate,
+} from './templates/vertical-mixed-text'
 
 export * from './datasources'
-export { badgeDataSource, badgeDemoData, badgeTemplate } from './templates/badge'
-export { certificateDataSource, certificateDemoData, certificateTemplate } from './templates/certificate'
-export { supermarketDataSource, supermarketDemoData, supermarketFlexRowReceiptTemplate, supermarketReceiptTemplate } from './templates/supermarket-receipt'
-export { verticalMixedTextDataSource, verticalMixedTextDemoData, verticalMixedTextTemplate } from './templates/vertical-mixed-text'
+export {
+  badgeDataSource,
+  badgeDemoData,
+  badgeTemplate,
+} from './templates/badge'
+export {
+  certificateDataSource,
+  certificateDemoData,
+  certificateTemplate,
+} from './templates/certificate'
+export {
+  supermarketDataSource,
+  supermarketDemoData,
+  supermarketFlexRowReceiptTemplate,
+  supermarketReceiptTemplate,
+} from './templates/supermarket-receipt'
+export {
+  verticalMixedTextDataSource,
+  verticalMixedTextDemoData,
+  verticalMixedTextTemplate,
+} from './templates/vertical-mixed-text'
 
 export interface SampleTemplateEntry {
   id: string
@@ -209,12 +236,12 @@ export const invoiceDemoData: Record<string, unknown> = {
     address: '上海市浦东新区测试路456号',
   },
   items: [
-    { name: '商品甲', qty: 10, price: 25.00, amount: 250.00 },
-    { name: '商品乙', qty: 5, price: 40.00, amount: 200.00 },
-    { name: '服务丙', qty: 1, price: 150.00, amount: 150.00 },
-    { name: '服务丁', qty: 1, price: 120.00, amount: 120.00 },
+    { name: '商品甲', qty: 10, price: 25.0, amount: 250.0 },
+    { name: '商品乙', qty: 5, price: 40.0, amount: 200.0 },
+    { name: '服务丙', qty: 1, price: 150.0, amount: 150.0 },
+    { name: '服务丁', qty: 1, price: 120.0, amount: 120.0 },
   ],
-  grandTotal: 600.00,
+  grandTotal: 600.0,
   notes: '请于30天内付款。谢谢惠顾！',
 }
 
@@ -262,7 +289,7 @@ export const sampleTemplates: SampleTemplateEntry[] = [
   },
   {
     id: 'supermarket-receipt-flex-row',
-    name: '超市小票（Flex Row）',
+    name: '超市小票（流动行）',
     category: 'receipt',
     schema: supermarketFlexRowReceiptTemplate,
     demoData: supermarketDemoData,

@@ -232,7 +232,27 @@ describe('useCanvasInteractionController', () => {
     expect(store.selection.ids).toEqual(['t'])
   })
 
-  it('dblclick on a material with geometry opens the editing-session', () => {
+  it('dblclick on a material with geometry opens the editing-session and selects the hit sub-element', () => {
+    const { store, controller } = setup()
+    store.registerDesignerFactory('cell-table', () => geometryExtension())
+    store.schema.elements.push(
+      { id: 't', type: 'cell-table', x: 200, y: 0, width: 80, height: 80, rotation: 0, props: {} } as never,
+    )
+    const dispatchSpy = vi.spyOn(store.editingSession, 'dispatch')
+
+    controller.handleElementDblClick(dblClickEvent(210, 10), 't')
+
+    expect(store.editingSession.isActive).toBe(true)
+    expect(store.editingSession.activeNodeId).toBe('t')
+    expect(store.editingSession.activeSession?.selection).toEqual({
+      type: 'test.cell',
+      nodeId: 't',
+      payload: { row: 0, col: 0 },
+    })
+    expect(dispatchSpy).not.toHaveBeenCalledWith({ kind: 'command', command: 'enter-edit' })
+  })
+
+  it('second dblclick inside an active editing-session explicitly enters sub-element edit mode', () => {
     const { store, controller } = setup()
     store.registerDesignerFactory('cell-table', () => geometryExtension())
     store.schema.elements.push(
@@ -240,9 +260,11 @@ describe('useCanvasInteractionController', () => {
     )
 
     controller.handleElementDblClick(dblClickEvent(210, 10), 't')
+    const dispatchSpy = vi.spyOn(store.editingSession, 'dispatch')
 
-    expect(store.editingSession.isActive).toBe(true)
-    expect(store.editingSession.activeNodeId).toBe('t')
+    controller.handleElementDblClick(dblClickEvent(210, 10), 't')
+
+    expect(dispatchSpy).toHaveBeenCalledWith({ kind: 'command', command: 'enter-edit' })
   })
 
   it('within an active session, pointerdown on the active element routes into session and does NOT start a drag', () => {

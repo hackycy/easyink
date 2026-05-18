@@ -69,4 +69,28 @@ describe('flow-row designer', () => {
 
     expect(enteredEdit).toBe(false)
   })
+
+  it('does not select a fallback column when enter-edit has no column selection', async () => {
+    const ext = createFlowRowExtension(context as never)
+    const node = createFlowRowNode()
+    const behavior = ext.behaviors?.find(item => item.id === 'flow-row.column-command')
+    let selected: unknown
+    let nextCalled = false
+
+    await behavior?.middleware({
+      node,
+      selection: null,
+      event: { kind: 'command', command: 'enter-edit' },
+      selectionStore: {
+        set: (selection: unknown) => {
+          selected = selection
+        },
+      },
+    } as never, async () => {
+      nextCalled = true
+    })
+
+    expect(selected).toBeUndefined()
+    expect(nextCalled).toBe(true)
+  })
 })
