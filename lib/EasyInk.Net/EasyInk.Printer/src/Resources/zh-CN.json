@@ -6,7 +6,7 @@
 
   "App_NeedUrlAcl_Message": "EasyInk Printer 需要注册网络监听权限才能启动 HTTP 服务，并添加 Windows 防火墙入站规则以支持局域网访问。\n\n此操作仅需执行一次，需要管理员授权。\n注册完成后应用将自动重启。",
   "App_NeedUrlAcl_Title": "需要注册网络权限",
-  "App_NeedFirewall_Message": "EasyInk Printer HTTP 服务已启动，但尚未添加端口 {0} 的 Windows 防火墙入站规则。\n\n若需要局域网设备通过本机 IP 访问打印服务，请允许应用添加专用/域网络入站规则。此操作需要管理员授权，完成后应用将自动重启。\n\n如果当前 Windows 网络类型是公用网络，请先切换为专用网络。",
+  "App_NeedFirewall_Message": "EasyInk Printer HTTP 服务已启动，但尚未添加端口 {0} 的 Windows 防火墙入站规则。\n\n若需要局域网设备通过本机 IP 访问打印服务，请允许应用添加入站规则。此规则会覆盖专用、域和公用网络，以适配门店、仓库、收银机等 Windows 网络类型可能被识别为公用网络的场景。此操作需要管理员授权，完成后应用将自动重启。",
   "App_NeedFirewall_Title": "需要放行局域网访问",
 
   "App_CloseConfirm_Message": "关闭窗口后打印服务将停止运行，已提交的打印任务会中断。\n确定要退出吗？",

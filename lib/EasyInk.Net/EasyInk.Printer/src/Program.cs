@@ -595,7 +595,7 @@ static class Program
     {
         var ruleName = GetFirewallRuleName(port);
         RunNetsh($"advfirewall firewall delete rule name=\"{ruleName}\"");
-        return RunNetsh($"advfirewall firewall add rule name=\"{ruleName}\" dir=in action=allow protocol=TCP localport={port} profile=private,domain");
+        return RunNetsh($"advfirewall firewall add rule name=\"{ruleName}\" dir=in action=allow protocol=TCP localport={port} profile=any");
     }
 
     private static string BuildCommandFailureMessage(params CommandResult[] results)

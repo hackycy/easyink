@@ -44,7 +44,7 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 
 [Run]
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""EasyInk Printer HTTP 18080"""; Flags: runhidden
-Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""EasyInk Printer HTTP 18080"" dir=in action=allow protocol=TCP localport=18080 profile=private,domain"; Flags: runhidden
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""EasyInk Printer HTTP 18080"" dir=in action=allow protocol=TCP localport=18080 profile=any"; Flags: runhidden
 Filename: "{app}\EasyInk.Printer.exe"; Description: "Launch EasyInk Printer"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]

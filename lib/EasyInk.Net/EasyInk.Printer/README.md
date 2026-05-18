@@ -171,7 +171,6 @@ build-installer.bat 1.2.3-beta.1
 
 - Windows 7 SP1 及以上。
 - .NET Framework 4.8 运行时。
-- 局域网访问依赖 Windows 防火墙入站规则。安装器会为默认端口 `18080` 添加 `EasyInk Printer HTTP 18080` 规则；若运行时改端口，应用会提示管理员授权并为新端口添加专用/域网络入站规则。
-- Windows 网络类型需要为专用网络或域网络；若当前网络是公用网络，Windows 仍可能拦截局域网入站访问。
+- 局域网访问依赖 Windows 防火墙入站规则。安装器会为默认端口 `18080` 添加 `EasyInk Printer HTTP 18080` 规则；若运行时改端口，应用会提示管理员授权并为新端口添加覆盖专用、域和公用网络的入站规则，以适配门店、仓库、收银机等网络常被 Windows 识别为公用网络的场景。
 - 发布目录保留 `x86\SQLite.Interop.dll`、`x64\SQLite.Interop.dll`。
 - 若启用 SumatraPDF fallback，发布目录保留 `SumatraPDF\SumatraPDF.exe`。
