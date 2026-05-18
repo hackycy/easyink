@@ -1,7 +1,7 @@
 {
   "name": "@easyink/material-text",
   "type": "module",
-  "version": "0.0.12",
+  "version": "0.0.13",
   "description": "EasyInk text material",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",
