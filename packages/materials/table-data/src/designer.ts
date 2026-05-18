@@ -38,6 +38,7 @@ const PLACEHOLDER_ROW_COUNT = 2
 
 const RUNTIME_HEIGHT_CONTROL_POLICY: MaterialControlPolicy = {
   geometry: {
+    width: { state: 'hidden', reason: 'designer.reason.runtimeHeight' },
     height: { state: 'disabled', reason: 'designer.reason.runtimeHeight' },
   },
   resize: {

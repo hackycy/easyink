@@ -66,8 +66,20 @@ Implement `MaterialDesignerExtension` with:
 - `behaviors`: optional middleware chain for pointer, key, drop, paste, and command events.
 - `decorations`: optional Vue decorations for handles, guides, toolbars, or overlays.
 - `resize`: optional material-private side effects during element resize.
+- `resolveControlPolicy`: optional design-time policy for hiding/disabling geometry inputs, resize handles, or property fields when a material owns its runtime dimension or other controls.
 
 `MaterialExtensionContext` provides `getSchema`, `getNode`, `getBindingLabel`, `commitCommand`, `tx`, `requestPropertyPanel`, event bus methods, zoom/page DOM access, and `t(key)`.
+
+Use `resolveControlPolicy()` when a material has a runtime-owned dimension or other state that should not be edited through the outer Designer chrome. This is the canonical place to say:
+
+- hide or disable `width` / `height` inputs in the Properties panel,
+- hide or disable the matching outer resize handles,
+- and keep behavior handlers from reintroducing a blocked resize path.
+
+Good examples:
+
+- `table-data` owns runtime height through measured repeat rows and hides vertical outer resizing.
+- `flow-row` / flex-row declares runtime height as a fixed Designer policy so width can reflow columns while height stays Viewer-measured.
 
 ## Viewer Contract
 

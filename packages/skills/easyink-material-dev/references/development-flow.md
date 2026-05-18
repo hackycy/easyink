@@ -83,6 +83,34 @@ Use `trustedViewerHtml()` for strings:
 - Keep Viewer output print/export stable because print and export reuse the Viewer result.
 - Add `measure()` only when runtime content changes physical size.
 
+## Designer Control Policy Rules
+
+`capabilities` are coarse static declarations. Use `MaterialDesignerExtension.resolveControlPolicy()` for node-specific or material-specific Designer controls.
+
+Use a control policy when:
+
+- runtime data or Viewer `measure()` owns an element dimension,
+- a material should keep width editable but make height runtime-controlled,
+- a property panel field or group should be disabled/hidden by material state,
+- or an internal kernel behavior must follow the same allow/deny rule as the visible handle.
+
+Runtime-height pattern:
+
+```ts
+const RUNTIME_HEIGHT_CONTROL_POLICY = {
+  geometry: {
+    height: { state: 'disabled', reason: 'designer.reason.runtimeHeight' },
+  },
+  resize: {
+    height: { state: 'hidden', reason: 'designer.reason.runtimeHeight' },
+  },
+}
+```
+
+Then return it from `resolveControlPolicy()` and also guard any behavior that would mutate height. For table-like kernels, expose delegate hooks such as `canResizeRow()` / `canResizeColumn()` and make decoration visibility and command execution use the same delegate.
+
+`table-data` and `flow-row` are fixed runtime-height examples: the Designer may allow horizontal width changes, but vertical outer handles and the `H` geometry field must be unavailable. Do not solve this with one-off checks in `CanvasWorkspace.vue` or `PropertiesPanel.vue`.
+
 ## Property Panel Rules
 
 Use `propSchemas` for simple `node.props` fields:
