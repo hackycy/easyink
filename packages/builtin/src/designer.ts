@@ -7,6 +7,7 @@ import {
   IconEllipse,
   IconHeart,
   IconImage,
+  IconLayoutPanelTop,
   IconLine,
   IconPageNumber,
   IconQrcode,
@@ -40,6 +41,12 @@ import {
   ELLIPSE_CAPABILITIES,
   ELLIPSE_TYPE,
 } from '@easyink/material-ellipse'
+import {
+  createFlowRowExtension,
+  createFlowRowNode,
+  FLOW_ROW_CAPABILITIES,
+  FLOW_ROW_TYPE,
+} from '@easyink/material-flow-row'
 import {
   createImageExtension,
   createImageNode,
@@ -211,6 +218,15 @@ export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
       sectionFilter: tableSectionFilter,
     },
     {
+      type: FLOW_ROW_TYPE,
+      name: 'designer.toolbar.flowRow',
+      icon: IconLayoutPanelTop,
+      category: 'data',
+      capabilities: FLOW_ROW_CAPABILITIES,
+      createDefaultNode: createFlowRowNode,
+      factory: createFlowRowExtension,
+    },
+    {
       type: CHART_TYPE,
       name: 'designer.toolbar.chart',
       icon: IconChart,
@@ -271,6 +287,7 @@ export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
   groupedCatalog: [
     { type: TABLE_STATIC_TYPE, group: 'data' },
     { type: TABLE_DATA_TYPE, group: 'data' },
+    { type: FLOW_ROW_TYPE, group: 'data' },
     { type: CONTAINER_TYPE, group: 'data' },
     { type: CHART_TYPE, group: 'chart' },
     { type: SVG_STAR_TYPE, group: 'svg' },

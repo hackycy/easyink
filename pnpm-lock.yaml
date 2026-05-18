@@ -321,6 +321,9 @@ importers:
       '@easyink/material-ellipse':
         specifier: workspace:*
         version: link:../materials/ellipse
+      '@easyink/material-flow-row':
+        specifier: workspace:*
+        version: link:../materials/flow-row
       '@easyink/material-image':
         specifier: workspace:*
         version: link:../materials/image
@@ -513,6 +516,21 @@ importers:
       '@easyink/shared':
         specifier: workspace:*
         version: link:../../shared
+
+  packages/materials/flow-row:
+    dependencies:
+      '@easyink/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@easyink/schema':
+        specifier: workspace:*
+        version: link:../../schema
+      '@easyink/shared':
+        specifier: workspace:*
+        version: link:../../shared
+      vue:
+        specifier: catalog:framework
+        version: 3.5.31(typescript@6.0.2)
 
   packages/materials/image:
     dependencies:

@@ -3,6 +3,7 @@ import { BARCODE_TYPE, renderBarcode } from '@easyink/material-barcode'
 import { CHART_TYPE, renderChart } from '@easyink/material-chart'
 import { CONTAINER_TYPE, renderContainer } from '@easyink/material-container'
 import { ELLIPSE_TYPE, renderEllipse } from '@easyink/material-ellipse'
+import { FLOW_ROW_TYPE, measureFlowRow, renderFlowRow } from '@easyink/material-flow-row'
 import { IMAGE_TYPE, renderImage } from '@easyink/material-image'
 import { createLineViewerExtension, LINE_TYPE } from '@easyink/material-line'
 import { PAGE_NUMBER_TYPE, renderPageNumber } from '@easyink/material-page-number'
@@ -28,6 +29,10 @@ export function registerBuiltinViewerMaterials(register: BuiltinViewerRegistrar)
   register(TABLE_DATA_TYPE, {
     render: (node, ctx) => renderTableData(node, ctx),
     measure: (node, ctx) => measureTableData(node, ctx),
+  })
+  register(FLOW_ROW_TYPE, {
+    render: (node, ctx) => renderFlowRow(node, ctx),
+    measure: (node, ctx) => measureFlowRow(node, ctx),
   })
   register(CHART_TYPE, { render: node => renderChart(node) })
   register(SVG_CUSTOM_TYPE, { render: node => renderSvgCustom(node) })

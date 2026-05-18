@@ -3,6 +3,7 @@ import { barcodeAIMaterialDescriptor } from '@easyink/material-barcode'
 import { chartAIMaterialDescriptor } from '@easyink/material-chart'
 import { containerAIMaterialDescriptor } from '@easyink/material-container'
 import { ellipseAIMaterialDescriptor } from '@easyink/material-ellipse'
+import { flowRowAIMaterialDescriptor } from '@easyink/material-flow-row'
 import { imageAIMaterialDescriptor } from '@easyink/material-image'
 import { lineAIMaterialDescriptor } from '@easyink/material-line'
 import { pageNumberAIMaterialDescriptor } from '@easyink/material-page-number'
@@ -19,6 +20,7 @@ export const builtinAIMaterialDescriptors: AIMaterialDescriptor[] = [
   textAIMaterialDescriptor,
   lineAIMaterialDescriptor,
   tableDataAIMaterialDescriptor,
+  flowRowAIMaterialDescriptor,
   tableStaticAIMaterialDescriptor,
   imageAIMaterialDescriptor,
   qrcodeAIMaterialDescriptor,
