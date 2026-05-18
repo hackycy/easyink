@@ -1,8 +1,7 @@
-name: Deploy GitHub Pages
+name: deploy-pages
 
 on:
-  schedule:
-    - cron: '0 2 * * *'
+  workflow_call:
   workflow_dispatch:
 
 permissions:
@@ -22,15 +21,6 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
-      - name: Ensure default branch deployment
-        env:
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-        run: |
-          if [ "$GITHUB_REF_NAME" != "$DEFAULT_BRANCH" ]; then
-            echo "This workflow only deploys from the default branch: $DEFAULT_BRANCH"
-            exit 1
-          fi
-
       - name: Checkout
         uses: actions/checkout@v4
 

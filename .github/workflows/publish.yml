@@ -217,3 +217,12 @@ jobs:
             echo "- Docker image published: ${{ needs.release-context.outputs.should_publish_docker }}"
             echo "- Release assets directory: release-assets"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy-pages:
+    needs: publish-release
+    if: ${{ needs.publish-release.result == 'success' }}
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/deploy-pages.yml
