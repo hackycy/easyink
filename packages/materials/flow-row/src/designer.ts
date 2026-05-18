@@ -16,7 +16,15 @@ import type { BindingRef, MaterialNode } from '@easyink/schema'
 import type { BindingDisplayFormat } from '@easyink/shared'
 import type { FlowColumnDef } from './schema'
 import { keyboardCursorMiddleware, selectionMiddleware, undoBoundaryMiddleware } from '@easyink/core'
-import { createPointerGesture } from '@easyink/shared'
+import { IconChevronLeft, IconChevronRight, IconDelete } from '@easyink/icons/svg-strings'
+import {
+  createPointerGesture,
+  materialToolbarButtonStyle,
+  materialToolbarDockStyle,
+  materialToolbarGroupStyle,
+  materialToolbarIconStyle,
+  materialToolbarShellStyle,
+} from '@easyink/shared'
 import { computed, defineComponent, h, onUnmounted, ref, watch } from 'vue'
 import {
   computeFlowColumnRects,
@@ -496,21 +504,32 @@ function createColumnDecorationComponent(context: MaterialExtensionContext) {
         event.stopPropagation()
       }
 
-      function actionButton(label: string, command: string) {
+      function actionButton(label: string, command: string, icon: string, options: { danger?: boolean, disabled?: boolean } = {}) {
         return h('button', {
           type: 'button',
           title: label,
-          style: toolbarButtonStyle(),
+          disabled: options.disabled,
+          style: materialToolbarButtonStyle(options.disabled, options.danger),
           onPointerdown: (event: PointerEvent) => {
             event.preventDefault()
             event.stopPropagation()
           },
+          onMouseenter: (event: MouseEvent) => {
+            if (!options.disabled)
+              (event.currentTarget as HTMLElement).style.background = options.danger ? 'rgba(217, 45, 32, 0.10)' : 'rgba(24, 144, 255, 0.10)'
+          },
+          onMouseleave: (event: MouseEvent) => {
+            (event.currentTarget as HTMLElement).style.background = 'transparent'
+          },
           onClick: (event: MouseEvent) => {
             event.preventDefault()
             event.stopPropagation()
-            props.session.dispatch({ kind: 'command', command })
+            if (!options.disabled)
+              props.session.dispatch({ kind: 'command', command })
           },
-        }, label)
+        }, [
+          h('span', { innerHTML: icon, style: materialToolbarIconStyle() }),
+        ])
       }
 
       function onResizePointerDown(event: PointerEvent) {
@@ -541,6 +560,7 @@ function createColumnDecorationComponent(context: MaterialExtensionContext) {
         if (!r)
           return null
         const u = props.unit
+        const canRemoveColumn = getFlowRowProps(props.node).columns.length > 1
         const children = [
           h('div', {
             style: {
@@ -571,24 +591,28 @@ function createColumnDecorationComponent(context: MaterialExtensionContext) {
             onPointerdown: onResizePointerDown,
           }),
           h('div', {
+            class: 'ei-deep-edit-toolbar',
             style: {
-              position: 'absolute',
-              left: `${r.x}${u}`,
-              top: `${r.y + r.height + 4}${u}`,
-              zIndex: 20,
-              display: 'flex',
-              gap: '4px',
-              pointerEvents: 'auto',
-              background: '#fff',
-              border: '1px solid rgba(0,0,0,.12)',
-              borderRadius: '4px',
-              boxShadow: '0 2px 8px rgba(0,0,0,.12)',
-              padding: '3px',
+              ...materialToolbarDockStyle(props.node, u),
+            },
+            onPointerdown: (event: PointerEvent) => {
+              event.preventDefault()
+              event.stopPropagation()
+            },
+            onClick: (event: MouseEvent) => {
+              event.stopPropagation()
             },
           }, [
-            actionButton(context.t('designer.flowRow.insertBefore'), 'flow-row.insert-before'),
-            actionButton(context.t('designer.flowRow.insertAfter'), 'flow-row.insert-after'),
-            actionButton(context.t('designer.flowRow.removeColumn'), 'flow-row.remove-column'),
+            h('div', { style: materialToolbarShellStyle() }, [
+              h('div', { style: materialToolbarGroupStyle() }, [
+                actionButton(context.t('designer.flowRow.insertBefore'), 'flow-row.insert-before', IconChevronLeft),
+                actionButton(context.t('designer.flowRow.insertAfter'), 'flow-row.insert-after', IconChevronRight),
+                actionButton(context.t('designer.flowRow.removeColumn'), 'flow-row.remove-column', IconDelete, {
+                  danger: true,
+                  disabled: !canRemoveColumn,
+                }),
+              ]),
+            ]),
           ]),
         ]
 
@@ -629,21 +653,6 @@ function createColumnDecorationComponent(context: MaterialExtensionContext) {
       }
     },
   })
-}
-
-function toolbarButtonStyle(): Record<string, string> {
-  return {
-    border: '0',
-    background: 'transparent',
-    color: 'var(--ei-text-color, #333)',
-    fontSize: '12px',
-    lineHeight: '18px',
-    minWidth: '22px',
-    height: '22px',
-    padding: '0 6px',
-    borderRadius: '3px',
-    cursor: 'pointer',
-  }
 }
 
 export function createFlowRowExtension(context: MaterialExtensionContext): MaterialDesignerExtension {

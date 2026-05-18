@@ -522,6 +522,9 @@ importers:
       '@easyink/core':
         specifier: workspace:*
         version: link:../../core
+      '@easyink/icons':
+        specifier: workspace:*
+        version: link:../../icons
       '@easyink/schema':
         specifier: workspace:*
         version: link:../../schema

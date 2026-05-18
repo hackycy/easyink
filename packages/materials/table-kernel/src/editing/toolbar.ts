@@ -1,4 +1,6 @@
 import type { EditingSessionRef } from '@easyink/core'
+import type { TableNode } from '@easyink/schema'
+import type { MaterialToolbarGroup } from '@easyink/shared'
 import type { TableCellPayload, TableEditingDelegate } from './types'
 import {
   IconAlignBottom,
@@ -16,123 +18,172 @@ import {
   IconTextAlignLeft,
   IconTextAlignRight,
 } from '@easyink/icons/svg-strings'
+import {
+  materialToolbarButtonStyle,
+  materialToolbarGroupStyle,
+  materialToolbarIconStyle,
+  materialToolbarShellStyle,
+} from '@easyink/shared'
 
 export interface TableToolbar {
   update: (selection: TableCellPayload | null) => void
   destroy: () => void
 }
 
+export function createTableToolbarGroups(
+  selection: TableCellPayload | null,
+  node: TableNode | undefined,
+  delegate: TableEditingDelegate,
+): MaterialToolbarGroup[] {
+  const t = delegate.t
+  if (!selection || !node)
+    return []
+
+  const kind = delegate.getTableKind()
+  const cellRole = kind === 'data'
+    ? node.table.topology.rows[selection.row]?.role ?? null
+    : null
+  const isDataArea = kind === 'data' && cellRole === 'repeat-template'
+  const isHeaderFooter = kind === 'data' && (cellRole === 'header' || cellRole === 'footer')
+
+  const groups: MaterialToolbarGroup[] = []
+
+  if (kind === 'static') {
+    groups.push({
+      id: 'table.rows',
+      actions: [
+        { id: 'insert-row-above', label: t('designer.table.insertRowAbove'), icon: IconTableInsertRowAbove, command: 'insert-row-above' },
+        { id: 'insert-row-below', label: t('designer.table.insertRowBelow'), icon: IconTableInsertRowBelow, command: 'insert-row-below' },
+        {
+          id: 'remove-row',
+          label: t('designer.table.removeRow'),
+          icon: IconTableRemoveRow,
+          command: 'remove-row',
+          disabled: node.table.topology.rows.length <= 1,
+          danger: true,
+        },
+      ],
+    })
+  }
+
+  groups.push({
+    id: 'table.columns',
+    actions: [
+      { id: 'insert-col-left', label: t('designer.table.insertColLeft'), icon: IconTableInsertColLeft, command: 'insert-col-left' },
+      { id: 'insert-col-right', label: t('designer.table.insertColRight'), icon: IconTableInsertColRight, command: 'insert-col-right' },
+      {
+        id: 'remove-col',
+        label: t('designer.table.removeCol'),
+        icon: IconTableRemoveCol,
+        command: 'remove-col',
+        disabled: node.table.topology.columns.length <= 1,
+        danger: true,
+      },
+    ],
+  })
+
+  if (!isDataArea) {
+    const cell = node.table.topology.rows[selection.row]?.cells[selection.col]
+    const hasSpan = (cell?.colSpan ?? 1) > 1 || (cell?.rowSpan ?? 1) > 1
+    const showSplit = isHeaderFooter ? (cell?.colSpan ?? 1) > 1 : hasSpan
+    const spanActions: MaterialToolbarGroup['actions'] = [
+      { id: 'merge-right', label: t('designer.table.mergeRight'), icon: IconTableMerge, command: 'merge-right' },
+    ]
+    if (kind === 'static')
+      spanActions.push({ id: 'merge-down', label: t('designer.table.mergeDown'), icon: IconTableMerge, command: 'merge-down' })
+    if (showSplit)
+      spanActions.push({ id: 'split-cell', label: t('designer.table.split'), icon: IconTableSplit, command: 'split-cell' })
+    groups.push({ id: 'table.spans', actions: spanActions })
+  }
+
+  groups.push(
+    {
+      id: 'table.horizontal-align',
+      actions: [
+        { id: 'align-left', label: t('designer.table.alignLeft'), icon: IconTextAlignLeft, command: 'align-left' },
+        { id: 'align-center', label: t('designer.table.alignCenter'), icon: IconTextAlignCenter, command: 'align-center' },
+        { id: 'align-right', label: t('designer.table.alignRight'), icon: IconTextAlignRight, command: 'align-right' },
+      ],
+    },
+    {
+      id: 'table.vertical-align',
+      actions: [
+        { id: 'valign-top', label: t('designer.table.alignTop'), icon: IconAlignTop, command: 'valign-top' },
+        { id: 'valign-middle', label: t('designer.table.alignMiddle'), icon: IconAlignMiddle, command: 'valign-middle' },
+        { id: 'valign-bottom', label: t('designer.table.alignBottom'), icon: IconAlignBottom, command: 'valign-bottom' },
+      ],
+    },
+  )
+
+  return groups
+}
+
 /**
- * Create self-managed toolbar DOM.
- * Dispatches BehaviorEvent.command through the session.
+ * Backward-compatible DOM renderer for hosts that mount table toolbar
+ * themselves. Designer decorations render the same action model through Vue
+ * so toolbar placement stays material-frame anchored.
  */
 export function createTableToolbar(
   session: EditingSessionRef,
   container: HTMLElement,
   delegate: TableEditingDelegate,
 ): TableToolbar {
-  const t = delegate.t
-  let row: HTMLElement | null = null
+  let root: HTMLElement | null = null
+
+  function applyStyle(el: HTMLElement, style: Record<string, string>) {
+    Object.assign(el.style, style)
+  }
+
+  function appendIcon(el: HTMLElement, icon: string) {
+    const span = document.createElement('span')
+    span.innerHTML = icon
+    applyStyle(span, materialToolbarIconStyle())
+    el.appendChild(span)
+  }
 
   function rebuild(selection: TableCellPayload | null) {
-    if (row) {
-      row.remove()
-      row = null
-    }
+    root?.remove()
+    root = null
 
-    if (!selection)
+    const groups = createTableToolbarGroups(selection, delegate.getNode(session.nodeId), delegate)
+    if (groups.length === 0)
       return
 
-    const kind = delegate.getTableKind()
-    const node = delegate.getNode(session.nodeId)
-    if (!node)
-      return
+    root = document.createElement('div')
+    root.className = 'ei-deep-edit-toolbar'
+    applyStyle(root, materialToolbarShellStyle())
 
-    // Determine cell role for table-data
-    let cellRole: string | null = null
-    if (kind === 'data') {
-      cellRole = node.table.topology.rows[selection.row]?.role ?? null
-    }
+    for (const group of groups) {
+      const groupEl = document.createElement('div')
+      applyStyle(groupEl, materialToolbarGroupStyle())
 
-    const isDataArea = kind === 'data' && cellRole === 'repeat-template'
-    const isHeaderFooter = kind === 'data' && (cellRole === 'header' || cellRole === 'footer')
-
-    row = document.createElement('div')
-    row.style.cssText = 'display:flex;align-items:center;gap:2px;background:#fff;border:1px solid var(--ei-border-color,#d0d0d0);border-radius:4px;padding:2px 4px;box-shadow:0 1px 4px rgba(0,0,0,0.1);'
-
-    function addBtn(title: string, svg: string, command: string, disabled?: boolean) {
-      const btn = document.createElement('button')
-      btn.style.cssText = 'display:flex;align-items:center;justify-content:center;width:24px;height:24px;border:none;background:transparent;border-radius:3px;cursor:pointer;color:var(--ei-text-primary,#333);padding:0;'
-      btn.title = title
-      btn.innerHTML = svg
-      if (disabled) {
-        btn.disabled = true
-        btn.style.opacity = '0.35'
-        btn.style.cursor = 'default'
-      }
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation()
-        if (!btn.disabled)
-          session.dispatch({ kind: 'command', command })
-      })
-      btn.addEventListener('mouseenter', () => {
-        if (!btn.disabled)
-          btn.style.background = 'var(--ei-hover-bg,#f0f0f0)'
-      })
-      btn.addEventListener('mouseleave', () => {
-        btn.style.background = 'transparent'
-      })
-      row!.appendChild(btn)
-    }
-
-    function addSep() {
-      const sep = document.createElement('span')
-      sep.style.cssText = 'width:1px;height:16px;background:var(--ei-border-color,#d0d0d0);margin:0 2px;'
-      row!.appendChild(sep)
-    }
-
-    // Row operations (table-static only)
-    if (kind === 'static') {
-      addBtn(t('designer.table.insertRowAbove'), IconTableInsertRowAbove, 'insert-row-above')
-      addBtn(t('designer.table.insertRowBelow'), IconTableInsertRowBelow, 'insert-row-below')
-      addBtn(t('designer.table.removeRow'), IconTableRemoveRow, 'remove-row', node.table.topology.rows.length <= 1)
-      addSep()
-    }
-
-    // Column operations (all contexts)
-    addBtn(t('designer.table.insertColLeft'), IconTableInsertColLeft, 'insert-col-left')
-    addBtn(t('designer.table.insertColRight'), IconTableInsertColRight, 'insert-col-right')
-    addBtn(t('designer.table.removeCol'), IconTableRemoveCol, 'remove-col', node.table.topology.columns.length <= 1)
-    addSep()
-
-    // Merge/Split (hidden in data area)
-    if (!isDataArea) {
-      addBtn(t('designer.table.mergeRight'), IconTableMerge, 'merge-right')
-      if (kind === 'static') {
-        addBtn(t('designer.table.mergeDown'), IconTableMerge, 'merge-down')
+      for (const action of group.actions) {
+        const btn = document.createElement('button')
+        btn.type = 'button'
+        btn.title = action.label
+        btn.disabled = Boolean(action.disabled)
+        applyStyle(btn, materialToolbarButtonStyle(action.disabled, action.danger))
+        appendIcon(btn, action.icon)
+        btn.addEventListener('mouseenter', () => {
+          if (!action.disabled)
+            btn.style.background = action.danger ? 'rgba(217, 45, 32, 0.10)' : 'rgba(24, 144, 255, 0.10)'
+        })
+        btn.addEventListener('mouseleave', () => {
+          btn.style.background = 'transparent'
+        })
+        btn.addEventListener('click', (event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          if (!action.disabled)
+            session.dispatch({ kind: 'command', command: action.command })
+        })
+        groupEl.appendChild(btn)
       }
 
-      // Split: show when cell has span
-      const cell = node.table.topology.rows[selection.row]?.cells[selection.col]
-      const hasSpan = (cell?.colSpan ?? 1) > 1 || (cell?.rowSpan ?? 1) > 1
-      const showSplit = isHeaderFooter ? (cell?.colSpan ?? 1) > 1 : hasSpan
-      if (showSplit) {
-        addBtn(t('designer.table.split'), IconTableSplit, 'split-cell')
-      }
-
-      addSep()
+      root.appendChild(groupEl)
     }
 
-    // Alignment (all contexts)
-    addBtn(t('designer.table.alignLeft'), IconTextAlignLeft, 'align-left')
-    addBtn(t('designer.table.alignCenter'), IconTextAlignCenter, 'align-center')
-    addBtn(t('designer.table.alignRight'), IconTextAlignRight, 'align-right')
-    addSep()
-    addBtn(t('designer.table.alignTop'), IconAlignTop, 'valign-top')
-    addBtn(t('designer.table.alignMiddle'), IconAlignMiddle, 'valign-middle')
-    addBtn(t('designer.table.alignBottom'), IconAlignBottom, 'valign-bottom')
-
-    container.appendChild(row)
+    container.appendChild(root)
   }
 
   return {
@@ -140,10 +191,8 @@ export function createTableToolbar(
       rebuild(selection)
     },
     destroy() {
-      if (row) {
-        row.remove()
-        row = null
-      }
+      root?.remove()
+      root = null
     },
   }
 }

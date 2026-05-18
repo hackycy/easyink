@@ -2,9 +2,16 @@ import type { EditingSessionRef, Rect, Selection } from '@easyink/core'
 import type { MaterialNode, TableNode } from '@easyink/schema'
 import type { TableCellPayload, TableEditingDelegate } from './types'
 import { isTableNode } from '@easyink/schema'
-import { createPointerGesture } from '@easyink/shared'
-import { computed, defineComponent, h, onMounted, onUnmounted, ref, watch } from 'vue'
-import { createTableToolbar } from './toolbar'
+import {
+  createPointerGesture,
+  materialToolbarButtonStyle,
+  materialToolbarDockStyle,
+  materialToolbarGroupStyle,
+  materialToolbarIconStyle,
+  materialToolbarShellStyle,
+} from '@easyink/shared'
+import { computed, defineComponent, h, onUnmounted, ref, watch } from 'vue'
+import { createTableToolbarGroups } from './toolbar'
 
 /**
  * Create a TableCellDecoration component with the delegate captured in closure.
@@ -87,35 +94,11 @@ export function createTableCellDecorationComponent(delegate: TableEditingDelegat
         }
       }, { immediate: true })
 
-      // ─── Toolbar management ─────────────────────────────────────
-
-      const toolbarContainerRef = ref<HTMLDivElement | null>(null)
-      let toolbar: ReturnType<typeof createTableToolbar> | null = null
-
-      function mountToolbar() {
-        if (toolbarContainerRef.value && !toolbar) {
-          toolbar = createTableToolbar(props.session, toolbarContainerRef.value, delegate)
-          toolbar.update(payload.value)
-        }
-      }
-
-      onMounted(mountToolbar)
-
-      watch(payload, (p) => {
-        toolbar?.update(p)
-      })
-
-      watch(toolbarContainerRef, () => {
-        toolbar?.destroy()
-        toolbar = null
-        mountToolbar()
-      })
+      const toolbarGroups = computed(() => createTableToolbarGroups(payload.value, tableNode.value ?? undefined, delegate))
 
       onUnmounted(() => {
         if (activeEditTarget.value)
           commitEdit()
-        toolbar?.destroy()
-        toolbar = null
       })
 
       // ─── Resize handlers ──────────────────────────────────────
@@ -343,17 +326,45 @@ export function createTableCellDecorationComponent(delegate: TableEditingDelegat
           }
         }
 
-        // Toolbar container (positioned below cell)
         children.push(h('div', {
-          ref: (el: unknown) => { toolbarContainerRef.value = el as HTMLDivElement },
-          style: {
-            position: 'absolute',
-            left: `${r.x}${u}`,
-            top: `${r.y + r.height + 4}${u}`,
-            zIndex: 20,
-            pointerEvents: 'auto',
+          class: 'ei-deep-edit-toolbar',
+          style: materialToolbarDockStyle(props.node, u),
+          onPointerdown: (event: PointerEvent) => {
+            event.preventDefault()
+            event.stopPropagation()
           },
-        }))
+          onClick: (event: MouseEvent) => {
+            event.stopPropagation()
+          },
+        }, [
+          h('div', { style: materialToolbarShellStyle() }, [
+            ...toolbarGroups.value.map(group => h('div', {
+              key: group.id,
+              style: materialToolbarGroupStyle(),
+            }, group.actions.map(action => h('button', {
+              key: action.id,
+              type: 'button',
+              title: action.label,
+              disabled: action.disabled,
+              style: materialToolbarButtonStyle(action.disabled, action.danger),
+              onMouseenter: (event: MouseEvent) => {
+                if (!action.disabled)
+                  (event.currentTarget as HTMLElement).style.background = action.danger ? 'rgba(217, 45, 32, 0.10)' : 'rgba(24, 144, 255, 0.10)'
+              },
+              onMouseleave: (event: MouseEvent) => {
+                (event.currentTarget as HTMLElement).style.background = 'transparent'
+              },
+              onClick: (event: MouseEvent) => {
+                event.preventDefault()
+                event.stopPropagation()
+                if (!action.disabled)
+                  props.session.dispatch({ kind: 'command', command: action.command })
+              },
+            }, [
+              h('span', { innerHTML: action.icon, style: materialToolbarIconStyle() }),
+            ])))),
+          ]),
+        ]))
 
         // Inline edit textarea (when editing this cell)
         if (isEditingThis.value) {
