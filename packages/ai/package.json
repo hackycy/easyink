@@ -1,7 +1,7 @@
 {
   "name": "@easyink/ai",
   "type": "module",
-  "version": "0.0.11",
+  "version": "0.0.12",
   "description": "AI integration for EasyInk designer (chat, MCP, prompt templates)",
   "author": "EasyInk Team",
   "license": "MIT",
