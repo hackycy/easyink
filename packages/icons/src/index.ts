@@ -49,6 +49,7 @@ export {
   EyeOff as IconHidden,
   History as IconHistory,
   Image as IconImage,
+  Upload as IconImport,
   Italic as IconItalic,
   ArrowDownToLine as IconLayerBottom,
   ArrowDown as IconLayerDown,

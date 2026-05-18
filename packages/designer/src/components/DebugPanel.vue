@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import type { DocumentSchemaInput } from '@easyink/schema'
 import type { Component } from 'vue'
 import type { DiagnosticSeverity } from '../store/diagnostics'
-import { IconChevronRight, IconCircleAlert, IconCircleDot, IconCopy, IconDelete, IconDown } from '@easyink/icons'
+import { IconChevronRight, IconCircleAlert, IconCircleDot, IconCopy, IconDelete, IconDown, IconExport, IconImport } from '@easyink/icons'
+import { isObject } from '@easyink/shared'
 import { EiIcon } from '@easyink/ui'
 import { computed, ref } from 'vue'
 import { useDesignerStore } from '../composables'
@@ -39,14 +41,97 @@ function clearDiagnostics() {
 const diagOpen = ref(true)
 const schemaOpen = ref(false)
 const schemaCopied = ref(false)
+const schemaImported = ref(false)
+const schemaExported = ref(false)
+const schemaFileInputRef = ref<HTMLInputElement | null>(null)
+
+function text(key: string, fallback: string): string {
+  const value = store.t(key)
+  return value === key ? fallback : value
+}
+
+function flash(flag: { value: boolean }): void {
+  flag.value = true
+  setTimeout(() => {
+    flag.value = false
+  }, 1500)
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error)
+    return error.message
+  if (typeof error === 'string')
+    return error
+  return 'Unknown error'
+}
+
+function getSchemaFileName(): string {
+  const rawName = store.schema.meta?.name?.trim() || 'easyink-schema'
+  const safeName = rawName
+    .replace(/[\\/:*?"<>|]+/g, '-')
+    .replace(/\s+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return `${safeName || 'easyink-schema'}.json`
+}
 
 function copySchema() {
   navigator.clipboard.writeText(schemaJson.value).then(() => {
-    schemaCopied.value = true
-    setTimeout(() => {
-      schemaCopied.value = false
-    }, 1500)
+    flash(schemaCopied)
   })
+}
+
+function exportSchema() {
+  const blob = new Blob([schemaJson.value], { type: 'application/json;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = getSchemaFileName()
+  link.style.display = 'none'
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 0)
+  flash(schemaExported)
+}
+
+function openSchemaImport() {
+  schemaFileInputRef.value?.click()
+}
+
+async function importSchemaFile(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file)
+    return
+
+  const message = text(
+    'designer.debug.confirmImportSchema',
+    'Import schema JSON? This will replace the current schema and clear undo history.',
+  )
+  // eslint-disable-next-line no-alert
+  if (!window.confirm(message))
+    return
+
+  try {
+    const parsed = JSON.parse(await file.text()) as unknown
+    if (!isObject(parsed))
+      throw new Error('Schema JSON must be an object.')
+
+    store.setSchema(parsed as DocumentSchemaInput)
+    flash(schemaImported)
+  }
+  catch (error) {
+    store.diagnostics.push({
+      source: 'debug-panel',
+      severity: 'error',
+      message: text('designer.debug.importSchemaFailed', 'Failed to import schema JSON.'),
+      detail: {
+        fileName: file.name,
+        reason: getErrorMessage(error),
+      },
+    })
+  }
 }
 </script>
 
@@ -123,15 +208,39 @@ function copySchema() {
           <EiIcon :icon="schemaOpen ? IconDown : IconChevronRight" :size="12" class="ei-debug-panel__chevron" />
           <span class="ei-debug-panel__section-title">{{ store.t('designer.debug.schema') }}</span>
         </button>
-        <button
-          v-if="schemaOpen"
-          type="button"
-          class="ei-debug-panel__clear-btn"
-          :title="schemaCopied ? 'Copied!' : 'Copy schema'"
-          @click="copySchema"
+        <div v-if="schemaOpen" class="ei-debug-panel__schema-actions">
+          <button
+            type="button"
+            class="ei-debug-panel__clear-btn"
+            :title="schemaImported ? text('designer.debug.importedSchema', 'Imported') : text('designer.debug.importSchema', 'Import JSON')"
+            @click="openSchemaImport"
+          >
+            <EiIcon :icon="IconImport" :size="12" :class="schemaImported ? 'ei-debug-panel__action--done' : ''" />
+          </button>
+          <button
+            type="button"
+            class="ei-debug-panel__clear-btn"
+            :title="schemaExported ? text('designer.debug.exportedSchema', 'Exported') : text('designer.debug.exportSchema', 'Export JSON')"
+            @click="exportSchema"
+          >
+            <EiIcon :icon="IconExport" :size="12" :class="schemaExported ? 'ei-debug-panel__action--done' : ''" />
+          </button>
+          <button
+            type="button"
+            class="ei-debug-panel__clear-btn"
+            :title="schemaCopied ? text('designer.debug.copiedSchema', 'Copied!') : text('designer.debug.copySchema', 'Copy schema')"
+            @click="copySchema"
+          >
+            <EiIcon :icon="IconCopy" :size="12" :class="schemaCopied ? 'ei-debug-panel__copy--done' : ''" />
+          </button>
+        </div>
+        <input
+          ref="schemaFileInputRef"
+          class="ei-debug-panel__file-input"
+          type="file"
+          accept="application/json,.json"
+          @change="importSchemaFile"
         >
-          <EiIcon :icon="IconCopy" :size="12" :class="schemaCopied ? 'ei-debug-panel__copy--done' : ''" />
-        </button>
       </div>
       <pre v-if="schemaOpen" class="ei-debug-panel__code">{{ schemaJson }}</pre>
     </div>
@@ -257,6 +366,21 @@ function copySchema() {
     }
   }
 
+  &__schema-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin-left: auto;
+
+    .ei-debug-panel__clear-btn {
+      margin-left: 0;
+    }
+  }
+
+  &__file-input {
+    display: none;
+  }
+
   &__diag-list {
     list-style: none;
     padding: 0;
@@ -355,6 +479,10 @@ function copySchema() {
   }
 
   &__copy--done {
+    color: #52c41a;
+  }
+
+  &__action--done {
     color: #52c41a;
   }
 

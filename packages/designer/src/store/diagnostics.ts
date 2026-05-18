@@ -29,6 +29,7 @@ export type DiagnosticSource
     | 'behavior-dispatcher'
     | 'transaction'
     | 'gesture'
+    | 'debug-panel'
     | 'material-extension'
 
 export interface Diagnostic {
