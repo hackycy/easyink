@@ -92,4 +92,25 @@ describe('renderText', () => {
     expect(measured.height).toBe(10)
     expect(measured.overflow).toBe(true)
   })
+
+  it('leaves auto-height constraints unset by default while measuring as unbounded', () => {
+    const node = createTextNode({
+      width: 12,
+      height: 4,
+      props: {
+        content: 'abcdefghijabcdefghij',
+        heightMode: 'auto',
+        wrapMode: 'anywhere',
+        fontSize: 4,
+        lineHeight: 1,
+      },
+    })
+
+    const measured = measureText(node)
+
+    expect(node.props.minHeight).toBeNull()
+    expect(node.props.maxHeight).toBeNull()
+    expect(measured.height).toBeGreaterThan(10)
+    expect(measured.overflow).toBe(false)
+  })
 })

@@ -23,7 +23,15 @@ const label = computed(() => props.t(props.schema.label))
 
 const placeholder = computed(() => {
   const value = props.schema.editorOptions?.placeholder
-  return typeof value === 'string' ? value : undefined
+  if (typeof value !== 'string')
+    return undefined
+  return value.startsWith('designer.') ? props.t(value) : value
+})
+
+const isNumberLike = computed(() => props.schema.type === 'number' || props.schema.type === 'unit')
+
+const isNullableNumber = computed(() => {
+  return isNumberLike.value && (props.schema.nullable === true || props.schema.editorOptions?.nullable === true)
 })
 
 const enumOptions = computed(() => {
@@ -45,9 +53,9 @@ const customEditorComponent = computed<Component | undefined>(() => {
 
 function resolveValue(val: unknown): unknown {
   let resolved = val
-  if (props.schema.type === 'number') {
+  if (isNumberLike.value) {
     if (resolved == null) {
-      resolved = props.schema.default ?? 0
+      resolved = isNullableNumber.value ? null : props.schema.default ?? 0
     }
     else {
       resolved = Number(val)
@@ -109,6 +117,7 @@ function onCommit(val: unknown) {
         :min="schema.min"
         :max="schema.max"
         :step="schema.step"
+        :nullable="isNullableNumber"
         :disabled="disabled"
         @update:model-value="onPreview"
         @commit="onCommit"

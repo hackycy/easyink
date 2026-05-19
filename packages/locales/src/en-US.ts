@@ -214,6 +214,7 @@ const enUS: LocaleMessages = {
     },
     placeholder: {
       textMaterialEmpty: 'Enter content or bind data',
+      unbounded: 'Unbounded',
     },
     reason: {
       runtimeHeight: 'Height is calculated from content',

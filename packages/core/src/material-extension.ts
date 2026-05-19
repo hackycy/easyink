@@ -297,6 +297,8 @@ export interface PropSchemaLike {
   min?: number
   max?: number
   step?: number
+  /** Preserve null for empty numeric input instead of coercing to 0/default. */
+  nullable?: boolean
   editor?: string
   editorOptions?: Record<string, unknown>
   [extra: string]: unknown
@@ -326,6 +328,8 @@ export interface PropSchema {
   min?: number
   max?: number
   step?: number
+  /** Preserve null for empty numeric input instead of coercing to 0/default. */
+  nullable?: boolean
   properties?: PropSchema[]
   items?: PropSchema
   visible?: (props: Record<string, unknown>) => boolean

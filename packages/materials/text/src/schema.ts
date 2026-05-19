@@ -24,8 +24,8 @@ export interface TextProps {
   /** @deprecated Use wrapMode. Kept for older schemas. */
   autoWrap: boolean
   overflow: 'visible' | 'hidden' | 'ellipsis'
-  minHeight: number
-  maxHeight: number
+  minHeight: number | null
+  maxHeight: number | null
   prefix: string
   suffix: string
   borderWidth: number
@@ -50,8 +50,8 @@ export const TEXT_DEFAULTS: TextProps = {
   wrapMode: 'anywhere',
   autoWrap: true,
   overflow: 'hidden',
-  minHeight: 0,
-  maxHeight: 0,
+  minHeight: null,
+  maxHeight: null,
   prefix: '',
   suffix: '',
   borderWidth: 0,

@@ -19,6 +19,15 @@ describe('designer prop schemas', () => {
     expect(keys).not.toContain('autoWrap')
   })
 
+  it('keeps text auto-height constraints nullable in the editor', () => {
+    const schemas = getPropSchemas('text')
+    const minHeight = schemas.find(schema => schema.key === 'minHeight')
+    const maxHeight = schemas.find(schema => schema.key === 'maxHeight')
+
+    expect(minHeight).toMatchObject({ default: null, nullable: true })
+    expect(maxHeight).toMatchObject({ default: null, nullable: true })
+  })
+
   it('returns shared stack layout schemas for unknown material types', () => {
     expect(getPropSchemas('unknown-material').map(schema => schema.key)).toEqual([
       'layoutMode',

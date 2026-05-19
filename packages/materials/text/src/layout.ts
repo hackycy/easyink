@@ -3,9 +3,11 @@ import type { TextHeightMode, TextProps, TextWrapMode } from './schema'
 import { getNodeProps } from '@easyink/schema'
 import { TEXT_DEFAULTS } from './schema'
 
-export interface ResolvedTextProps extends TextProps {
+export interface ResolvedTextProps extends Omit<TextProps, 'minHeight' | 'maxHeight'> {
   heightMode: TextHeightMode
   wrapMode: TextWrapMode
+  minHeight: number
+  maxHeight: number
 }
 
 export interface TextMeasureResult {
@@ -39,8 +41,8 @@ export function resolveTextProps(raw: Partial<TextProps> = {}): ResolvedTextProp
     wrapMode,
     autoWrap: wrapMode !== 'nowrap',
     overflow: raw.overflow === 'visible' || raw.overflow === 'ellipsis' ? raw.overflow : 'hidden',
-    minHeight: Math.max(0, toFiniteNumber(raw.minHeight, TEXT_DEFAULTS.minHeight)),
-    maxHeight: Math.max(0, toFiniteNumber(raw.maxHeight, TEXT_DEFAULTS.maxHeight)),
+    minHeight: Math.max(0, toFiniteNumber(raw.minHeight, 0)),
+    maxHeight: Math.max(0, toFiniteNumber(raw.maxHeight, 0)),
     fontSize: Math.max(0.1, toFiniteNumber(raw.fontSize, TEXT_DEFAULTS.fontSize)),
     lineHeight: Math.max(0.1, toFiniteNumber(raw.lineHeight, TEXT_DEFAULTS.lineHeight)),
     letterSpacing: toFiniteNumber(raw.letterSpacing, TEXT_DEFAULTS.letterSpacing),

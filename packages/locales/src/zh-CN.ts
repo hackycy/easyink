@@ -214,6 +214,7 @@ const zhCN: LocaleMessages = {
     },
     placeholder: {
       textMaterialEmpty: '请输入内容或绑定数据',
+      unbounded: '不限制',
     },
     reason: {
       runtimeHeight: '高度由内容自动计算',
