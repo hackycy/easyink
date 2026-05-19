@@ -4,7 +4,7 @@ import type { HiPrintClientLike, PrintPagesOptions } from './client'
 import { createManagedPrintViewer, resolvePrintDriverValue } from '@easyink/print-core'
 import { createHiPrintDriver } from './driver'
 
-export interface HiPrintPrintSdkOptions extends ManagedPrintViewerOptions {
+export interface HiPrintPrinterOptions extends ManagedPrintViewerOptions {
   client: HiPrintClientLike
   printerName?: PrintDriverValue<string>
   copies?: PrintDriverValue<number>
@@ -14,7 +14,7 @@ export interface HiPrintPrintSdkOptions extends ManagedPrintViewerOptions {
   ) => Partial<PrintPagesOptions> | undefined | Promise<Partial<PrintPagesOptions> | undefined>
 }
 
-export interface HiPrintPrintInput extends ManagedPrintInput {
+export interface HiPrintPrintRequest extends ManagedPrintInput {
   printerName?: string
   copies?: number
   forcePageSize?: boolean
@@ -25,18 +25,18 @@ export interface HiPrintPrintInput extends ManagedPrintInput {
   ) => Partial<PrintPagesOptions> | undefined | Promise<Partial<PrintPagesOptions> | undefined>
 }
 
-export interface HiPrintPrintSdk {
+export interface HiPrintPrinter {
   readonly client: HiPrintClientLike
   readonly viewer: ManagedPrintViewer
-  print: (input: HiPrintPrintInput) => Promise<void>
+  print: (input: HiPrintPrintRequest) => Promise<void>
   destroy: () => void
 }
 
 /**
- * Creates the high-level HiPrint SDK. The SDK owns Viewer creation/rendering
+ * Creates the high-level HiPrint printer. The printer owns Viewer creation/rendering
  * and exposes a single schema/data print call to application code.
  */
-export function createHiPrintPrintSdk(options: HiPrintPrintSdkOptions): HiPrintPrintSdk {
+export function createHiPrintPrinter(options: HiPrintPrinterOptions): HiPrintPrinter {
   const viewer = createManagedPrintViewer(options)
 
   return {

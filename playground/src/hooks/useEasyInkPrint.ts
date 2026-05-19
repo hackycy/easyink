@@ -1,5 +1,5 @@
-import type { EasyInkPrinterDevice, EasyInkPrinterJob, EasyInkPrinterOffset, EasyInkPrinterPaperSize, EasyInkPrinterPrintInput, EasyInkPrinterUserData } from '@easyink/print-integration-easyink-printer'
-import { createEasyInkPrinterClient, createEasyInkPrinterPrintSdk, DEFAULT_EASYINK_PRINTER_URL } from '@easyink/print-integration-easyink-printer'
+import type { EasyInkPrinterDevice, EasyInkPrinterJob, EasyInkPrinterOffset, EasyInkPrinterPaperSize, EasyInkPrinterPrintRequest, EasyInkPrinterUserData } from '@easyink/print-integration-easyink-printer'
+import { createEasyInkPrinter, createEasyInkPrinterClient, DEFAULT_EASYINK_PRINTER_URL } from '@easyink/print-integration-easyink-printer'
 import { computed, reactive, ref, watch } from 'vue'
 
 const CONFIG_KEY = 'easyink:printServiceConfig'
@@ -88,7 +88,7 @@ const client = createEasyInkPrinterClient({
   printerName: config.printerName,
   defaultCopies: config.copies,
 })
-const sdk = createEasyInkPrinterPrintSdk({
+const printer = createEasyInkPrinter({
   client,
   viewer: 'iframe',
   printerName: () => config.printerName,
@@ -158,8 +158,8 @@ async function refreshDevices(): Promise<PrintServiceDevice[]> {
   return list
 }
 
-async function print(input: EasyInkPrinterPrintInput): Promise<void> {
-  await sdk.print({
+async function print(input: EasyInkPrinterPrintRequest): Promise<void> {
+  await printer.print({
     ...input,
     printerName: input.printerName ?? config.printerName,
     copies: input.copies ?? config.copies,
@@ -202,7 +202,7 @@ if (config.enabled) {
 export function useEasyInkPrint() {
   return {
     client,
-    sdk,
+    printer,
     config,
     connectionState: computed(() => connectionState.value),
     isConnected: computed(() => connectionState.value === 'connected'),

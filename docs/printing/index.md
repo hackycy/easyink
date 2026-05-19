@@ -15,7 +15,7 @@ EasyInk 的本地打印目标很明确：让业务代码只关心“打印什么
 
 1. 安装对应的打印包。
 2. 创建打印客户端，管理连接地址、默认打印机和份数。
-3. 创建对应的 print SDK，选择 `viewer: 'iframe'` 或 `viewer: 'dom'`。
+3. 创建对应的打印器，选择 `viewer: 'iframe'` 或 `viewer: 'dom'`。
 4. 调用 `printer.print({ schema, data })`。
 5. 在设置页暴露打印机列表、连接状态和错误信息。
 
@@ -36,7 +36,7 @@ EasyInk 的本地打印目标很明确：让业务代码只关心“打印什么
 | **渲染质量** | 适合对矢量质量要求高的正式单据 | 适合标签、小票、跨平台打印 |
 | **通信方式** | HTTP + WebSocket | WebSocket |
 | **典型场景** | 面单、正式报表、A4 文档 | 小票、标签、嵌入 Electron 的桌面应用 |
-| **SDK 默认 pageSizeMode** | `fixed` | `driver` |
+| **打印器默认 pageSizeMode** | `fixed` | `driver` |
 | **官方包** | `@easyink/print-integration-easyink-printer` | `@easyink/print-integration-hiprint` |
 
 ## 如何选择
@@ -55,7 +55,7 @@ EasyInk 的本地打印目标很明确：让业务代码只关心“打印什么
 
 ### 不要自己实现驱动的情况
 
-如果你的打印目标只是“把 schema/data 打给本地服务”，官方 SDK 已经覆盖了绝大多数需求。只有在下面这些情况才建议写自定义驱动：
+如果你的打印目标只是“把 schema/data 打给本地服务”，官方打印器已经覆盖了绝大多数需求。只有在下面这些情况才建议写自定义驱动：
 
 - 你有独立的企业打印网关，需要走自定义协议。
 - 你要接专用硬件或厂商 SDK。
@@ -67,7 +67,7 @@ EasyInk 的本地打印目标很明确：让业务代码只关心“打印什么
 
 ```ts
 const client = createEasyInkPrinterClient(...)
-const printer = createEasyInkPrinterPrintSdk({
+const printer = createEasyInkPrinter({
   client,
   viewer: 'iframe',
 })
@@ -91,7 +91,7 @@ export function usePrintService() {
 
 这样做的原因有两个：
 
-- print SDK 负责“本次 schema/data 如何渲染并提交”，不负责“配置存在哪、何时重连”。
+- 打印器负责“本次 schema/data 如何渲染并提交”，不负责“配置存在哪、何时重连”。
 - 打印设置页、诊断页、预览页都能共享同一份连接状态。
 
 EasyInk Printer 官方客户端内部使用 VueUse `useWebSocket` 管理长连接。默认会自动重连 3 次，初始延迟 500ms，按 2 倍退避，最大延迟 5000ms；达到上限后进入 `error`，错误信息写入 `lastError`。

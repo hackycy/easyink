@@ -20,8 +20,8 @@ export {
 } from './client'
 
 export {
-  createHiPrintPrintSdk,
-  type HiPrintPrintInput,
-  type HiPrintPrintSdk,
-  type HiPrintPrintSdkOptions,
+  createHiPrintPrinter,
+  type HiPrintPrinter,
+  type HiPrintPrinterOptions,
+  type HiPrintPrintRequest,
 } from './sdk'

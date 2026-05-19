@@ -292,7 +292,7 @@ context.onDiagnostic?.({
 
 ## Playground 参考
 
-Playground 已迁移到高层 print SDK，不再维护业务侧驱动包装。可以直接对照两个 hook：
+Playground 已迁移到高层打印器，不再维护业务侧驱动包装。可以直接对照两个 hook：
 
-- `playground/src/hooks/useEasyInkPrint.ts`：创建 EasyInk Printer client 和托管 print SDK
-- `playground/src/hooks/useHiPrint.ts`：创建 HiPrint client 和托管 print SDK
+- `playground/src/hooks/useEasyInkPrint.ts`：创建 EasyInk Printer client 和托管打印器
+- `playground/src/hooks/useHiPrint.ts`：创建 HiPrint client 和托管打印器

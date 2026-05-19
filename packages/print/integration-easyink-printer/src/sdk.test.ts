@@ -1,6 +1,6 @@
 import type { DocumentSchema } from '@easyink/viewer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createEasyInkPrinterPrintSdk } from './sdk'
+import { createEasyInkPrinter } from './sdk'
 
 const { renderPagesToPdfBlob } = vi.hoisted(() => ({
   renderPagesToPdfBlob: vi.fn(async () => new Blob(['pdf'])),
@@ -28,13 +28,13 @@ beforeEach(() => {
   renderPagesToPdfBlob.mockClear()
 })
 
-describe('easy ink printer print sdk', () => {
+describe('easy ink printer', () => {
   it('creates the managed viewer, renders PDF, and submits the job', async () => {
     const client = {
       printPdf: vi.fn(async () => 'job-12345678'),
       waitForJob: vi.fn(async () => ({ jobId: 'job-12345678', status: 'completed' })),
     }
-    const sdk = createEasyInkPrinterPrintSdk({
+    const printer = createEasyInkPrinter({
       client: client as never,
       viewer: 'dom',
       printerName: () => 'Printer A',
@@ -42,7 +42,7 @@ describe('easy ink printer print sdk', () => {
       forcePageSize: () => true,
     })
 
-    await sdk.print({
+    await printer.print({
       schema: createFixedSchema(),
       data: {},
     })

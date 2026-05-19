@@ -13,8 +13,8 @@ export {
 } from './client'
 
 export {
-  createEasyInkPrinterPrintSdk,
-  type EasyInkPrinterPrintInput,
-  type EasyInkPrinterPrintSdk,
-  type EasyInkPrinterPrintSdkOptions,
+  createEasyInkPrinter,
+  type EasyInkPrinter,
+  type EasyInkPrinterOptions,
+  type EasyInkPrinterPrintRequest,
 } from './sdk'

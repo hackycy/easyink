@@ -49,7 +49,7 @@ export interface PrintDriverBaseOptions<TClient, TRequestOptions> {
 }
 
 /**
- * Selects the managed rendering surface used by high-level print SDKs.
+ * Selects the managed rendering surface used by high-level printers.
  *
  * - `iframe`: isolated document, default and recommended for production.
  * - `dom`: regular DOM element in the current document, useful for tests or
@@ -235,8 +235,8 @@ export function resolvePrintDriverValue<T>(value: PrintDriverValue<T> | undefine
 }
 
 /**
- * Creates a small managed Viewer runtime for print SDKs. Application code can
- * stay focused on client connection + print input while the SDK owns the
+ * Creates a small managed Viewer runtime for printers. Application code can
+ * stay focused on client connection + print input while the printer owns the
  * transient render surface.
  */
 export function createManagedPrintViewer(options: ManagedPrintViewerOptions = {}): ManagedPrintViewer {

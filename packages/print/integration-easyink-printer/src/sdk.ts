@@ -4,7 +4,7 @@ import type { EasyInkPrinterClient, EasyInkPrinterPrintPdfOptions } from './clie
 import { createManagedPrintViewer, resolvePrintDriverValue } from '@easyink/print-core'
 import { createEasyInkPrinterDriver } from './driver'
 
-export interface EasyInkPrinterPrintSdkOptions extends ManagedPrintViewerOptions {
+export interface EasyInkPrinterOptions extends ManagedPrintViewerOptions {
   client: EasyInkPrinterClient
   printerName?: PrintDriverValue<string>
   copies?: PrintDriverValue<number>
@@ -15,7 +15,7 @@ export interface EasyInkPrinterPrintSdkOptions extends ManagedPrintViewerOptions
   ) => Partial<EasyInkPrinterPrintPdfOptions> | undefined | Promise<Partial<EasyInkPrinterPrintPdfOptions> | undefined>
 }
 
-export interface EasyInkPrinterPrintInput extends ManagedPrintInput {
+export interface EasyInkPrinterPrintRequest extends ManagedPrintInput {
   printerName?: string
   copies?: number
   forcePageSize?: boolean
@@ -27,18 +27,18 @@ export interface EasyInkPrinterPrintInput extends ManagedPrintInput {
   ) => Partial<EasyInkPrinterPrintPdfOptions> | undefined | Promise<Partial<EasyInkPrinterPrintPdfOptions> | undefined>
 }
 
-export interface EasyInkPrinterPrintSdk {
+export interface EasyInkPrinter {
   readonly client: EasyInkPrinterClient
   readonly viewer: ManagedPrintViewer
-  print: (input: EasyInkPrinterPrintInput) => Promise<void>
+  print: (input: EasyInkPrinterPrintRequest) => Promise<void>
   destroy: () => void
 }
 
 /**
- * Creates the high-level EasyInk Printer SDK. The SDK owns Viewer rendering,
+ * Creates the high-level EasyInk Printer facade. The printer owns Viewer rendering,
  * PDF generation, upload, and optional job completion waiting.
  */
-export function createEasyInkPrinterPrintSdk(options: EasyInkPrinterPrintSdkOptions): EasyInkPrinterPrintSdk {
+export function createEasyInkPrinter(options: EasyInkPrinterOptions): EasyInkPrinter {
   const viewer = createManagedPrintViewer(options)
 
   return {

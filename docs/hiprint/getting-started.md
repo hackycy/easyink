@@ -9,7 +9,7 @@ HiPrint 通道适合跨平台静默打印，尤其适合标签、小票、卡片
 
 1. 启动 electron-hiprint。
 2. 确认本机能刷新到打印机列表。
-3. 前端创建 `@easyink/print-integration-hiprint` 的 print SDK。
+3. 前端创建 `@easyink/print-integration-hiprint` 的打印器。
 4. 调用 `printer.print({ schema, data })`。
 
 这篇文档只讲浏览器如何接入 HiPrint。electron-hiprint 本身的安装和系统打印驱动问题，仍然以它的发行包和操作系统配置为准。
@@ -44,16 +44,16 @@ console.log(printers)
 
 如果这里拿不到打印机，优先排查本地环境，而不是继续调模板渲染。
 
-## 第四步：创建 SDK 并打印
+## 第四步：创建打印器并打印
 
 ```ts
-import { createHiPrintClient, createHiPrintPrintSdk } from '@easyink/print-integration-hiprint'
+import { createHiPrintClient, createHiPrintPrinter } from '@easyink/print-integration-hiprint'
 
 const hiPrint = createHiPrintClient({
   serviceUrl: 'http://localhost:17521',
 })
 
-const printer = createHiPrintPrintSdk({
+const printer = createHiPrintPrinter({
   client: hiPrint,
   viewer: 'iframe',
 })
@@ -62,11 +62,11 @@ await hiPrint.useDefaultPrinter()
 await printer.print({ schema, data })
 ```
 
-`createHiPrintPrintSdk()` 默认使用 `pageSizeMode: 'driver'`，适合小票机、连续纸和由驱动决定介质的场景。用户只需要选择打印机，不需要理解 Viewer 的底层打印策略。
+`createHiPrintPrinter()` 默认使用 `pageSizeMode: 'driver'`，适合小票机、连续纸和由驱动决定介质的场景。用户只需要选择打印机，不需要理解 Viewer 的底层打印策略。
 
 如果这段代码能跑通，说明这条链路已经成立：
 
-- SDK 已经用托管 Viewer 渲染出可打印页面
+- 打印器已经用托管 Viewer 渲染出可打印页面
 - electron-hiprint 已建立连接
 - 当前机器能发现系统打印机
 - HiPrint 已经按页提交 HTML 到本地打印运行时
@@ -78,7 +78,7 @@ await printer.print({ schema, data })
 ```ts
 import { hiprint } from 'vue-plugin-hiprint'
 import {
-  createHiPrintPrintSdk,
+  createHiPrintPrinter,
   createHiPrintRuntimeClient,
 } from '@easyink/print-integration-hiprint'
 
@@ -89,7 +89,7 @@ const hiPrint = createHiPrintRuntimeClient({
   forcePageSize: settings.forcePageSize,
 })
 
-const printer = createHiPrintPrintSdk({
+const printer = createHiPrintPrinter({
   client: hiPrint,
   viewer: 'iframe',
   resolveRequestOptions: () => ({
@@ -131,7 +131,7 @@ const hiPrint = createHiPrintClient({
   defaultCopies: settings.copies,
 })
 
-const printer = createHiPrintPrintSdk({
+const printer = createHiPrintPrinter({
   client: hiPrint,
   viewer: 'iframe',
   printerName: () => settings.printerName,
@@ -184,7 +184,7 @@ await printer.print({ schema, data })
 Playground 已使用官方包集成：
 
 - [playground/src/hooks/useHiPrint.ts](../../playground/src/hooks/useHiPrint.ts) 只保留 Vue 状态和设置持久化
-- 预览页调用 hook 暴露的 `hiPrint.print({ schema, data })`，由 SDK 自动创建和销毁托管 Viewer
+- 预览页调用 hook 暴露的 `hiPrint.print({ schema, data })`，由打印器自动创建和销毁托管 Viewer
 
 ## 常见问题
 
@@ -192,6 +192,6 @@ Playground 已使用官方包集成：
 
 **未发现打印机**：先确认系统打印机已正常安装，再调用 `hiPrint.refreshPrinters()`；如果这里拿不到设备，问题通常不在模板渲染。
 
-**标签内容缩印到 A4**：确认当前打印任务需要显式纸张尺寸时，调用 `hiPrint.setForcePageSize(true)` 或在 SDK 配置里传 `forcePageSize`。
+**标签内容缩印到 A4**：确认当前打印任务需要显式纸张尺寸时，调用 `hiPrint.setForcePageSize(true)` 或在打印器配置里传 `forcePageSize`。
 
 **第一张单应该怎么验收**：最小验收标准不是前端 Promise resolve，而是设备确实打印出预期尺寸的纸张，且没有被驱动缩放到默认 A4。

@@ -1,5 +1,5 @@
-import type { HiPrintDevice, HiPrintPrintInput } from '@easyink/print-integration-hiprint'
-import { createHiPrintClient, createHiPrintPrintSdk, DEFAULT_HIPRINT_URL } from '@easyink/print-integration-hiprint'
+import type { HiPrintDevice, HiPrintPrintRequest } from '@easyink/print-integration-hiprint'
+import { createHiPrintClient, createHiPrintPrinter, DEFAULT_HIPRINT_URL } from '@easyink/print-integration-hiprint'
 import { computed, reactive, ref, watch } from 'vue'
 
 export const DEFAULT_PRINTER_HOST = DEFAULT_HIPRINT_URL
@@ -63,7 +63,7 @@ const client = createHiPrintClient({
   defaultCopies: config.printCopies ?? DEFAULT_PRINTER_COPIES,
   forcePageSize: config.forcePageSize,
 })
-const sdk = createHiPrintPrintSdk({
+const printer = createHiPrintPrinter({
   client,
   viewer: 'iframe',
   printerName: () => config.printerDevice,
@@ -136,8 +136,8 @@ function updateConfig(patch: Partial<PrinterConfig>): void {
   Object.assign(config, patch)
 }
 
-async function print(input: HiPrintPrintInput): Promise<void> {
-  await sdk.print({
+async function print(input: HiPrintPrintRequest): Promise<void> {
+  await printer.print({
     ...input,
     printerName: input.printerName ?? config.printerDevice,
     copies: input.copies ?? config.printCopies ?? DEFAULT_PRINTER_COPIES,
@@ -162,7 +162,7 @@ if (config.enablePrinterService) {
 export function usePrinter() {
   return {
     client,
-    sdk,
+    printer,
     config,
     connectionState: computed(() => connectionState.value),
     isConnected: computed(() => connectionState.value === 'connected'),

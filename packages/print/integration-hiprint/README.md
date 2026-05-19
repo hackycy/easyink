@@ -1,6 +1,6 @@
 # @easyink/print-integration-hiprint
 
-Official HiPrint client, print-only runtime adapter, and managed print SDK.
+Official HiPrint client, print-only runtime adapter, and managed document printer.
 
 ## Official client
 
@@ -8,10 +8,10 @@ Use this when you want EasyInk to manage the `vue-plugin-hiprint` socket
 connection, printer discovery, and template submission.
 
 ```ts
-import { createHiPrintClient, createHiPrintPrintSdk } from '@easyink/print-integration-hiprint'
+import { createHiPrintClient, createHiPrintPrinter } from '@easyink/print-integration-hiprint'
 
 const hiPrint = createHiPrintClient()
-const printer = createHiPrintPrintSdk({
+const printer = createHiPrintPrinter({
   client: hiPrint,
   viewer: 'iframe',
 })
@@ -24,7 +24,7 @@ await printer.print({
 })
 ```
 
-The SDK owns the Viewer render lifecycle. Each `print()` call creates the
+The printer owns the Viewer render lifecycle. Each `print()` call creates the
 configured render surface, opens the schema/data, submits the rendered pages to
 HiPrint, and destroys the surface by default. Use `autoDestroy: false` only when
 you want to reuse the managed viewer for batch printing, then call
@@ -47,7 +47,7 @@ existing `hiprint` instance.
 
 ```ts
 import {
-  createHiPrintPrintSdk,
+  createHiPrintPrinter,
   createHiPrintRuntimeClient,
 } from '@easyink/print-integration-hiprint'
 import { hiprint } from 'vue-plugin-hiprint'
@@ -58,7 +58,7 @@ const hiPrint = createHiPrintRuntimeClient({
   defaultCopies: 1,
 })
 
-const printer = createHiPrintPrintSdk({
+const printer = createHiPrintPrinter({
   client: hiPrint,
   viewer: 'iframe',
 })

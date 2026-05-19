@@ -1,11 +1,11 @@
 # @easyink/print-integration-easyink-printer
 
-Official EasyInk Printer client and managed print SDK.
+Official EasyInk Printer client and managed document printer.
 
 ```ts
 import {
+  createEasyInkPrinter,
   createEasyInkPrinterClient,
-  createEasyInkPrinterPrintSdk,
 } from '@easyink/print-integration-easyink-printer'
 
 const client = createEasyInkPrinterClient({
@@ -13,7 +13,7 @@ const client = createEasyInkPrinterClient({
   reconnect: true,
 })
 
-const printer = createEasyInkPrinterPrintSdk({
+const printer = createEasyInkPrinter({
   client,
   viewer: 'iframe',
 })
@@ -33,7 +33,7 @@ await printer.print({
 })
 ```
 
-The SDK owns the Viewer render lifecycle and PDF pipeline. Each `print()` call
+The printer owns the Viewer render lifecycle and PDF pipeline. Each `print()` call
 creates the configured render surface, opens the schema/data, renders Viewer
 pages to PDF, uploads the PDF through EasyInk Printer, waits for completion by
 default, and destroys the render surface.
