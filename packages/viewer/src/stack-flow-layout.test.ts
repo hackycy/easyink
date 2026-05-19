@@ -190,6 +190,60 @@ describe('viewer runtime stack reflow', () => {
     expect(Number.parseFloat(afterEl!.style.top)).toBeCloseTo(56.38, 2)
   })
 
+  it('repositions elements below bound auto-height text after measure', async () => {
+    const container = document.createElement('div')
+    const viewer = createViewer({ container })
+
+    const schema: DocumentSchema = {
+      version: '1.0.0',
+      unit: 'mm',
+      page: {
+        mode: 'stack',
+        width: 80,
+        height: 80,
+      },
+      guides: { x: [], y: [] },
+      elements: [
+        makeNode('notes', {
+          x: 5,
+          y: 10,
+          width: 12,
+          height: 4,
+          props: {
+            content: '',
+            heightMode: 'auto',
+            wrapMode: 'anywhere',
+            fontSize: 4,
+            lineHeight: 1,
+          },
+          binding: { sourceId: 'order', fieldPath: 'note' },
+        }),
+        makeNode('after-text', {
+          y: 20,
+          x: 5,
+          width: 70,
+          height: 8,
+          props: { content: 'After' },
+        }),
+      ],
+    }
+
+    await viewer.open({
+      schema,
+      data: {
+        note: 'abcdefghijabcdefghijabcdefghij',
+      },
+    })
+
+    const notesEl = container.querySelector('[data-element-id="notes"]') as HTMLElement | null
+    const afterEl = container.querySelector('[data-element-id="after-text"]') as HTMLElement | null
+    expect(notesEl).not.toBeNull()
+    expect(afterEl).not.toBeNull()
+    expect(notesEl!.textContent).toContain('abcdefghij')
+    expect(Number.parseFloat(notesEl!.style.height)).toBeGreaterThan(4)
+    expect(Number.parseFloat(afterEl!.style.top)).toBeGreaterThan(20)
+  })
+
   it('keeps the original template trailing gap after stack page height recompute', async () => {
     const container = document.createElement('div')
     const viewer = createViewer({ container })

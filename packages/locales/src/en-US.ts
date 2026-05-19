@@ -118,6 +118,9 @@ const enUS: LocaleMessages = {
       layout: 'Layout',
       pagination: 'Pagination',
       layoutMode: 'Layout Participation',
+      heightMode: 'Height Mode',
+      minHeight: 'Min Height',
+      maxHeight: 'Max Height',
       flow: 'Flow',
       fixed: 'Fixed',
       keepTogether: 'Keep Together',
@@ -178,6 +181,11 @@ const enUS: LocaleMessages = {
       alignBottom: 'Align Bottom',
       writingModeHorizontal: 'Horizontal',
       writingModeVertical: 'Vertical',
+      heightModeFixed: 'Fixed Height',
+      heightModeAuto: 'Auto Height',
+      textWrapNormal: 'Word Wrap',
+      textWrapNoWrap: 'No Wrap',
+      textWrapAnywhere: 'Anywhere Wrap',
       overflowVisible: 'Visible',
       overflowHidden: 'Hidden',
       overflowEllipsis: 'Ellipsis',
@@ -206,6 +214,9 @@ const enUS: LocaleMessages = {
     },
     placeholder: {
       textMaterialEmpty: 'Enter content or bind data',
+    },
+    reason: {
+      runtimeHeight: 'Height is calculated from content',
     },
     panel: {
       datasource: 'Data Sources',
@@ -473,6 +484,7 @@ const enUS: LocaleMessages = {
       resizeFlowRowColumn: 'Resize Flow Column',
       updateFlowRowColumn: 'Update Flow Column',
       updateFlowRowHeight: 'Update Flow Row Height',
+      updateTextHeight: 'Update Text Height',
     },
     animation: {
       title: 'Animation',

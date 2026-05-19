@@ -118,6 +118,9 @@ const zhCN: LocaleMessages = {
       layout: '布局',
       pagination: '分页',
       layoutMode: '布局参与',
+      heightMode: '高度模式',
+      minHeight: '最小高度',
+      maxHeight: '最大高度',
       flow: '流式',
       fixed: '固定',
       keepTogether: '保持整体',
@@ -178,6 +181,11 @@ const zhCN: LocaleMessages = {
       alignBottom: '底部对齐',
       writingModeHorizontal: '水平',
       writingModeVertical: '垂直',
+      heightModeFixed: '固定高度',
+      heightModeAuto: '自动高度',
+      textWrapNormal: '按词换行',
+      textWrapNoWrap: '不换行',
+      textWrapAnywhere: '任意换行',
       overflowVisible: '显示',
       overflowHidden: '隐藏',
       overflowEllipsis: '省略',
@@ -206,6 +214,9 @@ const zhCN: LocaleMessages = {
     },
     placeholder: {
       textMaterialEmpty: '请输入内容或绑定数据',
+    },
+    reason: {
+      runtimeHeight: '高度由内容自动计算',
     },
     panel: {
       datasource: '数据源',
@@ -473,6 +484,7 @@ const zhCN: LocaleMessages = {
       resizeFlowRowColumn: '调整流式列宽',
       updateFlowRowColumn: '修改流式列',
       updateFlowRowHeight: '调整流式行高度',
+      updateTextHeight: '调整文本高度',
     },
     animation: {
       title: '动画',

@@ -14,10 +14,14 @@ import { renderSvgHeart, SVG_HEART_TYPE } from '@easyink/material-svg-heart'
 import { renderSvgStar, SVG_STAR_TYPE } from '@easyink/material-svg-star'
 import { measureTableData, renderTableData, TABLE_DATA_TYPE } from '@easyink/material-table-data'
 import { renderTableStatic, TABLE_STATIC_TYPE } from '@easyink/material-table-static'
-import { renderText, TEXT_TYPE } from '@easyink/material-text'
+import { getTextRenderSize, measureText, renderText, TEXT_TYPE } from '@easyink/material-text'
 
 export function registerBuiltinViewerMaterials(register: BuiltinViewerRegistrar): void {
-  register(TEXT_TYPE, { render: (node, ctx) => renderText(node, ctx.data, ctx.unit) })
+  register(TEXT_TYPE, {
+    render: (node, ctx) => renderText(node, ctx),
+    measure: (node, ctx) => measureText(node, ctx),
+    getRenderSize: (node, ctx) => getTextRenderSize(node, ctx),
+  })
   register(IMAGE_TYPE, { render: (node, ctx) => renderImage(node, ctx.unit) })
   register(BARCODE_TYPE, { render: node => renderBarcode(node) })
   register(QRCODE_TYPE, { render: node => renderQrcode(node) })

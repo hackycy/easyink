@@ -134,7 +134,7 @@ export class ViewerRuntime {
     }
 
     // Stage 3.5: Measure elements that need expansion (e.g., table-data)
-    const { schema: measuredSchema, diagnostics: layoutDiagnostics } = this.applyMeasureAndLayout()
+    const { schema: measuredSchema, diagnostics: layoutDiagnostics } = this.applyMeasureAndLayout(resolvedPropsMap)
     diagnostics.push(...layoutDiagnostics)
 
     // Stage 4: Page planning
@@ -494,7 +494,7 @@ export class ViewerRuntime {
     }
   }
 
-  private applyMeasureAndLayout(): { schema: DocumentSchema, diagnostics: ViewerDiagnosticEvent[] } {
+  private applyMeasureAndLayout(resolvedPropsMap: Map<string, Record<string, unknown>>): { schema: DocumentSchema, diagnostics: ViewerDiagnosticEvent[] } {
     if (!this._schema)
       return { schema: this._schema!, diagnostics: [] }
 
@@ -515,9 +515,11 @@ export class ViewerRuntime {
     }
 
     let elements = this._schema.elements.map((node) => {
+      const resolvedProps = resolvedPropsMap.get(node.id) ?? node.props
+      const nodeForMeasure = resolvedProps === node.props ? node : { ...node, props: resolvedProps }
       let result
       try {
-        result = this._materialRegistry.measure(node, measureCtx)
+        result = this._materialRegistry.measure(nodeForMeasure, measureCtx)
       }
       catch (err) {
         diagnostics.push({

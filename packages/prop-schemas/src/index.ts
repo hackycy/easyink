@@ -27,6 +27,17 @@ const WRITING_MODE_OPTIONS: NonNullable<PropSchema['enum']> = [
   { label: 'designer.option.writingModeVertical', value: 'vertical' },
 ]
 
+const HEIGHT_MODE_OPTIONS: NonNullable<PropSchema['enum']> = [
+  { label: 'designer.option.heightModeFixed', value: 'fixed' },
+  { label: 'designer.option.heightModeAuto', value: 'auto' },
+]
+
+const TEXT_WRAP_MODE_OPTIONS: NonNullable<PropSchema['enum']> = [
+  { label: 'designer.option.textWrapNormal', value: 'wrap' },
+  { label: 'designer.option.textWrapNoWrap', value: 'nowrap' },
+  { label: 'designer.option.textWrapAnywhere', value: 'anywhere' },
+]
+
 const OVERFLOW_OPTIONS: NonNullable<PropSchema['enum']> = [
   { label: 'designer.option.overflowVisible', value: 'visible' },
   { label: 'designer.option.overflowHidden', value: 'hidden' },
@@ -76,6 +87,9 @@ const TEXT_PROP_SCHEMAS: PropSchema[] = [
   { key: 'prefix', label: 'designer.property.prefix', type: 'string', group: 'content' },
   { key: 'suffix', label: 'designer.property.suffix', type: 'string', group: 'content' },
   { key: 'writingMode', label: 'designer.property.writingMode', type: 'enum', group: 'content', enum: WRITING_MODE_OPTIONS },
+  { key: 'heightMode', label: 'designer.property.heightMode', type: 'enum', group: 'layout', default: 'fixed', enum: HEIGHT_MODE_OPTIONS },
+  { key: 'minHeight', label: 'designer.property.minHeight', type: 'number', group: 'layout', min: 0, max: 1000, step: 1, default: 0, visible: props => props.heightMode === 'auto' },
+  { key: 'maxHeight', label: 'designer.property.maxHeight', type: 'number', group: 'layout', min: 0, max: 1000, step: 1, default: 0, visible: props => props.heightMode === 'auto' },
   { key: 'fontFamily', label: 'designer.property.font', type: 'font', group: 'typography' },
   { key: 'fontSize', label: 'designer.property.fontSize', type: 'number', group: 'typography', min: 1, max: 200, step: 1 },
   { key: 'fontWeight', label: 'designer.property.fontWeight', type: 'enum', group: 'typography', enum: FONT_WEIGHT_OPTIONS },
@@ -84,7 +98,7 @@ const TEXT_PROP_SCHEMAS: PropSchema[] = [
   { key: 'verticalAlign', label: 'designer.property.verticalAlign', type: 'enum', group: 'typography', enum: VERTICAL_ALIGN_OPTIONS },
   { key: 'lineHeight', label: 'designer.property.lineHeight', type: 'number', group: 'typography', min: 0.5, max: 5, step: 0.1 },
   { key: 'letterSpacing', label: 'designer.property.letterSpacing', type: 'number', group: 'typography', min: -5, max: 20, step: 0.5 },
-  { key: 'autoWrap', label: 'designer.property.autoWrap', type: 'switch', group: 'typography' },
+  { key: 'wrapMode', label: 'designer.property.wrapMode', type: 'enum', group: 'typography', default: 'anywhere', enum: TEXT_WRAP_MODE_OPTIONS },
   { key: 'overflow', label: 'designer.property.overflow', type: 'enum', group: 'typography', enum: OVERFLOW_OPTIONS },
   { key: 'color', label: 'designer.property.color', type: 'color', group: 'appearance' },
   { key: 'backgroundColor', label: 'designer.property.background', type: 'color', group: 'appearance' },

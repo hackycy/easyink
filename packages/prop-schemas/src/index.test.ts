@@ -9,6 +9,16 @@ describe('designer prop schemas', () => {
     expect(schemas.map(schema => schema.key)).toContain('layoutMode')
   })
 
+  it('exposes the text layout model instead of the legacy autoWrap control', () => {
+    const keys = getPropSchemas('text').map(schema => schema.key)
+
+    expect(keys).toContain('heightMode')
+    expect(keys).toContain('wrapMode')
+    expect(keys).toContain('minHeight')
+    expect(keys).toContain('maxHeight')
+    expect(keys).not.toContain('autoWrap')
+  })
+
   it('returns shared stack layout schemas for unknown material types', () => {
     expect(getPropSchemas('unknown-material').map(schema => schema.key)).toEqual([
       'layoutMode',

@@ -3,9 +3,13 @@ import { convertUnit, generateId } from '@easyink/shared'
 
 export const TEXT_TYPE = 'text'
 
+export type TextHeightMode = 'fixed' | 'auto'
+export type TextWrapMode = 'wrap' | 'nowrap' | 'anywhere'
+
 export interface TextProps {
   content: string
   writingMode: 'horizontal' | 'vertical'
+  heightMode: TextHeightMode
   fontSize: number
   fontFamily: string
   fontWeight: string
@@ -16,8 +20,12 @@ export interface TextProps {
   verticalAlign: 'top' | 'middle' | 'bottom'
   lineHeight: number
   letterSpacing: number
+  wrapMode: TextWrapMode
+  /** @deprecated Use wrapMode. Kept for older schemas. */
   autoWrap: boolean
   overflow: 'visible' | 'hidden' | 'ellipsis'
+  minHeight: number
+  maxHeight: number
   prefix: string
   suffix: string
   borderWidth: number
@@ -28,6 +36,7 @@ export interface TextProps {
 export const TEXT_DEFAULTS: TextProps = {
   content: '',
   writingMode: 'horizontal',
+  heightMode: 'fixed',
   fontSize: 4.23,
   fontFamily: '',
   fontWeight: 'normal',
@@ -38,8 +47,11 @@ export const TEXT_DEFAULTS: TextProps = {
   verticalAlign: 'middle',
   lineHeight: 1.5,
   letterSpacing: 0,
+  wrapMode: 'anywhere',
   autoWrap: true,
   overflow: 'hidden',
+  minHeight: 0,
+  maxHeight: 0,
   prefix: '',
   suffix: '',
   borderWidth: 0,
@@ -49,6 +61,13 @@ export const TEXT_DEFAULTS: TextProps = {
 
 export function createTextNode(partial?: Partial<MaterialNode>, unit?: string): MaterialNode {
   const c = unit && unit !== 'mm' ? (v: number) => convertUnit(v, 'mm', unit) : (v: number) => v
+  const partialNode = partial ? { ...partial } : undefined
+  const partialProps = { ...((partial?.props ?? {}) as Partial<TextProps>) }
+  if (partialProps.wrapMode == null && partialProps.autoWrap != null)
+    partialProps.wrapMode = partialProps.autoWrap === false ? 'nowrap' : 'anywhere'
+  if (partialNode)
+    delete partialNode.props
+
   return {
     id: generateId('text'),
     type: TEXT_TYPE,
@@ -60,8 +79,9 @@ export function createTextNode(partial?: Partial<MaterialNode>, unit?: string): 
       ...TEXT_DEFAULTS,
       fontSize: c(TEXT_DEFAULTS.fontSize),
       letterSpacing: c(TEXT_DEFAULTS.letterSpacing),
+      ...partialProps,
     },
-    ...partial,
+    ...partialNode,
   }
 }
 
