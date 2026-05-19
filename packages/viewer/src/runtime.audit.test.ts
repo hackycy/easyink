@@ -1,8 +1,6 @@
 import type { DocumentSchema, MaterialNode, TableNode } from '@easyink/schema'
 import type { ViewerRuntime } from './runtime'
 import type { ViewerDiagnosticEvent } from './types'
-import { createLineViewerExtension, LINE_TYPE } from '@easyink/material-line'
-import { measureTableData, renderTableData, TABLE_DATA_TYPE } from '@easyink/material-table-data'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { applyBindingsToProps, projectBindings } from './binding-projector'
 import { createIframeViewerHost, createViewer } from './index'
@@ -58,14 +56,6 @@ function tableNode(sourceId = 'invoice'): TableNode {
       layout: {},
     } as TableNode['table'],
   }
-}
-
-function registerTableMaterial(viewer: ViewerRuntime): void {
-  viewer.registerMaterial(LINE_TYPE, createLineViewerExtension())
-  viewer.registerMaterial(TABLE_DATA_TYPE, {
-    render: (node, ctx) => renderTableData(node, ctx),
-    measure: (node, ctx) => measureTableData(node, ctx),
-  })
 }
 
 function collectDiagnostics(): { diagnostics: ViewerDiagnosticEvent[], onDiagnostic: (event: ViewerDiagnosticEvent) => void } {
@@ -163,7 +153,6 @@ describe('viewer audit risk regressions', () => {
   it('keeps root-shaped payloads when sourceId collides with a field name', async () => {
     const container = document.createElement('div')
     const viewer = createViewer({ container })
-    registerTableMaterial(viewer)
 
     await viewer.open({
       schema: fixedSchema([
@@ -186,7 +175,6 @@ describe('viewer audit risk regressions', () => {
   it('renders unwrapped root payloads without descriptor field matching', async () => {
     const container = document.createElement('div')
     const viewer = createViewer({ container })
-    registerTableMaterial(viewer)
 
     await viewer.open({
       schema: fixedSchema([
@@ -206,7 +194,6 @@ describe('viewer audit risk regressions', () => {
   it('resolves table-data collections from the runtime data root', async () => {
     const container = document.createElement('div')
     const viewer = createViewer({ container })
-    registerTableMaterial(viewer)
 
     await viewer.open({
       schema: fixedSchema([tableNode()]),

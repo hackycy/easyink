@@ -859,12 +859,6 @@ importers:
       '@easyink/core':
         specifier: workspace:*
         version: link:../core
-      '@easyink/material-line':
-        specifier: workspace:*
-        version: link:../materials/line
-      '@easyink/material-table-data':
-        specifier: workspace:*
-        version: link:../materials/table-data
       '@easyink/schema':
         specifier: workspace:*
         version: link:../schema
