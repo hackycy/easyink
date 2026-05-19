@@ -71,6 +71,81 @@ await printer.print({ schema, data })
 - 当前机器能发现系统打印机
 - HiPrint 已经按页提交 HTML 到本地打印运行时
 
+## Viewer 是什么时候创建和销毁的
+
+`createHiPrintPrinter()` 创建的是 EasyInk 的高层打印器，不是一个需要你手动挂载的预览组件。默认写法里只传：
+
+```ts
+const printer = createHiPrintPrinter({
+  client: hiPrint,
+  viewer: 'iframe',
+})
+```
+
+SDK 会在每次 `printer.print()` 时自动完成这些步骤：
+
+1. 创建一个隐藏的托管 iframe。
+2. 在 iframe 内创建 EasyInk Viewer。
+3. 用 `schema + data` 打开文档并完成分页渲染。
+4. 提取 Viewer 渲染出的页面 HTML。
+5. 通过 HiPrint `PrintTemplate` 逐页提交给 electron-hiprint。
+6. 打印结束或报错后销毁 Viewer，并移除 SDK 自己创建的 iframe。
+
+因此普通业务接入 HiPrint 打印时，不需要自己调用 `createViewer()`，也不需要自己创建 `createIframeViewerHost()`。如果页面上已经有自己的 iframe 或 DOM 容器，可以显式交给 SDK 复用：
+
+```ts
+const printer = createHiPrintPrinter({
+  client: hiPrint,
+  viewer: 'iframe',
+  iframe: document.getElementById('print-frame') as HTMLIFrameElement,
+})
+```
+
+传入自己的 `iframe` 或 `container` 时，`printer.destroy()` 会销毁 Viewer 运行时，但不会替你删除这个外部元素。
+
+## SDK 销毁和连接关闭
+
+打印器和 HiPrint client 的生命周期是分开的：
+
+- `printer.destroy()`：只清理 EasyInk 托管 Viewer、隐藏 iframe 或 DOM 渲染面。
+- `hiPrint.disconnect()`：只适用于 `createHiPrintClient()` 创建的官方 client，会停止 SDK 管理的 HiPrint socket。
+- `createHiPrintRuntimeClient()`：不会接管 socket，因此也不会替业务关闭已有的 `hiprint` 连接。
+
+默认 `autoDestroy` 是开启的，每次 `printer.print()` 完成后都会自动销毁 Viewer。大多数官方 client 接入只需要在应用退出、用户关闭打印模块、或组件卸载时关闭 socket：
+
+```ts
+import { onBeforeUnmount } from 'vue'
+
+const hiPrint = createHiPrintClient({ serviceUrl: 'http://localhost:17521' })
+const printer = createHiPrintPrinter({ client: hiPrint, viewer: 'iframe' })
+
+onBeforeUnmount(() => {
+  printer.destroy()
+  hiPrint.disconnect()
+})
+```
+
+如果 HiPrint client 是应用级单例，并且多个页面共享同一个打印连接，不要在单个页面离开时断开 `hiPrint`。可以只在用户关闭打印功能、退出登录或应用卸载时调用 `hiPrint.disconnect()`。
+
+只有批量打印、连续打印并且你明确想复用同一个托管 Viewer 时，才需要关闭自动销毁：
+
+```ts
+const printer = createHiPrintPrinter({
+  client: hiPrint,
+  viewer: 'iframe',
+  autoDestroy: false,
+})
+
+try {
+  for (const item of items) {
+    await printer.print({ schema, data: item })
+  }
+}
+finally {
+  printer.destroy()
+}
+```
+
 ## 已有 hiprint 封装时
 
 很多项目已经基于 `vue-plugin-hiprint` 或 `electron-hiprint` 做了自己的连接、打印机选择、状态管理和异常处理。这种情况下不要再让 EasyInk 接管连接，使用 `createHiPrintRuntimeClient()` 注入现成的 `hiprint` 实例即可。

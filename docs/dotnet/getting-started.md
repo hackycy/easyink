@@ -89,6 +89,82 @@ await printer.print({ schema, data })
 - 本地服务能选中打印机并创建任务
 - PDF 生成和上传链路没有问题
 
+## Viewer 是什么时候创建和销毁的
+
+`createEasyInkPrinter()` 创建的是一个高层打印器，不是一个需要你手动挂载到页面上的预览组件。默认写法里只传：
+
+```ts
+const printer = createEasyInkPrinter({
+  client,
+  viewer: 'iframe',
+})
+```
+
+SDK 会在每次 `printer.print()` 时自动完成这些步骤：
+
+1. 创建一个隐藏的托管 iframe。
+2. 在 iframe 内创建 EasyInk Viewer。
+3. 用 `schema + data` 打开文档并完成分页渲染。
+4. 把渲染结果导出成 PDF。
+5. 上传 PDF 到 EasyInk.Printer。
+6. 打印结束或报错后销毁 Viewer，并移除 SDK 自己创建的 iframe。
+
+所以普通业务代码不需要自己调用 `createViewer()`，也不需要自己准备 `createIframeViewerHost()`。只有在你要把 Viewer 显示在页面上做预览、或者要写自定义打印驱动时，才需要直接使用 `@easyink/viewer`。
+
+如果你希望复用自己的 iframe，也可以传入已有元素：
+
+```ts
+const printer = createEasyInkPrinter({
+  client,
+  viewer: 'iframe',
+  iframe: document.getElementById('print-frame') as HTMLIFrameElement,
+})
+```
+
+传入自己的 `iframe` 或 `container` 时，`printer.destroy()` 会销毁 Viewer 运行时，但不会替你删除这个外部元素。
+
+## SDK 销毁和连接关闭
+
+打印器和客户端的生命周期是分开的：
+
+- `printer.destroy()`：只清理托管 Viewer、隐藏 iframe 或 DOM 渲染面。
+- `client.disconnect()`：关闭 EasyInk.Printer 的 WebSocket 连接，并拒绝正在等待的请求。
+
+默认 `autoDestroy` 是开启的，每次 `printer.print()` 完成后都会自动销毁 Viewer。大多数项目只需要在应用退出、用户关闭打印模块、或组件卸载时关闭 client：
+
+```ts
+import { onBeforeUnmount } from 'vue'
+
+const client = createEasyInkPrinterClient({ serviceUrl: 'http://localhost:18080' })
+const printer = createEasyInkPrinter({ client, viewer: 'iframe' })
+
+onBeforeUnmount(() => {
+  printer.destroy()
+  client.disconnect()
+})
+```
+
+如果打印模块是应用级单例，并且多个页面都会复用同一个打印连接，不要在单个页面离开时断开 `client`。可以只在用户关闭打印功能、退出登录或应用卸载时调用 `client.disconnect()`。
+
+只有批量打印、连续打印并且你明确想复用同一个托管 Viewer 时，才需要关闭自动销毁：
+
+```ts
+const printer = createEasyInkPrinter({
+  client,
+  viewer: 'iframe',
+  autoDestroy: false,
+})
+
+try {
+  for (const item of items) {
+    await printer.print({ schema, data: item })
+  }
+}
+finally {
+  printer.destroy()
+}
+```
+
 ## 一个更接近真实业务的写法
 
 上面的例子适合验证链路。真正接业务设置页时，通常还需要把打印机、份数和纸张策略做成可变配置。
