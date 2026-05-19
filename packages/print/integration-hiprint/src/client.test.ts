@@ -111,6 +111,38 @@ describe('hi print client', () => {
     expect(String((runtime.addedHtml[0] as { options: { content: string } }).options.content).startsWith('<section')).toBe(true)
   })
 
+  it('serializes inline SVG materials as regular HTML content', async () => {
+    const client = new HiPrintClient({ printerName: 'Printer A' })
+    client.connectionState = 'connected'
+    const page = document.createElement('section')
+    page.className = 'ei-viewer-page'
+    page.innerHTML = '<div class="ei-viewer-element" data-element-type="qrcode"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2 2" width="100%" height="100%"><path d="M0,0h1v1h-1z" fill="#000"/></svg></div>'
+
+    await client.printPages([page], { width: 80, height: 60, printerName: 'Printer A' })
+
+    const content = String((runtime.addedHtml[0] as { options: { content: string } }).options.content)
+    expect(content).toContain('<svg')
+    expect(content).not.toContain('data:image/svg+xml')
+  })
+
+  it('serializes canvas materials as image data URLs because pixels are not in outerHTML', async () => {
+    const client = new HiPrintClient({ printerName: 'Printer A' })
+    client.connectionState = 'connected'
+    const page = document.createElement('section')
+    page.className = 'ei-viewer-page'
+    const canvas = document.createElement('canvas')
+    canvas.setAttribute('style', 'width:100%;height:100%')
+    vi.spyOn(canvas, 'toDataURL').mockReturnValue('data:image/png;base64,canvas')
+    page.appendChild(canvas)
+
+    await client.printPages([page], { width: 80, height: 60, printerName: 'Printer A' })
+
+    const content = String((runtime.addedHtml[0] as { options: { content: string } }).options.content)
+    expect(content).toContain('<img')
+    expect(content).toContain('data:image/png;base64,canvas')
+    expect(content).not.toContain('<canvas')
+  })
+
   it('sizes manual HTML elements to the full page and passes through print2 options', async () => {
     const client = new HiPrintClient({ printerName: 'Printer A' })
     client.connectionState = 'connected'
