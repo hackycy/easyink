@@ -1,7 +1,7 @@
 {
   "name": "@easyink/designer",
   "type": "module",
-  "version": "0.0.13",
+  "version": "0.0.14",
   "description": "EasyInk document/report designer workbench",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",

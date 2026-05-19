@@ -1,7 +1,7 @@
 {
   "name": "@easyink/material-svg-star",
   "type": "module",
-  "version": "0.0.13",
+  "version": "0.0.14",
   "description": "EasyInk star SVG material",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",
