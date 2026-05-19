@@ -49,6 +49,8 @@ features:
     details: 导出建模为状态机运行时 + 插件注册表。内置 DOM-to-PDF 插件，支持自定义打印驱动和导出格式，依赖按需加载。
 ---
 
+<HomeShowcase />
+
 <div class="ei-section">
   <h2 class="ei-section-title">四层架构</h2>
   <p class="ei-section-desc">从宿主应用到基础模型，每一层职责清晰、依赖单向。</p>
@@ -148,21 +150,21 @@ features:
   </div>
 </div>
 
-<div class="ei-section" style="padding-bottom: 64px;">
+<div class="ei-section ei-section--last">
   <h2 class="ei-section-title">三种状态，各司其职</h2>
   <p class="ei-section-desc">EasyInk 明确区分模板状态、工作台状态和运行时状态，避免状态混乱。</p>
 
-  <div class="ei-eco-grid" style="max-width: 960px;">
+  <div class="ei-eco-grid ei-state-grid">
     <div class="ei-eco-card">
-      <div class="ei-eco-card-name" style="color: #5b8af5;">模板状态</div>
+      <div class="ei-eco-card-name ei-state-name--template">模板状态</div>
       <div class="ei-eco-card-desc">存储在 Schema 中，支持撤销重做，可持久化、可导入导出。页面、元素、绑定、分页配置均属此类。</div>
     </div>
     <div class="ei-eco-card">
-      <div class="ei-eco-card-name" style="color: #8b5cf6;">工作台状态</div>
+      <div class="ei-eco-card-name ei-state-name--workbench">工作台状态</div>
       <div class="ei-eco-card-desc">窗口布局、缩放参数、面板开关。用户偏好，静默持久化，不进入 Schema，不影响撤销重做。</div>
     </div>
     <div class="ei-eco-card">
-      <div class="ei-eco-card-name" style="color: #d946ef;">运行时状态</div>
+      <div class="ei-eco-card-name ei-state-name--runtime">运行时状态</div>
       <div class="ei-eco-card-desc">Viewer 当前页、缩略图缓存、字体加载、打印任务。生命周期短，不持久化，随 Viewer 实例销毁。</div>
     </div>
   </div>
