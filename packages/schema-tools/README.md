@@ -1,5 +1,7 @@
 # @easyink/schema-tools
 
-[![npm version](https://img.shields.io/npm/v/@easyink/schema-tools)](https://www.npmjs.com/package/@easyink/schema-tools)
+[![npm version](https://img.shields.io/npm/v/%40easyink%2Fschema-tools?logo=npm)](https://www.npmjs.com/package/%40easyink%2Fschema-tools) [![npm downloads](https://img.shields.io/npm/dm/%40easyink%2Fschema-tools?logo=npm)](https://www.npmjs.com/package/%40easyink%2Fschema-tools)
 
 Schema validation and data source alignment utilities for EasyInk
+
+GitHub: [hackycy/easyink](https://github.com/hackycy/easyink)

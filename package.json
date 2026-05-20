@@ -18,6 +18,7 @@
     "play": "pnpm -F ./playground dev",
     "lint": "eslint --cache .",
     "release": "node ./scripts/release.mjs",
+    "sync:package-readmes": "node ./scripts/sync-package-readmes.mjs",
     "sync:logos": "node ./scripts/sync-logos.mjs",
     "prepublishOnly": "pnpm build",
     "test": "vitest run --dom",

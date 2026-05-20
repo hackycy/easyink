@@ -1,5 +1,7 @@
 # @easyink/shared
 
-[![npm version](https://img.shields.io/npm/v/@easyink/shared)](https://www.npmjs.com/package/@easyink/shared)
+[![npm version](https://img.shields.io/npm/v/%40easyink%2Fshared?logo=npm)](https://www.npmjs.com/package/%40easyink%2Fshared) [![npm downloads](https://img.shields.io/npm/dm/%40easyink%2Fshared?logo=npm)](https://www.npmjs.com/package/%40easyink%2Fshared)
 
 Common types, utilities, and constants for EasyInk
+
+GitHub: [hackycy/easyink](https://github.com/hackycy/easyink)

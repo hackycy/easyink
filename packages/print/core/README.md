@@ -1,9 +1,7 @@
 # @easyink/print-core
 
-Shared utilities for EasyInk printers.
+[![npm version](https://img.shields.io/npm/v/%40easyink%2Fprint-core?logo=npm)](https://www.npmjs.com/package/%40easyink%2Fprint-core) [![npm downloads](https://img.shields.io/npm/dm/%40easyink%2Fprint-core?logo=npm)](https://www.npmjs.com/package/%40easyink%2Fprint-core)
 
-This package is intended for official and custom print integration packages. It
-contains shared unit conversion, Viewer page extraction, diagnostics mapping,
-and the managed `iframe` / `dom` Viewer lifecycle used by high-level printers.
-Application code usually consumes `@easyink/print-integration-easyink-printer`
-or `@easyink/print-integration-hiprint` instead.
+Shared print utilities for EasyInk print drivers
+
+GitHub: [hackycy/easyink](https://github.com/hackycy/easyink)

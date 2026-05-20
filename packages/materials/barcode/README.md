@@ -1,5 +1,7 @@
 # @easyink/material-barcode
 
-[![npm version](https://img.shields.io/npm/v/@easyink/material-barcode)](https://www.npmjs.com/package/@easyink/material-barcode)
+[![npm version](https://img.shields.io/npm/v/%40easyink%2Fmaterial-barcode?logo=npm)](https://www.npmjs.com/package/%40easyink%2Fmaterial-barcode) [![npm downloads](https://img.shields.io/npm/dm/%40easyink%2Fmaterial-barcode?logo=npm)](https://www.npmjs.com/package/%40easyink%2Fmaterial-barcode)
 
 EasyInk barcode material
+
+GitHub: [hackycy/easyink](https://github.com/hackycy/easyink)

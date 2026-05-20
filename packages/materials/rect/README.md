@@ -1,5 +1,7 @@
 # @easyink/material-rect
 
-[![npm version](https://img.shields.io/npm/v/@easyink/material-rect)](https://www.npmjs.com/package/@easyink/material-rect)
+[![npm version](https://img.shields.io/npm/v/%40easyink%2Fmaterial-rect?logo=npm)](https://www.npmjs.com/package/%40easyink%2Fmaterial-rect) [![npm downloads](https://img.shields.io/npm/dm/%40easyink%2Fmaterial-rect?logo=npm)](https://www.npmjs.com/package/%40easyink%2Fmaterial-rect)
 
 EasyInk rect material
+
+GitHub: [hackycy/easyink](https://github.com/hackycy/easyink)

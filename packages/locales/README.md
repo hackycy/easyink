@@ -1,3 +1,7 @@
 # @easyink/locales
 
-Built-in locale messages for EasyInk Designer.
+[![npm version](https://img.shields.io/npm/v/%40easyink%2Flocales?logo=npm)](https://www.npmjs.com/package/%40easyink%2Flocales) [![npm downloads](https://img.shields.io/npm/dm/%40easyink%2Flocales?logo=npm)](https://www.npmjs.com/package/%40easyink%2Flocales)
+
+Built-in locale messages for EasyInk Designer
+
+GitHub: [hackycy/easyink](https://github.com/hackycy/easyink)
