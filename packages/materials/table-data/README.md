@@ -4,4 +4,6 @@
 
 EasyInk table-data material
 
-GitHub: [hackycy/easyink](https://github.com/hackycy/easyink)
+## Getting Started
+
+Please follow the repo at [hackycy/easyink](https://github.com/hackycy/easyink)

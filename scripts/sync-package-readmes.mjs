@@ -172,7 +172,9 @@ function buildReadme({ packageName, description, repositoryUrl }) {
     '',
     description.trim(),
     '',
-    `GitHub: [${repositoryLabel}](${repositoryUrl})`,
+    '## Getting Started',
+    '',
+    `Please follow the repo at [${repositoryLabel}](${repositoryUrl})`,
     '',
   ].join('\n')
 }

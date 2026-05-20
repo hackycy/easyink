@@ -4,4 +4,6 @@
 
 Sample templates and demo data for EasyInk
 
-GitHub: [hackycy/easyink](https://github.com/hackycy/easyink)
+## Getting Started
+
+Please follow the repo at [hackycy/easyink](https://github.com/hackycy/easyink)

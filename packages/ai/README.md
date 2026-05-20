@@ -4,4 +4,6 @@
 
 AI integration for EasyInk designer (chat, MCP, prompt templates)
 
-GitHub: [hackycy/easyink](https://github.com/hackycy/easyink)
+## Getting Started
+
+Please follow the repo at [hackycy/easyink](https://github.com/hackycy/easyink)

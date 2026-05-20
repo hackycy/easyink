@@ -4,4 +4,6 @@
 
 Shared print utilities for EasyInk print drivers
 
-GitHub: [hackycy/easyink](https://github.com/hackycy/easyink)
+## Getting Started
+
+Please follow the repo at [hackycy/easyink](https://github.com/hackycy/easyink)
