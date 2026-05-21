@@ -94,6 +94,7 @@
 /* ── Feature Cards ── */
 .VPHomeFeatures {
   position: relative;
+  margin-top: 40px;
   margin-bottom: 48px;
 }
 
@@ -260,7 +261,7 @@
 .ei-section {
   max-width: 1152px;
   margin: 0 auto;
-  padding: 56px 24px;
+  padding: 0 24px 0 24px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1191,5 +1192,322 @@
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
+  }
+}
+
+/* ================================================
+   FEATURE GRID — simple 4-column × 2-row layout
+   ================================================ */
+
+@media (min-width: 768px) {
+  .VPHomeFeatures .items {
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 14px !important;
+    flex-wrap: unset !important;
+    margin: 0 !important;
+  }
+
+  .VPHomeFeatures .item {
+    width: 100% !important;
+    max-width: unset !important;
+    flex: unset !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+}
+
+/* ================================================
+   STATS ROW
+   ================================================ */
+
+.ei-stats-row {
+  max-width: 840px;
+  margin: 0 auto;
+  padding: 52px 24px 20px;
+}
+
+.ei-stats-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28px 40px;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg,
+      rgba(91, 138, 245, 0.05) 0%,
+      rgba(20, 184, 166, 0.04) 50%,
+      rgba(245, 158, 11, 0.04) 100%),
+    var(--vp-c-bg-soft);
+  position: relative;
+  overflow: hidden;
+}
+
+.ei-stats-wrap::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(91, 138, 245, 0.5) 20%,
+    rgba(20, 184, 166, 0.5) 50%,
+    rgba(245, 158, 11, 0.5) 80%,
+    transparent
+  );
+}
+
+.ei-stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 20px;
+  text-align: center;
+}
+
+.ei-stat-divider {
+  width: 1px;
+  align-self: stretch;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    var(--vp-c-divider) 25%,
+    var(--vp-c-divider) 75%,
+    transparent
+  );
+  flex-shrink: 0;
+  margin: 4px 0;
+}
+
+.ei-stat-number {
+  font-size: 32px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  background: linear-gradient(135deg, var(--vp-c-brand-1), var(--ei-c-teal));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.ei-stat:nth-child(3) .ei-stat-number {
+  background-image: linear-gradient(135deg, var(--ei-c-teal), var(--ei-c-amber));
+}
+
+.ei-stat:nth-child(5) .ei-stat-number {
+  background-image: linear-gradient(135deg, var(--ei-c-amber), var(--ei-c-rose));
+}
+
+.ei-stat:nth-child(7) .ei-stat-number {
+  background-image: linear-gradient(135deg, var(--ei-c-rose), var(--vp-c-brand-1));
+}
+
+.ei-stat-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--vp-c-text-2);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* ================================================
+   MARQUEE TECH STRIP
+   ================================================ */
+
+.ei-marquee {
+  overflow: hidden;
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 12px 0;
+  mask-image: linear-gradient(90deg, transparent, black 8%, black 92%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, black 8%, black 92%, transparent);
+}
+
+.ei-marquee-track {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: max-content;
+  animation: ei-marquee 28s linear infinite;
+}
+
+.ei-marquee:hover .ei-marquee-track {
+  animation-play-state: paused;
+}
+
+.ei-marquee-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--vp-c-divider);
+  background: var(--vp-c-default-soft);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--vp-c-text-1);
+  white-space: nowrap;
+  cursor: default;
+  transition: border-color 0.22s, transform 0.22s;
+}
+
+.ei-marquee-item:hover {
+  border-color: var(--vp-c-brand-1);
+  transform: translateY(-2px);
+}
+
+.ei-marquee-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--vp-c-brand-1);
+}
+
+.ei-marquee-track .ei-marquee-item:nth-child(8n+1)  .ei-marquee-dot { background: var(--vp-c-brand-1); }
+.ei-marquee-track .ei-marquee-item:nth-child(8n+2)  .ei-marquee-dot { background: var(--ei-c-teal); }
+.ei-marquee-track .ei-marquee-item:nth-child(8n+3)  .ei-marquee-dot { background: var(--ei-c-amber); }
+.ei-marquee-track .ei-marquee-item:nth-child(8n+4)  .ei-marquee-dot { background: var(--ei-c-rose); }
+.ei-marquee-track .ei-marquee-item:nth-child(8n+5)  .ei-marquee-dot { background: var(--ei-c-teal); }
+.ei-marquee-track .ei-marquee-item:nth-child(8n+6)  .ei-marquee-dot { background: var(--ei-c-amber); }
+.ei-marquee-track .ei-marquee-item:nth-child(8n+7)  .ei-marquee-dot { background: var(--ei-c-rose); }
+.ei-marquee-track .ei-marquee-item:nth-child(8n)    .ei-marquee-dot { background: var(--vp-c-brand-1); }
+
+@keyframes ei-marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+/* ================================================
+   ECO CARD — colored left-stripe accent on hover
+   ================================================ */
+
+.ei-eco-card::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: linear-gradient(to bottom, var(--vp-c-brand-1), var(--ei-c-teal));
+  opacity: 0;
+  transition: opacity 0.28s;
+}
+
+.ei-eco-card:nth-child(2)::after { background: linear-gradient(to bottom, var(--ei-c-teal),       var(--ei-c-amber)); }
+.ei-eco-card:nth-child(3)::after { background: linear-gradient(to bottom, var(--ei-c-amber),      var(--ei-c-rose)); }
+.ei-eco-card:nth-child(4)::after { background: linear-gradient(to bottom, var(--ei-c-rose),       var(--vp-c-brand-1)); }
+.ei-eco-card:nth-child(5)::after { background: linear-gradient(to bottom, var(--vp-c-brand-1),   var(--ei-c-teal)); }
+.ei-eco-card:nth-child(6)::after { background: linear-gradient(to bottom, var(--ei-c-teal),       var(--ei-c-amber)); }
+.ei-eco-card:nth-child(7)::after { background: linear-gradient(to bottom, var(--ei-c-amber),      var(--ei-c-rose)); }
+.ei-eco-card:nth-child(8)::after { background: linear-gradient(to bottom, var(--ei-c-rose),       var(--vp-c-brand-1)); }
+
+.ei-eco-card:hover::after {
+  opacity: 1;
+}
+
+/* ================================================
+   HERO CURSOR SPOTLIGHT
+   ================================================ */
+
+.VPHero {
+  --ei-mouse-x: 50%;
+  --ei-mouse-y: 50%;
+}
+
+.ei-cursor-spotlight {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(
+    640px circle at var(--ei-mouse-x) var(--ei-mouse-y),
+    rgba(91, 138, 245, 0.08),
+    transparent 40%
+  );
+}
+
+/* ================================================
+   ARCHITECTURE — animated arrow
+   ================================================ */
+
+.ei-arch-arrow {
+  color: color-mix(in srgb, var(--vp-c-brand-1) 60%, var(--vp-c-text-3)) !important;
+  animation: ei-arch-bounce 2.6s ease-in-out infinite;
+}
+
+@keyframes ei-arch-bounce {
+  0%, 100% { opacity: 0.4; transform: translateY(0); }
+  50%       { opacity: 1;   transform: translateY(3px); }
+}
+
+/* ================================================
+   SHOWCASE WINDOW — 3D tilt on hover
+   ================================================ */
+
+.ei-window {
+  transition:
+    transform 0.45s var(--ei-motion-smooth),
+    box-shadow 0.45s var(--ei-motion-smooth);
+}
+
+.ei-showcase-visual:hover .ei-window {
+  transform: perspective(1100px) rotateX(-3deg) rotateY(4deg) scale(1.018);
+  box-shadow:
+    0 36px 72px rgba(31, 41, 55, 0.22),
+    0 0 0 1px rgba(91, 138, 245, 0.18);
+}
+
+.ei-showcase-visual:hover .ei-data-chip {
+  animation-play-state: paused;
+}
+
+/* ================================================
+   DIRECTIONAL SCROLL REVEAL
+   ================================================ */
+
+.ei-reveal.ei-section--from-left {
+  transform: translateX(-32px) !important;
+}
+
+.ei-reveal.ei-section--from-right {
+  transform: translateX(32px) !important;
+}
+
+.ei-visible.ei-section--from-left,
+.ei-visible.ei-section--from-right {
+  transform: none !important;
+}
+
+/* ================================================
+   RESPONSIVE — stats row, marquee
+   ================================================ */
+
+@media (max-width: 640px) {
+  .ei-stats-wrap {
+    flex-direction: column;
+    padding: 20px 16px;
+    gap: 20px;
+  }
+
+  .ei-stat-divider {
+    width: 80px;
+    height: 1px;
+    margin: 0;
+    background: linear-gradient(to right, transparent, var(--vp-c-divider), transparent);
+  }
+
+  .ei-stats-row {
+    padding: 0 16px 32px;
+  }
+}
+
+@media (max-width: 767px) {
+  .ei-marquee {
+    max-width: 100%;
   }
 }

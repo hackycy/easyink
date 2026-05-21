@@ -51,6 +51,30 @@ features:
 
 <HomeShowcase />
 
+<div class="ei-stats-row">
+  <div class="ei-stats-wrap">
+    <div class="ei-stat">
+      <span class="ei-stat-number">19+</span>
+      <span class="ei-stat-label">软件包</span>
+    </div>
+    <div class="ei-stat-divider"></div>
+    <div class="ei-stat">
+      <span class="ei-stat-number">4</span>
+      <span class="ei-stat-label">架构层次</span>
+    </div>
+    <div class="ei-stat-divider"></div>
+    <div class="ei-stat">
+      <span class="ei-stat-number">8+</span>
+      <span class="ei-stat-label">内置物料</span>
+    </div>
+    <div class="ei-stat-divider"></div>
+    <div class="ei-stat">
+      <span class="ei-stat-number">MCP</span>
+      <span class="ei-stat-label">AI 协议</span>
+    </div>
+  </div>
+</div>
+
 <div class="ei-section">
   <h2 class="ei-section-title">四层架构</h2>
   <p class="ei-section-desc">从宿主应用到基础模型，每一层职责清晰、依赖单向。</p>
@@ -94,23 +118,33 @@ features:
   </div>
 </div>
 
-<div class="ei-section">
+<div class="ei-section ei-section--from-right">
   <h2 class="ei-section-title">技术栈</h2>
   <p class="ei-section-desc">现代前端工程体系，类型安全、高内聚、低耦合。</p>
 
-  <div class="ei-tech-grid">
-    <div class="ei-tech-item"><span class="ei-tech-icon">⚡</span> Vue 3 Composition API</div>
-    <div class="ei-tech-item"><span class="ei-tech-icon">🔷</span> TypeScript 严格模式</div>
-    <div class="ei-tech-item"><span class="ei-tech-icon">📦</span> pnpm Monorepo</div>
-    <div class="ei-tech-item"><span class="ei-tech-icon">🔧</span> tsdown 构建</div>
-    <div class="ei-tech-item"><span class="ei-tech-icon">🧪</span> Vitest 单元测试</div>
-    <div class="ei-tech-item"><span class="ei-tech-icon">🎭</span> Playwright E2E</div>
-    <div class="ei-tech-item"><span class="ei-tech-icon">📐</span> CSS Variables 主题</div>
-    <div class="ei-tech-item"><span class="ei-tech-icon">🧹</span> ESLint 代码规范</div>
+  <div class="ei-marquee" aria-label="技术栈">
+    <div class="ei-marquee-track">
+      <span class="ei-marquee-item"><span class="ei-marquee-dot"></span>Vue 3 Composition API</span>
+      <span class="ei-marquee-item"><span class="ei-marquee-dot"></span>TypeScript Strict</span>
+      <span class="ei-marquee-item"><span class="ei-marquee-dot"></span>pnpm Monorepo</span>
+      <span class="ei-marquee-item"><span class="ei-marquee-dot"></span>tsdown Build</span>
+      <span class="ei-marquee-item"><span class="ei-marquee-dot"></span>Vitest Unit Tests</span>
+      <span class="ei-marquee-item"><span class="ei-marquee-dot"></span>Playwright E2E</span>
+      <span class="ei-marquee-item"><span class="ei-marquee-dot"></span>CSS Variables Theme</span>
+      <span class="ei-marquee-item"><span class="ei-marquee-dot"></span>ESLint Linting</span>
+      <span class="ei-marquee-item"><span class="ei-marquee-dot"></span>Vue 3 Composition API</span>
+      <span class="ei-marquee-item"><span class="ei-marquee-dot"></span>TypeScript Strict</span>
+      <span class="ei-marquee-item"><span class="ei-marquee-dot"></span>pnpm Monorepo</span>
+      <span class="ei-marquee-item"><span class="ei-marquee-dot"></span>tsdown Build</span>
+      <span class="ei-marquee-item"><span class="ei-marquee-dot"></span>Vitest Unit Tests</span>
+      <span class="ei-marquee-item"><span class="ei-marquee-dot"></span>Playwright E2E</span>
+      <span class="ei-marquee-item"><span class="ei-marquee-dot"></span>CSS Variables Theme</span>
+      <span class="ei-marquee-item"><span class="ei-marquee-dot"></span>ESLint Linting</span>
+    </div>
   </div>
 </div>
 
-<div class="ei-section">
+<div class="ei-section ei-section--from-left">
   <h2 class="ei-section-title">生态系统</h2>
   <p class="ei-section-desc">围绕 EasyInk Schema 构建的完整工具链。</p>
 

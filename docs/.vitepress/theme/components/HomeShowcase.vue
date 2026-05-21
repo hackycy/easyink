@@ -25,7 +25,7 @@
             <span />
             <span />
             <span />
-            <strong>invoice.eink</strong>
+            <strong>invoice · easyink</strong>
           </div>
           <div class="ei-designer-stage">
             <div class="ei-tool-rail">

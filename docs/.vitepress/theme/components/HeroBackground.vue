@@ -11,6 +11,8 @@ let rafId = 0
 let ro: ResizeObserver | null = null
 let W = 0
 let H = 0
+let heroEl: HTMLElement | null = null
+let mouseMoveHandler: ((e: MouseEvent) => void) | null = null
 
 interface Particle {
   x: number
@@ -107,6 +109,8 @@ onMounted(() => {
   if (!hero)
     return
 
+  heroEl = hero
+
   bgEl = document.createElement('div')
   bgEl.className = 'ei-hero-bg'
   bgEl.setAttribute('aria-hidden', 'true')
@@ -118,6 +122,9 @@ onMounted(() => {
   const orb3 = document.createElement('div')
   orb3.className = 'ei-orb ei-orb--3'
 
+  const spotlight = document.createElement('div')
+  spotlight.className = 'ei-cursor-spotlight'
+
   canvas = document.createElement('canvas')
   canvas.className = 'ei-particle-canvas'
   ctx = canvas.getContext('2d')
@@ -125,8 +132,21 @@ onMounted(() => {
   bgEl.appendChild(orb1)
   bgEl.appendChild(orb2)
   bgEl.appendChild(orb3)
+  bgEl.appendChild(spotlight)
   bgEl.appendChild(canvas)
   hero.insertBefore(bgEl, hero.firstChild)
+
+  // Cursor spotlight tracking
+  mouseMoveHandler = (e: MouseEvent) => {
+    if (!heroEl)
+      return
+    const rect = heroEl.getBoundingClientRect()
+    const x = ((e.clientX - rect.left) / rect.width) * 100
+    const y = ((e.clientY - rect.top) / rect.height) * 100
+    heroEl.style.setProperty('--ei-mouse-x', `${x}%`)
+    heroEl.style.setProperty('--ei-mouse-y', `${y}%`)
+  }
+  hero.addEventListener('mousemove', mouseMoveHandler)
 
   ro = new ResizeObserver(resize)
   ro.observe(bgEl)
@@ -138,6 +158,8 @@ onMounted(() => {
 onBeforeUnmount(() => {
   cancelAnimationFrame(rafId)
   ro?.disconnect()
+  if (heroEl && mouseMoveHandler)
+    heroEl.removeEventListener('mousemove', mouseMoveHandler)
   bgEl?.remove()
 })
 </script>
