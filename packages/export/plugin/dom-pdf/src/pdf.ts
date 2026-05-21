@@ -1,11 +1,12 @@
 import type { ExportDiagnostic, ExportFormatPlugin, ExportProgress } from '@easyink/export-runtime'
 import type { jsPDF as JsPDFType } from 'jspdf'
+import { createCanvasCaptureOptions } from './canvas-capture'
+import { createForeignObjectCaptureOptions, isLikelyBlankForeignObjectCanvas as isLikelyBlankCaptureCanvas } from './foreign-object-capture'
 
-const CSS_DPI = 96
 const DEFAULT_EXPORT_DPI = 300
 const DEFAULT_ASSET_LOAD_TIMEOUT_MS = 10000
-const MIN_CANVAS_SCALE = 2
-const MAX_CANVAS_PIXELS = 32000000
+
+export { resolveCanvasScale } from './canvas-capture'
 
 export interface PdfPageSize {
   widthMm: number
@@ -24,6 +25,7 @@ export interface RenderPagesToPdfOptions {
   dpi?: number
   assetLoadTimeoutMs?: number
   foreignObjectRendering?: boolean
+  enableCanvasFallback?: boolean
   onProgress?: (progress: ExportProgress) => void
   onDiagnostic?: (diagnostic: ExportDiagnostic) => void
 }
@@ -36,6 +38,7 @@ export interface DomPdfExportInput {
   dpi?: number
   assetLoadTimeoutMs?: number
   foreignObjectRendering?: boolean
+  enableCanvasFallback?: boolean
 }
 
 export interface DomPdfExportPluginOptions {
@@ -61,7 +64,8 @@ export async function renderPagesToPdfBlob(options: RenderPagesToPdfOptions): Pr
   const {
     dpi = DEFAULT_EXPORT_DPI,
     assetLoadTimeoutMs = DEFAULT_ASSET_LOAD_TIMEOUT_MS,
-    foreignObjectRendering = false,
+    foreignObjectRendering = true,
+    enableCanvasFallback = false,
     onProgress,
     onDiagnostic,
   } = options
@@ -92,38 +96,27 @@ export async function renderPagesToPdfBlob(options: RenderPagesToPdfOptions): Pr
       if (pageIndex > 0)
         pdf.addPage([pdfPage.widthMm, pdfPage.heightMm], resolvePdfOrientation(pdfPage))
 
-      let canvas = await html2canvas(page, {
-        scale: resolveCanvasScale(page, dpi),
-        foreignObjectRendering,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-        removeContainer: true,
-        scrollX: 0,
-        scrollY: 0,
-        onclone: (clonedDocument) => {
-          normalizeClonedCaptureDocument(clonedDocument, captureId)
-        },
-      })
-      if (foreignObjectRendering && isLikelyBlankCanvas(canvas, page)) {
+      let canvas = foreignObjectRendering
+        ? await html2canvas(page, createForeignObjectCaptureOptions(page, { dpi, captureId }))
+        : await html2canvas(page, createCanvasCaptureOptions(page, { dpi, captureId }))
+
+      const foreignObjectRenderedBlank = foreignObjectRendering && isLikelyBlankCaptureCanvas(canvas, page)
+      let finalCanvasBlank = foreignObjectRenderedBlank
+      if (foreignObjectRenderedBlank && enableCanvasFallback) {
         emitForeignObjectBlankRetryWarning(pageIndex, onDiagnostic)
         canvas.width = 0
         canvas.height = 0
-        canvas = await html2canvas(page, {
-          scale: resolveCanvasScale(page, dpi),
-          foreignObjectRendering: false,
-          useCORS: true,
-          backgroundColor: '#ffffff',
-          logging: false,
-          removeContainer: true,
-          scrollX: 0,
-          scrollY: 0,
-          onclone: (clonedDocument) => {
-            normalizeClonedCaptureDocument(clonedDocument, captureId)
-          },
-        })
+        canvas = await html2canvas(page, createCanvasCaptureOptions(page, { dpi, captureId }))
+        finalCanvasBlank = isLikelyBlankCaptureCanvas(canvas, page)
       }
-      if (isLikelyBlankCanvas(canvas, page))
+      else if (foreignObjectRenderedBlank) {
+        emitForeignObjectBlankWarning(pageIndex, onDiagnostic)
+      }
+      else if (!foreignObjectRendering) {
+        finalCanvasBlank = isLikelyBlankCaptureCanvas(canvas, page)
+      }
+
+      if (finalCanvasBlank)
         emitBlankPageWarning(pageIndex, onDiagnostic)
 
       pdf.addImage(canvas, 'PNG', 0, 0, pdfPage.widthMm, pdfPage.heightMm, undefined, 'FAST')
@@ -165,54 +158,6 @@ function isPositiveNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0
 }
 
-function isLikelyBlankCanvas(canvas: HTMLCanvasElement, sourcePage: HTMLElement): boolean {
-  if (!hasRenderableContent(sourcePage))
-    return false
-  const width = canvas.width
-  const height = canvas.height
-  if (width <= 0 || height <= 0)
-    return true
-
-  if (typeof canvas.getContext !== 'function')
-    return false
-
-  const context = canvas.getContext('2d', { willReadFrequently: true })
-  if (!context)
-    return false
-
-  try {
-    const points = [
-      [Math.floor(width / 2), Math.floor(height / 2)],
-      [Math.floor(width * 0.25), Math.floor(height * 0.25)],
-      [Math.floor(width * 0.75), Math.floor(height * 0.25)],
-      [Math.floor(width * 0.25), Math.floor(height * 0.75)],
-      [Math.floor(width * 0.75), Math.floor(height * 0.75)],
-    ] as const
-
-    for (const [x, y] of points) {
-      const pixel = context.getImageData(x, y, 1, 1).data
-      if (!isWhiteOrTransparentPixel(pixel))
-        return false
-    }
-    return true
-  }
-  catch {
-    return false
-  }
-}
-
-function hasRenderableContent(page: HTMLElement): boolean {
-  return page.querySelector('.ei-viewer-element,[data-element-id],img,svg,canvas,table') !== null
-    || page.textContent?.trim() !== ''
-}
-
-function isWhiteOrTransparentPixel(pixel: Uint8ClampedArray): boolean {
-  const alpha = pixel[3] ?? 0
-  if (alpha === 0)
-    return true
-  return (pixel[0] ?? 0) >= 248 && (pixel[1] ?? 0) >= 248 && (pixel[2] ?? 0) >= 248
-}
-
 function emitForeignObjectBlankRetryWarning(
   pageIndex: number,
   onDiagnostic: ((diagnostic: ExportDiagnostic) => void) | undefined,
@@ -221,6 +166,19 @@ function emitForeignObjectBlankRetryWarning(
     severity: 'warning',
     code: 'PDF_FOREIGN_OBJECT_BLANK_RETRY',
     message: 'PDF page rendered blank with foreignObject rendering; retrying with canvas rendering.',
+    scope: 'export-plugin',
+    detail: { pageIndex },
+  })
+}
+
+function emitForeignObjectBlankWarning(
+  pageIndex: number,
+  onDiagnostic: ((diagnostic: ExportDiagnostic) => void) | undefined,
+): void {
+  onDiagnostic?.({
+    severity: 'warning',
+    code: 'PDF_FOREIGN_OBJECT_RENDERED_BLANK',
+    message: 'PDF page rendered blank with foreignObject rendering. Canvas fallback is disabled; set enableCanvasFallback to retry with canvas rendering.',
     scope: 'export-plugin',
     detail: { pageIndex },
   })
@@ -237,38 +195,6 @@ function emitBlankPageWarning(
     scope: 'export-plugin',
     detail: { pageIndex },
   })
-}
-
-function normalizeClonedCaptureDocument(clonedDocument: Document, captureId: string): void {
-  const page = clonedDocument.querySelector<HTMLElement>(`[data-easyink-pdf-capture-id="${captureId}"]`)
-  if (!page)
-    return
-
-  page.style.margin = '0'
-  page.style.boxShadow = 'none'
-  page.style.transform = 'none'
-  page.style.transformOrigin = 'top left'
-  page.style.overflow = 'hidden'
-  page.style.backgroundColor = page.style.backgroundColor || '#ffffff'
-
-  const mount = page.closest<HTMLElement>('#easyink-viewer-root')
-  if (mount) {
-    mount.style.padding = '0'
-    mount.style.background = '#ffffff'
-  }
-
-  clonedDocument.documentElement.style.background = '#ffffff'
-  clonedDocument.body.style.margin = '0'
-  clonedDocument.body.style.background = '#ffffff'
-}
-
-export function resolveCanvasScale(page: HTMLElement, dpi: number): number {
-  const targetScale = Math.max(MIN_CANVAS_SCALE, dpi / CSS_DPI)
-  const rect = page.getBoundingClientRect()
-  const estimatedPixels = rect.width * rect.height * targetScale * targetScale
-  if (estimatedPixels <= MAX_CANVAS_PIXELS)
-    return targetScale
-  return Math.max(MIN_CANVAS_SCALE, Math.sqrt(MAX_CANVAS_PIXELS / (rect.width * rect.height)))
 }
 
 async function waitForRenderableAssets(

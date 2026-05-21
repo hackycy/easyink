@@ -136,6 +136,8 @@ function createRemotePrintDriver(): PrintDriver {
         pages,
         widthMm,
         heightMm,
+        // 默认使用 foreignObjectRendering 以保持浏览器预览一致性。
+        // 只有用户确认接受 canvas 兼容降级时，才设置 enableCanvasFallback: true。
         onProgress: context.onProgress,
       })
 
