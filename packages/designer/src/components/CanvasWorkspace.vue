@@ -11,7 +11,7 @@ import {
   RemovePageSheetCommand,
   UnitManager,
 } from '@easyink/core'
-import { IconDelete, IconDown, IconGrid, IconNewTemplate, IconPreview, IconUp } from '@easyink/icons'
+import { IconDelete, IconDown, IconNewTemplate, IconUp } from '@easyink/icons'
 import { EiIcon } from '@easyink/ui'
 import { computed, onMounted, onUnmounted, provide, ref } from 'vue'
 import { useDesignerStore } from '../composables'
@@ -61,6 +61,8 @@ const cursorPos = ref<{ x: number, y: number } | null>(null)
 const rulerHover = ref<{ axis: 'x' | 'y', position: number } | null>(null)
 
 const PAGE_TOOLBAR_GAP_PX = 16
+
+type PageToolbarMode = 'fixed-sheet-management'
 
 provide(CANVAS_CONTAINER_KEY, () => containerRef.value)
 
@@ -128,9 +130,17 @@ function handlePageDrop(e: DragEvent) {
 const editorSurfacePlan = computed(() => createEditorSurfacePlan(store.schema))
 
 const isFixedSheetPlan = computed(() =>
-  editorSurfacePlan.value.pages.some(page => page.kind === 'page')
+  editorSurfacePlan.value.pages.length > 0
+  && editorSurfacePlan.value.pages.every(page => page.kind === 'page')
   && store.schema.page.pagination?.strategy === 'fixed-sheets',
 )
+
+const pageToolbarMode = computed<PageToolbarMode | null>(() => {
+  const strategy = store.schema.page.pagination?.strategy
+  if (strategy === 'fixed-sheets' && isFixedSheetPlan.value)
+    return 'fixed-sheet-management'
+  return null
+})
 
 const surfaceStyle = computed(() => {
   const plan = editorSurfacePlan.value
@@ -222,14 +232,18 @@ const pageFrames = computed(() => {
 })
 
 const pageToolbarItems = computed(() => {
+  const mode = pageToolbarMode.value
+  if (!mode)
+    return []
   const plan = editorSurfacePlan.value
   const zoom = store.workbench.viewport.zoom
   const unitManager = new UnitManager(store.schema.unit)
   return plan.pages.map(page => ({
+    mode,
     page,
     style: {
       left: `${unitManager.toPixels(getEditorSurfacePageLeft(plan, page) + page.width, 96, zoom) + PAGE_TOOLBAR_GAP_PX}px`,
-      top: `${unitManager.toPixels(page.visualTop, 96, zoom) + PAGE_TOOLBAR_GAP_PX}px`,
+      top: `${unitManager.toPixels(page.visualTop, 96, zoom) + 0}px`,
     },
   }))
 })
@@ -619,7 +633,6 @@ onUnmounted(() => {
           @pointerdown.stop
         >
           <button
-            v-if="isFixedSheetPlan"
             class="ei-page-toolbar__button"
             type="button"
             title="Add page"
@@ -628,7 +641,6 @@ onUnmounted(() => {
             <EiIcon :icon="IconNewTemplate" :size="15" />
           </button>
           <button
-            v-if="isFixedSheetPlan"
             class="ei-page-toolbar__button"
             type="button"
             title="Delete page"
@@ -654,24 +666,6 @@ onUnmounted(() => {
             @click="scrollByPage(item.page, 1)"
           >
             <EiIcon :icon="IconDown" :size="15" />
-          </button>
-          <button
-            v-if="store.schema.page.pagination?.strategy === 'auto-sheets'"
-            class="ei-page-toolbar__button"
-            type="button"
-            title="Pagination preview"
-            disabled
-          >
-            <EiIcon :icon="IconPreview" :size="15" />
-          </button>
-          <button
-            v-if="item.page.kind === 'label-cell'"
-            class="ei-page-toolbar__button"
-            type="button"
-            title="Sheet preview"
-            disabled
-          >
-            <EiIcon :icon="IconGrid" :size="15" />
           </button>
         </div>
       </div>

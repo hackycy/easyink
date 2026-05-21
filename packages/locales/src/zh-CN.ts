@@ -245,7 +245,7 @@ const zhCN: LocaleMessages = {
       copies: '副本数',
       blankPolicy: '空白页策略',
       fixed: '固定页',
-      stack: '连续纸',
+      stack: '流式布局',
       continuous: '连续纸',
       label: '标签纸',
       paperPreset: '常用纸张',

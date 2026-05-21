@@ -104,17 +104,14 @@ function normalizeValue(val: number | null | undefined): number | null {
   return val ?? null
 }
 
-function normalizeParsedNumber(raw: string): number | null | undefined {
-  if (raw === '' || raw === '-') {
-    if (!props.nullable && props.modelValue == null && snapshotValue.value == null)
-      return undefined
-    return props.nullable ? null : 0
-  }
+function parseInputNumber(raw: string): number | null | undefined {
+  if (raw === '' || raw === '-')
+    return props.nullable ? null : undefined
 
   const num = Number(raw)
-  if (Number.isNaN(num))
+  if (Number.isNaN(num) || isOutOfRange(num))
     return undefined
-  return clamp(roundToPrecision(num))
+  return roundToPrecision(num)
 }
 
 function isOutOfRange(val: number): boolean {
@@ -129,19 +126,12 @@ function onInput(event: Event) {
   const raw = (event.target as HTMLInputElement).value
   displayText.value = raw
 
-  // Allow empty input => emit null (or 0 if not nullable)
-  const next = normalizeParsedNumber(raw)
+  // Preserve intermediate text such as "4" for a min=10 field so users can
+  // continue typing "40"; range clamping happens on blur/step commits.
+  const next = parseInputNumber(raw)
   if (next === undefined)
     return
 
-  if (typeof next === 'number') {
-    const num = Number(raw)
-    if (!Number.isNaN(num) && isOutOfRange(num)) {
-      const input = event.target as HTMLInputElement
-      displayText.value = String(next)
-      input.value = String(next)
-    }
-  }
   emit('update:modelValue', next)
   // If NaN, don't emit - will be corrected on blur
 }
