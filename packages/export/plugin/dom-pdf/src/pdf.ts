@@ -7,22 +7,35 @@ const DEFAULT_ASSET_LOAD_TIMEOUT_MS = 10000
 const MIN_CANVAS_SCALE = 2
 const MAX_CANVAS_PIXELS = 32000000
 
-export interface RenderPagesToPdfOptions {
-  pages: HTMLElement[]
+export interface PdfPageSize {
   widthMm: number
   heightMm: number
+}
+
+export interface PdfPageInput extends PdfPageSize {
+  element: HTMLElement
+}
+
+export interface RenderPagesToPdfOptions {
+  pages: HTMLElement[]
+  widthMm?: number
+  heightMm?: number
+  pageSizes?: PdfPageSize[]
   dpi?: number
   assetLoadTimeoutMs?: number
+  foreignObjectRendering?: boolean
   onProgress?: (progress: ExportProgress) => void
   onDiagnostic?: (diagnostic: ExportDiagnostic) => void
 }
 
 export interface DomPdfExportInput {
   pages: HTMLElement[]
-  widthMm: number
-  heightMm: number
+  widthMm?: number
+  heightMm?: number
+  pageSizes?: PdfPageSize[]
   dpi?: number
   assetLoadTimeoutMs?: number
+  foreignObjectRendering?: boolean
 }
 
 export interface DomPdfExportPluginOptions {
@@ -46,24 +59,30 @@ export function createDomPdfExportPlugin(options: DomPdfExportPluginOptions = {}
 
 export async function renderPagesToPdfBlob(options: RenderPagesToPdfOptions): Promise<Blob> {
   const {
-    pages,
-    widthMm,
-    heightMm,
     dpi = DEFAULT_EXPORT_DPI,
     assetLoadTimeoutMs = DEFAULT_ASSET_LOAD_TIMEOUT_MS,
+    foreignObjectRendering = false,
     onProgress,
     onDiagnostic,
   } = options
+  const pdfPages = resolvePdfPages(options)
   const [{ default: html2canvas }, { jsPDF: JsPDF }] = await Promise.all([
     import('html2canvas'),
     import('jspdf'),
   ])
-  const orientation = widthMm > heightMm ? 'landscape' : 'portrait'
-  const pdf = new JsPDF({ orientation, unit: 'mm', format: [widthMm, heightMm], compress: false })
+  const firstPage = pdfPages[0]!
+  const firstOrientation = resolvePdfOrientation(firstPage)
+  const pdf = new JsPDF({
+    orientation: firstOrientation,
+    unit: 'mm',
+    format: [firstPage.widthMm, firstPage.heightMm],
+    compress: true,
+  })
 
-  for (let pageIndex = 0; pageIndex < pages.length; pageIndex++) {
-    const page = pages[pageIndex]!
-    onProgress?.({ current: pageIndex + 1, total: pages.length, message: `render-page:${pageIndex + 1}` })
+  for (let pageIndex = 0; pageIndex < pdfPages.length; pageIndex++) {
+    const pdfPage = pdfPages[pageIndex]!
+    const page = pdfPage.element
+    onProgress?.({ current: pageIndex + 1, total: pdfPages.length, message: `render-page:${pageIndex + 1}` })
     const captureId = `easyink-pdf-capture-${pageIndex}`
     page.setAttribute('data-easyink-pdf-capture-id', captureId)
 
@@ -71,11 +90,11 @@ export async function renderPagesToPdfBlob(options: RenderPagesToPdfOptions): Pr
       await waitForRenderableAssets(page, onDiagnostic, assetLoadTimeoutMs)
 
       if (pageIndex > 0)
-        pdf.addPage([widthMm, heightMm], orientation)
+        pdf.addPage([pdfPage.widthMm, pdfPage.heightMm], resolvePdfOrientation(pdfPage))
 
-      const canvas = await html2canvas(page, {
+      let canvas = await html2canvas(page, {
         scale: resolveCanvasScale(page, dpi),
-        foreignObjectRendering: true,
+        foreignObjectRendering,
         useCORS: true,
         backgroundColor: '#ffffff',
         logging: false,
@@ -86,8 +105,28 @@ export async function renderPagesToPdfBlob(options: RenderPagesToPdfOptions): Pr
           normalizeClonedCaptureDocument(clonedDocument, captureId)
         },
       })
+      if (foreignObjectRendering && isLikelyBlankCanvas(canvas, page)) {
+        emitForeignObjectBlankRetryWarning(pageIndex, onDiagnostic)
+        canvas.width = 0
+        canvas.height = 0
+        canvas = await html2canvas(page, {
+          scale: resolveCanvasScale(page, dpi),
+          foreignObjectRendering: false,
+          useCORS: true,
+          backgroundColor: '#ffffff',
+          logging: false,
+          removeContainer: true,
+          scrollX: 0,
+          scrollY: 0,
+          onclone: (clonedDocument) => {
+            normalizeClonedCaptureDocument(clonedDocument, captureId)
+          },
+        })
+      }
+      if (isLikelyBlankCanvas(canvas, page))
+        emitBlankPageWarning(pageIndex, onDiagnostic)
 
-      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, widthMm, heightMm, undefined, 'NONE')
+      pdf.addImage(canvas, 'PNG', 0, 0, pdfPage.widthMm, pdfPage.heightMm, undefined, 'FAST')
       canvas.width = 0
       canvas.height = 0
     }
@@ -97,6 +136,107 @@ export async function renderPagesToPdfBlob(options: RenderPagesToPdfOptions): Pr
   }
 
   return pdf.output('blob')
+}
+
+function resolvePdfPages(options: RenderPagesToPdfOptions): PdfPageInput[] {
+  const { pages, widthMm, heightMm, pageSizes } = options
+  if (pages.length === 0)
+    throw new Error('No pages provided for PDF export.')
+
+  return pages.map((element, index) => {
+    const size = pageSizes?.[index]
+    const pageWidthMm = size?.widthMm ?? widthMm
+    const pageHeightMm = size?.heightMm ?? heightMm
+    if (!isPositiveNumber(pageWidthMm) || !isPositiveNumber(pageHeightMm))
+      throw new Error(`Missing PDF page size for page ${index + 1}.`)
+    return {
+      element,
+      widthMm: pageWidthMm,
+      heightMm: pageHeightMm,
+    }
+  })
+}
+
+function resolvePdfOrientation(page: PdfPageSize): 'landscape' | 'portrait' {
+  return page.widthMm > page.heightMm ? 'landscape' : 'portrait'
+}
+
+function isPositiveNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
+}
+
+function isLikelyBlankCanvas(canvas: HTMLCanvasElement, sourcePage: HTMLElement): boolean {
+  if (!hasRenderableContent(sourcePage))
+    return false
+  const width = canvas.width
+  const height = canvas.height
+  if (width <= 0 || height <= 0)
+    return true
+
+  if (typeof canvas.getContext !== 'function')
+    return false
+
+  const context = canvas.getContext('2d', { willReadFrequently: true })
+  if (!context)
+    return false
+
+  try {
+    const points = [
+      [Math.floor(width / 2), Math.floor(height / 2)],
+      [Math.floor(width * 0.25), Math.floor(height * 0.25)],
+      [Math.floor(width * 0.75), Math.floor(height * 0.25)],
+      [Math.floor(width * 0.25), Math.floor(height * 0.75)],
+      [Math.floor(width * 0.75), Math.floor(height * 0.75)],
+    ] as const
+
+    for (const [x, y] of points) {
+      const pixel = context.getImageData(x, y, 1, 1).data
+      if (!isWhiteOrTransparentPixel(pixel))
+        return false
+    }
+    return true
+  }
+  catch {
+    return false
+  }
+}
+
+function hasRenderableContent(page: HTMLElement): boolean {
+  return page.querySelector('.ei-viewer-element,[data-element-id],img,svg,canvas,table') !== null
+    || page.textContent?.trim() !== ''
+}
+
+function isWhiteOrTransparentPixel(pixel: Uint8ClampedArray): boolean {
+  const alpha = pixel[3] ?? 0
+  if (alpha === 0)
+    return true
+  return (pixel[0] ?? 0) >= 248 && (pixel[1] ?? 0) >= 248 && (pixel[2] ?? 0) >= 248
+}
+
+function emitForeignObjectBlankRetryWarning(
+  pageIndex: number,
+  onDiagnostic: ((diagnostic: ExportDiagnostic) => void) | undefined,
+): void {
+  onDiagnostic?.({
+    severity: 'warning',
+    code: 'PDF_FOREIGN_OBJECT_BLANK_RETRY',
+    message: 'PDF page rendered blank with foreignObject rendering; retrying with canvas rendering.',
+    scope: 'export-plugin',
+    detail: { pageIndex },
+  })
+}
+
+function emitBlankPageWarning(
+  pageIndex: number,
+  onDiagnostic: ((diagnostic: ExportDiagnostic) => void) | undefined,
+): void {
+  onDiagnostic?.({
+    severity: 'warning',
+    code: 'PDF_RENDERED_PAGE_BLANK',
+    message: 'PDF page capture appears blank even though the Viewer page contains renderable content.',
+    scope: 'export-plugin',
+    detail: { pageIndex },
+  })
 }
 
 function normalizeClonedCaptureDocument(clonedDocument: Document, captureId: string): void {

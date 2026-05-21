@@ -1,5 +1,6 @@
 import type { DocumentSchema } from '@easyink/schema'
 import type { ViewerPageMetrics, ViewerPrintOptions, ViewerPrintPolicy } from './types'
+import { resolvePageModel } from '@easyink/core'
 
 export interface ResolvePrintPolicyInput {
   schema: DocumentSchema
@@ -20,9 +21,10 @@ export class PrintPolicyError extends Error {
 export function resolvePrintPolicy(input: ResolvePrintPolicyInput): ViewerPrintPolicy {
   const { schema, options = {}, renderedPages = [] } = input
   const { page, unit } = schema
+  const pageModel = resolvePageModel(schema)
   const requestedPageSizeMode = options.pageSizeMode ?? 'driver'
-  const isContinuousPaper = page.pageModel?.kind === 'continuous-paper' || page.mode === 'continuous'
-  const isLabelSheet = page.pageModel?.kind === 'label-sheet' || page.mode === 'label'
+  const isContinuousPaper = pageModel.kind === 'continuous-paper'
+  const isLabelSheet = pageModel.kind === 'label-sheet'
   const usesDriverPaper = isContinuousPaper && requestedPageSizeMode === 'driver'
   const orientation = page.print?.orientation ?? 'auto'
 
@@ -66,8 +68,8 @@ export function resolvePrintPolicy(input: ResolvePrintPolicyInput): ViewerPrintP
     }
   }
 
-  let width = page.width
-  let height = page.height
+  let width = pageModel.width
+  let height = pageModel.height
   let source: 'schema' | 'label' = 'schema'
 
   if (isLabelSheet) {
@@ -75,8 +77,8 @@ export function resolvePrintPolicy(input: ResolvePrintPolicyInput): ViewerPrintP
     const rows = page.label?.rows || 1
     const gapX = page.label?.gap || 0
     const gapY = page.label?.rowGap || 0
-    width = page.width * columns + gapX * Math.max(columns - 1, 0)
-    height = page.height * rows + gapY * Math.max(rows - 1, 0)
+    width = pageModel.width * columns + gapX * Math.max(columns - 1, 0)
+    height = pageModel.height * rows + gapY * Math.max(rows - 1, 0)
     source = 'label'
   }
 

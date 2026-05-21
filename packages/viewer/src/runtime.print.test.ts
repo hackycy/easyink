@@ -256,6 +256,22 @@ describe('viewer runtime print policy', () => {
     expect(policy.orientation).toBe('landscape')
     expect(policy.sheetSize).toMatchObject({ width: 80, height: 60, unit: 'mm' })
   })
+
+  it('uses page model paper as the fixed print size source', () => {
+    const policy = resolvePrintPolicy({
+      schema: {
+        ...createFixedSchema(),
+        page: {
+          ...createFixedSchema().page,
+          width: 80,
+          height: 60,
+          pageModel: { kind: 'paged-paper', paper: { width: 100, height: 40 } },
+        },
+      },
+    })
+
+    expect(policy.sheetSize).toMatchObject({ width: 100, height: 40, unit: 'mm' })
+  })
 })
 
 describe('viewer runtime print behavior', () => {

@@ -14,10 +14,16 @@ function createContext() {
   const page = document.createElement('section')
   page.className = 'ei-viewer-page'
   container.appendChild(page)
+  const secondPage = document.createElement('section')
+  secondPage.className = 'ei-viewer-page'
+  container.appendChild(secondPage)
 
   return {
     container,
-    renderedPages: [{ index: 0, width: 80, height: 60, unit: 'mm' }],
+    renderedPages: [
+      { index: 0, width: 80, height: 60, unit: 'mm' },
+      { index: 1, width: 100, height: 40, unit: 'mm' },
+    ],
     printPolicy: {
       orientation: 'portrait',
       offset: { horizontal: 0, vertical: 0, unit: 'mm' },
@@ -51,6 +57,13 @@ describe('easy ink driver', () => {
 
     await driver.print(createContext())
 
+    expect(renderPagesToPdfBlob).toHaveBeenCalledWith(expect.objectContaining({
+      pages: expect.any(Array),
+      pageSizes: [
+        { widthMm: 80, heightMm: 60 },
+        { widthMm: 100, heightMm: 40 },
+      ],
+    }))
     expect(client.printPdf).toHaveBeenCalledTimes(1)
     expect(client.printPdf).toHaveBeenCalledWith(expect.any(Blob), expect.objectContaining({
       printerName: 'Printer A',

@@ -17,7 +17,7 @@ import type {
 import type { ViewerHost } from './viewer-host'
 import { registerBuiltinViewerMaterials } from '@easyink/builtin'
 import { createInternalHooks, FontManager, runLayoutPipeline, runPagination } from '@easyink/core'
-import { migrateLegacyStackPageMode, traverseNodes, validateSchema } from '@easyink/schema'
+import { migrateLegacyStackPageMode, normalizeDocumentSchema, traverseNodes, validateSchema } from '@easyink/schema'
 import { UNIT_FACTOR } from '@easyink/shared'
 import { applyBindingsToProps, projectBindings } from './binding-projector'
 import { collectFontFamilies, loadAndInjectFonts } from './font-loader'
@@ -82,8 +82,9 @@ export class ViewerRuntime {
       throw new Error(`Invalid schema: ${errors.join('; ')}`)
     }
 
-    // 2. Hook: beforeSchemaNormalize
-    const normalizedSchema = this.callSchemaNormalizeHook(migratedSchema)
+    // 2. Hook: beforeSchemaNormalize + schema normalization
+    const schemaForNormalize = this.callSchemaNormalizeHook(migratedSchema)
+    const normalizedSchema = normalizeDocumentSchema(schemaForNormalize)
     this._schema = normalizedSchema
 
     this._data = input.data ?? {}

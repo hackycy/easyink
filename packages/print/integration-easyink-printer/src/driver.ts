@@ -2,7 +2,7 @@ import type { PrintDriverBaseOptions } from '@easyink/print-core'
 import type { PrintDriver, ViewerPrintContext } from '@easyink/viewer'
 import type { EasyInkPrinterClient, EasyInkPrinterPrintPdfOptions } from './client'
 import { renderPagesToPdfBlob } from '@easyink/export-plugin-dom-pdf'
-import { exportDiagnosticToViewerEvent, getViewerPages, resolvePrintDriverValue, resolvePrintLandscape, resolvePrintOffset, resolveViewerPrintSize } from '@easyink/print-core'
+import { exportDiagnosticToViewerEvent, resolvePrintDriverValue, resolvePrintLandscape, resolvePrintOffset, resolveViewerPdfPages, resolveViewerPrintSize } from '@easyink/print-core'
 
 /**
  * Configures the official Viewer print driver for EasyInk Printer.
@@ -22,7 +22,9 @@ export function createEasyInkPrinterDriver(options: EasyInkPrinterDriverOptions)
     id: options.id ?? 'easyink-printer',
     defaults: { pageSizeMode: 'fixed' },
     async print(context: ViewerPrintContext) {
-      const pages = getViewerPages(context.container)
+      const pdfPages = resolveViewerPdfPages(context)
+      const pages = pdfPages.map(page => page.element)
+      const pageSizes = pdfPages.map(({ widthMm, heightMm }) => ({ widthMm, heightMm }))
       const { widthMm, heightMm } = resolveViewerPrintSize(context)
       const landscape = resolvePrintLandscape(context.printPolicy.orientation, widthMm, heightMm)
       const printerName = resolvePrintDriverValue(options.printerName)
@@ -32,8 +34,7 @@ export function createEasyInkPrinterDriver(options: EasyInkPrinterDriverOptions)
       context.onPhase?.({ phase: 'preparing', message: '生成 PDF 中' })
       const pdfBlob = await renderPagesToPdfBlob({
         pages,
-        widthMm,
-        heightMm,
+        pageSizes,
         onProgress: context.onProgress,
         onDiagnostic: diagnostic => context.onDiagnostic?.(exportDiagnosticToViewerEvent(diagnostic)),
       })
@@ -42,6 +43,7 @@ export function createEasyInkPrinterDriver(options: EasyInkPrinterDriverOptions)
       const requestOptions = await options.resolveRequestOptions?.({
         printContext: context,
         pages,
+        pageSizes,
         widthMm,
         heightMm,
         printerName,

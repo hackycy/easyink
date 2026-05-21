@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderPagesToPdfBlob, resolveCanvasScale } from './pdf'
 
 const pdfMocks = vi.hoisted(() => ({
+  constructor: vi.fn(),
   html2canvas: vi.fn(async () => ({
     width: 100,
     height: 100,
@@ -21,6 +22,10 @@ vi.mock('jspdf', () => {
     addPage = pdfMocks.addPage
     addImage = pdfMocks.addImage
     output = pdfMocks.output
+
+    constructor(options: unknown) {
+      pdfMocks.constructor(options)
+    }
   }
 
   return {
@@ -29,6 +34,7 @@ vi.mock('jspdf', () => {
 })
 
 beforeEach(() => {
+  pdfMocks.constructor.mockClear()
   pdfMocks.html2canvas.mockClear()
   pdfMocks.addPage.mockClear()
   pdfMocks.addImage.mockClear()
@@ -72,6 +78,94 @@ describe('resolveCanvasScale', () => {
 })
 
 describe('renderPagesToPdfBlob asset preflight', () => {
+  it('uses per-page sizes and passes canvas data to jsPDF without base64 conversion', async () => {
+    const first = document.createElement('div')
+    const second = document.createElement('div')
+
+    const result = await renderPagesToPdfBlob({
+      pages: [first, second],
+      pageSizes: [
+        { widthMm: 80, heightMm: 60 },
+        { widthMm: 100, heightMm: 40 },
+      ],
+    })
+
+    expect(result).toBeInstanceOf(Blob)
+    expect(pdfMocks.constructor).toHaveBeenCalledWith(expect.objectContaining({
+      compress: true,
+      format: [80, 60],
+      orientation: 'landscape',
+    }))
+    expect(pdfMocks.addPage).toHaveBeenCalledWith([100, 40], 'landscape')
+    expect(pdfMocks.addImage).toHaveBeenLastCalledWith(
+      expect.any(Object),
+      'PNG',
+      0,
+      0,
+      100,
+      40,
+      undefined,
+      'FAST',
+    )
+    expect(typeof pdfMocks.addImage.mock.calls[0]?.[0]).not.toBe('string')
+  })
+
+  it('uses the canvas renderer by default to avoid blank foreignObject captures', async () => {
+    const page = document.createElement('div')
+    page.textContent = 'hello'
+
+    await renderPagesToPdfBlob({
+      pages: [page],
+      widthMm: 80,
+      heightMm: 60,
+    })
+
+    expect(pdfMocks.html2canvas).toHaveBeenCalledWith(page, expect.objectContaining({
+      foreignObjectRendering: false,
+    }))
+  })
+
+  it('retries without foreignObject rendering when a captured page is blank', async () => {
+    const page = document.createElement('div')
+    const element = document.createElement('div')
+    element.className = 'ei-viewer-element'
+    page.appendChild(element)
+    const diagnostics: string[] = []
+    const blankCanvas = {
+      width: 100,
+      height: 100,
+      getContext: () => ({
+        getImageData: () => ({ data: new Uint8ClampedArray([255, 255, 255, 255]) }),
+      }),
+    }
+    const contentCanvas = {
+      width: 100,
+      height: 100,
+      getContext: () => ({
+        getImageData: () => ({ data: new Uint8ClampedArray([0, 0, 0, 255]) }),
+      }),
+    }
+    pdfMocks.html2canvas
+      .mockResolvedValueOnce(blankCanvas as never)
+      .mockResolvedValueOnce(contentCanvas as never)
+
+    await renderPagesToPdfBlob({
+      pages: [page],
+      widthMm: 80,
+      heightMm: 60,
+      foreignObjectRendering: true,
+      onDiagnostic(diagnostic) {
+        diagnostics.push(diagnostic.code)
+      },
+    })
+
+    const calls = pdfMocks.html2canvas.mock.calls as unknown as Array<[HTMLElement, { foreignObjectRendering?: boolean }]>
+    expect(pdfMocks.html2canvas).toHaveBeenCalledTimes(2)
+    expect(calls[0]?.[1]).toMatchObject({ foreignObjectRendering: true })
+    expect(calls[1]?.[1]).toMatchObject({ foreignObjectRendering: false })
+    expect(diagnostics).toContain('PDF_FOREIGN_OBJECT_BLANK_RETRY')
+  })
+
   it('continues and warns when an image never settles', async () => {
     const page = document.createElement('div')
     const image = document.createElement('img')

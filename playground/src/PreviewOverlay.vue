@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import type { ExportFormatPlugin, ExportProgress } from '@easyink/export-runtime'
-import type { DocumentSchema, ViewerDiagnosticEvent, ViewerHost, ViewerPageMetrics, ViewerRuntime, ViewerTaskPhaseEvent, ViewerTaskProgressEvent } from '@easyink/viewer'
+import type { DocumentSchema, ViewerDiagnosticEvent, ViewerHost, ViewerRuntime, ViewerTaskPhaseEvent, ViewerTaskProgressEvent } from '@easyink/viewer'
 import { createDomPdfExportPlugin } from '@easyink/export-plugin-dom-pdf'
 import { createExportRuntime } from '@easyink/export-runtime'
 import { IconChevronLeft, IconChevronRight, IconClose, IconDown, IconMinimize, IconPlus } from '@easyink/icons'
-import { exportDiagnosticToViewerEvent, getViewerPages, resolvePrintSize, toMillimeters } from '@easyink/print-core'
+import { exportDiagnosticToViewerEvent, resolvePrintSize, resolveViewerPdfPages, toMillimeters } from '@easyink/print-core'
 import { createCustomViewerHost, createIframeViewerHost, createViewer, resolvePrintPolicy } from '@easyink/viewer'
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { toast } from 'vue-sonner'
@@ -99,15 +99,21 @@ function registerOutputIntegrations(runtime: ViewerRuntime) {
     format: PDF_FORMAT,
     async export(context) {
       const renderedPages = context.renderedPages ?? []
-      const pages = getViewerPages(context.container)
-      const printSize = resolveFixedExportSize(renderedPages)
+      const pdfPages = resolveViewerPdfPages({ ...context, renderedPages, printPolicy: resolvePrintPolicy({
+        schema: context.schema,
+        options: { pageSizeMode: 'fixed' },
+        renderedPages,
+      }) })
+      const pages = pdfPages.map(page => page.element)
+      const pageSizes = pdfPages.map(({ widthMm, heightMm }) => ({ widthMm, heightMm }))
+      const printSize = resolveFixedExportSize(context.schema, renderedPages)
       const widthMm = toMillimeters(printSize.width, printSize.unit)
       const heightMm = toMillimeters(printSize.height, printSize.unit)
 
       return exportRuntime.exportDocument({
         format: PDF_FORMAT,
         entry: context.entry,
-        input: { pages, widthMm, heightMm },
+        input: { pages, pageSizes, widthMm, heightMm },
         throwOnError: true,
         onProgress: context.onProgress,
         onDiagnostic: diagnostic => context.onDiagnostic?.(exportDiagnosticToViewerEvent(diagnostic)),
@@ -144,9 +150,9 @@ function createPlaygroundJsonExportPlugin(): ExportFormatPlugin<{ schema: Docume
   }
 }
 
-function resolveFixedExportSize(renderedPages: ViewerPageMetrics[]): { width: number, height: number, unit: string } {
+function resolveFixedExportSize(schema: DocumentSchema, renderedPages: NonNullable<ViewerRuntime['renderedPages']>): { width: number, height: number, unit: string } {
   const printPolicy = resolvePrintPolicy({
-    schema: props.schema,
+    schema,
     options: { pageSizeMode: 'fixed' },
     renderedPages,
   })

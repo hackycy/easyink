@@ -1,6 +1,6 @@
 import type { DocumentSchema } from '@easyink/viewer'
 import { describe, expect, it, vi } from 'vitest'
-import { createManagedPrintViewer, EasyInkPrintError, getViewerPages, resolvePrintLandscape, resolvePrintOffset, resolvePrintSize, toMillimeters } from './index'
+import { createManagedPrintViewer, EasyInkPrintError, getViewerPages, resolvePrintLandscape, resolvePrintOffset, resolvePrintSize, resolveViewerPdfPages, toMillimeters } from './index'
 
 function createFixedSchema(): DocumentSchema {
   return {
@@ -58,6 +58,36 @@ describe('print core utilities', () => {
     expect(getViewerPages(container)).toEqual([page])
     expect(() => getViewerPages(undefined)).toThrow(EasyInkPrintError)
     expect(() => getViewerPages(document.createElement('div'))).toThrow(EasyInkPrintError)
+  })
+
+  it('resolves PDF page sizes from each rendered page metric', () => {
+    const container = document.createElement('div')
+    container.appendChild(document.createElement('section')).className = 'ei-viewer-page'
+    container.appendChild(document.createElement('section')).className = 'ei-viewer-page'
+
+    const pages = resolveViewerPdfPages({
+      container,
+      renderedPages: [
+        { index: 0, width: 80, height: 60, unit: 'mm' },
+        { index: 1, width: 100, height: 40, unit: 'mm' },
+      ],
+      printPolicy: {
+        pageMode: 'fixed',
+        pageSizeMode: 'fixed',
+        sheetSize: { width: 80, height: 60, unit: 'mm', source: 'schema' },
+        orientation: 'auto',
+        pageBreakBehavior: { after: 'page', inside: 'avoid' },
+        offset: { horizontal: 0, vertical: 0, unit: 'mm' },
+      },
+      schema: createFixedSchema(),
+      data: {},
+      entry: 'api',
+    })
+
+    expect(pages.map(({ widthMm, heightMm }) => ({ widthMm, heightMm }))).toEqual([
+      { widthMm: 80, heightMm: 60 },
+      { widthMm: 100, heightMm: 40 },
+    ])
   })
 
   it('creates a managed DOM viewer and destroys owned nodes after printing', async () => {

@@ -26,6 +26,7 @@ export function createHiPrintDriver(options: HiPrintDriverOptions): PrintDriver 
       const requestOptions = await options.resolveRequestOptions?.({
         printContext: context,
         pages,
+        pageSizes: pages.map(() => ({ widthMm, heightMm })),
         widthMm,
         heightMm,
         printerName,

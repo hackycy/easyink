@@ -29,6 +29,7 @@ export type PrintDriverValue<T> = T | (() => T | undefined)
 export interface PrintDriverRequestContext {
   printContext: ViewerPrintContext
   pages: HTMLElement[]
+  pageSizes: ViewerPdfPageSize[]
   widthMm: number
   heightMm: number
   printerName?: string
@@ -97,6 +98,15 @@ export interface PrintJobLike {
   errorMessage?: string
 }
 
+export interface ViewerPdfPageSize {
+  widthMm: number
+  heightMm: number
+}
+
+export interface ViewerPdfPageInput extends ViewerPdfPageSize {
+  element: HTMLElement
+}
+
 /**
  * Normalized error type used by all EasyInk print packages.
  *
@@ -147,6 +157,26 @@ export function resolveViewerPrintSize(context: ViewerPrintContext): { widthMm: 
     widthMm: toMillimeters(printSize.width, printSize.unit),
     heightMm: toMillimeters(printSize.height, printSize.unit),
   }
+}
+
+/**
+ * Resolves every rendered Viewer page into the physical page size expected by
+ * PDF-based printers/exporters. Per-page metrics win so continuous and future
+ * variable page plans do not collapse to the first page's dimensions.
+ */
+export function resolveViewerPdfPages(context: ViewerPrintContext): ViewerPdfPageInput[] {
+  const pages = getViewerPages(context.container)
+  const fallbackSize = resolvePrintSize(context.printPolicy.sheetSize, context.renderedPages[0])
+
+  return pages.map((element, index) => {
+    const metric = context.renderedPages[index]
+    const size = metric ?? fallbackSize
+    return {
+      element,
+      widthMm: toMillimeters(size.width, size.unit),
+      heightMm: toMillimeters(size.height, size.unit),
+    }
+  })
 }
 
 /**
