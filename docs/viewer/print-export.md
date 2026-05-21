@@ -116,9 +116,9 @@ URL.revokeObjectURL(url)
 |------|-------------|------|
 | fixed + driver | `'driver'` | 使用打印机默认纸张，仅设置方向 |
 | fixed + fixed | `'fixed'` | 使用模板定义的纸张尺寸 |
-| stack + driver | `'driver'` | 使用打印机默认纸张 |
-| stack + fixed | `'fixed'` | 使用渲染后的页面尺寸 |
-| label | `'fixed'` | 计算标签组合尺寸（列数 x 行数） |
+| continuous + driver | `'driver'` | 使用打印机默认纸张，不强制 `@page size` |
+| continuous + fixed | `'fixed'` | 使用渲染后的连续纸页面尺寸 |
+| label | `'fixed'` | 计算标签 sheet 尺寸（列数 x 行数） |
 
 ```ts
 import { resolvePrintPolicy } from '@easyink/viewer'
@@ -134,9 +134,9 @@ const policy = resolvePrintPolicy({
 
 ```ts
 interface ViewerPrintPolicy {
-  pageMode: 'fixed' | 'stack' | 'label' | 'continuous'
+  pageMode: 'fixed' | 'continuous' | 'label'
   pageSizeMode: 'driver' | 'fixed'
-  sheetSize?: { width: number; height: number; unit: string; source: string }
+  sheetSize?: { width: number; height: number; unit: string; source: 'schema' | 'label' | 'rendered' }
   orientation: 'portrait' | 'landscape' | 'auto'
   pageBreakBehavior: { after: 'auto' | 'page'; inside: 'auto' | 'avoid' }
   offset: { horizontal: number; vertical: number; unit: string }

@@ -181,7 +181,7 @@ Contribution API 不绑定 AI；后续若引入“审计面板”“素材市场
 
 - **物料事实源归属物料包**：每个真实物料在 `packages/materials/*/src/ai.ts` 导出纯数据 AI 描述，`@easyink/mcp-server` 通过 `pnpm -F @easyink/mcp-server build:materials` 生成 `config/materials.json`。`prebuild` 自动执行生成，根 `pnpm test` 前执行 `check:materials` 防止配置过期。
 - **只生成 canonical type**：提示词允许把 `table -> table-data`、`rich-text -> text` 等作为修复别名，但模型必须生成真实物料名，例如 `table-data`、`table-static`、`text`、`line`。旧结构 `type: "table"`、`props.columns`、`repeatTemplate` 不再视为合法表格 schema。
-- **行业纸张启发式先于 LLM**：AI 面板和 MCP server 共用 `inferAIGenerationPlan()`。例如“商超小票/超市小票/小票”推断为 `page.mode = "stack"`、`width = 80`、`height = 200`，明细数组使用 `table-data`；发票/报价单/订单默认 A4 fixed；标签类默认 label mode。
+- **行业纸张启发式先于 LLM**：AI 面板和 MCP server 共用 `inferAIGenerationPlan()`。例如“商超小票/超市小票/小票”推断为 `page.mode = "continuous"`、`layout.strategy = "stack-flow"`、`width = 80`、`height = 200`，明细数组使用 `table-data`；发票/报价单/订单默认 A4 fixed；标签类默认 label mode。
 - **非阻塞生成假设**：AI 面板从 prompt 推断 plan 并直接调用 MCP，不再阻塞确认；生成假设在面板内作为可解释摘要展示。没有前端 plan 时，server 端会重新推断。
 - **Intent-first 生成链路**：MCP server 不要求 LLM 一次性产出完整 `DocumentSchema`。LLM 先产出 `TemplateIntent`，描述领域、字段、区块、数组表格列等意图；`@easyink/schema-tools` 再确定性生成 schema，避免模型遗漏 `table-data.table.topology.rows[].role = "repeat-template"` 等内部 DSL 细节。
 - **严格结构化输出优先**：OpenAI provider 默认使用 JSON Schema structured output，Claude provider 默认启用 strict tool 定义；兼容 OpenAI-like endpoint 时可用 `MCP_STRICT_OUTPUTS=false` 回退 JSON mode，但仍保留后置修复与校验。

@@ -166,7 +166,7 @@ interface MaterialCapabilities {
 - 数据区占位行：纯渲染层虚拟行，不存在于 schema，参与表格内部高度分配，但不改变元素外框，完全惰性不可交互
 - Row 级 repeat：Viewer 运行时通过 `extractCollectionPath()` 从 repeat-template 行 cell 的 fieldPath 推导集合路径，按集合数据逐项重复
 
-分页切片、重复头、合计区、空行填充由 Viewer/PagePlanner 负责，不属于 table-data 职责。Cell 仅包含文本内容，不支持子物料嵌套。
+全局页数、页码上下文和输出 sheet 由 Viewer 的 PaginationEngine 负责；table-data 只通过 `FragmentPaginator` 提供自身行级拆分能力。Cell 仅包含文本内容，不支持子物料嵌套。
 
 ### 表格工具库
 

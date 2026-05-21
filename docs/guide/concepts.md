@@ -60,13 +60,17 @@ EasyInk 明确区分三种状态，避免混乱：
 
 用户通过拖拽数据源字段到元素上完成绑定。Viewer 渲染时根据绑定关系将运行时数据填充到元素中。
 
-## 分页模式
+## 页面介质与分页策略
 
-| 模式 | 说明 |
-|------|------|
-| `fixed` | 固定页面模式，每页尺寸固定，元素绝对定位 |
-| `stack` | 堆叠流式模式，元素按 Y 轴排列，自动分页 |
-| `label` | 标签模式，多列多行网格布局 |
+`page.mode` 只表示页面介质类型，真正的布局、测量重排和分页由 `page.layout / page.reflow / page.pagination` 表达。
+
+| 页面介质 | 常见策略组合 | 说明 |
+|------|------|------|
+| `fixed` | `absolute + measure-only + fixed-sheets` | 固定页面，每页尺寸固定，元素按文档坐标归页 |
+| `continuous` | `stack-flow + flow-y + none` | 连续纸或小票，动态内容沿 Y 轴推移，输出为一张连续 sheet |
+| `label` | `absolute + measure-only + label-sheets` | 标签模式，单个 label cell 由 Viewer 展开为 sheet 网格 |
+
+历史 `stack` 模式只作为旧模板兼容输入存在，新模板应使用 `continuous` 介质和 `stack-flow` 布局策略。
 
 ## 扩展机制
 

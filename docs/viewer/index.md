@@ -31,7 +31,7 @@ viewer.destroy()
 
 | 选项 | 类型 | 说明 |
 |------|------|------|
-| `mode` | `'fixed' \| 'stack' \| 'label'` | 渲染模式，默认 `'fixed'` |
+| `mode` | `'fixed' \| 'continuous' \| 'label'` | 兼容选项；实际页面介质以 `schema.page.mode` 为准 |
 | `host` | `ViewerHost` | 渲染宿主，通过 factory 函数创建 |
 | `container` | `HTMLElement` | 快捷方式，等同于 `createBrowserViewerHost(container)` |
 | `iframe` | `HTMLIFrameElement` | 快捷方式，等同于 `createIframeViewerHost(iframe)` |
@@ -95,7 +95,7 @@ await viewer.open({
 })
 ```
 
-渲染流程：字体加载 -> 数据绑定 -> 元素测量 -> 分页规划 -> DOM 渲染。
+渲染流程：字体加载 -> 数据绑定 -> 元素测量 -> layout/reflow -> pagination -> DOM 渲染。
 
 ### render()
 

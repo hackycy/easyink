@@ -1,227 +1,107 @@
 # 7. 布局与分页引擎
 
-EasyInk 的布局引擎是“测量回流 + 页面计划 + 容器内部布局 + 表格分页器”的组合系统。
+EasyInk 的布局引擎当前由三类纯规则组成：运行态测量回流、分页策略、物料局部分页。页面介质本身由 [24. 页面布局正交体系](./24-page-layout-orthogonal-system.md) 定义，本章只记录代码层如何执行。
 
-## 7.1 三层布局职责
+## 7.1 执行入口
 
-### 页面计划层
+ViewerRuntime 不再直接按 `page.mode` 分支做布局，而是按以下入口编排：
 
-- 决定文档是 `fixed`、`stack` 还是 `label`
-- 决定页数、分页断点、空白页策略、复制份数和标签列数
-
-### 运行时回流层
-
-- 对 table-data 等动态物料先做运行态测量
-- 在 `stack` 模式下把后续 flow 元素按内容变化做整体下推或上移
-- 对固定层元素保持原始文档坐标，并输出冲突诊断
-
-### 区域布局层
-
-- 在单页内部处理页头、正文、页尾、编辑区、多栏区域
-- 为容器、表格、图表等结构性物料划定可用区域
-
-### 物料布局层
-
-- 普通元素按绝对坐标放置
-- 容器内部管理子元素
-- data-table 自己负责行列布局、分页与重复头
-
-## 7.2 页面模式
-
-```typescript
-type PageMode = 'fixed' | 'stack' | 'label'
+```text
+MaterialViewerExtension.measure()
+  -> runLayoutPipeline(schema, { originalSchema, measured })
+  -> runPagination(schema, layoutDocument, { originalSchema, resolveFragmentPaginator })
+  -> RenderSurface
 ```
 
-### `fixed`
+相关文件：
 
-- 典型合同、报表、多页文档
-- 页面高度固定
-- 支持缩略图与页切换
+| 文件 | 职责 |
+| --- | --- |
+| `packages/core/src/layout-plan.ts` | 定义 `LayoutDocument`、`LayoutFragment`、`OutputPagePlan` 和诊断结构。 |
+| `packages/core/src/layout-strategy.ts` | 应用测量尺寸，并按 `reflow.strategy` 调用回流引擎。 |
+| `packages/core/src/reflow-engine.ts` | 实现 `flow-y`：按原始文档顺序传播高度差，并诊断 flow 元素与 fixed 元素的新重叠。 |
+| `packages/core/src/pagination-engine.ts` | 实现 `fixed-sheets / auto-sheets / none / label-sheets`。 |
+| `packages/core/src/page-planner.ts` | 兼容旧 `createPagePlan()` API，内部委托新 pipeline。 |
 
-### `stack`
+## 7.2 LayoutFragment
 
-- 典型连续纸、小票、长文档流式排版
-- 允许内容按段连续堆叠
-- 可转成多段预览，但不以固定页为中心模型
+布局和分页阶段不直接复制整份 schema，而是围绕 fragment 传递：
 
-首版流式堆叠约束：
-
-- 只在 `stack` 模式启用自动回流
-- 默认所有元素都参与 flow；显式 `layoutMode='fixed'` 的元素保留原始坐标
-- 回流规则只看文档纵向顺序：原始 `y` 更靠后的 flow 元素整体平移，保留原始间距
-- 同一原始 `y` 带内的元素互不推动，避免并排元素因排序差异互相串扰
-- 连续纸最终页高由回流后内容底边决定，但必须保留原模板尾部留白：`trailingGap = max(page.height - originalContentBottom, 0)`，最终高度为 `max(page.height, reflowedContentBottom + trailingGap)`
-- `keepTogether`、`pageBreakBefore`、`pageBreakAfter` 先入 schema / UI，首版不生效
-
-### `label`
-
-- 标签纸、多栏批量打印
-- 需要列数、间距、复制份数
-
-## 7.3 table-data 专项布局
-
-table-data 需要独立的分页器，而不是依赖通用元素推移。
-
-它至少要解决：
-
-- 表头重复（`showHeader=true` 时每页重复，`showHeader=false` 时不重复且不占空间）
-- 数据区逐页切分
-- 合计区尾页显示（`showFooter=true` 时末页显示，`showFooter=false` 时不显示且不占空间）
-- 空行填充
-- 单行缩放
-- 动态列和列宽分配
-- 多栏排版下的表格宽度适配
-
-### 行序列生成（取代 PageSlice）
-
-Viewer 的 PagePlanner 与表格物料的 ViewerExtension 采用协作模式：
-
-1. ViewerRuntime 在测量阶段检测到 table-data 元素时，调用其 ViewerExtension 的 `measure()` 方法
-2. 表格 ViewerExtension 负责展开 repeat-template 行（按绑定集合数据逐项生成），返回展开后的行序列和每行高度
-3. `stack` 模式下，ViewerRuntime 把测量后的高度差折算为后续 flow 元素的整体平移量
-4. PagePlanner 再根据回流后的几何结果和页面高度决定切分点，并在 `stack` 模式下用原始 schema 恢复模板尾部留白，在切分点处注入 header 行重复
-5. 最终的 `TablePagePlan` 传回表格 ViewerExtension 用于渲染
-
-```typescript
-interface TablePagePlan {
-  pages: TablePageRowSequence[]
-  diagnostics: LayoutDiagnostic[]
-}
-
-interface TablePageRowSequence {
-  pageIndex: number
-  /** 当前页要渲染的行序列，按渲染顺序排列。
-   *  包含：header 行（每页重复）、展开的数据行、footer 行（仅末页）。
-   *  每个 entry 携带行来源信息，用于渲染时查找样式和单元格定义。 */
-  entries: TablePageRowEntry[]
-}
-
-interface TablePageRowEntry {
-  /** 来源行在 topology.rows[] 中的索引 */
-  sourceRowIndex: number
-  /** 行角色（从 row.role 复制，方便渲染层直接判断） */
-  role: 'normal' | 'header' | 'footer' | 'repeat-template'
-  /** 仅 repeat-template 展开行：当前数据项在集合中的索引 */
-  dataIndex?: number
-  /** 仅 repeat-template 展开行：当前数据项的值（用于单元格绑定解析） */
-  dataItem?: unknown
-}
-
-/** 表格 ViewerExtension 返回给 PagePlanner 的度量结果 */
-interface TableMeasureResult {
-  /** 展开后的全部行序列（未分页），按渲染顺序排列 */
-  expandedRows: TablePageRowEntry[]
-  /** 每行的高度（文档 unit），与 expandedRows 一一对应 */
-  rowHeights: number[]
-  /** header 行的总高度，用于 PagePlanner 在每页开头预留空间。
-   *  当 showHeader=false 时返回 0，PagePlanner 不注入 header 重复 */
-  headerHeight: number
-  /** footer 行的总高度，用于 PagePlanner 在末页预留空间。
-   *  当 showFooter=false 时返回 0，PagePlanner 不在末页追加 footer */
-  footerHeight: number
-}
-
-/** measure 接收的上下文（由 ViewerRuntime 在 resolveAllBindings 阶段预备） */
-interface TableMeasureContext {
-  /** 原始表格节点（TableDataSchema 类型） */
-  node: TableNode
-  /** repeat-template 行展开的集合数据（ViewerRuntime 已通过 extractCollectionPath 推导集合路径并取出） */
-  collectionData: unknown[]
-  /** 预解析的单元格绑定结果 Map，key = `${rowIndex}:${colIndex}[:${dataIndex}]`。
-   *  类型定义见 [6.6.1 ResolvedCellBindings](./06-render-pipeline.md) */
-  resolvedCellBindings: Map<string, ResolvedCellBindings>
+```ts
+interface LayoutFragment {
+  id: string
+  sourceNodeId: string
+  node: MaterialNode
+  box: { x: number, y: number, width: number, height: number }
+  flow: {
+    participates: boolean
+    keepTogether?: boolean
+    pageBreakBefore?: boolean
+    pageBreakAfter?: boolean
+  }
+  measured?: ViewerMeasureResult
 }
 ```
 
-协作流程：
+约束：
 
-```
-ViewerRuntime                  FlowResolver             PagePlanner                     表格 ViewerExtension
-    |                                    |                                   |
-    |-- resolveAllBindings ------------>  |                                   |
-    |   (预解析 cell binding,            |                                   |
-    |    extractCollectionPath           |                                   |
-    |    推导集合路径并取出数据)          |                                   |
-    |                                    |                                   |
-    |-- 传递 TableMeasureContext ------------------------------------------->  |
-    |                                                                        |-- 计算每行高度
-    |                                                                        |-- 生成展开行序列
-    |<------------------------------- TableMeasureResult ---------------------|
-    |                                    |                                   |
-    |-- stack flow resolve ------------->|                                   |
-    |   (按高度差下推后续 flow 元素)     |                                   |
-    |<------------------------------- 回流后几何 -----------------------------|
-    |                                    |                                   |-- 计算每行高度
-    |                                    |-- 根据页面高度切分行序列          |
-    |                                    |-- 在切分点注入 header 行重复      |
-    |                                    |   (仅 showHeader=true 时)         |
-    |                                    |-- 末页追加 footer 行              |
-    |                                    |   (仅 showFooter=true 时)         |
-    |                                    |-- 空行填充（如启用）              |
-    |                                    |                                   |
-    |                                    |-- 为每页生成虚拟 TableNode ------>|
-    |                                    |   (只包含当页行序列)              |
-    |                                    |                                   |
-    |                                    |   标准 render(virtualNode) ------->|
-    |                                    |                                   |-- 渲染当页表格
-```
+- `box` 是当前阶段的文档坐标，不是页面局部坐标。
+- `sourceNodeId` 指向原始 schema 节点；虚拟 fragment 也必须保留它。
+- `flow` 由 `node.props.layoutMode / keepTogether / pageBreakBefore / pageBreakAfter` 投影而来。
+- 运行态测量和分页不能回写原始 schema。
 
-### 虚拟表格节点
+## 7.3 测量与 flow-y 回流
 
-PagePlanner 切分完成后，为每页生成一个虚拟 `TableNode`：
+测量阶段由 ViewerRuntime 调用物料的 `measure()`，并把结果传给 core。`runLayoutPipeline()` 会先把测量尺寸应用到节点副本，再根据 `page.reflow.strategy` 决定是否回流。
 
-- 虚拟节点的 `topology.rows` 只包含当页的行序列
-- repeat-template 行的展开结果作为具象行写入虚拟节点（不再是模板行）
-- 虚拟节点的 `width/height` 调整为当页实际尺寸
-- 表格 `ViewerExtension.render()` 接收虚拟节点，按标准 `render(node)` 接口渲染，无需感知分页逻辑
+`flow-y` 规则：
 
-## 7.3.1 stack 流式堆叠模型
+- 以原始元素顺序为基准，按 `y -> x -> 原始 index` 排序。
+- 同一原始 `y` 带内的元素共享一组高度差，避免并排元素互相推动。
+- `layoutMode !== 'fixed'` 的元素参与 flow；`layoutMode='fixed'` 的元素保持原始坐标。
+- 动态元素变高会下推后续 flow 元素，变矮会拉回后续 flow 元素。
+- 回流后如果 flow 元素与 fixed 元素产生新的重叠，输出 `FLOW_Y_FIXED_OVERLAP`。
 
-节点级排版属性挂在 `MaterialNode.props`：
+## 7.4 分页策略
 
-```typescript
-interface StackFlowProps {
-  layoutMode?: 'flow' | 'fixed'
-  keepTogether?: boolean
-  pageBreakBefore?: boolean
-  pageBreakAfter?: boolean
-}
-```
+`runPagination()` 只消费 `LayoutDocument` 和 schema 页面策略：
 
-首版解释：
+| 策略 | 当前行为 |
+| --- | --- |
+| `fixed-sheets` | 固定页高；按 `pagination.pageCount ?? page.pages ?? 1` 生成页面；元素按 `box.y` 归页；支持空白页移除和 copies。 |
+| `auto-sheets` | 按页面高度自动切分；支持 break before/after、keepTogether 和 fragment paginator。 |
+| `none` | 连续纸输出一页；高度取内容底边加模板尾部留白。 |
+| `label-sheets` | 把单个 label cell 的内容复制到 sheet 网格，并按 copies 生成多个 sheet。 |
 
-- `layoutMode` 缺省视为 `flow`
-- `fixed` 元素不参与下推，也不会阻止 flow 元素穿过；如果回流后发生重叠，输出 `STACK_FLOW_FIXED_OVERLAP` 诊断
-- 回流是双向的：动态内容变高时下推，变矮时上移
-- 多个动态元素允许级联，前一个元素产生的高度差会继续传递给后面的 flow 元素
+`fixed-sheets` 不会因为 page break 属性自动重排绝对定位元素，只输出诊断。`none` 不会把连续纸切成固定页。真正会执行 page break 和 keepTogether 的策略是 `auto-sheets`。
 
-## 7.4 设计器与 Viewer 的布局差异
+## 7.5 table-data 局部分页
 
-### 设计器画布
+`table-data` 是第一个实现 `FragmentPaginator` 的物料：
 
-- 使用声明坐标编辑元素
-- 关注选区、吸附、辅助线和可视反馈
-- 不要求完整执行 Viewer 分页
+1. `measureTableData()` 展开 repeat-template 行，解析 header/footer 显隐，并计算运行态行高。
+2. 运行态行布局缓存在 table schema 对象的 WeakMap 上，避免 render 阶段用测量后的 `node.height` 二次缩放。
+3. `tableDataFragmentPaginator.paginateFragment()` 在 `auto-sheets` 中按可用高度切行。
+4. 分页结果生成虚拟 table fragment，保持 `sourceNodeId`，不修改原始 topology。
 
-### Viewer
+当前职责边界：表格知道如何拆自己的行；全局页数、页码上下文、连续纸高度和标签 sheet 仍由 `pagination-engine` 决定。
 
-- 负责真实页面计划
-- 负责固定页、流式页和标签页的最终结果
-- 负责表格分页、重复头和空白页语义
+## 7.6 Designer 与 Viewer 的差异
 
-这意味着设计器看到的是“编辑态几何”，Viewer 看到的是“运行态文档”。
+Designer 编辑的是声明坐标，Viewer 输出的是运行态页面计划。两者共享 schema 和 core 页面模型，但不共用同一个页面计划：
 
-## 7.5 诊断原则
+- Designer 使用 `EditorSurfacePlan` 显示固定多页、连续画布或标签 cell。
+- Viewer 使用 `OutputPagePlan[]` 渲染预览、打印和导出页面。
+- `auto-sheets` 在 Designer 中是一个连续编辑表面加分页参考线，最终页数仍由 Viewer pipeline 计算。
 
-布局引擎的任务不是偷偷修复一切，而是：
+## 7.7 诊断原则
 
-- 先给出稳定结果
-- 再把冲突暴露出来
+布局引擎不静默移动、裁切或丢弃内容。当前核心诊断包括：
 
-典型诊断包括：
-
-- 容器溢出
-- 表格列宽无法分配
-- 页尾区域不足
-- label 模式下超出列数限制
-- 元素被裁切或越界
+| 诊断码 | 来源 |
+| --- | --- |
+| `FLOW_Y_FIXED_OVERLAP` | `flow-y` 回流后新增重叠。 |
+| `FIXED_SHEETS_BREAK_CONSTRAINT_IGNORED` | 固定页中 page break 约束只作为提示。 |
+| `CONTINUOUS_BREAK_CONSTRAINT_IGNORED` | 连续纸不因 page break 切页。 |
+| `AUTO_SHEETS_FRAGMENT_OVERFLOW` | 自动分页中 fragment 高度超过单页且无可用分页器。 |
+| `TABLE_DATA_FRAGMENT_OVERFLOW` | 表格分页器无法在当前剩余高度放下至少一行正文。 |

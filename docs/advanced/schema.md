@@ -63,11 +63,11 @@ interface DocumentMeta {
 
 ## PageSchema
 
-页面配置定义纸张尺寸、分页模式和打印参数。
+页面配置定义纸张尺寸、页面介质、布局策略、分页策略和打印参数。
 
 ```ts
 interface PageSchema {
-  mode: PageMode            // 'fixed' | 'stack' | 'label' | 'continuous'
+  mode: PageMode            // 'fixed' | 'continuous' | 'label'
   width: number             // 页面宽度
   height: number            // 页面高度
   pages?: number            // 页数（fixed 模式）
@@ -90,13 +90,17 @@ interface PageSchema {
 }
 ```
 
-### 分页模式
+### 页面介质与策略
 
-| 模式 | 说明 |
-|------|------|
-| `fixed` | 固定页面，元素绝对定位，支持多页 |
-| `stack` | 堆叠流式，元素按 Y 轴排列，自动分页 |
-| `label` | 标签模式，多列多行网格布局 |
+`page.mode` 只表达页面介质类型，布局、重排和分页分别由 `layout / reflow / pagination` 表达。`normalizeDocumentSchema()` 会按 `mode` 补齐默认策略。
+
+| `mode` | 默认页面模型 | 默认布局 | 默认重排 | 默认分页 |
+|------|------|------|------|------|
+| `fixed` | `paged-paper` | `absolute` | `measure-only` | `fixed-sheets` |
+| `continuous` | `continuous-paper` | `stack-flow` | `flow-y` | `none` |
+| `label` | `label-sheet` | `absolute` | `measure-only` | `label-sheets` |
+
+历史输入中的 `stack` 会在兼容入口迁移为 `continuous + stack-flow + flow-y`，新模板不应再写入 `page.mode = 'stack'`。
 
 ### LabelPageConfig
 

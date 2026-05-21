@@ -7,7 +7,7 @@
 | 模块 | 测试重点 |
 |------|----------|
 | SchemaStore | DocumentSchema CRUD、校验、遍历、序列化 |
-| PagePlanner / LayoutEngine | 页面计划、区域划分、表格分页、overflow 诊断 |
+| Layout / Pagination Engine | 页面模型、回流、分页策略、表格 fragment 分页、overflow 诊断 |
 | BindingResolver | `fieldPath` 根路径解析、`bindIndex`、格式化诊断 |
 | DataSourceRegistry | Designer 字段树注册、usage 解释、命名空间隔离 |
 | CommandManager | 撤销/重做、命令合并、事务 |
@@ -58,6 +58,6 @@
 - `packages/designer/src/interactions/canvas-interaction-controller.test.ts` — 覆盖画布手势仲裁全部决策路径（Cmd 多选、drag-then-click、dblclick 进入 editing-session、pointerdown 不进入、background pointerdown 退出顺序、右键保留、editing-session 路由 owner pointerdown）。对应审计 `.github/audit/202605010152.md` 与 `202605011431.md`。
 - `packages/shared/src/pointer-gesture.test.ts` — 覆盖 pointercancel 与 pointerup 走同一 teardown 路径，capture acquire/release throw 不影响 onEnd 单次触发。对应 `202605011431.md` item 3。
 - `packages/designer/src/editing/transaction-service.test.ts` / `behavior-dispatcher.test.ts` — 校验失败路径推送到 `DiagnosticsChannel` 而不是 silent console.error。
-- `packages/core/src/page-planner.test.ts` / `binding-utils.test.ts` / `font.test.ts` — 协议边界回归。
+- `packages/core/src/page-planner.test.ts` / `pagination-engine.test.ts` / `editor-surface-plan.test.ts` / `binding-utils.test.ts` / `font.test.ts` — 协议边界回归。
 
 新增交互/行为类协议时必须同步加测试；只改实现不加用例的 PR 默认拒绝。

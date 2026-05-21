@@ -98,16 +98,55 @@ interface PageSchema {
   font?: string
   background?: PageBackground
   print?: PagePrintConfig
+  pageModel?: PageModelConfig
+  layout?: DocumentLayoutConfig
+  pagination?: PaginationConfig
+  reflow?: ReflowConfig
   extensions?: Record<string, unknown>
 }
 
-type PageMode = 'fixed' | 'stack' | 'label'
+type PageMode = 'fixed' | 'continuous' | 'label'
 type PageScale = 'auto' | 'fit-width' | 'fit-height' | number
 type BlankPolicy = 'keep' | 'remove' | 'auto'
+
+type PageModelKind = 'paged-paper' | 'continuous-paper' | 'label-sheet'
+type LayoutStrategyKind = 'absolute' | 'stack-flow' | 'region-flow'
+type PaginationStrategyKind = 'none' | 'fixed-sheets' | 'auto-sheets' | 'label-sheets'
+type ReflowStrategyKind = 'none' | 'measure-only' | 'flow-y'
+
+interface PageModelConfig {
+  kind: PageModelKind
+  paper: {
+    width: number
+    height: number
+    minHeight?: number
+    maxHeight?: number
+  }
+}
+
+interface DocumentLayoutConfig {
+  strategy: LayoutStrategyKind
+  flowAxis?: 'y'
+}
+
+interface PaginationConfig {
+  strategy: PaginationStrategyKind
+  pageCount?: number
+  pageGap?: number
+  orphanPolicy?: 'allow' | 'keep-together'
+}
+
+interface ReflowConfig {
+  strategy: ReflowStrategyKind
+  preserveTrailingGap?: boolean
+  collisionPolicy?: 'diagnose' | 'clip' | 'push'
+}
 
 interface LabelPageConfig {
   columns: number
   gap: number
+  rows?: number
+  rowGap?: number
 }
 
 interface GridConfig {
@@ -137,6 +176,8 @@ interface PagePrintConfig {
 - `DocumentSchema.unit` 是文档级字段，因此属性面板里的“单位”是文档上下文展示，不重复落到 `page`
 - `常用纸张` 是根据 `width / height` 推导和反写的编辑器派生控件，不是规范模型字段
 - `pages` 不只是“页数”显示，它还要支撑多编辑区模板和固定分页模板的编辑上下文
+- `page.mode` 只表达页面介质类型；布局、分页、测量重排分别由 `layout / pagination / reflow` 表达
+- 历史 `stack` 不是合法新 schema 状态，只在兼容入口迁移为 `continuous + stack-flow`
 - `连续排版`、`底部留白`、`readonly`、`title`、`preformat` 这类 benchmark 页面项在公开样例里来源并不稳定；语义未被完全归一前，先进入 `page.extensions` 或 `compat.passthrough`，不要草率固定成规范字段
 
 与对标产品字段的对应关系：
