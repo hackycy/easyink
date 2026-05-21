@@ -1,3 +1,5 @@
+import { normalizeClonedCaptureDocument } from './capture-normalization'
+
 const CSS_DPI = 96
 const MIN_CANVAS_SCALE = 2
 const MAX_CANVAS_PIXELS = 32000000
@@ -37,31 +39,11 @@ export function resolveCanvasScale(page: HTMLElement, dpi: number): number {
 }
 
 function normalizeClonedCanvasCaptureDocument(clonedDocument: Document, captureId: string): void {
-  const page = clonedDocument.querySelector<HTMLElement>(`[data-easyink-pdf-capture-id="${captureId}"]`)
+  const page = normalizeClonedCaptureDocument(clonedDocument, captureId)
   if (!page)
     return
 
-  page.style.margin = '0'
-  page.style.boxShadow = 'none'
-  page.style.transform = 'none'
-  page.style.transformOrigin = 'top left'
-  page.style.overflow = 'hidden'
-  page.style.backgroundColor = page.style.backgroundColor || '#ffffff'
-
   normalizeElementCaptureBoxes(page)
-  normalizeCaptureRoot(page)
-}
-
-function normalizeCaptureRoot(page: HTMLElement): void {
-  const mount = page.closest<HTMLElement>('#easyink-viewer-root')
-  if (mount) {
-    mount.style.padding = '0'
-    mount.style.background = '#ffffff'
-  }
-
-  page.ownerDocument.documentElement.style.background = '#ffffff'
-  page.ownerDocument.body.style.margin = '0'
-  page.ownerDocument.body.style.background = '#ffffff'
 }
 
 function normalizeElementCaptureBoxes(page: HTMLElement): void {

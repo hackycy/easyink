@@ -166,6 +166,65 @@ describe('renderPagesToPdfBlob asset preflight', () => {
     expect(element.style.top).toBe('20px')
   })
 
+  it('isolates the cloned capture document to the current page', async () => {
+    const mount = document.createElement('div')
+    const first = document.createElement('div')
+    const second = document.createElement('div')
+    mount.id = 'easyink-viewer-root'
+    first.className = 'ei-viewer-page'
+    second.className = 'ei-viewer-page'
+    first.innerHTML = '<svg><defs><linearGradient id="grad"/></defs><rect fill="url(#grad)"/></svg>'
+    second.innerHTML = '<svg><defs><linearGradient id="grad"/></defs><rect fill="url(#grad)"/></svg>'
+    mount.append(first, second)
+    document.body.appendChild(mount)
+
+    await renderPagesToPdfBlob({
+      pages: [second],
+      widthMm: 80,
+      heightMm: 60,
+    })
+
+    expect(document.body.children).toHaveLength(1)
+    expect(document.body.firstElementChild).toBe(mount)
+    expect(mount.children).toHaveLength(1)
+    expect(mount.firstElementChild).toBe(second)
+    expect(first.isConnected).toBe(false)
+  })
+
+  it('scopes inline svg ids in the cloned capture page', async () => {
+    const page = document.createElement('div')
+    page.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="grad" />
+          <clipPath id="clip"><path id="shape" /></clipPath>
+        </defs>
+        <rect fill="url(#grad)" clip-path="url('#clip')" />
+        <use href="#shape" />
+      </svg>
+    `
+    document.body.appendChild(page)
+
+    await renderPagesToPdfBlob({
+      pages: [page],
+      widthMm: 80,
+      heightMm: 60,
+    })
+
+    const gradient = page.querySelector('[id$="-grad"]')
+    const clip = page.querySelector('[id$="-clip"]')
+    const shape = page.querySelector('[id$="-shape"]')
+    const rect = page.querySelector('rect')!
+    const use = page.querySelector('use')!
+
+    expect(gradient?.id).toBe('easyink-pdf-capture-0-svg-0-grad')
+    expect(clip?.id).toBe('easyink-pdf-capture-0-svg-0-clip')
+    expect(shape?.id).toBe('easyink-pdf-capture-0-svg-0-shape')
+    expect(rect.getAttribute('fill')).toBe('url(#easyink-pdf-capture-0-svg-0-grad)')
+    expect(rect.getAttribute('clip-path')).toBe('url(#easyink-pdf-capture-0-svg-0-clip)')
+    expect(use.getAttribute('href')).toBe('#easyink-pdf-capture-0-svg-0-shape')
+  })
+
   it('does not downgrade to canvas unless fallback is explicitly enabled', async () => {
     const page = document.createElement('div')
     const element = document.createElement('div')

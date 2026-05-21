@@ -1,4 +1,5 @@
 import { resolveCanvasScale } from './canvas-capture'
+import { normalizeClonedCaptureDocument } from './capture-normalization'
 
 const BLANK_CANVAS_PROBE_SIZE = 160
 
@@ -45,26 +46,7 @@ export function isLikelyBlankForeignObjectCanvas(canvas: HTMLCanvasElement, sour
 }
 
 function normalizeClonedForeignObjectCaptureDocument(clonedDocument: Document, captureId: string): void {
-  const page = clonedDocument.querySelector<HTMLElement>(`[data-easyink-pdf-capture-id="${captureId}"]`)
-  if (!page)
-    return
-
-  page.style.margin = '0'
-  page.style.boxShadow = 'none'
-  page.style.transform = 'none'
-  page.style.transformOrigin = 'top left'
-  page.style.overflow = 'hidden'
-  page.style.backgroundColor = page.style.backgroundColor || '#ffffff'
-
-  const mount = page.closest<HTMLElement>('#easyink-viewer-root')
-  if (mount) {
-    mount.style.padding = '0'
-    mount.style.background = '#ffffff'
-  }
-
-  clonedDocument.documentElement.style.background = '#ffffff'
-  clonedDocument.body.style.margin = '0'
-  clonedDocument.body.style.background = '#ffffff'
+  normalizeClonedCaptureDocument(clonedDocument, captureId)
 }
 
 function hasRenderableContent(page: HTMLElement): boolean {
