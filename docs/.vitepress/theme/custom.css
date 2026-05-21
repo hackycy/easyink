@@ -1003,3 +1003,193 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Hero Background (orbs + particle canvas) ── */
+.VPHero {
+  overflow: hidden;
+}
+
+.ei-hero-bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.ei-orb {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.ei-orb--1 {
+  width: 520px;
+  height: 520px;
+  background: rgba(91, 138, 245, 0.2);
+  filter: blur(88px);
+  top: -140px;
+  left: -80px;
+  animation: ei-orb-drift-1 20s ease-in-out infinite;
+}
+
+.ei-orb--2 {
+  width: 380px;
+  height: 380px;
+  background: rgba(20, 184, 166, 0.15);
+  filter: blur(72px);
+  top: 60px;
+  right: -60px;
+  animation: ei-orb-drift-2 15s ease-in-out infinite;
+  animation-delay: -5s;
+}
+
+.ei-orb--3 {
+  width: 300px;
+  height: 300px;
+  background: rgba(245, 158, 11, 0.11);
+  filter: blur(60px);
+  bottom: -60px;
+  left: 36%;
+  animation: ei-orb-drift-3 24s ease-in-out infinite;
+  animation-delay: -10s;
+}
+
+.dark .ei-orb--1 { background: rgba(91, 138, 245, 0.14); }
+.dark .ei-orb--2 { background: rgba(20, 184, 166, 0.10); }
+.dark .ei-orb--3 { background: rgba(245, 158, 11, 0.08); }
+
+.ei-particle-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* ── Animated hero grid ── */
+.VPHome::before {
+  animation: ei-grid-pan 36s linear infinite;
+}
+
+/* ── Hero name shimmer ── */
+.VPHero .name .clip {
+  background-image: linear-gradient(
+    110deg,
+    #2f6fed 0%,
+    #14b8a6 26%,
+    #f59e0b 52%,
+    #e03870 74%,
+    #2f6fed 100%
+  ) !important;
+  background-size: 280% auto !important;
+  animation: ei-text-shine 9s linear infinite;
+}
+
+/* ── Feature card stagger entrance ── */
+.VPHomeFeatures .item {
+  animation: ei-card-in 0.52s var(--ei-motion-smooth) backwards;
+}
+
+.VPHomeFeatures .item:nth-child(1) { animation-delay: 0.26s; }
+.VPHomeFeatures .item:nth-child(2) { animation-delay: 0.34s; }
+.VPHomeFeatures .item:nth-child(3) { animation-delay: 0.42s; }
+.VPHomeFeatures .item:nth-child(4) { animation-delay: 0.50s; }
+.VPHomeFeatures .item:nth-child(5) { animation-delay: 0.58s; }
+.VPHomeFeatures .item:nth-child(6) { animation-delay: 0.66s; }
+.VPHomeFeatures .item:nth-child(7) { animation-delay: 0.74s; }
+.VPHomeFeatures .item:nth-child(8) { animation-delay: 0.82s; }
+
+/* ── Showcase grid plane scroll ── */
+.ei-grid-plane {
+  animation: ei-grid-scroll 10s linear infinite;
+}
+
+/* ── Scroll reveal ── */
+.ei-reveal {
+  opacity: 0;
+  transform: translateY(26px);
+  transition:
+    opacity 0.7s var(--ei-motion-smooth),
+    transform 0.7s var(--ei-motion-smooth);
+}
+
+.ei-reveal.ei-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Stagger inner elements when their section becomes visible */
+.ei-section.ei-visible .ei-eco-card {
+  animation: ei-card-in 0.55s var(--ei-motion-smooth) backwards;
+}
+
+.ei-section.ei-visible .ei-eco-card:nth-child(2) { animation-delay: 0.055s; }
+.ei-section.ei-visible .ei-eco-card:nth-child(3) { animation-delay: 0.11s; }
+.ei-section.ei-visible .ei-eco-card:nth-child(4) { animation-delay: 0.165s; }
+.ei-section.ei-visible .ei-eco-card:nth-child(5) { animation-delay: 0.22s; }
+.ei-section.ei-visible .ei-eco-card:nth-child(6) { animation-delay: 0.275s; }
+.ei-section.ei-visible .ei-eco-card:nth-child(7) { animation-delay: 0.33s; }
+.ei-section.ei-visible .ei-eco-card:nth-child(8) { animation-delay: 0.385s; }
+
+.ei-section.ei-visible .ei-arch-layer--l0 { animation: ei-card-in 0.5s var(--ei-motion-smooth) backwards; }
+.ei-section.ei-visible .ei-arch-layer--l1 { animation: ei-card-in 0.5s var(--ei-motion-smooth) 0.1s backwards; }
+.ei-section.ei-visible .ei-arch-layer--l2 { animation: ei-card-in 0.5s var(--ei-motion-smooth) 0.2s backwards; }
+.ei-section.ei-visible .ei-arch-layer--l3 { animation: ei-card-in 0.5s var(--ei-motion-smooth) 0.3s backwards; }
+
+.ei-section.ei-visible .ei-tech-item {
+  animation: ei-card-in 0.45s var(--ei-motion-smooth) backwards;
+}
+
+.ei-section.ei-visible .ei-tech-item:nth-child(2)  { animation-delay: 0.04s; }
+.ei-section.ei-visible .ei-tech-item:nth-child(3)  { animation-delay: 0.08s; }
+.ei-section.ei-visible .ei-tech-item:nth-child(4)  { animation-delay: 0.12s; }
+.ei-section.ei-visible .ei-tech-item:nth-child(5)  { animation-delay: 0.16s; }
+.ei-section.ei-visible .ei-tech-item:nth-child(6)  { animation-delay: 0.20s; }
+.ei-section.ei-visible .ei-tech-item:nth-child(7)  { animation-delay: 0.24s; }
+.ei-section.ei-visible .ei-tech-item:nth-child(8)  { animation-delay: 0.28s; }
+
+/* ── New keyframes ── */
+@keyframes ei-orb-drift-1 {
+  0%, 100% { transform: translate(0, 0); }
+  33%       { transform: translate(50px, 70px); }
+  66%       { transform: translate(-40px, 28px); }
+}
+
+@keyframes ei-orb-drift-2 {
+  0%, 100% { transform: translate(0, 0); }
+  40%       { transform: translate(-58px, -42px); }
+  72%       { transform: translate(30px, 52px); }
+}
+
+@keyframes ei-orb-drift-3 {
+  0%, 100% { transform: translate(0, 0); }
+  30%       { transform: translate(68px, -48px); }
+  65%       { transform: translate(-28px, 32px); }
+}
+
+@keyframes ei-text-shine {
+  to { background-position: -280% center; }
+}
+
+@keyframes ei-grid-pan {
+  from { background-position: 0 0; }
+  to   { background-position: 72px 72px; }
+}
+
+@keyframes ei-grid-scroll {
+  from { background-position: 0 0; }
+  to   { background-position: 0 28px; }
+}
+
+@keyframes ei-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
