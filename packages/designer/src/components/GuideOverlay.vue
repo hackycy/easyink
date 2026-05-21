@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import type { EditorSurfacePlan } from '@easyink/core'
-import {
-  findPageForDocumentY,
-  getEditorSurfacePageLeft,
-  projectDocumentPointToEditorSurface,
-  UpdateGuidesCommand,
-} from '@easyink/core'
+import type { RulerCoordinateContext } from './ruler-coordinate'
+import { UpdateGuidesCommand } from '@easyink/core'
 import { computed, ref } from 'vue'
 import { useDesignerStore } from '../composables'
-import { createGeometryService } from '../editing/geometry-service'
+import {
+  getCanvasRulerOrigin,
+  rulerClientPointToUnit,
+  rulerUnitToSurfaceUnit,
+} from './ruler-coordinate'
 
 const props = defineProps<{
   surfacePlan: EditorSurfacePlan
@@ -17,74 +17,65 @@ const props = defineProps<{
 
 const store = useDesignerStore()
 const overlayRef = ref<HTMLElement | null>(null)
-const geometry = createGeometryService(store, {
-  getPageEl: () => overlayRef.value?.closest('.ei-canvas-page') as HTMLElement | null,
-})
 
 const guidesX = computed(() => store.schema.guides.x)
 const guidesY = computed(() => store.schema.guides.y)
 const unit = computed(() => store.schema.unit)
+const rulerOrigin = computed(() => getCanvasRulerOrigin(props.surfacePlan))
 
 const verticalGuideViews = computed(() => {
   const views: Array<{ key: string, index: number, style: Record<string, string> }> = []
   for (let index = 0; index < guidesX.value.length; index++) {
     const pos = guidesX.value[index]!
-    for (const page of props.surfacePlan.pages) {
-      views.push({
-        key: `x-${pos}-${page.index}`,
-        index,
-        style: {
-          left: `${getEditorSurfacePageLeft(props.surfacePlan, page) + pos}${unit.value}`,
-          top: `${page.visualTop}${unit.value}`,
-          height: `${page.height}${unit.value}`,
-        },
-      })
-    }
+    views.push({
+      key: `x-${index}`,
+      index,
+      style: {
+        left: `${rulerUnitToSurfaceUnit(rulerOrigin.value, 'horizontal', pos)}${unit.value}`,
+        top: `0${unit.value}`,
+        height: `${props.surfacePlan.contentBounds.height}${unit.value}`,
+      },
+    })
   }
   return views
 })
 
 const horizontalGuideViews = computed(() => guidesY.value.map((pos, index) => {
-  const page = findPageForDocumentY(props.surfacePlan, pos)
-  const projected = projectDocumentPointToEditorSurface(props.surfacePlan, { x: 0, y: pos })
   return {
     key: `y-${index}`,
     index,
     style: {
-      left: `${getEditorSurfacePageLeft(props.surfacePlan, page)}${unit.value}`,
-      top: `${projected.y}${unit.value}`,
-      width: `${page.width}${unit.value}`,
+      left: `0${unit.value}`,
+      top: `${rulerUnitToSurfaceUnit(rulerOrigin.value, 'vertical', pos)}${unit.value}`,
+      width: `${props.surfacePlan.contentBounds.width}${unit.value}`,
     },
   }
 }))
 
-const previewGuideStyle = computed(() => {
+const previewGuideViews = computed(() => {
   const guide = props.previewGuide
   if (!guide)
-    return null
+    return []
   if (guide.axis === 'x') {
-    const page = props.surfacePlan.pages[0]
-    if (!page)
-      return null
-    return {
+    return [{
+      key: 'preview-x',
       className: 'ei-guide--vertical',
       style: {
-        left: `${getEditorSurfacePageLeft(props.surfacePlan, page) + guide.position}${unit.value}`,
-        top: `${page.visualTop}${unit.value}`,
+        left: `${rulerUnitToSurfaceUnit(rulerOrigin.value, 'horizontal', guide.position)}${unit.value}`,
+        top: `0${unit.value}`,
         height: `${props.surfacePlan.contentBounds.height}${unit.value}`,
       },
-    }
+    }]
   }
-  const page = findPageForDocumentY(props.surfacePlan, guide.position)
-  const projected = projectDocumentPointToEditorSurface(props.surfacePlan, { x: 0, y: guide.position })
-  return {
+  return [{
+    key: 'preview-y',
     className: 'ei-guide--horizontal',
     style: {
-      left: `${getEditorSurfacePageLeft(props.surfacePlan, page)}${unit.value}`,
-      top: `${projected.y}${unit.value}`,
-      width: `${page.width}${unit.value}`,
+      left: `0${unit.value}`,
+      top: `${rulerUnitToSurfaceUnit(rulerOrigin.value, 'vertical', guide.position)}${unit.value}`,
+      width: `${props.surfacePlan.contentBounds.width}${unit.value}`,
     },
-  }
+  }]
 })
 
 const draggingGuide = ref<{
@@ -149,40 +140,24 @@ function startDrag(axis: 'x' | 'y', index: number, e: PointerEvent, isNew: boole
     }
   }
 
-  // Use overlay's own DOM to find the page element reliably.
-  // The event target may come from the ruler (outside .ei-canvas-page).
-  const pageEl = overlayRef.value?.closest('.ei-canvas-page') as HTMLElement | null
-  if (!pageEl)
+  const coordinateContext = getRulerCoordinateContext()
+  if (!coordinateContext) {
+    store.schema.guides.x = [...origGuides.x]
+    store.schema.guides.y = [...origGuides.y]
+    draggingGuide.value = null
     return
+  }
+  const activeCoordinateContext = coordinateContext
+
+  updateGuidePosition(e)
 
   function onMove(ev: PointerEvent) {
-    const point = geometry.screenToDocument({ x: ev.clientX, y: ev.clientY })
-    const pos = axis === 'x' ? point.x : point.y
-
-    const guides = axis === 'x' ? store.schema.guides.x : store.schema.guides.y
-    guides[index] = Math.round(pos * 100) / 100
+    updateGuidePosition(ev)
   }
 
   function onUp() {
     el.removeEventListener('pointermove', onMove)
     el.removeEventListener('pointerup', onUp)
-
-    const guides = axis === 'x' ? store.schema.guides.x : store.schema.guides.y
-    const finalPos = guides[index]!
-
-    // If dragged back to ruler area (negative), remove the guide
-    if (finalPos < 0) {
-      guides.splice(index, 1)
-      draggingGuide.value = null
-      const cmd = new UpdateGuidesCommand(
-        store.schema,
-        { x: [...store.schema.guides.x], y: [...store.schema.guides.y] },
-      )
-      store.schema.guides.x = [...origGuides.x]
-      store.schema.guides.y = [...origGuides.y]
-      store.commands.execute(cmd)
-      return
-    }
 
     draggingGuide.value = null
 
@@ -196,6 +171,27 @@ function startDrag(axis: 'x' | 'y', index: number, e: PointerEvent, isNew: boole
 
   el.addEventListener('pointermove', onMove)
   el.addEventListener('pointerup', onUp)
+
+  function updateGuidePosition(ev: PointerEvent) {
+    const position = rulerClientPointToUnit(activeCoordinateContext, axis === 'x' ? 'horizontal' : 'vertical', ev.clientX, ev.clientY)
+    const guides = axis === 'x' ? store.schema.guides.x : store.schema.guides.y
+    guides[index] = position
+  }
+}
+
+function getRulerCoordinateContext(): RulerCoordinateContext | null {
+  const surfaceRect = (overlayRef.value?.closest('.ei-canvas-page') as HTMLElement | null)?.getBoundingClientRect()
+  if (!surfaceRect)
+    return null
+  return {
+    unit: unit.value,
+    zoom: store.workbench.viewport.zoom,
+    surfaceRect: {
+      left: surfaceRect.left,
+      top: surfaceRect.top,
+    },
+    origin: rulerOrigin.value,
+  }
 }
 
 defineExpose({ onGuideDragStart, createGuideAt })
@@ -221,10 +217,11 @@ defineExpose({ onGuideDragStart, createGuideAt })
     />
     <!-- Preview guide line (hover on ruler) -->
     <div
-      v-if="previewGuideStyle"
+      v-for="guide in previewGuideViews"
+      :key="guide.key"
       class="ei-guide ei-guide--preview"
-      :class="previewGuideStyle.className"
-      :style="previewGuideStyle.style"
+      :class="guide.className"
+      :style="guide.style"
     />
   </div>
 </template>
@@ -233,6 +230,7 @@ defineExpose({ onGuideDragStart, createGuideAt })
 .ei-guide-overlay {
   position: absolute;
   inset: 0;
+  overflow: visible;
   pointer-events: none;
   z-index: 50;
 }

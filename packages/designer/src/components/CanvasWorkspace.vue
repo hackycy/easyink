@@ -510,7 +510,15 @@ onUnmounted(() => {
 <template>
   <div ref="containerRef" class="ei-canvas-workspace" tabindex="-1" @contextmenu="handleContextMenu" @mousemove="handleMouseMove" @mouseleave="handleMouseLeave" @keydown="handleKeyDown">
     <!-- Rulers -->
-    <CanvasRuler ref="rulerRef" :cursor-pos="cursorPos" @guide-drag-start="handleGuideDragStart" @guide-create="handleGuideCreate" @ruler-hover="handleRulerHover" />
+    <CanvasRuler
+      ref="rulerRef"
+      :surface-plan="editorSurfacePlan"
+      :surface-el="pageRef"
+      :cursor-pos="cursorPos"
+      @guide-drag-start="handleGuideDragStart"
+      @guide-create="handleGuideCreate"
+      @ruler-hover="handleRulerHover"
+    />
 
     <div
       ref="scrollRef"

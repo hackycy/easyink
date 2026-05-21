@@ -1,9 +1,18 @@
 <script setup lang="ts">
-import { UnitManager } from '@easyink/core'
+import type { EditorSurfacePlan } from '@easyink/core'
+import type { RulerCoordinateContext, RulerDirection } from './ruler-coordinate'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useDesignerStore } from '../composables'
+import {
+  getCanvasRulerOrigin,
+  getRulerPxPerUnit,
+  getRulerScale,
+  rulerClientPointToUnit,
+} from './ruler-coordinate'
 
 const props = defineProps<{
+  surfacePlan: EditorSurfacePlan
+  surfaceEl?: HTMLElement | null
   cursorPos?: { x: number, y: number } | null
 }>()
 
@@ -33,8 +42,6 @@ const zoom = computed(() => store.workbench.viewport.zoom)
 const scrollLeft = computed(() => store.workbench.viewport.scrollLeft)
 const scrollTop = computed(() => store.workbench.viewport.scrollTop)
 const unit = computed(() => store.schema.unit)
-const pageWidth = computed(() => store.schema.page.width)
-const pageHeight = computed(() => store.schema.page.height)
 
 function getTickStep(unitPerPx: number): number {
   const raw = TICK_MIN_PX * unitPerPx
@@ -46,15 +53,22 @@ function getTickStep(unitPerPx: number): number {
   return Math.ceil(raw / 100) * 100
 }
 
-function getOriginPx(direction: 'horizontal' | 'vertical'): number {
-  const isH = direction === 'horizontal'
-  // .ei-canvas-scroll has padding: 40px 40px 40px 60px (top right bottom left)
-  const padding = isH ? 60 : 40
-  const scroll = isH ? scrollLeft.value : scrollTop.value
-  return padding - scroll
+function getRulerCoordinateContext(): RulerCoordinateContext | null {
+  const surfaceRect = props.surfaceEl?.getBoundingClientRect()
+  if (!surfaceRect)
+    return null
+  return {
+    unit: unit.value,
+    zoom: zoom.value,
+    surfaceRect: {
+      left: surfaceRect.left,
+      top: surfaceRect.top,
+    },
+    origin: getCanvasRulerOrigin(props.surfacePlan),
+  }
 }
 
-function drawRuler(canvas: HTMLCanvasElement, direction: 'horizontal' | 'vertical') {
+function drawRuler(canvas: HTMLCanvasElement, direction: RulerDirection) {
   const ctx = canvas.getContext('2d')
   if (!ctx)
     return
@@ -77,19 +91,16 @@ function drawRuler(canvas: HTMLCanvasElement, direction: 'horizontal' | 'vertica
   ctx.fillStyle = BG_COLOR
   ctx.fillRect(0, 0, isH ? length : thickness, isH ? thickness : length)
 
-  const unitManager = new UnitManager(unit.value)
-  const pxPerUnit = unitManager.toPixels(1, 96, zoom.value)
+  const coordinateContext = getRulerCoordinateContext()
+  const pxPerUnit = getRulerPxPerUnit(unit.value, zoom.value)
   if (pxPerUnit <= 0)
     return
 
   const unitPerPx = 1 / pxPerUnit
   const step = getTickStep(unitPerPx)
-  const originPx = getOriginPx(direction)
-
-  // Calculate visible range in document units
-  const startUnit = Math.max(0, -originPx * unitPerPx)
-  const endUnit = (length - originPx) * unitPerPx
-  const firstTick = Math.floor(startUnit / step) * step
+  const scale = coordinateContext
+    ? getRulerScale(coordinateContext, { left: rect.left, top: rect.top }, direction, length)
+    : null
 
   ctx.fillStyle = TEXT_COLOR
   ctx.strokeStyle = TICK_COLOR
@@ -97,53 +108,56 @@ function drawRuler(canvas: HTMLCanvasElement, direction: 'horizontal' | 'vertica
   ctx.font = '9px sans-serif'
   ctx.textBaseline = isH ? 'top' : 'middle'
 
-  for (let v = firstTick; v <= endUnit + step; v += step) {
-    const px = Math.round(originPx + v * pxPerUnit)
-    if (px < 0)
-      continue
-    if (px > length)
-      break
+  if (scale) {
+    const firstTick = Math.floor(scale.startUnit / step) * step
+    for (let v = firstTick; v <= scale.endUnit + step; v += step) {
+      const px = Math.round(scale.originPx + v * pxPerUnit)
+      if (px < 0)
+        continue
+      if (px > length)
+        break
 
-    if (isH) {
-      ctx.beginPath()
-      ctx.moveTo(px, thickness)
-      ctx.lineTo(px, thickness * 0.35)
-      ctx.stroke()
-      ctx.fillText(String(Math.round(v * 100) / 100), px + 2, 2)
-    }
-    else {
-      ctx.beginPath()
-      ctx.moveTo(thickness, px)
-      ctx.lineTo(thickness * 0.35, px)
-      ctx.stroke()
-      ctx.save()
-      ctx.translate(9, px + 3)
-      ctx.rotate(-Math.PI / 2)
-      ctx.fillText(String(Math.round(v * 100) / 100), 0, 0)
-      ctx.restore()
-    }
+      if (isH) {
+        ctx.beginPath()
+        ctx.moveTo(px, thickness)
+        ctx.lineTo(px, thickness * 0.35)
+        ctx.stroke()
+        ctx.fillText(String(Math.round(v * 100) / 100), px + 2, 2)
+      }
+      else {
+        ctx.beginPath()
+        ctx.moveTo(thickness, px)
+        ctx.lineTo(thickness * 0.35, px)
+        ctx.stroke()
+        ctx.save()
+        ctx.translate(9, px + 3)
+        ctx.rotate(-Math.PI / 2)
+        ctx.fillText(String(Math.round(v * 100) / 100), 0, 0)
+        ctx.restore()
+      }
 
-    // Sub-ticks (5 divisions)
-    const subStep = step / 5
-    const subPxStep = subStep * pxPerUnit
-    if (subPxStep >= 4) {
-      for (let s = 1; s < 5; s++) {
-        const subPx = Math.round(originPx + (v + s * subStep) * pxPerUnit)
-        if (subPx < 0)
-          continue
-        if (subPx > length)
-          break
-        if (isH) {
-          ctx.beginPath()
-          ctx.moveTo(subPx, thickness)
-          ctx.lineTo(subPx, thickness * 0.65)
-          ctx.stroke()
-        }
-        else {
-          ctx.beginPath()
-          ctx.moveTo(thickness, subPx)
-          ctx.lineTo(thickness * 0.65, subPx)
-          ctx.stroke()
+      // Sub-ticks (5 divisions)
+      const subStep = step / 5
+      const subPxStep = subStep * pxPerUnit
+      if (subPxStep >= 4) {
+        for (let s = 1; s < 5; s++) {
+          const subPx = Math.round(scale.originPx + (v + s * subStep) * pxPerUnit)
+          if (subPx < 0)
+            continue
+          if (subPx > length)
+            break
+          if (isH) {
+            ctx.beginPath()
+            ctx.moveTo(subPx, thickness)
+            ctx.lineTo(subPx, thickness * 0.65)
+            ctx.stroke()
+          }
+          else {
+            ctx.beginPath()
+            ctx.moveTo(thickness, subPx)
+            ctx.lineTo(thickness * 0.65, subPx)
+            ctx.stroke()
+          }
         }
       }
     }
@@ -197,7 +211,7 @@ function redraw() {
     drawRuler(verticalRef.value, 'vertical')
 }
 
-watch([zoom, unit, pageWidth, pageHeight, scrollLeft, scrollTop, () => props.cursorPos], redraw)
+watch([zoom, unit, scrollLeft, scrollTop, () => props.cursorPos, () => props.surfacePlan, () => props.surfaceEl], redraw)
 
 let resizeObserver: ResizeObserver | null = null
 
@@ -219,19 +233,11 @@ defineExpose({ redraw })
 /**
  * Compute the document-unit position at a screen coordinate on a ruler.
  */
-function rulerPxToDocUnit(rulerDir: 'horizontal' | 'vertical', clientX: number, clientY: number): number | null {
-  const isH = rulerDir === 'horizontal'
-  const canvas = isH ? horizontalRef.value : verticalRef.value
-  if (!canvas)
+function rulerPxToDocUnit(rulerDir: RulerDirection, clientX: number, clientY: number): number | null {
+  const coordinateContext = getRulerCoordinateContext()
+  if (!coordinateContext)
     return null
-  const unitManager = new UnitManager(unit.value)
-  const pxPerUnit = unitManager.toPixels(1, 96, zoom.value)
-  if (pxPerUnit <= 0)
-    return null
-  const originPx = getOriginPx(rulerDir)
-  const rect = canvas.getBoundingClientRect()
-  const localPx = isH ? (clientX - rect.left) : (clientY - rect.top)
-  return Math.round(((localPx - originPx) / pxPerUnit) * 100) / 100
+  return rulerClientPointToUnit(coordinateContext, rulerDir, clientX, clientY)
 }
 
 /**
@@ -261,7 +267,7 @@ function handleRulerPointerDown(rulerDir: 'horizontal' | 'vertical', e: PointerE
       cleanup()
       // Drag: horizontal ruler drags to create horizontal guide ('y'),
       // vertical ruler drags to create vertical guide ('x')
-      emit('guideDragStart', isH ? 'y' : 'x', e)
+      emit('guideDragStart', isH ? 'y' : 'x', ev)
     }
   }
 
@@ -272,7 +278,7 @@ function handleRulerPointerDown(rulerDir: 'horizontal' | 'vertical', e: PointerE
     // Click: horizontal ruler creates vertical guide ('x'),
     // vertical ruler creates horizontal guide ('y')
     const position = rulerPxToDocUnit(rulerDir, ev.clientX, ev.clientY)
-    if (position != null && position >= 0) {
+    if (position != null) {
       emit('guideCreate', isH ? 'x' : 'y', position)
     }
   }
