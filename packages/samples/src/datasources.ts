@@ -267,6 +267,7 @@ function createInvoiceElements(): DocumentSchema['elements'] {
         fontWeight: 'bold',
         color: '#333333',
         verticalAlign: 'middle',
+        textAlign: 'left',
       },
       binding: {
         sourceId: 'invoice',
@@ -287,6 +288,7 @@ function createInvoiceElements(): DocumentSchema['elements'] {
         fontSize: 3.18,
         color: '#666666',
         verticalAlign: 'middle',
+        textAlign: 'left',
       },
       binding: {
         sourceId: 'invoice',
@@ -379,6 +381,7 @@ function createInvoiceElements(): DocumentSchema['elements'] {
         fontSize: 3.53,
         color: '#333333',
         verticalAlign: 'middle',
+        textAlign: 'left',
       },
       binding: {
         sourceId: 'invoice',
@@ -423,6 +426,7 @@ function createInvoiceElements(): DocumentSchema['elements'] {
         fontSize: 3.18,
         color: '#999999',
         verticalAlign: 'middle',
+        textAlign: 'left',
       },
       binding: {
         sourceId: 'invoice',
