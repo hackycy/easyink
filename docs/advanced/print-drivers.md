@@ -22,10 +22,13 @@
 `PrintDriver` 的接口很小，但责任并不小：
 
 ```ts
-import type { PrintDriver } from '@easyink/viewer'
+import type { PrintDriver, ViewerPrintContext } from '@easyink/viewer'
 
 interface PrintDriver {
   id: string
+  defaults?: {
+    pageSizeMode?: 'driver' | 'fixed'
+  }
   print: (context: ViewerPrintContext) => Promise<void>
 }
 ```
@@ -48,6 +51,8 @@ interface ViewerPrintContext extends ViewerExportContext {
 ```
 
 这意味着驱动不需要重新排版。它应该消费 Viewer 已经确定下来的结果，而不是在驱动层二次计算布局。
+
+注意不要把这里的 `ViewerPrintContext` 和 `@easyink/print-core` 的 `PrintDriverRequestContext` 混用。后者是官方高阶打印包在调用 `resolveRequestOptions()` 时传出的二次封装，字段包括 `printContext`、`pages`、`pageSizes`、`widthMm`、`heightMm`、`printerName`、`copies`、`forcePageSize` 和 `landscape`。
 
 ## 设计驱动前先做一个判断
 
@@ -114,28 +119,21 @@ function createLocalPrintDriver(): PrintDriver {
 
 ```ts
 import { renderPagesToPdfBlob } from '@easyink/export-plugin-dom-pdf'
+import { resolveViewerPdfPages } from '@easyink/print-core'
 import type { PrintDriver } from '@easyink/viewer'
 
 function createRemotePrintDriver(): PrintDriver {
   return {
     id: 'remote-printer',
     async print(context) {
-      const pages = Array.from(
-        context.container?.querySelectorAll('.ei-viewer-page') ?? []
-      )
-
-      if (pages.length === 0)
-        throw new Error('没有可打印的页面')
-
-      const firstPage = context.renderedPages[0]
-      const widthMm = context.printPolicy.sheetSize?.width ?? firstPage?.width ?? 210
-      const heightMm = context.printPolicy.sheetSize?.height ?? firstPage?.height ?? 297
+      const pdfPages = resolveViewerPdfPages(context)
+      const pages = pdfPages.map(page => page.element)
+      const pageSizes = pdfPages.map(({ widthMm, heightMm }) => ({ widthMm, heightMm }))
 
       context.onPhase?.({ phase: 'preparing', message: '生成 PDF' })
       const pdfBlob = await renderPagesToPdfBlob({
         pages,
-        widthMm,
-        heightMm,
+        pageSizes,
         // 默认使用 foreignObjectRendering 以保持浏览器预览一致性。
         // 只有用户确认接受 canvas 兼容降级时，才设置 enableCanvasFallback: true。
         onProgress: context.onProgress,
@@ -225,18 +223,10 @@ function createWsPrintDriver(wsUrl: string): PrintDriver {
 打印系统之间最容易出错的不是连接，而是单位。`px`、`pt`、`mm`、`inch` 混用时，最终打印出来就是尺寸不对。
 
 ```ts
-const UNIT_TO_MM: Record<string, number> = {
-  mm: 1,
-  cm: 10,
-  in: 25.4,
-  inch: 25.4,
-  pt: 0.352778,
-  px: 25.4 / 96,
-}
+import { resolveViewerPrintSize, toMillimeters } from '@easyink/print-core'
 
-function toMillimeters(value: number, unit: string): number {
-  return value * (UNIT_TO_MM[unit] ?? 1)
-}
+const { widthMm, heightMm } = resolveViewerPrintSize(context)
+const customGapMm = toMillimeters(context.schema.page.pagination?.pageGap ?? 0, context.schema.unit)
 ```
 
 建议在驱动入口就把所有尺寸统一转换成毫米，后面的协议层只处理一种单位。这样最不容易出错。

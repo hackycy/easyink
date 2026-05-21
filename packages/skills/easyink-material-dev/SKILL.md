@@ -1,74 +1,85 @@
 ---
 name: easyink-material-dev
-description: EasyInk material development workflow and review guide. Use when implementing, extending, debugging, or reviewing EasyInk built-in or custom materials that add or change a visual element saved in Schema, especially MaterialNode shape, createDefaultNode defaults, registerMaterialBundle wiring, Designer and Viewer parity, table-data or svg-star style deep editing, datasource binding, runtime measurement, AI material descriptors, and i18n behavior.
+description: EasyInk material development workflow and review guide. Use when implementing, extending, debugging, or reviewing EasyInk built-in or custom materials that add or change a Schema-saved visual element across MaterialNode shape, createDefaultNode defaults, registerMaterialBundle wiring, Designer and Viewer parity, orthogonal page layout behavior, page-aware overlays, fragment pagination, runtime measurement, table-data or svg-star style deep editing, datasource binding, AI material descriptors, tests, and i18n.
 ---
 
 # EasyInk Material Dev
 
-Use this skill to work on EasyInk materials as complete system features, not isolated render functions. A material must line up across Schema, Designer registration and editing, Viewer rendering and measurement, catalog exposure, data binding, AI descriptors, tests, and i18n.
+Use this skill to work on EasyInk materials as complete system features, not isolated render functions. A material must line up across Schema, Designer registration and editing, Viewer rendering and measurement, page layout behavior, catalog exposure, data binding, AI descriptors, tests, and i18n.
 
-If the request is to add a button, panel, command, diagnostic subscription, or host workflow without adding a new Schema-saved visual element, use `$easyink-contribution-dev` instead.
+If the request adds a panel, command, diagnostic subscription, host workflow, or toolbar action around existing elements without adding/changing a Schema-saved visual element, use `$easyink-contribution-dev` instead.
 
 ## First Read
 
 Start with the local repo, not memory. Prefer these files:
 
+- `CLAUDE.md` for project coding rules: no `structuredClone`, no Unicode emoji, workspace deps, and `pnpm build`, `pnpm lint`, `pnpm typecheck` in order for broad validation.
+- `.github/architecture/24-page-layout-orthogonal-system.md` for the current page model, layout, reflow, pagination, page overlay, and editor surface rules.
 - `docs/advanced/custom-materials.md` for the public custom material contract.
-- `docs/advanced/schema.md` for `DocumentSchemaInput` normalization, page modes, and persistent schema fields.
-- `docs/advanced/exporters.md` and `docs/advanced/print-drivers.md` when material output must be validated through export or print paths.
-- `packages/schema/src/types.ts` for `MaterialNode`, `BindingRef`, and table schema shape.
+- `docs/advanced/schema.md` for `DocumentSchemaInput` normalization, page layers, and persistent schema fields.
+- `docs/advanced/exporters.md` and `docs/advanced/print-drivers.md` when output must be validated through export or print paths.
+- `packages/schema/src/types.ts`, `packages/schema/src/defaults.ts`, and `packages/schema/src/compat.ts` for `MaterialNode`, binding, page layer defaults, and legacy `stack` migration.
 - `packages/core/src/material-extension.ts` and `packages/core/src/material-viewer.ts` for Designer and Viewer extension contracts.
-- `packages/designer/src/materials/registry.ts` for `registerMaterialBundle`.
+- `packages/core/src/layout-strategy.ts`, `packages/core/src/reflow-engine.ts`, `packages/core/src/pagination-engine.ts`, and `packages/core/src/editor-surface-plan.ts` for runtime layout and edit-surface behavior.
+- `packages/designer/src/materials/registry.ts`, `packages/prop-schemas/src/index.ts`, and `packages/designer/src/components/PropertiesPanel.vue` for registration and page behavior property schemas.
+- `packages/viewer/src/runtime.ts`, `packages/viewer/src/render-surface.ts`, and `packages/viewer/src/material-registry.ts` for binding projection, measurement, pagination, repeated overlays, and renderer dispatch.
 - `packages/builtin/src/designer.ts`, `packages/builtin/src/viewer.ts`, and `packages/builtin/src/ai.ts` for built-in registration.
-- `packages/materials/text`, `packages/materials/rect`, or `packages/materials/image` for simple material patterns.
+- `packages/materials/text`, `packages/materials/rect`, and `packages/materials/image` for simple fixed-size patterns.
+- `packages/materials/page-number` for page-aware repeated overlays.
+- `packages/materials/flow-row` for runtime-height flow/flex behavior.
+- `packages/materials/table-data` and `packages/materials/table-kernel` for datasource drop, cell sub-properties, runtime measurement, fragment pagination, and resize side effects.
 - `packages/materials/svg/star` for shape-specific deep editing.
-- `packages/materials/flow-row` for runtime-height flow/flex row behavior.
-- `packages/materials/table-data` and `packages/materials/table-kernel` for complex table editing, datasource drop, cell sub-properties, resize side effects, and runtime measurement.
 
 ## Workflow
 
-1. Decide whether this is really a material. If it only adds a property, update `propSchemas`; if it adds panels, toolbar actions, commands, diagnostics, or host workflows, switch to `$easyink-contribution-dev`; create a material only when a new Schema node, Designer interaction, and Viewer render path are all needed.
+1. Confirm this is a material change. Create or extend a material only when a Schema node, Designer interaction, and Viewer render path are all affected.
 2. Define stable schema identity first: `TYPE`, props interface, defaults, capabilities, and `createXNode(partial?, unit?)`. Default nodes must render visibly without runtime data.
-3. Implement Designer rendering with `renderContent(nodeSignal, container)` and subscribe to `nodeSignal`. Use escaped HTML or real DOM, and return cleanup.
-4. Implement Viewer rendering with `trustedViewerHtml()` or an `HTMLElement`. Read runtime binding results from `context.resolvedProps`; add `measure()` only when runtime content changes size.
-5. If Viewer `measure()` or runtime data owns an element dimension, add `MaterialDesignerExtension.resolveControlPolicy()` so Designer hides/disables the matching outer resize handles and geometry fields. Protect behavior entry points too.
-6. Register both sides. Built-ins go through `packages/builtin/src/designer.ts` and `packages/builtin/src/viewer.ts`; custom host integrations register through `setupStore` and `viewer.registerMaterial()`.
-7. Add `propSchemas` only for simple props-bag fields. Use custom `read` and `commit`, `PropertyPanelOverlay`, or `SelectionType.getPropertySchema()` when a property lives outside `node.props` or changes multiple fields.
-8. Add deep editing only when the material has meaningful sub-element selection. Define `MaterialGeometry`, JSON-safe `SelectionType`, behavior middleware, decorations, and `tx.run()` mutations with stable history labels.
-9. For material-local inline toolbars, design an action model first, then render it through a shared toolbar shell when possible. Prefer icon-only tool buttons with localized `title` tooltips; do not spend toolbar space on a static "current material" identity item.
-10. Anchor material-local toolbars to the material frame, not to the currently selected sub-element. The default placement is the material's top-left corner, outside the border, left-aligned with the material edge and offset upward so it does not cover content.
-11. Add datasource logic at the right layer. Whole-element binding uses `node.binding`; table-like cell binding owns `datasourceDrop` and cell-level `binding` or `staticBinding`.
-12. Add i18n keys for visible labels, titles/tooltips, material-local inline toolbar actions, property labels, reject reasons, and history labels. Prefer `context.t()` and `store.t()` over hardcoded strings.
-13. Update AI descriptors when the material is built in or should be generated by MCP/AI flows. Then regenerate or check `packages/mcp-server/config/materials.json`.
-14. Test the smallest useful surface: schema defaults, Designer refresh or deep behavior, control policy, toolbar action model/placement, Viewer render or measure, binding projection, and registration fallout.
+3. Normalize page assumptions. Legal `page.mode` values are `fixed`, `continuous`, and `label`; `stack` is legacy input migrated by `@easyink/schema`. New behavior should read `page.pageModel`, `page.layout`, `page.reflow`, and `page.pagination`, not add another `page.mode` branch.
+4. Keep node coordinates semantic. `MaterialNode.x/y/width/height` are document coordinates; measurement, reflow, pagination, repeated overlays, and Designer projection must not silently write runtime output plans back into source schema.
+5. Decide material page behavior deliberately. Use `node.placement` for flow/fixed positioning, `node.break` for auto-sheets pagination constraints, and `node.repeat.scope='every-output-page'` or Viewer `pageAware` for post-pagination overlays. Repeated/page-aware nodes must not influence flow, document height, or page count, and they do not run in `label-sheets`.
+6. If the material can split across `auto-sheets`, implement `fragmentPaginator`. It should produce virtual fragments with `sourceNodeId` preserved and avoid mutating source schema.
+7. Implement Designer rendering with `renderContent(nodeSignal, container)`. Render immediately, subscribe to `nodeSignal`, escape user-controlled strings or use real DOM, and return deterministic cleanup.
+8. Implement Viewer rendering with `trustedViewerHtml()` or an `HTMLElement`. Read ordinary runtime binding results from `context.resolvedProps`; add `measure()` only when runtime content changes physical size; use `getRenderSize()` only when wrapper size must differ from schema geometry.
+9. If Viewer `measure()` or runtime data owns a dimension, add `MaterialDesignerExtension.resolveControlPolicy()` so Designer hides/disables matching geometry fields and outer resize handles. Guard behavior/deep-edit entry points that could mutate the blocked dimension.
+10. Register both sides. Built-ins go through `packages/builtin/src/designer.ts` and `packages/builtin/src/viewer.ts`; custom hosts register through `setupStore` and `viewer.registerMaterial()`. A Designer-only material renders `[Unknown: type]` in Viewer.
+11. Add `propSchemas` only for simple props-bag fields. Use custom `read` and `commit`, `requestPropertyPanel()`, or `SelectionType.getPropertySchema()` when a property lives outside `node.props` or changes multiple fields.
+12. Use shared layout behavior props instead of material-local duplicates. `createLayoutBehaviorPropSchemas()` owns placement, break, and repeat UI visibility based on page strategy.
+13. Add deep editing only for meaningful sub-element selection. Define `MaterialGeometry`, JSON-safe namespaced `SelectionType`, behavior middleware, decorations, and `tx.run()` mutations with stable history labels and merge keys.
+14. Keep inline editors selection-scoped. Changing a cell, column, handle, or internal region must drop input mode back to selection highlight and require a fresh explicit edit entry.
+15. For material-local inline toolbars, render commands only. Prefer compact icon tools with localized `title` tooltips; anchor the toolbar to the material frame top-left outside the border unless a local interaction requires otherwise.
+16. Add datasource logic at the right layer. Whole-element binding uses `node.binding`; table-like internal binding owns `datasourceDrop` and cell-level `binding` or `staticBinding`.
+17. Add i18n keys for visible labels, tooltips, property labels, reject reasons, history labels, placeholders, and material-local toolbar actions. Prefer `context.t()` and `store.t()` over hardcoded strings.
+18. Update AI descriptors when the material is built in or should be generated by MCP/AI flows. Then run or check `packages/mcp-server/config/materials.json` with the MCP material commands.
+19. Test the smallest useful surface: schema defaults, Designer refresh or deep behavior, control policy, page behavior props, repeated overlay behavior, fragment pagination, Viewer render or measure, binding projection, registration fallout, AI config, and i18n.
 
 ## Reference Files
 
 Load only the reference needed for the current task:
 
-- `references/architecture.md`: material system boundaries and runtime pipeline.
+- `references/architecture.md`: material system boundaries, current page layout pipeline, Designer/Viewer contracts, and registration.
 - `references/development-flow.md`: built-in and custom material implementation checklist.
-- `references/deep-editing.md`: editing session, geometry, selection, behavior, decoration, overlay, and resize rules.
-- `references/binding-viewer.md`: binding projection, table-data runtime expansion, measurement, page-aware behavior, and trusted HTML.
-- `references/i18n-ai-tests.md`: i18n, AI descriptors, MCP materials config, and validation/test rules.
-- `references/case-studies.md`: distilled rules from `table-data`, `table-kernel`, and `svg-star`.
+- `references/deep-editing.md`: editing session, geometry, selection, behavior, decoration, overlay, inline editor, and resize rules.
+- `references/binding-viewer.md`: binding projection, runtime measurement, fragment pagination, page-aware overlays, trusted HTML, export, and print boundaries.
+- `references/i18n-ai-tests.md`: i18n, AI descriptors, MCP materials config, validation, and test rules.
+- `references/case-studies.md`: distilled rules from `table-data`, `table-kernel`, `flow-row`, `svg-star`, `text`, and `page-number`.
 
 ## Hard Rules
 
-- Keep Schema serializable and stable. Do not store DOM nodes, functions, transient selections, or preview-only rows in Schema.
+- Keep Schema serializable and stable. Do not store DOM nodes, functions, transient selections, virtual preview rows, measured caches, runtime fragments, output pages, or preview-only data in Schema.
 - Normalize loose host input with `normalizeDocumentSchema()` before relying on required schema fields.
-- Designer and Viewer must both know the material type. A Designer-only material becomes `[Unknown: type]` in Viewer.
+- Do not introduce `stack` as a legal page mode in new code. Treat it only as compat input migrated to `continuous + continuous-paper + stack-flow + flow-y + none`.
+- Do not branch material behavior solely on `page.mode` when a page layer has the actual semantics. Use page model, layout, reflow, and pagination strategy.
+- Designer and Viewer must both know the material type.
 - Use `convertUnit()` inside default-node factories when default physical sizes are authored in mm.
 - Escape all user-controlled strings before HTML interpolation. Viewer HTML must be wrapped with `trustedViewerHtml()`.
 - Use `context.resolvedProps` or `node.props` after Viewer projection; do not hand-resolve ordinary `node.binding` inside material renderers.
 - Use `tx.run()` for deep-edit mutations so history, patches, and undo work. Use `mergeKey` for continuous drag/resize edits.
 - Keep selection payloads JSON-safe and namespaced, such as `table.cell` or `svg-star.control`.
-- Bind inline input/editor session meta to the current sub-selection; changing cells, columns, or handles must drop input mode back to selection highlight and require a fresh double-click.
-- Material-local toolbars should be compact icon tools. Use localized `title` tooltips for action names; avoid text buttons unless an action has no recognizable icon or the existing design system already requires text.
-- Do not include a static material identity item in a material-local toolbar. The selected material is already communicated by selection and properties; the toolbar should contain commands only.
-- Place material-local toolbars at the material frame's top-left edge, outside the border, by default. Do not anchor them below a selected cell/column/handle unless there is a strong local interaction reason.
-- Runtime-height materials must declare a Designer control policy: disable `height`, hide vertical outer resize handles, and block any internal behavior that would mutate `node.height` or row heights. `table-data` and `flow-row` are fixed runtime-height examples.
-- For table-like deep editing, resize affordances belong to shared geometry/kernel rules plus material delegates. Expose real visible row bottom edges and column right edges only when the material delegate allows that axis; freeze hidden rows instead of role-blocking visible ones.
-- Preview-only rows remain outside Schema. If a runtime-height material shows designer preview rows, keep them display-only; do not add resize handles that change the semantic row or material frame height.
+- Bind inline input/editor session meta to the current sub-selection.
+- Runtime-height materials must declare a Designer control policy and must not expose any outer or internal path that mutates runtime-owned height.
+- Preview-only rows remain outside Schema. If a runtime-height material shows Designer preview rows, keep them display-only.
+- Material-local toolbars should be compact command toolbars, not identity badges.
+- Repeated/page-aware overlays are post-pagination page overlays. They must not affect flow, document height, page count, label sheets, or source-node editability.
+- For table-like deep editing, decoration visibility and behavior execution must share the same delegate rules for row/column resize affordances.
 - Add or reuse locale keys for anything user-visible in Designer UI, including property labels and history labels.
-- Exporters and print drivers must consume Viewer-rendered pages; do not reimplement material layout in those layers.
+- Exporters and print drivers must consume Viewer-rendered pages and `ViewerPageMetrics`; do not reimplement material layout in those layers.

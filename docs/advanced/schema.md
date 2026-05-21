@@ -148,7 +148,7 @@ interface LabelPageConfig {
 interface PageBackground {
   color?: string           // 背景颜色
   image?: string           // 背景图片 URL
-  repeat?: BackgroundRepeat // 'repeat' | 'repeat-x' | 'repeat-y' | 'no-repeat'
+  repeat?: BackgroundRepeat // 'full' | 'repeat' | 'repeat-x' | 'repeat-y' | 'none'
   width?: number
   height?: number
   offsetX?: number
@@ -196,6 +196,9 @@ interface MaterialNode<TProps = Record<string, unknown>> {
   hidden?: boolean             // 是否隐藏
   locked?: boolean             // 是否锁定
   print?: PrintBehavior        // 打印行为
+  placement?: NodePlacementConfig
+  break?: NodeBreakConfig
+  repeat?: NodeRepeatConfig
   props: TProps                // 物料属性（由物料类型决定）
   binding?: BindingRef | BindingRef[]  // 数据绑定
   animations?: AnimationSchema[]       // 动画
@@ -220,8 +223,12 @@ interface MaterialNode<TProps = Record<string, unknown>> {
 | `table-static` | 静态表格 | `table: TableSchema` |
 | `table-data` | 数据表格 | `table: TableDataSchema` |
 | `container` | 容器 | `children` |
+| `flow-row` | 流式数据行 | 列定义、间距、排版样式 |
 | `chart` | 图表 | 图表配置 |
-| `svg` | SVG | SVG 内容 |
+| `svg-custom` | 自定义 SVG | SVG 内容 |
+| `svg-star` | 星形 SVG | 星形参数 |
+| `svg-heart` | 心形 SVG | 心形参数 |
+| `page-number` | 页码 | 页码格式、页码上下文 |
 
 ## BindingRef
 
@@ -315,7 +322,23 @@ isTableDataNode(node)  // 是否为数据表格节点
 
 // 属性访问
 getNodeProps<T>(node)  // 获取类型化的 props
+
+// 默认值与归一化
+createDefaultSchema()       // 完整默认 Schema
+createDefaultPage()         // 默认 page
+createDefaultGuides()       // 默认 guides
+normalizeDocumentSchema(input)
+
+// 校验与序列化
+validateSchema(schema)        // 返回字符串错误数组
+validateSchemaIssues(schema)  // 返回 { path, message, code }[]
+isValidSchema(schema)         // 类型守卫
+serializeSchema(schema)
+deserializeSchema(json)
+isCompatibleVersion(version)
 ```
+
+`validateSchemaIssues()` 校验的是完整内部 Schema。宿主传入的宽松输入应该先经过 `normalizeDocumentSchema()`，否则缺少 `version`、`unit`、`page`、`guides` 或 `elements` 都会被视为校验问题。
 
 ## 最小 Schema 示例
 

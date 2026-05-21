@@ -18,8 +18,8 @@ await viewer.open({
 
 ```ts
 interface ViewerDiagnosticEvent {
-  category: 'schema' | 'datasource' | 'font' | 'material' | 'print' | 'exporter' | 'viewer'
-  severity: 'warning' | 'error'
+  category: 'schema' | 'datasource' | 'viewer' | 'material' | 'print' | 'exporter'
+  severity: 'error' | 'warning' | 'info'
   code: string
   message: string
   nodeId?: string
@@ -37,6 +37,7 @@ interface ViewerDiagnosticEvent {
 | `message` | 可读消息，用于展示 |
 | `nodeId` | 关联的元素 ID（如有） |
 | `detail` | 附加信息 |
+| `scope` | 诊断来源阶段，字体加载使用 `scope: 'font'` |
 | `cause` | 原始错误对象 |
 
 ## 常见诊断场景
@@ -51,14 +52,16 @@ Schema 格式错误或缺少必要字段时触发。
 
 ### 字体加载
 
-字体加载失败时触发，通常 severity 为 `warning`。
+字体加载失败时触发，通常 `severity` 为 `warning`。当前实现里字体加载诊断使用 `category: 'viewer'` 和 `scope: 'font'`，`category` 本身不包含 `font`。
 
 ### 物料渲染
 
 物料渲染器抛出异常时，Viewer 会：
 1. 记录 `error` 级别诊断事件
 2. 渲染一个带红色虚线边框的错误占位符
-3. 占位符包含 `[Error: type]` 文本
+3. 占位符包含警告符号和 `[type]` 文本
+
+`safeRender()` 根据 `scope` 生成诊断。`scope: 'material'` 的渲染错误当前会归到 `category: 'viewer'`，同时保留 `scope: 'material'` 供调用方区分阶段。
 
 ### 打印/导出
 

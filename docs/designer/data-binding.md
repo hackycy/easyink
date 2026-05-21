@@ -33,14 +33,19 @@ const dataSources: DataSourceDescriptor[] = [{
 | 属性 | 类型 | 说明 |
 |------|------|------|
 | `name` | `string` | 字段内部名称 |
+| `key` | `string` | 字段 key，可用于保留外部字段标识 |
 | `path` | `string` | 数据路径，以 `/` 分隔，如 `customer/name` 或 `items/price` |
 | `title` | `string` | 显示名称（在数据源面板中展示） |
+| `id` | `string` | 字段节点 ID |
+| `tag` | `string` | 字段标签，用于标记集合等语义 |
 | `fields` | `DataFieldNode[]` | 子字段（用于嵌套对象或数组） |
 | `use` | `MaterialUseToken` | 推荐使用的物料类型 |
 | `props` | `Record<string, unknown>` | 拖放时附加到元素的默认属性 |
 | `format` | `BindingDisplayFormat` | 格式化规则 |
 | `bindIndex` | `number` | 绑定索引（多绑定时区分主/次绑定） |
 | `union` | `DataUnionBinding[]` | 联合绑定（一次拖放绑定多个属性） |
+| `expand` | `boolean` | 数据源面板中是否默认展开 |
+| `meta` | `Record<string, unknown>` | 宿主或扩展保留的附加信息 |
 
 ## 传递数据源
 

@@ -10,9 +10,13 @@ Designer material catalog
   -> schema.elements[]
   -> MaterialDesignerExtension.renderContent()
   -> viewer.open({ schema, data })
-  -> Viewer binding projection and measure pass
+  -> binding projection
+  -> material measure()
+  -> runLayoutPipeline()
+  -> runPagination()
+  -> repeated page overlays
   -> MaterialViewerExtension.render()
-  -> print and export reuse Viewer DOM
+  -> print and export reuse Viewer DOM and metrics
 ```
 
 If one link is missing, the failure mode is usually direct: no Designer registration means it cannot be dragged in; no Viewer registration means `[Unknown: type]`; no stable default node means drag and auto-create paths produce blank or invalid templates.
@@ -20,14 +24,14 @@ If one link is missing, the failure mode is usually direct: no Designer registra
 ## State Boundaries
 
 - Schema state lives in `DocumentSchema` and `MaterialNode`: persistent, undoable, imported/exported.
-- Workbench state lives in Designer store: panels, zoom, selection, window layout, user preferences.
-- Runtime state lives in Viewer and editing sessions: resolved props, page plan, font state, transient handles, drag gestures.
+- Workbench state lives in Designer store: panels, zoom, selection, window layout, preferences, and active sessions.
+- Runtime state lives in Viewer and editing sessions: resolved props, measurements, layout fragments, output page plans, transient handles, drag gestures, DOM refs, and measured caches.
 
-Do not move transient runtime details into Schema. Examples to keep out of Schema: active cell selection, pointer gesture state, virtual preview rows, handle positions, measured layout caches, DOM refs, and active editing metadata.
+Do not move transient runtime details into Schema. Examples to keep out of Schema: active cell selection, pointer gesture state, virtual preview rows, handle positions, measurement caches, output page fragments, repeated overlay clones, DOM refs, and active editing metadata.
 
 ## Schema Input and Normalization
 
-Host apps may pass a loose `DocumentSchemaInput` into Designer. Required top-level fields, `page`, `guides`, and `elements` may be missing. The framework fills them with `normalizeDocumentSchema()`, and internal Designer, Viewer, autosave, print, and export flows should operate on a complete `DocumentSchema`.
+Host apps may pass a loose `DocumentSchemaInput` into Designer or Viewer. Required top-level fields, `page`, `guides`, and `elements` may be missing. The framework fills them with `normalizeDocumentSchema()`, and internal Designer, Viewer, autosave, print, and export flows should operate on a complete `DocumentSchema`.
 
 Rules:
 
@@ -36,22 +40,64 @@ Rules:
 - Preserve `DocumentSchema.extensions` and `MaterialNode.extensions` for host/plugin-owned serializable data.
 - Keep `compat` fields as compatibility state, not the primary home for new material semantics.
 
-## Schema Shape
+## Orthogonal Page System
 
-Use `packages/schema/src/types.ts` as source of truth:
+Legal `PageMode` values are `fixed`, `continuous`, and `label`. Legacy `stack` input is migrated by `@easyink/schema` compat code into the continuous-paper combination.
 
-- `MaterialNode` stores `id`, `type`, geometry, `props`, optional `binding`, `children`, `extensions`, and animation or print metadata.
-- `BindingRef` stores datasource identity and `fieldPath`, plus optional format and `bindIndex`.
-- `TableNode` adds `table: TableSchema`.
-- `TableDataSchema` uses `kind: 'data'`, `topology`, `layout`, and optional `showHeader` or `showFooter`.
-- `TableCellSchema.binding` is for `table-data` repeat-template cells.
-- `TableCellSchema.staticBinding` is for fixed cells such as table-static cells or table-data header/footer cells.
+Current semantics come from four page layers:
 
-Page-mode implications:
+- `page.pageModel.kind`: `paged-paper`, `continuous-paper`, or `label-sheet`.
+- `page.layout.strategy`: `absolute`, `stack-flow`, or `region-flow`.
+- `page.reflow.strategy`: `none`, `measure-only`, or `flow-y`.
+- `page.pagination.strategy`: `none`, `fixed-sheets`, `auto-sheets`, or `label-sheets`.
 
-- `fixed`: absolute positioning on fixed pages.
-- `stack`: Viewer may measure content and flow elements by Y position.
-- `label`: page-aware replication is not applied; label layout derives sheet dimensions from label cell width/height plus rows, columns, and gaps.
+Default combinations:
+
+- `fixed`: `paged-paper + absolute + measure-only + fixed-sheets`.
+- `continuous`: `continuous-paper + stack-flow + flow-y + none`.
+- `label`: `label-sheet + absolute + measure-only + label-sheets`.
+
+Material rules:
+
+- `MaterialNode.x/y/width/height` are document coordinates, not output page or editor-surface coordinates.
+- `measure()`, reflow, pagination, and repeated overlays can create runtime nodes/fragments, but must not silently write those results into source schema.
+- Do not add new behavior branches keyed only on `page.mode`; use the layer that owns the semantic decision.
+- `page-planner.ts` is a compatibility facade. New runtime behavior should go through `runLayoutPipeline()` and `runPagination()`.
+
+## Node Layout Behavior
+
+Node-level behavior lives outside material-specific props:
+
+- `node.placement.mode='flow'`: participates in `flow-y` reflow.
+- `node.placement.mode='fixed'`: keeps original document coordinates and ignores break constraints.
+- `node.break.keepTogether/before/after`: applies during `auto-sheets` pagination for flow nodes.
+- `node.repeat.scope='every-output-page'`: copied after pagination to every output page; does not affect page count or continuous-paper height.
+
+Old `node.props.layoutMode`, `keepTogether`, `pageBreakBefore`, and `pageBreakAfter` are read only as compatibility fallbacks. New writes should use `placement`, `break`, and `repeat` through `UpdateMaterialBehaviorCommand`.
+
+Designer exposes these behaviors through `createLayoutBehaviorPropSchemas()`:
+
+- Placement appears when the page supports `stack-flow + flow-y`.
+- Break rules appear only for `stack-flow + flow-y + auto-sheets`.
+- Repeat appears for all strategies except `label-sheets`.
+
+## Designer Surface
+
+Designer does not render a single page from `page.width/page.height`. It consumes `createEditorSurfacePlan(schema)`:
+
+- `fixed-sheets`: multiple editable page surfaces with visual gaps; `yOffset` remains document-coordinate offset.
+- `auto-sheets`: one continuous edit surface with fixed-page reference semantics; Viewer decides final output pages.
+- `none` and continuous paper: one growing continuous canvas.
+- `label-sheets`: one editable label cell; Viewer expands output sheets.
+
+Coordinate projection must use:
+
+- `projectDocumentPointToEditorSurface()`
+- `projectEditorSurfacePointToDocument()`
+
+Grid, guides, snapping, element overlays, repeat previews, rulers, and selection UI should all consume the same `EditorSurfacePlan`.
+
+Repeated/page-aware nodes have one interactive source node in Designer. Additional page previews are visual-only; they must not participate in selection, drag, resize, snapping, command history, or schema writes.
 
 ## Designer Contract
 
@@ -66,20 +112,9 @@ Implement `MaterialDesignerExtension` with:
 - `behaviors`: optional middleware chain for pointer, key, drop, paste, and command events.
 - `decorations`: optional Vue decorations for handles, guides, toolbars, or overlays.
 - `resize`: optional material-private side effects during element resize.
-- `resolveControlPolicy`: optional design-time policy for hiding/disabling geometry inputs, resize handles, or property fields when a material owns its runtime dimension or other controls.
+- `resolveControlPolicy`: optional design-time policy for hiding/disabling geometry inputs, resize handles, or property fields when a material owns runtime dimensions or controls.
 
-`MaterialExtensionContext` provides `getSchema`, `getNode`, `getBindingLabel`, `commitCommand`, `tx`, `requestPropertyPanel`, event bus methods, zoom/page DOM access, and `t(key)`.
-
-Use `resolveControlPolicy()` when a material has a runtime-owned dimension or other state that should not be edited through the outer Designer chrome. This is the canonical place to say:
-
-- hide or disable `width` / `height` inputs in the Properties panel,
-- hide or disable the matching outer resize handles,
-- and keep behavior handlers from reintroducing a blocked resize path.
-
-Good examples:
-
-- `table-data` owns runtime height through measured repeat rows and hides vertical outer resizing.
-- `flow-row` / flex-row declares runtime height as a fixed Designer policy so width can reflow columns while height stays Viewer-measured.
+Use `resolveControlPolicy()` when a material has a runtime-owned dimension or state that should not be edited through outer Designer chrome. It should control both visible handles/fields and any behavior path that could perform the same mutation.
 
 ## Viewer Contract
 
@@ -88,11 +123,21 @@ The Viewer contract is in `packages/core/src/material-viewer.ts`.
 Implement `MaterialViewerExtension` with:
 
 - `render(node, context)`: return `{ html: trustedViewerHtml(...) }` or `{ element }`.
-- `measure(node, context)`: optional pre-page-plan sizing for content-driven dimensions.
+- `measure(node, context)`: optional pre-layout sizing for content-driven dimensions.
 - `getRenderSize(node, context)`: optional wrapper size override.
-- `pageAware`: replicate this material to every page with `__pageNumber` and `__totalPages`.
+- `fragmentPaginator`: optional split logic for fragments that can cross `auto-sheets`.
+- `pageAware`: default repeated overlay behavior for materials such as page numbers.
 
-The Viewer pipeline validates schema, resolves bindings, runs `measure()`, creates a page plan, handles page-aware replication, and then calls each material renderer through `MaterialRendererRegistry`.
+Viewer runtime stages:
+
+1. Normalize/validate schema and load fonts.
+2. Resolve bindings into `resolvedPropsMap`.
+3. Run material `measure()` with resolved props applied to a temporary node.
+4. Exclude repeated/page-aware nodes from layout inputs.
+5. Run `runLayoutPipeline()` and `runPagination()`.
+6. Copy repeated/page-aware elements into each output page and inject `__pageNumber` / `__totalPages`.
+7. Render DOM through `MaterialRendererRegistry`.
+8. Cache `ViewerPageMetrics` for print/export.
 
 ## Registration
 
@@ -105,12 +150,8 @@ Built-in materials:
 
 - Add package imports and entries in `packages/builtin/src/designer.ts`.
 - Add Viewer registration in `packages/builtin/src/viewer.ts`.
-- Add AI descriptor import and entry in `packages/builtin/src/ai.ts`.
+- Add AI descriptor import and entry in `packages/builtin/src/ai.ts` when generation should know it.
 - Add `@easyink/material-x` dependency to `packages/builtin/package.json`.
-
-## Contribution Boundary
-
-If the request is to add a button, panel, command, diagnostic subscription, or host workflow around existing Designer behavior, switch to `$easyink-contribution-dev` instead of continuing material development.
 
 ## Catalog and Capabilities
 
@@ -120,16 +161,14 @@ If the request is to add a button, panel, command, diagnostic subscription, or h
 - `name`: display label or i18n key.
 - `icon`: Vue icon component.
 - `category`: primary material category.
-- `capabilities`: controls binding, rotation, resizing, children, animation, union drop, page-aware, multi-binding, aspect lock.
+- `capabilities`: controls binding, rotation, resizing, children, animation, union drop, page-aware, multi-binding, and aspect lock.
 - `createDefaultNode`: default schema factory.
 - `factory`: Designer extension factory.
-- `propSchemas`: material-owned property schemas appended to the base registry from `@easyink/prop-schemas`.
+- `propSchemas`: material-owned property schemas appended to base entries from `@easyink/prop-schemas`.
 - `sectionFilter`: hide or show property panel sections.
 
 `quickMaterialTypes` creates quick toolbar entries. `groupedCatalog` creates grouped catalog entries for data, chart, svg, and utility groups.
 
-Designer package boundaries:
+## Contribution Boundary
 
-- `@easyink/designer` owns workbench behavior, registration, panels, store, canvas interactions, and the public `@easyink/designer/locale` facade.
-- `@easyink/locales` owns built-in locale message objects.
-- `@easyink/prop-schemas` owns built-in base PropSchema declarations. Material packages still own material-specific additions such as table visibility or SVG shape controls.
+If the request is to add a button, panel, command, diagnostic subscription, or host workflow around existing Designer behavior, switch to `$easyink-contribution-dev` instead of continuing material development.

@@ -223,11 +223,9 @@ ctx.registerCommand<{ templateId: string }, void>({
 const unsubscribe = ctx.onDiagnostic((entry) => {
   console.warn(`[designer:${entry.severity}] ${entry.message}`)
 })
-
-ctx.onDispose(unsubscribe)
 ```
 
-这里的关键不是打印日志，而是“把 Designer 内部可恢复问题往宿主系统转发”。这样你不需要改设计器源码，也能把异常纳入自己的运维闭环。
+这里的关键不是打印日志，而是“把 Designer 内部可恢复问题往宿主系统转发”。`onDiagnostic()` 返回的取消函数可以用于提前取消订阅；如果不手动调用，ContributionRegistry 也会在 Designer dispose 时自动取消，避免路由切换或 HMR 后残留监听。
 
 ## 生命周期怎么设计才稳
 

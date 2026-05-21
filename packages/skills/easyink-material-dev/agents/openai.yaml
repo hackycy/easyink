@@ -1,4 +1,4 @@
 interface:
   display_name: EasyInk Material Dev
-  short_description: EasyInk 物料开发流程与复杂交互规则工作流指南
-  default_prompt: 'Use $easyink-material-dev to implement or review an EasyInk material with Designer, Viewer, binding, editing, and i18n behavior.'
+  short_description: EasyInk 物料、页面策略与复杂交互开发指南
+  default_prompt: 'Use $easyink-material-dev to implement or review an EasyInk material across Schema defaults, Designer registration, Viewer rendering, page behavior, binding, editing, and i18n.'

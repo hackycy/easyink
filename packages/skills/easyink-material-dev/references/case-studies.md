@@ -8,6 +8,7 @@ Source files:
 - `packages/materials/table-data/src/designer.ts`
 - `packages/materials/table-data/src/prop-schemas.ts`
 - `packages/materials/table-data/src/viewer.ts`
+- `packages/materials/table-data/src/layout.ts`
 - `packages/materials/table-data/src/ai.ts`
 - `packages/materials/table-kernel/src/editing/*`
 - `packages/materials/table-kernel/src/resize-adapter.ts`
@@ -25,12 +26,13 @@ Key rules:
 - Runtime measurement owns final table height.
 - Designer declares runtime height through `resolveControlPolicy()`: `height` is disabled and vertical outer resize handles are hidden.
 - Cell-level binding uses `binding` for repeat-template cells and `staticBinding` for fixed cells.
+- Viewer registration includes both `measureTableData()` and `tableDataFragmentPaginator`.
 
 Designer complexity:
 
 - `createTableDataExtension()` composes common table-kernel geometry, selection, keyboard nav, edit behavior, resize behavior, toolbar commands, and decorations.
 - Hidden header/footer rows use a hidden mask so hit tests, keyboard navigation, placeholder geometry, and rendering agree.
-- Row resize is disabled for table-data because runtime measurement owns height. Table-kernel still supports delegate-controlled row resize for materials that own schema height.
+- Row resize is disabled for table-data because runtime measurement owns height.
 - Designer placeholder rows are display-only and must not expose a height-changing drag path.
 - `datasourceDrop` rejects hidden rows and mismatched collection prefixes.
 - `sectionFilter` hides element-level binding because binding belongs to cells.
@@ -38,20 +40,22 @@ Designer complexity:
 
 Viewer complexity:
 
-- `measureTableData()` expands runtime rows and computes auto heights before page planning.
-- `renderTableData()` reuses measured layout through a WeakMap because `node.height` changes after measure.
+- `measureTableData()` expands runtime rows and computes auto heights before layout/reflow/pagination.
+- `renderTableData()` reuses measured layout through a WeakMap because the render node has the measured height.
 - Empty arrays render a single fallback row; they do not mutate Schema.
 - Static rows resolve `staticBinding` and repeat rows resolve item-level `binding`.
+- `tableDataFragmentPaginator` splits expanded runtime rows for `auto-sheets`, preserving `sourceNodeId` and keeping source schema untouched.
 
 What to copy:
 
 - Reuse shared kernels when a material family has common editing logic.
 - Keep preview-only Designer affordances outside Schema.
-- Make hidden/virtual row semantics consistent across render, geometry, drop, and keyboard behavior.
-- Keep row/column boundary handles in the shared table-kernel model, but gate them through material delegates. The last column's right border can be a valid resize edge for schema-height tables; runtime-height tables should block row-height paths.
-- Put material-specific resize policy in delegates, such as hidden-row masks and allowed row/column rules, and cover the rules with pure helper tests.
+- Make hidden/virtual row semantics consistent across render, geometry, drop, keyboard behavior, and resize decoration.
+- Keep row/column boundary handles in the shared table-kernel model, but gate them through material delegates.
+- Put material-specific resize policy in delegates and cover the rules with pure helper tests.
 - Use `resolveControlPolicy()` for outer Designer controls when runtime measurement owns height.
 - Use custom property commits for non-props fields.
+- Use `fragmentPaginator` for material-owned splitting rather than teaching pagination engine material internals.
 
 What not to copy blindly:
 
@@ -98,10 +102,16 @@ Key rules:
 
 Designer lessons:
 
-- Use the shared Designer control policy rather than checking `flow-row` in canvas or property-panel components.
+- Use shared Designer control policy rather than checking `flow-row` in canvas or property-panel components.
 - Disable `height` and hide vertical outer resize handles through policy.
 - Keep column editing and column width gestures selection-scoped; changing columns must leave text input mode.
 - Tests should assert the fixed policy and the runtime repeat detection helper separately if the helper remains exported for Viewer or AI use.
+
+Viewer lessons:
+
+- Measured runtime height participates in the page layout pipeline.
+- In continuous paper, flow nodes after a taller flow-row may be pushed by `flow-y`.
+- In fixed-position nodes, measurement changes size but the node does not trigger break constraints.
 
 ## svg-star
 
@@ -143,17 +153,21 @@ What to improve when touching it:
 - Schema defaults are stable and visible.
 - Designer displays binding labels as `{#label}` and placeholders through `context.t()`.
 - Viewer renders resolved `content` with prefix/suffix.
+- `measureText()` supports auto-height text behavior when text content changes size.
 - Styles are shared through pure rendering helpers.
-- No deep editing, custom geometry, or measurement is needed.
+- No deep editing is needed.
 
-Copy this pattern for fixed-size, props-bag-only materials.
+Copy this pattern for mostly fixed-size, props-bag-only materials.
 
 ## page-number
 
 Use as the page-aware reference:
 
-- Viewer registration sets `pageAware: true`.
-- Runtime replicates the material to every page and injects `__pageNumber` and `__totalPages`.
+- `createPageNumberNode()` sets `placement: { mode: 'fixed' }` and `repeat: { scope: 'every-output-page' }`.
+- Viewer registration also sets `pageAware: true`, making the material default repeat behavior explicit.
+- Runtime removes it from layout inputs, replicates it after pagination, and injects `__pageNumber` and `__totalPages`.
 - Rendering uses resolved runtime props, not schema-time page counts.
+- Designer shows one editable source node and non-interactive repeat previews on other pages.
+- Page-aware replication is skipped for `label-sheets`.
 
-Use this pattern for watermarks, repeated headers, and repeated footers, but remember page-aware does not run in label mode.
+Use this pattern for watermarks, repeated headers, and repeated footers. Ensure repeated overlays do not influence flow, continuous-paper height, output page count, or source-node editability.

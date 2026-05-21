@@ -225,6 +225,20 @@ curl "http://localhost:18080/api/logs?printerName=HP&status=completed&startTime=
 curl http://localhost:18080/api/status
 ```
 
+#### GET /api/status/connections
+
+返回当前 WebSocket 连接数。
+
+```bash
+curl http://localhost:18080/api/status/connections
+```
+
+响应 `data` 结构：
+
+```json
+{ "count": 1 }
+```
+
 ## WebSocket
 
 连接地址：`ws://localhost:18080/ws`
@@ -256,9 +270,11 @@ curl http://localhost:18080/api/status
 
 大 PDF（最大 50 MB）可通过分块上传：
 
-1. 将 PDF 切分为 2 MB 的块
+1. 将 PDF 切分为不超过 2 MB 的块
 2. 逐块发送 `uploadPdfChunk` 命令
 3. 最后发送 `printUploadedPdf` 或 `printUploadedPdfAsync` 触发打印
+
+官方 `@easyink/print-integration-easyink-printer` 前端客户端按 1 MB 切块上传，低于服务端 2 MB 上限。
 
 ### 支持的命令
 

@@ -11,6 +11,7 @@ Prefer locale keys over hardcoded labels for Designer-facing UI:
 - Table commands: `designer.table.*`.
 - Datasource hints and rejection messages: `designer.dataSource.*`.
 - History labels: `designer.history.*`.
+- Page behavior labels: `designer.property.placementMode`, `designer.property.keepTogether`, `designer.property.pageBreakBefore`, `designer.property.pageBreakAfter`, and `designer.property.repeatEveryPage` already live in shared prop schemas; reuse them instead of material-local duplicates.
 
 Add keys to both:
 
@@ -29,6 +30,7 @@ Property schemas can store label keys directly because `PropertiesPanel.vue` res
 
 - No new user-visible Chinese-only strings in built-in material registration unless intentionally not localized.
 - Decoration tooltips, material-local toolbar button titles, property titles, reject labels, placeholders, and history labels are localized.
+- Page-aware or fragment-pagination diagnostics that surface to users are stable, translated where they are Designer-facing, and use Viewer diagnostics for runtime-only failures.
 - `PropSchema.group` uses an existing group mapped by `GROUP_LABELS` in `PropertiesPanel.vue`, or the visible custom group text is intentional.
 - History panel can display the command label. Prefer stable `designer.history.*` keys for material commands.
 - Custom host-owned materials document how host locale messages are passed via `EasyInkDesigner` `locale`.
@@ -67,6 +69,7 @@ Keep descriptors compact and deterministic:
 - `binding` should be `none`, `single`, or `multi`.
 - `schemaRules` should forbid legacy shapes when the material has specialized schema. `table-data` explicitly forbids legacy `props.columns`, `props.repeatTemplate`, and type alias `table`.
 - `usage` should say when to choose the material and what not to encode in Schema.
+- For page-aware materials, `schemaRules` should say whether the factory should set `repeat.scope='every-output-page'`, `placement.mode='fixed'`, or neither. Do not let AI generators invent `page.mode='stack'`.
 
 ## Tests to Add or Run
 
@@ -78,6 +81,8 @@ Choose focused tests based on risk:
 - Deep editing: hit test, selection validation, property schema, behavior commands, keyboard navigation.
 - Viewer render: returns trusted HTML, uses resolved props, escapes user content.
 - Viewer measure: runtime height/width, layout cache behavior, diagnostics.
+- Fragment pagination: split behavior under `auto-sheets`, preservation of `sourceNodeId`, and no source schema mutation.
+- Page-aware/repeat overlay: excluded from layout inputs, copied after pagination, receives `__pageNumber` and `__totalPages`, skipped for `label-sheets`.
 - Datasource drop: accepted/rejected zones, collection prefix compatibility, cell binding shape.
 - Registration: built-in Designer and Viewer registries include the new material.
 - MCP config: `check:materials` passes when AI descriptors changed.
@@ -97,5 +102,7 @@ Useful commands:
 - New property label is a hardcoded string while neighboring schemas use locale keys.
 - New deep-edit payload stores DOM or non-serializable values.
 - New table-like material duplicates preview rows into Schema.
+- New repeated/page-aware material changes page count or continuous-paper height.
+- New material writes placement, break, or repeat semantics into `node.props` instead of `node.placement`, `node.break`, or `node.repeat`.
 - AI descriptor mentions a prop that does not exist or omits required specialized schema rules.
 - Tests assert raw full HTML instead of stable semantic snippets where markup is generated.

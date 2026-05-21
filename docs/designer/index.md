@@ -2,7 +2,7 @@
 
 [![npm](https://img.shields.io/npm/v/@easyink/designer?style=flat&colorA=080f12&colorB=1fa669)](https://npmjs.com/package/@easyink/designer)
 
-`@easyink/designer` 是面向开发者的文档/报表设计器框架。基于 Vue 3 + TypeScript，设计器与预览器分离，以组件形式嵌入宿主应用。内置画布编辑、物料拖放、数据绑定、撤销重做、自动保存等能力，开箱即用。
+`@easyink/designer` 是面向开发者的文档/标签/报表设计器框架。基于 Vue 3 + TypeScript，设计器与预览器分离，以组件形式嵌入宿主应用。内置画布编辑、物料拖放、数据绑定、撤销重做、自动保存等能力，开箱即用。
 
 ## 基本用法
 

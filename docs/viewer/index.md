@@ -247,8 +247,9 @@ await viewer.open({
   schema,
   data,
   onDiagnostic: (event) => {
-    // event.category  -- 'schema' | 'datasource' | 'font' | 'material' | 'print' | 'exporter'
-    // event.severity  -- 'warning' | 'error'
+    // event.category  -- 'schema' | 'datasource' | 'viewer' | 'material' | 'print' | 'exporter'
+    // event.scope     -- 'schema' | 'datasource' | 'font' | 'material' | 'print' | 'exporter' | 'hook'
+    // event.severity  -- 'error' | 'warning' | 'info'
     // event.code      -- 错误码
     // event.message   -- 可读消息
     // event.nodeId    -- 关联的元素 ID（可选）

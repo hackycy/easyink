@@ -2,7 +2,7 @@
 
 ## Built-In Material Package Shape
 
-Follow existing packages such as `packages/materials/rect`, `packages/materials/text`, `packages/materials/svg/star`, and `packages/materials/table-data`.
+Follow existing packages such as `packages/materials/rect`, `packages/materials/text`, `packages/materials/page-number`, `packages/materials/svg/star`, `packages/materials/flow-row`, and `packages/materials/table-data`.
 
 Typical files:
 
@@ -10,11 +10,11 @@ Typical files:
 - `tsdown.config.ts`: `entry: ['src/index.ts']`, `dts: true`, `exports: true`, `publint: true`.
 - `src/schema.ts`: type constant, props interface, defaults, capabilities, `createXNode()`.
 - `src/designer.ts`: `createXExtension(context)`.
-- `src/viewer.ts`: render and optional measure functions.
+- `src/viewer.ts`: render plus optional `measure()`, `getRenderSize()`, or `fragmentPaginator`.
 - `src/prop-schemas.ts`: material-owned property panel additions when needed.
 - `src/ai.ts`: `AIMaterialDescriptor` for AI/MCP generation.
 - `src/index.ts`: export public symbols.
-- `src/*.test.ts`: focused tests for rendering, defaults, deep editing, measure, and schema behavior.
+- `src/*.test.ts`: focused tests for rendering, defaults, deep editing, measure, pagination, and schema behavior.
 
 ## Schema Factory Rules
 
@@ -25,7 +25,8 @@ In `schema.ts`:
 - Use `convertUnit(value, 'mm', unit)` when defaults are authored in mm and `unit` may differ.
 - Merge defaults before partial props, and do not let `partial.props` accidentally overwrite the entire node before you normalize it.
 - Default nodes must be visible without external data.
-- Capabilities must match actual behavior. Do not mark `bindable`, `multiBinding`, `resizable`, `rotatable`, or `supportsChildren` optimistically.
+- Capabilities must match actual behavior. Do not mark `bindable`, `multiBinding`, `resizable`, `rotatable`, `supportsChildren`, `pageAware`, or `aspectLock` optimistically.
+- Use `placement`, `break`, and `repeat` for node-level page behavior. Do not add new page behavior fields under `node.props`.
 
 Pattern:
 
@@ -60,6 +61,17 @@ export function createXNode(partial?: Partial<MaterialNode>, unit?: string): Mat
 }
 ```
 
+For page overlays such as page numbers, defaults may set:
+
+```ts
+const overlayDefaults = {
+  placement: { mode: 'fixed' },
+  repeat: { scope: 'every-output-page' },
+}
+```
+
+Only do this when the material is intentionally a post-pagination overlay. Ordinary headers, footers, and watermarks can also use `repeat.scope`, but they should still behave like one editable source node in Designer.
+
 ## Designer Rendering Rules
 
 Use `renderContent(nodeSignal, container)`:
@@ -67,21 +79,46 @@ Use `renderContent(nodeSignal, container)`:
 - Render immediately.
 - Subscribe to `nodeSignal` so property changes update the canvas.
 - Return the unsubscribe and any cleanup for DOM listeners or gestures.
-- Escape user-controlled values with `escapeHtml()`.
+- Escape user-controlled values with `escapeHtml()` or use real DOM text APIs.
 - Use `context.t(key)` for placeholders and labels.
 - Use Designer placeholders for empty content when needed, but keep defaults Viewer-renderable.
 
 Simple materials can set `container.innerHTML`. Complex materials can create Vue decorations or DOM manually, but cleanup must be deterministic.
+
+Designer coordinates come through `EditorSurfacePlan` at the framework layer. Material code should use material-local coordinates in geometry and datasource drop protocols, and should not convert output page plans back into schema coordinates.
 
 ## Viewer Rendering Rules
 
 Use `trustedViewerHtml()` for strings:
 
 - Read `context.resolvedProps` for ordinary element bindings.
-- `renderPages()` passes a `nodeForRender` whose `props` are already projected; direct `getNodeProps(node)` is acceptable when the function is called through the Viewer pipeline, but `context.resolvedProps` communicates intent better.
+- `renderPages()` passes a `nodeForRender` whose `props` are already projected; direct `getNodeProps(node)` is acceptable when called through the Viewer pipeline, but `context.resolvedProps` communicates runtime intent better.
 - Escape runtime strings before interpolation.
 - Keep Viewer output print/export stable because print and export reuse the Viewer result.
 - Add `measure()` only when runtime content changes physical size.
+- Add `fragmentPaginator` only when an oversized measured fragment can be meaningfully split across `auto-sheets`.
+- Use `getRenderSize()` only when the wrapper dimensions must differ from schema `width` and `height`.
+
+`measure()` runs before layout/reflow/pagination. It should return document-unit size and must not mutate the source schema. `render()` must use the same layout assumptions as `measure()`.
+
+## Page Layout and Behavior Rules
+
+New material work should respect the orthogonal page layers:
+
+- `page.pageModel` describes media.
+- `page.layout` describes how elements enter document coordinates.
+- `page.reflow` describes whether measured flow elements move along Y.
+- `page.pagination` describes how document coordinates become output sheets.
+
+Do not implement material-specific page planning. Materials may provide:
+
+- stable document geometry,
+- optional runtime `measure()` results,
+- optional `fragmentPaginator` for splittable content,
+- optional `pageAware` default repetition,
+- and node-level `placement`, `break`, or `repeat` defaults.
+
+The Viewer owns layout, pagination, page overlay cloning, page number context, and `ViewerPageMetrics`.
 
 ## Designer Control Policy Rules
 
@@ -109,7 +146,7 @@ const RUNTIME_HEIGHT_CONTROL_POLICY = {
 
 Then return it from `resolveControlPolicy()` and also guard any behavior that would mutate height. For table-like kernels, expose delegate hooks such as `canResizeRow()` / `canResizeColumn()` and make decoration visibility and command execution use the same delegate.
 
-`table-data` and `flow-row` are fixed runtime-height examples: the Designer may allow horizontal width changes, but vertical outer handles and the `H` geometry field must be unavailable. Do not solve this with one-off checks in `CanvasWorkspace.vue` or `PropertiesPanel.vue`.
+`table-data` and `flow-row` are runtime-height examples: Designer may allow horizontal width changes, but vertical outer handles and the `H` geometry field must be unavailable. Do not solve this with one-off checks in `CanvasWorkspace.vue` or `PropertiesPanel.vue`.
 
 ## Property Panel Rules
 
@@ -121,6 +158,8 @@ Use `propSchemas` for simple `node.props` fields:
 - Group names should be one of the groups mapped in `PropertiesPanel.vue` or an intentionally visible custom group.
 
 Built-in base material schemas live in `@easyink/prop-schemas`. Material package `src/prop-schemas.ts` files should contain only material-owned additions or overrides that need to travel with that material package.
+
+Base layout behavior props are appended by `PropertiesPanel.vue` through `createLayoutBehaviorPropSchemas({ page })`. Do not duplicate placement, break, or repeat controls in material packages unless the material has a truly different sub-selection UI.
 
 Use a custom `read` and `commit` when the property is outside `node.props` or has side effects. `table-data` `showHeader` and `showFooter` are the model example: they live on `node.table`, flush active edits, potentially exit an editing session, and execute `UpdateTableVisibilityCommand`.
 
@@ -141,21 +180,21 @@ For a new built-in material:
 4. Import and register Designer entry in `packages/builtin/src/designer.ts`.
 5. Import and register Viewer entry in `packages/builtin/src/viewer.ts`.
 6. Import and append the AI descriptor in `packages/builtin/src/ai.ts` when generation should know it.
-7. Add locale keys in `packages/locales/src/zh-CN.ts` and `packages/locales/src/en-US.ts` for material catalog labels, material-local toolbars, properties, table-kernel commands, history, or placeholders.
+7. Add locale keys in `packages/locales/src/zh-CN.ts` and `packages/locales/src/en-US.ts` for material catalog labels, material-local toolbars, properties, table-kernel commands, history, page behavior labels, reject reasons, or placeholders.
 8. Update tests or snapshots affected by built-in type lists.
 9. Run `pnpm -F @easyink/mcp-server build:materials` or `pnpm -F @easyink/mcp-server check:materials` when AI descriptors changed.
-10. Run focused package tests and then `pnpm test` if the change touches shared Designer or Viewer behavior.
+10. Run focused package tests and then broader validation when registration or shared Designer/Viewer behavior changed.
 
 ## Export and Print Compatibility
 
 Every material change should be checked through Viewer because both export and print consume Viewer output:
 
 - Exporters read `.ei-viewer-page` DOM and `renderedPages`; they should not reinterpret material schema or rerun material layout.
-- Print drivers read `ViewerPrintContext.container`, `renderedPages`, and `printPolicy`; they should not recalculate page layout.
-- If a material depends on fonts, runtime data, page-aware props, or measured height, verify those are reflected in Viewer DOM before debugging exporter or printer code.
+- Print drivers read `ViewerPrintContext.container`, `renderedPages`, `ViewerPageMetrics`, and print policy; they should not recalculate page layout.
+- If a material depends on fonts, runtime data, page-aware props, measured height, or fragment pagination, verify those are reflected in Viewer DOM before debugging exporter or printer code.
 - For formal print paths, confirm material dimensions are stable in the schema unit and convert to the print system unit at the driver boundary.
 
-If export/print fails for a custom material, first confirm Viewer registration and render output. Only then inspect exporter or driver bridge logic.
+If export/print fails for a custom material, first confirm Viewer registration, render output, page plan shape, and rendered page metrics. Only then inspect exporter or driver bridge logic.
 
 ## Custom Host Checklist
 
@@ -166,14 +205,18 @@ For a host-owned custom material outside built-ins:
 - Keep the same `type` string in both.
 - Ship the default-node factory, Designer factory, Viewer extension, icons, prop schemas, and any host locale messages together.
 - Verify templates using that `type` cannot reach Viewer without the host registration.
+- If the host exposes page behavior UI, reuse the core schema fields `placement`, `break`, and `repeat`.
 
 ## Common Failure Signals
 
 - Designer changes do not repaint: `renderContent()` did not subscribe to `nodeSignal`.
 - Viewer shows `[Unknown: type]`: Viewer registration is missing.
 - Bound values do not change: renderer reads defaults instead of resolved props, or `viewer.open({ data })` data shape does not match `fieldPath`.
+- Page-aware content changes page count: repeated nodes were included in layout/pagination inputs.
+- Page numbers are missing: the material lacks `repeat.scope='every-output-page'`, Viewer `pageAware`, or reads schema-time counts instead of `__pageNumber` / `__totalPages`.
+- Break rules do nothing: the page does not use `auto-sheets`, the node is fixed-position, or the behavior is still stored only in legacy props.
 - Undo groups every pointer move separately: continuous operations need a stable `mergeKey`.
 - Property panel writes to the wrong location: the schema needs custom `read` and `commit`, not a plain props-bag schema.
-- Resize breaks internals: implement a `MaterialResizeAdapter`.
-- Export or print output differs from preview: the material may rely on design-only DOM, unmeasured runtime size, missing Viewer registration, or non-printable external resources.
-- Custom print driver size is wrong: driver skipped unit conversion or ignored `printPolicy` and `renderedPages`.
+- Resize breaks internals: implement a `MaterialResizeAdapter` or control policy.
+- Export or print output differs from preview: the material may rely on design-only DOM, unmeasured runtime size, missing Viewer registration, bad page overlay handling, or non-printable external resources.
+- Custom print driver size is wrong: driver skipped unit conversion or ignored print policy and rendered page metrics.

@@ -101,6 +101,7 @@ Designer 侧负责两件事：
 ```ts
 import type { MaterialExtensionFactory } from '@easyink/core'
 import { registerMaterialBundle } from '@easyink/designer'
+import { IconText } from '@easyink/icons'
 import { escapeHtml } from '@easyink/shared'
 
 const createPriceTagExtension: MaterialExtensionFactory = () => ({
@@ -138,7 +139,7 @@ registerMaterialBundle(store, {
     {
       type: PRICE_TAG_TYPE,
       name: '价格签',
-      icon: 'text',
+      icon: IconText,
       category: 'basic',
       capabilities: {
         bindable: true,
@@ -148,8 +149,8 @@ registerMaterialBundle(store, {
       createDefaultNode: createPriceTagNode,
       factory: createPriceTagExtension,
       propSchemas: [
-        { key: 'label', label: '标题', type: 'text' },
-        { key: 'price', label: '价格', type: 'text' },
+        { key: 'label', label: '标题', type: 'string' },
+        { key: 'price', label: '价格', type: 'string' },
         { key: 'accentColor', label: '强调色', type: 'color' },
       ],
     },
@@ -169,9 +170,25 @@ registerMaterialBundle(store, {
 - `propSchemas`：追加到设计器基础属性 Schema 后面，只适合那些直接落在 `node.props` 上的属性。
 - `capabilities`：决定设计器是否显示绑定、旋转、缩放等能力。
 
+当前能力字段来自 `MaterialCapabilities` / `BuiltinMaterialCapabilities`，包括：
+
+| 字段 | 作用 |
+|------|------|
+| `bindable` | 是否显示元素级绑定能力 |
+| `rotatable` | 是否允许旋转 |
+| `resizable` | 是否允许调整宽高 |
+| `supportsChildren` | 是否支持子节点 |
+| `supportsAnimation` | 是否支持动画配置 |
+| `supportsUnionDrop` | 是否支持一次拖放创建多个绑定节点 |
+| `pageAware` | 是否按输出页复制并注入页码上下文 |
+| `multiBinding` | 是否支持多个绑定项 |
+| `keepAspectRatio` | 缩放时是否保持宽高比 |
+
 如果一个属性不应该直接写入 `node.props`，就不要硬塞进 `propSchemas`，而应该用自定义 overlay 或命令去管理。
 
 内置物料的基础属性 Schema 由 `@easyink/prop-schemas` 维护，设计器注册物料时会先读取这部分基础字段，再合并物料包自己通过 `propSchemas` 提供的扩展字段。自定义物料只需要在注册时传入自己的 `propSchemas`。
+
+内置物料能力以各物料包的 `*_CAPABILITIES` 常量为准。当前注册到 Designer 的内置类型包括 `text`、`image`、`barcode`、`qrcode`、`line`、`rect`、`ellipse`、`container`、`table-static`、`table-data`、`flow-row`、`chart`、`svg-custom`、`svg-star`、`svg-heart` 和 `page-number`。
 
 ## 第三步：注册 Viewer 侧渲染器
 

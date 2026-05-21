@@ -20,6 +20,7 @@ Deep editing uses these contracts from `packages/core/src/editing-session.ts` an
 - `getContentLayout()` and `resolveLocation()` return document/page coordinates.
 - `hitTest(point, node)` receives material-local coordinates.
 - Use `GeometryService.documentToLocal()` and `localToDocument()` when pointer or handle positions cross spaces.
+- Let Designer framework projection handle `EditorSurfacePlan`; material geometry should not translate to output page coordinates or repeated overlay preview coordinates by itself.
 - Include transforms when needed. For shape handles like `svg-star`, local handle positions are converted through rotation and scale before overlay placement.
 
 Hit tests should return `null` for inert regions. Table-data returns `null` for virtual placeholder rows so preview-only rows are not editable.
@@ -74,6 +75,7 @@ Use decorations for visual handles, guides, inline toolbars, and overlays:
 - Keep rendering layer intentional: `below-content`, `above-content`, or `above-handles`.
 - Component props include `{ rects, selection, node, session, unit }`.
 - Use `session.dispatch()` to send commands and `session.setMeta()` for transient UI state shared with the decoration.
+- Material-local toolbars should anchor to the material frame unless the interaction truly belongs to a selected sub-element. Repeated/page-aware preview clones are visual-only and should not mount deep-edit decorations.
 
 `svg-star` uses a decoration to render inner-radius handles and dispatches `svg-star.adjust-handle` while dragging. The behavior converts screen coordinates to material-local points and writes `starInnerRatio`.
 
@@ -148,6 +150,7 @@ For table-like internal resize:
 - Returning to a previously edited sub-element shows highlight only until the user explicitly enters edit mode again.
 - Resize handles include outer semantic boundaries where users expect size control, such as table last-column right borders and visible row bottom borders.
 - Runtime-height materials should keep preview rows display-only and avoid any gesture that mutates preview-only structures into Schema.
+- Page-aware repeated previews should stay non-interactive; deep editing applies to the source node only.
 - Drag/resize gestures clean up on unmount.
 - Continuous edits have merge keys.
 - Hiding/removing the selected sub-element exits or repairs the active session.
