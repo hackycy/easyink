@@ -97,7 +97,7 @@ Coordinate projection must use:
 
 Grid, guides, snapping, element overlays, repeat previews, rulers, and selection UI should all consume the same `EditorSurfacePlan`.
 
-Repeated/page-aware nodes have one interactive source node in Designer. Additional page previews are visual-only; they must not participate in selection, drag, resize, snapping, command history, or schema writes.
+Repeated/page-aware nodes have one interactive source node in Designer. Additional page previews are visual-only; they must not participate in selection, drag, resize, snapping, command history, or schema writes. Designer may pass page preview data through `renderContextSignal`, but that context is display-only runtime state.
 
 ## Designer Contract
 
@@ -105,7 +105,7 @@ The Designer material contract is in `packages/core/src/material-extension.ts`.
 
 Implement `MaterialDesignerExtension` with:
 
-- `renderContent(nodeSignal, container)`: mount the design-time content and subscribe to node changes.
+- `renderContent(nodeSignal, container, renderContextSignal?)`: mount the design-time content, subscribe to node changes, and optionally subscribe to transient Designer render context such as page-aware preview numbers.
 - `datasourceDrop`: optional material-owned drag/drop binding logic.
 - `geometry`: optional deep-edit hit testing and selection rectangle mapping.
 - `selectionTypes`: optional sub-selection schema and payload validation.

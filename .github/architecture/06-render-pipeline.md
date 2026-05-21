@@ -74,9 +74,9 @@ EasyInk 存在两套独立的物料渲染能力，不共享实现代码：
 
 | | 设计态渲染 | Viewer 渲染 |
 |---|---|---|
-| 接口 | `MaterialDesignerExtension.renderContent(nodeSignal, container)` | `MaterialViewerExtension.render() / getRenderSize() / measure()` |
+| 接口 | `MaterialDesignerExtension.renderContent(nodeSignal, container, renderContextSignal?)` | `MaterialViewerExtension.render() / getRenderSize() / measure()` |
 | 运行场景 | Designer 画布内 | Viewer 运行时（预览/打印/导出） |
-| 数据 | 无真实数据，绑定显示为字段标签 | 真实数据绑定 + 格式化 |
+| 数据 | 无真实数据，绑定显示为字段标签；页码等通过临时设计态上下文预览 | 真实数据绑定 + 格式化 |
 | 性能要求 | 主线程同步渲染，必须轻量 | 可异步，可引入重量级第三方库 |
 | 输出 | HTML 注入画布元素容器 | DOM/SVG 页面 + 缩略图 |
 

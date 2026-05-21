@@ -167,7 +167,7 @@ Use as the page-aware reference:
 - Viewer registration also sets `pageAware: true`, making the material default repeat behavior explicit.
 - Runtime removes it from layout inputs, replicates it after pagination, and injects `__pageNumber` and `__totalPages`.
 - Rendering uses resolved runtime props, not schema-time page counts.
-- Designer shows one editable source node and non-interactive repeat previews on other pages.
+- Designer shows one editable source node and non-interactive repeat previews on other pages. It uses `renderContextSignal.page` to display real design-time page numbers for both source and preview instances, while keeping those values out of Schema.
 - Page-aware replication is skipped for `label-sheets`.
 
 Use this pattern for watermarks, repeated headers, and repeated footers. Ensure repeated overlays do not influence flow, continuous-paper height, output page count, or source-node editability.

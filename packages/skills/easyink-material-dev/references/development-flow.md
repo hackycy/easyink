@@ -74,10 +74,11 @@ Only do this when the material is intentionally a post-pagination overlay. Ordin
 
 ## Designer Rendering Rules
 
-Use `renderContent(nodeSignal, container)`:
+Use `renderContent(nodeSignal, container, renderContextSignal?)`:
 
 - Render immediately.
 - Subscribe to `nodeSignal` so property changes update the canvas.
+- Subscribe to `renderContextSignal` only when the material needs Designer-owned transient context, such as page-aware source/repeat preview page numbers.
 - Return the unsubscribe and any cleanup for DOM listeners or gestures.
 - Escape user-controlled values with `escapeHtml()` or use real DOM text APIs.
 - Use `context.t(key)` for placeholders and labels.
@@ -85,7 +86,7 @@ Use `renderContent(nodeSignal, container)`:
 
 Simple materials can set `container.innerHTML`. Complex materials can create Vue decorations or DOM manually, but cleanup must be deterministic.
 
-Designer coordinates come through `EditorSurfacePlan` at the framework layer. Material code should use material-local coordinates in geometry and datasource drop protocols, and should not convert output page plans back into schema coordinates.
+Designer coordinates and design-time page context come through framework-owned surface planning. Material code should use material-local coordinates in geometry and datasource drop protocols, and should not convert output page plans or `renderContextSignal` values back into schema coordinates or persisted props.
 
 ## Viewer Rendering Rules
 

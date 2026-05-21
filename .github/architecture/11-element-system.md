@@ -424,8 +424,13 @@ interface MaterialDesignerExtension {
   /** 设计态内容渲染：设计器提供定位好的内容 DOM 容器，物料自行渲染。
    *  nodeSignal 提供框架无关的响应式订阅：调用 nodeSignal.subscribe(callback) 监听节点变化，
    *  调用 nodeSignal.get() 获取当前值。物料在首次调用时完成 DOM 挂载，后续通过 subscribe 增量更新。
+   *  renderContextSignal 是可选的设计态上下文信号，用于页码、重复预览等不进入 Schema 的临时显示值。
    *  返回 cleanup 函数，在元素从画布移除时调用。 */
-  renderContent(nodeSignal: NodeSignal, container: HTMLElement): () => void
+  renderContent(
+    nodeSignal: NodeSignal,
+    container: HTMLElement,
+    renderContextSignal?: MaterialDesignerRenderContextSignal,
+  ): () => void
 
   /** 编辑行为协议（详见 22 章）。复杂物料按需提供。 */
   geometry?: MaterialGeometry
@@ -499,6 +504,19 @@ interface NodeSignal {
   subscribe(callback: (node: MaterialNode) => void): () => void
 }
 
+interface MaterialDesignerRenderContextSignal {
+  get(): MaterialDesignerRenderContext
+  subscribe(callback: (context: MaterialDesignerRenderContext) => void): () => void
+}
+
+interface MaterialDesignerRenderContext {
+  page?: {
+    pageIndex: number
+    pageNumber: number
+    totalPages: number
+  }
+}
+
 // 编辑行为相关接口（MaterialGeometry / SelectionType / BehaviorRegistration /
 // SelectionDecorationDef / TransactionAPI）见 22 章。
 ```
@@ -517,9 +535,9 @@ interface NodeSignal {
 
 **渲染方式：**
 
-`renderContent(nodeSignal, container)` 接收 Designer 提供的已定位 DOM 容器和框架无关的节点信号。物料在首次调用时挂载 DOM，后续通过 `nodeSignal.subscribe()` 监听变化并增量更新，无需重建。返回 cleanup 函数用于元素移除时的清理。不返回 HTML 字符串。
+`renderContent(nodeSignal, container, renderContextSignal?)` 接收 Designer 提供的已定位 DOM 容器、框架无关的节点信号，以及可选的设计态上下文信号。物料在首次调用时挂载 DOM，后续通过 `nodeSignal.subscribe()` 监听节点变化；需要页码、重复预览等设计态上下文时，再订阅 `renderContextSignal`。返回 cleanup 函数用于元素移除时的清理。不返回 HTML 字符串。
 
-Designer 内部将 Vue computed 包装为 `NodeSignal` 接口，extension 代码不依赖 Vue。
+Designer 内部将 Vue computed 包装为 `NodeSignal` / `MaterialDesignerRenderContextSignal` 接口，extension 代码不依赖 Vue。`renderContextSignal` 只表达当前编辑表面上的临时显示上下文，不允许物料把其中的页码、总页数或预览 clone 信息写回 Schema。
 
 **各类物料的设计态渲染策略：**
 
@@ -531,6 +549,7 @@ Designer 内部将 Vue computed 包装为 `NodeSignal` 接口，extension 代码
 | line / rect / ellipse | 根据 props 直接渲染图形（颜色、边框、圆角） | 基本无差异 |
 | table-static | 渲染表格格线结构和格子内容；有 staticBinding 的 cell 显示 `{#字段标签}`，无绑定的 cell 显示手动编辑文本 | Viewer 替换为真实数据 |
 | table-data | 渲染表格格线结构；header/footer 显示文本或绑定标签；数据区编辑行显示绑定标签，下方 2 行灰色占位 | Viewer 执行数据展开、分页、重复头 |
+| page-number | 使用 `renderContextSignal.page` 显示当前编辑页和重复预览页的真实页码 | Viewer 使用分页后的 `__pageNumber / __totalPages` |
 | container | 渲染容器边界 + 递归渲染子元素 | 基本无差异 |
 | chart | 显示图表类型图标 + 静态缩略图占位 | Viewer 调用图表库渲染真实图表 |
 | svg | 直接渲染 SVG 内容 | 基本无差异 |
@@ -546,8 +565,9 @@ Designer 内部将 Vue computed 包装为 `NodeSignal` 接口，extension 代码
 CanvasWorkspace 遍历 elements
   → 为每个元素创建定位好的内容 DOM 容器
   → 创建 NodeSignal：包装 Vue computed 为 { get(), subscribe() }
+  → 按需创建 MaterialDesignerRenderContextSignal：提供页码等临时上下文
   → 查找 MaterialDesignerExtension.renderContent
-  → 有：调用 cleanup = renderContent(nodeSignal, container)，物料自行渲染到容器内
+  → 有：调用 cleanup = renderContent(nodeSignal, container, renderContextSignal)，物料自行渲染到容器内
   → 无：在容器内显示类型名占位
   → 叠加选区边框、拖拽手柄、绑定角标等交互层
   → 元素移除时调用 cleanup() 清理

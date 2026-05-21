@@ -647,9 +647,10 @@ EasyInk 存在两套独立的物料渲染能力：
 ```
 ┌─────────────────────────────────────────────────────┐
 │ Designer 画布                                        │
-│  MaterialDesignerExtension.renderContent(nodeSignal, container)   │
+│  MaterialDesignerExtension.renderContent(nodeSignal, container, renderContextSignal?) │
 │  - 轻量、快速、不依赖运行时数据流                      │
 │  - 绑定值显示为字段标签 {#字段名}                      │
+│  - 页码/重复预览等仅注入临时设计态上下文，不写入 Schema │
 │  - 复杂物料使用简化占位                               │
 │  - 叠加选区/拖拽/编辑态交互层                          │
 └─────────────────────────────────────────────────────┘
@@ -680,7 +681,7 @@ EasyInk 存在两套独立的物料渲染能力：
 CanvasWorkspace 遍历 elements
   → store.getDesignerExtension(el.type)
   → extension.renderContent 存在？
-     ├─ 是：创建 NodeSignal 并传入 renderContent(nodeSignal, container)
+     ├─ 是：创建 NodeSignal，并按需传入设计态页码上下文
      │     物料首次挂载 DOM，后续通过 subscribe 增量更新
      └─ 否：显示类型名占位块 + 虚线边框（回退）
   → 叠加交互层：选区边框、8 向缩放手柄、旋转手柄、绑定角标
@@ -696,6 +697,8 @@ CanvasWorkspace 遍历 elements
 - 表格数据区：每个绑定单元格显示 `{#字段标签}`
 
 绑定标签由 `DesignerRenderContext.getBindingLabel()` 统一提供，格式为 `bindingRef.fieldLabel || bindingRef.fieldPath`。
+
+对页码、页眉、页脚、水印这类 page-aware 物料，Designer 还可通过 `renderContextSignal` 提供输出页序号、页码和总页数等临时上下文，用于“设计态直看真实页码”的预览，但这些值仍不进入 Schema，也不参与命令历史。
 
 ### 10.9.4 编辑态过渡
 
