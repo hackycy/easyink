@@ -43,6 +43,7 @@ export default defineConfig({
           text: 'Designer',
           items: [
             { text: '概述', link: '/designer/' },
+            { text: '样式自定义', link: '/designer/styling' },
             { text: '键盘快捷键', link: '/designer/keyboard-shortcuts' },
             { text: '数据绑定', link: '/designer/data-binding' },
             { text: '自动保存', link: '/designer/auto-save' },

@@ -165,3 +165,7 @@ const myLocale = { /* ... */ }
 ```ts
 import '@easyink/designer/index.css'
 ```
+
+## 样式自定义
+
+Designer 的主题定制目前主要基于 CSS 变量和类名覆盖，详细说明见 [样式自定义](./styling.md)。
