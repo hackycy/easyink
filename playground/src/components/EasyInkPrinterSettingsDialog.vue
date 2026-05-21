@@ -108,11 +108,11 @@ function handleAuditUserIdChange(value: string | number) {
   })
 }
 
-function handleAuditLabelTypeChange(value: string | number) {
+function handleAuditDocumentTypeChange(value: string | number) {
   printService.updateConfig({
     userData: {
       ...printService.config.userData,
-      labelType: String(value),
+      documentType: String(value),
     },
   })
 }
@@ -255,7 +255,7 @@ onMounted(() => {
           <div class="space-y-1">
             <Label>强制传纸张尺寸</Label>
             <p class="text-xs text-muted-foreground">
-              关闭时不传 paperSize，由打印机驱动按当前介质决定；仅在标签机必须显式指定尺寸时开启。
+              关闭时不传 paperSize，由打印机驱动按当前介质决定；仅在设备必须显式指定尺寸时开启。
             </p>
           </div>
           <Switch
@@ -269,7 +269,7 @@ onMounted(() => {
           <div class="space-y-1">
             <Label>审计演示</Label>
             <p class="text-xs text-muted-foreground">
-              这里的 UserId 和 LabelType 会随打印请求一起发送，打印后可在 EasyInk Printer 审计日志中看到对应两列。留空则不发送。
+              这里的 UserId 和 DocumentType 会随打印请求一起发送，打印后可在 EasyInk Printer 审计日志中看到对应两列。留空则不发送。
             </p>
           </div>
           <div class="grid gap-3 sm:grid-cols-2">
@@ -283,12 +283,12 @@ onMounted(() => {
               />
             </div>
             <div class="space-y-1.5">
-              <Label>LabelType</Label>
+              <Label>DocumentType</Label>
               <Input
-                :model-value="printService.config.userData?.labelType ?? ''"
+                :model-value="printService.config.userData?.documentType ?? ''"
                 :disabled="!printService.enabled.value"
-                placeholder="shipping-label"
-                @update:model-value="handleAuditLabelTypeChange"
+                placeholder="receipt"
+                @update:model-value="handleAuditDocumentTypeChange"
               />
             </div>
           </div>

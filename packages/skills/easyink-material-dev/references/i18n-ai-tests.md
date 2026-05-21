@@ -82,7 +82,7 @@ Choose focused tests based on risk:
 - Viewer render: returns trusted HTML, uses resolved props, escapes user content.
 - Viewer measure: runtime height/width, layout cache behavior, diagnostics.
 - Fragment pagination: split behavior under `auto-sheets`, preservation of `sourceNodeId`, and no source schema mutation.
-- Page-aware/repeat overlay: excluded from layout inputs, copied after pagination, receives `__pageNumber` and `__totalPages`, skipped for `label-sheets`.
+- Page-aware/repeat overlay: excluded from layout inputs, copied after pagination, receives `__pageNumber` and `__totalPages`.
 - Datasource drop: accepted/rejected zones, collection prefix compatibility, cell binding shape.
 - Registration: built-in Designer and Viewer registries include the new material.
 - MCP config: `check:materials` passes when AI descriptors changed.

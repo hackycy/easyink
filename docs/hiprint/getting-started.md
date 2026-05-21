@@ -1,6 +1,6 @@
 # HiPrint 快速上手
 
-HiPrint 通道适合跨平台静默打印，尤其适合标签、小票、卡片这类由设备驱动控制纸张的场景。EasyInk 已经内置托管 Viewer 打印链路，并提供两种接入方式：
+HiPrint 通道适合跨平台静默打印，尤其适合小票、卡片这类由设备驱动控制纸张的场景。EasyInk 已经内置托管 Viewer 打印链路，并提供两种接入方式：
 
 - 官方 client：EasyInk 帮你连接 `electron-hiprint`、发现打印机并提交打印。
 - runtime adapter：业务已有自己的 hiprint 封装时，只把现成 `hiprint` 实例交给 EasyInk 做打印提交。
@@ -241,9 +241,9 @@ hiPrint.setPrinter(printers[0]?.name)
 
 推荐先把 `refreshPrinters()` 结果展示在设置页里，再让用户明确选择。这样比默认盲选更容易排查问题。
 
-## 标签机纸张策略
+## 自定义纸张策略
 
-默认不向 electron-hiprint 强制传 `pageSize`，由打印机驱动使用当前介质。DELI 等标签机如果回退到 A4 缩印，再全局开启显式尺寸：
+默认不向 electron-hiprint 强制传 `pageSize`，由打印机驱动使用当前介质。某些自定义纸张驱动如果回退到 A4 缩印，再全局开启显式尺寸：
 
 ```ts
 hiPrint.setForcePageSize(true)
@@ -252,7 +252,7 @@ await printer.print({ schema, data })
 
 普通小票机、连续纸和普通办公打印机通常保持关闭。
 
-这里的判断标准不是“标签机就开启”，而是“当前设备如果不显式传纸张尺寸，就会被系统驱动按 A4 或默认介质处理”。
+这里的判断标准不是“特定设备类型就开启”，而是“当前设备如果不显式传纸张尺寸，就会被系统驱动按 A4 或默认介质处理”。
 
 ## Playground 示例
 
@@ -267,6 +267,6 @@ Playground 已使用官方包集成：
 
 **未发现打印机**：先确认系统打印机已正常安装，再调用 `hiPrint.refreshPrinters()`；如果这里拿不到设备，问题通常不在模板渲染。
 
-**标签内容缩印到 A4**：确认当前打印任务需要显式纸张尺寸时，调用 `hiPrint.setForcePageSize(true)` 或在打印器配置里传 `forcePageSize`。
+**内容缩印到 A4**：确认当前打印任务需要显式纸张尺寸时，调用 `hiPrint.setForcePageSize(true)` 或在打印器配置里传 `forcePageSize`。
 
 **第一张单应该怎么验收**：最小验收标准不是前端 Promise resolve，而是设备确实打印出预期尺寸的纸张，且没有被驱动缩放到默认 A4。

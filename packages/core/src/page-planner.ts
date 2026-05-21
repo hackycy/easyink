@@ -40,9 +40,7 @@ export interface PagePlanOptions {
 }
 
 export function createPagePlan(schema: DocumentSchema, options: PagePlanOptions = {}): PagePlan {
-  const repeatedElements = schema.page.pagination?.strategy === 'label-sheets'
-    ? []
-    : schema.elements.filter(el => readNodeRepeatScope(el) === 'every-output-page')
+  const repeatedElements = schema.elements.filter(el => readNodeRepeatScope(el) === 'every-output-page')
   const layoutSchema = repeatedElements.length > 0
     ? { ...schema, elements: schema.elements.filter(el => !repeatedElements.includes(el)) }
     : schema

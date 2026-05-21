@@ -152,16 +152,6 @@ function resolvePage(intent: TemplateGenerationIntent, plan: AIGenerationPlan): 
       reflow: { strategy: 'flow-y', preserveTrailingGap: true, collisionPolicy: 'diagnose' },
     }
   }
-  if (mode === 'label') {
-    return {
-      mode,
-      width,
-      height,
-      layout: { strategy: 'absolute' },
-      pagination: { strategy: 'label-sheets' },
-      reflow: { strategy: 'measure-only' },
-    }
-  }
   return {
     mode,
     width,

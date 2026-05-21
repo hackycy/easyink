@@ -39,7 +39,7 @@ MaterialRendererRegistry
 2. `FontRegistryLoader`：加载字体描述与字体资源。
 3. `BindingProjector`：按 `BindingRef.fieldPath` 从传入的 `data` 根对象解析值，并处理 `bindIndex` 与显示格式。对 table-data 节点执行单元格级解析（见 6.6.1）。
 4. `MeasureAndFlowResolver`：先测量 table-data 等动态物料的运行态尺寸，再按 `page.reflow.strategy` 执行 `flow-y` 等回流策略，把后续 flow 元素按文档顺序重新定位。
-5. `LayoutPipeline / PaginationEngine`：基于回流后的几何结果生成固定页、连续纸、自动分页页或标签 sheet 计划。对 table-data 等可拆分页物料通过 `FragmentPaginator` 协作（见 [7.5](./07-layout-engine.md)）。
+5. `LayoutPipeline / PaginationEngine`：基于回流后的几何结果生成固定页、连续纸或自动分页页计划。对 table-data 等可拆分页物料通过 `FragmentPaginator` 协作（见 [7.5](./07-layout-engine.md)）。
 6. `RenderSurface`：输出页面 DOM/SVG 和缩略图，并把最终 `ViewerPageMetrics` 缓存在 ViewerRuntime 内。`RenderSurface` 只负责页面容器、定位和通用诊断，不允许按 `materialType` 写分支。若某类物料的运行态渲染尺寸不等于 schema 几何尺寸，必须由 `MaterialViewerExtension.getRenderSize()` 通过注册表回传，`RenderSurface` 只消费 registry 返回值。
 7. `PrintPolicyResolver`：基于 `page.pageModel / page.mode / pageSizeMode / renderedPages` 解析打印策略。连续纸使用 driver 模式时不强制纸张尺寸；连续纸使用 fixed 模式时必须使用 render 阶段缓存的最终页面尺寸，缺失时发出 `PRINT_RENDER_METRICS_MISSING` 并拒绝打印。
 8. `ExportPluginLoader`：按需装载导出依赖和插件。
@@ -182,7 +182,7 @@ interface ViewerPrintPolicy {
   pageSizeMode: 'driver' | 'fixed'
   pageMode: DocumentSchema['page']['mode']
   pageSizeMode: 'driver' | 'fixed'
-  sheetSize?: { width: number, height: number, unit: string, source: 'schema' | 'label' | 'rendered' }
+  sheetSize?: { width: number, height: number, unit: string, source: 'schema' | 'rendered' }
   pageBreakBehavior: { after: 'auto' | 'page', inside: 'auto' | 'avoid' }
   offset: { horizontal: number, vertical: number, unit: string }
 }
@@ -193,7 +193,6 @@ interface ViewerPrintPolicy {
 - 连续纸 + driver：`pageSizeMode='driver'`，不输出固定 `@page size`，避免连续纸被浏览器或驱动裁切。
 - 连续纸 + fixed：`pageSizeMode='fixed'`，`sheetSize.source='rendered'`，尺寸来自 render 后缓存的 `ViewerPageMetrics`。
 - `fixed`：尺寸来自 schema page。
-- `label`：纸张尺寸由 label columns / rows / gaps 计算，不等同于单个标签 cell。
 - `PagePrintConfig` 的 offset 只进入策略对象，CSS 模板不重新读取 schema。
 
 ## 6.9 样式与承载策略

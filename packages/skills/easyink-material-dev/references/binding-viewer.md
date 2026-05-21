@@ -133,10 +133,9 @@ Viewer behavior:
 - They are copied into every output page after pagination.
 - Virtual IDs are generated as `originalId__p${page.index}`.
 - Resolved props get `__pageNumber` and `__totalPages`.
-- `label-sheets` skips this replication.
 - In `fixed-sheets + blankPolicy='remove'`, visible repeated overlays can retain an otherwise blank page.
 
-Material renderers should read page-aware runtime values from `context.resolvedProps`. Do not compute page counts from schema `page.pages`, label copies, or output DOM.
+Material renderers should read page-aware runtime values from `context.resolvedProps`. Do not compute page counts from schema `page.pages`, copy counts, or output DOM.
 
 Designer behavior:
 

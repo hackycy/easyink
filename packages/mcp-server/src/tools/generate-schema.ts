@@ -60,7 +60,7 @@ function buildClarification(plan: AIGenerationPlan): { reason: string, questions
   if (plan.confidence !== 'low')
     return undefined
   const questions: string[] = [
-    'What kind of document is this — receipt, invoice/order, label, certificate, or something else?',
+    'What kind of document is this — receipt, invoice/order, certificate, or something else?',
     `Is the paper size right (currently ${plan.page.mode}, ${plan.page.width}x${plan.page.height}mm)? If not, what should it be?`,
   ]
   if (plan.tableStrategy === 'table-data-for-arrays')

@@ -71,7 +71,7 @@ async function handleDelete(template: StoredTemplate, event: Event) {
 }
 
 function getModeLabel(mode: string): string {
-  const map: Record<string, string> = { fixed: '固定', continuous: '连续', label: '标签' }
+  const map: Record<string, string> = { fixed: '固定', continuous: '连续' }
   return map[mode] ?? mode
 }
 

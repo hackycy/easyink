@@ -39,7 +39,7 @@ export const PLAN_JSON_SCHEMA = {
       type: 'object',
       additionalProperties: false,
       properties: {
-        mode: { type: 'string', enum: ['fixed', 'label', 'continuous'] },
+        mode: { type: 'string', enum: ['fixed', 'continuous'] },
         width: { type: 'number' },
         height: { type: 'number' },
         reason: { type: 'string' },
@@ -63,7 +63,7 @@ export const TEMPLATE_INTENT_JSON_SCHEMA = {
       type: ['object', 'null'],
       additionalProperties: false,
       properties: {
-        mode: { type: ['string', 'null'], enum: ['fixed', 'label', 'continuous', null] },
+        mode: { type: ['string', 'null'], enum: ['fixed', 'continuous', null] },
         width: { type: ['number', 'null'] },
         height: { type: ['number', 'null'] },
       },

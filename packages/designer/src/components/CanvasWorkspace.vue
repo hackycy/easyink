@@ -173,8 +173,6 @@ const elements = computed(() => store.getElements())
 
 const elementRenderContexts = computed(() => {
   const contexts = new Map<string, MaterialDesignerRenderContext>()
-  if (store.schema.page.pagination?.strategy === 'label-sheets')
-    return contexts
   const pages = resolveRepeatPreviewPages()
   if (pages.length === 0)
     return contexts
@@ -187,8 +185,6 @@ const elementRenderContexts = computed(() => {
 })
 
 const repeatedPreviewElements = computed(() => {
-  if (store.schema.page.pagination?.strategy === 'label-sheets')
-    return []
   const pages = resolveRepeatPreviewPages()
   if (pages.length <= 1)
     return []
@@ -649,7 +645,6 @@ onUnmounted(() => {
             class="ei-canvas-paper"
             :class="{
               'ei-canvas-paper--continuous': frame.page.kind === 'continuous',
-              'ei-canvas-paper--label': frame.page.kind === 'label-cell',
             }"
             :style="frame.style"
           />
@@ -874,10 +869,6 @@ onUnmounted(() => {
 
   &--continuous {
     min-height: 100%;
-  }
-
-  &--label {
-    border-radius: 2px;
   }
 }
 

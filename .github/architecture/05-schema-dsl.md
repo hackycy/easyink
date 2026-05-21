@@ -79,7 +79,7 @@ interface BenchmarkDocumentInput {
 
 ## 5.3 页面模型
 
-页面模型覆盖打印、标签和背景语义的完整字段族。
+页面模型覆盖打印和背景语义的完整字段族。
 
 ```typescript
 interface PageSchema {
@@ -93,7 +93,6 @@ interface PageSchema {
   offsetY?: number
   copies?: number
   blankPolicy?: BlankPolicy
-  label?: LabelPageConfig
   grid?: GridConfig
   font?: string
   background?: PageBackground
@@ -105,13 +104,13 @@ interface PageSchema {
   extensions?: Record<string, unknown>
 }
 
-type PageMode = 'fixed' | 'continuous' | 'label'
+type PageMode = 'fixed' | 'continuous'
 type PageScale = 'auto' | 'fit-width' | 'fit-height' | number
 type BlankPolicy = 'keep' | 'remove' | 'auto'
 
-type PageModelKind = 'paged-paper' | 'continuous-paper' | 'label-sheet'
+type PageModelKind = 'paged-paper' | 'continuous-paper'
 type LayoutStrategyKind = 'absolute' | 'stack-flow' | 'region-flow'
-type PaginationStrategyKind = 'none' | 'fixed-sheets' | 'auto-sheets' | 'label-sheets'
+type PaginationStrategyKind = 'none' | 'fixed-sheets' | 'auto-sheets'
 type ReflowStrategyKind = 'none' | 'measure-only' | 'flow-y'
 
 interface PageModelConfig {
@@ -140,13 +139,6 @@ interface ReflowConfig {
   strategy: ReflowStrategyKind
   preserveTrailingGap?: boolean
   collisionPolicy?: 'diagnose' | 'clip' | 'push'
-}
-
-interface LabelPageConfig {
-  columns: number
-  gap: number
-  rows?: number
-  rowGap?: number
 }
 
 interface GridConfig {
@@ -192,7 +184,6 @@ interface PagePrintConfig {
 | `xOffset` / `yOffset` | `page.offsetX` / `page.offsetY` |
 | `copies` | `page.copies` |
 | `blank`（字符串或数字） | `page.blankPolicy` |
-| `labelCol` / `labelGap` | `page.label.columns` / `page.label.gap` |
 | `font` | `page.font` |
 | `gridWidth` / `gridHeight` | `page.grid.width` / `page.grid.height` |
 | `background` / `backgroundImage` | `page.background.color` 或 `page.background.image` |
@@ -209,7 +200,6 @@ interface PagePrintConfig {
 设计约束：
 
 - `fixed` 仍是当前第一优先级
-- 标签纸和多栏打印能力不能靠运行时临时参数补，必须进入 `page`
 - 背景图的拉伸、平移和重复方式属于模板永久语义
 - 页面属性面板里的派生控件不应污染 schema；schema 只保存能稳定回放的文档语义
 

@@ -132,7 +132,7 @@ describe('easy ink printer client', () => {
       printerName: 'Printer A',
       userData: {
         userId: 'demo-user',
-        labelType: 'shipping-label',
+        documentType: 'receipt',
       },
     })
 
@@ -152,13 +152,13 @@ describe('easy ink printer client', () => {
     const submitPayload = JSON.parse(String(socket.send.mock.calls[1]![0])) as {
       command: string
       id: string
-      params: { userData?: { userId?: string, labelType?: string } }
+      params: { userData?: { userId?: string, documentType?: string } }
     }
 
     expect(submitPayload.command).toBe('printUploadedPdfAsync')
     expect(submitPayload.params.userData).toEqual({
       userId: 'demo-user',
-      labelType: 'shipping-label',
+      documentType: 'receipt',
     })
 
     socket.onmessage?.(new MessageEvent('message', {

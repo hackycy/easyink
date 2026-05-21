@@ -193,13 +193,13 @@ interface PanelToggleState {
 
 画布页面采用 `EditorSurfacePlan` 描述编辑态表面，而不是直接把 `page.width / page.height` 当作唯一物理页。
 
-- `EditorSurfacePlan.pages[]` 描述固定多页、连续画布或标签 cell；`yOffset` 是文档坐标偏移，`visualTop` 是包含视觉 gap 的编辑器绘制位置。
+- `EditorSurfacePlan.pages[]` 描述固定多页或连续画布；`yOffset` 是文档坐标偏移，`visualTop` 是包含视觉 gap 的编辑器绘制位置。
 - 内层 page 是统一文档坐标层，宽高来自 `plan.contentBounds`，元素和 overlay 均通过 `projectDocumentPointToEditorSurface()` 投影到这个坐标层。
 - 纸张 frame 只是视觉背景，按 `EditorSurfacePagePlan` 绘制；网格、辅助线、吸附线、选区和元素不各自维护页面偏移。
 - wrapper 承载缩放后的视觉占位，宽高等于 `plan.contentBounds * viewport.zoom`，只用于让滚动容器拿到正确 on-screen footprint。
 - viewport 只表达观察状态，即 `zoom / scrollLeft / scrollTop`，不参与 Schema 和命令历史。
 
-固定多页使用 `fixed-sheets` 生成多张可编辑纸；`auto-sheets` 和连续纸在 Designer 中表现为一个连续编辑表面，Viewer 才负责最终输出页数；标签模式默认编辑单个 label cell。
+固定多页使用 `fixed-sheets` 生成多张可编辑纸；`auto-sheets` 和连续纸在 Designer 中表现为一个连续编辑表面，Viewer 才负责最终输出页数。
 
 所有 pointer、drag、drop、resize、rotate、marquee、guide 相关的 `screen <-> document` 换算只能通过 `GeometryService`。调用方只传浏览器 `clientX/clientY` 或 document 点，不能自行读取 page rect、scroll 与 zoom 拼公式。
 
@@ -262,7 +262,7 @@ interface PanelToggleState {
 页面属性区至少要覆盖四类信息：
 
 - 文档上下文：类型、单位、预览器
-- 纸张与编辑区：宽、高、编辑区、常用纸张、标签列数与间距、圆角
+- 纸张与编辑区：宽、高、编辑区、常用纸张、圆角
 - 打印与分页：水平位置、垂直位置、打印方向、打印份数、空白页、连续排版、底部留白
 - 辅助与背景：网格开关和尺寸、全局字体、背景颜色、背景图片、背景重复/缩放/偏移
 

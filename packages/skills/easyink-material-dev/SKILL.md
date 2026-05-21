@@ -34,9 +34,9 @@ Start with the local repo, not memory. Prefer these files:
 
 1. Confirm this is a material change. Create or extend a material only when a Schema node, Designer interaction, and Viewer render path are all affected.
 2. Define stable schema identity first: `TYPE`, props interface, defaults, capabilities, and `createXNode(partial?, unit?)`. Default nodes must render visibly without runtime data.
-3. Normalize page assumptions. Legal `page.mode` values are `fixed`, `continuous`, and `label`; `stack` is legacy input migrated by `@easyink/schema`. New behavior should read `page.pageModel`, `page.layout`, `page.reflow`, and `page.pagination`, not add another `page.mode` branch.
+3. Normalize page assumptions. Legal `page.mode` values are `fixed` and `continuous`; `stack` is legacy input migrated by `@easyink/schema`. New behavior should read `page.pageModel`, `page.layout`, `page.reflow`, and `page.pagination`, not add another `page.mode` branch.
 4. Keep node coordinates semantic. `MaterialNode.x/y/width/height` are document coordinates; measurement, reflow, pagination, repeated overlays, and Designer projection must not silently write runtime output plans back into source schema.
-5. Decide material page behavior deliberately. Use `node.placement` for flow/fixed positioning, `node.break` for auto-sheets pagination constraints, and `node.repeat.scope='every-output-page'` or Viewer `pageAware` for post-pagination overlays. Repeated/page-aware nodes must not influence flow, document height, or page count, and they do not run in `label-sheets`.
+5. Decide material page behavior deliberately. Use `node.placement` for flow/fixed positioning, `node.break` for auto-sheets pagination constraints, and `node.repeat.scope='every-output-page'` or Viewer `pageAware` for post-pagination overlays. Repeated/page-aware nodes must not influence flow, document height, or page count.
 6. If the material can split across `auto-sheets`, implement `fragmentPaginator`. It should produce virtual fragments with `sourceNodeId` preserved and avoid mutating source schema.
 7. Implement Designer rendering with `renderContent(nodeSignal, container, renderContextSignal?)`. Render immediately, subscribe to `nodeSignal`, escape user-controlled strings or use real DOM, and return deterministic cleanup. Subscribe to `renderContextSignal` only for Designer-owned transient context such as page-aware preview numbers; never persist it into Schema.
 8. Implement Viewer rendering with `trustedViewerHtml()` or an `HTMLElement`. Read ordinary runtime binding results from `context.resolvedProps`; add `measure()` only when runtime content changes physical size; use `getRenderSize()` only when wrapper size must differ from schema geometry.
@@ -79,7 +79,7 @@ Load only the reference needed for the current task:
 - Runtime-height materials must declare a Designer control policy and must not expose any outer or internal path that mutates runtime-owned height.
 - Preview-only rows remain outside Schema. If a runtime-height material shows Designer preview rows, keep them display-only.
 - Material-local toolbars should be compact command toolbars, not identity badges.
-- Repeated/page-aware overlays are post-pagination page overlays. They must not affect flow, document height, page count, label sheets, or source-node editability.
+- Repeated/page-aware overlays are post-pagination page overlays. They must not affect flow, document height, page count, output sheets, or source-node editability.
 - For table-like deep editing, decoration visibility and behavior execution must share the same delegate rules for row/column resize affordances.
 - Add or reuse locale keys for anything user-visible in Designer UI, including property labels and history labels.
 - Exporters and print drivers must consume Viewer-rendered pages and `ViewerPageMetrics`; do not reimplement material layout in those layers.

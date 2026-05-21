@@ -2,8 +2,6 @@ import type { DocumentSchema } from '@easyink/schema'
 import type { PageMode } from '@easyink/shared'
 import type { LayoutDiagnostic, LayoutDocument, LayoutFragment, OutputPagePlan } from './layout-plan'
 import type { FragmentPaginator } from './material-viewer'
-import { deepClone } from '@easyink/shared'
-import { createFragmentFromNode } from './layout-plan'
 import { resolvePageModel } from './page-model'
 
 export interface PaginationOptions {
@@ -30,8 +28,6 @@ export function runPagination(
     return { mode: schema.page.mode, pages: createFixedSheets(schema, document, diagnostics, options), diagnostics }
   if (strategy === 'auto-sheets')
     return { mode: schema.page.mode, pages: createAutoSheets(schema, document, diagnostics, options), diagnostics }
-  if (strategy === 'label-sheets')
-    return { mode: schema.page.mode, pages: createLabelSheets(schema, document, diagnostics), diagnostics }
   if (strategy === 'none')
     return { mode: schema.page.mode, pages: createContinuousSheet(schema, document, diagnostics, options.originalSchema), diagnostics }
 
@@ -46,8 +42,6 @@ export function runPagination(
 
 function inferPaginationStrategy(schema: DocumentSchema): NonNullable<DocumentSchema['page']['pagination']>['strategy'] {
   const pageModelKind = schema.page.pageModel?.kind
-  if (pageModelKind === 'label-sheet' || schema.page.mode === 'label')
-    return 'label-sheets'
   if (pageModelKind === 'continuous-paper' || schema.page.mode === 'continuous')
     return 'none'
   return 'fixed-sheets'
@@ -215,66 +209,6 @@ function getTrailingGap(originalSchema: DocumentSchema | undefined): number {
   for (const el of originalSchema.elements)
     bottom = Math.max(bottom, el.y + el.height)
   return Math.max(originalSchema.page.height - bottom, 0)
-}
-
-function createLabelSheets(
-  schema: DocumentSchema,
-  document: LayoutDocument,
-  diagnostics: LayoutDiagnostic[],
-): OutputPagePlan[] {
-  const page = schema.page
-  const pageModel = resolvePageModel(schema)
-  const columns = page.label?.columns || 1
-  const rows = page.label?.rows || 1
-  const gapX = page.label?.gap || 0
-  const gapY = page.label?.rowGap || 0
-  const copies = Math.max(page.copies || 1, 1)
-
-  if (columns <= 0 || rows <= 0) {
-    diagnostics.push({
-      code: 'INVALID_LABEL_GRID',
-      severity: 'error',
-      message: 'Label columns and rows must be positive',
-      stage: 'pagination',
-    })
-  }
-
-  const cellW = pageModel.width
-  const cellH = pageModel.height
-  const sheetWidth = cellW * columns + gapX * Math.max(columns - 1, 0)
-  const sheetHeight = cellH * rows + gapY * Math.max(rows - 1, 0)
-  const perSheet = Math.max(columns * rows, 1)
-  const sheetCount = Math.max(Math.ceil(copies / perSheet), 1)
-  const entries: OutputPagePlan[] = []
-  let remaining = copies
-
-  for (let sheetIndex = 0; sheetIndex < sheetCount; sheetIndex++) {
-    const cellsOnSheet = Math.min(perSheet, remaining)
-    remaining -= cellsOnSheet
-
-    const sheetFragments: LayoutFragment[] = []
-    for (let cellIndex = 0; cellIndex < cellsOnSheet; cellIndex++) {
-      const col = cellIndex % columns
-      const row = Math.floor(cellIndex / columns)
-      const xOffset = col * (cellW + gapX)
-      const yOffset = row * (cellH + gapY)
-
-      for (const fragment of document.fragments) {
-        const clonedNode = deepClone(fragment.node)
-        const node = {
-          ...clonedNode,
-          x: clonedNode.x + xOffset,
-          y: clonedNode.y + yOffset,
-        }
-        sheetFragments.push(createFragmentFromNode(node, fragment.measured))
-      }
-    }
-
-    entries.push(createPage(sheetIndex, sheetWidth, sheetHeight, 0, sheetFragments, sheetIndex))
-  }
-
-  resolveTotalPages(entries)
-  return entries
 }
 
 function createPage(

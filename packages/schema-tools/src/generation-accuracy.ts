@@ -72,11 +72,6 @@ function applyPagePlan(
     page.pagination = { strategy: 'none' }
     page.reflow = { strategy: 'flow-y', preserveTrailingGap: true, collisionPolicy: 'diagnose' }
   }
-  else if (expected.mode === 'label') {
-    page.layout = { strategy: 'absolute' }
-    page.pagination = { strategy: 'label-sheets' }
-    page.reflow = { strategy: 'measure-only' }
-  }
   else if (expected.mode === 'fixed') {
     page.layout = { strategy: 'absolute' }
     page.pagination = { strategy: 'fixed-sheets', pageCount: page.pages }

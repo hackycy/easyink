@@ -4,7 +4,7 @@ layout: home
 hero:
   name: EasyInk
   text: Print is Easy
-  tagline: 面向开发者的文档/标签/报表设计器框架。Schema 驱动、设计器与预览器分离、物料体系可扩展，以 Vue 组件形式嵌入你的应用。
+  tagline: 面向开发者的文档/报表设计器框架。Schema 驱动、设计器与预览器分离、物料体系可扩展，以 Vue 组件形式嵌入你的应用。
   image:
     src: /logo.png
     alt: EasyInk Logo

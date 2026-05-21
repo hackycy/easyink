@@ -137,25 +137,6 @@ const BUILTIN_PROFILES: DomainProfile[] = [
     ],
   },
   {
-    domain: 'shipping-label',
-    label: '快递/商品标签',
-    keywords: ['快递', '面单', '标签', '商品标签', '货架标签', '条码标签', '物流'],
-    page: {
-      mode: 'label',
-      width: 80,
-      height: 50,
-      unit: 'mm',
-      reason: 'Labels should use label mode and compact dimensions rather than A4 fixed pages.',
-    },
-    tableStrategy: 'avoid-table',
-    materialHints: ['text', 'barcode', 'qrcode', 'line', 'rect', 'image'],
-    dataSourceName: 'label',
-    requiredFields: [
-      { name: 'title', title: '标题', type: 'string', path: 'title', required: true },
-      { name: 'code', title: '条码', type: 'string', path: 'code', required: true },
-    ],
-  },
-  {
     domain: 'business-document',
     label: '发票/报价单/订单',
     keywords: ['发票', '报价单', '订单', '出库单', '入库单', '对账单', '报表'],
@@ -323,7 +304,7 @@ function projectFieldHint(spec: DomainFieldSpec): DomainFieldHint {
   }
 }
 
-const PAGE_MODES = new Set(['fixed', 'label', 'continuous'])
+const PAGE_MODES = new Set(['fixed', 'continuous'])
 const TABLE_STRATEGIES = new Set<AIGenerationPlan['tableStrategy']>([
   'table-data-for-arrays',
   'table-static-for-fixed',

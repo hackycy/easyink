@@ -33,9 +33,9 @@ EasyInk 的本地打印目标很明确：让业务代码只关心“打印什么
 |---|---|---|
 | **运行平台** | 仅 Windows | Windows / macOS / Linux |
 | **打印输入** | PDF | HTML |
-| **渲染质量** | 适合对矢量质量要求高的正式单据 | 适合标签、小票、跨平台打印 |
+| **渲染质量** | 适合对矢量质量要求高的正式单据 | 适合小票、卡片、跨平台打印 |
 | **通信方式** | HTTP + WebSocket | WebSocket |
-| **典型场景** | 面单、正式报表、A4 文档 | 小票、标签、嵌入 Electron 的桌面应用 |
+| **典型场景** | 面单、正式报表、A4 文档 | 小票、卡片、嵌入 Electron 的桌面应用 |
 | **打印器默认 pageSizeMode** | `fixed` | `driver` |
 | **官方包** | `@easyink/print-integration-easyink-printer` | `@easyink/print-integration-hiprint` |
 
@@ -51,7 +51,7 @@ EasyInk 的本地打印目标很明确：让业务代码只关心“打印什么
 
 - 你需要跨平台。
 - 你的系统已经在使用 electron-hiprint。
-- 你打印的主要是标签、小票、卡片等较轻量页面。
+- 你打印的主要是小票、卡片等较轻量页面。
 
 ### 不要自己实现驱动的情况
 

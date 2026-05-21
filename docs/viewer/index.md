@@ -31,7 +31,7 @@ viewer.destroy()
 
 | 选项 | 类型 | 说明 |
 |------|------|------|
-| `mode` | `'fixed' \| 'continuous' \| 'label'` | 兼容选项；实际页面介质以 `schema.page.mode` 为准 |
+| `mode` | `'fixed' \| 'continuous'` | 兼容选项；实际页面介质以 `schema.page.mode` 为准 |
 | `host` | `ViewerHost` | 渲染宿主，通过 factory 函数创建 |
 | `container` | `HTMLElement` | 快捷方式，等同于 `createBrowserViewerHost(container)` |
 | `iframe` | `HTMLIFrameElement` | 快捷方式，等同于 `createIframeViewerHost(iframe)` |

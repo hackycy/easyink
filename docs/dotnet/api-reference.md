@@ -121,9 +121,9 @@ curl -X POST http://localhost:18080/api/print \
 | `paperSize` | object | 否 | PDF/模板纸张尺寸 `{width, height, unit}`；默认使用 PDF 原生尺寸 |
 | `forcePaperSize` | bool | 否 | 是否强制把 `paperSize` 作为驱动纸张参数，默认 `false` |
 | `offset` | object | 否 | 打印偏移 `{x, y}` |
-| `userData` | object | 否 | 用户数据，用于审计日志 `{userId, labelType}` |
+| `userData` | object | 否 | 用户数据，用于审计日志 `{userId, documentType}` |
 
-热敏小票机、连续纸默认保持 `forcePaperSize=false`，由驱动使用当前介质尺寸；标签机必须显式指定尺寸时再开启。
+热敏小票机、连续纸默认保持 `forcePaperSize=false`，由驱动使用当前介质尺寸；只有设备必须显式指定尺寸时再开启。
 
 #### POST /api/print/async
 

@@ -22,7 +22,6 @@ const MODE_DESCRIPTOR: PagePropertyDescriptor = {
   enum: [
     { label: 'designer.page.fixed', value: 'fixed' },
     { label: 'designer.page.continuous', value: 'continuous' },
-    { label: 'designer.page.label', value: 'label' },
   ],
   normalize(value, ctx) {
     const mode = value as PageSchema['mode']
@@ -58,7 +57,6 @@ const LAYOUT_STRATEGY_DESCRIPTOR: PagePropertyDescriptor = {
     { label: 'designer.page.layoutAbsolute', value: 'absolute' },
     { label: 'designer.page.layoutStackFlow', value: 'stack-flow' },
   ],
-  visible: ctx => ctx.document.page.mode !== 'label',
   normalize(value, ctx) {
     const strategy = value as LayoutStrategyKind
     if (strategy === 'stack-flow') {
@@ -149,78 +147,6 @@ const RADIUS_DESCRIPTOR: PagePropertyDescriptor = {
   step: 1,
   normalize(value) {
     return { page: { radius: value ? String(value) : undefined } }
-  },
-}
-
-const LABEL_COLUMNS_DESCRIPTOR: PagePropertyDescriptor = {
-  id: 'labelColumns',
-  group: 'paper',
-  source: 'page',
-  path: 'label.columns',
-  label: 'designer.page.labelColumns',
-  persisted: 'schema',
-  editor: 'number',
-  min: 1,
-  max: 20,
-  step: 1,
-  visible: ctx => ctx.document.page.mode === 'label',
-  normalize(value, ctx) {
-    const existing = ctx.document.page.label ?? { columns: 1, gap: 0 }
-    return { page: { label: { ...existing, columns: Number(value) } } }
-  },
-}
-
-const LABEL_ROWS_DESCRIPTOR: PagePropertyDescriptor = {
-  id: 'labelRows',
-  group: 'paper',
-  source: 'page',
-  path: 'label.rows',
-  label: 'designer.page.labelRows',
-  persisted: 'schema',
-  editor: 'number',
-  min: 1,
-  max: 50,
-  step: 1,
-  visible: ctx => ctx.document.page.mode === 'label',
-  normalize(value, ctx) {
-    const existing = ctx.document.page.label ?? { columns: 1, gap: 0 }
-    return { page: { label: { ...existing, rows: Number(value) } } }
-  },
-}
-
-const LABEL_GAP_DESCRIPTOR: PagePropertyDescriptor = {
-  id: 'labelGap',
-  group: 'paper',
-  source: 'page',
-  path: 'label.gap',
-  label: 'designer.page.labelGap',
-  persisted: 'schema',
-  editor: 'number',
-  min: 0,
-  max: 100,
-  step: 0.5,
-  visible: ctx => ctx.document.page.mode === 'label',
-  normalize(value, ctx) {
-    const existing = ctx.document.page.label ?? { columns: 1, gap: 0 }
-    return { page: { label: { ...existing, gap: Number(value) } } }
-  },
-}
-
-const LABEL_ROW_GAP_DESCRIPTOR: PagePropertyDescriptor = {
-  id: 'labelRowGap',
-  group: 'paper',
-  source: 'page',
-  path: 'label.rowGap',
-  label: 'designer.page.labelRowGap',
-  persisted: 'schema',
-  editor: 'number',
-  min: 0,
-  max: 100,
-  step: 0.5,
-  visible: ctx => ctx.document.page.mode === 'label',
-  normalize(value, ctx) {
-    const existing = ctx.document.page.label ?? { columns: 1, gap: 0 }
-    return { page: { label: { ...existing, rowGap: Number(value) } } }
   },
 }
 
@@ -521,16 +447,6 @@ const BG_OFFSET_Y_DESCRIPTOR: PagePropertyDescriptor = {
 }
 
 function createModePresetPatch(mode: PageSchema['mode'], page: PageSchema): Partial<PageSchema> {
-  if (mode === 'label') {
-    return {
-      mode,
-      pageModel: { kind: 'label-sheet', paper: { width: page.width, height: page.height } },
-      layout: { strategy: 'absolute' },
-      pagination: { strategy: 'label-sheets' },
-      reflow: { strategy: 'measure-only' },
-    }
-  }
-
   if (mode === 'continuous') {
     return {
       mode,
@@ -559,10 +475,6 @@ export const PAGE_PROPERTY_DESCRIPTORS: PagePropertyDescriptor[] = [
   WIDTH_DESCRIPTOR,
   HEIGHT_DESCRIPTOR,
   RADIUS_DESCRIPTOR,
-  LABEL_COLUMNS_DESCRIPTOR,
-  LABEL_ROWS_DESCRIPTOR,
-  LABEL_GAP_DESCRIPTOR,
-  LABEL_ROW_GAP_DESCRIPTOR,
   // print
   OFFSET_X_DESCRIPTOR,
   OFFSET_Y_DESCRIPTOR,

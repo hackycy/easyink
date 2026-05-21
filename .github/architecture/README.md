@@ -8,7 +8,7 @@
 - `designer` 采用顶层双栏 + 画布内窗口系统 + 独立状态栏
 - `viewer` 是独立运行时，可被设计器通过 iframe 嵌入，也可被宿主独立使用
 - Schema 区分"EasyInk 内部规范模型"和"对标产品兼容输入"，避免把历史原始 JSON 噪音扩散到内部实现
-- 页面模型完整覆盖 `viewer / width / height / pages / scale / radius / offsets / copies / blank / label / grid / background` 这组真实打印语义，并容忍 `scale/scaleType`、背景偏移字段和空白页策略的历史别名
+- 页面模型完整覆盖 `viewer / width / height / pages / scale / radius / offsets / copies / blank / grid / background` 这组真实打印语义，并容忍 `scale/scaleType`、背景偏移字段和空白页策略的历史别名
 - 数据源协议覆盖 `id / name / tag / title / expand / headless / fields / use / props / union / bindIndex`
 - 顶部物料栏建模为"高频直达物料 + 分组目录物料"的混合入口
 - `table`、`container`、`chart`、`svg` 都是一级结构系统
@@ -52,7 +52,7 @@
 
 ## 补充说明
 
-- EasyInk 当前优先对齐 `fixed-page` 文档/报表场景，连续流式和标签模式保留在同一架构内扩展
+- EasyInk 当前优先对齐 `fixed-page` 文档/报表场景，并保留连续流式页面架构
 - 设计器中的工作台布局、面板开关、激活面板和工具组带布局属于工作台状态，不进入 Schema
 - 预览器独立完成字体加载、数据加载、分页、缩略图、打印和导出适配器加载，不复用画布 DOM
 - 数据绑定保存数据源引用、字段路径、显示格式和多参数绑定位次
@@ -60,7 +60,7 @@
 - 样例资产既用于演示，也可作为回归测试资产库
 - 未识别物料、缺失数据、缺失字体、渲染失败都必须以可见诊断暴露，不允许静默吞掉
 - 对标产品的原始 JSON 字段命名存在历史噪音，EasyInk 提供无损兼容编解码层
-- `DocumentSchema.unit`、纸张预设、页面类型标签这类信息在属性面板中可见，但不固化进 `page` 规范字段
+- `DocumentSchema.unit`、纸张预设、页面类型显示名称这类信息在属性面板中可见，但不固化进 `page` 规范字段
 - AI 对话生成通过 `@easyink/ai`（浏览器端，MCP Client + Designer Contribution）与 `@easyink/mcp-server`（Node 端，可 Docker 部署）实现；Schema/DataSource 校验下沉到 `@easyink/schema-tools`；designer 仅暴露 Contribution 协议，对 AI 零编译期依赖
 - 数据源系统支持运行时动态注册，通过 Provider Factory 模式支持 MCP 数据源注入
 

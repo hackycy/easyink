@@ -292,7 +292,7 @@ viewer.registerMaterial('my-page-badge', {
 })
 ```
 
-它不会在 `label` 模式下生效，这一点需要提前接受。
+它只在真实输出页语义下生效，不会影响 layout、reflow 或 pagination 输入。
 
 ## 数据绑定应该怎么接
 

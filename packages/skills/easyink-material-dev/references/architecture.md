@@ -42,20 +42,19 @@ Rules:
 
 ## Orthogonal Page System
 
-Legal `PageMode` values are `fixed`, `continuous`, and `label`. Legacy `stack` input is migrated by `@easyink/schema` compat code into the continuous-paper combination.
+Legal `PageMode` values are `fixed` and `continuous`. Legacy `stack` input is migrated by `@easyink/schema` compat code into the continuous-paper combination.
 
 Current semantics come from four page layers:
 
-- `page.pageModel.kind`: `paged-paper`, `continuous-paper`, or `label-sheet`.
+- `page.pageModel.kind`: `paged-paper` or `continuous-paper`.
 - `page.layout.strategy`: `absolute`, `stack-flow`, or `region-flow`.
 - `page.reflow.strategy`: `none`, `measure-only`, or `flow-y`.
-- `page.pagination.strategy`: `none`, `fixed-sheets`, `auto-sheets`, or `label-sheets`.
+- `page.pagination.strategy`: `none`, `fixed-sheets`, or `auto-sheets`.
 
 Default combinations:
 
 - `fixed`: `paged-paper + absolute + measure-only + fixed-sheets`.
 - `continuous`: `continuous-paper + stack-flow + flow-y + none`.
-- `label`: `label-sheet + absolute + measure-only + label-sheets`.
 
 Material rules:
 
@@ -79,7 +78,7 @@ Designer exposes these behaviors through `createLayoutBehaviorPropSchemas()`:
 
 - Placement appears when the page supports `stack-flow + flow-y`.
 - Break rules appear only for `stack-flow + flow-y + auto-sheets`.
-- Repeat appears for all strategies except `label-sheets`.
+- Repeat appears for all supported pagination strategies.
 
 ## Designer Surface
 
@@ -88,7 +87,6 @@ Designer does not render a single page from `page.width/page.height`. It consume
 - `fixed-sheets`: multiple editable page surfaces with visual gaps; `yOffset` remains document-coordinate offset.
 - `auto-sheets`: one continuous edit surface with fixed-page reference semantics; Viewer decides final output pages.
 - `none` and continuous paper: one growing continuous canvas.
-- `label-sheets`: one editable label cell; Viewer expands output sheets.
 
 Coordinate projection must use:
 

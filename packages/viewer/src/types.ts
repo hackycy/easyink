@@ -136,7 +136,7 @@ export interface ViewerPrintSheetSize {
   width: number
   height: number
   unit: string
-  source: 'schema' | 'label' | 'rendered'
+  source: 'schema' | 'rendered'
 }
 
 export interface ViewerPrintPolicy {

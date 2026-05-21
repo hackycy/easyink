@@ -1,12 +1,12 @@
 /**
  * @vitest-environment happy-dom
  */
-import type { MaterialNode } from '@easyink/schema'
+import type { MaterialNode, PageSchema } from '@easyink/schema'
 import { describe, expect, it, vi } from 'vitest'
 import { DATASOURCE_DRAG_MIME, useDatasourceDrop } from './use-datasource-drop'
 
 interface FakeStore {
-  schema: { unit: 'px' }
+  schema: { unit: 'px', page: PageSchema }
   workbench: { viewport: { zoom: number, scrollLeft: number, scrollTop: number } }
   getElements: () => MaterialNode[]
   getElementSize: (node: MaterialNode) => { width: number, height: number }
@@ -39,6 +39,10 @@ function makeNode(extra: Partial<MaterialNode> = {}): MaterialNode {
   } as MaterialNode
 }
 
+function makePage(): PageSchema {
+  return { mode: 'fixed', width: 500, height: 500 }
+}
+
 function makeDragEvent(clientX: number, clientY: number): DragEvent {
   return {
     clientX,
@@ -63,7 +67,7 @@ describe('useDatasourceDrop', () => {
       }),
     )
     const store: FakeStore = {
-      schema: { unit: 'px' },
+      schema: { unit: 'px', page: makePage() },
       workbench: { viewport: { zoom: 1, scrollLeft: 0, scrollTop: 0 } },
       getElements: () => [node],
       getElementSize: current => ({ width: current.width, height: current.height }),

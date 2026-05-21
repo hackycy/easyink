@@ -62,14 +62,6 @@ export function decodeBenchmarkInput(input: BenchmarkDocumentInput): DocumentSch
     }
   }
 
-  // Label config
-  if ('labelCol' in rawPage || 'labelGap' in rawPage) {
-    page.label = {
-      columns: rawPage.labelCol ?? 1,
-      gap: rawPage.labelGap ?? 0,
-    }
-  }
-
   // Grid config
   if ('gridWidth' in rawPage || 'gridHeight' in rawPage) {
     page.grid = {
@@ -109,8 +101,6 @@ export function decodeBenchmarkInput(input: BenchmarkDocumentInput): DocumentSch
   // Collect passthrough
   const knownPageKeys = new Set([
     ...Object.keys(PAGE_FIELD_MAP),
-    'labelCol',
-    'labelGap',
     'gridWidth',
     'gridHeight',
     'background',
@@ -280,12 +270,6 @@ export function encodeToBenchmark(schema: DocumentSchema): BenchmarkDocumentInpu
     if (value !== undefined) {
       page[rawKey] = value
     }
-  }
-
-  // Label
-  if (schema.page.label) {
-    page.labelCol = schema.page.label.columns
-    page.labelGap = schema.page.label.gap
   }
 
   // Grid

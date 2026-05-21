@@ -8,19 +8,18 @@ export type UnitType = 'mm' | 'pt' | 'px' | 'inch'
  * Page medium types.
  * - fixed: Contracts, reports, multi-page documents with fixed page height
  * - continuous: Continuous paper, receipts, long document flow
- * - label: Label paper, multi-column batch printing
  */
-export type PageMode = 'fixed' | 'label' | 'continuous'
+export type PageMode = 'fixed' | 'continuous'
 
 /**
  * Orthogonal page medium model kinds.
  * Layout, pagination, and reflow are modeled separately from this dimension.
  */
-export type PageModelKind = 'paged-paper' | 'continuous-paper' | 'label-sheet'
+export type PageModelKind = 'paged-paper' | 'continuous-paper'
 
 export type LayoutStrategyKind = 'absolute' | 'stack-flow' | 'region-flow'
 
-export type PaginationStrategyKind = 'none' | 'fixed-sheets' | 'auto-sheets' | 'label-sheets'
+export type PaginationStrategyKind = 'none' | 'fixed-sheets' | 'auto-sheets'
 
 export type ReflowStrategyKind = 'none' | 'measure-only' | 'flow-y'
 

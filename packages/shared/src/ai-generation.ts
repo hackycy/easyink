@@ -8,7 +8,6 @@ import type { PageMode } from './types'
 export type AIGenerationDomain
   = | 'supermarket-receipt'
     | 'restaurant-receipt'
-    | 'shipping-label'
     | 'business-document'
     | 'certificate'
     | 'generic'

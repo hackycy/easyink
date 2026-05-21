@@ -21,7 +21,7 @@ MaterialViewerExtension.measure()
 | `packages/core/src/layout-plan.ts` | 定义 `LayoutDocument`、`LayoutFragment`、`OutputPagePlan` 和诊断结构。 |
 | `packages/core/src/layout-strategy.ts` | 应用测量尺寸，并按 `reflow.strategy` 调用回流引擎。 |
 | `packages/core/src/reflow-engine.ts` | 实现 `flow-y`：按原始文档顺序传播高度差，并诊断 flow 元素与 fixed 元素的新重叠。 |
-| `packages/core/src/pagination-engine.ts` | 实现 `fixed-sheets / auto-sheets / none / label-sheets`。 |
+| `packages/core/src/pagination-engine.ts` | 实现 `fixed-sheets / auto-sheets / none`。 |
 | `packages/core/src/page-planner.ts` | 兼容旧 `createPagePlan()` API，内部委托新 pipeline。 |
 
 ## 7.2 LayoutFragment
@@ -72,7 +72,6 @@ interface LayoutFragment {
 | `fixed-sheets` | 固定页高；按 `pagination.pageCount ?? page.pages ?? 1` 生成页面；元素按 `box.y` 归页；支持空白页移除和 copies。 |
 | `auto-sheets` | 按页面高度自动切分；支持 break before/after、keepTogether 和 fragment paginator。 |
 | `none` | 连续纸输出一页；高度取内容底边加模板尾部留白。 |
-| `label-sheets` | 把单个 label cell 的内容复制到 sheet 网格，并按 copies 生成多个 sheet。 |
 
 `fixed-sheets` 不会因为 page break 属性自动重排绝对定位元素，只输出诊断。`none` 不会把连续纸切成固定页。真正会执行 page break 和 keepTogether 的策略是 `auto-sheets`。
 
@@ -91,13 +90,13 @@ interface LayoutFragment {
 3. `tableDataFragmentPaginator.paginateFragment()` 在 `auto-sheets` 中按可用高度切行。
 4. 分页结果生成虚拟 table fragment，保持 `sourceNodeId`，不修改原始 topology。
 
-当前职责边界：表格知道如何拆自己的行；全局页数、页码上下文、连续纸高度和标签 sheet 仍由 `pagination-engine` 决定。
+当前职责边界：表格知道如何拆自己的行；全局页数、页码上下文和连续纸高度仍由 `pagination-engine` 决定。
 
 ## 7.6 Designer 与 Viewer 的差异
 
 Designer 编辑的是声明坐标，Viewer 输出的是运行态页面计划。两者共享 schema 和 core 页面模型，但不共用同一个页面计划：
 
-- Designer 使用 `EditorSurfacePlan` 显示固定多页、连续画布或标签 cell。
+- Designer 使用 `EditorSurfacePlan` 显示固定多页或连续画布。
 - Viewer 使用 `OutputPagePlan[]` 渲染预览、打印和导出页面。
 - `auto-sheets` 在 Designer 中是一个连续编辑表面加分页参考线，最终页数仍由 Viewer pipeline 计算。
 

@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
-import type { MaterialNode } from '@easyink/schema'
+import type { MaterialNode, PageSchema } from '@easyink/schema'
 import type { MarqueeRect, MarqueeSelectContext } from './use-marquee-select'
 import { describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
@@ -16,7 +16,7 @@ interface FakeSelection {
 }
 
 interface FakeStore {
-  schema: { unit: 'px', elements: MaterialNode[] }
+  schema: { unit: 'px', page: PageSchema, elements: MaterialNode[] }
   workbench: { viewport: { zoom: number, scrollLeft: number, scrollTop: number } }
   selection: FakeSelection
   getElements: () => MaterialNode[]
@@ -27,10 +27,14 @@ function makeNode(id: string, x: number, y: number, w = 50, h = 50, extra: Parti
   return { id, type: 'rect', x, y, width: w, height: h, props: {}, ...extra } as MaterialNode
 }
 
+function makePage(): PageSchema {
+  return { mode: 'fixed', width: 1000, height: 1000 }
+}
+
 function makeStore(elements: MaterialNode[], initial: string[] = []): FakeStore {
   const set = new Set(initial)
   return {
-    schema: { unit: 'px', elements },
+    schema: { unit: 'px', page: makePage(), elements },
     workbench: { viewport: { zoom: 1, scrollLeft: 0, scrollTop: 0 } },
     selection: {
       get ids() {

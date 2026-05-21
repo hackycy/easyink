@@ -4,11 +4,11 @@
 
 ## 24.1 当前结论
 
-- 合法 `PageMode` 只有 `fixed | continuous | label`。
+- 合法 `PageMode` 只有 `fixed | continuous`。
 - 历史 `stack` 只是 legacy input，由 `@easyink/schema` 的 compat 入口迁移为 `continuous + continuous-paper + stack-flow + flow-y + none`。
 - `page.pageModel / page.layout / page.reflow / page.pagination` 是策略语义来源，`normalizeDocumentSchema()` 会按 `mode` 补齐默认层。
 - Viewer 运行期通过 `runLayoutPipeline()` 与 `runPagination()` 生成 `LayoutDocument` 和 `OutputPagePlan[]`；`page-planner.ts` 只保留兼容 facade。
-- Designer 编辑态通过 `EditorSurfacePlan` 描述纸张、连续画布和标签 cell，不直接复用 Viewer 的输出页计划。
+- Designer 编辑态通过 `EditorSurfacePlan` 描述纸张和连续画布，不直接复用 Viewer 的输出页计划。
 
 ## 24.2 四个维度
 
@@ -23,7 +23,7 @@ DocumentSchema
 
 | 维度 | 回答的问题 | 当前实现 |
 | --- | --- | --- |
-| Page Model | 介质是什么、纸张多大、是否标签 sheet 或连续纸 | `packages/core/src/page-model.ts` |
+| Page Model | 介质是什么、纸张多大、是否连续纸 | `packages/core/src/page-model.ts` |
 | Layout | 元素先如何进入文档坐标 | `packages/core/src/layout-strategy.ts` |
 | Reflow | 测量后是否沿 Y 轴推移 flow 元素 | `packages/core/src/reflow-engine.ts` |
 | Pagination | 文档坐标如何变成输出页或 sheet | `packages/core/src/pagination-engine.ts` |
@@ -38,13 +38,12 @@ DocumentSchema
 
 ```ts
 interface PageSchema {
-  mode: 'fixed' | 'continuous' | 'label'
+  mode: 'fixed' | 'continuous'
   width: number
   height: number
   pages?: number
   copies?: number
   blankPolicy?: 'keep' | 'remove' | 'auto'
-  label?: LabelPageConfig
   background?: PageBackground
   print?: PagePrintConfig
 
@@ -54,9 +53,9 @@ interface PageSchema {
   reflow?: ReflowConfig
 }
 
-type PageModelKind = 'paged-paper' | 'continuous-paper' | 'label-sheet'
+type PageModelKind = 'paged-paper' | 'continuous-paper'
 type LayoutStrategyKind = 'absolute' | 'stack-flow' | 'region-flow'
-type PaginationStrategyKind = 'none' | 'fixed-sheets' | 'auto-sheets' | 'label-sheets'
+type PaginationStrategyKind = 'none' | 'fixed-sheets' | 'auto-sheets'
 type ReflowStrategyKind = 'none' | 'measure-only' | 'flow-y'
 
 interface MaterialNode {
@@ -76,7 +75,6 @@ interface MaterialNode {
 | --- | --- | --- | --- | --- |
 | `fixed` | `paged-paper` | `absolute` | `measure-only` | `fixed-sheets` |
 | `continuous` | `continuous-paper` | `stack-flow` | `flow-y` | `none` |
-| `label` | `label-sheet` | `absolute` | `measure-only` | `label-sheets` |
 
 兼容规则：如果输入 `page.mode === 'stack'`，`migrateLegacyStackPageMode()` 会在 validation 和 normalize 前改写为连续纸组合。新代码、AI 生成、属性面板和 schema validation 都不得重新把 `stack` 当成合法页面类型。
 
@@ -103,7 +101,6 @@ ViewerRuntime 当前主流程：
 | `fixed-sheets` | 按 `pagination.pageCount ?? page.pages ?? 1` 生成固定页；元素按文档 Y 坐标归页；支持 `blankPolicy='remove'` 与 `copies`；显式 page break 只输出 info 诊断。 |
 | `auto-sheets` | 按页面高度自动切页；支持 `pageBreakBefore / pageBreakAfter / keepTogether`；元素过高时优先调用 `FragmentPaginator`，否则输出 overflow 诊断。 |
 | `none` | 连续纸只输出一张 sheet；高度为内容底边加尾部留白，且不因 page break 约束切成固定页。 |
-| `label-sheets` | `page.width/height` 表示单个标签 cell；`label.columns/rows/gap/rowGap` 推导 sheet 尺寸；`copies` 展开成一个或多个 sheet。 |
 
 分页控制字段从 `node.placement / node.break` 读取并投影为 `LayoutFragment.flow`，旧模板中的 `node.props.layoutMode / keepTogether / pageBreakBefore / pageBreakAfter` 只作为兼容 fallback。当前约定：`placement.mode !== 'fixed'` 的节点参与 flow；固定节点不会被 `flow-y` 推移，也不触发分页 break；若回流后与 flow 节点新增重叠，输出 `FLOW_Y_FIXED_OVERLAP`。
 
@@ -126,7 +123,6 @@ Designer 属性面板按页面策略注入行为项：
 | `absolute + fixed-sheets` | 每页重复 |
 | `stack-flow + flow-y + none` | 跟随内容 / 固定位置、每页重复 |
 | `stack-flow + flow-y + auto-sheets` | 跟随内容 / 固定位置、跨页规则、每页重复 |
-| `label-sheets` | 不显示每页重复；标签 copy/cell 不是文档页语义 |
 
 每页重复不是隐藏的高级能力。页码物料默认 `repeat.scope='every-output-page'`，普通文本、图片等也可显式开启，用于页眉、页脚、水印等通用场景。
 
@@ -156,7 +152,6 @@ Designer 不直接读取 `page.width/page.height` 渲染唯一页面，而是消
 | `fixed-sheets` | 多张固定纸纵向排列；`visualTop` 包含视觉 gap，`yOffset` 仍是文档坐标偏移。 |
 | `auto-sheets` | 单个连续编辑表面，并显示分页参考线；输出页数仍由 Viewer 决定。 |
 | `none` / `continuous-paper` | 单个可增长连续画布，高度按内容底边、最小高度和尾部留白计算。 |
-| `label-sheets` | 默认编辑单个 label cell；输出 sheet 由 Viewer 展开。 |
 
 每页重复元素在 Designer 中保留一份可交互源节点，其它输出页位置显示不可交互的重复预览。固定纸按页框复制预览；`auto-sheets` 在连续编辑表面内按分页参考线复制预览。预览只帮助用户理解输出效果，不参与选择、拖拽、缩放、吸附或命令历史。
 

@@ -129,58 +129,6 @@ export const simpleInvoiceTemplate: DocumentSchema = {
 }
 
 /**
- * 标签模板（多列）。
- *
- * `page.width/height` 为单个标签的尺寸；整张标签纸尺寸由 columns/rows/gap 派生。
- * copies=9 + columns=3,rows=1 → 聚合为 3 张 A4 横向标签纸（每张 3 个标签）。
- */
-export const labelTemplate: DocumentSchema = {
-  version: SCHEMA_VERSION,
-  unit: 'mm',
-  page: {
-    mode: 'label',
-    width: 68,
-    height: 40,
-    label: {
-      columns: 3,
-      gap: 2,
-      rows: 1,
-      rowGap: 0,
-    },
-    copies: 9,
-  },
-  guides: { x: [], y: [] },
-  elements: [
-    {
-      id: 'label_barcode',
-      type: 'barcode',
-      x: 5,
-      y: 5,
-      width: 55,
-      height: 20,
-      props: {
-        value: '1234567890',
-        format: 'CODE128',
-        showText: true,
-      },
-    },
-    {
-      id: 'label_name',
-      type: 'text',
-      x: 5,
-      y: 27,
-      width: 55,
-      height: 6,
-      props: {
-        content: '商品名称',
-        fontSize: 3.18,
-        textAlign: 'center',
-      },
-    },
-  ],
-}
-
-/**
  * 收据模板（连续纸 + 流式布局）。
  */
 export const receiptTemplate: DocumentSchema = {
@@ -273,12 +221,6 @@ export const sampleTemplates: SampleTemplateEntry[] = [
     category: 'business',
     schema: flowInvoiceTemplate,
     demoData: invoiceDemoData,
-  },
-  {
-    id: 'label-3col',
-    name: '标签（三列）',
-    category: 'label',
-    schema: labelTemplate,
   },
   {
     id: 'receipt',

@@ -110,7 +110,7 @@ interface PrintDriver {
 }
 ```
 
-打印驱动必须消费 `context.printPolicy` 或 `context.renderedPages` 中的尺寸信息，不能重新从 `.ei-viewer-page` 的 inline style 反推打印纸张。这样 label sheet 计算、continuous-paper 策略和固定纸张导出在 driver 和浏览器 fallback 两条路径上保持同一语义。
+打印驱动必须消费 `context.printPolicy` 或 `context.renderedPages` 中的尺寸信息，不能重新从 `.ei-viewer-page` 的 inline style 反推打印纸张。这样 continuous-paper 策略和固定纸张导出在 driver 和浏览器 fallback 两条路径上保持同一语义。
 
 ## 9.4 Hook 设计
 

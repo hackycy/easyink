@@ -200,7 +200,6 @@ export interface PageSchema {
   offsetY?: number
   copies?: number
   blankPolicy?: BlankPolicy
-  label?: LabelPageConfig
   grid?: GridConfig
   font?: string
   background?: PageBackground
@@ -238,27 +237,6 @@ export interface ReflowConfig {
   strategy: ReflowStrategyKind
   preserveTrailingGap?: boolean
   collisionPolicy?: 'diagnose' | 'clip' | 'push'
-}
-
-/**
- * Label page configuration.
- *
- * Semantic: `PageSchema.width/height` describes a SINGLE label cell.
- * The physical sheet is derived:
- *   sheetWidth  = width  * columns + gap    * (columns - 1)
- *   sheetHeight = height * rows    + rowGap * (rows    - 1)
- *
- * `PageSchema.copies` is the total number of label instances to emit;
- * the viewer aggregates them into `ceil(copies / (columns * rows))` sheets.
- */
-export interface LabelPageConfig {
-  columns: number
-  /** Horizontal gap between columns (document unit). */
-  gap: number
-  /** Rows per sheet. Defaults to 1 when omitted. */
-  rows?: number
-  /** Vertical gap between rows (document unit). Defaults to 0. */
-  rowGap?: number
 }
 
 export interface GridConfig {

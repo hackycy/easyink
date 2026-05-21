@@ -5,7 +5,7 @@ import { computed, reactive, ref, watch } from 'vue'
 const CONFIG_KEY = 'easyink:printServiceConfig'
 const DEFAULT_AUDIT_USER_DATA: EasyInkPrinterUserData = {
   userId: 'demo-user-001',
-  labelType: 'shipping-label',
+  documentType: 'receipt',
 }
 
 export interface PrintServiceDevice extends EasyInkPrinterDevice {}
@@ -40,16 +40,16 @@ function normalizeUserData(input: unknown): EasyInkPrinterUserData | undefined {
   if (!input || typeof input !== 'object')
     return undefined
 
-  const record = input as { userId?: unknown, labelType?: unknown }
+  const record = input as { userId?: unknown, documentType?: unknown }
   const userId = typeof record.userId === 'string' ? record.userId.trim() : ''
-  const labelType = typeof record.labelType === 'string' ? record.labelType.trim() : ''
+  const documentType = typeof record.documentType === 'string' ? record.documentType.trim() : ''
 
-  if (!userId && !labelType)
+  if (!userId && !documentType)
     return undefined
 
   return {
     userId: userId || undefined,
-    labelType: labelType || undefined,
+    documentType: documentType || undefined,
   }
 }
 

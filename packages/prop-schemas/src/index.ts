@@ -103,7 +103,6 @@ export function createLayoutBehaviorPropSchemas(context: LayoutBehaviorPropConte
   const schemas: PropSchema[] = []
   const supportsFlow = page.layout?.strategy === 'stack-flow' && page.reflow?.strategy === 'flow-y'
   const supportsBreakRules = supportsFlow && page.pagination?.strategy === 'auto-sheets'
-  const supportsPageRepeat = page.pagination?.strategy !== 'label-sheets'
 
   if (supportsFlow) {
     schemas.push({
@@ -164,19 +163,17 @@ export function createLayoutBehaviorPropSchemas(context: LayoutBehaviorPropConte
     )
   }
 
-  if (supportsPageRepeat) {
-    schemas.push({
-      key: 'repeat.scope',
-      label: 'designer.property.repeatEveryPage',
-      type: 'switch',
-      group: 'repeat',
-      default: false,
-      read: node => readRepeatConfig(node).scope === 'every-output-page',
-      commit: (node, value) => new UpdateMaterialBehaviorCommand(node, {
-        repeat: { scope: value === true ? 'every-output-page' : 'none' },
-      }),
-    })
-  }
+  schemas.push({
+    key: 'repeat.scope',
+    label: 'designer.property.repeatEveryPage',
+    type: 'switch',
+    group: 'repeat',
+    default: false,
+    read: node => readRepeatConfig(node).scope === 'every-output-page',
+    commit: (node, value) => new UpdateMaterialBehaviorCommand(node, {
+      repeat: { scope: value === true ? 'every-output-page' : 'none' },
+    }),
+  })
 
   return schemas
 }

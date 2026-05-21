@@ -67,7 +67,7 @@ interface DocumentMeta {
 
 ```ts
 interface PageSchema {
-  mode: PageMode            // 'fixed' | 'continuous' | 'label'
+  mode: PageMode            // 'fixed' | 'continuous'
   width: number             // 页面宽度
   height: number            // 页面高度
   pages?: number            // 页数（fixed 模式）
@@ -77,7 +77,6 @@ interface PageSchema {
   offsetY?: number          // 垂直偏移
   copies?: number           // 打印份数
   blankPolicy?: BlankPolicy // 空白页策略
-  label?: LabelPageConfig   // 标签页配置
   grid?: GridConfig         // 网格配置
   font?: string             // 默认字体
   background?: PageBackground // 页面背景
@@ -98,7 +97,6 @@ interface PageSchema {
 |------|------|------|------|------|
 | `fixed` | `paged-paper` | `absolute` | `measure-only` | `fixed-sheets` |
 | `continuous` | `continuous-paper` | `stack-flow` | `flow-y` | `none` |
-| `label` | `label-sheet` | `absolute` | `measure-only` | `label-sheets` |
 
 历史输入中的 `stack` 会在兼容入口迁移为 `continuous + stack-flow + flow-y`，新模板不应再写入 `page.mode = 'stack'`。
 
@@ -128,19 +126,6 @@ interface MaterialNode {
 - `repeat.scope='every-output-page'`：分页完成后复制到每个输出页，并注入页码上下文；不会影响页数。
 
 旧模板中的 `props.layoutMode / keepTogether / pageBreakBefore / pageBreakAfter` 会作为兼容输入读取，新模板不应继续写入这些字段。
-
-### LabelPageConfig
-
-标签模式的网格配置：
-
-```ts
-interface LabelPageConfig {
-  columns: number    // 列数
-  gap: number        // 列间距
-  rows?: number      // 行数
-  rowGap?: number    // 行间距
-}
-```
 
 ### PageBackground
 

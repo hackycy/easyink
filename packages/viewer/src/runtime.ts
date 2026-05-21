@@ -460,8 +460,6 @@ export class ViewerRuntime {
   // ---------------------------------------------------------------------------
 
   private collectRepeatedPageElements(elements: MaterialNode[]): MaterialNode[] {
-    if (this._schema?.page.pagination?.strategy === 'label-sheets')
-      return []
     return elements.filter(el =>
       readNodeRepeatScope(el) === 'every-output-page'
       || this._materialRegistry.isPageAware(el.type),

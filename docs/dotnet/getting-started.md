@@ -187,7 +187,7 @@ const printer = createEasyInkPrinter({
     dpi: settings.dpi,
     userData: {
       userId: settings.currentUserId,
-      labelType: settings.labelType,
+      documentType: settings.documentType,
     },
   }),
 })
@@ -215,32 +215,32 @@ await printer.print({ schema, data })
 不要把它理解成“越高越清晰”。实际打印效果取决于打印机本身的点密度：
 
 - 普通办公打印机：通常保持默认值即可
-- 203 dpi 热敏标签机：通常不传，或显式传 `203`
-- 300 dpi 标签机：可以传 `300`
+- 203 dpi 热敏打印机：通常不传，或显式传 `203`
+- 300 dpi 热敏打印机：可以传 `300`
 
 如果你不确定，就先不要改。只有当你已经确认设备分辨率、并且默认输出在清晰度或速度上不满足要求时，再显式设置 `dpi`。
 
-### `userData` 是什么，`labelType` 应该填什么
+### `userData` 是什么，`documentType` 应该填什么
 
 `userData` 不参与排版、不决定纸张尺寸，也不影响打印机选择。它只用于审计日志，当前包含两个字段：
 
 - `userId`：是谁发起的打印
-- `labelType`：这张打印品在业务上属于哪一类
+- `documentType`：这张打印品在业务上属于哪一类
 
-`labelType` 应该填业务类型，而不是设备信息或物理尺寸。推荐值例如：
+`documentType` 应该填业务类型，而不是设备信息或物理尺寸。推荐值例如：
 
-- `shipping-label`
-- `picking-label`
-- `product-label`
-- `return-label`
+- `receipt`
+- `invoice`
+- `picking-list`
+- `return-form`
 
-不推荐把这些值塞进 `labelType`：
+不推荐把这些值塞进 `documentType`：
 
 - `100x150`：这是尺寸，不是业务类型
-- `Zebra-ZD421`：这是打印机，不是标签类型
-- `A4`：这是纸型，不是标签类型
+- `Zebra-ZD421`：这是打印机，不是业务类型
+- `A4`：这是纸型，不是业务类型
 
-一句话区分：`dpi` 解决“以什么分辨率渲染后再打印”，`labelType` 解决“这张打印单在业务上是什么”。
+一句话区分：`dpi` 解决“以什么分辨率渲染后再打印”，`documentType` 解决“这张打印单在业务上是什么”。
 
 ## 指定服务和打印机
 
@@ -312,7 +312,7 @@ await printer.printPdfAndWait(file, {
   copies: 1,
   userData: {
     userId: currentUser.id,
-    labelType: 'invoice',
+    documentType: 'invoice',
   },
 })
 ```
@@ -326,7 +326,7 @@ await printer.printPdfAndWait(file, {
 
 默认 `forcePageSize=false`，由打印机驱动使用当前介质；这适合小票机、连续纸和大多数办公打印机。
 
-标签机必须显式按模板尺寸打印时再开启：
+设备必须显式按模板尺寸打印时再开启：
 
 ```ts
 const printer = createEasyInkPrinter({
@@ -336,7 +336,7 @@ const printer = createEasyInkPrinter({
 })
 ```
 
-判断标准不要反过来。不是“标签机就一定开启”，而是“只有当设备必须按模板尺寸输出，否则会缩放或错位时才开启”。
+判断标准不要反过来。不是“特定设备类型就一定开启”，而是“只有当设备必须按模板尺寸输出，否则会缩放或错位时才开启”。
 
 ## 如何验收审计链路
 
@@ -344,7 +344,7 @@ const printer = createEasyInkPrinter({
 
 1. 发送一笔带 `userData` 的打印请求
 2. 打开 `EasyInk.Printer` 桌面应用的日志页
-3. 确认日志列表里能看到对应的 `User` 和 `Label Type` 列值
+3. 确认日志列表里能看到对应的 `User` 和 `Document Type` 列值
 
 这一步的意义是把“前端已经把业务字段传出去了”和“后端审计真的落库并展示了”分开验证。
 
@@ -354,7 +354,7 @@ Playground 已使用官方包集成：
 
 - [playground/src/hooks/useEasyInkPrint.ts](../../playground/src/hooks/useEasyInkPrint.ts) 只保留 Vue 状态和设置持久化
 - 预览页调用 hook 暴露的 `easyInkPrint.print({ schema, data })`，由打印器自动创建和销毁托管 Viewer
-- Playground 的 EasyInk Printer 设置面板里还提供了 `UserId` 和 `LabelType` 演示字段，方便直接验证审计日志链路
+- Playground 的 EasyInk Printer 设置面板里还提供了 `UserId` 和 `DocumentType` 演示字段，方便直接验证审计日志链路
 
 ## 常见问题
 

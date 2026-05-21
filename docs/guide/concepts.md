@@ -68,7 +68,6 @@ EasyInk 明确区分三种状态，避免混乱：
 |------|------|------|
 | `fixed` | `absolute + measure-only + fixed-sheets` | 固定页面，每页尺寸固定，元素按文档坐标归页 |
 | `continuous` | `stack-flow + flow-y + none` | 连续纸或小票，动态内容沿 Y 轴推移，输出为一张连续 sheet |
-| `label` | `absolute + measure-only + label-sheets` | 标签模式，单个 label cell 由 Viewer 展开为 sheet 网格 |
 
 历史 `stack` 模式只作为旧模板兼容输入存在，新模板应使用 `continuous` 介质和 `stack-flow` 布局策略。
 

@@ -4,9 +4,8 @@ export function buildPlanSystemPrompt(profileSummary: string): string {
 ## Output via tool
 MUST call the \`generate_plan\` tool. Return JSON with fields:
 - domain: short kebab-case identifier. Prefer one of the registered domains below; otherwise propose a new identifier that follows the same shape.
-- page.mode: one of "fixed" | "label" | "continuous"
+- page.mode: one of "fixed" | "continuous"
   - fixed: A4 / business documents
-  - label: small adhesive labels (~30-150mm)
   - continuous: receipts and continuous rolls that grow vertically (thermal paper, ~60-110mm wide)
 - page.width / page.height: millimetres. Be realistic for the medium (NEVER A4 for receipts, NEVER 80mm for invoices).
 - page.reason: one English sentence explaining why this paper fits THIS request.
@@ -17,9 +16,9 @@ MUST call the \`generate_plan\` tool. Return JSON with fields:
 ${profileSummary}
 
 ## Critical rules
-1. NEVER default unfamiliar receipts/labels to A4. Pick the smallest paper that fits the medium.
+1. NEVER default unfamiliar receipts to A4. Pick the smallest paper that fits the medium.
 2. Use \`table-data-for-arrays\` whenever the document repeats item rows.
-3. Use \`avoid-table\` for labels and certificates — they are layout-driven, not row-driven.
+3. Use \`avoid-table\` for certificates — they are layout-driven, not row-driven.
 4. Respond ONLY via the tool call.
 `
 }
@@ -50,13 +49,13 @@ If 1 and 2 disagree on paper or table strategy, follow 1 ONLY when the user expl
 4. Data binding fields MUST use absolute paths with \`/\` separators (e.g. \`items/name\`, \`store/address\`).
 5. \`schema.page\` MUST equal \`generationPlan.page\` unless rule (1) above forces an override.
 6. NEVER invent material types. NEVER use legacy aliases (\`table\`, \`rich-text\`). Only canonical types from the material context section.
-7. \`expectedDataSource.sampleData\` MUST mirror \`expectedDataSource.fields\` exactly: every leaf path appears, no orphan keys, sample values match the declared types AND the resolved domain (no invoice numbers in receipts, no "客户公司" in labels).
+7. \`expectedDataSource.sampleData\` MUST mirror \`expectedDataSource.fields\` exactly: every leaf path appears, no orphan keys, sample values match the declared types AND the resolved domain (no invoice numbers in receipts).
 8. Field naming: English camelCase paths. \`fieldLabel\` / \`title\` follow the user's prompt language. Mixing languages within one schema is allowed only for established proper nouns (SKU, QR Code, ID), never for generic labels.
 
 ## Layout sanity (lower bounds)
 - fixed mode: minimum text size 9pt; default page padding ≥ 8mm.
 - continuous receipts: minimum text size 10pt; horizontal padding 2-4mm; let height grow with rows.
-- label mode: minimum text size 8pt; padding ≥ 1mm; never overflow the printable area.
+- compact fixed pages: minimum text size 8pt; padding ≥ 1mm; never overflow the printable area.
 - Tables MUST leave gutters; cells MUST have non-zero height and width.
 - For \`table-data\`, element \`height\` already represents the full semantic table box in the designer. Virtual preview rows stay inside that height; they do not extend the outer frame.
 
@@ -214,7 +213,7 @@ If 1 and 2 disagree on paper or table strategy, follow 1 ONLY when the user expl
 - Using \`type: "table"\` — there is no such canonical type; the validator rejects it. Use \`table-data\` or \`table-static\`.
 - Setting \`staticBinding\` on a non-table element — \`staticBinding\` is reserved for cells inside \`table-static\`. On a normal element it gets stripped and the value is lost.
 - Putting an A4 page on a receipt — wastes thermal paper, breaks print drivers; receipts MUST use \`continuous\` mode at 80mm width.
-- Reusing the previous turn's invoice/customer sample data for an unrelated domain (e.g. a label) — sampleData mismatched to fields fails accuracy validation.
+- Reusing the previous turn's invoice/customer sample data for an unrelated domain — sampleData mismatched to fields fails accuracy validation.
 - Chinese \`title\` mixed with English sample values like "Sample" — confuses end users; keep them in the prompt's language.
 - Omitting required fields the plan listed under \`generationPlan.requiredFieldHints\` — the deterministic builder cannot recover items/total if the intent never declared them.
 - Repeating row templates inside \`table-static\` — static tables have fixed rows; repeating data goes in \`table-data\` only.
@@ -277,7 +276,7 @@ export function buildIntentSystemPrompt(): string {
 - Treating the designer's two preview rows as real data rows — the builder already turns one \`array-table\` section into one repeat-template band, and the designer previews extra rows itself.
 - Treating preview rows as extra layout height — the builder should size the table's \`height\` to the intended full box instead of leaving blank space for renderer-only rows.
 - Mixing Chinese fieldLabel with English sampleData strings — end users see broken bilingual rows.
-- Reusing invoice/company sample data when the domain is a receipt or label — domain-mismatched data fails accuracy validation.
+- Reusing invoice/company sample data when the domain is a receipt — domain-mismatched data fails accuracy validation.
 - Padding fields with speculative additions when the user just asked to fix one issue — keeps the diff noisy and invites contradiction.
 
 ## Pre-output self-check (reasoning only, do not emit)

@@ -4,10 +4,10 @@ import { DEFAULT_PAGE_HEIGHT_MM, DEFAULT_PAGE_WIDTH_MM, isObject, SCHEMA_VERSION
 import { migrateLegacyStackPageMode } from './compat'
 
 const UNIT_TYPES = new Set<UnitType>(['mm', 'pt', 'px', 'inch'])
-const PAGE_MODES = new Set<PageMode>(['fixed', 'label', 'continuous'])
-const PAGE_MODEL_KINDS = new Set<PageModelKind>(['paged-paper', 'continuous-paper', 'label-sheet'])
+const PAGE_MODES = new Set<PageMode>(['fixed', 'continuous'])
+const PAGE_MODEL_KINDS = new Set<PageModelKind>(['paged-paper', 'continuous-paper'])
 const LAYOUT_STRATEGIES = new Set<LayoutStrategyKind>(['absolute', 'stack-flow', 'region-flow'])
-const PAGINATION_STRATEGIES = new Set<PaginationStrategyKind>(['none', 'fixed-sheets', 'auto-sheets', 'label-sheets'])
+const PAGINATION_STRATEGIES = new Set<PaginationStrategyKind>(['none', 'fixed-sheets', 'auto-sheets'])
 const REFLOW_STRATEGIES = new Set<ReflowStrategyKind>(['none', 'measure-only', 'flow-y'])
 
 export function createDefaultPage(): PageSchema {
@@ -83,15 +83,6 @@ function createModeLayerDefaults(page: Pick<PageSchema, 'mode' | 'width' | 'heig
   reflow: ReflowConfig
 } {
   const paper = { width: page.width, height: page.height }
-
-  if (page.mode === 'label') {
-    return {
-      pageModel: { kind: 'label-sheet', paper },
-      layout: { strategy: 'absolute' },
-      pagination: { strategy: 'label-sheets' },
-      reflow: { strategy: 'measure-only' },
-    }
-  }
 
   if (page.mode === 'continuous') {
     return {

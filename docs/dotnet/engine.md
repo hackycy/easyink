@@ -184,9 +184,9 @@ api.PrintCompleted += (requestId, requestParams, result) =>
 | PaperSize | PaperSizeParams? | PDF/模板纸张尺寸 `{ Width, Height, Unit }` |
 | ForcePaperSize | bool | 是否强制把 PaperSize 下发为驱动纸张参数，默认 false |
 | Offset | OffsetParams? | 打印偏移 `{ X, Y }` |
-| UserData | UserDataParams? | 用户数据（用于审计日志）`{ UserId, LabelType }` |
+| UserData | UserDataParams? | 用户数据（用于审计日志）`{ UserId, DocumentType }` |
 
-热敏小票机、连续纸建议保持 `ForcePaperSize=false`，让驱动使用当前介质。只有标签机等驱动不收到自定义尺寸会回退到 A4 时，才设为 `true`。
+热敏小票机、连续纸建议保持 `ForcePaperSize=false`，让驱动使用当前介质。只有设备驱动不收到自定义尺寸会回退到 A4 时，才设为 `true`。
 
 三种 PDF 来源互斥，只能提供其一。`CreatePdfProvider()` 按 Base64 > URL > Bytes 优先级选择。
 

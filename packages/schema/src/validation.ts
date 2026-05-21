@@ -3,10 +3,10 @@ import { isObject, SCHEMA_VERSION } from '@easyink/shared'
 import { migrateLegacyStackPageMode } from './compat'
 
 const UNIT_TYPES = new Set(['mm', 'pt', 'px', 'inch'])
-const PAGE_MODES = new Set(['fixed', 'label', 'continuous'])
-const PAGE_MODEL_KINDS = new Set(['paged-paper', 'continuous-paper', 'label-sheet'])
+const PAGE_MODES = new Set(['fixed', 'continuous'])
+const PAGE_MODEL_KINDS = new Set(['paged-paper', 'continuous-paper'])
 const LAYOUT_STRATEGIES = new Set(['absolute', 'stack-flow', 'region-flow'])
-const PAGINATION_STRATEGIES = new Set(['none', 'fixed-sheets', 'auto-sheets', 'label-sheets'])
+const PAGINATION_STRATEGIES = new Set(['none', 'fixed-sheets', 'auto-sheets'])
 const REFLOW_STRATEGIES = new Set(['none', 'measure-only', 'flow-y'])
 
 export interface SchemaValidationIssue {

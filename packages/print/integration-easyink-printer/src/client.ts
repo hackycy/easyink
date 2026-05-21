@@ -68,7 +68,7 @@ export interface EasyInkPrinterOffset {
  */
 export interface EasyInkPrinterUserData {
   userId?: string
-  labelType?: string
+  documentType?: string
 }
 
 /**

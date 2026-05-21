@@ -6,7 +6,7 @@ export interface EditorSurfacePagePlan {
   height: number
   yOffset: number
   visualTop: number
-  kind: 'page' | 'continuous' | 'label-cell'
+  kind: 'page' | 'continuous'
 }
 
 export interface EditorSurfacePlan {
@@ -33,17 +33,6 @@ export function createEditorSurfacePlan(schema: DocumentSchema): EditorSurfacePl
   const page = schema.page
   const pageModelKind = page.pageModel?.kind
   const pageGap = resolveEditorPageGap(schema)
-
-  if (pageModelKind === 'label-sheet' || page.mode === 'label') {
-    return createPlan([{
-      index: 0,
-      width: page.width,
-      height: page.height,
-      yOffset: 0,
-      visualTop: 0,
-      kind: 'label-cell',
-    }], 0)
-  }
 
   const paginationStrategy = page.pagination?.strategy
   if (

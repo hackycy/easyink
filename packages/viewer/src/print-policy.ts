@@ -24,7 +24,6 @@ export function resolvePrintPolicy(input: ResolvePrintPolicyInput): ViewerPrintP
   const pageModel = resolvePageModel(schema)
   const requestedPageSizeMode = options.pageSizeMode ?? 'driver'
   const isContinuousPaper = pageModel.kind === 'continuous-paper'
-  const isLabelSheet = pageModel.kind === 'label-sheet'
   const usesDriverPaper = isContinuousPaper && requestedPageSizeMode === 'driver'
   const orientation = page.print?.orientation ?? 'auto'
 
@@ -68,25 +67,11 @@ export function resolvePrintPolicy(input: ResolvePrintPolicyInput): ViewerPrintP
     }
   }
 
-  let width = pageModel.width
-  let height = pageModel.height
-  let source: 'schema' | 'label' = 'schema'
-
-  if (isLabelSheet) {
-    const columns = page.label?.columns || 1
-    const rows = page.label?.rows || 1
-    const gapX = page.label?.gap || 0
-    const gapY = page.label?.rowGap || 0
-    width = pageModel.width * columns + gapX * Math.max(columns - 1, 0)
-    height = pageModel.height * rows + gapY * Math.max(rows - 1, 0)
-    source = 'label'
-  }
-
   return {
     pageMode: page.mode,
     pageSizeMode: 'fixed',
     orientation,
-    sheetSize: { width, height, unit, source },
+    sheetSize: { width: pageModel.width, height: pageModel.height, unit, source: 'schema' },
     pageBreakBehavior: {
       after: isContinuousPaper ? 'auto' : 'page',
       inside: isContinuousPaper ? 'auto' : 'avoid',
