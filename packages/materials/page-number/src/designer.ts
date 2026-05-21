@@ -1,12 +1,16 @@
-import type { MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
+import type { MaterialDesignerExtension, MaterialDesignerRenderContext, MaterialExtensionContext } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { PageNumberProps } from './schema'
 import { getNodeProps } from '@easyink/schema'
 import { escapeHtml } from '@easyink/shared'
+import { formatPageNumberDisplay } from './rendering'
 
-function buildHtml(node: MaterialNode, unit: string): string {
+function buildHtml(node: MaterialNode, unit: string, renderContext?: MaterialDesignerRenderContext): string {
   const p = getNodeProps<PageNumberProps>(node)
-  const display = escapeHtml(p.format || '{current}/{total}')
+  const pageContext = renderContext?.page
+  const current = pageContext?.pageNumber ?? 1
+  const total = pageContext?.totalPages ?? 1
+  const display = escapeHtml(formatPageNumberDisplay(p.format, current, total))
 
   const vAlignMap: Record<string, string> = { top: 'flex-start', middle: 'center', bottom: 'flex-end' }
 
@@ -30,13 +34,17 @@ function buildHtml(node: MaterialNode, unit: string): string {
 
 export function createPageNumberExtension(context: MaterialExtensionContext): MaterialDesignerExtension {
   return {
-    renderContent(nodeSignal, container) {
+    renderContent(nodeSignal, container, renderContextSignal) {
       function render() {
-        container.innerHTML = buildHtml(nodeSignal.get(), context.getSchema().unit)
+        container.innerHTML = buildHtml(nodeSignal.get(), context.getSchema().unit, renderContextSignal?.get())
       }
       render()
-      const unsub = nodeSignal.subscribe(render)
-      return unsub
+      const unsubNode = nodeSignal.subscribe(render)
+      const unsubRenderContext = renderContextSignal?.subscribe(render)
+      return () => {
+        unsubNode()
+        unsubRenderContext?.()
+      }
     },
   }
 }

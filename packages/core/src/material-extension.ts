@@ -31,6 +31,23 @@ export interface NodeSignal {
   subscribe: (callback: (node: MaterialNode) => void) => () => void
 }
 
+export interface MaterialDesignerRenderPageContext {
+  /** Zero-based output page index in the current Designer surface. */
+  pageIndex: number
+  /** One-based output page number for direct display. */
+  pageNumber: number
+  totalPages: number
+}
+
+export interface MaterialDesignerRenderContext {
+  page?: MaterialDesignerRenderPageContext
+}
+
+export interface MaterialDesignerRenderContextSignal {
+  get: () => MaterialDesignerRenderContext
+  subscribe: (callback: (context: MaterialDesignerRenderContext) => void) => () => void
+}
+
 /**
  * Material designer extension contract.
  */
@@ -39,7 +56,11 @@ export interface MaterialDesignerExtension {
    * Mount content into the provided DOM container using the reactive NodeSignal.
    * Returns a cleanup function called when the element is removed from the canvas.
    */
-  renderContent: (nodeSignal: NodeSignal, container: HTMLElement) => () => void
+  renderContent: (
+    nodeSignal: NodeSignal,
+    container: HTMLElement,
+    renderContextSignal?: MaterialDesignerRenderContextSignal,
+  ) => () => void
   /**
    * Datasource drag-and-drop handler. Materials implement this to take over
    * dragOver detection and drop binding instead of the default BindFieldCommand.

@@ -4,6 +4,7 @@ import type { PageNumberProps } from './schema'
 import { trustedViewerHtml } from '@easyink/core'
 import { getNodeProps } from '@easyink/schema'
 import { escapeHtml } from '@easyink/shared'
+import { formatPageNumberDisplay } from './rendering'
 
 export function renderPageNumber(node: MaterialNode, context: ViewerRenderContext) {
   const props = getNodeProps<PageNumberProps>(node)
@@ -12,11 +13,7 @@ export function renderPageNumber(node: MaterialNode, context: ViewerRenderContex
   const current = (resolved.__pageNumber as number) ?? 1
   const total = (resolved.__totalPages as number) ?? 1
 
-  const display = escapeHtml(
-    (props.format || '{current}/{total}')
-      .replace(/\{current\}/g, String(current))
-      .replace(/\{total\}/g, String(total)),
-  )
+  const display = escapeHtml(formatPageNumberDisplay(props.format, current, total))
 
   const vAlignMap: Record<string, string> = { top: 'flex-start', middle: 'center', bottom: 'flex-end' }
 

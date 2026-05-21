@@ -38,8 +38,8 @@ export function createPageNumberNode(partial?: Partial<MaterialNode>, unit?: str
     type: PAGE_NUMBER_TYPE,
     x: 0,
     y: 0,
-    width: c(60),
-    height: c(16),
+    width: c(26),
+    height: c(8),
     placement: { mode: 'fixed' },
     repeat: { scope: 'every-output-page' },
     props: {

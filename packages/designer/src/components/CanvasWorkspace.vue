@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { EditorSurfacePagePlan } from '@easyink/core'
+import type { EditorSurfacePagePlan, MaterialDesignerRenderContext } from '@easyink/core'
 import type { ResizeHandle } from '../composables/use-element-resize'
 import type { MarqueeRect } from '../composables/use-marquee-select'
 import type { WorkspaceWindowState } from '../types'
@@ -171,6 +171,21 @@ const wrapperStyle = computed(() => {
 
 const elements = computed(() => store.getElements())
 
+const elementRenderContexts = computed(() => {
+  const contexts = new Map<string, MaterialDesignerRenderContext>()
+  if (store.schema.page.pagination?.strategy === 'label-sheets')
+    return contexts
+  const pages = resolveRepeatPreviewPages()
+  if (pages.length === 0)
+    return contexts
+
+  for (const node of elements.value) {
+    const sourcePage = resolveRepeatSourcePage(node, pages)
+    contexts.set(node.id, createPageRenderContext(sourcePage.index, pages.length))
+  }
+  return contexts
+})
+
 const repeatedPreviewElements = computed(() => {
   if (store.schema.page.pagination?.strategy === 'label-sheets')
     return []
@@ -181,6 +196,7 @@ const repeatedPreviewElements = computed(() => {
   const previews: Array<{
     key: string
     sourceId: string
+    renderContext: MaterialDesignerRenderContext
     style: ReturnType<typeof projectNodeStyle>
   }> = []
 
@@ -197,6 +213,7 @@ const repeatedPreviewElements = computed(() => {
       previews.push({
         key: `${node.id}__repeat_preview_${page.index}`,
         sourceId: node.id,
+        renderContext: createPageRenderContext(page.index, pages.length),
         style: projectRepeatPreviewStyle(node, page.yOffset + localY),
       })
     }
@@ -442,6 +459,16 @@ function isRepeatedEveryPage(node: ReturnType<typeof store.getElements>[number])
     || store.getMaterial(node.type)?.capabilities.pageAware === true
 }
 
+function createPageRenderContext(pageIndex: number, totalPages: number): MaterialDesignerRenderContext {
+  return {
+    page: {
+      pageIndex,
+      pageNumber: pageIndex + 1,
+      totalPages,
+    },
+  }
+}
+
 function resolveRepeatPreviewPages(): EditorSurfacePagePlan[] {
   if (store.schema.page.pagination?.strategy !== 'auto-sheets')
     return editorSurfacePlan.value.pages
@@ -647,7 +674,7 @@ onUnmounted(() => {
             :style="preview.style"
           >
             <div class="ei-canvas-element__content">
-              <CanvasElementContent :node-id="preview.sourceId" />
+              <CanvasElementContent :node-id="preview.sourceId" :render-context="preview.renderContext" />
             </div>
           </div>
 
@@ -668,7 +695,7 @@ onUnmounted(() => {
             @dblclick="handleElementDblClick($event, el.id)"
           >
             <div class="ei-canvas-element__content">
-              <CanvasElementContent :node-id="el.id" />
+              <CanvasElementContent :node-id="el.id" :render-context="elementRenderContexts.get(el.id)" />
             </div>
 
             <!-- Selection border, resize handles & rotation handle -->
