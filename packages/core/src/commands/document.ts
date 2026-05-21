@@ -1,5 +1,6 @@
 import type { DocumentSchema, ElementGroupSchema, GuideSchema, MaterialNode, PageSchema } from '@easyink/schema'
 import type { Command } from '../command'
+import type { EditorSurfacePlan } from '../editor-surface-plan'
 import type { MaterialResizeSideEffect } from '../material-extension'
 import { deepClone, generateId } from '@easyink/shared'
 import { asRecord, findNode, getByPath, setByPath } from './helpers'
@@ -390,6 +391,122 @@ export class UpdatePageCommand implements Command {
       asRecord(this.page)[key] = asRecord(this.oldValues)[key]
     }
   }
+}
+
+export class AddPageSheetCommand implements Command {
+  readonly id = generateId('cmd')
+  readonly type = 'add-page-sheet'
+  readonly description = 'Add page sheet'
+  private pageSnapshot: PageSchema | undefined
+  private elementsSnapshot: MaterialNode[] | undefined
+
+  constructor(
+    private schema: DocumentSchema,
+    private plan: EditorSurfacePlan,
+    private targetPageIndex: number,
+  ) {}
+
+  execute(): void {
+    const target = this.plan.pages[this.targetPageIndex]
+    if (!target || target.kind !== 'page')
+      return
+
+    this.pageSnapshot = deepClone(this.schema.page)
+    this.elementsSnapshot = deepClone(this.schema.elements)
+
+    const currentCount = resolveFixedPageCount(this.schema)
+    const insertIndex = Math.min(Math.max(this.targetPageIndex + 1, 1), currentCount)
+    const insertY = insertIndex * target.height
+    for (const node of this.schema.elements) {
+      if (node.y >= insertY)
+        node.y += target.height
+    }
+    writeFixedPageCount(this.schema.page, currentCount + 1)
+  }
+
+  undo(): void {
+    if (this.pageSnapshot)
+      replacePageSchema(this.schema.page, this.pageSnapshot)
+    if (this.elementsSnapshot)
+      replaceElements(this.schema.elements, this.elementsSnapshot)
+  }
+}
+
+export class RemovePageSheetCommand implements Command {
+  readonly id = generateId('cmd')
+  readonly type = 'remove-page-sheet'
+  readonly description = 'Remove page sheet'
+  private pageSnapshot: PageSchema | undefined
+  private elementsSnapshot: MaterialNode[] | undefined
+
+  constructor(
+    private schema: DocumentSchema,
+    private plan: EditorSurfacePlan,
+    private targetPageIndex: number,
+  ) {}
+
+  execute(): void {
+    const target = this.plan.pages[this.targetPageIndex]
+    if (!target || target.kind !== 'page')
+      return
+
+    const currentCount = resolveFixedPageCount(this.schema)
+    if (currentCount <= 1)
+      return
+
+    this.pageSnapshot = deepClone(this.schema.page)
+    this.elementsSnapshot = deepClone(this.schema.elements)
+
+    const deleteStart = target.yOffset
+    const deleteEnd = target.yOffset + target.height
+    const nextElements: MaterialNode[] = []
+
+    for (const node of this.schema.elements) {
+      const nodeBottom = node.y + node.height
+      const intersectsTarget = node.y < deleteEnd && nodeBottom > deleteStart
+      if (intersectsTarget)
+        continue
+
+      if (node.y >= deleteEnd)
+        nextElements.push({ ...node, y: node.y - target.height })
+      else
+        nextElements.push(node)
+    }
+
+    replaceElements(this.schema.elements, nextElements)
+    writeFixedPageCount(this.schema.page, currentCount - 1)
+  }
+
+  undo(): void {
+    if (this.pageSnapshot)
+      replacePageSchema(this.schema.page, this.pageSnapshot)
+    if (this.elementsSnapshot)
+      replaceElements(this.schema.elements, this.elementsSnapshot)
+  }
+}
+
+function resolveFixedPageCount(schema: DocumentSchema): number {
+  return Math.max(schema.page.pagination?.pageCount ?? schema.page.pages ?? 1, 1)
+}
+
+function writeFixedPageCount(page: PageSchema, pageCount: number): void {
+  const nextCount = Math.max(Math.floor(pageCount), 1)
+  page.pages = nextCount
+  page.pagination = {
+    ...(page.pagination ?? { strategy: 'fixed-sheets' as const }),
+    strategy: 'fixed-sheets',
+    pageCount: nextCount,
+  }
+}
+
+function replacePageSchema(target: PageSchema, snapshot: PageSchema): void {
+  for (const key of Object.keys(target) as Array<keyof PageSchema>)
+    delete asRecord(target)[key]
+  Object.assign(target, deepClone(snapshot))
+}
+
+function replaceElements(target: MaterialNode[], snapshot: MaterialNode[]): void {
+  target.splice(0, target.length, ...deepClone(snapshot))
 }
 
 export class UpdateGuidesCommand implements Command {

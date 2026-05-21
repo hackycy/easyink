@@ -15,12 +15,14 @@ export type { Command, HistoryEntry } from './command'
 export {
   AddElementGroupCommand,
   AddMaterialCommand,
+  AddPageSheetCommand,
   BindFieldCommand,
   ClearBindingCommand,
   getByPath,
   MoveMaterialCommand,
   RemoveElementGroupCommand,
   RemoveMaterialCommand,
+  RemovePageSheetCommand,
   ResizeMaterialCommand,
   RotateMaterialCommand,
   setByPath,
@@ -60,9 +62,18 @@ export type {
 
 // ─── Core Services ────────────────────────────────────────────────
 
-export { createEditorSurfacePlan } from './editor-surface-plan'
+export {
+  createEditorSurfacePlan,
+  DEFAULT_EDITOR_PAGE_GAP,
+  findPageForDocumentY,
+  findPageForVisualPoint,
+  getEditorSurfacePageLeft,
+  projectDocumentPointToEditorSurface,
+  projectEditorSurfacePointToDocument,
+  resolveEditorPageGap,
+} from './editor-surface-plan'
 
-export type { EditorSurfacePagePlan, EditorSurfacePlan } from './editor-surface-plan'
+export type { EditorSurfacePagePlan, EditorSurfacePlan, EditorSurfacePointProjection } from './editor-surface-plan'
 
 export { FontManager } from './font'
 export type {

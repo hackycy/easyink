@@ -178,8 +178,12 @@ resolve print policy
 
 ```ts
 interface EditorSurfacePlan {
-  activePageIndex: number
   pages: EditorSurfacePagePlan[]
+  pageGap: number
+  contentBounds: {
+    width: number
+    height: number
+  }
 }
 
 interface EditorSurfacePagePlan {
@@ -187,6 +191,7 @@ interface EditorSurfacePagePlan {
   width: number
   height: number
   yOffset: number
+  visualTop: number
   kind: 'page' | 'continuous' | 'label-cell'
 }
 ```
@@ -195,18 +200,50 @@ interface EditorSurfacePagePlan {
 
 - Designer 显示的是可编辑纸张和画布段，Viewer 输出的是最终分页结果；两者共享页面模型，但不强行共用同一个运行态分页计划。
 - `MaterialNode.y` 始终存储文档坐标。第 N 张固定纸的编辑局部坐标通过 `localY = node.y - page.yOffset` 投影。
+- `EditorSurfacePlan` 不保存 `activePageIndex`，也不把页面焦点写入 store。页面上下文只能由指针位置、选择集、滚动视口或显式命令参数临时推导。
 - 设计器增删纸张只改变编辑态页集，不执行运行态测量重排，也不回写测量后的元素尺寸。
 - 自动分页页数由运行态内容决定，设计器不得把自动分页结果直接写成手工纸张数量。
 
-画布侧提供一个轻量页面工具栏，锚定在当前纸张边缘附近，使用 icon-only 按钮和 tooltip：
+页面上下文的派生规则：
+
+- `hoverPageIndex`：由 pointer hit-test 得出。指针在纸张内部或页面边缘吸附区域时存在；指针在页间空隙时为空。
+- `selectionPageIndexes`：由选中元素的 `y / height` 与 `EditorSurfacePagePlan.yOffset / height` 求交集得出。跨页元素可以同时归属多页。
+- `viewportPageIndex`：由滚动容器中线与页面视觉矩形求最近页得出，只用于页面定位、迷你导航和初始工具条显隐，不影响拖拽落点。
+- `commandTargetPageIndex`：新增、删除、定位等页面命令必须显式传入目标页；来源可以是 hover、selection 或页面列表点击，但命令内部不得读取全局页面状态。
+
+画布布局与居中规则：
+
+- 多页固定纸使用纵向 page stack。所有页面按最大页面宽度所在的中轴线水平居中，页面之间使用 `pageGap` 作为视觉间距。
+- `yOffset` 表示文档坐标偏移，不包含视觉间距；`visualTop` 表示编辑器中实际绘制位置，等于前序页面高度和视觉 gap 的累积。
+- 滚动容器内容尺寸来自 `contentBounds`，其宽度至少等于视口宽度。缩放后页面组在可视区域内水平居中，页面比视口宽时保留左侧安全边距并允许水平滚动。
+- 新建、切换纸张数量或缩放时，优先保持当前视口中心对应的文档坐标稳定；没有历史视口时默认把第一页水平居中并显示顶部留白。
+- 网格、参考线、选区框、吸附线和元素 overlay 都渲染在同一文档坐标层，通过 `page.yOffset` 与 `page.visualTop` 做坐标投影，不能各自维护一套页面偏移。
+
+拖拽与落点规则：
+
+- 从物料面板拖入画布时，落点由 drop pointer 所在页面决定：`node.y = targetPage.yOffset + localY`。如果指针落在页间空隙，使用最近页面的边缘吸附点并给出边缘预览。
+- 拖动画布内已有元素时，元素按连续文档坐标移动，跨过页面边界时自然进入另一页；页面归属由最终坐标派生。
+- 多选拖拽允许跨页移动，保持选区内部相对位置不变。若部分元素越过页面边界，Designer 只更新元素坐标，不自动新增纸张。
+- 对 `fixed-sheets`，拖拽到最后一页下方的页外区域时默认阻止落点，并显示越界提示；新增纸张必须通过页面工具条或命令完成。
+- 对 `auto-sheets` 和连续纸，拖拽下方越界可以扩展编辑态内容高度，但不把预测分页结果写回 `page.pages`。
+
+画布侧提供一个轻量页面工具栏，锚定在目标纸张边缘附近，使用垂直布局、icon-only 按钮和 tooltip：
 
 | 操作 | 图标语义 | 适用策略 | 写入字段 | 说明 |
 | --- | --- | --- | --- | --- |
-| 新增纸张 | plus / file-plus | `pagination.strategy='fixed-sheets'` | `page.pages` 与 `pagination.pageCount` | 在当前纸张后插入一张同尺寸纸。 |
-| 删除纸张 | trash / file-minus | `pagination.strategy='fixed-sheets'` | `page.pages` 与 `pagination.pageCount` | 删除当前纸张，至少保留一张。 |
+| 新增纸张 | plus / file-plus | `pagination.strategy='fixed-sheets'` | `page.pages` 与 `pagination.pageCount` | 在目标纸张后插入一张同尺寸纸。 |
+| 删除纸张 | trash / file-minus | `pagination.strategy='fixed-sheets'` | `page.pages` 与 `pagination.pageCount` | 删除目标纸张，至少保留一张。 |
 | 纸张定位 | chevron / list | `fixed-sheets` 可选 | 不写 schema | 快速跳到上一张、下一张或指定纸张。 |
 | Sheet 预览 | grid / layers | `label-sheets` | 不写 schema | 从 cell edit 切到 sheet preview。 |
 | 分页预览 | split / dashed-line | `auto-sheets` | 不写 schema | 显示 Viewer pipeline 预测的分页线或只读预览。 |
+
+页面工具栏的交互形态：
+
+- 工具栏为垂直按钮组，默认停靠在目标页面右侧外缘；右侧空间不足时自动翻到左侧。按钮顺序从上到下为新增、删除、定位、预览类入口。
+- 工具栏目标页优先级为 `hoverPageIndex`、单页选择派生页、`viewportPageIndex`。任何按钮触发时都把解析出的目标页作为命令参数传入。
+- 工具栏不改变选择集，不写入页面焦点。用户只是移动鼠标或滚动画布时，页面工具条可以换锚点，但元素编辑状态不应被打断。
+- 页间空隙只显示定位或新增吸附预览，不显示删除按钮，避免用户误以为空隙也是一页。
+- 移动端或窄视口下，工具栏可折叠为单个垂直 more 按钮，展开后仍保持垂直排列。
 
 固定多页的新增/删除规则：
 
@@ -219,7 +256,7 @@ interface EditorSurfacePagePlan {
 
 不同页面策略的设计器表现：
 
-- `fixed-sheets`：显示多张固定纸张。纸张之间有固定 gap，工具栏出现在当前 hover/selected 纸张侧边。
+- `fixed-sheets`：显示多张固定纸张。纸张之间有固定 gap，页面组水平居中，工具栏以垂直按钮组出现在 hover、selection 或 viewport 派生的目标纸张侧边。
 - `auto-sheets`：编辑态仍是连续文档画布或流式画布，只显示分页参考线；不显示新增/删除纸张按钮，因为输出页数由内容和分页策略决定。
 - `none`：连续纸显示单张可增长 canvas，允许用户改纸宽和最小高度，但不提供增删纸张。
 - `label-sheets`：默认编辑单个 label cell，工具栏提供只读 sheet preview 切换；copies、rows、columns 决定输出 sheet，不用增删纸张按钮。
@@ -228,7 +265,7 @@ interface EditorSurfacePagePlan {
 
 - `AddPageSheetCommand`：更新 `page.pages / pagination.pageCount`。
 - `RemovePageSheetCommand`：校验最小页数、空白页或确认结果，再更新页数。
-- 命令不得直接依赖 DOM；它们消费 `EditorSurfacePlan` 和当前 `activePageIndex`。
+- 命令不得直接依赖 DOM；它们消费 `EditorSurfacePlan` 和显式传入的 `targetPageIndex`。
 - 页面工具栏只触发命令，不自己解释分页策略。
 
 ### `@easyink/material-*`
@@ -462,8 +499,9 @@ pagination.strategy = 'label-sheets'
 ### 阶段四：设计器多页和连续纸 UI
 
 - `CanvasWorkspace` 消费 `EditorSurfacePlan`。
-- 固定多页优先实现多页纵向画布。
-- 画布侧增加页面工具栏，提供 icon-only 的新增纸张、删除纸张、纸张定位入口。
+- 固定多页优先实现多页纵向画布，页面组在滚动视口内水平居中。
+- 画布侧增加垂直页面工具栏，提供 icon-only 的新增纸张、删除纸张、纸张定位入口。
+- 移除设计器里的全局激活页状态，拖拽、页面命令和工具栏锚点都从 hover、selection、viewport 或显式目标页派生。
 - 新增/删除纸张只作用于 `fixed-sheets`；`auto-sheets` 只显示分页预览线，不允许手工增删输出页。
 - 连续纸显示运行态高度预估和底部留白。
 - 标签模式区分 cell edit 和 sheet preview。
@@ -482,6 +520,7 @@ pagination.strategy = 'label-sheets'
 
 - Schema 表达稳定文档语义，运行态计划不回写 Schema。
 - Designer 可以有编辑态近似布局，但最终预览、打印、导出必须走 Viewer pipeline。
+- Designer 不维护全局激活页；页面相关交互必须从坐标、选择、视口或显式命令参数派生。
 - `RenderSurface` 不知道分页策略，只知道输出页和 fragments。
 - 物料可以测量和局部分页，但不能决定全局纸张或全局页数。
 - `page.mode` 只能做兼容预设，不能继续承载新增能力。

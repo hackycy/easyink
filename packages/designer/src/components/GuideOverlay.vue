@@ -1,10 +1,17 @@
 <script setup lang="ts">
-import { UpdateGuidesCommand } from '@easyink/core'
+import type { EditorSurfacePlan } from '@easyink/core'
+import {
+  findPageForDocumentY,
+  getEditorSurfacePageLeft,
+  projectDocumentPointToEditorSurface,
+  UpdateGuidesCommand,
+} from '@easyink/core'
 import { computed, ref } from 'vue'
 import { useDesignerStore } from '../composables'
 import { createGeometryService } from '../editing/geometry-service'
 
-defineProps<{
+const props = defineProps<{
+  surfacePlan: EditorSurfacePlan
   previewGuide?: { axis: 'x' | 'y', position: number } | null
 }>()
 
@@ -17,6 +24,68 @@ const geometry = createGeometryService(store, {
 const guidesX = computed(() => store.schema.guides.x)
 const guidesY = computed(() => store.schema.guides.y)
 const unit = computed(() => store.schema.unit)
+
+const verticalGuideViews = computed(() => {
+  const views: Array<{ key: string, index: number, style: Record<string, string> }> = []
+  for (let index = 0; index < guidesX.value.length; index++) {
+    const pos = guidesX.value[index]!
+    for (const page of props.surfacePlan.pages) {
+      views.push({
+        key: `x-${pos}-${page.index}`,
+        index,
+        style: {
+          left: `${getEditorSurfacePageLeft(props.surfacePlan, page) + pos}${unit.value}`,
+          top: `${page.visualTop}${unit.value}`,
+          height: `${page.height}${unit.value}`,
+        },
+      })
+    }
+  }
+  return views
+})
+
+const horizontalGuideViews = computed(() => guidesY.value.map((pos, index) => {
+  const page = findPageForDocumentY(props.surfacePlan, pos)
+  const projected = projectDocumentPointToEditorSurface(props.surfacePlan, { x: 0, y: pos })
+  return {
+    key: `y-${index}`,
+    index,
+    style: {
+      left: `${getEditorSurfacePageLeft(props.surfacePlan, page)}${unit.value}`,
+      top: `${projected.y}${unit.value}`,
+      width: `${page.width}${unit.value}`,
+    },
+  }
+}))
+
+const previewGuideStyle = computed(() => {
+  const guide = props.previewGuide
+  if (!guide)
+    return null
+  if (guide.axis === 'x') {
+    const page = props.surfacePlan.pages[0]
+    if (!page)
+      return null
+    return {
+      className: 'ei-guide--vertical',
+      style: {
+        left: `${getEditorSurfacePageLeft(props.surfacePlan, page) + guide.position}${unit.value}`,
+        top: `${page.visualTop}${unit.value}`,
+        height: `${props.surfacePlan.contentBounds.height}${unit.value}`,
+      },
+    }
+  }
+  const page = findPageForDocumentY(props.surfacePlan, guide.position)
+  const projected = projectDocumentPointToEditorSurface(props.surfacePlan, { x: 0, y: guide.position })
+  return {
+    className: 'ei-guide--horizontal',
+    style: {
+      left: `${getEditorSurfacePageLeft(props.surfacePlan, page)}${unit.value}`,
+      top: `${projected.y}${unit.value}`,
+      width: `${page.width}${unit.value}`,
+    },
+  }
+})
 
 const draggingGuide = ref<{
   axis: 'x' | 'y'
@@ -136,26 +205,26 @@ defineExpose({ onGuideDragStart, createGuideAt })
   <div ref="overlayRef" class="ei-guide-overlay">
     <!-- Vertical guide lines (x-axis positions) -->
     <div
-      v-for="(pos, i) in guidesX"
-      :key="`x-${i}`"
+      v-for="guide in verticalGuideViews"
+      :key="guide.key"
       class="ei-guide ei-guide--vertical"
-      :style="{ left: `${pos}${unit}` }"
-      @pointerdown="onGuidePointerDown('x', i, $event)"
+      :style="guide.style"
+      @pointerdown="onGuidePointerDown('x', guide.index, $event)"
     />
     <!-- Horizontal guide lines (y-axis positions) -->
     <div
-      v-for="(pos, i) in guidesY"
-      :key="`y-${i}`"
+      v-for="guide in horizontalGuideViews"
+      :key="guide.key"
       class="ei-guide ei-guide--horizontal"
-      :style="{ top: `${pos}${unit}` }"
-      @pointerdown="onGuidePointerDown('y', i, $event)"
+      :style="guide.style"
+      @pointerdown="onGuidePointerDown('y', guide.index, $event)"
     />
     <!-- Preview guide line (hover on ruler) -->
     <div
-      v-if="previewGuide"
+      v-if="previewGuideStyle"
       class="ei-guide ei-guide--preview"
-      :class="previewGuide.axis === 'x' ? 'ei-guide--vertical' : 'ei-guide--horizontal'"
-      :style="previewGuide.axis === 'x' ? { left: `${previewGuide.position}${unit}` } : { top: `${previewGuide.position}${unit}` }"
+      :class="previewGuideStyle.className"
+      :style="previewGuideStyle.style"
     />
   </div>
 </template>
@@ -174,7 +243,7 @@ defineExpose({ onGuideDragStart, createGuideAt })
 
   &--vertical {
     top: 0;
-    bottom: 0;
+    bottom: auto;
     width: 0;
     border-left: 1px dashed var(--ei-guide-color, #f50);
     cursor: ew-resize;
@@ -190,6 +259,7 @@ defineExpose({ onGuideDragStart, createGuideAt })
     left: 0;
     right: 0;
     height: 0;
+    right: auto;
     border-top: 1px dashed var(--ei-guide-color, #f50);
     cursor: ns-resize;
 

@@ -1,42 +1,70 @@
 <script setup lang="ts">
+import type { EditorSurfacePlan } from '@easyink/core'
+import { getEditorSurfacePageLeft, projectDocumentPointToEditorSurface } from '@easyink/core'
 import { computed } from 'vue'
 import { useDesignerStore } from '../composables'
+
+const props = defineProps<{
+  surfacePlan: EditorSurfacePlan
+}>()
 
 const store = useDesignerStore()
 
 const unit = computed(() => store.schema.unit)
 
 const verticalLines = computed(() =>
-  store.snapActiveLines.filter(l => l.orientation === 'vertical'),
+  store.snapActiveLines.filter(l => l.orientation === 'vertical').map((line, index) => {
+    const page = props.surfacePlan.pages[0]
+    const left = page ? getEditorSurfacePageLeft(props.surfacePlan, page) : 0
+    const from = projectDocumentPointToEditorSurface(props.surfacePlan, { x: 0, y: line.from })
+    const to = projectDocumentPointToEditorSurface(props.surfacePlan, { x: 0, y: line.to })
+    return {
+      ...line,
+      key: `v-${index}-${line.source}`,
+      surfacePosition: left + line.position,
+      surfaceFrom: Math.min(from.y, to.y),
+      surfaceTo: Math.max(from.y, to.y),
+    }
+  }),
 )
 
 const horizontalLines = computed(() =>
-  store.snapActiveLines.filter(l => l.orientation === 'horizontal'),
+  store.snapActiveLines.filter(l => l.orientation === 'horizontal').map((line, index) => {
+    const start = projectDocumentPointToEditorSurface(props.surfacePlan, { x: line.from, y: line.position })
+    const end = projectDocumentPointToEditorSurface(props.surfacePlan, { x: line.to, y: line.position })
+    return {
+      ...line,
+      key: `h-${index}-${line.source}`,
+      surfacePosition: start.y,
+      surfaceFrom: Math.min(start.x, end.x),
+      surfaceTo: Math.max(start.x, end.x),
+    }
+  }),
 )
 </script>
 
 <template>
   <div class="ei-snap-overlay">
     <div
-      v-for="(line, i) in verticalLines"
-      :key="`v-${i}-${line.source}`"
+      v-for="line in verticalLines"
+      :key="line.key"
       class="ei-snap-overlay__line ei-snap-overlay__line--vertical"
       :class="`ei-snap-overlay__line--${line.source}`"
       :style="{
-        left: `${line.position}${unit}`,
-        top: `${line.from}${unit}`,
-        height: `${Math.max(0, line.to - line.from)}${unit}`,
+        left: `${line.surfacePosition}${unit}`,
+        top: `${line.surfaceFrom}${unit}`,
+        height: `${Math.max(0, line.surfaceTo - line.surfaceFrom)}${unit}`,
       }"
     />
     <div
-      v-for="(line, i) in horizontalLines"
-      :key="`h-${i}-${line.source}`"
+      v-for="line in horizontalLines"
+      :key="line.key"
       class="ei-snap-overlay__line ei-snap-overlay__line--horizontal"
       :class="`ei-snap-overlay__line--${line.source}`"
       :style="{
-        top: `${line.position}${unit}`,
-        left: `${line.from}${unit}`,
-        width: `${Math.max(0, line.to - line.from)}${unit}`,
+        top: `${line.surfacePosition}${unit}`,
+        left: `${line.surfaceFrom}${unit}`,
+        width: `${Math.max(0, line.surfaceTo - line.surfaceFrom)}${unit}`,
       }"
     />
   </div>

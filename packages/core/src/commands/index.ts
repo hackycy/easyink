@@ -8,9 +8,11 @@ export {
 export {
   AddElementGroupCommand,
   AddMaterialCommand,
+  AddPageSheetCommand,
   MoveMaterialCommand,
   RemoveElementGroupCommand,
   RemoveMaterialCommand,
+  RemovePageSheetCommand,
   ResizeMaterialCommand,
   RotateMaterialCommand,
   UpdateDocumentCommand,

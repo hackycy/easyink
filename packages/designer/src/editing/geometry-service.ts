@@ -1,7 +1,12 @@
 import type { GeometryService, LocalCoordinateOptions, PageGeometrySnapshot, Point, Rect } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { DesignerStore } from '../store/designer-store'
-import { UnitManager } from '@easyink/core'
+import {
+  createEditorSurfacePlan,
+  projectDocumentPointToEditorSurface,
+  projectEditorSurfacePointToDocument,
+  UnitManager,
+} from '@easyink/core'
 
 export interface GeometryServiceOptions {
   getPageEl?: () => HTMLElement | null
@@ -69,18 +74,23 @@ export function createGeometryService(store: DesignerStore, options: GeometrySer
     screenToDocument(px: Point): Point {
       const { pageOffset, scroll, zoom, documentUnit } = getPageGeometry()
       const unitManager = new UnitManager(documentUnit)
-      return {
+      const surfacePoint = {
         x: unitManager.screenToDocument(px.x, pageOffset.x, scroll.x, zoom),
         y: unitManager.screenToDocument(px.y, pageOffset.y, scroll.y, zoom),
       }
+      const plan = createEditorSurfacePlan(store.schema)
+      const projected = projectEditorSurfacePointToDocument(plan, surfacePoint)
+      return { x: projected.x, y: projected.y }
     },
 
     documentToScreen(pt: Point): Point {
       const { pageOffset, scroll, zoom, documentUnit } = getPageGeometry()
       const unitManager = new UnitManager(documentUnit)
+      const plan = createEditorSurfacePlan(store.schema)
+      const surfacePoint = projectDocumentPointToEditorSurface(plan, pt)
       return {
-        x: unitManager.documentToScreen(pt.x, pageOffset.x, scroll.x, zoom),
-        y: unitManager.documentToScreen(pt.y, pageOffset.y, scroll.y, zoom),
+        x: unitManager.documentToScreen(surfacePoint.x, pageOffset.x, scroll.x, zoom),
+        y: unitManager.documentToScreen(surfacePoint.y, pageOffset.y, scroll.y, zoom),
       }
     },
 

@@ -1,8 +1,18 @@
 <script setup lang="ts">
+import type { EditorSurfacePagePlan } from '@easyink/core'
 import type { ResizeHandle } from '../composables/use-element-resize'
 import type { MarqueeRect } from '../composables/use-marquee-select'
 import type { WorkspaceWindowState } from '../types'
-import { createEditorSurfacePlan } from '@easyink/core'
+import {
+  AddPageSheetCommand,
+  createEditorSurfacePlan,
+  getEditorSurfacePageLeft,
+  projectDocumentPointToEditorSurface,
+  RemovePageSheetCommand,
+  UnitManager,
+} from '@easyink/core'
+import { IconDelete, IconDown, IconGrid, IconNewTemplate, IconPreview, IconUp } from '@easyink/icons'
+import { EiIcon } from '@easyink/ui'
 import { computed, onMounted, onUnmounted, provide, ref } from 'vue'
 import { useDesignerStore } from '../composables'
 import { useDatasourceDrop } from '../composables/use-datasource-drop'
@@ -49,6 +59,8 @@ function updateWindowState(windowState: WorkspaceWindowState, patch: Partial<Wor
 }
 const cursorPos = ref<{ x: number, y: number } | null>(null)
 const rulerHover = ref<{ axis: 'x' | 'y', position: number } | null>(null)
+
+const PAGE_TOOLBAR_GAP_PX = 16
 
 provide(CANVAS_CONTAINER_KEY, () => containerRef.value)
 
@@ -115,21 +127,20 @@ function handlePageDrop(e: DragEvent) {
 
 const editorSurfacePlan = computed(() => createEditorSurfacePlan(store.schema))
 
-const activeSurfacePage = computed(() => {
-  const plan = editorSurfacePlan.value
-  return plan.pages[plan.activePageIndex] ?? plan.pages[0]
-})
+const isFixedSheetPlan = computed(() =>
+  editorSurfacePlan.value.pages.some(page => page.kind === 'page')
+  && store.schema.page.pagination?.strategy === 'fixed-sheets',
+)
 
-const pageStyle = computed(() => {
-  const page = activeSurfacePage.value
+const surfaceStyle = computed(() => {
+  const plan = editorSurfacePlan.value
   const unit = store.schema.unit
   const zoom = store.workbench.viewport.zoom
   return {
-    width: `${page?.width ?? store.schema.page.width}${unit}`,
-    height: `${page?.height ?? store.schema.page.height}${unit}`,
+    width: `${plan.contentBounds.width}${unit}`,
+    height: `${plan.contentBounds.height}${unit}`,
     transform: `scale(${zoom})`,
     transformOrigin: 'top left',
-    background: store.schema.page.background?.color || '#fff',
   }
 })
 
@@ -138,12 +149,12 @@ const pageStyle = computed(() => {
 // its document-unit size and only applies CSS scale, so all overlays/elements
 // can stay in document-unit coordinates.
 const wrapperStyle = computed(() => {
-  const page = activeSurfacePage.value
+  const plan = editorSurfacePlan.value
   const unit = store.schema.unit
   const zoom = store.workbench.viewport.zoom
   return {
-    width: `calc(${page?.width ?? store.schema.page.width}${unit} * ${zoom})`,
-    height: `calc(${page?.height ?? store.schema.page.height}${unit} * ${zoom})`,
+    width: `calc(${plan.contentBounds.width}${unit} * ${zoom})`,
+    height: `calc(${plan.contentBounds.height}${unit} * ${zoom})`,
   }
 })
 
@@ -156,9 +167,10 @@ const marqueeStyle = computed(() => {
     return null
   const r = marqueeRect.value
   const unit = store.schema.unit
+  const topLeft = projectDocumentPointToEditorSurface(editorSurfacePlan.value, { x: r.x, y: r.y })
   return {
-    left: `${r.x}${unit}`,
-    top: `${r.y}${unit}`,
+    left: `${topLeft.x}${unit}`,
+    top: `${topLeft.y}${unit}`,
     width: `${r.width}${unit}`,
     height: `${r.height}${unit}`,
   }
@@ -184,12 +196,71 @@ const groupSelectionFrame = computed(() => {
   if (!box)
     return null
   const unit = store.schema.unit
+  const topLeft = projectDocumentPointToEditorSurface(editorSurfacePlan.value, { x: box.x, y: box.y })
   return {
-    left: `${box.x}${unit}`,
-    top: `${box.y}${unit}`,
+    left: `${topLeft.x}${unit}`,
+    top: `${topLeft.y}${unit}`,
     width: `${box.width}${unit}`,
     height: `${box.height}${unit}`,
   }
+})
+
+const pageFrames = computed(() => {
+  const plan = editorSurfacePlan.value
+  const unit = store.schema.unit
+  const background = store.schema.page.background?.color || '#fff'
+  return plan.pages.map(page => ({
+    page,
+    style: {
+      left: `${getEditorSurfacePageLeft(plan, page)}${unit}`,
+      top: `${page.visualTop}${unit}`,
+      width: `${page.width}${unit}`,
+      height: `${page.height}${unit}`,
+      background,
+    },
+  }))
+})
+
+const pageToolbarItems = computed(() => {
+  const plan = editorSurfacePlan.value
+  const zoom = store.workbench.viewport.zoom
+  const unitManager = new UnitManager(store.schema.unit)
+  return plan.pages.map(page => ({
+    page,
+    style: {
+      left: `${unitManager.toPixels(getEditorSurfacePageLeft(plan, page) + page.width, 96, zoom) + PAGE_TOOLBAR_GAP_PX}px`,
+      top: `${unitManager.toPixels(page.visualTop, 96, zoom) + PAGE_TOOLBAR_GAP_PX}px`,
+    },
+  }))
+})
+
+const autoPaginationLines = computed(() => {
+  if (store.schema.page.pagination?.strategy !== 'auto-sheets')
+    return []
+  const plan = editorSurfacePlan.value
+  const page = plan.pages[0]
+  if (!page)
+    return []
+  const lines: number[] = []
+  const pageHeight = store.schema.page.height
+  for (let y = pageHeight; y < page.height; y += pageHeight)
+    lines.push(y)
+  return lines
+})
+
+const autoPaginationLineStyles = computed(() => {
+  const page = editorSurfacePlan.value.pages[0]
+  if (!page)
+    return []
+  const unit = store.schema.unit
+  return autoPaginationLines.value.map(line => ({
+    key: line,
+    style: {
+      left: `${pageLeft(page)}${unit}`,
+      top: `${line}${unit}`,
+      width: `${page.width}${unit}`,
+    },
+  }))
 })
 
 // ─── Helpers ─────────────────────────────────────────────────────
@@ -292,6 +363,80 @@ function handleRulerHover(hover: { axis: 'x' | 'y', position: number } | null) {
   rulerHover.value = hover
 }
 
+function pageLeft(page: EditorSurfacePagePlan): number {
+  return getEditorSurfacePageLeft(editorSurfacePlan.value, page)
+}
+
+function projectNodeStyle(node: ReturnType<typeof store.getElements>[number]) {
+  const unit = store.schema.unit
+  const point = projectDocumentPointToEditorSurface(editorSurfacePlan.value, { x: node.x, y: node.y })
+  return {
+    left: `${point.x}${unit}`,
+    top: `${point.y}${unit}`,
+    width: `${node.width}${unit}`,
+    height: `${node.height}${unit}`,
+    transform: node.rotation ? `rotate(${node.rotation}deg)` : undefined,
+    opacity: node.hidden ? 1 : (node.alpha ?? 1),
+    zIndex: node.zIndex ?? 'auto',
+  }
+}
+
+function hasElementsOnPage(page: EditorSurfacePagePlan): boolean {
+  const start = page.yOffset
+  const end = page.yOffset + page.height
+  return store.schema.elements.some((node) => {
+    const bottom = node.y + node.height
+    return node.y < end && bottom > start
+  })
+}
+
+function addSheetAfter(page: EditorSurfacePagePlan) {
+  if (!isFixedSheetPlan.value)
+    return
+  store.commands.execute(new AddPageSheetCommand(store.schema, editorSurfacePlan.value, page.index))
+  store.markDraftModified()
+}
+
+function removeSheet(page: EditorSurfacePagePlan) {
+  if (!canDeletePage(page))
+    return
+  // eslint-disable-next-line no-alert
+  if (hasElementsOnPage(page) && !window.confirm('Delete this page and all elements on it?'))
+    return
+  store.commands.execute(new RemovePageSheetCommand(store.schema, editorSurfacePlan.value, page.index))
+  store.markDraftModified()
+}
+
+function scrollToPage(page: EditorSurfacePagePlan) {
+  const el = scrollRef.value
+  if (!el)
+    return
+  const zoom = store.workbench.viewport.zoom
+  const unitManager = new UnitManager(store.schema.unit)
+  const style = window.getComputedStyle(el)
+  const paddingTop = Number.parseFloat(style.paddingTop) || 0
+  const paddingLeft = Number.parseFloat(style.paddingLeft) || 0
+  const margin = 24
+  el.scrollTo({
+    top: Math.max(paddingTop + unitManager.toPixels(page.visualTop, 96, zoom) - margin, 0),
+    left: Math.max(paddingLeft + unitManager.toPixels(pageLeft(page), 96, zoom) - margin, 0),
+    behavior: 'smooth',
+  })
+}
+
+function canDeletePage(page: EditorSurfacePagePlan): boolean {
+  return page.kind === 'page' && isFixedSheetPlan.value && editorSurfacePlan.value.pages.length > 1
+}
+
+function scrollByPage(page: EditorSurfacePagePlan, delta: number) {
+  const pages = editorSurfacePlan.value.pages
+  if (pages.length === 0)
+    return
+  const next = pages[Math.min(Math.max(page.index + delta, 0), pages.length - 1)]
+  if (next)
+    scrollToPage(next)
+}
+
 // ─── Window position clamping ────────────────────────────────────
 
 let windowLayoutTimer: ReturnType<typeof setTimeout> | null = null
@@ -363,16 +508,34 @@ onUnmounted(() => {
         <div
           ref="pageRef"
           class="ei-canvas-page"
-          :style="pageStyle"
+          :style="surfaceStyle"
           @dragover="handlePageDragOver"
           @dragleave="handlePageDragLeave"
           @drop="handlePageDrop"
         >
+          <div
+            v-for="frame in pageFrames"
+            :key="frame.page.index"
+            class="ei-canvas-paper"
+            :class="{
+              'ei-canvas-paper--continuous': frame.page.kind === 'continuous',
+              'ei-canvas-paper--label': frame.page.kind === 'label-cell',
+            }"
+            :style="frame.style"
+          />
+
           <!-- Grid overlay -->
-          <GridOverlay />
+          <GridOverlay :surface-plan="editorSurfacePlan" />
 
           <!-- Guide overlay -->
-          <GuideOverlay ref="guideOverlayRef" :preview-guide="rulerHover" />
+          <GuideOverlay ref="guideOverlayRef" :surface-plan="editorSurfacePlan" :preview-guide="rulerHover" />
+
+          <div
+            v-for="line in autoPaginationLineStyles"
+            :key="line.key"
+            class="ei-canvas-page-break"
+            :style="line.style"
+          />
 
           <!-- Elements -->
           <div
@@ -385,15 +548,7 @@ onUnmounted(() => {
               'ei-canvas-element--hidden': el.hidden,
               'ei-canvas-element--deep-editing': editingNodeId === el.id,
             }"
-            :style="{
-              left: `${el.x}${store.schema.unit}`,
-              top: `${el.y}${store.schema.unit}`,
-              width: `${el.width}${store.schema.unit}`,
-              height: `${el.height}${store.schema.unit}`,
-              transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
-              opacity: el.hidden ? 1 : (el.alpha ?? 1),
-              zIndex: el.zIndex ?? 'auto',
-            }"
+            :style="projectNodeStyle(el)"
             @pointerdown="handleElementPointerDown($event, el.id)"
             @click="handleElementClick($event, el.id)"
             @dblclick="handleElementDblClick($event, el.id)"
@@ -440,7 +595,7 @@ onUnmounted(() => {
           />
 
           <!-- Snap line overlay -->
-          <SnapLineOverlay />
+          <SnapLineOverlay :surface-plan="editorSurfacePlan" />
 
           <!-- Selection overlay (decorations from editing session) -->
           <SelectionOverlay />
@@ -454,6 +609,70 @@ onUnmounted(() => {
             class="ei-canvas-marquee"
             :style="marqueeStyle"
           />
+        </div>
+
+        <div
+          v-for="item in pageToolbarItems"
+          :key="`toolbar-${item.page.index}`"
+          class="ei-page-toolbar"
+          :style="item.style"
+          @pointerdown.stop
+        >
+          <button
+            v-if="isFixedSheetPlan"
+            class="ei-page-toolbar__button"
+            type="button"
+            title="Add page"
+            @click="addSheetAfter(item.page)"
+          >
+            <EiIcon :icon="IconNewTemplate" :size="15" />
+          </button>
+          <button
+            v-if="isFixedSheetPlan"
+            class="ei-page-toolbar__button"
+            type="button"
+            title="Delete page"
+            :disabled="!canDeletePage(item.page)"
+            @click="removeSheet(item.page)"
+          >
+            <EiIcon :icon="IconDelete" :size="15" />
+          </button>
+          <button
+            class="ei-page-toolbar__button"
+            type="button"
+            title="Previous page"
+            :disabled="item.page.index <= 0"
+            @click="scrollByPage(item.page, -1)"
+          >
+            <EiIcon :icon="IconUp" :size="15" />
+          </button>
+          <button
+            class="ei-page-toolbar__button"
+            type="button"
+            title="Next page"
+            :disabled="item.page.index >= editorSurfacePlan.pages.length - 1"
+            @click="scrollByPage(item.page, 1)"
+          >
+            <EiIcon :icon="IconDown" :size="15" />
+          </button>
+          <button
+            v-if="store.schema.page.pagination?.strategy === 'auto-sheets'"
+            class="ei-page-toolbar__button"
+            type="button"
+            title="Pagination preview"
+            disabled
+          >
+            <EiIcon :icon="IconPreview" :size="15" />
+          </button>
+          <button
+            v-if="item.page.kind === 'label-cell'"
+            class="ei-page-toolbar__button"
+            type="button"
+            title="Sheet preview"
+            disabled
+          >
+            <EiIcon :icon="IconGrid" :size="15" />
+          </button>
         </div>
       </div>
     </div>
@@ -504,7 +723,6 @@ onUnmounted(() => {
 
 .ei-canvas-scroll {
   padding: 40px 40px 40px 60px;
-  display: inline-block;
   min-width: 100%;
   min-height: 100%;
   overflow: auto;
@@ -516,11 +734,8 @@ onUnmounted(() => {
 
 .ei-canvas-page-wrapper {
   position: relative;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
-  // Promote to its own compositor layer so that integer-sized wrapper bounds
-  // clip cleanly without bleeding the page's sub-pixel scaled content.
+  margin: 0 auto;
   will-change: width, height;
-  transform: translateZ(0);
 }
 
 .ei-canvas-page {
@@ -528,6 +743,66 @@ onUnmounted(() => {
   top: 0;
   left: 0;
   overflow: visible;
+}
+
+.ei-canvas-paper {
+  position: absolute;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+  pointer-events: none;
+  box-sizing: border-box;
+
+  &--continuous {
+    min-height: 100%;
+  }
+
+  &--label {
+    border-radius: 2px;
+  }
+}
+
+.ei-canvas-page-break {
+  position: absolute;
+  height: 0;
+  border-top: 1px dashed rgba(24, 144, 255, 0.5);
+  pointer-events: none;
+  z-index: 15;
+}
+
+.ei-page-toolbar {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 2px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid var(--ei-border-color, #d9d9d9);
+  border-radius: 6px;
+  // box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
+  z-index: 20;
+
+  &__button {
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--ei-text-primary, #333);
+    cursor: pointer;
+
+    &:hover:not(:disabled) {
+      background: var(--ei-hover-bg, rgba(24, 144, 255, 0.1));
+      color: var(--ei-primary, #1890ff);
+    }
+
+    &:disabled {
+      color: var(--ei-text-disabled, #bbb);
+      cursor: not-allowed;
+    }
+  }
 }
 
 .ei-canvas-element {
