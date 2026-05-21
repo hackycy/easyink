@@ -40,6 +40,8 @@ export function createPageNumberNode(partial?: Partial<MaterialNode>, unit?: str
     y: 0,
     width: c(60),
     height: c(16),
+    placement: { mode: 'fixed' },
+    repeat: { scope: 'every-output-page' },
     props: {
       ...PAGE_NUMBER_DEFAULTS,
       fontSize: c(PAGE_NUMBER_DEFAULTS.fontSize),

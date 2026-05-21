@@ -102,6 +102,33 @@ interface PageSchema {
 
 历史输入中的 `stack` 会在兼容入口迁移为 `continuous + stack-flow + flow-y`，新模板不应再写入 `page.mode = 'stack'`。
 
+### MaterialNode 布局行为
+
+布局、分页和每页重复使用节点级字段表达，物料 `props` 只保存物料自己的内容和样式属性。
+
+```ts
+interface MaterialNode {
+  placement?: {
+    mode?: 'flow' | 'fixed'
+  }
+  break?: {
+    keepTogether?: boolean
+    before?: 'auto' | 'page'
+    after?: 'auto' | 'page'
+  }
+  repeat?: {
+    scope?: 'none' | 'every-output-page'
+  }
+}
+```
+
+- `placement.mode='flow'`：节点参与 `flow-y` 回流。
+- `placement.mode='fixed'`：节点不被回流推移，跨页规则不生效。
+- `break`：仅在 `pagination.strategy='auto-sheets'` 时影响切页。
+- `repeat.scope='every-output-page'`：分页完成后复制到每个输出页，并注入页码上下文；不会影响页数。
+
+旧模板中的 `props.layoutMode / keepTogether / pageBreakBefore / pageBreakAfter` 会作为兼容输入读取，新模板不应继续写入这些字段。
+
 ### LabelPageConfig
 
 标签模式的网格配置：

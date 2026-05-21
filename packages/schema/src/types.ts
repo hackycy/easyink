@@ -283,6 +283,22 @@ export interface PagePrintConfig {
   verticalOffset?: number
 }
 
+// ─── Node Layout Behavior ───────────────────────────────────────────
+
+export interface NodePlacementConfig {
+  mode?: 'flow' | 'fixed'
+}
+
+export interface NodeBreakConfig {
+  keepTogether?: boolean
+  before?: 'auto' | 'page'
+  after?: 'auto' | 'page'
+}
+
+export interface NodeRepeatConfig {
+  scope?: 'none' | 'every-output-page'
+}
+
 // ─── Material Node ─────────────────────────────────────────────────
 
 export interface MaterialNode<TProps extends object = Record<string, unknown>> {
@@ -300,6 +316,9 @@ export interface MaterialNode<TProps extends object = Record<string, unknown>> {
   hidden?: boolean
   locked?: boolean
   print?: PrintBehavior
+  placement?: NodePlacementConfig
+  break?: NodeBreakConfig
+  repeat?: NodeRepeatConfig
   props: TProps
   binding?: BindingRef | BindingRef[]
   animations?: AnimationSchema[]

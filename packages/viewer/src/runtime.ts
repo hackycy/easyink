@@ -1,5 +1,5 @@
 import type { InternalHooks, PagePlan, PaginationResult, ViewerMeasureResult } from '@easyink/core'
-import type { DocumentSchema } from '@easyink/schema'
+import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import type {
   MaterialViewerExtension,
   PrintDriver,
@@ -16,9 +16,9 @@ import type {
 } from './types'
 import type { ViewerHost } from './viewer-host'
 import { registerBuiltinViewerMaterials } from '@easyink/builtin'
-import { createInternalHooks, FontManager, runLayoutPipeline, runPagination } from '@easyink/core'
+import { createInternalHooks, FontManager, readNodeRepeatScope, runLayoutPipeline, runPagination } from '@easyink/core'
 import { migrateLegacyStackPageMode, normalizeDocumentSchema, traverseNodes, validateSchema } from '@easyink/schema'
-import { UNIT_FACTOR } from '@easyink/shared'
+import { deepClone, UNIT_FACTOR } from '@easyink/shared'
 import { applyBindingsToProps, projectBindings } from './binding-projector'
 import { collectFontFamilies, loadAndInjectFonts } from './font-loader'
 import { MaterialRendererRegistry } from './material-registry'
@@ -139,14 +139,21 @@ export class ViewerRuntime {
     const { measurements, diagnostics: layoutDiagnostics } = this.measureRuntimeElements(resolvedPropsMap)
     diagnostics.push(...layoutDiagnostics)
 
-    // Stage 4: Orthogonal layout + pagination planning
-    const layoutDocument = runLayoutPipeline(this._schema, {
-      originalSchema: this._schema,
+    // Stage 4: Orthogonal layout + pagination planning. Page-repeated
+    // elements are overlays resolved after pagination, so they must not
+    // contribute to flow, document height, or page count.
+    const repeatedElements = this.collectRepeatedPageElements(this._schema.elements)
+    const layoutSchema = repeatedElements.length > 0
+      ? { ...this._schema, elements: this._schema.elements.filter(el => !repeatedElements.includes(el)) }
+      : this._schema
+    const layoutDocument = runLayoutPipeline(layoutSchema, {
+      originalSchema: layoutSchema,
       measured: measurements,
     })
-    const pagination = runPagination(this._schema, layoutDocument, {
-      originalSchema: this._schema,
+    const pagination = runPagination(layoutSchema, layoutDocument, {
+      originalSchema: layoutSchema,
       resolveFragmentPaginator: fragment => this._materialRegistry.getFragmentPaginator(fragment.node),
+      retainBlankPage: repeatedElements.some(el => !el.hidden) ? () => true : undefined,
     })
     const plan = toPagePlan(pagination)
 
@@ -159,8 +166,8 @@ export class ViewerRuntime {
       })
     }
 
-    // Stage 4.5: Resolve page-aware elements (e.g., page-number)
-    this.resolvePageAwareElements(plan, resolvedPropsMap)
+    // Stage 4.5: Resolve per-page overlays (e.g., page-number)
+    this.resolveRepeatedPageElements(plan, resolvedPropsMap, repeatedElements)
 
     // Stage 5: DOM rendering
     const pages = plan.pages.map(p => ({
@@ -452,48 +459,40 @@ export class ViewerRuntime {
   // Internal pipeline stages
   // ---------------------------------------------------------------------------
 
+  private collectRepeatedPageElements(elements: MaterialNode[]): MaterialNode[] {
+    if (this._schema?.page.pagination?.strategy === 'label-sheets')
+      return []
+    return elements.filter(el =>
+      readNodeRepeatScope(el) === 'every-output-page'
+      || this._materialRegistry.isPageAware(el.type),
+    )
+  }
+
   /**
-   * Stage 4.5: Resolve page-aware elements.
-   * Collects elements whose material type is marked pageAware, removes them
-   * from their original page, then replicates them into every page with
-   * injected __pageNumber / __totalPages props.
+   * Stage 4.5: Resolve per-page repeated elements.
+   * Repeated elements are page overlays: one schema node is copied to every
+   * output page after pagination and receives page context props.
    */
-  private resolvePageAwareElements(
+  private resolveRepeatedPageElements(
     plan: PagePlan,
     resolvedPropsMap: Map<string, Record<string, unknown>>,
+    repeatedElements: MaterialNode[],
   ): void {
-    // Label mode does not support page-aware elements
-    if (plan.mode === 'label')
-      return
-
-    // Collect page-aware elements across all pages
-    const pageAwareElements: import('@easyink/schema').MaterialNode[] = []
-    for (const page of plan.pages) {
-      const kept: import('@easyink/schema').MaterialNode[] = []
-      for (const el of page.elements) {
-        if (this._materialRegistry.isPageAware(el.type)) {
-          pageAwareElements.push(el)
-        }
-        else {
-          kept.push(el)
-        }
-      }
-      page.elements = kept
-    }
-
-    if (pageAwareElements.length === 0)
+    if (repeatedElements.length === 0)
       return
 
     const totalPages = plan.pages.length
 
-    // Replicate page-aware elements into every page
     for (const page of plan.pages) {
-      for (const el of pageAwareElements) {
+      for (const el of repeatedElements) {
         const virtualId = `${el.id}__p${page.index}`
-        const virtualNode = { ...el, id: virtualId }
+        const virtualNode = {
+          ...deepClone(el),
+          id: virtualId,
+          y: page.yOffset + resolveRepeatedElementLocalY(el, page.height),
+        }
         page.elements.push(virtualNode)
 
-        // Inject page context into resolved props
         const baseProps = resolvedPropsMap.get(el.id) ?? el.props
         resolvedPropsMap.set(virtualId, {
           ...baseProps,
@@ -769,6 +768,13 @@ function toPagePlan(result: PaginationResult): PagePlan {
       message: diagnostic.message,
     })),
   }
+}
+
+function resolveRepeatedElementLocalY(node: MaterialNode, pageHeight: number): number {
+  if (pageHeight <= 0)
+    return node.y
+  const localY = node.y % pageHeight
+  return localY < 0 ? localY + pageHeight : localY
 }
 
 function serializeCause(err: unknown): unknown {

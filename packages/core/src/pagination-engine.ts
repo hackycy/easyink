@@ -9,6 +9,7 @@ import { resolvePageModel } from './page-model'
 export interface PaginationOptions {
   originalSchema?: DocumentSchema
   resolveFragmentPaginator?: (fragment: LayoutFragment) => FragmentPaginator | undefined
+  retainBlankPage?: (page: OutputPagePlan) => boolean
 }
 
 export interface PaginationResult {
@@ -26,7 +27,7 @@ export function runPagination(
   const diagnostics = [...document.diagnostics]
 
   if (strategy === 'fixed-sheets')
-    return { mode: schema.page.mode, pages: createFixedSheets(schema, document, diagnostics), diagnostics }
+    return { mode: schema.page.mode, pages: createFixedSheets(schema, document, diagnostics, options), diagnostics }
   if (strategy === 'auto-sheets')
     return { mode: schema.page.mode, pages: createAutoSheets(schema, document, diagnostics, options), diagnostics }
   if (strategy === 'label-sheets')
@@ -56,6 +57,7 @@ function createFixedSheets(
   schema: DocumentSchema,
   document: LayoutDocument,
   diagnostics: LayoutDiagnostic[],
+  options: PaginationOptions,
 ): OutputPagePlan[] {
   const page = schema.page
   const pageModel = resolvePageModel(schema)
@@ -74,7 +76,7 @@ function createFixedSheets(
     entries.push(createPage(i, pageWidth, pageHeight, i * pageHeight, fragments))
   }
 
-  let pages = applyBlankPolicy(entries, page.blankPolicy)
+  let pages = applyBlankPolicy(entries, page.blankPolicy, options.retainBlankPage)
   pages = applyPageCopies(pages, Math.max(page.copies ?? 1, 1))
   resolveTotalPages(pages)
 
@@ -298,10 +300,14 @@ function createPage(
   }
 }
 
-function applyBlankPolicy(pages: OutputPagePlan[], blankPolicy: DocumentSchema['page']['blankPolicy']): OutputPagePlan[] {
+function applyBlankPolicy(
+  pages: OutputPagePlan[],
+  blankPolicy: DocumentSchema['page']['blankPolicy'],
+  retainBlankPage?: (page: OutputPagePlan) => boolean,
+): OutputPagePlan[] {
   if (blankPolicy !== 'remove')
     return pages
-  const filtered = pages.filter(page => page.fragments.length > 0)
+  const filtered = pages.filter(page => page.fragments.length > 0 || retainBlankPage?.(page))
   return filtered.length > 0 ? filtered : pages.slice(0, 1)
 }
 

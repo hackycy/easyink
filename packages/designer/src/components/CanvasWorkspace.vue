@@ -8,6 +8,7 @@ import {
   createEditorSurfacePlan,
   getEditorSurfacePageLeft,
   projectDocumentPointToEditorSurface,
+  readNodeRepeatScope,
   RemovePageSheetCommand,
   UnitManager,
 } from '@easyink/core'
@@ -169,6 +170,39 @@ const wrapperStyle = computed(() => {
 })
 
 const elements = computed(() => store.getElements())
+
+const repeatedPreviewElements = computed(() => {
+  if (store.schema.page.pagination?.strategy === 'label-sheets')
+    return []
+  const pages = resolveRepeatPreviewPages()
+  if (pages.length <= 1)
+    return []
+
+  const previews: Array<{
+    key: string
+    sourceId: string
+    style: ReturnType<typeof projectNodeStyle>
+  }> = []
+
+  for (const node of elements.value) {
+    if (!isRepeatedEveryPage(node))
+      continue
+    if (node.hidden)
+      continue
+    const sourcePage = resolveRepeatSourcePage(node, pages)
+    const localY = node.y - sourcePage.yOffset
+    for (const page of pages) {
+      if (page.index === sourcePage.index)
+        continue
+      previews.push({
+        key: `${node.id}__repeat_preview_${page.index}`,
+        sourceId: node.id,
+        style: projectRepeatPreviewStyle(node, page.yOffset + localY),
+      })
+    }
+  }
+  return previews
+})
 
 const editingNodeId = computed(() => store.editingSession.activeNodeId)
 
@@ -381,9 +415,9 @@ function pageLeft(page: EditorSurfacePagePlan): number {
   return getEditorSurfacePageLeft(editorSurfacePlan.value, page)
 }
 
-function projectNodeStyle(node: ReturnType<typeof store.getElements>[number]) {
+function projectNodeStyle(node: ReturnType<typeof store.getElements>[number], overrideY?: number) {
   const unit = store.schema.unit
-  const point = projectDocumentPointToEditorSurface(editorSurfacePlan.value, { x: node.x, y: node.y })
+  const point = projectDocumentPointToEditorSurface(editorSurfacePlan.value, { x: node.x, y: overrideY ?? node.y })
   return {
     left: `${point.x}${unit}`,
     top: `${point.y}${unit}`,
@@ -393,6 +427,53 @@ function projectNodeStyle(node: ReturnType<typeof store.getElements>[number]) {
     opacity: node.hidden ? 1 : (node.alpha ?? 1),
     zIndex: node.zIndex ?? 'auto',
   }
+}
+
+function projectRepeatPreviewStyle(node: ReturnType<typeof store.getElements>[number], overrideY: number) {
+  const style = projectNodeStyle(node, overrideY)
+  return {
+    ...style,
+    opacity: node.hidden ? 0.45 : (node.alpha ?? 1) * 0.45,
+  }
+}
+
+function isRepeatedEveryPage(node: ReturnType<typeof store.getElements>[number]): boolean {
+  return readNodeRepeatScope(node) === 'every-output-page'
+    || store.getMaterial(node.type)?.capabilities.pageAware === true
+}
+
+function resolveRepeatPreviewPages(): EditorSurfacePagePlan[] {
+  if (store.schema.page.pagination?.strategy !== 'auto-sheets')
+    return editorSurfacePlan.value.pages
+
+  const page = editorSurfacePlan.value.pages[0]
+  if (!page)
+    return []
+  const pageHeight = store.schema.page.height
+  if (pageHeight <= 0)
+    return [page]
+  const count = Math.max(Math.ceil(page.height / pageHeight), 1)
+  return Array.from({ length: count }, (_, index) => ({
+    index,
+    width: page.width,
+    height: pageHeight,
+    yOffset: index * pageHeight,
+    visualTop: index * pageHeight,
+    kind: 'page' as const,
+  }))
+}
+
+function resolveRepeatSourcePage(node: ReturnType<typeof store.getElements>[number], pages: EditorSurfacePagePlan[]): EditorSurfacePagePlan {
+  return pages.find(page => node.y >= page.yOffset && node.y < page.yOffset + page.height)
+    ?? pages[0]
+    ?? {
+      index: 0,
+      width: store.schema.page.width,
+      height: store.schema.page.height,
+      yOffset: 0,
+      visualTop: 0,
+      kind: 'page',
+    }
 }
 
 function hasElementsOnPage(page: EditorSurfacePagePlan): boolean {
@@ -558,6 +639,17 @@ onUnmounted(() => {
             class="ei-canvas-page-break"
             :style="line.style"
           />
+
+          <div
+            v-for="preview in repeatedPreviewElements"
+            :key="preview.key"
+            class="ei-canvas-element ei-canvas-element--repeat-preview"
+            :style="preview.style"
+          >
+            <div class="ei-canvas-element__content">
+              <CanvasElementContent :node-id="preview.sourceId" />
+            </div>
+          </div>
 
           <!-- Elements -->
           <div
@@ -814,6 +906,16 @@ onUnmounted(() => {
 
   &--locked {
     cursor: default;
+  }
+
+  &--repeat-preview {
+    pointer-events: none;
+    opacity: 0.45;
+    cursor: default;
+  }
+
+  &--repeat-preview &__content {
+    border: 0;
   }
 
   &--hidden {

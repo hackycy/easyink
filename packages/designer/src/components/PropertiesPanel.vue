@@ -6,7 +6,7 @@ import type { Component } from 'vue'
 import type { PagePropertyContext, PagePropertyDescriptor, PagePropertyGroup } from '../page-properties'
 import type { PanelSectionId, PropSchema } from '../types'
 import { ClearBindingCommand, getByPath, setByPath, UpdateBindingFormatCommand, UpdateDocumentCommand, UpdateGeometryCommand, UpdateMaterialMetaCommand, UpdateMaterialPropsCommand, UpdatePageCommand } from '@easyink/core'
-import { getPropSchemas, groupPropSchemas } from '@easyink/prop-schemas'
+import { createLayoutBehaviorPropSchemas, getPropSchemas, groupPropSchemas } from '@easyink/prop-schemas'
 import { deepClone, PAPER_PRESETS } from '@easyink/shared'
 import { EiNumberInput, EiPanel, EiSwitch } from '@easyink/ui'
 import { computed, shallowRef, watchEffect } from 'vue'
@@ -301,16 +301,23 @@ const materialSchemas = computed<PropSchema[]>(() => {
   if (!selectedElement.value)
     return []
   const def = store.getMaterial(selectedElement.value.type)
-  if (def && def.props.length > 0)
-    return def.props
-  return getPropSchemas(selectedElement.value.type)
+  const materialProps = def && def.props.length > 0
+    ? def.props
+    : getPropSchemas(selectedElement.value.type)
+  return [
+    ...materialProps,
+    ...createLayoutBehaviorPropSchemas({ page: store.schema.page }),
+  ]
 })
 
 const visibleSchemas = computed(() => {
   const el = selectedElement.value
   if (!el)
     return []
-  const elProps = el.props
+  const elProps = {
+    ...el.props,
+    __placementMode: el.placement?.mode ?? ((el.props as Record<string, unknown>).layoutMode === 'fixed' ? 'fixed' : 'flow'),
+  }
   return materialSchemas.value.filter(s => !s.visible || s.visible(elProps))
 })
 
@@ -340,6 +347,7 @@ const GROUP_LABELS: Record<string, string> = {
   'shape': 'designer.property.shape',
   'layout': 'designer.property.layout',
   'pagination': 'designer.property.pagination',
+  'repeat': 'designer.property.repeat',
   'general': 'designer.property.style',
   'table-border': 'designer.property.border',
   'table-layout': 'designer.property.layout',

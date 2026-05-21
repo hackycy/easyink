@@ -1,6 +1,8 @@
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import type { PageMode } from '@easyink/shared'
 import type { LayoutDiagnostic } from './layout-plan'
+import { deepClone } from '@easyink/shared'
+import { readNodeRepeatScope } from './layout-plan'
 import { runLayoutPipeline } from './layout-strategy'
 import { runPagination } from './pagination-engine'
 
@@ -38,8 +40,23 @@ export interface PagePlanOptions {
 }
 
 export function createPagePlan(schema: DocumentSchema, options: PagePlanOptions = {}): PagePlan {
-  const document = runLayoutPipeline(schema)
-  const result = runPagination(schema, document, { originalSchema: options.originalSchema })
+  const repeatedElements = schema.page.pagination?.strategy === 'label-sheets'
+    ? []
+    : schema.elements.filter(el => readNodeRepeatScope(el) === 'every-output-page')
+  const layoutSchema = repeatedElements.length > 0
+    ? { ...schema, elements: schema.elements.filter(el => !repeatedElements.includes(el)) }
+    : schema
+  const originalSchema = options.originalSchema
+    ? {
+        ...options.originalSchema,
+        elements: options.originalSchema.elements.filter(el => !repeatedElements.some(repeated => repeated.id === el.id)),
+      }
+    : undefined
+  const document = runLayoutPipeline(layoutSchema)
+  const result = runPagination(layoutSchema, document, {
+    originalSchema,
+    retainBlankPage: repeatedElements.some(el => !el.hidden) ? () => true : undefined,
+  })
 
   return {
     mode: result.mode,
@@ -47,12 +64,26 @@ export function createPagePlan(schema: DocumentSchema, options: PagePlanOptions 
       index: page.index,
       width: page.width,
       height: page.height,
-      elements: page.fragments.map(fragment => fragment.node),
+      elements: [
+        ...page.fragments.map(fragment => fragment.node),
+        ...repeatedElements.map(node => ({
+          ...deepClone(node),
+          id: `${node.id}__p${page.index}`,
+          y: page.yOffset + resolveRepeatedElementLocalY(node, page.height),
+        })),
+      ],
       copyIndex: page.pageContext.copyIndex,
       yOffset: page.yOffset,
     })),
     diagnostics: result.diagnostics.map(toPagePlanDiagnostic),
   }
+}
+
+function resolveRepeatedElementLocalY(node: MaterialNode, pageHeight: number): number {
+  if (pageHeight <= 0)
+    return node.y
+  const localY = node.y % pageHeight
+  return localY < 0 ? localY + pageHeight : localY
 }
 
 function toPagePlanDiagnostic(diagnostic: LayoutDiagnostic): PagePlanDiagnostic {

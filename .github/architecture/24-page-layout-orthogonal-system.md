@@ -17,6 +17,7 @@ DocumentSchema
   -> Page Model
   -> Layout + Reflow
   -> Pagination
+  -> Page Overlays
   -> Render Surface / Editor Surface
 ```
 
@@ -26,6 +27,7 @@ DocumentSchema
 | Layout | 元素先如何进入文档坐标 | `packages/core/src/layout-strategy.ts` |
 | Reflow | 测量后是否沿 Y 轴推移 flow 元素 | `packages/core/src/reflow-engine.ts` |
 | Pagination | 文档坐标如何变成输出页或 sheet | `packages/core/src/pagination-engine.ts` |
+| Page Overlays | 哪些元素在分页完成后按输出页复制 | `packages/viewer/src/runtime.ts` |
 | Editor Surface | Designer 如何显示可编辑纸张 | `packages/core/src/editor-surface-plan.ts` |
 
 不变量：`MaterialNode.x/y/width/height` 存储文档坐标；测量、回流、分页和编辑态投影都不能把运行结果静默写回原始 schema。
@@ -56,6 +58,16 @@ type PageModelKind = 'paged-paper' | 'continuous-paper' | 'label-sheet'
 type LayoutStrategyKind = 'absolute' | 'stack-flow' | 'region-flow'
 type PaginationStrategyKind = 'none' | 'fixed-sheets' | 'auto-sheets' | 'label-sheets'
 type ReflowStrategyKind = 'none' | 'measure-only' | 'flow-y'
+
+interface MaterialNode {
+  placement?: { mode?: 'flow' | 'fixed' }
+  break?: {
+    keepTogether?: boolean
+    before?: 'auto' | 'page'
+    after?: 'auto' | 'page'
+  }
+  repeat?: { scope?: 'none' | 'every-output-page' }
+}
 ```
 
 默认组合由 `packages/schema/src/defaults.ts` 生成：
@@ -79,7 +91,8 @@ ViewerRuntime 当前主流程：
 5. 调用物料 `measure()`，把运行态尺寸写入 `measurements` map。
 6. `runLayoutPipeline()` 根据 `reflow.strategy` 生成 `LayoutDocument`。
 7. `runPagination()` 根据 `pagination.strategy` 生成输出页，并通过 `FragmentPaginator` 处理可拆分页物料。
-8. 注入页码上下文，渲染 DOM，缓存 `ViewerPageMetrics` 供打印策略使用。
+8. 将 `repeat.scope='every-output-page'` 或 material 默认 page-aware 的元素按输出页复制为 page overlay，并注入页码上下文。
+9. 渲染 DOM，缓存 `ViewerPageMetrics` 供打印策略使用。
 
 `RenderSurface` 只消费页面计划和物料 registry，不根据 `page.mode` 或物料类型重新判断分页策略。
 
@@ -92,7 +105,30 @@ ViewerRuntime 当前主流程：
 | `none` | 连续纸只输出一张 sheet；高度为内容底边加尾部留白，且不因 page break 约束切成固定页。 |
 | `label-sheets` | `page.width/height` 表示单个标签 cell；`label.columns/rows/gap/rowGap` 推导 sheet 尺寸；`copies` 展开成一个或多个 sheet。 |
 
-分页控制字段从 `node.props.layoutMode / keepTogether / pageBreakBefore / pageBreakAfter` 读取并投影为 `LayoutFragment.flow`。当前约定：`layoutMode !== 'fixed'` 的节点参与 flow；固定节点不会被 `flow-y` 推移，若回流后与 flow 节点新增重叠，输出 `FLOW_Y_FIXED_OVERLAP`。
+分页控制字段从 `node.placement / node.break` 读取并投影为 `LayoutFragment.flow`，旧模板中的 `node.props.layoutMode / keepTogether / pageBreakBefore / pageBreakAfter` 只作为兼容 fallback。当前约定：`placement.mode !== 'fixed'` 的节点参与 flow；固定节点不会被 `flow-y` 推移，也不触发分页 break；若回流后与 flow 节点新增重叠，输出 `FLOW_Y_FIXED_OVERLAP`。
+
+## 24.5.1 节点局部行为
+
+节点级布局行为分三层，避免把所有控制塞进物料私有 props：
+
+| 行为 | 字段 | 生效阶段 | UI 语义 |
+| --- | --- | --- | --- |
+| 位置行为 | `placement.mode` | reflow | 跟随内容 / 固定位置 |
+| 跨页规则 | `break.keepTogether / before / after` | `auto-sheets` pagination | 保持整体、前置分页、后置分页 |
+| 每页重复 | `repeat.scope='every-output-page'` | pagination 之后 | 每个输出页都显示 |
+
+跨页规则只对参与 flow 的节点生效；固定位置节点即使保留旧 break 字段，也不会切页。每页重复节点不参与 layout/reflow/pagination，它们是分页完成后的 page overlay，因此不会影响页数或连续纸高度。但在 `fixed-sheets + blankPolicy='remove'` 下，可见的每页重复 overlay 会保留对应输出纸张，避免只有页码、页眉、页脚或水印的页面被误判为空白页。
+
+Designer 属性面板按页面策略注入行为项：
+
+| 页面组合 | 显示行为 |
+| --- | --- |
+| `absolute + fixed-sheets` | 每页重复 |
+| `stack-flow + flow-y + none` | 跟随内容 / 固定位置、每页重复 |
+| `stack-flow + flow-y + auto-sheets` | 跟随内容 / 固定位置、跨页规则、每页重复 |
+| `label-sheets` | 不显示每页重复；标签 copy/cell 不是文档页语义 |
+
+每页重复不是隐藏的高级能力。页码物料默认 `repeat.scope='every-output-page'`，普通文本、图片等也可显式开启，用于页眉、页脚、水印等通用场景。
 
 ## 24.6 可分页物料
 
@@ -122,6 +158,8 @@ Designer 不直接读取 `page.width/page.height` 渲染唯一页面，而是消
 | `none` / `continuous-paper` | 单个可增长连续画布，高度按内容底边、最小高度和尾部留白计算。 |
 | `label-sheets` | 默认编辑单个 label cell；输出 sheet 由 Viewer 展开。 |
 
+每页重复元素在 Designer 中保留一份可交互源节点，其它输出页位置显示不可交互的重复预览。固定纸按页框复制预览；`auto-sheets` 在连续编辑表面内按分页参考线复制预览。预览只帮助用户理解输出效果，不参与选择、拖拽、缩放、吸附或命令历史。
+
 坐标投影统一通过 `projectDocumentPointToEditorSurface()` 和 `projectEditorSurfacePointToDocument()`。网格、辅助线、吸附线、元素 overlay 和选区都消费同一个 `EditorSurfacePlan`。
 
 固定纸增删通过命令系统完成：
@@ -134,8 +172,8 @@ Designer 不直接读取 `page.width/page.height` 渲染唯一页面，而是消
 
 - `@easyink/schema`：类型、默认层、validation、legacy `stack` 迁移。
 - `@easyink/core`：页面模型解析、回流、分页、编辑表面计划、页面增删命令。
-- `@easyink/viewer`：编排字体、绑定、测量、layout/pagination、渲染、打印策略。
-- `@easyink/designer`：消费 `EditorSurfacePlan` 做编辑态投影和页面工具栏。
+- `@easyink/viewer`：编排字体、绑定、测量、layout/pagination、page overlay 复制、渲染、打印策略。
+- `@easyink/designer`：消费 `EditorSurfacePlan` 做编辑态投影、重复预览和页面工具栏。
 - `@easyink/material-*`：只提供渲染、测量和局部分页能力，不决定全局页面模型。
 
 `packages/viewer/src/stack-flow-layout.ts` 仍作为历史 helper 和测试资产存在；ViewerRuntime 的主路径已经使用 `@easyink/core` 的正交 layout/pagination pipeline。

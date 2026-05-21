@@ -58,6 +58,51 @@ describe('createPagePlan', () => {
       expect(plan.pages[0]!.width).toBe(90)
       expect(plan.pages[0]!.height).toBe(110)
     })
+
+    it('replicates every-output-page nodes without using them to create page count', () => {
+      const schema = makeSchema({
+        mode: 'fixed',
+        pages: 2,
+        pageModel: { kind: 'paged-paper', paper: { width: 210, height: 297 } },
+        pagination: { strategy: 'fixed-sheets', pageCount: 2 },
+      }, [
+        makeNode('content', { y: 20 }),
+        makeNode('page-number', {
+          y: 280,
+          height: 10,
+          repeat: { scope: 'every-output-page' },
+        }),
+      ])
+
+      const plan = createPagePlan(schema)
+
+      expect(plan.pages).toHaveLength(2)
+      expect(plan.pages[0]!.elements.map(el => el.id)).toEqual(['content', 'page-number__p0'])
+      expect(plan.pages[1]!.elements.map(el => el.id)).toEqual(['page-number__p1'])
+      expect(plan.pages[1]!.elements[0]!.y).toBe(577)
+    })
+
+    it('keeps fixed sheets with only repeated overlays when blankPolicy removes blank pages', () => {
+      const schema = makeSchema({
+        mode: 'fixed',
+        pages: 2,
+        blankPolicy: 'remove',
+        pageModel: { kind: 'paged-paper', paper: { width: 210, height: 297 } },
+        pagination: { strategy: 'fixed-sheets', pageCount: 2 },
+      }, [
+        makeNode('page-number', {
+          y: 280,
+          height: 10,
+          repeat: { scope: 'every-output-page' },
+        }),
+      ])
+
+      const plan = createPagePlan(schema)
+
+      expect(plan.pages).toHaveLength(2)
+      expect(plan.pages[0]!.elements.map(el => el.id)).toEqual(['page-number__p0'])
+      expect(plan.pages[1]!.elements.map(el => el.id)).toEqual(['page-number__p1'])
+    })
   })
 
   describe('continuous paper mode', () => {

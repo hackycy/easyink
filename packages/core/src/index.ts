@@ -31,6 +31,7 @@ export {
   UpdateDocumentCommand,
   UpdateGeometryCommand,
   UpdateGuidesCommand,
+  UpdateMaterialBehaviorCommand,
   UpdateMaterialMetaCommand,
   UpdateMaterialPropsCommand,
   UpdatePageCommand,
@@ -106,7 +107,7 @@ export { AsyncHook, createInternalHooks, SyncHook, SyncWaterfallHook } from './h
 
 export type { CommandRecord, InternalHooks, MaterialRenderPayload, PagePlanningContext, ViewerDiagnosticEvent } from './hooks'
 
-export { createFragmentFromNode, readNodeFlowConstraints } from './layout-plan'
+export { createFragmentFromNode, readNodeFlowConstraints, readNodeRepeatScope } from './layout-plan'
 
 export type { FlowBreakConstraints, LayoutDiagnostic, LayoutDocument, LayoutFragment, OutputPagePlan } from './layout-plan'
 export { runLayoutPipeline } from './layout-strategy'

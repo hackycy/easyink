@@ -18,6 +18,7 @@ export {
   UpdateDocumentCommand,
   UpdateGeometryCommand,
   UpdateGuidesCommand,
+  UpdateMaterialBehaviorCommand,
   UpdateMaterialMetaCommand,
   UpdateMaterialPropsCommand,
   UpdatePageCommand,

@@ -362,6 +362,46 @@ export class UpdateMaterialMetaCommand implements Command {
   }
 }
 
+export type MaterialBehaviorKey = 'placement' | 'break' | 'repeat'
+
+export class UpdateMaterialBehaviorCommand implements Command {
+  readonly id = generateId('cmd')
+  readonly type = 'update-material-behavior'
+  readonly description = 'Update material behavior'
+  private oldValues: Partial<Pick<MaterialNode, MaterialBehaviorKey>> = {}
+
+  constructor(
+    private node: MaterialNode,
+    private updates: Partial<Pick<MaterialNode, MaterialBehaviorKey>>,
+    precomputedOldValues?: Partial<Pick<MaterialNode, MaterialBehaviorKey>>,
+  ) {
+    if (precomputedOldValues)
+      this.oldValues = deepClone(precomputedOldValues)
+  }
+
+  execute(): void {
+    for (const key of Object.keys(this.updates) as MaterialBehaviorKey[]) {
+      if (!(key in this.oldValues))
+        this.oldValues[key] = deepClone(this.node[key])
+      const value = deepClone(this.updates[key])
+      if (value == null)
+        delete this.node[key]
+      else
+        this.node[key] = value as never
+    }
+  }
+
+  undo(): void {
+    for (const key of Object.keys(this.oldValues) as MaterialBehaviorKey[]) {
+      const value = deepClone(this.oldValues[key])
+      if (value == null)
+        delete this.node[key]
+      else
+        this.node[key] = value as never
+    }
+  }
+}
+
 export class UpdatePageCommand implements Command {
   readonly id = generateId('cmd')
   readonly type = 'update-page'
