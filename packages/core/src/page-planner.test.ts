@@ -46,6 +46,18 @@ describe('createPagePlan', () => {
       expect(plan.pages).toHaveLength(1)
       expect(plan.pages[0]!.elements).toHaveLength(0)
     })
+
+    it('uses pageModel paper dimensions when provided', () => {
+      const schema = makeSchema({
+        mode: 'fixed',
+        pageModel: { kind: 'paged-paper', paper: { width: 90, height: 110 } },
+      })
+
+      const plan = createPagePlan(schema)
+
+      expect(plan.pages[0]!.width).toBe(90)
+      expect(plan.pages[0]!.height).toBe(110)
+    })
   })
 
   describe('stack mode', () => {

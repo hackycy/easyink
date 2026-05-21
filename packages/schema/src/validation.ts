@@ -2,7 +2,11 @@ import type { DocumentSchema } from './types'
 import { isObject, SCHEMA_VERSION } from '@easyink/shared'
 
 const UNIT_TYPES = new Set(['mm', 'pt', 'px', 'inch'])
-const PAGE_MODES = new Set(['fixed', 'stack', 'label'])
+const PAGE_MODES = new Set(['fixed', 'stack', 'label', 'continuous'])
+const PAGE_MODEL_KINDS = new Set(['paged-paper', 'continuous-paper', 'label-sheet'])
+const LAYOUT_STRATEGIES = new Set(['absolute', 'stack-flow', 'region-flow'])
+const PAGINATION_STRATEGIES = new Set(['none', 'fixed-sheets', 'auto-sheets', 'label-sheets'])
+const REFLOW_STRATEGIES = new Set(['none', 'measure-only', 'flow-y'])
 
 export interface SchemaValidationIssue {
   path: string
@@ -101,6 +105,10 @@ export function validateSchemaIssues(schema: unknown): SchemaValidationIssue[] {
     if (typeof page.height !== 'number' || page.height <= 0) {
       issues.push(createIssue('page.height', 'must be a positive number', 'schema.page.height.invalid'))
     }
+    validatePageModel(page.pageModel, issues)
+    validateLayoutConfig(page.layout, issues)
+    validatePaginationConfig(page.pagination, issues)
+    validateReflowConfig(page.reflow, issues)
   }
 
   if (!isObject(schema.guides)) {
@@ -121,6 +129,73 @@ export function validateSchemaIssues(schema: unknown): SchemaValidationIssue[] {
   }
 
   return issues
+}
+
+function validatePageModel(value: unknown, issues: SchemaValidationIssue[]): void {
+  if (value == null)
+    return
+  if (!isObject(value)) {
+    issues.push(createIssue('page.pageModel', 'must be an object', 'schema.page.pageModel.invalid'))
+    return
+  }
+  if (typeof value.kind !== 'string' || !PAGE_MODEL_KINDS.has(value.kind)) {
+    issues.push(createIssue('page.pageModel.kind', 'must be a supported page model kind', 'schema.page.pageModel.kind.invalid'))
+  }
+  if (!isObject(value.paper)) {
+    issues.push(createIssue('page.pageModel.paper', 'must be an object', 'schema.page.pageModel.paper.invalid'))
+    return
+  }
+  if (typeof value.paper.width !== 'number' || value.paper.width <= 0) {
+    issues.push(createIssue('page.pageModel.paper.width', 'must be a positive number', 'schema.page.pageModel.paper.width.invalid'))
+  }
+  if (typeof value.paper.height !== 'number' || value.paper.height <= 0) {
+    issues.push(createIssue('page.pageModel.paper.height', 'must be a positive number', 'schema.page.pageModel.paper.height.invalid'))
+  }
+}
+
+function validateLayoutConfig(value: unknown, issues: SchemaValidationIssue[]): void {
+  if (value == null)
+    return
+  if (!isObject(value)) {
+    issues.push(createIssue('page.layout', 'must be an object', 'schema.page.layout.invalid'))
+    return
+  }
+  if (typeof value.strategy !== 'string' || !LAYOUT_STRATEGIES.has(value.strategy)) {
+    issues.push(createIssue('page.layout.strategy', 'must be a supported layout strategy', 'schema.page.layout.strategy.invalid'))
+  }
+  if (value.flowAxis != null && value.flowAxis !== 'y') {
+    issues.push(createIssue('page.layout.flowAxis', 'must be y when provided', 'schema.page.layout.flowAxis.invalid'))
+  }
+}
+
+function validatePaginationConfig(value: unknown, issues: SchemaValidationIssue[]): void {
+  if (value == null)
+    return
+  if (!isObject(value)) {
+    issues.push(createIssue('page.pagination', 'must be an object', 'schema.page.pagination.invalid'))
+    return
+  }
+  if (typeof value.strategy !== 'string' || !PAGINATION_STRATEGIES.has(value.strategy)) {
+    issues.push(createIssue('page.pagination.strategy', 'must be a supported pagination strategy', 'schema.page.pagination.strategy.invalid'))
+  }
+  if (value.pageCount != null && (typeof value.pageCount !== 'number' || value.pageCount <= 0)) {
+    issues.push(createIssue('page.pagination.pageCount', 'must be a positive number when provided', 'schema.page.pagination.pageCount.invalid'))
+  }
+}
+
+function validateReflowConfig(value: unknown, issues: SchemaValidationIssue[]): void {
+  if (value == null)
+    return
+  if (!isObject(value)) {
+    issues.push(createIssue('page.reflow', 'must be an object', 'schema.page.reflow.invalid'))
+    return
+  }
+  if (typeof value.strategy !== 'string' || !REFLOW_STRATEGIES.has(value.strategy)) {
+    issues.push(createIssue('page.reflow.strategy', 'must be a supported reflow strategy', 'schema.page.reflow.strategy.invalid'))
+  }
+  if (value.collisionPolicy != null && value.collisionPolicy !== 'diagnose' && value.collisionPolicy !== 'clip' && value.collisionPolicy !== 'push') {
+    issues.push(createIssue('page.reflow.collisionPolicy', 'must be a supported collision policy', 'schema.page.reflow.collisionPolicy.invalid'))
+  }
 }
 
 export function isValidSchema(schema: unknown): schema is DocumentSchema {

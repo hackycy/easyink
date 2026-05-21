@@ -1,3 +1,4 @@
+import type { PageSchema } from '@easyink/schema'
 import type { PagePropertyDescriptor } from './types'
 import { PAPER_PRESETS } from '@easyink/shared'
 
@@ -20,8 +21,13 @@ const MODE_DESCRIPTOR: PagePropertyDescriptor = {
   enum: [
     { label: 'designer.page.fixed', value: 'fixed' },
     { label: 'designer.page.stack', value: 'stack' },
+    { label: 'designer.page.continuous', value: 'continuous' },
     { label: 'designer.page.label', value: 'label' },
   ],
+  normalize(value, ctx) {
+    const mode = value as PageSchema['mode']
+    return { page: createModePresetPatch(mode, ctx.document.page) }
+  },
 }
 
 const UNIT_DESCRIPTOR: PagePropertyDescriptor = {
@@ -470,6 +476,36 @@ const BG_OFFSET_Y_DESCRIPTOR: PagePropertyDescriptor = {
     const existing = ctx.document.page.background ?? {}
     return { page: { background: { ...existing, offsetY: Number(value) } } }
   },
+}
+
+function createModePresetPatch(mode: PageSchema['mode'], page: PageSchema): Partial<PageSchema> {
+  if (mode === 'label') {
+    return {
+      mode,
+      pageModel: { kind: 'label-sheet', paper: { width: page.width, height: page.height } },
+      layout: { strategy: 'absolute' },
+      pagination: { strategy: 'label-sheets' },
+      reflow: { strategy: 'measure-only' },
+    }
+  }
+
+  if (mode === 'stack' || mode === 'continuous') {
+    return {
+      mode,
+      pageModel: { kind: 'continuous-paper', paper: { width: page.width, height: page.height } },
+      layout: { strategy: 'stack-flow', flowAxis: 'y' },
+      pagination: { strategy: 'none' },
+      reflow: { strategy: 'flow-y', preserveTrailingGap: true, collisionPolicy: 'diagnose' },
+    }
+  }
+
+  return {
+    mode,
+    pageModel: { kind: 'paged-paper', paper: { width: page.width, height: page.height } },
+    layout: { strategy: 'absolute' },
+    pagination: { strategy: 'fixed-sheets', pageCount: page.pages },
+    reflow: { strategy: 'measure-only' },
+  }
 }
 
 // ─── All Descriptors ────────────────────────────────────────────

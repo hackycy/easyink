@@ -15,6 +15,43 @@ describe('validateSchema', () => {
     expect(validateSchema(validSchema)).toEqual([])
   })
 
+  it('accepts continuous mode and structured page layers', () => {
+    expect(validateSchema({
+      ...validSchema,
+      page: {
+        mode: 'continuous',
+        width: 80,
+        height: 200,
+        pageModel: { kind: 'continuous-paper', paper: { width: 80, height: 200 } },
+        layout: { strategy: 'stack-flow', flowAxis: 'y' },
+        pagination: { strategy: 'none' },
+        reflow: { strategy: 'flow-y', preserveTrailingGap: true },
+      },
+    })).toEqual([])
+  })
+
+  it('rejects invalid structured page layers', () => {
+    const issues = validateSchemaIssues({
+      ...validSchema,
+      page: {
+        ...validSchema.page,
+        pageModel: { kind: 'screen', paper: { width: 0, height: 297 } },
+        layout: { strategy: 'float' },
+        pagination: { strategy: 'book', pageCount: 0 },
+        reflow: { strategy: 'magic' },
+      },
+    })
+
+    expect(issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'page.pageModel.kind' }),
+      expect.objectContaining({ path: 'page.pageModel.paper.width' }),
+      expect.objectContaining({ path: 'page.layout.strategy' }),
+      expect.objectContaining({ path: 'page.pagination.strategy' }),
+      expect.objectContaining({ path: 'page.pagination.pageCount' }),
+      expect.objectContaining({ path: 'page.reflow.strategy' }),
+    ]))
+  })
+
   it('catches missing version', () => {
     const { version, ...rest } = validSchema
     const errors = validateSchema(rest)

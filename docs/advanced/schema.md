@@ -67,7 +67,7 @@ interface DocumentMeta {
 
 ```ts
 interface PageSchema {
-  mode: PageMode            // 'fixed' | 'stack' | 'label'
+  mode: PageMode            // 'fixed' | 'stack' | 'label' | 'continuous'
   width: number             // 页面宽度
   height: number            // 页面高度
   pages?: number            // 页数（fixed 模式）
@@ -82,6 +82,10 @@ interface PageSchema {
   font?: string             // 默认字体
   background?: PageBackground // 页面背景
   print?: PagePrintConfig   // 打印配置
+  pageModel?: PageModelConfig
+  layout?: DocumentLayoutConfig
+  pagination?: PaginationConfig
+  reflow?: ReflowConfig
   extensions?: Record<string, unknown>
 }
 ```

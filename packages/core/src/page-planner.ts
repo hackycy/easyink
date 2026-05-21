@@ -1,9 +1,14 @@
-import type { DocumentSchema, MaterialNode, PageSchema } from '@easyink/schema'
+import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import type { PageMode } from '@easyink/shared'
-import { deepClone } from '@easyink/shared'
+import type { LayoutDiagnostic } from './layout-plan'
+import { runLayoutPipeline } from './layout-strategy'
+import { runPagination } from './pagination-engine'
 
 /**
  * Page plan result -- describes all pages for rendering.
+ *
+ * Compatibility facade for the orthogonal layout pipeline. New code should
+ * prefer LayoutDocument and OutputPagePlan from layout/pagination engines.
  */
 export interface PagePlan {
   mode: PageMode
@@ -18,7 +23,7 @@ export interface PagePlanEntry {
   elements: MaterialNode[]
   isBlank?: boolean
   copyIndex?: number
-  /** Y offset in document coordinates — used by the render surface to position elements within the page. */
+  /** Y offset in document coordinates -- used by the render surface to position elements within the page. */
   yOffset: number
 }
 
@@ -32,194 +37,28 @@ export interface PagePlanOptions {
   originalSchema?: DocumentSchema
 }
 
-/**
- * Create a page plan for fixed-page mode.
- * Elements are assigned to pages based on their y coordinate.
- */
 export function createPagePlan(schema: DocumentSchema, options: PagePlanOptions = {}): PagePlan {
-  const { page, elements } = schema
-  const diagnostics: PagePlanDiagnostic[] = []
-
-  switch (page.mode) {
-    case 'fixed':
-      return createFixedPagePlan(page, elements, diagnostics)
-    case 'stack':
-      return createStackPagePlan(page, elements, diagnostics, options.originalSchema)
-    case 'label':
-      return createLabelPagePlan(page, elements, diagnostics)
-    default:
-      diagnostics.push({
-        code: 'UNKNOWN_PAGE_MODE',
-        severity: 'error',
-        message: `Unknown page mode: ${page.mode}`,
-      })
-      return { mode: 'fixed', pages: [], diagnostics }
-  }
-}
-
-function createFixedPagePlan(
-  page: PageSchema,
-  elements: MaterialNode[],
-  diagnostics: PagePlanDiagnostic[],
-): PagePlan {
-  const pageCount = page.pages || 1
-  const entries: PagePlanEntry[] = []
-
-  for (let i = 0; i < pageCount; i++) {
-    const pageElements = elements.filter((el) => {
-      const pageStart = i * page.height
-      const pageEnd = (i + 1) * page.height
-      return el.y >= pageStart && el.y < pageEnd
-    })
-
-    entries.push({
-      index: i,
-      width: page.width,
-      height: page.height,
-      elements: pageElements,
-      yOffset: i * page.height,
-    })
-  }
-
-  // Handle elements beyond declared pages
-  if (pageCount === 1) {
-    // Single page: all elements go on page 0
-    entries[0] = {
-      index: 0,
-      width: page.width,
-      height: page.height,
-      elements,
-      yOffset: 0,
-    }
-  }
-
-  // Apply blank page policy
-  if (page.blankPolicy === 'remove') {
-    const filtered = entries.filter(e => e.elements.length > 0)
-    if (filtered.length === 0 && entries.length > 0) {
-      return { mode: 'fixed', pages: [entries[0]!], diagnostics }
-    }
-    return { mode: 'fixed', pages: filtered, diagnostics }
-  }
-
-  // Apply copies
-  if (page.copies && page.copies > 1) {
-    const base = [...entries]
-    for (let c = 1; c < page.copies; c++) {
-      for (const entry of base) {
-        entries.push({
-          ...entry,
-          index: entries.length,
-          copyIndex: c,
-          yOffset: entry.yOffset,
-        })
-      }
-    }
-  }
-
-  return { mode: 'fixed', pages: entries, diagnostics }
-}
-
-function createStackPagePlan(
-  page: PageSchema,
-  elements: MaterialNode[],
-  diagnostics: PagePlanDiagnostic[],
-  originalSchema: DocumentSchema | undefined,
-): PagePlan {
-  // Stack mode: single continuous page
-  const contentBottom = getContentBottom(elements)
-  const trailingGap = getStackTrailingGap(originalSchema)
-  const totalHeight = Math.max(page.height, contentBottom + trailingGap)
+  const document = runLayoutPipeline(schema)
+  const result = runPagination(schema, document, { originalSchema: options.originalSchema })
 
   return {
-    mode: 'stack',
-    pages: [{
-      index: 0,
+    mode: result.mode,
+    pages: result.pages.map(page => ({
+      index: page.index,
       width: page.width,
-      height: totalHeight,
-      elements,
-      yOffset: 0,
-    }],
-    diagnostics,
+      height: page.height,
+      elements: page.fragments.map(fragment => fragment.node),
+      copyIndex: page.pageContext.copyIndex,
+      yOffset: page.yOffset,
+    })),
+    diagnostics: result.diagnostics.map(toPagePlanDiagnostic),
   }
 }
 
-function getStackTrailingGap(originalSchema: DocumentSchema | undefined): number {
-  if (!originalSchema || originalSchema.page.mode !== 'stack')
-    return 0
-  const originalContentBottom = getContentBottom(originalSchema.elements)
-  return Math.max(originalSchema.page.height - originalContentBottom, 0)
-}
-
-function getContentBottom(elements: MaterialNode[]): number {
-  let bottom = 0
-  for (const el of elements) {
-    const elementBottom = el.y + el.height
-    if (elementBottom > bottom) {
-      bottom = elementBottom
-    }
+function toPagePlanDiagnostic(diagnostic: LayoutDiagnostic): PagePlanDiagnostic {
+  return {
+    code: diagnostic.code,
+    severity: diagnostic.severity,
+    message: diagnostic.message,
   }
-  return bottom
-}
-
-function createLabelPagePlan(
-  page: PageSchema,
-  elements: MaterialNode[],
-  diagnostics: PagePlanDiagnostic[],
-): PagePlan {
-  const columns = page.label?.columns || 1
-  const rows = page.label?.rows || 1
-  const gapX = page.label?.gap || 0
-  const gapY = page.label?.rowGap || 0
-  const copies = Math.max(page.copies || 1, 1)
-
-  if (columns <= 0 || rows <= 0) {
-    diagnostics.push({
-      code: 'INVALID_LABEL_GRID',
-      severity: 'error',
-      message: 'Label columns and rows must be positive',
-    })
-  }
-
-  // page.width / page.height now describe a single label cell.
-  const cellW = page.width
-  const cellH = page.height
-  const sheetWidth = cellW * columns + gapX * Math.max(columns - 1, 0)
-  const sheetHeight = cellH * rows + gapY * Math.max(rows - 1, 0)
-  const perSheet = Math.max(columns * rows, 1)
-  const sheetCount = Math.max(Math.ceil(copies / perSheet), 1)
-
-  const entries: PagePlanEntry[] = []
-  let remaining = copies
-  for (let s = 0; s < sheetCount; s++) {
-    const cellsOnSheet = Math.min(perSheet, remaining)
-    remaining -= cellsOnSheet
-
-    const sheetElements: MaterialNode[] = []
-    for (let cellIdx = 0; cellIdx < cellsOnSheet; cellIdx++) {
-      const col = cellIdx % columns
-      const row = Math.floor(cellIdx / columns)
-      const xOffset = col * (cellW + gapX)
-      const yOffset = row * (cellH + gapY)
-      for (const el of elements) {
-        const clonedElement = deepClone(el)
-        sheetElements.push({
-          ...clonedElement,
-          x: clonedElement.x + xOffset,
-          y: clonedElement.y + yOffset,
-        })
-      }
-    }
-
-    entries.push({
-      index: s,
-      width: sheetWidth,
-      height: sheetHeight,
-      elements: sheetElements,
-      copyIndex: s,
-      yOffset: 0,
-    })
-  }
-
-  return { mode: 'label', pages: entries, diagnostics }
 }

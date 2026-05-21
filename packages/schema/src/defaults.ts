@@ -1,17 +1,20 @@
-import type { PageMode, UnitType } from '@easyink/shared'
-import type { DocumentSchema, DocumentSchemaInput, GuideSchema, PageSchema } from './types'
+import type { LayoutStrategyKind, PageMode, PageModelKind, PaginationStrategyKind, ReflowStrategyKind, UnitType } from '@easyink/shared'
+import type { DocumentLayoutConfig, DocumentSchema, DocumentSchemaInput, GuideSchema, PageModelConfig, PageSchema, PaginationConfig, ReflowConfig } from './types'
 import { DEFAULT_PAGE_HEIGHT_MM, DEFAULT_PAGE_WIDTH_MM, isObject, SCHEMA_VERSION } from '@easyink/shared'
-import { isValidSchema } from './validation'
 
 const UNIT_TYPES = new Set<UnitType>(['mm', 'pt', 'px', 'inch'])
-const PAGE_MODES = new Set<PageMode>(['fixed', 'stack', 'label'])
+const PAGE_MODES = new Set<PageMode>(['fixed', 'stack', 'label', 'continuous'])
+const PAGE_MODEL_KINDS = new Set<PageModelKind>(['paged-paper', 'continuous-paper', 'label-sheet'])
+const LAYOUT_STRATEGIES = new Set<LayoutStrategyKind>(['absolute', 'stack-flow', 'region-flow'])
+const PAGINATION_STRATEGIES = new Set<PaginationStrategyKind>(['none', 'fixed-sheets', 'auto-sheets', 'label-sheets'])
+const REFLOW_STRATEGIES = new Set<ReflowStrategyKind>(['none', 'measure-only', 'flow-y'])
 
 export function createDefaultPage(): PageSchema {
-  return {
+  return normalizePageLayers({
     mode: 'fixed',
     width: DEFAULT_PAGE_WIDTH_MM,
     height: DEFAULT_PAGE_HEIGHT_MM,
-  }
+  })
 }
 
 export function createDefaultGuides(): GuideSchema {
@@ -43,12 +46,128 @@ function normalizePage(input: unknown, fallback: PageSchema): PageSchema {
   if (!isObject(input))
     return fallback
 
-  return {
+  return normalizePageLayers({
     ...fallback,
     ...input,
     mode: isPageMode(input.mode) ? input.mode : fallback.mode,
     width: typeof input.width === 'number' && input.width > 0 ? input.width : fallback.width,
     height: typeof input.height === 'number' && input.height > 0 ? input.height : fallback.height,
+    pageModel: isObject(input.pageModel) ? input.pageModel as unknown as PageSchema['pageModel'] : undefined,
+    layout: isObject(input.layout) ? input.layout as unknown as PageSchema['layout'] : undefined,
+    pagination: isObject(input.pagination) ? input.pagination as unknown as PageSchema['pagination'] : undefined,
+    reflow: isObject(input.reflow) ? input.reflow as unknown as PageSchema['reflow'] : undefined,
+  })
+}
+
+function normalizePageLayers(page: PageSchema): PageSchema {
+  const defaults = createModeLayerDefaults(page)
+  return {
+    ...page,
+    pageModel: normalizePageModelConfig(page.pageModel, defaults.pageModel, page),
+    layout: normalizeLayoutConfig(page.layout, defaults.layout),
+    pagination: normalizePaginationConfig(page.pagination, defaults.pagination),
+    reflow: normalizeReflowConfig(page.reflow, defaults.reflow),
+  }
+}
+
+function createModeLayerDefaults(page: Pick<PageSchema, 'mode' | 'width' | 'height' | 'pages'>): {
+  pageModel: PageModelConfig
+  layout: DocumentLayoutConfig
+  pagination: PaginationConfig
+  reflow: ReflowConfig
+} {
+  const paper = { width: page.width, height: page.height }
+
+  if (page.mode === 'label') {
+    return {
+      pageModel: { kind: 'label-sheet', paper },
+      layout: { strategy: 'absolute' },
+      pagination: { strategy: 'label-sheets' },
+      reflow: { strategy: 'measure-only' },
+    }
+  }
+
+  if (page.mode === 'stack' || page.mode === 'continuous') {
+    return {
+      pageModel: { kind: 'continuous-paper', paper },
+      layout: { strategy: 'stack-flow', flowAxis: 'y' },
+      pagination: { strategy: 'none' },
+      reflow: { strategy: 'flow-y', preserveTrailingGap: true, collisionPolicy: 'diagnose' },
+    }
+  }
+
+  return {
+    pageModel: { kind: 'paged-paper', paper },
+    layout: { strategy: 'absolute' },
+    pagination: { strategy: 'fixed-sheets', pageCount: page.pages },
+    reflow: { strategy: 'measure-only' },
+  }
+}
+
+function normalizePageModelConfig(input: unknown, fallback: PageModelConfig, page: Pick<PageSchema, 'width' | 'height'>): PageModelConfig {
+  if (!isObject(input)) {
+    return fallback
+  }
+  const paper = isObject(input.paper) ? input.paper : {}
+  const minHeight = typeof paper.minHeight === 'number' && paper.minHeight > 0 ? paper.minHeight : undefined
+  const maxHeight = typeof paper.maxHeight === 'number' && paper.maxHeight > 0 ? paper.maxHeight : undefined
+  return {
+    kind: typeof input.kind === 'string' && PAGE_MODEL_KINDS.has(input.kind as PageModelKind)
+      ? input.kind as PageModelKind
+      : fallback.kind,
+    paper: {
+      width: typeof paper.width === 'number' && paper.width > 0 ? paper.width : page.width,
+      height: typeof paper.height === 'number' && paper.height > 0 ? paper.height : page.height,
+      ...(minHeight != null ? { minHeight } : {}),
+      ...(maxHeight != null ? { maxHeight } : {}),
+    },
+  }
+}
+
+function normalizeLayoutConfig(input: unknown, fallback: DocumentLayoutConfig): DocumentLayoutConfig {
+  if (!isObject(input)) {
+    return fallback
+  }
+  return {
+    strategy: typeof input.strategy === 'string' && LAYOUT_STRATEGIES.has(input.strategy as LayoutStrategyKind)
+      ? input.strategy as LayoutStrategyKind
+      : fallback.strategy,
+    flowAxis: input.flowAxis === 'y' ? 'y' : fallback.flowAxis,
+  }
+}
+
+function normalizePaginationConfig(input: unknown, fallback: PaginationConfig): PaginationConfig {
+  if (!isObject(input)) {
+    return fallback
+  }
+  const orphanPolicy = input.orphanPolicy === 'allow' || input.orphanPolicy === 'keep-together'
+    ? input.orphanPolicy
+    : fallback.orphanPolicy
+  return {
+    strategy: typeof input.strategy === 'string' && PAGINATION_STRATEGIES.has(input.strategy as PaginationStrategyKind)
+      ? input.strategy as PaginationStrategyKind
+      : fallback.strategy,
+    pageCount: typeof input.pageCount === 'number' && input.pageCount > 0 ? input.pageCount : fallback.pageCount,
+    pageGap: typeof input.pageGap === 'number' && input.pageGap >= 0 ? input.pageGap : fallback.pageGap,
+    orphanPolicy,
+  }
+}
+
+function normalizeReflowConfig(input: unknown, fallback: ReflowConfig): ReflowConfig {
+  if (!isObject(input)) {
+    return fallback
+  }
+  const collisionPolicy = input.collisionPolicy === 'diagnose' || input.collisionPolicy === 'clip' || input.collisionPolicy === 'push'
+    ? input.collisionPolicy
+    : fallback.collisionPolicy
+  return {
+    strategy: typeof input.strategy === 'string' && REFLOW_STRATEGIES.has(input.strategy as ReflowStrategyKind)
+      ? input.strategy as ReflowStrategyKind
+      : fallback.strategy,
+    preserveTrailingGap: typeof input.preserveTrailingGap === 'boolean'
+      ? input.preserveTrailingGap
+      : fallback.preserveTrailingGap,
+    collisionPolicy,
   }
 }
 
@@ -65,9 +184,6 @@ function normalizeGuides(input: unknown, fallback: GuideSchema): GuideSchema {
 }
 
 export function normalizeDocumentSchema(input?: DocumentSchemaInput | null): DocumentSchema {
-  if (isValidSchema(input))
-    return input
-
   const fallback = createDefaultSchema()
   if (!isObject(input))
     return fallback

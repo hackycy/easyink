@@ -21,7 +21,9 @@ export function resolvePrintPolicy(input: ResolvePrintPolicyInput): ViewerPrintP
   const { schema, options = {}, renderedPages = [] } = input
   const { page, unit } = schema
   const requestedPageSizeMode = options.pageSizeMode ?? 'driver'
-  const usesDriverPaper = page.mode === 'stack' && requestedPageSizeMode === 'driver'
+  const isContinuousPaper = page.pageModel?.kind === 'continuous-paper' || page.mode === 'stack' || page.mode === 'continuous'
+  const isLabelSheet = page.pageModel?.kind === 'label-sheet' || page.mode === 'label'
+  const usesDriverPaper = isContinuousPaper && requestedPageSizeMode === 'driver'
   const orientation = page.print?.orientation ?? 'auto'
 
   const offset = {
@@ -40,12 +42,12 @@ export function resolvePrintPolicy(input: ResolvePrintPolicyInput): ViewerPrintP
     }
   }
 
-  if (page.mode === 'stack' && requestedPageSizeMode === 'fixed') {
+  if (isContinuousPaper && requestedPageSizeMode === 'fixed') {
     const firstPage = renderedPages[0]
     if (!firstPage) {
       throw new PrintPolicyError(
         'PRINT_RENDER_METRICS_MISSING',
-        'Stack PDF printing requires rendered page metrics. Call render() before printing.',
+        'Continuous paper fixed-size printing requires rendered page metrics. Call render() before printing.',
       )
     }
 
@@ -68,7 +70,7 @@ export function resolvePrintPolicy(input: ResolvePrintPolicyInput): ViewerPrintP
   let height = page.height
   let source: 'schema' | 'label' = 'schema'
 
-  if (page.mode === 'label') {
+  if (isLabelSheet) {
     const columns = page.label?.columns || 1
     const rows = page.label?.rows || 1
     const gapX = page.label?.gap || 0
@@ -84,8 +86,8 @@ export function resolvePrintPolicy(input: ResolvePrintPolicyInput): ViewerPrintP
     orientation,
     sheetSize: { width, height, unit, source },
     pageBreakBehavior: {
-      after: page.mode === 'stack' ? 'auto' : 'page',
-      inside: page.mode === 'stack' ? 'auto' : 'avoid',
+      after: isContinuousPaper ? 'auto' : 'page',
+      inside: isContinuousPaper ? 'auto' : 'avoid',
     },
     offset,
   }

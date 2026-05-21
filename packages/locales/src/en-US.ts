@@ -246,6 +246,7 @@ const enUS: LocaleMessages = {
       blankPolicy: 'Blank Page Policy',
       fixed: 'Fixed Page',
       stack: 'Continuous Paper',
+      continuous: 'Continuous Paper',
       label: 'Label Paper',
       paperPreset: 'Paper Preset',
       custom: 'Custom',

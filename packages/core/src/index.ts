@@ -60,8 +60,11 @@ export type {
 
 // ─── Core Services ────────────────────────────────────────────────
 
-export { FontManager } from './font'
+export { createEditorSurfacePlan } from './editor-surface-plan'
 
+export type { EditorSurfacePagePlan, EditorSurfacePlan } from './editor-surface-plan'
+
+export { FontManager } from './font'
 export type {
   FontBatchLoadOptions,
   FontBatchLoadResult,
@@ -73,6 +76,7 @@ export type {
   FontProvider,
   FontSource,
 } from './font'
+
 export {
   distance,
   getBoundingRect,
@@ -90,6 +94,13 @@ export type { Point, Rect, Size } from './geometry'
 export { AsyncHook, createInternalHooks, SyncHook, SyncWaterfallHook } from './hooks'
 
 export type { CommandRecord, InternalHooks, MaterialRenderPayload, PagePlanningContext, ViewerDiagnosticEvent } from './hooks'
+
+export { createFragmentFromNode, readNodeFlowConstraints } from './layout-plan'
+
+export type { FlowBreakConstraints, LayoutDiagnostic, LayoutDocument, LayoutFragment, OutputPagePlan } from './layout-plan'
+export { runLayoutPipeline } from './layout-strategy'
+
+export type { RunLayoutPipelineOptions } from './layout-strategy'
 
 export type {
   ContextAction,
@@ -121,6 +132,9 @@ export type {
 } from './material-extension'
 
 export type {
+  FragmentPaginateInput,
+  FragmentPaginateResult,
+  FragmentPaginator,
   MaterialViewerExtension,
   TrustedViewerHtml,
   TrustedViewerHtmlSource,
@@ -130,15 +144,23 @@ export type {
   ViewerRenderOutput,
   ViewerRenderSize,
 } from './material-viewer'
-
 export { readTrustedViewerHtml, trustedViewerHtml } from './material-viewer'
+
+export { resolvePageModel } from './page-model'
+export type { ResolvedPageModel } from './page-model'
 
 export { createPagePlan } from './page-planner'
 
 export type { PagePlan, PagePlanDiagnostic, PagePlanEntry, PagePlanOptions } from './page-planner'
 
+export { runPagination } from './pagination-engine'
+export type { PaginationOptions, PaginationResult } from './pagination-engine'
+
 export { applyJsonPatches, PatchCommand } from './patch-command'
 export type { PatchCommandOptions } from './patch-command'
+
+export { runFlowYReflow } from './reflow-engine'
+export type { ReflowEngineInput, ReflowEngineResult } from './reflow-engine'
 
 export { isInteractable, isSelectable, SelectionModel } from './selection'
 

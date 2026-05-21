@@ -1,6 +1,7 @@
+import type { FragmentPaginator, LayoutFragment } from '@easyink/core'
 import type { BindingRef, MaterialNode, TableCellSchema, TableDataSchema, TableRowSchema } from '@easyink/schema'
 import type { TableDataProps } from './schema'
-import { extractCollectionPath, formatBindingDisplayValue, resolveBindingValue, resolveFieldFromRecord, trustedViewerHtml } from '@easyink/core'
+import { createFragmentFromNode, extractCollectionPath, formatBindingDisplayValue, resolveBindingValue, resolveFieldFromRecord, trustedViewerHtml } from '@easyink/core'
 import { computeAutoRowHeights, computeRowScaleWithVirtualRows, renderPlainTextCell, renderTableHtml } from '@easyink/material-table-kernel'
 import { getNodeProps, isTableNode } from '@easyink/schema'
 import { TABLE_DATA_PLACEHOLDER_ROW_COUNT } from './layout'
@@ -129,6 +130,47 @@ export function measureTableData(node: MaterialNode, context: ViewerMeasureConte
   return { width: node.width, height: layout.totalHeight }
 }
 
+export const tableDataFragmentPaginator: FragmentPaginator = {
+  canPaginate(node) {
+    return isTableNode(node) && node.type === 'table-data'
+  },
+  paginateFragment(input) {
+    const node = input.fragment.node
+    if (!isTableNode(node) || node.type !== 'table-data') {
+      return { currentPage: input.fragment, diagnostics: [] }
+    }
+    const tableNode = node as MaterialNode & { table: TableDataSchema }
+
+    const cached = runtimeLayoutCache.get(tableNode.table)
+    if (!cached || input.availableHeight >= cached.totalHeight) {
+      return { currentPage: input.fragment, diagnostics: [] }
+    }
+
+    const split = splitRuntimeRows(cached.rows, cached.rowHeights, input.availableHeight)
+    if (!split) {
+      return {
+        currentPage: input.fragment,
+        diagnostics: [{
+          code: 'TABLE_DATA_FRAGMENT_OVERFLOW',
+          severity: 'warning',
+          message: `Table ${tableNode.id} cannot fit even one body row into the available page height.`,
+          stage: 'pagination',
+          sourceNodeId: input.fragment.sourceNodeId,
+        }],
+      }
+    }
+
+    const current = createVirtualTableFragment(input.fragment, tableNode, split.currentRows, split.currentHeights, split.currentHeight, `p${input.pageContext.pageIndex}`)
+    const next = createVirtualTableFragment(input.fragment, tableNode, split.nextRows, split.nextHeights, split.nextHeight, `p${input.pageContext.pageIndex + 1}`)
+
+    return {
+      currentPage: current,
+      nextPage: next,
+      diagnostics: [],
+    }
+  },
+}
+
 export function renderTableData(node: MaterialNode, context?: ViewerRenderContext): ViewerRenderOutput {
   if (!isTableNode(node)) {
     return {
@@ -249,6 +291,84 @@ function expandRepeatTemplateRows(
   }
 
   return result
+}
+
+function splitRuntimeRows(
+  rows: TableRowSchema[],
+  rowHeights: number[],
+  availableHeight: number,
+): { currentRows: TableRowSchema[], currentHeights: number[], currentHeight: number, nextRows: TableRowSchema[], nextHeights: number[], nextHeight: number } | null {
+  const header: Array<{ row: TableRowSchema, height: number }> = []
+  const body: Array<{ row: TableRowSchema, height: number }> = []
+  const footer: Array<{ row: TableRowSchema, height: number }> = []
+
+  rows.forEach((row, index) => {
+    const entry = { row, height: rowHeights[index] ?? row.height }
+    if (row.role === 'header')
+      header.push(entry)
+    else if (row.role === 'footer')
+      footer.push(entry)
+    else
+      body.push(entry)
+  })
+
+  const headerHeight = sumHeights(header)
+  let currentHeight = headerHeight
+  let bodyCut = 0
+  while (bodyCut < body.length && currentHeight + body[bodyCut]!.height <= availableHeight) {
+    currentHeight += body[bodyCut]!.height
+    bodyCut++
+  }
+
+  if (bodyCut === 0)
+    return null
+
+  const currentEntries = [...header, ...body.slice(0, bodyCut)]
+  const nextEntries = [...header, ...body.slice(bodyCut), ...footer]
+  return {
+    currentRows: currentEntries.map(entry => entry.row),
+    currentHeights: currentEntries.map(entry => entry.height),
+    currentHeight: sumHeights(currentEntries),
+    nextRows: nextEntries.map(entry => entry.row),
+    nextHeights: nextEntries.map(entry => entry.height),
+    nextHeight: sumHeights(nextEntries),
+  }
+}
+
+function createVirtualTableFragment(
+  source: LayoutFragment,
+  node: MaterialNode & { table: TableDataSchema },
+  rows: TableRowSchema[],
+  rowHeights: number[],
+  height: number,
+  suffix: string,
+): LayoutFragment {
+  const virtualTable: TableDataSchema = {
+    ...node.table,
+    topology: {
+      ...node.table.topology,
+      rows: rows.map((row, index) => ({ ...row, height: rowHeights[index] ?? row.height })),
+    },
+  }
+  const virtualNode = {
+    ...node,
+    id: `${node.id}__${suffix}`,
+    height,
+    table: virtualTable,
+  }
+  runtimeLayoutCache.set(virtualTable, { rows, rowHeights, totalHeight: height })
+  return {
+    ...createFragmentFromNode(virtualNode),
+    sourceNodeId: source.sourceNodeId,
+    flow: source.flow,
+  }
+}
+
+function sumHeights(entries: Array<{ height: number }>): number {
+  let total = 0
+  for (const entry of entries)
+    total += entry.height
+  return total
 }
 
 /**

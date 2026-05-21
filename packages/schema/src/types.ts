@@ -4,10 +4,14 @@ import type {
   BlankPolicy,
   BorderAppearance,
   BorderType,
+  LayoutStrategyKind,
   MaterialUseToken,
   PageMode,
+  PageModelKind,
   PageScale,
+  PaginationStrategyKind,
   PrintBehavior,
+  ReflowStrategyKind,
   TableRowRole,
   UnitType,
 } from '@easyink/shared'
@@ -201,7 +205,39 @@ export interface PageSchema {
   font?: string
   background?: PageBackground
   print?: PagePrintConfig
+  pageModel?: PageModelConfig
+  layout?: DocumentLayoutConfig
+  pagination?: PaginationConfig
+  reflow?: ReflowConfig
   extensions?: Record<string, unknown>
+}
+
+export interface PageModelConfig {
+  kind: PageModelKind
+  paper: {
+    width: number
+    height: number
+    minHeight?: number
+    maxHeight?: number
+  }
+}
+
+export interface DocumentLayoutConfig {
+  strategy: LayoutStrategyKind
+  flowAxis?: 'y'
+}
+
+export interface PaginationConfig {
+  strategy: PaginationStrategyKind
+  pageCount?: number
+  pageGap?: number
+  orphanPolicy?: 'allow' | 'keep-together'
+}
+
+export interface ReflowConfig {
+  strategy: ReflowStrategyKind
+  preserveTrailingGap?: boolean
+  collisionPolicy?: 'diagnose' | 'clip' | 'push'
 }
 
 /**

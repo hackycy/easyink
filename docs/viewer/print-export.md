@@ -134,7 +134,7 @@ const policy = resolvePrintPolicy({
 
 ```ts
 interface ViewerPrintPolicy {
-  pageMode: 'fixed' | 'stack' | 'label'
+  pageMode: 'fixed' | 'stack' | 'label' | 'continuous'
   pageSizeMode: 'driver' | 'fixed'
   sheetSize?: { width: number; height: number; unit: string; source: string }
   orientation: 'portrait' | 'landscape' | 'auto'

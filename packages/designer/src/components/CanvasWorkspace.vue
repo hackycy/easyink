@@ -2,6 +2,7 @@
 import type { ResizeHandle } from '../composables/use-element-resize'
 import type { MarqueeRect } from '../composables/use-marquee-select'
 import type { WorkspaceWindowState } from '../types'
+import { createEditorSurfacePlan } from '@easyink/core'
 import { computed, onMounted, onUnmounted, provide, ref } from 'vue'
 import { useDesignerStore } from '../composables'
 import { useDatasourceDrop } from '../composables/use-datasource-drop'
@@ -112,16 +113,23 @@ function handlePageDrop(e: DragEvent) {
 
 // ─── Computed ────────────────────────────────────────────────────
 
+const editorSurfacePlan = computed(() => createEditorSurfacePlan(store.schema))
+
+const activeSurfacePage = computed(() => {
+  const plan = editorSurfacePlan.value
+  return plan.pages[plan.activePageIndex] ?? plan.pages[0]
+})
+
 const pageStyle = computed(() => {
-  const page = store.schema.page
+  const page = activeSurfacePage.value
   const unit = store.schema.unit
   const zoom = store.workbench.viewport.zoom
   return {
-    width: `${page.width}${unit}`,
-    height: `${page.height}${unit}`,
+    width: `${page?.width ?? store.schema.page.width}${unit}`,
+    height: `${page?.height ?? store.schema.page.height}${unit}`,
     transform: `scale(${zoom})`,
     transformOrigin: 'top left',
-    background: page.background?.color || '#fff',
+    background: store.schema.page.background?.color || '#fff',
   }
 })
 
@@ -130,12 +138,12 @@ const pageStyle = computed(() => {
 // its document-unit size and only applies CSS scale, so all overlays/elements
 // can stay in document-unit coordinates.
 const wrapperStyle = computed(() => {
-  const page = store.schema.page
+  const page = activeSurfacePage.value
   const unit = store.schema.unit
   const zoom = store.workbench.viewport.zoom
   return {
-    width: `calc(${page.width}${unit} * ${zoom})`,
-    height: `calc(${page.height}${unit} * ${zoom})`,
+    width: `calc(${page?.width ?? store.schema.page.width}${unit} * ${zoom})`,
+    height: `calc(${page?.height ?? store.schema.page.height}${unit} * ${zoom})`,
   }
 })
 

@@ -1,5 +1,5 @@
 import type { MaterialNode } from '@easyink/schema'
-import type { MaterialViewerExtension, ViewerMeasureContext, ViewerMeasureResult, ViewerRenderContext, ViewerRenderOutput, ViewerRenderSize } from './types'
+import type { FragmentPaginator, MaterialViewerExtension, ViewerMeasureContext, ViewerMeasureResult, ViewerRenderContext, ViewerRenderOutput, ViewerRenderSize } from './types'
 import { trustedViewerHtml } from '@easyink/core'
 import { escapeHtml } from '@easyink/shared'
 
@@ -49,6 +49,13 @@ export class MaterialRendererRegistry {
       width: size?.width ?? node.width,
       height: size?.height ?? node.height,
     }
+  }
+
+  getFragmentPaginator(node: MaterialNode): FragmentPaginator | undefined {
+    const ext = this._renderers.get(node.type)
+    if (!ext?.fragmentPaginator?.canPaginate(node))
+      return undefined
+    return ext.fragmentPaginator
   }
 
   isPageAware(type: string): boolean {

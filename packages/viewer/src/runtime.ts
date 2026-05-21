@@ -1,4 +1,4 @@
-import type { InternalHooks, PagePlan } from '@easyink/core'
+import type { InternalHooks, PagePlan, PaginationResult, ViewerMeasureResult } from '@easyink/core'
 import type { DocumentSchema } from '@easyink/schema'
 import type {
   MaterialViewerExtension,
@@ -16,7 +16,7 @@ import type {
 } from './types'
 import type { ViewerHost } from './viewer-host'
 import { registerBuiltinViewerMaterials } from '@easyink/builtin'
-import { createInternalHooks, createPagePlan, FontManager } from '@easyink/core'
+import { createInternalHooks, FontManager, runLayoutPipeline, runPagination } from '@easyink/core'
 import { traverseNodes, validateSchema } from '@easyink/schema'
 import { UNIT_FACTOR } from '@easyink/shared'
 import { applyBindingsToProps, projectBindings } from './binding-projector'
@@ -25,7 +25,6 @@ import { MaterialRendererRegistry } from './material-registry'
 import { PrintPolicyError, resolvePrintPolicy } from './print-policy'
 import { runPrintWithIsolation } from './print-service'
 import { renderPages } from './render-surface'
-import { applyStackFlowLayout } from './stack-flow-layout'
 import { createThumbnails } from './thumbnail-pipeline'
 import { createBrowserViewerHost, createIframeViewerHost } from './viewer-host'
 
@@ -134,11 +133,19 @@ export class ViewerRuntime {
     }
 
     // Stage 3.5: Measure elements that need expansion (e.g., table-data)
-    const { schema: measuredSchema, diagnostics: layoutDiagnostics } = this.applyMeasureAndLayout(resolvedPropsMap)
+    const { measurements, diagnostics: layoutDiagnostics } = this.measureRuntimeElements(resolvedPropsMap)
     diagnostics.push(...layoutDiagnostics)
 
-    // Stage 4: Page planning
-    const plan = createPagePlan(measuredSchema, { originalSchema: this._schema })
+    // Stage 4: Orthogonal layout + pagination planning
+    const layoutDocument = runLayoutPipeline(this._schema, {
+      originalSchema: this._schema,
+      measured: measurements,
+    })
+    const pagination = runPagination(this._schema, layoutDocument, {
+      originalSchema: this._schema,
+      resolveFragmentPaginator: fragment => this._materialRegistry.getFragmentPaginator(fragment.node),
+    })
+    const plan = toPagePlan(pagination)
 
     for (const d of plan.diagnostics) {
       diagnostics.push({
@@ -494,12 +501,12 @@ export class ViewerRuntime {
     }
   }
 
-  private applyMeasureAndLayout(resolvedPropsMap: Map<string, Record<string, unknown>>): { schema: DocumentSchema, diagnostics: ViewerDiagnosticEvent[] } {
+  private measureRuntimeElements(resolvedPropsMap: Map<string, Record<string, unknown>>): { measurements: Map<string, ViewerMeasureResult>, diagnostics: ViewerDiagnosticEvent[] } {
     if (!this._schema)
-      return { schema: this._schema!, diagnostics: [] }
+      return { measurements: new Map(), diagnostics: [] }
 
-    let modified = false
     const diagnostics: ViewerDiagnosticEvent[] = []
+    const measurements = new Map<string, ViewerMeasureResult>()
     const measureCtx: ViewerMeasureContext = {
       data: this._data,
       unit: this._schema.unit,
@@ -514,7 +521,7 @@ export class ViewerRuntime {
       }),
     }
 
-    let elements = this._schema.elements.map((node) => {
+    for (const node of this._schema.elements) {
       const resolvedProps = resolvedPropsMap.get(node.id) ?? node.props
       const nodeForMeasure = resolvedProps === node.props ? node : { ...node, props: resolvedProps }
       let result
@@ -531,29 +538,14 @@ export class ViewerRuntime {
           scope: 'material',
           cause: serializeCause(err),
         })
-        return node
+        continue
       }
-      if (!result || (result.width === node.width && result.height === node.height))
-        return node
-      modified = true
-      return { ...node, height: result.height, width: result.width }
-    })
-
-    if (this._schema.page.mode === 'stack') {
-      const flowResult = applyStackFlowLayout(this._schema.elements, elements)
-      elements = flowResult.elements
-      diagnostics.push(...flowResult.diagnostics)
-      if (!modified) {
-        modified = elements.some((node, index) => {
-          const original = this._schema!.elements[index]
-          return !!original && (node.y !== original.y || node.height !== original.height || node.width !== original.width)
-        })
+      if (result) {
+        measurements.set(node.id, result)
       }
     }
 
-    if (!modified)
-      return { schema: this._schema, diagnostics }
-    return { schema: { ...this._schema, elements }, diagnostics }
+    return { measurements, diagnostics }
   }
 
   private async loadFonts(diagnostics: ViewerDiagnosticEvent[]): Promise<void> {
@@ -755,6 +747,25 @@ export class ViewerRuntime {
 
 function getGlobalWindow(): Window | undefined {
   return typeof window === 'undefined' ? undefined : window
+}
+
+function toPagePlan(result: PaginationResult): PagePlan {
+  return {
+    mode: result.mode,
+    pages: result.pages.map(page => ({
+      index: page.index,
+      width: page.width,
+      height: page.height,
+      elements: page.fragments.map(fragment => fragment.node),
+      copyIndex: page.pageContext.copyIndex,
+      yOffset: page.yOffset,
+    })),
+    diagnostics: result.diagnostics.map(diagnostic => ({
+      code: diagnostic.code,
+      severity: diagnostic.severity,
+      message: diagnostic.message,
+    })),
+  }
 }
 
 function serializeCause(err: unknown): unknown {

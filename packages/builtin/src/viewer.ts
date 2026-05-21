@@ -12,7 +12,7 @@ import { RECT_TYPE, renderRect } from '@easyink/material-rect'
 import { renderSvgCustom, SVG_CUSTOM_TYPE } from '@easyink/material-svg-custom'
 import { renderSvgHeart, SVG_HEART_TYPE } from '@easyink/material-svg-heart'
 import { renderSvgStar, SVG_STAR_TYPE } from '@easyink/material-svg-star'
-import { measureTableData, renderTableData, TABLE_DATA_TYPE } from '@easyink/material-table-data'
+import { measureTableData, renderTableData, TABLE_DATA_TYPE, tableDataFragmentPaginator } from '@easyink/material-table-data'
 import { renderTableStatic, TABLE_STATIC_TYPE } from '@easyink/material-table-static'
 import { getTextRenderSize, measureText, renderText, TEXT_TYPE } from '@easyink/material-text'
 
@@ -33,6 +33,7 @@ export function registerBuiltinViewerMaterials(register: BuiltinViewerRegistrar)
   register(TABLE_DATA_TYPE, {
     render: (node, ctx) => renderTableData(node, ctx),
     measure: (node, ctx) => measureTableData(node, ctx),
+    fragmentPaginator: tableDataFragmentPaginator,
   })
   register(FLOW_ROW_TYPE, {
     render: (node, ctx) => renderFlowRow(node, ctx),

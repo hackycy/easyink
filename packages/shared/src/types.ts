@@ -10,7 +10,19 @@ export type UnitType = 'mm' | 'pt' | 'px' | 'inch'
  * - stack: Continuous paper, receipts, long document flow
  * - label: Label paper, multi-column batch printing
  */
-export type PageMode = 'fixed' | 'stack' | 'label'
+export type PageMode = 'fixed' | 'stack' | 'label' | 'continuous'
+
+/**
+ * Orthogonal page-layout model kinds.
+ * These are the structured strategy dimensions derived from legacy page modes.
+ */
+export type PageModelKind = 'paged-paper' | 'continuous-paper' | 'label-sheet'
+
+export type LayoutStrategyKind = 'absolute' | 'stack-flow' | 'region-flow'
+
+export type PaginationStrategyKind = 'none' | 'fixed-sheets' | 'auto-sheets' | 'label-sheets'
+
+export type ReflowStrategyKind = 'none' | 'measure-only' | 'flow-y'
 
 /**
  * Page scale strategy.
