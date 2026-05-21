@@ -176,6 +176,7 @@ function readPagePropValue(descriptor: PagePropertyDescriptor): unknown {
 
 const PAGE_GROUP_LABELS: Record<PagePropertyGroup, string> = {
   document: 'designer.page.groupDocument',
+  layout: 'designer.page.groupLayout',
   paper: 'designer.page.groupPaper',
   print: 'designer.page.groupPrint',
   assist: 'designer.page.groupAssist',

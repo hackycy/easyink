@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { coerceLLMPlan, getDomainProfile, inferAIGenerationPlan, registerDomainProfile } from './domain-profile'
 
 describe('inferAIGenerationPlan', () => {
-  it('infers supermarket receipts as 80mm stack documents', () => {
+  it('infers supermarket receipts as 80mm continuous paper documents', () => {
     const plan = inferAIGenerationPlan('请生成一个关于商超小票的模版')
 
     expect(plan.domain).toBe('supermarket-receipt')
-    expect(plan.page).toMatchObject({ mode: 'stack', width: 80, height: 200 })
+    expect(plan.page).toMatchObject({ mode: 'continuous', width: 80, height: 200 })
     expect(plan.tableStrategy).toBe('table-data-for-arrays')
     expect(plan.materialHints).toContain('table-data')
   })
@@ -23,7 +23,7 @@ describe('coerceLLMPlan', () => {
   it('clamps unsafe paper sizes to allowed range', () => {
     const plan = coerceLLMPlan({
       domain: 'supermarket-receipt',
-      page: { mode: 'stack', width: 5, height: 10000 },
+      page: { mode: 'continuous', width: 5, height: 10000 },
       tableStrategy: 'table-data-for-arrays',
     }, '小票')
 
@@ -47,7 +47,7 @@ describe('coerceLLMPlan', () => {
   it('rejects unknown table strategies', () => {
     const plan = coerceLLMPlan({
       domain: 'supermarket-receipt',
-      page: { mode: 'stack', width: 80, height: 200 },
+      page: { mode: 'continuous', width: 80, height: 200 },
       tableStrategy: 'invalid-strategy',
     }, '小票')
 

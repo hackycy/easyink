@@ -449,4 +449,14 @@ function createInvoiceTemplate(mode: DocumentSchema['page']['mode']): DocumentSc
 
 export const invoiceWithTableTemplate: DocumentSchema = createInvoiceTemplate('fixed')
 
-export const flowInvoiceTemplate: DocumentSchema = createInvoiceTemplate('stack')
+export const flowInvoiceTemplate: DocumentSchema = {
+  ...createInvoiceTemplate('continuous'),
+  page: {
+    mode: 'continuous',
+    width: 210,
+    height: 297,
+    layout: { strategy: 'stack-flow', flowAxis: 'y' },
+    pagination: { strategy: 'none' },
+    reflow: { strategy: 'flow-y', preserveTrailingGap: true, collisionPolicy: 'diagnose' },
+  },
+}

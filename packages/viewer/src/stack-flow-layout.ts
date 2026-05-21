@@ -15,7 +15,7 @@ interface OrderedNode {
 }
 
 /**
- * Stack-mode flow resolver.
+ * Stack-flow layout resolver.
  *
  * Rules for v1:
  * - default every node to flow participation

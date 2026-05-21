@@ -48,7 +48,7 @@ function applyMeasurements(
 }
 
 function inferReflowStrategy(schema: DocumentSchema): NonNullable<DocumentSchema['page']['reflow']>['strategy'] {
-  if (schema.page.mode === 'stack' || schema.page.mode === 'continuous')
+  if (schema.page.layout?.strategy === 'stack-flow')
     return 'flow-y'
   return 'measure-only'
 }

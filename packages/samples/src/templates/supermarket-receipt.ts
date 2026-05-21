@@ -107,7 +107,7 @@ export const supermarketDemoData: Record<string, unknown> = {
 }
 
 // ---------------------------------------------------------------------------
-// Supermarket receipt template (80mm thermal paper, stack mode)
+// Supermarket receipt template (80mm thermal paper, continuous paper + stack-flow layout)
 // ---------------------------------------------------------------------------
 
 function createReceiptItemsTable(): TableNode {
@@ -335,9 +335,12 @@ export const supermarketReceiptTemplate: DocumentSchema = {
   version: SCHEMA_VERSION,
   unit: 'mm',
   page: {
-    mode: 'stack',
+    mode: 'continuous',
     width: 80,
     height: 200,
+    layout: { strategy: 'stack-flow', flowAxis: 'y' },
+    pagination: { strategy: 'none' },
+    reflow: { strategy: 'flow-y', preserveTrailingGap: true, collisionPolicy: 'diagnose' },
   },
   guides: { x: [], y: [] },
   elements: [

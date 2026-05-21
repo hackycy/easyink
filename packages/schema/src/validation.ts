@@ -1,8 +1,9 @@
 import type { DocumentSchema } from './types'
 import { isObject, SCHEMA_VERSION } from '@easyink/shared'
+import { migrateLegacyStackPageMode } from './compat'
 
 const UNIT_TYPES = new Set(['mm', 'pt', 'px', 'inch'])
-const PAGE_MODES = new Set(['fixed', 'stack', 'label', 'continuous'])
+const PAGE_MODES = new Set(['fixed', 'label', 'continuous'])
 const PAGE_MODEL_KINDS = new Set(['paged-paper', 'continuous-paper', 'label-sheet'])
 const LAYOUT_STRATEGIES = new Set(['absolute', 'stack-flow', 'region-flow'])
 const PAGINATION_STRATEGIES = new Set(['none', 'fixed-sheets', 'auto-sheets', 'label-sheets'])
@@ -223,7 +224,8 @@ export function deserializeSchema(json: string): DocumentSchema {
     throw new SchemaDeserializeError('invalid-json', 'Failed to parse schema JSON.', { cause: error })
   }
 
-  const issues = validateSchemaIssues(parsed)
+  const migrated = isObject(parsed) ? migrateLegacyStackPageMode(parsed) : parsed
+  const issues = validateSchemaIssues(migrated)
   if (issues.length > 0) {
     throw new SchemaDeserializeError(
       'invalid-schema',
@@ -232,7 +234,7 @@ export function deserializeSchema(json: string): DocumentSchema {
     )
   }
 
-  const schemaVersion = (parsed as DocumentSchema).version
+  const schemaVersion = (migrated as DocumentSchema).version
   if (!isCompatibleVersion(schemaVersion)) {
     throw new SchemaDeserializeError(
       'incompatible-version',
@@ -241,7 +243,7 @@ export function deserializeSchema(json: string): DocumentSchema {
     )
   }
 
-  return parsed as DocumentSchema
+  return migrated as DocumentSchema
 }
 
 /**

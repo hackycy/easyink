@@ -86,16 +86,34 @@ describe('normalizeDocumentSchema', () => {
     expect(schema.elements).toEqual([])
   })
 
-  it('derives continuous-paper layers from stack and continuous modes', () => {
-    const stack = normalizeDocumentSchema({ page: { mode: 'stack', width: 80, height: 200 } })
+  it('derives continuous-paper layers from continuous mode', () => {
     const continuous = normalizeDocumentSchema({ page: { mode: 'continuous', width: 80, height: 200 } })
 
-    for (const schema of [stack, continuous]) {
-      expect(schema.page.pageModel?.kind).toBe('continuous-paper')
-      expect(schema.page.layout).toMatchObject({ strategy: 'stack-flow', flowAxis: 'y' })
-      expect(schema.page.pagination?.strategy).toBe('none')
-      expect(schema.page.reflow).toMatchObject({ strategy: 'flow-y', preserveTrailingGap: true })
-    }
+    expect(continuous.page.pageModel?.kind).toBe('continuous-paper')
+    expect(continuous.page.layout).toMatchObject({ strategy: 'stack-flow', flowAxis: 'y' })
+    expect(continuous.page.pagination?.strategy).toBe('none')
+    expect(continuous.page.reflow).toMatchObject({ strategy: 'flow-y', preserveTrailingGap: true })
+  })
+
+  it('migrates legacy stack mode to continuous paper with stack-flow layout', () => {
+    const schema = normalizeDocumentSchema({
+      page: {
+        mode: 'stack',
+        width: 80,
+        height: 200,
+        layout: { strategy: 'absolute' },
+        pagination: { strategy: 'fixed-sheets', pageCount: 3 },
+        reflow: { strategy: 'measure-only' },
+      },
+    } as never)
+
+    expect(schema.page).toMatchObject({
+      mode: 'continuous',
+      pageModel: { kind: 'continuous-paper', paper: { width: 80, height: 200 } },
+      layout: { strategy: 'stack-flow', flowAxis: 'y' },
+      pagination: { strategy: 'none' },
+      reflow: { strategy: 'flow-y', preserveTrailingGap: true, collisionPolicy: 'diagnose' },
+    })
   })
 
   it('preserves explicit structured strategies while filling missing parts', () => {

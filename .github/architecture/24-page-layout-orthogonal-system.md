@@ -1,6 +1,6 @@
 # 24. 页面、布局、分页、测量重排正交体系
 
-本文档定义 EasyInk 下一阶段的页面与布局架构。目标不是在现有 `fixed / stack / label` 上继续追加分支，而是把页面模型、布局策略、分页策略、测量重排引擎拆成四个可独立表达、独立演进、组合使用的维度。
+本文档定义 EasyInk 下一阶段的页面与布局架构。目标不是在历史 `fixed / stack / label` 页面模式上继续追加分支，而是把页面模型、布局策略、分页策略、测量重排引擎拆成四个可独立表达、独立演进、组合使用的维度。`stack` 不再作为新的页面类型暴露，只作为旧 schema 的迁移输入。
 
 ## 24.1 当前问题
 
@@ -12,7 +12,7 @@
 - `packages/viewer/src/stack-flow-layout.ts` 只服务 `stack`，但它表达的是更通用的测量后重排能力。
 - `packages/designer/src/components/CanvasWorkspace.vue` 只渲染一个编辑页，编辑态页面模型与 Viewer 运行态页面计划没有统一中间层。
 - `packages/materials/table-data/src/viewer.ts` 已有运行态展开和测量，但表格分页仍未成为可被分页策略调用的标准协议。
-- `packages/schema-tools/src/domain-profile.ts` 已经出现 `continuous` 语义，但 schema 校验、默认值、设计器属性面板仍只承认 `fixed / stack / label`。
+- `packages/schema-tools/src/domain-profile.ts` 已经出现 `continuous` 语义，但历史 schema 校验、默认值、设计器属性面板曾只承认 `fixed / stack / label`。
 
 根因：`page.mode` 被当成总开关。它把"纸是什么"、"内容怎么排"、"输出怎么切页"、"动态内容怎么测量重排"压进一个枚举，导致新增能力只能继续加特判。
 
@@ -50,7 +50,7 @@ Render Surface    只消费输出页面计划，不参与策略判断
 
 ## 24.3 Schema 目标形态
 
-短期保持 `page.mode` 兼容，但新增结构化字段作为真正语义来源：
+`page.mode` 只表达页面介质类型；结构化字段是布局、分页和测量重排的真正语义来源：
 
 ```ts
 interface PageSchema {
@@ -70,7 +70,7 @@ interface PageSchema {
   reflow?: ReflowConfig
 }
 
-type PageMode = 'fixed' | 'stack' | 'label' | 'continuous'
+type PageMode = 'fixed' | 'label' | 'continuous'
 
 type PageModelKind = 'paged-paper' | 'continuous-paper' | 'label-sheet'
 type LayoutStrategyKind = 'absolute' | 'stack-flow' | 'region-flow'
@@ -106,20 +106,27 @@ interface ReflowConfig {
 }
 ```
 
-兼容映射：
+规范组合：
 
-| 旧 `page.mode` | 页面模型 | 布局策略 | 测量重排 | 分页策略 |
+| `page.mode` | 页面模型 | 布局策略 | 测量重排 | 分页策略 |
 | --- | --- | --- | --- | --- |
 | `fixed` | `paged-paper` | `absolute` | `measure-only` | `fixed-sheets` |
-| `stack` | `continuous-paper` | `stack-flow` | `flow-y` | `none` |
 | `continuous` | `continuous-paper` | `stack-flow` 或 `absolute` | `flow-y` 或 `measure-only` | `none` |
 | `label` | `label-sheet` | `absolute` | `measure-only` | `label-sheets` |
 
+旧模式迁移：
+
+| 旧 `page.mode` | 迁移后 `page.mode` | 页面模型 | 布局策略 | 测量重排 | 分页策略 |
+| --- | --- | --- | --- | --- | --- |
+| `stack` | `continuous` | `continuous-paper` | `stack-flow` | `flow-y` | `none` |
+
 原则：
 
-- `mode` 只作为兼容入口和 UI 快捷预设，不再作为底层策略分发的唯一依据。
+- `mode` 只作为页面介质类型和 UI 快捷预设，不再作为底层策略分发的唯一依据。
+- `stack` 不进入 `PageMode` 类型、schema validation、AI 生成枚举或设计器页面类型选项。
+- 旧 schema 入口若发现 `page.mode === 'stack'`，必须先迁移为 `continuous + continuous-paper + stack-flow + flow-y + none`，再进入 validation、normalize、Viewer 或 Designer。
 - 新字段进入 schema 后必须由 `normalizeDocumentSchema()` 补齐，不要求宿主一次性传全。
-- 旧模板不迁移也能运行，新模板优先写入结构化字段。
+- 旧模板允许通过迁移入口运行，但运行期内部不保留 `stack` 分支。
 - `continuous` 与旧 `stack` 的差异是页面模型语义更明确：连续纸是输出介质，`stack-flow` 只是布局策略之一。
 
 ## 24.4 核心包职责调整
@@ -128,10 +135,10 @@ interface ReflowConfig {
 
 负责保存可回放语义：
 
-- 扩展 `PageMode`，补齐 `pageModel / layout / pagination / reflow` 类型。
+- 收敛 `PageMode` 为 `fixed | continuous | label`，补齐 `pageModel / layout / pagination / reflow` 类型。
 - 在 defaults 中从旧 `mode` 推导四层配置。
 - 在 validation 中校验每层字段，不把策略组合写死在 Viewer。
-- migration 只做结构补齐，不改变元素坐标。
+- migration / compat 负责把旧 `stack` 页面模式升级为现行连续纸 + 流式布局组合，不改变元素坐标。
 
 ### `@easyink/core`
 
@@ -472,13 +479,16 @@ pagination.strategy = 'label-sheets'
 
 ### 阶段一：模型补齐，不改行为
 
-- `@easyink/shared` 增加 `continuous` 和策略枚举。
+- `@easyink/shared` 收敛 `PageMode` 为 `fixed | continuous | label`，保留策略枚举。
 - `@easyink/schema` 增加四层字段，默认从 `mode` 推导。
+- `@easyink/schema` 增加统一 compat 迁移入口：当输入 schema 的 `page.mode === 'stack'` 时，自动改写为 `mode='continuous'`、`pageModel.kind='continuous-paper'`、`layout.strategy='stack-flow'`、`reflow.strategy='flow-y'`、`pagination.strategy='none'`。
+- compat 迁移必须发生在 validation 之前，并接入 `normalizeDocumentSchema()`、`deserializeSchema()`、`MigrationRegistry.migrate()` 和 Viewer open 流程；Designer 通过 `normalizeDocumentSchema()` 获得同样行为。
+- compat 迁移不得把 `stack` 重新加入 `PageMode` 类型、schema validation、设计器页面类型、schema-tools 枚举或 MCP/AI 结构化输出。
 - 增加统一 helper 读取 `node.props` 中既有分页控制，并投影为 `LayoutFragment.flow`。
-- `designer` 页面属性面板先展示旧字段，但内部写入新字段。
-- `schema-tools` 的 `continuous` 不再被 schema validation 拒绝。
+- `designer` 页面属性面板展示页面类型和布局方式两个正交分组，不再展示 `stack` 页面类型。
+- `schema-tools` 生成连续纸时写入 `continuous + stack-flow` 组合，不再生成 `stack`。
 
-验收：现有测试全部通过，旧模板输出不变。
+验收：现有测试全部通过；旧 `stack` 模板经迁移后输出保持连续纸流式行为，内部 schema 不再保留 `stack`。
 
 ### 阶段二：抽出计划引擎
 
@@ -523,10 +533,11 @@ pagination.strategy = 'label-sheets'
 - Designer 不维护全局激活页；页面相关交互必须从坐标、选择、视口或显式命令参数派生。
 - `RenderSurface` 不知道分页策略，只知道输出页和 fragments。
 - 物料可以测量和局部分页，但不能决定全局纸张或全局页数。
-- `page.mode` 只能做兼容预设，不能继续承载新增能力。
+- `page.mode` 只能表达页面介质类型，不能继续承载布局、分页或重排能力。
+- `stack` 是 legacy input，不是合法的新 schema 状态；任何入口完成迁移后都不得继续按 `page.mode === 'stack'` 分支。
 - `keepTogether / pageBreakBefore / pageBreakAfter` 是分页约束，不是物料渲染属性；任何策略不支持时必须忽略并诊断，不能误解释。
 - 所有自动行为必须有诊断出口，不能静默移动、裁切或丢弃内容。
 
 ## 24.11 决策
 
-采用四层正交体系作为后续分页和布局演进方向。当前 `fixed / stack / label` 不是废弃，而是映射到新体系的三组预设。新增连续纸、固定纸自动分页、Word 多页、标签 sheet、多区域布局时，优先新增策略或策略组合，而不是扩展一个更大的 `PageMode` 分支。
+采用四层正交体系作为后续分页和布局演进方向。当前合法页面介质类型为 `fixed / continuous / label`；历史 `stack` 不再作为页面类型存在，只在 schema 入口迁移为 `continuous + stack-flow`。新增连续纸、固定纸自动分页、Word 多页、标签 sheet、多区域布局时，优先新增策略或策略组合，而不是扩展一个更大的 `PageMode` 分支。

@@ -70,9 +70,12 @@ export const simpleInvoiceTemplate: DocumentSchema = {
   version: SCHEMA_VERSION,
   unit: 'mm',
   page: {
-    mode: 'stack',
+    mode: 'continuous',
     width: 210,
     height: 297,
+    layout: { strategy: 'stack-flow', flowAxis: 'y' },
+    pagination: { strategy: 'none' },
+    reflow: { strategy: 'flow-y', preserveTrailingGap: true, collisionPolicy: 'diagnose' },
   },
   guides: { x: [], y: [] },
   elements: [
@@ -178,15 +181,18 @@ export const labelTemplate: DocumentSchema = {
 }
 
 /**
- * 收据模板（堆叠模式）。
+ * 收据模板（连续纸 + 流式布局）。
  */
 export const receiptTemplate: DocumentSchema = {
   version: SCHEMA_VERSION,
   unit: 'mm',
   page: {
-    mode: 'stack',
+    mode: 'continuous',
     width: 80,
     height: 200,
+    layout: { strategy: 'stack-flow', flowAxis: 'y' },
+    pagination: { strategy: 'none' },
+    reflow: { strategy: 'flow-y', preserveTrailingGap: true, collisionPolicy: 'diagnose' },
   },
   guides: { x: [], y: [] },
   elements: [

@@ -51,7 +51,7 @@ const BUILTIN_PROFILES: DomainProfile[] = [
     label: '商超/便利店小票',
     keywords: ['商超', '超市', '便利店', '购物小票', '收银小票', '小票'],
     page: {
-      mode: 'stack',
+      mode: 'continuous',
       width: 80,
       height: 200,
       unit: 'mm',
@@ -103,7 +103,7 @@ const BUILTIN_PROFILES: DomainProfile[] = [
     label: '餐饮小票',
     keywords: ['餐饮', '点餐', '外卖', '餐厅', '菜单', '桌号', '堂食'],
     page: {
-      mode: 'stack',
+      mode: 'continuous',
       width: 80,
       height: 180,
       unit: 'mm',
@@ -323,7 +323,7 @@ function projectFieldHint(spec: DomainFieldSpec): DomainFieldHint {
   }
 }
 
-const PAGE_MODES = new Set(['fixed', 'stack', 'label', 'continuous'])
+const PAGE_MODES = new Set(['fixed', 'label', 'continuous'])
 const TABLE_STRATEGIES = new Set<AIGenerationPlan['tableStrategy']>([
   'table-data-for-arrays',
   'table-static-for-fixed',

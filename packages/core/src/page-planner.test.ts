@@ -60,14 +60,14 @@ describe('createPagePlan', () => {
     })
   })
 
-  describe('stack mode', () => {
+  describe('continuous paper mode', () => {
     it('creates single continuous page', () => {
       const schema = makeSchema(
-        { mode: 'stack' },
+        { mode: 'continuous' },
         [makeNode('a', { y: 0, height: 100 }), makeNode('b', { y: 200, height: 150 })],
       )
       const plan = createPagePlan(schema)
-      expect(plan.mode).toBe('stack')
+      expect(plan.mode).toBe('continuous')
       expect(plan.pages).toHaveLength(1)
       expect(plan.pages[0]!.height).toBe(350)
       expect(plan.pages[0]!.elements).toHaveLength(2)
@@ -75,20 +75,20 @@ describe('createPagePlan', () => {
 
     it('uses page height as minimum', () => {
       const schema = makeSchema(
-        { mode: 'stack', height: 500 },
+        { mode: 'continuous', height: 500 },
         [makeNode('a', { y: 0, height: 50 })],
       )
       const plan = createPagePlan(schema)
       expect(plan.pages[0]!.height).toBe(500)
     })
 
-    it('preserves original trailing gap when stack content grows', () => {
+    it('preserves original trailing gap when continuous content grows', () => {
       const originalSchema = makeSchema(
-        { mode: 'stack', height: 200 },
+        { mode: 'continuous', height: 200 },
         [makeNode('last', { y: 150, height: 30 })],
       )
       const measuredSchema = makeSchema(
-        { mode: 'stack', height: 200 },
+        { mode: 'continuous', height: 200 },
         [makeNode('last', { y: 200, height: 30 })],
       )
 

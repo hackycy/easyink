@@ -44,9 +44,10 @@ export function runPagination(
 }
 
 function inferPaginationStrategy(schema: DocumentSchema): NonNullable<DocumentSchema['page']['pagination']>['strategy'] {
-  if (schema.page.mode === 'label')
+  const pageModelKind = schema.page.pageModel?.kind
+  if (pageModelKind === 'label-sheet' || schema.page.mode === 'label')
     return 'label-sheets'
-  if (schema.page.mode === 'stack' || schema.page.mode === 'continuous')
+  if (pageModelKind === 'continuous-paper' || schema.page.mode === 'continuous')
     return 'none'
   return 'fixed-sheets'
 }
@@ -205,7 +206,8 @@ function createContinuousSheet(
 }
 
 function getTrailingGap(originalSchema: DocumentSchema | undefined): number {
-  if (!originalSchema || (originalSchema.page.mode !== 'stack' && originalSchema.page.mode !== 'continuous'))
+  const pageModelKind = originalSchema?.page.pageModel?.kind
+  if (!originalSchema || (pageModelKind !== 'continuous-paper' && originalSchema.page.mode !== 'continuous'))
     return 0
   let bottom = 0
   for (const el of originalSchema.elements)

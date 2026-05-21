@@ -48,7 +48,6 @@ export function createEditorSurfacePlan(schema: DocumentSchema): EditorSurfacePl
   const paginationStrategy = page.pagination?.strategy
   if (
     pageModelKind === 'continuous-paper'
-    || page.mode === 'stack'
     || page.mode === 'continuous'
     || paginationStrategy === 'none'
     || paginationStrategy === 'auto-sheets'

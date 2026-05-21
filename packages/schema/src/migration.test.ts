@@ -79,6 +79,32 @@ describe('migrationRegistry', () => {
     expect(result).toBe(schema)
   })
 
+  it('migrates current-version legacy stack mode before validation', () => {
+    const reg = new MigrationRegistry()
+    const result = reg.migrate({
+      version: '1.0.0',
+      unit: 'mm',
+      page: {
+        mode: 'stack',
+        width: 80,
+        height: 200,
+        layout: { strategy: 'absolute' },
+        pagination: { strategy: 'fixed-sheets', pageCount: 2 },
+        reflow: { strategy: 'measure-only' },
+      },
+      guides: { x: [], y: [] },
+      elements: [],
+    })
+
+    expect(result.page).toMatchObject({
+      mode: 'continuous',
+      pageModel: { kind: 'continuous-paper', paper: { width: 80, height: 200 } },
+      layout: { strategy: 'stack-flow', flowAxis: 'y' },
+      pagination: { strategy: 'none' },
+      reflow: { strategy: 'flow-y', preserveTrailingGap: true, collisionPolicy: 'diagnose' },
+    })
+  })
+
   it('migrate throws structured issues when migration output is invalid', () => {
     const reg = new MigrationRegistry()
     reg.register(0, '1.0.0', schema => createMigratedSchema(schema, {

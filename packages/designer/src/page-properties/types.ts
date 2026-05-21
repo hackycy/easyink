@@ -3,7 +3,7 @@ import type { DocumentSchema, PageSchema } from '@easyink/schema'
 /**
  * Descriptor group for page properties.
  */
-export type PagePropertyGroup = 'document' | 'paper' | 'print' | 'assist' | 'background'
+export type PagePropertyGroup = 'document' | 'layout' | 'paper' | 'print' | 'assist' | 'background'
 
 /**
  * Where the property value originates.

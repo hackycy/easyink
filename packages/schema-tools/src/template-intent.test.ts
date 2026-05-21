@@ -14,7 +14,13 @@ describe('template intent builder', () => {
 
     const table = result.schema.elements.find(element => element.type === 'table-data') as TableNode | undefined
 
-    expect(result.schema.page).toMatchObject({ mode: 'stack', width: 80, height: 200 })
+    expect(result.schema.page).toMatchObject({
+      mode: 'continuous',
+      width: 80,
+      height: 200,
+      layout: { strategy: 'stack-flow', flowAxis: 'y' },
+      pagination: { strategy: 'none' },
+    })
     expect(table).toBeTruthy()
     expect(table?.table.kind).toBe('data')
     expect(table?.table.topology.rows.some(row => row.role === 'repeat-template')).toBe(true)

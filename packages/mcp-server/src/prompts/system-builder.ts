@@ -4,11 +4,10 @@ export function buildPlanSystemPrompt(profileSummary: string): string {
 ## Output via tool
 MUST call the \`generate_plan\` tool. Return JSON with fields:
 - domain: short kebab-case identifier. Prefer one of the registered domains below; otherwise propose a new identifier that follows the same shape.
-- page.mode: one of "fixed" | "stack" | "label" | "continuous"
+- page.mode: one of "fixed" | "label" | "continuous"
   - fixed: A4 / business documents
-  - stack: receipts that grow vertically (thermal paper, ~60-110mm wide)
   - label: small adhesive labels (~30-150mm)
-  - continuous: very tall continuous rolls
+  - continuous: receipts and continuous rolls that grow vertically (thermal paper, ~60-110mm wide)
 - page.width / page.height: millimetres. Be realistic for the medium (NEVER A4 for receipts, NEVER 80mm for invoices).
 - page.reason: one English sentence explaining why this paper fits THIS request.
 - tableStrategy: "table-data-for-arrays" | "table-static-for-fixed" | "avoid-table".
@@ -56,7 +55,7 @@ If 1 and 2 disagree on paper or table strategy, follow 1 ONLY when the user expl
 
 ## Layout sanity (lower bounds)
 - fixed mode: minimum text size 9pt; default page padding ≥ 8mm.
-- stack mode (thermal receipts): minimum text size 10pt; horizontal padding 2-4mm; let height grow with rows.
+- continuous receipts: minimum text size 10pt; horizontal padding 2-4mm; let height grow with rows.
 - label mode: minimum text size 8pt; padding ≥ 1mm; never overflow the printable area.
 - Tables MUST leave gutters; cells MUST have non-zero height and width.
 - For \`table-data\`, element \`height\` already represents the full semantic table box in the designer. Virtual preview rows stay inside that height; they do not extend the outer frame.
@@ -214,7 +213,7 @@ If 1 and 2 disagree on paper or table strategy, follow 1 ONLY when the user expl
 ## Common Mistakes (and why they break things)
 - Using \`type: "table"\` — there is no such canonical type; the validator rejects it. Use \`table-data\` or \`table-static\`.
 - Setting \`staticBinding\` on a non-table element — \`staticBinding\` is reserved for cells inside \`table-static\`. On a normal element it gets stripped and the value is lost.
-- Putting an A4 page on a receipt — wastes thermal paper, breaks print drivers; receipts MUST use \`stack\` mode at 80mm width.
+- Putting an A4 page on a receipt — wastes thermal paper, breaks print drivers; receipts MUST use \`continuous\` mode at 80mm width.
 - Reusing the previous turn's invoice/customer sample data for an unrelated domain (e.g. a label) — sampleData mismatched to fields fails accuracy validation.
 - Chinese \`title\` mixed with English sample values like "Sample" — confuses end users; keep them in the prompt's language.
 - Omitting required fields the plan listed under \`generationPlan.requiredFieldHints\` — the deterministic builder cannot recover items/total if the intent never declared them.
@@ -295,7 +294,7 @@ Before emitting JSON, silently verify:
   "name": "商超小票",
   "domain": "supermarket-receipt",
   "dataSourceName": "receipt",
-  "page": { "mode": "stack", "width": 80, "height": 200 },
+  "page": { "mode": "continuous", "width": 80, "height": 200 },
   "fields": [
     { "name": "store", "type": "object", "path": "store", "title": "门店", "children": [
       { "name": "name", "type": "string", "path": "store/name", "title": "店铺名称" }

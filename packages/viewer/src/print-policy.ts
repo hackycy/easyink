@@ -21,7 +21,7 @@ export function resolvePrintPolicy(input: ResolvePrintPolicyInput): ViewerPrintP
   const { schema, options = {}, renderedPages = [] } = input
   const { page, unit } = schema
   const requestedPageSizeMode = options.pageSizeMode ?? 'driver'
-  const isContinuousPaper = page.pageModel?.kind === 'continuous-paper' || page.mode === 'stack' || page.mode === 'continuous'
+  const isContinuousPaper = page.pageModel?.kind === 'continuous-paper' || page.mode === 'continuous'
   const isLabelSheet = page.pageModel?.kind === 'label-sheet' || page.mode === 'label'
   const usesDriverPaper = isContinuousPaper && requestedPageSizeMode === 'driver'
   const orientation = page.print?.orientation ?? 'auto'

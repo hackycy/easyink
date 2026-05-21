@@ -35,7 +35,13 @@ describe('generated schema accuracy', () => {
 
     const repaired = repairGeneratedSchema(input, { allowedMaterialTypes, materialAliases, plan })
 
-    expect(repaired.schema.page).toMatchObject({ mode: 'stack', width: 80, height: 200 })
+    expect(repaired.schema.page).toMatchObject({
+      mode: 'continuous',
+      width: 80,
+      height: 200,
+      layout: { strategy: 'stack-flow', flowAxis: 'y' },
+      pagination: { strategy: 'none' },
+    })
     expect(repaired.schema.elements[0]?.type).toBe('table-data')
     expect(repaired.schema.elements[0]?.binding).toMatchObject({ fieldPath: 'store/name' })
     expect(repaired.issues.map(issue => issue.code)).toEqual(expect.arrayContaining([

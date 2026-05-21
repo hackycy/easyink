@@ -58,6 +58,17 @@ function makeTableNode(id: string, overrides: Partial<TableNode> = {}): TableNod
   }
 }
 
+function makeContinuousStackFlowPage(width: number, height: number): DocumentSchema['page'] {
+  return {
+    mode: 'continuous',
+    width,
+    height,
+    layout: { strategy: 'stack-flow', flowAxis: 'y' },
+    pagination: { strategy: 'none' },
+    reflow: { strategy: 'flow-y', preserveTrailingGap: true, collisionPolicy: 'diagnose' },
+  }
+}
+
 describe('applyStackFlowLayout', () => {
   it('pushes later flow nodes by measured height delta', () => {
     const original = [
@@ -146,7 +157,7 @@ describe('applyStackFlowLayout', () => {
   })
 })
 
-describe('viewer runtime stack reflow', () => {
+describe('viewer runtime stack-flow reflow', () => {
   it('repositions elements below table-data after measure', async () => {
     const container = document.createElement('div')
     const viewer = createViewer({ container })
@@ -154,11 +165,7 @@ describe('viewer runtime stack reflow', () => {
     const schema: DocumentSchema = {
       version: '1.0.0',
       unit: 'mm',
-      page: {
-        mode: 'stack',
-        width: 80,
-        height: 120,
-      },
+      page: makeContinuousStackFlowPage(80, 120),
       guides: { x: [], y: [] },
       elements: [
         makeTableNode('items', { x: 5, y: 10, width: 70, height: 24 }),
@@ -197,11 +204,7 @@ describe('viewer runtime stack reflow', () => {
     const schema: DocumentSchema = {
       version: '1.0.0',
       unit: 'mm',
-      page: {
-        mode: 'stack',
-        width: 80,
-        height: 80,
-      },
+      page: makeContinuousStackFlowPage(80, 80),
       guides: { x: [], y: [] },
       elements: [
         makeNode('notes', {
@@ -244,7 +247,7 @@ describe('viewer runtime stack reflow', () => {
     expect(Number.parseFloat(afterEl!.style.top)).toBeGreaterThan(20)
   })
 
-  it('keeps the original template trailing gap after stack page height recompute', async () => {
+  it('keeps the original template trailing gap after continuous page height recompute', async () => {
     const container = document.createElement('div')
     const viewer = createViewer({ container })
 
@@ -253,11 +256,7 @@ describe('viewer runtime stack reflow', () => {
     const schema: DocumentSchema = {
       version: '1.0.0',
       unit: 'mm',
-      page: {
-        mode: 'stack',
-        width: 80,
-        height: pageHeight,
-      },
+      page: makeContinuousStackFlowPage(80, pageHeight),
       guides: { x: [], y: [] },
       elements: [
         makeTableNode('items', { x: 5, y: 10, width: 70, height: 24 }),

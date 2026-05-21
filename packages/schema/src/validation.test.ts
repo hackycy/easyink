@@ -156,6 +156,25 @@ describe('validateSchema', () => {
     )
   })
 
+  it('deserializeSchema migrates legacy stack mode before validating', () => {
+    const schema = deserializeSchema(JSON.stringify({
+      ...validSchema,
+      page: {
+        mode: 'stack',
+        width: 80,
+        height: 200,
+      },
+    }))
+
+    expect(schema.page).toMatchObject({
+      mode: 'continuous',
+      pageModel: { kind: 'continuous-paper', paper: { width: 80, height: 200 } },
+      layout: { strategy: 'stack-flow', flowAxis: 'y' },
+      pagination: { strategy: 'none' },
+      reflow: { strategy: 'flow-y', preserveTrailingGap: true, collisionPolicy: 'diagnose' },
+    })
+  })
+
   it('deserializeSchema distinguishes incompatible versions', () => {
     const nextMajor = Number.parseInt(SCHEMA_VERSION.split('.')[0] || '0', 10) + 1
     let error: unknown

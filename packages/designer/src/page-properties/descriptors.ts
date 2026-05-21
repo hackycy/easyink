@@ -1,4 +1,5 @@
 import type { PageSchema } from '@easyink/schema'
+import type { LayoutStrategyKind } from '@easyink/shared'
 import type { PagePropertyDescriptor } from './types'
 import { PAPER_PRESETS } from '@easyink/shared'
 
@@ -20,7 +21,6 @@ const MODE_DESCRIPTOR: PagePropertyDescriptor = {
   editor: 'select',
   enum: [
     { label: 'designer.page.fixed', value: 'fixed' },
-    { label: 'designer.page.stack', value: 'stack' },
     { label: 'designer.page.continuous', value: 'continuous' },
     { label: 'designer.page.label', value: 'label' },
   ],
@@ -41,6 +41,48 @@ const UNIT_DESCRIPTOR: PagePropertyDescriptor = {
   enum: UNIT_OPTIONS,
   normalize(value) {
     return { document: { unit: value as 'mm' | 'pt' | 'px' } }
+  },
+}
+
+// ─── Layout Group ───────────────────────────────────────────────
+
+const LAYOUT_STRATEGY_DESCRIPTOR: PagePropertyDescriptor = {
+  id: 'layoutStrategy',
+  group: 'layout',
+  source: 'page',
+  path: 'layout.strategy',
+  label: 'designer.page.layoutStrategy',
+  persisted: 'schema',
+  editor: 'select',
+  enum: [
+    { label: 'designer.page.layoutAbsolute', value: 'absolute' },
+    { label: 'designer.page.layoutStackFlow', value: 'stack-flow' },
+  ],
+  visible: ctx => ctx.document.page.mode !== 'label',
+  normalize(value, ctx) {
+    const strategy = value as LayoutStrategyKind
+    if (strategy === 'stack-flow') {
+      return {
+        page: {
+          layout: { strategy, flowAxis: 'y' },
+          reflow: {
+            ...(ctx.document.page.reflow ?? {}),
+            strategy: 'flow-y',
+            preserveTrailingGap: true,
+            collisionPolicy: 'diagnose',
+          },
+        },
+      }
+    }
+    return {
+      page: {
+        layout: { strategy: 'absolute' },
+        reflow: {
+          ...(ctx.document.page.reflow ?? {}),
+          strategy: 'measure-only',
+        },
+      },
+    }
   },
 }
 
@@ -489,22 +531,18 @@ function createModePresetPatch(mode: PageSchema['mode'], page: PageSchema): Part
     }
   }
 
-  if (mode === 'stack' || mode === 'continuous') {
+  if (mode === 'continuous') {
     return {
       mode,
       pageModel: { kind: 'continuous-paper', paper: { width: page.width, height: page.height } },
-      layout: { strategy: 'stack-flow', flowAxis: 'y' },
       pagination: { strategy: 'none' },
-      reflow: { strategy: 'flow-y', preserveTrailingGap: true, collisionPolicy: 'diagnose' },
     }
   }
 
   return {
     mode,
     pageModel: { kind: 'paged-paper', paper: { width: page.width, height: page.height } },
-    layout: { strategy: 'absolute' },
     pagination: { strategy: 'fixed-sheets', pageCount: page.pages },
-    reflow: { strategy: 'measure-only' },
   }
 }
 
@@ -514,6 +552,8 @@ export const PAGE_PROPERTY_DESCRIPTORS: PagePropertyDescriptor[] = [
   // document
   MODE_DESCRIPTOR,
   UNIT_DESCRIPTOR,
+  // layout
+  LAYOUT_STRATEGY_DESCRIPTOR,
   // paper
   PAPER_PRESET_DESCRIPTOR,
   WIDTH_DESCRIPTOR,

@@ -139,10 +139,36 @@ export function normalizeTemplateIntent(
 
 function resolvePage(intent: TemplateGenerationIntent, plan: AIGenerationPlan): PageSchema {
   const page = intent.page ?? {}
+  const mode = page.mode ?? plan.page.mode
+  const width = typeof page.width === 'number' ? page.width : plan.page.width
+  const height = typeof page.height === 'number' ? page.height : plan.page.height
+  if (mode === 'continuous') {
+    return {
+      mode,
+      width,
+      height,
+      layout: { strategy: 'stack-flow', flowAxis: 'y' },
+      pagination: { strategy: 'none' },
+      reflow: { strategy: 'flow-y', preserveTrailingGap: true, collisionPolicy: 'diagnose' },
+    }
+  }
+  if (mode === 'label') {
+    return {
+      mode,
+      width,
+      height,
+      layout: { strategy: 'absolute' },
+      pagination: { strategy: 'label-sheets' },
+      reflow: { strategy: 'measure-only' },
+    }
+  }
   return {
-    mode: page.mode ?? plan.page.mode,
-    width: typeof page.width === 'number' ? page.width : plan.page.width,
-    height: typeof page.height === 'number' ? page.height : plan.page.height,
+    mode,
+    width,
+    height,
+    layout: { strategy: 'absolute' },
+    pagination: { strategy: 'fixed-sheets', pageCount: page.pages },
+    reflow: { strategy: 'measure-only' },
   }
 }
 

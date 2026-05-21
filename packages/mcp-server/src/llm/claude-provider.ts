@@ -14,7 +14,7 @@ const TOOL_GENERATE_PLAN = {
       page: {
         type: 'object',
         properties: {
-          mode: { type: 'string', enum: ['fixed', 'stack', 'label', 'continuous'] },
+          mode: { type: 'string', enum: ['fixed', 'label', 'continuous'] },
           width: { type: 'number' },
           height: { type: 'number' },
           reason: { type: 'string' },

@@ -46,14 +46,17 @@ function createItemsTable(): TableNode {
   }
 }
 
-function createStackSchema(pageHeight = 100): DocumentSchema {
+function createContinuousSchema(pageHeight = 100): DocumentSchema {
   return {
     version: '1.0.0',
     unit: 'mm',
     page: {
-      mode: 'stack',
+      mode: 'continuous',
       width: 80,
       height: pageHeight,
+      layout: { strategy: 'stack-flow', flowAxis: 'y' },
+      pagination: { strategy: 'none' },
+      reflow: { strategy: 'flow-y', preserveTrailingGap: true, collisionPolicy: 'diagnose' },
     },
     guides: { x: [], y: [] },
     elements: [
@@ -74,11 +77,11 @@ function createStackSchema(pageHeight = 100): DocumentSchema {
   }
 }
 
-function createStackSchemaWithPrint(orientation: 'auto' | 'portrait' | 'landscape'): DocumentSchema {
+function createContinuousSchemaWithPrint(orientation: 'auto' | 'portrait' | 'landscape'): DocumentSchema {
   return {
-    ...createStackSchema(),
+    ...createContinuousSchema(),
     page: {
-      ...createStackSchema().page,
+      ...createContinuousSchema().page,
       print: {
         orientation,
       },
@@ -140,8 +143,8 @@ afterEach(() => {
 })
 
 describe('viewer runtime print policy', () => {
-  it('defaults pageSizeMode to driver for stack-mode browser printing', () => {
-    const policy = resolvePrintPolicy({ schema: createStackSchema() })
+  it('defaults pageSizeMode to driver for continuous-mode browser printing', () => {
+    const policy = resolvePrintPolicy({ schema: createContinuousSchema() })
 
     expect(policy.pageSizeMode).toBe('driver')
     expect(policy.orientation).toBe('auto')
@@ -149,21 +152,45 @@ describe('viewer runtime print policy', () => {
     expect(policy.pageBreakBehavior).toEqual({ after: 'auto', inside: 'auto' })
   })
 
-  it('uses configured orientation for stack-mode driver printing', () => {
-    const policy = resolvePrintPolicy({ schema: createStackSchemaWithPrint('landscape') })
+  it('migrates legacy stack schemas before viewer validation', async () => {
+    const container = document.createElement('div')
+    const viewer = createViewer({ container })
+
+    await viewer.open({
+      schema: {
+        ...createContinuousSchema(),
+        page: {
+          mode: 'stack',
+          width: 80,
+          height: 100,
+        },
+      } as never,
+      data: createData(),
+    })
+
+    expect(viewer.schema?.page).toMatchObject({
+      mode: 'continuous',
+      layout: { strategy: 'stack-flow', flowAxis: 'y' },
+      pagination: { strategy: 'none' },
+      reflow: { strategy: 'flow-y', preserveTrailingGap: true },
+    })
+  })
+
+  it('uses configured orientation for continuous-mode driver printing', () => {
+    const policy = resolvePrintPolicy({ schema: createContinuousSchemaWithPrint('landscape') })
 
     expect(policy.pageSizeMode).toBe('driver')
     expect(policy.orientation).toBe('landscape')
     expect(policy.sheetSize).toBeUndefined()
   })
 
-  it('does not force a fixed page size for stack-mode browser printing', async () => {
+  it('does not force a fixed page size for continuous-mode browser printing', async () => {
     const container = document.createElement('div')
     const viewer = createViewer({ container })
     const pageHeight = 100
 
     await viewer.open({
-      schema: createStackSchema(pageHeight),
+      schema: createContinuousSchema(pageHeight),
       data: createData(),
     })
 
@@ -178,17 +205,17 @@ describe('viewer runtime print policy', () => {
   })
 
   it('writes driver orientation into @page only when configured', () => {
-    const printStyles = buildPrintStyles(resolvePrintPolicy({ schema: createStackSchemaWithPrint('landscape') }))
+    const printStyles = buildPrintStyles(resolvePrintPolicy({ schema: createContinuousSchemaWithPrint('landscape') }))
 
     expect(printStyles).toContain('size: landscape;')
   })
 
-  it('uses cached rendered stack metrics when stack printing requests a fixed page size', async () => {
+  it('uses cached rendered continuous metrics when continuous printing requests a fixed page size', async () => {
     const container = document.createElement('div')
     const viewer = createViewer({ container })
 
     await viewer.open({
-      schema: createStackSchema(),
+      schema: createContinuousSchema(),
       data: createData(),
     })
 
@@ -326,14 +353,14 @@ describe('viewer runtime print behavior', () => {
     expect(container.hasAttribute('data-ei-printing')).toBe(false)
   })
 
-  it('rejects stack pdf printing when rendered metrics are missing', async () => {
+  it('rejects continuous pdf printing when rendered metrics are missing', async () => {
     const container = document.createElement('div')
     const diagnostics: string[] = []
     const viewer = createViewer({ container })
     const printSpy = mockWindowPrint()
 
     await viewer.open({
-      schema: createStackSchema(),
+      schema: createContinuousSchema(),
       data: createData(),
       onDiagnostic(event) {
         diagnostics.push(event.code)

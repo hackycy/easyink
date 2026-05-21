@@ -5,16 +5,16 @@
 export type UnitType = 'mm' | 'pt' | 'px' | 'inch'
 
 /**
- * Page layout modes.
+ * Page medium types.
  * - fixed: Contracts, reports, multi-page documents with fixed page height
- * - stack: Continuous paper, receipts, long document flow
+ * - continuous: Continuous paper, receipts, long document flow
  * - label: Label paper, multi-column batch printing
  */
-export type PageMode = 'fixed' | 'stack' | 'label' | 'continuous'
+export type PageMode = 'fixed' | 'label' | 'continuous'
 
 /**
- * Orthogonal page-layout model kinds.
- * These are the structured strategy dimensions derived from legacy page modes.
+ * Orthogonal page medium model kinds.
+ * Layout, pagination, and reflow are modeled separately from this dimension.
  */
 export type PageModelKind = 'paged-paper' | 'continuous-paper' | 'label-sheet'
 

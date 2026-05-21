@@ -1,9 +1,10 @@
 import type { LayoutStrategyKind, PageMode, PageModelKind, PaginationStrategyKind, ReflowStrategyKind, UnitType } from '@easyink/shared'
 import type { DocumentLayoutConfig, DocumentSchema, DocumentSchemaInput, GuideSchema, PageModelConfig, PageSchema, PaginationConfig, ReflowConfig } from './types'
 import { DEFAULT_PAGE_HEIGHT_MM, DEFAULT_PAGE_WIDTH_MM, isObject, SCHEMA_VERSION } from '@easyink/shared'
+import { migrateLegacyStackPageMode } from './compat'
 
 const UNIT_TYPES = new Set<UnitType>(['mm', 'pt', 'px', 'inch'])
-const PAGE_MODES = new Set<PageMode>(['fixed', 'stack', 'label', 'continuous'])
+const PAGE_MODES = new Set<PageMode>(['fixed', 'label', 'continuous'])
 const PAGE_MODEL_KINDS = new Set<PageModelKind>(['paged-paper', 'continuous-paper', 'label-sheet'])
 const LAYOUT_STRATEGIES = new Set<LayoutStrategyKind>(['absolute', 'stack-flow', 'region-flow'])
 const PAGINATION_STRATEGIES = new Set<PaginationStrategyKind>(['none', 'fixed-sheets', 'auto-sheets', 'label-sheets'])
@@ -46,16 +47,21 @@ function normalizePage(input: unknown, fallback: PageSchema): PageSchema {
   if (!isObject(input))
     return fallback
 
+  const isLegacyStack = input.mode === 'stack'
+  const mode = isLegacyStack
+    ? 'continuous'
+    : isPageMode(input.mode) ? input.mode : fallback.mode
+
   return normalizePageLayers({
     ...fallback,
     ...input,
-    mode: isPageMode(input.mode) ? input.mode : fallback.mode,
+    mode,
     width: typeof input.width === 'number' && input.width > 0 ? input.width : fallback.width,
     height: typeof input.height === 'number' && input.height > 0 ? input.height : fallback.height,
-    pageModel: isObject(input.pageModel) ? input.pageModel as unknown as PageSchema['pageModel'] : undefined,
-    layout: isObject(input.layout) ? input.layout as unknown as PageSchema['layout'] : undefined,
-    pagination: isObject(input.pagination) ? input.pagination as unknown as PageSchema['pagination'] : undefined,
-    reflow: isObject(input.reflow) ? input.reflow as unknown as PageSchema['reflow'] : undefined,
+    pageModel: !isLegacyStack && isObject(input.pageModel) ? input.pageModel as unknown as PageSchema['pageModel'] : undefined,
+    layout: !isLegacyStack && isObject(input.layout) ? input.layout as unknown as PageSchema['layout'] : undefined,
+    pagination: !isLegacyStack && isObject(input.pagination) ? input.pagination as unknown as PageSchema['pagination'] : undefined,
+    reflow: !isLegacyStack && isObject(input.reflow) ? input.reflow as unknown as PageSchema['reflow'] : undefined,
   })
 }
 
@@ -87,7 +93,7 @@ function createModeLayerDefaults(page: Pick<PageSchema, 'mode' | 'width' | 'heig
     }
   }
 
-  if (page.mode === 'stack' || page.mode === 'continuous') {
+  if (page.mode === 'continuous') {
     return {
       pageModel: { kind: 'continuous-paper', paper },
       layout: { strategy: 'stack-flow', flowAxis: 'y' },
@@ -188,14 +194,16 @@ export function normalizeDocumentSchema(input?: DocumentSchemaInput | null): Doc
   if (!isObject(input))
     return fallback
 
+  const migrated = migrateLegacyStackPageMode(input)
+
   return {
     ...fallback,
-    ...input,
-    version: typeof input.version === 'string' && input.version.length > 0 ? input.version : fallback.version,
-    unit: isUnitType(input.unit) ? input.unit : fallback.unit,
-    page: normalizePage(input.page, fallback.page),
-    guides: normalizeGuides(input.guides, fallback.guides),
-    elements: Array.isArray(input.elements) ? input.elements : fallback.elements,
-    groups: Array.isArray(input.groups) ? input.groups : undefined,
+    ...migrated,
+    version: typeof migrated.version === 'string' && migrated.version.length > 0 ? migrated.version : fallback.version,
+    unit: isUnitType(migrated.unit) ? migrated.unit : fallback.unit,
+    page: normalizePage(migrated.page, fallback.page),
+    guides: normalizeGuides(migrated.guides, fallback.guides),
+    elements: Array.isArray(migrated.elements) ? migrated.elements : fallback.elements,
+    groups: Array.isArray(migrated.groups) ? migrated.groups : undefined,
   }
 }

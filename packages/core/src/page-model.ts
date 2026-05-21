@@ -29,7 +29,7 @@ export function resolvePageModel(schema: DocumentSchema | PageSchema): ResolvedP
 function inferPageModelKind(page: PageSchema): PageModelKind {
   if (page.mode === 'label')
     return 'label-sheet'
-  if (page.mode === 'stack' || page.mode === 'continuous')
+  if (page.mode === 'continuous')
     return 'continuous-paper'
   return 'paged-paper'
 }

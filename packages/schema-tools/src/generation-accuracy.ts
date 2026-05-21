@@ -67,6 +67,21 @@ function applyPagePlan(
       ;(page[field] as typeof expected[typeof field]) = expected[field]
     }
   }
+  if (expected.mode === 'continuous') {
+    page.layout = { strategy: 'stack-flow', flowAxis: 'y' }
+    page.pagination = { strategy: 'none' }
+    page.reflow = { strategy: 'flow-y', preserveTrailingGap: true, collisionPolicy: 'diagnose' }
+  }
+  else if (expected.mode === 'label') {
+    page.layout = { strategy: 'absolute' }
+    page.pagination = { strategy: 'label-sheets' }
+    page.reflow = { strategy: 'measure-only' }
+  }
+  else if (expected.mode === 'fixed') {
+    page.layout = { strategy: 'absolute' }
+    page.pagination = { strategy: 'fixed-sheets', pageCount: page.pages }
+    page.reflow = { strategy: 'measure-only' }
+  }
 }
 
 function repairElements(
