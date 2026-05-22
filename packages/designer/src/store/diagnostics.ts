@@ -31,6 +31,7 @@ export type DiagnosticSource
     | 'gesture'
     | 'debug-panel'
     | 'material-extension'
+    | 'designer-interaction'
 
 export interface Diagnostic {
   /** Monotonic id assigned at push time. Useful for v-for keys / dedup. */

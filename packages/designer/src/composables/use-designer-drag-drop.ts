@@ -126,7 +126,7 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
   let globalListenersAttached = false
   let pointerListenersAttached = false
   let suppressNextClick = false
-  let clearClickSuppressionTimer: ReturnType<typeof window.setTimeout> | null = null
+  let clearClickSuppressionTimer: number | null = null
 
   function startMaterialPointerDrag(event: PointerEvent, entry: MaterialCatalogEntry) {
     if (!canStartPointerDrag(event))

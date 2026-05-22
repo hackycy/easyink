@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import type { Component } from 'vue'
-import type { PropSchema } from '../types'
+import type { DesignerImagePickRequest, DesignerImagePickResult, PropSchema } from '../types'
 import { EiBorderToggle, EiCheckbox, EiColorPicker, EiFontPicker, EiInput, EiNumberInput, EiSelect, EiSwitch, EiTextarea } from '@easyink/ui'
 import { computed } from 'vue'
+import ImageSourceEditor from './ImageSourceEditor.vue'
 
 const props = defineProps<{
   schema: PropSchema
@@ -12,11 +13,13 @@ const props = defineProps<{
   t: (key: string) => string
   /** Custom editor component map: key = schema.editor value */
   customEditors?: Record<string, Component>
+  imagePickRequest?: DesignerImagePickRequest
 }>()
 
 const emit = defineEmits<{
   preview: [key: string, value: unknown]
   change: [key: string, value: unknown]
+  imagePick: [key: string, result: DesignerImagePickResult]
 }>()
 
 const label = computed(() => props.t(props.schema.label))
@@ -79,6 +82,10 @@ function onCommit(val: unknown) {
     return
   emit('change', props.schema.key, resolved)
 }
+
+function onImagePicked(result: DesignerImagePickResult) {
+  emit('imagePick', props.schema.key, result)
+}
 </script>
 
 <template>
@@ -99,8 +106,27 @@ function onCommit(val: unknown) {
 
     <!-- string / image -->
     <template v-else>
+      <ImageSourceEditor
+        v-if="schema.type === 'image'"
+        :label="label"
+        :model-value="(value as string) ?? ''"
+        :placeholder="placeholder"
+        :disabled="disabled"
+        :pick-request="imagePickRequest ?? {
+          id: 'designer.imageMaterial.pickImage',
+          source: 'image-material',
+          currentSrc: (value as string) ?? '',
+          accept: ['image/*'],
+          payload: { propKey: schema.key },
+        }"
+        :t="t"
+        @update:model-value="onPreview"
+        @commit="onCommit"
+        @pick="onImagePicked"
+      />
+
       <EiInput
-        v-if="schema.type === 'string' || schema.type === 'image'"
+        v-else-if="schema.type === 'string'"
         :label="label"
         :model-value="(value as string) ?? ''"
         :placeholder="placeholder"

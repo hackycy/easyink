@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import type { PagePropertyDescriptor } from '../page-properties'
+import type { DesignerImagePickResult } from '../types'
 import { EiColorPicker, EiFontPicker, EiInput, EiNumberInput, EiSelect, EiSwitch } from '@easyink/ui'
 import { computed } from 'vue'
+import { useDesignerStore } from '../composables'
+import ImageSourceEditor from './ImageSourceEditor.vue'
 
 const props = defineProps<{
   descriptor: PagePropertyDescriptor
@@ -14,6 +17,8 @@ const emit = defineEmits<{
   preview: [descriptor: PagePropertyDescriptor, value: unknown]
   change: [descriptor: PagePropertyDescriptor, value: unknown]
 }>()
+
+const store = useDesignerStore()
 
 const label = computed(() => props.t(props.descriptor.label))
 
@@ -32,6 +37,10 @@ function onPreview(val: unknown) {
 
 function onCommit(val: unknown) {
   emit('change', props.descriptor, val)
+}
+
+function onImagePicked(result: DesignerImagePickResult) {
+  onCommit(result.src)
 }
 </script>
 
@@ -86,13 +95,23 @@ function onCommit(val: unknown) {
       @commit="onCommit"
     />
 
-    <!-- asset (image url input) -->
-    <EiInput
+    <!-- asset (image source) -->
+    <ImageSourceEditor
       v-else-if="descriptor.editor === 'asset'"
       :label="label"
       :model-value="(value as string) ?? ''"
+      :pick-request="{
+        id: 'designer.pageBackground.pickImage',
+        source: 'page-background',
+        title: label,
+        currentSrc: (value as string) ?? '',
+        accept: ['image/*'],
+        payload: { page: store.schema.page },
+      }"
+      :t="t"
       @update:model-value="onPreview"
       @commit="onCommit"
+      @pick="onImagePicked"
     />
 
     <!-- font -->

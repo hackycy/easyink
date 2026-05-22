@@ -1,4 +1,4 @@
-import type { DesignerConfirmRequest, DesignerInteractionProvider } from '../types'
+import type { DesignerConfirmRequest, DesignerImagePickRequest, DesignerImagePickResult, DesignerInteractionProvider } from '../types'
 
 /**
  * Central user-interaction bridge for designer-owned workflows.
@@ -13,6 +13,10 @@ export class DesignerInteractionService {
 
   setProvider(provider?: DesignerInteractionProvider): void {
     this._provider = provider
+  }
+
+  hasHostImagePicker(): boolean {
+    return typeof this._provider?.pickImage === 'function'
   }
 
   setFallbackProvider(provider?: DesignerInteractionProvider): void {
@@ -35,5 +39,13 @@ export class DesignerInteractionService {
     catch {
       return false
     }
+  }
+
+  async pickImage<TPayload = unknown>(request: DesignerImagePickRequest<TPayload>): Promise<DesignerImagePickResult | null> {
+    const provider = this._provider?.pickImage ? this._provider : this._fallbackProvider
+    if (!provider?.pickImage)
+      return null
+
+    return await provider.pickImage(request)
   }
 }

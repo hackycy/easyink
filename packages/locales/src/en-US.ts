@@ -82,6 +82,11 @@ const enUS: LocaleMessages = {
       showDivider: 'Show Divider',
       hideDivider: 'Hide Divider',
     },
+    action: {
+      pickImage: 'Pick Image',
+      clearImage: 'Clear Image',
+      imagePreview: 'Image Preview',
+    },
     property: {
       position: 'Position',
       size: 'Size',

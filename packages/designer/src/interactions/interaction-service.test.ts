@@ -63,4 +63,57 @@ describe('designer interaction service', () => {
     service.clearFallbackProvider(first)
     await expect(service.confirm({ id: 'cleared', message: 'Cleared?' })).resolves.toBe(false)
   })
+
+  it('delegates image picker requests to host provider and preserves cancel', async () => {
+    const pickImage = vi.fn(() => ({ src: 'https://example.com/a.png', alt: 'A' }))
+    const service = new DesignerInteractionService()
+    service.setProvider({ pickImage })
+
+    await expect(service.pickImage({
+      id: 'designer.imageMaterial.pickImage',
+      source: 'image-material',
+      currentSrc: '',
+      accept: ['image/*'],
+      payload: { nodeId: 'img_1' },
+    })).resolves.toEqual({ src: 'https://example.com/a.png', alt: 'A' })
+    expect(pickImage).toHaveBeenCalledTimes(1)
+
+    service.setProvider({ pickImage: () => null })
+    await expect(service.pickImage({
+      id: 'designer.imageMaterial.pickImage',
+      source: 'image-material',
+    })).resolves.toBeNull()
+  })
+
+  it('uses the fallback image picker only when no host picker is registered', async () => {
+    const fallbackPickImage = vi.fn(() => ({ src: 'data:image/png;base64,fallback' }))
+    const hostPickImage = vi.fn(() => ({ src: 'https://example.com/host.png' }))
+    const service = new DesignerInteractionService()
+    service.setFallbackProvider({ pickImage: fallbackPickImage })
+
+    await expect(
+      service.pickImage({ id: 'fallback', source: 'image-material' }),
+    ).resolves.toEqual({ src: 'data:image/png;base64,fallback' })
+
+    service.setProvider({ pickImage: hostPickImage })
+    await expect(
+      service.pickImage({ id: 'host', source: 'image-material' }),
+    ).resolves.toEqual({ src: 'https://example.com/host.png' })
+    expect(fallbackPickImage).toHaveBeenCalledTimes(1)
+    expect(hostPickImage).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns null when no image picker is available and propagates picker errors', async () => {
+    const service = new DesignerInteractionService()
+
+    await expect(service.pickImage({ id: 'missing', source: 'image-material' })).resolves.toBeNull()
+
+    service.setProvider({
+      pickImage: () => {
+        throw new Error('boom')
+      },
+    })
+
+    await expect(service.pickImage({ id: 'error', source: 'image-material' })).rejects.toThrow('boom')
+  })
 })

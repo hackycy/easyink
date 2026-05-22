@@ -26,6 +26,7 @@ const props = defineProps<{
   setupStore?: StoreSetup
   contributions?: Contribution[]
   interactionProvider?: DesignerInteractionProvider
+  enableImagePickerFallback?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -162,7 +163,7 @@ onBeforeUnmount(() => {
     <TopBarB />
     <CanvasWorkspace />
     <StatusBar />
-    <DesignerConfirmHost />
+    <DesignerConfirmHost :enable-image-picker-fallback="enableImagePickerFallback !== false" />
 
     <!-- Overlay root for contribution-registered panels (Vue Teleport target). -->
     <div id="ei-overlay-root" class="ei-designer__overlay-root" />

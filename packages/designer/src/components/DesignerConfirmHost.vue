@@ -1,8 +1,13 @@
 <script setup lang="ts">
-import type { DesignerConfirmRequest, DesignerInteractionProvider } from '../types'
+import type { DesignerConfirmRequest, DesignerImagePickRequest, DesignerInteractionProvider } from '../types'
 import { EiDialog } from '@easyink/ui'
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { useDesignerStore } from '../composables'
+import { pickImageWithFileInput } from '../interactions/image-picker-fallback'
+
+const props = defineProps<{
+  enableImagePickerFallback?: boolean
+}>()
 
 interface PendingConfirm {
   request: DesignerConfirmRequest
@@ -25,7 +30,22 @@ function confirm(request: DesignerConfirmRequest): Promise<boolean> {
   })
 }
 
-const provider: DesignerInteractionProvider = { confirm }
+function pickImage(request: DesignerImagePickRequest) {
+  if (props.enableImagePickerFallback === false)
+    return Promise.resolve(null)
+  return pickImageWithFileInput(request, {
+    onDiagnostic(diagnostic) {
+      store.diagnostics.push({
+        source: 'designer-interaction',
+        severity: diagnostic.severity,
+        message: diagnostic.message,
+        detail: diagnostic.detail,
+      })
+    },
+  })
+}
+
+const provider: DesignerInteractionProvider = { confirm, pickImage }
 store.interactions.setFallbackProvider(provider)
 
 function settle(value: boolean) {

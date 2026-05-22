@@ -82,6 +82,11 @@ const zhCN: LocaleMessages = {
       showDivider: '显示分隔线',
       hideDivider: '隐藏分隔线',
     },
+    action: {
+      pickImage: '选择图片',
+      clearImage: '清空图片',
+      imagePreview: '图片预览',
+    },
     property: {
       position: '位置',
       size: '尺寸',
