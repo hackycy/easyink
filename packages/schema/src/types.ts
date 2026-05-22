@@ -32,7 +32,7 @@ export interface DocumentSchema {
   compat?: BenchmarkCompatState
 }
 
-export type DocumentSchemaInput = Partial<Omit<DocumentSchema, 'page' | 'guides' | 'elements' | 'groups'>> & {
+export type DocumentSchemaInput = Partial<Omit<DocumentSchema, 'version' | 'page' | 'guides' | 'elements' | 'groups'>> & {
   page?: Partial<PageSchema>
   guides?: Partial<GuideSchema>
   elements?: MaterialNode[]

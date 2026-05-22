@@ -14,7 +14,6 @@ function makeNode(id: string, x: number, y: number, w = 50, h = 50): MaterialNod
 
 function makeStore(elements: MaterialNode[], selected: string[]): DesignerStore {
   const store = new DesignerStore({
-    version: '1.0.0',
     unit: 'px',
     page: { mode: 'fixed', width: 1000, height: 1000 },
     guides: { x: [], y: [] },

@@ -8,7 +8,6 @@ import { createGeometryService } from './geometry-service'
 
 function makeStore(): DesignerStore {
   return new DesignerStore({
-    version: '1.0.0',
     unit: 'px',
     page: { mode: 'fixed', width: 1000, height: 1000 },
     guides: { x: [], y: [] },

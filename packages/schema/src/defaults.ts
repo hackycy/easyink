@@ -190,7 +190,7 @@ export function normalizeDocumentSchema(input?: DocumentSchemaInput | null): Doc
   return {
     ...fallback,
     ...migrated,
-    version: typeof migrated.version === 'string' && migrated.version.length > 0 ? migrated.version : fallback.version,
+    version: fallback.version,
     unit: isUnitType(migrated.unit) ? migrated.unit : fallback.unit,
     page: normalizePage(migrated.page, fallback.page),
     guides: normalizeGuides(migrated.guides, fallback.guides),

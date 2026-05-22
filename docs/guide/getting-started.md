@@ -32,7 +32,6 @@ import '@easyink/designer/index.css'
 
 // 文档模板 -- 设计器的唯一数据源
 const schema = ref({
-  version: '1.0.0',
   unit: 'mm',
   page: {
     mode: 'fixed',

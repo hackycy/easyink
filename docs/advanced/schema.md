@@ -2,7 +2,7 @@
 
 Schema 是 EasyInk 的核心数据结构，描述文档的完整结构。它是设计器和预览器之间的唯一桥梁。
 
-对宿主应用而言，传入设计器的是 `DocumentSchemaInput`：所有顶层字段都可以省略，`page` 和 `guides` 的必填子字段也可以省略。框架会通过 `normalizeDocumentSchema()` 补齐默认值，进入 `DesignerStore`、Viewer、自动保存和导出链路后的内部模型始终是完整 `DocumentSchema`。
+对宿主应用而言，传入设计器的是 `DocumentSchemaInput`：所有顶层字段都可以省略，`page` 和 `guides` 的必填子字段也可以省略。`version` 不属于宿主可指定输入，框架会通过 `normalizeDocumentSchema()` 补齐默认值并写入当前 Schema 版本；进入 `DesignerStore`、Viewer、自动保存和导出链路后的内部模型始终是完整 `DocumentSchema`。
 
 ```ts
 import { normalizeDocumentSchema } from '@easyink/schema'
@@ -39,7 +39,7 @@ interface DocumentSchema {
 `DocumentSchemaInput` 是给宿主传入设计器或调用归一化函数时使用的宽松输入类型：
 
 ```ts
-type DocumentSchemaInput = Partial<Omit<DocumentSchema, 'page' | 'guides' | 'elements' | 'groups'>> & {
+type DocumentSchemaInput = Partial<Omit<DocumentSchema, 'version' | 'page' | 'guides' | 'elements' | 'groups'>> & {
   page?: Partial<PageSchema>
   guides?: Partial<GuideSchema>
   elements?: MaterialNode[]
@@ -47,7 +47,7 @@ type DocumentSchemaInput = Partial<Omit<DocumentSchema, 'page' | 'guides' | 'ele
 }
 ```
 
-默认值来自 `createDefaultSchema()`：A4、`mm`、`fixed`、空辅助线、空元素列表。已有合法字段会保留，缺失或非法的必需字段会回退到默认值。
+默认值来自 `createDefaultSchema()`：当前 Schema 版本、A4、`mm`、`fixed`、空辅助线、空元素列表。已有合法字段会保留，缺失或非法的必需字段会回退到默认值。持久化 JSON 中的 `version` 用于 `deserializeSchema()` 和迁移注册表判断兼容性，不应通过 `DocumentSchemaInput` 手动指定。
 
 ## DocumentMeta
 
@@ -323,7 +323,7 @@ deserializeSchema(json)
 isCompatibleVersion(version)
 ```
 
-`validateSchemaIssues()` 校验的是完整内部 Schema。宿主传入的宽松输入应该先经过 `normalizeDocumentSchema()`，否则缺少 `version`、`unit`、`page`、`guides` 或 `elements` 都会被视为校验问题。
+`validateSchemaIssues()` 校验的是完整内部 Schema。宿主传入的宽松输入应该先经过 `normalizeDocumentSchema()`，否则缺少 `version`、`unit`、`page`、`guides` 或 `elements` 都会被视为校验问题。旧模板或外部持久化 JSON 应通过 `deserializeSchema()` 或 `MigrationRegistry` 处理，由这些入口读取并解释 `version`。
 
 ## 最小 Schema 示例
 

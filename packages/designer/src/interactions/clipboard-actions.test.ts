@@ -9,7 +9,6 @@ function makeNode(id: string, x = 0, y = 0): MaterialNode {
 
 function makeStore(elements: MaterialNode[], selected: string[] = []): DesignerStore {
   const store = new DesignerStore({
-    version: '1.0.0',
     unit: 'px',
     page: { mode: 'fixed', width: 1000, height: 1000 },
     guides: { x: [], y: [] },
