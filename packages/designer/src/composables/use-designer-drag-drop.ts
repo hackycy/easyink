@@ -65,13 +65,14 @@ export interface DesignerDragDropController {
 export const DESIGNER_DRAG_DROP_KEY: InjectionKey<DesignerDragDropController> = Symbol('easyinkDesignerDragDrop')
 
 type DragSession
-  = | { kind: 'material', entry: MaterialCatalogEntry, dragData: string }
+  = | { kind: 'material', entry: MaterialCatalogEntry, dragData: string, node: MaterialNode | null }
     | { kind: 'datasource', data: DatasourceFieldDragData }
 
 type PointerSession
   = | {
     kind: 'material'
     entry: MaterialCatalogEntry
+    node: MaterialNode | null
     pointerId: number
     captureTarget: Element | null
     startX: number
@@ -137,6 +138,7 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
     pointerSession = {
       kind: 'material',
       entry,
+      node: createMaterialNodeDraft(entry),
       pointerId: event.pointerId,
       captureTarget,
       startX: event.clientX,
@@ -179,7 +181,7 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
     event.dataTransfer.effectAllowed = 'copy'
     event.dataTransfer.setData(MATERIAL_DRAG_MIME, dragData)
     setEmptyDragImage(event.dataTransfer)
-    session = { kind: 'material', entry, dragData }
+    session = { kind: 'material', entry, dragData, node: createMaterialNodeDraft(entry) }
     attachGlobalListeners()
     updateDragPosition(event)
   }
@@ -280,7 +282,7 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
         return
       const entry = resolveCatalogEntry(dragData)
       if (entry)
-        session = { kind: 'material', entry, dragData }
+        session = { kind: 'material', entry, dragData, node: createMaterialNodeDraft(entry) }
       return
     }
     if (transfer.types.includes(DATASOURCE_DRAG_MIME)) {
@@ -296,7 +298,7 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
       return { kind: 'cancel', reason: 'no-session' }
 
     if (activeSession.kind === 'material')
-      return resolveMaterialIntent(activeSession.entry, clientX, clientY)
+      return resolveMaterialIntent(activeSession.node, clientX, clientY)
 
     const target = resolveDatasourceDropTarget(clientX, clientY)
     const bindIntent = resolveDatasourceBindIntent(activeSession.data, target)
@@ -305,13 +307,10 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
     return resolveDatasourceFloatingIntent(activeSession.data, clientX, clientY)
   }
 
-  function resolveMaterialIntent(entry: MaterialCatalogEntry, clientX: number, clientY: number): DragIntent {
-    const definition = ctx.store.getMaterial(entry.materialType)
-    if (!definition)
+  function resolveMaterialIntent(node: MaterialNode | null, clientX: number, clientY: number): DragIntent {
+    if (!node)
       return { kind: 'cancel', reason: 'unknown-material' }
 
-    const createNode = entry.createDefaultNode ?? definition.createDefaultNode
-    const node = createNode({}, ctx.store.schema.unit)
     const target = resolveMaterialDropTarget(clientX, clientY, node.width, node.height)
     node.x = target.rect.x
     node.y = target.rect.y
@@ -799,6 +798,14 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
     return ctx.store.getCatalog().find(entry => entry.dragData === dragData || entry.materialType === dragData)
   }
 
+  function createMaterialNodeDraft(entry: MaterialCatalogEntry): MaterialNode | null {
+    const definition = ctx.store.getMaterial(entry.materialType)
+    if (!definition)
+      return null
+    const createNode = entry.createDefaultNode ?? definition.createDefaultNode
+    return createNode({}, ctx.store.schema.unit)
+  }
+
   function createBinding(data: DatasourceFieldDragData): BindingRef {
     return {
       sourceId: data.sourceId,
@@ -984,6 +991,7 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
         kind: 'material',
         entry: current.entry,
         dragData: current.entry.dragData ?? current.entry.materialType,
+        node: current.node,
       }
     }
     return { kind: 'datasource', data: current.data }

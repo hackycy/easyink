@@ -94,7 +94,11 @@ function dispatchPointerEvent(type: string, clientX: number, clientY: number, po
   window.dispatchEvent(event)
 }
 
-function makeStore(elements: MaterialNode[] = [], extension?: unknown) {
+function makeStore(
+  elements: MaterialNode[] = [],
+  extension?: unknown,
+  options: { textCreateDefaultNode?: (partial?: Partial<MaterialNode>) => MaterialNode } = {},
+) {
   const textDef = {
     type: 'text',
     name: 'Text',
@@ -102,7 +106,7 @@ function makeStore(elements: MaterialNode[] = [], extension?: unknown) {
     category: 'basic',
     capabilities: { bindable: true },
     props: [],
-    createDefaultNode: (partial?: Partial<MaterialNode>) => createTextNode(partial),
+    createDefaultNode: options.textCreateDefaultNode ?? ((partial?: Partial<MaterialNode>) => createTextNode(partial)),
   }
   const lineDef = {
     type: 'line',
@@ -329,6 +333,33 @@ describe('useDesignerDragDrop', () => {
     expect(elements[0]?.y).toBe(105)
     expect(elements[1]?.x).toBe(210)
     expect(elements[1]?.y).toBe(255)
+    drag.cleanup()
+  })
+
+  it('creates the material node draft once per pointer drag instead of on every move', () => {
+    const pageEl = makePageEl()
+    const elements: MaterialNode[] = []
+    const createDefaultNode = vi.fn((partial?: Partial<MaterialNode>) => createTextNode(partial))
+    const store = makeStore(elements, undefined, { textCreateDefaultNode: createDefaultNode })
+    const drag = useDesignerDragDrop({
+      store: store as never,
+      getPageEl: () => pageEl,
+    })
+
+    drag.startMaterialPointerDrag(makePointerDown(10, 10), {
+      id: 'quick-text',
+      group: 'quick',
+      label: 'Text',
+      icon: {},
+      materialType: 'text',
+      priority: 'quick',
+    })
+    dispatchPointerEvent('pointermove', 80, 90)
+    dispatchPointerEvent('pointermove', 120, 130)
+    dispatchPointerEvent('pointerup', 160, 170)
+
+    expect(createDefaultNode).toHaveBeenCalledTimes(1)
+    expect(elements).toHaveLength(1)
     drag.cleanup()
   })
 
