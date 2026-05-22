@@ -66,6 +66,54 @@ describe('page background descriptors', () => {
   })
 })
 
+describe('page paper descriptors', () => {
+  it('keeps pageModel paper in sync when width and height are edited', () => {
+    const document = makeDocument({
+      width: 80,
+      height: 120,
+      pageModel: {
+        kind: 'paged-paper',
+        paper: { width: 80, height: 120 },
+      },
+    })
+
+    const widthDescriptor = PAGE_PROPERTY_DESCRIPTORS.find(descriptor => descriptor.id === 'width')
+    const heightDescriptor = PAGE_PROPERTY_DESCRIPTORS.find(descriptor => descriptor.id === 'height')
+
+    const widthPatch = widthDescriptor?.normalize?.(90, { document })
+    const heightPatch = heightDescriptor?.normalize?.(150, { document })
+
+    expect(widthPatch?.page).toMatchObject({
+      width: 90,
+      pageModel: { kind: 'paged-paper', paper: { width: 90, height: 120 } },
+    })
+    expect(heightPatch?.page).toMatchObject({
+      height: 150,
+      pageModel: { kind: 'paged-paper', paper: { width: 80, height: 150 } },
+    })
+  })
+
+  it('keeps pageModel paper in sync when selecting a preset', () => {
+    const document = makeDocument({
+      width: 80,
+      height: 120,
+      pageModel: {
+        kind: 'paged-paper',
+        paper: { width: 80, height: 120 },
+      },
+    })
+
+    const descriptor = PAGE_PROPERTY_DESCRIPTORS.find(descriptor => descriptor.id === 'paperPreset')
+    const patch = descriptor?.normalize?.('A4', { document })
+
+    expect(patch?.page).toMatchObject({
+      width: 210,
+      height: 297,
+      pageModel: { kind: 'paged-paper', paper: { width: 210, height: 297 } },
+    })
+  })
+})
+
 function visibleDescriptorIds(pagePatch: Partial<PageSchema>) {
   const document = makeDocument(pagePatch)
   return filterVisible(PAGE_PROPERTY_DESCRIPTORS, {

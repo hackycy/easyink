@@ -98,10 +98,12 @@ const PAPER_PRESET_DESCRIPTOR: PagePropertyDescriptor = {
     ...PAPER_PRESETS.map(p => ({ label: p.name, value: p.name })),
     { label: 'designer.page.custom', value: 'custom' },
   ],
-  normalize(value) {
+  normalize(value, ctx) {
     const preset = PAPER_PRESETS.find(p => p.name === value)
     if (preset) {
-      return { page: { width: preset.width, height: preset.height } }
+      return {
+        page: syncPageDimensions(ctx.document.page, { width: preset.width, height: preset.height }),
+      }
     }
     // "custom" -- do nothing, user edits width/height directly
     return {}
@@ -119,6 +121,11 @@ const WIDTH_DESCRIPTOR: PagePropertyDescriptor = {
   min: 10,
   max: 2000,
   step: 1,
+  normalize(value, ctx) {
+    return {
+      page: syncPageDimensions(ctx.document.page, { width: Number(value) }),
+    }
+  },
 }
 
 const HEIGHT_DESCRIPTOR: PagePropertyDescriptor = {
@@ -132,6 +139,11 @@ const HEIGHT_DESCRIPTOR: PagePropertyDescriptor = {
   min: 10,
   max: 5000,
   step: 1,
+  normalize(value, ctx) {
+    return {
+      page: syncPageDimensions(ctx.document.page, { height: Number(value) }),
+    }
+  },
 }
 
 const RADIUS_DESCRIPTOR: PagePropertyDescriptor = {
@@ -481,6 +493,29 @@ function createModePresetPatch(mode: PageSchema['mode'], page: PageSchema): Part
     mode,
     pageModel: { kind: 'paged-paper', paper: { width: page.width, height: page.height } },
     pagination: { strategy: 'fixed-sheets', pageCount: page.pages },
+  }
+}
+
+function syncPageDimensions(page: PageSchema, updates: { width?: number, height?: number }): Partial<PageSchema> {
+  return {
+    ...updates,
+    pageModel: syncPageModelPaper(page, updates),
+  }
+}
+
+function syncPageModelPaper(page: PageSchema, updates: { width?: number, height?: number }): PageSchema['pageModel'] {
+  const current = page.pageModel ?? {
+    kind: page.mode === 'continuous' ? 'continuous-paper' : 'paged-paper',
+    paper: { width: page.width, height: page.height },
+  }
+
+  return {
+    ...current,
+    paper: {
+      ...current.paper,
+      ...(updates.width != null ? { width: updates.width } : {}),
+      ...(updates.height != null ? { height: updates.height } : {}),
+    },
   }
 }
 
