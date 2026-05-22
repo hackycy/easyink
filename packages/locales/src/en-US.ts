@@ -386,6 +386,7 @@ const enUS: LocaleMessages = {
       field: 'Field',
       path: 'Path',
       sourceConflict: 'Data source mismatch',
+      collectionMismatch: 'Collection path mismatch',
       bindColumn: 'Bind to column',
     },
     flowRow: {

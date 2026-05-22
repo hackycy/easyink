@@ -76,7 +76,8 @@ export function canResizeTableDataRow(node: TableNode, rowIndex: number): boolea
 
 function buildHtml(node: MaterialNode, unit: UnitType, context: MaterialExtensionContext): string {
   if (!isTableNode(node)) {
-    return `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#999;font-size:11px">table-data</div>`
+    const label = escapeHtml(context.t('designer.toolbar.dataTable'))
+    return `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#999;font-size:11px">${label}</div>`
   }
 
   const p = getNodeProps<TableDataProps>(node)

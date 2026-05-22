@@ -386,6 +386,7 @@ const zhCN: LocaleMessages = {
       field: '字段',
       path: '路径',
       sourceConflict: '数据源不匹配',
+      collectionMismatch: '集合路径不匹配',
       bindColumn: '绑定到列',
     },
     flowRow: {
