@@ -37,6 +37,7 @@ const preferenceProvider = createLocalStoragePreferenceProvider()
 | `autoSave` | `TemplateAutoSaveOptions` | 否 | 自动保存配置 |
 | `contributions` | `Contribution[]` | 否 | 贡献扩展列表（如 AI 面板） |
 | `setupStore` | `(store: DesignerStore) => void` | 否 | Store 初始化回调，用于注册自定义物料 |
+| `interactionProvider` | `DesignerInteractionProvider` | 否 | 宿主接管确认等用户交互流程 |
 
 `schema` 是宿主输入，不要求传完整对象。传 `undefined`、`{}` 或只传部分字段时，设计器会在进入 `DesignerStore` 前归一化为完整 `DocumentSchema`，例如自动补齐 `version`、`unit`、`page`、`guides` 和 `elements`。`update:schema`、自动保存和 store 内部读到的始终是完整 Schema。
 
@@ -118,6 +119,29 @@ const preferenceProvider = {
 这同样属于高级自定义能力。真正要落地时，关键不只是 `activate()` 怎么写，而是命令、面板、工具栏和宿主业务之间的职责划分。
 
 完整教程见 [进阶 / 贡献扩展开发](/advanced/contributions)。
+
+## 用户交互接管
+
+设计器内部的破坏性操作不会直接调用浏览器原生确认框。宿主可以通过 `interactionProvider` 接管确认流程，例如接入业务弹窗、权限校验或审计记录。
+
+```ts
+const interactionProvider = {
+  async confirm(request) {
+    // request.id 可用于区分 designer.template.clear、
+    // designer.page.deleteWithElements 等场景。
+    return await openBusinessConfirmDialog(request)
+  },
+}
+```
+
+```vue
+<EasyInkDesigner
+  v-model:schema="schema"
+  :interaction-provider="interactionProvider"
+/>
+```
+
+未传 `interactionProvider` 时，Designer 会使用内置 `EiDialog` 作为默认确认界面；传入后以宿主实现为准。
 
 ## Store 访问
 

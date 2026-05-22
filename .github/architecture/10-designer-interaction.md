@@ -408,6 +408,26 @@ get propertyOverlay(): PropertyPanelOverlay | null
 
 这样可以避免把业务权限模型、模板管理策略和设计器工作台状态混在一起。
 
+### 10.6.1 用户确认由宿主交互桥接层接管
+
+Designer 内部允许存在默认确认 UI，但破坏性功能代码不得直接调用浏览器原生确认 API，也不得把某个弹窗实现写死到操作链路里。所有需要用户确认的设计器动作统一走：
+
+```ts
+interface DesignerInteractionProvider {
+  confirm?: (request: DesignerConfirmRequest) => boolean | Promise<boolean>
+}
+```
+
+`EasyInkDesigner.interactionProvider` 是宿主接管入口；未传入时，Designer shell 可以使用内置 `EiDialog` 作为 fallback。功能代码只提交稳定的 `request.id`、本地化文案和 payload，由宿主决定弹窗、权限、审计、二次验证或直接放行。
+
+当前内置确认场景：
+
+- `designer.template.new`：顶部工具栏新建模板，会重置当前 schema
+- `designer.template.clear`：顶部工具栏清空模板
+- `designer.page.deleteWithElements`：固定分页删除含元素页面
+
+Contribution 也通过 `ctx.confirm()` 复用同一桥接层。Contribution、组件、composable 和 material designer UI 都不应各自调用浏览器原生确认 API。
+
 ## 10.7 深度编辑（Deep Editing）
 
 深度编辑不是表格专属能力。所有复杂物料（table/chart/container）通过同一套扩展协议进入深度编辑模式。编辑行为的正式协议已迁移至 [22 章 编辑行为架构](./22-editing-behavior.md)，本节保留设计器侧顶层交互模型和物料级示例。

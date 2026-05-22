@@ -15,13 +15,14 @@ EasyInk 的公共 API 按包组织。以下是各包的主要导出。
 | `useWorkbenchPersistence` | Function | 工作台偏好持久化 composable |
 | `registerMaterialBundle` | Function | 注册物料包 |
 | `ContributionRegistry` | Class | 贡献注册表 |
+| `DesignerInteractionService` | Class | 设计器用户交互桥接服务 |
 | `TemplateHistoryManager` | Class | 模板历史管理 |
 | `createLocalStoragePreferenceProvider` | Function | localStorage 偏好持久化 |
 | `createDefaultWorkbenchState` | Function | 创建默认工作台状态 |
 | `createDefaultSaveBranchMenu` | Function | 创建默认保存分支菜单状态 |
 | `tableSectionFilter` | Function | 表格属性面板过滤器 |
 
-类型导出：`DocumentSchema`, `DocumentSchemaInput`, `MaterialNode`, `DataSourceDescriptor`, `Contribution`, `ContributionContext`, `Command`, `PanelDescriptor`, `ToolbarActionDescriptor`, `DesignerMaterialBundle`, `DesignerMaterialRegistration`, `DesignerCatalogRegistration`, `MaterialCapabilities`, `TemplateAutoSaveOptions`, `PreferenceProvider`, `PersistableWorkbenchState`, `LocaleMessages`
+类型导出：`DocumentSchema`, `DocumentSchemaInput`, `MaterialNode`, `DataSourceDescriptor`, `Contribution`, `ContributionContext`, `Command`, `PanelDescriptor`, `ToolbarActionDescriptor`, `DesignerConfirmRequest`, `DesignerConfirmSeverity`, `DesignerInteractionProvider`, `DesignerMaterialBundle`, `DesignerMaterialRegistration`, `DesignerCatalogRegistration`, `MaterialCapabilities`, `TemplateAutoSaveOptions`, `PreferenceProvider`, `PersistableWorkbenchState`, `LocaleMessages`
 
 ## @easyink/viewer
 

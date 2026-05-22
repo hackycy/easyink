@@ -2,7 +2,7 @@
 import type { DataSourceDescriptor } from '@easyink/datasource'
 import type { DocumentSchema, DocumentSchemaInput } from '@easyink/schema'
 import type { Contribution } from '../contributions'
-import type { LocaleMessages, PreferenceProvider, StatusBarState, StoreSetup, TemplateAutoSaveOptions } from '../types'
+import type { DesignerInteractionProvider, LocaleMessages, PreferenceProvider, StatusBarState, StoreSetup, TemplateAutoSaveOptions } from '../types'
 import { builtinDesignerMaterialBundle } from '@easyink/builtin'
 import { onBeforeUnmount, onMounted, provide, reactive, ref, shallowRef, watch } from 'vue'
 import { provideDesignerStore } from '../composables'
@@ -13,6 +13,7 @@ import { CONTRIBUTION_REGISTRY_KEY } from '../contributions/injection'
 import { registerMaterialBundle } from '../materials/registry'
 import { DesignerStore } from '../store/designer-store'
 import CanvasWorkspace from './CanvasWorkspace.vue'
+import DesignerConfirmHost from './DesignerConfirmHost.vue'
 import StatusBar from './StatusBar.vue'
 import TopBarB from './TopBarB.vue'
 
@@ -24,6 +25,7 @@ const props = defineProps<{
   locale?: LocaleMessages
   setupStore?: StoreSetup
   contributions?: Contribution[]
+  interactionProvider?: DesignerInteractionProvider
 }>()
 
 const emit = defineEmits<{
@@ -31,7 +33,7 @@ const emit = defineEmits<{
 }>()
 
 const designerRootRef = ref<HTMLElement | null>(null)
-const store = reactive(new DesignerStore(props.schema, props.preferenceProvider)) as DesignerStore
+const store = reactive(new DesignerStore(props.schema, props.preferenceProvider, props.interactionProvider)) as DesignerStore
 if (store.schema !== props.schema) {
   emit('update:schema', store.schema)
 }
@@ -97,6 +99,10 @@ watch(() => props.locale, (newLocale) => {
     store.setLocale(newLocale)
 })
 
+watch(() => props.interactionProvider, (newProvider) => {
+  store.interactions.setProvider(newProvider)
+})
+
 function getFocusStateFromTarget(target: EventTarget | null): StatusBarState['focus'] {
   if (!(target instanceof Element))
     return 'none'
@@ -156,6 +162,7 @@ onBeforeUnmount(() => {
     <TopBarB />
     <CanvasWorkspace />
     <StatusBar />
+    <DesignerConfirmHost />
 
     <!-- Overlay root for contribution-registered panels (Vue Teleport target). -->
     <div id="ei-overlay-root" class="ei-designer__overlay-root" />

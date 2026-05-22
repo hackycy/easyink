@@ -110,7 +110,7 @@ EasyInk 明确区分三种状态：
 - `WindowSystem`：数据源、属性、结构树、历史、动画、调试、资源、暂存等可拖拽窗口
 - `StatusBar`：焦点、网络、暂存、自动保存等工作台状态反馈
 - `RegionNavigator`：多编辑区或区段型文档的区域切换与区块选择入口
-- `Host Integration Surface`：`#topbar` 插槽与 `useDesignerStore()`，供宿主接入自定义模板选择、预览和保存动作
+- `Host Integration Surface`：`#topbar` 插槽、`useDesignerStore()` 与 `interactionProvider`，供宿主接入自定义模板选择、预览、保存动作和破坏性操作确认
 
 ## 4.4 对外 API
 
@@ -122,6 +122,7 @@ EasyInk 明确区分三种状态：
     v-model:schema="schema"
     :data-sources="dataSources"
     :preference-provider="preferenceProvider"
+    :interaction-provider="interactionProvider"
   >
     <template #topbar>
       <button @click="openPreview">

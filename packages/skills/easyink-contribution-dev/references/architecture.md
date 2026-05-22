@@ -18,10 +18,11 @@ Use material development instead when the feature needs a new `MaterialNode`, `c
 
 ```text
 host app
-  -> <EasyInkDesigner :contributions="[...]" />
+  -> <EasyInkDesigner :contributions="[...]"
+                      :interaction-provider="..." />
   -> ContributionRegistry.activate(contributions, store)
   -> contribution.activate(ctx)
-  -> registerPanel / registerToolbarAction / registerCommand / onDiagnostic
+  -> registerPanel / registerToolbarAction / registerCommand / confirm / onDiagnostic
   -> Designer renders toolbar actions and Teleport panels
   -> user interactions call commands or panel handlers
   -> Designer unmount disposes contribution resources
@@ -44,10 +45,17 @@ Contribution state should not be stored in Schema unless it is genuinely templat
 - `registerToolbarAction(action)`: add a top toolbar action.
 - `registerCommand(command)`: add a reusable command handler.
 - `executeCommand(id, args?)`: invoke a registered command.
+- `confirm(request)`: ask the host-controlled `interactionProvider` for user consent before destructive actions.
 - `onDiagnostic(fn)`: subscribe to Designer diagnostics.
 - `onDispose(fn)`: register cleanup for unmount, remount, and HMR.
 
 `ContributionRegistry` uses shallow reactive descriptor lists and `markRaw()` so Vue component definitions are not proxied.
+
+## User Confirmation Boundary
+
+Contribution code should not call browser-native confirmation APIs or bind itself to a specific dialog implementation. Use `ctx.confirm()` with a stable request id and a payload that describes the affected template state. The host decides whether to show a modal, run a permission check, write an audit event, or return immediately.
+
+Designer-owned destructive actions use the same bridge, with ids such as `designer.template.new`, `designer.template.clear`, and `designer.page.deleteWithElements`.
 
 ## Lifecycle
 

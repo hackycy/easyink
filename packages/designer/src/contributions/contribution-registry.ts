@@ -31,6 +31,7 @@ export class ContributionRegistry {
       registerCommand: command => this.registerCommand(command as Command),
       executeCommand: <TArgs = unknown, TResult = unknown>(id: string, args?: TArgs) =>
         this.executeCommand<TArgs, TResult>(id, args, ctx),
+      confirm: request => store.interactions.confirm(request),
       onDispose: fn => this._disposers.push(fn),
       onDiagnostic: (fn) => {
         const unsubscribe = store.diagnostics.subscribe(fn)

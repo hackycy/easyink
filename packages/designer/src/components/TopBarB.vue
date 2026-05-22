@@ -191,15 +191,39 @@ function openToolbarManager() {
 }
 
 // ─── New / Clear ─────────────────────────────────────────────
-function handleNewTemplate() {
+async function handleNewTemplate() {
+  const confirmed = await store.interactions.confirm({
+    id: 'designer.template.new',
+    title: store.t('designer.toolbar.newTemplate'),
+    message: store.t('designer.message.confirmNewTemplate'),
+    severity: 'warning',
+    confirmText: store.t('designer.dialog.confirm'),
+    cancelText: store.t('designer.dialog.cancel'),
+    payload: {
+      elementCount: store.schema.elements.length,
+      draft: store.workbench.status.draft,
+    },
+  })
+  if (!confirmed)
+    return
   store.setSchema(createDefaultSchema())
 }
 
-function handleClear() {
+async function handleClear() {
   if (store.schema.elements.length === 0)
     return
-  // eslint-disable-next-line no-alert
-  if (!window.confirm(store.t('designer.message.confirmClear')))
+  const confirmed = await store.interactions.confirm({
+    id: 'designer.template.clear',
+    title: store.t('designer.toolbar.clear'),
+    message: store.t('designer.message.confirmClear'),
+    severity: 'danger',
+    confirmText: store.t('designer.dialog.confirm'),
+    cancelText: store.t('designer.dialog.cancel'),
+    payload: {
+      elementCount: store.schema.elements.length,
+    },
+  })
+  if (!confirmed)
     return
   store.setSchema(createDefaultSchema())
 }

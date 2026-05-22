@@ -30,6 +30,10 @@ const zhCN: LocaleMessages = {
       save: '保存',
       newTemplate: '新建',
       clear: '清空',
+      addPage: '新增页面',
+      deletePage: '删除页面',
+      previousPage: '上一页',
+      nextPage: '下一页',
       print: '打印',
       exportFile: '导出',
       importFile: '导入',
@@ -544,8 +548,10 @@ const zhCN: LocaleMessages = {
       overflow: '内容溢出',
     },
     message: {
+      confirmNewTemplate: '确定要新建模板吗？当前模板内容将被重置。',
       confirmClear: '确定要清空模板吗？此操作不可撤销。',
       confirmDelete: '确定要删除选中元素吗？',
+      confirmDeletePageWithElements: '确定要删除该页面及页面上的所有元素吗？',
     },
   },
 }

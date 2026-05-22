@@ -30,6 +30,10 @@ const enUS: LocaleMessages = {
       save: 'Save',
       newTemplate: 'New',
       clear: 'Clear',
+      addPage: 'Add page',
+      deletePage: 'Delete page',
+      previousPage: 'Previous page',
+      nextPage: 'Next page',
       print: 'Print',
       exportFile: 'Export',
       importFile: 'Import',
@@ -544,8 +548,10 @@ const enUS: LocaleMessages = {
       overflow: 'Content overflow',
     },
     message: {
+      confirmNewTemplate: 'Create a new template? The current template will be reset.',
       confirmClear: 'Are you sure you want to clear the template? This action cannot be undone.',
       confirmDelete: 'Are you sure you want to delete the selected element?',
+      confirmDeletePageWithElements: 'Delete this page and all elements on it?',
     },
   },
 }

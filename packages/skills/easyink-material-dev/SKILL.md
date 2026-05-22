@@ -79,6 +79,7 @@ Load only the reference needed for the current task:
 - Runtime-height materials must declare a Designer control policy and must not expose any outer or internal path that mutates runtime-owned height.
 - Preview-only rows remain outside Schema. If a runtime-height material shows Designer preview rows, keep them display-only.
 - Material-local toolbars should be compact command toolbars, not identity badges.
+- Material Designer UI must not call browser-native confirmation APIs. Destructive host UX belongs behind Designer's interaction bridge or a Contribution-level workflow.
 - Repeated/page-aware overlays are post-pagination page overlays. They must not affect flow, document height, page count, output sheets, or source-node editability.
 - For table-like deep editing, decoration visibility and behavior execution must share the same delegate rules for row/column resize affordances.
 - Add or reuse locale keys for anything user-visible in Designer UI, including property labels and history labels.

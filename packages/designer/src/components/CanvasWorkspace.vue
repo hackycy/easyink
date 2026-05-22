@@ -493,13 +493,13 @@ function resolveRepeatSourcePage(node: ReturnType<typeof store.getElements>[numb
     }
 }
 
-function hasElementsOnPage(page: EditorSurfacePagePlan): boolean {
+function countElementsOnPage(page: EditorSurfacePagePlan): number {
   const start = page.yOffset
   const end = page.yOffset + page.height
-  return store.schema.elements.some((node) => {
+  return store.schema.elements.filter((node) => {
     const bottom = node.y + node.height
     return node.y < end && bottom > start
-  })
+  }).length
 }
 
 function addSheetAfter(page: EditorSurfacePagePlan) {
@@ -509,12 +509,27 @@ function addSheetAfter(page: EditorSurfacePagePlan) {
   store.markDraftModified()
 }
 
-function removeSheet(page: EditorSurfacePagePlan) {
+async function removeSheet(page: EditorSurfacePagePlan) {
   if (!canDeletePage(page))
     return
-  // eslint-disable-next-line no-alert
-  if (hasElementsOnPage(page) && !window.confirm('Delete this page and all elements on it?'))
-    return
+  const affectedElementCount = countElementsOnPage(page)
+  if (affectedElementCount > 0) {
+    const confirmed = await store.interactions.confirm({
+      id: 'designer.page.deleteWithElements',
+      title: store.t('designer.toolbar.deletePage'),
+      message: store.t('designer.message.confirmDeletePageWithElements'),
+      severity: 'danger',
+      confirmText: store.t('designer.dialog.confirm'),
+      cancelText: store.t('designer.dialog.cancel'),
+      payload: {
+        pageIndex: page.index,
+        pageNumber: page.index + 1,
+        affectedElementCount,
+      },
+    })
+    if (!confirmed)
+      return
+  }
   store.commands.execute(new RemovePageSheetCommand(store.schema, editorSurfacePlan.value, page.index))
   store.markDraftModified()
 }
@@ -751,7 +766,7 @@ onUnmounted(() => {
           <button
             class="ei-page-toolbar__button"
             type="button"
-            title="Add page"
+            :title="store.t('designer.toolbar.addPage')"
             @click="addSheetAfter(item.page)"
           >
             <EiIcon :icon="IconNewTemplate" :size="15" />
@@ -759,7 +774,7 @@ onUnmounted(() => {
           <button
             class="ei-page-toolbar__button"
             type="button"
-            title="Delete page"
+            :title="store.t('designer.toolbar.deletePage')"
             :disabled="!canDeletePage(item.page)"
             @click="removeSheet(item.page)"
           >
@@ -768,7 +783,7 @@ onUnmounted(() => {
           <button
             class="ei-page-toolbar__button"
             type="button"
-            title="Previous page"
+            :title="store.t('designer.toolbar.previousPage')"
             :disabled="item.page.index <= 0"
             @click="scrollByPage(item.page, -1)"
           >
@@ -777,7 +792,7 @@ onUnmounted(() => {
           <button
             class="ei-page-toolbar__button"
             type="button"
-            title="Next page"
+            :title="store.t('designer.toolbar.nextPage')"
             :disabled="item.page.index >= editorSurfacePlan.pages.length - 1"
             @click="scrollByPage(item.page, 1)"
           >

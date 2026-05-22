@@ -1,6 +1,7 @@
 import type { Component } from 'vue'
 import type { DesignerStore } from '../store/designer-store'
 import type { Diagnostic } from '../store/diagnostics'
+import type { DesignerConfirmRequest } from '../types'
 
 /**
  * Descriptor for a panel contributed to the designer overlay layer.
@@ -49,6 +50,8 @@ export interface ContributionContext {
   registerToolbarAction: (action: ToolbarActionDescriptor) => void
   registerCommand: <TArgs, TResult>(command: Command<TArgs, TResult>) => void
   executeCommand: <TArgs = unknown, TResult = unknown>(id: string, args?: TArgs) => Promise<TResult>
+  /** Ask the host-controlled interaction layer for a user confirmation. */
+  confirm: <TPayload = unknown>(request: DesignerConfirmRequest<TPayload>) => Promise<boolean>
   /** Register a cleanup callback fired when the designer unmounts. */
   onDispose: (fn: () => void) => void
   /**

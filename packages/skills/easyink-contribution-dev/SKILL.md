@@ -14,9 +14,10 @@ If the request adds or changes a visual element that must be saved in `schema.el
 Start with the local repo, not memory. Prefer these files:
 
 - `docs/advanced/contributions.md` for the public Contribution contract and examples.
-- `docs/designer/index.md` for `EasyInkDesigner` props, especially `contributions`.
+- `docs/designer/index.md` for `EasyInkDesigner` props, especially `contributions` and `interactionProvider`.
 - `packages/designer/src/contributions/types.ts` for `Contribution`, `ContributionContext`, `PanelDescriptor`, `ToolbarActionDescriptor`, and `Command`.
 - `packages/designer/src/contributions/contribution-registry.ts` for lifecycle, duplicate-id behavior, command dispatch, and disposal.
+- `packages/designer/src/interactions/interaction-service.ts` for the host-controlled confirmation bridge.
 - `packages/designer/src/components/EasyInkDesigner.vue` for activation, panel Teleport mounting, and unmount disposal.
 - `packages/designer/src/components/TopBarB.vue` for toolbar action rendering and click dispatch.
 - `packages/ai/src/contribution.ts` for a real contribution with command, toolbar action, panel state, and async Vue panel loading.
@@ -31,9 +32,10 @@ Start with the local repo, not memory. Prefer these files:
 6. Use `registerPanel()` for long-lived UI such as AI assistants, review inspectors, asset browsers, and audit panels. Pass Vue components and stable props; prefer `defineAsyncComponent()` for heavier panels.
 7. Keep host-owned state in the contribution closure, Vue component state, or a host service. Do not serialize panel visibility, temporary review results, external subscriptions, or business workflow state into `MaterialNode` or `DocumentSchema`.
 8. Use `ctx.store` through public Designer store APIs. Read schema, selection, diagnostics, and workbench state as needed, but avoid depending on private internals.
-9. Use `ctx.onDiagnostic()` for observability bridges, toasts, logs, Sentry/APM, or review panels that need recoverable Designer errors.
-10. Register every external listener, timer, subscription, or temporary resource with `ctx.onDispose()` cleanup.
-11. Test activation, duplicate id behavior when relevant, command execution, toolbar click wiring, panel props/state, diagnostic unsubscribe, and unmount cleanup.
+9. Use `ctx.confirm()` for contribution-owned destructive actions that need user consent. Let the host `interactionProvider` decide the UI, permission, audit, or bypass behavior.
+10. Use `ctx.onDiagnostic()` for observability bridges, toasts, logs, Sentry/APM, or review panels that need recoverable Designer errors.
+11. Register every external listener, timer, subscription, or temporary resource with `ctx.onDispose()` cleanup.
+12. Test activation, duplicate id behavior when relevant, command execution, toolbar click wiring, panel props/state, confirmation branching, diagnostic unsubscribe, and unmount cleanup.
 
 ## Reference Files
 
@@ -49,6 +51,7 @@ Load only the reference needed for the current task:
 - Do not store transient contribution state in Schema. Schema is for template content; contribution state belongs to the contribution, panel, host, or preference layer.
 - Do not register panels, toolbar actions, or commands outside `activate(ctx)`.
 - Do not put complex business logic directly in a toolbar `onClick`; call a command or panel-owned action.
+- Do not call browser-native confirmation APIs from a contribution. Use `ctx.confirm()` so host apps keep control of destructive UX.
 - Do not ignore returned unsubscriptions. Register cleanup with `ctx.onDispose()`.
 - Keep descriptor ids unique and stable. Duplicate panel, toolbar action, or command ids throw.
 - Prefer locale keys for visible labels and tooltips when the contribution is shipped as part of EasyInk.

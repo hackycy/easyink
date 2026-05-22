@@ -1,11 +1,12 @@
 import type { EphemeralPanelDef, PropertyPanelOverlay } from '@easyink/core'
 import type { DocumentSchema, DocumentSchemaInput, ElementGroupSchema, MaterialNode } from '@easyink/schema'
-import type { LocaleMessages, MaterialCatalogEntry, MaterialDefinition, MaterialDesignerExtension, MaterialExtensionFactory, PreferenceProvider, SnapLine, StatusBarState } from '../types'
+import type { DesignerInteractionProvider, LocaleMessages, MaterialCatalogEntry, MaterialDefinition, MaterialDesignerExtension, MaterialExtensionFactory, PreferenceProvider, SnapLine, StatusBarState } from '../types'
 import { CommandManager, FontManager, SelectionModel } from '@easyink/core'
 import { DataSourceRegistry } from '@easyink/datasource'
 import { normalizeDocumentSchema } from '@easyink/schema'
 import { markRaw } from 'vue'
 import { EditingSessionManager } from '../editing/editing-session-manager'
+import { DesignerInteractionService } from '../interactions/interaction-service'
 import { createMaterialExtensionContext } from '../materials/extension-context'
 import { DiagnosticsChannel } from './diagnostics'
 import { applyPersistedWorkbench, loadWorkbenchPreferences } from './preference-persistence'
@@ -23,6 +24,7 @@ export class DesignerStore {
   readonly commands = new CommandManager()
   readonly selection = new SelectionModel()
   readonly dataSourceRegistry = new DataSourceRegistry()
+  readonly interactions = markRaw(new DesignerInteractionService())
 
   /**
    * Designer-level diagnostics channel. Recoverable errors (rejected
@@ -68,8 +70,9 @@ export class DesignerStore {
   // ─── Locale ───────────────────────────────────────────────────
   private _locale?: LocaleMessages
 
-  constructor(schema?: DocumentSchemaInput, preferenceProvider?: PreferenceProvider) {
+  constructor(schema?: DocumentSchemaInput, preferenceProvider?: PreferenceProvider, interactionProvider?: DesignerInteractionProvider) {
     this._schema = normalizeDocumentSchema(schema)
+    this.interactions.setProvider(interactionProvider)
     // Mark editing session manager as raw: it owns Vue refs internally and
     // must not be auto-unwrapped by the surrounding reactive(store) proxy.
     this.editingSession = markRaw(new EditingSessionManager(this))
@@ -353,6 +356,8 @@ export class DesignerStore {
     this.clipboard = []
     this._propertyOverlay = null
     this._ephemeralPanel = null
+    this.interactions.setProvider(undefined)
+    this.interactions.setFallbackProvider(undefined)
     this.editingSession.exit()
   }
 }

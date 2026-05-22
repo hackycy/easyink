@@ -115,6 +115,31 @@ ctx.onDispose(unsubscribe)
 
 The registry also auto-disposes diagnostic subscriptions, but explicitly registering returned cleanup keeps intent obvious and works for non-diagnostic subscriptions too.
 
+## Confirmation Pattern
+
+Use `ctx.confirm()` for contribution-owned destructive actions. Keep the request id stable, localize visible text, and pass payload details that help the host make policy decisions.
+
+```ts
+ctx.registerCommand({
+  id: 'review.applyFix',
+  async handler(args, ctx) {
+    const confirmed = await ctx.confirm({
+      id: 'review.applyFix',
+      title: ctx.store.t('designer.dialog.confirm'),
+      message: 'Apply this fix to the current template?',
+      severity: 'warning',
+      payload: args,
+    })
+
+    if (confirmed) {
+      // mutate template through store or commands here
+    }
+  },
+})
+```
+
+Do not call browser-native confirmation APIs from contributions. Host apps may use `interactionProvider` to show their own dialog, run permission checks, add audit metadata, or cancel actions globally.
+
 ## Store Usage
 
 Good contribution store usage:
@@ -143,6 +168,7 @@ Choose the smallest useful surface:
 - `executeCommand()` invokes the command with args and context.
 - Toolbar `onClick` calls the expected command.
 - Panel props reflect closure state and update callbacks work.
+- Confirmation-dependent commands call `ctx.confirm()` and branch on true/false.
 - Diagnostic subscriptions receive entries and unsubscribe on dispose.
 - `dispose()` clears descriptors and resets contribution state.
 

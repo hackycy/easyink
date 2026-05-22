@@ -10,6 +10,7 @@ export type {
   PanelDescriptor,
   ToolbarActionDescriptor,
 } from './contributions'
+export { DesignerInteractionService } from './interactions'
 export { registerMaterialBundle, tableSectionFilter } from './materials/registry'
 export type {
   DesignerCatalogRegistration,

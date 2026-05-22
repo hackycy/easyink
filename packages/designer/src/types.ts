@@ -1,7 +1,7 @@
 import type { PropSchema } from '@easyink/core'
 import type { DataSourceDescriptor } from '@easyink/datasource'
 import type { LocaleMessages } from '@easyink/locales'
-import type { DocumentSchema, MaterialNode } from '@easyink/schema'
+import type { DocumentSchema, DocumentSchemaInput, MaterialNode } from '@easyink/schema'
 import type { MaterialCategory } from '@easyink/shared'
 import type { Component } from 'vue'
 
@@ -253,15 +253,36 @@ export interface SaveBranchMenuState {
   pendingAction?: 'edit-template-data' | 'export-file' | 'import-file'
 }
 
+// ─── User Interaction Bridge ──────────────────────────────────────
+
+export type DesignerConfirmSeverity = 'info' | 'warning' | 'danger'
+
+export interface DesignerConfirmRequest<TPayload = unknown> {
+  /** Stable action id, e.g. "designer.template.clear". */
+  id: string
+  title?: string
+  message: string
+  description?: string
+  severity?: DesignerConfirmSeverity
+  confirmText?: string
+  cancelText?: string
+  payload?: TPayload
+}
+
+export interface DesignerInteractionProvider {
+  confirm?: <TPayload = unknown>(request: DesignerConfirmRequest<TPayload>) => boolean | Promise<boolean>
+}
+
 // ─── Designer Props ────────────────────────────────────────────────
 
 export interface EasyInkDesignerProps {
-  schema: DocumentSchema
+  schema?: DocumentSchemaInput
   dataSources?: DataSourceDescriptor[]
   preferenceProvider?: PreferenceProvider
   autoSave?: TemplateAutoSaveOptions
   locale?: LocaleMessages
   setupStore?: StoreSetup
+  interactionProvider?: DesignerInteractionProvider
 }
 
 export interface TemplateAutoSaveOptions {

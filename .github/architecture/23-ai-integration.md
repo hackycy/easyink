@@ -46,7 +46,9 @@ interface ContributionContext {
   registerToolbarAction: (action: ToolbarActionDescriptor) => void
   registerCommand: <A, R>(command: Command<A, R>) => void
   executeCommand: <A, R>(id: string, args?: A) => Promise<R>
+  confirm: (request: DesignerConfirmRequest) => Promise<boolean>
   onDispose: (fn: () => void) => void
+  onDiagnostic: (fn: (entry: Diagnostic) => void) => () => void
 }
 
 interface PanelDescriptor {
@@ -69,6 +71,7 @@ interface ToolbarActionDescriptor {
 - **Designer 单向消费**：`EasyInkDesigner` 接收 `contributions: Contribution[]` prop，挂载时调用 `ContributionRegistry.activate()`，卸载时统一 `dispose()`
 - **响应式 props**：`PanelDescriptor.props` 可使用 getter 在 `v-bind` 取值时触发 Vue 依赖追踪，从而把 ai 包内部的 ref 状态（如 panel open）暴露给面板组件
 - **命令通道**：toolbar action 通过 `executeCommand` 与 panel 状态解耦，避免在面板未挂载前的 ref 访问
+- **用户确认通道**：Contribution 内的破坏性动作通过 `ctx.confirm()` 进入宿主 `interactionProvider`，不得直接调用浏览器原生确认 API
 - **Schema 扩展存储**：designer `store.setExtension(key, value)` / `store.getExtension(key)` 把 contribution 私有状态写入 `schema.extensions[key]`，key 命名由 contribution 自治（例如 ai 用 `'ai'`），designer 不再硬编码 `extensions.mcp`
 
 ### 23.2.3 注入

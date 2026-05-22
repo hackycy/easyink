@@ -20,6 +20,7 @@
 - `viewer` 导出链路按运行时适配器建模，lazy load 第三方导出依赖
 - 物料通过 `DatasourceDropHandler` 协议自定义拖拽绑定行为
 - 设计器坐标术语统一为 `screen / document / local / viewport`，其中 `document` 是 Schema 单位坐标；交互层坐标换算统一经由 GeometryService
+- 破坏性用户确认通过 `DesignerInteractionProvider` 交给宿主接管，designer 内部功能与 Contribution 不直接调用浏览器原生确认 API
 
 ## 目录
 

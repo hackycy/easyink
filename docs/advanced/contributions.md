@@ -113,12 +113,15 @@ interface ContributionContext {
   registerToolbarAction: (action: ToolbarActionDescriptor) => void
   registerCommand: <TArgs, TResult>(command: Command<TArgs, TResult>) => void
   executeCommand: <TArgs = unknown, TResult = unknown>(id: string, args?: TArgs) => Promise<TResult>
+  confirm: (request: DesignerConfirmRequest) => Promise<boolean>
   onDispose: (fn: () => void) => void
   onDiagnostic: (fn: (entry: Diagnostic) => void) => () => void
 }
 ```
 
 接下来不要死记字段。更重要的是知道这些能力该怎么分层使用。
+
+`confirm()` 用于破坏性或不可自动恢复的动作。它会走宿主传给 `EasyInkDesigner` 的 `interactionProvider`，因此 Contribution 不应该自己调用浏览器原生确认 API 或直接绑定某个弹窗实现。
 
 ## `registerPanel()` 适合做什么
 
