@@ -16,4 +16,14 @@ describe('createDefaultWorkbenchState', () => {
     expect(state.snap.enabled).toBe(true)
     expect(state.windows.some(window => window.id === 'materials')).toBe(true)
   })
+
+  it('places default workspace windows on left and right side rails', () => {
+    const state = createDefaultWorkbenchState()
+
+    expect(state.windows.find(window => window.id === 'materials')).toMatchObject({ x: 32, y: 32 })
+    expect(state.windows.find(window => window.id === 'datasource')).toMatchObject({ x: 32, y: 470 })
+    expect(state.windows.find(window => window.id === 'properties')).toMatchObject({ x: -1, y: 32 })
+    expect(state.windows.find(window => window.id === 'structure-tree')).toMatchObject({ x: -1, y: 548 })
+    expect(state.windows.find(window => window.id === 'history')).toMatchObject({ x: 32, y: 470 })
+  })
 })
