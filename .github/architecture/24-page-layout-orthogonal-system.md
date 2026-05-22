@@ -5,7 +5,7 @@
 ## 24.1 当前结论
 
 - 合法 `PageMode` 只有 `fixed | continuous`。
-- 历史 `stack` 只是 legacy input，由 `@easyink/schema` 的 compat 入口迁移为 `continuous + continuous-paper + stack-flow + flow-y + none`。
+- 连续纸模板使用 `continuous + continuous-paper + stack-flow + flow-y + none`。
 - `page.pageModel / page.layout / page.reflow / page.pagination` 是策略语义来源，`normalizeDocumentSchema()` 会按 `mode` 补齐默认层。
 - Viewer 运行期通过 `runLayoutPipeline()` 与 `runPagination()` 生成 `LayoutDocument` 和 `OutputPagePlan[]`；`page-planner.ts` 只保留兼容 facade。
 - Designer 编辑态通过 `EditorSurfacePlan` 描述纸张和连续画布，不直接复用 Viewer 的输出页计划。
@@ -76,7 +76,7 @@ interface MaterialNode {
 | `fixed` | `paged-paper` | `absolute` | `measure-only` | `fixed-sheets` |
 | `continuous` | `continuous-paper` | `stack-flow` | `flow-y` | `none` |
 
-兼容规则：如果输入 `page.mode === 'stack'`，`migrateLegacyStackPageMode()` 会在 validation 和 normalize 前改写为连续纸组合。新代码、AI 生成、属性面板和 schema validation 都不得重新把 `stack` 当成合法页面类型。
+Schema validation 只接受已声明的页面介质；`normalizeDocumentSchema()` 对 loose input 的未知 mode 只按默认模式回退，不做历史输入改写。
 
 ## 24.4 Viewer 管线
 
@@ -165,7 +165,7 @@ Designer 不直接读取 `page.width/page.height` 渲染唯一页面，而是消
 
 ## 24.8 代码边界
 
-- `@easyink/schema`：类型、默认层、validation、legacy `stack` 迁移。
+- `@easyink/schema`：类型、默认层、validation，以及 invalid mode 的 loose input 回退。
 - `@easyink/core`：页面模型解析、回流、分页、编辑表面计划、页面增删命令。
 - `@easyink/viewer`：编排字体、绑定、测量、layout/pagination、page overlay 复制、渲染、打印策略。
 - `@easyink/designer`：消费 `EditorSurfacePlan` 做编辑态投影、重复预览和页面工具栏。

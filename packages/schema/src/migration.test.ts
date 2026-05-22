@@ -79,30 +79,33 @@ describe('migrationRegistry', () => {
     expect(result).toBe(schema)
   })
 
-  it('migrates current-version legacy stack mode before validation', () => {
+  it('rejects current-version schemas with an unknown mode', () => {
     const reg = new MigrationRegistry()
-    const result = reg.migrate({
-      version: '1.0.0',
-      unit: 'mm',
-      page: {
-        mode: 'stack',
-        width: 80,
-        height: 200,
-        layout: { strategy: 'absolute' },
-        pagination: { strategy: 'fixed-sheets', pageCount: 2 },
-        reflow: { strategy: 'measure-only' },
-      },
-      guides: { x: [], y: [] },
-      elements: [],
-    })
+    let error: unknown
 
-    expect(result.page).toMatchObject({
-      mode: 'continuous',
-      pageModel: { kind: 'continuous-paper', paper: { width: 80, height: 200 } },
-      layout: { strategy: 'stack-flow', flowAxis: 'y' },
-      pagination: { strategy: 'none' },
-      reflow: { strategy: 'flow-y', preserveTrailingGap: true, collisionPolicy: 'diagnose' },
-    })
+    try {
+      reg.migrate({
+        version: '1.0.0',
+        unit: 'mm',
+        page: {
+          mode: 'book',
+          width: 80,
+          height: 200,
+        },
+        guides: { x: [], y: [] },
+        elements: [],
+      })
+    }
+    catch (caught) {
+      error = caught
+    }
+
+    expect(error).toBeInstanceOf(SchemaMigrationError)
+    expect((error as SchemaMigrationError).issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: 'page.mode' }),
+      ]),
+    )
   })
 
   it('migrate throws structured issues when migration output is invalid', () => {

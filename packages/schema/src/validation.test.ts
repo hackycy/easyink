@@ -156,23 +156,30 @@ describe('validateSchema', () => {
     )
   })
 
-  it('deserializeSchema migrates legacy stack mode before validating', () => {
-    const schema = deserializeSchema(JSON.stringify({
-      ...validSchema,
-      page: {
-        mode: 'stack',
-        width: 80,
-        height: 200,
-      },
-    }))
+  it('deserializeSchema rejects unknown page modes', () => {
+    let error: unknown
 
-    expect(schema.page).toMatchObject({
-      mode: 'continuous',
-      pageModel: { kind: 'continuous-paper', paper: { width: 80, height: 200 } },
-      layout: { strategy: 'stack-flow', flowAxis: 'y' },
-      pagination: { strategy: 'none' },
-      reflow: { strategy: 'flow-y', preserveTrailingGap: true, collisionPolicy: 'diagnose' },
-    })
+    try {
+      deserializeSchema(JSON.stringify({
+        ...validSchema,
+        page: {
+          mode: 'book',
+          width: 80,
+          height: 200,
+        },
+      }))
+    }
+    catch (caught) {
+      error = caught
+    }
+
+    expect(error).toBeInstanceOf(SchemaDeserializeError)
+    expect((error as SchemaDeserializeError).code).toBe('invalid-schema')
+    expect((error as SchemaDeserializeError).issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: 'page.mode' }),
+      ]),
+    )
   })
 
   it('deserializeSchema distinguishes incompatible versions', () => {

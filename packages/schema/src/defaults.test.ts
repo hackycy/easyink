@@ -110,24 +110,21 @@ describe('normalizeDocumentSchema', () => {
     expect(continuous.page.reflow).toMatchObject({ strategy: 'flow-y', preserveTrailingGap: true })
   })
 
-  it('migrates legacy stack mode to continuous paper with stack-flow layout', () => {
+  it('treats unknown mode as invalid loose input and falls back to fixed mode', () => {
     const schema = normalizeDocumentSchema({
       page: {
-        mode: 'stack',
+        mode: 'book',
         width: 80,
         height: 200,
-        layout: { strategy: 'absolute' },
-        pagination: { strategy: 'fixed-sheets', pageCount: 3 },
-        reflow: { strategy: 'measure-only' },
       },
     } as never)
 
     expect(schema.page).toMatchObject({
-      mode: 'continuous',
-      pageModel: { kind: 'continuous-paper', paper: { width: 80, height: 200 } },
-      layout: { strategy: 'stack-flow', flowAxis: 'y' },
-      pagination: { strategy: 'none' },
-      reflow: { strategy: 'flow-y', preserveTrailingGap: true, collisionPolicy: 'diagnose' },
+      mode: 'fixed',
+      pageModel: { kind: 'paged-paper', paper: { width: 80, height: 200 } },
+      layout: { strategy: 'absolute' },
+      pagination: { strategy: 'fixed-sheets' },
+      reflow: { strategy: 'measure-only' },
     })
   })
 

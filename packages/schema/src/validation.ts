@@ -1,6 +1,5 @@
 import type { DocumentSchema } from './types'
 import { isObject, SCHEMA_VERSION } from '@easyink/shared'
-import { migrateLegacyStackPageMode } from './compat'
 
 const UNIT_TYPES = new Set(['mm', 'pt', 'px', 'inch'])
 const PAGE_MODES = new Set(['fixed', 'continuous'])
@@ -224,8 +223,7 @@ export function deserializeSchema(json: string): DocumentSchema {
     throw new SchemaDeserializeError('invalid-json', 'Failed to parse schema JSON.', { cause: error })
   }
 
-  const migrated = isObject(parsed) ? migrateLegacyStackPageMode(parsed) : parsed
-  const issues = validateSchemaIssues(migrated)
+  const issues = validateSchemaIssues(parsed)
   if (issues.length > 0) {
     throw new SchemaDeserializeError(
       'invalid-schema',
@@ -234,7 +232,7 @@ export function deserializeSchema(json: string): DocumentSchema {
     )
   }
 
-  const schemaVersion = (migrated as DocumentSchema).version
+  const schemaVersion = (parsed as DocumentSchema).version
   if (!isCompatibleVersion(schemaVersion)) {
     throw new SchemaDeserializeError(
       'incompatible-version',
@@ -243,7 +241,7 @@ export function deserializeSchema(json: string): DocumentSchema {
     )
   }
 
-  return migrated as DocumentSchema
+  return parsed as DocumentSchema
 }
 
 /**

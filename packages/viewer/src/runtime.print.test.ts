@@ -152,28 +152,30 @@ describe('viewer runtime print policy', () => {
     expect(policy.pageBreakBehavior).toEqual({ after: 'auto', inside: 'auto' })
   })
 
-  it('migrates legacy stack schemas before viewer validation', async () => {
+  it('rejects schemas with unknown page modes during viewer validation', async () => {
     const container = document.createElement('div')
     const viewer = createViewer({ container })
+    const diagnostics: unknown[] = []
 
-    await viewer.open({
+    await expect(viewer.open({
       schema: {
         ...createContinuousSchema(),
         page: {
-          mode: 'stack',
+          mode: 'book',
           width: 80,
           height: 100,
         },
       } as never,
       data: createData(),
-    })
+      onDiagnostic: event => diagnostics.push(event),
+    })).rejects.toThrow('Invalid schema')
 
-    expect(viewer.schema?.page).toMatchObject({
-      mode: 'continuous',
-      layout: { strategy: 'stack-flow', flowAxis: 'y' },
-      pagination: { strategy: 'none' },
-      reflow: { strategy: 'flow-y', preserveTrailingGap: true },
-    })
+    expect(diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        category: 'schema',
+        code: 'INVALID_SCHEMA',
+      }),
+    ]))
   })
 
   it('uses configured orientation for continuous-mode driver printing', () => {

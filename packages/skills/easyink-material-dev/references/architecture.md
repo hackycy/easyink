@@ -42,7 +42,7 @@ Rules:
 
 ## Orthogonal Page System
 
-Legal `PageMode` values are `fixed` and `continuous`. Legacy `stack` input is migrated by `@easyink/schema` compat code into the continuous-paper combination.
+Legal `PageMode` values are `fixed` and `continuous`.
 
 Current semantics come from four page layers:
 

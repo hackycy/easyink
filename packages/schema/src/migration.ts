@@ -1,6 +1,5 @@
 import type { DocumentSchema } from './types'
 import { SCHEMA_VERSION } from '@easyink/shared'
-import { migrateLegacyStackPageMode } from './compat'
 import { formatSchemaValidationIssue, SchemaMigrationError, validateSchemaIssues } from './validation'
 
 export type MigrationFunction = (schema: Record<string, unknown>) => DocumentSchema
@@ -55,7 +54,7 @@ export class MigrationRegistry {
     const currentMajor = parseMajor(SCHEMA_VERSION)
 
     if (fromMajor >= currentMajor) {
-      return toDocumentSchema(migrateLegacyStackPageMode(schema))
+      return toDocumentSchema(schema)
     }
 
     let current: Record<string, unknown> = schema
@@ -70,7 +69,7 @@ export class MigrationRegistry {
       major = parseMajor(entry.to)
     }
 
-    const result = toDocumentSchema(migrateLegacyStackPageMode(current))
+    const result = toDocumentSchema(current)
     result.version = SCHEMA_VERSION
     return result
   }

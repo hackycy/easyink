@@ -69,7 +69,7 @@ Keep descriptors compact and deterministic:
 - `binding` should be `none`, `single`, or `multi`.
 - `schemaRules` should forbid legacy shapes when the material has specialized schema. `table-data` explicitly forbids legacy `props.columns`, `props.repeatTemplate`, and type alias `table`.
 - `usage` should say when to choose the material and what not to encode in Schema.
-- For page-aware materials, `schemaRules` should say whether the factory should set `repeat.scope='every-output-page'`, `placement.mode='fixed'`, or neither. Do not let AI generators invent `page.mode='stack'`.
+- For page-aware materials, `schemaRules` should say whether the factory should set `repeat.scope='every-output-page'`, `placement.mode='fixed'`, or neither.
 
 ## Tests to Add or Run
 

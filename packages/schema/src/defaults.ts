@@ -1,7 +1,6 @@
 import type { LayoutStrategyKind, PageMode, PageModelKind, PaginationStrategyKind, ReflowStrategyKind, UnitType } from '@easyink/shared'
 import type { DocumentLayoutConfig, DocumentSchema, DocumentSchemaInput, GuideSchema, PageModelConfig, PageSchema, PaginationConfig, ReflowConfig } from './types'
 import { DEFAULT_PAGE_HEIGHT_MM, DEFAULT_PAGE_WIDTH_MM, isObject, SCHEMA_VERSION } from '@easyink/shared'
-import { migrateLegacyStackPageMode } from './compat'
 
 const UNIT_TYPES = new Set<UnitType>(['mm', 'pt', 'px', 'inch'])
 const PAGE_MODES = new Set<PageMode>(['fixed', 'continuous'])
@@ -47,10 +46,7 @@ function normalizePage(input: unknown, fallback: PageSchema): PageSchema {
   if (!isObject(input))
     return fallback
 
-  const isLegacyStack = input.mode === 'stack'
-  const mode = isLegacyStack
-    ? 'continuous'
-    : isPageMode(input.mode) ? input.mode : fallback.mode
+  const mode = isPageMode(input.mode) ? input.mode : fallback.mode
 
   return normalizePageLayers({
     ...fallback,
@@ -58,10 +54,10 @@ function normalizePage(input: unknown, fallback: PageSchema): PageSchema {
     mode,
     width: typeof input.width === 'number' && input.width > 0 ? input.width : fallback.width,
     height: typeof input.height === 'number' && input.height > 0 ? input.height : fallback.height,
-    pageModel: !isLegacyStack && isObject(input.pageModel) ? input.pageModel as unknown as PageSchema['pageModel'] : undefined,
-    layout: !isLegacyStack && isObject(input.layout) ? input.layout as unknown as PageSchema['layout'] : undefined,
-    pagination: !isLegacyStack && isObject(input.pagination) ? input.pagination as unknown as PageSchema['pagination'] : undefined,
-    reflow: !isLegacyStack && isObject(input.reflow) ? input.reflow as unknown as PageSchema['reflow'] : undefined,
+    pageModel: isObject(input.pageModel) ? input.pageModel as unknown as PageSchema['pageModel'] : undefined,
+    layout: isObject(input.layout) ? input.layout as unknown as PageSchema['layout'] : undefined,
+    pagination: isObject(input.pagination) ? input.pagination as unknown as PageSchema['pagination'] : undefined,
+    reflow: isObject(input.reflow) ? input.reflow as unknown as PageSchema['reflow'] : undefined,
   })
 }
 
@@ -185,16 +181,14 @@ export function normalizeDocumentSchema(input?: DocumentSchemaInput | null): Doc
   if (!isObject(input))
     return fallback
 
-  const migrated = migrateLegacyStackPageMode(input)
-
   return {
     ...fallback,
-    ...migrated,
+    ...input,
     version: fallback.version,
-    unit: isUnitType(migrated.unit) ? migrated.unit : fallback.unit,
-    page: normalizePage(migrated.page, fallback.page),
-    guides: normalizeGuides(migrated.guides, fallback.guides),
-    elements: Array.isArray(migrated.elements) ? migrated.elements : fallback.elements,
-    groups: Array.isArray(migrated.groups) ? migrated.groups : undefined,
+    unit: isUnitType(input.unit) ? input.unit : fallback.unit,
+    page: normalizePage(input.page, fallback.page),
+    guides: normalizeGuides(input.guides, fallback.guides),
+    elements: Array.isArray(input.elements) ? input.elements : fallback.elements,
+    groups: Array.isArray(input.groups) ? input.groups : undefined,
   }
 }

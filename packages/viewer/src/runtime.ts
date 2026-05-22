@@ -17,7 +17,7 @@ import type {
 import type { ViewerHost } from './viewer-host'
 import { registerBuiltinViewerMaterials } from '@easyink/builtin'
 import { createInternalHooks, FontManager, readNodeRepeatScope, runLayoutPipeline, runPagination } from '@easyink/core'
-import { migrateLegacyStackPageMode, normalizeDocumentSchema, traverseNodes, validateSchema } from '@easyink/schema'
+import { normalizeDocumentSchema, traverseNodes, validateSchema } from '@easyink/schema'
 import { deepClone, UNIT_FACTOR } from '@easyink/shared'
 import { applyBindingsToProps, projectBindings } from './binding-projector'
 import { collectFontFamilies, loadAndInjectFonts } from './font-loader'
@@ -66,10 +66,8 @@ export class ViewerRuntime {
     this.ensureNotDestroyed()
     this._diagnosticHandler = input.onDiagnostic
 
-    const migratedSchema = migrateLegacyStackPageMode(input.schema as unknown as Record<string, unknown>) as unknown as DocumentSchema
-
     // 1. Validate schema
-    const errors = validateSchema(migratedSchema)
+    const errors = validateSchema(input.schema)
     if (errors.length > 0) {
       const event: ViewerDiagnosticEvent = {
         category: 'schema',
@@ -83,7 +81,7 @@ export class ViewerRuntime {
     }
 
     // 2. Hook: beforeSchemaNormalize + schema normalization
-    const schemaForNormalize = this.callSchemaNormalizeHook(migratedSchema)
+    const schemaForNormalize = this.callSchemaNormalizeHook(input.schema)
     const normalizedSchema = normalizeDocumentSchema(schemaForNormalize)
     this._schema = normalizedSchema
 

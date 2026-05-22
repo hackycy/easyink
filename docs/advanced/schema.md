@@ -98,7 +98,7 @@ interface PageSchema {
 | `fixed` | `paged-paper` | `absolute` | `measure-only` | `fixed-sheets` |
 | `continuous` | `continuous-paper` | `stack-flow` | `flow-y` | `none` |
 
-历史输入中的 `stack` 会在兼容入口迁移为 `continuous + stack-flow + flow-y`，新模板不应再写入 `page.mode = 'stack'`。
+连续纸或小票模板应显式使用 `continuous + stack-flow + flow-y`。
 
 ### MaterialNode 布局行为
 

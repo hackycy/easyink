@@ -18,7 +18,7 @@ Start with the local repo, not memory. Prefer these files:
 - `docs/advanced/custom-materials.md` for the public custom material contract.
 - `docs/advanced/schema.md` for `DocumentSchemaInput` normalization, page layers, and persistent schema fields.
 - `docs/advanced/exporters.md` and `docs/advanced/print-drivers.md` when output must be validated through export or print paths.
-- `packages/schema/src/types.ts`, `packages/schema/src/defaults.ts`, and `packages/schema/src/compat.ts` for `MaterialNode`, binding, page layer defaults, and legacy `stack` migration.
+- `packages/schema/src/types.ts`, `packages/schema/src/defaults.ts`, and `packages/schema/src/validation.ts` for `MaterialNode`, binding, page layer defaults, and schema validity rules.
 - `packages/core/src/material-extension.ts` and `packages/core/src/material-viewer.ts` for Designer and Viewer extension contracts.
 - `packages/core/src/layout-strategy.ts`, `packages/core/src/reflow-engine.ts`, `packages/core/src/pagination-engine.ts`, and `packages/core/src/editor-surface-plan.ts` for runtime layout and edit-surface behavior.
 - `packages/designer/src/materials/registry.ts`, `packages/prop-schemas/src/index.ts`, and `packages/designer/src/components/PropertiesPanel.vue` for registration and page behavior property schemas.
@@ -34,7 +34,7 @@ Start with the local repo, not memory. Prefer these files:
 
 1. Confirm this is a material change. Create or extend a material only when a Schema node, Designer interaction, and Viewer render path are all affected.
 2. Define stable schema identity first: `TYPE`, props interface, defaults, capabilities, and `createXNode(partial?, unit?)`. Default nodes must render visibly without runtime data.
-3. Normalize page assumptions. Legal `page.mode` values are `fixed` and `continuous`; `stack` is legacy input migrated by `@easyink/schema`. New behavior should read `page.pageModel`, `page.layout`, `page.reflow`, and `page.pagination`, not add another `page.mode` branch.
+3. Normalize page assumptions. Legal `page.mode` values are `fixed` and `continuous`. New behavior should read `page.pageModel`, `page.layout`, `page.reflow`, and `page.pagination`, not add another `page.mode` branch.
 4. Keep node coordinates semantic. `MaterialNode.x/y/width/height` are document coordinates; measurement, reflow, pagination, repeated overlays, and Designer projection must not silently write runtime output plans back into source schema.
 5. Decide material page behavior deliberately. Use `node.placement` for flow/fixed positioning, `node.break` for auto-sheets pagination constraints, and `node.repeat.scope='every-output-page'` or Viewer `pageAware` for post-pagination overlays. Repeated/page-aware nodes must not influence flow, document height, or page count.
 6. If the material can split across `auto-sheets`, implement `fragmentPaginator`. It should produce virtual fragments with `sourceNodeId` preserved and avoid mutating source schema.
@@ -67,7 +67,7 @@ Load only the reference needed for the current task:
 
 - Keep Schema serializable and stable. Do not store DOM nodes, functions, transient selections, virtual preview rows, measured caches, runtime fragments, output pages, or preview-only data in Schema.
 - Normalize loose host input with `normalizeDocumentSchema()` before relying on required schema fields.
-- Do not introduce `stack` as a legal page mode in new code. Treat it only as compat input migrated to `continuous + continuous-paper + stack-flow + flow-y + none`.
+- Use `continuous + continuous-paper + stack-flow + flow-y + none` for continuous paper templates.
 - Do not branch material behavior solely on `page.mode` when a page layer has the actual semantics. Use page model, layout, reflow, and pagination strategy.
 - Designer and Viewer must both know the material type.
 - Use `convertUnit()` inside default-node factories when default physical sizes are authored in mm.

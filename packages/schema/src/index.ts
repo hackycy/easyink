@@ -1,5 +1,4 @@
 export * from './codec'
-export * from './compat'
 export * from './defaults'
 export * from './migration'
 export * from './traversal'
