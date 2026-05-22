@@ -16,7 +16,7 @@
   },
   "types": "./dist/index.d.mts",
   "bin": {
-    "easyink-mcp-server": "./dist/bin/server.mjs"
+    "mcp-server": "./dist/bin/server.mjs"
   },
   "files": [
     "config",
