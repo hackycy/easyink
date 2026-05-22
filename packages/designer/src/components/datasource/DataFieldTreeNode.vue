@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import type { DataFieldNode, DataSourceDescriptor } from '@easyink/datasource'
-import type { DatasourceFieldDragData } from '../../composables/use-datasource-drop'
+import type { DatasourceFieldDragData } from '../../composables/use-designer-drag-drop'
 import {
   IconChevronRight,
   IconFolderClosed,
   IconFolderOpen,
   IconGripVertical,
 } from '@easyink/icons'
-import { DATASOURCE_DRAG_MIME } from '../../composables/use-datasource-drop'
+import { inject } from 'vue'
+import { DESIGNER_DRAG_DROP_KEY } from '../../composables/use-designer-drag-drop'
 
 const props = defineProps<{
   field: DataFieldNode
@@ -16,6 +17,9 @@ const props = defineProps<{
   toggleExpand: (key: string) => void
   isExpanded: (key: string) => boolean
 }>()
+
+const dragDrop = inject(DESIGNER_DRAG_DROP_KEY, null)
+let suppressNativeToggleClick = false
 
 function nodeKey(): string {
   return `${props.source.id}:${props.field.path || props.field.name}`
@@ -29,6 +33,10 @@ function isLeaf(): boolean {
   return !props.field.fields || props.field.fields.length === 0
 }
 
+function isDraggable(): boolean {
+  return isLeaf() || !!props.field.union
+}
+
 function expanded(): boolean {
   return props.isExpanded(nodeKey())
 }
@@ -38,13 +46,17 @@ function childKey(child: DataFieldNode): string {
 }
 
 function onToggle() {
+  if (suppressNativeToggleClick) {
+    suppressNativeToggleClick = false
+    return
+  }
+  if (dragDrop?.consumeClickSuppression())
+    return
   props.toggleExpand(nodeKey())
 }
 
-function onDragStart(e: DragEvent) {
-  if (!e.dataTransfer)
-    return
-  const data: DatasourceFieldDragData = {
+function createDragData(): DatasourceFieldDragData {
+  return {
     sourceId: props.source.id,
     sourceName: props.source.name,
     sourceTag: props.source.tag,
@@ -53,9 +65,28 @@ function onDragStart(e: DragEvent) {
     fieldLabel: props.field.title || props.field.name,
     format: props.field.format,
     use: props.field.use,
+    props: props.field.props,
+    bindIndex: props.field.bindIndex,
+    union: props.field.union,
   }
-  e.dataTransfer.setData(DATASOURCE_DRAG_MIME, JSON.stringify(data))
-  e.dataTransfer.effectAllowed = 'link'
+}
+
+function onPointerDown(e: PointerEvent) {
+  if (!isDraggable())
+    return
+  dragDrop?.startDatasourcePointerDrag(e, createDragData())
+}
+
+function onPointerUp() {
+  if (!isDraggable() || isLeaf())
+    return
+  if (dragDrop?.consumeClickSuppression())
+    return
+  suppressNativeToggleClick = true
+  window.setTimeout(() => {
+    suppressNativeToggleClick = false
+  }, 0)
+  props.toggleExpand(nodeKey())
 }
 </script>
 
@@ -64,8 +95,12 @@ function onDragStart(e: DragEvent) {
   <div v-if="!isLeaf()">
     <div
       class="ei-field-node__row ei-field-node__row--group"
+      draggable="false"
       :style="{ paddingLeft: `${depth * 16 + 4}px` }"
       @click="onToggle"
+      @pointerdown="onPointerDown"
+      @pointerup="onPointerUp"
+      @dragstart.prevent
     >
       <IconChevronRight
         :size="14"
@@ -98,9 +133,10 @@ function onDragStart(e: DragEvent) {
   <div
     v-else
     class="ei-field-node__row ei-field-node__row--leaf"
+    draggable="false"
     :style="{ paddingLeft: `${depth * 16 + 4}px` }"
-    draggable="true"
-    @dragstart="onDragStart"
+    @pointerdown="onPointerDown"
+    @dragstart.prevent
   >
     <span class="ei-field-node__chevron-spacer" />
     <IconGripVertical :size="12" :stroke-width="1.5" class="ei-field-node__grip" />
@@ -116,6 +152,8 @@ function onDragStart(e: DragEvent) {
     padding: 3px 8px 3px 4px;
     border-radius: 3px;
     user-select: none;
+    touch-action: none;
+    -webkit-user-drag: none;
     gap: 4px;
     min-height: 26px;
 

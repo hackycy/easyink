@@ -16,12 +16,11 @@ import { IconDelete, IconDown, IconNewTemplate, IconUp } from '@easyink/icons'
 import { EiIcon } from '@easyink/ui'
 import { computed, onMounted, onUnmounted, provide, ref } from 'vue'
 import { useDesignerStore } from '../composables'
-import { useDatasourceDrop } from '../composables/use-datasource-drop'
+import { DESIGNER_DRAG_DROP_KEY, useDesignerDragDrop } from '../composables/use-designer-drag-drop'
 import { useElementResize } from '../composables/use-element-resize'
 import { useElementRotate } from '../composables/use-element-rotate'
 import { useKeyboardShortcuts } from '../composables/use-keyboard-shortcuts'
 import { useMarqueeSelect } from '../composables/use-marquee-select'
-import { useMaterialDrop } from '../composables/use-material-drop'
 import { useCanvasInteractionController } from '../interactions'
 import { isElementRotatable } from '../materials/capabilities'
 import { getVisibleResizeHandles } from '../materials/control-policy'
@@ -102,28 +101,23 @@ useKeyboardShortcuts({
   getContainer: () => containerRef.value,
 })
 
-const { onDragOver: onPageDragOver, onDrop: onPageDrop, onDragLeave: onPageDragLeave, cleanupOverlay } = useDatasourceDrop({
+const dragDrop = useDesignerDragDrop({
   store,
   getPageEl: () => pageRef.value,
 })
 
-const { onDragOver: onMaterialDragOver, onDrop: onMaterialDrop } = useMaterialDrop({
-  store,
-  getPageEl: () => pageRef.value,
-})
+provide(DESIGNER_DRAG_DROP_KEY, dragDrop)
 
 function handlePageDragOver(e: DragEvent) {
-  onPageDragOver(e)
-  onMaterialDragOver(e)
+  dragDrop.onCanvasDragOver(e)
 }
 
 function handlePageDragLeave(e: DragEvent) {
-  onPageDragLeave(e)
+  dragDrop.onCanvasDragLeave(e)
 }
 
 function handlePageDrop(e: DragEvent) {
-  onPageDrop(e)
-  onMaterialDrop(e)
+  dragDrop.onCanvasDrop(e)
 }
 
 // ─── Computed ────────────────────────────────────────────────────
@@ -607,7 +601,7 @@ onUnmounted(() => {
   }
   containerObserver.disconnect()
   cursorPos.value = null
-  cleanupOverlay()
+  dragDrop.cleanup()
 })
 </script>
 

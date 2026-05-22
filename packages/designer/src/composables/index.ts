@@ -1,4 +1,15 @@
 export { useDatasourceDrop } from './use-datasource-drop'
+export {
+  DATASOURCE_DRAG_MIME,
+  DESIGNER_DRAG_DROP_KEY,
+  MATERIAL_DRAG_MIME,
+  useDesignerDragDrop,
+} from './use-designer-drag-drop'
+export type {
+  DatasourceFieldDragData,
+  DesignerDragDropContext,
+  DesignerDragDropController,
+} from './use-designer-drag-drop'
 export { provideDesignerStore, useDesignerStore } from './use-designer-store'
 export { useElementDrag } from './use-element-drag'
 export { useElementResize } from './use-element-resize'

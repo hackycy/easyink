@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import type { MaterialCatalogEntry } from '../types'
 import { AddMaterialCommand } from '@easyink/core'
-import { computed } from 'vue'
+import { computed, inject } from 'vue'
 import { useDesignerStore } from '../composables'
-import { MATERIAL_DRAG_MIME } from '../composables/use-material-drop'
+import { DESIGNER_DRAG_DROP_KEY } from '../composables/use-designer-drag-drop'
 import { selectOne } from '../interactions/selection-api'
 
 const store = useDesignerStore()
+const dragDrop = inject(DESIGNER_DRAG_DROP_KEY, null)
 
 const quickMaterials = computed<MaterialCatalogEntry[]>(() => store.getQuickMaterials())
 
@@ -24,6 +25,8 @@ const hasRegisteredMaterials = computed(() =>
 )
 
 function handleAddMaterial(entry: MaterialCatalogEntry) {
+  if (dragDrop?.consumeClickSuppression())
+    return
   const definition = store.getMaterial(entry.materialType)
   if (!definition)
     return
@@ -36,11 +39,21 @@ function handleAddMaterial(entry: MaterialCatalogEntry) {
   selectOne(store, node.id)
 }
 
-function handleDragStart(e: DragEvent, entry: MaterialCatalogEntry) {
-  if (!e.dataTransfer)
+function handlePointerDown(e: PointerEvent, entry: MaterialCatalogEntry) {
+  dragDrop?.startMaterialPointerDrag(e, entry)
+}
+
+function handlePointerUp(entry: MaterialCatalogEntry) {
+  if (dragDrop?.consumeClickSuppression())
     return
-  e.dataTransfer.effectAllowed = 'copy'
-  e.dataTransfer.setData(MATERIAL_DRAG_MIME, entry.dragData ?? entry.materialType)
+  handleAddMaterial(entry)
+}
+
+function handleKeyAdd(e: KeyboardEvent, entry: MaterialCatalogEntry) {
+  if (e.key !== 'Enter' && e.key !== ' ')
+    return
+  e.preventDefault()
+  handleAddMaterial(entry)
 }
 </script>
 
@@ -64,10 +77,12 @@ function handleDragStart(e: DragEvent, entry: MaterialCatalogEntry) {
           v-for="mat in quickMaterials"
           :key="mat.id"
           class="ei-material-panel__item"
+          draggable="false"
           :title="store.t(mat.label)"
-          draggable="true"
-          @click="handleAddMaterial(mat)"
-          @dragstart="handleDragStart($event, mat)"
+          @pointerdown="handlePointerDown($event, mat)"
+          @pointerup="handlePointerUp(mat)"
+          @keydown="handleKeyAdd($event, mat)"
+          @dragstart.prevent
         >
           <component :is="mat.icon" :size="20" :stroke-width="1.5" class="ei-material-panel__icon" />
           <span class="ei-material-panel__label">{{ store.t(mat.label) }}</span>
@@ -85,10 +100,12 @@ function handleDragStart(e: DragEvent, entry: MaterialCatalogEntry) {
             v-for="item in group.items"
             :key="item.id"
             class="ei-material-panel__item"
+            draggable="false"
             :title="store.t(item.label)"
-            draggable="true"
-            @click="handleAddMaterial(item)"
-            @dragstart="handleDragStart($event, item)"
+            @pointerdown="handlePointerDown($event, item)"
+            @pointerup="handlePointerUp(item)"
+            @keydown="handleKeyAdd($event, item)"
+            @dragstart.prevent
           >
             <component :is="item.icon" :size="20" :stroke-width="1.5" class="ei-material-panel__icon" />
             <span class="ei-material-panel__label">{{ store.t(item.label) }}</span>
@@ -154,6 +171,8 @@ function handleDragStart(e: DragEvent, entry: MaterialCatalogEntry) {
     cursor: grab;
     color: var(--ei-text, #333);
     user-select: none;
+    touch-action: none;
+    -webkit-user-drag: none;
 
     &:hover {
       background: var(--ei-hover-bg, #f0f0f0);
