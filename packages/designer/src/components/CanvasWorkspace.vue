@@ -38,6 +38,7 @@ import GuideOverlay from './GuideOverlay.vue'
 import HistoryPanel from './HistoryPanel.vue'
 import MaterialPanel from './MaterialPanel.vue'
 import MinimapPanel from './MinimapPanel.vue'
+import { resolvePageBackgroundStyle } from './page-background-style'
 import PropertiesPanel from './PropertiesPanel.vue'
 import SelectionOverlay from './SelectionOverlay.vue'
 import SnapLineOverlay from './SnapLineOverlay.vue'
@@ -259,7 +260,6 @@ const groupSelectionFrame = computed(() => {
 const pageFrames = computed(() => {
   const plan = editorSurfacePlan.value
   const unit = store.schema.unit
-  const background = store.schema.page.background?.color || '#fff'
   return plan.pages.map(page => ({
     page,
     style: {
@@ -267,7 +267,7 @@ const pageFrames = computed(() => {
       top: `${page.visualTop}${unit}`,
       width: `${page.width}${unit}`,
       height: `${page.height}${unit}`,
-      background,
+      ...resolvePageBackgroundStyle(store.schema.page.background, unit),
     },
   }))
 })

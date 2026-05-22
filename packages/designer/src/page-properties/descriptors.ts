@@ -1,6 +1,6 @@
 import type { PageSchema } from '@easyink/schema'
 import type { LayoutStrategyKind } from '@easyink/shared'
-import type { PagePropertyDescriptor } from './types'
+import type { PagePropertyContext, PagePropertyDescriptor } from './types'
 import { PAPER_PRESETS } from '@easyink/shared'
 
 const UNIT_OPTIONS: NonNullable<PagePropertyDescriptor['enum']> = [
@@ -380,6 +380,11 @@ const BG_REPEAT_DESCRIPTOR: PagePropertyDescriptor = {
   },
 }
 
+function isEditableBackgroundImageConfig(ctx: PagePropertyContext): boolean {
+  const bg = ctx.document.page.background
+  return !!bg?.image && bg.repeat !== 'full'
+}
+
 const BG_WIDTH_DESCRIPTOR: PagePropertyDescriptor = {
   id: 'bgWidth',
   group: 'background',
@@ -390,7 +395,7 @@ const BG_WIDTH_DESCRIPTOR: PagePropertyDescriptor = {
   editor: 'number',
   min: 0,
   step: 1,
-  visible: ctx => !!ctx.document.page.background?.image,
+  visible: isEditableBackgroundImageConfig,
   normalize(value, ctx) {
     const existing = ctx.document.page.background ?? {}
     return { page: { background: { ...existing, width: Number(value) } } }
@@ -407,7 +412,7 @@ const BG_HEIGHT_DESCRIPTOR: PagePropertyDescriptor = {
   editor: 'number',
   min: 0,
   step: 1,
-  visible: ctx => !!ctx.document.page.background?.image,
+  visible: isEditableBackgroundImageConfig,
   normalize(value, ctx) {
     const existing = ctx.document.page.background ?? {}
     return { page: { background: { ...existing, height: Number(value) } } }
@@ -423,7 +428,7 @@ const BG_OFFSET_X_DESCRIPTOR: PagePropertyDescriptor = {
   persisted: 'schema',
   editor: 'number',
   step: 0.5,
-  visible: ctx => !!ctx.document.page.background?.image,
+  visible: isEditableBackgroundImageConfig,
   normalize(value, ctx) {
     const existing = ctx.document.page.background ?? {}
     return { page: { background: { ...existing, offsetX: Number(value) } } }
@@ -439,7 +444,7 @@ const BG_OFFSET_Y_DESCRIPTOR: PagePropertyDescriptor = {
   persisted: 'schema',
   editor: 'number',
   step: 0.5,
-  visible: ctx => !!ctx.document.page.background?.image,
+  visible: isEditableBackgroundImageConfig,
   normalize(value, ctx) {
     const existing = ctx.document.page.background ?? {}
     return { page: { background: { ...existing, offsetY: Number(value) } } }
