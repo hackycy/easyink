@@ -3,7 +3,7 @@
  */
 import type { Component } from 'vue'
 import type { DesignerStore } from '../store/designer-store'
-import type { DesignerImagePickResult } from '../types'
+import type { DesignerResolvedAsset } from '../types'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createApp, defineComponent, h, nextTick, ref } from 'vue'
 import enUS from '../../../locales/src/en-US'
@@ -48,11 +48,11 @@ describe('image source editor', () => {
   })
 
   it('disables typing, picking, and clearing together', async () => {
-    const pickImage = vi.fn(() => ({ src: 'https://example.com/new.png' }))
+    const pickAsset = vi.fn(() => ({ url: 'https://example.com/new.png' }))
     const mounted = mountImageSourceEditor({
       value: 'https://example.com/old.png',
       disabled: true,
-      provider: { pickImage },
+      provider: { pickAsset },
     })
 
     expect(textInput(mounted.host).disabled).toBe(true)
@@ -62,41 +62,33 @@ describe('image source editor', () => {
     button(mounted.host, PICK_TITLE).click()
     await flush()
 
-    expect(pickImage).not.toHaveBeenCalled()
+    expect(pickAsset).not.toHaveBeenCalled()
     mounted.unmount()
   })
 
-  it('uses the host interaction bridge instead of rendering native fallback inputs', async () => {
-    const pickImage = vi.fn(() => ({ src: 'https://example.com/picked.png', alt: 'Picked' }))
+  it('uses the host interaction bridge instead of rendering native inputs', async () => {
+    const pickAsset = vi.fn(() => ({ url: 'https://example.com/picked.png', alt: 'Picked' }))
     const mounted = mountImageSourceEditor({
       value: 'https://example.com/old.png',
-      provider: { pickImage },
+      provider: { pickAsset },
     })
 
     expect(mounted.host.querySelector('input[type="file"]')).toBeNull()
     button(mounted.host, PICK_TITLE).click()
     await flush()
 
-    expect(pickImage).toHaveBeenCalledWith(expect.objectContaining({
+    expect(pickAsset).toHaveBeenCalledWith(expect.objectContaining({
       id: 'designer.imageMaterial.pickImage',
-      currentSrc: 'https://example.com/old.png',
+      currentUrl: 'https://example.com/old.png',
       accept: ['image/*'],
     }))
     expect(mounted.events.updates).toContain('https://example.com/picked.png')
-    expect(mounted.events.picks).toEqual([{ src: 'https://example.com/picked.png', alt: 'Picked' }])
+    expect(mounted.events.picks).toEqual([{ url: 'https://example.com/picked.png', alt: 'Picked' }])
     mounted.unmount()
   })
 
-  it('keeps the picker button clickable for the built-in fallback path', async () => {
+  it('disables picking before the shell asset provider is mounted', async () => {
     const mounted = mountImageSourceEditor()
-
-    expect(mounted.host.querySelector('input[type="file"]')).toBeNull()
-    expect(button(mounted.host, PICK_TITLE).disabled).toBe(false)
-    mounted.unmount()
-  })
-
-  it('does not render native fallback input when fallback is disabled', async () => {
-    const mounted = mountImageSourceEditor({ fallbackEnabled: false })
 
     expect(mounted.host.querySelector('input[type="file"]')).toBeNull()
     expect(button(mounted.host, PICK_TITLE).disabled).toBe(true)
@@ -104,15 +96,13 @@ describe('image source editor', () => {
   })
 })
 
-describe('designer image picker fallback host', () => {
-  it('lets the shell feature flag disable the built-in fallback provider', async () => {
+describe('designer asset picker host', () => {
+  it('registers a default shell file picker and data URL uploader', async () => {
     const store = createStore()
-    const mounted = mountWithStore(store, DesignerConfirmHost, { enableImagePickerFallback: false })
+    const mounted = mountWithStore(store, DesignerConfirmHost)
 
-    await expect(store.interactions.pickImage({
-      id: 'designer.imageMaterial.pickImage',
-      source: 'image-material',
-    })).resolves.toBeNull()
+    expect(store.assetPickerAvailable).toBe(true)
+    expect(store.hostAssetUploaderAvailable).toBe(false)
 
     mounted.unmount()
   })
@@ -131,14 +121,14 @@ describe('properties panel image source writes', () => {
         },
       },
     })
-    const pickImage = vi.fn(() => ({ src: 'https://example.com/background.png' }))
-    store.setInteractionProvider({ pickImage })
+    const pickAsset = vi.fn(() => ({ url: 'https://example.com/background.png' }))
+    store.setInteractionProvider({ pickAsset })
     const mounted = mountWithStore(store, PropertiesPanel)
 
     button(mounted.host, PICK_TITLE).click()
     await flush()
 
-    expect(pickImage).toHaveBeenCalledWith(expect.objectContaining({
+    expect(pickAsset).toHaveBeenCalledWith(expect.objectContaining({
       id: 'designer.pageBackground.pickImage',
       source: 'page-background',
       accept: ['image/*'],
@@ -159,7 +149,7 @@ describe('properties panel image source writes', () => {
     })
     store.selection.select('img_blank')
     store.setInteractionProvider({
-      pickImage: vi.fn(() => ({ src: 'https://example.com/material.png', alt: 'Generated alt' })),
+      pickAsset: vi.fn(() => ({ url: 'https://example.com/material.png', alt: 'Generated alt' })),
     })
     const mounted = mountWithStore(store, PropertiesPanel)
 
@@ -181,7 +171,7 @@ describe('properties panel image source writes', () => {
     })
     store.selection.select('img_existing')
     store.setInteractionProvider({
-      pickImage: vi.fn(() => ({ src: 'https://example.com/material.png', alt: 'Generated alt' })),
+      pickAsset: vi.fn(() => ({ url: 'https://example.com/material.png', alt: 'Generated alt' })),
     })
     const mounted = mountWithStore(store, PropertiesPanel)
 
@@ -200,17 +190,14 @@ function mountImageSourceEditor(options: {
   value?: string
   disabled?: boolean
   provider?: Parameters<DesignerStore['interactions']['setProvider']>[0]
-  fallbackEnabled?: boolean
 } = {}) {
   const store = createStore()
   store.setInteractionProvider(options.provider)
-  if (options.fallbackEnabled !== undefined)
-    store.setImagePickerFallbackEnabled(options.fallbackEnabled)
   const model = ref(options.value ?? '')
   const events = {
     updates: [] as string[],
     commits: [] as string[],
-    picks: [] as DesignerImagePickResult[],
+    picks: [] as DesignerResolvedAsset[],
   }
 
   const mounted = mountWithStore(store, defineComponent({
@@ -222,7 +209,7 @@ function mountImageSourceEditor(options: {
         'pickRequest': {
           id: 'designer.imageMaterial.pickImage',
           source: 'image-material',
-          currentSrc: model.value,
+          currentUrl: model.value,
           accept: ['image/*'],
         },
         't': store.t.bind(store),
@@ -231,7 +218,7 @@ function mountImageSourceEditor(options: {
           events.updates.push(value)
         },
         'onCommit': (value: string) => events.commits.push(value),
-        'onPick': (result: DesignerImagePickResult) => events.picks.push(result),
+        'onPick': (result: DesignerResolvedAsset) => events.picks.push(result),
       })
     },
   }))

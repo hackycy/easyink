@@ -1,15 +1,9 @@
 <script setup lang="ts">
-import type { DesignerConfirmRequest, DesignerImagePickRequest, DesignerInteractionProvider } from '../types'
+import type { DesignerAssetPickRequest, DesignerConfirmRequest, DesignerInteractionProvider } from '../types'
 import { EiDialog } from '@easyink/ui'
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { useDesignerStore } from '../composables'
-import { pickImageWithFileInput } from '../interactions/image-picker-fallback'
-
-const props = withDefaults(defineProps<{
-  enableImagePickerFallback?: boolean
-}>(), {
-  enableImagePickerFallback: true,
-})
+import { pickAssetWithFileInput, uploadAssetAsDataUrl } from '../interactions/asset-file-picker'
 
 interface PendingConfirm {
   request: DesignerConfirmRequest
@@ -32,14 +26,11 @@ function confirm(request: DesignerConfirmRequest): Promise<boolean> {
   })
 }
 
-function pickImage(request: DesignerImagePickRequest) {
-  if (props.enableImagePickerFallback === false)
-    return Promise.resolve(null)
-  return pickImageWithFileInput(request, {
+function pickAsset(request: DesignerAssetPickRequest) {
+  return pickAssetWithFileInput(request, {
     messages: {
-      documentMissing: text('designer.diagnostic.imagePickerFallbackDocumentMissing', 'Image picker fallback requires a browser document.'),
+      documentMissing: text('designer.diagnostic.assetPickerDocumentMissing', 'Asset file picker requires a browser document.'),
       unsupportedFileType: text('designer.diagnostic.imagePickerUnsupportedFileType', 'Selected file type is not supported by this image field.'),
-      fileReadFailed: text('designer.diagnostic.imagePickerFileReadFailed', 'Failed to read selected image file.'),
       pickerOpenFailed: text('designer.diagnostic.imagePickerOpenFailed', 'Failed to open image file picker.'),
     },
     onDiagnostic(diagnostic) {
@@ -53,8 +44,9 @@ function pickImage(request: DesignerImagePickRequest) {
   })
 }
 
-const provider: DesignerInteractionProvider = { confirm, pickImage }
+const provider: DesignerInteractionProvider = { confirm, pickAsset, uploadAsset: uploadAssetAsDataUrl }
 store.interactions.setFallbackProvider(provider)
+store.refreshInteractionAvailability()
 
 function settle(value: boolean) {
   const current = active.value
@@ -74,6 +66,7 @@ function cancelAll() {
 
 onBeforeUnmount(() => {
   store.interactions.clearFallbackProvider(provider)
+  store.refreshInteractionAvailability()
   cancelAll()
 })
 

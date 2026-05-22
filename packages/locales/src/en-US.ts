@@ -559,6 +559,9 @@ const enUS: LocaleMessages = {
       imagePickerUnsupportedFileType: 'Selected file type is not supported by this image field.',
       imagePickerFileReadFailed: 'Failed to read selected image file.',
       imagePickerOpenFailed: 'Failed to open image file picker.',
+      assetPickerEmptyUrl: 'Asset picker returned an empty asset URL.',
+      assetPickerFailed: 'Asset picker failed.',
+      assetPickerDocumentMissing: 'Asset file picker requires a browser document.',
     },
     message: {
       confirmNewTemplate: 'Create a new template? The current template will be reset.',

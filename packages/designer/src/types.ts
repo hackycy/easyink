@@ -269,18 +269,19 @@ export interface DesignerConfirmRequest<TPayload = unknown> {
   payload?: TPayload
 }
 
-export interface DesignerImagePickRequest<TPayload = unknown> {
+export interface DesignerAssetPickRequest<TPayload = unknown> {
   /** Stable action id, e.g. "designer.pageBackground.pickImage". */
   id: string
   source: 'page-background' | 'image-material' | string
   title?: string
-  currentSrc?: string
+  currentUrl?: string
   accept?: string[]
   payload?: TPayload
 }
 
-export interface DesignerImagePickResult {
-  src: string
+export interface DesignerResolvedAsset {
+  url: string
+  assetId?: string
   alt?: string
   width?: number
   height?: number
@@ -288,10 +289,28 @@ export interface DesignerImagePickResult {
   metadata?: Record<string, unknown>
 }
 
+export interface DesignerLocalAssetPickResult {
+  file: File
+  alt?: string
+  width?: number
+  height?: number
+  name?: string
+  metadata?: Record<string, unknown>
+}
+
+export type DesignerAssetPickResult = DesignerResolvedAsset | DesignerLocalAssetPickResult
+
+export interface DesignerAssetUploadRequest<TPayload = unknown> extends DesignerAssetPickRequest<TPayload> {
+  file: File
+  picked: DesignerLocalAssetPickResult
+}
+
 export interface DesignerInteractionProvider {
   confirm?: <TPayload = unknown>(request: DesignerConfirmRequest<TPayload>) => boolean | Promise<boolean>
-  pickImage?: <TPayload = unknown>(request: DesignerImagePickRequest<TPayload>) =>
-    DesignerImagePickResult | null | Promise<DesignerImagePickResult | null>
+  pickAsset?: <TPayload = unknown>(request: DesignerAssetPickRequest<TPayload>) =>
+    DesignerAssetPickResult | null | Promise<DesignerAssetPickResult | null>
+  uploadAsset?: <TPayload = unknown>(request: DesignerAssetUploadRequest<TPayload>) =>
+    DesignerResolvedAsset | Promise<DesignerResolvedAsset>
 }
 
 // ─── Designer Props ────────────────────────────────────────────────
@@ -304,8 +323,6 @@ export interface EasyInkDesignerProps {
   locale?: LocaleMessages
   setupStore?: StoreSetup
   interactionProvider?: DesignerInteractionProvider
-  /** Enable the built-in file-to-data-URL image picker fallback. Defaults to true. */
-  enableImagePickerFallback?: boolean
 }
 
 export interface TemplateAutoSaveOptions {

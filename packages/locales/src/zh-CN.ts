@@ -559,6 +559,9 @@ const zhCN: LocaleMessages = {
       imagePickerUnsupportedFileType: '所选文件类型不支持。',
       imagePickerFileReadFailed: '读取所选图片文件失败。',
       imagePickerOpenFailed: '打开图片文件选择器失败。',
+      assetPickerEmptyUrl: '资源选择器返回了空资源地址。',
+      assetPickerFailed: '资源选择失败。',
+      assetPickerDocumentMissing: '资源文件选择器需要浏览器文档环境。',
     },
     message: {
       confirmNewTemplate: '确定要新建模板吗？当前模板内容将被重置。',

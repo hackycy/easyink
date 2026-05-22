@@ -1,7 +1,7 @@
 import type { Component } from 'vue'
 import type { DesignerStore } from '../store/designer-store'
 import type { Diagnostic } from '../store/diagnostics'
-import type { DesignerConfirmRequest, DesignerImagePickRequest, DesignerImagePickResult } from '../types'
+import type { DesignerAssetPickRequest, DesignerConfirmRequest, DesignerResolvedAsset } from '../types'
 
 /**
  * Descriptor for a panel contributed to the designer overlay layer.
@@ -52,8 +52,8 @@ export interface ContributionContext {
   executeCommand: <TArgs = unknown, TResult = unknown>(id: string, args?: TArgs) => Promise<TResult>
   /** Ask the host-controlled interaction layer for a user confirmation. */
   confirm: <TPayload = unknown>(request: DesignerConfirmRequest<TPayload>) => Promise<boolean>
-  /** Ask the host-controlled interaction layer for an image source. */
-  pickImage: <TPayload = unknown>(request: DesignerImagePickRequest<TPayload>) => Promise<DesignerImagePickResult | null>
+  /** Ask the host-controlled interaction layer for a stable asset URL. */
+  pickAsset: <TPayload = unknown>(request: DesignerAssetPickRequest<TPayload>) => Promise<DesignerResolvedAsset | null>
   /** Register a cleanup callback fired when the designer unmounts. */
   onDispose: (fn: () => void) => void
   /**

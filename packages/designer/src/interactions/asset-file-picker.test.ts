@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { pickImageWithFileInput, readImageFileAsDataUrl } from './image-picker-fallback'
+import { pickAssetWithFileInput, readAcceptedAssetFile, uploadAssetAsDataUrl } from './asset-file-picker'
 
-describe('image picker fallback', () => {
+describe('asset file picker', () => {
   it('opens the native picker and resolves null on cancel', async () => {
     const original = HTMLInputElement.prototype.click
     const click = vi.fn(function (this: HTMLInputElement) {
@@ -13,7 +13,7 @@ describe('image picker fallback', () => {
     })
 
     try {
-      await expect(pickImageWithFileInput({
+      await expect(pickAssetWithFileInput({
         id: 'designer.imageMaterial.pickImage',
         source: 'image-material',
       })).resolves.toBeNull()
@@ -39,7 +39,7 @@ describe('image picker fallback', () => {
       value: click,
     })
 
-    await expect(pickImageWithFileInput({
+    await expect(pickAssetWithFileInput({
       id: 'designer.imageMaterial.pickImage',
       source: 'image-material',
       accept: ['image/png'],
@@ -76,7 +76,7 @@ describe('image picker fallback', () => {
       value: click,
     })
 
-    const result = await pickImageWithFileInput({
+    const result = await pickAssetWithFileInput({
       id: 'designer.imageMaterial.pickImage',
       source: 'image-material',
       accept: ['image/*'],
@@ -86,25 +86,28 @@ describe('image picker fallback', () => {
     })
 
     expect(result).toEqual(expect.objectContaining({
+      file,
       name: 'sample.png',
       width: 320,
       height: 180,
     }))
-    expect(result?.src).toMatch(/^data:image\/png;base64,/)
     expect(click).toHaveBeenCalledTimes(1)
   })
 
-  it('reads selected image files as data URL results', async () => {
+  it('returns selected image files as local asset picks', async () => {
     const file = new File(['hello'], 'sample.png', { type: 'image/png' })
 
-    const result = await readImageFileAsDataUrl(file, {
+    const result = await readAcceptedAssetFile(file, {
+      id: 'designer.imageMaterial.pickImage',
+      source: 'image-material',
+    }, {
       createImage: () => delayedImage(),
     })
 
-    expect(result.name).toBe('sample.png')
-    expect(result.width).toBe(320)
-    expect(result.height).toBe(180)
-    expect(result.src).toMatch(/^data:image\/png;base64,/)
+    expect(result?.file).toBe(file)
+    expect(result?.name).toBe('sample.png')
+    expect(result?.width).toBe(320)
+    expect(result?.height).toBe(180)
   })
 
   it('rejects files that do not match the requested accept list', async () => {
@@ -124,7 +127,7 @@ describe('image picker fallback', () => {
     })
 
     try {
-      await expect(pickImageWithFileInput({
+      await expect(pickAssetWithFileInput({
         id: 'designer.imageMaterial.pickImage',
         source: 'image-material',
         accept: ['image/png'],
@@ -152,7 +155,7 @@ describe('image picker fallback', () => {
     }
   })
 
-  it('still returns src when image size probing fails', async () => {
+  it('still returns the file when image size probing fails', async () => {
     const file = new File(['hello'], 'sample.png', { type: 'image/png' })
     let onerror: null | ((event: Event) => void) = null
     const image = {
@@ -173,13 +176,16 @@ describe('image picker fallback', () => {
       },
     } as unknown as HTMLImageElement
 
-    const result = await readImageFileAsDataUrl(file, {
+    const result = await readAcceptedAssetFile(file, {
+      id: 'designer.imageMaterial.pickImage',
+      source: 'image-material',
+    }, {
       createImage: () => image,
     })
 
-    expect(result.src).toMatch(/^data:image\/png;base64,/)
-    expect(result.width).toBeUndefined()
-    expect(result.height).toBeUndefined()
+    expect(result?.file).toBe(file)
+    expect(result?.width).toBeUndefined()
+    expect(result?.height).toBeUndefined()
   })
 
   it('does not block selected images when size probing never settles', async () => {
@@ -195,31 +201,39 @@ describe('image picker fallback', () => {
       set src(_value: string) {},
     } as unknown as HTMLImageElement
 
-    const result = await readImageFileAsDataUrl(file, {
+    const result = await readAcceptedAssetFile(file, {
+      id: 'designer.imageMaterial.pickImage',
+      source: 'image-material',
+    }, {
       createImage: () => image,
       imageProbeTimeoutMs: 1,
     })
 
-    expect(result.src).toMatch(/^data:image\/png;base64,/)
-    expect(result.width).toBeUndefined()
-    expect(result.height).toBeUndefined()
+    expect(result?.file).toBe(file)
+    expect(result?.width).toBeUndefined()
+    expect(result?.height).toBeUndefined()
   })
 
-  it('rejects file reader errors', async () => {
+  it('uploads local files as data URLs by default', async () => {
     const file = new File(['hello'], 'sample.png', { type: 'image/png' })
-    const reader = {
-      result: null,
-      error: new Error('reader failed'),
-      onload: null as null | (() => void),
-      onerror: null as null | (() => void),
-      readAsDataURL: vi.fn(function (this: { onerror: null | (() => void) }) {
-        this.onerror?.()
-      }),
-    } as unknown as FileReader
+    const result = await uploadAssetAsDataUrl({
+      id: 'designer.imageMaterial.pickImage',
+      source: 'image-material',
+      file,
+      picked: {
+        file,
+        name: 'sample.png',
+        width: 320,
+        height: 180,
+        metadata: { source: 'local' },
+      },
+    })
 
-    await expect(readImageFileAsDataUrl(file, {
-      createFileReader: () => reader,
-    })).rejects.toThrow('reader failed')
+    expect(result.url).toMatch(/^data:image\/png;base64,/)
+    expect(result.name).toBe('sample.png')
+    expect(result.width).toBe(320)
+    expect(result.height).toBe(180)
+    expect(result.metadata).toEqual({ source: 'local' })
   })
 })
 

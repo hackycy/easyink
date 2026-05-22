@@ -1,38 +1,36 @@
-import type { DesignerImagePickRequest, DesignerImagePickResult } from '../types'
+import type { DesignerAssetPickRequest, DesignerAssetUploadRequest, DesignerLocalAssetPickResult, DesignerResolvedAsset } from '../types'
 
-export interface ImagePickerFallbackDiagnostic {
+export interface AssetFilePickerDiagnostic {
   severity: 'warn' | 'error'
   message: string
   detail?: Record<string, unknown>
 }
 
-export interface ImagePickerFallbackOptions {
+export interface AssetFilePickerOptions {
   document?: Document
   input?: HTMLInputElement | null
-  createFileReader?: () => FileReader
   createImage?: () => HTMLImageElement
   imageProbeTimeoutMs?: number
-  onDiagnostic?: (diagnostic: ImagePickerFallbackDiagnostic) => void
-  messages?: Partial<Record<ImagePickerFallbackMessageKey, string>>
+  onDiagnostic?: (diagnostic: AssetFilePickerDiagnostic) => void
+  messages?: Partial<Record<AssetFilePickerMessageKey, string>>
 }
 
 const DEFAULT_ACCEPT = ['image/*']
 const CANCEL_FOCUS_DELAY_MS = 1500
 const PICKER_FAILSAFE_MS = 30_000
 const IMAGE_PROBE_TIMEOUT_MS = 1500
-type ImagePickerFallbackMessageKey = 'documentMissing' | 'unsupportedFileType' | 'fileReadFailed' | 'pickerOpenFailed'
+type AssetFilePickerMessageKey = 'documentMissing' | 'unsupportedFileType' | 'pickerOpenFailed'
 
-const DEFAULT_MESSAGES: Record<ImagePickerFallbackMessageKey, string> = {
-  documentMissing: 'Image picker fallback requires a browser document.',
+const DEFAULT_MESSAGES: Record<AssetFilePickerMessageKey, string> = {
+  documentMissing: 'Asset file picker requires a browser document.',
   unsupportedFileType: 'Selected file type is not supported by this image field.',
-  fileReadFailed: 'Failed to read selected image file.',
   pickerOpenFailed: 'Failed to open image file picker.',
 }
 
-export async function pickImageWithFileInput(
-  request: DesignerImagePickRequest,
-  options: ImagePickerFallbackOptions = {},
-): Promise<DesignerImagePickResult | null> {
+export async function pickAssetWithFileInput(
+  request: DesignerAssetPickRequest,
+  options: AssetFilePickerOptions = {},
+): Promise<DesignerLocalAssetPickResult | null> {
   const doc = options.document ?? options.input?.ownerDocument ?? globalThis.document
   if (!doc?.body) {
     options.onDiagnostic?.({
@@ -56,7 +54,7 @@ export async function pickImageWithFileInput(
   if (removeInputOnCleanup)
     doc.body.appendChild(input)
 
-  return await new Promise<DesignerImagePickResult | null>((resolve) => {
+  return await new Promise<DesignerLocalAssetPickResult | null>((resolve) => {
     let settled = false
     let focusCancelTimer: ReturnType<typeof globalThis.setTimeout> | undefined
     let failsafeTimer: ReturnType<typeof globalThis.setTimeout> | undefined
@@ -75,7 +73,7 @@ export async function pickImageWithFileInput(
         input.remove()
     }
 
-    function settle(result: DesignerImagePickResult | null) {
+    function settle(result: DesignerLocalAssetPickResult | null) {
       if (settled)
         return
       settled = true
@@ -107,7 +105,7 @@ export async function pickImageWithFileInput(
         return
       }
 
-      settle(await readAcceptedImageFileAsDataUrl(file, request, options))
+      settle(await readAcceptedAssetFile(file, request, options))
     }
 
     input.addEventListener('change', onChange)
@@ -141,11 +139,11 @@ export async function pickImageWithFileInput(
   })
 }
 
-export async function readAcceptedImageFileAsDataUrl(
+export async function readAcceptedAssetFile(
   file: File,
-  request: DesignerImagePickRequest,
-  options: ImagePickerFallbackOptions = {},
-): Promise<DesignerImagePickResult | null> {
+  request: DesignerAssetPickRequest,
+  options: AssetFilePickerOptions = {},
+): Promise<DesignerLocalAssetPickResult | null> {
   const accept = getImagePickerAccept(request.accept)
   if (!matchesAccept(file, accept)) {
     options.onDiagnostic?.({
@@ -157,36 +155,34 @@ export async function readAcceptedImageFileAsDataUrl(
   }
 
   try {
-    return await readImageFileAsDataUrl(file, options)
+    const size = await probeImageSize(file, options.createImage, options.imageProbeTimeoutMs).catch(() => undefined)
+    return {
+      file,
+      name: file.name,
+      width: size?.width,
+      height: size?.height,
+    }
   }
-  catch (error) {
-    options.onDiagnostic?.({
-      severity: 'error',
-      message: message(options, 'fileReadFailed'),
-      detail: {
-        requestId: request.id,
-        fileName: file.name,
-        error: error instanceof Error ? error.message : String(error),
-      },
-    })
+  catch {
     return null
   }
 }
 
-export function getImagePickerAccept(accept?: string[]): string[] {
-  return normalizeAccept(accept)
+export async function uploadAssetAsDataUrl(request: DesignerAssetUploadRequest): Promise<DesignerResolvedAsset> {
+  const url = await readFileAsDataUrl(request.file)
+  return {
+    url,
+    alt: request.picked.alt,
+    width: request.picked.width,
+    height: request.picked.height,
+    name: request.picked.name ?? request.file.name,
+    metadata: request.picked.metadata,
+  }
 }
 
-function message(options: ImagePickerFallbackOptions, key: ImagePickerFallbackMessageKey): string {
-  return options.messages?.[key] ?? DEFAULT_MESSAGES[key]
-}
-
-export async function readImageFileAsDataUrl(
-  file: File,
-  options: ImagePickerFallbackOptions = {},
-): Promise<DesignerImagePickResult> {
-  const reader = options.createFileReader?.() ?? new FileReader()
-  const src = await new Promise<string>((resolve, reject) => {
+export async function readFileAsDataUrl(file: File): Promise<string> {
+  const reader = new FileReader()
+  return await new Promise<string>((resolve, reject) => {
     reader.onerror = () => reject(reader.error ?? new Error('FileReader failed.'))
     reader.onload = () => {
       if (typeof reader.result === 'string' && reader.result)
@@ -196,14 +192,14 @@ export async function readImageFileAsDataUrl(
     }
     reader.readAsDataURL(file)
   })
+}
 
-  const size = await probeImageSize(src, options.createImage, options.imageProbeTimeoutMs).catch(() => undefined)
-  return {
-    src,
-    name: file.name,
-    width: size?.width,
-    height: size?.height,
-  }
+export function getImagePickerAccept(accept?: string[]): string[] {
+  return normalizeAccept(accept)
+}
+
+function message(options: AssetFilePickerOptions, key: AssetFilePickerMessageKey): string {
+  return options.messages?.[key] ?? DEFAULT_MESSAGES[key]
 }
 
 function normalizeAccept(accept?: string[]): string[] {
@@ -230,19 +226,22 @@ function matchesAccept(file: File, accept: string[]): boolean {
 }
 
 function probeImageSize(
-  src: string,
-  createImage: ImagePickerFallbackOptions['createImage'],
+  src: string | Blob,
+  createImage: AssetFilePickerOptions['createImage'],
   timeoutMs = IMAGE_PROBE_TIMEOUT_MS,
 ): Promise<{ width: number, height: number }> {
   return new Promise((resolve, reject) => {
     const image = createImage?.() ?? new Image()
     let timeout: ReturnType<typeof globalThis.setTimeout> | undefined
+    let objectUrl: string | undefined
 
     function cleanup() {
       image.onload = null
       image.onerror = null
       if (timeout !== undefined)
         globalThis.clearTimeout(timeout)
+      if (objectUrl)
+        URL.revokeObjectURL(objectUrl)
     }
 
     image.onload = () => {
@@ -257,6 +256,18 @@ function probeImageSize(
       cleanup()
       reject(new Error('Image size probe timed out.'))
     }, timeoutMs)
-    image.src = src
+    if (typeof src === 'string') {
+      image.src = src
+      return
+    }
+
+    if (typeof URL.createObjectURL !== 'function') {
+      cleanup()
+      reject(new Error('URL.createObjectURL is unavailable.'))
+      return
+    }
+
+    objectUrl = URL.createObjectURL(src)
+    image.src = objectUrl
   })
 }

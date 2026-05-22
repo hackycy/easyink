@@ -64,56 +64,133 @@ describe('designer interaction service', () => {
     await expect(service.confirm({ id: 'cleared', message: 'Cleared?' })).resolves.toBe(false)
   })
 
-  it('delegates image picker requests to host provider and preserves cancel', async () => {
-    const pickImage = vi.fn(() => ({ src: 'https://example.com/a.png', alt: 'A' }))
+  it('delegates asset picker requests to host provider and preserves cancel', async () => {
+    const pickAsset = vi.fn(() => ({ url: 'https://example.com/a.png', alt: 'A' }))
     const service = new DesignerInteractionService()
-    service.setProvider({ pickImage })
+    service.setProvider({ pickAsset })
 
-    await expect(service.pickImage({
+    await expect(service.pickAsset({
       id: 'designer.imageMaterial.pickImage',
       source: 'image-material',
-      currentSrc: '',
+      currentUrl: '',
       accept: ['image/*'],
       payload: { nodeId: 'img_1' },
-    })).resolves.toEqual({ src: 'https://example.com/a.png', alt: 'A' })
-    expect(pickImage).toHaveBeenCalledTimes(1)
+    })).resolves.toEqual({ url: 'https://example.com/a.png', alt: 'A' })
+    expect(pickAsset).toHaveBeenCalledTimes(1)
 
-    service.setProvider({ pickImage: () => null })
-    await expect(service.pickImage({
+    service.setProvider({ pickAsset: () => null })
+    await expect(service.pickAsset({
       id: 'designer.imageMaterial.pickImage',
       source: 'image-material',
     })).resolves.toBeNull()
   })
 
-  it('uses the fallback image picker only when no host picker is registered', async () => {
-    const fallbackPickImage = vi.fn(() => ({ src: 'data:image/png;base64,fallback' }))
-    const hostPickImage = vi.fn(() => ({ src: 'https://example.com/host.png' }))
+  it('uses the shell asset picker only when no host picker is registered', async () => {
+    const fallbackPickAsset = vi.fn(() => ({ url: 'https://example.com/fallback.png' }))
+    const hostPickAsset = vi.fn(() => ({ url: 'https://example.com/host.png' }))
     const service = new DesignerInteractionService()
-    service.setFallbackProvider({ pickImage: fallbackPickImage })
+    service.setFallbackProvider({ pickAsset: fallbackPickAsset })
 
     await expect(
-      service.pickImage({ id: 'fallback', source: 'image-material' }),
-    ).resolves.toEqual({ src: 'data:image/png;base64,fallback' })
+      service.pickAsset({ id: 'fallback', source: 'image-material' }),
+    ).resolves.toEqual({ url: 'https://example.com/fallback.png' })
 
-    service.setProvider({ pickImage: hostPickImage })
+    service.setProvider({ pickAsset: hostPickAsset })
     await expect(
-      service.pickImage({ id: 'host', source: 'image-material' }),
-    ).resolves.toEqual({ src: 'https://example.com/host.png' })
-    expect(fallbackPickImage).toHaveBeenCalledTimes(1)
-    expect(hostPickImage).toHaveBeenCalledTimes(1)
+      service.pickAsset({ id: 'host', source: 'image-material' }),
+    ).resolves.toEqual({ url: 'https://example.com/host.png' })
+    expect(fallbackPickAsset).toHaveBeenCalledTimes(1)
+    expect(hostPickAsset).toHaveBeenCalledTimes(1)
   })
 
-  it('returns null when no image picker is available and propagates picker errors', async () => {
+  it('uploads local files picked by either picker before returning a stable asset', async () => {
+    const file = new File(['image'], 'sample.png', { type: 'image/png' })
+    const pickAsset = vi.fn(() => ({ file, name: 'sample.png', metadata: { source: 'library' } }))
+    const uploadAsset = vi.fn(() => ({ url: 'https://cdn.example.com/sample.png', assetId: 'asset_1' }))
+    const service = new DesignerInteractionService()
+    service.setProvider({ pickAsset, uploadAsset })
+
+    await expect(service.pickAsset({
+      id: 'designer.imageMaterial.pickImage',
+      source: 'image-material',
+      accept: ['image/*'],
+    })).resolves.toEqual({ url: 'https://cdn.example.com/sample.png', assetId: 'asset_1' })
+
+    expect(uploadAsset).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'designer.imageMaterial.pickImage',
+      source: 'image-material',
+      file,
+      picked: expect.objectContaining({ file, name: 'sample.png' }),
+    }))
+  })
+
+  it('can combine the shell file picker with a host uploader', async () => {
+    const file = new File(['image'], 'sample.png', { type: 'image/png' })
+    const fallbackPickAsset = vi.fn(() => ({ file, name: 'sample.png' }))
+    const uploadAsset = vi.fn(() => ({ url: 'https://cdn.example.com/sample.png' }))
+    const service = new DesignerInteractionService()
+    service.setFallbackProvider({ pickAsset: fallbackPickAsset })
+    service.setProvider({ uploadAsset })
+
+    expect(service.canPickAsset()).toBe(true)
+    await expect(service.pickAsset({ id: 'fallback', source: 'image-material' }))
+      .resolves
+      .toEqual({ url: 'https://cdn.example.com/sample.png' })
+    expect(fallbackPickAsset).toHaveBeenCalledTimes(1)
+    expect(uploadAsset).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses the shell uploader when no host uploader is registered', async () => {
+    const file = new File(['image'], 'sample.png', { type: 'image/png' })
+    const fallbackPickAsset = vi.fn(() => ({ file, name: 'sample.png' }))
+    const fallbackUploadAsset = vi.fn(() => ({ url: 'data:image/png;base64,aW1hZ2U=', name: 'sample.png' }))
+    const service = new DesignerInteractionService()
+    service.setFallbackProvider({ pickAsset: fallbackPickAsset, uploadAsset: fallbackUploadAsset })
+
+    expect(service.canPickAsset()).toBe(true)
+    await expect(service.pickAsset({ id: 'fallback', source: 'image-material' }))
+      .resolves
+      .toEqual({ url: 'data:image/png;base64,aW1hZ2U=', name: 'sample.png' })
+    expect(fallbackPickAsset).toHaveBeenCalledTimes(1)
+    expect(fallbackUploadAsset).toHaveBeenCalledWith(expect.objectContaining({
+      file,
+      picked: expect.objectContaining({ file, name: 'sample.png' }),
+    }))
+  })
+
+  it('uses the shell uploader for host-picked local files when the host omits uploadAsset', async () => {
+    const file = new File(['image'], 'sample.png', { type: 'image/png' })
+    const pickAsset = vi.fn(() => ({ file, name: 'sample.png' }))
+    const fallbackUploadAsset = vi.fn(() => ({ url: 'data:image/png;base64,aW1hZ2U=', name: 'sample.png' }))
+    const service = new DesignerInteractionService()
+    service.setProvider({ pickAsset })
+    service.setFallbackProvider({ uploadAsset: fallbackUploadAsset })
+
+    await expect(service.pickAsset({ id: 'host-local', source: 'image-material' }))
+      .resolves
+      .toEqual({ url: 'data:image/png;base64,aW1hZ2U=', name: 'sample.png' })
+    expect(fallbackUploadAsset).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns null when no asset picker is available or a local file cannot be uploaded', async () => {
+    const file = new File(['image'], 'sample.png', { type: 'image/png' })
     const service = new DesignerInteractionService()
 
-    await expect(service.pickImage({ id: 'missing', source: 'image-material' })).resolves.toBeNull()
+    await expect(service.pickAsset({ id: 'missing', source: 'image-material' })).resolves.toBeNull()
+
+    service.setFallbackProvider({ pickAsset: () => ({ file }) })
+    await expect(service.pickAsset({ id: 'local', source: 'image-material' })).resolves.toBeNull()
+  })
+
+  it('propagates asset picker errors', async () => {
+    const service = new DesignerInteractionService()
 
     service.setProvider({
-      pickImage: () => {
+      pickAsset: () => {
         throw new Error('boom')
       },
     })
 
-    await expect(service.pickImage({ id: 'error', source: 'image-material' })).rejects.toThrow('boom')
+    await expect(service.pickAsset({ id: 'error', source: 'image-material' })).rejects.toThrow('boom')
   })
 })

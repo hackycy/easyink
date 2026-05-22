@@ -17,7 +17,7 @@ import DesignerConfirmHost from './DesignerConfirmHost.vue'
 import StatusBar from './StatusBar.vue'
 import TopBarB from './TopBarB.vue'
 
-const props = withDefaults(defineProps<{
+const props = defineProps<{
   schema?: DocumentSchemaInput
   dataSources?: DataSourceDescriptor[]
   preferenceProvider?: PreferenceProvider
@@ -26,10 +26,7 @@ const props = withDefaults(defineProps<{
   setupStore?: StoreSetup
   contributions?: Contribution[]
   interactionProvider?: DesignerInteractionProvider
-  enableImagePickerFallback?: boolean
-}>(), {
-  enableImagePickerFallback: true,
-})
+}>()
 
 const emit = defineEmits<{
   'update:schema': [schema: DocumentSchema]
@@ -37,7 +34,6 @@ const emit = defineEmits<{
 
 const designerRootRef = ref<HTMLElement | null>(null)
 const store = reactive(new DesignerStore(props.schema, props.preferenceProvider, props.interactionProvider)) as DesignerStore
-store.setImagePickerFallbackEnabled(props.enableImagePickerFallback !== false)
 if (store.schema !== props.schema) {
   emit('update:schema', store.schema)
 }
@@ -107,10 +103,6 @@ watch(() => props.interactionProvider, (newProvider) => {
   store.setInteractionProvider(newProvider)
 })
 
-watch(() => props.enableImagePickerFallback, (enabled) => {
-  store.setImagePickerFallbackEnabled(enabled !== false)
-})
-
 function getFocusStateFromTarget(target: EventTarget | null): StatusBarState['focus'] {
   if (!(target instanceof Element))
     return 'none'
@@ -170,7 +162,7 @@ onBeforeUnmount(() => {
     <TopBarB />
     <CanvasWorkspace />
     <StatusBar />
-    <DesignerConfirmHost :enable-image-picker-fallback="props.enableImagePickerFallback !== false" />
+    <DesignerConfirmHost />
 
     <!-- Overlay root for contribution-registered panels (Vue Teleport target). -->
     <div id="ei-overlay-root" class="ei-designer__overlay-root" />

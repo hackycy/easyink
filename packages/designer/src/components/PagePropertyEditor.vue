@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { PagePropertyDescriptor } from '../page-properties'
-import type { DesignerImagePickResult } from '../types'
+import type { DesignerResolvedAsset } from '../types'
 import { EiColorPicker, EiFontPicker, EiInput, EiNumberInput, EiSelect, EiSwitch } from '@easyink/ui'
 import { computed } from 'vue'
 import { useDesignerStore } from '../composables'
@@ -39,8 +39,8 @@ function onCommit(val: unknown) {
   emit('change', props.descriptor, val)
 }
 
-function onImagePicked(result: DesignerImagePickResult) {
-  onCommit(result.src)
+function onImagePicked(result: DesignerResolvedAsset) {
+  onCommit(result.url)
 }
 </script>
 
@@ -104,7 +104,7 @@ function onImagePicked(result: DesignerImagePickResult) {
         id: 'designer.pageBackground.pickImage',
         source: 'page-background',
         title: label,
-        currentSrc: (value as string) ?? '',
+        currentUrl: (value as string) ?? '',
         accept: ['image/*'],
         payload: { page: store.schema.page },
       }"

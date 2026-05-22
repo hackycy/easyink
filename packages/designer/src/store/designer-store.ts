@@ -34,8 +34,9 @@ export class DesignerStore {
    */
   readonly diagnostics = new DiagnosticsChannel()
   readonly fontManager = new FontManager()
-  imagePickerFallbackEnabled = true
-  hostImagePickerAvailable = false
+  assetPickerAvailable = false
+  hostAssetPickerAvailable = false
+  hostAssetUploaderAvailable = false
   // ─── Clipboard (internal, not in Schema) ──────────────────────
   clipboard: MaterialNode[] = []
 
@@ -108,11 +109,13 @@ export class DesignerStore {
 
   setInteractionProvider(provider?: DesignerInteractionProvider): void {
     this.interactions.setProvider(provider)
-    this.hostImagePickerAvailable = this.interactions.hasHostImagePicker()
+    this.refreshInteractionAvailability()
   }
 
-  setImagePickerFallbackEnabled(enabled: boolean): void {
-    this.imagePickerFallbackEnabled = enabled
+  refreshInteractionAvailability(): void {
+    this.hostAssetPickerAvailable = this.interactions.hasHostAssetPicker()
+    this.hostAssetUploaderAvailable = this.interactions.hasHostAssetUploader()
+    this.assetPickerAvailable = this.interactions.canPickAsset()
   }
 
   // ─── Template Save Status ─────────────────────────────────────
@@ -369,6 +372,7 @@ export class DesignerStore {
     this._ephemeralPanel = null
     this.setInteractionProvider(undefined)
     this.interactions.setFallbackProvider(undefined)
+    this.refreshInteractionAvailability()
     this.editingSession.exit()
   }
 }

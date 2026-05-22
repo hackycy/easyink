@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DesignerImagePickRequest, DesignerImagePickResult } from '../types'
+import type { DesignerAssetPickRequest, DesignerResolvedAsset } from '../types'
 import { IconCircleAlert, IconClose, IconImage, IconLoader } from '@easyink/icons'
 import { EiIcon } from '@easyink/ui'
 import { computed, nextTick, ref, watch } from 'vue'
@@ -10,14 +10,14 @@ const props = defineProps<{
   modelValue?: string
   placeholder?: string
   disabled?: boolean
-  pickRequest: DesignerImagePickRequest
+  pickRequest: DesignerAssetPickRequest
   t: (key: string) => string
 }>()
 
 const emit = defineEmits<{
   'update:modelValue': [value: string]
   'commit': [value: string]
-  'pick': [result: DesignerImagePickResult]
+  'pick': [result: DesignerResolvedAsset]
 }>()
 
 const store = useDesignerStore()
@@ -28,7 +28,7 @@ const previewState = ref<'idle' | 'loading' | 'loaded' | 'error'>('idle')
 
 const value = computed(() => props.modelValue ?? '')
 const hasValue = computed(() => value.value.trim().length > 0)
-const canPickImage = computed(() => store.hostImagePickerAvailable || store.imagePickerFallbackEnabled)
+const canPickImage = computed(() => store.assetPickerAvailable)
 const pickTitle = computed(() => props.t('designer.action.pickImage'))
 const clearTitle = computed(() => props.t('designer.action.clearImage'))
 const previewTitle = computed(() => props.t('designer.action.imagePreview'))
@@ -67,10 +67,10 @@ function clearValue() {
   snapshotValue.value = ''
 }
 
-function commitPickedResult(result: DesignerImagePickResult) {
-  updateValue(result.src)
+function commitPickedResult(result: DesignerResolvedAsset) {
+  updateValue(result.url)
   emit('pick', result)
-  snapshotValue.value = result.src
+  snapshotValue.value = result.url
 }
 
 function text(key: string, fallback: string): string {
@@ -84,17 +84,17 @@ async function pickImage() {
 
   pending.value = true
   try {
-    const result = await store.interactions.pickImage({
+    const result = await store.interactions.pickAsset({
       ...props.pickRequest,
-      currentSrc: value.value,
+      currentUrl: value.value,
     })
     if (!result)
       return
-    if (typeof result.src !== 'string' || !result.src.trim()) {
+    if (typeof result.url !== 'string' || !result.url.trim()) {
       store.diagnostics.push({
         source: 'designer-interaction',
         severity: 'warn',
-        message: text('designer.diagnostic.imagePickerEmptySource', 'Image picker returned an empty image source.'),
+        message: text('designer.diagnostic.assetPickerEmptyUrl', 'Asset picker returned an empty asset URL.'),
         detail: { requestId: props.pickRequest.id },
       })
       return
@@ -106,7 +106,7 @@ async function pickImage() {
     store.diagnostics.push({
       source: 'designer-interaction',
       severity: 'error',
-      message: text('designer.diagnostic.imagePickerFailed', 'Image picker failed.'),
+      message: text('designer.diagnostic.assetPickerFailed', 'Asset picker failed.'),
       detail: {
         requestId: props.pickRequest.id,
         error: error instanceof Error ? error.message : String(error),

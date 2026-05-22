@@ -4,7 +4,7 @@ import type { BindingRef, DocumentSchema, MaterialNode, PageSchema } from '@easy
 import type { BindingDisplayFormat } from '@easyink/shared'
 import type { Component } from 'vue'
 import type { PagePropertyContext, PagePropertyDescriptor, PagePropertyGroup } from '../page-properties'
-import type { DesignerImagePickRequest, DesignerImagePickResult, PanelSectionId, PropSchema } from '../types'
+import type { DesignerAssetPickRequest, DesignerResolvedAsset, PanelSectionId, PropSchema } from '../types'
 import { ClearBindingCommand, getByPath, setByPath, UpdateBindingFormatCommand, UpdateDocumentCommand, UpdateGeometryCommand, UpdateMaterialMetaCommand, UpdateMaterialPropsCommand, UpdatePageCommand } from '@easyink/core'
 import { createLayoutBehaviorPropSchemas, getPropSchemas, groupPropSchemas } from '@easyink/prop-schemas'
 import { deepClone, PAPER_PRESETS } from '@easyink/shared'
@@ -90,8 +90,8 @@ function updateSubProp(key: string, value: unknown) {
   subPropertySchema.value.write(key, value, session.tx)
 }
 
-function updateSubImagePropFromPicker(key: string, result: DesignerImagePickResult) {
-  updateSubProp(key, result.src)
+function updateSubImagePropFromPicker(key: string, result: DesignerResolvedAsset) {
+  updateSubProp(key, result.url)
 }
 
 const subCustomEditors = computed<Record<string, Component> | undefined>(() => {
@@ -427,12 +427,12 @@ function updateProp(key: string, value: unknown) {
   store.commands.execute(cmd)
 }
 
-function updateImagePropFromPicker(key: string, result: DesignerImagePickResult) {
+function updateImagePropFromPicker(key: string, result: DesignerResolvedAsset) {
   const el = selectedElement.value
   if (!el)
     return
 
-  const updates: Record<string, unknown> = { [key]: result.src }
+  const updates: Record<string, unknown> = { [key]: result.url }
   const oldValues: Record<string, unknown> = {}
   const oldValue = propSnapshots.get(key)
   if (oldValue !== undefined)
@@ -553,11 +553,11 @@ function isPropInputDisabled(schema: PropSchema): boolean {
   return isMaterialPropSchemaDisabled(store, el, schema)
 }
 
-function createImagePickRequest(schema: PropSchema): DesignerImagePickRequest {
+function createImagePickRequest(schema: PropSchema): DesignerAssetPickRequest {
   return {
     id: 'designer.imageMaterial.pickImage',
     source: 'image-material',
-    currentSrc: String(readPropValue(schema) ?? ''),
+    currentUrl: String(readPropValue(schema) ?? ''),
     accept: ['image/*'],
     payload: {
       nodeId: selectedElement.value?.id,
