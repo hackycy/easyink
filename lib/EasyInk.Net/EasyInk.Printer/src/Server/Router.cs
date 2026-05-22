@@ -63,8 +63,6 @@ public class Router
             // POST routes
             Route("POST", Exact("/api/print"), HandlePrintRequest),
             Route("POST", Exact("/api/print/async"), HandleEnqueuePrintRequest),
-            Route("POST", Exact("/api/print/batch"), async req => _printController.BatchPrint(await ReadBodyAsString(req) ?? "")),
-            Route("POST", Exact("/api/print/batch/async"), async req => _printController.EnqueueBatchPrint(await ReadBodyAsString(req) ?? "")),
         };
     }
 

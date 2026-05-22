@@ -74,8 +74,6 @@ public class RouterTests
     [InlineData("/api/logs")]
     [InlineData("/api/print")]
     [InlineData("/api/print/async")]
-    [InlineData("/api/print/batch")]
-    [InlineData("/api/print/batch/async")]
     [InlineData("/api/status/connections")]
     public void Exact_MatchesCorrectPaths(string path)
     {

@@ -141,23 +141,6 @@ curl -X POST http://localhost:18080/api/print/async \
 { "jobId": "550e8400-e29b-41d4-a716-446655440000" }
 ```
 
-#### POST /api/print/batch
-
-批量同步打印。
-
-```bash
-curl -X POST http://localhost:18080/api/print/batch \
-  -H "Content-Type: application/json" \
-  -d '[
-    {"printerName":"Printer1","pdfBase64":"..."},
-    {"printerName":"Printer2","pdfBase64":"..."}
-  ]'
-```
-
-#### POST /api/print/batch/async
-
-批量异步打印，返回 jobId 数组。
-
 ### 任务
 
 #### GET /api/jobs

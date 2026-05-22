@@ -146,7 +146,7 @@ onBeforeUnmount(() => {
 
 如果打印模块是应用级单例，并且多个页面都会复用同一个打印连接，不要在单个页面离开时断开 `client`。可以只在用户关闭打印功能、退出登录或应用卸载时调用 `client.disconnect()`。
 
-只有批量打印、连续打印并且你明确想复用同一个托管 Viewer 时，才需要关闭自动销毁：
+只有连续打印并且你明确想复用同一个托管 Viewer 时，才需要关闭自动销毁：
 
 ```ts
 const printer = createEasyInkPrinter({

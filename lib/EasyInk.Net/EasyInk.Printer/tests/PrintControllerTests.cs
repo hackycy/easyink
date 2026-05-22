@@ -72,26 +72,4 @@ public class PrintControllerTests
         Assert.True(result.Success);
     }
 
-    [Fact]
-    public void BatchPrint_EmptyBody_ReturnsError()
-    {
-        var controller = CreateController();
-        var result = controller.BatchPrint("");
-
-        Assert.False(result.Success);
-    }
-
-    [Fact]
-    public void BatchPrint_ArrayBody_CallsEngineApi()
-    {
-        var printService = new Mock<IPrintService>();
-        printService.Setup(s => s.Print(It.IsAny<string>(), It.IsAny<PrintRequestParams>(), It.IsAny<System.Threading.CancellationToken>()))
-            .Returns(PrinterResult.Ok("test", PrintResult.Success("job-1")));
-
-        var controller = CreateController(printService: printService);
-        var body = @"[{""printerName"":""P1"",""pdfBase64"":""AQID""}]";
-        var result = controller.BatchPrint(body);
-
-        Assert.True(result.Success);
-    }
 }

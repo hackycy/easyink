@@ -119,8 +119,6 @@ PrinterResult result = api.HandleCommand(jsonString);
 | `printAsync` | 同上 | 异步打印，立即返回 jobId |
 | `getJobStatus` | `jobId` | 查询任务状态 |
 | `getAllJobs` | - | 获取所有任务 |
-| `batchPrint` | `jobs[]` | 批量同步打印 |
-| `batchPrintAsync` | `jobs[]` | 批量异步打印 |
 
 ## 方法一览
 

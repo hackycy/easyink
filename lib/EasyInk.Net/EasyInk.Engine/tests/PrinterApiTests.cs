@@ -4,7 +4,6 @@ using EasyInk.Engine.Models;
 using EasyInk.Engine.Services.Abstractions;
 using Moq;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using Xunit;
 
 namespace EasyInk.Engine.Tests;
@@ -123,17 +122,15 @@ public class PrinterApiTests
         Assert.Equal(ErrorCode.UnknownCommand, result.ErrorInfo!.Code);
     }
 
-    [Fact]
-    public void HandleCommand_BatchPrint_EmptyJobs_ReturnsError()
+    [Theory]
+    [InlineData("batchPrint")]
+    [InlineData("batchPrintAsync")]
+    public void HandleCommand_BatchPrintCommands_ReturnUnknownCommand(string command)
     {
         using var api = CreateApi();
-        var parms = new Dictionary<string, object>
-        {
-            ["jobs"] = new JArray()
-        };
-        var result = api.HandleCommand(MakeCommand("batchPrint", parms: parms));
+        var result = api.HandleCommand(MakeCommand(command));
         Assert.False(result.Success);
-        Assert.Equal(ErrorCode.InvalidParams, result.ErrorInfo!.Code);
+        Assert.Equal(ErrorCode.UnknownCommand, result.ErrorInfo!.Code);
     }
 
     [Fact]

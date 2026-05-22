@@ -1,10 +1,8 @@
 using System;
 using System.Collections.Generic;
-using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using EasyInk.Engine;
 using EasyInk.Engine.Models;
-using EasyInk.Printer;
 using EasyInk.Printer.Services;
 
 namespace EasyInk.Printer.Api;
@@ -40,16 +38,6 @@ public class PrintController
         return ExecuteCommandWithBlob("printAsync", body, pdfBytes);
     }
 
-    public PrinterResult BatchPrint(string body)
-    {
-        return ExecuteBatchCommand("batchPrint", body);
-    }
-
-    public PrinterResult EnqueueBatchPrint(string body)
-    {
-        return ExecuteBatchCommand("batchPrintAsync", body);
-    }
-
     private PrinterResult ExecuteCommand(string command, string body)
     {
         var id = Guid.NewGuid().ToString();
@@ -82,29 +70,6 @@ public class PrintController
         var result = _api.HandleCommand(cmd);
         _debugLogService?.WriteSubmitResult(id, result);
         return result;
-    }
-
-    private PrinterResult ExecuteBatchCommand(string command, string body)
-    {
-        if (string.IsNullOrEmpty(body))
-            return PrinterResult.Error(Guid.NewGuid().ToString(), ErrorCode.InvalidParams, LangManager.Get("Api_MissingBody"));
-
-        var token = JToken.Parse(body);
-        JArray jobs;
-        if (token is JArray arr)
-            jobs = arr;
-        else if (token is JObject obj && obj["jobs"] is JArray jArr)
-            jobs = jArr;
-        else
-            return PrinterResult.Error(Guid.NewGuid().ToString(), ErrorCode.InvalidParams, LangManager.Get("Api_JobsMustBeArray"));
-
-        var cmd = new PrinterCommand
-        {
-            Command = command,
-            Id = Guid.NewGuid().ToString(),
-            Params = new Dictionary<string, object> { ["jobs"] = jobs }
-        };
-        return _api.HandleCommand(cmd);
     }
 
     private static Dictionary<string, object>? ParseBodyToDictionary(string body)

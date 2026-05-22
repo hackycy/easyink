@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using EasyInk.Engine.Models;
@@ -209,10 +208,6 @@ public class EngineApi : IDisposable
                 return HandleGetJobStatus(request);
             case "getAllJobs":
                 return PrinterResult.Ok(request.Id, _jobQueue.GetAllJobs());
-            case "batchPrint":
-                return HandleBatchPrint(request, enqueue: false);
-            case "batchPrintAsync":
-                return HandleBatchPrint(request, enqueue: true);
             default:
                 return PrinterResult.Error(request.Id, ErrorCode.UnknownCommand, $"未知命令: {request.Command}");
         }
@@ -286,26 +281,6 @@ public class EngineApi : IDisposable
         return PrinterResult.Ok(request.Id, info);
     }
 
-    private PrinterResult HandleBatchPrint(PrinterCommand request, bool enqueue)
-    {
-        var jobsToken = request.Params != null && request.Params.ContainsKey("jobs")
-            ? request.Params["jobs"]
-            : null;
-
-        if (jobsToken == null || !(jobsToken is JArray jArr))
-        {
-            return PrinterResult.Error(request.Id, ErrorCode.InvalidParams, "缺少jobs数组参数");
-        }
-
-        var jobs = jArr.ToObject<List<PrintRequestParams>>() ?? new List<PrintRequestParams>();
-        if (jobs.Count == 0)
-        {
-            return PrinterResult.Error(request.Id, ErrorCode.InvalidParams, "jobs不能为空");
-        }
-
-        return ExecuteBatchJobs(request.Id, jobs, enqueue);
-    }
-
     private PrintRequestParams? ExtractPrintParams(PrinterCommand request)
     {
         if (request.Params == null || request.Params.Count == 0)
@@ -352,44 +327,6 @@ public class EngineApi : IDisposable
             RaiseLog(LogLevel.Error, $"参数 '{key}' 转换失败: {ex.Message}");
             return default;
         }
-    }
-
-    private PrinterResult ExecuteBatchJobs(string requestId, List<PrintRequestParams> jobs, bool enqueue)
-    {
-        if (enqueue)
-        {
-            var results = new List<BatchJobResult>(jobs.Count);
-            foreach (var job in jobs)
-            {
-                try
-                {
-                    var jobId = _jobQueue.Enqueue(null, job);
-                    results.Add(new BatchJobResult { JobId = jobId, Status = JobStatus.Queued });
-                }
-                catch (InvalidOperationException ex)
-                {
-                    results.Add(new BatchJobResult { JobId = null, Status = JobStatus.Failed, ErrorMessage = ex.Message });
-                }
-            }
-            return PrinterResult.Ok(requestId, new BatchPrintResult { Jobs = results });
-        }
-
-        var syncResults = new BatchJobResult[jobs.Count];
-        Parallel.For(0, jobs.Count, i =>
-        {
-            var job = jobs[i];
-            var jobId = Guid.NewGuid().ToString();
-            var response = _printService.Print(jobId, job);
-            RaisePrintCompleted(jobId, job, response);
-            syncResults[i] = new BatchJobResult
-            {
-                JobId = jobId,
-                Status = response.Success ? JobStatus.Completed : JobStatus.Failed,
-                ErrorMessage = response.Success ? null : response.ErrorInfo?.Message
-            };
-        });
-
-        return PrinterResult.Ok(requestId, new BatchPrintResult { Jobs = new List<BatchJobResult>(syncResults) });
     }
 
     private sealed class EventLogger : ILogger

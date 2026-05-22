@@ -6,7 +6,7 @@ EasyInk.Engine 是 EasyInk 的打印引擎类库，目标框架为 .NET Framewor
 
 - 打印机列表和状态查询。
 - PDF 来源读取：Base64、URL、二进制。
-- 同步打印、异步队列和批量打印。
+- 同步打印和异步队列。
 - 按打印机名称路由到 PDFium/GDI、SumatraPDF fallback 或 ESC/POS raw。
 - 通过事件把日志和打印完成结果交给宿主处理。
 
@@ -74,8 +74,6 @@ using var api = new EngineApi(
 | `printAsync` | `PrintRequestParams` | 入队打印，返回 `jobId`。 |
 | `getJobStatus` | `jobId` | 查询异步任务。 |
 | `getAllJobs` | - | 获取所有任务记录。 |
-| `batchPrint` | `jobs[]` | 批量同步打印。 |
-| `batchPrintAsync` | `jobs[]` | 批量入队。 |
 
 ## 打印参数
 
