@@ -4,7 +4,6 @@ import { IconCircleAlert, IconClose, IconImage, IconLoader } from '@easyink/icon
 import { EiIcon } from '@easyink/ui'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useDesignerStore } from '../composables'
-import { readImageFileAsDataUrl } from '../interactions/image-picker-fallback'
 
 const props = defineProps<{
   label: string
@@ -21,22 +20,20 @@ const emit = defineEmits<{
   'pick': [result: DesignerImagePickResult]
 }>()
 
-let nativeInputIdSeed = 0
-
 const store = useDesignerStore()
 const snapshotValue = ref<string | undefined>()
 const pending = ref(false)
 const pickButtonRef = ref<HTMLElement | null>(null)
 const previewState = ref<'idle' | 'loading' | 'loaded' | 'error'>('idle')
-const nativeInputId = `ei-image-source-picker-${++nativeInputIdSeed}`
 
 const value = computed(() => props.modelValue ?? '')
 const hasValue = computed(() => value.value.trim().length > 0)
+const canPickImage = computed(() => store.hostImagePickerAvailable || store.imagePickerFallbackEnabled)
 const pickTitle = computed(() => props.t('designer.action.pickImage'))
 const clearTitle = computed(() => props.t('designer.action.clearImage'))
 const previewTitle = computed(() => props.t('designer.action.imagePreview'))
-const useNativeFallback = computed(() => !store.interactions.hasHostImagePicker())
-const acceptAttr = computed(() => (props.pickRequest.accept?.length ? props.pickRequest.accept : ['image/*']).join(','))
+const previewLoadingTitle = computed(() => props.t('designer.action.imagePreviewLoading'))
+const previewFailedTitle = computed(() => props.t('designer.action.imagePreviewFailed'))
 
 watch(value, (next) => {
   previewState.value = next.trim() ? 'loading' : 'idle'
@@ -76,8 +73,13 @@ function commitPickedResult(result: DesignerImagePickResult) {
   snapshotValue.value = result.src
 }
 
+function text(key: string, fallback: string): string {
+  const value = props.t(key)
+  return value === key ? fallback : value
+}
+
 async function pickImage() {
-  if (pending.value || props.disabled)
+  if (pending.value || props.disabled || !canPickImage.value)
     return
 
   pending.value = true
@@ -92,7 +94,7 @@ async function pickImage() {
       store.diagnostics.push({
         source: 'designer-interaction',
         severity: 'warn',
-        message: 'Image picker returned an empty image source.',
+        message: text('designer.diagnostic.imagePickerEmptySource', 'Image picker returned an empty image source.'),
         detail: { requestId: props.pickRequest.id },
       })
       return
@@ -104,7 +106,7 @@ async function pickImage() {
     store.diagnostics.push({
       source: 'designer-interaction',
       severity: 'error',
-      message: 'Image picker failed.',
+      message: text('designer.diagnostic.imagePickerFailed', 'Image picker failed.'),
       detail: {
         requestId: props.pickRequest.id,
         error: error instanceof Error ? error.message : String(error),
@@ -116,61 +118,6 @@ async function pickImage() {
     await nextTick()
     pickButtonRef.value?.focus()
   }
-}
-
-async function onNativeFileChange(event: Event) {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  input.value = ''
-  if (!file)
-    return
-
-  if (file.type && !file.type.toLowerCase().startsWith('image/')) {
-    store.diagnostics.push({
-      source: 'designer-interaction',
-      severity: 'warn',
-      message: 'Selected file type is not supported by this image field.',
-      detail: { requestId: props.pickRequest.id, fileName: file.name, fileType: file.type },
-    })
-    return
-  }
-
-  pending.value = true
-  try {
-    commitPickedResult(await readImageFileAsDataUrl(file))
-  }
-  catch (error) {
-    store.diagnostics.push({
-      source: 'designer-interaction',
-      severity: 'error',
-      message: 'Failed to read selected image file.',
-      detail: {
-        requestId: props.pickRequest.id,
-        fileName: file.name,
-        error: error instanceof Error ? error.message : String(error),
-      },
-    })
-  }
-  finally {
-    pending.value = false
-    await nextTick()
-    pickButtonRef.value?.focus()
-  }
-}
-
-function preventNativeOpenWhenDisabled(event: MouseEvent | KeyboardEvent) {
-  if (!props.disabled && !pending.value)
-    return
-  event.preventDefault()
-}
-
-function openNativeInputFromKeyboard(event: KeyboardEvent) {
-  if (props.disabled || pending.value) {
-    event.preventDefault()
-    return
-  }
-  event.preventDefault()
-  document.getElementById(nativeInputId)?.click()
 }
 </script>
 
@@ -190,45 +137,17 @@ function openNativeInputFromKeyboard(event: KeyboardEvent) {
         @keydown.enter="onCommit"
       >
       <button
-        v-if="!useNativeFallback"
         ref="pickButtonRef"
         class="ei-image-source-editor__button"
         type="button"
         :title="pickTitle"
         :aria-label="pickTitle"
-        :disabled="disabled || pending"
+        :disabled="disabled || pending || !canPickImage"
         @pointerdown.stop
         @click.stop="pickImage"
       >
         <EiIcon :icon="pending ? IconLoader : IconImage" :size="15" />
       </button>
-      <input
-        v-else
-        :id="nativeInputId"
-        class="ei-image-source-editor__file"
-        type="file"
-        :accept="acceptAttr"
-        :disabled="disabled || pending"
-        @change="onNativeFileChange"
-      >
-      <label
-        v-if="useNativeFallback"
-        ref="pickButtonRef"
-        class="ei-image-source-editor__button"
-        :class="{ 'ei-image-source-editor__button--disabled': disabled || pending }"
-        :for="nativeInputId"
-        role="button"
-        tabindex="0"
-        :title="pickTitle"
-        :aria-label="pickTitle"
-        :aria-disabled="disabled || pending"
-        @pointerdown.stop
-        @click.stop="preventNativeOpenWhenDisabled"
-        @keydown.enter.stop="openNativeInputFromKeyboard"
-        @keydown.space.stop="openNativeInputFromKeyboard"
-      >
-        <EiIcon :icon="pending ? IconLoader : IconImage" :size="15" />
-      </label>
       <button
         v-if="hasValue"
         class="ei-image-source-editor__button"
@@ -255,10 +174,20 @@ function openNativeInputFromKeyboard(event: KeyboardEvent) {
         @load="previewState = 'loaded'"
         @error="previewState = 'error'"
       >
-      <div v-if="previewState === 'loading'" class="ei-image-source-editor__placeholder">
+      <div
+        v-if="previewState === 'loading'"
+        class="ei-image-source-editor__placeholder"
+        :title="previewLoadingTitle"
+        :aria-label="previewLoadingTitle"
+      >
         <EiIcon :icon="IconLoader" :size="16" />
       </div>
-      <div v-else-if="previewState === 'error'" class="ei-image-source-editor__placeholder ei-image-source-editor__placeholder--error">
+      <div
+        v-else-if="previewState === 'error'"
+        class="ei-image-source-editor__placeholder ei-image-source-editor__placeholder--error"
+        :title="previewFailedTitle"
+        :aria-label="previewFailedTitle"
+      >
         <EiIcon :icon="IconCircleAlert" :size="16" />
       </div>
     </div>
@@ -299,7 +228,6 @@ function openNativeInputFromKeyboard(event: KeyboardEvent) {
     font-size: 13px;
     outline: none;
     background: transparent;
-    color: var(--ei-text, #333);
     min-width: 0;
     width: 100%;
     box-sizing: border-box;
@@ -314,6 +242,7 @@ function openNativeInputFromKeyboard(event: KeyboardEvent) {
   }
 
   &__button {
+    position: relative;
     width: 28px;
     height: 28px;
     display: inline-flex;
@@ -339,16 +268,7 @@ function openNativeInputFromKeyboard(event: KeyboardEvent) {
     &--disabled {
       opacity: 0.5;
       cursor: not-allowed;
-      pointer-events: none;
     }
-  }
-
-  &__file {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    opacity: 0;
-    pointer-events: none;
   }
 
   &__preview {

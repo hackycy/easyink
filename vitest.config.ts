@@ -1,7 +1,8 @@
+import Vue from 'unplugin-vue/vite'
 import { configDefaults, defineConfig } from 'vitest/config'
 
 export default defineConfig({
-  plugins: [],
+  plugins: [Vue()],
   test: {
     environment: 'happy-dom',
     environmentOptions: {

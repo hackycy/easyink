@@ -86,6 +86,8 @@ const enUS: LocaleMessages = {
       pickImage: 'Pick Image',
       clearImage: 'Clear Image',
       imagePreview: 'Image Preview',
+      imagePreviewLoading: 'Image Loading',
+      imagePreviewFailed: 'Image Preview Failed',
     },
     property: {
       position: 'Position',
@@ -551,6 +553,12 @@ const enUS: LocaleMessages = {
       bindingError: 'Binding error',
       renderError: 'Render failed',
       overflow: 'Content overflow',
+      imagePickerEmptySource: 'Image picker returned an empty image source.',
+      imagePickerFailed: 'Image picker failed.',
+      imagePickerFallbackDocumentMissing: 'Image picker fallback requires a browser document.',
+      imagePickerUnsupportedFileType: 'Selected file type is not supported by this image field.',
+      imagePickerFileReadFailed: 'Failed to read selected image file.',
+      imagePickerOpenFailed: 'Failed to open image file picker.',
     },
     message: {
       confirmNewTemplate: 'Create a new template? The current template will be reset.',

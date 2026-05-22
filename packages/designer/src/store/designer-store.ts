@@ -34,6 +34,8 @@ export class DesignerStore {
    */
   readonly diagnostics = new DiagnosticsChannel()
   readonly fontManager = new FontManager()
+  imagePickerFallbackEnabled = true
+  hostImagePickerAvailable = false
   // ─── Clipboard (internal, not in Schema) ──────────────────────
   clipboard: MaterialNode[] = []
 
@@ -72,7 +74,7 @@ export class DesignerStore {
 
   constructor(schema?: DocumentSchemaInput, preferenceProvider?: PreferenceProvider, interactionProvider?: DesignerInteractionProvider) {
     this._schema = normalizeDocumentSchema(schema)
-    this.interactions.setProvider(interactionProvider)
+    this.setInteractionProvider(interactionProvider)
     // Mark editing session manager as raw: it owns Vue refs internally and
     // must not be auto-unwrapped by the surrounding reactive(store) proxy.
     this.editingSession = markRaw(new EditingSessionManager(this))
@@ -102,6 +104,15 @@ export class DesignerStore {
     this.selection.clear()
     this.commands.clear()
     this.editingSession.exit()
+  }
+
+  setInteractionProvider(provider?: DesignerInteractionProvider): void {
+    this.interactions.setProvider(provider)
+    this.hostImagePickerAvailable = this.interactions.hasHostImagePicker()
+  }
+
+  setImagePickerFallbackEnabled(enabled: boolean): void {
+    this.imagePickerFallbackEnabled = enabled
   }
 
   // ─── Template Save Status ─────────────────────────────────────
@@ -356,7 +367,7 @@ export class DesignerStore {
     this.clipboard = []
     this._propertyOverlay = null
     this._ephemeralPanel = null
-    this.interactions.setProvider(undefined)
+    this.setInteractionProvider(undefined)
     this.interactions.setFallbackProvider(undefined)
     this.editingSession.exit()
   }

@@ -59,6 +59,7 @@
     "vitepress": "catalog:cli",
     "vitest": "catalog:testing",
     "vitest-package-exports": "catalog:testing",
+    "vue": "catalog:framework",
     "vue-tsc": "catalog:cli",
     "yaml": "catalog:testing"
   },

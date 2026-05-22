@@ -8,30 +8,43 @@ export interface ImagePickerFallbackDiagnostic {
 
 export interface ImagePickerFallbackOptions {
   document?: Document
+  input?: HTMLInputElement | null
   createFileReader?: () => FileReader
   createImage?: () => HTMLImageElement
+  imageProbeTimeoutMs?: number
   onDiagnostic?: (diagnostic: ImagePickerFallbackDiagnostic) => void
+  messages?: Partial<Record<ImagePickerFallbackMessageKey, string>>
 }
 
 const DEFAULT_ACCEPT = ['image/*']
-const CANCEL_FOCUS_DELAY_MS = 250
+const CANCEL_FOCUS_DELAY_MS = 1500
 const PICKER_FAILSAFE_MS = 30_000
+const IMAGE_PROBE_TIMEOUT_MS = 1500
+type ImagePickerFallbackMessageKey = 'documentMissing' | 'unsupportedFileType' | 'fileReadFailed' | 'pickerOpenFailed'
+
+const DEFAULT_MESSAGES: Record<ImagePickerFallbackMessageKey, string> = {
+  documentMissing: 'Image picker fallback requires a browser document.',
+  unsupportedFileType: 'Selected file type is not supported by this image field.',
+  fileReadFailed: 'Failed to read selected image file.',
+  pickerOpenFailed: 'Failed to open image file picker.',
+}
 
 export async function pickImageWithFileInput(
   request: DesignerImagePickRequest,
   options: ImagePickerFallbackOptions = {},
 ): Promise<DesignerImagePickResult | null> {
-  const doc = options.document ?? globalThis.document
+  const doc = options.document ?? options.input?.ownerDocument ?? globalThis.document
   if (!doc?.body) {
     options.onDiagnostic?.({
       severity: 'error',
-      message: 'Image picker fallback requires a browser document.',
+      message: message(options, 'documentMissing'),
       detail: { requestId: request.id },
     })
     return null
   }
 
-  const input = doc.createElement('input')
+  const input = options.input ?? doc.createElement('input')
+  const removeInputOnCleanup = !input.isConnected
   input.type = 'file'
   input.accept = normalizeAccept(request.accept).join(',')
   input.multiple = false
@@ -39,12 +52,15 @@ export async function pickImageWithFileInput(
   input.style.left = '-9999px'
   input.style.top = '-9999px'
   input.tabIndex = -1
-  doc.body.appendChild(input)
+  input.value = ''
+  if (removeInputOnCleanup)
+    doc.body.appendChild(input)
 
   return await new Promise<DesignerImagePickResult | null>((resolve) => {
     let settled = false
-    let focusCancelTimer: number | undefined
-    let failsafeTimer: number | undefined
+    let focusCancelTimer: ReturnType<typeof globalThis.setTimeout> | undefined
+    let failsafeTimer: ReturnType<typeof globalThis.setTimeout> | undefined
+    const supportsCancelEvent = 'oncancel' in input
 
     function cleanup() {
       input.removeEventListener('change', onChange)
@@ -54,7 +70,9 @@ export async function pickImageWithFileInput(
         globalThis.clearTimeout(focusCancelTimer)
       if (failsafeTimer !== undefined)
         globalThis.clearTimeout(failsafeTimer)
-      input.remove()
+      input.value = ''
+      if (removeInputOnCleanup)
+        input.remove()
     }
 
     function settle(result: DesignerImagePickResult | null) {
@@ -89,56 +107,29 @@ export async function pickImageWithFileInput(
         return
       }
 
-      const accept = normalizeAccept(request.accept)
-      if (!matchesAccept(file, accept)) {
-        options.onDiagnostic?.({
-          severity: 'warn',
-          message: 'Selected file type is not supported by this image field.',
-          detail: { requestId: request.id, fileName: file.name, fileType: file.type, accept },
-        })
-        settle(null)
-        return
-      }
-
-      try {
-        settle(await readImageFileAsDataUrl(file, options))
-      }
-      catch (error) {
-        options.onDiagnostic?.({
-          severity: 'error',
-          message: 'Failed to read selected image file.',
-          detail: {
-            requestId: request.id,
-            fileName: file.name,
-            error: error instanceof Error ? error.message : String(error),
-          },
-        })
-        settle(null)
-      }
+      settle(await readAcceptedImageFileAsDataUrl(file, request, options))
     }
 
     input.addEventListener('change', onChange)
     input.addEventListener('cancel', onCancel)
-    globalThis.window?.addEventListener('focus', onWindowFocus)
+    if (!supportsCancelEvent)
+      globalThis.window?.addEventListener('focus', onWindowFocus)
     failsafeTimer = globalThis.setTimeout(() => {
       if (!settled && doc.hasFocus())
         settle(null)
     }, PICKER_FAILSAFE_MS)
 
     try {
-      if (typeof input.showPicker === 'function')
-        input.showPicker()
-      else
-        input.click()
+      input.click()
     }
     catch (error) {
       try {
-        input.click()
+        input.showPicker?.()
       }
       catch {
         options.onDiagnostic?.({
           severity: 'error',
-          message: 'Failed to open image file picker.',
+          message: message(options, 'pickerOpenFailed'),
           detail: {
             requestId: request.id,
             error: error instanceof Error ? error.message : String(error),
@@ -148,6 +139,46 @@ export async function pickImageWithFileInput(
       }
     }
   })
+}
+
+export async function readAcceptedImageFileAsDataUrl(
+  file: File,
+  request: DesignerImagePickRequest,
+  options: ImagePickerFallbackOptions = {},
+): Promise<DesignerImagePickResult | null> {
+  const accept = getImagePickerAccept(request.accept)
+  if (!matchesAccept(file, accept)) {
+    options.onDiagnostic?.({
+      severity: 'warn',
+      message: message(options, 'unsupportedFileType'),
+      detail: { requestId: request.id, fileName: file.name, fileType: file.type, accept },
+    })
+    return null
+  }
+
+  try {
+    return await readImageFileAsDataUrl(file, options)
+  }
+  catch (error) {
+    options.onDiagnostic?.({
+      severity: 'error',
+      message: message(options, 'fileReadFailed'),
+      detail: {
+        requestId: request.id,
+        fileName: file.name,
+        error: error instanceof Error ? error.message : String(error),
+      },
+    })
+    return null
+  }
+}
+
+export function getImagePickerAccept(accept?: string[]): string[] {
+  return normalizeAccept(accept)
+}
+
+function message(options: ImagePickerFallbackOptions, key: ImagePickerFallbackMessageKey): string {
+  return options.messages?.[key] ?? DEFAULT_MESSAGES[key]
 }
 
 export async function readImageFileAsDataUrl(
@@ -166,7 +197,7 @@ export async function readImageFileAsDataUrl(
     reader.readAsDataURL(file)
   })
 
-  const size = await probeImageSize(src, options.createImage).catch(() => undefined)
+  const size = await probeImageSize(src, options.createImage, options.imageProbeTimeoutMs).catch(() => undefined)
   return {
     src,
     name: file.name,
@@ -201,11 +232,31 @@ function matchesAccept(file: File, accept: string[]): boolean {
 function probeImageSize(
   src: string,
   createImage: ImagePickerFallbackOptions['createImage'],
+  timeoutMs = IMAGE_PROBE_TIMEOUT_MS,
 ): Promise<{ width: number, height: number }> {
   return new Promise((resolve, reject) => {
     const image = createImage?.() ?? new Image()
-    image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight })
-    image.onerror = () => reject(new Error('Image size probe failed.'))
+    let timeout: ReturnType<typeof globalThis.setTimeout> | undefined
+
+    function cleanup() {
+      image.onload = null
+      image.onerror = null
+      if (timeout !== undefined)
+        globalThis.clearTimeout(timeout)
+    }
+
+    image.onload = () => {
+      cleanup()
+      resolve({ width: image.naturalWidth, height: image.naturalHeight })
+    }
+    image.onerror = () => {
+      cleanup()
+      reject(new Error('Image size probe failed.'))
+    }
+    timeout = globalThis.setTimeout(() => {
+      cleanup()
+      reject(new Error('Image size probe timed out.'))
+    }, timeoutMs)
     image.src = src
   })
 }

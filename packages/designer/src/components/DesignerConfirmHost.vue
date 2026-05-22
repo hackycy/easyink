@@ -5,9 +5,11 @@ import { computed, onBeforeUnmount, ref } from 'vue'
 import { useDesignerStore } from '../composables'
 import { pickImageWithFileInput } from '../interactions/image-picker-fallback'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   enableImagePickerFallback?: boolean
-}>()
+}>(), {
+  enableImagePickerFallback: true,
+})
 
 interface PendingConfirm {
   request: DesignerConfirmRequest
@@ -34,6 +36,12 @@ function pickImage(request: DesignerImagePickRequest) {
   if (props.enableImagePickerFallback === false)
     return Promise.resolve(null)
   return pickImageWithFileInput(request, {
+    messages: {
+      documentMissing: text('designer.diagnostic.imagePickerFallbackDocumentMissing', 'Image picker fallback requires a browser document.'),
+      unsupportedFileType: text('designer.diagnostic.imagePickerUnsupportedFileType', 'Selected file type is not supported by this image field.'),
+      fileReadFailed: text('designer.diagnostic.imagePickerFileReadFailed', 'Failed to read selected image file.'),
+      pickerOpenFailed: text('designer.diagnostic.imagePickerOpenFailed', 'Failed to open image file picker.'),
+    },
     onDiagnostic(diagnostic) {
       store.diagnostics.push({
         source: 'designer-interaction',

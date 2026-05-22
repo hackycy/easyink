@@ -86,6 +86,8 @@ const zhCN: LocaleMessages = {
       pickImage: '选择图片',
       clearImage: '清空图片',
       imagePreview: '图片预览',
+      imagePreviewLoading: '图片加载中',
+      imagePreviewFailed: '图片预览失败',
     },
     property: {
       position: '位置',
@@ -551,6 +553,12 @@ const zhCN: LocaleMessages = {
       bindingError: '绑定错误',
       renderError: '渲染失败',
       overflow: '内容溢出',
+      imagePickerEmptySource: '图片选择器返回了空图片地址。',
+      imagePickerFailed: '图片选择失败。',
+      imagePickerFallbackDocumentMissing: '内置图片选择器需要浏览器文档环境。',
+      imagePickerUnsupportedFileType: '所选文件类型不支持。',
+      imagePickerFileReadFailed: '读取所选图片文件失败。',
+      imagePickerOpenFailed: '打开图片文件选择器失败。',
     },
     message: {
       confirmNewTemplate: '确定要新建模板吗？当前模板内容将被重置。',

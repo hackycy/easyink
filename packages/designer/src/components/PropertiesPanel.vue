@@ -439,7 +439,7 @@ function updateImagePropFromPicker(key: string, result: DesignerImagePickResult)
     oldValues[key] = oldValue
   propSnapshots.delete(key)
 
-  if (key === 'src' && result.alt && !el.props.alt) {
+  if (key === 'src' && result.alt && isBlankAlt(el.props.alt)) {
     updates.alt = result.alt
     oldValues.alt = el.props.alt
   }
@@ -451,6 +451,10 @@ function updateImagePropFromPicker(key: string, result: DesignerImagePickResult)
     Object.keys(oldValues).length > 0 ? oldValues : undefined,
   )
   store.commands.execute(cmd)
+}
+
+function isBlankAlt(value: unknown): boolean {
+  return typeof value !== 'string' || value.trim().length === 0
 }
 
 // ─── Geometry preview/commit ────────────────────────────────────
