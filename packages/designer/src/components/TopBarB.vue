@@ -199,7 +199,7 @@ function handleClear() {
   if (store.schema.elements.length === 0)
     return
   // eslint-disable-next-line no-alert
-  if (!confirm(store.t('designer.message.confirmClear')))
+  if (!window.confirm(store.t('designer.message.confirmClear')))
     return
   store.setSchema(createDefaultSchema())
 }
