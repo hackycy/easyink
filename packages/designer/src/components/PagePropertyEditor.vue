@@ -62,7 +62,7 @@ function onImagePicked(result: DesignerResolvedAsset) {
       :min="descriptor.min"
       :max="descriptor.max"
       :step="descriptor.step"
-      :nullable="false"
+      :nullable="descriptor.nullable ?? false"
       @update:model-value="onPreview"
       @commit="onCommit"
     />

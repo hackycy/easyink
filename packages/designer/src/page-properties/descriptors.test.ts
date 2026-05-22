@@ -33,23 +33,58 @@ describe('page background descriptors', () => {
     expect(visible).toContain('bgOffsetX')
     expect(visible).toContain('bgOffsetY')
   })
+
+  it('allows background width and height to be cleared outside full repeat mode', () => {
+    const document = makeDocument({
+      background: {
+        image: 'https://example.com/bg.png',
+        repeat: 'repeat',
+        width: 120,
+        height: 80,
+      },
+    })
+
+    const widthDescriptor = PAGE_PROPERTY_DESCRIPTORS.find(descriptor => descriptor.id === 'bgWidth')
+    const heightDescriptor = PAGE_PROPERTY_DESCRIPTORS.find(descriptor => descriptor.id === 'bgHeight')
+
+    expect(widthDescriptor?.nullable).toBe(true)
+    expect(heightDescriptor?.nullable).toBe(true)
+
+    const widthPatch = widthDescriptor?.normalize?.(null, { document })
+    const heightPatch = heightDescriptor?.normalize?.('', { document })
+
+    expect(widthPatch?.page?.background).toEqual({
+      image: 'https://example.com/bg.png',
+      repeat: 'repeat',
+      height: 80,
+    })
+    expect(heightPatch?.page?.background).toEqual({
+      image: 'https://example.com/bg.png',
+      repeat: 'repeat',
+      width: 120,
+    })
+  })
 })
 
 function visibleDescriptorIds(pagePatch: Partial<PageSchema>) {
+  const document = makeDocument(pagePatch)
+  return filterVisible(PAGE_PROPERTY_DESCRIPTORS, {
+    document,
+  }).map(descriptor => descriptor.id)
+}
+
+function makeDocument(pagePatch: Partial<PageSchema>): DocumentSchema {
   const page: PageSchema = {
     mode: 'fixed',
     width: 210,
     height: 297,
     ...pagePatch,
   }
-  const document: DocumentSchema = {
+  return {
     version: '1',
     unit: 'mm',
     page,
     guides: { x: [], y: [] },
     elements: [],
   }
-  return filterVisible(PAGE_PROPERTY_DESCRIPTORS, {
-    document,
-  }).map(descriptor => descriptor.id)
 }

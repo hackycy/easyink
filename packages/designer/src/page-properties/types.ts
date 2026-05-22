@@ -44,6 +44,7 @@ export interface PagePropertyDescriptor {
   min?: number
   max?: number
   step?: number
+  nullable?: boolean
   visible?: (ctx: PagePropertyContext) => boolean
   normalize?: (value: unknown, ctx: PagePropertyContext) => PagePropertyPatch
 }

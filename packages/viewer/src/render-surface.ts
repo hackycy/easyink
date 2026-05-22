@@ -173,7 +173,7 @@ function applyPageBackground(el: HTMLElement, bg: PageBackground | undefined, un
 
   // Background image
   if (bg.image) {
-    el.style.backgroundImage = `url(${bg.image})`
+    el.style.backgroundImage = `url(${JSON.stringify(bg.image)})`
 
     // Repeat mode -> CSS background-repeat + background-size
     const repeat = bg.repeat || 'none'

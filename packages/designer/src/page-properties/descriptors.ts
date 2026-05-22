@@ -385,6 +385,23 @@ function isEditableBackgroundImageConfig(ctx: PagePropertyContext): boolean {
   return !!bg?.image && bg.repeat !== 'full'
 }
 
+function normalizeBackgroundDimension(
+  key: 'width' | 'height',
+  value: unknown,
+  ctx: PagePropertyContext,
+) {
+  const existing = ctx.document.page.background ?? {}
+  const background = { ...existing }
+  const numericValue = value == null || value === '' ? null : Number(value)
+
+  if (numericValue == null || Number.isNaN(numericValue))
+    delete background[key]
+  else
+    background[key] = numericValue
+
+  return { page: { background } }
+}
+
 const BG_WIDTH_DESCRIPTOR: PagePropertyDescriptor = {
   id: 'bgWidth',
   group: 'background',
@@ -395,10 +412,10 @@ const BG_WIDTH_DESCRIPTOR: PagePropertyDescriptor = {
   editor: 'number',
   min: 0,
   step: 1,
+  nullable: true,
   visible: isEditableBackgroundImageConfig,
   normalize(value, ctx) {
-    const existing = ctx.document.page.background ?? {}
-    return { page: { background: { ...existing, width: Number(value) } } }
+    return normalizeBackgroundDimension('width', value, ctx)
   },
 }
 
@@ -412,10 +429,10 @@ const BG_HEIGHT_DESCRIPTOR: PagePropertyDescriptor = {
   editor: 'number',
   min: 0,
   step: 1,
+  nullable: true,
   visible: isEditableBackgroundImageConfig,
   normalize(value, ctx) {
-    const existing = ctx.document.page.background ?? {}
-    return { page: { background: { ...existing, height: Number(value) } } }
+    return normalizeBackgroundDimension('height', value, ctx)
   },
 }
 

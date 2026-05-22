@@ -51,4 +51,45 @@ describe('renderPages', () => {
     expect(element!.style.width).toBe('30mm')
     expect(element!.style.height).toBe('7mm')
   })
+
+  it('applies page background styles consistently for repeat modes', () => {
+    const container = document.createElement('div')
+    const registry = new MaterialRendererRegistry()
+    const pageSchema: PageSchema = {
+      mode: 'fixed',
+      width: 80,
+      height: 60,
+      background: {
+        color: '#ffeeaa',
+        image: 'https://example.com/bg.png',
+        repeat: 'repeat-x',
+        width: 120,
+        offsetY: 8,
+      },
+    }
+
+    renderPages([{
+      index: 0,
+      width: 80,
+      height: 60,
+      elements: [],
+      yOffset: 0,
+    }], registry, {
+      container,
+      document,
+      zoom: 1,
+      unit: 'mm',
+      data: {},
+      resolvedPropsMap: new Map(),
+      pageSchema,
+    }, [])
+
+    const page = container.querySelector('.ei-viewer-page') as HTMLElement | null
+    expect(page).not.toBeNull()
+    expect(page!.style.backgroundColor).toBe('#ffeeaa')
+    expect(page!.style.backgroundImage).toBe('url("https://example.com/bg.png")')
+    expect(page!.style.backgroundRepeat).toBe('repeat-x')
+    expect(page!.style.backgroundSize).toBe('120mm auto')
+    expect(page!.style.backgroundPosition).toBe('0mm 8mm')
+  })
 })
