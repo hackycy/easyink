@@ -1,0 +1,20 @@
+{
+  "requestId": "sample-easyink-001",
+  "source": {
+    "type": "easyink",
+    "schema": {
+      "version": "1.0",
+      "page": {
+        "width": 80,
+        "height": 120,
+        "unit": "mm"
+      },
+      "elements": []
+    },
+    "data": {
+      "receipt": {
+        "no": "R-001"
+      }
+    }
+  }
+}

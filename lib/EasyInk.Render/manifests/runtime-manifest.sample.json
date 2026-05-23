@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "protocolVersion": "1.0",
+  "host": {
+    "version": "0.1.0",
+    "platform": "linux-arm64",
+    "executable": "easyink-render-host",
+    "url": "",
+    "sha256": "",
+    "size": 0
+  },
+  "browser": {
+    "name": "chrome-for-testing",
+    "version": "148.0.7778.97",
+    "platform": "linux-arm64",
+    "executable": "headless-shell",
+    "url": "",
+    "sha256": "",
+    "size": 0
+  },
+  "easyinkRuntime": {
+    "version": "0.1.0",
+    "bundled": true,
+    "entry": "embedded://easyink-lite"
+  },
+  "compatibility": {
+    "minOs": "linux",
+    "protocol": "1.0"
+  }
+}

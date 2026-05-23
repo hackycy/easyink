@@ -1,0 +1,10 @@
+{
+  "requestId": "fixture-pdf-001",
+  "source": {
+    "type": "pdf",
+    "pdfBase64": "JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyA+PgplbmRvYmoKJSVFT0Y="
+  },
+  "output": {
+    "type": "base64Json"
+  }
+}

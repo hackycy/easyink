@@ -89,3 +89,66 @@ Caller
 
 - [架构设计](architecture.md)
 - [实施方案](proposal.md)
+
+## 当前落地状态
+
+`host/` 已提供首期 Go Host 实现：
+
+- `GET /v1/info`
+- `GET /v1/health`
+- `POST /v1/render/print-pdf`
+- `source.type=html` 通过 chromedp/CDP `Page.printToPDF` 输出 PDF。
+- `source.type=pdf` 执行 base64 解码、大小限制、PDF 文件头校验和透传归一。
+- `source.type=easyink` 通过内置轻量 Runtime 合成 HTML，再走 `Page.printToPDF`。
+- 支持 `output.type=base64Json` 调试响应。
+- 支持 requestId diagnostics、token 认证、并发限制和基础 URL 安全校验。
+
+## Docker 验证
+
+本机不需要安装 Go。使用 Docker 执行单元测试：
+
+```bash
+docker run --rm \
+  -v "$PWD/lib/EasyInk.Render/host:/src" \
+  -w /src \
+  golang:1.23-bookworm \
+  sh -lc 'export PATH=/usr/local/go/bin:$PATH; gofmt -w cmd internal && go test ./...'
+```
+
+执行真实浏览器集成测试：
+
+```bash
+docker run --rm \
+  -v "$PWD/lib/EasyInk.Render/host:/src" \
+  -w /src \
+  golang:1.23-bookworm \
+  sh -lc 'export PATH=/usr/local/go/bin:$PATH; go test -c ./internal/render -o /src/render.test'
+
+docker run --rm --entrypoint sh \
+  -v "$PWD/lib/EasyInk.Render/host:/src" \
+  -w /src \
+  chromedp/headless-shell:latest \
+  -lc 'EASYINK_RENDER_BROWSER_PATH=/headless-shell/headless-shell ./render.test -test.v'
+```
+
+启动 Host：
+
+```bash
+docker run --rm \
+  -v "$PWD/lib/EasyInk.Render/host:/src" \
+  -w /src \
+  golang:1.23-bookworm \
+  sh -lc 'export PATH=/usr/local/go/bin:$PATH; go build -o /src/easyink-render-host ./cmd/easyink-render-host'
+
+docker run --rm --entrypoint sh \
+  -v "$PWD/lib/EasyInk.Render/host:/src" \
+  -w /src \
+  chromedp/headless-shell:latest \
+  -lc './easyink-render-host --host 127.0.0.1 --port 18181 --browser-path /headless-shell/headless-shell --profile-root /tmp/easyink-profile --temp-dir /tmp/easyink-temp --log-dir /tmp/easyink-logs --auth-token test-token'
+```
+
+也可以直接构建 Host 镜像：
+
+```bash
+docker build -t easyink-render-host lib/EasyInk.Render/host
+```
