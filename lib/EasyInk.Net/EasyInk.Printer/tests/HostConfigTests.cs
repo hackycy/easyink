@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Reflection;
 using EasyInk.Printer.Config;
 using Xunit;
 
@@ -113,5 +114,64 @@ public class HostConfigTests
         var command = HostConfig.BuildAutoStartCommand(@"C:\Program Files\EasyInk Printer\EasyInk.Printer.exe");
 
         Assert.Equal(@"""C:\Program Files\EasyInk Printer\EasyInk.Printer.exe"" --autostart", command);
+    }
+
+    [Fact]
+    public void Save_ReplacesExistingConfigWithoutLeavingTempFile()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "EasyInk.Printer.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            using var _ = OverrideConfigPath(tempDir);
+            var configPath = Path.Combine(tempDir, "config.json");
+            File.WriteAllText(configPath, "{\"HttpPort\": 1}");
+
+            var config = new HostConfig
+            {
+                HttpPort = 19090,
+                Language = "en-US"
+            };
+
+            config.Save();
+
+            var savedJson = File.ReadAllText(configPath);
+            Assert.Contains("\"HttpPort\": 19090", savedJson);
+            Assert.Contains("\"Language\": \"en-US\"", savedJson);
+            Assert.False(File.Exists(configPath + ".tmp"));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+                Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    private static IDisposable OverrideConfigPath(string configDir)
+    {
+        var configDirField = typeof(HostConfig).GetField("ConfigDir", BindingFlags.Static | BindingFlags.NonPublic)!;
+        var configPathField = typeof(HostConfig).GetField("ConfigPath", BindingFlags.Static | BindingFlags.NonPublic)!;
+        var originalConfigDir = (string)configDirField.GetValue(null)!;
+        var originalConfigPath = (string)configPathField.GetValue(null)!;
+        var configPath = Path.Combine(configDir, "config.json");
+
+        configDirField.SetValue(null, configDir);
+        configPathField.SetValue(null, configPath);
+
+        return new ConfigPathOverride(configDirField, originalConfigDir, configPathField, originalConfigPath);
+    }
+
+    private sealed class ConfigPathOverride(
+        FieldInfo configDirField,
+        string originalConfigDir,
+        FieldInfo configPathField,
+        string originalConfigPath) : IDisposable
+    {
+        public void Dispose()
+        {
+            configDirField.SetValue(null, originalConfigDir);
+            configPathField.SetValue(null, originalConfigPath);
+        }
     }
 }

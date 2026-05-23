@@ -322,7 +322,18 @@ public class HostConfig
         var json = JsonConvert.SerializeObject(this, Formatting.Indented);
         var tmpPath = ConfigPath + ".tmp";
         File.WriteAllText(tmpPath, json);
-        File.Copy(tmpPath, ConfigPath, overwrite: true);
-        File.Delete(tmpPath);
+
+        try
+        {
+            if (File.Exists(ConfigPath))
+                File.Replace(tmpPath, ConfigPath, null);
+            else
+                File.Move(tmpPath, ConfigPath);
+        }
+        finally
+        {
+            if (File.Exists(tmpPath))
+                File.Delete(tmpPath);
+        }
     }
 }
