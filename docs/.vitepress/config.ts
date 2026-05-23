@@ -46,6 +46,7 @@ export default defineConfig({
             { text: '键盘快捷键', link: '/designer/keyboard-shortcuts' },
             { text: '数据绑定', link: '/designer/data-binding' },
             { text: '自动保存', link: '/designer/auto-save' },
+            { text: '字体管理', link: '/designer/fonts' },
             { text: '样式自定义', link: '/designer/styling' },
           ],
         },
@@ -56,6 +57,7 @@ export default defineConfig({
           items: [
             { text: '概述', link: '/viewer/' },
             { text: 'Host 模式', link: '/viewer/viewer-hosts' },
+            { text: '字体加载', link: '/viewer/fonts' },
             { text: '打印与导出', link: '/viewer/print-export' },
             { text: '诊断', link: '/viewer/diagnostics' },
           ],

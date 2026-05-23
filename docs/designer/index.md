@@ -38,6 +38,7 @@ const preferenceProvider = createLocalStoragePreferenceProvider()
 | `contributions` | `Contribution[]` | 否 | 贡献扩展列表（如 AI 面板） |
 | `setupStore` | `(store: DesignerStore) => void` | 否 | Store 初始化回调，用于注册自定义物料 |
 | `interactionProvider` | `DesignerInteractionProvider` | 否 | 宿主接管确认等用户交互流程 |
+| `fontProvider` | `FontProvider` | 否 | 字体目录和字体资源加载器；Designer 会负责按需加载和注入 |
 
 `schema` 是宿主输入，不要求传完整对象。传 `undefined`、`{}` 或只传部分字段时，设计器会在进入 `DesignerStore` 前归一化为完整 `DocumentSchema`，例如自动补齐 `version`、`unit`、`page`、`guides` 和 `elements`。`update:schema`、自动保存和 store 内部读到的始终是完整 Schema。
 
@@ -111,6 +112,39 @@ const preferenceProvider = {
 这属于高级二次开发：不仅涉及 Designer 注册，还会同时涉及 Schema、Viewer 渲染、数据绑定和调试。
 
 完整流程见 [进阶 / 自定义物料开发](/advanced/custom-materials)。
+
+## 字体管理
+
+Designer 支持宿主通过 `fontProvider` 提供字体目录和字体资源。属性面板会显示完整 FontPicker，包括默认字体、搜索、预览文本、按需加载按钮和加载状态。
+
+```vue
+<script setup lang="ts">
+import type { FontProvider } from '@easyink/designer'
+
+const fontProvider: FontProvider = {
+  async listFonts() {
+    return [
+      {
+        family: 'SourceHanSans',
+        displayName: '思源黑体',
+        weights: ['400'],
+        styles: ['normal'],
+        preview: '字体预览 EasyInk 123',
+      },
+    ]
+  },
+  async loadFont(family) {
+    return `/fonts/${encodeURIComponent(family)}.woff2`
+  },
+}
+</script>
+
+<template>
+  <EasyInkDesigner :font-provider="fontProvider" />
+</template>
+```
+
+宿主不需要手动注入 `@font-face`。Designer 会预加载模板中已经引用的字体，并在用户提交字体选择时确保字体加载成功后再写入 schema。完整说明见 [字体管理](./fonts.md)。
 
 ## 贡献扩展
 

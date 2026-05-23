@@ -35,7 +35,7 @@ viewer.destroy()
 | `host` | `ViewerHost` | 渲染宿主，通过 factory 函数创建 |
 | `container` | `HTMLElement` | 快捷方式，等同于 `createBrowserViewerHost(container)` |
 | `iframe` | `HTMLIFrameElement` | 快捷方式，等同于 `createIframeViewerHost(iframe)` |
-| `fontProvider` | `FontProvider` | 自定义字体加载器 |
+| `fontProvider` | `FontProvider` | 自定义字体加载器；Viewer 会在渲染前加载并注入字体 |
 
 ## ViewerHost
 
@@ -96,6 +96,8 @@ await viewer.open({
 ```
 
 渲染流程：字体加载 -> 数据绑定 -> 元素测量 -> layout/reflow -> pagination -> DOM 渲染。
+
+字体加载发生在测量和分页之前。Viewer 会收集 `schema.page.font`、元素 `props.fontFamily` 以及 schema traversal 能访问到的 hosted elements 字体引用，加载成功后注入到 Host document。完整说明见 [字体加载](./fonts.md)。
 
 ### render()
 

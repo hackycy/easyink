@@ -22,7 +22,18 @@ EasyInk 的公共 API 按包组织。以下是各包的主要导出。
 | `createDefaultSaveBranchMenu` | Function | 创建默认保存分支菜单状态 |
 | `tableSectionFilter` | Function | 表格属性面板过滤器 |
 
-类型导出：`DocumentSchema`, `DocumentSchemaInput`, `MaterialNode`, `DataSourceDescriptor`, `Contribution`, `ContributionContext`, `Command`, `PanelDescriptor`, `ToolbarActionDescriptor`, `DesignerConfirmRequest`, `DesignerConfirmSeverity`, `DesignerInteractionProvider`, `DesignerMaterialBundle`, `DesignerMaterialRegistration`, `DesignerCatalogRegistration`, `MaterialCapabilities`, `TemplateAutoSaveOptions`, `PreferenceProvider`, `PersistableWorkbenchState`, `LocaleMessages`
+类型导出：`DocumentSchema`, `DocumentSchemaInput`, `MaterialNode`, `DataSourceDescriptor`, `Contribution`, `ContributionContext`, `Command`, `PanelDescriptor`, `ToolbarActionDescriptor`, `DesignerConfirmRequest`, `DesignerConfirmSeverity`, `DesignerInteractionProvider`, `DesignerMaterialBundle`, `DesignerMaterialRegistration`, `DesignerCatalogRegistration`, `MaterialCapabilities`, `TemplateAutoSaveOptions`, `PreferenceProvider`, `PersistableWorkbenchState`, `LocaleMessages`, `FontDescriptor`, `FontProvider`
+
+## @easyink/core
+
+共享核心能力。
+
+| 导出 | 类型 | 说明 |
+|------|------|------|
+| `FontManager` | Class | 字体目录缓存、加载状态、批量加载和可选 `@font-face` 注入 |
+| `collectFontFamilies` | Function | 从 DocumentSchema 收集页面和元素字体引用 |
+
+字体相关类型导出：`FontDescriptor`, `FontProvider`, `FontSource`, `FontLoadRequest`, `FontLoadStatus`, `FontLoadState`, `FontLoadSuccess`, `FontLoadFailure`, `FontBatchLoadOptions`, `FontBatchLoadResult`, `FontPreloadResult`
 
 ## @easyink/viewer
 
@@ -36,7 +47,7 @@ EasyInk 的公共 API 按包组织。以下是各包的主要导出。
 | `renderPages` | Function | 渲染页面 DOM |
 | `createThumbnails` | Function | 生成缩略图 |
 | `collectFontFamilies` | Function | 收集字体引用 |
-| `loadAndInjectFonts` | Function | 加载并注入字体 |
+| `loadAndInjectFonts` | Function | 加载并注入字体到 Viewer host document |
 | `projectBindings` | Function | 解析数据绑定 |
 | `applyBindingsToProps` | Function | 应用绑定到属性 |
 | `resolvePrintPolicy` | Function | 解析打印策略 |
@@ -45,7 +56,7 @@ EasyInk 的公共 API 按包组织。以下是各包的主要导出。
 | `createIframeViewerHost` | Function | Iframe Host |
 | `createCustomViewerHost` | Function | Custom Host |
 
-类型导出：`ViewerHost`, `ViewerOptions`, `ViewerOpenInput`, `ViewerRenderResult`, `ViewerDiagnosticEvent`, `PrintDriver`, `ViewerPrintOptions`, `ViewerPrintPolicy`, `ViewerPrintContext`, `ViewerExporter`, `ViewerExportContext`, `ViewerExportOptions`, `ViewerTaskCallbacks`, `ViewerTaskPhaseEvent`, `ViewerTaskProgressEvent`, `MaterialViewerExtension`, `ViewerRenderContext`, `ViewerMeasureContext`
+类型导出：`ViewerHost`, `ViewerOptions`, `ViewerOpenInput`, `ViewerRenderResult`, `ViewerDiagnosticEvent`, `PrintDriver`, `ViewerPrintOptions`, `ViewerPrintPolicy`, `ViewerPrintContext`, `ViewerExporter`, `ViewerExportContext`, `ViewerExportOptions`, `ViewerTaskCallbacks`, `ViewerTaskPhaseEvent`, `ViewerTaskProgressEvent`, `MaterialViewerExtension`, `ViewerRenderContext`, `ViewerMeasureContext`, `FontDescriptor`, `FontProvider`
 
 ## @easyink/schema
 
