@@ -2,45 +2,36 @@
 
 ## 方案摘要
 
-建立 `EasyInk.Render` 作为独立渲染能力层，提供可下载的 `easyink-render-host` 和浏览器运行时。C#、Node.js、Golang 等服务端通过统一协议调用它，把 HTML、URL、Viewer payload 或模板渲染成 PDF/图片。
+`EasyInk.Render` 交付一个 Go 编写的跨平台可执行文件 `easyink-render-host`，配套固定版本 Chrome for Testing 和内置 EasyInk Runtime Bundle。Host 把 HTML、PDF、EasyInk schema + data 三类输入统一归一为可打印 PDF。
 
-C# 端集成时，`EasyInk.Printer` 负责下载和启动 Render Host；打印请求如果包含 HTML 或 Viewer 输入，先调用 Render Host 生成 PDF，再把 PDF 交给现有 `EasyInk.Engine` 打印链路。
+`EasyInk.Render` 的交付边界到可执行文件、Browser Bundle、manifest、协议、诊断和发布包为止。调用方集成不写入本方案。
 
-## 推荐技术路线
+Node.js 不进入 Runtime 交付架构。Playwright 只存在于测试工具中，用于生成输出质量 fixture。
 
-### MVP 路线
+## 技术栈
 
-用 Node.js + Playwright 快速验证协议和渲染能力。
+```text
+Host language: Go
+CDP client: chromedp + cdproto
+Browser runtime: Chrome for Testing
+Host protocol: loopback HTTP
+Request format: JSON
+PDF success response: application/pdf binary
+Error response: JSON
+PDF operation: CDP Page.printToPDF
+```
 
-优点：
+技术选型结论：
 
-- 开发速度快。
-- PDF、截图、等待策略成熟。
-- 易于验证模板、字体、网络和诊断能力。
-
-缺点：
-
-- 发布形态较重。
-- Host 运行时依赖 Node.js 或需要额外打包。
-- 长期作为基础设施时，部署边界不如单文件 Host 清晰。
-
-### 长期路线
-
-用 Go 或 Rust 编写 `easyink-render-host`，直接控制 Chrome DevTools Protocol。
-
-优点：
-
-- Host 可以做成单个可执行文件。
-- 适合 C#、Node.js、Golang 等多语言共同调用。
-- 运行时边界清晰。
-- 不把 Playwright/Puppeteer API 暴露给协议。
-
-缺点：
-
-- 初期开发成本更高。
-- 需要自行封装部分浏览器控制细节。
-
-建议：先用 MVP 路线验证协议和产品体验，再切换或重写为长期 Host。协议保持稳定，Host 实现可以替换。
+- Render Host 使用 Go。
+- 浏览器控制使用 chromedp/cdproto。
+- 浏览器运行时使用 Chrome for Testing。
+- PDF 输出使用 CDP `Page.printToPDF`。
+- PDF 输入走校验、诊断和透传归一流程。
+- EasyInk schema + data 通过内置 EasyInk Runtime Bundle 合成为 HTML 后再调用 `Page.printToPDF`。
+- Host 作为单独进程运行。
+- Host 首期只监听 `127.0.0.1` loopback HTTP。
+- Node.js + Playwright 不作为首期交付、不作为正式 Host、不作为 Runtime 依赖。
 
 ## 目录规划
 
@@ -50,20 +41,34 @@ lib/EasyInk.Render/
   architecture.md
   proposal.md
   host/
+    go.mod
+    cmd/
+      easyink-render-host/
+    internal/
+      browser/
+      config/
+      diagnostics/
+      easyink/
+      protocol/
+      render/
+      security/
+      server/
   protocol/
-  clients/
-    dotnet/
-    nodejs/
-    go/
+    openapi/
+    fixtures/
   manifests/
   samples/
+    html/
+    pdf/
+    easyink/
+  tools/
+    playwright-fixtures/
+  releases/
 ```
 
-当前先建立文档目录，后续再按阶段补充代码。
+`tools/playwright-fixtures` 只存放测试对照脚本，不进入 Runtime 产物。
 
 ## Manifest 设计
-
-由 EasyInk 维护版本 manifest，设置页和各语言宿主都通过 manifest 下载 runtime。
 
 ```json
 {
@@ -72,6 +77,7 @@ lib/EasyInk.Render/
   "host": {
     "version": "1.0.0",
     "platform": "win-x64",
+    "executable": "easyink-render-host.exe",
     "url": "https://download.easyink.dev/render/host/1.0.0/win-x64.zip",
     "sha256": "...",
     "size": 12345678
@@ -80,201 +86,399 @@ lib/EasyInk.Render/
     "name": "chrome-for-testing",
     "version": "126.0.0.0",
     "platform": "win-x64",
+    "executable": "chrome.exe",
     "url": "https://download.easyink.dev/render/browser/chrome-126-win-x64.zip",
     "sha256": "...",
     "size": 234567890
   },
+  "easyinkRuntime": {
+    "version": "1.0.0",
+    "bundled": true,
+    "entry": "runtime/easyink-viewer/index.html"
+  },
   "compatibility": {
-    "minWindowsVersion": "10.0",
-    "supportedClients": ["dotnet", "nodejs", "go"]
+    "minOs": "windows-10",
+    "protocol": "1.0"
   }
 }
 ```
 
-## C# 集成方案
+非 Windows 平台：
 
-### 新增配置
-
-在 `EasyInk.Printer` 的配置层增加：
-
-- `RenderEnabled`
-- `RenderHostVersion`
-- `RenderHostPath`
-- `RenderBrowserVersion`
-- `RenderBrowserPath`
-- `RenderEndpoint`
-- `RenderMaxConcurrency`
-- `RenderTimeoutSeconds`
-- `RenderTempDir`
-- `RenderAllowedOrigins`
-
-### 设置页
-
-新增设置分组：`渲染服务`。
-
-建议字段：
-
-- 安装状态：未安装、已安装、校验失败、版本过旧。
-- Host 版本。
-- Browser 版本。
-- 下载按钮。
-- 删除按钮。
-- 启用开关。
-- 最大并发。
-- 渲染超时。
-- 临时目录。
-- 允许访问的域名。
-
-启用条件：
-
-- Host 已下载并校验通过。
-- Browser 已下载并校验通过。
-- 当前系统满足 manifest 的兼容性要求。
-
-### 打印请求预处理
-
-扩展打印请求输入：
-
-- `html`
-- `htmlUrl`
-- `viewer`
-- `template`
-- `renderOptions`
-
-处理规则：
-
-1. 如果请求已有 `pdfBytes`、`pdfBase64` 或 `pdfUrl`，不经过 Render，保持现有行为。
-2. 如果请求包含 HTML、URL、Viewer 或模板输入，调用 Render Host 生成 PDF。
-3. 生成的 PDF 写入 `PdfBytes`。
-4. 继续调用现有 `EngineApi` 和 `RoutingPrintService`。
-
-这样可以最大限度复用当前 C# 打印能力，不改变 PDFium/GDI、SumatraPDF、ESC/POS Raw 的责任边界。
-
-## Node.js 集成方案
-
-Node.js SDK 只封装协议：
-
-```ts
-const client = new EasyInkRenderClient({ endpoint: 'http://127.0.0.1:18181' })
-
-const pdf = await client.renderPdf({
-  source: {
-    type: 'html',
-    html
-  },
-  pdf: {
-    printBackground: true,
-    paperWidthMm: 80,
-    marginMm: { top: 0, right: 0, bottom: 0, left: 0 }
+```json
+{
+  "host": {
+    "version": "1.0.0",
+    "platform": "linux-x64",
+    "executable": "easyink-render-host",
+    "url": "https://download.easyink.dev/render/host/1.0.0/linux-x64.tar.gz",
+    "sha256": "...",
+    "size": 12345678
   }
-})
+}
 ```
 
-Node.js 服务可以选择：
+## Host 模块
 
-- 连接已有 Render Host。
-- 自行下载并启动 Render Host。
-- 在容器中固定挂载 Render Host 和 Browser Bundle。
+```text
+host/internal/config
+  CLI 参数解析、默认值、环境约束。
 
-## Golang 集成方案
+host/internal/server
+  net/http server、路由、认证、请求大小限制、响应写入。
 
-Golang SDK 同样只封装协议：
+host/internal/protocol
+  v1 请求/响应模型、错误码、版本协商。
 
-```go
-client := easyinkrender.NewClient("http://127.0.0.1:18181")
+host/internal/browser
+  Chrome for Testing 启动、进程复用、context 管理。
 
-pdf, err := client.RenderPDF(ctx, easyinkrender.RenderPDFRequest{
-    Source: easyinkrender.Source{
-        Type: "html",
-        HTML: html,
-    },
-    PDF: easyinkrender.PDFOptions{
-        PrintBackground: true,
-        PaperWidthMM: 80,
-    },
-})
+host/internal/render
+  HTML/PDF/EasyInk source pipeline、等待策略、PDF 输出。
+
+host/internal/easyink
+  EasyInk schema 校验、data binding、Runtime Bundle 路由、easyinkReady 等待协议。
+
+host/internal/security
+  allowlist、本地地址拦截、协议拦截、代理控制、文件访问控制。
+
+host/internal/diagnostics
+  requestId 日志聚合、console/network 采集、截图和 HTML 快照。
 ```
 
-Golang 服务端适合直接托管 `easyink-render-host`，也适合作为长期 Host 的实现语言候选。
+## Host CLI
+
+```text
+easyink-render-host
+  --host 127.0.0.1
+  --port 18181
+  --browser-path "<chrome-for-testing-executable>"
+  --profile-root "<cache-dir>"
+  --temp-dir "<temp-dir>"
+  --log-dir "<log-dir>"
+  --max-concurrency 2
+  --request-timeout-ms 30000
+  --auth-token "local-random-token"
+```
+
+启动失败条件：
+
+- `--browser-path` 不存在。
+- Browser 版本无法读取。
+- `--host` 不是 `127.0.0.1`。
+- `--port` 被占用。
+- `--auth-token` 为空。
+- `--log-dir` 或 `--temp-dir` 不可写。
+
+## HTTP API
+
+### `GET /v1/info`
+
+返回：
+
+```json
+{
+  "hostVersion": "1.0.0",
+  "protocolVersion": "1.0",
+  "browserName": "chrome-for-testing",
+  "browserVersion": "126.0.0.0",
+  "capabilities": ["print-pdf", "source-html", "source-pdf", "source-easyink", "diagnostics"]
+}
+```
+
+### `GET /v1/health`
+
+返回：
+
+```json
+{
+  "status": "ok",
+  "browser": "ready",
+  "queue": {
+    "running": 0,
+    "pending": 0,
+    "maxConcurrency": 2
+  }
+}
+```
+
+### `POST /v1/render/print-pdf`
+
+请求使用 Render Protocol v1 Print PDF 请求。`source.type` 取值固定为 `html`、`pdf` 或 `easyink`。成功返回 `application/pdf` 二进制流。失败返回 JSON 错误。
+
+## Render Protocol v1
+
+### Print PDF 请求：HTML
+
+```json
+{
+  "requestId": "req-001",
+  "source": {
+    "type": "html",
+    "html": "<html>...</html>",
+    "baseUrl": "https://example.com/"
+  },
+  "pdf": {
+    "paperWidthMm": 80,
+    "paperHeightMm": 120,
+    "printBackground": true,
+    "landscape": false,
+    "marginMm": {
+      "top": 0,
+      "right": 0,
+      "bottom": 0,
+      "left": 0
+    }
+  },
+  "wait": {
+    "until": "networkIdle",
+    "selector": ".easyink-ready",
+    "timeoutMs": 30000
+  },
+  "output": {
+    "type": "binary"
+  },
+  "security": {
+    "allowFileAccess": false,
+    "allowedOrigins": ["https://cdn.example.com"]
+  }
+}
+```
+
+### Print PDF 请求：PDF
+
+```json
+{
+  "requestId": "req-002",
+  "source": {
+    "type": "pdf",
+    "pdfBase64": "JVBERi0xLjQK...",
+    "fileName": "input.pdf"
+  },
+  "output": {
+    "type": "binary"
+  },
+  "security": {
+    "maxInputBytes": 52428800
+  }
+}
+```
+
+### Print PDF 请求：EasyInk Schema + Data
+
+```json
+{
+  "requestId": "req-003",
+  "source": {
+    "type": "easyink",
+    "schema": {
+      "version": "1.0",
+      "page": {
+        "width": 80,
+        "height": 120,
+        "unit": "mm"
+      },
+      "elements": []
+    },
+    "data": {
+      "receipt": {
+        "no": "R-001",
+        "items": []
+      }
+    }
+  },
+  "pdf": {
+    "printBackground": true,
+    "marginMm": {
+      "top": 0,
+      "right": 0,
+      "bottom": 0,
+      "left": 0
+    }
+  },
+  "wait": {
+    "until": "easyinkReady",
+    "timeoutMs": 30000
+  },
+  "output": {
+    "type": "binary"
+  }
+}
+```
+
+### PDF 成功响应
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/pdf
+X-EasyInk-Request-Id: req-001
+X-EasyInk-Diagnostics-Id: diag-001
+
+<PDF bytes>
+```
+
+### JSON 错误响应
+
+```json
+{
+  "success": false,
+  "requestId": "req-001",
+  "error": {
+    "code": "RENDER_TIMEOUT",
+    "message": "Render timeout after 30000ms",
+    "details": {
+      "stage": "waitForReady"
+    }
+  },
+  "diagnostics": {
+    "durationMs": 30012,
+    "consoleErrors": [],
+    "failedRequests": []
+  }
+}
+```
 
 ## 分阶段落地
 
-### 阶段 1：协议和 MVP Host
+### 阶段 1：Host 骨架
 
-- 定义 Render Protocol v1。
+- 创建 Go module。
+- 实现 CLI 参数解析。
+- 实现日志初始化。
+- 实现 token 认证。
+- 实现 `/v1/info`。
+- 实现 `/v1/health`。
+- 实现优雅退出。
+
+验收：命令行启动 Host 后，curl 能访问 `/v1/info` 和 `/v1/health`。
+
+### 阶段 2：浏览器生命周期
+
+- 接入 chromedp/cdproto。
+- 使用 `--browser-path` 启动 Chrome for Testing。
+- 实现 Browser 版本读取。
+- 实现 context/page 创建和释放。
+- 实现进程退出清理。
+
+验收：Host 能启动浏览器、创建页面、关闭页面，并在 `/v1/health` 中返回 browser ready。
+
+### 阶段 3：Print PDF 渲染
+
+- 实现 `/v1/render/print-pdf`。
 - 实现 HTML 到 PDF。
-- 实现 URL 到 PDF。
-- 支持等待策略：load、networkIdle、selector、timeout。
-- 支持 PDF 基础选项：纸张、边距、横向、背景。
-- 输出基础 diagnostics。
+- 实现 PDF 到 PDF 校验、诊断和透传归一。
+- 实现等待策略：load、networkIdle、selector、timeout。
+- 实现 PDF 选项映射：纸张、边距、横向、背景。
+- 调用 CDP `Page.printToPDF`。
+- 返回 `application/pdf` 二进制流。
+- 返回 JSON 错误响应。
 
-验收：Node.js 或命令行可以调用 Host 生成 PDF。
+验收：curl 使用 `source.type=html` 和 `source.type=pdf` 调用 `/v1/render/print-pdf` 均能得到有效 PDF 文件。
 
-### 阶段 2：C# 集成
+### 阶段 4：安全和隔离
 
-- `EasyInk.Printer` 增加 Runtime Manager。
-- 设置页增加下载、校验、启用能力。
-- 增加 Render Client。
-- 打印请求支持 HTML/URL 渲染成 PDF。
-- 生成 PDF 后复用现有打印链路。
+- 实现 URL allowlist。
+- 拦截 localhost、内网 IP、link-local、IPv6 private。
+- 拦截重定向到内网。
+- 禁用非 http/https 协议。
+- 禁用默认文件访问。
+- 控制代理环境变量。
+- 每个请求使用独立 browser context。
 
-验收：C# 端可以打印 HTML 输入，最终仍走现有 PDF 打印路由。
+验收：SSRF、本地文件访问和私网重定向用例全部被阻断。
 
-### 阶段 3：Viewer 和模板
+### 阶段 5：Diagnostics
 
-- 支持 EasyInk Viewer payload。
-- 支持模板和数据合成。
+- 采集请求耗时。
+- 采集 console error。
+- 采集网络失败请求。
+- 记录最终 URL。
+- 记录 PDF 页数。
+- 支持失败截图。
+- 支持 HTML 快照。
+- 返回 diagnostics ID。
+
+验收：失败渲染能通过 diagnostics ID 定位日志、截图和网络错误。
+
+### 阶段 6：EasyInk Schema + Data
+
+- 内置 EasyInk Runtime Bundle。
+- 实现 EasyInk schema 校验。
+- 实现 data binding。
+- 实现 schema + data 到 HTML。
+- 支持 `easyinkReady` 等待策略。
 - 支持字体包和资源包。
-- 支持失败截图、HTML 快照和网络诊断。
+- 支持离线资源包加载。
 
-验收：业务页面可以不依赖浏览器前端，直接在服务端渲染成 PDF。
+验收：`source.type=easyink` 的 schema + data 能生成有效 PDF 文件。
 
-### 阶段 4：多语言 SDK
+### 阶段 7：发布包
 
-- 发布 C# SDK。
-- 发布 Node.js SDK。
-- 发布 Golang SDK。
-- 补充 Docker/container 使用文档。
+- 生成 win-x64 Host zip。
+- 生成 linux-x64 Host tar.gz。
+- 生成 linux-arm64 Host tar.gz。
+- 生成 darwin-x64 Host tar.gz。
+- 生成 darwin-arm64 Host tar.gz。
+- 生成 Chrome for Testing Browser Bundle 包。
+- 生成 manifest。
+- 生成 SHA256。
 
-验收：不同语言服务端使用同一 Render Host 产出一致结果。
+验收：每个平台包解压后均能通过 manifest 校验并启动 Host。
 
 ## 测试计划
 
 - 单页 HTML 到 PDF。
 - 多页 HTML 到 PDF。
+- PDF 输入归一。
+- EasyInk schema + data 到 PDF。
 - 自定义纸张和零边距。
 - 外部字体加载。
 - 图片资源加载。
-- URL allowlist 拦截。
+- HTML 外链 allowlist 拦截。
+- localhost、内网 IP、link-local、IPv6 private 拦截。
+- 重定向到内网拦截。
+- 非 http/https 协议拦截。
 - 超时和取消。
 - 并发渲染。
-- 大 PDF 输出。
-- Host 崩溃后重启。
-- Browser Bundle 缺失或校验失败。
+- 大 PDF 输入和输出。
+- Browser Bundle 缺失。
+- Browser 进程异常退出。
+- Host 优雅退出。
 - Windows 10/11 兼容性。
+- Linux x64 / arm64 兼容性。
+- macOS x64 / arm64 兼容性。
 
-## 风险
+## 风险和处理
 
 ### Windows 7 兼容性
 
-现代 Chromium 对 Windows 7/8.1 支持有限。Render 能力应以 Windows 10/11 为主要目标，C# 原有打印链路继续保持 Windows 7 支持。
+现代 Chrome for Testing 不提供 Windows 7/8.1 能力承诺。Render Host 不承诺 Windows 7/8.1。
 
 ### SSRF 和本地文件访问
 
-服务端渲染天然存在访问内网和本地文件的风险。默认必须关闭本地文件访问，并提供域名 allowlist。
+服务端渲染存在访问内网和本地文件的风险。Host 默认关闭本地文件访问，URL 和 HTML 外链资源默认经过 allowlist。
 
 ### 浏览器体积
 
-浏览器运行时体积较大，因此必须按需下载，不内置到 C# 安装包。下载过程必须支持断点、校验和失败恢复。
+Chrome for Testing 作为独立 Browser Bundle 发布。Host 二进制不包含浏览器。
 
 ### 协议演进
 
-协议需要版本化。Host 可以升级实现，但不能随意破坏 v1 请求和响应结构。
+协议版本化。Host 升级不得破坏 v1 请求和响应结构。
 
-## 推荐下一步
+### CDP 封装成本
 
-1. 固化 Render Protocol v1 字段。
-2. 决定 MVP Host 使用 Node.js + Playwright 还是直接 Go/Rust + CDP。
-3. 先做 CLI/HTTP Host 原型，不接 C# 设置页。
-4. 用真实 EasyInk Viewer 页面验证 PDF 输出质量。
-5. 再接入 `EasyInk.Printer` 设置页和打印请求预处理。
+Go Host 直接封装浏览器启动、页面生命周期、等待策略、PDF 参数映射和 diagnostics。该成本进入 Host 阶段，不通过 Node.js Host 过渡。
+
+## 执行清单
+
+1. 创建 Go Host 工程。
+2. 实现 CLI/HTTP Host。
+3. 接入 chromedp/cdproto。
+4. 实现 Chrome for Testing 生命周期。
+5. 固化 Render Protocol v1。
+6. 实现 HTML/PDF Print PDF 渲染。
+7. 实现安全拦截。
+8. 实现 diagnostics。
+9. 实现 EasyInk schema + data 渲染。
+10. 生成跨平台发布包和 manifest。
