@@ -18,6 +18,11 @@ namespace EasyInk.Engine.Services;
 public class EscPosRawPrintService : IPrintService
 {
     private const int CUT_FEED_LINES = 6;
+    private static readonly PrintPipelineMessages PipelineMessages = new(
+        "Raw 打印成功",
+        "打印已取消",
+        "Raw 打印失败",
+        "打印失败，请检查打印机状态后重试");
 
     private readonly int _dpi;
     private readonly int _maxDotsWidth;
@@ -40,42 +45,23 @@ public class EscPosRawPrintService : IPrintService
 
     public PrinterResult Print(string requestId, PrintRequestParams request, CancellationToken cancellationToken = default)
     {
-        if (cancellationToken.IsCancellationRequested)
-            return PrinterResult.Error(requestId, ErrorCode.PrintFailed, "打印已取消");
+        return PrintPipeline.ExecutePdfPrint(
+            requestId,
+            request,
+            _printerService,
+            _logger,
+            (pdfBytes, token) =>
+            {
+                var bands = RenderPdfToEscPosBands(requestId, pdfBytes, token);
+                var batches = BuildPrintBatches(bands, request.Copies);
 
-        var status = _printerService.GetPrinterStatus(request.PrinterName);
-        if (!status.IsReady)
-            return PrinterResult.Error(requestId, status.StatusCode, status.Message);
+                NativePrintApi.SendRawBatched(request.PrinterName, batches,
+                    $"EasyInk-{requestId.Substring(0, Math.Min(8, requestId.Length))}", delayMs: 80);
 
-        IPdfProvider provider;
-        try { provider = request.CreatePdfProvider(); }
-        catch (Exception ex) { return PrinterResult.Error(requestId, ErrorCode.InvalidPdfSource, ex.Message); }
-
-        var pdfBytes = provider.GetPdfBytes();
-        if (pdfBytes == null || pdfBytes.Length == 0)
-            return PrinterResult.Error(requestId, ErrorCode.InvalidPdfSource, "PDF 内容为空");
-
-        try
-        {
-            var bands = RenderPdfToEscPosBands(requestId, pdfBytes, cancellationToken);
-            var batches = BuildPrintBatches(bands, request.Copies);
-
-            NativePrintApi.SendRawBatched(request.PrinterName, batches,
-                $"EasyInk-{requestId.Substring(0, Math.Min(8, requestId.Length))}", delayMs: 80);
-
-            _logger.Log(LogLevel.Info, $"Raw 打印成功: {request.PrinterName}, jobId={requestId}", requestId);
-            return PrinterResult.Ok(requestId, PrintResult.Success(requestId));
-        }
-        catch (OperationCanceledException)
-        {
-            _logger.Log(LogLevel.Info, $"打印已取消: {request.PrinterName}, jobId={requestId}", requestId);
-            return PrinterResult.Error(requestId, ErrorCode.PrintFailed, "打印已取消");
-        }
-        catch (Exception ex)
-        {
-            _logger.Log(LogLevel.Error, $"Raw 打印失败: {request.PrinterName}, jobId={requestId}, {ex}", requestId);
-            return PrinterResult.Error(requestId, ErrorCode.PrintFailed, "打印失败，请检查打印机状态后重试");
-        }
+                return PrinterResult.Ok(requestId, PrintResult.Success(requestId));
+            },
+            PipelineMessages,
+            cancellationToken);
     }
 
     internal static byte[][] BuildPrintBatches(IReadOnlyList<byte[]> bands, int copies)

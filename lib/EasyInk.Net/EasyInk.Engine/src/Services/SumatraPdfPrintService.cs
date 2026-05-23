@@ -16,6 +16,11 @@ public class SumatraPdfPrintService : IPrintService
 {
     private const int DefaultTimeoutMs = 60_000;
     private static readonly TimeSpan StaleTempFileAge = TimeSpan.FromDays(1);
+    private static readonly PrintPipelineMessages PipelineMessages = new(
+        "SumatraPDF 打印成功",
+        "SumatraPDF 打印已取消",
+        "SumatraPDF 打印异常",
+        "SumatraPDF 打印失败，请检查配置后重试");
 
     private readonly IPrinterService _printerService;
     private readonly string _sumatraExePath;
@@ -46,30 +51,22 @@ public class SumatraPdfPrintService : IPrintService
 
     public PrinterResult Print(string requestId, PrintRequestParams request, CancellationToken cancellationToken = default)
     {
-        if (cancellationToken.IsCancellationRequested)
-            return PrinterResult.Error(requestId, ErrorCode.PrintFailed, "打印已取消");
-
         if (!File.Exists(_sumatraExePath))
             return PrinterResult.Error(requestId, ErrorCode.PrintFailed, $"SumatraPDF 不存在: {_sumatraExePath}");
 
-        var status = _printerService.GetPrinterStatus(request.PrinterName);
-        if (!status.IsReady)
-            return PrinterResult.Error(requestId, status.StatusCode, status.Message);
+        return PrintPipeline.ExecutePdfPrint(
+            requestId,
+            request,
+            _printerService,
+            _logger,
+            (pdfBytes, token) => PrintWithSumatra(requestId, request, pdfBytes, token),
+            PipelineMessages,
+            cancellationToken);
+    }
 
-        IPdfProvider provider;
-        try
-        {
-            provider = request.CreatePdfProvider();
-        }
-        catch (Exception ex)
-        {
-            return PrinterResult.Error(requestId, ErrorCode.InvalidPdfSource, ex.Message);
-        }
-
-        var pdfBytes = provider.GetPdfBytes();
-        if (pdfBytes == null || pdfBytes.Length == 0)
-            return PrinterResult.Error(requestId, ErrorCode.InvalidPdfSource, "PDF 内容为空");
-
+    private PrinterResult PrintWithSumatra(string requestId, PrintRequestParams request, byte[] pdfBytes,
+        CancellationToken cancellationToken)
+    {
         var tempFile = "";
         try
         {
@@ -110,18 +107,7 @@ public class SumatraPdfPrintService : IPrintService
                 return PrinterResult.Error(requestId, ErrorCode.PrintFailed, $"SumatraPDF 打印失败，退出码 {process.ExitCode}");
             }
 
-            _logger.Log(LogLevel.Info, $"SumatraPDF 打印成功: {request.PrinterName}, jobId={requestId}", requestId);
             return PrinterResult.Ok(requestId, PrintResult.Success(requestId));
-        }
-        catch (OperationCanceledException)
-        {
-            _logger.Log(LogLevel.Info, $"SumatraPDF 打印已取消: {request.PrinterName}, jobId={requestId}", requestId);
-            return PrinterResult.Error(requestId, ErrorCode.PrintFailed, "打印已取消");
-        }
-        catch (Exception ex)
-        {
-            _logger.Log(LogLevel.Error, $"SumatraPDF 打印异常: {request.PrinterName}, jobId={requestId}, {ex}", requestId);
-            return PrinterResult.Error(requestId, ErrorCode.PrintFailed, "SumatraPDF 打印失败，请检查配置后重试");
         }
         finally
         {

@@ -26,6 +26,11 @@ public class PdfiumPrintService : IPrintService
     private const float LowDpiTextBoostContrast = 1.28f;
     private const float LowDpiTextBoostBrightness = -0.08f;
     private const byte LowDpiMonochromeThreshold = 220;
+    private static readonly PrintPipelineMessages PipelineMessages = new(
+        "打印成功",
+        "打印已取消",
+        "打印失败",
+        "打印失败，请检查打印机状态后重试");
 
     private readonly IPrinterService _printerService;
     private readonly ILogger _logger;
@@ -47,46 +52,21 @@ public class PdfiumPrintService : IPrintService
     /// </summary>
     public PrinterResult Print(string requestId, PrintRequestParams request, CancellationToken cancellationToken = default)
     {
-        if (cancellationToken.IsCancellationRequested)
-            return PrinterResult.Error(requestId, ErrorCode.PrintFailed, "打印已取消");
-
         // IsReady 仅在确知打印机不可用时为 false（离线、卡纸、缺纸、已停止）。
         // WMI 查询失败/超时/不可用时 IsReady 必须为 true —— 状态未知不等于不可用，
         // 误拦截会导致实际可用的打印机无法打印。
-        var status = _printerService.GetPrinterStatus(request.PrinterName);
-        if (!status.IsReady)
-            return PrinterResult.Error(requestId, status.StatusCode, status.Message);
-
-        IPdfProvider provider;
-        try
-        {
-            provider = request.CreatePdfProvider();
-        }
-        catch (Exception ex)
-        {
-            return PrinterResult.Error(requestId, ErrorCode.InvalidPdfSource, ex.Message);
-        }
-
-        var pdfBytes = provider.GetPdfBytes();
-        if (pdfBytes == null || pdfBytes.Length == 0)
-            return PrinterResult.Error(requestId, ErrorCode.InvalidPdfSource, "PDF 内容为空");
-
-        try
-        {
-            PrintWithSpooler(requestId, request, pdfBytes, cancellationToken);
-            _logger.Log(LogLevel.Info, $"打印成功: {request.PrinterName}, jobId={requestId}", requestId);
-            return PrinterResult.Ok(requestId, PrintResult.Success(requestId));
-        }
-        catch (OperationCanceledException)
-        {
-            _logger.Log(LogLevel.Info, $"打印已取消: {request.PrinterName}, jobId={requestId}", requestId);
-            return PrinterResult.Error(requestId, ErrorCode.PrintFailed, "打印已取消");
-        }
-        catch (Exception ex)
-        {
-            _logger.Log(LogLevel.Error, $"打印失败: {request.PrinterName}, jobId={requestId}, {ex}", requestId);
-            return PrinterResult.Error(requestId, ErrorCode.PrintFailed, "打印失败，请检查打印机状态后重试");
-        }
+        return PrintPipeline.ExecutePdfPrint(
+            requestId,
+            request,
+            _printerService,
+            _logger,
+            (pdfBytes, token) =>
+            {
+                PrintWithSpooler(requestId, request, pdfBytes, token);
+                return PrinterResult.Ok(requestId, PrintResult.Success(requestId));
+            },
+            PipelineMessages,
+            cancellationToken);
     }
 
     private void PrintWithSpooler(string requestId, PrintRequestParams request, byte[] pdfBytes, CancellationToken cancellationToken)
