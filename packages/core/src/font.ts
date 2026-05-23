@@ -285,13 +285,26 @@ export function collectFontFamilies(schema: DocumentSchema): Set<string> {
     families.add(schema.page.font)
 
   traverseNodes(schema, (node) => {
-    const fontFamily = node.props?.fontFamily
-    if (typeof fontFamily === 'string' && fontFamily) {
-      families.add(fontFamily)
-    }
+    collectPropsFontFamilies(node.props, families)
   })
 
   return families
+}
+
+function collectPropsFontFamilies(props: Record<string, unknown> | undefined, families: Set<string>): void {
+  if (!props)
+    return
+
+  const fontFamily = props.fontFamily
+  if (typeof fontFamily === 'string' && fontFamily)
+    families.add(fontFamily)
+
+  const typography = props.typography
+  if (typography && typeof typography === 'object' && !Array.isArray(typography)) {
+    const typographyFontFamily = (typography as Record<string, unknown>).fontFamily
+    if (typeof typographyFontFamily === 'string' && typographyFontFamily)
+      families.add(typographyFontFamily)
+  }
 }
 
 function createFontFaceStyle(input: {
@@ -325,7 +338,7 @@ function createFontFaceStyle(input: {
 function getFontStyleContainer(target: Document | ShadowRoot): HTMLElement | ShadowRoot {
   if (target.nodeType === 9)
     return (target as Document).head
-  return target
+  return target as ShadowRoot
 }
 
 function getFontOwnerDocument(target: Document | ShadowRoot): Document {

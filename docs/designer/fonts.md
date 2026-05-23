@@ -81,7 +81,7 @@ FontPicker 右侧只有一个状态区域：
 
 字体选择器顶部会显示“默认”选项。选择默认时，字段值写入空字符串，元素会继承页面或浏览器默认字体。
 
-页面全局字体来自 `schema.page.font`，元素字体来自 `node.props.fontFamily`。Designer 会自动收集这些引用并进行预加载。
+页面全局字体来自 `schema.page.font`，普通文字元素字体来自 `node.props.fontFamily`，表格/流动行这类整体排版字体来自 `node.props.typography.fontFamily`。Designer 会自动收集这些引用并进行预加载。
 
 ## Playground 示例
 

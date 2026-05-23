@@ -13,6 +13,7 @@ export interface TableBaseProps {
 }
 
 export const TABLE_TYPOGRAPHY_DEFAULTS: TableTypography = {
+  fontFamily: '',
   fontSize: 3.18,
   color: '#000000',
   fontWeight: 'normal',

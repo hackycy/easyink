@@ -426,8 +426,9 @@ export interface CellTypography {
   verticalAlign?: 'top' | 'middle' | 'bottom'
 }
 
-/** Table-level typography defaults. Symmetric to CellTypography but all fields required. */
+/** Table-level typography defaults. Font family is optional for older schemas. */
 export interface TableTypography {
+  fontFamily?: string
   fontSize: number
   color: string
   fontWeight: 'normal' | 'bold'

@@ -1,6 +1,22 @@
+import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import type { FontDescriptor, FontProvider } from './font'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { collectFontFamilies, FontManager } from './font'
+
+function createSchema(input: { page?: Partial<DocumentSchema['page']>, elements?: MaterialNode[] }): DocumentSchema {
+  return {
+    version: '1.0.0',
+    unit: 'mm',
+    page: {
+      mode: 'fixed',
+      width: 100,
+      height: 100,
+      ...(input.page ?? {}),
+    },
+    guides: { x: [], y: [] },
+    elements: input.elements ?? [],
+  }
+}
 
 function createMockProvider(): FontProvider {
   const fonts: FontDescriptor[] = [
@@ -182,12 +198,8 @@ describe('fontManager', () => {
   })
 
   it('collectFontFamilies includes page and element fonts', () => {
-    const families = collectFontFamilies({
-      unit: 'mm',
+    const families = collectFontFamilies(createSchema({
       page: {
-        mode: 'fixed',
-        width: 100,
-        height: 100,
         font: 'PageFont',
       },
       elements: [
@@ -201,19 +213,40 @@ describe('fontManager', () => {
           props: { fontFamily: 'ElementFont' },
         },
       ],
-    })
+    }))
 
     expect([...families]).toEqual(['PageFont', 'ElementFont'])
   })
 
+  it('collectFontFamilies includes material typography fonts', () => {
+    const families = collectFontFamilies(createSchema({
+      elements: [
+        {
+          id: 'table-1',
+          type: 'table-static',
+          x: 0,
+          y: 0,
+          width: 10,
+          height: 10,
+          props: { typography: { fontFamily: 'TableFont' } },
+        },
+        {
+          id: 'flow-1',
+          type: 'flow-row',
+          x: 0,
+          y: 0,
+          width: 10,
+          height: 10,
+          props: { typography: { fontFamily: 'FlowFont' } },
+        },
+      ],
+    }))
+
+    expect([...families]).toEqual(['TableFont', 'FlowFont'])
+  })
+
   it('collectFontFamilies traverses hosted table cell elements', () => {
-    const families = collectFontFamilies({
-      unit: 'mm',
-      page: {
-        mode: 'fixed',
-        width: 100,
-        height: 100,
-      },
+    const families = collectFontFamilies(createSchema({
       elements: [
         {
           id: 'table-1',
@@ -246,9 +279,9 @@ describe('fontManager', () => {
             },
             layout: {},
           },
-        },
+        } as unknown as MaterialNode,
       ],
-    })
+    }))
 
     expect([...families]).toEqual(['HostedFont'])
   })

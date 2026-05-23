@@ -26,6 +26,27 @@ describe('renderTableHtml', () => {
     expect(html).not.toContain('border-collapse:collapse')
   })
 
+  it('applies table-level font family to the whole table', () => {
+    const html = renderTableHtml({
+      topology: {
+        columns: [{ ratio: 1 }],
+        rows: [{ height: 10, role: 'normal', cells: [{ content: { text: 'A' } }] }],
+      },
+      props: {
+        ...TABLE_BASE_DEFAULTS,
+        typography: {
+          ...TABLE_BASE_DEFAULTS.typography,
+          fontFamily: 'TableFont',
+        },
+      },
+      unit: 'mm',
+      elementHeight: 10,
+      cellRenderer: cell => cell.content?.text ?? '',
+    })
+
+    expect(html).toContain('font-family:TableFont')
+  })
+
   it('renders shared internal borders once in separate border mode', () => {
     const html = renderSimpleTable({
       columns: [{ ratio: 0.5 }, { ratio: 0.5 }],

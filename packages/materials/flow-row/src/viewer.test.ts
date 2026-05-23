@@ -92,6 +92,21 @@ describe('flow-row viewer', () => {
     expect(html).toContain('padding:3mm 2mm')
   })
 
+  it('applies flow-row typography font family to the material', () => {
+    const node = createFlowRowNode({
+      props: {
+        typography: {
+          ...FLOW_ROW_DEFAULTS.typography,
+          fontFamily: 'FlowFont',
+        },
+      },
+    })
+
+    const html = readTrustedViewerHtml(renderFlowRow(node, viewerContext).html!)
+
+    expect(html).toContain('font-family:FlowFont')
+  })
+
   it('reads legacy padding as both horizontal and vertical padding', () => {
     const node = createFlowRowNode({
       props: {

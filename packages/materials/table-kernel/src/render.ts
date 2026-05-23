@@ -73,6 +73,7 @@ export function renderTableHtml(options: RenderTableHtmlOptions): string {
   const bc = escapeAttr(props.borderColor || '#000')
   const bt = props.borderType || 'solid'
   const pad = props.cellPadding ?? TABLE_BASE_DEFAULTS.cellPadding
+  const fontFamily = props.typography?.fontFamily ? `;font-family:${escapeAttr(props.typography.fontFamily)}` : ''
 
   const colgroup = buildColgroup(topology)
   const numCols = topology.columns.length
@@ -190,7 +191,7 @@ export function renderTableHtml(options: RenderTableHtmlOptions): string {
   }
 
   const extra = tableStyle ? `;${tableStyle}` : ''
-  return `<table style="width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;box-sizing:border-box${extra}">${colgroup}${rows}</table>`
+  return `<table style="width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;box-sizing:border-box${fontFamily}${extra}">${colgroup}${rows}</table>`
 }
 
 function getRenderedCellBorders(
