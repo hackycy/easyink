@@ -14,6 +14,14 @@ const fontProvider: FontProvider = {
   async listFonts() {
     return [
       {
+        family: 'system-ui',
+        displayName: '系统界面字体',
+        weights: ['400', '700'],
+        styles: ['normal'],
+        source: 'system',
+        preview: '字体预览 EasyInk 123',
+      },
+      {
         family: 'SourceHanSans',
         displayName: '思源黑体',
         weights: ['400'],
@@ -51,6 +59,8 @@ Viewer 的渲染流程是：
 6. 渲染页面 DOM
 
 字体加载在测量和分页之前完成，因为文本宽度、行高和分页结果都可能受字体影响。
+
+标记为 `source: 'system'` 的字体会直接走浏览器字体匹配，不调用 `loadFont()`，也不会注入 `@font-face`。
 
 ## Host 注入目标
 

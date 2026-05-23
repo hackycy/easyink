@@ -9,7 +9,7 @@ The chain is:
 1. `ViewerRuntime.render()` calls its font-loading stage.
 2. `collectFontFamilies(schema)` collects `schema.page.font` and every traversed `node.props.fontFamily`.
 3. `loadAndInjectFonts(families, fontManager, host.document)` calls `FontManager.ensureFontLoaded({ family }, target)`.
-4. `FontManager` asks the host `FontProvider.loadFont()` for a URL or `ArrayBuffer`, caches the result, and injects one `@font-face` style per target and font key.
+4. `FontManager` asks the host `FontProvider.loadFont()` for a URL or `ArrayBuffer`, caches the result, and injects one `@font-face` style per target and font key. Catalog entries with `source: 'system'` are treated as already loaded and skip this resource-loading step.
 5. Viewer continues with binding projection, measurement, layout, pagination, and rendering.
 
 Rules for material developers:

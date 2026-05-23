@@ -124,7 +124,7 @@ The public font contract is in `packages/core/src/font.ts`, with user-facing Des
 Host apps pass a `FontProvider` into Designer and Viewer:
 
 - `listFonts()` returns display metadata for the FontPicker catalog.
-- `loadFont(family, weight?, style?)` returns a URL or `ArrayBuffer` that can be used in `@font-face`.
+- `loadFont(family, weight?, style?)` returns a URL or `ArrayBuffer` that can be used in `@font-face`; catalog entries with `source: 'system'` use browser/system fonts directly and do not call `loadFont()`.
 
 Designer owns edit-time font loading:
 

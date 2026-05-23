@@ -81,6 +81,7 @@ export type {
   FontBatchLoadOptions,
   FontBatchLoadResult,
   FontDescriptor,
+  FontDescriptorSource,
   FontLoadFailure,
   FontLoadRequest,
   FontLoadState,
@@ -89,6 +90,7 @@ export type {
   FontPreloadResult,
   FontProvider,
   FontSource,
+  SystemFontSource,
 } from './font'
 
 export {

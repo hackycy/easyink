@@ -17,6 +17,15 @@ const fontProvider: FontProvider = {
   async listFonts() {
     return [
       {
+        family: 'system-ui',
+        displayName: '系统界面字体',
+        weights: ['400', '700'],
+        styles: ['normal'],
+        source: 'system',
+        category: 'sans-serif',
+        preview: '字体预览 EasyInk 123',
+      },
+      {
         family: 'SourceHanSans',
         displayName: '思源黑体',
         weights: ['400', '700'],
@@ -50,6 +59,8 @@ const fontProvider: FontProvider = {
 ```
 
 `listFonts()` 返回字体目录，FontPicker 会用它展示字体名称、搜索结果、预览文本和加载状态。`loadFont()` 返回 CSS `@font-face` 可使用的 URL 或 `ArrayBuffer`。
+
+如果字体来自浏览器或操作系统，可以在目录中设置 `source: 'system'`。这类字体不会显示下载按钮，选择和预览时也不会调用 `loadFont()` 或注入 `@font-face`。
 
 ## 加载行为
 
@@ -88,8 +99,8 @@ FontPicker 右侧只有一个状态区域：
 Playground 的字体示例位于 `playground/src/fonts.ts`：
 
 - 字体文件放在 `playground/public/fonts`
-- `listFonts()` 只返回字体 manifest
-- `loadFont()` 返回 public 目录下的字体 URL
+- `listFonts()` 返回字体 manifest，可同时包含 `source: 'system'` 的系统字体和本地字体文件
+- `loadFont()` 只为本地字体返回 public 目录下的字体 URL
 - 不需要调用额外的 `injectFontFace()` 或手动创建 style
 
 这个模式也适合业务系统：字体文件可以来自 public 目录、CDN、私有文件服务或后端 API，只要 `loadFont()` 返回 URL 或 `ArrayBuffer` 即可。

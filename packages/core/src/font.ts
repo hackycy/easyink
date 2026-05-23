@@ -9,9 +9,12 @@ export interface FontDescriptor {
   displayName: string
   weights: string[]
   styles: string[]
+  source?: FontDescriptorSource
   category?: string
   preview?: string
 }
+
+export type FontDescriptorSource = 'provider' | 'system'
 
 /**
  * Font provider interface for loading font data.
@@ -22,7 +25,7 @@ export interface FontProvider {
   loadFont: (fontFamily: string, weight?: string, style?: string) => Promise<FontSource>
 }
 
-export type FontSource = string | ArrayBuffer
+export type FontSource = string | ArrayBuffer | SystemFontSource
 
 export interface FontLoadRequest {
   family: string
@@ -66,6 +69,12 @@ interface FontCacheEntry {
   source: FontSource
   loaded: boolean
 }
+
+export interface SystemFontSource {
+  type: 'system'
+}
+
+const SYSTEM_FONT_SOURCE: SystemFontSource = { type: 'system' }
 
 /**
  * FontManager provides font catalog access, loading state, caching and
@@ -118,6 +127,9 @@ export class FontManager {
     if (inflight)
       return inflight
 
+    if (isSystemFontDescriptor(this.getCachedFontDescriptor(family)))
+      return this.markSystemFontLoaded(key)
+
     if (!this._provider) {
       throw new Error(`No font provider configured, cannot load font: ${family}`)
     }
@@ -152,11 +164,20 @@ export class FontManager {
   async ensureFontLoaded(request: FontLoadRequest, target?: Document | ShadowRoot): Promise<FontLoadSuccess> {
     const provider = this._provider
     const generation = this._generation
+    const descriptor = this.getCachedFontDescriptor(request.family) ?? await this.findFontDescriptor(request.family)
+    if (this._generation !== generation || this._provider !== provider) {
+      throw new Error(`Font provider changed while loading font: ${request.family}`)
+    }
+    if (isSystemFontDescriptor(descriptor)) {
+      const source = this.markSystemFontLoaded(fontCacheKey(request.family, request.weight, request.style))
+      return { ...request, source }
+    }
+
     const source = await this.loadFont(request.family, request.weight, request.style)
     if (this._generation !== generation || this._provider !== provider) {
       throw new Error(`Font provider changed while loading font: ${request.family}`)
     }
-    if (target) {
+    if (target && !isSystemFontSource(source)) {
       this.injectFontFace({
         family: request.family,
         weight: request.weight,
@@ -207,11 +228,15 @@ export class FontManager {
   }
 
   isLoaded(family: string, weight?: string, style?: string): boolean {
+    if (isSystemFontDescriptor(this.getCachedFontDescriptor(family)))
+      return true
     const key = fontCacheKey(family, weight, style)
     return this._cache.get(key)?.loaded === true
   }
 
   getLoadState(family: string, weight?: string, style?: string): FontLoadState {
+    if (isSystemFontDescriptor(this.getCachedFontDescriptor(family)))
+      return { family, weight, style, status: 'loaded' }
     const key = fontCacheKey(family, weight, style)
     const failure = this._failures.get(key)
     if (this._cache.get(key)?.loaded) {
@@ -276,6 +301,36 @@ export class FontManager {
     this._injectedTargets = new WeakMap()
     this._injectedTargetRefs.clear()
   }
+
+  private getCachedFontDescriptor(family: string): FontDescriptor | undefined {
+    return this._fontList?.find(font => font.family === family)
+  }
+
+  private async findFontDescriptor(family: string): Promise<FontDescriptor | undefined> {
+    if (!this._provider)
+      return undefined
+    try {
+      const fonts = await this.listFonts()
+      return fonts.find(font => font.family === family)
+    }
+    catch {
+      return undefined
+    }
+  }
+
+  private markSystemFontLoaded(key: string): FontSource {
+    this._cache.set(key, { source: SYSTEM_FONT_SOURCE, loaded: true })
+    this._failures.delete(key)
+    return SYSTEM_FONT_SOURCE
+  }
+}
+
+function isSystemFontDescriptor(font: FontDescriptor | undefined): boolean {
+  return font?.source === 'system'
+}
+
+function isSystemFontSource(source: FontSource): source is SystemFontSource {
+  return typeof source === 'object' && !(source instanceof ArrayBuffer) && source.type === 'system'
 }
 
 export function collectFontFamilies(schema: DocumentSchema): Set<string> {
@@ -314,6 +369,9 @@ function createFontFaceStyle(input: {
   weight?: string
   style?: string
 }): HTMLStyleElement {
+  if (isSystemFontSource(input.source))
+    throw new Error(`System font does not require @font-face injection: ${input.family}`)
+
   const key = fontCacheKey(input.family, input.weight, input.style)
   const doc = getFontOwnerDocument(input.target)
   const src = typeof input.source === 'string'

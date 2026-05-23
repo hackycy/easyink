@@ -152,6 +152,27 @@ describe('fontManager', () => {
     expect(styles[0]!.textContent).toContain('font-family: "Arial"')
   })
 
+  it('treats cataloged system fonts as loaded without injecting font-face rules', async () => {
+    const loadFont = vi.fn(async () => '/fonts/should-not-load.woff2')
+    const provider: FontProvider = {
+      listFonts: async () => [
+        { family: 'Arial', displayName: 'Arial', weights: ['400'], styles: ['normal'], source: 'system' },
+      ],
+      loadFont,
+    }
+    const mgr = new FontManager(provider)
+
+    await mgr.listFonts()
+    expect(mgr.getLoadState('Arial').status).toBe('loaded')
+
+    const result = await mgr.ensureFontLoaded({ family: 'Arial' }, document)
+
+    expect(result.source).toEqual({ type: 'system' })
+    expect(loadFont).not.toHaveBeenCalled()
+    expect(mgr.isLoaded('Arial')).toBe(true)
+    expect(document.head.querySelector('style[data-easyink-font="Arial|normal|normal"]')).toBeNull()
+  })
+
   it('setProvider removes previously injected font-face rules for the same manager', async () => {
     const firstProvider: FontProvider = {
       listFonts: async () => [],
