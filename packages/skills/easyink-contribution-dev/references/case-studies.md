@@ -55,5 +55,6 @@ Use this shape for logging, toasts, and observability:
 
 - Subscribe with `ctx.onDiagnostic()`.
 - Forward entries to host logging, Sentry/APM, or a notification service.
+- Treat font diagnostics as observability or host-configuration feedback; the fix is usually `fontProvider` data or font file access, not a Contribution-side reload.
 - Register cleanup with `ctx.onDispose()`.
 - Do not mutate Schema from passive diagnostic subscriptions unless the user explicitly triggers a repair action.

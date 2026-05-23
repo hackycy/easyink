@@ -115,6 +115,8 @@ ctx.onDispose(unsubscribe)
 
 The registry also auto-disposes diagnostic subscriptions, but explicitly registering returned cleanup keeps intent obvious and works for non-diagnostic subscriptions too.
 
+Font loading failures surface through Designer diagnostics with `source: 'font'`. A contribution may forward them to logging, toast UI, or a review panel, but passive diagnostic handling should not mutate Schema or attempt to reload/inject fonts. Host font configuration belongs to `EasyInkDesigner.fontProvider`.
+
 ## Confirmation Pattern
 
 Use `ctx.confirm()` for contribution-owned destructive actions. Keep the request id stable, localize visible text, and pass payload details that help the host make policy decisions.
@@ -152,6 +154,7 @@ Risky store usage:
 
 - mutating private fields directly
 - replacing internal services
+- bypassing `fontProvider` / `FontManager` by injecting font CSS from a contribution
 - storing host workflow state inside `schema.extensions` just to preserve a panel session
 - relying on DOM structure when a context API exists
 

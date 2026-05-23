@@ -19,7 +19,8 @@ Use material development instead when the feature needs a new `MaterialNode`, `c
 ```text
 host app
   -> <EasyInkDesigner :contributions="[...]"
-                      :interaction-provider="..." />
+                      :interaction-provider="..."
+                      :font-provider="..." />
   -> ContributionRegistry.activate(contributions, store)
   -> contribution.activate(ctx)
   -> registerPanel / registerToolbarAction / registerCommand / confirm / onDiagnostic
@@ -50,6 +51,16 @@ Contribution state should not be stored in Schema unless it is genuinely templat
 - `onDispose(fn)`: register cleanup for unmount, remount, and HMR.
 
 `ContributionRegistry` uses shallow reactive descriptor lists and `markRaw()` so Vue component definitions are not proxied.
+
+## Host Capability Boundary
+
+Some host capabilities are passed directly to `EasyInkDesigner` instead of being registered as Contributions. Examples include:
+
+- `interactionProvider` for confirmation and other host-controlled interactions.
+- `fontProvider` for font catalog lookup, font loading, and Designer-side `@font-face` injection.
+- `preferenceProvider` and `autoSave` for Designer-owned persistence flows.
+
+Contribution code may coordinate UI around these capabilities, but should not replace their core pipelines. For fonts specifically, use `fontProvider` on Designer and Viewer options; Contributions can observe `source: 'font'` diagnostics or show host guidance, but should not call `FontProvider` directly or inject font CSS.
 
 ## User Confirmation Boundary
 

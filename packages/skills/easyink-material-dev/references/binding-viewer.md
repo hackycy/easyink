@@ -1,5 +1,26 @@
 # Binding, Viewer, Measurement, Fragment Pagination, and Page-Aware Rules
 
+## Font Loading
+
+Viewer loads fonts before ordinary runtime binding projection, measurement, layout, pagination, and DOM rendering.
+
+The chain is:
+
+1. `ViewerRuntime.render()` calls its font-loading stage.
+2. `collectFontFamilies(schema)` collects `schema.page.font` and every traversed `node.props.fontFamily`.
+3. `loadAndInjectFonts(families, fontManager, host.document)` calls `FontManager.ensureFontLoaded({ family }, target)`.
+4. `FontManager` asks the host `FontProvider.loadFont()` for a URL or `ArrayBuffer`, caches the result, and injects one `@font-face` style per target and font key.
+5. Viewer continues with binding projection, measurement, layout, pagination, and rendering.
+
+Rules for material developers:
+
+- Store font references as family strings, usually `node.props.fontFamily`, or inherit from `schema.page.font`.
+- Render CSS such as `font-family:${escapeHtml(props.fontFamily)}` only after escaping or via DOM style APIs.
+- Do not call `FontProvider`, `FontManager`, or `loadAndInjectFonts()` from material `render()` or `measure()`.
+- Do not serialize font URLs, `ArrayBuffer`s, loaded/error status, style elements, or generated `@font-face` text into Schema.
+- When adding a new font-bearing prop outside `node.props.fontFamily`, also update `collectFontFamilies()` or the schema traversal model so Viewer and Designer can preload it.
+- Font load diagnostics are warnings. Materials should still render with CSS fallback behavior when a font is unavailable.
+
 ## Binding Projection
 
 Ordinary element binding is handled by Viewer before material render:

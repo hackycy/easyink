@@ -88,6 +88,13 @@ Simple materials can set `container.innerHTML`. Complex materials can create Vue
 
 Designer coordinates and design-time page context come through framework-owned surface planning. Material code should use material-local coordinates in geometry and datasource drop protocols, and should not convert output page plans or `renderContextSignal` values back into schema coordinates or persisted props.
 
+For font-bearing materials:
+
+- Use `node.props.fontFamily` for the normal element font field when possible, because Designer and Viewer already collect that path.
+- Let the property panel `font` editor own catalog display, load button state, preview suppression, and commit-time `ensureFontLoaded()`.
+- Designer renderers may set `font-family` from the current prop to reflect the selected family, but they should not inject font CSS or call the host font provider.
+- If a deep-edit sub-property exposes a font field, define it as `type: 'font'` through `SelectionType.getPropertySchema()` so the same loading and commit guard applies.
+
 ## Viewer Rendering Rules
 
 Use `trustedViewerHtml()` for strings:
@@ -101,6 +108,13 @@ Use `trustedViewerHtml()` for strings:
 - Use `getRenderSize()` only when the wrapper dimensions must differ from schema `width` and `height`.
 
 `measure()` runs before layout/reflow/pagination. It should return document-unit size and must not mutate the source schema. `render()` must use the same layout assumptions as `measure()`.
+
+Font-dependent Viewer behavior:
+
+- Viewer loads and injects fonts before `measure()` and `render()`, so text measurement can assume requested fonts have been attempted.
+- Material `measure()` must still tolerate browser fallback metrics when a font failed to load.
+- Material `render()` should emit only the `font-family` declaration needed for its own content. Page-level inheritance is handled by the Viewer page root from `schema.page.font`.
+- If a material stores fonts in nested data, add or update tests around `collectFontFamilies()` so preloading still happens before measurement and render.
 
 ## Page Layout and Behavior Rules
 
@@ -157,6 +171,13 @@ Use `propSchemas` for simple `node.props` fields:
 - Nested props can use dotted keys such as `typography.fontSize`.
 - Labels should be i18n keys.
 - Group names should be one of the groups mapped in `PropertiesPanel.vue` or an intentionally visible custom group.
+
+For font properties:
+
+- Use `type: 'font'` instead of a string enum or free text field when the value should be selected from the host font catalog.
+- Keep the normal key as `fontFamily` when possible. `collectFontFamilies()` currently scans `schema.page.font` and `node.props.fontFamily`.
+- Do not implement custom font preload logic in material-local property editors. The shared property panel prevents preview writes for font fields, loads the family on commit, and rolls back when loading fails.
+- The empty string means default/inherited font. Do not replace it with a hardcoded browser font unless the material intentionally owns that default.
 
 Built-in base material schemas live in `@easyink/prop-schemas`. Material package `src/prop-schemas.ts` files should contain only material-owned additions or overrides that need to travel with that material package.
 

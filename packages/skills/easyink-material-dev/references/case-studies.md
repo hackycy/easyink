@@ -155,6 +155,7 @@ What to improve when touching it:
 - Viewer renders resolved `content` with prefix/suffix.
 - `measureText()` supports auto-height text behavior when text content changes size.
 - Styles are shared through pure rendering helpers.
+- `fontFamily` is a plain Schema string consumed by shared Designer/Viewer font loading; the material renderer only emits the CSS declaration.
 - No deep editing is needed.
 
 Copy this pattern for mostly fixed-size, props-bag-only materials.

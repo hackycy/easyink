@@ -8,8 +8,10 @@ Material work spans this chain:
 Designer material catalog
   -> createDefaultNode(partial?, unit?)
   -> schema.elements[]
+  -> FontProvider / FontManager preload and injection for referenced page or element fonts
   -> MaterialDesignerExtension.renderContent()
   -> viewer.open({ schema, data })
+  -> collectFontFamilies(schema) and loadAndInjectFonts() into the Viewer host document
   -> binding projection
   -> material measure()
   -> runLayoutPipeline()
@@ -26,8 +28,9 @@ If one link is missing, the failure mode is usually direct: no Designer registra
 - Schema state lives in `DocumentSchema` and `MaterialNode`: persistent, undoable, imported/exported.
 - Workbench state lives in Designer store: panels, zoom, selection, window layout, preferences, and active sessions.
 - Runtime state lives in Viewer and editing sessions: resolved props, measurements, layout fragments, output page plans, transient handles, drag gestures, DOM refs, and measured caches.
+- Font runtime state lives in `FontManager`: provider catalog cache, in-flight loads, failures, loaded font sources, and injected style elements for a host `Document` or `ShadowRoot`.
 
-Do not move transient runtime details into Schema. Examples to keep out of Schema: active cell selection, pointer gesture state, virtual preview rows, handle positions, measurement caches, output page fragments, repeated overlay clones, DOM refs, and active editing metadata.
+Do not move transient runtime details into Schema. Examples to keep out of Schema: active cell selection, pointer gesture state, virtual preview rows, handle positions, measurement caches, output page fragments, repeated overlay clones, DOM refs, active editing metadata, font sources, font load states, and injected `@font-face` CSS.
 
 ## Schema Input and Normalization
 
@@ -113,6 +116,30 @@ Implement `MaterialDesignerExtension` with:
 - `resolveControlPolicy`: optional design-time policy for hiding/disabling geometry inputs, resize handles, or property fields when a material owns runtime dimensions or controls.
 
 Use `resolveControlPolicy()` when a material has a runtime-owned dimension or state that should not be edited through outer Designer chrome. It should control both visible handles/fields and any behavior path that could perform the same mutation.
+
+## Font Loading Contract
+
+The public font contract is in `packages/core/src/font.ts`, with user-facing Designer guidance in `docs/designer/fonts.md`.
+
+Host apps pass a `FontProvider` into Designer and Viewer:
+
+- `listFonts()` returns display metadata for the FontPicker catalog.
+- `loadFont(family, weight?, style?)` returns a URL or `ArrayBuffer` that can be used in `@font-face`.
+
+Designer owns edit-time font loading:
+
+- `EasyInkDesigner` passes `fontProvider` to `DesignerStore`.
+- `DesignerStore` creates a `FontManager`, captures the host `Document` or `ShadowRoot` through `setFontTarget()`, and preloads fonts referenced by `schema.page.font` and `node.props.fontFamily`.
+- Font properties use the `font` editor. Preview writes are skipped for font fields, and commits call `store.ensureFontLoaded({ family })` before writing Schema.
+- Failed font loads do not commit the new font value. Designer diagnostics receive a `source: 'font'` warning.
+
+Viewer owns output-time font loading:
+
+- `ViewerRuntime` creates its own `FontManager` from `ViewerOptions.fontProvider`.
+- Before binding, measurement, layout, pagination, and DOM render, it calls `collectFontFamilies(schema)` and `loadAndInjectFonts()` for the Viewer host document.
+- Font failures emit Viewer diagnostics with `scope: 'font'`, but rendering continues with browser fallback fonts.
+
+Material code should only store and render font family names. It should not call `FontProvider`, create `FontManager`, inject `@font-face`, or serialize font sources.
 
 ## Viewer Contract
 
