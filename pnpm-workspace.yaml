@@ -7,7 +7,6 @@ packages:
   - packages/materials/svg/*
   - packages/export/runtime
   - packages/export/plugin/*
-  - lib/EasyInk.Electron
 catalogMode: prefer
 
 catalogs:
