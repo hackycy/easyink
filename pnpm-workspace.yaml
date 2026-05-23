@@ -7,6 +7,7 @@ packages:
   - packages/materials/svg/*
   - packages/export/runtime
   - packages/export/plugin/*
+  - lib/EasyInk.Electron
 catalogMode: prefer
 
 catalogs:
@@ -81,9 +82,15 @@ ignoreWorkspaceRootCheck: true
 
 onlyBuiltDependencies:
   - '@parcel/watcher'
+  - electron
   - esbuild
   - simple-git-hooks
 shellEmulator: true
 trustPolicy: no-downgrade
 trustPolicyExclude:
   - chokidar@4.0.3
+  - semver
+  - semver@5.7.2
+  - semver@6.3.1
+  - undici-types
+  - undici-types@6.21.0

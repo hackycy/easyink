@@ -78,6 +78,12 @@ export default defineConfig({
           ],
         },
         {
+          text: 'EasyInk Electron',
+          items: [
+            { text: '架构设计', link: '/electron/' },
+          ],
+        },
+        {
           text: 'EasyInk Printer (.NET)',
           items: [
             { text: '概述', link: '/dotnet/' },
@@ -103,6 +109,12 @@ export default defineConfig({
           ],
         },
         {
+          text: 'EasyInk Electron',
+          items: [
+            { text: '架构设计', link: '/electron/' },
+          ],
+        },
+        {
           text: 'EasyInk Printer (.NET)',
           items: [
             { text: '概述', link: '/dotnet/' },
@@ -125,6 +137,43 @@ export default defineConfig({
           items: [
             { text: '概述', link: '/hiprint/' },
             { text: '快速上手', link: '/hiprint/getting-started' },
+          ],
+        },
+        {
+          text: 'EasyInk Electron',
+          items: [
+            { text: '架构设计', link: '/electron/' },
+          ],
+        },
+        {
+          text: 'EasyInk Printer (.NET)',
+          items: [
+            { text: '概述', link: '/dotnet/' },
+            { text: '快速上手', link: '/dotnet/getting-started' },
+            { text: 'Engine DLL', link: '/dotnet/engine' },
+            { text: 'Printer 应用', link: '/dotnet/printer' },
+            { text: 'API 参考', link: '/dotnet/api-reference' },
+          ],
+        },
+      ],
+      '/electron/': [
+        {
+          text: 'Printing',
+          items: [
+            { text: '概述', link: '/printing/' },
+          ],
+        },
+        {
+          text: 'Electron HiPrint',
+          items: [
+            { text: '概述', link: '/hiprint/' },
+            { text: '快速上手', link: '/hiprint/getting-started' },
+          ],
+        },
+        {
+          text: 'EasyInk Electron',
+          items: [
+            { text: '架构设计', link: '/electron/' },
           ],
         },
         {

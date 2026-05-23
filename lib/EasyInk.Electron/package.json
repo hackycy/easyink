@@ -1,0 +1,52 @@
+{
+  "name": "@easyink/electron",
+  "version": "0.1.0",
+  "description": "EasyInk Electron local printer powered by Chromium print APIs",
+  "main": "./out/main/index.js",
+  "author": "hackycy <hackycy@outlook.com>",
+  "homepage": "https://github.com/hackycy/easyink#readme",
+  "private": true,
+  "scripts": {
+    "format": "prettier --write .",
+    "lint": "eslint --cache .",
+    "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
+    "typecheck:web": "vue-tsc --noEmit -p tsconfig.web.json --composite false",
+    "typecheck": "pnpm typecheck:node && pnpm typecheck:web",
+    "start": "electron-vite preview",
+    "dev": "electron-vite dev",
+    "build": "pnpm typecheck && electron-vite build",
+    "postinstall": "electron-builder install-app-deps",
+    "build:unpack": "pnpm build && electron-builder --dir",
+    "build:win": "pnpm build && electron-builder --win",
+    "build:mac": "pnpm build && electron-builder --mac",
+    "build:linux": "pnpm build && electron-builder --linux"
+  },
+  "dependencies": {
+    "@electron-toolkit/preload": "^3.0.2",
+    "@electron-toolkit/utils": "^4.0.0",
+    "class-variance-authority": "catalog:framework",
+    "clsx": "catalog:framework",
+    "lucide-vue-next": "catalog:framework",
+    "pinia": "^3.0.4",
+    "tailwind-merge": "catalog:framework",
+    "vue": "catalog:framework",
+    "vue-router": "^4.6.3"
+  },
+  "devDependencies": {
+    "@electron-toolkit/eslint-config-prettier": "3.0.0",
+    "@electron-toolkit/eslint-config-ts": "^3.1.0",
+    "@electron-toolkit/tsconfig": "^2.0.0",
+    "@types/node": "catalog:types",
+    "@vitejs/plugin-vue": "catalog:cli",
+    "electron": "^39.2.6",
+    "electron-builder": "^26.0.12",
+    "electron-vite": "^5.0.0",
+    "eslint": "^9.39.1",
+    "eslint-plugin-vue": "^10.6.2",
+    "prettier": "^3.7.4",
+    "typescript": "catalog:cli",
+    "vite": "catalog:cli",
+    "vue-eslint-parser": "^10.2.0",
+    "vue-tsc": "catalog:cli"
+  }
+}
