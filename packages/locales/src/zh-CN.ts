@@ -97,6 +97,8 @@ const zhCN: LocaleMessages = {
       style: '样式',
       dataBinding: '数据绑定',
       content: '内容',
+      default: '默认',
+      loadFont: '加载字体',
       font: '字体',
       fontSize: '字号',
       fontWeight: '字重',

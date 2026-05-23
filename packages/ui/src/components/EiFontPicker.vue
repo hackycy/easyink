@@ -1,9 +1,17 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { IconCheck, IconExport, IconLoader } from '@easyink/icons'
+import { computed } from 'vue'
+import EiSelect from './EiSelect.vue'
+
+type FontStatus = 'unloaded' | 'loading' | 'loaded' | 'error'
 
 const props = defineProps<{
   modelValue?: string
-  fonts?: Array<{ family: string, displayName: string }>
+  fonts?: Array<{ family: string, displayName: string, preview?: string }>
+  fontStatuses?: Record<string, FontStatus>
+  defaultLabel?: string
+  loadLabel?: string
+  searchPlaceholder?: string
   label?: string
   disabled?: boolean
 }>()
@@ -11,22 +19,25 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:modelValue': [value: string]
   'commit': [value: string]
+  'load': [family: string]
 }>()
 
-const searchQuery = ref('')
-const isOpen = ref(false)
-
-const filteredFonts = computed(() => {
-  if (!props.fonts || props.fonts.length === 0)
-    return []
-  if (!searchQuery.value)
-    return props.fonts
-  const q = searchQuery.value.toLowerCase()
-  return props.fonts.filter(f =>
-    f.displayName.toLowerCase().includes(q)
-    || f.family.toLowerCase().includes(q),
-  )
-})
+const fontOptions = computed(() =>
+  [
+    {
+      label: props.defaultLabel ?? 'Default',
+      value: '',
+      title: props.defaultLabel ?? 'Default',
+      preview: 'AaBbCc 1234',
+    },
+    ...(props.fonts ?? []).map(font => ({
+      label: font.displayName,
+      value: font.family,
+      title: font.family,
+      preview: font.preview,
+    })),
+  ],
+)
 
 const displayValue = computed(() => {
   if (!props.modelValue)
@@ -35,11 +46,32 @@ const displayValue = computed(() => {
   return found ? found.displayName : props.modelValue
 })
 
-function selectFont(family: string) {
+const selectedFontFamily = computed(() => props.modelValue || undefined)
+
+function previewText(option: unknown) {
+  const preview = typeof option === 'object' && option !== null && 'preview' in option
+    ? (option as { preview?: unknown }).preview
+    : undefined
+  return typeof preview === 'string' && preview ? preview : 'AaBbCc 1234'
+}
+
+function fontStatus(family: string): FontStatus {
+  if (!family)
+    return 'loaded'
+  return props.fontStatuses?.[family] ?? 'unloaded'
+}
+
+function isLoadable(family: string) {
+  const status = fontStatus(family)
+  return !!family && status !== 'loaded' && status !== 'loading'
+}
+
+function updateFont(family: string) {
   emit('update:modelValue', family)
+}
+
+function commitFont(family: string) {
   emit('commit', family)
-  isOpen.value = false
-  searchQuery.value = ''
 }
 
 function handleInputChange(e: Event) {
@@ -47,57 +79,69 @@ function handleInputChange(e: Event) {
   emit('update:modelValue', val)
   emit('commit', val)
 }
-
-watch(isOpen, (open) => {
-  if (!open)
-    searchQuery.value = ''
-})
 </script>
 
 <template>
   <div class="ei-font-picker-wrapper">
-    <label v-if="label" class="ei-font-picker__label">{{ label }}</label>
-    <div class="ei-font-picker">
-      <template v-if="fonts && fonts.length > 0">
-        <button
-          class="ei-font-picker__trigger"
-          :disabled="disabled"
-          @click="isOpen = !isOpen"
-        >
-          <span class="ei-font-picker__value">{{ displayValue || '--' }}</span>
-          <span class="ei-font-picker__arrow">{{ isOpen ? '▲' : '▼' }}</span>
-        </button>
-        <div v-if="isOpen" class="ei-font-picker__dropdown">
-          <input
-            v-model="searchQuery"
-            class="ei-font-picker__search"
-            placeholder="..."
-          >
-          <ul class="ei-font-picker__list">
-            <li
-              v-for="f in filteredFonts"
-              :key="f.family"
-              class="ei-font-picker__item"
-              :class="{ 'ei-font-picker__item--active': f.family === modelValue }"
-              :style="{ fontFamily: f.family }"
-              @click="selectFont(f.family)"
+    <EiSelect
+      v-if="fonts"
+      :label="label"
+      :model-value="modelValue"
+      :options="fontOptions"
+      :disabled="disabled"
+      :dropdown-width="240"
+      :max-height="260"
+      :show-selected-check="false"
+      searchable
+      :search-placeholder="searchPlaceholder ?? '...'"
+      @update:model-value="updateFont(String($event))"
+      @commit="commitFont(String($event))"
+    >
+      <template #value>
+        <span class="ei-font-picker__value" :style="{ fontFamily: selectedFontFamily }">
+          {{ displayValue || '--' }}
+        </span>
+      </template>
+      <template #option="{ option, selected }">
+        <div class="ei-font-picker__option">
+          <span class="ei-font-picker__item" :style="{ fontFamily: String(option.value) || undefined }">
+            <span class="ei-font-picker__item-name">{{ option.label }}</span>
+            <span class="ei-font-picker__item-preview">{{ previewText(option) }}</span>
+          </span>
+          <span class="ei-font-picker__state">
+            <IconLoader
+              v-if="fontStatus(String(option.value)) === 'loading'"
+              class="ei-font-picker__status ei-font-picker__status--loading"
+              :size="13"
+              :stroke-width="1.8"
+            />
+            <button
+              v-else-if="isLoadable(String(option.value))"
+              type="button"
+              class="ei-font-picker__load"
+              :title="loadLabel ?? 'Load font'"
+              :aria-label="loadLabel ?? 'Load font'"
+              @click.stop="emit('load', String(option.value))"
             >
-              {{ f.displayName }}
-            </li>
-            <li v-if="filteredFonts.length === 0" class="ei-font-picker__empty">
-              --
-            </li>
-          </ul>
+              <IconExport :size="13" :stroke-width="1.8" />
+            </button>
+            <IconCheck
+              v-else-if="selected"
+              class="ei-font-picker__status"
+              :size="13"
+              :stroke-width="1.8"
+            />
+          </span>
         </div>
       </template>
-      <input
-        v-else
-        class="ei-font-picker__fallback"
-        :value="modelValue"
-        :disabled="disabled"
-        @change="handleInputChange"
-      >
-    </div>
+    </EiSelect>
+    <input
+      v-else
+      class="ei-font-picker__fallback"
+      :value="modelValue"
+      :disabled="disabled"
+      @change="handleInputChange"
+    >
   </div>
 </template>
 
@@ -109,96 +153,6 @@ watch(isOpen, (open) => {
 }
 
 .ei-font-picker {
-  position: relative;
-
-  &__label {
-    font-size: 12px;
-    color: var(--ei-text-secondary, #666);
-  }
-
-  &__trigger {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    width: 100%;
-    padding: 4px 8px;
-    border: 1px solid var(--ei-border-color, #d0d0d0);
-    border-radius: 4px;
-    font-size: 13px;
-    background: var(--ei-input-bg, #fff);
-    color: var(--ei-text, #333);
-    cursor: pointer;
-    text-align: left;
-
-    &:hover {
-      border-color: var(--ei-primary, #1890ff);
-    }
-
-    &:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-  }
-
-  &__arrow {
-    font-size: 10px;
-    color: var(--ei-text-secondary, #999);
-  }
-
-  &__dropdown {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    z-index: 100;
-    margin-top: 2px;
-    border: 1px solid var(--ei-border-color, #d0d0d0);
-    border-radius: 4px;
-    background: var(--ei-panel-bg, #fff);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-  }
-
-  &__search {
-    width: 100%;
-    padding: 6px 8px;
-    border: none;
-    border-bottom: 1px solid var(--ei-border-color, #eee);
-    font-size: 12px;
-    outline: none;
-    box-sizing: border-box;
-    background: transparent;
-  }
-
-  &__list {
-    list-style: none;
-    margin: 0;
-    padding: 4px 0;
-    max-height: 200px;
-    overflow-y: auto;
-  }
-
-  &__item {
-    padding: 4px 8px;
-    font-size: 13px;
-    cursor: pointer;
-
-    &:hover {
-      background: var(--ei-hover-bg, #f0f0f0);
-    }
-
-    &--active {
-      color: var(--ei-primary, #1890ff);
-      font-weight: 500;
-    }
-  }
-
-  &__empty {
-    padding: 8px;
-    font-size: 12px;
-    color: var(--ei-text-secondary, #999);
-    text-align: center;
-  }
-
   &__fallback {
     width: 100%;
     padding: 4px 8px;
@@ -218,6 +172,91 @@ watch(isOpen, (open) => {
       opacity: 0.5;
       cursor: not-allowed;
     }
+  }
+}
+
+.ei-font-picker__value {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ei-font-picker__item {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 2px 0;
+  line-height: 1.25;
+}
+
+.ei-font-picker__option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  width: 100%;
+}
+
+.ei-font-picker__item-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ei-font-picker__item-preview {
+  color: var(--ei-text-secondary, #666);
+  font-size: 16px;
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ei-font-picker__load {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--ei-text-secondary, #666);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--ei-hover-bg, #f0f0f0);
+    color: var(--ei-primary, #1890ff);
+  }
+}
+
+.ei-font-picker__state {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+}
+
+.ei-font-picker__status {
+  flex: 0 0 auto;
+  color: var(--ei-primary, #1890ff);
+
+  &--loading {
+    animation: ei-font-picker-spin 1s linear infinite;
+  }
+}
+
+@keyframes ei-font-picker-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 </style>

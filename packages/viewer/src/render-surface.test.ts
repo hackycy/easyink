@@ -92,4 +92,35 @@ describe('renderPages', () => {
     expect(page!.style.backgroundSize).toBe('120mm auto')
     expect(page!.style.backgroundPosition).toBe('0mm 8mm')
   })
+
+  it('applies page font to the viewer page root', () => {
+    const container = document.createElement('div')
+    const registry = new MaterialRendererRegistry()
+    const pageSchema: PageSchema = {
+      mode: 'fixed',
+      width: 80,
+      height: 60,
+      font: 'ZCOOL KuaiLe',
+    }
+
+    renderPages([{
+      index: 0,
+      width: 80,
+      height: 60,
+      elements: [],
+      yOffset: 0,
+    }], registry, {
+      container,
+      document,
+      zoom: 1,
+      unit: 'mm',
+      data: {},
+      resolvedPropsMap: new Map(),
+      pageSchema,
+    }, [])
+
+    const page = container.querySelector('.ei-viewer-page') as HTMLElement | null
+    expect(page).not.toBeNull()
+    expect(page!.style.fontFamily).toBe('"ZCOOL KuaiLe"')
+  })
 })

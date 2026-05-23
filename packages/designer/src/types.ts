@@ -318,6 +318,7 @@ export interface DesignerInteractionProvider {
 export interface EasyInkDesignerProps {
   schema?: DocumentSchemaInput
   dataSources?: DataSourceDescriptor[]
+  fontProvider?: import('@easyink/core').FontProvider
   preferenceProvider?: PreferenceProvider
   autoSave?: TemplateAutoSaveOptions
   locale?: LocaleMessages

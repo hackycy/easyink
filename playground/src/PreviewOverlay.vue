@@ -19,6 +19,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from './components/ui/dropdown-menu'
+import { playgroundFontProvider } from './fonts'
 import { useEasyInkPrint } from './hooks/useEasyInkPrint'
 import { usePrinter } from './hooks/useHiPrint'
 
@@ -69,7 +70,7 @@ onMounted(async () => {
     print: iframeHost.print,
   })
 
-  viewer = createViewer({ host: viewerHost })
+  viewer = createViewer({ host: viewerHost, fontProvider: playgroundFontProvider })
   registerOutputIntegrations(viewer)
   await viewer.open({
     schema: props.schema,

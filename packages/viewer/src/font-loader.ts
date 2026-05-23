@@ -1,35 +1,7 @@
-import type { FontManager, FontSource } from '@easyink/core'
-import type { DocumentSchema, MaterialNode } from '@easyink/schema'
+import type { FontManager } from '@easyink/core'
 import type { ViewerDiagnosticEvent } from './types'
 
-/**
- * Collect all font families referenced in a schema (page-level + element-level).
- */
-export function collectFontFamilies(schema: DocumentSchema): Set<string> {
-  const families = new Set<string>()
-
-  // Page-level font
-  if (schema.page.font) {
-    families.add(schema.page.font)
-  }
-
-  // Element-level fonts
-  collectFromNodes(schema.elements, families)
-
-  return families
-}
-
-function collectFromNodes(nodes: MaterialNode[], families: Set<string>): void {
-  for (const node of nodes) {
-    const fontFamily = node.props?.fontFamily
-    if (typeof fontFamily === 'string' && fontFamily) {
-      families.add(fontFamily)
-    }
-    if (node.children) {
-      collectFromNodes(node.children, families)
-    }
-  }
-}
+export { collectFontFamilies } from '@easyink/core'
 
 /**
  * Load all required fonts via FontManager and inject @font-face rules into a target.
@@ -46,62 +18,25 @@ export async function loadAndInjectFonts(
     return diagnostics
   }
 
-  const result = await fontManager.loadFonts(
-    [...families].map(family => ({ family })),
-    { logFailures: false },
+  const familyList = [...families]
+  const settled = await Promise.allSettled(
+    familyList.map(family => fontManager.ensureFontLoaded({ family }, target)),
   )
 
-  for (const loaded of result.loaded) {
-    injectFontFace(loaded.family, loaded.source, target)
-  }
-
-  for (const failure of result.failures) {
+  settled.forEach((entry, index) => {
+    if (entry.status === 'fulfilled')
+      return
+    const family = familyList[index]!
+    const state = fontManager.getLoadState(family)
     diagnostics.push({
       category: 'viewer',
       severity: 'warning',
       code: 'FONT_LOAD_FAILED',
-      message: `Failed to load font "${failure.family}": ${failure.message}`,
+      message: `Failed to load font "${family}": ${state.message ?? (entry.reason instanceof Error ? entry.reason.message : String(entry.reason))}`,
       scope: 'font',
-      cause: failure.cause,
+      cause: state.cause,
     })
-  }
+  })
 
   return diagnostics
-}
-
-/**
- * Inject a single @font-face rule into a document or shadow root.
- */
-function injectFontFace(
-  family: string,
-  source: FontSource,
-  target: Document | ShadowRoot,
-): void {
-  const isDocument = target.nodeType === 9
-  const doc = isDocument ? target as Document : target.ownerDocument
-  if (!doc)
-    throw new Error('Font injection target does not have an owner document')
-  const styleEl = doc.createElement('style')
-
-  const src = typeof source === 'string'
-    ? `url("${source}")`
-    : `url("${arrayBufferToDataUrl(source)}")`
-
-  styleEl.textContent = `@font-face { font-family: "${family}"; src: ${src}; font-display: swap; }`
-
-  if (isDocument) {
-    doc.head.appendChild(styleEl)
-  }
-  else {
-    target.appendChild(styleEl)
-  }
-}
-
-function arrayBufferToDataUrl(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer)
-  let binary = ''
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]!)
-  }
-  return `data:font/woff2;base64,${btoa(binary)}`
 }

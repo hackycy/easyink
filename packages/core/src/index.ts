@@ -76,13 +76,15 @@ export {
 
 export type { EditorSurfacePagePlan, EditorSurfacePlan, EditorSurfacePointProjection } from './editor-surface-plan'
 
-export { FontManager } from './font'
+export { collectFontFamilies, FontManager } from './font'
 export type {
   FontBatchLoadOptions,
   FontBatchLoadResult,
   FontDescriptor,
   FontLoadFailure,
   FontLoadRequest,
+  FontLoadState,
+  FontLoadStatus,
   FontLoadSuccess,
   FontPreloadResult,
   FontProvider,

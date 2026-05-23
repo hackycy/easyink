@@ -126,6 +126,9 @@ function createPageElement(
   pageEl.style.overflow = 'hidden'
   pageEl.style.boxShadow = '0 1px 4px rgba(0,0,0,0.15)'
   pageEl.style.boxSizing = 'border-box'
+  if (pageSchema.font) {
+    pageEl.style.fontFamily = pageSchema.font
+  }
 
   // Background
   applyPageBackground(pageEl, pageSchema.background, unit)

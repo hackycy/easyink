@@ -24,11 +24,15 @@ const props = withDefaults(
     maxHeight?: number
     dropdownWidth?: number | string
     placement?: 'bottom-start' | 'bottom-end'
+    searchable?: boolean
+    searchPlaceholder?: string
+    showSelectedCheck?: boolean
   }>(),
   {
     emptyText: '--',
     maxHeight: 220,
     placement: 'bottom-start',
+    showSelectedCheck: true,
   },
 )
 
@@ -38,11 +42,17 @@ const emit = defineEmits<{
   'openChange': [open: boolean]
 }>()
 
+defineSlots<{
+  value?: (props: { option?: EiSelectOption, displayValue: string }) => unknown
+  option?: (props: { option: EiSelectOption, index: number, active: boolean, selected: boolean }) => unknown
+}>()
+
 const triggerId = useId()
 const listboxId = `${triggerId}-listbox`
 
 const isOpen = ref(false)
 const activeIndex = ref(-1)
+const searchQuery = ref('')
 const triggerRef = ref<HTMLElement | null>(null)
 const triggerButtonRef = ref<HTMLElement | null>(null)
 const panelRef = ref<HTMLElement | null>(null)
@@ -59,6 +69,16 @@ const selectedOption = computed(() =>
 const displayValue = computed(() => selectedOption.value?.label ?? props.placeholder ?? '')
 const hasValue = computed(() => selectedOption.value !== undefined)
 const canClear = computed(() => props.clearable && hasValue.value && !props.disabled)
+const renderedOptions = computed(() => {
+  if (!props.searchable || !searchQuery.value.trim())
+    return props.options
+  const q = searchQuery.value.trim().toLowerCase()
+  return props.options.filter(opt =>
+    opt.label.toLowerCase().includes(q)
+    || String(opt.value).toLowerCase().includes(q)
+    || opt.title?.toLowerCase().includes(q),
+  )
+})
 
 const panelStyle = computed<CSSProperties>(() => {
   const width = normalizeCssSize(props.dropdownWidth)
@@ -87,20 +107,22 @@ function isSameValue(a: SelectValue | undefined, b: SelectValue | undefined) {
 }
 
 function findEnabledIndex(start: number, direction: 1 | -1) {
-  if (props.options.length === 0)
+  const options = renderedOptions.value
+  if (options.length === 0)
     return -1
 
-  for (let step = 0; step < props.options.length; step += 1) {
-    const index = (start + step * direction + props.options.length) % props.options.length
-    if (!props.options[index]?.disabled)
+  for (let step = 0; step < options.length; step += 1) {
+    const index = (start + step * direction + options.length) % options.length
+    if (!options[index]?.disabled)
       return index
   }
   return -1
 }
 
 function setInitialActiveIndex() {
-  if (selectedIndex.value >= 0 && !props.options[selectedIndex.value]?.disabled) {
-    activeIndex.value = selectedIndex.value
+  const renderedSelectedIndex = renderedOptions.value.findIndex(opt => isSameValue(opt.value, props.modelValue))
+  if (renderedSelectedIndex >= 0 && !renderedOptions.value[renderedSelectedIndex]?.disabled) {
+    activeIndex.value = renderedSelectedIndex
     return
   }
   activeIndex.value = findEnabledIndex(0, 1)
@@ -145,6 +167,7 @@ function closeDropdown() {
   if (!isOpen.value)
     return
   isOpen.value = false
+  searchQuery.value = ''
 }
 
 function toggleDropdown() {
@@ -179,7 +202,7 @@ function clearValue(event: MouseEvent) {
 function moveActive(direction: 1 | -1) {
   const start = activeIndex.value >= 0
     ? activeIndex.value + direction
-    : direction > 0 ? 0 : props.options.length - 1
+    : direction > 0 ? 0 : renderedOptions.value.length - 1
   activeIndex.value = findEnabledIndex(start, direction)
 }
 
@@ -202,7 +225,7 @@ function onTriggerKeydown(event: KeyboardEvent) {
       openDropdown()
       return
     }
-    const option = props.options[activeIndex.value]
+    const option = renderedOptions.value[activeIndex.value]
     if (option)
       selectOption(option)
     return
@@ -215,8 +238,20 @@ function onTriggerKeydown(event: KeyboardEvent) {
   }
 }
 
+function onSearchKeydown(event: KeyboardEvent) {
+  if (
+    event.key === 'ArrowDown'
+    || event.key === 'ArrowUp'
+    || event.key === 'Enter'
+    || event.key === 'Escape'
+  ) {
+    return
+  }
+  event.stopPropagation()
+}
+
 function onOptionMouseenter(index: number) {
-  if (!props.options[index]?.disabled)
+  if (!renderedOptions.value[index]?.disabled)
     activeIndex.value = index
 }
 
@@ -249,7 +284,7 @@ watch(isOpen, (open) => {
 })
 
 watch(
-  () => props.options,
+  () => [props.options, searchQuery.value],
   () => {
     if (isOpen.value) {
       setInitialActiveIndex()
@@ -292,7 +327,11 @@ onBeforeUnmount(() => {
         @click="toggleDropdown"
         @keydown="onTriggerKeydown"
       >
-        <span class="ei-select__value" :title="displayValue">{{ displayValue || placeholder || '--' }}</span>
+        <span class="ei-select__value" :title="displayValue">
+          <slot name="value" :option="selectedOption" :display-value="displayValue">
+            {{ displayValue || placeholder || '--' }}
+          </slot>
+        </span>
         <button
           v-if="canClear"
           type="button"
@@ -318,9 +357,16 @@ onBeforeUnmount(() => {
       :aria-labelledby="triggerId"
       @keydown="onTriggerKeydown"
     >
-      <ul v-if="options.length > 0" class="ei-select__list">
+      <input
+        v-if="searchable"
+        v-model="searchQuery"
+        class="ei-select__search"
+        :placeholder="searchPlaceholder ?? '...'"
+        @keydown="onSearchKeydown"
+      >
+      <ul v-if="renderedOptions.length > 0" class="ei-select__list">
         <li
-          v-for="(opt, index) in options"
+          v-for="(opt, index) in renderedOptions"
           :id="`${listboxId}-option-${index}`"
           :key="`${String(opt.value)}-${index}`"
           class="ei-select__option"
@@ -336,9 +382,19 @@ onBeforeUnmount(() => {
           @mouseenter="onOptionMouseenter(index)"
           @click="selectOption(opt)"
         >
-          <span class="ei-select__option-label">{{ opt.label }}</span>
+          <span class="ei-select__option-label">
+            <slot
+              name="option"
+              :option="opt"
+              :index="index"
+              :active="index === activeIndex"
+              :selected="isSameValue(opt.value, modelValue)"
+            >
+              {{ opt.label }}
+            </slot>
+          </span>
           <IconCheck
-            v-if="isSameValue(opt.value, modelValue)"
+            v-if="showSelectedCheck && isSameValue(opt.value, modelValue)"
             class="ei-select__check"
             :size="14"
             :stroke-width="1.8"
@@ -466,6 +522,24 @@ onBeforeUnmount(() => {
     list-style: none;
     overflow-y: auto;
     box-sizing: border-box;
+  }
+
+  &__search {
+    width: 100%;
+    height: 30px;
+    padding: 5px 8px;
+    border: 0;
+    border-bottom: 1px solid var(--ei-border-color, #eee);
+    outline: none;
+    background: transparent;
+    color: var(--ei-text, #333);
+    font: inherit;
+    font-size: 12px;
+    box-sizing: border-box;
+
+    &::placeholder {
+      color: var(--ei-text-secondary, #999);
+    }
   }
 
   &__option {

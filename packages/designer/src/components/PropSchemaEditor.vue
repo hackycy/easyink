@@ -10,6 +10,7 @@ const props = defineProps<{
   value: unknown
   disabled?: boolean
   fonts?: Array<{ family: string, displayName: string }>
+  fontStatuses?: Record<string, 'unloaded' | 'loading' | 'loaded' | 'error'>
   t: (key: string) => string
   /** Custom editor component map: key = schema.editor value */
   customEditors?: Record<string, Component>
@@ -20,6 +21,7 @@ const emit = defineEmits<{
   preview: [key: string, value: unknown]
   change: [key: string, value: unknown]
   imagePick: [key: string, result: DesignerResolvedAsset]
+  loadFont: [family: string]
 }>()
 
 const label = computed(() => props.t(props.schema.label))
@@ -98,6 +100,7 @@ function onImagePicked(result: DesignerResolvedAsset) {
         :value="value"
         :disabled="disabled"
         :fonts="fonts"
+        :font-statuses="fontStatuses"
         :t="t"
         @preview="(key: string, val: unknown) => emit('preview', key, val)"
         @change="(key: string, val: unknown) => emit('change', key, val)"
@@ -207,9 +210,13 @@ function onImagePicked(result: DesignerResolvedAsset) {
         :label="label"
         :model-value="(value as string) ?? ''"
         :fonts="fonts"
+        :font-statuses="fontStatuses"
+        :default-label="t('designer.property.default')"
+        :load-label="t('designer.property.loadFont')"
         :disabled="disabled"
         @update:model-value="onPreview"
         @commit="onCommit"
+        @load="(family: string) => emit('loadFont', family)"
       />
 
       <!-- border-toggle -->

@@ -80,18 +80,33 @@ function previewSubProp(_key: string, value: unknown) {
   const session = store.editingSession.activeSession
   if (!session || !subPropertySchema.value)
     return
+  const schema = subPropertySchema.value.schemas.find(s => s.key === _key)
+  if (schema?.type === 'font')
+    return
   subPropertySchema.value.write(_key, value, session.tx)
 }
 
-function updateSubProp(key: string, value: unknown) {
+async function updateSubProp(key: string, value: unknown) {
   const session = store.editingSession.activeSession
   if (!session || !subPropertySchema.value)
     return
+  const schema = subPropertySchema.value.schemas.find(s => s.key === key)
+  if (schema?.type === 'font' && typeof value === 'string') {
+    const loaded = await store.ensureFontLoaded({ family: value })
+    if (!loaded)
+      return
+  }
   subPropertySchema.value.write(key, value, session.tx)
 }
 
 function updateSubImagePropFromPicker(key: string, result: DesignerResolvedAsset) {
   updateSubProp(key, result.url)
+}
+
+function loadFont(family: string) {
+  if (!family)
+    return
+  void store.ensureFontLoaded({ family })
 }
 
 const subCustomEditors = computed<Record<string, Component> | undefined>(() => {
@@ -232,6 +247,9 @@ function readGeometryValue(node: MaterialNode, key: GeometryKey): number | undef
 }
 
 function previewPageProperty(descriptor: PagePropertyDescriptor, value: unknown) {
+  if (descriptor.editor === 'font')
+    return
+
   const ctx = pagePropertyContext.value
   const patch = descriptor.normalize
     ? descriptor.normalize(value, ctx)
@@ -268,7 +286,14 @@ function previewPageProperty(descriptor: PagePropertyDescriptor, value: unknown)
   }
 }
 
-function onPagePropertyChange(descriptor: PagePropertyDescriptor, value: unknown) {
+async function onPagePropertyChange(descriptor: PagePropertyDescriptor, value: unknown) {
+  if (descriptor.editor === 'font' && typeof value === 'string') {
+    const loaded = await store.ensureFontLoaded({ family: value })
+    if (!loaded) {
+      rollbackPagePreview(descriptor.id)
+      return
+    }
+  }
   const ctx = pagePropertyContext.value
   const patch = descriptor.normalize
     ? descriptor.normalize(value, ctx)
@@ -296,6 +321,19 @@ function onPagePropertyChange(descriptor: PagePropertyDescriptor, value: unknown
       snapshot?.document,
     )
     store.commands.execute(cmd)
+  }
+}
+
+function rollbackPagePreview(descriptorId: string) {
+  const snapshot = pageSnapshots.get(descriptorId)
+  if (!snapshot)
+    return
+  pageSnapshots.delete(descriptorId)
+  if (snapshot.page) {
+    Object.assign(store.schema.page, snapshot.page)
+  }
+  if (snapshot.document) {
+    Object.assign(store.schema, snapshot.document)
   }
 }
 
@@ -328,19 +366,30 @@ const visibleSchemas = computed(() => {
 const groupedSchemas = computed(() => groupPropSchemas(visibleSchemas.value))
 
 // Font list from FontManager (async)
-const fontList = shallowRef<Array<{ family: string, displayName: string }>>([])
+const fontList = shallowRef<Array<{ family: string, displayName: string, preview?: string }>>([])
 const fontManager = store.fontManager
+let fontListRequestId = 0
 watchEffect(async () => {
+  const revision = store.fontRevision
+  const requestId = ++fontListRequestId
   if (fontManager) {
     try {
       const fonts = await fontManager.listFonts()
+      if (requestId !== fontListRequestId || revision !== store.fontRevision)
+        return
       fontList.value = fonts
     }
     catch {
+      if (requestId !== fontListRequestId || revision !== store.fontRevision)
+        return
       fontList.value = []
     }
   }
 })
+
+const fontStatuses = computed<Record<string, ReturnType<typeof store.getFontStatus>>>(() =>
+  store.getFontStatuses(fontList.value.map(font => font.family), store.fontRevision),
+)
 
 // Group label i18n
 const GROUP_LABELS: Record<string, string> = {
@@ -380,6 +429,8 @@ function previewProp(key: string, value: unknown) {
   const schema = materialSchemas.value.find(s => s.key === key)
   if (schema?.commit)
     return
+  if (schema?.type === 'font')
+    return
   // Snapshot before first preview
   if (!propSnapshots.has(key)) {
     propSnapshots.set(key, deepClone(getByPath(el.props, key)))
@@ -391,11 +442,18 @@ function previewProp(key: string, value: unknown) {
     el.props[key] = value
 }
 
-function updateProp(key: string, value: unknown) {
+async function updateProp(key: string, value: unknown) {
   const el = selectedElement.value
   if (!el)
     return
   const schema = materialSchemas.value.find(s => s.key === key)
+  if (schema?.type === 'font' && typeof value === 'string') {
+    const loaded = await store.ensureFontLoaded({ family: value })
+    if (!loaded) {
+      rollbackPropPreview(key)
+      return
+    }
+  }
 
   // PropSchema can override the default props-bag commit path (e.g. table.showHeader
   // lives on `node.table` and needs UpdateTableVisibilityCommand + session cleanup).
@@ -425,6 +483,23 @@ function updateProp(key: string, value: unknown) {
     oldValue !== undefined ? { [key]: oldValue } : undefined,
   )
   store.commands.execute(cmd)
+}
+
+function rollbackPropPreview(key: string) {
+  const el = selectedElement.value
+  if (!el || !propSnapshots.has(key))
+    return
+  const oldValue = propSnapshots.get(key)
+  propSnapshots.delete(key)
+  if (key.includes('.')) {
+    setByPath(el.props, key, oldValue)
+  }
+  else if (oldValue === undefined) {
+    delete el.props[key]
+  }
+  else {
+    el.props[key] = oldValue
+  }
 }
 
 function updateImagePropFromPicker(key: string, result: DesignerResolvedAsset) {
@@ -644,11 +719,13 @@ function createImagePickRequest(schema: PropSchema): DesignerAssetPickRequest {
               :value="readPropValue(schema)"
               :disabled="isPropInputDisabled(schema)"
               :fonts="fontList"
+              :font-statuses="fontStatuses"
               :t="store.t.bind(store)"
               :image-pick-request="createImagePickRequest(schema)"
               @preview="previewProp"
               @change="updateProp"
               @image-pick="updateImagePropFromPicker"
+              @load-font="loadFont"
             />
           </div>
         </EiPanel>
@@ -671,11 +748,13 @@ function createImagePickRequest(schema: PropSchema): DesignerAssetPickRequest {
               :value="readSubValue(schema)"
               :custom-editors="subCustomEditors"
               :fonts="fontList"
+              :font-statuses="fontStatuses"
               :t="store.t.bind(store)"
               :image-pick-request="createImagePickRequest(schema)"
               @preview="previewSubProp"
               @change="updateSubProp"
               @image-pick="updateSubImagePropFromPicker"
+              @load-font="loadFont"
             />
           </div>
         </EiPanel>
@@ -729,9 +808,11 @@ function createImagePickRequest(schema: PropSchema): DesignerAssetPickRequest {
             :descriptor="descriptor"
             :value="readPagePropValue(descriptor)"
             :fonts="fontList"
+            :font-statuses="fontStatuses"
             :t="store.t.bind(store)"
             @preview="previewPageProperty"
             @change="onPagePropertyChange"
+            @load-font="loadFont"
           />
         </div>
       </EiPanel>

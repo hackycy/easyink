@@ -1,7 +1,7 @@
-import type { EphemeralPanelDef, PropertyPanelOverlay } from '@easyink/core'
+import type { EphemeralPanelDef, FontLoadRequest, FontProvider, PropertyPanelOverlay } from '@easyink/core'
 import type { DocumentSchema, DocumentSchemaInput, ElementGroupSchema, MaterialNode } from '@easyink/schema'
 import type { DesignerInteractionProvider, LocaleMessages, MaterialCatalogEntry, MaterialDefinition, MaterialDesignerExtension, MaterialExtensionFactory, PreferenceProvider, SnapLine, StatusBarState } from '../types'
-import { CommandManager, FontManager, SelectionModel } from '@easyink/core'
+import { collectFontFamilies, CommandManager, FontManager, SelectionModel } from '@easyink/core'
 import { DataSourceRegistry } from '@easyink/datasource'
 import { normalizeDocumentSchema } from '@easyink/schema'
 import { markRaw } from 'vue'
@@ -34,6 +34,10 @@ export class DesignerStore {
    */
   readonly diagnostics = new DiagnosticsChannel()
   readonly fontManager = new FontManager()
+  fontRevision = 0
+  private _fontTarget?: Document | ShadowRoot
+  private _fontPreloadGeneration = 0
+  private _fontDiagnosticKeys = new Set<string>()
   assetPickerAvailable = false
   hostAssetPickerAvailable = false
   hostAssetUploaderAvailable = false
@@ -105,6 +109,7 @@ export class DesignerStore {
     this.selection.clear()
     this.commands.clear()
     this.editingSession.exit()
+    void this.preloadDocumentFonts()
   }
 
   setInteractionProvider(provider?: DesignerInteractionProvider): void {
@@ -116,6 +121,80 @@ export class DesignerStore {
     this.hostAssetPickerAvailable = this.interactions.hasHostAssetPicker()
     this.hostAssetUploaderAvailable = this.interactions.hasHostAssetUploader()
     this.assetPickerAvailable = this.interactions.canPickAsset()
+  }
+
+  setFontProvider(provider?: FontProvider): void {
+    this.fontManager.setProvider(provider)
+    this._fontDiagnosticKeys.clear()
+    this.fontRevision++
+    void this.preloadDocumentFonts()
+  }
+
+  setFontTarget(target?: Document | ShadowRoot): void {
+    this._fontTarget = target
+    void this.preloadDocumentFonts()
+  }
+
+  getFontStatus(family: string): ReturnType<FontManager['getLoadState']>['status'] {
+    if (!family)
+      return 'loaded'
+    return this.fontManager.getLoadState(family).status
+  }
+
+  getFontStatuses(families: string[], _revision = this.fontRevision): Record<string, ReturnType<FontManager['getLoadState']>['status']> {
+    const statuses: Record<string, ReturnType<FontManager['getLoadState']>['status']> = {}
+    for (const family of families) {
+      statuses[family] = this.getFontStatus(family)
+    }
+    return statuses
+  }
+
+  async ensureFontLoaded(
+    request: FontLoadRequest,
+    options: { preloadGeneration?: number, reportDiagnostic?: boolean } = {},
+  ): Promise<boolean> {
+    if (!request.family)
+      return true
+    const shouldReportDiagnostic = options.reportDiagnostic ?? true
+    try {
+      await this.fontManager.ensureFontLoaded(request, this._fontTarget)
+      if (options.preloadGeneration !== undefined && options.preloadGeneration !== this._fontPreloadGeneration)
+        return false
+      this._fontDiagnosticKeys.delete(fontDiagnosticKey(request))
+      this.fontRevision++
+      return true
+    }
+    catch (err) {
+      if (options.preloadGeneration !== undefined && options.preloadGeneration !== this._fontPreloadGeneration)
+        return false
+      this.fontRevision++
+      const diagnosticKey = fontDiagnosticKey(request)
+      if (shouldReportDiagnostic && !this._fontDiagnosticKeys.has(diagnosticKey)) {
+        this._fontDiagnosticKeys.add(diagnosticKey)
+        this.diagnostics.push({
+          source: 'font',
+          severity: 'warn',
+          message: `Font load failed: ${request.family}`,
+          detail: {
+            family: request.family,
+            message: err instanceof Error ? err.message : String(err),
+          },
+        })
+      }
+      return false
+    }
+  }
+
+  async preloadDocumentFonts(): Promise<void> {
+    const generation = ++this._fontPreloadGeneration
+    if (!this._fontTarget || !this.fontManager.provider)
+      return
+    const families = collectFontFamilies(this._schema)
+    if (families.size === 0)
+      return
+    await Promise.all([...families].map(family =>
+      this.ensureFontLoaded({ family }, { preloadGeneration: generation, reportDiagnostic: true }),
+    ))
   }
 
   // ─── Template Save Status ─────────────────────────────────────
@@ -375,4 +454,8 @@ export class DesignerStore {
     this.refreshInteractionAvailability()
     this.editingSession.exit()
   }
+}
+
+function fontDiagnosticKey(request: FontLoadRequest): string {
+  return `${request.family}|${request.weight || 'normal'}|${request.style || 'normal'}`
 }

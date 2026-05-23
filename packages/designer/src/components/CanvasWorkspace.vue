@@ -145,6 +145,7 @@ const surfaceStyle = computed(() => {
   return {
     width: `${plan.contentBounds.width}${unit}`,
     height: `${plan.contentBounds.height}${unit}`,
+    fontFamily: store.schema.page.font || undefined,
     transform: `scale(${zoom})`,
     transformOrigin: 'top left',
   }

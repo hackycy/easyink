@@ -97,6 +97,8 @@ const enUS: LocaleMessages = {
       style: 'Style',
       dataBinding: 'Data Binding',
       content: 'Content',
+      default: 'Default',
+      loadFont: 'Load font',
       font: 'Font',
       fontSize: 'Font Size',
       fontWeight: 'Font Weight',

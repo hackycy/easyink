@@ -12,6 +12,7 @@ import DataEditorModal from './components/DataEditor.vue'
 import TemplateGallery from './components/TemplateGallery.vue'
 import { Button } from './components/ui/button'
 import { Toaster } from './components/ui/sonner'
+import { playgroundFontProvider } from './fonts'
 import PreviewOverlay from './PreviewOverlay.vue'
 import { getLastTemplateId, getTemplate, listTemplates, saveTemplate, setLastTemplateId } from './storage/template-store'
 import { jsonToDataSource } from './utils/json-to-datasource'
@@ -241,6 +242,7 @@ const contributions = [createAIContribution()]
   <EasyInkDesigner
     v-model:schema="schema"
     :data-sources="mergedDataSources"
+    :font-provider="playgroundFontProvider"
     :locale="designerLocale"
     :preference-provider="preferenceProvider"
     :auto-save="autoSaveOptions"

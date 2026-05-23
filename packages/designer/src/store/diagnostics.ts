@@ -32,6 +32,7 @@ export type DiagnosticSource
     | 'debug-panel'
     | 'material-extension'
     | 'designer-interaction'
+    | 'font'
 
 export interface Diagnostic {
   /** Monotonic id assigned at push time. Useful for v-for keys / dedup. */

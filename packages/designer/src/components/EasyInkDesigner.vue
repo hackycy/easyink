@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { FontProvider } from '@easyink/core'
 import type { DataSourceDescriptor } from '@easyink/datasource'
 import type { DocumentSchema, DocumentSchemaInput } from '@easyink/schema'
 import type { Contribution } from '../contributions'
@@ -20,6 +21,7 @@ import TopBarB from './TopBarB.vue'
 const props = defineProps<{
   schema?: DocumentSchemaInput
   dataSources?: DataSourceDescriptor[]
+  fontProvider?: FontProvider
   preferenceProvider?: PreferenceProvider
   autoSave?: TemplateAutoSaveOptions
   locale?: LocaleMessages
@@ -42,6 +44,7 @@ if (store.schema !== props.schema) {
 // reactivity (otherwise patches mutate the raw store and templates stay stale).
 store.editingSession.setStore(store)
 registerMaterialBundle(store, builtinDesignerMaterialBundle)
+store.setFontProvider(props.fontProvider)
 props.setupStore?.(store)
 provideDesignerStore(store)
 
@@ -103,6 +106,10 @@ watch(() => props.interactionProvider, (newProvider) => {
   store.setInteractionProvider(newProvider)
 })
 
+watch(() => props.fontProvider, (newProvider) => {
+  store.setFontProvider(newProvider)
+})
+
 function getFocusStateFromTarget(target: EventTarget | null): StatusBarState['focus'] {
   if (!(target instanceof Element))
     return 'none'
@@ -142,12 +149,14 @@ function handleWindowBlur(): void {
 }
 
 onMounted(() => {
+  store.setFontTarget(designerRootRef.value?.ownerDocument ?? document)
   window.addEventListener('pointerdown', handleGlobalPointerDown, true)
   window.addEventListener('focusin', handleGlobalFocusIn, true)
   window.addEventListener('blur', handleWindowBlur)
 })
 
 onBeforeUnmount(() => {
+  store.setFontTarget(undefined)
   window.removeEventListener('pointerdown', handleGlobalPointerDown, true)
   window.removeEventListener('focusin', handleGlobalFocusIn, true)
   window.removeEventListener('blur', handleWindowBlur)

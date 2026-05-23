@@ -10,12 +10,14 @@ const props = defineProps<{
   descriptor: PagePropertyDescriptor
   value: unknown
   fonts?: Array<{ family: string, displayName: string }>
+  fontStatuses?: Record<string, 'unloaded' | 'loading' | 'loaded' | 'error'>
   t: (key: string) => string
 }>()
 
 const emit = defineEmits<{
   preview: [descriptor: PagePropertyDescriptor, value: unknown]
   change: [descriptor: PagePropertyDescriptor, value: unknown]
+  loadFont: [family: string]
 }>()
 
 const store = useDesignerStore()
@@ -120,8 +122,12 @@ function onImagePicked(result: DesignerResolvedAsset) {
       :label="label"
       :model-value="(value as string) ?? ''"
       :fonts="fonts"
+      :font-statuses="fontStatuses"
+      :default-label="t('designer.property.default')"
+      :load-label="t('designer.property.loadFont')"
       @update:model-value="onPreview"
       @commit="onCommit"
+      @load="(family: string) => emit('loadFont', family)"
     />
   </div>
 </template>
