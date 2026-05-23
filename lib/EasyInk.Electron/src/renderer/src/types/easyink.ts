@@ -25,6 +25,12 @@ export interface PrintRequestParams {
   html?: string
   htmlBase64?: string
   htmlUrl?: string
+  viewer?: {
+    pages: string[]
+    styles?: string
+    head?: string
+    title?: string
+  }
   baseUrl?: string
   copies?: number
   landscape?: boolean
@@ -56,12 +62,15 @@ export interface PrintJob {
 }
 
 export interface PrintAuditLog {
-  id: string
-  command: string
-  printerName?: string
-  success: boolean
+  id: number | string
+  timestamp?: string
+  command?: string
+  printerName: string
+  status: string
   createdAt: string
+  success: boolean
   sourceType?: string
+  jobId?: string
   errorMessage?: string
 }
 
@@ -70,5 +79,8 @@ export interface RuntimeStatus {
   httpPort?: number
   chromiumPrint: boolean
   htmlPrint: boolean
+  viewerPrint: boolean
+  webSocket?: boolean
+  connections?: number
   config: Record<string, unknown>
 }

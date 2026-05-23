@@ -16,7 +16,7 @@ export interface EngineApiOptions {
 
 export interface EngineApiEvents {
   log: [LogLevel, string, string?]
-  printCompleted: [string, PrintRequestParams, PrinterResult]
+  printCompleted: [string, PrintRequestParams, PrinterResult, string?]
 }
 
 export class EngineApi extends EventEmitter {
@@ -38,7 +38,8 @@ export class EngineApi extends EventEmitter {
       this.printService,
       options.maxQueueSize ?? 100,
       this.logger,
-      (requestId, request, result) => this.emit('printCompleted', requestId, request, result)
+      (requestId, request, result) =>
+        this.emit('printCompleted', requestId, request, result, 'printAsync')
     )
   }
 
@@ -121,7 +122,7 @@ export class EngineApi extends EventEmitter {
     }
 
     const result = await this.printService.print(request.id, printParams)
-    this.emit('printCompleted', request.id, printParams, result)
+    this.emit('printCompleted', request.id, printParams, result, request.command)
     return result
   }
 

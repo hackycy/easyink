@@ -20,10 +20,10 @@ const store = useEasyInkStore()
         <span>状态</span>
       </div>
       <div v-for="log in store.logs" :key="log.id" class="table-row">
-        <span>{{ new Date(log.createdAt).toLocaleString() }}</span>
-        <span>{{ log.command }}</span>
+        <span>{{ new Date(log.timestamp ?? log.createdAt).toLocaleString() }}</span>
+        <span>{{ log.command ?? '-' }}</span>
         <span>{{ log.sourceType ?? '-' }}</span>
-        <UiBadge :tone="log.success ? 'good' : 'bad'">{{ log.success ? '成功' : '失败' }}</UiBadge>
+        <UiBadge :tone="log.success ? 'good' : 'bad'">{{ log.status }}</UiBadge>
       </div>
       <div v-if="store.logs.length === 0" class="empty-state">暂无审计记录</div>
     </div>

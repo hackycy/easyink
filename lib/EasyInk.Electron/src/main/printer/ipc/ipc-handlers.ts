@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
-import { randomUUID } from 'crypto'
 import type { AppContext } from '../app-context'
+import { randomUUID } from 'crypto'
 import type { PrinterCommand, PrintRequestParams } from '../../engine/models'
 
 export function registerIpcHandlers(context: AppContext): void {
@@ -9,6 +9,9 @@ export function registerIpcHandlers(context: AppContext): void {
     httpPort: context.httpServer?.port,
     chromiumPrint: true,
     htmlPrint: true,
+    viewerPrint: true,
+    webSocket: Boolean(context.httpServer),
+    connections: context.httpServer?.connectionCount ?? 0,
     config: context.config
   }))
 
@@ -27,27 +30,13 @@ export function registerIpcHandlers(context: AppContext): void {
     })
   )
 
-  ipcMain.handle('easyink:print', async (_event, params: PrintRequestParams) => {
-    const request: PrinterCommand = {
-      command: 'print',
-      id: randomUUID(),
-      params: params as unknown as Record<string, unknown>
-    }
-    const result = await context.engine.handleCommand(request)
-    context.auditService.record('print', params, result)
-    return result
-  })
+  ipcMain.handle('easyink:print', (_event, params: PrintRequestParams) =>
+    context.printController.print(params)
+  )
 
-  ipcMain.handle('easyink:printAsync', async (_event, params: PrintRequestParams) => {
-    const request: PrinterCommand = {
-      command: 'printAsync',
-      id: randomUUID(),
-      params: params as unknown as Record<string, unknown>
-    }
-    const result = await context.engine.handleCommand(request)
-    context.auditService.record('printAsync', params, result)
-    return result
-  })
+  ipcMain.handle('easyink:printAsync', (_event, params: PrintRequestParams) =>
+    context.printController.enqueuePrint(params)
+  )
 
   ipcMain.handle('easyink:getAllJobs', () =>
     context.engine.handleCommand({

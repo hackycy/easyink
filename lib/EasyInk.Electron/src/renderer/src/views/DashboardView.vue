@@ -24,7 +24,7 @@ const readyPrinters = computed(
     <div class="metric-panel">
       <span>审计</span>
       <strong>{{ store.logs.length }}</strong>
-      <p>内存日志，宿主层可替换为持久化实现</p>
+      <p>SQLite 持久化，按保留周期自动清理</p>
     </div>
   </section>
 

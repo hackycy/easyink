@@ -67,10 +67,20 @@ export interface PrintMargins {
 }
 
 export interface UserDataParams {
+  userId?: string
+  labelType?: string
+  documentType?: string
   orderId?: string
   title?: string
   source?: string
   [key: string]: unknown
+}
+
+export interface ViewerPrintSource {
+  pages: string[]
+  styles?: string
+  head?: string
+  title?: string
 }
 
 export interface PrintRequestParams {
@@ -81,6 +91,7 @@ export interface PrintRequestParams {
   html?: string
   htmlBase64?: string
   htmlUrl?: string
+  viewer?: ViewerPrintSource
   baseUrl?: string
   copies?: number
   paperSize?: PaperSizeParams
@@ -128,11 +139,21 @@ export interface PrintJob {
 }
 
 export interface PrintAuditLog {
-  id: string
-  command: string
-  printerName?: string
-  success: boolean
+  id: number | string
+  timestamp?: string
+  command?: string
+  printerName: string
+  paperWidth?: number
+  paperHeight?: number
+  paperUnit?: string
+  copies: number
+  dpi?: number
+  userId?: string
+  labelType?: string
+  status: string
+  jobId?: string
   createdAt: string
+  success: boolean
   sourceType?: PrintSourceType
   userData?: UserDataParams
   errorMessage?: string
@@ -145,6 +166,7 @@ export type PrintSourceType =
   | 'html'
   | 'htmlBase64'
   | 'htmlUrl'
+  | 'viewer'
 
 export function ok<T>(id: string, data?: T): PrinterResult<T> {
   return { id, success: true, data }

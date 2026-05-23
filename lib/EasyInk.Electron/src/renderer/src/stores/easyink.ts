@@ -42,7 +42,7 @@ export const useEasyInkStore = defineStore('easyink', {
         this.status = status as RuntimeStatus
         this.printers = unwrap<PrinterInfo[]>(printers, [])
         this.jobs = unwrap<PrintJob[]>(jobs, [])
-        this.logs = logs as PrintAuditLog[]
+        this.logs = unwrapLogs(logs)
       } catch (err) {
         this.error = err instanceof Error ? err.message : String(err)
       } finally {
@@ -70,7 +70,7 @@ export const useEasyInkStore = defineStore('easyink', {
       this.jobs = unwrap<PrintJob[]>(await window.api.getAllJobs(), [])
     },
     async refreshLogs() {
-      this.logs = (await window.api.getLogs(100)) as PrintAuditLog[]
+      this.logs = unwrapLogs(await window.api.getLogs(100))
     }
   }
 })
@@ -78,4 +78,16 @@ export const useEasyInkStore = defineStore('easyink', {
 function unwrap<T>(result: unknown, fallback: T): T {
   const response = result as PrinterResult<T>
   return response.success && response.data ? response.data : fallback
+}
+
+function unwrapLogs(result: unknown): PrintAuditLog[] {
+  if (Array.isArray(result)) {
+    return result as PrintAuditLog[]
+  }
+
+  const response = result as PrinterResult<PrintAuditLog[] | { logs: PrintAuditLog[] }>
+  if (!response.success || !response.data) {
+    return []
+  }
+  return Array.isArray(response.data) ? response.data : (response.data.logs ?? [])
 }

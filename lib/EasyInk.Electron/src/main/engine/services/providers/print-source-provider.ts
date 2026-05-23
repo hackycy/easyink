@@ -15,6 +15,10 @@ export interface ResolvedPrintSource {
 export async function resolvePrintSource(
   request: PrintRequestParams
 ): Promise<ResolvedPrintSource> {
+  if (request.viewer) {
+    return writeHtmlSource(buildViewerHtmlSource(request), request, 'viewer')
+  }
+
   if (request.html != null) {
     return writeHtmlSource(request.html, request)
   }
@@ -59,7 +63,7 @@ export async function resolvePrintSource(
     }
   }
 
-  throw new Error('必须提供 pdfBase64、pdfUrl、pdfBytes、html、htmlBase64 或 htmlUrl 之一')
+  throw new Error('必须提供 pdfBase64、pdfUrl、pdfBytes、html、htmlBase64、htmlUrl 或 viewer 之一')
 }
 
 function stripDataUrlPrefix(value: string): string {
@@ -134,6 +138,61 @@ function normalizeHtml(html: string, request: PrintRequestParams): string {
   }
 
   return withClass.replace(/<html([^>]*)>/i, `<html$1><head>${baseTag}${printCss}</head>`)
+}
+
+function buildViewerHtmlSource(request: PrintRequestParams): string {
+  const viewer = request.viewer
+  if (!viewer || !Array.isArray(viewer.pages) || viewer.pages.length === 0) {
+    throw new Error('viewer 打印必须提供至少一个 pages 项')
+  }
+
+  const title = escapeHtmlText(viewer.title ?? request.userData?.title ?? 'EasyInk Viewer Print')
+  const head = viewer.head ?? ''
+  const styles = viewer.styles ?? ''
+  const pages = viewer.pages
+    .map((page) => `<section class="ei-viewer-print-page">${page}</section>`)
+    .join('\n')
+
+  return `<!doctype html>
+<html class="easyink-viewer-print">
+<head>
+  <meta charset="utf-8">
+  <title>${title}</title>
+  ${head}
+  <style>
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      background: #fff;
+    }
+
+    .ei-viewer-print-page {
+      break-after: page;
+      page-break-after: always;
+    }
+
+    .ei-viewer-print-page:last-child {
+      break-after: auto;
+      page-break-after: auto;
+    }
+
+    @media print {
+      .ei-viewer-print-page {
+        box-shadow: none !important;
+      }
+    }
+  </style>
+  ${styles ? `<style>${styles}</style>` : ''}
+</head>
+<body>
+${pages}
+</body>
+</html>`
+}
+
+function escapeHtmlText(value: string): string {
+  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
 }
 
 function escapeAttribute(value: string): string {

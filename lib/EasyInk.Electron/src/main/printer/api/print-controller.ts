@@ -1,24 +1,35 @@
 import { randomUUID } from 'crypto'
 import type { EngineApi } from '../../engine/engine-api'
-import type { PrinterCommand, PrinterResult } from '../../engine/models'
+import type { PrinterCommand, PrinterResult, PrintRequestParams } from '../../engine/models'
+import type { PrintDebugLogService } from '../services/print-debug-log-service'
 
 export class PrintController {
-  constructor(private readonly engine: EngineApi) {}
+  constructor(
+    private readonly engine: EngineApi,
+    private readonly debugLogService?: PrintDebugLogService
+  ) {}
 
-  print(params: Record<string, unknown>): Promise<PrinterResult> {
-    return this.executeCommand('print', params)
+  print(params: PrintRequestParams): Promise<PrinterResult> {
+    return this.executeCommand('print', randomUUID(), params)
   }
 
-  enqueuePrint(params: Record<string, unknown>): Promise<PrinterResult> {
-    return this.executeCommand('printAsync', params)
+  enqueuePrint(params: PrintRequestParams): Promise<PrinterResult> {
+    return this.executeCommand('printAsync', randomUUID(), params)
   }
 
-  private executeCommand(command: string, params: Record<string, unknown>): Promise<PrinterResult> {
+  async executeCommand(
+    command: string,
+    id: string,
+    params: PrintRequestParams
+  ): Promise<PrinterResult> {
     const request: PrinterCommand = {
       command,
-      id: randomUUID(),
-      params
+      id,
+      params: params as unknown as Record<string, unknown>
     }
-    return this.engine.handleCommand(request)
+    this.debugLogService?.beginPrintRequest(request.id, command, params)
+    const result = await this.engine.handleCommand(request)
+    this.debugLogService?.writeSubmitResult(request.id, result)
+    return result
   }
 }

@@ -54,6 +54,8 @@ onMounted(() => {
         </div>
         <div class="topbar-actions">
           <UiBadge :tone="store.status?.htmlPrint ? 'good' : 'warn'">HTML</UiBadge>
+          <UiBadge :tone="store.status?.viewerPrint ? 'good' : 'warn'">Viewer</UiBadge>
+          <UiBadge :tone="store.status?.webSocket ? 'good' : 'warn'">WS</UiBadge>
           <UiBadge :tone="store.status?.chromiumPrint ? 'good' : 'warn'">Chromium</UiBadge>
           <UiButton
             variant="secondary"

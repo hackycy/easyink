@@ -7,6 +7,12 @@ export interface HostConfig {
   startHttpServer: boolean
   apiKey?: string
   trustAllOrigins: boolean
+  dbPath?: string
+  fileLogDir?: string
+  fileLogRetentionDays: number
+  printDebugLoggingEnabled: boolean
+  printDebugArtifactsDir?: string
+  printDebugArtifactRetentionCount: number
   maxQueueSize: number
   printTimeoutSeconds: number
   auditLogRetentionDays: number
@@ -18,6 +24,9 @@ export const defaultHostConfig: HostConfig = {
   httpPort: 18081,
   startHttpServer: true,
   trustAllOrigins: false,
+  fileLogRetentionDays: 7,
+  printDebugLoggingEnabled: false,
+  printDebugArtifactRetentionCount: 10,
   maxQueueSize: 100,
   printTimeoutSeconds: 60,
   auditLogRetentionDays: 90,
@@ -25,8 +34,24 @@ export const defaultHostConfig: HostConfig = {
   minimizeToTray: true
 }
 
+export function getUserDataPath(): string {
+  return process.env.EASYINK_ELECTRON_USER_DATA_DIR || app.getPath('userData')
+}
+
 export function getConfigPath(): string {
-  return join(app.getPath('userData'), 'config.json')
+  return join(getUserDataPath(), 'config.json')
+}
+
+export function resolveDbPath(dbPath?: string): string {
+  return isBlank(dbPath) ? join(getUserDataPath(), 'data', 'audit.db') : dbPath!.trim()
+}
+
+export function resolveFileLogDir(logDir?: string): string {
+  return isBlank(logDir) ? join(getUserDataPath(), 'data', 'logs') : logDir!.trim()
+}
+
+export function resolvePrintDebugArtifactsDir(dir?: string): string {
+  return isBlank(dir) ? join(resolveFileLogDir(), 'print-debug') : dir!.trim()
 }
 
 export async function loadHostConfig(): Promise<HostConfig> {
@@ -52,6 +77,18 @@ function normalizeConfig(config: Partial<HostConfig>): HostConfig {
     ...defaultHostConfig,
     ...config,
     httpPort: clampInteger(config.httpPort, 1024, 65535, defaultHostConfig.httpPort),
+    fileLogRetentionDays: clampInteger(
+      config.fileLogRetentionDays,
+      1,
+      3650,
+      defaultHostConfig.fileLogRetentionDays
+    ),
+    printDebugArtifactRetentionCount: clampInteger(
+      config.printDebugArtifactRetentionCount,
+      1,
+      10000,
+      defaultHostConfig.printDebugArtifactRetentionCount
+    ),
     maxQueueSize: clampInteger(config.maxQueueSize, 10, 1000, defaultHostConfig.maxQueueSize),
     printTimeoutSeconds: clampInteger(
       config.printTimeoutSeconds,
@@ -66,6 +103,10 @@ function normalizeConfig(config: Partial<HostConfig>): HostConfig {
       defaultHostConfig.auditLogRetentionDays
     )
   }
+}
+
+function isBlank(value: string | undefined): boolean {
+  return !value || value.trim().length === 0
 }
 
 function clampInteger(value: unknown, min: number, max: number, fallback: number): number {

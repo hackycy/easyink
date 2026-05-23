@@ -1,21 +1,38 @@
 import { createServer } from 'http'
 import type { IncomingMessage, Server, ServerResponse } from 'http'
 import type { AddressInfo } from 'net'
-import { randomUUID } from 'crypto'
+import type { Socket } from 'net'
 import type { EngineApi } from '../../engine/engine-api'
-import { ErrorCode, error, ok } from '../../engine/models'
-import type { PrinterCommand, PrinterResult, PrintRequestParams } from '../../engine/models'
+import { ErrorCode, error } from '../../engine/models'
+import type { PrinterResult, PrintRequestParams } from '../../engine/models'
 import type { AuditService } from '../services/audit-service'
 import type { HostConfig } from '../config/host-config'
+import type { PrintController } from '../api/print-controller'
+import { JobController } from '../api/job-controller'
+import { LogController } from '../api/log-controller'
+import { PrinterController } from '../api/printer-controller'
+import { StatusController } from '../api/status-controller'
+import { WebSocketServer } from './websocket-server'
 
 export class HttpServer {
   private server?: Server
+  private readonly webSocketServer: WebSocketServer
+  private readonly printerController: PrinterController
+  private readonly jobController: JobController
+  private readonly logController: LogController
+  private readonly statusController = new StatusController()
 
   constructor(
-    private readonly engine: EngineApi,
-    private readonly auditService: AuditService,
+    engine: EngineApi,
+    private readonly printController: PrintController,
+    auditService: AuditService,
     private readonly config: HostConfig
-  ) {}
+  ) {
+    this.webSocketServer = new WebSocketServer(engine, printController, auditService, config)
+    this.printerController = new PrinterController(engine)
+    this.jobController = new JobController(engine)
+    this.logController = new LogController(auditService)
+  }
 
   start(): Promise<number> {
     if (this.server) {
@@ -25,10 +42,25 @@ export class HttpServer {
     this.server = createServer((req, res) => {
       void this.handle(req, res)
     })
+    this.server.on('upgrade', (req, socket) => {
+      this.webSocketServer.handleUpgrade(req, socket as Socket)
+    })
 
     return new Promise((resolve, reject) => {
-      this.server?.once('error', reject)
-      this.server?.listen(this.config.httpPort, '127.0.0.1', () => resolve(this.port))
+      const server = this.server!
+      const onError = (err: Error): void => {
+        server.off('listening', onListening)
+        this.webSocketServer.dispose()
+        this.server = undefined
+        reject(err)
+      }
+      const onListening = (): void => {
+        server.off('error', onError)
+        resolve(this.port)
+      }
+
+      server.once('error', onError)
+      server.listen(this.config.httpPort, '127.0.0.1', onListening)
     })
   }
 
@@ -39,16 +71,28 @@ export class HttpServer {
         return
       }
 
-      this.server.close(() => {
+      const server = this.server
+      const finish = (): void => {
+        this.webSocketServer.dispose()
         this.server = undefined
         resolve()
-      })
+      }
+
+      try {
+        server.close(finish)
+      } catch {
+        finish()
+      }
     })
   }
 
   get port(): number {
     const address = this.server?.address() as AddressInfo | null
     return address?.port ?? this.config.httpPort
+  }
+
+  get connectionCount(): number {
+    return this.webSocketServer.connectionCount
   }
 
   private async handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -74,17 +118,20 @@ export class HttpServer {
 
   private async route(req: IncomingMessage, url: URL): Promise<PrinterResult> {
     if (req.method === 'GET' && url.pathname === '/api/status') {
-      return ok('status', {
-        name: '@easyink/electron',
+      return this.statusController.getStatus({
         httpPort: this.port,
-        chromiumPrint: true,
-        htmlPrint: true,
-        uptimeSeconds: Math.round(process.uptime())
+        webSocket: true,
+        connections: this.webSocketServer.connectionCount,
+        config: this.config
       })
     }
 
+    if (req.method === 'GET' && url.pathname === '/api/status/connections') {
+      return this.statusController.getConnections(this.webSocketServer.connectionCount)
+    }
+
     if (req.method === 'GET' && url.pathname === '/api/printers') {
-      return this.engine.handleCommand({ command: 'getPrinters', id: randomUUID() })
+      return this.printerController.getPrinters()
     }
 
     if (
@@ -95,11 +142,7 @@ export class HttpServer {
       const printerName = decodeURIComponent(
         url.pathname.slice('/api/printers/'.length, -'/status'.length)
       )
-      return this.engine.handleCommand({
-        command: 'getPrinterStatus',
-        id: randomUUID(),
-        params: { printerName }
-      })
+      return this.printerController.getPrinterStatus(printerName)
     }
 
     if (
@@ -108,31 +151,23 @@ export class HttpServer {
     ) {
       const params = await readJsonBody(req)
       const command = url.pathname.endsWith('/async') ? 'printAsync' : 'print'
-      const request: PrinterCommand = {
-        command,
-        id: randomUUID(),
-        params
-      }
-      const result = await this.engine.handleCommand(request)
-      this.auditService.record(command, params as unknown as PrintRequestParams, result)
-      return result
+      return command === 'printAsync'
+        ? this.printController.enqueuePrint(params as unknown as PrintRequestParams)
+        : this.printController.print(params as unknown as PrintRequestParams)
     }
 
     if (req.method === 'GET' && url.pathname === '/api/jobs') {
-      return this.engine.handleCommand({ command: 'getAllJobs', id: randomUUID() })
+      return this.jobController.getAllJobs()
     }
 
     if (req.method === 'GET' && url.pathname.startsWith('/api/jobs/')) {
-      return this.engine.handleCommand({
-        command: 'getJobStatus',
-        id: randomUUID(),
-        params: { jobId: decodeURIComponent(url.pathname.slice('/api/jobs/'.length)) }
-      })
+      return this.jobController.getJobStatus(
+        decodeURIComponent(url.pathname.slice('/api/jobs/'.length))
+      )
     }
 
     if (req.method === 'GET' && url.pathname === '/api/logs') {
-      const limit = Number(url.searchParams.get('limit') ?? 100)
-      return ok('logs', this.auditService.query(limit))
+      return this.logController.queryLogs(url.searchParams)
     }
 
     return error('unknown', ErrorCode.UnknownCommand, `未找到接口: ${req.method} ${url.pathname}`)
