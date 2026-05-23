@@ -78,12 +78,6 @@ export default defineConfig({
           ],
         },
         {
-          text: 'EasyInk Electron',
-          items: [
-            { text: '架构设计', link: '/electron/' },
-          ],
-        },
-        {
           text: 'EasyInk Printer (.NET)',
           items: [
             { text: '概述', link: '/dotnet/' },
@@ -106,12 +100,6 @@ export default defineConfig({
           items: [
             { text: '概述', link: '/hiprint/' },
             { text: '快速上手', link: '/hiprint/getting-started' },
-          ],
-        },
-        {
-          text: 'EasyInk Electron',
-          items: [
-            { text: '架构设计', link: '/electron/' },
           ],
         },
         {
@@ -140,12 +128,6 @@ export default defineConfig({
           ],
         },
         {
-          text: 'EasyInk Electron',
-          items: [
-            { text: '架构设计', link: '/electron/' },
-          ],
-        },
-        {
           text: 'EasyInk Printer (.NET)',
           items: [
             { text: '概述', link: '/dotnet/' },
@@ -168,12 +150,6 @@ export default defineConfig({
           items: [
             { text: '概述', link: '/hiprint/' },
             { text: '快速上手', link: '/hiprint/getting-started' },
-          ],
-        },
-        {
-          text: 'EasyInk Electron',
-          items: [
-            { text: '架构设计', link: '/electron/' },
           ],
         },
         {
