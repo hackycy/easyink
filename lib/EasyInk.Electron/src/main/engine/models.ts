@@ -1,13 +1,22 @@
 export const ErrorCode = {
   InvalidParams: 'INVALID_PARAMS',
   InvalidJson: 'INVALID_JSON',
+  InvalidMessage: 'INVALID_MESSAGE',
   UnknownCommand: 'UNKNOWN_COMMAND',
   JobNotFound: 'JOB_NOT_FOUND',
   QueueFull: 'QUEUE_FULL',
   PrintFailed: 'PRINT_FAILED',
   PrintTimeout: 'PRINT_TIMEOUT',
   InvalidPrintSource: 'INVALID_PRINT_SOURCE',
-  InternalError: 'INTERNAL_ERROR'
+  ChunkTooLarge: 'CHUNK_TOO_LARGE',
+  PdfTooLarge: 'PDF_TOO_LARGE',
+  InvalidChunk: 'INVALID_CHUNK',
+  UploadNotFound: 'UPLOAD_NOT_FOUND',
+  UploadIncomplete: 'UPLOAD_INCOMPLETE',
+  MessageTooLarge: 'MESSAGE_TOO_LARGE',
+  InternalError: 'INTERNAL_ERROR',
+  Unauthorized: 'UNAUTHORIZED',
+  NotFound: 'NOT_FOUND'
 } as const
 
 export type ErrorCodeValue = (typeof ErrorCode)[keyof typeof ErrorCode]
@@ -22,6 +31,9 @@ export enum JobStatus {
 export enum PrinterStatusCode {
   Ready = 'READY',
   Offline = 'PRINTER_OFFLINE',
+  PaperJam = 'PAPER_JAM',
+  PaperOut = 'PAPER_OUT',
+  Stopped = 'PRINTER_STOPPED',
   Error = 'PRINTER_ERROR',
   NotFound = 'PRINTER_NOT_FOUND',
   Unknown = 'UNKNOWN'

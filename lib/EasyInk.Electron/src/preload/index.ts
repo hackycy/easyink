@@ -4,6 +4,8 @@ import { electronAPI } from '@electron-toolkit/preload'
 // Custom APIs for renderer
 const api = {
   getStatus: () => ipcRenderer.invoke('easyink:getStatus'),
+  getConfig: () => ipcRenderer.invoke('easyink:getConfig'),
+  saveConfig: (config: unknown) => ipcRenderer.invoke('easyink:saveConfig', config),
   getPrinters: () => ipcRenderer.invoke('easyink:getPrinters'),
   getPrinterStatus: (printerName: string) =>
     ipcRenderer.invoke('easyink:getPrinterStatus', printerName),
@@ -11,7 +13,8 @@ const api = {
   printAsync: (params: unknown) => ipcRenderer.invoke('easyink:printAsync', params),
   getAllJobs: () => ipcRenderer.invoke('easyink:getAllJobs'),
   getJobStatus: (jobId: string) => ipcRenderer.invoke('easyink:getJobStatus', jobId),
-  getLogs: (limit?: number) => ipcRenderer.invoke('easyink:getLogs', limit),
+  getLogs: (query?: unknown) => ipcRenderer.invoke('easyink:getLogs', query),
+  exportLogsCsv: (query?: unknown) => ipcRenderer.invoke('easyink:exportLogsCsv', query),
   handleCommand: (command: unknown) => ipcRenderer.invoke('easyink:handleCommand', command)
 }
 

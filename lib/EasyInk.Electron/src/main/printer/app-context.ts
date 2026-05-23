@@ -1,17 +1,25 @@
 import { EngineApi } from '../engine/engine-api'
 import type { HostConfig } from './config/host-config'
-import { loadHostConfig, resolveDbPath, resolveFileLogDir } from './config/host-config'
+import {
+  loadHostConfig,
+  resolveCrashLogDir,
+  resolveDbPath,
+  resolveFileLogDir
+} from './config/host-config'
 import { PrintController } from './api/print-controller'
 import { AuditService } from './services/audit-service'
+import { CrashLogService } from './services/crash-log-service'
 import { PrintDebugLogService } from './services/print-debug-log-service'
 import { SimpleLogger } from './services/simple-logger'
 import { HttpServer } from './server/http-server'
 
 export interface AppContext {
   config: HostConfig
+  startupError?: string
   engine: EngineApi
   printController: PrintController
   auditService: AuditService
+  crashLogService: CrashLogService
   debugLogService: PrintDebugLogService
   logger: SimpleLogger
   httpServer?: HttpServer
@@ -25,6 +33,10 @@ export async function createAppContext(): Promise<AppContext> {
     config.fileLogRetentionDays
   )
   const auditService = new AuditService(resolveDbPath(config.dbPath), config.auditLogRetentionDays)
+  const crashLogService = new CrashLogService(
+    resolveCrashLogDir(config.crashLogDir),
+    config.fileLogRetentionDays
+  )
   const debugLogService = new PrintDebugLogService(config)
   const engine = new EngineApi({
     maxQueueSize: config.maxQueueSize,
@@ -56,6 +68,7 @@ export async function createAppContext(): Promise<AppContext> {
     engine,
     printController,
     auditService,
+    crashLogService,
     debugLogService,
     logger
   }
@@ -66,6 +79,8 @@ export async function createAppContext(): Promise<AppContext> {
       await httpServer.start()
       context.httpServer = httpServer
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      context.startupError = message
       logger.error('HTTP 服务启动失败', err)
       await httpServer.stop()
     }
@@ -77,6 +92,7 @@ export async function createAppContext(): Promise<AppContext> {
 export async function disposeAppContext(context: AppContext): Promise<void> {
   await context.httpServer?.stop()
   context.engine.dispose()
+  context.crashLogService.dispose()
   context.debugLogService.dispose()
   context.auditService.dispose()
   context.logger.dispose()

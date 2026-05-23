@@ -73,6 +73,10 @@ export class EngineApi extends EventEmitter {
     return ok('all', this.jobQueue.getAllJobs())
   }
 
+  getQueueStats(): PrinterResult {
+    return ok('queue', this.jobQueue.getStats())
+  }
+
   async handleCommandJson(json: string): Promise<PrinterResult> {
     try {
       return await this.handleCommand(JSON.parse(json) as PrinterCommand)
@@ -95,6 +99,8 @@ export class EngineApi extends EventEmitter {
         return this.handleGetJobStatus(request)
       case 'getAllJobs':
         return ok(request.id, this.jobQueue.getAllJobs())
+      case 'getQueueStats':
+        return ok(request.id, this.jobQueue.getStats())
       default:
         return error(request.id, ErrorCode.UnknownCommand, `未知命令: ${request.command}`)
     }

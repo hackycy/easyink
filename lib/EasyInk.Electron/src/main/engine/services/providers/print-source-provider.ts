@@ -5,6 +5,10 @@ import { join } from 'path'
 import { pathToFileURL } from 'url'
 import type { PrintRequestParams, PrintSourceType } from '../../models'
 import { offsetToCss } from '../unit-converter'
+import { downloadSafeRemoteSource } from './remote-source'
+
+const MAX_REMOTE_PDF_BYTES = 50 * 1024 * 1024
+const MAX_REMOTE_HTML_BYTES = 10 * 1024 * 1024
 
 export interface ResolvedPrintSource {
   type: PrintSourceType
@@ -32,12 +36,15 @@ export async function resolvePrintSource(
   }
 
   if (request.htmlUrl) {
-    assertHttpUrl(request.htmlUrl, 'htmlUrl')
-    return {
-      type: 'htmlUrl',
-      url: request.htmlUrl,
-      cleanup: async () => {}
-    }
+    const source = await downloadSafeRemoteSource(request.htmlUrl, 'htmlUrl', MAX_REMOTE_HTML_BYTES)
+    return writeHtmlSource(
+      source.bytes.toString('utf8'),
+      {
+        ...request,
+        baseUrl: request.baseUrl ?? source.finalUrl
+      },
+      'htmlUrl'
+    )
   }
 
   if (request.pdfBytes) {
@@ -55,12 +62,8 @@ export async function resolvePrintSource(
   }
 
   if (request.pdfUrl) {
-    assertHttpUrl(request.pdfUrl, 'pdfUrl')
-    return {
-      type: 'pdfUrl',
-      url: request.pdfUrl,
-      cleanup: async () => {}
-    }
+    const source = await downloadSafeRemoteSource(request.pdfUrl, 'pdfUrl', MAX_REMOTE_PDF_BYTES)
+    return writeBinarySource(source.bytes, 'pdfUrl')
   }
 
   throw new Error('必须提供 pdfBase64、pdfUrl、pdfBytes、html、htmlBase64、htmlUrl 或 viewer 之一')
@@ -197,11 +200,4 @@ function escapeHtmlText(value: string): string {
 
 function escapeAttribute(value: string): string {
   return value.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;')
-}
-
-function assertHttpUrl(value: string, fieldName: string): void {
-  const url = new URL(value)
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    throw new Error(`${fieldName} 仅支持 http/https URL`)
-  }
 }

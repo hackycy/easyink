@@ -12,12 +12,15 @@ const store = useEasyInkStore()
       <h2>任务</h2>
       <UiButton variant="secondary" @click="store.refreshJobs">刷新</UiButton>
     </div>
-    <div class="table">
+    <div class="table table--jobs">
       <div class="table-row table-head">
         <span>Job ID</span>
         <span>打印机</span>
         <span>状态</span>
         <span>创建时间</span>
+        <span>开始时间</span>
+        <span>完成时间</span>
+        <span>错误信息</span>
       </div>
       <div v-for="job in store.jobs" :key="job.jobId" class="table-row">
         <span class="mono">{{ job.jobId }}</span>
@@ -27,6 +30,9 @@ const store = useEasyInkStore()
           >{{ job.status }}</UiBadge
         >
         <span>{{ new Date(job.createdAt).toLocaleString() }}</span>
+        <span>{{ job.startedAt ? new Date(job.startedAt).toLocaleString() : '-' }}</span>
+        <span>{{ job.completedAt ? new Date(job.completedAt).toLocaleString() : '-' }}</span>
+        <span class="mono">{{ job.errorMessage ?? '-' }}</span>
       </div>
       <div v-if="store.jobs.length === 0" class="empty-state">暂无任务</div>
     </div>

@@ -190,7 +190,7 @@ function sanitizePrintRequest(
   request: PrintRequestParams,
   directory: string
 ): Record<string, unknown> {
-  const payload = structuredClone(request) as unknown as Record<string, unknown>
+  const payload = clonePrintRequest(request) as Record<string, unknown>
   redactApiKeys(payload)
 
   if (typeof payload.pdfBase64 === 'string') {
@@ -232,6 +232,28 @@ function sanitizePrintRequest(
   }
 
   return payload
+}
+
+function clonePrintRequest(value: unknown): unknown {
+  if (Buffer.isBuffer(value)) {
+    return Buffer.from(value)
+  }
+  if (value instanceof Uint8Array) {
+    return new Uint8Array(value)
+  }
+  if (Array.isArray(value)) {
+    return value.map(clonePrintRequest)
+  }
+  if (!value || typeof value !== 'object') {
+    return value
+  }
+
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([key, child]) => [
+      key,
+      clonePrintRequest(child)
+    ])
+  )
 }
 
 function summarizePrintRequest(request: PrintRequestParams): Record<string, unknown> {

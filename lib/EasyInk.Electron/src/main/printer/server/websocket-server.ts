@@ -64,6 +64,11 @@ export class WebSocketServer {
       return
     }
 
+    if (this.connections.size >= this.config.maxWebSocketConnections) {
+      rejectUpgrade(socket, 429, 'Too Many Connections')
+      return
+    }
+
     const key = req.headers['sec-websocket-key']
     if (typeof key !== 'string') {
       rejectUpgrade(socket, 400, 'Bad Request')
@@ -111,7 +116,7 @@ export class WebSocketServer {
         messageType === 'binary' ? parseBinaryMessage(payload) : parseTextMessage(payload)
       result = await this.routeMessage(message)
     } catch (err) {
-      result = error('unknown', ErrorCode.InvalidJson, getErrorMessage(err))
+      result = error('unknown', ErrorCode.InvalidMessage, getErrorMessage(err))
     }
 
     connection.sendText(JSON.stringify(result))
@@ -133,6 +138,7 @@ export class WebSocketServer {
       case 'getPrinterStatus':
       case 'getJobStatus':
       case 'getAllJobs':
+      case 'getQueueStats':
         return this.engine.handleCommand({
           command: message.command,
           id: message.id,
@@ -193,7 +199,7 @@ export class WebSocketServer {
     if (pdfBytes.byteLength > MAX_CHUNK_BYTES) {
       return error(
         message.id,
-        'CHUNK_TOO_LARGE',
+        ErrorCode.ChunkTooLarge,
         `分片超过 ${MAX_CHUNK_BYTES / 1024 / 1024}MB 上限`
       )
     }
@@ -210,7 +216,11 @@ export class WebSocketServer {
       )
     }
     if (totalBytes <= 0 || totalBytes > MAX_PDF_BYTES) {
-      return error(message.id, 'PDF_TOO_LARGE', `PDF 超过 ${MAX_PDF_BYTES / 1024 / 1024}MB 上限`)
+      return error(
+        message.id,
+        ErrorCode.PdfTooLarge,
+        `PDF 超过 ${MAX_PDF_BYTES / 1024 / 1024}MB 上限`
+      )
     }
     if (totalChunks <= 0 || chunkIndex < 0 || chunkIndex >= totalChunks) {
       return error(message.id, ErrorCode.InvalidParams, '无效的分片序号')
@@ -248,12 +258,12 @@ export class WebSocketServer {
 
     const upload = this.uploads.get(uploadId)
     if (!upload) {
-      return error(message.id, 'UPLOAD_NOT_FOUND', `上传不存在: ${uploadId}`)
+      return error(message.id, ErrorCode.UploadNotFound, `上传不存在: ${uploadId}`)
     }
 
     const pdfBytes = assembleUpload(upload)
     if (!pdfBytes) {
-      return error(message.id, 'UPLOAD_INCOMPLETE', 'PDF 分片尚未上传完成')
+      return error(message.id, ErrorCode.UploadIncomplete, 'PDF 分片尚未上传完成')
     }
 
     this.uploads.delete(uploadId)
@@ -349,7 +359,9 @@ class WebSocketConnection extends EventEmitter {
 
     const size = this.fragments.reduce((sum, item) => sum + item.byteLength, 0)
     if (size > MAX_BINARY_MESSAGE_SIZE) {
-      this.sendText(JSON.stringify(error('unknown', 'MESSAGE_TOO_LARGE', 'WebSocket 消息过大')))
+      this.sendText(
+        JSON.stringify(error('unknown', ErrorCode.MessageTooLarge, 'WebSocket 消息过大'))
+      )
       this.close()
       return
     }
@@ -490,13 +502,13 @@ function addUploadChunk(
   chunk: Buffer
 ): { success: true } | { success: false; code: string; message: string } {
   if (totalChunks !== upload.totalChunks || totalBytes !== upload.totalBytes) {
-    return { success: false, code: 'INVALID_CHUNK', message: '上传元数据不一致' }
+    return { success: false, code: ErrorCode.InvalidChunk, message: '上传元数据不一致' }
   }
   if (upload.chunks[chunkIndex]) {
     return { success: true }
   }
   if (upload.receivedBytes + chunk.byteLength > upload.totalBytes) {
-    return { success: false, code: 'INVALID_CHUNK', message: '分片总大小超过声明大小' }
+    return { success: false, code: ErrorCode.InvalidChunk, message: '分片总大小超过声明大小' }
   }
 
   upload.chunks[chunkIndex] = chunk

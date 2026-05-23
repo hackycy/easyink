@@ -15,7 +15,7 @@ export class ChromiumPrinterService implements PrinterService {
       description: printer.description,
       isDefault: isDefaultPrinter(printer.options),
       status: readPrinterStatus(printer.options),
-      statusCode: mapPrinterStatus(readPrinterStatus(printer.options)),
+      statusCode: mapPrinterStatus(printer.options),
       options: printer.options as Record<string, unknown>
     }))
   }
@@ -34,7 +34,7 @@ export class ChromiumPrinterService implements PrinterService {
       printerName,
       statusCode: printer.statusCode,
       status: printer.status,
-      message: printer.statusCode === PrinterStatusCode.Ready ? '打印机就绪' : '打印机状态异常'
+      message: getPrinterStatusMessage(printer.statusCode)
     }
   }
 
@@ -60,11 +60,39 @@ export class ChromiumPrinterService implements PrinterService {
   }
 }
 
-function mapPrinterStatus(status?: number): PrinterStatusCode {
+function mapPrinterStatus(options: Electron.Options): PrinterStatusCode {
+  const status = readPrinterStatus(options)
+  const reasons = readPrinterStateReasons(options)
+  if (reasons.some((reason) => reason.includes('media-jam') || reason.includes('paper-jam'))) {
+    return PrinterStatusCode.PaperJam
+  }
+  if (
+    reasons.some(
+      (reason) =>
+        reason.includes('media-empty') ||
+        reason.includes('media-needed') ||
+        reason.includes('paper-out')
+    )
+  ) {
+    return PrinterStatusCode.PaperOut
+  }
+  if (reasons.some((reason) => reason.includes('offline'))) {
+    return PrinterStatusCode.Offline
+  }
+
   if (status == null || status === 0) {
     return PrinterStatusCode.Ready
   }
 
+  if ((status & 0x00000008) !== 0) {
+    return PrinterStatusCode.PaperJam
+  }
+  if ((status & 0x00000010) !== 0 || (status & 0x00000040) !== 0) {
+    return PrinterStatusCode.PaperOut
+  }
+  if ((status & 0x00000001) !== 0) {
+    return PrinterStatusCode.Stopped
+  }
   if ((status & 0x00000080) !== 0 || (status & 0x00000400) !== 0) {
     return PrinterStatusCode.Offline
   }
@@ -85,4 +113,30 @@ function readPrinterStatus(options: Electron.Options): number | undefined {
   const rawStatus = optionBag.status ?? optionBag['printer-state']
   const status = Number(rawStatus)
   return Number.isFinite(status) ? status : undefined
+}
+
+function readPrinterStateReasons(options: Electron.Options): string[] {
+  const optionBag = options as Record<string, unknown>
+  const rawReasons = optionBag['printer-state-reasons'] ?? optionBag.printerStateReasons
+  if (Array.isArray(rawReasons)) {
+    return rawReasons.map((reason) => String(reason).toLowerCase())
+  }
+  return rawReasons ? String(rawReasons).toLowerCase().split(',') : []
+}
+
+function getPrinterStatusMessage(statusCode: PrinterStatusCode): string {
+  switch (statusCode) {
+    case PrinterStatusCode.Ready:
+      return '打印机就绪'
+    case PrinterStatusCode.Offline:
+      return '打印机离线'
+    case PrinterStatusCode.PaperJam:
+      return '打印机卡纸'
+    case PrinterStatusCode.PaperOut:
+      return '打印机缺纸'
+    case PrinterStatusCode.Stopped:
+      return '打印机已停止'
+    default:
+      return '打印机状态异常'
+  }
 }

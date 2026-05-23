@@ -1,7 +1,8 @@
 {
   "name": "@easyink/electron",
   "version": "0.1.0",
-  "description": "EasyInk Electron local printer powered by Chromium print APIs",
+  "productName": "EasyInk Printer",
+  "description": "EasyInk Printer local print service powered by Chromium print APIs",
   "main": "./out/main/index.js",
   "author": "hackycy <hackycy@outlook.com>",
   "homepage": "https://github.com/hackycy/easyink#readme",

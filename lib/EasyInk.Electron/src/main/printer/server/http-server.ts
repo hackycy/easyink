@@ -13,6 +13,9 @@ import { LogController } from '../api/log-controller'
 import { PrinterController } from '../api/printer-controller'
 import { StatusController } from '../api/status-controller'
 import { WebSocketServer } from './websocket-server'
+import { parseMultipartBody } from './multipart-parser'
+
+const MAX_HTTP_BODY_BYTES = 10 * 1024 * 1024
 
 export class HttpServer {
   private server?: Server
@@ -21,9 +24,10 @@ export class HttpServer {
   private readonly jobController: JobController
   private readonly logController: LogController
   private readonly statusController = new StatusController()
+  private readonly requestLimiter: AsyncSemaphore
 
   constructor(
-    engine: EngineApi,
+    private readonly engine: EngineApi,
     private readonly printController: PrintController,
     auditService: AuditService,
     private readonly config: HostConfig
@@ -32,6 +36,7 @@ export class HttpServer {
     this.printerController = new PrinterController(engine)
     this.jobController = new JobController(engine)
     this.logController = new LogController(auditService)
+    this.requestLimiter = new AsyncSemaphore(config.maxConcurrentRequests)
   }
 
   start(): Promise<number> {
@@ -60,7 +65,7 @@ export class HttpServer {
       }
 
       server.once('error', onError)
-      server.listen(this.config.httpPort, '127.0.0.1', onListening)
+      server.listen(this.config.httpPort, '0.0.0.0', onListening)
     })
   }
 
@@ -96,23 +101,33 @@ export class HttpServer {
   }
 
   private async handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
-    setCorsHeaders(res, this.config.trustAllOrigins)
-    if (req.method === 'OPTIONS') {
-      res.writeHead(204).end()
-      return
-    }
-
-    if (!this.authorize(req)) {
-      writeJson(res, 401, error('unknown', ErrorCode.InvalidParams, '未授权'))
-      return
-    }
-
-    const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
+    await this.requestLimiter.acquire()
     try {
-      const result = await this.route(req, url)
-      writeJson(res, result.success ? 200 : 400, result)
-    } catch (err) {
-      writeJson(res, 500, error('unknown', ErrorCode.InternalError, getErrorMessage(err)))
+      setCorsHeaders(req, res, this.config.trustAllOrigins)
+      if (req.method === 'OPTIONS') {
+        res.writeHead(204).end()
+        return
+      }
+
+      if (!this.authorize(req)) {
+        writeJson(res, 401, error('unknown', ErrorCode.Unauthorized, '未授权'))
+        return
+      }
+
+      const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
+      try {
+        const result = await this.route(req, url)
+        writeJson(res, result.success ? 200 : 400, result)
+      } catch (err) {
+        const code = err instanceof SyntaxError ? ErrorCode.InvalidJson : ErrorCode.InternalError
+        writeJson(
+          res,
+          code === ErrorCode.InvalidJson ? 400 : 500,
+          error('unknown', code, getErrorMessage(err))
+        )
+      }
+    } finally {
+      this.requestLimiter.release()
     }
   }
 
@@ -122,6 +137,7 @@ export class HttpServer {
         httpPort: this.port,
         webSocket: true,
         connections: this.webSocketServer.connectionCount,
+        queue: this.engine.getQueueStats().data,
         config: this.config
       })
     }
@@ -149,7 +165,7 @@ export class HttpServer {
       req.method === 'POST' &&
       (url.pathname === '/api/print' || url.pathname === '/api/print/async')
     ) {
-      const params = await readJsonBody(req)
+      const params = await readPrintRequestBody(req)
       const command = url.pathname.endsWith('/async') ? 'printAsync' : 'print'
       return command === 'printAsync'
         ? this.printController.enqueuePrint(params as unknown as PrintRequestParams)
@@ -170,7 +186,7 @@ export class HttpServer {
       return this.logController.queryLogs(url.searchParams)
     }
 
-    return error('unknown', ErrorCode.UnknownCommand, `未找到接口: ${req.method} ${url.pathname}`)
+    return error('unknown', ErrorCode.NotFound, `未找到接口: ${req.method} ${url.pathname}`)
   }
 
   private authorize(req: IncomingMessage): boolean {
@@ -181,10 +197,29 @@ export class HttpServer {
   }
 }
 
-function setCorsHeaders(res: ServerResponse, trustAllOrigins: boolean): void {
-  res.setHeader('Access-Control-Allow-Origin', trustAllOrigins ? '*' : 'http://localhost')
+function setCorsHeaders(req: IncomingMessage, res: ServerResponse, trustAllOrigins: boolean): void {
+  const origin = req.headers.origin
+  res.setHeader(
+    'Access-Control-Allow-Origin',
+    trustAllOrigins ? '*' : typeof origin === 'string' && isLocalOrigin(origin) ? origin : 'null'
+  )
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-API-Key')
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+}
+
+function isLocalOrigin(origin: string): boolean {
+  try {
+    const url = new URL(origin)
+    const hostname = url.hostname.toLowerCase()
+    return (
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname === '::1' ||
+      hostname === '[::1]'
+    )
+  } catch {
+    return false
+  }
 }
 
 function writeJson(res: ServerResponse, statusCode: number, body: unknown): void {
@@ -192,23 +227,76 @@ function writeJson(res: ServerResponse, statusCode: number, body: unknown): void
   res.end(JSON.stringify(body))
 }
 
-async function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown>> {
+async function readPrintRequestBody(req: IncomingMessage): Promise<Record<string, unknown>> {
+  const body = await readBody(req, MAX_HTTP_BODY_BYTES)
+  const contentType = String(req.headers['content-type'] ?? '')
+  if (contentType.toLowerCase().includes('multipart/form-data')) {
+    return readMultipartPrintParams(body, contentType)
+  }
+  if (body.byteLength === 0) {
+    return {}
+  }
+  return JSON.parse(body.toString('utf8')) as Record<string, unknown>
+}
+
+async function readBody(req: IncomingMessage, maxBytes: number): Promise<Buffer> {
   const chunks: Buffer[] = []
   let size = 0
   for await (const chunk of req) {
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
     size += buffer.byteLength
-    if (size > 10 * 1024 * 1024) {
+    if (size > maxBytes) {
       throw new Error('请求体超过 10MB 上限')
     }
     chunks.push(buffer)
   }
-  if (chunks.length === 0) {
-    return {}
+  return Buffer.concat(chunks)
+}
+
+function readMultipartPrintParams(body: Buffer, contentType: string): Record<string, unknown> {
+  const parts = parseMultipartBody(body, contentType)
+  const paramsPart = parts.find((part) => part.name === 'params')
+  const params = paramsPart
+    ? (JSON.parse(paramsPart.data.toString('utf8')) as Record<string, unknown>)
+    : {}
+  const pdfPart = parts.find((part) => part.name === 'pdf' || part.name === 'file')
+  if (pdfPart && pdfPart.data.byteLength > 0) {
+    delete params.pdfBase64
+    delete params.pdfUrl
+    params.pdfBytes = pdfPart.data
   }
-  return JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<string, unknown>
+  return params
 }
 
 function getErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
+}
+
+class AsyncSemaphore {
+  private active = 0
+  private readonly waiters: Array<() => void> = []
+
+  constructor(private readonly maxConcurrent: number) {}
+
+  acquire(): Promise<void> {
+    if (this.active < this.maxConcurrent) {
+      this.active += 1
+      return Promise.resolve()
+    }
+
+    return new Promise((resolve) => {
+      this.waiters.push(() => {
+        this.active += 1
+        resolve()
+      })
+    })
+  }
+
+  release(): void {
+    this.active = Math.max(0, this.active - 1)
+    const next = this.waiters.shift()
+    if (next) {
+      next()
+    }
+  }
 }

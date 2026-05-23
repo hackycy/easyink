@@ -5,12 +5,15 @@ import type {
   PrintRequestParams,
   PrinterInfo,
   PrinterResult,
-  RuntimeStatus
+  RuntimeStatus,
+  HostConfig,
+  LogQuery
 } from '../types/easyink'
 
 interface State {
   loading: boolean
   status?: RuntimeStatus
+  config?: HostConfig
   printers: PrinterInfo[]
   jobs: PrintJob[]
   logs: PrintAuditLog[]
@@ -37,9 +40,10 @@ export const useEasyInkStore = defineStore('easyink', {
           window.api.getStatus(),
           window.api.getPrinters(),
           window.api.getAllJobs(),
-          window.api.getLogs(100)
+          window.api.getLogs(defaultLogQuery())
         ])
-        this.status = status as RuntimeStatus
+        this.status = unwrap<RuntimeStatus>(status, status as RuntimeStatus)
+        this.config = this.status.config
         this.printers = unwrap<PrinterInfo[]>(printers, [])
         this.jobs = unwrap<PrintJob[]>(jobs, [])
         this.logs = unwrapLogs(logs)
@@ -69,11 +73,48 @@ export const useEasyInkStore = defineStore('easyink', {
     async refreshJobs() {
       this.jobs = unwrap<PrintJob[]>(await window.api.getAllJobs(), [])
     },
-    async refreshLogs() {
-      this.logs = unwrapLogs(await window.api.getLogs(100))
+    async refreshStatus() {
+      const status = await window.api.getStatus()
+      this.status = unwrap<RuntimeStatus>(status, status as RuntimeStatus)
+      this.config = this.status.config
+    },
+    async refreshConfig() {
+      const result = await window.api.getConfig()
+      this.config = unwrap<HostConfig>(result, this.config ?? ({} as HostConfig))
+    },
+    async saveConfig(config: HostConfig) {
+      const result = await window.api.saveConfig(config)
+      const payload = unwrap<{ config: HostConfig; restartRequired: boolean }>(result, {
+        config,
+        restartRequired: true
+      })
+      this.config = payload.config
+      if (this.status) {
+        this.status.config = payload.config
+      }
+      return payload
+    },
+    async refreshLogs(query: LogQuery = defaultLogQuery()) {
+      this.logs = unwrapLogs(await window.api.getLogs(query))
+    },
+    async exportLogsCsv(query: LogQuery = defaultLogQuery()) {
+      return unwrap<{ csv: string; count: number }>(await window.api.exportLogsCsv(query), {
+        csv: '',
+        count: 0
+      })
     }
   }
 })
+
+export function defaultLogQuery(): LogQuery {
+  const endTime = new Date()
+  const startTime = new Date(endTime.getTime() - 7 * 24 * 60 * 60 * 1000)
+  return {
+    startTime: startTime.toISOString(),
+    endTime: endTime.toISOString(),
+    limit: 100
+  }
+}
 
 function unwrap<T>(result: unknown, fallback: T): T {
   const response = result as PrinterResult<T>

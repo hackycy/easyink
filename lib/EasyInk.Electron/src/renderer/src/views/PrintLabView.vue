@@ -10,7 +10,7 @@ const store = useEasyInkStore()
 const asyncMode = ref(true)
 const form = reactive({
   printerName: '',
-  sourceMode: 'html' as 'html' | 'htmlUrl' | 'pdfUrl' | 'pdfBase64',
+  sourceMode: 'html' as 'html' | 'htmlUrl' | 'pdfUrl' | 'pdfBase64' | 'viewer',
   sourceValue: `<!doctype html>
 <html>
 <head>
@@ -31,6 +31,8 @@ const form = reactive({
   </table>
 </body>
 </html>`,
+  viewerStyles: 'body { font-family: Arial, sans-serif; padding: 20mm; }',
+  viewerTitle: 'EasyInk Viewer Print',
   copies: 1,
   landscape: false,
   paperWidth: 210,
@@ -55,8 +57,36 @@ async function submit(): Promise<void> {
       unit: 'mm'
     }
   }
-  params[form.sourceMode] = form.sourceValue
+  if (form.sourceMode === 'viewer') {
+    params.viewer = {
+      title: form.viewerTitle,
+      styles: form.viewerStyles,
+      pages: parseViewerPages(form.sourceValue)
+    }
+  } else {
+    params[form.sourceMode] = form.sourceValue
+  }
   await store.print(params, asyncMode.value)
+}
+
+function parseViewerPages(value: string): string[] {
+  const trimmed = value.trim()
+  try {
+    const parsed = JSON.parse(trimmed) as unknown
+    if (Array.isArray(parsed)) {
+      return parsed.map((item) => String(item))
+    }
+    if (
+      parsed &&
+      typeof parsed === 'object' &&
+      Array.isArray((parsed as { pages?: unknown[] }).pages)
+    ) {
+      return (parsed as { pages: unknown[] }).pages.map((item) => String(item))
+    }
+  } catch {
+    return [trimmed]
+  }
+  return [trimmed]
 }
 </script>
 
@@ -78,7 +108,7 @@ async function submit(): Promise<void> {
         </select>
       </label>
 
-      <div class="segmented">
+      <div class="segmented segmented--five">
         <button
           type="button"
           :class="{ active: form.sourceMode === 'html' }"
@@ -107,10 +137,28 @@ async function submit(): Promise<void> {
         >
           PDF Base64
         </button>
+        <button
+          type="button"
+          :class="{ active: form.sourceMode === 'viewer' }"
+          @click="form.sourceMode = 'viewer'"
+        >
+          Viewer
+        </button>
+      </div>
+
+      <div v-if="form.sourceMode === 'viewer'" class="form-grid form-grid--two">
+        <label class="field">
+          <span>标题</span>
+          <input v-model="form.viewerTitle" />
+        </label>
+        <label class="field">
+          <span>样式</span>
+          <input v-model="form.viewerStyles" />
+        </label>
       </div>
 
       <label class="field field-grow">
-        <span>内容</span>
+        <span>{{ form.sourceMode === 'viewer' ? 'Viewer pages' : '内容' }}</span>
         <textarea v-model="form.sourceValue" spellcheck="false" />
       </label>
 

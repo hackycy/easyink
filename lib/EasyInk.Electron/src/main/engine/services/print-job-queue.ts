@@ -57,6 +57,27 @@ export class PrintJobQueue {
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
   }
 
+  getStats(): {
+    queued: number
+    printing: number
+    completed: number
+    failed: number
+    total: number
+    maxQueueSize: number
+    processing: boolean
+  } {
+    const jobs = [...this.jobs.values()].map((entry) => entry.job)
+    return {
+      queued: jobs.filter((job) => job.status === JobStatus.Queued).length,
+      printing: jobs.filter((job) => job.status === JobStatus.Printing).length,
+      completed: jobs.filter((job) => job.status === JobStatus.Completed).length,
+      failed: jobs.filter((job) => job.status === JobStatus.Failed).length,
+      total: jobs.length,
+      maxQueueSize: this.maxQueueSize,
+      processing: this.processing
+    }
+  }
+
   dispose(): void {
     this.disposed = true
     this.queue.length = 0

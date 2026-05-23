@@ -248,6 +248,18 @@ button {
   gap: 12px;
 }
 
+.form-grid--two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.form-grid--three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.form-grid--four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .segmented {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -256,6 +268,10 @@ button {
   border-radius: 8px;
   background: #e8eef3;
   padding: 4px;
+}
+
+.segmented--five {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .segmented button {
@@ -317,6 +333,50 @@ button {
   font-size: 13px;
 }
 
+.table--printers .table-row {
+  grid-template-columns:
+    minmax(220px, 2fr) minmax(120px, 1fr) minmax(90px, 0.6fr)
+    minmax(110px, 0.7fr);
+}
+
+.table--printers-page .table-row {
+  grid-template-columns:
+    minmax(240px, 2fr) minmax(90px, 0.6fr) minmax(120px, 0.8fr)
+    minmax(160px, 1fr) minmax(110px, 0.7fr);
+}
+
+.table--jobs .table-row {
+  grid-template-columns:
+    minmax(210px, 1.5fr) minmax(150px, 1fr) minmax(100px, 0.7fr)
+    minmax(160px, 1fr) minmax(160px, 1fr) minmax(160px, 1fr) minmax(180px, 1fr);
+}
+
+.table--logs .table-row {
+  grid-template-columns:
+    minmax(160px, 1fr) minmax(160px, 1fr) minmax(100px, 0.7fr) minmax(110px, 0.7fr)
+    minmax(120px, 0.8fr) minmax(190px, 1.2fr) minmax(180px, 1fr);
+}
+
+.table-button-row {
+  width: 100%;
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 0;
+  background: #ffffff;
+  text-align: left;
+}
+
+.table-button-row.active {
+  background: #eef8fb;
+}
+
+.table-button-row small {
+  display: block;
+  margin-top: 2px;
+  color: #64748b;
+  font-size: 12px;
+}
+
 .table-row:first-child {
   border-top: 0;
 }
@@ -332,6 +392,106 @@ button {
   padding: 32px;
   text-align: center;
   color: #64748b;
+}
+
+.alert-band {
+  border-color: #fecaca;
+  background: #fff7f7;
+}
+
+.alert-band p {
+  color: #991b1b;
+  font-size: 13px;
+}
+
+.info-grid,
+.detail-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.info-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.detail-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 14px;
+}
+
+.info-row {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 12px;
+  min-width: 0;
+}
+
+.info-row span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.info-row strong {
+  overflow: hidden;
+  color: #111827;
+  font-size: 13px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.filter-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.settings-layout {
+  display: grid;
+  gap: 16px;
+}
+
+.settings-section {
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+}
+
+.settings-section:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.settings-section h3 {
+  margin: 0 0 12px;
+  color: #172033;
+  font-size: 15px;
+}
+
+.toggle-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  color: #344256;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.json-preview {
+  overflow: auto;
+  max-height: 260px;
+  border-radius: 8px;
+  background: #111827;
+  color: #e2e8f0;
+  padding: 14px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.55;
 }
 
 .mono {
