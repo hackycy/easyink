@@ -1,15 +1,17 @@
-import type { EphemeralPanelDef, FontLoadRequest, FontProvider, PropertyPanelOverlay } from '@easyink/core'
+import type { EphemeralPanelDef, FontLoadRequest, FontLoadStatus, FontManager, FontProvider, PropertyPanelOverlay } from '@easyink/core'
 import type { DocumentSchema, DocumentSchemaInput, ElementGroupSchema, MaterialNode } from '@easyink/schema'
 import type { DesignerInteractionProvider, LocaleMessages, MaterialCatalogEntry, MaterialDefinition, MaterialDesignerExtension, MaterialExtensionFactory, PreferenceProvider, SnapLine, StatusBarState } from '../types'
-import { collectFontFamilies, CommandManager, FontManager, SelectionModel } from '@easyink/core'
+import { CommandManager, SelectionModel } from '@easyink/core'
 import { DataSourceRegistry } from '@easyink/datasource'
 import { normalizeDocumentSchema } from '@easyink/schema'
 import { markRaw } from 'vue'
 import { EditingSessionManager } from '../editing/editing-session-manager'
 import { DesignerInteractionService } from '../interactions/interaction-service'
-import { createMaterialExtensionContext } from '../materials/extension-context'
 import { DiagnosticsChannel } from './diagnostics'
+import { FontService } from './font-service'
+import { MaterialRegistry } from './material-registry'
 import { applyPersistedWorkbench, loadWorkbenchPreferences } from './preference-persistence'
+import { SaveStatusManager } from './save-status-manager'
 import { createDefaultSaveBranchMenu, createDefaultWorkbenchState } from './workbench'
 
 /**
@@ -33,11 +35,7 @@ export class DesignerStore {
    * surface them. See `./diagnostics.ts` for rationale.
    */
   readonly diagnostics = new DiagnosticsChannel()
-  readonly fontManager = new FontManager()
-  fontRevision = 0
-  private _fontTarget?: Document | ShadowRoot
-  private _fontPreloadGeneration = 0
-  private _fontDiagnosticKeys = new Set<string>()
+  readonly fontService: FontService
   assetPickerAvailable = false
   hostAssetPickerAvailable = false
   hostAssetUploaderAvailable = false
@@ -47,6 +45,7 @@ export class DesignerStore {
   // ─── Workbench state (NOT in Schema, NOT in undo/redo) ───────
   readonly workbench = createDefaultWorkbenchState()
   readonly saveBranch = createDefaultSaveBranchMenu()
+  readonly saveStatus = new SaveStatusManager()
 
   /**
    * Active snap-line feedback for the overlay. Held as a top-level field
@@ -58,11 +57,7 @@ export class DesignerStore {
    */
   snapActiveLines: readonly SnapLine[] = []
 
-  // ─── Material registry ────────────────────────────────────────
-  private _materials = new Map<string, MaterialDefinition>()
-  private _materialFactories = new Map<string, MaterialExtensionFactory>()
-  private _cachedExtensions = new Map<string, MaterialDesignerExtension>()
-  private _catalog: MaterialCatalogEntry[] = []
+  readonly materialRegistry: MaterialRegistry
 
   // ─── Editing Session Manager ─────────────────────────────────────
   readonly editingSession: EditingSessionManager
@@ -79,13 +74,12 @@ export class DesignerStore {
 
   constructor(schema?: DocumentSchemaInput, preferenceProvider?: PreferenceProvider, interactionProvider?: DesignerInteractionProvider) {
     this._schema = normalizeDocumentSchema(schema)
+    this.fontService = new FontService(this.diagnostics)
+    this.materialRegistry = new MaterialRegistry()
     this.setInteractionProvider(interactionProvider)
     // Mark editing session manager as raw: it owns Vue refs internally and
     // must not be auto-unwrapped by the surrounding reactive(store) proxy.
     this.editingSession = markRaw(new EditingSessionManager(this))
-    markRaw(this._materials)
-    markRaw(this._materialFactories)
-    markRaw(this._cachedExtensions)
     markRaw(this.dataSourceRegistry)
     markRaw(this.diagnostics)
 
@@ -123,121 +117,71 @@ export class DesignerStore {
     this.assetPickerAvailable = this.interactions.canPickAsset()
   }
 
+  get fontManager(): FontManager {
+    return this.fontService.manager
+  }
+
+  get fontRevision(): number {
+    return this.fontService.revision
+  }
+
   setFontProvider(provider?: FontProvider): void {
-    this.fontManager.setProvider(provider)
-    this._fontDiagnosticKeys.clear()
-    this.fontRevision++
+    this.fontService.setProvider(provider)
     void this.preloadDocumentFonts()
   }
 
   setFontTarget(target?: Document | ShadowRoot): void {
-    this._fontTarget = target
+    this.fontService.setTarget(target)
     void this.preloadDocumentFonts()
   }
 
-  getFontStatus(family: string): ReturnType<FontManager['getLoadState']>['status'] {
-    if (!family)
-      return 'loaded'
-    return this.fontManager.getLoadState(family).status
+  getFontStatus(family: string): FontLoadStatus {
+    return this.fontService.getStatus(family)
   }
 
-  getFontStatuses(families: string[], _revision = this.fontRevision): Record<string, ReturnType<FontManager['getLoadState']>['status']> {
-    const statuses: Record<string, ReturnType<FontManager['getLoadState']>['status']> = {}
-    for (const family of families) {
-      statuses[family] = this.getFontStatus(family)
-    }
-    return statuses
+  getFontStatuses(families: string[], _revision = this.fontRevision): Record<string, FontLoadStatus> {
+    return this.fontService.getStatuses(families)
   }
 
   async ensureFontLoaded(
     request: FontLoadRequest,
     options: { preloadGeneration?: number, reportDiagnostic?: boolean } = {},
   ): Promise<boolean> {
-    if (!request.family)
-      return true
-    const shouldReportDiagnostic = options.reportDiagnostic ?? true
-    try {
-      await this.fontManager.ensureFontLoaded(request, this._fontTarget)
-      if (options.preloadGeneration !== undefined && options.preloadGeneration !== this._fontPreloadGeneration)
-        return false
-      this._fontDiagnosticKeys.delete(fontDiagnosticKey(request))
-      this.fontRevision++
-      return true
-    }
-    catch (err) {
-      if (options.preloadGeneration !== undefined && options.preloadGeneration !== this._fontPreloadGeneration)
-        return false
-      this.fontRevision++
-      const diagnosticKey = fontDiagnosticKey(request)
-      if (shouldReportDiagnostic && !this._fontDiagnosticKeys.has(diagnosticKey)) {
-        this._fontDiagnosticKeys.add(diagnosticKey)
-        this.diagnostics.push({
-          source: 'font',
-          severity: 'warn',
-          message: `Font load failed: ${request.family}`,
-          detail: {
-            family: request.family,
-            message: err instanceof Error ? err.message : String(err),
-          },
-        })
-      }
-      return false
-    }
+    return this.fontService.ensureLoaded(request, options)
   }
 
   async preloadDocumentFonts(): Promise<void> {
-    const generation = ++this._fontPreloadGeneration
-    if (!this._fontTarget || !this.fontManager.provider)
-      return
-    const families = collectFontFamilies(this._schema)
-    if (families.size === 0)
-      return
-    await Promise.all([...families].map(family =>
-      this.ensureFontLoaded({ family }, { preloadGeneration: generation, reportDiagnostic: true }),
-    ))
+    await this.fontService.preloadDocumentFonts(this._schema)
   }
 
   // ─── Template Save Status ─────────────────────────────────────
 
   markDraftModified(): void {
-    this.workbench.status.draft = 'modified'
+    this.saveStatus.markDraftModified(this.workbench.status)
   }
 
   queueSave(): void {
-    this.workbench.status.draft = 'modified'
-    this.workbench.status.savePhase = 'queued'
-    this.workbench.status.saveMessage = undefined
+    this.saveStatus.queueSave(this.workbench.status)
   }
 
   startSave(): void {
-    this.workbench.status.savePhase = 'saving'
-    this.workbench.status.saveMessage = undefined
+    this.saveStatus.startSave(this.workbench.status)
   }
 
   completeSave(): void {
-    this.workbench.status.draft = 'clean'
-    this.workbench.status.savePhase = 'success'
-    this.workbench.status.saveMessage = undefined
-    this.workbench.status.saveUpdatedAt = Date.now()
+    this.saveStatus.completeSave(this.workbench.status)
   }
 
   failSave(message?: string): void {
-    this.workbench.status.draft = 'modified'
-    this.workbench.status.savePhase = 'failed'
-    this.workbench.status.saveMessage = message
-    this.workbench.status.saveUpdatedAt = Date.now()
+    this.saveStatus.failSave(this.workbench.status, message)
   }
 
   resetSaveIndicator(): void {
-    this.workbench.status.savePhase = 'idle'
-    this.workbench.status.saveMessage = undefined
+    this.saveStatus.resetSaveIndicator(this.workbench.status)
   }
 
   resetTemplateSaveState(): void {
-    this.workbench.status.draft = 'clean'
-    this.workbench.status.savePhase = 'idle'
-    this.workbench.status.saveMessage = undefined
-    this.workbench.status.saveUpdatedAt = undefined
+    this.saveStatus.resetTemplateSaveState(this.workbench.status)
   }
 
   setFocusState(focus: StatusBarState['focus']): void {
@@ -316,55 +260,38 @@ export class DesignerStore {
   // ─── Material registry ────────────────────────────────────────
 
   registerMaterial(definition: MaterialDefinition): void {
-    this._materials.set(definition.type, markRaw({
-      ...definition,
-      icon: markRaw(definition.icon),
-    }))
+    this.materialRegistry.registerMaterial(definition)
   }
 
   getMaterial(type: string): MaterialDefinition | undefined {
-    return this._materials.get(type)
+    return this.materialRegistry.getMaterial(type)
   }
 
   registerCatalogEntry(entry: MaterialCatalogEntry): void {
-    this._catalog.push(markRaw({
-      ...entry,
-      icon: markRaw(entry.icon),
-    }))
+    this.materialRegistry.registerCatalogEntry(entry)
   }
 
   getCatalog(): MaterialCatalogEntry[] {
-    return this._catalog
+    return this.materialRegistry.getCatalog()
   }
 
   getQuickMaterials(): MaterialCatalogEntry[] {
-    return this._catalog.filter(e => e.priority === 'quick')
+    return this.materialRegistry.getQuickMaterials()
   }
 
   getGroupedMaterials(group: string): MaterialCatalogEntry[] {
-    return this._catalog.filter(e => e.group === group && e.priority !== 'quick')
+    return this.materialRegistry.getGroupedMaterials(group)
   }
 
   // ─── Extension Factory Registry ─────────────────────────────────
 
   registerDesignerFactory(type: string, factory: MaterialExtensionFactory): void {
-    this._materialFactories.set(type, factory)
+    this.materialRegistry.registerDesignerFactory(type, factory)
   }
 
   /** Get or lazily instantiate an extension from its factory. */
   getDesignerExtension(type: string): MaterialDesignerExtension | undefined {
-    let ext = this._cachedExtensions.get(type)
-    if (ext)
-      return ext
-
-    const factory = this._materialFactories.get(type)
-    if (!factory)
-      return undefined
-
-    const context = createMaterialExtensionContext(this)
-    ext = factory(context)
-    this._cachedExtensions.set(type, ext)
-    return ext
+    return this.materialRegistry.getDesignerExtension(type, this)
   }
 
   // ─── Locale ───────────────────────────────────────────────────
@@ -442,10 +369,8 @@ export class DesignerStore {
     this.commands.clear()
     this.selection.clear()
     this.dataSourceRegistry.clear()
-    this._materials.clear()
-    this._materialFactories.clear()
-    this._cachedExtensions.clear()
-    this._catalog = []
+    this.fontService.clear()
+    this.materialRegistry.clear()
     this.clipboard = []
     this._propertyOverlay = null
     this._ephemeralPanel = null
@@ -454,8 +379,4 @@ export class DesignerStore {
     this.refreshInteractionAvailability()
     this.editingSession.exit()
   }
-}
-
-function fontDiagnosticKey(request: FontLoadRequest): string {
-  return `${request.family}|${request.weight || 'normal'}|${request.style || 'normal'}`
 }
