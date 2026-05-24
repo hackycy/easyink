@@ -21,7 +21,7 @@
   "easyinkRuntime": {
     "version": "0.1.0",
     "bundled": true,
-    "entry": "embedded://easyink-lite"
+    "entry": "runtime/easyink-viewer/index.html"
   },
   "compatibility": {
     "minOs": "linux",

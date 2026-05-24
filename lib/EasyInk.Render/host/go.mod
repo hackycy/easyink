@@ -5,6 +5,7 @@ go 1.23
 require (
 	github.com/chromedp/cdproto v0.0.0-20250403032234-65de8f5d025b
 	github.com/chromedp/chromedp v0.13.7
+	github.com/ledongthuc/pdf v0.0.0-20220302134840-0c2507a12d80
 )
 
 require (

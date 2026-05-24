@@ -126,6 +126,7 @@ Host 生命周期：
 - 每个请求使用独立 browser context。
 - 请求完成后释放 page 和 context。
 - Host 收到终止信号后停止接收新请求，等待正在执行的请求结束或超时退出。
+- 进入终止态后，新的渲染请求直接返回 `503 Service Unavailable`，不会继续排队。
 
 ## Host 职责
 
@@ -163,6 +164,7 @@ easyink-render-host
   --temp-dir "<temp-dir>"
   --log-dir "<log-dir>"
   --max-concurrency 2
+  --max-queue-size 16
   --request-timeout-ms 30000
   --auth-token "local-random-token"
 ```

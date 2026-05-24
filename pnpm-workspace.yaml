@@ -69,6 +69,7 @@ catalogs:
     lodash-es: ^4.18.1
   testing:
     happy-dom: ^20.8.9
+    fflate: ^0.8.2
     tinyexec: ^1.0.2
     vitest: ^4.0.7
     vitest-package-exports: ^0.1.1

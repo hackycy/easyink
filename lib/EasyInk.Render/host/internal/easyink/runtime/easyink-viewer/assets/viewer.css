@@ -1,0 +1,158 @@
+html,
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  color: #111827;
+  background: #ffffff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.easyink-page {
+  position: relative;
+  width: 100%;
+  min-height: inherit;
+  overflow: hidden;
+}
+
+.easyink-material {
+  position: absolute;
+  box-sizing: border-box;
+  overflow: hidden;
+  transform-origin: center center;
+}
+
+.easyink-text {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+
+.easyink-page-number {
+  display: flex;
+  padding: 0;
+}
+
+.easyink-container {
+  display: flex;
+}
+
+.easyink-svg-shape svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+}
+
+.easyink-qrcode,
+.easyink-barcode,
+.easyink-svg-custom {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.easyink-qrcode svg,
+.easyink-barcode svg,
+.easyink-svg-custom svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.easyink-flow-row {
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+}
+
+.easyink-flow-row__record {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.easyink-flow-row__inline {
+  display: flex;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.easyink-flow-row__cell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  box-sizing: border-box;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.easyink-flow-row__cell span {
+  display: block;
+  width: 100%;
+}
+
+.easyink-chart {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.easyink-chart svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.easyink-chart__empty {
+  color: #999999;
+  font-size: 10px;
+}
+
+.easyink-image {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f5f5;
+  color: #999999;
+  font-size: 10px;
+}
+
+.easyink-image img {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.easyink-line {
+  min-height: 0.1mm;
+}
+
+.easyink-fallback {
+  border: 0.2mm solid #d1d5db;
+  padding: 1mm;
+  font-size: 9px;
+}
+
+.easyink-fallback pre {
+  margin: 1mm 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.easyink-table table {
+  width: 100%;
+  height: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.easyink-table td {
+  box-sizing: border-box;
+  overflow: hidden;
+  padding: 1mm;
+  vertical-align: middle;
+}

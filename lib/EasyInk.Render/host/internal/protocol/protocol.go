@@ -66,15 +66,23 @@ type InfoResponse struct {
 }
 
 type HealthResponse struct {
-	Status  string      `json:"status"`
-	Browser string      `json:"browser"`
-	Queue   QueueHealth `json:"queue"`
+	Status  string        `json:"status"`
+	Browser BrowserHealth `json:"browser"`
+	Queue   QueueHealth   `json:"queue"`
+}
+
+type BrowserHealth struct {
+	Status    string `json:"status"`
+	Version   string `json:"version"`
+	Restarts  int    `json:"restarts"`
+	LastError string `json:"lastError,omitempty"`
 }
 
 type QueueHealth struct {
 	Running        int `json:"running"`
 	Pending        int `json:"pending"`
 	MaxConcurrency int `json:"maxConcurrency"`
+	MaxQueueSize   int `json:"maxQueueSize"`
 }
 
 type Base64PDFResponse struct {
@@ -100,17 +108,25 @@ type ErrorBody struct {
 }
 
 type Diagnostics struct {
-	ID              string   `json:"id,omitempty"`
-	RequestID       string   `json:"requestId"`
-	HostVersion     string   `json:"hostVersion"`
-	BrowserVersion  string   `json:"browserVersion"`
-	ProtocolVersion string   `json:"protocolVersion"`
-	DurationMs      int64    `json:"durationMs"`
-	ConsoleErrors   []string `json:"consoleErrors"`
-	FailedRequests  []string `json:"failedRequests"`
-	FinalURL        string   `json:"finalUrl,omitempty"`
-	SourceType      string   `json:"sourceType"`
-	PageCount       int      `json:"pageCount,omitempty"`
+	ID               string   `json:"id,omitempty"`
+	RequestID        string   `json:"requestId"`
+	HostVersion      string   `json:"hostVersion"`
+	BrowserVersion   string   `json:"browserVersion"`
+	ProtocolVersion  string   `json:"protocolVersion"`
+	DurationMs       int64    `json:"durationMs"`
+	ConsoleErrors    []string `json:"consoleErrors"`
+	FailedRequests   []string `json:"failedRequests"`
+	FinalURL         string   `json:"finalUrl,omitempty"`
+	SourceType       string   `json:"sourceType"`
+	PageCount        int      `json:"pageCount,omitempty"`
+	PDFTitle         string   `json:"pdfTitle,omitempty"`
+	PDFAuthor        string   `json:"pdfAuthor,omitempty"`
+	PDFCreator       string   `json:"pdfCreator,omitempty"`
+	PDFProducer      string   `json:"pdfProducer,omitempty"`
+	AttachmentPath   string   `json:"attachmentPath,omitempty"`
+	LogPath          string   `json:"logPath,omitempty"`
+	ScreenshotPath   string   `json:"screenshotPath,omitempty"`
+	HTMLSnapshotPath string   `json:"htmlSnapshotPath,omitempty"`
 }
 
 const (

@@ -16,6 +16,7 @@ type Config struct {
 	TempDir          string
 	LogDir           string
 	MaxConcurrency   int
+	MaxQueueSize     int
 	RequestTimeoutMs int
 	AuthToken        string
 }
@@ -30,6 +31,7 @@ func Parse(args []string) (Config, error) {
 	fs.StringVar(&cfg.TempDir, "temp-dir", "", "temporary file directory")
 	fs.StringVar(&cfg.LogDir, "log-dir", "", "diagnostics log directory")
 	fs.IntVar(&cfg.MaxConcurrency, "max-concurrency", 2, "maximum concurrent render requests")
+	fs.IntVar(&cfg.MaxQueueSize, "max-queue-size", 16, "maximum queued render requests waiting for concurrency")
 	fs.IntVar(&cfg.RequestTimeoutMs, "request-timeout-ms", 30000, "render request timeout in milliseconds")
 	fs.StringVar(&cfg.AuthToken, "auth-token", "", "local bearer token")
 	if err := fs.Parse(args); err != nil {
@@ -71,6 +73,9 @@ func (c Config) Validate() error {
 	}
 	if c.MaxConcurrency <= 0 {
 		return errors.New("max-concurrency must be greater than 0")
+	}
+	if c.MaxQueueSize < 0 {
+		return errors.New("max-queue-size must be greater than or equal to 0")
 	}
 	if c.RequestTimeoutMs <= 0 {
 		return errors.New("request-timeout-ms must be greater than 0")

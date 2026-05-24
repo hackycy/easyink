@@ -159,6 +159,9 @@ catalogs:
       specifier: ^4.18.1
       version: 4.18.1
   testing:
+    fflate:
+      specifier: ^0.8.2
+      version: 0.8.2
     happy-dom:
       specifier: ^20.8.9
       version: 20.8.9
@@ -213,6 +216,9 @@ importers:
       eslint:
         specifier: catalog:cli
         version: 10.2.1(jiti@2.6.1)
+      fflate:
+        specifier: catalog:testing
+        version: 0.8.2
       happy-dom:
         specifier: catalog:testing
         version: 20.8.9

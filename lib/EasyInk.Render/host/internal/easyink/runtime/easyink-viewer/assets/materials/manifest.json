@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "runtime": "easyink-viewer",
+  "materials": [
+    {
+      "type": "text",
+      "viewer": "builtin-text"
+    },
+    {
+      "type": "rect",
+      "viewer": "builtin-rect"
+    },
+    {
+      "type": "line",
+      "viewer": "builtin-line"
+    },
+    {
+      "type": "image",
+      "viewer": "builtin-image"
+    },
+    {
+      "type": "qrcode",
+      "viewer": "builtin-qrcode"
+    },
+    {
+      "type": "barcode",
+      "viewer": "builtin-barcode"
+    },
+    {
+      "type": "ellipse",
+      "viewer": "builtin-ellipse"
+    },
+    {
+      "type": "table-static",
+      "viewer": "builtin-table"
+    },
+    {
+      "type": "table-data",
+      "viewer": "builtin-table-data"
+    },
+    {
+      "type": "page-number",
+      "viewer": "builtin-page-number"
+    },
+    {
+      "type": "container",
+      "viewer": "builtin-container"
+    },
+    {
+      "type": "svg-star",
+      "viewer": "builtin-svg-star"
+    },
+    {
+      "type": "svg-heart",
+      "viewer": "builtin-svg-heart"
+    },
+    {
+      "type": "svg",
+      "viewer": "builtin-svg-custom"
+    },
+    {
+      "type": "flow-row",
+      "viewer": "builtin-flow-row"
+    },
+    {
+      "type": "chart",
+      "viewer": "builtin-chart"
+    }
+  ]
+}

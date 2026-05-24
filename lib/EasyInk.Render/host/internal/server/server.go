@@ -8,11 +8,13 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"easyink/render/host/internal/browser"
 	"easyink/render/host/internal/config"
+	"easyink/render/host/internal/diagnostics"
 	"easyink/render/host/internal/protocol"
 	"easyink/render/host/internal/render"
 )
@@ -22,7 +24,12 @@ type Server struct {
 	browser  *browser.Manager
 	renderer *render.Service
 	sem      chan struct{}
+	queue    chan struct{}
+	shutdown sync.Once
+	stop     chan struct{}
+	closed   atomic.Bool
 	running  atomic.Int64
+	pending  atomic.Int64
 }
 
 func New(cfg config.Config, browserManager *browser.Manager) *Server {
@@ -31,6 +38,8 @@ func New(cfg config.Config, browserManager *browser.Manager) *Server {
 		browser:  browserManager,
 		renderer: render.NewService(browserManager),
 		sem:      make(chan struct{}, cfg.MaxConcurrency),
+		queue:    make(chan struct{}, cfg.MaxQueueSize),
+		stop:     make(chan struct{}),
 	}
 }
 
@@ -55,6 +64,10 @@ func (s *Server) Run(ctx context.Context) error {
 	}()
 	select {
 	case <-ctx.Done():
+		s.closed.Store(true)
+		s.shutdown.Do(func() {
+			close(s.stop)
+		})
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := httpServer.Shutdown(shutdownCtx); err != nil {
@@ -74,11 +87,17 @@ func (s *Server) info(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusMethodNotAllowed, "", protocol.ErrInvalidRequest, "method not allowed", nil, emptyDiagnostics(""))
 		return
 	}
+	browserName := "chrome-for-testing"
+	browserVersion := "unavailable"
+	if s.browser != nil {
+		browserName = s.browser.BrowserName()
+		browserVersion = s.browser.Version()
+	}
 	writeJSON(w, http.StatusOK, protocol.InfoResponse{
 		HostVersion:     protocol.HostVersion,
 		ProtocolVersion: protocol.ProtocolVersion,
-		BrowserName:     s.browser.BrowserName(),
-		BrowserVersion:  s.browser.Version(),
+		BrowserName:     browserName,
+		BrowserVersion:  browserVersion,
 		Capabilities: []string{
 			"print-pdf",
 			"source-html",
@@ -94,13 +113,33 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusMethodNotAllowed, "", protocol.ErrInvalidRequest, "method not allowed", nil, emptyDiagnostics(""))
 		return
 	}
+	browserHealth := browser.Health{
+		Ready:     false,
+		Version:   "unavailable",
+		LastError: "browser manager is not configured",
+	}
+	if s.browser != nil {
+		browserHealth = s.browser.Health(r.Context())
+	}
+	status := "ok"
+	browserStatus := "ready"
+	if !browserHealth.Ready {
+		status = "degraded"
+		browserStatus = "recovering"
+	}
 	writeJSON(w, http.StatusOK, protocol.HealthResponse{
-		Status:  "ok",
-		Browser: "ready",
+		Status: status,
+		Browser: protocol.BrowserHealth{
+			Status:    browserStatus,
+			Version:   browserHealth.Version,
+			Restarts:  browserHealth.Restarts,
+			LastError: browserHealth.LastError,
+		},
 		Queue: protocol.QueueHealth{
 			Running:        int(s.running.Load()),
-			Pending:        len(s.sem),
+			Pending:        int(s.pending.Load()),
 			MaxConcurrency: s.cfg.MaxConcurrency,
+			MaxQueueSize:   s.cfg.MaxQueueSize,
 		},
 	})
 }
@@ -110,13 +149,24 @@ func (s *Server) printPDF(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusMethodNotAllowed, "", protocol.ErrInvalidRequest, "method not allowed", nil, emptyDiagnostics(""))
 		return
 	}
-	select {
-	case s.sem <- struct{}{}:
-		defer func() { <-s.sem }()
-	default:
-		writeError(w, http.StatusTooManyRequests, "", protocol.ErrTooManyRequests, "render queue is full", nil, emptyDiagnostics(""))
+	if s.closed.Load() {
+		writeError(w, http.StatusServiceUnavailable, "", protocol.ErrRenderFailed, "server is shutting down", nil, emptyDiagnostics(""))
 		return
 	}
+	release, ok := s.acquireRenderSlot(r.Context())
+	if !ok {
+		status := http.StatusTooManyRequests
+		code := protocol.ErrTooManyRequests
+		message := "render queue is full"
+		if s.closed.Load() {
+			status = http.StatusServiceUnavailable
+			code = protocol.ErrRenderFailed
+			message = "server is shutting down"
+		}
+		writeError(w, status, "", code, message, nil, emptyDiagnostics(""))
+		return
+	}
+	defer release()
 	s.running.Add(1)
 	defer s.running.Add(-1)
 
@@ -135,6 +185,7 @@ func (s *Server) printPDF(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), time.Duration(timeoutMs)*time.Millisecond)
 	defer cancel()
 	result, err := s.renderer.RenderPrintPDF(ctx, req)
+	result.Diagnostics = s.persistDiagnostics(result.Diagnostics, result.Attachments)
 	if err != nil {
 		status := statusFor(err)
 		coded := codedError(err)
@@ -143,6 +194,8 @@ func (s *Server) printPDF(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Output.Type == "base64Json" {
+		w.Header().Set("X-EasyInk-Request-Id", req.RequestID)
+		w.Header().Set("X-EasyInk-Diagnostics-Id", result.Diagnostics.ID)
 		writeJSON(w, http.StatusOK, protocol.Base64PDFResponse{
 			Success:     true,
 			RequestID:   req.RequestID,
@@ -158,6 +211,42 @@ func (s *Server) printPDF(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-EasyInk-Diagnostics-Id", result.Diagnostics.ID)
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(result.PDF)
+}
+
+func (s *Server) acquireRenderSlot(ctx context.Context) (func(), bool) {
+	if s.closed.Load() {
+		return nil, false
+	}
+	select {
+	case s.sem <- struct{}{}:
+		return func() { <-s.sem }, true
+	default:
+	}
+	if s.cfg.MaxQueueSize <= 0 {
+		return nil, false
+	}
+	select {
+	case s.queue <- struct{}{}:
+		s.pending.Add(1)
+		defer func() {
+			<-s.queue
+			s.pending.Add(-1)
+		}()
+	case <-ctx.Done():
+		return nil, false
+	case <-s.stop:
+		return nil, false
+	default:
+		return nil, false
+	}
+	select {
+	case s.sem <- struct{}{}:
+		return func() { <-s.sem }, true
+	case <-ctx.Done():
+		return nil, false
+	case <-s.stop:
+		return nil, false
+	}
 }
 
 func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
@@ -210,6 +299,12 @@ func writeError(w http.ResponseWriter, status int, requestID, code, message stri
 	if diag.RequestID == "" {
 		diag = emptyDiagnostics(requestID)
 	}
+	if requestID != "" {
+		w.Header().Set("X-EasyInk-Request-Id", requestID)
+	}
+	if diag.ID != "" {
+		w.Header().Set("X-EasyInk-Diagnostics-Id", diag.ID)
+	}
 	writeJSON(w, status, protocol.ErrorResponse{
 		Success:   false,
 		RequestID: requestID,
@@ -236,4 +331,35 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(value)
+}
+
+func (s *Server) persistDiagnostics(diag protocol.Diagnostics, attachments render.DiagnosticAttachments) protocol.Diagnostics {
+	if path, err := diagnostics.WriteAttachment(s.cfg.LogDir, diag.ID, "snapshot.html", attachments.HTMLSnapshot); err != nil {
+		log.Printf("write html snapshot failed for %s: %v", diag.ID, err)
+	} else {
+		diag.HTMLSnapshotPath = path
+	}
+	if path, err := diagnostics.WriteAttachment(s.cfg.LogDir, diag.ID, "screenshot.png", attachments.Screenshot); err != nil {
+		log.Printf("write screenshot failed for %s: %v", diag.ID, err)
+	} else {
+		diag.ScreenshotPath = path
+	}
+	path, err := diagnostics.WriteSummary(s.cfg.LogDir, diag)
+	if err != nil {
+		log.Printf("write diagnostics summary failed for %s: %v", diag.ID, err)
+		return diag
+	}
+	diag.AttachmentPath = path
+	path, err = diagnostics.WriteLog(s.cfg.LogDir, diag)
+	if err != nil {
+		log.Printf("write diagnostics log failed for %s: %v", diag.ID, err)
+		return diag
+	}
+	diag.LogPath = path
+	if path, err = diagnostics.WriteSummary(s.cfg.LogDir, diag); err != nil {
+		log.Printf("write diagnostics summary failed for %s: %v", diag.ID, err)
+		return diag
+	}
+	diag.AttachmentPath = path
+	return diag
 }

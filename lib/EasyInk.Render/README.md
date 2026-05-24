@@ -98,10 +98,93 @@ Caller
 - `GET /v1/health`
 - `POST /v1/render/print-pdf`
 - `source.type=html` 通过 chromedp/CDP `Page.printToPDF` 输出 PDF。
-- `source.type=pdf` 执行 base64 解码、大小限制、PDF 文件头校验和透传归一。
-- `source.type=easyink` 通过内置轻量 Runtime 合成 HTML，再走 `Page.printToPDF`。
+- `source.type=pdf` 执行 base64 解码、大小限制、PDF header/EOF/startxref/结构校验、页数解析、metadata 归一和透传输出。
+- `source.type=easyink` 通过内置 EasyInk Runtime Bundle 合成 HTML，再走 `Page.printToPDF`；内置 viewer 读取 materials manifest，并支持 text、rect、line、image、qrcode、barcode、ellipse、container、table-static、table-data、flow-row、chart、page-number、svg-star、svg-heart、svg 基础渲染和 binding 文本投影。
 - 支持 `output.type=base64Json` 调试响应。
-- 支持 requestId diagnostics、token 认证、并发限制和基础 URL 安全校验。
+- 支持 requestId diagnostics、console error、network failed request、最终 URL、页数、PDF metadata、失败截图和 HTML snapshot 落盘；二进制、调试 JSON 和错误响应均返回 `X-EasyInk-Request-Id` 与 `X-EasyInk-Diagnostics-Id` 便于定位附件。
+- 支持 token 认证、并发限制、有界渲染队列、baseUrl/resource URL 安全校验、请求级资源拦截、外链 allowlist、非 http/https 拦截、DNS 解析后私网地址拦截、direct proxy 浏览器启动和代理环境变量清空。
+- 支持 `wait.until=load|selector|easyinkReady|networkIdle`，并支持 selector/timeout 组合。
+- Browser Manager 支持复用根浏览器、每请求独立 browser context、异常探活后自动重启和结构化 `/v1/health`；健康检查返回 `queue.running`、`queue.pending`、`queue.maxConcurrency` 和 `queue.maxQueueSize`。
+- 发布工具支持 Host/Browser/runtime manifest 生成、SHA256/size 校验和 Browser Bundle 打包。
+
+## 发布与 Manifest 验证
+
+Render 发布辅助脚本位于 `tools/render-release.mjs`：
+
+```bash
+pnpm render:manifest
+pnpm render:release:test
+```
+
+生成单个平台 Host 包和 runtime manifest：
+
+```bash
+node lib/EasyInk.Render/tools/render-release.mjs build-host \
+  --platform linux-x64 \
+  --version 0.1.0 \
+  --outDir lib/EasyInk.Render/releases \
+  --urlBase https://download.easyink.dev/render
+```
+
+生成 Host 多平台矩阵包、逐个校验 SHA256/size/executable，并输出 `release-index.json`：
+
+```bash
+node lib/EasyInk.Render/tools/render-release.mjs build-host-matrix \
+  --platforms win-x64,linux-x64,linux-arm64,darwin-x64,darwin-arm64 \
+  --version 0.1.0 \
+  --outDir lib/EasyInk.Render/releases \
+  --urlBase https://download.easyink.dev/render
+```
+
+生成 Browser Bundle 包和 browser manifest：
+
+从 Chrome for Testing manifest 下载官方 `chrome-headless-shell` archive，并生成 browser manifest：
+
+```bash
+node lib/EasyInk.Render/tools/render-release.mjs download-browser \
+  --platform linux-x64 \
+  --version 148.0.7778.97 \
+  --outDir lib/EasyInk.Render/releases
+```
+
+如果已经有本地解压后的浏览器目录，也可以重新打包成本项目的 Browser Bundle：
+
+```bash
+node lib/EasyInk.Render/tools/render-release.mjs build-browser \
+  --platform linux-x64 \
+  --version 148.0.7778.97 \
+  --browserDir /path/to/chrome-for-testing \
+  --browserExecutable headless-shell \
+  --outDir lib/EasyInk.Render/releases
+```
+
+合并 Host manifest 和 Browser manifest：
+
+```bash
+node lib/EasyInk.Render/tools/render-release.mjs build-runtime \
+  --platform linux-x64 \
+  --hostManifest lib/EasyInk.Render/releases/host/0.1.0/linux-x64/runtime-manifest.linux-x64.json \
+  --browserManifest lib/EasyInk.Render/releases/browser/148.0.7778.97/linux-x64/runtime-manifest.linux-x64.json \
+  --outDir lib/EasyInk.Render/releases/runtime/0.1.0/linux-x64
+```
+
+校验已生成包与 manifest 的 SHA256/size 是否一致：
+
+```bash
+node lib/EasyInk.Render/tools/render-release.mjs verify-package \
+  --manifest lib/EasyInk.Render/releases/host/0.1.0/linux-x64/runtime-manifest.linux-x64.json \
+  --archive lib/EasyInk.Render/releases/host/0.1.0/linux-x64/easyink-render-host-0.1.0-linux-x64.tar.gz
+```
+
+校验会同时解压包并确认 manifest 指向的 executable 存在。校验 Browser Bundle 时添加 `--kind browser`。
+
+对当前操作系统可执行的 Browser Bundle，还可以进一步解包并运行 `--version`，确认浏览器二进制能启动且版本匹配：
+
+```bash
+node lib/EasyInk.Render/tools/render-release.mjs verify-browser \
+  --manifest lib/EasyInk.Render/releases/browser/148.0.7778.97/linux-x64/runtime-manifest.linux-x64.json \
+  --archive lib/EasyInk.Render/releases/browser/148.0.7778.97/linux-x64/chrome-headless-shell-linux64.zip
+```
 
 ## Docker 验证
 
@@ -144,7 +227,7 @@ docker run --rm --entrypoint sh \
   -v "$PWD/lib/EasyInk.Render/host:/src" \
   -w /src \
   chromedp/headless-shell:latest \
-  -lc './easyink-render-host --host 127.0.0.1 --port 18181 --browser-path /headless-shell/headless-shell --profile-root /tmp/easyink-profile --temp-dir /tmp/easyink-temp --log-dir /tmp/easyink-logs --auth-token test-token'
+  -lc './easyink-render-host --host 127.0.0.1 --port 18181 --browser-path /headless-shell/headless-shell --profile-root /tmp/easyink-profile --temp-dir /tmp/easyink-temp --log-dir /tmp/easyink-logs --max-concurrency 2 --max-queue-size 16 --auth-token test-token'
 ```
 
 也可以直接构建 Host 镜像：
