@@ -43,6 +43,22 @@ describe('designer store schema initialization', () => {
     expect(store.workbench.status.saveUpdatedAt).toBeUndefined()
   })
 
+  it('prunes removed elements from logical groups', () => {
+    const store = new DesignerStore({
+      elements: [
+        createNode('a'),
+        createNode('b'),
+        createNode('c'),
+      ],
+      groups: [{ id: 'grp_1', memberIds: ['a', 'b', 'c'] }],
+    })
+
+    store.removeElement('b')
+    expect(store.schema.groups).toEqual([{ id: 'grp_1', memberIds: ['a', 'c'] }])
+
+    store.removeElement('a')
+    expect(store.schema.groups).toEqual([])
+  })
   it('registers materials, catalog entries, and cached designer extensions', () => {
     const store = new DesignerStore()
     const definition = createMaterialDefinition('sample')
@@ -108,5 +124,17 @@ function createMaterialDefinition(type: string): MaterialDefinition {
       props: {},
       ...input,
     } satisfies MaterialNode),
+  }
+}
+
+function createNode(id: string): MaterialNode {
+  return {
+    id,
+    type: 'sample',
+    x: 0,
+    y: 0,
+    width: 10,
+    height: 10,
+    props: {},
   }
 }

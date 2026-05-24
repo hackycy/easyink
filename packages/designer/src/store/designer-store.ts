@@ -243,6 +243,14 @@ export class DesignerStore {
     if (idx < 0)
       return undefined
     const [removed] = this._schema.elements.splice(idx, 1)
+    if (this._schema.groups) {
+      this._schema.groups = this._schema.groups
+        .map(group => ({
+          ...group,
+          memberIds: group.memberIds.filter(memberId => memberId !== id),
+        }))
+        .filter(group => group.memberIds.length >= 2)
+    }
     this.selection.remove(id)
     if (this.editingSession.activeNodeId === id) {
       this.editingSession.exit()
