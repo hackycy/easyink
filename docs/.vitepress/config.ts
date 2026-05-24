@@ -68,6 +68,7 @@ export default defineConfig({
           text: 'Printing',
           items: [
             { text: '概述', link: '/printing/' },
+            { text: 'Render 服务端渲染', link: '/printing/render' },
           ],
         },
         {
@@ -93,6 +94,7 @@ export default defineConfig({
           text: 'Printing',
           items: [
             { text: '概述', link: '/printing/' },
+            { text: 'Render 服务端渲染', link: '/printing/render' },
           ],
         },
         {
@@ -118,6 +120,7 @@ export default defineConfig({
           text: 'Printing',
           items: [
             { text: '概述', link: '/printing/' },
+            { text: 'Render 服务端渲染', link: '/printing/render' },
           ],
         },
         {
@@ -143,6 +146,7 @@ export default defineConfig({
           text: 'Printing',
           items: [
             { text: '概述', link: '/printing/' },
+            { text: 'Render 服务端渲染', link: '/printing/render' },
           ],
         },
         {

@@ -2,6 +2,8 @@
 
 EasyInk 的本地打印目标很明确：让业务代码只关心“打印什么”和“发给哪台打印机”，而不是自己处理 PDF 渲染、WebSocket 通信、分页 DOM 提取和任务轮询。
 
+如果你的目标是“先稳定生成 PDF，再交给打印服务或业务系统下载”，请先看 [EasyInk.Render 服务端渲染](/printing/render)。Render 负责把 HTML、PDF、EasyInk schema + data 归一为可打印 PDF，并提供浏览器版本固定、等待策略、安全拦截和 diagnostics。
+
 如果你是第一次接入，优先走官方打印集成包：
 
 - `@easyink/print-integration-easyink-printer`：对接 EasyInk.Printer (.NET)，把 Viewer 页面转成 PDF 后发送到本地打印服务
@@ -141,4 +143,5 @@ const client = createEasyInkPrinterClient({
 
 - [EasyInk Printer (.NET)](/dotnet/)：了解 Windows 打印服务部署方式
 - [Electron HiPrint](/hiprint/)：了解 electron-hiprint 的运行要求
+- [EasyInk.Render 服务端渲染](/printing/render)：了解服务端 PDF 渲染、诊断和开发方式
 - [自定义打印驱动开发](/advanced/print-drivers) ：当官方驱动不满足你的接入要求时再进入这一层
