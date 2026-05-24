@@ -57,15 +57,16 @@ func TestPersistDiagnosticsWritesSummaryAndSetsAttachmentPath(t *testing.T) {
 			HTMLSnapshot: []byte("<html></html>"),
 			Screenshot:   []byte("png"),
 		},
+		protocol.DiagnosticsOptions{},
 	)
 	if diag.AttachmentPath == "" {
 		t.Fatal("expected attachment path")
 	}
-	if diag.HTMLSnapshotPath == "" {
-		t.Fatal("expected html snapshot path")
+	if diag.HTMLSnapshotPath != "" {
+		t.Fatal("expected html snapshot path to be omitted by default")
 	}
-	if diag.ScreenshotPath == "" {
-		t.Fatal("expected screenshot path")
+	if diag.ScreenshotPath != "" {
+		t.Fatal("expected screenshot path to be omitted by default")
 	}
 	if diag.LogPath == "" {
 		t.Fatal("expected log path")
@@ -93,6 +94,56 @@ func TestPersistDiagnosticsWritesSummaryAndSetsAttachmentPath(t *testing.T) {
 	}
 	if !strings.Contains(string(logData), "requestId=req-test") {
 		t.Fatalf("log did not include requestId: %s", string(logData))
+	}
+}
+
+func TestPersistDiagnosticsWritesRequestedAttachments(t *testing.T) {
+	dir := t.TempDir()
+	s := &Server{cfg: config.Config{LogDir: dir}}
+	diag := s.persistDiagnostics(
+		protocol.Diagnostics{
+			ID:        "diag-test",
+			RequestID: "req-test",
+		},
+		render.DiagnosticAttachments{
+			HTMLSnapshot: []byte("<html></html>"),
+			Screenshot:   []byte("png"),
+		},
+		protocol.DiagnosticsOptions{
+			IncludeHTMLSnapshot: true,
+			IncludeScreenshot:   true,
+		},
+	)
+	if diag.HTMLSnapshotPath == "" {
+		t.Fatal("expected html snapshot path")
+	}
+	if diag.ScreenshotPath == "" {
+		t.Fatal("expected screenshot path")
+	}
+	if _, err := os.Stat(diag.HTMLSnapshotPath); err != nil {
+		t.Fatalf("expected html snapshot on disk: %v", err)
+	}
+	if _, err := os.Stat(diag.ScreenshotPath); err != nil {
+		t.Fatalf("expected screenshot on disk: %v", err)
+	}
+}
+
+func TestSanitizedHeadersRedactsSecrets(t *testing.T) {
+	headers := http.Header{}
+	headers.Set("Authorization", "Bearer secret")
+	headers.Set("X-EasyInk-Auth-Token", "secret")
+	headers.Set("X-Trace-Id", "trace")
+
+	got := sanitizedHeaders(headers)
+
+	if got["Authorization"] != "[redacted]" {
+		t.Fatalf("authorization = %q", got["Authorization"])
+	}
+	if got["X-Easyink-Auth-Token"] != "[redacted]" {
+		t.Fatalf("token = %q", got["X-Easyink-Auth-Token"])
+	}
+	if got["X-Trace-Id"] != "trace" {
+		t.Fatalf("trace = %q", got["X-Trace-Id"])
 	}
 }
 
@@ -332,7 +383,8 @@ func TestHTTPPrintPDFEndToEnd(t *testing.T) {
 			"html": "<!doctype html><html><body><main class=\"easyink-ready\">HTTP E2E</main></body></html>"
 		},
 		"wait": {"until": "load"},
-		"output": {"type": "base64Json"}
+		"output": {"type": "base64Json"},
+		"diagnostics": {"includeRequestHeaders": true}
 	}`)
 	req, err := http.NewRequest(http.MethodPost, ts.URL+"/v1/render/print-pdf", bytes.NewReader(reqBody))
 	if err != nil {
@@ -372,6 +424,9 @@ func TestHTTPPrintPDFEndToEnd(t *testing.T) {
 	}
 	if parsed.Diagnostics.AttachmentPath == "" || parsed.Diagnostics.LogPath == "" {
 		t.Fatalf("expected diagnostics paths, got %#v", parsed.Diagnostics)
+	}
+	if parsed.Diagnostics.RequestHeaders["Authorization"] != "[redacted]" {
+		t.Fatalf("expected authorization to be redacted, got %#v", parsed.Diagnostics.RequestHeaders)
 	}
 	if resp.Header.Get("X-EasyInk-Diagnostics-Id") != parsed.Diagnostics.ID {
 		t.Fatalf("diagnostics header = %q, want %q", resp.Header.Get("X-EasyInk-Diagnostics-Id"), parsed.Diagnostics.ID)

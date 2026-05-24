@@ -1,0 +1,182 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "EasyInk.Render Protocol",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/v1/info": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Host and protocol information"
+          }
+        }
+      }
+    },
+    "/v1/health": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Host, browser, and queue health"
+          }
+        }
+      }
+    },
+    "/v1/render/print-pdf": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrintPDFRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Rendered PDF or base64 debug JSON"
+          },
+          "400": {
+            "description": "Invalid render request"
+          },
+          "401": {
+            "description": "Invalid auth token"
+          },
+          "403": {
+            "description": "Security policy blocked the request"
+          },
+          "429": {
+            "description": "Render queue is full"
+          },
+          "504": {
+            "description": "Render timed out"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "PrintPDFRequest": {
+        "type": "object",
+        "required": ["requestId", "source"],
+        "additionalProperties": false,
+        "properties": {
+          "requestId": { "type": "string" },
+          "source": { "$ref": "#/components/schemas/Source" },
+          "pdf": { "$ref": "#/components/schemas/PDFOptions" },
+          "wait": { "$ref": "#/components/schemas/WaitOptions" },
+          "output": { "$ref": "#/components/schemas/OutputOptions" },
+          "security": { "$ref": "#/components/schemas/SecurityOptions" },
+          "diagnostics": { "$ref": "#/components/schemas/DiagnosticsOptions" }
+        }
+      },
+      "Source": {
+        "type": "object",
+        "required": ["type"],
+        "additionalProperties": false,
+        "properties": {
+          "type": { "enum": ["html", "pdf", "easyink"] },
+          "html": { "type": "string" },
+          "baseUrl": { "type": "string" },
+          "pdfBase64": { "type": "string" },
+          "fileName": { "type": "string" },
+          "schema": true,
+          "data": true,
+          "resources": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Resource" }
+          },
+          "fonts": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/FontResource" }
+          }
+        }
+      },
+      "Resource": {
+        "type": "object",
+        "required": ["url", "contentType", "base64"],
+        "additionalProperties": false,
+        "properties": {
+          "url": { "type": "string", "pattern": "^https://easyink\\.local/" },
+          "contentType": { "type": "string" },
+          "base64": { "type": "string" }
+        }
+      },
+      "FontResource": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Resource" },
+          {
+            "type": "object",
+            "required": ["family"],
+            "properties": {
+              "family": { "type": "string" },
+              "weight": { "type": "string" },
+              "style": { "type": "string" }
+            }
+          }
+        ]
+      },
+      "PDFOptions": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "paperWidthMm": { "type": "number" },
+          "paperHeightMm": { "type": "number" },
+          "printBackground": { "type": "boolean" },
+          "landscape": { "type": "boolean" },
+          "marginMm": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "top": { "type": "number" },
+              "right": { "type": "number" },
+              "bottom": { "type": "number" },
+              "left": { "type": "number" }
+            }
+          }
+        }
+      },
+      "WaitOptions": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "until": { "enum": ["load", "networkIdle", "selector", "easyinkReady"] },
+          "selector": { "type": "string" },
+          "timeoutMs": { "type": "integer" }
+        }
+      },
+      "OutputOptions": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "type": { "enum": ["binary", "base64Json"] }
+        }
+      },
+      "SecurityOptions": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "allowFileAccess": { "type": "boolean" },
+          "allowedOrigins": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "maxInputBytes": { "type": "integer" }
+        }
+      },
+      "DiagnosticsOptions": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "includeHtmlSnapshot": { "type": "boolean" },
+          "includeScreenshot": { "type": "boolean" },
+          "includeRequestHeaders": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}

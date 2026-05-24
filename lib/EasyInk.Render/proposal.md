@@ -137,7 +137,7 @@ host/internal/render
   HTML/PDF/EasyInk source pipeline、等待策略、PDF 输出。
 
 host/internal/easyink
-  EasyInk schema 校验、data binding、Runtime Bundle 路由、easyinkReady 等待协议。
+  EasyInk schema 校验、data binding、Runtime Bundle 路由、easyinkReady 等待协议、请求内离线资源和字体资源挂载。
 
 host/internal/security
   allowlist、本地地址拦截、协议拦截、代理控制、文件访问控制。
@@ -407,8 +407,8 @@ X-EasyInk-Diagnostics-Id: diag-001
 - 实现 data binding。
 - 实现 schema + data 到 HTML。
 - 支持 `easyinkReady` 等待策略。
-- 支持字体包和资源包。
-- 支持离线资源包加载。
+- 支持字体包和资源包，资源 URL 固定在 `https://easyink.local/resources/...` 或 `https://easyink.local/fonts/...`。
+- 支持离线资源包加载，资源由 Host 请求级拦截直接返回，不访问外部网络。
 
 验收：`source.type=easyink` 的 schema + data 能生成有效 PDF 文件。
 

@@ -100,8 +100,9 @@ Caller
 - `source.type=html` 通过 chromedp/CDP `Page.printToPDF` 输出 PDF。
 - `source.type=pdf` 执行 base64 解码、大小限制、PDF header/EOF/startxref/结构校验、页数解析、metadata 归一和透传输出。
 - `source.type=easyink` 通过内置 EasyInk Runtime Bundle 合成 HTML，再走 `Page.printToPDF`；内置 viewer 读取 materials manifest，并支持 text、rect、line、image、qrcode、barcode、ellipse、container、table-static、table-data、flow-row、chart、page-number、svg-star、svg-heart、svg 基础渲染和 binding 文本投影。
+- 支持请求内离线资源包和字体包；资源 URL 必须使用 `https://easyink.local/resources/...` 或 `https://easyink.local/fonts/...`，由 Host 在请求级资源拦截中直接返回，不访问外部网络。
 - 支持 `output.type=base64Json` 调试响应。
-- 支持 requestId diagnostics、console error、network failed request、最终 URL、页数、PDF metadata、失败截图和 HTML snapshot 落盘；二进制、调试 JSON 和错误响应均返回 `X-EasyInk-Request-Id` 与 `X-EasyInk-Diagnostics-Id` 便于定位附件。
+- 支持 requestId diagnostics、console error、network failed request、最终 URL、页数、PDF metadata 和日志落盘；调用方可通过 `diagnostics.includeHtmlSnapshot`、`diagnostics.includeScreenshot`、`diagnostics.includeRequestHeaders` 显式开启 HTML snapshot、截图和脱敏请求头附件。二进制、调试 JSON 和错误响应均返回 `X-EasyInk-Request-Id` 与 `X-EasyInk-Diagnostics-Id` 便于定位附件。
 - 支持 token 认证、并发限制、有界渲染队列、baseUrl/resource URL 安全校验、请求级资源拦截、外链 allowlist、非 http/https 拦截、DNS 解析后私网地址拦截、direct proxy 浏览器启动和代理环境变量清空。
 - 支持 `wait.until=load|selector|easyinkReady|networkIdle`，并支持 selector/timeout 组合。
 - Browser Manager 支持复用根浏览器、每请求独立 browser context、异常探活后自动重启和结构化 `/v1/health`；健康检查返回 `queue.running`、`queue.pending`、`queue.maxConcurrency` 和 `queue.maxQueueSize`。
@@ -115,6 +116,8 @@ Render 发布辅助脚本位于 `tools/render-release.mjs`：
 pnpm render:manifest
 pnpm render:release:test
 ```
+
+OpenAPI 协议描述位于 `protocol/openapi/render-v1.openapi.json`。
 
 生成单个平台 Host 包和 runtime manifest：
 
@@ -185,6 +188,8 @@ node lib/EasyInk.Render/tools/render-release.mjs verify-browser \
   --manifest lib/EasyInk.Render/releases/browser/148.0.7778.97/linux-x64/runtime-manifest.linux-x64.json \
   --archive lib/EasyInk.Render/releases/browser/148.0.7778.97/linux-x64/chrome-headless-shell-linux64.zip
 ```
+
+Docker 环境下的 Browser Bundle 下载、manifest 校验和启动验证步骤见 [Browser Bundle Docker 验证教程](tutorials/browser-bundle-docker.md)。Host 发布包构建、archive 校验和 packaged Host 启动验证见 [Host Package Docker 打包验证教程](tutorials/host-package-docker.md)。
 
 ## Docker 验证
 

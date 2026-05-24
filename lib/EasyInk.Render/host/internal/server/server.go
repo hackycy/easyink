@@ -7,6 +7,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -185,7 +186,10 @@ func (s *Server) printPDF(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), time.Duration(timeoutMs)*time.Millisecond)
 	defer cancel()
 	result, err := s.renderer.RenderPrintPDF(ctx, req)
-	result.Diagnostics = s.persistDiagnostics(result.Diagnostics, result.Attachments)
+	if req.Diagnostics.IncludeRequestHeaders {
+		result.Diagnostics.RequestHeaders = sanitizedHeaders(r.Header)
+	}
+	result.Diagnostics = s.persistDiagnostics(result.Diagnostics, result.Attachments, req.Diagnostics)
 	if err != nil {
 		status := statusFor(err)
 		coded := codedError(err)
@@ -333,16 +337,20 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	_ = json.NewEncoder(w).Encode(value)
 }
 
-func (s *Server) persistDiagnostics(diag protocol.Diagnostics, attachments render.DiagnosticAttachments) protocol.Diagnostics {
-	if path, err := diagnostics.WriteAttachment(s.cfg.LogDir, diag.ID, "snapshot.html", attachments.HTMLSnapshot); err != nil {
-		log.Printf("write html snapshot failed for %s: %v", diag.ID, err)
-	} else {
-		diag.HTMLSnapshotPath = path
+func (s *Server) persistDiagnostics(diag protocol.Diagnostics, attachments render.DiagnosticAttachments, options protocol.DiagnosticsOptions) protocol.Diagnostics {
+	if options.IncludeHTMLSnapshot {
+		if path, err := diagnostics.WriteAttachment(s.cfg.LogDir, diag.ID, "snapshot.html", attachments.HTMLSnapshot); err != nil {
+			log.Printf("write html snapshot failed for %s: %v", diag.ID, err)
+		} else {
+			diag.HTMLSnapshotPath = path
+		}
 	}
-	if path, err := diagnostics.WriteAttachment(s.cfg.LogDir, diag.ID, "screenshot.png", attachments.Screenshot); err != nil {
-		log.Printf("write screenshot failed for %s: %v", diag.ID, err)
-	} else {
-		diag.ScreenshotPath = path
+	if options.IncludeScreenshot {
+		if path, err := diagnostics.WriteAttachment(s.cfg.LogDir, diag.ID, "screenshot.png", attachments.Screenshot); err != nil {
+			log.Printf("write screenshot failed for %s: %v", diag.ID, err)
+		} else {
+			diag.ScreenshotPath = path
+		}
 	}
 	path, err := diagnostics.WriteSummary(s.cfg.LogDir, diag)
 	if err != nil {
@@ -362,4 +370,25 @@ func (s *Server) persistDiagnostics(diag protocol.Diagnostics, attachments rende
 	}
 	diag.AttachmentPath = path
 	return diag
+}
+
+func sanitizedHeaders(headers http.Header) map[string]string {
+	if len(headers) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(headers))
+	for key := range headers {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	out := map[string]string{}
+	for _, key := range keys {
+		lower := strings.ToLower(key)
+		if lower == "authorization" || lower == "cookie" || lower == "set-cookie" || lower == "x-easyink-auth-token" {
+			out[key] = "[redacted]"
+			continue
+		}
+		out[key] = strings.Join(headers.Values(key), ", ")
+	}
+	return out
 }

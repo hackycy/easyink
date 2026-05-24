@@ -8,12 +8,13 @@ const (
 )
 
 type PrintPDFRequest struct {
-	RequestID string          `json:"requestId"`
-	Source    Source          `json:"source"`
-	PDF       PDFOptions      `json:"pdf,omitempty"`
-	Wait      WaitOptions     `json:"wait,omitempty"`
-	Output    OutputOptions   `json:"output,omitempty"`
-	Security  SecurityOptions `json:"security,omitempty"`
+	RequestID   string             `json:"requestId"`
+	Source      Source             `json:"source"`
+	PDF         PDFOptions         `json:"pdf,omitempty"`
+	Wait        WaitOptions        `json:"wait,omitempty"`
+	Output      OutputOptions      `json:"output,omitempty"`
+	Security    SecurityOptions    `json:"security,omitempty"`
+	Diagnostics DiagnosticsOptions `json:"diagnostics,omitempty"`
 }
 
 type Source struct {
@@ -24,6 +25,23 @@ type Source struct {
 	FileName  string          `json:"fileName,omitempty"`
 	Schema    json.RawMessage `json:"schema,omitempty"`
 	Data      json.RawMessage `json:"data,omitempty"`
+	Resources []Resource      `json:"resources,omitempty"`
+	Fonts     []FontResource  `json:"fonts,omitempty"`
+}
+
+type Resource struct {
+	URL         string `json:"url"`
+	ContentType string `json:"contentType"`
+	Base64      string `json:"base64"`
+}
+
+type FontResource struct {
+	Family      string `json:"family"`
+	URL         string `json:"url"`
+	ContentType string `json:"contentType"`
+	Base64      string `json:"base64"`
+	Weight      string `json:"weight,omitempty"`
+	Style       string `json:"style,omitempty"`
 }
 
 type PDFOptions struct {
@@ -55,6 +73,12 @@ type SecurityOptions struct {
 	AllowFileAccess bool     `json:"allowFileAccess,omitempty"`
 	AllowedOrigins  []string `json:"allowedOrigins,omitempty"`
 	MaxInputBytes   int64    `json:"maxInputBytes,omitempty"`
+}
+
+type DiagnosticsOptions struct {
+	IncludeHTMLSnapshot   bool `json:"includeHtmlSnapshot,omitempty"`
+	IncludeScreenshot     bool `json:"includeScreenshot,omitempty"`
+	IncludeRequestHeaders bool `json:"includeRequestHeaders,omitempty"`
 }
 
 type InfoResponse struct {
@@ -108,25 +132,26 @@ type ErrorBody struct {
 }
 
 type Diagnostics struct {
-	ID               string   `json:"id,omitempty"`
-	RequestID        string   `json:"requestId"`
-	HostVersion      string   `json:"hostVersion"`
-	BrowserVersion   string   `json:"browserVersion"`
-	ProtocolVersion  string   `json:"protocolVersion"`
-	DurationMs       int64    `json:"durationMs"`
-	ConsoleErrors    []string `json:"consoleErrors"`
-	FailedRequests   []string `json:"failedRequests"`
-	FinalURL         string   `json:"finalUrl,omitempty"`
-	SourceType       string   `json:"sourceType"`
-	PageCount        int      `json:"pageCount,omitempty"`
-	PDFTitle         string   `json:"pdfTitle,omitempty"`
-	PDFAuthor        string   `json:"pdfAuthor,omitempty"`
-	PDFCreator       string   `json:"pdfCreator,omitempty"`
-	PDFProducer      string   `json:"pdfProducer,omitempty"`
-	AttachmentPath   string   `json:"attachmentPath,omitempty"`
-	LogPath          string   `json:"logPath,omitempty"`
-	ScreenshotPath   string   `json:"screenshotPath,omitempty"`
-	HTMLSnapshotPath string   `json:"htmlSnapshotPath,omitempty"`
+	ID               string            `json:"id,omitempty"`
+	RequestID        string            `json:"requestId"`
+	HostVersion      string            `json:"hostVersion"`
+	BrowserVersion   string            `json:"browserVersion"`
+	ProtocolVersion  string            `json:"protocolVersion"`
+	DurationMs       int64             `json:"durationMs"`
+	ConsoleErrors    []string          `json:"consoleErrors"`
+	FailedRequests   []string          `json:"failedRequests"`
+	FinalURL         string            `json:"finalUrl,omitempty"`
+	SourceType       string            `json:"sourceType"`
+	PageCount        int               `json:"pageCount,omitempty"`
+	PDFTitle         string            `json:"pdfTitle,omitempty"`
+	PDFAuthor        string            `json:"pdfAuthor,omitempty"`
+	PDFCreator       string            `json:"pdfCreator,omitempty"`
+	PDFProducer      string            `json:"pdfProducer,omitempty"`
+	RequestHeaders   map[string]string `json:"requestHeaders,omitempty"`
+	AttachmentPath   string            `json:"attachmentPath,omitempty"`
+	LogPath          string            `json:"logPath,omitempty"`
+	ScreenshotPath   string            `json:"screenshotPath,omitempty"`
+	HTMLSnapshotPath string            `json:"htmlSnapshotPath,omitempty"`
 }
 
 const (

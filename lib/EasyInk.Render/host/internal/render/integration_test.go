@@ -208,6 +208,49 @@ func TestRenderPrintPDFCapturesBrowserDiagnostics(t *testing.T) {
 	}
 }
 
+func TestRenderPrintPDFUsesOfflineResourceBundle(t *testing.T) {
+	browserPath := os.Getenv("EASYINK_RENDER_BROWSER_PATH")
+	if browserPath == "" {
+		t.Skip("EASYINK_RENDER_BROWSER_PATH is not set")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	manager, err := browser.New(ctx, browserPath, t.TempDir())
+	if err != nil {
+		t.Fatalf("start browser: %v", err)
+	}
+	defer manager.Shutdown()
+	service := render.NewService(manager)
+
+	result, err := service.RenderPrintPDF(ctx, protocol.PrintPDFRequest{
+		RequestID: "req-offline-resource",
+		Source: protocol.Source{
+			Type: "html",
+			HTML: `<!doctype html><html><body>
+				<img src="https://easyink.local/resources/pixel.svg">
+				<main class="easyink-ready">Offline resource</main>
+			</body></html>`,
+			Resources: []protocol.Resource{
+				{
+					URL:         "https://easyink.local/resources/pixel.svg",
+					ContentType: "image/svg+xml",
+					Base64:      base64.StdEncoding.EncodeToString([]byte(`<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"><rect width="1" height="1" fill="black"/></svg>`)),
+				},
+			},
+		},
+		Wait: protocol.WaitOptions{Until: "networkIdle", TimeoutMs: 5000},
+	})
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	if len(result.Diagnostics.FailedRequests) != 0 {
+		t.Fatalf("unexpected failed requests: %#v", result.Diagnostics.FailedRequests)
+	}
+	if !strings.HasPrefix(string(result.PDF), "%PDF-") {
+		t.Fatalf("expected PDF output")
+	}
+}
+
 func TestRenderPrintPDFCapturesFailureAttachments(t *testing.T) {
 	browserPath := os.Getenv("EASYINK_RENDER_BROWSER_PATH")
 	if browserPath == "" {

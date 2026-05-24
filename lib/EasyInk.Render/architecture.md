@@ -97,7 +97,7 @@ runtime/
       materials/
 ```
 
-Host 使用本地受控资源路由加载 EasyInk Runtime Bundle，不通过外部网络加载 viewer、material 或样式资源。
+Host 使用本地受控资源路由加载 EasyInk Runtime Bundle，不通过外部网络加载 viewer、material 或样式资源。请求内离线资源包和字体包只允许挂载到 `https://easyink.local/resources/...` 或 `https://easyink.local/fonts/...`，由 Host 通过请求级拦截直接返回。
 
 ### Runtime Manifest
 
@@ -401,7 +401,7 @@ Caller
 - Host 默认只监听 `127.0.0.1`。
 - 每个请求必须携带本机随机 token。
 - Host 禁用或显式控制代理环境变量，避免绕过 allowlist。
-- 诊断附件默认不包含完整 HTML、截图或请求头；调用方显式开启后才写入受控诊断目录。
+- 诊断附件默认不包含完整 HTML、截图或请求头；调用方通过 diagnostics 选项显式开启后才写入受控诊断目录，请求头附件会脱敏认证和 Cookie 字段。
 
 ## Diagnostics
 

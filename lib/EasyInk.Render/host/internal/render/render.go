@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"html"
 	"math"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -27,6 +28,8 @@ import (
 )
 
 const defaultMaxInputBytes int64 = 50 * 1024 * 1024
+const offlineResourceHost = "easyink.local"
+const offlineResourceOrigin = "https://" + offlineResourceHost
 
 type Service struct {
 	browser *browser.Manager
@@ -50,6 +53,11 @@ type PDFMetadata struct {
 	Author   string
 	Creator  string
 	Producer string
+}
+
+type offlineResource struct {
+	contentType string
+	body        []byte
 }
 
 type CodedError struct {
@@ -116,6 +124,8 @@ func (s *Service) browserVersion() string {
 }
 
 func (s *Service) renderEasyInk(ctx context.Context, req protocol.PrintPDFRequest, collector *diagnostics.Collector) (Result, error) {
+	resources := req.Source.Resources
+	fonts := req.Source.Fonts
 	htmlDoc, pdfDefaults, err := easyink.RenderHTML(req.Source)
 	if err != nil {
 		return Result{}, coded(protocol.ErrInvalidRequest, err.Error(), nil)
@@ -132,7 +142,12 @@ func (s *Service) renderEasyInk(ctx context.Context, req protocol.PrintPDFReques
 	if req.PDF.PrintBackground == nil {
 		req.PDF.PrintBackground = pdfDefaults.PrintBackground
 	}
-	req.Source = protocol.Source{Type: "html", HTML: htmlDoc}
+	req.Source = protocol.Source{
+		Type:      "html",
+		HTML:      htmlDoc,
+		Resources: resources,
+		Fonts:     fonts,
+	}
 	if req.Wait.Until == "" {
 		req.Wait.Until = "easyinkReady"
 	}
@@ -148,6 +163,10 @@ func (s *Service) renderHTML(ctx context.Context, req protocol.PrintPDFRequest, 
 	}
 	if err := security.ValidateBaseURL(req.Source.BaseURL, req.Security.AllowFileAccess, req.Security.AllowedOrigins); err != nil {
 		return Result{}, coded(protocol.ErrSecurityBlocked, err.Error(), nil)
+	}
+	offlineResources, fontCSS, err := buildOfflineResources(req.Source)
+	if err != nil {
+		return Result{}, coded(protocol.ErrInvalidRequest, err.Error(), nil)
 	}
 	wait, err := resolveWaitPlan(req.Wait)
 	if err != nil {
@@ -167,9 +186,10 @@ func (s *Service) renderHTML(ctx context.Context, req protocol.PrintPDFRequest, 
 	defer timeoutCancel()
 
 	tracker := newPageTracker(renderCtx, req, collector)
+	tracker.offlineResources = offlineResources
 	chromedp.ListenTarget(renderCtx, tracker.handleEvent)
 
-	loadedHTML := htmlWithBaseURL(req.Source.HTML, req.Source.BaseURL)
+	loadedHTML := htmlWithBaseURL(htmlWithInjectedHeadStyle(req.Source.HTML, fontCSS), req.Source.BaseURL)
 	htmlDataURL := "data:text/html;base64," + base64.StdEncoding.EncodeToString([]byte(loadedHTML))
 	setupActions := []chromedp.Action{
 		network.Enable(),
@@ -292,9 +312,10 @@ type pageTracker struct {
 	req       protocol.PrintPDFRequest
 	collector *diagnostics.Collector
 
-	mu       sync.Mutex
-	inflight map[network.RequestID]string
-	changed  chan struct{}
+	mu               sync.Mutex
+	inflight         map[network.RequestID]string
+	changed          chan struct{}
+	offlineResources map[string]offlineResource
 }
 
 func newPageTracker(ctx context.Context, req protocol.PrintPDFRequest, collector *diagnostics.Collector) *pageTracker {
@@ -336,6 +357,10 @@ func (t *pageTracker) handlePausedRequest(e *fetch.EventRequestPaused) {
 	if e.Request != nil {
 		rawURL = e.Request.URL
 	}
+	if resource, ok := t.offlineResources[rawURL]; ok {
+		go t.fulfillOfflineResource(e.RequestID, resource)
+		return
+	}
 	err := security.ValidateResourceURL(rawURL, t.req.Source.BaseURL, t.req.Security.AllowFileAccess, t.req.Security.AllowedOrigins)
 	if err == nil && e.ResponseStatusCode >= 300 && e.ResponseStatusCode < 400 {
 		redirectURL := headerValue(e.ResponseHeaders, "location")
@@ -355,6 +380,17 @@ func (t *pageTracker) handlePausedRequest(e *fetch.EventRequestPaused) {
 		}
 		_ = chromedp.Run(ctx, fetch.ContinueRequest(e.RequestID))
 	}()
+}
+
+func (t *pageTracker) fulfillOfflineResource(id fetch.RequestID, resource offlineResource) {
+	ctx, cancel := context.WithTimeout(t.ctx, 5*time.Second)
+	defer cancel()
+	_ = chromedp.Run(ctx, fetch.FulfillRequest(id, 200).
+		WithResponseHeaders([]*fetch.HeaderEntry{
+			{Name: "Content-Type", Value: resource.contentType},
+			{Name: "Cache-Control", Value: "no-store"},
+		}).
+		WithBody(base64.StdEncoding.EncodeToString(resource.body)))
 }
 
 func (t *pageTracker) handleRedirectResponse(requestID network.RequestID, response *network.Response) {
@@ -596,6 +632,132 @@ func htmlWithBaseURL(htmlDoc, baseURL string) string {
 		return htmlDoc[:insertAt] + "<head>" + baseTag + "</head>" + htmlDoc[insertAt:]
 	}
 	return "<head>" + baseTag + "</head>" + htmlDoc
+}
+
+func htmlWithInjectedHeadStyle(htmlDoc, css string) string {
+	if strings.TrimSpace(css) == "" {
+		return htmlDoc
+	}
+	style := `<style data-easyink-offline-fonts>` + css + `</style>`
+	lower := strings.ToLower(htmlDoc)
+	if idx := strings.Index(lower, "<head>"); idx >= 0 {
+		insertAt := idx + len("<head>")
+		return htmlDoc[:insertAt] + style + htmlDoc[insertAt:]
+	}
+	if idx := strings.Index(lower, "<html>"); idx >= 0 {
+		insertAt := idx + len("<html>")
+		return htmlDoc[:insertAt] + "<head>" + style + "</head>" + htmlDoc[insertAt:]
+	}
+	return "<head>" + style + "</head>" + htmlDoc
+}
+
+func buildOfflineResources(source protocol.Source) (map[string]offlineResource, string, error) {
+	resources := map[string]offlineResource{}
+	for _, item := range source.Resources {
+		if _, err := addOfflineResource(resources, item.URL, item.ContentType, item.Base64); err != nil {
+			return nil, "", err
+		}
+	}
+	var fontCSS strings.Builder
+	for _, item := range source.Fonts {
+		if strings.TrimSpace(item.Family) == "" {
+			return nil, "", errors.New("source.fonts[].family is required")
+		}
+		normalizedURL, err := addOfflineResource(resources, item.URL, item.ContentType, item.Base64)
+		if err != nil {
+			return nil, "", err
+		}
+		fontCSS.WriteString("@font-face{font-family:")
+		fontCSS.WriteString(cssString(item.Family))
+		fontCSS.WriteString(";src:url(")
+		fontCSS.WriteString(cssString(normalizedURL))
+		fontCSS.WriteString(")")
+		if item.ContentType != "" {
+			fontCSS.WriteString(" format('")
+			fontCSS.WriteString(fontFormat(item.ContentType))
+			fontCSS.WriteString("')")
+		}
+		fontCSS.WriteString(";font-weight:")
+		fontCSS.WriteString(cssIdentOrDefault(item.Weight, "normal"))
+		fontCSS.WriteString(";font-style:")
+		fontCSS.WriteString(cssIdentOrDefault(item.Style, "normal"))
+		fontCSS.WriteString(";font-display:block;}")
+	}
+	return resources, fontCSS.String(), nil
+}
+
+func addOfflineResource(resources map[string]offlineResource, rawURL, contentType, encoded string) (string, error) {
+	normalizedURL, err := normalizeOfflineResourceURL(rawURL)
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(contentType) == "" {
+		return "", fmt.Errorf("offline resource contentType is required: %s", rawURL)
+	}
+	body, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return "", fmt.Errorf("offline resource base64 is invalid: %s", rawURL)
+	}
+	if len(body) == 0 {
+		return "", fmt.Errorf("offline resource body is empty: %s", rawURL)
+	}
+	resources[normalizedURL] = offlineResource{
+		contentType: contentType,
+		body:        body,
+	}
+	return normalizedURL, nil
+}
+
+func normalizeOfflineResourceURL(rawURL string) (string, error) {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil {
+		return "", fmt.Errorf("invalid offline resource URL: %w", err)
+	}
+	if parsed.Scheme != "https" || !strings.EqualFold(parsed.Hostname(), offlineResourceHost) {
+		return "", fmt.Errorf("offline resource URL must use %s", offlineResourceOrigin)
+	}
+	if parsed.Path == "" || parsed.Path == "/" {
+		return "", errors.New("offline resource URL must include a path")
+	}
+	parsed.Scheme = "https"
+	parsed.Host = offlineResourceHost
+	parsed.Fragment = ""
+	return parsed.String(), nil
+}
+
+func cssString(value string) string {
+	escaped := strings.ReplaceAll(value, `\`, `\\`)
+	escaped = strings.ReplaceAll(escaped, `"`, `\"`)
+	return `"` + escaped + `"`
+}
+
+func cssIdentOrDefault(value, fallback string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return fallback
+	}
+	for _, r := range trimmed {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == ' ' {
+			continue
+		}
+		return fallback
+	}
+	return trimmed
+}
+
+func fontFormat(contentType string) string {
+	switch strings.ToLower(strings.TrimSpace(strings.Split(contentType, ";")[0])) {
+	case "font/woff2":
+		return "woff2"
+	case "font/woff", "application/font-woff":
+		return "woff"
+	case "font/ttf", "application/x-font-ttf":
+		return "truetype"
+	case "font/otf", "application/vnd.ms-opentype":
+		return "opentype"
+	default:
+		return "woff2"
+	}
 }
 
 func printPDF(options protocol.PDFOptions) *page.PrintToPDFParams {

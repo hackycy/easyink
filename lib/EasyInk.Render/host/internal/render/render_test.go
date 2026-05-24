@@ -129,6 +129,55 @@ func TestHTMLWithBaseURLPreservesExistingBase(t *testing.T) {
 	}
 }
 
+func TestBuildOfflineResourcesValidatesAndGeneratesFontCSS(t *testing.T) {
+	resources, css, err := buildOfflineResources(protocol.Source{
+		Resources: []protocol.Resource{
+			{
+				URL:         "https://easyink.local/resources/logo.png",
+				ContentType: "image/png",
+				Base64:      base64.StdEncoding.EncodeToString([]byte("png")),
+			},
+		},
+		Fonts: []protocol.FontResource{
+			{
+				Family:      "Receipt Font",
+				URL:         "https://easyink.local/fonts/receipt.woff2",
+				ContentType: "font/woff2",
+				Base64:      base64.StdEncoding.EncodeToString([]byte("font")),
+				Weight:      "700",
+				Style:       "normal",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("build offline resources: %v", err)
+	}
+	if len(resources) != 2 {
+		t.Fatalf("resources = %#v", resources)
+	}
+	if !strings.Contains(css, `font-family:"Receipt Font"`) {
+		t.Fatalf("font css = %s", css)
+	}
+	if !strings.Contains(css, `src:url("https://easyink.local/fonts/receipt.woff2") format('woff2')`) {
+		t.Fatalf("font css = %s", css)
+	}
+}
+
+func TestBuildOfflineResourcesRejectsExternalURL(t *testing.T) {
+	_, _, err := buildOfflineResources(protocol.Source{
+		Resources: []protocol.Resource{
+			{
+				URL:         "https://example.com/logo.png",
+				ContentType: "image/png",
+				Base64:      base64.StdEncoding.EncodeToString([]byte("png")),
+			},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "easyink.local") {
+		t.Fatalf("expected easyink.local validation error, got %v", err)
+	}
+}
+
 func TestResolveWaitPlan(t *testing.T) {
 	tests := []struct {
 		name        string
