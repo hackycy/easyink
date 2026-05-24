@@ -111,6 +111,7 @@ static class Program
         var engineApi = services.GetRequiredService<EngineApi>();
         var auditService = services.GetRequiredService<IAuditService>();
         var debugLogService = services.GetRequiredService<Services.PrintDebugLogService>();
+        var renderRuntimeManager = services.GetRequiredService<Services.RenderRuntimeManager>();
         var httpServer = services.GetRequiredService<HttpServer>();
         var wsHandler = services.GetRequiredService<WebSocketHandler>();
         var wsCommandHandler = services.GetRequiredService<WebSocketCommandHandler>();
@@ -192,7 +193,7 @@ static class Program
 
         mainWindow.OnRestart += () =>
         {
-            Cleanup(httpServer, wsHandler, engineApi, trayIcon);
+            Cleanup(httpServer, wsHandler, engineApi, renderRuntimeManager, trayIcon);
 
             DisposeMutex();
 
@@ -247,7 +248,7 @@ static class Program
 
         trayIcon.OnExit += () =>
         {
-            Cleanup(httpServer, wsHandler, engineApi, trayIcon);
+            Cleanup(httpServer, wsHandler, engineApi, renderRuntimeManager, trayIcon);
             Application.Exit();
         };
 
@@ -285,7 +286,7 @@ static class Program
 
         Application.Run(mainWindow);
 
-        Cleanup(httpServer, wsHandler, engineApi, trayIcon);
+        Cleanup(httpServer, wsHandler, engineApi, renderRuntimeManager, trayIcon);
     }
 
     private static void OnEngineLog(Services.PrintDebugLogService debugLogService, LogLevel level, string message, string? jobId)
@@ -298,13 +299,14 @@ static class Program
         debugLogService.AppendEngineLog(jobId, level, message);
     }
 
-    private static void Cleanup(HttpServer httpServer, WebSocketHandler wsHandler, EngineApi engineApi, TrayIcon trayIcon)
+    private static void Cleanup(HttpServer httpServer, WebSocketHandler wsHandler, EngineApi engineApi, Services.RenderRuntimeManager renderRuntimeManager, TrayIcon trayIcon)
     {
         if (_disposed) return;
         _disposed = true;
 
         try { httpServer.Stop(); } catch (Exception ex) { SimpleLogger.Debug("HTTP服务器停止异常", ex); }
         try { wsHandler.Dispose(); } catch (Exception ex) { SimpleLogger.Debug("WebSocket处理器释放异常", ex); }
+        try { renderRuntimeManager.Dispose(); } catch (Exception ex) { SimpleLogger.Debug("Render Host 停止异常", ex); }
         try { engineApi.Dispose(); } catch (Exception ex) { SimpleLogger.Debug("引擎释放异常", ex); }
         try { trayIcon.Dispose(); } catch (Exception ex) { SimpleLogger.Debug("托盘图标释放异常", ex); }
     }

@@ -52,11 +52,29 @@
   <ItemGroup>
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Drawing" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
   </ItemGroup>
 
   <ItemGroup>
     <Content Include="bin\SumatraPDF\SumatraPDF.exe" Condition="Exists('bin\SumatraPDF\SumatraPDF.exe')">
       <Link>SumatraPDF\SumatraPDF.exe</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <Content Include="bin\render\host\easyink-render-host.exe" Condition="Exists('bin\render\host\easyink-render-host.exe')">
+      <Link>render\host\easyink-render-host.exe</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <Content Include="bin\render\runtime-manifest.json" Condition="Exists('bin\render\runtime-manifest.json')">
+      <Link>render\runtime-manifest.json</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <Content Include="bin\render\browser\**\*" Condition="Exists('bin\render\browser')">
+      <Link>render\browser\%(RecursiveDir)%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>

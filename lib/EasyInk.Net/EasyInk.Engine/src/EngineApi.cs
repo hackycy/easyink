@@ -67,10 +67,11 @@ public class EngineApi : IDisposable
         string? sumatraPrintSettings = null,
         int sumatraTimeoutSeconds = 60,
         LowDpiPrintEnhancementMode lowDpiPrintEnhancementMode = LowDpiPrintEnhancementMode.Boost,
-        string? sumatraTempDir = null)
+        string? sumatraTempDir = null,
+        IRenderPdfService? renderPdfService = null)
         : this(null, null, maxQueueSize, rawPrinterNames, rawPrintDpi, rawPrintMaxDotsWidth,
             sumatraPdfPath, sumatraPrinterNames, sumatraPrintSettings, sumatraTimeoutSeconds,
-            lowDpiPrintEnhancementMode, sumatraTempDir)
+            lowDpiPrintEnhancementMode, sumatraTempDir, renderPdfService)
     {
     }
 
@@ -90,7 +91,8 @@ public class EngineApi : IDisposable
         string? sumatraPrintSettings = null,
         int sumatraTimeoutSeconds = 60,
         LowDpiPrintEnhancementMode lowDpiPrintEnhancementMode = LowDpiPrintEnhancementMode.Boost,
-        string? sumatraTempDir = null)
+        string? sumatraTempDir = null,
+        IRenderPdfService? renderPdfService = null)
     {
         var logger = new EventLogger(this);
         _printerService = printerService ?? new PrinterService(logger);
@@ -124,6 +126,9 @@ public class EngineApi : IDisposable
                 sumatraService,
                 sumatraPrinterNames ?? Array.Empty<string>());
         }
+
+        if (renderPdfService != null)
+            _printService = new RenderAwarePrintService(_printService, renderPdfService);
 
         _jobQueue = new PrintJobQueue(_printService, maxQueueSize ?? 100,
             logger, (requestId, request, result) => RaisePrintCompleted(requestId, request, result));
@@ -241,6 +246,10 @@ public class EngineApi : IDisposable
             return PrinterResult.Error(request.Id, ErrorCode.InvalidParams, "缺少打印参数或格式错误");
         }
 
+        var validation = ValidatePrintParams(request.Id, printParams);
+        if (validation != null)
+            return validation;
+
         var result = _printService.Print(request.Id, printParams);
         RaisePrintCompleted(request.Id, printParams, result);
         return result;
@@ -254,6 +263,10 @@ public class EngineApi : IDisposable
             return PrinterResult.Error(request.Id, ErrorCode.InvalidParams, "缺少打印参数或格式错误");
         }
 
+        var validation = ValidatePrintParams(request.Id, printParams);
+        if (validation != null)
+            return validation;
+
         try
         {
             var jobId = _jobQueue.Enqueue(request.Id, printParams);
@@ -263,6 +276,23 @@ public class EngineApi : IDisposable
         {
             return PrinterResult.Error(request.Id, ErrorCode.QueueFull, ex.Message);
         }
+    }
+
+    private PrinterResult? ValidatePrintParams(string requestId, PrintRequestParams request)
+    {
+        var hasPdfInput = request.HasPdfInput();
+        var hasRenderInput = request.HasRenderInput();
+
+        if (hasPdfInput && hasRenderInput)
+            return PrinterResult.Error(requestId, ErrorCode.InvalidParams, "不能同时提供 PDF 输入和 renderSource");
+
+        if (!hasPdfInput && !hasRenderInput)
+            return PrinterResult.Error(requestId, ErrorCode.InvalidParams, "必须提供 PDF 输入或 renderSource");
+
+        if (hasRenderInput && !(_printService is RenderAwarePrintService))
+            return PrinterResult.Error(requestId, ErrorCode.RenderFailed, "Render 未启用或未配置");
+
+        return null;
     }
 
     private PrinterResult HandleGetJobStatus(PrinterCommand request)

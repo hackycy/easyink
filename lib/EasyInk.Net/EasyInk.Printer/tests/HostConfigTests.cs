@@ -73,6 +73,36 @@ public class HostConfigTests
     }
 
     [Fact]
+    public void DefaultRenderDirs_UseLocalApplicationData()
+    {
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
+        Assert.Equal(Path.Combine(localAppData, "EasyInk.Printer", "render", "browser"), HostConfig.DefaultRenderBrowserCacheDir);
+        Assert.Equal(Path.Combine(localAppData, "EasyInk.Printer", "render", "browser", "versions"), HostConfig.DefaultRenderBrowserVersionsDir);
+        Assert.Equal(Path.Combine(localAppData, "EasyInk.Printer", "render", "profile"), HostConfig.DefaultRenderProfileRoot);
+        Assert.Equal(Path.Combine(localAppData, "EasyInk.Printer", "render", "temp"), HostConfig.DefaultRenderTempDir);
+        Assert.Equal(Path.Combine(localAppData, "EasyInk.Printer", "data", "logs", "render"), HostConfig.DefaultRenderLogDir);
+    }
+
+    [Fact]
+    public void GetRenderBrowserVersionDir_Auto_UsesRecommendedVersion()
+    {
+        var expectedKey = RenderBrowserVersionCatalog.GetRecommendedKey();
+
+        Assert.Equal(
+            Path.Combine(HostConfig.DefaultRenderBrowserVersionsDir, expectedKey),
+            HostConfig.GetRenderBrowserVersionDir(RenderBrowserVersionCatalog.AutoKey));
+    }
+
+    [Fact]
+    public void DefaultBundledRenderPaths_UseApplicationBaseDirectory()
+    {
+        Assert.Equal(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "render", "host", "easyink-render-host.exe"), HostConfig.DefaultRenderHostPath);
+        Assert.Equal(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "render", "browser"), HostConfig.DefaultRenderBrowserDir);
+        Assert.Equal(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "render", "runtime-manifest.json"), HostConfig.DefaultRenderManifestPath);
+    }
+
+    [Fact]
     public void ResolveDbPath_Null_ReturnsDefault()
     {
         Assert.Equal(HostConfig.DefaultDbPath, HostConfig.ResolveDbPath(null!));
@@ -106,6 +136,32 @@ public class HostConfigTests
     public void ResolveSumatraTempDir_Custom_ReturnsCustom()
     {
         Assert.Equal(@"D:\custom\temp", HostConfig.ResolveSumatraTempDir(@"D:\custom\temp"));
+    }
+
+    [Fact]
+    public void ResolveRenderDirs_Null_ReturnsDefaults()
+    {
+        Assert.Equal(HostConfig.DefaultRenderHostPath, HostConfig.ResolveRenderHostPath(null!));
+        Assert.Equal(HostConfig.DefaultRenderProfileRoot, HostConfig.ResolveRenderProfileRoot(null!));
+        Assert.Equal(HostConfig.DefaultRenderTempDir, HostConfig.ResolveRenderTempDir(null!));
+        Assert.Equal(HostConfig.DefaultRenderLogDir, HostConfig.ResolveRenderLogDir(null!));
+    }
+
+    [Fact]
+    public void RenderLimits_ClampToMinimums()
+    {
+        var config = new HostConfig
+        {
+            RenderPort = 1,
+            RenderRequestTimeoutMs = 1,
+            RenderMaxConcurrency = 0,
+            RenderMaxQueueSize = -1
+        };
+
+        Assert.Equal(1024, config.RenderPort);
+        Assert.Equal(1000, config.RenderRequestTimeoutMs);
+        Assert.Equal(1, config.RenderMaxConcurrency);
+        Assert.Equal(0, config.RenderMaxQueueSize);
     }
 
     [Fact]

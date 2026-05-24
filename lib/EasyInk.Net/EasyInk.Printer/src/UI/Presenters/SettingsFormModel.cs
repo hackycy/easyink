@@ -5,7 +5,9 @@ internal enum SettingsField
     DbPath,
     CrashLogDir,
     SumatraTempDir,
-    PrintDebugArtifactsDir
+    PrintDebugArtifactsDir,
+    RenderBrowserVersion,
+    RenderLogDir
 }
 
 internal sealed class SettingsFormModel
@@ -31,6 +33,14 @@ internal sealed class SettingsFormModel
     public int FileLogRetentionDays { get; set; }
     public int PrintDebugArtifactRetentionCount { get; set; }
     public string PrintDebugArtifactsDir { get; set; } = string.Empty;
+    public bool RenderEnabled { get; set; }
+    public string RenderBrowserVersion { get; set; } = string.Empty;
+    public int RenderPort { get; set; }
+    public int RenderRequestTimeoutMs { get; set; }
+    public int RenderMaxConcurrency { get; set; }
+    public int RenderMaxQueueSize { get; set; }
+    public string RenderLogDir { get; set; } = string.Empty;
+    public bool RenderDiagnosticsEnabled { get; set; }
 }
 
 internal sealed class SettingsValidationResult

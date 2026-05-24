@@ -168,6 +168,47 @@ public class PrinterApiTests
     }
 
     [Fact]
+    public void HandleCommand_Print_WithRenderSourceButNoRenderService_ReturnsRenderFailed()
+    {
+        using var api = CreateApi();
+        var parms = new Dictionary<string, object>
+        {
+            ["printerName"] = "TestPrinter",
+            ["renderSource"] = new Dictionary<string, object>
+            {
+                ["type"] = "html",
+                ["html"] = "<main class=\"easyink-ready\">ok</main>"
+            }
+        };
+
+        var result = api.HandleCommand(MakeCommand("print", parms: parms));
+
+        Assert.False(result.Success);
+        Assert.Equal(ErrorCode.RenderFailed, result.ErrorInfo!.Code);
+    }
+
+    [Fact]
+    public void HandleCommand_Print_WithPdfAndRenderSource_ReturnsInvalidParams()
+    {
+        using var api = CreateApi();
+        var parms = new Dictionary<string, object>
+        {
+            ["printerName"] = "TestPrinter",
+            ["pdfBase64"] = Convert.ToBase64String(new byte[] { 1, 2, 3 }),
+            ["renderSource"] = new Dictionary<string, object>
+            {
+                ["type"] = "html",
+                ["html"] = "<main class=\"easyink-ready\">ok</main>"
+            }
+        };
+
+        var result = api.HandleCommand(MakeCommand("print", parms: parms));
+
+        Assert.False(result.Success);
+        Assert.Equal(ErrorCode.InvalidParams, result.ErrorInfo!.Code);
+    }
+
+    [Fact]
     public void Dispose_DisposesJobQueue()
     {
         var printerService = new Mock<IPrinterService>();

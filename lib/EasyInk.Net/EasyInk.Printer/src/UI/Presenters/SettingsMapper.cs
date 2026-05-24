@@ -36,7 +36,15 @@ internal static class SettingsMapper
             PrintDebugArtifactRetentionCount = config.PrintDebugArtifactRetentionCount,
             PrintDebugArtifactsDir = string.IsNullOrWhiteSpace(config.PrintDebugArtifactsDir)
                 ? HostConfig.DefaultPrintDebugArtifactsDir
-                : config.PrintDebugArtifactsDir!
+                : config.PrintDebugArtifactsDir!,
+            RenderEnabled = config.RenderEnabled,
+            RenderBrowserVersion = RenderBrowserVersionCatalog.NormalizeKey(config.RenderBrowserVersion),
+            RenderPort = config.RenderPort,
+            RenderRequestTimeoutMs = config.RenderRequestTimeoutMs,
+            RenderMaxConcurrency = config.RenderMaxConcurrency,
+            RenderMaxQueueSize = config.RenderMaxQueueSize,
+            RenderLogDir = string.IsNullOrWhiteSpace(config.RenderLogDir) ? HostConfig.DefaultRenderLogDir : config.RenderLogDir!,
+            RenderDiagnosticsEnabled = config.RenderDiagnosticsEnabled
         };
     }
 
@@ -58,6 +66,14 @@ internal static class SettingsMapper
         if (!HostConfig.IsValidFilePath(printDebugArtifactsDirValue + Path.DirectorySeparatorChar, out var debugArtifactsError))
             return SettingsValidationResult.Invalid(SettingsField.PrintDebugArtifactsDir, LangManager.Get("Error_PrintDebugArtifactsDirInvalid", debugArtifactsError!));
 
+        var renderBrowserVersionValue = RenderBrowserVersionCatalog.NormalizeKey(model.RenderBrowserVersion);
+        if (!RenderBrowserVersionCatalog.Options.Any(o => string.Equals(o.Key, renderBrowserVersionValue, StringComparison.OrdinalIgnoreCase)))
+            return SettingsValidationResult.Invalid(SettingsField.RenderBrowserVersion, LangManager.Get("Error_RenderBrowserVersionInvalid"));
+
+        var renderLogDirValue = (model.RenderLogDir ?? string.Empty).Trim();
+        if (!HostConfig.IsValidFilePath(renderLogDirValue + Path.DirectorySeparatorChar, out var renderLogError))
+            return SettingsValidationResult.Invalid(SettingsField.RenderLogDir, LangManager.Get("Error_RenderLogDirInvalid", renderLogError!));
+
         return SettingsValidationResult.Valid();
     }
 
@@ -67,6 +83,8 @@ internal static class SettingsMapper
         var crashDirValue = (model.CrashLogDir ?? string.Empty).Trim();
         var sumatraTempDirValue = (model.SumatraTempDir ?? string.Empty).Trim();
         var printDebugArtifactsDirValue = (model.PrintDebugArtifactsDir ?? string.Empty).Trim();
+        var renderBrowserVersionValue = RenderBrowserVersionCatalog.NormalizeKey(model.RenderBrowserVersion);
+        var renderLogDirValue = (model.RenderLogDir ?? string.Empty).Trim();
 
         config.LowDpiPrintEnhancement = GetLowDpiEnhancementValue(model.LowDpiEnhancementIndex);
         config.RawPrinterNames = ParseNames(model.RawPrinterNamesText);
@@ -103,6 +121,17 @@ internal static class SettingsMapper
         config.PrintDebugArtifactsDir = string.Equals(printDebugArtifactsDirValue, HostConfig.DefaultPrintDebugArtifactsDir, StringComparison.OrdinalIgnoreCase)
             ? null
             : printDebugArtifactsDirValue;
+        config.RenderEnabled = model.RenderEnabled;
+        config.RenderHostPath = HostConfig.DefaultRenderHostPath;
+        config.RenderBrowserVersion = renderBrowserVersionValue;
+        config.RenderPort = model.RenderPort;
+        config.RenderRequestTimeoutMs = model.RenderRequestTimeoutMs;
+        config.RenderMaxConcurrency = model.RenderMaxConcurrency;
+        config.RenderMaxQueueSize = model.RenderMaxQueueSize;
+        config.RenderLogDir = string.Equals(renderLogDirValue, HostConfig.DefaultRenderLogDir, StringComparison.OrdinalIgnoreCase)
+            ? null
+            : renderLogDirValue;
+        config.RenderDiagnosticsEnabled = model.RenderDiagnosticsEnabled;
     }
 
     public static int GetLowDpiEnhancementSelectedIndex(string? value)

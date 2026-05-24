@@ -1,7 +1,10 @@
 using System;
+using System.Diagnostics;
 using System.IO;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using EasyInk.Printer.Config;
+using EasyInk.Printer.Services;
 using EasyInk.Printer.UI.Controls;
 using EasyInk.Printer.UI.Presenters;
 
@@ -23,6 +26,16 @@ internal sealed class SettingsView : UserControl, ISettingsView, IActivatableTab
     private readonly TextBox _txtSumatraPrinters;
     private readonly TextBox _txtSumatraSettings;
     private readonly NumericUpDown _numSumatraTimeout;
+    private readonly NoFocusCheckBox _chkRenderEnabled;
+    private readonly ComboBox _cmbRenderBrowserVersion;
+    private readonly Button _btnRenderBrowserDownload;
+    private readonly TextBox _txtRenderBrowserCacheDir;
+    private readonly NumericUpDown _numRenderPort;
+    private readonly NumericUpDown _numRenderTimeout;
+    private readonly NumericUpDown _numRenderMaxConcurrency;
+    private readonly NumericUpDown _numRenderMaxQueueSize;
+    private readonly TextBox _txtRenderLogDir;
+    private readonly NoFocusCheckBox _chkRenderDiagnostics;
     private readonly TextBox _txtDbPath;
     private readonly TextBox _txtCrashDir;
     private readonly TextBox _txtSumatraTempDir;
@@ -188,6 +201,79 @@ internal sealed class SettingsView : UserControl, ISettingsView, IActivatableTab
         UiFactory.AddSettingDescriptionRow(compatPanel, LangManager.Get("Settings_SumatraDescription"));
         grpPrinterCompat.ContentPanel.Controls.Add(compatPanel);
 
+        var grpRender = UiFactory.CreateSettingsSection(LangManager.Get("Settings_Render"));
+        var renderPanel = UiFactory.CreateSettingsTable(
+            new ColumnStyle(SizeType.Absolute, 140),
+            new ColumnStyle(SizeType.Percent, 100),
+            new ColumnStyle(SizeType.Absolute, 72));
+        _chkRenderEnabled = new NoFocusCheckBox
+        {
+            Text = LangManager.Get("Settings_RenderEnabled"),
+            Anchor = AnchorStyles.Left,
+            AutoSize = true
+        };
+        _cmbRenderBrowserVersion = new ComboBox
+        {
+            Width = 260,
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            Anchor = AnchorStyles.Left
+        };
+        foreach (var option in RenderBrowserVersionCatalog.Options)
+            _cmbRenderBrowserVersion.Items.Add(option);
+        _cmbRenderBrowserVersion.SelectedIndexChanged += (s, e) => UpdateRenderBrowserCacheDir();
+        _btnRenderBrowserDownload = UiFactory.CreateSecondaryButton(LangManager.Get("Common_Download"), 68);
+        _btnRenderBrowserDownload.Anchor = AnchorStyles.Left;
+        _btnRenderBrowserDownload.Click += async (s, e) => await DownloadRenderBrowser();
+        _txtRenderBrowserCacheDir = new TextBox
+        {
+            Dock = DockStyle.Fill,
+            Anchor = AnchorStyles.Left | AnchorStyles.Right,
+            ReadOnly = true
+        };
+        var btnOpenRenderBrowserDir = UiFactory.CreateSecondaryButton(LangManager.Get("Common_Open"), 68);
+        btnOpenRenderBrowserDir.Anchor = AnchorStyles.Left;
+        btnOpenRenderBrowserDir.Click += (s, e) => OpenRenderBrowserDir();
+
+        var pnlRenderLimits = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            Margin = new Padding(0)
+        };
+        _numRenderPort = new NumericUpDown { Width = 80, Minimum = 1024, Maximum = 65535, Anchor = AnchorStyles.Left };
+        _numRenderTimeout = new NumericUpDown { Width = 90, Minimum = 1000, Maximum = 600000, Increment = 1000, Anchor = AnchorStyles.Left };
+        _numRenderMaxConcurrency = new NumericUpDown { Width = 60, Minimum = 1, Maximum = 32, Anchor = AnchorStyles.Left };
+        _numRenderMaxQueueSize = new NumericUpDown { Width = 60, Minimum = 0, Maximum = 10000, Anchor = AnchorStyles.Left };
+        pnlRenderLimits.Controls.Add(_numRenderPort);
+        pnlRenderLimits.Controls.Add(CreateInlineLabel(LangManager.Get("Settings_RenderTimeoutLabel")));
+        pnlRenderLimits.Controls.Add(_numRenderTimeout);
+        pnlRenderLimits.Controls.Add(CreateInlineLabel(LangManager.Get("Settings_RenderConcurrencyLabel")));
+        pnlRenderLimits.Controls.Add(_numRenderMaxConcurrency);
+        pnlRenderLimits.Controls.Add(CreateInlineLabel(LangManager.Get("Settings_RenderQueueLabel")));
+        pnlRenderLimits.Controls.Add(_numRenderMaxQueueSize);
+
+        _txtRenderLogDir = new TextBox { Dock = DockStyle.Fill, Anchor = AnchorStyles.Left | AnchorStyles.Right };
+        var btnBrowseRenderLogDir = UiFactory.CreateSecondaryButton(LangManager.Get("Common_Browse"), 56);
+        btnBrowseRenderLogDir.Anchor = AnchorStyles.Left;
+        btnBrowseRenderLogDir.Click += (s, e) => BrowseRenderLogDir();
+        _chkRenderDiagnostics = new NoFocusCheckBox
+        {
+            Text = LangManager.Get("Settings_RenderDiagnostics"),
+            Anchor = AnchorStyles.Left,
+            AutoSize = true
+        };
+
+        UiFactory.AddSettingWideRow(renderPanel, _chkRenderEnabled);
+        UiFactory.AddSettingRow(renderPanel, LangManager.Get("Settings_RenderBrowserVersion"), _cmbRenderBrowserVersion, _btnRenderBrowserDownload);
+        UiFactory.AddSettingRow(renderPanel, LangManager.Get("Settings_RenderBrowserCacheDir"), _txtRenderBrowserCacheDir, btnOpenRenderBrowserDir);
+        UiFactory.AddSettingRow(renderPanel, LangManager.Get("Settings_RenderPortLabel"), pnlRenderLimits);
+        UiFactory.AddSettingRow(renderPanel, LangManager.Get("Settings_RenderLogDir"), _txtRenderLogDir, btnBrowseRenderLogDir);
+        UiFactory.AddSettingWideRow(renderPanel, _chkRenderDiagnostics);
+        UiFactory.AddSettingDescriptionRow(renderPanel, LangManager.Get("Settings_RenderDescription"));
+        grpRender.ContentPanel.Controls.Add(renderPanel);
+
         var grpPath = UiFactory.CreateSettingsSection(LangManager.Get("Settings_Path"));
         var pathPanel = UiFactory.CreateSettingsTable(
             new ColumnStyle(SizeType.Absolute, 110),
@@ -275,6 +361,7 @@ internal sealed class SettingsView : UserControl, ISettingsView, IActivatableTab
         UiFactory.StyleSettingsSection(grpDisplay);
         UiFactory.StyleSettingsSection(grpSecurity);
         UiFactory.StyleSettingsSection(grpPrinterCompat);
+        UiFactory.StyleSettingsSection(grpRender);
         UiFactory.StyleSettingsSection(grpPath);
         UiFactory.StyleSettingsSection(grpLogging);
 
@@ -282,6 +369,7 @@ internal sealed class SettingsView : UserControl, ISettingsView, IActivatableTab
         UiFactory.AddSettingsBlock(settingsLayout, grpDisplay);
         UiFactory.AddSettingsBlock(settingsLayout, grpSecurity);
         UiFactory.AddSettingsBlock(settingsLayout, grpPrinterCompat);
+        UiFactory.AddSettingsBlock(settingsLayout, grpRender);
         UiFactory.AddSettingsBlock(settingsLayout, grpPath);
         UiFactory.AddSettingsBlock(settingsLayout, grpLogging);
         UiFactory.AddSettingsBlock(settingsLayout, saveBar, 0);
@@ -326,6 +414,15 @@ internal sealed class SettingsView : UserControl, ISettingsView, IActivatableTab
         _numFileLogRetentionDays.Value = model.FileLogRetentionDays;
         _numPrintDebugArtifactRetentionCount.Value = model.PrintDebugArtifactRetentionCount;
         _txtPrintDebugArtifactsDir.Text = model.PrintDebugArtifactsDir;
+        _chkRenderEnabled.Checked = model.RenderEnabled;
+        SelectRenderBrowserVersion(model.RenderBrowserVersion);
+        UpdateRenderBrowserCacheDir();
+        _numRenderPort.Value = model.RenderPort;
+        _numRenderTimeout.Value = model.RenderRequestTimeoutMs;
+        _numRenderMaxConcurrency.Value = model.RenderMaxConcurrency;
+        _numRenderMaxQueueSize.Value = model.RenderMaxQueueSize;
+        _txtRenderLogDir.Text = model.RenderLogDir;
+        _chkRenderDiagnostics.Checked = model.RenderDiagnosticsEnabled;
         SetApiKey(model.ApiKey);
     }
 
@@ -353,7 +450,15 @@ internal sealed class SettingsView : UserControl, ISettingsView, IActivatableTab
             AuditLogRetentionDays = (int)_numAuditLogRetentionDays.Value,
             FileLogRetentionDays = (int)_numFileLogRetentionDays.Value,
             PrintDebugArtifactRetentionCount = (int)_numPrintDebugArtifactRetentionCount.Value,
-            PrintDebugArtifactsDir = _txtPrintDebugArtifactsDir.Text ?? string.Empty
+            PrintDebugArtifactsDir = _txtPrintDebugArtifactsDir.Text ?? string.Empty,
+            RenderEnabled = _chkRenderEnabled.Checked,
+            RenderBrowserVersion = GetSelectedRenderBrowserVersionKey(),
+            RenderPort = (int)_numRenderPort.Value,
+            RenderRequestTimeoutMs = (int)_numRenderTimeout.Value,
+            RenderMaxConcurrency = (int)_numRenderMaxConcurrency.Value,
+            RenderMaxQueueSize = (int)_numRenderMaxQueueSize.Value,
+            RenderLogDir = _txtRenderLogDir.Text ?? string.Empty,
+            RenderDiagnosticsEnabled = _chkRenderDiagnostics.Checked
         };
     }
 
@@ -447,7 +552,23 @@ internal sealed class SettingsView : UserControl, ISettingsView, IActivatableTab
             case SettingsField.PrintDebugArtifactsDir:
                 _txtPrintDebugArtifactsDir.Focus();
                 break;
+            case SettingsField.RenderBrowserVersion:
+                _cmbRenderBrowserVersion.Focus();
+                break;
+            case SettingsField.RenderLogDir:
+                _txtRenderLogDir.Focus();
+                break;
         }
+    }
+
+    private static Label CreateInlineLabel(string text)
+    {
+        return new Label
+        {
+            Text = text,
+            AutoSize = true,
+            Margin = new Padding(12, 6, 4, 0)
+        };
     }
 
     private void BrowseSumatraPath()
@@ -509,5 +630,111 @@ internal sealed class SettingsView : UserControl, ISettingsView, IActivatableTab
         };
         if (dlg.ShowDialog() == DialogResult.OK)
             _txtPrintDebugArtifactsDir.Text = dlg.SelectedPath;
+    }
+
+    private void BrowseRenderLogDir()
+    {
+        using var dlg = new FolderBrowserDialog
+        {
+            Description = LangManager.Get("Dialog_RenderLogDir"),
+            SelectedPath = _txtRenderLogDir.Text
+        };
+        if (dlg.ShowDialog() == DialogResult.OK)
+            _txtRenderLogDir.Text = dlg.SelectedPath;
+    }
+
+    private async Task DownloadRenderBrowser()
+    {
+        var selectedKey = GetSelectedRenderBrowserVersionKey();
+        var effectiveKey = RenderBrowserVersionCatalog.ResolveEffectiveKey(selectedKey);
+        var option = RenderBrowserVersionCatalog.GetOption(effectiveKey);
+        RenderBrowserDownloadProgressDialog? progressDialog = null;
+
+        _btnRenderBrowserDownload.Enabled = false;
+        _btnRenderBrowserDownload.Text = LangManager.Get("Common_Downloading");
+        try
+        {
+            var model = GetModel();
+            progressDialog = new RenderBrowserDownloadProgressDialog();
+            var owner = FindForm();
+            if (owner == null)
+                progressDialog.Show();
+            else
+                progressDialog.Show(owner);
+            var progress = new Progress<RenderBrowserInstallProgress>(p => progressDialog.UpdateProgress(p));
+            var installedPath = await Task.Run(() => _presenter.InstallRenderBrowser(model, progress));
+            UpdateRenderBrowserCacheDir();
+            progressDialog.UpdateProgress(new RenderBrowserInstallProgress(RenderBrowserInstallStage.Completed, installedPath));
+        }
+        catch (Exception ex)
+        {
+            progressDialog?.MarkFailed();
+            if (!option.SupportsAutomaticDownload)
+            {
+                var dir = GetSelectedRenderBrowserDir();
+                Directory.CreateDirectory(dir);
+                MessageBox.Show(
+                    LangManager.Get("Prompt_RenderBrowserManualInstall", option.DisplayName, dir),
+                    LangManager.Get("Common_Info"),
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+                OpenRenderBrowserDir();
+                return;
+            }
+
+            MessageBox.Show(
+                LangManager.Get("Error_RenderBrowserDownloadFailed", ex.Message),
+                LangManager.Get("Common_Error"),
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+        finally
+        {
+            _btnRenderBrowserDownload.Enabled = true;
+            _btnRenderBrowserDownload.Text = LangManager.Get("Common_Download");
+        }
+    }
+
+    private void OpenRenderBrowserDir()
+    {
+        var dir = GetSelectedRenderBrowserDir();
+        Directory.CreateDirectory(dir);
+        Process.Start(new ProcessStartInfo
+        {
+            FileName = dir,
+            UseShellExecute = true
+        });
+    }
+
+    private void SelectRenderBrowserVersion(string? versionKey)
+    {
+        var normalizedKey = RenderBrowserVersionCatalog.NormalizeKey(versionKey);
+        for (var i = 0; i < _cmbRenderBrowserVersion.Items.Count; i++)
+        {
+            if (_cmbRenderBrowserVersion.Items[i] is RenderBrowserVersionOption option &&
+                string.Equals(option.Key, normalizedKey, StringComparison.OrdinalIgnoreCase))
+            {
+                _cmbRenderBrowserVersion.SelectedIndex = i;
+                return;
+            }
+        }
+
+        _cmbRenderBrowserVersion.SelectedIndex = 0;
+    }
+
+    private string GetSelectedRenderBrowserVersionKey()
+    {
+        return (_cmbRenderBrowserVersion.SelectedItem as RenderBrowserVersionOption)?.Key
+               ?? RenderBrowserVersionCatalog.AutoKey;
+    }
+
+    private string GetSelectedRenderBrowserDir()
+    {
+        return HostConfig.GetRenderBrowserVersionDir(GetSelectedRenderBrowserVersionKey());
+    }
+
+    private void UpdateRenderBrowserCacheDir()
+    {
+        _txtRenderBrowserCacheDir.Text = GetSelectedRenderBrowserDir();
     }
 }

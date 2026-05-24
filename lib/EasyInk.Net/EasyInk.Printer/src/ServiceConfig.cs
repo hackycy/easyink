@@ -1,6 +1,7 @@
 using EasyInk.Engine;
 using EasyInk.Engine.Models;
 using EasyInk.Engine.Services;
+using EasyInk.Engine.Services.Abstractions;
 using EasyInk.Printer.Api;
 using EasyInk.Printer.Config;
 using EasyInk.Printer.Server;
@@ -22,6 +23,12 @@ internal static class ServiceConfig
         // Configuration
         services.AddSingleton(config);
 
+        services.AddSingleton<PrintDebugLogService>();
+        services.AddSingleton<RenderRuntimeManager>();
+        services.AddSingleton<RenderClient>();
+        services.AddSingleton<PrinterRenderPdfService>();
+        services.AddSingleton<IRenderPdfService>(sp => sp.GetRequiredService<PrinterRenderPdfService>());
+
         // Engine — with routing between GDI and Raw print paths
         services.AddSingleton<EngineApi>(sp =>
         {
@@ -35,13 +42,13 @@ internal static class ServiceConfig
                 sumatraPrintSettings: config.SumatraPrintSettings,
                 sumatraTimeoutSeconds: config.SumatraTimeoutSeconds,
                 sumatraTempDir: HostConfig.ResolveSumatraTempDir(config.SumatraTempDir!),
-                lowDpiPrintEnhancementMode: ParseLowDpiPrintEnhancement(config.LowDpiPrintEnhancement));
+                lowDpiPrintEnhancementMode: ParseLowDpiPrintEnhancement(config.LowDpiPrintEnhancement),
+                renderPdfService: config.RenderEnabled ? sp.GetRequiredService<IRenderPdfService>() : null);
             return api;
         });
 
         // Audit
         services.TryAddAuditService(config);
-        services.AddSingleton<PrintDebugLogService>();
 
         // Server
         services.AddSingleton<HttpServer>(sp =>

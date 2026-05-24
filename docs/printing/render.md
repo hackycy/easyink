@@ -43,19 +43,36 @@ Caller
 
 `EasyInk Printer (.NET)` 是本地打印服务，重点是把 PDF 提交给 Windows 打印管线。Render 的输出可以成为 Printer 的输入，但 Render 本身不枚举打印机、不提交打印任务、不维护打印队列。
 
+Printer 集成时 Render Host 随应用内置，不需要用户选择 Host 可执行文件。Chrome 配置收敛为版本选择：设置页默认提供 Auto、Stable、136、131、126、120、114、109 等选项。
+
+版本匹配机制如下：
+
+- `Auto` 会按系统推荐版本；Windows 10/11 推荐 `Stable`，Windows 7/8.1 推荐 `109`。系统版本使用 Windows `RtlGetVersion` 获取，避免 .NET Framework 兼容层把新系统误判成旧系统。
+- `Stable` 会从 Chrome for Testing 官方索引读取当前 Stable 版本。
+- `136`、`131`、`126`、`120`、`114` 会按 milestone 从 Chrome for Testing 官方索引匹配 Windows zip，优先 `chrome-headless-shell`，没有时回退到 `chrome`。
+- 运行时加载顺序是：发布目录内置 `render\browser`、设置页所选版本目录、通用缓存目录、系统已安装 Chrome 109、旧配置兼容路径。目录内会递归查找 `chrome-headless-shell.exe`、`headless-shell.exe` 或 `chrome.exe`。
+- 点击下载会把 zip 下载到所选版本目录下的 `downloads` 子目录，校验可读后解压；离线环境可自行下载对应版本并解压到设置页显示的 Chrome 目录。
+
+手动下载来源：普通版本请使用 Chrome for Testing 官方页面 `https://googlechromelabs.github.io/chrome-for-testing/`，选择对应 milestone 和 Windows 平台 zip。Chrome for Testing 的 `chrome` 二进制从 v113 起提供，但 Windows 7/8.1 最后可用版本是 Chrome 109，因此官方索引里没有可解析的 109 zip。Win7/8.1 场景支持三种方式：
+
+- 直接在系统安装 Chrome 109，EasyInk 会自动检测常见安装路径和 `App Paths` 注册表中的 `chrome.exe`，并校验主版本号为 109。
+- 使用已有 Chrome 109 离线安装包，或从已安装 Chrome 109 的机器复制包含 `chrome.exe` 的 `Application` 目录到设置页显示的 Chrome 目录。
+- 企业部署时在 `render\runtime-manifest.json` 的 `browser` 段提供内网包 `url`、`sha256`、`size` 和 `executable`，设置页下载按钮会使用该 manifest 下载并校验。
+
 ## 快速跑通
 
 Render Host 启动时必须指定 Chrome for Testing 或兼容的 headless shell 可执行文件。Host 首期只允许监听 `127.0.0.1`，并要求所有请求携带 Bearer token。
 
 ### 1. 构建 Host
 
-在仓库根目录执行：
+在仓库根目录执行。Windows 本地开发建议用 Docker 构建，避免依赖本机 Go 环境：
 
 ```powershell
-Push-Location lib/EasyInk.Render/host
-go test ./...
-go build -o easyink-render-host.exe ./cmd/easyink-render-host
-Pop-Location
+docker run --rm `
+  -v "${PWD}\lib\EasyInk.Render\host:/src" `
+  -w /src `
+  golang:1.23-bookworm `
+  sh -c 'set -e; go test ./...; CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o easyink-render-host.exe ./cmd/easyink-render-host'
 ```
 
 Linux 或 macOS：

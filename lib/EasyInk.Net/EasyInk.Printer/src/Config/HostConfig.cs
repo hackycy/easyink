@@ -24,6 +24,14 @@ public class HostConfig
     private const int DefaultFileLogRetentionDays = 7;
     private const int MinPrintDebugArtifactRetentionCount = 1;
     private const int DefaultPrintDebugArtifactRetentionCount = 10;
+    private const int MinRenderPort = 1024;
+    private const int DefaultRenderPort = 18181;
+    private const int MinRenderRequestTimeoutMs = 1000;
+    private const int DefaultRenderRequestTimeoutMs = 30000;
+    private const int MinRenderMaxConcurrency = 1;
+    private const int DefaultRenderMaxConcurrency = 2;
+    private const int MinRenderMaxQueueSize = 0;
+    private const int DefaultRenderMaxQueueSize = 16;
 
     private int _maxWebSocketConnections = DefaultWebSocketConnections;
     private int _maxQueueSize = DefaultQueueSize;
@@ -32,6 +40,10 @@ public class HostConfig
     private int _auditLogRetentionDays = DefaultAuditLogRetentionDays;
     private int _fileLogRetentionDays = DefaultFileLogRetentionDays;
     private int _printDebugArtifactRetentionCount = DefaultPrintDebugArtifactRetentionCount;
+    private int _renderPort = DefaultRenderPort;
+    private int _renderRequestTimeoutMs = DefaultRenderRequestTimeoutMs;
+    private int _renderMaxConcurrency = DefaultRenderMaxConcurrency;
+    private int _renderMaxQueueSize = DefaultRenderMaxQueueSize;
 
     private static readonly string DefaultDataDir = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -43,12 +55,33 @@ public class HostConfig
         "EasyInk.Printer",
         "temp");
 
+    private static readonly string DefaultRenderDir = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "EasyInk.Printer",
+        "render");
+
     private static readonly string DefaultLogDir = Path.Combine(DefaultDataDir, "logs");
 
     private static readonly string DefaultBundledSumatraPdfPath = Path.Combine(
         AppDomain.CurrentDomain.BaseDirectory,
         "SumatraPDF",
         "SumatraPDF.exe");
+
+    private static readonly string DefaultBundledRenderHostPath = Path.Combine(
+        AppDomain.CurrentDomain.BaseDirectory,
+        "render",
+        "host",
+        "easyink-render-host.exe");
+
+    private static readonly string DefaultBundledRenderBrowserDir = Path.Combine(
+        AppDomain.CurrentDomain.BaseDirectory,
+        "render",
+        "browser");
+
+    private static readonly string DefaultBundledRenderManifestPath = Path.Combine(
+        AppDomain.CurrentDomain.BaseDirectory,
+        "render",
+        "runtime-manifest.json");
 
     public int HttpPort { get; set; } = 18080;
     public bool AutoStart { get; set; } = false;
@@ -61,6 +94,18 @@ public class HostConfig
     public bool TrustAllOrigins { get; set; } = false;
     public string? ApiKey { get; set; }
     public string Language { get; set; } = "";
+
+    public bool RenderEnabled { get; set; } = false;
+    public string? RenderHostPath { get; set; } = DefaultBundledRenderHostPath;
+    public string? RenderBrowserExecutablePath { get; set; }
+    public string? RenderBrowserArchivePath { get; set; }
+    public string? RenderBrowserDownloadUrl { get; set; }
+    public string? RenderBrowserVersion { get; set; } = RenderBrowserVersionCatalog.AutoKey;
+    public string? RenderManifestPath { get; set; }
+    public string? RenderProfileRoot { get; set; }
+    public string? RenderTempDir { get; set; }
+    public string? RenderLogDir { get; set; }
+    public bool RenderDiagnosticsEnabled { get; set; } = false;
 
     /// <summary>
     /// 低 DPI 小票/热敏打印机位图增强模式：normal、boost、monochrome。默认 boost。
@@ -151,6 +196,30 @@ public class HostConfig
             : value;
     }
 
+    public int RenderPort
+    {
+        get => _renderPort;
+        set => _renderPort = Clamp(value, MinRenderPort, 65535);
+    }
+
+    public int RenderRequestTimeoutMs
+    {
+        get => _renderRequestTimeoutMs;
+        set => _renderRequestTimeoutMs = value < MinRenderRequestTimeoutMs ? MinRenderRequestTimeoutMs : value;
+    }
+
+    public int RenderMaxConcurrency
+    {
+        get => _renderMaxConcurrency;
+        set => _renderMaxConcurrency = value < MinRenderMaxConcurrency ? MinRenderMaxConcurrency : value;
+    }
+
+    public int RenderMaxQueueSize
+    {
+        get => _renderMaxQueueSize;
+        set => _renderMaxQueueSize = value < MinRenderMaxQueueSize ? MinRenderMaxQueueSize : value;
+    }
+
     public static string DefaultDbPath => Path.Combine(DefaultDataDir, "audit.db");
 
     public static string DefaultCrashLogDir => Path.Combine(DefaultDataDir, "crash");
@@ -162,6 +231,28 @@ public class HostConfig
     public static string DefaultSumatraTempDir => Path.Combine(DefaultTempDir, "sumatra");
 
     public static string DefaultSumatraPdfPath => DefaultBundledSumatraPdfPath;
+
+    public static string DefaultRenderHostPath => DefaultBundledRenderHostPath;
+
+    public static string DefaultRenderBrowserDir => DefaultBundledRenderBrowserDir;
+
+    public static string DefaultRenderManifestPath => DefaultBundledRenderManifestPath;
+
+    public static string DefaultRenderBrowserCacheDir => Path.Combine(DefaultRenderDir, "browser");
+
+    public static string DefaultRenderBrowserVersionsDir => Path.Combine(DefaultRenderBrowserCacheDir, "versions");
+
+    public static string DefaultRenderProfileRoot => Path.Combine(DefaultRenderDir, "profile");
+
+    public static string DefaultRenderTempDir => Path.Combine(DefaultRenderDir, "temp");
+
+    public static string DefaultRenderLogDir => Path.Combine(DefaultDataDir, "logs", "render");
+
+    public static string GetRenderBrowserVersionDir(string? versionKey)
+    {
+        var normalizedKey = RenderBrowserVersionCatalog.ResolveEffectiveKey(versionKey);
+        return Path.Combine(DefaultRenderBrowserVersionsDir, SanitizePathSegment(normalizedKey));
+    }
 
     public static string ResolveDbPath(string dbPath)
     {
@@ -181,6 +272,26 @@ public class HostConfig
     public static string ResolveSumatraTempDir(string dir)
     {
         return string.IsNullOrWhiteSpace(dir) ? DefaultSumatraTempDir : dir;
+    }
+
+    public static string ResolveRenderHostPath(string path)
+    {
+        return string.IsNullOrWhiteSpace(path) ? DefaultRenderHostPath : path;
+    }
+
+    public static string ResolveRenderProfileRoot(string dir)
+    {
+        return string.IsNullOrWhiteSpace(dir) ? DefaultRenderProfileRoot : dir;
+    }
+
+    public static string ResolveRenderTempDir(string dir)
+    {
+        return string.IsNullOrWhiteSpace(dir) ? DefaultRenderTempDir : dir;
+    }
+
+    public static string ResolveRenderLogDir(string dir)
+    {
+        return string.IsNullOrWhiteSpace(dir) ? DefaultRenderLogDir : dir;
     }
 
     public static bool IsValidFilePath(string path, out string? error)
@@ -295,6 +406,14 @@ public class HostConfig
         if (value < min) return min;
         if (value > max) return max;
         return value;
+    }
+
+    private static string SanitizePathSegment(string value)
+    {
+        var result = value.Trim();
+        foreach (var invalid in Path.GetInvalidFileNameChars())
+            result = result.Replace(invalid, '_');
+        return string.IsNullOrWhiteSpace(result) ? RenderBrowserVersionCatalog.StableKey : result;
     }
 
     public static HostConfig Load()

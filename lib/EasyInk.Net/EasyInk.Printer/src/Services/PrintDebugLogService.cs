@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Text;
 using EasyInk.Engine;
 using EasyInk.Engine.Models;
 using EasyInk.Printer.Config;
@@ -21,6 +22,10 @@ public sealed class PrintDebugLogService : IDisposable
     private const string EngineLogFileName = "engine.log";
     private const string SubmitResultFileName = "submit-result.json";
     private const string CompletionResultFileName = "completion-result.json";
+    private const string RenderRequestFileName = "render-request.json";
+    private const string RenderResultFileName = "render-result.json";
+    private const string RenderOutputFileName = "render-output.pdf";
+    private const string RenderErrorFileName = "render-error.json";
     private static readonly TimeSpan TerminalSubmitGracePeriod = TimeSpan.FromHours(1);
 
     private readonly bool _enabled;
@@ -142,6 +147,56 @@ public sealed class PrintDebugLogService : IDisposable
         catch (Exception ex)
         {
             SimpleLogger.Error($"打印调试引擎日志保存失败: jobId={jobId}", ex);
+        }
+    }
+
+    internal void WriteRenderArtifacts(
+        string requestId,
+        string renderRequestJson,
+        int statusCode,
+        string? contentType,
+        string? diagnosticsId,
+        long durationMs,
+        byte[]? pdfBytes,
+        string? errorJson)
+    {
+        if (!_enabled) return;
+
+        var directory = GetArtifactDirectory(requestId);
+        if (directory == null) return;
+
+        try
+        {
+            File.WriteAllText(Path.Combine(directory, RenderRequestFileName), SanitizeRenderRequest(renderRequestJson));
+
+            var resultPayload = new JObject
+            {
+                ["writtenAt"] = DateTime.Now,
+                ["statusCode"] = statusCode,
+                ["contentType"] = contentType,
+                ["diagnosticsId"] = diagnosticsId,
+                ["durationMs"] = durationMs,
+                ["success"] = pdfBytes != null && pdfBytes.Length > 0
+            };
+            if (pdfBytes != null && pdfBytes.Length > 0)
+            {
+                resultPayload["pdf"] = new JObject
+                {
+                    ["savedAs"] = RenderOutputFileName,
+                    ["bytes"] = pdfBytes.Length,
+                    ["sha256"] = ComputeSha256(pdfBytes)
+                };
+                File.WriteAllBytes(Path.Combine(directory, RenderOutputFileName), pdfBytes);
+            }
+
+            File.WriteAllText(Path.Combine(directory, RenderResultFileName), resultPayload.ToString(Formatting.Indented));
+
+            if (!string.IsNullOrWhiteSpace(errorJson))
+                File.WriteAllText(Path.Combine(directory, RenderErrorFileName), errorJson);
+        }
+        catch (Exception ex)
+        {
+            SimpleLogger.Error($"Render 调试附件保存失败: jobId={requestId}", ex);
         }
     }
 
@@ -284,6 +339,59 @@ public sealed class PrintDebugLogService : IDisposable
 
         foreach (var child in obj.Properties().Select(p => p.Value).ToList())
             ExtractPdfBase64(child, directory, hasPdfBytes);
+    }
+
+    private static string SanitizeRenderRequest(string renderRequestJson)
+    {
+        try
+        {
+            var token = JToken.Parse(renderRequestJson);
+            SummarizeLargeRenderFields(token);
+            return token.ToString(Formatting.Indented);
+        }
+        catch (JsonException)
+        {
+            return renderRequestJson;
+        }
+    }
+
+    private static void SummarizeLargeRenderFields(JToken token)
+    {
+        if (token is JObject obj)
+        {
+            foreach (var prop in obj.Properties().ToList())
+            {
+                if (prop.Value.Type == JTokenType.String && ShouldSummarizeRenderString(prop.Name, prop.Value.ToString()))
+                {
+                    var value = prop.Value.ToString();
+                    prop.Value = new JObject
+                    {
+                        ["omitted"] = true,
+                        ["length"] = value.Length,
+                        ["sha256"] = ComputeSha256(Encoding.UTF8.GetBytes(value))
+                    };
+                    continue;
+                }
+
+                SummarizeLargeRenderFields(prop.Value);
+            }
+        }
+        else if (token is JArray array)
+        {
+            foreach (var item in array)
+                SummarizeLargeRenderFields(item);
+        }
+    }
+
+    private static bool ShouldSummarizeRenderString(string propertyName, string value)
+    {
+        if (string.Equals(propertyName, "html", StringComparison.OrdinalIgnoreCase))
+            return value.Length > 2048;
+        if (string.Equals(propertyName, "base64", StringComparison.OrdinalIgnoreCase))
+            return value.Length > 256;
+        if (string.Equals(propertyName, "pdfBase64", StringComparison.OrdinalIgnoreCase))
+            return value.Length > 256;
+        return false;
     }
 
     private static void SavePdfBytes(string directory, byte[]? pdfBytes, bool overwrite)

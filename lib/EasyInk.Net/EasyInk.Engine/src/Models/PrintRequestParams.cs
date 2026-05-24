@@ -30,6 +30,16 @@ public class PrintRequestParams
     public byte[]? PdfBytes { get; set; }
 
     /// <summary>
+    /// Render 输入来源。用于 HTML 或 EasyInk schema + data 打印。
+    /// </summary>
+    public RenderSourceParams? RenderSource { get; set; }
+
+    /// <summary>
+    /// Render 渲染选项。
+    /// </summary>
+    public RenderOptionsParams? RenderOptions { get; set; }
+
+    /// <summary>
     /// 打印份数
     /// </summary>
     public int Copies { get; set; } = 1;
@@ -63,6 +73,18 @@ public class PrintRequestParams
     /// 是否横向打印
     /// </summary>
     public bool Landscape { get; set; }
+
+    public bool HasPdfInput()
+    {
+        return !string.IsNullOrEmpty(PdfBase64) ||
+            !string.IsNullOrEmpty(PdfUrl) ||
+            (PdfBytes != null && PdfBytes.Length > 0);
+    }
+
+    public bool HasRenderInput()
+    {
+        return RenderSource != null && !string.IsNullOrWhiteSpace(RenderSource.Type);
+    }
 
     /// <summary>
     /// 根据输入创建对应的 PdfProvider

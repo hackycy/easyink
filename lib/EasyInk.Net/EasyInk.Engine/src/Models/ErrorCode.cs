@@ -22,6 +22,8 @@ public static class ErrorCode
     public const string PrintFailed = "PRINT_FAILED";
     /// <summary>打印超时</summary>
     public const string PrintTimeout = "PRINT_TIMEOUT";
+    /// <summary>Render 渲染失败</summary>
+    public const string RenderFailed = "RENDER_FAILED";
     /// <summary>PDF 来源无效</summary>
     public const string InvalidPdfSource = "INVALID_PDF_SOURCE";
 

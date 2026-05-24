@@ -26,9 +26,11 @@ tools/      发布包和 manifest 辅助脚本
 ## 常用命令
 
 ```bash
-cd lib/EasyInk.Render/host
-go test ./...
-go build -o easyink-render-host ./cmd/easyink-render-host
+docker run --rm \
+  -v "$PWD/lib/EasyInk.Render/host:/src" \
+  -w /src \
+  golang:1.23-bookworm \
+  sh -c 'set -e; go test ./...; CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o easyink-render-host.exe ./cmd/easyink-render-host'
 ```
 
 ```bash

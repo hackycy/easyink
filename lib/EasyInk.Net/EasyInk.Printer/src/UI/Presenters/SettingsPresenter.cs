@@ -1,5 +1,6 @@
 using System;
 using EasyInk.Printer.Config;
+using EasyInk.Printer.Services;
 
 namespace EasyInk.Printer.UI.Presenters;
 
@@ -68,6 +69,21 @@ internal sealed class SettingsPresenter : IDisposable
             _view.RequestRestart();
         else
             _view.ShowDelayedApply();
+    }
+
+    public string InstallRenderBrowser(SettingsFormModel model, IProgress<RenderBrowserInstallProgress>? progress = null)
+    {
+        if (_disposed)
+            throw new ObjectDisposedException(nameof(SettingsPresenter));
+
+        var tempConfig = new HostConfig
+        {
+            RenderBrowserVersion = RenderBrowserVersionCatalog.NormalizeKey(model.RenderBrowserVersion),
+            RenderRequestTimeoutMs = model.RenderRequestTimeoutMs
+        };
+
+        using var runtime = new RenderRuntimeManager(tempConfig);
+        return runtime.InstallBrowserVersion(tempConfig.RenderBrowserVersion!, progress);
     }
 
     public void Dispose()

@@ -38,6 +38,13 @@ public class SettingsMapperTests
         Assert.Equal(7, model.FileLogRetentionDays);
         Assert.Equal(10, model.PrintDebugArtifactRetentionCount);
         Assert.Equal(HostConfig.DefaultPrintDebugArtifactsDir, model.PrintDebugArtifactsDir);
+        Assert.False(model.RenderEnabled);
+        Assert.Equal(RenderBrowserVersionCatalog.AutoKey, model.RenderBrowserVersion);
+        Assert.Equal(18181, model.RenderPort);
+        Assert.Equal(30000, model.RenderRequestTimeoutMs);
+        Assert.Equal(2, model.RenderMaxConcurrency);
+        Assert.Equal(16, model.RenderMaxQueueSize);
+        Assert.Equal(HostConfig.DefaultRenderLogDir, model.RenderLogDir);
     }
 
     [Fact]
@@ -66,7 +73,15 @@ public class SettingsMapperTests
             AuditLogRetentionDays = 45,
             FileLogRetentionDays = 3,
             PrintDebugArtifactRetentionCount = 8,
-            PrintDebugArtifactsDir = HostConfig.DefaultPrintDebugArtifactsDir
+            PrintDebugArtifactsDir = HostConfig.DefaultPrintDebugArtifactsDir,
+            RenderEnabled = true,
+            RenderBrowserVersion = "126",
+            RenderPort = 18182,
+            RenderRequestTimeoutMs = 45000,
+            RenderMaxConcurrency = 3,
+            RenderMaxQueueSize = 20,
+            RenderLogDir = HostConfig.DefaultRenderLogDir,
+            RenderDiagnosticsEnabled = true
         };
 
         SettingsMapper.ApplyToConfig(config, model);
@@ -92,6 +107,29 @@ public class SettingsMapperTests
         Assert.Equal(3, config.FileLogRetentionDays);
         Assert.Equal(8, config.PrintDebugArtifactRetentionCount);
         Assert.Null(config.PrintDebugArtifactsDir);
+        Assert.True(config.RenderEnabled);
+        Assert.Equal(HostConfig.DefaultRenderHostPath, config.RenderHostPath);
+        Assert.Equal("126", config.RenderBrowserVersion);
+        Assert.Equal(18182, config.RenderPort);
+        Assert.Equal(45000, config.RenderRequestTimeoutMs);
+        Assert.Equal(3, config.RenderMaxConcurrency);
+        Assert.Equal(20, config.RenderMaxQueueSize);
+        Assert.Null(config.RenderLogDir);
+        Assert.True(config.RenderDiagnosticsEnabled);
+    }
+
+    [Fact]
+    public void Validate_InvalidRenderBrowserVersion_NormalizesToAuto()
+    {
+        var model = SettingsMapper.FromConfig(new HostConfig(), autoStart: false);
+        model.RenderBrowserVersion = "unknown";
+
+        var validation = SettingsMapper.Validate(model);
+
+        Assert.True(validation.IsValid);
+        var config = new HostConfig();
+        SettingsMapper.ApplyToConfig(config, model);
+        Assert.Equal(RenderBrowserVersionCatalog.AutoKey, config.RenderBrowserVersion);
     }
 
     [Theory]
