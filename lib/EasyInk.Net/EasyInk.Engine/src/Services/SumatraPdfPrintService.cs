@@ -140,7 +140,40 @@ public class SumatraPdfPrintService : IPrintService
 
     private static string Quote(string value)
     {
-        return "\"" + value.Replace("\"", "\\\"") + "\"";
+        var escaped = new StringBuilder(value.Length + 2);
+        escaped.Append('"');
+
+        var backslashCount = 0;
+        foreach (var ch in value)
+        {
+            if (ch == '\\')
+            {
+                backslashCount++;
+                continue;
+            }
+
+            if (ch == '"')
+            {
+                escaped.Append('\\', backslashCount * 2 + 1);
+                escaped.Append(ch);
+                backslashCount = 0;
+                continue;
+            }
+
+            if (backslashCount > 0)
+            {
+                escaped.Append('\\', backslashCount);
+                backslashCount = 0;
+            }
+
+            escaped.Append(ch);
+        }
+
+        if (backslashCount > 0)
+            escaped.Append('\\', backslashCount * 2);
+
+        escaped.Append('"');
+        return escaped.ToString();
     }
 
     private static void TryKill(Process process)
