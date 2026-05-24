@@ -59,6 +59,7 @@ describe('designer store schema initialization', () => {
     store.removeElement('a')
     expect(store.schema.groups).toEqual([])
   })
+
   it('registers materials, catalog entries, and cached designer extensions', () => {
     const store = new DesignerStore()
     const definition = createMaterialDefinition('sample')
