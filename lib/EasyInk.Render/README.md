@@ -1,23 +1,23 @@
 # EasyInk.Render
 
-`EasyInk.Render` 是 EasyInk 的服务端 PDF 渲染 Runtime。它交付独立可执行文件 `easyink-render-host`，把 HTML、PDF、EasyInk schema + data 三类输入统一归一为可打印 PDF，并返回受控 diagnostics。
+`EasyInk.Render` 是 CLI-first PDF render runtime。主可执行文件是 `easyink-render`：默认通过本地 IPC 自动启动并复用 daemon/browser；需要 CI 或故障隔离时可使用 `render --no-daemon` 单进程渲染。
 
-完整教程、架构说明、协议示例、开发流程和 Docker 验证步骤统一维护在 [docs/printing/render.md](../../docs/printing/render.md)。源码目录下只保留这个入口，避免设计文档和教程散落多处。
+完整教程、架构说明、协议示例、跨平台构建测试和 Docker 验证步骤统一维护在 [docs/printing/render.md](../../docs/printing/render.md)。
 
 ## 当前实现
 
-- Host 使用 Go、`net/http`、chromedp/cdproto 和 Chrome for Testing。
-- API：`GET /v1/info`、`GET /v1/health`、`POST /v1/render/print-pdf`。
-- 输入：`source.type=html`、`source.type=pdf`、`source.type=easyink`。
-- 输出：默认 `application/pdf`；调试时支持 `output.type=base64Json`。
-- 安全：loopback HTTP、Bearer token、每请求 browser context、资源 allowlist、私网地址拦截、direct proxy。
-- 诊断：按 `requestId` 聚合耗时、console error、网络失败、页数、PDF metadata、日志和可选附件。
+- CLI：`render`、`daemon`、`browser inspect`、`config`、`diagnostics show`、`version`。
+- Daemon：Windows Named Pipe，macOS/Linux Unix Domain Socket；不监听 TCP 端口。
+- 输入：`source.type=html`、`source.type=pdf`、`source.type=easyink`，继续复用 `protocol.PrintPDFRequest`。
+- Browser：支持 `chrome-for-testing`、`chromium`、`chrome`、`edge`、`headless-shell`、`custom`。
+- Diagnostics：按 `requestId` 记录浏览器信息、耗时、console error、网络失败、页数、PDF metadata、日志和可选附件。
+- HTTP：不提供 HTTP 兼容入口，Render 主路径只保留 CLI/IPC daemon。
 
 ## 目录
 
 ```text
-host/       Go Render Host 实现
-protocol/   OpenAPI 描述和协议 fixture
+host/       Go CLI、daemon、IPC、render host 实现
+protocol/   协议 fixture
 manifests/  runtime manifest 示例
 samples/    html/pdf/easyink 请求示例
 tools/      发布包和 manifest 辅助脚本
@@ -25,29 +25,43 @@ tools/      发布包和 manifest 辅助脚本
 
 ## 常用命令
 
+Docker 单元测试：
+
 ```bash
-docker run --rm \
+docker run --rm --platform linux/amd64 \
   -v "$PWD/lib/EasyInk.Render/host:/src" \
   -w /src \
   golang:1.23-bookworm \
-  sh -c 'set -e; go test ./...; CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o easyink-render-host.exe ./cmd/easyink-render-host'
+  sh -lc '/usr/local/go/bin/gofmt -w cmd internal && /usr/local/go/bin/go test ./...'
 ```
+
+跨平台构建检查：
+
+```bash
+docker run --rm --platform linux/amd64 \
+  -v "$PWD/lib/EasyInk.Render/host:/src" \
+  -w /src \
+  golang:1.23-bookworm \
+  sh -lc 'CGO_ENABLED=0 GOOS=linux GOARCH=amd64 /usr/local/go/bin/go build -trimpath -o /tmp/easyink-render ./cmd/easyink-render-host && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 /usr/local/go/bin/go build -trimpath -o /tmp/easyink-render.exe ./cmd/easyink-render-host'
+```
+
+真实浏览器渲染验证：
+
+```bash
+docker run --rm --platform linux/amd64 --entrypoint /bin/sh \
+  -v "$PWD/lib/EasyInk.Render:/work" \
+  -w /work \
+  chromedp/headless-shell:latest \
+  -lc './host/easyink-render render --no-daemon --request samples/html/request.json --out /tmp/out.pdf --browser-kind headless-shell --browser-path /headless-shell/headless-shell --profile-root /tmp/easyink-profile --temp-dir /tmp/easyink-temp --log-dir /tmp/easyink-logs --json && test -s /tmp/out.pdf'
+```
+
+发布工具：
 
 ```bash
 pnpm render:manifest
 pnpm render:release:test
 ```
 
-Docker 单元测试：
-
-```bash
-docker run --rm \
-  -v "$PWD/lib/EasyInk.Render/host:/src" \
-  -w /src \
-  golang:1.23-bookworm \
-  sh -lc 'gofmt -w cmd internal && go test ./...'
-```
-
 ## 文档维护约定
 
-Render 使用、架构、开发、发布和排错说明统一更新到 [docs/printing/render.md](../../docs/printing/render.md)。如果新增协议字段、source pipeline、Runtime 能力或发布命令，请同步更新该文档、OpenAPI、samples 和相关测试。
+Render 使用、架构、开发、发布和排错说明统一更新到 [docs/printing/render.md](../../docs/printing/render.md)。如果新增协议字段、CLI 命令、daemon IPC 方法、浏览器能力、runtime manifest 字段或发布命令，请同步更新该文档、OpenAPI、samples 和相关测试。

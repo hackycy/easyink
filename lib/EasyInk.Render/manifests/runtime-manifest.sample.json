@@ -4,7 +4,7 @@
   "host": {
     "version": "0.1.0",
     "platform": "linux-arm64",
-    "executable": "easyink-render-host",
+    "executable": "easyink-render",
     "url": "",
     "sha256": "",
     "size": 0

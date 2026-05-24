@@ -43,10 +43,7 @@ type Result struct {
 	PDFMetadata PDFMetadata
 }
 
-type DiagnosticAttachments struct {
-	HTMLSnapshot []byte
-	Screenshot   []byte
-}
+type DiagnosticAttachments = diagnostics.Attachments
 
 type PDFMetadata struct {
 	Title    string
@@ -82,6 +79,7 @@ func (s *Service) RenderPrintPDF(ctx context.Context, req protocol.PrintPDFReque
 		return Result{}, coded(protocol.ErrInvalidRequest, "source.type is required", nil)
 	}
 	collector := diagnostics.New(req.RequestID, req.Source.Type, s.browserVersion())
+	collector.SetBrowser(s.browserKind(), s.browserName(), s.browserVersion())
 	var result Result
 	var err error
 	switch req.Source.Type {
@@ -121,6 +119,20 @@ func (s *Service) browserVersion() string {
 		return "not-required"
 	}
 	return s.browser.Version()
+}
+
+func (s *Service) browserKind() string {
+	if s == nil || s.browser == nil {
+		return "not-required"
+	}
+	return s.browser.BrowserKind()
+}
+
+func (s *Service) browserName() string {
+	if s == nil || s.browser == nil {
+		return "not-required"
+	}
+	return s.browser.BrowserName()
 }
 
 func (s *Service) renderEasyInk(ctx context.Context, req protocol.PrintPDFRequest, collector *diagnostics.Collector) (Result, error) {

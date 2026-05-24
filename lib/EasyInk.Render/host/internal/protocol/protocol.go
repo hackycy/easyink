@@ -81,60 +81,12 @@ type DiagnosticsOptions struct {
 	IncludeRequestHeaders bool `json:"includeRequestHeaders,omitempty"`
 }
 
-type InfoResponse struct {
-	HostVersion     string   `json:"hostVersion"`
-	ProtocolVersion string   `json:"protocolVersion"`
-	BrowserName     string   `json:"browserName"`
-	BrowserVersion  string   `json:"browserVersion"`
-	Capabilities    []string `json:"capabilities"`
-}
-
-type HealthResponse struct {
-	Status  string        `json:"status"`
-	Browser BrowserHealth `json:"browser"`
-	Queue   QueueHealth   `json:"queue"`
-}
-
-type BrowserHealth struct {
-	Status    string `json:"status"`
-	Version   string `json:"version"`
-	Restarts  int    `json:"restarts"`
-	LastError string `json:"lastError,omitempty"`
-}
-
-type QueueHealth struct {
-	Running        int `json:"running"`
-	Pending        int `json:"pending"`
-	MaxConcurrency int `json:"maxConcurrency"`
-	MaxQueueSize   int `json:"maxQueueSize"`
-}
-
-type Base64PDFResponse struct {
-	Success     bool        `json:"success"`
-	RequestID   string      `json:"requestId"`
-	ContentType string      `json:"contentType"`
-	Base64      string      `json:"base64"`
-	PageCount   int         `json:"pageCount"`
-	Diagnostics Diagnostics `json:"diagnostics"`
-}
-
-type ErrorResponse struct {
-	Success     bool        `json:"success"`
-	RequestID   string      `json:"requestId"`
-	Error       ErrorBody   `json:"error"`
-	Diagnostics Diagnostics `json:"diagnostics"`
-}
-
-type ErrorBody struct {
-	Code    string         `json:"code"`
-	Message string         `json:"message"`
-	Details map[string]any `json:"details,omitempty"`
-}
-
 type Diagnostics struct {
 	ID               string            `json:"id,omitempty"`
 	RequestID        string            `json:"requestId"`
 	HostVersion      string            `json:"hostVersion"`
+	BrowserKind      string            `json:"browserKind,omitempty"`
+	BrowserName      string            `json:"browserName,omitempty"`
 	BrowserVersion   string            `json:"browserVersion"`
 	ProtocolVersion  string            `json:"protocolVersion"`
 	DurationMs       int64             `json:"durationMs"`
@@ -155,7 +107,6 @@ type Diagnostics struct {
 }
 
 const (
-	ErrUnauthorized      = "UNAUTHORIZED"
 	ErrInvalidRequest    = "INVALID_REQUEST"
 	ErrUnsupportedSource = "UNSUPPORTED_SOURCE"
 	ErrInvalidPDF        = "INVALID_PDF"

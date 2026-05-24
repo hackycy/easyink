@@ -3,59 +3,62 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
-func TestParseRequiresLoopbackAndToken(t *testing.T) {
+func TestRuntimeConfigValidation(t *testing.T) {
 	browser := filepath.Join(t.TempDir(), "chrome")
 	if err := os.WriteFile(browser, []byte("fake"), 0o755); err != nil {
 		t.Fatalf("write browser: %v", err)
 	}
+	cfg := Defaults()
+	cfg.Browser.Kind = "chromium"
+	cfg.Browser.Path = browser
+	cfg.ProfileRoot = t.TempDir()
+	cfg.TempDir = t.TempDir()
+	cfg.LogDir = t.TempDir()
 
-	_, err := Parse([]string{
-		"--host", "0.0.0.0",
-		"--auth-token", "token",
-		"--browser-path", browser,
-	})
-	if err == nil {
-		t.Fatal("expected non-loopback host to fail")
+	if err := cfg.ValidateRuntime(true); err != nil {
+		t.Fatalf("validate runtime: %v", err)
 	}
 
-	_, err = Parse([]string{
-		"--host", "127.0.0.1",
-		"--browser-path", browser,
-	})
-	if err == nil {
-		t.Fatal("expected missing token to fail")
+	cfg.Browser.Kind = "netscape"
+	if err := cfg.ValidateRuntime(true); err == nil || !strings.Contains(err.Error(), "unsupported browser.kind") {
+		t.Fatalf("expected unsupported browser kind, got %v", err)
 	}
 }
 
-func TestParseAcceptsMaxQueueSize(t *testing.T) {
-	browser := filepath.Join(t.TempDir(), "chrome")
-	if err := os.WriteFile(browser, []byte("fake"), 0o755); err != nil {
-		t.Fatalf("write browser: %v", err)
-	}
+func TestRuntimeFingerprintChangesWithBrowserPath(t *testing.T) {
+	cfg := Defaults()
+	cfg.Browser.Kind = "chromium"
+	cfg.Browser.Path = "/browser/a"
+	original := cfg.Fingerprint()
 
-	cfg, err := Parse([]string{
-		"--host", "127.0.0.1",
-		"--auth-token", "token",
-		"--browser-path", browser,
-		"--max-queue-size", "7",
-	})
-	if err != nil {
-		t.Fatalf("parse config: %v", err)
+	cfg.Browser.Path = "/browser/b"
+	if got := cfg.Fingerprint(); got == original {
+		t.Fatal("expected fingerprint to change when browser path changes")
 	}
-	if cfg.MaxQueueSize != 7 {
-		t.Fatalf("max queue size = %d", cfg.MaxQueueSize)
-	}
+}
 
-	_, err = Parse([]string{
-		"--host", "127.0.0.1",
-		"--auth-token", "token",
-		"--browser-path", browser,
-		"--max-queue-size", "-1",
+func TestMergeOverrideKeepsUnsetValues(t *testing.T) {
+	cfg := Defaults()
+	cfg.Browser.Kind = "chromium"
+	cfg.MaxQueueSize = 16
+	queueSize := 0
+
+	got := MergeOverride(cfg, Override{
+		BrowserPath:  "/tmp/chrome",
+		MaxQueueSize: &queueSize,
 	})
-	if err == nil {
-		t.Fatal("expected negative max queue size to fail")
+
+	if got.Browser.Kind != "chromium" {
+		t.Fatalf("browser kind = %q", got.Browser.Kind)
+	}
+	if got.Browser.Path != "/tmp/chrome" {
+		t.Fatalf("browser path = %q", got.Browser.Path)
+	}
+	if got.MaxQueueSize != 0 {
+		t.Fatalf("max queue size = %d", got.MaxQueueSize)
 	}
 }

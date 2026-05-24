@@ -3,6 +3,7 @@ package diagnostics
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,6 +12,11 @@ import (
 
 	"easyink/render/host/internal/protocol"
 )
+
+type Attachments struct {
+	HTMLSnapshot []byte
+	Screenshot   []byte
+}
 
 type Collector struct {
 	mu          sync.Mutex
@@ -72,6 +78,14 @@ func (c *Collector) SetPDFMetadata(title, author, creator, producer string) {
 	c.diagnostics.PDFProducer = producer
 }
 
+func (c *Collector) SetBrowser(kind, name, version string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.diagnostics.BrowserKind = kind
+	c.diagnostics.BrowserName = name
+	c.diagnostics.BrowserVersion = version
+}
+
 func (c *Collector) Snapshot() protocol.Diagnostics {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -115,6 +129,8 @@ func WriteLog(logDir string, value protocol.Diagnostics) (string, error) {
 	writeLogLine(&out, "sourceType", value.SourceType)
 	writeLogLine(&out, "hostVersion", value.HostVersion)
 	writeLogLine(&out, "protocolVersion", value.ProtocolVersion)
+	writeLogLine(&out, "browserKind", value.BrowserKind)
+	writeLogLine(&out, "browserName", value.BrowserName)
 	writeLogLine(&out, "browserVersion", value.BrowserVersion)
 	writeLogLine(&out, "durationMs", fmt.Sprint(value.DurationMs))
 	writeLogLine(&out, "finalUrl", value.FinalURL)
@@ -167,6 +183,55 @@ func WriteAttachment(logDir, diagnosticsID, fileName string, data []byte) (strin
 		return "", err
 	}
 	return path, nil
+}
+
+func Persist(logDir string, diag protocol.Diagnostics, attachments Attachments, options protocol.DiagnosticsOptions) protocol.Diagnostics {
+	if options.IncludeHTMLSnapshot {
+		if path, err := WriteAttachment(logDir, diag.ID, "snapshot.html", attachments.HTMLSnapshot); err != nil {
+			log.Printf("write html snapshot failed for %s: %v", diag.ID, err)
+		} else {
+			diag.HTMLSnapshotPath = path
+		}
+	}
+	if options.IncludeScreenshot {
+		if path, err := WriteAttachment(logDir, diag.ID, "screenshot.png", attachments.Screenshot); err != nil {
+			log.Printf("write screenshot failed for %s: %v", diag.ID, err)
+		} else {
+			diag.ScreenshotPath = path
+		}
+	}
+	path, err := WriteSummary(logDir, diag)
+	if err != nil {
+		log.Printf("write diagnostics summary failed for %s: %v", diag.ID, err)
+		return diag
+	}
+	diag.AttachmentPath = path
+	path, err = WriteLog(logDir, diag)
+	if err != nil {
+		log.Printf("write diagnostics log failed for %s: %v", diag.ID, err)
+		return diag
+	}
+	diag.LogPath = path
+	if path, err = WriteSummary(logDir, diag); err != nil {
+		log.Printf("write diagnostics summary failed for %s: %v", diag.ID, err)
+		return diag
+	}
+	diag.AttachmentPath = path
+	return diag
+}
+
+func WriteCopy(path string, diag protocol.Diagnostics) error {
+	if strings.TrimSpace(path) == "" {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(diag, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, append(data, '\n'), 0o644)
 }
 
 func Directory(logDir, diagnosticsID string) string {

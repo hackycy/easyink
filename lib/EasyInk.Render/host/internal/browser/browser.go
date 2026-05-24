@@ -2,9 +2,16 @@ package browser
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"os"
 	"strings"
 	"sync"
+	"time"
 
+	"easyink/render/host/internal/config"
+
+	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
 )
 
@@ -25,6 +32,9 @@ type Manager struct {
 	browser     context.Context
 	cancel      func()
 	path        string
+	kind        string
+	name        string
+	headless    string
 	profileRoot string
 	version     string
 	restarts    int
@@ -34,15 +44,43 @@ type Manager struct {
 
 type Health struct {
 	Ready     bool
+	Kind      string
+	Name      string
 	Version   string
 	Restarts  int
 	LastError string
 }
 
+type InspectResult struct {
+	Kind       string `json:"kind"`
+	Name       string `json:"name"`
+	Version    string `json:"version"`
+	Headless   bool   `json:"headless"`
+	CDP        bool   `json:"cdp"`
+	PrintToPDF bool   `json:"printToPDF"`
+}
+
 func New(ctx context.Context, browserPath, profileRoot string) (*Manager, error) {
+	return NewWithConfig(ctx, config.BrowserConfig{
+		Kind:         "chrome-for-testing",
+		Path:         browserPath,
+		HeadlessMode: "new",
+	}, profileRoot)
+}
+
+func NewWithConfig(ctx context.Context, browserConfig config.BrowserConfig, profileRoot string) (*Manager, error) {
+	if strings.TrimSpace(browserConfig.Kind) == "" {
+		browserConfig.Kind = "chrome-for-testing"
+	}
+	if strings.TrimSpace(browserConfig.HeadlessMode) == "" {
+		browserConfig.HeadlessMode = "auto"
+	}
 	manager := &Manager{
 		parent:      ctx,
-		path:        browserPath,
+		path:        browserConfig.Path,
+		kind:        browserConfig.Kind,
+		name:        browserConfig.Kind,
+		headless:    browserConfig.HeadlessMode,
 		profileRoot: profileRoot,
 		version:     "unknown",
 	}
@@ -59,7 +97,15 @@ func (m *Manager) Version() string {
 }
 
 func (m *Manager) BrowserName() string {
-	return "chrome-for-testing"
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.name
+}
+
+func (m *Manager) BrowserKind() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.kind
 }
 
 func (m *Manager) Health(parent context.Context) Health {
@@ -69,6 +115,8 @@ func (m *Manager) Health(parent context.Context) Health {
 	if err != nil {
 		return Health{
 			Ready:     false,
+			Kind:      m.kind,
+			Name:      m.name,
 			Version:   m.version,
 			Restarts:  m.restarts,
 			LastError: err.Error(),
@@ -76,6 +124,8 @@ func (m *Manager) Health(parent context.Context) Health {
 	}
 	return Health{
 		Ready:     true,
+		Kind:      m.kind,
+		Name:      m.name,
 		Version:   m.version,
 		Restarts:  m.restarts,
 		LastError: m.lastError,
@@ -164,6 +214,14 @@ func (m *Manager) NewPage(parent context.Context) (context.Context, context.Canc
 }
 
 func (m *Manager) startLocked() error {
+	if strings.TrimSpace(m.path) == "" {
+		return errors.New("browser path is required")
+	}
+	if info, err := os.Stat(m.path); err != nil {
+		return fmt.Errorf("browser path is not accessible: %w", err)
+	} else if info.IsDir() {
+		return errors.New("browser path must point to an executable file")
+	}
 	opts := append(chromedp.DefaultExecAllocatorOptions[:],
 		chromedp.ExecPath(m.path),
 		chromedp.UserDataDir(m.profileRoot),
@@ -172,11 +230,11 @@ func (m *Manager) startLocked() error {
 		chromedp.NoDefaultBrowserCheck,
 		chromedp.Flag("disable-dev-shm-usage", true),
 		chromedp.Flag("disable-gpu", true),
-		chromedp.Flag("headless", "new"),
 		chromedp.Flag("no-sandbox", true),
 		chromedp.Flag("proxy-server", "direct://"),
 		chromedp.Flag("proxy-bypass-list", "*"),
 	)
+	opts = append(opts, headlessOptions(m.kind, m.headless)...)
 	allocator, allocatorCancel := chromedp.NewExecAllocator(m.parent, opts...)
 	browserCtx, browserCancel := chromedp.NewContext(allocator)
 	m.browser = browserCtx
@@ -219,6 +277,7 @@ func (m *Manager) probeVersionLocked() error {
 		return err
 	}
 	m.version = parseChromeVersion(value)
+	m.name = parseBrowserName(value, m.kind)
 	return nil
 }
 
@@ -240,4 +299,79 @@ func parseChromeVersion(userAgent string) string {
 		}
 	}
 	return "unknown"
+}
+
+func parseBrowserName(userAgent, fallback string) string {
+	lower := strings.ToLower(userAgent)
+	switch {
+	case strings.Contains(lower, "edg/"):
+		return "edge"
+	case strings.Contains(lower, "headlesschrome/"):
+		return "headless-shell"
+	case strings.Contains(lower, "chrome/"):
+		return "chrome"
+	default:
+		if strings.TrimSpace(fallback) == "" {
+			return "unknown"
+		}
+		return fallback
+	}
+}
+
+func headlessOptions(kind, mode string) []chromedp.ExecAllocatorOption {
+	switch mode {
+	case "none":
+		return nil
+	case "old":
+		return []chromedp.ExecAllocatorOption{chromedp.Flag("headless", true)}
+	case "shell":
+		return []chromedp.ExecAllocatorOption{chromedp.Flag("headless", true)}
+	case "new":
+		return []chromedp.ExecAllocatorOption{chromedp.Flag("headless", "new")}
+	default:
+		if kind == "headless-shell" {
+			return []chromedp.ExecAllocatorOption{chromedp.Flag("headless", true)}
+		}
+		return []chromedp.ExecAllocatorOption{chromedp.Flag("headless", "new")}
+	}
+}
+
+func Inspect(ctx context.Context, browserConfig config.BrowserConfig, profileRoot string) (InspectResult, error) {
+	if profileRoot == "" {
+		profileRoot = os.TempDir()
+	}
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	manager, err := NewWithConfig(ctx, browserConfig, profileRoot)
+	if err != nil {
+		return InspectResult{}, err
+	}
+	defer manager.Shutdown()
+
+	pageCtx, pageCancel, err := manager.NewPage(ctx)
+	if err != nil {
+		return InspectResult{}, err
+	}
+	defer pageCancel()
+
+	printOK := false
+	if err := chromedp.Run(pageCtx, chromedp.ActionFunc(func(ctx context.Context) error {
+		_, _, err := page.PrintToPDF().Do(ctx)
+		if err == nil {
+			printOK = true
+		}
+		return err
+	})); err != nil {
+		return InspectResult{}, err
+	}
+
+	health := manager.Health(ctx)
+	return InspectResult{
+		Kind:       health.Kind,
+		Name:       health.Name,
+		Version:    health.Version,
+		Headless:   browserConfig.HeadlessMode != "none",
+		CDP:        health.Ready,
+		PrintToPDF: printOK,
+	}, nil
 }
