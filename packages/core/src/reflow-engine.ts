@@ -1,5 +1,6 @@
 import type { MaterialNode } from '@easyink/schema'
 import type { LayoutDiagnostic } from './layout-plan'
+import { rectsIntersect } from './geometry'
 import { readNodeFlowConstraints } from './layout-plan'
 
 export interface ReflowEngineInput {
@@ -16,6 +17,11 @@ interface OrderedNode {
   index: number
   original: MaterialNode
   measured: MaterialNode
+}
+
+interface ReflowNodePartition {
+  flowNodes: MaterialNode[]
+  fixedNodes: MaterialNode[]
 }
 
 export function runFlowYReflow(input: ReflowEngineInput): ReflowEngineResult {
@@ -40,6 +46,7 @@ export function runFlowYReflow(input: ReflowEngineInput): ReflowEngineResult {
   let accumulatedDelta = 0
   let pendingBandDelta = 0
   const laidOutById = new Map<string, MaterialNode>()
+  const participatesById = new Map<string, boolean>()
 
   for (const entry of ordered) {
     if (currentBandY === null) {
@@ -52,6 +59,7 @@ export function runFlowYReflow(input: ReflowEngineInput): ReflowEngineResult {
     }
 
     const flow = readNodeFlowConstraints(entry.measured)
+    participatesById.set(entry.original.id, flow.participates)
     const nextY = flow.participates
       ? entry.original.y + accumulatedDelta
       : entry.original.y
@@ -68,18 +76,36 @@ export function runFlowYReflow(input: ReflowEngineInput): ReflowEngineResult {
   }
 
   const elements = input.measuredElements.map(node => laidOutById.get(node.id) ?? node)
+  const partition = partitionReflowNodes(elements, participatesById)
   return {
     elements,
-    diagnostics: collectFixedOverlapDiagnostics(elements, originalById),
+    diagnostics: collectFixedOverlapDiagnostics(partition, originalById),
   }
 }
 
-function collectFixedOverlapDiagnostics(
+function partitionReflowNodes(
   elements: MaterialNode[],
+  participatesById: ReadonlyMap<string, boolean>,
+): ReflowNodePartition {
+  const flowNodes: MaterialNode[] = []
+  const fixedNodes: MaterialNode[] = []
+
+  for (const node of elements) {
+    const participates = participatesById.get(node.id) ?? readNodeFlowConstraints(node).participates
+    if (participates)
+      flowNodes.push(node)
+    else
+      fixedNodes.push(node)
+  }
+
+  return { flowNodes, fixedNodes }
+}
+
+function collectFixedOverlapDiagnostics(
+  partition: ReflowNodePartition,
   originalById: Map<string, MaterialNode>,
 ): LayoutDiagnostic[] {
-  const flowNodes = elements.filter(node => readNodeFlowConstraints(node).participates)
-  const fixedNodes = elements.filter(node => !readNodeFlowConstraints(node).participates)
+  const { flowNodes, fixedNodes } = partition
   const diagnostics: LayoutDiagnostic[] = []
 
   for (const flowNode of flowNodes) {
@@ -112,11 +138,4 @@ function collectFixedOverlapDiagnostics(
   }
 
   return diagnostics
-}
-
-function rectsIntersect(left: MaterialNode, right: MaterialNode): boolean {
-  return left.x < right.x + right.width
-    && left.x + left.width > right.x
-    && left.y < right.y + right.height
-    && left.y + left.height > right.y
 }
