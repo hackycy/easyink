@@ -21,6 +21,28 @@ func TestVersionCommand(t *testing.T) {
 	}
 }
 
+func TestShortVersionFlag(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := run([]string{"-v"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("exit = %d stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "easyink-render") {
+		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+}
+
+func TestRootHelpCommand(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := run(nil, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("exit = %d stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "Usage:") {
+		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+}
+
 func TestRenderNoDaemonPDF(t *testing.T) {
 	temp := t.TempDir()
 	requestPath := filepath.Join(temp, "request.json")
@@ -61,5 +83,35 @@ func TestRenderNoDaemonPDF(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), `"success": true`) {
 		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+}
+
+func TestRenderRejectsTrailingJSON(t *testing.T) {
+	temp := t.TempDir()
+	requestPath := filepath.Join(temp, "request.json")
+	outPath := filepath.Join(temp, "out.pdf")
+	request := `{
+		"requestId": "req-cli-pdf",
+		"source": {
+			"type": "pdf",
+			"pdfBase64": "` + samplePDFBase64 + `"
+		}
+	} {}`
+	if err := os.WriteFile(requestPath, []byte(request), 0o644); err != nil {
+		t.Fatalf("write request: %v", err)
+	}
+	var stdout, stderr bytes.Buffer
+	code := run([]string{
+		"render",
+		"--no-daemon",
+		"--request", requestPath,
+		"--out", outPath,
+		"--log-dir", temp,
+	}, &stdout, &stderr)
+	if code != 3 {
+		t.Fatalf("exit = %d stdout=%s stderr=%s", code, stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "single object") {
+		t.Fatalf("unexpected stderr: %s", stderr.String())
 	}
 }

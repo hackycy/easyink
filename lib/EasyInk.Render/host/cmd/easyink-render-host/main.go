@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -25,6 +24,9 @@ import (
 	"easyink/render/host/internal/ipc"
 	"easyink/render/host/internal/protocol"
 	"easyink/render/host/internal/render"
+
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 func main() {
@@ -32,97 +34,185 @@ func main() {
 }
 
 func run(args []string, stdout, stderr io.Writer) int {
-	if len(args) == 0 {
-		usage(stdout)
-		return clix.ExitSuccess
-	}
-	switch args[0] {
-	case "render":
-		return runRender(args[1:], stdout, stderr)
-	case "daemon":
-		return runDaemon(args[1:], stdout, stderr)
-	case "browser":
-		return runBrowser(args[1:], stdout, stderr)
-	case "config":
-		return runConfig(args[1:], stdout, stderr)
-	case "diagnostics":
-		return runDiagnostics(args[1:], stdout, stderr)
-	case "version", "--version", "-v":
-		fmt.Fprintf(stdout, "easyink-render %s protocol=%s\n", protocol.HostVersion, protocol.ProtocolVersion)
-		return clix.ExitSuccess
-	case "help", "--help", "-h":
-		usage(stdout)
-		return clix.ExitSuccess
-	default:
-		fmt.Fprintf(stderr, "unknown command: %s\n", args[0])
-		usage(stderr)
+	root := newRootCommand(stdout, stderr)
+	root.SetArgs(args)
+	if err := root.Execute(); err != nil {
+		var exitErr exitError
+		if errors.As(err, &exitErr) {
+			return exitErr.code
+		}
+		fmt.Fprintln(stderr, err)
 		return clix.ExitInvalidArguments
+	}
+	return clix.ExitSuccess
+}
+
+type exitError struct {
+	code int
+}
+
+func (e exitError) Error() string {
+	return fmt.Sprintf("command exited with code %d", e.code)
+}
+
+func commandExit(code int) error {
+	if code == clix.ExitSuccess {
+		return nil
+	}
+	return exitError{code: code}
+}
+
+func newRootCommand(stdout, stderr io.Writer) *cobra.Command {
+	version := fmt.Sprintf("easyink-render %s protocol=%s", protocol.HostVersion, protocol.ProtocolVersion)
+	showVersion := false
+	root := &cobra.Command{
+		Use:           "easyink-render",
+		Short:         "EasyInk.Render CLI",
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if showVersion {
+				fmt.Fprintln(stdout, version)
+				return nil
+			}
+			return cmd.Help()
+		},
+	}
+	root.SetOut(stdout)
+	root.SetErr(stderr)
+	root.Flags().BoolVarP(&showVersion, "version", "v", false, "print version")
+	root.AddCommand(
+		newRenderCommand(stdout, stderr),
+		newDaemonCommand(stdout, stderr),
+		newBrowserCommand(stdout, stderr),
+		newConfigCommand(stdout, stderr),
+		newDiagnosticsCommand(stdout, stderr),
+		&cobra.Command{
+			Use:   "version",
+			Short: "Print version information",
+			Args:  cobra.NoArgs,
+			Run: func(cmd *cobra.Command, args []string) {
+				fmt.Fprintln(stdout, version)
+			},
+		},
+	)
+	return root
+}
+
+type runtimeOptions struct {
+	override      config.Override
+	idleTimeoutMs int
+	maxQueueSize  int
+}
+
+func newRuntimeOptions() *runtimeOptions {
+	return &runtimeOptions{
+		override:      config.Override{IdleTimeoutMs: -1},
+		idleTimeoutMs: -1,
+		maxQueueSize:  -1,
 	}
 }
 
-func runRender(args []string, stdout, stderr io.Writer) int {
-	fs := flag.NewFlagSet("easyink-render render", flag.ContinueOnError)
-	fs.SetOutput(stderr)
-	requestPath := fs.String("request", "", "request JSON path")
-	outPath := fs.String("out", "", "output PDF path")
-	jsonOut := fs.Bool("json", false, "write JSON summary")
-	diagnosticsOut := fs.String("diagnostics-out", "", "extra diagnostics JSON output path")
-	noDaemon := fs.Bool("no-daemon", false, "render in the current process")
-	forceRestart := fs.Bool("force-restart-daemon", false, "restart daemon before render")
-	override := config.Override{IdleTimeoutMs: -1}
-	idleTimeout, maxQueueSize := bindRuntimeFlags(fs, &override)
-	if err := fs.Parse(args); err != nil {
-		return clix.ExitInvalidArguments
+func (o *runtimeOptions) bind(flags *pflag.FlagSet) {
+	flags.StringVar(&o.override.BrowserKind, "browser-kind", "", "browser kind")
+	flags.StringVar(&o.override.BrowserPath, "browser-path", "", "browser executable path")
+	flags.StringVar(&o.override.HeadlessMode, "headless-mode", "", "browser headless mode: auto, new, old, shell, none")
+	flags.StringVar(&o.override.ProfileRoot, "profile-root", "", "browser profile root")
+	flags.StringVar(&o.override.TempDir, "temp-dir", "", "temporary directory")
+	flags.StringVar(&o.override.LogDir, "log-dir", "", "diagnostics log directory")
+	flags.IntVar(&o.override.MaxConcurrency, "max-concurrency", 0, "maximum concurrent render jobs")
+	flags.IntVar(&o.maxQueueSize, "max-queue-size", -1, "maximum queued render jobs")
+	flags.IntVar(&o.override.RequestTimeoutMs, "request-timeout-ms", 0, "request timeout in milliseconds")
+	flags.IntVar(&o.idleTimeoutMs, "idle-timeout-ms", -1, "daemon idle timeout in milliseconds, 0 disables idle exit")
+}
+
+func (o *runtimeOptions) toOverride() config.Override {
+	override := o.override
+	override.IdleTimeoutMs = o.idleTimeoutMs
+	if o.maxQueueSize >= 0 {
+		maxQueueSize := o.maxQueueSize
+		override.MaxQueueSize = &maxQueueSize
 	}
-	override.IdleTimeoutMs = *idleTimeout
-	if *maxQueueSize >= 0 {
-		override.MaxQueueSize = maxQueueSize
+	return override
+}
+
+type renderOptions struct {
+	requestPath    string
+	outPath        string
+	diagnosticsOut string
+	jsonOut        bool
+	noDaemon       bool
+	forceRestart   bool
+	runtimeOptions *runtimeOptions
+}
+
+func newRenderCommand(stdout, stderr io.Writer) *cobra.Command {
+	options := renderOptions{runtimeOptions: newRuntimeOptions()}
+	cmd := &cobra.Command{
+		Use:   "render",
+		Short: "Render a request to PDF",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return commandExit(runRender(options, stdout, stderr))
+		},
 	}
-	if *requestPath == "" || *outPath == "" {
+	flags := cmd.Flags()
+	flags.StringVar(&options.requestPath, "request", "", "request JSON path")
+	flags.StringVar(&options.outPath, "out", "", "output PDF path")
+	flags.BoolVar(&options.jsonOut, "json", false, "write JSON summary")
+	flags.StringVar(&options.diagnosticsOut, "diagnostics-out", "", "extra diagnostics JSON output path")
+	flags.BoolVar(&options.noDaemon, "no-daemon", false, "render in the current process")
+	flags.BoolVar(&options.forceRestart, "force-restart-daemon", false, "restart daemon before render")
+	options.runtimeOptions.bind(flags)
+	return cmd
+}
+
+func runRender(options renderOptions, stdout, stderr io.Writer) int {
+	if options.requestPath == "" || options.outPath == "" {
 		fmt.Fprintln(stderr, "render requires --request and --out")
 		return clix.ExitInvalidArguments
 	}
-	cfg, err := loadRuntimeConfig(override)
+	cfg, err := loadRuntimeConfig(options.runtimeOptions.toOverride())
 	if err != nil {
 		fmt.Fprintf(stderr, "configuration error: %v\n", err)
 		return clix.ExitInvalidArguments
 	}
-	requestData, req, code, err := readRequest(*requestPath)
+	requestData, req, code, err := readRequest(options.requestPath)
 	if err != nil {
 		fmt.Fprintf(stderr, "request error: %v\n", err)
 		return code
 	}
-	if *noDaemon {
-		return renderOnce(cfg, req, *outPath, *diagnosticsOut, *jsonOut, stdout, stderr)
+	if options.noDaemon {
+		return renderOnce(cfg, req, options.outPath, options.diagnosticsOut, options.jsonOut, stdout, stderr)
 	}
 	if err := cfg.ValidateRuntime(true); err != nil {
 		fmt.Fprintf(stderr, "configuration error: %v\n", err)
 		return clix.ExitBrowserUnavailable
 	}
-	frame, _, err := daemon.NewManager(cfg).Render(context.Background(), requestData, *forceRestart)
+	frame, _, err := daemon.NewManager(cfg).Render(context.Background(), requestData, options.forceRestart)
 	if err != nil {
 		fmt.Fprintf(stderr, "daemon error: %v\n", err)
 		return clix.ExitDaemonUnavailable
 	}
 	diag := diagnosticsFromHeader(frame.Header.Diagnostics)
 	if !frame.Header.OK {
-		if *jsonOut {
+		if options.jsonOut {
 			writeFailure(stdout, frame, diag)
 		} else if frame.Header.Error != nil {
 			fmt.Fprintf(stderr, "%s: %s\n", frame.Header.Error.Code, frame.Header.Error.Message)
 		}
-		_ = diagnostics.WriteCopy(*diagnosticsOut, diag)
+		_ = diagnostics.WriteCopy(options.diagnosticsOut, diag)
 		return clix.ExitCodeForIPC(frame)
 	}
-	if err := writeOutput(*outPath, frame.Payload); err != nil {
+	if err := writeOutput(options.outPath, frame.Payload); err != nil {
 		fmt.Fprintf(stderr, "write output failed: %v\n", err)
 		return clix.ExitOutputWriteFailed
 	}
-	_ = diagnostics.WriteCopy(*diagnosticsOut, diag)
-	writeSuccess(stdout, *jsonOut, clix.RenderSuccess{
+	_ = diagnostics.WriteCopy(options.diagnosticsOut, diag)
+	writeSuccess(stdout, options.jsonOut, clix.RenderSuccess{
 		Success:         true,
 		RequestID:       req.RequestID,
-		Out:             *outPath,
+		Out:             options.outPath,
 		PageCount:       diag.PageCount,
 		DiagnosticsPath: diag.AttachmentPath,
 	})
@@ -188,82 +278,144 @@ func renderOnce(cfg config.RuntimeConfig, req protocol.PrintPDFRequest, outPath,
 	return clix.ExitSuccess
 }
 
-func runDaemon(args []string, stdout, stderr io.Writer) int {
-	if len(args) == 0 {
-		fmt.Fprintln(stderr, "daemon requires start, run, status, stop, or restart")
-		return clix.ExitInvalidArguments
+func newDaemonCommand(stdout, stderr io.Writer) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "daemon",
+		Short: "Manage the render daemon",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fmt.Fprintln(stderr, "daemon requires start, run, status, stop, or restart")
+			return commandExit(clix.ExitInvalidArguments)
+		},
 	}
-	switch args[0] {
-	case "run":
-		return runDaemonRun(args[1:], stderr)
-	case "start":
-		cfg, err := parseRuntimeConfigFromArgs("easyink-render daemon start", args[1:], stderr)
-		if err != nil {
-			fmt.Fprintf(stderr, "configuration error: %v\n", err)
-			return clix.ExitInvalidArguments
-		}
-		state, err := daemon.NewManager(cfg).Ensure(context.Background(), false)
-		if err != nil {
-			fmt.Fprintf(stderr, "daemon start failed: %v\n", err)
-			return clix.ExitDaemonUnavailable
-		}
-		fmt.Fprintf(stdout, "daemon started pid=%d ipc=%s\n", state.PID, state.IPC)
-		return clix.ExitSuccess
-	case "status":
-		cfg, err := loadRuntimeConfig(config.Override{IdleTimeoutMs: -1})
-		if err != nil {
-			fmt.Fprintf(stderr, "configuration error: %v\n", err)
-			return clix.ExitInvalidArguments
-		}
-		status, err := daemon.NewManager(cfg).Status(context.Background())
-		if err != nil {
-			fmt.Fprintf(stderr, "daemon unavailable: %v\n", err)
-			return clix.ExitDaemonUnavailable
-		}
-		clix.WriteJSON(stdout, status)
-		return clix.ExitSuccess
-	case "stop":
-		cfg, _ := loadRuntimeConfig(config.Override{IdleTimeoutMs: -1})
-		if err := daemon.NewManager(cfg).Stop(context.Background()); err != nil {
-			fmt.Fprintf(stderr, "daemon stop failed: %v\n", err)
-			return clix.ExitDaemonUnavailable
-		}
-		fmt.Fprintln(stdout, "daemon stopped")
-		return clix.ExitSuccess
-	case "restart":
-		cfg, err := parseRuntimeConfigFromArgs("easyink-render daemon restart", args[1:], stderr)
-		if err != nil {
-			fmt.Fprintf(stderr, "configuration error: %v\n", err)
-			return clix.ExitInvalidArguments
-		}
-		if err := daemon.NewManager(cfg).Restart(context.Background()); err != nil {
-			fmt.Fprintf(stderr, "daemon restart failed: %v\n", err)
-			return clix.ExitDaemonUnavailable
-		}
-		fmt.Fprintln(stdout, "daemon restarted")
-		return clix.ExitSuccess
-	default:
-		fmt.Fprintf(stderr, "unknown daemon command: %s\n", args[0])
-		return clix.ExitInvalidArguments
+
+	startOptions := newRuntimeOptions()
+	startCmd := &cobra.Command{
+		Use:   "start",
+		Short: "Start the daemon",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return commandExit(runDaemonStart(startOptions, stdout, stderr))
+		},
 	}
+	startOptions.bind(startCmd.Flags())
+
+	restartOptions := newRuntimeOptions()
+	restartCmd := &cobra.Command{
+		Use:   "restart",
+		Short: "Restart the daemon",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return commandExit(runDaemonRestart(restartOptions, stdout, stderr))
+		},
+	}
+	restartOptions.bind(restartCmd.Flags())
+
+	runOptions := daemonRunOptions{runtimeOptions: newRuntimeOptions(), statePath: config.StatePath()}
+	runCmd := &cobra.Command{
+		Use:    "run",
+		Short:  "Run the daemon foreground process",
+		Hidden: true,
+		Args:   cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return commandExit(runDaemonRun(runOptions, stderr))
+		},
+	}
+	runCmd.Flags().StringVar(&runOptions.ipcPath, "ipc", "", "IPC endpoint")
+	runCmd.Flags().StringVar(&runOptions.statePath, "state", config.StatePath(), "daemon state path")
+	runCmd.Flags().StringVar(&runOptions.nonce, "nonce", "", "daemon nonce")
+	runOptions.runtimeOptions.bind(runCmd.Flags())
+
+	cmd.AddCommand(
+		startCmd,
+		runCmd,
+		&cobra.Command{
+			Use:   "status",
+			Short: "Show daemon status",
+			Args:  cobra.NoArgs,
+			RunE: func(cmd *cobra.Command, args []string) error {
+				return commandExit(runDaemonStatus(stdout, stderr))
+			},
+		},
+		&cobra.Command{
+			Use:   "stop",
+			Short: "Stop the daemon",
+			Args:  cobra.NoArgs,
+			RunE: func(cmd *cobra.Command, args []string) error {
+				return commandExit(runDaemonStop(stdout, stderr))
+			},
+		},
+		restartCmd,
+	)
+	return cmd
 }
 
-func runDaemonRun(args []string, stderr io.Writer) int {
-	fs := flag.NewFlagSet("easyink-render daemon run", flag.ContinueOnError)
-	fs.SetOutput(stderr)
-	ipcPath := fs.String("ipc", "", "IPC endpoint")
-	statePath := fs.String("state", config.StatePath(), "daemon state path")
-	nonce := fs.String("nonce", "", "daemon nonce")
-	override := config.Override{IdleTimeoutMs: -1}
-	idleTimeout, maxQueueSize := bindRuntimeFlags(fs, &override)
-	if err := fs.Parse(args); err != nil {
+func runDaemonStart(options *runtimeOptions, stdout, stderr io.Writer) int {
+	cfg, err := loadRuntimeConfig(options.toOverride())
+	if err != nil {
+		fmt.Fprintf(stderr, "configuration error: %v\n", err)
 		return clix.ExitInvalidArguments
 	}
-	override.IdleTimeoutMs = *idleTimeout
-	if *maxQueueSize >= 0 {
-		override.MaxQueueSize = maxQueueSize
+	state, err := daemon.NewManager(cfg).Ensure(context.Background(), false)
+	if err != nil {
+		fmt.Fprintf(stderr, "daemon start failed: %v\n", err)
+		return clix.ExitDaemonUnavailable
 	}
-	cfg, err := loadRuntimeConfig(override)
+	fmt.Fprintf(stdout, "daemon started pid=%d ipc=%s\n", state.PID, state.IPC)
+	return clix.ExitSuccess
+}
+
+func runDaemonStatus(stdout, stderr io.Writer) int {
+	cfg, err := loadRuntimeConfig(config.Override{IdleTimeoutMs: -1})
+	if err != nil {
+		fmt.Fprintf(stderr, "configuration error: %v\n", err)
+		return clix.ExitInvalidArguments
+	}
+	status, err := daemon.NewManager(cfg).Status(context.Background())
+	if err != nil {
+		fmt.Fprintf(stderr, "daemon unavailable: %v\n", err)
+		return clix.ExitDaemonUnavailable
+	}
+	clix.WriteJSON(stdout, status)
+	return clix.ExitSuccess
+}
+
+func runDaemonStop(stdout, stderr io.Writer) int {
+	cfg, err := loadRuntimeConfig(config.Override{IdleTimeoutMs: -1})
+	if err != nil {
+		fmt.Fprintf(stderr, "configuration error: %v\n", err)
+		return clix.ExitInvalidArguments
+	}
+	if err := daemon.NewManager(cfg).Stop(context.Background()); err != nil {
+		fmt.Fprintf(stderr, "daemon stop failed: %v\n", err)
+		return clix.ExitDaemonUnavailable
+	}
+	fmt.Fprintln(stdout, "daemon stopped")
+	return clix.ExitSuccess
+}
+
+func runDaemonRestart(options *runtimeOptions, stdout, stderr io.Writer) int {
+	cfg, err := loadRuntimeConfig(options.toOverride())
+	if err != nil {
+		fmt.Fprintf(stderr, "configuration error: %v\n", err)
+		return clix.ExitInvalidArguments
+	}
+	if err := daemon.NewManager(cfg).Restart(context.Background()); err != nil {
+		fmt.Fprintf(stderr, "daemon restart failed: %v\n", err)
+		return clix.ExitDaemonUnavailable
+	}
+	fmt.Fprintln(stdout, "daemon restarted")
+	return clix.ExitSuccess
+}
+
+type daemonRunOptions struct {
+	ipcPath        string
+	statePath      string
+	nonce          string
+	runtimeOptions *runtimeOptions
+}
+
+func runDaemonRun(options daemonRunOptions, stderr io.Writer) int {
+	cfg, err := loadRuntimeConfig(options.runtimeOptions.toOverride())
 	if err != nil {
 		fmt.Fprintf(stderr, "configuration error: %v\n", err)
 		return clix.ExitInvalidArguments
@@ -272,17 +424,17 @@ func runDaemonRun(args []string, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "configuration error: %v\n", err)
 		return clix.ExitBrowserUnavailable
 	}
-	if *ipcPath == "" {
+	if options.ipcPath == "" {
 		fmt.Fprintln(stderr, "daemon run requires --ipc")
 		return clix.ExitInvalidArguments
 	}
-	if *nonce == "" {
+	if options.nonce == "" {
 		fmt.Fprintln(stderr, "daemon run requires --nonce")
 		return clix.ExitInvalidArguments
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	rt, err := daemon.NewRuntime(ctx, cfg, *statePath, *ipcPath, *nonce)
+	rt, err := daemon.NewRuntime(ctx, cfg, options.statePath, options.ipcPath, options.nonce)
 	if err != nil {
 		fmt.Fprintf(stderr, "daemon startup failed: %v\n", err)
 		return clix.ExitBrowserUnavailable
@@ -294,37 +446,31 @@ func runDaemonRun(args []string, stderr io.Writer) int {
 	return clix.ExitSuccess
 }
 
-func parseRuntimeConfigFromArgs(name string, args []string, stderr io.Writer) (config.RuntimeConfig, error) {
-	fs := flag.NewFlagSet(name, flag.ContinueOnError)
-	fs.SetOutput(stderr)
-	override := config.Override{IdleTimeoutMs: -1}
-	idleTimeout, maxQueueSize := bindRuntimeFlags(fs, &override)
-	if err := fs.Parse(args); err != nil {
-		return config.RuntimeConfig{}, err
+func newBrowserCommand(stdout, stderr io.Writer) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "browser",
+		Short: "Browser utilities",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fmt.Fprintln(stderr, "browser requires inspect")
+			return commandExit(clix.ExitInvalidArguments)
+		},
 	}
-	override.IdleTimeoutMs = *idleTimeout
-	if *maxQueueSize >= 0 {
-		override.MaxQueueSize = maxQueueSize
+	inspectOptions := newRuntimeOptions()
+	inspectCmd := &cobra.Command{
+		Use:   "inspect",
+		Short: "Inspect configured browser",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return commandExit(runBrowserInspect(inspectOptions, stdout, stderr))
+		},
 	}
-	return loadRuntimeConfig(override)
+	inspectOptions.bind(inspectCmd.Flags())
+	cmd.AddCommand(inspectCmd)
+	return cmd
 }
 
-func runBrowser(args []string, stdout, stderr io.Writer) int {
-	if len(args) == 0 || args[0] != "inspect" {
-		fmt.Fprintln(stderr, "browser requires inspect")
-		return clix.ExitInvalidArguments
-	}
-	fs := flag.NewFlagSet("easyink-render browser inspect", flag.ContinueOnError)
-	fs.SetOutput(stderr)
-	override := config.Override{IdleTimeoutMs: -1}
-	_, maxQueueSize := bindRuntimeFlags(fs, &override)
-	if err := fs.Parse(args[1:]); err != nil {
-		return clix.ExitInvalidArguments
-	}
-	if *maxQueueSize >= 0 {
-		override.MaxQueueSize = maxQueueSize
-	}
-	cfg, err := loadRuntimeConfig(override)
+func runBrowserInspect(options *runtimeOptions, stdout, stderr io.Writer) int {
+	cfg, err := loadRuntimeConfig(options.toOverride())
 	if err != nil {
 		fmt.Fprintf(stderr, "configuration error: %v\n", err)
 		return clix.ExitInvalidArguments
@@ -342,56 +488,98 @@ func runBrowser(args []string, stdout, stderr io.Writer) int {
 	return clix.ExitSuccess
 }
 
-func runConfig(args []string, stdout, stderr io.Writer) int {
-	if len(args) == 0 {
-		fmt.Fprintln(stderr, "config requires get or set")
-		return clix.ExitInvalidArguments
+func newConfigCommand(stdout, stderr io.Writer) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "config",
+		Short: "Read or update runtime configuration",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fmt.Fprintln(stderr, "config requires get or set")
+			return commandExit(clix.ExitInvalidArguments)
+		},
 	}
+	cmd.AddCommand(
+		&cobra.Command{
+			Use:   "get [key]",
+			Short: "Read runtime configuration",
+			Args:  cobra.MaximumNArgs(1),
+			RunE: func(cmd *cobra.Command, args []string) error {
+				key := ""
+				if len(args) == 1 {
+					key = args[0]
+				}
+				return commandExit(runConfigGet(key, stdout, stderr))
+			},
+		},
+		&cobra.Command{
+			Use:   "set <key> <value>",
+			Short: "Update runtime configuration",
+			Args:  cobra.ExactArgs(2),
+			RunE: func(cmd *cobra.Command, args []string) error {
+				return commandExit(runConfigSet(args[0], args[1], stdout, stderr))
+			},
+		},
+	)
+	return cmd
+}
+
+func runConfigGet(key string, stdout, stderr io.Writer) int {
 	cfg, err := config.LoadRuntime()
 	if err != nil {
 		fmt.Fprintf(stderr, "configuration error: %v\n", err)
 		return clix.ExitInvalidArguments
 	}
-	switch args[0] {
-	case "get":
-		if len(args) == 1 {
-			clix.WriteJSON(stdout, cfg)
-			return clix.ExitSuccess
-		}
-		value, ok := getConfigValue(cfg, args[1])
-		if !ok {
-			fmt.Fprintf(stderr, "unknown config key: %s\n", args[1])
-			return clix.ExitInvalidArguments
-		}
-		fmt.Fprintf(stdout, "%v\n", value)
+	if key == "" {
+		clix.WriteJSON(stdout, cfg)
 		return clix.ExitSuccess
-	case "set":
-		if len(args) != 3 {
-			fmt.Fprintln(stderr, "config set requires <key> <value>")
-			return clix.ExitInvalidArguments
-		}
-		if err := setConfigValue(&cfg, args[1], args[2]); err != nil {
-			fmt.Fprintf(stderr, "config set failed: %v\n", err)
-			return clix.ExitInvalidArguments
-		}
-		if err := config.SaveRuntime(cfg); err != nil {
-			fmt.Fprintf(stderr, "config save failed: %v\n", err)
-			return clix.ExitInvalidArguments
-		}
-		fmt.Fprintf(stdout, "updated %s\n", args[1])
-		return clix.ExitSuccess
-	default:
-		fmt.Fprintf(stderr, "unknown config command: %s\n", args[0])
+	}
+	value, ok := getConfigValue(cfg, key)
+	if !ok {
+		fmt.Fprintf(stderr, "unknown config key: %s\n", key)
 		return clix.ExitInvalidArguments
 	}
+	fmt.Fprintf(stdout, "%v\n", value)
+	return clix.ExitSuccess
 }
 
-func runDiagnostics(args []string, stdout, stderr io.Writer) int {
-	if len(args) < 2 || args[0] != "show" {
-		fmt.Fprintln(stderr, "diagnostics supports: diagnostics show <path-or-id>")
+func runConfigSet(key, value string, stdout, stderr io.Writer) int {
+	cfg, err := config.LoadRuntime()
+	if err != nil {
+		fmt.Fprintf(stderr, "configuration error: %v\n", err)
 		return clix.ExitInvalidArguments
 	}
-	path := args[1]
+	if err := setConfigValue(&cfg, key, value); err != nil {
+		fmt.Fprintf(stderr, "config set failed: %v\n", err)
+		return clix.ExitInvalidArguments
+	}
+	if err := config.SaveRuntime(cfg); err != nil {
+		fmt.Fprintf(stderr, "config save failed: %v\n", err)
+		return clix.ExitInvalidArguments
+	}
+	fmt.Fprintf(stdout, "updated %s\n", key)
+	return clix.ExitSuccess
+}
+
+func newDiagnosticsCommand(stdout, stderr io.Writer) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "diagnostics",
+		Short: "Read diagnostics files",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fmt.Fprintln(stderr, "diagnostics supports: diagnostics show <path-or-id>")
+			return commandExit(clix.ExitInvalidArguments)
+		},
+	}
+	cmd.AddCommand(&cobra.Command{
+		Use:   "show <path-or-id>",
+		Short: "Print diagnostics JSON",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return commandExit(runDiagnosticsShow(args[0], stdout, stderr))
+		},
+	})
+	return cmd
+}
+
+func runDiagnosticsShow(path string, stdout, stderr io.Writer) int {
 	if !strings.Contains(path, string(filepath.Separator)) && filepath.Ext(path) == "" {
 		path = filepath.Join(config.Defaults().LogDir, "diagnostics", path, "diagnostics.json")
 	}
@@ -402,20 +590,6 @@ func runDiagnostics(args []string, stdout, stderr io.Writer) int {
 	}
 	fmt.Fprintln(stdout, string(bytes.TrimSpace(data)))
 	return clix.ExitSuccess
-}
-
-func bindRuntimeFlags(fs *flag.FlagSet, override *config.Override) (*int, *int) {
-	fs.StringVar(&override.BrowserKind, "browser-kind", "", "browser kind")
-	fs.StringVar(&override.BrowserPath, "browser-path", "", "browser executable path")
-	fs.StringVar(&override.HeadlessMode, "headless-mode", "", "browser headless mode: auto, new, old, shell, none")
-	fs.StringVar(&override.ProfileRoot, "profile-root", "", "browser profile root")
-	fs.StringVar(&override.TempDir, "temp-dir", "", "temporary directory")
-	fs.StringVar(&override.LogDir, "log-dir", "", "diagnostics log directory")
-	fs.IntVar(&override.MaxConcurrency, "max-concurrency", 0, "maximum concurrent render jobs")
-	maxQueueSize := fs.Int("max-queue-size", -1, "maximum queued render jobs")
-	fs.IntVar(&override.RequestTimeoutMs, "request-timeout-ms", 0, "request timeout in milliseconds")
-	idleTimeout := fs.Int("idle-timeout-ms", -1, "daemon idle timeout in milliseconds, 0 disables idle exit")
-	return idleTimeout, maxQueueSize
 }
 
 func loadRuntimeConfig(override config.Override) (config.RuntimeConfig, error) {
@@ -436,6 +610,10 @@ func readRequest(path string) ([]byte, protocol.PrintPDFRequest, int, error) {
 	var req protocol.PrintPDFRequest
 	if err := decoder.Decode(&req); err != nil {
 		return nil, protocol.PrintPDFRequest{}, clix.ExitInvalidRequestJSON, err
+	}
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		return nil, protocol.PrintPDFRequest{}, clix.ExitInvalidRequestJSON, errors.New("request JSON must contain a single object")
 	}
 	return data, req, clix.ExitSuccess, nil
 }
@@ -569,19 +747,6 @@ func setConfigValue(cfg *config.RuntimeConfig, key, value string) error {
 		return fmt.Errorf("unknown config key: %s", key)
 	}
 	return nil
-}
-
-func usage(w io.Writer) {
-	fmt.Fprintln(w, `EasyInk.Render CLI
-
-Usage:
-  easyink-render render --request request.json --out out.pdf [--no-daemon]
-  easyink-render daemon start|status|stop|restart
-  easyink-render browser inspect --browser-path /path/to/chrome
-  easyink-render config get [key]
-  easyink-render config set <key> <value>
-  easyink-render diagnostics show <path-or-id>
-  easyink-render version`)
 }
 
 func init() {
