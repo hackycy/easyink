@@ -7,13 +7,13 @@ set ARG1=%~1
 set ARG2=%~2
 set ARG3=%~3
 set VERSION=
-set PLATFORMS=win-x64
+set PLATFORMS=win-x64,win-x86
 set URL_BASE=
 set OUT_DIR=lib/EasyInk.Render/releases
 
 if defined ARG1 (
-    echo %ARG1% | findstr /i /r "^all$ x64 arm64" >nul
-    if errorlevel 1 (
+    echo %ARG1% | findstr /i /r "^[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*" >nul
+    if not errorlevel 1 (
         set VERSION=%ARG1%
         if defined ARG2 set PLATFORMS=%ARG2%
         if defined ARG3 set URL_BASE=%ARG3%
