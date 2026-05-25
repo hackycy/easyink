@@ -1,6 +1,6 @@
 import type { MaterialNode } from '@easyink/schema'
 import type { DesignerStore } from '../store/designer-store'
-import { isInteractable, MoveMaterialCommand } from '@easyink/core'
+import { createEditorSurfacePlan, isInteractable, MoveMaterialCommand } from '@easyink/core'
 import { markRaw } from 'vue'
 import { createGeometryService } from '../editing/geometry-service'
 import { collectSnapCandidates, computeSnap, getSelectionBox } from '../snap'
@@ -67,7 +67,6 @@ export function useElementDrag(ctx: ElementDragContext) {
     const startPoint = geometry.screenToDocument({ x: e.clientX, y: e.clientY })
 
     const origPositions = selectedNodes.map(n => ({ id: n.id, x: n.x, y: n.y }))
-
     const selectionBox = getSelectionBox(selectedNodes, n => store.getElementSize(n))
     if (!selectionBox)
       return
@@ -81,8 +80,15 @@ export function useElementDrag(ctx: ElementDragContext) {
     // would burn O(n) allocation each frame on dense canvases. Toggles are
     // captured at drag start (changing them mid-drag is not a supported flow).
     const snapStateAtStart = store.workbench.snap
+    const pageRects = createEditorSurfacePlan(store.schema).pages.map(page => ({
+      x: 0,
+      y: page.yOffset,
+      width: page.width,
+      height: page.height,
+    }))
     const snapCandidates = collectSnapCandidates({
       page: store.schema.page,
+      pageRects,
       guidesX: store.schema.guides.x,
       guidesY: store.schema.guides.y,
       otherNodes,
@@ -134,6 +140,7 @@ export function useElementDrag(ctx: ElementDragContext) {
         ? computeSnap(
             {
               page: store.schema.page,
+              pageRects,
               guidesX: store.schema.guides.x,
               guidesY: store.schema.guides.y,
               otherNodes,

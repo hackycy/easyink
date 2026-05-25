@@ -45,6 +45,7 @@ export interface SnapCandidates {
 
 export interface SnapEngineContext {
   page: Pick<PageSchema, 'width' | 'height' | 'grid'>
+  pageRects?: Rect[]
   guidesX: number[]
   guidesY: number[]
   /** Other elements (those not being moved) to align with. */
@@ -58,6 +59,7 @@ export interface SnapEngineContext {
   gridSnap: boolean
   guideSnap: boolean
   elementSnap: boolean
+  pageSnap?: boolean
 }
 
 const SOURCE_PRIORITY: Record<SnapSource, number> = {
@@ -77,6 +79,9 @@ export function collectSnapCandidates(ctx: SnapEngineContext): SnapCandidates {
   const y: SnapCandidate[] = []
   const pageW = ctx.page.width
   const pageH = ctx.page.height
+  const pageRects = ctx.pageRects && ctx.pageRects.length > 0
+    ? ctx.pageRects
+    : [{ x: 0, y: 0, width: pageW, height: pageH }]
 
   if (ctx.guideSnap) {
     for (const g of ctx.guidesX) {
@@ -113,16 +118,22 @@ export function collectSnapCandidates(ctx: SnapEngineContext): SnapCandidates {
     }
   }
 
-  // Page bounds and center axes are physical document references, so they are
-  // always emitted (no opt-out flag) and outrank guides/grid.
-  const fullY = { min: 0, max: pageH }
-  const fullX = { min: 0, max: pageW }
-  x.push({ value: 0, source: 'page', segmentExtent: fullY })
-  x.push({ value: pageW / 2, source: 'page', segmentExtent: fullY })
-  x.push({ value: pageW, source: 'page', segmentExtent: fullY })
-  y.push({ value: 0, source: 'page', segmentExtent: fullX })
-  y.push({ value: pageH / 2, source: 'page', segmentExtent: fullX })
-  y.push({ value: pageH, source: 'page', segmentExtent: fullX })
+  if (ctx.pageSnap !== false) {
+    for (const rect of pageRects) {
+      const xMin = rect.x
+      const xMax = rect.x + rect.width
+      const yMin = rect.y
+      const yMax = rect.y + rect.height
+      const fullY = { min: yMin, max: yMax }
+      const fullX = { min: xMin, max: xMax }
+      x.push({ value: xMin, source: 'page', segmentExtent: fullY })
+      x.push({ value: (xMin + xMax) / 2, source: 'page', segmentExtent: fullY })
+      x.push({ value: xMax, source: 'page', segmentExtent: fullY })
+      y.push({ value: yMin, source: 'page', segmentExtent: fullX })
+      y.push({ value: (yMin + yMax) / 2, source: 'page', segmentExtent: fullX })
+      y.push({ value: yMax, source: 'page', segmentExtent: fullX })
+    }
+  }
 
   return { x, y }
 }

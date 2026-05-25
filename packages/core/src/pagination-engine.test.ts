@@ -71,4 +71,27 @@ describe('runPagination', () => {
     expect(result.pages[1]!.fragments[0]!.node.id).toBe('table__p1')
     expect(result.pages[1]!.fragments[0]!.box.y).toBe(100)
   })
+
+  it('warns when fixed-sheets fragments overflow their owning page', () => {
+    const schema = {
+      ...makeSchema([
+        makeNode('wide', { type: 'rect', x: 70, y: 10, width: 20, height: 20 }),
+        makeNode('tall', { type: 'rect', x: 0, y: 90, width: 20, height: 20 }),
+      ]),
+      page: {
+        ...makeSchema([]).page,
+        layout: { strategy: 'absolute' as const },
+        reflow: { strategy: 'measure-only' as const },
+        pagination: { strategy: 'fixed-sheets' as const, pageCount: 1 },
+      },
+    }
+    const document = runLayoutPipeline(schema)
+
+    const result = runPagination(schema, document)
+
+    expect(result.diagnostics.filter(d => d.code === 'FIXED_SHEETS_FRAGMENT_OVERFLOW').map(d => d.sourceNodeId)).toEqual([
+      'wide',
+      'tall',
+    ])
+  })
 })

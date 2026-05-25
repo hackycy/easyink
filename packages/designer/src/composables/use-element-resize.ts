@@ -1,7 +1,7 @@
 import type { MaterialResizeHandle } from '@easyink/core'
 import type { DesignerStore } from '../store/designer-store'
 import type { SnapLine } from '../types'
-import { isInteractable, ResizeMaterialCommand } from '@easyink/core'
+import { createEditorSurfacePlan, isInteractable, ResizeMaterialCommand } from '@easyink/core'
 import { markRaw } from 'vue'
 import { createGeometryService } from '../editing/geometry-service'
 import { canResizeHandle } from '../materials/control-policy'
@@ -62,7 +62,6 @@ export function useElementResize(ctx: ElementResizeContext) {
     const origY = node.y
     const origW = node.width
     const origH = node.height
-
     const adapterSnapshot = resizeAdapter ? resizeAdapter.beginResize(node) : undefined
 
     const MIN_SIZE = 1
@@ -94,8 +93,15 @@ export function useElementResize(ctx: ElementResizeContext) {
     const otherNodes = store.getElements().filter(
       n => n.id !== elementId && !n.hidden && !n.locked,
     )
+    const pageRects = createEditorSurfacePlan(store.schema).pages.map(page => ({
+      x: 0,
+      y: page.yOffset,
+      width: page.width,
+      height: page.height,
+    }))
     const snapCandidates = collectSnapCandidates({
       page: store.schema.page,
+      pageRects,
       guidesX: store.schema.guides.x,
       guidesY: store.schema.guides.y,
       otherNodes,
@@ -260,8 +266,8 @@ export function useElementResize(ctx: ElementResizeContext) {
         resizeAdapter.applyResize(node!, adapterSnapshot, {
           originalWidth: origW,
           originalHeight: origH,
-          newWidth: newW,
-          newHeight: newH,
+          newWidth: node!.width,
+          newHeight: node!.height,
         })
       }
     }

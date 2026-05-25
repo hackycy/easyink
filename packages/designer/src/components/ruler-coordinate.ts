@@ -35,7 +35,7 @@ export function getCanvasRulerOrigin(plan: EditorSurfacePlan): RulerOrigin {
     return { x: 0, y: 0 }
   return {
     x: getEditorSurfacePageLeft(plan, page),
-    y: page.visualTop,
+    y: page.yOffset,
   }
 }
 

@@ -1,4 +1,4 @@
-import type { MaterialNode } from '@easyink/schema'
+import type { MaterialNode, PageSchema } from '@easyink/schema'
 import { describe, expect, it, vi } from 'vitest'
 import { DesignerStore } from '../store/designer-store'
 import { createClipboardActions } from './clipboard-actions'
@@ -7,10 +7,10 @@ function makeNode(id: string, x = 0, y = 0): MaterialNode {
   return { id, type: 'rect', x, y, width: 50, height: 50, props: {} } as MaterialNode
 }
 
-function makeStore(elements: MaterialNode[], selected: string[] = []): DesignerStore {
+function makeStore(elements: MaterialNode[], selected: string[] = [], page: PageSchema = { mode: 'fixed', width: 1000, height: 1000 }): DesignerStore {
   const store = new DesignerStore({
     unit: 'px',
-    page: { mode: 'fixed', width: 1000, height: 1000 },
+    page,
     guides: { x: [], y: [] },
     elements,
   })
@@ -73,5 +73,21 @@ describe('createClipboardActions', () => {
     expect(store.commands.commitTransaction).toHaveBeenCalledOnce()
     expect(store.commands.rollbackTransaction).not.toHaveBeenCalled()
     expect(executeSpy).toHaveBeenCalledOnce()
+  })
+
+  it('duplicates continuously across fixed-sheet page breaks', () => {
+    const node = makeNode('node-1', 80, 80)
+    const store = makeStore([node], ['node-1'], {
+      mode: 'fixed',
+      width: 100,
+      height: 100,
+      pagination: { strategy: 'fixed-sheets', pageCount: 2 },
+    })
+    const actions = createClipboardActions(store, () => [node])
+
+    actions.duplicateSelection()
+
+    expect(store.schema.elements).toHaveLength(2)
+    expect(store.schema.elements[1]).toMatchObject({ x: 90, y: 90 })
   })
 })

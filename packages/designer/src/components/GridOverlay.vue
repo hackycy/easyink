@@ -23,7 +23,7 @@ const gridPages = computed(() => {
     key: page.index,
     style: {
       left: `${getEditorSurfacePageLeft(props.surfacePlan, page)}${unit}`,
-      top: `${page.visualTop}${unit}`,
+      top: `${page.yOffset}${unit}`,
       width: `${page.width}${unit}`,
       height: `${page.height}${unit}`,
       backgroundSize: `${w}${unit} ${h}${unit}`,

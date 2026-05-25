@@ -263,9 +263,9 @@ describe('viewer audit risk regressions', () => {
       },
     })
     const fontManager = viewer.fontManager as unknown as {
-      loadFonts: ViewerRuntime['fontManager']['loadFonts']
+      ensureFontLoaded: ViewerRuntime['fontManager']['ensureFontLoaded']
     }
-    fontManager.loadFonts = async () => {
+    fontManager.ensureFontLoaded = async () => {
       throw new Error('font boom')
     }
 
@@ -295,7 +295,7 @@ describe('viewer audit risk regressions', () => {
     await viewer.print({ driverId: 'boom-print' })
     await Promise.resolve()
 
-    expect(diagnostics.some(d => d.code === 'FONT_LOAD_ERROR')).toBe(true)
+    expect(diagnostics.some(d => d.code === 'FONT_LOAD_FAILED')).toBe(true)
     expect(diagnostics.some(d => d.code === 'EXPORTER_ERROR')).toBe(true)
     expect(diagnostics.some(d => d.code === 'PRINT_ERROR')).toBe(true)
     expect(diagnostics.some(d => d.code === 'DIAGNOSTIC_HOOK_ERROR')).toBe(true)

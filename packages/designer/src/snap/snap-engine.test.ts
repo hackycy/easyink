@@ -19,7 +19,7 @@ const baseCtx = {
 }
 
 describe('collectSnapCandidates', () => {
-  it('emits 3 vertical + 3 horizontal candidates per other element when elementSnap on (plus page edges)', () => {
+  it('emits 3 vertical + 3 horizontal candidates per other element when elementSnap on', () => {
     const ctx = {
       ...baseCtx,
       elementSnap: true,
@@ -43,7 +43,27 @@ describe('collectSnapCandidates', () => {
     expect(pageY[0].segmentExtent).toEqual({ min: 0, max: 200 })
   })
 
-  it('omits non-page sources that are disabled (page edges still emitted)', () => {
+  it('can omit page candidates so page breaks stay visual-only during editing', () => {
+    const c = collectSnapCandidates({ ...baseCtx, pageSnap: false })
+
+    expect(c.x.filter(p => p.source === 'page')).toHaveLength(0)
+    expect(c.y.filter(p => p.source === 'page')).toHaveLength(0)
+  })
+
+  it('emits page candidates from the supplied document page slices', () => {
+    const c = collectSnapCandidates({
+      ...baseCtx,
+      pageRects: [
+        { x: 0, y: 0, width: 200, height: 300 },
+        { x: 0, y: 300, width: 200, height: 300 },
+      ],
+    })
+    const pageY = c.y.filter(p => p.source === 'page')
+    expect(pageY.map(p => p.value)).toEqual([0, 150, 300, 300, 450, 600])
+    expect(pageY[3].segmentExtent).toEqual({ min: 0, max: 200 })
+  })
+
+  it('omits non-page sources that are disabled', () => {
     const ctx = { ...baseCtx, guidesX: [11], guideSnap: false }
     const c = collectSnapCandidates(ctx)
     expect(c.x.filter(p => p.source !== 'page')).toHaveLength(0)

@@ -131,7 +131,6 @@ interface DocumentLayoutConfig {
 interface PaginationConfig {
   strategy: PaginationStrategyKind
   pageCount?: number
-  pageGap?: number
   orphanPolicy?: 'allow' | 'keep-together'
 }
 

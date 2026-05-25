@@ -27,14 +27,14 @@ function makeNode(id: string, x: number, y: number, w = 50, h = 50, extra: Parti
   return { id, type: 'rect', x, y, width: w, height: h, props: {}, ...extra } as MaterialNode
 }
 
-function makePage(): PageSchema {
-  return { mode: 'fixed', width: 1000, height: 1000 }
+function makePage(overrides: Partial<PageSchema> = {}): PageSchema {
+  return { mode: 'fixed', width: 1000, height: 1000, ...overrides }
 }
 
-function makeStore(elements: MaterialNode[], initial: string[] = []): FakeStore {
+function makeStore(elements: MaterialNode[], initial: string[] = [], page = makePage()): FakeStore {
   const set = new Set(initial)
   return {
-    schema: { unit: 'px', page: makePage(), elements },
+    schema: { unit: 'px', page, elements },
     workbench: { viewport: { zoom: 1, scrollLeft: 0, scrollTop: 0 } },
     selection: {
       get ids() {
@@ -169,6 +169,30 @@ describe('useMarqueeSelect', () => {
     window.dispatchEvent(pdEvent('pointermove', 260, 260))
 
     expect([...store.selection.ids].sort()).toEqual(['a', 'b'])
+  })
+
+  it('does not clamp the marquee rectangle to fixed-sheet top or bottom edges', () => {
+    const store = makeStore([], [], makePage({
+      width: 100,
+      height: 100,
+      pagination: { strategy: 'fixed-sheets', pageCount: 2 },
+    }))
+    const { ctx, marqueeRef } = makeCtx(store)
+    const marquee = useMarqueeSelect(ctx)
+
+    const target = document.createElement('div')
+    document.body.appendChild(target)
+
+    startMarquee(target, marquee, 10, 50)
+    window.dispatchEvent(pdEvent('pointermove', 10, 250))
+
+    expect(marqueeRef.value).toMatchObject({ x: 10, y: 50, width: 0, height: 200 })
+
+    window.dispatchEvent(pdEvent('pointerup', 10, 250))
+    startMarquee(target, marquee, 10, 50)
+    window.dispatchEvent(pdEvent('pointermove', 10, -50))
+
+    expect(marqueeRef.value).toMatchObject({ x: 10, y: -50, width: 0, height: 100 })
   })
 
   it('plain background click (no drag) clears selection on pointerup', () => {

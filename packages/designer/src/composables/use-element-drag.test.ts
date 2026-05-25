@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
-import type { MaterialNode } from '@easyink/schema'
+import type { MaterialNode, PageSchema } from '@easyink/schema'
 import type { ElementDragContext } from './use-element-drag'
 import { MoveMaterialCommand } from '@easyink/core'
 import { describe, expect, it, vi } from 'vitest'
@@ -12,10 +12,10 @@ function makeNode(id: string, x: number, y: number, w = 50, h = 50): MaterialNod
   return { id, type: 'rect', x, y, width: w, height: h, props: {} } as MaterialNode
 }
 
-function makeStore(elements: MaterialNode[], selected: string[]): DesignerStore {
+function makeStore(elements: MaterialNode[], selected: string[], page: PageSchema = { mode: 'fixed', width: 1000, height: 1000 }): DesignerStore {
   const store = new DesignerStore({
     unit: 'px',
-    page: { mode: 'fixed', width: 1000, height: 1000 },
+    page,
     guides: { x: [], y: [] },
     elements,
   })
@@ -110,6 +110,73 @@ describe('useElementDrag', () => {
     expect(a.y).toBe(30)
     expect(b.x).toBe(120)
     expect(b.y).toBe(130)
+  })
+
+  it('moves multi-selection continuously across fixed-sheet page breaks', () => {
+    const a = makeNode('a', 0, 80, 10, 10)
+    const b = makeNode('b', 0, 150, 10, 10)
+    const store = makeStore([a, b], ['a', 'b'], {
+      mode: 'fixed',
+      width: 100,
+      height: 100,
+      pagination: { strategy: 'fixed-sheets', pageCount: 2 },
+    })
+    const drag = useElementDrag(makeCtx(store))
+
+    const target = document.createElement('div')
+    target.dataset.id = 'a'
+    document.body.appendChild(target)
+
+    startDrag(target, drag, 0, 80)
+    window.dispatchEvent(pdEvent('pointermove', 0, 130))
+
+    expect(a.y).toBe(130)
+    expect(b.y).toBe(200)
+  })
+
+  it('keeps page boundary snap as an auxiliary page reference', () => {
+    const node = makeNode('n1', 10, 20)
+    const store = makeStore([node], ['n1'])
+    const drag = useElementDrag(makeCtx(store))
+
+    const target = document.createElement('div')
+    target.dataset.id = 'n1'
+    document.body.appendChild(target)
+
+    startDrag(target, drag, 0, 0)
+    window.dispatchEvent(pdEvent('pointermove', -9, 0))
+
+    expect(node.x).toBe(0)
+    expect(store.snapActiveLines).toContainEqual(expect.objectContaining({
+      orientation: 'vertical',
+      position: 0,
+      source: 'page',
+    }))
+  })
+
+  it('snaps to later fixed-sheet page boundaries', () => {
+    const node = makeNode('n1', 0, 150, 10, 10)
+    const store = makeStore([node], ['n1'], {
+      mode: 'fixed',
+      width: 100,
+      height: 100,
+      pagination: { strategy: 'fixed-sheets', pageCount: 2 },
+    })
+    const drag = useElementDrag(makeCtx(store))
+
+    const target = document.createElement('div')
+    target.dataset.id = 'n1'
+    document.body.appendChild(target)
+
+    startDrag(target, drag, 0, 150)
+    window.dispatchEvent(pdEvent('pointermove', 0, 189))
+
+    expect(node.y).toBe(190)
+    expect(store.snapActiveLines).toContainEqual(expect.objectContaining({
+      orientation: 'horizontal',
+      position: 200,
+      source: 'page',
+    }))
   })
 
   it('multi-selection drag commits a single transaction', () => {

@@ -75,6 +75,25 @@ function createFixedSheets(
   resolveTotalPages(pages)
 
   for (const fragment of document.fragments) {
+    const pageIndex = Math.max(Math.min(Math.floor(fragment.box.y / pageHeight), pageCount - 1), 0)
+    const pageStart = pageIndex * pageHeight
+    const overflowsX = fragment.box.x < 0 || fragment.box.x + fragment.box.width > pageWidth
+    const overflowsY = fragment.box.y < pageStart || fragment.box.y + fragment.box.height > pageStart + pageHeight
+    if (overflowsX || overflowsY) {
+      diagnostics.push({
+        code: 'FIXED_SHEETS_FRAGMENT_OVERFLOW',
+        severity: 'warning',
+        message: `Fragment ${fragment.sourceNodeId} overflows its fixed output page and may be clipped.`,
+        stage: 'pagination',
+        sourceNodeId: fragment.sourceNodeId,
+        detail: {
+          pageIndex,
+          pageRect: { x: 0, y: pageStart, width: pageWidth, height: pageHeight },
+          fragmentBox: fragment.box,
+        },
+      })
+    }
+
     if (fragment.flow.pageBreakBefore || fragment.flow.pageBreakAfter) {
       diagnostics.push({
         code: 'FIXED_SHEETS_BREAK_CONSTRAINT_IGNORED',

@@ -65,13 +65,11 @@ export type {
 
 export {
   createEditorSurfacePlan,
-  DEFAULT_EDITOR_PAGE_GAP,
   findPageForDocumentY,
   findPageForVisualPoint,
   getEditorSurfacePageLeft,
   projectDocumentPointToEditorSurface,
   projectEditorSurfacePointToDocument,
-  resolveEditorPageGap,
 } from './editor-surface-plan'
 
 export type { EditorSurfacePagePlan, EditorSurfacePlan, EditorSurfacePointProjection } from './editor-surface-plan'

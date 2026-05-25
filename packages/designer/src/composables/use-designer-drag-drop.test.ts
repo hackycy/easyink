@@ -31,8 +31,8 @@ function createLineNode(partial: Partial<MaterialNode> = {}): MaterialNode {
   } as MaterialNode
 }
 
-function makePage(): PageSchema {
-  return { mode: 'fixed', width: 500, height: 500 }
+function makePage(overrides: Partial<PageSchema> = {}): PageSchema {
+  return { mode: 'fixed', width: 500, height: 500, ...overrides }
 }
 
 function makePageEl() {
@@ -97,7 +97,7 @@ function dispatchPointerEvent(type: string, clientX: number, clientY: number, po
 function makeStore(
   elements: MaterialNode[] = [],
   extension?: unknown,
-  options: { textCreateDefaultNode?: (partial?: Partial<MaterialNode>) => MaterialNode } = {},
+  options: { textCreateDefaultNode?: (partial?: Partial<MaterialNode>) => MaterialNode, page?: PageSchema } = {},
 ) {
   const textDef = {
     type: 'text',
@@ -118,7 +118,7 @@ function makeStore(
     createDefaultNode: (partial?: Partial<MaterialNode>) => createLineNode(partial),
   }
   return {
-    schema: { unit: 'px', page: makePage(), elements, groups: [] },
+    schema: { unit: 'px', page: options.page ?? makePage(), elements, groups: [] },
     workbench: { viewport: { zoom: 1, scrollLeft: 0, scrollTop: 0 } },
     commands: {
       execute: vi.fn((command: { execute: () => void }) => command.execute()),
@@ -203,7 +203,7 @@ describe('useDesignerDragDrop', () => {
     drag.cleanup()
   })
 
-  it('does not create a material outside the canvas safe margin', () => {
+  it('creates a material continuously outside page bands', () => {
     const pageEl = makePageEl()
     const elements: MaterialNode[] = []
     const store = makeStore(elements)
@@ -222,7 +222,8 @@ describe('useDesignerDragDrop', () => {
     })
     drag.onCanvasDrop(makeDragEvent(530, 530, [MATERIAL_DRAG_MIME], { [MATERIAL_DRAG_MIME]: 'text' }))
 
-    expect(elements).toHaveLength(0)
+    expect(elements).toHaveLength(1)
+    expect(elements[0]).toMatchObject({ x: 480, y: 505 })
     drag.cleanup()
   })
 
@@ -250,7 +251,7 @@ describe('useDesignerDragDrop', () => {
     drag.cleanup()
   })
 
-  it('cleans up pointer-driven preview immediately on pointerup outside the canvas', () => {
+  it('commits pointer-driven material drag outside page bands and cleans up the preview', () => {
     const pageEl = makePageEl()
     const elements: MaterialNode[] = []
     const store = makeStore(elements)
@@ -275,7 +276,8 @@ describe('useDesignerDragDrop', () => {
 
     dispatchPointerEvent('pointerup', 530, 530)
 
-    expect(elements).toHaveLength(0)
+    expect(elements).toHaveLength(1)
+    expect(elements[0]).toMatchObject({ x: 480, y: 505 })
     expect(document.body.querySelector('.ei-designer-drag-preview__rect')).toBeNull()
     expect(drag.consumeClickSuppression()).toBe(true)
     drag.cleanup()
@@ -452,6 +454,32 @@ describe('useDesignerDragDrop', () => {
     expect(elements[0]?.type).toBe('line')
     expect(elements[0]?.x).toBe(170)
     expect(elements[0]?.y).toBe(-13.5)
+    drag.cleanup()
+  })
+
+  it('drops onto fixed sheets using continuous y', () => {
+    const pageEl = makePageEl()
+    const elements: MaterialNode[] = []
+    const store = makeStore(elements, undefined, {
+      page: makePage({ pagination: { strategy: 'fixed-sheets', pageCount: 2 } }),
+    })
+    const drag = useDesignerDragDrop({
+      store: store as never,
+      getPageEl: () => pageEl,
+    })
+
+    drag.startMaterialDrag(makeDragEvent(10, 10, []), {
+      id: 'quick-text',
+      group: 'quick',
+      label: 'Text',
+      icon: {},
+      materialType: 'text',
+      priority: 'quick',
+    })
+    drag.onCanvasDrop(makeDragEvent(250, 540, [MATERIAL_DRAG_MIME], { [MATERIAL_DRAG_MIME]: 'text' }))
+
+    expect(elements).toHaveLength(1)
+    expect(elements[0]).toMatchObject({ x: 200, y: 515 })
     drag.cleanup()
   })
 

@@ -265,7 +265,7 @@ const pageFrames = computed(() => {
     page,
     style: {
       left: `${getEditorSurfacePageLeft(plan, page)}${unit}`,
-      top: `${page.visualTop}${unit}`,
+      top: `${page.yOffset}${unit}`,
       width: `${page.width}${unit}`,
       height: `${page.height}${unit}`,
       ...resolvePageBackgroundStyle(store.schema.page.background, unit),
@@ -285,7 +285,7 @@ const pageToolbarItems = computed(() => {
     page,
     style: {
       left: `${unitManager.toPixels(getEditorSurfacePageLeft(plan, page) + page.width, 96, zoom) + PAGE_TOOLBAR_GAP_PX}px`,
-      top: `${unitManager.toPixels(page.visualTop, 96, zoom) + 0}px`,
+      top: `${unitManager.toPixels(page.yOffset, 96, zoom) + 0}px`,
     },
   }))
 })
@@ -304,13 +304,26 @@ const autoPaginationLines = computed(() => {
   return lines
 })
 
-const autoPaginationLineStyles = computed(() => {
+const pageBreakLineStyles = computed(() => {
+  if (isFixedSheetPlan.value) {
+    const plan = editorSurfacePlan.value
+    const unit = store.schema.unit
+    return plan.pages.slice(0, -1).map(page => ({
+      key: `fixed-${page.index}`,
+      style: {
+        left: `${pageLeft(page)}${unit}`,
+        top: `${page.yOffset + page.height}${unit}`,
+        width: `${page.width}${unit}`,
+      },
+    }))
+  }
+
   const page = editorSurfacePlan.value.pages[0]
   if (!page)
     return []
   const unit = store.schema.unit
   return autoPaginationLines.value.map(line => ({
-    key: line,
+    key: `auto-${line}`,
     style: {
       left: `${pageLeft(page)}${unit}`,
       top: `${line}${unit}`,
@@ -476,7 +489,6 @@ function resolveRepeatPreviewPages(): EditorSurfacePagePlan[] {
     width: page.width,
     height: pageHeight,
     yOffset: index * pageHeight,
-    visualTop: index * pageHeight,
     kind: 'page' as const,
   }))
 }
@@ -489,7 +501,6 @@ function resolveRepeatSourcePage(node: ReturnType<typeof store.getElements>[numb
       width: store.schema.page.width,
       height: store.schema.page.height,
       yOffset: 0,
-      visualTop: 0,
       kind: 'page',
     }
 }
@@ -546,7 +557,7 @@ function scrollToPage(page: EditorSurfacePagePlan) {
   const paddingLeft = Number.parseFloat(style.paddingLeft) || 0
   const margin = 24
   el.scrollTo({
-    top: Math.max(paddingTop + unitManager.toPixels(page.visualTop, 96, zoom) - margin, 0),
+    top: Math.max(paddingTop + unitManager.toPixels(page.yOffset, 96, zoom) - margin, 0),
     left: Math.max(paddingLeft + unitManager.toPixels(pageLeft(page), 96, zoom) - margin, 0),
     behavior: 'smooth',
   })
@@ -666,7 +677,7 @@ onUnmounted(() => {
           <GuideOverlay ref="guideOverlayRef" :surface-plan="editorSurfacePlan" :preview-guide="rulerHover" />
 
           <div
-            v-for="line in autoPaginationLineStyles"
+            v-for="line in pageBreakLineStyles"
             :key="line.key"
             class="ei-canvas-page-break"
             :style="line.style"
@@ -873,9 +884,9 @@ onUnmounted(() => {
 
 .ei-canvas-paper {
   position: absolute;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
   pointer-events: none;
   box-sizing: border-box;
+  border: 1px solid rgba(0, 0, 0, 0.08);
 
   &--continuous {
     min-height: 100%;
@@ -885,9 +896,31 @@ onUnmounted(() => {
 .ei-canvas-page-break {
   position: absolute;
   height: 0;
-  border-top: 1px dashed rgba(24, 144, 255, 0.5);
+  border-top: 1px dashed var(--ei-page-break-color, rgba(24, 144, 255, 0.72));
   pointer-events: none;
   z-index: 15;
+
+  &::before,
+  &::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    width: 0;
+    height: 0;
+    transform: translateY(-50%);
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+  }
+
+  &::before {
+    left: -8px;
+    border-left: 8px solid var(--ei-page-break-color, rgba(24, 144, 255, 0.72));
+  }
+
+  &::after {
+    right: -8px;
+    border-right: 8px solid var(--ei-page-break-color, rgba(24, 144, 255, 0.72));
+  }
 }
 
 .ei-page-toolbar {

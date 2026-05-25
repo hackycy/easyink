@@ -1,4 +1,4 @@
-import type { DatasourceDropZone, DatasourceFieldInfo, EditorSurfacePagePlan, Rect } from '@easyink/core'
+import type { DatasourceDropZone, DatasourceFieldInfo, Rect } from '@easyink/core'
 import type { DataUnionBinding } from '@easyink/datasource'
 import type { BindingRef, MaterialNode } from '@easyink/schema'
 import type { BindingDisplayFormat } from '@easyink/shared'
@@ -9,9 +9,8 @@ import {
   AddMaterialCommand,
   BindFieldCommand,
   createEditorSurfacePlan,
-  findPageForVisualPoint,
-  getEditorSurfacePageLeft,
   pointInRect,
+  projectEditorSurfacePointToDocument,
   UnitManager,
 } from '@easyink/core'
 import { deepClone } from '@easyink/shared'
@@ -21,7 +20,6 @@ import { selectMany, selectOne } from '../interactions/selection-api'
 export const MATERIAL_DRAG_MIME = 'application/x-easyink-material'
 export const DATASOURCE_DRAG_MIME = 'application/x-easyink-field'
 
-const SAFE_DROP_MARGIN_PX = 12
 const MATERIAL_PREVIEW_MIN_SIZE_PX = 32
 const DATASOURCE_FLOATING_PREVIEW = {
   width: 136,
@@ -90,11 +88,11 @@ type PointerSession
   }
 
 type DropTarget
-  = | { status: 'inside' | 'safe-margin', page: EditorSurfacePagePlan, docPoint: { x: number, y: number } }
+  = | { status: 'inside', docPoint: { x: number, y: number } }
     | { status: 'outside', docPoint: { x: number, y: number } }
 
 type MaterialDropTarget
-  = | { status: 'inside' | 'safe-margin', page: EditorSurfacePagePlan, rect: Rect, previewRect: Rect }
+  = | { status: 'inside', rect: Rect, previewRect: Rect }
     | { status: 'outside', rect: Rect, previewRect: Rect }
 
 type DragIntent
@@ -405,23 +403,12 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
 
     const surfacePoint = screenToSurfacePoint(clientX, clientY, pageEl)
     const plan = createEditorSurfacePlan(ctx.store.schema)
-    const page = findPageForVisualPoint(plan, surfacePoint)
-    const pageLeft = getEditorSurfacePageLeft(plan, page)
-    const localX = surfacePoint.x - pageLeft
-    const localY = surfacePoint.y - page.visualTop
-    const unitManager = new UnitManager(ctx.store.schema.unit)
-    const margin = unitManager.fromPixels(SAFE_DROP_MARGIN_PX, 96, ctx.store.workbench.viewport.zoom)
-    const inside = localX >= 0 && localX <= page.width && localY >= 0 && localY <= page.height
-    const safe = localX >= -margin && localX <= page.width + margin && localY >= -margin && localY <= page.height + margin
+    const projected = projectEditorSurfacePointToDocument(plan, surfacePoint)
     const docPoint = {
-      x: Math.min(Math.max(localX, 0), page.width),
-      y: page.yOffset + Math.min(Math.max(localY, 0), page.height),
+      x: projected.x,
+      y: projected.y,
     }
-    if (inside)
-      return { status: 'inside', page, docPoint }
-    if (safe)
-      return { status: 'safe-margin', page, docPoint }
-    return { status: 'outside', docPoint }
+    return { status: 'inside', docPoint }
   }
 
   function resolveMaterialDropTarget(clientX: number, clientY: number, width: number, height: number): MaterialDropTarget {
@@ -444,101 +431,26 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
     }
     const plan = createEditorSurfacePlan(ctx.store.schema)
     const unitManager = new UnitManager(ctx.store.schema.unit)
-    const margin = unitManager.fromPixels(SAFE_DROP_MARGIN_PX, 96, ctx.store.workbench.viewport.zoom)
     const minPreviewSize = unitManager.fromPixels(MATERIAL_PREVIEW_MIN_SIZE_PX, 96, ctx.store.workbench.viewport.zoom)
     const previewSurfaceRect = expandRectToMinSize(surfaceRect, minPreviewSize, minPreviewSize)
-    const actualCandidate = findBestMaterialPageIntersection(plan, previewSurfaceRect, 0)
-    if (actualCandidate) {
-      return {
-        status: 'inside',
-        page: actualCandidate.page,
-        rect: surfaceRectToDocumentRect(plan, actualCandidate.page, surfaceRect),
-        previewRect: surfaceRectToDocumentRect(plan, actualCandidate.page, previewSurfaceRect),
-      }
-    }
-
-    const safePage = findSafeMarginPage(plan, surfacePoint, margin)
-    if (safePage) {
-      return {
-        status: 'safe-margin',
-        page: safePage,
-        rect: surfaceRectToDocumentRect(plan, safePage, surfaceRect),
-        previewRect: surfaceRectToDocumentRect(plan, safePage, previewSurfaceRect),
-      }
-    }
-
-    const nearestPage = findPageForVisualPoint(plan, surfacePoint)
     return {
-      status: 'outside',
-      rect: surfaceRectToDocumentRect(plan, nearestPage, surfaceRect),
-      previewRect: surfaceRectToDocumentRect(plan, nearestPage, previewSurfaceRect),
-    }
-  }
-
-  function findBestMaterialPageIntersection(
-    plan: ReturnType<typeof createEditorSurfacePlan>,
-    surfaceRect: Rect,
-    margin: number,
-  ) {
-    let best: { page: EditorSurfacePagePlan, area: number } | null = null
-    for (const page of plan.pages) {
-      const pageRect = getPageSurfaceRect(plan, page, margin)
-      const area = intersectionArea(surfaceRect, pageRect)
-      if (area <= 0)
-        continue
-      if (!best || area > best.area)
-        best = { page, area }
-    }
-    return best
-  }
-
-  function findSafeMarginPage(
-    plan: ReturnType<typeof createEditorSurfacePlan>,
-    point: { x: number, y: number },
-    margin: number,
-  ) {
-    for (const page of plan.pages) {
-      const rect = getPageSurfaceRect(plan, page, margin)
-      if (point.x >= rect.x && point.x <= rect.x + rect.width && point.y >= rect.y && point.y <= rect.y + rect.height)
-        return page
-    }
-    return null
-  }
-
-  function getPageSurfaceRect(
-    plan: ReturnType<typeof createEditorSurfacePlan>,
-    page: EditorSurfacePagePlan,
-    margin = 0,
-  ): Rect {
-    const left = getEditorSurfacePageLeft(plan, page)
-    return {
-      x: left - margin,
-      y: page.visualTop - margin,
-      width: page.width + margin * 2,
-      height: page.height + margin * 2,
+      status: 'inside',
+      rect: surfaceRectToDocumentRect(plan, surfaceRect),
+      previewRect: surfaceRectToDocumentRect(plan, previewSurfaceRect),
     }
   }
 
   function surfaceRectToDocumentRect(
     plan: ReturnType<typeof createEditorSurfacePlan>,
-    page: EditorSurfacePagePlan,
     surfaceRect: Rect,
   ): Rect {
-    const pageLeft = getEditorSurfacePageLeft(plan, page)
+    const topLeft = projectEditorSurfacePointToDocument(plan, { x: surfaceRect.x, y: surfaceRect.y })
     return {
-      x: surfaceRect.x - pageLeft,
-      y: page.yOffset + surfaceRect.y - page.visualTop,
+      x: topLeft.x,
+      y: topLeft.y,
       width: surfaceRect.width,
       height: surfaceRect.height,
     }
-  }
-
-  function intersectionArea(a: Rect, b: Rect) {
-    const left = Math.max(a.x, b.x)
-    const top = Math.max(a.y, b.y)
-    const right = Math.min(a.x + a.width, b.x + b.width)
-    const bottom = Math.min(a.y + a.height, b.y + b.height)
-    return Math.max(right - left, 0) * Math.max(bottom - top, 0)
   }
 
   function expandRectToMinSize(rect: Rect, minWidth: number, minHeight: number): Rect {

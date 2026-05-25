@@ -20,7 +20,7 @@ function fixedSchema(): DocumentSchema {
       pages: 2,
       pageModel: { kind: 'paged-paper', paper: { width: 100, height: 80 } },
       layout: { strategy: 'absolute' },
-      pagination: { strategy: 'fixed-sheets', pageCount: 2, pageGap: 20 },
+      pagination: { strategy: 'fixed-sheets', pageCount: 2 },
       reflow: { strategy: 'measure-only' },
     },
     guides: { x: [], y: [] },
@@ -52,7 +52,7 @@ describe('ruler-coordinate', () => {
     expect(rulerClientPointToUnit(ctx, 'horizontal', 125, 0)).toBe(25)
   })
 
-  it('keeps fixed-sheet page gaps as canvas ruler distance instead of clipping by paper', () => {
+  it('measures fixed sheets on one continuous vertical canvas without clipping by paper', () => {
     const ctx = context()
     const scale = getRulerScale(ctx, { left: 0, top: 20 }, 'vertical', 300)
 

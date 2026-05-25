@@ -1,17 +1,29 @@
 import type { DocumentSchema } from '@easyink/schema'
+import type { Point, Rect } from './geometry'
+import { resolvePageModel } from './page-model'
 
 export interface EditorSurfacePagePlan {
   index: number
   width: number
   height: number
   yOffset: number
-  visualTop: number
   kind: 'page' | 'continuous'
+}
+
+export interface EditorSurfaceDecoration {
+  kind: 'page-frame' | 'page-break' | 'page-label' | 'page-toolbar-anchor'
+  pageIndex: number
+  rect?: Rect
+  position?: Point
 }
 
 export interface EditorSurfacePlan {
   pages: EditorSurfacePagePlan[]
-  pageGap: number
+  coordinate: {
+    width: number
+    height: number
+  }
+  decorations: EditorSurfaceDecoration[]
   contentBounds: {
     width: number
     height: number
@@ -27,47 +39,36 @@ export interface EditorSurfacePointProjection {
   inPage: boolean
 }
 
-export const DEFAULT_EDITOR_PAGE_GAP = 24
-
 export function createEditorSurfacePlan(schema: DocumentSchema): EditorSurfacePlan {
   const page = schema.page
-  const pageModelKind = page.pageModel?.kind
-  const pageGap = resolveEditorPageGap(schema)
+  const pageModel = resolvePageModel(schema)
 
   const paginationStrategy = page.pagination?.strategy
   if (
-    pageModelKind === 'continuous-paper'
+    pageModel.kind === 'continuous-paper'
     || page.mode === 'continuous'
     || paginationStrategy === 'none'
     || paginationStrategy === 'auto-sheets'
   ) {
     return createPlan([{
       index: 0,
-      width: page.width,
-      height: resolveContinuousEditorHeight(schema),
+      width: pageModel.width,
+      height: pageModel.height,
       yOffset: 0,
-      visualTop: 0,
       kind: 'continuous',
-    }], 0)
+    }])
   }
 
   const pageCount = Math.max(page.pagination?.pageCount ?? page.pages ?? 1, 1)
   return createPlan(
     Array.from({ length: pageCount }, (_, index) => ({
       index,
-      width: page.width,
-      height: page.height,
-      yOffset: index * page.height,
-      visualTop: index * (page.height + pageGap),
+      width: pageModel.width,
+      height: pageModel.height,
+      yOffset: index * pageModel.height,
       kind: 'page',
     })),
-    pageGap,
   )
-}
-
-export function resolveEditorPageGap(schema: DocumentSchema): number {
-  const configured = schema.page.pagination?.pageGap
-  return typeof configured === 'number' && configured >= 0 ? configured : DEFAULT_EDITOR_PAGE_GAP
 }
 
 export function getEditorSurfacePageLeft(plan: EditorSurfacePlan, page: EditorSurfacePagePlan): number {
@@ -83,7 +84,7 @@ export function projectDocumentPointToEditorSurface(
   const localY = point.y - page.yOffset
   return {
     x: pageLeft + point.x,
-    y: page.visualTop + localY,
+    y: page.yOffset + localY,
     pageIndex: page.index,
     localX: point.x,
     localY,
@@ -97,19 +98,18 @@ export function projectEditorSurfacePointToDocument(
 ): EditorSurfacePointProjection {
   const page = findPageForVisualPoint(plan, point)
   const pageLeft = getEditorSurfacePageLeft(plan, page)
-  const rawLocalY = point.y - page.visualTop
-  const localY = Math.min(Math.max(rawLocalY, 0), page.height)
+  const rawLocalY = point.y - page.yOffset
   const localX = point.x - pageLeft
-  const inPage = point.y >= page.visualTop
-    && point.y <= page.visualTop + page.height
+  const inPage = point.y >= page.yOffset
+    && point.y <= page.yOffset + page.height
     && point.x >= pageLeft
     && point.x <= pageLeft + page.width
   return {
     x: localX,
-    y: page.yOffset + localY,
+    y: page.yOffset + rawLocalY,
     pageIndex: page.index,
     localX,
-    localY,
+    localY: rawLocalY,
     inPage,
   }
 }
@@ -133,7 +133,7 @@ export function findPageForVisualPoint(
   for (const page of plan.pages) {
     const left = getEditorSurfacePageLeft(plan, page)
     const right = left + page.width
-    const top = page.visualTop
+    const top = page.yOffset
     const bottom = top + page.height
     if (point.x >= left && point.x <= right && point.y >= top && point.y <= bottom)
       return page
@@ -152,35 +152,73 @@ export function findPageForVisualPoint(
     width: plan.contentBounds.width,
     height: plan.contentBounds.height,
     yOffset: 0,
-    visualTop: 0,
     kind: 'page',
   }
 }
 
-function resolveContinuousEditorHeight(schema: DocumentSchema): number {
-  let bottom = 0
-  for (const node of schema.elements)
-    bottom = Math.max(bottom, node.y + node.height)
-  const trailingGap = schema.page.reflow?.preserveTrailingGap === false
-    ? 0
-    : Math.max(schema.page.height - bottom, 0)
-  const minHeight = schema.page.pageModel?.paper.minHeight ?? schema.page.height
-  const maxHeight = schema.page.pageModel?.paper.maxHeight
-  const height = Math.max(minHeight, schema.page.height, bottom + trailingGap)
-  return typeof maxHeight === 'number' && maxHeight > 0 ? Math.min(height, maxHeight) : height
-}
-
-function createPlan(pages: EditorSurfacePagePlan[], pageGap: number): EditorSurfacePlan {
-  const width = pages.reduce((max, page) => Math.max(max, page.width), 0)
-  const height = pages.reduce((max, page) => Math.max(max, page.visualTop + page.height), 0)
+function createPlan(pages: EditorSurfacePagePlan[]): EditorSurfacePlan {
+  const pageWidth = pages.reduce((max, page) => Math.max(max, page.width), 0)
+  const pageStackHeight = pages.reduce((max, page) => Math.max(max, page.yOffset + page.height), 0)
+  const width = pageWidth
+  const height = pageStackHeight
+  const decorations = createDecorations(pages)
   return {
     pages,
-    pageGap,
+    coordinate: {
+      width,
+      height,
+    },
+    decorations,
     contentBounds: {
       width,
       height,
     },
   }
+}
+
+function createDecorations(pages: EditorSurfacePagePlan[]): EditorSurfaceDecoration[] {
+  const decorations: EditorSurfaceDecoration[] = []
+  for (const page of pages) {
+    decorations.push({
+      kind: 'page-frame',
+      pageIndex: page.index,
+      rect: {
+        x: 0,
+        y: page.yOffset,
+        width: page.width,
+        height: page.height,
+      },
+    })
+    if (page.kind === 'page' && page.index < pages.length - 1) {
+      decorations.push({
+        kind: 'page-break',
+        pageIndex: page.index,
+        position: {
+          x: 0,
+          y: page.yOffset + page.height,
+        },
+      })
+      decorations.push({
+        kind: 'page-label',
+        pageIndex: page.index + 1,
+        position: {
+          x: 0,
+          y: page.yOffset + page.height,
+        },
+      })
+    }
+    if (page.kind === 'page') {
+      decorations.push({
+        kind: 'page-toolbar-anchor',
+        pageIndex: page.index,
+        position: {
+          x: page.width,
+          y: page.yOffset,
+        },
+      })
+    }
+  }
+  return decorations
 }
 
 function nearestPageByDocumentY(plan: EditorSurfacePlan, y: number): EditorSurfacePagePlan {
@@ -200,7 +238,6 @@ function nearestPageByDocumentY(plan: EditorSurfacePlan, y: number): EditorSurfa
     width: plan.contentBounds.width,
     height: plan.contentBounds.height,
     yOffset: 0,
-    visualTop: 0,
     kind: 'page',
   }
 }

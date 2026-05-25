@@ -141,7 +141,6 @@ function normalizePaginationConfig(input: unknown, fallback: PaginationConfig): 
       ? input.strategy as PaginationStrategyKind
       : fallback.strategy,
     pageCount: typeof input.pageCount === 'number' && input.pageCount > 0 ? input.pageCount : fallback.pageCount,
-    pageGap: typeof input.pageGap === 'number' && input.pageGap >= 0 ? input.pageGap : fallback.pageGap,
     orphanPolicy,
   }
 }

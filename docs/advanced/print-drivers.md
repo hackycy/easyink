@@ -223,10 +223,9 @@ function createWsPrintDriver(wsUrl: string): PrintDriver {
 打印系统之间最容易出错的不是连接，而是单位。`px`、`pt`、`mm`、`inch` 混用时，最终打印出来就是尺寸不对。
 
 ```ts
-import { resolveViewerPrintSize, toMillimeters } from '@easyink/print-core'
+import { resolveViewerPrintSize } from '@easyink/print-core'
 
 const { widthMm, heightMm } = resolveViewerPrintSize(context)
-const customGapMm = toMillimeters(context.schema.page.pagination?.pageGap ?? 0, context.schema.unit)
 ```
 
 建议在驱动入口就把所有尺寸统一转换成毫米，后面的协议层只处理一种单位。这样最不容易出错。

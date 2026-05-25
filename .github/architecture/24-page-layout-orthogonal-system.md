@@ -149,13 +149,17 @@ Designer 不直接读取 `page.width/page.height` 渲染唯一页面，而是消
 
 | 页面组合 | 编辑态表现 |
 | --- | --- |
-| `fixed-sheets` | 多张固定纸纵向排列；`visualTop` 包含视觉 gap，`yOffset` 仍是文档坐标偏移。 |
-| `auto-sheets` | 单个连续编辑表面，并显示分页参考线；输出页数仍由 Viewer 决定。 |
-| `none` / `continuous-paper` | 单个可增长连续画布，高度按内容底边、最小高度和尾部留白计算。 |
+| `fixed-sheets` | 连续 document surface；页只作为 `yOffset + height` 切片和 page break decoration 存在，`pageGap` 不进入坐标，编辑表面高度固定为 `resolvePageModel().height * pageCount`。 |
+| `auto-sheets` | 单个纸张尺寸的连续编辑表面；输出页数仍由 Viewer 决定。 |
+| `none` / `continuous-paper` | 单个纸张尺寸的连续编辑表面，高度固定为 `resolvePageModel().height`，不按内容底边自动增长。 |
 
 每页重复元素在 Designer 中保留一份可交互源节点，其它输出页位置显示不可交互的重复预览。固定纸按页框复制预览；`auto-sheets` 在连续编辑表面内按分页参考线复制预览。预览只帮助用户理解输出效果，不参与选择、拖拽、缩放、吸附或命令历史。
 
-坐标投影统一通过 `projectDocumentPointToEditorSurface()` 和 `projectEditorSurfacePointToDocument()`。网格、辅助线、吸附线、元素 overlay 和选区都消费同一个 `EditorSurfacePlan`。
+坐标投影统一通过 `projectDocumentPointToEditorSurface()` 和 `projectEditorSurfacePointToDocument()`。网格、辅助线、吸附线、元素 overlay 和选区都消费同一个 `EditorSurfacePlan`。`visualTop` 和 `EditorSurfacePlan.pageGap` 已移除；普通编辑路径不得按 page slice clamp，禁止 drag/drop/resize/keyboard/paste 为 fixed-sheets 重新实现 page gap、nearest-page、page rect intersection 或页内编辑区逻辑。
+
+物料 drop 是连续 document rect 创建行为，不以纸张 frame、分页带或 pageEl 可视矩形为有效性边界。投放在纸张左右外侧、最后页之后或当前可视画布外侧时，仍应创建物料，但不得让 `EditorSurfacePlan.contentBounds` 或 schema page 尺寸随内容自动增长；越界风险交给诊断系统表达。
+
+纸张边界/中心线仍可作为拖拽或缩放的 page 辅助吸附候选，但分页线默认不作为吸附候选。需要吸附分页线时必须通过显式设置开启，并在交互反馈中区别于普通辅助线。
 
 固定纸增删通过命令系统完成：
 
