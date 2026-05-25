@@ -53,6 +53,8 @@ internal sealed class RenderDaemonService
     private readonly HostConfig _config;
     private readonly RenderRuntimeManager _runtimeManager;
 
+    public event Action? StatusChanged;
+
     public RenderDaemonService(HostConfig config, RenderRuntimeManager runtimeManager)
     {
         _config = config;
@@ -82,11 +84,54 @@ internal sealed class RenderDaemonService
         }
     }
 
-    public void Start()
+    public RenderDaemonStatus GetCachedStatus()
     {
-        var runtime = _runtimeManager.ResolveOptions();
-        var result = RunHost(runtime.HostPath, BuildDaemonArguments("start", runtime), 30000);
-        ThrowIfFailed(result, LangManager.Get("Error_RenderDaemonStartFailed"));
+        if (!_config.RenderEnabled)
+            return RenderDaemonStatus.Disabled();
+
+        var hostPath = HostConfig.ResolveRenderHostPath(_config.RenderHostPath!);
+        if (!File.Exists(hostPath))
+            return RenderDaemonStatus.ErrorStatus(LangManager.Get("Error_RenderHostMissing", hostPath));
+
+        var statePath = GetDaemonStatePath();
+        if (!File.Exists(statePath))
+            return RenderDaemonStatus.Stopped();
+
+        try
+        {
+            var root = JObject.Parse(File.ReadAllText(statePath));
+            var pid = root.Value<int?>("pid");
+            if (!pid.HasValue || !IsProcessAlive(pid.Value))
+                return RenderDaemonStatus.Stopped();
+
+            var browser = root["browser"] as JObject;
+            return new RenderDaemonStatus
+            {
+                Kind = RenderDaemonStateKind.Running,
+                Message = LangManager.Get("Dashboard_Status_Running"),
+                Pid = pid,
+                BrowserKind = browser?.Value<string>("kind") ?? string.Empty,
+                BrowserVersion = browser?.Value<string>("version") ?? string.Empty
+            };
+        }
+        catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is Newtonsoft.Json.JsonException)
+        {
+            return RenderDaemonStatus.Stopped(ex.Message);
+        }
+    }
+
+    public void Start(bool allowBrowserDownload = true)
+    {
+        try
+        {
+            var runtime = _runtimeManager.ResolveOptions(allowBrowserDownload: allowBrowserDownload);
+            var result = RunHost(runtime.HostPath, BuildDaemonArguments("start", runtime), 30000);
+            ThrowIfFailed(result, LangManager.Get("Error_RenderDaemonStartFailed"));
+        }
+        finally
+        {
+            NotifyStatusChanged();
+        }
     }
 
     public void Stop()
@@ -95,15 +140,65 @@ internal sealed class RenderDaemonService
         if (!File.Exists(hostPath))
             throw new FileNotFoundException(LangManager.Get("Error_RenderHostMissing", hostPath), hostPath);
 
-        var result = RunHost(hostPath, "daemon stop", 10000);
-        ThrowIfFailed(result, LangManager.Get("Error_RenderDaemonStopFailed"));
+        try
+        {
+            var result = RunHost(hostPath, "daemon stop", 10000);
+            ThrowIfFailed(result, LangManager.Get("Error_RenderDaemonStopFailed"));
+        }
+        finally
+        {
+            NotifyStatusChanged();
+        }
     }
 
     public void Restart()
     {
-        var runtime = _runtimeManager.ResolveOptions();
-        var result = RunHost(runtime.HostPath, BuildDaemonArguments("restart", runtime), 30000);
-        ThrowIfFailed(result, LangManager.Get("Error_RenderDaemonStartFailed"));
+        try
+        {
+            var runtime = _runtimeManager.ResolveOptions();
+            var result = RunHost(runtime.HostPath, BuildDaemonArguments("restart", runtime), 30000);
+            ThrowIfFailed(result, LangManager.Get("Error_RenderDaemonStartFailed"));
+        }
+        finally
+        {
+            NotifyStatusChanged();
+        }
+    }
+
+    private void NotifyStatusChanged()
+    {
+        try
+        {
+            StatusChanged?.Invoke();
+        }
+        catch
+        {
+        }
+    }
+
+    private static string GetDaemonStatePath()
+    {
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        if (!string.IsNullOrWhiteSpace(localAppData))
+            return Path.Combine(localAppData, "EasyInk.Render", "daemon.json");
+
+        var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        return string.IsNullOrWhiteSpace(userProfile)
+            ? Path.Combine(Path.GetTempPath(), "easyink-render", "daemon.json")
+            : Path.Combine(userProfile, "AppData", "Local", "EasyInk.Render", "daemon.json");
+    }
+
+    private static bool IsProcessAlive(int pid)
+    {
+        try
+        {
+            using var process = Process.GetProcessById(pid);
+            return !process.HasExited;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static RenderDaemonStatus ParseStatus(string json)

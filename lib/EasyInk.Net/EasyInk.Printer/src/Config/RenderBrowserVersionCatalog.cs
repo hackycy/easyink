@@ -34,18 +34,20 @@ internal static class RenderBrowserVersionCatalog
 {
     public const string AutoKey = "auto";
     public const string StableKey = "stable";
+    public const string Chromium86Key = "86";
     public const string LegacyWindowsKey = "109";
 
     private static readonly RenderBrowserVersionOption[] _options =
     {
-        new RenderBrowserVersionOption(AutoKey, "Auto", null, "chrome-headless-shell.exe", true, true),
-        new RenderBrowserVersionOption(StableKey, "Chrome Stable", null, "chrome-headless-shell.exe", true, false),
-        new RenderBrowserVersionOption("136", "Chrome 136", "136", "chrome-headless-shell.exe", true, false),
-        new RenderBrowserVersionOption("131", "Chrome 131", "131", "chrome-headless-shell.exe", true, false),
-        new RenderBrowserVersionOption("126", "Chrome 126", "126", "chrome-headless-shell.exe", true, false),
-        new RenderBrowserVersionOption("120", "Chrome 120", "120", "chrome-headless-shell.exe", true, false),
+        new RenderBrowserVersionOption(AutoKey, "Auto", null, "chrome.exe", true, true),
+        new RenderBrowserVersionOption(StableKey, "Chrome Stable", null, "chrome.exe", true, false),
+        new RenderBrowserVersionOption("136", "Chrome 136", "136", "chrome.exe", true, false),
+        new RenderBrowserVersionOption("131", "Chrome 131", "131", "chrome.exe", true, false),
+        new RenderBrowserVersionOption("126", "Chrome 126", "126", "chrome.exe", true, false),
+        new RenderBrowserVersionOption("120", "Chrome 120", "120", "chrome.exe", true, false),
         new RenderBrowserVersionOption("114", "Chrome 114", "114", "chrome.exe", true, false),
-        new RenderBrowserVersionOption(LegacyWindowsKey, "Chrome 109 (Windows 7/8.1)", null, "chrome.exe", false, true)
+        new RenderBrowserVersionOption(LegacyWindowsKey, "Chromium 109 (Windows 7/8.1)", null, "chrome.exe", true, true),
+        new RenderBrowserVersionOption(Chromium86Key, "Chromium 86", null, "chrome.exe", true, true)
     };
 
     public static IReadOnlyList<RenderBrowserVersionOption> Options => _options;

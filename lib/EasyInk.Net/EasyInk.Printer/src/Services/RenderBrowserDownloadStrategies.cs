@@ -111,12 +111,13 @@ internal sealed class ChromiumSnapshotDownloadStrategy : IRenderBrowserDownloadS
 
     private static readonly IReadOnlyDictionary<string, string> MilestoneRevisions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
+        [RenderBrowserVersionCatalog.Chromium86Key] = "800218",
         [RenderBrowserVersionCatalog.LegacyWindowsKey] = "1069273"
     };
 
     public BrowserDownloadInfo? Resolve(RenderBrowserDownloadContext context, CancellationToken cancellationToken)
     {
-        if (!string.Equals(context.BrowserKind, RenderBrowserKindCatalog.ChromiumKey, StringComparison.OrdinalIgnoreCase))
+        if (!SupportsBrowserKind(context))
             return null;
 
         var revision = ResolveRevision(context, cancellationToken);
@@ -131,6 +132,15 @@ internal sealed class ChromiumSnapshotDownloadStrategy : IRenderBrowserDownloadS
             "chrome-win/chrome.exe",
             "chromium-snapshot",
             null);
+    }
+
+    private static bool SupportsBrowserKind(RenderBrowserDownloadContext context)
+    {
+        if (string.Equals(context.BrowserKind, RenderBrowserKindCatalog.ChromiumKey, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return string.Equals(context.BrowserKind, RenderBrowserKindCatalog.AutoKey, StringComparison.OrdinalIgnoreCase)
+               && MilestoneRevisions.ContainsKey(context.Version.Key);
     }
 
     private static string? ResolveRevision(RenderBrowserDownloadContext context, CancellationToken cancellationToken)
@@ -155,6 +165,10 @@ internal sealed class ChromeForTestingDownloadStrategy : IRenderBrowserDownloadS
     public BrowserDownloadInfo? Resolve(RenderBrowserDownloadContext context, CancellationToken cancellationToken)
     {
         if (!SupportsBrowserKind(context.BrowserKind) || !context.Version.SupportsAutomaticDownload)
+            return null;
+
+        if (!string.Equals(context.Version.Key, RenderBrowserVersionCatalog.StableKey, StringComparison.OrdinalIgnoreCase) &&
+            string.IsNullOrWhiteSpace(context.Version.ChromeForTestingMilestone))
             return null;
 
         var json = context.ReadJsonFromUrl(
@@ -192,18 +206,8 @@ internal sealed class ChromeForTestingDownloadStrategy : IRenderBrowserDownloadS
 
     private static ChromeForTestingDownload? ResolveDownload(string browserKind, JObject? downloads, string platform)
     {
-        var preferHeadlessShell = string.Equals(browserKind, RenderBrowserKindCatalog.AutoKey, StringComparison.OrdinalIgnoreCase)
-                                  || string.Equals(browserKind, RenderBrowserKindCatalog.ChromeForTestingKey, StringComparison.OrdinalIgnoreCase)
-                                  || string.Equals(browserKind, RenderBrowserKindCatalog.HeadlessShellKey, StringComparison.OrdinalIgnoreCase);
-        return preferHeadlessShell
-            ? FindDownload(downloads, "chrome-headless-shell", platform)
-              ?? FindDownload(downloads, "chrome", platform)
-              ?? FindDownload(downloads, "chrome-headless-shell", "win32")
-              ?? FindDownload(downloads, "chrome", "win32")
-            : FindDownload(downloads, "chrome", platform)
-              ?? FindDownload(downloads, "chrome-headless-shell", platform)
-              ?? FindDownload(downloads, "chrome", "win32")
-              ?? FindDownload(downloads, "chrome-headless-shell", "win32");
+        return FindDownload(downloads, "chrome", platform)
+               ?? FindDownload(downloads, "chrome", "win32");
     }
 
     private static ChromeForTestingDownload? FindDownload(JObject? downloads, string downloadType, string platform)

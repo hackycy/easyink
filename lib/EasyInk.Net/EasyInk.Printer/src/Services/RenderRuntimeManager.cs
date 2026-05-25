@@ -26,7 +26,7 @@ internal sealed class RenderRuntimeManager : IDisposable
         _config = config;
     }
 
-    public RenderRuntimeOptions ResolveOptions(CancellationToken cancellationToken = default)
+    public RenderRuntimeOptions ResolveOptions(CancellationToken cancellationToken = default, bool allowBrowserDownload = true)
     {
         if (!_config.RenderEnabled)
             throw new InvalidOperationException("Render 未启用");
@@ -35,7 +35,7 @@ internal sealed class RenderRuntimeManager : IDisposable
         {
             ThrowIfDisposed();
 
-            return BuildOptions(cancellationToken);
+            return BuildOptions(cancellationToken, allowBrowserDownload);
         }
     }
 
@@ -87,18 +87,18 @@ internal sealed class RenderRuntimeManager : IDisposable
 
         var downloadedArchive = DownloadBrowserArchive(download, manifest, normalizedKey, progress, cancellationToken);
         progress?.Report(new RenderBrowserInstallProgress(RenderBrowserInstallStage.Extracting, downloadedArchive));
-        var installedPath = ExtractBrowserArchive(downloadedArchive, manifest, download.Executable, versionDir);
+        var installedPath = ExtractBrowserArchive(downloadedArchive, manifest, BuildInstallExecutableCandidates(download.Executable, executableCandidates), versionDir);
         progress?.Report(new RenderBrowserInstallProgress(RenderBrowserInstallStage.Completed, installedPath));
         return installedPath;
     }
 
-    private RenderRuntimeOptions BuildOptions(CancellationToken cancellationToken)
+    private RenderRuntimeOptions BuildOptions(CancellationToken cancellationToken, bool allowBrowserDownload)
     {
         var hostPath = HostConfig.ResolveRenderHostPath(_config.RenderHostPath!);
         if (!File.Exists(hostPath))
             throw new FileNotFoundException("Render CLI 不存在", hostPath);
 
-        var browserPath = ResolveBrowserExecutablePath(cancellationToken);
+        var browserPath = ResolveBrowserExecutablePath(cancellationToken, allowBrowserDownload);
         var profileRoot = HostConfig.ResolveRenderProfileRoot(_config.RenderProfileRoot!);
         var tempDir = HostConfig.ResolveRenderTempDir(_config.RenderTempDir!);
         var logDir = HostConfig.ResolveRenderLogDir(_config.RenderLogDir!);
@@ -123,7 +123,7 @@ internal sealed class RenderRuntimeManager : IDisposable
         };
     }
 
-    private string ResolveBrowserExecutablePath(CancellationToken cancellationToken)
+    private string ResolveBrowserExecutablePath(CancellationToken cancellationToken, bool allowBrowserDownload)
     {
         var browserKind = RenderBrowserKindCatalog.NormalizeKey(_config.RenderBrowserKind);
         var explicitPath = ResolveExplicitBrowserPath();
@@ -153,18 +153,21 @@ internal sealed class RenderRuntimeManager : IDisposable
         if (systemBrowser != null)
             return systemBrowser;
 
-        var download = ResolveBrowserDownload(option, manifest, browserKind, cancellationToken);
-        if (download != null)
+        if (allowBrowserDownload)
         {
-            var downloadedArchive = DownloadBrowserArchive(download, manifest, normalizedKey, null, cancellationToken);
-            return ExtractBrowserArchive(downloadedArchive, manifest, download.Executable, HostConfig.GetRenderBrowserVersionDir(browserDir, normalizedKey));
+            var download = ResolveBrowserDownload(option, manifest, browserKind, cancellationToken);
+            if (download != null)
+            {
+                var downloadedArchive = DownloadBrowserArchive(download, manifest, normalizedKey, null, cancellationToken);
+                return ExtractBrowserArchive(downloadedArchive, manifest, BuildInstallExecutableCandidates(download.Executable, executableCandidates), HostConfig.GetRenderBrowserVersionDir(browserDir, normalizedKey));
+            }
         }
 
-        if (string.IsNullOrWhiteSpace(_config.RenderBrowserArchivePath))
+        if (!allowBrowserDownload || string.IsNullOrWhiteSpace(_config.RenderBrowserArchivePath))
             throw CreateBrowserMissingException(browserKind, normalizedKey, browserDir);
 
         var archivePath = _config.RenderBrowserArchivePath!.Trim();
-        return ExtractBrowserArchive(archivePath, manifest, executableCandidates.FirstOrDefault(), HostConfig.GetRenderBrowserVersionDir(browserDir, normalizedKey));
+        return ExtractBrowserArchive(archivePath, manifest, executableCandidates, HostConfig.GetRenderBrowserVersionDir(browserDir, normalizedKey));
     }
 
     private string? ResolveExplicitBrowserPath()
@@ -191,7 +194,7 @@ internal sealed class RenderRuntimeManager : IDisposable
         return ExpandExecutableCandidates(candidates);
     }
 
-    private string ExtractBrowserArchive(string archivePath, ManifestBrowserInfo? manifest, string? executableHint, string targetRoot)
+    internal static string ExtractBrowserArchive(string archivePath, ManifestBrowserInfo? manifest, IEnumerable<string?> executableHints, string targetRoot)
     {
         if (!File.Exists(archivePath))
             throw new FileNotFoundException("Render Chrome zip 包不存在", archivePath);
@@ -203,16 +206,37 @@ internal sealed class RenderRuntimeManager : IDisposable
 
         var targetDir = Path.Combine(targetRoot, Path.GetFileNameWithoutExtension(archivePath) + "-" + archiveHash.Substring(0, 12));
         Directory.CreateDirectory(targetRoot);
+        var executableCandidates = BuildInstallExecutableCandidates(manifest?.Executable, executableHints);
 
-        if (!Directory.Exists(targetDir) || !Directory.EnumerateFileSystemEntries(targetDir).Any())
+        if (Directory.Exists(targetDir) && Directory.EnumerateFileSystemEntries(targetDir).Any())
         {
-            Directory.CreateDirectory(targetDir);
-            ZipFile.ExtractToDirectory(archivePath, targetDir);
+            var cachedBrowserPath = LocateBrowserExecutable(targetDir, executableCandidates);
+            if (cachedBrowserPath != null)
+                return cachedBrowserPath;
+
+            TryDeleteDirectory(targetDir);
         }
 
-        var browserPath = LocateBrowserExecutable(targetDir, manifest?.Executable ?? executableHint);
+        Directory.CreateDirectory(targetDir);
+        try
+        {
+            ZipFile.ExtractToDirectory(archivePath, targetDir);
+        }
+        catch
+        {
+            TryDeleteDirectory(targetDir);
+            throw;
+        }
+
+        var browserPath = LocateBrowserExecutable(targetDir, executableCandidates);
         if (browserPath == null)
-            throw new FileNotFoundException("Render Chrome zip 包中未找到 chrome-headless-shell.exe 或 chrome.exe", targetDir);
+        {
+            var entries = ListArchiveEntries(archivePath, 12);
+            TryDeleteDirectory(targetDir);
+            throw new FileNotFoundException(
+                "Render Chrome zip 包中未找到可执行文件。候选: " + string.Join(", ", executableCandidates) + "; zip entries: " + entries,
+                targetDir);
+        }
 
         return browserPath;
     }
@@ -390,6 +414,20 @@ internal sealed class RenderRuntimeManager : IDisposable
         return LocateBrowserExecutable(root, ExpandExecutableCandidates(new[] { manifestExecutable }));
     }
 
+    private static string[] BuildInstallExecutableCandidates(string? primaryExecutable, IEnumerable<string?> executableCandidates)
+    {
+        return ExpandExecutableCandidates(new[] { primaryExecutable }
+            .Concat(executableCandidates)
+            .Concat(new[]
+            {
+                "chrome.exe",
+                "chromium.exe",
+                "chrome-win64/chrome.exe",
+                "chrome-win32/chrome.exe",
+                "chrome-win/chrome.exe"
+            }));
+    }
+
     private static string? LocateBrowserExecutable(string root, string[] executableCandidates)
     {
         if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
@@ -543,6 +581,36 @@ internal sealed class RenderRuntimeManager : IDisposable
             .Select(s => s!.Replace('/', Path.DirectorySeparatorChar))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
+    }
+
+    private static string ListArchiveEntries(string archivePath, int maxEntries)
+    {
+        try
+        {
+            using var archive = ZipFile.OpenRead(archivePath);
+            var entries = archive.Entries
+                .Take(maxEntries)
+                .Select(e => e.FullName)
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .ToArray();
+            return entries.Length == 0 ? "<empty>" : string.Join(", ", entries);
+        }
+        catch
+        {
+            return "<unreadable>";
+        }
+    }
+
+    private static void TryDeleteDirectory(string path)
+    {
+        try
+        {
+            if (Directory.Exists(path))
+                Directory.Delete(path, true);
+        }
+        catch
+        {
+        }
     }
 
     private static string? AppendExe(string? value)

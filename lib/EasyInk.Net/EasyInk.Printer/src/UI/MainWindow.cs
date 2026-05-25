@@ -12,7 +12,6 @@ internal class MainWindow : Form
 {
     private readonly IReadOnlyList<IActivatableTab> _pages;
     private readonly SettingsView _settingsView;
-    private readonly HashSet<int> _loadedTabs = new() { 0 };
     private TabControl _tabs = null!;
 
     public event Action? OnRestart;
@@ -76,6 +75,14 @@ internal class MainWindow : Form
         base.Dispose(disposing);
     }
 
+    protected override async void OnShown(EventArgs e)
+    {
+        base.OnShown(e);
+
+        if (_pages.Count > 0)
+            await ActivatePageAsync(_pages[0]);
+    }
+
     private static TabPage CreateTabPage(IActivatableTab page)
     {
         var tabPage = new TabPage(page.Title);
@@ -88,7 +95,6 @@ internal class MainWindow : Form
     {
         var selectedIndex = _tabs.SelectedIndex;
         if (selectedIndex < 0 || selectedIndex >= _pages.Count) return;
-        if (!_loadedTabs.Add(selectedIndex)) return;
 
         await ActivatePageAsync(_pages[selectedIndex]);
     }

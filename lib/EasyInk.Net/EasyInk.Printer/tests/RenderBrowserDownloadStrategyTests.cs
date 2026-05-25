@@ -23,6 +23,32 @@ public class RenderBrowserDownloadStrategyTests
     }
 
     [Fact]
+    public void Resolve_Chromium86_UsesChromiumSnapshot()
+    {
+        var context = CreateContext(RenderBrowserKindCatalog.ChromiumKey, RenderBrowserVersionCatalog.Chromium86Key);
+
+        var download = RenderBrowserDownloadResolver.Resolve(context, CancellationToken.None);
+
+        Assert.NotNull(download);
+        Assert.Equal("chromium-snapshot", download!.Source);
+        Assert.Contains("/800218/chrome-win.zip", download.Url);
+        Assert.Equal("chrome-win/chrome.exe", download.Executable);
+    }
+
+    [Fact]
+    public void Resolve_Auto86_UsesChromiumSnapshot()
+    {
+        var context = CreateContext(RenderBrowserKindCatalog.AutoKey, RenderBrowserVersionCatalog.Chromium86Key);
+
+        var download = RenderBrowserDownloadResolver.Resolve(context, CancellationToken.None);
+
+        Assert.NotNull(download);
+        Assert.Equal("chromium-snapshot", download!.Source);
+        Assert.Contains("/800218/chrome-win.zip", download.Url);
+        Assert.Equal("chrome-win/chrome.exe", download.Executable);
+    }
+
+    [Fact]
     public void Resolve_ChromeStable_UsesChromeForTestingChromePackage()
     {
         var context = CreateContext(RenderBrowserKindCatalog.ChromeKey, RenderBrowserVersionCatalog.StableKey, ChromeForTestingStableJson());
@@ -36,16 +62,24 @@ public class RenderBrowserDownloadStrategyTests
     }
 
     [Fact]
-    public void Resolve_HeadlessShellStable_UsesChromeForTestingHeadlessShellPackage()
+    public void Resolve_AutoStable_UsesChromeForTestingChromePackage()
     {
-        var context = CreateContext(RenderBrowserKindCatalog.HeadlessShellKey, RenderBrowserVersionCatalog.StableKey, ChromeForTestingStableJson());
+        var context = CreateContext(RenderBrowserKindCatalog.AutoKey, RenderBrowserVersionCatalog.StableKey, ChromeForTestingStableJson());
 
         var download = RenderBrowserDownloadResolver.Resolve(context, CancellationToken.None);
 
         Assert.NotNull(download);
         Assert.Equal("chrome-for-testing", download!.Source);
-        Assert.Contains("chrome-headless-shell-win64.zip", download.Url);
-        Assert.Equal("chrome-headless-shell-win64/chrome-headless-shell.exe", download.Executable);
+        Assert.Contains("chrome-win64.zip", download.Url);
+        Assert.Equal("chrome-win64/chrome.exe", download.Executable);
+    }
+
+    [Fact]
+    public void Resolve_ChromeForTestingStable_DoesNotFallbackToHeadlessShell()
+    {
+        var context = CreateContext(RenderBrowserKindCatalog.ChromeForTestingKey, RenderBrowserVersionCatalog.StableKey, ChromeForTestingHeadlessShellOnlyJson());
+
+        Assert.Throws<InvalidOperationException>(() => RenderBrowserDownloadResolver.Resolve(context, CancellationToken.None));
     }
 
     [Fact]
@@ -80,6 +114,22 @@ public class RenderBrowserDownloadStrategyTests
         ""chrome"": [
           { ""platform"": ""win64"", ""url"": ""https://example.test/chrome-win64.zip"" }
         ],
+        ""chrome-headless-shell"": [
+          { ""platform"": ""win64"", ""url"": ""https://example.test/chrome-headless-shell-win64.zip"" }
+        ]
+      }
+    }
+  }
+}";
+    }
+
+    private static string ChromeForTestingHeadlessShellOnlyJson()
+    {
+        return @"{
+  ""channels"": {
+    ""Stable"": {
+      ""version"": ""136.0.0.0"",
+      ""downloads"": {
         ""chrome-headless-shell"": [
           { ""platform"": ""win64"", ""url"": ""https://example.test/chrome-headless-shell-win64.zip"" }
         ]

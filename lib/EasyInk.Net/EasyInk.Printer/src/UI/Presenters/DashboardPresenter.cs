@@ -62,8 +62,10 @@ internal sealed class DashboardPresenter : IDisposable
     private readonly EngineApi _api;
     private readonly RenderDaemonService _renderDaemonService;
     private readonly Action _connectionCountChanged;
+    private readonly Action _renderDaemonStatusChanged;
     private IDashboardView? _view;
     private bool _isRefreshing;
+    private bool _isCachedRefreshing;
     private bool _disposed;
 
     public DashboardPresenter(HttpServer server, WebSocketHandler wsHandler, EngineApi api, RenderDaemonService renderDaemonService)
@@ -73,13 +75,50 @@ internal sealed class DashboardPresenter : IDisposable
         _api = api;
         _renderDaemonService = renderDaemonService;
         _connectionCountChanged = OnConnectionCountChanged;
+        _renderDaemonStatusChanged = OnRenderDaemonStatusChanged;
     }
 
     public void Attach(IDashboardView view)
     {
         _view = view ?? throw new ArgumentNullException(nameof(view));
         _wsHandler.ConnectionCountChanged += _connectionCountChanged;
+        _renderDaemonService.StatusChanged += _renderDaemonStatusChanged;
         _view.SetSnapshot(CreateSnapshot(includeQueueProbe: false));
+    }
+
+    public void RefreshCachedInBackground()
+    {
+        if (_disposed || _isRefreshing || _isCachedRefreshing || _view == null) return;
+
+        _isCachedRefreshing = true;
+        Task.Run(() =>
+        {
+            try
+            {
+                var queue = GetQueueStatus();
+                var render = GetCachedRenderDaemonStatus();
+                Post(view =>
+                {
+                    view.SetQueueStatus(queue.Text, queue.Kind);
+                    view.SetRenderDaemonStatus(render.Text, render.Kind);
+                });
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+            catch
+            {
+                Post(view =>
+                {
+                    view.SetQueueStatus(LangManager.Get("Dashboard_Status_Unknown"), DashboardStateKind.Info);
+                    view.SetRenderDaemonStatus(LangManager.Get("Dashboard_Status_Unknown"), DashboardStateKind.Info);
+                });
+            }
+            finally
+            {
+                _isCachedRefreshing = false;
+            }
+        });
     }
 
     public async Task RefreshAsync()
@@ -89,6 +128,7 @@ internal sealed class DashboardPresenter : IDisposable
         _isRefreshing = true;
         _view.SetBusy(true);
         _view.SetSnapshot(CreateSnapshot(includeQueueProbe: false));
+        _view.SetRenderDaemonStatus(LangManager.Get("Dashboard_Status_Checking"), DashboardStateKind.Info);
 
         try
         {
@@ -106,9 +146,13 @@ internal sealed class DashboardPresenter : IDisposable
         catch (ObjectDisposedException)
         {
         }
-        catch
+        catch (Exception ex)
         {
-            Post(view => view.SetQueueStatus(LangManager.Get("Dashboard_Status_Unknown"), DashboardStateKind.Success));
+            Post(view =>
+            {
+                view.SetQueueStatus(LangManager.Get("Dashboard_Status_Unknown"), DashboardStateKind.Info);
+                view.SetRenderDaemonStatus(ex.Message, DashboardStateKind.Error);
+            });
         }
         finally
         {
@@ -123,12 +167,18 @@ internal sealed class DashboardPresenter : IDisposable
 
         _disposed = true;
         _wsHandler.ConnectionCountChanged -= _connectionCountChanged;
+        _renderDaemonService.StatusChanged -= _renderDaemonStatusChanged;
         _view = null;
     }
 
     private void OnConnectionCountChanged()
     {
         Post(view => view.SetWebSocketConnections(_wsHandler.ConnectionCount.ToString()));
+    }
+
+    private void OnRenderDaemonStatusChanged()
+    {
+        RefreshCachedInBackground();
     }
 
     private DashboardSnapshot CreateSnapshot(bool includeQueueProbe)
@@ -186,6 +236,17 @@ internal sealed class DashboardPresenter : IDisposable
     private (string Text, DashboardStateKind Kind) GetRenderDaemonStatus()
     {
         var status = _renderDaemonService.GetStatus();
+        return ToRenderDaemonDisplay(status);
+    }
+
+    private (string Text, DashboardStateKind Kind) GetCachedRenderDaemonStatus()
+    {
+        var status = _renderDaemonService.GetCachedStatus();
+        return ToRenderDaemonDisplay(status);
+    }
+
+    private static (string Text, DashboardStateKind Kind) ToRenderDaemonDisplay(RenderDaemonStatus status)
+    {
         switch (status.Kind)
         {
             case RenderDaemonStateKind.Running:

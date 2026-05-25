@@ -81,6 +81,7 @@
   "Dashboard_Status_Idle": "Idle",
   "Dashboard_Status_Busy": "Busy",
   "Dashboard_Status_Unknown": "--",
+  "Dashboard_Status_Checking": "Checking",
   "Dashboard_RenderDaemonRunning": "PID {0}",
 
   "Dashboard_DeviceInfo": "Device Info",

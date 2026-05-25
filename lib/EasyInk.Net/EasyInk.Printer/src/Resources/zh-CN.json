@@ -81,6 +81,7 @@
   "Dashboard_Status_Idle": "空闲",
   "Dashboard_Status_Busy": "忙碌",
   "Dashboard_Status_Unknown": "--",
+  "Dashboard_Status_Checking": "检查中",
   "Dashboard_RenderDaemonRunning": "PID {0}",
 
   "Dashboard_DeviceInfo": "设备信息",

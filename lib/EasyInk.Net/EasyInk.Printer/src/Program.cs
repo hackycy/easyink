@@ -112,6 +112,7 @@ static class Program
         var auditService = services.GetRequiredService<IAuditService>();
         var debugLogService = services.GetRequiredService<Services.PrintDebugLogService>();
         var renderRuntimeManager = services.GetRequiredService<Services.RenderRuntimeManager>();
+        var renderDaemonService = services.GetRequiredService<Services.RenderDaemonService>();
         var httpServer = services.GetRequiredService<HttpServer>();
         var wsHandler = services.GetRequiredService<WebSocketHandler>();
         var wsCommandHandler = services.GetRequiredService<WebSocketCommandHandler>();
@@ -257,6 +258,8 @@ static class Program
         else
             trayIcon.UpdateStatus(LangManager.Get("Tray_Status_Error"));
 
+        StartRenderDaemonIfEnabled(config, renderDaemonService);
+
         if (config.StartMinimized)
         {
             mainWindow.WindowState = FormWindowState.Minimized;
@@ -287,6 +290,25 @@ static class Program
         Application.Run(mainWindow);
 
         Cleanup(httpServer, wsHandler, engineApi, renderRuntimeManager, trayIcon);
+    }
+
+    private static void StartRenderDaemonIfEnabled(HostConfig config, Services.RenderDaemonService renderDaemonService)
+    {
+        if (!config.RenderEnabled)
+            return;
+
+        Task.Run(() =>
+        {
+            try
+            {
+                renderDaemonService.Start(allowBrowserDownload: false);
+                SimpleLogger.Info("Render daemon 已随程序启动");
+            }
+            catch (Exception ex)
+            {
+                SimpleLogger.Error("Render daemon 自启动失败", ex);
+            }
+        });
     }
 
     private static void OnEngineLog(Services.PrintDebugLogService debugLogService, LogLevel level, string message, string? jobId)

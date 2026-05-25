@@ -35,10 +35,14 @@ internal static class RenderBrowserKindCatalog
 
     private static readonly RenderBrowserKindOption[] _options =
     {
-        new RenderBrowserKindOption(AutoKey, "Auto", "chrome-headless-shell.exe", "chrome.exe", "msedge.exe", "chromium.exe", "headless-shell.exe"),
-        new RenderBrowserKindOption(ChromeForTestingKey, "Chrome for Testing", "chrome-headless-shell.exe", "chrome.exe"),
+        new RenderBrowserKindOption(AutoKey, "Auto", "chrome.exe", "chromium.exe"),
+        new RenderBrowserKindOption(ChromeForTestingKey, "Chrome for Testing", "chrome.exe"),
+        new RenderBrowserKindOption(ChromiumKey, "Chromium", "chromium.exe", "chrome.exe")
+    };
+
+    private static readonly RenderBrowserKindOption[] _legacyOptions =
+    {
         new RenderBrowserKindOption(HeadlessShellKey, "Headless Shell", "chrome-headless-shell.exe", "headless-shell.exe"),
-        new RenderBrowserKindOption(ChromiumKey, "Chromium", "chromium.exe", "chrome.exe"),
         new RenderBrowserKindOption(ChromeKey, "Chrome", "chrome.exe"),
         new RenderBrowserKindOption(EdgeKey, "Microsoft Edge", "msedge.exe"),
         new RenderBrowserKindOption(CustomKey, "Custom", "chrome-headless-shell.exe", "chrome.exe", "msedge.exe", "chromium.exe", "headless-shell.exe")
@@ -49,7 +53,7 @@ internal static class RenderBrowserKindCatalog
     public static RenderBrowserKindOption GetOption(string? key)
     {
         var normalizedKey = NormalizeKey(key);
-        return _options.First(o => string.Equals(o.Key, normalizedKey, StringComparison.OrdinalIgnoreCase));
+        return _options.Concat(_legacyOptions).First(o => string.Equals(o.Key, normalizedKey, StringComparison.OrdinalIgnoreCase));
     }
 
     public static string NormalizeKey(string? key)
@@ -58,7 +62,7 @@ internal static class RenderBrowserKindCatalog
             return AutoKey;
 
         var trimmed = key!.Trim();
-        return _options.Any(o => string.Equals(o.Key, trimmed, StringComparison.OrdinalIgnoreCase))
+        return _options.Concat(_legacyOptions).Any(o => string.Equals(o.Key, trimmed, StringComparison.OrdinalIgnoreCase))
             ? trimmed
             : AutoKey;
     }

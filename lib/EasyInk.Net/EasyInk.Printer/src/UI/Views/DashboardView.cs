@@ -123,7 +123,8 @@ internal sealed class DashboardView : UserControl, IDashboardView, IActivatableT
 
     public Task ActivateAsync()
     {
-        return _presenter.RefreshAsync();
+        _presenter.RefreshCachedInBackground();
+        return Task.CompletedTask;
     }
 
     public void RunOnUiThread(Action action)
