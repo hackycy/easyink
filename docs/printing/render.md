@@ -29,7 +29,7 @@ easyink-render render
 
 ### 下载预构建包
 
-如果只是使用 Render CLI，不需要本机安装 Go。前往 [EasyInk 最新应用发布](https://github.com/hackycy/easyink/releases/latest)，在 `app-v*` 版本的 Release assets 中按平台下载：
+如果只是使用 Render CLI，不需要本机安装 Go。前往 [EasyInk Releases](https://github.com/hackycy/easyink/releases)，选择 `app-v*` 开头的应用发布版本，在该版本的 Release assets 中按平台下载：
 
 | 平台 | 产物 |
 | --- | --- |
