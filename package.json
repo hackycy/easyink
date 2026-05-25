@@ -21,6 +21,7 @@
     "sync:package-readmes": "node ./scripts/sync-package-readmes.mjs",
     "sync:logos": "node ./scripts/sync-logos.mjs",
     "render:manifest": "node ./lib/EasyInk.Render/tools/render-release.mjs validate-manifest --manifest lib/EasyInk.Render/manifests/runtime-manifest.sample.json",
+    "render:host:docker": "node ./lib/EasyInk.Render/tools/render-release.mjs build-host-matrix --docker true",
     "render:release:test": "vitest run ./lib/EasyInk.Render/tools/render-release.test.mjs",
     "prepublishOnly": "pnpm build",
     "test": "vitest run --dom",

@@ -1,0 +1,169 @@
+name: Build EasyInk.Render
+
+on:
+  workflow_call:
+    inputs:
+      run_tests:
+        description: Run EasyInk.Render release tests and Go host tests before packaging
+        type: boolean
+        default: true
+      platforms:
+        description: Comma-separated host platforms, or all
+        type: string
+        default: all
+      url_base:
+        description: Optional download URL base stamped into generated runtime manifests
+        type: string
+        default: ''
+      docker_image:
+        description: Docker image used for Go cross-compilation
+        type: string
+        default: golang:1.23-bookworm
+    outputs:
+      render_version:
+        description: EasyInk.Render host package version
+        value: ${{ jobs.build.outputs.render_version }}
+      artifact_suffix:
+        description: Artifact suffix shared by EasyInk.Render packages
+        value: ${{ jobs.build.outputs.artifact_suffix }}
+      host_artifact_name:
+        description: Uploaded EasyInk.Render host artifact name
+        value: ${{ jobs.build.outputs.host_artifact_name }}
+  workflow_dispatch:
+    inputs:
+      run_tests:
+        description: Run EasyInk.Render release tests and Go host tests before packaging
+        type: boolean
+        default: true
+      platforms:
+        description: Comma-separated host platforms, or all
+        type: string
+        default: all
+      url_base:
+        description: Optional download URL base stamped into generated runtime manifests
+        type: string
+        default: ''
+      docker_image:
+        description: Docker image used for Go cross-compilation
+        type: string
+        default: golang:1.23-bookworm
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-easyink-render-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      render_version: ${{ steps.version.outputs.render_version }}
+      artifact_suffix: ${{ steps.version.outputs.artifact_suffix }}
+      host_artifact_name: ${{ steps.artifact.outputs.host_artifact_name }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Read Render version
+        id: version
+        shell: bash
+        run: |
+          version=$(node --input-type=module -e "import fs from 'node:fs'; const manifest = JSON.parse(fs.readFileSync('./lib/EasyInk.Render/manifests/runtime-manifest.sample.json', 'utf8')); console.log(manifest.host.version)")
+
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Unsupported Render version: $version" >&2
+            exit 1
+          fi
+
+          short_sha=${GITHUB_SHA::7}
+          suffix="v$version-$short_sha"
+
+          echo "render_version=$version" >> "$GITHUB_OUTPUT"
+          echo "artifact_suffix=$suffix" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve artifact name
+        id: artifact
+        shell: bash
+        run: echo "host_artifact_name=easyink-render-host-${{ steps.version.outputs.artifact_suffix }}" >> "$GITHUB_OUTPUT"
+
+      - name: Validate Render manifest
+        run: pnpm render:manifest
+
+      - name: Test Render release tooling
+        if: ${{ inputs.run_tests }}
+        run: pnpm render:release:test
+
+      - name: Test Render Go host with Docker
+        if: ${{ inputs.run_tests }}
+        env:
+          DOCKER_IMAGE: ${{ inputs.docker_image }}
+        shell: bash
+        run: |
+          docker run --rm --platform linux/amd64 \
+            -v "$PWD/lib/EasyInk.Render/host:/src" \
+            -w /src \
+            "$DOCKER_IMAGE" \
+            sh -lc 'set -e; test -z "$(/usr/local/go/bin/gofmt -l cmd internal)"; /usr/local/go/bin/go test ./...'
+
+      - name: Build Render host packages with Docker
+        env:
+          PLATFORMS: ${{ inputs.platforms }}
+          URL_BASE: ${{ inputs.url_base }}
+          DOCKER_IMAGE: ${{ inputs.docker_image }}
+        shell: bash
+        run: |
+          args=(build-host-matrix --platforms "$PLATFORMS" --outDir lib/EasyInk.Render/.artifacts --docker true --dockerImage "$DOCKER_IMAGE")
+
+          if [ -n "$URL_BASE" ]; then
+            args+=(--urlBase "$URL_BASE")
+          fi
+
+          node ./lib/EasyInk.Render/tools/render-release.mjs "${args[@]}"
+
+      - name: Stage release assets
+        shell: bash
+        run: |
+          version='${{ steps.version.outputs.render_version }}'
+          suffix='${{ steps.version.outputs.artifact_suffix }}'
+          source_dir="lib/EasyInk.Render/.artifacts/host/$version"
+          release_dir='lib/EasyInk.Render/.artifacts/release'
+
+          mkdir -p "$release_dir"
+          find "$source_dir" -mindepth 2 -maxdepth 2 -type f \( -name 'easyink-render-*' -o -name 'runtime-manifest.*.json' \) -exec cp {} "$release_dir" \;
+          cp "$source_dir/release-index.json" "$release_dir/easyink-render-host-release-index-$suffix.json"
+          ls -la "$release_dir"
+
+      - name: Upload Render host artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.artifact.outputs.host_artifact_name }}
+          path: lib/EasyInk.Render/.artifacts/release/*
+          if-no-files-found: error
+
+      - name: Write workflow summary
+        shell: bash
+        run: |
+          {
+            echo "Built EasyInk.Render host packages."
+            echo
+            echo "- Version: ${{ steps.version.outputs.render_version }}"
+            echo "- Platforms: ${{ inputs.platforms }}"
+            echo "- Artifact suffix: ${{ steps.version.outputs.artifact_suffix }}"
+            echo "- Artifact: ${{ steps.artifact.outputs.host_artifact_name }}"
+            echo "- Docker image: ${{ inputs.docker_image }}"
+          } >> "$GITHUB_STEP_SUMMARY"

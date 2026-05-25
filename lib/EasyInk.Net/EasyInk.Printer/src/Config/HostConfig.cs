@@ -73,7 +73,7 @@ public class HostConfig
         AppDomain.CurrentDomain.BaseDirectory,
         "render",
         "host",
-        "easyink-render-host.exe");
+        "easyink-render.exe");
 
     private static readonly string DefaultBundledRenderBrowserDir = Path.Combine(
         AppDomain.CurrentDomain.BaseDirectory,

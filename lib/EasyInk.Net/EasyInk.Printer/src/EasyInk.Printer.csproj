@@ -63,8 +63,8 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
-    <Content Include="bin\render\host\easyink-render-host.exe" Condition="Exists('bin\render\host\easyink-render-host.exe')">
-      <Link>render\host\easyink-render-host.exe</Link>
+    <Content Include="bin\render\host\easyink-render.exe" Condition="Exists('bin\render\host\easyink-render.exe')">
+      <Link>render\host\easyink-render.exe</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>

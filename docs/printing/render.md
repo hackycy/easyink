@@ -332,6 +332,9 @@ Host package 的发布可执行文件名为 `easyink-render`，Windows 为 `easy
 ```bash
 pnpm render:manifest
 pnpm render:release:test
+pnpm render:host:docker -- --platforms all
 ```
+
+Windows 手动发布可运行 `lib\EasyInk.Render\build-host.bat`。该脚本使用 Docker 内的 `golang:1.23-bookworm` 交叉编译 host 包，不依赖本机 Go 环境；默认构建 `win-x64`，传入 `all` 可构建全部平台，例如 `lib\EasyInk.Render\build-host.bat all`，也可用 `lib\EasyInk.Render\build-host.bat 0.1.0 all` 指定版本。
 
 `runtime-manifest` 继续描述 host、browser、EasyInk Runtime、平台、版本、下载地址、SHA256 和协议兼容性。新增平台或浏览器包时，需要同步更新 manifest、release tests 和本文档。

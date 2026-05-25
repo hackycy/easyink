@@ -79,7 +79,7 @@ public class SettingsMapperTests
             PrintDebugArtifactRetentionCount = 8,
             PrintDebugArtifactsDir = HostConfig.DefaultPrintDebugArtifactsDir,
             RenderEnabled = true,
-            RenderHostPath = @"D:\EasyInk\Render\easyink-render-host.exe",
+            RenderHostPath = @"D:\EasyInk\Render\easyink-render.exe",
             RenderBrowserKind = RenderBrowserKindCatalog.EdgeKey,
             RenderBrowserVersion = "126",
             RenderBrowserDir = @"D:\EasyInk\RenderBrowser",
@@ -116,7 +116,7 @@ public class SettingsMapperTests
         Assert.Equal(8, config.PrintDebugArtifactRetentionCount);
         Assert.Null(config.PrintDebugArtifactsDir);
         Assert.True(config.RenderEnabled);
-        Assert.Equal(@"D:\EasyInk\Render\easyink-render-host.exe", config.RenderHostPath);
+        Assert.Equal(@"D:\EasyInk\Render\easyink-render.exe", config.RenderHostPath);
         Assert.Equal(RenderBrowserKindCatalog.EdgeKey, config.RenderBrowserKind);
         Assert.Equal("126", config.RenderBrowserVersion);
         Assert.Equal(@"D:\EasyInk\RenderBrowser", config.RenderBrowserDir);

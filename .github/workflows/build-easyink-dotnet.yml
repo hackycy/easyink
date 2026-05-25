@@ -19,6 +19,10 @@ on:
         description: Upload a standalone EasyInk.Engine SDK package for external consumers
         type: boolean
         default: true
+      render_host_artifact_name:
+        description: Optional EasyInk.Render host artifact to bundle into EasyInk.Printer
+        type: string
+        default: ''
     outputs:
       printer_version:
         description: EasyInk.Printer package version
@@ -56,6 +60,10 @@ on:
         description: Upload a standalone EasyInk.Engine SDK package for external consumers
         type: boolean
         default: true
+      render_host_artifact_name:
+        description: Optional EasyInk.Render host artifact to bundle into EasyInk.Printer
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -157,6 +165,44 @@ jobs:
       - name: Download SumatraPDF
         shell: pwsh
         run: ./lib/EasyInk.Net/EasyInk.Printer/tools/download-sumatra.ps1
+
+      - name: Download Render host artifact
+        if: ${{ inputs.render_host_artifact_name != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.render_host_artifact_name }}
+          path: lib/EasyInk.Net/.render-artifacts
+
+      - name: Stage bundled Render CLI
+        if: ${{ inputs.render_host_artifact_name != '' }}
+        shell: pwsh
+        run: |
+          $artifactDir = 'lib/EasyInk.Net/.render-artifacts'
+          $archive = Get-ChildItem $artifactDir -Filter 'easyink-render-*-win-x64.zip' -File | Select-Object -First 1
+          $manifest = Get-ChildItem $artifactDir -Filter 'runtime-manifest.win-x64.json' -File | Select-Object -First 1
+
+          if ($null -eq $archive) {
+            throw "Render win-x64 archive not found in $artifactDir"
+          }
+
+          if ($null -eq $manifest) {
+            throw "Render win-x64 manifest not found in $artifactDir"
+          }
+
+          $hostDir = 'lib/EasyInk.Net/EasyInk.Printer/src/bin/render/host'
+          $renderDir = 'lib/EasyInk.Net/EasyInk.Printer/src/bin/render'
+          $tempDir = Join-Path ([IO.Path]::GetTempPath()) "easyink-render-$([guid]::NewGuid())"
+
+          New-Item -ItemType Directory -Force -Path $hostDir, $renderDir, $tempDir | Out-Null
+
+          try {
+            Expand-Archive -Path $archive.FullName -DestinationPath $tempDir -Force
+            Copy-Item (Join-Path $tempDir 'easyink-render.exe') (Join-Path $hostDir 'easyink-render.exe') -Force
+            Copy-Item $manifest.FullName (Join-Path $renderDir 'runtime-manifest.json') -Force
+          }
+          finally {
+            Remove-Item $tempDir -Recurse -Force -ErrorAction SilentlyContinue
+          }
 
       - name: Build solution
         run: dotnet build lib/EasyInk.Net/EasyInk.Net.sln -c Release --no-restore --nologo /p:Version=${{ steps.version.outputs.printer_version }} /p:AssemblyVersion=${{ steps.version.outputs.assembly_version }} /p:FileVersion=${{ steps.version.outputs.assembly_version }} /p:InformationalVersion=${{ steps.version.outputs.informational_version }}
@@ -275,3 +321,4 @@ jobs:
           Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "- Engine SDK uploaded: ${{ inputs.upload_engine_sdk }}"
           Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "- Portable zip uploaded: ${{ inputs.build_portable }}"
           Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "- Installer uploaded: ${{ inputs.build_installer }}"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "- Render host bundled: ${{ inputs.render_host_artifact_name != '' }}"

@@ -280,7 +280,7 @@
   "Settings_RenderBrowserProgressFailed": "浏览器下载失败",
   "Settings_RenderDescription": "Render 会把 HTML / EasyInk 输入转成 PDF 再打印。默认使用应用目录内置 CLI 和本地 daemon；需要替换运行时，可修改 CLI 路径、浏览器和目录。保存后重启服务生效。",
   "Dialog_SumatraPdfPath": "选择 SumatraPDF.exe",
-  "Dialog_RenderHostPath": "选择 easyink-render-host.exe",
+  "Dialog_RenderHostPath": "选择 easyink-render.exe",
   "Dialog_RenderLogDir": "选择 Render 日志目录",
   "Dialog_RenderBrowserDir": "选择浏览器目录",
   "Dialog_ExeFileFilter": "可执行文件 (*.exe)|*.exe|所有文件 (*.*)|*.*",

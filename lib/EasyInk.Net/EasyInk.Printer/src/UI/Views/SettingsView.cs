@@ -665,7 +665,7 @@ internal sealed class SettingsView : UserControl, ISettingsView, IActivatableTab
         {
             Title = LangManager.Get("Dialog_RenderHostPath"),
             Filter = LangManager.Get("Dialog_ExeFileFilter"),
-            FileName = "easyink-render-host.exe",
+            FileName = "easyink-render.exe",
             InitialDirectory = GetFileDialogInitialDirectory(_txtRenderHostPath.Text, HostConfig.DefaultRenderHostPath)
         };
         if (dlg.ShowDialog() == DialogResult.OK)

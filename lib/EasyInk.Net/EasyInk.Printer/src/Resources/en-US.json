@@ -280,7 +280,7 @@
   "Settings_RenderBrowserProgressFailed": "Browser download failed",
   "Settings_RenderDescription": "Render converts HTML / EasyInk input to PDF before printing. It uses the app-bundled CLI and a local daemon by default; change the CLI path, browser, or directory when replacing the runtime. Restart after saving.",
   "Dialog_SumatraPdfPath": "Select SumatraPDF.exe",
-  "Dialog_RenderHostPath": "Select easyink-render-host.exe",
+  "Dialog_RenderHostPath": "Select easyink-render.exe",
   "Dialog_RenderLogDir": "Select Render log directory",
   "Dialog_RenderBrowserDir": "Select browser directory",
   "Dialog_ExeFileFilter": "Executable files (*.exe)|*.exe|All files (*.*)|*.*",

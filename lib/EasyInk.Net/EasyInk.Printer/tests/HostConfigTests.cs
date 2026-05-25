@@ -105,7 +105,7 @@ public class HostConfigTests
     [Fact]
     public void DefaultBundledRenderPaths_UseApplicationBaseDirectory()
     {
-        Assert.Equal(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "render", "host", "easyink-render-host.exe"), HostConfig.DefaultRenderHostPath);
+        Assert.Equal(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "render", "host", "easyink-render.exe"), HostConfig.DefaultRenderHostPath);
         Assert.Equal(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "render", "browser"), HostConfig.DefaultRenderBrowserDir);
         Assert.Equal(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "render", "runtime-manifest.json"), HostConfig.DefaultRenderManifestPath);
     }

@@ -68,7 +68,9 @@ jobs:
         run: echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/easyink-mcp-server" >> "$GITHUB_OUTPUT"
 
   build-dotnet-release-assets:
-    needs: release-context
+    needs:
+      - release-context
+      - build-render-release-assets
     permissions:
       contents: read
     uses: ./.github/workflows/build-easyink-dotnet.yml
@@ -77,6 +79,16 @@ jobs:
       build_portable: true
       build_installer: true
       upload_engine_sdk: true
+      render_host_artifact_name: ${{ needs.build-render-release-assets.outputs.host_artifact_name }}
+
+  build-render-release-assets:
+    needs: release-context
+    permissions:
+      contents: read
+    uses: ./.github/workflows/build-easyink-render.yml
+    with:
+      run_tests: true
+      platforms: all
 
   publish-npm:
     needs: release-context
@@ -165,9 +177,10 @@ jobs:
     needs:
       - release-context
       - build-dotnet-release-assets
+      - build-render-release-assets
       - publish-npm
       - publish-docker
-    if: ${{ always() && needs.release-context.result == 'success' && needs.build-dotnet-release-assets.result == 'success' && needs.publish-npm.result == 'success' && (needs.publish-docker.result == 'success' || needs.publish-docker.result == 'skipped') }}
+    if: ${{ always() && needs.release-context.result == 'success' && needs.build-dotnet-release-assets.result == 'success' && needs.build-render-release-assets.result == 'success' && needs.publish-npm.result == 'success' && (needs.publish-docker.result == 'success' || needs.publish-docker.result == 'skipped') }}
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -195,6 +208,13 @@ jobs:
           name: ${{ needs.build-dotnet-release-assets.outputs.installer_artifact_name }}
           path: release-assets
 
+      - name: Download Render host artifact
+        if: ${{ needs.build-render-release-assets.outputs.host_artifact_name != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build-render-release-assets.outputs.host_artifact_name }}
+          path: release-assets
+
       - name: Create or update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -214,6 +234,8 @@ jobs:
             echo "- Tag: ${{ github.ref_name }}"
             echo "- EasyInk.Printer version: ${{ needs.build-dotnet-release-assets.outputs.printer_version }}"
             echo "- EasyInk.Net artifact suffix: ${{ needs.build-dotnet-release-assets.outputs.artifact_suffix }}"
+            echo "- EasyInk.Render version: ${{ needs.build-render-release-assets.outputs.render_version }}"
+            echo "- EasyInk.Render artifact suffix: ${{ needs.build-render-release-assets.outputs.artifact_suffix }}"
             echo "- Docker image published: ${{ needs.release-context.outputs.should_publish_docker }}"
             echo "- Release assets directory: release-assets"
           } >> "$GITHUB_STEP_SUMMARY"
