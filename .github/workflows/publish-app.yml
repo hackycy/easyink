@@ -1,0 +1,158 @@
+name: Release App
+
+on:
+  push:
+    tags:
+      - 'app-v*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Application release tag to create or update, for example app-v1.0.0
+        required: true
+        type: string
+
+concurrency:
+  group: release-app-${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release-context:
+    runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.context.outputs.release_tag }}
+      printer_version: ${{ steps.context.outputs.printer_version }}
+      render_version: ${{ steps.context.outputs.render_version }}
+      prerelease: ${{ steps.context.outputs.prerelease }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve release context
+        id: context
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            release_tag="$INPUT_RELEASE_TAG"
+          else
+            release_tag="$REF_NAME"
+          fi
+
+          if [[ ! "$release_tag" =~ ^app-v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Application release tags must look like app-v1.0.0 or app-v1.0.0-beta.1: $release_tag" >&2
+            exit 1
+          fi
+
+          printer_version=$(node --input-type=module -e "import fs from 'node:fs'; const text = fs.readFileSync('./lib/EasyInk.Net/EasyInk.Printer/src/EasyInk.Printer.csproj', 'utf8'); const match = text.match(/<Version>([^<]+)<\\/Version>/); if (!match) throw new Error('Version not found in EasyInk.Printer.csproj'); console.log(match[1])")
+          render_version=$(node --input-type=module -e "import fs from 'node:fs'; const manifest = JSON.parse(fs.readFileSync('./lib/EasyInk.Render/manifests/runtime-manifest.sample.json', 'utf8')); console.log(manifest.host.version)")
+          expected_tag="app-v$printer_version"
+
+          if [ "$release_tag" != "$expected_tag" ]; then
+            echo "Release tag $release_tag does not match EasyInk.Printer version $printer_version. Expected $expected_tag." >&2
+            exit 1
+          fi
+
+          prerelease=false
+          if [[ "$printer_version" == *-* ]]; then
+            prerelease=true
+          fi
+
+          {
+            echo "release_tag=$release_tag"
+            echo "printer_version=$printer_version"
+            echo "render_version=$render_version"
+            echo "prerelease=$prerelease"
+          } >> "$GITHUB_OUTPUT"
+
+  build-render-release-assets:
+    needs: release-context
+    permissions:
+      contents: read
+    uses: ./.github/workflows/build-easyink-render.yml
+    with:
+      run_tests: true
+      platforms: all
+
+  build-dotnet-release-assets:
+    needs:
+      - release-context
+      - build-render-release-assets
+    permissions:
+      contents: read
+    uses: ./.github/workflows/build-easyink-dotnet.yml
+    with:
+      run_tests: true
+      build_portable: true
+      build_installer: true
+      upload_engine_sdk: true
+      render_host_artifact_name: ${{ needs.build-render-release-assets.outputs.host_artifact_name }}
+
+  publish-release:
+    needs:
+      - release-context
+      - build-dotnet-release-assets
+      - build-render-release-assets
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+
+    steps:
+      - name: Download EasyInk.Engine SDK artifact
+        if: ${{ needs.build-dotnet-release-assets.outputs.engine_artifact_name != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build-dotnet-release-assets.outputs.engine_artifact_name }}
+          path: release-assets
+
+      - name: Download portable artifact
+        if: ${{ needs.build-dotnet-release-assets.outputs.portable_artifact_name != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build-dotnet-release-assets.outputs.portable_artifact_name }}
+          path: release-assets
+
+      - name: Download installer artifact
+        if: ${{ needs.build-dotnet-release-assets.outputs.installer_artifact_name != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build-dotnet-release-assets.outputs.installer_artifact_name }}
+          path: release-assets
+
+      - name: Download Render host artifact
+        if: ${{ needs.build-render-release-assets.outputs.host_artifact_name != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build-render-release-assets.outputs.host_artifact_name }}
+          path: release-assets
+
+      - name: Create or update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.release-context.outputs.release_tag }}
+          name: EasyInk App ${{ needs.release-context.outputs.printer_version }}
+          target_commitish: ${{ github.sha }}
+          files: release-assets/*
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+          prerelease: ${{ needs.release-context.outputs.prerelease == 'true' }}
+
+      - name: Write workflow summary
+        shell: bash
+        run: |
+          {
+            echo "Published EasyInk application release."
+            echo
+            echo "- Tag: ${{ needs.release-context.outputs.release_tag }}"
+            echo "- EasyInk.Printer version: ${{ needs.build-dotnet-release-assets.outputs.printer_version }}"
+            echo "- EasyInk.Net artifact suffix: ${{ needs.build-dotnet-release-assets.outputs.artifact_suffix }}"
+            echo "- EasyInk.Render version: ${{ needs.build-render-release-assets.outputs.render_version }}"
+            echo "- EasyInk.Render artifact suffix: ${{ needs.build-render-release-assets.outputs.artifact_suffix }}"
+            echo "- Release assets directory: release-assets"
+          } >> "$GITHUB_STEP_SUMMARY"

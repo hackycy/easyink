@@ -1,23 +1,58 @@
 import { spawn } from 'node:child_process'
+import { readFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
-import { cancel, confirm, intro, isCancel, outro } from '@clack/prompts'
+import { cancel, confirm, intro, isCancel, outro, select } from '@clack/prompts'
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const gitBinary = 'git'
 const pnpmBinary = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
 const validationScripts = ['lint', 'build', 'typecheck']
-const commitMessage = 'chore: bump version'
+const npmReleaseCommitMessage = 'chore: version packages'
 const releaseBranch = 'main'
 const releaseRemote = 'origin'
 
 async function main() {
   ensureInteractiveTerminal()
-  intro('easyink changeset release')
+  intro('easyink release')
 
+  const releaseMode = await selectReleaseMode()
   await runPreflightChecks()
 
+  if (releaseMode === 'npm') {
+    await runNpmRelease()
+  }
+  else {
+    await runAppRelease()
+  }
+}
+
+async function selectReleaseMode() {
+  const answer = await select({
+    message: '请选择发布类型',
+    options: [
+      {
+        value: 'npm',
+        label: 'npm 包发布',
+        hint: '生成 changeset 版本提交，推送 main 后由 Publish npm Packages workflow 发布 npm、Docker 和 Pages。',
+      },
+      {
+        value: 'app',
+        label: '应用层发布',
+        hint: '打 app-v<PrinterVersion> tag，由 Release App workflow 构建安装包和软件产物。',
+      },
+    ],
+  })
+
+  if (isCancel(answer)) {
+    stopGracefully('发布类型选择已取消，流程已退出。')
+  }
+
+  return answer
+}
+
+async function runNpmRelease() {
   await confirmStep({
     title: '步骤 1/4: 运行 changeset',
     details: [
@@ -65,21 +100,18 @@ async function main() {
 
   await runValidationSuite('版本变更后校验', validationScripts)
 
-  const tagName = formatTag(new Date())
   await confirmStep({
-    title: '步骤 3/4: 提交、打 tag 并推送',
+    title: '步骤 3/4: 提交并推送 npm 版本提交',
     details: [
-      `commit: ${commitMessage}`,
-      `tag: ${tagName}`,
+      `commit: ${npmReleaseCommitMessage}`,
       `branch: ${releaseRemote}/${releaseBranch}`,
       `version files: ${versionBumpFiles.join(', ')}`,
+      '说明: 本步骤不打 tag；推送 main 后由 Publish npm Packages workflow 发布 npm 包并部署 GitHub Pages。',
     ],
   })
 
-  await ensureTagDoesNotExist(tagName)
   await runCommandOrFail(gitBinary, ['add', '.'], 'git add .')
-  await runCommandOrFail(gitBinary, ['commit', '-m', commitMessage], `git commit -m "${commitMessage}"`)
-  await runCommandOrFail(gitBinary, ['tag', '-a', tagName, '-m', tagName], `git tag -a ${tagName} -m ${tagName}`)
+  await runCommandOrFail(gitBinary, ['commit', '-m', npmReleaseCommitMessage], `git commit -m "${npmReleaseCommitMessage}"`)
 
   try {
     await runCommandOrFail(
@@ -87,38 +119,62 @@ async function main() {
       ['push', releaseRemote, '-u', releaseBranch],
       `git push ${releaseRemote} -u ${releaseBranch}`,
     )
-    await runCommandOrFail(
-      gitBinary,
-      ['push', releaseRemote, `refs/tags/${tagName}`],
-      `git push ${releaseRemote} refs/tags/${tagName}`,
-    )
   }
   catch (error) {
     fail([
-      '推送失败，脚本已停止。',
-      `当前 commit 已创建，本地 tag ${tagName} 也已经存在。`,
-      `如果分支已推送成功但 tag 推送失败，请先检查远端状态再决定是否单独补推 refs/tags/${tagName}。`,
-      '请先人工检查本地仓库状态，再决定是否重新推送或回滚。',
+      '推送 npm 版本提交失败，脚本已停止。',
+      '当前 commit 已经创建，请先人工检查本地仓库状态，再决定是否重新推送或回滚。',
       error instanceof Error ? error.message : String(error),
     ].join('\n'))
   }
 
-  const finish = await confirm({
-    message: '步骤 4/4: 发布已完成，确认结束脚本？',
-    active: '结束',
-    inactive: '直接退出',
-    initialValue: true,
-  })
-
-  if (isCancel(finish) || !finish) {
-    process.exit(0)
-  }
+  await confirmFinish('步骤 4/4: npm 发布提交已推送，确认结束脚本？')
 
   console.log('')
-  console.log(`[release] tag: ${tagName}`)
   console.log(`[release] branch: ${releaseRemote}/${releaseBranch}`)
-  console.log(`[release] commit: ${commitMessage}`)
-  outro('发布流程执行完成。')
+  console.log(`[release] commit: ${npmReleaseCommitMessage}`)
+  outro('npm 版本提交已推送。Publish npm Packages workflow 将负责 npm 发布、mcp-server Docker 镜像和 GitHub Pages。')
+}
+
+async function runAppRelease() {
+  const release = await resolveApplicationRelease()
+
+  await confirmStep({
+    title: '步骤 1/2: 创建应用层发布 tag',
+    details: [
+      `tag: ${release.tagName}`,
+      `EasyInk.Printer: ${release.printerVersion}`,
+      `EasyInk.Render: ${release.renderVersion}`,
+      `branch: ${releaseRemote}/${releaseBranch}`,
+      '说明: 本步骤不改 npm 包版本；推送 tag 后由 Release App workflow 构建应用产物。',
+    ],
+  })
+
+  await ensureTagDoesNotExist(release.tagName)
+  await runCommandOrFail(gitBinary, ['tag', '-a', release.tagName, '-m', release.tagName], `git tag -a ${release.tagName} -m ${release.tagName}`)
+
+  try {
+    await runCommandOrFail(
+      gitBinary,
+      ['push', releaseRemote, `refs/tags/${release.tagName}`],
+      `git push ${releaseRemote} refs/tags/${release.tagName}`,
+    )
+  }
+  catch (error) {
+    fail([
+      '推送应用层 tag 失败，脚本已停止。',
+      `本地 tag ${release.tagName} 已经存在。`,
+      `请先检查远端状态，再决定是否单独补推 refs/tags/${release.tagName} 或删除本地 tag。`,
+      error instanceof Error ? error.message : String(error),
+    ].join('\n'))
+  }
+
+  await confirmFinish('步骤 2/2: 应用层发布 tag 已推送，确认结束脚本？')
+
+  console.log('')
+  console.log(`[release] tag: ${release.tagName}`)
+  console.log(`[release] branch: ${releaseRemote}/${releaseBranch}`)
+  outro('应用层发布 tag 已推送。Release App workflow 将负责构建和发布软件产物。')
 }
 
 function ensureInteractiveTerminal() {
@@ -146,7 +202,7 @@ async function runPreflightChecks() {
     fail(`当前分支必须跟踪 ${releaseRemote}/${releaseBranch}。`)
   }
 
-  await runCommandOrFail(gitBinary, ['fetch', releaseRemote], `git fetch ${releaseRemote}`)
+  await runCommandOrFail(gitBinary, ['fetch', releaseRemote, '--tags'], `git fetch ${releaseRemote} --tags`)
 
   const divergence = await runCapturedCommandOrFail(
     gitBinary,
@@ -166,6 +222,40 @@ async function runPreflightChecks() {
   await runValidationSuite('发布前校验', validationScripts)
 }
 
+async function resolveApplicationRelease() {
+  const printerProject = await readFile(resolve(repoRoot, 'lib/EasyInk.Net/EasyInk.Printer/src/EasyInk.Printer.csproj'), 'utf8')
+  const printerVersion = matchRequired(printerProject, /<Version>([^<]+)<\/Version>/, 'EasyInk.Printer.csproj Version')
+
+  const manifestText = await readFile(resolve(repoRoot, 'lib/EasyInk.Render/manifests/runtime-manifest.sample.json'), 'utf8')
+  const manifest = JSON.parse(manifestText)
+  const renderVersion = manifest?.host?.version
+  if (!isSemver(renderVersion)) {
+    fail(`EasyInk.Render host version 非法: ${renderVersion}`)
+  }
+
+  if (!isSemver(printerVersion)) {
+    fail(`EasyInk.Printer version 非法: ${printerVersion}`)
+  }
+
+  return {
+    printerVersion,
+    renderVersion,
+    tagName: `app-v${printerVersion}`,
+  }
+}
+
+function matchRequired(text, pattern, label) {
+  const match = text.match(pattern)
+  if (!match?.[1]) {
+    fail(`未找到 ${label}`)
+  }
+  return match[1]
+}
+
+function isSemver(value) {
+  return typeof value === 'string' && /^\d+\.\d+\.\d+(?:[-+][\d.a-z-]+)?$/i.test(value)
+}
+
 async function runValidationSuite(title, scripts) {
   console.log('')
   console.log(`[release] ${title}`)
@@ -178,8 +268,9 @@ async function runValidationSuite(title, scripts) {
 async function confirmStep({ title, details }) {
   console.log('')
   console.log(`[release] ${title}`)
-  for (const detail of details)
+  for (const detail of details) {
     console.log(`[release]   ${detail}`)
+  }
 
   const answer = await confirm({
     message: `${title}，是否继续？`,
@@ -190,6 +281,19 @@ async function confirmStep({ title, details }) {
 
   if (isCancel(answer) || !answer) {
     stopGracefully(`${title} 已取消，流程已退出。`)
+  }
+}
+
+async function confirmFinish(message) {
+  const finish = await confirm({
+    message,
+    active: '结束',
+    inactive: '直接退出',
+    initialValue: true,
+  })
+
+  if (isCancel(finish) || !finish) {
+    process.exit(0)
   }
 }
 
@@ -233,15 +337,6 @@ async function collectVersionBumpFiles(changedFiles) {
   }
 
   return versionBumpFiles
-}
-
-function formatTag(date) {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hour = String(date.getHours()).padStart(2, '0')
-  const minute = String(date.getMinutes()).padStart(2, '0')
-  return `v${year}.${month}.${day}.${hour}${minute}`
 }
 
 async function runInteractiveCommand(command, args) {

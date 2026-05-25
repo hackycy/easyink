@@ -31,11 +31,11 @@ EasyInk.Printer
 
 ### 方式一：便携包
 
-从 GitHub Actions 下载 `easyink-printer-portable-*` zip，解压后运行 `EasyInk.Printer.exe`。
+从 [EasyInk 最新应用发布](https://github.com/hackycy/easyink/releases/latest) 的 Release assets 下载 `EasyInkPrinter-Portable-*.zip`，解压后运行 `EasyInk.Printer.exe`。
 
 ### 方式二：安装包
 
-从 GitHub Actions 下载 `easyink-printer-installer-*` exe，运行安装向导。
+从 [EasyInk 最新应用发布](https://github.com/hackycy/easyink/releases/latest) 的 Release assets 下载 `EasyInkPrinter-Setup-*.exe`，运行安装向导。
 
 ### 方式三：从源码构建
 

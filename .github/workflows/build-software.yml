@@ -1,0 +1,37 @@
+name: Build Software
+
+on:
+  workflow_dispatch:
+    inputs:
+      platforms:
+        description: Comma-separated Render host platforms, or all
+        type: string
+        default: all
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-software-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-render:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/build-easyink-render.yml
+    with:
+      run_tests: true
+      platforms: ${{ github.event_name == 'workflow_dispatch' && inputs.platforms || 'all' }}
+
+  build-dotnet:
+    needs: build-render
+    permissions:
+      contents: read
+    uses: ./.github/workflows/build-easyink-dotnet.yml
+    with:
+      run_tests: true
+      build_portable: true
+      build_installer: true
+      upload_engine_sdk: true
+      render_host_artifact_name: ${{ needs.build-render.outputs.host_artifact_name }}

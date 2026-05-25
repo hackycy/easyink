@@ -27,6 +27,34 @@ easyink-render render
 
 ## 快速跑通
 
+### 下载预构建包
+
+如果只是使用 Render CLI，不需要本机安装 Go。前往 [EasyInk 最新应用发布](https://github.com/hackycy/easyink/releases/latest)，在 `app-v*` 版本的 Release assets 中按平台下载：
+
+| 平台 | 产物 |
+| --- | --- |
+| Windows x64 | `easyink-render-*-win-x64.zip` |
+| Linux x64 | `easyink-render-*-linux-x64.tar.gz` |
+| Linux arm64 | `easyink-render-*-linux-arm64.tar.gz` |
+| macOS x64 | `easyink-render-*-darwin-x64.tar.gz` |
+| macOS arm64 | `easyink-render-*-darwin-arm64.tar.gz` |
+
+同一个 Release 还会提供 `runtime-manifest.<platform>.json` 和 `easyink-render-host-release-index-*.json`，用于校验、自动下载或宿主集成。
+
+Windows 解压后可直接运行：
+
+```powershell
+.\easyink-render.exe version
+```
+
+macOS/Linux 解压后先确认可执行权限：
+
+```bash
+tar -xzf easyink-render-*-linux-x64.tar.gz
+chmod +x easyink-render
+./easyink-render version
+```
+
 ### 构建
 
 推荐在 Docker 内构建和测试，避免本机 Go 版本差异：
