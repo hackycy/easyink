@@ -4,16 +4,11 @@ import type { ResizeHandle } from '../composables/use-element-resize'
 import type { MarqueeRect } from '../composables/use-marquee-select'
 import type { WorkspaceWindowState } from '../types'
 import {
-  AddPageSheetCommand,
   createEditorSurfacePlan,
   getEditorSurfacePageLeft,
   projectDocumentPointToEditorSurface,
   readNodeRepeatScope,
-  RemovePageSheetCommand,
-  UnitManager,
 } from '@easyink/core'
-import { IconDelete, IconDown, IconNewTemplate, IconUp } from '@easyink/icons'
-import { EiIcon } from '@easyink/ui'
 import { computed, onMounted, onUnmounted, provide, ref } from 'vue'
 import { useDesignerStore } from '../composables'
 import { DESIGNER_DRAG_DROP_KEY, useDesignerDragDrop } from '../composables/use-designer-drag-drop'
@@ -61,10 +56,6 @@ function updateWindowState(windowState: WorkspaceWindowState, patch: Partial<Wor
 }
 const cursorPos = ref<{ x: number, y: number } | null>(null)
 const rulerHover = ref<{ axis: 'x' | 'y', position: number } | null>(null)
-
-const PAGE_TOOLBAR_GAP_PX = 16
-
-type PageToolbarMode = 'fixed-sheet-management'
 
 provide(CANVAS_CONTAINER_KEY, () => containerRef.value)
 
@@ -125,19 +116,6 @@ function handlePageDrop(e: DragEvent) {
 // ─── Computed ────────────────────────────────────────────────────
 
 const editorSurfacePlan = computed(() => createEditorSurfacePlan(store.schema))
-
-const isFixedSheetPlan = computed(() =>
-  editorSurfacePlan.value.pages.length > 0
-  && editorSurfacePlan.value.pages.every(page => page.kind === 'page')
-  && store.schema.page.pagination?.strategy === 'fixed-sheets',
-)
-
-const pageToolbarMode = computed<PageToolbarMode | null>(() => {
-  const strategy = store.schema.page.pagination?.strategy
-  if (strategy === 'fixed-sheets' && isFixedSheetPlan.value)
-    return 'fixed-sheet-management'
-  return null
-})
 
 const surfaceStyle = computed(() => {
   const plan = editorSurfacePlan.value
@@ -274,23 +252,6 @@ const pageFrames = computed(() => {
   }))
 })
 
-const pageToolbarItems = computed(() => {
-  const mode = pageToolbarMode.value
-  if (!mode)
-    return []
-  const plan = editorSurfacePlan.value
-  const zoom = store.workbench.viewport.zoom
-  const unitManager = new UnitManager(store.schema.unit)
-  return plan.pages.map(page => ({
-    mode,
-    page,
-    style: {
-      left: `${unitManager.toPixels(getEditorSurfacePageLeft(plan, page) + page.width, 96, zoom) + PAGE_TOOLBAR_GAP_PX}px`,
-      top: `${unitManager.toPixels(page.yOffset, 96, zoom) + 0}px`,
-    },
-  }))
-})
-
 // ─── Helpers ─────────────────────────────────────────────────────
 
 function windowTitle(kind: string): string {
@@ -391,10 +352,6 @@ function handleRulerHover(hover: { axis: 'x' | 'y', position: number } | null) {
   rulerHover.value = hover
 }
 
-function pageLeft(page: EditorSurfacePagePlan): number {
-  return getEditorSurfacePageLeft(editorSurfacePlan.value, page)
-}
-
 function projectNodeStyle(node: ReturnType<typeof store.getElements>[number], overrideY?: number) {
   const unit = store.schema.unit
   const point = projectDocumentPointToEditorSurface(editorSurfacePlan.value, { x: node.x, y: overrideY ?? node.y })
@@ -462,77 +419,6 @@ function resolveRepeatSourcePage(node: ReturnType<typeof store.getElements>[numb
       yOffset: 0,
       kind: 'page',
     }
-}
-
-function countElementsOnPage(page: EditorSurfacePagePlan): number {
-  const start = page.yOffset
-  const end = page.yOffset + page.height
-  return store.schema.elements.filter((node) => {
-    const bottom = node.y + node.height
-    return node.y < end && bottom > start
-  }).length
-}
-
-function addSheetAfter(page: EditorSurfacePagePlan) {
-  if (!isFixedSheetPlan.value)
-    return
-  store.commands.execute(new AddPageSheetCommand(store.schema, editorSurfacePlan.value, page.index))
-  store.markDraftModified()
-}
-
-async function removeSheet(page: EditorSurfacePagePlan) {
-  if (!canDeletePage(page))
-    return
-  const affectedElementCount = countElementsOnPage(page)
-  if (affectedElementCount > 0) {
-    const confirmed = await store.interactions.confirm({
-      id: 'designer.page.deleteWithElements',
-      title: store.t('designer.toolbar.deletePage'),
-      message: store.t('designer.message.confirmDeletePageWithElements'),
-      severity: 'danger',
-      confirmText: store.t('designer.dialog.confirm'),
-      cancelText: store.t('designer.dialog.cancel'),
-      payload: {
-        pageIndex: page.index,
-        pageNumber: page.index + 1,
-        affectedElementCount,
-      },
-    })
-    if (!confirmed)
-      return
-  }
-  store.commands.execute(new RemovePageSheetCommand(store.schema, editorSurfacePlan.value, page.index))
-  store.markDraftModified()
-}
-
-function scrollToPage(page: EditorSurfacePagePlan) {
-  const el = scrollRef.value
-  if (!el)
-    return
-  const zoom = store.workbench.viewport.zoom
-  const unitManager = new UnitManager(store.schema.unit)
-  const style = window.getComputedStyle(el)
-  const paddingTop = Number.parseFloat(style.paddingTop) || 0
-  const paddingLeft = Number.parseFloat(style.paddingLeft) || 0
-  const margin = 24
-  el.scrollTo({
-    top: Math.max(paddingTop + unitManager.toPixels(page.yOffset, 96, zoom) - margin, 0),
-    left: Math.max(paddingLeft + unitManager.toPixels(pageLeft(page), 96, zoom) - margin, 0),
-    behavior: 'smooth',
-  })
-}
-
-function canDeletePage(page: EditorSurfacePagePlan): boolean {
-  return page.kind === 'page' && isFixedSheetPlan.value && editorSurfacePlan.value.pages.length > 1
-}
-
-function scrollByPage(page: EditorSurfacePagePlan, delta: number) {
-  const pages = editorSurfacePlan.value.pages
-  if (pages.length === 0)
-    return
-  const next = pages[Math.min(Math.max(page.index + delta, 0), pages.length - 1)]
-  if (next)
-    scrollToPage(next)
 }
 
 // ─── Window position clamping ────────────────────────────────────
@@ -721,50 +607,6 @@ onUnmounted(() => {
             :style="marqueeStyle"
           />
         </div>
-
-        <div
-          v-for="item in pageToolbarItems"
-          :key="`toolbar-${item.page.index}`"
-          class="ei-page-toolbar"
-          :style="item.style"
-          @pointerdown.stop
-        >
-          <button
-            class="ei-page-toolbar__button"
-            type="button"
-            :title="store.t('designer.toolbar.addPage')"
-            @click="addSheetAfter(item.page)"
-          >
-            <EiIcon :icon="IconNewTemplate" :size="15" />
-          </button>
-          <button
-            class="ei-page-toolbar__button"
-            type="button"
-            :title="store.t('designer.toolbar.deletePage')"
-            :disabled="!canDeletePage(item.page)"
-            @click="removeSheet(item.page)"
-          >
-            <EiIcon :icon="IconDelete" :size="15" />
-          </button>
-          <button
-            class="ei-page-toolbar__button"
-            type="button"
-            :title="store.t('designer.toolbar.previousPage')"
-            :disabled="item.page.index <= 0"
-            @click="scrollByPage(item.page, -1)"
-          >
-            <EiIcon :icon="IconUp" :size="15" />
-          </button>
-          <button
-            class="ei-page-toolbar__button"
-            type="button"
-            :title="store.t('designer.toolbar.nextPage')"
-            :disabled="item.page.index >= editorSurfacePlan.pages.length - 1"
-            @click="scrollByPage(item.page, 1)"
-          >
-            <EiIcon :icon="IconDown" :size="15" />
-          </button>
-        </div>
       </div>
     </div>
 
@@ -844,43 +686,6 @@ onUnmounted(() => {
 
   &--continuous {
     min-height: 100%;
-  }
-}
-
-.ei-page-toolbar {
-  position: absolute;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 2px;
-  background: rgba(255, 255, 255, 0.96);
-  border: 1px solid var(--ei-border-color, #d9d9d9);
-  border-radius: 6px;
-  // box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
-  z-index: 20;
-
-  &__button {
-    width: 28px;
-    height: 28px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    border: 0;
-    border-radius: 4px;
-    background: transparent;
-    color: var(--ei-text-primary, #333);
-    cursor: pointer;
-
-    &:hover:not(:disabled) {
-      background: var(--ei-hover-bg, rgba(24, 144, 255, 0.1));
-      color: var(--ei-primary, #1890ff);
-    }
-
-    &:disabled {
-      color: var(--ei-text-disabled, #bbb);
-      cursor: not-allowed;
-    }
   }
 }
 

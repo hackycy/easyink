@@ -9,6 +9,8 @@ const UNIT_OPTIONS: NonNullable<PagePropertyDescriptor['enum']> = [
   { label: 'designer.option.unitPixel', value: 'px' },
 ]
 
+const MAX_FIXED_PAGE_COUNT = 6
+
 // ─── Document Group ─────────────────────────────────────────────
 
 const MODE_DESCRIPTOR: PagePropertyDescriptor = {
@@ -40,6 +42,38 @@ const UNIT_DESCRIPTOR: PagePropertyDescriptor = {
   enum: UNIT_OPTIONS,
   normalize(value) {
     return { document: { unit: value as 'mm' | 'pt' | 'px' } }
+  },
+}
+
+const PAGE_COUNT_DESCRIPTOR: PagePropertyDescriptor = {
+  id: 'pageCount',
+  group: 'document',
+  source: 'derived',
+  path: '',
+  label: 'designer.page.pageCount',
+  persisted: 'derived',
+  editor: 'number-slider',
+  min: 1,
+  max: MAX_FIXED_PAGE_COUNT,
+  step: 1,
+  nullable: false,
+  visible: ctx => ctx.document.page.mode === 'fixed'
+    && (ctx.document.page.pagination?.strategy ?? 'fixed-sheets') === 'fixed-sheets',
+  read(ctx) {
+    return resolveFixedPageCount(ctx.document.page)
+  },
+  normalize(value, ctx) {
+    const pageCount = normalizeFixedPageCount(Number(value))
+    return {
+      page: {
+        pages: pageCount,
+        pagination: {
+          ...(ctx.document.page.pagination ?? {}),
+          strategy: 'fixed-sheets',
+          pageCount,
+        },
+      },
+    }
   },
 }
 
@@ -489,11 +523,23 @@ function createModePresetPatch(mode: PageSchema['mode'], page: PageSchema): Part
     }
   }
 
+  const pageCount = resolveFixedPageCount(page)
   return {
     mode,
     pageModel: { kind: 'paged-paper', paper: { width: page.width, height: page.height } },
-    pagination: { strategy: 'fixed-sheets', pageCount: page.pages },
+    pages: pageCount,
+    pagination: { strategy: 'fixed-sheets', pageCount },
   }
+}
+
+function normalizeFixedPageCount(value: number): number {
+  if (!Number.isFinite(value))
+    return 1
+  return Math.min(Math.max(Math.floor(value), 1), MAX_FIXED_PAGE_COUNT)
+}
+
+function resolveFixedPageCount(page: PageSchema): number {
+  return normalizeFixedPageCount(page.pagination?.pageCount ?? page.pages ?? 1)
 }
 
 function syncPageDimensions(page: PageSchema, updates: { width?: number, height?: number }): Partial<PageSchema> {
@@ -525,6 +571,7 @@ export const PAGE_PROPERTY_DESCRIPTORS: PagePropertyDescriptor[] = [
   // document
   MODE_DESCRIPTOR,
   UNIT_DESCRIPTOR,
+  PAGE_COUNT_DESCRIPTOR,
   // layout
   LAYOUT_STRATEGY_DESCRIPTOR,
   // paper

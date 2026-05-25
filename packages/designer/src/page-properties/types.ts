@@ -18,7 +18,7 @@ export type PagePropertyPersistence = 'schema' | 'compat' | 'derived'
 /**
  * Editor widget type for rendering.
  */
-export type PagePropertyEditorType = 'readonly' | 'number' | 'select' | 'switch' | 'color' | 'asset' | 'font'
+export type PagePropertyEditorType = 'readonly' | 'number' | 'number-slider' | 'select' | 'switch' | 'color' | 'asset' | 'font'
 
 /**
  * Enum option for select editors.
@@ -46,6 +46,7 @@ export interface PagePropertyDescriptor {
   step?: number
   nullable?: boolean
   visible?: (ctx: PagePropertyContext) => boolean
+  read?: (ctx: PagePropertyContext) => unknown
   normalize?: (value: unknown, ctx: PagePropertyContext) => PagePropertyPatch
 }
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { PagePropertyDescriptor } from '../page-properties'
 import type { DesignerResolvedAsset } from '../types'
-import { EiColorPicker, EiFontPicker, EiInput, EiNumberInput, EiSelect, EiSwitch } from '@easyink/ui'
+import { EiColorPicker, EiFontPicker, EiInput, EiNumberInput, EiNumberSlider, EiSelect, EiSwitch } from '@easyink/ui'
 import { computed } from 'vue'
 import { useDesignerStore } from '../composables'
 import ImageSourceEditor from './ImageSourceEditor.vue'
@@ -59,6 +59,19 @@ function onImagePicked(result: DesignerResolvedAsset) {
     <!-- number -->
     <EiNumberInput
       v-else-if="descriptor.editor === 'number'"
+      :label="label"
+      :model-value="(value as number | null) ?? null"
+      :min="descriptor.min"
+      :max="descriptor.max"
+      :step="descriptor.step"
+      :nullable="descriptor.nullable ?? false"
+      @update:model-value="onPreview"
+      @commit="onCommit"
+    />
+
+    <!-- number slider -->
+    <EiNumberSlider
+      v-else-if="descriptor.editor === 'number-slider'"
       :label="label"
       :model-value="(value as number | null) ?? null"
       :min="descriptor.min"

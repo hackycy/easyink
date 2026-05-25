@@ -5,6 +5,8 @@ import type { PagePropertyContext, PagePropertyDescriptor, PagePropertyGroup, Pa
  * Read the current value for a page property descriptor from context.
  */
 export function readPageProperty(descriptor: PagePropertyDescriptor, ctx: PagePropertyContext): unknown {
+  if (descriptor.read)
+    return descriptor.read(ctx)
   if (descriptor.source === 'document') {
     return getByPath(ctx.document, descriptor.path)
   }
