@@ -1,22 +1,49 @@
 <script setup lang="ts">
 import type { DataFieldNode, DataSourceDescriptor } from '@easyink/datasource'
-import { IconChevronRight, IconDatabase } from '@easyink/icons'
-import { computed, reactive, watch } from 'vue'
+import { IconChevronRight, IconClose, IconDatabase, IconSearch } from '@easyink/icons'
+import { computed, reactive, ref, watch } from 'vue'
 import { useDesignerStore } from '../composables'
 import DataFieldTreeNode from './datasource/DataFieldTreeNode.vue'
 
 const store = useDesignerStore()
+const searchText = ref('')
 
 const sources = computed<DataSourceDescriptor[]>(() => {
   return store.dataSourceRegistry.getSources()
 })
 
 const hasData = computed(() => sources.value.length > 0)
+const normalizedSearch = computed(() => searchText.value.trim().toLowerCase())
+const hasSearch = computed(() => normalizedSearch.value.length > 0)
+const displayedSources = computed<DataSourceDescriptor[]>(() => {
+  const query = normalizedSearch.value
+  if (!query)
+    return sources.value
+
+  const result: DataSourceDescriptor[] = []
+  for (const source of sources.value) {
+    const fields = source.fields ?? []
+    if (matchesSource(source, query)) {
+      result.push(source)
+      continue
+    }
+
+    const matchedFields = filterFields(fields, query)
+    if (matchedFields.length > 0)
+      result.push({ ...source, fields: matchedFields })
+  }
+  return result
+})
+const hasVisibleData = computed(() => displayedSources.value.length > 0)
 
 const expandedKeys = reactive(new Set<string>())
 
 function isExpanded(key: string): boolean {
   return expandedKeys.has(key)
+}
+
+function isVisibleExpanded(key: string): boolean {
+  return hasSearch.value || isExpanded(key)
 }
 
 function toggleExpand(key: string) {
@@ -49,13 +76,79 @@ watch(sources, (s) => {
 function childKey(source: DataSourceDescriptor, child: DataFieldNode): string {
   return `${source.id}:${child.path || child.name}`
 }
+
+function matchesValue(query: string, value: unknown): boolean {
+  return typeof value === 'string' && value.toLowerCase().includes(query)
+}
+
+function matchesSource(source: DataSourceDescriptor, query: string): boolean {
+  return [
+    source.title,
+    source.name,
+    source.id,
+    source.tag,
+  ].some(value => matchesValue(query, value))
+}
+
+function matchesField(field: DataFieldNode, query: string): boolean {
+  return [
+    field.title,
+    field.name,
+    field.path,
+    field.key,
+    field.id,
+    field.tag,
+  ].some(value => matchesValue(query, value))
+}
+
+function filterFields(fields: DataFieldNode[], query: string): DataFieldNode[] {
+  const result: DataFieldNode[] = []
+  for (const field of fields) {
+    if (matchesField(field, query)) {
+      result.push(field)
+      continue
+    }
+
+    if (!field.fields)
+      continue
+
+    const matchedChildren = filterFields(field.fields, query)
+    if (matchedChildren.length > 0)
+      result.push({ ...field, fields: matchedChildren })
+  }
+  return result
+}
+
+function clearSearch() {
+  searchText.value = ''
+}
 </script>
 
 <template>
   <div class="ei-datasource-panel">
-    <div v-if="hasData" class="ei-datasource-panel__list">
+    <div v-if="hasData" class="ei-datasource-panel__search">
+      <IconSearch :size="14" :stroke-width="1.5" class="ei-datasource-panel__search-icon" />
+      <input
+        v-model="searchText"
+        type="search"
+        class="ei-datasource-panel__search-input"
+        :placeholder="store.t('designer.dataSource.search')"
+        @keydown.esc.prevent="clearSearch"
+      >
+      <button
+        v-if="hasSearch"
+        type="button"
+        class="ei-datasource-panel__search-clear"
+        :title="store.t('designer.dataSource.clearSearch')"
+        :aria-label="store.t('designer.dataSource.clearSearch')"
+        @click="clearSearch"
+      >
+        <IconClose :size="12" :stroke-width="1.5" />
+      </button>
+    </div>
+    <div v-if="hasVisibleData" class="ei-datasource-panel__list">
       <div
-        v-for="source in sources"
+        v-for="source in displayedSources"
         :key="source.id"
         class="ei-datasource-panel__source"
       >
@@ -68,14 +161,14 @@ function childKey(source: DataSourceDescriptor, child: DataFieldNode): string {
             :size="14"
             :stroke-width="1.5"
             class="ei-datasource-panel__chevron"
-            :class="{ 'ei-datasource-panel__chevron--expanded': isExpanded(source.id) }"
+            :class="{ 'ei-datasource-panel__chevron--expanded': isVisibleExpanded(source.id) }"
           />
           <IconDatabase :size="14" :stroke-width="1.5" class="ei-datasource-panel__source-icon" />
           <span class="ei-datasource-panel__source-name">{{ source.title || source.name }}</span>
         </div>
 
         <!-- Source body (fields tree) -->
-        <div v-if="isExpanded(source.id) && source.fields.length > 0" class="ei-datasource-panel__source-body">
+        <div v-if="isVisibleExpanded(source.id) && source.fields.length > 0" class="ei-datasource-panel__source-body">
           <DataFieldTreeNode
             v-for="child in source.fields"
             :key="childKey(source, child)"
@@ -83,10 +176,13 @@ function childKey(source: DataSourceDescriptor, child: DataFieldNode): string {
             :source="source"
             :depth="0"
             :toggle-expand="toggleExpand"
-            :is-expanded="isExpanded"
+            :is-expanded="isVisibleExpanded"
           />
         </div>
       </div>
+    </div>
+    <div v-else-if="hasData" class="ei-datasource-panel__empty">
+      {{ store.t('designer.dataSource.searchEmpty') }}
     </div>
     <div v-else class="ei-datasource-panel__empty">
       {{ store.t('designer.dataSource.empty') }}
@@ -100,6 +196,63 @@ function childKey(source: DataSourceDescriptor, child: DataFieldNode): string {
 <style scoped lang="scss">
 .ei-datasource-panel {
   font-size: 12px;
+
+  &__search {
+    position: relative;
+    display: flex;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+
+  &__search-icon {
+    position: absolute;
+    left: 7px;
+    color: var(--ei-text-secondary, #999);
+    pointer-events: none;
+  }
+
+  &__search-input {
+    width: 100%;
+    min-width: 0;
+    height: 26px;
+    padding: 3px 24px 3px 26px;
+    border: 1px solid var(--ei-border-color, #d0d0d0);
+    border-radius: 4px;
+    outline: none;
+    background: var(--ei-input-bg, #fff);
+    color: var(--ei-text, #333);
+    font-size: 12px;
+    box-sizing: border-box;
+
+    &:focus {
+      border-color: var(--ei-primary, #1890ff);
+    }
+
+    &::-webkit-search-cancel-button {
+      appearance: none;
+    }
+  }
+
+  &__search-clear {
+    position: absolute;
+    right: 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: 0;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--ei-text-secondary, #999);
+    cursor: pointer;
+
+    &:hover {
+      background: var(--ei-hover-bg, #f0f0f0);
+      color: var(--ei-text, #333);
+    }
+  }
 
   &__source {
     margin-bottom: 4px;

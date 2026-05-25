@@ -82,6 +82,7 @@ export {
   Ruler as IconRuler,
   Save as IconSave,
   Scissors as IconScissors,
+  Search as IconSearch,
   SquareDashedMousePointer as IconSelectAll,
   BoxSelect as IconSelectSameType,
   Send as IconSend,
