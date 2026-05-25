@@ -69,10 +69,18 @@ public class HostConfig
         "SumatraPDF",
         "SumatraPDF.exe");
 
-    private static readonly string DefaultBundledRenderHostPath = Path.Combine(
+    private static readonly string DefaultBundledRenderHostPathX64 = Path.Combine(
         AppDomain.CurrentDomain.BaseDirectory,
         "render",
         "host",
+        "win-x64",
+        "easyink-render.exe");
+
+    private static readonly string DefaultBundledRenderHostPathX86 = Path.Combine(
+        AppDomain.CurrentDomain.BaseDirectory,
+        "render",
+        "host",
+        "win-x86",
         "easyink-render.exe");
 
     private static readonly string DefaultBundledRenderBrowserDir = Path.Combine(
@@ -98,7 +106,7 @@ public class HostConfig
     public string Language { get; set; } = "";
 
     public bool RenderEnabled { get; set; } = false;
-    public string? RenderHostPath { get; set; } = DefaultBundledRenderHostPath;
+    public string? RenderHostPath { get; set; } = null;
     public string? RenderBrowserKind { get; set; } = RenderBrowserKindCatalog.AutoKey;
     public string? RenderBrowserExecutablePath { get; set; }
     public string? RenderBrowserHeadlessMode { get; set; } = RenderHeadlessModeCatalog.AutoKey;
@@ -243,7 +251,8 @@ public class HostConfig
 
     public static string DefaultSumatraPdfPath => DefaultBundledSumatraPdfPath;
 
-    public static string DefaultRenderHostPath => DefaultBundledRenderHostPath;
+    public static string DefaultRenderHostPath
+        => Environment.Is64BitOperatingSystem ? DefaultBundledRenderHostPathX64 : DefaultBundledRenderHostPathX86;
 
     public static string DefaultRenderBrowserDir => DefaultBundledRenderBrowserDir;
 
@@ -292,7 +301,15 @@ public class HostConfig
 
     public static string ResolveRenderHostPath(string path)
     {
-        return string.IsNullOrWhiteSpace(path) ? DefaultRenderHostPath : path;
+        if (!string.IsNullOrWhiteSpace(path))
+            return path;
+
+        var preferred = DefaultRenderHostPath;
+        if (File.Exists(preferred))
+            return preferred;
+
+        var fallback = Environment.Is64BitOperatingSystem ? DefaultBundledRenderHostPathX86 : DefaultBundledRenderHostPathX64;
+        return File.Exists(fallback) ? fallback : preferred;
     }
 
     public static string ResolveRenderBrowserDir(string dir)

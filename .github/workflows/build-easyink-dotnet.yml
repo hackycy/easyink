@@ -178,30 +178,40 @@ jobs:
         shell: pwsh
         run: |
           $artifactDir = 'lib/EasyInk.Net/.render-artifacts'
-          $archive = Get-ChildItem $artifactDir -Filter 'easyink-render-*-win-x64.zip' -File | Select-Object -First 1
+          $archiveX64 = Get-ChildItem $artifactDir -Filter 'easyink-render-*-win-x64.zip' -File | Select-Object -First 1
+          $archiveX86 = Get-ChildItem $artifactDir -Filter 'easyink-render-*-win-x86.zip' -File | Select-Object -First 1
           $manifest = Get-ChildItem $artifactDir -Filter 'runtime-manifest.win-x64.json' -File | Select-Object -First 1
 
-          if ($null -eq $archive) {
+          if ($null -eq $archiveX64) {
             throw "Render win-x64 archive not found in $artifactDir"
+          }
+
+          if ($null -eq $archiveX86) {
+            throw "Render win-x86 archive not found in $artifactDir"
           }
 
           if ($null -eq $manifest) {
             throw "Render win-x64 manifest not found in $artifactDir"
           }
 
-          $hostDir = 'lib/EasyInk.Net/EasyInk.Printer/src/bin/render/host'
+          $hostDirX64 = 'lib/EasyInk.Net/EasyInk.Printer/src/bin/render/host/win-x64'
+          $hostDirX86 = 'lib/EasyInk.Net/EasyInk.Printer/src/bin/render/host/win-x86'
           $renderDir = 'lib/EasyInk.Net/EasyInk.Printer/src/bin/render'
-          $tempDir = Join-Path ([IO.Path]::GetTempPath()) "easyink-render-$([guid]::NewGuid())"
+          $tempDirX64 = Join-Path ([IO.Path]::GetTempPath()) "easyink-render-x64-$([guid]::NewGuid())"
+          $tempDirX86 = Join-Path ([IO.Path]::GetTempPath()) "easyink-render-x86-$([guid]::NewGuid())"
 
-          New-Item -ItemType Directory -Force -Path $hostDir, $renderDir, $tempDir | Out-Null
+          New-Item -ItemType Directory -Force -Path $hostDirX64, $hostDirX86, $renderDir, $tempDirX64, $tempDirX86 | Out-Null
 
           try {
-            Expand-Archive -Path $archive.FullName -DestinationPath $tempDir -Force
-            Copy-Item (Join-Path $tempDir 'easyink-render.exe') (Join-Path $hostDir 'easyink-render.exe') -Force
+            Expand-Archive -Path $archiveX64.FullName -DestinationPath $tempDirX64 -Force
+            Expand-Archive -Path $archiveX86.FullName -DestinationPath $tempDirX86 -Force
+            Copy-Item (Join-Path $tempDirX64 'easyink-render.exe') (Join-Path $hostDirX64 'easyink-render.exe') -Force
+            Copy-Item (Join-Path $tempDirX86 'easyink-render.exe') (Join-Path $hostDirX86 'easyink-render.exe') -Force
             Copy-Item $manifest.FullName (Join-Path $renderDir 'runtime-manifest.json') -Force
           }
           finally {
-            Remove-Item $tempDir -Recurse -Force -ErrorAction SilentlyContinue
+            Remove-Item $tempDirX64 -Recurse -Force -ErrorAction SilentlyContinue
+            Remove-Item $tempDirX86 -Recurse -Force -ErrorAction SilentlyContinue
           }
 
       - name: Build solution
