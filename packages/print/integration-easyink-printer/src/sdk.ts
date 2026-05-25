@@ -1,6 +1,7 @@
 import type { ManagedPrintInput, ManagedPrintViewer, ManagedPrintViewerOptions, PrintDriverRequestContext, PrintDriverValue } from '@easyink/print-core'
 import type { ViewerPrintPageSizeMode } from '@easyink/viewer'
-import type { EasyInkPrinterClient, EasyInkPrinterPrintPdfOptions } from './client'
+import type { EasyInkPrinterClient } from './client'
+import type { EasyInkPrinterDriverPrintOptions, EasyInkPrinterDriverSubmitMode } from './driver'
 import { createManagedPrintViewer, resolvePrintDriverValue } from '@easyink/print-core'
 import { createEasyInkPrinterDriver } from './driver'
 
@@ -9,22 +10,24 @@ export interface EasyInkPrinterOptions extends ManagedPrintViewerOptions {
   printerName?: PrintDriverValue<string>
   copies?: PrintDriverValue<number>
   forcePageSize?: PrintDriverValue<boolean>
+  submitMode?: PrintDriverValue<EasyInkPrinterDriverSubmitMode>
   waitForCompletion?: boolean
   resolveRequestOptions?: (
     context: PrintDriverRequestContext,
-  ) => Partial<EasyInkPrinterPrintPdfOptions> | undefined | Promise<Partial<EasyInkPrinterPrintPdfOptions> | undefined>
+  ) => Partial<EasyInkPrinterDriverPrintOptions> | undefined | Promise<Partial<EasyInkPrinterDriverPrintOptions> | undefined>
 }
 
 export interface EasyInkPrinterPrintRequest extends ManagedPrintInput {
   printerName?: string
   copies?: number
   forcePageSize?: boolean
+  submitMode?: EasyInkPrinterDriverSubmitMode
   waitForCompletion?: boolean
   pageSizeMode?: ViewerPrintPageSizeMode
-  requestOptions?: Partial<EasyInkPrinterPrintPdfOptions>
+  requestOptions?: Partial<EasyInkPrinterDriverPrintOptions>
   resolveRequestOptions?: (
     context: PrintDriverRequestContext,
-  ) => Partial<EasyInkPrinterPrintPdfOptions> | undefined | Promise<Partial<EasyInkPrinterPrintPdfOptions> | undefined>
+  ) => Partial<EasyInkPrinterDriverPrintOptions> | undefined | Promise<Partial<EasyInkPrinterDriverPrintOptions> | undefined>
 }
 
 export interface EasyInkPrinter {
@@ -54,6 +57,7 @@ export function createEasyInkPrinter(options: EasyInkPrinterOptions): EasyInkPri
         printerName: () => input.printerName ?? resolvePrintDriverValue(options.printerName),
         copies: () => input.copies ?? resolvePrintDriverValue(options.copies),
         forcePageSize: () => input.forcePageSize ?? resolvePrintDriverValue(options.forcePageSize),
+        submitMode: input.submitMode ?? resolvePrintDriverValue(options.submitMode),
         waitForCompletion: input.waitForCompletion ?? options.waitForCompletion,
         async resolveRequestOptions(context) {
           const base = await options.resolveRequestOptions?.(context)

@@ -1,3 +1,4 @@
+import type { DocumentSchema } from '@easyink/viewer'
 import type { UseWebSocketReturn } from '@vueuse/core'
 import { EasyInkPrintError, normalizeJobStatus } from '@easyink/print-core'
 import { useWebSocket } from '@vueuse/core'
@@ -82,9 +83,9 @@ export interface EasyInkPrinterJob {
 }
 
 /**
- * Options for submitting a rendered PDF to EasyInk Printer.
+ * Common options for submitting a print job to EasyInk Printer.
  */
-export interface EasyInkPrinterPrintPdfOptions {
+export interface EasyInkPrinterPrintBaseOptions {
   printerName?: string
   copies?: number
   paperSize?: EasyInkPrinterPaperSize
@@ -93,6 +94,106 @@ export interface EasyInkPrinterPrintPdfOptions {
   offset?: EasyInkPrinterOffset
   dpi?: number
   userData?: EasyInkPrinterUserData
+}
+
+/**
+ * Options for submitting a rendered PDF to EasyInk Printer.
+ */
+export interface EasyInkPrinterPrintPdfOptions extends EasyInkPrinterPrintBaseOptions {}
+
+export interface EasyInkPrinterRenderResource {
+  url: string
+  contentType: string
+  base64: string
+}
+
+export interface EasyInkPrinterRenderFontResource extends EasyInkPrinterRenderResource {
+  family: string
+  weight?: string
+  style?: string
+}
+
+export interface EasyInkPrinterHtmlRenderSource {
+  type: 'html'
+  html: string
+  baseUrl?: string
+  fileName?: string
+  resources?: EasyInkPrinterRenderResource[]
+  fonts?: EasyInkPrinterRenderFontResource[]
+}
+
+export interface EasyInkPrinterEasyInkRenderSource {
+  type: 'easyink'
+  schema: DocumentSchema
+  data?: Record<string, unknown>
+  fileName?: string
+  resources?: EasyInkPrinterRenderResource[]
+  fonts?: EasyInkPrinterRenderFontResource[]
+}
+
+export type EasyInkPrinterRenderSource = EasyInkPrinterHtmlRenderSource | EasyInkPrinterEasyInkRenderSource
+
+export interface EasyInkPrinterRenderMarginMm {
+  top: number
+  right: number
+  bottom: number
+  left: number
+}
+
+export interface EasyInkPrinterRenderPdfOptions {
+  paperWidthMm?: number
+  paperHeightMm?: number
+  printBackground?: boolean
+  landscape?: boolean
+  marginMm?: EasyInkPrinterRenderMarginMm
+}
+
+export interface EasyInkPrinterRenderWaitOptions {
+  until?: string
+  selector?: string
+  timeoutMs?: number
+}
+
+export interface EasyInkPrinterRenderSecurityOptions {
+  allowFileAccess?: boolean
+  allowedOrigins?: string[]
+  maxInputBytes?: number
+}
+
+export interface EasyInkPrinterRenderDiagnosticsOptions {
+  includeHtmlSnapshot?: boolean
+  includeScreenshot?: boolean
+  includeRequestHeaders?: boolean
+}
+
+export interface EasyInkPrinterRenderOptions {
+  pdf?: EasyInkPrinterRenderPdfOptions
+  wait?: EasyInkPrinterRenderWaitOptions
+  security?: EasyInkPrinterRenderSecurityOptions
+  diagnostics?: EasyInkPrinterRenderDiagnosticsOptions
+}
+
+/**
+ * Options for submitting HTML or EasyInk schema + data to the local Render
+ * pipeline inside EasyInk Printer.
+ */
+export interface EasyInkPrinterPrintRenderOptions extends EasyInkPrinterPrintBaseOptions {
+  renderOptions?: EasyInkPrinterRenderOptions
+}
+
+export interface EasyInkPrinterPrintHtmlOptions extends EasyInkPrinterPrintRenderOptions {
+  baseUrl?: string
+  fileName?: string
+  resources?: EasyInkPrinterRenderResource[]
+  fonts?: EasyInkPrinterRenderFontResource[]
+}
+
+export interface EasyInkPrinterPrintEasyInkInput {
+  schema: DocumentSchema
+  data?: Record<string, unknown>
+  fileName?: string
+  resources?: EasyInkPrinterRenderResource[]
+  fonts?: EasyInkPrinterRenderFontResource[]
 }
 
 interface PendingRequest {
@@ -348,26 +449,10 @@ export class EasyInkPrinterClient {
 
     const data = await this.sendCommand<{ jobId?: string, status?: string }>('printUploadedPdfAsync', {
       uploadId,
-      printerName,
-      copies: options.copies ?? this.defaultCopies,
-      paperSize: options.paperSize,
-      forcePaperSize: options.forcePageSize,
-      landscape: options.landscape,
-      offset: options.offset,
-      dpi: options.dpi,
-      userData: options.userData,
+      ...this.buildCommonPrintParams(printerName, options),
     })
 
-    const jobId = data?.jobId ?? ''
-    if (!jobId)
-      throw new EasyInkPrintError('打印服务未返回打印任务 ID', 'PRINT_JOB_ID_MISSING')
-
-    this.jobs.set(jobId, {
-      jobId,
-      status: normalizeJobStatus(data.status ?? 'queued'),
-      printerName,
-    })
-    return jobId
+    return this.trackSubmittedJob(data, printerName)
   }
 
   /**
@@ -376,6 +461,70 @@ export class EasyInkPrinterClient {
    */
   async printPdfAndWait(pdfBlob: Blob, options: EasyInkPrinterPrintPdfOptions & { timeoutMs?: number } = {}): Promise<EasyInkPrinterJob> {
     const jobId = await this.printPdf(pdfBlob, options)
+    return this.waitForJob(jobId, options.timeoutMs)
+  }
+
+  /**
+   * Submits HTML or EasyInk schema + data to the Printer-side Render pipeline
+   * and returns the created job ID.
+   */
+  async printRenderSource(renderSource: EasyInkPrinterRenderSource, options: EasyInkPrinterPrintRenderOptions = {}): Promise<string> {
+    await this.connect()
+
+    const printerName = await this.resolvePrinterName(options.printerName)
+    const data = await this.sendCommand<{ jobId?: string, status?: string }>('printAsync', {
+      ...this.buildCommonPrintParams(printerName, options),
+      renderSource,
+      renderOptions: options.renderOptions,
+    })
+
+    return this.trackSubmittedJob(data, printerName)
+  }
+
+  /**
+   * Convenience wrapper for Printer-side HTML rendering and printing.
+   */
+  async printHtml(html: string, options: EasyInkPrinterPrintHtmlOptions = {}): Promise<string> {
+    if (!html.trim())
+      throw new EasyInkPrintError('HTML 内容为空', 'HTML_EMPTY')
+
+    return this.printRenderSource({
+      type: 'html',
+      html,
+      baseUrl: options.baseUrl,
+      fileName: options.fileName,
+      resources: options.resources,
+      fonts: options.fonts,
+    }, options)
+  }
+
+  /**
+   * Convenience wrapper for Printer-side EasyInk schema + data rendering and
+   * printing.
+   */
+  printEasyInk(input: EasyInkPrinterPrintEasyInkInput, options: EasyInkPrinterPrintRenderOptions = {}): Promise<string> {
+    return this.printRenderSource({
+      type: 'easyink',
+      schema: input.schema,
+      data: input.data,
+      fileName: input.fileName,
+      resources: input.resources,
+      fonts: input.fonts,
+    }, options)
+  }
+
+  async printRenderSourceAndWait(renderSource: EasyInkPrinterRenderSource, options: EasyInkPrinterPrintRenderOptions & { timeoutMs?: number } = {}): Promise<EasyInkPrinterJob> {
+    const jobId = await this.printRenderSource(renderSource, options)
+    return this.waitForJob(jobId, options.timeoutMs)
+  }
+
+  async printHtmlAndWait(html: string, options: EasyInkPrinterPrintHtmlOptions & { timeoutMs?: number } = {}): Promise<EasyInkPrinterJob> {
+    const jobId = await this.printHtml(html, options)
+    return this.waitForJob(jobId, options.timeoutMs)
+  }
+
+  async printEasyInkAndWait(input: EasyInkPrinterPrintEasyInkInput, options: EasyInkPrinterPrintRenderOptions & { timeoutMs?: number } = {}): Promise<EasyInkPrinterJob> {
+    const jobId = await this.printEasyInk(input, options)
     return this.waitForJob(jobId, options.timeoutMs)
   }
 
@@ -669,6 +818,32 @@ export class EasyInkPrinterClient {
     if (selected)
       return selected
     throw new EasyInkPrintError('未选择打印机', 'PRINTER_NOT_SELECTED')
+  }
+
+  private buildCommonPrintParams(printerName: string, options: EasyInkPrinterPrintBaseOptions): Record<string, unknown> {
+    return {
+      printerName,
+      copies: options.copies ?? this.defaultCopies,
+      paperSize: options.paperSize,
+      forcePaperSize: options.forcePageSize,
+      landscape: options.landscape,
+      offset: options.offset,
+      dpi: options.dpi,
+      userData: options.userData,
+    }
+  }
+
+  private trackSubmittedJob(data: { jobId?: string, status?: string } | undefined, printerName: string): string {
+    const jobId = data?.jobId ?? ''
+    if (!jobId)
+      throw new EasyInkPrintError('打印服务未返回打印任务 ID', 'PRINT_JOB_ID_MISSING')
+
+    this.jobs.set(jobId, {
+      jobId,
+      status: normalizeJobStatus(data.status ?? 'queued'),
+      printerName,
+    })
+    return jobId
   }
 }
 

@@ -80,6 +80,26 @@ await printer.print({ schema, data })
 
 `createEasyInkPrinter()` 默认使用 `pageSizeMode: 'fixed'`，会自动创建托管 Viewer、把页面生成 PDF，再发送给 EasyInk.Printer。调用方不用再处理 Viewer 生命周期、PDF 导出插件、WebSocket 二进制帧、分块上传或任务轮询。
 
+如果你希望把 `schema + data` 直接交给 EasyInk.Printer 内置的 Render 运行时生成 PDF，可以切换提交模式：
+
+```ts
+const printer = createEasyInkPrinter({
+  client,
+  viewer: 'iframe',
+  submitMode: 'renderSource',
+  resolveRequestOptions: () => ({
+    renderOptions: {
+      pdf: { printBackground: true },
+      wait: { until: 'easyinkReady', timeoutMs: 5000 },
+    },
+  }),
+})
+
+await printer.print({ schema, data })
+```
+
+这条路径仍会创建托管 Viewer 来复用 Viewer 的分页和打印策略解析，但提交给服务端的是 `renderSource.type=easyink`，不是浏览器端生成的 PDF。服务端会先通过本地 Render 转 PDF，再进入相同的打印队列。
+
 客户端内部使用 VueUse 的 `useWebSocket` 管理长连接。连接意外断开时会进入 `reconnecting`，按配置重试；达到最大重连次数后进入 `error`，并把原因写入 `lastError`。
 
 如果这段代码跑通，意味着下面几层都已经工作正常：
@@ -322,6 +342,45 @@ await printer.printPdfAndWait(file, {
 - 你的服务端已经生成好了 PDF
 - 你只是想把已有票据重新投递给本地打印机
 
+## 打印 schema + data 或 HTML
+
+如果业务侧不需要高层托管 Viewer，也可以直接使用客户端 API。`printEasyInk()` 会把模板和数据作为 `renderSource.type=easyink` 发送给 EasyInk.Printer：
+
+```ts
+const client = createEasyInkPrinterClient()
+await client.useDefaultPrinter()
+
+await client.printEasyInkAndWait({
+  schema,
+  data,
+}, {
+  renderOptions: {
+    pdf: { printBackground: true },
+    wait: { until: 'easyinkReady', timeoutMs: 5000 },
+  },
+})
+```
+
+HTML 打印使用 `renderSource.type=html`。HTML 中建议提供一个稳定的 ready 节点，再用 `wait.selector` 等待它出现：
+
+```ts
+await client.printHtmlAndWait(
+  '<!doctype html><html><body><main class="easyink-ready">Hello</main></body></html>',
+  {
+    paperSize: { width: 80, height: 120, unit: 'mm' },
+    renderOptions: {
+      pdf: {
+        printBackground: true,
+        marginMm: { top: 0, right: 0, bottom: 0, left: 0 },
+      },
+      wait: { selector: '.easyink-ready' },
+    },
+  },
+)
+```
+
+注意不要把 PDF 输入和 `renderSource` 放在同一个请求里。Printer 会把这类请求视为参数错误，因为一笔打印任务只能有一个来源。
+
 ## 纸张策略
 
 默认 `forcePageSize=false`，由打印机驱动使用当前介质；这适合小票机、连续纸和大多数办公打印机。
@@ -354,6 +413,7 @@ Playground 已使用官方包集成：
 
 - [playground/src/hooks/useEasyInkPrint.ts](../../playground/src/hooks/useEasyInkPrint.ts) 只保留 Vue 状态和设置持久化
 - 预览页调用 hook 暴露的 `easyInkPrint.print({ schema, data })`，由打印器自动创建和销毁托管 Viewer
+- 预览页打印菜单还提供 `EasyInk Printer 打印（Schema）` 和 `EasyInk Printer 打印（HTML）`，用于验证 Printer-side Render 的 `renderSource.type=easyink` / `html` 两条路径
 - Playground 的 EasyInk Printer 设置面板里还提供了 `UserId` 和 `DocumentType` 演示字段，方便直接验证审计日志链路
 
 ## 常见问题

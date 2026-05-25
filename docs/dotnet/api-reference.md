@@ -95,7 +95,7 @@ curl -X POST http://localhost:18080/api/print \
     "pdfBase64": "JVBERi0xLjQK...",
     "copies": 1,
     "landscape": false,
-    "dpi": 300
+    "dpi": 600
   }'
 ```
 
@@ -107,23 +107,78 @@ curl -X POST http://localhost:18080/api/print \
   -F 'pdf=@document.pdf'
 ```
 
+**Render 方式（EasyInk schema + data）：**
+
+```bash
+curl -X POST http://localhost:18080/api/print/async \
+  -H "Content-Type: application/json" \
+  -d '{
+    "printerName": "HP LaserJet",
+    "renderSource": {
+      "type": "easyink",
+      "schema": {
+        "version": "1.0.0",
+        "unit": "mm",
+        "page": { "mode": "fixed", "width": 80, "height": 120 },
+        "guides": { "x": [], "y": [] },
+        "elements": []
+      },
+      "data": {
+        "receipt": { "no": "R-001" }
+      }
+    },
+    "renderOptions": {
+      "pdf": { "printBackground": true },
+      "wait": { "until": "easyinkReady", "timeoutMs": 5000 }
+    }
+  }'
+```
+
+**Render 方式（HTML）：**
+
+```bash
+curl -X POST http://localhost:18080/api/print/async \
+  -H "Content-Type: application/json" \
+  -d '{
+    "printerName": "HP LaserJet",
+    "paperSize": { "width": 80, "height": 120, "unit": "mm" },
+    "renderSource": {
+      "type": "html",
+      "html": "<!doctype html><html><body><main class=\"easyink-ready\">Hello</main></body></html>"
+    },
+    "renderOptions": {
+      "pdf": {
+        "printBackground": true,
+        "marginMm": { "top": 0, "right": 0, "bottom": 0, "left": 0 }
+      },
+      "wait": { "selector": ".easyink-ready" }
+    }
+  }'
+```
+
 参数：
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | `printerName` | string | 是 | 打印机名称 |
-| `pdfBase64` | string | 三选一 | Base64 编码的 PDF |
-| `pdfUrl` | string | 三选一 | 远程 PDF URL |
-| `pdfBytes` | binary | 三选一 | 二进制 PDF（multipart） |
+| `pdfBase64` | string | 四选一 | Base64 编码的 PDF |
+| `pdfUrl` | string | 四选一 | 远程 PDF URL |
+| `pdfBytes` | binary | 四选一 | 二进制 PDF（multipart） |
+| `renderSource` | object | 四选一 | Render 输入，支持 `{type:"easyink", schema, data}` 或 `{type:"html", html}` |
+| `renderOptions` | object | 否 | Render 选项，包含 `pdf`、`wait`、`security`、`diagnostics` |
 | `copies` | int | 否 | 份数，默认 1 |
 | `landscape` | bool | 否 | 横向打印 |
-| `dpi` | int | 否 | 分辨率，默认 300 |
+| `dpi` | int | 否 | 分辨率，默认 600 |
 | `paperSize` | object | 否 | PDF/模板纸张尺寸 `{width, height, unit}`；默认使用 PDF 原生尺寸 |
 | `forcePaperSize` | bool | 否 | 是否强制把 `paperSize` 作为驱动纸张参数，默认 `false` |
 | `offset` | object | 否 | 打印偏移 `{x, y}` |
 | `userData` | object | 否 | 用户数据，用于审计日志 `{userId, documentType}` |
 
 热敏小票机、连续纸默认保持 `forcePaperSize=false`，由驱动使用当前介质尺寸；只有设备必须显式指定尺寸时再开启。
+
+`renderSource` 会先由 EasyInk.Printer 内置的 Render 运行时转换成 PDF，再进入和 PDF 打印相同的物理打印链路。不要在同一个请求里同时传 `pdfBase64` / `pdfUrl` / `pdfBytes` 和 `renderSource`，服务端会按参数错误处理。
+
+`renderOptions.pdf.paperWidthMm` / `paperHeightMm` 未提供时，Printer 会用顶层 `paperSize` 补齐；顶层 `landscape=true` 也会补到 `renderOptions.pdf.landscape`。HTML 打印通常建议提供 `wait.selector` 或 `wait.until`，让浏览器渲染完成后再生成 PDF。
 
 #### POST /api/print/async
 

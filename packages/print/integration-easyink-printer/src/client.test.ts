@@ -172,6 +172,109 @@ describe('easy ink printer client', () => {
     await expect(printPromise).resolves.toBe('job-123')
   })
 
+  it('submits EasyInk schema and data through renderSource', async () => {
+    const client = new EasyInkPrinterClient({ responseTimeoutMs: 1000 })
+    const socket = await connectClient(client)
+
+    const printPromise = client.printEasyInk({
+      schema: {
+        version: '1.0.0',
+        unit: 'mm',
+        page: { mode: 'fixed', width: 80, height: 120 },
+        guides: { x: [], y: [] },
+        elements: [],
+      },
+      data: { receipt: { no: 'R-001' } },
+    }, {
+      printerName: 'Printer A',
+      paperSize: { width: 80, height: 120, unit: 'mm' },
+      forcePageSize: true,
+      renderOptions: {
+        pdf: { printBackground: true },
+        wait: { until: 'easyinkReady', timeoutMs: 5000 },
+      },
+    })
+
+    await vi.waitFor(() => {
+      expect(socket.send).toHaveBeenCalledTimes(1)
+    })
+
+    const submitPayload = JSON.parse(String(socket.send.mock.calls[0]![0])) as {
+      command: string
+      id: string
+      params: {
+        renderSource?: { type?: string, data?: unknown }
+        renderOptions?: { pdf?: { printBackground?: boolean }, wait?: { until?: string } }
+        paperSize?: { width?: number, height?: number, unit?: string }
+        forcePaperSize?: boolean
+      }
+    }
+
+    expect(submitPayload.command).toBe('printAsync')
+    expect(submitPayload.params.renderSource).toMatchObject({
+      type: 'easyink',
+      data: { receipt: { no: 'R-001' } },
+    })
+    expect(submitPayload.params.paperSize).toEqual({ width: 80, height: 120, unit: 'mm' })
+    expect(submitPayload.params.forcePaperSize).toBe(true)
+    expect(submitPayload.params.renderOptions).toMatchObject({
+      pdf: { printBackground: true },
+      wait: { until: 'easyinkReady' },
+    })
+
+    socket.onmessage?.(new MessageEvent('message', {
+      data: JSON.stringify({
+        id: submitPayload.id,
+        success: true,
+        data: { jobId: 'job-render', status: 'queued' },
+      }),
+    }))
+
+    await expect(printPromise).resolves.toBe('job-render')
+  })
+
+  it('submits HTML through renderSource', async () => {
+    const client = new EasyInkPrinterClient({ responseTimeoutMs: 1000 })
+    const socket = await connectClient(client)
+
+    const printPromise = client.printHtml('<main class="easyink-ready">ok</main>', {
+      printerName: 'Printer A',
+      baseUrl: 'https://example.com/forms/',
+      renderOptions: {
+        wait: { selector: '.easyink-ready' },
+      },
+    })
+
+    await vi.waitFor(() => {
+      expect(socket.send).toHaveBeenCalledTimes(1)
+    })
+
+    const submitPayload = JSON.parse(String(socket.send.mock.calls[0]![0])) as {
+      id: string
+      params: {
+        renderSource?: { type?: string, html?: string, baseUrl?: string }
+        renderOptions?: { wait?: { selector?: string } }
+      }
+    }
+
+    expect(submitPayload.params.renderSource).toEqual({
+      type: 'html',
+      html: '<main class="easyink-ready">ok</main>',
+      baseUrl: 'https://example.com/forms/',
+    })
+    expect(submitPayload.params.renderOptions?.wait?.selector).toBe('.easyink-ready')
+
+    socket.onmessage?.(new MessageEvent('message', {
+      data: JSON.stringify({
+        id: submitPayload.id,
+        success: true,
+        data: { jobId: 'job-html', status: 'queued' },
+      }),
+    }))
+
+    await expect(printPromise).resolves.toBe('job-html')
+  })
+
   it('keeps timeout failure state when closing a stalled connection', async () => {
     vi.useFakeTimers()
     const client = new EasyInkPrinterClient({ connectTimeoutMs: 10 })

@@ -1,4 +1,5 @@
-import type { EasyInkPrinterDevice, EasyInkPrinterJob, EasyInkPrinterOffset, EasyInkPrinterPaperSize, EasyInkPrinterPrintRequest, EasyInkPrinterUserData } from '@easyink/print-integration-easyink-printer'
+import type { EasyInkPrinterDevice, EasyInkPrinterJob, EasyInkPrinterOffset, EasyInkPrinterPaperSize, EasyInkPrinterPrintHtmlOptions, EasyInkPrinterPrintRenderOptions, EasyInkPrinterPrintRequest, EasyInkPrinterUserData } from '@easyink/print-integration-easyink-printer'
+import { toMillimeters } from '@easyink/print-core'
 import { createEasyInkPrinter, createEasyInkPrinterClient, DEFAULT_EASYINK_PRINTER_URL } from '@easyink/print-integration-easyink-printer'
 import { computed, reactive, ref, watch } from 'vue'
 
@@ -172,6 +173,55 @@ async function print(input: EasyInkPrinterPrintRequest): Promise<void> {
   syncState()
 }
 
+async function printWithRenderSource(input: EasyInkPrinterPrintRequest): Promise<void> {
+  input.onPhase?.({ phase: 'submitting', message: '发送 schema + data 到 EasyInk Printer' })
+  const forcePageSize = input.forcePageSize ?? config.forcePageSize ?? false
+  const requestOptions = {
+    userData: normalizeUserData(config.userData),
+    ...input.requestOptions,
+  } satisfies Partial<EasyInkPrinterPrintRenderOptions>
+  const renderOptions = requestOptions.renderOptions
+  const jobId = await client.printEasyInk({
+    schema: input.schema,
+    data: input.data,
+  }, {
+    ...requestOptions,
+    printerName: input.printerName ?? config.printerName,
+    copies: input.copies ?? config.copies,
+    forcePageSize,
+    paperSize: requestOptions.paperSize ?? (forcePageSize ? resolveSchemaPaperSize(input.schema) : undefined),
+    renderOptions: {
+      pdf: {
+        printBackground: true,
+        ...renderOptions?.pdf,
+      },
+      wait: {
+        until: 'easyinkReady',
+        ...renderOptions?.wait,
+      },
+      security: renderOptions?.security,
+      diagnostics: renderOptions?.diagnostics,
+    },
+  })
+
+  if (input.waitForCompletion !== false)
+    await client.waitForJob(jobId)
+  syncState()
+}
+
+async function printHtml(html: string, options: EasyInkPrinterPrintHtmlOptions & { waitForCompletion?: boolean } = {}): Promise<void> {
+  const jobId = await client.printHtml(html, {
+    printerName: config.printerName,
+    copies: config.copies,
+    userData: normalizeUserData(config.userData),
+    ...options,
+  })
+
+  if (options.waitForCompletion !== false)
+    await client.waitForJob(jobId)
+  syncState()
+}
+
 async function waitForJob(jobId: string): Promise<PrintJobInfo> {
   const job = await client.waitForJob(jobId)
   syncState()
@@ -193,6 +243,14 @@ function updateConfig(patch: Partial<PrintServiceConfig>) {
     ...patch,
     userData: 'userData' in patch ? normalizeUserData(patch.userData) : config.userData,
   })
+}
+
+function resolveSchemaPaperSize(schema: EasyInkPrinterPrintRequest['schema']): EasyInkPrinterPaperSize {
+  return {
+    width: toMillimeters(schema.page.width, schema.unit),
+    height: toMillimeters(schema.page.height, schema.unit),
+    unit: 'mm',
+  }
 }
 
 if (config.enabled) {
@@ -224,6 +282,8 @@ export function useEasyInkPrint() {
     updateConfig,
     refreshDevices,
     print,
+    printWithRenderSource,
+    printHtml,
     waitForJob,
   }
 }

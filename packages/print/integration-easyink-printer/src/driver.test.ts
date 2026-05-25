@@ -74,4 +74,39 @@ describe('easy ink driver', () => {
     }))
     expect(client.waitForJob).toHaveBeenCalledWith('job-12345678')
   })
+
+  it('can submit schema and data to Printer-side Render without generating a PDF in the browser', async () => {
+    const client = {
+      printEasyInk: vi.fn(async () => 'job-render-1234'),
+      waitForJob: vi.fn(async () => ({ jobId: 'job-render-1234', status: 'completed' })),
+    }
+    const context = createContext()
+    const driver = createEasyInkPrinterDriver({
+      client: client as never,
+      submitMode: 'renderSource',
+      printerName: () => 'Printer A',
+      forcePageSize: () => true,
+      resolveRequestOptions: () => ({
+        renderOptions: {
+          pdf: { printBackground: true },
+        },
+      }),
+    })
+
+    await driver.print(context)
+
+    expect(renderPagesToPdfBlob).not.toHaveBeenCalled()
+    expect(client.printEasyInk).toHaveBeenCalledWith({
+      schema: context.schema,
+      data: {},
+    }, expect.objectContaining({
+      printerName: 'Printer A',
+      forcePageSize: true,
+      paperSize: { width: 80, height: 60, unit: 'mm' },
+      renderOptions: {
+        pdf: { printBackground: true },
+      },
+    }))
+    expect(client.waitForJob).toHaveBeenCalledWith('job-render-1234')
+  })
 })

@@ -488,6 +488,42 @@ async function handleEasyInkPrintPrint() {
   }
 }
 
+async function handleEasyInkPrintRenderSourcePrint() {
+  if (await ensureEasyInkPrintReady()) {
+    await runManagedPrint('EasyInk Printer Schema 打印', callbacks => easyInkPrint.printWithRenderSource({
+      schema: props.schema,
+      data: props.data,
+      pageSizeMode: 'fixed',
+      ...callbacks,
+    }))
+  }
+}
+
+async function handleEasyInkPrintHtmlDemo() {
+  if (await ensureEasyInkPrintReady()) {
+    const size = resolveSchemaPaperSize()
+    await runManagedPrint('EasyInk Printer HTML 打印', (callbacks) => {
+      callbacks.onPhase({ phase: 'submitting', message: '发送 HTML 到 EasyInk Printer' })
+      return easyInkPrint.printHtml(createHtmlPrintDemo(), {
+        paperSize: size,
+        forcePageSize: true,
+        renderOptions: {
+          pdf: {
+            paperWidthMm: size.width,
+            paperHeightMm: size.height,
+            printBackground: true,
+            marginMm: { top: 0, right: 0, bottom: 0, left: 0 },
+          },
+          wait: {
+            selector: '.easyink-ready',
+            timeoutMs: 5000,
+          },
+        },
+      })
+    })
+  }
+}
+
 async function runManagedPrint(
   label: string,
   submit: (callbacks: {
@@ -524,6 +560,61 @@ function openHiPrintSettings() {
 
 function openEasyInkPrinterSettings() {
   showEasyInkPrinterSettings.value = true
+}
+
+function resolveSchemaPaperSize() {
+  return {
+    width: toMillimeters(props.schema.page.width, props.schema.unit),
+    height: toMillimeters(props.schema.page.height, props.schema.unit),
+    unit: 'mm' as const,
+  }
+}
+
+function createHtmlPrintDemo(): string {
+  const sampleNo = resolveHtmlDemoNo()
+  return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Arial, "Microsoft YaHei", sans-serif; color: #111827; }
+    main { width: 100%; min-height: 100vh; padding: 6mm; border: 0.4mm solid #111827; }
+    h1 { margin: 0 0 4mm; font-size: 6mm; letter-spacing: 0; }
+    dl { margin: 0; display: grid; grid-template-columns: 24mm 1fr; row-gap: 2mm; font-size: 3.4mm; }
+    dt { color: #6b7280; }
+    dd { margin: 0; font-weight: 700; }
+    .foot { margin-top: 6mm; padding-top: 3mm; border-top: 0.2mm solid #d1d5db; font-size: 3mm; }
+  </style>
+</head>
+<body>
+  <main class="easyink-ready">
+    <h1>EasyInk HTML Print</h1>
+    <dl>
+      <dt>Channel</dt><dd>Printer-side Render</dd>
+      <dt>Document</dt><dd>${escapeHtml(sampleNo)}</dd>
+      <dt>Source</dt><dd>HTML</dd>
+    </dl>
+    <div class="foot">Rendered by EasyInk.Printer from renderSource.type=html.</div>
+  </main>
+</body>
+</html>`
+}
+
+function resolveHtmlDemoNo(): string {
+  const receipt = props.data.receipt
+  if (receipt && typeof receipt === 'object' && 'no' in receipt)
+    return String((receipt as { no?: unknown }).no ?? 'HTML-DEMO-001')
+  return String(props.data.orderNo ?? 'HTML-DEMO-001')
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('\'', '&#39;')
 }
 
 async function handleExport() {
@@ -591,7 +682,13 @@ async function handleExport() {
               HiPrint 打印
             </DropdownMenuItem>
             <DropdownMenuItem :disabled="isPrinting" @click="handleEasyInkPrintPrint">
-              EasyInk Printer 打印
+              EasyInk Printer 打印（PDF）
+            </DropdownMenuItem>
+            <DropdownMenuItem :disabled="isPrinting" @click="handleEasyInkPrintRenderSourcePrint">
+              EasyInk Printer 打印（Schema）
+            </DropdownMenuItem>
+            <DropdownMenuItem :disabled="isPrinting" @click="handleEasyInkPrintHtmlDemo">
+              EasyInk Printer 打印（HTML）
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem @click="openHiPrintSettings">

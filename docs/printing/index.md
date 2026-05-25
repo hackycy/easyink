@@ -6,7 +6,7 @@ EasyInk 的本地打印目标很明确：让业务代码只关心“打印什么
 
 如果你是第一次接入，优先走官方打印集成包：
 
-- `@easyink/print-integration-easyink-printer`：对接 EasyInk.Printer (.NET)，把 Viewer 页面转成 PDF 后发送到本地打印服务
+- `@easyink/print-integration-easyink-printer`：对接 EasyInk.Printer (.NET)，默认把 Viewer 页面转成 PDF 后发送到本地打印服务，也可直接提交 `schema + data` 或 HTML 给 Printer-side Render
 - `@easyink/print-integration-hiprint`：对接 electron-hiprint，直接把 Viewer 页面 HTML 发送给 HiPrint
 
 这两个包都已经包含了“客户端 + 托管 Viewer 渲染 + 打印提交”完整链路。大多数项目不需要自己创建 Viewer，也不需要自己注册 `PrintDriver`。
@@ -34,7 +34,7 @@ EasyInk 的本地打印目标很明确：让业务代码只关心“打印什么
 | | EasyInk Printer (.NET) | HiPrint (vue-plugin-hiprint) |
 |---|---|---|
 | **运行平台** | 仅 Windows | Windows / macOS / Linux |
-| **打印输入** | PDF | HTML |
+| **打印输入** | PDF / schema + data / HTML | HTML |
 | **渲染质量** | 适合对矢量质量要求高的正式单据 | 适合小票、卡片、跨平台打印 |
 | **通信方式** | HTTP + WebSocket | WebSocket |
 | **典型场景** | 面单、正式报表、A4 文档 | 小票、卡片、嵌入 Electron 的桌面应用 |
@@ -48,6 +48,7 @@ EasyInk 的本地打印目标很明确：让业务代码只关心“打印什么
 - 你的部署环境是 Windows。
 - 你更在意 PDF 打印质量和系统打印稳定性。
 - 你希望纸张尺寸、方向、偏移量都由打印服务准确控制。
+- 你希望浏览器前端少做 PDF 生成，把 EasyInk schema + data 或 HTML 交给本地 Printer 渲染。
 
 ### 选 HiPrint 的情况
 
@@ -122,6 +123,8 @@ const client = createEasyInkPrinterClient({
 ### 为什么 EasyInk Printer 要先转 PDF
 
 因为目标不是“把浏览器 DOM 打出去”，而是“把页面以稳定、可控、与浏览器缩放无关的形式交给 Windows 打印管线”。PDF 是这里最稳定的交换格式。
+
+现在 EasyInk Printer 也可以接收 `renderSource.type=easyink` 或 `renderSource.type=html`。这并不绕过 PDF，而是把“生成 PDF”这一步移动到本地 Printer 内置的 Render 运行时里，后续仍然进入同一套 PDF 打印队列和物理打印路由。
 
 ### 为什么 HiPrint 有时需要 `forcePageSize`
 
