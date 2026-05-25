@@ -49,6 +49,30 @@ const sliderStyle = computed(() => ({
   '--ei-number-slider-percent': `${progressPercent.value}%`,
 }))
 
+const displayValue = computed(() => {
+  if (props.precision == null)
+    return String(currentValue.value)
+  return currentValue.value.toFixed(props.precision)
+})
+
+const marks = computed(() => {
+  const min = effectiveMin.value
+  const max = effectiveMax.value
+  const step = effectiveStep.value
+  const count = Math.floor((max - min) / step) + 1
+  if (count < 2 || count > 12)
+    return []
+  return Array.from({ length: count }, (_, index) => {
+    const value = roundToPrecision(min + index * step)
+    return {
+      value,
+      style: {
+        left: `${((value - min) / (max - min)) * 100}%`,
+      },
+    }
+  })
+})
+
 watch(() => props.modelValue, (value) => {
   if (value == null)
     return
@@ -101,28 +125,38 @@ function onCommit(event: Event) {
 
 <template>
   <div class="ei-number-slider-wrapper">
-    <div v-if="label" class="ei-number-slider__header">
-      <label class="ei-number-slider__label">{{ label }}</label>
-      <span class="ei-number-slider__value">{{ currentValue }}</span>
-    </div>
+    <label v-if="label" class="ei-number-slider__label">{{ label }}</label>
     <div
       class="ei-number-slider"
       :class="{ 'ei-number-slider--disabled': disabled }"
     >
-      <input
-        class="ei-number-slider__range"
-        type="range"
-        :value="currentValue"
-        :min="effectiveMin"
-        :max="effectiveMax"
-        :step="effectiveStep"
-        :disabled="disabled"
-        :style="sliderStyle"
-        @focus="takeSnapshot"
-        @pointerdown="takeSnapshot"
-        @input="onInput"
-        @change="onCommit"
-      >
+      <div class="ei-number-slider__track-wrap">
+        <input
+          class="ei-number-slider__range"
+          type="range"
+          :value="currentValue"
+          :min="effectiveMin"
+          :max="effectiveMax"
+          :step="effectiveStep"
+          :disabled="disabled"
+          :aria-label="label"
+          :style="sliderStyle"
+          @focus="takeSnapshot"
+          @pointerdown="takeSnapshot"
+          @input="onInput"
+          @change="onCommit"
+        >
+        <div v-if="marks.length > 0" class="ei-number-slider__marks" aria-hidden="true">
+          <span
+            v-for="mark in marks"
+            :key="mark.value"
+            class="ei-number-slider__mark"
+            :class="{ 'ei-number-slider__mark--active': mark.value <= currentValue }"
+            :style="mark.style"
+          />
+        </div>
+      </div>
+      <span class="ei-number-slider__value">{{ displayValue }}</span>
     </div>
   </div>
 </template>
@@ -131,49 +165,57 @@ function onCommit(event: Event) {
 .ei-number-slider-wrapper {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 2px;
   min-width: 0;
 }
 
 .ei-number-slider {
   display: flex;
   align-items: center;
+  gap: 8px;
   min-width: 0;
   width: 100%;
-  height: 26px;
+  min-height: 28px;
+  padding: 4px 4px 4px 8px;
+  border: 1px solid var(--ei-border-color, #d0d0d0);
+  border-radius: 4px;
+  background: var(--ei-input-bg, #fff);
+  color: var(--ei-text, #333);
   box-sizing: border-box;
-
-  &__header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    min-width: 0;
-  }
+  transition: border-color 0.15s, box-shadow 0.15s;
 
   &__label {
-    min-width: 0;
     color: var(--ei-text-secondary, #666);
     font-size: 12px;
+  }
+
+  &__track-wrap {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    height: 18px;
   }
 
   &__value {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 24px;
-    height: 18px;
-    padding: 0 6px;
-    border: 1px solid var(--ei-border-color, #d0d0d0);
-    border-radius: 4px;
-    background: var(--ei-input-bg, #fff);
-    color: var(--ei-text, #333);
+    flex: 0 0 30px;
+    align-self: stretch;
+    min-width: 30px;
+    padding: 0 4px;
+    border-left: 1px solid var(--ei-border-color, #d0d0d0);
+    color: var(--ei-primary, #1890ff);
     font-size: 12px;
-    line-height: 18px;
+    font-weight: 600;
+    line-height: 1;
     box-sizing: border-box;
   }
 
   &__range {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
     width: 100%;
     min-width: 0;
     height: 18px;
@@ -185,8 +227,9 @@ function onCommit(event: Event) {
     cursor: pointer;
 
     &::-webkit-slider-runnable-track {
-      height: 4px;
-      border-radius: 999px;
+      height: 6px;
+      border: 1px solid color-mix(in srgb, var(--ei-border-color, #d0d0d0) 72%, transparent);
+      border-radius: 4px;
       background:
         linear-gradient(
           90deg,
@@ -198,23 +241,24 @@ function onCommit(event: Event) {
     }
 
     &::-moz-range-track {
-      height: 4px;
-      border-radius: 999px;
+      height: 6px;
+      border: 1px solid color-mix(in srgb, var(--ei-border-color, #d0d0d0) 72%, transparent);
+      border-radius: 4px;
       background: var(--ei-border-color, #d0d0d0);
     }
 
     &::-moz-range-progress {
-      height: 4px;
-      border-radius: 999px;
+      height: 6px;
+      border-radius: 4px;
       background: var(--ei-primary, #1890ff);
     }
 
     &::-webkit-slider-thumb {
-      width: 14px;
-      height: 14px;
-      margin-top: -5px;
-      border: 2px solid var(--ei-primary, #1890ff);
-      border-radius: 50%;
+      width: 12px;
+      height: 16px;
+      margin-top: -6px;
+      border: 1px solid var(--ei-primary, #1890ff);
+      border-radius: 3px;
       appearance: none;
       background: var(--ei-input-bg, #fff);
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.16);
@@ -223,9 +267,9 @@ function onCommit(event: Event) {
 
     &::-moz-range-thumb {
       width: 10px;
-      height: 10px;
-      border: 2px solid var(--ei-primary, #1890ff);
-      border-radius: 50%;
+      height: 14px;
+      border: 1px solid var(--ei-primary, #1890ff);
+      border-radius: 3px;
       background: var(--ei-input-bg, #fff);
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.16);
       transition: border-color 0.15s, box-shadow 0.15s;
@@ -244,6 +288,32 @@ function onCommit(event: Event) {
     &:disabled {
       cursor: not-allowed;
     }
+  }
+
+  &__marks {
+    position: absolute;
+    inset: 0 6px;
+    z-index: 1;
+    pointer-events: none;
+  }
+
+  &__mark {
+    position: absolute;
+    top: 7px;
+    width: 2px;
+    height: 4px;
+    border-radius: 1px;
+    background: color-mix(in srgb, var(--ei-text-secondary, #666) 34%, transparent);
+    transform: translateX(-50%);
+
+    &--active {
+      background: rgba(255, 255, 255, 0.8);
+    }
+  }
+
+  &:focus-within {
+    border-color: var(--ei-primary, #1890ff);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--ei-primary, #1890ff) 18%, transparent);
   }
 
   &--disabled {
