@@ -840,7 +840,7 @@ export class EasyInkPrinterClient {
 
     this.jobs.set(jobId, {
       jobId,
-      status: normalizeJobStatus(data.status ?? 'queued'),
+      status: normalizeJobStatus(data?.status ?? 'queued'),
       printerName,
     })
     return jobId

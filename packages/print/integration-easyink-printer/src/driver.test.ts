@@ -1,3 +1,4 @@
+import type { ViewerPrintContext } from '@easyink/viewer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createEasyInkPrinterDriver } from './driver'
 
@@ -9,7 +10,7 @@ vi.mock('@easyink/export-plugin-dom-pdf', () => ({
   renderPagesToPdfBlob,
 }))
 
-function createContext() {
+function createContext(): ViewerPrintContext {
   const container = document.createElement('div')
   const page = document.createElement('section')
   page.className = 'ei-viewer-page'
@@ -19,6 +20,7 @@ function createContext() {
   container.appendChild(secondPage)
 
   return {
+    entry: 'preview',
     container,
     renderedPages: [
       { index: 0, width: 80, height: 60, unit: 'mm' },
@@ -32,9 +34,19 @@ function createContext() {
       pageBreakBehavior: { after: 'page', inside: 'avoid' },
       sheetSize: { width: 80, height: 60, unit: 'mm', source: 'schema' },
     },
-    schema: {} as never,
+    schema: {
+      version: '1.0.0',
+      unit: 'mm',
+      page: {
+        mode: 'fixed',
+        width: 80,
+        height: 60,
+      },
+      guides: { x: [], y: [] },
+      elements: [],
+    },
     data: {},
-  } as never
+  }
 }
 
 beforeEach(() => {
