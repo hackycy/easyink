@@ -2,18 +2,19 @@ import type { MaterialDesignerExtension, MaterialExtensionContext } from '@easyi
 import type { RectProps } from './schema'
 import { getNodeProps } from '@easyink/schema'
 
-const DASH_MAP: Record<string, string> = { dashed: '6 3', dotted: '2 2' }
-
 function buildHtml(props: RectProps, unit: string): string {
   const bw = props.borderWidth || 0
   const bc = props.borderColor || 'transparent'
-  const dash = DASH_MAP[props.borderType] || ''
+  const bt = props.borderType || 'solid'
   const r = props.borderRadius || 0
+  const fc = props.fillColor || 'transparent'
 
-  return `<svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">`
-    + `<rect x="${bw / 2}" y="${bw / 2}" width="calc(100% - ${bw}${unit})" height="calc(100% - ${bw}${unit})" rx="${r}" ry="${r}" `
-    + `fill="${props.fillColor || 'transparent'}" stroke="${bc}" stroke-width="${bw}${unit}"${dash ? ` stroke-dasharray="${dash}"` : ''} />`
-    + `</svg>`
+  return `<div style="`
+    + `width:100%;height:100%;box-sizing:border-box;`
+    + `background:${fc};`
+    + `border:${bw}${unit} ${bt} ${bc};`
+    + `border-radius:${r}${unit}`
+    + `"></div>`
 }
 
 export function createRectExtension(context: MaterialExtensionContext): MaterialDesignerExtension {
