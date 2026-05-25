@@ -2,9 +2,8 @@ name: Publish npm Packages
 
 on:
   push:
-    branches:
-      - main
-  workflow_dispatch:
+    tags:
+      - 'npm-v*'
 
 concurrency:
   group: publish-npm-${{ github.ref }}
@@ -16,6 +15,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      packages: write
     outputs:
       published: ${{ steps.changesets.outputs.published }}
       published_packages: ${{ steps.changesets.outputs.publishedPackages }}
@@ -43,14 +43,13 @@ jobs:
       - name: Build packages
         run: pnpm build
 
-      - name: Version or publish packages
+      # Each published package must be manually published once, then granted publish
+      # access for the configured NPM_TOKEN on npmjs.com.
+      - name: Publish packages to npm
         id: changesets
         uses: changesets/action@v1
         with:
-          version: pnpm changeset:version
           publish: pnpm changeset:publish
-          commit: 'chore: version packages'
-          title: 'chore: version packages'
           createGithubReleases: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

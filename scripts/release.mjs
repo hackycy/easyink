@@ -35,7 +35,7 @@ async function selectReleaseMode() {
       {
         value: 'npm',
         label: 'npm 包发布',
-        hint: '生成 changeset 版本提交，推送 main 后由 Publish npm Packages workflow 发布 npm、Docker 和 Pages。',
+        hint: '生成 changeset 版本提交并打 npm-v* tag，由 Publish npm Packages workflow 发布 npm、Docker 和 Pages。',
       },
       {
         value: 'app',
@@ -100,18 +100,22 @@ async function runNpmRelease() {
 
   await runValidationSuite('版本变更后校验', validationScripts)
 
+  const tagName = formatTimestampTag('npm-v', new Date())
   await confirmStep({
-    title: '步骤 3/4: 提交并推送 npm 版本提交',
+    title: '步骤 3/4: 提交、打 npm tag 并推送',
     details: [
       `commit: ${npmReleaseCommitMessage}`,
+      `tag: ${tagName}`,
       `branch: ${releaseRemote}/${releaseBranch}`,
       `version files: ${versionBumpFiles.join(', ')}`,
-      '说明: 本步骤不打 tag；推送 main 后由 Publish npm Packages workflow 发布 npm 包并部署 GitHub Pages。',
+      '说明: 推送 npm-v* tag 后由 Publish npm Packages workflow 发布 npm 包并部署 GitHub Pages。',
     ],
   })
 
+  await ensureTagDoesNotExist(tagName)
   await runCommandOrFail(gitBinary, ['add', '.'], 'git add .')
   await runCommandOrFail(gitBinary, ['commit', '-m', npmReleaseCommitMessage], `git commit -m "${npmReleaseCommitMessage}"`)
+  await runCommandOrFail(gitBinary, ['tag', '-a', tagName, '-m', tagName], `git tag -a ${tagName} -m ${tagName}`)
 
   try {
     await runCommandOrFail(
@@ -119,11 +123,18 @@ async function runNpmRelease() {
       ['push', releaseRemote, '-u', releaseBranch],
       `git push ${releaseRemote} -u ${releaseBranch}`,
     )
+    await runCommandOrFail(
+      gitBinary,
+      ['push', releaseRemote, `refs/tags/${tagName}`],
+      `git push ${releaseRemote} refs/tags/${tagName}`,
+    )
   }
   catch (error) {
     fail([
-      '推送 npm 版本提交失败，脚本已停止。',
-      '当前 commit 已经创建，请先人工检查本地仓库状态，再决定是否重新推送或回滚。',
+      '推送 npm 发布提交或 tag 失败，脚本已停止。',
+      `当前 commit 已经创建，本地 tag ${tagName} 也可能已经存在。`,
+      `如果分支已推送成功但 tag 推送失败，请先检查远端状态再决定是否单独补推 refs/tags/${tagName}。`,
+      '请先人工检查本地仓库状态，再决定是否重新推送或回滚。',
       error instanceof Error ? error.message : String(error),
     ].join('\n'))
   }
@@ -131,6 +142,7 @@ async function runNpmRelease() {
   await confirmFinish('步骤 4/4: npm 发布提交已推送，确认结束脚本？')
 
   console.log('')
+  console.log(`[release] tag: ${tagName}`)
   console.log(`[release] branch: ${releaseRemote}/${releaseBranch}`)
   console.log(`[release] commit: ${npmReleaseCommitMessage}`)
   outro('npm 版本提交已推送。Publish npm Packages workflow 将负责 npm 发布、mcp-server Docker 镜像和 GitHub Pages。')
@@ -337,6 +349,15 @@ async function collectVersionBumpFiles(changedFiles) {
   }
 
   return versionBumpFiles
+}
+
+function formatTimestampTag(prefix, date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hour = String(date.getHours()).padStart(2, '0')
+  const minute = String(date.getMinutes()).padStart(2, '0')
+  return `${prefix}${year}.${month}.${day}.${hour}${minute}`
 }
 
 async function runInteractiveCommand(command, args) {
