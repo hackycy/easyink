@@ -17,6 +17,9 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from './components/ui/dropdown-menu'
 import { playgroundFontProvider } from './fonts'
@@ -673,24 +676,34 @@ async function handleExport() {
               <IconDown :size="14" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent class="z-[10002]">
-            <DropdownMenuLabel>打印通道</DropdownMenuLabel>
+          <DropdownMenuContent class="z-[10002] min-w-[220px]">
+            <DropdownMenuLabel>常用打印</DropdownMenuLabel>
             <DropdownMenuItem :disabled="isPrinting" @click="handleBrowserPrint('driver')">
               浏览器打印（按打印机介质）
             </DropdownMenuItem>
             <DropdownMenuItem :disabled="isPrinting" @click="handleHiPrintPrint">
               HiPrint 打印
             </DropdownMenuItem>
-            <DropdownMenuItem :disabled="isPrinting" @click="handleEasyInkPrintPrint">
-              EasyInk Printer 打印（PDF）
-            </DropdownMenuItem>
-            <DropdownMenuItem :disabled="isPrinting" @click="handleEasyInkPrintRenderSourcePrint">
-              EasyInk Printer 打印（Schema）
-            </DropdownMenuItem>
-            <DropdownMenuItem :disabled="isPrinting" @click="handleEasyInkPrintHtmlDemo">
-              EasyInk Printer 打印（HTML）
-            </DropdownMenuItem>
             <DropdownMenuSeparator />
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                EasyInk Printer
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent class="z-[10003] min-w-[220px]">
+                <DropdownMenuLabel>提交方式</DropdownMenuLabel>
+                <DropdownMenuItem :disabled="isPrinting" @click="handleEasyInkPrintPrint">
+                  PDF 上传
+                </DropdownMenuItem>
+                <DropdownMenuItem :disabled="isPrinting" @click="handleEasyInkPrintRenderSourcePrint">
+                  Schema + Data
+                </DropdownMenuItem>
+                <DropdownMenuItem :disabled="isPrinting" @click="handleEasyInkPrintHtmlDemo">
+                  HTML 示例
+                </DropdownMenuItem>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>设置</DropdownMenuLabel>
             <DropdownMenuItem @click="openHiPrintSettings">
               HiPrint 客户端设置
             </DropdownMenuItem>
