@@ -197,7 +197,7 @@ interface PanelToggleState {
 - `visualTop` 已从 `EditorSurfacePagePlan` 移除；所有投影、overlay 和交互只能读取 `yOffset`。
 - `decorations[]` 描述 page frame、page break、page label 和 page toolbar anchor；这些装饰不参与坐标投影。
 - 内层 page 是统一文档坐标层，宽高来自 `plan.coordinate` / `plan.contentBounds`，元素和 overlay 均通过 `projectDocumentPointToEditorSurface()` 投影到这个坐标层；编辑表面尺寸永远以 `resolvePageModel()` 解析出的纸张尺寸或 fixed-sheets 页堆叠尺寸为参考，不得因元素越界或拖拽过程自动增长。
-- 纸张 frame 和分页线只是视觉背景，按 `EditorSurfacePagePlan` / `decorations` 绘制；网格、辅助线、吸附线、选区和元素不各自维护页面偏移。
+- 纸张 frame 和分页分割标尺只是视觉背景，按 `EditorSurfacePagePlan` / `decorations` 绘制；网格、辅助线、吸附线、选区和元素不各自维护页面偏移。分页分割标尺必须由同一个 `page.yOffset + page.height` 锚点派生分割线、端点刻度和纸张外侧指针，不允许线与指针分别计算 y。
 - wrapper 承载缩放后的视觉占位，宽高等于 `plan.contentBounds * viewport.zoom`，只用于让滚动容器拿到正确 on-screen footprint。
 - viewport 只表达观察状态，即 `zoom / scrollLeft / scrollTop`，不参与 Schema 和命令历史。
 

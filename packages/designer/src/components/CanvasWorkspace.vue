@@ -39,6 +39,7 @@ import HistoryPanel from './HistoryPanel.vue'
 import MaterialPanel from './MaterialPanel.vue'
 import MinimapPanel from './MinimapPanel.vue'
 import { resolvePageBackgroundStyle } from './page-background-style'
+import PageBreakRuler from './PageBreakRuler.vue'
 import PropertiesPanel from './PropertiesPanel.vue'
 import SelectionOverlay from './SelectionOverlay.vue'
 import SnapLineOverlay from './SnapLineOverlay.vue'
@@ -286,48 +287,6 @@ const pageToolbarItems = computed(() => {
     style: {
       left: `${unitManager.toPixels(getEditorSurfacePageLeft(plan, page) + page.width, 96, zoom) + PAGE_TOOLBAR_GAP_PX}px`,
       top: `${unitManager.toPixels(page.yOffset, 96, zoom) + 0}px`,
-    },
-  }))
-})
-
-const autoPaginationLines = computed(() => {
-  if (store.schema.page.pagination?.strategy !== 'auto-sheets')
-    return []
-  const plan = editorSurfacePlan.value
-  const page = plan.pages[0]
-  if (!page)
-    return []
-  const lines: number[] = []
-  const pageHeight = store.schema.page.height
-  for (let y = pageHeight; y < page.height; y += pageHeight)
-    lines.push(y)
-  return lines
-})
-
-const pageBreakLineStyles = computed(() => {
-  if (isFixedSheetPlan.value) {
-    const plan = editorSurfacePlan.value
-    const unit = store.schema.unit
-    return plan.pages.slice(0, -1).map(page => ({
-      key: `fixed-${page.index}`,
-      style: {
-        left: `${pageLeft(page)}${unit}`,
-        top: `${page.yOffset + page.height}${unit}`,
-        width: `${page.width}${unit}`,
-      },
-    }))
-  }
-
-  const page = editorSurfacePlan.value.pages[0]
-  if (!page)
-    return []
-  const unit = store.schema.unit
-  return autoPaginationLines.value.map(line => ({
-    key: `auto-${line}`,
-    style: {
-      left: `${pageLeft(page)}${unit}`,
-      top: `${line}${unit}`,
-      width: `${page.width}${unit}`,
     },
   }))
 })
@@ -676,12 +635,7 @@ onUnmounted(() => {
           <!-- Guide overlay -->
           <GuideOverlay ref="guideOverlayRef" :surface-plan="editorSurfacePlan" :preview-guide="rulerHover" />
 
-          <div
-            v-for="line in pageBreakLineStyles"
-            :key="line.key"
-            class="ei-canvas-page-break"
-            :style="line.style"
-          />
+          <PageBreakRuler :surface-plan="editorSurfacePlan" />
 
           <div
             v-for="preview in repeatedPreviewElements"
@@ -890,36 +844,6 @@ onUnmounted(() => {
 
   &--continuous {
     min-height: 100%;
-  }
-}
-
-.ei-canvas-page-break {
-  position: absolute;
-  height: 0;
-  border-top: 1px dashed var(--ei-page-break-color, rgba(24, 144, 255, 0.72));
-  pointer-events: none;
-  z-index: 15;
-
-  &::before,
-  &::after {
-    content: "";
-    position: absolute;
-    top: 0;
-    width: 0;
-    height: 0;
-    transform: translateY(-50%);
-    border-top: 5px solid transparent;
-    border-bottom: 5px solid transparent;
-  }
-
-  &::before {
-    left: -8px;
-    border-left: 8px solid var(--ei-page-break-color, rgba(24, 144, 255, 0.72));
-  }
-
-  &::after {
-    right: -8px;
-    border-right: 8px solid var(--ei-page-break-color, rgba(24, 144, 255, 0.72));
   }
 }
 

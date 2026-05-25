@@ -157,6 +157,8 @@ Designer 不直接读取 `page.width/page.height` 渲染唯一页面，而是消
 
 坐标投影统一通过 `projectDocumentPointToEditorSurface()` 和 `projectEditorSurfacePointToDocument()`。网格、辅助线、吸附线、元素 overlay 和选区都消费同一个 `EditorSurfacePlan`。`visualTop` 和 `EditorSurfacePlan.pageGap` 已移除；普通编辑路径不得按 page slice clamp，禁止 drag/drop/resize/keyboard/paste 为 fixed-sheets 重新实现 page gap、nearest-page、page rect intersection 或页内编辑区逻辑。
 
+分页提示渲染为独立分割标尺，而不是普通 border 虚线加伪元素三角。`PageBreakRuler` 只消费 `EditorSurfacePlan.decorations` 中的 `page-break`，并以 `decoration.position.y` 作为唯一锚点派生分割线、端点刻度和纸张外侧指针，避免缩放后线与指针分别取整造成错位。
+
 物料 drop 是连续 document rect 创建行为，不以纸张 frame、分页带或 pageEl 可视矩形为有效性边界。投放在纸张左右外侧、最后页之后或当前可视画布外侧时，仍应创建物料，但不得让 `EditorSurfacePlan.contentBounds` 或 schema page 尺寸随内容自动增长；越界风险交给诊断系统表达。
 
 纸张边界/中心线仍可作为拖拽或缩放的 page 辅助吸附候选，但分页线默认不作为吸附候选。需要吸附分页线时必须通过显式设置开启，并在交互反馈中区别于普通辅助线。
