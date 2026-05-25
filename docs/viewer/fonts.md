@@ -1,14 +1,12 @@
 # 字体加载
 
-Viewer 会在渲染前加载模板引用的字体，并把 `@font-face` 注入到 Viewer host 对应的 document。宿主只需要传入 `fontProvider`。
+Viewer 的字体链路和 Designer 是同一套约定。你提供 `FontProvider`，Viewer 负责在渲染前把模板里用到的字体加载好，并注入到当前 Host 对应的文档环境里。
 
-## 基本用法
+## 先看用法
 
 ```ts
-import { createIframeViewerHost, createViewer } from '@easyink/viewer'
+import { createViewer } from '@easyink/viewer'
 import type { FontProvider } from '@easyink/viewer'
-
-const host = createIframeViewerHost(iframeElement)
 
 const fontProvider: FontProvider = {
   async listFonts() {
@@ -19,62 +17,57 @@ const fontProvider: FontProvider = {
         weights: ['400', '700'],
         styles: ['normal'],
         source: 'system',
-        preview: '字体预览 EasyInk 123',
       },
       {
         family: 'SourceHanSans',
         displayName: '思源黑体',
         weights: ['400'],
         styles: ['normal'],
-        preview: '字体预览 EasyInk 123',
       },
     ]
   },
-
   async loadFont(family) {
     return `/fonts/${encodeURIComponent(family)}.woff2`
   },
 }
 
 const viewer = createViewer({
-  host,
+  iframe: iframeElement,
   fontProvider,
-})
-
-await viewer.open({
-  schema,
-  data,
 })
 ```
 
-## 渲染时机
+这个接口和 Designer 是一致的，所以你完全可以把两边共用同一个 provider。
 
-Viewer 的渲染流程是：
+## 字体为什么要在渲染前加载
 
-1. 收集 `schema.page.font` 和元素 `props.fontFamily`
-2. 加载并注入字体
-3. 解析数据绑定
-4. 测量元素
-5. 执行 layout / reflow / pagination
-6. 渲染页面 DOM
+因为字体会直接影响测量结果。
 
-字体加载在测量和分页之前完成，因为文本宽度、行高和分页结果都可能受字体影响。
+Viewer 在正式渲染前，会先收集模板里引用到的字体，再通过 `loadAndInjectFonts()` 把这些字体加载并注入到当前目标文档里。只有这一步完成后，它才继续做后面的绑定、测量、布局和分页。
 
-标记为 `source: 'system'` 的字体会直接走浏览器字体匹配，不调用 `loadFont()`，也不会注入 `@font-face`。
+如果你看到分页结果和字体有关，这不是巧合，而是设计使然。
 
-## Host 注入目标
+## 字体会注入到哪里
 
-| Host | 字体注入位置 |
-|------|--------------|
-| Browser Host | 当前页面 document |
-| Iframe Host | iframe document |
-| Custom Host | 自定义 host 提供的 document |
+这取决于你用的 Host：
 
-如果 Viewer 渲染在 iframe 中，不需要在父页面手动注入字体；Viewer 会把字体注入 iframe 内部。
+- Browser Host：注入当前页面的 `document`
+- Iframe Host：注入 iframe 的 `document`
+- Custom Host：注入你提供的 `document` 或 `ShadowRoot`
 
-## 失败诊断
+所以如果你用的是 iframe 模式，不需要在父页面再额外注入一次字体样式。
 
-字体加载失败不会阻止整份文档渲染。Viewer 会发出 warning 级别诊断：
+## `source: 'system'` 会发生什么
+
+系统字体不会被当成远程资源重复加载。
+
+这意味着如果 `FontDescriptor` 标成了系统字体，Viewer 会把它当作可直接使用的字体来源，而不是强制再走一次资源请求和注入流程。
+
+## 失败了会不会直接中断渲染
+
+不会。
+
+当前实现里，单个字体加载失败会生成一条 warning 级别诊断事件，但不会阻止整份文档继续渲染。
 
 ```ts
 await viewer.open({
@@ -88,26 +81,21 @@ await viewer.open({
 })
 ```
 
-常见 code：
+当前字体加载失败的常见诊断码是 `FONT_LOAD_FAILED`。
 
-| code | 说明 |
-|------|------|
-| `FONT_LOAD_FAILED` | 单个字体加载失败 |
-| `FONT_LOAD_ERROR` | 字体加载阶段出现非预期错误 |
+## 一个够用的接入建议
 
-## 与 Designer 共用 provider
-
-Designer 和 Viewer 使用同一个 `FontProvider` 约定。推荐把业务字体 manifest 写成一个独立模块，然后同时传给 Designer 和 Viewer：
+如果你的项目同时使用 Designer 和 Viewer，最稳的方式还是把字体目录和加载器抽成共享模块。
 
 ```ts
 export const fontProvider: FontProvider = {
   async listFonts() {
     return fontManifest
   },
-  async loadFont(family) {
-    return resolveFontUrl(family)
+  async loadFont(family, weight, style) {
+    return resolveFontAsset(family, weight, style)
   },
 }
 ```
 
-这样设计态、预览态、打印和导出都能使用同一套字体来源，避免“设计器可见但预览缺字”的问题。
+这样设计态、预览态、打印和导出都会用同一套字体来源，不容易出现前后表现不一致的问题。

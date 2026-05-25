@@ -1,24 +1,28 @@
 # 诊断系统
 
-Viewer 通过统一的诊断机制报告问题，不会静默吞掉错误。所有错误路径都经过诊断系统，确保问题可见。
+Viewer 有一套统一的诊断事件模型，用来把“渲染里出了什么问题”明确地抛给宿主。
 
-## 订阅诊断事件
+它的意义不是让一切都不断抛异常，而是让可恢复问题也能被看见。
+
+## 先订阅诊断
 
 ```ts
 await viewer.open({
   schema,
   data,
-  onDiagnostic: (event) => {
+  onDiagnostic(event) {
     console.warn(`[${event.severity}] [${event.scope}] ${event.code}: ${event.message}`)
   },
 })
 ```
 
-## ViewerDiagnosticEvent
+如果你已经有日志、埋点或告警系统，这个回调就是最自然的接入口。
+
+## 事件长什么样
 
 ```ts
 interface ViewerDiagnosticEvent {
-  category: 'schema' | 'datasource' | 'viewer' | 'material' | 'print' | 'exporter'
+  category: 'schema' | 'datasource' | 'viewer' | 'print' | 'exporter'
   severity: 'error' | 'warning' | 'info'
   code: string
   message: string
@@ -29,100 +33,58 @@ interface ViewerDiagnosticEvent {
 }
 ```
 
-| 字段 | 说明 |
-|------|------|
-| `category` | 问题所属模块 |
-| `severity` | 严重程度 |
-| `code` | 错误码，用于程序化处理 |
-| `message` | 可读消息，用于展示 |
-| `nodeId` | 关联的元素 ID（如有） |
-| `detail` | 附加信息 |
-| `scope` | 诊断来源阶段，字体加载使用 `scope: 'font'` |
-| `cause` | 原始错误对象 |
+这里最值得先理解的是 `category` 和 `scope`：
 
-## 常见诊断场景
+- `category` 更偏向归类结果
+- `scope` 更偏向问题发生在哪个阶段
 
-### Schema 校验
+这也是为什么有些字体或物料问题，最终 `category` 可能还是 `viewer`，但 `scope` 会更具体。
 
-Schema 格式错误或缺少必要字段时触发。
+## 你最常会看到哪几类问题
 
-### 数据绑定
+### Schema 校验失败
 
-绑定格式化或绑定投影失败时触发。Viewer 不接收 `dataSources`，也不根据数据源描述符匹配运行时数据。
+`open()` 一开始就会先校验 Schema。校验不通过时，会先发出一条 `category: 'schema'` 的错误诊断，然后再抛出异常。
 
-### 字体加载
+### 字体加载失败
 
-字体加载失败时触发，通常 `severity` 为 `warning`。当前实现里字体加载诊断使用 `category: 'viewer'` 和 `scope: 'font'`，`category` 本身不包含 `font`。
+字体不是强依赖成功才能继续渲染，所以这类问题通常会以 warning 形式上报。
 
-### 物料渲染
+当前实现里，字体失败会带上 `scope: 'font'`，并常见于 `FONT_LOAD_FAILED` 这类错误码。
 
-物料渲染器抛出异常时，Viewer 会：
-1. 记录 `error` 级别诊断事件
-2. 渲染一个带红色虚线边框的错误占位符
-3. 占位符包含警告符号和 `[type]` 文本
+### 物料渲染出错
 
-`safeRender()` 根据 `scope` 生成诊断。`scope: 'material'` 的渲染错误当前会归到 `category: 'viewer'`，同时保留 `scope: 'material'` 供调用方区分阶段。
+当某个物料的渲染函数抛错时，Viewer 会尽量不中断整页渲染，而是：
 
-### 打印/导出
+- 记录一条错误诊断
+- 用占位内容替代出错节点
 
-打印或导出过程中的错误。
+这对排查自定义物料特别有用，因为你不会因为一个节点失败就丢掉整页结果。
 
-## 内部机制
+### 打印和导出失败
 
-### safeRender
+打印驱动和导出器也会通过同一套诊断事件把错误往上抛。
 
-包装同步渲染函数，捕获异常后记录诊断并返回错误占位符：
+这意味着你的宿主 UI 不需要为每条链路再设计一套完全不同的错误模型。
 
-```ts
-// 内部使用
-const result = safeRender(
-  () => extension.render(node, context),
-  { scope: 'material', code: 'RENDER_ERROR', nodeId: node.id, placeholderHtml },
-  diagnostics,
-)
+## Viewer 内部是怎么做这件事的
 
-if (isErrorSentinel(result)) {
-  // 使用占位符 HTML
-}
-```
+有两个内部工具最值得知道：`safeRender()` 和 `safeCall()`。
 
-### safeCall
+`safeRender()` 主要包同步渲染逻辑。出错时，它会生成诊断，并在有回退 HTML 的情况下返回一个错误占位结果。
 
-包装异步操作，捕获异常后记录诊断并重新抛出：
+`safeCall()` 主要包异步流程。出错时，它会把诊断记录下来，然后继续把异常往外抛。
 
-```ts
-await safeCall(
-  async () => { /* 异步操作 */ },
-  { scope: 'font', code: 'FONT_LOAD_ERROR' },
-  diagnostics,
-)
-```
+你不需要直接调用它们，但知道这层机制后，再看诊断事件就更容易理解来源。
 
-### emitDiagnostic
+## 一个够用的落地建议
 
-记录诊断事件但不抛出异常，用于非致命问题：
+如果你正在做业务接入，先别急着把每条 `warning` 都弹成红色报错。
 
-```ts
-emitDiagnostic(diagnostics, {
-  category: 'datasource',
-  severity: 'warning',
-  code: 'MISSING_FIELD',
-  message: `Field "${path}" not found in data`,
-  nodeId: node.id,
-})
-```
+更稳的做法通常是：
 
-## 在打印和导出中使用
+- `error` 进入日志和用户可见反馈
+- `warning` 进入诊断面板、日志或开发环境控制台
+- `info` 只做调试辅助
 
-打印和导出操作也支持诊断回调：
-
-```ts
-await viewer.print({
-  driverId: 'browser',
-  onDiagnostic: (event) => {
-    if (event.severity === 'warning') {
-      showToast(event.message)
-    }
-  },
-})
-```
+这样既能看见问题，也不会把非致命情况渲染成“系统完全不可用”。

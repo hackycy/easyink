@@ -1,29 +1,10 @@
 # 自定义打印驱动开发
 
-这篇文档不是讲“打印驱动接口长什么样”，而是讲“什么时候值得自己写驱动，以及一套驱动最少应该承担什么职责”。
+如果你只是接 EasyInk Printer 或 HiPrint，先不要写驱动。只有在你要接企业内部打印网关、专用硬件或厂商 SDK 时，这一层才值得进入。
 
-先说结论：
-
-- 如果你只是接 EasyInk Printer 或 HiPrint，优先用官方驱动。
-- 如果你需要对接的是公司内部打印网关、专用硬件、厂商 SDK，才应该写自定义驱动。
-
-原因很直接。驱动不是一个简单的 `print()` 函数，它承担的是 Viewer 和真实打印系统之间的协议适配层。
-
-## 驱动到底负责什么
-
-一个合格的 `PrintDriver` 至少要做下面几件事：
-
-1. 从 Viewer 容器中拿到已渲染页面。
-2. 把页面尺寸转换成目标打印系统能理解的单位。
-3. 按目标协议发送打印任务。
-4. 通过 `onPhase`、`onProgress`、`onDiagnostic` 把过程反馈给上层 UI。
-5. 在失败时抛出可定位的问题，而不是沉默失败。
-
-`PrintDriver` 的接口很小，但责任并不小：
+## 当前驱动接口很小，但职责不小
 
 ```ts
-import type { PrintDriver, ViewerPrintContext } from '@easyink/viewer'
-
 interface PrintDriver {
   id: string
   defaults?: {
@@ -33,95 +14,39 @@ interface PrintDriver {
 }
 ```
 
-## 先理解 `ViewerPrintContext`
+驱动真正负责的是把 Viewer 已经渲染好的结果，转换成目标打印系统能接受的输入。
 
-你真正需要关注的是这几个字段：
+## `ViewerPrintContext` 里最值得先看什么
 
-- `container`：当前已经渲染完成的页面容器
-- `renderedPages`：每页的实际尺寸
-- `printPolicy`：打印策略，包含纸张尺寸、方向、偏移量
-- `onPhase` / `onProgress` / `onDiagnostic`：反馈通道
+你真正常用的是这些字段：
 
-```ts
-interface ViewerPrintContext extends ViewerExportContext {
-  printPolicy: ViewerPrintPolicy
-  renderedPages: ViewerPageMetrics[]
-  container?: HTMLElement
-}
-```
+- `container`
+- `renderedPages`
+- `printPolicy`
+- `onPhase`
+- `onProgress`
+- `onDiagnostic`
 
-这意味着驱动不需要重新排版。它应该消费 Viewer 已经确定下来的结果，而不是在驱动层二次计算布局。
+这意味着驱动不应该重新排版，而应该消费 Viewer 已经确定下来的页面结果。
 
-注意不要把这里的 `ViewerPrintContext` 和 `@easyink/print-core` 的 `PrintDriverRequestContext` 混用。后者是官方高阶打印包在调用 `resolveRequestOptions()` 时传出的二次封装，字段包括 `printContext`、`pages`、`pageSizes`、`widthMm`、`heightMm`、`printerName`、`copies`、`forcePageSize` 和 `landscape`。
+## `@easyink/print-core` 已经给了哪些辅助函数
 
-## 设计驱动前先做一个判断
+如果你自己写驱动，优先复用这些现成工具：
 
-先问自己：你的目标打印系统更像下面哪一种？
+- `getViewerPages()`
+- `resolveViewerPrintSize()`
+- `resolveViewerPdfPages()`
+- `resolvePrintLandscape()`
+- `resolvePrintOffset()`
+- `exportDiagnosticToViewerEvent()`
 
-### 类型一：接受 DOM / HTML
+它们的价值不在“少写几行代码”，而在于把页面提取、单位换算和诊断映射统一下来。
 
-例如 Electron 环境下的浏览器打印能力，或者厂商提供的 HTML 打印运行时。
+## 一条典型的 PDF 提交路径
 
-这类系统最适合直接发送 Viewer 页面 DOM。
-
-### 类型二：接受 PDF / 图片
-
-例如远程打印网关、Windows 本地打印服务、需要稳定纸张尺寸的正式单据系统。
-
-这类系统更适合先把页面转成 PDF 或图片，再上传。
-
-### 类型三：接受逐页流式协议
-
-例如需要 WebSocket 实时提交任务、逐页 ACK、支持设备侧状态回传的场景。
-
-这类系统要求驱动能处理连接复用、逐页进度和异常中断。
-
-## 模式一：直接发送 DOM
-
-这个模式的核心原则是“不重新解释布局，只传递已经渲染好的页面”。
+如果你的目标系统更适合接 PDF，可以这样组织：
 
 ```ts
-import type { PrintDriver, ViewerPrintContext } from '@easyink/viewer'
-
-function createLocalPrintDriver(): PrintDriver {
-  return {
-    id: 'local-printer',
-    async print(context: ViewerPrintContext) {
-      const pages = context.container
-        ? Array.from(context.container.querySelectorAll('.ei-viewer-page'))
-        : []
-
-      if (pages.length === 0)
-        throw new Error('没有可打印的页面')
-
-      const { sheetSize, orientation } = context.printPolicy
-      const width = sheetSize?.width ?? context.renderedPages[0]?.width ?? 210
-      const height = sheetSize?.height ?? context.renderedPages[0]?.height ?? 297
-
-      context.onPhase?.({ phase: 'printing', message: '发送到本地打印运行时' })
-
-      await sendToPrinter({
-        pages,
-        paperWidth: width,
-        paperHeight: height,
-        orientation,
-      })
-    },
-  }
-}
-```
-
-适合这个模式的前提是：目标运行时能忠实复用当前 HTML/CSS 输出。如果设备端本身不理解这些样式，直接发 DOM 反而会把问题转移到设备侧。
-
-## 模式二：先生成 PDF 再发送
-
-这是更稳的一种方案，尤其适合正式文档和需要精确纸张尺寸的打印任务。
-
-```ts
-import { renderPagesToPdfBlob } from '@easyink/export-plugin-dom-pdf'
-import { resolveViewerPdfPages } from '@easyink/print-core'
-import type { PrintDriver } from '@easyink/viewer'
-
 function createRemotePrintDriver(): PrintDriver {
   return {
     id: 'remote-printer',
@@ -130,93 +55,29 @@ function createRemotePrintDriver(): PrintDriver {
       const pages = pdfPages.map(page => page.element)
       const pageSizes = pdfPages.map(({ widthMm, heightMm }) => ({ widthMm, heightMm }))
 
-      context.onPhase?.({ phase: 'preparing', message: '生成 PDF' })
       const pdfBlob = await renderPagesToPdfBlob({
         pages,
         pageSizes,
-        // 默认使用 foreignObjectRendering 以保持浏览器预览一致性。
-        // 只有用户确认接受 canvas 兼容降级时，才设置 enableCanvasFallback: true。
         onProgress: context.onProgress,
       })
 
-      context.onPhase?.({ phase: 'submitting', message: '上传打印任务' })
-      const response = await fetch('https://print-service.example.com/print', {
-        method: 'POST',
-        body: pdfBlob,
-        headers: { 'Content-Type': 'application/pdf' },
-      })
-
-      if (!response.ok)
-        throw new Error(`打印服务返回 HTTP ${response.status}`)
-
-      context.onPhase?.({ phase: 'waiting', message: '等待打印完成' })
-      const { jobId } = await response.json()
-      await waitForPrintComplete(jobId)
+      await submitPdf(pdfBlob)
     },
   }
 }
 ```
 
-这个模式的优点不是“实现更简单”，而是边界更清晰：浏览器负责渲染，打印服务负责输出，双方通过 PDF 这个稳定格式解耦。
+如果目标系统本身更适合接 HTML 或逐页流式协议，再考虑 DOM 提交或 WebSocket 提交路径。
 
-## 模式三：WebSocket 流式打印
+## 一个工程上的分层建议
 
-如果你的打印服务需要长连接、逐页确认或实时状态回传，驱动就应该把“连接管理”和“打印提交”分成两层。
+不要把连接管理、配置持久化和驱动实现写在一个文件里。更稳的拆法是：
 
-```ts
-import type { PrintDriver } from '@easyink/viewer'
+- `client` 负责连接和任务提交
+- `driver` 负责从 `ViewerPrintContext` 提取数据并调用 `client`
+- `store` 或设置层负责保存打印机、份数和其他配置
 
-function createWsPrintDriver(wsUrl: string): PrintDriver {
-  let socket: WebSocket | null = null
-
-  async function ensureConnected(): Promise<WebSocket> {
-    if (socket?.readyState === WebSocket.OPEN)
-      return socket
-
-    return new Promise((resolve, reject) => {
-      socket = new WebSocket(wsUrl)
-      socket.onopen = () => resolve(socket!)
-      socket.onerror = () => reject(new Error('连接打印服务失败'))
-    })
-  }
-
-  return {
-    id: 'ws-printer',
-    async print(context) {
-      const ws = await ensureConnected()
-      const pages = Array.from(
-        context.container?.querySelectorAll('.ei-viewer-page') ?? []
-      )
-
-      if (pages.length === 0)
-        throw new Error('没有可打印的页面')
-
-      context.onPhase?.({ phase: 'printing', message: '发送打印数据' })
-
-      for (let pageIndex = 0; pageIndex < pages.length; pageIndex++) {
-        await sendPageOverWs(ws, pages[pageIndex]!, context.printPolicy)
-        context.onProgress?.({
-          current: pageIndex + 1,
-          total: pages.length,
-          message: `打印第 ${pageIndex + 1}/${pages.length} 页`,
-        })
-      }
-    },
-  }
-}
-```
-
-注意这里真正的关键点不是 WebSocket 本身，而是驱动要对“部分成功”有明确语义。比如打印了 3 页，第 4 页失败了，业务侧该怎么显示？这需要你在协议层定义清楚。
-
-## 一个更实际的工程建议
-
-不要把“连接管理 + 驱动实现 + 配置持久化”写在一个文件里。把职责拆开：
-
-- `client` 或 `service`：连接、刷新设备、发送任务、等待结果
-- `driver`：从 `ViewerPrintContext` 提取页面并调用 client
-- `settings store`：保存用户配置、同步 UI 状态
-
-官方的 `@easyink/print-integration-easyink-printer` 和 `@easyink/print-integration-hiprint` 都是按这个分层实现的。自定义驱动也建议延续这个结构，因为它能把“业务设置变化”和“打印一次任务”解耦。
+官方打印集成也是按这个思路做的。
 
 ## 单位转换不要省略
 

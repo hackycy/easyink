@@ -1,83 +1,112 @@
 # 包概览
 
-EasyInk 由以下独立发布到 npm 的包组成，按职责分为以下几类。
+第一次看 EasyInk 的包列表，很容易有一种感觉：包很多，不知道该从哪装起。
 
-## 面向应用
+其实不用一上来就把整张表背下来。先按“我现在要做什么”来选，就够了。
 
-| 包 | 说明 | 版本 |
-|---|---|---|
-| `@easyink/designer` | 设计器工作台 | [![npm](https://img.shields.io/npm/v/@easyink/designer?style=flat&colorA=080f12&colorB=1fa669)](https://npmjs.com/package/@easyink/designer) |
-| `@easyink/viewer` | 预览、打印、导出引擎 | [![npm](https://img.shields.io/npm/v/@easyink/viewer?style=flat&colorA=080f12&colorB=1fa669)](https://npmjs.com/package/@easyink/viewer) |
+## 如果你只是要嵌入编辑和预览
 
-## 核心
+大多数业务项目先装这两个包：
 
-| 包 | 说明 | 版本 |
-|---|---|---|
-| `@easyink/core` | 命令、选区、几何、单位、字体 | [![npm](https://img.shields.io/npm/v/@easyink/core?style=flat&colorA=080f12&colorB=1fa669)](https://npmjs.com/package/@easyink/core) |
-| `@easyink/schema` | Schema 类型、默认值、迁移、序列化 | [![npm](https://img.shields.io/npm/v/@easyink/schema?style=flat&colorA=080f12&colorB=1fa669)](https://npmjs.com/package/@easyink/schema) |
-| `@easyink/schema-tools` | Schema 校验、数据源对齐工具 | [![npm](https://img.shields.io/npm/v/@easyink/schema-tools?style=flat&colorA=080f12&colorB=1fa669)](https://npmjs.com/package/@easyink/schema-tools) |
-| `@easyink/datasource` | 数据源协议与字段树 | [![npm](https://img.shields.io/npm/v/@easyink/datasource?style=flat&colorA=080f12&colorB=1fa669)](https://npmjs.com/package/@easyink/datasource) |
-| `@easyink/shared` | 通用类型、工具函数、常量 | [![npm](https://img.shields.io/npm/v/@easyink/shared?style=flat&colorA=080f12&colorB=1fa669)](https://npmjs.com/package/@easyink/shared) |
+```bash
+pnpm add @easyink/designer @easyink/viewer
+```
 
-## UI 与物料框架
+- `@easyink/designer` 提供设计器组件和相关扩展接口。
+- `@easyink/viewer` 提供预览、打印和导出所需的运行时。
 
-| 包 | 说明 | 版本 |
-|---|---|---|
-| `@easyink/ui` | 设计器 UI 组件库 | [![npm](https://img.shields.io/npm/v/@easyink/ui?style=flat&colorA=080f12&colorB=1fa669)](https://npmjs.com/package/@easyink/ui) |
-| `@easyink/icons` | 图标资源 | [![npm](https://img.shields.io/npm/v/@easyink/icons?style=flat&colorA=080f12&colorB=1fa669)](https://npmjs.com/package/@easyink/icons) |
-| `@easyink/builtin` | 内置物料注册表 | [![npm](https://img.shields.io/npm/v/@easyink/builtin?style=flat&colorA=080f12&colorB=1fa669)](https://npmjs.com/package/@easyink/builtin) |
-| `@easyink/locales` | 设计器内置语言包（由 `@easyink/designer/locale` 透出） | [![npm](https://img.shields.io/npm/v/@easyink/locales?style=flat&colorA=080f12&colorB=1fa669)](https://npmjs.com/package/@easyink/locales) |
-| `@easyink/prop-schemas` | 设计器内置物料基础属性 Schema | [![npm](https://img.shields.io/npm/v/@easyink/prop-schemas?style=flat&colorA=080f12&colorB=1fa669)](https://npmjs.com/package/@easyink/prop-schemas) |
-| `@easyink/samples` | 示例模板与演示数据 | [![npm](https://img.shields.io/npm/v/@easyink/samples?style=flat&colorA=080f12&colorB=1fa669)](https://npmjs.com/package/@easyink/samples) |
+如果你现在处在“先把页面跑起来”的阶段，这两个包已经够用了。
 
-## 物料
+## 如果你开始关心模板本身
 
-每个物料包实现一种文档元素类型（已内置）
+接下来最常用的是这几类基础包：
 
-| 包 | 说明 | 版本 |
-|---|---|---|
-| `@easyink/material-text` | 文本 | [![npm](https://img.shields.io/npm/v/@easyink/material-text?style=flat&colorA=080f12&colorB=1fa669)](https://npmjs.com/package/@easyink/material-text) |
-| `@easyink/material-image` | 图片 | [![npm](https://img.shields.io/npm/v/@easyink/material-image?style=flat&colorA=080f12&colorB=1fa669)](https://npmjs.com/package/@easyink/material-image) |
-| `@easyink/material-svg-custom` | SVG 自定义 | [![npm](https://img.shields.io/npm/v/@easyink/material-svg-custom?style=flat&colorA=080f12&colorB=1fa669)](https://npmjs.com/package/@easyink/material-svg-custom) |
-| `@easyink/material-svg-heart` | SVG 心形 | [![npm](https://img.shields.io/npm/v/@easyink/material-svg-heart?style=flat&colorA=080f12&colorB=1fa669)](https://npmjs.com/package/@easyink/material-svg-heart) |
-| `@easyink/material-svg-star` | SVG 星形 | [![npm](https://img.shields.io/npm/v/@easyink/material-svg-star?style=flat&colorA=080f12&colorB=1fa669)](https://npmjs.com/package/@easyink/material-svg-star) |
-| `@easyink/material-rect` | 矩形 | [![npm](https://img.shields.io/npm/v/@easyink/material-rect?style=flat&colorA=080f12&colorB=1fa669)](https://npmjs.com/package/@easyink/material-rect) |
-| `@easyink/material-ellipse` | 椭圆 | [![npm](https://img.shields.io/npm/v/@easyink/material-ellipse?style=flat&colorA=080f12&colorB=1fa669)](https://npmjs.com/package/@easyink/material-ellipse) |
-| `@easyink/material-line` | 线条 | [![npm](https://img.shields.io/npm/v/@easyink/material-line?style=flat&colorA=080f12&colorB=1fa669)](https://npmjs.com/package/@easyink/material-line) |
-| `@easyink/material-barcode` | 条形码 | [![npm](https://img.shields.io/npm/v/@easyink/material-barcode?style=flat&colorA=080f12&colorB=1fa669)](https://npmjs.com/package/@easyink/material-barcode) |
-| `@easyink/material-qrcode` | 二维码 | [![npm](https://img.shields.io/npm/v/@easyink/material-qrcode?style=flat&colorA=080f12&colorB=1fa669)](https://npmjs.com/package/@easyink/material-qrcode) |
-| `@easyink/material-chart` | 图表 | [![npm](https://img.shields.io/npm/v/@easyink/material-chart?style=flat&colorA=080f12&colorB=1fa669)](https://npmjs.com/package/@easyink/material-chart) |
-| `@easyink/material-container` | 容器 | [![npm](https://img.shields.io/npm/v/@easyink/material-container?style=flat&colorA=080f12&colorB=1fa669)](https://npmjs.com/package/@easyink/material-container) |
-| `@easyink/material-page-number` | 页码 | [![npm](https://img.shields.io/npm/v/@easyink/material-page-number?style=flat&colorA=080f12&colorB=1fa669)](https://npmjs.com/package/@easyink/material-page-number) |
-| `@easyink/material-table-kernel` | 表格内核 | [![npm](https://img.shields.io/npm/v/@easyink/material-table-kernel?style=flat&colorA=080f12&colorB=1fa669)](https://npmjs.com/package/@easyink/material-table-kernel) |
-| `@easyink/material-table-static` | 静态表格 | [![npm](https://img.shields.io/npm/v/@easyink/material-table-static?style=flat&colorA=080f12&colorB=1fa669)](https://npmjs.com/package/@easyink/material-table-static) |
-| `@easyink/material-table-data` | 数据表格 | [![npm](https://img.shields.io/npm/v/@easyink/material-table-data?style=flat&colorA=080f12&colorB=1fa669)](https://npmjs.com/package/@easyink/material-table-data) |
-| `@easyink/material-flow-row` | 流式数据行 | [![npm](https://img.shields.io/npm/v/@easyink/material-flow-row?style=flat&colorA=080f12&colorB=1fa669)](https://npmjs.com/package/@easyink/material-flow-row) |
+| 包 | 你什么时候会碰到它 |
+| --- | --- |
+| `@easyink/schema` | 你想手动构造、归一化、校验模板 |
+| `@easyink/core` | 你在做字体、物料扩展、布局或底层能力复用 |
+| `@easyink/datasource` | 你想在业务层维护数据源字段树 |
+| `@easyink/schema-tools` | 你要做 Schema 校验、对齐或 AI 生成后的修复 |
 
-## 打印
+通常是这样的顺序：先用 Designer 和 Viewer，遇到更细的模板问题时，再往这些包下钻。
 
-| 包 | 说明 | 版本 |
-|---|---|---|
-| `@easyink/print-core` | 打印基础工具 | [![npm](https://img.shields.io/npm/v/@easyink/print-core?style=flat&colorA=080f12&colorB=1fa669)](https://npmjs.com/package/@easyink/print-core) |
-| `@easyink/print-integration-easyink-printer` | EasyInk.Printer 打印集成 | [![npm](https://img.shields.io/npm/v/@easyink/print-integration-easyink-printer?style=flat&colorA=080f12&colorB=1fa669)](https://npmjs.com/package/@easyink/print-integration-easyink-printer) |
-| `@easyink/print-integration-hiprint` | HiPrint 打印集成 | [![npm](https://img.shields.io/npm/v/@easyink/print-integration-hiprint?style=flat&colorA=080f12&colorB=1fa669)](https://npmjs.com/package/@easyink/print-integration-hiprint) |
+## 如果你要做打印集成
 
-## 导出
+打印相关包分两层看会更清楚。
 
-| 包 | 说明 | 版本 |
-|---|---|---|
-| `@easyink/export-runtime` | 导出运行时（框架无关） | [![npm](https://img.shields.io/npm/v/@easyink/export-runtime?style=flat&colorA=080f12&colorB=1fa669)](https://npmjs.com/package/@easyink/export-runtime) |
-| `@easyink/export-plugin-dom-pdf` | DOM-to-PDF 导出插件 | [![npm](https://img.shields.io/npm/v/@easyink/export-plugin-dom-pdf?style=flat&colorA=080f12&colorB=1fa669)](https://npmjs.com/package/@easyink/export-plugin-dom-pdf) |
+先看基础层：
 
-## 扩展
+- `@easyink/print-core`：Viewer 页面提取、尺寸换算和托管打印面等共享工具。
 
-| 包 | 说明 | 版本 |
-|---|---|---|
-| `@easyink/ai` | AI 集成（对话、MCP、提示词模板） | [![npm](https://img.shields.io/npm/v/@easyink/ai?style=flat&colorA=080f12&colorB=1fa669)](https://npmjs.com/package/@easyink/ai) |
-| `@easyink/mcp-server` | MCP 服务端，LLM 生成模板 | [![npm](https://img.shields.io/npm/v/@easyink/mcp-server?style=flat&colorA=080f12&colorB=1fa669)](https://npmjs.com/package/@easyink/mcp-server) |
+再看官方集成层：
 
-## 开发辅助
+- `@easyink/print-integration-easyink-printer`：对接 Windows 上的 EasyInk.Printer。
+- `@easyink/print-integration-hiprint`：对接 electron-hiprint。
 
-| 包 | 说明 | 发布状态 |
-|---|---|---|
-| `@easyink/skills` | EasyInk 开发工作流用的 Codex skills，包含 contribution 和 material 开发辅助 | 私有 workspace 包，不发布到 npm |
+如果你的目标只是把模板打出去，优先选官方集成包，不用先自己写驱动。
+
+## 如果你要做导出
+
+导出也分两层：
+
+| 包 | 作用 |
+| --- | --- |
+| `@easyink/export-runtime` | 导出运行时和插件注册表 |
+| `@easyink/export-plugin-dom-pdf` | 把 Viewer 页面导出成 PDF 的官方插件 |
+
+这层设计的意思很简单：Viewer 负责把页面渲染出来，导出插件负责把这些页面变成文件。
+
+## 如果你要做 Designer 二次开发
+
+这时你通常会碰到下面这些包：
+
+| 包 | 作用 |
+| --- | --- |
+| `@easyink/builtin` | 内置物料注册表 |
+| `@easyink/locales` | 内置语言包实现，设计器会继续透出它们 |
+| `@easyink/ui` | 设计器内部共用 UI 组件 |
+| `@easyink/icons` | 图标资源 |
+
+这些包更多是扩展和维护层会接触到的东西。普通业务接入一般不需要直接操作全部内容。
+
+## 物料包怎么看
+
+仓库里每种内置物料都拆成独立包，比如：
+
+- `@easyink/material-text`
+- `@easyink/material-image`
+- `@easyink/material-barcode`
+- `@easyink/material-qrcode`
+- `@easyink/material-rect`
+- `@easyink/material-ellipse`
+- `@easyink/material-line`
+- `@easyink/material-container`
+- `@easyink/material-page-number`
+- `@easyink/material-table-static`
+- `@easyink/material-table-data`
+- `@easyink/material-flow-row`
+- `@easyink/material-chart`
+
+你不用一开始就单独安装它们。多数情况下，它们会通过内置注册表进入 Designer 和 Viewer。
+
+只有当你在研究自定义物料、对照内置实现写扩展时，才需要逐个看这些包。
+
+## AI 和 MCP 在哪一层
+
+AI 相关能力也单独拆了出来：
+
+- `@easyink/ai`：给 Designer 提供 AI 面板和 MCP 客户端能力。
+- `@easyink/mcp-server`：独立的 MCP 服务端。
+
+这两个包不属于 Designer 运行时必需依赖。你只有在接 AI 生成模板工作流时，才需要引入它们。
+
+## 一个足够实用的选择原则
+
+如果你不想每次都从零判断，可以直接按下面这个规则来：
+
+- 只做编辑和预览：装 `@easyink/designer`、`@easyink/viewer`
+- 做打印：再加官方打印集成包
+- 做导出：再加导出运行时和对应插件
+- 做高级扩展：再看 `schema`、`core`、物料包和 AI 包
+
+关于包，目前知道这些就够用了。后面读具体章节时，再按需深入某个包即可。

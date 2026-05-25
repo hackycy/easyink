@@ -1,150 +1,95 @@
 # 打印方案
 
-EasyInk 的本地打印目标很明确：让业务代码只关心“打印什么”和“发给哪台打印机”，而不是自己处理 PDF 渲染、WebSocket 通信、分页 DOM 提取和任务轮询。
+打印章节最想帮你解决的，不是“打印接口长什么样”，而是“我到底该选哪条链路”。
 
-如果你的目标是“先稳定生成 PDF，再交给打印服务或业务系统下载”，请先看 [EasyInk.Render CLI 渲染运行时](/printing/render)。Render 负责把 HTML、PDF、EasyInk schema + data 归一为可打印 PDF，并提供浏览器版本固定、等待策略、安全拦截和 diagnostics。
+EasyInk 当前有两条官方前端打印集成：
 
-如果你是第一次接入，优先走官方打印集成包：
+- `@easyink/print-integration-easyink-printer`
+- `@easyink/print-integration-hiprint`
 
-- `@easyink/print-integration-easyink-printer`：对接 EasyInk.Printer (.NET)，默认把 Viewer 页面转成 PDF 后发送到本地打印服务，也可直接提交 `schema + data` 或 HTML 给 Printer-side Render
-- `@easyink/print-integration-hiprint`：对接 electron-hiprint，直接把 Viewer 页面 HTML 发送给 HiPrint
+它们都已经把“托管 Viewer 渲染 + 打印提交”这一段封装好了，所以多数项目不需要自己先写 `PrintDriver`。
 
-这两个包都已经包含了“客户端 + 托管 Viewer 渲染 + 打印提交”完整链路。大多数项目不需要自己创建 Viewer，也不需要自己注册 `PrintDriver`。
+## 先看最短接法
 
-## 你真正要做的事情
-
-无论选哪条链路，前端接入步骤都一样：
-
-1. 安装对应的打印包。
-2. 创建打印客户端，管理连接地址、默认打印机和份数。
-3. 创建对应的打印器，选择 `viewer: 'iframe'` 或 `viewer: 'dom'`。
-4. 调用 `printer.print({ schema, data })`。
-5. 在设置页暴露打印机列表、连接状态和错误信息。
-
-也就是说，业务系统真正需要维护的状态通常只有这些：
-
-- 打印服务地址
-- 当前选中的打印机
-- 默认份数
-- 是否强制纸张尺寸
-- 连接状态、重连次数和最近一次错误
-
-## 方案对比
-
-| | EasyInk Printer (.NET) | HiPrint (vue-plugin-hiprint) |
-|---|---|---|
-| **运行平台** | 仅 Windows | Windows / macOS / Linux |
-| **打印输入** | PDF / schema + data / HTML | HTML |
-| **渲染质量** | 适合对矢量质量要求高的正式单据 | 适合小票、卡片、跨平台打印 |
-| **通信方式** | HTTP + WebSocket | WebSocket |
-| **典型场景** | 面单、正式报表、A4 文档 | 小票、卡片、嵌入 Electron 的桌面应用 |
-| **打印器默认 pageSizeMode** | `fixed` | `driver` |
-| **官方包** | `@easyink/print-integration-easyink-printer` | `@easyink/print-integration-hiprint` |
-
-## 如何选择
-
-### 选 EasyInk Printer 的情况
-
-- 你的部署环境是 Windows。
-- 你更在意 PDF 打印质量和系统打印稳定性。
-- 你希望纸张尺寸、方向、偏移量都由打印服务准确控制。
-- 你希望浏览器前端少做 PDF 生成，把 EasyInk schema + data 或 HTML 交给本地 Printer 渲染。
-
-### 选 HiPrint 的情况
-
-- 你需要跨平台。
-- 你的系统已经在使用 electron-hiprint。
-- 你打印的主要是小票、卡片等较轻量页面。
-
-### 不要自己实现驱动的情况
-
-如果你的打印目标只是“把 schema/data 打给本地服务”，官方打印器已经覆盖了绝大多数需求。只有在下面这些情况才建议写自定义驱动：
-
-- 你有独立的企业打印网关，需要走自定义协议。
-- 你要接专用硬件或厂商 SDK。
-- 你需要在提交前做额外的签名、加密或审计。
-
-## 推荐的前端封装方式
-
-不要把连接逻辑散落在按钮点击里。更稳定的方式是把打印集成收口成一个可复用的 store 或 hook：
+不管你最后选哪条链路，前端主流程都很像：
 
 ```ts
-const client = createEasyInkPrinterClient(...)
-const printer = createEasyInkPrinter({
+const printer = createXXXPrinter({
   client,
   viewer: 'iframe',
 })
 
-export function usePrintService() {
-	return {
-		client,
-		printer,
-		connect,
-		disconnect,
-		refreshDevices,
-		config,
-		devices,
-		jobs,
-		connectionState,
-		reconnectAttempts,
-		lastError,
-	}
-}
+await printer.print({ schema, data })
 ```
 
-这样做的原因有两个：
+也就是说，业务层真正关心的往往只有：
 
-- 打印器负责“本次 schema/data 如何渲染并提交”，不负责“配置存在哪、何时重连”。
-- 打印设置页、诊断页、预览页都能共享同一份连接状态。
+- 打到哪个服务
+- 选哪台打印机
+- 打几份
+- 这次用什么模板和数据
 
-EasyInk Printer 官方客户端内部使用 VueUse `useWebSocket` 管理长连接。默认会自动重连 3 次，初始延迟 500ms，按 2 倍退避，最大延迟 5000ms；达到上限后进入 `error`，错误信息写入 `lastError`。
+## 两条官方链路怎么选
 
-```ts
-const client = createEasyInkPrinterClient({
-  serviceUrl: 'http://localhost:18080',
-  reconnect: true,
-  maxReconnectAttempts: 5,
-  reconnectDelayMs: 500,
-  reconnectBackoffMultiplier: 2,
-  maxReconnectDelayMs: 5000,
-})
-```
+| 方案 | 更适合什么场景 |
+| --- | --- |
+| EasyInk Printer | Windows、本地服务、正式单据、PDF 质量优先 |
+| HiPrint | 跨平台、小票、卡片、已有 electron-hiprint 环境 |
 
-## 常见问题
+如果你只看一个判断条件，也够用了：
 
-### 调用了 print，但没有打印输出
+- 更在意 Windows 本地打印稳定性和 PDF 路径，选 EasyInk Printer
+- 更在意跨平台和 HTML 提交链路，选 HiPrint
 
-先检查三件事：
+## 为什么多数项目不需要自己写驱动
 
-1. 本地打印服务是否在线。
-2. 当前打印机是否已经选中，并且仍然存在于设备列表。
-3. `printer.print()` 的 `onPhase` / `onDiagnostic` 是否报告渲染或提交错误。
+因为官方打印器已经把下面这些事做掉了：
 
-### 为什么 EasyInk Printer 要先转 PDF
+- 创建托管 Viewer
+- 打开 `schema + data`
+- 取渲染结果
+- 按对应协议提交打印
+- 在合适的时候销毁 Viewer
 
-因为目标不是“把浏览器 DOM 打出去”，而是“把页面以稳定、可控、与浏览器缩放无关的形式交给 Windows 打印管线”。PDF 是这里最稳定的交换格式。
+这意味着如果你的需求只是“把模板稳定打出去”，直接接官方打印器通常是最短路径。
 
-现在 EasyInk Printer 也可以接收 `renderSource.type=easyink` 或 `renderSource.type=html`。这并不绕过 PDF，而是把“生成 PDF”这一步移动到本地 Printer 内置的 Render 运行时里，后续仍然进入同一套 PDF 打印队列和物理打印路由。
+## 如果你选 EasyInk Printer
 
-### 为什么 HiPrint 有时需要 `forcePageSize`
+这条链路默认更偏向 PDF 或服务端 Render 路径，适合正式文档和尺寸控制要求更强的场景。
 
-部分驱动在未收到显式 page size 时会按 A4 或默认介质缩放输出，这时可以为当前打印配置开启 `forcePageSize`。如果开启后出现留白、缩放或打印失败，就保持关闭，让驱动使用当前介质。
+它的高层打印器默认会用 `pageSizeMode: 'fixed'`，也就是更倾向于按模板或渲染尺寸来控制输出。
 
-## 排错顺序
+继续看这里：
 
-当用户反馈“点了打印没反应”时，排查顺序建议固定下来：
+- [EasyInk Printer (.NET)](/dotnet/)
+- [快速上手](/dotnet/getting-started)
 
-1. 先看连接状态是否为 `connected`。
-2. 再看打印机列表是否成功刷新。
-3. 再看当前打印机名称是否存在于设备列表。
-4. 再看 `printer.print()` 期间的 `onPhase` 和 `onProgress` 事件。
-5. 最后再查本地打印服务日志。
+## 如果你选 HiPrint
 
-这个顺序的原因是，大多数问题并不在模板渲染，而是在连接、选机和设备侧能力协商。
+这条链路默认更偏向驱动主导的纸张策略，适合小票和设备驱动自己决定介质的场景。
 
-## 下一步
+它的高层打印器默认会用 `pageSizeMode: 'driver'`。
 
-- [EasyInk Printer (.NET)](/dotnet/)：了解 Windows 打印服务部署方式
-- [Electron HiPrint](/hiprint/)：了解 electron-hiprint 的运行要求
-- [EasyInk.Render CLI 渲染运行时](/printing/render)：了解 CLI-first PDF 渲染、诊断和开发方式
-- [自定义打印驱动开发](/advanced/print-drivers) ：当官方驱动不满足你的接入要求时再进入这一层
+继续看这里：
+
+- [Electron HiPrint](/hiprint/)
+- [快速上手](/hiprint/getting-started)
+
+## 如果你还没决定，要不要先看 Render
+
+如果你的目标不是“立刻打印”，而是“先稳定把 HTML、Schema 或 PDF 归一成 PDF 输出”，那更应该先看 Render：
+
+- [EasyInk.Render CLI 渲染运行时](/printing/render)
+
+Render 不负责枚举打印机和提交物理打印任务，它负责把输入稳定地变成 PDF。
+
+## 一个够用的排错顺序
+
+用户说“点了打印没反应”时，先按这个顺序查：
+
+1. 客户端是不是连上了本地服务或运行时。
+2. 打印机列表是不是能正常刷新。
+3. 当前打印机是不是有效。
+4. `printer.print()` 的 `onPhase` / `onDiagnostic` 有没有给出错误信息。
+
+多数问题其实都卡在连接和设备，不在模板本身。

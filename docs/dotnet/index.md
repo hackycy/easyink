@@ -1,55 +1,37 @@
 # .NET 打印服务
 
-EasyInk 的 .NET 组件提供 **Windows 本地打印能力**，让浏览器端（Vue）无需 Electron 即可通过 HTTP/WebSocket 调用本地打印机。
+EasyInk 的 .NET 部分解决的是 Windows 本地打印这件事。它把前端调用、本地 HTTP/WebSocket 服务和底层打印引擎拆成了两层。
 
-这套组件是独立的 .NET 工程，与 `@easyink/*` 的 Node.js 包体系互不依赖。
+## 先看整体关系
 
-## 架构总览
-
-```
-浏览器 (Vue 前端)
-    │  HTTP / WebSocket
-    ▼
-EasyInk.Printer              ← 完整应用：HTTP 服务 + 系统托盘 + 桌面管理窗口 + 审计日志
-    │
-    ▼
-EasyInk.Engine.dll           ← 打印引擎：Pdfium 渲染 + Windows Print Spooler 打印
+```text
+浏览器前端
+    -> EasyInk.Printer
+    -> EasyInk.Engine
+    -> Windows 打印通道
 ```
 
-## 两个组件
+如果你只需要浏览器去调用本地打印机，通常直接安装 `EasyInk.Printer` 就够了。
 
-| 组件 | 类型 | 说明 |
-|------|------|------|
-| **EasyInk.Engine** | DLL（类库） | 纯打印引擎，无 UI、无持久化。可嵌入任何 .NET 宿主 |
-| **EasyInk.Printer** | WinExe（桌面应用） | 完整打印服务：HTTP/WebSocket 服务器 + 系统托盘 + 管理窗口 + 审计日志 |
+## 两个组件分别干什么
 
-## 集成方式
+| 组件 | 作用 |
+| --- | --- |
+| `EasyInk.Engine` | 纯打印引擎，暴露 `EngineApi` |
+| `EasyInk.Printer` | 桌面应用，提供 HTTP/WebSocket、UI、审计和配置 |
 
-根据你的场景选择不同的集成方式：
+这个拆分很实用。它让你既可以直接使用完整桌面服务，也可以把底层引擎嵌到自己的 .NET 宿主里。
 
-| 场景 | 推荐方式 | 说明 |
-|------|---------|------|
-| 浏览器应用需要调用本地打印机 | 安装 **EasyInk.Printer** | 运行桌面应用，前端通过 HTTP/WebSocket 调用 |
-| 自有 .NET 应用需要打印能力 | 引用 **EasyInk.Engine.dll** | 直接调用 `EngineApi`，无需 HTTP 层 |
-| 需要嵌入到 Electron / 其他桌面壳 | 引用 **EasyInk.Engine.dll** | 通过进程内调用或自建 HTTP 层 |
+## 怎么选
 
-## 下载
+- 你是浏览器项目，要调用本地打印机：先选 `EasyInk.Printer`
+- 你已经有自己的 .NET 应用，只差打印能力：先看 `EasyInk.Engine`
 
-每次发版都会将 .NET 产物发布到 GitHub Release，无需本地构建，直接下载即可使用。
-
-前往 [GitHub Releases](https://github.com/hackycy/easyink/releases) 下载最新版本的 `EasyInk.Printer` 和 `EasyInk.Engine`。
-
-> 如果你需要自行修改源码或调试，请参考 [快速上手](./getting-started) 从源码构建。
-
-## 环境要求
-
-- **操作系统**：Windows 7 SP1 及以上
-- **运行时**：.NET Framework 4.8（Windows 10 1903+ 已内置）
-- **开发**：.NET SDK（`dotnet build`）或 Visual Studio 2019+
+多数 Web 项目都落在第一种。
 
 ## 下一步
 
-- [快速上手](./getting-started) -- 构建并运行第一个打印服务
-- [Engine DLL](./engine) -- 在自有 .NET 应用中集成打印引擎
-- [Printer 应用](./printer) -- 安装和配置独立打印服务
-- [API 参考](./api-reference) -- HTTP / WebSocket 接口文档
+- [快速上手](./getting-started)
+- [Engine DLL](./engine)
+- [Printer 应用](./printer)
+- [API 参考](./api-reference)

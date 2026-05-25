@@ -1,21 +1,27 @@
 # Electron HiPrint
 
-基于 [vue-plugin-hiprint](https://github.com/CcSimple/vue-plugin-hiprint) + [electron-hiprint](https://github.com/CcSimple/electron-hiprint) 的跨平台静默打印方案。
+HiPrint 这条链路更适合跨平台和小票类场景。EasyInk 在这一层提供的是一个高层打印器，让你不用自己手动创建 Viewer、提取页面 HTML、再去拼接 HiPrint 调用。
 
-## 架构
+## 它的链路很简单
 
-```
-浏览器 (Vue 前端)
-    │  WebSocket (vue-plugin-hiprint)
-    ▼
-electron-hiprint 客户端        ← 本地 Node.js/Electron 服务，默认端口 17521
-    │
-    ▼
-系统打印机驱动                  ← Chromium 调用 OS 打印通道
+```text
+schema + data
+    -> 托管 Viewer 渲染
+    -> 页面 HTML
+    -> HiPrint runtime
+    -> 系统打印机
 ```
 
-前端通过 `vue-plugin-hiprint` 将 HTML 内容发送到本地运行的 `electron-hiprint` 客户端，由客户端调用系统打印机完成打印。
+这也是它和 EasyInk Printer 的最大差别之一：这里的打印输入更接近 HTML 页面，而不是本地服务侧 PDF 路径。
+
+## 什么时候适合选它
+
+- 你需要跨平台
+- 你的项目已经接入 `electron-hiprint`
+- 你的打印内容主要是小票、卡片或驱动主导纸张尺寸的任务
+
+如果你的场景更像正式报表、A4 或对 PDF 路径依赖更强的 Windows 环境，那通常应该先看 EasyInk Printer。
 
 ## 下一步
 
-- [快速上手](./getting-started) -- 环境搭建、与 EasyInk Viewer 集成
+继续直接看 [快速上手](./getting-started)。

@@ -1,8 +1,10 @@
 # ViewerHost 模式
 
-ViewerHost 决定 Viewer 在哪里渲染。`@easyink/viewer` 提供三种 Host 模式，适用于不同场景。
+ViewerHost 解决的是一个很具体的问题：Viewer 到底要把页面渲染到哪里。
 
-## ViewerHost 接口
+当前实现里，Host 接口很小，但职责很明确：提供文档对象、挂载点、样式注入能力和打印入口。
+
+## 先看接口长什么样
 
 ```ts
 interface ViewerHost {
@@ -16,58 +18,51 @@ interface ViewerHost {
 }
 ```
 
+如果你看到这里已经有点眉目了，没错，Host 本质上就是把 Viewer 运行时和具体 DOM 环境隔开。
+
 ## Browser Host
 
-直接渲染到当前页面的 DOM 容器中。最简单，但样式可能与宿主页面互相影响。
+这是最直接的模式。Viewer 就渲染在当前页面某个容器里。
 
 ```ts
 import { createBrowserViewerHost, createViewer } from '@easyink/viewer'
 
-const container = document.getElementById('viewer-root')
 const host = createBrowserViewerHost(container)
 const viewer = createViewer({ host })
 ```
 
-等价快捷写法：
+如果你不想自己先创建 Host，也可以直接走快捷写法：
 
 ```ts
-const viewer = createViewer({
-  container: document.getElementById('viewer-root'),
-})
+const viewer = createViewer({ container })
 ```
 
-**适用场景**：嵌入到已有页面中，不需要样式隔离。
+这种模式上手最快，但要自己承担宿主样式和 Viewer 样式互相影响的风险。
 
 ## Iframe Host
 
-渲染到 iframe 内部，实现样式和脚本完全隔离。**推荐方式**。
+这是最推荐的模式，也是业务里最常见的模式。
 
 ```ts
 import { createIframeViewerHost, createViewer } from '@easyink/viewer'
 
-const iframe = document.getElementById('viewer-iframe')
-const host = createIframeViewerHost(iframe)
+const host = createIframeViewerHost(iframeElement)
 const viewer = createViewer({ host })
 ```
 
-等价快捷写法：
+同样也有快捷写法：
 
 ```ts
-const viewer = createViewer({
-  iframe: document.getElementById('viewer-iframe'),
-})
+const viewer = createViewer({ iframe: iframeElement })
 ```
 
-**工作原理**：
-1. 读取 `iframe.contentDocument`
-2. 确保 `<body>` 存在
-3. 在 iframe body 内创建或查找 `<div id="easyink-viewer-root">` 作为 mount 点
+当前实现会在 iframe 文档里确认 `body` 存在，然后创建或复用一个 `id='easyink-viewer-root'` 的挂载点。
 
-**适用场景**：需要完全隔离渲染环境，防止样式污染和脚本冲突。
+这也是为什么 iframe 模式通常更省心。它直接把预览和宿主页面隔开了。
 
 ## Custom Host
 
-完全自定义 document、window、mount 点和打印行为。
+当你已经有自己的文档环境时，可以自己提供 Host。
 
 ```ts
 import { createCustomViewerHost, createViewer } from '@easyink/viewer'
@@ -77,45 +72,49 @@ const host = createCustomViewerHost({
   window: myWindow,
   mount: myRootElement,
   print: () => {
-    // 自定义打印逻辑
-    window.print()
+    myWindow.print()
   },
 })
+
 const viewer = createViewer({ host })
 ```
 
-**适用场景**：
-- 在 Shadow DOM 中渲染
-- 需要自定义打印行为（如发送到远程打印机）
-- 在 Web Worker 或其他非标准环境中渲染
+这适合 Shadow DOM、特殊容器，或者你要完全接管打印行为的场景。
 
-## 自定义 iframe 样式
+## 什么时候选哪一种
 
-使用 Iframe Host 时，可以在创建 Host 后自定义 iframe 内部样式：
+可以直接按这个规则选：
+
+- 想最稳地做业务预览，选 `iframe`
+- 只是本页嵌入一下，且能接受样式共存，选 `container`
+- 已经有特殊宿主环境，选 `custom`
+
+如果你还没有很强的约束，先用 iframe 就对了。
+
+## Host 提供了哪些你能直接用的能力
+
+除了挂载点本身，Host 还有两个很实用的方法：
+
+- `clear()`：清空当前挂载区域
+- `appendStyle(css)`：往当前 Host 的文档里注入样式，并拿到一个移除函数
+
+例如在 iframe 里加一层预览外观：
 
 ```ts
-const host = createIframeViewerHost(iframe)
+const host = createIframeViewerHost(iframeElement)
 
-// 自定义背景和布局
-host.document.body.style.background = '#525659'
 host.document.body.style.margin = '0'
-host.mount.style.padding = '32px 48px'
-host.mount.style.overflow = 'auto'
+host.document.body.style.background = '#e5e7eb'
 
-// 注入自定义 CSS
 const removeStyle = host.appendStyle(`
   .ei-viewer-page {
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
   }
 `)
 
-// 移除注入的样式
 removeStyle()
 ```
 
-## Host 生命周期
+这比去操作 Viewer 内部 DOM 结构更稳，也更符合 Host 的职责边界。
 
-- `clear()` -- 清空 mount 点的所有子元素
-- `appendStyle(css)` -- 注入 CSS 到 document.head，返回移除函数
-- `print()` -- 调用 `window.print()`（Browser/Iframe）或自定义打印（Custom）
-- `destroy()` -- 通过 `viewer.destroy()` 调用，清理所有状态
+关于 Host，目前知道这些就够用了。下一步最适合继续看 [打印与导出](./print-export)。

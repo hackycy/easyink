@@ -1,27 +1,28 @@
 # 快速上手
 
-本指南帮助你在 5 分钟内跑通 Designer（设计器）和 Viewer（预览器）。
+这页只做一件事：让你先把一份模板跑起来。
 
-## 环境要求
+我们会先把 Designer 嵌进 Vue 页面，再用同一份 `schema` 交给 Viewer 预览。这样你很快就能建立起 EasyInk 最重要的心智模型：Designer 负责编辑，Viewer 负责消费，二者之间只传 `schema + data`。
 
-- Node.js >= 18
-- pnpm >= 9
+## 先准备环境
 
-## 安装
+- Node.js 18 或更高版本
+- pnpm 9 或更高版本
+- 一个 Vue 3 + TypeScript 项目
 
-大多数场景只需安装面向应用的两个包（完整包列表见 [包概览](/guide/packages)）：
+先安装两个最常用的包：
 
 ```bash
-# 设计器（包含完整的编辑工作台）
-pnpm add @easyink/designer
-
-# 预览器（独立的渲染/打印/导出引擎）
-pnpm add @easyink/viewer
+pnpm add @easyink/designer @easyink/viewer
 ```
 
-## 使用 Designer
+上面这两个包已经覆盖了大多数业务的第一阶段接入。关于其它包怎么选，后面再看 [包概览](/guide/packages) 就行。
 
-Designer 是一个 Vue 3 组件，通过 `v-model:schema` 双向绑定文档模板。
+## 先把 Designer 跑起来
+
+`EasyInkDesigner` 是一个 Vue 组件。你给它一个 `schema`，它负责把缺省字段补齐，并在编辑时通过 `v-model:schema` 把完整模板回传给你。
+
+先看一个最小示例：
 
 ```vue
 <script setup lang="ts">
@@ -30,7 +31,6 @@ import { EasyInkDesigner, createLocalStoragePreferenceProvider } from '@easyink/
 import { zhCN } from '@easyink/designer/locale'
 import '@easyink/designer/index.css'
 
-// 文档模板 -- 设计器的唯一数据源
 const schema = ref({
   unit: 'mm',
   page: {
@@ -42,7 +42,6 @@ const schema = ref({
   elements: [],
 })
 
-// 偏好持久化（可选，保存面板布局、缩放等用户偏好）
 const preferenceProvider = createLocalStoragePreferenceProvider()
 </script>
 
@@ -55,25 +54,36 @@ const preferenceProvider = createLocalStoragePreferenceProvider()
 </template>
 ```
 
-设计器内置 `zhCN` 和 `enUS` 两套语言包，推荐继续从 `@easyink/designer/locale` 引入；语言包实现由独立的 `@easyink/locales` 包维护，并通过设计器透出。
+上面这段代码里，真正需要你先记住的只有两点：
 
-### 添加数据源
+- `schema` 是模板的唯一数据源。
+- `preferenceProvider` 存的是工作台偏好，不是模板内容。
 
-数据源定义了可绑定的字段树，用户可以通过拖拽将字段绑定到元素上。
+如果你现在只想先看到画布，这些就够了。
+
+## 给 Designer 加一份数据源
+
+接下来你通常会想做第二件事：把业务字段拖到画布上。
+
+EasyInk 用 `DataSourceDescriptor` 描述一棵字段树。Designer 只消费这个字段树本身，不会替你请求业务数据。
 
 ```ts
 import type { DataSourceDescriptor } from '@easyink/designer'
 
-const dataSources: DataSourceDescriptor[] = [{
-  id: 'order',
-  name: '订单数据',
-  fields: [
-    { name: 'orderNo', path: 'orderNo', title: '订单号', use: 'text' },
-    { name: 'customerName', path: 'customerName', title: '客户名称', use: 'text' },
-    { name: 'qrcode', path: 'qrcode', title: '二维码', use: 'image' },
-  ],
-}]
+const dataSources: DataSourceDescriptor[] = [
+  {
+    id: 'order',
+    name: '订单',
+    fields: [
+      { name: 'orderNo', path: 'orderNo', title: '订单号', use: 'text' },
+      { name: 'customerName', path: 'customerName', title: '客户名称', use: 'text' },
+      { name: 'qrcode', path: 'qrcode', title: '二维码', use: 'image' },
+    ],
+  },
+]
 ```
+
+再把它传给组件：
 
 ```vue
 <EasyInkDesigner
@@ -84,51 +94,68 @@ const dataSources: DataSourceDescriptor[] = [{
 />
 ```
 
-### 自动保存
+这时你就能在设计器里看到字段面板，并把字段拖到元素上了。
 
-配置 `auto-save` 属性，设计器会在 Schema 变化后自动调用你的保存回调。
+## 打开自动保存
+
+模板能编辑之后，通常下一步就是保存。
+
+Designer 内置了一层自动保存控制器。你只需要提供 `save` 回调，它会在模板变化后按 `delay` 防抖调用，并把当前 `DocumentSchema` 快照传给你。
 
 ```ts
-const autoSaveOptions = {
+const autoSave = {
   enabled: true,
-  delay: 1000, // 防抖延迟（毫秒）
+  delay: 1000,
   save: async (schemaSnapshot) => {
-    // 保存到你的后端
     await fetch('/api/templates/1', {
       method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ schema: schemaSnapshot }),
     })
   },
 }
 ```
 
-## 使用 Viewer
+```vue
+<EasyInkDesigner
+  v-model:schema="schema"
+  :data-sources="dataSources"
+  :locale="zhCN"
+  :preference-provider="preferenceProvider"
+  :auto-save="autoSave"
+/>
+```
 
-Viewer 是一个命令式 API，通过 `createViewer()` 创建运行时实例。通常运行在 iframe 中以实现样式隔离。
+这里先知道一件事就够了：自动保存存的是模板，偏好持久化存的是工作台状态。两者互不替代。
+
+## 再把同一份模板交给 Viewer
+
+当你已经能编辑模板时，就可以开始预览了。
+
+Viewer 是命令式运行时。你创建实例，调用 `open({ schema, data })`，它就会完成校验、绑定解析、渲染和分页。
+
+先看最常见的 iframe 用法：
 
 ```vue
 <script setup lang="ts">
-import { createIframeViewerHost, createViewer } from '@easyink/viewer'
 import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { createViewer } from '@easyink/viewer'
 
-const props = defineProps({
-  schema: { type: Object, required: true },
-  data: { type: Object, default: () => ({}) },
-})
+const props = defineProps<{
+  schema: Record<string, unknown>
+  data?: Record<string, unknown>
+}>()
 
-const iframeRef = ref()
-let viewer
+const iframeRef = ref<HTMLIFrameElement | null>(null)
+let viewer: ReturnType<typeof createViewer> | undefined
 
 onMounted(async () => {
-  // 1. 创建 iframe host
-  const host = createIframeViewerHost(iframeRef.value)
+  if (!iframeRef.value)
+    return
 
-  // 2. 创建 viewer 运行时
-  viewer = createViewer({ host })
-
-  // 3. 打开文档（传入 Schema + 数据）
+  viewer = createViewer({ iframe: iframeRef.value })
   await viewer.open({
-    schema: props.schema,
+    schema: props.schema as never,
     data: props.data,
   })
 })
@@ -139,28 +166,42 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <iframe ref="iframeRef" style="width: 100%; height: 100%; border: none;" />
+  <iframe ref="iframeRef" style="width: 100%; height: 100%; border: 0;" />
 </template>
 ```
 
-### 打印与导出
+上面这段代码演示了 Viewer 最重要的输入契约：它只接收 `schema` 和运行时 `data`。Designer 里的 `dataSources` 不会传进来。
 
-Viewer 内置浏览器打印支持，同时支持注册自定义打印驱动和导出插件。
+## 试一下打印和导出
+
+当文档已经打开后，打印和导出就是下一层能力。
+
+先看调用方式：
 
 ```ts
-// 浏览器打印
-await viewer.print({ driverId: 'browser' })
+await viewer.print()
 
-// 导出 PDF（需要注册导出插件）
 const blob = await viewer.exportDocument({
   format: 'pdf',
   entry: 'preview',
-  onProgress: (progress) => console.log(progress),
+  onProgress(event) {
+    console.log(event.current, event.total)
+  },
 })
 ```
 
-## 下一步
+这里有个细节值得先记住：`print()` 默认走浏览器打印；`exportDocument()` 则要求你先注册对应格式的导出器。关于这两条链路的完整接法，后面分别去看 Viewer 章节就行。
 
-- [核心概念](/guide/concepts) -- Schema、物料、数据源、三种状态模型
-- [Designer 详解](/designer/) -- 组件 Props、数据绑定、自动保存
-- [Viewer 详解](/viewer/) -- Host 模式、打印导出、诊断
+## 你现在应该已经知道什么
+
+到这里，你已经具备了三个基础动作：
+
+- 用 `EasyInkDesigner` 编辑模板。
+- 用 `dataSources` 给模板提供设计时字段树。
+- 用 `createViewer().open({ schema, data })` 预览同一份模板。
+
+关于 EasyInk，目前先掌握这些就够用了。继续往下读时，建议按这个顺序走：
+
+- [核心概念](/guide/concepts)
+- [Designer 概述](/designer/)
+- [Viewer 概述](/viewer/)

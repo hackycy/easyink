@@ -1,10 +1,8 @@
 # Designer
 
-[![npm](https://img.shields.io/npm/v/@easyink/designer?style=flat&colorA=080f12&colorB=1fa669)](https://npmjs.com/package/@easyink/designer)
+`@easyink/designer` 提供的是一个完整的 Vue 组件，而不是一组零散拼装件。你把它嵌进页面，传入模板、数据源和宿主能力，它就能给你一个可以工作的编辑工作台。
 
-`@easyink/designer` 是面向开发者的文档/报表设计器框架。基于 Vue 3 + TypeScript，设计器与预览器分离，以组件形式嵌入宿主应用。内置画布编辑、物料拖放、数据绑定、撤销重做、自动保存等能力，开箱即用。
-
-## 基本用法
+## 先看最小用法
 
 ```vue
 <script setup lang="ts">
@@ -26,99 +24,100 @@ const preferenceProvider = createLocalStoragePreferenceProvider()
 </template>
 ```
 
-## 组件 Props
+这段代码已经能让 Designer 跑起来。`schema` 可以先传空对象，组件内部会在进入 `DesignerStore` 前把它归一化成完整模板。
 
-| Prop | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `schema` | `DocumentSchemaInput` | 否 | 文档模板输入，支持 `v-model:schema` 双向绑定；缺失字段会自动补默认值 |
-| `dataSources` | `DataSourceDescriptor[]` | 否 | 数据源描述符列表，定义可绑定的字段树 |
-| `locale` | `LocaleMessages` | 否 | 国际化消息，如 `zhCN` / `enUS`；推荐从 `@easyink/designer/locale` 引入 |
-| `preferenceProvider` | `PreferenceProvider` | 否 | 用户偏好持久化 provider |
-| `autoSave` | `TemplateAutoSaveOptions` | 否 | 自动保存配置 |
-| `contributions` | `Contribution[]` | 否 | 贡献扩展列表（如 AI 面板） |
-| `setupStore` | `(store: DesignerStore) => void` | 否 | Store 初始化回调，用于注册自定义物料 |
-| `interactionProvider` | `DesignerInteractionProvider` | 否 | 宿主接管确认等用户交互流程 |
-| `fontProvider` | `FontProvider` | 否 | 字体目录和字体资源加载器；Designer 会负责按需加载和注入 |
+## 组件最常用的输入
 
-`schema` 是宿主输入，不要求传完整对象。传 `undefined`、`{}` 或只传部分字段时，设计器会在进入 `DesignerStore` 前归一化为完整 `DocumentSchema`，例如自动补齐 `version`、`unit`、`page`、`guides` 和 `elements`。`update:schema`、自动保存和 store 内部读到的始终是完整 Schema。
+当前组件实现里，你最常碰到的是这些输入：
 
-## Slots
+| 属性 | 作用 |
+| --- | --- |
+| `schema` | 模板输入，支持 `v-model:schema` |
+| `dataSources` | 设计时字段树 |
+| `locale` | 语言包 |
+| `preferenceProvider` | 工作台偏好持久化 |
+| `autoSave` | 模板自动保存 |
+| `fontProvider` | 字体目录和字体加载器 |
+| `setupStore` | 初始化 store 后做自定义注册 |
+| `interactionProvider` | 接管确认和资产选择这类交互 |
 
-| Slot | 说明 |
-|------|------|
-| `#topbar` | 自定义顶栏内容，通过 Teleport 挂载到顶栏区域 |
+如果你只是做业务接入，前四项最常用。剩下几项通常在你开始做二次开发时才会用到。
 
-## 数据持久化
+## `schema` 为什么可以先传不完整对象
 
-Designer 有两种独立的持久化机制，各管一件事：
-
-| | 自动保存 (`autoSave`) | 偏好持久化 (`preferenceProvider`) |
-|---|---|---|
-| **存什么** | 模板内容（DocumentSchema） | 工作台偏好（窗口布局、缩放、吸附设置等） |
-| **存到哪** | 宿主提供的 `save` 回调（通常是后端 API） | 默认 localStorage，也可自定义 |
-| **用户感知** | 状态栏显示保存状态 | 无感，静默保存 |
-| **是否进入 undo/redo** | 是 | 否 |
-
-两者互补：自动保存保证模板内容不丢失，偏好持久化保证用户的编辑环境设置不丢失。
-
-## 自动保存
+先看一个例子：
 
 ```ts
-const autoSaveOptions = {
-  enabled: true,
-  delay: 1000,
-  save: async (schemaSnapshot: DocumentSchema) => {
-    // schemaSnapshot 是当前 Schema 的快照
-    await saveToBackend(schemaSnapshot)
-  },
-}
+const schema = ref({
+  page: { width: 80, height: 120 },
+})
 ```
 
-自动保存的工作流程：
-1. 用户编辑触发 Schema 变化
-2. 经过 `delay` 毫秒防抖后调用 `save` 回调
-3. 保存期间状态栏显示保存状态（保存中/已保存/保存失败）
+这份输入不完整，但 Designer 仍然能工作。原因很简单：它内部会把输入补成完整 `DocumentSchema`，再交给 store 和后续流程。
 
-详细配置（并发保护、动态启用、模板切换配合等）见 [自动保存](./auto-save.md)。
+这也是为什么：
 
-## 偏好持久化
+- `update:schema` 回传给你的会是完整模板。
+- 自动保存拿到的也是完整模板。
+- 你不需要自己先手写所有默认字段。
 
-通过 `PreferenceProvider` 接口保存和恢复用户的工作台偏好。这些偏好不进入 Schema，不影响 undo/redo。
+## 自动保存和偏好持久化不要混
 
-**持久化范围**：窗口显隐/位置/尺寸、工具栏排列、面板开关、画布缩放、吸附设置。
+很多业务项目第一次接入时会把这两件事写成一个接口，后面就会越来越乱。
+
+先看两者各自负责什么：
+
+| 能力 | 存什么 |
+| --- | --- |
+| `autoSave` | 模板内容，也就是 `DocumentSchema` |
+| `preferenceProvider` | 窗口布局、缩放、面板开关、吸附设置 |
+
+先看代码：
 
 ```ts
-// 使用 localStorage 持久化
+const autoSave = {
+  enabled: true,
+  delay: 1000,
+  save: async (schemaSnapshot) => {
+    await saveTemplate(schemaSnapshot)
+  },
+}
+
 const preferenceProvider = createLocalStoragePreferenceProvider()
 ```
 
-也可以自定义持久化方式：
+如果你的目标是“模板别丢”和“用户习惯别丢”，这两条能力都应该保留，但别让它们共用一套存储语义。
+
+## 数据源怎么进来
+
+Designer 不负责请求业务数据，它只消费一份字段树。
 
 ```ts
-const preferenceProvider = {
-  get: async (key: string) => {
-    // 从你的存储读取
+const dataSources = [
+  {
+    id: 'order',
+    name: '订单',
+    fields: [
+      { name: 'orderNo', path: 'orderNo', title: '订单号', use: 'text' },
+    ],
   },
-  set: async (key: string, value: unknown) => {
-    // 写入你的存储
-  },
-}
+]
 ```
 
-## 自定义物料
-
-通过 `setupStore` 回调可以接入自定义物料。
-
-这属于高级二次开发：不仅涉及 Designer 注册，还会同时涉及 Schema、Viewer 渲染、数据绑定和调试。
-
-完整流程见 [进阶 / 自定义物料开发](/advanced/custom-materials)。
-
-## 字体管理
-
-Designer 支持宿主通过 `fontProvider` 提供字体目录和字体资源。属性面板会显示完整 FontPicker，包括默认字体、搜索、预览文本、按需加载按钮和加载状态。
-
 ```vue
-<script setup lang="ts">
+<EasyInkDesigner
+  v-model:schema="schema"
+  :data-sources="dataSources"
+/>
+```
+
+这时 Designer 会把字段树注册进内部数据源注册表，并在左侧面板里展示出来。用户后续做的是拖拽绑定，不是直接传运行时数据。
+
+## 字体是怎么接入的
+
+如果你的模板要用业务字体，先给 `fontProvider`。
+
+```ts
 import type { FontProvider } from '@easyink/designer'
 
 const fontProvider: FontProvider = {
@@ -127,43 +126,45 @@ const fontProvider: FontProvider = {
       {
         family: 'SourceHanSans',
         displayName: '思源黑体',
-        weights: ['400'],
+        weights: ['400', '700'],
         styles: ['normal'],
-        preview: '字体预览 EasyInk 123',
+        preview: 'EasyInk 字体预览',
       },
     ]
   },
-  async loadFont(family) {
-    return `/fonts/${encodeURIComponent(family)}.woff2`
+  async loadFont(family, weight, style) {
+    return `/fonts/${encodeURIComponent(family)}-${weight ?? '400'}-${style ?? 'normal'}.woff2`
   },
 }
-</script>
-
-<template>
-  <EasyInkDesigner :font-provider="fontProvider" />
-</template>
 ```
 
-宿主不需要手动注入 `@font-face`。Designer 会预加载模板中已经引用的字体，并在用户提交字体选择时确保字体加载成功后再写入 schema。完整说明见 [字体管理](./fonts.md)。
+Designer 会自己负责加载字体和注入 `@font-face`。宿主不用再手写一套重复的注入逻辑。
 
-## 贡献扩展
+## `setupStore` 适合什么时候用
 
-通过 `Contribution` API，宿主可以向设计器注入自定义面板、工具栏动作、命令和诊断订阅，而不用修改 Designer 源码。
+当你需要在初始化时做一次注册或定制，就可以用 `setupStore`。
 
-这同样属于高级自定义能力。真正要落地时，关键不只是 `activate()` 怎么写，而是命令、面板、工具栏和宿主业务之间的职责划分。
+最常见的场景是注册自定义物料，或者在 store 初始化后接入自己的扩展逻辑。
 
-完整教程见 [进阶 / 贡献扩展开发](/advanced/contributions)。
+```vue
+<EasyInkDesigner
+  v-model:schema="schema"
+  :setup-store="setupStore"
+/>
+```
 
-## 用户交互接管
+这已经属于进阶能力了。如果你还没到这一层，先把 Designer 跑顺就好。
 
-设计器内部的破坏性操作不会直接调用浏览器原生确认框。宿主可以通过 `interactionProvider` 接管确认流程，例如接入业务弹窗、权限校验或审计记录。
+## 宿主怎么接管交互
+
+Designer 支持把确认和资产选择这类交互交给宿主控制。
+
+先看一个确认示例：
 
 ```ts
 const interactionProvider = {
   async confirm(request) {
-    // request.id 可用于区分 designer.template.clear、
-    // designer.page.deleteWithElements 等场景。
-    return await openBusinessConfirmDialog(request)
+    return openBusinessConfirmDialog(request)
   },
 }
 ```
@@ -175,55 +176,47 @@ const interactionProvider = {
 />
 ```
 
-未传 `interactionProvider` 时，Designer 会使用内置 `EiDialog` 作为默认确认界面；传入后以宿主实现为准。
+这很适合接你的业务弹窗、权限策略和审计流程。你不用去改 Designer 内部组件，就能把交互接回自己的系统。
 
-## Store 访问
+## 在组件树里访问 Store
 
-在 `EasyInkDesigner` 子组件内通过 `useDesignerStore()` 获取 Store 实例（基于 Vue `inject`，必须在组件树内调用）。
+如果你写的是 Designer 内部子组件或贡献面板，可以直接通过 `useDesignerStore()` 取到 store。
 
 ```ts
 import { useDesignerStore } from '@easyink/designer'
 
 const store = useDesignerStore()
-
-// 元素操作
-store.addElement(node)
-store.removeElement(id)
-store.updateElement(id, { width: 200 })
-
-// Schema 操作
-store.setSchema(newSchema)
-
-// 国际化
-store.t('common.save')
 ```
 
-## 国际化
+这个 hook 依赖 Vue 注入，所以必须在 `EasyInkDesigner` 组件树内使用。脱离组件树单独调用会直接报错。
 
-内置中英文语言包，也支持自定义。语言包实现位于独立的 `@easyink/locales` 包中，`@easyink/designer/locale` 会继续透出这些语言包，应用侧不需要直接依赖内部维护包。
+## 顶栏插槽和扩展入口
 
-```ts
-import { enUS, zhCN } from '@easyink/designer/locale'
+Designer 还提供一个顶栏插槽：
 
-// 使用内置中文
-<EasyInkDesigner :locale="zhCN" />
-
-// 使用内置英文
-<EasyInkDesigner :locale="enUS" />
-
-// 自定义语言包（结构参考 zhCN）
-const myLocale = { /* ... */ }
-<EasyInkDesigner :locale="myLocale" />
+```vue
+<EasyInkDesigner v-model:schema="schema">
+  <template #topbar>
+    <div>My Header</div>
+  </template>
+</EasyInkDesigner>
 ```
 
-## CSS 引入
+如果你需要的不是简单插槽，而是按钮、面板、命令和诊断订阅，那就继续往 [贡献扩展开发](/advanced/contributions) 看。
 
-必须在入口文件中引入样式：
+## 样式别忘了先引入
+
+最后一个容易漏掉的点，是样式入口：
 
 ```ts
 import '@easyink/designer/index.css'
 ```
 
-## 样式自定义
+如果你看到组件能挂载，但界面布局明显不对，先检查这里。
 
-Designer 的主题定制目前主要基于 CSS 变量和类名覆盖，详细说明见 [样式自定义](./styling.md)。
+关于 Designer，目前知道这些就够用了。接下来最适合继续读的是：
+
+- [数据绑定](./data-binding)
+- [自动保存](./auto-save)
+- [字体管理](./fonts)
+- [样式自定义](./styling)

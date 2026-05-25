@@ -4,7 +4,7 @@ layout: home
 hero:
   name: EasyInk
   text: Print is Easy
-  tagline: 面向开发者的文档/报表设计器框架。Schema 驱动、设计器与预览器分离、物料体系可扩展，以 Vue 组件形式嵌入你的应用。
+  tagline: 面向开发者的模板设计与渲染框架。Schema 驱动，Designer 与 Viewer 分离，打印、导出和扩展能力围绕同一份文档模型组织。
   image:
     src: /logo.png
     alt: EasyInk Logo
@@ -23,30 +23,24 @@ hero:
       link: /viewer/
 
 features:
-  - icon: 🎨
-    title: 设计器开箱即用
-    details: 内置画布编辑、物料拖放、数据绑定、撤销重做、自动保存。一个 Vue 组件即可嵌入你的应用，零配置启动。
-  - icon: 👁
+  - icon: D
+    title: 设计器可直接嵌入
+    details: 画布编辑、物料拖放、数据绑定、撤销重做和自动保存都以 Vue 组件形态提供。
+  - icon: V
     title: 预览器独立运行
-    details: 接收 Schema + 数据即可渲染、分页、打印、导出 PDF。iframe 样式隔离，自定义打印驱动，插件化导出。
-  - icon: 🧩
-    title: 可扩展的物料体系
-    details: 每个物料由 Schema 定义、设计器交互、Viewer 渲染三部分组成。通过 registerMaterialBundle 注册自定义物料。
-  - icon: 🔌
-    title: 贡献扩展机制
-    details: VS Code 风格 Contribution API，向设计器注入自定义面板、工具栏按钮和命令，零侵入扩展设计器能力。
-  - icon: 📐
+    details: Viewer 只依赖 Schema 和数据输入，可以单独承担渲染、分页、打印和导出。
+  - icon: M
+    title: 物料体系可扩展
+    details: 自定义物料同时覆盖 Schema、Designer 和 Viewer 三层，而不是只改其中一层。
+  - icon: C
+    title: Contribution 扩展
+    details: 宿主可以向 Designer 注入面板、工具栏动作、命令和诊断订阅，而不必修改设计器源码。
+  - icon: S
     title: Schema 驱动
-    details: 文档模板是唯一数据源。支持版本化、SemVer 迁移、无损导入导出，兼容对标产品的历史 JSON 格式。
-  - icon: 📊
-    title: 一等公民表格系统
-    details: 静态表格与数据表格均为完整结构系统。单元格级绑定、合并拆分、行角色、排版继承、分页感知渲染。
-  - icon: 🤖
-    title: AI 模板生成
-    details: 基于 MCP 协议集成，意图优先生成管线。LLM 输出 TemplateIntent，schema-tools 确定性构建 Schema，避免幻觉。
-  - icon: 📦
-    title: 插件化导出
-    details: 导出建模为状态机运行时 + 插件注册表。内置 DOM-to-PDF 插件，支持自定义打印驱动和导出格式，依赖按需加载。
+    details: 模板、预览、打印和导出围绕同一份文档模型工作，归一化和校验能力独立提供。
+  - icon: P
+    title: 打印与导出分层
+    details: 打印驱动、导出插件和运行时解耦，可以按不同接入场景组合。
 ---
 
 <HomeShowcase />
@@ -54,30 +48,30 @@ features:
 <div class="ei-stats-row">
   <div class="ei-stats-wrap">
     <div class="ei-stat">
-      <span class="ei-stat-number">19+</span>
-      <span class="ei-stat-label">软件包</span>
+      <span class="ei-stat-number">Designer</span>
+      <span class="ei-stat-label">设计工作台</span>
     </div>
     <div class="ei-stat-divider"></div>
     <div class="ei-stat">
-      <span class="ei-stat-number">4</span>
-      <span class="ei-stat-label">架构层次</span>
+      <span class="ei-stat-number">Viewer</span>
+      <span class="ei-stat-label">独立运行时</span>
     </div>
     <div class="ei-stat-divider"></div>
     <div class="ei-stat">
-      <span class="ei-stat-number">8+</span>
-      <span class="ei-stat-label">内置物料</span>
+      <span class="ei-stat-number">Schema</span>
+      <span class="ei-stat-label">统一文档模型</span>
     </div>
     <div class="ei-stat-divider"></div>
     <div class="ei-stat">
-      <span class="ei-stat-number">MCP</span>
-      <span class="ei-stat-label">AI 协议</span>
+      <span class="ei-stat-number">Print</span>
+      <span class="ei-stat-label">打印与导出链路</span>
     </div>
   </div>
 </div>
 
 <div class="ei-section">
-  <h2 class="ei-section-title">四层架构</h2>
-  <p class="ei-section-desc">从宿主应用到基础模型，每一层职责清晰、依赖单向。</p>
+  <h2 class="ei-section-title">核心分层</h2>
+  <p class="ei-section-desc">从宿主应用到基础模型，能力按职责拆分，而不是堆在一个大组件里。</p>
 
   <div class="ei-arch-layers">
     <div class="ei-arch-layer ei-arch-layer--l0">
@@ -119,8 +113,8 @@ features:
 </div>
 
 <div class="ei-section ei-section--from-right">
-  <h2 class="ei-section-title">技术栈</h2>
-  <p class="ei-section-desc">现代前端工程体系，类型安全、高内聚、低耦合。</p>
+  <h2 class="ei-section-title">工程基础</h2>
+  <p class="ei-section-desc">当前仓库围绕 Vue、TypeScript 和 pnpm workspace 组织，文档、运行时和扩展层可以独立演进。</p>
 
   <div class="ei-marquee" aria-label="技术栈">
     <div class="ei-marquee-track">
@@ -145,48 +139,48 @@ features:
 </div>
 
 <div class="ei-section ei-section--from-left">
-  <h2 class="ei-section-title">生态系统</h2>
-  <p class="ei-section-desc">围绕 EasyInk Schema 构建的完整工具链。</p>
+  <h2 class="ei-section-title">主要包</h2>
+  <p class="ei-section-desc">如果你第一次接入，通常先区分自己需要的是 Designer、Viewer 还是打印集成。</p>
 
   <div class="ei-eco-grid">
     <div class="ei-eco-card">
       <div class="ei-eco-card-name">@easyink/designer</div>
-      <div class="ei-eco-card-desc">完整的设计工作台 Vue 组件。画布编辑、物料拖放、属性面板、撤销重做、自动保存，开箱即用。</div>
+      <div class="ei-eco-card-desc">完整的设计工作台组件，负责模板编辑、数据绑定和工作台交互。</div>
     </div>
     <div class="ei-eco-card">
       <div class="ei-eco-card-name">@easyink/viewer</div>
-      <div class="ei-eco-card-desc">独立的渲染/打印/导出运行时。iframe 隔离，接收 Schema + 数据即可预览、分页、打印、导出 PDF。</div>
+      <div class="ei-eco-card-desc">独立的渲染运行时，负责预览、分页、打印入口和导出入口。</div>
     </div>
     <div class="ei-eco-card">
       <div class="ei-eco-card-name">@easyink/ai</div>
-      <div class="ei-eco-card-desc">浏览器端 AI 对话面板。MCP Client + Designer Contribution，通过意图优先管线生成模板。</div>
+      <div class="ei-eco-card-desc">浏览器侧 AI 能力入口，围绕模板生成和交互扩展组织。</div>
     </div>
     <div class="ei-eco-card">
       <div class="ei-eco-card-name">@easyink/mcp-server</div>
-      <div class="ei-eco-card-desc">Node 端 MCP Server。LLM Provider 抽象（Claude / OpenAI），支持 Docker 部署，可独立运行。</div>
+      <div class="ei-eco-card-desc">独立 MCP 服务，用于生成 Schema 和数据源描述，不是 Designer 运行时依赖。</div>
     </div>
     <div class="ei-eco-card">
       <div class="ei-eco-card-name">@easyink/schema</div>
-      <div class="ei-eco-card-desc">文档 Schema 类型定义、默认值、版本迁移和序列化。EasyInk 的核心数据模型。</div>
+      <div class="ei-eco-card-desc">文档模型、默认值、校验和编解码能力所在的基础包。</div>
     </div>
     <div class="ei-eco-card">
       <div class="ei-eco-card-name">@easyink/schema-tools</div>
-      <div class="ei-eco-card-desc">Schema 校验与 DataSource 对齐工具。Node + 浏览器双运行时，AI 管线的确定性构建层。</div>
+      <div class="ei-eco-card-desc">Schema 构建和数据源对齐工具，更适合自动生成或批处理链路。</div>
     </div>
     <div class="ei-eco-card">
       <div class="ei-eco-card-name">@easyink/core</div>
-      <div class="ei-eco-card-desc">命令管理器、选区、几何运算、吸附对齐、分页引擎、参考线。设计器与预览器的共享内核。</div>
+      <div class="ei-eco-card-desc">Designer 和 Viewer 共用的核心契约与底层能力。</div>
     </div>
     <div class="ei-eco-card">
       <div class="ei-eco-card-name">@easyink/datasource</div>
-      <div class="ei-eco-card-desc">字段树协议、数据源引用、绑定规则、格式化规则。支持运行时动态注册和 MCP 数据源注入。</div>
+      <div class="ei-eco-card-desc">数据源描述、字段树和绑定相关能力所在的基础包。</div>
     </div>
   </div>
 </div>
 
 <div class="ei-section ei-section--last">
-  <h2 class="ei-section-title">三种状态，各司其职</h2>
-  <p class="ei-section-desc">EasyInk 明确区分模板状态、工作台状态和运行时状态，避免状态混乱。</p>
+  <h2 class="ei-section-title">三类状态</h2>
+  <p class="ei-section-desc">模板、工作台和运行时状态分开管理，是 EasyInk 设计里非常重要的一条边界。</p>
 
   <div class="ei-eco-grid ei-state-grid">
     <div class="ei-eco-card">

@@ -1,16 +1,15 @@
 # 自动保存
 
-Designer 内置自动保存机制，在 Schema 变化后经过防抖延迟自动调用你的保存回调。
+自动保存这层能力很适合早点接上，因为它的职责非常单一：模板一旦变化，就在防抖之后把当前 Schema 快照交给你保存。
 
-## 配置
+## 先看配置
 
 ```ts
-const autoSaveOptions = {
-  enabled: true,           // 是否启用
-  delay: 1000,             // 防抖延迟（毫秒），默认 1000
-  save: async (schema) => {
-    // schema 是当前 Schema 的深拷贝快照
-    await saveToBackend(schema)
+const autoSave = {
+  enabled: true,
+  delay: 1000,
+  save: async (schemaSnapshot) => {
+    await saveTemplate(schemaSnapshot)
   },
 }
 ```
@@ -18,59 +17,77 @@ const autoSaveOptions = {
 ```vue
 <EasyInkDesigner
   v-model:schema="schema"
-  :auto-save="autoSaveOptions"
+  :auto-save="autoSave"
 />
 ```
 
-## 工作流程
+上面这段配置已经够大多数项目使用了。
 
-1. 用户编辑触发 Schema 变化
-2. 经过 `delay` 毫秒防抖后触发保存
-3. `save` 回调接收 Schema 的深拷贝快照（`JSON.parse(JSON.stringify(...))`）
-4. 保存期间状态栏显示保存状态
-5. 保存成功后 1.4 秒重置状态指示
-6. 保存失败时状态栏显示错误信息
+## 回调里拿到的是什么
 
-## 并发保护
+你拿到的不是一个可变引用，而是当前模板的快照。当前实现会在保存前克隆一份 `store.schema`，再把这份结果传给 `save`。
 
-自动保存内置并发保护：
+这意味着两件事：
 
-- 如果上一次保存仍在进行中，新的保存请求会排队
-- 上一次保存完成后自动执行排队的保存
-- 通过 generation 计数器丢弃过期的保存请求
+- 你可以放心把它直接序列化发给后端。
+- 不要指望在 `save` 回调里修改它，去反向驱动 Designer 状态。
 
-## 动态启用/禁用
+## 保存是怎么触发的
 
-`autoSaveOptions` 可以是响应式的 computed：
+内部流程可以简单理解成这样：
+
+```text
+schema 变化
+  -> 标记草稿已修改
+  -> 按 delay 防抖
+  -> 调用 save(schemaSnapshot)
+  -> 更新状态栏保存状态
+```
+
+如果你看到界面上有保存中、已保存、保存失败这些状态，它们就是围着这条流程更新的。
+
+## 保存中的变更不会丢
+
+自动保存内部已经处理了一个很常见的问题：上一次保存还没完成，用户又继续改了模板。
+
+当前实现会把新的保存请求排队，而不是直接丢掉。前一次保存结束后，如果中间还有变更，就会继续执行下一次保存。
+
+所以你不需要自己再额外套一层“保存中就忽略新请求”的逻辑。那样反而容易把后续修改吞掉。
+
+## 可以动态启用和关闭
+
+如果你的页面里只有在模板真正加载后才允许保存，把 `autoSave` 做成响应式对象就可以。
 
 ```ts
-const currentTemplate = ref<StoredTemplate | null>(null)
+import { computed, ref } from 'vue'
 
-const autoSaveOptions = computed(() => ({
-  enabled: Boolean(currentTemplate.value),
+const currentTemplateId = ref<string | null>(null)
+
+const autoSave = computed(() => ({
+  enabled: currentTemplateId.value != null,
   delay: 1000,
-  save: saveCurrentTemplate,
+  save: saveTemplate,
 }))
 ```
 
-当 `enabled` 变为 `false` 时，所有自动保存状态会被重置。
+当 `enabled` 变成 `false` 时，内部会重置当前自动保存运行状态。
 
-## 状态指示
+## 模板切换时为什么不会立刻误保存
 
-状态栏会显示以下保存状态：
+你可能已经想到一个问题：如果我从服务器加载一份新模板，Designer 不是也会感知到 `schema` 变化吗？
 
-| 状态 | 含义 |
-|------|------|
-| 空闲 | 未启用自动保存或无变更 |
-| 保存中 | 正在调用 save 回调 |
-| 已保存 | 保存成功 |
-| 保存失败 | save 回调抛出异常 |
+是的，但当前组件内部已经处理了这个场景。它在替换 Schema 时会先标记“这次变化来自模板加载”，从而抑制紧接着那次自动保存触发。
 
-## 与模板切换配合
+所以正常接入时，你不需要自己去调用内部的 `markSchemaLoaded()`。组件已经帮你做了。
 
-切换模板时，应先加载新 Schema 再启用自动保存。`markSchemaLoaded()` 方法会抑制首次 Schema 变化触发的自动保存，避免加载模板时误触发保存。
+## 一个够用的接入建议
 
-```ts
-// 内部实现：useTemplateAutoSave composable
-// Designer 组件自动管理，无需手动调用
-```
+如果你刚开始接自动保存，建议先做到这三件事：
+
+1. `save` 回调只负责保存，不做额外 UI 副作用。
+2. 后端接口接受完整 Schema。
+3. 模板切换和模板保存走两条明确的业务路径。
+
+这样后面再补保存版本、冲突提示或审计日志时，会轻松很多。
+
+关于自动保存，目前知道这些就够了。接下来可以继续看 [数据绑定](./data-binding) 或 [字体管理](./fonts)。

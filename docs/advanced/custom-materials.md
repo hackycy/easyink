@@ -1,143 +1,57 @@
 # 自定义物料开发
 
-这篇文档解决的不是“Viewer 怎么渲染一个 div”，而是一个完整问题：当业务需要新的可编辑元素时，代码应该分别落在哪一层，才能让 Designer、Viewer、导出和打印都保持一致。
+当你需要一个新的模板元素，而且这个元素既要能在 Designer 里编辑，又要能在 Viewer 里渲染，这一层才值得进入。
 
-这也是它被放到“进阶”而不是 “Viewer” 章节的原因。自定义物料天然跨越三层：Schema、Designer、Viewer。只看其中一层，最后一定会卡在另一层。
+## 先做一个判断
 
-## 先判断是不是应该新建物料
+下面三种需求不要混在一起：
 
-先问自己三个问题：
+- 只是想给现有物料补几个属性：先看 `propSchemas`
+- 只是想加按钮、面板或命令：那是 Contribution
+- 需要新的节点类型、新的设计态表现和新的预览态表现：这才是自定义物料
 
-- 只是现有物料缺少几个属性：优先补 `propSchemas` 或扩展属性面板。
-- 只是想在设计器里多一个按钮或面板：那是 Contribution，不是物料。
-- 需要新的 Schema 节点、新的设计态交互、新的预览态渲染：这才是自定义物料。
+## 一个物料最少要覆盖哪几层
 
-如果你的需求同时满足第三条，再继续往下做。
+真实链路至少有三段：
 
-## 自定义物料的四个组成部分
+1. Schema 里要有稳定的 `type` 和默认节点
+2. Designer 里要能注册、拖入、编辑
+3. Viewer 里要能按同一个 `type` 渲染
 
-一个完整物料最少有四部分职责：
+少任意一段，物料都不完整。
 
-1. `MaterialNode`：Schema 里的节点结构，决定模板保存什么。
-2. `DesignerMaterialRegistration`：把物料注册进设计器目录、快捷栏和属性面板。
-3. `MaterialDesignerExtension`：定义设计态渲染、拖放、编辑、缩放副作用。
-4. `MaterialViewerExtension`：定义预览态渲染、测量、跨页复制。
+## Designer 侧真正依赖的契约
 
-把它理解成一条链路更准确：
+Designer 的注册入口是 `registerMaterialBundle(store, bundle)`。
 
-```text
-拖入 Designer
-  -> createDefaultNode()
-  -> schema.elements[]
-  -> DesignerExtension.renderContent()
-  -> viewer.open({ schema, data })
-  -> viewer.registerMaterial().render()
-  -> 打印 / 导出复用 Viewer 结果
-```
-
-如果其中一环缺失，表现会很直接：
-
-- 少了 Designer 注册，画布里拖不进去。
-- 少了 Viewer 注册，预览里只会看到 `[Unknown: type]`。
-- 少了默认节点，模板能识别类型但没法稳定创建。
-
-## 最短落地路径
-
-不要一开始就做复杂交互。最快跑通的顺序是：
-
-1. 先定义 `type`、默认节点和最小属性。
-2. 先让 Designer 里能拖进去、能保存到 Schema。
-3. 再让 Viewer 能正确渲染同一个节点。
-4. 最后再补属性面板、数据绑定、深度编辑、缩放联动。
-
-这样做的原因很简单：你先验证“这个物料在系统里存在”，再验证“它好不好用”。
-
-## 第一步：定义共享常量和默认节点
-
-先把物料的身份定义清楚。最关键的是 `type` 和 `createDefaultNode()`。
+当前 bundle 结构就是这三个字段：
 
 ```ts
-import type { MaterialNode } from '@easyink/schema'
-
-export const PRICE_TAG_TYPE = 'price-tag'
-
-export interface PriceTagProps {
-  label: string
-  price: string
-  accentColor: string
-}
-
-export function createPriceTagNode(
-  input: Partial<MaterialNode> = {},
-): MaterialNode<PriceTagProps> {
-  return {
-    id: crypto.randomUUID(),
-    type: PRICE_TAG_TYPE,
-    x: 0,
-    y: 0,
-    width: 50,
-    height: 24,
-    props: {
-      label: '商品名称',
-      price: '99.00',
-      accentColor: '#0f766e',
-    },
-    ...input,
-  }
+interface DesignerMaterialBundle {
+  materials: DesignerMaterialRegistration[]
+  quickMaterialTypes: string[]
+  groupedCatalog: DesignerCatalogRegistration[]
 }
 ```
 
-这里的要求只有一个：默认节点必须能独立渲染。不要让它依赖外部数据才能显示，否则拖进画布第一时间就是空白。
+其中单个物料注册最关键的是这些字段：
 
-## 第二步：注册 Designer 侧物料
+- `type`
+- `name`
+- `icon`
+- `category`
+- `capabilities`
+- `createDefaultNode`
+- `factory`
+- `propSchemas`
 
-Designer 侧负责两件事：
-
-- 让用户能把这个物料拖进模板。
-- 让用户在画布里看见它、选中它、编辑它。
-
-注册入口是 `registerMaterialBundle()`。
+最小注册形态可以长这样：
 
 ```ts
-import type { MaterialExtensionFactory } from '@easyink/core'
-import { registerMaterialBundle } from '@easyink/designer'
-import { IconText } from '@easyink/icons'
-import { escapeHtml } from '@easyink/shared'
-
-const createPriceTagExtension: MaterialExtensionFactory = () => ({
-  renderContent(nodeSignal, container) {
-    const render = () => {
-      const node = nodeSignal.get()
-      const props = node.props as PriceTagProps
-
-      container.innerHTML = `
-        <div style="
-          width:100%;
-          height:100%;
-          box-sizing:border-box;
-          border:1px solid ${escapeHtml(props.accentColor)};
-          border-radius:4px;
-          padding:4px 6px;
-          display:flex;
-          flex-direction:column;
-          justify-content:center;
-          background:#ffffff;
-        ">
-          <div style="font-size:10px;color:#666;line-height:1.2;">${escapeHtml(props.label)}</div>
-          <div style="font-size:16px;font-weight:700;color:${escapeHtml(props.accentColor)};line-height:1.2;">${escapeHtml(props.price)}</div>
-        </div>
-      `
-    }
-
-    render()
-    return nodeSignal.subscribe(render)
-  },
-})
-
 registerMaterialBundle(store, {
   materials: [
     {
-      type: PRICE_TAG_TYPE,
+      type: 'price-tag',
       name: '价格签',
       icon: IconText,
       category: 'basic',
@@ -146,83 +60,79 @@ registerMaterialBundle(store, {
         resizable: true,
         rotatable: true,
       },
-      createDefaultNode: createPriceTagNode,
-      factory: createPriceTagExtension,
+      createDefaultNode,
+      factory: () => designerExtension,
       propSchemas: [
         { key: 'label', label: '标题', type: 'string' },
-        { key: 'price', label: '价格', type: 'string' },
-        { key: 'accentColor', label: '强调色', type: 'color' },
       ],
     },
   ],
-  quickMaterialTypes: [PRICE_TAG_TYPE],
-  groupedCatalog: [
-    { type: PRICE_TAG_TYPE, group: 'utility' },
-  ],
+  quickMaterialTypes: ['price-tag'],
+  groupedCatalog: [{ type: 'price-tag', group: 'utility' }],
 })
 ```
 
-### `DesignerMaterialRegistration` 里最重要的字段
+这里有一个实现细节值得知道：Designer 注册时会先取 `@easyink/prop-schemas` 里的基础属性，再把你传入的 `propSchemas` 追加进去。
 
-- `type`：Schema 里的稳定标识，发布后不要随意改。
-- `createDefaultNode`：拖入画布和某些自动创建路径都会走这里。
-- `factory`：返回 `MaterialDesignerExtension`，定义设计态内容。
-- `propSchemas`：追加到设计器基础属性 Schema 后面，只适合那些直接落在 `node.props` 上的属性。
-- `capabilities`：决定设计器是否显示绑定、旋转、缩放等能力。
+## 设计态真正要实现什么
 
-当前能力字段来自 `MaterialCapabilities` / `BuiltinMaterialCapabilities`，包括：
+Designer 侧不是简单画一个 div。它依赖的是 `MaterialDesignerExtension`。
 
-| 字段 | 作用 |
-|------|------|
-| `bindable` | 是否显示元素级绑定能力 |
-| `rotatable` | 是否允许旋转 |
-| `resizable` | 是否允许调整宽高 |
-| `supportsChildren` | 是否支持子节点 |
-| `supportsAnimation` | 是否支持动画配置 |
-| `supportsUnionDrop` | 是否支持一次拖放创建多个绑定节点 |
-| `pageAware` | 是否按输出页复制并注入页码上下文 |
-| `multiBinding` | 是否支持多个绑定项 |
-| `keepAspectRatio` | 缩放时是否保持宽高比 |
-
-如果一个属性不应该直接写入 `node.props`，就不要硬塞进 `propSchemas`，而应该用自定义 overlay 或命令去管理。
-
-内置物料的基础属性 Schema 由 `@easyink/prop-schemas` 维护，设计器注册物料时会先读取这部分基础字段，再合并物料包自己通过 `propSchemas` 提供的扩展字段。自定义物料只需要在注册时传入自己的 `propSchemas`。
-
-内置物料能力以各物料包的 `*_CAPABILITIES` 常量为准。当前注册到 Designer 的内置类型包括 `text`、`image`、`barcode`、`qrcode`、`line`、`rect`、`ellipse`、`container`、`table-static`、`table-data`、`flow-row`、`chart`、`svg-custom`、`svg-star`、`svg-heart` 和 `page-number`。
-
-## 第三步：注册 Viewer 侧渲染器
-
-同一个物料在 Viewer 里要再注册一次。原因不是重复，而是设计态和预览态本来就是两套职责。
+这个契约里最核心的入口是：
 
 ```ts
-import { trustedViewerHtml } from '@easyink/core'
-import { escapeHtml } from '@easyink/shared'
+interface MaterialDesignerExtension {
+  renderContent: (nodeSignal, container, renderContextSignal?) => () => void
+  datasourceDrop?: DatasourceDropHandler
+  geometry?: MaterialGeometry
+  behaviors?: BehaviorRegistration[]
+  resize?: MaterialResizeAdapter
+  resolveControlPolicy?: (node, context) => MaterialControlPolicy
+}
+```
 
-viewer.registerMaterial(PRICE_TAG_TYPE, {
+如果你第一次做自定义物料，不要一上来就实现全部能力。先只把 `renderContent` 跑通，让节点能在画布上稳定显示。
+
+## Viewer 侧是另一套契约
+
+同一个 `type` 在 Viewer 里还要再注册一次，因为设计态和预览态本来就不是同一层职责。
+
+Viewer 侧依赖的是 `MaterialViewerExtension`：
+
+```ts
+interface MaterialViewerExtension {
+  render: (node, context) => ViewerRenderOutput
+  measure?: (node, context) => ViewerMeasureResult
+  getRenderSize?: (node, context) => Partial<ViewerRenderSize>
+  fragmentPaginator?: FragmentPaginator
+  pageAware?: boolean
+}
+```
+
+最短的接法通常是先实现 `render`：
+
+```ts
+viewer.registerMaterial('price-tag', {
   render(node, context) {
-    const props = context.resolvedProps as PriceTagProps
-
     return {
-      html: trustedViewerHtml(`
-        <div style="
-          width:100%;
-          height:100%;
-          box-sizing:border-box;
-          border:1px solid ${escapeHtml(props.accentColor)};
-          border-radius:4px;
-          padding:4px 6px;
-          display:flex;
-          flex-direction:column;
-          justify-content:center;
-          background:#ffffff;
-        ">
-          <div style="font-size:10px;color:#666;line-height:1.2;">${escapeHtml(props.label)}</div>
-          <div style="font-size:16px;font-weight:700;color:${escapeHtml(props.accentColor)};line-height:1.2;">${escapeHtml(props.price)}</div>
-        </div>
-      `),
+      html: trustedViewerHtml('<div>...</div>'),
     }
   },
 })
+```
+
+只有当你的物料确实涉及运行时测量、跨页切分或每页重复渲染时，再继续补 `measure`、`fragmentPaginator` 或 `pageAware`。
+
+## 推荐的开发顺序
+
+最稳的顺序是：
+
+1. 先定义 `type` 和默认节点
+2. 再让 Designer 能拖进去
+3. 再让 Viewer 能渲染同一个节点
+4. 最后再补数据拖放、深度编辑、缩放副作用和分页能力
+
+这样能先验证“这个物料在系统里存在”，再验证“它的高级行为是否正确”。
 ```
 
 这里有两个容易踩错的点：

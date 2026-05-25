@@ -1,142 +1,45 @@
 # EasyInk.Render CLI 渲染运行时
 
-`EasyInk.Render` 是 CLI-first 的 PDF render runtime。主入口是 `easyink-render` 命令：默认自动发现或启动本机 daemon，通过本地 IPC 复用浏览器进程完成渲染；需要隔离或 CI 简化时，可以用 `--no-daemon` 在当前进程内完成一次渲染。
+`EasyInk.Render` 解决的是“把输入稳定变成 PDF”这件事。
 
-Render 仍只负责把 HTML、PDF、EasyInk schema + data 归一为可打印 PDF，不枚举打印机、不提交物理打印任务。EasyInk Printer 或其他宿主应把 Render 输出的 PDF 当作打印输入。
+它不枚举打印机，也不提交物理打印任务。你可以把它理解成打印链路前面的渲染引擎。
 
-## 一句话架构
+## 一句话理解它的工作方式
 
 ```text
 easyink-render render
-  -> local daemon over IPC
-  -> Browser Manager
-  -> render.Service.RenderPrintPDF
-  -> PDF + diagnostics + stable CLI result
+  -> 本地 daemon 或当前进程
+  -> 浏览器渲染
+  -> 输出 PDF 和 diagnostics
 ```
 
-默认路径不需要端口、HTTP endpoint 或 auth token。Render 不再提供 HTTP 兼容入口，功能、文档和发布主路径都以 CLI/IPC daemon 为准。
+当前主入口是 `easyink-render` 命令。默认模式会自动发现或拉起本机 daemon；如果你想做一次性隔离执行，也可以加 `--no-daemon`。
 
-| 组件 | 职责 |
-| --- | --- |
-| CLI | 解析命令、加载配置、输出稳定 JSON/text、归一退出码。 |
-| Daemon | 本机 IPC 常驻运行时，缓存 Browser Manager，处理队列和状态；默认不空闲退出，可配置 idle timeout。 |
-| IPC | Windows 使用 Named Pipe，macOS/Linux 使用 Unix Domain Socket，frame 为长度前缀 JSON header + 可选二进制 payload。 |
-| Browser | 支持 `chrome-for-testing`、`chromium`、`chrome`、`edge`、`headless-shell`、`custom`。 |
-| Render Core | 复用 `protocol.PrintPDFRequest` 和 `render.Service.RenderPrintPDF`。 |
-| Diagnostics | 每次渲染落盘 `diagnostics.json`、`render.log`，按需写 snapshot/screenshot。 |
-
-## 快速跑通
-
-### 下载预构建包
-
-如果只是使用 Render CLI，不需要本机安装 Go。前往 [EasyInk Releases](https://github.com/hackycy/easyink/releases)，选择 `app-v*` 开头的应用发布版本，在该版本的 Release assets 中按平台下载：
-
-| 平台 | 产物 |
-| --- | --- |
-| Windows x64 | `easyink-render-*-win-x64.zip` |
-| Windows x86 | `easyink-render-*-win-x86.zip` |
-| Linux x64 | `easyink-render-*-linux-x64.tar.gz` |
-| Linux arm64 | `easyink-render-*-linux-arm64.tar.gz` |
-| macOS x64 | `easyink-render-*-darwin-x64.tar.gz` |
-| macOS arm64 | `easyink-render-*-darwin-arm64.tar.gz` |
-
-同一个 Release 还会提供 `runtime-manifest.<platform>.json` 和 `easyink-render-host-release-index-*.json`，用于校验、自动下载或宿主集成。
-
-Windows 解压后可直接运行：
-
-```powershell
-.\easyink-render.exe version
-```
-
-macOS/Linux 解压后先确认可执行权限：
-
-```bash
-tar -xzf easyink-render-*-linux-x64.tar.gz
-chmod +x easyink-render
-./easyink-render version
-```
-
-### 构建
-
-推荐在 Docker 内构建和测试，避免本机 Go 版本差异：
-
-```bash
-docker run --rm --platform linux/amd64 \
-  -v "$PWD/lib/EasyInk.Render/host:/src" \
-  -w /src \
-  golang:1.23-bookworm \
-  sh -lc '/usr/local/go/bin/gofmt -w cmd internal && /usr/local/go/bin/go test ./...'
-```
-
-Linux 二进制：
-
-```bash
-docker run --rm --platform linux/amd64 \
-  -v "$PWD/lib/EasyInk.Render/host:/src" \
-  -w /src \
-  golang:1.23-bookworm \
-  sh -lc 'CGO_ENABLED=0 GOOS=linux GOARCH=amd64 /usr/local/go/bin/go build -trimpath -o easyink-render ./cmd/easyink-render-host'
-```
-
-Windows x64 二进制：
-
-```bash
-docker run --rm --platform linux/amd64 \
-  -v "$PWD/lib/EasyInk.Render/host:/src" \
-  -w /src \
-  golang:1.23-bookworm \
-  sh -lc 'CGO_ENABLED=0 GOOS=windows GOARCH=amd64 /usr/local/go/bin/go build -trimpath -o easyink-render.exe ./cmd/easyink-render-host'
-```
-
-macOS 本地构建：
-
-```bash
-cd lib/EasyInk.Render/host
-go test ./...
-go build -trimpath -o easyink-render ./cmd/easyink-render-host
-```
-
-### 单次渲染
-
-默认 daemon 模式：
+## 先跑一条命令
 
 ```bash
 easyink-render render \
   --request lib/EasyInk.Render/samples/html/request.json \
   --out out.pdf \
-  --browser-kind headless-shell \
-  --browser-path /path/to/headless-shell \
   --json
 ```
 
-行为：
+如果这是第一次运行，CLI 会先把渲染环境准备好。成功之后，你会拿到 PDF 文件和稳定的 JSON 输出。
 
-- 第一次运行会启动本机 daemon。
-- 后续配置兼容的 render 命令复用同一个 daemon 和浏览器进程。
-- PDF 写入 `--out`。
-- `--json` 输出稳定机器可读结果。
+## `--no-daemon` 什么时候用
 
-单进程隔离模式：
+当你在 CI、隔离环境或临时调试里不想复用常驻 daemon 时，直接这样跑：
 
 ```bash
 easyink-render render \
   --no-daemon \
   --request lib/EasyInk.Render/samples/html/request.json \
-  --out out.pdf \
-  --browser-kind chromium \
-  --browser-path /path/to/chromium
+  --out out.pdf
 ```
 
-PDF 输入不需要浏览器：
+如果你只是日常本机开发，默认 daemon 模式通常更省资源也更快。
 
-```bash
-easyink-render render \
-  --no-daemon \
-  --request lib/EasyInk.Render/samples/pdf/request.json \
-  --out normalized.pdf
-```
-
-### Daemon 管理
+## daemon 可以直接管理
 
 ```bash
 easyink-render daemon start
@@ -145,11 +48,19 @@ easyink-render daemon stop
 easyink-render daemon restart
 ```
 
-`daemon status` 输出 pid、IPC endpoint、browser kind/name/version、queue、uptime、host/protocol version。`daemon stop` 会关闭 daemon 和浏览器进程。
+这组命令足够你完成大多数本地排查。
 
-Daemon 启动有两层本地互斥：`daemon.start.lock` 只保护并发自动启动的临界区，`daemon.process.lock` 由实际 daemon 进程持有到退出，用于阻止外部重复执行内部 `daemon run`。锁文件会记录持有进程 PID；如果进程已不存在，会在下一次启动时自动清理。macOS/Linux 上 IPC socket 只会在确认不是活连接后才清理，避免重复启动误删已有 daemon 的入口。
+## Browser 检查也有独立命令
 
-## 命令
+```bash
+easyink-render browser inspect \
+  --browser-kind headless-shell \
+  --browser-path /path/to/headless-shell
+```
+
+当你怀疑渲染环境本身有问题，这条命令会比盲猜快很多。
+
+## 常用命令有哪些
 
 ```text
 easyink-render render
@@ -165,95 +76,25 @@ easyink-render diagnostics show
 easyink-render version
 ```
 
-`daemon run` 是 CLI 自动启动 daemon 的内部命令，普通用户通常不需要直接调用。
+如果你不是在做内部调试，日常最常用的还是 `render`、`daemon status` 和 `diagnostics show`。
 
-## 配置
-
-优先级：
+## 配置优先级先记这一条就够了
 
 ```text
 CLI flags > environment variables > config file > defaults
 ```
 
-配置文件路径：
+这条规则基本决定了你排查配置问题时该先看哪里。
 
-| 平台 | 路径 |
-| --- | --- |
-| Windows | `%AppData%\EasyInk.Render\config.json` |
-| macOS/Linux | `~/.config/easyink-render/config.json` |
+## diagnostics 在哪看
 
-状态文件路径：
-
-| 平台 | 路径 |
-| --- | --- |
-| Windows | `%LocalAppData%\EasyInk.Render\daemon.json` |
-| macOS/Linux | `~/.easyink-render/daemon.json` |
-
-IPC endpoint：
-
-| 平台 | Transport | 默认 endpoint |
-| --- | --- | --- |
-| Windows | Named Pipe | `\\.\pipe\easyink-render-default` |
-| macOS/Linux | Unix Domain Socket | `$XDG_RUNTIME_DIR/easyink-render/daemon.sock` 或 `~/.easyink-render/run/daemon.sock` |
-
-常用环境变量：
-
-```text
-EASYINK_RENDER_BROWSER_KIND
-EASYINK_RENDER_BROWSER_PATH
-EASYINK_RENDER_PROFILE_ROOT
-EASYINK_RENDER_TEMP_DIR
-EASYINK_RENDER_LOG_DIR
-EASYINK_RENDER_IDLE_TIMEOUT_MS
-```
-
-配置示例：
+Render 会把诊断结果落盘。最常用的查看方式是：
 
 ```bash
-easyink-render config set browser.kind chromium
-easyink-render config set browser.path /path/to/chromium
-easyink-render config set browser.headlessMode auto
-easyink-render config get
+easyink-render diagnostics show diagnostics.json
 ```
 
-## Browser 检查
-
-```bash
-easyink-render browser inspect \
-  --browser-kind headless-shell \
-  --browser-path /path/to/headless-shell
-```
-
-输出示例：
-
-```json
-{
-  "kind": "headless-shell",
-  "name": "chrome",
-  "version": "148.0.7778.97",
-  "headless": true,
-  "cdp": true,
-  "printToPDF": true
-}
-```
-
-## Diagnostics
-
-默认落盘：
-
-```text
-<logDir>/diagnostics/<diagnostics-id>/diagnostics.json
-<logDir>/diagnostics/<diagnostics-id>/render.log
-```
-
-请求里启用附件后还会写：
-
-```text
-<logDir>/diagnostics/<diagnostics-id>/snapshot.html
-<logDir>/diagnostics/<diagnostics-id>/screenshot.png
-```
-
-把最终 diagnostics 额外写到指定位置：
+如果你在渲染命令里显式指定输出位置，也可以直接把 diagnostics 收到固定文件里：
 
 ```bash
 easyink-render render \
@@ -262,62 +103,16 @@ easyink-render render \
   --diagnostics-out diagnostics.json
 ```
 
-查看 diagnostics：
+## 什么时候该先看这页
 
-```bash
-easyink-render diagnostics show diagnostics.json
-easyink-render diagnostics show diag-1779633993491225802
-```
+如果你的目标是下面这些之一，就该先看 Render，而不是先看打印机集成：
 
-## 输出和退出码
+- 把 HTML 变成 PDF
+- 把 EasyInk schema + data 变成 PDF
+- 在 CI 或服务端批量生成 PDF
+- 排查浏览器渲染和 PDF 输出问题
 
-成功文本输出：
-
-```text
-Rendered out.pdf pages=1 diagnostics=/path/to/diagnostics.json
-```
-
-成功 JSON：
-
-```json
-{
-  "success": true,
-  "requestId": "sample-html-001",
-  "out": "out.pdf",
-  "pageCount": 1,
-  "diagnosticsPath": "/path/to/diagnostics.json"
-}
-```
-
-退出码：
-
-| Code | 含义 |
-| --- | --- |
-| 0 | success |
-| 1 | general failure |
-| 2 | invalid CLI arguments |
-| 3 | invalid request JSON |
-| 4 | daemon unavailable or startup failed |
-| 5 | daemon protocol error |
-| 6 | render failed |
-| 7 | output write failed |
-| 8 | timeout |
-| 9 | browser unavailable |
-
-## Render Protocol
-
-CLI 和 daemon 继续复用 `protocol.PrintPDFRequest`。这意味着现有 samples、fixtures、OpenAPI 字段和渲染核心可以继续继承：
-
-```json
-{
-  "requestId": "req-001",
-  "source": {},
-  "pdf": {},
-  "wait": {},
-  "output": {},
-  "security": {},
-  "diagnostics": {}
-}
+如果你的目标是“怎么把 PDF 送去本地打印机”，那就回到 [打印方案概述](/printing/) 或具体打印集成章节。
 ```
 
 支持输入：

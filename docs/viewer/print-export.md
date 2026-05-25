@@ -1,64 +1,46 @@
 # 打印与导出
 
-Viewer 支持浏览器打印、自定义打印驱动和插件化导出。
+Viewer 的打印和导出能力都建立在同一个前提上：页面已经被渲染好了。
 
-## 打印
+所以这一层的重点不是“重新排版”，而是“消费现成的渲染结果”。
 
-### 浏览器打印
-
-最简单的方式，使用内置的 `browser` 驱动：
+## 先试最简单的打印
 
 ```ts
-await viewer.print({ driverId: 'browser' })
+await viewer.print()
 ```
 
-打印时 Viewer 会：
-1. 从 mount 向上遍历，标记所有祖先元素
-2. 注入 `@media print` CSS，重置祖先布局，只显示 Viewer 内容
-3. 调用 `window.print()`
-4. 清理标记和注入的样式
+默认情况下，Viewer 会走浏览器打印路径。
 
-### 打印策略
+如果 Host 存在，它会先准备一层打印隔离样式，再调用对应文档环境里的 `window.print()`。打印结束或出错后，这层隔离状态会被清理掉。
 
-通过 `pageSizeMode` 控制纸张尺寸来源：
+## `pageSizeMode` 是什么意思
+
+打印时最值得先理解的选项，就是 `pageSizeMode`。
 
 ```ts
-await viewer.print({
-  driverId: 'browser',
-  pageSizeMode: 'driver', // 使用打印机默认纸张
-})
-
-await viewer.print({
-  driverId: 'browser',
-  pageSizeMode: 'fixed',  // 使用模板定义的纸张尺寸
-})
+await viewer.print({ pageSizeMode: 'driver' })
+await viewer.print({ pageSizeMode: 'fixed' })
 ```
 
-### 打印选项
+它回答的问题很简单：纸张尺寸到底听谁的。
 
-```ts
-await viewer.print({
-  driverId: 'browser',
-  pageSizeMode: 'driver',
-  throwOnError: true,                    // 出错时抛出异常
-  onPhase: (event) => { /* 阶段回调 */ },
-  onProgress: (progress) => { /* 进度回调 */ },
-  onDiagnostic: (event) => { /* 诊断回调 */ },
-})
-```
+- `driver`：优先让打印机驱动决定纸张。
+- `fixed`：尽量按模板或渲染结果里的尺寸来打印。
 
-### 自定义打印驱动
+固定页模板和连续纸模板在这里的行为会不同，这也是 Viewer 需要先解析打印策略的原因。
 
-注册自定义打印驱动，将渲染结果发送到远程打印机：
+## 自定义打印驱动怎么接
+
+如果你不是直接调浏览器打印，而是要把内容交给本地服务、远程网关或专用设备，就注册一个驱动。
 
 ```ts
 viewer.registerPrintDriver({
   id: 'thermal-printer',
   async print(context) {
-    // context.renderedPages  -- 已渲染的页面 DOM
-    // context.printPolicy    -- 打印策略（纸张尺寸、方向等）
-    // context.container      -- 容器元素
-    // context.schema         -- 文档 Schema
+    console.log(context.printPolicy)
+    console.log(context.renderedPages)
+    console.log(context.container)
   },
 })
 
@@ -68,56 +50,53 @@ await viewer.print({
 })
 ```
 
-## 导出
+这里的 `context` 已经包含了当前打印最需要的信息：
 
-### 注册导出插件
+- 打印策略
+- 已渲染页尺寸
+- 渲染容器
+- Schema 和数据
+
+驱动最适合做协议适配，不适合再重新做布局判断。
+
+## 导出器的注册方式也很直接
+
+导出走的是另一条注册接口：
 
 ```ts
 viewer.registerExporter({
   id: 'pdf-exporter',
   format: 'pdf',
   async export(context) {
-    // context.renderedPages  -- 已渲染的页面信息
-    // context.container      -- 容器元素
-    // context.schema         -- 文档 Schema
-    // context.data           -- 运行时数据
-    // context.onProgress     -- 进度回调
-    // context.onDiagnostic   -- 诊断回调
-    return blob // 返回 Blob
+    console.log(context.renderedPages)
+    console.log(context.container)
+    return new Blob(['ok'], { type: 'application/pdf' })
   },
 })
 ```
 
-### 调用导出
+然后在运行时调用：
 
 ```ts
 const blob = await viewer.exportDocument({
   format: 'pdf',
   entry: 'preview',
-  throwOnError: true,
-  onPhase: (event) => console.log(event.phase),
-  onProgress: (progress) => console.log(progress),
+  onPhase(event) {
+    console.log(event.phase)
+  },
+  onProgress(event) {
+    console.log(event.current, event.total)
+  },
 })
-
-// 下载文件
-const url = URL.createObjectURL(blob)
-const a = document.createElement('a')
-a.href = url
-a.download = 'document.pdf'
-a.click()
-URL.revokeObjectURL(url)
 ```
 
-## PrintPolicy
+这里有个小细节值得记住：`exportDocument()` 既可以传字符串格式，也可以传完整选项对象。
 
-`resolvePrintPolicy()` 根据 Schema 和选项计算打印策略：
+## `resolvePrintPolicy()` 是干什么的
 
-| 模式 | pageSizeMode | 行为 |
-|------|-------------|------|
-| fixed + driver | `'driver'` | 使用打印机默认纸张，仅设置方向 |
-| fixed + fixed | `'fixed'` | 使用模板定义的纸张尺寸 |
-| continuous + driver | `'driver'` | 使用打印机默认纸张，不强制 `@page size` |
-| continuous + fixed | `'fixed'` | 使用渲染后的连续纸页面尺寸 |
+如果你在写驱动，通常会想知道 Viewer 最终到底准备怎么打印。
+
+这时可以直接看打印策略：
 
 ```ts
 import { resolvePrintPolicy } from '@easyink/viewer'
@@ -129,28 +108,46 @@ const policy = resolvePrintPolicy({
 })
 ```
 
-### ViewerPrintPolicy
+当前策略对象里最关键的是这些字段：
+
+- `pageMode`
+- `pageSizeMode`
+- `sheetSize`
+- `orientation`
+- `pageBreakBehavior`
+- `offset`
+
+如果你要把 Viewer 接到外部打印系统，这几个字段通常就已经足够决定提交参数了。
+
+## 打印和导出共用一套任务回调
+
+这一点很实用，因为你可以用同一套 UI 状态处理两条链路。
 
 ```ts
-interface ViewerPrintPolicy {
-  pageMode: 'fixed' | 'continuous'
-  pageSizeMode: 'driver' | 'fixed'
-  sheetSize?: { width: number; height: number; unit: string; source: 'schema' | 'rendered' }
-  orientation: 'portrait' | 'landscape' | 'auto'
-  pageBreakBehavior: { after: 'auto' | 'page'; inside: 'auto' | 'avoid' }
-  offset: { horizontal: number; vertical: number; unit: string }
-}
+await viewer.print({
+  onPhase(event) {
+    console.log(event.phase)
+  },
+  onProgress(event) {
+    console.log(event.current, event.total)
+  },
+  onDiagnostic(event) {
+    console.warn(event.code, event.message)
+  },
+  throwOnError: true,
+})
 ```
 
-## 任务回调
+导出时同样能用这些回调。
 
-打印和导出都支持统一的任务回调：
+## 一个够用的实践建议
 
-```ts
-interface ViewerTaskCallbacks {
-  onPhase?: (event: { phase: string; message?: string }) => void
-  onProgress?: (event: { current?: number; total?: number; message?: string }) => void
-  onDiagnostic?: (event: ViewerDiagnosticEvent) => void
-  throwOnError?: boolean
-}
-```
+如果你当前的目标只是把文档稳定打印出去，不要急着从 `registerPrintDriver()` 开始。
+
+更短路径通常是：
+
+1. 先确认浏览器打印是否满足需求。
+2. 不满足时，再优先看官方打印集成包。
+3. 只有在协议或设备要求特殊时，再自己写驱动。
+
+这样能少走很多弯路。

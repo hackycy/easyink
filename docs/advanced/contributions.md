@@ -1,67 +1,59 @@
 # 贡献扩展开发
 
-这篇文档解决的是另一个高级问题：当你不想改 EasyInk Designer 源码，但又要把自己的面板、按钮、命令和诊断接到设计器里，代码应该落在哪一层，边界又该怎么划。
+Contribution 解决的不是“怎么用 Designer”，而是“怎么在不改 Designer 源码的前提下把宿主能力挂进去”。
 
-它被放到“进阶”的原因和自定义物料一样。Contribution 不是日常使用 Designer 的基础能力，而是宿主对 Designer 的二次开发能力。
+## 什么时候该用这一层
 
-## 先判断你需不需要 Contribution
+下面几种需求通常应该走 Contribution：
 
-先做一个最短判断：
+- 增加一个设计器面板
+- 增加一个工具栏动作
+- 定义一个可复用命令
+- 订阅设计器诊断并转发给宿主系统
 
-- 只是要把 Designer 嵌进业务页面：不需要 Contribution。
-- 只是注册新物料：优先看 [自定义物料开发](/advanced/custom-materials)。
-- 要向设计器注入新面板、工具栏动作、跨模块命令或宿主侧诊断订阅：这才是 Contribution。
+如果你只是想注册新物料，那先看 [自定义物料开发](/advanced/custom-materials)。
 
-如果你的需求是“在不改设计器源码的前提下给它加能力”，通常就应该走这一层。
-
-## Contribution 到底解决什么问题
-
-Designer 已经提供了画布、属性面板、数据绑定、撤销重做这些基础能力。Contribution API 解决的是“宿主如何零侵入地把业务能力挂进去”。
-
-最典型的几类需求：
-
-- 增加一个 AI 助手面板
-- 增加一个工具栏按钮，触发业务动作
-- 注册一个命令，让多个扩展共用同一动作入口
-- 订阅诊断并转发到日志、埋点或告警系统
-
-如果你发现自己正准备 fork 设计器，只是为了加一个面板或按钮，大概率先应该看这一层。
-
-## 架构边界
-
-Contribution 有三种最核心的注入点：
-
-1. `registerPanel()`：注入一个覆盖层面板
-2. `registerToolbarAction()`：注入一个顶部工具栏动作
-3. `registerCommand()`：注册一个统一命令入口
-
-可以把它理解成这样：
-
-```text
-host app
-  -> contributions[]
-  -> contribution.activate(ctx)
-  -> panel / toolbar action / command / diagnostic subscription
-  -> Designer 渲染并调度
-```
-
-这层的关键价值不是“能扩展”，而是“扩展点有限且稳定”。你把业务逻辑放在自己的 contribution 里，而不是散落到设计器内部。
-
-## 最小可用示例
-
-先从一个能跑通的最小例子开始，不要一上来就做复杂面板。
+## 最核心的接口只有一个
 
 ```ts
-import type { Contribution } from '@easyink/designer'
-import { IconSparkles } from '@easyink/icons'
+interface Contribution {
+  id: string
+  activate: (ctx: ContributionContext) => void
+}
+```
 
+这意味着 Contribution 最好理解成“初始化时注册能力”，而不是一段散落的业务脚本。
+
+## `ContributionContext` 当前给了什么
+
+源码里最核心的入口就是这些：
+
+```ts
+interface ContributionContext {
+  store: DesignerStore
+  registerPanel: (panel: PanelDescriptor) => void
+  registerToolbarAction: (action: ToolbarActionDescriptor) => void
+  registerCommand: <TArgs, TResult>(command: Command<TArgs, TResult>) => void
+  executeCommand: <TArgs = unknown, TResult = unknown>(id: string, args?: TArgs) => Promise<TResult>
+  confirm: (request) => Promise<boolean>
+  pickAsset: (request) => Promise<DesignerResolvedAsset | null>
+  onDispose: (fn: () => void) => void
+  onDiagnostic: (fn: (entry: Diagnostic) => void) => () => void
+}
+```
+
+如果只记一条分层原则，也够用了：面板和按钮只负责入口，真正可复用的动作尽量收敛成命令。
+
+## 一个最小可用示例
+
+```ts
 export const helloContribution: Contribution = {
   id: 'demo.hello',
   activate(ctx) {
     ctx.registerCommand({
       id: 'demo.sayHello',
       handler: () => {
-        console.log('current schema version:', ctx.store.schema.version)
+        console.log(ctx.store.schema.version)
       },
     })
 
@@ -77,6 +69,8 @@ export const helloContribution: Contribution = {
 }
 ```
 
+接入方式也很直接：
+
 ```vue
 <EasyInkDesigner
   v-model:schema="schema"
@@ -84,140 +78,33 @@ export const helloContribution: Contribution = {
 />
 ```
 
-这个例子里最重要的不是按钮本身，而是结构：按钮不直接塞业务代码，而是去调用一个命令。这样同一个动作后面可以被按钮、快捷键、面板或其他 contribution 复用。
+## `registerPanel()` 适合放什么
 
-## Contribution 接口
+适合持续存在的扩展能力，例如：
 
-```ts
-interface Contribution {
-  id: string
-  activate: (ctx: ContributionContext) => void
-}
-```
-
-要求其实很少：
-
-- `id` 是贡献扩展自己的稳定标识
-- `activate()` 是唯一入口
-
-这意味着 Contribution 最好被设计成“初始化时注册能力”，而不是“每次点击时再临时拼装能力”。
-
-## ContributionContext 有什么
-
-源码里实际可用的能力主要是这几项：
-
-```ts
-interface ContributionContext {
-  store: DesignerStore
-  registerPanel: (panel: PanelDescriptor) => void
-  registerToolbarAction: (action: ToolbarActionDescriptor) => void
-  registerCommand: <TArgs, TResult>(command: Command<TArgs, TResult>) => void
-  executeCommand: <TArgs = unknown, TResult = unknown>(id: string, args?: TArgs) => Promise<TResult>
-  confirm: (request: DesignerConfirmRequest) => Promise<boolean>
-  onDispose: (fn: () => void) => void
-  onDiagnostic: (fn: (entry: Diagnostic) => void) => () => void
-}
-```
-
-接下来不要死记字段。更重要的是知道这些能力该怎么分层使用。
-
-`confirm()` 用于破坏性或不可自动恢复的动作。它会走宿主传给 `EasyInkDesigner` 的 `interactionProvider`，因此 Contribution 不应该自己调用浏览器原生确认 API 或直接绑定某个弹窗实现。
-
-## `registerPanel()` 适合做什么
-
-面板适合承载那些“不是一次点击就结束”的能力，例如：
-
-- AI 生成面板
-- 模板审查面板
+- AI 面板
 - 资产选择器
-- 审计日志面板
+- 审查面板
+- 宿主侧日志面板
 
-```ts
-ctx.registerPanel({
-  id: 'audit.panel',
-  component: AuditPanel,
-  props: {
-    level: 'warning',
-  },
-})
-```
+`PanelDescriptor` 当前支持 `id`、`component`、`teleportTarget` 和 `props`。如果没有特殊要求，面板会挂到默认的 `#ei-overlay-root`。
 
-这里有三个要点：
+## `registerToolbarAction()` 适合放什么
 
-- `id` 必须唯一，重复注册会抛错。
-- `component` 是 Vue 组件，可以是 `defineAsyncComponent()`。
-- `props` 适合传静态配置或 getter 包装出的响应式值。
+它只适合显式触发动作，不适合承载整条业务流程。
 
-如果你的扩展需要自己的打开/关闭状态，不要把这个状态塞进设计器内部，直接在 contribution 自己的闭包里维护即可。
+如果一个逻辑以后可能还会被面板、快捷键或其他扩展复用，就不要直接焊在按钮点击里，先做成命令。
 
-## `registerToolbarAction()` 适合做什么
+## `confirm()` 和 `pickAsset()` 为什么重要
 
-工具栏动作只适合“显式触发一个动作”，不适合承载完整流程。
+这两个入口都走宿主控制的交互层，而不是 Contribution 自己去直接操作浏览器 UI。
 
-```ts
-ctx.registerToolbarAction({
-  id: 'audit.toggle',
-  icon: IconSparkles,
-  label: 'Open Audit',
-  onClick: () => {
-    void ctx.executeCommand('audit.togglePanel')
-  },
-})
-```
+这意味着：
 
-推荐做法永远是：
+- 破坏性确认应走 `confirm()`
+- 资产选择应走 `pickAsset()`
 
-- 工具栏按钮只负责触发
-- 真实逻辑写进命令或面板状态切换
-
-原因很直接：同一能力以后往往不止一个入口。你把逻辑焊死在按钮里，后面就没法复用。
-
-## `registerCommand()` 应该怎么用
-
-命令是 Contribution 体系里最值得先设计好的部分，因为它定义了“能力的统一调用面”。
-
-```ts
-ctx.registerCommand<{ templateId: string }, void>({
-  id: 'template.openReview',
-  handler: async (args, contributionCtx) => {
-    const templateId = args.templateId
-    console.log('review template', templateId)
-    console.log('current page count', contributionCtx.store.schema.page.pages)
-  },
-})
-```
-
-适合写成命令的逻辑：
-
-- 可以被多个入口复用
-- 需要接收参数
-- 可能返回结果
-- 需要被面板和按钮共享
-
-不适合写成命令的逻辑：
-
-- 纯视图渲染
-- 面板内部的一次性本地状态变化
-
-一个实用原则：只要你觉得“这个动作以后可能还会从别的地方触发”，就优先抽成命令。
-
-## `store` 应该怎么碰
-
-`ctx.store` 给了你直接访问 `DesignerStore` 的能力，但不要把它理解成“可以在 contribution 里随便改所有内部状态”。
-
-更稳的用法是：
-
-- 读当前 schema、选区、状态
-- 触发明确的 store API
-- 把业务状态仍放在 contribution 自己维护的闭包或组件里
-
-如果你的 contribution 开始大量依赖 store 的内部细节，而不是公开方法，这通常说明边界已经开始失控。
-
-## `onDiagnostic()` 适合接到哪里
-
-这个能力很适合接宿主侧的可观测性系统：
-
-- 控制台告警
+这样扩展能力仍然能保持宿主可控，而不是把交互细节写死在设计器内部。
 - 埋点系统
 - Sentry / APM
 - 业务提示条

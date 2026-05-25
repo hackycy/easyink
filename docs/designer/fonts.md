@@ -1,17 +1,11 @@
 # 字体管理
 
-Designer 内置字体选择和加载流程。宿主只需要提供 `FontProvider`，不需要在外部提前注入 `@font-face`。
+Designer 的字体链路已经帮你做了大部分脏活。宿主真正要做的，是提供一份字体目录，以及一个“如何加载字体文件”的方法。
 
-## 接入 FontProvider
+## 先给一个 `FontProvider`
 
-```vue
-<script setup lang="ts">
-import { ref } from 'vue'
-import { EasyInkDesigner } from '@easyink/designer'
+```ts
 import type { FontProvider } from '@easyink/designer'
-import '@easyink/designer/index.css'
-
-const schema = ref({})
 
 const fontProvider: FontProvider = {
   async listFonts() {
@@ -22,85 +16,92 @@ const fontProvider: FontProvider = {
         weights: ['400', '700'],
         styles: ['normal'],
         source: 'system',
-        category: 'sans-serif',
-        preview: '字体预览 EasyInk 123',
+        preview: 'EasyInk Font Preview',
       },
       {
         family: 'SourceHanSans',
         displayName: '思源黑体',
         weights: ['400', '700'],
         styles: ['normal'],
-        category: 'sans-serif',
-        preview: '字体预览 EasyInk 123',
-      },
-      {
-        family: 'SourceHanSerif',
-        displayName: '思源宋体',
-        weights: ['400'],
-        styles: ['normal'],
-        category: 'serif',
-        preview: '字体预览 EasyInk 123',
+        preview: 'EasyInk Font Preview',
       },
     ]
   },
-
-  async loadFont(family, weight = '400') {
-    return `/fonts/${encodeURIComponent(family)}-${weight}.woff2`
+  async loadFont(fontFamily, weight, style) {
+    return `/fonts/${encodeURIComponent(fontFamily)}-${weight ?? '400'}-${style ?? 'normal'}.woff2`
   },
 }
-</script>
-
-<template>
-  <EasyInkDesigner
-    v-model:schema="schema"
-    :font-provider="fontProvider"
-  />
-</template>
 ```
 
-`listFonts()` 返回字体目录，FontPicker 会用它展示字体名称、搜索结果、预览文本和加载状态。`loadFont()` 返回 CSS `@font-face` 可使用的 URL 或 `ArrayBuffer`。
+```vue
+<EasyInkDesigner
+  v-model:schema="schema"
+  :font-provider="fontProvider"
+/>
+```
 
-如果字体来自浏览器或操作系统，可以在目录中设置 `source: 'system'`。这类字体不会显示下载按钮，选择和预览时也不会调用 `loadFont()` 或注入 `@font-face`。
+上面这段代码已经覆盖了 `FontProvider` 真实接口要求：
 
-## 加载行为
+- `listFonts()` 返回字体目录。
+- `loadFont()` 返回字体资源，可以是 URL，也可以是 `ArrayBuffer`。
 
-Designer 会在以下时机加载字体：
+## `source: 'system'` 是干什么的
 
-| 时机 | 行为 |
-|------|------|
-| 打开模板 / schema 变化 | 预加载当前模板已经引用的字体 |
-| `fontProvider` 变化 | 清理旧字体注入状态，并重新加载当前模板引用 |
-| 点击 FontPicker 下载按钮 | 只加载对应字体，不改变 schema |
-| 选择字体并提交 | 先加载并注入成功，再写入 schema |
+如果某个字体本来就由系统提供，你可以把它标成系统字体。
 
-字体加载失败不会把失败字体写入模板。属性面板会保留原值，并通过 Designer diagnostics 暴露警告。
+```ts
+{
+  family: 'system-ui',
+  displayName: '系统界面字体',
+  weights: ['400'],
+  styles: ['normal'],
+  source: 'system',
+}
+```
 
-## FontPicker 状态
+这样 Designer 在处理它时，会把它当成“已经存在的字体来源”，而不是再去请求一份外部字体文件。
 
-FontPicker 右侧只有一个状态区域：
+## Designer 会在什么时候加载字体
 
-| 状态 | 显示 |
-|------|------|
-| 未加载 | 下载按钮 |
-| 加载中 | 旋转加载图标 |
-| 当前选中 | 勾选图标 |
-| 已加载但未选中 | 不显示额外图标 |
+当前实现里，字体服务会围着模板变化和字体选择做两类事情：
 
-这样可以避免“已加载”和“已选中”同时出现两个勾，用户只需要关注当前选择。
+- 当模板或 `fontProvider` 变化时，重新检查模板里已经引用的字体。
+- 当用户明确选择某个字体时，先确保字体加载成功，再把值写回模板。
 
-## 默认字体
+这个顺序很重要。它避免了“模板里写进了一个其实没加载成功的字体名”。
 
-字体选择器顶部会显示“默认”选项。选择默认时，字段值写入空字符串，元素会继承页面或浏览器默认字体。
+## 失败了会怎样
 
-页面全局字体来自 `schema.page.font`，普通文字元素字体来自 `node.props.fontFamily`，表格/流动行这类整体排版字体来自 `node.props.typography.fontFamily`。Designer 会自动收集这些引用并进行预加载。
+字体加载失败不会直接让 Designer 崩掉，也不会把失败字体静默写进模板。
 
-## Playground 示例
+当前实现会做两件事：
 
-Playground 的字体示例位于 `playground/src/fonts.ts`：
+- 保留原有值，不强行写入失败结果。
+- 通过 diagnostics 发出一条 `source: 'font'` 的警告。
 
-- 字体文件放在 `playground/public/fonts`
-- `listFonts()` 返回字体 manifest，可同时包含 `source: 'system'` 的系统字体和本地字体文件
-- `loadFont()` 只为本地字体返回 public 目录下的字体 URL
-- 不需要调用额外的 `injectFontFace()` 或手动创建 style
+这对业务来说通常是更合理的默认行为。你可以继续编辑模板，同时把问题交给宿主日志或提示系统去处理。
 
-这个模式也适合业务系统：字体文件可以来自 public 目录、CDN、私有文件服务或后端 API，只要 `loadFont()` 返回 URL 或 `ArrayBuffer` 即可。
+## 你不需要手动注入 `@font-face`
+
+这是最值得省心的一点。
+
+Designer 内部已经有 `FontManager` 和字体服务来负责缓存、加载状态和注入目标。只要 `loadFont()` 能返回可用资源，宿主就不需要再写一套重复的样式注入逻辑。
+
+## 一个很实用的组织方式
+
+如果你的项目同时用了 Designer 和 Viewer，最稳的做法是把 `fontProvider` 提成一个共享模块。
+
+```ts
+export const fontProvider: FontProvider = {
+  async listFonts() {
+    return fontManifest
+  },
+  async loadFont(family, weight, style) {
+    return resolveFontAsset(family, weight, style)
+  },
+}
+```
+
+这样设计态和预览态会使用同一套字体来源，不容易出现“Designer 里看得到，Viewer 里又缺字”的情况。
+
+关于字体管理，目前先知道这些就够用了。继续深入时，可以再看 [Viewer 字体加载](/viewer/fonts)。

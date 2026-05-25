@@ -16,224 +16,66 @@ const schema = normalizeDocumentSchema({
 // schema.elements => []
 ```
 
-`validateSchemaIssues()` 仍用于判断一个对象是否已经是完整合法的内部 Schema；缺字段的输入不应直接交给画布或预览器消费，应先归一化。
+# Schema 参考
 
-## DocumentSchema
+Schema 是 EasyInk 的基础模型。Designer、Viewer、打印和导出最终都围绕它工作。
 
-```ts
-interface DocumentSchema {
-  version: string                    // Schema 版本号
-  meta?: DocumentMeta                // 文档元信息
-  unit: UnitType                     // 全局单位：'mm' | 'pt' | 'px' | 'inch'
-  page: PageSchema                   // 页面配置
-  guides: GuideSchema                // 辅助线
-  elements: MaterialNode[]           // 元素列表
-  groups?: ElementGroupSchema[]      // 元素分组
-  extensions?: Record<string, unknown> // 扩展数据（如 AI、自定义插件）
-  compat?: BenchmarkCompatState      // 兼容层数据
-}
-```
+## 先分清两种输入形态
 
-## DocumentSchemaInput
+对宿主来说，最常接触的是宽松输入；对运行时来说，最终都会落到完整 Schema。
 
-`DocumentSchemaInput` 是给宿主传入设计器或调用归一化函数时使用的宽松输入类型：
+最关键的规则是：先归一化，再校验和消费。
 
 ```ts
-type DocumentSchemaInput = Partial<Omit<DocumentSchema, 'version' | 'page' | 'guides' | 'elements' | 'groups'>> & {
-  page?: Partial<PageSchema>
-  guides?: Partial<GuideSchema>
-  elements?: MaterialNode[]
-  groups?: ElementGroupSchema[]
-}
+import { normalizeDocumentSchema, validateSchemaIssues } from '@easyink/schema'
+
+const schema = normalizeDocumentSchema({
+  page: { width: 80 },
+})
+
+const issues = validateSchemaIssues(schema)
 ```
 
-默认值来自 `createDefaultSchema()`：当前 Schema 版本、A4、`mm`、`fixed`、空辅助线、空元素列表。已有合法字段会保留，缺失或非法的必需字段会回退到默认值。持久化 JSON 中的 `version` 用于 `deserializeSchema()` 和迁移注册表判断兼容性，不应通过 `DocumentSchemaInput` 手动指定。
+`normalizeDocumentSchema()` 会补默认值，`validateSchemaIssues()` 用来判断对象是否已经是完整合法的内部 Schema。
 
-## DocumentMeta
+## `normalizeDocumentSchema()` 当前会做什么
 
-```ts
-interface DocumentMeta {
-  name?: string
-  description?: string
-  author?: string
-  createdAt?: string
-  updatedAt?: string
-}
-```
+从实现上看，它至少会保证这些默认值：
 
-## PageSchema
+- `version` 写成当前 Schema 版本
+- `unit` 默认 `mm`
+- `guides` 默认 `{ x: [], y: [] }`
+- `elements` 默认空数组
+- `page` 会按 `mode` 补全对应的层级默认策略
 
-页面配置定义纸张尺寸、页面介质、布局策略、分页策略和打印参数。
+## `page.mode` 不只是页面尺寸
 
-```ts
-interface PageSchema {
-  mode: PageMode            // 'fixed' | 'continuous'
-  width: number             // 页面宽度
-  height: number            // 页面高度
-  pages?: number            // 页数（fixed 模式）
-  scale?: PageScale         // 缩放模式
-  radius?: string           // 页面圆角
-  offsetX?: number          // 水平偏移
-  offsetY?: number          // 垂直偏移
-  copies?: number           // 打印份数
-  blankPolicy?: BlankPolicy // 空白页策略
-  grid?: GridConfig         // 网格配置
-  font?: string             // 默认字体
-  background?: PageBackground // 页面背景
-  print?: PagePrintConfig   // 打印配置
-  pageModel?: PageModelConfig
-  layout?: DocumentLayoutConfig
-  pagination?: PaginationConfig
-  reflow?: ReflowConfig
-  extensions?: Record<string, unknown>
-}
-```
+当前归一化逻辑里，`mode` 会决定整组页面层配置默认值：
 
-### 页面介质与策略
+| mode | pageModel | layout | pagination | reflow |
+| --- | --- | --- | --- | --- |
+| `fixed` | `paged-paper` | `absolute` | `fixed-sheets` | `measure-only` |
+| `continuous` | `continuous-paper` | `stack-flow` | `none` | `flow-y` |
 
-`page.mode` 只表达页面介质类型，布局、重排和分页分别由 `layout / reflow / pagination` 表达。`normalizeDocumentSchema()` 会按 `mode` 补齐默认策略。
+这也是为什么连续纸和固定页面模板不能只改一个宽高就算了。
 
-| `mode` | 默认页面模型 | 默认布局 | 默认重排 | 默认分页 |
-|------|------|------|------|------|
-| `fixed` | `paged-paper` | `absolute` | `measure-only` | `fixed-sheets` |
-| `continuous` | `continuous-paper` | `stack-flow` | `flow-y` | `none` |
+## 校验层当前暴露了哪些能力
 
-连续纸或小票模板应显式使用 `continuous + stack-flow + flow-y`。
+`@easyink/schema` 当前直接导出了这些常用能力：
 
-### MaterialNode 布局行为
+- `validateSchema()`
+- `validateSchemaIssues()`
+- `isValidSchema()`
+- `serializeSchema()`
+- `deserializeSchema()`
 
-布局、分页和每页重复使用节点级字段表达，物料 `props` 只保存物料自己的内容和样式属性。
+如果你要做本地持久化、导入导出或服务端接收模板，这些入口比自己手写 JSON 检查更可靠。
 
-```ts
-interface MaterialNode {
-  placement?: {
-    mode?: 'flow' | 'fixed'
-  }
-  break?: {
-    keepTogether?: boolean
-    before?: 'auto' | 'page'
-    after?: 'auto' | 'page'
-  }
-  repeat?: {
-    scope?: 'none' | 'every-output-page'
-  }
-}
-```
+## 兼容输入也有现成入口
 
-- `placement.mode='flow'`：节点参与 `flow-y` 回流。
-- `placement.mode='fixed'`：节点不被回流推移，跨页规则不生效。
-- `break`：仅在 `pagination.strategy='auto-sheets'` 时影响切页。
-- `repeat.scope='every-output-page'`：分页完成后复制到每个输出页，并注入页码上下文；不会影响页数。
+Schema codec 里还包含对 benchmark 输入的解码逻辑。也就是说，兼容旧输入格式并不是靠文档约定，而是有明确代码路径去做字段映射。
 
-旧模板中的 `props.layoutMode / keepTogether / pageBreakBefore / pageBreakAfter` 会作为兼容输入读取，新模板不应继续写入这些字段。
-
-### PageBackground
-
-```ts
-interface PageBackground {
-  color?: string           // 背景颜色
-  image?: string           // 背景图片 URL
-  repeat?: BackgroundRepeat // 'full' | 'repeat' | 'repeat-x' | 'repeat-y' | 'none'
-  width?: number
-  height?: number
-  offsetX?: number
-  offsetY?: number
-}
-```
-
-### PagePrintConfig
-
-```ts
-interface PagePrintConfig {
-  orientation?: 'auto' | 'portrait' | 'landscape'
-  horizontalOffset?: number  // 打印水平偏移
-  verticalOffset?: number    // 打印垂直偏移
-}
-```
-
-### GridConfig
-
-```ts
-interface GridConfig {
-  enabled: boolean
-  width: number   // 网格单元宽度
-  height: number  // 网格单元高度
-}
-```
-
-## MaterialNode
-
-元素节点是文档中的可视对象。
-
-```ts
-interface MaterialNode<TProps = Record<string, unknown>> {
-  id: string                   // 唯一标识
-  type: string                 // 物料类型（如 'text'、'image'、'table-data'）
-  name?: string                // 显示名称
-  unit?: UnitType              // 坐标单位（覆盖全局 unit）
-  x: number                    // X 坐标
-  y: number                    // Y 坐标
-  width: number                // 宽度
-  height: number               // 高度
-  rotation?: number            // 旋转角度
-  alpha?: number               // 透明度（0-1）
-  zIndex?: number              // 层级
-  hidden?: boolean             // 是否隐藏
-  locked?: boolean             // 是否锁定
-  print?: PrintBehavior        // 打印行为
-  placement?: NodePlacementConfig
-  break?: NodeBreakConfig
-  repeat?: NodeRepeatConfig
-  props: TProps                // 物料属性（由物料类型决定）
-  binding?: BindingRef | BindingRef[]  // 数据绑定
-  animations?: AnimationSchema[]       // 动画
-  children?: MaterialNode[]    // 子元素（容器类物料）
-  diagnostics?: NodeDiagnosticState[]  // 节点级诊断
-  extensions?: Record<string, unknown>
-  compat?: BenchmarkElementCompatState
-}
-```
-
-### 常见物料类型
-
-| type | 说明 | 主要 props |
-|------|------|-----------|
-| `text` | 文本 | `content`, `fontSize`, `fontFamily`, `color`, `textAlign`, `fontWeight` |
-| `image` | 图片 | `src`, `objectFit` |
-| `barcode` | 条码 | `value`, `format` |
-| `qrcode` | 二维码 | `value` |
-| `line` | 线条 | `direction`, `strokeColor`, `strokeWidth` |
-| `rect` | 矩形 | `fill`, `strokeColor`, `strokeWidth` |
-| `ellipse` | 椭圆 | `fill`, `strokeColor` |
-| `table-static` | 静态表格 | `table: TableSchema` |
-| `table-data` | 数据表格 | `table: TableDataSchema` |
-| `container` | 容器 | `children` |
-| `flow-row` | 流式数据行 | 列定义、间距、排版样式 |
-| `chart` | 图表 | 图表配置 |
-| `svg-custom` | 自定义 SVG | SVG 内容 |
-| `svg-star` | 星形 SVG | 星形参数 |
-| `svg-heart` | 心形 SVG | 心形参数 |
-| `page-number` | 页码 | 页码格式、页码上下文 |
-
-## BindingRef
-
-数据绑定引用。
-
-```ts
-interface BindingRef {
-  sourceId: string           // 设计时数据源 ID，Viewer 不用它选择数据根
-  sourceName?: string        // 设计时数据源名称
-  sourceTag?: string         // 设计时数据源标签
-  fieldPath: string          // 运行时 data 根路径，如 'customer/name' 或 'items/price'
-  fieldKey?: string          // 字段 key
-  fieldLabel?: string        // 字段标签
-  format?: BindingDisplayFormat  // 格式化规则
-  bindIndex?: number         // 绑定索引（多绑定时区分主/次）
-  required?: boolean         // 是否必填
-  extensions?: Record<string, unknown>
-}
-```
-
+如果你在做旧模板迁移，优先复用 codec，而不是在业务层自己手写转换。
 ## AnimationSchema
 
 ```ts
