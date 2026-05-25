@@ -1,7 +1,7 @@
 {
   "name": "@easyink/material-table-kernel",
   "type": "module",
-  "version": "0.0.16",
+  "version": "0.0.17",
   "description": "EasyInk shared table kernel: geometry, rendering, topology helpers",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",
