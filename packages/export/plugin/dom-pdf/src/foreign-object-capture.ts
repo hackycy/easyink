@@ -2,18 +2,45 @@ import { resolveCanvasScale } from './canvas-capture'
 import { normalizeClonedCaptureDocument } from './capture-normalization'
 
 const BLANK_CANVAS_PROBE_SIZE = 160
+const CSS_PX_PER_MM = 96 / 25.4
 
 export interface ForeignObjectCaptureOptions {
   dpi: number
   captureId: string
+  widthMm: number
+  heightMm: number
 }
 
 export function createForeignObjectCaptureOptions(
   page: HTMLElement,
   options: ForeignObjectCaptureOptions,
 ) {
+  const scale = resolveCanvasScale(page, options.dpi)
+  // html2canvas's ForeignObjectRenderer positions the foreign <foreignObject>
+  // at SVG natural coords (scale, scale) (see html2canvas/dist/lib/render/canvas/
+  // foreignobject-renderer.js: createForeignObjectSVG(width*scale, height*scale,
+  // scale, scale, element)). After the ctx.scale(scale, scale) transform that
+  // happens before drawImage, this offset translates to a `scale * scale` canvas-
+  // pixel margin on the top/left of the produced canvas, with the content clipped
+  // by the same amount on the right/bottom. The margin is invisible for typical
+  // white-background pages but appears as a white strip whenever the page
+  // background or any material is an image that reaches the edges (upstream issue
+  // niklasvh/html2canvas#1401, never actually fixed in v1.4.1).
+  //
+  // We compensate in two steps: (1) here, we request html2canvas to render an
+  // area inflated by ceil(scale) CSS pixels in width/height so the right/bottom
+  // edge is not clipped; (2) `cropForeignObjectOffset` slices the resulting
+  // canvas to remove the top/left margin and restore the intended output size.
+  //
+  // The width/height are computed from the page's declared mm dimensions
+  // (widthMm * 96 / 25.4 CSS px) — matching what html2canvas's internal
+  // parseBounds(clonedElement) would measure on the normalized clone — so the
+  // compensation is independent of any zoom/transform on the original element.
+  const cssWidth = Math.max(1, Math.ceil(options.widthMm * CSS_PX_PER_MM))
+  const cssHeight = Math.max(1, Math.ceil(options.heightMm * CSS_PX_PER_MM))
+  const inflatePx = Math.ceil(scale)
   return {
-    scale: resolveCanvasScale(page, options.dpi),
+    scale,
     foreignObjectRendering: true,
     useCORS: true,
     backgroundColor: '#ffffff',
@@ -21,10 +48,75 @@ export function createForeignObjectCaptureOptions(
     removeContainer: true,
     scrollX: 0,
     scrollY: 0,
+    width: cssWidth + inflatePx,
+    height: cssHeight + inflatePx,
     onclone: (clonedDocument: Document) => {
       normalizeClonedForeignObjectCaptureDocument(clonedDocument, options.captureId)
     },
   }
+}
+
+export interface CropForeignObjectOffsetOptions {
+  dpi: number
+  widthMm: number
+  heightMm: number
+}
+
+export function cropForeignObjectOffset(
+  source: HTMLCanvasElement,
+  page: HTMLElement,
+  options: CropForeignObjectOffsetOptions,
+): HTMLCanvasElement {
+  const scale = resolveCanvasScale(page, options.dpi)
+  // Canvas-pixel offset introduced by the (scale, scale) foreignObject SVG
+  // attribute, propagated through ctx.scale(scale, scale): exactly scale*scale.
+  const offset = Math.round(scale * scale)
+  if (offset <= 0)
+    return source
+
+  const cssWidth = Math.max(1, Math.ceil(options.widthMm * CSS_PX_PER_MM))
+  const cssHeight = Math.max(1, Math.ceil(options.heightMm * CSS_PX_PER_MM))
+  // Target output canvas size = what html2canvas would have produced for the
+  // page without the inflate (matches Math.floor(width * scale) in
+  // ForeignObjectRenderer). pdf.addImage maps this canvas onto widthMm x heightMm
+  // in millimetres, so any size proportional to the page is acceptable, but we
+  // pick the unbiased target to keep PDF resolution identical to the pre-fix path
+  // when there was no image background.
+  const targetWidth = Math.floor(cssWidth * scale)
+  const targetHeight = Math.floor(cssHeight * scale)
+  if (targetWidth <= 0 || targetHeight <= 0)
+    return source
+  if (source.width < targetWidth + offset || source.height < targetHeight + offset)
+    return source
+
+  const document = source.ownerDocument
+  if (!document || typeof document.createElement !== 'function')
+    return source
+
+  let cropped: HTMLCanvasElement
+  try {
+    cropped = document.createElement('canvas')
+  }
+  catch {
+    return source
+  }
+  cropped.width = targetWidth
+  cropped.height = targetHeight
+  const context = typeof cropped.getContext === 'function'
+    ? cropped.getContext('2d')
+    : null
+  if (!context)
+    return source
+
+  try {
+    context.drawImage(source, -offset, -offset)
+  }
+  catch {
+    return source
+  }
+  source.width = 0
+  source.height = 0
+  return cropped
 }
 
 export function isLikelyBlankForeignObjectCanvas(canvas: HTMLCanvasElement, sourcePage: HTMLElement): boolean {

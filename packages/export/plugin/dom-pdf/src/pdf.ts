@@ -1,7 +1,7 @@
 import type { ExportDiagnostic, ExportFormatPlugin, ExportProgress } from '@easyink/export-runtime'
 import type { jsPDF as JsPDFType } from 'jspdf'
 import { createCanvasCaptureOptions } from './canvas-capture'
-import { createForeignObjectCaptureOptions, isLikelyBlankForeignObjectCanvas as isLikelyBlankCaptureCanvas } from './foreign-object-capture'
+import { createForeignObjectCaptureOptions, cropForeignObjectOffset, isLikelyBlankForeignObjectCanvas as isLikelyBlankCaptureCanvas } from './foreign-object-capture'
 
 const DEFAULT_EXPORT_DPI = 300
 const DEFAULT_ASSET_LOAD_TIMEOUT_MS = 10000
@@ -97,7 +97,16 @@ export async function renderPagesToPdfBlob(options: RenderPagesToPdfOptions): Pr
         pdf.addPage([pdfPage.widthMm, pdfPage.heightMm], resolvePdfOrientation(pdfPage))
 
       let canvas = foreignObjectRendering
-        ? await html2canvas(page, createForeignObjectCaptureOptions(page, { dpi, captureId }))
+        ? cropForeignObjectOffset(
+            await html2canvas(page, createForeignObjectCaptureOptions(page, {
+              dpi,
+              captureId,
+              widthMm: pdfPage.widthMm,
+              heightMm: pdfPage.heightMm,
+            })),
+            page,
+            { dpi, widthMm: pdfPage.widthMm, heightMm: pdfPage.heightMm },
+          )
         : await html2canvas(page, createCanvasCaptureOptions(page, { dpi, captureId }))
 
       const foreignObjectRenderedBlank = foreignObjectRendering && isLikelyBlankCaptureCanvas(canvas, page)
