@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 	"time"
 
@@ -86,7 +85,7 @@ func (m Manager) Ensure(ctx context.Context, forceRestart bool) (State, error) {
 	if err := m.Config.ValidateRuntime(true); err != nil {
 		return State{}, err
 	}
-	lock, err := AcquireLock(filepath.Join(config.StateRoot(), "daemon.lock"), 10*time.Second)
+	lock, err := AcquireLock(StartLockPath(m.StatePath), 10*time.Second)
 	if err != nil {
 		return State{}, err
 	}

@@ -118,6 +118,8 @@ easyink-render daemon restart
 
 `daemon status` 输出 pid、IPC endpoint、browser kind/name/version、queue、uptime、host/protocol version。`daemon stop` 会关闭 daemon 和浏览器进程。
 
+Daemon 启动有两层本地互斥：`daemon.start.lock` 只保护并发自动启动的临界区，`daemon.process.lock` 由实际 daemon 进程持有到退出，用于阻止外部重复执行内部 `daemon run`。锁文件会记录持有进程 PID；如果进程已不存在，会在下一次启动时自动清理。macOS/Linux 上 IPC socket 只会在确认不是活连接后才清理，避免重复启动误删已有 daemon 的入口。
+
 ## 命令
 
 ```text

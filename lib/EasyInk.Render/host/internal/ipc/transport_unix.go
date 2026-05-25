@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 func DefaultEndpoint() string {
@@ -23,7 +24,9 @@ func Listen(endpoint string) (net.Listener, error) {
 	if err := os.MkdirAll(filepath.Dir(endpoint), 0o700); err != nil {
 		return nil, err
 	}
-	_ = os.Remove(endpoint)
+	if err := removeStaleEndpoint(endpoint); err != nil {
+		return nil, err
+	}
 	listener, err := net.Listen("unix", endpoint)
 	if err != nil {
 		return nil, err
@@ -39,4 +42,19 @@ func Dial(ctx context.Context, endpoint string) (net.Conn, error) {
 
 func Remove(endpoint string) {
 	_ = os.Remove(endpoint)
+}
+
+func removeStaleEndpoint(endpoint string) error {
+	conn, err := net.DialTimeout("unix", endpoint, 200*time.Millisecond)
+	if err == nil {
+		_ = conn.Close()
+		return os.ErrExist
+	}
+	if _, statErr := os.Stat(endpoint); statErr == nil {
+		return os.Remove(endpoint)
+	} else if os.IsNotExist(statErr) {
+		return nil
+	} else {
+		return statErr
+	}
 }

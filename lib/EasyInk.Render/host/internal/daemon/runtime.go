@@ -34,6 +34,7 @@ type Runtime struct {
 	pending   atomic.Int64
 	lastUsed  atomic.Int64
 	startedAt time.Time
+	lock      *Lock
 	stopOnce  sync.Once
 }
 
@@ -59,13 +60,20 @@ func NewRuntime(ctx context.Context, cfg config.RuntimeConfig, statePath, ipcPat
 	return rt, nil
 }
 
+func (r *Runtime) SetProcessLock(lock *Lock) {
+	r.lock = lock
+}
+
 func (r *Runtime) Run(ctx context.Context) error {
+	defer r.releaseProcessLock()
+
 	listener, err := ipc.Listen(r.ipcPath)
 	if err != nil {
+		r.browser.Shutdown()
 		return err
 	}
-	defer listener.Close()
 	defer ipc.Remove(r.ipcPath)
+	defer listener.Close()
 	defer RemoveState(r.statePath)
 	defer r.browser.Shutdown()
 
@@ -290,6 +298,12 @@ func (r *Runtime) stopNow() {
 	r.stopOnce.Do(func() {
 		close(r.stop)
 	})
+}
+
+func (r *Runtime) releaseProcessLock() {
+	if r.lock != nil {
+		r.lock.Release()
+	}
 }
 
 func jsonFrame(id string, value any) ipc.Frame {

@@ -432,13 +432,20 @@ func runDaemonRun(options daemonRunOptions, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "daemon run requires --nonce")
 		return clix.ExitInvalidArguments
 	}
+	lock, err := daemon.AcquireLock(daemon.ProcessLockPath(options.statePath), 10*time.Second)
+	if err != nil {
+		fmt.Fprintf(stderr, "daemon already running: %v\n", err)
+		return clix.ExitDaemonUnavailable
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	rt, err := daemon.NewRuntime(ctx, cfg, options.statePath, options.ipcPath, options.nonce)
 	if err != nil {
+		lock.Release()
 		fmt.Fprintf(stderr, "daemon startup failed: %v\n", err)
 		return clix.ExitBrowserUnavailable
 	}
+	rt.SetProcessLock(lock)
 	if err := rt.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
 		fmt.Fprintf(stderr, "daemon runtime failed: %v\n", err)
 		return clix.ExitGeneralFailure
