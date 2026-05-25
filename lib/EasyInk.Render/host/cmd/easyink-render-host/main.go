@@ -414,7 +414,7 @@ func bindRuntimeFlags(fs *flag.FlagSet, override *config.Override) (*int, *int) 
 	fs.IntVar(&override.MaxConcurrency, "max-concurrency", 0, "maximum concurrent render jobs")
 	maxQueueSize := fs.Int("max-queue-size", -1, "maximum queued render jobs")
 	fs.IntVar(&override.RequestTimeoutMs, "request-timeout-ms", 0, "request timeout in milliseconds")
-	idleTimeout := fs.Int("idle-timeout-ms", -1, "daemon idle timeout in milliseconds")
+	idleTimeout := fs.Int("idle-timeout-ms", -1, "daemon idle timeout in milliseconds, 0 disables idle exit")
 	return idleTimeout, maxQueueSize
 }
 

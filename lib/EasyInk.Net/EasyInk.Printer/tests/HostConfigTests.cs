@@ -95,6 +95,14 @@ public class HostConfigTests
     }
 
     [Fact]
+    public void GetRenderBrowserVersionDir_CustomRoot_UsesRootVersionsDirectory()
+    {
+        Assert.Equal(
+            Path.Combine(@"D:\EasyInk\RenderBrowser", "versions", "126"),
+            HostConfig.GetRenderBrowserVersionDir(@"D:\EasyInk\RenderBrowser", "126"));
+    }
+
+    [Fact]
     public void DefaultBundledRenderPaths_UseApplicationBaseDirectory()
     {
         Assert.Equal(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "render", "host", "easyink-render-host.exe"), HostConfig.DefaultRenderHostPath);
@@ -154,12 +162,14 @@ public class HostConfigTests
         {
             RenderPort = 1,
             RenderRequestTimeoutMs = 1,
+            RenderIdleTimeoutMs = -1,
             RenderMaxConcurrency = 0,
             RenderMaxQueueSize = -1
         };
 
         Assert.Equal(1024, config.RenderPort);
         Assert.Equal(1000, config.RenderRequestTimeoutMs);
+        Assert.Equal(0, config.RenderIdleTimeoutMs);
         Assert.Equal(1, config.RenderMaxConcurrency);
         Assert.Equal(0, config.RenderMaxQueueSize);
     }

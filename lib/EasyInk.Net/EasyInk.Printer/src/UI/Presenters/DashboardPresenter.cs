@@ -6,6 +6,7 @@ using EasyInk.Engine;
 using EasyInk.Engine.Models;
 using EasyInk.Printer.Api;
 using EasyInk.Printer.Server;
+using EasyInk.Printer.Services;
 using EasyInk.Printer.Utils;
 
 namespace EasyInk.Printer.UI.Presenters;
@@ -38,6 +39,8 @@ internal sealed class DashboardSnapshot
     public string WebSocketText { get; set; } = string.Empty;
     public string QueueText { get; set; } = string.Empty;
     public DashboardStateKind QueueKind { get; set; }
+    public string RenderDaemonText { get; set; } = string.Empty;
+    public DashboardStateKind RenderDaemonKind { get; set; }
     public string? StartupError { get; set; }
     public IReadOnlyList<DashboardInfoRow> InfoRows { get; set; } = Array.Empty<DashboardInfoRow>();
 }
@@ -48,6 +51,7 @@ internal interface IDashboardView
     void SetSnapshot(DashboardSnapshot snapshot);
     void SetWebSocketConnections(string value);
     void SetQueueStatus(string text, DashboardStateKind kind);
+    void SetRenderDaemonStatus(string text, DashboardStateKind kind);
     void SetBusy(bool busy);
 }
 
@@ -56,16 +60,18 @@ internal sealed class DashboardPresenter : IDisposable
     private readonly HttpServer _server;
     private readonly WebSocketHandler _wsHandler;
     private readonly EngineApi _api;
+    private readonly RenderDaemonService _renderDaemonService;
     private readonly Action _connectionCountChanged;
     private IDashboardView? _view;
     private bool _isRefreshing;
     private bool _disposed;
 
-    public DashboardPresenter(HttpServer server, WebSocketHandler wsHandler, EngineApi api)
+    public DashboardPresenter(HttpServer server, WebSocketHandler wsHandler, EngineApi api, RenderDaemonService renderDaemonService)
     {
         _server = server;
         _wsHandler = wsHandler;
         _api = api;
+        _renderDaemonService = renderDaemonService;
         _connectionCountChanged = OnConnectionCountChanged;
     }
 
@@ -86,8 +92,16 @@ internal sealed class DashboardPresenter : IDisposable
 
         try
         {
-            var queue = await Task.Run(GetQueueStatus).ConfigureAwait(false);
-            Post(view => view.SetQueueStatus(queue.Text, queue.Kind));
+            var queueTask = Task.Run(GetQueueStatus);
+            var renderTask = Task.Run(GetRenderDaemonStatus);
+            await Task.WhenAll(queueTask, renderTask).ConfigureAwait(false);
+            var queue = queueTask.Result;
+            var render = renderTask.Result;
+            Post(view =>
+            {
+                view.SetQueueStatus(queue.Text, queue.Kind);
+                view.SetRenderDaemonStatus(render.Text, render.Kind);
+            });
         }
         catch (ObjectDisposedException)
         {
@@ -132,6 +146,8 @@ internal sealed class DashboardPresenter : IDisposable
             WebSocketText = _wsHandler.ConnectionCount.ToString(),
             QueueText = queue.Item1,
             QueueKind = queue.Item2,
+            RenderDaemonText = LangManager.Get("Dashboard_Status_Unknown"),
+            RenderDaemonKind = DashboardStateKind.Info,
             StartupError = hasError ? LangManager.Get("Dashboard_StartupError", _server.LastError!) : null,
             InfoRows = CreateInfoRows()
         };
@@ -165,6 +181,22 @@ internal sealed class DashboardPresenter : IDisposable
         return hasActive
             ? (LangManager.Get("Dashboard_Status_Busy"), DashboardStateKind.Warning)
             : (LangManager.Get("Dashboard_Status_Idle"), DashboardStateKind.Success);
+    }
+
+    private (string Text, DashboardStateKind Kind) GetRenderDaemonStatus()
+    {
+        var status = _renderDaemonService.GetStatus();
+        switch (status.Kind)
+        {
+            case RenderDaemonStateKind.Running:
+                return (status.Pid.HasValue ? LangManager.Get("Dashboard_RenderDaemonRunning", status.Pid.Value) : status.Message, DashboardStateKind.Success);
+            case RenderDaemonStateKind.Disabled:
+                return (status.Message, DashboardStateKind.Info);
+            case RenderDaemonStateKind.Error:
+                return (status.Message, DashboardStateKind.Error);
+            default:
+                return (status.Message, DashboardStateKind.Warning);
+        }
     }
 
     private void Post(Action<IDashboardView> update)

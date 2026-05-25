@@ -39,9 +39,13 @@ public class SettingsMapperTests
         Assert.Equal(10, model.PrintDebugArtifactRetentionCount);
         Assert.Equal(HostConfig.DefaultPrintDebugArtifactsDir, model.PrintDebugArtifactsDir);
         Assert.False(model.RenderEnabled);
+        Assert.Equal(HostConfig.DefaultRenderHostPath, model.RenderHostPath);
+        Assert.Equal(RenderBrowserKindCatalog.AutoKey, model.RenderBrowserKind);
         Assert.Equal(RenderBrowserVersionCatalog.AutoKey, model.RenderBrowserVersion);
-        Assert.Equal(18181, model.RenderPort);
+        Assert.Equal(HostConfig.DefaultRenderBrowserCacheDir, model.RenderBrowserDir);
+        Assert.Equal(RenderHeadlessModeCatalog.AutoKey, model.RenderBrowserHeadlessMode);
         Assert.Equal(30000, model.RenderRequestTimeoutMs);
+        Assert.Equal(0, model.RenderIdleTimeoutMs);
         Assert.Equal(2, model.RenderMaxConcurrency);
         Assert.Equal(16, model.RenderMaxQueueSize);
         Assert.Equal(HostConfig.DefaultRenderLogDir, model.RenderLogDir);
@@ -75,9 +79,13 @@ public class SettingsMapperTests
             PrintDebugArtifactRetentionCount = 8,
             PrintDebugArtifactsDir = HostConfig.DefaultPrintDebugArtifactsDir,
             RenderEnabled = true,
+            RenderHostPath = @"D:\EasyInk\Render\easyink-render-host.exe",
+            RenderBrowserKind = RenderBrowserKindCatalog.EdgeKey,
             RenderBrowserVersion = "126",
-            RenderPort = 18182,
+            RenderBrowserDir = @"D:\EasyInk\RenderBrowser",
+            RenderBrowserHeadlessMode = "new",
             RenderRequestTimeoutMs = 45000,
+            RenderIdleTimeoutMs = 120000,
             RenderMaxConcurrency = 3,
             RenderMaxQueueSize = 20,
             RenderLogDir = HostConfig.DefaultRenderLogDir,
@@ -108,14 +116,30 @@ public class SettingsMapperTests
         Assert.Equal(8, config.PrintDebugArtifactRetentionCount);
         Assert.Null(config.PrintDebugArtifactsDir);
         Assert.True(config.RenderEnabled);
-        Assert.Equal(HostConfig.DefaultRenderHostPath, config.RenderHostPath);
+        Assert.Equal(@"D:\EasyInk\Render\easyink-render-host.exe", config.RenderHostPath);
+        Assert.Equal(RenderBrowserKindCatalog.EdgeKey, config.RenderBrowserKind);
         Assert.Equal("126", config.RenderBrowserVersion);
-        Assert.Equal(18182, config.RenderPort);
+        Assert.Equal(@"D:\EasyInk\RenderBrowser", config.RenderBrowserDir);
+        Assert.Null(config.RenderBrowserExecutablePath);
+        Assert.Equal("new", config.RenderBrowserHeadlessMode);
         Assert.Equal(45000, config.RenderRequestTimeoutMs);
+        Assert.Equal(120000, config.RenderIdleTimeoutMs);
         Assert.Equal(3, config.RenderMaxConcurrency);
         Assert.Equal(20, config.RenderMaxQueueSize);
         Assert.Null(config.RenderLogDir);
         Assert.True(config.RenderDiagnosticsEnabled);
+    }
+
+    [Fact]
+    public void Validate_InvalidRenderBrowserDir_ReturnsInvalid()
+    {
+        var model = SettingsMapper.FromConfig(new HostConfig(), autoStart: false);
+        model.RenderBrowserDir = @"relative\browser";
+
+        var validation = SettingsMapper.Validate(model);
+
+        Assert.False(validation.IsValid);
+        Assert.Equal(SettingsField.RenderBrowserDir, validation.Field);
     }
 
     [Fact]

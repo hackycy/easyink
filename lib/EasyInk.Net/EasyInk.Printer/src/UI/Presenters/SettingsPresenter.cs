@@ -1,4 +1,6 @@
 using System;
+using System.Diagnostics;
+using System.IO;
 using EasyInk.Printer.Config;
 using EasyInk.Printer.Services;
 
@@ -18,12 +20,14 @@ internal interface ISettingsView
 internal sealed class SettingsPresenter : IDisposable
 {
     private readonly HostConfig _config;
+    private readonly RenderDaemonService _renderDaemonService;
     private ISettingsView? _view;
     private bool _disposed;
 
-    public SettingsPresenter(HostConfig config)
+    public SettingsPresenter(HostConfig config, RenderDaemonService renderDaemonService)
     {
         _config = config;
+        _renderDaemonService = renderDaemonService;
     }
 
     public void Attach(ISettingsView view)
@@ -36,7 +40,9 @@ internal sealed class SettingsPresenter : IDisposable
     {
         if (_disposed || _view == null) return;
 
-        _view.SetModel(SettingsMapper.FromConfig(_config, HostConfig.GetAutoStartRegistry()));
+        var model = SettingsMapper.FromConfig(_config, HostConfig.GetAutoStartRegistry());
+        model.RenderHostVersion = GetRenderCliVersion(model.RenderHostPath);
+        _view.SetModel(model);
     }
 
     public void Save()
@@ -78,12 +84,66 @@ internal sealed class SettingsPresenter : IDisposable
 
         var tempConfig = new HostConfig
         {
+            RenderBrowserKind = RenderBrowserKindCatalog.NormalizeKey(model.RenderBrowserKind),
             RenderBrowserVersion = RenderBrowserVersionCatalog.NormalizeKey(model.RenderBrowserVersion),
+            RenderBrowserDir = HostConfig.ResolveRenderBrowserDir(model.RenderBrowserDir),
             RenderRequestTimeoutMs = model.RenderRequestTimeoutMs
         };
 
         using var runtime = new RenderRuntimeManager(tempConfig);
         return runtime.InstallBrowserVersion(tempConfig.RenderBrowserVersion!, progress);
+    }
+
+    public string GetRenderCliVersion(string? hostPath)
+    {
+        var resolvedPath = HostConfig.ResolveRenderHostPath(hostPath!);
+        if (!File.Exists(resolvedPath))
+            return LangManager.Get("Settings_RenderCliVersionUnavailable");
+
+        try
+        {
+            using var process = new Process();
+            process.StartInfo = new ProcessStartInfo
+            {
+                FileName = resolvedPath,
+                Arguments = "version",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+            process.Start();
+            if (!process.WaitForExit(3000))
+            {
+                try { process.Kill(); } catch { }
+                return LangManager.Get("Settings_RenderCliVersionUnavailable");
+            }
+
+            var output = process.StandardOutput.ReadToEnd().Trim();
+            if (process.ExitCode == 0 && !string.IsNullOrWhiteSpace(output))
+                return output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)[0];
+        }
+        catch
+        {
+        }
+
+        return LangManager.Get("Settings_RenderCliVersionUnavailable");
+    }
+
+    public void StartRenderDaemon()
+    {
+        if (_disposed)
+            throw new ObjectDisposedException(nameof(SettingsPresenter));
+
+        _renderDaemonService.Start();
+    }
+
+    public void StopRenderDaemon()
+    {
+        if (_disposed)
+            throw new ObjectDisposedException(nameof(SettingsPresenter));
+
+        _renderDaemonService.Stop();
     }
 
     public void Dispose()

@@ -24,13 +24,12 @@ internal sealed class PrinterRenderPdfService : IRenderPdfService
     {
         try
         {
-            var runtime = _runtimeManager.EnsureAvailable(cancellationToken);
+            var runtime = _runtimeManager.ResolveOptions(cancellationToken);
             var response = _client.RenderPrintPdf(runtime, requestId, request, cancellationToken);
             _debugLogService.WriteRenderArtifacts(
                 requestId,
                 response.RequestJson,
-                response.StatusCode,
-                response.ContentType,
+                response.ExitCode,
                 response.DiagnosticsId,
                 response.DurationMs,
                 response.PdfBytes,
@@ -41,7 +40,7 @@ internal sealed class PrinterRenderPdfService : IRenderPdfService
         {
             return RenderPdfResult.Error(ErrorCode.PrintTimeout, "Render 请求已取消");
         }
-        catch (Exception ex) when (ex is InvalidOperationException || ex is IOException || ex is InvalidDataException || ex is TimeoutException || ex is UnauthorizedAccessException || ex is HttpRequestException || ex is UriFormatException)
+        catch (Exception ex) when (ex is InvalidOperationException || ex is IOException || ex is InvalidDataException || ex is TimeoutException || ex is UnauthorizedAccessException || ex is HttpRequestException || ex is UriFormatException || ex is System.ComponentModel.Win32Exception)
         {
             return RenderPdfResult.Error(ErrorCode.RenderFailed, ex.Message, ex.ToString());
         }

@@ -38,9 +38,13 @@ internal static class SettingsMapper
                 ? HostConfig.DefaultPrintDebugArtifactsDir
                 : config.PrintDebugArtifactsDir!,
             RenderEnabled = config.RenderEnabled,
+            RenderBrowserKind = RenderBrowserKindCatalog.NormalizeKey(config.RenderBrowserKind),
             RenderBrowserVersion = RenderBrowserVersionCatalog.NormalizeKey(config.RenderBrowserVersion),
-            RenderPort = config.RenderPort,
+            RenderHostPath = HostConfig.ResolveRenderHostPath(config.RenderHostPath!),
+            RenderBrowserDir = HostConfig.ResolveRenderBrowserDir(config.RenderBrowserDir!),
+            RenderBrowserHeadlessMode = RenderHeadlessModeCatalog.NormalizeKey(config.RenderBrowserHeadlessMode),
             RenderRequestTimeoutMs = config.RenderRequestTimeoutMs,
+            RenderIdleTimeoutMs = config.RenderIdleTimeoutMs,
             RenderMaxConcurrency = config.RenderMaxConcurrency,
             RenderMaxQueueSize = config.RenderMaxQueueSize,
             RenderLogDir = string.IsNullOrWhiteSpace(config.RenderLogDir) ? HostConfig.DefaultRenderLogDir : config.RenderLogDir!,
@@ -66,9 +70,17 @@ internal static class SettingsMapper
         if (!HostConfig.IsValidFilePath(printDebugArtifactsDirValue + Path.DirectorySeparatorChar, out var debugArtifactsError))
             return SettingsValidationResult.Invalid(SettingsField.PrintDebugArtifactsDir, LangManager.Get("Error_PrintDebugArtifactsDirInvalid", debugArtifactsError!));
 
+        var renderHostPathValue = HostConfig.ResolveRenderHostPath((model.RenderHostPath ?? string.Empty).Trim());
+        if (!HostConfig.IsValidFilePath(renderHostPathValue, out var renderHostPathError))
+            return SettingsValidationResult.Invalid(SettingsField.RenderHostPath, LangManager.Get("Error_RenderHostPathInvalid", renderHostPathError!));
+
         var renderBrowserVersionValue = RenderBrowserVersionCatalog.NormalizeKey(model.RenderBrowserVersion);
         if (!RenderBrowserVersionCatalog.Options.Any(o => string.Equals(o.Key, renderBrowserVersionValue, StringComparison.OrdinalIgnoreCase)))
             return SettingsValidationResult.Invalid(SettingsField.RenderBrowserVersion, LangManager.Get("Error_RenderBrowserVersionInvalid"));
+
+        var renderBrowserDirValue = (model.RenderBrowserDir ?? string.Empty).Trim();
+        if (!HostConfig.IsValidFilePath(renderBrowserDirValue + Path.DirectorySeparatorChar, out var renderBrowserDirError))
+            return SettingsValidationResult.Invalid(SettingsField.RenderBrowserDir, LangManager.Get("Error_RenderBrowserDirInvalid", renderBrowserDirError!));
 
         var renderLogDirValue = (model.RenderLogDir ?? string.Empty).Trim();
         if (!HostConfig.IsValidFilePath(renderLogDirValue + Path.DirectorySeparatorChar, out var renderLogError))
@@ -83,7 +95,11 @@ internal static class SettingsMapper
         var crashDirValue = (model.CrashLogDir ?? string.Empty).Trim();
         var sumatraTempDirValue = (model.SumatraTempDir ?? string.Empty).Trim();
         var printDebugArtifactsDirValue = (model.PrintDebugArtifactsDir ?? string.Empty).Trim();
+        var renderHostPathValue = (model.RenderHostPath ?? string.Empty).Trim();
         var renderBrowserVersionValue = RenderBrowserVersionCatalog.NormalizeKey(model.RenderBrowserVersion);
+        var renderBrowserKindValue = RenderBrowserKindCatalog.NormalizeKey(model.RenderBrowserKind);
+        var renderBrowserDirValue = (model.RenderBrowserDir ?? string.Empty).Trim();
+        var renderBrowserHeadlessMode = RenderHeadlessModeCatalog.NormalizeKey(model.RenderBrowserHeadlessMode);
         var renderLogDirValue = (model.RenderLogDir ?? string.Empty).Trim();
 
         config.LowDpiPrintEnhancement = GetLowDpiEnhancementValue(model.LowDpiEnhancementIndex);
@@ -122,10 +138,18 @@ internal static class SettingsMapper
             ? null
             : printDebugArtifactsDirValue;
         config.RenderEnabled = model.RenderEnabled;
-        config.RenderHostPath = HostConfig.DefaultRenderHostPath;
+        config.RenderHostPath = string.IsNullOrWhiteSpace(renderHostPathValue)
+            ? HostConfig.DefaultRenderHostPath
+            : renderHostPathValue;
+        config.RenderBrowserKind = renderBrowserKindValue;
         config.RenderBrowserVersion = renderBrowserVersionValue;
-        config.RenderPort = model.RenderPort;
+        config.RenderBrowserDir = string.Equals(renderBrowserDirValue, HostConfig.DefaultRenderBrowserCacheDir, StringComparison.OrdinalIgnoreCase)
+            ? null
+            : renderBrowserDirValue;
+        config.RenderBrowserExecutablePath = null;
+        config.RenderBrowserHeadlessMode = renderBrowserHeadlessMode;
         config.RenderRequestTimeoutMs = model.RenderRequestTimeoutMs;
+        config.RenderIdleTimeoutMs = model.RenderIdleTimeoutMs;
         config.RenderMaxConcurrency = model.RenderMaxConcurrency;
         config.RenderMaxQueueSize = model.RenderMaxQueueSize;
         config.RenderLogDir = string.Equals(renderLogDirValue, HostConfig.DefaultRenderLogDir, StringComparison.OrdinalIgnoreCase)

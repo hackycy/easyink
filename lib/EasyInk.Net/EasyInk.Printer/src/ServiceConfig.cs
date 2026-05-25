@@ -25,6 +25,7 @@ internal static class ServiceConfig
 
         services.AddSingleton<PrintDebugLogService>();
         services.AddSingleton<RenderRuntimeManager>();
+        services.AddSingleton<RenderDaemonService>();
         services.AddSingleton<RenderClient>();
         services.AddSingleton<PrinterRenderPdfService>();
         services.AddSingleton<IRenderPdfService>(sp => sp.GetRequiredService<PrinterRenderPdfService>());

@@ -1,10 +1,8 @@
 using System;
 using System.Diagnostics;
-using System.Net;
-using System.Net.Http;
+using System.IO;
 using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 using EasyInk.Engine;
 using EasyInk.Engine.Models;
 using EasyInk.Printer.Config;
@@ -15,6 +13,16 @@ namespace EasyInk.Printer.Services;
 
 internal sealed class RenderClient
 {
+    private const int ExitSuccess = 0;
+    private const int ExitInvalidArguments = 2;
+    private const int ExitInvalidRequestJson = 3;
+    private const int ExitDaemonUnavailable = 4;
+    private const int ExitDaemonProtocol = 5;
+    private const int ExitRenderFailed = 6;
+    private const int ExitOutputWriteFailed = 7;
+    private const int ExitTimeout = 8;
+    private const int ExitBrowserUnavailable = 9;
+
     private readonly HostConfig _config;
 
     public RenderClient(HostConfig config)
@@ -22,78 +30,133 @@ internal sealed class RenderClient
         _config = config;
     }
 
-    public RenderClientResponse RenderPrintPdf(RenderRuntimeHandle runtime, string requestId, PrintRequestParams request, CancellationToken cancellationToken)
+    public RenderClientResponse RenderPrintPdf(RenderRuntimeOptions runtime, string requestId, PrintRequestParams request, CancellationToken cancellationToken)
     {
         var renderRequest = BuildRenderRequest(requestId, request);
         var requestJson = renderRequest.ToString(Formatting.None);
+        var workDir = CreateWorkDir(requestId);
+        var requestPath = Path.Combine(workDir, "request.json");
+        var outputPath = Path.Combine(workDir, "output.pdf");
+        var diagnosticsPath = Path.Combine(workDir, "diagnostics.json");
+
+        File.WriteAllText(requestPath, requestJson, new UTF8Encoding(false));
+
         var stopwatch = Stopwatch.StartNew();
+        var processResult = RunRender(runtime, requestPath, outputPath, diagnosticsPath, cancellationToken);
+        stopwatch.Stop();
 
-        using var http = new HttpClient { Timeout = TimeSpan.FromMilliseconds(Math.Max(_config.RenderRequestTimeoutMs, 1000) + 5000) };
-        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, runtime.BaseUrl + "/v1/render/print-pdf");
-        httpRequest.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", runtime.AuthToken);
-        httpRequest.Content = new StringContent(requestJson, Encoding.UTF8, "application/json");
+        var summary = ParseSummary(processResult.Stdout);
+        var diagnosticsId = ReadDiagnosticsId(diagnosticsPath) ?? summary.DiagnosticsId;
+        var errorJson = BuildErrorJson(processResult, summary, diagnosticsId);
 
-        try
+        if (processResult.ExitCode == ExitSuccess && File.Exists(outputPath))
         {
-            using var response = http.SendAsync(httpRequest, cancellationToken).GetAwaiter().GetResult();
-            stopwatch.Stop();
-            var diagnosticsId = response.Headers.Contains("X-EasyInk-Diagnostics-Id")
-                ? string.Join(",", response.Headers.GetValues("X-EasyInk-Diagnostics-Id"))
-                : null;
-            var contentType = response.Content.Headers.ContentType?.MediaType;
-
-            if (response.IsSuccessStatusCode)
+            var pdfBytes = File.ReadAllBytes(outputPath);
+            if (pdfBytes.Length > 0)
             {
-                var pdfBytes = response.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult();
-                if (pdfBytes.Length == 0 || !string.Equals(contentType, "application/pdf", StringComparison.OrdinalIgnoreCase))
-                {
-                    return RenderClientResponse.Failure(
-                        requestJson,
-                        (int)response.StatusCode,
-                        contentType,
-                        diagnosticsId,
-                        stopwatch.ElapsedMilliseconds,
-                        RenderPdfResult.Error(ErrorCode.RenderFailed, "Render 返回内容不是 PDF", null, diagnosticsId),
-                        null);
-                }
-
-                return RenderClientResponse.Success(requestJson, (int)response.StatusCode, contentType, diagnosticsId, stopwatch.ElapsedMilliseconds, pdfBytes);
+                return RenderClientResponse.Success(
+                    requestJson,
+                    processResult.ExitCode,
+                    diagnosticsId,
+                    stopwatch.ElapsedMilliseconds,
+                    pdfBytes,
+                    summary.PageCount);
             }
 
-            var errorJson = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
             return RenderClientResponse.Failure(
                 requestJson,
-                (int)response.StatusCode,
-                contentType,
+                ExitOutputWriteFailed,
                 diagnosticsId,
                 stopwatch.ElapsedMilliseconds,
-                ParseRenderError(response.StatusCode, errorJson, diagnosticsId),
+                RenderPdfResult.Error(ErrorCode.RenderFailed, "Render 未生成有效 PDF", errorJson, diagnosticsId),
                 errorJson);
         }
-        catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+
+        return RenderClientResponse.Failure(
+            requestJson,
+            processResult.ExitCode,
+            diagnosticsId,
+            stopwatch.ElapsedMilliseconds,
+            ParseRenderFailure(processResult.ExitCode, summary, processResult.Stderr, diagnosticsId),
+            errorJson);
+    }
+
+    private ProcessResult RunRender(RenderRuntimeOptions runtime, string requestPath, string outputPath, string diagnosticsPath, CancellationToken cancellationToken)
+    {
+        var stdout = new StringBuilder();
+        var stderr = new StringBuilder();
+        using var process = new Process();
+        process.StartInfo = new ProcessStartInfo
         {
-            stopwatch.Stop();
-            return RenderClientResponse.Failure(
-                requestJson,
-                0,
-                null,
-                null,
-                stopwatch.ElapsedMilliseconds,
-                RenderPdfResult.Error(ErrorCode.PrintTimeout, "Render 请求超时", ex.Message),
-                null);
-        }
-        catch (Exception ex) when (ex is HttpRequestException || ex is InvalidOperationException || ex is WebException)
+            FileName = runtime.HostPath,
+            Arguments = BuildArguments(runtime, requestPath, outputPath, diagnosticsPath),
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            WorkingDirectory = Path.GetDirectoryName(runtime.HostPath) ?? AppDomain.CurrentDomain.BaseDirectory
+        };
+        process.OutputDataReceived += (s, e) => { if (e.Data != null) stdout.AppendLine(e.Data); };
+        process.ErrorDataReceived += (s, e) => { if (e.Data != null) stderr.AppendLine(e.Data); };
+
+        if (!process.Start())
+            throw new InvalidOperationException("Render CLI 启动失败");
+
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+
+        var deadline = DateTime.UtcNow.AddMilliseconds(Math.Max(runtime.RequestTimeoutMs, 1000) + 15000);
+        while (!process.HasExited)
         {
-            stopwatch.Stop();
-            return RenderClientResponse.Failure(
-                requestJson,
-                0,
-                null,
-                null,
-                stopwatch.ElapsedMilliseconds,
-                RenderPdfResult.Error(ErrorCode.RenderFailed, "Render 请求失败", ex.Message),
-                null);
+            if (cancellationToken.IsCancellationRequested)
+            {
+                TryKill(process);
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+            if (DateTime.UtcNow >= deadline)
+            {
+                TryKill(process);
+                return new ProcessResult(ExitTimeout, stdout.ToString(), "Render CLI 请求超时");
+            }
+            process.WaitForExit(100);
         }
+
+        process.WaitForExit();
+        return new ProcessResult(process.ExitCode, stdout.ToString(), stderr.ToString());
+    }
+
+    private static string BuildArguments(RenderRuntimeOptions runtime, string requestPath, string outputPath, string diagnosticsPath)
+    {
+        var args = new StringBuilder();
+        AppendArg(args, "render");
+        AppendArg(args, "--request");
+        AppendArg(args, requestPath);
+        AppendArg(args, "--out");
+        AppendArg(args, outputPath);
+        AppendArg(args, "--json");
+        AppendArg(args, "--diagnostics-out");
+        AppendArg(args, diagnosticsPath);
+        AppendArg(args, "--browser-kind");
+        AppendArg(args, runtime.BrowserKind);
+        AppendArg(args, "--browser-path");
+        AppendArg(args, runtime.BrowserPath);
+        AppendArg(args, "--headless-mode");
+        AppendArg(args, runtime.HeadlessMode);
+        AppendArg(args, "--profile-root");
+        AppendArg(args, runtime.ProfileRoot);
+        AppendArg(args, "--temp-dir");
+        AppendArg(args, runtime.TempDir);
+        AppendArg(args, "--log-dir");
+        AppendArg(args, runtime.LogDir);
+        AppendArg(args, "--max-concurrency");
+        AppendArg(args, runtime.MaxConcurrency.ToString());
+        AppendArg(args, "--max-queue-size");
+        AppendArg(args, runtime.MaxQueueSize.ToString());
+        AppendArg(args, "--request-timeout-ms");
+        AppendArg(args, runtime.RequestTimeoutMs.ToString());
+        AppendArg(args, "--idle-timeout-ms");
+        AppendArg(args, runtime.IdleTimeoutMs.ToString());
+        return args.ToString();
     }
 
     private JObject BuildRenderRequest(string requestId, PrintRequestParams request)
@@ -152,39 +215,27 @@ internal sealed class RenderClient
         return string.Equals(unit, "inch", StringComparison.OrdinalIgnoreCase) ? value * 25.4 : value;
     }
 
-    private static RenderPdfResult ParseRenderError(HttpStatusCode statusCode, string errorJson, string? diagnosticsId)
+    private static RenderPdfResult ParseRenderFailure(int exitCode, RenderSummary summary, string stderr, string? diagnosticsId)
     {
-        try
-        {
-            var json = JObject.Parse(errorJson);
-            var error = json["error"] as JObject;
-            var renderCode = error?.Value<string>("code") ?? statusCode.ToString();
-            var message = error?.Value<string>("message") ?? "Render 渲染失败";
-            diagnosticsId ??= json["diagnostics"]?.Value<string>("id");
+        var renderCode = string.IsNullOrWhiteSpace(summary.Code) ? ExitCodeToRenderCode(exitCode) : summary.Code!;
+        var message = !string.IsNullOrWhiteSpace(summary.Message)
+            ? summary.Message!
+            : !string.IsNullOrWhiteSpace(stderr)
+                ? stderr.Trim()
+                : "Render 渲染失败";
 
-            var details = new JObject
-            {
-                ["renderCode"] = renderCode,
-                ["httpStatus"] = (int)statusCode
-            };
-            if (!string.IsNullOrWhiteSpace(diagnosticsId))
-                details["diagnosticsId"] = diagnosticsId;
-            if (error?["details"] != null)
-                details["details"] = error["details"];
-
-            return RenderPdfResult.Error(MapRenderErrorCode(renderCode), message, details.ToString(Formatting.None), diagnosticsId);
-        }
-        catch (JsonException)
+        var details = new JObject
         {
-            return RenderPdfResult.Error(
-                MapHttpStatus(statusCode),
-                "Render 渲染失败",
-                errorJson,
-                diagnosticsId);
-        }
+            ["renderCode"] = renderCode,
+            ["exitCode"] = exitCode
+        };
+        if (!string.IsNullOrWhiteSpace(diagnosticsId))
+            details["diagnosticsId"] = diagnosticsId;
+
+        return RenderPdfResult.Error(MapRenderErrorCode(renderCode, exitCode), message, details.ToString(Formatting.None), diagnosticsId);
     }
 
-    private static string MapRenderErrorCode(string renderCode)
+    private static string MapRenderErrorCode(string renderCode, int exitCode)
     {
         switch (renderCode)
         {
@@ -198,25 +249,161 @@ internal sealed class RenderClient
                 return ErrorCode.QueueFull;
             case "RENDER_TIMEOUT":
                 return ErrorCode.PrintTimeout;
+        }
+
+        if (exitCode == ExitTimeout)
+            return ErrorCode.PrintTimeout;
+        if (exitCode == ExitInvalidArguments || exitCode == ExitInvalidRequestJson)
+            return ErrorCode.InvalidParams;
+        return ErrorCode.RenderFailed;
+    }
+
+    private static string ExitCodeToRenderCode(int exitCode)
+    {
+        switch (exitCode)
+        {
+            case ExitInvalidArguments:
+                return "INVALID_ARGUMENTS";
+            case ExitInvalidRequestJson:
+                return "INVALID_REQUEST";
+            case ExitDaemonUnavailable:
+                return "DAEMON_UNAVAILABLE";
+            case ExitDaemonProtocol:
+                return "DAEMON_PROTOCOL";
+            case ExitRenderFailed:
+                return "RENDER_FAILED";
+            case ExitOutputWriteFailed:
+                return "OUTPUT_WRITE_FAILED";
+            case ExitTimeout:
+                return "RENDER_TIMEOUT";
+            case ExitBrowserUnavailable:
+                return "BROWSER_UNAVAILABLE";
             default:
-                return ErrorCode.RenderFailed;
+                return "RENDER_FAILED";
         }
     }
 
-    private static string MapHttpStatus(HttpStatusCode statusCode)
+    private static RenderSummary ParseSummary(string stdout)
     {
-        switch (statusCode)
+        try
         {
-            case HttpStatusCode.BadRequest:
-            case HttpStatusCode.Forbidden:
-                return ErrorCode.InvalidParams;
-            case (HttpStatusCode)429:
-                return ErrorCode.QueueFull;
-            case HttpStatusCode.GatewayTimeout:
-                return ErrorCode.PrintTimeout;
-            default:
-                return ErrorCode.RenderFailed;
+            var json = JObject.Parse(stdout);
+            return new RenderSummary
+            {
+                Success = json.Value<bool?>("success") ?? false,
+                Code = json.Value<string>("code"),
+                Message = json.Value<string>("message"),
+                RequestId = json.Value<string>("requestId"),
+                PageCount = json.Value<int?>("pageCount"),
+                DiagnosticsPath = json.Value<string>("diagnosticsPath"),
+                DiagnosticsId = ReadDiagnosticsId(json.Value<string>("diagnosticsPath"))
+            };
         }
+        catch (JsonException)
+        {
+            return new RenderSummary();
+        }
+    }
+
+    private static string? ReadDiagnosticsId(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            return null;
+
+        try
+        {
+            var json = JObject.Parse(File.ReadAllText(path));
+            return json.Value<string>("id");
+        }
+        catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static string? BuildErrorJson(ProcessResult processResult, RenderSummary summary, string? diagnosticsId)
+    {
+        if (processResult.ExitCode == ExitSuccess)
+            return null;
+
+        var payload = new JObject
+        {
+            ["success"] = false,
+            ["exitCode"] = processResult.ExitCode,
+            ["code"] = string.IsNullOrWhiteSpace(summary.Code) ? ExitCodeToRenderCode(processResult.ExitCode) : summary.Code,
+            ["message"] = string.IsNullOrWhiteSpace(summary.Message) ? processResult.Stderr.Trim() : summary.Message,
+            ["diagnosticsId"] = diagnosticsId,
+            ["stdout"] = processResult.Stdout.Trim(),
+            ["stderr"] = processResult.Stderr.Trim()
+        };
+        return payload.ToString(Formatting.Indented);
+    }
+
+    private static string CreateWorkDir(string requestId)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "EasyInk.Printer", "render-cli");
+        Directory.CreateDirectory(root);
+        var name = DateTime.Now.ToString("yyyyMMdd-HHmmssfff") + "_" + SanitizeFileName(requestId);
+        var dir = Path.Combine(root, name);
+        Directory.CreateDirectory(dir);
+        return dir;
+    }
+
+    private static void AppendArg(StringBuilder builder, string value)
+    {
+        if (builder.Length > 0)
+            builder.Append(' ');
+        builder.Append(QuoteArg(value));
+    }
+
+    private static string QuoteArg(string value)
+    {
+        return "\"" + value.Replace("\"", "\\\"") + "\"";
+    }
+
+    private static string SanitizeFileName(string value)
+    {
+        var result = string.IsNullOrWhiteSpace(value) ? "render" : value.Trim();
+        foreach (var invalid in Path.GetInvalidFileNameChars())
+            result = result.Replace(invalid, '_');
+        return result;
+    }
+
+    private static void TryKill(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+                process.Kill();
+        }
+        catch
+        {
+        }
+    }
+
+    private sealed class ProcessResult
+    {
+        public ProcessResult(int exitCode, string stdout, string stderr)
+        {
+            ExitCode = exitCode;
+            Stdout = stdout;
+            Stderr = stderr;
+        }
+
+        public int ExitCode { get; }
+        public string Stdout { get; }
+        public string Stderr { get; }
+    }
+
+    private sealed class RenderSummary
+    {
+        public bool Success { get; set; }
+        public string? Code { get; set; }
+        public string? Message { get; set; }
+        public string? RequestId { get; set; }
+        public int? PageCount { get; set; }
+        public string? DiagnosticsPath { get; set; }
+        public string? DiagnosticsId { get; set; }
     }
 }
 
@@ -224,8 +411,7 @@ internal sealed class RenderClientResponse
 {
     private RenderClientResponse(
         string requestJson,
-        int statusCode,
-        string? contentType,
+        int exitCode,
         string? diagnosticsId,
         long durationMs,
         RenderPdfResult result,
@@ -233,8 +419,7 @@ internal sealed class RenderClientResponse
         string? errorJson)
     {
         RequestJson = requestJson;
-        StatusCode = statusCode;
-        ContentType = contentType;
+        ExitCode = exitCode;
         DiagnosticsId = diagnosticsId;
         DurationMs = durationMs;
         Result = result;
@@ -243,29 +428,27 @@ internal sealed class RenderClientResponse
     }
 
     public string RequestJson { get; }
-    public int StatusCode { get; }
-    public string? ContentType { get; }
+    public int ExitCode { get; }
     public string? DiagnosticsId { get; }
     public long DurationMs { get; }
     public RenderPdfResult Result { get; }
     public byte[]? PdfBytes { get; }
     public string? ErrorJson { get; }
 
-    public static RenderClientResponse Success(string requestJson, int statusCode, string? contentType, string? diagnosticsId, long durationMs, byte[] pdfBytes)
+    public static RenderClientResponse Success(string requestJson, int exitCode, string? diagnosticsId, long durationMs, byte[] pdfBytes, int? pageCount)
     {
         return new RenderClientResponse(
             requestJson,
-            statusCode,
-            contentType,
+            exitCode,
             diagnosticsId,
             durationMs,
-            RenderPdfResult.Ok(pdfBytes, diagnosticsId),
+            RenderPdfResult.Ok(pdfBytes, diagnosticsId, pageCount),
             pdfBytes,
             null);
     }
 
-    public static RenderClientResponse Failure(string requestJson, int statusCode, string? contentType, string? diagnosticsId, long durationMs, RenderPdfResult result, string? errorJson)
+    public static RenderClientResponse Failure(string requestJson, int exitCode, string? diagnosticsId, long durationMs, RenderPdfResult result, string? errorJson)
     {
-        return new RenderClientResponse(requestJson, statusCode, contentType, diagnosticsId, durationMs, result, null, errorJson);
+        return new RenderClientResponse(requestJson, exitCode, diagnosticsId, durationMs, result, null, errorJson);
     }
 }

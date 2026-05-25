@@ -1,11 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Net.Http;
 using System.Security.Cryptography;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using EasyInk.Engine.Models;
@@ -17,13 +17,8 @@ namespace EasyInk.Printer.Services;
 
 internal sealed class RenderRuntimeManager : IDisposable
 {
-    private const string ChromeForTestingStableUrl = "https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json";
-    private const string ChromeForTestingMilestoneUrl = "https://googlechromelabs.github.io/chrome-for-testing/latest-versions-per-milestone-with-downloads.json";
-
     private readonly HostConfig _config;
     private readonly object _sync = new object();
-    private Process? _process;
-    private string? _authToken;
     private bool _disposed;
 
     public RenderRuntimeManager(HostConfig config)
@@ -31,7 +26,7 @@ internal sealed class RenderRuntimeManager : IDisposable
         _config = config;
     }
 
-    public RenderRuntimeHandle EnsureAvailable(CancellationToken cancellationToken = default)
+    public RenderRuntimeOptions ResolveOptions(CancellationToken cancellationToken = default)
     {
         if (!_config.RenderEnabled)
             throw new InvalidOperationException("Render 未启用");
@@ -39,15 +34,8 @@ internal sealed class RenderRuntimeManager : IDisposable
         lock (_sync)
         {
             ThrowIfDisposed();
-            _authToken ??= GenerateToken();
 
-            if (IsProcessAlive() && IsHealthy(cancellationToken))
-                return CurrentHandle();
-
-            StopProcess();
-            StartProcess(cancellationToken);
-            WaitUntilHealthy(cancellationToken);
-            return CurrentHandle();
+            return BuildOptions(cancellationToken);
         }
     }
 
@@ -56,7 +44,7 @@ internal sealed class RenderRuntimeManager : IDisposable
         lock (_sync)
         {
             _disposed = true;
-            StopProcess();
+            StopDaemon();
         }
     }
 
@@ -70,28 +58,32 @@ internal sealed class RenderRuntimeManager : IDisposable
         var normalizedKey = RenderBrowserVersionCatalog.NormalizeKey(versionKey);
         var effectiveKey = RenderBrowserVersionCatalog.ResolveEffectiveKey(normalizedKey);
         var option = RenderBrowserVersionCatalog.GetOption(effectiveKey);
+        var browserKind = RenderBrowserKindCatalog.NormalizeKey(_config.RenderBrowserKind);
         progress?.Report(new RenderBrowserInstallProgress(RenderBrowserInstallStage.Resolving));
         var manifest = LoadManifestBrowserInfo(ResolveManifestPath());
-        var executableHint = manifest?.Executable ?? option.ExecutableHint;
-        var versionDir = HostConfig.GetRenderBrowserVersionDir(normalizedKey);
+        var executableCandidates = ResolveExecutableCandidates(browserKind, manifest, option);
+        var browserDir = HostConfig.ResolveRenderBrowserDir(_config.RenderBrowserDir!);
+        var versionDir = HostConfig.GetRenderBrowserVersionDir(browserDir, normalizedKey);
 
-        var existingBrowser = LocateBrowserExecutable(versionDir, executableHint);
+        var existingBrowser = LocateBrowserExecutable(versionDir, executableCandidates);
         if (existingBrowser != null)
         {
             progress?.Report(new RenderBrowserInstallProgress(RenderBrowserInstallStage.CacheHit, existingBrowser));
             return existingBrowser;
         }
 
-        var installedLegacyBrowser = LocateSystemChromeForLegacyWindows(effectiveKey);
-        if (installedLegacyBrowser != null)
-        {
-            progress?.Report(new RenderBrowserInstallProgress(RenderBrowserInstallStage.CacheHit, installedLegacyBrowser));
-            return installedLegacyBrowser;
-        }
-
-        var download = ResolveBrowserDownload(option, manifest, cancellationToken);
+        var download = ResolveBrowserDownload(option, manifest, browserKind, cancellationToken);
         if (download == null)
-            throw CreateBrowserMissingException(normalizedKey);
+        {
+            var systemBrowser = LocateSystemBrowser(browserKind, effectiveKey);
+            if (systemBrowser != null)
+            {
+                progress?.Report(new RenderBrowserInstallProgress(RenderBrowserInstallStage.CacheHit, systemBrowser));
+                return systemBrowser;
+            }
+
+            throw CreateBrowserMissingException(browserKind, normalizedKey, browserDir);
+        }
 
         var downloadedArchive = DownloadBrowserArchive(download, manifest, normalizedKey, progress, cancellationToken);
         progress?.Report(new RenderBrowserInstallProgress(RenderBrowserInstallStage.Extracting, downloadedArchive));
@@ -100,11 +92,11 @@ internal sealed class RenderRuntimeManager : IDisposable
         return installedPath;
     }
 
-    private void StartProcess(CancellationToken cancellationToken)
+    private RenderRuntimeOptions BuildOptions(CancellationToken cancellationToken)
     {
-        var hostPath = HostConfig.DefaultRenderHostPath;
+        var hostPath = HostConfig.ResolveRenderHostPath(_config.RenderHostPath!);
         if (!File.Exists(hostPath))
-            throw new FileNotFoundException("内置 Render Host 不存在", hostPath);
+            throw new FileNotFoundException("Render CLI 不存在", hostPath);
 
         var browserPath = ResolveBrowserExecutablePath(cancellationToken);
         var profileRoot = HostConfig.ResolveRenderProfileRoot(_config.RenderProfileRoot!);
@@ -115,87 +107,88 @@ internal sealed class RenderRuntimeManager : IDisposable
         Directory.CreateDirectory(tempDir);
         Directory.CreateDirectory(logDir);
 
-        var args = string.Join(" ", new[]
+        return new RenderRuntimeOptions
         {
-            "--host 127.0.0.1",
-            "--port " + _config.RenderPort,
-            "--browser-path " + QuoteArg(browserPath),
-            "--profile-root " + QuoteArg(profileRoot),
-            "--temp-dir " + QuoteArg(tempDir),
-            "--log-dir " + QuoteArg(logDir),
-            "--max-concurrency " + _config.RenderMaxConcurrency,
-            "--max-queue-size " + _config.RenderMaxQueueSize,
-            "--request-timeout-ms " + _config.RenderRequestTimeoutMs,
-            "--auth-token " + QuoteArg(_authToken!)
-        });
-
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = hostPath,
-            Arguments = args,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardError = true,
-            RedirectStandardOutput = true,
-            WorkingDirectory = Path.GetDirectoryName(hostPath) ?? AppDomain.CurrentDomain.BaseDirectory
+            HostPath = hostPath,
+            BrowserKind = ResolveBrowserKind(browserPath),
+            BrowserPath = browserPath,
+            HeadlessMode = RenderHeadlessModeCatalog.NormalizeKey(_config.RenderBrowserHeadlessMode),
+            ProfileRoot = profileRoot,
+            TempDir = tempDir,
+            LogDir = logDir,
+            MaxConcurrency = _config.RenderMaxConcurrency,
+            MaxQueueSize = _config.RenderMaxQueueSize,
+            RequestTimeoutMs = _config.RenderRequestTimeoutMs,
+            IdleTimeoutMs = _config.RenderIdleTimeoutMs
         };
-
-        _process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
-        _process.OutputDataReceived += (s, e) => { if (!string.IsNullOrWhiteSpace(e.Data)) SimpleLogger.Debug("Render Host: " + e.Data); };
-        _process.ErrorDataReceived += (s, e) => { if (!string.IsNullOrWhiteSpace(e.Data)) SimpleLogger.Error("Render Host: " + e.Data); };
-
-        if (!_process.Start())
-            throw new InvalidOperationException("Render Host 启动失败");
-
-        _process.BeginOutputReadLine();
-        _process.BeginErrorReadLine();
-        cancellationToken.ThrowIfCancellationRequested();
     }
 
     private string ResolveBrowserExecutablePath(CancellationToken cancellationToken)
     {
+        var browserKind = RenderBrowserKindCatalog.NormalizeKey(_config.RenderBrowserKind);
+        var explicitPath = ResolveExplicitBrowserPath();
+        if (explicitPath != null)
+            return explicitPath;
+
         var normalizedKey = RenderBrowserVersionCatalog.NormalizeKey(_config.RenderBrowserVersion);
         var effectiveKey = RenderBrowserVersionCatalog.ResolveEffectiveKey(normalizedKey);
         var option = RenderBrowserVersionCatalog.GetOption(effectiveKey);
         var manifest = LoadManifestBrowserInfo(ResolveManifestPath());
-        var executableHint = manifest?.Executable ?? option.ExecutableHint;
+        var executableCandidates = ResolveExecutableCandidates(browserKind, manifest, option);
+        var browserDir = HostConfig.ResolveRenderBrowserDir(_config.RenderBrowserDir!);
 
-        var bundledBrowser = LocateBrowserExecutable(HostConfig.DefaultRenderBrowserDir, executableHint);
+        var bundledBrowser = LocateBrowserExecutable(HostConfig.DefaultRenderBrowserDir, executableCandidates);
         if (bundledBrowser != null)
             return bundledBrowser;
 
-        var versionBrowser = LocateBrowserExecutable(HostConfig.GetRenderBrowserVersionDir(normalizedKey), executableHint);
+        var versionBrowser = LocateBrowserExecutable(HostConfig.GetRenderBrowserVersionDir(browserDir, normalizedKey), executableCandidates);
         if (versionBrowser != null)
             return versionBrowser;
 
-        var cachedBrowser = LocateBrowserExecutable(HostConfig.DefaultRenderBrowserCacheDir, executableHint);
+        var cachedBrowser = LocateBrowserExecutable(browserDir, executableCandidates);
         if (cachedBrowser != null)
             return cachedBrowser;
 
-        var installedLegacyBrowser = LocateSystemChromeForLegacyWindows(effectiveKey);
-        if (installedLegacyBrowser != null)
-            return installedLegacyBrowser;
+        var systemBrowser = LocateSystemBrowser(browserKind, effectiveKey);
+        if (systemBrowser != null)
+            return systemBrowser;
 
-        if (!string.IsNullOrWhiteSpace(_config.RenderBrowserExecutablePath))
-        {
-            var executablePath = _config.RenderBrowserExecutablePath!.Trim();
-            if (!File.Exists(executablePath))
-                throw new FileNotFoundException("Render Chrome 可执行文件不存在", executablePath);
-            return executablePath;
-        }
-
-        var download = ResolveBrowserDownload(option, manifest, cancellationToken);
+        var download = ResolveBrowserDownload(option, manifest, browserKind, cancellationToken);
         if (download != null)
         {
             var downloadedArchive = DownloadBrowserArchive(download, manifest, normalizedKey, null, cancellationToken);
-            return ExtractBrowserArchive(downloadedArchive, manifest, download.Executable, HostConfig.GetRenderBrowserVersionDir(normalizedKey));
+            return ExtractBrowserArchive(downloadedArchive, manifest, download.Executable, HostConfig.GetRenderBrowserVersionDir(browserDir, normalizedKey));
         }
 
         if (string.IsNullOrWhiteSpace(_config.RenderBrowserArchivePath))
-            throw CreateBrowserMissingException(normalizedKey);
+            throw CreateBrowserMissingException(browserKind, normalizedKey, browserDir);
 
         var archivePath = _config.RenderBrowserArchivePath!.Trim();
-        return ExtractBrowserArchive(archivePath, manifest, executableHint, HostConfig.GetRenderBrowserVersionDir(normalizedKey));
+        return ExtractBrowserArchive(archivePath, manifest, executableCandidates.FirstOrDefault(), HostConfig.GetRenderBrowserVersionDir(browserDir, normalizedKey));
+    }
+
+    private string? ResolveExplicitBrowserPath()
+    {
+        if (string.IsNullOrWhiteSpace(_config.RenderBrowserExecutablePath))
+            return null;
+
+        var executablePath = _config.RenderBrowserExecutablePath!.Trim();
+        if (!File.Exists(executablePath))
+            throw new FileNotFoundException("Render 浏览器可执行文件不存在", executablePath);
+        return executablePath;
+    }
+
+    private static string[] ResolveExecutableCandidates(string browserKind, ManifestBrowserInfo? manifest, RenderBrowserVersionOption option)
+    {
+        var candidates = RenderBrowserKindCatalog.GetExecutableCandidates(browserKind)
+            .Cast<string?>()
+            .ToList();
+        if (!string.IsNullOrWhiteSpace(manifest?.Executable))
+            candidates.Insert(0, manifest!.Executable!);
+        if (!string.IsNullOrWhiteSpace(option.ExecutableHint))
+            candidates.Add(option.ExecutableHint);
+
+        return ExpandExecutableCandidates(candidates);
     }
 
     private string ExtractBrowserArchive(string archivePath, ManifestBrowserInfo? manifest, string? executableHint, string targetRoot)
@@ -236,23 +229,22 @@ internal sealed class RenderRuntimeManager : IDisposable
         return ResolveManifestPath(_config.RenderManifestPath);
     }
 
-    private BrowserDownloadInfo? ResolveBrowserDownload(RenderBrowserVersionOption option, ManifestBrowserInfo? manifest, CancellationToken cancellationToken)
+    private BrowserDownloadInfo? ResolveBrowserDownload(RenderBrowserVersionOption option, ManifestBrowserInfo? manifest, string browserKind, CancellationToken cancellationToken)
     {
-        if (!string.IsNullOrWhiteSpace(_config.RenderBrowserDownloadUrl))
-            return new BrowserDownloadInfo(_config.RenderBrowserDownloadUrl!.Trim(), option.DisplayName, option.ExecutableHint, "legacy", null);
-
-        if (option.SupportsAutomaticDownload)
-            return ResolveChromeForTestingDownload(option, cancellationToken);
-
-        if (!string.IsNullOrWhiteSpace(manifest?.Url))
-            return new BrowserDownloadInfo(manifest!.Url!, option.DisplayName, manifest.Executable ?? option.ExecutableHint, "manifest", manifest.Size);
-
-        return null;
+        var context = new RenderBrowserDownloadContext(
+            browserKind,
+            option,
+            manifest,
+            _config.RenderBrowserDownloadUrl,
+            ResolveExecutableCandidates(browserKind, manifest, option),
+            ReadJsonFromUrl);
+        return RenderBrowserDownloadResolver.Resolve(context, cancellationToken);
     }
 
     private string DownloadBrowserArchive(BrowserDownloadInfo download, ManifestBrowserInfo? manifest, string versionKey, IProgress<RenderBrowserInstallProgress>? progress, CancellationToken cancellationToken)
     {
-        var versionDir = HostConfig.GetRenderBrowserVersionDir(versionKey);
+        var browserDir = HostConfig.ResolveRenderBrowserDir(_config.RenderBrowserDir!);
+        var versionDir = HostConfig.GetRenderBrowserVersionDir(browserDir, versionKey);
         Directory.CreateDirectory(versionDir);
         var downloadsDir = Path.Combine(versionDir, "downloads");
         Directory.CreateDirectory(downloadsDir);
@@ -302,12 +294,12 @@ internal sealed class RenderRuntimeManager : IDisposable
             }
 
             if (download.ExpectedSize.HasValue && download.ExpectedSize.Value > 0 && new FileInfo(tempArchivePath).Length != download.ExpectedSize.Value)
-                throw new InvalidOperationException("Render Chrome 下载文件大小不完整");
+                throw new InvalidOperationException("Render 浏览器下载文件大小不完整");
 
             if (File.Exists(archivePath))
                 File.Delete(archivePath);
             File.Move(tempArchivePath, archivePath);
-            SimpleLogger.Info("Render Chrome 下载完成: " + archivePath);
+            SimpleLogger.Info("Render 浏览器下载完成: " + archivePath);
             return archivePath;
         }
         catch
@@ -318,69 +310,12 @@ internal sealed class RenderRuntimeManager : IDisposable
         }
     }
 
-    private BrowserDownloadInfo ResolveChromeForTestingDownload(RenderBrowserVersionOption option, CancellationToken cancellationToken)
-    {
-        var platform = Environment.Is64BitOperatingSystem ? "win64" : "win32";
-        var json = ReadJsonFromUrl(
-            string.Equals(option.Key, RenderBrowserVersionCatalog.StableKey, StringComparison.OrdinalIgnoreCase)
-                ? ChromeForTestingStableUrl
-                : ChromeForTestingMilestoneUrl,
-            cancellationToken);
-        var root = JObject.Parse(json);
-        var versionNode = string.Equals(option.Key, RenderBrowserVersionCatalog.StableKey, StringComparison.OrdinalIgnoreCase)
-            ? root["channels"]?["Stable"] as JObject
-            : root["milestones"]?[option.ChromeForTestingMilestone!] as JObject;
-
-        if (versionNode == null)
-            throw new InvalidOperationException("未找到可下载的 Render Chrome 版本: " + option.DisplayName);
-
-        var version = versionNode.Value<string>("version") ?? option.DisplayName;
-        var downloads = versionNode["downloads"] as JObject;
-        var download = FindChromeForTestingDownload(downloads, "chrome-headless-shell", platform)
-            ?? FindChromeForTestingDownload(downloads, "chrome", platform)
-            ?? FindChromeForTestingDownload(downloads, "chrome-headless-shell", "win32")
-            ?? FindChromeForTestingDownload(downloads, "chrome", "win32");
-        if (download == null)
-            throw new InvalidOperationException("未找到适用于 Windows 的 Render Chrome 下载包: " + option.DisplayName);
-
-        return new BrowserDownloadInfo(
-            download.Url,
-            version + "-" + download.DownloadType + "-" + download.Platform,
-            download.Executable,
-            download.DownloadType,
-            null);
-    }
-
     private string ReadJsonFromUrl(string url, CancellationToken cancellationToken)
     {
         using var http = CreateHttpClient(TimeSpan.FromMilliseconds(Math.Max(_config.RenderRequestTimeoutMs, 30000)));
         using var response = http.GetAsync(url, cancellationToken).GetAwaiter().GetResult();
         response.EnsureSuccessStatusCode();
         return response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
-    }
-
-    private static ChromeForTestingDownload? FindChromeForTestingDownload(JObject? downloads, string downloadType, string platform)
-    {
-        var items = downloads?[downloadType] as JArray;
-        if (items == null)
-            return null;
-
-        foreach (var item in items.OfType<JObject>())
-        {
-            if (!string.Equals(item.Value<string>("platform"), platform, StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            var url = item.Value<string>("url");
-            if (string.IsNullOrWhiteSpace(url))
-                continue;
-
-            var executable = string.Equals(downloadType, "chrome-headless-shell", StringComparison.OrdinalIgnoreCase)
-                ? "chrome-headless-shell-" + platform + "/chrome-headless-shell.exe"
-                : "chrome-" + platform + "/chrome.exe";
-            return new ChromeForTestingDownload(url!, platform, downloadType, executable);
-        }
-
-        return null;
     }
 
     private static ManifestBrowserInfo? LoadManifestBrowserInfo(string? manifestPath)
@@ -452,10 +387,15 @@ internal sealed class RenderRuntimeManager : IDisposable
 
     private static string? LocateBrowserExecutable(string root, string? manifestExecutable)
     {
+        return LocateBrowserExecutable(root, ExpandExecutableCandidates(new[] { manifestExecutable }));
+    }
+
+    private static string? LocateBrowserExecutable(string root, string[] executableCandidates)
+    {
         if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
             return null;
 
-        foreach (var candidate in ExpandExecutableCandidates(manifestExecutable))
+        foreach (var candidate in executableCandidates)
         {
             var direct = Path.Combine(root, candidate);
             if (File.Exists(direct))
@@ -466,6 +406,24 @@ internal sealed class RenderRuntimeManager : IDisposable
             if (found != null)
                 return found;
         }
+
+        return null;
+    }
+
+    private static string? LocateSystemBrowser(string browserKind, string effectiveKey)
+    {
+        if (string.Equals(browserKind, RenderBrowserKindCatalog.AutoKey, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(browserKind, RenderBrowserKindCatalog.ChromeForTestingKey, StringComparison.OrdinalIgnoreCase))
+            return LocateSystemChromeForLegacyWindows(effectiveKey);
+
+        if (string.Equals(browserKind, RenderBrowserKindCatalog.EdgeKey, StringComparison.OrdinalIgnoreCase))
+            return EnumerateSystemEdgeCandidates().FirstOrDefault(File.Exists);
+
+        if (string.Equals(browserKind, RenderBrowserKindCatalog.ChromeKey, StringComparison.OrdinalIgnoreCase))
+            return EnumerateSystemChromeCandidates().FirstOrDefault(File.Exists);
+
+        if (string.Equals(browserKind, RenderBrowserKindCatalog.ChromiumKey, StringComparison.OrdinalIgnoreCase))
+            return EnumerateSystemChromiumCandidates().FirstOrDefault(File.Exists);
 
         return null;
     }
@@ -503,6 +461,40 @@ internal sealed class RenderRuntimeManager : IDisposable
             Path.Combine(programFiles, "Google", "Chrome", "Application", "chrome.exe"),
             Path.Combine(programFilesX86, "Google", "Chrome", "Application", "chrome.exe")
         }.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s!).ToArray();
+    }
+
+    private static string[] EnumerateSystemEdgeCandidates()
+    {
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        var programFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+
+        return new[]
+        {
+            ReadRegistryString(@"HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\msedge.exe", string.Empty),
+            ReadRegistryString(@"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\msedge.exe", string.Empty),
+            ReadRegistryString(@"HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\App Paths\msedge.exe", string.Empty),
+            Path.Combine(localAppData, "Microsoft", "Edge", "Application", "msedge.exe"),
+            Path.Combine(programFiles, "Microsoft", "Edge", "Application", "msedge.exe"),
+            Path.Combine(programFilesX86, "Microsoft", "Edge", "Application", "msedge.exe")
+        }.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s!).ToArray();
+    }
+
+    private static string[] EnumerateSystemChromiumCandidates()
+    {
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        var programFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+
+        return new[]
+        {
+            Path.Combine(localAppData, "Chromium", "Application", "chrome.exe"),
+            Path.Combine(programFiles, "Chromium", "Application", "chrome.exe"),
+            Path.Combine(programFilesX86, "Chromium", "Application", "chrome.exe"),
+            Path.Combine(localAppData, "Chromium", "Application", "chromium.exe"),
+            Path.Combine(programFiles, "Chromium", "Application", "chromium.exe"),
+            Path.Combine(programFilesX86, "Chromium", "Application", "chromium.exe")
+        };
     }
 
     private static string? ReadRegistryString(string keyName, string valueName)
@@ -543,18 +535,10 @@ internal sealed class RenderRuntimeManager : IDisposable
         return null;
     }
 
-    private static string[] ExpandExecutableCandidates(string? manifestExecutable)
+    private static string[] ExpandExecutableCandidates(IEnumerable<string?> executableCandidates)
     {
-        var candidates = new[]
-        {
-            manifestExecutable,
-            AppendExe(manifestExecutable),
-            "chrome-headless-shell.exe",
-            "headless-shell.exe",
-            "chrome.exe"
-        };
-
-        return candidates
+        return executableCandidates
+            .SelectMany(c => new[] { c, AppendExe(c) })
             .Where(s => !string.IsNullOrWhiteSpace(s))
             .Select(s => s!.Replace('/', Path.DirectorySeparatorChar))
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -568,81 +552,32 @@ internal sealed class RenderRuntimeManager : IDisposable
         return value + ".exe";
     }
 
-    private void WaitUntilHealthy(CancellationToken cancellationToken)
+    private void StopDaemon()
     {
-        var deadline = DateTime.UtcNow.AddMilliseconds(Math.Max(_config.RenderRequestTimeoutMs, 5000));
-        Exception? lastError = null;
-
-        while (DateTime.UtcNow < deadline)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            if (!IsProcessAlive())
-                throw new InvalidOperationException("Render Host 已退出");
-
-            try
-            {
-                if (IsHealthy(cancellationToken))
-                    return;
-            }
-            catch (Exception ex) when (ex is HttpRequestException || ex is TaskCanceledException || ex is InvalidOperationException)
-            {
-                lastError = ex;
-            }
-
-            Thread.Sleep(200);
-        }
-
-        throw new TimeoutException("等待 Render Host ready 超时", lastError);
-    }
-
-    private bool IsHealthy(CancellationToken cancellationToken)
-    {
-        using var http = CreateHttpClient(TimeSpan.FromSeconds(2));
-        using var request = new HttpRequestMessage(HttpMethod.Get, CurrentHandle().BaseUrl + "/v1/health");
-        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _authToken);
-        using var response = http.SendAsync(request, cancellationToken).GetAwaiter().GetResult();
-        if (!response.IsSuccessStatusCode)
-            return false;
-
-        var json = JObject.Parse(response.Content.ReadAsStringAsync().GetAwaiter().GetResult());
-        var browserStatus = json["browser"]?.Value<string>("status");
-        return string.Equals(browserStatus, "ready", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private RenderRuntimeHandle CurrentHandle()
-    {
-        return new RenderRuntimeHandle("http://127.0.0.1:" + _config.RenderPort, _authToken!);
-    }
-
-    private bool IsProcessAlive()
-    {
-        return _process != null && !_process.HasExited;
-    }
-
-    private void StopProcess()
-    {
-        var process = _process;
-        _process = null;
-        if (process == null)
+        var hostPath = HostConfig.ResolveRenderHostPath(_config.RenderHostPath!);
+        if (!File.Exists(hostPath))
             return;
 
         try
         {
-            if (!process.HasExited)
+            using var process = new Process();
+            process.StartInfo = new ProcessStartInfo
             {
-                process.CloseMainWindow();
-                if (!process.WaitForExit(3000))
-                    process.Kill();
-            }
+                FileName = hostPath,
+                Arguments = "daemon stop",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardError = true,
+                RedirectStandardOutput = true,
+                WorkingDirectory = Path.GetDirectoryName(hostPath) ?? AppDomain.CurrentDomain.BaseDirectory
+            };
+
+            if (process.Start() && !process.WaitForExit(3000))
+                process.Kill();
         }
         catch (Exception ex)
         {
-            SimpleLogger.Debug("Render Host 停止异常", ex);
-        }
-        finally
-        {
-            process.Dispose();
+            SimpleLogger.Debug("Render daemon 停止异常", ex);
         }
     }
 
@@ -657,12 +592,26 @@ internal sealed class RenderRuntimeManager : IDisposable
         return new HttpClient { Timeout = timeout };
     }
 
-    private static string GenerateToken()
+    private string ResolveBrowserKind(string browserPath)
     {
-        var bytes = new byte[32];
-        using var rng = RandomNumberGenerator.Create();
-        rng.GetBytes(bytes);
-        return Convert.ToBase64String(bytes);
+        var configuredKind = RenderBrowserKindCatalog.NormalizeKey(_config.RenderBrowserKind);
+        return string.Equals(configuredKind, RenderBrowserKindCatalog.AutoKey, StringComparison.OrdinalIgnoreCase)
+            ? InferBrowserKind(browserPath)
+            : configuredKind;
+    }
+
+    private static string InferBrowserKind(string browserPath)
+    {
+        var name = Path.GetFileNameWithoutExtension(browserPath) ?? string.Empty;
+        if (name.IndexOf("headless-shell", StringComparison.OrdinalIgnoreCase) >= 0)
+            return "headless-shell";
+        if (name.IndexOf("chromium", StringComparison.OrdinalIgnoreCase) >= 0)
+            return "chromium";
+        if (name.IndexOf("chrome", StringComparison.OrdinalIgnoreCase) >= 0)
+            return "chrome-for-testing";
+        if (name.IndexOf("msedge", StringComparison.OrdinalIgnoreCase) >= 0)
+            return "edge";
+        return "chrome-for-testing";
     }
 
     private static string QuoteArg(string value)
@@ -678,11 +627,11 @@ internal sealed class RenderRuntimeManager : IDisposable
         return BitConverter.ToString(hash).Replace("-", string.Empty).ToLowerInvariant();
     }
 
-    private static InvalidOperationException CreateBrowserMissingException(string versionKey)
+    private static InvalidOperationException CreateBrowserMissingException(string browserKind, string versionKey, string browserDir)
     {
         return new InvalidOperationException(
-            "Render Chrome 未安装。请在设置页选择版本并点击下载，或将对应版本 Chrome 解压到 " +
-            HostConfig.GetRenderBrowserVersionDir(versionKey) + " 后重试");
+            "Render 浏览器未安装。请在设置页选择浏览器类型和版本后点击下载，或将对应浏览器解压到 " +
+            HostConfig.GetRenderBrowserVersionDir(browserDir, versionKey) + " 后重试。当前类型: " + browserKind);
     }
 
     private static string SanitizeFileName(string value)
@@ -693,45 +642,4 @@ internal sealed class RenderRuntimeManager : IDisposable
         return string.IsNullOrWhiteSpace(result) ? "chrome-for-testing" : result;
     }
 
-    private sealed class BrowserDownloadInfo
-    {
-        public BrowserDownloadInfo(string url, string versionLabel, string executable, string source, long? expectedSize)
-        {
-            Url = url;
-            VersionLabel = versionLabel;
-            Executable = executable;
-            Source = source;
-            ExpectedSize = expectedSize;
-        }
-
-        public string Url { get; }
-        public string VersionLabel { get; }
-        public string Executable { get; }
-        public string Source { get; }
-        public long? ExpectedSize { get; }
-    }
-
-    private sealed class ChromeForTestingDownload
-    {
-        public ChromeForTestingDownload(string url, string platform, string downloadType, string executable)
-        {
-            Url = url;
-            Platform = platform;
-            DownloadType = downloadType;
-            Executable = executable;
-        }
-
-        public string Url { get; }
-        public string Platform { get; }
-        public string DownloadType { get; }
-        public string Executable { get; }
-    }
-
-    private sealed class ManifestBrowserInfo
-    {
-        public string? Executable { get; set; }
-        public string? Url { get; set; }
-        public string? Sha256 { get; set; }
-        public long? Size { get; set; }
-    }
 }

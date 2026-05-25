@@ -14,8 +14,10 @@ internal sealed class DashboardView : UserControl, IDashboardView, IActivatableT
     private readonly Label _portValue;
     private readonly Label _webSocketValue;
     private readonly Label _queueValue;
+    private readonly Label _renderDaemonValue;
     private readonly Panel _serviceCard;
     private readonly Panel _queueCard;
+    private readonly Panel _renderDaemonCard;
     private readonly TableLayoutPanel _infoGrid;
     private readonly Control _errorBanner;
     private readonly Label _errorLabel;
@@ -36,24 +38,26 @@ internal sealed class DashboardView : UserControl, IDashboardView, IActivatableT
         {
             Dock = DockStyle.Top,
             Height = 118,
-            ColumnCount = 4,
+            ColumnCount = 5,
             RowCount = 1,
             Padding = new Padding(0, 0, 0, 14),
             BackColor = UiTheme.PageBackColor
         };
-        for (var i = 0; i < 4; i++)
-            cardsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+        for (var i = 0; i < 5; i++)
+            cardsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20));
         cardsPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         _serviceCard = CreateCardPanel(UiTheme.SuccessColor, LangManager.Get("Dashboard_ServiceStatus"), string.Empty, valueFont, UiTheme.SuccessColor, titleFont, out _serviceValue);
         var portCard = CreateCardPanel(UiTheme.InfoColor, LangManager.Get("Dashboard_Port"), string.Empty, valueFont, UiTheme.InfoColor, titleFont, out _portValue);
         var wsCard = CreateCardPanel(UiTheme.WarningColor, LangManager.Get("Dashboard_WebSocket"), string.Empty, valueFont, UiTheme.WarningColor, titleFont, out _webSocketValue);
         _queueCard = CreateCardPanel(UiTheme.SuccessColor, LangManager.Get("Dashboard_PrintQueue"), string.Empty, valueFont, UiTheme.SuccessColor, titleFont, out _queueValue);
+        _renderDaemonCard = CreateCardPanel(UiTheme.InfoColor, LangManager.Get("Dashboard_RenderDaemon"), string.Empty, valueFont, UiTheme.InfoColor, titleFont, out _renderDaemonValue);
 
         cardsPanel.Controls.Add(_serviceCard, 0, 0);
         cardsPanel.Controls.Add(portCard, 1, 0);
         cardsPanel.Controls.Add(wsCard, 2, 0);
         cardsPanel.Controls.Add(_queueCard, 3, 0);
+        cardsPanel.Controls.Add(_renderDaemonCard, 4, 0);
 
         var infoPanel = new RoundedPanel
         {
@@ -119,7 +123,7 @@ internal sealed class DashboardView : UserControl, IDashboardView, IActivatableT
 
     public Task ActivateAsync()
     {
-        return Task.CompletedTask;
+        return _presenter.RefreshAsync();
     }
 
     public void RunOnUiThread(Action action)
@@ -147,6 +151,7 @@ internal sealed class DashboardView : UserControl, IDashboardView, IActivatableT
         _portValue.Text = snapshot.PortText;
         _webSocketValue.Text = snapshot.WebSocketText;
         SetQueueStatus(snapshot.QueueText, snapshot.QueueKind);
+        SetRenderDaemonStatus(snapshot.RenderDaemonText, snapshot.RenderDaemonKind);
         UiFactory.SetErrorBanner(_errorBanner, _errorLabel, snapshot.StartupError);
         SetInfoRows(snapshot);
     }
@@ -162,6 +167,14 @@ internal sealed class DashboardView : UserControl, IDashboardView, IActivatableT
         _queueValue.Text = text;
         _queueValue.ForeColor = color;
         UiFactory.SetCardAccent(_queueCard, color);
+    }
+
+    public void SetRenderDaemonStatus(string text, DashboardStateKind kind)
+    {
+        var color = GetStateColor(kind);
+        _renderDaemonValue.Text = text;
+        _renderDaemonValue.ForeColor = color;
+        UiFactory.SetCardAccent(_renderDaemonCard, color);
     }
 
     public void SetBusy(bool busy)

@@ -306,7 +306,7 @@ static class Program
 
         try { httpServer.Stop(); } catch (Exception ex) { SimpleLogger.Debug("HTTP服务器停止异常", ex); }
         try { wsHandler.Dispose(); } catch (Exception ex) { SimpleLogger.Debug("WebSocket处理器释放异常", ex); }
-        try { renderRuntimeManager.Dispose(); } catch (Exception ex) { SimpleLogger.Debug("Render Host 停止异常", ex); }
+        try { renderRuntimeManager.Dispose(); } catch (Exception ex) { SimpleLogger.Debug("Render daemon 停止异常", ex); }
         try { engineApi.Dispose(); } catch (Exception ex) { SimpleLogger.Debug("引擎释放异常", ex); }
         try { trayIcon.Dispose(); } catch (Exception ex) { SimpleLogger.Debug("托盘图标释放异常", ex); }
     }

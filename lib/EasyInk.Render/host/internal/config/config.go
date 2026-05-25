@@ -77,7 +77,7 @@ func Defaults() RuntimeConfig {
 		MaxConcurrency:   2,
 		MaxQueueSize:     16,
 		RequestTimeoutMs: 30000,
-		IdleTimeoutMs:    600000,
+		IdleTimeoutMs:    0,
 	}
 }
 

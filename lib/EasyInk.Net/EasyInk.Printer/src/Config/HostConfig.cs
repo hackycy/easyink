@@ -28,6 +28,7 @@ public class HostConfig
     private const int DefaultRenderPort = 18181;
     private const int MinRenderRequestTimeoutMs = 1000;
     private const int DefaultRenderRequestTimeoutMs = 30000;
+    private const int DefaultRenderIdleTimeoutMs = 0;
     private const int MinRenderMaxConcurrency = 1;
     private const int DefaultRenderMaxConcurrency = 2;
     private const int MinRenderMaxQueueSize = 0;
@@ -42,6 +43,7 @@ public class HostConfig
     private int _printDebugArtifactRetentionCount = DefaultPrintDebugArtifactRetentionCount;
     private int _renderPort = DefaultRenderPort;
     private int _renderRequestTimeoutMs = DefaultRenderRequestTimeoutMs;
+    private int _renderIdleTimeoutMs = DefaultRenderIdleTimeoutMs;
     private int _renderMaxConcurrency = DefaultRenderMaxConcurrency;
     private int _renderMaxQueueSize = DefaultRenderMaxQueueSize;
 
@@ -97,7 +99,10 @@ public class HostConfig
 
     public bool RenderEnabled { get; set; } = false;
     public string? RenderHostPath { get; set; } = DefaultBundledRenderHostPath;
+    public string? RenderBrowserKind { get; set; } = RenderBrowserKindCatalog.AutoKey;
     public string? RenderBrowserExecutablePath { get; set; }
+    public string? RenderBrowserHeadlessMode { get; set; } = RenderHeadlessModeCatalog.AutoKey;
+    public string? RenderBrowserDir { get; set; }
     public string? RenderBrowserArchivePath { get; set; }
     public string? RenderBrowserDownloadUrl { get; set; }
     public string? RenderBrowserVersion { get; set; } = RenderBrowserVersionCatalog.AutoKey;
@@ -208,6 +213,12 @@ public class HostConfig
         set => _renderRequestTimeoutMs = value < MinRenderRequestTimeoutMs ? MinRenderRequestTimeoutMs : value;
     }
 
+    public int RenderIdleTimeoutMs
+    {
+        get => _renderIdleTimeoutMs;
+        set => _renderIdleTimeoutMs = value < 0 ? 0 : value;
+    }
+
     public int RenderMaxConcurrency
     {
         get => _renderMaxConcurrency;
@@ -250,8 +261,13 @@ public class HostConfig
 
     public static string GetRenderBrowserVersionDir(string? versionKey)
     {
+        return GetRenderBrowserVersionDir(DefaultRenderBrowserCacheDir, versionKey);
+    }
+
+    public static string GetRenderBrowserVersionDir(string browserDir, string? versionKey)
+    {
         var normalizedKey = RenderBrowserVersionCatalog.ResolveEffectiveKey(versionKey);
-        return Path.Combine(DefaultRenderBrowserVersionsDir, SanitizePathSegment(normalizedKey));
+        return Path.Combine(ResolveRenderBrowserDir(browserDir), "versions", SanitizePathSegment(normalizedKey));
     }
 
     public static string ResolveDbPath(string dbPath)
@@ -277,6 +293,11 @@ public class HostConfig
     public static string ResolveRenderHostPath(string path)
     {
         return string.IsNullOrWhiteSpace(path) ? DefaultRenderHostPath : path;
+    }
+
+    public static string ResolveRenderBrowserDir(string dir)
+    {
+        return string.IsNullOrWhiteSpace(dir) ? DefaultRenderBrowserCacheDir : dir;
     }
 
     public static string ResolveRenderProfileRoot(string dir)

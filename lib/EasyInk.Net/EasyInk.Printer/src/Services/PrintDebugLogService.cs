@@ -153,8 +153,7 @@ public sealed class PrintDebugLogService : IDisposable
     internal void WriteRenderArtifacts(
         string requestId,
         string renderRequestJson,
-        int statusCode,
-        string? contentType,
+        int exitCode,
         string? diagnosticsId,
         long durationMs,
         byte[]? pdfBytes,
@@ -172,8 +171,7 @@ public sealed class PrintDebugLogService : IDisposable
             var resultPayload = new JObject
             {
                 ["writtenAt"] = DateTime.Now,
-                ["statusCode"] = statusCode,
-                ["contentType"] = contentType,
+                ["exitCode"] = exitCode,
                 ["diagnosticsId"] = diagnosticsId,
                 ["durationMs"] = durationMs,
                 ["success"] = pdfBytes != null && pdfBytes.Length > 0

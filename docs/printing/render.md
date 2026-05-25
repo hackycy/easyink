@@ -19,7 +19,7 @@ easyink-render render
 | 组件 | 职责 |
 | --- | --- |
 | CLI | 解析命令、加载配置、输出稳定 JSON/text、归一退出码。 |
-| Daemon | 本机 IPC 常驻运行时，缓存 Browser Manager，处理队列、状态和 idle timeout。 |
+| Daemon | 本机 IPC 常驻运行时，缓存 Browser Manager，处理队列和状态；默认不空闲退出，可配置 idle timeout。 |
 | IPC | Windows 使用 Named Pipe，macOS/Linux 使用 Unix Domain Socket，frame 为长度前缀 JSON header + 可选二进制 payload。 |
 | Browser | 支持 `chrome-for-testing`、`chromium`、`chrome`、`edge`、`headless-shell`、`custom`。 |
 | Render Core | 复用 `protocol.PrintPDFRequest` 和 `render.Service.RenderPrintPDF`。 |

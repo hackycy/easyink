@@ -6,7 +6,9 @@ internal enum SettingsField
     CrashLogDir,
     SumatraTempDir,
     PrintDebugArtifactsDir,
+    RenderHostPath,
     RenderBrowserVersion,
+    RenderBrowserDir,
     RenderLogDir
 }
 
@@ -34,9 +36,14 @@ internal sealed class SettingsFormModel
     public int PrintDebugArtifactRetentionCount { get; set; }
     public string PrintDebugArtifactsDir { get; set; } = string.Empty;
     public bool RenderEnabled { get; set; }
+    public string RenderBrowserKind { get; set; } = string.Empty;
     public string RenderBrowserVersion { get; set; } = string.Empty;
-    public int RenderPort { get; set; }
+    public string RenderHostPath { get; set; } = string.Empty;
+    public string RenderHostVersion { get; set; } = string.Empty;
+    public string RenderBrowserDir { get; set; } = string.Empty;
+    public string RenderBrowserHeadlessMode { get; set; } = string.Empty;
     public int RenderRequestTimeoutMs { get; set; }
+    public int RenderIdleTimeoutMs { get; set; }
     public int RenderMaxConcurrency { get; set; }
     public int RenderMaxQueueSize { get; set; }
     public string RenderLogDir { get; set; } = string.Empty;
