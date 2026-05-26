@@ -102,7 +102,7 @@ function tick(): void {
 }
 
 onMounted(() => {
-  if (route.path !== '/')
+  if (route.data.relativePath !== 'index.md')
     return
 
   const hero = document.querySelector<HTMLElement>('.VPHero')
