@@ -41,9 +41,13 @@ function normalizeUserData(input: unknown): EasyInkPrinterUserData | undefined {
   if (!input || typeof input !== 'object')
     return undefined
 
-  const record = input as { userId?: unknown, documentType?: unknown }
+  const record = input as { userId?: unknown, documentType?: unknown, labelType?: unknown }
   const userId = typeof record.userId === 'string' ? record.userId.trim() : ''
-  const documentType = typeof record.documentType === 'string' ? record.documentType.trim() : ''
+  const documentType = typeof record.documentType === 'string'
+    ? record.documentType.trim()
+    : typeof record.labelType === 'string'
+      ? record.labelType.trim()
+      : ''
 
   if (!userId && !documentType)
     return undefined
@@ -141,7 +145,11 @@ async function connect(): Promise<void> {
   connectionState.value = 'connecting'
   try {
     await client.connect()
-    await client.refreshPrinters().catch(() => [])
+    await client.refreshPrinters()
+  }
+  catch (e) {
+    client.lastError = e instanceof Error ? e.message : '连接 EasyInk Printer 服务失败'
+    throw e
   }
   finally {
     syncState()
