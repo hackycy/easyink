@@ -1,7 +1,7 @@
 {
   "name": "@easyink/export-runtime",
   "type": "module",
-  "version": "0.0.17",
+  "version": "0.0.18",
   "description": "Framework-agnostic export runtime for EasyInk",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",

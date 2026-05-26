@@ -1,7 +1,7 @@
 {
   "name": "@easyink/datasource",
   "type": "module",
-  "version": "0.0.17",
+  "version": "0.0.18",
   "description": "Data source protocol and field tree for EasyInk designer",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",

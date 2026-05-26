@@ -1,7 +1,7 @@
 {
   "name": "@easyink/locales",
   "type": "module",
-  "version": "0.0.17",
+  "version": "0.0.18",
   "description": "Built-in locale messages for EasyInk Designer",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",
