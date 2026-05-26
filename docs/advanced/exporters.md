@@ -96,7 +96,7 @@ viewer.registerExporter({
 
 这类导出没有必要再抽 runtime 插件。
 
-## 状态生命周期
+## 导出状态
 
 ```
 idle -> preparing -> exporting -> completed

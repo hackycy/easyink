@@ -29,7 +29,7 @@ EasyInk 的 .NET 部分解决的是 Windows 本地打印这件事。它把前端
 
 多数 Web 项目都落在第一种。
 
-## 下一步
+## 后续阅读
 
 - [快速上手](./getting-started)
 - [Engine DLL](./engine)

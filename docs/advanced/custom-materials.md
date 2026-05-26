@@ -234,7 +234,7 @@ viewer.registerMaterial('my-page-badge', {
 
 判断标准只有一个：如果属性面板操作已经不再是“改一个 key 的值”，就别假装它还是简单 `propSchemas`。
 
-## 一个最小验收清单
+## 验收清单
 
 物料开发完成后，至少自己过这五步：
 
@@ -244,7 +244,7 @@ viewer.registerMaterial('my-page-badge', {
 4. 带绑定的数据在 `viewer.open({ data })` 后能正确显示。
 5. 打印和导出结果与 Viewer 渲染一致，没有退回 `[Unknown: type]`。
 
-## 常见失败信号与原因
+## 常见故障
 
 ### 类型未注册
 
@@ -275,7 +275,7 @@ viewer.registerMaterial('my-page-badge', {
 
 不要把三层代码塞进一个组件文件里。短期快，长期一定会把职责搅乱。
 
-## 相关文档
+## 延伸阅读
 
 - Designer 接入入口见 [Designer / 概述](/designer/)
 - Viewer 基础能力见 [Viewer / 概述](/viewer/)

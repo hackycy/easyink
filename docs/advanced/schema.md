@@ -156,7 +156,7 @@ isCompatibleVersion(version)
 
 `validateSchemaIssues()` 校验的是完整内部 Schema。宿主传入的宽松输入应该先经过 `normalizeDocumentSchema()`，否则缺少 `version`、`unit`、`page`、`guides` 或 `elements` 都会被视为校验问题。旧模板或外部持久化 JSON 应通过 `deserializeSchema()` 或 `MigrationRegistry` 处理，由这些入口读取并解释 `version`。
 
-## 最小 Schema 示例
+## Schema 示例
 
 ```json
 {

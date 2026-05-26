@@ -176,7 +176,7 @@ const printer = createEasyInkPrinter({
 
 这一步的意义是把“前端已经把业务字段传出去了”和“后端审计真的落库并展示了”分开验证。
 
-## Playground 示例
+## Playground 参考
 
 Playground 已使用官方包集成：
 

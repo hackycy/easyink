@@ -22,6 +22,6 @@ schema + data
 
 如果你的场景更像正式报表、A4 或对 PDF 路径依赖更强的 Windows 环境，那通常应该先看 EasyInk Printer。
 
-## 下一步
+## 后续阅读
 
 继续直接看 [快速上手](./getting-started)。

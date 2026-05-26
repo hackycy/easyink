@@ -83,7 +83,7 @@ await viewer.open({
 
 当前字体加载失败的常见诊断码是 `FONT_LOAD_FAILED`。
 
-## 接入建议
+## 字体共享方案
 
 如果你的项目同时使用 Designer 和 Viewer，最稳的方式还是把字体目录和加载器抽成共享模块。
 

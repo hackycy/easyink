@@ -205,7 +205,7 @@ export function createReviewContribution(): Contribution {
 - 命令统一切换状态
 - 面板只消费 props
 
-## 仓库参考
+## 仓库实现参考
 
 当前仓库里最直接的参考实现就是 AI 集成：
 
@@ -250,7 +250,7 @@ export function createReviewContribution(): Contribution {
 
 这样你能先验证“扩展已经成功激活”，再验证“交互入口可用”，最后才处理复杂 UI。
 
-## 相关文档
+## 延伸阅读
 
 - Designer 基础接入见 [Designer / 概述](/designer/)
 - 自定义物料见 [自定义物料开发](/advanced/custom-materials)

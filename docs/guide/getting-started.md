@@ -192,7 +192,7 @@ const blob = await viewer.exportDocument({
 
 这里有个细节值得先记住：`print()` 默认走浏览器打印；`exportDocument()` 则要求你先注册对应格式的导出器。关于这两条链路的完整接法，后面分别去看 Viewer 章节就行。
 
-## 阶段总结
+## 基础能力总结
 
 到这里，你已经具备了三个基础动作：
 

@@ -140,7 +140,7 @@ await viewer.print({
 
 导出时同样能用这些回调。
 
-## 实践建议
+## 打印接入路径
 
 如果你当前的目标只是把文档稳定打印出去，不要急着从 `registerPrintDriver()` 开始。
 
