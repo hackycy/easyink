@@ -1,4 +1,5 @@
 using System;
+using System.Data.SQLite;
 using System.IO;
 using System.Linq;
 using EasyInk.Printer.Models;
@@ -32,6 +33,7 @@ public class AuditServiceTests : IDisposable
         {
             Timestamp = DateTime.UtcNow,
             PrinterName = "TestPrinter",
+            DocumentType = "receipt",
             Status = "Success",
             JobId = "job-1"
         });
@@ -39,6 +41,7 @@ public class AuditServiceTests : IDisposable
         var logs = _service.QueryLogs(limit: 10);
         Assert.Single(logs);
         Assert.Equal("TestPrinter", logs[0].PrinterName);
+        Assert.Equal("receipt", logs[0].DocumentType);
         Assert.Equal("Success", logs[0].Status);
         Assert.Equal("job-1", logs[0].JobId);
     }
@@ -166,6 +169,55 @@ public class AuditServiceTests : IDisposable
             Assert.Equal(1, deleted);
             Assert.Single(logs);
             Assert.Equal("new", logs[0].JobId);
+        }
+        finally
+        {
+            if (File.Exists(dbPath))
+                File.Delete(dbPath);
+        }
+    }
+
+    [Fact]
+    public void Constructor_MigratesLegacyLabelTypeToDocumentType()
+    {
+        var dbPath = Path.Combine(Path.GetTempPath(), $"audit_legacy_{Guid.NewGuid():N}.db");
+        try
+        {
+            using (var connection = new SQLiteConnection($"Data Source={dbPath}"))
+            {
+                connection.Open();
+                using var command = connection.CreateCommand();
+                command.CommandText = @"
+                    CREATE TABLE PrintAuditLog (
+                        Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        Timestamp DATETIME NOT NULL,
+                        PrinterName TEXT NOT NULL,
+                        PaperWidth REAL,
+                        PaperHeight REAL,
+                        PaperUnit TEXT DEFAULT 'mm',
+                        Copies INTEGER DEFAULT 1,
+                        Dpi INTEGER,
+                        UserId TEXT,
+                        LabelType TEXT,
+                        Status TEXT NOT NULL,
+                        ErrorMessage TEXT,
+                        JobId TEXT,
+                        CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+                    );
+                    INSERT INTO PrintAuditLog
+                    (Timestamp, PrinterName, UserId, LabelType, Status, JobId)
+                    VALUES
+                    (@Timestamp, 'LegacyPrinter', 'user-1', 'receipt', 'Success', 'legacy-job');
+                ";
+                command.Parameters.AddWithValue("@Timestamp", DateTime.UtcNow);
+                command.ExecuteNonQuery();
+            }
+
+            using var service = new AuditService(dbPath, startCleanupTimer: false);
+            var logs = service.QueryLogs(limit: 10);
+
+            Assert.Single(logs);
+            Assert.Equal("receipt", logs[0].DocumentType);
         }
         finally
         {

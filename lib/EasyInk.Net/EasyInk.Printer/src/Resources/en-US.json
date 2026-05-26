@@ -114,7 +114,7 @@
   "Logs_ColPrinter": "Printer",
   "Logs_ColStatus": "Status",
   "Logs_ColUser": "User",
-  "Logs_ColLabelType": "Label Type",
+  "Logs_ColDocumentType": "Document Type",
   "Logs_ColJobId": "Job ID",
   "Logs_ColError": "Error",
 

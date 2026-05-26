@@ -122,7 +122,7 @@ internal sealed class LogsPresenter : IDisposable
                 log.PrinterName,
                 log.Status,
                 log.UserId ?? string.Empty,
-                log.LabelType ?? string.Empty,
+                log.DocumentType ?? string.Empty,
                 log.JobId ?? string.Empty,
                 log.ErrorMessage ?? string.Empty));
         }
@@ -145,7 +145,7 @@ internal sealed class LogsPresenter : IDisposable
             LangManager.Get("Logs_ColPrinter"),
             LangManager.Get("Logs_ColStatus"),
             LangManager.Get("Logs_ColUser"),
-            LangManager.Get("Logs_ColLabelType"),
+            LangManager.Get("Logs_ColDocumentType"),
             LangManager.Get("Logs_ColJobId"),
             LangManager.Get("Logs_ColError"));
 
@@ -158,7 +158,7 @@ internal sealed class LogsPresenter : IDisposable
                 log.PrinterName,
                 log.Status,
                 log.UserId ?? string.Empty,
-                log.LabelType ?? string.Empty,
+                log.DocumentType ?? string.Empty,
                 log.JobId ?? string.Empty,
                 log.ErrorMessage ?? string.Empty);
             count++;

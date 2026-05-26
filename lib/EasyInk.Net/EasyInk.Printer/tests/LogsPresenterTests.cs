@@ -41,7 +41,7 @@ public class LogsPresenterTests
                 PrinterName = "Printer, A",
                 Status = "Success",
                 UserId = "user-1",
-                LabelType = "shipping",
+                DocumentType = "shipping",
                 JobId = "job\"1",
                 ErrorMessage = "line1\nline2"
             }
@@ -58,7 +58,7 @@ public class LogsPresenterTests
             Assert.Equal(1, count);
             Assert.Equal(startTime, service.LastStartTime);
             Assert.Equal(new DateTime(2026, 5, 18, 23, 59, 59, 999).AddTicks(9999), service.LastEndTime);
-            Assert.StartsWith("时间,打印机,状态,用户,标签类型,任务ID,错误", csv);
+            Assert.StartsWith("时间,打印机,状态,用户,文档类型,任务ID,错误", csv);
             Assert.Contains("\"Printer, A\"", csv);
             Assert.Contains("\"job\"\"1\"", csv);
             Assert.Contains("\"line1\nline2\"", csv);

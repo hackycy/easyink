@@ -269,7 +269,7 @@ onMounted(() => {
           <div class="space-y-1">
             <Label>审计演示</Label>
             <p class="text-xs text-muted-foreground">
-              这里的 UserId 和 DocumentType 会随打印请求一起发送，打印后可在 EasyInk Printer 审计日志中看到 User 和 Label Type 列。留空则不发送。
+              这里的 UserId 和 DocumentType 会随打印请求一起发送，打印后可在 EasyInk Printer 审计日志中看到 User 和 Document Type 列。留空则不发送。
             </p>
           </div>
           <div class="grid gap-3 sm:grid-cols-2">

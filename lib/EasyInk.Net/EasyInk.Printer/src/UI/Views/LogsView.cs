@@ -99,7 +99,7 @@ internal sealed class LogsView : UserControl, ILogsView, IActivatableTab
         _listView.Columns.Add(LangManager.Get("Logs_ColPrinter"), 150);
         _listView.Columns.Add(LangManager.Get("Logs_ColStatus"), 80);
         _listView.Columns.Add(LangManager.Get("Logs_ColUser"), 100);
-        _listView.Columns.Add(LangManager.Get("Logs_ColLabelType"), 120);
+        _listView.Columns.Add(LangManager.Get("Logs_ColDocumentType"), 120);
         _listView.Columns.Add(LangManager.Get("Logs_ColJobId"), 200);
         _listView.Columns.Add(LangManager.Get("Logs_ColError"), 200);
 

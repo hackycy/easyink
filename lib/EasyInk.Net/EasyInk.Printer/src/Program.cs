@@ -136,7 +136,7 @@ static class Program
                     Copies = request.Copies,
                     Dpi = request.Dpi,
                     UserId = request.UserData?.UserId,
-                    LabelType = request.UserData?.LabelType,
+                    DocumentType = request.UserData?.DocumentType,
                     Status = result.Success ? JobStatus.Completed.ToString() : JobStatus.Failed.ToString(),
                     ErrorMessage = result.ErrorInfo?.Message,
                     JobId = requestId

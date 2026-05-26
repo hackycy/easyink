@@ -58,7 +58,7 @@ public class AuditService : IAuditService, IDisposable
                 Copies INTEGER DEFAULT 1,
                 Dpi INTEGER,
                 UserId TEXT,
-                LabelType TEXT,
+                DocumentType TEXT,
                 Status TEXT NOT NULL,
                 ErrorMessage TEXT,
                 JobId TEXT,
@@ -66,6 +66,7 @@ public class AuditService : IAuditService, IDisposable
             )
         ");
 
+        EnsureDocumentTypeColumn(connection);
         connection.Execute("CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON PrintAuditLog(Timestamp)");
         connection.Execute("CREATE INDEX IF NOT EXISTS idx_audit_printer ON PrintAuditLog(PrinterName)");
         connection.Execute("CREATE INDEX IF NOT EXISTS idx_audit_user ON PrintAuditLog(UserId)");
@@ -81,10 +82,10 @@ public class AuditService : IAuditService, IDisposable
         connection.Execute(@"
             INSERT INTO PrintAuditLog
             (Timestamp, PrinterName, PaperWidth, PaperHeight, PaperUnit,
-             Copies, Dpi, UserId, LabelType, Status, ErrorMessage, JobId)
+             Copies, Dpi, UserId, DocumentType, Status, ErrorMessage, JobId)
             VALUES
             (@Timestamp, @PrinterName, @PaperWidth, @PaperHeight, @PaperUnit,
-             @Copies, @Dpi, @UserId, @LabelType, @Status, @ErrorMessage, @JobId)
+             @Copies, @Dpi, @UserId, @DocumentType, @Status, @ErrorMessage, @JobId)
         ", log);
     }
 
@@ -173,6 +174,24 @@ public class AuditService : IAuditService, IDisposable
         }
 
         return sql;
+    }
+
+    private static void EnsureDocumentTypeColumn(SQLiteConnection connection)
+    {
+        var columns = connection.Query<string>("SELECT name FROM pragma_table_info('PrintAuditLog')").ToList();
+        if (!columns.Contains("DocumentType", StringComparer.OrdinalIgnoreCase))
+            connection.Execute("ALTER TABLE PrintAuditLog ADD COLUMN DocumentType TEXT");
+
+        if (columns.Contains("LabelType", StringComparer.OrdinalIgnoreCase))
+        {
+            connection.Execute(@"
+                UPDATE PrintAuditLog
+                SET DocumentType = LabelType
+                WHERE (DocumentType IS NULL OR DocumentType = '')
+                  AND LabelType IS NOT NULL
+                  AND LabelType <> ''
+            ");
+        }
     }
 
     public int CleanupOldLogs(DateTime? now = null)

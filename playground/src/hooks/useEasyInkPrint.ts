@@ -41,13 +41,9 @@ function normalizeUserData(input: unknown): EasyInkPrinterUserData | undefined {
   if (!input || typeof input !== 'object')
     return undefined
 
-  const record = input as { userId?: unknown, documentType?: unknown, labelType?: unknown }
+  const record = input as { userId?: unknown, documentType?: unknown }
   const userId = typeof record.userId === 'string' ? record.userId.trim() : ''
-  const documentType = typeof record.documentType === 'string'
-    ? record.documentType.trim()
-    : typeof record.labelType === 'string'
-      ? record.labelType.trim()
-      : ''
+  const documentType = typeof record.documentType === 'string' ? record.documentType.trim() : ''
 
   if (!userId && !documentType)
     return undefined

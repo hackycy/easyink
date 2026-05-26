@@ -1,7 +1,6 @@
 ﻿using EasyInk.Engine;
 using EasyInk.Engine.Models;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using Xunit;
 
 namespace EasyInk.Engine.Tests;
@@ -103,40 +102,27 @@ public class PrinterResultTests
 public class UserDataParamsTests
 {
     [Fact]
-    public void Deserialize_DocumentType_MapsToLabelType()
+    public void Deserialize_DocumentType_SetsDocumentType()
     {
         var userData = JsonConvert.DeserializeObject<UserDataParams>(
             @"{""userId"":""demo-user"",""documentType"":""receipt""}",
             JsonConfig.CamelCase);
 
         Assert.Equal("demo-user", userData!.UserId);
-        Assert.Equal("receipt", userData.LabelType);
         Assert.Equal("receipt", userData.DocumentType);
     }
 
     [Fact]
-    public void Deserialize_LabelType_RemainsSupported()
-    {
-        var userData = JsonConvert.DeserializeObject<UserDataParams>(
-            @"{""userId"":""demo-user"",""labelType"":""shipping""}",
-            JsonConfig.CamelCase);
-
-        Assert.Equal("shipping", userData!.LabelType);
-        Assert.Equal("shipping", userData.DocumentType);
-    }
-
-    [Fact]
-    public void Serialize_OmitsDocumentTypeAlias()
+    public void Serialize_UsesDocumentType()
     {
         var json = JsonConvert.SerializeObject(new UserDataParams
         {
             UserId = "demo-user",
-            LabelType = "receipt"
+            DocumentType = "receipt"
         }, JsonConfig.CamelCase);
-        var token = JObject.Parse(json);
 
-        Assert.Equal("demo-user", token["userId"]!.ToString());
-        Assert.Equal("receipt", token["labelType"]!.ToString());
-        Assert.Null(token["documentType"]);
+        Assert.Contains(@"""userId"":""demo-user""", json);
+        Assert.Contains(@"""documentType"":""receipt""", json);
+        Assert.DoesNotContain("labelType", json);
     }
 }

@@ -53,9 +53,9 @@ public class PrintAuditLog
     public string? UserId { get; set; }
 
     /// <summary>
-    /// 标签类型
+    /// 文档类型
     /// </summary>
-    public string? LabelType { get; set; }
+    public string? DocumentType { get; set; }
 
     /// <summary>
     /// 打印状态
