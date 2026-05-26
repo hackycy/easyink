@@ -93,6 +93,34 @@ description: EasyInk 文档写作风格指南。用于编写、审阅或修改 E
 
 ---
 
+## 标题命名
+
+标题的语气应与内容的约束力匹配——读者扫一眼标题就能感知这条规则有多硬。
+
+### 强制规则：用祈使句
+
+必须遵守的规则用 **"动词原形 + 名词短语"** 的祈使结构。动词只使用 `Use`（要做什么）和 `Avoid`（不要做什么）。
+
+**正确：** "Use multi-word component names"、"Avoid v-if with v-for"
+**避免：** "Multi-word component names"（太弱，看不出是强制要求）
+
+### 推荐规则：用名词短语
+
+允许读者自行判断的建议和注意事项，用描述性名词短语。不包含动词，陈述话题本身。
+
+**正确：** "Component files"、"Component name casing in templates"、"Element selectors with scoped"
+**避免：** "You should use separate component files"（多余，且语气不匹配推荐级别）
+
+### 核心原则
+
+| 内容约束力 | 标题格式 | 示例 |
+|-----------|----------|------|
+| 强制（必须遵守） | 祈使动词短语（Use/Avoid + 名词） | "Use keyed v-for" |
+| 推荐（建议遵守） | 名词短语（话题描述） | "Directive shorthands" |
+| 参考（提供选项） | 名词短语（话题描述） | "Empty lines in component options" |
+
+---
+
 ## 结构模板
 
 ### 打开一个主题
