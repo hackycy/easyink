@@ -2,7 +2,7 @@
 
 `EasyInk.Engine` 是纯打印引擎层。它没有 UI，也不负责 HTTP 服务。你把它嵌进 .NET 宿主里，它就负责打印机查询、打印执行和任务队列这些能力。
 
-## 先看入口
+## 基本用法
 
 ```csharp
 using EasyInk.Engine;
@@ -12,7 +12,7 @@ using var api = new EngineApi();
 
 这就是引擎最直接的使用方式。
 
-## 你会最常用到哪些方法
+## 常用方法
 
 ```csharp
 var printers = api.GetPrinters();
@@ -23,7 +23,7 @@ var jobs = api.GetAllJobs();
 
 如果你只是在自有 .NET 应用里嵌打印能力，上面这组方法通常已经是第一批要接的接口。
 
-## 统一命令入口也是真的存在
+## 统一命令入口
 
 除了这些显式方法，`EngineApi` 还支持统一命令入口：
 
@@ -52,7 +52,7 @@ var result = api.HandleCommand(new PrinterCommand
 
 这也是 Printer 桌面服务在内部继续复用 Engine 的原因。
 
-## 事件是怎么给宿主用的
+## 宿主事件接口
 
 Engine 不负责持久化，但会把关键事件抛出来交给宿主处理。
 
@@ -81,7 +81,7 @@ api.PrintCompleted += (requestId, requestParams, result) =>
 
 如果你要做审计、日志或业务事件转发，这里就是最自然的挂点。
 
-## 打印请求里最关键的参数
+## 打印请求参数
 
 第一次集成时，先盯住这几个字段就够了：
 
@@ -95,7 +95,7 @@ api.PrintCompleted += (requestId, requestParams, result) =>
 
 特别是 `ForcePaperSize`，不要一开始就默认开。很多连续纸和热敏机更适合先让驱动决定当前介质。
 
-## 如果你要换底层实现
+## 底层实现替换
 
 Engine 也允许你替换服务实现。
 

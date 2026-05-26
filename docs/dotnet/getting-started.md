@@ -2,7 +2,7 @@
 
 这页只做一件事：让浏览器端先打出第一张单。
 
-## 第一步：先把本地服务跑起来
+## 本地服务启动
 
 启动 `EasyInk.Printer.exe` 之后，默认服务地址通常是：
 
@@ -12,13 +12,13 @@ http://localhost:18080
 
 先别急着写前端代码，先确认服务真的能响应。
 
-## 第二步：安装前端集成包
+## 前端集成包安装
 
 ```bash
 pnpm add @easyink/print-integration-easyink-printer
 ```
 
-## 第三步：先确认能看到打印机
+## 打印机验证
 
 你可以先直接打这个接口：
 
@@ -28,7 +28,7 @@ curl http://localhost:18080/api/printers
 
 如果这一步都失败，优先排查本地服务和打印机驱动，而不是继续调模板渲染。
 
-## 第四步：创建客户端和打印器
+## 客户端与打印器创建
 
 ```ts
 import { createEasyInkPrinterClient, createEasyInkPrinter } from '@easyink/print-integration-easyink-printer'
@@ -48,13 +48,13 @@ await printer.print({ schema, data })
 
 这条链路已经把托管 Viewer、渲染、PDF 提交和打印过程串起来了。大多数项目第一次接入，就从这里开始。
 
-## 默认打印策略先记这一条
+## 默认打印策略
 
 当前高层打印器默认走 `pageSizeMode: 'fixed'`。这通常更适合正式单据、固定页模板和 PDF 路径。
 
 如果你之后还要改成服务端 Render 提交模式，也是在这层配置上继续扩展，而不是重写整条打印流程。
 
-## 如果你想直接走服务端 Render
+## 服务端 Render
 
 ```ts
 const printer = createEasyInkPrinter({
@@ -72,7 +72,7 @@ const printer = createEasyInkPrinter({
 
 这条模式仍然会使用托管 Viewer 来复用页面策略和运行时数据输入，但最终提交给本地服务的是 render source，而不是浏览器端生成的 PDF 文件。
 
-## 你不需要自己手动创建 Viewer
+## Viewer 自动创建
 
 这和 HiPrint 一样，也是高层打印器最省心的地方。
 
@@ -80,14 +80,14 @@ const printer = createEasyInkPrinter({
 
 如果你真的想复用自己的容器，也可以显式传入 `iframe` 或 `container`。
 
-## 生命周期怎么处理
+## 生命周期管理
 
 - `printer.destroy()`：清理托管 Viewer
 - `client.disconnect()`：关闭客户端连接
 
 这两件事最好分开理解。前者是渲染面生命周期，后者是通信生命周期。
 
-## 如果你已经有 PDF 文件
+## PDF 直接打印
 
 那就不一定要再走 Viewer。
 
@@ -111,7 +111,7 @@ await client.printPdfAndWait(file, {
 - 你的服务端已经生成好了 PDF
 - 你只是想把已有票据重新投递给本地打印机
 
-## 打印 schema + data 或 HTML
+## Schema/HTML 打印
 
 如果业务侧不需要高层托管 Viewer，也可以直接使用客户端 API。`printEasyInk()` 会把模板和数据作为 `renderSource.type=easyink` 发送给 EasyInk.Printer：
 
@@ -166,7 +166,7 @@ const printer = createEasyInkPrinter({
 
 判断标准不要反过来。不是“特定设备类型就一定开启”，而是“只有当设备必须按模板尺寸输出，否则会缩放或错位时才开启”。
 
-## 如何验收审计链路
+## 审计链路验收
 
 如果你的目标不只是“打出来”，还包括“知道是谁打的、打的是什么类型”，那最小验收标准应该再多一步：
 

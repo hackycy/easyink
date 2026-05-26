@@ -2,7 +2,7 @@
 
 导出层最容易做错的地方，不是代码写不出来，而是把 Viewer 适配和格式转换混在一起。
 
-## 两层职责先分清
+## 职责分层
 
 当前导出体系至少有两层：
 
@@ -11,7 +11,7 @@
 
 如果一段逻辑还依赖 `container`、`renderedPages` 或 `entry`，它更像 Viewer 侧桥接；如果它只关心输入和输出文件，它更像格式插件。
 
-## 这两个接口长什么样
+## 接口定义
 
 ```ts
 interface ViewerExporter {
@@ -32,7 +32,7 @@ interface ExportFormatPlugin<TInput = unknown, TResult extends Blob | void = Blo
 }
 ```
 
-## 推荐的开发顺序
+## 开发顺序
 
 最稳的顺序是：
 
@@ -42,7 +42,7 @@ interface ExportFormatPlugin<TInput = unknown, TResult extends Blob | void = Blo
 
 这样格式转换能先独立验证，Viewer 这一层只负责适配。
 
-## 一个典型组合
+## 典型组合
 
 如果你要把 Viewer 页面导成 PDF，通常会这样组合：
 
@@ -72,7 +72,7 @@ viewer.registerExporter({
 
 这里真正做 PDF 的是格式插件，不是 ViewerExporter 本身。
 
-## 什么时候不需要 `ExportRuntime`
+## `ExportRuntime` 适用边界
 
 如果你的导出结果本来就直接依赖 Viewer 上下文，而且没有复用价值，那可以只写 `ViewerExporter`。
 
@@ -111,7 +111,7 @@ idle -> preparing -> exporting -> completed
 - `completed`：结果已生成
 - `failed`：任一阶段发生错误
 
-## 一个更短的工程路径
+## 工程路径
 
 如果你的需求只是“导出一种新格式”，最短路径通常不是先设计大而全的导出体系，而是：
 

@@ -2,7 +2,7 @@
 
 当你需要一个新的模板元素，而且这个元素既要能在 Designer 里编辑，又要能在 Viewer 里渲染，这一层才值得进入。
 
-## 先做一个判断
+## 需求判断
 
 下面三种需求不要混在一起：
 
@@ -10,7 +10,7 @@
 - 只是想加按钮、面板或命令：那是 Contribution
 - 需要新的节点类型、新的设计态表现和新的预览态表现：这才是自定义物料
 
-## 一个物料最少要覆盖哪几层
+## 物料分层
 
 真实链路至少有三段：
 
@@ -20,7 +20,7 @@
 
 少任意一段，物料都不完整。
 
-## Designer 侧真正依赖的契约
+## Designer 侧契约
 
 Designer 的注册入口是 `registerMaterialBundle(store, bundle)`。
 
@@ -74,7 +74,7 @@ registerMaterialBundle(store, {
 
 这里有一个实现细节值得知道：Designer 注册时会先取 `@easyink/prop-schemas` 里的基础属性，再把你传入的 `propSchemas` 追加进去。
 
-## 设计态真正要实现什么
+## 设计态实现
 
 Designer 侧不是简单画一个 div。它依赖的是 `MaterialDesignerExtension`。
 
@@ -93,7 +93,7 @@ interface MaterialDesignerExtension {
 
 如果你第一次做自定义物料，不要一上来就实现全部能力。先只把 `renderContent` 跑通，让节点能在画布上稳定显示。
 
-## Viewer 侧是另一套契约
+## Viewer 侧契约
 
 同一个 `type` 在 Viewer 里还要再注册一次，因为设计态和预览态本来就不是同一层职责。
 
@@ -123,7 +123,7 @@ viewer.registerMaterial('price-tag', {
 
 只有当你的物料确实涉及运行时测量、跨页切分或每页重复渲染时，再继续补 `measure`、`fragmentPaginator` 或 `pageAware`。
 
-## 推荐的开发顺序
+## 开发顺序
 
 最稳的顺序是：
 
@@ -141,7 +141,7 @@ viewer.registerMaterial('price-tag', {
 
 Viewer 实际传给 `render()` 的 `node.props` 也已经是解析后的属性，但文档里推荐优先读 `context.resolvedProps`，因为它更能表达“这里用的是运行时结果”。
 
-## 什么时候实现 `measure`
+## `measure` 实现时机
 
 只有一种情况值得写 `measure()`：物料的最终高度或宽度依赖运行时内容。
 
@@ -172,7 +172,7 @@ viewer.registerMaterial(PRICE_TAG_TYPE, {
 
 上面这个 `measure()` 只是示意接口形状。对于固定尺寸物料，直接省略更合适。
 
-## 什么时候使用 `pageAware`
+## `pageAware` 使用时机
 
 `pageAware` 不是“这个物料知道页码”，而是“这个物料应该被复制到每一页”。
 
@@ -203,7 +203,7 @@ viewer.registerMaterial('my-page-badge', {
 
 它只在真实输出页语义下生效，不会影响 layout、reflow 或 pagination 输入。
 
-## 数据绑定应该怎么接
+## 数据绑定接入
 
 自定义物料最常见的误区，是把绑定逻辑写进 Viewer 里手动取数据。正确顺序应该是：
 
@@ -215,7 +215,7 @@ viewer.registerMaterial('my-page-badge', {
 
 如果你发现自己在 Viewer 里手动写 `getByPath(context.data, ...)`，通常说明职责写错层了。
 
-## 属性面板什么时候够用，什么时候要自定义 overlay
+## 属性面板与 Overlay
 
 `propSchemas` 适合简单字段：
 
@@ -246,26 +246,26 @@ viewer.registerMaterial('my-page-badge', {
 
 ## 常见失败信号与原因
 
-### Designer 里能看到，Viewer 里是 `[Unknown: type]`
+### 类型未注册
 
 根因通常只有一个：你只注册了 Designer，没有注册 Viewer。
 
-### Viewer 里渲染出来，但绑定值始终不变
+### 绑定失效
 
 优先检查两点：
 
 - `viewer.open()` 传入的 `data` 结构是否与 `fieldPath` 对齐。
 - 渲染器是否错误地读了自己拼的默认值，而不是 `context.resolvedProps`。
 
-### 属性面板能改，画布内容不刷新
+### 画布不刷新
 
 通常是 `renderContent()` 只在挂载时渲染了一次，没有订阅 `nodeSignal`。
 
-### 缩放后内部结构错位
+### 缩放错位
 
 如果物料内部有独立布局状态，光靠节点 `width/height` 改变还不够，需要实现 `resize` 适配器，把私有状态和外层几何一起更新。
 
-## 一条更稳的工程边界
+## 工程边界
 
 如果你的物料后面还会被多个业务复用，建议从第一天开始把它拆成三个文件：
 

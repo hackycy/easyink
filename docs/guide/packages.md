@@ -4,7 +4,7 @@
 
 其实不用一上来就把整张表背下来。先按“我现在要做什么”来选，就够了。
 
-## 如果你只是要嵌入编辑和预览
+## 编辑与预览
 
 大多数业务项目先装这两个包：
 
@@ -17,7 +17,7 @@ pnpm add @easyink/designer @easyink/viewer
 
 如果你现在处在“先把页面跑起来”的阶段，这两个包已经够用了。
 
-## 如果你开始关心模板本身
+## 模板能力
 
 接下来最常用的是这几类基础包：
 
@@ -30,7 +30,7 @@ pnpm add @easyink/designer @easyink/viewer
 
 通常是这样的顺序：先用 Designer 和 Viewer，遇到更细的模板问题时，再往这些包下钻。
 
-## 如果你要做打印集成
+## 打印集成
 
 打印相关包分两层看会更清楚。
 
@@ -45,7 +45,7 @@ pnpm add @easyink/designer @easyink/viewer
 
 如果你的目标只是把模板打出去，优先选官方集成包，不用先自己写驱动。
 
-## 如果你要做导出
+## 导出能力
 
 导出也分两层：
 
@@ -56,7 +56,7 @@ pnpm add @easyink/designer @easyink/viewer
 
 这层设计的意思很简单：Viewer 负责把页面渲染出来，导出插件负责把这些页面变成文件。
 
-## 如果你要做 Designer 二次开发
+## Designer 扩展
 
 这时你通常会碰到下面这些包：
 
@@ -69,7 +69,7 @@ pnpm add @easyink/designer @easyink/viewer
 
 这些包更多是扩展和维护层会接触到的东西。普通业务接入一般不需要直接操作全部内容。
 
-## 物料包怎么看
+## 物料包
 
 仓库里每种内置物料都拆成独立包，比如：
 
@@ -91,7 +91,7 @@ pnpm add @easyink/designer @easyink/viewer
 
 只有当你在研究自定义物料、对照内置实现写扩展时，才需要逐个看这些包。
 
-## AI 和 MCP 在哪一层
+## AI 与 MCP
 
 AI 相关能力也单独拆了出来：
 

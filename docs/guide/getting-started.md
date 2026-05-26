@@ -4,7 +4,7 @@
 
 我们会先把 Designer 嵌进 Vue 页面，再用同一份 `schema` 交给 Viewer 预览。这样你很快就能建立起 EasyInk 最重要的心智模型：Designer 负责编辑，Viewer 负责消费，二者之间只传 `schema + data`。
 
-## 先准备环境
+## 环境准备
 
 - Node.js 18 或更高版本
 - pnpm 9 或更高版本
@@ -18,7 +18,7 @@ pnpm add @easyink/designer @easyink/viewer
 
 上面这两个包已经覆盖了大多数业务的第一阶段接入。关于其它包怎么选，后面再看 [包概览](/guide/packages) 就行。
 
-## 先把 Designer 跑起来
+## Designer 入门
 
 `EasyInkDesigner` 是一个 Vue 组件。你给它一个 `schema`，它负责把缺省字段补齐，并在编辑时通过 `v-model:schema` 把完整模板回传给你。
 
@@ -61,7 +61,7 @@ const preferenceProvider = createLocalStoragePreferenceProvider()
 
 如果你现在只想先看到画布，这些就够了。
 
-## 给 Designer 加一份数据源
+## 数据源集成
 
 接下来你通常会想做第二件事：把业务字段拖到画布上。
 
@@ -96,7 +96,7 @@ const dataSources: DataSourceDescriptor[] = [
 
 这时你就能在设计器里看到字段面板，并把字段拖到元素上了。
 
-## 打开自动保存
+## 自动保存
 
 模板能编辑之后，通常下一步就是保存。
 
@@ -128,7 +128,7 @@ const autoSave = {
 
 这里先知道一件事就够了：自动保存存的是模板，偏好持久化存的是工作台状态。两者互不替代。
 
-## 再把同一份模板交给 Viewer
+## Viewer 预览
 
 当你已经能编辑模板时，就可以开始预览了。
 
@@ -172,7 +172,7 @@ onBeforeUnmount(() => {
 
 上面这段代码演示了 Viewer 最重要的输入契约：它只接收 `schema` 和运行时 `data`。Designer 里的 `dataSources` 不会传进来。
 
-## 试一下打印和导出
+## 打印与导出
 
 当文档已经打开后，打印和导出就是下一层能力。
 
@@ -192,7 +192,7 @@ const blob = await viewer.exportDocument({
 
 这里有个细节值得先记住：`print()` 默认走浏览器打印；`exportDocument()` 则要求你先注册对应格式的导出器。关于这两条链路的完整接法，后面分别去看 Viewer 章节就行。
 
-## 你现在应该已经知道什么
+## 阶段总结
 
 到这里，你已经具备了三个基础动作：
 

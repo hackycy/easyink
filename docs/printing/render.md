@@ -4,7 +4,7 @@
 
 它不枚举打印机，也不提交物理打印任务。你可以把它理解成打印链路前面的渲染引擎。
 
-## 一句话理解它的工作方式
+## 工作方式
 
 ```text
 easyink-render render
@@ -15,7 +15,7 @@ easyink-render render
 
 当前主入口是 `easyink-render` 命令。默认模式会自动发现或拉起本机 daemon；如果你想做一次性隔离执行，也可以加 `--no-daemon`。
 
-## 先跑一条命令
+## 基本命令
 
 ```bash
 easyink-render render \
@@ -26,7 +26,7 @@ easyink-render render \
 
 如果这是第一次运行，CLI 会先把渲染环境准备好。成功之后，你会拿到 PDF 文件和稳定的 JSON 输出。
 
-## `--no-daemon` 什么时候用
+## `--no-daemon` 使用时机
 
 当你在 CI、隔离环境或临时调试里不想复用常驻 daemon 时，直接这样跑：
 
@@ -39,7 +39,7 @@ easyink-render render \
 
 如果你只是日常本机开发，默认 daemon 模式通常更省资源也更快。
 
-## daemon 可以直接管理
+## Daemon 管理
 
 ```bash
 easyink-render daemon start
@@ -50,7 +50,7 @@ easyink-render daemon restart
 
 这组命令足够你完成大多数本地排查。
 
-## Browser 检查也有独立命令
+## Browser 检查
 
 ```bash
 easyink-render browser inspect \
@@ -60,7 +60,7 @@ easyink-render browser inspect \
 
 当你怀疑渲染环境本身有问题，这条命令会比盲猜快很多。
 
-## 常用命令有哪些
+## 常用命令
 
 ```text
 easyink-render render
@@ -78,7 +78,7 @@ easyink-render version
 
 如果你不是在做内部调试，日常最常用的还是 `render`、`daemon status` 和 `diagnostics show`。
 
-## 配置优先级先记这一条就够了
+## 配置优先级
 
 ```text
 CLI flags > environment variables > config file > defaults
@@ -86,7 +86,7 @@ CLI flags > environment variables > config file > defaults
 
 这条规则基本决定了你排查配置问题时该先看哪里。
 
-## diagnostics 在哪看
+## Diagnostics 查看
 
 Render 会把诊断结果落盘。最常用的查看方式是：
 
@@ -103,7 +103,7 @@ easyink-render render \
   --diagnostics-out diagnostics.json
 ```
 
-## 什么时候该先看这页
+## 使用场景
 
 如果你的目标是下面这些之一，就该先看 Render，而不是先看打印机集成：
 

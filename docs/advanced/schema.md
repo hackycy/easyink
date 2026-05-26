@@ -2,7 +2,7 @@
 
 Schema 是 EasyInk 的基础模型。Designer、Viewer、打印和导出最终都围绕它工作。
 
-## 先分清两种输入形态
+## 输入形态
 
 对宿主来说，最常接触的是宽松输入；对运行时来说，最终都会落到完整 Schema。传入设计器的是 `DocumentSchemaInput`：所有顶层字段都可以省略，`page` 和 `guides` 的必填子字段也可以省略。
 
@@ -26,7 +26,7 @@ const issues = validateSchemaIssues(schema)
 
 `normalizeDocumentSchema()` 会补默认值，`validateSchemaIssues()` 用来判断对象是否已经是完整合法的内部 Schema。
 
-## `normalizeDocumentSchema()` 当前会做什么
+## `normalizeDocumentSchema()` 行为
 
 从实现上看，它至少会保证这些默认值：
 
@@ -36,7 +36,7 @@ const issues = validateSchemaIssues(schema)
 - `elements` 默认空数组
 - `page` 会按 `mode` 补全对应的层级默认策略
 
-## `page.mode` 不只是页面尺寸
+## `page.mode` 配置
 
 当前归一化逻辑里，`mode` 会决定整组页面层配置默认值：
 
@@ -47,7 +47,7 @@ const issues = validateSchemaIssues(schema)
 
 这也是为什么连续纸和固定页面模板不能只改一个宽高就算了。
 
-## 校验层当前暴露了哪些能力
+## 校验能力
 
 `@easyink/schema` 当前直接导出了这些常用能力：
 
@@ -59,7 +59,7 @@ const issues = validateSchemaIssues(schema)
 
 如果你要做本地持久化、导入导出或服务端接收模板，这些入口比自己手写 JSON 检查更可靠。
 
-## 兼容输入也有现成入口
+## 兼容输入
 
 Schema codec 里还包含对 benchmark 输入的解码逻辑。也就是说，兼容旧输入格式并不是靠文档约定，而是有明确代码路径去做字段映射。
 

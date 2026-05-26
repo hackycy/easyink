@@ -2,7 +2,7 @@
 
 EasyInk.Printer 同时提供 HTTP 和 WebSocket 两套入口。默认端口是 `18080`。
 
-## 统一响应长什么样
+## 统一响应格式
 
 ```json
 {
@@ -15,15 +15,15 @@ EasyInk.Printer 同时提供 HTTP 和 WebSocket 两套入口。默认端口是 `
 
 这一层统一返回 `PrinterResult` 结构。成功和失败都走同一套外壳，差别主要在 `success` 和 `errorInfo`。
 
-## 最常用的 HTTP 接口
+## 常用 HTTP 接口
 
-### 列出打印机
+### 打印机列表
 
 ```bash
 curl http://localhost:18080/api/printers
 ```
 
-### 查询单个打印机状态
+### 单个打印机状态
 
 ```bash
 curl http://localhost:18080/api/printers/HP%20LaserJet/status
@@ -52,14 +52,14 @@ curl -X POST http://localhost:18080/api/print/async \
   }'
 ```
 
-### 查询任务
+### 任务查询
 
 ```bash
 curl http://localhost:18080/api/jobs
 curl http://localhost:18080/api/jobs/550e8400-e29b-41d4-a716-446655440000
 ```
 
-## `print` 请求最关键的输入
+## `print` 请求输入
 
 当前打印请求里，最核心的字段是：
 
@@ -74,7 +74,7 @@ curl http://localhost:18080/api/jobs/550e8400-e29b-41d4-a716-446655440000
 
 这里最需要注意的一条规则是：PDF 输入和 `renderSource` 不能同时传。服务端会把它当成参数错误处理。
 
-## `renderSource` 也可以直接打印
+## `renderSource` 直接打印
 
 如果你不是上传 PDF，而是希望服务端先做 Render，也可以直接提交 render source。
 
@@ -103,7 +103,7 @@ curl -X POST http://localhost:18080/api/print/async \
 
 HTML 的例子也成立，只要 `renderSource.type` 换成 `html` 并传入 `html` 内容即可。
 
-## WebSocket 适合什么时候用
+## WebSocket 场景
 
 当你要做长连接、实时状态或大文件上传时，WebSocket 更合适。
 

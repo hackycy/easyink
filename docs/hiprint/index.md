@@ -2,7 +2,7 @@
 
 HiPrint 这条链路更适合跨平台和小票类场景。EasyInk 在这一层提供的是一个高层打印器，让你不用自己手动创建 Viewer、提取页面 HTML、再去拼接 HiPrint 调用。
 
-## 它的链路很简单
+## 工作链路
 
 ```text
 schema + data
@@ -14,7 +14,7 @@ schema + data
 
 这也是它和 EasyInk Printer 的最大差别之一：这里的打印输入更接近 HTML 页面，而不是本地服务侧 PDF 路径。
 
-## 什么时候适合选它
+## 适用场景
 
 - 你需要跨平台
 - 你的项目已经接入 `electron-hiprint`
