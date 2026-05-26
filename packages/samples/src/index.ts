@@ -11,6 +11,7 @@ import {
   supermarketFlexRowReceiptTemplate,
   supermarketReceiptTemplate,
 } from './templates/supermarket-receipt'
+import { vatElectronicInvoiceTemplate } from './templates/vat-electronic-invoice'
 import {
   verticalMixedTextDemoData,
   verticalMixedTextTemplate,
@@ -33,6 +34,7 @@ export {
   supermarketFlexRowReceiptTemplate,
   supermarketReceiptTemplate,
 } from './templates/supermarket-receipt'
+export { vatElectronicInvoiceTemplate } from './templates/vat-electronic-invoice'
 export {
   verticalMixedTextDataSource,
   verticalMixedTextDemoData,
@@ -214,6 +216,12 @@ export const sampleTemplates: SampleTemplateEntry[] = [
     name: '简单发票',
     category: 'business',
     schema: simpleInvoiceTemplate,
+  },
+  {
+    id: 'vat-electronic-invoice',
+    name: '增值税电子普通发票',
+    category: 'business',
+    schema: vatElectronicInvoiceTemplate,
   },
   {
     id: 'flow-invoice',
