@@ -6,6 +6,7 @@ import { createAIContribution } from '@easyink/ai'
 import { createLocalStoragePreferenceProvider, EasyInkDesigner } from '@easyink/designer'
 import { enUS, zhCN } from '@easyink/designer/locale'
 import { blankA4Template, flowInvoiceTemplate, invoiceDemoData, sampleDataSources } from '@easyink/samples'
+import { BookOpen, ChevronDown, Database, Eye, Github, Languages, LayoutTemplate, Save } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 import { toast } from 'vue-sonner'
 import DataEditorModal from './components/DataEditor.vue'
@@ -249,35 +250,53 @@ const contributions = [createAIContribution()]
     :contributions="contributions"
   >
     <template #topbar>
-      <div class="flex items-center gap-2 px-3 py-1 bg-muted border-b border-border">
-        <Button variant="outline" size="sm" class="flex items-center gap-1" @click="showTemplateGallery = true">
-          {{ topbarLabel }}
-          <span class="text-[10px] text-muted-foreground">&#9662;</span>
-        </Button>
-        <Button
-          v-if="previewingSample"
-          variant="outline"
-          size="sm"
-          @click="handleSavePreviewAsTemplate"
-        >
-          另存为我的模板
-        </Button>
+      <div data-easyink-topbar class="flex h-12 items-center gap-2 overflow-x-auto bg-background px-3 shadow-[0_1px_18px_rgba(15,23,42,0.08)]">
+        <div class="flex min-w-0 shrink-0 items-center gap-2">
+          <div class="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground shadow-sm">
+            <LayoutTemplate class="size-4" />
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            class="min-w-0 max-w-[42vw] justify-start bg-muted/70 px-2.5 font-semibold hover:bg-muted sm:max-w-[280px]"
+            @click="showTemplateGallery = true"
+          >
+            <span class="truncate">{{ topbarLabel }}</span>
+            <ChevronDown class="size-3.5 text-muted-foreground" />
+          </Button>
+          <Button
+            v-if="previewingSample"
+            variant="secondary"
+            size="sm"
+            class="h-8 px-2.5"
+            @click="handleSavePreviewAsTemplate"
+          >
+            <Save class="size-3.5" />
+            另存为我的模板
+          </Button>
+        </div>
         <div class="flex-1" />
-        <Button variant="outline" size="sm" @click="openDocumentation">
-          文档
-        </Button>
-        <Button variant="outline" size="sm" class="px-2" title="GitHub" @click="openGitHub">
-          <svg class="size-4" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0 1 12 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z" />
-          </svg>
-        </Button>
-        <Button variant="outline" size="sm" @click="localeCode = localeCode === 'zh-CN' ? 'en-US' : 'zh-CN'">
-          {{ localeToggleLabel }}
-        </Button>
-        <Button variant="outline" size="sm" @click="openDataEditor">
-          数据
-        </Button>
-        <Button size="sm" @click="openPreview">
+        <div class="flex shrink-0 items-center gap-1 rounded-md bg-muted/70 p-1">
+          <Button variant="ghost" size="sm" class="h-7 px-2 text-muted-foreground hover:text-foreground" @click="openDocumentation">
+            <BookOpen class="size-3.5" />
+            文档
+          </Button>
+          <Button variant="ghost" size="icon-sm" class="size-7 text-muted-foreground hover:text-foreground" title="GitHub" aria-label="GitHub" @click="openGitHub">
+            <Github class="size-4" />
+          </Button>
+        </div>
+        <div class="flex shrink-0 items-center gap-1 rounded-md bg-muted/70 p-1">
+          <Button variant="ghost" size="sm" class="h-7 px-2 text-muted-foreground hover:text-foreground" @click="localeCode = localeCode === 'zh-CN' ? 'en-US' : 'zh-CN'">
+            <Languages class="size-3.5" />
+            {{ localeToggleLabel }}
+          </Button>
+          <Button variant="ghost" size="sm" class="h-7 px-2 text-muted-foreground hover:text-foreground" @click="openDataEditor">
+            <Database class="size-3.5" />
+            数据
+          </Button>
+        </div>
+        <Button size="sm" class="h-9 shrink-0 px-3.5 shadow-sm" @click="openPreview">
+          <Eye class="size-3.5" />
           预览
         </Button>
       </div>
