@@ -604,6 +604,10 @@ function updateBindingFormat(format: BindingDisplayFormat | undefined, bindIndex
   store.commands.execute(cmd)
 }
 
+function getBindingDataSource(sourceId: string) {
+  return store.dataSourceRegistry.getSourceSync(sourceId)
+}
+
 function readPropValue(schema: PropSchema): unknown {
   const el = selectedElement.value
   if (!el)
@@ -767,6 +771,7 @@ function createImagePickRequest(schema: PropSchema): DesignerAssetPickRequest {
           :t="store.t.bind(store)"
           :external-binding="externalBinding"
           :has-external-binding="hasSubBinding"
+          :get-data-source="getBindingDataSource"
           @clear-binding="clearBinding"
           @clear-external-binding="handleClearExternalBinding"
           @update-binding-format="updateBindingFormat"

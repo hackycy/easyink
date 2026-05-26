@@ -28,6 +28,18 @@ interface DataSourceDescriptor {
   meta?: Record<string, unknown>
 }
 
+interface DataFieldDisplayFormatConfig {
+  customTemplates?: DataFieldCustomFormatTemplate[]
+  defaultCustomTemplateId?: string
+}
+
+interface DataFieldCustomFormatTemplate {
+  id: string
+  label: string
+  source: string
+  hint?: string
+}
+
 interface DataFieldNode {
   name: string
   key?: string
@@ -38,6 +50,7 @@ interface DataFieldNode {
   use?: string
   props?: Record<string, unknown>
   format?: BindingDisplayFormat
+  displayFormat?: DataFieldDisplayFormatConfig
   bindIndex?: number
   union?: DataUnionBinding[]
   expand?: boolean
@@ -191,6 +204,7 @@ EasyInk 的做法应是：
 | `use` | 推荐物料或物料模板 token | 拖拽创建 |
 | `props` | 创建默认属性 | 拖拽创建 |
 | `format` | 字段默认显示格式 | 拖拽绑定时复制到 `BindingRef.format` |
+| `displayFormat` | 字段级显示格式模板配置 | 为该字段的绑定格式编辑器提供自定义函数示例 |
 | `union` | 一拖多投放方案 | 批量生成 |
 | `bindIndex` | 多参数绑定位次 | BWIP、函数、公式等 |
 | `expand` | 默认展开状态 | 字段树 UI |
@@ -262,6 +276,7 @@ const receiptField: DataFieldNode = {
 - 偏移量以主元素左上角为参照坐标系
 - 默认 props 只提供创建初值，不覆盖用户后续编辑结果
 - `format` 是字段建议，不是动态引用；拖拽后固化到绑定，保证模板在数据源字段配置变化后仍可稳定回放
+- `displayFormat` 是字段级设计时能力，只影响 Designer 创建或编辑该字段绑定显示格式时的模板候选，不进入 Viewer 运行时依赖
 
 ## 8.8 显示格式默认值
 
@@ -288,6 +303,80 @@ const amountField: DataFieldNode = {
 - `table-data` repeat-template 单元格复制到 `cell.binding.format`
 - `table-static` 或非 repeat 行单元格复制到 `cell.staticBinding.format`
 - 后续用户在属性面板修改绑定格式，只修改模板绑定，不反写数据源字段树
+
+### 8.8.1 字段级自定义格式模板
+
+字段级 `format` 解决的是“这个字段拖出去时直接带什么显示格式”。但有些字段更适合提供一组自定义函数示例，让用户在属性面板里按需采用，例如发票金额、业务状态码、行业日期码等。此时应由具体字段声明 `displayFormat.customTemplates`，供 Designer 的绑定格式编辑器采用：
+
+```typescript
+const invoiceSource: DataSourceDescriptor = {
+  id: 'invoice',
+  name: '发票数据',
+  fields: [
+    {
+      name: 'grandTotal',
+      path: 'grandTotal',
+      title: '合计金额',
+      use: 'text',
+      displayFormat: {
+        defaultCustomTemplateId: 'invoice-money',
+        customTemplates: [
+          {
+            id: 'invoice-money',
+            label: '发票金额',
+            hint: '金额转人民币展示',
+            source: `(value) => {
+  var num = Number(value)
+  if (isNaN(num)) return ''
+  return num.toFixed(2)
+}`,
+          },
+          {
+            id: 'invoice-money-total',
+            label: '合计金额',
+            source: `(value) => {
+  var num = Number(value)
+  if (isNaN(num)) return ''
+  return '合计 ' + num.toFixed(2)
+}`,
+          },
+        ],
+      },
+    },
+    {
+      name: 'date',
+      path: 'invoice/date',
+      title: '开票日期',
+      use: 'text',
+      displayFormat: {
+        defaultCustomTemplateId: 'invoice-date-cn',
+        customTemplates: [
+          {
+            id: 'invoice-date-cn',
+            label: '中文开票日期',
+            source: `(value) => String(value ?? '')`,
+          },
+        ],
+      },
+    },
+  ],
+}
+```
+
+Designer 的采用规则：
+
+1. 打开某个绑定的显示格式配置时，根据 `BindingRef.sourceId + fieldPath/fieldKey` 从 `DataSourceRegistry` 同步定位具体 `DataFieldNode`。
+2. 如果该字段存在可用的 `displayFormat.customTemplates`，自定义函数编辑器用字段模板替换内置“默认转换函数”入口，同时保留其余内置示例。
+3. 用户从“预设”切换到“自定义”且当前绑定还没有 `format.custom.source` 时，优先使用 `defaultCustomTemplateId` 对应的模板；若默认模板不存在，则使用第一个可用模板。
+4. 如果字段没有模板配置，回退到 Designer 内置默认模板。
+5. 用户保存后，最终写入 Schema 的仍是 `BindingRef.format.custom.source`，而不是模板 ID。
+
+设计约束：
+
+- `customTemplates` 是“模板种子”和“编辑器示例”，不是运行时动态引用。保存后的模板必须能脱离 `DataSourceDescriptor` 和 `DataFieldNode` 独立回放。
+- `source` 的语义与 `BindingDisplayFormat.custom.source` 完全一致：可信、同步、当前值转换函数，不应依赖 DOM、网络、异步副作用或完整数据源描述符。
+- Designer 不按字段类型自动猜测应该采用哪个模板。字段级默认值仍使用 `DataFieldNode.format`；字段级模板只改变用户编辑自定义函数时可选和默认的函数来源。
+- 字段配置变化不会自动重写既有 `BindingRef.format`。如需批量迁移，必须通过显式命令或宿主侧迁移流程完成。
 
 ## 8.9 多参数绑定 `bindIndex`
 
@@ -326,10 +415,10 @@ const bwipFields: DataFieldNode[] = [
 也就是说：
 
 - Designer 通过字段树帮助绑定
-- 模板通过绑定引用保持可回放性
+- 模板通过绑定引用保持可回放性；显示格式最终固化在 `BindingRef.format`
 - Viewer 通过 `fieldPath` 直接从运行时 `data` 根对象解析值，不依赖数据源系统
 - `sourceId / sourceName / sourceTag` 是设计时重匹配、诊断和模板可读性元数据，不是 Viewer 的运行时数据选择器
-- Viewer 不接受 `dataSources`，不根据数据源描述符评分、匹配、分包或重构 `data`
+- Viewer 不接受 `dataSources`，不根据数据源描述符评分、匹配、分包、重构 `data`，也不读取字段级 `displayFormat.customTemplates`
 
 ## 8.11 绑定解析函数
 
@@ -526,6 +615,7 @@ Viewer 的 `resolveAllBindings` 阶段检测到 table-static 节点时：
 - `@easyink/datasource` 是 Designer 专属包，Viewer 不依赖它
 - Viewer 只消费 `schema + data`，通过 `@easyink/core` 的绑定解析函数从数据中取值
 - 绑定解析函数（`resolveBindingValue`、`extractCollectionPath`、`resolveFieldFromRecord`）位于 `@easyink/core`，Designer 和 Viewer 均可使用
+- 字段级显示格式模板只服务 Designer 的格式编辑体验；Viewer 只执行已经固化到 `BindingRef.format` 的格式规则
 
 这样保证：
 

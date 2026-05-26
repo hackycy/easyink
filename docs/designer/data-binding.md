@@ -118,6 +118,123 @@ const data = {
 
 你当然还能继续往里放 `format`、`bindIndex`、`union` 之类更细的能力，但如果你现在只是先把绑定跑通，这些基础字段就足够了。
 
+## 给绑定一个默认显示格式
+
+如果某个字段每次拖出去都应该按同一种方式展示，可以直接在字段上写 `format`。
+
+```ts
+const dataSources: DataSourceDescriptor[] = [
+  {
+    id: 'invoice',
+    name: '发票数据',
+    fields: [
+      {
+        name: 'grandTotal',
+        path: 'grandTotal',
+        title: '合计金额',
+        use: 'text',
+        format: {
+          prefix: '￥',
+          fallback: '--',
+          mode: 'preset',
+          preset: {
+            type: 'number',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          },
+        },
+      },
+    ],
+  },
+]
+```
+
+用户把 `grandTotal` 拖到文本、表格单元格或其他可绑定物料上时，Designer 会把这份格式复制到绑定里。
+
+这里的关键词是“复制”。后面用户在属性面板里改显示格式，改的是模板里的 `BindingRef.format`，不会反写你的字段树。
+
+## 给某个字段准备专属函数模板
+
+有时你不想直接给字段写死 `format`，而是想改变“自定义函数”里的默认示例。比如金额字段默认给一个金额函数，日期字段默认给一个中文日期函数。
+
+这时把模板函数放到具体字段的 `displayFormat.customTemplates` 里：
+
+```ts
+const dataSources: DataSourceDescriptor[] = [
+  {
+    id: 'invoice',
+    name: '发票数据',
+    fields: [
+      {
+        name: 'grandTotal',
+        path: 'grandTotal',
+        title: '合计金额',
+        use: 'text',
+        displayFormat: {
+          defaultCustomTemplateId: 'invoice-money',
+          customTemplates: [
+            {
+              id: 'invoice-money',
+              label: '发票金额',
+              hint: '金额保留两位小数并添加人民币符号',
+              source: `function transform(value) {
+  var num = Number(value)
+  if (isNaN(num)) return ''
+  return '￥' + num.toFixed(2)
+}`,
+            },
+            {
+              id: 'invoice-money-total',
+              label: '合计金额',
+              hint: '金额保留两位小数并加上合计前缀',
+              source: `function transform(value) {
+  var num = Number(value)
+  if (isNaN(num)) return ''
+  return '合计 ￥' + num.toFixed(2)
+}`,
+            },
+          ],
+        },
+      },
+      {
+        name: 'date',
+        path: 'invoice/date',
+        title: '开票日期',
+        use: 'text',
+        displayFormat: {
+          defaultCustomTemplateId: 'invoice-date-cn',
+          customTemplates: [
+            {
+              id: 'invoice-date-cn',
+              label: '中文开票日期',
+              source: `function transform(value) {
+  if (value == null || value === '') return ''
+  var text = String(value)
+  var match = text.match(/^(\\d{4})-(\\d{2})-(\\d{2})/)
+  if (!match) return text
+  return match[1] + '年' + match[2] + '月' + match[3] + '日'
+}`,
+            },
+          ],
+        },
+      },
+    ],
+  },
+]
+```
+
+用户选中 `grandTotal` 这个字段产生的绑定，再打开“显示格式”，切到“自定义”时，默认示例会被字段自己的函数替换。字段可以只有一个模板，也可以有多个模板；有多个时，Designer 会优先采用 `defaultCustomTemplateId` 指向的那一个。
+
+原来的内置示例不会全部消失。字段模板只替换“默认转换函数”这一类入口，后面的“原始值转字符串”“数值格式化为货币”“日期格式化 YYYY-MM-DD”等示例仍然保留，用户随时可以切回去。
+
+你可能会有个疑问：为什么保存的是函数内容，而不是模板 ID？
+
+原因是模板要能脱离 Designer 和字段树独立渲染。用户点确定后，最终写进 Schema 的仍然是 `BindingRef.format.custom.source`。之后字段树里的模板函数变了，已经保存的模板不会被悄悄改写。
+
+:::tip 在线试一下
+Playground 默认示例里的“流式发票”已经给发票金额、开票日期、税率这些字段加了各自的函数模板。打开示例后选中对应绑定字段，在属性面板里进入“显示格式”并切到“自定义”，就能看到字段自己的默认示例，同时还能看到其余内置示例。
+:::
+
 ## 一个很实用的判断标准
 
 当你调试绑定问题时，可以按这个顺序查：

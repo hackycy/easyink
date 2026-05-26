@@ -17,6 +17,25 @@ export interface DataSourceDescriptor {
 }
 
 /**
+ * Field-owned display-format configuration used by the designer when
+ * creating or editing binding display formats for this field.
+ */
+export interface DataFieldDisplayFormatConfig {
+  customTemplates?: DataFieldCustomFormatTemplate[]
+  defaultCustomTemplateId?: string
+}
+
+/**
+ * Reusable trusted formatter template for BindingDisplayFormat.custom.source.
+ */
+export interface DataFieldCustomFormatTemplate {
+  id: string
+  label: string
+  source: string
+  hint?: string
+}
+
+/**
  * A node in the field tree. Supports recursive nesting.
  */
 export interface DataFieldNode {
@@ -29,6 +48,7 @@ export interface DataFieldNode {
   use?: MaterialUseToken
   props?: Record<string, unknown>
   format?: BindingDisplayFormat
+  displayFormat?: DataFieldDisplayFormatConfig
   bindIndex?: number
   union?: DataUnionBinding[]
   expand?: boolean

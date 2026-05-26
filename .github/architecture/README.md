@@ -9,7 +9,7 @@
 - `viewer` 是独立运行时，可被设计器通过 iframe 嵌入，也可被宿主独立使用
 - Schema 区分"EasyInk 内部规范模型"和"对标产品兼容输入"，避免把历史原始 JSON 噪音扩散到内部实现
 - 页面模型完整覆盖 `viewer / width / height / pages / scale / radius / offsets / copies / blank / grid / background` 这组真实打印语义，并容忍 `scale/scaleType`、背景偏移字段和空白页策略的历史别名
-- 数据源协议覆盖 `id / name / tag / title / expand / headless / fields / use / props / union / bindIndex`
+- 数据源协议覆盖 `id / name / tag / title / expand / headless / fields / use / props / union / bindIndex`，字段节点可声明 `format / displayFormat`
 - 顶部物料栏建模为"高频直达物料 + 分组目录物料"的混合入口
 - `table`、`container`、`chart`、`svg` 都是一级结构系统
 - 属性面板在同一窗口壳层中互斥展示"元素属性"与"页面属性"，支持 PropertyPanelOverlay 动态叠加层
@@ -33,7 +33,7 @@
 | 5 | [Schema DSL 设计](./05-schema-dsl.md) | 规范模型、兼容编解码、页面字段、结构物料与绑定 |
 | 6 | [渲染管线](./06-render-pipeline.md) | 统一 DOM 渲染、溢出诊断、输出边界 |
 | 7 | [布局引擎](./07-layout-engine.md) | 坐标推移布局模型、计算流程 |
-| 8 | [数据源系统](./08-datasource.md) | 字段树协议、推荐物料、union、bindIndex、Provider Factory、MCP 集成 |
+| 8 | [数据源系统](./08-datasource.md) | 字段树协议、推荐物料、union、bindIndex、显示格式模板、Provider Factory、MCP 集成 |
 | 9 | [内部扩展机制](./09-plugin-system.md) | 仓库内扩展点、上下文 API、钩子体系 |
 | 10 | [设计器交互层](./10-designer-interaction.md) | 工作台布局、工具组带、窗口系统、结构树、属性壳层、PropertyPanelOverlay、sectionFilter |
 | 11 | [物料体系](./11-element-system.md) | 物料目录、属性矩阵、Designer/Viewer 合约、DatasourceDropHandler 协议、分阶段交付 |
@@ -56,7 +56,7 @@
 - EasyInk 当前优先对齐 `fixed-page` 文档/报表场景，并保留连续流式页面架构
 - 设计器中的工作台布局、面板开关、激活面板和工具组带布局属于工作台状态，不进入 Schema
 - 预览器独立完成字体加载、数据加载、分页、缩略图、打印和导出适配器加载，不复用画布 DOM
-- 数据绑定保存数据源引用、字段路径、显示格式和多参数绑定位次
+- 数据绑定保存数据源引用、字段路径、显示格式和多参数绑定位次；字段可提供自有显示格式模板，Designer 只在创建或编辑该字段的绑定格式时采用
 - 表格类和容器类物料拥有独立内部模型
 - 样例资产既用于演示，也可作为回归测试资产库
 - 未识别物料、缺失数据、缺失字体、渲染失败都必须以可见诊断暴露，不允许静默吞掉

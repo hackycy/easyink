@@ -1,9 +1,12 @@
 <script setup lang="ts">
+import type { DataSourceDescriptor } from '@easyink/datasource'
 import type { BindingRef, MaterialNode } from '@easyink/schema'
 import type { BindingDisplayFormat, BindingFormatPresetType, BindingPresetFormat } from '@easyink/shared'
+import { findDataFieldNode, getDataFieldCustomFormatTemplates, getDefaultDataFieldCustomFormatTemplate } from '@easyink/datasource'
 import { IconCheck, IconEdit } from '@easyink/icons'
 import { EiButton, EiDialog, EiIcon, EiInput } from '@easyink/ui'
 import { computed, defineAsyncComponent, ref } from 'vue'
+import { createBindingCodeExamples, DEFAULT_CUSTOM_FORMAT_SOURCE } from './binding-format-templates'
 
 const props = defineProps<{
   element: MaterialNode
@@ -12,6 +15,7 @@ const props = defineProps<{
   externalBinding?: BindingRef | BindingRef[] | null
   /** Whether external binding is explicitly set (to distinguish undefined from not-provided) */
   hasExternalBinding?: boolean
+  getDataSource?: (sourceId: string) => DataSourceDescriptor | undefined
 }>()
 
 const emit = defineEmits<{
@@ -167,6 +171,7 @@ function updateDraftTextField(key: 'prefix' | 'suffix', value: string | number) 
 
 function updateDraftMode(value: FormatTab) {
   const next = cloneDraftFormat()
+  const ref = getActiveBinding()
   activeTab.value = value
   if (value === 'preset') {
     next.mode = 'preset'
@@ -176,17 +181,7 @@ function updateDraftMode(value: FormatTab) {
   else if (value === 'custom') {
     next.mode = 'custom'
     next.custom = next.custom ?? {
-      source: `/**
- * 默认数据转换函数
- * 接收字段的原始值，返回最终显示在打印区域的文本内容
- * 空值（null / undefined）统一输出为空字符串
- * 可按需修改函数体，实现格式化、映射等处理逻辑
- * @param {*} value - 字段原始值
- * @returns {string} 处理后的显示文本
- */
-function transform(value) {
-  return value != null ? String(value) : ''
-}`,
+      source: getDefaultCustomFormatSource(ref),
     }
     next.preset = undefined
     next.prefix = undefined
@@ -229,10 +224,19 @@ function cloneDraftFormat(): BindingDisplayFormat {
   }
 }
 
-const activeBinding = computed(() => {
+function getActiveBinding(): BindingRef | undefined {
   if (activeBindingIndex.value === null)
     return undefined
   return bindings.value[activeBindingIndex.value]
+}
+
+const activeBinding = computed(() => getActiveBinding())
+
+const activeCustomExamples = computed(() => {
+  const ref = activeBinding.value
+  if (!ref)
+    return []
+  return createBindingCodeExamples(props.t, getDataFieldCustomFormatTemplates(getBindingField(ref)))
 })
 
 const validationMessage = computed(() => validateFormat(draftFormat.value))
@@ -322,6 +326,17 @@ function isSamePreset(a: BindingPresetFormat, b: BindingPresetFormat): boolean {
     && a.minimumFractionDigits === b.minimumFractionDigits
     && a.maximumFractionDigits === b.maximumFractionDigits
     && a.currency === b.currency
+}
+
+function getDefaultCustomFormatSource(ref: BindingRef | undefined): string {
+  return getDefaultDataFieldCustomFormatTemplate(ref ? getBindingField(ref) : undefined)?.source ?? DEFAULT_CUSTOM_FORMAT_SOURCE
+}
+
+function getBindingField(ref: BindingRef) {
+  return findDataFieldNode(props.getDataSource?.(ref.sourceId), {
+    fieldPath: ref.fieldPath,
+    fieldKey: ref.fieldKey,
+  })
 }
 </script>
 
@@ -458,8 +473,9 @@ function isSamePreset(a: BindingPresetFormat, b: BindingPresetFormat): boolean {
           <!-- Custom mode -->
           <div v-if="activeTab === 'custom'" class="ei-bfd__custom-body">
             <BindingCodeEditor
-              :model-value="draftFormat.custom?.source || `/**\n * 自定义转换函数\n * @param {*} value - 字段原始值\n * @returns {string} 最终展示的字符串内容\n */\nfunction transform(value) {\n  return String(value ?? '')\n}`"
+              :model-value="draftFormat.custom?.source || getDefaultCustomFormatSource(activeBinding)"
               :placeholder="t('designer.bindingFormat.customSource')"
+              :examples="activeCustomExamples"
               :t="t"
               @update:model-value="updateDraftCustomSource"
             />

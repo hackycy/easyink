@@ -114,6 +114,9 @@ DOM-to-PDF 导出插件。
 |------|------|------|
 | `DataSourceRegistry` | Class | 数据源与异步 provider 注册表 |
 | `normalizeDataSource` | Function | 归一化数据源描述符 |
+| `findDataFieldNode` | Function | 按绑定路径或字段 key 查找字段节点 |
+| `getDataFieldCustomFormatTemplates` | Function | 读取字段级自定义格式模板 |
+| `getDefaultDataFieldCustomFormatTemplate` | Function | 解析字段级默认自定义格式模板 |
 | `getNamespacedId` | Function | 生成带命名空间的数据源 ID |
 | `parseNamespacedId` | Function | 解析命名空间 ID |
 | `setSourceNamespace` | Function | 写入数据源命名空间 |
@@ -121,7 +124,7 @@ DOM-to-PDF 导出插件。
 
 常量导出：`DEFAULT_NAMESPACE`, `AI_NAMESPACE`
 
-类型导出：`DataSourceDescriptor`, `DataFieldNode`, `DataUnionBinding`, `DataSourceProviderFactory`, `ResolvedDataSourceEntry`, `DataSourceChangeCallback`
+类型导出：`DataSourceDescriptor`, `DataFieldNode`, `DataFieldDisplayFormatConfig`, `DataFieldCustomFormatTemplate`, `DataFieldLookup`, `DataUnionBinding`, `DataSourceProviderFactory`, `ResolvedDataSourceEntry`, `DataSourceChangeCallback`
 
 ## @easyink/print-core
 

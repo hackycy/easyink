@@ -1,10 +1,70 @@
-import type { DataSourceDescriptor } from '@easyink/datasource'
+import type { DataFieldDisplayFormatConfig, DataSourceDescriptor } from '@easyink/datasource'
 import type { DocumentSchema, TableDataSchema, TableNode } from '@easyink/schema'
 import { SCHEMA_VERSION } from '@easyink/shared'
 import { badgeDataSource } from './templates/badge'
 import { certificateDataSource } from './templates/certificate'
 import { supermarketDataSource } from './templates/supermarket-receipt'
 import { verticalMixedTextDataSource } from './templates/vertical-mixed-text'
+
+const invoiceMoneyDisplayFormat: DataFieldDisplayFormatConfig = {
+  defaultCustomTemplateId: 'invoice-money',
+  customTemplates: [
+    {
+      id: 'invoice-money',
+      label: '发票金额',
+      hint: '金额保留两位小数并添加人民币符号',
+      source: `function transform(value) {
+  var num = Number(value)
+  if (isNaN(num)) return ''
+  return '￥' + num.toFixed(2)
+}`,
+    },
+    {
+      id: 'invoice-money-total',
+      label: '合计金额',
+      hint: '金额保留两位小数并加上合计前缀',
+      source: `function transform(value) {
+  var num = Number(value)
+  if (isNaN(num)) return ''
+  return '合计 ￥' + num.toFixed(2)
+}`,
+    },
+  ],
+}
+
+const invoiceDateDisplayFormat: DataFieldDisplayFormatConfig = {
+  defaultCustomTemplateId: 'invoice-date-cn',
+  customTemplates: [
+    {
+      id: 'invoice-date-cn',
+      label: '中文开票日期',
+      hint: '把 YYYY-MM-DD 转成中文日期',
+      source: `function transform(value) {
+  if (value == null || value === '') return ''
+  var text = String(value)
+  var match = text.match(/^(\\d{4})-(\\d{2})-(\\d{2})/)
+  if (!match) return text
+  return match[1] + '年' + match[2] + '月' + match[3] + '日'
+}`,
+    },
+  ],
+}
+
+const invoiceTaxRateDisplayFormat: DataFieldDisplayFormatConfig = {
+  defaultCustomTemplateId: 'invoice-tax-rate',
+  customTemplates: [
+    {
+      id: 'invoice-tax-rate',
+      label: '税率百分比',
+      hint: '把 0.13 这类税率转成 13%',
+      source: `function transform(value) {
+  var num = Number(value)
+  if (isNaN(num)) return ''
+  return Math.round(num * 10000) / 100 + '%'
+}`,
+    },
+  ],
+}
 
 // ---------------------------------------------------------------------------
 // A. 发票数据源
@@ -36,8 +96,8 @@ export const invoiceDataSource: DataSourceDescriptor = {
       expand: true,
       fields: [
         { name: 'number', title: '发票编号', path: 'invoice/number', use: 'text' },
-        { name: 'date', title: '开票日期', path: 'invoice/date', use: 'text' },
-        { name: 'dueDate', title: '到期日', path: 'invoice/dueDate', use: 'text' },
+        { name: 'date', title: '开票日期', path: 'invoice/date', use: 'text', displayFormat: invoiceDateDisplayFormat },
+        { name: 'dueDate', title: '到期日', path: 'invoice/dueDate', use: 'text', displayFormat: invoiceDateDisplayFormat },
       ],
     },
     {
@@ -59,14 +119,14 @@ export const invoiceDataSource: DataSourceDescriptor = {
       fields: [
         { name: 'name', title: '品名', path: 'items/name', use: 'text' },
         { name: 'qty', title: '数量', path: 'items/qty', use: 'text' },
-        { name: 'price', title: '单价', path: 'items/price', use: 'text' },
-        { name: 'amount', title: '金额', path: 'items/amount', use: 'text' },
+        { name: 'price', title: '单价', path: 'items/price', use: 'text', displayFormat: invoiceMoneyDisplayFormat },
+        { name: 'amount', title: '金额', path: 'items/amount', use: 'text', displayFormat: invoiceMoneyDisplayFormat },
       ],
     },
-    { name: 'subtotal', title: '小计', path: 'subtotal', use: 'text' },
-    { name: 'taxRate', title: '税率', path: 'taxRate', use: 'text' },
-    { name: 'taxAmount', title: '税额', path: 'taxAmount', use: 'text' },
-    { name: 'grandTotal', title: '合计', path: 'grandTotal', use: 'text' },
+    { name: 'subtotal', title: '小计', path: 'subtotal', use: 'text', displayFormat: invoiceMoneyDisplayFormat },
+    { name: 'taxRate', title: '税率', path: 'taxRate', use: 'text', displayFormat: invoiceTaxRateDisplayFormat },
+    { name: 'taxAmount', title: '税额', path: 'taxAmount', use: 'text', displayFormat: invoiceMoneyDisplayFormat },
+    { name: 'grandTotal', title: '合计', path: 'grandTotal', use: 'text', displayFormat: invoiceMoneyDisplayFormat },
     { name: 'notes', title: '备注', path: 'notes', use: 'rich-text' },
   ],
 }
