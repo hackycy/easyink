@@ -9,7 +9,7 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const gitBinary = 'git'
 const pnpmBinary = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
 const validationScripts = ['lint', 'build', 'typecheck']
-const npmReleaseCommitMessage = 'chore: version packages'
+const npmReleaseCommitMessage = 'chore: bump versions'
 const releaseBranch = 'main'
 const releaseRemote = 'origin'
 
