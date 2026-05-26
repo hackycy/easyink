@@ -1196,13 +1196,13 @@
 }
 
 /* ================================================
-   FEATURE GRID — simple 4-column × 2-row layout
+   FEATURE GRID — simple 3-column × 2-row layout
    ================================================ */
 
 @media (min-width: 768px) {
   .VPHomeFeatures .items {
     display: grid !important;
-    grid-template-columns: repeat(4, 1fr) !important;
+    grid-template-columns: repeat(3, 1fr) !important;
     gap: 14px !important;
     flex-wrap: unset !important;
     margin: 0 !important;
