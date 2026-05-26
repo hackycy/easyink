@@ -95,8 +95,6 @@ viewer.registerExporter({
 ```
 
 这类导出没有必要再抽 runtime 插件。
-})
-```
 
 ## 状态生命周期
 

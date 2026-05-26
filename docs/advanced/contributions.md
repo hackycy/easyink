@@ -105,6 +105,11 @@ export const helloContribution: Contribution = {
 - 资产选择应走 `pickAsset()`
 
 这样扩展能力仍然能保持宿主可控，而不是把交互细节写死在设计器内部。
+
+## 诊断事件应该往外转发
+
+如果你要把 Designer 内部诊断接入宿主系统，可以转给：
+
 - 埋点系统
 - Sentry / APM
 - 业务提示条

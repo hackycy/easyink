@@ -1,28 +1,12 @@
 # Schema 参考
 
-Schema 是 EasyInk 的核心数据结构，描述文档的完整结构。它是设计器和预览器之间的唯一桥梁。
-
-对宿主应用而言，传入设计器的是 `DocumentSchemaInput`：所有顶层字段都可以省略，`page` 和 `guides` 的必填子字段也可以省略。`version` 不属于宿主可指定输入，框架会通过 `normalizeDocumentSchema()` 补齐默认值并写入当前 Schema 版本；进入 `DesignerStore`、Viewer、自动保存和导出链路后的内部模型始终是完整 `DocumentSchema`。
-
-```ts
-import { normalizeDocumentSchema } from '@easyink/schema'
-
-const schema = normalizeDocumentSchema({
-  page: { width: 80 },
-})
-
-// schema.page => { mode: 'fixed', width: 80, height: 297 }
-// schema.guides => { x: [], y: [] }
-// schema.elements => []
-```
-
-# Schema 参考
-
 Schema 是 EasyInk 的基础模型。Designer、Viewer、打印和导出最终都围绕它工作。
 
 ## 先分清两种输入形态
 
-对宿主来说，最常接触的是宽松输入；对运行时来说，最终都会落到完整 Schema。
+对宿主来说，最常接触的是宽松输入；对运行时来说，最终都会落到完整 Schema。传入设计器的是 `DocumentSchemaInput`：所有顶层字段都可以省略，`page` 和 `guides` 的必填子字段也可以省略。
+
+`version` 不属于宿主可指定输入，框架会通过 `normalizeDocumentSchema()` 补齐默认值并写入当前 Schema 版本。进入 `DesignerStore`、Viewer、自动保存和导出链路后的内部模型始终是完整 `DocumentSchema`。
 
 最关键的规则是：先归一化，再校验和消费。
 
@@ -34,6 +18,10 @@ const schema = normalizeDocumentSchema({
 })
 
 const issues = validateSchemaIssues(schema)
+
+// schema.page => { mode: 'fixed', width: 80, height: 297 }
+// schema.guides => { x: [], y: [] }
+// schema.elements => []
 ```
 
 `normalizeDocumentSchema()` 会补默认值，`validateSchemaIssues()` 用来判断对象是否已经是完整合法的内部 Schema。
@@ -76,6 +64,7 @@ const issues = validateSchemaIssues(schema)
 Schema codec 里还包含对 benchmark 输入的解码逻辑。也就是说，兼容旧输入格式并不是靠文档约定，而是有明确代码路径去做字段映射。
 
 如果你在做旧模板迁移，优先复用 codec，而不是在业务层自己手写转换。
+
 ## AnimationSchema
 
 ```ts
