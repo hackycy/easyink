@@ -1,164 +1,239 @@
-# 自定义物料开发
+# 自定义物料开发 {#custom-materials}
 
-当你需要一个新的模板元素，而且这个元素既要能在 Designer 里编辑，又要能在 Viewer 里渲染，这一层才值得进入。
+当你需要一个新的模板元素，并且它要同时出现在 Designer 和 Viewer 里，就进入自定义物料这一层。
 
-## 需求判断
-
-下面三种需求不要混在一起：
-
-- 只是想给现有物料补几个属性：先看 `propSchemas`
-- 只是想加按钮、面板或命令：那是 Contribution
-- 需要新的节点类型、新的设计态表现和新的预览态表现：这才是自定义物料
-
-## 物料分层
-
-真实链路至少有三段：
-
-1. Schema 里要有稳定的 `type` 和默认节点
-2. Designer 里要能注册、拖入、编辑
-3. Viewer 里要能按同一个 `type` 渲染
-
-少任意一段，物料都不完整。
-
-## Designer 侧契约
-
-Designer 的注册入口是 `registerMaterialBundle(store, bundle)`。
-
-当前 bundle 结构就是这三个字段：
+先看一版最小实现：
 
 ```ts
-interface DesignerMaterialBundle {
-  materials: DesignerMaterialRegistration[]
-  quickMaterialTypes: string[]
-  groupedCatalog: DesignerCatalogRegistration[]
+import type { DesignerStore, MaterialDesignerExtension } from '@easyink/designer'
+import type { MaterialNode } from '@easyink/schema'
+import type { ViewerRuntime } from '@easyink/viewer'
+import { trustedViewerHtml } from '@easyink/core'
+import { registerMaterialBundle } from '@easyink/designer'
+import { IconText } from '@easyink/icons'
+
+export const PRICE_TAG_TYPE = 'price-tag'
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
 }
-```
 
-其中单个物料注册最关键的是这些字段：
-
-- `type`
-- `name`
-- `icon`
-- `category`
-- `capabilities`
-- `createDefaultNode`
-- `factory`
-- `propSchemas`
-
-最小注册形态可以长这样：
-
-```ts
-registerMaterialBundle(store, {
-  materials: [
-    {
-      type: 'price-tag',
-      name: '价格签',
-      icon: IconText,
-      category: 'basic',
-      capabilities: {
-        bindable: true,
-        resizable: true,
-        rotatable: true,
-      },
-      createDefaultNode,
-      factory: () => designerExtension,
-      propSchemas: [
-        { key: 'label', label: '标题', type: 'string' },
-      ],
+export function createPriceTagNode(input: Partial<MaterialNode> = {}): MaterialNode {
+  return {
+    id: input.id ?? `price-tag-${Date.now()}`,
+    type: PRICE_TAG_TYPE,
+    x: input.x ?? 20,
+    y: input.y ?? 20,
+    width: input.width ?? 48,
+    height: input.height ?? 18,
+    props: {
+      label: '价格',
+      amount: '¥ 99.00',
+      ...input.props,
     },
-  ],
-  quickMaterialTypes: ['price-tag'],
-  groupedCatalog: [{ type: 'price-tag', group: 'utility' }],
-})
-```
+  } as MaterialNode
+}
 
-这里有一个实现细节值得知道：Designer 注册时会先取 `@easyink/prop-schemas` 里的基础属性，再把你传入的 `propSchemas` 追加进去。
+export function createPriceTagDesignerExtension(): MaterialDesignerExtension {
+  return {
+    renderContent(nodeSignal, container) {
+      const render = (node: MaterialNode) => {
+        const props = node.props as Record<string, unknown>
+        container.textContent = `${String(props.label ?? '')}: ${String(props.amount ?? '')}`
+      }
 
-## 设计态实现
+      render(nodeSignal.get())
+      return nodeSignal.subscribe(render)
+    },
+  }
+}
 
-Designer 侧不是简单画一个 div。它依赖的是 `MaterialDesignerExtension`。
+export function registerPriceTagDesigner(store: DesignerStore) {
+  registerMaterialBundle(store, {
+    materials: [
+      {
+        type: PRICE_TAG_TYPE,
+        name: '价格签',
+        icon: IconText,
+        category: 'basic',
+        capabilities: {
+          bindable: true,
+          resizable: true,
+          rotatable: true,
+        },
+        createDefaultNode: createPriceTagNode,
+        factory: createPriceTagDesignerExtension,
+        propSchemas: [
+          { key: 'label', label: '标题', type: 'string', group: 'content' },
+          { key: 'amount', label: '金额', type: 'string', group: 'content' },
+        ],
+      },
+    ],
+    quickMaterialTypes: [PRICE_TAG_TYPE],
+    groupedCatalog: [{ type: PRICE_TAG_TYPE, group: 'utility' }],
+  })
+}
 
-这个契约里最核心的入口是：
-
-```ts
-interface MaterialDesignerExtension {
-  renderContent: (nodeSignal, container, renderContextSignal?) => () => void
-  datasourceDrop?: DatasourceDropHandler
-  geometry?: MaterialGeometry
-  behaviors?: BehaviorRegistration[]
-  resize?: MaterialResizeAdapter
-  resolveControlPolicy?: (node, context) => MaterialControlPolicy
+export function registerPriceTagViewer(viewer: ViewerRuntime) {
+  viewer.registerMaterial(PRICE_TAG_TYPE, {
+    render(_node, context) {
+      const props = context.resolvedProps
+      return {
+        html: trustedViewerHtml(
+          `<div>${escapeHtml(String(props.label ?? ''))}: ${escapeHtml(String(props.amount ?? ''))}</div>`,
+        ),
+      }
+    },
+  })
 }
 ```
 
-如果你第一次做自定义物料，不要一上来就实现全部能力。先只把 `renderContent` 跑通，让节点能在画布上稳定显示。
+这段代码做了三件事：定义一个稳定的 `type`，把它注册到 Designer 的物料面板，再用同一个 `type` 注册 Viewer 渲染器。
 
-## Viewer 侧契约
+如果这些概念看起来有点密，没关系。先记住一句话：Designer 负责拖入和编辑，Viewer 负责最终渲染，Schema 负责保存中间结果。
 
-同一个 `type` 在 Viewer 里还要再注册一次，因为设计态和预览态本来就不是同一层职责。
+## 判断它是不是物料 {#when-to-use}
 
-Viewer 侧依赖的是 `MaterialViewerExtension`：
+先用这个判断表分流：
 
 ```ts
-interface MaterialViewerExtension {
-  render: (node, context) => ViewerRenderOutput
-  measure?: (node, context) => ViewerMeasureResult
-  getRenderSize?: (node, context) => Partial<ViewerRenderSize>
-  fragmentPaginator?: FragmentPaginator
-  pageAware?: boolean
+// 需要新节点类型：自定义物料
+node.type = 'price-tag'
+
+// 只是给现有节点补属性：propSchemas
+propSchemas.push({ key: 'label', label: '标题', type: 'string' })
+
+// 只是加按钮、面板或命令：Contribution
+ctx.registerToolbarAction(...)
+```
+
+三条路都能扩展 Designer，但它们解决的问题不同。
+
+- 新节点类型、新设计态、新预览态：写自定义物料。
+- 现有物料多几个属性：先用 `propSchemas`。
+- 宿主要挂面板、按钮、命令：看 [贡献扩展开发](/advanced/contributions)。
+
+## 注册到 Designer {#register-designer}
+
+Designer 的入口是 `setupStore`。我们在初始化 store 后注册物料包：
+
+```vue
+<script setup lang="ts">
+import { EasyInkDesigner } from '@easyink/designer'
+import { registerPriceTagDesigner } from './price-tag'
+
+function setupStore(store) {
+  registerPriceTagDesigner(store)
+}
+</script>
+
+<template>
+  <EasyInkDesigner
+    v-model:schema="schema"
+    :setup-store="setupStore"
+  />
+</template>
+```
+
+`registerMaterialBundle()` 会同时处理三类信息：
+
+- `materials`：物料定义、属性面板字段、设计态 factory。
+- `quickMaterialTypes`：出现在物料面板的“基础”区域。
+- `groupedCatalog`：出现在 `data`、`chart`、`svg`、`utility` 分组里。
+
+:::tip 提示
+物料面板里的图标来自 `MaterialCatalogEntry.icon`。如果你只在 `materials` 里传 `icon`，注册器会自动把它带到 quick 和 grouped catalog；如果 grouped catalog 想用另一个图标，也可以在 `groupedCatalog` 项里单独传 `icon`。
+:::
+
+## 渲染设计态 {#designer-extension}
+
+设计态最小只需要实现 `renderContent()`：
+
+```ts
+export function createPriceTagDesignerExtension(): MaterialDesignerExtension {
+  return {
+    renderContent(nodeSignal, container) {
+      const render = (node: MaterialNode) => {
+        const props = node.props as Record<string, unknown>
+        container.innerHTML = ''
+        const label = document.createElement('span')
+        label.textContent = `${String(props.label ?? '')}: ${String(props.amount ?? '')}`
+        container.appendChild(label)
+      }
+
+      render(nodeSignal.get())
+      return nodeSignal.subscribe(render)
+    },
+  }
 }
 ```
 
-最短的接法通常是先实现 `render`：
+`nodeSignal` 是 Designer 给物料的响应式节点快照。节点变化时重新渲染，返回的函数负责取消订阅或清理 DOM。
+
+关于 `geometry`、`behaviors`、`resize` 和 `datasourceDrop`，目前知道它们是高级能力就够了。第一次做自定义物料，先让画布上能稳定显示。
+
+## 注册到 Viewer {#register-viewer}
+
+Viewer 需要按同一个 `type` 再注册一次：
 
 ```ts
-viewer.registerMaterial('price-tag', {
-  render(node, context) {
+import { trustedViewerHtml } from '@easyink/core'
+import { createViewer } from '@easyink/viewer'
+
+const viewer = createViewer({ container })
+
+viewer.registerMaterial(PRICE_TAG_TYPE, {
+  render(_node, context) {
+    const props = context.resolvedProps
     return {
-      html: trustedViewerHtml('<div>...</div>'),
+      html: trustedViewerHtml(
+        `<div class="price-tag">${escapeHtml(String(props.amount ?? ''))}</div>`,
+      ),
     }
   },
 })
 ```
 
-只有当你的物料确实涉及运行时测量、跨页切分或每页重复渲染时，再继续补 `measure`、`fragmentPaginator` 或 `pageAware`。
+这里最值得记住的是 `context.resolvedProps`。绑定、默认值和运行时属性会在 Viewer 渲染前合成好，你的渲染器直接消费它就行。
 
-## 开发顺序
+:::warning 注意
+`html` 必须用 `trustedViewerHtml()` 包装。不要直接返回裸字符串。
+:::
 
-最稳的顺序是：
+## 接入数据绑定 {#binding}
 
-1. 先定义 `type` 和默认节点
-2. 再让 Designer 能拖进去
-3. 再让 Viewer 能渲染同一个节点
-4. 最后再补数据拖放、深度编辑、缩放副作用和分页能力
+大多数物料不需要自己解析字段路径。让 Designer 保存绑定，让 Viewer 解析绑定：
 
-这样能先验证“这个物料在系统里存在”，再验证“它的高级行为是否正确”。
+```ts
+viewer.open({
+  schema,
+  data: {
+    product: {
+      name: '热敏标签纸',
+      price: '¥ 99.00',
+    },
+  },
+})
+```
 
-这里有两个容易踩错的点：
+当节点保存了 `binding` 后，Viewer 会把绑定结果写进 `context.resolvedProps`。你的物料渲染器继续读 `resolvedProps`，不用手写 `getByPath(context.data, fieldPath)`。
 
-- `html` 不是普通字符串，而是 `trustedViewerHtml()` 包装后的结果。
-- 绑定后的值应该从 `context.resolvedProps` 读。它是 Viewer 在渲染前已经合成好的属性结果。
+如果你的物料想接管数据源拖放，比如表格单元格那样落到内部区域，再实现 `datasourceDrop`。
 
-Viewer 实际传给 `render()` 的 `node.props` 也已经是解析后的属性，但文档里推荐优先读 `context.resolvedProps`，因为它更能表达“这里用的是运行时结果”。
+## 何时实现 measure {#measure}
 
-## `measure` 实现时机
-
-只有一种情况值得写 `measure()`：物料的最终高度或宽度依赖运行时内容。
-
-典型例子：
-
-- 数据表格内容变长后高度变化
-- 富文本根据字数自动扩高
-- 某个容器按子项数量展开
-
-如果你的物料尺寸就是用户在画布上拖出来的固定宽高，不要写 `measure()`。
+固定尺寸物料不需要 `measure()`。只有最终尺寸依赖运行时内容时才加：
 
 ```ts
 viewer.registerMaterial(PRICE_TAG_TYPE, {
-  render(node, context) {
-    const props = context.resolvedProps as PriceTagProps
+  render(_node, context) {
     return {
-      html: trustedViewerHtml(`<div>${escapeHtml(props.label)}</div>`),
+      html: trustedViewerHtml(`<div>${escapeHtml(String(context.resolvedProps.amount ?? ''))}</div>`),
     }
   },
   measure(node) {
@@ -170,113 +245,57 @@ viewer.registerMaterial(PRICE_TAG_TYPE, {
 })
 ```
 
-上面这个 `measure()` 只是示意接口形状。对于固定尺寸物料，直接省略更合适。
+上面只是接口形状。对于固定宽高的价格签，删掉 `measure()` 更合适。
 
-## `pageAware` 使用时机
+适合实现 `measure()` 的场景通常是：
 
-`pageAware` 不是“这个物料知道页码”，而是“这个物料应该被复制到每一页”。
+- 文本根据内容自动增高。
+- 表格根据数据行数增高。
+- 容器根据子项数量展开。
 
-适用场景：
+## 何时使用 pageAware {#page-aware}
 
-- 页码
-- 页眉 / 页脚
-- 每页都要重复出现的水印类元素
-
-开启后，Viewer 会把元素从原始页抽出来，复制到每一页，并在解析后的 props 里注入：
-
-- `__pageNumber`
-- `__totalPages`
+`pageAware` 表示这个物料要复制到每一页：
 
 ```ts
-viewer.registerMaterial('my-page-badge', {
+viewer.registerMaterial('page-badge', {
   pageAware: true,
-  render(node, context) {
-    const props = context.resolvedProps as Record<string, unknown>
+  render(_node, context) {
+    const props = context.resolvedProps
     return {
       html: trustedViewerHtml(
-        `<div>第 ${String(props.__pageNumber)} / ${String(props.__totalPages)} 页</div>`
+        `<div>第 ${String(props.__pageNumber ?? '')} / ${String(props.__totalPages ?? '')} 页</div>`,
       ),
     }
   },
 })
 ```
 
-它只在真实输出页语义下生效，不会影响 layout、reflow 或 pagination 输入。
+它适合页码、页眉、页脚、水印这类“每页都出现”的元素。它不负责重新分页，也不会替你改变 layout 或 reflow。
 
-## 数据绑定接入
+Viewer 会给复制后的节点注入 `__pageNumber` 和 `__totalPages`，所以页码类物料应该从 `context.resolvedProps` 读取它们。
 
-自定义物料最常见的误区，是把绑定逻辑写进 Viewer 里手动取数据。正确顺序应该是：
+## 完成前检查 {#checklist}
 
-1. Designer 负责把绑定关系保存进 `node.binding`。
-2. Viewer 在 `open({ schema, data })` 时统一解析绑定。
-3. 你的渲染器只消费解析后的 `resolvedProps`。
+写完后按这个顺序验证：
 
-这意味着大多数自定义物料根本不需要自己解析 `fieldPath`。
+```ts
+// 1. Designer 能拖入
+registerPriceTagDesigner(store)
 
-如果你发现自己在 Viewer 里手动写 `getByPath(context.data, ...)`，通常说明职责写错层了。
+// 2. Schema 里有稳定 type
+schema.elements.some(node => node.type === PRICE_TAG_TYPE)
 
-## 属性面板与 Overlay
+// 3. Viewer 能渲染同一个 type
+viewer.registerMaterial(PRICE_TAG_TYPE, priceTagViewerExtension)
+```
 
-`propSchemas` 适合简单字段：
+然后再检查这些结果：
 
-- 文本
-- 数字
-- 颜色
-- 开关
-- 枚举
+- 从物料面板点击或拖入后，画布上能看到元素。
+- 修改属性后，Schema 保存出稳定的 `type` 和 `props`。
+- 同一份 Schema 交给 Viewer 后，不会出现 `[Unknown: price-tag]`。
+- 绑定数据后，Viewer 能从 `context.resolvedProps` 读到结果。
+- 打印和导出结果与 Viewer 预览一致。
 
-下面这些情况更适合 `requestPropertyPanel()` 推送自定义 overlay：
-
-- 一个操作同时改多个字段
-- 属性实际不在 `node.props` 下
-- 需要自定义编辑器
-- 需要上下文感知的临时编辑面板
-
-判断标准只有一个：如果属性面板操作已经不再是“改一个 key 的值”，就别假装它还是简单 `propSchemas`。
-
-## 验收清单
-
-物料开发完成后，至少自己过这五步：
-
-1. 能从物料面板拖入画布。
-2. 修改属性后，Schema 能保存出稳定的 `type + props`。
-3. 同一份 Schema 交给 Viewer 后，预览结果和设计态核心信息一致。
-4. 带绑定的数据在 `viewer.open({ data })` 后能正确显示。
-5. 打印和导出结果与 Viewer 渲染一致，没有退回 `[Unknown: type]`。
-
-## 常见故障
-
-### 类型未注册
-
-根因通常只有一个：你只注册了 Designer，没有注册 Viewer。
-
-### 绑定失效
-
-优先检查两点：
-
-- `viewer.open()` 传入的 `data` 结构是否与 `fieldPath` 对齐。
-- 渲染器是否错误地读了自己拼的默认值，而不是 `context.resolvedProps`。
-
-### 画布不刷新
-
-通常是 `renderContent()` 只在挂载时渲染了一次，没有订阅 `nodeSignal`。
-
-### 缩放错位
-
-如果物料内部有独立布局状态，光靠节点 `width/height` 改变还不够，需要实现 `resize` 适配器，把私有状态和外层几何一起更新。
-
-## 工程边界
-
-如果你的物料后面还会被多个业务复用，建议从第一天开始把它拆成三个文件：
-
-- `schema.ts`：`type`、默认节点、能力声明
-- `designer.ts`：DesignerExtension 和注册描述
-- `viewer.ts`：ViewerExtension
-
-不要把三层代码塞进一个组件文件里。短期快，长期一定会把职责搅乱。
-
-## 延伸阅读
-
-- Designer 接入入口见 [Designer / 概述](/designer/)
-- Viewer 基础能力见 [Viewer / 概述](/viewer/)
-- Schema 结构见 [Schema 参考](/advanced/schema)
+关于物料，目前知道这些就够用了。接下来可以继续看 [贡献扩展开发](/advanced/contributions) 或 [Schema 参考](/advanced/schema)。

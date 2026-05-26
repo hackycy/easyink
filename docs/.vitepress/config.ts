@@ -22,7 +22,7 @@ export default defineConfig({
       { text: 'Designer', link: '/designer/' },
       { text: 'Viewer', link: '/viewer/' },
       { text: 'Printing', link: '/printing/' },
-      { text: '进阶', link: '/advanced/print-drivers' },
+      { text: '进阶', link: '/advanced/custom-materials' },
       { text: 'API', link: '/api/' },
       { text: '在线演示', link: 'https://hackycy.github.io/easyink' },
     ],

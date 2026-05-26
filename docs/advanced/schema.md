@@ -1,85 +1,181 @@
-# Schema 参考
+# Schema 参考 {#schema}
 
-Schema 是 EasyInk 的基础模型。Designer、Viewer、打印和导出最终都围绕它工作。
+Schema 是 EasyInk 的模板模型。Designer、Viewer、打印和导出最终都围绕同一份 Schema 工作。
 
-## 输入形态
-
-对宿主来说，最常接触的是宽松输入；对运行时来说，最终都会落到完整 Schema。传入设计器的是 `DocumentSchemaInput`：所有顶层字段都可以省略，`page` 和 `guides` 的必填子字段也可以省略。
-
-`version` 不属于宿主可指定输入，框架会通过 `normalizeDocumentSchema()` 补齐默认值并写入当前 Schema 版本。进入 `DesignerStore`、Viewer、自动保存和导出链路后的内部模型始终是完整 `DocumentSchema`。
-
-最关键的规则是：先归一化，再校验和消费。
+先看一个最小输入：
 
 ```ts
 import { normalizeDocumentSchema, validateSchemaIssues } from '@easyink/schema'
 
 const schema = normalizeDocumentSchema({
   page: { width: 80 },
+  elements: [],
 })
 
 const issues = validateSchemaIssues(schema)
-
-// schema.page => { mode: 'fixed', width: 80, height: 297 }
-// schema.guides => { x: [], y: [] }
-// schema.elements => []
 ```
 
-`normalizeDocumentSchema()` 会补默认值，`validateSchemaIssues()` 用来判断对象是否已经是完整合法的内部 Schema。
+归一化后，运行时拿到的是完整 `DocumentSchema`。宿主可以传宽松输入，但内部消费前应该先归一化。
 
-## `normalizeDocumentSchema()` 行为
+## 输入和内部模型 {#input-vs-schema}
 
-从实现上看，它至少会保证这些默认值：
+宿主通常传 `DocumentSchemaInput`：
 
-- `version` 写成当前 Schema 版本
-- `unit` 默认 `mm`
-- `guides` 默认 `{ x: [], y: [] }`
-- `elements` 默认空数组
-- `page` 会按 `mode` 补全对应的层级默认策略
+```ts
+const input = {
+  page: {
+    mode: 'continuous',
+    width: 80,
+    height: 200,
+  },
+}
 
-## `page.mode` 配置
+const schema = normalizeDocumentSchema(input)
+```
 
-当前归一化逻辑里，`mode` 会决定整组页面层配置默认值：
+`DocumentSchemaInput` 允许省略很多顶层字段。`normalizeDocumentSchema()` 会补齐：
 
-| mode | pageModel | layout | pagination | reflow |
+- `version`
+- `unit`
+- `page`
+- `guides`
+- `elements`
+- 页面模式相关的 `pageModel`、`layout`、`pagination`、`reflow`
+
+:::warning 注意
+`version` 不属于宿主可指定输入。归一化会写入当前 Schema 版本。
+:::
+
+## 页面模式默认值 {#page-mode-defaults}
+
+`page.mode` 会决定一组页面层默认配置：
+
+```ts
+const fixed = normalizeDocumentSchema({
+  page: { mode: 'fixed', width: 210, height: 297 },
+})
+
+const continuous = normalizeDocumentSchema({
+  page: { mode: 'continuous', width: 80, height: 200 },
+})
+```
+
+当前默认值是：
+
+| `mode` | `pageModel` | `layout` | `pagination` | `reflow` |
 | --- | --- | --- | --- | --- |
 | `fixed` | `paged-paper` | `absolute` | `fixed-sheets` | `measure-only` |
 | `continuous` | `continuous-paper` | `stack-flow` | `none` | `flow-y` |
 
-这也是为什么连续纸和固定页面模板不能只改一个宽高就算了。
+这就是为什么连续纸不能只改宽高。它还会切换布局、分页和回流策略。
 
-## 校验能力
+## 校验和序列化 {#validation}
 
-`@easyink/schema` 当前直接导出了这些常用能力：
-
-- `validateSchema()`
-- `validateSchemaIssues()`
-- `isValidSchema()`
-- `serializeSchema()`
-- `deserializeSchema()`
-
-如果你要做本地持久化、导入导出或服务端接收模板，这些入口比自己手写 JSON 检查更可靠。
-
-## 兼容输入
-
-Schema codec 里还包含对 benchmark 输入的解码逻辑。也就是说，兼容旧输入格式并不是靠文档约定，而是有明确代码路径去做字段映射。
-
-如果你在做旧模板迁移，优先复用 codec，而不是在业务层自己手写转换。
-
-## AnimationSchema
+本地保存、导入导出和服务端接收模板时，优先用 schema 包里的入口：
 
 ```ts
-interface AnimationSchema {
-  trigger: string    // 触发条件
-  type: string       // 动画类型
-  duration?: number  // 持续时间（毫秒）
-  delay?: number     // 延迟（毫秒）
-  options?: Record<string, unknown>
+import {
+  deserializeSchema,
+  isValidSchema,
+  serializeSchema,
+  validateSchemaIssues,
+} from '@easyink/schema'
+
+const json = serializeSchema(schema)
+const restored = deserializeSchema(json)
+
+if (!isValidSchema(restored)) {
+  console.warn(validateSchemaIssues(restored))
 }
 ```
 
-## TableNode
+常用能力包括：
 
-表格元素扩展了 MaterialNode，增加了 `table` 属性。
+- `validateSchema()`：返回字符串错误数组。
+- `validateSchemaIssues()`：返回结构化问题，包含 `path`、`message` 和 `code`。
+- `isValidSchema()`：类型守卫。
+- `serializeSchema()` / `deserializeSchema()`：处理持久化 JSON。
+- `isCompatibleVersion()`：判断版本是否兼容。
+
+## 旧格式兼容 {#compat}
+
+旧模板或外部输入不要在业务层手写字段映射。先交给 codec：
+
+```ts
+import { decodeBenchmarkInput } from '@easyink/schema'
+
+const schema = decodeBenchmarkInput(legacyInput)
+```
+
+Schema codec 里包含 benchmark 输入的解码逻辑。兼容旧格式是明确代码路径，不是文档约定。普通 EasyInk JSON 仍然用 `deserializeSchema(json)`。
+
+## 元素节点 {#material-node}
+
+最常见的元素节点长这样：
+
+```json
+{
+  "id": "text-1",
+  "type": "text",
+  "x": 20,
+  "y": 20,
+  "width": 170,
+  "height": 10,
+  "props": {
+    "content": "Hello EasyInk",
+    "fontSize": 24,
+    "fontFamily": "sans-serif"
+  }
+}
+```
+
+`type` 决定用哪个物料渲染，`x/y/width/height` 决定画布几何，`props` 保存物料自己的属性。
+
+自定义物料也走同一套结构：
+
+```ts
+const node = {
+  id: 'price-tag-1',
+  type: 'price-tag',
+  x: 20,
+  y: 20,
+  width: 48,
+  height: 18,
+  props: {
+    label: '价格',
+    amount: '¥ 99.00',
+  },
+}
+```
+
+只要 Designer 和 Viewer 都注册了同一个 `type`，这份节点就能被两边识别。
+
+## 数据绑定字段 {#binding}
+
+元素可以保存绑定引用：
+
+```json
+{
+  "id": "total-text",
+  "type": "text",
+  "x": 20,
+  "y": 20,
+  "width": 60,
+  "height": 10,
+  "props": { "content": "" },
+  "binding": {
+    "sourceId": "invoice",
+    "fieldPath": "summary/total",
+    "fieldLabel": "合计"
+  }
+}
+```
+
+Designer 负责把绑定写进节点。Viewer 在 `open({ schema, data })` 时解析绑定，然后把结果交给物料渲染器。
+
+## 表格节点 {#table-node}
+
+表格节点在 `MaterialNode` 外多了 `table` 属性：
 
 ```ts
 interface TableNode extends MaterialNode {
@@ -89,74 +185,74 @@ interface TableNode extends MaterialNode {
 
 interface TableSchema {
   kind: 'static' | 'data'
-  topology: TableTopologySchema  // 行列拓扑
-  layout: TableLayoutConfig      // 布局配置
+  topology: TableTopologySchema
+  layout: TableLayoutConfig
   diagnostics?: LayoutDiagnostic[]
 }
+```
 
-/** table-data 专用 Schema */
-interface TableDataSchema extends TableSchema {
-  kind: 'data'
-  showHeader?: boolean  // 是否显示表头，默认 true
-  showFooter?: boolean  // 是否显示表尾，默认 true
-}
+单元格绑定保存在 cell 上：
 
-interface TableTopologySchema {
-  columns: TableColumnSchema[]   // 列定义（ratio 为宽度比例）
-  rows: TableRowSchema[]         // 行定义
-}
-
-interface TableRowSchema {
-  height: number
-  role: TableRowRole             // 'header' | 'body' | 'footer'
-  cells: TableCellSchema[]
-}
-
+```ts
 interface TableCellSchema {
   rowSpan?: number
   colSpan?: number
-  border?: CellBorderSchema
-  padding?: BoxSpacing
   content?: {
     text?: string
-    elements?: MaterialNode[]    // 单元格内嵌元素
+    elements?: MaterialNode[]
     editMode?: 'inline-text' | 'rich-text' | 'hosted'
   }
-  typography?: CellTypography
   props?: Record<string, unknown>
-  binding?: BindingRef            // table-data 单元格绑定
-  staticBinding?: BindingRef      // table-static 独立单元格绑定
+  binding?: BindingRef
+  staticBinding?: BindingRef
 }
 ```
 
-## 工具函数
+`table-data` 通常用 `binding` 表示数据行字段。`table-static` 可以用 `staticBinding` 表示独立单元格绑定。
+
+## 动画字段 {#animation}
+
+动画挂在元素的可选字段里：
 
 ```ts
-// 类型守卫
-isTableNode(node)      // 是否为表格节点
-isTableDataNode(node)  // 是否为数据表格节点
-
-// 属性访问
-getNodeProps<T>(node)  // 获取类型化的 props
-
-// 默认值与归一化
-createDefaultSchema()       // 完整默认 Schema
-createDefaultPage()         // 默认 page
-createDefaultGuides()       // 默认 guides
-normalizeDocumentSchema(input)
-
-// 校验与序列化
-validateSchema(schema)        // 返回字符串错误数组
-validateSchemaIssues(schema)  // 返回 { path, message, code }[]
-isValidSchema(schema)         // 类型守卫
-serializeSchema(schema)
-deserializeSchema(json)
-isCompatibleVersion(version)
+interface AnimationSchema {
+  trigger: string
+  type: string
+  duration?: number
+  delay?: number
+  options?: Record<string, unknown>
+}
 ```
 
-`validateSchemaIssues()` 校验的是完整内部 Schema。宿主传入的宽松输入应该先经过 `normalizeDocumentSchema()`，否则缺少 `version`、`unit`、`page`、`guides` 或 `elements` 都会被视为校验问题。旧模板或外部持久化 JSON 应通过 `deserializeSchema()` 或 `MigrationRegistry` 处理，由这些入口读取并解释 `version`。
+目前先把它理解成“元素上的播放配置”就够了。不同运行时可以按自己的能力消费这份配置。
 
-## Schema 示例
+## 工具函数 {#helpers}
+
+常用工具可以按用途记：
+
+```ts
+import {
+  createDefaultGuides,
+  createDefaultPage,
+  createDefaultSchema,
+  getNodeProps,
+  isCompatibleVersion,
+  isTableDataNode,
+  isTableNode,
+  normalizeDocumentSchema,
+  validateSchemaIssues,
+} from '@easyink/schema'
+```
+
+它们大致分三类：
+
+- 默认值：`createDefaultSchema()`、`createDefaultPage()`、`createDefaultGuides()`。
+- 类型和访问：`isTableNode()`、`isTableDataNode()`、`getNodeProps<T>()`。
+- 校验和兼容：`validateSchemaIssues()`、`isCompatibleVersion()`、`normalizeDocumentSchema()`。
+
+## 完整示例 {#full-example}
+
+一份固定 A4 模板可以这样写：
 
 ```json
 {
@@ -165,7 +261,14 @@ isCompatibleVersion(version)
   "page": {
     "mode": "fixed",
     "width": 210,
-    "height": 297
+    "height": 297,
+    "pageModel": {
+      "kind": "paged-paper",
+      "paper": { "width": 210, "height": 297 }
+    },
+    "layout": { "strategy": "absolute" },
+    "pagination": { "strategy": "fixed-sheets" },
+    "reflow": { "strategy": "measure-only" }
   },
   "guides": { "x": [], "y": [] },
   "elements": [
@@ -185,3 +288,7 @@ isCompatibleVersion(version)
   ]
 }
 ```
+
+如果你手写的是宽松输入，不必把所有默认层都写出来。交给 `normalizeDocumentSchema()` 补齐即可。
+
+关于 Schema，目前知道这些就够用了。自定义物料如何保存自己的节点，可以继续看 [自定义物料开发](/advanced/custom-materials)。

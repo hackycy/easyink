@@ -1,52 +1,13 @@
-# 贡献扩展开发
+# 贡献扩展开发 {#contributions}
 
-Contribution 解决的不是“怎么用 Designer”，而是“怎么在不改 Designer 源码的前提下把宿主能力挂进去”。
+Contribution 用来把宿主能力挂到 Designer 上，而不修改 Designer 源码。
 
-## 使用场景
-
-下面几种需求通常应该走 Contribution：
-
-- 增加一个设计器面板
-- 增加一个工具栏动作
-- 定义一个可复用命令
-- 订阅设计器诊断并转发给宿主系统
-
-如果你只是想注册新物料，那先看 [自定义物料开发](/advanced/custom-materials)。
-
-## 核心接口
+先看一个最小按钮：
 
 ```ts
-interface Contribution {
-  id: string
-  activate: (ctx: ContributionContext) => void
-}
-```
+import type { Contribution } from '@easyink/designer'
+import { IconSparkles } from '@easyink/icons'
 
-这意味着 Contribution 最好理解成“初始化时注册能力”，而不是一段散落的业务脚本。
-
-## `ContributionContext` 能力
-
-源码里最核心的入口就是这些：
-
-```ts
-interface ContributionContext {
-  store: DesignerStore
-  registerPanel: (panel: PanelDescriptor) => void
-  registerToolbarAction: (action: ToolbarActionDescriptor) => void
-  registerCommand: <TArgs, TResult>(command: Command<TArgs, TResult>) => void
-  executeCommand: <TArgs = unknown, TResult = unknown>(id: string, args?: TArgs) => Promise<TResult>
-  confirm: (request) => Promise<boolean>
-  pickAsset: (request) => Promise<DesignerResolvedAsset | null>
-  onDispose: (fn: () => void) => void
-  onDiagnostic: (fn: (entry: Diagnostic) => void) => () => void
-}
-```
-
-如果只记一条分层原则，也够用了：面板和按钮只负责入口，真正可复用的动作尽量收敛成命令。
-
-## 最小示例
-
-```ts
 export const helloContribution: Contribution = {
   id: 'demo.hello',
   activate(ctx) {
@@ -69,7 +30,7 @@ export const helloContribution: Contribution = {
 }
 ```
 
-接入方式也很直接：
+接入 Designer：
 
 ```vue
 <EasyInkDesigner
@@ -78,75 +39,195 @@ export const helloContribution: Contribution = {
 />
 ```
 
-## `registerPanel()` 用途
+这段代码注册了一个命令和一个工具栏按钮。按钮只负责触发命令，真正动作放在命令里。
 
-适合持续存在的扩展能力，例如：
+## 判断是否需要 Contribution {#when-to-use}
 
-- AI 面板
-- 资产选择器
-- 审查面板
-- 宿主侧日志面板
+如果你要加的是这些能力，通常就用 Contribution：
 
-`PanelDescriptor` 当前支持 `id`、`component`、`teleportTarget` 和 `props`。如果没有特殊要求，面板会挂到默认的 `#ei-overlay-root`。
+```ts
+ctx.registerPanel(...)
+ctx.registerToolbarAction(...)
+ctx.registerCommand(...)
+ctx.onDiagnostic(...)
+```
 
-## `registerToolbarAction()` 用途
+它适合扩展 Designer 的外层能力：
 
-它只适合显式触发动作，不适合承载整条业务流程。
+- 增加业务面板。
+- 增加工具栏动作。
+- 定义可复用命令。
+- 订阅诊断并转发到宿主系统。
 
-如果一个逻辑以后可能还会被面板、快捷键或其他扩展复用，就不要直接焊在按钮点击里，先做成命令。
+如果你要注册新元素类型，先看 [自定义物料开发](/advanced/custom-materials)。物料负责画布节点，Contribution 负责设计器外围能力。
 
-## `confirm()` 与 `pickAsset()`
+## 核心接口 {#api}
 
-这两个入口都走宿主控制的交互层，而不是 Contribution 自己去直接操作浏览器 UI。
+Contribution 的形状很小：
 
-这意味着：
+```ts
+interface Contribution {
+  id: string
+  activate: (ctx: ContributionContext) => void
+}
+```
 
-- 破坏性确认应走 `confirm()`
-- 资产选择应走 `pickAsset()`
+`activate()` 会在 Designer 初始化 contribution registry 时执行。你应该在这里完成注册和订阅。
 
-这样扩展能力仍然能保持宿主可控，而不是把交互细节写死在设计器内部。
+`ContributionContext` 里最常用的是这些入口：
 
-## 诊断事件转发
+```ts
+interface ContributionContext {
+  store: DesignerStore
+  registerPanel: (panel: PanelDescriptor) => void
+  registerToolbarAction: (action: ToolbarActionDescriptor) => void
+  registerCommand: <TArgs, TResult>(command: Command<TArgs, TResult>) => void
+  executeCommand: <TArgs = unknown, TResult = unknown>(id: string, args?: TArgs) => Promise<TResult>
+  confirm: (request: DesignerConfirmRequest) => Promise<boolean>
+  pickAsset: (request: DesignerAssetPickRequest) => Promise<DesignerResolvedAsset | null>
+  onDispose: (fn: () => void) => void
+  onDiagnostic: (fn: (entry: Diagnostic) => void) => () => void
+}
+```
 
-如果你要把 Designer 内部诊断接入宿主系统，可以转给：
+如果只记一条分层原则：面板和按钮负责入口，真正可复用的动作收敛成命令。
 
-- 埋点系统
-- Sentry / APM
-- 业务提示条
+## 注册命令 {#commands}
+
+命令适合放可以被多处复用的动作：
+
+```ts
+ctx.registerCommand<{ prefix: string }, string>({
+  id: 'demo.renameTemplate',
+  handler: async (args, ctx) => {
+    const name = `${args.prefix}-${Date.now()}`
+    ctx.store.schema.meta = {
+      ...ctx.store.schema.meta,
+      name,
+    }
+    return name
+  },
+})
+
+const name = await ctx.executeCommand<{ prefix: string }, string>(
+  'demo.renameTemplate',
+  { prefix: 'invoice' },
+)
+```
+
+`executeCommand()` 会按 id 找到已注册命令。重复 id 或找不到命令都会抛错，所以 id 最好带上业务命名空间。
+
+## 注册工具栏动作 {#toolbar-actions}
+
+工具栏动作适合显式触发：
+
+```ts
+ctx.registerToolbarAction({
+  id: 'demo.rename.button',
+  icon: IconSparkles,
+  label: 'Rename',
+  onClick: (ctx) => {
+    void ctx.executeCommand('demo.renameTemplate', { prefix: 'invoice' })
+  },
+})
+```
+
+按钮不要承载太长业务流程。以后面板、快捷键或自动化也要复用时，命令会让这条链路更清楚。
+
+## 注册面板 {#panels}
+
+持续存在的业务 UI 适合放进 panel：
+
+```ts
+import { defineAsyncComponent, ref } from 'vue'
+
+const ReviewPanel = defineAsyncComponent(() => import('./ReviewPanel.vue'))
+
+const open = ref(false)
+
+ctx.registerPanel({
+  id: 'review.panel',
+  component: ReviewPanel,
+  props: {
+    get open() {
+      return open.value
+    },
+    'onUpdate:open': (next: boolean) => {
+      open.value = next
+    },
+  },
+})
+```
+
+默认情况下，面板会通过 Teleport 挂到 Designer 的 `#ei-overlay-root`。如果你有自己的挂载点，可以传 `teleportTarget`。
+
+## 使用宿主交互 {#host-interactions}
+
+破坏性确认和资产选择应该走宿主交互层：
+
+```ts
+const ok = await ctx.confirm({
+  id: 'demo.deleteTemplate',
+  title: '删除模板',
+  message: '确认删除当前模板吗？',
+  severity: 'danger',
+})
+
+if (!ok)
+  return
+
+const asset = await ctx.pickAsset({
+  id: 'demo.pickLogo',
+  source: 'demo-contribution',
+})
+```
+
+这样 Contribution 不需要自己实现浏览器弹窗或业务资产库。宿主可以统一处理权限、审计和 UI 风格。
+
+## 转发诊断 {#diagnostics}
+
+Designer 内部的可恢复问题可以订阅出来：
 
 ```ts
 const unsubscribe = ctx.onDiagnostic((entry) => {
   console.warn(`[designer:${entry.severity}] ${entry.message}`)
 })
+
+ctx.onDispose(() => {
+  unsubscribe()
+})
 ```
 
-这里的关键不是打印日志，而是“把 Designer 内部可恢复问题往宿主系统转发”。`onDiagnostic()` 返回的取消函数可以用于提前取消订阅；如果不手动调用，ContributionRegistry 也会在 Designer dispose 时自动取消，避免路由切换或 HMR 后残留监听。
+`onDiagnostic()` 返回取消函数。registry 在 Designer dispose 时也会自动取消订阅；你提前取消也可以。
 
-## 生命周期设计
+## 清理生命周期 {#lifecycle}
 
-Contribution 的实际生命周期可以理解成：
+带外部副作用的 contribution 必须清理：
 
-```text
-mount designer
-  -> activate()
-  -> register panel / action / command / subscriptions
-  -> user interaction
-  -> designer unmount
-  -> dispose callbacks
+```ts
+activate(ctx) {
+  const timer = window.setInterval(() => {
+    console.log(ctx.store.saveStatus)
+  }, 1000)
+
+  ctx.onDispose(() => {
+    window.clearInterval(timer)
+  })
+}
 ```
 
-`onDispose()` 必须拿来清理这些东西：
+需要清理的通常包括：
 
-- 事件监听
-- 轮询
-- 外部订阅
-- contribution 自己维护的临时状态
+- DOM 事件监听。
+- 轮询和定时器。
+- WebSocket 或外部订阅。
+- contribution 自己维护的临时状态。
 
-不要假设 contribution 会一直存活。嵌入式场景、路由切换、HMR 都会让它被反复挂载和销毁。
+嵌入式场景、路由切换和 HMR 都可能让 Designer 反复挂载。不要假设 contribution 会一直存在。
 
-## 可切换面板示例
+## 完整面板示例 {#panel-example}
 
-这类结构最接近真实业务，也最适合作为起点。
+这版结构接近仓库里的 AI contribution：
 
 ```ts
 import type { Contribution } from '@easyink/designer'
@@ -198,60 +279,22 @@ export function createReviewContribution(): Contribution {
 }
 ```
 
-这个结构和仓库里的 AI contribution 是同一思路：
+这段代码把状态、命令、按钮和面板拆开了。你调试时可以逐个确认：命令是否注册、按钮是否触发、面板 props 是否更新。
 
-- 面板状态在 contribution 自己维护
-- 工具栏只负责触发命令
-- 命令统一切换状态
-- 面板只消费 props
+## 常见问题 {#troubleshooting}
 
-## 仓库实现参考
+重复 id 会直接抛错：
 
-当前仓库里最直接的参考实现就是 AI 集成：
+```ts
+ctx.registerCommand({ id: 'review.togglePanel', handler: () => {} })
+ctx.registerCommand({ id: 'review.togglePanel', handler: () => {} })
+```
 
-- `packages/ai/src/contribution.ts`
+遇到问题时先查这几项：
 
-它做了三件事：
+- 按钮无响应：确认 `onClick` 里调用了 `executeCommand()`。
+- 命令找不到：确认 contribution 已传给 `<EasyInkDesigner :contributions>`。
+- 面板不出现：确认 `open` 这类状态真的传进了 panel props。
+- 事件残留：确认外部订阅放进了 `onDispose()`。
 
-1. 注册 `ai.togglePanel` 命令
-2. 注册顶部工具栏按钮
-3. 注册异步加载的 AI 面板
-
-如果你要做自己的业务扩展，这个实现比文档示例更接近真实工程写法。
-
-## 常见错误
-
-### 重复 ID
-
-根因通常很简单：同一个 contribution 被重复挂载，或者你在 `activate()` 之外又做了一次注册。
-
-### 按钮无响应
-
-先查两点：
-
-- 对应命令是不是成功注册了
-- `onClick` 里是不是没有实际调用 `executeCommand()` 或状态切换
-
-### 事件残留
-
-说明你把外部订阅挂上去了，但没有在 `onDispose()` 里清理。
-
-### 职责混淆
-
-这通常不是能力不够，而是职责划错了。Contribution 应该是注入额外能力，不应该把设计器本身的主流程重新实现一遍。
-
-## 工程路径
-
-如果你是第一次做 contribution，最稳的顺序是：
-
-1. 先注册一个命令。
-2. 再给它挂一个工具栏按钮。
-3. 最后再接一个面板。
-
-这样你能先验证“扩展已经成功激活”，再验证“交互入口可用”，最后才处理复杂 UI。
-
-## 延伸阅读
-
-- Designer 基础接入见 [Designer / 概述](/designer/)
-- 自定义物料见 [自定义物料开发](/advanced/custom-materials)
-- Schema 结构见 [Schema 参考](/advanced/schema)
+关于 Contribution，目前知道这些就够用了。更完整的工程参考可以看 `packages/ai/src/contribution.ts`，它注册了命令、工具栏按钮和异步面板。

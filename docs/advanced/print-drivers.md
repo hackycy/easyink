@@ -1,8 +1,47 @@
-# 自定义打印驱动开发
+# 自定义打印驱动开发 {#print-drivers}
 
-如果你只是接 EasyInk Printer 或 HiPrint，先不要写驱动。只有在你要接企业内部打印网关、专用硬件或厂商 SDK 时，这一层才值得进入。
+如果你只是接 EasyInk Printer 或 HiPrint，先用现成集成。只有在你要接企业内部打印网关、专用硬件或厂商 SDK 时，才需要写自定义驱动。
 
-## 驱动接口职责
+先看一个 PDF 提交型驱动：
+
+```ts
+import type { PrintDriver } from '@easyink/viewer'
+import { renderPagesToPdfBlob } from '@easyink/export-plugin-dom-pdf'
+import { resolveViewerPdfPages, resolveViewerPrintSize } from '@easyink/print-core'
+
+export function createRemotePdfPrintDriver(): PrintDriver {
+  return {
+    id: 'remote-pdf-printer',
+    defaults: {
+      pageSizeMode: 'fixed',
+    },
+    async print(context) {
+      context.onPhase?.({ phase: 'preparing', message: '生成 PDF' })
+
+      const pdfPages = resolveViewerPdfPages(context)
+      const { widthMm, heightMm } = resolveViewerPrintSize(context)
+
+      const pdfBlob = await renderPagesToPdfBlob({
+        pages: pdfPages.map(page => page.element),
+        pageSizes: pdfPages.map(page => ({
+          widthMm: page.widthMm,
+          heightMm: page.heightMm,
+        })),
+        onProgress: context.onProgress,
+      })
+
+      context.onPhase?.({ phase: 'submitting', message: '提交打印任务' })
+      await submitPdfToGateway(pdfBlob, { widthMm, heightMm })
+    },
+  }
+}
+```
+
+这段代码没有重新排版。它只读取 Viewer 已经渲染好的页面，把页面转成目标系统需要的 PDF，再提交出去。
+
+## 驱动接口 {#driver-api}
+
+打印驱动的接口很小：
 
 ```ts
 interface PrintDriver {
@@ -14,137 +53,162 @@ interface PrintDriver {
 }
 ```
 
-驱动真正负责的是把 Viewer 已经渲染好的结果，转换成目标打印系统能接受的输入。
+`print()` 拿到的是 `ViewerPrintContext`。它代表 Viewer 已经完成渲染，驱动现在要把结果交给打印系统。
 
-## `ViewerPrintContext`
+## 读取 ViewerPrintContext {#print-context}
 
-你真正常用的是这些字段：
-
-- `container`
-- `renderedPages`
-- `printPolicy`
-- `onPhase`
-- `onProgress`
-- `onDiagnostic`
-
-这意味着驱动不应该重新排版，而应该消费 Viewer 已经确定下来的页面结果。
-
-## `print-core` 辅助函数
-
-如果你自己写驱动，优先复用这些现成工具：
-
-- `getViewerPages()`
-- `resolveViewerPrintSize()`
-- `resolveViewerPdfPages()`
-- `resolvePrintLandscape()`
-- `resolvePrintOffset()`
-- `exportDiagnosticToViewerEvent()`
-
-它们的价值不在“少写几行代码”，而在于把页面提取、单位换算和诊断映射统一下来。
-
-## PDF 提交路径
-
-如果你的目标系统更适合接 PDF，可以这样组织：
+驱动里常用这些字段：
 
 ```ts
-function createRemotePrintDriver(): PrintDriver {
-  return {
-    id: 'remote-printer',
-    async print(context) {
-      const pdfPages = resolveViewerPdfPages(context)
-      const pages = pdfPages.map(page => page.element)
-      const pageSizes = pdfPages.map(({ widthMm, heightMm }) => ({ widthMm, heightMm }))
+async print(context) {
+  const pages = context.renderedPages
+  const policy = context.printPolicy
+  const container = context.container
 
-      const pdfBlob = await renderPagesToPdfBlob({
-        pages,
-        pageSizes,
-        onProgress: context.onProgress,
-      })
-
-      await submitPdf(pdfBlob)
-    },
-  }
+  context.onPhase?.({ phase: 'printing', message: `${pages.length} 页` })
 }
 ```
 
-如果目标系统本身更适合接 HTML 或逐页流式协议，再考虑 DOM 提交或 WebSocket 提交路径。
+这些字段的含义是：
 
-## 工程分层建议
+- `container`：Viewer 渲染后的 DOM 容器。
+- `renderedPages`：每页宽高和单位。
+- `printPolicy`：纸张模式、方向、偏移等打印策略。
+- `onPhase`、`onProgress`、`onDiagnostic`：反馈给宿主的通道。
 
-不要把连接管理、配置持久化和驱动实现写在一个文件里。更稳的拆法是：
+:::warning 注意
+驱动不应该重新计算模板 layout。页面尺寸、分页和元素位置都应该来自 Viewer 的渲染结果。
+:::
 
-- `client` 负责连接和任务提交
-- `driver` 负责从 `ViewerPrintContext` 提取数据并调用 `client`
-- `store` 或设置层负责保存打印机、份数和其他配置
+## 复用 print-core {#print-core}
 
-官方打印集成也是按这个思路做的。
-
-## 单位转换
-
-打印系统之间最容易出错的不是连接，而是单位。`px`、`pt`、`mm`、`inch` 混用时，最终打印出来就是尺寸不对。
+自己写驱动时，优先复用 `@easyink/print-core`：
 
 ```ts
-import { resolveViewerPrintSize } from '@easyink/print-core'
+import {
+  getViewerPages,
+  resolvePrintLandscape,
+  resolvePrintOffset,
+  resolveViewerPdfPages,
+  resolveViewerPrintSize,
+} from '@easyink/print-core'
 
+const pages = getViewerPages(context.container)
+const pdfPages = resolveViewerPdfPages(context)
 const { widthMm, heightMm } = resolveViewerPrintSize(context)
+const landscape = resolvePrintLandscape(context.printPolicy.orientation, widthMm, heightMm)
+const offset = resolvePrintOffset(context.printPolicy.offset)
 ```
 
-建议在驱动入口就把所有尺寸统一转换成毫米，后面的协议层只处理一种单位。这样最不容易出错。
+这些工具会统一处理页面提取、单位换算和方向判断。你不用在每个驱动里重新写一套。
 
-## 反馈通道
+## 选择提交路径 {#submit-path}
 
-### 阶段反馈
+常见提交路径有三种：
+
+```ts
+// PDF 型网关
+await submitPdfToGateway(pdfBlob)
+
+// HTML 型网关
+await submitHtmlToGateway(context.container!.innerHTML)
+
+// 厂商 SDK
+await printerSdk.print({ pages, widthMm, heightMm })
+```
+
+三种方式都可以。选择时看目标系统最稳定支持什么输入：
+
+- 支持 PDF：优先 PDF，尺寸和分页更可控。
+- 支持 HTML：可以直接提交 Viewer DOM，但要确认样式和字体加载策略。
+- 只能走 SDK：把 `ViewerPrintContext` 转成 SDK 参数，不要让 SDK 反过来接管排版。
+
+## 处理单位 {#units}
+
+打印问题里最常见的是单位混用。建议在驱动入口就统一成毫米：
+
+```ts
+import { resolveViewerPrintSize, toMillimeters } from '@easyink/print-core'
+
+const { widthMm, heightMm } = resolveViewerPrintSize(context)
+
+const firstPage = context.renderedPages[0]
+const pageWidthMm = toMillimeters(firstPage.width, firstPage.unit)
+```
+
+后面的协议层只处理 `mm`。这样你更容易排查“打印出来尺寸不对”的问题。
+
+## 报告阶段和进度 {#feedback}
+
+生产环境里，反馈通道不是装饰。驱动至少应该报告阶段、进度和可恢复诊断：
 
 ```ts
 context.onPhase?.({ phase: 'preparing', message: '准备打印数据' })
-context.onPhase?.({ phase: 'submitting', message: '提交打印任务' })
-context.onPhase?.({ phase: 'waiting', message: '等待打印结果' })
-```
-
-### 进度反馈
-
-```ts
-context.onProgress?.({ current: 1, total: 5, message: '打印第 1/5 页' })
-```
-
-### 诊断反馈
-
-```ts
+context.onProgress?.({ current: 1, total: 5, message: '处理第 1/5 页' })
 context.onDiagnostic?.({
   category: 'print',
   severity: 'warning',
   code: 'DEVICE_BUSY',
   message: '打印机忙碌，任务已进入等待队列',
+  scope: 'print',
 })
 ```
 
-这些反馈不是可选装饰，而是生产环境里定位问题的最小闭环。
+宿主可以用这些事件更新 UI、写日志或上报监控。
 
-## 抽象边界
+## 拆分工程边界 {#project-boundary}
 
-很多团队在写第一个驱动时会继续往上抽象一个“统一打印平台”，试图把 DOM、PDF、图片、硬件指令全部塞进一个大接口。通常这一步太早了。
+建议把驱动拆成三层：
 
-更短路径是：
+```text
+client -> 连接、鉴权、提交任务
+driver -> 从 ViewerPrintContext 提取数据并调用 client
+store  -> 保存打印机、份数、偏移等业务配置
+```
 
-- 先围绕一种真实设备和协议把驱动跑通。
-- 把共性抽成 `client` 或 `print-core` 工具。
-- 第二种设备出现时，再判断是否需要继续抽象。
+不要在第一个驱动里急着做“统一打印平台”。先围绕一种真实设备跑通，第二种设备出现时再抽公共层。
 
-因为打印系统的差异点常常在协议边界，而不是 Viewer 这一层。
+## 注册和调用 {#register}
 
-## 完成前检查清单
+注册驱动后，Viewer 可以按 `driverId` 调用它：
 
-一个自定义驱动至少应该验证这些场景：
+```ts
+const driver = createRemotePdfPrintDriver()
 
-1. 无打印机时是否给出明确错误。
-2. `container` 为空时是否阻止提交。
-3. 多页打印时进度是否递增。
-4. 连接断开时是否能抛出稳定错误码。
-5. 纸张方向和尺寸是否与 Viewer 渲染结果一致。
+viewer.registerPrintDriver(driver)
 
-## Playground 参考
+await viewer.print({
+  driverId: 'remote-pdf-printer',
+  pageSizeMode: 'fixed',
+  throwOnError: true,
+  onPhase(event) {
+    console.log(event.phase, event.message)
+  },
+})
+```
 
-Playground 已迁移到高层打印器，不再维护业务侧驱动包装。可以直接对照两个 hook：
+如果你的驱动设置了 `defaults.pageSizeMode`，宿主没有显式传 `pageSizeMode` 时会使用驱动默认值。
 
-- `playground/src/hooks/useEasyInkPrint.ts`：创建 EasyInk Printer client 和托管打印器
-- `playground/src/hooks/useHiPrint.ts`：创建 HiPrint client 和托管打印器
+## 完成前检查 {#checklist}
+
+写完驱动后，至少跑这些场景：
+
+```ts
+await viewer.print({
+  driverId: 'remote-pdf-printer',
+  throwOnError: true,
+  onProgress(event) {
+    console.log(event.current, event.total)
+  },
+})
+```
+
+然后检查结果：
+
+- 无打印机或无连接时，是否抛出稳定错误码。
+- `container` 为空时，是否阻止提交。
+- 多页打印时，进度是否递增。
+- 连接断开时，是否能通过 `onDiagnostic` 或异常暴露原因。
+- 纸张方向、尺寸和 Viewer 渲染结果是否一致。
+
+Playground 现在使用高层打印器。业务接入可以参考 `playground/src/hooks/useEasyInkPrint.ts` 和 `playground/src/hooks/useHiPrint.ts`。
