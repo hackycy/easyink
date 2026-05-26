@@ -1,7 +1,29 @@
 import type { MaterialNode } from '@easyink/schema'
 
 export function findNode(elements: MaterialNode[], id: string): MaterialNode | undefined {
-  return elements.find(el => el.id === id)
+  return findNodeLocation(elements, id)?.node
+}
+
+export interface NodeLocation {
+  node: MaterialNode
+  collection: MaterialNode[]
+  index: number
+  path: number[]
+}
+
+export function findNodeLocation(elements: MaterialNode[], id: string, basePath: number[] = []): NodeLocation | undefined {
+  for (let index = 0; index < elements.length; index++) {
+    const node = elements[index]!
+    const path = [...basePath, index]
+    if (node.id === id)
+      return { node, collection: elements, index, path }
+    if (node.children) {
+      const child = findNodeLocation(node.children, id, path)
+      if (child)
+        return child
+    }
+  }
+  return undefined
 }
 
 export function asRecord(obj: unknown): Record<string, unknown> {

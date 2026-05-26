@@ -3,7 +3,7 @@ import type { Command } from '../command'
 import type { EditorSurfacePlan } from '../editor-surface-plan'
 import type { MaterialResizeSideEffect } from '../material-extension'
 import { deepClone, generateId } from '@easyink/shared'
-import { asRecord, findNode, getByPath, setByPath } from './helpers'
+import { asRecord, findNode, findNodeLocation, getByPath, setByPath } from './helpers'
 
 // ─── Document Commands ──────────────────────────────────────────────
 
@@ -34,21 +34,27 @@ export class RemoveMaterialCommand implements Command {
   readonly description = 'Remove material'
   private snapshot: MaterialNode | undefined
   private groupsSnapshot: ElementGroupSchema[] | undefined
+  private collection: MaterialNode[]
+  private parentPath: number[] = []
   private index = -1
 
   constructor(
     private elements: MaterialNode[],
     private nodeId: string,
     private schema?: DocumentSchema,
-  ) {}
+  ) {
+    this.collection = elements
+  }
 
   execute(): void {
-    const idx = this.elements.findIndex(el => el.id === this.nodeId)
-    if (idx < 0)
+    const location = findNodeLocation(this.elements, this.nodeId)
+    if (!location)
       return
-    this.index = idx
-    this.snapshot = deepClone(this.elements[idx]!)
-    this.elements.splice(idx, 1)
+    this.index = location.index
+    this.collection = location.collection
+    this.parentPath = location.path.slice(0, -1)
+    this.snapshot = deepClone(location.node)
+    location.collection.splice(location.index, 1)
     if (this.schema?.groups) {
       this.groupsSnapshot = deepClone(this.schema.groups)
       pruneElementFromGroups(this.schema, this.nodeId)
@@ -56,8 +62,9 @@ export class RemoveMaterialCommand implements Command {
   }
 
   undo(): void {
+    const collection = resolveCollectionByPath(this.elements, this.parentPath) ?? this.collection
     if (this.snapshot)
-      this.elements.splice(this.index, 0, this.snapshot)
+      collection.splice(this.index, 0, this.snapshot)
     if (this.schema && this.groupsSnapshot)
       this.schema.groups = deepClone(this.groupsSnapshot)
   }
@@ -125,6 +132,17 @@ function pruneElementFromGroups(schema: DocumentSchema, elementId: string): void
       nextGroups.push({ ...group, memberIds })
   }
   schema.groups = nextGroups
+}
+
+function resolveCollectionByPath(elements: MaterialNode[], parentPath: number[]): MaterialNode[] | undefined {
+  let collection = elements
+  for (const index of parentPath) {
+    const node = collection[index]
+    if (!node)
+      return undefined
+    collection = node.children ?? (node.children = [])
+  }
+  return collection
 }
 
 export class MoveMaterialCommand implements Command {

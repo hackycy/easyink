@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import type { MaterialNode } from '@easyink/schema'
 import type { TreeNode } from '@easyink/ui'
-import { UpdateMaterialMetaCommand } from '@easyink/core'
-import { IconHidden, IconLock } from '@easyink/icons'
+import { IconDelete, IconHidden, IconLock, IconPreview } from '@easyink/icons'
 import { EiIcon, EiTree } from '@easyink/ui'
 import { computed } from 'vue'
 import { useDesignerStore } from '../composables'
+import { deleteMaterialNodes, toggleMaterialHidden, updateMaterialMeta } from '../interactions/element-actions'
 import { selectOne } from '../interactions/selection-api'
 
 const store = useDesignerStore()
@@ -43,18 +43,20 @@ function handleSelect(node: TreeNode) {
   selectOne(store, node.id)
 }
 
-function updateNodeMeta(node: MaterialNode, updates: Partial<Record<'hidden' | 'locked', boolean | undefined>>) {
-  store.commands.execute(new UpdateMaterialMetaCommand(store.schema.elements, node.id, updates))
-}
-
 function handleUnlock(node: MaterialNode) {
-  updateNodeMeta(node, { locked: false })
+  updateMaterialMeta(store, 'Unlock', [node], { locked: false })
 }
 
-function handleShow(node: MaterialNode) {
-  if (node.locked)
-    return
-  updateNodeMeta(node, { hidden: false })
+function handleToggleHidden(node: MaterialNode) {
+  toggleMaterialHidden(store, node)
+}
+
+function handleDelete(node: MaterialNode) {
+  deleteMaterialNodes(store, [node])
+}
+
+function visibilityTitle(node: MaterialNode): string {
+  return store.t(node.hidden ? 'designer.context.show' : 'designer.context.hide')
 }
 </script>
 
@@ -66,37 +68,86 @@ function handleShow(node: MaterialNode) {
     @select="handleSelect"
   >
     <template #suffix="{ node }">
-      <EiIcon
+      <button
         v-if="(node.data as MaterialNode)?.locked"
-        :icon="IconLock"
-        :size="12"
-        :stroke-width="1.5"
-        class="structure-tree__status structure-tree__status--action"
+        type="button"
+        class="structure-tree__action"
+        :title="store.t('designer.context.unlock')"
+        :aria-label="store.t('designer.context.unlock')"
         @click.stop="handleUnlock(node.data as MaterialNode)"
-      />
-      <EiIcon
-        v-if="(node.data as MaterialNode)?.hidden"
-        :icon="IconHidden"
-        :size="12"
-        :stroke-width="1.5"
-        class="structure-tree__status"
-        :class="{ 'structure-tree__status--action': !(node.data as MaterialNode)?.locked }"
-        @click.stop="handleShow(node.data as MaterialNode)"
-      />
+      >
+        <EiIcon
+          :icon="IconLock"
+          :size="12"
+          :stroke-width="1.5"
+        />
+      </button>
+      <button
+        type="button"
+        class="structure-tree__action"
+        :disabled="(node.data as MaterialNode)?.locked"
+        :title="visibilityTitle(node.data as MaterialNode)"
+        :aria-label="visibilityTitle(node.data as MaterialNode)"
+        @click.stop="handleToggleHidden(node.data as MaterialNode)"
+      >
+        <EiIcon
+          :icon="(node.data as MaterialNode)?.hidden ? IconHidden : IconPreview"
+          :size="12"
+          :stroke-width="1.5"
+        />
+      </button>
+      <button
+        type="button"
+        class="structure-tree__action structure-tree__action--danger"
+        :disabled="(node.data as MaterialNode)?.locked"
+        :title="store.t('designer.context.delete')"
+        :aria-label="store.t('designer.context.delete')"
+        @click.stop="handleDelete(node.data as MaterialNode)"
+      >
+        <EiIcon
+          :icon="IconDelete"
+          :size="12"
+          :stroke-width="1.5"
+        />
+      </button>
     </template>
   </EiTree>
 </template>
 
 <style scoped lang="scss">
-.structure-tree__status {
+.structure-tree__action {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   color: var(--ei-text-secondary, #999);
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
 
-  &--action {
-    cursor: pointer;
+  &:hover {
+    color: var(--ei-primary, #1890ff);
+    background: var(--ei-hover-bg, #f0f0f0);
+  }
+
+  &:disabled {
+    color: var(--ei-text-tertiary, #ccc);
+    cursor: not-allowed;
 
     &:hover {
-      color: var(--ei-primary, #1890ff);
+      background: transparent;
     }
+  }
+}
+
+.structure-tree__action--danger {
+  color: var(--ei-text-secondary, #999);
+
+  &:hover:not(:disabled) {
+    color: var(--ei-danger, #ff4d4f);
   }
 }
 </style>

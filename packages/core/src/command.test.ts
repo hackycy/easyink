@@ -2,7 +2,7 @@ import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import type { Command } from './command'
 import { describe, expect, it } from 'vitest'
 import { CommandManager } from './command'
-import { AddElementGroupCommand, RemoveElementGroupCommand, RemoveMaterialCommand } from './commands'
+import { AddElementGroupCommand, RemoveElementGroupCommand, RemoveMaterialCommand, UpdateMaterialMetaCommand } from './commands'
 
 function makeCommand(id: string, log: string[]): Command {
   return {
@@ -337,5 +337,29 @@ describe('logical element group commands', () => {
     manager.undo()
     expect(schema.elements.map(node => node.id)).toEqual(['a', 'b', 'c'])
     expect(schema.groups).toEqual([{ id: 'grp_1', memberIds: ['a', 'b', 'c'] }])
+  })
+
+  it('updates and removes child elements through undoable commands', () => {
+    const schema = makeSchema()
+    schema.elements = [
+      {
+        ...makeNode('parent'),
+        children: [makeNode('child')],
+      },
+    ]
+    const manager = new CommandManager()
+
+    manager.execute(new UpdateMaterialMetaCommand(schema.elements, 'child', { hidden: true }))
+    expect(schema.elements[0]!.children![0]!.hidden).toBe(true)
+
+    manager.execute(new RemoveMaterialCommand(schema.elements, 'child', schema))
+    expect(schema.elements[0]!.children).toEqual([])
+
+    manager.undo()
+    expect(schema.elements[0]!.children!.map(node => node.id)).toEqual(['child'])
+    expect(schema.elements[0]!.children![0]!.hidden).toBe(true)
+
+    manager.undo()
+    expect(schema.elements[0]!.children![0]!.hidden).toBeUndefined()
   })
 })

@@ -3,7 +3,7 @@ import type { DocumentSchema, DocumentSchemaInput, ElementGroupSchema, MaterialN
 import type { DesignerInteractionProvider, LocaleMessages, MaterialCatalogEntry, MaterialDefinition, MaterialDesignerExtension, MaterialExtensionFactory, PreferenceProvider, SnapLine, StatusBarState } from '../types'
 import { CommandManager, SelectionModel } from '@easyink/core'
 import { DataSourceRegistry } from '@easyink/datasource'
-import { normalizeDocumentSchema } from '@easyink/schema'
+import { findNodeById, normalizeDocumentSchema } from '@easyink/schema'
 import { markRaw } from 'vue'
 import { EditingSessionManager } from '../editing/editing-session-manager'
 import { DesignerInteractionService } from '../interactions/interaction-service'
@@ -231,7 +231,7 @@ export class DesignerStore {
   }
 
   getElementById(id: string): MaterialNode | undefined {
-    return this._schema.elements.find(el => el.id === id)
+    return findNodeById(this._schema, id)
   }
 
   addElement(node: MaterialNode): void {

@@ -45,3 +45,15 @@ export function selectMany(store: DesignerStore, elementIds: readonly string[]):
 export function clearSelection(store: DesignerStore): void {
   store.selection.clear()
 }
+
+/** Remove ids from the current selection. Used by structure-tree post-delete. */
+export function removeFromSelection(store: DesignerStore, elementIds: readonly string[]): void {
+  if (elementIds.length === 0 || store.selection.isEmpty)
+    return
+  const removed = new Set(elementIds)
+  const nextIds = store.selection.ids.filter(id => !removed.has(id))
+  if (nextIds.length === 0)
+    store.selection.clear()
+  else
+    store.selection.selectMultiple(nextIds)
+}
