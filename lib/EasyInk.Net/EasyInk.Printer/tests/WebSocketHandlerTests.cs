@@ -27,6 +27,18 @@ public class WebSocketHandlerTests
     }
 
     [Theory]
+    [InlineData(null, null, null, true)]
+    [InlineData("secret", "secret", null, true)]
+    [InlineData("secret", null, "secret", true)]
+    [InlineData("secret", "wrong", "secret", true)]
+    [InlineData("secret", "wrong", null, false)]
+    [InlineData("secret", null, null, false)]
+    public void ValidateApiKeyCore_AcceptsQueryOrHeaderKey(string? configuredKey, string? queryKey, string? headerKey, bool expected)
+    {
+        Assert.Equal(expected, WebSocketHandler.ValidateApiKeyCore(configuredKey, queryKey, headerKey));
+    }
+
+    [Theory]
     [InlineData(64)]
     [InlineData(995)]
     [InlineData(10054)]

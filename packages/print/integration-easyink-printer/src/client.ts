@@ -216,6 +216,12 @@ interface PrinterResultMessage {
   errorInfo?: { code?: string, message?: string, details?: string }
 }
 
+interface PrinterHttpResult {
+  success?: boolean
+  data?: unknown
+  errorInfo?: { code?: string, message?: string, details?: string }
+}
+
 export class EasyInkPrinterClient {
   serviceUrl: string
   apiKey?: string
@@ -378,8 +384,8 @@ export class EasyInkPrinterClient {
       if (!response.ok)
         throw new EasyInkPrintError(`获取打印机列表失败: HTTP ${response.status}`, 'PRINTER_LIST_FAILED')
 
-      const payload = await response.json() as { data?: unknown }
-      const devices = normalizePrinterDevices(payload.data ?? payload)
+      const payload = await response.json() as PrinterHttpResult
+      const devices = normalizePrinterDevices(unwrapPrinterResultData(payload))
       this.devices = devices
       this.ensureSelectedPrinter(devices)
       return devices
@@ -881,6 +887,22 @@ function normalizePrinterDevices(data: unknown): EasyInkPrinterDevice[] {
       isDefault: Boolean(item.isDefault),
     }))
     .filter(device => device.name.length > 0) as EasyInkPrinterDevice[]
+}
+
+function unwrapPrinterResultData(payload: unknown): unknown {
+  if (!isRecord(payload))
+    return payload
+
+  if (payload.success === false) {
+    const errorInfo = isRecord(payload.errorInfo) ? payload.errorInfo : undefined
+    throw new EasyInkPrintError(
+      toOptionalString(errorInfo?.message) ?? '打印服务请求失败',
+      toOptionalString(errorInfo?.code) ?? 'PRINTER_REQUEST_FAILED',
+      errorInfo,
+    )
+  }
+
+  return 'data' in payload ? payload.data : payload
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

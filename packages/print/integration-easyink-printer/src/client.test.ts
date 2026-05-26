@@ -112,6 +112,29 @@ describe('easy ink printer client', () => {
     await assertion
   })
 
+  it('rejects printer list service errors instead of treating them as an empty list', async () => {
+    Object.defineProperty(globalThis, 'fetch', {
+      configurable: true,
+      value: vi.fn(async () => new Response(JSON.stringify({
+        success: false,
+        errorInfo: {
+          code: 'INTERNAL_ERROR',
+          message: 'printer backend failed',
+        },
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })),
+    })
+    const client = new EasyInkPrinterClient()
+
+    await expect(client.refreshPrinters()).rejects.toMatchObject({
+      code: 'INTERNAL_ERROR',
+      message: 'printer backend failed',
+    })
+    expect(client.devices).toEqual([])
+  })
+
   it('rejects immediately when WebSocket send fails', async () => {
     const client = new EasyInkPrinterClient({ responseTimeoutMs: 1000 })
     const socket = await connectClient(client)

@@ -23,6 +23,7 @@ public class WebSocketHandler : IDisposable
     private readonly SemaphoreSlim _broadcastLock = new SemaphoreSlim(1, 1);
     private readonly CancellationTokenSource _cts = new CancellationTokenSource();
     private readonly int _maxConnections;
+    private readonly string? _apiKey;
     private readonly Task _pingTask;
     private bool _disposed;
     private WebSocketCommandHandler? _commandHandler;
@@ -31,9 +32,10 @@ public class WebSocketHandler : IDisposable
 
     public event Action? ConnectionCountChanged;
 
-    public WebSocketHandler(int maxConnections = 100)
+    public WebSocketHandler(int maxConnections = 100, string? apiKey = null)
     {
         _maxConnections = maxConnections < 10 ? 10 : maxConnections;
+        _apiKey = apiKey;
         _pingTask = PingLoop();
     }
 
@@ -103,14 +105,15 @@ public class WebSocketHandler : IDisposable
             return;
         }
 
+        if (!ValidateApiKey(context.Request))
+        {
+            await WriteJsonError(context.Response, 401, ErrorCode.Unauthorized, LangManager.Get("Api_InvalidApiKey"));
+            return;
+        }
+
         if (_connections.Count >= _maxConnections)
         {
-            context.Response.StatusCode = 429;
-            var bytes = Encoding.UTF8.GetBytes("{\"success\":false,\"errorInfo\":{\"code\":\"TooManyConnections\",\"message\":\"" + LangManager.Get("Ws_ConnectionLimit") + "\"}}");
-            context.Response.ContentType = "application/json";
-            context.Response.ContentLength64 = bytes.Length;
-            await context.Response.OutputStream.WriteAsync(bytes, 0, bytes.Length);
-            context.Response.Close();
+            await WriteJsonError(context.Response, 429, "TooManyConnections", LangManager.Get("Ws_ConnectionLimit"));
             return;
         }
 
@@ -213,6 +216,32 @@ public class WebSocketHandler : IDisposable
         catch (Exception ex) when (IsExpectedDisconnectException(ex))
         {
         }
+    }
+
+    private bool ValidateApiKey(HttpListenerRequest request)
+    {
+        return ValidateApiKeyCore(_apiKey, request.QueryString["apiKey"], request.Headers["X-API-Key"]);
+    }
+
+    internal static bool ValidateApiKeyCore(string? configuredKey, string? queryApiKey, string? headerApiKey)
+    {
+        return Router.ValidateApiKeyCore(configuredKey, queryApiKey)
+            || Router.ValidateApiKeyCore(configuredKey, headerApiKey);
+    }
+
+    private static async Task WriteJsonError(HttpListenerResponse response, int statusCode, string code, string message)
+    {
+        var json = JsonConvert.SerializeObject(new
+        {
+            success = false,
+            errorInfo = new { code, message }
+        });
+        var bytes = Encoding.UTF8.GetBytes(json);
+        response.StatusCode = statusCode;
+        response.ContentType = "application/json";
+        response.ContentLength64 = bytes.Length;
+        await response.OutputStream.WriteAsync(bytes, 0, bytes.Length);
+        response.Close();
     }
 
     public async Task Broadcast(string message)

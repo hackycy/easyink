@@ -55,7 +55,7 @@ internal static class ServiceConfig
         services.AddSingleton<HttpServer>(sp =>
             new HttpServer(config.HttpPort, config.MaxConcurrentRequests));
         services.AddSingleton<WebSocketHandler>(sp =>
-            new WebSocketHandler(config.MaxWebSocketConnections));
+            new WebSocketHandler(config.MaxWebSocketConnections, config.ApiKey));
         services.AddSingleton<WebSocketCommandHandler>();
         services.AddSingleton<Router>();
 
