@@ -22,9 +22,10 @@
 
 <p align="center">
 	<a href="https://github.com/hackycy/easyink/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/hackycy/easyink.svg?style=flat&colorA=080f12&colorB=1fa669" /></a>
-	<a href="https://npmjs.com/package/@easyink/designer"><img alt="npm version for @easyink/designer" src="https://img.shields.io/npm/v/@easyink/designer?style=flat&colorA=080f12&colorB=1fa669" /></a>
-	<a href="https://npmjs.com/package/@easyink/viewer"><img alt="npm version for @easyink/viewer" src="https://img.shields.io/npm/v/@easyink/viewer?style=flat&colorA=080f12&colorB=1fa669" /></a>
-	<a href="https://npmjs.com/package/@easyink/mcp-server"><img alt="npm version for @easyink/mcp-server" src="https://img.shields.io/npm/v/@easyink/mcp-server?style=flat&colorA=080f12&colorB=1fa669" /></a>
+	<a href="https://www.typescriptlang.org/"><img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-Ready-3178C6?style=flat&logo=typescript&logoColor=white" /></a>
+	<a href="https://vuejs.org/"><img alt="Vue 3" src="https://img.shields.io/badge/Vue-3-42B883?style=flat&logo=vuedotjs&logoColor=white" /></a>
+	<a href="https://pnpm.io/"><img alt="pnpm workspace" src="https://img.shields.io/badge/pnpm-workspace-F69220?style=flat&logo=pnpm&logoColor=white" /></a>
+	<a href="https://turbo.build/repo"><img alt="Turborepo" src="https://img.shields.io/badge/Turborepo-Monorepo-EF4444?style=flat&logo=turborepo&logoColor=white" /></a>
 </p>
 
 <p align="center">
