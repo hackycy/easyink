@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { EditorSurfacePagePlan, MaterialDesignerRenderContext } from '@easyink/core'
+import type { EditorSurfacePagePlan, MaterialDesignerRenderContext, Rect } from '@easyink/core'
 import type { ResizeHandle } from '../composables/use-element-resize'
 import type { MarqueeRect } from '../composables/use-marquee-select'
 import type { WorkspaceWindowState } from '../types'
@@ -9,7 +9,7 @@ import {
   projectDocumentPointToEditorSurface,
   readNodeRepeatScope,
 } from '@easyink/core'
-import { computed, onMounted, onUnmounted, provide, ref } from 'vue'
+import { computed, onMounted, onUnmounted, provide, ref, watch } from 'vue'
 import { useDesignerStore } from '../composables'
 import { DESIGNER_DRAG_DROP_KEY, useDesignerDragDrop } from '../composables/use-designer-drag-drop'
 import { useElementResize } from '../composables/use-element-resize'
@@ -56,6 +56,7 @@ function updateWindowState(windowState: WorkspaceWindowState, patch: Partial<Wor
 }
 const cursorPos = ref<{ x: number, y: number } | null>(null)
 const rulerHover = ref<{ axis: 'x' | 'y', position: number } | null>(null)
+const viewportSurfaceRect = ref<Rect | null>(null)
 
 provide(CANVAS_CONTAINER_KEY, () => containerRef.value)
 
@@ -316,6 +317,7 @@ function handleScroll() {
     return
   store.workbench.viewport.scrollLeft = el.scrollLeft
   store.workbench.viewport.scrollTop = el.scrollTop
+  updateViewportSurfaceRect()
 }
 
 function handleMouseMove(e: MouseEvent) {
@@ -421,6 +423,44 @@ function resolveRepeatSourcePage(node: ReturnType<typeof store.getElements>[numb
     }
 }
 
+function updateViewportSurfaceRect() {
+  const scrollEl = scrollRef.value
+  const surfaceEl = pageRef.value
+  if (!scrollEl || !surfaceEl) {
+    viewportSurfaceRect.value = null
+    return
+  }
+
+  const zoom = store.workbench.viewport.zoom || 1
+  const scrollRect = scrollEl.getBoundingClientRect()
+  const surfaceRect = surfaceEl.getBoundingClientRect()
+  viewportSurfaceRect.value = {
+    x: Math.max((scrollRect.left - surfaceRect.left) / zoom, 0),
+    y: Math.max((scrollRect.top - surfaceRect.top) / zoom, 0),
+    width: scrollRect.width / zoom,
+    height: scrollRect.height / zoom,
+  }
+}
+
+function handleMinimapNavigate(point: { x: number, y: number }) {
+  const scrollEl = scrollRef.value
+  const surfaceEl = pageRef.value
+  if (!scrollEl || !surfaceEl)
+    return
+
+  const zoom = store.workbench.viewport.zoom || 1
+  const scrollRect = scrollEl.getBoundingClientRect()
+  const surfaceRect = surfaceEl.getBoundingClientRect()
+  const surfaceLeftInScroll = surfaceRect.left - scrollRect.left + scrollEl.scrollLeft
+  const surfaceTopInScroll = surfaceRect.top - scrollRect.top + scrollEl.scrollTop
+
+  scrollEl.scrollTo({
+    left: surfaceLeftInScroll + point.x * zoom - scrollEl.clientWidth / 2,
+    top: surfaceTopInScroll + point.y * zoom - scrollEl.clientHeight / 2,
+    behavior: 'smooth',
+  })
+}
+
 // ─── Window position clamping ────────────────────────────────────
 
 let windowLayoutTimer: ReturnType<typeof setTimeout> | null = null
@@ -447,6 +487,12 @@ function scheduleWindowLayout() {
 }
 
 const containerObserver = new ResizeObserver(scheduleWindowLayout)
+const viewportObserver = new ResizeObserver(updateViewportSurfaceRect)
+
+watch(
+  () => store.workbench.viewport.zoom,
+  () => requestAnimationFrame(updateViewportSurfaceRect),
+)
 
 // ─── Lifecycle ───────────────────────────────────────────────────
 
@@ -463,7 +509,10 @@ onMounted(() => {
   // Sync initial scroll position
   if (scrollRef.value) {
     handleScroll()
+    viewportObserver.observe(scrollRef.value)
   }
+  if (pageRef.value)
+    viewportObserver.observe(pageRef.value)
 })
 
 onUnmounted(() => {
@@ -472,7 +521,9 @@ onUnmounted(() => {
     windowLayoutTimer = null
   }
   containerObserver.disconnect()
+  viewportObserver.disconnect()
   cursorPos.value = null
+  viewportSurfaceRect.value = null
   dragDrop.cleanup()
 })
 </script>
@@ -624,7 +675,12 @@ onUnmounted(() => {
           <StructureTree v-else-if="win.kind === 'structure-tree'" />
           <DataSourcePanel v-else-if="win.kind === 'datasource'" />
           <HistoryPanel v-else-if="win.kind === 'history'" />
-          <MinimapPanel v-else-if="win.kind === 'minimap'" />
+          <MinimapPanel
+            v-else-if="win.kind === 'minimap'"
+            :surface-plan="editorSurfacePlan"
+            :viewport-rect="viewportSurfaceRect"
+            @navigate="handleMinimapNavigate"
+          />
           <DebugPanel v-else-if="win.kind === 'debug'" />
           <ToolbarManager v-else-if="win.kind === 'toolbar-manager'" />
           <MaterialPanel v-else-if="win.kind === 'materials'" />
