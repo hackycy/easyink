@@ -7,7 +7,7 @@ public class SettingsSectionPanel : RoundedPanel
 {
     public const int DefaultHeaderHeight = 36;
     public int HeaderHeight => DefaultHeaderHeight;
-    public Panel ContentPanel { get; }
+    public TableLayoutPanel ContentPanel { get; }
 
     public SettingsSectionPanel(string title)
     {
@@ -44,15 +44,17 @@ public class SettingsSectionPanel : RoundedPanel
             Padding = new Padding(16, 2, 16, 0)
         };
 
-        ContentPanel = new Panel
+        ContentPanel = new TableLayoutPanel
         {
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             Dock = DockStyle.Fill,
+            ColumnCount = 1,
             Padding = new Padding(14, 0, 14, 14),
             Margin = new Padding(0),
             BackColor = UiTheme.SectionBackColor
         };
+        ContentPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
         layout.Controls.Add(titleLabel, 0, 0);
         layout.Controls.Add(ContentPanel, 0, 1);
