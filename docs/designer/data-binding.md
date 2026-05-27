@@ -2,13 +2,13 @@
 description: Designer 数据绑定机制：将模板属性连接到运行时数据路径，支持设计时字段树与运行时数据分离。
 ---
 
-# 数据绑定
+# 数据绑定 {#data-binding}
 
 Designer 里的数据绑定，本质上是在做一件很朴素的事：把模板里的某个属性，连到运行时数据里的某条路径上。
 
 如果你先把“设计时字段树”和“运行时数据”分开理解，这一层就不会绕。
 
-## 字段树定义
+## 字段树定义 {#field-tree}
 
 Designer 接收的是 `DataSourceDescriptor[]`。它决定左侧数据源面板长什么样，也决定用户能拖哪些字段。
 
@@ -56,7 +56,45 @@ const dataSources: DataSourceDescriptor[] = [
 
 上面这一步只是把字段树交给 Designer。它还没有产生任何运行时值。
 
-## 拖拽处理
+## 哪些字段能拖拽 {#draggable-fields}
+
+当前 Designer 的字段树有一个明确规则：叶子字段可以拖拽；带 `union` 的分组字段也可以拖拽。
+
+```ts
+const dataSources: DataSourceDescriptor[] = [
+  {
+    id: 'order',
+    name: '订单数据',
+    fields: [
+      {
+        name: 'items',
+        path: 'items',
+        title: '商品列表',
+        fields: [
+          { name: 'name', path: 'items/name', title: '商品名称', use: 'text' },
+        ],
+      },
+      {
+        name: 'summary',
+        path: 'summary',
+        title: '摘要组合',
+        fields: [
+          { name: 'orderNo', path: 'orderNo', title: '订单号', use: 'text' },
+          { name: 'grandTotal', path: 'grandTotal', title: '合计金额', use: 'text' },
+        ],
+        union: [
+          { path: 'orderNo', title: '订单号', use: 'text' },
+          { path: 'grandTotal', title: '合计金额', use: 'text', offsetY: 8 },
+        ],
+      },
+    ],
+  },
+]
+```
+
+上面这个例子里，`items` 只是分组节点，默认负责展开子字段；`summary` 虽然也可以带子语义，但因为配置了 `union`，Designer 会允许它作为“一次拖拽生成多个绑定节点”的入口。
+
+## 拖拽处理 {#drag-binding}
 
 先别急着想 Viewer。用户在画布里拖一个字段时，Designer 做的其实是把绑定信息写进模板。
 
@@ -71,7 +109,7 @@ const dataSources: DataSourceDescriptor[] = [
 
 这也是为什么绑定是模板的一部分，而不是运行时的一次性状态。
 
-## `fieldPath` 约定
+## `fieldPath` 约定 {#field-path}
 
 到了运行时，Viewer 会统一解析节点上的绑定。
 
@@ -91,7 +129,9 @@ const data = {
 
 你可能会注意到绑定里还有 `sourceId`、`sourceName` 之类的信息。它们有用，但作用主要在设计时元数据和界面提示，不参与运行时根数据选择。
 
-## 稳定绑定约定
+`fieldPath` 使用 `/` 分隔。解析时会从运行时 `data` 根对象开始逐段读取，也会避开 `__proto__`、`constructor` 这类危险路径。
+
+## 稳定绑定约定 {#stable-binding}
 
 写模板时，Designer 关心的是：
 
@@ -107,7 +147,7 @@ const data = {
 
 这意味着一件很重要的事：预览、打印和导出时，不要再把 `dataSources` 传给 Viewer。
 
-## 常用字段
+## 常用字段 {#field-properties}
 
 第一次接入时，最常用的是这些：
 
@@ -122,7 +162,7 @@ const data = {
 
 你当然还能继续往里放 `format`、`bindIndex`、`union` 之类更细的能力，但如果你现在只是先把绑定跑通，这些基础字段就足够了。
 
-## 默认显示格式
+## 默认显示格式 {#default-format}
 
 如果某个字段每次拖出去都应该按同一种方式展示，可以直接在字段上写 `format`。
 
@@ -157,7 +197,7 @@ const dataSources: DataSourceDescriptor[] = [
 
 这里的关键词是“复制”。后面用户在属性面板里改显示格式，改的是模板里的 `BindingRef.format`，不会反写你的字段树。
 
-## 字段函数模板
+## 字段函数模板 {#custom-format-templates}
 
 有时你不想直接给字段写死 `format`，而是想改变“自定义函数”里的默认示例。比如金额字段默认给一个金额函数，日期字段默认给一个中文日期函数。
 
@@ -239,7 +279,7 @@ const dataSources: DataSourceDescriptor[] = [
 Playground 默认示例里的“流式发票”已经给发票金额、开票日期、税率这些字段加了各自的函数模板。打开示例后选中对应绑定字段，在属性面板里进入“显示格式”并切到“自定义”，就能看到字段自己的默认示例，同时还能看到其余内置示例。
 :::
 
-## 绑定判断标准
+## 绑定判断标准 {#debugging}
 
 当你调试绑定问题时，可以按这个顺序查：
 

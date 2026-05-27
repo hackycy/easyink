@@ -4,6 +4,7 @@ import type { LocaleMessages } from '@easyink/locales'
 import type { DocumentSchema, DocumentSchemaInput, MaterialNode } from '@easyink/schema'
 import type { MaterialCategory } from '@easyink/shared'
 import type { Component } from 'vue'
+import type { Contribution } from './contributions/types'
 
 export type MaterialIcon = Component
 
@@ -323,6 +324,7 @@ export interface EasyInkDesignerProps {
   autoSave?: TemplateAutoSaveOptions
   locale?: LocaleMessages
   setupStore?: StoreSetup
+  contributions?: Contribution[]
   interactionProvider?: DesignerInteractionProvider
 }
 

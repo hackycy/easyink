@@ -2,11 +2,11 @@
 description: Designer 字体管理：通过 FontProvider 提供字体目录和加载方法，支持自定义字体在设计器中使用。
 ---
 
-# 字体管理
+# 字体管理 {#fonts}
 
 Designer 的字体链路已经帮你做了大部分脏活。宿主真正要做的，是提供一份字体目录，以及一个“如何加载字体文件”的方法。
 
-## `FontProvider` 配置
+## `FontProvider` 配置 {#font-provider}
 
 ```ts
 import type { FontProvider } from '@easyink/designer'
@@ -47,9 +47,9 @@ const fontProvider: FontProvider = {
 上面这段代码已经覆盖了 `FontProvider` 真实接口要求：
 
 - `listFonts()` 返回字体目录。
-- `loadFont()` 返回字体资源，可以是 URL，也可以是 `ArrayBuffer`。
+- `loadFont()` 返回字体资源，可以是 URL、`ArrayBuffer`，也可以是 `{ type: 'system' }`。
 
-## `source: 'system'` 标记
+## `source: 'system'` 标记 {#system-source}
 
 如果某个字体本来就由系统提供，你可以把它标成系统字体。
 
@@ -65,7 +65,7 @@ const fontProvider: FontProvider = {
 
 这样 Designer 在处理它时，会把它当成“已经存在的字体来源”，而不是再去请求一份外部字体文件。
 
-## 字体加载时机
+## 字体加载时机 {#loading-timing}
 
 当前实现里，字体服务会围着模板变化和字体选择做两类事情：
 
@@ -74,7 +74,9 @@ const fontProvider: FontProvider = {
 
 这个顺序很重要。它避免了“模板里写进了一个其实没加载成功的字体名”。
 
-## 失败处理
+目前 Designer 这条链路按 `family` 加载字体。`FontProvider.loadFont(family, weight, style)` 的 `weight` 和 `style` 参数属于通用接口，当前 Designer 不保证一定传入它们。
+
+## 失败处理 {#failure-handling}
 
 字体加载失败不会直接让 Designer 崩掉，也不会把失败字体静默写进模板。
 
@@ -85,13 +87,13 @@ const fontProvider: FontProvider = {
 
 这对业务来说通常是更合理的默认行为。你可以继续编辑模板，同时把问题交给宿主日志或提示系统去处理。
 
-## 字体自动注入
+## 字体自动注入 {#font-face-injection}
 
 这是最值得省心的一点。
 
 Designer 内部已经有 `FontManager` 和字体服务来负责缓存、加载状态和注入目标。只要 `loadFont()` 能返回可用资源，宿主就不需要再写一套重复的样式注入逻辑。
 
-## 字体组织方式
+## 字体组织方式 {#shared-provider}
 
 如果你的项目同时用了 Designer 和 Viewer，最稳的做法是把 `fontProvider` 提成一个共享模块。
 
