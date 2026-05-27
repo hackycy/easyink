@@ -62,6 +62,7 @@ internal static class ServiceConfig
         // API Controllers
         services.AddSingleton<PrinterController>();
         services.AddSingleton<PrintController>();
+        services.AddSingleton<TestController>();
         services.AddSingleton<JobController>();
         services.AddSingleton<LogController>();
         services.AddSingleton<StatusController>();

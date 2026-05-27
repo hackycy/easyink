@@ -49,6 +49,17 @@ public class RoutingPrintService : IPrintService
         return SelectService(request.PrinterName).Print(requestId, request, cancellationToken);
     }
 
+    /// <summary>
+    /// 获取指定打印机会使用的打印路径名称（供测试/诊断使用）
+    /// </summary>
+    internal string GetPrintPathName(string printerName)
+    {
+        var service = SelectService(printerName);
+        if (service == _sumatraService) return "SumatraPDF";
+        if (service == _rawService) return "Raw (ESC/POS)";
+        return "GDI (Pdfium)";
+    }
+
     private IPrintService SelectService(string printerName)
     {
         if (string.IsNullOrEmpty(printerName))

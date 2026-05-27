@@ -27,6 +27,7 @@ public class EngineApi : IDisposable
 {
     private readonly IPrinterService _printerService;
     private readonly IPrintService _printService;
+    private readonly IPrintTestService _testService;
     private readonly PrintJobQueue _jobQueue;
 
     /// <summary>
@@ -130,6 +131,8 @@ public class EngineApi : IDisposable
         if (renderPdfService != null)
             _printService = new RenderAwarePrintService(_printService, renderPdfService);
 
+        _testService = new PrintTestService(_printerService, _printService, logger);
+
         _jobQueue = new PrintJobQueue(_printService, maxQueueSize ?? 100,
             logger, (requestId, request, result) => RaisePrintCompleted(requestId, request, result));
     }
@@ -174,6 +177,26 @@ public class EngineApi : IDisposable
     }
 
     /// <summary>
+    /// 打印测试
+    /// </summary>
+    public PrinterResult TestPrinter(string requestId, string printerName, PrinterTestLevel level)
+    {
+        if (string.IsNullOrEmpty(printerName))
+            return PrinterResult.Error(requestId, ErrorCode.InvalidParams, "缺少printerName参数");
+
+        try
+        {
+            var result = _testService.TestPrint(requestId, printerName, level);
+            return PrinterResult.Ok(requestId, result);
+        }
+        catch (Exception ex)
+        {
+            RaiseLog(LogLevel.Error, $"打印测试异常: {printerName}, {ex.Message}", requestId);
+            return PrinterResult.Error(requestId, ErrorCode.PrintTestFailed, ex.Message);
+        }
+    }
+
+    /// <summary>
     /// 处理 JSON 命令（统一入口）
     /// </summary>
     public PrinterResult HandleCommand(string json)
@@ -213,6 +236,8 @@ public class EngineApi : IDisposable
                 return HandleGetJobStatus(request);
             case "getAllJobs":
                 return PrinterResult.Ok(request.Id, _jobQueue.GetAllJobs());
+            case "testPrinter":
+                return HandleTestPrinter(request);
             default:
                 return PrinterResult.Error(request.Id, ErrorCode.UnknownCommand, $"未知命令: {request.Command}");
         }
@@ -309,6 +334,36 @@ public class EngineApi : IDisposable
             return PrinterResult.Error(request.Id, ErrorCode.JobNotFound, $"任务不存在: {jobId}");
         }
         return PrinterResult.Ok(request.Id, info);
+    }
+
+    private PrinterResult HandleTestPrinter(PrinterCommand request)
+    {
+        var printerName = GetParam<string>(request, "printerName");
+        if (string.IsNullOrEmpty(printerName))
+            return PrinterResult.Error(request.Id, ErrorCode.InvalidParams, "缺少printerName参数");
+
+        var levelStr = GetParam<string>(request, "level") ?? "quick";
+        var level = ParseTestLevel(levelStr!);
+
+        try
+        {
+            var result = _testService.TestPrint(request.Id, printerName!, level);
+            return PrinterResult.Ok(request.Id, result);
+        }
+        catch (Exception ex)
+        {
+            RaiseLog(LogLevel.Error, $"打印测试异常: {printerName}, {ex.Message}", request.Id);
+            return PrinterResult.Error(request.Id, ErrorCode.PrintTestFailed, ex.Message);
+        }
+    }
+
+    private static PrinterTestLevel ParseTestLevel(string value)
+    {
+        return string.Equals(value, "connectivity", StringComparison.OrdinalIgnoreCase)
+            ? PrinterTestLevel.Connectivity
+            : string.Equals(value, "full", StringComparison.OrdinalIgnoreCase)
+                ? PrinterTestLevel.Full
+                : PrinterTestLevel.Quick;
     }
 
     private PrintRequestParams? ExtractPrintParams(PrinterCommand request)

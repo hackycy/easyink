@@ -18,6 +18,11 @@ public sealed class RenderAwarePrintService : IPrintService
         _renderPdfService = renderPdfService;
     }
 
+    /// <summary>
+    /// 获取内部装饰的打印服务（供测试/诊断使用）
+    /// </summary>
+    internal IPrintService GetInnerService() => _inner;
+
     public PrinterResult Print(string requestId, PrintRequestParams request, CancellationToken cancellationToken = default)
     {
         if (!request.HasRenderInput())

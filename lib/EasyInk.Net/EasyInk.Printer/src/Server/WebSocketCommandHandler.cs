@@ -51,6 +51,7 @@ public class WebSocketCommandHandler
                 "getJobStatus" => HandleGetJobStatus(message),
                 "getAllJobs" => _api.GetAllJobs(),
                 "queryLogs" => HandleQueryLogs(message),
+                "testPrinter" => HandleTestPrinter(message),
                 _ => PrinterResult.Error(message.Id, ErrorCode.UnknownCommand, LangManager.Get("Ws_UnknownCommand", message.Command))
             };
         }
@@ -224,6 +225,26 @@ public class WebSocketCommandHandler
 
         var logs = _auditService.QueryLogs(startTime, endTime, printerName, userId, status, limit, offset);
         return PrinterResult.Ok(message.Id, new { logs });
+    }
+
+    private PrinterResult HandleTestPrinter(WebSocketMessage message)
+    {
+        var printerName = message.Params?["printerName"]?.ToString();
+        if (string.IsNullOrEmpty(printerName))
+            return PrinterResult.Error(message.Id, ErrorCode.InvalidParams, LangManager.Get("Ws_MissingPrinterName"));
+
+        var level = message.Params?["level"]?.ToString() ?? "quick";
+
+        return _api.HandleCommand(new PrinterCommand
+        {
+            Command = "testPrinter",
+            Id = message.Id,
+            Params = new Dictionary<string, object>
+            {
+                ["printerName"] = printerName!,
+                ["level"] = level
+            }
+        });
     }
 
     private static Dictionary<string, object>? ConvertToDictionary(JObject? obj)

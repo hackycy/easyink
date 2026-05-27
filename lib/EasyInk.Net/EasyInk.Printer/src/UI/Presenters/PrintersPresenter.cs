@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using EasyInk.Engine;
 using EasyInk.Engine.Models;
 
@@ -12,6 +14,19 @@ internal sealed class PrintersPresenter : ListPagePresenter
         : base("Error_GetPrinters")
     {
         _api = api;
+    }
+
+    public async Task<PrinterTestResult> TestPrinterAsync(string printerName, PrinterTestLevel level)
+    {
+        return await Task.Run(() =>
+        {
+            var result = _api.TestPrinter(Guid.NewGuid().ToString(), printerName, level);
+            if (!result.Success)
+                throw new InvalidOperationException(result.ErrorInfo?.Message ?? LangManager.Get("Api_InternalError"));
+            if (result.Data is PrinterTestResult testResult)
+                return testResult;
+            throw new InvalidOperationException(LangManager.Get("Api_InternalError"));
+        }).ConfigureAwait(false);
     }
 
     protected override PrinterResult FetchData()

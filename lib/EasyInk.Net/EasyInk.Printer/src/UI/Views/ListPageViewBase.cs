@@ -15,6 +15,7 @@ internal abstract class ListPageViewBase<TPresenter> : UserControl, IListPageVie
     private readonly ListView _listView;
     private readonly Control _errorBanner;
     private readonly Label _errorLabel;
+    private readonly FlowLayoutPanel _toolPanel;
 
     protected ListPageViewBase(TPresenter presenter, string title, IEnumerable<ListColumn> columns)
     {
@@ -37,16 +38,16 @@ internal abstract class ListPageViewBase<TPresenter> : UserControl, IListPageVie
         foreach (var column in columns)
             _listView.Columns.Add(column.Header, column.Width);
 
-        var toolPanel = UiFactory.CreateToolPanel(46);
+        _toolPanel = UiFactory.CreateToolPanel(46);
         _refreshButton = UiFactory.CreateCommandButton(LangManager.Get("Common_Refresh"), 84);
         _refreshButton.Click += async (s, e) => await RefreshAsync();
-        toolPanel.Controls.Add(_refreshButton);
+        _toolPanel.Controls.Add(_refreshButton);
 
         _errorBanner = UiFactory.CreateErrorBanner(out _errorLabel);
 
         panel.Controls.Add(_listView);
         panel.Controls.Add(_errorBanner);
-        panel.Controls.Add(toolPanel);
+        panel.Controls.Add(_toolPanel);
         Controls.Add(panel);
 
         _presenter.Attach(this);
@@ -54,6 +55,7 @@ internal abstract class ListPageViewBase<TPresenter> : UserControl, IListPageVie
 
     public string Title { get; }
     public Control View => this;
+    protected FlowLayoutPanel ToolPanel => _toolPanel;
 
     public Task ActivateAsync()
     {

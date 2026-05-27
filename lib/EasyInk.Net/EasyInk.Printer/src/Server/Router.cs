@@ -18,6 +18,7 @@ public class Router
 
     private readonly PrinterController _printerController;
     private readonly PrintController _printController;
+    private readonly TestController _testController;
     private readonly JobController _jobController;
     private readonly LogController _logController;
     private readonly StatusController _statusController;
@@ -37,11 +38,13 @@ public class Router
     }
 
     public Router(PrinterController printerController, PrintController printController,
+        TestController testController,
         JobController jobController, LogController logController, StatusController statusController,
         WebSocketHandler wsHandler, HostConfig config)
     {
         _printerController = printerController;
         _printController = printController;
+        _testController = testController;
         _jobController = jobController;
         _logController = logController;
         _statusController = statusController;
@@ -63,6 +66,7 @@ public class Router
             // POST routes
             Route("POST", Exact("/api/print"), HandlePrintRequest),
             Route("POST", Exact("/api/print/async"), HandleEnqueuePrintRequest),
+            Route("POST", Exact("/api/test"), HandleTestPrinterRequest),
         };
     }
 
@@ -209,6 +213,22 @@ public class Router
         if (pdfBytes != null)
             return _printController.EnqueuePrint(paramsJson, pdfBytes);
         return _printController.EnqueuePrint(paramsJson);
+    }
+
+    private async Task<PrinterResult> HandleTestPrinterRequest(HttpListenerRequest request)
+    {
+        var body = await ReadBodyAsString(request);
+        if (string.IsNullOrEmpty(body))
+            return PrinterResult.Error("", ErrorCode.InvalidParams, LangManager.Get("Api_MissingParams"));
+
+        var token = Newtonsoft.Json.Linq.JToken.Parse(body);
+        var printerName = token["printerName"]?.ToString();
+        var level = token["level"]?.ToString() ?? "quick";
+
+        if (string.IsNullOrEmpty(printerName))
+            return PrinterResult.Error("", ErrorCode.InvalidParams, LangManager.Get("Api_MissingPrinterName"));
+
+        return _testController.TestPrinter(printerName, level);
     }
 
     private async Task<(string? paramsJson, byte[]? pdfBytes)> ReadMultipartOrJson(HttpListenerRequest request)
