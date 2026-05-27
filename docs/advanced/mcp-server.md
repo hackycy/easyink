@@ -1,3 +1,7 @@
+---
+description: EasyInk MCP Server：独立 MCP 服务，用于 AI 模型生成 EasyInk 模板 Schema 和数据源描述。
+---
+
 # MCP Server {#mcp-server}
 
 `@easyink/mcp-server` 是独立 MCP 服务，用来让模型生成 EasyInk 模板和数据源描述。它不是 Designer 的运行时依赖。

@@ -1,3 +1,7 @@
+---
+description: Viewer Host 模式详解：控制 Viewer 的渲染目标文档、挂载点、样式注入和打印入口。
+---
+
 # ViewerHost 模式
 
 ViewerHost 解决的是一个很具体的问题：Viewer 到底要把页面渲染到哪里。

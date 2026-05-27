@@ -1,3 +1,7 @@
+---
+description: EasyInk.Engine 纯打印引擎：无 UI 的 .NET 库，负责打印机查询、打印执行和任务队列管理。
+---
+
 # EasyInk.Engine
 
 `EasyInk.Engine` 是纯打印引擎层。它没有 UI，也不负责 HTTP 服务。你把它嵌进 .NET 宿主里，它就负责打印机查询、打印执行和任务队列这些能力。

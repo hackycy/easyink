@@ -1,3 +1,7 @@
+---
+description: 5 分钟跑通 EasyInk 最小示例：嵌入 Designer、生成 Schema、交给 Viewer 预览和打印。
+---
+
 # 快速上手
 
 这页只做一件事：让你先把一份模板跑起来。

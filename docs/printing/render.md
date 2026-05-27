@@ -1,3 +1,7 @@
+---
+description: EasyInk.Render CLI 渲染运行时：将 Schema 输入稳定转换为 PDF，不涉及打印机枚举和物理打印任务。
+---
+
 # EasyInk.Render CLI 渲染运行时
 
 `EasyInk.Render` 解决的是“把输入稳定变成 PDF”这件事。

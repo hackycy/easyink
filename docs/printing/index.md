@@ -1,3 +1,7 @@
+---
+description: EasyInk 打印方案选型指南：Render 服务端渲染、Electron HiPrint 桌面打印和 .NET Printer 原生打印。
+---
+
 # 打印方案
 
 打印章节最想帮你解决的，不是“打印接口长什么样”，而是“我到底该选哪条链路”。

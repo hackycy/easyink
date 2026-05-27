@@ -1,3 +1,7 @@
+---
+description: EasyInk API 索引：快速定位公开能力的包入口，涵盖 Designer、Viewer、Schema、Core 等模块。
+---
+
 # API 索引
 
 这页不讲怎么用，它只回答一个问题：某个公开能力大概从哪个包导出。

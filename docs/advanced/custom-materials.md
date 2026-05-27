@@ -1,3 +1,7 @@
+---
+description: EasyInk 自定义物料开发：同时覆盖 Schema、Designer 和 Viewer 三层的物料扩展机制。
+---
+
 # 自定义物料开发 {#custom-materials}
 
 当你需要一个新的模板元素，并且它要同时出现在 Designer 和 Viewer 里，就进入自定义物料这一层。

@@ -1,3 +1,7 @@
+---
+description: EasyInk.Printer Windows 桌面打印服务：集成 HTTP/WebSocket、桌面管理界面、审计和配置。
+---
+
 # EasyInk.Printer
 
 `EasyInk.Printer` 是完整的 Windows 桌面打印服务。它把 HTTP/WebSocket、桌面管理界面、审计和配置都包进了一个应用里。

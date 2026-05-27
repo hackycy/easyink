@@ -1,3 +1,7 @@
+---
+description: HiPrint 快速上手：5 分钟跑通第一张打印单，包含 Runtime 检查和最小调用示例。
+---
+
 # HiPrint 快速上手
 
 这页的目标很简单：先让 HiPrint 跑出第一张单。

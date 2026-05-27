@@ -2,14 +2,29 @@ import process from 'node:process'
 import { defineConfig } from 'vitepress'
 
 const base = process.env.EASYINK_DOCS_BASE ?? '/'
+const siteUrl = 'https://hackycy.github.io/easyink/docs'
 
 export default defineConfig({
   base,
+  lang: 'zh-CN',
   title: 'EasyInk',
-  description: 'EasyInk - Print is Easy',
+  description: 'EasyInk - 面向开发者的模板设计与渲染框架，Schema 驱动，支持可视化设计、预览、打印与导出',
   head: [
     ['link', { rel: 'icon', href: `${base}logo.ico` }],
+    ['meta', { property: 'og:type', content: 'website' }],
+    ['meta', { property: 'og:title', content: 'EasyInk - 模板设计与渲染框架' }],
+    ['meta', { property: 'og:description', content: '面向开发者的模板设计与渲染框架，Schema 驱动，支持可视化设计、预览、打印与导出' }],
+    ['meta', { property: 'og:image', content: `${siteUrl}${base}logo.png` }],
+    ['meta', { property: 'og:url', content: siteUrl }],
+    ['meta', { name: 'twitter:card', content: 'summary' }],
+    ['meta', { name: 'twitter:title', content: 'EasyInk - 模板设计与渲染框架' }],
+    ['meta', { name: 'twitter:description', content: '面向开发者的模板设计与渲染框架，Schema 驱动，支持可视化设计、预览、打印与导出' }],
+    ['meta', { name: 'twitter:image', content: `${siteUrl}${base}logo.png` }],
+    ['meta', { name: 'theme-color', content: '#5f67ee' }],
   ],
+  sitemap: {
+    hostname: siteUrl,
+  },
   vite: {
     server: {
       port: 8533,

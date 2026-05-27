@@ -1,3 +1,7 @@
+---
+description: EasyInk 自定义打印驱动开发：接入企业内部打印网关、专用硬件或厂商 SDK 的扩展方式。
+---
+
 # 自定义打印驱动开发 {#print-drivers}
 
 如果你只是接 EasyInk Printer 或 HiPrint，先用现成集成。只有在你要接企业内部打印网关、专用硬件或厂商 SDK 时，才需要写自定义驱动。

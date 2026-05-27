@@ -1,3 +1,7 @@
+---
+description: Electron HiPrint 集成：适合跨平台和小票类打印场景，EasyInk 提供高层打印器封装。
+---
+
 # Electron HiPrint
 
 HiPrint 这条链路更适合跨平台和小票类场景。EasyInk 在这一层提供的是一个高层打印器，让你不用自己手动创建 Viewer、提取页面 HTML、再去拼接 HiPrint 调用。

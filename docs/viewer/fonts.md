@@ -1,3 +1,7 @@
+---
+description: Viewer 字体加载机制：通过 FontProvider 在渲染前预加载模板所需字体，与 Designer 共用同一套约定。
+---
+
 # 字体加载
 
 Viewer 的字体链路和 Designer 是同一套约定。你提供 `FontProvider`，Viewer 负责在渲染前把模板里用到的字体加载好，并注入到当前 Host 对应的文档环境里。

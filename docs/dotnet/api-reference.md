@@ -1,3 +1,7 @@
+---
+description: EasyInk.Printer API 参考：HTTP 和 WebSocket 接口文档，默认端口 18080。
+---
+
 # API 参考
 
 EasyInk.Printer 同时提供 HTTP 和 WebSocket 两套入口。默认端口是 `18080`。

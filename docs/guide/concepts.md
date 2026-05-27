@@ -1,3 +1,7 @@
+---
+description: 了解 EasyInk 的核心概念：Schema 文档模型、Designer 设计器、Viewer 预览器，以及它们之间的协作关系。
+---
+
 # 核心概念
 
 这页只回答一个问题：当你把 EasyInk 接进项目时，脑子里到底要先装哪几个概念。

@@ -1,3 +1,7 @@
+---
+description: EasyInk .NET 打印服务：Windows 本地打印方案，包含 HTTP/WebSocket 服务和底层打印引擎两层架构。
+---
+
 # .NET 打印服务
 
 EasyInk 的 .NET 部分解决的是 Windows 本地打印这件事。它把前端调用、本地 HTTP/WebSocket 服务和底层打印引擎拆成了两层。

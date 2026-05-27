@@ -1,3 +1,7 @@
+---
+description: '@easyink/viewer 是独立的渲染运行时，支持预览、分页、打印和导出，只依赖 Schema 和数据输入。'
+---
+
 # Viewer
 
 `@easyink/viewer` 是 EasyInk 的消费端运行时。它接收一份 Schema 和一份运行时数据，然后完成校验、绑定、渲染、分页、打印和导出。

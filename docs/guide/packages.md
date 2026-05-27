@@ -1,3 +1,7 @@
+---
+description: EasyInk 包概览：Designer、Viewer、Schema、Core、Datasource 等模块的职责划分与选型指南。
+---
+
 # 包概览
 
 第一次看 EasyInk 的包列表，很容易有一种感觉：包很多，不知道该从哪装起。

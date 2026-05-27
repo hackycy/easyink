@@ -1,3 +1,7 @@
+---
+description: EasyInk 自定义导出插件开发：Viewer 负责渲染页面，Export Runtime 负责转换为文件输出。
+---
+
 # 自定义导出插件开发 {#exporters}
 
 导出扩展有两层：Viewer 负责拿到已渲染页面，Export Runtime 负责把输入转换成文件。

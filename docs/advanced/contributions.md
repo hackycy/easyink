@@ -1,3 +1,7 @@
+---
+description: EasyInk Contribution 扩展开发：向 Designer 注入面板、工具栏动作和命令，无需修改源码。
+---
+
 # 贡献扩展开发 {#contributions}
 
 Contribution 用来把宿主能力挂到 Designer 上，而不修改 Designer 源码。

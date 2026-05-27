@@ -1,3 +1,7 @@
+---
+description: EasyInk Schema 参考：模板文档模型规范，Designer、Viewer、打印和导出围绕同一份 Schema 工作。
+---
+
 # Schema 参考 {#schema}
 
 Schema 是 EasyInk 的模板模型。Designer、Viewer、打印和导出最终都围绕同一份 Schema 工作。
