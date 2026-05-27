@@ -45,18 +45,33 @@ public class PrintJobQueueTests
     }
 
     [Fact]
-    public void GetJobStatus_InitiallyQueued()
+    public void GetJobStatus_BeforeCompletion_IsTrackedAndBecomesPrinting()
     {
         var gate = new ManualResetEventSlim(false);
+        var enteredPrint = new ManualResetEventSlim(false);
         var printService = new Mock<IPrintService>();
         printService.Setup(s => s.Print(It.IsAny<string>(), It.IsAny<PrintRequestParams>(), It.IsAny<CancellationToken>()))
-            .Returns(() => { gate.Wait(); return PrinterResult.Ok("test", PrintResult.Success("done")); });
+            .Returns(() =>
+            {
+                enteredPrint.Set();
+                gate.Wait();
+                return PrinterResult.Ok("test", PrintResult.Success("done"));
+            });
 
         using var queue = new PrintJobQueue(printService.Object);
         var jobId = queue.Enqueue(null!, MakeRequest());
         var job = queue.GetJobStatus(jobId);
         Assert.NotNull(job);
-        Assert.Equal(JobStatus.Queued, job!.Status);
+        Assert.Contains(job!.Status, new[] { JobStatus.Queued, JobStatus.Printing });
+        Assert.NotEqual(JobStatus.Completed, job.Status);
+        Assert.NotEqual(JobStatus.Failed, job.Status);
+
+        Assert.True(enteredPrint.Wait(TimeSpan.FromSeconds(5)));
+
+        var printing = queue.GetJobStatus(jobId);
+        Assert.NotNull(printing);
+        Assert.Equal(JobStatus.Printing, printing!.Status);
+        Assert.NotNull(printing.StartedAt);
 
         gate.Set();
         var deadline = DateTime.UtcNow.AddSeconds(5);
