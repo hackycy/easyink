@@ -1,46 +1,51 @@
 ---
-description: Viewer 打印与导出：基于已渲染页面消费结果，支持浏览器打印、PDF 导出和自定义导出插件。
+description: Viewer 打印与导出：基于已渲染页面消费结果，支持浏览器打印、自定义打印驱动和自定义导出器。
 ---
 
-# 打印与导出
+# 打印与导出 {#print-export}
 
-Viewer 的打印和导出能力都建立在同一个前提上：页面已经被渲染好了。
+Viewer 的打印和导出都建立在同一个前提上：页面已经通过 Viewer 渲染出来。
 
-所以这一层的重点不是“重新排版”，而是“消费现成的渲染结果”。
+这一层不重新设计模板。它消费当前 Schema、数据、渲染页尺寸和页面 DOM。
 
-## 基本打印
+## 浏览器打印 {#browser-print}
+
+最短路径是直接调用 `print()`：
 
 ```ts
 await viewer.print()
 ```
 
-默认情况下，Viewer 会走浏览器打印路径。
+不传 `driverId` 时，Viewer 会走浏览器打印路径。即使你已经注册了自定义打印驱动，默认也仍然是浏览器打印。
 
-如果 Host 存在，它会先准备一层打印隔离样式，再调用对应文档环境里的 `window.print()`。打印结束或出错后，这层隔离状态会被清理掉。
+有 Host 时，Viewer 会先给当前 Host 加一层打印隔离样式，再调用 `host.print()`。打印结束或抛错后，这层隔离状态会被清理。
 
-## `pageSizeMode`
+## 纸张尺寸策略 {#page-size-mode}
 
-打印时最值得先理解的选项，就是 `pageSizeMode`。
+`pageSizeMode` 用来回答一个问题：纸张尺寸听谁的。
 
 ```ts
 await viewer.print({ pageSizeMode: 'driver' })
 await viewer.print({ pageSizeMode: 'fixed' })
 ```
 
-它回答的问题很简单：纸张尺寸到底听谁的。
+当前只支持两个值：
 
-- `driver`：优先让打印机驱动决定纸张。
-- `fixed`：尽量按模板或渲染结果里的尺寸来打印。
+- `driver`：连续纸会让打印机驱动决定纸张；固定页仍会使用 Schema 解析出的纸张尺寸。
+- `fixed`：按 Schema 或已渲染页面尺寸生成固定纸张策略。
 
-固定页模板和连续纸模板在这里的行为会不同，这也是 Viewer 需要先解析打印策略的原因。
+连续纸比较特殊。如果连续纸请求 `fixed`，Viewer 需要已经有渲染页尺寸。否则会发出 `PRINT_RENDER_METRICS_MISSING` 诊断。
 
-## 打印驱动接入
+## 自定义打印驱动 {#custom-print-driver}
 
-如果你不是直接调浏览器打印，而是要把内容交给本地服务、远程网关或专用设备，就注册一个驱动。
+需要接本地服务、远程网关或专用设备时，注册一个打印驱动。
 
 ```ts
 viewer.registerPrintDriver({
   id: 'thermal-printer',
+  defaults: {
+    pageSizeMode: 'fixed',
+  },
   async print(context) {
     console.log(context.printPolicy)
     console.log(context.renderedPages)
@@ -50,22 +55,46 @@ viewer.registerPrintDriver({
 
 await viewer.print({
   driverId: 'thermal-printer',
-  pageSizeMode: 'fixed',
 })
 ```
 
-这里的 `context` 已经包含了当前打印最需要的信息：
+驱动可以提供 `defaults.pageSizeMode`。调用 `viewer.print()` 时，如果你没有显式传 `pageSizeMode`，Viewer 会使用驱动默认值。
 
-- 打印策略
-- 已渲染页尺寸
-- 渲染容器
-- Schema 和数据
+`context` 里最常用的是：
 
-驱动最适合做协议适配，不适合再重新做布局判断。
+- `schema` 和 `data`
+- `printPolicy`
+- `renderedPages`
+- `container`
+- `onPhase`、`onProgress`、`onDiagnostic`
 
-## 导出器注册
+驱动适合做协议适配。布局、分页和尺寸策略应该交给 Viewer 先算好。
 
-导出走的是另一条注册接口：
+## 打印任务回调 {#print-callbacks}
+
+自定义驱动可以复用 Viewer 传进来的任务回调。
+
+```ts
+await viewer.print({
+  driverId: 'thermal-printer',
+  onPhase(event) {
+    console.log(event.phase, event.message)
+  },
+  onProgress(event) {
+    console.log(event.current, event.total)
+  },
+  onDiagnostic(event) {
+    console.warn(event.code, event.message)
+  },
+  throwOnError: true,
+})
+```
+
+`throwOnError: true` 会让打印驱动错误、打印策略错误或浏览器打印错误继续向外抛出。默认情况下，Viewer 会发诊断并结束这次打印调用。
+
+## 导出器注册 {#exporter-registration}
+
+导出使用 `registerExporter()`。
 
 ```ts
 viewer.registerExporter({
@@ -79,56 +108,27 @@ viewer.registerExporter({
 })
 ```
 
-然后在运行时调用：
+然后调用 `exportDocument()`：
 
 ```ts
 const blob = await viewer.exportDocument({
   format: 'pdf',
   entry: 'preview',
-  onPhase(event) {
-    console.log(event.phase)
-  },
-  onProgress(event) {
-    console.log(event.current, event.total)
-  },
 })
 ```
 
-这里有个小细节值得记住：`exportDocument()` 既可以传字符串格式，也可以传完整选项对象。
+Viewer 会按 `format` 找到第一个匹配的导出器。如果不传 `format`，会使用当前实例注册的第一个导出器。
 
-## `resolvePrintPolicy()` 作用
+没有匹配导出器时，会发出 `NO_EXPORTER` 诊断。传了 `throwOnError: true` 时，同一个错误会继续抛出。
 
-如果你在写驱动，通常会想知道 Viewer 最终到底准备怎么打印。
+## 导出任务回调 {#export-callbacks}
 
-这时可以直接看打印策略：
-
-```ts
-import { resolvePrintPolicy } from '@easyink/viewer'
-
-const policy = resolvePrintPolicy({
-  schema: documentSchema,
-  options: { pageSizeMode: 'fixed' },
-  renderedPages: viewer.renderedPages,
-})
-```
-
-当前策略对象里最关键的是这些字段：
-
-- `pageMode`
-- `pageSizeMode`
-- `sheetSize`
-- `orientation`
-- `pageBreakBehavior`
-- `offset`
-
-如果你要把 Viewer 接到外部打印系统，这几个字段通常就已经足够决定提交参数了。
-
-## 任务回调
-
-这一点很实用，因为你可以用同一套 UI 状态处理两条链路。
+导出器可以有 `prepare()`，也可以在 `export()` 里上报进度和诊断。
 
 ```ts
-await viewer.print({
+const blob = await viewer.exportDocument({
+  format: 'pdf',
+  entry: 'api',
   onPhase(event) {
     console.log(event.phase)
   },
@@ -142,16 +142,76 @@ await viewer.print({
 })
 ```
 
-导出时同样能用这些回调。
+当前 Viewer 会在导出过程中发出这些阶段：
 
-## 打印接入路径
+- 有 `prepare()` 时：`preparing`
+- 调用 `export()` 前：`exporting`
+- 导出成功后：`completed`
 
-如果你当前的目标只是把文档稳定打印出去，不要急着从 `registerPrintDriver()` 开始。
+如果导出器抛错，Viewer 会发出 `EXPORTER_ERROR`。`throwOnError: true` 时会继续抛出原始错误。
 
-更短路径通常是：
+## 字符串快捷调用 {#string-format}
 
-1. 先确认浏览器打印是否满足需求。
-2. 不满足时，再优先看官方打印集成包。
-3. 只有在协议或设备要求特殊时，再自己写驱动。
+`exportDocument()` 也可以直接传格式字符串。
 
-这样能少走很多弯路。
+```ts
+const blob = await viewer.exportDocument('pdf')
+```
+
+这等价于：
+
+```ts
+const blob = await viewer.exportDocument({
+  format: 'pdf',
+  entry: 'api',
+})
+```
+
+如果你的导出来自预览按钮、保存菜单或程序调用，可以显式传 `entry`。当前类型支持 `save-menu`、`preview` 和 `api`。
+
+## 打印策略解析 {#resolve-print-policy}
+
+写驱动时，你通常会想知道 Viewer 最终准备怎么打印。
+
+```ts
+import { resolvePrintPolicy } from '@easyink/viewer'
+
+const policy = resolvePrintPolicy({
+  schema: documentSchema,
+  options: { pageSizeMode: 'fixed' },
+  renderedPages: viewer.renderedPages,
+})
+```
+
+策略对象里常用字段是：
+
+- `pageMode`
+- `pageSizeMode`
+- `sheetSize`
+- `orientation`
+- `pageBreakBehavior`
+- `offset`
+
+`sheetSize.source` 会告诉你尺寸来自 `schema` 还是已渲染页面。
+
+## PDF 导出路径 {#pdf-export-path}
+
+Viewer 本身只定义导出器接口，不内置 PDF 导出实现。
+
+```ts
+viewer.registerExporter({
+  id: 'pdf-exporter',
+  format: 'pdf',
+  async export(context) {
+    const pages = Array.from(
+      context.container?.querySelectorAll<HTMLElement>('.ei-viewer-page') ?? [],
+    )
+
+    return renderPdfSomehow(pages, context.renderedPages ?? [])
+  },
+})
+```
+
+如果你要使用官方 DOM 转 PDF 插件，继续看 [自定义导出插件](/advanced/exporters)。如果你要把 Viewer 接到打印设备，继续看 [自定义打印驱动](/advanced/print-drivers)。
+
+关于打印与导出，目前知道这些就够用了。排查错误时可以继续看 [诊断系统](./diagnostics)。

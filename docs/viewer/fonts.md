@@ -1,15 +1,18 @@
 ---
-description: Viewer 字体加载机制：通过 FontProvider 在渲染前预加载模板所需字体，与 Designer 共用同一套约定。
+description: Viewer 字体加载机制：通过 FontProvider 在渲染前加载模板所需字体，并注入到当前 Viewer Host 文档。
 ---
 
-# 字体加载
+# 字体加载 {#fonts}
 
-Viewer 的字体链路和 Designer 是同一套约定。你提供 `FontProvider`，Viewer 负责在渲染前把模板里用到的字体加载好，并注入到当前 Host 对应的文档环境里。
+Viewer 的字体链路和 Designer 共用同一套 `FontProvider` 约定。你提供字体目录和字体资源，Viewer 在渲染前按模板引用的字体族加载并注入。
 
-## 基本用法
+这一步会影响测量、布局和分页，所以它发生在正式渲染 DOM 之前。
+
+## 基本用法 {#basic-usage}
+
+先定义一个 `FontProvider`：
 
 ```ts
-import { createViewer } from '@easyink/viewer'
 import type { FontProvider } from '@easyink/viewer'
 
 const fontProvider: FontProvider = {
@@ -30,10 +33,16 @@ const fontProvider: FontProvider = {
       },
     ]
   },
-  async loadFont(family) {
-    return `/fonts/${encodeURIComponent(family)}.woff2`
+  async loadFont(family, weight, style) {
+    return `/fonts/${encodeURIComponent(family)}-${weight ?? '400'}-${style ?? 'normal'}.woff2`
   },
 }
+```
+
+然后把它交给 Viewer：
+
+```ts
+import { createViewer } from '@easyink/viewer'
 
 const viewer = createViewer({
   iframe: iframeElement,
@@ -41,37 +50,11 @@ const viewer = createViewer({
 })
 ```
 
-这个接口和 Designer 是一致的，所以你完全可以把两边共用同一个 provider。
+`listFonts()` 提供字体目录。`loadFont()` 返回字体资源，可以是 URL 字符串、`ArrayBuffer`，也可以返回 `{ type: 'system' }` 表示系统字体。
 
-## 渲染前字体加载
+## 渲染前加载 {#pre-render-loading}
 
-因为字体会直接影响测量结果。
-
-Viewer 在正式渲染前，会先收集模板里引用到的字体，再通过 `loadAndInjectFonts()` 把这些字体加载并注入到当前目标文档里。只有这一步完成后，它才继续做后面的绑定、测量、布局和分页。
-
-如果你看到分页结果和字体有关，这不是巧合，而是设计使然。
-
-## 字体注入位置
-
-这取决于你用的 Host：
-
-- Browser Host：注入当前页面的 `document`
-- Iframe Host：注入 iframe 的 `document`
-- Custom Host：注入你提供的 `document` 或 `ShadowRoot`
-
-所以如果你用的是 iframe 模式，不需要在父页面再额外注入一次字体样式。
-
-## `source: 'system'` 处理
-
-系统字体不会被当成远程资源重复加载。
-
-这意味着如果 `FontDescriptor` 标成了系统字体，Viewer 会把它当作可直接使用的字体来源，而不是强制再走一次资源请求和注入流程。
-
-## 失败处理
-
-不会。
-
-当前实现里，单个字体加载失败会生成一条 warning 级别诊断事件，但不会阻止整份文档继续渲染。
+`open()` 或 `render()` 会在渲染前加载字体。
 
 ```ts
 await viewer.open({
@@ -85,11 +68,82 @@ await viewer.open({
 })
 ```
 
-当前字体加载失败的常见诊断码是 `FONT_LOAD_FAILED`。
+当前 Viewer 会先从 Schema 里收集字体族，再调用内部的 `loadAndInjectFonts()`。如果没有配置 `fontProvider`、没有 Host，或者模板里没有字体引用，这一步会直接跳过。
 
-## 字体共享方案
+目前预加载按 `family` 收集。`FontProvider.loadFont(family, weight, style)` 的 `weight` 和 `style` 参数属于通用字体接口，Viewer 这条预加载路径不保证一定传入它们。
 
-如果你的项目同时使用 Designer 和 Viewer，最稳的方式还是把字体目录和加载器抽成共享模块。
+## 注入位置 {#injection-target}
+
+字体样式会注入到当前 Host 的文档。
+
+```ts
+const iframeViewer = createViewer({
+  iframe: iframeElement,
+  fontProvider,
+})
+
+const domViewer = createViewer({
+  container: containerElement,
+  fontProvider,
+})
+```
+
+两种 Host 的注入位置不同：
+
+- `iframe`：注入 iframe 的 `document.head`。
+- `container`：注入 `container.ownerDocument.head`。
+- `host`：注入你提供的 `host.document.head`。
+
+所以 iframe 模式下，你不需要再在父页面重复注入同一份 `@font-face`。
+
+## 系统字体 {#system-fonts}
+
+系统字体不会生成 `@font-face`。
+
+```ts
+const fontProvider: FontProvider = {
+  async listFonts() {
+    return [
+      {
+        family: 'Arial',
+        displayName: 'Arial',
+        weights: ['400'],
+        styles: ['normal'],
+        source: 'system',
+      },
+    ]
+  },
+  async loadFont() {
+    return { type: 'system' }
+  },
+}
+```
+
+当字体目录里的 `source` 是 `system` 时，`FontManager` 会把它视为已可用字体。Viewer 不会再请求远程资源，也不会注入 `@font-face`。
+
+## 失败处理 {#failure-handling}
+
+单个字体加载失败不会阻止整份文档继续渲染。
+
+```ts
+await viewer.open({
+  schema,
+  data,
+  onDiagnostic(event) {
+    if (event.code === 'FONT_LOAD_FAILED') {
+      console.warn(event.message)
+    }
+  },
+})
+```
+
+当前实现会把单个字体失败转换成 warning 级诊断，常见诊断码是 `FONT_LOAD_FAILED`。
+
+如果整个字体加载流程本身抛错，Viewer 会生成 `FONT_LOAD_ERROR`，同样是 warning 级别。
+
+## 共享字体来源 {#shared-provider}
+
+如果你的项目同时使用 Designer 和 Viewer，我们建议把 `FontProvider` 抽成共享模块。
 
 ```ts
 export const fontProvider: FontProvider = {
@@ -102,4 +156,6 @@ export const fontProvider: FontProvider = {
 }
 ```
 
-这样设计态、预览态、打印和导出都会用同一套字体来源，不容易出现前后表现不一致的问题。
+这样设计态、预览态、打印和导出会使用同一套字体来源。出现分页或宽度差异时，你也能从同一个 provider 开始排查。
+
+关于字体加载，目前知道这些就够用了。诊断事件的完整形状继续看 [诊断系统](./diagnostics)。
