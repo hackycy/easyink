@@ -1,0 +1,34 @@
+{
+  "name": "@easyink/render-api-service",
+  "type": "module",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Internal Node HTTP API facade for EasyInk.Render CLI",
+  "author": "hackycy <hackycy@outlook.com>",
+  "license": "MIT",
+  "sideEffects": false,
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./bin/server": "./dist/bin/server.mjs",
+    "./server": "./dist/server.mjs",
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/index.d.mts",
+  "bin": {
+    "render-api-service": "./dist/bin/server.mjs"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsx src/bin/server.ts",
+    "pretest:render-smoke": "pnpm --dir ../.. render:runtime && pnpm --dir ../.. -F @easyink/samples build",
+    "start": "node dist/bin/server.mjs",
+    "test": "vitest run",
+    "test:render-smoke": "tsx scripts/render-supermarket-smoke.ts"
+  },
+  "devDependencies": {
+    "@easyink/samples": "workspace:*"
+  }
+}

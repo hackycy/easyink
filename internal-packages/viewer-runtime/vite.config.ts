@@ -4,6 +4,9 @@ import { defineConfig } from 'vite'
 const entry = fileURLToPath(new URL('./src/main.ts', import.meta.url))
 
 export default defineConfig({
+  define: {
+    'process.env.NODE_ENV': JSON.stringify('production'),
+  },
   build: {
     outDir: 'dist/runtime/easyink-viewer/assets',
     emptyOutDir: true,

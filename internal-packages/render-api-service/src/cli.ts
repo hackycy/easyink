@@ -1,0 +1,228 @@
+import type {
+  PrintPDFRequest,
+  RenderApiRequest,
+  RenderCliJsonFailure,
+  RenderCliJsonResult,
+  RenderCliJsonSuccess,
+  RenderDiagnostics,
+  RenderRuntimeOptions,
+} from './protocol'
+import { Buffer } from 'node:buffer'
+import { spawn } from 'node:child_process'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import process from 'node:process'
+
+const DEFAULT_CLI_TIMEOUT_MS = 120_000
+
+export interface RenderCliOptions {
+  binary?: string
+  workDir?: string
+  keepWorkDir?: boolean
+  cliTimeoutMs?: number
+  defaultRuntime?: RenderRuntimeOptions
+}
+
+export interface RenderCliResult {
+  cli: RenderCliJsonSuccess
+  pdf: Buffer
+  diagnostics?: RenderDiagnostics
+  stdout: string
+  stderr: string
+  exitCode: number
+}
+
+export class RenderCliError extends Error {
+  readonly code: string
+  readonly exitCode?: number
+  readonly stderr?: string
+  readonly cli?: RenderCliJsonFailure
+
+  constructor(message: string, options: { code: string, exitCode?: number, stderr?: string, cli?: RenderCliJsonFailure }) {
+    super(message)
+    this.name = 'RenderCliError'
+    this.code = options.code
+    this.exitCode = options.exitCode
+    this.stderr = options.stderr
+    this.cli = options.cli
+  }
+}
+
+export function toPrintPDFRequest(input: RenderApiRequest): PrintPDFRequest {
+  return {
+    requestId: input.requestId,
+    source: input.source,
+    pdf: input.pdf,
+    wait: input.wait,
+    output: input.output,
+    security: input.security,
+    diagnostics: input.diagnostics,
+  }
+}
+
+export function toRenderCliArgs(paths: { requestPath: string, outputPath: string, diagnosticsPath: string }, runtime: RenderRuntimeOptions = {}): string[] {
+  const args = [
+    'render',
+    '--request',
+    paths.requestPath,
+    '--out',
+    paths.outputPath,
+    '--diagnostics-out',
+    paths.diagnosticsPath,
+    '--json',
+  ]
+
+  if (runtime.noDaemon) {
+    args.push('--no-daemon')
+  }
+  if (runtime.forceRestartDaemon) {
+    args.push('--force-restart-daemon')
+  }
+  pushStringFlag(args, '--browser-kind', runtime.browserKind)
+  pushStringFlag(args, '--browser-path', runtime.browserPath)
+  pushStringFlag(args, '--headless-mode', runtime.headlessMode)
+  pushStringFlag(args, '--profile-root', runtime.profileRoot)
+  pushStringFlag(args, '--temp-dir', runtime.tempDir)
+  pushStringFlag(args, '--log-dir', runtime.logDir)
+  pushNumberFlag(args, '--max-concurrency', runtime.maxConcurrency)
+  pushNumberFlag(args, '--max-queue-size', runtime.maxQueueSize)
+  pushNumberFlag(args, '--request-timeout-ms', runtime.requestTimeoutMs)
+  pushNumberFlag(args, '--idle-timeout-ms', runtime.idleTimeoutMs)
+  return args
+}
+
+export async function renderWithCli(input: RenderApiRequest, options: RenderCliOptions = {}): Promise<RenderCliResult> {
+  const binary = options.binary ?? process.env.EASYINK_RENDER_BIN ?? 'easyink-render'
+  const baseDir = options.workDir ?? tmpdir()
+  await mkdir(baseDir, { recursive: true })
+  const requestDir = await mkdtemp(join(baseDir, 'easyink-render-api-'))
+  const requestPath = join(requestDir, 'request.json')
+  const outputPath = join(requestDir, 'out.pdf')
+  const diagnosticsPath = join(requestDir, 'diagnostics.json')
+  const runtime = { ...options.defaultRuntime, ...input.runtime }
+
+  try {
+    await writeFile(requestPath, JSON.stringify(toPrintPDFRequest(input)), 'utf8')
+    const args = toRenderCliArgs({ requestPath, outputPath, diagnosticsPath }, runtime)
+    const requestTimeoutMs = input.wait?.timeoutMs
+    const processResult = await runProcess(binary, args, {
+      timeoutMs: options.cliTimeoutMs ?? (requestTimeoutMs ? requestTimeoutMs + 10_000 : DEFAULT_CLI_TIMEOUT_MS),
+    })
+    const cli = parseCliJson(processResult.stdout)
+
+    if (processResult.exitCode !== 0 || !cli.success) {
+      const failure = cli.success
+        ? {
+          success: false,
+          code: 'RENDER_CLI_FAILED',
+          message: processResult.stderr || `Render CLI exited with code ${processResult.exitCode}`,
+          requestId: input.requestId,
+        } satisfies RenderCliJsonFailure
+        : cli
+
+      throw new RenderCliError(failure.message, {
+        code: failure.code,
+        exitCode: processResult.exitCode,
+        stderr: processResult.stderr,
+        cli: failure,
+      })
+    }
+    const successCli = cli
+
+    const [pdf, diagnostics] = await Promise.all([
+      readFile(outputPath),
+      readJsonFile<RenderDiagnostics>(diagnosticsPath),
+    ])
+
+    return {
+      cli: successCli,
+      pdf,
+      diagnostics,
+      stdout: processResult.stdout,
+      stderr: processResult.stderr,
+      exitCode: processResult.exitCode,
+    }
+  }
+  finally {
+    if (!options.keepWorkDir) {
+      await rm(requestDir, { force: true, recursive: true })
+    }
+  }
+}
+
+export async function runRenderCommand(args: string[], options: RenderCliOptions = {}): Promise<{ stdout: string, stderr: string, exitCode: number }> {
+  const binary = options.binary ?? process.env.EASYINK_RENDER_BIN ?? 'easyink-render'
+  return runProcess(binary, args, { timeoutMs: options.cliTimeoutMs ?? DEFAULT_CLI_TIMEOUT_MS })
+}
+
+async function runProcess(command: string, args: string[], options: { timeoutMs: number }): Promise<{ stdout: string, stderr: string, exitCode: number }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] })
+    const stdout: Buffer[] = []
+    const stderr: Buffer[] = []
+    let settled = false
+    const timer = setTimeout(() => {
+      child.kill('SIGTERM')
+      settled = true
+      reject(new RenderCliError(`Render CLI timed out after ${options.timeoutMs}ms`, { code: 'RENDER_CLI_TIMEOUT' }))
+    }, options.timeoutMs)
+
+    child.stdout.on('data', chunk => stdout.push(Buffer.from(chunk)))
+    child.stderr.on('data', chunk => stderr.push(Buffer.from(chunk)))
+    child.on('error', (err) => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timer)
+      reject(new RenderCliError(err.message, { code: 'RENDER_CLI_UNAVAILABLE' }))
+    })
+    child.on('close', (code) => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timer)
+      resolve({
+        stdout: Buffer.concat(stdout).toString('utf8'),
+        stderr: Buffer.concat(stderr).toString('utf8'),
+        exitCode: code ?? 1,
+      })
+    })
+  })
+}
+
+function parseCliJson(stdout: string): RenderCliJsonResult {
+  const trimmed = stdout.trim()
+  if (!trimmed) {
+    return { success: false, code: 'RENDER_CLI_EMPTY_OUTPUT', message: 'Render CLI did not write JSON output' }
+  }
+  try {
+    return JSON.parse(trimmed) as RenderCliJsonResult
+  }
+  catch {
+    return { success: false, code: 'RENDER_CLI_INVALID_OUTPUT', message: 'Render CLI wrote invalid JSON output' }
+  }
+}
+
+async function readJsonFile<T>(path: string): Promise<T | undefined> {
+  try {
+    return JSON.parse(await readFile(path, 'utf8')) as T
+  }
+  catch {
+    return undefined
+  }
+}
+
+function pushStringFlag(args: string[], name: string, value: string | undefined): void {
+  if (value) {
+    args.push(name, value)
+  }
+}
+
+function pushNumberFlag(args: string[], name: string, value: number | undefined): void {
+  if (typeof value === 'number') {
+    args.push(name, String(value))
+  }
+}
