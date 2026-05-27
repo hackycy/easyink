@@ -13,8 +13,15 @@ import (
 
 const RuntimeVersion = "easyink-viewer-embedded-0.1.0"
 
-//go:embed runtime/easyink-viewer/index.html runtime/easyink-viewer/assets/viewer.css runtime/easyink-viewer/assets/viewer.js runtime/easyink-viewer/assets/materials/manifest.json
+//go:embed runtime/easyink-viewer/index.html runtime/easyink-viewer/assets/viewer.css runtime/easyink-viewer/assets/viewer.js
 var runtimeBundle embed.FS
+
+const (
+	viewerCSSTag = `<style data-easyink-runtime="viewer-css"></style>`
+	pageCSSTag   = `<style data-easyink-runtime="page-css"></style>`
+	payloadTag   = `<script id="easyink-payload" type="application/json">{}</script>`
+	viewerJSTag  = `<script data-easyink-runtime="viewer-js"></script>`
+)
 
 type pageSchema struct {
 	Version  string          `json:"version"`
@@ -30,7 +37,6 @@ type pageDefinition struct {
 
 type runtimePayload struct {
 	RuntimeVersion string          `json:"runtimeVersion"`
-	Materials      json.RawMessage `json:"materials"`
 	Schema         json.RawMessage `json:"schema"`
 	Data           json.RawMessage `json:"data"`
 }
@@ -65,7 +71,6 @@ func RenderHTML(source protocol.Source) (string, protocol.PDFOptions, error) {
 
 	payload, err := json.Marshal(runtimePayload{
 		RuntimeVersion: RuntimeVersion,
-		Materials:      mustReadRuntimeJSON("runtime/easyink-viewer/assets/materials/manifest.json"),
 		Schema:         source.Schema,
 		Data:           dataJSON,
 	})
@@ -86,14 +91,6 @@ func RenderHTML(source protocol.Source) (string, protocol.PDFOptions, error) {
 	return doc, pdf, nil
 }
 
-func mustReadRuntimeJSON(path string) json.RawMessage {
-	data, err := runtimeBundle.ReadFile(path)
-	if err != nil {
-		return json.RawMessage(`{}`)
-	}
-	return json.RawMessage(data)
-}
-
 func RuntimeFiles() ([]string, error) {
 	entries, err := runtimeBundle.ReadDir("runtime/easyink-viewer/assets")
 	if err != nil {
@@ -106,7 +103,6 @@ func RuntimeFiles() ([]string, error) {
 		}
 		files = append(files, "runtime/easyink-viewer/assets/"+entry.Name())
 	}
-	files = append(files, "runtime/easyink-viewer/assets/materials/manifest.json")
 	return files, nil
 }
 
@@ -123,15 +119,36 @@ func renderRuntimeDocument(page pageDefinition, payload []byte) (string, error) 
 	if err != nil {
 		return "", err
 	}
-	if _, err := readRuntimeText("runtime/easyink-viewer/assets/materials/manifest.json"); err != nil {
-		return "", err
-	}
-	doc := strings.ReplaceAll(index, "__EASYINK_VIEWER_CSS__", css)
-	doc = strings.ReplaceAll(doc, "__EASYINK_VIEWER_JS__", js)
-	doc = strings.ReplaceAll(doc, "__EASYINK_PAGE_WIDTH_MM__", fmt.Sprintf("%.3f", page.Width))
-	doc = strings.ReplaceAll(doc, "__EASYINK_PAGE_HEIGHT_MM__", fmt.Sprintf("%.3f", page.Height))
-	doc = strings.ReplaceAll(doc, "__EASYINK_PAYLOAD_JSON__", safeScriptJSON(payload))
+	pageCSS := renderPageCSS(page)
+	doc := strings.ReplaceAll(index, viewerCSSTag, wrapStyleTag("viewer-css", css))
+	doc = strings.ReplaceAll(doc, pageCSSTag, wrapStyleTag("page-css", pageCSS))
+	doc = strings.ReplaceAll(doc, payloadTag, wrapPayloadTag(safeScriptJSON(payload)))
+	doc = strings.ReplaceAll(doc, viewerJSTag, wrapScriptTag("viewer-js", js))
 	return doc, nil
+}
+
+func renderPageCSS(page pageDefinition) string {
+	width := fmt.Sprintf("%.3f", page.Width)
+	height := fmt.Sprintf("%.3f", page.Height)
+	return fmt.Sprintf(
+		"@page { size: %smm %smm; margin: 0; }\nhtml, body { width: %smm; min-height: %smm; }",
+		width,
+		height,
+		width,
+		height,
+	)
+}
+
+func wrapStyleTag(name, content string) string {
+	return fmt.Sprintf(`<style data-easyink-runtime="%s">%s</style>`, name, content)
+}
+
+func wrapPayloadTag(content string) string {
+	return fmt.Sprintf(`<script id="easyink-payload" type="application/json">%s</script>`, content)
+}
+
+func wrapScriptTag(name, content string) string {
+	return fmt.Sprintf(`<script data-easyink-runtime="%s">%s</script>`, name, content)
 }
 
 func readRuntimeText(path string) (string, error) {

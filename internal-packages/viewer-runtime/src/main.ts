@@ -4,9 +4,6 @@ import './style.css'
 
 interface RuntimePayload {
   runtimeVersion?: string
-  materials?: {
-    materials?: Array<{ type?: string }>
-  }
   schema?: unknown
   data?: unknown
 }
@@ -37,7 +34,6 @@ async function boot(): Promise<void> {
 
     root.classList.add('easyink-ready')
     root.setAttribute('data-easyink-runtime', payload.runtimeVersion || 'embedded')
-    root.setAttribute('data-easyink-materials', materialTypes(payload).join(','))
     window.easyinkReady = true
     document.dispatchEvent(new CustomEvent('easyink:ready'))
   }
@@ -79,14 +75,6 @@ function normalizeRuntimeSchema(input: unknown): DocumentSchema {
     guides,
     elements: Array.isArray(input.elements) ? input.elements : [],
   } as DocumentSchemaInput)
-}
-
-function materialTypes(payload: RuntimePayload): string[] {
-  if (!Array.isArray(payload.materials?.materials))
-    return []
-  return payload.materials.materials
-    .map(item => item.type)
-    .filter((type): type is string => typeof type === 'string' && type.length > 0)
 }
 
 function reportDiagnostic(event: ViewerDiagnosticEvent): void {

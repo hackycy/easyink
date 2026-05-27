@@ -33,11 +33,8 @@ func TestRenderHTMLBuildsReadyDocumentAndPDFOptions(t *testing.T) {
 	if !strings.Contains(html, RuntimeVersion) {
 		t.Fatal("expected generated html to include runtime version")
 	}
-	if !strings.Contains(html, `"materials":[{"type":"text"`) {
-		t.Fatal("expected generated html to include materials manifest payload")
-	}
-	if !strings.Contains(html, `data-easyink-materials`) {
-		t.Fatal("expected generated html to include material registry support")
+	if strings.Contains(html, "__EASYINK_") {
+		t.Fatal("expected generated html to replace all runtime template placeholders")
 	}
 	if !strings.Contains(html, `"type":"text"`) {
 		t.Fatal("expected generated html to include schema payload")
@@ -432,7 +429,7 @@ func TestRenderHTMLIncludesSvgHeartRuntimeRenderer(t *testing.T) {
 	}
 }
 
-func TestRuntimeFilesIncludesViewerAssetsAndMaterialsManifest(t *testing.T) {
+func TestRuntimeFilesIncludesViewerAssets(t *testing.T) {
 	files, err := RuntimeFiles()
 	if err != nil {
 		t.Fatalf("runtime files: %v", err)
@@ -441,7 +438,6 @@ func TestRuntimeFilesIncludesViewerAssetsAndMaterialsManifest(t *testing.T) {
 		"runtime/easyink-viewer/index.html",
 		"runtime/easyink-viewer/assets/viewer.css",
 		"runtime/easyink-viewer/assets/viewer.js",
-		"runtime/easyink-viewer/assets/materials/manifest.json",
 	} {
 		found := false
 		for _, file := range files {
