@@ -1,12 +1,12 @@
 import type { PrintDriverBaseOptions } from '@easyink/print-core'
 import type { PrintDriver, ViewerPrintContext } from '@easyink/viewer'
-import type { EasyInkPrinterClient, EasyInkPrinterPrintPdfOptions, EasyInkPrinterPrintRenderOptions } from './client'
+import type { EasyInkPrinterClient, EasyInkPrinterPrintHtmlOptions, EasyInkPrinterPrintPdfOptions, EasyInkPrinterPrintRenderOptions } from './client'
 import { renderPagesToPdfBlob } from '@easyink/export-plugin-dom-pdf'
 import { exportDiagnosticToViewerEvent, resolvePrintDriverValue, resolvePrintLandscape, resolvePrintOffset, resolveViewerPdfPages, resolveViewerPrintSize } from '@easyink/print-core'
 
-export type EasyInkPrinterDriverSubmitMode = 'pdf' | 'renderSource'
+export type EasyInkPrinterDriverSubmitMode = 'pdf' | 'renderSource' | 'html'
 
-export type EasyInkPrinterDriverPrintOptions = EasyInkPrinterPrintPdfOptions & EasyInkPrinterPrintRenderOptions
+export type EasyInkPrinterDriverPrintOptions = EasyInkPrinterPrintPdfOptions & EasyInkPrinterPrintRenderOptions & EasyInkPrinterPrintHtmlOptions
 
 /**
  * Configures the official Viewer print driver for EasyInk Printer.
@@ -66,6 +66,15 @@ export function createEasyInkPrinterDriver(options: EasyInkPrinterDriverOptions)
           data: context.data ?? {},
         }, printOptions)
       }
+      else if (options.submitMode === 'html') {
+        context.onPhase?.({ phase: 'submitting', message: '发送预览 HTML 到打印服务' })
+        jobId = await options.client.printHtml(serializeViewerHtml({
+          context,
+          pages,
+          widthMm,
+          heightMm,
+        }), printOptions)
+      }
       else {
         context.onPhase?.({ phase: 'preparing', message: '生成 PDF 中' })
         const pdfBlob = await renderPagesToPdfBlob({
@@ -86,4 +95,99 @@ export function createEasyInkPrinterDriver(options: EasyInkPrinterDriverOptions)
       await options.client.waitForJob(jobId)
     },
   }
+}
+
+function serializeViewerHtml(input: {
+  context: ViewerPrintContext
+  pages: HTMLElement[]
+  widthMm: number
+  heightMm: number
+}): string {
+  const document = input.pages[0]?.ownerDocument ?? input.context.container?.ownerDocument
+  const styles = document ? collectPreviewHeadMarkup(document) : ''
+  const pageHtml = input.pages.map(page => serializeViewerPage(page)).join('\n')
+
+  return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { box-sizing: border-box; }
+    @page { size: ${input.widthMm}mm ${input.heightMm}mm; margin: 0; }
+    html, body { margin: 0; padding: 0; background: #fff; }
+    .easyink-ready { display: block; margin: 0; padding: 0; }
+    .ei-viewer-page {
+      box-shadow: none !important;
+      margin: 0 !important;
+      transform: none !important;
+      break-after: page;
+      break-inside: avoid;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    .ei-viewer-page:last-child { break-after: auto; }
+  </style>
+  ${styles}
+</head>
+<body>
+  <main class="easyink-ready">
+${pageHtml}
+  </main>
+</body>
+</html>`
+}
+
+function collectPreviewHeadMarkup(document: Document): string {
+  const styles = Array.from(document.head.querySelectorAll<HTMLStyleElement>('style'))
+    .map(style => `<style>${escapeStyleText(style.textContent ?? '')}</style>`)
+
+  const links = Array.from(document.head.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]'))
+    .map(link => link.outerHTML)
+
+  return [...styles, ...links].join('\n  ')
+}
+
+function serializeViewerPage(page: HTMLElement): string {
+  const clone = page.cloneNode(true) as HTMLElement
+  clone.style.boxShadow = 'none'
+  clone.style.margin = '0'
+  clone.style.transform = 'none'
+  clone.style.transformOrigin = ''
+  inlineCanvasBitmaps(Array.from(page.querySelectorAll('canvas')), clone)
+  return `    ${clone.outerHTML}`
+}
+
+function inlineCanvasBitmaps(sourceCanvases: HTMLCanvasElement[], cloneRoot: HTMLElement): void {
+  const cloneCanvases = Array.from(cloneRoot.querySelectorAll('canvas'))
+
+  for (let index = 0; index < cloneCanvases.length; index++) {
+    const source = sourceCanvases[index]
+    const clone = cloneCanvases[index]
+    if (!source || !clone)
+      continue
+
+    const dataUrl = readCanvasDataUrl(source)
+    if (!dataUrl)
+      continue
+
+    const img = clone.ownerDocument.createElement('img')
+    img.src = dataUrl
+    const style = clone.getAttribute('style')
+    if (style)
+      img.setAttribute('style', style)
+    clone.replaceWith(img)
+  }
+}
+
+function readCanvasDataUrl(canvas: HTMLCanvasElement): string | undefined {
+  try {
+    return canvas.toDataURL('image/png')
+  }
+  catch {
+    return undefined
+  }
+}
+
+function escapeStyleText(value: string): string {
+  return value.replaceAll('</style', '<\\/style')
 }

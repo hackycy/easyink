@@ -154,15 +154,17 @@ DOM-to-PDF 导出插件。
 
 EasyInk.Printer 官方前端集成。
 
+推荐入口是 `createEasyInkPrinter()`。它只暴露 `print()`、`printPdf()` 和 `printHtml()` 这三种高层打印动作，不需要你理解 Render 协议。
+
 | 导出 | 类型 | 说明 |
 |------|------|------|
 | `createEasyInkPrinterClient` | Function | 创建 HTTP/WebSocket 客户端 |
 | `EasyInkPrinterClient` | Class | EasyInk.Printer 连接、设备、任务和 PDF 上传客户端 |
 | `DEFAULT_EASYINK_PRINTER_URL` | Constant | 默认服务地址 `http://localhost:18080` |
-| `createEasyInkPrinter` | Function | 创建托管 Viewer + PDF 上传或 Printer-side Render 的高阶打印器 |
-| `createEasyInkPrinterDriver` | Function | 创建 Viewer 打印驱动 |
+| `createEasyInkPrinter` | Function | 创建简单打印门面，支持 schema + data、PDF 和 HTML 打印 |
+| `createEasyInkPrinterDriver` | Function | 创建 Viewer 打印驱动（高级用法） |
 
-类型导出：`EasyInkPrinterClientOptions`, `EasyInkPrinterConnectionState`, `EasyInkPrinterDevice`, `EasyInkPrinterJob`, `EasyInkPrinterPrintPdfOptions`, `EasyInkPrinterPrintRenderOptions`, `EasyInkPrinterRenderSource`, `EasyInkPrinterRenderOptions`, `EasyInkPrinterOptions`, `EasyInkPrinter`, `EasyInkPrinterPrintRequest`, `EasyInkPrinterDriverSubmitMode`
+类型导出：`EasyInkPrinterClientOptions`, `EasyInkPrinterConnectionState`, `EasyInkPrinterDevice`, `EasyInkPrinterJob`, `EasyInkPrinterOffset`, `EasyInkPrinterPaperSize`, `EasyInkPrinterUserData`, `EasyInkPaperSize`, `EasyInkPrinterDefaults`, `EasyInkPrinterOptions`, `EasyInkPrinter`, `EasyInkPrinterPrintInput`, `EasyInkPrinterPrintPdfInput`, `EasyInkPrinterPrintHtmlInput`, `EasyInkPrintStrategy`, `EasyInkPrinterDriverOptions`
 
 ## @easyink/print-integration-hiprint
 

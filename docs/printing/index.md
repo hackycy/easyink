@@ -9,18 +9,14 @@ description: EasyInk 打印方案选型指南：Render PDF 渲染、Electron HiP
 先看两个最短调用：
 
 ```ts
-import { createEasyInkPrinter, createEasyInkPrinterClient } from '@easyink/print-integration-easyink-printer'
-
-const client = createEasyInkPrinterClient({
-  serviceUrl: 'http://localhost:18080',
-})
+import { createEasyInkPrinter } from '@easyink/print-integration-easyink-printer'
 
 const printer = createEasyInkPrinter({
-  client,
+  serviceUrl: 'http://localhost:18080',
   viewer: 'iframe',
 })
 
-await client.useDefaultPrinter()
+await printer.ready()
 await printer.print({ schema, data })
 ```
 
@@ -66,7 +62,7 @@ EasyInk Printer 的高层打印器默认会先在浏览器端生成 PDF，再通
 
 ```ts
 const printer = createEasyInkPrinter({
-  client,
+  serviceUrl: 'http://localhost:18080',
   viewer: 'iframe',
 })
 
@@ -80,13 +76,24 @@ await printer.print({
 
 这段代码会默认使用 `pageSizeMode: 'fixed'`。也就是说，Viewer 会按模板尺寸渲染页面，打印器再把结果作为 PDF 提交给 EasyInk Printer。
 
-如果你要让本地 Printer 服务自己调用 Render，可以显式改成 `renderSource`：
+如果你要让本地 Printer 服务自己调用 Render，可以选择 `printer-template` 策略：
 
 ```ts
-const printer = createEasyInkPrinter({
-  client,
-  viewer: 'iframe',
-  submitMode: 'renderSource',
+await printer.print({
+  schema,
+  data,
+  strategy: 'printer-template',
+})
+```
+
+如果你想把预览里已经渲染好的页面作为 HTML 交给 Printer，可以选择 `preview-html` 策略：
+
+```ts
+await printer.print({
+  schema,
+  data,
+  strategy: 'preview-html',
+  paper: 'template',
 })
 ```
 
@@ -131,8 +138,7 @@ easyink-render render \
 用户说“点了打印没反应”时，先按这个顺序查：
 
 ```ts
-await client.refreshPrinters()
-await client.useDefaultPrinter()
+await printer.ready()
 await printer.print({
   schema,
   data,
@@ -143,6 +149,6 @@ await printer.print({
 
 - 拿不到打印机：先查本地服务和系统打印机。
 - 有打印机但提交失败：看前端抛出的错误和服务端日志。
-- 提交成功但纸张异常：再看 `forcePageSize`、纸张尺寸和驱动默认介质。
+- 提交成功但纸张异常：再看 `paper`、模板尺寸和驱动默认介质。
 
 关于选型，目前停在这里就够了。下一步可以进入具体链路：[EasyInk Printer](/dotnet/getting-started) 或 [HiPrint](/hiprint/getting-started)。

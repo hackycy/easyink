@@ -32,18 +32,14 @@ pnpm add @easyink/print-integration-easyink-printer
 先用默认 PDF 提交路径：
 
 ```ts
-import { createEasyInkPrinter, createEasyInkPrinterClient } from '@easyink/print-integration-easyink-printer'
-
-const client = createEasyInkPrinterClient({
-  serviceUrl: 'http://localhost:18080',
-})
+import { createEasyInkPrinter } from '@easyink/print-integration-easyink-printer'
 
 const printer = createEasyInkPrinter({
-  client,
+  serviceUrl: 'http://localhost:18080',
   viewer: 'iframe',
 })
 
-await client.useDefaultPrinter()
+await printer.ready()
 
 await printer.print({
   schema,
@@ -63,105 +59,97 @@ await printer.print({
   data,
   printerName: 'HP LaserJet',
   copies: 2,
-  forcePageSize: true,
-  requestOptions: {
-    dpi: 600,
-    userData: {
-      userId: 'u-001',
-      documentType: 'invoice',
-    },
+  paper: 'template',
+  userData: {
+    userId: 'u-001',
+    documentType: 'invoice',
   },
 })
 ```
 
-`forcePageSize: true` 时，打印器会把 Viewer 解析出的模板尺寸作为 `paperSize` 传给服务端。默认不强制纸张，由打印机驱动使用当前介质。
+`paper: 'template'` 表示按模板尺寸下发纸张；`paper: 'driver'` 表示使用打印机驱动当前介质。
 
 ## Printer-side Render {#printer-side-render}
 
-如果你要让本地 Printer 服务调用 Render，而不是在浏览器端生成 PDF，可以打开 `renderSource` 提交模式：
+如果你要让本地 Printer 服务调用 Render，而不是在浏览器端生成 PDF，可以选择 `printer-template` 策略：
 
 ```ts
-const printer = createEasyInkPrinter({
-  client,
-  viewer: 'iframe',
-  submitMode: 'renderSource',
-  resolveRequestOptions: () => ({
-    renderOptions: {
-      pdf: { printBackground: true },
-      wait: { until: 'easyinkReady', timeoutMs: 5000 },
-    },
-  }),
+await printer.print({
+  schema,
+  data,
+  strategy: 'printer-template',
 })
-
-await printer.print({ schema, data })
 ```
 
-这条路径仍然会用托管 Viewer 统一打印入口，但提交给本地服务的是 `renderSource.type=easyink`。服务端必须启用并配置 Render，否则会返回 `RENDER_FAILED`。
+这条路径提交的是模板和数据，等待条件、背景打印等 Render 细节由 SDK 设置。服务端必须启用并配置 Render，否则会返回 `RENDER_FAILED`。
+
+如果你想打印的是当前预览结果，而不是重新生成 PDF，可以改用 `preview-html` 策略：
+
+```ts
+await printer.print({
+  schema,
+  data,
+  strategy: 'preview-html',
+  paper: 'template',
+})
+```
+
+这条路径会把托管 Viewer 当前渲染出的页面序列化成 HTML，再交给 Printer 去打印。它适合你想保留预览效果、但不想直接操作底层 Render 协议的时候。
 
 ## 直接打印 PDF {#print-pdf}
 
 业务已经有 PDF 时，不需要再走 Viewer：
 
 ```ts
-const client = createEasyInkPrinterClient({
-  serviceUrl: 'http://localhost:18080',
-})
-
 const file = await fetch('/invoice.pdf').then(res => res.blob())
 
-await client.printPdfAndWait(file, {
+await printer.printPdf({
+  pdf: file,
   printerName: 'HP LaserJet',
   copies: 1,
 })
 ```
 
-`printPdf()` 会把 PDF 按 1 MB 分片上传，再调用 `printUploadedPdfAsync`。服务端单片上限是 2 MB，总 PDF 上限是 50 MB。
+SDK 会把 PDF 按 1 MB 分片上传，再调用本地服务打印。服务端单片上限是 2 MB，总 PDF 上限是 50 MB。
 
-## 直接打印 HTML 或 EasyInk {#print-render-source}
+## 直接打印 HTML {#print-html}
 
-你也可以不创建高层打印器，直接走客户端 API：
-
-```ts
-const client = createEasyInkPrinterClient()
-await client.useDefaultPrinter()
-
-await client.printEasyInkAndWait(
-  { schema, data },
-  {
-    renderOptions: {
-      pdf: { printBackground: true },
-      wait: { until: 'easyinkReady', timeoutMs: 5000 },
-    },
-  },
-)
-```
-
-HTML 输入使用 `printHtmlAndWait()`：
+业务已经有 HTML 时，可以直接打印 HTML：
 
 ```ts
-await client.printHtmlAndWait(
-  '<!doctype html><html><body><main class="easyink-ready">Hello</main></body></html>',
-  {
-    paperSize: { width: 80, height: 120, unit: 'mm' },
-    renderOptions: {
-      pdf: {
-        printBackground: true,
-        marginMm: { top: 0, right: 0, bottom: 0, left: 0 },
-      },
-      wait: { selector: '.easyink-ready' },
-    },
-  },
-)
+await printer.printHtml({
+  html: '<!doctype html><html><body><main class="ready">Hello</main></body></html>',
+  paper: { widthMm: 80, heightMm: 120 },
+  readySelector: '.ready',
+})
 ```
 
-这两条 API 都会提交 `renderSource`。不要在同一笔请求里再放 PDF 输入。
+HTML 渲染仍由本地 Printer 服务完成。你只需要提供 HTML、纸张和可选的就绪选择器，不需要手写 Render 协议参数。
+
+## 高级客户端 {#advanced-client}
+
+如果你要调试底层协议或接入自定义上传流程，可以直接创建客户端：
+
+```ts
+import { createEasyInkPrinterClient } from '@easyink/print-integration-easyink-printer'
+
+const client = createEasyInkPrinterClient({
+  serviceUrl: 'http://localhost:18080',
+})
+
+await client.printPdfAndWait(file, {
+  printerName: 'HP LaserJet',
+})
+```
+
+客户端暴露的是底层 Printer/Render 能力，适合封装 SDK、排查协议问题或做非标准集成；业务页面优先使用 `createEasyInkPrinter()`。
 
 ## API Key {#api-key}
 
 如果 Printer 配置了 API Key，创建客户端时传入同一个值：
 
 ```ts
-const client = createEasyInkPrinterClient({
+const printer = createEasyInkPrinter({
   serviceUrl: 'http://localhost:18080',
   apiKey: 'your-secret-key',
 })
@@ -175,16 +163,16 @@ const client = createEasyInkPrinterClient({
 
 ```ts
 printer.destroy()
-client.disconnect()
+printer.client.disconnect()
 ```
 
-`printer.destroy()` 清理托管 Viewer。`client.disconnect()` 关闭 WebSocket 并拒绝还没完成的请求。
+`printer.destroy()` 清理托管 Viewer。`printer.client.disconnect()` 关闭 WebSocket 并拒绝还没完成的请求。
 
 ## 最小验收 {#acceptance}
 
 第一张单不要只看“代码没报错”。我们建议你确认这三件事：
 
-1. `client.refreshPrinters()` 能拿到打印机。
+1. `printer.ready()` 能拿到打印机。
 2. `printer.print()` 返回前没有抛错。
 3. EasyInk.Printer 任务列表里能看到任务，目标打印机真的输出纸张。
 

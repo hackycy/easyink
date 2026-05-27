@@ -9,18 +9,14 @@ EasyInk 的 .NET 链路解决的是 Windows 本地打印。
 前端最常见的入口是：
 
 ```ts
-import { createEasyInkPrinter, createEasyInkPrinterClient } from '@easyink/print-integration-easyink-printer'
-
-const client = createEasyInkPrinterClient({
-  serviceUrl: 'http://localhost:18080',
-})
+import { createEasyInkPrinter } from '@easyink/print-integration-easyink-printer'
 
 const printer = createEasyInkPrinter({
-  client,
+  serviceUrl: 'http://localhost:18080',
   viewer: 'iframe',
 })
 
-await client.useDefaultPrinter()
+await printer.ready()
 await printer.print({ schema, data })
 ```
 
@@ -92,7 +88,7 @@ EasyInk Printer 可以接收两类输入：
 }
 ```
 
-PDF 输入会直接进入 Engine 打印路径。`renderSource` 输入会先由 Printer 调用本机 `easyink-render.exe render` 转成 PDF，再进入同一套 Engine 路由。
+PDF 输入会直接进入 Engine 打印路径。模板输入会先在浏览器端走托管 Viewer，再由 SDK 选择 PDF、模板渲染或 HTML 路径。
 
 :::warning 注意
 一笔打印请求只能有一个来源。不要同时传 `pdfBase64` / `pdfUrl` / `pdfBytes` 和 `renderSource`，服务端会返回 `INVALID_PARAMS`。

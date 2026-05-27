@@ -121,4 +121,44 @@ describe('easy ink driver', () => {
     }))
     expect(client.waitForJob).toHaveBeenCalledWith('job-render-1234')
   })
+
+  it('can serialize rendered Viewer pages and submit them as HTML renderSource', async () => {
+    const client = {
+      printHtml: vi.fn(async (_html: string, _options?: unknown) => 'job-html-1234'),
+      waitForJob: vi.fn(async () => ({ jobId: 'job-html-1234', status: 'completed' })),
+    }
+    const context = createContext()
+    const firstPage = context.container!.querySelector<HTMLElement>('.ei-viewer-page')!
+    firstPage.innerHTML = '<span>Hello HTML</span>'
+    firstPage.style.transform = 'scale(2)'
+
+    const driver = createEasyInkPrinterDriver({
+      client: client as never,
+      submitMode: 'html',
+      printerName: () => 'Printer A',
+      forcePageSize: () => true,
+      resolveRequestOptions: () => ({
+        renderOptions: {
+          wait: { selector: '.easyink-ready' },
+        },
+      }),
+    })
+
+    await driver.print(context)
+
+    expect(renderPagesToPdfBlob).not.toHaveBeenCalled()
+    expect(client.printHtml).toHaveBeenCalledTimes(1)
+    expect(client.printHtml.mock.calls[0]![0]).toContain('class="easyink-ready"')
+    expect(client.printHtml.mock.calls[0]![0]).toContain('Hello HTML')
+    expect(client.printHtml.mock.calls[0]![0]).toContain('transform: none')
+    expect(client.printHtml).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      printerName: 'Printer A',
+      forcePageSize: true,
+      paperSize: { width: 80, height: 60, unit: 'mm' },
+      renderOptions: {
+        wait: { selector: '.easyink-ready' },
+      },
+    }))
+    expect(client.waitForJob).toHaveBeenCalledWith('job-html-1234')
+  })
 })
