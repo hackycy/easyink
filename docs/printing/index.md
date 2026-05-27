@@ -20,6 +20,8 @@ await printer.ready()
 await printer.print({ schema, data })
 ```
 
+这里的 `printer.ready()` 是可选预检，用来提前确认本地服务和打印机列表。实际打印 API 会按需连接，所以你也可以直接调用 `printer.print()`。
+
 ```ts
 import { createHiPrintClient, createHiPrintPrinter } from '@easyink/print-integration-hiprint'
 
@@ -145,7 +147,7 @@ await printer.print({
 })
 ```
 
-上面这段先把连接、打印机选择和提交路径跑通。要看渲染阶段，就回到你自己创建 Viewer 的那层。
+上面这段先把连接、打印机选择和提交路径跑通。`printer.ready()` 在这里同样只是预检，不是打印前必须调用的步骤。要看渲染阶段，就回到你自己创建 Viewer 的那层。
 
 - 拿不到打印机：先查本地服务和系统打印机。
 - 有打印机但提交失败：看前端抛出的错误和服务端日志。

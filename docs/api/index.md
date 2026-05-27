@@ -156,6 +156,8 @@ EasyInk.Printer 官方前端集成。
 
 推荐入口是 `createEasyInkPrinter()`。它只暴露 `print()`、`printPdf()` 和 `printHtml()` 这三种高层打印动作，不需要你理解 Render 协议。
 
+`ready()` 只是可选的预检方法，用来提前连服务和刷新打印机列表。
+
 | 导出 | 类型 | 说明 |
 |------|------|------|
 | `createEasyInkPrinterClient` | Function | 创建 HTTP/WebSocket 客户端 |

@@ -22,6 +22,8 @@ await printer.print({ schema, data })
 
 这段代码会连接本机 `EasyInk.Printer`，创建托管 Viewer，默认生成 PDF，再把 PDF 提交给 Windows 本地打印服务。
 
+`printer.ready()` 只是可选的预检：你想先确认服务和打印机列表时再调它；如果你已经在别处完成连接检查，也可以直接打印。
+
 ## 两层组件 {#components}
 
 .NET 部分拆成两层：

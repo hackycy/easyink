@@ -49,6 +49,8 @@ await printer.print({
 
 这段代码会在浏览器端创建托管 Viewer，把页面导出成 PDF Blob，再通过 WebSocket 分片上传给 `EasyInk.Printer`。默认会等待异步任务完成；如果只想提交任务，可以传 `waitForCompletion: false`。
 
+如果你想先做预检，`printer.ready()` 可以提前确认服务可连、打印机可见；如果你已经有别的连接检查流程，也可以直接调用 `printer.print()`。
+
 ## 指定打印参数 {#print-options}
 
 打印机、份数、纸张策略和审计字段都可以跟着单次打印走：
@@ -172,7 +174,7 @@ printer.client.disconnect()
 
 第一张单不要只看“代码没报错”。我们建议你确认这三件事：
 
-1. `printer.ready()` 能拿到打印机。
+1. 如果先做预检，`printer.ready()` 能拿到打印机。
 2. `printer.print()` 返回前没有抛错。
 3. EasyInk.Printer 任务列表里能看到任务，目标打印机真的输出纸张。
 
