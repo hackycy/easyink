@@ -40,6 +40,12 @@ fi
 
 cd "$REPO_ROOT"
 
+if [ ! -e "internal-packages/viewer-runtime/node_modules/@easyink/viewer" ]; then
+  echo "Missing workspace dependency link for @easyink/viewer in internal-packages/viewer-runtime." >&2
+  echo "Run \"pnpm install\" from the repository root to refresh workspace node_modules, then rerun this script." >&2
+  exit 1
+fi
+
 echo "Building EasyInk.Render viewer runtime..."
 pnpm render:runtime
 pnpm render:manifest

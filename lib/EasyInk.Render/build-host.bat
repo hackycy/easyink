@@ -37,6 +37,13 @@ if errorlevel 1 (
 
 pushd "%REPO_ROOT%" >nul
 
+if not exist "internal-packages\viewer-runtime\node_modules\@easyink\viewer" (
+    echo Missing workspace dependency link for @easyink/viewer in internal-packages\viewer-runtime.
+    echo Run "pnpm install" from the repository root to refresh workspace node_modules, then rerun this script.
+    popd >nul
+    exit /b 1
+)
+
 set RENDER_ARGS=build-host-matrix --platforms "%PLATFORMS%" --outDir "%OUT_DIR%" --docker true
 if defined VERSION set RENDER_ARGS=!RENDER_ARGS! --version "%VERSION%"
 if defined URL_BASE set RENDER_ARGS=!RENDER_ARGS! --urlBase "%URL_BASE%"
