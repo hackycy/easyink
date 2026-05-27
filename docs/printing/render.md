@@ -1,25 +1,12 @@
 ---
-description: EasyInk.Render CLI 渲染运行时：将 Schema 输入稳定转换为 PDF，不涉及打印机枚举和物理打印任务。
+description: EasyInk.Render CLI 渲染运行时：将 HTML、PDF 或 EasyInk Schema 输入转换为 PDF，不涉及打印机枚举和物理打印任务。
 ---
 
-# EasyInk.Render CLI 渲染运行时
+# Render PDF 渲染 {#render}
 
-`EasyInk.Render` 解决的是“把输入稳定变成 PDF”这件事。
+`EasyInk.Render` 只做一件事：把输入稳定变成 PDF。
 
-它不枚举打印机，也不提交物理打印任务。你可以把它理解成打印链路前面的渲染引擎。
-
-## 工作方式
-
-```text
-easyink-render render
-  -> 本地 daemon 或当前进程
-  -> 浏览器渲染
-  -> 输出 PDF 和 diagnostics
-```
-
-当前主入口是 `easyink-render` 命令。默认模式会自动发现或拉起本机 daemon；如果你想做一次性隔离执行，也可以加 `--no-daemon`。
-
-## 基本命令
+先跑一个最小命令：
 
 ```bash
 easyink-render render \
@@ -28,11 +15,62 @@ easyink-render render \
   --json
 ```
 
-如果这是第一次运行，CLI 会先把渲染环境准备好。成功之后，你会拿到 PDF 文件和稳定的 JSON 输出。
+成功后你会拿到 `out.pdf`。如果加了 `--json`，标准输出会给出 `success`、`requestId`、`pageCount` 和 diagnostics 路径。
 
-## `--no-daemon` 使用时机
+## 请求格式 {#request-format}
 
-当你在 CI、隔离环境或临时调试里不想复用常驻 daemon 时，直接这样跑：
+Render 读取的是一个 JSON 请求文件。最小 HTML 请求长这样：
+
+```json
+{
+  "requestId": "html-001",
+  "source": {
+    "type": "html",
+    "html": "<!doctype html><html><body><main class=\"ready\">Hello</main></body></html>"
+  },
+  "wait": {
+    "selector": ".ready",
+    "timeoutMs": 5000
+  },
+  "pdf": {
+    "printBackground": true
+  }
+}
+```
+
+这段请求会加载 HTML，等待 `.ready` 出现，再调用浏览器的 PDF 输出能力。`wait.timeoutMs` 没传时，HTML 渲染内部默认等待 30000 ms。
+
+## 输入类型 {#source-types}
+
+当前实现支持三种 `source.type`：
+
+```json
+{
+  "source": {
+    "type": "easyink",
+    "schema": {
+      "version": "1.0.0",
+      "unit": "mm",
+      "page": { "mode": "fixed", "width": 80, "height": 120 },
+      "guides": { "x": [], "y": [] },
+      "elements": []
+    },
+    "data": {
+      "receipt": { "no": "R-001" }
+    }
+  }
+}
+```
+
+- `html`：加载 `source.html`，按 `wait` 条件等待后输出 PDF。
+- `pdf`：校验并归一 `source.pdfBase64`，读取页数和 metadata，不启动浏览器。
+- `easyink`：用内嵌 EasyInk Viewer runtime 把 `schema + data` 渲染成 HTML，再进入 HTML pipeline。
+
+`easyink` 输入会自动补默认等待条件：`wait.until` 为 `easyinkReady`，`wait.selector` 为 `.easyink-ready`。如果你显式传入 `wait`，就以你的配置为准。
+
+## 一次性渲染 {#no-daemon}
+
+默认 `render` 会自动发现或拉起本机 daemon。CI、隔离环境或临时调试时，可以改成当前进程一次性执行：
 
 ```bash
 easyink-render render \
@@ -41,9 +79,11 @@ easyink-render render \
   --out out.pdf
 ```
 
-如果你只是日常本机开发，默认 daemon 模式通常更省资源也更快。
+`--no-daemon` 仍然会按输入类型决定是否需要浏览器。`source.type=pdf` 不需要浏览器；`html` 和 `easyink` 需要可用的浏览器运行时。
 
-## Daemon 管理
+## Daemon 管理 {#daemon}
+
+日常本机开发通常直接用默认 daemon。你需要排查常驻进程时，再用这些命令：
 
 ```bash
 easyink-render daemon start
@@ -52,9 +92,11 @@ easyink-render daemon stop
 easyink-render daemon restart
 ```
 
-这组命令足够你完成大多数本地排查。
+`daemon status` 会输出 JSON。它适合确认 daemon 是否正在运行、当前使用的 IPC 和运行时状态。
 
-## Browser 检查
+## 浏览器检查 {#browser-inspect}
+
+怀疑浏览器路径、headless 模式或启动参数有问题时，先跑 inspect：
 
 ```bash
 easyink-render browser inspect \
@@ -62,43 +104,42 @@ easyink-render browser inspect \
   --browser-path /path/to/headless-shell
 ```
 
-当你怀疑渲染环境本身有问题，这条命令会比盲猜快很多。
+如果这一步失败，先修浏览器配置。继续调模板通常只会得到更长的错误链。
 
-## 常用命令
+## 配置优先级 {#config-priority}
 
-```text
-easyink-render render
-easyink-render daemon start
-easyink-render daemon run
-easyink-render daemon stop
-easyink-render daemon restart
-easyink-render daemon status
-easyink-render browser inspect
-easyink-render config get
-easyink-render config set
-easyink-render diagnostics show
-easyink-render version
-```
-
-如果你不是在做内部调试，日常最常用的还是 `render`、`daemon status` 和 `diagnostics show`。
-
-## 配置优先级
+Render 配置按这个顺序合并：
 
 ```text
 CLI flags > environment variables > config file > defaults
 ```
 
-这条规则基本决定了你排查配置问题时该先看哪里。
-
-## Diagnostics 查看
-
-Render 会把诊断结果落盘。最常用的查看方式是：
+你可以直接读写配置：
 
 ```bash
-easyink-render diagnostics show diagnostics.json
+easyink-render config get
+easyink-render config get browser.kind
+easyink-render config set maxConcurrency 2
 ```
 
-如果你在渲染命令里显式指定输出位置，也可以直接把 diagnostics 收到固定文件里：
+当前可读写的 key 包括：
+
+- `browser.kind`
+- `browser.path`
+- `browser.headlessMode`
+- `profileRoot`
+- `tempDir`
+- `logDir`
+- `maxConcurrency`
+- `maxQueueSize`
+- `requestTimeoutMs`
+- `idleTimeoutMs`
+
+如果命令行同时传了 `--browser-kind` 这类参数，它会覆盖配置文件里的值。
+
+## Diagnostics {#diagnostics}
+
+Render 会把诊断信息写到日志目录。你也可以把这次渲染的 diagnostics 固定到一个文件：
 
 ```bash
 easyink-render render \
@@ -107,64 +148,28 @@ easyink-render render \
   --diagnostics-out diagnostics.json
 ```
 
-## 使用场景
-
-如果你的目标是下面这些之一，就该先看 Render，而不是先看打印机集成：
-
-- 把 HTML 变成 PDF
-- 把 EasyInk schema + data 变成 PDF
-- 在 CI 或服务端批量生成 PDF
-- 排查浏览器渲染和 PDF 输出问题
-
-如果你的目标是“怎么把 PDF 送去本地打印机”，那就回到 [打印方案概述](/printing/) 或具体打印集成章节。
-```
-
-支持输入：
-
-- `source.type=html`：加载 HTML，等待 `load`、`selector`、`easyinkReady` 或 `networkIdle` 后调用 `Page.printToPDF`。
-- `source.type=pdf`：校验并归一 PDF bytes，读取页数和 metadata，不启动浏览器。
-- `source.type=easyink`：使用内嵌 EasyInk Runtime 把 schema + data 渲染成 HTML，再进入 HTML pipeline。
-
-安全边界保持不变：外链资源通过 allowlist 校验，默认阻断私网、localhost、link-local、非 http/https 协议；浏览器禁用代理环境变量并使用独立 profile/context。
-
-## Docker 验证
-
-单进程真实浏览器渲染：
+查看 diagnostics：
 
 ```bash
-docker run --rm --platform linux/amd64 \
-  -v "$PWD/lib/EasyInk.Render/host:/src" \
-  -w /src \
-  golang:1.23-bookworm \
-  sh -lc 'CGO_ENABLED=0 GOOS=linux GOARCH=amd64 /usr/local/go/bin/go build -trimpath -o /src/easyink-render ./cmd/easyink-render-host'
-
-docker run --rm --platform linux/amd64 --entrypoint /bin/sh \
-  -v "$PWD/lib/EasyInk.Render:/work" \
-  -w /work \
-  chromedp/headless-shell:latest \
-  -lc './host/easyink-render render --no-daemon --request samples/html/request.json --out /tmp/out.pdf --browser-kind headless-shell --browser-path /headless-shell/headless-shell --profile-root /tmp/easyink-profile --temp-dir /tmp/easyink-temp --log-dir /tmp/easyink-logs --json && test -s /tmp/out.pdf'
+easyink-render diagnostics show diagnostics.json
 ```
 
-Daemon 自动启动和复用：
+如果你传的是 diagnostics id，而不是文件路径，CLI 会从默认日志目录里找对应的 `diagnostics.json`。
 
-```bash
-docker run --rm --platform linux/amd64 --entrypoint /bin/sh \
-  -v "$PWD/lib/EasyInk.Render:/work" \
-  -w /work \
-  chromedp/headless-shell:latest \
-  -lc 'set -e; ./host/easyink-render render --request samples/html/request.json --out /tmp/out1.pdf --browser-kind headless-shell --browser-path /headless-shell/headless-shell --profile-root /tmp/easyink-profile --temp-dir /tmp/easyink-temp --log-dir /tmp/easyink-logs --idle-timeout-ms 60000 --json; ./host/easyink-render render --request samples/html/request.json --out /tmp/out2.pdf --browser-kind headless-shell --browser-path /headless-shell/headless-shell --profile-root /tmp/easyink-profile --temp-dir /tmp/easyink-temp --log-dir /tmp/easyink-logs --idle-timeout-ms 60000 --json; ./host/easyink-render daemon status; ./host/easyink-render daemon stop; test -s /tmp/out1.pdf; test -s /tmp/out2.pdf'
+## 安全边界 {#security}
+
+HTML 和 EasyInk 输入会经过资源安全校验。
+
+```json
+{
+  "security": {
+    "allowedOrigins": ["https://cdn.example.com"],
+    "allowFileAccess": false,
+    "maxInputBytes": 52428800
+  }
+}
 ```
 
-## 发布
+默认策略会阻断私网、localhost、link-local、非 `http/https` 协议等外链资源。浏览器运行时也会禁用代理环境变量，并使用独立的 profile/context。
 
-Host package 的发布可执行文件名为 `easyink-render`，Windows 为 `easyink-render.exe`。发布工具仍从 Go 包路径 `./cmd/easyink-render-host` 构建，输出物和 manifest 使用新的 CLI 名称。
-
-```bash
-pnpm render:manifest
-pnpm render:release:test
-pnpm render:host:docker -- --platforms all
-```
-
-Windows 手动发布可运行 `lib\EasyInk.Render\build-host.bat`。该脚本使用 Docker 内的 `golang:1.23-bookworm` 交叉编译 host 包，不依赖本机 Go 环境；默认构建 `win-x64,win-x86`，传入 `all` 可构建全部平台，例如 `lib\EasyInk.Render\build-host.bat all`，也可用 `lib\EasyInk.Render\build-host.bat 0.1.0 all` 指定版本。
-
-`runtime-manifest` 继续描述 host、browser、EasyInk Runtime、平台、版本、下载地址、SHA256 和协议兼容性。新增平台或浏览器包时，需要同步更新 manifest、release tests 和本文档。
+关于 Render，目前知道这些就够用了。如果你的下一步是把 PDF 送到打印机，回到 [打印方案](/printing/) 选择 EasyInk Printer 或 HiPrint。
