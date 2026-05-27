@@ -51,7 +51,7 @@ public class PrintTestService : IPrintTestService
     }
 
     public PrinterTestResult TestPrint(string requestId, string printerName, PrinterTestLevel level,
-        CancellationToken cancellationToken = default)
+        TestPageMetadata? metadata = null, CancellationToken cancellationToken = default)
     {
         if (level == PrinterTestLevel.Connectivity)
             return TestConnectivity(printerName);
@@ -84,8 +84,8 @@ public class PrintTestService : IPrintTestService
         try
         {
             testPdf = level == PrinterTestLevel.Full
-                ? TestPageGenerator.GenerateFull(printerName, printPath, status.IsReady, status.Message, paperSizeText)
-                : TestPageGenerator.GenerateQuick(printerName, printPath);
+                ? TestPageGenerator.GenerateFull(printerName, printPath, status.IsReady, status.Message, paperSizeText, metadata)
+                : TestPageGenerator.GenerateQuick(printerName, printPath, metadata);
         }
         catch (Exception ex)
         {

@@ -17,5 +17,5 @@ public interface IPrintTestService
     /// 打印测试 - 打印测试页
     /// </summary>
     PrinterTestResult TestPrint(string requestId, string printerName, PrinterTestLevel level,
-        CancellationToken cancellationToken = default);
+        TestPageMetadata? metadata = null, CancellationToken cancellationToken = default);
 }

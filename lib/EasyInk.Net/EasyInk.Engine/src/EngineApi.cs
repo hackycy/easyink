@@ -179,14 +179,15 @@ public class EngineApi : IDisposable
     /// <summary>
     /// 打印测试
     /// </summary>
-    public PrinterResult TestPrinter(string requestId, string printerName, PrinterTestLevel level)
+    public PrinterResult TestPrinter(string requestId, string printerName, PrinterTestLevel level,
+        TestPageMetadata? metadata = null)
     {
         if (string.IsNullOrEmpty(printerName))
             return PrinterResult.Error(requestId, ErrorCode.InvalidParams, "缺少printerName参数");
 
         try
         {
-            var result = _testService.TestPrint(requestId, printerName, level);
+            var result = _testService.TestPrint(requestId, printerName, level, metadata);
             return PrinterResult.Ok(requestId, result);
         }
         catch (Exception ex)

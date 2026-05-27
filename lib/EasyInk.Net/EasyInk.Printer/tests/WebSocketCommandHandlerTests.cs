@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using EasyInk.Engine;
 using EasyInk.Engine.Models;
 using EasyInk.Engine.Services.Abstractions;
+using EasyInk.Printer.Api;
 using EasyInk.Printer.Server;
 using EasyInk.Printer.Services.Abstractions;
 using Moq;
@@ -17,14 +18,17 @@ public class WebSocketCommandHandlerTests
     private static WebSocketCommandHandler CreateHandler(
         EngineApi? api = null,
         WebSocketHandler? wsHandler = null,
-        IAuditService? auditService = null)
+        IAuditService? auditService = null,
+        TestController? testController = null)
     {
         api ??= new EngineApi(
             new Mock<IPrinterService>().Object,
             new Mock<IPrintService>().Object);
         wsHandler ??= new WebSocketHandler();
         auditService ??= new Mock<IAuditService>().Object;
-        return new WebSocketCommandHandler(api, wsHandler, auditService);
+        var printerService = new Mock<IPrinterService>().Object;
+        testController ??= new TestController(api, printerService, new EasyInk.Printer.Config.HostConfig());
+        return new WebSocketCommandHandler(api, wsHandler, auditService, testController);
     }
 
     private static WebSocketMessage MakeMessage(string command, string id = "test-1", JObject? parms = null)

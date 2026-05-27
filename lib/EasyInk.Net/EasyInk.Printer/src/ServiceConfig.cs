@@ -22,6 +22,7 @@ internal static class ServiceConfig
 
         // Configuration
         services.AddSingleton(config);
+        services.AddSingleton<IPrinterService>(new PrinterService());
 
         services.AddSingleton<PrintDebugLogService>();
         services.AddSingleton<RenderRuntimeManager>();

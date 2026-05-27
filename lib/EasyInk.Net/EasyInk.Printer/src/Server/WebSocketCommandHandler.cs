@@ -8,6 +8,7 @@ using Newtonsoft.Json.Linq;
 using EasyInk.Engine;
 using EasyInk.Engine.Models;
 using EasyInk.Printer;
+using EasyInk.Printer.Api;
 using EasyInk.Printer.Services;
 using EasyInk.Printer.Services.Abstractions;
 
@@ -23,13 +24,16 @@ public class WebSocketCommandHandler
     private readonly WebSocketHandler _wsHandler;
     private readonly IAuditService _auditService;
     private readonly PrintDebugLogService? _debugLogService;
+    private readonly TestController _testController;
     private readonly ConcurrentDictionary<string, PdfUploadSession> _uploads = new();
 
-    public WebSocketCommandHandler(EngineApi api, WebSocketHandler wsHandler, IAuditService auditService, PrintDebugLogService? debugLogService = null)
+    public WebSocketCommandHandler(EngineApi api, WebSocketHandler wsHandler, IAuditService auditService,
+        TestController testController, PrintDebugLogService? debugLogService = null)
     {
         _api = api;
         _wsHandler = wsHandler;
         _auditService = auditService;
+        _testController = testController;
         _debugLogService = debugLogService;
     }
 
@@ -235,16 +239,7 @@ public class WebSocketCommandHandler
 
         var level = message.Params?["level"]?.ToString() ?? "quick";
 
-        return _api.HandleCommand(new PrinterCommand
-        {
-            Command = "testPrinter",
-            Id = message.Id,
-            Params = new Dictionary<string, object>
-            {
-                ["printerName"] = printerName!,
-                ["level"] = level
-            }
-        });
+        return _testController.TestPrinter(printerName!, level);
     }
 
     private static Dictionary<string, object>? ConvertToDictionary(JObject? obj)
