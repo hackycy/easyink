@@ -58,7 +58,6 @@ public class TestController
             TrustAllOrigins = _config.TrustAllOrigins,
 
             // Print Config
-            ConfigDpi = _config.RawPrintDpi,
             LowDpiEnhancement = _config.LowDpiPrintEnhancement,
             RawPrinterNames = _config.RawPrinterNames.Count > 0 ? string.Join(", ", _config.RawPrinterNames) : null,
             RawPrintDpi = _config.RawPrintDpi,
@@ -70,6 +69,7 @@ public class TestController
             MaxConcurrentRequests = _config.MaxConcurrentRequests,
 
             // Printer Capabilities
+            DriverName = GetDriverName(printerName),
             DefaultPaperSize = GetDefaultPaperSize(printerName),
             SupportedPaperSizes = GetSupportedPaperSizeNames(printerName)
         };
@@ -97,6 +97,17 @@ public class TestController
         {
             var settings = new PrinterSettings { PrinterName = printerName };
             return settings.DefaultPageSettings.PaperSize.PaperName;
+        }
+        catch { return null; }
+    }
+
+    private static string? GetDriverName(string printerName)
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
+                $@"SYSTEM\CurrentControlSet\Control\Print\Printers\{printerName}");
+            return key?.GetValue("Printer Driver")?.ToString();
         }
         catch { return null; }
     }

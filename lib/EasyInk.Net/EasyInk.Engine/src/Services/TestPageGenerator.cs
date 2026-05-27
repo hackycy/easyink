@@ -9,303 +9,402 @@ namespace EasyInk.Engine.Services;
 /// <summary>
 /// 在内存中生成测试页 PDF（无外部依赖）。
 /// 使用 PDF 内置 Helvetica/Courier 字体，生成单页测试文档。
+///
+/// Y 坐标管理原则：
+///   - y 表示当前光标位置，从页面顶部 (PageH - Margin) 向下递减
+///   - 文本以基线 (baseline) 定位在 y
+///   - 图形元素（线段、矩形）以顶部定位在 y
+///   - 所有 y 递减由调用方显式控制，辅助方法不修改 y
 /// </summary>
 internal static class TestPageGenerator
 {
-    private const float A4WidthPt = 595.28f;   // 210mm
-    private const float A4HeightPt = 841.89f;  // 297mm
-    private const float MarginPt = 30f;
-    private const float LineGap = 1.5f;
+    private const float PageW = 595.28f;
+    private const float PageH = 841.89f;
+    private const float Margin = 30f;
+
+    // 文本行间距（基线到基线的额外间距）
+    private const float LineGap = 1.2f;
+
+    // 线段下方间距（从线段中心到下一条文本基线的距离，需容纳上行字母高度）
+    // 8pt 字体上行高度约 5.76pt，7pt 余量确保不重叠
+    private const float RuleGap = 7f;
+
+    // 各 section 之间的额外间距
+    private const float SectionGap = 2f;
+
+    // 文本标签与下方图形块之间的间距
+    private const float BlockGap = 2f;
+
     private static readonly Encoding WinAnsi = Encoding.GetEncoding(1252);
 
-    /// <summary>
-    /// 生成快速测试页 PDF
-    /// </summary>
+    // ===== Quick Test Page =====
+
     internal static byte[] GenerateQuick(string printerName, string printPath, TestPageMetadata? meta = null)
     {
         var sb = new StringBuilder();
-        float y = A4HeightPt - MarginPt;
+        float y = PageH - Margin;
+        float left = Margin;
+        float right = PageW - Margin;
 
-        AppendLine(sb, ref y, 16f, "EasyInk Print Test");
-        y -= 4f;
-        AppendHLine(sb, ref y);
-        y -= 4f;
-        AppendLine(sb, ref y, 9f, $"Printer: {printerName}");
-        AppendLine(sb, ref y, 9f, $"Path: {printPath}");
-        if (meta != null)
+        EmitText(sb, left, y, 16f, "EasyInk Print Test");
+        y -= 16f + LineGap + 4f;
+        EmitHLine(sb, left, right, y, 0.8f);
+        y -= 0.8f + RuleGap;
+
+        EmitText(sb, left, y, 9f, $"Printer: {printerName}");
+        y -= 9f + LineGap;
+        EmitText(sb, left, y, 9f, $"Path: {printPath}");
+        y -= 9f + LineGap;
+        if (!string.IsNullOrEmpty(meta?.AppVersion))
         {
-            if (!string.IsNullOrEmpty(meta.AppVersion))
-                AppendLine(sb, ref y, 9f, $"App: {meta.AppVersion}");
-            if (!string.IsNullOrEmpty(meta.LanAddresses))
-                AppendLine(sb, ref y, 9f, $"Address: {meta.LanAddresses}:{meta.HttpPort}");
+            EmitText(sb, left, y, 9f, $"App: {meta.AppVersion}");
+            y -= 9f + LineGap;
         }
-        AppendLine(sb, ref y, 9f, $"Time: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-        y -= 8f;
-        AppendLine(sb, ref y, 12f, "ABCDEFGHIJKLMNOPQRSTUVWXYZ");
-        AppendLine(sb, ref y, 12f, "abcdefghijklmnopqrstuvwxyz");
-        AppendLine(sb, ref y, 12f, "0123456789 !@#$%^&*()");
+        if (!string.IsNullOrEmpty(meta?.LanAddresses))
+        {
+            EmitText(sb, left, y, 9f, $"Address: {meta.LanAddresses}:{meta.HttpPort}");
+            y -= 9f + LineGap;
+        }
+        EmitText(sb, left, y, 9f, $"Time: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+        y -= 9f + LineGap + 6f;
+
+        EmitText(sb, left, y, 12f, "ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+        y -= 12f + LineGap;
+        EmitText(sb, left, y, 12f, "abcdefghijklmnopqrstuvwxyz");
+        y -= 12f + LineGap;
+        EmitText(sb, left, y, 12f, "0123456789 !@#$%^&*()");
 
         return BuildPdf(sb);
     }
 
-    /// <summary>
-    /// 生成完整诊断测试页 PDF
-    /// </summary>
+    // ===== Full Diagnostic Test Page =====
+
     internal static byte[] GenerateFull(string printerName, string printPath,
         bool statusReady, string? statusDetail, string? paperSize,
         TestPageMetadata? meta = null)
     {
         var sb = new StringBuilder();
-        float y = A4HeightPt - MarginPt;
+        float y = PageH - Margin;
+        float left = Margin;
+        float right = PageW - Margin;
+        float indent = Margin + 10f;
 
         // ===== Header =====
-        AppendLine(sb, ref y, 18f, "EasyInk Print Test Page");
-        y -= 2f;
-        AppendHLine(sb, ref y);
-        y -= 4f;
+        EmitText(sb, left, y, 18f, "EasyInk Print Test Page");
+        y -= 18f + LineGap + 2f;
+        EmitHLine(sb, left, right, y, 0.8f);
+        y -= 0.8f + RuleGap + SectionGap;
 
-        // ===== System Info =====
-        AppendLine(sb, ref y, 10f, "System Information");
-        y -= 1f;
-        AppendThinHLine(sb, ref y);
-        y -= 2f;
-        if (meta != null)
+        // ===== System Information =====
+        AppendSectionHeader(sb, ref y, left, right, "System Information");
+        if (!string.IsNullOrEmpty(meta?.OsVersion))
         {
-            if (!string.IsNullOrEmpty(meta.OsVersion))
-                AppendLine(sb, ref y, 8f, $"  OS: {meta.OsVersion}");
-            if (!string.IsNullOrEmpty(meta.DotNetVersion))
-                AppendLine(sb, ref y, 8f, $"  .NET: {meta.DotNetVersion}");
-            if (!string.IsNullOrEmpty(meta.AppVersion))
-                AppendLine(sb, ref y, 8f, $"  App Version: {meta.AppVersion}");
-            if (!string.IsNullOrEmpty(meta.MachineName))
-                AppendLine(sb, ref y, 8f, $"  Machine: {meta.MachineName}");
-            if (!string.IsNullOrEmpty(meta.UserName))
-                AppendLine(sb, ref y, 8f, $"  User: {meta.UserName}");
-            if (!string.IsNullOrEmpty(meta.DeviceNumber))
-                AppendLine(sb, ref y, 8f, $"  Device No: {meta.DeviceNumber}");
+            EmitText(sb, indent, y, 8f, $"OS: {meta.OsVersion}");
+            y -= 8f + LineGap;
         }
-        AppendLine(sb, ref y, 8f, $"  Test Time: {DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}");
-        y -= 4f;
-
-        // ===== Network Info =====
-        AppendLine(sb, ref y, 10f, "Network & Service");
-        y -= 1f;
-        AppendThinHLine(sb, ref y);
-        y -= 2f;
-        if (meta != null)
+        if (!string.IsNullOrEmpty(meta?.DotNetVersion))
         {
-            AppendLine(sb, ref y, 8f, $"  HTTP Port: {meta.HttpPort}");
-            if (!string.IsNullOrEmpty(meta.LanAddresses))
+            EmitText(sb, indent, y, 8f, $".NET: {meta.DotNetVersion}");
+            y -= 8f + LineGap;
+        }
+        if (!string.IsNullOrEmpty(meta?.AppVersion))
+        {
+            EmitText(sb, indent, y, 8f, $"App Version: {meta.AppVersion}");
+            y -= 8f + LineGap;
+        }
+        if (!string.IsNullOrEmpty(meta?.MachineName))
+        {
+            EmitText(sb, indent, y, 8f, $"Machine: {meta.MachineName}");
+            y -= 8f + LineGap;
+        }
+        if (!string.IsNullOrEmpty(meta?.UserName))
+        {
+            EmitText(sb, indent, y, 8f, $"User: {meta.UserName}");
+            y -= 8f + LineGap;
+        }
+        if (!string.IsNullOrEmpty(meta?.DeviceNumber))
+        {
+            EmitText(sb, indent, y, 8f, $"Device No: {meta.DeviceNumber}");
+            y -= 8f + LineGap;
+        }
+        EmitText(sb, indent, y, 8f, $"Test Time: {DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}");
+        y -= 8f + LineGap + SectionGap;
+
+        // ===== Network & Service =====
+        AppendSectionHeader(sb, ref y, left, right, "Network & Service");
+        EmitText(sb, indent, y, 8f, $"HTTP Port: {meta?.HttpPort ?? 0}");
+        y -= 8f + LineGap;
+        if (!string.IsNullOrEmpty(meta?.LanAddresses))
+        {
+            var addrs = meta.LanAddresses.Split(new[] { '|' }, StringSplitOptions.RemoveEmptyEntries);
+            if (addrs.Length > 0)
             {
-                var addrs = meta.LanAddresses.Split(new[] { '|' }, StringSplitOptions.RemoveEmptyEntries);
-                AppendLine(sb, ref y, 8f, $"  LAN IPv4: {addrs[0]}");
+                EmitText(sb, indent, y, 8f, $"LAN IPv4: {addrs[0]}");
+                y -= 8f + LineGap;
                 for (int i = 1; i < addrs.Length; i++)
-                    AppendLine(sb, ref y, 8f, $"            {addrs[i]}");
-                AppendLine(sb, ref y, 8f, $"  Service URLs: {string.Join("  ", Array.ConvertAll(addrs, a => $"http://{a}:{meta.HttpPort}"))}");
+                {
+                    EmitText(sb, indent, y, 8f, $"          {addrs[i]}");
+                    y -= 8f + LineGap;
+                }
+                EmitText(sb, indent, y, 8f, $"Service URLs: {string.Join("  ", Array.ConvertAll(addrs, a => $"http://{a}:{meta.HttpPort}"))}");
+                y -= 8f + LineGap;
             }
-            AppendLine(sb, ref y, 8f, $"  MAC Address: {meta.MacAddresses ?? "--"}");
-            if (!string.IsNullOrEmpty(meta.DefaultGateway))
-                AppendLine(sb, ref y, 8f, $"  Gateway: {meta.DefaultGateway}");
-            if (!string.IsNullOrEmpty(meta.DnsServers))
-                AppendLine(sb, ref y, 8f, $"  DNS: {meta.DnsServers}");
-            AppendLine(sb, ref y, 8f, $"  API Key: {(meta.ApiKeyEnabled ? "Enabled" : "Disabled")}");
-            AppendLine(sb, ref y, 8f, $"  Trust All Origins: {(meta.TrustAllOrigins ? "Yes" : "No")}");
         }
-        y -= 4f;
+        EmitText(sb, indent, y, 8f, $"MAC Address: {meta?.MacAddresses ?? "--"}");
+        y -= 8f + LineGap;
+        if (!string.IsNullOrEmpty(meta?.DefaultGateway))
+        {
+            EmitText(sb, indent, y, 8f, $"Gateway: {meta.DefaultGateway}");
+            y -= 8f + LineGap;
+        }
+        if (!string.IsNullOrEmpty(meta?.DnsServers))
+        {
+            EmitText(sb, indent, y, 8f, $"DNS: {meta.DnsServers}");
+            y -= 8f + LineGap;
+        }
+        EmitText(sb, indent, y, 8f, $"API Key: {(meta?.ApiKeyEnabled ?? false ? "Enabled" : "Disabled")}");
+        y -= 8f + LineGap;
+        EmitText(sb, indent, y, 8f, $"Trust All Origins: {(meta?.TrustAllOrigins ?? false ? "Yes" : "No")}");
+        y -= 8f + LineGap + SectionGap;
 
-        // ===== Printer Info =====
-        AppendLine(sb, ref y, 10f, "Printer Information");
-        y -= 1f;
-        AppendThinHLine(sb, ref y);
-        y -= 2f;
-        AppendLine(sb, ref y, 8f, $"  Name: {printerName}");
-        AppendLine(sb, ref y, 8f, $"  Print Path: {printPath}");
-        AppendLine(sb, ref y, 8f, $"  Status Ready: {(statusReady ? "Yes" : "No")}");
+        // ===== Printer Information =====
+        AppendSectionHeader(sb, ref y, left, right, "Printer Information");
+        EmitText(sb, indent, y, 8f, $"Name: {printerName}");
+        y -= 8f + LineGap;
+        EmitText(sb, indent, y, 8f, $"Print Path: {printPath}");
+        y -= 8f + LineGap;
+        EmitText(sb, indent, y, 8f, $"Status Ready: {(statusReady ? "Yes" : "No")}");
+        y -= 8f + LineGap;
         if (!string.IsNullOrEmpty(statusDetail))
-            AppendLine(sb, ref y, 8f, $"  Status Detail: {statusDetail}");
+        {
+            EmitText(sb, indent, y, 8f, $"Status Detail: {statusDetail}");
+            y -= 8f + LineGap;
+        }
         if (!string.IsNullOrEmpty(paperSize))
-            AppendLine(sb, ref y, 8f, $"  Paper Match: {paperSize}");
-        if (meta != null)
         {
-            if (!string.IsNullOrEmpty(meta.DriverName))
-                AppendLine(sb, ref y, 8f, $"  Driver: {meta.DriverName}");
-            if (!string.IsNullOrEmpty(meta.DefaultPaperSize))
-                AppendLine(sb, ref y, 8f, $"  Default Paper: {meta.DefaultPaperSize}");
+            EmitText(sb, indent, y, 8f, $"Paper Match: {paperSize}");
+            y -= 8f + LineGap;
         }
-        y -= 4f;
-
-        // ===== Print Config =====
-        AppendLine(sb, ref y, 10f, "Print Configuration");
-        y -= 1f;
-        AppendThinHLine(sb, ref y);
-        y -= 2f;
-        if (meta != null)
+        if (!string.IsNullOrEmpty(meta?.DriverName))
         {
-            if (meta.ConfigDpi.HasValue)
-                AppendLine(sb, ref y, 8f, $"  Requested DPI: {meta.ConfigDpi.Value}");
-            if (!string.IsNullOrEmpty(meta.LowDpiEnhancement))
-                AppendLine(sb, ref y, 8f, $"  Low DPI Enhancement: {meta.LowDpiEnhancement}");
-            if (!string.IsNullOrEmpty(meta.RawPrinterNames))
-                AppendLine(sb, ref y, 8f, $"  Raw Printers: {meta.RawPrinterNames}");
-            if (meta.RawPrintDpi.HasValue)
-                AppendLine(sb, ref y, 8f, $"  Raw DPI: {meta.RawPrintDpi.Value}");
-            if (meta.RawPrintMaxDotsWidth.HasValue)
-                AppendLine(sb, ref y, 8f, $"  Raw Max Width: {meta.RawPrintMaxDotsWidth.Value} dots");
-            if (!string.IsNullOrEmpty(meta.SumatraPrinterNames))
-                AppendLine(sb, ref y, 8f, $"  SumatraPDF Printers: {meta.SumatraPrinterNames}");
-            if (meta.SumatraTimeoutSeconds.HasValue)
-                AppendLine(sb, ref y, 8f, $"  SumatraPDF Timeout: {meta.SumatraTimeoutSeconds.Value}s");
-            AppendLine(sb, ref y, 8f, $"  Render: {(meta.RenderEnabled ? "Enabled" : "Disabled")}");
-            if (meta.MaxQueueSize.HasValue)
-                AppendLine(sb, ref y, 8f, $"  Max Queue: {meta.MaxQueueSize.Value}");
-            if (meta.MaxConcurrentRequests.HasValue)
-                AppendLine(sb, ref y, 8f, $"  Max Concurrent: {meta.MaxConcurrentRequests.Value}");
+            EmitText(sb, indent, y, 8f, $"Driver: {meta.DriverName}");
+            y -= 8f + LineGap;
         }
-        y -= 4f;
+        if (!string.IsNullOrEmpty(meta?.DefaultPaperSize))
+        {
+            EmitText(sb, indent, y, 8f, $"Default Paper: {meta.DefaultPaperSize}");
+            y -= 8f + LineGap;
+        }
+        y -= SectionGap;
 
-        // ===== Printer Capabilities =====
+        // ===== Print Configuration =====
+        AppendSectionHeader(sb, ref y, left, right, "Print Configuration");
+        if (meta?.ConfigDpi.HasValue == true)
+        {
+            EmitText(sb, indent, y, 8f, $"Requested DPI: {meta.ConfigDpi.Value}");
+            y -= 8f + LineGap;
+        }
+        if (!string.IsNullOrEmpty(meta?.LowDpiEnhancement))
+        {
+            EmitText(sb, indent, y, 8f, $"Low DPI Enhancement: {meta.LowDpiEnhancement}");
+            y -= 8f + LineGap;
+        }
+        if (!string.IsNullOrEmpty(meta?.RawPrinterNames))
+        {
+            EmitText(sb, indent, y, 8f, $"Raw Printers: {meta.RawPrinterNames}");
+            y -= 8f + LineGap;
+        }
+        if (meta?.RawPrintDpi.HasValue == true)
+        {
+            EmitText(sb, indent, y, 8f, $"Raw DPI: {meta.RawPrintDpi.Value}");
+            y -= 8f + LineGap;
+        }
+        if (meta?.RawPrintMaxDotsWidth.HasValue == true)
+        {
+            EmitText(sb, indent, y, 8f, $"Raw Max Width: {meta.RawPrintMaxDotsWidth.Value} dots");
+            y -= 8f + LineGap;
+        }
+        if (!string.IsNullOrEmpty(meta?.SumatraPrinterNames))
+        {
+            EmitText(sb, indent, y, 8f, $"SumatraPDF Printers: {meta.SumatraPrinterNames}");
+            y -= 8f + LineGap;
+        }
+        if (meta?.SumatraTimeoutSeconds.HasValue == true)
+        {
+            EmitText(sb, indent, y, 8f, $"SumatraPDF Timeout: {meta.SumatraTimeoutSeconds.Value}s");
+            y -= 8f + LineGap;
+        }
+        EmitText(sb, indent, y, 8f, $"Render: {(meta?.RenderEnabled ?? false ? "Enabled" : "Disabled")}");
+        y -= 8f + LineGap;
+        if (meta?.MaxQueueSize.HasValue == true)
+        {
+            EmitText(sb, indent, y, 8f, $"Max Queue: {meta.MaxQueueSize.Value}");
+            y -= 8f + LineGap;
+        }
+        if (meta?.MaxConcurrentRequests.HasValue == true)
+        {
+            EmitText(sb, indent, y, 8f, $"Max Concurrent: {meta.MaxConcurrentRequests.Value}");
+            y -= 8f + LineGap;
+        }
+        y -= SectionGap;
+
+        // ===== Printer Capabilities (optional) =====
         if (meta?.SupportedPaperSizes != null && meta.SupportedPaperSizes.Count > 0)
         {
-            AppendLine(sb, ref y, 10f, "Printer Capabilities");
-            y -= 1f;
-            AppendThinHLine(sb, ref y);
-            y -= 2f;
+            AppendSectionHeader(sb, ref y, left, right, "Printer Capabilities");
             var sizes = meta.SupportedPaperSizes.Count > 6
                 ? meta.SupportedPaperSizes.GetRange(0, 6)
                 : meta.SupportedPaperSizes;
-            AppendLine(sb, ref y, 8f, $"  Supported Papers ({meta.SupportedPaperSizes.Count} total): {string.Join(", ", sizes)}");
+            EmitText(sb, indent, y, 8f, $"Supported Papers ({meta.SupportedPaperSizes.Count} total): {string.Join(", ", sizes)}");
+            y -= 8f + LineGap;
             if (meta.SupportedPaperSizes.Count > 6)
-                AppendLine(sb, ref y, 8f, $"    ... and {meta.SupportedPaperSizes.Count - 6} more");
-            y -= 4f;
+            {
+                EmitText(sb, indent, y, 8f, $"  ... and {meta.SupportedPaperSizes.Count - 6} more");
+                y -= 8f + LineGap;
+            }
+            y -= SectionGap;
         }
 
         // ===== Text Quality =====
-        AppendLine(sb, ref y, 10f, "Text Quality");
-        y -= 1f;
-        AppendThinHLine(sb, ref y);
-        y -= 3f;
-        AppendLine(sb, ref y, 14f, "ABCDEFGHIJKLMNOPQRSTUVWXYZ");
-        AppendLine(sb, ref y, 14f, "abcdefghijklmnopqrstuvwxyz");
-        AppendLine(sb, ref y, 14f, "0123456789 !@#$%^&*()");
-        AppendLine(sb, ref y, 14f, "The quick brown fox jumps over the lazy dog");
+        AppendSectionHeader(sb, ref y, left, right, "Text Quality");
+        // Use explicit y management for varied font sizes
+        EmitText(sb, indent, y, 14f, "ABCDEFGHIJKLMNOPQRSTUVWXYZ"); y -= 14f + LineGap;
+        EmitText(sb, indent, y, 14f, "abcdefghijklmnopqrstuvwxyz"); y -= 14f + LineGap;
+        EmitText(sb, indent, y, 14f, "0123456789 !@#$%^&*()");      y -= 14f + LineGap;
+        EmitText(sb, indent, y, 14f, "The quick brown fox jumps over the lazy dog");
+        y -= 14f + LineGap + 2f;
+        EmitText(sb, indent, y, 10f, "Medium: ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789"); y -= 10f + LineGap;
+        EmitText(sb, indent, y, 8f,  "Small:  ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789"); y -= 8f + LineGap;
+        EmitText(sb, indent, y, 7f,  "Tiny:   ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789"); y -= 7f + LineGap;
         y -= 2f;
-        AppendLine(sb, ref y, 10f, "Medium: ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789");
-        AppendLine(sb, ref y, 8f, "Small:  ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789");
-        AppendLine(sb, ref y, 7f, "Tiny:   ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789");
-        y -= 2f;
-        AppendLine(sb, ref y, 9f, "CJK: 中文测试 日本語テスト 한국어테스트");
-        y -= 6f;
+        EmitText(sb, indent, y, 9f, "CJK: 中文测试 日本語テスト 한국어테스트");
+        y -= 9f + LineGap + SectionGap;
 
-        // ===== Alignment & Lines =====
-        AppendLine(sb, ref y, 10f, "Line & Alignment");
-        y -= 1f;
-        AppendThinHLine(sb, ref y);
-        y -= 3f;
-        float left = MarginPt;
-        float right = A4WidthPt - MarginPt;
+        // ===== Line & Alignment =====
+        AppendSectionHeader(sb, ref y, left, right, "Line & Alignment");
         float markLen = 18f;
-        // Top-left corner mark
-        AppendLineSeg(sb, left, y, left + markLen, y);
-        AppendLineSeg(sb, left, y, left, y - markLen);
+
+        // Top-left corner mark (L shape at current y)
+        EmitLineSeg(sb, left, y, left + markLen, y, 0.8f);
+        EmitLineSeg(sb, left, y, left, y - markLen, 0.8f);
         // Top-right corner mark
-        AppendLineSeg(sb, right, y, right - markLen, y);
-        AppendLineSeg(sb, right, y, right, y - markLen);
-        y -= 28f;
-        AppendLine(sb, ref y, 8f, "  Corner alignment marks (top-left & top-right shown above)");
-        y -= 2f;
-        // Bottom corner marks
-        float botY = MarginPt + markLen + 6f;
-        AppendLineSeg(sb, left, botY, left + markLen, botY);
-        AppendLineSeg(sb, left, botY + markLen, left, botY);
-        AppendLineSeg(sb, right, botY, right - markLen, botY);
-        AppendLineSeg(sb, right, botY + markLen, right, botY);
-        y -= 4f;
+        EmitLineSeg(sb, right, y, right - markLen, y, 0.8f);
+        EmitLineSeg(sb, right, y, right, y - markLen, 0.8f);
+        y -= markLen + 6f;
+
+        EmitText(sb, indent, y, 8f, "Corner alignment marks (top-left & top-right shown above)");
+        y -= 8f + LineGap;
+
         // Horizontal rules at different thicknesses
-        AppendLine(sb, ref y, 8f, "  Horizontal rules (0.5pt / 1pt / 2pt):");
-        AppendThickLine(sb, ref y, 0.5f);
-        y -= 1f;
-        AppendThickLine(sb, ref y, 1.0f);
-        y -= 1f;
-        AppendThickLine(sb, ref y, 2.0f);
-        y -= 6f;
+        EmitText(sb, indent, y, 8f, "Horizontal rules (0.5pt / 1pt / 2pt):");
+        y -= 8f + LineGap + 2f;
+        EmitHLine(sb, left, right, y, 0.5f);
+        y -= 0.5f + 2f;
+        EmitHLine(sb, left, right, y, 1.0f);
+        y -= 1.0f + 2f;
+        EmitHLine(sb, left, right, y, 2.0f);
+        y -= 2.0f + RuleGap + SectionGap;
 
         // ===== Diagnostic Elements =====
-        AppendLine(sb, ref y, 10f, "Diagnostic Elements");
-        y -= 1f;
-        AppendThinHLine(sb, ref y);
-        y -= 3f;
+        AppendSectionHeader(sb, ref y, left, right, "Diagnostic Elements");
 
         // Grayscale blocks
-        AppendLine(sb, ref y, 8f, "  Grayscale: 100%   75%   50%   25%   10%");
-        AppendGrayBlocks(sb, ref y);
-        y -= 6f;
+        EmitText(sb, indent, y, 8f, "Grayscale: 100%   75%   50%   25%   10%");
+        y -= 8f + LineGap + BlockGap;
+        EmitGrayBlocks(sb, indent, y, 50f, 20f, 8f, new[] { 0f, 0.25f, 0.5f, 0.75f, 0.9f });
+        // Rectangles extend upward from y. Bottom at y-20, top at y.
+        y -= 20f + BlockGap + SectionGap;
 
-        // Code 128 barcode (test identifier)
+        // Code 128 barcode
         var barcodeData = $"EASYINK-{DateTime.Now:yyyyMMdd}";
-        AppendLine(sb, ref y, 8f, $"  Barcode (Code 128): {barcodeData}");
-        AppendCode128Barcode(sb, ref y, barcodeData);
-        y -= 6f;
+        EmitText(sb, indent, y, 8f, $"Barcode (Code 128): {barcodeData}");
+        y -= 8f + LineGap + BlockGap;
+        float barUnit = 0.7f;
+        float barHeight = 25f;
+        // Bars extend upward from y. Bottom at y-barHeight, top at y.
+        EmitCode128Bars(sb, indent, y, barUnit, barHeight, barcodeData);
+        y -= barHeight + 2f; // 2pt gap below bars to human-readable text
+        EmitText(sb, indent, y, 7f, barcodeData, font: "Courier");
+        y -= 7f + LineGap + SectionGap;
 
-        // Footer
-        AppendHLine(sb, ref y);
-        y -= 3f;
-        AppendLine(sb, ref y, 7f, "Generated by EasyInk Printer | https://github.com/nicepkg/easyink");
+        // ===== Bottom corner marks & Footer =====
+        float botY = Margin + markLen + 4f; // bottom corner position (above footer)
+        // Bottom-left corner mark (L shape opening upward-rightward)
+        EmitLineSeg(sb, left, botY + markLen, left + markLen, botY + markLen, 0.8f);
+        EmitLineSeg(sb, left, botY + markLen, left, botY, 0.8f);
+        // Bottom-right corner mark
+        EmitLineSeg(sb, right, botY + markLen, right - markLen, botY + markLen, 0.8f);
+        EmitLineSeg(sb, right, botY + markLen, right, botY, 0.8f);
+
+        y -= SectionGap;
+        EmitHLine(sb, left, right, y, 0.8f);
+        y -= 0.8f + 4f;
+        EmitText(sb, indent, y, 7f, "Generated by EasyInk Printer | https://github.com/nicepkg/easyink");
 
         return BuildPdf(sb);
     }
 
-    // ===== PDF text helpers =====
+    // ===== Layout helpers (manage y internally for common patterns) =====
 
-    private static void AppendLine(StringBuilder sb, ref float y, float fontSize, string text)
+    /// <summary>
+    /// 输出 section 标题文字 + 细分割线，并更新 y 到下一条内容基线的位置。
+    /// </summary>
+    private static void AppendSectionHeader(StringBuilder sb, ref float y, float left, float right, string title)
+    {
+        EmitText(sb, left, y, 10f, title);
+        y -= 10f + LineGap + 1f;
+        EmitHLine(sb, left, right, y, 0.3f);
+        y -= 0.3f + RuleGap;
+    }
+
+    // ===== PDF drawing primitives (do NOT modify y) =====
+
+    /// <summary>
+    /// 在指定基线位置渲染文本（Helvetica, WinAnsi 编码）。
+    /// y 不会被修改。
+    /// </summary>
+    private static void EmitText(StringBuilder sb, float x, float y, float size, string text, string font = "/F1")
     {
         var escaped = EscapePdfString(text);
-        sb.AppendLine($"BT /F1 {F(fontSize)} Tf {F(MarginPt)} {F(y)} Td ({escaped}) Tj ET");
-        y -= fontSize + LineGap;
+        sb.AppendLine($"BT {font} {F(size)} Tf {F(x)} {F(y)} Td ({escaped}) Tj ET");
     }
 
-    private static void AppendHLine(StringBuilder sb, ref float y)
+    /// <summary>
+    /// 渲染水平线段，线宽 width，中心在 y。
+    /// </summary>
+    private static void EmitHLine(StringBuilder sb, float x1, float x2, float y, float width)
     {
-        sb.AppendLine($"0.8 w {F(MarginPt)} {F(y)} m {F(A4WidthPt - MarginPt)} {F(y)} l S");
-        y -= 3f;
+        sb.AppendLine($"{F(width)} w {F(x1)} {F(y)} m {F(x2)} {F(y)} l S");
     }
 
-    private static void AppendThinHLine(StringBuilder sb, ref float y)
+    /// <summary>
+    /// 渲染单条线段。
+    /// </summary>
+    private static void EmitLineSeg(StringBuilder sb, float x1, float y1, float x2, float y2, float width)
     {
-        sb.AppendLine($"0.3 w {F(MarginPt)} {F(y)} m {F(A4WidthPt - MarginPt)} {F(y)} l S");
-        y -= 2f;
+        sb.AppendLine($"{F(width)} w {F(x1)} {F(y1)} m {F(x2)} {F(y2)} l S");
     }
 
-    private static void AppendThickLine(StringBuilder sb, ref float y, float lineWidth)
+    /// <summary>
+    /// 渲染一排灰度矩形。每个矩形的左下角在 (x, y - h)，右上角在 (x + w, y)。
+    /// 即矩形从 y 向上延伸 h。
+    /// </summary>
+    private static void EmitGrayBlocks(StringBuilder sb, float x, float y, float w, float h, float gap, float[] grays)
     {
-        sb.AppendLine($"{F(lineWidth)} w {F(MarginPt)} {F(y)} m {F(A4WidthPt - MarginPt)} {F(y)} l S");
-        y -= lineWidth + 1.5f;
-    }
-
-    private static void AppendLineSeg(StringBuilder sb, float x1, float y1, float x2, float y2)
-    {
-        sb.AppendLine($"0.8 w {F(x1)} {F(y1)} m {F(x2)} {F(y2)} l S");
-    }
-
-    private static void AppendGrayBlocks(StringBuilder sb, ref float y)
-    {
-        float x = MarginPt + 10f;
-        float blockW = 50f;
-        float blockH = 20f;
-        float gap = 8f;
-
-        var grays = new[] { 0f, 0.25f, 0.5f, 0.75f, 0.9f };
         foreach (var gray in grays)
         {
-            sb.AppendLine($"{F(gray)} g {F(x)} {F(y)} {F(blockW)} {F(blockH)} f 0 g");
-            x += blockW + gap;
+            // PDF rect: (x, y-h) 到 (x+w, y)
+            sb.AppendLine($"{F(gray)} g {F(x)} {F(y - h)} {F(w)} {F(h)} f 0 g");
+            x += w + gap;
         }
-        y -= blockH + 3f;
     }
 
-    private static void AppendCode128Barcode(StringBuilder sb, ref float y, string data)
+    /// <summary>
+    /// 渲染 Code 128B 条形码的黑色竖条。bars 从 y 向上延伸 barHeight。
+    /// 不绘制 human-readable 文字（由调用方用 EmitText 单独处理）。
+    /// </summary>
+    private static void EmitCode128Bars(StringBuilder sb, float x, float y, float barUnit, float barHeight, string data)
     {
-        // Code 128B encoding for ASCII printable characters
-        // Start code B = 104, then character values - 32 = code, checksum mod 103
         var codes = new List<int> { 104 }; // Start B
         int checksum = 104;
         for (int i = 0; i < data.Length; i++)
@@ -314,14 +413,8 @@ internal static class TestPageGenerator
             codes.Add(code);
             checksum += code * (i + 1);
         }
-        codes.Add(checksum % 103); // Checksum
+        codes.Add(checksum % 103);
         codes.Add(106); // Stop
-
-        // Code 128 bar widths (6 patterns per code, each 1-4 units)
-        // Simplified: render each code as a group of bars
-        float x = MarginPt + 10f;
-        float barUnit = 0.7f;  // width of one module
-        float barHeight = 25f;
 
         foreach (var code in codes)
         {
@@ -329,23 +422,16 @@ internal static class TestPageGenerator
             foreach (char bit in pattern)
             {
                 if (bit == '1')
-                {
-                    sb.AppendLine($"0 g {F(x)} {F(y)} {F(barUnit)} {F(barHeight)} f");
-                }
+                    sb.AppendLine($"0 g {F(x)} {F(y - barHeight)} {F(barUnit)} {F(barHeight)} f");
                 x += barUnit;
             }
         }
-
-        // Human-readable text below barcode
-        y -= barHeight + 2f;
-        sb.AppendLine($"BT /Courier 7 Tf {F(MarginPt + 10f)} {F(y)} Td ({EscapePdfString(data)}) Tj ET");
-        y -= 8f;
     }
+
+    // ===== Code 128 patterns =====
 
     private static string GetCode128Pattern(int code)
     {
-        // Code 128 bar/space patterns (1=bar, 0=space), 6 elements per code
-        // Simplified lookup for common codes
         string[] patterns =
         {
             "11011001100", "11001101100", "11001100110", "10010011000", "10010001100",
@@ -374,12 +460,13 @@ internal static class TestPageGenerator
 
         if (code >= 0 && code < patterns.Length)
             return patterns[code];
-        return "11011001100"; // fallback
+        return "11011001100";
     }
+
+    // ===== PDF string utilities =====
 
     private static string EscapePdfString(string text)
     {
-        // WinAnsi encoding for PDF strings - replace chars outside WinAnsi with '?'
         var result = new StringBuilder(text.Length);
         foreach (var ch in text)
         {
@@ -401,6 +488,8 @@ internal static class TestPageGenerator
 
     private static string F(float value) => value.ToString("F2", CultureInfo.InvariantCulture);
 
+    // ===== PDF document assembly =====
+
     private static byte[] BuildPdf(StringBuilder content)
     {
         var contentBytes = WinAnsi.GetBytes(content.ToString());
@@ -420,27 +509,29 @@ internal static class TestPageGenerator
 
         // 3: Page
         offsets.Add(sb.Length);
-        sb.Append($"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {F(A4WidthPt)} {F(A4HeightPt)}] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>\nendobj\n");
+        sb.Append($"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {F(PageW)} {F(PageH)}] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>\nendobj\n");
 
         // 4: Content stream
         offsets.Add(sb.Length);
         sb.Append($"4 0 obj\n<< /Length {contentBytes.Length} >>\nstream\n");
         var headerBytes = WinAnsi.GetBytes(sb.ToString());
+        var footer = WinAnsi.GetBytes("\nendstream\nendobj\n");
+
+        var baseOffset = headerBytes.Length + contentBytes.Length + footer.Length;
+
         sb.Clear();
 
-        var footer = WinAnsi.GetBytes("\nendstream\nendobj\n");
-        sb.Append(footer);
-
         // 5: Helvetica
-        offsets.Add(sb.Length);
+        offsets.Add(baseOffset + sb.Length);
         sb.Append("5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n");
 
-        // 6: Courier (for barcode text)
-        offsets.Add(sb.Length);
+        // 6: Courier
+        offsets.Add(baseOffset + sb.Length);
         sb.Append("6 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>\nendobj\n");
 
         // xref
-        var xrefOffset = headerBytes.Length + contentBytes.Length + footer.Length + WinAnsi.GetBytes(sb.ToString()).Length;
+        var middleBytes = WinAnsi.GetBytes(sb.ToString());
+        var xrefOffset = baseOffset + middleBytes.Length;
         var xref = new StringBuilder();
         xref.Append("xref\n0 7\n");
         xref.Append("0000000000 65535 f \n");
@@ -449,7 +540,6 @@ internal static class TestPageGenerator
         xref.Append($"trailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n{xrefOffset}\n%%EOF");
 
         var xrefBytes = WinAnsi.GetBytes(xref.ToString());
-        var middleBytes = WinAnsi.GetBytes(sb.ToString());
 
         var result = new byte[headerBytes.Length + contentBytes.Length + footer.Length + middleBytes.Length + xrefBytes.Length];
         var pos = 0;

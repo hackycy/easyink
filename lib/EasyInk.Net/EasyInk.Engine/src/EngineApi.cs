@@ -345,10 +345,11 @@ public class EngineApi : IDisposable
 
         var levelStr = GetParam<string>(request, "level") ?? "quick";
         var level = ParseTestLevel(levelStr!);
+        var metadata = GetParam<TestPageMetadata>(request, "metadata");
 
         try
         {
-            var result = _testService.TestPrint(request.Id, printerName!, level);
+            var result = _testService.TestPrint(request.Id, printerName!, level, metadata);
             return PrinterResult.Ok(request.Id, result);
         }
         catch (Exception ex)
