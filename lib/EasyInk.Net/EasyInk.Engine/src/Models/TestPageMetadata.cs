@@ -25,7 +25,6 @@ public class TestPageMetadata
     public bool TrustAllOrigins { get; set; }
 
     // Print Config
-    public int? ConfigDpi { get; set; }
     public string? LowDpiEnhancement { get; set; }
     public string? RawPrinterNames { get; set; }
     public int? RawPrintDpi { get; set; }
