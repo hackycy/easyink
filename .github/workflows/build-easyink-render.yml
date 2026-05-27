@@ -19,6 +19,10 @@ on:
         description: Docker image used for Go cross-compilation
         type: string
         default: golang:1.23-bookworm
+      build_docker_image:
+        description: Build and smoke-test the EasyInk.Render Docker image
+        type: boolean
+        default: true
     outputs:
       render_version:
         description: EasyInk.Render host package version
@@ -47,6 +51,10 @@ on:
         description: Docker image used for Go cross-compilation
         type: string
         default: golang:1.23-bookworm
+      build_docker_image:
+        description: Build and smoke-test the EasyInk.Render Docker image
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -92,9 +100,11 @@ jobs:
 
           short_sha=${GITHUB_SHA::7}
           suffix="v$version-$short_sha"
+          docker_tag_suffix=$(echo "$suffix" | tr '+/' '--' | tr -c 'A-Za-z0-9_.-' '-')
 
           echo "render_version=$version" >> "$GITHUB_OUTPUT"
           echo "artifact_suffix=$suffix" >> "$GITHUB_OUTPUT"
+          echo "docker_tag_suffix=$docker_tag_suffix" >> "$GITHUB_OUTPUT"
 
       - name: Resolve artifact name
         id: artifact
@@ -119,6 +129,21 @@ jobs:
             -w /src \
             "$DOCKER_IMAGE" \
             sh -lc 'set -e; test -z "$(/usr/local/go/bin/gofmt -l cmd internal)"; /usr/local/go/bin/go test ./...'
+
+      - name: Build Render Docker image
+        if: ${{ inputs.build_docker_image }}
+        shell: bash
+        run: |
+          docker build --platform linux/amd64 \
+            -t easyink-render-host:${{ steps.version.outputs.docker_tag_suffix }} \
+            -f lib/EasyInk.Render/host/Dockerfile \
+            lib/EasyInk.Render/host
+
+      - name: Smoke-test Render Docker image
+        if: ${{ inputs.build_docker_image }}
+        shell: bash
+        run: |
+          docker run --rm easyink-render-host:${{ steps.version.outputs.docker_tag_suffix }} version
 
       - name: Build Render host packages with Docker
         env:
@@ -166,4 +191,5 @@ jobs:
             echo "- Artifact suffix: ${{ steps.version.outputs.artifact_suffix }}"
             echo "- Artifact: ${{ steps.artifact.outputs.host_artifact_name }}"
             echo "- Docker image: ${{ inputs.docker_image }}"
+            echo "- Docker image smoke test: ${{ inputs.build_docker_image }}"
           } >> "$GITHUB_STEP_SUMMARY"

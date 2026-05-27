@@ -13,7 +13,7 @@ import (
 
 const RuntimeVersion = "easyink-viewer-embedded-0.1.0"
 
-//go:embed runtime/easyink-viewer/index.html runtime/easyink-viewer/assets/viewer.css runtime/easyink-viewer/assets/viewer.js runtime/easyink-viewer/assets/vendor/qrcode-generator.js runtime/easyink-viewer/assets/vendor/jsbarcode.all.min.js runtime/easyink-viewer/assets/materials/manifest.json
+//go:embed runtime/easyink-viewer/index.html runtime/easyink-viewer/assets/viewer.css runtime/easyink-viewer/assets/viewer.js runtime/easyink-viewer/assets/materials/manifest.json
 var runtimeBundle embed.FS
 
 type pageSchema struct {
@@ -106,16 +106,6 @@ func RuntimeFiles() ([]string, error) {
 		}
 		files = append(files, "runtime/easyink-viewer/assets/"+entry.Name())
 	}
-	vendorEntries, err := runtimeBundle.ReadDir("runtime/easyink-viewer/assets/vendor")
-	if err != nil {
-		return nil, err
-	}
-	for _, entry := range vendorEntries {
-		if entry.IsDir() {
-			continue
-		}
-		files = append(files, "runtime/easyink-viewer/assets/vendor/"+entry.Name())
-	}
 	files = append(files, "runtime/easyink-viewer/assets/materials/manifest.json")
 	return files, nil
 }
@@ -133,20 +123,10 @@ func renderRuntimeDocument(page pageDefinition, payload []byte) (string, error) 
 	if err != nil {
 		return "", err
 	}
-	qrcodeJS, err := readRuntimeText("runtime/easyink-viewer/assets/vendor/qrcode-generator.js")
-	if err != nil {
-		return "", err
-	}
-	barcodeJS, err := readRuntimeText("runtime/easyink-viewer/assets/vendor/jsbarcode.all.min.js")
-	if err != nil {
-		return "", err
-	}
 	if _, err := readRuntimeText("runtime/easyink-viewer/assets/materials/manifest.json"); err != nil {
 		return "", err
 	}
 	doc := strings.ReplaceAll(index, "__EASYINK_VIEWER_CSS__", css)
-	doc = strings.ReplaceAll(doc, "__EASYINK_VENDOR_QRCODE_JS__", qrcodeJS)
-	doc = strings.ReplaceAll(doc, "__EASYINK_VENDOR_BARCODE_JS__", barcodeJS)
 	doc = strings.ReplaceAll(doc, "__EASYINK_VIEWER_JS__", js)
 	doc = strings.ReplaceAll(doc, "__EASYINK_PAGE_WIDTH_MM__", fmt.Sprintf("%.3f", page.Width))
 	doc = strings.ReplaceAll(doc, "__EASYINK_PAGE_HEIGHT_MM__", fmt.Sprintf("%.3f", page.Height))

@@ -1,0 +1,43 @@
+html,
+body {
+  margin: 0;
+  color: #111827;
+  background: #ffffff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.easyink-runtime-root {
+  width: 100%;
+  min-height: inherit;
+}
+
+.ei-viewer-page {
+  box-shadow: none !important;
+  margin: 0 !important;
+}
+
+.ei-viewer-element {
+  break-inside: avoid;
+}
+
+@media print {
+  html,
+  body {
+    margin: 0;
+  }
+
+  .ei-viewer-page {
+    box-shadow: none !important;
+    margin: 0 !important;
+    transform: none !important;
+  }
+
+  .ei-viewer-page-zoom {
+    width: auto !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+}

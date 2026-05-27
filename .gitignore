@@ -16,6 +16,7 @@ cache
 lib/EasyInk.Render/releases-browser-docker/
 lib/EasyInk.Render/releases-package-docker/
 lib/EasyInk.Render/releases/
+lib/EasyInk.Render/host/internal/easyink/runtime/easyink-viewer/
 .env.*
 .env
 

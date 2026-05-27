@@ -45,6 +45,20 @@ echo Building EasyInk.Render host packages with Docker...
 echo Platforms: !PLATFORMS!
 if defined VERSION echo Version: !VERSION!
 
+pnpm render:runtime
+if errorlevel 1 (
+    echo Render viewer runtime build failed
+    popd >nul
+    exit /b 1
+)
+
+pnpm render:manifest
+if errorlevel 1 (
+    echo Render manifest validation failed
+    popd >nul
+    exit /b 1
+)
+
 pnpm exec node "lib/EasyInk.Render/tools/render-release.mjs" !RENDER_ARGS!
 set BUILD_EXIT=%ERRORLEVEL%
 

@@ -68,6 +68,94 @@ Render 读取的是一个 JSON 请求文件。最小 HTML 请求长这样：
 
 `easyink` 输入会自动补默认等待条件：`wait.until` 为 `easyinkReady`，`wait.selector` 为 `.easyink-ready`。如果你显式传入 `wait`，就以你的配置为准。
 
+内嵌 runtime 由根级 `internal-packages/viewer-runtime` 构建。该内部包通过 pnpm workspace 引入 `@easyink/viewer`，输出 `index.html`、`viewer.js`、`viewer.css` 和 materials manifest 到 Go host 的 embed 目录，避免 Render 侧维护另一套 EasyInk 渲染实现。
+
+这些输出文件是构建产物，不提交到 Git。你需要本地跑 Go 测试或直接构建 Docker image 时，先执行：
+
+```bash
+pnpm render:runtime
+```
+
+CI、`pnpm render:manifest`、`pnpm render:host:docker` 和 `build-host.sh` 都会先生成这组文件。
+
+## 配置文件 {#config-files}
+
+Render 会用到几类 JSON 文件。我们先看最常改的请求文件：
+
+```json
+{
+  "requestId": "sample-html-001",
+  "source": {
+    "type": "html",
+    "html": "<!doctype html><html><body><main class=\"easyink-ready\">Sample HTML to PDF</main></body></html>"
+  },
+  "pdf": {
+    "paperWidthMm": 80,
+    "paperHeightMm": 120,
+    "printBackground": true
+  }
+}
+```
+
+`samples/*/request.json` 是给 `easyink-render render --request` 读取的输入样例。你调服务渲染时，通常复制这类文件，然后改 `source`、`wait`、`pdf`、`security` 和 `output`。
+
+发布包还有一个 manifest：
+
+```json
+{
+  "host": {
+    "version": "0.1.0",
+    "platform": "linux-arm64",
+    "executable": "easyink-render"
+  },
+  "browser": {
+    "name": "chrome-for-testing",
+    "version": "148.0.7778.97"
+  },
+  "easyinkRuntime": {
+    "bundled": true,
+    "entry": "runtime/easyink-viewer/index.html"
+  }
+}
+```
+
+`manifests/runtime-manifest.sample.json` 是发布 manifest 模板。构建 host 包时，发布工具会把目标平台、包大小、sha256 和下载地址写进生成的 `runtime-manifest.<platform>.json`。客户端用它判断该下载哪个 Render host、哪个浏览器包，以及内嵌 EasyInk runtime 的入口在哪里。
+
+仓库里还有一组 protocol fixtures：
+
+```text
+lib/EasyInk.Render/protocol/fixtures/
+```
+
+这些文件用于协议测试，覆盖 `html`、`pdf`、`easyink` 三种输入形态。它们不是运行时默认配置；如果你改了请求协议字段，要同步更新 fixtures 和文档，避免测试只验证旧协议。
+
+运行时配置不是仓库文件，而是用户机器上的 `config.json`。可以用命令查看：
+
+```bash
+easyink-render config get
+easyink-render config set browser.path /path/to/headless-shell
+```
+
+Linux/macOS 默认写到 `~/.config/easyink-render/config.json`，Windows 默认写到 `%APPDATA%\EasyInk.Render\config.json`。它保存浏览器路径、profile/temp/log 目录、并发数、队列长度和超时配置。
+
+## 手动构建 {#manual-build}
+
+本机手动构建 Render host 发布包时，优先使用 Docker 脚本：
+
+```bash
+./lib/EasyInk.Render/build-host.sh all
+./lib/EasyInk.Render/build-host.sh 0.1.0 linux-x64,darwin-arm64
+```
+
+Windows 使用：
+
+```bat
+lib\EasyInk.Render\build-host.bat all
+lib\EasyInk.Render\build-host.bat 0.1.0 win-x64,win-x86
+```
+
+脚本会先执行 `pnpm render:runtime` 和 `pnpm render:manifest`，再通过 Docker 构建 host 包。GitHub Actions 的 `Build EasyInk.Render` workflow 也支持手动触发，可指定 platforms、url_base、docker_image，并可选择是否执行 Docker image smoke test。
+
 ## 一次性渲染 {#no-daemon}
 
 默认 `render` 会自动发现或拉起本机 daemon。CI、隔离环境或临时调试时，可以改成当前进程一次性执行：

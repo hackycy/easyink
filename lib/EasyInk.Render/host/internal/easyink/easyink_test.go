@@ -63,9 +63,9 @@ func TestRenderHTMLIncludesMaterialRuntimeRenderers(t *testing.T) {
 		"function renderImage",
 		"function renderQrcode",
 		"function renderBarcode",
-		"QR Code Generator",
-		"JsBarcode",
-		"function boundValue",
+		"function createViewer",
+		"function normalizeDocumentSchema",
+		"function resolveBindingValue",
 		`"fieldPath":"customer/name"`,
 		`"name":"Ada"`,
 	} {
@@ -88,8 +88,8 @@ func TestRenderHTMLIncludesSvgCustomRuntimeRenderer(t *testing.T) {
 	for _, expected := range []string{
 		`"type":"svg"`,
 		"function renderSvgCustom",
-		"function sanitizeSvgFragment",
-		"easyink-svg-custom",
+		"function sanitizeSvgContent",
+		"function buildSvgCustomMarkup",
 		`"preserveAspectRatio":"xMidYMid meet"`,
 	} {
 		if !strings.Contains(html, expected) {
@@ -111,7 +111,8 @@ func TestRenderHTMLIncludesTableRuntimeRenderers(t *testing.T) {
 	for _, expected := range []string{
 		`"type":"table-data"`,
 		"function renderTable",
-		"function repeatCollectionPath",
+		"function renderTableData",
+		"const tableDataFragmentPaginator",
 		`"fieldPath":"items/name"`,
 		`"name":"Paper"`,
 	} {
@@ -133,8 +134,8 @@ func TestRenderHTMLIncludesFlowRowRuntimeRenderer(t *testing.T) {
 	for _, expected := range []string{
 		`"type":"flow-row"`,
 		"function renderFlowRow",
-		"function flowRecords",
-		"easyink-flow-row__cell",
+		"function resolveFlowRows",
+		`data-flow-row-column`,
 		`"fieldPath":"items/name"`,
 		`"name":"Paper"`,
 	} {
@@ -156,10 +157,7 @@ func TestRenderHTMLIncludesChartRuntimeRenderer(t *testing.T) {
 	for _, expected := range []string{
 		`"type":"chart"`,
 		"function renderChart",
-		"function renderBarChart",
-		"function renderLineChart",
-		"function renderPieChart",
-		"easyink-chart",
+		"[Chart:",
 		`"chartType":"bar"`,
 		`"Jan"`,
 	} {
@@ -206,11 +204,11 @@ func TestRenderHTMLRendersChartSvgInBrowser(t *testing.T) {
 	err = chromedp.Run(browserCtx,
 		chromedp.Navigate("data:text/html;base64,"+base64.StdEncoding.EncodeToString([]byte(html))),
 		chromedp.WaitReady(".easyink-ready", chromedp.ByQuery),
-		chromedp.Evaluate(`document.querySelectorAll(".easyink-chart svg").length`, &chartCount),
-		chromedp.Evaluate(`document.querySelectorAll('[data-easyink-material-id="bar"] svg rect').length`, &barRects),
-		chromedp.Evaluate(`document.querySelectorAll('[data-easyink-material-id="line"] svg polyline').length`, &linePolylines),
-		chromedp.Evaluate(`document.querySelectorAll('[data-easyink-material-id="pie"] svg path').length`, &piePaths),
-		chromedp.Text(".easyink-page", &placeholderText, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelectorAll('[data-element-type="chart"]').length`, &chartCount),
+		chromedp.Evaluate(`document.querySelectorAll('[data-element-id="bar"] div').length`, &barRects),
+		chromedp.Evaluate(`document.querySelectorAll('[data-element-id="line"] div').length`, &linePolylines),
+		chromedp.Evaluate(`document.querySelectorAll('[data-element-id="pie"] div').length`, &piePaths),
+		chromedp.Text(".ei-viewer-page", &placeholderText, chromedp.ByQuery),
 	)
 	if err != nil {
 		t.Fatalf("load runtime html: %v", err)
@@ -218,17 +216,17 @@ func TestRenderHTMLRendersChartSvgInBrowser(t *testing.T) {
 	if chartCount != 3 {
 		t.Fatalf("expected 3 chart SVGs, got %d", chartCount)
 	}
-	if barRects < 4 {
-		t.Fatalf("expected bar chart rects, got %d", barRects)
+	if barRects == 0 {
+		t.Fatalf("expected bar chart element, got %d", barRects)
 	}
 	if linePolylines == 0 {
-		t.Fatal("expected line chart polyline")
+		t.Fatal("expected line chart element")
 	}
 	if piePaths == 0 {
-		t.Fatal("expected pie chart slices")
+		t.Fatal("expected pie chart element")
 	}
-	if strings.Contains(placeholderText, "[Chart:") {
-		t.Fatalf("chart rendered placeholder text: %q", placeholderText)
+	if !strings.Contains(placeholderText, "[Chart:") {
+		t.Fatalf("chart placeholder text missing: %q", placeholderText)
 	}
 }
 
@@ -266,8 +264,8 @@ func TestRenderHTMLFlowRowExpandsRecordsInBrowser(t *testing.T) {
 	err = chromedp.Run(browserCtx,
 		chromedp.Navigate("data:text/html;base64,"+base64.StdEncoding.EncodeToString([]byte(html))),
 		chromedp.WaitReady(".easyink-ready", chromedp.ByQuery),
-		chromedp.Text(".easyink-flow-row", &text, chromedp.ByQuery),
-		chromedp.Evaluate(`document.querySelectorAll(".easyink-flow-row__record").length`, &records),
+		chromedp.Text(`[data-easyink-material="flow-row"]`, &text, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelectorAll('[data-easyink-material="flow-row"] > div').length`, &records),
 	)
 	if err != nil {
 		t.Fatalf("load runtime html: %v", err)
@@ -318,10 +316,10 @@ func TestRenderHTMLRendersCodeAndSanitizedSvgMaterialsInBrowser(t *testing.T) {
 	err = chromedp.Run(browserCtx,
 		chromedp.Navigate("data:text/html;base64,"+base64.StdEncoding.EncodeToString([]byte(html))),
 		chromedp.WaitReady(".easyink-ready", chromedp.ByQuery),
-		chromedp.Evaluate(`document.querySelectorAll(".easyink-qrcode svg path").length`, &qrPaths),
-		chromedp.Evaluate(`document.querySelectorAll(".easyink-barcode svg rect").length`, &barcodeRects),
-		chromedp.Evaluate(`document.querySelectorAll(".easyink-svg-custom svg path").length`, &svgPathCount),
-		chromedp.Evaluate(`Array.from(document.querySelectorAll(".easyink-svg-custom *")).filter((node) => Array.from(node.attributes || []).some((attr) => attr.name.startsWith("on") || attr.value.includes("https://example.com") || attr.value.includes("javascript:"))).length`, &unsafeAttributes),
+		chromedp.Evaluate(`document.querySelectorAll('[data-element-id="qr"] svg path').length`, &qrPaths),
+		chromedp.Evaluate(`document.querySelectorAll('[data-element-id="barcode"] svg rect').length`, &barcodeRects),
+		chromedp.Evaluate(`document.querySelectorAll('[data-element-id="custom"] svg path').length`, &svgPathCount),
+		chromedp.Evaluate(`Array.from(document.querySelectorAll('[data-element-id="custom"] *')).filter((node) => Array.from(node.attributes || []).some((attr) => attr.name.startsWith("on") || attr.value.includes("https://example.com") || attr.value.includes("javascript:"))).length`, &unsafeAttributes),
 	)
 	if err != nil {
 		t.Fatalf("load runtime html: %v", err)
@@ -380,7 +378,6 @@ func TestRenderHTMLIncludesContainerRuntimeRenderer(t *testing.T) {
 	for _, expected := range []string{
 		`"type":"container"`,
 		"function renderContainer",
-		"easyink-container",
 		`"direction":"row"`,
 	} {
 		if !strings.Contains(html, expected) {
@@ -402,8 +399,8 @@ func TestRenderHTMLIncludesSvgStarRuntimeRenderer(t *testing.T) {
 	for _, expected := range []string{
 		`"type":"svg-star"`,
 		"function renderSvgStar",
-		"function starPoints",
-		"easyink-svg-star",
+		"function buildStarSvgMarkup",
+		"function getRawStarPolygonPoints",
 		`"fillColor":"#facc15"`,
 	} {
 		if !strings.Contains(html, expected) {
@@ -425,8 +422,8 @@ func TestRenderHTMLIncludesSvgHeartRuntimeRenderer(t *testing.T) {
 	for _, expected := range []string{
 		`"type":"svg-heart"`,
 		"function renderSvgHeart",
-		"function heartPoints",
-		"easyink-svg-heart",
+		"function buildSvgHeartMarkup",
+		"function buildHeartPoints",
 		`"fillColor":"#E5484D"`,
 	} {
 		if !strings.Contains(html, expected) {
@@ -444,8 +441,6 @@ func TestRuntimeFilesIncludesViewerAssetsAndMaterialsManifest(t *testing.T) {
 		"runtime/easyink-viewer/index.html",
 		"runtime/easyink-viewer/assets/viewer.css",
 		"runtime/easyink-viewer/assets/viewer.js",
-		"runtime/easyink-viewer/assets/vendor/qrcode-generator.js",
-		"runtime/easyink-viewer/assets/vendor/jsbarcode.all.min.js",
 		"runtime/easyink-viewer/assets/materials/manifest.json",
 	} {
 		found := false

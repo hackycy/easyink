@@ -7,6 +7,10 @@ on:
         description: Comma-separated Render host platforms, or all
         type: string
         default: all
+      build_render_docker_image:
+        description: Build and smoke-test the EasyInk.Render Docker image
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -23,6 +27,7 @@ jobs:
     with:
       run_tests: true
       platforms: ${{ github.event_name == 'workflow_dispatch' && inputs.platforms || 'all' }}
+      build_docker_image: ${{ inputs.build_render_docker_image }}
 
   build-dotnet:
     needs: build-render

@@ -23,11 +23,16 @@ samples/    html/pdf/easyink 请求示例
 tools/      发布包和 manifest 辅助脚本
 ```
 
+Render 专用的 pnpm 内部包位于仓库根级 `internal-packages/viewer-runtime`，和 `packages/` 平级。该包会把 `@easyink/viewer` 打包成 host 可 embed 的 HTML runtime。
+
+生成的 runtime bundle 会放到 `host/internal/easyink/runtime/easyink-viewer/`，该目录是构建产物，不提交到 Git。运行 Go 测试、Docker image build 或 host 发布包构建前，先执行 `pnpm render:runtime`；`pnpm render:manifest`、`pnpm render:host:docker`、`build-host.sh` 和 CI 会自动完成这一步。
+
 ## 常用命令
 
 Docker 单元测试：
 
 ```bash
+pnpm render:runtime
 docker run --rm --platform linux/amd64 \
   -v "$PWD/lib/EasyInk.Render/host:/src" \
   -w /src \
@@ -58,9 +63,29 @@ docker run --rm --platform linux/amd64 --entrypoint /bin/sh \
 发布工具：
 
 ```bash
+pnpm render:runtime
 pnpm render:manifest
 pnpm render:release:test
 pnpm render:host:docker -- --platforms all
+```
+
+手动构建 host 发布包：
+
+```bash
+./lib/EasyInk.Render/build-host.sh all
+./lib/EasyInk.Render/build-host.sh 0.1.0 linux-x64,darwin-arm64
+```
+
+Windows 可继续使用 `build-host.bat`，参数顺序相同。两个脚本都会先构建 `internal-packages/viewer-runtime` 并校验 manifest，再通过 Docker 构建 host 包。
+
+Docker 构建测试：
+
+```bash
+docker build --platform linux/amd64 \
+  -t easyink-render-host:test \
+  -f lib/EasyInk.Render/host/Dockerfile \
+  lib/EasyInk.Render/host
+docker run --rm easyink-render-host:test version
 ```
 
 Windows 手动构建发布 host 包时，可直接运行 `build-host.bat`。该脚本通过 Docker 中的 `golang:1.23-bookworm` 交叉编译，不要求本机安装 Go；默认构建 `win-x64,win-x86`，例如 `build-host.bat all` 会构建所有 host 平台，`build-host.bat 0.1.0 all` 可指定版本。

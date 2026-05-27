@@ -1,0 +1,22 @@
+{
+  "name": "@easyink/render-viewer-runtime",
+  "type": "module",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Internal EasyInk.Render HTML runtime bundle built from @easyink/viewer",
+  "sideEffects": [
+    "./src/style.css"
+  ],
+  "scripts": {
+    "build": "vite build && node ./scripts/sync-runtime.mjs",
+    "dev": "vite build --watch"
+  },
+  "dependencies": {
+    "@easyink/viewer": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:types",
+    "typescript": "catalog:cli",
+    "vite": "catalog:cli"
+  }
+}
