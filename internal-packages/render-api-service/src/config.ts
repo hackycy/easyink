@@ -103,9 +103,9 @@ function loadDefaultRuntime(env: Env): RenderRuntimeOptions {
     tempDir: readString(env, 'EASYINK_RENDER_TEMP_DIR'),
     logDir: readString(env, 'EASYINK_RENDER_LOG_DIR'),
     maxConcurrency: readOptionalNumber(env, 'EASYINK_RENDER_MAX_CONCURRENCY'),
-    maxQueueSize: readOptionalNumber(env, 'EASYINK_RENDER_MAX_QUEUE_SIZE'),
+    maxQueueSize: readOptionalNonNegativeNumber(env, 'EASYINK_RENDER_MAX_QUEUE_SIZE'),
     requestTimeoutMs: readOptionalNumber(env, 'EASYINK_RENDER_REQUEST_TIMEOUT_MS'),
-    idleTimeoutMs: readOptionalNumber(env, 'EASYINK_RENDER_IDLE_TIMEOUT_MS'),
+    idleTimeoutMs: readOptionalNonNegativeNumber(env, 'EASYINK_RENDER_IDLE_TIMEOUT_MS'),
   })
 }
 
@@ -136,6 +136,18 @@ function readOptionalNumber(env: Env, name: string): number | undefined {
   const parsed = Number(value)
   if (!Number.isFinite(parsed) || parsed <= 0) {
     throw new RenderConfigError(name, `${name} must be a positive number`)
+  }
+  return parsed
+}
+
+function readOptionalNonNegativeNumber(env: Env, name: string): number | undefined {
+  const value = readString(env, name)
+  if (value === undefined) {
+    return undefined
+  }
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new RenderConfigError(name, `${name} must be a non-negative number`)
   }
   return parsed
 }

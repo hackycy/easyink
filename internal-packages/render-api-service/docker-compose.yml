@@ -1,0 +1,37 @@
+services:
+  render-api-service:
+    image: easyink-render-api-service:local
+    build:
+      context: ../..
+      dockerfile: internal-packages/render-api-service/Dockerfile
+    ports:
+      - '${EASYINK_RENDER_API_PORT:-18081}:18081'
+    environment:
+      EASYINK_RENDER_API_HOST: 0.0.0.0
+      EASYINK_RENDER_API_PORT: 18081
+      EASYINK_RENDER_API_CORS_ORIGIN: ${EASYINK_RENDER_API_CORS_ORIGIN:-*}
+      EASYINK_RENDER_API_CLI_TIMEOUT_MS: ${EASYINK_RENDER_API_CLI_TIMEOUT_MS:-120000}
+      EASYINK_RENDER_API_MAX_BODY_BYTES: ${EASYINK_RENDER_API_MAX_BODY_BYTES:-67108864}
+      EASYINK_RENDER_API_WORK_DIR: /tmp/easyink-render-api
+      EASYINK_RENDER_API_KEEP_WORK_DIR: ${EASYINK_RENDER_API_KEEP_WORK_DIR:-false}
+      EASYINK_RENDER_BIN: /usr/local/bin/easyink-render
+      EASYINK_RENDER_NO_DAEMON: ${EASYINK_RENDER_NO_DAEMON:-true}
+      EASYINK_RENDER_FORCE_RESTART_DAEMON: ${EASYINK_RENDER_FORCE_RESTART_DAEMON:-false}
+      EASYINK_RENDER_DISABLE_SANDBOX: ${EASYINK_RENDER_DISABLE_SANDBOX:-true}
+      EASYINK_RENDER_BROWSER_KIND: chromium
+      EASYINK_RENDER_BROWSER_PATH: /usr/bin/chromium
+      EASYINK_RENDER_HEADLESS_MODE: ${EASYINK_RENDER_HEADLESS_MODE:-new}
+      EASYINK_RENDER_TEMP_DIR: /var/tmp/easyink-render
+      EASYINK_RENDER_LOG_DIR: /var/log/easyink-render
+      EASYINK_RENDER_MAX_CONCURRENCY: ${EASYINK_RENDER_MAX_CONCURRENCY:-2}
+      EASYINK_RENDER_MAX_QUEUE_SIZE: ${EASYINK_RENDER_MAX_QUEUE_SIZE:-16}
+      EASYINK_RENDER_REQUEST_TIMEOUT_MS: ${EASYINK_RENDER_REQUEST_TIMEOUT_MS:-30000}
+      EASYINK_RENDER_IDLE_TIMEOUT_MS: ${EASYINK_RENDER_IDLE_TIMEOUT_MS:-0}
+    volumes:
+      - render-logs:/var/log/easyink-render
+    shm_size: 1gb
+    init: true
+    restart: unless-stopped
+
+volumes:
+  render-logs:

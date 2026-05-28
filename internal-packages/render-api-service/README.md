@@ -34,6 +34,42 @@ Development:
 pnpm -F @easyink/render-api-service dev
 ```
 
+## Docker
+
+The package includes a full Docker image for the HTTP service, the Go
+`easyink-render` CLI, and a runnable Debian Chromium. The Docker build runs the
+same chain the CLI needs in production: build the embedded viewer runtime, build
+the Render host binary, build the API service, then deploy the Node package.
+
+```bash
+docker compose -f internal-packages/render-api-service/docker-compose.yml up --build
+```
+
+The service listens on `http://127.0.0.1:18081` by default:
+
+```bash
+curl http://127.0.0.1:18081/health
+curl -X POST http://127.0.0.1:18081/v1/render/browser/inspect \
+  -H 'content-type: application/json' \
+  -d '{}'
+```
+
+Docker defaults are tuned for Chromium in a container:
+
+- `EASYINK_RENDER_API_HOST=0.0.0.0`
+- `EASYINK_RENDER_BIN=/usr/local/bin/easyink-render`
+- `EASYINK_RENDER_NO_DAEMON=true`
+- `EASYINK_RENDER_BROWSER_KIND=chromium`
+- `EASYINK_RENDER_BROWSER_PATH=/usr/bin/chromium`
+- `EASYINK_RENDER_DISABLE_SANDBOX=true`
+
+When `noDaemon` is enabled and no explicit profile root is provided, the API
+service gives each render request an isolated temporary Chromium profile to avoid
+profile singleton lock conflicts between requests. The compose volume keeps
+Render diagnostics logs. Set environment variables before `docker compose up` to
+override port, CORS, timeouts, queue size, daemon usage, or request work-dir
+retention.
+
 ## Render Smoke Test
 
 The Docker smoke test imports `@easyink/samples`, builds a request from

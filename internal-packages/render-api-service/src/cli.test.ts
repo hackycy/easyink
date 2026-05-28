@@ -34,7 +34,9 @@ describe('render API env config', () => {
       EASYINK_RENDER_NO_DAEMON: '1',
       EASYINK_RENDER_DISABLE_SANDBOX: 'false',
       EASYINK_RENDER_BROWSER_KIND: 'headless-shell',
+      EASYINK_RENDER_MAX_QUEUE_SIZE: '0',
       EASYINK_RENDER_REQUEST_TIMEOUT_MS: '5000',
+      EASYINK_RENDER_IDLE_TIMEOUT_MS: '0',
     })).toEqual({
       host: '0.0.0.0',
       port: 19000,
@@ -48,7 +50,9 @@ describe('render API env config', () => {
         noDaemon: true,
         disableSandbox: false,
         browserKind: 'headless-shell',
+        maxQueueSize: 0,
         requestTimeoutMs: 5000,
+        idleTimeoutMs: 0,
       },
     })
   })
@@ -56,6 +60,7 @@ describe('render API env config', () => {
   it('rejects invalid env values early', () => {
     expect(() => loadRenderApiConfig({ EASYINK_RENDER_API_PORT: 'nope' })).toThrow(RenderConfigError)
     expect(() => loadRenderApiConfig({ EASYINK_RENDER_API_KEEP_WORK_DIR: 'maybe' })).toThrow(RenderConfigError)
+    expect(() => loadRenderApiConfig({ EASYINK_RENDER_IDLE_TIMEOUT_MS: '-1' })).toThrow(RenderConfigError)
   })
 
   it('loads dotenv files with process env precedence', async () => {

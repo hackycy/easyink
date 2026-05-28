@@ -104,6 +104,9 @@ export async function renderWithCli(input: RenderApiRequest, config: RenderProce
 
   try {
     await writeFile(requestPath, JSON.stringify(toPrintPDFRequest(input)), 'utf8')
+    if (runtime.noDaemon && !runtime.profileRoot) {
+      runtime.profileRoot = join(requestDir, 'profile')
+    }
     const args = toRenderCliArgs({ requestPath, outputPath, diagnosticsPath }, runtime)
     const requestTimeoutMs = input.wait?.timeoutMs
     const processResult = await runProcess(binary, args, {
