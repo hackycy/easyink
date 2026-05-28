@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { resolveRenderBinary, toPrintPDFRequest, toRenderCliArgs } from './cli'
-import { DEFAULT_CLI_TIMEOUT_MS, DEFAULT_MAX_BODY_BYTES, DEFAULT_RENDER_API_HOST, DEFAULT_RENDER_API_PORT, loadRenderApiConfig, loadRenderApiEnv, RenderConfigError } from './config'
+import { DEFAULT_CLI_TIMEOUT_MS, DEFAULT_MAX_BODY_BYTES, DEFAULT_RENDER_API_CORS_ORIGIN, DEFAULT_RENDER_API_HOST, DEFAULT_RENDER_API_PORT, loadRenderApiConfig, loadRenderApiEnv, RenderConfigError } from './config'
 
 describe('render API env config', () => {
   it('loads defaults when env is empty', () => {
@@ -16,6 +16,7 @@ describe('render API env config', () => {
       keepWorkDir: false,
       cliTimeoutMs: DEFAULT_CLI_TIMEOUT_MS,
       maxBodyBytes: DEFAULT_MAX_BODY_BYTES,
+      corsOrigin: DEFAULT_RENDER_API_CORS_ORIGIN,
       defaultRuntime: {},
     })
   })
@@ -28,6 +29,7 @@ describe('render API env config', () => {
       EASYINK_RENDER_API_WORK_DIR: '/tmp/easyink',
       EASYINK_RENDER_API_KEEP_WORK_DIR: 'true',
       EASYINK_RENDER_API_CLI_TIMEOUT_MS: '30000',
+      EASYINK_RENDER_API_CORS_ORIGIN: 'http://localhost:5173',
       EASYINK_RENDER_API_MAX_BODY_BYTES: '1048576',
       EASYINK_RENDER_NO_DAEMON: '1',
       EASYINK_RENDER_DISABLE_SANDBOX: 'false',
@@ -41,6 +43,7 @@ describe('render API env config', () => {
       keepWorkDir: true,
       cliTimeoutMs: 30000,
       maxBodyBytes: 1048576,
+      corsOrigin: 'http://localhost:5173',
       defaultRuntime: {
         noDaemon: true,
         disableSandbox: false,

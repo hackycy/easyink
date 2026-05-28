@@ -10,6 +10,7 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { toast } from 'vue-sonner'
 import EasyInkPrinterSettingsDialog from './components/EasyInkPrinterSettingsDialog.vue'
 import HiPrintSettingsDialog from './components/HiPrintSettingsDialog.vue'
+import RenderApiSettingsDialog from './components/RenderApiSettingsDialog.vue'
 import { Button } from './components/ui/button'
 import {
   DropdownMenu,
@@ -25,6 +26,7 @@ import {
 import { playgroundFontProvider } from './fonts'
 import { useEasyInkPrint } from './hooks/useEasyInkPrint'
 import { usePrinter } from './hooks/useHiPrint'
+import { useRenderApiService } from './hooks/useRenderApiService'
 
 const props = defineProps<{
   schema: DocumentSchema
@@ -52,8 +54,10 @@ const totalPages = ref(1)
 // Print channel integration
 const hiPrint = usePrinter()
 const easyInkPrint = useEasyInkPrint()
+const renderApi = useRenderApiService()
 const showHiPrintSettings = ref(false)
 const showEasyInkPrinterSettings = ref(false)
+const showRenderApiSettings = ref(false)
 const isPrinting = ref(false)
 
 // Auto-connect is handled inside each persisted singleton hook.
@@ -381,6 +385,77 @@ async function handleJsonExport() {
   await runViewerExport(EXPORT_FORMAT, 'easyink-export.json', '导出 JSON')
 }
 
+function serializePreviewHtml(): string {
+  const doc = viewerHost?.document
+  if (!doc)
+    throw new Error('预览文档尚未就绪')
+
+  const doctype = doc.doctype
+    ? `<!DOCTYPE ${doc.doctype.name}${doc.doctype.publicId ? ` PUBLIC "${doc.doctype.publicId}"` : ''}${doc.doctype.systemId ? ` "${doc.doctype.systemId}"` : ''}>\n`
+    : '<!doctype html>\n'
+  return `${doctype}${doc.documentElement.outerHTML}`
+}
+
+async function ensureRenderApiReady(): Promise<boolean> {
+  if (!renderApi.enabled.value) {
+    toast.error('请先在设置中启用 Render API')
+    showRenderApiSettings.value = true
+    return false
+  }
+
+  if (!renderApi.isConnected.value) {
+    const progressId = toast.loading('正在检查 Render API 服务...')
+    try {
+      await renderApi.checkHealth()
+      toast.dismiss(progressId)
+    }
+    catch (error) {
+      toast.dismiss(progressId)
+      toast.error(error instanceof Error ? error.message : '连接 Render API 服务失败')
+      showRenderApiSettings.value = true
+      return false
+    }
+  }
+
+  return true
+}
+
+async function runRenderApiExport(label: string, submit: () => Promise<{ pdf: Blob, pageCount?: number, diagnosticsPath?: string }>) {
+  if (!(await ensureRenderApiReady()))
+    return
+
+  isPrinting.value = true
+  const progressId = toast.loading(`${label}中...`)
+  try {
+    const result = await submit()
+    downloadBlob(result.pdf, `easyink-${label.includes('HTML') ? 'html' : 'schema'}-render.pdf`)
+    toast.dismiss(progressId)
+    const suffix = result.diagnosticsPath ? `，诊断：${result.diagnosticsPath}` : ''
+    toast.success(`${label}完成${result.pageCount ? `，共 ${result.pageCount} 页` : ''}${suffix}`)
+  }
+  catch (error) {
+    toast.dismiss(progressId)
+    toast.error(`${label}失败: ${error instanceof Error ? error.message : String(error)}`)
+  }
+  finally {
+    isPrinting.value = false
+  }
+}
+
+async function handleRenderApiSchemaExport() {
+  await runRenderApiExport('服务端 Schema 渲染', () => renderApi.renderSchema({
+    schema: props.schema,
+    data: props.data,
+  }))
+}
+
+async function handleRenderApiHtmlExport() {
+  await runRenderApiExport('服务端 HTML 渲染', () => renderApi.renderHtml({
+    html: serializePreviewHtml(),
+    baseUrl: window.location.href,
+  }))
+}
+
 async function handleBrowserPrint(pageSizeMode: 'driver' | 'fixed' = 'driver') {
   await runViewerPrint(BROWSER_PRINT_DRIVER_ID, pageSizeMode, '浏览器打印')
 }
@@ -551,6 +626,10 @@ function openEasyInkPrinterSettings() {
   showEasyInkPrinterSettings.value = true
 }
 
+function openRenderApiSettings() {
+  showRenderApiSettings.value = true
+}
+
 async function handleExport() {
   await handleJsonExport()
 }
@@ -591,12 +670,25 @@ async function handleExport() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent class="z-[10002]">
-            <DropdownMenuLabel>文件导出</DropdownMenuLabel>
+            <DropdownMenuLabel>本地导出</DropdownMenuLabel>
             <DropdownMenuItem :disabled="isPrinting" @click="handlePdfExport">
               PDF（固定纸张）
             </DropdownMenuItem>
             <DropdownMenuItem :disabled="isPrinting" @click="handleExport">
               JSON（模板数据）
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>服务端渲染</DropdownMenuLabel>
+            <DropdownMenuItem :disabled="isPrinting" @click="handleRenderApiSchemaExport">
+              Render API：Schema + Data
+            </DropdownMenuItem>
+            <DropdownMenuItem :disabled="isPrinting" @click="handleRenderApiHtmlExport">
+              Render API：HTML
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>设置</DropdownMenuLabel>
+            <DropdownMenuItem @click="openRenderApiSettings">
+              Render API 服务设置
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -664,5 +756,10 @@ async function handleExport() {
   <EasyInkPrinterSettingsDialog
     v-if="showEasyInkPrinterSettings"
     @close="showEasyInkPrinterSettings = false"
+  />
+
+  <RenderApiSettingsDialog
+    v-if="showRenderApiSettings"
+    @close="showRenderApiSettings = false"
   />
 </template>

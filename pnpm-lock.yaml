@@ -933,6 +933,9 @@ importers:
       '@easyink/print-integration-hiprint':
         specifier: workspace:*
         version: link:../packages/print/integration-hiprint
+      '@easyink/render-api-service':
+        specifier: workspace:*
+        version: link:../internal-packages/render-api-service
       '@easyink/samples':
         specifier: workspace:*
         version: link:../packages/samples

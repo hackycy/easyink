@@ -8,6 +8,7 @@ export const DEFAULT_RENDER_API_HOST = '127.0.0.1'
 export const DEFAULT_RENDER_API_PORT = 18081
 export const DEFAULT_CLI_TIMEOUT_MS = 120_000
 export const DEFAULT_MAX_BODY_BYTES = 64 * 1024 * 1024
+export const DEFAULT_RENDER_API_CORS_ORIGIN = '*'
 
 export interface RenderProcessConfig {
   binary?: string
@@ -21,6 +22,7 @@ export interface RenderApiConfig extends RenderProcessConfig {
   host: string
   port: number
   maxBodyBytes: number
+  corsOrigin: string
 }
 
 export class RenderConfigError extends Error {
@@ -70,6 +72,7 @@ export function loadRenderApiConfig(env: Env = loadRenderApiEnv()): RenderApiCon
     keepWorkDir: readBoolean(env, 'EASYINK_RENDER_API_KEEP_WORK_DIR', false),
     cliTimeoutMs: readNumber(env, 'EASYINK_RENDER_API_CLI_TIMEOUT_MS', DEFAULT_CLI_TIMEOUT_MS),
     maxBodyBytes: readNumber(env, 'EASYINK_RENDER_API_MAX_BODY_BYTES', DEFAULT_MAX_BODY_BYTES),
+    corsOrigin: readString(env, 'EASYINK_RENDER_API_CORS_ORIGIN') ?? DEFAULT_RENDER_API_CORS_ORIGIN,
     defaultRuntime: loadDefaultRuntime(env),
   }
 }

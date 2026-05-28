@@ -10,6 +10,7 @@ describe('render API h3 app', () => {
     const response = await app.request('/health')
 
     expect(response.status).toBe(200)
+    expect(response.headers.get('access-control-allow-origin')).toBe('*')
     expect(await readJsonResponse(response)).toMatchObject({
       ok: true,
       service: 'easyink-render-api',
@@ -30,6 +31,21 @@ describe('render API h3 app', () => {
         code: 'INVALID_JSON',
       },
     })
+  })
+
+  it('handles browser preflight requests for playground calls', async () => {
+    const app = createRenderApiApp(loadRenderApiConfig({ EASYINK_RENDER_API_CORS_ORIGIN: 'http://localhost:5173' }))
+    const response = await app.request('/v1/render/pdf', {
+      method: 'OPTIONS',
+      headers: {
+        'origin': 'http://localhost:5173',
+        'access-control-request-method': 'POST',
+      },
+    })
+
+    expect(response.status).toBe(204)
+    expect(response.headers.get('access-control-allow-origin')).toBe('http://localhost:5173')
+    expect(response.headers.get('access-control-expose-headers')).toContain('x-easyink-page-count')
   })
 
   it('returns the API not-found envelope for unknown routes', async () => {

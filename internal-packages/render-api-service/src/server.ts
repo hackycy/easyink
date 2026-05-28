@@ -28,6 +28,16 @@ const startedAt = Date.now()
 export function createRenderApiApp(config: RenderApiConfig = loadRenderApiConfig()): H3 {
   const app = new H3({ silent: true })
 
+  app.use((event) => {
+    applyCorsHeaders(event, config)
+    if (event.req.method === 'OPTIONS') {
+      return new Response(null, {
+        status: 204,
+        headers: event.res.headers,
+      })
+    }
+  })
+
   app.get('/health', () => ({
     ok: true,
     service: 'easyink-render-api',
@@ -145,6 +155,16 @@ export function createRenderApiServer(options: RenderApiServerOptions = {}): Ren
         })
       })
     },
+  }
+}
+
+function applyCorsHeaders(event: H3Event, config: RenderApiConfig): void {
+  event.res.headers.set('access-control-allow-origin', config.corsOrigin)
+  event.res.headers.set('access-control-allow-methods', 'GET, POST, OPTIONS')
+  event.res.headers.set('access-control-allow-headers', 'content-type, accept, authorization')
+  event.res.headers.set('access-control-expose-headers', 'x-easyink-request-id, x-easyink-page-count, x-easyink-diagnostics-path')
+  if (config.corsOrigin !== '*') {
+    event.res.headers.append('vary', 'origin')
   }
 }
 

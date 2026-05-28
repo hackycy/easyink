@@ -63,6 +63,7 @@ The service loads dotenv files with this precedence, from lowest to highest: `.e
 - `EASYINK_RENDER_API_KEEP_WORK_DIR`: keep per-request temp files for debugging. Accepts `1`, `true`, `yes`, or `on`.
 - `EASYINK_RENDER_API_CLI_TIMEOUT_MS`: child process timeout, default `120000`.
 - `EASYINK_RENDER_API_MAX_BODY_BYTES`: max HTTP JSON body size, default `67108864`.
+- `EASYINK_RENDER_API_CORS_ORIGIN`: browser CORS origin for playground/demo calls, default `*`.
 
 Default Render runtime can also be configured by environment. Per-request `runtime` still wins for that request.
 
