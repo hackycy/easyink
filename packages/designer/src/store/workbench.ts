@@ -1,5 +1,6 @@
 import type {
   CanvasViewportState,
+  GuideInteractionState,
   PanelToggleState,
   SaveBranchMenuState,
   SnapState,
@@ -17,6 +18,7 @@ export function createDefaultWorkbenchState(): WorkbenchState {
     panels: createDefaultPanels(),
     status: createDefaultStatus(),
     snap: createDefaultSnap(),
+    guide: createDefaultGuideInteraction(),
   }
 }
 
@@ -179,5 +181,11 @@ function createDefaultSnap(): SnapState {
     guideSnap: true,
     elementSnap: true,
     threshold: 3,
+  }
+}
+
+function createDefaultGuideInteraction(): GuideInteractionState {
+  return {
+    enabled: false,
   }
 }

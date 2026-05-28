@@ -42,6 +42,7 @@ const zoom = computed(() => store.workbench.viewport.zoom)
 const scrollLeft = computed(() => store.workbench.viewport.scrollLeft)
 const scrollTop = computed(() => store.workbench.viewport.scrollTop)
 const unit = computed(() => store.schema.unit)
+const guideEnabled = computed(() => store.workbench.guide.enabled)
 
 function getTickStep(unitPerPx: number): number {
   const raw = TICK_MIN_PX * unitPerPx
@@ -245,6 +246,9 @@ function rulerPxToDocUnit(rulerDir: RulerDirection, clientX: number, clientY: nu
  * Distinguishes click (create guide at position) from drag (start drag flow).
  */
 function handleRulerPointerDown(rulerDir: 'horizontal' | 'vertical', e: PointerEvent) {
+  if (!guideEnabled.value)
+    return
+
   e.preventDefault()
   const isH = rulerDir === 'horizontal'
   const canvas = isH ? horizontalRef.value : verticalRef.value
@@ -293,6 +297,11 @@ function handleRulerPointerDown(rulerDir: 'horizontal' | 'vertical', e: PointerE
 }
 
 function handleRulerHover(direction: 'horizontal' | 'vertical', e: MouseEvent) {
+  if (!guideEnabled.value) {
+    emit('rulerHover', null)
+    return
+  }
+
   const isH = direction === 'horizontal'
   const position = rulerPxToDocUnit(direction, e.clientX, e.clientY)
   if (position == null)

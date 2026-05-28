@@ -61,6 +61,7 @@ const zhCN: LocaleMessages = {
       selectSameType: '选择同类型',
       rotation: '旋转',
       aspectRatio: '锁定比例',
+      guideLines: '悬浮辅助线',
       snapToGrid: '吸附网格',
       snapToGuide: '吸附参考线',
       snapMenu: {

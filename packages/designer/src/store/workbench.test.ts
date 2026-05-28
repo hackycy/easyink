@@ -14,6 +14,7 @@ describe('createDefaultWorkbenchState', () => {
 
     expect(state.status.focus).toBe('none')
     expect(state.snap.enabled).toBe(true)
+    expect(state.guide.enabled).toBe(false)
     expect(state.windows.some(window => window.id === 'materials')).toBe(true)
   })
 

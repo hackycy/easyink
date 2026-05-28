@@ -32,6 +32,7 @@ export function useWorkbenchPersistence(
       () => workbench.snap.guideSnap,
       () => workbench.snap.elementSnap,
       () => workbench.snap.threshold,
+      () => workbench.guide.enabled,
     ],
     scheduleSave,
     { deep: true },

@@ -304,10 +304,14 @@ function handleContextMenu(e: MouseEvent) {
 }
 
 function handleGuideDragStart(direction: 'x' | 'y', e: PointerEvent) {
+  if (!store.workbench.guide.enabled)
+    return
   guideOverlayRef.value?.onGuideDragStart(direction, e)
 }
 
 function handleGuideCreate(axis: 'x' | 'y', position: number) {
+  if (!store.workbench.guide.enabled)
+    return
   guideOverlayRef.value?.createGuideAt(axis, position)
 }
 
@@ -351,7 +355,7 @@ function handleKeyDown(e: KeyboardEvent) {
 }
 
 function handleRulerHover(hover: { axis: 'x' | 'y', position: number } | null) {
-  rulerHover.value = hover
+  rulerHover.value = store.workbench.guide.enabled ? hover : null
 }
 
 function projectNodeStyle(node: ReturnType<typeof store.getElements>[number], overrideY?: number) {
@@ -493,6 +497,11 @@ watch(
   () => store.workbench.viewport.zoom,
   () => requestAnimationFrame(updateViewportSurfaceRect),
 )
+
+watch(() => store.workbench.guide.enabled, (enabled) => {
+  if (!enabled)
+    rulerHover.value = null
+})
 
 // ─── Lifecycle ───────────────────────────────────────────────────
 

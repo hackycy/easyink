@@ -61,6 +61,7 @@ const enUS: LocaleMessages = {
       selectSameType: 'Select Same Type',
       rotation: 'Rotate',
       aspectRatio: 'Lock Aspect Ratio',
+      guideLines: 'Floating Guides',
       snapToGrid: 'Snap to Grid',
       snapToGuide: 'Snap to Guides',
       snapMenu: {

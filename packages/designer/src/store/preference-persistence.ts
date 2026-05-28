@@ -24,6 +24,9 @@ export interface PersistableWorkbenchState {
     elementSnap?: boolean
     threshold?: number
   }
+  guide?: {
+    enabled?: boolean
+  }
 }
 
 // ─── Extract ─────────────────────────────────────────────────────
@@ -57,6 +60,9 @@ export function extractPersistableWorkbench(state: WorkbenchState): PersistableW
       guideSnap: state.snap.guideSnap,
       elementSnap: state.snap.elementSnap,
       threshold: state.snap.threshold,
+    },
+    guide: {
+      enabled: state.guide.enabled,
     },
   }
 }
@@ -146,6 +152,10 @@ export function applyPersistedWorkbench(workbench: WorkbenchState, persisted: Pe
     if (typeof persisted.snap.threshold === 'number') {
       workbench.snap.threshold = persisted.snap.threshold
     }
+  }
+
+  if (persisted.guide && typeof persisted.guide.enabled === 'boolean') {
+    workbench.guide.enabled = persisted.guide.enabled
   }
 }
 

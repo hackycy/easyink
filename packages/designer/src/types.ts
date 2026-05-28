@@ -68,6 +68,11 @@ export interface WorkbenchState {
   panels: PanelToggleState
   status: StatusBarState
   snap: SnapState
+  guide: GuideInteractionState
+}
+
+export interface GuideInteractionState {
+  enabled: boolean
 }
 
 export interface SnapState {

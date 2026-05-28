@@ -9,6 +9,7 @@ import {
   normalizeRotation,
   RemoveElementGroupCommand,
   RotateMaterialCommand,
+  UpdateGuidesCommand,
   UpdateMaterialMetaCommand,
   UpdateMaterialPropsCommand,
 } from '@easyink/core'
@@ -40,6 +41,7 @@ import {
   IconPaste,
   IconRedo,
   IconRotation,
+  IconScissorsLineDashed,
   IconSelectAll,
   IconSelectSameType,
   IconSliders,
@@ -480,6 +482,14 @@ function handleDelete() {
 }
 
 // ─── Snap ────────────────────────────────────────────────────
+function handleGuideToggle() {
+  const enabled = !store.workbench.guide.enabled
+  store.workbench.guide.enabled = enabled
+  if (!enabled && (store.schema.guides.x.length > 0 || store.schema.guides.y.length > 0)) {
+    store.commands.execute(new UpdateGuidesCommand(store.schema, { x: [], y: [] }))
+  }
+}
+
 function handleSnap() {
   store.workbench.snap.enabled = !store.workbench.snap.enabled
 }
@@ -773,6 +783,14 @@ function toggleSnapMenu(ev: MouseEvent) {
 
         <!-- snap -->
         <div v-else-if="group.id === 'snap'" class="ei-topbar-b__group ei-topbar-b__snap-group">
+          <button
+            class="ei-topbar-b__btn"
+            :class="{ 'ei-topbar-b__btn--active': store.workbench.guide.enabled }"
+            :title="store.t('designer.toolbar.guideLines')"
+            @click="handleGuideToggle"
+          >
+            <IconScissorsLineDashed :size="16" :stroke-width="1.5" />
+          </button>
           <button
             class="ei-topbar-b__btn ei-topbar-b__snap-main"
             :class="{ 'ei-topbar-b__btn--active': store.workbench.snap.enabled }"
