@@ -452,7 +452,6 @@ async function handleRenderApiSchemaExport() {
 async function handleRenderApiHtmlExport() {
   await runRenderApiExport('服务端 HTML 渲染', () => renderApi.renderHtml({
     html: serializePreviewHtml(),
-    baseUrl: window.location.href,
   }))
 }
 
