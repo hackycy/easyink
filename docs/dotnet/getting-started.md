@@ -85,6 +85,8 @@ await printer.print({
 
 这条路径提交的是模板和数据，等待条件、背景打印等 Render 细节由 SDK 设置。服务端必须启用并配置 Render，否则会返回 `RENDER_FAILED`。
 
+连续纸模板也适合这条路径。Printer-side Render 会让内嵌 Viewer 先算出实际输出高度，再生成 PDF。
+
 如果你想打印的是当前预览结果，而不是重新生成 PDF，可以改用 `preview-html` 策略：
 
 ```ts
@@ -97,6 +99,7 @@ await printer.print({
 ```
 
 这条路径会把托管 Viewer 当前渲染出的页面序列化成 HTML，再交给 Printer 去打印。它适合你想保留预览效果、但不想直接操作底层 Render 协议的时候。
+SDK 会让 Render 尊重序列化 HTML 里的 `@page`，所以固定页和连续纸都会按预览尺寸生成 PDF。
 
 ## 直接打印 PDF {#print-pdf}
 

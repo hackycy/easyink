@@ -142,12 +142,18 @@ HTML 输入也走同一字段，只是 `renderSource.type` 改成 `html`：
     "html": "<!doctype html><html><body><main class=\"ready\">Hello</main></body></html>"
   },
   "renderOptions": {
-    "wait": { "selector": ".ready" }
+    "wait": { "selector": ".ready" },
+    "pdf": {
+      "preferCSSPageSize": true,
+      "printBackground": true
+    }
   }
 }
 ```
 
 `renderSource` 支持 `resources` 和 `fonts`，字段和 Render 协议一致：`url`、`contentType`、`base64`，字体额外支持 `family`、`weight`、`style`。
+
+如果 HTML 里已经写了 `@page`，打开 `renderOptions.pdf.preferCSSPageSize`。这样 Render 会使用 HTML 声明的纸张尺寸，而不是只看请求里的 `paperWidthMm` / `paperHeightMm`。EasyInk schema 输入会自动处理连续纸高度，通常不需要你手动设置这个字段。
 
 :::warning 注意
 PDF 输入和 `renderSource` 不能同时传。服务端会返回 `INVALID_PARAMS`。

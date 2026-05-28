@@ -88,6 +88,8 @@ await printer.print({
 })
 ```
 
+连续纸模板会在 Printer-side Render 里按实际渲染高度生成 PDF。
+
 如果你想把预览里已经渲染好的页面作为 HTML 交给 Printer，可以选择 `preview-html` 策略：
 
 ```ts
@@ -98,6 +100,8 @@ await printer.print({
   paper: 'template',
 })
 ```
+
+这条路径会保留预览 HTML 里的 `@page` 尺寸声明。
 
 关于这条链路，目前知道这些就够用了。继续看 [EasyInk Printer (.NET)](/dotnet/)。
 

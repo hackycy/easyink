@@ -118,6 +118,8 @@ ws://localhost:18080/ws?apiKey=your-secret-key
 
 Printer 会把这类请求写成 Render request，调用 `easyink-render.exe render --json --diagnostics-out ...`，拿到 PDF bytes 后再交给 Engine 的物理打印路径。
 
+HTML 输入如果自己声明了 `@page`，可以在 `renderOptions.pdf` 里传 `preferCSSPageSize: true`。EasyInk schema 输入会由 Render runtime 写入实际页面尺寸，连续纸会按渲染后的高度生成 PDF。
+
 :::warning 注意
 `RenderEnabled=false` 时，`renderSource` 请求会返回 `RENDER_FAILED`。纯 PDF 请求不依赖 Render。
 :::
