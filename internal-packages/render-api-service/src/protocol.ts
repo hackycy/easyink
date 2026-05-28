@@ -53,6 +53,7 @@ export interface RenderPdfOptions {
   printBackground?: boolean
   landscape?: boolean
   marginMm?: RenderMarginMm
+  preferCSSPageSize?: boolean
 }
 
 export interface RenderWaitOptions {

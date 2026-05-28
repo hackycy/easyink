@@ -42,6 +42,9 @@ func TestRenderHTMLBuildsReadyDocumentAndPDFOptions(t *testing.T) {
 	if pdf.PaperWidthMm != 80 || pdf.PaperHeightMm != 120 {
 		t.Fatalf("unexpected page size: %#v", pdf)
 	}
+	if !pdf.PreferCSSPageSize {
+		t.Fatal("expected EasyInk render to prefer Viewer CSS page size")
+	}
 }
 
 func TestRenderHTMLIncludesMaterialRuntimeRenderers(t *testing.T) {

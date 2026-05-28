@@ -125,6 +125,7 @@ await printer.print({
 ## Render 路径 {#render}
 
 Render 不提交物理打印任务。它只负责把输入变成 PDF。
+连续纸会按 Viewer 实际渲染高度生成 PDF，不依赖浏览器打印驱动接管纸张。
 
 ```bash
 easyink-render render \

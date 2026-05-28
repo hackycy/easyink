@@ -786,6 +786,9 @@ func printPDF(options protocol.PDFOptions) *page.PrintToPDFParams {
 	if options.Landscape {
 		params = params.WithLandscape(true)
 	}
+	if options.PreferCSSPageSize {
+		params = params.WithPreferCSSPageSize(true)
+	}
 	if options.MarginMm != nil {
 		params = params.
 			WithMarginTop(mmToIn(options.MarginMm.Top)).

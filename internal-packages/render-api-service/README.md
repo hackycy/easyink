@@ -11,6 +11,21 @@ pnpm -F @easyink/render-api-service build
 EASYINK_RENDER_BIN=/path/to/easyink-render pnpm -F @easyink/render-api-service start
 ```
 
+When `EASYINK_RENDER_BIN` is not set, the service first looks for the current
+platform binary produced by the Render host build, for example:
+
+```text
+lib/EasyInk.Render/releases/host/<version>/<platform>/easyink-render
+```
+
+So the usual local flow is:
+
+```bash
+./lib/EasyInk.Render/build-host.sh darwin-arm64
+pnpm -F @easyink/render-api-service build
+pnpm -F @easyink/render-api-service start
+```
+
 Development:
 
 ```bash
@@ -39,7 +54,7 @@ Environment:
 
 - `EASYINK_RENDER_API_HOST`: listen host, default `127.0.0.1`.
 - `EASYINK_RENDER_API_PORT`: listen port, default `18081`.
-- `EASYINK_RENDER_BIN`: Render CLI path, default `easyink-render`.
+- `EASYINK_RENDER_BIN`: Render CLI path. Explicit value wins; otherwise the service tries the local Render release output, then falls back to `easyink-render`.
 - `EASYINK_RENDER_API_WORK_DIR`: temporary request/output root, default OS temp dir.
 - `EASYINK_RENDER_API_KEEP_WORK_DIR=1`: keep per-request temp files for debugging.
 - `EASYINK_RENDER_API_CLI_TIMEOUT_MS`: child process timeout, default `120000`.

@@ -68,6 +68,8 @@ Render 读取的是一个 JSON 请求文件。最小 HTML 请求长这样：
 
 `easyink` 输入会自动补默认等待条件：`wait.until` 为 `easyinkReady`，`wait.selector` 为 `.easyink-ready`。如果你显式传入 `wait`，就以你的配置为准。
 
+连续纸在 Render 路径里按 Viewer 实际渲染高度生成 PDF。也就是说，输出纸高来自渲染完成后的页面尺寸，而不是 schema 的初始 `page.height`，更不是交给浏览器打印驱动决定。
+
 内嵌 runtime 由根级 `internal-packages/viewer-runtime` 构建。该内部包通过 pnpm workspace 引入 `@easyink/viewer`，输出 `index.html`、`viewer.js` 和 `viewer.css` 到 Go host 的 embed 目录，避免 Render 侧维护另一套 EasyInk 渲染实现。
 
 这些输出文件是构建产物，不提交到 Git。你需要本地跑 Go 测试或直接构建 Docker image 时，先执行：

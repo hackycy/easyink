@@ -82,9 +82,10 @@ func RenderHTML(source protocol.Source) (string, protocol.PDFOptions, error) {
 		return "", protocol.PDFOptions{}, err
 	}
 	pdf := protocol.PDFOptions{
-		PaperWidthMm:  schema.Page.Width,
-		PaperHeightMm: schema.Page.Height,
-		MarginMm:      &protocol.MarginMm{},
+		PaperWidthMm:      schema.Page.Width,
+		PaperHeightMm:     schema.Page.Height,
+		MarginMm:          &protocol.MarginMm{},
+		PreferCSSPageSize: true,
 	}
 	printBackground := true
 	pdf.PrintBackground = &printBackground

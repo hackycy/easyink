@@ -9,9 +9,10 @@ import type {
 } from './protocol'
 import { Buffer } from 'node:buffer'
 import { spawn } from 'node:child_process'
+import { existsSync, readFileSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
 
 const DEFAULT_CLI_TIMEOUT_MS = 120_000
@@ -47,6 +48,10 @@ export class RenderCliError extends Error {
     this.stderr = options.stderr
     this.cli = options.cli
   }
+}
+
+export function resolveRenderBinary(binary?: string): string {
+  return binary ?? process.env.EASYINK_RENDER_BIN ?? findLocalRenderBinary() ?? 'easyink-render'
 }
 
 export function toPrintPDFRequest(input: RenderApiRequest): PrintPDFRequest {
@@ -93,7 +98,7 @@ export function toRenderCliArgs(paths: { requestPath: string, outputPath: string
 }
 
 export async function renderWithCli(input: RenderApiRequest, options: RenderCliOptions = {}): Promise<RenderCliResult> {
-  const binary = options.binary ?? process.env.EASYINK_RENDER_BIN ?? 'easyink-render'
+  const binary = resolveRenderBinary(options.binary)
   const baseDir = options.workDir ?? tmpdir()
   await mkdir(baseDir, { recursive: true })
   const requestDir = await mkdtemp(join(baseDir, 'easyink-render-api-'))
@@ -152,7 +157,7 @@ export async function renderWithCli(input: RenderApiRequest, options: RenderCliO
 }
 
 export async function runRenderCommand(args: string[], options: RenderCliOptions = {}): Promise<{ stdout: string, stderr: string, exitCode: number }> {
-  const binary = options.binary ?? process.env.EASYINK_RENDER_BIN ?? 'easyink-render'
+  const binary = resolveRenderBinary(options.binary)
   return runProcess(binary, args, { timeoutMs: options.cliTimeoutMs ?? DEFAULT_CLI_TIMEOUT_MS })
 }
 
@@ -224,5 +229,77 @@ function pushStringFlag(args: string[], name: string, value: string | undefined)
 function pushNumberFlag(args: string[], name: string, value: number | undefined): void {
   if (typeof value === 'number') {
     args.push(name, String(value))
+  }
+}
+
+function findLocalRenderBinary(): string | undefined {
+  const repoRoot = findRepoRoot(process.cwd())
+  if (!repoRoot) {
+    return undefined
+  }
+
+  const platform = currentRenderPlatform()
+  if (!platform) {
+    return undefined
+  }
+
+  const executable = process.platform === 'win32' ? 'easyink-render.exe' : 'easyink-render'
+  const renderRoot = join(repoRoot, 'lib/EasyInk.Render')
+  const version = readRenderHostVersion(renderRoot)
+  const candidates = [
+    version ? join(renderRoot, 'releases/host', version, platform, executable) : undefined,
+    join(renderRoot, 'host', executable),
+  ].filter((item): item is string => Boolean(item))
+
+  return candidates.find(candidate => existsSync(candidate))
+}
+
+function findRepoRoot(start: string): string | undefined {
+  let current = resolve(start)
+  while (true) {
+    if (
+      existsSync(join(current, 'package.json'))
+      && existsSync(join(current, 'lib/EasyInk.Render'))
+    ) {
+      return current
+    }
+    const parent = dirname(current)
+    if (parent === current) {
+      return undefined
+    }
+    current = parent
+  }
+}
+
+function currentRenderPlatform(): string | undefined {
+  const arch = process.arch
+  if (process.platform === 'darwin') {
+    if (arch === 'arm64')
+      return 'darwin-arm64'
+    if (arch === 'x64')
+      return 'darwin-x64'
+  }
+  if (process.platform === 'linux') {
+    if (arch === 'arm64')
+      return 'linux-arm64'
+    if (arch === 'x64')
+      return 'linux-x64'
+  }
+  if (process.platform === 'win32') {
+    if (arch === 'ia32')
+      return 'win-x86'
+    if (arch === 'x64')
+      return 'win-x64'
+  }
+  return undefined
+}
+
+function readRenderHostVersion(renderRoot: string): string | undefined {
+  try {
+    const manifest = JSON.parse(readFileSync(join(renderRoot, 'manifests/runtime-manifest.sample.json'), 'utf8')) as { host?: { version?: unknown } }
+    return typeof manifest.host?.version === 'string' ? manifest.host.version : undefined
+  }
+  catch {
+    return undefined
   }
 }

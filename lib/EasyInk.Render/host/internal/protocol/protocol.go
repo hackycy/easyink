@@ -45,11 +45,12 @@ type FontResource struct {
 }
 
 type PDFOptions struct {
-	PaperWidthMm    float64   `json:"paperWidthMm,omitempty"`
-	PaperHeightMm   float64   `json:"paperHeightMm,omitempty"`
-	PrintBackground *bool     `json:"printBackground,omitempty"`
-	Landscape       bool      `json:"landscape,omitempty"`
-	MarginMm        *MarginMm `json:"marginMm,omitempty"`
+	PaperWidthMm      float64   `json:"paperWidthMm,omitempty"`
+	PaperHeightMm     float64   `json:"paperHeightMm,omitempty"`
+	PrintBackground   *bool     `json:"printBackground,omitempty"`
+	Landscape         bool      `json:"landscape,omitempty"`
+	MarginMm          *MarginMm `json:"marginMm,omitempty"`
+	PreferCSSPageSize bool      `json:"preferCSSPageSize,omitempty"`
 }
 
 type MarginMm struct {

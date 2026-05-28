@@ -1,6 +1,6 @@
 import type { RenderApiRequest } from './protocol'
 import { describe, expect, it } from 'vitest'
-import { toPrintPDFRequest, toRenderCliArgs } from './cli'
+import { resolveRenderBinary, toPrintPDFRequest, toRenderCliArgs } from './cli'
 
 describe('render CLI adapter', () => {
   it('strips API-only fields before writing the Render request', () => {
@@ -54,5 +54,9 @@ describe('render CLI adapter', () => {
       '--request-timeout-ms',
       '5000',
     ])
+  })
+
+  it('lets explicit binary configuration win over auto-discovery', () => {
+    expect(resolveRenderBinary('/opt/easyink/easyink-render')).toBe('/opt/easyink/easyink-render')
   })
 })

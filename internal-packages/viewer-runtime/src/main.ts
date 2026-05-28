@@ -32,6 +32,7 @@ async function boot(): Promise<void> {
       onDiagnostic: reportDiagnostic,
     })
 
+    applyRenderedPageCSS(viewer.renderedPages)
     root.classList.add('easyink-ready')
     root.setAttribute('data-easyink-runtime', payload.runtimeVersion || 'embedded')
     window.easyinkReady = true
@@ -43,6 +44,30 @@ async function boot(): Promise<void> {
     console.error('[easyink-render-runtime]', error)
     throw error
   }
+}
+
+function applyRenderedPageCSS(pages: Array<{ width: number, height: number, unit: string }>): void {
+  const firstPage = pages[0]
+  if (!firstPage)
+    return
+
+  const style = document.querySelector<HTMLStyleElement>('style[data-easyink-runtime="page-css"]')
+  if (!style)
+    return
+
+  const unit = normalizeCSSUnit(firstPage.unit)
+  const width = formatCSSNumber(firstPage.width)
+  const height = formatCSSNumber(firstPage.height)
+  style.textContent = `@page { size: ${width}${unit} ${height}${unit}; margin: 0; }
+html, body { width: ${width}${unit}; min-height: ${height}${unit}; }`
+}
+
+function normalizeCSSUnit(unit: string): string {
+  return ['mm', 'cm', 'in', 'pt', 'px'].includes(unit) ? unit : 'mm'
+}
+
+function formatCSSNumber(value: number): string {
+  return Number.isFinite(value) ? value.toFixed(3).replace(/\.?0+$/, '') : '0'
 }
 
 function readPayload(): RuntimePayload {
