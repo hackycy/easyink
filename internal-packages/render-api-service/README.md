@@ -1,15 +1,17 @@
 # @easyink/render-api-service
 
-Internal Node HTTP facade for `EasyInk.Render`.
+Internal h3-based Node HTTP facade for `EasyInk.Render`.
 
-`EasyInk.Render` stays CLI/IPC-first. This package starts a small local Node service that receives HTTP JSON requests, writes a temporary Render request file, calls `easyink-render render --json`, then returns either PDF bytes or JSON with `pdfBase64`.
+`EasyInk.Render` stays CLI/IPC-first. This package starts a small local h3 service that receives HTTP JSON requests, writes a temporary Render request file, calls `easyink-render render --json`, then returns either PDF bytes or JSON with `pdfBase64`.
 
 ## Start
 
 ```bash
 pnpm -F @easyink/render-api-service build
-EASYINK_RENDER_BIN=/path/to/easyink-render pnpm -F @easyink/render-api-service start
+pnpm -F @easyink/render-api-service start
 ```
+
+Configuration can come from shell environment variables or dotenv files in the current working directory. For local development, copy `.env.sample` to `.env.local` and adjust values as needed.
 
 When `EASYINK_RENDER_BIN` is not set, the service first looks for the current
 platform binary produced by the Render host build, for example:
@@ -29,7 +31,7 @@ pnpm -F @easyink/render-api-service start
 Development:
 
 ```bash
-EASYINK_RENDER_BIN=lib/EasyInk.Render/host/easyink-render pnpm -F @easyink/render-api-service dev
+pnpm -F @easyink/render-api-service dev
 ```
 
 ## Render Smoke Test
@@ -52,12 +54,33 @@ temp/easyink-render-supermarket-smoke/supermarket-diagnostics.json
 
 Environment:
 
+The service loads dotenv files with this precedence, from lowest to highest: `.env`, `.env.local`, `.env.${NODE_ENV}`, `.env.${NODE_ENV}.local`, then real shell environment variables. Real `.env` files are ignored by git; `.env.sample` documents safe defaults.
+
 - `EASYINK_RENDER_API_HOST`: listen host, default `127.0.0.1`.
 - `EASYINK_RENDER_API_PORT`: listen port, default `18081`.
 - `EASYINK_RENDER_BIN`: Render CLI path. Explicit value wins; otherwise the service tries the local Render release output, then falls back to `easyink-render`.
 - `EASYINK_RENDER_API_WORK_DIR`: temporary request/output root, default OS temp dir.
-- `EASYINK_RENDER_API_KEEP_WORK_DIR=1`: keep per-request temp files for debugging.
+- `EASYINK_RENDER_API_KEEP_WORK_DIR`: keep per-request temp files for debugging. Accepts `1`, `true`, `yes`, or `on`.
 - `EASYINK_RENDER_API_CLI_TIMEOUT_MS`: child process timeout, default `120000`.
+- `EASYINK_RENDER_API_MAX_BODY_BYTES`: max HTTP JSON body size, default `67108864`.
+
+Default Render runtime can also be configured by environment. Per-request `runtime` still wins for that request.
+
+- `EASYINK_RENDER_NO_DAEMON`
+- `EASYINK_RENDER_FORCE_RESTART_DAEMON`
+- `EASYINK_RENDER_DISABLE_SANDBOX`
+- `EASYINK_RENDER_BROWSER_KIND`
+- `EASYINK_RENDER_BROWSER_PATH`
+- `EASYINK_RENDER_HEADLESS_MODE`
+- `EASYINK_RENDER_PROFILE_ROOT`
+- `EASYINK_RENDER_TEMP_DIR`
+- `EASYINK_RENDER_LOG_DIR`
+- `EASYINK_RENDER_MAX_CONCURRENCY`
+- `EASYINK_RENDER_MAX_QUEUE_SIZE`
+- `EASYINK_RENDER_REQUEST_TIMEOUT_MS`
+- `EASYINK_RENDER_IDLE_TIMEOUT_MS`
+
+Invalid numeric or boolean environment values fail at startup instead of being silently coerced.
 
 ## API Shape
 
@@ -209,13 +232,12 @@ Use this to load a diagnostics id returned by Render, or a URL-encoded diagnosti
 ```ts
 import { createRenderApiServer } from '@easyink/render-api-service'
 
-const service = createRenderApiServer({
-  binary: '/path/to/easyink-render',
-  port: 18081,
-})
+const service = createRenderApiServer()
 
 await service.listen()
 ```
+
+Set `EASYINK_RENDER_BIN`, `EASYINK_RENDER_API_PORT`, and other environment variables before creating the service.
 
 ## Boundary
 

@@ -3,7 +3,7 @@
   "type": "module",
   "version": "0.0.0",
   "private": true,
-  "description": "Internal Node HTTP API facade for EasyInk.Render CLI",
+  "description": "Internal h3 Node HTTP API facade for EasyInk.Render CLI",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",
   "sideEffects": false,
@@ -27,6 +27,10 @@
     "start": "node dist/bin/server.mjs",
     "test": "vitest run",
     "test:render-smoke": "tsx scripts/render-supermarket-smoke.ts"
+  },
+  "dependencies": {
+    "dotenv": "catalog:framework",
+    "h3": "catalog:framework"
   },
   "devDependencies": {
     "@easyink/samples": "workspace:*"

@@ -1,3 +1,4 @@
+import type { RenderProcessConfig } from './config'
 import type {
   PrintPDFRequest,
   RenderApiRequest,
@@ -14,16 +15,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
-
-const DEFAULT_CLI_TIMEOUT_MS = 120_000
-
-export interface RenderCliOptions {
-  binary?: string
-  workDir?: string
-  keepWorkDir?: boolean
-  cliTimeoutMs?: number
-  defaultRuntime?: RenderRuntimeOptions
-}
+import { loadRenderApiConfig } from './config'
 
 export interface RenderCliResult {
   cli: RenderCliJsonSuccess
@@ -100,22 +92,22 @@ export function toRenderCliArgs(paths: { requestPath: string, outputPath: string
   return args
 }
 
-export async function renderWithCli(input: RenderApiRequest, options: RenderCliOptions = {}): Promise<RenderCliResult> {
-  const binary = resolveRenderBinary(options.binary)
-  const baseDir = options.workDir ?? tmpdir()
+export async function renderWithCli(input: RenderApiRequest, config: RenderProcessConfig = loadRenderApiConfig()): Promise<RenderCliResult> {
+  const binary = resolveRenderBinary(config.binary)
+  const baseDir = config.workDir ?? tmpdir()
   await mkdir(baseDir, { recursive: true })
   const requestDir = await mkdtemp(join(baseDir, 'easyink-render-api-'))
   const requestPath = join(requestDir, 'request.json')
   const outputPath = join(requestDir, 'out.pdf')
   const diagnosticsPath = join(requestDir, 'diagnostics.json')
-  const runtime = { ...options.defaultRuntime, ...input.runtime }
+  const runtime = { ...config.defaultRuntime, ...input.runtime }
 
   try {
     await writeFile(requestPath, JSON.stringify(toPrintPDFRequest(input)), 'utf8')
     const args = toRenderCliArgs({ requestPath, outputPath, diagnosticsPath }, runtime)
     const requestTimeoutMs = input.wait?.timeoutMs
     const processResult = await runProcess(binary, args, {
-      timeoutMs: options.cliTimeoutMs ?? (requestTimeoutMs ? requestTimeoutMs + 10_000 : DEFAULT_CLI_TIMEOUT_MS),
+      timeoutMs: requestTimeoutMs ? requestTimeoutMs + 10_000 : config.cliTimeoutMs,
     })
     const cli = parseCliJson(processResult.stdout)
 
@@ -153,15 +145,15 @@ export async function renderWithCli(input: RenderApiRequest, options: RenderCliO
     }
   }
   finally {
-    if (!options.keepWorkDir) {
+    if (!config.keepWorkDir) {
       await rm(requestDir, { force: true, recursive: true })
     }
   }
 }
 
-export async function runRenderCommand(args: string[], options: RenderCliOptions = {}): Promise<{ stdout: string, stderr: string, exitCode: number }> {
-  const binary = resolveRenderBinary(options.binary)
-  return runProcess(binary, args, { timeoutMs: options.cliTimeoutMs ?? DEFAULT_CLI_TIMEOUT_MS })
+export async function runRenderCommand(args: string[], config: RenderProcessConfig = loadRenderApiConfig()): Promise<{ stdout: string, stderr: string, exitCode: number }> {
+  const binary = resolveRenderBinary(config.binary)
+  return runProcess(binary, args, { timeoutMs: config.cliTimeoutMs })
 }
 
 async function runProcess(command: string, args: string[], options: { timeoutMs: number }): Promise<{ stdout: string, stderr: string, exitCode: number }> {
@@ -175,6 +167,7 @@ async function runProcess(command: string, args: string[], options: { timeoutMs:
       settled = true
       reject(new RenderCliError(`Render CLI timed out after ${options.timeoutMs}ms`, { code: 'RENDER_CLI_TIMEOUT' }))
     }, options.timeoutMs)
+    timer.unref()
 
     child.stdout.on('data', chunk => stdout.push(Buffer.from(chunk)))
     child.stderr.on('data', chunk => stderr.push(Buffer.from(chunk)))

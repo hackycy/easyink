@@ -19,6 +19,7 @@ lib/EasyInk.Render/releases/
 lib/EasyInk.Render/host/internal/easyink/runtime/
 .env.*
 .env
+!.env.sample
 
 # AI
 .claude
