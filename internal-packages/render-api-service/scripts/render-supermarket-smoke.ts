@@ -82,7 +82,7 @@ function buildLinuxHostBinary(): void {
     'golang:1.23-bookworm',
     'sh',
     '-lc',
-    'CGO_ENABLED=0 GOOS=linux GOARCH=amd64 /usr/local/go/bin/go build -trimpath -o /src/easyink-render ./cmd/easyink-render-host',
+    'CGO_ENABLED=0 GOOS=linux GOARCH=amd64 /usr/local/go/bin/go build -trimpath -o /src/easyink-render ./cmd/easyink-render',
   ])
 }
 

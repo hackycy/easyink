@@ -6,7 +6,7 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -o /out/easyink-render ./cmd/easyink-render-host
+RUN CGO_ENABLED=0 go build -o /out/easyink-render ./cmd/easyink-render
 
 FROM chromedp/headless-shell:latest
 

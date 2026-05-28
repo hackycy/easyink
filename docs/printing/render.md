@@ -156,7 +156,7 @@ easyink-render config get
 easyink-render config set browser.path /path/to/headless-shell
 ```
 
-Linux/macOS 默认写到 `~/.config/easyink-render/config.json`，Windows 默认写到 `%APPDATA%\EasyInk.Render\config.json`。它保存浏览器路径、profile/temp/log 目录、并发数、队列长度和超时配置。
+Linux/macOS 默认写到 `~/.config/easyink-render/config.json`，Windows 默认写到 `%APPDATA%\EasyInk.Render\config.json`。它保存浏览器路径、profile/temp/log 目录、并发数、队列长度、超时配置和浏览器 sandbox 开关。
 
 ## 手动构建 {#manual-build}
 
@@ -235,6 +235,7 @@ easyink-render config set maxConcurrency 2
 - `browser.kind`
 - `browser.path`
 - `browser.headlessMode`
+- `browser.disableSandbox`
 - `profileRoot`
 - `tempDir`
 - `logDir`
@@ -243,7 +244,7 @@ easyink-render config set maxConcurrency 2
 - `requestTimeoutMs`
 - `idleTimeoutMs`
 
-如果命令行同时传了 `--browser-kind` 这类参数，它会覆盖配置文件里的值。
+如果命令行同时传了 `--browser-kind` 这类参数，它会覆盖配置文件里的值。默认会保留浏览器 sandbox；只有在容器 root 用户或浏览器运行时明确要求时，才设置 `browser.disableSandbox=true`、环境变量 `EASYINK_RENDER_DISABLE_SANDBOX=true`，或在命令行传 `--disable-sandbox`。
 
 ## Diagnostics {#diagnostics}
 
@@ -278,6 +279,6 @@ HTML 和 EasyInk 输入会经过资源安全校验。
 }
 ```
 
-默认策略会阻断私网、localhost、link-local、非 `http/https` 协议等外链资源。浏览器运行时也会禁用代理环境变量，并使用独立的 profile/context。
+默认策略会阻断私网、localhost、link-local、非 `http/https` 协议等外链资源。浏览器运行时也会禁用代理环境变量，并使用独立的 profile/context。IPC daemon 请求必须带状态文件中的 nonce，单个 IPC payload 和 request JSON 会被限制在 128 MiB 内；PDF 与离线资源还会受 `security.maxInputBytes` 限制。Diagnostics 默认以当前用户私有权限写入，且不会把 `data:` 页面地址原文写入 `finalUrl`。
 
 关于 Render，目前知道这些就够用了。如果你的下一步是把 PDF 送到打印机，回到 [打印方案](/printing/) 选择 EasyInk Printer 或 HiPrint。

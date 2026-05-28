@@ -99,7 +99,7 @@ func WriteSummary(logDir string, value protocol.Diagnostics) (string, error) {
 		return "", nil
 	}
 	dir := Directory(logDir, value.ID)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}
 	path := filepath.Join(dir, "diagnostics.json")
@@ -108,7 +108,7 @@ func WriteSummary(logDir string, value protocol.Diagnostics) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := os.WriteFile(path, append(data, '\n'), 0o644); err != nil {
+	if err := os.WriteFile(path, append(data, '\n'), 0o600); err != nil {
 		return "", err
 	}
 	return path, nil
@@ -119,7 +119,7 @@ func WriteLog(logDir string, value protocol.Diagnostics) (string, error) {
 		return "", nil
 	}
 	dir := Directory(logDir, value.ID)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}
 	path := filepath.Join(dir, "render.log")
@@ -150,7 +150,7 @@ func WriteLog(logDir string, value protocol.Diagnostics) (string, error) {
 	for _, item := range value.FailedRequests {
 		writeLogLine(&out, "failedRequest", item)
 	}
-	if err := os.WriteFile(path, []byte(out.String()), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(out.String()), 0o600); err != nil {
 		return "", err
 	}
 	return path, nil
@@ -175,11 +175,11 @@ func WriteAttachment(logDir, diagnosticsID, fileName string, data []byte) (strin
 		return "", nil
 	}
 	dir := Directory(logDir, diagnosticsID)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}
 	path := filepath.Join(dir, name)
-	if err := os.WriteFile(path, data, 0o644); err != nil {
+	if err := os.WriteFile(path, data, 0o600); err != nil {
 		return "", err
 	}
 	return path, nil
@@ -224,14 +224,14 @@ func WriteCopy(path string, diag protocol.Diagnostics) error {
 	if strings.TrimSpace(path) == "" {
 		return nil
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
 	data, err := json.MarshalIndent(diag, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, append(data, '\n'), 0o644)
+	return os.WriteFile(path, append(data, '\n'), 0o600)
 }
 
 func Directory(logDir, diagnosticsID string) string {

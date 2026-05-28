@@ -26,7 +26,7 @@ EasyInk.Engine
 
 路由优先级为 SumatraPDF fallback、ESC/POS raw、默认 PDFium/GDI。
 
-启用 Render 后，`renderSource` 请求会先通过本地 `easyink-render-host` 转成 PDF，再进入同一套物理打印路由；纯 PDF 请求保持原路径不变。
+启用 Render 后，`renderSource` 请求会先通过本地 `easyink-render` 转成 PDF，再进入同一套物理打印路由；纯 PDF 请求保持原路径不变。
 
 ## 打印路径
 

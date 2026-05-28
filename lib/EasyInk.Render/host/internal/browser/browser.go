@@ -27,19 +27,20 @@ var proxyEnvironmentKeys = []string{
 }
 
 type Manager struct {
-	mu          sync.Mutex
-	parent      context.Context
-	browser     context.Context
-	cancel      func()
-	path        string
-	kind        string
-	name        string
-	headless    string
-	profileRoot string
-	version     string
-	restarts    int
-	lastError   string
-	shutdown    bool
+	mu             sync.Mutex
+	parent         context.Context
+	browser        context.Context
+	cancel         func()
+	path           string
+	kind           string
+	name           string
+	headless       string
+	disableSandbox bool
+	profileRoot    string
+	version        string
+	restarts       int
+	lastError      string
+	shutdown       bool
 }
 
 type Health struct {
@@ -76,13 +77,14 @@ func NewWithConfig(ctx context.Context, browserConfig config.BrowserConfig, prof
 		browserConfig.HeadlessMode = "auto"
 	}
 	manager := &Manager{
-		parent:      ctx,
-		path:        browserConfig.Path,
-		kind:        browserConfig.Kind,
-		name:        browserConfig.Kind,
-		headless:    browserConfig.HeadlessMode,
-		profileRoot: profileRoot,
-		version:     "unknown",
+		parent:         ctx,
+		path:           browserConfig.Path,
+		kind:           browserConfig.Kind,
+		name:           browserConfig.Kind,
+		headless:       browserConfig.HeadlessMode,
+		disableSandbox: browserConfig.DisableSandbox,
+		profileRoot:    profileRoot,
+		version:        "unknown",
 	}
 	if err := manager.startLocked(); err != nil {
 		return nil, err
@@ -230,10 +232,12 @@ func (m *Manager) startLocked() error {
 		chromedp.NoDefaultBrowserCheck,
 		chromedp.Flag("disable-dev-shm-usage", true),
 		chromedp.Flag("disable-gpu", true),
-		chromedp.Flag("no-sandbox", true),
 		chromedp.Flag("proxy-server", "direct://"),
 		chromedp.Flag("proxy-bypass-list", "*"),
 	)
+	if m.disableSandbox {
+		opts = append(opts, chromedp.Flag("no-sandbox", true))
+	}
 	opts = append(opts, headlessOptions(m.kind, m.headless)...)
 	allocator, allocatorCancel := chromedp.NewExecAllocator(m.parent, opts...)
 	browserCtx, browserCancel := chromedp.NewContext(allocator)

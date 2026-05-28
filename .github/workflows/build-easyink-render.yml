@@ -109,7 +109,7 @@ jobs:
       - name: Resolve artifact name
         id: artifact
         shell: bash
-        run: echo "host_artifact_name=easyink-render-host-${{ steps.version.outputs.artifact_suffix }}" >> "$GITHUB_OUTPUT"
+        run: echo "host_artifact_name=easyink-render-${{ steps.version.outputs.artifact_suffix }}" >> "$GITHUB_OUTPUT"
 
       - name: Validate Render manifest
         run: pnpm render:manifest
@@ -135,7 +135,7 @@ jobs:
         shell: bash
         run: |
           docker build --platform linux/amd64 \
-            -t easyink-render-host:${{ steps.version.outputs.docker_tag_suffix }} \
+            -t easyink-render:${{ steps.version.outputs.docker_tag_suffix }} \
             -f lib/EasyInk.Render/host/Dockerfile \
             lib/EasyInk.Render/host
 
@@ -143,7 +143,7 @@ jobs:
         if: ${{ inputs.build_docker_image }}
         shell: bash
         run: |
-          docker run --rm easyink-render-host:${{ steps.version.outputs.docker_tag_suffix }} version
+          docker run --rm easyink-render:${{ steps.version.outputs.docker_tag_suffix }} version
 
       - name: Build Render host packages with Docker
         env:
@@ -170,7 +170,7 @@ jobs:
 
           mkdir -p "$release_dir"
           find "$source_dir" -mindepth 2 -maxdepth 2 -type f \( -name 'easyink-render-*' -o -name 'runtime-manifest.*.json' \) -exec cp {} "$release_dir" \;
-          cp "$source_dir/release-index.json" "$release_dir/easyink-render-host-release-index-$suffix.json"
+          cp "$source_dir/release-index.json" "$release_dir/easyink-render-release-index-$suffix.json"
           ls -la "$release_dir"
 
       - name: Upload Render host artifact

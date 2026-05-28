@@ -41,7 +41,7 @@ func (m Manager) Status(ctx context.Context) (map[string]any, error) {
 		return nil, err
 	}
 	defer client.Close()
-	frame, err := client.Call(ipc.Frame{Header: requestHeader("daemon.status", state.Nonce), Payload: nil})
+	frame, err := client.Call(ctx, ipc.Frame{Header: requestHeader("daemon.status", state.Nonce), Payload: nil})
 	if err != nil {
 		return nil, err
 	}
@@ -61,7 +61,7 @@ func (m Manager) Stop(ctx context.Context) error {
 		return err
 	}
 	defer client.Close()
-	frame, err := client.Call(ipc.Frame{Header: requestHeader("daemon.shutdown", state.Nonce)})
+	frame, err := client.Call(ctx, ipc.Frame{Header: requestHeader("daemon.shutdown", state.Nonce)})
 	if err != nil {
 		return err
 	}
@@ -119,6 +119,9 @@ func (m Manager) Ensure(ctx context.Context, forceRestart bool) (State, error) {
 		"--request-timeout-ms", strconv.Itoa(m.Config.RequestTimeoutMs),
 		"--idle-timeout-ms", strconv.Itoa(m.Config.IdleTimeoutMs),
 	}
+	if m.Config.Browser.DisableSandbox {
+		args = append(args, "--disable-sandbox")
+	}
 	exe, err := os.Executable()
 	if err != nil {
 		return State{}, err
@@ -144,7 +147,11 @@ func (m Manager) Ensure(ctx context.Context, forceRestart bool) (State, error) {
 		} else {
 			lastErr = err
 		}
-		time.Sleep(100 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			return State{}, ctx.Err()
+		case <-time.After(100 * time.Millisecond):
+		}
 	}
 	return State{}, fmt.Errorf("daemon startup failed: %w", lastErr)
 }
@@ -155,7 +162,7 @@ func shutdownState(ctx context.Context, state State) error {
 		return err
 	}
 	defer client.Close()
-	frame, err := client.Call(ipc.Frame{Header: requestHeader("daemon.shutdown", state.Nonce)})
+	frame, err := client.Call(ctx, ipc.Frame{Header: requestHeader("daemon.shutdown", state.Nonce)})
 	if err != nil {
 		return err
 	}
@@ -175,7 +182,7 @@ func (m Manager) Render(ctx context.Context, request []byte, forceRestart bool) 
 		return ipc.Frame{}, State{}, err
 	}
 	defer client.Close()
-	frame, err := client.Call(ipc.Frame{
+	frame, err := client.Call(ctx, ipc.Frame{
 		Header:  requestHeader("render.printPdf", state.Nonce),
 		Payload: request,
 	})
@@ -197,7 +204,7 @@ func (m Manager) connect(ctx context.Context) (State, *ipc.Client, error) {
 	if err != nil {
 		return state, nil, err
 	}
-	frame, err := client.Call(ipc.Frame{Header: requestHeader("daemon.ping", state.Nonce)})
+	frame, err := client.Call(ctx, ipc.Frame{Header: requestHeader("daemon.ping", state.Nonce)})
 	if err != nil {
 		_ = client.Close()
 		return state, nil, err

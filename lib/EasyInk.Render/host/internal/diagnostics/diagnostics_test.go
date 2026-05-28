@@ -26,6 +26,7 @@ func TestWriteSummaryWritesDiagnosticsByID(t *testing.T) {
 	if !strings.Contains(string(data), `"requestId": "req-123"`) {
 		t.Fatalf("summary did not include requestId: %s", string(data))
 	}
+	assertPrivateFile(t, path)
 }
 
 func TestWriteAttachmentWritesFileInDiagnosticsDirectory(t *testing.T) {
@@ -43,6 +44,7 @@ func TestWriteAttachmentWritesFileInDiagnosticsDirectory(t *testing.T) {
 	if string(data) != "<html></html>" {
 		t.Fatalf("attachment = %q", string(data))
 	}
+	assertPrivateFile(t, path)
 }
 
 func TestWriteLogWritesReadableDiagnosticsLog(t *testing.T) {
@@ -82,6 +84,7 @@ func TestWriteLogWritesReadableDiagnosticsLog(t *testing.T) {
 			t.Fatalf("expected log to include %q, got:\n%s", want, text)
 		}
 	}
+	assertPrivateFile(t, path)
 }
 
 func TestWriteAttachmentRejectsUnsafeFileName(t *testing.T) {
@@ -91,6 +94,17 @@ func TestWriteAttachmentRejectsUnsafeFileName(t *testing.T) {
 	}
 	if path != "" {
 		t.Fatalf("expected unsafe file name to be ignored, got %s", path)
+	}
+}
+
+func assertPrivateFile(t *testing.T, path string) {
+	t.Helper()
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat %s: %v", path, err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Fatalf("file mode = %o", got)
 	}
 }
 

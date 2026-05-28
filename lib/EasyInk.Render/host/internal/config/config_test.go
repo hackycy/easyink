@@ -48,8 +48,9 @@ func TestMergeOverrideKeepsUnsetValues(t *testing.T) {
 	queueSize := 0
 
 	got := MergeOverride(cfg, Override{
-		BrowserPath:  "/tmp/chrome",
-		MaxQueueSize: &queueSize,
+		BrowserPath:    "/tmp/chrome",
+		DisableSandbox: true,
+		MaxQueueSize:   &queueSize,
 	})
 
 	if got.Browser.Kind != "chromium" {
@@ -57,6 +58,9 @@ func TestMergeOverrideKeepsUnsetValues(t *testing.T) {
 	}
 	if got.Browser.Path != "/tmp/chrome" {
 		t.Fatalf("browser path = %q", got.Browser.Path)
+	}
+	if !got.Browser.DisableSandbox {
+		t.Fatal("expected sandbox override")
 	}
 	if got.MaxQueueSize != 0 {
 		t.Fatalf("max queue size = %d", got.MaxQueueSize)

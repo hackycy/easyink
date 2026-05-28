@@ -85,6 +85,13 @@ func TestCountPDFPagesHasMinimumForValidPDFBytes(t *testing.T) {
 	}
 }
 
+func TestCountPDFPagesUsesParserBeforeFallback(t *testing.T) {
+	input := minimalPDF(t, PDFMetadata{Title: "/Type /Page"})
+	if got := countPDFPages(input); got != 1 {
+		t.Fatalf("page count = %d", got)
+	}
+}
+
 func TestNormalizePDFRejectsMissingStartXref(t *testing.T) {
 	service := &Service{}
 	input := []byte("%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF")
@@ -148,7 +155,7 @@ func TestBuildOfflineResourcesValidatesAndGeneratesFontCSS(t *testing.T) {
 				Style:       "normal",
 			},
 		},
-	})
+	}, defaultMaxInputBytes)
 	if err != nil {
 		t.Fatalf("build offline resources: %v", err)
 	}
@@ -172,9 +179,48 @@ func TestBuildOfflineResourcesRejectsExternalURL(t *testing.T) {
 				Base64:      base64.StdEncoding.EncodeToString([]byte("png")),
 			},
 		},
-	})
+	}, defaultMaxInputBytes)
 	if err == nil || !strings.Contains(err.Error(), "easyink.local") {
 		t.Fatalf("expected easyink.local validation error, got %v", err)
+	}
+}
+
+func TestBuildOfflineResourcesRejectsOversizedBundle(t *testing.T) {
+	_, _, err := buildOfflineResources(protocol.Source{
+		Resources: []protocol.Resource{
+			{
+				URL:         "https://easyink.local/resources/logo.png",
+				ContentType: "image/png",
+				Base64:      base64.StdEncoding.EncodeToString([]byte("toolarge")),
+			},
+		},
+	}, 4)
+	if err == nil || !strings.Contains(err.Error(), "maxInputBytes") {
+		t.Fatalf("expected maxInputBytes error, got %v", err)
+	}
+}
+
+func TestNormalizePDFRejectsOversizedBase64BeforeDecode(t *testing.T) {
+	service := &Service{}
+	_, err := service.normalizePDF(protocol.PrintPDFRequest{
+		RequestID: "req-pdf",
+		Source: protocol.Source{
+			Type:      "pdf",
+			PDFBase64: base64.StdEncoding.EncodeToString([]byte("too-large")),
+		},
+		Security: protocol.SecurityOptions{MaxInputBytes: 4},
+	})
+	if err == nil || !strings.Contains(err.Error(), "maxInputBytes") {
+		t.Fatalf("expected maxInputBytes error, got %v", err)
+	}
+}
+
+func TestSanitizeFinalURLRedactsDataURL(t *testing.T) {
+	if got := sanitizeFinalURL("data:text/html;base64,PGh0bWw+"); got != "data:<redacted>" {
+		t.Fatalf("sanitized URL = %q", got)
+	}
+	if got := sanitizeFinalURL("https://example.com/template.html"); got != "https://example.com/template.html" {
+		t.Fatalf("sanitized URL = %q", got)
 	}
 }
 

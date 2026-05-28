@@ -130,13 +130,13 @@ func (r *Runtime) handleConn(conn net.Conn) {
 }
 
 func (r *Runtime) handleFrame(frame ipc.Frame) ipc.Frame {
-	r.touch()
 	if frame.Header.Type != "request" {
 		return errorFrame(frame.Header.ID, "INVALID_FRAME", "frame type must be request", nil)
 	}
-	if metaNonce(frame.Header.Meta) != "" && metaNonce(frame.Header.Meta) != r.nonce {
-		return errorFrame(frame.Header.ID, "DAEMON_NONCE_MISMATCH", "daemon nonce mismatch", nil)
+	if metaNonce(frame.Header.Meta) != r.nonce {
+		return errorFrame(frame.Header.ID, "DAEMON_NONCE_MISMATCH", "daemon nonce is required or invalid", nil)
 	}
+	r.touch()
 	switch frame.Header.Method {
 	case "daemon.ping":
 		return jsonFrame(frame.Header.ID, map[string]any{
@@ -161,14 +161,6 @@ func (r *Runtime) handleFrame(frame ipc.Frame) ipc.Frame {
 }
 
 func (r *Runtime) render(frame ipc.Frame) ipc.Frame {
-	release, ok := r.acquireRenderSlot(context.Background())
-	if !ok {
-		return errorFrame(frame.Header.ID, protocol.ErrTooManyRequests, "render queue is full", nil)
-	}
-	defer release()
-	r.running.Add(1)
-	defer r.running.Add(-1)
-
 	var req protocol.PrintPDFRequest
 	if err := json.Unmarshal(frame.Payload, &req); err != nil {
 		return errorFrame(frame.Header.ID, protocol.ErrInvalidRequest, err.Error(), nil)
@@ -179,6 +171,16 @@ func (r *Runtime) render(frame ipc.Frame) ipc.Frame {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutMs)*time.Millisecond)
 	defer cancel()
+	release, ok := r.acquireRenderSlot(ctx)
+	if !ok {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return errorFrame(frame.Header.ID, protocol.ErrRenderTimeout, fmt.Sprintf("Render timeout after %dms", timeoutMs), map[string]any{"stage": "queue"})
+		}
+		return errorFrame(frame.Header.ID, protocol.ErrTooManyRequests, "render queue is full", nil)
+	}
+	defer release()
+	r.running.Add(1)
+	defer r.running.Add(-1)
 	result, err := r.renderer.RenderPrintPDF(ctx, req)
 	result.Diagnostics = diagnostics.Persist(r.cfg.LogDir, result.Diagnostics, result.Attachments, req.Diagnostics)
 	if err != nil {

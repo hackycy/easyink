@@ -16,11 +16,12 @@ import (
 )
 
 type BrowserConfig struct {
-	Kind         string `json:"kind"`
-	Path         string `json:"path"`
-	Channel      string `json:"channel,omitempty"`
-	Version      string `json:"version,omitempty"`
-	HeadlessMode string `json:"headlessMode"`
+	Kind           string `json:"kind"`
+	Path           string `json:"path"`
+	Channel        string `json:"channel,omitempty"`
+	Version        string `json:"version,omitempty"`
+	HeadlessMode   string `json:"headlessMode"`
+	DisableSandbox bool   `json:"disableSandbox,omitempty"`
 }
 
 type RuntimeConfig struct {
@@ -38,6 +39,7 @@ type Override struct {
 	BrowserKind      string
 	BrowserPath      string
 	HeadlessMode     string
+	DisableSandbox   bool
 	ProfileRoot      string
 	TempDir          string
 	LogDir           string
@@ -102,14 +104,14 @@ func SaveRuntime(cfg RuntimeConfig) error {
 		return err
 	}
 	path := ConfigPath()
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, append(data, '\n'), 0o644)
+	return os.WriteFile(path, append(data, '\n'), 0o600)
 }
 
 func ApplyEnvironment(cfg RuntimeConfig) RuntimeConfig {
@@ -133,6 +135,11 @@ func ApplyEnvironment(cfg RuntimeConfig) RuntimeConfig {
 			cfg.IdleTimeoutMs = parsed
 		}
 	}
+	if value := os.Getenv("EASYINK_RENDER_DISABLE_SANDBOX"); value != "" {
+		if parsed, err := strconv.ParseBool(value); err == nil {
+			cfg.Browser.DisableSandbox = parsed
+		}
+	}
 	return cfg
 }
 
@@ -145,6 +152,9 @@ func MergeOverride(cfg RuntimeConfig, override Override) RuntimeConfig {
 	}
 	if override.HeadlessMode != "" {
 		cfg.Browser.HeadlessMode = override.HeadlessMode
+	}
+	if override.DisableSandbox {
+		cfg.Browser.DisableSandbox = true
 	}
 	if override.ProfileRoot != "" {
 		cfg.ProfileRoot = override.ProfileRoot
@@ -280,7 +290,7 @@ func StatePath() string {
 }
 
 func ensureWritableDir(dir string) error {
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
 	file, err := os.CreateTemp(dir, ".easyink-write-test-*")

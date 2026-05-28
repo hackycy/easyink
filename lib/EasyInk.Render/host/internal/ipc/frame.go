@@ -8,7 +8,10 @@ import (
 	"io"
 )
 
-const MaxHeaderBytes = 1024 * 1024
+const (
+	MaxHeaderBytes  = 1024 * 1024
+	MaxPayloadBytes = 128 * 1024 * 1024
+)
 
 type Header struct {
 	ID                string         `json:"id"`
@@ -44,6 +47,9 @@ func WriteFrame(w io.Writer, frame Frame) error {
 	}
 	if len(header) > MaxHeaderBytes {
 		return fmt.Errorf("ipc header exceeds %d bytes", MaxHeaderBytes)
+	}
+	if len(frame.Payload) > MaxPayloadBytes {
+		return fmt.Errorf("ipc payload exceeds %d bytes", MaxPayloadBytes)
 	}
 	var prefix [4]byte
 	binary.BigEndian.PutUint32(prefix[:], uint32(len(header)))
@@ -82,6 +88,9 @@ func ReadFrame(r io.Reader) (Frame, error) {
 	}
 	if header.PayloadLength < 0 {
 		return Frame{}, errors.New("invalid negative ipc payload length")
+	}
+	if header.PayloadLength > MaxPayloadBytes {
+		return Frame{}, fmt.Errorf("ipc payload exceeds %d bytes", MaxPayloadBytes)
 	}
 	payload := make([]byte, header.PayloadLength)
 	if header.PayloadLength > 0 {

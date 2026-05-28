@@ -47,7 +47,7 @@ docker run --rm --platform linux/amd64 \
   -v "$PWD/lib/EasyInk.Render/host:/src" \
   -w /src \
   golang:1.23-bookworm \
-  sh -lc 'CGO_ENABLED=0 GOOS=linux GOARCH=amd64 /usr/local/go/bin/go build -trimpath -o /tmp/easyink-render ./cmd/easyink-render-host && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 /usr/local/go/bin/go build -trimpath -o /tmp/easyink-render.exe ./cmd/easyink-render-host'
+  sh -lc 'CGO_ENABLED=0 GOOS=linux GOARCH=amd64 /usr/local/go/bin/go build -trimpath -o /tmp/easyink-render ./cmd/easyink-render && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 /usr/local/go/bin/go build -trimpath -o /tmp/easyink-render.exe ./cmd/easyink-render'
 ```
 
 真实浏览器渲染验证：
@@ -82,10 +82,10 @@ Docker 构建测试：
 
 ```bash
 docker build --platform linux/amd64 \
-  -t easyink-render-host:test \
+  -t easyink-render:test \
   -f lib/EasyInk.Render/host/Dockerfile \
   lib/EasyInk.Render/host
-docker run --rm easyink-render-host:test version
+docker run --rm easyink-render:test version
 ```
 
 Windows 手动构建发布 host 包时，可直接运行 `build-host.bat`。该脚本通过 Docker 中的 `golang:1.23-bookworm` 交叉编译，不要求本机安装 Go；默认构建 `win-x64,win-x86`，例如 `build-host.bat all` 会构建所有 host 平台，`build-host.bat 0.1.0 all` 可指定版本。

@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"easyink/render/host/internal/config"
+	"easyink/render/host/internal/ipc"
 )
 
 func TestStateRoundTrip(t *testing.T) {
@@ -95,5 +97,22 @@ func TestLockReleaseDoesNotRemoveNewOwner(t *testing.T) {
 	first.Release()
 	if _, err := os.Stat(path); err != nil {
 		t.Fatalf("expected second owner lock to remain: %v", err)
+	}
+}
+
+func TestRuntimeRejectsMissingOrInvalidNonce(t *testing.T) {
+	runtime := &Runtime{nonce: "secret"}
+
+	for _, frame := range []ipc.Frame{
+		{Header: ipc.Header{ID: "req-1", Type: "request", Method: "daemon.ping"}},
+		{Header: ipc.Header{ID: "req-2", Type: "request", Method: "daemon.ping", Meta: map[string]any{"nonce": "wrong"}}},
+	} {
+		response := runtime.handleFrame(frame)
+		if response.Header.OK || response.Header.Error == nil {
+			t.Fatalf("expected nonce error, got %#v", response.Header)
+		}
+		if response.Header.Error.Code != "DAEMON_NONCE_MISMATCH" || !strings.Contains(response.Header.Error.Message, "nonce") {
+			t.Fatalf("unexpected error: %#v", response.Header.Error)
+		}
 	}
 }

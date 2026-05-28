@@ -177,7 +177,7 @@ func (s *Service) renderHTML(ctx context.Context, req protocol.PrintPDFRequest, 
 	if err := security.ValidateBaseURL(req.Source.BaseURL, req.Security.AllowFileAccess, req.Security.AllowedOrigins); err != nil {
 		return Result{}, coded(protocol.ErrSecurityBlocked, err.Error(), nil)
 	}
-	offlineResources, fontCSS, err := buildOfflineResources(req.Source)
+	offlineResources, fontCSS, err := buildOfflineResources(req.Source, maxInputBytes(req.Security))
 	if err != nil {
 		return Result{}, coded(protocol.ErrInvalidRequest, err.Error(), nil)
 	}
@@ -237,7 +237,7 @@ func (s *Service) renderHTML(ctx context.Context, req protocol.PrintPDFRequest, 
 	actions = append(actions,
 		chromedp.Location(&finalURL),
 		chromedp.ActionFunc(func(ctx context.Context) error {
-			collector.SetFinalURL(finalURL)
+			collector.SetFinalURL(sanitizeFinalURL(finalURL))
 			buf, _, err := printPDF(req.PDF).Do(ctx)
 			if err != nil {
 				return err
@@ -563,9 +563,9 @@ func (s *Service) normalizePDF(req protocol.PrintPDFRequest) (Result, error) {
 	if strings.TrimSpace(req.Source.PDFBase64) == "" {
 		return Result{}, coded(protocol.ErrInvalidRequest, "source.pdfBase64 is required", nil)
 	}
-	maxInputBytes := req.Security.MaxInputBytes
-	if maxInputBytes <= 0 {
-		maxInputBytes = defaultMaxInputBytes
+	maxInputBytes := maxInputBytes(req.Security)
+	if int64(base64.StdEncoding.DecodedLen(len(req.Source.PDFBase64))) > maxInputBytes {
+		return Result{}, coded(protocol.ErrInvalidPDF, "input PDF exceeds maxInputBytes", map[string]any{"maxInputBytes": maxInputBytes})
 	}
 	decoded, err := base64.StdEncoding.DecodeString(req.Source.PDFBase64)
 	if err != nil {
@@ -664,10 +664,13 @@ func htmlWithInjectedHeadStyle(htmlDoc, css string) string {
 	return "<head>" + style + "</head>" + htmlDoc
 }
 
-func buildOfflineResources(source protocol.Source) (map[string]offlineResource, string, error) {
+func buildOfflineResources(source protocol.Source, maxInputBytes int64) (map[string]offlineResource, string, error) {
 	resources := map[string]offlineResource{}
+	var totalBytes int64
 	for _, item := range source.Resources {
-		if _, err := addOfflineResource(resources, item.URL, item.ContentType, item.Base64); err != nil {
+		var err error
+		totalBytes, err = addOfflineResource(resources, item.URL, item.ContentType, item.Base64, maxInputBytes, totalBytes)
+		if err != nil {
 			return nil, "", err
 		}
 	}
@@ -676,7 +679,9 @@ func buildOfflineResources(source protocol.Source) (map[string]offlineResource, 
 		if strings.TrimSpace(item.Family) == "" {
 			return nil, "", errors.New("source.fonts[].family is required")
 		}
-		normalizedURL, err := addOfflineResource(resources, item.URL, item.ContentType, item.Base64)
+		var normalizedURL string
+		var err error
+		normalizedURL, totalBytes, err = addOfflineFontResource(resources, item.URL, item.ContentType, item.Base64, maxInputBytes, totalBytes)
 		if err != nil {
 			return nil, "", err
 		}
@@ -699,26 +704,55 @@ func buildOfflineResources(source protocol.Source) (map[string]offlineResource, 
 	return resources, fontCSS.String(), nil
 }
 
-func addOfflineResource(resources map[string]offlineResource, rawURL, contentType, encoded string) (string, error) {
+func addOfflineResource(resources map[string]offlineResource, rawURL, contentType, encoded string, maxInputBytes, totalBytes int64) (int64, error) {
+	_, nextTotal, err := addOfflineResourceValue(resources, rawURL, contentType, encoded, maxInputBytes, totalBytes)
+	return nextTotal, err
+}
+
+func addOfflineFontResource(resources map[string]offlineResource, rawURL, contentType, encoded string, maxInputBytes, totalBytes int64) (string, int64, error) {
+	return addOfflineResourceValue(resources, rawURL, contentType, encoded, maxInputBytes, totalBytes)
+}
+
+func addOfflineResourceValue(resources map[string]offlineResource, rawURL, contentType, encoded string, maxInputBytes, totalBytes int64) (string, int64, error) {
 	normalizedURL, err := normalizeOfflineResourceURL(rawURL)
 	if err != nil {
-		return "", err
+		return "", totalBytes, err
 	}
 	if strings.TrimSpace(contentType) == "" {
-		return "", fmt.Errorf("offline resource contentType is required: %s", rawURL)
+		return "", totalBytes, fmt.Errorf("offline resource contentType is required: %s", rawURL)
+	}
+	if int64(base64.StdEncoding.DecodedLen(len(encoded))) > maxInputBytes-totalBytes {
+		return "", totalBytes, fmt.Errorf("offline resources exceed maxInputBytes: %s", rawURL)
 	}
 	body, err := base64.StdEncoding.DecodeString(encoded)
 	if err != nil {
-		return "", fmt.Errorf("offline resource base64 is invalid: %s", rawURL)
+		return "", totalBytes, fmt.Errorf("offline resource base64 is invalid: %s", rawURL)
 	}
 	if len(body) == 0 {
-		return "", fmt.Errorf("offline resource body is empty: %s", rawURL)
+		return "", totalBytes, fmt.Errorf("offline resource body is empty: %s", rawURL)
+	}
+	if totalBytes+int64(len(body)) > maxInputBytes {
+		return "", totalBytes, fmt.Errorf("offline resources exceed maxInputBytes: %s", rawURL)
 	}
 	resources[normalizedURL] = offlineResource{
 		contentType: contentType,
 		body:        body,
 	}
-	return normalizedURL, nil
+	return normalizedURL, totalBytes + int64(len(body)), nil
+}
+
+func maxInputBytes(options protocol.SecurityOptions) int64 {
+	if options.MaxInputBytes > 0 {
+		return options.MaxInputBytes
+	}
+	return defaultMaxInputBytes
+}
+
+func sanitizeFinalURL(value string) string {
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(value)), "data:") {
+		return "data:<redacted>"
+	}
+	return value
 }
 
 func normalizeOfflineResourceURL(rawURL string) (string, error) {
@@ -808,8 +842,13 @@ func countPDFPages(pdf []byte) int {
 	if len(pdf) == 0 {
 		return 0
 	}
-	count := strings.Count(string(pdf), "/Type /Page")
-	pages := strings.Count(string(pdf), "/Type /Pages")
+	if reader, err := pdfparse.NewReader(bytes.NewReader(pdf), int64(len(pdf))); err == nil {
+		if pageCount := reader.NumPage(); pageCount > 0 {
+			return pageCount
+		}
+	}
+	count := bytes.Count(pdf, []byte("/Type /Page"))
+	pages := bytes.Count(pdf, []byte("/Type /Pages"))
 	count -= pages
 	if count <= 0 {
 		return 1
