@@ -245,6 +245,9 @@ function statusForError(err: unknown): number {
 }
 
 function appendRuntimeInspectFlags(args: string[], runtime = {} as RenderApiRequest['runtime']): void {
+  if (runtime?.disableSandbox) {
+    args.push('--disable-sandbox')
+  }
   pushStringFlag(args, '--browser-kind', runtime?.browserKind)
   pushStringFlag(args, '--browser-path', runtime?.browserPath)
   pushStringFlag(args, '--headless-mode', runtime?.headlessMode)

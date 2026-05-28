@@ -148,6 +148,8 @@ internal sealed class RenderClient
         AppendArg(args, runtime.TempDir);
         AppendArg(args, "--log-dir");
         AppendArg(args, runtime.LogDir);
+        if (runtime.DisableSandbox)
+            AppendArg(args, "--disable-sandbox");
         AppendArg(args, "--max-concurrency");
         AppendArg(args, runtime.MaxConcurrency.ToString());
         AppendArg(args, "--max-queue-size");
@@ -157,6 +159,11 @@ internal sealed class RenderClient
         AppendArg(args, "--idle-timeout-ms");
         AppendArg(args, runtime.IdleTimeoutMs.ToString());
         return args.ToString();
+    }
+
+    internal static string BuildArgumentsForTest(RenderRuntimeOptions runtime, string requestPath, string outputPath, string diagnosticsPath)
+    {
+        return BuildArguments(runtime, requestPath, outputPath, diagnosticsPath);
     }
 
     internal JObject BuildRenderRequestForTest(string requestId, PrintRequestParams request)

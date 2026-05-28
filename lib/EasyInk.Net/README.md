@@ -108,7 +108,7 @@ build-installer.bat 1.2.3-beta.1
 - 目标机器需要 .NET Framework 4.8 运行时。
 - Printer 发布目录必须保留 `x86/SQLite.Interop.dll` 和 `x64/SQLite.Interop.dll`，否则审计日志会退化或不可用。
 - 若启用 SumatraPDF fallback，发布目录需要包含 `SumatraPDF\SumatraPDF.exe`。
-- 若启用 Render，发布目录需要包含 `render\host\win-x64\easyink-render.exe` 与 `render\host\win-x86\easyink-render.exe`。Chrome for Testing / headless shell 可随包放入 `render\browser`，也可以在 Printer 设置页按版本下载到本地缓存；离线环境可从 `https://googlechromelabs.github.io/chrome-for-testing/` 下载普通版本。Win7/8.1 使用 Chrome 109 时，可安装本机 Chrome 109、把历史离线包/已安装目录解压到 `%LOCALAPPDATA%\EasyInk.Printer\render\browser\versions\<version>`，或通过 `render\runtime-manifest.json` 指向内网包。Render daemon 默认常驻，设置里的空闲时间为 `0` 表示不因空闲退出；填入非 0 毫秒值才启用空闲退出。Go Render CLI 的构建请在 Docker 中执行，避免依赖本机 Go 环境。
+- 若启用 Render，发布目录需要包含 `render\host\win-x64\easyink-render.exe` 与 `render\host\win-x86\easyink-render.exe`。Chrome for Testing / headless shell 可随包放入 `render\browser`，也可以在 Printer 设置页按版本下载到本地缓存；离线环境可从 `https://googlechromelabs.github.io/chrome-for-testing/` 下载普通版本。Win7/8.1 使用 Chrome 109 时，可安装本机 Chrome 109、把历史离线包/已安装目录解压到 `%LOCALAPPDATA%\EasyInk.Printer\render\browser\versions\<version>`，或通过 `render\runtime-manifest.json` 指向内网包。Render daemon 默认常驻，设置里的空闲时间为 `0` 表示不因空闲退出；填入非 0 毫秒值才启用空闲退出。浏览器 sandbox 默认保持开启；只有在受控容器或确需兼容的环境中才把 `RenderDisableSandbox` 配为 `true`。Go Render CLI 的构建请在 Docker 中执行，避免依赖本机 Go 环境。
 
 ## 兼容性
 

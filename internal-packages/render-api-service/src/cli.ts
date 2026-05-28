@@ -84,6 +84,9 @@ export function toRenderCliArgs(paths: { requestPath: string, outputPath: string
   if (runtime.forceRestartDaemon) {
     args.push('--force-restart-daemon')
   }
+  if (runtime.disableSandbox) {
+    args.push('--disable-sandbox')
+  }
   pushStringFlag(args, '--browser-kind', runtime.browserKind)
   pushStringFlag(args, '--browser-path', runtime.browserPath)
   pushStringFlag(args, '--headless-mode', runtime.headlessMode)

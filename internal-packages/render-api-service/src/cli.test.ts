@@ -30,6 +30,7 @@ describe('render CLI adapter', () => {
     }, {
       noDaemon: true,
       forceRestartDaemon: true,
+      disableSandbox: true,
       browserKind: 'headless-shell',
       browserPath: '/bin/headless-shell',
       maxConcurrency: 2,
@@ -45,6 +46,7 @@ describe('render CLI adapter', () => {
       '--json',
       '--no-daemon',
       '--force-restart-daemon',
+      '--disable-sandbox',
       '--browser-kind',
       'headless-shell',
       '--browser-path',

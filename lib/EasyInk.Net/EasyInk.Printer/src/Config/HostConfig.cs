@@ -119,6 +119,7 @@ public class HostConfig
     public string? RenderTempDir { get; set; }
     public string? RenderLogDir { get; set; }
     public bool RenderDiagnosticsEnabled { get; set; } = false;
+    public bool RenderDisableSandbox { get; set; } = false;
 
     /// <summary>
     /// 低 DPI 小票/热敏打印机位图增强模式：normal、boost、monochrome。默认 boost。

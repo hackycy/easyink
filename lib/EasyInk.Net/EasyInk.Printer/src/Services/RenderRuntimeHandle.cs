@@ -9,6 +9,7 @@ internal sealed class RenderRuntimeOptions
     public string ProfileRoot { get; set; } = string.Empty;
     public string TempDir { get; set; } = string.Empty;
     public string LogDir { get; set; } = string.Empty;
+    public bool DisableSandbox { get; set; }
     public int MaxConcurrency { get; set; }
     public int MaxQueueSize { get; set; }
     public int RequestTimeoutMs { get; set; }

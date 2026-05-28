@@ -116,6 +116,7 @@ export interface RenderDiagnostics {
 export interface RenderRuntimeOptions {
   noDaemon?: boolean
   forceRestartDaemon?: boolean
+  disableSandbox?: boolean
   browserKind?: string
   browserPath?: string
   headlessMode?: string

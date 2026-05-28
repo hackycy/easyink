@@ -116,6 +116,7 @@ internal sealed class RenderRuntimeManager : IDisposable
             ProfileRoot = profileRoot,
             TempDir = tempDir,
             LogDir = logDir,
+            DisableSandbox = _config.RenderDisableSandbox,
             MaxConcurrency = _config.RenderMaxConcurrency,
             MaxQueueSize = _config.RenderMaxQueueSize,
             RequestTimeoutMs = _config.RenderRequestTimeoutMs,

@@ -243,6 +243,8 @@ internal sealed class RenderDaemonService
         AppendArg(args, runtime.TempDir);
         AppendArg(args, "--log-dir");
         AppendArg(args, runtime.LogDir);
+        if (runtime.DisableSandbox)
+            AppendArg(args, "--disable-sandbox");
         AppendArg(args, "--max-concurrency");
         AppendArg(args, runtime.MaxConcurrency.ToString());
         AppendArg(args, "--max-queue-size");
@@ -252,6 +254,11 @@ internal sealed class RenderDaemonService
         AppendArg(args, "--idle-timeout-ms");
         AppendArg(args, runtime.IdleTimeoutMs.ToString());
         return args.ToString();
+    }
+
+    internal static string BuildDaemonArgumentsForTest(string command, RenderRuntimeOptions runtime)
+    {
+        return BuildDaemonArguments(command, runtime);
     }
 
     private static RenderDaemonCommandResult RunHost(string hostPath, string arguments, int timeoutMs)

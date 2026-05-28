@@ -97,7 +97,7 @@ Renders HTML, EasyInk schema, or existing PDF input through the Render CLI.
 Request body is the existing Render `PrintPDFRequest` plus two API-only fields:
 
 - `response`: HTTP response controls. `type` is `base64Json` or `pdf`; `includeDiagnostics` embeds parsed diagnostics JSON when JSON output is used.
-- `runtime`: per-call CLI flag overrides such as `noDaemon`, `browserKind`, `browserPath`, `logDir`, `requestTimeoutMs`.
+- `runtime`: per-call CLI flag overrides such as `noDaemon`, `disableSandbox`, `browserKind`, `browserPath`, `logDir`, `requestTimeoutMs`.
 
 `response` and `runtime` are stripped before the JSON is passed to `easyink-render`, because the Go CLI rejects unknown request fields.
 
@@ -123,6 +123,7 @@ Default response type is `base64Json`, unless `Accept: application/pdf` is sent.
   },
   "runtime": {
     "noDaemon": false,
+    "disableSandbox": false,
     "requestTimeoutMs": 30000
   }
 }

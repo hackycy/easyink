@@ -105,7 +105,7 @@ function renderWithHeadlessShell(): void {
     [
       'set -eu',
       'mkdir -p /smoke/profile /smoke/tmp /smoke/logs /smoke/output',
-      './host/easyink-render render --no-daemon --request /smoke/supermarket-request.json --out /smoke/output/supermarket-receipt.pdf --browser-kind headless-shell --browser-path /headless-shell/headless-shell --profile-root /smoke/profile --temp-dir /smoke/tmp --log-dir /smoke/logs --diagnostics-out /smoke/supermarket-diagnostics.json --json',
+      './host/easyink-render render --no-daemon --disable-sandbox --request /smoke/supermarket-request.json --out /smoke/output/supermarket-receipt.pdf --browser-kind headless-shell --browser-path /headless-shell/headless-shell --profile-root /smoke/profile --temp-dir /smoke/tmp --log-dir /smoke/logs --diagnostics-out /smoke/supermarket-diagnostics.json --json',
       'test -s /smoke/output/supermarket-receipt.pdf',
     ].join('\n'),
   ])
