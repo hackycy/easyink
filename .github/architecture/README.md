@@ -50,6 +50,7 @@
 | 22 | [编辑行为架构](./22-editing-behavior.md) | EditingSession、类型化 Selection、Geometry 协议、Behavior 中间件、Surfaces 与 Transaction |
 | 23 | [AI 集成与 Contribution](./23-ai-integration.md) | Contribution API、`@easyink/ai`、`@easyink/schema-tools`、MCP Client/Server、LLM Provider |
 | 24 | [页面布局正交体系](./24-page-layout-orthogonal-system.md) | 页面模型、布局策略、分页策略、测量重排引擎四层解耦 |
+| 25 | [AI 助手重构](./25-assistant-platform-v3.md) | 当前主推方案：退役旧 AI/MCP 包，核心架构不依赖 MCP |
 
 ## 补充说明
 
@@ -62,8 +63,8 @@
 - 未识别物料、缺失数据、缺失字体、渲染失败都必须以可见诊断暴露，不允许静默吞掉
 - 对标产品的原始 JSON 字段命名存在历史噪音，EasyInk 提供无损兼容编解码层
 - `DocumentSchema.unit`、纸张预设、页面类型显示名称这类信息在属性面板中可见，但不固化进 `page` 规范字段
-- AI 对话生成通过 `@easyink/ai`（浏览器端，MCP Client + Designer Contribution）与 `@easyink/mcp-server`（Node 端，可 Docker 部署）实现；Schema/DataSource 校验下沉到 `@easyink/schema-tools`；designer 仅暴露 Contribution 协议，对 AI 零编译期依赖
-- 数据源系统支持运行时动态注册，通过 Provider Factory 模式支持 MCP 数据源注入
+- 旧 AI 对话方案基于 `@easyink/ai` 与 `@easyink/mcp-server`；新主推方案见 [25-assistant-platform-v3](./25-assistant-platform-v3.md)，退役旧 AI/MCP 包，核心架构不依赖 MCP
+- 数据源系统支持运行时动态注册；新 Assistant v3 只保留轻量数据输入适配，不把 MCP 作为核心数据源机制
 
 ## 快速导航
 
@@ -75,3 +76,4 @@
 - **想了解物料体系?** -> [11-element-system](./11-element-system.md)
 - **想了解命令与历史?** -> [12-command-undo-redo](./12-command-undo-redo.md)
 - **想了解 AI 集成?** -> [23-ai-integration](./23-ai-integration.md)
+- **想了解 AI Agent 重构?** -> [25-assistant-platform-v3](./25-assistant-platform-v3.md)
