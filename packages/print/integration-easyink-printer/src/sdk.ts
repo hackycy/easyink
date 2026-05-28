@@ -235,6 +235,7 @@ function resolveStrategyRenderOptions(
         paperHeightMm: htmlPaper?.height,
         printBackground: true,
         marginMm: { top: 0, right: 0, bottom: 0, left: 0 },
+        preferCSSPageSize: true,
       },
       wait: { selector: '.easyink-ready', timeoutMs: 5000 },
     }

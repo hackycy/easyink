@@ -154,6 +154,7 @@ func (s *Service) renderEasyInk(ctx context.Context, req protocol.PrintPDFReques
 	if req.PDF.PrintBackground == nil {
 		req.PDF.PrintBackground = pdfDefaults.PrintBackground
 	}
+	req.PDF.PreferCSSPageSize = true
 	req.Source = protocol.Source{
 		Type:      "html",
 		HTML:      htmlDoc,

@@ -146,6 +146,7 @@ export interface EasyInkPrinterRenderPdfOptions {
   printBackground?: boolean
   landscape?: boolean
   marginMm?: EasyInkPrinterRenderMarginMm
+  preferCSSPageSize?: boolean
 }
 
 export interface EasyInkPrinterRenderWaitOptions {

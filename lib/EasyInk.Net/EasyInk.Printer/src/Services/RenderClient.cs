@@ -159,6 +159,11 @@ internal sealed class RenderClient
         return args.ToString();
     }
 
+    internal JObject BuildRenderRequestForTest(string requestId, PrintRequestParams request)
+    {
+        return BuildRenderRequest(requestId, request);
+    }
+
     private JObject BuildRenderRequest(string requestId, PrintRequestParams request)
     {
         var payload = new JObject

@@ -121,6 +121,9 @@ describe('easy ink printer', () => {
       printerName: 'Printer A',
       forcePageSize: true,
       paperSize: { width: 80, height: 60, unit: 'mm' },
+      renderOptions: expect.objectContaining({
+        pdf: expect.objectContaining({ preferCSSPageSize: true }),
+      }),
     }))
     expect(client.waitForJob).toHaveBeenCalledWith('job-html-1234')
   })

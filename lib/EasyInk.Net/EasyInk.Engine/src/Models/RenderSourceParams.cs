@@ -48,6 +48,7 @@ public sealed class RenderPdfOptionsParams
     public bool? PrintBackground { get; set; }
     public bool? Landscape { get; set; }
     public RenderMarginMmParams? MarginMm { get; set; }
+    public bool? PreferCSSPageSize { get; set; }
 }
 
 public sealed class RenderMarginMmParams
