@@ -50,6 +50,8 @@ const STEP_LABELS: Record<string, string> = {
   intake: '理解需求',
   plan: '规划版式',
   source: '解析数据源',
+  contract: '构建数据契约',
+  layout: '规划版式骨架',
   compose: '生成模板',
   validate: '校验结果',
   repair: '修复问题',
@@ -57,7 +59,7 @@ const STEP_LABELS: Record<string, string> = {
   done: '已应用',
 }
 
-const STEP_ORDER = ['intake', 'plan', 'source', 'compose', 'validate', 'repair']
+const STEP_ORDER = ['intake', 'plan', 'source', 'contract', 'layout', 'compose', 'validate', 'repair']
 const RUNNING_STATUSES = new Set(['queued', 'running'])
 
 export function projectTaskToMessages(input: ProjectTaskToMessagesInput): AssistantConversationMessage[] {

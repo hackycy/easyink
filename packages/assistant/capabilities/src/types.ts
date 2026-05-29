@@ -8,6 +8,8 @@ export const AssistantWorkflowStepSchema = z.enum([
   'intake',
   'plan',
   'source',
+  'contract',
+  'layout',
   'compose',
   'validate',
   'repair',

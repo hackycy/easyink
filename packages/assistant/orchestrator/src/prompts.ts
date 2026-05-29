@@ -153,3 +153,14 @@ Respond with a single JSON object — no markdown fences, no commentary:
 \`\`\`
 `
 }
+
+export function buildSchemaRepairSystemPrompt(materialContext: string): string {
+  return `${buildSchemaSystemPrompt(materialContext)}
+
+## Repair mode
+You are repairing a previously generated DocumentSchema that failed deterministic validation.
+- You will receive the current schema, the realized data contract, the layout skeleton, and a list of deterministic errors with their codes and locations.
+- Fix every reported error while preserving all valid parts of the schema and the user's intent.
+- Do NOT introduce new material types, props, or bindings that are not registered in the material context.
+- Re-emit the COMPLETE schema and expectedDataSource in the same output format, not a patch.`
+}

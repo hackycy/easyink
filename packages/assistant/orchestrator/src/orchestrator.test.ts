@@ -1,6 +1,6 @@
 import { MemoryAssistantStore } from '@easyink/assistant-store'
 import { describe, expect, it } from 'vitest'
-import { AssistantOrchestrator, createAssistantApp } from './index'
+import { AssistantOrchestrator, createAssistantApp, createAssistantWorkflowGraph } from './index'
 
 describe('assistantOrchestrator', () => {
   it('runs a task into review and stores result/events', async () => {
@@ -326,6 +326,8 @@ describe('assistantOrchestrator', () => {
       { requiresClarification: false, questions: [], suggestedAnswers: [], taskType: 'quote' },
       {},
       { explanation: '校验前会经过 capability validate。' },
+      { name: 'receipt', fields: [], sampleData: {}, warnings: [] },
+      { blocks: [], warnings: [] },
       defaultSchemaAgentPayload(),
     ])
     const orchestrator = new AssistantOrchestrator({ store, llm })
@@ -346,6 +348,66 @@ describe('assistantOrchestrator', () => {
     expect(planningBrief.requiredBlocks).toEqual([])
     expect(planningBrief.dataNeeds).toEqual([])
     expect(planningBrief.styleHints).toEqual([])
+  })
+
+  it('produces the v2 contract/layout/repair workflow step sequence', async () => {
+    const graph = createAssistantWorkflowGraph()
+    const result = await graph.invoke({ input: { prompt: '生成一张商超小票' }, steps: [] })
+
+    expect(result.steps).toEqual([
+      'intake',
+      'plan',
+      'source',
+      'contract',
+      'layout',
+      'compose',
+      'validate',
+      'repair',
+      'review',
+    ])
+  })
+
+  it('repairs an invalid schema in the bounded loop and terminates on the first success', async () => {
+    const store = new MemoryAssistantStore()
+    const llm = new SequenceLLMClient([
+      ...upstreamLLMPayloads(),
+      invalidSchemaAgentPayload(),
+      defaultSchemaAgentPayload(),
+    ])
+    const orchestrator = new AssistantOrchestrator({ store, llm })
+    const task = await store.createTask({ prompt: '生成一张商超小票', materialManifest: textMaterialManifest() })
+
+    const reviewed = await orchestrator.runTask(task.id)
+    const result = await store.getResult(reviewed.resultId!)
+    const events = await store.listEvents(task.id)
+    const repairStarts = events.filter(record => record.event.type === 'tool.started' && record.event.toolId === 'repair')
+
+    expect(reviewed.status).toBe('review')
+    expect(result?.validation.valid).toBe(true)
+    expect(events.some(record => record.event.type === 'step.started' && record.event.step === 'repair')).toBe(true)
+    expect(repairStarts.length).toBe(1)
+  })
+
+  it('stops the bounded repair loop at the max retry count and returns the best-effort schema', async () => {
+    const store = new MemoryAssistantStore()
+    const llm = new SequenceLLMClient([
+      ...upstreamLLMPayloads(),
+      invalidSchemaAgentPayload(),
+      invalidSchemaAgentPayload(),
+      invalidSchemaAgentPayload(),
+    ])
+    const orchestrator = new AssistantOrchestrator({ store, llm })
+    const task = await store.createTask({ prompt: '生成一张商超小票', materialManifest: textMaterialManifest() })
+
+    const reviewed = await orchestrator.runTask(task.id)
+    const result = await store.getResult(reviewed.resultId!)
+    const events = await store.listEvents(task.id)
+    const repairStarts = events.filter(record => record.event.type === 'tool.started' && record.event.toolId === 'repair')
+
+    expect(reviewed.status).toBe('review')
+    expect(result?.validation.valid).toBe(false)
+    expect(repairStarts.length).toBe(2)
+    expect(result?.preview.warnings.join('\n')).toContain('已返回当前最优结果')
   })
 })
 
@@ -396,8 +458,68 @@ function schemaLLMPayloads(schemaPayload: unknown = defaultSchemaAgentPayload())
       warnings: [],
     },
     { explanation: '校验前会经过 capability validate。' },
+    {
+      name: 'quote',
+      fields: [{ name: 'customer', path: 'customer', title: '客户', type: 'string' }],
+      sampleData: { customer: '示例客户' },
+      warnings: [],
+    },
+    {
+      blocks: [{ id: 'txt-title', type: 'text', x: 16, y: 16, width: 178, height: 8 }],
+      warnings: [],
+    },
     schemaPayload,
   ]
+}
+
+function upstreamLLMPayloads() {
+  return [
+    { requiresClarification: false, questions: [], suggestedAnswers: [], taskType: 'quote' },
+    { requiresClarification: false, questions: [], suggestedAnswers: [], taskType: 'quote' },
+    {
+      documentIntent: 'business quote document',
+      page: { mode: 'fixed', width: 210, height: 297, reason: 'A4 business document.' },
+      confidence: 'high',
+      requiredBlocks: ['title'],
+      dataNeeds: ['customer'],
+      styleHints: [],
+      uncertainty: [],
+      warnings: [],
+    },
+    { explanation: '校验前会经过 capability validate。' },
+    {
+      name: 'quote',
+      fields: [{ name: 'customer', path: 'customer', title: '客户', type: 'string' }],
+      sampleData: { customer: '示例客户' },
+      warnings: [],
+    },
+    { blocks: [{ id: 'txt-title', type: 'text', x: 16, y: 16, width: 178, height: 8 }], warnings: [] },
+  ]
+}
+
+function invalidSchemaAgentPayload() {
+  return {
+    schema: {
+      version: '1.0.0',
+      unit: 'mm',
+      page: { mode: 'fixed', width: 210, height: 297 },
+      guides: { x: [], y: [] },
+      elements: [{
+        id: 'tbl-items',
+        type: 'table-data',
+        x: 16,
+        y: 24,
+        width: 178,
+        height: 40,
+        props: {},
+      }],
+    },
+    expectedDataSource: {
+      name: 'quote',
+      fields: [{ name: 'items', path: 'items', title: '明细', type: 'array' }],
+      sampleData: { items: [] },
+    },
+  }
 }
 
 function defaultSchemaAgentPayload() {

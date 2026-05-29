@@ -12,6 +12,7 @@ import type { Logger } from 'pino'
 import { resolveExternalData } from '@easyink/assistant-adapters'
 import {
   alignAssistantDataSource,
+  collectDeterministicErrors,
   createAssistantPreview,
   diffAssistantSchema,
   repairAssistantSchema,
@@ -21,7 +22,15 @@ import { createId, MemoryAssistantStore } from '@easyink/assistant-store'
 import { isValidSchema } from '@easyink/schema'
 import { buildDataSourceDescriptor } from '@easyink/schema-tools'
 import pino from 'pino'
-import { runAssistantAgents, runIntakeAgent, runMemoryAgent, runSchemaAgent } from './agents'
+import {
+  runAssistantAgents,
+  runContractAgent,
+  runIntakeAgent,
+  runLayoutAgent,
+  runMemoryAgent,
+  runSchemaAgent,
+  runSchemaRepairAgent,
+} from './agents'
 import { createAssistantWorkflowGraph } from './graph'
 
 export interface AssistantOrchestratorOptions {
@@ -29,6 +38,8 @@ export interface AssistantOrchestratorOptions {
   logger?: Logger
   llm?: LLMClient
 }
+
+const MAX_REPAIR_ITERATIONS = 2
 
 export class AssistantOrchestrator {
   readonly store: AssistantStore
@@ -115,50 +126,86 @@ export class AssistantOrchestrator {
       if (agents.planner.summary)
         await this.think(taskId, agents.planner.summary)
 
-      await this.runStep(current, 'compose')
-      await this.think(taskId, '正在生成 EasyInk 模板结构。')
-      const schemaAgent = await runSchemaAgent({
+      const agentContext = {
         input: current.input,
         taskId,
         store: this.store,
         llm: this.llm,
         sourceData: externalData,
-      }, agents.planner, agents.source, agents.memorySummary).catch((error: unknown) => {
+      }
+
+      await this.runStep(current, 'contract')
+      await this.store.appendEvent(taskId, { type: 'tool.started', taskId, toolId: 'contract', title: '构建数据契约' })
+      await this.think(taskId, '正在构建数据契约。')
+      const contract = await runContractAgent(agentContext, agents.planner, agents.source, agents.memorySummary)
+      await this.store.appendEvent(taskId, {
+        type: 'tool.completed',
+        taskId,
+        toolId: 'contract',
+        summary: contract.dataSource
+          ? `定义 ${contract.dataSource.fields.length} 个数据字段。`
+          : '未生成数据契约，交由 Schema Agent 推断。',
+      })
+
+      await this.runStep(current, 'layout')
+      await this.store.appendEvent(taskId, { type: 'tool.started', taskId, toolId: 'layout', title: '规划版式骨架' })
+      await this.think(taskId, '正在规划版式骨架。')
+      const layout = await runLayoutAgent(agentContext, agents.planner, contract, agents.memorySummary)
+      await this.store.appendEvent(taskId, {
+        type: 'tool.completed',
+        taskId,
+        toolId: 'layout',
+        summary: layout.blocks.length
+          ? `规划 ${layout.blocks.length} 个版式区块。`
+          : '未生成版式骨架，交由 Schema Agent 推断。',
+      })
+
+      await this.runStep(current, 'compose')
+      await this.think(taskId, '正在生成 EasyInk 模板结构。')
+      const schemaAgent = await runSchemaAgent(
+        agentContext,
+        agents.planner,
+        agents.source,
+        agents.memorySummary,
+        { contract, layout },
+      ).catch((error: unknown) => {
         const message = error instanceof Error ? error.message : String(error)
         throw new Error(`Schema Agent 返回不可用。${message}`)
       })
       if (!schemaAgent)
         throw new Error('Schema Agent requires an LLM client and a Designer material manifest.')
 
-      const candidate = {
-        schema: schemaAgent.schema,
-        dataSource: buildDataSourceDescriptor(schemaAgent.expectedDataSource, {
-          id: schemaAgent.expectedDataSource.name,
-          generatedBy: 'easyink-assistant-orchestrator',
-          prompt: current.input.prompt,
-          titlePrefix: 'Assistant',
-        }),
-        warnings: [
-          'Schema Agent used registered Designer materials; legacy presets were not used.',
-          ...schemaAgent.warnings,
-        ],
-      }
-      candidate.warnings.push(
+      const planningPage = schemaAgent.planningBrief.page
+        ? {
+            mode: schemaAgent.planningBrief.page.mode,
+            width: schemaAgent.planningBrief.page.width,
+            height: schemaAgent.planningBrief.page.height,
+          }
+        : undefined
+      const warnings: string[] = [
+        'Schema Agent used registered Designer materials; legacy presets were not used.',
+        ...schemaAgent.warnings,
+        ...contract.warnings,
+        ...layout.warnings,
         ...agents.planner.warnings,
         ...agents.source.warnings,
         ...Object.entries(agents.source.fieldMeanings).map(([field, meaning]) => `${field}: ${meaning}`),
         ...(agents.validator.explanation ? [agents.validator.explanation] : []),
         ...(agents.memorySummary ? [`Memory: ${agents.memorySummary}`] : []),
-      )
+      ]
+
+      let schemaResult = schemaAgent
 
       await this.runStep(current, 'validate')
       await this.store.appendEvent(taskId, { type: 'tool.started', taskId, toolId: 'validate', title: '校验模板与数据绑定' })
-      const validation = validateAssistantSchema(candidate.schema, { materialManifest: current.input.materialManifest })
-      if (candidate.dataSource) {
-        const alignment = alignAssistantDataSource(candidate.schema, candidate.dataSource)
-        candidate.warnings.push(...alignment.warnings)
-      }
-      if (validation.valid) {
+      let validation = validateAssistantSchema(schemaResult.schema, { materialManifest: current.input.materialManifest })
+      let deterministicErrors = collectDeterministicErrors(schemaResult.schema, {
+        materialManifest: current.input.materialManifest,
+        expectedDataSource: schemaResult.expectedDataSource,
+        page: planningPage,
+      })
+      const initialErrorCount = validation.errors.length + deterministicErrors.length
+      if (validation.valid && deterministicErrors.length === 0) {
         await this.store.appendEvent(taskId, { type: 'tool.completed', taskId, toolId: 'validate', summary: '模板结构与物料校验通过。' })
       }
       else {
@@ -166,23 +213,87 @@ export class AssistantOrchestrator {
           type: 'tool.failed',
           taskId,
           toolId: 'validate',
-          error: validation.errors[0]?.message ?? '存在需修复的校验问题。',
+          error: (validation.errors[0] ?? deterministicErrors[0])?.message ?? '存在需修复的校验问题。',
         })
       }
+
+      if (initialErrorCount > 0) {
+        await this.store.appendEvent(taskId, { type: 'step.started', taskId, step: 'repair' })
+        current = await this.updateTask(current, { step: 'repair' })
+        await this.think(taskId, '校验发现问题，正在自动修复。')
+        for (let attempt = 1; attempt <= MAX_REPAIR_ITERATIONS; attempt += 1) {
+          await this.store.appendEvent(taskId, { type: 'tool.started', taskId, toolId: 'repair', title: `修复模板结构（第 ${attempt} 次）` })
+          const repaired = await runSchemaRepairAgent(agentContext, {
+            schemaResult,
+            errors: [...validation.errors, ...deterministicErrors],
+            upstream: { contract, layout },
+            memorySummary: agents.memorySummary,
+          }).catch(() => undefined)
+
+          if (!repaired) {
+            const fallback = repairAssistantSchema(schemaResult.schema, { materialManifest: current.input.materialManifest })
+            schemaResult = { ...schemaResult, schema: fallback.schema }
+            warnings.push(...fallback.repairs.map(issue => `Repair: ${issue.reason}`))
+            validation = fallback.validation
+            deterministicErrors = collectDeterministicErrors(schemaResult.schema, {
+              materialManifest: current.input.materialManifest,
+              expectedDataSource: schemaResult.expectedDataSource,
+              page: planningPage,
+            })
+            await this.store.appendEvent(taskId, {
+              type: 'tool.completed',
+              taskId,
+              toolId: 'repair',
+              summary: `确定性修复后剩余 ${validation.errors.length + deterministicErrors.length} 个问题（重试 ${attempt}）。`,
+            })
+            break
+          }
+
+          schemaResult = repaired
+          warnings.push(...repaired.warnings)
+          validation = validateAssistantSchema(schemaResult.schema, { materialManifest: current.input.materialManifest })
+          deterministicErrors = collectDeterministicErrors(schemaResult.schema, {
+            materialManifest: current.input.materialManifest,
+            expectedDataSource: schemaResult.expectedDataSource,
+            page: planningPage,
+          })
+          const remaining = validation.errors.length + deterministicErrors.length
+          await this.store.appendEvent(taskId, {
+            type: 'tool.completed',
+            taskId,
+            toolId: 'repair',
+            summary: `第 ${attempt} 次修复后剩余 ${remaining} 个问题。`,
+          })
+          if (validation.valid && deterministicErrors.length === 0)
+            break
+        }
+        if (!validation.valid || deterministicErrors.length > 0)
+          warnings.push('Schema Agent 在多次修复后仍存在校验问题，已返回当前最优结果。')
+        await this.store.appendEvent(taskId, { type: 'step.completed', taskId, step: 'repair' })
+      }
+
+      const dataSource = buildDataSourceDescriptor(schemaResult.expectedDataSource, {
+        id: schemaResult.expectedDataSource.name,
+        generatedBy: 'easyink-assistant-orchestrator',
+        prompt: current.input.prompt,
+        titlePrefix: 'Assistant',
+      })
+      const alignment = alignAssistantDataSource(schemaResult.schema, dataSource)
+      warnings.push(...alignment.warnings)
 
       const currentSchema = isValidSchema(current.input.currentSchema)
         ? current.input.currentSchema as DocumentSchema
         : undefined
-      const diff = diffAssistantSchema(currentSchema, candidate.schema)
+      const diff = diffAssistantSchema(currentSchema, schemaResult.schema)
       const result: AssistantResult = {
         id: createId('result'),
-        schema: candidate.schema,
-        dataSource: candidate.dataSource,
+        schema: schemaResult.schema,
+        dataSource,
         patch: diff.operations,
         diff,
         validation,
-        preview: createAssistantPreview(candidate.schema, candidate.dataSource, [
-          ...candidate.warnings,
+        preview: createAssistantPreview(schemaResult.schema, dataSource, [
+          ...warnings,
           ...(externalData?.warnings ?? []),
         ]),
         createdAt: Date.now(),

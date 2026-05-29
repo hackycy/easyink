@@ -1,12 +1,12 @@
 import type { ParsedExternalData } from '@easyink/assistant-adapters'
-import type { AssistantTaskInput } from '@easyink/assistant-capabilities'
+import type { AssistantTaskInput, AssistantValidationIssue } from '@easyink/assistant-capabilities'
 import type { LLMClient } from '@easyink/assistant-llm'
 import type { AssistantStore } from '@easyink/assistant-store'
 import type { DocumentSchema, ExpectedDataSource, ExpectedField } from '@easyink/schema'
 import { formatSchemaValidationIssue, isValidSchema, validateSchemaIssues } from '@easyink/schema'
 import { normalizeAllFieldPaths, SchemaValidator } from '@easyink/schema-tools'
 import { z } from 'zod'
-import { buildMaterialContext, buildSchemaSystemPrompt } from './prompts'
+import { buildMaterialContext, buildSchemaRepairSystemPrompt, buildSchemaSystemPrompt } from './prompts'
 
 export interface AssistantAgentContext {
   input: AssistantTaskInput
@@ -50,6 +50,38 @@ export interface SchemaAgentResult {
   expectedDataSource: ExpectedDataSource
   planningBrief: PlanningBrief
   warnings: string[]
+}
+
+export interface ContractAgentResult {
+  dataSource?: ExpectedDataSource
+  warnings: string[]
+}
+
+export interface LayoutBox {
+  id: string
+  type: string
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export interface LayoutAgentResult {
+  page?: PlannerPage
+  blocks: LayoutBox[]
+  warnings: string[]
+}
+
+export interface SchemaUpstreamContext {
+  contract?: ContractAgentResult
+  layout?: LayoutAgentResult
+}
+
+export interface SchemaRepairRequest {
+  schemaResult: SchemaAgentResult
+  errors: AssistantValidationIssue[]
+  upstream?: SchemaUpstreamContext
+  memorySummary?: string
 }
 
 export interface AssistantAgentBundle {
@@ -141,6 +173,32 @@ const ExpectedDataSourceSchema: z.ZodType<ExpectedDataSource> = z.object({
 const SchemaAgentSchema = z.object({
   schema: z.unknown(),
   expectedDataSource: z.unknown(),
+  warnings: z.array(z.string()).optional(),
+})
+
+const ContractSchema = z.object({
+  name: z.string().optional(),
+  fields: z.unknown().optional(),
+  sampleData: z.record(z.unknown()).optional(),
+  warnings: z.array(z.string()).optional(),
+})
+
+const LayoutSchema = z.object({
+  page: z.object({
+    mode: z.enum(['fixed', 'continuous']).optional(),
+    width: z.number().optional(),
+    height: z.number().optional(),
+    pages: z.number().optional(),
+    reason: z.string().optional(),
+  }).optional(),
+  blocks: z.array(z.object({
+    id: z.string(),
+    type: z.string(),
+    x: z.number(),
+    y: z.number(),
+    width: z.number(),
+    height: z.number(),
+  })).optional(),
   warnings: z.array(z.string()).optional(),
 })
 
@@ -249,6 +307,7 @@ export async function runSchemaAgent(
   planner: PlannerAgentResult,
   source: SourceAgentResult,
   memorySummary?: string,
+  upstream?: SchemaUpstreamContext,
 ): Promise<SchemaAgentResult | undefined> {
   if (!context.llm)
     return undefined
@@ -264,6 +323,12 @@ export async function runSchemaAgent(
         `EasyInk planning brief:\n${JSON.stringify(planningBrief, null, 2)}`,
         isValidSchema(context.input.currentSchema)
           ? `Current schema context:\n${JSON.stringify(context.input.currentSchema, null, 2)}`
+          : '',
+        upstream?.contract?.dataSource
+          ? `Expected data contract (use as the binding source of truth):\n${JSON.stringify(upstream.contract.dataSource, null, 2)}`
+          : '',
+        upstream?.layout?.blocks?.length
+          ? `Layout skeleton (id/type/x/y/width/height in mm; refine props and bindings, keep ids and boxes):\n${JSON.stringify(upstream.layout.blocks, null, 2)}`
           : '',
         context.sourceData
           ? `External source descriptor:\n${JSON.stringify(context.sourceData.descriptor, null, 2).slice(0, 12000)}`
@@ -284,6 +349,124 @@ export async function runSchemaAgent(
     ],
   })
 
+  return finalizeSchemaAgentResult(result, planningBrief)
+}
+
+export async function runContractAgent(
+  context: AssistantAgentContext,
+  planner: PlannerAgentResult,
+  source: SourceAgentResult,
+  memorySummary?: string,
+): Promise<ContractAgentResult> {
+  if (!context.llm)
+    return { warnings: [] }
+  const result = await completeJson(context.llm, ContractSchema, {
+    messages: [
+      [
+        'You are EasyInk Assistant\'s data contract architect. Output JSON only.',
+        'Define the expected data contract the document will bind to: a flat-or-nested field list plus mirrored sampleData.',
+        'Field paths use slash-separated absolute paths (e.g. "items/name"). Field names are English camelCase; titles follow the prompt language.',
+        'fields MUST be an array of field objects. sampleData MUST mirror every leaf field path exactly.',
+        'Do NOT design layout or choose materials. Only describe the data contract.',
+      ].join('\n'),
+      `User request: ${context.input.prompt}`,
+      planner.dataNeeds.length ? `Planned data needs: ${JSON.stringify(planner.dataNeeds)}` : '',
+      Object.keys(source.fieldMeanings).length ? `Source field meanings:\n${JSON.stringify(source.fieldMeanings, null, 2)}` : '',
+      context.sourceData ? `External source descriptor:\n${JSON.stringify(context.sourceData.descriptor, null, 2).slice(0, 8000)}` : '',
+      context.sourceData ? `External source sample:\n${JSON.stringify(context.sourceData.sample, null, 2).slice(0, 8000)}` : '',
+      memorySummary ? `Historical preference summary:\n${memorySummary}` : '',
+    ],
+  })
+
+  const warnings = result.warnings ?? []
+  const name = result.name?.trim()
+  if (result.fields === undefined)
+    return { warnings }
+  try {
+    const dataSource = ExpectedDataSourceSchema.parse(normalizeExpectedDataSource({
+      name: name || 'dataSource',
+      fields: result.fields,
+      sampleData: result.sampleData,
+    }))
+    return { dataSource, warnings }
+  }
+  catch (error) {
+    return { warnings: [...warnings, formatAgentWarning('Contract', error)] }
+  }
+}
+
+export async function runLayoutAgent(
+  context: AssistantAgentContext,
+  planner: PlannerAgentResult,
+  contract: ContractAgentResult,
+  memorySummary?: string,
+): Promise<LayoutAgentResult> {
+  if (!context.llm)
+    return { blocks: [], warnings: [] }
+  const materialTypes = context.input.materialManifest?.materials.map(material => material.type) ?? []
+  const planningBrief = buildPlanningBrief(planner)
+  const result = await completeJson(context.llm, LayoutSchema, {
+    messages: [
+      [
+        'You are EasyInk Assistant\'s layout skeleton planner. Output JSON only.',
+        'Produce a layout skeleton: an ordered list of blocks with id, type, x, y, width, height in mm relative to the page top-left.',
+        'Do NOT fill props, bindings, or content. Only place boxes that cover the required business blocks.',
+        'Use only material types from the provided list. Keep every box inside the page bounds.',
+      ].join('\n'),
+      `User request: ${context.input.prompt}`,
+      `Planning brief:\n${JSON.stringify(planningBrief, null, 2)}`,
+      materialTypes.length ? `Available material types: ${JSON.stringify(materialTypes)}` : '',
+      contract.dataSource ? `Data contract fields:\n${JSON.stringify(contract.dataSource.fields, null, 2)}` : '',
+      memorySummary ? `Historical preference summary:\n${memorySummary}` : '',
+    ],
+  })
+
+  return {
+    page: result.page,
+    blocks: result.blocks ?? [],
+    warnings: result.warnings ?? [],
+  }
+}
+
+export async function runSchemaRepairAgent(
+  context: AssistantAgentContext,
+  request: SchemaRepairRequest,
+): Promise<SchemaAgentResult | undefined> {
+  if (!context.llm)
+    return undefined
+  if (!context.input.materialManifest?.materials.length)
+    return undefined
+
+  const planningBrief = request.schemaResult.planningBrief
+  const materialContext = buildMaterialContext(context.input.materialManifest)
+  const result = await completeJson(context.llm, SchemaAgentSchema, {
+    messages: [
+      buildSchemaRepairSystemPrompt(materialContext),
+      [
+        `EasyInk planning brief:\n${JSON.stringify(planningBrief, null, 2)}`,
+        `Current schema (must be repaired):\n${JSON.stringify(request.schemaResult.schema, null, 2).slice(0, 16000)}`,
+        `Realized data contract:\n${JSON.stringify(request.schemaResult.expectedDataSource, null, 2)}`,
+        request.upstream?.layout?.blocks?.length
+          ? `Layout skeleton:\n${JSON.stringify(request.upstream.layout.blocks, null, 2)}`
+          : '',
+        `Deterministic validation errors to fix:\n${JSON.stringify(request.errors.map(issue => ({ code: issue.code, message: issue.message, path: issue.path })), null, 2)}`,
+        request.memorySummary ? `Historical preference summary:\n${request.memorySummary}` : '',
+        `User request: ${context.input.prompt}`,
+      ].filter(Boolean).join('\n\n'),
+    ],
+  })
+
+  const finalized = finalizeSchemaAgentResult(result, planningBrief)
+  return {
+    ...finalized,
+    warnings: [...finalized.warnings, `Repair pass addressed ${request.errors.length} deterministic error(s).`],
+  }
+}
+
+function finalizeSchemaAgentResult(
+  result: z.infer<typeof SchemaAgentSchema>,
+  planningBrief: PlanningBrief,
+): SchemaAgentResult {
   const normalizedSchema = normalizeSchemaAgentSchema(result.schema, planningBrief)
   const schemaIssues = validateSchemaIssues(normalizedSchema.schema)
   if (schemaIssues.length > 0) {
