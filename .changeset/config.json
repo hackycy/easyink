@@ -13,5 +13,9 @@
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": ["@easyink/playground"]
+  "ignore": [
+    "@easyink/playground",
+    "@easyink/render-viewer-runtime",
+    "@easyink/render-api-service"
+  ]
 }
