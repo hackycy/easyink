@@ -1,15 +1,19 @@
 import type { AIGenerationPlan } from '@easyink/shared'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import type { LLMProvider, SchemaGenerationInput, SchemaGenerationOutput } from '../llm/types'
+import type { LLMProvider, SchemaGenerationInput } from '../llm/types'
 import {
   buildDataSourceDescriptor,
+  buildSchemaFromTemplateIntent,
+  coerceLLMPlan,
+  inferAIGenerationPlan,
+  listDomainProfiles,
   repairGeneratedSchema,
   SchemaValidator,
   validateGeneratedSchemaAccuracy,
 } from '@easyink/schema-tools'
 import { z } from 'zod'
 import { buildMaterialContext, getMaterialAliases, getMaterialTypes, loadMaterialsConfig } from '../config/material-loader'
-import { buildSystemPrompt } from '../prompts/system-builder'
+import { buildIntentSystemPrompt, buildPlanSystemPrompt } from '../prompts/system-builder'
 import { createProgressRelay } from './progress'
 
 /**
@@ -26,9 +30,9 @@ const RETRY_TRIGGER_CODES = new Set([
 ])
 
 /**
- * Translate raw validator codes into imperative behavior instructions the LLM
- * responds best to. Mirrors the "Common Mistakes" section in the schema
- * prompt so the second attempt sees consistent guidance.
+ * Translate raw validator codes into the imperative behavior instructions
+ * the LLM responds best to. Mirrors the "Common Mistakes" section in the
+ * intent system prompt so the second attempt sees consistent guidance.
  */
 const FEEDBACK_INSTRUCTIONS: Record<string, string> = {
   UNKNOWN_MATERIAL_TYPE: 'Replace the unknown material type with a canonical one from the material context (e.g. text, image, table-data, table-static, container, qrcode, barcode, line, rect).',
@@ -38,8 +42,6 @@ const FEEDBACK_INSTRUCTIONS: Record<string, string> = {
   LEGACY_TABLE_SCHEMA: 'Do not use type="table" or legacy column/headerStyle props. Use canonical table-data (with topology + cells) for repeating rows, or table-static for fixed grids.',
 }
 
-const MAX_SCHEMA_ATTEMPTS = 2
-
 function describeFeedback(code: string, path: string, fallbackMessage: string): string {
   const instruction = FEEDBACK_INSTRUCTIONS[code]
   if (instruction)
@@ -47,8 +49,15 @@ function describeFeedback(code: string, path: string, fallbackMessage: string): 
   return `At ${path}: ${fallbackMessage}`
 }
 
-function buildClarification(plan: AIGenerationPlan | undefined): { reason: string, questions: string[] } | undefined {
-  if (!plan || plan.confidence !== 'low')
+/**
+ * When the resolved plan is low-confidence (e.g. the user said "make a
+ * template" with no domain signal) we still ship a result so the caller
+ * can preview it, but we surface a focused list of clarifying questions.
+ * The caller — typically the host LLM driving this MCP tool — decides
+ * whether to ask the user before committing the generated schema.
+ */
+function buildClarification(plan: AIGenerationPlan): { reason: string, questions: string[] } | undefined {
+  if (plan.confidence !== 'low')
     return undefined
   const questions: string[] = [
     'What kind of document is this — receipt, invoice/order, certificate, or something else?',
@@ -57,10 +66,12 @@ function buildClarification(plan: AIGenerationPlan | undefined): { reason: strin
   if (plan.tableStrategy === 'table-data-for-arrays')
     questions.push('What columns should the item table show, and is there a fixed column order?')
   return {
-    reason: 'Low-confidence supplied generation plan. Confirm before committing.',
+    reason: 'Low-confidence plan: assumptions were taken from a generic profile. Confirm before committing.',
     questions,
   }
 }
+
+const MAX_INTENT_ATTEMPTS = 2
 
 export function registerGenerateSchemaTool(
   server: McpServer,
@@ -81,10 +92,12 @@ export function registerGenerateSchemaTool(
           .object({})
           .passthrough()
           .optional()
-          .describe('Optional caller-confirmed EasyInk generation plan. When omitted, the schema generator infers paper and structure from the prompt and source data.'),
+          .describe('Optional deterministic EasyInk generation plan supplied by the caller. When omitted the server resolves a plan via LLM with a keyword-based fallback.'),
       },
     },
     async ({ prompt, currentSchema, generationPlan }, extra) => {
+      // Bridge MCP request lifecycle (cancel signal, progress notifications,
+      // 5-minute hard cap) to the underlying LLM call.
       const relay = createProgressRelay({
         progressToken: extra._meta?.progressToken as string | number | undefined,
         clientSignal: extra.signal,
@@ -97,32 +110,42 @@ export function registerGenerateSchemaTool(
         const materialContext = buildMaterialContext(materialsConfig)
         const allowedTypes = getMaterialTypes(materialsConfig)
         const materialAliases = getMaterialAliases(materialsConfig)
-        const plan = isGenerationPlan(generationPlan) ? generationPlan : undefined
-        const systemPrompt = `${buildSystemPrompt(materialContext)}`
 
+        const plan = isGenerationPlan(generationPlan)
+          ? generationPlan
+          : await resolvePlan(prompt, llmProvider, relay)
+
+        relay.notify(`Plan resolved: ${plan.domain} ${plan.page.width}x${plan.page.height}mm`)
+
+        const intentSystemPrompt = `${buildIntentSystemPrompt()}\n\n${materialContext}`
         let attempt = 0
         let feedback: string[] = []
-        let lastGenerated: SchemaGenerationOutput | undefined
+        let lastBuild: ReturnType<typeof buildSchemaFromTemplateIntent> | undefined
         let lastRepair: ReturnType<typeof repairGeneratedSchema> | undefined
         let lastAccuracyIssues: ReturnType<typeof validateGeneratedSchemaAccuracy> = []
+        let lastIntent: Awaited<ReturnType<typeof llmProvider.generateTemplateIntent>> | undefined
 
-        while (attempt < MAX_SCHEMA_ATTEMPTS) {
+        while (attempt < MAX_INTENT_ATTEMPTS) {
           attempt += 1
-          relay.notify(attempt === 1 ? 'Generating schema...' : `Retrying schema generation (attempt ${attempt})...`)
+          relay.notify(attempt === 1 ? 'Interpreting template intent...' : `Retrying intent (attempt ${attempt})...`)
 
-          lastGenerated = await llmProvider.generateSchema({
+          lastIntent = await llmProvider.generateTemplateIntent({
             prompt,
             currentSchema: currentSchema as SchemaGenerationInput['currentSchema'],
-            systemPrompt,
+            systemPrompt: intentSystemPrompt,
             generationPlan: plan,
+            // Bump diversity on retry so the model does not repeat the same mistake.
             temperature: attempt === 1 ? undefined : 0.3,
             feedbackMessages: feedback.length > 0 ? feedback : undefined,
             signal: relay.signal,
             onProgress: relay.onProgress,
           })
 
+          relay.notify('Building schema from deterministic intent...')
+          lastBuild = buildSchemaFromTemplateIntent(lastIntent, { prompt, plan })
+
           relay.notify('Repairing schema with deterministic rules...')
-          lastRepair = repairGeneratedSchema(lastGenerated.schema, {
+          lastRepair = repairGeneratedSchema(lastBuild.schema, {
             allowedMaterialTypes: allowedTypes,
             materialAliases,
             plan,
@@ -134,18 +157,29 @@ export function registerGenerateSchemaTool(
             plan,
           })
 
-          const retryReasons = lastAccuracyIssues
-            .filter(issue => RETRY_TRIGGER_CODES.has(issue.code))
-            .map(issue => describeFeedback(issue.code, issue.path, issue.message))
+          const retryReasons: string[] = []
+          if (lastBuild.missingRequiredPaths.length > 0) {
+            retryReasons.push(
+              `Add these required field paths to your TemplateIntent (declared by the resolved domain profile): ${lastBuild.missingRequiredPaths.join(', ')}. Keep their declared types and any nested children.`,
+            )
+          }
+          for (const issue of lastAccuracyIssues) {
+            if (RETRY_TRIGGER_CODES.has(issue.code))
+              retryReasons.push(describeFeedback(issue.code, issue.path, issue.message))
+          }
 
-          if (retryReasons.length === 0 || attempt >= MAX_SCHEMA_ATTEMPTS)
+          if (retryReasons.length === 0)
+            break
+          if (attempt >= MAX_INTENT_ATTEMPTS)
             break
 
           feedback = retryReasons
         }
 
-        const generated = lastGenerated!
         const repaired = lastRepair!
+        const result = lastBuild!
+        const intent = lastIntent!
+
         const blocking = lastAccuracyIssues.filter(issue => RETRY_TRIGGER_CODES.has(issue.code))
         if (blocking.length > 0) {
           const errorMessages = blocking.map(issue => `${issue.code}: ${issue.message}`).join('; ')
@@ -202,16 +236,17 @@ export function registerGenerateSchemaTool(
           finalSchema = fixed
         }
 
-        const dataSource = buildDataSourceDescriptor(generated.expectedDataSource, {
-          id: generated.expectedDataSource.name,
+        const dataSource = buildDataSourceDescriptor(result.expectedDataSource, {
+          id: result.expectedDataSource.name,
           prompt,
         })
 
         const payload = {
           schema: finalSchema,
-          expectedDataSource: generated.expectedDataSource,
+          expectedDataSource: result.expectedDataSource,
           dataSource,
           assumptions: plan,
+          intent,
           attempts: attempt,
           needsClarification: buildClarification(plan),
           validation: {
@@ -244,6 +279,36 @@ export function registerGenerateSchemaTool(
       }
     },
   )
+}
+
+/**
+ * Try to resolve the generation plan via LLM first, falling back to keyword
+ * inference on failure or when the LLM output cannot be coerced. The
+ * fallback path keeps generation working even when the plan tool fails.
+ */
+export async function resolvePlan(
+  prompt: string,
+  llmProvider: LLMProvider,
+  relay: ReturnType<typeof createProgressRelay>,
+): Promise<AIGenerationPlan> {
+  relay.notify('Resolving generation plan...')
+  const profileSummary = listDomainProfiles()
+    .map(profile => `- ${profile.domain} (${profile.label}): ${profile.page.mode} ${profile.page.width}x${profile.page.height}mm, ${profile.tableStrategy}`)
+    .join('\n')
+
+  try {
+    const raw = await llmProvider.generatePlan({
+      prompt,
+      systemPrompt: buildPlanSystemPrompt(profileSummary),
+      signal: relay.signal,
+      onProgress: relay.onProgress,
+    })
+    return coerceLLMPlan(raw, prompt)
+  }
+  catch (error) {
+    relay.notify(`Plan inference failed (${(error as Error).message}), falling back to keyword inference.`)
+    return inferAIGenerationPlan(prompt)
+  }
 }
 
 export function isGenerationPlan(value: unknown): value is AIGenerationPlan {

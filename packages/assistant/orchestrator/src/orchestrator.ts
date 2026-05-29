@@ -139,7 +139,7 @@ export class AssistantOrchestrator {
           titlePrefix: 'Assistant',
         }),
         warnings: [
-          'Schema Agent used registered Designer materials; legacy presets were not used.',
+          'Schema Agent used registered Designer materials; domain profiles and legacy presets were not used.',
           ...schemaAgent.warnings,
         ],
       }

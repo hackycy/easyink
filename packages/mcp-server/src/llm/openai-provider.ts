@@ -1,5 +1,7 @@
-import type { ResponseFormatJSONObject } from 'openai/resources/shared'
-import type { DataSourceGenerationInput, DataSourceGenerationOutput, LLMConfig, LLMProgressEvent, LLMProvider, SchemaGenerationInput, SchemaGenerationOutput } from './types'
+import type { TemplateGenerationIntent } from '@easyink/schema-tools'
+import type { ResponseFormatJSONObject, ResponseFormatJSONSchema } from 'openai/resources/shared'
+import type { DataSourceGenerationInput, DataSourceGenerationOutput, LLMConfig, LLMProgressEvent, LLMProvider, PlanGenerationInput, PlanGenerationOutput, SchemaGenerationInput, SchemaGenerationOutput, TemplateIntentGenerationInput } from './types'
+import { openAIJsonSchemaResponseFormat, PLAN_JSON_SCHEMA, TEMPLATE_INTENT_JSON_SCHEMA } from './structured-output'
 
 /** Minimum interval between `llm-delta` progress emissions, in ms. */
 const PROGRESS_THROTTLE_MS = 1000
@@ -28,8 +30,28 @@ export class OpenAIProvider implements LLMProvider {
     return new OpenAIProvider(config, OpenAIClass)
   }
 
-  async generateSchema(input: SchemaGenerationInput): Promise<SchemaGenerationOutput> {
-    const { prompt, currentSchema, systemPrompt, generationPlan, signal, onProgress, feedbackMessages, temperature } = input
+  async generatePlan(input: PlanGenerationInput): Promise<PlanGenerationOutput> {
+    const { prompt, systemPrompt, signal, onProgress } = input
+
+    const content = await this.streamJSON(
+      {
+        model: this.model,
+        max_tokens: 1024,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: `User request: ${prompt}` },
+        ],
+        ...this.withResponseFormat('easyink_generation_plan', PLAN_JSON_SCHEMA),
+      },
+      signal,
+      onProgress,
+    )
+
+    return parseJSONResponse<PlanGenerationOutput>('plan', content)
+  }
+
+  async generateTemplateIntent(input: TemplateIntentGenerationInput): Promise<TemplateGenerationIntent> {
+    const { prompt, currentSchema, systemPrompt, generationPlan, signal, onProgress, temperature, feedbackMessages } = input
 
     const userContent = [
       currentSchema ? `Current schema context:\n${JSON.stringify(currentSchema, null, 2)}` : undefined,
@@ -47,17 +69,43 @@ export class OpenAIProvider implements LLMProvider {
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userContent },
       ],
-      ...this.withJSONResponseFormat(),
+      ...this.withResponseFormat('easyink_template_intent', TEMPLATE_INTENT_JSON_SCHEMA),
     }
     if (typeof temperature === 'number')
       params.temperature = temperature
 
-    const parsed = await this.streamParsedJSON<{ schema?: unknown, expectedDataSource?: unknown }>(
+    return await this.streamParsedJSON<TemplateGenerationIntent>(
       params,
-      'schema',
+      'TemplateIntent',
       signal,
       onProgress,
     )
+  }
+
+  async generateSchema(input: SchemaGenerationInput): Promise<SchemaGenerationOutput> {
+    const { prompt, currentSchema, systemPrompt, generationPlan, signal, onProgress } = input
+
+    const userContent = [
+      currentSchema ? `Current schema context:\n${JSON.stringify(currentSchema, null, 2)}` : undefined,
+      generationPlan ? `EasyInk generation plan:\n${JSON.stringify(generationPlan, null, 2)}` : undefined,
+      `User request: ${prompt}`,
+    ].filter(Boolean).join('\n\n')
+
+    const content = await this.streamJSON(
+      {
+        model: this.model,
+        max_tokens: 8192,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userContent },
+        ],
+        ...this.withJSONResponseFormat(),
+      },
+      signal,
+      onProgress,
+    )
+
+    const parsed = parseJSONResponse<{ schema?: unknown, expectedDataSource?: unknown }>('schema', content)
 
     if (!parsed.schema || !parsed.expectedDataSource) {
       throw new Error('OpenAI returned incomplete result (missing schema or expectedDataSource)')
@@ -198,6 +246,20 @@ export class OpenAIProvider implements LLMProvider {
     }
 
     throw invalidJSONError(label, lastContent)
+  }
+
+  private withResponseFormat(
+    name: string,
+    schema: Record<string, unknown>,
+  ): { response_format?: ResponseFormatJSONSchema | ResponseFormatJSONObject } {
+    switch (this.responseFormatMode) {
+      case 'json_schema':
+        return { response_format: openAIJsonSchemaResponseFormat(name, schema) }
+      case 'json_object':
+        return { response_format: { type: 'json_object' } }
+      case 'none':
+        return {}
+    }
   }
 
   private withJSONResponseFormat(): { response_format?: ResponseFormatJSONObject } {

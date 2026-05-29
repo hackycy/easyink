@@ -1,7 +1,35 @@
 import type { Anthropic } from '@anthropic-ai/sdk'
-import type { DataSourceGenerationInput, DataSourceGenerationOutput, LLMConfig, LLMProgressEvent, LLMProvider, SchemaGenerationInput, SchemaGenerationOutput } from './types'
+import type { TemplateGenerationIntent } from '@easyink/schema-tools'
+import type { DataSourceGenerationInput, DataSourceGenerationOutput, LLMConfig, LLMProgressEvent, LLMProvider, PlanGenerationInput, PlanGenerationOutput, SchemaGenerationInput, SchemaGenerationOutput, TemplateIntentGenerationInput } from './types'
 
 const PROGRESS_THROTTLE_MS = 1000
+
+const TOOL_GENERATE_PLAN = {
+  name: 'generate_plan',
+  description: 'Decide the deterministic generation plan for an EasyInk template (domain, paper, table strategy).',
+  input_schema: {
+    type: 'object' as const,
+    properties: {
+      domain: { type: 'string' },
+      page: {
+        type: 'object',
+        properties: {
+          mode: { type: 'string', enum: ['fixed', 'continuous'] },
+          width: { type: 'number' },
+          height: { type: 'number' },
+          reason: { type: 'string' },
+        },
+        required: ['mode', 'width', 'height'],
+      },
+      tableStrategy: {
+        type: 'string',
+        enum: ['table-data-for-arrays', 'table-static-for-fixed', 'avoid-table'],
+      },
+      confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+    },
+    required: ['domain', 'page', 'tableStrategy'],
+  },
+}
 
 const TOOL_GENERATE_SCHEMA = {
   name: 'generate_schema',
@@ -37,6 +65,25 @@ const TOOL_GENERATE_SCHEMA = {
       },
     },
     required: ['schema', 'expectedDataSource'],
+  },
+}
+
+const TOOL_GENERATE_TEMPLATE_INTENT = {
+  name: 'generate_template_intent',
+  description: 'Generate a compact EasyInk TemplateIntent. Do not generate DocumentSchema.',
+  input_schema: {
+    type: 'object' as const,
+    properties: {
+      name: { type: 'string' },
+      domain: { type: 'string' },
+      dataSourceName: { type: 'string' },
+      page: { type: 'object' },
+      fields: { type: 'array', items: { type: 'object' } },
+      sections: { type: 'array', items: { type: 'object' } },
+      sampleData: { type: 'object' },
+      warnings: { type: 'array', items: { type: 'string' } },
+    },
+    required: ['fields', 'sections'],
   },
 }
 
@@ -81,7 +128,27 @@ export class ClaudeProvider implements LLMProvider {
     return new ClaudeProvider(config, AnthropicClass)
   }
 
-  async generateSchema(input: SchemaGenerationInput): Promise<SchemaGenerationOutput> {
+  async generatePlan(input: PlanGenerationInput): Promise<PlanGenerationOutput> {
+    const { prompt, systemPrompt, signal, onProgress } = input
+
+    const toolInput = await this.streamToolUse(
+      {
+        model: this.model,
+        max_tokens: 1024,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: `User request: ${prompt}` }],
+        tools: [this.toolDefinition(TOOL_GENERATE_PLAN)],
+        tool_choice: { type: 'tool', name: 'generate_plan' },
+      },
+      'generate_plan',
+      signal,
+      onProgress,
+    )
+
+    return toolInput as PlanGenerationOutput
+  }
+
+  async generateTemplateIntent(input: TemplateIntentGenerationInput): Promise<TemplateGenerationIntent> {
     const { prompt, currentSchema, systemPrompt, generationPlan, signal, onProgress, temperature, feedbackMessages } = input
 
     const userContent = [
@@ -95,17 +162,43 @@ export class ClaudeProvider implements LLMProvider {
 
     const params: Anthropic.Messages.MessageCreateParamsNonStreaming = {
       model: this.model,
-      max_tokens: 8192,
+      max_tokens: 4096,
       system: systemPrompt,
       messages: [{ role: 'user', content: userContent }],
-      tools: [this.toolDefinition(TOOL_GENERATE_SCHEMA)],
-      tool_choice: { type: 'tool', name: 'generate_schema' },
+      tools: [this.toolDefinition(TOOL_GENERATE_TEMPLATE_INTENT)],
+      tool_choice: { type: 'tool', name: 'generate_template_intent' },
     }
     if (typeof temperature === 'number')
       params.temperature = temperature
 
     const toolInput = await this.streamToolUse(
       params,
+      'generate_template_intent',
+      signal,
+      onProgress,
+    )
+
+    return toolInput as TemplateGenerationIntent
+  }
+
+  async generateSchema(input: SchemaGenerationInput): Promise<SchemaGenerationOutput> {
+    const { prompt, currentSchema, systemPrompt, generationPlan, signal, onProgress } = input
+
+    const userContent = [
+      currentSchema ? `Current schema context:\n${JSON.stringify(currentSchema, null, 2)}` : undefined,
+      generationPlan ? `EasyInk generation plan:\n${JSON.stringify(generationPlan, null, 2)}` : undefined,
+      `User request: ${prompt}`,
+    ].filter(Boolean).join('\n\n')
+
+    const toolInput = await this.streamToolUse(
+      {
+        model: this.model,
+        max_tokens: 8192,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userContent }],
+        tools: [this.toolDefinition(TOOL_GENERATE_SCHEMA)],
+        tool_choice: { type: 'tool', name: 'generate_schema' },
+      },
       'generate_schema',
       signal,
       onProgress,

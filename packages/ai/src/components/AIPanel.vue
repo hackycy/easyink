@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import type { DesignerStore } from '@easyink/designer'
+import type { AIGenerationPlan } from '@easyink/shared'
 import type { MCPServerConfig, SessionMessage } from '../types'
 import { AI_NAMESPACE } from '@easyink/datasource'
 import { IconClose, IconDelete, IconManager, IconSparkles } from '@easyink/icons'
-import { DataSourceAligner, SchemaValidator } from '@easyink/schema-tools'
+import { DataSourceAligner, getDomainProfile, SchemaValidator } from '@easyink/schema-tools'
 import { generateId } from '@easyink/shared'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { MCPClient } from '../mcp-client'
@@ -34,6 +35,7 @@ const prompt = ref('')
 const isGenerating = ref(false)
 const sessionMessages = ref<SessionMessage[]>(loadSession({ key: SESSION_STORAGE_KEY }))
 const showServerManager = ref(false)
+const lastGenerationPlan = ref<AIGenerationPlan | null>(null)
 const selectedServerId = ref<string | null>(null)
 const jsonModal = ref<{ title: string, data: unknown } | null>(null)
 const scrollerRef = useTemplateRef<HTMLDivElement>('scrollerRef')
@@ -124,6 +126,10 @@ async function ensureConnected(serverId: string): Promise<void> {
     serverErrors.value = { ...serverErrors.value, [serverId]: message }
     throw new Error(`连接 MCP 服务器失败 (${config.name}): ${message}`)
   }
+}
+
+function formatDomain(domain: AIGenerationPlan['domain']): string {
+  return getDomainProfile(domain).label
 }
 
 // ─── server management ──────────────────────────────────────────────────
@@ -255,6 +261,10 @@ async function runGenerate(reusePrompt?: string) {
       },
     })
 
+    const assumptions = result.metadata?.assumptions as AIGenerationPlan | undefined
+    if (assumptions)
+      lastGenerationPlan.value = assumptions
+
     appendProgress('校验生成结果...')
     const validator = new SchemaValidator({
       strictMode: true,
@@ -318,7 +328,8 @@ async function runGenerate(reusePrompt?: string) {
     // Finalize streaming message.
     const assistantMsg = sessionMessages.value.find(m => m.id === assistantId)
     if (assistantMsg) {
-      assistantMsg.content = `已生成模板${sampleData ? '，并应用示例数据。' : '。'}`
+      const domain = assumptions?.domain ?? 'generic'
+      assistantMsg.content = `已生成「${formatDomain(domain)}」模板${sampleData ? '，并应用示例数据。' : '。'}`
       assistantMsg.toolsUsed = result.toolsUsed
       assistantMsg.schemaSnapshot = alignment.schema
       assistantMsg.dataSourceSnapshot = alignment.dataSource

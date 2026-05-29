@@ -1,26 +1,10 @@
 import type { DocumentSchema } from '@easyink/schema'
-import type { AIGenerationPlan } from '@easyink/shared'
 import { describe, expect, it } from 'vitest'
+import { inferAIGenerationPlan } from './domain-profile'
 import { repairGeneratedSchema, validateGeneratedSchemaAccuracy } from './generation-accuracy'
 
 const allowedMaterialTypes = new Set(['text', 'line', 'table-data', 'table-static'])
 const materialAliases = { table: 'table-data' }
-const receiptPlan: AIGenerationPlan = {
-  domain: 'receipt',
-  confidence: 'high',
-  page: {
-    mode: 'continuous',
-    width: 80,
-    height: 200,
-    unit: 'mm',
-    reason: 'Thermal receipts use narrow continuous paper.',
-  },
-  fieldNaming: 'english-camel-path-chinese-label',
-  tableStrategy: 'table-data-for-arrays',
-  sampleData: 'required',
-  materialHints: ['text', 'table-data'],
-  warnings: [],
-}
 
 function makeSchema(overrides: Partial<DocumentSchema> = {}): DocumentSchema {
   return {
@@ -35,6 +19,7 @@ function makeSchema(overrides: Partial<DocumentSchema> = {}): DocumentSchema {
 
 describe('generated schema accuracy', () => {
   it('repairs material aliases, receipt paper, and dotted binding paths', () => {
+    const plan = inferAIGenerationPlan('生成商超小票模板')
     const input = makeSchema({
       elements: [{
         id: 'items',
@@ -48,7 +33,7 @@ describe('generated schema accuracy', () => {
       }],
     })
 
-    const repaired = repairGeneratedSchema(input, { allowedMaterialTypes, materialAliases, plan: receiptPlan })
+    const repaired = repairGeneratedSchema(input, { allowedMaterialTypes, materialAliases, plan })
 
     expect(repaired.schema.page).toMatchObject({
       mode: 'continuous',

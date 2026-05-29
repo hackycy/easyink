@@ -1,6 +1,6 @@
 import type { DataSourceDescriptor } from '@easyink/datasource'
-import type { DocumentSchema } from '@easyink/schema'
-import type { AIMaterialDescriptor } from '@easyink/shared'
+import type { DocumentSchema, ExpectedDataSource } from '@easyink/schema'
+import type { AIGenerationPlan, AIMaterialDescriptor } from '@easyink/shared'
 import { z } from 'zod'
 
 export const AssistantWorkflowStepSchema = z.enum([
@@ -102,6 +102,14 @@ export const AssistantTaskInputSchema = z.object({
 })
 
 export type AssistantTaskInput = z.infer<typeof AssistantTaskInputSchema>
+
+export interface SchemaCandidate {
+  schema: DocumentSchema
+  expectedDataSource: ExpectedDataSource
+  dataSource: DataSourceDescriptor
+  plan: AIGenerationPlan
+  warnings: string[]
+}
 
 export interface AssistantPatchOperation {
   op: 'add' | 'remove' | 'replace'

@@ -122,8 +122,10 @@ debug tools 用来拆开生成链路，适合开发和排错。
 工具内部会做这些事：
 
 ```text
-build material context
-  -> ask LLM for DocumentSchema + expectedDataSource
+resolve generation plan
+  -> build material context
+  -> ask LLM for template intent
+  -> build schema deterministically
   -> repair and validate generated schema
 ```
 
