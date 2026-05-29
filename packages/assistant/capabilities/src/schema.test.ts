@@ -1,21 +1,45 @@
+import type { DataSourceDescriptor } from '@easyink/datasource'
+import type { DocumentSchema } from '@easyink/schema'
 import { describe, expect, it } from 'vitest'
-import { createAssistantPreview, generateSchemaCandidate, repairAssistantSchema, validateAssistantSchema } from './index'
+import { createAssistantPreview, repairAssistantSchema, validateAssistantSchema } from './index'
+
+const schema: DocumentSchema = {
+  version: '1.0.0',
+  unit: 'mm',
+  page: { mode: 'fixed', width: 210, height: 297 },
+  guides: { x: [], y: [] },
+  elements: [{
+    id: 'txt-title',
+    type: 'text',
+    x: 10,
+    y: 10,
+    width: 100,
+    height: 8,
+    props: { content: '标题', fontSize: 12 },
+  }],
+}
+
+const dataSource: DataSourceDescriptor = {
+  id: 'document',
+  name: 'document',
+  fields: [{
+    name: 'title',
+    path: 'title',
+  }],
+}
 
 describe('assistant capabilities', () => {
-  it('generates and validates a deterministic schema candidate', () => {
-    const candidate = generateSchemaCandidate({ prompt: '生成一张商超购物小票' })
-    const report = validateAssistantSchema(candidate.schema)
-    const preview = createAssistantPreview(candidate.schema, candidate.dataSource, candidate.warnings)
+  it('validates schema candidates and creates previews', () => {
+    const report = validateAssistantSchema(schema)
+    const preview = createAssistantPreview(schema, dataSource, [])
 
     expect(report.valid).toBe(true)
-    expect(candidate.schema.elements.length).toBeGreaterThan(0)
-    expect(candidate.dataSource.fields.length).toBeGreaterThan(0)
-    expect(preview.elementCount).toBeGreaterThan(0)
+    expect(preview.elementCount).toBe(1)
+    expect(preview.dataFieldCount).toBe(1)
   })
 
   it('repairs auto-fixable schema issues before returning to Designer', () => {
-    const candidate = generateSchemaCandidate({ prompt: '生成一张商超购物小票' })
-    const broken = { ...candidate.schema, version: '', elements: undefined } as never
+    const broken = { ...schema, version: '', elements: undefined } as never
 
     const repair = repairAssistantSchema(broken)
 
@@ -24,47 +48,25 @@ describe('assistant capabilities', () => {
     expect(repair.schema.elements).toEqual([])
   })
 
-  it('rejects schema elements that are not in the active material manifest', () => {
+  it('accepts schema elements registered in the active material manifest', () => {
     const materialManifest = {
       materials: [
         { type: 'text', name: 'Text', capabilities: {}, props: [] },
       ],
     }
-    const candidate = generateSchemaCandidate({ prompt: '生成一张商超购物小票' })
-    const report = validateAssistantSchema(candidate.schema, { materialManifest })
-
-    expect(report.valid).toBe(false)
-    expect(report.errors).toContainEqual(expect.objectContaining({
-      code: 'UNREGISTERED_MATERIAL_TYPE',
-    }))
-  })
-
-  it('constrains deterministic generation to the active material manifest', () => {
-    const materialManifest = {
-      materials: [
-        { type: 'text', name: 'Text', capabilities: {}, props: [] },
-      ],
-    }
-    const candidate = generateSchemaCandidate({
-      prompt: '生成一张商超购物小票',
-      materialManifest,
-    })
-    const report = validateAssistantSchema(candidate.schema, { materialManifest })
+    const report = validateAssistantSchema(schema, { materialManifest })
 
     expect(report.valid).toBe(true)
-    expect(candidate.schema.elements.every(element => element.type === 'text')).toBe(true)
-    expect(candidate.warnings).toContainEqual(expect.stringContaining('Material type "table-data" is not registered'))
   })
 
   it('keeps repair validation scoped to the active material manifest', () => {
-    const candidate = generateSchemaCandidate({ prompt: '生成一张商超购物小票' })
     const materialManifest = {
       materials: [
-        { type: 'text', name: 'Text', capabilities: {}, props: [] },
+        { type: 'image', name: 'Image', capabilities: {}, props: [] },
       ],
     }
 
-    const repair = repairAssistantSchema(candidate.schema, { materialManifest })
+    const repair = repairAssistantSchema(schema, { materialManifest })
 
     expect(repair.validation.valid).toBe(false)
     expect(repair.validation.errors).toContainEqual(expect.objectContaining({

@@ -52,7 +52,7 @@ export function buildSchemaSystemPrompt(materialContext: string): string {
 - You design print/report templates, not web pages. Don't borrow web tropes.
 - You treat the supplied planning brief as user-intent and page-constraint context, not as material implementation strategy.
 - You write JSON only. No prose, no markdown fences, no commentary.
-- Domain profiles are deprecated in this runtime. Do not rely on preset defaults; infer the complete fields, sections, and visual composition from the prompt and source data.
+- Preset defaults are deprecated in this runtime. Infer the complete fields, sections, and visual composition from the prompt and source data.
 - Material strategies are deprecated in this runtime. Do not use hard-coded strategy enums. Choose only from the registered Designer materials in the material context.
 
 ## Conflict-resolution order (highest wins)
@@ -60,7 +60,7 @@ export function buildSchemaSystemPrompt(materialContext: string): string {
 2. The supplied \`planningBrief\` (document intent, explicit page constraints, required blocks, data needs, style hints).
 3. Any \`currentSchema\` provided as context (treat as a starting point, not a constraint).
 
-If \`planningBrief.page\` is present with mode/width/height, \`schema.page\` MUST follow those provided fields unless the user's current prompt explicitly overrides paper size. If \`planningBrief.page\` is absent or partial, infer only from the user's current prompt and the print medium; do not use domain-profile defaults.
+If \`planningBrief.page\` is present with mode/width/height, \`schema.page\` MUST follow those provided fields unless the user's current prompt explicitly overrides paper size. If \`planningBrief.page\` is absent or partial, infer only from the user's current prompt and the print medium; do not use preset defaults.
 
 ## Critical rules (MUST/NEVER)
 1. Output ONLY valid JSON matching the structure described below — no fences, no comments.

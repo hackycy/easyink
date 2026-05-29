@@ -31,7 +31,7 @@ const config = {
   generationRules: {
     fieldNaming: 'Use English camelCase field paths and Chinese fieldLabel/title for Chinese prompts.',
     sampleData: 'expectedDataSource.sampleData is required and must match the generated fields.',
-    pageInference: 'Use deterministic domain profiles supplied by the client/server plan; do not default receipts or labels to A4.',
+    pageInference: 'Infer paper size from the prompt, source data, and any caller-supplied plan; do not default receipts or labels to A4.',
     tableData: 'Array/detail-list fields must use table-data with table.topology rows/cells, not legacy props.columns or repeatTemplate.',
   },
   materialTypes: Object.fromEntries(
