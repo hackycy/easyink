@@ -1,6 +1,7 @@
 {
   "name": "@easyink/render-api-service",
   "type": "module",
+  "version": "0.0.0",
   "private": true,
   "description": "Internal h3 Node HTTP API facade for EasyInk.Render CLI",
   "author": "hackycy <hackycy@outlook.com>",

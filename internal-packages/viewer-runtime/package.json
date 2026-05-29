@@ -1,6 +1,7 @@
 {
   "name": "@easyink/render-viewer-runtime",
   "type": "module",
+  "version": "0.0.0",
   "private": true,
   "description": "Internal EasyInk.Render HTML runtime bundle built from @easyink/viewer",
   "sideEffects": [
