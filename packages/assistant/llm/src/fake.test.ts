@@ -27,6 +27,6 @@ describe('staticLLMClient', () => {
     })
 
     expect(client).toBeInstanceOf(OpenAILLMClient)
-    expect((client as OpenAILLMClient & { client: { baseURL: string } }).client.baseURL).toBe('https://api.deepseek.com')
+    expect((client as unknown as { client: { baseURL: string } }).client.baseURL).toBe('https://api.deepseek.com')
   })
 })

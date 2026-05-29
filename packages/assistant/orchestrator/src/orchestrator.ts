@@ -14,14 +14,14 @@ import {
   alignAssistantDataSource,
   createAssistantPreview,
   diffAssistantSchema,
-  generateSchemaCandidate,
   repairAssistantSchema,
   validateAssistantSchema,
 } from '@easyink/assistant-capabilities'
 import { createId, MemoryAssistantStore } from '@easyink/assistant-store'
 import { isValidSchema } from '@easyink/schema'
+import { buildDataSourceDescriptor } from '@easyink/schema-tools'
 import pino from 'pino'
-import { runAssistantAgents, runIntakeAgent, runMemoryAgent } from './agents'
+import { runAssistantAgents, runIntakeAgent, runMemoryAgent, runSchemaAgent } from './agents'
 import { createAssistantWorkflowGraph } from './graph'
 
 export interface AssistantOrchestratorOptions {
@@ -112,22 +112,37 @@ export class AssistantOrchestrator {
         llm: this.llm,
         sourceData: externalData,
       })
-      if (agents.planner.strategy)
-        await this.think(taskId, agents.planner.strategy)
+      if (agents.planner.summary)
+        await this.think(taskId, agents.planner.summary)
 
       await this.runStep(current, 'compose')
       await this.think(taskId, '正在生成 EasyInk 模板结构。')
-      const candidate = generateSchemaCandidate(current.input, {
-        sourceData: externalData?.sample,
-        sourceDescriptor: externalData?.descriptor,
-        intent: agents.composer
-          ? {
-              ...agents.composer,
-              domain: agents.composer.domain ?? agents.planner.domain,
-              page: agents.composer.page ?? agents.planner.page,
-            }
-          : undefined,
+      const schemaAgent = await runSchemaAgent({
+        input: current.input,
+        taskId,
+        store: this.store,
+        llm: this.llm,
+        sourceData: externalData,
+      }, agents.planner, agents.source, agents.memorySummary).catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error)
+        throw new Error(`Schema Agent 返回不可用。${message}`)
       })
+      if (!schemaAgent)
+        throw new Error('Schema Agent requires an LLM client and a Designer material manifest.')
+
+      const candidate = {
+        schema: schemaAgent.schema,
+        dataSource: buildDataSourceDescriptor(schemaAgent.expectedDataSource, {
+          id: schemaAgent.expectedDataSource.name,
+          generatedBy: 'easyink-assistant-orchestrator',
+          prompt: current.input.prompt,
+          titlePrefix: 'Assistant',
+        }),
+        warnings: [
+          'Schema Agent used registered Designer materials; domain profiles and legacy presets were not used.',
+          ...schemaAgent.warnings,
+        ],
+      }
       candidate.warnings.push(
         ...agents.planner.warnings,
         ...agents.source.warnings,

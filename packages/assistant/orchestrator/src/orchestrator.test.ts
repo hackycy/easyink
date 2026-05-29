@@ -5,8 +5,8 @@ import { AssistantOrchestrator, createAssistantApp } from './index'
 describe('assistantOrchestrator', () => {
   it('runs a task into review and stores result/events', async () => {
     const store = new MemoryAssistantStore()
-    const orchestrator = new AssistantOrchestrator({ store })
-    const task = await store.createTask({ prompt: '生成一张商超小票' })
+    const orchestrator = new AssistantOrchestrator({ store, llm: createSchemaLLM() })
+    const task = await store.createTask({ prompt: '生成一张商超小票', materialManifest: textMaterialManifest() })
 
     const done = await orchestrator.runTask(task.id)
     const events = await store.listEvents(task.id)
@@ -17,10 +17,10 @@ describe('assistantOrchestrator', () => {
   })
 
   it('exposes Hono task endpoints', async () => {
-    const app = createAssistantApp()
+    const app = createAssistantApp({ llm: createSchemaLLM() })
     const response = await app.request('/assistant/tasks', {
       method: 'POST',
-      body: JSON.stringify({ prompt: '生成一张商超小票' }),
+      body: JSON.stringify({ prompt: '生成一张商超小票', materialManifest: textMaterialManifest() }),
       headers: { 'content-type': 'application/json' },
     })
 
@@ -66,8 +66,14 @@ describe('assistantOrchestrator', () => {
 
   it('asks for clarification and continues the same task after an answer', async () => {
     const store = new MemoryAssistantStore()
-    const orchestrator = new AssistantOrchestrator({ store })
-    const task = await store.createTask({ prompt: '帮我做个单据' })
+    const orchestrator = new AssistantOrchestrator({
+      store,
+      llm: new SequenceLLMClient([
+        { requiresClarification: true, questions: ['这是报价单、出库单、收据，还是其他类型的单据？'], suggestedAnswers: [['报价单', '出库单', '收据']], taskType: 'generic-document' },
+        ...schemaLLMPayloads(),
+      ]),
+    })
+    const task = await store.createTask({ prompt: '帮我做个单据', materialManifest: textMaterialManifest() })
 
     const waiting = await orchestrator.runTask(task.id)
     expect(waiting.status).toBe('waiting')
@@ -83,9 +89,9 @@ describe('assistantOrchestrator', () => {
 
   it('exposes result and version endpoints', async () => {
     const store = new MemoryAssistantStore()
-    const orchestrator = new AssistantOrchestrator({ store })
+    const orchestrator = new AssistantOrchestrator({ store, llm: createSchemaLLM() })
     const app = createAssistantApp({ orchestrator })
-    const task = await store.createTask({ prompt: '生成一张商超小票' })
+    const task = await store.createTask({ prompt: '生成一张商超小票', materialManifest: textMaterialManifest() })
     const reviewed = await orchestrator.runTask(task.id)
 
     const resultResponse = await app.request(`/assistant/tasks/${task.id}/results/${reviewed.resultId}`)
@@ -99,9 +105,9 @@ describe('assistantOrchestrator', () => {
 
   it('repairs an invalid result in place and exposes retry/rollback branches', async () => {
     const store = new MemoryAssistantStore()
-    const orchestrator = new AssistantOrchestrator({ store })
+    const orchestrator = new AssistantOrchestrator({ store, llm: createSchemaLLM() })
     const currentSchema = createSchema('before')
-    const task = await store.createTask({ prompt: '生成一张商超小票', currentSchema })
+    const task = await store.createTask({ prompt: '生成一张商超小票', currentSchema, materialManifest: textMaterialManifest() })
     const result = {
       id: 'result_broken',
       schema: { ...createSchema('broken'), version: '', elements: undefined } as never,
@@ -136,87 +142,150 @@ describe('assistantOrchestrator', () => {
     expect(actions).toContain('rolled-back')
   })
 
-  it('uses LLM agent intent as controlled composer input', async () => {
+  it('fails generation when the Designer material manifest is absent', async () => {
     const store = new MemoryAssistantStore()
-    const llm = new SequenceLLMClient([
-      { requiresClarification: false, questions: [], suggestedAnswers: [], taskType: 'quote' },
-      { requiresClarification: false, questions: [], suggestedAnswers: [], taskType: 'quote' },
-      { domain: 'business', page: { mode: 'fixed', width: 210, height: 297 }, warnings: [] },
-      {
-        name: 'LLM 报价单',
-        fields: [{ name: 'customer', path: 'customer', title: '客户', type: 'string' }],
-        sections: [{ kind: 'field-list', title: '基础信息', fields: [{ name: 'customer', path: 'customer', title: '客户' }] }],
-      },
-      { explanation: '校验前会经过 capability validate。' },
-    ])
-    const orchestrator = new AssistantOrchestrator({ store, llm })
+    const orchestrator = new AssistantOrchestrator({ store, llm: createSchemaLLM() })
     const task = await store.createTask({ prompt: '生成一个报价单' })
 
-    const reviewed = await orchestrator.runTask(task.id)
-    const result = await store.getResult(reviewed.resultId!)
+    await expect(orchestrator.runTask(task.id)).rejects.toThrow('Schema Agent requires an LLM client and a Designer material manifest.')
 
-    expect(result?.validation.valid).toBe(true)
-    expect(JSON.stringify(result?.dataSource?.fields)).toContain('customer')
-    expect(result?.preview.warnings.join('\n')).toContain('capability validate')
+    const failed = await store.getTask(task.id)
+    expect(failed?.status).toBe('failed')
+    expect(failed?.error).toContain('Schema Agent requires an LLM client and a Designer material manifest.')
   })
 
-  it('falls back to deterministic generation when LLM JSON is invalid', async () => {
-    const store = new MemoryAssistantStore()
-    const llm = new SequenceLLMClient([
-      { requiresClarification: false, questions: [], suggestedAnswers: [], taskType: 'quote' },
-      { requiresClarification: false, questions: [], suggestedAnswers: [], taskType: 'quote' },
-      { domain: 'business', page: { mode: 'fixed', width: 210, height: 297 }, warnings: [] },
-      '{"name":"截断的报价单',
-      { explanation: '校验前会经过 capability validate。' },
-    ])
-    const orchestrator = new AssistantOrchestrator({ store, llm })
-    const task = await store.createTask({ prompt: '生成一个报价单' })
-
-    const reviewed = await orchestrator.runTask(task.id)
-    const result = await store.getResult(reviewed.resultId!)
-
-    expect(reviewed.status).toBe('review')
-    expect(result?.validation.valid).toBe(true)
-    expect(result?.preview.warnings.join('\n')).toContain('Composer Agent 返回不可用')
-  })
-
-  it('accepts fenced JSON from LLM agents', async () => {
-    const store = new MemoryAssistantStore()
-    const llm = new SequenceLLMClient([
-      { requiresClarification: false, questions: [], suggestedAnswers: [], taskType: 'quote' },
-      { requiresClarification: false, questions: [], suggestedAnswers: [], taskType: 'quote' },
-      { domain: 'business', page: { mode: 'fixed', width: 210, height: 297 }, warnings: [] },
-      '```json\n{"name":"围栏 JSON 报价单","fields":[{"name":"customer","path":"customer","title":"客户","type":"string"}],"sections":[{"kind":"field-list","title":"基础信息","fields":[{"name":"customer","path":"customer","title":"客户"}]}]}\n```',
-      { explanation: '校验前会经过 capability validate。' },
-    ])
-    const orchestrator = new AssistantOrchestrator({ store, llm })
-    const task = await store.createTask({ prompt: '生成一个报价单' })
-
-    const reviewed = await orchestrator.runTask(task.id)
-    const result = await store.getResult(reviewed.resultId!)
-
-    expect(reviewed.status).toBe('review')
-    expect(JSON.stringify(result?.dataSource?.fields)).toContain('customer')
-  })
-
-  it('constrains generated results to the active material manifest', async () => {
+  it('fails generation when no LLM client is configured', async () => {
     const store = new MemoryAssistantStore()
     const orchestrator = new AssistantOrchestrator({ store })
+    const task = await store.createTask({ prompt: '生成一个报价单', materialManifest: textMaterialManifest() })
+
+    await expect(orchestrator.runTask(task.id)).rejects.toThrow('Schema Agent requires an LLM client and a Designer material manifest.')
+
+    const failed = await store.getTask(task.id)
+    expect(failed?.status).toBe('failed')
+  })
+
+  it('prefers the migrated MCP schema prompt over legacy profiles when the LLM returns a full schema', async () => {
+    const store = new MemoryAssistantStore()
+    const orchestrator = new AssistantOrchestrator({ store, llm: createSchemaLLM() })
     const task = await store.createTask({
-      prompt: '生成一张商超小票',
-      materialManifest: {
-        materials: [
-          { type: 'text', name: 'Text', capabilities: {}, props: [] },
-        ],
-      },
+      prompt: '生成一个报价单',
+      materialManifest: textMaterialManifest(),
     })
 
     const reviewed = await orchestrator.runTask(task.id)
     const result = await store.getResult(reviewed.resultId!)
 
+    expect(reviewed.status).toBe('review')
     expect(result?.validation.valid).toBe(true)
-    expect(result?.schema.elements.every(element => element.type === 'text')).toBe(true)
-    expect(result?.preview.warnings).toContainEqual(expect.stringContaining('Material type "table-data" is not registered'))
+    expect(result?.dataSource?.id).toBe('quote')
+    expect(result?.preview.warnings.join('\n')).toContain('Schema Agent used registered Designer materials')
+  })
+
+  it('reports schema-agent material output that is not in the active manifest', async () => {
+    const store = new MemoryAssistantStore()
+    const orchestrator = new AssistantOrchestrator({
+      store,
+      llm: createSchemaLLM({
+        schema: {
+          version: '1.0.0',
+          unit: 'mm',
+          page: { mode: 'fixed', width: 210, height: 297 },
+          guides: { x: [], y: [] },
+          elements: [{
+            id: 'tbl-items',
+            type: 'table-data',
+            x: 16,
+            y: 24,
+            width: 178,
+            height: 40,
+            props: {},
+          }],
+        },
+        expectedDataSource: {
+          name: 'quote',
+          fields: [{ name: 'items', path: 'items', title: '明细', type: 'array' }],
+          sampleData: { items: [] },
+        },
+      }),
+    })
+    const task = await store.createTask({
+      prompt: '生成一张商超小票',
+      materialManifest: textMaterialManifest(),
+    })
+
+    const reviewed = await orchestrator.runTask(task.id)
+    const result = await store.getResult(reviewed.resultId!)
+
+    expect(reviewed.status).toBe('review')
+    expect(result?.validation.valid).toBe(false)
+    expect(result?.validation.errors).toContainEqual(expect.objectContaining({
+      code: 'UNREGISTERED_MATERIAL_TYPE',
+    }))
+  })
+
+  it('normalizes schema-agent expectedDataSource field maps into field arrays', async () => {
+    const store = new MemoryAssistantStore()
+    const orchestrator = new AssistantOrchestrator({
+      store,
+      llm: createSchemaLLM({
+        schema: defaultSchemaAgentPayload().schema,
+        expectedDataSource: {
+          name: 'quote',
+          fields: {
+            customer: {
+              title: '客户',
+              type: 'object',
+              children: {
+                name: { title: '客户名称', type: 'string' },
+              },
+            },
+          },
+          sampleData: { customer: { name: '示例客户' } },
+        },
+      }),
+    })
+    const task = await store.createTask({ prompt: '生成一个报价单', materialManifest: textMaterialManifest() })
+
+    const reviewed = await orchestrator.runTask(task.id)
+    const result = await store.getResult(reviewed.resultId!)
+
+    expect(result?.dataSource?.fields).toEqual([
+      expect.objectContaining({
+        name: 'customer',
+        path: 'customer',
+        fields: [expect.objectContaining({ name: 'name', path: 'customer/name' })],
+      }),
+    ])
+  })
+
+  it('does not synthesize hidden planning defaults when Planner omits facts', async () => {
+    const store = new MemoryAssistantStore()
+    const llm = new SequenceLLMClient([
+      { requiresClarification: false, questions: [], suggestedAnswers: [], taskType: 'quote' },
+      { requiresClarification: false, questions: [], suggestedAnswers: [], taskType: 'quote' },
+      {},
+      { explanation: '校验前会经过 capability validate。' },
+      defaultSchemaAgentPayload(),
+    ])
+    const orchestrator = new AssistantOrchestrator({ store, llm })
+    const task = await store.createTask({ prompt: '生成一张商超小票', materialManifest: textMaterialManifest() })
+
+    await orchestrator.runTask(task.id)
+
+    const schemaAgentRequest = llm.requests.at(-1) as { messages: Array<{ role: string, content: string }> }
+    const userMessage = schemaAgentRequest.messages.find(message => message.role === 'user')?.content ?? ''
+    const planningBrief = JSON.parse(userMessage.match(/EasyInk planning brief:\n([\s\S]*?)\n\n/)?.[1] ?? '{}') as {
+      page?: unknown
+      requiredBlocks?: string[]
+      dataNeeds?: string[]
+      styleHints?: string[]
+    }
+
+    expect(planningBrief.page).toBeUndefined()
+    expect(planningBrief.requiredBlocks).toEqual([])
+    expect(planningBrief.dataNeeds).toEqual([])
+    expect(planningBrief.styleHints).toEqual([])
   })
 })
 
@@ -248,12 +317,112 @@ async function waitForTask(store: MemoryAssistantStore, taskId: string, status: 
   throw new Error(`Task ${taskId} did not reach ${status}`)
 }
 
+function createSchemaLLM(schemaPayload: unknown = defaultSchemaAgentPayload()) {
+  return new SequenceLLMClient(schemaLLMPayloads(schemaPayload))
+}
+
+function schemaLLMPayloads(schemaPayload: unknown = defaultSchemaAgentPayload()) {
+  return [
+    { requiresClarification: false, questions: [], suggestedAnswers: [], taskType: 'quote' },
+    { requiresClarification: false, questions: [], suggestedAnswers: [], taskType: 'quote' },
+    {
+      documentIntent: 'business quote document',
+      page: { mode: 'fixed', width: 210, height: 297, reason: 'A4 business document.' },
+      confidence: 'high',
+      requiredBlocks: ['title', 'customer information'],
+      dataNeeds: ['customer'],
+      styleHints: ['professional print layout'],
+      uncertainty: [],
+      warnings: [],
+    },
+    { explanation: '校验前会经过 capability validate。' },
+    schemaPayload,
+  ]
+}
+
+function defaultSchemaAgentPayload() {
+  return {
+    schema: {
+      version: '1.0.0',
+      unit: 'mm',
+      page: { mode: 'fixed', width: 210, height: 297 },
+      guides: { x: [], y: [] },
+      elements: [
+        {
+          id: 'txt-title',
+          type: 'text',
+          x: 16,
+          y: 16,
+          width: 178,
+          height: 8,
+          props: {
+            content: '直出报价单',
+            fontSize: 5,
+            fontWeight: 'bold',
+            textAlign: 'center',
+            verticalAlign: 'middle',
+            color: '#111827',
+          },
+        },
+        {
+          id: 'txt-customer',
+          type: 'text',
+          x: 16,
+          y: 28,
+          width: 178,
+          height: 5,
+          props: {
+            content: '客户：',
+            fontSize: 3,
+            textAlign: 'left',
+            verticalAlign: 'middle',
+            color: '#111827',
+          },
+          binding: {
+            sourceId: 'quote',
+            sourceName: 'quote',
+            fieldPath: 'customer',
+            fieldLabel: '客户',
+          },
+        },
+      ],
+    },
+    expectedDataSource: {
+      name: 'quote',
+      fields: [
+        { name: 'customer', path: 'customer', title: '客户', type: 'string' },
+      ],
+      sampleData: { customer: '示例客户' },
+    },
+  }
+}
+
+function textMaterialManifest() {
+  return {
+    materials: [
+      {
+        type: 'text',
+        name: 'Text',
+        capabilities: { bindable: true },
+        ai: {
+          type: 'text',
+          description: 'Designer-registered text material.',
+          properties: ['content', 'fontSize', 'fontWeight', 'textAlign', 'verticalAlign', 'color'],
+          binding: 'single' as const,
+        },
+      },
+    ],
+  }
+}
+
 class SequenceLLMClient {
   private index = 0
+  readonly requests: unknown[] = []
 
   constructor(private readonly payloads: unknown[]) {}
 
-  async complete() {
+  async complete(request?: unknown) {
+    this.requests.push(request)
     const payload = this.payloads[this.index] ?? {}
     this.index += 1
     return {
