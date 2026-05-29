@@ -89,10 +89,22 @@ const ValidatorSchema = z.object({
 export async function runAssistantAgents(context: AssistantAgentContext): Promise<AssistantAgentBundle> {
   const memorySummary = await runMemoryAgent(context)
   const intake = await runIntakeAgent(context, memorySummary)
-  const planner = await runPlannerAgent(context, memorySummary)
-  const source = await runSourceAgent(context)
-  const composer = await runComposerAgent(context, planner, source, memorySummary)
-  const validator = await runValidatorAgent(context)
+  const planner = await runPlannerAgent(context, memorySummary).catch((error: unknown) => ({
+    warnings: [formatAgentWarning('Planner', error)],
+  }))
+  const source = await runSourceAgent(context).catch((error: unknown) => ({
+    fieldMeanings: {},
+    warnings: [formatAgentWarning('Source', error)],
+  }))
+  const composerWarnings: string[] = []
+  const composer = await runComposerAgent(context, planner, source, memorySummary).catch((error: unknown) => {
+    composerWarnings.push(formatAgentWarning('Composer', error))
+    return undefined
+  })
+  const validator = await runValidatorAgent(context).catch((error: unknown) => ({
+    explanation: formatAgentWarning('Validator', error),
+  }))
+  planner.warnings.push(...composerWarnings)
   return { intake, planner, source, composer, validator, memorySummary }
 }
 
@@ -100,11 +112,13 @@ export async function runIntakeAgent(context: AssistantAgentContext, memorySumma
   const fallback = heuristicIntake(context.input.prompt)
   if (!context.llm)
     return fallback
-  const result = await completeJson(context.llm, IntakeSchema, [
-    '你是 EasyInk Assistant 的 Intake Agent。判断任务类型，以及是否必须澄清。只输出 JSON。',
-    `用户需求：${context.input.prompt}`,
-    memorySummary ? `历史上下文：${memorySummary}` : '',
-  ])
+  const result = await completeJson(context.llm, IntakeSchema, {
+    messages: [
+      '你是 EasyInk Assistant 的 Intake Agent。判断任务类型，以及是否必须澄清。只输出 JSON。',
+      `用户需求：${context.input.prompt}`,
+      memorySummary ? `历史上下文：${memorySummary}` : '',
+    ],
+  }).catch(() => fallback)
   return {
     requiresClarification: result.requiresClarification ?? fallback.requiresClarification,
     questions: result.questions?.length ? result.questions : fallback.questions,
@@ -116,22 +130,26 @@ export async function runIntakeAgent(context: AssistantAgentContext, memorySumma
 export async function runPlannerAgent(context: AssistantAgentContext, memorySummary?: string): Promise<PlannerAgentResult> {
   if (!context.llm)
     return { warnings: [] }
-  const result = await completeJson(context.llm, PlannerSchema, [
-    '你是 EasyInk Assistant 的 Planner Agent。判断领域、纸张方向、模板策略。只输出 JSON。',
-    `用户需求：${context.input.prompt}`,
-    memorySummary ? `历史上下文：${memorySummary}` : '',
-  ])
+  const result = await completeJson(context.llm, PlannerSchema, {
+    messages: [
+      '你是 EasyInk Assistant 的 Planner Agent。判断领域、纸张方向、模板策略。只输出 JSON。',
+      `用户需求：${context.input.prompt}`,
+      memorySummary ? `历史上下文：${memorySummary}` : '',
+    ],
+  })
   return { domain: result.domain, page: result.page, strategy: result.strategy, warnings: result.warnings ?? [] }
 }
 
 export async function runSourceAgent(context: AssistantAgentContext): Promise<SourceAgentResult> {
   if (!context.llm || !context.sourceData)
     return { fieldMeanings: {}, warnings: [] }
-  const result = await completeJson(context.llm, SourceSchema, [
-    '你是 EasyInk Assistant 的 Source Agent。解释数据源字段含义，指出字段风险。只输出 JSON。',
-    `字段描述：${JSON.stringify(context.sourceData.descriptor.fields).slice(0, 6000)}`,
-    `样例：${JSON.stringify(context.sourceData.sample).slice(0, 6000)}`,
-  ])
+  const result = await completeJson(context.llm, SourceSchema, {
+    messages: [
+      '你是 EasyInk Assistant 的 Source Agent。解释数据源字段含义，指出字段风险。只输出 JSON。',
+      `字段描述：${JSON.stringify(context.sourceData.descriptor.fields).slice(0, 6000)}`,
+      `样例：${JSON.stringify(context.sourceData.sample).slice(0, 6000)}`,
+    ],
+  })
   return { fieldMeanings: result.fieldMeanings ?? {}, warnings: result.warnings ?? [] }
 }
 
@@ -143,27 +161,32 @@ export async function runComposerAgent(
 ): Promise<TemplateGenerationIntent | undefined> {
   if (!context.llm)
     return undefined
-  const result = await completeJson(context.llm, ComposerSchema, [
-    '你是 EasyInk Assistant 的 Composer Agent。产出 TemplateGenerationIntent，不要输出 Designer schema。只输出 JSON。',
-    '可用字段类型：string, number, boolean, array, object。sections.kind 可用 title,text,field-list,array-table,summary,footer,code。',
-    context.input.materialManifest
-      ? `当前 Designer 已注册物料：${context.input.materialManifest.materials.map(material => `${material.type}(${material.ai?.binding ?? 'none'})`).join(', ')}。只能规划可由这些物料表达的结构。`
-      : '',
-    `用户需求：${context.input.prompt}`,
-    `规划：${JSON.stringify(planner)}`,
-    `数据源解释：${JSON.stringify(source)}`,
-    memorySummary ? `历史上下文：${memorySummary}` : '',
-  ])
+  const result = await completeJson(context.llm, ComposerSchema, {
+    maxTokens: 4000,
+    messages: [
+      '你是 EasyInk Assistant 的 Composer Agent。产出 TemplateGenerationIntent，不要输出 Designer schema。只输出 JSON。',
+      '可用字段类型：string, number, boolean, array, object。sections.kind 可用 title,text,field-list,array-table,summary,footer,code。',
+      context.input.materialManifest
+        ? `当前 Designer 已注册物料：${context.input.materialManifest.materials.map(material => `${material.type}(${material.ai?.binding ?? 'none'})`).join(', ')}。只能规划可由这些物料表达的结构。`
+        : '',
+      `用户需求：${context.input.prompt}`,
+      `规划：${JSON.stringify(planner)}`,
+      `数据源解释：${JSON.stringify(source)}`,
+      memorySummary ? `历史上下文：${memorySummary}` : '',
+    ],
+  })
   return result
 }
 
 export async function runValidatorAgent(context: AssistantAgentContext): Promise<ValidatorAgentResult> {
   if (!context.llm)
     return {}
-  return completeJson(context.llm, ValidatorSchema, [
-    '你是 EasyInk Assistant 的 Validator Agent。解释可能的校验风险并给出 repair hint。只输出 JSON。',
-    `用户需求：${context.input.prompt}`,
-  ])
+  return completeJson(context.llm, ValidatorSchema, {
+    messages: [
+      '你是 EasyInk Assistant 的 Validator Agent。解释可能的校验风险并给出 repair hint。只输出 JSON。',
+      `用户需求：${context.input.prompt}`,
+    ],
+  })
 }
 
 export async function runMemoryAgent(context: AssistantAgentContext): Promise<string | undefined> {
@@ -186,15 +209,99 @@ export async function runMemoryAgent(context: AssistantAgentContext): Promise<st
   return response.content.trim() || related.join('\n')
 }
 
-async function completeJson<T>(llm: LLMClient, schema: z.ZodType<T>, content: string[]): Promise<T> {
+interface CompleteJsonOptions {
+  messages: string[]
+  maxTokens?: number
+}
+
+class LLMJsonParseError extends Error {
+  constructor(message: string, readonly content: string) {
+    super(`${message}: ${content.slice(0, 240)}`)
+    this.name = 'LLMJsonParseError'
+  }
+}
+
+async function completeJson<T>(llm: LLMClient, schema: z.ZodType<T>, options: CompleteJsonOptions): Promise<T> {
+  const content = options.messages
   const response = await llm.complete({
     messages: [
       { role: 'system', content: content[0] ?? '只输出 JSON。' },
       { role: 'user', content: content.slice(1).filter(Boolean).join('\n') },
     ],
-    options: { responseFormat: 'json', temperature: 0.2, maxTokens: 1800 },
+    options: { responseFormat: 'json', temperature: 0.2, maxTokens: options.maxTokens ?? 1800 },
   })
-  return schema.parse(JSON.parse(response.content))
+  return schema.parse(parseJsonObject(response.content))
+}
+
+function parseJsonObject(content: string): unknown {
+  const normalized = stripJsonFence(content.trim())
+  try {
+    return JSON.parse(normalized)
+  }
+  catch (error) {
+    const objectText = findBalancedJsonObject(normalized)
+    if (objectText) {
+      try {
+        return JSON.parse(objectText)
+      }
+      catch {
+        // Fall through to a diagnostic error with the original parse message.
+      }
+    }
+    const message = error instanceof Error ? error.message : 'Invalid JSON'
+    throw new LLMJsonParseError(message, content)
+  }
+}
+
+function stripJsonFence(content: string): string {
+  if (!content.startsWith('```'))
+    return content
+  const firstLineEnd = content.indexOf('\n')
+  if (firstLineEnd < 0)
+    return content
+  const closingFenceStart = content.lastIndexOf('```')
+  if (closingFenceStart <= firstLineEnd)
+    return content
+  return content.slice(firstLineEnd + 1, closingFenceStart).trim()
+}
+
+function findBalancedJsonObject(content: string): string | undefined {
+  const start = content.indexOf('{')
+  if (start < 0)
+    return undefined
+  let depth = 0
+  let inString = false
+  let escaped = false
+  for (let index = start; index < content.length; index += 1) {
+    const char = content[index]
+    if (escaped) {
+      escaped = false
+      continue
+    }
+    if (char === '\\') {
+      escaped = true
+      continue
+    }
+    if (char === '"') {
+      inString = !inString
+      continue
+    }
+    if (inString)
+      continue
+    if (char === '{')
+      depth += 1
+    if (char === '}') {
+      depth -= 1
+      if (depth === 0)
+        return content.slice(start, index + 1)
+    }
+  }
+  return undefined
+}
+
+function formatAgentWarning(agent: string, error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+  return `${agent} Agent 返回不可用，已使用确定性生成路径。${message}`
 }
 
 function heuristicIntake(prompt: string): IntakeAgentResult {

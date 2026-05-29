@@ -160,6 +160,45 @@ describe('assistantOrchestrator', () => {
     expect(result?.preview.warnings.join('\n')).toContain('capability validate')
   })
 
+  it('falls back to deterministic generation when LLM JSON is invalid', async () => {
+    const store = new MemoryAssistantStore()
+    const llm = new SequenceLLMClient([
+      { requiresClarification: false, questions: [], suggestedAnswers: [], taskType: 'quote' },
+      { requiresClarification: false, questions: [], suggestedAnswers: [], taskType: 'quote' },
+      { domain: 'business', page: { mode: 'fixed', width: 210, height: 297 }, warnings: [] },
+      '{"name":"截断的报价单',
+      { explanation: '校验前会经过 capability validate。' },
+    ])
+    const orchestrator = new AssistantOrchestrator({ store, llm })
+    const task = await store.createTask({ prompt: '生成一个报价单' })
+
+    const reviewed = await orchestrator.runTask(task.id)
+    const result = await store.getResult(reviewed.resultId!)
+
+    expect(reviewed.status).toBe('review')
+    expect(result?.validation.valid).toBe(true)
+    expect(result?.preview.warnings.join('\n')).toContain('Composer Agent 返回不可用')
+  })
+
+  it('accepts fenced JSON from LLM agents', async () => {
+    const store = new MemoryAssistantStore()
+    const llm = new SequenceLLMClient([
+      { requiresClarification: false, questions: [], suggestedAnswers: [], taskType: 'quote' },
+      { requiresClarification: false, questions: [], suggestedAnswers: [], taskType: 'quote' },
+      { domain: 'business', page: { mode: 'fixed', width: 210, height: 297 }, warnings: [] },
+      '```json\n{"name":"围栏 JSON 报价单","fields":[{"name":"customer","path":"customer","title":"客户","type":"string"}],"sections":[{"kind":"field-list","title":"基础信息","fields":[{"name":"customer","path":"customer","title":"客户"}]}]}\n```',
+      { explanation: '校验前会经过 capability validate。' },
+    ])
+    const orchestrator = new AssistantOrchestrator({ store, llm })
+    const task = await store.createTask({ prompt: '生成一个报价单' })
+
+    const reviewed = await orchestrator.runTask(task.id)
+    const result = await store.getResult(reviewed.resultId!)
+
+    expect(reviewed.status).toBe('review')
+    expect(JSON.stringify(result?.dataSource?.fields)).toContain('customer')
+  })
+
   it('constrains generated results to the active material manifest', async () => {
     const store = new MemoryAssistantStore()
     const orchestrator = new AssistantOrchestrator({ store })

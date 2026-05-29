@@ -175,7 +175,9 @@ async function refreshTask() {
     task.value = nextTask.task
     result.value = nextTask.result
     versions.value = nextVersions
-    sourceSample.value = await api.value.getSourceSample(taskId.value).catch(() => undefined)
+    sourceSample.value = shouldLoadSourceSample(nextTask.task, nextEvents)
+      ? await api.value.getSourceSample(taskId.value).catch(() => undefined)
+      : undefined
   }
   finally {
     refreshing.value = false
@@ -205,6 +207,12 @@ function formatAssistantError(err: unknown): string {
   if (err instanceof Error)
     return err.message
   return String(err)
+}
+
+function shouldLoadSourceSample(nextTask: AssistantTaskRecord, nextEvents: AssistantEventRecord[]): boolean {
+  if (!nextTask.input.source || nextTask.input.source.kind === 'none')
+    return false
+  return nextEvents.some(record => record.event.type === 'tool.completed' && record.event.toolId === 'source')
 }
 
 function downloadJson(fileName: string, payload: unknown) {
