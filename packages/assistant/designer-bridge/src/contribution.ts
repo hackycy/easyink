@@ -9,7 +9,6 @@ import {
   applySelectedAssistantElementsToDesigner,
   rollbackAssistantDesigner,
 } from './apply'
-import { createLocalAssistantApiClient } from './local-client'
 import { createAssistantMaterialManifest } from './material-manifest'
 
 const AssistantPanel = defineAsyncComponent(() => import('./AssistantPanel.vue'))
@@ -18,12 +17,10 @@ export interface CreateAssistantContributionOptions {
   id?: string
   label?: string
   endpoint?: string
-  useLocalClient?: boolean
 }
 
 export function createAssistantContribution(options: CreateAssistantContributionOptions = {}): Contribution {
   const open = ref(false)
-  const apiClient = options.useLocalClient ? createLocalAssistantApiClient() : undefined
 
   return {
     id: options.id ?? 'easyink.assistant',
@@ -109,7 +106,6 @@ export function createAssistantContribution(options: CreateAssistantContribution
             open.value = next
           },
           'endpoint': options.endpoint,
-          'apiClient': apiClient,
           get 'currentSchema'() {
             return ctx.store.schema
           },

@@ -116,12 +116,11 @@ packages/ai/src/
 ```
 用户输入 prompt
   -> AIPanel.handleGenerate()
-    -> inferAIGenerationPlan(prompt)，非阻塞展示生成假设
-    -> MCPClient.connect(config) / generate({ prompt, currentSchema, generationPlan })
+    -> MCPClient.connect(config) / generate({ prompt, currentSchema })
       -> MCP Tool call (HTTP+SSE) -> mcp-server
-      -> LLM Provider 生成 TemplateIntent（字段、区块、数组表格意图）
-      -> schema-tools 确定性构建 DocumentSchema + expectedDataSource
-    <- { schema, expectedDataSource, intent, validation }
+      -> LLM Provider 直接生成 DocumentSchema + expectedDataSource
+      -> schema-tools repair/validate
+    <- { schema, expectedDataSource, validation }
     -> SchemaValidator.validate() / DataSourceAligner.align()
     -> store.dataSourceRegistry.registerProviderFactory(factory)
     -> store.setSchema(alignment.schema)
@@ -137,7 +136,8 @@ packages/schema-tools/src/
   index.ts
   schema-validator.ts     # 三层校验（结构/语义/绑定）+ autoFix（操作 deep clone）
   datasource-aligner.ts   # 字段路径对齐与模糊匹配
-  template-intent.ts      # TemplateIntent 归一化 + 确定性 schema/dataSource 构建
+  datasource-descriptor.ts # ExpectedDataSource -> DataSourceDescriptor
+  generation-accuracy.ts  # AI 生成后修复与准确性校验
 ```
 
 被 `@easyink/ai`（生成结果二次校验）与 `@easyink/mcp-server`（LLM 输出兜底校验）共同消费。无 Vue 依赖，可以在 Node 与浏览器双端运行。
@@ -146,7 +146,7 @@ packages/schema-tools/src/
 
 服务端 MCP 实现保持不变，仅切换内部依赖：原 `@easyink/mcp` -> `@easyink/schema-tools`。
 
-`McpServer` 的主工具是 `generateSchema`（plan -> TemplateIntent -> deterministic schema/expectedDataSource/DataSourceDescriptor -> repair/validate）。同时注册研发调试工具：`resolvePlan`、`generateIntent`、`buildSchemaFromIntent`、`validateGeneratedSchema`，用于定位生成偏差发生在 plan、intent、确定性构建还是校验阶段。`generateDataSource` 保留为兼容工具，但现在只做确定性 `ExpectedDataSource -> DataSourceDescriptor` 转换，不再额外调用 LLM。
+`McpServer` 的主工具是 `generateSchema`（LLM 直接生成 schema/expectedDataSource -> repair/validate -> DataSourceDescriptor）。研发调试工具保留 `validateGeneratedSchema`，用于定位生成结果与真实物料/Schema 校验的偏差。`generateDataSource` 保留为兼容工具，但现在只做确定性 `ExpectedDataSource -> DataSourceDescriptor` 转换，不再额外调用 LLM。
 
 Transport 通过 `MCP_TRANSPORT` 在 stdio / HTTP 间切换；LLM Provider 通过 `MCP_PROVIDER` 在 Claude / OpenAI 间切换。HTTP 默认监听 `0.0.0.0` 并返回 `Access-Control-Allow-Origin: *`，不提供 Origin allowlist 或 MCP 级 API key 配置。浏览器客户端可通过 `X-EasyInk-Provider`、`X-EasyInk-Provider-Key`、`X-EasyInk-Model`、`X-EasyInk-Base-URL` 按请求传入 provider 配置；未传入时回落到 `MCP_PROVIDER`、`MCP_API_KEY`、`MCP_MODEL`、`MCP_BASE_URL`。结构化输出默认开启；OpenAI-like provider 若拒绝 strict `json_schema` 会自动降级到 `json_object`，必要时再移除 `response_format`，也可通过 `MCP_STRICT_OUTPUTS=false` 直接从 JSON mode 开始。详见 `packages/mcp-server/README.md`。
 
@@ -184,14 +184,12 @@ Contribution API 不绑定 AI；后续若引入“审计面板”“素材市场
 
 - **物料事实源归属物料包**：每个真实物料在 `packages/materials/*/src/ai.ts` 导出纯数据 AI 描述，`@easyink/mcp-server` 通过 `pnpm -F @easyink/mcp-server build:materials` 生成 `config/materials.json`。`prebuild` 自动执行生成，根 `pnpm test` 前执行 `check:materials` 防止配置过期。
 - **只生成 canonical type**：提示词允许把 `table -> table-data`、`rich-text -> text` 等作为修复别名，但模型必须生成真实物料名，例如 `table-data`、`table-static`、`text`、`line`。旧结构 `type: "table"`、`props.columns`、`repeatTemplate` 不再视为合法表格 schema。
-- **行业纸张启发式先于 LLM**：AI 面板和 MCP server 共用 `inferAIGenerationPlan()`。例如“商超小票/超市小票/小票”推断为 `page.mode = "continuous"`、`layout.strategy = "stack-flow"`、`width = 80`、`height = 200`，明细数组使用 `table-data`；发票/报价单/订单默认 A4 fixed。
-- **非阻塞生成假设**：AI 面板从 prompt 推断 plan 并直接调用 MCP，不再阻塞确认；生成假设在面板内作为可解释摘要展示。没有前端 plan 时，server 端会重新推断。
-- **Intent-first 生成链路**：MCP server 不要求 LLM 一次性产出完整 `DocumentSchema`。LLM 先产出 `TemplateIntent`，描述领域、字段、区块、数组表格列等意图；`@easyink/schema-tools` 再确定性生成 schema，避免模型遗漏 `table-data.table.topology.rows[].role = "repeat-template"` 等内部 DSL 细节。
+- **纸张与结构由模型按上下文推断**：AI 面板不再预置行业 profile；MCP server 只把用户 prompt、当前 schema、可用物料和可选 caller plan 交给模型。小票、发票、证书等纸张差异由模型结合提示词和 source data 判断。
+- **Schema-first 生成链路**：MCP server 要求 LLM 一次性产出完整 `DocumentSchema` 与 `expectedDataSource`，随后由 `@easyink/schema-tools` 做低风险修复与校验，避免维护 parallel 的 deterministic template builder。
 - **严格结构化输出优先**：OpenAI provider 默认使用 JSON Schema structured output，Claude provider 默认启用 strict tool 定义；兼容 OpenAI-like endpoint 时可用 `MCP_STRICT_OUTPUTS=false` 回退 JSON mode，但仍保留后置修复与校验。
 - **同源 sampleData**：`generateSchema` 要求 `expectedDataSource.sampleData` 与 `expectedDataSource.fields` 同源，避免 schema 是 receipt 而预览数据仍是 invoice/company/customer 的错配。当前前端暂不消费 sampleData，只通过 MCP 返回和 metadata 保留。
 - **Server 统一数据源描述**：`generateSchema` 返回完整 `DataSourceDescriptor`，并保持 `dataSource.id === schema binding.sourceId` 的稳定 slug；AI client 只在兼容旧服务时从 `expectedDataSource` 本地转换。
-- **确定性表格构建优先**：数组/明细字段由 Intent builder 生成合法 `table-data`，固定包含 header row 与 repeat-template row。生成后仍只对直接 LLM schema 做低风险修复；表格结构不再依赖模型临场拼装。
+- **表格结构由提示词约束**：数组/明细字段必须由模型生成合法 `table-data`，固定包含 header row 与 repeat-template row；后置校验会拒绝旧表格结构和非法物料类型，并把可修复问题反馈给模型重试一次。
 - **字段命名规范**：中文需求下，字段 path 使用英文 camelCase/斜杠路径，`fieldLabel`/`title` 使用中文。例如 `store/name` + `店铺名称`、`items/subtotal` + `小计`。
-- **Plan 携带必备字段提示**：`AIGenerationPlan.requiredFieldHints?: DomainFieldHint[]` 由 domain profile 的 `requiredFields` 投影而成（`{ name, path, type, required, title?, children? }`），随 plan 一并送入 intent system prompt。LLM 必须在 `TemplateIntent.fields` 中覆盖这些路径；缺失时 server 会以指令式反馈触发一次重试，不再裸抛 `MISSING_REQUIRED_FIELD` 错误码。新增 domain 时只需在 profile 上声明 `requiredFields`，无需改动提示词。
 - **指令式重试反馈**：可由 LLM 修复的校验码（`UNKNOWN_MATERIAL_TYPE` / `INVALID_TABLE_DATA_SCHEMA` / `INVALID_TABLE_STATIC_SCHEMA` / `STATIC_BINDING_ON_ELEMENT` / `LEGACY_TABLE_SCHEMA`）在喂给下一轮重试前，会经 `FEEDBACK_INSTRUCTIONS` 翻译成具体修复指令（例如「不要使用 `type: "table"`，改用 table-data 并填充 topology」），显著提升二次成功率。
-- **低置信度回执**：当 plan.confidence = `low`（generic profile 兜底）时，`generateSchema` 仍返回 schema，但 payload 多带 `needsClarification: { reason, questions[] }`。调用方（通常是上层 LLM）应在提交前先向用户回放这些问题，避免把无信号的 prompt 直接落到通用模板。该字段在中/高置信度下不存在。
+- **低置信度回执**：当调用方显式传入 `generationPlan.confidence = "low"` 时，`generateSchema` 仍返回 schema，但 payload 多带 `needsClarification: { reason, questions[] }`。调用方（通常是上层 LLM）应在提交前先向用户回放这些问题。未传入 plan 时不再产生 profile 兜底假设。
