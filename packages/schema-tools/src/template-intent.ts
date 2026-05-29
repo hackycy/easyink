@@ -49,6 +49,7 @@ export interface TemplateGenerationIntent {
 export interface TemplateBuildOptions {
   plan: AIGenerationPlan
   prompt: string
+  allowedMaterialTypes?: Iterable<string>
 }
 
 export interface TemplateBuildResult {
@@ -73,6 +74,7 @@ export function buildSchemaFromTemplateIntent(
   const missingRequiredPaths = computeMissingRequiredPaths(rawIntent.fields, profile)
   const intent = normalizeTemplateIntent(rawIntent, options)
   const page = resolvePage(intent, options.plan)
+  const availability = createMaterialAvailability(options.allowedMaterialTypes)
   const schema: DocumentSchema = {
     version: '1.0.0',
     unit: 'mm',
@@ -84,13 +86,18 @@ export function buildSchemaFromTemplateIntent(
   const dataSourceName = intent.dataSourceName
   const layout = createLayoutCursor(page)
   const title = intent.name || profile.label
-  addTitle(schema.elements, title, layout, dataSourceName)
+  if (availability.canUse('text', 'document title'))
+    addTitle(schema.elements, title, layout, dataSourceName)
 
   for (const section of intent.sections) {
     if (section.kind === 'title')
       continue
-    addSection(schema.elements, section, intent.fields, layout, dataSourceName)
+    addSection(schema.elements, section, intent.fields, layout, dataSourceName, availability)
   }
+  const warnings = [
+    ...intent.warnings,
+    ...availability.warnings(),
+  ]
 
   const expectedDataSource: ExpectedDataSource = {
     name: dataSourceName,
@@ -98,7 +105,7 @@ export function buildSchemaFromTemplateIntent(
     sampleData: createSampleData(intent.fields),
   }
 
-  return { schema, expectedDataSource, intent, missingRequiredPaths }
+  return { schema, expectedDataSource, intent: { ...intent, warnings }, missingRequiredPaths }
 }
 
 export function normalizeTemplateIntent(
@@ -168,28 +175,30 @@ function addSection(
   fields: TemplateIntentField[],
   layout: LayoutCursor,
   dataSourceName: string,
+  availability: MaterialAvailability,
 ): void {
   if (section.kind === 'text' || section.kind === 'footer') {
-    addText(elements, section.text || section.title || '', layout, dataSourceName)
+    if (availability.canUse('text', `${section.kind} section`))
+      addText(elements, section.text || section.title || '', layout, dataSourceName)
     return
   }
 
   if (section.kind === 'array-table') {
     const arrayField = findArrayField(fields, section.sourcePath)
     if (arrayField)
-      addArrayTable(elements, section, arrayField, layout, dataSourceName)
+      addArrayTable(elements, section, arrayField, layout, dataSourceName, availability)
     return
   }
 
   if (section.kind === 'field-list' || section.kind === 'summary') {
     const sectionFields = resolveSectionFields(section, fields)
-    addFieldRows(elements, sectionFields, layout, dataSourceName, section.kind === 'summary')
+    addFieldRows(elements, sectionFields, layout, dataSourceName, section.kind === 'summary', availability)
     return
   }
 
   if (section.kind === 'code') {
     const field = resolveSectionFields(section, fields)[0]
-    addCodePlaceholder(elements, field, layout, dataSourceName)
+    addCodePlaceholder(elements, field, layout, dataSourceName, availability)
   }
 }
 
@@ -247,7 +256,11 @@ function addFieldRows(
   layout: LayoutCursor,
   dataSourceName: string,
   emphasize: boolean,
+  availability: MaterialAvailability,
 ): void {
+  if (!availability.canUse('text', 'field rows'))
+    return
+
   // Standard text 3mm ≈ 8.5pt; emphasized 3.6mm ≈ 10pt; compact halved.
   const fontSize = layout.compact
     ? (emphasize ? 3 : 2.6)
@@ -290,7 +303,11 @@ function addArrayTable(
   arrayField: TemplateIntentField,
   layout: LayoutCursor,
   dataSourceName: string,
+  availability: MaterialAvailability,
 ): void {
+  if (!availability.canUse('table-data', 'array table section'))
+    return
+
   const columns = normalizeColumns(section.columns, arrayField)
   if (columns.length === 0)
     return
@@ -388,9 +405,13 @@ function addCodePlaceholder(
   field: TemplateIntentField | undefined,
   layout: LayoutCursor,
   dataSourceName: string,
+  availability: MaterialAvailability,
 ): void {
   if (!field)
     return
+  if (!availability.canUse('qrcode', 'code section'))
+    return
+
   const size = layout.compact ? 18 : 28
   elements.push({
     id: layout.nextElementId('qr-code'),
@@ -409,6 +430,34 @@ function addCodePlaceholder(
     binding: createBinding(dataSourceName, field.path!, fieldTitle(field)),
   })
   layout.y += size + 4
+}
+
+interface MaterialAvailability {
+  canUse: (type: string, purpose: string) => boolean
+  warnings: () => string[]
+}
+
+function createMaterialAvailability(allowedMaterialTypes: Iterable<string> | undefined): MaterialAvailability {
+  if (!allowedMaterialTypes) {
+    return {
+      canUse: () => true,
+      warnings: () => [],
+    }
+  }
+
+  const allowed = new Set(allowedMaterialTypes)
+  const skipped = new Set<string>()
+  return {
+    canUse(type, purpose) {
+      if (allowed.has(type))
+        return true
+      skipped.add(`Material type "${type}" is not registered in the active Designer material manifest; skipped ${purpose}.`)
+      return false
+    },
+    warnings() {
+      return Array.from(skipped)
+    },
+  }
 }
 
 function createTextNode(input: {

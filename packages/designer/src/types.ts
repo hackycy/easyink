@@ -2,7 +2,7 @@ import type { PropSchema } from '@easyink/core'
 import type { DataSourceDescriptor } from '@easyink/datasource'
 import type { LocaleMessages } from '@easyink/locales'
 import type { DocumentSchema, DocumentSchemaInput, MaterialNode } from '@easyink/schema'
-import type { MaterialCategory } from '@easyink/shared'
+import type { AIMaterialDescriptor, MaterialCategory } from '@easyink/shared'
 import type { Component } from 'vue'
 import type { Contribution } from './contributions/types'
 
@@ -184,6 +184,7 @@ export interface MaterialDefinition {
   category: MaterialCategory
   capabilities: MaterialCapabilities
   props: PropSchema[]
+  aiDescriptor?: AIMaterialDescriptor
   createDefaultNode: (input?: Partial<MaterialNode>, unit?: string) => MaterialNode
   /**
    * Dynamic filter for PropertiesPanel sections.

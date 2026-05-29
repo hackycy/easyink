@@ -59,6 +59,22 @@ describe('template intent builder', () => {
     ])
   })
 
+  it('only emits material types allowed by the active material manifest', () => {
+    const plan = inferAIGenerationPlan('生成一个商超小票模版，附带商品结账清单和合计')
+    const result = buildSchemaFromTemplateIntent({
+      name: '商超小票',
+      fields: [],
+      sections: [],
+    }, {
+      prompt: '生成一个商超小票模版，附带商品结账清单和合计',
+      plan,
+      allowedMaterialTypes: ['text'],
+    })
+
+    expect(result.schema.elements.every(element => element.type === 'text')).toBe(true)
+    expect(result.intent.warnings).toContainEqual(expect.stringContaining('Material type "table-data" is not registered'))
+  })
+
   it('keeps elements below table-data out of the designer preview area', () => {
     const plan = inferAIGenerationPlan('生成一个商超小票模版，附带商品结账清单和合计')
     const result = buildSchemaFromTemplateIntent({

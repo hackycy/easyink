@@ -44,7 +44,7 @@ export function createLocalAssistantApiClient(): AssistantApiClient {
       })
 
       await runStep(current, 'validate')
-      const validation = validateAssistantSchema(candidate.schema)
+      const validation = validateAssistantSchema(candidate.schema, { materialManifest: current.input.materialManifest })
       if (candidate.dataSource) {
         const alignment = alignAssistantDataSource(candidate.schema, candidate.dataSource)
         candidate.warnings.push(...alignment.warnings)
@@ -150,7 +150,7 @@ export function createLocalAssistantApiClient(): AssistantApiClient {
       if (task.resultId) {
         const result = await store.getResult(task.resultId)
         if (result && !result.validation.valid) {
-          const repair = repairAssistantSchema(result.schema)
+          const repair = repairAssistantSchema(result.schema, { materialManifest: task.input.materialManifest })
           const diff = diffAssistantSchema(result.schema, repair.schema)
           const repairedResult: AssistantResult = {
             ...result,

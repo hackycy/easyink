@@ -20,6 +20,10 @@ export class MaterialRegistry {
     return this.materials.get(type)
   }
 
+  listMaterials(): MaterialDefinition[] {
+    return Array.from(this.materials.values())
+  }
+
   registerCatalogEntry(entry: MaterialCatalogEntry): void {
     this.catalog.push(markRaw({
       ...entry,

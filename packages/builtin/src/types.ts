@@ -1,6 +1,6 @@
 import type { MaterialExtensionFactory, MaterialViewerExtension, PropSchema } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
-import type { MaterialCategory } from '@easyink/shared'
+import type { AIMaterialDescriptor, MaterialCategory } from '@easyink/shared'
 import type { Component } from 'vue'
 
 export type BuiltinPanelSectionId = 'geometry' | 'props' | 'overlay' | 'binding' | 'visibility'
@@ -25,6 +25,7 @@ export interface BuiltinDesignerMaterialRegistration {
   capabilities: BuiltinMaterialCapabilities
   createDefaultNode: (input?: Partial<MaterialNode>, unit?: string) => MaterialNode
   factory: MaterialExtensionFactory
+  aiDescriptor?: AIMaterialDescriptor
   /** Material-owned PropSchemas appended to the designer's static registry entries. */
   propSchemas?: PropSchema[]
   sectionFilter?: (sectionId: BuiltinPanelSectionId) => boolean

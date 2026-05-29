@@ -124,6 +124,26 @@ describe('assistantOrchestrator', () => {
     expect(JSON.stringify(result?.dataSource?.fields)).toContain('customer')
     expect(result?.preview.warnings.join('\n')).toContain('capability validate')
   })
+
+  it('constrains generated results to the active material manifest', async () => {
+    const store = new MemoryAssistantStore()
+    const orchestrator = new AssistantOrchestrator({ store })
+    const task = await store.createTask({
+      prompt: '生成一张商超小票',
+      materialManifest: {
+        materials: [
+          { type: 'text', name: 'Text', capabilities: {}, props: [] },
+        ],
+      },
+    })
+
+    const reviewed = await orchestrator.runTask(task.id)
+    const result = await store.getResult(reviewed.resultId!)
+
+    expect(result?.validation.valid).toBe(true)
+    expect(result?.schema.elements.every(element => element.type === 'text')).toBe(true)
+    expect(result?.preview.warnings).toContainEqual(expect.stringContaining('Material type "table-data" is not registered'))
+  })
 })
 
 function createSchema(text: string) {

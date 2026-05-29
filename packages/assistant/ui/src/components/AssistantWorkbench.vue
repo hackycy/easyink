@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { AssistantPatchOperation, AssistantResult } from '@easyink/assistant-capabilities'
+import type { AssistantMaterialManifest, AssistantPatchOperation, AssistantResult } from '@easyink/assistant-capabilities'
 import type { AssistantApiClient } from '../api'
 import ConversationPanel from './ConversationPanel.vue'
 
@@ -7,6 +7,7 @@ defineProps<{
   endpoint?: string
   apiClient?: AssistantApiClient
   currentSchema?: unknown
+  materialManifest?: AssistantMaterialManifest
 }>()
 
 defineEmits<{
@@ -23,6 +24,7 @@ defineEmits<{
     :endpoint="endpoint"
     :api-client="apiClient"
     :current-schema="currentSchema"
+    :material-manifest="materialManifest"
     @apply="$emit('apply', $event)"
     @apply-patch="$emit('applyPatch', $event)"
     @apply-selected-patch="$emit('applySelectedPatch', $event)"

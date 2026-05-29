@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { AssistantPatchOperation, AssistantResult, AssistantSourceInput } from '@easyink/assistant-capabilities'
+import type { AssistantMaterialManifest, AssistantPatchOperation, AssistantResult, AssistantSourceInput } from '@easyink/assistant-capabilities'
 import type { AssistantEventRecord, AssistantSourceSampleRecord, AssistantVersionRecord } from '@easyink/assistant-store'
 import type { AssistantApiClient } from '../api'
 import { useIntervalFn } from '@vueuse/core'
@@ -16,10 +16,12 @@ const props = withDefaults(defineProps<{
   endpoint?: string
   apiClient?: AssistantApiClient
   currentSchema?: unknown
+  materialManifest?: AssistantMaterialManifest
 }>(), {
   endpoint: '',
   apiClient: undefined,
   currentSchema: undefined,
+  materialManifest: undefined,
 })
 
 const emit = defineEmits<{
@@ -83,6 +85,7 @@ async function submitMessage(payload: { prompt: string, source?: AssistantSource
         prompt: payload.prompt,
         source: payload.source ?? { kind: 'none' },
         currentSchema: props.currentSchema,
+        materialManifest: props.materialManifest,
       })
       taskId.value = created.id
     }

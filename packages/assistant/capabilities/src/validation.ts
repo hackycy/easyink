@@ -1,16 +1,21 @@
 import type { DataSourceDescriptor } from '@easyink/datasource'
 import type { DocumentSchema } from '@easyink/schema'
-import type { AssistantValidationReport } from './types'
-import { validateSchemaIssues } from '@easyink/schema'
+import type { AssistantMaterialManifest, AssistantValidationIssue, AssistantValidationReport } from './types'
+import { traverseNodes, validateSchemaIssues } from '@easyink/schema'
 import { DataSourceAligner, normalizeAllFieldPaths, SchemaValidator } from '@easyink/schema-tools'
 
-export function validateAssistantSchema(schema: unknown): AssistantValidationReport {
+export interface ValidateAssistantSchemaOptions {
+  materialManifest?: AssistantMaterialManifest
+}
+
+export function validateAssistantSchema(schema: unknown, options: ValidateAssistantSchemaOptions = {}): AssistantValidationReport {
   const validator = new SchemaValidator({ autoFix: true })
   const generated = validator.validate(schema)
   const structural = validateSchemaIssues(schema)
+  const materialIssues = validateSchemaMaterialTypes(schema, options.materialManifest)
 
   return {
-    valid: generated.valid && structural.length === 0,
+    valid: generated.valid && structural.length === 0 && materialIssues.length === 0,
     errors: [
       ...generated.errors.map(issue => ({
         code: issue.code,
@@ -23,6 +28,7 @@ export function validateAssistantSchema(schema: unknown): AssistantValidationRep
         message: issue.message,
         path: issue.path,
       })),
+      ...materialIssues,
     ],
     warnings: generated.warnings.map(issue => ({
       code: issue.code,
@@ -37,7 +43,7 @@ export function alignAssistantDataSource(schema: DocumentSchema, dataSource: Dat
   return new DataSourceAligner().align(schema, dataSource)
 }
 
-export function repairAssistantSchema(schema: DocumentSchema): {
+export function repairAssistantSchema(schema: DocumentSchema, options: ValidateAssistantSchemaOptions = {}): {
   schema: DocumentSchema
   validation: AssistantValidationReport
   repairs: AssistantValidationReport['autoFixed']
@@ -45,7 +51,7 @@ export function repairAssistantSchema(schema: DocumentSchema): {
   const validator = new SchemaValidator({ autoFix: true })
   const repaired = validator.autoFix(schema)
   const normalized = normalizeAllFieldPaths(repairGuideAxes(repaired.fixed))
-  const validation = validateAssistantSchema(normalized)
+  const validation = validateAssistantSchema(normalized, options)
   return {
     schema: normalized,
     validation,
@@ -56,6 +62,26 @@ export function repairAssistantSchema(schema: DocumentSchema): {
       fixed: issue.fixed,
     })),
   }
+}
+
+function validateSchemaMaterialTypes(schema: unknown, manifest: AssistantMaterialManifest | undefined): AssistantValidationIssue[] {
+  if (!manifest)
+    return []
+  if (!schema || typeof schema !== 'object' || !('elements' in schema) || !Array.isArray((schema as { elements?: unknown }).elements))
+    return []
+
+  const allowedTypes = new Set(manifest.materials.map(material => material.type))
+  const issues: AssistantValidationIssue[] = []
+  traverseNodes(schema as DocumentSchema, (node) => {
+    if (!allowedTypes.has(node.type)) {
+      issues.push({
+        code: 'UNREGISTERED_MATERIAL_TYPE',
+        message: `Material type "${node.type}" is not registered in the active Designer material manifest.`,
+        path: `elements.${node.id}`,
+      })
+    }
+  })
+  return issues
 }
 
 function repairGuideAxes(schema: DocumentSchema): DocumentSchema {

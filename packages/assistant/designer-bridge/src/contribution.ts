@@ -10,6 +10,7 @@ import {
   rollbackAssistantDesigner,
 } from './apply'
 import { createLocalAssistantApiClient } from './local-client'
+import { createAssistantMaterialManifest } from './material-manifest'
 
 const AssistantPanel = defineAsyncComponent(() => import('./AssistantPanel.vue'))
 
@@ -111,6 +112,9 @@ export function createAssistantContribution(options: CreateAssistantContribution
           'apiClient': apiClient,
           get 'currentSchema'() {
             return ctx.store.schema
+          },
+          get 'materialManifest'() {
+            return createAssistantMaterialManifest(ctx.store)
           },
           'onApply': (result: AssistantResult) => {
             void ctx.executeCommand('assistant.applyResult', result)

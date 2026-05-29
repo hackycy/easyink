@@ -20,18 +20,21 @@ import {
 import {
   BARCODE_CAPABILITIES,
   BARCODE_TYPE,
+  barcodeAIMaterialDescriptor,
   createBarcodeExtension,
   createBarcodeNode,
 } from '@easyink/material-barcode'
 import {
   CHART_CAPABILITIES,
   CHART_TYPE,
+  chartAIMaterialDescriptor,
   createChartExtension,
   createChartNode,
 } from '@easyink/material-chart'
 import {
   CONTAINER_CAPABILITIES,
   CONTAINER_TYPE,
+  containerAIMaterialDescriptor,
   createContainerExtension,
   createContainerNode,
 } from '@easyink/material-container'
@@ -40,48 +43,56 @@ import {
   createEllipseNode,
   ELLIPSE_CAPABILITIES,
   ELLIPSE_TYPE,
+  ellipseAIMaterialDescriptor,
 } from '@easyink/material-ellipse'
 import {
   createFlowRowExtension,
   createFlowRowNode,
   FLOW_ROW_CAPABILITIES,
   FLOW_ROW_TYPE,
+  flowRowAIMaterialDescriptor,
 } from '@easyink/material-flow-row'
 import {
   createImageExtension,
   createImageNode,
   IMAGE_CAPABILITIES,
   IMAGE_TYPE,
+  imageAIMaterialDescriptor,
 } from '@easyink/material-image'
 import {
   createLineExtension,
   createLineNode,
   LINE_CAPABILITIES,
   LINE_TYPE,
+  lineAIMaterialDescriptor,
 } from '@easyink/material-line'
 import {
   createPageNumberExtension,
   createPageNumberNode,
   PAGE_NUMBER_CAPABILITIES,
   PAGE_NUMBER_TYPE,
+  pageNumberAIMaterialDescriptor,
 } from '@easyink/material-page-number'
 import {
   createQrcodeExtension,
   createQrcodeNode,
   QRCODE_CAPABILITIES,
   QRCODE_TYPE,
+  qrcodeAIMaterialDescriptor,
 } from '@easyink/material-qrcode'
 import {
   createRectExtension,
   createRectNode,
   RECT_CAPABILITIES,
   RECT_TYPE,
+  rectAIMaterialDescriptor,
 } from '@easyink/material-rect'
 import {
   createSvgCustomExtension,
   createSvgCustomNode,
   SVG_CUSTOM_CAPABILITIES,
   SVG_CUSTOM_TYPE,
+  svgCustomAIMaterialDescriptor,
   svgCustomDesignerPropSchemas,
 } from '@easyink/material-svg-custom'
 import {
@@ -89,6 +100,7 @@ import {
   createSvgHeartNode,
   SVG_HEART_CAPABILITIES,
   SVG_HEART_TYPE,
+  svgHeartAIMaterialDescriptor,
   svgHeartDesignerPropSchemas,
 } from '@easyink/material-svg-heart'
 import {
@@ -96,6 +108,7 @@ import {
   createSvgStarNode,
   SVG_STAR_CAPABILITIES,
   SVG_STAR_TYPE,
+  svgStarAIMaterialDescriptor,
   svgStarDesignerPropSchemas,
 } from '@easyink/material-svg-star'
 import {
@@ -103,6 +116,7 @@ import {
   createTableDataNode,
   TABLE_DATA_CAPABILITIES,
   TABLE_DATA_TYPE,
+  tableDataAIMaterialDescriptor,
   tableDataDesignerPropSchemas,
 } from '@easyink/material-table-data'
 import {
@@ -110,12 +124,14 @@ import {
   createTableStaticNode,
   TABLE_STATIC_CAPABILITIES,
   TABLE_STATIC_TYPE,
+  tableStaticAIMaterialDescriptor,
 } from '@easyink/material-table-static'
 import {
   createTextExtension,
   createTextNode,
   TEXT_CAPABILITIES,
   TEXT_TYPE,
+  textAIMaterialDescriptor,
 } from '@easyink/material-text'
 
 function tableSectionFilter(sectionId: BuiltinPanelSectionId): boolean {
@@ -130,6 +146,7 @@ export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
       icon: IconText,
       category: 'basic',
       capabilities: TEXT_CAPABILITIES,
+      aiDescriptor: textAIMaterialDescriptor,
       createDefaultNode: createTextNode,
       factory: createTextExtension,
     },
@@ -139,6 +156,7 @@ export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
       icon: IconImage,
       category: 'basic',
       capabilities: IMAGE_CAPABILITIES,
+      aiDescriptor: imageAIMaterialDescriptor,
       createDefaultNode: createImageNode,
       factory: createImageExtension,
     },
@@ -148,6 +166,7 @@ export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
       icon: IconBarcode,
       category: 'basic',
       capabilities: BARCODE_CAPABILITIES,
+      aiDescriptor: barcodeAIMaterialDescriptor,
       createDefaultNode: createBarcodeNode,
       factory: createBarcodeExtension,
     },
@@ -157,6 +176,7 @@ export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
       icon: IconQrcode,
       category: 'basic',
       capabilities: QRCODE_CAPABILITIES,
+      aiDescriptor: qrcodeAIMaterialDescriptor,
       createDefaultNode: createQrcodeNode,
       factory: createQrcodeExtension,
     },
@@ -166,6 +186,7 @@ export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
       icon: IconLine,
       category: 'basic',
       capabilities: LINE_CAPABILITIES,
+      aiDescriptor: lineAIMaterialDescriptor,
       createDefaultNode: createLineNode,
       factory: createLineExtension,
     },
@@ -175,6 +196,7 @@ export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
       icon: IconRect,
       category: 'basic',
       capabilities: RECT_CAPABILITIES,
+      aiDescriptor: rectAIMaterialDescriptor,
       createDefaultNode: createRectNode,
       factory: createRectExtension,
     },
@@ -184,6 +206,7 @@ export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
       icon: IconEllipse,
       category: 'basic',
       capabilities: ELLIPSE_CAPABILITIES,
+      aiDescriptor: ellipseAIMaterialDescriptor,
       createDefaultNode: createEllipseNode,
       factory: createEllipseExtension,
     },
@@ -193,6 +216,7 @@ export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
       icon: IconContainer,
       category: 'layout',
       capabilities: CONTAINER_CAPABILITIES,
+      aiDescriptor: containerAIMaterialDescriptor,
       createDefaultNode: createContainerNode,
       factory: createContainerExtension,
     },
@@ -202,6 +226,7 @@ export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
       icon: IconTable,
       category: 'data',
       capabilities: TABLE_STATIC_CAPABILITIES,
+      aiDescriptor: tableStaticAIMaterialDescriptor,
       createDefaultNode: createTableStaticNode,
       factory: createTableStaticExtension,
       sectionFilter: tableSectionFilter,
@@ -212,6 +237,7 @@ export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
       icon: IconDataTable,
       category: 'data',
       capabilities: TABLE_DATA_CAPABILITIES,
+      aiDescriptor: tableDataAIMaterialDescriptor,
       createDefaultNode: createTableDataNode,
       factory: createTableDataExtension,
       propSchemas: tableDataDesignerPropSchemas,
@@ -223,6 +249,7 @@ export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
       icon: IconLayoutPanelTop,
       category: 'data',
       capabilities: FLOW_ROW_CAPABILITIES,
+      aiDescriptor: flowRowAIMaterialDescriptor,
       createDefaultNode: createFlowRowNode,
       factory: createFlowRowExtension,
     },
@@ -232,6 +259,7 @@ export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
       icon: IconChart,
       category: 'chart',
       capabilities: CHART_CAPABILITIES,
+      aiDescriptor: chartAIMaterialDescriptor,
       createDefaultNode: createChartNode,
       factory: createChartExtension,
     },
@@ -241,6 +269,7 @@ export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
       icon: IconSvg,
       category: 'svg',
       capabilities: SVG_CUSTOM_CAPABILITIES,
+      aiDescriptor: svgCustomAIMaterialDescriptor,
       createDefaultNode: createSvgCustomNode,
       factory: createSvgCustomExtension,
       propSchemas: svgCustomDesignerPropSchemas,
@@ -251,6 +280,7 @@ export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
       icon: IconStar,
       category: 'svg',
       capabilities: SVG_STAR_CAPABILITIES,
+      aiDescriptor: svgStarAIMaterialDescriptor,
       createDefaultNode: createSvgStarNode,
       factory: createSvgStarExtension,
       propSchemas: svgStarDesignerPropSchemas,
@@ -261,6 +291,7 @@ export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
       icon: IconHeart,
       category: 'svg',
       capabilities: SVG_HEART_CAPABILITIES,
+      aiDescriptor: svgHeartAIMaterialDescriptor,
       createDefaultNode: createSvgHeartNode,
       factory: createSvgHeartExtension,
       propSchemas: svgHeartDesignerPropSchemas,
@@ -271,6 +302,7 @@ export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
       icon: IconPageNumber,
       category: 'utility',
       capabilities: PAGE_NUMBER_CAPABILITIES,
+      aiDescriptor: pageNumberAIMaterialDescriptor,
       createDefaultNode: createPageNumberNode,
       factory: createPageNumberExtension,
     },

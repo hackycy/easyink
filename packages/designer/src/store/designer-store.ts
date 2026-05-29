@@ -275,6 +275,10 @@ export class DesignerStore {
     return this.materialRegistry.getMaterial(type)
   }
 
+  listMaterials(): MaterialDefinition[] {
+    return this.materialRegistry.listMaterials()
+  }
+
   registerCatalogEntry(entry: MaterialCatalogEntry): void {
     this.materialRegistry.registerCatalogEntry(entry)
   }

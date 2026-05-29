@@ -146,6 +146,9 @@ export async function runComposerAgent(
   const result = await completeJson(context.llm, ComposerSchema, [
     '你是 EasyInk Assistant 的 Composer Agent。产出 TemplateGenerationIntent，不要输出 Designer schema。只输出 JSON。',
     '可用字段类型：string, number, boolean, array, object。sections.kind 可用 title,text,field-list,array-table,summary,footer,code。',
+    context.input.materialManifest
+      ? `当前 Designer 已注册物料：${context.input.materialManifest.materials.map(material => `${material.type}(${material.ai?.binding ?? 'none'})`).join(', ')}。只能规划可由这些物料表达的结构。`
+      : '',
     `用户需求：${context.input.prompt}`,
     `规划：${JSON.stringify(planner)}`,
     `数据源解释：${JSON.stringify(source)}`,

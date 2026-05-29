@@ -1,3 +1,4 @@
+import type { AIMaterialDescriptor } from '@easyink/shared'
 import type { DesignerStore } from '../store/designer-store'
 import type { MaterialCapabilities, MaterialCatalogEntry, MaterialDefinition, MaterialExtensionFactory, PanelSectionId, PropSchema } from '../types'
 import { getPropSchemas } from '@easyink/prop-schemas'
@@ -12,6 +13,7 @@ export interface DesignerMaterialRegistration {
   capabilities: MaterialCapabilities
   createDefaultNode: MaterialDefinition['createDefaultNode']
   factory: MaterialExtensionFactory
+  aiDescriptor?: AIMaterialDescriptor
   /** Material-owned PropSchemas appended to designer's static registry entries. */
   propSchemas?: PropSchema[]
   sectionFilter?: MaterialDefinition['sectionFilter']
@@ -65,6 +67,7 @@ export function registerMaterialBundle(store: DesignerStore, bundle: DesignerMat
       category: entry.category,
       capabilities: entry.capabilities,
       props: mergedProps,
+      aiDescriptor: entry.aiDescriptor,
       createDefaultNode: entry.createDefaultNode,
       sectionFilter: entry.sectionFilter,
     }

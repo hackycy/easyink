@@ -45,7 +45,11 @@ export function generateSchemaCandidate(
         ...(options.intent?.warnings ?? []),
       ],
     },
-    { plan, prompt: input.prompt },
+    {
+      plan,
+      prompt: input.prompt,
+      allowedMaterialTypes: input.materialManifest?.materials.map(material => material.type),
+    },
   )
 
   const dataSource = options.sourceDescriptor ?? buildDataSourceDescriptor(
@@ -56,7 +60,7 @@ export function generateSchemaCandidate(
       titlePrefix: 'Assistant',
     },
   )
-  const validation = validateAssistantSchema(build.schema)
+  const validation = validateAssistantSchema(build.schema, { materialManifest: input.materialManifest })
 
   return {
     schema: build.schema,
