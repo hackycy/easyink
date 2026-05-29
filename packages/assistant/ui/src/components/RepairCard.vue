@@ -8,13 +8,13 @@ defineEmits<{ repair: [] }>()
 <template>
   <article class="assistant-card assistant-repair-card">
     <strong>建议修复</strong>
-    <p v-if="result.validation.errors.length">
+    <p v-if="result.validation.errors.length" class="assistant-muted">
       {{ result.validation.errors[0]?.message }}
     </p>
-    <p v-else>
+    <p v-else class="assistant-muted">
       校验报告提示存在可修复问题。
     </p>
-    <button type="button" @click="$emit('repair')">
+    <button type="button" class="assistant-btn assistant-btn--primary" @click="$emit('repair')">
       修复并重新校验
     </button>
   </article>

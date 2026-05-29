@@ -39,10 +39,10 @@ describe('assistant message projection', () => {
 
     const messages = projectTaskToMessages({ task, events, result })
 
-    expect(messages.map(message => message.kind)).toEqual(['text', 'source', 'progress', 'result', 'diff'])
+    expect(messages.map(message => message.kind)).toEqual(['text', 'source', 'turn', 'result', 'diff'])
   })
 
-  it('collapses started and completed events for the same step', () => {
+  it('aggregates started and completed events into turn steps', () => {
     const task: AssistantTaskRecord = {
       id: 'task_1',
       input: {
@@ -61,11 +61,13 @@ describe('assistant message projection', () => {
     ]
 
     const messages = projectTaskToMessages({ task, events })
-    const progress = messages.filter(message => message.kind === 'progress')
+    const turn = messages.find(message => message.kind === 'turn')
 
-    expect(progress).toHaveLength(2)
-    expect(progress.map(message => message.title)).toEqual(['理解需求', '规划模板'])
-    expect(progress.map(message => message.status)).toEqual(['done', 'running'])
+    expect(turn).toBeDefined()
+    if (turn?.kind !== 'turn')
+      throw new Error('expected turn message')
+    expect(turn.steps.map(step => step.title)).toEqual(['理解需求', '规划版式'])
+    expect(turn.steps.map(step => step.status)).toEqual(['done', 'running'])
   })
 
   it('infers pasted JSON, curl, and URLs as source attachments', () => {

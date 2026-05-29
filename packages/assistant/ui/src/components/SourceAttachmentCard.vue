@@ -14,19 +14,21 @@ defineEmits<{ remove: [] }>()
 
 <template>
   <article class="assistant-card assistant-source-card">
-    <div>
+    <div class="assistant-source-card__body">
       <strong>{{ title }}</strong>
-      <p>{{ detail }}</p>
-      <ul v-if="fields?.length">
+      <p class="assistant-muted">
+        {{ detail }}
+      </p>
+      <ul v-if="fields?.length" class="assistant-source-card__fields">
         <li v-for="field in fields.slice(0, 8)" :key="field">
           {{ field }}
         </li>
       </ul>
-      <p v-if="warnings?.length">
+      <p v-if="warnings?.length" class="assistant-source-card__warning">
         {{ warnings[0] }}
       </p>
     </div>
-    <button type="button" @click="$emit('remove')">
+    <button type="button" class="assistant-link" @click="$emit('remove')">
       删除
     </button>
   </article>

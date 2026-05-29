@@ -58,9 +58,12 @@ export class AssistantOrchestrator {
     try {
       await this.invokeGraph(current.input)
       await this.runStep(current, 'intake')
+      await this.store.appendEvent(taskId, { type: 'thinking.started', taskId, title: '理解模板需求' })
+      await this.think(taskId, '正在理解你的模板需求……')
       const memorySummary = await runMemoryAgent({ input: current.input, taskId, store: this.store, llm: this.llm })
       const intake = await runIntakeAgent({ input: current.input, taskId, store: this.store, llm: this.llm }, memorySummary)
       if (intake.requiresClarification) {
+        await this.think(taskId, '需求信息还不够明确，需要先和你确认。')
         await this.store.appendEvent(taskId, {
           type: 'clarification.required',
           taskId,
@@ -72,13 +75,22 @@ export class AssistantOrchestrator {
         await this.saveProjectionSnapshot(taskId)
         return current
       }
+      await this.think(taskId, intake.taskType ? `识别为${describeTaskType(intake.taskType)}场景。` : '已理解模板类型与目标。')
 
       await this.runStep(current, 'plan')
+      await this.think(taskId, '正在规划页面结构与版式。')
 
       let externalData: ParsedExternalData | undefined
       if (current.input.source && current.input.source.kind !== 'none') {
         await this.runStep(current, 'source')
+        await this.store.appendEvent(taskId, { type: 'tool.started', taskId, toolId: 'source', title: '解析数据源' })
         externalData = await this.resolveSource(current.input.source)
+        await this.store.appendEvent(taskId, {
+          type: 'tool.completed',
+          taskId,
+          toolId: 'source',
+          summary: `识别到 ${externalData.descriptor.fields.length} 个字段。`,
+        })
         await this.store.saveSourceSample({
           taskId,
           sourceKind: current.input.source.kind,
@@ -100,8 +112,11 @@ export class AssistantOrchestrator {
         llm: this.llm,
         sourceData: externalData,
       })
+      if (agents.planner.strategy)
+        await this.think(taskId, agents.planner.strategy)
 
       await this.runStep(current, 'compose')
+      await this.think(taskId, '正在生成 EasyInk 模板结构。')
       const candidate = generateSchemaCandidate(current.input, {
         sourceData: externalData?.sample,
         sourceDescriptor: externalData?.descriptor,
@@ -122,10 +137,22 @@ export class AssistantOrchestrator {
       )
 
       await this.runStep(current, 'validate')
+      await this.store.appendEvent(taskId, { type: 'tool.started', taskId, toolId: 'validate', title: '校验模板与数据绑定' })
       const validation = validateAssistantSchema(candidate.schema, { materialManifest: current.input.materialManifest })
       if (candidate.dataSource) {
         const alignment = alignAssistantDataSource(candidate.schema, candidate.dataSource)
         candidate.warnings.push(...alignment.warnings)
+      }
+      if (validation.valid) {
+        await this.store.appendEvent(taskId, { type: 'tool.completed', taskId, toolId: 'validate', summary: '模板结构与物料校验通过。' })
+      }
+      else {
+        await this.store.appendEvent(taskId, {
+          type: 'tool.failed',
+          taskId,
+          toolId: 'validate',
+          error: validation.errors[0]?.message ?? '存在需修复的校验问题。',
+        })
       }
 
       const currentSchema = isValidSchema(current.input.currentSchema)
@@ -148,6 +175,16 @@ export class AssistantOrchestrator {
 
       await this.store.saveResult(taskId, result)
       await this.store.appendEvent(taskId, { type: 'result.ready', taskId, resultId: result.id })
+      await this.store.appendEvent(taskId, {
+        type: 'thinking.completed',
+        taskId,
+        summary: [
+          intake.taskType ? `识别模板类型：${describeTaskType(intake.taskType)}` : '识别模板需求',
+          `规划页面结构：${result.preview.elementCount} 个元素`,
+          externalData ? `解析数据字段：${result.preview.dataFieldCount} 个` : '未使用外部数据源',
+          validation.valid ? '校验通过' : '存在需修复项',
+        ],
+      })
       await this.runStep(current, 'review')
       current = await this.updateTask(current, { status: 'review', step: 'review', resultId: result.id })
       await this.store.updateRun({ ...run, status: 'review', finishedAt: Date.now() })
@@ -317,6 +354,10 @@ export class AssistantOrchestrator {
     await this.store.appendEvent(task.id, { type: 'step.completed', taskId: task.id, step })
   }
 
+  private async think(taskId: string, text: string): Promise<void> {
+    await this.store.appendEvent(taskId, { type: 'thinking.delta', taskId, text })
+  }
+
   private async resolveSource(source: AssistantSourceInput): Promise<ParsedExternalData> {
     if (source.kind === 'json') {
       if (!source.content)
@@ -378,4 +419,19 @@ export class AssistantOrchestrator {
       ],
     })
   }
+}
+
+const TASK_TYPE_LABELS: Record<string, string> = {
+  'quote': '报价单',
+  'receipt': '收据',
+  'invoice': '发票',
+  'label': '标签',
+  'retail-receipt': '零售小票',
+  'delivery': '送货单',
+  'purchase': '采购单',
+  'generic-document': '通用单据',
+}
+
+function describeTaskType(taskType: string): string {
+  return TASK_TYPE_LABELS[taskType] ?? taskType
 }

@@ -4,5 +4,5 @@ export { default as AssistantWorkbench } from './components/AssistantWorkbench.v
 export { default as ConversationPanel } from './components/ConversationPanel.vue'
 export { assistantWorkbenchMachine } from './machine'
 export { inferSourceFromText, projectTaskToMessages } from './projection'
-export type { AssistantConversationMessage, ClarificationQuestion, ProjectTaskToMessagesInput } from './projection'
+export type { AssistantConversationMessage, AssistantThinking, ClarificationQuestion, ExecutionStep, ProjectTaskToMessagesInput, ToolUseItem } from './projection'
 export { createAssistantTaskQueryOptions } from './queries'

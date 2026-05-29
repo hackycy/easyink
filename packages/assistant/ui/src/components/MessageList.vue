@@ -2,10 +2,10 @@
 import type { AssistantPatchOperation, AssistantResult } from '@easyink/assistant-capabilities'
 import type { AssistantConversationMessage } from '../projection'
 import AssistantMessage from './AssistantMessage.vue'
+import AssistantTurn from './AssistantTurn.vue'
 import ClarificationCard from './ClarificationCard.vue'
 import DiffCard from './DiffCard.vue'
 import ErrorCard from './ErrorCard.vue'
-import ProgressMessage from './ProgressMessage.vue'
 import RepairCard from './RepairCard.vue'
 import ResultCard from './ResultCard.vue'
 import SourceAttachmentCard from './SourceAttachmentCard.vue'
@@ -40,7 +40,7 @@ defineEmits<{
     <template v-for="message in messages" :key="message.id">
       <UserMessage v-if="message.kind === 'text' && message.role === 'user'" :text="message.text" />
       <AssistantMessage v-else-if="message.kind === 'text'" :text="message.text" />
-      <ProgressMessage v-else-if="message.kind === 'progress'" :title="message.title" :detail="message.detail" :status="message.status" />
+      <AssistantTurn v-else-if="message.kind === 'turn'" :thinking="message.thinking" :steps="message.steps" :tools="message.tools" />
       <SourceAttachmentCard v-else-if="message.kind === 'source'" :source="message.source" :title="message.title" :detail="message.detail" :fields="message.fields" :warnings="message.warnings" @remove="$emit('removeSource')" />
       <ResultCard v-else-if="message.kind === 'result'" :result="message.result" :applying="applying" @apply="$emit('apply', $event)" @apply-data-source="$emit('applyDataSource', $event)" />
       <DiffCard v-else-if="message.kind === 'diff'" :result="message.result" @apply-patch="$emit('applyPatch', $event)" @apply-selected-patch="$emit('applySelectedPatch', $event)" />

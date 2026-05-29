@@ -10,21 +10,23 @@ defineEmits<{
 
 <template>
   <article class="assistant-card assistant-version-card">
-    <div class="assistant-card__head">
+    <header class="assistant-card__head">
       <div>
         <strong>版本记录</strong>
-        <p>{{ versions.length }} 条记录，可用于回滚或导出复现。</p>
+        <p class="assistant-muted">
+          {{ versions.length }} 条记录，可用于回滚或导出复现。
+        </p>
       </div>
-      <button type="button" @click="$emit('export')">
+      <button type="button" class="assistant-link" @click="$emit('export')">
         导出
       </button>
-    </div>
-    <ul>
+    </header>
+    <ul class="assistant-version-card__list">
       <li v-for="version in versions.slice(0, 4)" :key="version.id">
         {{ version.label ?? version.action }}
       </li>
     </ul>
-    <button type="button" :disabled="!versions.length" @click="$emit('rollback')">
+    <button type="button" class="assistant-btn" :disabled="!versions.length" @click="$emit('rollback')">
       回到应用前
     </button>
   </article>

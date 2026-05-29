@@ -60,6 +60,12 @@ export type AssistantEvent
   = | { type: 'task.created', taskId: string }
     | { type: 'step.started', taskId: string, step: AssistantWorkflowStep }
     | { type: 'step.completed', taskId: string, step: AssistantWorkflowStep }
+    | { type: 'thinking.started', taskId: string, title?: string }
+    | { type: 'thinking.delta', taskId: string, text: string }
+    | { type: 'thinking.completed', taskId: string, summary: string[] }
+    | { type: 'tool.started', taskId: string, toolId: string, title: string }
+    | { type: 'tool.completed', taskId: string, toolId: string, summary: string }
+    | { type: 'tool.failed', taskId: string, toolId: string, error: string }
     | { type: 'message.created', taskId: string, message: string }
     | { type: 'clarification.required', taskId: string, questions: string[], suggestedAnswers?: string[][] }
     | { type: 'clarification.answered', taskId: string, answer: string }

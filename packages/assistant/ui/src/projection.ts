@@ -4,7 +4,7 @@ import type { AssistantEventRecord, AssistantSourceSampleRecord, AssistantTaskRe
 export type AssistantConversationMessage
   = | { id: string, role: 'user', kind: 'text', text: string, createdAt: number }
     | { id: string, role: 'assistant', kind: 'text', text: string, createdAt: number }
-    | { id: string, role: 'assistant', kind: 'progress', title: string, detail?: string, status: 'running' | 'done', createdAt: number }
+    | { id: string, role: 'assistant', kind: 'turn', thinking: AssistantThinking, steps: ExecutionStep[], tools: ToolUseItem[], createdAt: number }
     | { id: string, role: 'assistant', kind: 'source', source: AssistantSourceInput, title: string, detail: string, fields: string[], warnings: string[], createdAt: number }
     | { id: string, role: 'assistant', kind: 'result', result: AssistantResult, createdAt: number }
     | { id: string, role: 'assistant', kind: 'diff', result: AssistantResult, createdAt: number }
@@ -12,6 +12,25 @@ export type AssistantConversationMessage
     | { id: string, role: 'assistant', kind: 'repair', result: AssistantResult, createdAt: number }
     | { id: string, role: 'assistant', kind: 'version', versions: AssistantVersionRecord[], createdAt: number }
     | { id: string, role: 'assistant', kind: 'error', text: string, createdAt: number }
+
+export interface AssistantThinking {
+  status: 'running' | 'done'
+  lines: string[]
+  summary: string[]
+}
+
+export interface ExecutionStep {
+  id: string
+  title: string
+  status: 'pending' | 'running' | 'done' | 'failed'
+}
+
+export interface ToolUseItem {
+  id: string
+  title: string
+  status: 'running' | 'done' | 'failed'
+  summary?: string
+}
 
 export interface ClarificationQuestion {
   text: string
@@ -29,7 +48,7 @@ export interface ProjectTaskToMessagesInput {
 
 const STEP_LABELS: Record<string, string> = {
   intake: '理解需求',
-  plan: '规划模板',
+  plan: '规划版式',
   source: '解析数据源',
   compose: '生成模板',
   validate: '校验结果',
@@ -38,12 +57,14 @@ const STEP_LABELS: Record<string, string> = {
   done: '已应用',
 }
 
+const STEP_ORDER = ['intake', 'plan', 'source', 'compose', 'validate', 'repair']
+const RUNNING_STATUSES = new Set(['queued', 'running'])
+
 export function projectTaskToMessages(input: ProjectTaskToMessagesInput): AssistantConversationMessage[] {
   const { task, result, error } = input
   const events = input.events ?? []
   const versions = input.versions ?? []
   const messages: AssistantConversationMessage[] = []
-  const stepMessages = new Map<string, Extract<AssistantConversationMessage, { kind: 'progress' }>>()
 
   if (task) {
     messages.push({
@@ -69,19 +90,41 @@ export function projectTaskToMessages(input: ProjectTaskToMessagesInput): Assist
     }
   }
 
+  const thinkingLines: string[] = []
+  let thinkingSummary: string[] = []
+  let hasThinkingCompleted = false
+  let turnAnchor: number | undefined
+  const stepStatus = new Map<string, 'running' | 'done'>()
+  const tools = new Map<string, ToolUseItem>()
+
   for (const record of events) {
     const event = record.event
-    if (event.type === 'step.started' || event.type === 'step.completed') {
-      const key = `${record.taskId}:${event.step}`
-      const existing = stepMessages.get(key)
-      stepMessages.set(key, {
-        id: `${record.taskId}:step:${event.step}`,
-        role: 'assistant',
-        kind: 'progress',
-        title: STEP_LABELS[event.step] ?? event.step,
-        status: event.type === 'step.completed' ? 'done' : 'running',
-        createdAt: existing?.createdAt ?? record.createdAt,
-      })
+    if (event.type === 'thinking.started') {
+      turnAnchor ??= record.createdAt
+    }
+    else if (event.type === 'thinking.delta') {
+      turnAnchor ??= record.createdAt
+      thinkingLines.push(event.text)
+    }
+    else if (event.type === 'thinking.completed') {
+      hasThinkingCompleted = true
+      thinkingSummary = event.summary
+    }
+    else if (event.type === 'step.started' || event.type === 'step.completed') {
+      turnAnchor ??= record.createdAt
+      stepStatus.set(event.step, event.type === 'step.completed' ? 'done' : stepStatus.get(event.step) ?? 'running')
+    }
+    else if (event.type === 'tool.started') {
+      turnAnchor ??= record.createdAt
+      tools.set(event.toolId, { id: event.toolId, title: event.title, status: 'running' })
+    }
+    else if (event.type === 'tool.completed') {
+      const existing = tools.get(event.toolId)
+      tools.set(event.toolId, { id: event.toolId, title: existing?.title ?? event.toolId, status: 'done', summary: event.summary })
+    }
+    else if (event.type === 'tool.failed') {
+      const existing = tools.get(event.toolId)
+      tools.set(event.toolId, { id: event.toolId, title: existing?.title ?? event.toolId, status: 'failed', summary: event.error })
     }
     else if (event.type === 'clarification.required') {
       messages.push({
@@ -132,7 +175,26 @@ export function projectTaskToMessages(input: ProjectTaskToMessagesInput): Assist
       })
     }
   }
-  messages.push(...stepMessages.values())
+
+  const isRunning = RUNNING_STATUSES.has(task?.status ?? '')
+  const failed = task?.status === 'failed' || !!error
+  const steps = buildSteps(stepStatus, { running: isRunning, failed })
+
+  if (steps.length || thinkingLines.length || tools.size) {
+    messages.push({
+      id: `${task?.id ?? 'task'}:turn`,
+      role: 'assistant',
+      kind: 'turn',
+      thinking: {
+        status: isRunning && !hasThinkingCompleted ? 'running' : 'done',
+        lines: thinkingLines,
+        summary: thinkingSummary,
+      },
+      steps,
+      tools: [...tools.values()],
+      createdAt: turnAnchor ?? (task ? task.createdAt + 2 : Date.now()),
+    })
+  }
 
   if (result) {
     messages.push({ id: `${result.id}:result`, role: 'assistant', kind: 'result', result, createdAt: result.createdAt })
@@ -156,6 +218,22 @@ export function projectTaskToMessages(input: ProjectTaskToMessagesInput): Assist
   }
 
   return dedupeMessages(messages).sort((a, b) => a.createdAt - b.createdAt)
+}
+
+function buildSteps(
+  stepStatus: Map<string, 'running' | 'done'>,
+  flags: { running: boolean, failed: boolean },
+): ExecutionStep[] {
+  const present = STEP_ORDER.filter(step => stepStatus.has(step))
+  return present.map((step) => {
+    const raw = stepStatus.get(step) ?? 'running'
+    let status: ExecutionStep['status'] = raw
+    if (raw === 'running' && flags.failed)
+      status = 'failed'
+    else if (raw === 'running' && !flags.running)
+      status = 'done'
+    return { id: step, title: STEP_LABELS[step] ?? step, status }
+  })
 }
 
 export function inferSourceFromText(text: string): AssistantSourceInput | undefined {

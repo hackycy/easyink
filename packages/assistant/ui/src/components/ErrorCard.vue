@@ -6,8 +6,10 @@ defineEmits<{ retry: [] }>()
 <template>
   <article class="assistant-card assistant-card--danger">
     <strong>处理失败</strong>
-    <p>{{ text }}</p>
-    <button type="button" @click="$emit('retry')">
+    <p class="assistant-muted">
+      {{ text }}
+    </p>
+    <button type="button" class="assistant-btn" @click="$emit('retry')">
       重试
     </button>
   </article>

@@ -15,6 +15,7 @@ defineEmits<{ answer: [value: string] }>()
           v-for="answer in question.suggestions"
           :key="answer"
           type="button"
+          class="assistant-chip"
           @click="$emit('answer', answer)"
         >
           {{ answer }}
