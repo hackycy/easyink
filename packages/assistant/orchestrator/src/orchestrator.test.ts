@@ -194,6 +194,54 @@ describe('assistantOrchestrator', () => {
     expect(result?.preview.warnings.join('\n')).toContain('Schema Agent used registered Designer materials')
   })
 
+  it('repairs missing schema shell fields before validating a schema-agent result', async () => {
+    const store = new MemoryAssistantStore()
+    const orchestrator = new AssistantOrchestrator({
+      store,
+      llm: createSchemaLLM({
+        schema: {
+          unit: 'mm',
+          page: { mode: 'fixed', width: 210, height: 297 },
+          elements: [{
+            id: 'txt-title',
+            type: 'text',
+            x: 16,
+            y: 16,
+            width: 178,
+            height: 8,
+            props: {
+              content: '直出报价单',
+              fontSize: 5,
+              fontWeight: 'bold',
+              textAlign: 'center',
+              verticalAlign: 'middle',
+              color: '#111827',
+            },
+          }],
+        },
+        expectedDataSource: {
+          name: 'quote',
+          fields: [
+            { name: 'customer', path: 'customer', title: '客户', type: 'string' },
+          ],
+          sampleData: { customer: '示例客户' },
+        },
+      }),
+    })
+    const task = await store.createTask({
+      prompt: '生成一个报价单',
+      materialManifest: textMaterialManifest(),
+    })
+
+    const reviewed = await orchestrator.runTask(task.id)
+    const result = await store.getResult(reviewed.resultId!)
+
+    expect(reviewed.status).toBe('review')
+    expect(result?.validation.valid).toBe(true)
+    expect(result?.schema.version).toBe('1.0.0')
+    expect(result?.schema.guides).toEqual({ x: [], y: [] })
+  })
+
   it('reports schema-agent material output that is not in the active manifest', async () => {
     const store = new MemoryAssistantStore()
     const orchestrator = new AssistantOrchestrator({

@@ -3,7 +3,8 @@ import type { AssistantTaskInput } from '@easyink/assistant-capabilities'
 import type { LLMClient } from '@easyink/assistant-llm'
 import type { AssistantStore } from '@easyink/assistant-store'
 import type { DocumentSchema, ExpectedDataSource, ExpectedField } from '@easyink/schema'
-import { isValidSchema } from '@easyink/schema'
+import { formatSchemaValidationIssue, isValidSchema, validateSchemaIssues } from '@easyink/schema'
+import { normalizeAllFieldPaths, SchemaValidator } from '@easyink/schema-tools'
 import { z } from 'zod'
 import { buildMaterialContext, buildSchemaSystemPrompt } from './prompts'
 
@@ -283,15 +284,23 @@ export async function runSchemaAgent(
     ],
   })
 
-  if (!isValidSchema(result.schema))
-    throw new Error('Schema Agent returned an invalid DocumentSchema shape.')
+  const normalizedSchema = normalizeSchemaAgentSchema(result.schema, planningBrief)
+  const schemaIssues = validateSchemaIssues(normalizedSchema.schema)
+  if (schemaIssues.length > 0) {
+    throw new Error(
+      `Schema Agent returned an invalid DocumentSchema shape: ${schemaIssues.map(formatSchemaValidationIssue).join('; ')}`,
+    )
+  }
   const expectedDataSource = ExpectedDataSourceSchema.parse(normalizeExpectedDataSource(result.expectedDataSource))
 
   return {
-    schema: result.schema,
+    schema: normalizedSchema.schema as DocumentSchema,
     expectedDataSource,
     planningBrief,
-    warnings: result.warnings ?? [],
+    warnings: [
+      ...normalizedSchema.warnings,
+      ...(result.warnings ?? []),
+    ],
   }
 }
 
@@ -417,6 +426,89 @@ function joinFieldPath(parentPath: string, path: string): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value)
+}
+
+function normalizeSchemaAgentSchema(
+  value: unknown,
+  planningBrief: PlanningBrief,
+): { schema: unknown, warnings: string[] } {
+  if (!isRecord(value))
+    return { schema: value, warnings: [] }
+
+  const warnings: string[] = []
+  const next: Record<string, unknown> = { ...value }
+
+  if (typeof next.version !== 'string' || !next.version) {
+    next.version = '1.0.0'
+    warnings.push('Schema Agent output was missing schema.version; defaulted to 1.0.0.')
+  }
+
+  if (next.unit !== 'mm' && next.unit !== 'pt' && next.unit !== 'px' && next.unit !== 'inch') {
+    next.unit = 'mm'
+    warnings.push('Schema Agent output was missing or using an unsupported schema.unit; defaulted to mm.')
+  }
+
+  next.page = normalizeSchemaPage(next.page, planningBrief, warnings)
+  next.guides = normalizeGuides(next.guides, warnings)
+
+  if (!Array.isArray(next.elements)) {
+    next.elements = []
+    warnings.push('Schema Agent output was missing schema.elements; initialized an empty element list.')
+  }
+
+  const validator = new SchemaValidator({ autoFix: true })
+  const repaired = validator.autoFix(next as unknown as DocumentSchema)
+  for (const issue of repaired.issues)
+    warnings.push(`Schema Agent output normalized ${issue.path}: ${issue.reason}.`)
+
+  return {
+    schema: normalizeAllFieldPaths(repaired.fixed),
+    warnings,
+  }
+}
+
+function normalizeSchemaPage(
+  value: unknown,
+  planningBrief: PlanningBrief,
+  warnings: string[],
+): DocumentSchema['page'] {
+  const page = isRecord(value) ? { ...value } : {}
+  const briefPage = planningBrief.page
+  const mode = page.mode === 'continuous' || page.mode === 'fixed'
+    ? page.mode
+    : briefPage?.mode ?? 'fixed'
+  const fallbackWidth = briefPage?.width ?? (mode === 'continuous' ? 80 : 210)
+  const fallbackHeight = briefPage?.height ?? (mode === 'continuous' ? 200 : 297)
+  const width = typeof page.width === 'number' && page.width > 0 ? page.width : fallbackWidth
+  const height = typeof page.height === 'number' && page.height > 0 ? page.height : fallbackHeight
+
+  if (!isRecord(value))
+    warnings.push('Schema Agent output was missing schema.page; initialized page from the planning brief.')
+  if (page.mode !== mode)
+    warnings.push(`Schema Agent output had no valid page.mode; defaulted to ${mode}.`)
+  if (page.width !== width)
+    warnings.push(`Schema Agent output had no valid page.width; defaulted to ${width}.`)
+  if (page.height !== height)
+    warnings.push(`Schema Agent output had no valid page.height; defaulted to ${height}.`)
+
+  return {
+    ...page,
+    mode,
+    width,
+    height,
+  } as DocumentSchema['page']
+}
+
+function normalizeGuides(value: unknown, warnings: string[]): DocumentSchema['guides'] {
+  if (!isRecord(value)) {
+    warnings.push('Schema Agent output was missing schema.guides; initialized empty guide axes.')
+    return { x: [], y: [] }
+  }
+  return {
+    ...value,
+    x: Array.isArray(value.x) ? value.x : [],
+    y: Array.isArray(value.y) ? value.y : [],
+  } as DocumentSchema['guides']
 }
 
 interface CompleteJsonOptions {
