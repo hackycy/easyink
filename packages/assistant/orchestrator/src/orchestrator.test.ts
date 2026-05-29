@@ -29,6 +29,41 @@ describe('assistantOrchestrator', () => {
     expect(payload.task.id).toMatch(/^task_/)
   })
 
+  it('handles browser preflight requests from playground', async () => {
+    const app = createAssistantApp({ corsOrigin: 'http://localhost:8532' })
+    const response = await app.request('/assistant/tasks', {
+      method: 'OPTIONS',
+      headers: {
+        'origin': 'http://localhost:8532',
+        'access-control-request-method': 'POST',
+        'access-control-request-headers': 'content-type',
+      },
+    })
+
+    expect(response.status).toBe(204)
+    expect(response.headers.get('access-control-allow-origin')).toBe('http://localhost:8532')
+    expect(response.headers.get('access-control-allow-methods')).toContain('POST')
+  })
+
+  it('keeps CORS headers on event stream responses', async () => {
+    const store = new MemoryAssistantStore()
+    const orchestrator = new AssistantOrchestrator({ store })
+    const app = createAssistantApp({ orchestrator, corsOrigin: 'http://localhost:8532' })
+    const task = await store.createTask({ prompt: '生成一张商超小票' })
+    await store.appendEvent(task.id, { type: 'step.started', taskId: task.id, step: 'intake' })
+
+    const response = await app.request(`/assistant/tasks/${task.id}/events`, {
+      headers: {
+        origin: 'http://localhost:8532',
+        accept: 'text/event-stream',
+      },
+    })
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('content-type')).toContain('text/event-stream')
+    expect(response.headers.get('access-control-allow-origin')).toBe('http://localhost:8532')
+  })
+
   it('asks for clarification and continues the same task after an answer', async () => {
     const store = new MemoryAssistantStore()
     const orchestrator = new AssistantOrchestrator({ store })

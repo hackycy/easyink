@@ -9,11 +9,21 @@ export interface CreateAssistantAppOptions {
   orchestrator?: AssistantOrchestrator
   store?: AssistantStore
   llm?: LLMClient
+  corsOrigin?: string
 }
 
 export function createAssistantApp(options: CreateAssistantAppOptions = {}) {
   const orchestrator = options.orchestrator ?? new AssistantOrchestrator({ store: options.store, llm: options.llm })
   const app = new Hono()
+
+  app.use('*', async (c, next) => {
+    if (c.req.method === 'OPTIONS') {
+      applyCorsHeaders(c, options.corsOrigin ?? '*')
+      return new Response(null, { status: 204, headers: c.res.headers })
+    }
+    await next()
+    applyCorsHeaders(c, options.corsOrigin ?? '*')
+  })
 
   app.get('/health', c => c.json({ ok: true, service: 'easyink-assistant-orchestrator' }))
 
@@ -130,4 +140,12 @@ export function createAssistantApp(options: CreateAssistantAppOptions = {}) {
   })
 
   return app
+}
+
+function applyCorsHeaders(c: { header: (name: string, value: string, options?: { append?: boolean }) => void }, origin: string): void {
+  c.header('Access-Control-Allow-Origin', origin)
+  c.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+  c.header('Access-Control-Allow-Headers', 'content-type, accept, authorization')
+  if (origin !== '*')
+    c.header('Vary', 'Origin', { append: true })
 }

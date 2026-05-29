@@ -39,6 +39,7 @@ async function main(): Promise<void> {
     throw new Error(`Invalid EASYINK_ASSISTANT_HTTP_PORT: ${process.env.EASYINK_ASSISTANT_HTTP_PORT}`)
 
   const app = createAssistantApp({
+    corsOrigin: process.env.EASYINK_ASSISTANT_CORS_ORIGIN?.trim() || undefined,
     llm: createLLMClientFromEnv(process.env as LLMEnvironment),
     store: createStoreFromEnv(),
   })
