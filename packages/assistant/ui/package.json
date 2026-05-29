@@ -1,0 +1,44 @@
+{
+  "name": "@easyink/assistant-ui",
+  "type": "module",
+  "version": "0.0.18",
+  "description": "Vue task workbench UI for EasyInk Assistant",
+  "author": "hackycy <hackycy@outlook.com>",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./package.json": "./package.json",
+    "./index.css": "./dist/index.css"
+  },
+  "types": "./dist/index.d.mts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "typecheck": "vue-tsc --noEmit"
+  },
+  "peerDependencies": {
+    "vue": "catalog:framework"
+  },
+  "dependencies": {
+    "@easyink/assistant-capabilities": "workspace:*",
+    "@easyink/assistant-store": "workspace:*",
+    "@easyink/icons": "workspace:*",
+    "@easyink/ui": "workspace:*",
+    "@tanstack/vue-query": "catalog:framework",
+    "@vueuse/core": "catalog:framework",
+    "@xstate/vue": "catalog:framework",
+    "xstate": "catalog:framework"
+  },
+  "devDependencies": {
+    "typescript": "catalog:cli",
+    "vue": "catalog:framework",
+    "vue-tsc": "catalog:cli"
+  }
+}

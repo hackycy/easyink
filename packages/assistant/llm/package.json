@@ -1,0 +1,33 @@
+{
+  "name": "@easyink/assistant-llm",
+  "type": "module",
+  "version": "0.0.18",
+  "description": "Provider-neutral LLM gateway for EasyInk Assistant",
+  "author": "hackycy <hackycy@outlook.com>",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/index.d.mts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "test": "vitest run src/**/*.test.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "catalog:framework",
+    "openai": "catalog:framework",
+    "zod": "catalog:framework"
+  },
+  "devDependencies": {
+    "vitest": "catalog:testing"
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "name": "@easyink/assistant-capabilities",
+  "type": "module",
+  "version": "0.0.18",
+  "description": "Pure EasyInk Assistant capabilities for schema, datasource alignment, validation, preview, diff, and patch",
+  "author": "hackycy <hackycy@outlook.com>",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/index.d.mts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "test": "vitest run src/**/*.test.ts"
+  },
+  "dependencies": {
+    "@easyink/datasource": "workspace:*",
+    "@easyink/schema": "workspace:*",
+    "@easyink/schema-tools": "workspace:*",
+    "@easyink/shared": "workspace:*",
+    "zod": "catalog:framework"
+  },
+  "devDependencies": {
+    "vitest": "catalog:testing"
+  }
+}

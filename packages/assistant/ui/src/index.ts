@@ -1,0 +1,5 @@
+export { createAssistantApiClient } from './api'
+export type { AssistantApiClient, AssistantTaskResponse } from './api'
+export { default as AssistantWorkbench } from './components/AssistantWorkbench.vue'
+export { assistantWorkbenchMachine } from './machine'
+export { createAssistantTaskQueryOptions } from './queries'

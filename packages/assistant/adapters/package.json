@@ -1,0 +1,34 @@
+{
+  "name": "@easyink/assistant-adapters",
+  "type": "module",
+  "version": "0.0.18",
+  "description": "Lightweight external data adapters for EasyInk Assistant",
+  "author": "hackycy <hackycy@outlook.com>",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/index.d.mts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "test": "vitest run src/**/*.test.ts"
+  },
+  "dependencies": {
+    "@easyink/datasource": "workspace:*",
+    "@easyink/shared": "workspace:*",
+    "curlconverter": "catalog:framework",
+    "zod": "catalog:framework"
+  },
+  "devDependencies": {
+    "vitest": "catalog:testing"
+  }
+}

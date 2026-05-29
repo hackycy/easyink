@@ -1,0 +1,33 @@
+{
+  "name": "@easyink/assistant-store",
+  "type": "module",
+  "version": "0.0.18",
+  "description": "Task, run, version, draft, and event stores for EasyInk Assistant",
+  "author": "hackycy <hackycy@outlook.com>",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/index.d.mts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "test": "vitest run src/**/*.test.ts"
+  },
+  "dependencies": {
+    "@easyink/assistant-capabilities": "workspace:*",
+    "dexie": "catalog:framework",
+    "zod": "catalog:framework"
+  },
+  "devDependencies": {
+    "vitest": "catalog:testing"
+  }
+}
