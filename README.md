@@ -42,7 +42,6 @@ EasyInk provides a package-based print design ecosystem for building templates, 
 | --- | --- | --- | --- |
 | [@easyink/designer](packages/designer) | Template designer and editing experience | [![npm][designer-npm-version-src]][designer-npm-version-href] | [![npm downloads][designer-npm-downloads-src]][designer-npm-version-href] |
 | [@easyink/viewer](packages/viewer) | Viewer and print preview runtime | [![npm][viewer-npm-version-src]][viewer-npm-version-href] | [![npm downloads][viewer-npm-downloads-src]][viewer-npm-version-href] |
-| [@easyink/mcp-server](packages/mcp-server) | MCP server for AI-assisted print workflows | [![npm][mcp-server-npm-version-src]][mcp-server-npm-version-href] | [![npm downloads][mcp-server-npm-downloads-src]][mcp-server-npm-version-href] |
 
 ## Documentation
 
@@ -69,9 +68,6 @@ pnpm play
 [designer-npm-version-src]: https://img.shields.io/npm/v/@easyink/designer?style=flat&colorA=080f12&colorB=1fa669
 [designer-npm-downloads-src]: https://img.shields.io/npm/dm/@easyink/designer?style=flat&colorA=080f12&colorB=1fa669
 [designer-npm-version-href]: https://npmjs.com/package/@easyink/designer
-[mcp-server-npm-version-src]: https://img.shields.io/npm/v/@easyink/mcp-server?style=flat&colorA=080f12&colorB=1fa669
-[mcp-server-npm-downloads-src]: https://img.shields.io/npm/dm/@easyink/mcp-server?style=flat&colorA=080f12&colorB=1fa669
-[mcp-server-npm-version-href]: https://npmjs.com/package/@easyink/mcp-server
 [viewer-npm-version-src]: https://img.shields.io/npm/v/@easyink/viewer?style=flat&colorA=080f12&colorB=1fa669
 [viewer-npm-downloads-src]: https://img.shields.io/npm/dm/@easyink/viewer?style=flat&colorA=080f12&colorB=1fa669
 [viewer-npm-version-href]: https://npmjs.com/package/@easyink/viewer

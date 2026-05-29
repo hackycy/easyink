@@ -43,6 +43,7 @@ export function projectTaskToMessages(input: ProjectTaskToMessagesInput): Assist
   const events = input.events ?? []
   const versions = input.versions ?? []
   const messages: AssistantConversationMessage[] = []
+  const stepMessages = new Map<string, Extract<AssistantConversationMessage, { kind: 'progress' }>>()
 
   if (task) {
     messages.push({
@@ -71,13 +72,15 @@ export function projectTaskToMessages(input: ProjectTaskToMessagesInput): Assist
   for (const record of events) {
     const event = record.event
     if (event.type === 'step.started' || event.type === 'step.completed') {
-      messages.push({
-        id: record.id,
+      const key = `${record.taskId}:${event.step}`
+      const existing = stepMessages.get(key)
+      stepMessages.set(key, {
+        id: `${record.taskId}:step:${event.step}`,
         role: 'assistant',
         kind: 'progress',
         title: STEP_LABELS[event.step] ?? event.step,
         status: event.type === 'step.completed' ? 'done' : 'running',
-        createdAt: record.createdAt,
+        createdAt: existing?.createdAt ?? record.createdAt,
       })
     }
     else if (event.type === 'clarification.required') {
@@ -129,6 +132,7 @@ export function projectTaskToMessages(input: ProjectTaskToMessagesInput): Assist
       })
     }
   }
+  messages.push(...stepMessages.values())
 
   if (result) {
     messages.push({ id: `${result.id}:result`, role: 'assistant', kind: 'result', result, createdAt: result.createdAt })

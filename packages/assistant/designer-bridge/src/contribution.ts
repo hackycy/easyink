@@ -17,11 +17,12 @@ export interface CreateAssistantContributionOptions {
   id?: string
   label?: string
   endpoint?: string
+  useLocalClient?: boolean
 }
 
 export function createAssistantContribution(options: CreateAssistantContributionOptions = {}): Contribution {
   const open = ref(false)
-  const apiClient = options.endpoint ? undefined : createLocalAssistantApiClient()
+  const apiClient = options.useLocalClient ? createLocalAssistantApiClient() : undefined
 
   return {
     id: options.id ?? 'easyink.assistant',

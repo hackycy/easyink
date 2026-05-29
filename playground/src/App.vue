@@ -236,7 +236,8 @@ function handleDataUpdate(data: Record<string, unknown>) {
   applyDemoData(data)
 }
 
-const contributions = [createAssistantContribution()]
+const assistantEndpoint = import.meta.env.VITE_EASYINK_ASSISTANT_ENDPOINT || undefined
+const contributions = [createAssistantContribution({ endpoint: assistantEndpoint })]
 </script>
 
 <template>

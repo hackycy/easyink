@@ -42,6 +42,32 @@ describe('assistant message projection', () => {
     expect(messages.map(message => message.kind)).toEqual(['text', 'source', 'progress', 'result', 'diff'])
   })
 
+  it('collapses started and completed events for the same step', () => {
+    const task: AssistantTaskRecord = {
+      id: 'task_1',
+      input: {
+        prompt: '帮我生成一张 80mm 小票',
+        source: { kind: 'none' },
+      },
+      status: 'running',
+      step: 'plan',
+      createdAt: 1,
+      updatedAt: 2,
+    }
+    const events: AssistantEventRecord[] = [
+      { id: 'evt_1', taskId: task.id, event: { type: 'step.started', taskId: task.id, step: 'intake' }, createdAt: 3 },
+      { id: 'evt_2', taskId: task.id, event: { type: 'step.completed', taskId: task.id, step: 'intake' }, createdAt: 4 },
+      { id: 'evt_3', taskId: task.id, event: { type: 'step.started', taskId: task.id, step: 'plan' }, createdAt: 5 },
+    ]
+
+    const messages = projectTaskToMessages({ task, events })
+    const progress = messages.filter(message => message.kind === 'progress')
+
+    expect(progress).toHaveLength(2)
+    expect(progress.map(message => message.title)).toEqual(['理解需求', '规划模板'])
+    expect(progress.map(message => message.status)).toEqual(['done', 'running'])
+  })
+
   it('infers pasted JSON, curl, and URLs as source attachments', () => {
     expect(inferSourceFromText('{"items":[]}')?.kind).toBe('json')
     expect(inferSourceFromText('curl https://example.com')?.kind).toBe('curl')
