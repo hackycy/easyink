@@ -183,7 +183,6 @@ export async function runPlannerAgent(context: AssistantAgentContext, memorySumm
   if (!context.llm)
     return emptyPlannerResult()
   const result = await completeJson(context.llm, PlannerSchema, {
-    maxTokens: 2400,
     messages: [
       [
         'You are EasyInk Assistant\'s planning brief writer. Output JSON only.',
@@ -258,7 +257,6 @@ export async function runSchemaAgent(
   const planningBrief = buildPlanningBrief(planner)
   const materialContext = buildMaterialContext(context.input.materialManifest)
   const result = await completeJson(context.llm, SchemaAgentSchema, {
-    maxTokens: 8192,
     messages: [
       buildSchemaSystemPrompt(materialContext),
       [
@@ -312,7 +310,6 @@ export async function runMemoryAgent(context: AssistantAgentContext): Promise<st
       { role: 'system', content: '你是 EasyInk Assistant 的 Memory Agent。用一句话总结历史任务偏好。' },
       { role: 'user', content: related.join('\n') },
     ],
-    options: { maxTokens: 160 },
   })
   return response.content.trim() || related.join('\n')
 }
@@ -424,7 +421,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 interface CompleteJsonOptions {
   messages: string[]
-  maxTokens?: number
 }
 
 class LLMJsonParseError extends Error {
@@ -441,7 +437,7 @@ async function completeJson<T>(llm: LLMClient, schema: z.ZodType<T>, options: Co
       { role: 'system', content: content[0] ?? '只输出 JSON。' },
       { role: 'user', content: content.slice(1).filter(Boolean).join('\n') },
     ],
-    options: { responseFormat: 'json', temperature: 0.2, maxTokens: options.maxTokens ?? 1800 },
+    options: { responseFormat: 'json', temperature: 0.2 },
   })
   return schema.parse(parseJsonObject(response.content))
 }

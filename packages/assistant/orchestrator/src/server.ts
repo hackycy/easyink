@@ -13,7 +13,10 @@ export interface CreateAssistantAppOptions {
 }
 
 export function createAssistantApp(options: CreateAssistantAppOptions = {}) {
-  const orchestrator = options.orchestrator ?? new AssistantOrchestrator({ store: options.store, llm: options.llm })
+  const orchestrator = options.orchestrator ?? new AssistantOrchestrator({
+    store: options.store,
+    llm: options.llm,
+  })
   const app = new Hono()
 
   app.use('*', async (c, next) => {

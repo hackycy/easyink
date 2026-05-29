@@ -16,6 +16,18 @@ describe('assistantOrchestrator', () => {
     expect(events.some(record => record.event.type === 'result.ready')).toBe(true)
   })
 
+  it('does not send max token limits to the Schema Agent LLM request', async () => {
+    const store = new MemoryAssistantStore()
+    const llm = createSchemaLLM()
+    const orchestrator = new AssistantOrchestrator({ store, llm })
+    const task = await store.createTask({ prompt: '生成一个复杂原型界面', materialManifest: textMaterialManifest() })
+
+    await orchestrator.runTask(task.id)
+
+    const schemaRequest = llm.requests.at(-1) as { options?: { maxTokens?: number } }
+    expect(schemaRequest.options?.maxTokens).toBeUndefined()
+  })
+
   it('exposes Hono task endpoints', async () => {
     const app = createAssistantApp({ llm: createSchemaLLM() })
     const response = await app.request('/assistant/tasks', {
