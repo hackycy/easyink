@@ -12,21 +12,26 @@ export interface LLMEnvironment {
 }
 
 export function createLLMClientFromEnv(env: LLMEnvironment): LLMClient | undefined {
-  const provider = (env.EASYINK_ASSISTANT_LLM_PROVIDER ?? '').trim().toLowerCase()
+  const provider = readEnvValue(env.EASYINK_ASSISTANT_LLM_PROVIDER)?.toLowerCase()
   if (!provider)
     return undefined
   if (provider === 'openai' || provider === 'openai-compatible') {
     return new OpenAILLMClient({
-      apiKey: env.OPENAI_API_KEY,
-      baseURL: env.EASYINK_ASSISTANT_LLM_BASE_URL ?? env.OPENAI_BASE_URL,
-      model: env.EASYINK_ASSISTANT_LLM_MODEL,
+      apiKey: readEnvValue(env.OPENAI_API_KEY),
+      baseURL: readEnvValue(env.EASYINK_ASSISTANT_LLM_BASE_URL) ?? readEnvValue(env.OPENAI_BASE_URL),
+      model: readEnvValue(env.EASYINK_ASSISTANT_LLM_MODEL),
     })
   }
   if (provider === 'anthropic') {
     return new AnthropicLLMClient({
-      apiKey: env.ANTHROPIC_API_KEY,
-      model: env.EASYINK_ASSISTANT_LLM_MODEL,
+      apiKey: readEnvValue(env.ANTHROPIC_API_KEY),
+      model: readEnvValue(env.EASYINK_ASSISTANT_LLM_MODEL),
     })
   }
   throw new Error(`Unsupported EasyInk Assistant LLM provider: ${provider}`)
+}
+
+function readEnvValue(value: string | undefined): string | undefined {
+  const trimmed = value?.trim()
+  return trimmed || undefined
 }

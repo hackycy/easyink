@@ -37,6 +37,21 @@ export interface AssistantApiClient {
   applyTask: (taskId: string) => Promise<AssistantTaskRecord>
 }
 
+export class AssistantApiError extends Error {
+  readonly status: number
+  readonly statusText: string
+  readonly body?: string
+
+  constructor(response: Response, body?: string) {
+    const statusText = response.statusText ? ` ${response.statusText}` : ''
+    super(`HTTP ${response.status}${statusText}`)
+    this.name = 'AssistantApiError'
+    this.status = response.status
+    this.statusText = response.statusText
+    this.body = body
+  }
+}
+
 export function createAssistantApiClient(baseUrl = ''): AssistantApiClient {
   const root = baseUrl.replace(/\/$/, '')
 
@@ -56,7 +71,7 @@ export function createAssistantApiClient(baseUrl = ''): AssistantApiClient {
         headers: { accept: 'text/event-stream' },
       })
       if (!response.ok)
-        throw new Error(`HTTP ${response.status}`)
+        throw await createApiError(response)
       const text = await response.text()
       return parseSseEvents(text)
     },
@@ -99,7 +114,7 @@ export function createAssistantApiClient(baseUrl = ''): AssistantApiClient {
       if (response.status === 404)
         return undefined
       if (!response.ok)
-        throw new Error(`HTTP ${response.status}`)
+        throw await createApiError(response)
       return ((await response.json()) as { projection: AssistantProjectionSnapshotRecord }).projection
     },
     async getSourceSample(taskId) {
@@ -107,7 +122,7 @@ export function createAssistantApiClient(baseUrl = ''): AssistantApiClient {
       if (response.status === 404)
         return undefined
       if (!response.ok)
-        throw new Error(`HTTP ${response.status}`)
+        throw await createApiError(response)
       return ((await response.json()) as { sourceSample: AssistantSourceSampleRecord }).sourceSample
     },
     async exportSnapshot() {
@@ -144,8 +159,13 @@ async function request(url: string, init: RequestInit = {}): Promise<unknown> {
     },
   })
   if (!response.ok)
-    throw new Error(`HTTP ${response.status}`)
+    throw await createApiError(response)
   return response.json() as Promise<unknown>
+}
+
+async function createApiError(response: Response): Promise<AssistantApiError> {
+  const body = await response.text().catch(() => undefined)
+  return new AssistantApiError(response, body || undefined)
 }
 
 function parseSseEvents(text: string): AssistantEventRecord[] {

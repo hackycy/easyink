@@ -17,4 +17,16 @@ describe('staticLLMClient', () => {
 
     expect(client).toBeInstanceOf(OpenAILLMClient)
   })
+
+  it('falls back to OPENAI_BASE_URL when assistant base URL is empty', () => {
+    const client = createLLMClientFromEnv({
+      EASYINK_ASSISTANT_LLM_PROVIDER: 'openai-compatible',
+      EASYINK_ASSISTANT_LLM_BASE_URL: '',
+      OPENAI_API_KEY: 'test-key',
+      OPENAI_BASE_URL: 'https://api.deepseek.com',
+    })
+
+    expect(client).toBeInstanceOf(OpenAILLMClient)
+    expect((client as OpenAILLMClient & { client: { baseURL: string } }).client.baseURL).toBe('https://api.deepseek.com')
+  })
 })

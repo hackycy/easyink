@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import type { AssistantMaterialManifest, AssistantPatchOperation, AssistantResult, AssistantSourceInput } from '@easyink/assistant-capabilities'
-import type { AssistantEventRecord, AssistantSourceSampleRecord, AssistantVersionRecord } from '@easyink/assistant-store'
+import type { AssistantEventRecord, AssistantSourceSampleRecord, AssistantTaskRecord, AssistantVersionRecord } from '@easyink/assistant-store'
 import type { AssistantApiClient } from '../api'
 import { useIntervalFn } from '@vueuse/core'
 import { useMachine } from '@xstate/vue'
 import { computed, ref, watch } from 'vue'
-import { createAssistantApiClient } from '../api'
+import { AssistantApiError, createAssistantApiClient } from '../api'
 import { assistantWorkbenchMachine } from '../machine'
 import { projectTaskToMessages } from '../projection'
 import ComposerBar from './ComposerBar.vue'
@@ -41,9 +41,12 @@ const versions = ref<AssistantVersionRecord[]>([])
 const sourceSample = ref<AssistantSourceSampleRecord>()
 const error = ref<string>()
 const applying = ref(false)
+const refreshing = ref(false)
 const { snapshot, send } = useMachine(assistantWorkbenchMachine)
 
-const running = computed(() => snapshot.value.matches('running') || task.value?.status === 'running' || task.value?.status === 'queued')
+const POLLING_STATUSES = new Set(['queued', 'running'])
+const shouldPoll = computed(() => !!taskId.value && !error.value && (!task.value || POLLING_STATUSES.has(task.value.status)))
+const running = computed(() => !error.value && (snapshot.value.matches('running') || task.value?.status === 'running' || task.value?.status === 'queued'))
 const statusLabel = computed(() => task.value?.status === 'waiting' ? '等待确认' : running.value ? '生成中' : task.value?.status === 'review' ? '待应用' : undefined)
 const messages = computed(() => projectTaskToMessages({
   task: task.value,
@@ -54,11 +57,18 @@ const messages = computed(() => projectTaskToMessages({
   error: error.value,
 }))
 
-useIntervalFn(async () => {
-  if (!taskId.value)
+const { pause: pauseRefresh, resume: resumeRefresh } = useIntervalFn(() => {
+  if (!shouldPoll.value || refreshing.value)
     return
-  await refreshTask()
-}, 1000)
+  void refreshTask().catch(stopRefreshWithError)
+}, 1000, { immediate: false })
+
+watch(shouldPoll, (poll) => {
+  if (poll)
+    resumeRefresh()
+  else
+    pauseRefresh()
+}, { immediate: true })
 
 watch(result, (next) => {
   if (next)
@@ -66,10 +76,14 @@ watch(result, (next) => {
 })
 
 watch(() => task.value?.status, (status) => {
-  if (status === 'failed')
+  if (status === 'failed') {
+    pauseRefresh()
     send({ type: 'FAIL' })
-  if (status === 'done' || status === 'review' || status === 'waiting')
+  }
+  if (status === 'done' || status === 'review' || status === 'waiting') {
+    pauseRefresh()
     send({ type: 'DONE' })
+  }
 })
 
 async function submitMessage(payload: { prompt: string, source?: AssistantSourceInput }) {
@@ -79,6 +93,7 @@ async function submitMessage(payload: { prompt: string, source?: AssistantSource
     if (task.value?.status === 'waiting' && taskId.value) {
       const updated = await api.value.submitClarification(taskId.value, { answer: payload.prompt })
       taskId.value = updated.id
+      task.value = updated
     }
     else {
       const created = await api.value.createTask({
@@ -88,12 +103,12 @@ async function submitMessage(payload: { prompt: string, source?: AssistantSource
         materialManifest: props.materialManifest,
       })
       taskId.value = created.id
+      task.value = created
     }
     await refreshTask()
   }
   catch (err) {
-    error.value = err instanceof Error ? err.message : String(err)
-    send({ type: 'FAIL' })
+    stopRefreshWithError(err)
   }
 }
 
@@ -108,6 +123,9 @@ async function applyResult(resultToApply: AssistantResult) {
     await refreshTask()
     send({ type: 'DONE' })
   }
+  catch (err) {
+    stopRefreshWithError(err)
+  }
   finally {
     applying.value = false
   }
@@ -116,23 +134,26 @@ async function applyResult(resultToApply: AssistantResult) {
 async function repairTask() {
   if (!taskId.value)
     return
-  await api.value.repairTask(taskId.value)
-  await refreshTask()
+  await runTaskCommand(() => api.value.repairTask(taskId.value!))
 }
 
 async function retryTask() {
   if (!taskId.value)
     return
-  await api.value.retryTask(taskId.value)
-  await refreshTask()
+  await runTaskCommand(() => api.value.retryTask(taskId.value!))
 }
 
 async function rollbackTask() {
   if (!taskId.value)
     return
-  await api.value.rollbackTask(taskId.value)
-  emit('rollback')
-  await refreshTask()
+  try {
+    await api.value.rollbackTask(taskId.value)
+    emit('rollback')
+    await refreshTask()
+  }
+  catch (err) {
+    stopRefreshWithError(err)
+  }
 }
 
 async function exportVersions() {
@@ -143,16 +164,47 @@ async function exportVersions() {
 async function refreshTask() {
   if (!taskId.value)
     return
-  const [nextEvents, nextTask, nextVersions] = await Promise.all([
-    api.value.listEvents(taskId.value),
-    api.value.getTask(taskId.value),
-    api.value.listVersions(taskId.value),
-  ])
-  events.value = nextEvents
-  task.value = nextTask.task
-  result.value = nextTask.result
-  versions.value = nextVersions
-  sourceSample.value = await api.value.getSourceSample(taskId.value).catch(() => undefined)
+  refreshing.value = true
+  try {
+    const [nextEvents, nextTask, nextVersions] = await Promise.all([
+      api.value.listEvents(taskId.value),
+      api.value.getTask(taskId.value),
+      api.value.listVersions(taskId.value),
+    ])
+    events.value = nextEvents
+    task.value = nextTask.task
+    result.value = nextTask.result
+    versions.value = nextVersions
+    sourceSample.value = await api.value.getSourceSample(taskId.value).catch(() => undefined)
+  }
+  finally {
+    refreshing.value = false
+  }
+}
+
+async function runTaskCommand(command: () => Promise<AssistantTaskRecord>) {
+  error.value = undefined
+  try {
+    task.value = await command()
+    await refreshTask()
+  }
+  catch (err) {
+    stopRefreshWithError(err)
+  }
+}
+
+function stopRefreshWithError(err: unknown) {
+  pauseRefresh()
+  error.value = formatAssistantError(err)
+  send({ type: 'FAIL' })
+}
+
+function formatAssistantError(err: unknown): string {
+  if (err instanceof AssistantApiError && err.status === 401)
+    return '请求未授权（HTTP 401），请检查登录状态或 Assistant 服务凭据后重试。'
+  if (err instanceof Error)
+    return err.message
+  return String(err)
 }
 
 function downloadJson(fileName: string, payload: unknown) {
