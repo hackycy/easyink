@@ -21,6 +21,7 @@ lib/EasyInk.Render/host/internal/easyink/runtime/
 .env.*
 .env
 !.env.sample
+docker-compose.*.yml
 
 # AI
 .claude
