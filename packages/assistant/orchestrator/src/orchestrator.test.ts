@@ -242,6 +242,64 @@ describe('assistantOrchestrator', () => {
     expect(result?.schema.guides).toEqual({ x: [], y: [] })
   })
 
+  it('normalizes invalid schema pageModel shape returned by schema agent', async () => {
+    const store = new MemoryAssistantStore()
+    const orchestrator = new AssistantOrchestrator({
+      store,
+      llm: createSchemaLLM({
+        schema: {
+          version: '1.0.0',
+          unit: 'mm',
+          page: {
+            mode: 'fixed',
+            width: 210,
+            height: 297,
+            pageModel: {
+              kind: 'screen',
+              paper: { width: 210, height: 0 },
+            },
+          },
+          guides: { x: [], y: [] },
+          elements: [{
+            id: 'txt-title',
+            type: 'text',
+            x: 16,
+            y: 16,
+            width: 178,
+            height: 8,
+            props: {
+              content: '页面模型修复验证',
+              fontSize: 5,
+              fontWeight: 'bold',
+              textAlign: 'center',
+              verticalAlign: 'middle',
+              color: '#111827',
+            },
+          }],
+        },
+        expectedDataSource: {
+          name: 'quote',
+          fields: [
+            { name: 'customer', path: 'customer', title: '客户', type: 'string' },
+          ],
+          sampleData: { customer: '示例客户' },
+        },
+      }),
+    })
+    const task = await store.createTask({
+      prompt: '生成一个报价单',
+      materialManifest: textMaterialManifest(),
+    })
+
+    const reviewed = await orchestrator.runTask(task.id)
+    const result = await store.getResult(reviewed.resultId!)
+
+    expect(reviewed.status).toBe('review')
+    expect(result?.validation.valid).toBe(true)
+    expect(result?.schema.page.pageModel?.kind).toBe('paged-paper')
+    expect(result?.schema.page.pageModel?.paper.height).toBe(297)
+  })
+
   it('reports schema-agent material output that is not in the active manifest', async () => {
     const store = new MemoryAssistantStore()
     const orchestrator = new AssistantOrchestrator({

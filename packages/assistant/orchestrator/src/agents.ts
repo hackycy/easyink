@@ -632,6 +632,7 @@ function normalizeSchemaAgentSchema(
   }
 
   next.page = normalizeSchemaPage(next.page, planningBrief, warnings)
+  next.page = normalizeSchemaPageModel(next.page, warnings)
   next.guides = normalizeGuides(next.guides, warnings)
 
   if (!Array.isArray(next.elements)) {
@@ -648,6 +649,48 @@ function normalizeSchemaAgentSchema(
     schema: normalizeAllFieldPaths(repaired.fixed),
     warnings,
   }
+}
+
+function normalizeSchemaPageModel(value: unknown, warnings: string[]): DocumentSchema['page'] {
+  if (!isRecord(value))
+    return value as DocumentSchema['page']
+
+  const page = { ...value }
+  const mode = page.mode === 'continuous' ? 'continuous' : 'fixed'
+  const width = typeof page.width === 'number' && page.width > 0 ? page.width : (mode === 'continuous' ? 80 : 210)
+  const height = typeof page.height === 'number' && page.height > 0 ? page.height : (mode === 'continuous' ? 200 : 297)
+
+  const expectedKind = mode === 'continuous' ? 'continuous-paper' : 'paged-paper'
+  const pageModel = isRecord(page.pageModel) ? { ...page.pageModel } : {}
+  const paper = isRecord(pageModel.paper) ? { ...pageModel.paper } : {}
+
+  if (pageModel.kind !== expectedKind) {
+    warnings.push(`Schema Agent output had incompatible page.pageModel.kind; normalized to ${expectedKind}.`)
+  }
+
+  if (paper.width !== width) {
+    warnings.push(`Schema Agent output had no valid page.pageModel.paper.width; normalized to ${width}.`)
+  }
+
+  if (paper.height !== height) {
+    warnings.push(`Schema Agent output had no valid page.pageModel.paper.height; normalized to ${height}.`)
+  }
+
+  return {
+    ...page,
+    mode,
+    width,
+    height,
+    pageModel: {
+      ...pageModel,
+      kind: expectedKind,
+      paper: {
+        ...paper,
+        width,
+        height,
+      },
+    },
+  } as DocumentSchema['page']
 }
 
 function normalizeSchemaPage(
