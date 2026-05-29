@@ -32,20 +32,42 @@ export interface AssistantVersionRecord {
   id: string
   taskId: string
   resultId?: string
-  action: 'generated' | 'repaired' | 'applied' | 'rolled-back'
+  action: 'generated' | 'repaired' | 'before-apply' | 'applied' | 'rolled-back'
+  label?: string
   snapshot: unknown
   createdAt: number
+}
+
+export interface AssistantProjectionSnapshotRecord {
+  id: string
+  taskId: string
+  messages: unknown[]
+  createdAt: number
+}
+
+export interface AssistantSourceSampleRecord {
+  id: string
+  taskId: string
+  sourceKind: string
+  descriptor?: unknown
+  sample: unknown
+  warnings: string[]
+  createdAt: number
+  expiresAt?: number
 }
 
 export type AssistantEvent
   = | { type: 'task.created', taskId: string }
     | { type: 'step.started', taskId: string, step: AssistantWorkflowStep }
     | { type: 'step.completed', taskId: string, step: AssistantWorkflowStep }
-    | { type: 'clarification.required', taskId: string, questions: string[] }
+    | { type: 'message.created', taskId: string, message: string }
+    | { type: 'clarification.required', taskId: string, questions: string[], suggestedAnswers?: string[][] }
+    | { type: 'clarification.answered', taskId: string, answer: string }
     | { type: 'result.ready', taskId: string, resultId: string }
     | { type: 'task.failed', taskId: string, error: string }
     | { type: 'task.cancelled', taskId: string }
     | { type: 'task.applied', taskId: string, resultId: string }
+    | { type: 'task.rolled-back', taskId: string, versionId: string }
 
 export interface AssistantEventRecord {
   id: string
@@ -55,11 +77,14 @@ export interface AssistantEventRecord {
 }
 
 export interface AssistantSnapshot {
+  schemaVersion: 1
   tasks: AssistantTaskRecord[]
   runs: AssistantRunRecord[]
   results: AssistantResult[]
   versions: AssistantVersionRecord[]
   events: AssistantEventRecord[]
+  projectionSnapshots: AssistantProjectionSnapshotRecord[]
+  sourceSamples: AssistantSourceSampleRecord[]
 }
 
 export interface AssistantStore {
@@ -72,7 +97,14 @@ export interface AssistantStore {
   saveResult: (taskId: string, result: AssistantResult) => Promise<void>
   getResult: (id: string) => Promise<AssistantResult | undefined>
   appendVersion: (record: Omit<AssistantVersionRecord, 'id' | 'createdAt'>) => Promise<AssistantVersionRecord>
+  listVersions: (taskId: string) => Promise<AssistantVersionRecord[]>
+  saveProjectionSnapshot: (record: Omit<AssistantProjectionSnapshotRecord, 'id' | 'createdAt'>) => Promise<AssistantProjectionSnapshotRecord>
+  getLatestProjectionSnapshot: (taskId: string) => Promise<AssistantProjectionSnapshotRecord | undefined>
+  saveSourceSample: (record: Omit<AssistantSourceSampleRecord, 'id' | 'createdAt'>) => Promise<AssistantSourceSampleRecord>
+  getSourceSample: (taskId: string) => Promise<AssistantSourceSampleRecord | undefined>
   appendEvent: (taskId: string, event: AssistantEvent) => Promise<AssistantEventRecord>
   listEvents: (taskId: string) => Promise<AssistantEventRecord[]>
+  importSnapshot: (snapshot: AssistantSnapshot) => Promise<void>
   exportSnapshot: () => Promise<AssistantSnapshot>
+  cleanupExpired: (now?: number) => Promise<number>
 }

@@ -11,15 +11,22 @@
   "sideEffects": false,
   "exports": {
     ".": "./dist/index.mjs",
+    "./bin/server": "./dist/bin/server.mjs",
     "./package.json": "./package.json"
   },
   "types": "./dist/index.d.mts",
+  "bin": {
+    "assistant-orchestrator": "./dist/bin/server.mjs"
+  },
   "files": [
+    ".env.sample",
     "dist"
   ],
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
+    "dev:server": "tsx src/bin/server.ts",
+    "start": "node dist/bin/server.mjs",
     "test": "vitest run src/**/*.test.ts"
   },
   "dependencies": {
@@ -28,13 +35,17 @@
     "@easyink/assistant-llm": "workspace:*",
     "@easyink/assistant-store": "workspace:*",
     "@easyink/schema": "workspace:*",
+    "@easyink/schema-tools": "workspace:*",
+    "@hono/node-server": "^1.19.14",
     "@langchain/core": "catalog:framework",
     "@langchain/langgraph": "catalog:framework",
+    "dotenv": "catalog:framework",
     "hono": "catalog:framework",
     "pino": "catalog:framework",
     "zod": "catalog:framework"
   },
   "devDependencies": {
+    "tsx": "catalog:cli",
     "vitest": "catalog:testing"
   }
 }

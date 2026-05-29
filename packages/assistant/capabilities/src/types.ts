@@ -56,6 +56,8 @@ export interface AssistantPatchOperation {
   value?: unknown
 }
 
+export type AssistantPatchApplyMode = 'full' | 'new-elements' | 'selected-elements'
+
 export interface AssistantSchemaDiff {
   changed: boolean
   operations: AssistantPatchOperation[]

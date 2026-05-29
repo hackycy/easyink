@@ -1,6 +1,6 @@
-export { applyAssistantPatch, diffAssistantSchema } from './patch'
+export { applyAssistantPatch, diffAssistantSchema, selectAssistantPatchOperations, selectAssistantPatchOperationsForElements } from './patch'
 export { createAssistantPreview } from './preview'
 export { generateSchemaCandidate } from './schema'
 export type { GenerateSchemaCandidateOptions } from './schema'
 export * from './types'
-export { alignAssistantDataSource, validateAssistantSchema } from './validation'
+export { alignAssistantDataSource, repairAssistantSchema, validateAssistantSchema } from './validation'

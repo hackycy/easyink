@@ -1,5 +1,8 @@
 export { createAssistantApiClient } from './api'
 export type { AssistantApiClient, AssistantTaskResponse } from './api'
 export { default as AssistantWorkbench } from './components/AssistantWorkbench.vue'
+export { default as ConversationPanel } from './components/ConversationPanel.vue'
 export { assistantWorkbenchMachine } from './machine'
+export { inferSourceFromText, projectTaskToMessages } from './projection'
+export type { AssistantConversationMessage, ClarificationQuestion, ProjectTaskToMessagesInput } from './projection'
 export { createAssistantTaskQueryOptions } from './queries'

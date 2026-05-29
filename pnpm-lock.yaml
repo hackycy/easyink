@@ -415,6 +415,9 @@ importers:
       '@easyink/assistant-capabilities':
         specifier: workspace:*
         version: link:../capabilities
+      '@easyink/assistant-store':
+        specifier: workspace:*
+        version: link:../store
       '@easyink/assistant-ui':
         specifier: workspace:*
         version: link:../ui
@@ -434,6 +437,9 @@ importers:
       typescript:
         specifier: catalog:cli
         version: 6.0.2
+      vitest:
+        specifier: catalog:testing
+        version: 4.0.7(@types/debug@4.1.12)(@types/node@24.10.0)(happy-dom@20.8.9)(jiti@2.6.1)(lightningcss@1.32.0)(sass-embedded@1.98.0)(sass@1.98.0)(tsx@4.21.0)(yaml@2.8.3)
       vue-tsc:
         specifier: catalog:cli
         version: 3.3.1(typescript@6.0.2)
@@ -471,12 +477,21 @@ importers:
       '@easyink/schema':
         specifier: workspace:*
         version: link:../../schema
+      '@easyink/schema-tools':
+        specifier: workspace:*
+        version: link:../../schema-tools
+      '@hono/node-server':
+        specifier: ^1.19.14
+        version: 1.19.14(hono@4.12.23)
       '@langchain/core':
         specifier: catalog:framework
         version: 1.1.48(openai@6.34.0(ws@8.20.0)(zod@3.25.76))(ws@8.20.0)
       '@langchain/langgraph':
         specifier: catalog:framework
         version: 1.3.2(@langchain/core@1.1.48(openai@6.34.0(ws@8.20.0)(zod@3.25.76))(ws@8.20.0))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(vue@3.5.31(typescript@6.0.2))(zod-to-json-schema@3.25.2(zod@3.25.76))(zod@3.25.76)
+      dotenv:
+        specifier: catalog:framework
+        version: 17.4.2
       hono:
         specifier: catalog:framework
         version: 4.12.23
@@ -487,6 +502,9 @@ importers:
         specifier: catalog:framework
         version: 3.25.76
     devDependencies:
+      tsx:
+        specifier: catalog:cli
+        version: 4.21.0
       vitest:
         specifier: catalog:testing
         version: 4.0.7(@types/debug@4.1.12)(@types/node@24.10.0)(happy-dom@20.8.9)(jiti@2.6.1)(lightningcss@1.32.0)(sass-embedded@1.98.0)(sass@1.98.0)(tsx@4.21.0)(yaml@2.8.3)
@@ -547,6 +565,9 @@ importers:
       typescript:
         specifier: catalog:cli
         version: 6.0.2
+      vitest:
+        specifier: catalog:testing
+        version: 4.0.7(@types/debug@4.1.12)(@types/node@24.10.0)(happy-dom@20.8.9)(jiti@2.6.1)(lightningcss@1.32.0)(sass-embedded@1.98.0)(sass@1.98.0)(tsx@4.21.0)(yaml@2.8.3)
       vue:
         specifier: catalog:framework
         version: 3.5.31(typescript@6.0.2)
@@ -1121,9 +1142,9 @@ importers:
 
   playground:
     dependencies:
-      '@easyink/ai':
+      '@easyink/assistant-designer-bridge':
         specifier: workspace:*
-        version: link:../packages/ai
+        version: link:../packages/assistant/designer-bridge
       '@easyink/designer':
         specifier: workspace:*
         version: link:../packages/designer
@@ -6396,6 +6417,10 @@ snapshots:
   '@hono/node-server@1.19.14(hono@4.12.15)':
     dependencies:
       hono: 4.12.15
+
+  '@hono/node-server@1.19.14(hono@4.12.23)':
+    dependencies:
+      hono: 4.12.23
 
   '@humanfs/core@0.19.1': {}
 

@@ -21,6 +21,7 @@
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
+    "test": "vitest run src/**/*.test.ts",
     "typecheck": "vue-tsc --noEmit"
   },
   "peerDependencies": {
@@ -38,6 +39,7 @@
   },
   "devDependencies": {
     "typescript": "catalog:cli",
+    "vitest": "catalog:testing",
     "vue": "catalog:framework",
     "vue-tsc": "catalog:cli"
   }

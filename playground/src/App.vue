@@ -2,7 +2,7 @@
 import type { DataSourceDescriptor, DocumentSchema } from '@easyink/designer'
 import type { SampleTemplateEntry } from '@easyink/samples'
 import type { StoredTemplate } from './storage/template-store'
-import { createAIContribution } from '@easyink/ai'
+import { createAssistantContribution } from '@easyink/assistant-designer-bridge'
 import { createLocalStoragePreferenceProvider, EasyInkDesigner } from '@easyink/designer'
 import { enUS, zhCN } from '@easyink/designer/locale'
 import { blankA4Template, flowInvoiceTemplate, invoiceDemoData, sampleDataSources } from '@easyink/samples'
@@ -236,7 +236,7 @@ function handleDataUpdate(data: Record<string, unknown>) {
   applyDemoData(data)
 }
 
-const contributions = [createAIContribution()]
+const contributions = [createAssistantContribution()]
 </script>
 
 <template>

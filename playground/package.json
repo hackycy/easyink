@@ -8,7 +8,7 @@
     "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
-    "@easyink/ai": "workspace:*",
+    "@easyink/assistant-designer-bridge": "workspace:*",
     "@easyink/designer": "workspace:*",
     "@easyink/export-plugin-dom-pdf": "workspace:*",
     "@easyink/export-runtime": "workspace:*",

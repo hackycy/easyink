@@ -97,6 +97,8 @@ onlyBuiltDependencies:
   - electron
   - esbuild
   - simple-git-hooks
+  - tree-sitter
+  - tree-sitter-bash
 shellEmulator: true
 trustPolicy: no-downgrade
 trustPolicyExclude:

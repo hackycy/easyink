@@ -11,6 +11,7 @@ describe('memoryAssistantStore', () => {
     const snapshot = await store.exportSnapshot()
 
     expect(events.map(record => record.event.type)).toEqual(['task.created', 'step.started'])
+    expect(snapshot.schemaVersion).toBe(1)
     expect(snapshot.tasks).toHaveLength(1)
   })
 })

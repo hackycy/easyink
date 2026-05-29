@@ -2,7 +2,7 @@
   "name": "@easyink/ai",
   "type": "module",
   "version": "0.0.18",
-  "description": "AI integration for EasyInk designer (chat, MCP, prompt templates)",
+  "description": "Deprecated legacy AI integration for EasyInk designer (chat, MCP, prompt templates)",
   "author": "EasyInk Team",
   "license": "MIT",
   "publishConfig": {

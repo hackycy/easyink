@@ -11,6 +11,10 @@ temp
 **/*.log
 .env
 **/.env
+.env.*
+**/.env.*
+!.env.sample
+!**/.env.sample
 .env.local
 **/.env.local
 .env.*.local

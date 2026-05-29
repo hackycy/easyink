@@ -1,5 +1,7 @@
 export { AnthropicLLMClient } from './anthropic'
 export type { AnthropicLLMClientOptions } from './anthropic'
+export { createLLMClientFromEnv } from './factory'
+export type { LLMEnvironment } from './factory'
 export { StaticLLMClient } from './fake'
 export { OpenAILLMClient } from './openai'
 export type { OpenAILLMClientOptions } from './openai'

@@ -13,6 +13,7 @@ cache
 .eslintcache
 .playwright-mcp
 .turbo
+.easyink-assistant/
 lib/EasyInk.Render/releases-browser-docker/
 lib/EasyInk.Render/releases-package-docker/
 lib/EasyInk.Render/releases/

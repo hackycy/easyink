@@ -1,5 +1,5 @@
 import type { DataFieldNode, DataSourceDescriptor } from '@easyink/datasource'
-import type { TemplateIntentField, TemplateIntentSection } from '@easyink/schema-tools'
+import type { TemplateGenerationIntent, TemplateIntentField, TemplateIntentSection } from '@easyink/schema-tools'
 import type { AssistantTaskInput, SchemaCandidate } from './types'
 import {
   buildDataSourceDescriptor,
@@ -11,6 +11,7 @@ import { validateAssistantSchema } from './validation'
 export interface GenerateSchemaCandidateOptions {
   sourceData?: unknown
   sourceDescriptor?: DataSourceDescriptor
+  intent?: TemplateGenerationIntent
 }
 
 export function generateSchemaCandidate(
@@ -23,15 +24,26 @@ export function generateSchemaCandidate(
     : undefined
 
   const sections = fields?.length ? createSectionsFromFields(fields) : undefined
+  const baseIntent: TemplateGenerationIntent = {
+    name: resolveTitle(input.prompt),
+    domain: plan.domain,
+    dataSourceName: options.sourceDescriptor?.name,
+    fields,
+    sections,
+    sampleData: isRecord(options.sourceData) ? options.sourceData : undefined,
+    warnings: plan.warnings,
+  }
   const build = buildSchemaFromTemplateIntent(
     {
-      name: resolveTitle(input.prompt),
-      domain: plan.domain,
-      dataSourceName: options.sourceDescriptor?.name,
-      fields,
-      sections,
-      sampleData: isRecord(options.sourceData) ? options.sourceData : undefined,
-      warnings: plan.warnings,
+      ...baseIntent,
+      ...options.intent,
+      fields: options.intent?.fields ?? baseIntent.fields,
+      sections: options.intent?.sections ?? baseIntent.sections,
+      sampleData: options.intent?.sampleData ?? baseIntent.sampleData,
+      warnings: [
+        ...(baseIntent.warnings ?? []),
+        ...(options.intent?.warnings ?? []),
+      ],
     },
     { plan, prompt: input.prompt },
   )
