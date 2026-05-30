@@ -38,9 +38,6 @@
     "xstate": "catalog:framework"
   },
   "devDependencies": {
-    "typescript": "catalog:cli",
-    "vitest": "catalog:testing",
-    "vue": "catalog:framework",
-    "vue-tsc": "catalog:cli"
+    "vue": "catalog:framework"
   }
 }

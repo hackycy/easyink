@@ -36,4 +36,58 @@ export interface AIMaterialDescriptor {
   usage?: string[]
   schemaRules?: string[]
   examples?: Array<Record<string, unknown>>
+  knowledge?: MaterialKnowledgeDescriptor
+}
+
+export type MaterialKnowledgeCategory = 'data' | 'layout' | 'decoration' | 'typography' | 'visualization'
+export type MaterialKnowledgeFieldType = 'string' | 'number' | 'boolean' | 'date' | 'image-url' | 'array' | 'object'
+export type MaterialKnowledgeBindingMode = 'none' | 'scalar' | 'collection' | 'multi-scalar'
+
+export interface MaterialKnowledgeDescriptor {
+  category: MaterialKnowledgeCategory
+  composability: {
+    canBeChildOf: string[]
+    canContain: string[]
+    exclusiveWith: string[]
+    preferredCompanions: string[]
+  }
+  bindingSpec: {
+    mode: MaterialKnowledgeBindingMode
+    accepts: {
+      types: MaterialKnowledgeFieldType[]
+      isArray?: boolean
+      minChildren?: number
+      requiredChildFields?: string[]
+    }
+    produces: {
+      kind: 'scalar-field' | 'collection-repeat' | 'multi-field' | 'none'
+      fieldCount?: 'single' | 'multiple' | 'dynamic'
+      pathPattern?: string
+    }
+    examples?: Array<{
+      scenario: string
+      binding: Record<string, unknown>
+      fieldStructure: Record<string, unknown>
+    }>
+  }
+  sizing: {
+    minWidth: number
+    minHeight: number
+    aspectRatio?: number | 'free'
+    growAxis?: 'x' | 'y' | 'both' | 'none'
+    defaultSize: { width: number, height: number }
+  }
+  fitness?: Array<{
+    scenario: string
+    score: number
+    reason: string
+  }>
+  properties?: Array<{
+    key: string
+    type: 'string' | 'number' | 'boolean' | 'enum' | 'color' | 'object' | 'array'
+    required: boolean
+    defaultValue?: unknown
+    enumValues?: string[]
+    description?: string
+  }>
 }

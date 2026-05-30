@@ -32,8 +32,14 @@
   "dependencies": {
     "@easyink/assistant-adapters": "workspace:*",
     "@easyink/assistant-capabilities": "workspace:*",
+    "@easyink/assistant-constraint-engine": "workspace:*",
     "@easyink/assistant-llm": "workspace:*",
+    "@easyink/assistant-material-knowledge": "workspace:*",
+    "@easyink/assistant-scenario-templates": "workspace:*",
+    "@easyink/assistant-schema-builder": "workspace:*",
     "@easyink/assistant-store": "workspace:*",
+    "@easyink/assistant-tool-registry": "workspace:*",
+    "@easyink/assistant-type-aligner": "workspace:*",
     "@easyink/schema": "workspace:*",
     "@easyink/schema-tools": "workspace:*",
     "@hono/node-server": "^1.19.14",
@@ -43,9 +49,5 @@
     "hono": "catalog:framework",
     "pino": "catalog:framework",
     "zod": "catalog:framework"
-  },
-  "devDependencies": {
-    "tsx": "catalog:cli",
-    "vitest": "catalog:testing"
   }
 }

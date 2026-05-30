@@ -1,0 +1,30 @@
+{
+  "name": "@easyink/assistant-material-knowledge",
+  "type": "module",
+  "version": "0.0.18",
+  "description": "Structured material knowledge graph with executable constraints for EasyInk Assistant",
+  "author": "hackycy <hackycy@outlook.com>",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/index.d.mts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "test": "vitest run src/**/*.test.ts"
+  },
+  "dependencies": {
+    "@easyink/schema": "workspace:*",
+    "@easyink/shared": "workspace:*",
+    "zod": "catalog:framework"
+  }
+}

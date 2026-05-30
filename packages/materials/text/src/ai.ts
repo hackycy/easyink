@@ -12,4 +12,29 @@ export const textAIMaterialDescriptor = {
     'Use props.heightMode="auto" when long or bound text should grow vertically and participate in stack flow layout.',
     'Use props.wrapMode for wrapping behavior: "wrap" for word wrapping, "anywhere" for long codes/CJK-heavy labels, and "nowrap" for single-line text.',
   ],
+  knowledge: {
+    category: 'typography',
+    composability: {
+      canBeChildOf: ['container', '*'],
+      canContain: [],
+      exclusiveWith: [],
+      preferredCompanions: ['line', 'rect'],
+    },
+    bindingSpec: {
+      mode: 'scalar',
+      accepts: { types: ['string', 'number', 'boolean', 'date'], isArray: false },
+      produces: { kind: 'scalar-field', fieldCount: 'single', pathPattern: '{fieldPath}' },
+      examples: [
+        { scenario: 'invoice title', binding: { sourceId: 'invoice', fieldPath: 'title' }, fieldStructure: { title: 'string' } },
+      ],
+    },
+    sizing: { minWidth: 10, minHeight: 4, growAxis: 'y', defaultSize: { width: 40, height: 6 } },
+    fitness: [
+      { scenario: 'invoice-header', score: 0.9, reason: 'titles and labels are text elements' },
+      { scenario: 'receipt-header', score: 0.9, reason: 'shop name and receipt title' },
+      { scenario: 'key-value-pair', score: 0.95, reason: 'scalar field display' },
+      { scenario: 'form-label', score: 0.9, reason: 'static label text' },
+      { scenario: 'footer-notes', score: 0.8, reason: 'remark and note text' },
+    ],
+  },
 } satisfies AIMaterialDescriptor

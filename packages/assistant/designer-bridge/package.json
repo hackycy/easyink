@@ -35,10 +35,5 @@
     "@easyink/icons": "workspace:*",
     "@easyink/schema": "workspace:*",
     "vue": "catalog:framework"
-  },
-  "devDependencies": {
-    "typescript": "catalog:cli",
-    "vitest": "catalog:testing",
-    "vue-tsc": "catalog:cli"
   }
 }

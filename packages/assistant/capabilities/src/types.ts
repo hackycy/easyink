@@ -1,6 +1,5 @@
 import type { DataSourceDescriptor } from '@easyink/datasource'
 import type { DocumentSchema } from '@easyink/schema'
-import type { AIMaterialDescriptor } from '@easyink/shared'
 import { z } from 'zod'
 
 export const AssistantWorkflowStepSchema = z.enum([
@@ -75,7 +74,55 @@ export const AssistantAIMaterialDescriptorSchema = z.object({
   usage: z.array(z.string()).optional(),
   schemaRules: z.array(z.string()).optional(),
   examples: z.array(z.record(z.unknown())).optional(),
-}) satisfies z.ZodType<AIMaterialDescriptor>
+  knowledge: z.object({
+    category: z.enum(['data', 'layout', 'decoration', 'typography', 'visualization']),
+    composability: z.object({
+      canBeChildOf: z.array(z.string()),
+      canContain: z.array(z.string()),
+      exclusiveWith: z.array(z.string()),
+      preferredCompanions: z.array(z.string()),
+    }),
+    bindingSpec: z.object({
+      mode: z.enum(['none', 'scalar', 'collection', 'multi-scalar']),
+      accepts: z.object({
+        types: z.array(z.string()),
+        isArray: z.boolean().optional(),
+        minChildren: z.number().optional(),
+        requiredChildFields: z.array(z.string()).optional(),
+      }),
+      produces: z.object({
+        kind: z.enum(['scalar-field', 'collection-repeat', 'multi-field', 'none']),
+        fieldCount: z.enum(['single', 'multiple', 'dynamic']).optional(),
+        pathPattern: z.string().optional(),
+      }),
+      examples: z.array(z.object({
+        scenario: z.string(),
+        binding: z.record(z.unknown()),
+        fieldStructure: z.record(z.unknown()),
+      })).optional(),
+    }),
+    sizing: z.object({
+      minWidth: z.number(),
+      minHeight: z.number(),
+      aspectRatio: z.union([z.number(), z.literal('free')]).optional(),
+      growAxis: z.enum(['x', 'y', 'both', 'none']).optional(),
+      defaultSize: z.object({ width: z.number(), height: z.number() }),
+    }),
+    fitness: z.array(z.object({
+      scenario: z.string(),
+      score: z.number(),
+      reason: z.string(),
+    })).optional(),
+    properties: z.array(z.object({
+      key: z.string(),
+      type: z.enum(['string', 'number', 'boolean', 'enum', 'color', 'object', 'array']),
+      required: z.boolean(),
+      defaultValue: z.unknown().optional(),
+      enumValues: z.array(z.string()).optional(),
+      description: z.string().optional(),
+    })).optional(),
+  }).optional(),
+})
 
 export type AssistantAIMaterialDescriptor = z.infer<typeof AssistantAIMaterialDescriptorSchema>
 

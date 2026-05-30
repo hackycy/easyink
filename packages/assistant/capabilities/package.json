@@ -28,8 +28,5 @@
     "@easyink/schema-tools": "workspace:*",
     "@easyink/shared": "workspace:*",
     "zod": "catalog:framework"
-  },
-  "devDependencies": {
-    "vitest": "catalog:testing"
   }
 }

@@ -19,4 +19,26 @@ export const flowRowAIMaterialDescriptor = {
     'Column bindings may be absolute collection paths such as items/name; node.binding may point to items.',
     'Do not encode header/footer/table topology in flow-row; use table-data for table semantics.',
   ],
+  knowledge: {
+    category: 'data',
+    composability: {
+      canBeChildOf: ['*'],
+      canContain: [],
+      exclusiveWith: [],
+      preferredCompanions: ['line', 'text'],
+    },
+    bindingSpec: {
+      mode: 'collection',
+      accepts: { types: ['array'], isArray: true, minChildren: 1 },
+      produces: { kind: 'collection-repeat', fieldCount: 'dynamic', pathPattern: '{collection}/{field}' },
+      examples: [
+        { scenario: 'receipt item', binding: { sourceId: 'receipt', fieldPath: 'items' }, fieldStructure: { items: [{ name: 'string', qty: 'number', amount: 'number' }] } },
+      ],
+    },
+    sizing: { minWidth: 20, minHeight: 8, growAxis: 'y', defaultSize: { width: 72, height: 10 } },
+    fitness: [
+      { scenario: 'receipt-items', score: 0.95, reason: 'optimized for narrow receipt with mixed-width columns' },
+      { scenario: 'invoice-items', score: 0.5, reason: 'works but table-data is better for wide documents' },
+    ],
+  },
 } satisfies AIMaterialDescriptor

@@ -9,4 +9,22 @@ export const ellipseAIMaterialDescriptor = {
   usage: [
     'Use sparingly; prefer text, line, and table-data for document structure.',
   ],
+  knowledge: {
+    category: 'decoration',
+    composability: {
+      canBeChildOf: ['container', '*'],
+      canContain: [],
+      exclusiveWith: [],
+      preferredCompanions: ['text'],
+    },
+    bindingSpec: {
+      mode: 'none',
+      accepts: { types: [], isArray: false },
+      produces: { kind: 'none' },
+    },
+    sizing: { minWidth: 5, minHeight: 5, aspectRatio: 1, growAxis: 'none', defaultSize: { width: 15, height: 15 } },
+    fitness: [
+      { scenario: 'seal-badge', score: 0.7, reason: 'circular seal or badge decoration' },
+    ],
+  },
 } satisfies AIMaterialDescriptor

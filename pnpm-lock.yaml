@@ -383,10 +383,6 @@ importers:
       zod:
         specifier: catalog:framework
         version: 3.25.76
-    devDependencies:
-      vitest:
-        specifier: catalog:testing
-        version: 4.0.7(@types/debug@4.1.12)(@types/node@24.10.0)(happy-dom@20.8.9)(jiti@2.6.1)(lightningcss@1.32.0)(sass-embedded@1.98.0)(sass@1.98.0)(tsx@4.21.0)(yaml@2.8.3)
 
   packages/assistant/capabilities:
     dependencies:
@@ -405,10 +401,18 @@ importers:
       zod:
         specifier: catalog:framework
         version: 3.25.76
-    devDependencies:
-      vitest:
-        specifier: catalog:testing
-        version: 4.0.7(@types/debug@4.1.12)(@types/node@24.10.0)(happy-dom@20.8.9)(jiti@2.6.1)(lightningcss@1.32.0)(sass-embedded@1.98.0)(sass@1.98.0)(tsx@4.21.0)(yaml@2.8.3)
+
+  packages/assistant/constraint-engine:
+    dependencies:
+      '@easyink/assistant-material-knowledge':
+        specifier: workspace:*
+        version: link:../material-knowledge
+      '@easyink/schema':
+        specifier: workspace:*
+        version: link:../../schema
+      '@easyink/shared':
+        specifier: workspace:*
+        version: link:../../shared
 
   packages/assistant/designer-bridge:
     dependencies:
@@ -433,16 +437,6 @@ importers:
       vue:
         specifier: catalog:framework
         version: 3.5.31(typescript@6.0.2)
-    devDependencies:
-      typescript:
-        specifier: catalog:cli
-        version: 6.0.2
-      vitest:
-        specifier: catalog:testing
-        version: 4.0.7(@types/debug@4.1.12)(@types/node@24.10.0)(happy-dom@20.8.9)(jiti@2.6.1)(lightningcss@1.32.0)(sass-embedded@1.98.0)(sass@1.98.0)(tsx@4.21.0)(yaml@2.8.3)
-      vue-tsc:
-        specifier: catalog:cli
-        version: 3.3.1(typescript@6.0.2)
 
   packages/assistant/llm:
     dependencies:
@@ -455,10 +449,18 @@ importers:
       zod:
         specifier: catalog:framework
         version: 3.25.76
-    devDependencies:
-      vitest:
-        specifier: catalog:testing
-        version: 4.0.7(@types/debug@4.1.12)(@types/node@24.10.0)(happy-dom@20.8.9)(jiti@2.6.1)(lightningcss@1.32.0)(sass-embedded@1.98.0)(sass@1.98.0)(tsx@4.21.0)(yaml@2.8.3)
+
+  packages/assistant/material-knowledge:
+    dependencies:
+      '@easyink/schema':
+        specifier: workspace:*
+        version: link:../../schema
+      '@easyink/shared':
+        specifier: workspace:*
+        version: link:../../shared
+      zod:
+        specifier: catalog:framework
+        version: 3.25.76
 
   packages/assistant/orchestrator:
     dependencies:
@@ -468,12 +470,30 @@ importers:
       '@easyink/assistant-capabilities':
         specifier: workspace:*
         version: link:../capabilities
+      '@easyink/assistant-constraint-engine':
+        specifier: workspace:*
+        version: link:../constraint-engine
       '@easyink/assistant-llm':
         specifier: workspace:*
         version: link:../llm
+      '@easyink/assistant-material-knowledge':
+        specifier: workspace:*
+        version: link:../material-knowledge
+      '@easyink/assistant-scenario-templates':
+        specifier: workspace:*
+        version: link:../scenario-templates
+      '@easyink/assistant-schema-builder':
+        specifier: workspace:*
+        version: link:../schema-builder
       '@easyink/assistant-store':
         specifier: workspace:*
         version: link:../store
+      '@easyink/assistant-tool-registry':
+        specifier: workspace:*
+        version: link:../tool-registry
+      '@easyink/assistant-type-aligner':
+        specifier: workspace:*
+        version: link:../type-aligner
       '@easyink/schema':
         specifier: workspace:*
         version: link:../../schema
@@ -501,13 +521,33 @@ importers:
       zod:
         specifier: catalog:framework
         version: 3.25.76
-    devDependencies:
-      tsx:
-        specifier: catalog:cli
-        version: 4.21.0
-      vitest:
-        specifier: catalog:testing
-        version: 4.0.7(@types/debug@4.1.12)(@types/node@24.10.0)(happy-dom@20.8.9)(jiti@2.6.1)(lightningcss@1.32.0)(sass-embedded@1.98.0)(sass@1.98.0)(tsx@4.21.0)(yaml@2.8.3)
+
+  packages/assistant/scenario-templates:
+    dependencies:
+      '@easyink/assistant-material-knowledge':
+        specifier: workspace:*
+        version: link:../material-knowledge
+      '@easyink/schema':
+        specifier: workspace:*
+        version: link:../../schema
+      '@easyink/shared':
+        specifier: workspace:*
+        version: link:../../shared
+
+  packages/assistant/schema-builder:
+    dependencies:
+      '@easyink/assistant-constraint-engine':
+        specifier: workspace:*
+        version: link:../constraint-engine
+      '@easyink/assistant-material-knowledge':
+        specifier: workspace:*
+        version: link:../material-knowledge
+      '@easyink/schema':
+        specifier: workspace:*
+        version: link:../../schema
+      '@easyink/shared':
+        specifier: workspace:*
+        version: link:../../shared
 
   packages/assistant/store:
     dependencies:
@@ -520,10 +560,49 @@ importers:
       zod:
         specifier: catalog:framework
         version: 3.25.76
+
+  packages/assistant/tool-registry:
+    dependencies:
+      '@easyink/assistant-constraint-engine':
+        specifier: workspace:*
+        version: link:../constraint-engine
+      '@easyink/assistant-material-knowledge':
+        specifier: workspace:*
+        version: link:../material-knowledge
+      '@easyink/assistant-scenario-templates':
+        specifier: workspace:*
+        version: link:../scenario-templates
+      '@easyink/assistant-schema-builder':
+        specifier: workspace:*
+        version: link:../schema-builder
+      '@easyink/assistant-type-aligner':
+        specifier: workspace:*
+        version: link:../type-aligner
+      '@easyink/schema':
+        specifier: workspace:*
+        version: link:../../schema
+      '@easyink/shared':
+        specifier: workspace:*
+        version: link:../../shared
+      zod:
+        specifier: catalog:framework
+        version: 3.25.76
     devDependencies:
       vitest:
         specifier: catalog:testing
         version: 4.0.7(@types/debug@4.1.12)(@types/node@24.10.0)(happy-dom@20.8.9)(jiti@2.6.1)(lightningcss@1.32.0)(sass-embedded@1.98.0)(sass@1.98.0)(tsx@4.21.0)(yaml@2.8.3)
+
+  packages/assistant/type-aligner:
+    dependencies:
+      '@easyink/assistant-material-knowledge':
+        specifier: workspace:*
+        version: link:../material-knowledge
+      '@easyink/schema':
+        specifier: workspace:*
+        version: link:../../schema
+      '@easyink/shared':
+        specifier: workspace:*
+        version: link:../../shared
 
   packages/assistant/ui:
     dependencies:
@@ -552,18 +631,9 @@ importers:
         specifier: catalog:framework
         version: 5.32.0
     devDependencies:
-      typescript:
-        specifier: catalog:cli
-        version: 6.0.2
-      vitest:
-        specifier: catalog:testing
-        version: 4.0.7(@types/debug@4.1.12)(@types/node@24.10.0)(happy-dom@20.8.9)(jiti@2.6.1)(lightningcss@1.32.0)(sass-embedded@1.98.0)(sass@1.98.0)(tsx@4.21.0)(yaml@2.8.3)
       vue:
         specifier: catalog:framework
         version: 3.5.31(typescript@6.0.2)
-      vue-tsc:
-        specifier: catalog:cli
-        version: 3.3.1(typescript@6.0.2)
 
   packages/builtin:
     dependencies:

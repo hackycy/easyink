@@ -10,4 +10,26 @@ export const imageAIMaterialDescriptor = {
     'Use fit contain for logos and cover for cropped photos.',
     'Bind image fields only when the data source provides an image URL.',
   ],
+  knowledge: {
+    category: 'decoration',
+    composability: {
+      canBeChildOf: ['container', '*'],
+      canContain: [],
+      exclusiveWith: [],
+      preferredCompanions: ['text'],
+    },
+    bindingSpec: {
+      mode: 'scalar',
+      accepts: { types: ['image-url', 'string'], isArray: false },
+      produces: { kind: 'scalar-field', fieldCount: 'single', pathPattern: '{fieldPath}' },
+      examples: [
+        { scenario: 'company logo', binding: { sourceId: 'company', fieldPath: 'logoUrl' }, fieldStructure: { logoUrl: 'string' } },
+      ],
+    },
+    sizing: { minWidth: 8, minHeight: 8, aspectRatio: 'free', growAxis: 'none', defaultSize: { width: 25, height: 25 } },
+    fitness: [
+      { scenario: 'invoice-header', score: 0.7, reason: 'company logo placement' },
+      { scenario: 'product-label', score: 0.8, reason: 'product image display' },
+    ],
+  },
 } satisfies AIMaterialDescriptor

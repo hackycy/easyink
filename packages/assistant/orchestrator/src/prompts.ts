@@ -16,8 +16,11 @@ export function buildMaterialContext(manifest: AssistantMaterialManifest | undef
   lines.push('## Available Material Types')
   for (const material of materials) {
     const ai = material.ai
+    const knowledge = ai?.knowledge
     lines.push(`### ${material.type}`)
     lines.push(`- ${ai?.description ?? material.name}`)
+    if (knowledge?.category)
+      lines.push(`- Category: ${knowledge.category}`)
     const properties = ai?.properties?.length
       ? ai.properties
       : material.props?.map(prop => prop.key) ?? []
@@ -27,6 +30,30 @@ export function buildMaterialContext(manifest: AssistantMaterialManifest | undef
       lines.push(`- Required props: ${ai.requiredProps.join(', ')}`)
     if (ai?.binding)
       lines.push(`- Binding: ${ai.binding}`)
+    if (knowledge?.bindingSpec) {
+      const spec = knowledge.bindingSpec
+      lines.push(`- Binding mode: ${spec.mode} (accepts: ${spec.accepts.types.join('/')}, produces: ${spec.produces.kind})`)
+      if (spec.accepts.isArray)
+        lines.push(`- Expects array data${spec.accepts.minChildren ? ` (min ${spec.accepts.minChildren} child fields)` : ''}`)
+      if (spec.accepts.requiredChildFields?.length)
+        lines.push(`- Required child fields: ${spec.accepts.requiredChildFields.join(', ')}`)
+    }
+    if (knowledge?.sizing) {
+      const s = knowledge.sizing
+      lines.push(`- Default size: ${s.defaultSize.width}x${s.defaultSize.height}mm, min: ${s.minWidth}x${s.minHeight}mm${s.growAxis ? `, grows: ${s.growAxis}` : ''}`)
+    }
+    if (knowledge?.composability) {
+      const c = knowledge.composability
+      if (c.canContain.length)
+        lines.push(`- Can contain: ${c.canContain.join(', ')}`)
+      if (c.preferredCompanions.length)
+        lines.push(`- Preferred companions: ${c.preferredCompanions.join(', ')}`)
+    }
+    if (knowledge?.fitness?.length) {
+      const top = knowledge.fitness.filter(f => f.score >= 0.8).slice(0, 3)
+      if (top.length)
+        lines.push(`- Best for: ${top.map(f => `${f.scenario} (${f.reason})`).join('; ')}`)
+    }
     for (const usage of ai?.usage ?? [])
       lines.push(`- Usage: ${usage}`)
     for (const rule of ai?.schemaRules ?? [])
@@ -39,7 +66,6 @@ export function buildMaterialContext(manifest: AssistantMaterialManifest | undef
   lines.push('## Sizing Reference (CRITICAL)')
   lines.push('- schema.unit declares the unit for ALL numeric values: element x/y/width/height AND all props (fontSize, borderWidth, cellPadding, letterSpacing, etc.).')
   lines.push('- Conversion: 1mm = 2.835pt = 3.78px. 1pt = 0.353mm = 1.333px. 1px = 0.265mm = 0.75pt.')
-  // lines.push('- Material defaults (in mm): text fontSize 4.23, table/flow-row fontSize 3.18, borderWidth 0.26, cellPadding 0.53. Convert these to schema.unit before using.')
   lines.push('- Element height must accommodate content: height >= fontSize * lineHeight (text lineHeight default 1.5, table lineHeight default 1.2).')
   lines.push('- NEVER mix units. If schema.unit="pt", output fontSize in pt (e.g. 12). If schema.unit="mm", output fontSize in mm (e.g. 4.23). Do NOT output mm-scale values when unit is pt, or pt-scale values when unit is mm.')
   lines.push('')
@@ -49,6 +75,15 @@ export function buildMaterialContext(manifest: AssistantMaterialManifest | undef
   lines.push('- Use the same value as expectedDataSource.name for binding.sourceId and binding.sourceName.')
   lines.push('- Choose materials only from the list above. Use their Binding, Usage, Schema rule, capabilities, and examples as the sole source of material behavior.')
   lines.push('- If the registered materials cannot express a requested visual or data interaction, approximate with registered materials and add a warning; never invent a missing material type.')
+  lines.push('')
+
+  lines.push('## Material Selection Guide')
+  lines.push('- For array/list data: prefer table-data (wide documents) or flow-row (narrow receipts).')
+  lines.push('- For fixed key-value grids: prefer table-static.')
+  lines.push('- For scalar labels and values: prefer text.')
+  lines.push('- For codes: barcode (CODE128/EAN) or qrcode (URLs/verification).')
+  lines.push('- For separators: line.')
+  lines.push('- Match material binding mode to data shape: scalar fields → binding "single", array fields → binding "multi".')
 
   return lines.join('\n')
 }
@@ -221,9 +256,11 @@ export function buildLayoutMaterialContext(manifest: AssistantMaterialManifest |
   const lines: string[] = ['Available materials (use ONLY these types):']
   for (const material of manifest.materials) {
     const ai = material.ai
+    const knowledge = ai?.knowledge
     const binding = ai?.binding ?? 'none'
     const children = material.capabilities?.supportsChildren ? ', supports children' : ''
-    lines.push(`- ${material.type}: ${ai?.description ?? material.name} (binding: ${binding}${children})`)
+    const sizing = knowledge?.sizing ? `, default ${knowledge.sizing.defaultSize.width}x${knowledge.sizing.defaultSize.height}mm` : ''
+    lines.push(`- ${material.type}: ${ai?.description ?? material.name} (binding: ${binding}${children}${sizing})`)
   }
   return lines.join('\n')
 }

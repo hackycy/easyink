@@ -1,0 +1,38 @@
+{
+  "name": "@easyink/assistant-tool-registry",
+  "type": "module",
+  "version": "0.0.18",
+  "description": "Agent tool registry with material, data, layout, schema and validation tools for EasyInk Composer Agent",
+  "author": "hackycy <hackycy@outlook.com>",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/index.d.mts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "test": "vitest run src/**/*.test.ts"
+  },
+  "dependencies": {
+    "@easyink/assistant-constraint-engine": "workspace:*",
+    "@easyink/assistant-material-knowledge": "workspace:*",
+    "@easyink/assistant-scenario-templates": "workspace:*",
+    "@easyink/assistant-schema-builder": "workspace:*",
+    "@easyink/assistant-type-aligner": "workspace:*",
+    "@easyink/schema": "workspace:*",
+    "@easyink/shared": "workspace:*",
+    "zod": "catalog:framework"
+  },
+  "devDependencies": {
+    "vitest": "catalog:testing"
+  }
+}

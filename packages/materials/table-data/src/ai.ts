@@ -21,4 +21,28 @@ export const tableDataAIMaterialDescriptor = {
     'Element must keep the preview semantics in the renderer only: table.topology.rows stores the real structural rows, not duplicated sample rows.',
     'Element must include table.layout with borderAppearance, borderWidth, borderType, and borderColor.',
   ],
+  knowledge: {
+    category: 'data',
+    composability: {
+      canBeChildOf: ['*'],
+      canContain: [],
+      exclusiveWith: [],
+      preferredCompanions: ['text', 'line'],
+    },
+    bindingSpec: {
+      mode: 'collection',
+      accepts: { types: ['array'], isArray: true, minChildren: 1 },
+      produces: { kind: 'collection-repeat', fieldCount: 'dynamic', pathPattern: '{collection}/{field}' },
+      examples: [
+        { scenario: 'invoice line items', binding: { sourceId: 'invoice', fieldPath: 'items/name' }, fieldStructure: { items: [{ name: 'string', quantity: 'number', price: 'number' }] } },
+      ],
+    },
+    sizing: { minWidth: 30, minHeight: 15, growAxis: 'y', defaultSize: { width: 178, height: 80 } },
+    fitness: [
+      { scenario: 'invoice-items', score: 0.95, reason: 'primary choice for array/detail-list data' },
+      { scenario: 'order-details', score: 0.95, reason: 'tabular array data with headers' },
+      { scenario: 'receipt-items', score: 0.7, reason: 'works but flow-row may be better for narrow receipts' },
+      { scenario: 'report-table', score: 0.9, reason: 'structured data display' },
+    ],
+  },
 } satisfies AIMaterialDescriptor

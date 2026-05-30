@@ -27,8 +27,5 @@
     "@easyink/shared": "workspace:*",
     "curlconverter": "catalog:framework",
     "zod": "catalog:framework"
-  },
-  "devDependencies": {
-    "vitest": "catalog:testing"
   }
 }

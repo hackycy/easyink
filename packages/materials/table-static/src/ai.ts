@@ -14,4 +14,24 @@ export const tableStaticAIMaterialDescriptor = {
     'Element must include table.kind = static.',
     'Element must include table.topology.columns and table.topology.rows.',
   ],
+  knowledge: {
+    category: 'data',
+    composability: {
+      canBeChildOf: ['*'],
+      canContain: [],
+      exclusiveWith: [],
+      preferredCompanions: ['text'],
+    },
+    bindingSpec: {
+      mode: 'multi-scalar',
+      accepts: { types: ['string', 'number', 'boolean', 'date'], isArray: false },
+      produces: { kind: 'multi-field', fieldCount: 'multiple', pathPattern: '{fieldPath}' },
+    },
+    sizing: { minWidth: 30, minHeight: 10, growAxis: 'none', defaultSize: { width: 178, height: 40 } },
+    fitness: [
+      { scenario: 'form-grid', score: 0.95, reason: 'fixed-row key-value grids' },
+      { scenario: 'invoice-header', score: 0.85, reason: 'structured header info with labels' },
+      { scenario: 'summary-totals', score: 0.8, reason: 'fixed summary rows' },
+    ],
+  },
 } satisfies AIMaterialDescriptor
