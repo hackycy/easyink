@@ -14,6 +14,7 @@ import type {
 } from './types'
 import Dexie from 'dexie'
 import { createId } from './id'
+import { EventSubscriptions } from './subscriptions'
 
 class AssistantDexieDatabase extends Dexie {
   tasks!: Table<AssistantTaskRecord, string>
@@ -47,6 +48,7 @@ class AssistantDexieDatabase extends Dexie {
 
 export class DexieAssistantStore implements AssistantStore {
   private readonly db: AssistantDexieDatabase
+  private readonly subscriptions = new EventSubscriptions()
 
   constructor(name = 'easyink-assistant') {
     this.db = new AssistantDexieDatabase(name)
@@ -144,7 +146,12 @@ export class DexieAssistantStore implements AssistantStore {
   async appendEvent(taskId: string, event: AssistantEvent): Promise<AssistantEventRecord> {
     const record: AssistantEventRecord = { id: createId('evt'), taskId, event, createdAt: Date.now() }
     await this.db.events.put(record)
+    this.subscriptions.emit(record)
     return record
+  }
+
+  subscribe(taskId: string, listener: (record: AssistantEventRecord) => void): () => void {
+    return this.subscriptions.subscribe(taskId, listener)
   }
 
   async listEvents(taskId: string): Promise<AssistantEventRecord[]> {

@@ -1,88 +1,65 @@
 /**
  * @vitest-environment happy-dom
  */
-import type { AssistantEventRecord, AssistantSourceSampleRecord, AssistantTaskRecord } from '@easyink/assistant-store'
-import type { AssistantApiClient } from '../api'
+import type { AssistantResult } from '@easyink/assistant-capabilities'
+import type { AssistantEventRecord, AssistantTaskRecord } from '@easyink/assistant-store'
+import type { AssistantApiClient, AssistantStreamHandlers } from '../api'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createApp, nextTick } from 'vue'
-import { AssistantApiError } from '../api'
 import ConversationPanel from './ConversationPanel.vue'
 
 describe('assistant conversation panel', () => {
   afterEach(() => {
-    vi.useRealTimers()
     document.body.innerHTML = ''
   })
 
-  it('stops polling when a task refresh fails with 401', async () => {
-    vi.useFakeTimers()
+  it('opens a single SSE stream after submitting a prompt', async () => {
     const task = createTask()
-    const api = createApiClient({
-      createTask: vi.fn().mockResolvedValue(task),
-      listEvents: vi.fn().mockRejectedValue(createApiError(401, 'Unauthorized')),
-    })
-    mount({ apiClient: api })
-
-    const textarea = document.querySelector('textarea')
-    textarea!.value = '生成小票'
-    textarea!.dispatchEvent(new Event('input', { bubbles: true }))
-    await nextTick()
-    document.querySelector('.assistant-composer__bar button')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-
-    await flushPromises()
-    await vi.advanceTimersByTimeAsync(3500)
-
-    expect(api.listEvents).toHaveBeenCalledTimes(1)
-    expect(document.body.textContent).toContain('请求未授权')
-  })
-
-  it('does not request a source sample for tasks without source input', async () => {
-    const task = createTask()
-    const api = createApiClient({
-      createTask: vi.fn().mockResolvedValue(task),
-      getTask: vi.fn().mockResolvedValue({ task }),
-      listEvents: vi.fn().mockResolvedValue([]),
-      getSourceSample: vi.fn().mockResolvedValue(undefined),
-    })
+    const { api } = createStreamingClient({ createTask: vi.fn().mockResolvedValue(task) })
     mount({ apiClient: api })
 
     await submitPrompt('生成小票')
 
-    expect(api.getSourceSample).not.toHaveBeenCalled()
+    expect(api.createTask).toHaveBeenCalledTimes(1)
+    expect(api.streamTask).toHaveBeenCalledTimes(1)
+    expect(api.streamTask).toHaveBeenCalledWith(task.id, expect.any(Object))
+    expect(api.listEvents).not.toHaveBeenCalled()
+    expect(api.getTask).not.toHaveBeenCalled()
   })
 
-  it('loads a source sample after the source parser completes', async () => {
-    const task = createTask({
-      source: { kind: 'json', content: '{"orderNo":"A001"}' },
-    })
+  it('renders checklist progress and the result card from streamed events', async () => {
+    const task = createTask()
+    const { api, getHandlers } = createStreamingClient({ createTask: vi.fn().mockResolvedValue(task) })
+    mount({ apiClient: api })
+
+    await submitPrompt('生成小票')
+
     const events: AssistantEventRecord[] = [
-      {
-        id: 'evt_source',
-        taskId: task.id,
-        event: { type: 'tool.completed', taskId: task.id, toolId: 'source', summary: '识别到 1 个字段。' },
-        createdAt: 2,
-      },
+      { id: 'evt_1', taskId: task.id, event: { type: 'task.created', taskId: task.id }, createdAt: 1 },
+      { id: 'evt_2', taskId: task.id, event: { type: 'step.started', taskId: task.id, step: 'intake' }, createdAt: 2 },
     ]
-    const sourceSample: AssistantSourceSampleRecord = {
-      id: 'sample_1',
-      taskId: task.id,
-      sourceKind: 'json',
-      descriptor: { fields: [{ name: 'orderNo' }] },
-      sample: { orderNo: 'A001' },
-      warnings: [],
-      createdAt: 3,
-    }
-    const api = createApiClient({
-      createTask: vi.fn().mockResolvedValue(task),
-      getTask: vi.fn().mockResolvedValue({ task }),
-      listEvents: vi.fn().mockResolvedValue(events),
-      getSourceSample: vi.fn().mockResolvedValue(sourceSample),
-    })
+    getHandlers().onSnapshot?.({ task, events })
+    await nextTick()
+    expect(document.body.textContent).toContain('理解需求')
+    expect(document.body.textContent).toContain('执行中')
+
+    getHandlers().onResult?.(createResult(task.id))
+    await nextTick()
+    expect(document.body.textContent).toContain('生成完成，可以应用')
+    expect(document.body.textContent).toContain('应用到设计器')
+  })
+
+  it('surfaces a stream error and offers a retry', async () => {
+    const task = createTask()
+    const { api, getHandlers } = createStreamingClient({ createTask: vi.fn().mockResolvedValue(task) })
     mount({ apiClient: api })
 
     await submitPrompt('生成小票')
+    getHandlers().onError?.(new Error('连接已断开'))
+    await nextTick()
 
-    expect(api.getSourceSample).toHaveBeenCalledWith(task.id)
+    expect(document.body.textContent).toContain('连接已断开')
+    expect(document.body.textContent).toContain('重试')
   })
 })
 
@@ -118,11 +95,35 @@ function createTask(input: Partial<AssistantTaskRecord['input']> = {}): Assistan
   }
 }
 
-function createApiClient(overrides: Partial<AssistantApiClient>): AssistantApiClient {
+function createResult(taskId: string): AssistantResult {
   return {
+    id: `result_${taskId}`,
+    schema: { version: 1, pages: [] },
+    patch: [],
+    diff: { operations: [] },
+    validation: { valid: true, errors: [] },
+    preview: {
+      title: '小票模板',
+      page: { width: 80, height: 200, unit: 'mm' },
+      elementCount: 4,
+      dataFieldCount: 2,
+      warnings: [],
+    },
+    createdAt: 5,
+  } as unknown as AssistantResult
+}
+
+function createStreamingClient(overrides: Partial<AssistantApiClient>) {
+  let handlers: AssistantStreamHandlers = {}
+  const streamTask = vi.fn((_taskId: string, next: AssistantStreamHandlers) => {
+    handlers = next
+    return { close: vi.fn() }
+  })
+  const api: AssistantApiClient = {
     createTask: vi.fn(),
     getTask: vi.fn(),
     listEvents: vi.fn(),
+    streamTask,
     sendMessage: vi.fn(),
     submitClarification: vi.fn(),
     retryTask: vi.fn(),
@@ -139,10 +140,7 @@ function createApiClient(overrides: Partial<AssistantApiClient>): AssistantApiCl
     applyTask: vi.fn(),
     ...overrides,
   }
-}
-
-function createApiError(status: number, statusText: string) {
-  return new AssistantApiError(new Response('', { status, statusText }))
+  return { api, getHandlers: () => handlers }
 }
 
 async function flushPromises() {

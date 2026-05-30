@@ -14,6 +14,7 @@ import type {
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { createId } from './id'
+import { EventSubscriptions } from './subscriptions'
 
 export interface FileAssistantStoreOptions {
   dir: string
@@ -24,6 +25,7 @@ interface FileAssistantState extends AssistantSnapshot {}
 
 export class FileAssistantStore implements AssistantStore {
   private readonly filePath: string
+  private readonly subscriptions = new EventSubscriptions()
   private state?: FileAssistantState
   private pending = Promise.resolve()
 
@@ -153,7 +155,12 @@ export class FileAssistantStore implements AssistantStore {
     const state = await this.load()
     state.events.push(clone(record))
     await this.persist(state)
+    this.subscriptions.emit(clone(record))
     return clone(record)
+  }
+
+  subscribe(taskId: string, listener: (record: AssistantEventRecord) => void): () => void {
+    return this.subscriptions.subscribe(taskId, listener)
   }
 
   async listEvents(taskId: string): Promise<AssistantEventRecord[]> {

@@ -1,16 +1,17 @@
 <script setup lang="ts">
 import type { AssistantMaterialManifest, AssistantPatchOperation, AssistantResult, AssistantSourceInput } from '@easyink/assistant-capabilities'
-import type { AssistantEventRecord, AssistantSourceSampleRecord, AssistantTaskRecord, AssistantVersionRecord } from '@easyink/assistant-store'
-import type { AssistantApiClient } from '../api'
-import { useIntervalFn } from '@vueuse/core'
-import { useMachine } from '@xstate/vue'
-import { computed, ref, watch } from 'vue'
+import type { AssistantEventRecord } from '@easyink/assistant-store'
+import type { AssistantApiClient, AssistantStreamHandle } from '../api'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { AssistantApiError, createAssistantApiClient } from '../api'
-import { assistantWorkbenchMachine } from '../machine'
-import { projectTaskToMessages } from '../projection'
+import { projectChecklist, projectNarration } from '../projection'
+import AssistantMessage from './AssistantMessage.vue'
+import ChecklistCard from './ChecklistCard.vue'
+import ClarificationCard from './ClarificationCard.vue'
 import ComposerBar from './ComposerBar.vue'
 import ConversationHeader from './ConversationHeader.vue'
-import MessageList from './MessageList.vue'
+import ErrorCard from './ErrorCard.vue'
+import UserMessage from './UserMessage.vue'
 
 const props = withDefaults(defineProps<{
   endpoint?: string
@@ -34,81 +35,113 @@ const emit = defineEmits<{
 
 const api = computed(() => props.apiClient ?? createAssistantApiClient(props.endpoint))
 const taskId = ref<string>()
+const prompt = ref<string>()
 const events = ref<AssistantEventRecord[]>([])
-const task = ref<Awaited<ReturnType<AssistantApiClient['getTask']>>['task']>()
-const result = ref<Awaited<ReturnType<AssistantApiClient['getTask']>>['result']>()
-const versions = ref<AssistantVersionRecord[]>([])
-const sourceSample = ref<AssistantSourceSampleRecord>()
+const result = ref<AssistantResult>()
 const error = ref<string>()
 const applying = ref(false)
-const refreshing = ref(false)
-const { snapshot, send } = useMachine(assistantWorkbenchMachine)
+const showDebug = ref(false)
 
-const POLLING_STATUSES = new Set(['queued', 'running'])
-const shouldPoll = computed(() => !!taskId.value && !error.value && (!task.value || POLLING_STATUSES.has(task.value.status)))
-const running = computed(() => !error.value && (snapshot.value.matches('running') || task.value?.status === 'running' || task.value?.status === 'queued'))
-const statusLabel = computed(() => task.value?.status === 'waiting' ? '等待确认' : running.value ? '生成中' : task.value?.status === 'review' ? '待应用' : undefined)
-const messages = computed(() => projectTaskToMessages({
-  task: task.value,
+let stream: AssistantStreamHandle | undefined
+
+const narration = computed(() => projectNarration(events.value))
+
+// The stream carries events + result; the task status is derived from them so
+// the UI never needs to poll a second endpoint.
+const derivedStatus = computed<'idle' | 'running' | 'waiting' | 'review' | 'done' | 'failed'>(() => {
+  if (error.value)
+    return 'failed'
+  const types = new Set(events.value.map(record => record.event.type))
+  if (types.has('task.applied'))
+    return 'done'
+  if (types.has('task.failed') || types.has('task.cancelled'))
+    return 'failed'
+  if (narration.value.clarification)
+    return 'waiting'
+  if (result.value)
+    return 'review'
+  if (types.has('task.created'))
+    return 'running'
+  return 'idle'
+})
+
+const derivedTask = computed(() => taskId.value ? { status: derivedStatus.value } as { status: string } : undefined)
+const checklist = computed(() => projectChecklist({
   events: events.value,
   result: result.value,
-  versions: versions.value,
-  sourceSample: sourceSample.value,
   error: error.value,
+  task: derivedTask.value,
 }))
-
-const { pause: pauseRefresh, resume: resumeRefresh } = useIntervalFn(() => {
-  if (!shouldPoll.value || refreshing.value)
-    return
-  void refreshTask().catch(stopRefreshWithError)
-}, 1000, { immediate: false })
-
-watch(shouldPoll, (poll) => {
-  if (poll)
-    resumeRefresh()
-  else
-    pauseRefresh()
-}, { immediate: true })
-
-watch(result, (next) => {
-  if (next)
-    send({ type: 'RESULT_READY' })
-})
-
-watch(() => task.value?.status, (status) => {
-  if (status === 'failed') {
-    pauseRefresh()
-    send({ type: 'FAIL' })
-  }
-  if (status === 'done' || status === 'review' || status === 'waiting') {
-    pauseRefresh()
-    send({ type: 'DONE' })
+const running = computed(() => derivedStatus.value === 'running')
+const statusLabel = computed(() => {
+  switch (derivedStatus.value) {
+    case 'running': return '生成中'
+    case 'waiting': return '等待确认'
+    case 'review': return '待应用'
+    case 'done': return '已应用'
+    case 'failed': return '已失败'
+    default: return undefined
   }
 })
+
+const errorText = computed(() => {
+  if (error.value)
+    return error.value
+  const failed = [...events.value].reverse().find(record => record.event.type === 'task.failed')
+  return failed && failed.event.type === 'task.failed' ? failed.event.error : undefined
+})
+
+const showChecklist = computed(() => derivedStatus.value !== 'idle' && checklist.value.some(item => item.status !== 'pending'))
+const showSummary = computed(() => narration.value.summary.length > 0 && (derivedStatus.value === 'review' || derivedStatus.value === 'done'))
+const applied = computed(() => derivedStatus.value === 'done')
+
+function openStream(id: string) {
+  closeStream()
+  error.value = undefined
+  stream = api.value.streamTask(id, {
+    onSnapshot: (snapshot) => {
+      events.value = snapshot.events
+      result.value = snapshot.result ?? result.value
+      prompt.value = snapshot.task.input.prompt
+    },
+    onEvent: (record) => {
+      events.value = [...events.value, record]
+    },
+    onResult: (next) => {
+      result.value = next
+    },
+    onError: (err) => {
+      error.value = formatAssistantError(err)
+    },
+  })
+}
+
+function closeStream() {
+  stream?.close()
+  stream = undefined
+}
 
 async function submitMessage(payload: { prompt: string, source?: AssistantSourceInput }) {
   error.value = undefined
-  send({ type: 'SUBMIT' })
   try {
-    if (task.value?.status === 'waiting' && taskId.value) {
-      const updated = await api.value.submitClarification(taskId.value, { answer: payload.prompt })
-      taskId.value = updated.id
-      task.value = updated
+    if (derivedStatus.value === 'waiting' && taskId.value) {
+      await api.value.submitClarification(taskId.value, { answer: payload.prompt })
+      return
     }
-    else {
-      const created = await api.value.createTask({
-        prompt: payload.prompt,
-        source: payload.source ?? { kind: 'none' },
-        currentSchema: props.currentSchema,
-        materialManifest: props.materialManifest,
-      })
-      taskId.value = created.id
-      task.value = created
-    }
-    await refreshTask()
+    result.value = undefined
+    events.value = []
+    const created = await api.value.createTask({
+      prompt: payload.prompt,
+      source: payload.source ?? { kind: 'none' },
+      currentSchema: props.currentSchema,
+      materialManifest: props.materialManifest,
+    })
+    taskId.value = created.id
+    prompt.value = created.input.prompt
+    openStream(created.id)
   }
   catch (err) {
-    stopRefreshWithError(err)
+    error.value = formatAssistantError(err)
   }
 }
 
@@ -117,89 +150,41 @@ async function applyResult(resultToApply: AssistantResult) {
     return
   applying.value = true
   try {
-    send({ type: 'APPLY' })
     await api.value.applyTask(taskId.value)
     emit('apply', resultToApply)
-    await refreshTask()
-    send({ type: 'DONE' })
   }
   catch (err) {
-    stopRefreshWithError(err)
+    error.value = formatAssistantError(err)
   }
   finally {
     applying.value = false
   }
 }
 
-async function repairTask() {
-  if (!taskId.value)
-    return
-  await runTaskCommand(() => api.value.repairTask(taskId.value!))
-}
-
 async function retryTask() {
   if (!taskId.value)
     return
-  await runTaskCommand(() => api.value.retryTask(taskId.value!))
-}
-
-async function rollbackTask() {
-  if (!taskId.value)
-    return
-  try {
-    await api.value.rollbackTask(taskId.value)
-    emit('rollback')
-    await refreshTask()
-  }
-  catch (err) {
-    stopRefreshWithError(err)
-  }
-}
-
-async function exportVersions() {
-  const snapshot = await api.value.exportSnapshot()
-  downloadJson('easyink-assistant-debug-snapshot.json', snapshot)
-}
-
-async function refreshTask() {
-  if (!taskId.value)
-    return
-  refreshing.value = true
-  try {
-    const [nextEvents, nextTask, nextVersions] = await Promise.all([
-      api.value.listEvents(taskId.value),
-      api.value.getTask(taskId.value),
-      api.value.listVersions(taskId.value),
-    ])
-    events.value = nextEvents
-    task.value = nextTask.task
-    result.value = nextTask.result
-    versions.value = nextVersions
-    sourceSample.value = shouldLoadSourceSample(nextTask.task, nextEvents)
-      ? await api.value.getSourceSample(taskId.value).catch(() => undefined)
-      : undefined
-  }
-  finally {
-    refreshing.value = false
-  }
-}
-
-async function runTaskCommand(command: () => Promise<AssistantTaskRecord>) {
   error.value = undefined
+  result.value = undefined
   try {
-    task.value = await command()
-    await refreshTask()
+    await api.value.retryTask(taskId.value)
+    openStream(taskId.value)
   }
   catch (err) {
-    stopRefreshWithError(err)
+    error.value = formatAssistantError(err)
   }
 }
 
-function stopRefreshWithError(err: unknown) {
-  pauseRefresh()
-  error.value = formatAssistantError(err)
-  send({ type: 'FAIL' })
+function toggleDebug() {
+  showDebug.value = !showDebug.value
 }
+
+const debugPayload = computed(() => ({
+  taskId: taskId.value,
+  status: derivedStatus.value,
+  result: result.value,
+  events: events.value,
+}))
 
 function formatAssistantError(err: unknown): string {
   if (err instanceof AssistantApiError && err.status === 401)
@@ -209,42 +194,86 @@ function formatAssistantError(err: unknown): string {
   return String(err)
 }
 
-function shouldLoadSourceSample(nextTask: AssistantTaskRecord, nextEvents: AssistantEventRecord[]): boolean {
-  if (!nextTask.input.source || nextTask.input.source.kind === 'none')
-    return false
-  return nextEvents.some(record => record.event.type === 'tool.completed' && record.event.toolId === 'source')
-}
+watch(() => api.value, () => {
+  if (taskId.value)
+    openStream(taskId.value)
+})
 
-function downloadJson(fileName: string, payload: unknown) {
-  const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = fileName
-  link.click()
-  URL.revokeObjectURL(url)
-}
+onBeforeUnmount(closeStream)
 </script>
 
 <template>
   <section class="easyink-assistant-conversation">
     <ConversationHeader :status="statusLabel" />
-    <MessageList
-      :messages="messages"
-      :applying="applying"
-      @apply="applyResult"
-      @apply-patch="$emit('applyPatch', $event)"
-      @apply-selected-patch="$emit('applySelectedPatch', $event)"
-      @apply-data-source="$emit('applyDataSource', $event)"
-      @answer="submitMessage({ prompt: $event })"
-      @repair="repairTask"
-      @retry="retryTask"
-      @rollback="rollbackTask"
-      @export-versions="exportVersions"
-    />
+    <main class="assistant-stream">
+      <AssistantMessage
+        v-if="derivedStatus === 'idle'"
+        text="你好，我可以帮你生成 EasyInk 模板。试试输入“帮我生成一张 80mm 小票”。"
+      />
+      <UserMessage v-if="prompt" :text="prompt" />
+
+      <p v-if="narration.answer" class="assistant-answer">
+        {{ narration.answer }}
+      </p>
+
+      <ChecklistCard v-if="showChecklist" :items="checklist" />
+
+      <details v-if="showSummary" class="assistant-summary">
+        <summary>分析摘要</summary>
+        <ul>
+          <li v-for="(line, index) in narration.summary" :key="index">
+            {{ line }}
+          </li>
+        </ul>
+      </details>
+
+      <ClarificationCard
+        v-if="narration.clarification"
+        :questions="narration.clarification"
+        @answer="submitMessage({ prompt: $event })"
+      />
+
+      <article v-if="derivedStatus === 'review' && result" class="assistant-card assistant-done-card">
+        <div class="assistant-done-card__head">
+          <span class="assistant-done-card__badge" aria-hidden="true">
+            <svg viewBox="0 0 16 16" width="15" height="15">
+              <path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </span>
+          <div>
+            <strong>生成完成，可以应用</strong>
+            <p class="assistant-muted">
+              已为你生成模板，确认后应用到设计器。
+            </p>
+          </div>
+        </div>
+        <div class="assistant-done-card__actions">
+          <button type="button" class="assistant-btn assistant-btn--primary" :disabled="applying" @click="applyResult(result)">
+            应用到设计器
+          </button>
+        </div>
+      </article>
+
+      <p v-if="applied" class="assistant-answer assistant-answer--muted">
+        已应用到设计器。
+      </p>
+
+      <ErrorCard
+        v-if="errorText && derivedStatus === 'failed'"
+        :text="errorText"
+        @retry="retryTask"
+      />
+
+      <div v-if="result || events.length" class="assistant-debug">
+        <button type="button" class="assistant-link" @click="toggleDebug">
+          {{ showDebug ? '隐藏技术细节' : '查看技术细节' }}
+        </button>
+        <pre v-if="showDebug" class="assistant-debug__body">{{ JSON.stringify(debugPayload, null, 2) }}</pre>
+      </div>
+    </main>
     <ComposerBar
       :running="running"
-      :placeholder="task?.status === 'waiting' ? '输入你的选择或补充信息' : '帮我生成一张 80mm 小票'"
+      :placeholder="derivedStatus === 'waiting' ? '输入你的选择或补充信息' : '帮我生成一张 80mm 小票'"
       @submit="submitMessage"
     />
   </section>
@@ -261,15 +290,116 @@ function downloadJson(fileName: string, payload: unknown) {
   --assistant-accent-hover: var(--ei-primary-hover, #4096ff);
   display: grid;
   grid-template-rows: auto minmax(280px, 1fr) auto;
-  width: min(720px, calc(100vw - 48px));
-  height: min(760px, calc(100vh - 72px));
-  border: 1px solid var(--assistant-border);
-  border-radius: 14px;
+  width: 100%;
+  height: 100%;
   overflow: hidden;
   background: var(--assistant-bg);
   color: var(--assistant-text);
-  box-shadow: 0 20px 56px rgb(15 23 42 / 16%);
   font-size: 13px;
+}
+
+/* Conversation stream */
+.assistant-stream {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 12px;
+  overflow: auto;
+  padding: 18px;
+  background: var(--assistant-surface);
+  scroll-behavior: smooth;
+}
+
+.assistant-answer {
+  align-self: flex-start;
+  max-width: 92%;
+  margin: 0;
+  color: var(--assistant-text);
+  font-size: 13px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+.assistant-answer--muted {
+  color: var(--assistant-muted);
+}
+
+.assistant-summary {
+  align-self: stretch;
+  font-size: 12px;
+  color: var(--assistant-muted);
+
+  summary {
+    cursor: pointer;
+    color: var(--assistant-text);
+    font-weight: 600;
+    list-style: none;
+  }
+
+  summary::-webkit-details-marker {
+    display: none;
+  }
+
+  ul {
+    margin: 8px 0 0;
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+}
+
+.assistant-done-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.assistant-done-card__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.assistant-done-card__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: rgb(22 163 74 / 12%);
+  color: #15803d;
+}
+
+.assistant-done-card__head strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.assistant-done-card__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.assistant-debug {
+  align-self: stretch;
+  margin-top: 4px;
+}
+
+.assistant-debug__body {
+  margin: 8px 0 0;
+  max-height: 220px;
+  overflow: auto;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--assistant-bg);
+  color: var(--assistant-muted);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 
 /* Header */

@@ -63,6 +63,93 @@ export function createAssistantApp(options: CreateAssistantAppOptions = {}) {
     })
   })
 
+  // Single long-lived SSE connection: replays history, then streams live
+  // events (status, steps, AI answer, result, errors) until the task settles.
+  app.get('/assistant/tasks/:id/stream', async (c) => {
+    const taskId = c.req.param('id')
+    const task = await orchestrator.store.getTask(taskId)
+    if (!task)
+      return c.json({ error: 'Task not found' }, 404)
+
+    const encoder = new TextEncoder()
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        let closed = false
+        let heartbeat: ReturnType<typeof setInterval> | undefined
+        let unsubscribe: (() => void) | undefined
+
+        const write = (chunk: string): void => {
+          if (closed)
+            return
+          try {
+            controller.enqueue(encoder.encode(chunk))
+          }
+          catch {
+            closed = true
+          }
+        }
+        const send = (event: string, data: unknown): void => {
+          write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+        }
+        const finish = (): void => {
+          if (closed)
+            return
+          closed = true
+          if (heartbeat)
+            clearInterval(heartbeat)
+          unsubscribe?.()
+          try {
+            controller.close()
+          }
+          catch {
+            // controller may already be closed by the client
+          }
+        }
+
+        const emitResult = async (resultId: string): Promise<void> => {
+          const result = await orchestrator.store.getResult(resultId).catch(() => undefined)
+          if (result)
+            send('result', result)
+        }
+
+        // 1) Replay the current state so the client renders immediately.
+        const history = await orchestrator.store.listEvents(taskId)
+        const initialResult = task.resultId ? await orchestrator.store.getResult(task.resultId) : undefined
+        send('snapshot', { task, events: history, result: initialResult })
+
+        // 2) Subscribe to live events emitted by the running orchestrator.
+        unsubscribe = orchestrator.store.subscribe(taskId, (record) => {
+          send('event', record)
+          const type = record.event.type
+          if (type === 'result.ready')
+            void emitResult(record.event.resultId)
+          if (type === 'task.failed' || type === 'task.cancelled' || type === 'task.applied')
+            finish()
+        })
+
+        // 3) If the task already settled before subscribing, close now.
+        const TERMINAL = new Set(['failed', 'cancelled', 'done'])
+        const latest = await orchestrator.store.getTask(taskId)
+        if (latest && TERMINAL.has(latest.status))
+          finish()
+
+        // 4) Keep proxies from dropping an idle connection.
+        heartbeat = setInterval(write, 15000, ': ping\n\n')
+
+        c.req.raw.signal.addEventListener('abort', finish)
+      },
+    })
+
+    return new Response(stream, {
+      headers: {
+        'content-type': 'text/event-stream; charset=utf-8',
+        'cache-control': 'no-cache, no-transform',
+        'connection': 'keep-alive',
+        'x-accel-buffering': 'no',
+      },
+    })
+  })
+
   app.get('/assistant/snapshot', async (c) => {
     const snapshot = await orchestrator.store.exportSnapshot()
     return c.json({ snapshot })

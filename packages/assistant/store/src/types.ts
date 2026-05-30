@@ -110,6 +110,7 @@ export interface AssistantStore {
   getSourceSample: (taskId: string) => Promise<AssistantSourceSampleRecord | undefined>
   appendEvent: (taskId: string, event: AssistantEvent) => Promise<AssistantEventRecord>
   listEvents: (taskId: string) => Promise<AssistantEventRecord[]>
+  subscribe: (taskId: string, listener: (record: AssistantEventRecord) => void) => () => void
   importSnapshot: (snapshot: AssistantSnapshot) => Promise<void>
   exportSnapshot: () => Promise<AssistantSnapshot>
   cleanupExpired: (now?: number) => Promise<number>

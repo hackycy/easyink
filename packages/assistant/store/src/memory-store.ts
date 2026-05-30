@@ -12,8 +12,10 @@ import type {
   AssistantVersionRecord,
 } from './types'
 import { createId } from './id'
+import { EventSubscriptions } from './subscriptions'
 
 export class MemoryAssistantStore implements AssistantStore {
+  private readonly subscriptions = new EventSubscriptions()
   private readonly tasks = new Map<string, AssistantTaskRecord>()
   private readonly runs = new Map<string, AssistantRunRecord>()
   private readonly results = new Map<string, AssistantResult>()
@@ -139,7 +141,12 @@ export class MemoryAssistantStore implements AssistantStore {
       createdAt: Date.now(),
     }
     this.events.set(record.id, clone(record))
+    this.subscriptions.emit(clone(record))
     return clone(record)
+  }
+
+  subscribe(taskId: string, listener: (record: AssistantEventRecord) => void): () => void {
+    return this.subscriptions.subscribe(taskId, listener)
   }
 
   async listEvents(taskId: string): Promise<AssistantEventRecord[]> {

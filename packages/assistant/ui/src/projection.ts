@@ -25,6 +25,122 @@ export interface ExecutionStep {
   status: 'pending' | 'running' | 'done' | 'failed'
 }
 
+export type ChecklistItemStatus = 'pending' | 'running' | 'done' | 'failed'
+
+export interface ChecklistItem {
+  id: string
+  title: string
+  status: ChecklistItemStatus
+}
+
+export interface AssistantNarration {
+  answer: string
+  summary: string[]
+  clarification?: ClarificationQuestion[]
+}
+
+export interface ProjectChecklistInput {
+  task?: { status: string }
+  events?: AssistantEventRecord[]
+  result?: AssistantResult
+  error?: string
+}
+
+const CHECKLIST_PHASES: { id: string, title: string, steps: string[] }[] = [
+  { id: 'understand', title: '理解需求', steps: ['intake'] },
+  { id: 'data', title: '解析数据', steps: ['source'] },
+  { id: 'layout', title: '规划版式', steps: ['plan', 'contract', 'layout'] },
+  { id: 'compose', title: '生成模板', steps: ['compose'] },
+  { id: 'validate', title: '校验结果', steps: ['validate', 'repair', 'review'] },
+]
+
+/**
+ * Map the orchestrator's fine-grained workflow steps onto the five
+ * user-facing checklist phases, each carrying a coarse lifecycle status.
+ */
+export function projectChecklist(input: ProjectChecklistInput): ChecklistItem[] {
+  const events = input.events ?? []
+  const stepState = new Map<string, 'running' | 'done'>()
+  for (const record of events) {
+    const event = record.event
+    if (event.type === 'step.started')
+      stepState.set(event.step, stepState.get(event.step) === 'done' ? 'done' : 'running')
+    else if (event.type === 'step.completed')
+      stepState.set(event.step, 'done')
+  }
+
+  const failed = input.task?.status === 'failed' || !!input.error
+  const settled = input.task?.status === 'review' || input.task?.status === 'done' || !!input.result
+
+  let reached = -1
+  CHECKLIST_PHASES.forEach((phase, index) => {
+    if (phase.steps.some(step => stepState.has(step)))
+      reached = Math.max(reached, index)
+  })
+
+  return CHECKLIST_PHASES.map((phase, index) => {
+    const seen = phase.steps.filter(step => stepState.has(step))
+    const allDone = seen.length > 0 && seen.every(step => stepState.get(step) === 'done')
+    const anyRunning = phase.steps.some(step => stepState.get(step) === 'running')
+    let status: ChecklistItemStatus
+    if (settled) {
+      status = 'done'
+    }
+    else if (failed) {
+      if (index < reached)
+        status = 'done'
+      else status = index === reached ? 'failed' : 'pending'
+    }
+    else if (index < reached) {
+      status = 'done'
+    }
+    else if (index === reached) {
+      status = allDone && !anyRunning ? 'done' : 'running'
+    }
+    else {
+      status = 'pending'
+    }
+    return { id: phase.id, title: phase.title, status }
+  })
+}
+
+/**
+ * Collect the assistant's natural-language narration (streamed answer text),
+ * its safe thinking summary, and any pending clarification questions.
+ */
+export function projectNarration(events: AssistantEventRecord[]): AssistantNarration {
+  const answerLines: string[] = []
+  let summary: string[] = []
+  let clarification: ClarificationQuestion[] | undefined
+  let answeredClarification = false
+
+  for (const record of events) {
+    const event = record.event
+    if (event.type === 'thinking.delta') {
+      answerLines.push(event.text)
+    }
+    else if (event.type === 'thinking.completed') {
+      summary = event.summary
+    }
+    else if (event.type === 'clarification.required') {
+      clarification = event.questions.map((question, index) => ({
+        text: question,
+        suggestions: event.suggestedAnswers?.[index] ?? [],
+      }))
+      answeredClarification = false
+    }
+    else if (event.type === 'clarification.answered') {
+      answeredClarification = true
+    }
+  }
+
+  return {
+    answer: answerLines.join('\n'),
+    summary,
+    clarification: answeredClarification ? undefined : clarification,
+  }
+}
+
 export interface ToolUseItem {
   id: string
   title: string

@@ -13,6 +13,24 @@ export interface AssistantTaskResponse {
   result?: AssistantResult
 }
 
+export interface AssistantStreamSnapshot {
+  task: AssistantTaskRecord
+  events: AssistantEventRecord[]
+  result?: AssistantResult
+}
+
+export interface AssistantStreamHandlers {
+  onSnapshot?: (snapshot: AssistantStreamSnapshot) => void
+  onEvent?: (record: AssistantEventRecord) => void
+  onResult?: (result: AssistantResult) => void
+  onError?: (error: unknown) => void
+  onClose?: () => void
+}
+
+export interface AssistantStreamHandle {
+  close: () => void
+}
+
 export interface AssistantClarificationPayload {
   answer: string
 }
@@ -21,6 +39,7 @@ export interface AssistantApiClient {
   createTask: (input: AssistantTaskInput) => Promise<AssistantTaskRecord>
   getTask: (taskId: string) => Promise<AssistantTaskResponse>
   listEvents: (taskId: string) => Promise<AssistantEventRecord[]>
+  streamTask: (taskId: string, handlers: AssistantStreamHandlers) => AssistantStreamHandle
   sendMessage: (taskId: string, payload: { message: string }) => Promise<AssistantTaskRecord>
   submitClarification: (taskId: string, payload: AssistantClarificationPayload) => Promise<AssistantTaskRecord>
   retryTask: (taskId: string) => Promise<AssistantTaskRecord>
@@ -74,6 +93,59 @@ export function createAssistantApiClient(baseUrl = ''): AssistantApiClient {
         throw await createApiError(response)
       const text = await response.text()
       return parseSseEvents(text)
+    },
+    streamTask(taskId, handlers) {
+      const controller = new AbortController()
+      let closed = false
+      const close = (): void => {
+        if (closed)
+          return
+        closed = true
+        controller.abort()
+        handlers.onClose?.()
+      }
+
+      void (async () => {
+        try {
+          const response = await fetch(`${root}/assistant/tasks/${taskId}/stream`, {
+            headers: { accept: 'text/event-stream' },
+            signal: controller.signal,
+          })
+          if (!response.ok)
+            throw await createApiError(response)
+          if (!response.body)
+            throw new Error('Assistant stream is not readable in this environment.')
+
+          const reader = response.body.getReader()
+          const decoder = new TextDecoder()
+          let buffer = ''
+
+          for (;;) {
+            const { value, done } = await reader.read()
+            if (done)
+              break
+            buffer += decoder.decode(value, { stream: true })
+            let separator = buffer.indexOf('\n\n')
+            while (separator !== -1) {
+              const frame = buffer.slice(0, separator)
+              buffer = buffer.slice(separator + 2)
+              dispatchSseFrame(frame, handlers)
+              separator = buffer.indexOf('\n\n')
+            }
+          }
+        }
+        catch (error) {
+          if (!closed && !(error instanceof DOMException && error.name === 'AbortError'))
+            handlers.onError?.(error)
+        }
+        finally {
+          if (!closed)
+            handlers.onClose?.()
+          closed = true
+        }
+      })()
+
+      return { close }
     },
     async sendMessage(taskId, payload) {
       const response = await request(`${root}/assistant/tasks/${taskId}/messages`, {
@@ -166,6 +238,29 @@ async function request(url: string, init: RequestInit = {}): Promise<unknown> {
 async function createApiError(response: Response): Promise<AssistantApiError> {
   const body = await response.text().catch(() => undefined)
   return new AssistantApiError(response, body || undefined)
+}
+
+function dispatchSseFrame(frame: string, handlers: AssistantStreamHandlers): void {
+  const trimmed = frame.trim()
+  if (!trimmed || trimmed.startsWith(':'))
+    return
+  const eventName = trimmed.match(/^event: ?(.*)$/m)?.[1]?.trim()
+  const dataLine = trimmed.match(/^data: ?(.*)$/m)?.[1]
+  if (!eventName || dataLine === undefined)
+    return
+  let payload: unknown
+  try {
+    payload = JSON.parse(dataLine)
+  }
+  catch {
+    return
+  }
+  if (eventName === 'snapshot')
+    handlers.onSnapshot?.(payload as AssistantStreamSnapshot)
+  else if (eventName === 'event')
+    handlers.onEvent?.(payload as AssistantEventRecord)
+  else if (eventName === 'result')
+    handlers.onResult?.(payload as AssistantResult)
 }
 
 function parseSseEvents(text: string): AssistantEventRecord[] {
