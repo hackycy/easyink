@@ -6,7 +6,7 @@ import type { DocumentSchema, ExpectedDataSource, ExpectedField } from '@easyink
 import { formatSchemaValidationIssue, isValidSchema, validateSchemaIssues } from '@easyink/schema'
 import { normalizeAllFieldPaths, SchemaValidator } from '@easyink/schema-tools'
 import { z } from 'zod'
-import { buildMaterialContext, buildSchemaRepairSystemPrompt, buildSchemaSystemPrompt } from './prompts'
+import { buildLayoutMaterialContext, buildLayoutSystemPrompt, buildMaterialContext, buildSchemaRepairSystemPrompt, buildSchemaSystemPrompt } from './prompts'
 
 export interface AssistantAgentContext {
   input: AssistantTaskInput
@@ -403,29 +403,31 @@ export async function runLayoutAgent(
 ): Promise<LayoutAgentResult> {
   if (!context.llm)
     return { blocks: [], warnings: [] }
-  const materialTypes = context.input.materialManifest?.materials.map(material => material.type) ?? []
   const planningBrief = buildPlanningBrief(planner)
+  const briefPage = planningBrief.page
+  const pageMode = briefPage?.mode ?? 'fixed'
+  const pageWidth = briefPage?.width ?? (pageMode === 'continuous' ? 80 : 210)
+  const pageHeight = briefPage?.height ?? (pageMode === 'continuous' ? 200 : 297)
+
+  const materialContext = buildLayoutMaterialContext(context.input.materialManifest)
   const result = await completeJson(context.llm, LayoutSchema, {
     messages: [
+      buildLayoutSystemPrompt(materialContext, pageWidth, pageHeight, pageMode),
       [
-        'You are EasyInk Assistant\'s layout skeleton planner. Output JSON only.',
-        'Produce a layout skeleton: an ordered list of blocks with id, type, x, y, width, height in mm relative to the page top-left.',
-        'Do NOT fill props, bindings, or content. Only place boxes that cover the required business blocks.',
-        'Use only material types from the provided list. Keep every box inside the page bounds.',
-      ].join('\n'),
-      `User request: ${context.input.prompt}`,
-      `Planning brief:\n${JSON.stringify(planningBrief, null, 2)}`,
-      materialTypes.length ? `Available material types: ${JSON.stringify(materialTypes)}` : '',
-      contract.dataSource ? `Data contract fields:\n${JSON.stringify(contract.dataSource.fields, null, 2)}` : '',
-      memorySummary ? `Historical preference summary:\n${memorySummary}` : '',
+        `User request: ${context.input.prompt}`,
+        `Planning brief:\n${JSON.stringify(planningBrief, null, 2)}`,
+        contract.dataSource
+          ? `Data contract fields:\n${JSON.stringify(contract.dataSource.fields, null, 2)}`
+          : '',
+        memorySummary ? `Historical preference summary:\n${memorySummary}` : '',
+      ].filter(Boolean).join('\n\n'),
     ],
   })
 
-  return {
-    page: result.page,
-    blocks: result.blocks ?? [],
-    warnings: result.warnings ?? [],
-  }
+  const validTypes = new Set(
+    context.input.materialManifest?.materials.map(m => m.type) ?? [],
+  )
+  return normalizeLayoutResult(result, validTypes, pageWidth, pageHeight)
 }
 
 export async function runSchemaRepairAgent(
@@ -529,6 +531,35 @@ function buildPlanningBrief(planner: PlannerAgentResult): PlanningBrief {
     uncertainty: planner.uncertainty,
     warnings: planner.warnings,
   }
+}
+
+function normalizeLayoutResult(
+  result: z.infer<typeof LayoutSchema>,
+  validTypes: Set<string>,
+  pageWidth: number,
+  pageHeight: number,
+): LayoutAgentResult {
+  const warnings: string[] = [...(result.warnings ?? [])]
+  const blocks: LayoutBox[] = []
+
+  for (const block of result.blocks ?? []) {
+    if (!validTypes.has(block.type)) {
+      warnings.push(`Layout block "${block.id}" uses unregistered type "${block.type}"; removed.`)
+      continue
+    }
+
+    const width = Math.max(block.width, 5)
+    const height = Math.max(block.height, 5)
+    const x = Math.max(0, Math.min(block.x, pageWidth - width))
+    const y = Math.max(0, Math.min(block.y, pageHeight - height))
+
+    if (x !== block.x || y !== block.y || width !== block.width || height !== block.height)
+      warnings.push(`Layout block "${block.id}" was clamped to fit page bounds.`)
+
+    blocks.push({ id: block.id, type: block.type, x, y, width, height })
+  }
+
+  return { page: result.page, blocks, warnings }
 }
 
 function normalizeExpectedDataSource(value: unknown): unknown {
