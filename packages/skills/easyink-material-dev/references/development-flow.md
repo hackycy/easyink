@@ -12,7 +12,7 @@ Typical files:
 - `src/designer.ts`: `createXExtension(context)`.
 - `src/viewer.ts`: render plus optional `measure()`, `getRenderSize()`, or `fragmentPaginator`.
 - `src/prop-schemas.ts`: material-owned property panel additions when needed.
-- `src/ai.ts`: `AIMaterialDescriptor` for AI/MCP generation.
+- `src/ai.ts`: `AIMaterialDescriptor` plus optional `knowledge` for Assistant generation and MCP material config.
 - `src/index.ts`: export public symbols.
 - `src/*.test.ts`: focused tests for rendering, defaults, deep editing, measure, pagination, and schema behavior.
 
@@ -201,7 +201,7 @@ For a new built-in material:
 3. Add package dependency to `packages/builtin/package.json`.
 4. Import and register Designer entry in `packages/builtin/src/designer.ts`.
 5. Import and register Viewer entry in `packages/builtin/src/viewer.ts`.
-6. Import and append the AI descriptor in `packages/builtin/src/ai.ts` when generation should know it.
+6. Import and append the AI descriptor in `packages/builtin/src/ai.ts` when MCP generation should know it, and pass the same descriptor as `aiDescriptor` in Designer registration so Assistant sees it.
 7. Add locale keys in `packages/locales/src/zh-CN.ts` and `packages/locales/src/en-US.ts` for material catalog labels, material-local toolbars, properties, table-kernel commands, history, page behavior labels, reject reasons, or placeholders.
 8. Update tests or snapshots affected by built-in type lists.
 9. Run `pnpm -F @easyink/mcp-server build:materials` or `pnpm -F @easyink/mcp-server check:materials` when AI descriptors changed.

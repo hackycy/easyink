@@ -1,11 +1,11 @@
 ---
 name: easyink-material-dev
-description: EasyInk material development workflow and review guide. Use when implementing, extending, debugging, or reviewing EasyInk built-in or custom materials that add or change a Schema-saved visual element across MaterialNode shape, createDefaultNode defaults, registerMaterialBundle wiring, Designer and Viewer parity, orthogonal page layout behavior, page-aware overlays, fragment pagination, runtime measurement, table-data or svg-star style deep editing, datasource binding, AI material descriptors, tests, and i18n.
+description: EasyInk material development workflow and review guide. Use when implementing, extending, debugging, or reviewing EasyInk built-in or custom materials that add or change a Schema-saved visual element across MaterialNode shape, createDefaultNode defaults, registerMaterialBundle wiring, Designer and Viewer parity, orthogonal page layout behavior, page-aware overlays, fragment pagination, runtime measurement, table-data or svg-star style deep editing, datasource binding, Assistant AI material knowledge, MCP material descriptors, tests, and i18n.
 ---
 
 # EasyInk Material Dev
 
-Use this skill to work on EasyInk materials as complete system features, not isolated render functions. A material must line up across Schema, Designer registration and editing, Viewer rendering and measurement, page layout behavior, catalog exposure, data binding, AI descriptors, tests, and i18n.
+Use this skill to work on EasyInk materials as complete system features, not isolated render functions. A material must line up across Schema, Designer registration and editing, Viewer rendering and measurement, page layout behavior, catalog exposure, data binding, Assistant material knowledge, MCP descriptors, tests, and i18n.
 
 If the request adds a panel, command, diagnostic subscription, host workflow, or toolbar action around existing elements without adding/changing a Schema-saved visual element, use `$easyink-contribution-dev` instead.
 
@@ -17,6 +17,7 @@ Start with the local repo, not memory. Prefer these files:
 - `.github/architecture/24-page-layout-orthogonal-system.md` for the current page model, layout, reflow, pagination, page overlay, and editor surface rules.
 - `docs/advanced/custom-materials.md` for the public custom material contract.
 - `docs/advanced/schema.md` for `DocumentSchemaInput` normalization, page layers, and persistent schema fields.
+- `.github/architecture/25-ai-assistant.md` and `docs/advanced/contributions.md` when the material should be available to Assistant generation or custom-host AI flows.
 - `docs/advanced/exporters.md` and `docs/advanced/print-drivers.md` when output must be validated through export or print paths.
 - `docs/designer/fonts.md` when a material exposes `fontFamily`, page font, text measurement, or print/export output that depends on host-provided fonts.
 - `packages/schema/src/types.ts`, `packages/schema/src/defaults.ts`, and `packages/schema/src/validation.ts` for `MaterialNode`, binding, page layer defaults, and schema validity rules.
@@ -26,6 +27,7 @@ Start with the local repo, not memory. Prefer these files:
 - `packages/designer/src/materials/registry.ts`, `packages/prop-schemas/src/index.ts`, and `packages/designer/src/components/PropertiesPanel.vue` for registration and page behavior property schemas.
 - `packages/viewer/src/runtime.ts`, `packages/viewer/src/render-surface.ts`, and `packages/viewer/src/material-registry.ts` for binding projection, measurement, pagination, repeated overlays, and renderer dispatch.
 - `packages/builtin/src/designer.ts`, `packages/builtin/src/viewer.ts`, and `packages/builtin/src/ai.ts` for built-in registration.
+- `packages/shared/src/ai-generation.ts`, `packages/assistant/designer-bridge/src/material-manifest.ts`, `packages/assistant/material-knowledge/src/from-manifest.ts`, and `packages/assistant/orchestrator/src/prompts.ts` for Assistant material knowledge flow.
 - `packages/materials/text`, `packages/materials/rect`, and `packages/materials/image` for simple fixed-size patterns.
 - `packages/materials/page-number` for page-aware repeated overlays.
 - `packages/materials/flow-row` for runtime-height flow/flex behavior.
@@ -52,7 +54,7 @@ Start with the local repo, not memory. Prefer these files:
 16. For material-local inline toolbars, render commands only. Prefer compact icon tools with localized `title` tooltips; anchor the toolbar to the material frame top-left outside the border unless a local interaction requires otherwise.
 17. Add datasource logic at the right layer. Whole-element binding uses `node.binding`; table-like internal binding owns `datasourceDrop` and cell-level `binding` or `staticBinding`.
 18. Add i18n keys for visible labels, tooltips, property labels, reject reasons, history labels, placeholders, and material-local toolbar actions. Prefer `context.t()` and `store.t()` over hardcoded strings.
-19. Update AI descriptors when the material is built in or should be generated by MCP/AI flows. Then run or check `packages/mcp-server/config/materials.json` with the MCP material commands.
+19. Update `src/ai.ts` when the material should be generated by Assistant or MCP. Include `knowledge` for Assistant selection, sizing, binding, composability, and scenario fitness. Built-ins must register the descriptor in both `packages/builtin/src/designer.ts` as `aiDescriptor` and `packages/builtin/src/ai.ts` for MCP config generation.
 20. Test the smallest useful surface: schema defaults, Designer refresh or deep behavior, control policy, page behavior props, repeated overlay behavior, fragment pagination, Viewer render or measure, binding projection, font-dependent output, registration fallout, AI config, and i18n.
 
 ## Reference Files
@@ -63,7 +65,8 @@ Load only the reference needed for the current task:
 - `references/development-flow.md`: built-in and custom material implementation checklist.
 - `references/deep-editing.md`: editing session, geometry, selection, behavior, decoration, overlay, inline editor, and resize rules.
 - `references/binding-viewer.md`: font loading, binding projection, runtime measurement, fragment pagination, page-aware overlays, trusted HTML, export, and print boundaries.
-- `references/i18n-ai-tests.md`: i18n, AI descriptors, MCP materials config, validation, and test rules.
+- `references/ai-assistant-materials.md`: Assistant manifest, `AIMaterialDescriptor.knowledge`, prompt/registry consumers, custom material AI flow, and MCP config checks.
+- `references/i18n-ai-tests.md`: i18n, validation, test rules, and brief AI/MCP review reminders.
 - `references/case-studies.md`: distilled rules from `table-data`, `table-kernel`, `flow-row`, `svg-star`, `text`, and `page-number`.
 
 ## Hard Rules
@@ -89,4 +92,6 @@ Load only the reference needed for the current task:
 - Repeated/page-aware overlays are post-pagination page overlays. They must not affect flow, document height, page count, output sheets, or source-node editability.
 - For table-like deep editing, decoration visibility and behavior execution must share the same delegate rules for row/column resize affordances.
 - Add or reuse locale keys for anything user-visible in Designer UI, including property labels and history labels.
+- Assistant sees material capabilities through the current Designer store manifest. Register custom material `aiDescriptor` on the Designer material entry; built-in-only MCP descriptors are not enough for live Assistant generation.
+- Keep AI descriptors honest: do not list props, binding modes, child support, default sizes, or scenario fitness that the Designer/Viewer implementation cannot satisfy.
 - Exporters and print drivers must consume Viewer-rendered pages and `ViewerPageMetrics`; do not reimplement material layout in those layers.
