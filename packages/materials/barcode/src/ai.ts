@@ -30,6 +30,8 @@ export const barcodeAIMaterialDescriptor = {
       { scenario: 'product-label', score: 0.9, reason: 'product code barcode' },
       { scenario: 'shipping-label', score: 0.9, reason: 'tracking number barcode' },
       { scenario: 'invoice-footer', score: 0.7, reason: 'order number barcode' },
+      { scenario: 'h5-landing', score: 0.5, reason: 'rarely used on screen but possible for ticket codes' },
+      { scenario: 'certificate', score: 0.6, reason: 'verification code on certificates' },
     ],
   },
 } satisfies AIMaterialDescriptor

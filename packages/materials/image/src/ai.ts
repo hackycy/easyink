@@ -30,6 +30,10 @@ export const imageAIMaterialDescriptor = {
     fitness: [
       { scenario: 'invoice-header', score: 0.7, reason: 'company logo placement' },
       { scenario: 'product-label', score: 0.8, reason: 'product image display' },
+      { scenario: 'h5-landing', score: 0.95, reason: 'hero banners, product photos, and promotional images' },
+      { scenario: 'poster', score: 0.95, reason: 'background images, photos, and visual elements' },
+      { scenario: 'prototype', score: 0.8, reason: 'placeholder images and avatars' },
+      { scenario: 'certificate', score: 0.7, reason: 'logo and decorative seal images' },
     ],
   },
 } satisfies AIMaterialDescriptor

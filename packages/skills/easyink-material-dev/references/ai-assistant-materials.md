@@ -82,10 +82,65 @@ Keep `description`, `usage`, `schemaRules`, `examples`, and `knowledge` short an
 - `bindingSpec.accepts`: match runtime data shape. Array/detail-list materials should set `types: ['array']`, `isArray: true`, and often `minChildren`.
 - `bindingSpec.produces`: describe the binding shape Assistant should emit, such as `scalar-field` or `collection-repeat`.
 - `sizing`: values are in mm. Match factory defaults and real minimums. `growAxis` should reflect measurement/layout behavior.
-- `fitness`: use stable scenario IDs already present in examples or scenario templates when possible; scores >= 0.8 appear as "Best for" in prompt context.
+- `fitness`: scenario-based scoring that drives material selection. See "Fitness and Scenario Coverage" below.
 - `properties`: optional structured property specs. Add only when the plain `properties` string list is not enough.
 
 If `knowledge` is omitted, Assistant can still synthesize minimal knowledge from `binding` and `properties`, but selection, sizing, binding, and compatibility will be weaker.
+
+## Fitness and Scenario Coverage
+
+The `fitness` array declares which document scenarios a material is suitable for. The orchestrator's Planner Agent infers a free-form `scenario` string from the user's prompt, and `buildMaterialContext()` uses it to prioritize materials whose fitness matches.
+
+### How it works
+
+1. Planner infers `scenario` (e.g. `'invoice'`, `'h5-landing'`, `'poster'`, `'prototype'`).
+2. `buildMaterialContext(manifest, scenario)` filters each material's fitness:
+   - If scenario is set: show entries matching that scenario + all entries with score >= 0.8.
+   - If no scenario: show entries with score >= 0.8.
+3. Matching fitness entries appear as "Best for: ..." in the Schema Agent prompt.
+
+### Scenario naming conventions
+
+Use stable, lowercase, hyphenated scenario IDs:
+
+| Category | Scenarios |
+|----------|-----------|
+| Print/business | `invoice`, `receipt`, `report`, `certificate`, `label`, `shipping-label`, `product-label` |
+| Screen/digital | `h5-landing`, `poster`, `prototype`, `dashboard` |
+| Structural | `invoice-header`, `invoice-items`, `receipt-items`, `receipt-footer`, `key-value-pair`, `grouped-elements` |
+
+New scenarios can be added freely. The system does not validate scenario strings against a fixed enum.
+
+### Adding fitness to a material
+
+```ts
+// in knowledge.fitness array:
+const fitness = [
+  // Print scenarios
+  { scenario: 'invoice-header', score: 0.9, reason: 'titles and labels' },
+  // Screen scenarios
+  { scenario: 'h5-landing', score: 0.85, reason: 'headings and call-to-action text' },
+  { scenario: 'poster', score: 0.9, reason: 'title and body copy' },
+  { scenario: 'prototype', score: 0.85, reason: 'UI labels and placeholder text' },
+]
+```
+
+### Guidelines
+
+- Score 0.9-1.0: primary/best choice for this scenario.
+- Score 0.7-0.89: works well but another material may be better.
+- Score 0.5-0.69: usable but not ideal.
+- Below 0.5: don't list it; absence means "not recommended".
+- Every material should cover both print and screen scenarios where applicable.
+- `reason` should be one short phrase explaining WHY the material fits, not WHAT it does.
+
+### Unit awareness
+
+The Planner also infers `page.unit` (`mm` | `px` | `pt`) based on the scenario:
+- Print scenarios → `mm` (default)
+- Screen scenarios → `px`
+
+The `sizing` field in knowledge is always declared in mm (internal reference). The prompt system converts sizing references to the active unit when presenting to the LLM. Materials do not need to declare px-based sizing separately.
 
 ## Registration Rules
 
@@ -111,9 +166,11 @@ Current flow:
 2. `createAssistantMaterialManifest(store)` emits `{ type, name, capabilities, props, ai }`.
 3. `AssistantPanel` sends `materialManifest` with each task.
 4. Linear pipeline:
+   - Planner infers `scenario` (free string) and `page.unit` (`mm` | `px` | `pt`) from user prompt.
+   - `buildMaterialContext(manifest, scenario)` includes category, properties, required props, binding, bindingSpec, sizing, composability, fitness (filtered by scenario), usage, schemaRules, and examples.
+   - `buildSchemaSystemPrompt(materialContext, ctx)` assembles prompt segments based on `PromptContext { unit, mode, scenario }`.
    - `buildLayoutMaterialContext()` lists type, binding, children, and sizing.
-   - `buildMaterialContext()` includes category, properties, required props, binding, bindingSpec, sizing, composability, fitness, usage, schemaRules, and examples.
-   - schema repair uses the same material context and must not invent unregistered types.
+   - Schema repair uses the same material context and prompt context; must not invent unregistered types.
 5. Composer Agent:
    - `createRegistryFromManifest()` builds `MaterialKnowledgeRegistry`.
    - material tools answer `query_material`, `get_binding_spec`, `check_compatibility`, and `get_material_sizing`.

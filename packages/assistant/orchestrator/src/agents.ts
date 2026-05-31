@@ -3,6 +3,7 @@ import type { AssistantTaskInput, AssistantValidationIssue } from '@easyink/assi
 import type { LLMClient } from '@easyink/assistant-llm'
 import type { AssistantStore } from '@easyink/assistant-store'
 import type { DocumentSchema, ExpectedDataSource, ExpectedField } from '@easyink/schema'
+import type { PromptContext } from './prompts'
 import { formatSchemaValidationIssue, isValidSchema, validateSchemaIssues } from '@easyink/schema'
 import { normalizeAllFieldPaths, SchemaValidator } from '@easyink/schema-tools'
 import { z } from 'zod'
@@ -25,6 +26,7 @@ export interface IntakeAgentResult {
 
 export interface PlannerAgentResult {
   documentIntent?: string
+  scenario?: string
   page?: PlannerPage
   confidence?: 'high' | 'medium' | 'low'
   requiredBlocks: string[]
@@ -96,18 +98,20 @@ export interface PlannerPage {
   mode?: 'fixed' | 'continuous'
   width?: number
   height?: number
+  unit?: 'mm' | 'px' | 'pt'
   pages?: number
   reason?: string
 }
 
 export interface PlanningBrief {
   documentIntent?: string
+  scenario?: string
   confidence?: 'high' | 'medium' | 'low'
   page?: {
     mode?: 'fixed' | 'continuous'
     width?: number
     height?: number
-    unit: 'mm'
+    unit: 'mm' | 'px' | 'pt'
     reason?: string
   }
   fieldNaming: 'english-camel-path-chinese-label'
@@ -128,10 +132,12 @@ const IntakeSchema = z.object({
 
 const PlannerSchema = z.object({
   documentIntent: z.string().optional(),
+  scenario: z.string().optional(),
   page: z.object({
     mode: z.enum(['fixed', 'continuous']).optional(),
     width: z.number().optional(),
     height: z.number().optional(),
+    unit: z.enum(['mm', 'px', 'pt']).optional(),
     pages: z.number().optional(),
     reason: z.string().optional(),
   }).optional(),
@@ -248,7 +254,26 @@ export async function runPlannerAgent(context: AssistantAgentContext, memorySumm
         'Domain profiles and material strategies are deprecated.',
         'Your job is to describe the user goal, physical page constraints, required business blocks, data needs, style hints, and uncertainty.',
         'Do NOT choose material types. Do NOT output implementation strategy enums. The Schema Agent will choose from the registered Designer material manifest.',
-        'Only include page fields that are explicit in the prompt or strongly implied by the print medium. Put unresolved assumptions in uncertainty instead of filling defaults.',
+        '',
+        '## Scenario inference',
+        'Output a `scenario` string that best describes the document type (e.g. "invoice", "receipt", "h5-landing", "poster", "prototype", "certificate", "label", "report").',
+        'This is a free-form string — use whatever best matches the user intent. It will be used to match material fitness scores.',
+        '',
+        '## Page and unit inference',
+        'Infer `page.unit` from the document context:',
+        '- Print documents (invoices, receipts, labels, certificates, reports): unit = "mm"',
+        '- Screen/digital documents (H5 pages, posters for digital display, prototypes, activity pages): unit = "px"',
+        '- If the user explicitly mentions a unit, use that.',
+        '',
+        'Infer page dimensions from the scenario:',
+        '- A4 print: { mode: "fixed", width: 210, height: 297, unit: "mm" }',
+        '- Thermal receipt (58mm): { mode: "continuous", width: 58, unit: "mm" }',
+        '- Thermal receipt (80mm): { mode: "continuous", width: 80, unit: "mm" }',
+        '- Mobile H5 page: { mode: "fixed", width: 375, height: 667, unit: "px" }',
+        '- Poster (portrait): { mode: "fixed", width: 1080, height: 1920, unit: "px" }',
+        '- Only include page fields that are explicit in the prompt or strongly implied by the medium.',
+        '',
+        'Put unresolved assumptions in uncertainty instead of filling defaults.',
         'If page is present, return page.reason as one short English sentence.',
       ].join('\n'),
       `用户需求：${context.input.prompt}`,
@@ -257,6 +282,7 @@ export async function runPlannerAgent(context: AssistantAgentContext, memorySumm
   })
   return {
     documentIntent: result.documentIntent,
+    scenario: result.scenario,
     page: result.page,
     confidence: result.confidence,
     requiredBlocks: result.requiredBlocks ?? [],
@@ -315,10 +341,11 @@ export async function runSchemaAgent(
     return undefined
 
   const planningBrief = buildPlanningBrief(planner)
-  const materialContext = buildMaterialContext(context.input.materialManifest)
+  const promptCtx = buildPromptContext(planningBrief)
+  const materialContext = buildMaterialContext(context.input.materialManifest, planningBrief.scenario)
   const result = await completeJson(context.llm, SchemaAgentSchema, {
     messages: [
-      buildSchemaSystemPrompt(materialContext),
+      buildSchemaSystemPrompt(materialContext, promptCtx),
       [
         `EasyInk planning brief:\n${JSON.stringify(planningBrief, null, 2)}`,
         isValidSchema(context.input.currentSchema)
@@ -328,7 +355,7 @@ export async function runSchemaAgent(
           ? `Expected data contract (use as the binding source of truth):\n${JSON.stringify(upstream.contract.dataSource, null, 2)}`
           : '',
         upstream?.layout?.blocks?.length
-          ? `Layout skeleton (id/type/x/y/width/height in mm; refine props and bindings, keep ids and boxes):\n${JSON.stringify(upstream.layout.blocks, null, 2)}`
+          ? `Layout skeleton (id/type/x/y/width/height in ${promptCtx.unit}; refine props and bindings, keep ids and boxes):\n${JSON.stringify(upstream.layout.blocks, null, 2)}`
           : '',
         context.sourceData
           ? `External source descriptor:\n${JSON.stringify(context.sourceData.descriptor, null, 2).slice(0, 12000)}`
@@ -405,14 +432,15 @@ export async function runLayoutAgent(
     return { blocks: [], warnings: [] }
   const planningBrief = buildPlanningBrief(planner)
   const briefPage = planningBrief.page
+  const unit = briefPage?.unit ?? 'mm'
   const pageMode = briefPage?.mode ?? 'fixed'
-  const pageWidth = briefPage?.width ?? (pageMode === 'continuous' ? 80 : 210)
-  const pageHeight = briefPage?.height ?? (pageMode === 'continuous' ? 200 : 297)
+  const pageWidth = briefPage?.width ?? (pageMode === 'continuous' ? (unit === 'px' ? 375 : 80) : (unit === 'px' ? 375 : 210))
+  const pageHeight = briefPage?.height ?? (pageMode === 'continuous' ? (unit === 'px' ? 800 : 200) : (unit === 'px' ? 667 : 297))
 
   const materialContext = buildLayoutMaterialContext(context.input.materialManifest)
   const result = await completeJson(context.llm, LayoutSchema, {
     messages: [
-      buildLayoutSystemPrompt(materialContext, pageWidth, pageHeight, pageMode),
+      buildLayoutSystemPrompt(materialContext, pageWidth, pageHeight, pageMode, unit),
       [
         `User request: ${context.input.prompt}`,
         `Planning brief:\n${JSON.stringify(planningBrief, null, 2)}`,
@@ -440,10 +468,11 @@ export async function runSchemaRepairAgent(
     return undefined
 
   const planningBrief = request.schemaResult.planningBrief
-  const materialContext = buildMaterialContext(context.input.materialManifest)
+  const promptCtx = buildPromptContext(planningBrief)
+  const materialContext = buildMaterialContext(context.input.materialManifest, planningBrief.scenario)
   const result = await completeJson(context.llm, SchemaAgentSchema, {
     messages: [
-      buildSchemaRepairSystemPrompt(materialContext),
+      buildSchemaRepairSystemPrompt(materialContext, promptCtx),
       [
         `EasyInk planning brief:\n${JSON.stringify(planningBrief, null, 2)}`,
         `Current schema (must be repaired):\n${JSON.stringify(request.schemaResult.schema, null, 2).slice(0, 16000)}`,
@@ -513,13 +542,14 @@ function buildPlanningBrief(planner: PlannerAgentResult): PlanningBrief {
   const hasPageFacts = page.mode || typeof page.width === 'number' || typeof page.height === 'number' || page.reason
   return {
     documentIntent: planner.documentIntent,
+    scenario: planner.scenario,
     confidence: planner.confidence,
     page: hasPageFacts
       ? {
           mode: page.mode,
           width: page.width,
           height: page.height,
-          unit: 'mm',
+          unit: page.unit ?? 'mm',
           reason: page.reason,
         }
       : undefined,
@@ -530,6 +560,14 @@ function buildPlanningBrief(planner: PlannerAgentResult): PlanningBrief {
     styleHints: planner.styleHints,
     uncertainty: planner.uncertainty,
     warnings: planner.warnings,
+  }
+}
+
+function buildPromptContext(brief: PlanningBrief): PromptContext {
+  return {
+    unit: brief.page?.unit ?? 'mm',
+    mode: brief.page?.mode ?? 'fixed',
+    scenario: brief.scenario,
   }
 }
 
@@ -658,8 +696,8 @@ function normalizeSchemaAgentSchema(
   }
 
   if (next.unit !== 'mm' && next.unit !== 'pt' && next.unit !== 'px' && next.unit !== 'inch') {
-    next.unit = 'mm'
-    warnings.push('Schema Agent output was missing or using an unsupported schema.unit; defaulted to mm.')
+    next.unit = planningBrief.page?.unit ?? 'mm'
+    warnings.push(`Schema Agent output was missing or using an unsupported schema.unit; defaulted to ${next.unit}.`)
   }
 
   next.page = normalizeSchemaPage(next.page, planningBrief, warnings)
@@ -731,13 +769,14 @@ function normalizeSchemaPage(
 ): DocumentSchema['page'] {
   const page = isRecord(value) ? { ...value } : {}
   const briefPage = planningBrief.page
+  const unit = briefPage?.unit ?? 'mm'
   const mode = page.mode === 'continuous' || page.mode === 'fixed'
     ? page.mode
     : briefPage?.mode ?? 'fixed'
-  const fallbackWidth = briefPage?.width ?? (mode === 'continuous' ? 80 : 210)
-  const fallbackHeight = briefPage?.height ?? (mode === 'continuous' ? 200 : 297)
-  const width = typeof page.width === 'number' && page.width > 0 ? page.width : fallbackWidth
-  const height = typeof page.height === 'number' && page.height > 0 ? page.height : fallbackHeight
+  const defaultWidth = briefPage?.width ?? (mode === 'continuous' ? (unit === 'px' ? 375 : 80) : (unit === 'px' ? 375 : 210))
+  const defaultHeight = briefPage?.height ?? (mode === 'continuous' ? (unit === 'px' ? 800 : 200) : (unit === 'px' ? 667 : 297))
+  const width = typeof page.width === 'number' && page.width > 0 ? page.width : defaultWidth
+  const height = typeof page.height === 'number' && page.height > 0 ? page.height : defaultHeight
 
   if (!isRecord(value))
     warnings.push('Schema Agent output was missing schema.page; initialized page from the planning brief.')

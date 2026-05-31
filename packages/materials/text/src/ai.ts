@@ -35,6 +35,10 @@ export const textAIMaterialDescriptor = {
       { scenario: 'key-value-pair', score: 0.95, reason: 'scalar field display' },
       { scenario: 'form-label', score: 0.9, reason: 'static label text' },
       { scenario: 'footer-notes', score: 0.8, reason: 'remark and note text' },
+      { scenario: 'h5-landing', score: 0.9, reason: 'headings, descriptions, and call-to-action text' },
+      { scenario: 'poster', score: 0.9, reason: 'title, subtitle, and body copy' },
+      { scenario: 'prototype', score: 0.85, reason: 'UI labels and placeholder text' },
+      { scenario: 'certificate', score: 0.9, reason: 'recipient name and certificate title' },
     ],
   },
 } satisfies AIMaterialDescriptor

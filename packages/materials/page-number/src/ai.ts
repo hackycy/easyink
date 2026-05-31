@@ -27,6 +27,7 @@ export const pageNumberAIMaterialDescriptor = {
     fitness: [
       { scenario: 'paginated-report', score: 0.9, reason: 'page numbers for multi-page A4 documents' },
       { scenario: 'invoice-footer', score: 0.5, reason: 'page numbers if document spans pages' },
+      { scenario: 'certificate', score: 0.6, reason: 'page numbering for multi-page certificates' },
     ],
   },
 } satisfies AIMaterialDescriptor

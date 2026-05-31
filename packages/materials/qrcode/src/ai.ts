@@ -30,6 +30,8 @@ export const qrcodeAIMaterialDescriptor = {
     fitness: [
       { scenario: 'receipt-footer', score: 0.8, reason: 'payment or verification QR code' },
       { scenario: 'product-label', score: 0.7, reason: 'traceability QR' },
+      { scenario: 'h5-landing', score: 0.75, reason: 'download links and promotional URLs' },
+      { scenario: 'poster', score: 0.7, reason: 'event registration or website URL' },
     ],
   },
 } satisfies AIMaterialDescriptor

@@ -39,6 +39,7 @@ export const flowRowAIMaterialDescriptor = {
     fitness: [
       { scenario: 'receipt-items', score: 0.95, reason: 'optimized for narrow receipt with mixed-width columns' },
       { scenario: 'invoice-items', score: 0.5, reason: 'works but table-data is better for wide documents' },
+      { scenario: 'h5-landing', score: 0.6, reason: 'narrow list layout for mobile product cards' },
     ],
   },
 } satisfies AIMaterialDescriptor

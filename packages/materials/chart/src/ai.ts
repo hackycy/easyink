@@ -26,6 +26,8 @@ export const chartAIMaterialDescriptor = {
     fitness: [
       { scenario: 'analytics-report', score: 0.95, reason: 'primary choice for data visualization' },
       { scenario: 'dashboard', score: 0.9, reason: 'visual data representation' },
+      { scenario: 'h5-landing', score: 0.7, reason: 'data-driven promotional charts' },
+      { scenario: 'poster', score: 0.6, reason: 'infographic data visualization' },
     ],
   },
 } satisfies AIMaterialDescriptor

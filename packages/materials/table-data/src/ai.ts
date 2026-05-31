@@ -43,6 +43,8 @@ export const tableDataAIMaterialDescriptor = {
       { scenario: 'order-details', score: 0.95, reason: 'tabular array data with headers' },
       { scenario: 'receipt-items', score: 0.7, reason: 'works but flow-row may be better for narrow receipts' },
       { scenario: 'report-table', score: 0.9, reason: 'structured data display' },
+      { scenario: 'h5-landing', score: 0.7, reason: 'product list or pricing table' },
+      { scenario: 'prototype', score: 0.8, reason: 'data table UI component' },
     ],
   },
 } satisfies AIMaterialDescriptor

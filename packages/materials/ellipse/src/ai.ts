@@ -25,6 +25,9 @@ export const ellipseAIMaterialDescriptor = {
     sizing: { minWidth: 5, minHeight: 5, aspectRatio: 1, growAxis: 'none', defaultSize: { width: 15, height: 15 } },
     fitness: [
       { scenario: 'seal-badge', score: 0.7, reason: 'circular seal or badge decoration' },
+      { scenario: 'h5-landing', score: 0.7, reason: 'avatar frames and circular badges' },
+      { scenario: 'poster', score: 0.7, reason: 'decorative circular elements' },
+      { scenario: 'prototype', score: 0.75, reason: 'avatar placeholders and status indicators' },
     ],
   },
 } satisfies AIMaterialDescriptor
