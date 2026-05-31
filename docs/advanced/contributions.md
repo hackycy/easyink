@@ -359,5 +359,3 @@ export function createAssistantContribution(): Contribution {
 **命令分离：** 面板 UI 不直接操作 store。所有写操作（apply、rollback、applyPatch）都收敛为命令。这样其他 contribution 或自动化脚本也能调用同一套命令。
 
 **异步面板加载：** `defineAsyncComponent` 确保 AI 面板的代码不会进入 Designer 的初始 bundle。只有用户点击按钮后才加载。
-
-详见 [AI 集成](/advanced/ai-integration) 了解 manifest 如何传递到 Orchestrator 并驱动模板生成。

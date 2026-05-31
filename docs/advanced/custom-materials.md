@@ -361,4 +361,4 @@ registerMaterialBundle(store, {
 })
 ```
 
-`knowledge` 是可选的。没有它 AI 仍然能使用你的物料，但有了它 AI 会更精确地选择物料、设置尺寸和绑定数据。详见 [AI 集成](/advanced/ai-integration#material-knowledge)。
+`knowledge` 是可选的。没有它 AI 仍然能使用你的物料，但有了它 AI 会更精确地选择物料、设置尺寸和绑定数据。
