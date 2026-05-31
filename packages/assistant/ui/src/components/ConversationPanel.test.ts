@@ -42,11 +42,34 @@ describe('assistant conversation panel', () => {
     await nextTick()
     expect(document.body.textContent).toContain('理解需求')
     expect(document.body.textContent).toContain('执行中')
+    expect(document.body.textContent).toContain('正在把你的描述拆成可生成的版面目标')
+    expect(document.querySelector('button[aria-label="停止生成"]')).toBeTruthy()
 
     getHandlers().onResult?.(createResult(task.id))
     await nextTick()
     expect(document.body.textContent).toContain('生成完成，可以应用')
     expect(document.body.textContent).toContain('应用到设计器')
+  })
+
+  it('lets users stop a running generation from the composer', async () => {
+    const task = createTask()
+    const { api, getHandlers } = createStreamingClient({ createTask: vi.fn().mockResolvedValue(task) })
+    mount({ apiClient: api })
+
+    await submitPrompt('生成小票')
+    getHandlers().onSnapshot?.({
+      task,
+      events: [
+        { id: 'evt_1', taskId: task.id, event: { type: 'task.created', taskId: task.id }, createdAt: 1 },
+        { id: 'evt_2', taskId: task.id, event: { type: 'step.started', taskId: task.id, step: 'intake' }, createdAt: 2 },
+      ],
+    })
+    await nextTick()
+
+    document.querySelector('button[aria-label="停止生成"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await flushPromises()
+
+    expect(api.cancelTask).toHaveBeenCalledWith(task.id)
   })
 
   it('surfaces a stream error and offers a retry', async () => {
@@ -76,7 +99,7 @@ async function submitPrompt(prompt: string) {
   textarea!.value = prompt
   textarea!.dispatchEvent(new Event('input', { bubbles: true }))
   await nextTick()
-  document.querySelector('.assistant-composer__bar button')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  document.querySelector('button[aria-label="发送"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
   await flushPromises()
 }
 

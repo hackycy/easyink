@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { AssistantSourceInput } from '@easyink/assistant-capabilities'
+import { IconClose, IconDatabase, IconFileText, IconLoader, IconSend, IconWifi } from '@easyink/icons'
 import { computed, ref } from 'vue'
 import { inferSourceFromText } from '../projection'
 
@@ -10,6 +11,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   submit: [payload: { prompt: string, source?: AssistantSourceInput }]
+  cancel: []
 }>()
 
 const text = ref('')
@@ -57,25 +59,31 @@ function reparseSource() {
 function focusForReplace() {
   textarea.value?.focus()
 }
+
+const sourceIcon = computed(() => {
+  if (!source.value)
+    return IconFileText
+  if (source.value.kind === 'http' || source.value.kind === 'curl')
+    return IconWifi
+  if (source.value.kind === 'json')
+    return IconDatabase
+  return IconFileText
+})
 </script>
 
 <template>
   <footer class="assistant-composer">
-    <div v-if="source" class="assistant-composer__attachment">
-      <span>{{ sourceLabel }}</span>
-      <div>
-        <button type="button" :disabled="running" @click="focusForReplace">
-          替换
+    <div class="assistant-composer__bar">
+      <div v-if="source" class="assistant-composer__attachment">
+        <component :is="sourceIcon" :size="15" stroke-width="1.8" />
+        <span>{{ sourceLabel }}</span>
+        <button type="button" :disabled="running" title="重新解析数据源" aria-label="重新解析数据源" @click="reparseSource">
+          <IconLoader :size="13" stroke-width="1.9" />
         </button>
-        <button type="button" :disabled="running" @click="reparseSource">
-          重新解析
-        </button>
-        <button type="button" :disabled="running" @click="source = undefined">
-          删除
+        <button type="button" :disabled="running" title="删除数据源" aria-label="删除数据源" @click="source = undefined">
+          <IconClose :size="13" stroke-width="2" />
         </button>
       </div>
-    </div>
-    <div class="assistant-composer__bar">
       <textarea
         ref="textarea"
         v-model="text"
@@ -85,9 +93,39 @@ function focusForReplace() {
         @paste="onPaste"
         @keydown.enter.exact.prevent="submit"
       />
-      <button type="button" :disabled="running || !text.trim()" @click="submit">
-        发送
-      </button>
+      <div class="assistant-composer__tools">
+        <button
+          type="button"
+          class="assistant-composer__icon-btn"
+          :disabled="running"
+          title="粘贴 JSON、URL 或 curl 可自动识别数据源"
+          aria-label="粘贴 JSON、URL 或 curl 可自动识别数据源"
+          @click="focusForReplace"
+        >
+          <IconDatabase :size="16" stroke-width="1.8" />
+        </button>
+        <button
+          v-if="running"
+          type="button"
+          class="assistant-composer__send assistant-composer__send--stop"
+          title="停止生成"
+          aria-label="停止生成"
+          @click="$emit('cancel')"
+        >
+          <span />
+        </button>
+        <button
+          v-else
+          type="button"
+          class="assistant-composer__send"
+          :disabled="!text.trim()"
+          title="发送"
+          aria-label="发送"
+          @click="submit"
+        >
+          <IconSend :size="16" stroke-width="2" />
+        </button>
+      </div>
     </div>
   </footer>
 </template>
