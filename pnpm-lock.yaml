@@ -100,15 +100,9 @@ catalogs:
     '@modelcontextprotocol/sdk':
       specifier: ^1.29.0
       version: 1.29.0
-    '@tanstack/vue-query':
-      specifier: ^5.100.14
-      version: 5.100.14
     '@vueuse/core':
       specifier: ^14.3.0
       version: 14.3.0
-    '@xstate/vue':
-      specifier: ^5.0.0
-      version: 5.0.0
     class-variance-authority:
       specifier: ^0.7.1
       version: 0.7.1
@@ -175,9 +169,6 @@ catalogs:
     vue-sonner:
       specifier: ^2.0.9
       version: 2.0.9
-    xstate:
-      specifier: ^5.32.0
-      version: 5.32.0
     zod:
       specifier: ^3.24.0
       version: 3.25.76
@@ -615,21 +606,6 @@ importers:
       '@easyink/icons':
         specifier: workspace:*
         version: link:../../icons
-      '@easyink/ui':
-        specifier: workspace:*
-        version: link:../../ui
-      '@tanstack/vue-query':
-        specifier: catalog:framework
-        version: 5.100.14(vue@3.5.31(typescript@6.0.2))
-      '@vueuse/core':
-        specifier: catalog:framework
-        version: 14.3.0(vue@3.5.31(typescript@6.0.2))
-      '@xstate/vue':
-        specifier: catalog:framework
-        version: 5.0.0(vue@3.5.31(typescript@6.0.2))(xstate@5.32.0)
-      xstate:
-        specifier: catalog:framework
-        version: 5.32.0
     devDependencies:
       vue:
         specifier: catalog:framework
@@ -2616,24 +2592,8 @@ packages:
     peerDependencies:
       vite: ^5.2.0 || ^6 || ^7 || ^8
 
-  '@tanstack/match-sorter-utils@8.19.4':
-    resolution: {integrity: sha512-Wo1iKt2b9OT7d+YGhvEPD3DXvPv2etTusIMhMUoG7fbhmxcXCtIjJDEygy91Y2JFlwGyjqiBPRozme7UD8hoqg==}
-    engines: {node: '>=12'}
-
-  '@tanstack/query-core@5.100.14':
-    resolution: {integrity: sha512-5X41dGpxgeaHISCRW2oYwcSycZeULZzAunaudXT9ov1KOTj9xwt0CH6hbwqP1/z74ZWF7rYFnDpyYH07XFcZew==}
-
   '@tanstack/virtual-core@3.14.0':
     resolution: {integrity: sha512-JLANqGy/D6k4Ujmh8Tr25lGimuOXNiaVyXaCAZS0W+1390sADdGnyUdSWNIfd49gebtIxGMij4IktRVzrdr12Q==}
-
-  '@tanstack/vue-query@5.100.14':
-    resolution: {integrity: sha512-gNKay40Z29mvnjJtq2emzbZhGd2HRZQTOJuJZxAWpUKnmjOf79BndNnF1Aowm0Nt4WQtXYjFCGNZkBzSEJ+JEg==}
-    peerDependencies:
-      '@vue/composition-api': ^1.1.2
-      vue: ^2.6.0 || ^3.3.0
-    peerDependenciesMeta:
-      '@vue/composition-api':
-        optional: true
 
   '@tanstack/vue-virtual@3.13.24':
     resolution: {integrity: sha512-A0k2qF0zFSUStXSZkGXABouXr2Tw2Ztl/cVIYG9qy84uR8W7UNjAcX3DvzBS3YnDcwvLxab8v7dbmYBZ39itDA==}
@@ -2945,9 +2905,6 @@ packages:
   '@vue/compiler-ssr@3.5.31':
     resolution: {integrity: sha512-h0xIMxrt/LHOvJKMri+vdYT92BrK3HFLtDqq9Pr/lVVfE4IyKZKvWf0vJFW10Yr6nX02OR4MkJwI0c1HDa1hog==}
 
-  '@vue/devtools-api@6.6.4':
-    resolution: {integrity: sha512-sGhTPMuXqZ1rVOk32RylztWkfXTRhuS7vgAKv0zjqk8gbsHkJ7xfFf+jbySxt7tWObEJwyKaHMikV/WGDiQm8g==}
-
   '@vue/devtools-api@8.1.2':
     resolution: {integrity: sha512-vA0O112YqyDuNA1s7Yb2gCgToQ/OxOWiFDO5ThLCcDy0ldHnSd1dUTaSYhOldbqoNgumE4dxtGAoAaSUKUD1Zg==}
 
@@ -3047,15 +3004,6 @@ packages:
   '@wtto00/html2canvas@1.4.3':
     resolution: {integrity: sha512-jwsb+xL8N+gjrSNABSaFdxmWtE4c7RNFjP20lo1G7gs63Qqo1phhxVBTzxc/apDVh6LgXsU2l5bwKtXd9uz65w==}
     engines: {node: '>=8.0.0'}
-
-  '@xstate/vue@5.0.0':
-    resolution: {integrity: sha512-9TyJV4yz5QLJdEU44Ly9LBooEyZmv0nht3qEvDflxXAJmSn1dzaZeESdHFm+ANHtxoUed5jGqH6NT86BusvXQg==}
-    peerDependencies:
-      vue: ^3.0.0
-      xstate: ^5.20.0
-    peerDependenciesMeta:
-      xstate:
-        optional: true
 
   accepts@2.0.0:
     resolution: {integrity: sha512-5cvg6CtKwfgdmVqY1WIiXKc3Q1bkRqGLi+2W/6ao+6Y7gu/RCwRuAhGEzh5B4KlszSuTLgZYuqFqo5bImjNKng==}
@@ -4971,9 +4919,6 @@ packages:
     peerDependencies:
       vue: '>= 3.4.0'
 
-  remove-accents@0.5.0:
-    resolution: {integrity: sha512-8g3/Otx1eJaVD12e31UbJj1YzdtVvzH85HV7t+9MJYk/u3XmkOUJ5Ys9wQrf9PCPK8+xn4ymzqYCiZl6QWKn+A==}
-
   require-from-string@2.0.2:
     resolution: {integrity: sha512-Xf0nWe6RseziFMu+Ap9biiUbmplq6S9/p+7w7YXP/JBHhrUDDUhwa+vANyubuqfZWTveU//DYVGsDG7RKL/vEw==}
     engines: {node: '>=0.10.0'}
@@ -5901,9 +5846,6 @@ packages:
   xmlhttprequest-ssl@2.1.2:
     resolution: {integrity: sha512-TEU+nJVUUnA4CYJFLvK5X9AOeH4KvDvhIfm0vV1GaQRtchnG0hgK5p8hw/xjv8cunWYCsiPCSDzObPyhEwq3KQ==}
     engines: {node: '>=0.4.0'}
-
-  xstate@5.32.0:
-    resolution: {integrity: sha512-zsk73aWGmxn9z34P0kbiod5JwTvdYRW3+IDxITq8sd9+VWwMyW7BUzpplnYy9mIEXa6V8IMDv7Hy4m0mhT5+2Q==}
 
   yaml-eslint-parser@2.0.0:
     resolution: {integrity: sha512-h0uDm97wvT2bokfwwTmY6kJ1hp6YDFL0nRHwNKz8s/VD1FH/vvZjAKoMUE+un0eaYBSG7/c6h+lJTP+31tjgTw==}
@@ -7127,21 +7069,7 @@ snapshots:
       tailwindcss: 4.2.4
       vite: 7.3.2(@types/node@24.10.0)(jiti@2.6.1)(lightningcss@1.32.0)(sass-embedded@1.98.0)(sass@1.98.0)(tsx@4.21.0)(yaml@2.8.3)
 
-  '@tanstack/match-sorter-utils@8.19.4':
-    dependencies:
-      remove-accents: 0.5.0
-
-  '@tanstack/query-core@5.100.14': {}
-
   '@tanstack/virtual-core@3.14.0': {}
-
-  '@tanstack/vue-query@5.100.14(vue@3.5.31(typescript@6.0.2))':
-    dependencies:
-      '@tanstack/match-sorter-utils': 8.19.4
-      '@tanstack/query-core': 5.100.14
-      '@vue/devtools-api': 6.6.4
-      vue: 3.5.31(typescript@6.0.2)
-      vue-demi: 0.14.10(vue@3.5.31(typescript@6.0.2))
 
   '@tanstack/vue-virtual@3.13.24(vue@3.5.31(typescript@6.0.2))':
     dependencies:
@@ -7530,8 +7458,6 @@ snapshots:
       '@vue/compiler-dom': 3.5.31
       '@vue/shared': 3.5.31
 
-  '@vue/devtools-api@6.6.4': {}
-
   '@vue/devtools-api@8.1.2':
     dependencies:
       '@vue/devtools-kit': 8.1.2
@@ -7635,12 +7561,6 @@ snapshots:
     dependencies:
       css-line-break: 2.1.0
       text-segmentation: 1.0.3
-
-  '@xstate/vue@5.0.0(vue@3.5.31(typescript@6.0.2))(xstate@5.32.0)':
-    dependencies:
-      vue: 3.5.31(typescript@6.0.2)
-    optionalDependencies:
-      xstate: 5.32.0
 
   accepts@2.0.0:
     dependencies:
@@ -9734,8 +9654,6 @@ snapshots:
     transitivePeerDependencies:
       - '@vue/composition-api'
 
-  remove-accents@0.5.0: {}
-
   require-from-string@2.0.2: {}
 
   reserved-identifiers@1.2.0: {}
@@ -10786,8 +10704,6 @@ snapshots:
   xml-name-validator@4.0.0: {}
 
   xmlhttprequest-ssl@2.1.2: {}
-
-  xstate@5.32.0: {}
 
   yaml-eslint-parser@2.0.0:
     dependencies:
