@@ -1,7 +1,3 @@
-<script setup lang="ts">
-defineProps<{ status?: string }>()
-</script>
-
 <template>
   <header class="assistant-conversation-header">
     <div class="assistant-conversation-header__brand">
@@ -16,9 +12,5 @@ defineProps<{ status?: string }>()
         <p>描述你要的票据、标签或表单，确认后再应用到设计器。</p>
       </div>
     </div>
-    <span v-if="status" class="assistant-conversation-header__status">
-      <i class="assistant-conversation-header__pulse" />
-      {{ status }}
-    </span>
   </header>
 </template>

@@ -37,18 +37,21 @@ describe('assistant conversation panel', () => {
     const events: AssistantEventRecord[] = [
       { id: 'evt_1', taskId: task.id, event: { type: 'task.created', taskId: task.id }, createdAt: 1 },
       { id: 'evt_2', taskId: task.id, event: { type: 'step.started', taskId: task.id, step: 'intake' }, createdAt: 2 },
+      { id: 'evt_3', taskId: task.id, event: { type: 'thinking.delta', taskId: task.id, text: '正在理解你的模板需求……' }, createdAt: 3 },
     ]
     getHandlers().onSnapshot?.({ task, events })
     await nextTick()
     expect(document.body.textContent).toContain('理解需求')
     expect(document.body.textContent).toContain('执行中')
-    expect(document.body.textContent).toContain('正在把你的描述拆成可生成的版面目标')
+    expect(document.body.textContent).toContain('我在梳理票据目标和关键内容')
+    expect(document.body.textContent).not.toContain('正在理解你的模板需求')
     expect(document.querySelector('button[aria-label="停止生成"]')).toBeTruthy()
 
     getHandlers().onResult?.(createResult(task.id))
     await nextTick()
     expect(document.body.textContent).toContain('生成完成，可以应用')
     expect(document.body.textContent).toContain('应用到设计器')
+    expect(document.body.textContent).not.toContain('我在梳理票据目标和关键内容')
   })
 
   it('lets users stop a running generation from the composer', async () => {

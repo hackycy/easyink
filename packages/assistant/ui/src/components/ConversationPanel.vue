@@ -75,17 +75,6 @@ const checklist = computed(() => projectChecklist({
   task: derivedTask.value,
 }))
 const running = computed(() => derivedStatus.value === 'running')
-const statusLabel = computed(() => {
-  switch (derivedStatus.value) {
-    case 'running': return '生成中'
-    case 'waiting': return '等待确认'
-    case 'review': return '待应用'
-    case 'done': return '已应用'
-    case 'cancelled': return '已停止'
-    case 'failed': return '已失败'
-    default: return undefined
-  }
-})
 
 const errorText = computed(() => {
   if (error.value)
@@ -106,21 +95,30 @@ const completedCount = computed(() => checklist.value.filter(item => item.status
 const runningPercent = computed(() => Math.max(8, Math.round((completedCount.value / Math.max(checklist.value.length, 1)) * 100)))
 const latestThinkingLine = computed(() => {
   const lines = narration.value.answer.split('\n').map(line => line.trim()).filter(Boolean)
+  return friendlyThinkingText(lines.at(-1))
+})
+const supportingNarration = computed(() => {
+  if (running.value || derivedStatus.value !== 'waiting')
+    return undefined
+  const lines = narration.value.answer
+    .split('\n')
+    .map(line => friendlyThinkingText(line.trim()))
+    .filter((line): line is string => Boolean(line))
   return lines.at(-1)
 })
 const runningMood = computed(() => {
   const id = activeChecklistItem.value?.id
   if (id === 'understand')
-    return '正在把你的描述拆成可生成的版面目标。'
+    return '我在梳理票据目标和关键内容。'
   if (id === 'data')
-    return '正在辨认数据字段，稍后会把它们放到合适的位置。'
+    return '正在识别数据字段，准备放到合适位置。'
   if (id === 'layout')
-    return '正在安排内容层级，让票据读起来更自然。'
+    return '正在安排信息层级和版面节奏。'
   if (id === 'compose')
-    return '正在把版面变成可用模板，这一步通常会多花几秒。'
+    return '正在生成可以直接应用的设计结果。'
   if (id === 'validate')
-    return '正在做最后检查，避免生成后还要你手动修边。'
-  return '正在启动生成流程。'
+    return '正在做最后检查，尽量减少手动调整。'
+  return '生成流程已开始，我会持续同步进度。'
 })
 const runningSignals = computed(() => {
   const signals: string[] = []
@@ -227,6 +225,31 @@ async function cancelTask() {
   }
 }
 
+function friendlyThinkingText(text: string | undefined): string | undefined {
+  if (!text)
+    return undefined
+  const normalized = text.replace(/[.。…]+$/g, '')
+  if (normalized.includes('正在理解你的模板需求'))
+    return '我在梳理票据目标和关键内容。'
+  if (normalized.includes('需求信息还不够明确'))
+    return '我需要再确认几个细节，避免生成方向跑偏。'
+  if (normalized.startsWith('识别为') && normalized.endsWith('场景'))
+    return `${normalized}，继续细化模板结构。`
+  if (normalized.includes('已理解模板类型与目标'))
+    return '已确认主要目标，开始安排版面。'
+  if (normalized.includes('正在规划页面结构与版式'))
+    return '正在安排信息层级和版面节奏。'
+  if (normalized.includes('正在构建数据契约'))
+    return '正在整理字段关系，确保内容能正确填入。'
+  if (normalized.includes('正在规划版式骨架'))
+    return '正在搭出版面的主要区域。'
+  if (normalized.includes('正在生成 EasyInk 模板结构'))
+    return '正在生成可以直接应用的设计结果。'
+  if (normalized.includes('校验发现问题'))
+    return '发现细节问题，正在自动修正。'
+  return text
+}
+
 function formatAssistantError(err: unknown): string {
   if (err instanceof AssistantApiError && err.status === 401)
     return '请求未授权（HTTP 401），请检查登录状态或 Assistant 服务凭据后重试。'
@@ -245,7 +268,7 @@ onBeforeUnmount(closeStream)
 
 <template>
   <section class="easyink-assistant-conversation">
-    <ConversationHeader :status="statusLabel" />
+    <ConversationHeader />
     <main class="assistant-stream">
       <AssistantMessage
         v-if="derivedStatus === 'idle'"
@@ -253,8 +276,8 @@ onBeforeUnmount(closeStream)
       />
       <UserMessage v-if="prompt" :text="prompt" />
 
-      <p v-if="narration.answer" class="assistant-answer">
-        {{ narration.answer }}
+      <p v-if="supportingNarration" class="assistant-answer">
+        {{ supportingNarration }}
       </p>
 
       <article v-if="running" class="assistant-live-card">
@@ -343,27 +366,22 @@ onBeforeUnmount(closeStream)
 .easyink-assistant-conversation {
   --assistant-border: var(--ei-border-color, #e3e7ee);
   --assistant-bg: var(--ei-panel-bg, #ffffff);
-  --assistant-surface: var(--ei-hover-bg, #f6f8fb);
+  --assistant-surface: var(--ei-bg-secondary, #f7f8fa);
   --assistant-muted: var(--ei-text-secondary, #667085);
   --assistant-text: var(--ei-text, #1f2937);
   --assistant-accent: var(--ei-primary, #1677ff);
   --assistant-accent-hover: var(--ei-primary-hover, #4096ff);
-  --assistant-ink: #20242a;
-  --assistant-paper: #fffdf8;
-  --assistant-paper-soft: #f7f2e8;
-  --assistant-wash: #ebe2d1;
-  --assistant-copper: #b56b3a;
-  --assistant-moss: #64745a;
-  --assistant-shadow: 0 18px 48px rgb(56 43 26 / 10%);
+  --assistant-primary-soft: color-mix(in srgb, var(--assistant-accent) 10%, transparent);
+  --assistant-success: #16a34a;
+  --assistant-danger: #b42318;
+  --assistant-shadow: 0 18px 48px rgb(15 23 42 / 8%);
   display: grid;
   grid-template-rows: auto minmax(280px, 1fr) auto;
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background:
-    radial-gradient(circle at 18% 8%, rgb(218 168 100 / 16%), transparent 30%),
-    linear-gradient(145deg, var(--assistant-paper), #f5efe3 54%, #f9f6ee);
-  color: var(--assistant-ink);
+  background: var(--assistant-bg);
+  color: var(--assistant-text);
   font-size: 13px;
 }
 
@@ -372,14 +390,10 @@ onBeforeUnmount(closeStream)
   display: flex;
   min-height: 0;
   flex-direction: column;
-  gap: 12px;
+  gap: 18px;
   overflow: auto;
-  padding: 18px;
-  background:
-    linear-gradient(90deg, rgb(100 116 90 / 5%) 1px, transparent 1px),
-    linear-gradient(180deg, rgb(255 255 255 / 22%), rgb(255 255 255 / 0%)),
-    var(--assistant-paper-soft);
-  background-size: 28px 28px, auto, auto;
+  padding: 28px 24px;
+  background: linear-gradient(180deg, var(--assistant-bg), var(--assistant-surface));
   scroll-behavior: smooth;
 }
 
@@ -460,20 +474,21 @@ onBeforeUnmount(closeStream)
   position: relative;
   align-self: stretch;
   overflow: hidden;
-  padding: 16px;
-  border-radius: 26px;
+  padding: 20px;
+  border-radius: 18px;
   background:
-    radial-gradient(circle at 8% 0%, rgb(181 107 58 / 18%), transparent 34%),
-    radial-gradient(circle at 92% 18%, rgb(100 116 90 / 16%), transparent 30%),
-    linear-gradient(145deg, rgb(255 253 248 / 92%), rgb(246 239 226 / 84%));
+    radial-gradient(circle at 0% 0%, var(--assistant-primary-soft), transparent 34%),
+    var(--assistant-bg);
   box-shadow: var(--assistant-shadow);
 }
 
 .assistant-live-card__aura {
   position: absolute;
-  inset: -40%;
-  background: conic-gradient(from 140deg, transparent, rgb(181 107 58 / 12%), transparent, rgb(100 116 90 / 10%), transparent);
-  animation: assistant-aura-drift 8s linear infinite;
+  inset: 0;
+  background: linear-gradient(120deg, transparent, rgb(255 255 255 / 72%), transparent);
+  opacity: 0.42;
+  transform: translateX(-100%);
+  animation: assistant-aura-drift 2.8s ease-in-out infinite;
 }
 
 .assistant-live-card__head,
@@ -493,40 +508,40 @@ onBeforeUnmount(closeStream)
 
 .assistant-live-card__orb {
   display: inline-flex;
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   align-items: center;
   justify-content: center;
-  border-radius: 16px;
-  background: #2d312c;
-  color: #fff7ea;
-  box-shadow: 0 10px 24px rgb(45 49 44 / 22%);
+  border-radius: 12px;
+  background: var(--assistant-accent);
+  color: #fff;
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--assistant-accent) 22%, transparent);
 }
 
 .assistant-live-card__head strong {
   display: block;
   font-size: 14px;
-  font-weight: 680;
+  font-weight: 600;
   letter-spacing: -0.01em;
 }
 
 .assistant-live-card__head p {
   margin: 3px 0 0;
-  color: rgb(32 36 42 / 66%);
+  color: var(--assistant-muted);
   line-height: 1.55;
 }
 
 .assistant-live-card__loader {
-  color: var(--assistant-copper);
+  color: var(--assistant-accent);
   animation: assistant-spin 1.1s linear infinite;
 }
 
 .assistant-live-card__meter {
   height: 6px;
   overflow: hidden;
-  margin: 14px 0 4px;
+  margin: 18px 0 8px;
   border-radius: 999px;
-  background: rgb(32 36 42 / 8%);
+  background: color-mix(in srgb, var(--assistant-border) 60%, transparent);
 }
 
 .assistant-live-card__meter span {
@@ -534,7 +549,7 @@ onBeforeUnmount(closeStream)
   height: 100%;
   min-width: 26px;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--assistant-moss), var(--assistant-copper));
+  background: linear-gradient(90deg, var(--assistant-accent), var(--assistant-accent-hover));
   transition: width 0.38s ease;
 }
 
@@ -542,9 +557,9 @@ onBeforeUnmount(closeStream)
   display: flex;
   flex-direction: column;
   gap: 5px;
-  margin: 8px 0 0;
+  margin: 14px 0 0;
   padding: 0;
-  color: rgb(32 36 42 / 58%);
+  color: var(--assistant-muted);
   font-size: 12px;
   list-style: none;
 }
@@ -560,7 +575,7 @@ onBeforeUnmount(closeStream)
   height: 5px;
   flex: 0 0 auto;
   border-radius: 50%;
-  background: var(--assistant-moss);
+  background: var(--assistant-accent);
   content: '';
 }
 
@@ -570,8 +585,8 @@ onBeforeUnmount(closeStream)
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 16px 18px 13px;
-  background: rgb(255 253 248 / 76%);
+  padding: 22px 24px 16px;
+  background: var(--assistant-bg);
   backdrop-filter: blur(18px);
 }
 
@@ -587,48 +602,25 @@ onBeforeUnmount(closeStream)
   justify-content: center;
   width: 34px;
   height: 34px;
-  border-radius: 15px;
-  background:
-    radial-gradient(circle at 30% 20%, rgb(255 247 234 / 36%), transparent 38%),
-    #2d312c;
-  color: #fff7ea;
+  border-radius: 10px;
+  background: var(--assistant-accent);
+  color: #fff;
   flex: 0 0 auto;
-  box-shadow: 0 12px 26px rgb(45 49 44 / 18%);
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--assistant-accent) 18%, transparent);
 }
 
 :deep(.assistant-conversation-header h2) {
   margin: 0;
-  color: var(--assistant-ink);
+  color: var(--assistant-text);
   font-size: 15px;
-  font-weight: 720;
+  font-weight: 600;
   letter-spacing: -0.015em;
 }
 
 :deep(.assistant-conversation-header p) {
   margin: 2px 0 0;
-  color: rgb(32 36 42 / 58%);
+  color: var(--assistant-muted);
   font-size: 12px;
-}
-
-:deep(.assistant-conversation-header__status) {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex: 0 0 auto;
-  padding: 5px 10px;
-  border-radius: 999px;
-  background: rgb(45 49 44 / 7%);
-  color: var(--assistant-moss);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-:deep(.assistant-conversation-header__pulse) {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-  animation: assistant-status-pulse 1.4s ease-in-out infinite;
 }
 
 /* Message list */
@@ -660,16 +652,16 @@ onBeforeUnmount(closeStream)
 :deep(.assistant-message--user) {
   align-self: flex-end;
   border-bottom-right-radius: 6px;
-  background: #2d312c;
-  color: #fff7ea;
-  box-shadow: 0 12px 26px rgb(45 49 44 / 14%);
+  background: var(--assistant-accent);
+  color: #fff;
+  box-shadow: 0 12px 26px color-mix(in srgb, var(--assistant-accent) 16%, transparent);
 }
 
 :deep(.assistant-message--assistant) {
   align-self: flex-start;
   border-bottom-left-radius: 6px;
-  background: rgb(255 253 248 / 72%);
-  box-shadow: 0 10px 28px rgb(56 43 26 / 8%);
+  background: var(--assistant-bg);
+  box-shadow: 0 10px 28px rgb(15 23 42 / 6%);
 }
 
 /* Cards */
@@ -679,7 +671,7 @@ onBeforeUnmount(closeStream)
   box-sizing: border-box;
   padding: 14px;
   border-radius: 22px;
-  background: rgb(255 253 248 / 78%);
+  background: var(--assistant-bg);
   box-shadow: var(--assistant-shadow);
   font-size: 13px;
 
@@ -717,14 +709,14 @@ onBeforeUnmount(closeStream)
   padding: 0 14px;
   border: none;
   border-radius: 999px;
-  background: rgb(45 49 44 / 8%);
-  color: var(--assistant-ink);
+  background: var(--assistant-surface);
+  color: var(--assistant-text);
   cursor: pointer;
   font-size: 13px;
   transition: transform 0.15s, background 0.15s, color 0.15s;
 
   &:hover:not(:disabled) {
-    background: rgb(45 49 44 / 13%);
+    background: var(--ei-hover-bg, #eef2f7);
     transform: translateY(-1px);
   }
 
@@ -735,19 +727,19 @@ onBeforeUnmount(closeStream)
 }
 
 :deep(.assistant-btn--primary) {
-  background: #2d312c;
-  color: #fff7ea;
+  background: var(--assistant-accent);
+  color: #fff;
 
   &:hover:not(:disabled) {
-    background: #1f221f;
-    color: #fff7ea;
+    background: var(--assistant-accent-hover);
+    color: #fff;
   }
 }
 
 :deep(.assistant-link) {
   border: none;
   background: transparent;
-  color: var(--assistant-copper);
+  color: var(--assistant-accent);
   cursor: pointer;
   font-size: 12px;
   padding: 0;
@@ -762,15 +754,15 @@ onBeforeUnmount(closeStream)
   padding: 0 12px;
   border: none;
   border-radius: 999px;
-  background: rgb(45 49 44 / 7%);
-  color: var(--assistant-ink);
+  background: var(--assistant-surface);
+  color: var(--assistant-text);
   cursor: pointer;
   font-size: 12px;
   transition: border-color 0.15s, background 0.15s, color 0.15s;
 
   &:hover {
-    background: rgb(181 107 58 / 14%);
-    color: var(--assistant-copper);
+    background: var(--assistant-primary-soft);
+    color: var(--assistant-accent);
   }
 }
 
@@ -812,7 +804,7 @@ onBeforeUnmount(closeStream)
   li {
     padding: 2px 8px;
     border-radius: 6px;
-    background: rgb(45 49 44 / 7%);
+    background: var(--assistant-surface);
     font-size: 12px;
     color: var(--assistant-muted);
   }
@@ -871,7 +863,7 @@ onBeforeUnmount(closeStream)
 }
 
 :deep(.assistant-card--danger) {
-  background: rgb(255 248 244 / 86%);
+  background: color-mix(in srgb, var(--assistant-danger) 6%, var(--assistant-bg));
 
   > strong {
     color: #b42318;
@@ -894,8 +886,8 @@ onBeforeUnmount(closeStream)
 :deep(.assistant-composer) {
   padding: 12px 14px 16px;
   background:
-    linear-gradient(180deg, rgb(247 242 232 / 0%), rgb(255 253 248 / 86%) 32%),
-    rgb(255 253 248 / 86%);
+    linear-gradient(180deg, rgb(255 255 255 / 0%), color-mix(in srgb, var(--assistant-bg) 92%, transparent) 32%),
+    var(--assistant-bg);
   backdrop-filter: blur(18px);
 }
 
@@ -908,8 +900,8 @@ onBeforeUnmount(closeStream)
   margin: 2px 0 6px 2px;
   padding: 6px 7px 6px 9px;
   border-radius: 999px;
-  background: rgb(45 49 44 / 7%);
-  color: rgb(32 36 42 / 64%);
+  background: var(--assistant-surface);
+  color: var(--assistant-muted);
   font-size: 12px;
 
   span {
@@ -932,8 +924,8 @@ onBeforeUnmount(closeStream)
     padding: 0;
 
     &:hover:not(:disabled) {
-      background: rgb(45 49 44 / 10%);
-      color: var(--assistant-ink);
+      background: var(--ei-hover-bg, #eef2f7);
+      color: var(--assistant-text);
     }
   }
 }
@@ -946,18 +938,18 @@ onBeforeUnmount(closeStream)
   padding: 10px;
   border-radius: 28px;
   background:
-    linear-gradient(180deg, rgb(255 255 255 / 72%), rgb(255 253 248 / 88%)),
-    var(--assistant-paper);
+    linear-gradient(180deg, var(--assistant-bg), color-mix(in srgb, var(--assistant-surface) 58%, var(--assistant-bg))),
+    var(--assistant-bg);
   box-shadow:
-    0 18px 42px rgb(56 43 26 / 12%),
-    inset 0 0 0 1px rgb(45 49 44 / 6%);
+    0 18px 42px rgb(15 23 42 / 8%),
+    inset 0 0 0 1px color-mix(in srgb, var(--assistant-border) 70%, transparent);
   transition: box-shadow 0.18s, transform 0.18s;
 
   &:focus-within {
     box-shadow:
-      0 22px 54px rgb(56 43 26 / 16%),
-      0 0 0 4px rgb(181 107 58 / 10%),
-      inset 0 0 0 1px rgb(181 107 58 / 22%);
+      0 22px 54px rgb(15 23 42 / 10%),
+      0 0 0 4px var(--assistant-primary-soft),
+      inset 0 0 0 1px color-mix(in srgb, var(--assistant-accent) 24%, transparent);
   }
 
   textarea {
@@ -968,7 +960,7 @@ onBeforeUnmount(closeStream)
     background: transparent;
     resize: vertical;
     font: inherit;
-    color: var(--assistant-ink);
+    color: var(--assistant-text);
     line-height: 1.55;
 
     &:focus {
@@ -1016,8 +1008,8 @@ onBeforeUnmount(closeStream)
   transition: background 0.15s, color 0.15s;
 
   &:hover:not(:disabled) {
-    background: rgb(45 49 44 / 7%);
-    color: var(--assistant-ink);
+    background: var(--assistant-surface);
+    color: var(--assistant-text);
   }
 }
 
@@ -1026,20 +1018,20 @@ onBeforeUnmount(closeStream)
   height: 34px;
   margin-left: auto;
   border-radius: 999px;
-  background: #2d312c;
-  color: #fff7ea;
-  box-shadow: 0 10px 22px rgb(45 49 44 / 18%);
+  background: var(--assistant-accent);
+  color: #fff;
+  box-shadow: 0 10px 22px color-mix(in srgb, var(--assistant-accent) 18%, transparent);
   transition: transform 0.15s, background 0.15s, box-shadow 0.15s;
 
   &:hover:not(:disabled) {
-    background: #1f221f;
-    box-shadow: 0 12px 26px rgb(45 49 44 / 24%);
+    background: var(--assistant-accent-hover);
+    box-shadow: 0 12px 26px color-mix(in srgb, var(--assistant-accent) 24%, transparent);
     transform: translateY(-1px);
   }
 }
 
 :deep(.assistant-composer__send--stop) {
-  background: var(--assistant-copper);
+  background: var(--assistant-danger);
 }
 
 :deep(.assistant-composer__send--stop span) {
@@ -1049,17 +1041,13 @@ onBeforeUnmount(closeStream)
   background: currentColor;
 }
 
-@keyframes assistant-status-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
-}
-
 @keyframes assistant-spin {
   to { transform: rotate(360deg); }
 }
 
 @keyframes assistant-aura-drift {
-  to { transform: rotate(360deg); }
+  0% { transform: translateX(-100%); }
+  45%, 100% { transform: translateX(100%); }
 }
 
 @media (max-width: 680px) {
