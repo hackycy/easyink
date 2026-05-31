@@ -303,3 +303,62 @@ viewer.registerMaterial(PRICE_TAG_TYPE, priceTagViewerExtension)
 - 打印和导出结果与 Viewer 预览一致。
 
 关于物料，目前知道这些就够用了。接下来可以继续看 [贡献扩展开发](/advanced/contributions) 或 [Schema 参考](/advanced/schema)。
+
+## 声明 AI 知识 {#ai-knowledge}
+
+如果你希望 AI 助手能理解你的自定义物料并在生成模板时正确使用它，需要在 `aiDescriptor` 中声明 `knowledge` 字段：
+
+```ts
+import type { AIMaterialDescriptor } from '@easyink/shared'
+
+export const priceTagAIMaterialDescriptor = {
+  type: 'price-tag',
+  description: 'Price tag for displaying product price with label.',
+  properties: ['label', 'amount'],
+  requiredProps: ['label', 'amount'],
+  binding: 'single',
+  usage: ['Use for product price display in retail labels.'],
+  knowledge: {
+    category: 'typography',
+    composability: {
+      canBeChildOf: ['container', '*'],
+      canContain: [],
+      exclusiveWith: [],
+      preferredCompanions: ['barcode', 'image'],
+    },
+    bindingSpec: {
+      mode: 'scalar',
+      accepts: { types: ['number', 'string'] },
+      produces: { kind: 'scalar-field', fieldCount: 'single' },
+    },
+    sizing: {
+      minWidth: 20,
+      minHeight: 10,
+      defaultSize: { width: 48, height: 18 },
+    },
+    fitness: [
+      { scenario: 'product-label', score: 0.95, reason: 'price display' },
+      { scenario: 'retail-shelf', score: 0.9, reason: 'shelf price tag' },
+    ],
+  },
+} satisfies AIMaterialDescriptor
+```
+
+然后在注册物料时传入：
+
+```ts
+registerMaterialBundle(store, {
+  materials: [{
+    type: PRICE_TAG_TYPE,
+    name: '价格签',
+    icon: IconText,
+    category: 'basic',
+    capabilities: { bindable: true, resizable: true, rotatable: true },
+    aiDescriptor: priceTagAIMaterialDescriptor,  // ← 传入 AI 描述
+    createDefaultNode: createPriceTagNode,
+    factory: createPriceTagDesignerExtension,
+  }],
+})
+```
+
+`knowledge` 是可选的。没有它 AI 仍然能使用你的物料，但有了它 AI 会更精确地选择物料、设置尺寸和绑定数据。详见 [AI 集成](/advanced/ai-integration#material-knowledge)。

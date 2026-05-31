@@ -48,9 +48,9 @@
 | 20 | [性能策略](./20-performance.md) | 架构层预留、性能目标 |
 | 21 | [安全模型](./21-security.md) | 数据路径安全、富文本安全、渲染安全 |
 | 22 | [编辑行为架构](./22-editing-behavior.md) | EditingSession、类型化 Selection、Geometry 协议、Behavior 中间件、Surfaces 与 Transaction |
-| 23 | [AI 集成与 Contribution](./23-ai-integration.md) | Contribution API、`@easyink/ai`、`@easyink/schema-tools`、MCP Client/Server、LLM Provider |
+| 23 | [Contribution 机制](./23-contribution.md) | ContributionRegistry、注入方式、响应式 Props、生命周期、命名空间 |
 | 24 | [页面布局正交体系](./24-page-layout-orthogonal-system.md) | 页面模型、布局策略、分页策略、测量重排引擎四层解耦 |
-| 25 | [AI 助手重构](./25-assistant-platform-v3.md) | 当前主推方案：退役旧 AI/MCP 包，核心架构不依赖 MCP |
+| 25 | [AI Assistant 平台](./25-ai-assistant.md) | 物料知识声明、数据流链路、Orchestrator 工作流、ComposerAgent、知识与推理层 |
 
 ## 补充说明
 
@@ -75,5 +75,5 @@
 - **想了解设计器工作台?** -> [10-designer-interaction](./10-designer-interaction.md)
 - **想了解物料体系?** -> [11-element-system](./11-element-system.md)
 - **想了解命令与历史?** -> [12-command-undo-redo](./12-command-undo-redo.md)
-- **想了解 AI 集成?** -> [23-ai-integration](./23-ai-integration.md)
-- **想了解 AI Agent 重构?** -> [25-assistant-platform-v3](./25-assistant-platform-v3.md)
+- **想了解 Contribution 机制?** -> [23-ai-integration](./23-ai-integration.md)
+- **想了解 AI Agent 平台?** -> [25-assistant-platform-v3](./25-assistant-platform-v3.md)

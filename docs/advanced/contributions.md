@@ -301,4 +301,63 @@ ctx.registerCommand({ id: 'review.togglePanel', handler: () => {} })
 - 面板不出现：确认 `open` 这类状态真的传进了 panel props。
 - 事件残留：确认外部订阅放进了 `onDispose()`。
 
-关于 Contribution，目前知道这些就够用了。更完整的工程参考可以看 `packages/ai/src/contribution.ts`，它注册了命令、工具栏按钮和异步面板。
+关于 Contribution，目前知道这些就够用了。更完整的工程参考可以看 `packages/assistant/designer-bridge/src/contribution.ts`，它注册了命令、工具栏按钮和异步面板。
+
+## AI Assistant Contribution 实现参考 {#assistant-contribution}
+
+仓库中的 AI 助手是 Contribution 机制的典型应用。它通过 `@easyink/assistant-designer-bridge` 包实现，展示了如何将一个完整的业务系统接入 Designer。
+
+### 注册结构 {#assistant-structure}
+
+```ts
+import type { Contribution } from '@easyink/designer'
+import { createAssistantMaterialManifest } from './material-manifest'
+
+export function createAssistantContribution(): Contribution {
+  const open = ref(false)
+
+  return {
+    id: 'assistant',
+    activate(ctx) {
+      // 1. 注册命令
+      ctx.registerCommand({ id: 'assistant.open', handler: () => { open.value = true } })
+      ctx.registerCommand({ id: 'assistant.close', handler: () => { open.value = false } })
+      ctx.registerCommand({ id: 'assistant.applyResult', handler: (args) => { /* 应用生成结果 */ } })
+      ctx.registerCommand({ id: 'assistant.rollback', handler: () => { /* 回滚 */ } })
+
+      // 2. 注册工具栏按钮
+      ctx.registerToolbarAction({
+        id: 'assistant.toggle',
+        icon: IconSparkles,
+        label: 'AI 助手',
+        onClick: () => void ctx.executeCommand('assistant.togglePanel'),
+      })
+
+      // 3. 注册面板（响应式 props）
+      ctx.registerPanel({
+        id: 'assistant.panel',
+        component: defineAsyncComponent(() => import('@easyink/assistant-ui')),
+        props: {
+          get open() { return open.value },
+          get currentSchema() { return ctx.store.schema },
+          get materialManifest() { return createAssistantMaterialManifest(ctx.store) },
+          onApply: (result) => void ctx.executeCommand('assistant.applyResult', result),
+          onRollback: () => void ctx.executeCommand('assistant.rollback'),
+        },
+      })
+
+      ctx.onDispose(() => { open.value = false })
+    },
+  }
+}
+```
+
+### 关键设计点 {#assistant-design-points}
+
+**响应式 manifest 传递：** `materialManifest` 通过 getter 实现响应式。当用户注册新物料后，面板下次读取时自动获得最新的物料列表（含 `knowledge` 字段）。AI 不需要重启就能感知新物料。
+
+**命令分离：** 面板 UI 不直接操作 store。所有写操作（apply、rollback、applyPatch）都收敛为命令。这样其他 contribution 或自动化脚本也能调用同一套命令。
+
+**异步面板加载：** `defineAsyncComponent` 确保 AI 面板的代码不会进入 Designer 的初始 bundle。只有用户点击按钮后才加载。
+
+详见 [AI 集成](/advanced/ai-integration) 了解 manifest 如何传递到 Orchestrator 并驱动模板生成。

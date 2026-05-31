@@ -95,14 +95,43 @@ pnpm add @easyink/designer @easyink/viewer
 
 只有当你在研究自定义物料、对照内置实现写扩展时，才需要逐个看这些包。
 
-## AI 与 MCP
+## AI 与 Assistant 平台
 
-AI 相关能力也单独拆了出来：
+AI 能力通过 Assistant 平台实现，分为三层：
 
-- `@easyink/ai`：给 Designer 提供 AI 面板和 MCP 客户端能力。
-- `@easyink/mcp-server`：独立的 MCP 服务端。
+**Designer 集成层：**
 
-这两个包不属于 Designer 运行时必需依赖。你只有在接 AI 生成模板工作流时，才需要引入它们。
+| 包 | 作用 |
+| --- | --- |
+| `@easyink/assistant-designer-bridge` | 通过 Contribution 机制将 AI 面板接入 Designer |
+| `@easyink/assistant-ui` | AI 任务面板 Vue 组件 |
+
+**Orchestrator 服务层：**
+
+| 包 | 作用 |
+| --- | --- |
+| `@easyink/assistant-orchestrator` | 主服务：LangGraph 管道 + ComposerAgent + HTTP API |
+| `@easyink/assistant-llm` | Provider 无关的 LLM 网关 |
+| `@easyink/assistant-store` | 任务、版本、草稿存储 |
+| `@easyink/assistant-capabilities` | Schema 验证、diff、patch、preview |
+| `@easyink/assistant-adapters` | 外部数据源适配器 |
+
+**知识与推理层：**
+
+| 包 | 作用 |
+| --- | --- |
+| `@easyink/assistant-material-knowledge` | 物料知识注册表（从 manifest 动态构建） |
+| `@easyink/assistant-constraint-engine` | 可执行约束引擎（验证 + 自动修复） |
+| `@easyink/assistant-schema-builder` | Schema 构建 DSL |
+| `@easyink/assistant-type-aligner` | 类型驱动数据对齐 |
+| `@easyink/assistant-scenario-templates` | 场景模板库与分类器 |
+| `@easyink/assistant-tool-registry` | Agent 工具注册表 |
+
+**独立工具：**
+
+- `@easyink/mcp-server`：MCP 协议服务端，允许外部 AI 工具操作模板。
+
+这些包不属于 Designer 运行时必需依赖。只有在接 AI 生成模板工作流时才需要引入。详见 [AI 集成](/advanced/ai-integration)。
 
 ## 选包原则
 
