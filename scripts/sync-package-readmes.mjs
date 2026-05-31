@@ -163,7 +163,7 @@ function buildReadme({ packageName, description, repositoryUrl }) {
   const npmUrl = `https://www.npmjs.com/package/${npmPackageName}`
   const versionBadgeUrl = `https://img.shields.io/npm/v/${npmPackageName}?logo=npm`
   const downloadsBadgeUrl = `https://img.shields.io/npm/dm/${npmPackageName}?logo=npm`
-  const repositoryLabel = formatRepositoryLabel(repositoryUrl)
+  const documentationUrl = `https://hackycy.github.io/easyink/docs/`
 
   return [
     `# ${packageName}`,
@@ -172,21 +172,14 @@ function buildReadme({ packageName, description, repositoryUrl }) {
     '',
     description.trim(),
     '',
-    '## Getting Started',
+    '## Documentation',
     '',
-    `Please follow the repo at [${repositoryLabel}](${repositoryUrl})`,
+    `- [Docs](${documentationUrl})`,
     '',
+    '## License',
+    '',
+    `[MIT](${repositoryUrl}/blob/main/LICENSE) © 2025-present hackycy`,
   ].join('\n')
-}
-
-function formatRepositoryLabel(repositoryUrl) {
-  try {
-    const url = new URL(repositoryUrl)
-    return url.pathname.replace(/^\//, '') || repositoryUrl
-  }
-  catch {
-    return repositoryUrl
-  }
 }
 
 function resolveRepositoryUrl(rootPackageJson) {

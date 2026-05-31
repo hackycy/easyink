@@ -4,6 +4,10 @@
 
 DOM-to-PDF export plugin for @easyink/export-runtime (html2canvas + jsPDF)
 
-## Getting Started
+## Documentation
 
-Please follow the repo at [hackycy/easyink](https://github.com/hackycy/easyink)
+- [Docs](https://hackycy.github.io/easyink/docs/)
+
+## License
+
+[MIT](https://github.com/hackycy/easyink/blob/main/LICENSE) © 2025-present hackycy

@@ -4,6 +4,10 @@
 
 Schema types, defaults, migration, and serialization for EasyInk
 
-## Getting Started
+## Documentation
 
-Please follow the repo at [hackycy/easyink](https://github.com/hackycy/easyink)
+- [Docs](https://hackycy.github.io/easyink/docs/)
+
+## License
+
+[MIT](https://github.com/hackycy/easyink/blob/main/LICENSE) © 2025-present hackycy
