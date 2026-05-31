@@ -8,19 +8,19 @@
 - `designer` 采用顶层双栏 + 画布内窗口系统 + 独立状态栏
 - `viewer` 是独立运行时，可被设计器通过 iframe 嵌入，也可被宿主独立使用
 - Schema 区分"EasyInk 内部规范模型"和"对标产品兼容输入"，避免把历史原始 JSON 噪音扩散到内部实现
-- 页面模型完整覆盖 `viewer / width / height / pages / scale / radius / offsets / copies / blank / grid / background` 这组真实打印语义，并容忍 `scale/scaleType`、背景偏移字段和空白页策略的历史别名
-- 数据源协议覆盖 `id / name / tag / title / expand / headless / fields / use / props / union / bindIndex`，字段节点可声明 `format / displayFormat`
+- 页面模型覆盖 `mode / width / height / pages / scale / radius / offsetX / offsetY / copies / blankPolicy / grid / font / background / print / pageModel / layout / pagination / reflow`，并兼容 benchmark 输入里的 `viewer / xOffset / yOffset / blank`
+- 数据源协议覆盖 `id / name / tag / title / icon / expand / headless / fields / use / props / format / displayFormat / union / bindIndex / meta`，字段节点可声明 `format / displayFormat`
 - 顶部物料栏建模为"高频直达物料 + 分组目录物料"的混合入口
 - `table`、`container`、`chart`、`svg` 都是一级结构系统
 - 属性面板在同一窗口壳层中互斥展示"元素属性"与"页面属性"，支持 PropertyPanelOverlay 动态叠加层
 - 画布中的每个物料必须根据 props 展示近似真实的视觉效果（设计态渲染）
-- 设计态渲染（`MaterialDesignerExtension.renderContent`）与 Viewer 渲染（`MaterialViewerExtension.render`）是两套独立实现
+- 设计态渲染（`MaterialDesignerExtension.renderContent`）与 Viewer 渲染（`MaterialViewerExtension.render / measure / getRenderSize / fragmentPaginator`）是两套独立实现
 - 页面属性面板区分"规范字段 / benchmark 兼容字段 / 派生 UI 字段"
 - 工作台状态、模板状态、运行时状态明确分层
-- `viewer` 导出链路按运行时适配器建模，lazy load 第三方导出依赖
+- `viewer` 的 `exportDocument()` 走 `ViewerExporter` 注册表，独立 `@easyink/export-runtime` 负责格式插件运行时；第三方导出依赖通过对应插件或导出器按需装载
 - 物料通过 `DatasourceDropHandler` 协议自定义拖拽绑定行为
 - 设计器坐标术语统一为 `screen / document / local / viewport`，其中 `document` 是 Schema 单位坐标；交互层坐标换算统一经由 GeometryService
-- 破坏性用户确认通过 `DesignerInteractionProvider` 交给宿主接管，designer 内部功能与 Contribution 不直接调用浏览器原生确认 API
+- 破坏性用户确认通过 `DesignerInteractionProvider` 交给宿主接管，designer 内部功能与 Contribution 统一走 `DesignerInteractionService`
 
 ## 目录
 
@@ -63,8 +63,8 @@
 - 未识别物料、缺失数据、缺失字体、渲染失败都必须以可见诊断暴露，不允许静默吞掉
 - 对标产品的原始 JSON 字段命名存在历史噪音，EasyInk 提供无损兼容编解码层
 - `DocumentSchema.unit`、纸张预设、页面类型显示名称这类信息在属性面板中可见，但不固化进 `page` 规范字段
-- 旧 AI 对话方案基于 `@easyink/ai` 与 `@easyink/mcp-server`；新主推方案见 [25-assistant-platform-v3](./25-assistant-platform-v3.md)，退役旧 AI/MCP 包，核心架构不依赖 MCP
-- 数据源系统支持运行时动态注册；新 Assistant v3 只保留轻量数据输入适配，不把 MCP 作为核心数据源机制
+- `@easyink/ai`、`@easyink/assistant-*` 与 `@easyink/mcp-server` 都是当前仓库中的真实包；其中 `ai` 提供 Designer 侧 AI Contribution，`assistant-*` 提供新的 Assistant 平台实现，`mcp-server` 仍作为独立工具保留
+- 数据源系统支持运行时动态注册；`@easyink/ai` 仍可通过 `MCPClient` 连接远端 MCP 服务，但核心设计器/Viewer 数据流不以 MCP 为必需前提
 
 ## 快速导航
 
@@ -75,5 +75,5 @@
 - **想了解设计器工作台?** -> [10-designer-interaction](./10-designer-interaction.md)
 - **想了解物料体系?** -> [11-element-system](./11-element-system.md)
 - **想了解命令与历史?** -> [12-command-undo-redo](./12-command-undo-redo.md)
-- **想了解 Contribution 机制?** -> [23-ai-integration](./23-ai-integration.md)
-- **想了解 AI Agent 平台?** -> [25-assistant-platform-v3](./25-assistant-platform-v3.md)
+- **想了解 Contribution 机制?** -> [23-contribution](./23-contribution.md)
+- **想了解 AI Agent 平台?** -> [25-ai-assistant](./25-ai-assistant.md)

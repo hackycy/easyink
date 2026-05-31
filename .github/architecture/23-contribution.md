@@ -167,8 +167,8 @@ EasyInkDesigner unmount
 
 `@easyink/assistant-designer-bridge` 是 Contribution 机制的典型应用，它注册了：
 
-- 8 个命令（open、close、togglePanel、applyResult、applyPatch、applySelectedElements、applyDataSource、rollback）
+- 9 个命令（open、close、togglePanel、applyResult、applyPatch、applySelectedElements、applyDataSource、rollback、attachCurrentSelection）
 - 1 个工具栏按钮（AI 助手开关）
 - 1 个异步面板（AssistantPanel，通过 `defineAsyncComponent` 按需加载）
 
-面板通过响应式 getter 传递 `materialManifest`（含物料 knowledge 字段），使 AI 能实时感知已注册物料的能力和约束。详见 [25-assistant-platform-v3](./25-assistant-platform-v3.md)。
+面板通过响应式 getter 传递 `materialManifest`（含物料 knowledge 字段），使 AI 能实时感知已注册物料的能力和约束。详见 [25-ai-assistant](./25-ai-assistant.md)。

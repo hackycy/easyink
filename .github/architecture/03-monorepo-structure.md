@@ -1,33 +1,34 @@
 # 3. Monorepo 包结构
 
-包结构以”文档模型、数据源、设计器、Viewer、物料系统”五条主轴组织。
+包结构以“文档模型、数据源、核心能力、设计器、Viewer、物料系统、导出/打印、Assistant”几条主轴组织。
 
 ```
 easyink/
 ├── packages/
 │   ├── shared/                 # @easyink/shared — 通用类型、工具、常量
-│   ├── schema/                 # @easyink/schema — Schema 类型、默认值、迁移、序列化
-│   ├── core/                   # @easyink/core — 命令、选择、几何、分页、辅助线、历史
-│   ├── datasource/             # @easyink/datasource — 字段树、数据源引用、绑定规则、格式规则
-│   ├── viewer/                 # @easyink/viewer — iframe Viewer、预览、打印、导出、缩略图
+│   ├── schema/                 # @easyink/schema — Schema 类型、默认值、迁移、序列化、校验
+│   ├── core/                   # @easyink/core — 命令、选择、几何、分页、字体、物料协议
+│   ├── datasource/             # @easyink/datasource — 字段树、数据源引用、绑定格式模板
+│   ├── viewer/                 # @easyink/viewer — ViewerRuntime、预览、打印、导出、缩略图
 │   ├── export/
 │   │   ├── runtime/            # @easyink/export-runtime — 导出任务状态机、插件注册（不绑定具体格式实现）
 │   │   └── plugin/
 │   │       └── dom-pdf/        # @easyink/export-plugin-dom-pdf — 浏览器 DOM 截图转 PDF 插件（html2canvas + jsPDF）
 │   ├── print/
-│   │   ├── core/                           # @easyink/print-core — 打印驱动共享纯工具
-│   │   ├── integration-easyink-printer/   # @easyink/print-integration-easyink-printer — EasyInk.Printer 客户端与 Viewer 驱动
-│   │   └── integration-hiprint/           # @easyink/print-integration-hiprint — HiPrint 客户端与 Viewer 驱动
-│   ├── builtin/                # @easyink/builtin — 内置物料注册与清单汇总包（内部装配层）
+│   │   ├── core/              # @easyink/print-core — 打印驱动共享纯工具
+│   │   ├── integration-easyink-printer/ # @easyink/print-integration-easyink-printer — EasyInk.Printer 客户端与 Viewer 驱动
+│   │   └── integration-hiprint/         # @easyink/print-integration-hiprint — HiPrint 客户端与 Viewer 驱动
+│   ├── builtin/                # @easyink/builtin — 内置物料注册、Designer/Viewer/AI 共享清单
 │   ├── designer/               # @easyink/designer — 设计器工作台 Vue 组件
 │   ├── locales/                # @easyink/locales — 设计器内置语言包
 │   ├── prop-schemas/           # @easyink/prop-schemas — 内置物料基础属性 Schema
 │   ├── ui/                     # @easyink/ui — 面板、表单、工作台基础组件
 │   ├── icons/                  # @easyink/icons — 图标资产
-│   ├── ai/                     # @easyink/ai — AI 对话面板、MCP Client、Server Registry、Designer Contribution
-│   ├── schema-tools/           # @easyink/schema-tools — Schema 校验、DataSource 对齐（Node + 浏览器双端）
-│   ├── mcp-server/             # @easyink/mcp-server — MCP Server、LLM Provider、Docker 部署
+│   ├── ai/                     # @easyink/ai — AI Contribution、MCP Client、Server Registry
+│   ├── schema-tools/           # @easyink/schema-tools — Schema 校验、DataSource 对齐
+│   ├── mcp-server/             # @easyink/mcp-server — MCP Server、LLM Provider
 │   ├── samples/                # @easyink/samples — 示例 schema、data 与 datasource
+│   ├── assistant/              # @easyink/assistant-* — 新一代 Assistant 平台包族
 │   └── materials/
 │       ├── text/
 │       ├── image/
@@ -61,20 +62,19 @@ easyink/
 
 ### `@easyink/builtin`
 
-- 汇总内置物料的 Designer 注册元数据、Viewer 渲染注册以及 MCP Server 物料描述符
-- 作为内部装配层被 `designer`、`viewer`、`mcp-server` 消费，不作为宿主应用主入口推荐
-- 统一维护默认物料清单，避免 Designer / Viewer / Server 三处漂移
+- 汇总内置物料的 Designer 注册元数据、Viewer 渲染注册以及 AI 物料知识描述符
+- 作为内部装配层被 `designer`、`viewer`、`ai` 消费，不作为宿主应用主入口推荐
+- 统一维护默认物料清单，避免 Designer / Viewer / AI 三处漂移
 
 ### `@easyink/datasource`
 
-- 通过插槽、`setupStore` 和 `useDesignerStore()` 暴露宿主集成点，不在包级直接依赖 `@easyink/viewer` 或具体物料包
-- 数据源引用与适配器注册
+- 只处理数据源描述、字段树、命名空间、绑定格式模板和规范化
+- 不依赖 `@easyink/viewer`
 
 ### `@easyink/viewer`
-- 包内同时提供 Schema 默认值、Designer 交互、Viewer 渲染器
 - 独立 Viewer 运行时
 - 负责预览、缩略图、打印、导出文档入口
-- 负责数据加载、字体加载、页面计划与最终页面渲染
+- 负责数据绑定投影、字体加载、页面计划与最终页面渲染
 - 通过 `ViewerExporter` / `PrintDriver` 承接外部导出和打印运行时；打印驱动由 `driverId` 显式选择，未指定时回退浏览器打印
 - 默认注册内置物料；宿主后续注册同类型物料时以后注册覆盖默认注册
 
@@ -83,7 +83,6 @@ easyink/
 - 框架无关的导出运行时内核
 - 只提供 `createExportRuntime()`、plugin registry、`ExportDispatchState` 状态机、进度与诊断回调
 - 不绑定任何具体导出格式；不依赖 `html2canvas` / `jspdf` 等第三方实现
-- 不依赖 `viewer`；宿主或 playground 负责把 Viewer 的页面 DOM、渲染尺寸和诊断桥接进 runtime
 
 ### `@easyink/export-plugin-dom-pdf`
 
@@ -156,15 +155,12 @@ easyink/
 
 ### `@easyink/mcp-server`
 
-- MCP Server 实现（基于 `@modelcontextprotocol/sdk` 的 `McpServer`），支持 stdio 和 HTTP/SSE 两种 transport
-- LLM Provider 抽象层：通过 async factory pattern 动态加载 Claude / OpenAI SDK，避免 `require()`
-- 物料知识通过 `config/materials.json` 注入 system prompt
-- 暴露 `generateSchema` 和 `generateDataSource` 两个 MCP Tool
-- 无状态设计：schema 进出，无文件 IO，单机无认证
-- 依赖 `datasource`、`schema`、`schema-tools`、`shared`、`@modelcontextprotocol/sdk`、`zod`
-- LLM SDK（`@anthropic-ai/sdk`、`openai`）为 optionalDependencies，用户按需安装
-- Docker 部署：多阶段构建 + `pnpm deploy`，`docker-compose.yml` 一键启动
-- CLI 入口：`npx easyink-mcp-server`，通过 `MCP_TRANSPORT` 环境变量选择传输模式
+- MCP Server 实现（基于 `@modelcontextprotocol/sdk`），支持 stdio 与 HTTP 入口
+- LLM Provider 抽象层：通过 async factory pattern 动态加载 Claude / OpenAI SDK
+- 暴露 `generateSchema`、`generateDataSource` 等工具
+- 无状态设计：schema 进出，无文件 IO
+- 依赖 `builtin`、`datasource`、`schema`、`schema-tools`、`shared`、`@modelcontextprotocol/sdk`、`zod`
+- LLM SDK（`@anthropic-ai/sdk`、`openai`）为可选依赖
 
 ## 3.2 物料包内部结构
 
@@ -199,14 +195,16 @@ builtin ───── designer + viewer + mcp-server + material-*
 designer ─── builtin + core + datasource + schema + shared + ui + icons + locales + prop-schemas + material-table-kernel
 locales ─── (no runtime deps)
 prop-schemas ─── core
-viewer ─── builtin + core + datasource + schema + shared
+viewer ─── builtin + core + schema + shared
 export-runtime ─── shared
 export-plugin-dom-pdf ─── export-runtime + shared + html2canvas + jspdf
 print-core ─── viewer + export-runtime
-print-easyink ─── print-core + viewer + export-plugin-dom-pdf
-print-hiprint ─── print-core + viewer + vue-plugin-hiprint
+print-integration-easyink-printer ─── print-core + viewer + export-plugin-dom-pdf
+print-integration-hiprint ─── print-core + viewer + vue-plugin-hiprint
   ↑
 ai ──────── designer (仅类型) + datasource + schema + schema-tools + shared + vue + @modelcontextprotocol/sdk
+
+assistant-* ── 多个 assistant 包彼此依赖，形成独立 Assistant 平台子图
 
 mcp-server ─── builtin + schema-tools + datasource + schema + shared + @modelcontextprotocol/sdk + zod
 
@@ -218,33 +216,29 @@ playground ── designer + ai + viewer + export-runtime + samples + schema
 - `designer` 依赖 `builtin`、`core`、`datasource`、`schema`、`shared`、`ui`、`icons`、`locales`、`prop-schemas` 与 `material-table-kernel`，默认启用内置物料；调用方可通过 `setupStore` 继续扩展或覆盖
 - `locales` 与 `prop-schemas` 是 Designer 静态资源边界包：前者维护内置语言包，后者维护基础属性 Schema。它们可独立构建、测试和发布，但应用层稳定入口仍优先使用 `@easyink/designer` 及其 `./locale` facade
 - 已被 designer 内部直接使用且宿主不应手动补齐的第三方运行时依赖（如 `codemirror`）必须声明为 `dependencies`；只有需要与宿主单例对齐的框架依赖（当前为 `vue`）才保留为 `peerDependencies`
-- `viewer` 依赖 `builtin`、`core`、`schema`、`shared`，默认启用内置物料；调用方可通过 `viewer.registerMaterial()` 继续扩展或覆盖。`viewer` 不依赖 `datasource`，不消费 Designer 的数据源描述符
+- `viewer` 依赖 `builtin`、`core`、`schema`、`shared`，默认启用内置物料；调用方可通过 `viewer.registerMaterial()` 继续扩展或覆盖。`viewer` 不依赖 `datasource`
 - `export-runtime` 仅依赖 `shared`，不绑定任何导出格式实现，不依赖 `viewer`、`designer` 或 Vue
 - `export-plugin-dom-pdf` 依赖 `export-runtime`、`shared` 与按需装载的 `html2canvas` / `jspdf`；任何具体导出链路一律走独立 plugin 包，不再回灌到 runtime
 - `print-core` 只承接打印驱动共享逻辑；具体打印通道放在 `packages/print/*` 下独立包中
-- `print-easyink` 依赖 `print-core`、`viewer` 与 `export-plugin-dom-pdf`；负责 EasyInk.Printer 通道的协议和 Viewer 驱动
-- `print-hiprint` 依赖 `print-core`、`viewer` 与 `vue-plugin-hiprint`；负责 HiPrint 通道的协议和 Viewer 驱动
+- `print-integration-easyink-printer` 依赖 `print-core`、`viewer` 与 `export-plugin-dom-pdf`；负责 EasyInk.Printer 通道的协议和 Viewer 驱动
+- `print-integration-hiprint` 依赖 `print-core`、`viewer` 与 `vue-plugin-hiprint`；负责 HiPrint 通道的协议和 Viewer 驱动
 - `builtin` 依赖全部内置 `material-*` 包，集中维护 Designer / Viewer / MCP Server 三侧共享的默认物料清单
 - `ui` 依赖 `icons` 和 `shared`，不依赖 `designer`；方向为 designer 依赖 ui
 - `samples` 依赖 `datasource`、`schema`、`shared`，不依赖 `designer`
 - `schema-tools` 仅依赖 `datasource`、`schema`、`shared`；无 Vue 依赖；可在 Node 与浏览器双端运行
-- `ai` 依赖 `schema-tools`（校验/对齐）、`designer`（仅 `Contribution` 与 `DesignerStore` 类型）、`vue`、`@modelcontextprotocol/sdk`；通过 `createAIContribution()` 注入 designer，**designer 不反向依赖 ai**
-- `mcp-server` 依赖 `builtin` 与 `schema-tools`（兜底校验）、`datasource`、`schema`、`shared`、`@modelcontextprotocol/sdk`、`zod`。LLM SDK 为 optionalDependencies（`@anthropic-ai/sdk`、`openai`），按运行时环境变量选择加载
+- `ai` 依赖 `datasource`、`schema`、`schema-tools`、`shared`、`designer`（仅 `Contribution` 与 `DesignerStore` 类型）、`vue`、`@modelcontextprotocol/sdk`；通过 `createAIContribution()` 注入 designer，**designer 不反向依赖 ai**
+- `mcp-server` 依赖 `builtin` 与 `schema-tools`（兜底校验）、`datasource`、`schema`、`shared`、`@modelcontextprotocol/sdk`、`zod`。LLM SDK 为可选依赖（`@anthropic-ai/sdk`、`openai`）
 
 ## 3.4 对外消费方式
 
 ```typescript
 import { EasyInkDesigner } from '@easyink/designer'
-import { createDomPdfExportPlugin } from '@easyink/export-plugin-dom-pdf'
-import { createExportRuntime } from '@easyink/export-runtime'
 import { createViewer } from '@easyink/viewer'
 
 // Vue template
 // <EasyInkDesigner v-model:schema="schema" />
 
 const viewer = createViewer({ mode: 'fixed' })
-const exportRuntime = createExportRuntime()
-exportRuntime.registerPlugin(createDomPdfExportPlugin())
 await viewer.open({ schema, data })
 ```
 

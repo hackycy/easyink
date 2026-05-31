@@ -256,7 +256,7 @@ Agent 工具注册表：
 
 ## 25.7 Designer Bridge
 
-通过 Contribution 机制接入 Designer（详见 [23-ai-integration](./23-ai-integration.md)）。
+通过 Contribution 机制接入 Designer（详见 [23-contribution](./23-contribution.md)）。
 
 `createAssistantContribution()` 注册：
 

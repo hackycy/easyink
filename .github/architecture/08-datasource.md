@@ -1,6 +1,6 @@
 # 8. 数据源系统
 
-EasyInk 的数据源系统是 Designer 专属的设计时基础设施，负责字段树展示和拖拽绑定。Viewer 不依赖数据源系统，只消费 schema + data。
+EasyInk 的数据源系统是 Designer 专属的设计时基础设施，负责字段树展示、命名空间管理和拖拽绑定。Viewer 不依赖数据源系统，只消费 `schema + data`。
 
 ## 8.1 目标
 
@@ -84,38 +84,29 @@ interface DataUnionBinding {
 
 interface DataSourceProviderFactory {
   readonly id: string           // 数据源唯一标识
-  readonly namespace: string   // 命名空间（如 '__mcp__'）
+  readonly namespace: string   // 命名空间（如 '__ai__'）
   resolve(): Promise<DataSourceDescriptor>
 }
 ```
 
 ### 8.3.2 DataSourceRegistry 扩展
 
-`DataSourceRegistry` 新增以下方法支持异步数据源注册：
+`DataSourceRegistry` 真实提供的方法如下：
 
 ```typescript
 class DataSourceRegistry {
-  // 原有方法（同步）
   registerSource(source: DataSourceDescriptor): void
   unregisterSource(id: string): void
-  getSource(id: string): DataSourceDescriptor | undefined
-  getSources(): DataSourceDescriptor[]
-  clear(): void
-
-  // 新增：异步注册
   registerProviderFactory(factory: DataSourceProviderFactory): void
-  async registerAsync(
-    id: string,
-    sourceOrFactory: DataSourceDescriptor | DataSourceProviderFactory,
-    namespace?: string
-  ): Promise<void>
-  async getSource(id: string): Promise<DataSourceDescriptor | undefined>
-
-  // 新增：命名空间过滤
+  registerAsync(id: string, sourceOrFactory: DataSourceDescriptor | DataSourceProviderFactory, namespace?: string): Promise<void>
+  getSource(id: string): Promise<DataSourceDescriptor | undefined>
+  getSourceSync(id: string): DataSourceDescriptor | undefined
+  getSources(): DataSourceDescriptor[]
+  getAllSources(): DataSourceDescriptor[]
   getSourcesByNamespace(namespace: string): DataSourceDescriptor[]
   findSourceByName(name: string): DataSourceDescriptor | undefined
-
-  // 新增：变更订阅
+  getProviderFactories(): DataSourceProviderFactory[]
+  clear(): void
   onSourcesChange(callback: DataSourceChangeCallback): () => void
 }
 ```
@@ -127,8 +118,8 @@ class DataSourceRegistry {
 ```typescript
 // @easyink/datasource
 
-// MCP 数据源隐式使用 '__mcp__' 命名空间
-export const MCP_NAMESPACE = '__mcp__'
+// AI 驱动数据源隐式使用 '__ai__' 命名空间
+export const AI_NAMESPACE = '__ai__'
 export const DEFAULT_NAMESPACE = 'default'
 
 // 工具函数
@@ -142,7 +133,7 @@ export function parseNamespacedId(fullId: string): { namespace: string, id: stri
 | 命名空间 | 来源 | 说明 |
 |---|---|---|
 | `default` | 用户手动注册 | 默认命名空间 |
-| `__mcp__` | MCP AI 生成 | 隐式分配，不可指定 |
+| `__ai__` | AI / contribution 生成 | 隐式分配，不可指定 |
 
 ### 8.3.4 注册流程
 
@@ -157,7 +148,7 @@ registry.registerSource({
 // 方式二：Provider Factory 注册（异步）
 registry.registerProviderFactory({
   id: 'mcp-datasource-1',
-  namespace: '__mcp__',
+  namespace: '__ai__',
   async resolve() {
     // 动态获取数据源
     const response = await fetch('https://api.example.com/fields')
@@ -187,7 +178,7 @@ await registry.registerAsync('dynamic-ds', {
 
 EasyInk 的做法应是：
 
-- 用 `normalizeDataSource()` 统一把 `key` 转成规范 `path`
+- 用 `normalizeDataSource()` 统一把输入归一化到 `DataSourceDescriptor`
 - 保留原始字段到 `meta` 或兼容态，而不是静默丢掉
 - 对仅有 `key` 的节点，规范路径默认取 `key`
 
@@ -209,7 +200,7 @@ EasyInk 的做法应是：
 | `bindIndex` | 多参数绑定位次 | BWIP、函数、公式等 |
 | `expand` | 默认展开状态 | 字段树 UI |
 | `headless` | 不作为独立显示根节点 | UI/兼容 |
-| `namespace` | 数据源命名空间 | MCP 隔离、权限控制 |
+| `namespace` | 数据源命名空间 | AI / 外部适配器隔离、权限控制 |
 
 ## 8.6 `use` 不是注释，而是物料推荐协议
 

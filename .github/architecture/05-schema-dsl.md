@@ -17,7 +17,7 @@ EasyInk 需要同时维护两种视图：
 原则：
 
 - 内部类型不照搬对标产品的历史命名噪音
-- codec 必须尽量无损读取 `x / y / g / page / elements / props / bind / animations`
+- codec 必须尽量无损读取 `x / y / g / page / elements / props / binding / animations`
 - 未识别字段和 props 必须保留，避免导入导出破坏模板资产
 
 ## 5.2 顶层结构

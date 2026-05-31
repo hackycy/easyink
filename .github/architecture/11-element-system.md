@@ -409,7 +409,7 @@ interface MaterialExtensionContext {
   /** 查询能力：读取 schema、获取选中状态 */
   getSchema(): DocumentSchema
   getNode(id: string): MaterialNode | undefined
-  getSelection(): SelectionState
+  getSelection(): SelectionSnapshot
   /** 指令能力：提交 command、请求属性面板切换 */
   commitCommand(command: Command): void
   /** 命令式推送临时面板（EphemeralPanel，详见 22 章 §22.6.4 escape hatch）。
@@ -486,11 +486,12 @@ interface DatasourceDropZone {
 
 interface DatasourceFieldInfo {
   sourceId: string
-  sourceName: string
-  sourceTag: string
+  sourceName?: string
+  sourceTag?: string
   fieldPath: string
-  fieldKey: string
-  fieldLabel: string
+  fieldKey?: string
+  fieldLabel?: string
+  format?: BindingDisplayFormat
   use?: string
 }
 
@@ -537,7 +538,7 @@ interface MaterialDesignerRenderContext {
 
 `renderContent(nodeSignal, container, renderContextSignal?)` 接收 Designer 提供的已定位 DOM 容器、框架无关的节点信号，以及可选的设计态上下文信号。物料在首次调用时挂载 DOM，后续通过 `nodeSignal.subscribe()` 监听节点变化；需要页码、重复预览等设计态上下文时，再订阅 `renderContextSignal`。返回 cleanup 函数用于元素移除时的清理。不返回 HTML 字符串。
 
-Designer 内部将 Vue computed 包装为 `NodeSignal` / `MaterialDesignerRenderContextSignal` 接口，extension 代码不依赖 Vue。`renderContextSignal` 只表达当前编辑表面上的临时显示上下文，不允许物料把其中的页码、总页数或预览 clone 信息写回 Schema。
+Designer 内部将 Vue computed 包装为 `NodeSignal` / `MaterialDesignerRenderContextSignal` 接口，extension 代码不依赖 Vue。`renderContextSignal` 只表达当前编辑表面上的临时显示上下文，不允许物料把其中的页码、总页数或预览信息写回 Schema。
 
 **各类物料的设计态渲染策略：**
 

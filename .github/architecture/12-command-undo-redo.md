@@ -111,7 +111,7 @@ class CommandManager {
 
 - `BindFieldCommand`
 - `ClearBindingCommand`
-- `UpdateUsageCommand`
+- `UpdateBindingFormatCommand`
 - `UnionDropCommand`
 
 ### 表格相关命令
@@ -130,7 +130,7 @@ class CommandManager {
 ### 组合命令
 
 - `CompositeCommand` -- 将多个子命令打包成一条原子操作，undo/redo 时整体回滚/重做
-- `BatchCommand`
+- `createBatchCommand()` 生成的批量命令（`type: 'batch'`）
 
 ## 12.6 CompositeCommand 模型
 
