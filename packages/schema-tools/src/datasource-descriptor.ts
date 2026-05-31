@@ -24,7 +24,7 @@ export function buildDataSourceDescriptor(
     fields: expectedDataSource.fields.map(field => toDataFieldNode(field)),
     meta: {
       namespace: AI_NAMESPACE,
-      generatedBy: options.generatedBy ?? 'easyink-mcp-server',
+      generatedBy: options.generatedBy ?? 'easyink-schema-tools',
       sourceName: expectedDataSource.name,
       ...(options.prompt ? { prompt: options.prompt } : {}),
     },

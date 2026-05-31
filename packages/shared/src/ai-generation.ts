@@ -11,7 +11,7 @@ export interface AIPageAssumption {
 }
 
 /**
- * Optional generation plan shared between the AI panel and the mcp-server.
+ * Optional generation plan shared by Assistant-driven template generation flows.
  * Callers may supply one when the user has already confirmed paper or table
  * constraints; otherwise the schema generator infers them directly from the
  * prompt and source data.

@@ -30,7 +30,6 @@
     "prepare": "simple-git-hooks",
     "open:packages": "npx open-packages-on-npm",
     "catalog": "pnpx codemod pnpm/catalog",
-    "pretest": "pnpm -F @easyink/mcp-server check:materials",
     "changeset": "changeset",
     "changeset:version": "changeset version",
     "changeset:status": "changeset status",

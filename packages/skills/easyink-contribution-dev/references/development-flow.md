@@ -2,7 +2,7 @@
 
 ## Package Shape
 
-Host-owned contributions can live in the host app. Built-in EasyInk contributions should follow the AI package shape:
+Host-owned contributions can live in the host app. Built-in EasyInk contributions should follow the Assistant bridge package shape:
 
 - `src/contribution.ts`: factory that returns a `Contribution`.
 - `src/components/*.vue`: panel UI.

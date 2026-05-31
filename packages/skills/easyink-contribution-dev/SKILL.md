@@ -21,7 +21,7 @@ Start with the local repo, not memory. Prefer these files:
 - `packages/designer/src/interactions/interaction-service.ts` for the host-controlled confirmation bridge.
 - `packages/designer/src/components/EasyInkDesigner.vue` for activation, panel Teleport mounting, and unmount disposal.
 - `packages/designer/src/components/TopBarB.vue` for toolbar action rendering and click dispatch.
-- `packages/ai/src/contribution.ts` for a real contribution with command, toolbar action, panel state, and async Vue panel loading.
+- `packages/assistant/designer-bridge/src/contribution.ts` for a real contribution with command, toolbar action, panel state, reactive props, and async Vue panel loading.
 
 ## Workflow
 

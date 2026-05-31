@@ -63,8 +63,8 @@
 - 未识别物料、缺失数据、缺失字体、渲染失败都必须以可见诊断暴露，不允许静默吞掉
 - 对标产品的原始 JSON 字段命名存在历史噪音，EasyInk 提供无损兼容编解码层
 - `DocumentSchema.unit`、纸张预设、页面类型显示名称这类信息在属性面板中可见，但不固化进 `page` 规范字段
-- `@easyink/ai`、`@easyink/assistant-*` 与 `@easyink/mcp-server` 都是当前仓库中的真实包；其中 `ai` 提供 Designer 侧 AI Contribution，`assistant-*` 提供新的 Assistant 平台实现，`mcp-server` 仍作为独立工具保留
-- 数据源系统支持运行时动态注册；`@easyink/ai` 仍可通过 `MCPClient` 连接远端 MCP 服务，但核心设计器/Viewer 数据流不以 MCP 为必需前提
+- `@easyink/assistant-*` 是当前仓库中的 Assistant 平台包族，通过 Contribution 机制接入 Designer
+- 数据源系统支持运行时动态注册；核心设计器/Viewer 数据流不依赖具体 Assistant 实现
 
 ## 快速导航
 

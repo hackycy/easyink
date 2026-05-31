@@ -32,7 +32,7 @@ describe('buildDataSourceDescriptor', () => {
     expect(descriptor.name).toBe('receipt')
     expect(descriptor.meta).toMatchObject({
       namespace: '__ai__',
-      generatedBy: 'easyink-mcp-server',
+      generatedBy: 'easyink-schema-tools',
       sourceName: 'receipt',
       prompt: '生成商超小票',
     })

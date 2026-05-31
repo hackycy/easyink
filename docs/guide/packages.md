@@ -127,11 +127,7 @@ AI 能力通过 Assistant 平台实现，分为三层：
 | `@easyink/assistant-scenario-templates` | 场景模板库与分类器 |
 | `@easyink/assistant-tool-registry` | Agent 工具注册表 |
 
-**独立工具：**
-
-- `@easyink/mcp-server`：MCP 协议服务端，允许外部 AI 工具操作模板。
-
-这些包不属于 Designer 运行时必需依赖。只有在接 AI 生成模板工作流时才需要引入。详见 [AI 集成](/advanced/ai-integration)。
+这些包不属于 Designer 运行时必需依赖。只有在接 AI 生成模板工作流时才需要引入。
 
 ## 选包原则
 
@@ -140,6 +136,6 @@ AI 能力通过 Assistant 平台实现，分为三层：
 - 只做编辑和预览：装 `@easyink/designer`、`@easyink/viewer`
 - 做打印：再加官方打印集成包
 - 做导出：再加导出运行时和对应插件
-- 做高级扩展：再看 `schema`、`core`、物料包和 AI 包
+- 做高级扩展：再看 `schema`、`core`、物料包和 Assistant 包
 
 关于包，目前知道这些就够用了。后面读具体章节时，再按需深入某个包即可。

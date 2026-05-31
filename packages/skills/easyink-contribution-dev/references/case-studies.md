@@ -1,19 +1,19 @@
 # Contribution Case Studies
 
-## AI Contribution
+## Assistant Contribution
 
 Source file:
 
-- `packages/ai/src/contribution.ts`
+- `packages/assistant/designer-bridge/src/contribution.ts`
 
 Key structure:
 
-- `createAIContribution(options)` returns a `Contribution`.
+- `createAssistantContribution(options)` returns a `Contribution`.
 - `open` is a Vue `ref` owned by the contribution closure.
-- `AIPanel` is loaded with `defineAsyncComponent()`.
-- `ai.togglePanel` is registered as a command.
-- The toolbar action only calls `ctx.executeCommand('ai.togglePanel')`.
-- The panel receives `open`, `onUpdate:open`, and `knownMaterialTypes` as props.
+- `AssistantPanel` is loaded with `defineAsyncComponent()`.
+- A namespaced toggle command is registered by the contribution.
+- The toolbar action only calls `ctx.executeCommand()`.
+- The panel receives `open`, `onUpdate:open`, and Assistant service props.
 - `ctx.onDispose()` resets `open` on unmount.
 
 What to copy:
@@ -26,7 +26,7 @@ What to copy:
 
 What not to copy blindly:
 
-- Do not reuse `ai.*` ids for other features.
+- Do not reuse Assistant contribution ids for unrelated features.
 - Do not assume every panel should be globally fixed; choose layout in the panel component.
 - Do not use material AI descriptors here. Material descriptors belong to `$easyink-material-dev`.
 

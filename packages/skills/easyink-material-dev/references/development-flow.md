@@ -201,11 +201,10 @@ For a new built-in material:
 3. Add package dependency to `packages/builtin/package.json`.
 4. Import and register Designer entry in `packages/builtin/src/designer.ts`.
 5. Import and register Viewer entry in `packages/builtin/src/viewer.ts`.
-6. Import and append the AI descriptor in `packages/builtin/src/ai.ts` when MCP generation should know it, and pass the same descriptor as `aiDescriptor` in Designer registration so Assistant sees it.
+6. Import and append the AI descriptor in `packages/builtin/src/ai.ts`, and pass the same descriptor as `aiDescriptor` in Designer registration so Assistant sees it.
 7. Add locale keys in `packages/locales/src/zh-CN.ts` and `packages/locales/src/en-US.ts` for material catalog labels, material-local toolbars, properties, table-kernel commands, history, page behavior labels, reject reasons, or placeholders.
 8. Update tests or snapshots affected by built-in type lists.
-9. Run `pnpm -F @easyink/mcp-server build:materials` or `pnpm -F @easyink/mcp-server check:materials` when AI descriptors changed.
-10. Run focused package tests and then broader validation when registration or shared Designer/Viewer behavior changed.
+9. Run focused package tests and then broader validation when registration, descriptors, or shared Designer/Viewer behavior changed.
 
 ## Export and Print Compatibility
 

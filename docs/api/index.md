@@ -184,34 +184,3 @@ electron-hiprint 官方前端集成。
 | `printHtmlWithHiPrintRuntime` | Function | 通过 HiPrint runtime 打印单个 HTML 文档 |
 
 类型导出：`HiPrintClientOptions`, `HiPrintRuntimeClientOptions`, `HiPrintClientLike`, `HiPrintDevice`, `HiPrintPrinterOptions`, `HiPrintPrinter`, `HiPrintPrintRequest`, `PrintHtmlOptions`, `PrintPagesOptions`, `HiPrintProgress`
-
-## @easyink/ai
-
-Designer AI contribution 与 MCP 客户端。
-
-| 导出 | 类型 | 说明 |
-|------|------|------|
-| `AIPanel` | Vue Component | 可单独挂载的 AI 面板 |
-| `createAIContribution` | Function | 注册 AI 面板、工具栏按钮和 `ai.togglePanel` 命令 |
-| `MCPClient` | Class | MCP 工具调用客户端 |
-| `ServerRegistry` | Class | MCP server 配置注册表 |
-| `validateServerConfig` | Function | 校验 MCP server 配置 |
-
-类型导出：`CreateAIContributionOptions`, `MCPServerConfig`, `MCPProviderConfig`, `MCPAuthConfig`, `MCPTool`, `MCPToolResult`, `GenerateOptions`, `GenerateResult`, `GenerateContext`, `ConnectionState`, `ServerStatus`, `SessionMessage`
-
-## @easyink/mcp-server
-
-EasyInk MCP 服务端。
-
-| 导出 | 类型 | 说明 |
-|------|------|------|
-| `createMCPServer` | Function | 创建 MCP server 并注册工具 |
-| `startStdioServer` | Function | 以 stdio transport 启动 |
-| `startHTTPServer` | Function | 以 Streamable HTTP transport 启动 `/mcp` |
-| `ClaudeProvider` | Class | Claude LLM provider |
-| `OpenAIProvider` | Class | OpenAI LLM provider |
-| `registerGenerateSchemaTool` | Function | 注册 `generateSchema` 工具 |
-| `registerGenerateDataSourceTool` | Function | 注册 `generateDataSource` 工具 |
-| `registerDebugTools` | Function | 注册调试工具 |
-
-类型导出：`MCPServerOptions`, `LLMConfig`, `LLMProvider`, `SchemaGenerationInput`, `SchemaGenerationOutput`, `DataSourceGenerationInput`, `DataSourceGenerationOutput`

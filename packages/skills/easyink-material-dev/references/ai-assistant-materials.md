@@ -1,13 +1,13 @@
 # AI and Assistant Material Knowledge
 
-Use this reference when a material should be generated, selected, repaired, or reasoned about by EasyInk Assistant or MCP.
+Use this reference when a material should be generated, selected, repaired, or reasoned about by EasyInk Assistant.
 
 ## Current Implementation Map
 
 - `packages/shared/src/ai-generation.ts`: source types for `AIMaterialDescriptor` and `MaterialKnowledgeDescriptor`.
 - `packages/designer/src/materials/registry.ts`: stores each registered Designer material's optional `aiDescriptor`.
 - `packages/builtin/src/designer.ts`: built-in Designer registration must pass `aiDescriptor` on the material entry.
-- `packages/builtin/src/ai.ts`: built-in descriptor list used by MCP material config generation.
+- `packages/builtin/src/ai.ts`: built-in descriptor list used by Assistant material knowledge consumers.
 - `packages/assistant/designer-bridge/src/material-manifest.ts`: exports the live Designer store as `AssistantMaterialManifest`; props are serialized and `material.aiDescriptor` becomes `manifest.materials[].ai`.
 - `packages/assistant/designer-bridge/src/contribution.ts`: passes `materialManifest` through a getter so Assistant sees newly registered materials without restart.
 - `packages/assistant/capabilities/src/types.ts`: runtime zod shape for `AssistantMaterialManifest` and `AssistantAIMaterialDescriptorSchema`.
@@ -15,7 +15,6 @@ Use this reference when a material should be generated, selected, repaired, or r
 - `packages/assistant/material-knowledge/src/from-manifest.ts`: builds `MaterialKnowledgeRegistry` from `entry.knowledge` or `entry.ai.knowledge`, falling back to synthesized minimal knowledge from plain `ai`.
 - `packages/assistant/tool-registry/src/tools/material-tools.ts`: exposes registry-backed material queries, binding specs, compatibility, and sizing.
 - `packages/assistant/orchestrator/src/composer/agent.ts`: Composer Agent builds a registry from `input.materialManifest` and calls material/data/layout/schema tools.
-- `packages/mcp-server/scripts/generate-materials-config.ts`: generates `packages/mcp-server/config/materials.json` from `builtinAIMaterialDescriptors`.
 
 Useful architecture docs:
 
@@ -119,15 +118,6 @@ Current flow:
    - `createRegistryFromManifest()` builds `MaterialKnowledgeRegistry`.
    - material tools answer `query_material`, `get_binding_spec`, `check_compatibility`, and `get_material_sizing`.
 
-## MCP Materials Config
-
-MCP config is built from built-in descriptors, not the live Designer manifest:
-
-- `pnpm -F @easyink/mcp-server build:materials`
-- `pnpm -F @easyink/mcp-server check:materials`
-
-Run `check:materials` when built-in descriptors changed. Run `build:materials` when the generated `packages/mcp-server/config/materials.json` should be updated.
-
 ## Review Checklist
 
 - `type` exactly matches the canonical material type and factory default.
@@ -139,8 +129,8 @@ Run `check:materials` when built-in descriptors changed. Run `build:materials` w
 - `knowledge.sizing.defaultSize` matches `createXNode()` defaults in mm.
 - `knowledge.sizing.growAxis` matches Viewer `measure()` and page layout behavior.
 - `composability` does not promise child support unless the material supports children end to end.
-- Built-ins are registered in Designer, Viewer, and `packages/builtin/src/ai.ts` when AI/MCP should see them.
-- Custom materials register `aiDescriptor` with Designer; MCP registration is irrelevant unless the type is built-in.
+- Built-ins are registered in Designer, Viewer, and `packages/builtin/src/ai.ts` when Assistant should see them.
+- Custom materials register `aiDescriptor` with Designer.
 - Assistant manifest tests cover descriptor preservation when changing serialization behavior.
 
 ## Failure Signals
@@ -150,4 +140,3 @@ Run `check:materials` when built-in descriptors changed. Run `build:materials` w
 - Assistant emits a scalar binding for array data: `binding` or `knowledge.bindingSpec.mode` is wrong.
 - Generated elements are too small: `knowledge.sizing` or prompt examples disagree with factory defaults.
 - Custom material works in Designer but not Assistant: missing `aiDescriptor` on the Designer material entry.
-- MCP material check fails after changing a built-in: update generated config or fix descriptor fields.

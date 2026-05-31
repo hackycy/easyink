@@ -153,14 +153,6 @@ features:
       <div class="ei-eco-card-desc">独立的渲染运行时，负责预览、分页、打印入口和导出入口。</div>
     </div>
     <div class="ei-eco-card">
-      <div class="ei-eco-card-name">@easyink/ai</div>
-      <div class="ei-eco-card-desc">浏览器侧 AI 能力入口，围绕模板生成和交互扩展组织。</div>
-    </div>
-    <div class="ei-eco-card">
-      <div class="ei-eco-card-name">@easyink/mcp-server</div>
-      <div class="ei-eco-card-desc">独立 MCP 服务，用于生成 Schema 和数据源描述，不是 Designer 运行时依赖。</div>
-    </div>
-    <div class="ei-eco-card">
       <div class="ei-eco-card-name">@easyink/schema</div>
       <div class="ei-eco-card-desc">文档模型、默认值、校验和编解码能力所在的基础包。</div>
     </div>
@@ -171,6 +163,14 @@ features:
     <div class="ei-eco-card">
       <div class="ei-eco-card-name">@easyink/core</div>
       <div class="ei-eco-card-desc">Designer 和 Viewer 共用的核心契约与底层能力。</div>
+    </div>
+    <div class="ei-eco-card">
+      <div class="ei-eco-card-name">@easyink/assistant-designer-bridge</div>
+      <div class="ei-eco-card-desc">通过 Contribution 机制将 Assistant 面板接入 Designer。</div>
+    </div>
+    <div class="ei-eco-card">
+      <div class="ei-eco-card-name">@easyink/assistant-orchestrator</div>
+      <div class="ei-eco-card-desc">面向模板生成工作流的编排服务，连接 LLM、知识和修复能力。</div>
     </div>
     <div class="ei-eco-card">
       <div class="ei-eco-card-name">@easyink/datasource</div>

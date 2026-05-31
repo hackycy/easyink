@@ -7,7 +7,7 @@
 | Skill | 路径 | 描述 |
 |-------|------|------|
 | **easyink-material-dev** | [SKILL.md](./easyink-material-dev/SKILL.md) | 新增或修改可保存到 Schema 的可视物料，覆盖 MaterialNode、Designer、Viewer、绑定、i18n、AI descriptor 等完整流程 |
-| **easyink-contribution-dev** | [SKILL.md](./easyink-contribution-dev/SKILL.md) | 扩展 Designer 能力（面板、工具栏、命令、诊断、AI 面板等），不新增物料类型 |
+| **easyink-contribution-dev** | [SKILL.md](./easyink-contribution-dev/SKILL.md) | 扩展 Designer 能力（面板、工具栏、命令、诊断、Assistant 面板等），不新增物料类型 |
 
 ## 直接使用
 
@@ -38,6 +38,6 @@
 ## 职责边界
 
 - `easyink-material-dev`：新增或修改可保存到 `schema.elements[]` 的物料，覆盖 `MaterialNode`、`createDefaultNode`、Designer 注册、Viewer 渲染、绑定、measure、深度编辑、i18n 和 AI descriptor。
-- `easyink-contribution-dev`：扩展 Designer 能力但不新增物料类型，覆盖 `Contribution`、面板、工具栏动作、命令、诊断订阅、宿主业务状态、AI 面板、审查面板和资产面板。
+- `easyink-contribution-dev`：扩展 Designer 能力但不新增物料类型，覆盖 `Contribution`、面板、工具栏动作、命令、诊断订阅、宿主业务状态、Assistant 面板、审查面板和资产面板。
 
 简单判断：能不能成为模板里的一个新可视元素。能，就是 material；不能，只是设计器工作台能力，就是 contribution。

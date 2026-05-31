@@ -145,7 +145,7 @@ async function runNpmRelease() {
   console.log(`[release] tag: ${tagName}`)
   console.log(`[release] branch: ${releaseRemote}/${releaseBranch}`)
   console.log(`[release] commit: ${npmReleaseCommitMessage}`)
-  outro('npm 版本提交已推送。Publish npm Packages workflow 将负责 npm 发布、mcp-server Docker 镜像和 GitHub Pages。')
+  outro('npm 版本提交已推送。Publish npm Packages workflow 将负责 npm 发布和 GitHub Pages。')
 }
 
 async function runAppRelease() {

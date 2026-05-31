@@ -277,9 +277,7 @@ Agent 工具注册表：
 | 日志 | pino | orchestrator |
 | 测试 | Vitest | 全部 assistant 包 |
 
-## 25.9 与旧架构的关系
+## 25.9 与周边架构的关系
 
-- `@easyink/ai`：已冻结，不再扩展。新功能进入 assistant 包族
-- `@easyink/mcp-server`：保留为独立 MCP 工具，不进入核心架构
 - `@easyink/schema-tools`：继续保留，被 orchestrator 和 capabilities 消费
 - Contribution 机制：继续使用，是 assistant 接入 Designer 的唯一通道

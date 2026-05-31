@@ -35,29 +35,24 @@ Property schemas can store label keys directly because `PropertiesPanel.vue` res
 - History panel can display the command label. Prefer stable `designer.history.*` keys for material commands.
 - Custom host-owned materials document how host locale messages are passed via `EasyInkDesigner` `locale`.
 
-## AI and MCP Reminder
+## AI Reminder
 
 Read `references/ai-assistant-materials.md` when AI behavior matters. In short:
 
-- Put `src/ai.ts` next to the material when it should be generated or selected by Assistant/MCP.
+- Put `src/ai.ts` next to the material when it should be generated or selected by Assistant.
 - Include `AIMaterialDescriptor.knowledge` when Assistant needs reliable material selection, binding, sizing, compatibility, or scenario fitness.
 - Register built-in descriptors through Designer `aiDescriptor` and `packages/builtin/src/ai.ts`.
 - Register custom material descriptors on the Designer material entry; Assistant gets them from the live store manifest.
 
-For built-in MCP config, update/check:
-
-- `pnpm -F @easyink/mcp-server build:materials`
-- `pnpm -F @easyink/mcp-server check:materials`
-
-The generated config contains canonical material types, aliases, binding rules, and schema rules. If a type is added but not in the AI descriptor list, MCP generation may reject or ignore it.
+The built-in descriptor list contains canonical material types, aliases, binding rules, and schema rules. If a type is added but not in the AI descriptor list, Assistant generation may reject or ignore it.
 
 ## AI Review Smells
 
 - AI descriptor mentions a prop that does not exist or omits required specialized schema rules.
 - Descriptor binding says `single` or `multi` but `knowledge.bindingSpec.mode` says something incompatible.
 - `knowledge.sizing.defaultSize` does not match the factory default size in mm.
-- Custom material only updates `packages/builtin/src/ai.ts` or MCP config but forgets Designer `aiDescriptor`.
-- Built-in material has `aiDescriptor` in Designer but is missing from `builtinAIMaterialDescriptors`, so MCP config cannot see it.
+- Custom material only updates `packages/builtin/src/ai.ts` but forgets Designer `aiDescriptor`.
+- Built-in material has `aiDescriptor` in Designer but is missing from `builtinAIMaterialDescriptors`.
 
 ## Tests to Add or Run
 
@@ -73,14 +68,12 @@ Choose focused tests based on risk:
 - Page-aware/repeat overlay: excluded from layout inputs, copied after pagination, receives `__pageNumber` and `__totalPages`.
 - Datasource drop: accepted/rejected zones, collection prefix compatibility, cell binding shape.
 - Registration: built-in Designer and Viewer registries include the new material.
-- MCP config: `check:materials` passes when AI descriptors changed.
 
 Useful commands:
 
 - `pnpm test -- packages/materials/svg/star/src/star.test.ts`
 - `pnpm test -- packages/materials/table-data/src/viewer.test.ts`
 - `pnpm test -- packages/materials/table-kernel/src/editing/geometry.test.ts`
-- `pnpm -F @easyink/mcp-server check:materials`
 - `pnpm build` for broad package integration when registration or package exports changed.
 
 ## Review Smells

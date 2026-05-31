@@ -45,7 +45,6 @@ catalogs:
     '@codemirror/state': ^6.0.0
     '@codemirror/view': ^6.0.0
     '@lezer/highlight': ^1.0.0
-    '@modelcontextprotocol/sdk': ^1.29.0
     '@vueuse/core': ^14.3.0
     ant-design-vue: ^4.2.6
     class-variance-authority: ^0.7.1
