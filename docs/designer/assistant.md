@@ -1,0 +1,331 @@
+---
+description: 在 Designer 中接入 EasyInk Assistant：注册助手面板、部署 orchestrator 服务、配置模型、持久化和上线检查。
+---
+
+# Assistant 助手 {#assistant}
+
+Assistant 是 Designer 旁边的模板生成助手。你把一个 Contribution 接进 Designer，再把前端连到 `assistant-orchestrator` 服务，用户就可以在设计器里描述要生成的票据、标签或表单，并在确认后应用到当前模板。
+
+## 安装前端包 {#install-packages}
+
+先把 Designer 和助手桥接包装进你的前端项目：
+
+```bash
+pnpm add @easyink/designer @easyink/assistant-designer-bridge
+```
+
+`@easyink/assistant-designer-bridge` 已经把面板、工具栏按钮、命令和应用结果的逻辑封装好了。你不需要自己从零写一个侧边面板。
+
+## 接入 Designer {#connect-designer}
+
+先看一个最小接入：
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue'
+import { EasyInkDesigner, createLocalStoragePreferenceProvider } from '@easyink/designer'
+import { zhCN } from '@easyink/designer/locale'
+import { createAssistantContribution } from '@easyink/assistant-designer-bridge'
+import '@easyink/designer/index.css'
+import '@easyink/assistant-designer-bridge/index.css'
+
+const schema = ref({})
+const preferenceProvider = createLocalStoragePreferenceProvider()
+
+const assistant = createAssistantContribution({
+  endpoint: import.meta.env.VITE_EASYINK_ASSISTANT_ENDPOINT,
+})
+
+const contributions = [assistant]
+</script>
+
+<template>
+  <EasyInkDesigner
+    v-model:schema="schema"
+    :locale="zhCN"
+    :preference-provider="preferenceProvider"
+    :contributions="contributions"
+  />
+</template>
+```
+
+这段代码做了三件事：
+
+- 在 Designer 工具栏里注册 Assistant 按钮。
+- 点击按钮时打开助手面板。
+- 用户点击“应用到设计器”后，把生成结果写回当前 `schema`。
+
+如果你的前端和 Assistant 服务在同一个域名下，可以不传 `endpoint`。这时面板会请求当前站点下的 `/assistant/*` 接口。
+
+## 配置接口地址 {#configure-endpoint}
+
+开发时最直接的方式，是把服务地址放进前端环境变量：
+
+```dotenv
+VITE_EASYINK_ASSISTANT_ENDPOINT=http://localhost:3010
+```
+
+然后像上面的示例一样传给 `createAssistantContribution()`。
+
+生产环境里更推荐让前端走同源反向代理：
+
+```ts
+const assistant = createAssistantContribution({
+  endpoint: '/easyink-assistant',
+})
+```
+
+这样浏览器会请求：
+
+```text
+/easyink-assistant/assistant/tasks
+/easyink-assistant/assistant/tasks/{id}/stream
+```
+
+后端代理再把 `/easyink-assistant/` 转发到 Assistant 服务根路径。
+
+:::tip 提示
+Assistant 会使用 SSE 接收生成进度。反向代理要关闭响应缓冲，否则用户会看到“请求还在转，但面板一直不更新”。
+:::
+
+## 本地启动服务 {#run-service-locally}
+
+如果你只想先在本机试通，可以直接用 Docker 跑服务：
+
+```bash
+docker run --rm \
+  -p 3010:3010 \
+  -e EASYINK_ASSISTANT_LLM_PROVIDER=openai \
+  -e OPENAI_API_KEY=sk-your-key \
+  -e EASYINK_ASSISTANT_LLM_MODEL=gpt-5-mini \
+  ghcr.io/hackycy/easyink-assistant-orchestrator:latest
+```
+
+服务启动后，先验证健康检查：
+
+```bash
+curl http://localhost:3010/health
+```
+
+你应该能看到类似结果：
+
+```json
+{"ok":true,"service":"easyink-assistant-orchestrator"}
+```
+
+再确认前端能读到服务能力：
+
+```bash
+curl http://localhost:3010/assistant/capabilities
+```
+
+如果这里已经通了，再回到 Designer，点击工具栏里的 Assistant 按钮，输入一句“帮我生成一张 80mm 小票”试试看。
+
+## Docker Compose 部署 {#docker-compose}
+
+长期运行时，建议给服务加上持久化目录。下面是一份可以直接改的 `docker-compose.yml`：
+
+```yaml
+services:
+  easyink-assistant:
+    image: ghcr.io/hackycy/easyink-assistant-orchestrator:latest
+    ports:
+      - '3010:3010'
+    environment:
+      EASYINK_ASSISTANT_HTTP_HOST: 0.0.0.0
+      EASYINK_ASSISTANT_HTTP_PORT: 3010
+      EASYINK_ASSISTANT_CORS_ORIGIN: https://your-designer.example.com
+      EASYINK_ASSISTANT_STORE_KIND: sqlite
+      EASYINK_ASSISTANT_STORE_DIR: /var/lib/easyink-assistant
+      EASYINK_ASSISTANT_STORE_SQLITE_FILE: assistant-store.sqlite
+      EASYINK_ASSISTANT_LLM_PROVIDER: openai
+      EASYINK_ASSISTANT_LLM_MODEL: gpt-5-mini
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    volumes:
+      - easyink-assistant-data:/var/lib/easyink-assistant
+    restart: unless-stopped
+
+volumes:
+  easyink-assistant-data:
+```
+
+这份配置把任务、事件、版本和生成结果放进 SQLite。容器重启后，服务端的任务记录还在。
+
+如果你只是做临时演示，也可以用内存存储：
+
+```yaml
+environment:
+  EASYINK_ASSISTANT_STORE_KIND: memory
+```
+
+内存模式重启就清空，适合演示，不适合生产。
+
+## 模型配置方式 {#llm-configuration}
+
+模型配置有两种常见方式。两种都能跑通，区别在于 API Key 放在哪里。
+
+### 服务端统一配置 {#server-side-llm}
+
+如果你的系统由团队统一付费和管控，选服务端配置：
+
+```dotenv
+EASYINK_ASSISTANT_LLM_PROVIDER=openai
+EASYINK_ASSISTANT_LLM_MODEL=gpt-5-mini
+OPENAI_API_KEY=sk-your-key
+```
+
+OpenAI-compatible 服务也走同一套 OpenAI 客户端，只是多传一个 base URL：
+
+```dotenv
+EASYINK_ASSISTANT_LLM_PROVIDER=openai-compatible
+EASYINK_ASSISTANT_LLM_BASE_URL=https://api.deepseek.com
+EASYINK_ASSISTANT_LLM_MODEL=deepseek-chat
+OPENAI_API_KEY=your-key
+```
+
+Anthropic 则换成：
+
+```dotenv
+EASYINK_ASSISTANT_LLM_PROVIDER=anthropic
+EASYINK_ASSISTANT_LLM_MODEL=claude-sonnet-4-5
+ANTHROPIC_API_KEY=sk-ant-your-key
+```
+
+这种方式下，浏览器不会接触模型密钥。对企业内部系统来说，这是更常见的选择。
+
+### 用户自己填写 Key {#request-scoped-llm}
+
+如果你做的是公开演示，可能不想替所有访问者承担模型调用。这时可以允许用户在浏览器里填写自己的 Key。
+
+先在服务端打开请求级模型配置：
+
+```dotenv
+EASYINK_ASSISTANT_REQUEST_LLM_CONFIG=1
+EASYINK_ASSISTANT_REQUEST_LLM_PROVIDERS=openai,openai-compatible,anthropic
+EASYINK_ASSISTANT_REQUEST_LLM_ALLOWED_BASE_URLS=https://api.openai.com,https://api.deepseek.com
+EASYINK_ASSISTANT_REQUEST_LLM_PRIVATE_BASE_URL=0
+EASYINK_ASSISTANT_REQUEST_LLM_INSECURE_BASE_URL=0
+```
+
+再在前端传入浏览器配置服务：
+
+```ts
+import {
+  createAssistantContribution,
+  createBrowserAssistantLLMConfigService,
+} from '@easyink/assistant-designer-bridge'
+
+const llmConfig = createBrowserAssistantLLMConfigService({
+  persistence: 'session',
+  providers: [
+    { provider: 'openai', label: 'OpenAI', model: 'gpt-5-mini' },
+    { provider: 'openai-compatible', label: 'DeepSeek', baseURL: 'https://api.deepseek.com', model: 'deepseek-chat' },
+    { provider: 'anthropic', label: 'Anthropic', model: 'claude-sonnet-4-5' },
+  ],
+})
+
+const assistant = createAssistantContribution({
+  endpoint: import.meta.env.VITE_EASYINK_ASSISTANT_ENDPOINT,
+  llmConfig,
+})
+```
+
+`persistence: 'session'` 表示配置只保存在当前浏览器会话里。你也可以改成 `memory` 或 `local`，但公开站点里我们建议先用 `session`。
+
+:::warning 注意
+请求级模型配置会把用户填写的 Key 随请求发送到 Assistant 服务。服务不会把它写进任务存储，但你仍然要使用 HTTPS，并避免在日志里记录请求体。
+:::
+
+## 反向代理配置 {#reverse-proxy}
+
+如果前端页面在 `https://your-designer.example.com`，我们建议把 Assistant 也挂到同一个域名下：
+
+```nginx
+location /easyink-assistant/ {
+  proxy_pass http://easyink-assistant:3010/;
+  proxy_http_version 1.1;
+  proxy_set_header Host $host;
+  proxy_set_header X-Forwarded-Proto $scheme;
+  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  proxy_buffering off;
+  proxy_cache off;
+}
+```
+
+前端对应写：
+
+```ts
+const assistant = createAssistantContribution({
+  endpoint: '/easyink-assistant',
+})
+```
+
+如果你不走同源代理，而是让浏览器直接访问 `http://assistant.example.com:3010`，记得设置：
+
+```dotenv
+EASYINK_ASSISTANT_CORS_ORIGIN=https://your-designer.example.com
+```
+
+开发阶段可以用 `*`，生产环境建议写明确域名。
+
+## 应用结果的流程 {#apply-flow}
+
+Assistant 不会在生成完成后自动改模板。用户需要先查看生成结果，再点击应用。
+
+整个流程可以这样理解：
+
+```text
+用户描述需求
+  -> Assistant 服务生成候选模板或补丁
+  -> 面板展示摘要、差异和需要确认的问题
+  -> 用户点击应用
+  -> Designer 更新 schema、数据源或当前选中元素
+```
+
+如果应用后发现不合适，面板里的回滚操作会恢复到应用前的模板快照。
+
+这也是为什么我们建议你保留 Designer 的 [自动保存](./auto-save)：Assistant 负责生成和应用，自动保存负责把最终模板持久化到你的业务系统。
+
+## 上线前检查 {#production-checklist}
+
+接入完成后，至少检查这些点：
+
+- 健康检查：`/health` 能被监控系统访问。
+- 进度流：`/assistant/tasks/{id}/stream` 没有被代理缓冲。
+- CORS：生产环境不要长期使用 `*`，除非你明确允许任意来源访问。
+- 存储：生产环境使用 SQLite 或你自己的持久化方案，不要用内存模式。
+- 密钥：服务端 API Key 放在部署平台的密钥管理里，不要写进镜像或前端环境变量。
+- 日志：不要记录用户 prompt 里的敏感业务数据，也不要记录请求级 LLM Key。
+- 版本：前端包和服务镜像尽量一起升级，避免面板调用了服务端还不认识的新接口。
+
+## 常见问题 {#troubleshooting}
+
+**工具栏没有 Assistant 按钮**
+
+先确认 `contributions` 真的传给了 Designer：
+
+```vue
+<EasyInkDesigner :contributions="contributions" />
+```
+
+如果你把 `contributions` 写在 `computed` 里，也要保证里面的 `createAssistantContribution()` 没有在每次渲染时重新创建。
+
+**面板打开后请求失败**
+
+先检查 endpoint 拼出来的路径：
+
+```text
+{endpoint}/assistant/capabilities
+```
+
+如果你传的是 `/easyink-assistant`，那服务能力接口应该是 `/easyink-assistant/assistant/capabilities`。
+
+**生成进度一直不动**
+
+大概率是 SSE 被代理缓冲了。先用浏览器 Network 看 `/stream` 请求是否持续接收事件，再检查反向代理的 `proxy_buffering off` 或同等配置。
+
+**应用后模板没有保存到业务后端**
+
+Assistant 只负责把结果应用到 Designer。你仍然需要配置 [自动保存](./auto-save)，或者监听 `update:schema` 后调用自己的保存接口。
+
+关于 Assistant，目前知道这些就能完成一次完整接入。下一步可以继续看 [Contribution 扩展](../advanced/contributions)，了解它是怎么把按钮、面板和命令挂进 Designer 的。

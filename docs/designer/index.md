@@ -252,6 +252,7 @@ import '@easyink/designer/index.css'
 关于 Designer，目前知道这些就够用了。接下来最适合继续读的是：
 
 - [数据绑定](./data-binding)
+- [Assistant 助手](./assistant)
 - [自动保存](./auto-save)
 - [字体管理](./fonts)
 - [样式自定义](./styling)
