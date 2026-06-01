@@ -30,7 +30,7 @@ export function renderTableStatic(node: MaterialNode, contextOrUnit: ViewerRende
     cellRenderer: (cell) => {
       if (cell.staticBinding) {
         const raw = resolveBindingValue(cell.staticBinding, data)
-        const formatted = formatBindingDisplayValue(raw, cell.staticBinding)
+        const formatted = formatBindingDisplayValue(raw, cell.staticBinding, { data })
         for (const diagnostic of formatted.diagnostics)
           context?.reportDiagnostic?.({ ...diagnostic, nodeId: node.id })
         return renderPlainTextCell(formatted.value)

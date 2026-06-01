@@ -108,11 +108,11 @@ Viewer 在渲染前执行：
 1. 使用 `resolveBindingValue()` 或表格行内解析得到原始值
 2. 若值为 `null / undefined / ''`，先使用 `format.fallback`
 3. `format.mode='preset'` 时执行内置格式：`datetime / weekday / chinese-money / number / currency / percent`
-4. `format.mode='custom'` 时执行可信模板函数表达式 `(value, ctx) => string`
+4. `format.mode='custom'` 时执行可信模板函数表达式 `(value, data) => string`
 5. 最后拼接 `format.prefix` 与 `format.suffix`
 6. 失败时保留原始显示值并发出 `datasource` warning
 
-自定义函数第一版是同步、可信模板能力。函数只应处理当前值，不应依赖物料差异、整份 data、DOM、网络或异步副作用。
+自定义函数是同步、可信模板能力。函数可以读取当前字段值和 Viewer 正在消费的完整运行时 data；不应依赖物料差异、DOM、网络或异步副作用。
 
 ### 6.6.1 table-data 单元格绑定预解析
 

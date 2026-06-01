@@ -4,6 +4,7 @@ import { parseDateInput } from '@easyink/shared'
 
 export interface BindingFormatContext {
   binding: BindingRef
+  data: Record<string, unknown>
   locale?: string
 }
 
@@ -19,7 +20,7 @@ export interface BindingFormatResult {
   diagnostics: BindingFormatDiagnostic[]
 }
 
-type TrustedFormatter = (value: unknown, ctx: BindingFormatContext) => unknown
+type TrustedFormatter = (value: unknown, data: Record<string, unknown>) => unknown
 
 const DEFAULT_LOCALE = 'zh-CN'
 const DEFAULT_DATE_PATTERN = 'yyyy-MM-dd HH:mm:ss'
@@ -36,6 +37,7 @@ export function formatBindingDisplayValue(
   const diagnostics: BindingFormatDiagnostic[] = []
   const format = binding.format
   const fallback = format?.fallback ?? ''
+  const runtimeData = context.data ?? {}
 
   const valueForFormat = isEmptyValue(value) ? fallback : value
   let display = valueToString(valueForFormat)
@@ -57,7 +59,7 @@ export function formatBindingDisplayValue(
   else if (format?.mode === 'custom' && format.custom?.source?.trim()) {
     try {
       const formatter = compileTrustedFormatter(format.custom.source)
-      const result = formatter(valueForFormat, { binding, locale: DEFAULT_LOCALE, ...context })
+      const result = formatter(valueForFormat, runtimeData)
       display = isEmptyValue(result) ? fallback : String(result)
     }
     catch (err) {

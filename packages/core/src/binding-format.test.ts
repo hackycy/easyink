@@ -83,6 +83,21 @@ describe('formatBindingDisplayValue', () => {
     expect(result.value).toBe('ABC')
   })
 
+  it('passes runtime data as the custom formatter second argument', () => {
+    const result = formatBindingDisplayValue('Ada', {
+      sourceId: 's1',
+      fieldPath: 'customer/name',
+      format: {
+        mode: 'custom',
+        custom: { source: '(value, data) => String(value) + " / " + data.invoiceNo' },
+      },
+    }, {
+      data: { invoiceNo: 'INV-001', customer: { name: 'Ada' } },
+    })
+
+    expect(result.value).toBe('Ada / INV-001')
+  })
+
   it('falls back to original display value and warns when formatting fails', () => {
     const result = formatBindingDisplayValue('abc', {
       sourceId: 's1',

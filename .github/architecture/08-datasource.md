@@ -316,7 +316,7 @@ const invoiceSource: DataSourceDescriptor = {
             id: 'invoice-money',
             label: '发票金额',
             hint: '金额转人民币展示',
-            source: `(value) => {
+            source: `(value, data) => {
   var num = Number(value)
   if (isNaN(num)) return ''
   return num.toFixed(2)
@@ -325,7 +325,7 @@ const invoiceSource: DataSourceDescriptor = {
           {
             id: 'invoice-money-total',
             label: '合计金额',
-            source: `(value) => {
+            source: `(value, data) => {
   var num = Number(value)
   if (isNaN(num)) return ''
   return '合计 ' + num.toFixed(2)
@@ -345,7 +345,7 @@ const invoiceSource: DataSourceDescriptor = {
           {
             id: 'invoice-date-cn',
             label: '中文开票日期',
-            source: `(value) => String(value ?? '')`,
+            source: `(value, data) => String(value ?? '')`,
           },
         ],
       },
@@ -365,7 +365,7 @@ Designer 的采用规则：
 设计约束：
 
 - `customTemplates` 是“模板种子”和“编辑器示例”，不是运行时动态引用。保存后的模板必须能脱离 `DataSourceDescriptor` 和 `DataFieldNode` 独立回放。
-- `source` 的语义与 `BindingDisplayFormat.custom.source` 完全一致：可信、同步、当前值转换函数，不应依赖 DOM、网络、异步副作用或完整数据源描述符。
+- `source` 的语义与 `BindingDisplayFormat.custom.source` 完全一致：可信、同步、当前值转换函数，签名为 `(value, data)`；`value` 是当前字段值，`data` 是当前 Viewer 正在消费的完整运行时数据。不应依赖 DOM、网络、异步副作用或完整数据源描述符。
 - Designer 不按字段类型自动猜测应该采用哪个模板。字段级默认值仍使用 `DataFieldNode.format`；字段级模板只改变用户编辑自定义函数时可选和默认的函数来源。
 - 字段配置变化不会自动重写既有 `BindingRef.format`。如需批量迁移，必须通过显式命令或宿主侧迁移流程完成。
 

@@ -26,11 +26,11 @@
 
 ## 21.5 绑定显示格式函数
 
-`BindingRef.format.custom.source` 允许可信模板保存同步 JavaScript 函数表达式，例如 `(value, ctx) => String(value)`。
+`BindingRef.format.custom.source` 允许可信模板保存同步 JavaScript 函数表达式，例如 `(value, data) => String(value)`。
 
 安全边界：
 
 - 第一版只承诺可信模板场景，不允许把它当成可打开不可信模板的沙箱
-- Viewer 只向函数传入当前绑定值和最小上下文，不传入整份 data、行记录、DOM 或网络能力
+- Viewer 向函数传入当前绑定值和当前正在消费的完整运行时 data，不传入 DOM 或网络能力
 - 实现会屏蔽常见全局入口以减少误用，但这不是强隔离；可信模板作者仍需为死循环、长耗时和副作用负责
 - 格式化异常必须转成 `datasource` warning，打印输出保留原始值

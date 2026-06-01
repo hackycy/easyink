@@ -27,6 +27,8 @@ export interface DataFieldDisplayFormatConfig {
 
 /**
  * Reusable trusted formatter template for BindingDisplayFormat.custom.source.
+ * The formatter receives `(value, data)`, where `data` is the current
+ * runtime data object consumed by Viewer.
  */
 export interface DataFieldCustomFormatTemplate {
   id: string

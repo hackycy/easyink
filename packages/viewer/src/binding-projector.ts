@@ -18,7 +18,7 @@ export function projectBindings(
   for (const ref of refs) {
     const value = resolveBindingValue(ref, data)
     const formatted = hasBindingFormat(ref.format)
-      ? formatBindingDisplayValue(value, ref)
+      ? formatBindingDisplayValue(value, ref, { data })
       : { value, diagnostics: [] }
     results.push({
       bindIndex: ref.bindIndex ?? 0,

@@ -280,7 +280,7 @@ function expandRepeatTemplateRows(
           return { ...cell }
         const leafField = cell.binding.fieldPath.substring(collectionPath.length + 1)
         const value = resolveFieldFromRecord(leafField, record)
-        const formatted = formatCellValue(value, cell.binding, nodeId, reportDiagnostic)
+        const formatted = formatCellValue(value, cell.binding, data, nodeId, reportDiagnostic)
         return {
           ...cell,
           content: { text: formatted },
@@ -389,7 +389,7 @@ function resolveStaticRow(
     if (!cell.staticBinding)
       return cell
     const value = resolveBindingValue(cell.staticBinding, data)
-    const formatted = formatCellValue(value, cell.staticBinding, nodeId, reportDiagnostic)
+    const formatted = formatCellValue(value, cell.staticBinding, data, nodeId, reportDiagnostic)
     return {
       ...cell,
       content: { text: formatted },
@@ -401,10 +401,11 @@ function resolveStaticRow(
 function formatCellValue(
   value: unknown,
   binding: BindingRef,
+  data: Record<string, unknown>,
   nodeId: string,
   reportDiagnostic?: ViewerRenderContext['reportDiagnostic'],
 ): string {
-  const result = formatBindingDisplayValue(value, binding)
+  const result = formatBindingDisplayValue(value, binding, { data })
   for (const diagnostic of result.diagnostics)
     reportDiagnostic?.({ ...diagnostic, nodeId })
   return result.value

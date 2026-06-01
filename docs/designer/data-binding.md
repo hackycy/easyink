@@ -221,7 +221,7 @@ const dataSources: DataSourceDescriptor[] = [
               id: 'invoice-money',
               label: '发票金额',
               hint: '金额保留两位小数并添加人民币符号',
-              source: `function transform(value) {
+              source: `function transform(value, data) {
   var num = Number(value)
   if (isNaN(num)) return ''
   return '￥' + num.toFixed(2)
@@ -231,7 +231,7 @@ const dataSources: DataSourceDescriptor[] = [
               id: 'invoice-money-total',
               label: '合计金额',
               hint: '金额保留两位小数并加上合计前缀',
-              source: `function transform(value) {
+              source: `function transform(value, data) {
   var num = Number(value)
   if (isNaN(num)) return ''
   return '合计 ￥' + num.toFixed(2)
@@ -251,7 +251,7 @@ const dataSources: DataSourceDescriptor[] = [
             {
               id: 'invoice-date-cn',
               label: '中文开票日期',
-              source: `function transform(value) {
+              source: `function transform(value, data) {
   if (value == null || value === '') return ''
   var text = String(value)
   var match = text.match(/^(\\d{4})-(\\d{2})-(\\d{2})/)
@@ -267,7 +267,7 @@ const dataSources: DataSourceDescriptor[] = [
 ]
 ```
 
-用户选中 `grandTotal` 这个字段产生的绑定，再打开“显示格式”，切到“自定义”时，默认示例会被字段自己的函数替换。字段可以只有一个模板，也可以有多个模板；有多个时，Designer 会优先采用 `defaultCustomTemplateId` 指向的那一个。
+用户选中 `grandTotal` 这个字段产生的绑定，再打开“显示格式”，切到“自定义”时，默认示例会被字段自己的函数替换。字段可以只有一个模板，也可以有多个模板；有多个时，Designer 会优先采用 `defaultCustomTemplateId` 指向的那一个。自定义函数接收两个参数：`value` 是当前字段值，`data` 是当前 Viewer 正在消费的完整运行时数据。
 
 原来的内置示例不会全部消失。字段模板只替换“默认转换函数”这一类入口，后面的“原始值转字符串”“数值格式化为货币”“日期格式化 YYYY-MM-DD”等示例仍然保留，用户随时可以切回去。
 

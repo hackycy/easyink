@@ -13,7 +13,7 @@ const invoiceMoneyDisplayFormat: DataFieldDisplayFormatConfig = {
       id: 'invoice-money',
       label: '发票金额',
       hint: '金额保留两位小数并添加人民币符号',
-      source: `function transform(value) {
+      source: `function transform(value, data) {
   var num = Number(value)
   if (isNaN(num)) return ''
   return '￥' + num.toFixed(2)
@@ -23,7 +23,7 @@ const invoiceMoneyDisplayFormat: DataFieldDisplayFormatConfig = {
       id: 'invoice-money-total',
       label: '合计金额',
       hint: '金额保留两位小数并加上合计前缀',
-      source: `function transform(value) {
+      source: `function transform(value, data) {
   var num = Number(value)
   if (isNaN(num)) return ''
   return '合计 ￥' + num.toFixed(2)
@@ -39,7 +39,7 @@ const invoiceDateDisplayFormat: DataFieldDisplayFormatConfig = {
       id: 'invoice-date-cn',
       label: '中文开票日期',
       hint: '把 YYYY-MM-DD 转成中文日期',
-      source: `function transform(value) {
+      source: `function transform(value, data) {
   if (value == null || value === '') return ''
   var text = String(value)
   var match = text.match(/^(\\d{4})-(\\d{2})-(\\d{2})/)
@@ -57,7 +57,7 @@ const invoiceTaxRateDisplayFormat: DataFieldDisplayFormatConfig = {
       id: 'invoice-tax-rate',
       label: '税率百分比',
       hint: '把 0.13 这类税率转成 13%',
-      source: `function transform(value) {
+      source: `function transform(value, data) {
   var num = Number(value)
   if (isNaN(num)) return ''
   return Math.round(num * 10000) / 100 + '%'

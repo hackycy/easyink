@@ -161,7 +161,7 @@ function resolveColumnText(
     ? resolveFieldFromRecord(column.binding.fieldPath.slice(collectionPath.length + 1), record)
     : resolveBindingValue(column.binding, context.data)
 
-  const formatted = formatBindingDisplayValue(value, column.binding)
+  const formatted = formatBindingDisplayValue(value, column.binding, { data: context.data })
   for (const diagnostic of formatted.diagnostics)
     context.reportDiagnostic?.({ ...diagnostic, nodeId: context.nodeId })
   return formatted.value

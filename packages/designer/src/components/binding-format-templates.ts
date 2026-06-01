@@ -8,13 +8,14 @@ export interface BindingCodeExample {
 
 export const DEFAULT_CUSTOM_FORMAT_SOURCE = `/**
  * 默认数据转换函数
- * 接收字段的原始值，返回最终显示在打印区域的文本内容
+ * 接收字段的原始值和当前 Viewer data，返回最终显示在打印区域的文本内容
  * 空值（null / undefined）统一输出为空字符串
  * 可按需修改函数体，实现格式化、映射等处理逻辑
  * @param {*} value - 字段原始值
+ * @param {Record<string, *>} data - 当前 Viewer 正在消费的完整 data
  * @returns {string} 处理后的显示文本
  */
-function transform(value) {
+function transform(value, data) {
   return value != null ? String(value) : ''
 }`
 
@@ -24,18 +25,20 @@ export const DEFAULT_BINDING_CODE_EXAMPLE_SOURCES = [
  * 将字段原始值转换为字符串
  * 空值（null / undefined）统一输出为空字符串
  * @param {*} value - 字段原始值
+ * @param {Record<string, *>} data - 当前 Viewer 正在消费的完整 data
  * @returns {string} 转换后的字符串
  */
-function transform(value) {
+function transform(value, data) {
   return String(value ?? '')
 }`,
   `/**
  * 将数值格式化为人民币金额，保留两位小数
  * 非数字或无效值时显示占位符 '-'
  * @param {*} value - 字段原始值（数字或可转换为数字的字符串）
+ * @param {Record<string, *>} data - 当前 Viewer 正在消费的完整 data
  * @returns {string}
  */
-function transform(value) {
+function transform(value, data) {
   var num = Number(value)
   if (isNaN(num)) return '-'
   return '\xA5' + num.toFixed(2)
@@ -45,6 +48,7 @@ function transform(value) {
  * 支持时间戳，以及 YYYY-MM-DD / YYYY-MM-DDTHH:mm:ss / YYYY-MM-DD HH:mm:ss 这类明确格式
  * 无效日期返回空字符串
  * @param {*} value - 字段原始值（日期字符串或时间戳）
+ * @param {Record<string, *>} data - 当前 Viewer 正在消费的完整 data
  * @returns {string}
  */
 function parseDateValue(value) {
@@ -74,7 +78,7 @@ function parseDateValue(value) {
   return date
 }
 
-function transform(value) {
+function transform(value, data) {
   var d = parseDateValue(value)
   if (!d) return ''
   var y = d.getFullYear()
@@ -86,9 +90,10 @@ function transform(value) {
  * 将整数状态码映射为对应的中文可读标签
  * 未匹配到映射时原样返回字段值的字符串形式
  * @param {*} value - 字段原始值（整数状态码）
+ * @param {Record<string, *>} data - 当前 Viewer 正在消费的完整 data
  * @returns {string}
  */
-function transform(value) {
+function transform(value, data) {
   var map = { 0: '\u5F85\u5904\u7406', 1: '\u8FDB\u884C\u4E2D', 2: '\u5DF2\u5B8C\u6210' }
   return map[value] !== undefined ? map[value] : String(value ?? '')
 }`,

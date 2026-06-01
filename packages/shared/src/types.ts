@@ -94,7 +94,7 @@ export interface BindingPresetFormat {
 
 /**
  * Trusted template formatter source. First version stores a JavaScript
- * function expression such as `(value, ctx) => String(value)`.
+ * function expression such as `(value, data) => String(value)`.
  */
 export interface BindingCustomFormat {
   source: string
