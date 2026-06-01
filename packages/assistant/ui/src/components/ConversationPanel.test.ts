@@ -158,6 +158,28 @@ describe('assistant conversation panel', () => {
     expect(document.body.textContent).toContain('旧会话')
     expect(document.body.textContent).toContain('新会话')
   })
+
+  it('keeps separate history entries for separate submitted tasks', async () => {
+    const store = new MemoryAssistantStore()
+    const firstTask = createTask({ prompt: '第一张小票' })
+    firstTask.id = 'task_first'
+    const secondTask = createTask({ prompt: '第二张标签' })
+    secondTask.id = 'task_second'
+    const { api } = createStreamingClient({
+      createTask: vi.fn()
+        .mockResolvedValueOnce(firstTask)
+        .mockResolvedValueOnce(secondTask),
+    })
+    mount({ apiClient: api, store })
+
+    await submitPrompt('第一张小票')
+    await submitPrompt('第二张标签')
+
+    const conversations = await store.listConversations()
+    expect(conversations).toHaveLength(2)
+    expect(new Set(conversations.map(conversation => conversation.title))).toEqual(new Set(['第一张小票', '第二张标签']))
+    expect(new Set(conversations.map(conversation => conversation.activeTaskId))).toEqual(new Set(['task_first', 'task_second']))
+  })
 })
 
 function mount(props: Record<string, unknown>) {

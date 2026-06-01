@@ -207,7 +207,10 @@ async function submitMessage(payload: { prompt: string, source?: AssistantSource
       await api.value.submitClarification(taskId.value, { answer: payload.prompt })
       return
     }
+    if (!draftMode.value)
+      activeConversationId.value = createLocalConversationId()
     draftMode.value = false
+    activeView.value = 'chat'
     result.value = undefined
     events.value = []
     const created = await api.value.createTask({
