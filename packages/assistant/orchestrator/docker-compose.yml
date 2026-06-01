@@ -15,8 +15,9 @@ services:
       EASYINK_ASSISTANT_HTTP_HOST: 0.0.0.0
       EASYINK_ASSISTANT_HTTP_PORT: 3010
       EASYINK_ASSISTANT_CORS_ORIGIN: ${EASYINK_ASSISTANT_CORS_ORIGIN:-*}
+      EASYINK_ASSISTANT_STORE_KIND: sqlite
       EASYINK_ASSISTANT_STORE_DIR: /var/lib/easyink-assistant
-      EASYINK_ASSISTANT_STORE_FILE: assistant-store.json
+      EASYINK_ASSISTANT_STORE_SQLITE_FILE: assistant-store.sqlite
     volumes:
       - assistant-data:/var/lib/easyink-assistant
     restart: unless-stopped

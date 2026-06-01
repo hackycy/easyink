@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM node:22-bookworm-slim AS builder
+FROM node:24-bookworm-slim AS builder
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends g++ make python3 \
@@ -17,7 +17,7 @@ RUN pnpm install --frozen-lockfile
 RUN pnpm turbo build --filter=@easyink/assistant-orchestrator
 RUN pnpm deploy --legacy --filter=@easyink/assistant-orchestrator /deploy
 
-FROM node:22-bookworm-slim AS runtime
+FROM node:24-bookworm-slim AS runtime
 
 WORKDIR /app
 
@@ -30,8 +30,9 @@ ENV NODE_ENV=production
 ENV EASYINK_ASSISTANT_HTTP_HOST=0.0.0.0
 ENV EASYINK_ASSISTANT_HTTP_PORT=3010
 ENV EASYINK_ASSISTANT_CORS_ORIGIN=*
+ENV EASYINK_ASSISTANT_STORE_KIND=sqlite
 ENV EASYINK_ASSISTANT_STORE_DIR=/var/lib/easyink-assistant
-ENV EASYINK_ASSISTANT_STORE_FILE=assistant-store.json
+ENV EASYINK_ASSISTANT_STORE_SQLITE_FILE=assistant-store.sqlite
 
 USER node
 

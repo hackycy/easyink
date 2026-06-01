@@ -1,4 +1,6 @@
+import type { NormalizedAssistantSnapshot } from './snapshot'
 import type {
+  AssistantConversationRecord,
   AssistantEvent,
   AssistantEventRecord,
   AssistantProjectionSnapshotRecord,
@@ -14,6 +16,7 @@ import type {
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { createId } from './id'
+import { clone, createEmptySnapshot, normalizeSnapshot } from './snapshot'
 import { EventSubscriptions } from './subscriptions'
 
 export interface FileAssistantStoreOptions {
@@ -21,7 +24,7 @@ export interface FileAssistantStoreOptions {
   fileName?: string
 }
 
-interface FileAssistantState extends AssistantSnapshot {}
+interface FileAssistantState extends NormalizedAssistantSnapshot {}
 
 export class FileAssistantStore implements AssistantStore {
   private readonly filePath: string
@@ -32,6 +35,40 @@ export class FileAssistantStore implements AssistantStore {
   constructor(options: FileAssistantStoreOptions | string) {
     const config = typeof options === 'string' ? { dir: options } : options
     this.filePath = join(config.dir, config.fileName ?? 'assistant-store.json')
+  }
+
+  async upsertConversation(record: Omit<AssistantConversationRecord, 'createdAt' | 'updatedAt'> & Partial<Pick<AssistantConversationRecord, 'createdAt' | 'updatedAt'>>): Promise<AssistantConversationRecord> {
+    const now = Date.now()
+    const state = await this.load()
+    const existing = state.conversations?.find(conversation => conversation.id === record.id)
+    const conversation: AssistantConversationRecord = {
+      ...existing,
+      ...record,
+      createdAt: existing?.createdAt ?? record.createdAt ?? now,
+      updatedAt: now,
+    }
+    upsert(state.conversations, clone(conversation))
+    await this.persist(state)
+    return clone(conversation)
+  }
+
+  async getConversation(id: string): Promise<AssistantConversationRecord | undefined> {
+    const conversation = (await this.load()).conversations.find(conversation => conversation.id === id)
+    return conversation ? clone(conversation) : undefined
+  }
+
+  async listConversations(): Promise<AssistantConversationRecord[]> {
+    return [...(await this.load()).conversations]
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .map(conversation => clone(conversation))
+  }
+
+  async deleteConversation(id: string): Promise<void> {
+    const state = await this.load()
+    const before = state.conversations.length
+    state.conversations = state.conversations.filter(conversation => conversation.id !== id)
+    if (state.conversations.length !== before)
+      await this.persist(state)
   }
 
   async createTask(input: AssistantTaskInput): Promise<AssistantTaskRecord> {
@@ -105,6 +142,12 @@ export class FileAssistantStore implements AssistantStore {
     return result ? clone(result) : undefined
   }
 
+  async saveResultRecord(result: AssistantResult): Promise<void> {
+    const state = await this.load()
+    upsert(state.results, clone(result))
+    await this.persist(state)
+  }
+
   async appendVersion(record: Omit<AssistantVersionRecord, 'id' | 'createdAt'>): Promise<AssistantVersionRecord> {
     const version: AssistantVersionRecord = { ...record, id: createId('ver'), createdAt: Date.now() }
     const state = await this.load()
@@ -157,6 +200,13 @@ export class FileAssistantStore implements AssistantStore {
     await this.persist(state)
     this.subscriptions.emit(clone(record))
     return clone(record)
+  }
+
+  async saveEventRecord(record: AssistantEventRecord): Promise<void> {
+    const state = await this.load()
+    upsert(state.events, clone(record))
+    await this.persist(state)
+    this.subscriptions.emit(clone(record))
   }
 
   subscribe(taskId: string, listener: (record: AssistantEventRecord) => void): () => void {
@@ -216,42 +266,12 @@ export class FileAssistantStore implements AssistantStore {
   }
 }
 
-function createEmptySnapshot(): FileAssistantState {
-  return {
-    schemaVersion: 1,
-    tasks: [],
-    runs: [],
-    results: [],
-    versions: [],
-    events: [],
-    projectionSnapshots: [],
-    sourceSamples: [],
-  }
-}
-
-function normalizeSnapshot(snapshot: AssistantSnapshot): FileAssistantState {
-  return {
-    schemaVersion: 1,
-    tasks: clone(snapshot.tasks ?? []),
-    runs: clone(snapshot.runs ?? []),
-    results: clone(snapshot.results ?? []),
-    versions: clone(snapshot.versions ?? []),
-    events: clone(snapshot.events ?? []),
-    projectionSnapshots: clone(snapshot.projectionSnapshots ?? []),
-    sourceSamples: clone(snapshot.sourceSamples ?? []),
-  }
-}
-
 function upsert<T extends { id: string }>(records: T[], record: T): void {
   const index = records.findIndex(item => item.id === record.id)
   if (index >= 0)
     records[index] = record
   else
     records.push(record)
-}
-
-function clone<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value)) as T
 }
 
 function isNotFoundError(error: unknown): boolean {

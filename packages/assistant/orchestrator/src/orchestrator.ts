@@ -90,10 +90,11 @@ export class AssistantOrchestrator {
       await this.completeStep(taskId, 'intake')
 
       let externalData: ParsedExternalData | undefined
-      if (current.input.source && current.input.source.kind !== 'none') {
+      const source = current.input.source
+      if (source && source.kind !== 'none') {
         current = await this.startStep(current, 'source')
         await this.store.appendEvent(taskId, { type: 'tool.started', taskId, toolId: 'source', title: '解析数据源' })
-        externalData = await this.resolveSource(current.input.source)
+        externalData = await this.resolveSource(source)
         await this.store.appendEvent(taskId, {
           type: 'tool.completed',
           taskId,
@@ -102,7 +103,7 @@ export class AssistantOrchestrator {
         })
         await this.store.saveSourceSample({
           taskId,
-          sourceKind: current.input.source.kind,
+          sourceKind: source.kind,
           descriptor: externalData.descriptor,
           sample: externalData.sample,
           warnings: externalData.warnings,

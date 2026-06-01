@@ -6,6 +6,7 @@ import { resolve } from 'node:path'
 import process from 'node:process'
 import { createLLMClientFromEnv } from '@easyink/assistant-llm'
 import { FileAssistantStore } from '@easyink/assistant-store/file-store'
+import { SQLiteAssistantStore } from '@easyink/assistant-store/sqlite-store'
 import { serve } from '@hono/node-server'
 import { config as loadDotenv } from 'dotenv'
 import pino from 'pino'
@@ -20,9 +21,31 @@ function loadEnvFiles(): void {
 }
 
 function createStoreFromEnv(): AssistantStore | undefined {
+  const kind = process.env.EASYINK_ASSISTANT_STORE_KIND?.trim().toLowerCase()
+  if (kind === 'memory')
+    return undefined
+
+  const sqlitePath = process.env.EASYINK_ASSISTANT_STORE_SQLITE_PATH?.trim()
+  if (sqlitePath) {
+    return new SQLiteAssistantStore({
+      path: resolve(process.cwd(), sqlitePath),
+    })
+  }
+
   const dir = process.env.EASYINK_ASSISTANT_STORE_DIR?.trim()
   if (!dir)
     return undefined
+
+  if (kind && kind !== 'sqlite' && kind !== 'file')
+    throw new Error(`Invalid EASYINK_ASSISTANT_STORE_KIND: ${process.env.EASYINK_ASSISTANT_STORE_KIND}`)
+
+  if (kind === 'sqlite' || (!kind && !process.env.EASYINK_ASSISTANT_STORE_FILE?.trim())) {
+    return new SQLiteAssistantStore({
+      dir: resolve(process.cwd(), dir),
+      fileName: process.env.EASYINK_ASSISTANT_STORE_SQLITE_FILE?.trim() || undefined,
+    })
+  }
+
   return new FileAssistantStore({
     dir: resolve(process.cwd(), dir),
     fileName: process.env.EASYINK_ASSISTANT_STORE_FILE?.trim() || undefined,

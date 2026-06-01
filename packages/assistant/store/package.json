@@ -12,6 +12,7 @@
   "exports": {
     ".": "./dist/index.mjs",
     "./file-store": "./dist/file-store.mjs",
+    "./sqlite-store": "./dist/sqlite-store.mjs",
     "./package.json": "./package.json"
   },
   "types": "./dist/index.d.mts",
