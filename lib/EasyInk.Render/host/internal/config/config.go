@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -16,10 +17,7 @@ import (
 )
 
 type BrowserConfig struct {
-	Kind           string `json:"kind"`
 	Path           string `json:"path"`
-	Channel        string `json:"channel,omitempty"`
-	Version        string `json:"version,omitempty"`
 	HeadlessMode   string `json:"headlessMode"`
 	DisableSandbox bool   `json:"disableSandbox,omitempty"`
 }
@@ -36,7 +34,6 @@ type RuntimeConfig struct {
 }
 
 type Override struct {
-	BrowserKind      string
 	BrowserPath      string
 	HeadlessMode     string
 	DisableSandbox   bool
@@ -49,28 +46,19 @@ type Override struct {
 	IdleTimeoutMs    int
 }
 
-var SupportedBrowserKinds = map[string]bool{
-	"chrome-for-testing": true,
-	"chromium":           true,
-	"chrome":             true,
-	"edge":               true,
-	"headless-shell":     true,
-	"custom":             true,
-}
+const BrowserNameChromium = "chromium"
 
 var SupportedHeadlessModes = map[string]bool{
-	"auto":  true,
-	"new":   true,
-	"old":   true,
-	"shell": true,
-	"none":  true,
+	"auto": true,
+	"new":  true,
+	"old":  true,
+	"none": true,
 }
 
 func Defaults() RuntimeConfig {
 	stateRoot := StateRoot()
 	return RuntimeConfig{
 		Browser: BrowserConfig{
-			Kind:         "chrome-for-testing",
 			HeadlessMode: "auto",
 		},
 		ProfileRoot:      filepath.Join(stateRoot, "profile"),
@@ -93,7 +81,9 @@ func LoadRuntime() (RuntimeConfig, error) {
 		}
 		return RuntimeConfig{}, err
 	}
-	if err := json.Unmarshal(data, &cfg); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&cfg); err != nil {
 		return RuntimeConfig{}, err
 	}
 	return ApplyEnvironment(cfg), nil
@@ -115,9 +105,6 @@ func SaveRuntime(cfg RuntimeConfig) error {
 }
 
 func ApplyEnvironment(cfg RuntimeConfig) RuntimeConfig {
-	if value := os.Getenv("EASYINK_RENDER_BROWSER_KIND"); value != "" {
-		cfg.Browser.Kind = value
-	}
 	if value := os.Getenv("EASYINK_RENDER_BROWSER_PATH"); value != "" {
 		cfg.Browser.Path = value
 	}
@@ -144,9 +131,6 @@ func ApplyEnvironment(cfg RuntimeConfig) RuntimeConfig {
 }
 
 func MergeOverride(cfg RuntimeConfig, override Override) RuntimeConfig {
-	if override.BrowserKind != "" {
-		cfg.Browser.Kind = override.BrowserKind
-	}
 	if override.BrowserPath != "" {
 		cfg.Browser.Path = override.BrowserPath
 	}
@@ -181,12 +165,6 @@ func MergeOverride(cfg RuntimeConfig, override Override) RuntimeConfig {
 }
 
 func (c RuntimeConfig) ValidateRuntime(requireBrowserPath bool) error {
-	if strings.TrimSpace(c.Browser.Kind) == "" {
-		return errors.New("browser.kind is required")
-	}
-	if !SupportedBrowserKinds[c.Browser.Kind] {
-		return fmt.Errorf("unsupported browser.kind: %s", c.Browser.Kind)
-	}
 	if c.Browser.HeadlessMode == "" {
 		c.Browser.HeadlessMode = "auto"
 	}

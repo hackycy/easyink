@@ -78,10 +78,9 @@ func (c *Collector) SetPDFMetadata(title, author, creator, producer string) {
 	c.diagnostics.PDFProducer = producer
 }
 
-func (c *Collector) SetBrowser(kind, name, version string) {
+func (c *Collector) SetBrowser(name, version string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.diagnostics.BrowserKind = kind
 	c.diagnostics.BrowserName = name
 	c.diagnostics.BrowserVersion = version
 }
@@ -129,7 +128,6 @@ func WriteLog(logDir string, value protocol.Diagnostics) (string, error) {
 	writeLogLine(&out, "sourceType", value.SourceType)
 	writeLogLine(&out, "hostVersion", value.HostVersion)
 	writeLogLine(&out, "protocolVersion", value.ProtocolVersion)
-	writeLogLine(&out, "browserKind", value.BrowserKind)
 	writeLogLine(&out, "browserName", value.BrowserName)
 	writeLogLine(&out, "browserVersion", value.BrowserVersion)
 	writeLogLine(&out, "durationMs", fmt.Sprint(value.DurationMs))

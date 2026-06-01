@@ -14,6 +14,33 @@ func TestParseChromeVersion(t *testing.T) {
 	if got != "123.0.1.2" {
 		t.Fatalf("version = %q", got)
 	}
+
+	got = parseChromeVersion("Mozilla/5.0 Chromium/80.0.3987.163 Safari/537.36")
+	if got != "80.0.3987.163" {
+		t.Fatalf("chromium version = %q", got)
+	}
+}
+
+func TestValidateChromiumUserAgentRequiresVersion80OrNewer(t *testing.T) {
+	if err := validateChromiumUserAgent("Mozilla/5.0 Chrome/80.0.3987.163 Safari/537.36"); err != nil {
+		t.Fatalf("expected Chromium 80 to be supported: %v", err)
+	}
+	if err := validateChromiumUserAgent("Mozilla/5.0 Chrome/79.0.3945.130 Safari/537.36"); err == nil {
+		t.Fatal("expected Chromium 79 to be rejected")
+	}
+	if err := validateChromiumUserAgent("Mozilla/5.0 Firefox/123.0"); err == nil {
+		t.Fatal("expected non-Chromium user agent to be rejected")
+	}
+	if err := validateChromiumUserAgent("Mozilla/5.0 Chrome/123.0.0.0 Safari/537.36 Edg/123.0.0.0"); err == nil {
+		t.Fatal("expected Microsoft Edge user agent to be rejected")
+	}
+}
+
+func TestHeadlessAutoUsesChromium80CompatibleFlag(t *testing.T) {
+	got := headlessOptions("auto")
+	if len(got) != 1 {
+		t.Fatalf("expected one headless option, got %d", len(got))
+	}
 }
 
 func TestDisabledProxyEnvironmentClearsKnownProxyVariables(t *testing.T) {

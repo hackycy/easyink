@@ -10,10 +10,10 @@
     "size": 0
   },
   "browser": {
-    "name": "chrome-for-testing",
+    "name": "chromium",
     "version": "148.0.7778.97",
     "platform": "linux-arm64",
-    "executable": "headless-shell",
+    "executable": "chrome",
     "url": "",
     "sha256": "",
     "size": 0

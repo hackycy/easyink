@@ -92,8 +92,6 @@ func loadRuntimeConfig(override config.Override) (config.RuntimeConfig, error) {
 
 func getConfigValue(cfg config.RuntimeConfig, key string) (any, bool) {
 	switch key {
-	case "browser.kind":
-		return cfg.Browser.Kind, true
 	case "browser.path":
 		return cfg.Browser.Path, true
 	case "browser.headlessMode":
@@ -121,8 +119,6 @@ func getConfigValue(cfg config.RuntimeConfig, key string) (any, bool) {
 
 func setConfigValue(cfg *config.RuntimeConfig, key, value string) error {
 	switch key {
-	case "browser.kind":
-		cfg.Browser.Kind = value
 	case "browser.path":
 		cfg.Browser.Path = value
 	case "browser.headlessMode":

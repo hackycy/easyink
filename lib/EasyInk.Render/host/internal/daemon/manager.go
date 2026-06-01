@@ -109,7 +109,6 @@ func (m Manager) Ensure(ctx context.Context, forceRestart bool) (State, error) {
 		"--ipc", m.IPCPath,
 		"--state", m.StatePath,
 		"--nonce", nonce,
-		"--browser-kind", m.Config.Browser.Kind,
 		"--browser-path", m.Config.Browser.Path,
 		"--profile-root", m.Config.ProfileRoot,
 		"--temp-dir", m.Config.TempDir,

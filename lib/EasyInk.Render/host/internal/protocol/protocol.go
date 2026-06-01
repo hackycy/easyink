@@ -86,7 +86,6 @@ type Diagnostics struct {
 	ID               string            `json:"id,omitempty"`
 	RequestID        string            `json:"requestId"`
 	HostVersion      string            `json:"hostVersion"`
-	BrowserKind      string            `json:"browserKind,omitempty"`
 	BrowserName      string            `json:"browserName,omitempty"`
 	BrowserVersion   string            `json:"browserVersion"`
 	ProtocolVersion  string            `json:"protocolVersion"`

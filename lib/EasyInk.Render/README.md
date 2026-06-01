@@ -9,9 +9,9 @@
 - CLI：`render`、`daemon`、`browser inspect`、`config`、`diagnostics show`、`version`。
 - Daemon：Windows Named Pipe，macOS/Linux Unix Domain Socket；不监听 TCP 端口。
 - 输入：`source.type=html`、`source.type=pdf`、`source.type=easyink`，继续复用 `protocol.PrintPDFRequest`。
-- Browser：支持 `chrome-for-testing`、`chromium`、`chrome`、`edge`、`headless-shell`、`custom`。
+- Browser：渲染架构只支持 Chromium；浏览器二进制需支持 Chromium/Chrome DevTools Protocol，最低 Chromium 80。
 - Diagnostics：按 `requestId` 记录浏览器信息、耗时、console error、网络失败、页数、PDF metadata、日志和可选附件。
-- HTTP：不提供 HTTP 兼容入口，Render 主路径只保留 CLI/IPC daemon。
+- Runtime：Render 主路径为 CLI/IPC daemon。
 
 ## 目录
 
@@ -56,8 +56,8 @@ docker run --rm --platform linux/amd64 \
 docker run --rm --platform linux/amd64 --entrypoint /bin/sh \
   -v "$PWD/lib/EasyInk.Render:/work" \
   -w /work \
-  chromedp/headless-shell:latest \
-  -lc './host/easyink-render render --no-daemon --request samples/html/request.json --out /tmp/out.pdf --browser-kind headless-shell --browser-path /headless-shell/headless-shell --profile-root /tmp/easyink-profile --temp-dir /tmp/easyink-temp --log-dir /tmp/easyink-logs --json && test -s /tmp/out.pdf'
+  mcr.microsoft.com/playwright:v1.57.0-noble \
+  -lc 'BROWSER_PATH="$(find /ms-playwright -path "*/chrome-linux*/chrome" -type f | head -n 1)" && ./host/easyink-render render --no-daemon --request samples/html/request.json --out /tmp/out.pdf --browser-path "$BROWSER_PATH" --disable-sandbox --profile-root /tmp/easyink-profile --temp-dir /tmp/easyink-temp --log-dir /tmp/easyink-logs --json && test -s /tmp/out.pdf'
 ```
 
 发布工具：

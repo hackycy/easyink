@@ -242,7 +242,6 @@ func (r *Runtime) status() map[string]any {
 		"protocolVersion":   protocol.ProtocolVersion,
 		"configFingerprint": r.cfg.Fingerprint(),
 		"browser": map[string]any{
-			"kind":      health.Kind,
 			"name":      health.Name,
 			"version":   health.Version,
 			"ready":     health.Ready,

@@ -100,9 +100,8 @@ func newRuntimeOptions() *runtimeOptions {
 }
 
 func (o *runtimeOptions) bind(flags *pflag.FlagSet) {
-	flags.StringVar(&o.override.BrowserKind, "browser-kind", "", "browser kind")
 	flags.StringVar(&o.override.BrowserPath, "browser-path", "", "browser executable path")
-	flags.StringVar(&o.override.HeadlessMode, "headless-mode", "", "browser headless mode: auto, new, old, shell, none")
+	flags.StringVar(&o.override.HeadlessMode, "headless-mode", "", "browser headless mode: auto, new, old, none")
 	flags.BoolVar(&o.override.DisableSandbox, "disable-sandbox", false, "disable the browser sandbox")
 	flags.StringVar(&o.override.ProfileRoot, "profile-root", "", "browser profile root")
 	flags.StringVar(&o.override.TempDir, "temp-dir", "", "temporary directory")

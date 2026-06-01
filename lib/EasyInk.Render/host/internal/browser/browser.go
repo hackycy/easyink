@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -14,6 +15,8 @@ import (
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
 )
+
+const minChromiumMajorVersion = 80
 
 var proxyEnvironmentKeys = []string{
 	"HTTP_PROXY",
@@ -32,7 +35,6 @@ type Manager struct {
 	browser        context.Context
 	cancel         func()
 	path           string
-	kind           string
 	name           string
 	headless       string
 	disableSandbox bool
@@ -45,7 +47,6 @@ type Manager struct {
 
 type Health struct {
 	Ready     bool
-	Kind      string
 	Name      string
 	Version   string
 	Restarts  int
@@ -53,7 +54,6 @@ type Health struct {
 }
 
 type InspectResult struct {
-	Kind       string `json:"kind"`
 	Name       string `json:"name"`
 	Version    string `json:"version"`
 	Headless   bool   `json:"headless"`
@@ -63,24 +63,19 @@ type InspectResult struct {
 
 func New(ctx context.Context, browserPath, profileRoot string) (*Manager, error) {
 	return NewWithConfig(ctx, config.BrowserConfig{
-		Kind:         "chrome-for-testing",
 		Path:         browserPath,
-		HeadlessMode: "new",
+		HeadlessMode: "auto",
 	}, profileRoot)
 }
 
 func NewWithConfig(ctx context.Context, browserConfig config.BrowserConfig, profileRoot string) (*Manager, error) {
-	if strings.TrimSpace(browserConfig.Kind) == "" {
-		browserConfig.Kind = "chrome-for-testing"
-	}
 	if strings.TrimSpace(browserConfig.HeadlessMode) == "" {
 		browserConfig.HeadlessMode = "auto"
 	}
 	manager := &Manager{
 		parent:         ctx,
 		path:           browserConfig.Path,
-		kind:           browserConfig.Kind,
-		name:           browserConfig.Kind,
+		name:           config.BrowserNameChromium,
 		headless:       browserConfig.HeadlessMode,
 		disableSandbox: browserConfig.DisableSandbox,
 		profileRoot:    profileRoot,
@@ -104,12 +99,6 @@ func (m *Manager) BrowserName() string {
 	return m.name
 }
 
-func (m *Manager) BrowserKind() string {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.kind
-}
-
 func (m *Manager) Health(parent context.Context) Health {
 	err := m.EnsureReady(parent)
 	m.mu.Lock()
@@ -117,7 +106,6 @@ func (m *Manager) Health(parent context.Context) Health {
 	if err != nil {
 		return Health{
 			Ready:     false,
-			Kind:      m.kind,
 			Name:      m.name,
 			Version:   m.version,
 			Restarts:  m.restarts,
@@ -126,7 +114,6 @@ func (m *Manager) Health(parent context.Context) Health {
 	}
 	return Health{
 		Ready:     true,
-		Kind:      m.kind,
 		Name:      m.name,
 		Version:   m.version,
 		Restarts:  m.restarts,
@@ -238,7 +225,7 @@ func (m *Manager) startLocked() error {
 	if m.disableSandbox {
 		opts = append(opts, chromedp.Flag("no-sandbox", true))
 	}
-	opts = append(opts, headlessOptions(m.kind, m.headless)...)
+	opts = append(opts, headlessOptions(m.headless)...)
 	allocator, allocatorCancel := chromedp.NewExecAllocator(m.parent, opts...)
 	browserCtx, browserCancel := chromedp.NewContext(allocator)
 	m.browser = browserCtx
@@ -280,8 +267,11 @@ func (m *Manager) probeVersionLocked() error {
 	if err := chromedp.Run(m.browser, chromedp.Evaluate(`navigator.userAgent`, &value)); err != nil {
 		return err
 	}
+	if err := validateChromiumUserAgent(value); err != nil {
+		return err
+	}
 	m.version = parseChromeVersion(value)
-	m.name = parseBrowserName(value, m.kind)
+	m.name = parseBrowserName(value)
 	return nil
 }
 
@@ -295,7 +285,7 @@ func (m *Manager) stopForTest() {
 
 func parseChromeVersion(userAgent string) string {
 	for _, part := range strings.Fields(userAgent) {
-		if strings.HasPrefix(part, "Chrome/") || strings.HasPrefix(part, "HeadlessChrome/") {
+		if strings.HasPrefix(part, "Chrome/") || strings.HasPrefix(part, "HeadlessChrome/") || strings.HasPrefix(part, "Chromium/") {
 			items := strings.SplitN(part, "/", 2)
 			if len(items) == 2 {
 				return items[1]
@@ -305,38 +295,58 @@ func parseChromeVersion(userAgent string) string {
 	return "unknown"
 }
 
-func parseBrowserName(userAgent, fallback string) string {
+func parseBrowserName(userAgent string) string {
 	lower := strings.ToLower(userAgent)
 	switch {
-	case strings.Contains(lower, "edg/"):
-		return "edge"
 	case strings.Contains(lower, "headlesschrome/"):
-		return "headless-shell"
+		return "chromium"
+	case strings.Contains(lower, "chromium/"):
+		return "chromium"
 	case strings.Contains(lower, "chrome/"):
-		return "chrome"
+		return "chromium"
 	default:
-		if strings.TrimSpace(fallback) == "" {
-			return "unknown"
-		}
-		return fallback
+		return "unknown"
 	}
 }
 
-func headlessOptions(kind, mode string) []chromedp.ExecAllocatorOption {
+func parseChromeMajorVersion(userAgent string) (int, bool) {
+	version := parseChromeVersion(userAgent)
+	if version == "unknown" {
+		return 0, false
+	}
+	majorText, _, _ := strings.Cut(version, ".")
+	major, err := strconv.Atoi(majorText)
+	if err != nil {
+		return 0, false
+	}
+	return major, true
+}
+
+func validateChromiumUserAgent(userAgent string) error {
+	lower := strings.ToLower(userAgent)
+	if strings.Contains(lower, "edg/") {
+		return errors.New("browser must be Chromium or Chrome; Microsoft Edge is not supported")
+	}
+	major, ok := parseChromeMajorVersion(userAgent)
+	if !ok {
+		return errors.New("browser must be Chromium-compatible and expose a Chrome/Chromium user agent")
+	}
+	if major < minChromiumMajorVersion {
+		return fmt.Errorf("chromium version %d is not supported; minimum supported major version is %d", major, minChromiumMajorVersion)
+	}
+	return nil
+}
+
+func headlessOptions(mode string) []chromedp.ExecAllocatorOption {
 	switch mode {
 	case "none":
 		return nil
 	case "old":
 		return []chromedp.ExecAllocatorOption{chromedp.Flag("headless", true)}
-	case "shell":
-		return []chromedp.ExecAllocatorOption{chromedp.Flag("headless", true)}
 	case "new":
 		return []chromedp.ExecAllocatorOption{chromedp.Flag("headless", "new")}
 	default:
-		if kind == "headless-shell" {
-			return []chromedp.ExecAllocatorOption{chromedp.Flag("headless", true)}
-		}
-		return []chromedp.ExecAllocatorOption{chromedp.Flag("headless", "new")}
+		return []chromedp.ExecAllocatorOption{chromedp.Flag("headless", true)}
 	}
 }
 
@@ -371,7 +381,6 @@ func Inspect(ctx context.Context, browserConfig config.BrowserConfig, profileRoo
 
 	health := manager.Health(ctx)
 	return InspectResult{
-		Kind:       health.Kind,
 		Name:       health.Name,
 		Version:    health.Version,
 		Headless:   browserConfig.HeadlessMode != "none",

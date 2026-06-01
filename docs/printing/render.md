@@ -129,7 +129,7 @@ Render 会用到几类 JSON 文件。我们先看最常改的请求文件：
     "executable": "easyink-render"
   },
   "browser": {
-    "name": "chrome-for-testing",
+    "name": "chromium",
     "version": "148.0.7778.97"
   },
   "easyinkRuntime": {
@@ -153,7 +153,7 @@ lib/EasyInk.Render/protocol/fixtures/
 
 ```bash
 easyink-render config get
-easyink-render config set browser.path /path/to/headless-shell
+easyink-render config set browser.path /path/to/chromium
 ```
 
 Linux/macOS 默认写到 `~/.config/easyink-render/config.json`，Windows 默认写到 `%APPDATA%\EasyInk.Render\config.json`。它保存浏览器路径、profile/temp/log 目录、并发数、队列长度、超时配置和浏览器 sandbox 开关。
@@ -208,8 +208,7 @@ easyink-render daemon restart
 
 ```bash
 easyink-render browser inspect \
-  --browser-kind headless-shell \
-  --browser-path /path/to/headless-shell
+  --browser-path /path/to/chromium
 ```
 
 如果这一步失败，先修浏览器配置。继续调模板通常只会得到更长的错误链。
@@ -226,13 +225,11 @@ CLI flags > environment variables > config file > defaults
 
 ```bash
 easyink-render config get
-easyink-render config get browser.kind
 easyink-render config set maxConcurrency 2
 ```
 
 当前可读写的 key 包括：
 
-- `browser.kind`
 - `browser.path`
 - `browser.headlessMode`
 - `browser.disableSandbox`
@@ -244,7 +241,7 @@ easyink-render config set maxConcurrency 2
 - `requestTimeoutMs`
 - `idleTimeoutMs`
 
-如果命令行同时传了 `--browser-kind` 这类参数，它会覆盖配置文件里的值。默认会保留浏览器 sandbox；只有在容器 root 用户或浏览器运行时明确要求时，才设置 `browser.disableSandbox=true`、环境变量 `EASYINK_RENDER_DISABLE_SANDBOX=true`，或在命令行传 `--disable-sandbox`。
+Render 使用 Chromium 浏览器渲染路径。浏览器二进制需要支持 Chromium/Chrome DevTools Protocol，最低支持 Chromium 80。默认会保留浏览器 sandbox；只有在容器 root 用户或浏览器运行时明确要求时，才设置 `browser.disableSandbox=true`、环境变量 `EASYINK_RENDER_DISABLE_SANDBOX=true`，或在命令行传 `--disable-sandbox`。
 
 ## Diagnostics {#diagnostics}
 
