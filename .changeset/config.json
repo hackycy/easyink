@@ -6,8 +6,7 @@
       "@easyink/material-*",
       "@easyink/builtin",
       "@easyink/designer",
-      "@easyink/viewer",
-      "@easyink/mcp-server"
+      "@easyink/viewer"
     ]
   ],
   "access": "public",
