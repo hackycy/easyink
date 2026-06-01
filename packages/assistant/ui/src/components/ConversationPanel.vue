@@ -489,9 +489,12 @@ onBeforeUnmount(closeStream)
   padding: 20px;
   border-radius: 18px;
   background:
-    radial-gradient(circle at 0% 0%, var(--assistant-primary-soft), transparent 34%),
+    radial-gradient(circle at 8% 8%, color-mix(in srgb, var(--assistant-accent) 18%, transparent), transparent 34%),
+    radial-gradient(circle at 96% 12%, rgb(22 163 74 / 9%), transparent 28%),
     var(--assistant-bg);
-  box-shadow: var(--assistant-shadow);
+  box-shadow:
+    var(--assistant-shadow),
+    inset 0 0 0 1px color-mix(in srgb, var(--assistant-accent) 10%, transparent);
 }
 
 .assistant-live-card__aura {
@@ -534,7 +537,6 @@ onBeforeUnmount(closeStream)
   display: block;
   font-size: 14px;
   font-weight: 600;
-  letter-spacing: -0.01em;
 }
 
 .assistant-live-card__head p {
@@ -549,20 +551,41 @@ onBeforeUnmount(closeStream)
 }
 
 .assistant-live-card__meter {
+  position: relative;
   height: 6px;
   overflow: hidden;
   margin: 18px 0 8px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--assistant-border) 60%, transparent);
+  background:
+    linear-gradient(90deg, rgb(255 255 255 / 0%), rgb(255 255 255 / 58%), rgb(255 255 255 / 0%)) 0 0 / 44px 100%,
+    color-mix(in srgb, var(--assistant-border) 60%, transparent);
+  animation: assistant-meter-track 1.25s linear infinite;
 }
 
 .assistant-live-card__meter span {
+  position: relative;
   display: block;
   height: 100%;
   min-width: 26px;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--assistant-accent), var(--assistant-accent-hover));
+  background:
+    linear-gradient(90deg, var(--assistant-accent), var(--assistant-accent-hover), color-mix(in srgb, #16a34a 38%, var(--assistant-accent))),
+    var(--assistant-accent);
+  box-shadow:
+    0 0 14px color-mix(in srgb, var(--assistant-accent) 32%, transparent),
+    inset 0 0 0 1px rgb(255 255 255 / 22%);
   transition: width 0.38s ease;
+  animation: assistant-meter-breathe 1.05s ease-in-out infinite;
+}
+
+.assistant-live-card__meter span::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 76%), transparent);
+  content: '';
+  transform: translateX(-100%);
+  animation: assistant-meter-shine 1.15s ease-in-out infinite;
 }
 
 .assistant-live-card__signals {
@@ -1060,6 +1083,22 @@ onBeforeUnmount(closeStream)
 @keyframes assistant-aura-drift {
   0% { transform: translateX(-100%); }
   45%, 100% { transform: translateX(100%); }
+}
+
+@keyframes assistant-meter-track {
+  from { background-position: -44px 0, 0 0; }
+  to { background-position: 44px 0, 0 0; }
+}
+
+@keyframes assistant-meter-breathe {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.2); }
+}
+
+@keyframes assistant-meter-shine {
+  0% { opacity: 0; transform: translateX(-100%); }
+  28% { opacity: 1; }
+  100% { opacity: 0; transform: translateX(100%); }
 }
 
 @media (max-width: 680px) {

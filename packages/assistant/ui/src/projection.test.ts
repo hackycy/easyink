@@ -16,6 +16,18 @@ describe('assistant projection', () => {
     expect(checklist.map(item => item.status)).toEqual(['done', 'done', 'running', 'pending', 'pending'])
   })
 
+  it('keeps a phase running until all of its own steps complete', () => {
+    const events: AssistantEventRecord[] = [
+      { id: 'evt_1', taskId: 'task_1', event: { type: 'step.started', taskId: 'task_1', step: 'plan' }, createdAt: 1 },
+      { id: 'evt_2', taskId: 'task_1', event: { type: 'step.started', taskId: 'task_1', step: 'source' }, createdAt: 2 },
+      { id: 'evt_3', taskId: 'task_1', event: { type: 'step.completed', taskId: 'task_1', step: 'source' }, createdAt: 3 },
+    ]
+
+    const checklist = projectChecklist({ task: { status: 'running' }, events })
+
+    expect(checklist.map(item => item.status)).toEqual(['done', 'done', 'running', 'pending', 'pending'])
+  })
+
   it('collects narration and hides answered clarification prompts', () => {
     const events: AssistantEventRecord[] = [
       { id: 'evt_1', taskId: 'task_1', event: { type: 'thinking.delta', taskId: 'task_1', text: '正在理解你的模板需求……' }, createdAt: 1 },

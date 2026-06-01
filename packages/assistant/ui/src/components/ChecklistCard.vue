@@ -73,16 +73,29 @@ function tr(key: string): string {
 }
 
 .assistant-checklist__signal {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 18px;
+  width: 24px;
+  height: 20px;
   flex: 0 0 auto;
+}
+
+.assistant-checklist__signal::before,
+.assistant-checklist__signal::after {
+  position: absolute;
+  inset: 1px 3px;
+  border: 1px solid var(--assistant-accent, #1677ff);
+  border-radius: 50%;
+  content: '';
+  opacity: 0;
+  pointer-events: none;
 }
 
 .assistant-checklist__lamp {
   position: relative;
+  z-index: 1;
   width: 8px;
   height: 8px;
   border-radius: 50%;
@@ -110,7 +123,17 @@ function tr(key: string): string {
 
 .assistant-checklist__item--running .assistant-checklist__lamp {
   background: var(--assistant-accent, #1677ff);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--assistant-accent, #1677ff) 12%, transparent);
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--assistant-accent, #1677ff) 12%, transparent),
+    0 0 18px color-mix(in srgb, var(--assistant-accent, #1677ff) 32%, transparent);
+}
+
+.assistant-checklist__item--running .assistant-checklist__signal::before {
+  animation: assistant-signal-radar 1.8s ease-out infinite;
+}
+
+.assistant-checklist__item--running .assistant-checklist__signal::after {
+  animation: assistant-signal-radar 1.8s ease-out 0.58s infinite;
 }
 
 .assistant-checklist__item--running .assistant-checklist__lamp::after {
@@ -145,5 +168,11 @@ function tr(key: string): string {
   0% { opacity: 0.3; transform: scale(0.55); }
   70% { opacity: 0; transform: scale(1.8); }
   100% { opacity: 0; transform: scale(1.8); }
+}
+
+@keyframes assistant-signal-radar {
+  0% { opacity: 0.46; transform: scale(0.56); }
+  74% { opacity: 0; transform: scale(1.55); }
+  100% { opacity: 0; transform: scale(1.55); }
 }
 </style>

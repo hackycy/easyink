@@ -68,7 +68,7 @@ export class AssistantOrchestrator {
 
     try {
       await this.invokeGraph(current.input)
-      await this.runStep(current, 'intake')
+      current = await this.startStep(current, 'intake')
       await this.store.appendEvent(taskId, { type: 'thinking.started', taskId, title: '理解模板需求' })
       await this.think(taskId, '正在理解你的模板需求……')
       const memorySummary = await runMemoryAgent({ input: current.input, taskId, store: this.store, llm: this.llm })
@@ -87,13 +87,11 @@ export class AssistantOrchestrator {
         return current
       }
       await this.think(taskId, intake.taskType ? `识别为${describeTaskType(intake.taskType)}场景。` : '已理解模板类型与目标。')
-
-      await this.runStep(current, 'plan')
-      await this.think(taskId, '正在规划页面结构与版式。')
+      await this.completeStep(taskId, 'intake')
 
       let externalData: ParsedExternalData | undefined
       if (current.input.source && current.input.source.kind !== 'none') {
-        await this.runStep(current, 'source')
+        current = await this.startStep(current, 'source')
         await this.store.appendEvent(taskId, { type: 'tool.started', taskId, toolId: 'source', title: '解析数据源' })
         externalData = await this.resolveSource(current.input.source)
         await this.store.appendEvent(taskId, {
@@ -110,11 +108,15 @@ export class AssistantOrchestrator {
           warnings: externalData.warnings,
           expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
         })
+        await this.completeStep(taskId, 'source')
       }
       else {
         current = await this.updateTask(current, { step: 'source' })
         await this.store.appendEvent(taskId, { type: 'step.completed', taskId, step: 'source' })
       }
+
+      current = await this.startStep(current, 'plan')
+      await this.think(taskId, '正在规划页面结构与版式。')
 
       const agents = await runAssistantAgents({
         input: current.input,
@@ -125,6 +127,7 @@ export class AssistantOrchestrator {
       })
       if (agents.planner.summary)
         await this.think(taskId, agents.planner.summary)
+      await this.completeStep(taskId, 'plan')
 
       const agentContext = {
         input: current.input,
@@ -134,7 +137,7 @@ export class AssistantOrchestrator {
         sourceData: externalData,
       }
 
-      await this.runStep(current, 'contract')
+      current = await this.startStep(current, 'contract')
       await this.store.appendEvent(taskId, { type: 'tool.started', taskId, toolId: 'contract', title: '构建数据契约' })
       await this.think(taskId, '正在构建数据契约。')
       const contract = await runContractAgent(agentContext, agents.planner, agents.source, agents.memorySummary)
@@ -146,8 +149,9 @@ export class AssistantOrchestrator {
           ? `定义 ${contract.dataSource.fields.length} 个数据字段。`
           : '未生成数据契约，交由 Schema Agent 推断。',
       })
+      await this.completeStep(taskId, 'contract')
 
-      await this.runStep(current, 'layout')
+      current = await this.startStep(current, 'layout')
       await this.store.appendEvent(taskId, { type: 'tool.started', taskId, toolId: 'layout', title: '规划版式骨架' })
       await this.think(taskId, '正在规划版式骨架。')
       const layout = await runLayoutAgent(agentContext, agents.planner, contract, agents.memorySummary)
@@ -159,8 +163,9 @@ export class AssistantOrchestrator {
           ? `规划 ${layout.blocks.length} 个版式区块。`
           : '未生成版式骨架，交由 Schema Agent 推断。',
       })
+      await this.completeStep(taskId, 'layout')
 
-      await this.runStep(current, 'compose')
+      current = await this.startStep(current, 'compose')
       await this.think(taskId, '正在生成 EasyInk 模板结构。')
       const schemaAgent = await runSchemaAgent(
         agentContext,
@@ -174,6 +179,7 @@ export class AssistantOrchestrator {
       })
       if (!schemaAgent)
         throw new Error('Schema Agent requires an LLM client and a Designer material manifest.')
+      await this.completeStep(taskId, 'compose')
 
       const planningPage = schemaAgent.planningBrief.page
         ? {
@@ -196,7 +202,7 @@ export class AssistantOrchestrator {
 
       let schemaResult = schemaAgent
 
-      await this.runStep(current, 'validate')
+      current = await this.startStep(current, 'validate')
       await this.store.appendEvent(taskId, { type: 'tool.started', taskId, toolId: 'validate', title: '校验模板与数据绑定' })
       let validation = validateAssistantSchema(schemaResult.schema, { materialManifest: current.input.materialManifest })
       let deterministicErrors = collectDeterministicErrors(schemaResult.schema, {
@@ -216,10 +222,10 @@ export class AssistantOrchestrator {
           error: (validation.errors[0] ?? deterministicErrors[0])?.message ?? '存在需修复的校验问题。',
         })
       }
+      await this.completeStep(taskId, 'validate')
 
       if (initialErrorCount > 0) {
-        await this.store.appendEvent(taskId, { type: 'step.started', taskId, step: 'repair' })
-        current = await this.updateTask(current, { step: 'repair' })
+        current = await this.startStep(current, 'repair')
         await this.think(taskId, '校验发现问题，正在自动修复。')
         for (let attempt = 1; attempt <= MAX_REPAIR_ITERATIONS; attempt += 1) {
           await this.store.appendEvent(taskId, { type: 'tool.started', taskId, toolId: 'repair', title: `修复模板结构（第 ${attempt} 次）` })
@@ -311,7 +317,8 @@ export class AssistantOrchestrator {
           validation.valid ? '校验通过' : '存在需修复项',
         ],
       })
-      await this.runStep(current, 'review')
+      current = await this.startStep(current, 'review')
+      await this.completeStep(taskId, 'review')
       current = await this.updateTask(current, { status: 'review', step: 'review', resultId: result.id })
       await this.store.updateRun({ ...run, status: 'review', finishedAt: Date.now() })
       await this.saveProjectionSnapshot(taskId)
@@ -474,10 +481,13 @@ export class AssistantOrchestrator {
     return updated
   }
 
-  private async runStep(task: AssistantTaskRecord, step: AssistantWorkflowStep): Promise<void> {
+  private async startStep(task: AssistantTaskRecord, step: AssistantWorkflowStep): Promise<AssistantTaskRecord> {
     await this.store.appendEvent(task.id, { type: 'step.started', taskId: task.id, step })
-    await this.updateTask(task, { step })
-    await this.store.appendEvent(task.id, { type: 'step.completed', taskId: task.id, step })
+    return this.updateTask(task, { step })
+  }
+
+  private async completeStep(taskId: string, step: AssistantWorkflowStep): Promise<void> {
+    await this.store.appendEvent(taskId, { type: 'step.completed', taskId, step })
   }
 
   private async think(taskId: string, text: string): Promise<void> {

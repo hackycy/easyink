@@ -70,6 +70,9 @@ export function projectChecklist(input: ProjectChecklistInput): ChecklistItem[] 
         status = 'done'
       else status = index === reached ? 'failed' : 'pending'
     }
+    else if (anyRunning) {
+      status = 'running'
+    }
     else if (index < reached) {
       status = 'done'
     }

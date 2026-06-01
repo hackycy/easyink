@@ -16,6 +16,35 @@ describe('assistantOrchestrator', () => {
     expect(events.some(record => record.event.type === 'result.ready')).toBe(true)
   })
 
+  it('keeps workflow steps running while their work is in progress', async () => {
+    const store = new MemoryAssistantStore()
+    const orchestrator = new AssistantOrchestrator({ store, llm: createSchemaLLM() })
+    const task = await store.createTask({ prompt: '生成一张商超小票', materialManifest: textMaterialManifest() })
+
+    await orchestrator.runTask(task.id)
+    const events = (await store.listEvents(task.id)).map(record => record.event)
+    const indexOf = (type: 'step.started' | 'step.completed', step: string) => {
+      return events.findIndex(event => event.type === type && event.step === step)
+    }
+    const intakeStarted = indexOf('step.started', 'intake')
+    const intakeCompleted = indexOf('step.completed', 'intake')
+    const planStarted = indexOf('step.started', 'plan')
+    const planCompleted = indexOf('step.completed', 'plan')
+    const contractToolStarted = events.findIndex(event => event.type === 'tool.started' && event.toolId === 'contract')
+    const contractCompleted = indexOf('step.completed', 'contract')
+    const layoutToolStarted = events.findIndex(event => event.type === 'tool.started' && event.toolId === 'layout')
+    const layoutCompleted = indexOf('step.completed', 'layout')
+
+    expect(intakeStarted).toBeGreaterThanOrEqual(0)
+    expect(intakeCompleted).toBeGreaterThan(intakeStarted)
+    expect(planStarted).toBeGreaterThan(intakeCompleted)
+    expect(planCompleted).toBeGreaterThan(planStarted)
+    expect(contractToolStarted).toBeGreaterThan(indexOf('step.started', 'contract'))
+    expect(contractCompleted).toBeGreaterThan(contractToolStarted)
+    expect(layoutToolStarted).toBeGreaterThan(indexOf('step.started', 'layout'))
+    expect(layoutCompleted).toBeGreaterThan(layoutToolStarted)
+  })
+
   it('does not send max token limits to the Schema Agent LLM request', async () => {
     const store = new MemoryAssistantStore()
     const llm = createSchemaLLM()
