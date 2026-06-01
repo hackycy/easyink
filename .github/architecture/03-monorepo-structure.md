@@ -38,7 +38,6 @@ easyink/
 │       ├── table-static/
 │       ├── table-data/
 │       ├── table-kernel/           # @easyink/material-table-kernel — 表格共享纯计算库
-│       ├── container/
 │       ├── chart/
 │       └── svg/
 ├── playground/

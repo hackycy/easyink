@@ -592,9 +592,6 @@ importers:
       '@easyink/material-chart':
         specifier: workspace:*
         version: link:../materials/chart
-      '@easyink/material-container':
-        specifier: workspace:*
-        version: link:../materials/container
       '@easyink/material-ellipse':
         specifier: workspace:*
         version: link:../materials/ellipse
@@ -767,18 +764,6 @@ importers:
         version: 3.12.3
 
   packages/materials/chart:
-    dependencies:
-      '@easyink/core':
-        specifier: workspace:*
-        version: link:../../core
-      '@easyink/schema':
-        specifier: workspace:*
-        version: link:../../schema
-      '@easyink/shared':
-        specifier: workspace:*
-        version: link:../../shared
-
-  packages/materials/container:
     dependencies:
       '@easyink/core':
         specifier: workspace:*

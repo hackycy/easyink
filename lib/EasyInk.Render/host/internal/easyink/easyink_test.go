@@ -365,27 +365,6 @@ func flowRowSchema() json.RawMessage {
 	return json.RawMessage(`{"version":"1.0","page":{"width":80,"height":120,"unit":"mm"},"elements":[{"id":"items","type":"flow-row","x":4,"y":4,"width":72,"height":26.3,"binding":{"sourceId":"root","fieldPath":"items"},"props":{"gap":1,"paddingX":1,"paddingY":1,"typography":{"fontSize":3.18,"lineHeight":1.2,"letterSpacing":0,"color":"#000000"},"columns":[{"ratio":0.44,"textAlign":"left","verticalAlign":"middle","wrapMode":"block","binding":{"sourceId":"root","fieldPath":"items/name"}},{"ratio":0.12,"textAlign":"center","verticalAlign":"middle","wrapMode":"inline","binding":{"sourceId":"root","fieldPath":"items/qty"}},{"ratio":0.20,"textAlign":"right","verticalAlign":"middle","wrapMode":"inline","binding":{"sourceId":"root","fieldPath":"items/price"}}]}}]}`)
 }
 
-func TestRenderHTMLIncludesContainerRuntimeRenderer(t *testing.T) {
-	schema := json.RawMessage(`{"version":"1.0","page":{"width":80,"height":120,"unit":"mm"},"elements":[{"id":"group","type":"container","x":4,"y":4,"width":72,"height":24,"props":{"padding":2.12,"gap":1.06,"direction":"row","fillColor":"#ffffff","borderWidth":0.26,"borderColor":"#111111","borderType":"dashed"}}]}`)
-	html, _, err := RenderHTML(protocol.Source{
-		Type:   "easyink",
-		Schema: schema,
-		Data:   json.RawMessage(`{}`),
-	})
-	if err != nil {
-		t.Fatalf("render html: %v", err)
-	}
-	for _, expected := range []string{
-		`"type":"container"`,
-		"function renderContainer",
-		`"direction":"row"`,
-	} {
-		if !strings.Contains(html, expected) {
-			t.Fatalf("expected runtime html to include %q", expected)
-		}
-	}
-}
-
 func TestRenderHTMLIncludesSvgStarRuntimeRenderer(t *testing.T) {
 	schema := json.RawMessage(`{"version":"1.0","page":{"width":80,"height":120,"unit":"mm"},"elements":[{"id":"star","type":"svg-star","x":24,"y":24,"width":24,"height":24,"props":{"fillColor":"#facc15","borderWidth":0.26,"borderColor":"#111111","starPoints":5,"starInnerRatio":0.381966,"starRotation":-90}}]}`)
 	html, _, err := RenderHTML(protocol.Source{

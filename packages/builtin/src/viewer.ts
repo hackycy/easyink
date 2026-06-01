@@ -1,7 +1,6 @@
 import type { BuiltinViewerRegistrar } from './types'
 import { BARCODE_TYPE, renderBarcode } from '@easyink/material-barcode'
 import { CHART_TYPE, renderChart } from '@easyink/material-chart'
-import { CONTAINER_TYPE, renderContainer } from '@easyink/material-container'
 import { ELLIPSE_TYPE, renderEllipse } from '@easyink/material-ellipse'
 import { FLOW_ROW_TYPE, measureFlowRow, renderFlowRow } from '@easyink/material-flow-row'
 import { IMAGE_TYPE, renderImage } from '@easyink/material-image'
@@ -28,7 +27,6 @@ export function registerBuiltinViewerMaterials(register: BuiltinViewerRegistrar)
   register(LINE_TYPE, createLineViewerExtension())
   register(RECT_TYPE, { render: (node, ctx) => renderRect(node, ctx.unit) })
   register(ELLIPSE_TYPE, { render: (node, ctx) => renderEllipse(node, ctx.unit) })
-  register(CONTAINER_TYPE, { render: (node, ctx) => renderContainer(node, ctx.unit) })
   register(TABLE_STATIC_TYPE, { render: (node, ctx) => renderTableStatic(node, ctx) })
   register(TABLE_DATA_TYPE, {
     render: (node, ctx) => renderTableData(node, ctx),

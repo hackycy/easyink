@@ -2,7 +2,7 @@
 
 > 本章是 EasyInk 编辑交互的**正式协议**，**完全替代** 11 章中 `MaterialDesignerExtension.deepEditing` / `DeepEditingDefinition` / `SubSelectionHandler` / `InternalResizeHandler` / `KeyboardRouteHandler` 这套旧 FSM 协议。
 >
-> 适用范围：所有需要"在物料内部继续编辑"的复杂物料——表格（table-static / table-data / cell-free）、容器（container 子元素 in-place 编辑）、图表（chart 内图例/坐标轴/系列编辑）、SVG 路径/锚点编辑，以及未来扩展的表单、看板等。
+> 适用范围：所有需要"在物料内部继续编辑"的复杂物料——表格（table-static / table-data / cell-free）、图表（chart 内图例/坐标轴/系列编辑）、SVG 路径/锚点编辑，以及未来扩展的表单、看板等。
 
 ## 22.0 两种 selection 的边界
 

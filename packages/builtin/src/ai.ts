@@ -1,7 +1,6 @@
 import type { AIMaterialDescriptor } from '@easyink/shared'
 import { barcodeAIMaterialDescriptor } from '@easyink/material-barcode'
 import { chartAIMaterialDescriptor } from '@easyink/material-chart'
-import { containerAIMaterialDescriptor } from '@easyink/material-container'
 import { ellipseAIMaterialDescriptor } from '@easyink/material-ellipse'
 import { flowRowAIMaterialDescriptor } from '@easyink/material-flow-row'
 import { imageAIMaterialDescriptor } from '@easyink/material-image'
@@ -27,7 +26,6 @@ export const builtinAIMaterialDescriptors: AIMaterialDescriptor[] = [
   barcodeAIMaterialDescriptor,
   rectAIMaterialDescriptor,
   ellipseAIMaterialDescriptor,
-  containerAIMaterialDescriptor,
   pageNumberAIMaterialDescriptor,
   svgCustomAIMaterialDescriptor,
   svgStarAIMaterialDescriptor,

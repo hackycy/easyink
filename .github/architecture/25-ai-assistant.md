@@ -85,7 +85,7 @@ export const textAIMaterialDescriptor = {
   binding: 'single',
   knowledge: {
     category: 'typography',
-    composability: { canBeChildOf: ['container', '*'], canContain: [], ... },
+    composability: { canBeChildOf: ['*'], canContain: [], ... },
     bindingSpec: { mode: 'scalar', accepts: { types: ['string', 'number'] }, ... },
     sizing: { minWidth: 10, minHeight: 4, defaultSize: { width: 40, height: 6 } },
     fitness: [{ scenario: 'invoice-header', score: 0.9, reason: '...' }],

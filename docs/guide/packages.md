@@ -84,7 +84,6 @@ pnpm add @easyink/designer @easyink/viewer
 - `@easyink/material-rect`
 - `@easyink/material-ellipse`
 - `@easyink/material-line`
-- `@easyink/material-container`
 - `@easyink/material-page-number`
 - `@easyink/material-table-static`
 - `@easyink/material-table-data`

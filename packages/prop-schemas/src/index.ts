@@ -74,11 +74,6 @@ const IMAGE_FIT_OPTIONS: NonNullable<PropSchema['enum']> = [
   { label: 'designer.option.imageFitNone', value: 'none' },
 ]
 
-const DIRECTION_OPTIONS: NonNullable<PropSchema['enum']> = [
-  { label: 'designer.option.directionRow', value: 'row' },
-  { label: 'designer.option.directionColumn', value: 'column' },
-]
-
 const CHART_TYPE_OPTIONS: NonNullable<PropSchema['enum']> = [
   { label: 'designer.option.chartBar', value: 'bar' },
   { label: 'designer.option.chartLine', value: 'line' },
@@ -302,18 +297,6 @@ const ELLIPSE_PROP_SCHEMAS: PropSchema[] = [
   { key: 'borderType', label: 'designer.property.borderType', type: 'enum', group: 'border', enum: STROKE_STYLE_OPTIONS },
 ]
 
-// ─── Container ───────────────────────────────────────────────────────
-
-const CONTAINER_PROP_SCHEMAS: PropSchema[] = [
-  { key: 'direction', label: 'designer.property.direction', type: 'enum', group: 'layout', enum: DIRECTION_OPTIONS },
-  { key: 'padding', label: 'designer.property.padding', type: 'number', group: 'layout', min: 0, max: 100, step: 1 },
-  { key: 'gap', label: 'designer.property.gap', type: 'number', group: 'layout', min: 0, max: 100, step: 1 },
-  { key: 'fillColor', label: 'designer.property.fillColor', type: 'color', group: 'appearance' },
-  { key: 'borderWidth', label: 'designer.property.borderWidth', type: 'number', group: 'border', min: 0, max: 20, step: 1 },
-  { key: 'borderColor', label: 'designer.property.borderColor', type: 'color', group: 'border' },
-  { key: 'borderType', label: 'designer.property.borderType', type: 'enum', group: 'border', enum: STROKE_STYLE_OPTIONS },
-]
-
 // ─── Chart ───────────────────────────────────────────────────────────
 
 const CHART_PROP_SCHEMAS: PropSchema[] = [
@@ -415,7 +398,6 @@ const PROP_SCHEMA_REGISTRY: Record<string, PropSchema[]> = {
   'line': LINE_PROP_SCHEMAS,
   'rect': RECT_PROP_SCHEMAS,
   'ellipse': ELLIPSE_PROP_SCHEMAS,
-  'container': CONTAINER_PROP_SCHEMAS,
   'chart': CHART_PROP_SCHEMAS,
   'svg': SVG_PROP_SCHEMAS,
   'page-number': PAGE_NUMBER_PROP_SCHEMAS,

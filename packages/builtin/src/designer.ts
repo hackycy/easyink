@@ -2,7 +2,6 @@ import type { BuiltinDesignerMaterialBundle, BuiltinPanelSectionId } from './typ
 import {
   IconBarcode,
   IconChart,
-  IconContainer,
   IconDataTable,
   IconEllipse,
   IconHeart,
@@ -31,13 +30,6 @@ import {
   createChartExtension,
   createChartNode,
 } from '@easyink/material-chart'
-import {
-  CONTAINER_CAPABILITIES,
-  CONTAINER_TYPE,
-  containerAIMaterialDescriptor,
-  createContainerExtension,
-  createContainerNode,
-} from '@easyink/material-container'
 import {
   createEllipseExtension,
   createEllipseNode,
@@ -211,16 +203,6 @@ export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
       factory: createEllipseExtension,
     },
     {
-      type: CONTAINER_TYPE,
-      name: 'designer.toolbar.container',
-      icon: IconContainer,
-      category: 'layout',
-      capabilities: CONTAINER_CAPABILITIES,
-      aiDescriptor: containerAIMaterialDescriptor,
-      createDefaultNode: createContainerNode,
-      factory: createContainerExtension,
-    },
-    {
       type: TABLE_STATIC_TYPE,
       name: 'designer.toolbar.table',
       icon: IconTable,
@@ -320,7 +302,6 @@ export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
     { type: TABLE_STATIC_TYPE, group: 'data' },
     { type: TABLE_DATA_TYPE, group: 'data' },
     { type: FLOW_ROW_TYPE, group: 'data' },
-    { type: CONTAINER_TYPE, group: 'data' },
     { type: CHART_TYPE, group: 'chart' },
     { type: SVG_STAR_TYPE, group: 'svg' },
     { type: SVG_HEART_TYPE, group: 'svg' },

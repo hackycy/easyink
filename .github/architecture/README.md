@@ -11,7 +11,7 @@
 - 页面模型覆盖 `mode / width / height / pages / scale / radius / offsetX / offsetY / copies / blankPolicy / grid / font / background / print / pageModel / layout / pagination / reflow`，并兼容 benchmark 输入里的 `viewer / xOffset / yOffset / blank`
 - 数据源协议覆盖 `id / name / tag / title / icon / expand / headless / fields / use / props / format / displayFormat / union / bindIndex / meta`，字段节点可声明 `format / displayFormat`
 - 顶部物料栏建模为"高频直达物料 + 分组目录物料"的混合入口
-- `table`、`container`、`chart`、`svg` 都是一级结构系统
+- `table`、`chart`、`svg` 都是一级结构系统
 - 属性面板在同一窗口壳层中互斥展示"元素属性"与"页面属性"，支持 PropertyPanelOverlay 动态叠加层
 - 画布中的每个物料必须根据 props 展示近似真实的视觉效果（设计态渲染）
 - 设计态渲染（`MaterialDesignerExtension.renderContent`）与 Viewer 渲染（`MaterialViewerExtension.render / measure / getRenderSize / fragmentPaginator`）是两套独立实现
