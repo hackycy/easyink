@@ -72,8 +72,8 @@ Choose focused tests based on risk:
 Useful commands:
 
 - `pnpm test -- packages/materials/svg/star/src/star.test.ts`
-- `pnpm test -- packages/materials/table-data/src/viewer.test.ts`
-- `pnpm test -- packages/materials/table-kernel/src/editing/geometry.test.ts`
+- `pnpm test -- packages/materials/table/data/src/viewer.test.ts`
+- `pnpm test -- packages/materials/table/kernel/src/geometry.test.ts`
 - `pnpm build` for broad package integration when registration or package exports changed.
 
 ## Review Smells

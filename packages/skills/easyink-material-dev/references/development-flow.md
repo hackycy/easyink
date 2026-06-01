@@ -2,7 +2,7 @@
 
 ## Built-In Material Package Shape
 
-Follow existing packages such as `packages/materials/rect`, `packages/materials/text`, `packages/materials/page-number`, `packages/materials/svg/star`, `packages/materials/flow-row`, and `packages/materials/table-data`.
+Follow existing packages such as `packages/materials/rect`, `packages/materials/text`, `packages/materials/page-number`, `packages/materials/svg/star`, `packages/materials/flow-row`, and `packages/materials/table/data`.
 
 Typical files:
 

@@ -560,7 +560,7 @@ packages/core/src/material-extension.ts
 
 ### 22.8.2 物料迁移路径
 
-`packages/materials/table-kernel/src/deep-editing.ts` 全部重写：
+`packages/materials/table/kernel/src/*` 中的表格编辑实现全部迁移到新协议：
 
 | 旧概念 | 新落地 |
 |---|---|
@@ -598,7 +598,7 @@ selection 与 transaction 都满足协作必要条件：
 
 - [x] `packages/core` 旧 deep editing 协议全部删除，新协议接口完成
 - [x] `packages/designer` 提供框架级中间件、SelectionStore、GeometryService、SurfacesRenderer
-- [x] `packages/materials/table-kernel` 重写为新协议实现，旧 phase 代码清零
+- [x] `packages/materials/table/kernel` 重写为新协议实现，旧 phase 代码清零
 - [x] `table-static` / `table-data` extension 迁移完成
 - [x] `pnpm lint` / `pnpm typecheck` / `pnpm build` 通过
 - [x] 单元测试覆盖：selection 序列化往返、tx coalesce、resolveLocation 跨 viewport 裁剪、behavior 中间件优先级

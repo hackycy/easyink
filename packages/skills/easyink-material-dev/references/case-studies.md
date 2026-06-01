@@ -4,15 +4,16 @@
 
 Source files:
 
-- `packages/materials/table-data/src/schema.ts`
-- `packages/materials/table-data/src/designer.ts`
-- `packages/materials/table-data/src/prop-schemas.ts`
-- `packages/materials/table-data/src/viewer.ts`
-- `packages/materials/table-data/src/layout.ts`
-- `packages/materials/table-data/src/ai.ts`
-- `packages/materials/table-kernel/src/editing/*`
-- `packages/materials/table-kernel/src/resize-adapter.ts`
-- `packages/materials/table-kernel/src/measure.ts`
+- `packages/materials/table/data/src/schema.ts`
+- `packages/materials/table/data/src/designer.ts`
+- `packages/materials/table/data/src/prop-schemas.ts`
+- `packages/materials/table/data/src/viewer.ts`
+- `packages/materials/table/data/src/layout.ts`
+- `packages/materials/table/data/src/ai.ts`
+- `packages/materials/table/kernel/src/geometry.ts`
+- `packages/materials/table/kernel/src/commands.ts`
+- `packages/materials/table/kernel/src/resize-adapter.ts`
+- `packages/materials/table/kernel/src/measure.ts`
 
 Key rules:
 

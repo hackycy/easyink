@@ -35,8 +35,11 @@ easyink/
 │       ├── line/
 │       ├── rect/
 │       ├── ellipse/
-│       ├── kernel/           # kernel为表格共享纯计算库
 │       ├── chart/
+│       ├── table/
+│       │   ├── data/          # @easyink/material-table-data — 动态数据表格物料
+│       │   ├── static/        # @easyink/material-table-static — 静态单元格表格物料
+│       │   └── kernel/        # @easyink/material-table-kernel — 表格共享几何、渲染、编辑与测量工具
 │       └── svg/
 ├── playground/
 ```
@@ -146,7 +149,7 @@ easyink/
 以 `@easyink/material-table-data` 为例：
 
 ```
-packages/materials/table-data/
+packages/materials/table/data/
 ├── src/
 │   ├── schema.ts              # 默认 props、迁移补丁、能力声明
 │   ├── designer.ts            # 单元格选区、列宽拖拽、行列编辑、属性桥接

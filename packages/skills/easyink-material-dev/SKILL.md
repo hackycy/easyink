@@ -31,7 +31,7 @@ Start with the local repo, not memory. Prefer these files:
 - `packages/materials/text`, `packages/materials/rect`, and `packages/materials/image` for simple fixed-size patterns.
 - `packages/materials/page-number` for page-aware repeated overlays.
 - `packages/materials/flow-row` for runtime-height flow/flex behavior.
-- `packages/materials/table-data` and `packages/materials/table-kernel` for datasource drop, cell sub-properties, runtime measurement, fragment pagination, and resize side effects.
+- `packages/materials/table/data` and `packages/materials/table/kernel` for datasource drop, cell sub-properties, runtime measurement, fragment pagination, and resize side effects.
 - `packages/materials/svg/star` for shape-specific deep editing.
 
 ## Workflow
