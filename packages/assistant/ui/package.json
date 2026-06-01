@@ -31,7 +31,8 @@
     "@easyink/assistant-capabilities": "workspace:*",
     "@easyink/assistant-llm": "workspace:*",
     "@easyink/assistant-store": "workspace:*",
-    "@easyink/icons": "workspace:*"
+    "@easyink/icons": "workspace:*",
+    "@easyink/ui": "workspace:*"
   },
   "devDependencies": {
     "vue": "catalog:framework"

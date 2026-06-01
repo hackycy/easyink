@@ -576,6 +576,9 @@ importers:
       '@easyink/icons':
         specifier: workspace:*
         version: link:../../icons
+      '@easyink/ui':
+        specifier: workspace:*
+        version: link:../../ui
     devDependencies:
       vue:
         specifier: catalog:framework

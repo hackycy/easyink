@@ -228,6 +228,24 @@ describe('assistant conversation panel', () => {
     expect(document.querySelector('button[aria-label="模型配置"]')).toBeFalsy()
   })
 
+  it('shows model configuration as a switchable content page', async () => {
+    const service: AssistantLLMConfigService = {
+      providers: [{ provider: 'openai', label: 'OpenAI', model: 'gpt-5-mini' }],
+      load: () => undefined,
+    }
+    const { api } = createStreamingClient({})
+    mount({ apiClient: api, llmConfig: service })
+    await flushPromises()
+
+    document.querySelector('button[aria-label="模型配置"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await flushPromises()
+
+    expect(document.body.textContent).toContain('模型配置')
+    expect(document.body.textContent).toContain('API Key 仅用于本次浏览器侧请求配置转发')
+    expect(document.querySelector('.assistant-settings-form')).toBeTruthy()
+    expect(document.body.textContent).not.toContain('暂无历史会话')
+  })
+
   it('requires user LLM config when the service has no server model configured', async () => {
     let savedConfig: RuntimeLLMConfig | undefined
     const task = createTask()
@@ -257,8 +275,10 @@ describe('assistant conversation panel', () => {
     await submitPrompt('生成小票')
     expect(api.createTask).not.toHaveBeenCalled()
     expect(document.body.textContent).toContain('请先配置模型凭据后再发送')
+    expect(document.body.textContent).toContain('模型配置')
+    expect(document.body.textContent).toContain('未配置')
 
-    const apiKeyInput = document.querySelector('.assistant-llm-config input[type="password"]') as HTMLInputElement
+    const apiKeyInput = document.querySelector('.assistant-settings-form input[type="password"]') as HTMLInputElement
     apiKeyInput.value = 'user-key'
     apiKeyInput.dispatchEvent(new Event('input', { bubbles: true }))
     document.querySelector('button[aria-label="保存模型配置"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))

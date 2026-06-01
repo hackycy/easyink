@@ -24,4 +24,4 @@ export interface AssistantConversationPanelEmits {
   statusChange: [status: AssistantConversationStatus]
 }
 
-export type AssistantConversationView = 'chat' | 'history'
+export type AssistantConversationView = 'chat' | 'history' | 'settings'

@@ -239,7 +239,7 @@ function handleDataUpdate(data: Record<string, unknown>) {
 const assistantEndpoint = import.meta.env.VITE_EASYINK_ASSISTANT_ENDPOINT || 'http://127.0.0.1:3010'
 const contributions = [createAssistantContribution({
   endpoint: assistantEndpoint,
-  llmConfig: createBrowserAssistantLLMConfigService({ persistence: 'session' }),
+  llmConfig: createBrowserAssistantLLMConfigService({ persistence: 'local' }),
 })]
 </script>
 

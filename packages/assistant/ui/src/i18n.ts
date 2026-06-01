@@ -73,6 +73,10 @@ const fallbackMessages: Record<string, string> = {
   'designer.assistant.llm.apiKey': 'API Key',
   'designer.assistant.llm.model': '模型',
   'designer.assistant.llm.baseURL': 'Base URL',
+  'designer.assistant.llm.configured': '已配置',
+  'designer.assistant.llm.unconfigured': '未配置',
+  'designer.assistant.llm.securityTipTitle': '提示',
+  'designer.assistant.llm.securityTip': 'API Key 仅用于本次浏览器侧请求配置转发，不会保存在服务端。',
 }
 
 export function translateAssistant(key: string, t?: AssistantTranslate): string {
