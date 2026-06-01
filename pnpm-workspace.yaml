@@ -6,6 +6,7 @@ packages:
   - packages/print/*
   - packages/materials/*
   - packages/materials/svg/*
+  - packages/materials/table/*
   - packages/export/runtime
   - packages/export/plugin/*
   - internal-packages/*

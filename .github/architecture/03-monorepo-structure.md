@@ -35,9 +35,7 @@ easyink/
 │       ├── line/
 │       ├── rect/
 │       ├── ellipse/
-│       ├── table-static/
-│       ├── table-data/
-│       ├── table-kernel/           # @easyink/material-table-kernel — 表格共享纯计算库
+│       ├── kernel/           # kernel为表格共享纯计算库
 │       ├── chart/
 │       └── svg/
 ├── playground/

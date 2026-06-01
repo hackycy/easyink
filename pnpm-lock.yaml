@@ -624,10 +624,10 @@ importers:
         version: link:../materials/svg/star
       '@easyink/material-table-data':
         specifier: workspace:*
-        version: link:../materials/table-data
+        version: link:../materials/table/data
       '@easyink/material-table-static':
         specifier: workspace:*
-        version: link:../materials/table-static
+        version: link:../materials/table/static
       '@easyink/material-text':
         specifier: workspace:*
         version: link:../materials/text
@@ -907,56 +907,56 @@ importers:
         specifier: '>=3.0.0'
         version: 3.5.31(typescript@6.0.2)
 
-  packages/materials/table-data:
+  packages/materials/table/data:
     dependencies:
       '@easyink/core':
         specifier: workspace:*
-        version: link:../../core
+        version: link:../../../core
       '@easyink/material-table-kernel':
         specifier: workspace:*
-        version: link:../table-kernel
+        version: link:../kernel
       '@easyink/schema':
         specifier: workspace:*
-        version: link:../../schema
+        version: link:../../../schema
       '@easyink/shared':
         specifier: workspace:*
-        version: link:../../shared
+        version: link:../../../shared
 
-  packages/materials/table-kernel:
+  packages/materials/table/kernel:
     dependencies:
       '@easyink/core':
         specifier: workspace:*
-        version: link:../../core
+        version: link:../../../core
       '@easyink/icons':
         specifier: workspace:*
-        version: link:../../icons
+        version: link:../../../icons
       '@easyink/schema':
         specifier: workspace:*
-        version: link:../../schema
+        version: link:../../../schema
       '@easyink/shared':
         specifier: workspace:*
-        version: link:../../shared
+        version: link:../../../shared
       '@easyink/ui':
         specifier: workspace:*
-        version: link:../../ui
+        version: link:../../../ui
       vue:
         specifier: '>=3.0.0'
         version: 3.5.31(typescript@6.0.2)
 
-  packages/materials/table-static:
+  packages/materials/table/static:
     dependencies:
       '@easyink/core':
         specifier: workspace:*
-        version: link:../../core
+        version: link:../../../core
       '@easyink/material-table-kernel':
         specifier: workspace:*
-        version: link:../table-kernel
+        version: link:../kernel
       '@easyink/schema':
         specifier: workspace:*
-        version: link:../../schema
+        version: link:../../../schema
       '@easyink/shared':
         specifier: workspace:*
-        version: link:../../shared
+        version: link:../../../shared
 
   packages/materials/text:
     dependencies:
