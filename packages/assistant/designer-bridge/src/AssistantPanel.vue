@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { AssistantMaterialManifest, AssistantPatchOperation, AssistantResult } from '@easyink/assistant-capabilities'
 import type { AssistantConversationStatus, AssistantStore } from '@easyink/assistant-store'
-import type { AssistantApiClient } from '@easyink/assistant-ui'
+import type { AssistantApiClient, AssistantLLMConfigService } from '@easyink/assistant-ui'
 import { AssistantWorkbench } from '@easyink/assistant-ui'
 import '@easyink/assistant-ui/index.css'
 
@@ -15,6 +15,7 @@ const props = defineProps<{
   materialManifest?: AssistantMaterialManifest
   store?: AssistantStore
   conversationId?: string
+  llmConfig?: AssistantLLMConfigService
   t?: AssistantTranslate
 }>()
 
@@ -65,6 +66,7 @@ function tr(key: string): string {
             :material-manifest="materialManifest"
             :store="store"
             :conversation-id="conversationId"
+            :llm-config="llmConfig"
             :t="t"
             @apply="$emit('apply', $event)"
             @apply-patch="$emit('applyPatch', $event)"

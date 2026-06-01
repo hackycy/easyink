@@ -11,6 +11,7 @@ import { serve } from '@hono/node-server'
 import { config as loadDotenv } from 'dotenv'
 import pino from 'pino'
 import { createAssistantApp } from '../server'
+import type { AssistantRequestLLMConfigOptions } from '../server'
 
 function loadEnvFiles(): void {
   for (const file of ['.env', '.env.local']) {
@@ -52,6 +53,26 @@ function createStoreFromEnv(): AssistantStore | undefined {
   })
 }
 
+function createRequestLLMPolicyFromEnv(): false | AssistantRequestLLMConfigOptions {
+  if (process.env.EASYINK_ASSISTANT_REQUEST_LLM_CONFIG?.trim() !== '1')
+    return false
+  const providers = process.env.EASYINK_ASSISTANT_REQUEST_LLM_PROVIDERS
+    ?.split(',')
+    .map(provider => provider.trim())
+    .filter(Boolean) as AssistantRequestLLMConfigOptions['providers']
+  return {
+    enabled: true,
+    providers: providers?.length ? providers : undefined,
+    allowCustomBaseURL: process.env.EASYINK_ASSISTANT_REQUEST_LLM_CUSTOM_BASE_URL?.trim() !== '0',
+    allowedBaseURLs: process.env.EASYINK_ASSISTANT_REQUEST_LLM_ALLOWED_BASE_URLS
+      ?.split(',')
+      .map(url => url.trim())
+      .filter(Boolean),
+    allowPrivateBaseURL: process.env.EASYINK_ASSISTANT_REQUEST_LLM_PRIVATE_BASE_URL?.trim() === '1',
+    allowInsecureBaseURL: process.env.EASYINK_ASSISTANT_REQUEST_LLM_INSECURE_BASE_URL?.trim() === '1',
+  }
+}
+
 async function main(): Promise<void> {
   loadEnvFiles()
 
@@ -64,6 +85,7 @@ async function main(): Promise<void> {
   const app = createAssistantApp({
     corsOrigin: process.env.EASYINK_ASSISTANT_CORS_ORIGIN?.trim() || undefined,
     llm: createLLMClientFromEnv(process.env as LLMEnvironment),
+    requestLLM: createRequestLLMPolicyFromEnv(),
     store: createStoreFromEnv(),
   })
 

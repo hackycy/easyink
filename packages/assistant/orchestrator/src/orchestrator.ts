@@ -39,6 +39,10 @@ export interface AssistantOrchestratorOptions {
   llm?: LLMClient
 }
 
+export interface AssistantRunRuntime {
+  llm?: LLMClient
+}
+
 const MAX_REPAIR_ITERATIONS = 2
 
 export class AssistantOrchestrator {
@@ -53,16 +57,21 @@ export class AssistantOrchestrator {
     this.llm = options.llm
   }
 
-  async createTask(input: AssistantTaskInput): Promise<AssistantTaskRecord> {
+  get hasLLM(): boolean {
+    return Boolean(this.llm)
+  }
+
+  async createTask(input: AssistantTaskInput, runtime: AssistantRunRuntime = {}): Promise<AssistantTaskRecord> {
     const task = await this.store.createTask(input)
-    void this.runTask(task.id).catch((error: unknown) => {
+    void this.runTask(task.id, runtime).catch((error: unknown) => {
       this.logger.error({ err: error, taskId: task.id }, 'assistant task failed outside request lifecycle')
     })
     return task
   }
 
-  async runTask(taskId: string): Promise<AssistantTaskRecord> {
+  async runTask(taskId: string, runtime: AssistantRunRuntime = {}): Promise<AssistantTaskRecord> {
     const task = await this.requireTask(taskId)
+    const llm = runtime.llm ?? this.llm
     const run = await this.store.createRun(taskId)
     let current = await this.updateTask(task, { status: 'running', step: 'intake' })
 
@@ -71,8 +80,8 @@ export class AssistantOrchestrator {
       current = await this.startStep(current, 'intake')
       await this.store.appendEvent(taskId, { type: 'thinking.started', taskId, title: '理解模板需求' })
       await this.think(taskId, '正在理解你的模板需求……')
-      const memorySummary = await runMemoryAgent({ input: current.input, taskId, store: this.store, llm: this.llm })
-      const intake = await runIntakeAgent({ input: current.input, taskId, store: this.store, llm: this.llm }, memorySummary)
+      const memorySummary = await runMemoryAgent({ input: current.input, taskId, store: this.store, llm })
+      const intake = await runIntakeAgent({ input: current.input, taskId, store: this.store, llm }, memorySummary)
       if (intake.requiresClarification) {
         await this.think(taskId, '需求信息还不够明确，需要先和你确认。')
         await this.store.appendEvent(taskId, {
@@ -123,7 +132,7 @@ export class AssistantOrchestrator {
         input: current.input,
         taskId,
         store: this.store,
-        llm: this.llm,
+        llm,
         sourceData: externalData,
       })
       if (agents.planner.summary)
@@ -134,7 +143,7 @@ export class AssistantOrchestrator {
         input: current.input,
         taskId,
         store: this.store,
-        llm: this.llm,
+        llm,
         sourceData: externalData,
       }
 
@@ -343,7 +352,7 @@ export class AssistantOrchestrator {
     return updated
   }
 
-  async appendMessage(taskId: string, message: string): Promise<AssistantTaskRecord> {
+  async appendMessage(taskId: string, message: string, runtime: AssistantRunRuntime = {}): Promise<AssistantTaskRecord> {
     const task = await this.requireTask(taskId)
     await this.store.appendEvent(taskId, { type: 'message.created', taskId, message })
     const next = await this.updateTask(task, {
@@ -354,13 +363,13 @@ export class AssistantOrchestrator {
       status: 'queued',
       error: undefined,
     })
-    void this.runTask(taskId).catch((error: unknown) => {
+    void this.runTask(taskId, runtime).catch((error: unknown) => {
       this.logger.error({ err: error, taskId }, 'assistant message run failed')
     })
     return next
   }
 
-  async answerClarification(taskId: string, answer: string): Promise<AssistantTaskRecord> {
+  async answerClarification(taskId: string, answer: string, runtime: AssistantRunRuntime = {}): Promise<AssistantTaskRecord> {
     const task = await this.requireTask(taskId)
     await this.store.appendEvent(taskId, { type: 'clarification.answered', taskId, answer })
     const next = await this.updateTask(task, {
@@ -371,22 +380,22 @@ export class AssistantOrchestrator {
       status: 'queued',
       error: undefined,
     })
-    void this.runTask(taskId).catch((error: unknown) => {
+    void this.runTask(taskId, runtime).catch((error: unknown) => {
       this.logger.error({ err: error, taskId }, 'assistant clarification run failed')
     })
     return next
   }
 
-  async retryTask(taskId: string): Promise<AssistantTaskRecord> {
+  async retryTask(taskId: string, runtime: AssistantRunRuntime = {}): Promise<AssistantTaskRecord> {
     const task = await this.requireTask(taskId)
     const next = await this.updateTask(task, { status: 'queued', error: undefined })
-    void this.runTask(taskId).catch((error: unknown) => {
+    void this.runTask(taskId, runtime).catch((error: unknown) => {
       this.logger.error({ err: error, taskId }, 'assistant retry failed')
     })
     return next
   }
 
-  async repairTask(taskId: string): Promise<AssistantTaskRecord> {
+  async repairTask(taskId: string, runtime: AssistantRunRuntime = {}): Promise<AssistantTaskRecord> {
     const task = await this.requireTask(taskId)
     await this.store.appendEvent(taskId, { type: 'step.started', taskId, step: 'repair' })
     if (task.resultId) {
@@ -428,7 +437,7 @@ export class AssistantOrchestrator {
       }
     }
     await this.store.appendEvent(taskId, { type: 'step.completed', taskId, step: 'repair' })
-    return this.retryTask(taskId)
+    return this.retryTask(taskId, runtime)
   }
 
   async applyTaskResult(taskId: string): Promise<AssistantTaskRecord> {

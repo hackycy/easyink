@@ -1,5 +1,25 @@
 import { z } from 'zod'
 
+export const RuntimeLLMProviderSchema = z.enum(['openai', 'openai-compatible', 'anthropic'])
+
+export type RuntimeLLMProvider = z.infer<typeof RuntimeLLMProviderSchema>
+
+export const RuntimeLLMConfigSchema = z.object({
+  provider: RuntimeLLMProviderSchema,
+  apiKey: z.string().trim().min(1),
+  model: z.string().trim().optional(),
+  baseURL: z.string().trim().optional(),
+})
+
+export type RuntimeLLMConfig = z.infer<typeof RuntimeLLMConfigSchema>
+
+export interface RuntimeLLMProviderOption {
+  provider: RuntimeLLMProvider
+  label: string
+  baseURL?: string
+  model?: string
+}
+
 export const LLMMessageSchema = z.object({
   role: z.enum(['system', 'user', 'assistant']),
   content: z.string(),

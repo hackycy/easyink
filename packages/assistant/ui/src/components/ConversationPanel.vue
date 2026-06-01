@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import type { AssistantResult, AssistantSourceInput } from '@easyink/assistant-capabilities'
+import type { RuntimeLLMConfig, RuntimeLLMProvider, RuntimeLLMProviderOption } from '@easyink/assistant-llm'
 import type { AssistantConversationRecord, AssistantEventRecord, AssistantTaskRecord } from '@easyink/assistant-store'
 import type { AssistantStreamHandle } from '../api'
 import type { AssistantConversationPanelEmits, AssistantConversationPanelProps, AssistantConversationView } from '../types'
 import { DexieAssistantStore } from '@easyink/assistant-store'
-import { IconHistory, IconPlus } from '@easyink/icons'
+import { IconClose, IconDelete, IconHistory, IconManager, IconPlus, IconSave } from '@easyink/icons'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { createAssistantApiClient } from '../api'
 import { useConversationPresentation } from '../composables/useConversationPresentation'
@@ -27,12 +28,12 @@ const props = withDefaults(defineProps<AssistantConversationPanelProps>(), {
   materialManifest: undefined,
   store: undefined,
   conversationId: 'default',
+  llmConfig: undefined,
   t: undefined,
 })
 
 const emit = defineEmits<AssistantConversationPanelEmits>()
 
-const api = computed(() => props.apiClient ?? createAssistantApiClient(props.endpoint))
 const taskId = ref<string>()
 const prompt = ref<string>()
 const events = ref<AssistantEventRecord[]>([])
@@ -44,12 +45,39 @@ const activeView = ref<AssistantConversationView>('chat')
 const conversations = ref<AssistantConversationRecord[]>([])
 const activeConversationId = ref(props.conversationId)
 const draftMode = ref(false)
+const llmConfigOpen = ref(false)
+const runtimeLLMConfig = ref<RuntimeLLMConfig>()
+const llmConfigError = ref<string>()
+const serviceProviders = ref<RuntimeLLMProviderOption[]>([])
+const serverProviders = ref<RuntimeLLMProviderOption[]>([])
+const serverLLMConfigured = ref(true)
+const requestLLMEnabled = ref(false)
+const llmConfigDraft = ref({
+  provider: 'openai' as RuntimeLLMProvider,
+  apiKey: '',
+  model: '',
+  baseURL: '',
+})
+const api = computed(() => props.apiClient ?? createAssistantApiClient(props.endpoint, {
+  runtimeProvider: () => runtimeLLMConfig.value ? { llm: runtimeLLMConfig.value } : undefined,
+}))
 const translate = computed(() => props.t)
 
 const browserStore = typeof indexedDB === 'undefined'
   ? undefined
   : new DexieAssistantStore('easyink-assistant-ui')
 const store = computed(() => props.store ?? browserStore)
+const llmConfigEnabled = computed(() => Boolean(props.llmConfig))
+const llmProviderOptions = computed(() => {
+  if (serverProviders.value.length)
+    return serverProviders.value
+  if (serviceProviders.value.length)
+    return serviceProviders.value
+  return [{ provider: 'openai' as const, label: 'OpenAI', model: 'gpt-5-mini' }]
+})
+const activeLLMProvider = computed(() => llmProviderOptions.value.find(option => option.provider === llmConfigDraft.value.provider))
+const showLLMBaseURL = computed(() => llmConfigDraft.value.provider === 'openai-compatible' || llmConfigDraft.value.provider === 'openai')
+const hasRuntimeLLMConfig = computed(() => Boolean(runtimeLLMConfig.value?.apiKey))
 
 const {
   narration,
@@ -122,6 +150,12 @@ function closeStream() {
 async function submitMessage(payload: { prompt: string, source?: AssistantSourceInput }) {
   error.value = undefined
   try {
+    if (llmConfigEnabled.value && requestLLMEnabled.value && !serverLLMConfigured.value && !runtimeLLMConfig.value) {
+      llmConfigOpen.value = true
+      draftMode.value = false
+      error.value = tr('designer.assistant.error.llmConfigRequired')
+      return
+    }
     if (!draftMode.value && derivedStatus.value === 'waiting' && taskId.value) {
       await api.value.submitClarification(taskId.value, { answer: payload.prompt })
       return
@@ -259,6 +293,78 @@ function tr(key: string): string {
   return translateAssistant(key, props.t)
 }
 
+async function loadLLMConfig() {
+  const service = props.llmConfig
+  if (!service)
+    return
+  serviceProviders.value = service.providers ?? []
+  const saved = await service.load()
+  runtimeLLMConfig.value = saved
+  setLLMConfigDraft(saved)
+  try {
+    const capabilities = await api.value.getCapabilities()
+    serverLLMConfigured.value = capabilities.llm.serverConfigured
+    requestLLMEnabled.value = capabilities.llm.requestConfigEnabled
+    serverProviders.value = capabilities.llm.providers
+  }
+  catch {
+    requestLLMEnabled.value = false
+  }
+}
+
+function setLLMConfigDraft(config?: RuntimeLLMConfig) {
+  const provider = config?.provider ?? llmProviderOptions.value[0]?.provider ?? 'openai'
+  const option = llmProviderOptions.value.find(item => item.provider === provider)
+  llmConfigDraft.value = {
+    provider,
+    apiKey: config?.apiKey ?? '',
+    model: config?.model ?? option?.model ?? '',
+    baseURL: config?.baseURL ?? option?.baseURL ?? '',
+  }
+}
+
+function onLLMProviderChange() {
+  const option = activeLLMProvider.value
+  llmConfigDraft.value.model = option?.model ?? ''
+  llmConfigDraft.value.baseURL = option?.baseURL ?? ''
+}
+
+async function saveLLMConfig() {
+  const service = props.llmConfig
+  if (!service)
+    return
+  const config = normalizeLLMConfigDraft()
+  if (!config) {
+    llmConfigError.value = tr('designer.assistant.error.llmConfigInvalid')
+    return
+  }
+  await service.save?.(config)
+  runtimeLLMConfig.value = config
+  llmConfigError.value = undefined
+  llmConfigOpen.value = false
+}
+
+async function clearLLMConfig() {
+  await props.llmConfig?.clear?.()
+  runtimeLLMConfig.value = undefined
+  llmConfigError.value = undefined
+  setLLMConfigDraft()
+}
+
+function normalizeLLMConfigDraft(): RuntimeLLMConfig | undefined {
+  const apiKey = llmConfigDraft.value.apiKey.trim()
+  if (!apiKey)
+    return undefined
+  const model = llmConfigDraft.value.model.trim()
+  const baseURL = llmConfigDraft.value.baseURL.trim()
+  return {
+    provider: llmConfigDraft.value.provider,
+    apiKey,
+    model: model || undefined,
+    baseURL: showLLMBaseURL.value && baseURL ? baseURL : undefined,
+  }
+}
+
 async function restoreConversation(conversationId?: string) {
   if (!store.value)
     return
@@ -374,6 +480,7 @@ watch(derivedStatus, () => {
 onBeforeUnmount(closeStream)
 onMounted(async () => {
   try {
+    await loadLLMConfig()
     await restoreConversation()
   }
   finally {
@@ -459,6 +566,50 @@ onMounted(async () => {
       @delete="deleteConversation"
       @select="selectConversation"
     />
+    <form v-if="llmConfigEnabled && llmConfigOpen" class="assistant-llm-config" @submit.prevent="saveLLMConfig">
+      <div class="assistant-llm-config__head">
+        <strong>{{ tr('designer.assistant.llm.title') }}</strong>
+        <button
+          type="button"
+          :title="tr('designer.assistant.action.close')"
+          :aria-label="tr('designer.assistant.action.close')"
+          @click="llmConfigOpen = false"
+        >
+          <IconClose :size="14" stroke-width="2" />
+        </button>
+      </div>
+      <label>
+        <span>{{ tr('designer.assistant.llm.provider') }}</span>
+        <select v-model="llmConfigDraft.provider" @change="onLLMProviderChange">
+          <option v-for="option in llmProviderOptions" :key="option.provider" :value="option.provider">
+            {{ option.label }}
+          </option>
+        </select>
+      </label>
+      <label>
+        <span>{{ tr('designer.assistant.llm.apiKey') }}</span>
+        <input v-model="llmConfigDraft.apiKey" type="password" autocomplete="off">
+      </label>
+      <label>
+        <span>{{ tr('designer.assistant.llm.model') }}</span>
+        <input v-model="llmConfigDraft.model" type="text" autocomplete="off">
+      </label>
+      <label v-if="showLLMBaseURL">
+        <span>{{ tr('designer.assistant.llm.baseURL') }}</span>
+        <input v-model="llmConfigDraft.baseURL" type="url" autocomplete="off">
+      </label>
+      <p v-if="llmConfigError" class="assistant-llm-config__error">
+        {{ llmConfigError }}
+      </p>
+      <div class="assistant-llm-config__actions">
+        <button type="button" class="assistant-llm-config__action" :title="tr('designer.assistant.action.clearLLMConfig')" :aria-label="tr('designer.assistant.action.clearLLMConfig')" @click="clearLLMConfig">
+          <IconDelete :size="14" stroke-width="1.9" />
+        </button>
+        <button type="submit" class="assistant-llm-config__action assistant-llm-config__action--primary" :title="tr('designer.assistant.action.saveLLMConfig')" :aria-label="tr('designer.assistant.action.saveLLMConfig')">
+          <IconSave :size="14" stroke-width="1.9" />
+        </button>
+      </div>
+    </form>
     <ComposerBar
       :running="running"
       :placeholder="derivedStatus === 'waiting' ? tr('designer.assistant.placeholder.clarification') : tr('designer.assistant.placeholder.prompt')"
@@ -485,6 +636,17 @@ onMounted(async () => {
           @click="toggleHistoryView"
         >
           <IconHistory :size="16" stroke-width="1.9" />
+        </button>
+        <button
+          v-if="llmConfigEnabled"
+          type="button"
+          class="assistant-composer__icon-btn assistant-composer__icon-btn--session"
+          :class="{ 'assistant-composer__icon-btn--active': llmConfigOpen || hasRuntimeLLMConfig }"
+          :title="tr('designer.assistant.action.llmConfig')"
+          :aria-label="tr('designer.assistant.action.llmConfig')"
+          @click="llmConfigOpen = !llmConfigOpen"
+        >
+          <IconManager :size="16" stroke-width="1.9" />
         </button>
       </template>
     </ComposerBar>
@@ -563,6 +725,116 @@ onMounted(async () => {
     display: flex;
     flex-direction: column;
     gap: 4px;
+  }
+}
+
+.assistant-llm-config {
+  position: absolute;
+  right: 18px;
+  bottom: 88px;
+  z-index: 2;
+  display: flex;
+  width: min(340px, calc(100% - 36px));
+  box-sizing: border-box;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--assistant-border);
+  border-radius: 16px;
+  background: var(--assistant-bg);
+  box-shadow: var(--assistant-shadow);
+  font-size: 12px;
+
+  label {
+    display: grid;
+    gap: 5px;
+    color: var(--assistant-muted);
+  }
+
+  input,
+  select {
+    width: 100%;
+    height: 32px;
+    box-sizing: border-box;
+    border: 1px solid var(--assistant-border);
+    border-radius: 8px;
+    background: var(--assistant-bg);
+    color: var(--assistant-text);
+    font: inherit;
+    outline: none;
+    padding: 0 10px;
+
+    &:focus {
+      border-color: var(--assistant-accent);
+      box-shadow: 0 0 0 3px var(--assistant-primary-soft);
+    }
+  }
+}
+
+.assistant-llm-config__head,
+.assistant-llm-config__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.assistant-llm-config__head {
+  color: var(--assistant-text);
+
+  button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--assistant-muted);
+    cursor: pointer;
+
+    &:hover {
+      background: var(--assistant-surface);
+      color: var(--assistant-text);
+    }
+  }
+}
+
+.assistant-llm-config__error {
+  margin: 0;
+  color: var(--assistant-danger);
+  line-height: 1.5;
+}
+
+.assistant-llm-config__actions {
+  justify-content: flex-end;
+}
+
+.assistant-llm-config__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 8px;
+  background: var(--assistant-surface);
+  color: var(--assistant-muted);
+  cursor: pointer;
+
+  &:hover {
+    color: var(--assistant-text);
+  }
+}
+
+.assistant-llm-config__action--primary {
+  background: var(--assistant-accent);
+  color: #fff;
+
+  &:hover {
+    background: var(--assistant-accent-hover);
+    color: #fff;
   }
 }
 

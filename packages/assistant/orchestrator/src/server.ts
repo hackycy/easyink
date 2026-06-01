@@ -1,16 +1,51 @@
-import type { LLMClient } from '@easyink/assistant-llm'
+import type { LLMClient, RuntimeLLMProvider, RuntimeLLMProviderOption } from '@easyink/assistant-llm'
 import type { AssistantStore } from '@easyink/assistant-store'
+import type { AssistantRunRuntime } from './orchestrator'
 import { AssistantTaskInputSchema } from '@easyink/assistant-capabilities'
+import { createLLMClientFromConfig, RuntimeLLMConfigSchema } from '@easyink/assistant-llm'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { AssistantOrchestrator } from './orchestrator'
+
+export interface AssistantRequestLLMConfigOptions {
+  enabled: true
+  providers?: RuntimeLLMProvider[]
+  allowCustomBaseURL?: boolean
+  allowedBaseURLs?: string[]
+  allowPrivateBaseURL?: boolean
+  allowInsecureBaseURL?: boolean
+}
 
 export interface CreateAssistantAppOptions {
   orchestrator?: AssistantOrchestrator
   store?: AssistantStore
   llm?: LLMClient
   corsOrigin?: string
+  requestLLM?: false | AssistantRequestLLMConfigOptions
 }
+
+const RuntimeRequestSchema = z.object({
+  llm: RuntimeLLMConfigSchema.optional(),
+}).optional()
+
+const CreateTaskRequestSchema = z.object({
+  input: AssistantTaskInputSchema,
+  runtime: RuntimeRequestSchema,
+})
+
+const MessageRequestSchema = z.object({
+  input: z.object({ message: z.string().min(1) }),
+  runtime: RuntimeRequestSchema,
+})
+
+const ClarificationRequestSchema = z.object({
+  input: z.object({ answer: z.string().min(1) }),
+  runtime: RuntimeRequestSchema,
+})
+
+const RuntimeOnlyRequestSchema = z.object({
+  runtime: RuntimeRequestSchema,
+}).optional()
 
 export function createAssistantApp(options: CreateAssistantAppOptions = {}) {
   const orchestrator = options.orchestrator ?? new AssistantOrchestrator({
@@ -18,6 +53,14 @@ export function createAssistantApp(options: CreateAssistantAppOptions = {}) {
     llm: options.llm,
   })
   const app = new Hono()
+
+  app.onError((error, c) => {
+    if (error instanceof z.ZodError)
+      return c.json({ error: 'Invalid Assistant request.', issues: error.issues }, 400)
+    if (error instanceof AssistantRequestError)
+      return c.json({ error: error.message }, error.status)
+    throw error
+  })
 
   app.use('*', async (c, next) => {
     if (c.req.method === 'OPTIONS') {
@@ -30,10 +73,21 @@ export function createAssistantApp(options: CreateAssistantAppOptions = {}) {
 
   app.get('/health', c => c.json({ ok: true, service: 'easyink-assistant-orchestrator' }))
 
+  app.get('/assistant/capabilities', (c) => {
+    const requestLLM = normalizeRequestLLMPolicy(options.requestLLM)
+    return c.json({
+      llm: {
+        serverConfigured: orchestrator.hasLLM,
+        requestConfigEnabled: Boolean(requestLLM),
+        providers: requestLLM ? buildProviderOptions(requestLLM.providers) : [],
+      },
+    })
+  })
+
   app.post('/assistant/tasks', async (c) => {
-    const body = await c.req.json()
-    const input = AssistantTaskInputSchema.parse(body)
-    const task = await orchestrator.createTask(input)
+    const body = CreateTaskRequestSchema.parse(await c.req.json())
+    const runtime = resolveRequestRuntime(body.runtime, options.requestLLM)
+    const task = await orchestrator.createTask(body.input, runtime)
     return c.json({ task }, 202)
   })
 
@@ -172,24 +226,30 @@ export function createAssistantApp(options: CreateAssistantAppOptions = {}) {
   })
 
   app.post('/assistant/tasks/:id/messages', async (c) => {
-    const body = z.object({ message: z.string().min(1) }).parse(await c.req.json())
-    const task = await orchestrator.appendMessage(c.req.param('id'), body.message)
+    const body = MessageRequestSchema.parse(await c.req.json())
+    const runtime = resolveRequestRuntime(body.runtime, options.requestLLM)
+    const task = await orchestrator.appendMessage(c.req.param('id'), body.input.message, runtime)
     return c.json({ task }, 202)
   })
 
   app.post('/assistant/tasks/:id/clarifications', async (c) => {
-    const body = z.object({ answer: z.string().min(1) }).parse(await c.req.json())
-    const task = await orchestrator.answerClarification(c.req.param('id'), body.answer)
+    const body = ClarificationRequestSchema.parse(await c.req.json())
+    const runtime = resolveRequestRuntime(body.runtime, options.requestLLM)
+    const task = await orchestrator.answerClarification(c.req.param('id'), body.input.answer, runtime)
     return c.json({ task }, 202)
   })
 
   app.post('/assistant/tasks/:id/retry', async (c) => {
-    const task = await orchestrator.retryTask(c.req.param('id'))
+    const body = RuntimeOnlyRequestSchema.parse(await readOptionalJson(c.req.raw))
+    const runtime = resolveRequestRuntime(body?.runtime, options.requestLLM)
+    const task = await orchestrator.retryTask(c.req.param('id'), runtime)
     return c.json({ task }, 202)
   })
 
   app.post('/assistant/tasks/:id/repair', async (c) => {
-    const task = await orchestrator.repairTask(c.req.param('id'))
+    const body = RuntimeOnlyRequestSchema.parse(await readOptionalJson(c.req.raw))
+    const runtime = resolveRequestRuntime(body?.runtime, options.requestLLM)
+    const task = await orchestrator.repairTask(c.req.param('id'), runtime)
     return c.json({ task }, 202)
   })
 
@@ -230,6 +290,90 @@ export function createAssistantApp(options: CreateAssistantAppOptions = {}) {
   })
 
   return app
+}
+
+function resolveRequestRuntime(runtime: z.infer<typeof RuntimeRequestSchema>, option: CreateAssistantAppOptions['requestLLM']): AssistantRunRuntime {
+  if (!runtime?.llm)
+    return {}
+  const policy = normalizeRequestLLMPolicy(option)
+  if (!policy)
+    throw new AssistantRequestError(400, 'Request LLM configuration is not enabled for this Assistant service.')
+  validateRuntimeLLMConfig(runtime.llm, policy)
+  return { llm: createLLMClientFromConfig(runtime.llm) }
+}
+
+function normalizeRequestLLMPolicy(option: CreateAssistantAppOptions['requestLLM']): AssistantRequestLLMConfigOptions | undefined {
+  return option && option.enabled ? option : undefined
+}
+
+function validateRuntimeLLMConfig(config: z.infer<typeof RuntimeLLMConfigSchema>, policy: AssistantRequestLLMConfigOptions): void {
+  const providers = policy.providers ?? ['openai', 'openai-compatible', 'anthropic']
+  if (!providers.includes(config.provider))
+    throw new AssistantRequestError(400, `Assistant service does not allow LLM provider: ${config.provider}`)
+  if (config.provider === 'anthropic' && config.baseURL)
+    throw new AssistantRequestError(400, 'baseURL is only supported by OpenAI-compatible providers.')
+  if (!config.baseURL)
+    return
+  if (policy.allowCustomBaseURL === false && !isAllowedBaseURL(config.baseURL, policy.allowedBaseURLs ?? []))
+    throw new AssistantRequestError(400, 'Custom LLM baseURL is not allowed by this Assistant service.')
+
+  let url: URL
+  try {
+    url = new URL(config.baseURL)
+  }
+  catch {
+    throw new AssistantRequestError(400, 'Invalid LLM baseURL.')
+  }
+  if (url.protocol !== 'https:' && !(policy.allowInsecureBaseURL && url.protocol === 'http:'))
+    throw new AssistantRequestError(400, 'LLM baseURL must use HTTPS.')
+  if (!policy.allowPrivateBaseURL && isPrivateHost(url.hostname))
+    throw new AssistantRequestError(400, 'LLM baseURL must not point to localhost or a private network.')
+}
+
+function isAllowedBaseURL(value: string, allowed: string[]): boolean {
+  if (allowed.includes(value))
+    return true
+  try {
+    const url = new URL(value)
+    return allowed.includes(url.origin)
+  }
+  catch {
+    return false
+  }
+}
+
+function isPrivateHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, '')
+  if (host === 'localhost' || host.endsWith('.localhost') || host === '::1')
+    return true
+  const parts = host.split('.').map(part => Number(part))
+  if (parts.length !== 4 || parts.some(part => !Number.isInteger(part) || part < 0 || part > 255))
+    return false
+  return parts[0] === 10
+    || parts[0] === 127
+    || (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31)
+    || (parts[0] === 192 && parts[1] === 168)
+}
+
+async function readOptionalJson(request: Request): Promise<unknown> {
+  const text = await request.text()
+  return text.trim() ? JSON.parse(text) : undefined
+}
+
+function buildProviderOptions(providers: RuntimeLLMProvider[] = ['openai', 'openai-compatible', 'anthropic']): RuntimeLLMProviderOption[] {
+  const options: Record<RuntimeLLMProvider, RuntimeLLMProviderOption> = {
+    'openai': { provider: 'openai', label: 'OpenAI', model: 'gpt-5-mini' },
+    'openai-compatible': { provider: 'openai-compatible', label: 'OpenAI Compatible' },
+    'anthropic': { provider: 'anthropic', label: 'Anthropic', model: 'claude-sonnet-4-5' },
+  }
+  return providers.map(provider => options[provider]).filter(Boolean)
+}
+
+class AssistantRequestError extends Error {
+  constructor(readonly status: 400 | 403, message: string) {
+    super(message)
+    this.name = 'AssistantRequestError'
+  }
 }
 
 function applyCorsHeaders(c: { header: (name: string, value: string, options?: { append?: boolean }) => void }, origin: string): void {

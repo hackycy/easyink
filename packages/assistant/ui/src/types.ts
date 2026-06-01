@@ -2,6 +2,7 @@ import type { AssistantMaterialManifest, AssistantPatchOperation, AssistantResul
 import type { AssistantConversationStatus, AssistantStore } from '@easyink/assistant-store'
 import type { AssistantApiClient } from './api'
 import type { AssistantTranslate } from './i18n'
+import type { AssistantLLMConfigService } from './runtime-llm'
 
 export interface AssistantConversationPanelProps {
   endpoint?: string
@@ -10,6 +11,7 @@ export interface AssistantConversationPanelProps {
   materialManifest?: AssistantMaterialManifest
   store?: AssistantStore
   conversationId?: string
+  llmConfig?: AssistantLLMConfigService
   t?: AssistantTranslate
 }
 

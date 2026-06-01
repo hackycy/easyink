@@ -1,4 +1,5 @@
 import type { AssistantPatchOperation, AssistantResult } from '@easyink/assistant-capabilities'
+import type { AssistantLLMConfigService } from '@easyink/assistant-ui'
 import type { Contribution } from '@easyink/designer'
 import { DexieAssistantStore } from '@easyink/assistant-store'
 import { IconSparkles } from '@easyink/icons'
@@ -23,6 +24,7 @@ export interface CreateAssistantContributionOptions {
   id?: string
   label?: string
   endpoint?: string
+  llmConfig?: AssistantLLMConfigService
 }
 
 export function createAssistantContribution(options: CreateAssistantContributionOptions = {}): Contribution {
@@ -121,6 +123,7 @@ export function createAssistantContribution(options: CreateAssistantContribution
           'endpoint': options.endpoint,
           'store': store,
           'conversationId': conversationId,
+          'llmConfig': options.llmConfig,
           get 'currentSchema'() {
             return ctx.store.schema
           },

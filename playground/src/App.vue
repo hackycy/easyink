@@ -2,7 +2,7 @@
 import type { DataSourceDescriptor, DocumentSchema } from '@easyink/designer'
 import type { SampleTemplateEntry } from '@easyink/samples'
 import type { StoredTemplate } from './storage/template-store'
-import { createAssistantContribution } from '@easyink/assistant-designer-bridge'
+import { createAssistantContribution, createBrowserAssistantLLMConfigService } from '@easyink/assistant-designer-bridge'
 import { createLocalStoragePreferenceProvider, EasyInkDesigner } from '@easyink/designer'
 import { enUS, zhCN } from '@easyink/designer/locale'
 import { blankA4Template, flowInvoiceTemplate, invoiceDemoData, sampleDataSources } from '@easyink/samples'
@@ -237,7 +237,10 @@ function handleDataUpdate(data: Record<string, unknown>) {
 }
 
 const assistantEndpoint = import.meta.env.VITE_EASYINK_ASSISTANT_ENDPOINT || 'http://127.0.0.1:3010'
-const contributions = [createAssistantContribution({ endpoint: assistantEndpoint })]
+const contributions = [createAssistantContribution({
+  endpoint: assistantEndpoint,
+  llmConfig: createBrowserAssistantLLMConfigService({ persistence: 'session' }),
+})]
 </script>
 
 <template>

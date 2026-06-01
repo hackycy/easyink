@@ -12,6 +12,9 @@ const fallbackMessages: Record<string, string> = {
   'designer.assistant.action.stop': '停止生成',
   'designer.assistant.action.newConversation': '新建会话',
   'designer.assistant.action.history': '历史会话',
+  'designer.assistant.action.llmConfig': '模型配置',
+  'designer.assistant.action.saveLLMConfig': '保存模型配置',
+  'designer.assistant.action.clearLLMConfig': '清除模型配置',
   'designer.assistant.action.deleteConversation': '删除会话',
   'designer.assistant.action.confirmDeleteConversation': '确认删除会话',
   'designer.assistant.action.reparseSource': '重新解析数据源',
@@ -63,6 +66,13 @@ const fallbackMessages: Record<string, string> = {
   'designer.assistant.progress.repair': '发现细节问题，正在自动修正。',
   'designer.assistant.progress.issueFound': '已发现问题：{error}',
   'designer.assistant.error.unauthorized': '请求未授权（HTTP 401），请检查登录状态或 Assistant 服务凭据后重试。',
+  'designer.assistant.error.llmConfigRequired': '请先配置模型凭据后再发送。',
+  'designer.assistant.error.llmConfigInvalid': '请填写可用的 API Key。',
+  'designer.assistant.llm.title': '模型配置',
+  'designer.assistant.llm.provider': '服务商',
+  'designer.assistant.llm.apiKey': 'API Key',
+  'designer.assistant.llm.model': '模型',
+  'designer.assistant.llm.baseURL': 'Base URL',
 }
 
 export function translateAssistant(key: string, t?: AssistantTranslate): string {

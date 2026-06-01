@@ -2,8 +2,10 @@
  * @vitest-environment happy-dom
  */
 import type { AssistantResult } from '@easyink/assistant-capabilities'
+import type { RuntimeLLMConfig } from '@easyink/assistant-llm'
 import type { AssistantEventRecord, AssistantTaskRecord } from '@easyink/assistant-store'
 import type { AssistantApiClient, AssistantStreamHandlers } from '../api'
+import type { AssistantLLMConfigService } from '../runtime-llm'
 import { MemoryAssistantStore } from '@easyink/assistant-store'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createApp, nextTick } from 'vue'
@@ -217,6 +219,55 @@ describe('assistant conversation panel', () => {
     expect(document.body.textContent).not.toContain('待删除会话')
     expect(onStatusChange).toHaveBeenCalledWith('idle')
   })
+
+  it('hides model configuration when no config service is provided', async () => {
+    const { api } = createStreamingClient({})
+    mount({ apiClient: api })
+    await flushPromises()
+
+    expect(document.querySelector('button[aria-label="模型配置"]')).toBeFalsy()
+  })
+
+  it('requires user LLM config when the service has no server model configured', async () => {
+    let savedConfig: RuntimeLLMConfig | undefined
+    const task = createTask()
+    const service: AssistantLLMConfigService = {
+      providers: [{ provider: 'openai', label: 'OpenAI', model: 'gpt-5-mini' }],
+      load: () => savedConfig,
+      save: (config) => {
+        savedConfig = config
+      },
+      clear: () => {
+        savedConfig = undefined
+      },
+    }
+    const { api } = createStreamingClient({
+      createTask: vi.fn().mockResolvedValue(task),
+      getCapabilities: vi.fn().mockResolvedValue({
+        llm: {
+          serverConfigured: false,
+          requestConfigEnabled: true,
+          providers: [{ provider: 'openai', label: 'OpenAI', model: 'gpt-5-mini' }],
+        },
+      }),
+    })
+    mount({ apiClient: api, llmConfig: service })
+    await flushPromises()
+
+    await submitPrompt('生成小票')
+    expect(api.createTask).not.toHaveBeenCalled()
+    expect(document.body.textContent).toContain('请先配置模型凭据后再发送')
+
+    const apiKeyInput = document.querySelector('.assistant-llm-config input[type="password"]') as HTMLInputElement
+    apiKeyInput.value = 'user-key'
+    apiKeyInput.dispatchEvent(new Event('input', { bubbles: true }))
+    document.querySelector('button[aria-label="保存模型配置"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await flushPromises()
+
+    await submitPrompt('生成小票')
+    expect(savedConfig).toMatchObject({ provider: 'openai', apiKey: 'user-key' })
+    expect(api.createTask).toHaveBeenCalledTimes(1)
+  })
 })
 
 function mount(props: Record<string, unknown>) {
@@ -277,6 +328,7 @@ function createStreamingClient(overrides: Partial<AssistantApiClient>) {
   })
   const api: AssistantApiClient = {
     createTask: vi.fn(),
+    getCapabilities: vi.fn(),
     getTask: vi.fn(),
     listEvents: vi.fn(),
     streamTask,

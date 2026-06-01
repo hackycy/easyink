@@ -1,5 +1,5 @@
 import { MemoryAssistantStore } from '@easyink/assistant-store'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { AssistantOrchestrator, createAssistantApp, createAssistantWorkflowGraph } from './index'
 
 describe('assistantOrchestrator', () => {
@@ -61,13 +61,87 @@ describe('assistantOrchestrator', () => {
     const app = createAssistantApp({ llm: createSchemaLLM() })
     const response = await app.request('/assistant/tasks', {
       method: 'POST',
-      body: JSON.stringify({ prompt: '生成一张商超小票', materialManifest: textMaterialManifest() }),
+      body: JSON.stringify({ input: { prompt: '生成一张商超小票', materialManifest: textMaterialManifest() } }),
       headers: { 'content-type': 'application/json' },
     })
 
     expect(response.status).toBe(202)
     const payload = await response.json() as { task: { id: string } }
     expect(payload.task.id).toMatch(/^task_/)
+  })
+
+  it('accepts per-request LLM config without storing it in task input', async () => {
+    const store = new MemoryAssistantStore()
+    const createTask = vi.fn(async (input, runtime) => {
+      const task = await store.createTask(input)
+      expect(runtime).toEqual(expect.objectContaining({ llm: expect.any(Object) }))
+      return task
+    })
+    const app = createAssistantApp({
+      orchestrator: { store, createTask } as unknown as AssistantOrchestrator,
+      requestLLM: {
+        enabled: true,
+        allowInsecureBaseURL: true,
+        allowPrivateBaseURL: true,
+      },
+    })
+
+    const response = await app.request('/assistant/tasks', {
+      method: 'POST',
+      body: JSON.stringify({
+        input: { prompt: '生成一张商超小票' },
+        runtime: {
+          llm: {
+            provider: 'openai-compatible',
+            apiKey: 'user-key',
+            model: 'local-model',
+            baseURL: 'http://127.0.0.1:11434/v1',
+          },
+        },
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(202)
+    const task = (await store.listTasks())[0]
+    expect(JSON.stringify(task)).not.toContain('user-key')
+    expect(createTask).toHaveBeenCalledWith(
+      expect.objectContaining({ prompt: '生成一张商超小票' }),
+      expect.objectContaining({ llm: expect.any(Object) }),
+    )
+  })
+
+  it('rejects request LLM config unless the service explicitly enables it', async () => {
+    const app = createAssistantApp()
+    const response = await app.request('/assistant/tasks', {
+      method: 'POST',
+      body: JSON.stringify({
+        input: { prompt: '生成一张商超小票' },
+        runtime: { llm: { provider: 'openai', apiKey: 'user-key' } },
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(400)
+  })
+
+  it('keeps concurrent runtime LLM clients isolated by run', async () => {
+    const store = new MemoryAssistantStore()
+    const orchestrator = new AssistantOrchestrator({ store })
+    const taskA = await store.createTask({ prompt: '生成 A 单据', materialManifest: textMaterialManifest() })
+    const taskB = await store.createTask({ prompt: '生成 B 单据', materialManifest: textMaterialManifest() })
+    const llmA = createSchemaLLMWithMemory(schemaPayloadWithTitle('A 专属标题'))
+    const llmB = createSchemaLLMWithMemory(schemaPayloadWithTitle('B 专属标题'))
+
+    const [doneA, doneB] = await Promise.all([
+      orchestrator.runTask(taskA.id, { llm: llmA }),
+      orchestrator.runTask(taskB.id, { llm: llmB }),
+    ])
+
+    const resultA = await store.getResult(doneA.resultId!)
+    const resultB = await store.getResult(doneB.resultId!)
+    expect(JSON.stringify(resultA?.schema)).toContain('A 专属标题')
+    expect(JSON.stringify(resultB?.schema)).toContain('B 专属标题')
   })
 
   it('handles browser preflight requests from playground', async () => {
@@ -530,6 +604,16 @@ function createSchemaLLM(schemaPayload: unknown = defaultSchemaAgentPayload()) {
   return new SequenceLLMClient(schemaLLMPayloads(schemaPayload))
 }
 
+function createSchemaLLMWithMemory(schemaPayload: unknown = defaultSchemaAgentPayload()) {
+  const payloads = schemaLLMPayloads(schemaPayload)
+  return new SequenceLLMClient([
+    'memory',
+    payloads[0],
+    'memory',
+    ...payloads.slice(1),
+  ])
+}
+
 function schemaLLMPayloads(schemaPayload: unknown = defaultSchemaAgentPayload()) {
   return [
     { requiresClarification: false, questions: [], suggestedAnswers: [], taskType: 'quote' },
@@ -662,6 +746,27 @@ function defaultSchemaAgentPayload() {
         { name: 'customer', path: 'customer', title: '客户', type: 'string' },
       ],
       sampleData: { customer: '示例客户' },
+    },
+  }
+}
+
+function schemaPayloadWithTitle(title: string) {
+  const payload = defaultSchemaAgentPayload()
+  return {
+    ...payload,
+    schema: {
+      ...payload.schema,
+      elements: payload.schema.elements.map((element) => {
+        if (element.id !== 'txt-title')
+          return element
+        return {
+          ...element,
+          props: {
+            ...element.props,
+            content: title,
+          },
+        }
+      }),
     },
   }
 }

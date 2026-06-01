@@ -567,6 +567,9 @@ importers:
       '@easyink/assistant-capabilities':
         specifier: workspace:*
         version: link:../capabilities
+      '@easyink/assistant-llm':
+        specifier: workspace:*
+        version: link:../llm
       '@easyink/assistant-store':
         specifier: workspace:*
         version: link:../store

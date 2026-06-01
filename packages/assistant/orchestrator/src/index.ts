@@ -10,6 +10,6 @@ export type {
 export { createAssistantWorkflowGraph } from './graph'
 export type { AssistantGraphState } from './graph'
 export { AssistantOrchestrator } from './orchestrator'
-export type { AssistantOrchestratorOptions } from './orchestrator'
+export type { AssistantOrchestratorOptions, AssistantRunRuntime } from './orchestrator'
 export { createAssistantApp } from './server'
-export type { CreateAssistantAppOptions } from './server'
+export type { AssistantRequestLLMConfigOptions, CreateAssistantAppOptions } from './server'

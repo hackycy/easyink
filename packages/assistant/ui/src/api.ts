@@ -1,4 +1,5 @@
 import type { AssistantResult, AssistantTaskInput } from '@easyink/assistant-capabilities'
+import type { RuntimeLLMConfig, RuntimeLLMProviderOption } from '@easyink/assistant-llm'
 import type {
   AssistantEventRecord,
   AssistantProjectionSnapshotRecord,
@@ -11,6 +12,22 @@ import type {
 export interface AssistantTaskResponse {
   task: AssistantTaskRecord
   result?: AssistantResult
+}
+
+export interface AssistantRequestRuntime {
+  llm?: RuntimeLLMConfig
+}
+
+export interface AssistantApiClientOptions {
+  runtimeProvider?: () => AssistantRequestRuntime | undefined | Promise<AssistantRequestRuntime | undefined>
+}
+
+export interface AssistantCapabilitiesResponse {
+  llm: {
+    serverConfigured: boolean
+    requestConfigEnabled: boolean
+    providers: RuntimeLLMProviderOption[]
+  }
 }
 
 export interface AssistantStreamSnapshot {
@@ -37,6 +54,7 @@ export interface AssistantClarificationPayload {
 
 export interface AssistantApiClient {
   createTask: (input: AssistantTaskInput) => Promise<AssistantTaskRecord>
+  getCapabilities: () => Promise<AssistantCapabilitiesResponse>
   getTask: (taskId: string) => Promise<AssistantTaskResponse>
   listEvents: (taskId: string) => Promise<AssistantEventRecord[]>
   streamTask: (taskId: string, handlers: AssistantStreamHandlers) => AssistantStreamHandle
@@ -71,16 +89,22 @@ export class AssistantApiError extends Error {
   }
 }
 
-export function createAssistantApiClient(baseUrl = ''): AssistantApiClient {
+export function createAssistantApiClient(baseUrl = '', options: AssistantApiClientOptions = {}): AssistantApiClient {
   const root = baseUrl.replace(/\/$/, '')
 
   return {
     async createTask(input) {
       const response = await request(`${root}/assistant/tasks`, {
         method: 'POST',
-        body: JSON.stringify(input),
+        body: JSON.stringify({
+          input,
+          runtime: await resolveRequestRuntime(options),
+        }),
       }) as { task: AssistantTaskRecord }
       return response.task
+    },
+    async getCapabilities() {
+      return request(`${root}/assistant/capabilities`) as Promise<AssistantCapabilitiesResponse>
     },
     async getTask(taskId) {
       return request(`${root}/assistant/tasks/${taskId}`) as Promise<AssistantTaskResponse>
@@ -150,23 +174,35 @@ export function createAssistantApiClient(baseUrl = ''): AssistantApiClient {
     async sendMessage(taskId, payload) {
       const response = await request(`${root}/assistant/tasks/${taskId}/messages`, {
         method: 'POST',
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          input: payload,
+          runtime: await resolveRequestRuntime(options),
+        }),
       }) as { task: AssistantTaskRecord }
       return response.task
     },
     async submitClarification(taskId, payload) {
       const response = await request(`${root}/assistant/tasks/${taskId}/clarifications`, {
         method: 'POST',
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          input: payload,
+          runtime: await resolveRequestRuntime(options),
+        }),
       }) as { task: AssistantTaskRecord }
       return response.task
     },
     async retryTask(taskId) {
-      const response = await request(`${root}/assistant/tasks/${taskId}/retry`, { method: 'POST' }) as { task: AssistantTaskRecord }
+      const response = await request(`${root}/assistant/tasks/${taskId}/retry`, {
+        method: 'POST',
+        body: JSON.stringify({ runtime: await resolveRequestRuntime(options) }),
+      }) as { task: AssistantTaskRecord }
       return response.task
     },
     async repairTask(taskId) {
-      const response = await request(`${root}/assistant/tasks/${taskId}/repair`, { method: 'POST' }) as { task: AssistantTaskRecord }
+      const response = await request(`${root}/assistant/tasks/${taskId}/repair`, {
+        method: 'POST',
+        body: JSON.stringify({ runtime: await resolveRequestRuntime(options) }),
+      }) as { task: AssistantTaskRecord }
       return response.task
     },
     async rollbackTask(taskId) {
@@ -220,6 +256,11 @@ export function createAssistantApiClient(baseUrl = ''): AssistantApiClient {
       return response.task
     },
   }
+}
+
+async function resolveRequestRuntime(options: AssistantApiClientOptions): Promise<AssistantRequestRuntime | undefined> {
+  const runtime = await options.runtimeProvider?.()
+  return runtime?.llm ? runtime : undefined
 }
 
 async function request(url: string, init: RequestInit = {}): Promise<unknown> {
