@@ -501,7 +501,7 @@ onMounted(async () => {
           v-if="llmConfigEnabled"
           type="button"
           class="assistant-composer__icon-btn assistant-composer__icon-btn--session"
-          :class="{ 'assistant-composer__icon-btn--active': activeView === 'settings' || hasRuntimeLLMConfig }"
+          :class="{ 'assistant-composer__icon-btn--active': activeView === 'settings' }"
           :title="tr('designer.assistant.action.llmConfig')"
           :aria-label="tr('designer.assistant.action.llmConfig')"
           @click="toggleSettingsView"
