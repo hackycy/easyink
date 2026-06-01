@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { AssistantConversationRecord } from '@easyink/assistant-store'
 import type { AssistantTranslate } from '../i18n'
-import { computed } from 'vue'
+import { IconCheck, IconDelete } from '@easyink/icons'
+import { computed, ref } from 'vue'
 import { translateAssistant } from '../i18n'
 import { conversationStatusLabel, formatConversationTime } from '../utils/conversation'
 
@@ -11,11 +12,27 @@ const props = defineProps<{
   t?: AssistantTranslate
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   select: [id: string]
+  delete: [id: string]
 }>()
 
 const hasHistory = computed(() => props.conversations.length > 0)
+const pendingDeleteId = ref<string>()
+
+function handleDeleteClick(id: string, emitDelete: (id: string) => void) {
+  if (pendingDeleteId.value === id) {
+    pendingDeleteId.value = undefined
+    emitDelete(id)
+    return
+  }
+  pendingDeleteId.value = id
+}
+
+function handleSelect(id: string, emitSelect: (id: string) => void) {
+  pendingDeleteId.value = undefined
+  emitSelect(id)
+}
 
 function tr(key: string): string {
   return translateAssistant(key, props.t)
@@ -34,22 +51,39 @@ function tr(key: string): string {
       {{ tr('designer.assistant.history.empty') }}
     </p>
     <div v-else class="assistant-history__list">
-      <button
+      <div
         v-for="conversation in conversations"
         :key="conversation.id"
-        type="button"
         class="assistant-history__item"
-        :class="{ 'assistant-history__item--active': conversation.id === activeConversationId }"
-        @click="$emit('select', conversation.id)"
+        :class="{
+          'assistant-history__item--active': conversation.id === activeConversationId,
+          'assistant-history__item--confirming': conversation.id === pendingDeleteId,
+        }"
       >
-        <span class="assistant-history__marker" aria-hidden="true" />
-        <span class="assistant-history__body">
-          <span class="assistant-history__title">{{ conversation.title ?? tr('designer.assistant.history.untitled') }}</span>
-          <span class="assistant-history__meta">
-            {{ conversationStatusLabel(conversation.status, tr) }} · {{ formatConversationTime(conversation.updatedAt) }}
+        <button
+          type="button"
+          class="assistant-history__select"
+          @click="handleSelect(conversation.id, id => emit('select', id))"
+        >
+          <span class="assistant-history__marker" aria-hidden="true" />
+          <span class="assistant-history__body">
+            <span class="assistant-history__title">{{ conversation.title ?? tr('designer.assistant.history.untitled') }}</span>
+            <span class="assistant-history__meta">
+              {{ conversationStatusLabel(conversation.status, tr) }} · {{ formatConversationTime(conversation.updatedAt) }}
+            </span>
           </span>
-        </span>
-      </button>
+        </button>
+        <button
+          type="button"
+          class="assistant-history__delete"
+          :title="conversation.id === pendingDeleteId ? tr('designer.assistant.action.confirmDeleteConversation') : tr('designer.assistant.action.deleteConversation')"
+          :aria-label="conversation.id === pendingDeleteId ? tr('designer.assistant.action.confirmDeleteConversation') : tr('designer.assistant.action.deleteConversation')"
+          @click="handleDeleteClick(conversation.id, id => emit('delete', id))"
+        >
+          <IconCheck v-if="conversation.id === pendingDeleteId" :size="15" stroke-width="1.9" />
+          <IconDelete v-else :size="15" stroke-width="1.9" />
+        </button>
+      </div>
     </div>
   </main>
 </template>
@@ -119,18 +153,15 @@ function tr(key: string): string {
 .assistant-history__item {
   position: relative;
   display: grid;
-  grid-template-columns: 16px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 32px;
   width: 100%;
   min-height: 56px;
   align-items: center;
-  gap: 8px;
-  border: none;
+  gap: 4px;
   border-radius: 7px;
   background: transparent;
   color: var(--assistant-text);
-  cursor: pointer;
-  padding: 9px 10px 9px 6px;
-  text-align: left;
+  padding: 2px 4px 2px 0;
   transition: background 0.15s, color 0.15s;
 
   &:hover {
@@ -141,6 +172,26 @@ function tr(key: string): string {
 .assistant-history__item--active {
   background: color-mix(in srgb, var(--assistant-surface) 86%, var(--assistant-bg));
   color: var(--assistant-text);
+}
+
+.assistant-history__item--confirming {
+  background: color-mix(in srgb, var(--assistant-danger) 9%, var(--assistant-bg));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--assistant-danger) 16%, transparent);
+}
+
+.assistant-history__select {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  min-width: 0;
+  min-height: 52px;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 7px 4px 7px 6px;
+  text-align: left;
 }
 
 .assistant-history__marker {
@@ -173,5 +224,44 @@ function tr(key: string): string {
 .assistant-history__meta {
   color: var(--assistant-muted);
   font-size: 12px;
+}
+
+.assistant-history__delete {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: color-mix(in srgb, var(--assistant-muted) 78%, transparent);
+  cursor: pointer;
+  opacity: 0;
+  padding: 0;
+  transition: background 0.15s, color 0.15s, opacity 0.15s, transform 0.15s;
+
+  &:hover {
+    background: color-mix(in srgb, var(--assistant-danger) 8%, transparent);
+    color: var(--assistant-danger);
+    transform: translateY(-1px);
+  }
+}
+
+.assistant-history__item:hover .assistant-history__delete,
+.assistant-history__delete--confirming {
+  opacity: 1;
+}
+
+.assistant-history__delete--confirming {
+  background: var(--assistant-danger);
+  color: #fff;
+  opacity: 1;
+  box-shadow: 0 8px 18px rgb(180 35 24 / 18%);
+
+  &:hover {
+    background: #971c13;
+    color: #fff;
+  }
 }
 </style>

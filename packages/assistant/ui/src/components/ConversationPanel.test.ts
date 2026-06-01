@@ -180,6 +180,43 @@ describe('assistant conversation panel', () => {
     expect(new Set(conversations.map(conversation => conversation.title))).toEqual(new Set(['第一张小票', '第二张标签']))
     expect(new Set(conversations.map(conversation => conversation.activeTaskId))).toEqual(new Set(['task_first', 'task_second']))
   })
+
+  it('requires two delete clicks before removing a history entry', async () => {
+    const store = new MemoryAssistantStore()
+    const oldTask = createTask({ prompt: '待删除会话' })
+    await store.updateTask({ ...oldTask, status: 'done' })
+    await store.saveEventRecord({ id: 'evt_old', taskId: oldTask.id, event: { type: 'task.created', taskId: oldTask.id }, createdAt: 1 })
+    await store.upsertConversation({
+      id: 'conv_old',
+      activeTaskId: oldTask.id,
+      title: oldTask.input.prompt,
+      status: 'done',
+    })
+    const { api } = createStreamingClient({
+      getTask: vi.fn().mockResolvedValue({ task: oldTask }),
+      listEvents: vi.fn().mockResolvedValue([{ id: 'evt_old', taskId: oldTask.id, event: { type: 'task.created', taskId: oldTask.id }, createdAt: 1 }]),
+    })
+    const onStatusChange = vi.fn()
+
+    mount({ apiClient: api, store, conversationId: 'conv_old', onStatusChange })
+    await flushPromises()
+    document.querySelector('button[aria-label="历史会话"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await flushPromises()
+
+    const deleteButton = document.querySelector('button[aria-label="删除会话"]')
+    expect(deleteButton).toBeTruthy()
+    deleteButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await flushPromises()
+    expect(await store.getConversation('conv_old')).toBeTruthy()
+    expect(document.querySelector('button[aria-label="确认删除会话"]')).toBeTruthy()
+
+    document.querySelector('button[aria-label="确认删除会话"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await flushPromises()
+
+    expect(await store.getConversation('conv_old')).toBeUndefined()
+    expect(document.body.textContent).not.toContain('待删除会话')
+    expect(onStatusChange).toHaveBeenCalledWith('idle')
+  })
 })
 
 function mount(props: Record<string, unknown>) {

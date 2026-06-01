@@ -182,6 +182,22 @@ async function selectConversation(id: string) {
   }
 }
 
+async function deleteConversation(id: string) {
+  const target = store.value
+  if (!target)
+    return
+  if (id === activeConversationId.value) {
+    restoreToken += 1
+    closeStream()
+    resetConversationState()
+    activeConversationId.value = createLocalConversationId()
+    draftMode.value = true
+    emit('statusChange', 'idle')
+  }
+  await target.deleteConversation(id)
+  await refreshConversations()
+}
+
 function resetConversationState() {
   loadingSession.value = false
   taskId.value = undefined
@@ -440,6 +456,7 @@ onMounted(async () => {
       :active-conversation-id="activeConversationId"
       :conversations="conversations"
       :t="t"
+      @delete="deleteConversation"
       @select="selectConversation"
     />
     <ComposerBar

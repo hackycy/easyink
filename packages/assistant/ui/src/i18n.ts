@@ -12,6 +12,8 @@ const fallbackMessages: Record<string, string> = {
   'designer.assistant.action.stop': '停止生成',
   'designer.assistant.action.newConversation': '新建会话',
   'designer.assistant.action.history': '历史会话',
+  'designer.assistant.action.deleteConversation': '删除会话',
+  'designer.assistant.action.confirmDeleteConversation': '确认删除会话',
   'designer.assistant.action.reparseSource': '重新解析数据源',
   'designer.assistant.action.removeSource': '删除数据源',
   'designer.assistant.action.attachSourceHint': '粘贴 JSON、URL 或 curl 可自动识别数据源',
