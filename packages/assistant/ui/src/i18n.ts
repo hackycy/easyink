@@ -19,7 +19,7 @@ const fallbackMessages: Record<string, string> = {
   'designer.assistant.action.confirmDeleteConversation': '确认删除会话',
   'designer.assistant.action.reparseSource': '重新解析数据源',
   'designer.assistant.action.removeSource': '删除数据源',
-  'designer.assistant.action.attachSourceHint': '粘贴 JSON、URL 或 curl 可自动识别数据源',
+  'designer.assistant.action.attachSourceHint': '从剪贴板附加 JSON、URL 或 curl 数据源',
   'designer.assistant.placeholder.prompt': '帮我生成一张 80mm 小票',
   'designer.assistant.placeholder.clarification': '输入你的选择或补充信息',
   'designer.assistant.message.welcome': '你好，我可以帮你生成 EasyInk 模板。试试输入“帮我生成一张 80mm 小票”。',

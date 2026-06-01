@@ -22,7 +22,7 @@ const zhCN = {
         clearLLMConfig: '清除模型配置',
         reparseSource: '重新解析数据源',
         removeSource: '删除数据源',
-        attachSourceHint: '粘贴 JSON、URL 或 curl 可自动识别数据源',
+        attachSourceHint: '从剪贴板附加 JSON、URL 或 curl 数据源',
       },
       placeholder: {
         prompt: '帮我生成一张 80mm 小票',
@@ -129,7 +129,7 @@ const enUS = {
         clearLLMConfig: 'Clear model settings',
         reparseSource: 'Reparse data source',
         removeSource: 'Remove data source',
-        attachSourceHint: 'Paste JSON, a URL, or curl to detect a data source',
+        attachSourceHint: 'Attach JSON, a URL, or curl from the clipboard',
       },
       placeholder: {
         prompt: 'Generate an 80mm receipt',

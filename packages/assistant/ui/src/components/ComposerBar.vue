@@ -67,6 +67,27 @@ function focusForReplace() {
   textarea.value?.focus()
 }
 
+async function attachSourceFromClipboard() {
+  if (props.running)
+    return
+  const clipboardText = await readClipboardText()
+  const inferred = clipboardText ? inferSourceFromText(clipboardText) : undefined
+  if (inferred) {
+    source.value = inferred
+    return
+  }
+  focusForReplace()
+}
+
+async function readClipboardText(): Promise<string | undefined> {
+  try {
+    return await navigator.clipboard?.readText()
+  }
+  catch {
+    return undefined
+  }
+}
+
 const sourceIcon = computed(() => {
   if (!source.value)
     return IconFileText
@@ -108,7 +129,7 @@ const sourceIcon = computed(() => {
           :disabled="running"
           :title="tr('designer.assistant.action.attachSourceHint')"
           :aria-label="tr('designer.assistant.action.attachSourceHint')"
-          @click="focusForReplace"
+          @click="attachSourceFromClipboard"
         >
           <IconDatabase :size="16" stroke-width="1.8" />
         </button>

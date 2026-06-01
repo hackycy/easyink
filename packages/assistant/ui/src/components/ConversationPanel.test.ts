@@ -91,6 +91,37 @@ describe('assistant conversation panel', () => {
     expect(document.body.textContent).toContain('重试')
   })
 
+  it('attaches clipboard data source from the composer action before submitting', async () => {
+    const clipboardText = '{"orderNo":"A001","total":128}'
+    const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { readText: vi.fn().mockResolvedValue(clipboardText) },
+    })
+    const task = createTask({ prompt: '根据数据生成小票' })
+    const { api } = createStreamingClient({ createTask: vi.fn().mockResolvedValue(task) })
+    mount({ apiClient: api })
+    await flushPromises()
+
+    try {
+      document.querySelector('button[aria-label="从剪贴板附加 JSON、URL 或 curl 数据源"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await flushPromises()
+      expect(document.body.textContent).toContain('JSON 数据源')
+
+      await submitPrompt('根据数据生成小票')
+      expect(api.createTask).toHaveBeenCalledWith(expect.objectContaining({
+        prompt: '根据数据生成小票',
+        source: { kind: 'json', content: clipboardText },
+      }))
+    }
+    finally {
+      if (clipboardDescriptor)
+        Object.defineProperty(navigator, 'clipboard', clipboardDescriptor)
+      else
+        delete (navigator as unknown as Record<string, unknown>).clipboard
+    }
+  })
+
   it('restores the active conversation after the drawer unmounts', async () => {
     const store = new MemoryAssistantStore()
     const task = createTask()
