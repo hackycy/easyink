@@ -101,6 +101,7 @@ const sourceIcon = computed(() => {
         @keydown.enter.exact.prevent="submit"
       />
       <div class="assistant-composer__tools">
+        <slot name="tools" />
         <button
           type="button"
           class="assistant-composer__icon-btn"

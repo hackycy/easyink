@@ -56,6 +56,17 @@ export interface AssistantSourceSampleRecord {
   expiresAt?: number
 }
 
+export type AssistantConversationStatus = 'idle' | AssistantTaskStatus
+
+export interface AssistantConversationRecord {
+  id: string
+  activeTaskId?: string
+  title?: string
+  status: AssistantConversationStatus
+  createdAt: number
+  updatedAt: number
+}
+
 export type AssistantEvent
   = | { type: 'task.created', taskId: string }
     | { type: 'step.started', taskId: string, step: AssistantWorkflowStep }
@@ -83,7 +94,7 @@ export interface AssistantEventRecord {
 }
 
 export interface AssistantSnapshot {
-  schemaVersion: 1
+  schemaVersion: 1 | 2
   tasks: AssistantTaskRecord[]
   runs: AssistantRunRecord[]
   results: AssistantResult[]
@@ -91,9 +102,14 @@ export interface AssistantSnapshot {
   events: AssistantEventRecord[]
   projectionSnapshots: AssistantProjectionSnapshotRecord[]
   sourceSamples: AssistantSourceSampleRecord[]
+  conversations?: AssistantConversationRecord[]
 }
 
 export interface AssistantStore {
+  upsertConversation: (record: Omit<AssistantConversationRecord, 'createdAt' | 'updatedAt'> & Partial<Pick<AssistantConversationRecord, 'createdAt' | 'updatedAt'>>) => Promise<AssistantConversationRecord>
+  getConversation: (id: string) => Promise<AssistantConversationRecord | undefined>
+  listConversations: () => Promise<AssistantConversationRecord[]>
+  deleteConversation: (id: string) => Promise<void>
   createTask: (input: AssistantTaskInput) => Promise<AssistantTaskRecord>
   updateTask: (task: AssistantTaskRecord) => Promise<void>
   getTask: (id: string) => Promise<AssistantTaskRecord | undefined>
@@ -101,6 +117,7 @@ export interface AssistantStore {
   createRun: (taskId: string) => Promise<AssistantRunRecord>
   updateRun: (run: AssistantRunRecord) => Promise<void>
   saveResult: (taskId: string, result: AssistantResult) => Promise<void>
+  saveResultRecord: (result: AssistantResult) => Promise<void>
   getResult: (id: string) => Promise<AssistantResult | undefined>
   appendVersion: (record: Omit<AssistantVersionRecord, 'id' | 'createdAt'>) => Promise<AssistantVersionRecord>
   listVersions: (taskId: string) => Promise<AssistantVersionRecord[]>
@@ -108,6 +125,7 @@ export interface AssistantStore {
   getLatestProjectionSnapshot: (taskId: string) => Promise<AssistantProjectionSnapshotRecord | undefined>
   saveSourceSample: (record: Omit<AssistantSourceSampleRecord, 'id' | 'createdAt'>) => Promise<AssistantSourceSampleRecord>
   getSourceSample: (taskId: string) => Promise<AssistantSourceSampleRecord | undefined>
+  saveEventRecord: (record: AssistantEventRecord) => Promise<void>
   appendEvent: (taskId: string, event: AssistantEvent) => Promise<AssistantEventRecord>
   listEvents: (taskId: string) => Promise<AssistantEventRecord[]>
   subscribe: (taskId: string, listener: (record: AssistantEventRecord) => void) => () => void

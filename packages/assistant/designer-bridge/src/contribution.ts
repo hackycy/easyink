@@ -1,5 +1,6 @@
 import type { AssistantPatchOperation, AssistantResult } from '@easyink/assistant-capabilities'
 import type { Contribution } from '@easyink/designer'
+import { DexieAssistantStore } from '@easyink/assistant-store'
 import { IconSparkles } from '@easyink/icons'
 import { defineAsyncComponent, ref } from 'vue'
 import {
@@ -26,6 +27,8 @@ export interface CreateAssistantContributionOptions {
 
 export function createAssistantContribution(options: CreateAssistantContributionOptions = {}): Contribution {
   const open = ref(false)
+  const store = new DexieAssistantStore('easyink-assistant-ui')
+  const conversationId = options.id ?? 'easyink.assistant'
 
   return {
     id: options.id ?? 'easyink.assistant',
@@ -112,7 +115,12 @@ export function createAssistantContribution(options: CreateAssistantContribution
           'onUpdate:open': (next: boolean) => {
             open.value = next
           },
+          'onRequestClose': () => {
+            open.value = false
+          },
           'endpoint': options.endpoint,
+          'store': store,
+          'conversationId': conversationId,
           get 'currentSchema'() {
             return ctx.store.schema
           },

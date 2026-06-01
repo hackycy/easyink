@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import type { AssistantMaterialManifest, AssistantPatchOperation, AssistantResult, AssistantSourceInput } from '@easyink/assistant-capabilities'
-import type { AssistantEventRecord } from '@easyink/assistant-store'
+import type { AssistantConversationRecord, AssistantConversationStatus, AssistantEventRecord, AssistantStore, AssistantTaskRecord } from '@easyink/assistant-store'
 import type { AssistantApiClient, AssistantStreamHandle } from '../api'
 import type { AssistantTranslate } from '../i18n'
-import { IconLoader, IconSparkles } from '@easyink/icons'
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { DexieAssistantStore } from '@easyink/assistant-store'
+import { IconHistory, IconLoader, IconPlus, IconSparkles } from '@easyink/icons'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { AssistantApiError, createAssistantApiClient } from '../api'
 import { formatAssistantMessage, translateAssistant } from '../i18n'
 import { projectChecklist, projectNarration } from '../projection'
@@ -21,12 +22,16 @@ const props = withDefaults(defineProps<{
   apiClient?: AssistantApiClient
   currentSchema?: unknown
   materialManifest?: AssistantMaterialManifest
+  store?: AssistantStore
+  conversationId?: string
   t?: AssistantTranslate
 }>(), {
   endpoint: '',
   apiClient: undefined,
   currentSchema: undefined,
   materialManifest: undefined,
+  store: undefined,
+  conversationId: 'default',
   t: undefined,
 })
 
@@ -36,6 +41,7 @@ const emit = defineEmits<{
   applySelectedPatch: [operations: AssistantPatchOperation[]]
   applyDataSource: [dataSource: NonNullable<AssistantResult['dataSource']>]
   rollback: []
+  statusChange: [status: AssistantConversationStatus]
 }>()
 
 const api = computed(() => props.apiClient ?? createAssistantApiClient(props.endpoint))
@@ -45,14 +51,29 @@ const events = ref<AssistantEventRecord[]>([])
 const result = ref<AssistantResult>()
 const error = ref<string>()
 const applying = ref(false)
+const loadingSession = ref(true)
+const activeView = ref<'chat' | 'history'>('chat')
+const conversations = ref<AssistantConversationRecord[]>([])
+const activeConversationId = ref(props.conversationId)
+const draftMode = ref(false)
+
+const browserStore = typeof indexedDB === 'undefined'
+  ? undefined
+  : new DexieAssistantStore('easyink-assistant-ui')
+const store = computed(() => props.store ?? browserStore)
 
 let stream: AssistantStreamHandle | undefined
+let saveToken = 0
+let restoreToken = 0
+let streamToken = 0
 
 const narration = computed(() => projectNarration(events.value))
 
 // The stream carries events + result; the task status is derived from them so
 // the UI never needs to poll a second endpoint.
 const derivedStatus = computed<'idle' | 'running' | 'waiting' | 'review' | 'done' | 'failed' | 'cancelled'>(() => {
+  if (draftMode.value)
+    return 'idle'
   if (error.value)
     return 'failed'
   const types = new Set(events.value.map(record => record.event.type))
@@ -138,29 +159,43 @@ const runningSignals = computed(() => {
   }
   return signals
 })
+const hasHistory = computed(() => conversations.value.length > 0)
 
 function openStream(id: string) {
   closeStream()
+  const token = ++streamToken
   error.value = undefined
   stream = api.value.streamTask(id, {
     onSnapshot: (snapshot) => {
+      if (token !== streamToken || id !== taskId.value)
+        return
+      void persistSnapshot(snapshot.task, snapshot.events, snapshot.result)
       events.value = snapshot.events
       result.value = snapshot.result ?? result.value
       prompt.value = snapshot.task.input.prompt
     },
     onEvent: (record) => {
+      if (token !== streamToken || id !== taskId.value)
+        return
+      void store.value?.saveEventRecord(record)
       events.value = [...events.value, record]
     },
     onResult: (next) => {
+      if (token !== streamToken || id !== taskId.value)
+        return
+      void persistResult(next)
       result.value = next
     },
     onError: (err) => {
+      if (token !== streamToken || id !== taskId.value)
+        return
       error.value = formatAssistantError(err)
     },
   })
 }
 
 function closeStream() {
+  streamToken += 1
   stream?.close()
   stream = undefined
 }
@@ -168,10 +203,11 @@ function closeStream() {
 async function submitMessage(payload: { prompt: string, source?: AssistantSourceInput }) {
   error.value = undefined
   try {
-    if (derivedStatus.value === 'waiting' && taskId.value) {
+    if (!draftMode.value && derivedStatus.value === 'waiting' && taskId.value) {
       await api.value.submitClarification(taskId.value, { answer: payload.prompt })
       return
     }
+    draftMode.value = false
     result.value = undefined
     events.value = []
     const created = await api.value.createTask({
@@ -182,11 +218,55 @@ async function submitMessage(payload: { prompt: string, source?: AssistantSource
     })
     taskId.value = created.id
     prompt.value = created.input.prompt
+    await persistSnapshot(created, [], undefined)
+    await refreshConversations()
     openStream(created.id)
   }
   catch (err) {
     error.value = formatAssistantError(err)
   }
+}
+
+function startNewConversation() {
+  restoreToken += 1
+  closeStream()
+  resetConversationState()
+  activeConversationId.value = createLocalConversationId()
+  draftMode.value = true
+  activeView.value = 'chat'
+  emit('statusChange', 'idle')
+}
+
+function toggleHistoryView() {
+  activeView.value = activeView.value === 'history' ? 'chat' : 'history'
+  if (activeView.value === 'history')
+    void refreshConversations()
+}
+
+async function selectConversation(id: string) {
+  restoreToken += 1
+  closeStream()
+  activeConversationId.value = id
+  draftMode.value = false
+  resetConversationState()
+  activeView.value = 'chat'
+  loadingSession.value = true
+  try {
+    await restoreConversation(id)
+  }
+  finally {
+    loadingSession.value = false
+    emit('statusChange', derivedStatus.value)
+  }
+}
+
+function resetConversationState() {
+  loadingSession.value = false
+  taskId.value = undefined
+  prompt.value = undefined
+  events.value = []
+  result.value = undefined
+  error.value = undefined
 }
 
 async function applyResult(resultToApply: AssistantResult) {
@@ -196,6 +276,7 @@ async function applyResult(resultToApply: AssistantResult) {
   try {
     await api.value.applyTask(taskId.value)
     emit('apply', resultToApply)
+    await saveConversationState()
   }
   catch (err) {
     error.value = formatAssistantError(err)
@@ -212,6 +293,7 @@ async function retryTask() {
   result.value = undefined
   try {
     await api.value.retryTask(taskId.value)
+    await saveConversationState()
     openStream(taskId.value)
   }
   catch (err) {
@@ -224,6 +306,7 @@ async function cancelTask() {
     return
   try {
     await api.value.cancelTask(taskId.value)
+    await saveConversationState()
   }
   catch (err) {
     error.value = formatAssistantError(err)
@@ -267,20 +350,193 @@ function tr(key: string): string {
   return translateAssistant(key, props.t)
 }
 
+async function restoreConversation(conversationId?: string) {
+  if (!store.value)
+    return
+  const token = ++restoreToken
+  await refreshConversations()
+  const restoreId = conversationId ?? conversations.value[0]?.id ?? props.conversationId
+  if (token !== restoreToken)
+    return
+  activeConversationId.value = restoreId
+  draftMode.value = false
+  const conversation = await store.value.getConversation(restoreId)
+  const id = conversation?.activeTaskId
+  if (!id)
+    return
+
+  const cachedTask = await store.value.getTask(id)
+  const cachedEvents = await store.value.listEvents(id)
+  const cachedResult = cachedTask?.resultId ? await store.value.getResult(cachedTask.resultId) : undefined
+
+  if (token !== restoreToken)
+    return
+  if (cachedTask) {
+    taskId.value = cachedTask.id
+    prompt.value = cachedTask.input.prompt
+    events.value = cachedEvents
+    result.value = cachedResult
+  }
+
+  try {
+    const response = await api.value.getTask(id)
+    const nextEvents = await api.value.listEvents(id)
+    if (token !== restoreToken)
+      return
+    await persistSnapshot(response.task, nextEvents, response.result)
+    taskId.value = response.task.id
+    prompt.value = response.task.input.prompt
+    result.value = response.result ?? cachedResult
+    events.value = await store.value.listEvents(id)
+    if (isOpenStreamStatus(statusFromTask(response.task)))
+      openStream(id)
+  }
+  catch {
+    if (token === restoreToken && cachedTask && isOpenStreamStatus(statusFromTask(cachedTask)))
+      openStream(id)
+  }
+}
+
+async function persistResult(nextResult: AssistantResult) {
+  const target = store.value
+  if (!target)
+    return
+  await target.saveResultRecord(nextResult)
+  if (!taskId.value)
+    return
+  const task = await target.getTask(taskId.value)
+  if (!task)
+    return
+  await target.updateTask({ ...task, resultId: nextResult.id })
+  await persistConversation({ ...task, resultId: nextResult.id }, events.value, nextResult)
+}
+
+async function persistSnapshot(task: AssistantTaskRecord, nextEvents: AssistantEventRecord[], nextResult?: AssistantResult) {
+  const target = store.value
+  if (!target)
+    return
+  await target.updateTask(task)
+  await Promise.all(nextEvents.map(record => target.saveEventRecord(record)))
+  if (nextResult)
+    await target.saveResultRecord(nextResult)
+  await persistConversation(task, nextEvents, nextResult)
+}
+
+async function persistConversation(task: AssistantTaskRecord, nextEvents: AssistantEventRecord[], nextResult?: AssistantResult) {
+  const target = store.value
+  if (!target)
+    return
+  await target.upsertConversation({
+    id: activeConversationId.value,
+    activeTaskId: task.id,
+    title: task.input.prompt,
+    status: statusFromTask(task, nextEvents, nextResult),
+  })
+  await refreshConversations()
+}
+
+async function refreshConversations() {
+  const target = store.value
+  if (!target)
+    return
+  conversations.value = await target.listConversations()
+}
+
+async function saveConversationState() {
+  if (!taskId.value || !store.value)
+    return
+  const token = ++saveToken
+  const task = await store.value.getTask(taskId.value)
+  if (!task || token !== saveToken)
+    return
+  await persistConversation(task, events.value, result.value)
+}
+
+function statusFromTask(task: AssistantTaskRecord, nextEvents: AssistantEventRecord[] = [], nextResult?: AssistantResult): AssistantConversationStatus {
+  const taskStatus = task.status
+  if (taskStatus !== 'queued' && taskStatus !== 'running')
+    return taskStatus
+  const types = new Set(nextEvents.map(record => record.event.type))
+  if (types.has('task.applied'))
+    return 'done'
+  if (types.has('task.cancelled'))
+    return 'cancelled'
+  if (types.has('task.failed'))
+    return 'failed'
+  if (nextEvents.some(record => record.event.type === 'clarification.required'))
+    return 'waiting'
+  if (nextResult)
+    return 'review'
+  return taskStatus
+}
+
+function isOpenStreamStatus(status: AssistantConversationStatus): boolean {
+  return status === 'queued' || status === 'running' || status === 'waiting' || status === 'review'
+}
+
+function conversationStatusLabel(status: AssistantConversationStatus): string {
+  if (status === 'idle')
+    return tr('designer.assistant.status.idle')
+  if (status === 'queued' || status === 'running')
+    return tr('designer.assistant.status.running')
+  if (status === 'waiting')
+    return tr('designer.assistant.status.waiting')
+  if (status === 'review')
+    return tr('designer.assistant.status.review')
+  if (status === 'done')
+    return tr('designer.assistant.status.done')
+  if (status === 'failed')
+    return tr('designer.assistant.status.failed')
+  if (status === 'cancelled')
+    return tr('designer.assistant.status.cancelled')
+  return status
+}
+
+function formatConversationTime(value: number): string {
+  return new Intl.DateTimeFormat(undefined, {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(value))
+}
+
+function createLocalConversationId(): string {
+  return `conv_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`
+}
+
 watch(() => api.value, () => {
   if (taskId.value)
     openStream(taskId.value)
 })
 
+watch(derivedStatus, () => {
+  emit('statusChange', derivedStatus.value)
+  void saveConversationState()
+})
+
 onBeforeUnmount(closeStream)
+onMounted(async () => {
+  try {
+    await restoreConversation()
+  }
+  finally {
+    loadingSession.value = false
+    emit('statusChange', derivedStatus.value)
+  }
+})
 </script>
 
 <template>
   <section class="easyink-assistant-conversation">
     <ConversationHeader :t="t" />
-    <main class="assistant-stream">
+    <main v-if="activeView === 'chat'" class="assistant-stream">
       <AssistantMessage
-        v-if="derivedStatus === 'idle'"
+        v-if="loadingSession"
+        :text="tr('designer.assistant.message.restoring')"
+      />
+      <AssistantMessage
+        v-else-if="derivedStatus === 'idle'"
         :text="tr('designer.assistant.message.welcome')"
       />
       <UserMessage v-if="prompt" :text="prompt" />
@@ -364,13 +620,64 @@ onBeforeUnmount(closeStream)
         @retry="retryTask"
       />
     </main>
+    <main v-else class="assistant-history-panel" :aria-label="tr('designer.assistant.history.title')">
+      <header class="assistant-history-panel__head">
+        <div>
+          <strong>{{ tr('designer.assistant.history.title') }}</strong>
+          <span>{{ conversations.length }}</span>
+        </div>
+      </header>
+      <p v-if="!hasHistory" class="assistant-history__empty">
+        {{ tr('designer.assistant.history.empty') }}
+      </p>
+      <div v-else class="assistant-history__list">
+        <button
+          v-for="conversation in conversations"
+          :key="conversation.id"
+          type="button"
+          class="assistant-history__item"
+          :class="{ 'assistant-history__item--active': conversation.id === activeConversationId }"
+          @click="selectConversation(conversation.id)"
+        >
+          <span class="assistant-history__marker" aria-hidden="true" />
+          <span class="assistant-history__body">
+            <span class="assistant-history__title">{{ conversation.title ?? tr('designer.assistant.history.untitled') }}</span>
+            <span class="assistant-history__meta">
+              {{ conversationStatusLabel(conversation.status) }} · {{ formatConversationTime(conversation.updatedAt) }}
+            </span>
+          </span>
+        </button>
+      </div>
+    </main>
     <ComposerBar
       :running="running"
       :placeholder="derivedStatus === 'waiting' ? tr('designer.assistant.placeholder.clarification') : tr('designer.assistant.placeholder.prompt')"
       :t="t"
       @submit="submitMessage"
       @cancel="cancelTask"
-    />
+    >
+      <template #tools>
+        <button
+          type="button"
+          class="assistant-composer__icon-btn assistant-composer__icon-btn--session"
+          :title="tr('designer.assistant.action.newConversation')"
+          :aria-label="tr('designer.assistant.action.newConversation')"
+          @click="startNewConversation"
+        >
+          <IconPlus :size="16" stroke-width="1.9" />
+        </button>
+        <button
+          type="button"
+          class="assistant-composer__icon-btn assistant-composer__icon-btn--session"
+          :class="{ 'assistant-composer__icon-btn--active': activeView === 'history' }"
+          :title="tr('designer.assistant.action.history')"
+          :aria-label="tr('designer.assistant.action.history')"
+          @click="toggleHistoryView"
+        >
+          <IconHistory :size="16" stroke-width="1.9" />
+        </button>
+      </template>
+    </ComposerBar>
   </section>
 </template>
 
@@ -387,6 +694,7 @@ onBeforeUnmount(closeStream)
   --assistant-success: #16a34a;
   --assistant-danger: #b42318;
   --assistant-shadow: 0 18px 48px rgb(15 23 42 / 8%);
+  position: relative;
   display: grid;
   grid-template-rows: auto minmax(280px, 1fr) auto;
   width: 100%;
@@ -421,6 +729,126 @@ onBeforeUnmount(closeStream)
 
 .assistant-answer--muted {
   color: var(--assistant-muted);
+}
+
+.assistant-history-panel {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 22px 24px 18px;
+  background: var(--assistant-bg);
+}
+
+.assistant-history-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  color: var(--assistant-muted);
+  font-size: 12px;
+
+  > div {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 8px;
+  }
+
+  strong {
+    color: var(--assistant-text);
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  span {
+    display: inline-flex;
+    min-width: 22px;
+    height: 22px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: var(--assistant-surface);
+    color: var(--assistant-muted);
+    font-size: 11px;
+    font-weight: 600;
+  }
+}
+
+.assistant-history__empty {
+  margin: 0;
+  padding: 16px 2px;
+  color: var(--assistant-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.assistant-history__list {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  overflow: auto;
+  padding: 0;
+}
+
+.assistant-history__item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  width: 100%;
+  min-height: 56px;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--assistant-text);
+  cursor: pointer;
+  padding: 9px 10px 9px 6px;
+  text-align: left;
+  transition: background 0.15s, color 0.15s;
+
+  &:hover {
+    background: color-mix(in srgb, var(--assistant-surface) 72%, transparent);
+  }
+}
+
+.assistant-history__item--active {
+  background: color-mix(in srgb, var(--assistant-surface) 86%, var(--assistant-bg));
+  color: var(--assistant-text);
+}
+
+.assistant-history__marker {
+  width: 6px;
+  height: 22px;
+  justify-self: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--assistant-muted) 28%, transparent);
+}
+
+.assistant-history__item--active .assistant-history__marker {
+  background: var(--assistant-text);
+}
+
+.assistant-history__body {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.assistant-history__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.assistant-history__meta {
+  color: var(--assistant-muted);
+  font-size: 12px;
 }
 
 .assistant-summary {
@@ -629,6 +1057,7 @@ onBeforeUnmount(closeStream)
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
 }
 
 :deep(.assistant-conversation-header__avatar) {
@@ -1020,8 +1449,7 @@ onBeforeUnmount(closeStream)
 :deep(.assistant-composer__tools) {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 4px;
   min-height: 34px;
 }
 
@@ -1040,12 +1468,28 @@ onBeforeUnmount(closeStream)
   border-radius: 999px;
   background: transparent;
   color: rgb(32 36 42 / 48%);
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.15s, color 0.15s, transform 0.15s;
+
+  &:hover:not(:disabled) {
+    background: var(--assistant-surface);
+    color: var(--assistant-text);
+    transform: translateY(-1px);
+  }
+}
+
+:deep(.assistant-composer__icon-btn--session) {
+  color: rgb(32 36 42 / 52%);
 
   &:hover:not(:disabled) {
     background: var(--assistant-surface);
     color: var(--assistant-text);
   }
+}
+
+:deep(.assistant-composer__icon-btn--active) {
+  background: var(--assistant-surface);
+  color: var(--assistant-text);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--assistant-muted) 18%, transparent);
 }
 
 :deep(.assistant-composer__send) {

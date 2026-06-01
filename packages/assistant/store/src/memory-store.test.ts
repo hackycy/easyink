@@ -14,4 +14,24 @@ describe('memoryAssistantStore', () => {
     expect(snapshot.schemaVersion).toBe(1)
     expect(snapshot.tasks).toHaveLength(1)
   })
+
+  it('persists assistant conversation cursors in snapshots', async () => {
+    const store = new MemoryAssistantStore()
+    const task = await store.createTask({ prompt: '生成小票' })
+    await store.upsertConversation({
+      id: 'assistant.panel',
+      activeTaskId: task.id,
+      title: task.input.prompt,
+      status: 'running',
+    })
+
+    const snapshot = await store.exportSnapshot()
+    const restored = new MemoryAssistantStore()
+    await restored.importSnapshot(snapshot)
+
+    await expect(restored.getConversation('assistant.panel')).resolves.toMatchObject({
+      activeTaskId: task.id,
+      status: 'running',
+    })
+  })
 })

@@ -1,5 +1,6 @@
 import type { Table } from 'dexie'
 import type {
+  AssistantConversationRecord,
   AssistantEvent,
   AssistantEventRecord,
   AssistantProjectionSnapshotRecord,
@@ -24,6 +25,7 @@ class AssistantDexieDatabase extends Dexie {
   events!: Table<AssistantEventRecord, string>
   projectionSnapshots!: Table<AssistantProjectionSnapshotRecord, string>
   sourceSamples!: Table<AssistantSourceSampleRecord, string>
+  conversations!: Table<AssistantConversationRecord, string>
 
   constructor(name: string) {
     super(name)
@@ -43,6 +45,16 @@ class AssistantDexieDatabase extends Dexie {
       projectionSnapshots: 'id, taskId, createdAt',
       sourceSamples: 'id, taskId, sourceKind, createdAt, expiresAt',
     })
+    this.version(3).stores({
+      tasks: 'id, status, updatedAt',
+      runs: 'id, taskId, status, startedAt',
+      results: 'id, createdAt',
+      versions: 'id, taskId, resultId, createdAt',
+      events: 'id, taskId, createdAt',
+      projectionSnapshots: 'id, taskId, createdAt',
+      sourceSamples: 'id, taskId, sourceKind, createdAt, expiresAt',
+      conversations: 'id, activeTaskId, status, updatedAt',
+    })
   }
 }
 
@@ -52,6 +64,31 @@ export class DexieAssistantStore implements AssistantStore {
 
   constructor(name = 'easyink-assistant') {
     this.db = new AssistantDexieDatabase(name)
+  }
+
+  async upsertConversation(record: Omit<AssistantConversationRecord, 'createdAt' | 'updatedAt'> & Partial<Pick<AssistantConversationRecord, 'createdAt' | 'updatedAt'>>): Promise<AssistantConversationRecord> {
+    const now = Date.now()
+    const existing = await this.db.conversations.get(record.id)
+    const conversation: AssistantConversationRecord = {
+      ...existing,
+      ...record,
+      createdAt: existing?.createdAt ?? record.createdAt ?? now,
+      updatedAt: now,
+    }
+    await this.db.conversations.put(conversation)
+    return conversation
+  }
+
+  async getConversation(id: string): Promise<AssistantConversationRecord | undefined> {
+    return this.db.conversations.get(id)
+  }
+
+  async listConversations(): Promise<AssistantConversationRecord[]> {
+    return this.db.conversations.orderBy('updatedAt').reverse().toArray()
+  }
+
+  async deleteConversation(id: string): Promise<void> {
+    await this.db.conversations.delete(id)
   }
 
   async createTask(input: AssistantTaskInput): Promise<AssistantTaskRecord> {
@@ -106,6 +143,10 @@ export class DexieAssistantStore implements AssistantStore {
     })
   }
 
+  async saveResultRecord(result: AssistantResult): Promise<void> {
+    await this.db.results.put(result)
+  }
+
   async getResult(id: string): Promise<AssistantResult | undefined> {
     return this.db.results.get(id)
   }
@@ -150,6 +191,11 @@ export class DexieAssistantStore implements AssistantStore {
     return record
   }
 
+  async saveEventRecord(record: AssistantEventRecord): Promise<void> {
+    await this.db.events.put(record)
+    this.subscriptions.emit(record)
+  }
+
   subscribe(taskId: string, listener: (record: AssistantEventRecord) => void): () => void {
     return this.subscriptions.subscribe(taskId, listener)
   }
@@ -159,7 +205,7 @@ export class DexieAssistantStore implements AssistantStore {
   }
 
   async exportSnapshot(): Promise<AssistantSnapshot> {
-    const [tasks, runs, results, versions, events, projectionSnapshots, sourceSamples] = await Promise.all([
+    const [tasks, runs, results, versions, events, projectionSnapshots, sourceSamples, conversations] = await Promise.all([
       this.db.tasks.toArray(),
       this.db.runs.toArray(),
       this.db.results.toArray(),
@@ -167,8 +213,9 @@ export class DexieAssistantStore implements AssistantStore {
       this.db.events.toArray(),
       this.db.projectionSnapshots.toArray(),
       this.db.sourceSamples.toArray(),
+      this.db.conversations.toArray(),
     ])
-    return { schemaVersion: 1, tasks, runs, results, versions, events, projectionSnapshots, sourceSamples }
+    return { schemaVersion: 2, tasks, runs, results, versions, events, projectionSnapshots, sourceSamples, conversations }
   }
 
   async importSnapshot(snapshot: AssistantSnapshot): Promise<void> {
@@ -180,6 +227,7 @@ export class DexieAssistantStore implements AssistantStore {
       this.db.events,
       this.db.projectionSnapshots,
       this.db.sourceSamples,
+      this.db.conversations,
     ], async () => {
       await Promise.all([
         this.db.tasks.clear(),
@@ -189,6 +237,7 @@ export class DexieAssistantStore implements AssistantStore {
         this.db.events.clear(),
         this.db.projectionSnapshots.clear(),
         this.db.sourceSamples.clear(),
+        this.db.conversations.clear(),
       ])
       await Promise.all([
         this.db.tasks.bulkPut(snapshot.tasks),
@@ -198,6 +247,7 @@ export class DexieAssistantStore implements AssistantStore {
         this.db.events.bulkPut(snapshot.events),
         this.db.projectionSnapshots.bulkPut(snapshot.projectionSnapshots ?? []),
         this.db.sourceSamples.bulkPut(snapshot.sourceSamples ?? []),
+        this.db.conversations.bulkPut(snapshot.conversations ?? []),
       ])
     })
   }

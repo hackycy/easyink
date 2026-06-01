@@ -4,6 +4,7 @@
 import type { AssistantResult } from '@easyink/assistant-capabilities'
 import type { AssistantEventRecord, AssistantTaskRecord } from '@easyink/assistant-store'
 import type { AssistantApiClient, AssistantStreamHandlers } from '../api'
+import { MemoryAssistantStore } from '@easyink/assistant-store'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createApp, nextTick } from 'vue'
 import ConversationPanel from './ConversationPanel.vue'
@@ -86,6 +87,76 @@ describe('assistant conversation panel', () => {
 
     expect(document.body.textContent).toContain('连接已断开')
     expect(document.body.textContent).toContain('重试')
+  })
+
+  it('restores the active conversation after the drawer unmounts', async () => {
+    const store = new MemoryAssistantStore()
+    const task = createTask()
+    const result = createResult(task.id)
+    await store.updateTask({ ...task, status: 'done', resultId: result.id })
+    await store.saveEventRecord({ id: 'evt_1', taskId: task.id, event: { type: 'task.created', taskId: task.id }, createdAt: 1 })
+    await store.saveResultRecord(result)
+    await store.upsertConversation({
+      id: 'assistant.panel',
+      activeTaskId: task.id,
+      title: task.input.prompt,
+      status: 'done',
+    })
+    const { api } = createStreamingClient({
+      getTask: vi.fn().mockResolvedValue({ task: { ...task, status: 'done', resultId: result.id }, result }),
+      listEvents: vi.fn().mockResolvedValue([
+        { id: 'evt_1', taskId: task.id, event: { type: 'task.created', taskId: task.id }, createdAt: 1 },
+        { id: 'evt_2', taskId: task.id, event: { type: 'task.applied', taskId: task.id, resultId: result.id }, createdAt: 2 },
+      ]),
+    })
+
+    mount({ apiClient: api, store, conversationId: 'assistant.panel' })
+    await flushPromises()
+
+    expect(document.body.textContent).toContain('生成小票')
+    expect(document.body.textContent).toContain('生成完成，可以应用')
+    expect(api.getTask).toHaveBeenCalledWith(task.id)
+  })
+
+  it('shows conversation history and starts a fresh conversation', async () => {
+    const store = new MemoryAssistantStore()
+    const oldTask = createTask({ prompt: '旧会话' })
+    await store.updateTask({ ...oldTask, status: 'done' })
+    await store.saveEventRecord({ id: 'evt_old', taskId: oldTask.id, event: { type: 'task.created', taskId: oldTask.id }, createdAt: 1 })
+    await store.upsertConversation({
+      id: 'conv_old',
+      activeTaskId: oldTask.id,
+      title: oldTask.input.prompt,
+      status: 'done',
+    })
+    const newTask = createTask({ prompt: '新会话' })
+    newTask.id = 'task_new'
+    const { api } = createStreamingClient({
+      getTask: vi.fn().mockResolvedValue({ task: oldTask }),
+      listEvents: vi.fn().mockResolvedValue([{ id: 'evt_old', taskId: oldTask.id, event: { type: 'task.created', taskId: oldTask.id }, createdAt: 1 }]),
+      createTask: vi.fn().mockResolvedValue(newTask),
+    })
+
+    const onStatusChange = vi.fn()
+    mount({ apiClient: api, store, conversationId: 'conv_old', onStatusChange })
+    await flushPromises()
+    expect(document.body.textContent).toContain('旧会话')
+
+    const newConversationButton = document.querySelector('button[aria-label="新建会话"]')
+    expect(newConversationButton).toBeTruthy()
+    ;(newConversationButton as HTMLButtonElement).click()
+    await flushPromises()
+    expect(onStatusChange).toHaveBeenCalledWith('idle')
+    expect(document.querySelector('button[aria-label="发送"]')).toBeTruthy()
+    expect(document.querySelector('textarea')?.hasAttribute('disabled')).toBe(false)
+
+    await submitPrompt('新会话')
+    document.querySelector('button[aria-label="历史会话"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await flushPromises()
+
+    expect(document.body.textContent).toContain('历史会话')
+    expect(document.body.textContent).toContain('旧会话')
+    expect(document.body.textContent).toContain('新会话')
   })
 })
 
@@ -171,6 +242,7 @@ function createStreamingClient(overrides: Partial<AssistantApiClient>) {
 
 async function flushPromises() {
   await nextTick()
-  await Promise.resolve()
-  await Promise.resolve()
+  for (let index = 0; index < 8; index += 1)
+    await Promise.resolve()
+  await nextTick()
 }

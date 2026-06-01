@@ -1,4 +1,5 @@
 import type {
+  AssistantConversationRecord,
   AssistantEvent,
   AssistantEventRecord,
   AssistantProjectionSnapshotRecord,
@@ -23,6 +24,35 @@ export class MemoryAssistantStore implements AssistantStore {
   private readonly events = new Map<string, AssistantEventRecord>()
   private readonly projectionSnapshots = new Map<string, AssistantProjectionSnapshotRecord>()
   private readonly sourceSamples = new Map<string, AssistantSourceSampleRecord>()
+  private readonly conversations = new Map<string, AssistantConversationRecord>()
+
+  async upsertConversation(record: Omit<AssistantConversationRecord, 'createdAt' | 'updatedAt'> & Partial<Pick<AssistantConversationRecord, 'createdAt' | 'updatedAt'>>): Promise<AssistantConversationRecord> {
+    const now = Date.now()
+    const existing = this.conversations.get(record.id)
+    const conversation: AssistantConversationRecord = {
+      ...existing,
+      ...record,
+      createdAt: existing?.createdAt ?? record.createdAt ?? now,
+      updatedAt: now,
+    }
+    this.conversations.set(conversation.id, clone(conversation))
+    return clone(conversation)
+  }
+
+  async getConversation(id: string): Promise<AssistantConversationRecord | undefined> {
+    const conversation = this.conversations.get(id)
+    return conversation ? clone(conversation) : undefined
+  }
+
+  async listConversations(): Promise<AssistantConversationRecord[]> {
+    return [...this.conversations.values()]
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .map(conversation => clone(conversation))
+  }
+
+  async deleteConversation(id: string): Promise<void> {
+    this.conversations.delete(id)
+  }
 
   async createTask(input: AssistantTaskInput): Promise<AssistantTaskRecord> {
     const now = Date.now()
@@ -75,6 +105,10 @@ export class MemoryAssistantStore implements AssistantStore {
       action: 'generated',
       snapshot: result,
     })
+  }
+
+  async saveResultRecord(result: AssistantResult): Promise<void> {
+    this.results.set(result.id, clone(result))
   }
 
   async getResult(id: string): Promise<AssistantResult | undefined> {
@@ -145,6 +179,11 @@ export class MemoryAssistantStore implements AssistantStore {
     return clone(record)
   }
 
+  async saveEventRecord(record: AssistantEventRecord): Promise<void> {
+    this.events.set(record.id, clone(record))
+    this.subscriptions.emit(clone(record))
+  }
+
   subscribe(taskId: string, listener: (record: AssistantEventRecord) => void): () => void {
     return this.subscriptions.subscribe(taskId, listener)
   }
@@ -166,6 +205,7 @@ export class MemoryAssistantStore implements AssistantStore {
       events: [...this.events.values()].map(event => clone(event)),
       projectionSnapshots: [...this.projectionSnapshots.values()].map(snapshot => clone(snapshot)),
       sourceSamples: [...this.sourceSamples.values()].map(sample => clone(sample)),
+      conversations: [...this.conversations.values()].map(conversation => clone(conversation)),
     }
   }
 
@@ -177,6 +217,7 @@ export class MemoryAssistantStore implements AssistantStore {
     this.events.clear()
     this.projectionSnapshots.clear()
     this.sourceSamples.clear()
+    this.conversations.clear()
     for (const task of snapshot.tasks)
       this.tasks.set(task.id, clone(task))
     for (const run of snapshot.runs)
@@ -191,6 +232,8 @@ export class MemoryAssistantStore implements AssistantStore {
       this.projectionSnapshots.set(projection.id, clone(projection))
     for (const sample of snapshot.sourceSamples ?? [])
       this.sourceSamples.set(sample.id, clone(sample))
+    for (const conversation of snapshot.conversations ?? [])
+      this.conversations.set(conversation.id, clone(conversation))
   }
 
   async cleanupExpired(now = Date.now()): Promise<number> {

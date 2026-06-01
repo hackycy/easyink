@@ -15,6 +15,8 @@ const zhCN = {
         apply: '应用到设计器',
         send: '发送',
         stop: '停止生成',
+        newConversation: '新建会话',
+        history: '历史会话',
         reparseSource: '重新解析数据源',
         removeSource: '删除数据源',
         attachSourceHint: '粘贴 JSON、URL 或 curl 可自动识别数据源',
@@ -25,6 +27,7 @@ const zhCN = {
       },
       message: {
         welcome: '你好，我可以帮你生成 EasyInk 模板。试试输入“帮我生成一张 80mm 小票”。',
+        restoring: '正在恢复上次对话...',
         applied: '已应用到设计器。',
         cancelled: '已停止生成，你可以调整描述后重新发送。',
       },
@@ -43,10 +46,19 @@ const zhCN = {
         validate: '校验结果',
       },
       status: {
+        idle: '未开始',
         pending: '等待中',
+        waiting: '待确认',
+        review: '待应用',
         running: '执行中',
         done: '已完成',
         failed: '失败',
+        cancelled: '已取消',
+      },
+      history: {
+        title: '历史会话',
+        empty: '暂无历史会话。',
+        untitled: '未命名会话',
       },
       source: {
         json: 'JSON 数据源',
@@ -94,6 +106,8 @@ const enUS = {
         apply: 'Apply to Designer',
         send: 'Send',
         stop: 'Stop generation',
+        newConversation: 'New conversation',
+        history: 'History',
         reparseSource: 'Reparse data source',
         removeSource: 'Remove data source',
         attachSourceHint: 'Paste JSON, a URL, or curl to detect a data source',
@@ -104,6 +118,7 @@ const enUS = {
       },
       message: {
         welcome: 'Hi, I can help generate EasyInk templates. Try "Generate an 80mm receipt".',
+        restoring: 'Restoring the last conversation...',
         applied: 'Applied to the designer.',
         cancelled: 'Generation stopped. Adjust your prompt and send again.',
       },
@@ -122,10 +137,19 @@ const enUS = {
         validate: 'Validate Result',
       },
       status: {
+        idle: 'Not started',
         pending: 'Pending',
+        waiting: 'Waiting',
+        review: 'Ready',
         running: 'Running',
         done: 'Done',
         failed: 'Failed',
+        cancelled: 'Cancelled',
+      },
+      history: {
+        title: 'Conversation History',
+        empty: 'No conversations yet.',
+        untitled: 'Untitled conversation',
       },
       source: {
         json: 'JSON data source',
