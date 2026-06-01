@@ -1,15 +1,22 @@
 <script setup lang="ts">
+import type { AssistantTranslate } from '../i18n'
 import type { ChecklistItem } from '../projection'
+import { translateAssistant } from '../i18n'
 
-defineProps<{
+const props = defineProps<{
   items: ChecklistItem[]
+  t?: AssistantTranslate
 }>()
 
-const STATUS_LABEL: Record<ChecklistItem['status'], string> = {
-  pending: '等待中',
-  running: '执行中',
-  done: '已完成',
-  failed: '失败',
+const STATUS_LABEL_KEY: Record<ChecklistItem['status'], string> = {
+  pending: 'designer.assistant.status.pending',
+  running: 'designer.assistant.status.running',
+  done: 'designer.assistant.status.done',
+  failed: 'designer.assistant.status.failed',
+}
+
+function tr(key: string): string {
+  return translateAssistant(key, props.t)
 }
 </script>
 
@@ -26,7 +33,7 @@ const STATUS_LABEL: Record<ChecklistItem['status'], string> = {
           <span class="assistant-checklist__lamp" />
         </span>
         <span class="assistant-checklist__title">{{ item.title }}</span>
-        <span class="assistant-checklist__status">{{ STATUS_LABEL[item.status] }}</span>
+        <span class="assistant-checklist__status">{{ tr(STATUS_LABEL_KEY[item.status]) }}</span>
       </li>
     </ul>
   </div>

@@ -1,13 +1,19 @@
 <script setup lang="ts">
+import type { AssistantTranslate } from '../i18n'
 import type { ClarificationQuestion } from '../projection'
+import { translateAssistant } from '../i18n'
 
-defineProps<{ questions: ClarificationQuestion[] }>()
+const props = defineProps<{ questions: ClarificationQuestion[], t?: AssistantTranslate }>()
 defineEmits<{ answer: [value: string] }>()
+
+function tr(key: string): string {
+  return translateAssistant(key, props.t)
+}
 </script>
 
 <template>
   <article class="assistant-card assistant-clarification-card">
-    <strong>需要确认一下</strong>
+    <strong>{{ tr('designer.assistant.card.clarificationTitle') }}</strong>
     <div v-for="question in questions" :key="question.text" class="assistant-clarification-card__question">
       <p>{{ question.text }}</p>
       <div class="assistant-clarification-card__answers">

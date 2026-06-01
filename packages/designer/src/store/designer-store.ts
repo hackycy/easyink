@@ -1,6 +1,6 @@
 import type { EphemeralPanelDef, FontLoadRequest, FontLoadStatus, FontManager, FontProvider, PropertyPanelOverlay } from '@easyink/core'
 import type { DocumentSchema, DocumentSchemaInput, ElementGroupSchema, MaterialNode } from '@easyink/schema'
-import type { DesignerInteractionProvider, LocaleMessages, MaterialCatalogEntry, MaterialDefinition, MaterialDesignerExtension, MaterialExtensionFactory, PreferenceProvider, SnapLine, StatusBarState } from '../types'
+import type { DesignerInteractionProvider, LocaleMessageRegistration, LocaleMessages, MaterialCatalogEntry, MaterialDefinition, MaterialDesignerExtension, MaterialExtensionFactory, PreferenceProvider, SnapLine, StatusBarState } from '../types'
 import { CommandManager, SelectionModel } from '@easyink/core'
 import { DataSourceRegistry } from '@easyink/datasource'
 import { findNodeById, normalizeDocumentSchema } from '@easyink/schema'
@@ -71,6 +71,8 @@ export class DesignerStore {
 
   // ─── Locale ───────────────────────────────────────────────────
   private _locale?: LocaleMessages
+  private _localeCode?: string
+  private readonly _localeRegistrations: LocaleMessageRegistration[] = []
 
   constructor(schema?: DocumentSchemaInput, preferenceProvider?: PreferenceProvider, interactionProvider?: DesignerInteractionProvider) {
     this._schema = normalizeDocumentSchema(schema)
@@ -308,21 +310,54 @@ export class DesignerStore {
 
   // ─── Locale ───────────────────────────────────────────────────
 
-  setLocale(locale: LocaleMessages): void {
+  setLocale(locale: LocaleMessages, code?: string): void {
     this._locale = locale
+    this._localeCode = code
+  }
+
+  registerLocaleMessages(registration: LocaleMessageRegistration): () => void {
+    this._localeRegistrations.push(registration)
+    return () => {
+      const index = this._localeRegistrations.indexOf(registration)
+      if (index >= 0)
+        this._localeRegistrations.splice(index, 1)
+    }
   }
 
   t(key: string): string {
-    if (!this._locale)
-      return key
+    const own = this.lookupLocaleMessage(this._locale, key)
+    if (own)
+      return own
+
+    for (const registration of this._localeRegistrations) {
+      const registered = this.lookupLocaleMessage(this.resolveRegisteredLocaleMessages(registration), key)
+      if (registered)
+        return registered
+    }
+
+    return key
+  }
+
+  private resolveRegisteredLocaleMessages(registration: LocaleMessageRegistration): LocaleMessages | undefined {
+    if (this._localeCode) {
+      const current = registration.locales?.[this._localeCode]
+      if (current)
+        return current
+    }
+    return registration.messages
+  }
+
+  private lookupLocaleMessage(locale: LocaleMessages | undefined, key: string): string | undefined {
+    if (!locale)
+      return undefined
     const parts = key.split('.')
-    let current: unknown = this._locale
+    let current: unknown = locale
     for (const part of parts) {
       if (typeof current !== 'object' || current === null)
-        return key
+        return undefined
       current = (current as Record<string, unknown>)[part]
     }
-    return typeof current === 'string' ? current : key
+    return typeof current === 'string' ? current : undefined
   }
 
   // ─── Element geometry ───────────────────────────────────────────

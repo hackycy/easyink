@@ -1,3 +1,14 @@
+<script setup lang="ts">
+import type { AssistantTranslate } from '../i18n'
+import { translateAssistant } from '../i18n'
+
+const props = defineProps<{ t?: AssistantTranslate }>()
+
+function tr(key: string): string {
+  return translateAssistant(key, props.t)
+}
+</script>
+
 <template>
   <header class="assistant-conversation-header">
     <div class="assistant-conversation-header__brand">
@@ -8,8 +19,8 @@
         </svg>
       </span>
       <div>
-        <h2>EasyInk Assistant</h2>
-        <p>描述你要的票据、标签或表单，确认后再应用到设计器。</p>
+        <h2>{{ tr('designer.assistant.title') }}</h2>
+        <p>{{ tr('designer.assistant.description') }}</p>
       </div>
     </div>
   </header>

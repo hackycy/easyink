@@ -2,9 +2,11 @@
 import type { AssistantMaterialManifest, AssistantPatchOperation, AssistantResult, AssistantSourceInput } from '@easyink/assistant-capabilities'
 import type { AssistantEventRecord } from '@easyink/assistant-store'
 import type { AssistantApiClient, AssistantStreamHandle } from '../api'
+import type { AssistantTranslate } from '../i18n'
 import { IconLoader, IconSparkles } from '@easyink/icons'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { AssistantApiError, createAssistantApiClient } from '../api'
+import { formatAssistantMessage, translateAssistant } from '../i18n'
 import { projectChecklist, projectNarration } from '../projection'
 import AssistantMessage from './AssistantMessage.vue'
 import ChecklistCard from './ChecklistCard.vue'
@@ -19,11 +21,13 @@ const props = withDefaults(defineProps<{
   apiClient?: AssistantApiClient
   currentSchema?: unknown
   materialManifest?: AssistantMaterialManifest
+  t?: AssistantTranslate
 }>(), {
   endpoint: '',
   apiClient: undefined,
   currentSchema: undefined,
   materialManifest: undefined,
+  t: undefined,
 })
 
 const emit = defineEmits<{
@@ -73,6 +77,7 @@ const checklist = computed(() => projectChecklist({
   result: result.value,
   error: error.value,
   task: derivedTask.value,
+  t: props.t,
 }))
 const running = computed(() => derivedStatus.value === 'running')
 
@@ -109,16 +114,16 @@ const supportingNarration = computed(() => {
 const runningMood = computed(() => {
   const id = activeChecklistItem.value?.id
   if (id === 'understand')
-    return '我在梳理票据目标和关键内容。'
+    return tr('designer.assistant.progress.understand')
   if (id === 'data')
-    return '正在识别数据字段，准备放到合适位置。'
+    return tr('designer.assistant.progress.data')
   if (id === 'layout')
-    return '正在安排信息层级和版面节奏。'
+    return tr('designer.assistant.progress.layout')
   if (id === 'compose')
-    return '正在生成可以直接应用的设计结果。'
+    return tr('designer.assistant.progress.compose')
   if (id === 'validate')
-    return '正在做最后检查，尽量减少手动调整。'
-  return '生成流程已开始，我会持续同步进度。'
+    return tr('designer.assistant.progress.validate')
+  return tr('designer.assistant.progress.started')
 })
 const runningSignals = computed(() => {
   const signals: string[] = []
@@ -127,7 +132,7 @@ const runningSignals = computed(() => {
     if (event.type === 'tool.completed' && event.summary)
       signals.push(event.summary)
     if (event.type === 'tool.failed' && event.error)
-      signals.push(`已发现问题：${event.error}`)
+      signals.push(formatAssistantMessage('designer.assistant.progress.issueFound', { error: event.error }, props.t))
     if (signals.length >= 2)
       break
   }
@@ -230,32 +235,36 @@ function friendlyThinkingText(text: string | undefined): string | undefined {
     return undefined
   const normalized = text.replace(/[.。…]+$/g, '')
   if (normalized.includes('正在理解你的模板需求'))
-    return '我在梳理票据目标和关键内容。'
+    return tr('designer.assistant.progress.understand')
   if (normalized.includes('需求信息还不够明确'))
-    return '我需要再确认几个细节，避免生成方向跑偏。'
+    return tr('designer.assistant.progress.needsClarification')
   if (normalized.startsWith('识别为') && normalized.endsWith('场景'))
-    return `${normalized}，继续细化模板结构。`
+    return `${normalized}${tr('designer.assistant.progress.scenarioSuffix')}`
   if (normalized.includes('已理解模板类型与目标'))
-    return '已确认主要目标，开始安排版面。'
+    return tr('designer.assistant.progress.confirmedGoal')
   if (normalized.includes('正在规划页面结构与版式'))
-    return '正在安排信息层级和版面节奏。'
+    return tr('designer.assistant.progress.layout')
   if (normalized.includes('正在构建数据契约'))
-    return '正在整理字段关系，确保内容能正确填入。'
+    return tr('designer.assistant.progress.contract')
   if (normalized.includes('正在规划版式骨架'))
-    return '正在搭出版面的主要区域。'
+    return tr('designer.assistant.progress.skeleton')
   if (normalized.includes('正在生成 EasyInk 模板结构'))
-    return '正在生成可以直接应用的设计结果。'
+    return tr('designer.assistant.progress.compose')
   if (normalized.includes('校验发现问题'))
-    return '发现细节问题，正在自动修正。'
+    return tr('designer.assistant.progress.repair')
   return text
 }
 
 function formatAssistantError(err: unknown): string {
   if (err instanceof AssistantApiError && err.status === 401)
-    return '请求未授权（HTTP 401），请检查登录状态或 Assistant 服务凭据后重试。'
+    return tr('designer.assistant.error.unauthorized')
   if (err instanceof Error)
     return err.message
   return String(err)
+}
+
+function tr(key: string): string {
+  return translateAssistant(key, props.t)
 }
 
 watch(() => api.value, () => {
@@ -268,11 +277,11 @@ onBeforeUnmount(closeStream)
 
 <template>
   <section class="easyink-assistant-conversation">
-    <ConversationHeader />
+    <ConversationHeader :t="t" />
     <main class="assistant-stream">
       <AssistantMessage
         v-if="derivedStatus === 'idle'"
-        text="你好，我可以帮你生成 EasyInk 模板。试试输入“帮我生成一张 80mm 小票”。"
+        :text="tr('designer.assistant.message.welcome')"
       />
       <UserMessage v-if="prompt" :text="prompt" />
 
@@ -287,7 +296,7 @@ onBeforeUnmount(closeStream)
             <IconSparkles :size="17" stroke-width="1.8" />
           </span>
           <div>
-            <strong>{{ activeChecklistItem?.title ?? '正在生成' }}</strong>
+            <strong>{{ activeChecklistItem?.title ?? tr('designer.assistant.progress.generating') }}</strong>
             <p>{{ latestThinkingLine ?? runningMood }}</p>
           </div>
           <IconLoader class="assistant-live-card__loader" :size="17" stroke-width="2" aria-hidden="true" />
@@ -295,7 +304,7 @@ onBeforeUnmount(closeStream)
         <div class="assistant-live-card__meter" aria-hidden="true">
           <span :style="{ width: `${runningPercent}%` }" />
         </div>
-        <ChecklistCard v-if="showChecklist" :items="checklist" />
+        <ChecklistCard v-if="showChecklist" :items="checklist" :t="t" />
         <ul v-if="runningSignals.length" class="assistant-live-card__signals">
           <li v-for="signal in runningSignals" :key="signal">
             {{ signal }}
@@ -304,7 +313,7 @@ onBeforeUnmount(closeStream)
       </article>
 
       <details v-if="showSummary" class="assistant-summary">
-        <summary>分析摘要</summary>
+        <summary>{{ tr('designer.assistant.card.summary') }}</summary>
         <ul>
           <li v-for="(line, index) in narration.summary" :key="index">
             {{ line }}
@@ -315,6 +324,7 @@ onBeforeUnmount(closeStream)
       <ClarificationCard
         v-if="narration.clarification"
         :questions="narration.clarification"
+        :t="t"
         @answer="submitMessage({ prompt: $event })"
       />
 
@@ -326,36 +336,38 @@ onBeforeUnmount(closeStream)
             </svg>
           </span>
           <div>
-            <strong>生成完成，可以应用</strong>
+            <strong>{{ tr('designer.assistant.card.doneTitle') }}</strong>
             <p class="assistant-muted">
-              已为你生成模板，确认后应用到设计器。
+              {{ tr('designer.assistant.card.doneDescription') }}
             </p>
           </div>
         </div>
         <div class="assistant-done-card__actions">
           <button type="button" class="assistant-btn assistant-btn--primary" :disabled="applying" @click="applyResult(result)">
-            应用到设计器
+            {{ tr('designer.assistant.action.apply') }}
           </button>
         </div>
       </article>
 
       <p v-if="applied" class="assistant-answer assistant-answer--muted">
-        已应用到设计器。
+        {{ tr('designer.assistant.message.applied') }}
       </p>
 
       <p v-if="derivedStatus === 'cancelled'" class="assistant-answer assistant-answer--muted">
-        已停止生成，你可以调整描述后重新发送。
+        {{ tr('designer.assistant.message.cancelled') }}
       </p>
 
       <ErrorCard
         v-if="errorText && derivedStatus === 'failed'"
         :text="errorText"
+        :t="t"
         @retry="retryTask"
       />
     </main>
     <ComposerBar
       :running="running"
-      :placeholder="derivedStatus === 'waiting' ? '输入你的选择或补充信息' : '帮我生成一张 80mm 小票'"
+      :placeholder="derivedStatus === 'waiting' ? tr('designer.assistant.placeholder.clarification') : tr('designer.assistant.placeholder.prompt')"
+      :t="t"
       @submit="submitMessage"
       @cancel="cancelTask"
     />

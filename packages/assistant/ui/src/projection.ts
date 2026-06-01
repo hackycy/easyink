@@ -1,5 +1,7 @@
 import type { AssistantResult, AssistantSourceInput } from '@easyink/assistant-capabilities'
 import type { AssistantEventRecord } from '@easyink/assistant-store'
+import type { AssistantTranslate } from './i18n'
+import { translateAssistant } from './i18n'
 
 export type ChecklistItemStatus = 'pending' | 'running' | 'done' | 'failed'
 
@@ -20,14 +22,15 @@ export interface ProjectChecklistInput {
   events?: AssistantEventRecord[]
   result?: AssistantResult
   error?: string
+  t?: AssistantTranslate
 }
 
-const CHECKLIST_PHASES: { id: string, title: string, steps: string[] }[] = [
-  { id: 'understand', title: '理解需求', steps: ['intake'] },
-  { id: 'data', title: '解析数据', steps: ['source'] },
-  { id: 'layout', title: '规划版式', steps: ['plan', 'contract', 'layout'] },
-  { id: 'compose', title: '生成模板', steps: ['compose'] },
-  { id: 'validate', title: '校验结果', steps: ['validate', 'repair', 'review'] },
+const CHECKLIST_PHASES: { id: string, titleKey: string, steps: string[] }[] = [
+  { id: 'understand', titleKey: 'designer.assistant.checklist.understand', steps: ['intake'] },
+  { id: 'data', titleKey: 'designer.assistant.checklist.data', steps: ['source'] },
+  { id: 'layout', titleKey: 'designer.assistant.checklist.layout', steps: ['plan', 'contract', 'layout'] },
+  { id: 'compose', titleKey: 'designer.assistant.checklist.compose', steps: ['compose'] },
+  { id: 'validate', titleKey: 'designer.assistant.checklist.validate', steps: ['validate', 'repair', 'review'] },
 ]
 
 /**
@@ -76,7 +79,7 @@ export function projectChecklist(input: ProjectChecklistInput): ChecklistItem[] 
     else {
       status = 'pending'
     }
-    return { id: phase.id, title: phase.title, status }
+    return { id: phase.id, title: translateAssistant(phase.titleKey, input.t), status }
   })
 }
 

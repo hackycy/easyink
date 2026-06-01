@@ -5,6 +5,7 @@ import type { DocumentSchema, DocumentSchemaInput } from '@easyink/schema'
 import type { Contribution } from '../contributions'
 import type { DesignerInteractionProvider, LocaleMessages, PreferenceProvider, StatusBarState, StoreSetup, TemplateAutoSaveOptions } from '../types'
 import { builtinDesignerMaterialBundle } from '@easyink/builtin'
+import { builtinLocales } from '@easyink/locales'
 import { onBeforeUnmount, onMounted, provide, reactive, ref, shallowRef, watch } from 'vue'
 import { provideDesignerStore } from '../composables'
 import { useTemplateAutoSave } from '../composables/use-template-autosave'
@@ -25,6 +26,7 @@ const props = defineProps<{
   preferenceProvider?: PreferenceProvider
   autoSave?: TemplateAutoSaveOptions
   locale?: LocaleMessages
+  localeCode?: string
   setupStore?: StoreSetup
   contributions?: Contribution[]
   interactionProvider?: DesignerInteractionProvider
@@ -56,7 +58,7 @@ if (props.preferenceProvider) {
 const templateAutoSave = useTemplateAutoSave(store, () => props.autoSave)
 
 if (props.locale) {
-  store.setLocale(props.locale)
+  store.setLocale(props.locale, resolveLocaleCode(props.locale))
 }
 
 if (props.dataSources) {
@@ -97,10 +99,20 @@ watch(() => store.schema, (newSchema) => {
   }
 })
 
-watch(() => props.locale, (newLocale) => {
+watch([() => props.locale, () => props.localeCode], ([newLocale]) => {
   if (newLocale)
-    store.setLocale(newLocale)
+    store.setLocale(newLocale, resolveLocaleCode(newLocale))
 })
+
+function resolveLocaleCode(locale: LocaleMessages): string | undefined {
+  if (props.localeCode)
+    return props.localeCode
+  for (const [code, messages] of Object.entries(builtinLocales)) {
+    if (messages === locale)
+      return code
+  }
+  return undefined
+}
 
 watch(() => props.interactionProvider, (newProvider) => {
   store.setInteractionProvider(newProvider)

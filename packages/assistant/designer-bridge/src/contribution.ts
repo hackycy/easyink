@@ -9,9 +9,14 @@ import {
   applySelectedAssistantElementsToDesigner,
   rollbackAssistantDesigner,
 } from './apply'
+import { assistantLocaleMessages } from './locale'
 import { createAssistantMaterialManifest } from './material-manifest'
 
 const AssistantPanel = defineAsyncComponent(() => import('./AssistantPanel.vue'))
+
+interface LocaleMessageRegistrationStore {
+  registerLocaleMessages?: (registration: typeof assistantLocaleMessages) => () => void
+}
 
 export interface CreateAssistantContributionOptions {
   id?: string
@@ -25,6 +30,8 @@ export function createAssistantContribution(options: CreateAssistantContribution
   return {
     id: options.id ?? 'easyink.assistant',
     activate(ctx) {
+      const unregisterLocaleMessages = (ctx.store as LocaleMessageRegistrationStore).registerLocaleMessages?.(assistantLocaleMessages)
+
       ctx.registerCommand({
         id: 'assistant.open',
         handler: () => {
@@ -89,7 +96,7 @@ export function createAssistantContribution(options: CreateAssistantContribution
       ctx.registerToolbarAction({
         id: 'assistant.toggle',
         icon: IconSparkles,
-        label: options.label ?? 'Assistant',
+        label: options.label ?? 'designer.assistant.toolbar.label',
         onClick: () => {
           void ctx.executeCommand('assistant.togglePanel')
         },
@@ -112,6 +119,7 @@ export function createAssistantContribution(options: CreateAssistantContribution
           get 'materialManifest'() {
             return createAssistantMaterialManifest(ctx.store)
           },
+          't': (key: string) => ctx.store.t(key),
           'onApply': (result: AssistantResult) => {
             void ctx.executeCommand('assistant.applyResult', result)
           },
@@ -132,6 +140,7 @@ export function createAssistantContribution(options: CreateAssistantContribution
 
       ctx.onDispose(() => {
         open.value = false
+        unregisterLocaleMessages?.()
       })
     },
   }

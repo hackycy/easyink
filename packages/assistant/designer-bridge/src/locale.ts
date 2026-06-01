@@ -1,0 +1,165 @@
+const zhCN = {
+  designer: {
+    assistant: {
+      title: 'EasyInk Assistant',
+      description: '描述你要的票据、标签或表单，确认后再应用到设计器。',
+      toolbar: {
+        label: 'Assistant',
+      },
+      dialog: {
+        label: 'EasyInk Assistant',
+      },
+      action: {
+        close: '关闭',
+        retry: '重试',
+        apply: '应用到设计器',
+        send: '发送',
+        stop: '停止生成',
+        reparseSource: '重新解析数据源',
+        removeSource: '删除数据源',
+        attachSourceHint: '粘贴 JSON、URL 或 curl 可自动识别数据源',
+      },
+      placeholder: {
+        prompt: '帮我生成一张 80mm 小票',
+        clarification: '输入你的选择或补充信息',
+      },
+      message: {
+        welcome: '你好，我可以帮你生成 EasyInk 模板。试试输入“帮我生成一张 80mm 小票”。',
+        applied: '已应用到设计器。',
+        cancelled: '已停止生成，你可以调整描述后重新发送。',
+      },
+      card: {
+        errorTitle: '处理失败',
+        clarificationTitle: '需要确认一下',
+        summary: '分析摘要',
+        doneTitle: '生成完成，可以应用',
+        doneDescription: '已为你生成模板，确认后应用到设计器。',
+      },
+      checklist: {
+        understand: '理解需求',
+        data: '解析数据',
+        layout: '规划版式',
+        compose: '生成模板',
+        validate: '校验结果',
+      },
+      status: {
+        pending: '等待中',
+        running: '执行中',
+        done: '已完成',
+        failed: '失败',
+      },
+      source: {
+        json: 'JSON 数据源',
+        curl: 'curl 接口',
+        http: 'HTTP 接口',
+        file: '文件数据源',
+      },
+      progress: {
+        generating: '正在生成',
+        understand: '我在梳理票据目标和关键内容。',
+        data: '正在识别数据字段，准备放到合适位置。',
+        layout: '正在安排信息层级和版面节奏。',
+        compose: '正在生成可以直接应用的设计结果。',
+        validate: '正在做最后检查，尽量减少手动调整。',
+        started: '生成流程已开始，我会持续同步进度。',
+        needsClarification: '我需要再确认几个细节，避免生成方向跑偏。',
+        scenarioSuffix: '，继续细化模板结构。',
+        confirmedGoal: '已确认主要目标，开始安排版面。',
+        contract: '正在整理字段关系，确保内容能正确填入。',
+        skeleton: '正在搭出版面的主要区域。',
+        repair: '发现细节问题，正在自动修正。',
+        issueFound: '已发现问题：{error}',
+      },
+      error: {
+        unauthorized: '请求未授权（HTTP 401），请检查登录状态或 Assistant 服务凭据后重试。',
+      },
+    },
+  },
+}
+
+const enUS = {
+  designer: {
+    assistant: {
+      title: 'EasyInk Assistant',
+      description: 'Describe the receipt, label, or form you need, then review it before applying it to the designer.',
+      toolbar: {
+        label: 'Assistant',
+      },
+      dialog: {
+        label: 'EasyInk Assistant',
+      },
+      action: {
+        close: 'Close',
+        retry: 'Retry',
+        apply: 'Apply to Designer',
+        send: 'Send',
+        stop: 'Stop generation',
+        reparseSource: 'Reparse data source',
+        removeSource: 'Remove data source',
+        attachSourceHint: 'Paste JSON, a URL, or curl to detect a data source',
+      },
+      placeholder: {
+        prompt: 'Generate an 80mm receipt',
+        clarification: 'Enter your choice or more details',
+      },
+      message: {
+        welcome: 'Hi, I can help generate EasyInk templates. Try "Generate an 80mm receipt".',
+        applied: 'Applied to the designer.',
+        cancelled: 'Generation stopped. Adjust your prompt and send again.',
+      },
+      card: {
+        errorTitle: 'Failed',
+        clarificationTitle: 'Needs Confirmation',
+        summary: 'Analysis Summary',
+        doneTitle: 'Generation complete',
+        doneDescription: 'Your template is ready. Review it, then apply it to the designer.',
+      },
+      checklist: {
+        understand: 'Understand Request',
+        data: 'Parse Data',
+        layout: 'Plan Layout',
+        compose: 'Generate Template',
+        validate: 'Validate Result',
+      },
+      status: {
+        pending: 'Pending',
+        running: 'Running',
+        done: 'Done',
+        failed: 'Failed',
+      },
+      source: {
+        json: 'JSON data source',
+        curl: 'curl endpoint',
+        http: 'HTTP endpoint',
+        file: 'File data source',
+      },
+      progress: {
+        generating: 'Generating',
+        understand: 'I am sorting out the document goal and key content.',
+        data: 'Identifying data fields and preparing their placement.',
+        layout: 'Arranging the information hierarchy and layout rhythm.',
+        compose: 'Generating a design result you can apply directly.',
+        validate: 'Running final checks to reduce manual cleanup.',
+        started: 'Generation has started. I will keep the progress updated.',
+        needsClarification: 'I need to confirm a few details to avoid going in the wrong direction.',
+        scenarioSuffix: ', continuing to refine the template structure.',
+        confirmedGoal: 'Main goal confirmed. Starting the layout.',
+        contract: 'Organizing field relationships so content can fill correctly.',
+        skeleton: 'Building the main layout regions.',
+        repair: 'Found detail issues and am fixing them automatically.',
+        issueFound: 'Issue found: {error}',
+      },
+      error: {
+        unauthorized: 'Request unauthorized (HTTP 401). Check your login state or Assistant service credentials and try again.',
+      },
+    },
+  },
+}
+
+export const assistantLocaleMessages = {
+  messages: zhCN,
+  locales: {
+    'zh-CN': zhCN,
+    'en-US': enUS,
+  },
+}

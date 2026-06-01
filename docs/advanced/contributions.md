@@ -96,6 +96,38 @@ interface ContributionContext {
 
 如果只记一条分层原则：面板和按钮负责入口，真正可复用的动作收敛成命令。
 
+`ctx.store` 还提供 contribution 文案注册能力。外部 contribution 的 UI 文案应放在 contribution 包里注册，不要追加到 `@easyink/locales`：
+
+```ts
+const unregister = ctx.store.registerLocaleMessages({
+  messages: {
+    designer: {
+      review: {
+        toolbar: { label: 'Review' },
+      },
+    },
+  },
+  locales: {
+    'zh-CN': {
+      designer: {
+        review: {
+          toolbar: { label: '审阅' },
+        },
+      },
+    },
+    'en-US': {
+      designer: {
+        review: {
+          toolbar: { label: 'Review' },
+        },
+      },
+    },
+  },
+})
+
+ctx.onDispose(unregister)
+```
+
 ## 注册命令 {#commands}
 
 命令适合放可以被多处复用的动作：
@@ -129,7 +161,7 @@ const name = await ctx.executeCommand<{ prefix: string }, string>(
 ctx.registerToolbarAction({
   id: 'demo.rename.button',
   icon: IconSparkles,
-  label: 'Rename',
+  label: 'designer.demo.rename',
   onClick: (ctx) => {
     void ctx.executeCommand('demo.renameTemplate', { prefix: 'invoice' })
   },
@@ -137,6 +169,8 @@ ctx.registerToolbarAction({
 ```
 
 按钮不要承载太长业务流程。以后面板、快捷键或自动化也要复用时，命令会让这条链路更清楚。
+
+`label` 可以是普通字符串，也可以是 locale key。Designer 渲染工具栏时会调用 `store.t(action.label)`；命中翻译就显示翻译，未命中就显示原始字符串。面向产品的 contribution 推荐使用 locale key。
 
 ## 注册面板 {#panels}
 
@@ -187,6 +221,82 @@ const asset = await ctx.pickAsset({
 ```
 
 这样 Contribution 不需要自己实现浏览器弹窗或业务资产库。宿主可以统一处理权限、审计和 UI 风格。
+
+## 注册多语言文案 {#locale-messages}
+
+Contribution 可以注册自己的语义文案：
+
+```ts
+import type { Contribution } from '@easyink/designer'
+import { IconSparkles } from '@easyink/icons'
+
+const messages = {
+  messages: {
+    designer: {
+      review: {
+        toolbar: { label: 'Review' },
+        panel: { title: 'Review Panel' },
+        action: { close: 'Close' },
+      },
+    },
+  },
+  locales: {
+    'zh-CN': {
+      designer: {
+        review: {
+          toolbar: { label: '审阅' },
+          panel: { title: '审阅面板' },
+          action: { close: '关闭' },
+        },
+      },
+    },
+    'en-US': {
+      designer: {
+        review: {
+          toolbar: { label: 'Review' },
+          panel: { title: 'Review Panel' },
+          action: { close: 'Close' },
+        },
+      },
+    },
+  },
+}
+
+export const reviewContribution: Contribution = {
+  id: 'demo.review',
+  activate(ctx) {
+    const unregisterMessages = ctx.store.registerLocaleMessages(messages)
+
+    ctx.registerToolbarAction({
+      id: 'review.toggle',
+      icon: IconSparkles,
+      label: 'designer.review.toolbar.label',
+      onClick: () => void ctx.executeCommand('review.togglePanel'),
+    })
+
+    ctx.onDispose(unregisterMessages)
+  },
+}
+```
+
+翻译解析顺序是：
+
+1. 宿主传给 `<EasyInkDesigner :locale="...">` 的语言包。
+2. 当前 `localeCode` 对应的 contribution 注册文案。
+3. contribution 注册的默认 `messages`。
+4. 原始 key。
+
+宿主永远有最高优先级，所以业务接入方可以覆盖 contribution 默认文案。`EasyInkDesigner` 对内置 `zh-CN` 和 `en-US` 会自动识别语言代码；如果你传的是自定义语言包，可以显式传 `localeCode`：
+
+```vue
+<EasyInkDesigner
+  :locale="myLocale"
+  locale-code="en-US"
+  :contributions="[reviewContribution]"
+/>
+```
+
+这套机制的边界是：`@easyink/locales` 只维护 Designer 内置文案；contribution 包维护自己的文案，并在激活时注册。
 
 ## 转发诊断 {#diagnostics}
 
@@ -256,7 +366,7 @@ export function createReviewContribution(): Contribution {
       ctx.registerToolbarAction({
         id: 'review.toggle.button',
         icon: IconSparkles,
-        label: 'Review',
+        label: 'designer.review.toolbar.label',
         onClick: () => {
           void ctx.executeCommand('review.togglePanel')
         },
@@ -299,6 +409,7 @@ ctx.registerCommand({ id: 'review.togglePanel', handler: () => {} })
 - 按钮无响应：确认 `onClick` 里调用了 `executeCommand()`。
 - 命令找不到：确认 contribution 已传给 `<EasyInkDesigner :contributions>`。
 - 面板不出现：确认 `open` 这类状态真的传进了 panel props。
+- 文案显示 key：确认 contribution 已调用 `registerLocaleMessages()`，或者宿主 `localeCode` 和注册的 `locales` key 匹配。
 - 事件残留：确认外部订阅放进了 `onDispose()`。
 
 关于 Contribution，目前知道这些就够用了。更完整的工程参考可以看 `packages/assistant/designer-bridge/src/contribution.ts`，它注册了命令、工具栏按钮和异步面板。
@@ -329,7 +440,7 @@ export function createAssistantContribution(): Contribution {
       ctx.registerToolbarAction({
         id: 'assistant.toggle',
         icon: IconSparkles,
-        label: 'AI 助手',
+        label: 'designer.assistant.toolbar.label',
         onClick: () => void ctx.executeCommand('assistant.togglePanel'),
       })
 
@@ -359,3 +470,5 @@ export function createAssistantContribution(): Contribution {
 **命令分离：** 面板 UI 不直接操作 store。所有写操作（apply、rollback、applyPatch）都收敛为命令。这样其他 contribution 或自动化脚本也能调用同一套命令。
 
 **异步面板加载：** `defineAsyncComponent` 确保 AI 面板的代码不会进入 Designer 的初始 bundle。只有用户点击按钮后才加载。
+
+**文案注册：** Assistant 的中英文文案由 `@easyink/assistant-designer-bridge` 自己维护，并在 contribution 激活时通过 `ctx.store.registerLocaleMessages()` 注册。Designer 内置语言包不需要认识 Assistant。

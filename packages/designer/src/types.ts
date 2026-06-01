@@ -59,6 +59,17 @@ export type {
 export * from '@easyink/datasource'
 export type { LocaleMessages } from '@easyink/locales'
 
+export interface LocaleMessageRegistration {
+  /**
+   * Fallback messages used when the active locale code has no specific entry.
+   * This keeps standalone contributions useful even when the host does not
+   * provide a locale code.
+   */
+  messages?: LocaleMessages
+  /** Messages keyed by locale code, for example `zh-CN` or `en-US`. */
+  locales?: Record<string, LocaleMessages>
+}
+
 // ─── Workbench State ───────────────────────────────────────────────
 
 export interface WorkbenchState {

@@ -4,12 +4,15 @@ import type { AssistantApiClient } from '@easyink/assistant-ui'
 import { AssistantWorkbench } from '@easyink/assistant-ui'
 import '@easyink/assistant-ui/index.css'
 
-defineProps<{
+type AssistantTranslate = (key: string) => string
+
+const props = defineProps<{
   open: boolean
   endpoint?: string
   apiClient?: AssistantApiClient
   currentSchema?: unknown
   materialManifest?: AssistantMaterialManifest
+  t?: AssistantTranslate
 }>()
 
 defineEmits<{
@@ -20,18 +23,29 @@ defineEmits<{
   'applyDataSource': [dataSource: NonNullable<AssistantResult['dataSource']>]
   'rollback': []
 }>()
+
+function tr(key: string): string {
+  const translated = props.t?.(key)
+  if (translated && translated !== key)
+    return translated
+  if (key === 'designer.assistant.action.close')
+    return '关闭'
+  if (key === 'designer.assistant.dialog.label')
+    return 'EasyInk Assistant'
+  return key
+}
 </script>
 
 <template>
   <Teleport to="body">
     <Transition name="easyink-assistant-drawer">
-      <div v-if="open" class="easyink-assistant-drawer" role="dialog" aria-modal="true" aria-label="EasyInk Assistant">
+      <div v-if="open" class="easyink-assistant-drawer" role="dialog" aria-modal="true" :aria-label="tr('designer.assistant.dialog.label')">
         <div class="easyink-assistant-drawer__scrim" @click="$emit('update:open', false)" />
         <aside class="easyink-assistant-drawer__panel">
           <button
             type="button"
             class="easyink-assistant-drawer__close"
-            aria-label="关闭"
+            :aria-label="tr('designer.assistant.action.close')"
             @click="$emit('update:open', false)"
           >
             <svg viewBox="0 0 16 16" width="16" height="16">
@@ -44,6 +58,7 @@ defineEmits<{
             :api-client="apiClient"
             :current-schema="currentSchema"
             :material-manifest="materialManifest"
+            :t="t"
             @apply="$emit('apply', $event)"
             @apply-patch="$emit('applyPatch', $event)"
             @apply-selected-patch="$emit('applySelectedPatch', $event)"

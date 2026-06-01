@@ -6,6 +6,8 @@
 
 Designer 需要支持外部能力注入（AI 面板、审计面板、素材市场等），但不能为每个新能力新增 prop 或 event。Contribution 机制借鉴 VS Code 的 Extension Point 思路：Designer 只暴露注册协议，外部包通过协议注入能力。
 
+Contribution 还应拥有自己的语义文案。Designer 内置语言包只维护 Designer 自身文案，外部 contribution 不应把自己的 UI 文案追加到 `@easyink/locales`。需要多语言时，contribution 在激活阶段向 `DesignerStore` 注册扩展文案。
+
 ## 23.2 核心接口
 
 ```ts
@@ -24,6 +26,21 @@ interface ContributionContext {
   pickAsset: (request: DesignerAssetPickRequest) => Promise<DesignerResolvedAsset | null>
   onDispose: (fn: () => void) => void
   onDiagnostic: (fn: (entry: Diagnostic) => void) => () => void
+}
+```
+
+`ctx.store` 同时提供 locale 扩展注册入口：
+
+```ts
+interface LocaleMessageRegistration {
+  messages?: LocaleMessages
+  locales?: Record<string, LocaleMessages>
+}
+
+class DesignerStore {
+  setLocale(locale: LocaleMessages, code?: string): void
+  registerLocaleMessages(registration: LocaleMessageRegistration): () => void
+  t(key: string): string
 }
 ```
 
@@ -131,7 +148,66 @@ Contribution 不应直接调用浏览器原生 API。破坏性确认和资产选
 
 这样宿主可以统一处理权限、审计和 UI 风格。
 
-## 23.7 生命周期
+## 23.7 语义文案与 i18n 注册
+
+Contribution 的文案归属 contribution 自己。推荐每个 contribution 包内维护自己的 `locale.ts`，并在 `activate()` 中注册：
+
+```ts
+const reviewMessages = {
+  messages: {
+    designer: {
+      review: {
+        toolbar: { label: 'Review' },
+        panel: { title: 'Review Panel' },
+      },
+    },
+  },
+  locales: {
+    'zh-CN': {
+      designer: {
+        review: {
+          toolbar: { label: '审阅' },
+          panel: { title: '审阅面板' },
+        },
+      },
+    },
+    'en-US': {
+      designer: {
+        review: {
+          toolbar: { label: 'Review' },
+          panel: { title: 'Review Panel' },
+        },
+      },
+    },
+  },
+}
+
+activate(ctx) {
+  const unregisterMessages = ctx.store.registerLocaleMessages(reviewMessages)
+
+  ctx.registerToolbarAction({
+    id: 'review.toggle',
+    icon: IconSparkles,
+    label: 'designer.review.toolbar.label',
+    onClick: () => void ctx.executeCommand('review.togglePanel'),
+  })
+
+  ctx.onDispose(unregisterMessages)
+}
+```
+
+`store.t(key)` 的解析优先级：
+
+1. 宿主传入的 `locale`。
+2. 当前 `localeCode` 对应的 contribution 注册文案。
+3. contribution 注册的默认 `messages`。
+4. 原始 key。
+
+这个优先级保证宿主可以覆盖任意 contribution 文案，同时 contribution 不需要修改 `@easyink/locales` 就能交付默认中英文文案。`EasyInkDesigner` 会对内置 `zh-CN` / `en-US` locale 自动推断 `localeCode`；宿主使用自定义语言包时可以显式传入 `localeCode`。
+
+Toolbar action 的 `label` 建议使用 locale key。Designer 渲染工具栏时会通过 `store.t(action.label)` 转换，未命中时显示原始字符串。
+
+## 23.8 生命周期
 
 ```
 EasyInkDesigner mount
@@ -148,13 +224,16 @@ EasyInkDesigner unmount
 
 嵌入式场景、路由切换和 HMR 都可能让 Designer 反复挂载。Contribution 不应假设自己会一直存在。
 
-## 23.8 命名空间约定
+如果 contribution 注册了 locale messages，应把 `registerLocaleMessages()` 返回的取消函数放进 `onDispose()`，避免 Designer 反复挂载后保留过期文案。
+
+## 23.9 命名空间约定
 
 - 命令 id 使用 `namespace.action` 格式，如 `assistant.open`、`review.togglePanel`
 - 面板 id 使用 `namespace.panel` 格式
 - 工具栏 id 使用 `namespace.action.button` 格式
+- 文案 key 使用 `designer.namespace.*` 格式，如 `designer.assistant.toolbar.label`
 
-## 23.9 与物料扩展的区别
+## 23.10 与物料扩展的区别
 
 | 维度 | 物料扩展 | Contribution |
 |------|---------|-------------|
@@ -163,12 +242,13 @@ EasyInkDesigner unmount
 | 依赖方向 | 物料包 → designer 类型 | contribution 包 → designer 类型 |
 | 典型用途 | 价格签、图表、自定义容器 | AI 面板、审计面板、素材市场 |
 
-## 23.10 实际应用：Assistant Contribution
+## 23.11 实际应用：Assistant Contribution
 
 `@easyink/assistant-designer-bridge` 是 Contribution 机制的典型应用，它注册了：
 
 - 9 个命令（open、close、togglePanel、applyResult、applyPatch、applySelectedElements、applyDataSource、rollback、attachCurrentSelection）
 - 1 个工具栏按钮（AI 助手开关）
 - 1 个异步面板（AssistantPanel，通过 `defineAsyncComponent` 按需加载）
+- 1 组 locale messages（`zh-CN`、`en-US` 和默认 fallback）
 
 面板通过响应式 getter 传递 `materialManifest`（含物料 knowledge 字段），使 AI 能实时感知已注册物料的能力和约束。详见 [25-ai-assistant](./25-ai-assistant.md)。

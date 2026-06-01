@@ -83,6 +83,25 @@ describe('designer store schema initialization', () => {
     expect(factory).toHaveBeenCalledTimes(1)
   })
 
+  it('resolves registered locale messages after host locale overrides', () => {
+    const store = new DesignerStore()
+
+    store.setLocale({ plugin: { title: 'Host Title' } }, 'en-US')
+    const unregister = store.registerLocaleMessages({
+      messages: { plugin: { title: 'Default Title', action: '默认操作' } },
+      locales: {
+        'en-US': { plugin: { title: 'Registered Title', action: 'Registered Action' } },
+      },
+    })
+
+    expect(store.t('plugin.title')).toBe('Host Title')
+    expect(store.t('plugin.action')).toBe('Registered Action')
+
+    unregister()
+
+    expect(store.t('plugin.action')).toBe('plugin.action')
+  })
+
   it('delegates font loading while preserving font manager compatibility', async () => {
     const store = new DesignerStore()
     const provider: FontProvider = {

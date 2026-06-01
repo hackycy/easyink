@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import type { AssistantSourceInput } from '@easyink/assistant-capabilities'
+import type { AssistantTranslate } from '../i18n'
 import { IconClose, IconDatabase, IconFileText, IconLoader, IconSend, IconWifi } from '@easyink/icons'
 import { computed, ref } from 'vue'
+import { translateAssistant } from '../i18n'
 import { inferSourceFromText } from '../projection'
 
 const props = defineProps<{
   running?: boolean
   placeholder?: string
+  t?: AssistantTranslate
 }>()
 
 const emit = defineEmits<{
@@ -21,13 +24,17 @@ const sourceLabel = computed(() => {
   if (!source.value)
     return ''
   if (source.value.kind === 'json')
-    return 'JSON 数据源'
+    return tr('designer.assistant.source.json')
   if (source.value.kind === 'curl')
-    return 'curl 接口'
+    return tr('designer.assistant.source.curl')
   if (source.value.kind === 'http')
-    return 'HTTP 接口'
-  return '文件数据源'
+    return tr('designer.assistant.source.http')
+  return tr('designer.assistant.source.file')
 })
+
+function tr(key: string): string {
+  return translateAssistant(key, props.t)
+}
 
 function submit() {
   const prompt = text.value.trim()
@@ -77,17 +84,17 @@ const sourceIcon = computed(() => {
       <div v-if="source" class="assistant-composer__attachment">
         <component :is="sourceIcon" :size="15" stroke-width="1.8" />
         <span>{{ sourceLabel }}</span>
-        <button type="button" :disabled="running" title="重新解析数据源" aria-label="重新解析数据源" @click="reparseSource">
+        <button type="button" :disabled="running" :title="tr('designer.assistant.action.reparseSource')" :aria-label="tr('designer.assistant.action.reparseSource')" @click="reparseSource">
           <IconLoader :size="13" stroke-width="1.9" />
         </button>
-        <button type="button" :disabled="running" title="删除数据源" aria-label="删除数据源" @click="source = undefined">
+        <button type="button" :disabled="running" :title="tr('designer.assistant.action.removeSource')" :aria-label="tr('designer.assistant.action.removeSource')" @click="source = undefined">
           <IconClose :size="13" stroke-width="2" />
         </button>
       </div>
       <textarea
         ref="textarea"
         v-model="text"
-        :placeholder="placeholder ?? '帮我生成一张 80mm 小票'"
+        :placeholder="placeholder ?? tr('designer.assistant.placeholder.prompt')"
         :disabled="running"
         rows="2"
         @paste="onPaste"
@@ -98,8 +105,8 @@ const sourceIcon = computed(() => {
           type="button"
           class="assistant-composer__icon-btn"
           :disabled="running"
-          title="粘贴 JSON、URL 或 curl 可自动识别数据源"
-          aria-label="粘贴 JSON、URL 或 curl 可自动识别数据源"
+          :title="tr('designer.assistant.action.attachSourceHint')"
+          :aria-label="tr('designer.assistant.action.attachSourceHint')"
           @click="focusForReplace"
         >
           <IconDatabase :size="16" stroke-width="1.8" />
@@ -108,8 +115,8 @@ const sourceIcon = computed(() => {
           v-if="running"
           type="button"
           class="assistant-composer__send assistant-composer__send--stop"
-          title="停止生成"
-          aria-label="停止生成"
+          :title="tr('designer.assistant.action.stop')"
+          :aria-label="tr('designer.assistant.action.stop')"
           @click="$emit('cancel')"
         >
           <span />
@@ -119,8 +126,8 @@ const sourceIcon = computed(() => {
           type="button"
           class="assistant-composer__send"
           :disabled="!text.trim()"
-          title="发送"
-          aria-label="发送"
+          :title="tr('designer.assistant.action.send')"
+          :aria-label="tr('designer.assistant.action.send')"
           @click="submit"
         >
           <IconSend :size="16" stroke-width="2" />

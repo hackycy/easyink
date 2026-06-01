@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { AssistantMaterialManifest, AssistantPatchOperation, AssistantResult } from '@easyink/assistant-capabilities'
 import type { AssistantApiClient } from '../api'
+import type { AssistantTranslate } from '../i18n'
 import ConversationPanel from './ConversationPanel.vue'
 
 defineProps<{
@@ -8,6 +9,7 @@ defineProps<{
   apiClient?: AssistantApiClient
   currentSchema?: unknown
   materialManifest?: AssistantMaterialManifest
+  t?: AssistantTranslate
 }>()
 
 defineEmits<{
@@ -25,6 +27,7 @@ defineEmits<{
     :api-client="apiClient"
     :current-schema="currentSchema"
     :material-manifest="materialManifest"
+    :t="t"
     @apply="$emit('apply', $event)"
     @apply-patch="$emit('applyPatch', $event)"
     @apply-selected-patch="$emit('applySelectedPatch', $event)"
