@@ -76,6 +76,8 @@ jobs:
       pages: write
       id-token: write
     uses: ./.github/workflows/deploy-pages.yml
+    secrets:
+      EASYINK_ASSISTANT_SERVER_URL: ${{ secrets.EASYINK_ASSISTANT_SERVER_URL }}
 
   publish-orchestrator-image:
     needs:
