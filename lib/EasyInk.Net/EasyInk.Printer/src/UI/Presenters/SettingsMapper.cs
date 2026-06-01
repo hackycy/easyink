@@ -38,7 +38,6 @@ internal static class SettingsMapper
                 ? HostConfig.DefaultPrintDebugArtifactsDir
                 : config.PrintDebugArtifactsDir!,
             RenderEnabled = config.RenderEnabled,
-            RenderBrowserKind = RenderBrowserKindCatalog.NormalizeKey(config.RenderBrowserKind),
             RenderBrowserVersion = RenderBrowserVersionCatalog.NormalizeKey(config.RenderBrowserVersion),
             RenderHostPath = HostConfig.ResolveRenderHostPath(config.RenderHostPath!),
             RenderBrowserDir = HostConfig.ResolveRenderBrowserDir(config.RenderBrowserDir!),
@@ -97,7 +96,6 @@ internal static class SettingsMapper
         var printDebugArtifactsDirValue = (model.PrintDebugArtifactsDir ?? string.Empty).Trim();
         var renderHostPathValue = (model.RenderHostPath ?? string.Empty).Trim();
         var renderBrowserVersionValue = RenderBrowserVersionCatalog.NormalizeKey(model.RenderBrowserVersion);
-        var renderBrowserKindValue = RenderBrowserKindCatalog.NormalizeKey(model.RenderBrowserKind);
         var renderBrowserDirValue = (model.RenderBrowserDir ?? string.Empty).Trim();
         var renderBrowserHeadlessMode = RenderHeadlessModeCatalog.NormalizeKey(model.RenderBrowserHeadlessMode);
         var renderLogDirValue = (model.RenderLogDir ?? string.Empty).Trim();
@@ -141,7 +139,6 @@ internal static class SettingsMapper
         config.RenderHostPath = string.IsNullOrWhiteSpace(renderHostPathValue)
             ? HostConfig.DefaultRenderHostPath
             : renderHostPathValue;
-        config.RenderBrowserKind = renderBrowserKindValue;
         config.RenderBrowserVersion = renderBrowserVersionValue;
         config.RenderBrowserDir = string.Equals(renderBrowserDirValue, HostConfig.DefaultRenderBrowserCacheDir, StringComparison.OrdinalIgnoreCase)
             ? null

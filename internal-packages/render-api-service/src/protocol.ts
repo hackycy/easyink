@@ -92,7 +92,6 @@ export interface RenderDiagnostics {
   id?: string
   requestId: string
   hostVersion: string
-  browserKind?: string
   browserName?: string
   browserVersion: string
   protocolVersion: string
@@ -117,7 +116,6 @@ export interface RenderRuntimeOptions {
   noDaemon?: boolean
   forceRestartDaemon?: boolean
   disableSandbox?: boolean
-  browserKind?: string
   browserPath?: string
   headlessMode?: string
   profileRoot?: string

@@ -136,8 +136,6 @@ internal sealed class RenderClient
         AppendArg(args, "--json");
         AppendArg(args, "--diagnostics-out");
         AppendArg(args, diagnosticsPath);
-        AppendArg(args, "--browser-kind");
-        AppendArg(args, runtime.BrowserKind);
         AppendArg(args, "--browser-path");
         AppendArg(args, runtime.BrowserPath);
         AppendArg(args, "--headless-mode");

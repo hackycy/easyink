@@ -32,7 +32,7 @@ func TestValidateChromiumUserAgentRequiresVersion80OrNewer(t *testing.T) {
 		t.Fatal("expected non-Chromium user agent to be rejected")
 	}
 	if err := validateChromiumUserAgent("Mozilla/5.0 Chrome/123.0.0.0 Safari/537.36 Edg/123.0.0.0"); err == nil {
-		t.Fatal("expected Microsoft Edge user agent to be rejected")
+		t.Fatal("expected non-Chromium runtime user agent to be rejected")
 	}
 }
 

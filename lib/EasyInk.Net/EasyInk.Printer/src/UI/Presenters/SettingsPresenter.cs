@@ -84,7 +84,6 @@ internal sealed class SettingsPresenter : IDisposable
 
         var tempConfig = new HostConfig
         {
-            RenderBrowserKind = RenderBrowserKindCatalog.NormalizeKey(model.RenderBrowserKind),
             RenderBrowserVersion = RenderBrowserVersionCatalog.NormalizeKey(model.RenderBrowserVersion),
             RenderBrowserDir = HostConfig.ResolveRenderBrowserDir(model.RenderBrowserDir),
             RenderRequestTimeoutMs = model.RenderRequestTimeoutMs

@@ -3,7 +3,6 @@ namespace EasyInk.Printer.Services;
 internal sealed class RenderRuntimeOptions
 {
     public string HostPath { get; set; } = string.Empty;
-    public string BrowserKind { get; set; } = "chrome-for-testing";
     public string BrowserPath { get; set; } = string.Empty;
     public string HeadlessMode { get; set; } = "auto";
     public string ProfileRoot { get; set; } = string.Empty;

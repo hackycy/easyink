@@ -96,7 +96,6 @@ function loadDefaultRuntime(env: Env): RenderRuntimeOptions {
     noDaemon: readOptionalBoolean(env, 'EASYINK_RENDER_NO_DAEMON'),
     forceRestartDaemon: readOptionalBoolean(env, 'EASYINK_RENDER_FORCE_RESTART_DAEMON'),
     disableSandbox: readOptionalBoolean(env, 'EASYINK_RENDER_DISABLE_SANDBOX'),
-    browserKind: readString(env, 'EASYINK_RENDER_BROWSER_KIND'),
     browserPath: readString(env, 'EASYINK_RENDER_BROWSER_PATH'),
     headlessMode: readString(env, 'EASYINK_RENDER_HEADLESS_MODE'),
     profileRoot: readString(env, 'EASYINK_RENDER_PROFILE_ROOT'),

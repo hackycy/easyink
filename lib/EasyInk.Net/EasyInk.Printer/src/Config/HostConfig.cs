@@ -107,13 +107,12 @@ public class HostConfig
 
     public bool RenderEnabled { get; set; } = false;
     public string? RenderHostPath { get; set; } = null;
-    public string? RenderBrowserKind { get; set; } = RenderBrowserKindCatalog.AutoKey;
     public string? RenderBrowserExecutablePath { get; set; }
     public string? RenderBrowserHeadlessMode { get; set; } = RenderHeadlessModeCatalog.AutoKey;
     public string? RenderBrowserDir { get; set; }
     public string? RenderBrowserArchivePath { get; set; }
     public string? RenderBrowserDownloadUrl { get; set; }
-    public string? RenderBrowserVersion { get; set; } = RenderBrowserVersionCatalog.AutoKey;
+    public string? RenderBrowserVersion { get; set; } = RenderBrowserVersionCatalog.StableKey;
     public string? RenderManifestPath { get; set; }
     public string? RenderProfileRoot { get; set; }
     public string? RenderTempDir { get; set; }
@@ -276,7 +275,7 @@ public class HostConfig
 
     public static string GetRenderBrowserVersionDir(string browserDir, string? versionKey)
     {
-        var normalizedKey = RenderBrowserVersionCatalog.ResolveEffectiveKey(versionKey);
+        var normalizedKey = RenderBrowserVersionCatalog.NormalizeKey(versionKey);
         return Path.Combine(ResolveRenderBrowserDir(browserDir), "versions", SanitizePathSegment(normalizedKey));
     }
 

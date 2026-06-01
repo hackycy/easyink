@@ -1,5 +1,4 @@
 using System;
-using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -29,7 +28,6 @@ internal sealed class SettingsView : UserControl, ISettingsView, IActivatableTab
     private readonly NoFocusCheckBox _chkRenderEnabled;
     private readonly TextBox _txtRenderHostPath;
     private readonly Label _lblRenderHostVersion;
-    private readonly ComboBox _cmbRenderBrowserKind;
     private readonly ComboBox _cmbRenderBrowserVersion;
     private readonly Button _btnRenderBrowserDownload;
     private readonly ComboBox _cmbRenderHeadlessMode;
@@ -238,14 +236,6 @@ internal sealed class SettingsView : UserControl, ISettingsView, IActivatableTab
             Anchor = AnchorStyles.Left,
             Margin = new Padding(0, 6, 0, 0)
         };
-        _cmbRenderBrowserKind = new ComboBox
-        {
-            Width = 180,
-            DropDownStyle = ComboBoxStyle.DropDownList,
-            Anchor = AnchorStyles.Left
-        };
-        foreach (var option in RenderBrowserKindCatalog.Options)
-            _cmbRenderBrowserKind.Items.Add(option);
         _cmbRenderBrowserVersion = new ComboBox
         {
             Width = 260,
@@ -322,9 +312,8 @@ internal sealed class SettingsView : UserControl, ISettingsView, IActivatableTab
         };
 
         UiFactory.AddSettingWideRow(renderPanel, _chkRenderEnabled);
-    UiFactory.AddSettingRow(renderPanel, LangManager.Get("Settings_RenderHostPath"), pnlRenderHostPath);
-    UiFactory.AddSettingRow(renderPanel, LangManager.Get("Settings_RenderHostVersion"), _lblRenderHostVersion);
-        UiFactory.AddSettingRow(renderPanel, LangManager.Get("Settings_RenderBrowserKind"), _cmbRenderBrowserKind);
+        UiFactory.AddSettingRow(renderPanel, LangManager.Get("Settings_RenderHostPath"), pnlRenderHostPath);
+        UiFactory.AddSettingRow(renderPanel, LangManager.Get("Settings_RenderHostVersion"), _lblRenderHostVersion);
         UiFactory.AddSettingRow(renderPanel, LangManager.Get("Settings_RenderBrowserVersion"), _cmbRenderBrowserVersion, _btnRenderBrowserDownload);
         UiFactory.AddSettingRow(renderPanel, LangManager.Get("Settings_RenderHeadlessMode"), _cmbRenderHeadlessMode);
         UiFactory.AddSettingRow(renderPanel, LangManager.Get("Settings_RenderBrowserDir"), _txtRenderBrowserDir, btnBrowseRenderBrowserDir);
@@ -478,7 +467,6 @@ internal sealed class SettingsView : UserControl, ISettingsView, IActivatableTab
         _chkRenderEnabled.Checked = model.RenderEnabled;
         _txtRenderHostPath.Text = model.RenderHostPath;
         _lblRenderHostVersion.Text = model.RenderHostVersion;
-        SelectRenderBrowserKind(model.RenderBrowserKind);
         SelectRenderBrowserVersion(model.RenderBrowserVersion);
         _txtRenderBrowserDir.Text = model.RenderBrowserDir;
         SelectRenderHeadlessMode(model.RenderBrowserHeadlessMode);
@@ -518,7 +506,6 @@ internal sealed class SettingsView : UserControl, ISettingsView, IActivatableTab
             PrintDebugArtifactsDir = _txtPrintDebugArtifactsDir.Text ?? string.Empty,
             RenderEnabled = _chkRenderEnabled.Checked,
             RenderHostPath = _txtRenderHostPath.Text ?? string.Empty,
-            RenderBrowserKind = GetSelectedRenderBrowserKindKey(),
             RenderBrowserVersion = GetSelectedRenderBrowserVersionKey(),
             RenderBrowserDir = _txtRenderBrowserDir.Text ?? string.Empty,
             RenderBrowserHeadlessMode = GetSelectedRenderHeadlessModeKey(),
@@ -758,9 +745,6 @@ internal sealed class SettingsView : UserControl, ISettingsView, IActivatableTab
 
     private async Task DownloadRenderBrowser()
     {
-        var selectedKey = GetSelectedRenderBrowserVersionKey();
-        var effectiveKey = RenderBrowserVersionCatalog.ResolveEffectiveKey(selectedKey);
-        var option = RenderBrowserVersionCatalog.GetOption(effectiveKey);
         RenderBrowserDownloadProgressDialog? progressDialog = null;
 
         _btnRenderBrowserDownload.Enabled = false;
@@ -781,19 +765,6 @@ internal sealed class SettingsView : UserControl, ISettingsView, IActivatableTab
         catch (Exception ex)
         {
             progressDialog?.MarkFailed();
-            if (!option.SupportsAutomaticDownload)
-            {
-                var dir = GetSelectedRenderBrowserInstallDir();
-                Directory.CreateDirectory(dir);
-                MessageBox.Show(
-                    LangManager.Get("Prompt_RenderBrowserManualInstall", option.DisplayName, dir),
-                    LangManager.Get("Common_Info"),
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
-                OpenRenderBrowserDir(dir);
-                return;
-            }
-
             MessageBox.Show(
                 LangManager.Get("Error_RenderBrowserDownloadFailed", ex.Message),
                 LangManager.Get("Common_Error"),
@@ -841,17 +812,6 @@ internal sealed class SettingsView : UserControl, ISettingsView, IActivatableTab
         }
     }
 
-    private void OpenRenderBrowserDir(string? dir = null)
-    {
-        dir = string.IsNullOrWhiteSpace(dir) ? GetSelectedRenderBrowserDir() : dir;
-        Directory.CreateDirectory(dir);
-        Process.Start(new ProcessStartInfo
-        {
-            FileName = dir,
-            UseShellExecute = true
-        });
-    }
-
     private void SelectRenderBrowserVersion(string? versionKey)
     {
         var normalizedKey = RenderBrowserVersionCatalog.NormalizeKey(versionKey);
@@ -866,22 +826,6 @@ internal sealed class SettingsView : UserControl, ISettingsView, IActivatableTab
         }
 
         _cmbRenderBrowserVersion.SelectedIndex = 0;
-    }
-
-    private void SelectRenderBrowserKind(string? kind)
-    {
-        var normalizedKey = RenderBrowserKindCatalog.NormalizeKey(kind);
-        for (var i = 0; i < _cmbRenderBrowserKind.Items.Count; i++)
-        {
-            if (_cmbRenderBrowserKind.Items[i] is RenderBrowserKindOption option &&
-                string.Equals(option.Key, normalizedKey, StringComparison.OrdinalIgnoreCase))
-            {
-                _cmbRenderBrowserKind.SelectedIndex = i;
-                return;
-            }
-        }
-
-        _cmbRenderBrowserKind.SelectedIndex = 0;
     }
 
     private void SelectRenderHeadlessMode(string? mode)
@@ -900,16 +844,10 @@ internal sealed class SettingsView : UserControl, ISettingsView, IActivatableTab
         _cmbRenderHeadlessMode.SelectedIndex = 0;
     }
 
-    private string GetSelectedRenderBrowserKindKey()
-    {
-        return (_cmbRenderBrowserKind.SelectedItem as RenderBrowserKindOption)?.Key
-               ?? RenderBrowserKindCatalog.AutoKey;
-    }
-
     private string GetSelectedRenderBrowserVersionKey()
     {
         return (_cmbRenderBrowserVersion.SelectedItem as RenderBrowserVersionOption)?.Key
-               ?? RenderBrowserVersionCatalog.AutoKey;
+               ?? RenderBrowserVersionCatalog.StableKey;
     }
 
     private string GetSelectedRenderHeadlessModeKey()
@@ -923,8 +861,4 @@ internal sealed class SettingsView : UserControl, ISettingsView, IActivatableTab
         return HostConfig.ResolveRenderBrowserDir(_txtRenderBrowserDir.Text);
     }
 
-    private string GetSelectedRenderBrowserInstallDir()
-    {
-        return HostConfig.GetRenderBrowserVersionDir(GetSelectedRenderBrowserDir(), GetSelectedRenderBrowserVersionKey());
-    }
 }

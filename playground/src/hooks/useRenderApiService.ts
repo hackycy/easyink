@@ -11,7 +11,6 @@ export interface RenderApiServiceConfig {
   noDaemon: boolean
   disableSandbox: boolean
   requestTimeoutMs?: number
-  browserKind?: string
   browserPath?: string
 }
 
@@ -50,7 +49,6 @@ function normalizeConfig(input: Partial<RenderApiServiceConfig> = {}): RenderApi
     noDaemon: Boolean(input.noDaemon),
     disableSandbox: Boolean(input.disableSandbox),
     requestTimeoutMs,
-    browserKind: normalizeOptionalString(input.browserKind),
     browserPath: normalizeOptionalString(input.browserPath),
   }
 }
@@ -95,7 +93,6 @@ function buildRuntime(config: RenderApiServiceConfig): RenderRuntimeOptions | un
     noDaemon: config.noDaemon || undefined,
     disableSandbox: config.disableSandbox || undefined,
     requestTimeoutMs: config.requestTimeoutMs,
-    browserKind: config.browserKind,
     browserPath: config.browserPath,
   }
   return Object.values(runtime).some(value => value !== undefined) ? runtime : undefined

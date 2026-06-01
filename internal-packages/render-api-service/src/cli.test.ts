@@ -33,7 +33,7 @@ describe('render API env config', () => {
       EASYINK_RENDER_API_MAX_BODY_BYTES: '1048576',
       EASYINK_RENDER_NO_DAEMON: '1',
       EASYINK_RENDER_DISABLE_SANDBOX: 'false',
-      EASYINK_RENDER_BROWSER_KIND: 'headless-shell',
+      EASYINK_RENDER_BROWSER_PATH: '/usr/bin/chromium',
       EASYINK_RENDER_MAX_QUEUE_SIZE: '0',
       EASYINK_RENDER_REQUEST_TIMEOUT_MS: '5000',
       EASYINK_RENDER_IDLE_TIMEOUT_MS: '0',
@@ -49,7 +49,7 @@ describe('render API env config', () => {
       defaultRuntime: {
         noDaemon: true,
         disableSandbox: false,
-        browserKind: 'headless-shell',
+        browserPath: '/usr/bin/chromium',
         maxQueueSize: 0,
         requestTimeoutMs: 5000,
         idleTimeoutMs: 0,
@@ -70,10 +70,10 @@ describe('render API env config', () => {
       await writeFile(join(envDir, '.env'), [
         'EASYINK_RENDER_API_HOST=from-env',
         'EASYINK_RENDER_API_PORT=18082',
-        'EASYINK_RENDER_BROWSER_KIND=chromium',
+        'EASYINK_RENDER_BROWSER_PATH=/usr/bin/chromium',
       ].join('\n'))
       await writeFile(join(envDir, '.env.local'), 'EASYINK_RENDER_API_PORT=18083\n')
-      await writeFile(join(envDir, '.env.test'), 'EASYINK_RENDER_BROWSER_KIND=headless-shell\n')
+      await writeFile(join(envDir, '.env.test'), 'EASYINK_RENDER_BROWSER_PATH=/opt/chromium/chrome\n')
       await writeFile(join(envDir, '.env.test.local'), 'EASYINK_RENDER_API_HOST=from-test-local\n')
 
       const env = loadRenderApiEnv({
@@ -88,7 +88,7 @@ describe('render API env config', () => {
         host: 'from-test-local',
         port: 19000,
         defaultRuntime: {
-          browserKind: 'headless-shell',
+          browserPath: '/opt/chromium/chrome',
         },
       })
     }
@@ -127,8 +127,7 @@ describe('render CLI adapter', () => {
       noDaemon: true,
       forceRestartDaemon: true,
       disableSandbox: true,
-      browserKind: 'headless-shell',
-      browserPath: '/bin/headless-shell',
+      browserPath: '/usr/bin/chromium',
       maxConcurrency: 2,
       requestTimeoutMs: 5000,
     })).toEqual([
@@ -143,10 +142,8 @@ describe('render CLI adapter', () => {
       '--no-daemon',
       '--force-restart-daemon',
       '--disable-sandbox',
-      '--browser-kind',
-      'headless-shell',
       '--browser-path',
-      '/bin/headless-shell',
+      '/usr/bin/chromium',
       '--max-concurrency',
       '2',
       '--request-timeout-ms',

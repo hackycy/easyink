@@ -64,10 +64,6 @@ function handleRequestTimeoutChange(value: string | number) {
   renderApi.updateConfig({ requestTimeoutMs: Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : undefined })
 }
 
-function handleBrowserKindChange(value: string | number) {
-  renderApi.updateConfig({ browserKind: String(value).trim() || undefined })
-}
-
 function handleBrowserPathChange(value: string | number) {
   renderApi.updateConfig({ browserPath: String(value).trim() || undefined })
 }
@@ -188,25 +184,14 @@ onMounted(() => {
             />
           </div>
 
-          <div class="grid gap-3 sm:grid-cols-2">
-            <div class="space-y-1.5">
-              <Label>浏览器类型（可选）</Label>
-              <Input
-                :model-value="renderApi.config.browserKind ?? ''"
-                :disabled="!renderApi.enabled.value"
-                placeholder="headless-shell"
-                @update:model-value="handleBrowserKindChange"
-              />
-            </div>
-            <div class="space-y-1.5">
-              <Label>浏览器路径（可选）</Label>
-              <Input
-                :model-value="renderApi.config.browserPath ?? ''"
-                :disabled="!renderApi.enabled.value"
-                placeholder="/path/to/headless-shell"
-                @update:model-value="handleBrowserPathChange"
-              />
-            </div>
+          <div class="space-y-1.5">
+            <Label>Chromium 路径（可选）</Label>
+            <Input
+              :model-value="renderApi.config.browserPath ?? ''"
+              :disabled="!renderApi.enabled.value"
+              placeholder="/path/to/chromium"
+              @update:model-value="handleBrowserPathChange"
+            />
           </div>
         </section>
       </div>

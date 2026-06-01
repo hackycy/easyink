@@ -24,6 +24,16 @@ public class RenderClientTests
     }
 
     [Fact]
+    public void BuildArguments_UsesChromiumPathWithoutTypeFlag()
+    {
+        var args = RenderClient.BuildArgumentsForTest(CreateRuntime(), "request.json", "out.pdf", "diagnostics.json");
+
+        Assert.Contains("--browser-path", args);
+        Assert.Contains("/bin/chromium", args);
+        Assert.DoesNotContain("--browser-" + "kind", args);
+    }
+
+    [Fact]
     public void BuildRenderRequest_PreservesPreferCssPageSize()
     {
         var client = new RenderClient(new HostConfig());
@@ -51,8 +61,7 @@ public class RenderClientTests
     {
         return new RenderRuntimeOptions
         {
-            BrowserKind = "headless-shell",
-            BrowserPath = "/bin/headless-shell",
+            BrowserPath = "/bin/chromium",
             HeadlessMode = "auto",
             ProfileRoot = "/tmp/profile",
             TempDir = "/tmp/temp",

@@ -21,7 +21,6 @@ internal sealed class RenderDaemonStatus
     public RenderDaemonStateKind Kind { get; set; }
     public string Message { get; set; } = string.Empty;
     public int? Pid { get; set; }
-    public string BrowserKind { get; set; } = string.Empty;
     public string BrowserName { get; set; } = string.Empty;
     public string BrowserVersion { get; set; } = string.Empty;
     public bool BrowserReady { get; set; }
@@ -110,7 +109,6 @@ internal sealed class RenderDaemonService
                 Kind = RenderDaemonStateKind.Running,
                 Message = LangManager.Get("Dashboard_Status_Running"),
                 Pid = pid,
-                BrowserKind = browser?.Value<string>("kind") ?? string.Empty,
                 BrowserVersion = browser?.Value<string>("version") ?? string.Empty
             };
         }
@@ -213,7 +211,6 @@ internal sealed class RenderDaemonService
             Kind = ready ? RenderDaemonStateKind.Running : RenderDaemonStateKind.Error,
             Message = ready ? LangManager.Get("Dashboard_Status_Running") : LangManager.Get("Dashboard_Status_Error"),
             Pid = root.Value<int?>("pid"),
-            BrowserKind = browser?.Value<string>("kind") ?? string.Empty,
             BrowserName = browser?.Value<string>("name") ?? string.Empty,
             BrowserVersion = browser?.Value<string>("version") ?? string.Empty,
             BrowserReady = ready,
@@ -231,8 +228,6 @@ internal sealed class RenderDaemonService
         var args = new StringBuilder();
         AppendArg(args, "daemon");
         AppendArg(args, command);
-        AppendArg(args, "--browser-kind");
-        AppendArg(args, runtime.BrowserKind);
         AppendArg(args, "--browser-path");
         AppendArg(args, runtime.BrowserPath);
         AppendArg(args, "--headless-mode");

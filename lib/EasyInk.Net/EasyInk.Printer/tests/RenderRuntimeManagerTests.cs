@@ -10,22 +10,22 @@ namespace EasyInk.Printer.Tests;
 public class RenderRuntimeManagerTests
 {
     [Fact]
-    public void ExtractBrowserArchive_FindsChromeForTestingChromeExe()
+    public void ExtractBrowserArchive_FindsChromiumChromeExe()
     {
         var tempRoot = CreateTempRoot();
         try
         {
-            var archivePath = Path.Combine(tempRoot, "chrome-win64.zip");
+            var archivePath = Path.Combine(tempRoot, "chrome-win.zip");
             var targetRoot = Path.Combine(tempRoot, "versions", "stable");
-            CreateZip(archivePath, "chrome-win64/chrome.exe", "browser");
+            CreateZip(archivePath, "chrome-win/chrome.exe", "browser");
 
             var browserPath = RenderRuntimeManager.ExtractBrowserArchive(
                 archivePath,
                 manifest: null,
-                executableHints: new[] { "chrome-win64/chrome.exe", "chrome.exe" },
+                executableHints: new[] { "chrome-win/chrome.exe", "chrome.exe" },
                 targetRoot: targetRoot);
 
-            Assert.EndsWith(Path.Combine("chrome-win64", "chrome.exe"), browserPath, StringComparison.OrdinalIgnoreCase);
+            Assert.EndsWith(Path.Combine("chrome-win", "chrome.exe"), browserPath, StringComparison.OrdinalIgnoreCase);
             Assert.True(File.Exists(browserPath));
         }
         finally

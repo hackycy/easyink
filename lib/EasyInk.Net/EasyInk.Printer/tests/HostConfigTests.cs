@@ -85,13 +85,11 @@ public class HostConfigTests
     }
 
     [Fact]
-    public void GetRenderBrowserVersionDir_Auto_UsesRecommendedVersion()
+    public void GetRenderBrowserVersionDir_EmptyVersion_UsesStableVersion()
     {
-        var expectedKey = RenderBrowserVersionCatalog.GetRecommendedKey();
-
         Assert.Equal(
-            Path.Combine(HostConfig.DefaultRenderBrowserVersionsDir, expectedKey),
-            HostConfig.GetRenderBrowserVersionDir(RenderBrowserVersionCatalog.AutoKey));
+            Path.Combine(HostConfig.DefaultRenderBrowserVersionsDir, RenderBrowserVersionCatalog.StableKey),
+            HostConfig.GetRenderBrowserVersionDir(string.Empty));
     }
 
     [Fact]

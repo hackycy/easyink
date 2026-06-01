@@ -40,7 +40,7 @@ function main(): void {
     resetSmokeRoot()
     writeSupermarketRequest()
     buildLinuxHostBinary()
-    renderWithHeadlessShell()
+    renderWithChromium()
     assertSmokeResult()
   }
   finally {
@@ -86,7 +86,7 @@ function buildLinuxHostBinary(): void {
   ])
 }
 
-function renderWithHeadlessShell(): void {
+function renderWithChromium(): void {
   run('docker', [
     'run',
     '--rm',
@@ -100,12 +100,14 @@ function renderWithHeadlessShell(): void {
     `${smokeRoot}:/smoke`,
     '-w',
     '/work',
-    'chromedp/headless-shell:latest',
+    'mcr.microsoft.com/playwright:v1.57.0-noble',
     '-lc',
     [
       'set -eu',
+      'BROWSER_PATH="$(find /ms-playwright -path "*/chrome-linux*/chrome" -type f | head -n 1)"',
+      'test -n "$BROWSER_PATH"',
       'mkdir -p /smoke/profile /smoke/tmp /smoke/logs /smoke/output',
-      './host/easyink-render render --no-daemon --disable-sandbox --request /smoke/supermarket-request.json --out /smoke/output/supermarket-receipt.pdf --browser-kind headless-shell --browser-path /headless-shell/headless-shell --profile-root /smoke/profile --temp-dir /smoke/tmp --log-dir /smoke/logs --diagnostics-out /smoke/supermarket-diagnostics.json --json',
+      './host/easyink-render render --no-daemon --disable-sandbox --request /smoke/supermarket-request.json --out /smoke/output/supermarket-receipt.pdf --browser-path "$BROWSER_PATH" --profile-root /smoke/profile --temp-dir /smoke/tmp --log-dir /smoke/logs --diagnostics-out /smoke/supermarket-diagnostics.json --json',
       'test -s /smoke/output/supermarket-receipt.pdf',
     ].join('\n'),
   ])

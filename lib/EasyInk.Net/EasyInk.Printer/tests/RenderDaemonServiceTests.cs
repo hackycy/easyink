@@ -21,12 +21,21 @@ public class RenderDaemonServiceTests
         Assert.DoesNotContain("--disable-sandbox", args);
     }
 
+    [Fact]
+    public void BuildDaemonArguments_UsesChromiumPathWithoutTypeFlag()
+    {
+        var args = RenderDaemonService.BuildDaemonArgumentsForTest("start", CreateRuntime());
+
+        Assert.Contains("--browser-path", args);
+        Assert.Contains("/bin/chromium", args);
+        Assert.DoesNotContain("--browser-" + "kind", args);
+    }
+
     private static RenderRuntimeOptions CreateRuntime(bool disableSandbox = false)
     {
         return new RenderRuntimeOptions
         {
-            BrowserKind = "headless-shell",
-            BrowserPath = "/bin/headless-shell",
+            BrowserPath = "/bin/chromium",
             HeadlessMode = "auto",
             ProfileRoot = "/tmp/profile",
             TempDir = "/tmp/temp",

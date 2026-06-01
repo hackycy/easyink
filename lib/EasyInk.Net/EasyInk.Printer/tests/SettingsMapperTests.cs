@@ -8,6 +8,14 @@ namespace EasyInk.Printer.Tests;
 public class SettingsMapperTests
 {
     [Fact]
+    public void RenderCatalogs_ExposeOnlyChromiumVersionAndSupportedHeadlessModes()
+    {
+        Assert.DoesNotContain(RenderBrowserVersionCatalog.Options, option => string.Equals(option.Key, "auto", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(RenderHeadlessModeCatalog.Options, option => string.Equals(option.Key, "sh" + "ell", StringComparison.OrdinalIgnoreCase));
+        Assert.All(RenderBrowserVersionCatalog.Options, option => Assert.StartsWith("Chromium", option.DisplayName));
+    }
+
+    [Fact]
     public void FromConfig_UsesDefaultsForEmptyOptionalPaths()
     {
         var config = new HostConfig
@@ -40,8 +48,7 @@ public class SettingsMapperTests
         Assert.Equal(HostConfig.DefaultPrintDebugArtifactsDir, model.PrintDebugArtifactsDir);
         Assert.False(model.RenderEnabled);
         Assert.Equal(HostConfig.DefaultRenderHostPath, model.RenderHostPath);
-        Assert.Equal(RenderBrowserKindCatalog.AutoKey, model.RenderBrowserKind);
-        Assert.Equal(RenderBrowserVersionCatalog.AutoKey, model.RenderBrowserVersion);
+        Assert.Equal(RenderBrowserVersionCatalog.StableKey, model.RenderBrowserVersion);
         Assert.Equal(HostConfig.DefaultRenderBrowserCacheDir, model.RenderBrowserDir);
         Assert.Equal(RenderHeadlessModeCatalog.AutoKey, model.RenderBrowserHeadlessMode);
         Assert.Equal(30000, model.RenderRequestTimeoutMs);
@@ -80,8 +87,7 @@ public class SettingsMapperTests
             PrintDebugArtifactsDir = HostConfig.DefaultPrintDebugArtifactsDir,
             RenderEnabled = true,
             RenderHostPath = @"D:\EasyInk\Render\easyink-render.exe",
-            RenderBrowserKind = RenderBrowserKindCatalog.EdgeKey,
-            RenderBrowserVersion = "126",
+            RenderBrowserVersion = RenderBrowserVersionCatalog.Chromium109Key,
             RenderBrowserDir = @"D:\EasyInk\RenderBrowser",
             RenderBrowserHeadlessMode = "new",
             RenderRequestTimeoutMs = 45000,
@@ -117,8 +123,7 @@ public class SettingsMapperTests
         Assert.Null(config.PrintDebugArtifactsDir);
         Assert.True(config.RenderEnabled);
         Assert.Equal(@"D:\EasyInk\Render\easyink-render.exe", config.RenderHostPath);
-        Assert.Equal(RenderBrowserKindCatalog.EdgeKey, config.RenderBrowserKind);
-        Assert.Equal("126", config.RenderBrowserVersion);
+        Assert.Equal(RenderBrowserVersionCatalog.Chromium109Key, config.RenderBrowserVersion);
         Assert.Equal(@"D:\EasyInk\RenderBrowser", config.RenderBrowserDir);
         Assert.Null(config.RenderBrowserExecutablePath);
         Assert.Equal("new", config.RenderBrowserHeadlessMode);
@@ -143,7 +148,7 @@ public class SettingsMapperTests
     }
 
     [Fact]
-    public void Validate_InvalidRenderBrowserVersion_NormalizesToAuto()
+    public void Validate_InvalidRenderBrowserVersion_NormalizesToStable()
     {
         var model = SettingsMapper.FromConfig(new HostConfig(), autoStart: false);
         model.RenderBrowserVersion = "unknown";
@@ -153,7 +158,7 @@ public class SettingsMapperTests
         Assert.True(validation.IsValid);
         var config = new HostConfig();
         SettingsMapper.ApplyToConfig(config, model);
-        Assert.Equal(RenderBrowserVersionCatalog.AutoKey, config.RenderBrowserVersion);
+        Assert.Equal(RenderBrowserVersionCatalog.StableKey, config.RenderBrowserVersion);
     }
 
     [Theory]

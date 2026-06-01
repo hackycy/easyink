@@ -66,7 +66,7 @@ HTTP / WebSocket
 - 队列和并发：`MaxWebSocketConnections`、`MaxQueueSize`、`MaxConcurrentRequests`、`PrintTimeoutSeconds`。
 - 日志和审计：`DbPath`、`CrashLogDir`、`PrintDebugLoggingEnabled`、`AuditLogRetentionDays`、`FileLogRetentionDays`。
 - 打印路径：`RawPrinterNames`、`RawPrintDpi`、`RawPrintMaxDotsWidth`、`SumatraPdfPath`、`SumatraPrinterNames`、`SumatraPrintSettings`、`SumatraTimeoutSeconds`。
-- Render：`RenderEnabled`、`RenderHostPath`、`RenderBrowserKind`、`RenderBrowserExecutablePath`、`RenderBrowserHeadlessMode`、`RenderBrowserDir`、`RenderRequestTimeoutMs`、`RenderIdleTimeoutMs`、`RenderMaxConcurrency`、`RenderMaxQueueSize`。
+- Render：`RenderEnabled`、`RenderHostPath`、`RenderBrowserExecutablePath`、`RenderBrowserHeadlessMode`、`RenderBrowserDir`、`RenderRequestTimeoutMs`、`RenderIdleTimeoutMs`、`RenderMaxConcurrency`、`RenderMaxQueueSize`。
 
 如果你刚开始部署，先盯住端口、认证、队列和目标打印路径。Render、Raw、Sumatra 都可以第二阶段再打开。
 

@@ -36,7 +36,6 @@ internal sealed class SettingsFormModel
     public int PrintDebugArtifactRetentionCount { get; set; }
     public string PrintDebugArtifactsDir { get; set; } = string.Empty;
     public bool RenderEnabled { get; set; }
-    public string RenderBrowserKind { get; set; } = string.Empty;
     public string RenderBrowserVersion { get; set; } = string.Empty;
     public string RenderHostPath { get; set; } = string.Empty;
     public string RenderHostVersion { get; set; } = string.Empty;

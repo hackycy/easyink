@@ -59,7 +59,6 @@ Docker defaults are tuned for Chromium in a container:
 - `EASYINK_RENDER_API_HOST=0.0.0.0`
 - `EASYINK_RENDER_BIN=/usr/local/bin/easyink-render`
 - `EASYINK_RENDER_NO_DAEMON=true`
-- `EASYINK_RENDER_BROWSER_KIND=chromium`
 - `EASYINK_RENDER_BROWSER_PATH=/usr/bin/chromium`
 - `EASYINK_RENDER_DISABLE_SANDBOX=true`
 
@@ -75,7 +74,7 @@ retention.
 The Docker smoke test imports `@easyink/samples`, builds a request from
 `supermarketReceiptTemplate` and `supermarketDemoData`, compiles the Linux
 Render host in `golang:1.23-bookworm`, then renders the receipt in
-`chromedp/headless-shell:latest`.
+the Playwright Chromium image.
 
 ```bash
 pnpm -F @easyink/render-api-service test:render-smoke
@@ -106,7 +105,6 @@ Default Render runtime can also be configured by environment. Per-request `runti
 - `EASYINK_RENDER_NO_DAEMON`
 - `EASYINK_RENDER_FORCE_RESTART_DAEMON`
 - `EASYINK_RENDER_DISABLE_SANDBOX`
-- `EASYINK_RENDER_BROWSER_KIND`
 - `EASYINK_RENDER_BROWSER_PATH`
 - `EASYINK_RENDER_HEADLESS_MODE`
 - `EASYINK_RENDER_PROFILE_ROOT`
@@ -157,7 +155,7 @@ Renders HTML, EasyInk schema, or existing PDF input through the Render CLI.
 Request body is the existing Render `PrintPDFRequest` plus two API-only fields:
 
 - `response`: HTTP response controls. `type` is `base64Json` or `pdf`; `includeDiagnostics` embeds parsed diagnostics JSON when JSON output is used.
-- `runtime`: per-call CLI flag overrides such as `noDaemon`, `disableSandbox`, `browserKind`, `browserPath`, `logDir`, `requestTimeoutMs`.
+- `runtime`: per-call CLI flag overrides such as `noDaemon`, `disableSandbox`, `browserPath`, `logDir`, `requestTimeoutMs`.
 
 `response` and `runtime` are stripped before the JSON is passed to `easyink-render`, because the Go CLI rejects unknown request fields.
 
@@ -248,8 +246,7 @@ Calls `easyink-render browser inspect`. Optional body:
 ```json
 {
   "runtime": {
-    "browserKind": "headless-shell",
-    "browserPath": "/path/to/headless-shell"
+    "browserPath": "/path/to/chromium"
   }
 }
 ```

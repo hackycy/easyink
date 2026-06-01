@@ -57,7 +57,7 @@ EasyInk.Engine
 - Printer 调用本地 `easyink-render.exe render` CLI。CLI 会自动通过本机 IPC 启动并复用 Render daemon，不再暴露或配置 Render HTTP 端口。
 - 成功后把 Render 输出的 PDF bytes 交回既有 `RoutingPrintService`，继续走 PDFium、ESC/POS raw 或 SumatraPDF。
 - 若同时提供 PDF 输入和 `renderSource`，请求会返回 `INVALID_PARAMS`。
-- Render CLI 随 Printer 内置在发布目录 `render\host\win-x64\easyink-render.exe` 与 `render\host\win-x86\easyink-render.exe`；C# 默认按操作系统位数自动选择对应架构，若目标缺失会回退到另一架构。设置页只暴露浏览器类型、Chrome 版本和浏览器目录。C# 会按浏览器类型在内置 `render\browser`、所选浏览器目录、版本子目录和系统浏览器中解析实际 exe，并把 `browser.kind` 与解析后的路径传给 Render CLI。下载行为按浏览器类型分流: `chrome-for-testing` / `headless-shell` / `chrome` 使用 Chrome for Testing 索引，`chromium` 使用 Chromium snapshot，当前支持 109 的固定 snapshot 下载，`edge` / `custom` 默认使用系统浏览器、目录或 runtime manifest。Windows 7/8.1 自动推荐 Chrome/Chromium 109；Chrome 109 不在 Chrome for Testing 索引中，运行时会自动检测本机已安装 Chrome 109，也支持手动目录或内网 runtime manifest 包。仪表盘会显示 Render daemon 状态，设置页支持手动启动/停止 daemon。
+- Render CLI 随 Printer 内置在发布目录 `render\host\win-x64\easyink-render.exe` 与 `render\host\win-x86\easyink-render.exe`；C# 默认按操作系统位数自动选择对应架构，若目标缺失会回退到另一架构。设置页只暴露 Chromium 版本和浏览器目录。C# 会在内置 `render\browser`、所选浏览器目录、版本子目录和系统 Chromium 中解析实际 exe，并把解析后的路径传给 Render CLI。下载行为统一使用 Chromium snapshot 或 runtime manifest。仪表盘会显示 Render daemon 状态，设置页支持手动启动/停止 daemon。
 
 ## 目录结构
 
@@ -108,7 +108,7 @@ build-installer.bat 1.2.3-beta.1
 - 目标机器需要 .NET Framework 4.8 运行时。
 - Printer 发布目录必须保留 `x86/SQLite.Interop.dll` 和 `x64/SQLite.Interop.dll`，否则审计日志会退化或不可用。
 - 若启用 SumatraPDF fallback，发布目录需要包含 `SumatraPDF\SumatraPDF.exe`。
-- 若启用 Render，发布目录需要包含 `render\host\win-x64\easyink-render.exe` 与 `render\host\win-x86\easyink-render.exe`。Chrome for Testing / headless shell 可随包放入 `render\browser`，也可以在 Printer 设置页按版本下载到本地缓存；离线环境可从 `https://googlechromelabs.github.io/chrome-for-testing/` 下载普通版本。Win7/8.1 使用 Chrome 109 时，可安装本机 Chrome 109、把历史离线包/已安装目录解压到 `%LOCALAPPDATA%\EasyInk.Printer\render\browser\versions\<version>`，或通过 `render\runtime-manifest.json` 指向内网包。Render daemon 默认常驻，设置里的空闲时间为 `0` 表示不因空闲退出；填入非 0 毫秒值才启用空闲退出。浏览器 sandbox 默认保持开启；只有在受控容器或确需兼容的环境中才把 `RenderDisableSandbox` 配为 `true`。Go Render CLI 的构建请在 Docker 中执行，避免依赖本机 Go 环境。
+- 若启用 Render，发布目录需要包含 `render\host\win-x64\easyink-render.exe` 与 `render\host\win-x86\easyink-render.exe`。Chromium 可随包放入 `render\browser`，也可以在 Printer 设置页按版本下载到本地缓存；离线环境可通过 `render\runtime-manifest.json` 指向内网包。Render daemon 默认常驻，设置里的空闲时间为 `0` 表示不因空闲退出；填入非 0 毫秒值才启用空闲退出。浏览器 sandbox 默认保持开启；只有在受控容器中才把 `RenderDisableSandbox` 配为 `true`。Go Render CLI 的构建请在 Docker 中执行，避免依赖本机 Go 环境。
 
 ## 兼容性
 

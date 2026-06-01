@@ -325,7 +325,7 @@ func parseChromeMajorVersion(userAgent string) (int, bool) {
 func validateChromiumUserAgent(userAgent string) error {
 	lower := strings.ToLower(userAgent)
 	if strings.Contains(lower, "edg/") {
-		return errors.New("browser must be Chromium or Chrome; Microsoft Edge is not supported")
+		return errors.New("browser must be Chromium-compatible and expose a Chromium runtime user agent")
 	}
 	major, ok := parseChromeMajorVersion(userAgent)
 	if !ok {
