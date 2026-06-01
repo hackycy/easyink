@@ -1,7 +1,7 @@
 {
   "name": "@easyink/samples",
   "type": "module",
-  "version": "0.0.18",
+  "version": "0.0.19",
   "description": "Sample templates and demo data for EasyInk",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",

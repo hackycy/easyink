@@ -1,7 +1,7 @@
 {
   "name": "@easyink/assistant-orchestrator",
   "type": "module",
-  "version": "0.0.18",
+  "version": "0.0.19",
   "description": "LangGraph and Hono based orchestration service for EasyInk Assistant",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",
