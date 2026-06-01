@@ -76,3 +76,14 @@ jobs:
       pages: write
       id-token: write
     uses: ./.github/workflows/deploy-pages.yml
+
+  publish-orchestrator-image:
+    needs:
+      - release
+    if: ${{ needs.release.result == 'success' && needs.release.outputs.published == 'true' && contains(needs.release.outputs.published_packages, '@easyink/assistant-orchestrator') }}
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/publish-orchestrator-image.yml
+    with:
+      push_latest: true

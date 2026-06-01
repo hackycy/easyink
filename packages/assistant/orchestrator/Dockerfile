@@ -1,10 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM node:24-bookworm-slim AS builder
-
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends g++ make python3 \
-  && rm -rf /var/lib/apt/lists/*
+FROM node:24-bookworm AS builder
 
 RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
 

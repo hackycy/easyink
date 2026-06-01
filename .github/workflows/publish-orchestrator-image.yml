@@ -1,0 +1,151 @@
+name: Publish Orchestrator Docker Image
+
+on:
+  workflow_call:
+    inputs:
+      image_tag:
+        description: Optional image tag. Defaults to the orchestrator package version.
+        type: string
+        default: ''
+      platforms:
+        description: Comma-separated Docker platforms to build.
+        type: string
+        default: linux/amd64
+      push_latest:
+        description: Also publish the latest tag.
+        type: boolean
+        default: false
+      push_image:
+        description: Push the built image to GitHub Container Registry.
+        type: boolean
+        default: true
+    outputs:
+      image:
+        description: Published image repository.
+        value: ${{ jobs.publish.outputs.image }}
+      tags:
+        description: Published image tags.
+        value: ${{ jobs.publish.outputs.tags }}
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Optional image tag. Defaults to the orchestrator package version.
+        type: string
+        default: ''
+      platforms:
+        description: Comma-separated Docker platforms to build.
+        type: string
+        default: linux/amd64
+      push_latest:
+        description: Also publish the latest tag.
+        type: boolean
+        default: false
+      push_image:
+        description: Push the built image to GitHub Container Registry.
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-orchestrator-image-${{ github.ref }}-${{ inputs.image_tag }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+      tags: ${{ steps.meta.outputs.tags }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve image metadata
+        id: meta
+        shell: bash
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          PUSH_LATEST: ${{ inputs.push_latest }}
+        run: |
+          version=$(node --input-type=module -e "import fs from 'node:fs'; const pkg = JSON.parse(fs.readFileSync('./packages/assistant/orchestrator/package.json', 'utf8')); console.log(pkg.version)")
+
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Unsupported orchestrator version: $version" >&2
+            exit 1
+          fi
+
+          owner=$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')
+          image="ghcr.io/$owner/easyink-assistant-orchestrator"
+
+          if [ -n "$IMAGE_TAG" ]; then
+            tag="$IMAGE_TAG"
+          else
+            tag=$(printf '%s' "$version" | tr '+/' '--' | tr -c 'A-Za-z0-9_.-' '-')
+          fi
+
+          if [[ ! "$tag" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]]; then
+            echo "Unsupported Docker tag: $tag" >&2
+            exit 1
+          fi
+
+          short_sha=${GITHUB_SHA::7}
+          tags="$image:$tag"$'\n'"$image:sha-$short_sha"
+
+          if [ "$PUSH_LATEST" = "true" ]; then
+            tags="$tags"$'\n'"$image:latest"
+          fi
+
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          {
+            echo "tags<<EOF"
+            printf '%s\n' "$tags"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        if: ${{ contains(inputs.platforms, 'arm') }}
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        if: ${{ inputs.push_image }}
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build and publish image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: packages/assistant/orchestrator/Dockerfile
+          platforms: ${{ inputs.platforms }}
+          push: ${{ inputs.push_image }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: |
+            org.opencontainers.image.title=EasyInk Assistant Orchestrator
+            org.opencontainers.image.description=LangGraph and Hono based orchestration service for EasyInk Assistant
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Write workflow summary
+        shell: bash
+        run: |
+          {
+            echo "Built EasyInk Assistant Orchestrator Docker image."
+            echo
+            echo "- Image: ${{ steps.meta.outputs.image }}"
+            echo "- Platforms: ${{ inputs.platforms }}"
+            echo "- Push image: ${{ inputs.push_image }}"
+            echo "- Tags:"
+            printf '%s\n' "${{ steps.meta.outputs.tags }}" | sed 's/^/  - /'
+          } >> "$GITHUB_STEP_SUMMARY"
