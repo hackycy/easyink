@@ -327,26 +327,25 @@ EASYINK_ASSISTANT_CORS_ORIGIN=https://your-designer.example.com
 
 - Domain Names：`assistant.example.com`
 - Scheme：`http`
-- Forward Hostname / IP：`easyink-assistant`、宿主机 IP 或 `127.0.0.1`
+- Forward Hostname / IP：`easyink-assistant`、Assistant 容器 IP 或宿主机局域网 IP
 - Forward Port：`3010`
 - SSL：申请证书，并打开 `Force SSL`
 
-SSE 不需要 WebSocket。你可以打开 WebSocket Support，它通常不会影响结果，但真正关键的是在 Advanced 里关掉缓冲：
+:::tip 提示
+如果 Nginx Proxy Manager 自己也跑在 Docker 里，`127.0.0.1` 指的是 Nginx Proxy Manager 容器本身，不是宿主机。Assistant 和 Nginx Proxy Manager 在同一个 Docker network 时，优先填 Assistant 的服务名，比如 `easyink-assistant`。
+:::
+
+SSE 不需要 WebSocket。你可以不打开 WebSocket Support，真正关键的是在 Advanced 里关掉缓冲：
 
 ```nginx
-proxy_http_version 1.1;
-proxy_set_header Host $host;
-proxy_set_header X-Real-IP $remote_addr;
-proxy_set_header X-Forwarded-Host $host;
-proxy_set_header X-Forwarded-Proto $scheme;
-proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-
 proxy_buffering off;
 proxy_cache off;
 proxy_read_timeout 1h;
 proxy_send_timeout 1h;
 gzip off;
 ```
+
+不要在 Nginx Proxy Manager 的 Advanced 里重复写 `proxy_http_version` 或 `proxy_set_header`。它会自己生成这些代理头；如果你同时打开 WebSocket Support，再手写 `proxy_http_version 1.1;`，Nginx 可能会因为重复指令导致这个 Proxy Host 无法正常启动。
 
 保存后用下面两个请求确认代理已经通了：
 
