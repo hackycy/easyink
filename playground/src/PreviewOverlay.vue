@@ -714,10 +714,10 @@ async function handleExport() {
           <DropdownMenuContent class="z-[10002]">
             <DropdownMenuLabel>本地导出</DropdownMenuLabel>
             <DropdownMenuItem :disabled="isPrinting" @click="handlePdfExport">
-              PDF（固定纸张）
+              PDF
             </DropdownMenuItem>
             <DropdownMenuItem :disabled="isPrinting" @click="handleExport">
-              JSON（模板数据）
+              JSON
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuLabel>服务端渲染</DropdownMenuLabel>
@@ -749,7 +749,7 @@ async function handleExport() {
             <DropdownMenuItem :disabled="isPrinting" @click="handleHiPrintPrint">
               HiPrint 打印
             </DropdownMenuItem>
-            <DropdownMenuItem :disabled="isPrinting" @click="handleLodopPrint">
+            <DropdownMenuItem :disabled="isPrinting" @select="handleLodopPrint">
               LODOP 打印
             </DropdownMenuItem>
             <DropdownMenuSeparator />
@@ -760,13 +760,13 @@ async function handleExport() {
               <DropdownMenuSubContent class="z-[10003] min-w-[220px]">
                 <DropdownMenuLabel>提交方式</DropdownMenuLabel>
                 <DropdownMenuItem :disabled="isPrinting" @click="handleEasyInkPrintPrint">
-                  PDF 上传
+                  PDF
                 </DropdownMenuItem>
                 <DropdownMenuItem :disabled="isPrinting" @click="handleEasyInkPrintRenderSourcePrint">
                   Schema + Data
                 </DropdownMenuItem>
                 <DropdownMenuItem :disabled="isPrinting" @click="handleEasyInkPrintHtmlPrint">
-                  HTML（预览内容）
+                  HTML
                 </DropdownMenuItem>
               </DropdownMenuSubContent>
             </DropdownMenuSub>
@@ -775,7 +775,7 @@ async function handleExport() {
             <DropdownMenuItem @click="openHiPrintSettings">
               HiPrint 客户端设置
             </DropdownMenuItem>
-            <DropdownMenuItem @click="openLodopSettings">
+            <DropdownMenuItem @select="openLodopSettings">
               LODOP 设置
             </DropdownMenuItem>
             <DropdownMenuItem @click="openEasyInkPrinterSettings">

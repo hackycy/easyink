@@ -2,8 +2,6 @@ export {
   createLegacyLodopClient,
   createLodopClient,
   createLodopRuntimeClient,
-  DEFAULT_CLODOP_SCRIPT_URLS,
-  loadLodopScript,
   LodopClient,
   type LodopClientLike,
   type LodopClientOptions,
@@ -15,9 +13,6 @@ export {
   type LodopRuntime,
   LodopRuntimeClient,
   type LodopRuntimeClientOptions,
-  type LodopScriptConfig,
-  type LodopScriptOptions,
-  type LodopScriptSource,
   type PrintHtmlOptions,
   printHtmlWithLodopRuntime,
   type PrintImageOptions,
@@ -29,6 +24,14 @@ export {
   createLodopDriver,
   type LodopDriverOptions,
 } from './driver'
+
+export {
+  DEFAULT_CLODOP_SCRIPT_URLS,
+  loadLodopScript,
+  type LodopScriptConfig,
+  type LodopScriptOptions,
+  type LodopScriptSource,
+} from './script'
 
 export {
   createLodopPrinter,

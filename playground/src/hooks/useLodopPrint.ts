@@ -4,6 +4,7 @@ import { computed, reactive, ref, watch } from 'vue'
 
 const CONFIG_KEY = 'easyink:lodopPrintConfig'
 const DEFAULT_COPIES = 1
+const RUNTIME_READY_TIMEOUT_MS = 8000
 
 export type LodopConnectionState = 'idle' | 'connecting' | 'connected' | 'error'
 
@@ -109,11 +110,13 @@ async function connect(): Promise<void> {
   lastError.value = ''
 
   try {
+    const scriptUrl = normalizeScriptUrl(config.scriptUrl)
+
     if (config.manageScript) {
       await loadLodopScript({
-        src: config.scriptUrl,
+        src: scriptUrl,
         name: normalizeOptionalString(config.runtimeName),
-        timeoutMs: 8000,
+        timeoutMs: RUNTIME_READY_TIMEOUT_MS,
       })
     }
 
@@ -162,6 +165,7 @@ function updateConfig(patch: Partial<LodopPrintConfig>): void {
   Object.assign(config, {
     ...patch,
     runtimeName: 'runtimeName' in patch ? normalizeOptionalString(patch.runtimeName) : config.runtimeName,
+    scriptUrl: 'scriptUrl' in patch ? String(patch.scriptUrl ?? '') : config.scriptUrl,
     copies: 'copies' in patch ? normalizeCopies(patch.copies) : config.copies,
   })
 }
@@ -227,6 +231,18 @@ function normalizeOptionalString(value: unknown): string | undefined {
     return undefined
   const trimmed = value.trim()
   return trimmed || undefined
+}
+
+function normalizeScriptUrl(value: unknown): string {
+  const raw = typeof value === 'string' ? value.trim() : ''
+  const fallback = DEFAULT_CLODOP_SCRIPT_URLS[0]
+  if (!raw)
+    return fallback
+
+  if (/\/(?:C?Lodopfuncs|Lodop)\.js(?:[?#].*)?$/i.test(raw))
+    return raw
+
+  return `${raw.replace(/\/+$/, '')}/CLodopfuncs.js`
 }
 
 if (config.enabled) {

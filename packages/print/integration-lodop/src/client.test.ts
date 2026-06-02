@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createLodopClient, createLodopRuntimeClient, loadLodopScript } from './client'
+import { createLodopClient, createLodopRuntimeClient } from './client'
+import { loadLodopScript } from './script'
 
 function createRuntime() {
   const calls = {
@@ -65,6 +66,24 @@ describe('lodop client', () => {
     expect(calls.actions).toEqual(['print'])
   })
 
+  it('calls LODOP html methods with the runtime as this', async () => {
+    const { runtime } = createRuntime()
+    const htmlThisValues: unknown[] = []
+    runtime.ADD_PRINT_HTM = vi.fn(function (this: unknown, ...args: unknown[]) {
+      htmlThisValues.push(this)
+      return args.length
+    })
+    const client = createLodopRuntimeClient({ lodop: runtime })
+
+    await client.printHtml({
+      html: '<main>context</main>',
+      width: 80,
+      height: 60,
+    })
+
+    expect(htmlThisValues).toEqual([runtime])
+  })
+
   it('prints base64 images through ADD_PRINT_IMAGE', async () => {
     const { calls, runtime } = createRuntime()
     const client = createLodopRuntimeClient({
@@ -119,6 +138,45 @@ describe('lodop client', () => {
 
     await expect(printed).resolves.toBe(true)
     expect(calls.html).toHaveLength(1)
+  })
+
+  it('serializes concurrent C-LODOP actions for the same runtime', async () => {
+    const { calls, runtime } = createRuntime()
+    const asyncRuntime = runtime as typeof runtime & {
+      CVERSION?: string
+      On_Return?: (taskId: unknown, value: unknown) => void
+    }
+    Object.assign(asyncRuntime, {
+      CVERSION: '6.6.4.2',
+      PRINT: vi.fn(() => undefined),
+    })
+    const client = createLodopRuntimeClient({ lodop: asyncRuntime, resultTimeoutMs: 1000 })
+
+    const first = client.printHtml({ html: '<main>one</main>', width: 80, height: 60 })
+    const second = client.printHtml({ html: '<main>two</main>', width: 80, height: 60 })
+
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(calls.html).toHaveLength(1)
+
+    asyncRuntime.On_Return?.('task-1', true)
+    await expect(first).resolves.toBe(true)
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(calls.html).toHaveLength(2)
+
+    asyncRuntime.On_Return?.('task-2', true)
+    await expect(second).resolves.toBe(true)
+  })
+
+  it('includes the raw LODOP print result when PRINT fails', async () => {
+    const { runtime } = createRuntime()
+    runtime.PRINT = vi.fn(() => false)
+    const client = createLodopRuntimeClient({ lodop: runtime })
+
+    await expect(client.printHtml({
+      html: '<main>failed</main>',
+      width: 80,
+      height: 60,
+    })).rejects.toThrow('PRINT 返回 false')
   })
 
   it('serializes canvas materials as image data URLs for viewer pages', async () => {
@@ -178,5 +236,26 @@ describe('lodop client', () => {
     })
 
     await expect(client.ready()).resolves.toBe(runtime)
+  })
+
+  it('waits for an existing LODOP script element to finish loading', async () => {
+    const script = document.createElement('script')
+    script.src = 'http://localhost:8000/pending-CLodopfuncs.js'
+    document.head.appendChild(script)
+
+    let settled = false
+    const loaded = loadLodopScript({
+      src: 'http://localhost:8000/pending-CLodopfuncs.js',
+      timeoutMs: 1000,
+    }).then(() => {
+      settled = true
+    })
+
+    await Promise.resolve()
+    expect(settled).toBe(false)
+
+    script.dispatchEvent(new Event('load'))
+    await loaded
+    expect(settled).toBe(true)
   })
 })

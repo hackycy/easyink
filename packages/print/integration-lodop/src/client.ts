@@ -1,13 +1,14 @@
+import type { LodopScriptConfig } from './script'
 import { EasyInkPrintError } from '@easyink/print-core'
+import { loadLodopScript } from './script'
+import { serializeViewerPage } from './serialize'
 
 export type LodopPrintAction = 'print' | 'preview' | 'setup' | 'design'
 export type LodopLength = number | string
-export const DEFAULT_CLODOP_SCRIPT_URLS = [
-  'http://localhost:8000/CLodopfuncs.js',
-  'http://localhost:18000/CLodopfuncs.js',
-] as const
 
-const scriptLoadPromises = new Map<string, Promise<void>>()
+const DEFAULT_RUNTIME_READY_TIMEOUT_MS = 8000
+const RUNTIME_READY_INTERVAL_MS = 100
+const runtimeActionQueues = new WeakMap<LodopRuntime, Promise<void>>()
 
 /**
  * Describes a printer reported by the LODOP runtime.
@@ -26,48 +27,28 @@ export interface LodopRuntime {
   VERSION?: string
   CVERSION?: string
   On_Return?: (taskId: unknown, value: unknown) => void
-  PRINT_INIT: (title: string) => unknown
-  PRINT_INITA?: (top: LodopLength, left: LodopLength, width: LodopLength, height: LodopLength, title: string) => unknown
-  SET_PRINT_PAGESIZE?: (orient: number, width: number, height: number, pageName: string) => unknown
-  SET_PRINTER_INDEX?: (printer: string | number) => unknown
-  SET_PRINT_COPIES?: (copies: number) => unknown
-  SET_PRINT_MODE?: (mode: string, value: unknown) => unknown
-  SET_SHOW_MODE?: (mode: string, value: unknown) => unknown
-  SET_PRINT_STYLE?: (styleName: string, value: unknown) => unknown
-  SET_PRINT_STYLEA?: (itemNameOrIndex: string | number, styleName: string, value: unknown) => unknown
-  ADD_PRINT_HTM: (top: LodopLength, left: LodopLength, width: LodopLength, height: LodopLength, html: string) => unknown
-  ADD_PRINT_HTML?: (top: LodopLength, left: LodopLength, width: LodopLength, height: LodopLength, html: string) => unknown
-  ADD_PRINT_IMAGE?: (top: LodopLength, left: LodopLength, width: LodopLength, height: LodopLength, image: string) => unknown
-  ADD_PRINT_URL?: (top: LodopLength, left: LodopLength, width: LodopLength, height: LodopLength, url: string) => unknown
-  GET_PRINTER_COUNT?: () => number
-  GET_PRINTER_NAME?: (index: number) => string
-  PRINT: () => unknown
-  PREVIEW: () => unknown
-  PRINT_SETUP: () => unknown
-  PRINT_DESIGN: () => unknown
+  PRINT_INIT: (this: LodopRuntime, title: string) => unknown
+  PRINT_INITA?: (this: LodopRuntime, top: LodopLength, left: LodopLength, width: LodopLength, height: LodopLength, title: string) => unknown
+  SET_PRINT_PAGESIZE?: (this: LodopRuntime, orient: number, width: number, height: number, pageName: string) => unknown
+  SET_PRINTER_INDEX?: (this: LodopRuntime, printer: string | number) => unknown
+  SET_PRINT_COPIES?: (this: LodopRuntime, copies: number) => unknown
+  SET_PRINT_MODE?: (this: LodopRuntime, mode: string, value: unknown) => unknown
+  SET_SHOW_MODE?: (this: LodopRuntime, mode: string, value: unknown) => unknown
+  SET_PRINT_STYLE?: (this: LodopRuntime, styleName: string, value: unknown) => unknown
+  SET_PRINT_STYLEA?: (this: LodopRuntime, itemNameOrIndex: string | number, styleName: string, value: unknown) => unknown
+  ADD_PRINT_HTM: (this: LodopRuntime, top: LodopLength, left: LodopLength, width: LodopLength, height: LodopLength, html: string) => unknown
+  ADD_PRINT_HTML?: (this: LodopRuntime, top: LodopLength, left: LodopLength, width: LodopLength, height: LodopLength, html: string) => unknown
+  ADD_PRINT_IMAGE?: (this: LodopRuntime, top: LodopLength, left: LodopLength, width: LodopLength, height: LodopLength, image: string) => unknown
+  ADD_PRINT_URL?: (this: LodopRuntime, top: LodopLength, left: LodopLength, width: LodopLength, height: LodopLength, url: string) => unknown
+  GET_PRINTER_COUNT?: (this: LodopRuntime) => number
+  GET_PRINTER_NAME?: (this: LodopRuntime, index: number) => string
+  PRINT: (this: LodopRuntime) => unknown
+  PREVIEW: (this: LodopRuntime) => unknown
+  PRINT_SETUP: (this: LodopRuntime) => unknown
+  PRINT_DESIGN: (this: LodopRuntime) => unknown
 }
 
 export type LodopGetter = () => LodopRuntime | undefined
-
-export interface LodopScriptSource {
-  src: string
-  name?: string
-  id?: string
-  attrs?: Record<string, string>
-}
-
-export interface LodopScriptOptions {
-  src?: string
-  sources?: Array<string | LodopScriptSource>
-  name?: string
-  id?: string
-  timeoutMs?: number
-  document?: Document
-  forceReload?: boolean
-  attrs?: Record<string, string>
-}
-
-export type LodopScriptConfig = true | string | LodopScriptOptions
 
 export interface PrintHtmlOptions {
   html: string
@@ -132,6 +113,7 @@ export interface LodopClientOptions {
   forcePageSize?: boolean
   allowDefaultPrinter?: boolean
   resultTimeoutMs?: number
+  runtimeReadyTimeoutMs?: number
 }
 
 export interface LodopRuntimeClientOptions extends LodopClientOptions {
@@ -148,6 +130,7 @@ export class LodopClient implements LodopClientLike {
   private readonly getLodop: LodopGetter
   private readonly script: LodopScriptConfig | false | undefined
   private readonly resultTimeoutMs: number
+  private readonly runtimeReadyTimeoutMs: number
 
   constructor(options: LodopClientOptions = {}) {
     const runtimeName = options.runtimeName ?? resolveScriptName(options.script)
@@ -158,6 +141,7 @@ export class LodopClient implements LodopClientLike {
     this.forcePageSize = options.forcePageSize ?? true
     this.allowDefaultPrinter = options.allowDefaultPrinter ?? true
     this.resultTimeoutMs = options.resultTimeoutMs ?? 30000
+    this.runtimeReadyTimeoutMs = options.runtimeReadyTimeoutMs ?? DEFAULT_RUNTIME_READY_TIMEOUT_MS
   }
 
   configure(options: Partial<LodopClientOptions>): void {
@@ -183,7 +167,7 @@ export class LodopClient implements LodopClientLike {
   async ready(): Promise<LodopRuntime> {
     if (this.script)
       await loadLodopScript(this.script)
-    return this.getRuntime()
+    return waitForLodopRuntime(this.getLodop, this.runtimeReadyTimeoutMs)
   }
 
   async listPrinters(): Promise<LodopDevice[]> {
@@ -322,12 +306,14 @@ export function printHtmlWithLodopRuntime(
     resultTimeoutMs?: number
   } = {},
 ): Promise<unknown> {
-  prepareLodopJob(runtime, options, defaults)
-  addHtml(runtime, options)
-  applyItemStyles(runtime, options.itemStyles)
-  return runLodopAction(runtime, options.action ?? 'print', {
-    catchPrintStatus: options.catchPrintStatus,
-    resultTimeoutMs: options.resultTimeoutMs ?? defaults.resultTimeoutMs,
+  return enqueueLodopAction(runtime, () => {
+    prepareLodopJob(runtime, options, defaults)
+    addHtml(runtime, options)
+    applyItemStyles(runtime, options.itemStyles)
+    return runLodopAction(runtime, options.action ?? 'print', {
+      catchPrintStatus: options.catchPrintStatus,
+      resultTimeoutMs: options.resultTimeoutMs ?? defaults.resultTimeoutMs,
+    })
   })
 }
 
@@ -344,20 +330,22 @@ export function printImageWithLodopRuntime(
   if (!runtime.ADD_PRINT_IMAGE)
     throw new EasyInkPrintError('当前 LODOP 运行时不支持图片打印', 'LODOP_IMAGE_UNSUPPORTED')
 
-  prepareLodopJob(runtime, options, defaults)
-  runtime.ADD_PRINT_IMAGE(
-    options.top ?? 0,
-    options.left ?? 0,
-    options.itemWidth ?? '100%',
-    options.itemHeight ?? '100%',
-    options.image,
-  )
-  if (options.stretch !== undefined)
-    runtime.SET_PRINT_STYLEA?.(0, 'Stretch', options.stretch)
-  applyItemStyles(runtime, options.itemStyles)
-  return runLodopAction(runtime, options.action ?? 'print', {
-    catchPrintStatus: options.catchPrintStatus,
-    resultTimeoutMs: options.resultTimeoutMs ?? defaults.resultTimeoutMs,
+  return enqueueLodopAction(runtime, () => {
+    prepareLodopJob(runtime, options, defaults)
+    runtime.ADD_PRINT_IMAGE?.(
+      options.top ?? 0,
+      options.left ?? 0,
+      options.itemWidth ?? '100%',
+      options.itemHeight ?? '100%',
+      options.image,
+    )
+    if (options.stretch !== undefined)
+      runtime.SET_PRINT_STYLEA?.(0, 'Stretch', options.stretch)
+    applyItemStyles(runtime, options.itemStyles)
+    return runLodopAction(runtime, options.action ?? 'print', {
+      catchPrintStatus: options.catchPrintStatus,
+      resultTimeoutMs: options.resultTimeoutMs ?? defaults.resultTimeoutMs,
+    })
   })
 }
 
@@ -370,12 +358,16 @@ function prepareLodopJob(
     forcePageSize?: boolean
   },
 ): void {
-  runtime.PRINT_INIT(options.title ?? 'EasyInk 打印任务')
-  if (options.printerName ?? defaults.printerName)
-    runtime.SET_PRINTER_INDEX?.((options.printerName ?? defaults.printerName)!)
-  runtime.SET_PRINT_COPIES?.(options.copies ?? defaults.defaultCopies ?? 1)
+  const printerName = options.printerName ?? defaults.printerName
+  const copies = options.copies ?? defaults.defaultCopies ?? 1
+  const forcePageSize = options.forcePageSize ?? defaults.forcePageSize ?? true
 
-  if (options.forcePageSize ?? defaults.forcePageSize ?? true) {
+  runtime.PRINT_INIT(options.title ?? 'EasyInk 打印任务')
+  if (printerName)
+    runtime.SET_PRINTER_INDEX?.(printerName)
+  runtime.SET_PRINT_COPIES?.(copies)
+
+  if (forcePageSize) {
     runtime.SET_PRINT_PAGESIZE?.(
       resolveLodopOrient(options),
       Math.round(options.width * 10),
@@ -392,18 +384,28 @@ function prepareLodopJob(
   applyStyles(runtime, options.styles)
 }
 
-function addHtml(runtime: LodopRuntime, options: PrintHtmlOptions): void {
-  const add = options.useHtmlParser === 'html' && runtime.ADD_PRINT_HTML
-    ? runtime.ADD_PRINT_HTML
-    : runtime.ADD_PRINT_HTM
+function enqueueLodopAction<T>(runtime: LodopRuntime, action: () => Promise<T>): Promise<T> {
+  const previous = runtimeActionQueues.get(runtime) ?? Promise.resolve()
+  const current = previous.catch(() => {}).then(action)
+  runtimeActionQueues.set(runtime, current.then(() => undefined, () => undefined))
+  return current
+}
 
-  add(
+function addHtml(runtime: LodopRuntime, options: PrintHtmlOptions): void {
+  const args = [
     options.top ?? 0,
     options.left ?? 0,
     options.itemWidth ?? `${options.width}mm`,
     options.itemHeight ?? `${options.height}mm`,
     options.html,
-  )
+  ] as const
+
+  if (options.useHtmlParser === 'html' && runtime.ADD_PRINT_HTML) {
+    runtime.ADD_PRINT_HTML(...args)
+    return
+  }
+
+  runtime.ADD_PRINT_HTM(...args)
 }
 
 function runLodopAction(
@@ -492,7 +494,20 @@ function assertSuccessfulPrintResult(value: unknown, action: LodopPrintAction, c
     return
   }
   if (value === false || value === 0 || value === '0')
-    throw new EasyInkPrintError('LODOP 打印失败', 'LODOP_PRINT_FAILED', value)
+    throw new EasyInkPrintError(`LODOP 打印失败: PRINT 返回 ${formatLodopResult(value)}`, 'LODOP_PRINT_FAILED', value)
+}
+
+function formatLodopResult(value: unknown): string {
+  if (typeof value === 'string')
+    return JSON.stringify(value)
+  if (value === undefined)
+    return 'undefined'
+  try {
+    return JSON.stringify(value)
+  }
+  catch {
+    return String(value)
+  }
 }
 
 function resolveLodopOrient(options: Pick<PrintHtmlOptions, 'orientation' | 'width' | 'height'>): 0 | 1 | 2 {
@@ -541,137 +556,6 @@ function readDefaultPrinterName(runtime: LodopRuntime): string | undefined {
   }
 }
 
-export function loadLodopScript(config: LodopScriptConfig): Promise<void> {
-  const options = normalizeScriptOptions(config)
-  const sources = normalizeScriptSources(options)
-  return loadLodopScriptSources(sources, options, 0)
-}
-
-function loadLodopScriptSources(
-  sources: LodopScriptSource[],
-  options: LodopScriptOptions,
-  index: number,
-): Promise<void> {
-  const source = sources[index]
-  if (!source)
-    return Promise.reject(new EasyInkPrintError('加载 LODOP 脚本失败', 'LODOP_SCRIPT_LOAD_FAILED'))
-
-  return loadSingleLodopScript(source, options).catch((error) => {
-    if (index + 1 < sources.length)
-      return loadLodopScriptSources(sources, options, index + 1)
-    throw error
-  })
-}
-
-function loadSingleLodopScript(source: LodopScriptSource, options: LodopScriptOptions): Promise<void> {
-  const document = options.document ?? globalThis.document
-  if (!document)
-    throw new EasyInkPrintError('当前环境不支持加载 LODOP 脚本', 'LODOP_SCRIPT_DOCUMENT_MISSING')
-
-  const src = withScriptName(source.src, source.name ?? options.name)
-  const cacheKey = `${source.id ?? options.id ?? ''}|${src}`
-  if (!options.forceReload) {
-    const cached = scriptLoadPromises.get(cacheKey)
-    if (cached)
-      return cached
-  }
-
-  const promise = new Promise<void>((resolve, reject) => {
-    const existing = !options.forceReload ? findExistingScript(document, src, source.id ?? options.id) : undefined
-    const script = existing ?? document.createElement('script')
-    let settled = false
-    let timer: ReturnType<typeof setTimeout>
-    let onLoad = () => {}
-    let onError = () => {}
-
-    const cleanup = () => {
-      script.removeEventListener('load', onLoad)
-      script.removeEventListener('error', onError)
-      clearTimeout(timer)
-    }
-    const finish = (callback: () => void) => {
-      if (settled)
-        return
-      settled = true
-      cleanup()
-      callback()
-    }
-    onLoad = () => finish(() => {
-      script.dataset.easyinkLodopLoaded = 'true'
-      resolve()
-    })
-    onError = () => finish(() => {
-      scriptLoadPromises.delete(cacheKey)
-      reject(new EasyInkPrintError(`加载 LODOP 脚本失败: ${src}`, 'LODOP_SCRIPT_LOAD_FAILED'))
-    })
-    timer = setTimeout(() => {
-      finish(() => {
-        scriptLoadPromises.delete(cacheKey)
-        reject(new EasyInkPrintError(`加载 LODOP 脚本超时: ${src}`, 'LODOP_SCRIPT_LOAD_TIMEOUT'))
-      })
-    }, options.timeoutMs ?? 8000)
-
-    if (existing?.dataset.easyinkLodopLoaded === 'true') {
-      finish(resolve)
-      return
-    }
-
-    script.addEventListener('load', onLoad)
-    script.addEventListener('error', onError)
-
-    if (!existing) {
-      if (source.id ?? options.id)
-        script.id = (source.id ?? options.id)!
-      script.async = true
-      script.src = src
-      const attrs = { ...options.attrs, ...source.attrs }
-      for (const [name, value] of Object.entries(attrs))
-        script.setAttribute(name, value)
-      document.head.appendChild(script)
-    }
-  })
-
-  scriptLoadPromises.set(cacheKey, promise)
-  return promise
-}
-
-function normalizeScriptOptions(config: LodopScriptConfig): LodopScriptOptions {
-  if (config === true)
-    return {}
-  if (typeof config === 'string')
-    return { src: config }
-  return config
-}
-
-function normalizeScriptSources(options: LodopScriptOptions): LodopScriptSource[] {
-  const rawSources = options.sources ?? (options.src ? [options.src] : [...DEFAULT_CLODOP_SCRIPT_URLS])
-  return rawSources.map((source) => {
-    if (typeof source === 'string')
-      return { src: source, name: options.name, id: options.id, attrs: options.attrs }
-    return {
-      ...source,
-      name: source.name ?? options.name,
-      id: source.id ?? options.id,
-      attrs: { ...options.attrs, ...source.attrs },
-    }
-  })
-}
-
-function findExistingScript(document: Document, src: string, id: string | undefined): HTMLScriptElement | undefined {
-  if (id) {
-    const byId = document.getElementById(id)
-    if (byId instanceof HTMLScriptElement)
-      return byId
-  }
-  return Array.from(document.scripts).find(script => script.src === src || script.getAttribute('src') === src)
-}
-
-function withScriptName(src: string, name: string | undefined): string {
-  if (!name || /[?&]name=/.test(src))
-    return src
-  return `${src}${src.includes('?') ? '&' : '?'}name=${encodeURIComponent(name)}`
-}
-
 function resolveScriptName(script: LodopScriptConfig | false | undefined): string | undefined {
   if (!script || script === true || typeof script === 'string')
     return undefined
@@ -715,54 +599,29 @@ function getGlobalCLodop(): LodopRuntime | undefined {
   return globalWindow.CLODOP
 }
 
+function waitForLodopRuntime(getLodop: LodopGetter, timeoutMs: number): Promise<LodopRuntime> {
+  return new Promise((resolve, reject) => {
+    const startedAt = Date.now()
+
+    const check = () => {
+      const runtime = getLodop()
+      if (runtime && (runtime.VERSION || runtime.CVERSION)) {
+        resolve(runtime)
+        return
+      }
+
+      if (Date.now() - startedAt >= timeoutMs) {
+        reject(new EasyInkPrintError('LODOP 脚本已加载，但运行时尚不可用', 'LODOP_RUNTIME_NOT_READY'))
+        return
+      }
+
+      setTimeout(check, RUNTIME_READY_INTERVAL_MS)
+    }
+
+    check()
+  })
+}
+
 function isLodopRuntime(value: unknown): value is LodopRuntime {
   return Boolean(value && typeof value === 'object' && ('VERSION' in value || 'CVERSION' in value))
-}
-
-function serializeViewerPage(page: HTMLElement): string {
-  const sourceCanvases = Array.from(page.querySelectorAll('canvas'))
-  if (sourceCanvases.length === 0)
-    return page.outerHTML
-
-  const clone = page.cloneNode(true) as HTMLElement
-  inlineCanvasBitmaps(sourceCanvases, clone)
-  return clone.outerHTML
-}
-
-function inlineCanvasBitmaps(sourceCanvases: HTMLCanvasElement[], cloneRoot: HTMLElement): void {
-  const cloneCanvases = Array.from(cloneRoot.querySelectorAll('canvas'))
-
-  for (let index = 0; index < cloneCanvases.length; index++) {
-    const source = sourceCanvases[index]
-    const clone = cloneCanvases[index]
-    if (!source || !clone)
-      continue
-
-    const dataUrl = readCanvasDataUrl(source)
-    if (!dataUrl)
-      continue
-
-    clone.replaceWith(createImageFromDataUrl(clone.ownerDocument, dataUrl, clone.getAttribute('style')))
-  }
-}
-
-function readCanvasDataUrl(canvas: HTMLCanvasElement): string | undefined {
-  try {
-    return canvas.toDataURL('image/png')
-  }
-  catch {
-    return undefined
-  }
-}
-
-function createImageFromDataUrl(document: Document, dataUrl: string, style: string | null): HTMLImageElement {
-  const image = document.createElement('img')
-  image.src = dataUrl
-  image.style.display = 'block'
-  image.style.width = '100%'
-  image.style.height = '100%'
-  image.style.objectFit = 'contain'
-  if (style)
-    image.setAttribute('style', `${style};${image.getAttribute('style') ?? ''}`)
-  return image
 }
