@@ -1,6 +1,6 @@
 export const RENDER_PROTOCOL_VERSION = '1.0'
 
-export type RenderSourceType = 'html' | 'pdf' | 'easyink'
+export type RenderSourceType = 'html' | 'easyink'
 
 export interface RenderResource {
   url: string
@@ -23,12 +23,6 @@ export interface RenderHtmlSource {
   fonts?: RenderFontResource[]
 }
 
-export interface RenderPdfSource {
-  type: 'pdf'
-  pdfBase64: string
-  fileName?: string
-}
-
 export interface RenderEasyInkSource {
   type: 'easyink'
   schema: unknown
@@ -38,7 +32,7 @@ export interface RenderEasyInkSource {
   fonts?: RenderFontResource[]
 }
 
-export type RenderSource = RenderHtmlSource | RenderPdfSource | RenderEasyInkSource
+export type RenderSource = RenderHtmlSource | RenderEasyInkSource
 
 export interface RenderMarginMm {
   top: number
@@ -101,10 +95,6 @@ export interface RenderDiagnostics {
   finalUrl?: string
   sourceType: string
   pageCount?: number
-  pdfTitle?: string
-  pdfAuthor?: string
-  pdfCreator?: string
-  pdfProducer?: string
   requestHeaders?: Record<string, string>
   attachmentPath?: string
   logPath?: string

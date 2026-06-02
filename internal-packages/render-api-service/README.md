@@ -150,7 +150,7 @@ Response:
 
 ### `POST /v1/render/pdf`
 
-Renders HTML, EasyInk schema, or existing PDF input through the Render CLI.
+Renders HTML or EasyInk schema through the Render CLI.
 
 Request body is the existing Render `PrintPDFRequest` plus two API-only fields:
 
@@ -226,7 +226,7 @@ Failure:
 HTTP status mapping:
 
 - `400`: invalid JSON or body too large.
-- `422`: Render request/security/PDF validation failed.
+- `422`: Render request or security validation failed.
 - `502`: Render CLI unavailable, daemon unavailable, browser unavailable, or render failed.
 - `504`: Render timeout.
 

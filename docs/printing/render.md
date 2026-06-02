@@ -1,5 +1,5 @@
 ---
-description: EasyInk.Render CLI 渲染运行时：将 HTML、PDF 或 EasyInk Schema 输入转换为 PDF，不涉及打印机枚举和物理打印任务。
+description: EasyInk.Render CLI 渲染运行时：将 HTML 或 EasyInk Schema 输入转换为 PDF，不涉及打印机枚举和物理打印任务。
 ---
 
 # Render PDF 渲染 {#render}
@@ -42,7 +42,7 @@ Render 读取的是一个 JSON 请求文件。最小 HTML 请求长这样：
 
 ## 输入类型 {#source-types}
 
-当前实现支持三种 `source.type`：
+当前实现支持两种 `source.type`：
 
 ```json
 {
@@ -63,7 +63,6 @@ Render 读取的是一个 JSON 请求文件。最小 HTML 请求长这样：
 ```
 
 - `html`：加载 `source.html`，按 `wait` 条件等待后输出 PDF。
-- `pdf`：校验并归一 `source.pdfBase64`，读取页数和 metadata，不启动浏览器。
 - `easyink`：用内嵌 EasyInk Viewer runtime 把 `schema + data` 渲染成 HTML，再进入 HTML pipeline。
 
 `easyink` 输入会自动补默认等待条件：`wait.until` 为 `easyinkReady`，`wait.selector` 为 `.easyink-ready`。如果你显式传入 `wait`，就以你的配置为准。
@@ -147,7 +146,7 @@ Render 会用到几类 JSON 文件。我们先看最常改的请求文件：
 lib/EasyInk.Render/protocol/fixtures/
 ```
 
-这些文件用于协议测试，覆盖 `html`、`pdf`、`easyink` 三种输入形态。它们不是运行时默认配置；如果你改了请求协议字段，要同步更新 fixtures 和文档，避免测试只验证旧协议。
+这些文件用于协议测试，覆盖 `html`、`easyink` 两种输入形态。它们不是运行时默认配置；如果你改了请求协议字段，要同步更新 fixtures 和文档，避免测试只验证旧协议。
 
 运行时配置不是仓库文件，而是用户机器上的 `config.json`。可以用命令查看：
 
@@ -187,7 +186,7 @@ easyink-render render \
   --out out.pdf
 ```
 
-`--no-daemon` 仍然会按输入类型决定是否需要浏览器。`source.type=pdf` 不需要浏览器；`html` 和 `easyink` 需要可用的浏览器运行时。
+`--no-daemon` 仍然需要可用的浏览器运行时。
 
 ## Daemon 管理 {#daemon}
 

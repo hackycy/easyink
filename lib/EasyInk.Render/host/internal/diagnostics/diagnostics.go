@@ -69,15 +69,6 @@ func (c *Collector) SetPageCount(value int) {
 	c.diagnostics.PageCount = value
 }
 
-func (c *Collector) SetPDFMetadata(title, author, creator, producer string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.diagnostics.PDFTitle = title
-	c.diagnostics.PDFAuthor = author
-	c.diagnostics.PDFCreator = creator
-	c.diagnostics.PDFProducer = producer
-}
-
 func (c *Collector) SetBrowser(name, version string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -135,10 +126,6 @@ func WriteLog(logDir string, value protocol.Diagnostics) (string, error) {
 	if value.PageCount > 0 {
 		writeLogLine(&out, "pageCount", fmt.Sprint(value.PageCount))
 	}
-	writeLogLine(&out, "pdfTitle", value.PDFTitle)
-	writeLogLine(&out, "pdfAuthor", value.PDFAuthor)
-	writeLogLine(&out, "pdfCreator", value.PDFCreator)
-	writeLogLine(&out, "pdfProducer", value.PDFProducer)
 	writeLogLine(&out, "diagnosticsPath", value.AttachmentPath)
 	writeLogLine(&out, "htmlSnapshotPath", value.HTMLSnapshotPath)
 	writeLogLine(&out, "screenshotPath", value.ScreenshotPath)

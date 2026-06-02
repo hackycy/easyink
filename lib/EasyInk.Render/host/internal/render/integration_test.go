@@ -1,10 +1,8 @@
 package render_test
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
-	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -73,99 +71,6 @@ func TestRenderPrintPDFHTMLAndEasyInkWithBrowser(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestRenderPrintPDFPDFPassThrough(t *testing.T) {
-	service := render.NewService(nil)
-	input := minimalIntegrationPDF(t)
-	result, err := service.RenderPrintPDF(context.Background(), protocol.PrintPDFRequest{
-		RequestID: "req-pdf",
-		Source: protocol.Source{
-			Type:      "pdf",
-			PDFBase64: base64.StdEncoding.EncodeToString(input),
-		},
-	})
-	if err != nil {
-		t.Fatalf("render pdf: %v", err)
-	}
-	if string(result.PDF) != string(input) {
-		t.Fatal("expected PDF pass-through")
-	}
-	if result.PageCount != 1 {
-		t.Fatalf("page count = %d", result.PageCount)
-	}
-	if result.Diagnostics.PageCount != 1 {
-		t.Fatalf("diagnostics page count = %d", result.Diagnostics.PageCount)
-	}
-}
-
-func TestRenderPrintPDFPDFDiagnosticsIncludesMetadata(t *testing.T) {
-	service := render.NewService(nil)
-	input := minimalIntegrationPDFWithInfo(t, "Integration PDF")
-	result, err := service.RenderPrintPDF(context.Background(), protocol.PrintPDFRequest{
-		RequestID: "req-pdf-info",
-		Source: protocol.Source{
-			Type:      "pdf",
-			PDFBase64: base64.StdEncoding.EncodeToString(input),
-		},
-	})
-	if err != nil {
-		t.Fatalf("render pdf: %v", err)
-	}
-	if result.Diagnostics.PDFTitle != "Integration PDF" {
-		t.Fatalf("diagnostics title = %q", result.Diagnostics.PDFTitle)
-	}
-}
-
-func minimalIntegrationPDF(t *testing.T) []byte {
-	t.Helper()
-	return minimalIntegrationPDFWithInfo(t, "")
-}
-
-func minimalIntegrationPDFWithInfo(t *testing.T, title string) []byte {
-	t.Helper()
-	objects := []string{
-		"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n",
-		"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n",
-		"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R >>\nendobj\n",
-		"4 0 obj\n<< /Length 0 >>\nstream\n\nendstream\nendobj\n",
-	}
-	infoObjectID := 0
-	if title != "" {
-		infoObjectID = len(objects) + 1
-		objects = append(objects, fmt.Sprintf("%d 0 obj\n<< /Title (%s) >>\nendobj\n", infoObjectID, escapeIntegrationPDFString(title)))
-	}
-	var buf bytes.Buffer
-	buf.WriteString("%PDF-1.4\n")
-	offsets := make([]int, len(objects)+1)
-	for i, obj := range objects {
-		offsets[i+1] = buf.Len()
-		buf.WriteString(obj)
-	}
-	xrefOffset := buf.Len()
-	buf.WriteString("xref\n")
-	buf.WriteString(fmt.Sprintf("0 %d\n", len(objects)+1))
-	buf.WriteString("0000000000 65535 f \n")
-	for i := 1; i < len(offsets); i++ {
-		buf.WriteString(fmt.Sprintf("%010d 00000 n \n", offsets[i]))
-	}
-	buf.WriteString("trailer\n")
-	if infoObjectID > 0 {
-		buf.WriteString(fmt.Sprintf("<< /Size %d /Root 1 0 R /Info %d 0 R >>\n", len(objects)+1, infoObjectID))
-	} else {
-		buf.WriteString(fmt.Sprintf("<< /Size %d /Root 1 0 R >>\n", len(objects)+1))
-	}
-	buf.WriteString("startxref\n")
-	buf.WriteString(fmt.Sprintf("%d\n", xrefOffset))
-	buf.WriteString("%%EOF\n")
-	return buf.Bytes()
-}
-
-func escapeIntegrationPDFString(value string) string {
-	value = strings.ReplaceAll(value, `\`, `\\`)
-	value = strings.ReplaceAll(value, `(`, `\(`)
-	value = strings.ReplaceAll(value, `)`, `\)`)
-	return value
 }
 
 func TestRenderPrintPDFCapturesBrowserDiagnostics(t *testing.T) {

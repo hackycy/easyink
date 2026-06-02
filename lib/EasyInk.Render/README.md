@@ -8,9 +8,9 @@
 
 - CLI：`render`、`daemon`、`browser inspect`、`config`、`diagnostics show`、`version`。
 - Daemon：Windows Named Pipe，macOS/Linux Unix Domain Socket；不监听 TCP 端口。
-- 输入：`source.type=html`、`source.type=pdf`、`source.type=easyink`，继续复用 `protocol.PrintPDFRequest`。
+- 输入：`source.type=html`、`source.type=easyink`，继续复用 `protocol.PrintPDFRequest`。
 - Browser：渲染架构只支持 Chromium；浏览器二进制需支持 Chromium/Chrome DevTools Protocol，最低 Chromium 80。
-- Diagnostics：按 `requestId` 记录浏览器信息、耗时、console error、网络失败、页数、PDF metadata、日志和可选附件。
+- Diagnostics：按 `requestId` 记录浏览器信息、耗时、console error、网络失败、页数、日志和可选附件。
 - Runtime：Render 主路径为 CLI/IPC daemon。
 
 ## 目录
@@ -19,7 +19,7 @@
 host/       Go CLI、daemon、IPC、render host 实现
 protocol/   协议 fixture
 manifests/  runtime manifest 示例
-samples/    html/pdf/easyink 请求示例
+samples/    html/easyink 请求示例
 tools/      发布包和 manifest 辅助脚本
 ```
 

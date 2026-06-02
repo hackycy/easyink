@@ -271,7 +271,7 @@ function statusForError(err: unknown): number {
   if (err.code === 'INVALID_JSON' || err.code === 'REQUEST_BODY_TOO_LARGE') {
     return 400
   }
-  if (err.code === 'INVALID_REQUEST' || err.code === 'INVALID_PDF' || err.code === 'SECURITY_BLOCKED') {
+  if (err.code === 'INVALID_REQUEST' || err.code === 'SECURITY_BLOCKED') {
     return 422
   }
   if (err.code === 'RENDER_TIMEOUT' || err.code === 'RENDER_CLI_TIMEOUT') {

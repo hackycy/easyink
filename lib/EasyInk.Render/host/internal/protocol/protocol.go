@@ -21,7 +21,6 @@ type Source struct {
 	Type      string          `json:"type"`
 	HTML      string          `json:"html,omitempty"`
 	BaseURL   string          `json:"baseUrl,omitempty"`
-	PDFBase64 string          `json:"pdfBase64,omitempty"`
 	FileName  string          `json:"fileName,omitempty"`
 	Schema    json.RawMessage `json:"schema,omitempty"`
 	Data      json.RawMessage `json:"data,omitempty"`
@@ -95,10 +94,6 @@ type Diagnostics struct {
 	FinalURL         string            `json:"finalUrl,omitempty"`
 	SourceType       string            `json:"sourceType"`
 	PageCount        int               `json:"pageCount,omitempty"`
-	PDFTitle         string            `json:"pdfTitle,omitempty"`
-	PDFAuthor        string            `json:"pdfAuthor,omitempty"`
-	PDFCreator       string            `json:"pdfCreator,omitempty"`
-	PDFProducer      string            `json:"pdfProducer,omitempty"`
 	RequestHeaders   map[string]string `json:"requestHeaders,omitempty"`
 	AttachmentPath   string            `json:"attachmentPath,omitempty"`
 	LogPath          string            `json:"logPath,omitempty"`
@@ -109,7 +104,6 @@ type Diagnostics struct {
 const (
 	ErrInvalidRequest    = "INVALID_REQUEST"
 	ErrUnsupportedSource = "UNSUPPORTED_SOURCE"
-	ErrInvalidPDF        = "INVALID_PDF"
 	ErrRenderTimeout     = "RENDER_TIMEOUT"
 	ErrRenderFailed      = "RENDER_FAILED"
 	ErrTooManyRequests   = "TOO_MANY_REQUESTS"

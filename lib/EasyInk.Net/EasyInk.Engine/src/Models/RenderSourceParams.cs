@@ -11,7 +11,6 @@ public sealed class RenderSourceParams
     public string Type { get; set; } = string.Empty;
     public string? Html { get; set; }
     public string? BaseUrl { get; set; }
-    public string? PdfBase64 { get; set; }
     public string? FileName { get; set; }
     public JToken? Schema { get; set; }
     public JToken? Data { get; set; }

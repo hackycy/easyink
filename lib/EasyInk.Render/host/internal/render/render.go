@@ -40,17 +40,9 @@ type Result struct {
 	Diagnostics protocol.Diagnostics
 	PageCount   int
 	Attachments DiagnosticAttachments
-	PDFMetadata PDFMetadata
 }
 
 type DiagnosticAttachments = diagnostics.Attachments
-
-type PDFMetadata struct {
-	Title    string
-	Author   string
-	Creator  string
-	Producer string
-}
 
 type offlineResource struct {
 	contentType string
@@ -85,8 +77,6 @@ func (s *Service) RenderPrintPDF(ctx context.Context, req protocol.PrintPDFReque
 	switch req.Source.Type {
 	case "html":
 		result, err = s.renderHTML(ctx, req, collector)
-	case "pdf":
-		result, err = s.normalizePDF(req)
 	case "easyink":
 		result, err = s.renderEasyInk(ctx, req, collector)
 	default:
@@ -95,14 +85,6 @@ func (s *Service) RenderPrintPDF(ctx context.Context, req protocol.PrintPDFReque
 	if err != nil {
 		result.Diagnostics = collector.Snapshot()
 		return result, normalizeError(err)
-	}
-	if req.Source.Type == "pdf" {
-		collector.SetPDFMetadata(
-			result.PDFMetadata.Title,
-			result.PDFMetadata.Author,
-			result.PDFMetadata.Creator,
-			result.PDFMetadata.Producer,
-		)
 	}
 	pageCount := result.PageCount
 	if pageCount == 0 {
@@ -550,74 +532,6 @@ func (t *pageTracker) notifyChanged() {
 	case t.changed <- struct{}{}:
 	default:
 	}
-}
-
-func (s *Service) normalizePDF(req protocol.PrintPDFRequest) (Result, error) {
-	if strings.TrimSpace(req.Source.PDFBase64) == "" {
-		return Result{}, coded(protocol.ErrInvalidRequest, "source.pdfBase64 is required", nil)
-	}
-	maxInputBytes := maxInputBytes(req.Security)
-	if int64(base64.StdEncoding.DecodedLen(len(req.Source.PDFBase64))) > maxInputBytes {
-		return Result{}, coded(protocol.ErrInvalidPDF, "input PDF exceeds maxInputBytes", map[string]any{"maxInputBytes": maxInputBytes})
-	}
-	decoded, err := base64.StdEncoding.DecodeString(req.Source.PDFBase64)
-	if err != nil {
-		return Result{}, coded(protocol.ErrInvalidPDF, "source.pdfBase64 is not valid base64", nil)
-	}
-	if int64(len(decoded)) > maxInputBytes {
-		return Result{}, coded(protocol.ErrInvalidPDF, "input PDF exceeds maxInputBytes", map[string]any{"maxInputBytes": maxInputBytes})
-	}
-	if len(decoded) < 5 || string(decoded[:5]) != "%PDF-" {
-		return Result{}, coded(protocol.ErrInvalidPDF, "input PDF header is invalid", nil)
-	}
-	if !bytes.Contains(decoded, []byte("%%EOF")) {
-		return Result{}, coded(protocol.ErrInvalidPDF, "input PDF EOF marker is missing", nil)
-	}
-	if !bytes.Contains(decoded, []byte("startxref")) {
-		return Result{}, coded(protocol.ErrInvalidPDF, "input PDF startxref is missing", nil)
-	}
-	reader, err := pdfparse.NewReader(bytes.NewReader(decoded), int64(len(decoded)))
-	if err != nil {
-		return Result{}, coded(protocol.ErrInvalidPDF, "input PDF structure is invalid", map[string]any{"reason": err.Error()})
-	}
-	pageCount := reader.NumPage()
-	if pageCount <= 0 {
-		return Result{}, coded(protocol.ErrInvalidPDF, "input PDF has no pages", nil)
-	}
-	return Result{
-		PDF:         decoded,
-		PageCount:   pageCount,
-		PDFMetadata: readPDFMetadata(reader),
-	}, nil
-}
-
-func readPDFMetadata(reader *pdfparse.Reader) PDFMetadata {
-	if reader == nil {
-		return PDFMetadata{}
-	}
-	info := reader.Trailer().Key("Info")
-	if info.IsNull() {
-		return PDFMetadata{}
-	}
-	return PDFMetadata{
-		Title:    pdfText(info.Key("Title")),
-		Author:   pdfText(info.Key("Author")),
-		Creator:  pdfText(info.Key("Creator")),
-		Producer: pdfText(info.Key("Producer")),
-	}
-}
-
-func pdfText(value pdfparse.Value) string {
-	if value.IsNull() {
-		return ""
-	}
-	if text := strings.TrimSpace(value.Text()); text != "" {
-		return text
-	}
-	if text := strings.TrimSpace(value.TextFromUTF16()); text != "" {
-		return text
-	}
-	return strings.TrimSpace(value.RawString())
 }
 
 func htmlWithBaseURL(htmlDoc, baseURL string) string {

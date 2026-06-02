@@ -109,7 +109,7 @@ func runRender(options renderOptions, stdout, stderr io.Writer) int {
 }
 
 func renderOnce(cfg config.RuntimeConfig, req protocol.PrintPDFRequest, outPath, diagnosticsOut string, jsonOut bool, stdout, stderr io.Writer) int {
-	requireBrowser := req.Source.Type != "pdf"
+	requireBrowser := req.Source.Type == "html" || req.Source.Type == "easyink"
 	if err := cfg.ValidateRuntime(requireBrowser); err != nil {
 		fmt.Fprintf(stderr, "configuration error: %v\n", err)
 		if requireBrowser {

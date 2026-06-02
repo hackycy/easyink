@@ -52,7 +52,7 @@ func ExitCode(err error) int {
 	var coded *render.CodedError
 	if errors.As(err, &coded) {
 		switch coded.Code {
-		case protocol.ErrInvalidRequest, protocol.ErrInvalidPDF, protocol.ErrSecurityBlocked:
+		case protocol.ErrInvalidRequest, protocol.ErrSecurityBlocked:
 			return ExitInvalidRequestJSON
 		case protocol.ErrRenderTimeout:
 			return ExitTimeout
@@ -71,7 +71,7 @@ func ExitCodeForIPC(frame ipc.Frame) int {
 		return ExitDaemonProtocol
 	}
 	switch frame.Header.Error.Code {
-	case protocol.ErrInvalidRequest, protocol.ErrInvalidPDF, protocol.ErrSecurityBlocked:
+	case protocol.ErrInvalidRequest, protocol.ErrSecurityBlocked:
 		return ExitInvalidRequestJSON
 	case protocol.ErrRenderTimeout:
 		return ExitTimeout

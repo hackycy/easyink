@@ -2,6 +2,7 @@ package render
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"fmt"
 	"strings"
@@ -12,70 +13,16 @@ import (
 	"github.com/chromedp/cdproto/network"
 )
 
-func TestNormalizePDFValidatesAndReturnsBytes(t *testing.T) {
+func TestRenderPrintPDFRejectsPDFSource(t *testing.T) {
 	service := &Service{}
-	input := minimalPDF(t, PDFMetadata{})
-	result, err := service.normalizePDF(protocol.PrintPDFRequest{
+	_, err := service.RenderPrintPDF(context.Background(), protocol.PrintPDFRequest{
 		RequestID: "req-pdf",
 		Source: protocol.Source{
-			Type:      "pdf",
-			PDFBase64: base64.StdEncoding.EncodeToString(input),
+			Type: "pdf",
 		},
 	})
-	if err != nil {
-		t.Fatalf("normalize pdf: %v", err)
-	}
-	if string(result.PDF) != string(input) {
-		t.Fatal("expected PDF bytes to be returned unchanged")
-	}
-	if result.PageCount != 1 {
-		t.Fatalf("page count = %d", result.PageCount)
-	}
-}
-
-func TestNormalizePDFReadsMetadata(t *testing.T) {
-	service := &Service{}
-	input := minimalPDF(t, PDFMetadata{
-		Title:    "EasyInk Test PDF",
-		Author:   "EasyInk",
-		Creator:  "Render Test",
-		Producer: "Go",
-	})
-	result, err := service.normalizePDF(protocol.PrintPDFRequest{
-		RequestID: "req-pdf",
-		Source: protocol.Source{
-			Type:      "pdf",
-			PDFBase64: base64.StdEncoding.EncodeToString(input),
-		},
-	})
-	if err != nil {
-		t.Fatalf("normalize pdf: %v", err)
-	}
-	if result.PDFMetadata.Title != "EasyInk Test PDF" {
-		t.Fatalf("title = %q", result.PDFMetadata.Title)
-	}
-	if result.PDFMetadata.Author != "EasyInk" {
-		t.Fatalf("author = %q", result.PDFMetadata.Author)
-	}
-	if result.PDFMetadata.Creator != "Render Test" {
-		t.Fatalf("creator = %q", result.PDFMetadata.Creator)
-	}
-	if result.PDFMetadata.Producer != "Go" {
-		t.Fatalf("producer = %q", result.PDFMetadata.Producer)
-	}
-}
-
-func TestNormalizePDFRejectsInvalidHeader(t *testing.T) {
-	service := &Service{}
-	_, err := service.normalizePDF(protocol.PrintPDFRequest{
-		RequestID: "req-pdf",
-		Source: protocol.Source{
-			Type:      "pdf",
-			PDFBase64: base64.StdEncoding.EncodeToString([]byte("hello")),
-		},
-	})
-	if err == nil || !strings.Contains(err.Error(), "header") {
-		t.Fatalf("expected header error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "unsupported source.type") {
+		t.Fatalf("expected unsupported source error, got %v", err)
 	}
 }
 
@@ -86,39 +33,9 @@ func TestCountPDFPagesHasMinimumForValidPDFBytes(t *testing.T) {
 }
 
 func TestCountPDFPagesUsesParserBeforeFallback(t *testing.T) {
-	input := minimalPDF(t, PDFMetadata{Title: "/Type /Page"})
+	input := minimalPDF(t, "/Type /Page")
 	if got := countPDFPages(input); got != 1 {
 		t.Fatalf("page count = %d", got)
-	}
-}
-
-func TestNormalizePDFRejectsMissingStartXref(t *testing.T) {
-	service := &Service{}
-	input := []byte("%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF")
-	_, err := service.normalizePDF(protocol.PrintPDFRequest{
-		RequestID: "req-pdf",
-		Source: protocol.Source{
-			Type:      "pdf",
-			PDFBase64: base64.StdEncoding.EncodeToString(input),
-		},
-	})
-	if err == nil || !strings.Contains(err.Error(), "startxref") {
-		t.Fatalf("expected startxref error, got %v", err)
-	}
-}
-
-func TestNormalizePDFRejectsStructurallyInvalidPDF(t *testing.T) {
-	service := &Service{}
-	input := []byte("%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\nstartxref\n0\n%%EOF")
-	_, err := service.normalizePDF(protocol.PrintPDFRequest{
-		RequestID: "req-pdf",
-		Source: protocol.Source{
-			Type:      "pdf",
-			PDFBase64: base64.StdEncoding.EncodeToString(input),
-		},
-	})
-	if err == nil || !strings.Contains(err.Error(), "structure") {
-		t.Fatalf("expected structure error, got %v", err)
 	}
 }
 
@@ -195,21 +112,6 @@ func TestBuildOfflineResourcesRejectsOversizedBundle(t *testing.T) {
 			},
 		},
 	}, 4)
-	if err == nil || !strings.Contains(err.Error(), "maxInputBytes") {
-		t.Fatalf("expected maxInputBytes error, got %v", err)
-	}
-}
-
-func TestNormalizePDFRejectsOversizedBase64BeforeDecode(t *testing.T) {
-	service := &Service{}
-	_, err := service.normalizePDF(protocol.PrintPDFRequest{
-		RequestID: "req-pdf",
-		Source: protocol.Source{
-			Type:      "pdf",
-			PDFBase64: base64.StdEncoding.EncodeToString([]byte("too-large")),
-		},
-		Security: protocol.SecurityOptions{MaxInputBytes: 4},
-	})
 	if err == nil || !strings.Contains(err.Error(), "maxInputBytes") {
 		t.Fatalf("expected maxInputBytes error, got %v", err)
 	}
@@ -315,7 +217,7 @@ func TestRedirectResponseBlockedBySecurityPolicy(t *testing.T) {
 	}
 }
 
-func minimalPDF(t *testing.T, metadata PDFMetadata) []byte {
+func minimalPDF(t *testing.T, title string) []byte {
 	t.Helper()
 	objects := []string{
 		"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n",
@@ -324,16 +226,9 @@ func minimalPDF(t *testing.T, metadata PDFMetadata) []byte {
 		"4 0 obj\n<< /Length 0 >>\nstream\n\nendstream\nendobj\n",
 	}
 	infoObjectID := 0
-	if metadata != (PDFMetadata{}) {
+	if title != "" {
 		infoObjectID = len(objects) + 1
-		objects = append(objects, fmt.Sprintf(
-			"%d 0 obj\n<< /Title (%s) /Author (%s) /Creator (%s) /Producer (%s) >>\nendobj\n",
-			infoObjectID,
-			escapePDFString(metadata.Title),
-			escapePDFString(metadata.Author),
-			escapePDFString(metadata.Creator),
-			escapePDFString(metadata.Producer),
-		))
+		objects = append(objects, fmt.Sprintf("%d 0 obj\n<< /Title (%s) >>\nendobj\n", infoObjectID, escapePDFString(title)))
 	}
 	var buf bytes.Buffer
 	buf.WriteString("%PDF-1.4\n")

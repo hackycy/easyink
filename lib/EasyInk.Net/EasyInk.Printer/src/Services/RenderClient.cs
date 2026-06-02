@@ -253,8 +253,6 @@ internal sealed class RenderClient
             case "UNSUPPORTED_SOURCE":
             case "SECURITY_BLOCKED":
                 return ErrorCode.InvalidParams;
-            case "INVALID_PDF":
-                return ErrorCode.InvalidPdfSource;
             case "TOO_MANY_REQUESTS":
                 return ErrorCode.QueueFull;
             case "RENDER_TIMEOUT":
