@@ -1,12 +1,12 @@
 ---
-description: EasyInk 打印方案选型指南：Render PDF 渲染、Electron HiPrint 桌面打印和 EasyInk Printer Windows 本地打印。
+description: EasyInk 打印方案选型指南：Render PDF 渲染、EasyInk Printer Windows 本地打印、Electron HiPrint 和 LODOP/C-Lodop 集成。
 ---
 
 # 打印方案 {#printing}
 
 打印章节先帮你回答一个问题：这次到底是要“生成 PDF”，还是要“把内容送到本地打印机”。
 
-先看两个最短调用：
+先看几个最短调用：
 
 ```ts
 import { createEasyInkPrinter } from '@easyink/print-integration-easyink-printer'
@@ -40,23 +40,47 @@ await printer.print({ schema, data })
 
 两段代码都做了同一件事：用托管 Viewer 渲染 `schema + data`，再交给对应的本地打印链路。区别在于最后提交给谁，以及用什么格式提交。
 
+LODOP 路径也类似：
+
+```ts
+import { createLodopClient, createLodopPrinter } from '@easyink/print-integration-lodop'
+
+const client = createLodopClient({
+  script: {
+    src: 'http://localhost:8000/CLodopfuncs.js',
+  },
+})
+
+const printer = createLodopPrinter({
+  client,
+  viewer: 'iframe',
+})
+
+await client.useDefaultPrinter()
+await printer.print({ schema, data })
+```
+
+这段代码会加载 C-Lodop script，等待 LODOP runtime 可用，再把 Viewer 渲染出的 HTML 提交给本地控件。
+
 ## 选哪条链路 {#choose-a-path}
 
-三条链路都能进入打印工作流，但它们解决的问题不一样。
+几条链路都能进入打印工作流，但它们解决的问题不一样。
 
 | 方案 | 更适合什么 | 默认端口或入口 |
 | --- | --- | --- |
 | EasyInk.Render | 把 HTML、PDF 或 EasyInk schema 归一成 PDF | `easyink-render render` |
 | EasyInk Printer | Windows 本地服务、正式单据、PDF 打印路径 | `http://localhost:18080` |
 | HiPrint | 已有 `electron-hiprint`、小票、卡片、跨平台桌面场景 | `http://localhost:17521` |
+| LODOP | 已有 `LODOP` 或 `C-Lodop`、浏览器直接控件打印、HTML 和图片打印 | `http://localhost:8000/CLodopfuncs.js` |
 
 如果你刚开始接打印，可以这样判断：
 
 - 只需要生成 PDF，不需要枚举打印机：先看 [Render PDF 渲染](/printing/render)。
 - 浏览器要调用 Windows 本地打印机：先看 [EasyInk Printer 快速上手](/dotnet/getting-started)。
 - 项目已经接入 `electron-hiprint`：先看 [HiPrint 快速上手](/hiprint/getting-started)。
+- 项目已经部署 `LODOP` 或 `C-Lodop`：先看 [LODOP 快速上手](/lodop/getting-started)。
 
-两条本地打印集成都有高层打印器。你不用先自己写 `PrintDriver`，除非你要接入完全不同的设备协议。
+本地打印集成都有高层打印器。你不用先自己写 `PrintDriver`，除非你要接入完全不同的设备协议。
 
 ## EasyInk Printer 路径 {#easyink-printer}
 
@@ -126,6 +150,37 @@ await printer.print({
 
 如果你的设备更依赖驱动当前纸张，比如热敏机或连续纸，这个默认值通常更稳。继续看 [Electron HiPrint](/hiprint/)。
 
+## LODOP 路径 {#lodop}
+
+LODOP 的高层打印器默认会把 Viewer 页面序列化成 HTML，再交给 LODOP runtime。
+
+```ts
+const printer = createLodopPrinter({
+  client,
+  viewer: 'iframe',
+})
+
+await printer.print({
+  schema,
+  data,
+  printerName: 'XP-80C',
+})
+```
+
+这段代码会默认调用 LODOP 的页面尺寸设置。也就是说，`LodopClient` 会把毫米尺寸换算给 `SET_PRINT_PAGESIZE`，再通过 `ADD_PRINT_HTM` 或 `ADD_PRINT_HTML` 提交页面内容。
+
+如果你想使用打印机驱动当前纸张，可以传 `forcePageSize: false`：
+
+```ts
+await printer.print({
+  schema,
+  data,
+  forcePageSize: false,
+})
+```
+
+LODOP 还适合直接打印业务 HTML 或 base64 图片。继续看 [LODOP](/lodop/)。
+
 ## Render 路径 {#render}
 
 Render 不提交物理打印任务。它只负责把输入变成 PDF。
@@ -158,4 +213,4 @@ await printer.print({
 - 有打印机但提交失败：看前端抛出的错误和服务端日志。
 - 提交成功但纸张异常：再看 `paper`、模板尺寸和驱动默认介质。
 
-关于选型，目前停在这里就够了。下一步可以进入具体链路：[EasyInk Printer](/dotnet/getting-started) 或 [HiPrint](/hiprint/getting-started)。
+关于选型，目前停在这里就够了。下一步可以进入具体链路：[EasyInk Printer](/dotnet/getting-started)、[HiPrint](/hiprint/getting-started) 或 [LODOP](/lodop/getting-started)。

@@ -46,6 +46,7 @@ pnpm add @easyink/designer @easyink/viewer
 
 - `@easyink/print-integration-easyink-printer`：对接 Windows 上的 EasyInk.Printer。
 - `@easyink/print-integration-hiprint`：对接 electron-hiprint。
+- `@easyink/print-integration-lodop`：对接 LODOP/C-Lodop。
 
 如果你的目标只是把模板打出去，优先选官方集成包，不用先自己写驱动。
 

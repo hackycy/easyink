@@ -278,4 +278,4 @@ HTML 和 EasyInk 输入会经过资源安全校验。
 
 默认策略会阻断私网、localhost、link-local、非 `http/https` 协议等外链资源。浏览器运行时也会禁用代理环境变量，并使用独立的 profile/context。IPC daemon 请求必须带状态文件中的 nonce，单个 IPC payload 和 request JSON 会被限制在 128 MiB 内；PDF 与离线资源还会受 `security.maxInputBytes` 限制。Diagnostics 默认以当前用户私有权限写入，且不会把 `data:` 页面地址原文写入 `finalUrl`。
 
-关于 Render，目前知道这些就够用了。如果你的下一步是把 PDF 送到打印机，回到 [打印方案](/printing/) 选择 EasyInk Printer 或 HiPrint。
+关于 Render，目前知道这些就够用了。如果你的下一步是把 PDF 或 HTML 送到打印机，回到 [打印方案](/printing/) 选择 EasyInk Printer、HiPrint 或 LODOP。

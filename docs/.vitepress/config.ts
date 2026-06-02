@@ -95,6 +95,13 @@ export default defineConfig({
           ],
         },
         {
+          text: 'LODOP',
+          items: [
+            { text: '概述', link: '/lodop/' },
+            { text: '快速上手', link: '/lodop/getting-started' },
+          ],
+        },
+        {
           text: 'EasyInk Printer (.NET)',
           items: [
             { text: '概述', link: '/dotnet/' },
@@ -118,6 +125,46 @@ export default defineConfig({
           items: [
             { text: '概述', link: '/hiprint/' },
             { text: '快速上手', link: '/hiprint/getting-started' },
+          ],
+        },
+        {
+          text: 'LODOP',
+          items: [
+            { text: '概述', link: '/lodop/' },
+            { text: '快速上手', link: '/lodop/getting-started' },
+          ],
+        },
+        {
+          text: 'EasyInk Printer (.NET)',
+          items: [
+            { text: '概述', link: '/dotnet/' },
+            { text: '快速上手', link: '/dotnet/getting-started' },
+            { text: 'Engine DLL', link: '/dotnet/engine' },
+            { text: 'Printer 应用', link: '/dotnet/printer' },
+            { text: 'API 参考', link: '/dotnet/api-reference' },
+          ],
+        },
+      ],
+      '/lodop/': [
+        {
+          text: 'Printing',
+          items: [
+            { text: '概述', link: '/printing/' },
+            { text: 'Render 服务端渲染', link: '/printing/render' },
+          ],
+        },
+        {
+          text: 'Electron HiPrint',
+          items: [
+            { text: '概述', link: '/hiprint/' },
+            { text: '快速上手', link: '/hiprint/getting-started' },
+          ],
+        },
+        {
+          text: 'LODOP',
+          items: [
+            { text: '概述', link: '/lodop/' },
+            { text: '快速上手', link: '/lodop/getting-started' },
           ],
         },
         {
@@ -147,6 +194,13 @@ export default defineConfig({
           ],
         },
         {
+          text: 'LODOP',
+          items: [
+            { text: '概述', link: '/lodop/' },
+            { text: '快速上手', link: '/lodop/getting-started' },
+          ],
+        },
+        {
           text: 'EasyInk Printer (.NET)',
           items: [
             { text: '概述', link: '/dotnet/' },
@@ -170,6 +224,13 @@ export default defineConfig({
           items: [
             { text: '概述', link: '/hiprint/' },
             { text: '快速上手', link: '/hiprint/getting-started' },
+          ],
+        },
+        {
+          text: 'LODOP',
+          items: [
+            { text: '概述', link: '/lodop/' },
+            { text: '快速上手', link: '/lodop/getting-started' },
           ],
         },
         {

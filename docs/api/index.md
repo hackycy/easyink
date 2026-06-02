@@ -184,3 +184,23 @@ electron-hiprint 官方前端集成。
 | `printHtmlWithHiPrintRuntime` | Function | 通过 HiPrint runtime 打印单个 HTML 文档 |
 
 类型导出：`HiPrintClientOptions`, `HiPrintRuntimeClientOptions`, `HiPrintClientLike`, `HiPrintDevice`, `HiPrintPrinterOptions`, `HiPrintPrinter`, `HiPrintPrintRequest`, `PrintHtmlOptions`, `PrintPagesOptions`, `HiPrintProgress`
+
+## @easyink/print-integration-lodop
+
+LODOP/C-Lodop 官方前端集成。
+
+| 导出 | 类型 | 说明 |
+|------|------|------|
+| `createLodopClient` | Function | 创建并管理 LODOP script、runtime、设备和打印提交的客户端 |
+| `createLodopRuntimeClient` | Function | 包装业务已有的 LODOP runtime |
+| `createLegacyLodopClient` | Function | `createLodopRuntimeClient` 的兼容别名 |
+| `LodopClient` | Class | LODOP script 加载、设备枚举和打印提交客户端 |
+| `LodopRuntimeClient` | Class | 只负责打印提交的 runtime adapter |
+| `DEFAULT_CLODOP_SCRIPT_URLS` | Constant | 默认 C-Lodop script 地址 |
+| `loadLodopScript` | Function | 加载 `CLodopfuncs.js`，支持 `name` 命名 runtime |
+| `createLodopPrinter` | Function | 创建托管 Viewer + LODOP HTML 提交的高阶打印器 |
+| `createLodopDriver` | Function | 创建 Viewer 打印驱动（高级用法） |
+| `printHtmlWithLodopRuntime` | Function | 通过 LODOP runtime 打印单个 HTML 文档 |
+| `printImageWithLodopRuntime` | Function | 通过 LODOP runtime 打印单张图片 |
+
+类型导出：`LodopClientOptions`, `LodopRuntimeClientOptions`, `LodopClientLike`, `LodopDevice`, `LodopPrinterOptions`, `LodopPrinter`, `LodopPrintRequest`, `LodopScriptConfig`, `LodopScriptOptions`, `LodopScriptSource`, `LodopRuntime`, `PrintHtmlOptions`, `PrintImageOptions`, `PrintPagesOptions`, `LodopProgress`
