@@ -28,7 +28,7 @@
     "@easyink/core": "workspace:*",
     "@easyink/icons": "workspace:*",
     "@easyink/material-barcode": "workspace:*",
-    "@easyink/material-chart": "workspace:*",
+    "@easyink/material-chart-bar": "workspace:*",
     "@easyink/material-ellipse": "workspace:*",
     "@easyink/material-flow-row": "workspace:*",
     "@easyink/material-image": "workspace:*",

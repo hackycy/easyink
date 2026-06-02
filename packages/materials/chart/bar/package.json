@@ -1,8 +1,8 @@
 {
-  "name": "@easyink/material-chart",
+  "name": "@easyink/material-chart-bar",
   "type": "module",
   "version": "0.0.19",
-  "description": "EasyInk chart material",
+  "description": "EasyInk bar chart material",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",
   "publishConfig": {
@@ -23,7 +23,11 @@
   },
   "dependencies": {
     "@easyink/core": "workspace:*",
+    "@easyink/material-chart-kernel": "workspace:*",
     "@easyink/schema": "workspace:*",
     "@easyink/shared": "workspace:*"
+  },
+  "inlinedDependencies": {
+    "echarts": "6.1.0"
   }
 }

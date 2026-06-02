@@ -24,12 +24,13 @@ import {
   createBarcodeNode,
 } from '@easyink/material-barcode'
 import {
-  CHART_CAPABILITIES,
-  CHART_TYPE,
-  chartAIMaterialDescriptor,
-  createChartExtension,
-  createChartNode,
-} from '@easyink/material-chart'
+  CHART_BAR_CAPABILITIES,
+  CHART_BAR_TYPE,
+  chartBarAIMaterialDescriptor,
+  chartBarDesignerPropSchemas,
+  createChartBarExtension,
+  createChartBarNode,
+} from '@easyink/material-chart-bar'
 import {
   createEllipseExtension,
   createEllipseNode,
@@ -236,14 +237,15 @@ export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
       factory: createFlowRowExtension,
     },
     {
-      type: CHART_TYPE,
-      name: 'designer.toolbar.chart',
+      type: CHART_BAR_TYPE,
+      name: 'designer.toolbar.chartBar',
       icon: IconChart,
       category: 'chart',
-      capabilities: CHART_CAPABILITIES,
-      aiDescriptor: chartAIMaterialDescriptor,
-      createDefaultNode: createChartNode,
-      factory: createChartExtension,
+      capabilities: CHART_BAR_CAPABILITIES,
+      aiDescriptor: chartBarAIMaterialDescriptor,
+      createDefaultNode: createChartBarNode,
+      factory: createChartBarExtension,
+      propSchemas: chartBarDesignerPropSchemas,
     },
     {
       type: SVG_CUSTOM_TYPE,
@@ -302,7 +304,7 @@ export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
     { type: TABLE_STATIC_TYPE, group: 'data' },
     { type: TABLE_DATA_TYPE, group: 'data' },
     { type: FLOW_ROW_TYPE, group: 'data' },
-    { type: CHART_TYPE, group: 'chart' },
+    { type: CHART_BAR_TYPE, group: 'chart' },
     { type: SVG_STAR_TYPE, group: 'svg' },
     { type: SVG_HEART_TYPE, group: 'svg' },
     { type: SVG_CUSTOM_TYPE, group: 'svg' },

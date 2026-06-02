@@ -1,6 +1,6 @@
 import type { BuiltinViewerRegistrar } from './types'
 import { BARCODE_TYPE, renderBarcode } from '@easyink/material-barcode'
-import { CHART_TYPE, renderChart } from '@easyink/material-chart'
+import { CHART_BAR_TYPE, renderChartBar } from '@easyink/material-chart-bar'
 import { ELLIPSE_TYPE, renderEllipse } from '@easyink/material-ellipse'
 import { FLOW_ROW_TYPE, measureFlowRow, renderFlowRow } from '@easyink/material-flow-row'
 import { IMAGE_TYPE, renderImage } from '@easyink/material-image'
@@ -37,7 +37,7 @@ export function registerBuiltinViewerMaterials(register: BuiltinViewerRegistrar)
     render: (node, ctx) => renderFlowRow(node, ctx),
     measure: (node, ctx) => measureFlowRow(node, ctx),
   })
-  register(CHART_TYPE, { render: node => renderChart(node) })
+  register(CHART_BAR_TYPE, { render: (node, ctx) => renderChartBar(node, ctx) })
   register(SVG_CUSTOM_TYPE, { render: node => renderSvgCustom(node) })
   register(SVG_STAR_TYPE, { render: (node, ctx) => renderSvgStar(node, ctx.unit) })
   register(SVG_HEART_TYPE, { render: (node, ctx) => renderSvgHeart(node, ctx.unit) })

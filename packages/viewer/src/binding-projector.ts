@@ -62,10 +62,11 @@ export function applyBindingsToProps(
 }
 
 const PRIMARY_BIND_MAP: Record<string, string> = {
-  text: 'content',
-  image: 'src',
-  barcode: 'value',
-  qrcode: 'value',
+  'text': 'content',
+  'image': 'src',
+  'barcode': 'value',
+  'qrcode': 'value',
+  'chart-bar': 'data',
 }
 
 function getPrimaryBindProp(nodeType: string): string {

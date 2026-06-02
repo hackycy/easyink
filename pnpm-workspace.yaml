@@ -5,6 +5,7 @@ packages:
   - packages/assistant/*
   - packages/print/*
   - packages/materials/*
+  - packages/materials/chart/*
   - packages/materials/svg/*
   - packages/materials/table/*
   - packages/export/runtime
@@ -57,6 +58,7 @@ catalogs:
     '@xstate/vue': ^5.0.0
     curlconverter: ^4.12.0
     dexie: ^4.4.3
+    echarts: ^6.0.0
     h3: 2.0.1-rc.22
     hono: ^4.12.23
     jsbarcode: ^3.12.3

@@ -115,6 +115,9 @@ catalogs:
     dotenv:
       specifier: ^17.2.5
       version: 17.4.2
+    echarts:
+      specifier: ^6.0.0
+      version: 6.1.0
     h3:
       specifier: 2.0.1-rc.22
       version: 2.0.1-rc.22
@@ -595,9 +598,9 @@ importers:
       '@easyink/material-barcode':
         specifier: workspace:*
         version: link:../materials/barcode
-      '@easyink/material-chart':
+      '@easyink/material-chart-bar':
         specifier: workspace:*
-        version: link:../materials/chart
+        version: link:../materials/chart/bar
       '@easyink/material-ellipse':
         specifier: workspace:*
         version: link:../materials/ellipse
@@ -769,17 +772,26 @@ importers:
         specifier: catalog:framework
         version: 3.12.3
 
-  packages/materials/chart:
+  packages/materials/chart/bar:
     dependencies:
       '@easyink/core':
         specifier: workspace:*
-        version: link:../../core
+        version: link:../../../core
+      '@easyink/material-chart-kernel':
+        specifier: workspace:*
+        version: link:../kernel
       '@easyink/schema':
         specifier: workspace:*
-        version: link:../../schema
+        version: link:../../../schema
       '@easyink/shared':
         specifier: workspace:*
-        version: link:../../shared
+        version: link:../../../shared
+
+  packages/materials/chart/kernel:
+    dependencies:
+      echarts:
+        specifier: catalog:framework
+        version: 6.1.0
 
   packages/materials/ellipse:
     dependencies:
@@ -3274,6 +3286,9 @@ packages:
       oxc-resolver:
         optional: true
 
+  echarts@6.1.0:
+    resolution: {integrity: sha512-q0yaFPggC9FUdsWH4blavRWFmxdrIodbkoKNAjJudAI6CA9gNPxHtV2RcZNEepZVlk4yvBYkOkbk6HIVpIyHZA==}
+
   electron-to-chromium@1.5.344:
     resolution: {integrity: sha512-4MxfbmNDm+KPh066EZy+eUnkcDPcZ35wNmOWzFuh/ijvHsve6kbLTLURy88uCNK5FbpN+yk2nQY6BYh1GEt+wg==}
 
@@ -5106,6 +5121,9 @@ packages:
       unrun:
         optional: true
 
+  tslib@2.3.0:
+    resolution: {integrity: sha512-N82ooyxVNm6h1riLCoyS9e3fuJ3AMG2zIZs2Gd1ATcSFjSA23Q0fzjjZeh0jbJvWVDZ0cJT8yaNNaaXHzueNjg==}
+
   tslib@2.8.1:
     resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
 
@@ -5499,6 +5517,9 @@ packages:
 
   zod@4.3.6:
     resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
+
+  zrender@6.1.0:
+    resolution: {integrity: sha512-oEGMDB6pOP2S6OwRR4PdVv610zrjnA3Bh+JnSG12fYJlBKjtNAoEb5fSUoCOOINlH96I2fU38/A2UpRKs67xYQ==}
 
   zwitch@2.0.4:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
@@ -7397,6 +7418,11 @@ snapshots:
   dotenv@17.4.2: {}
 
   dts-resolver@3.0.0: {}
+
+  echarts@6.1.0:
+    dependencies:
+      tslib: 2.3.0
+      zrender: 6.1.0
 
   electron-to-chromium@1.5.344: {}
 
@@ -9454,6 +9480,8 @@ snapshots:
       - oxc-resolver
       - vue-tsc
 
+  tslib@2.3.0: {}
+
   tslib@2.8.1: {}
 
   tsx@4.21.0:
@@ -9890,5 +9918,9 @@ snapshots:
   zod@3.25.76: {}
 
   zod@4.3.6: {}
+
+  zrender@6.1.0:
+    dependencies:
+      tslib: 2.3.0
 
   zwitch@2.0.4: {}
