@@ -10,6 +10,7 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { toast } from 'vue-sonner'
 import EasyInkPrinterSettingsDialog from './components/EasyInkPrinterSettingsDialog.vue'
 import HiPrintSettingsDialog from './components/HiPrintSettingsDialog.vue'
+import LodopSettingsDialog from './components/LodopSettingsDialog.vue'
 import RenderApiSettingsDialog from './components/RenderApiSettingsDialog.vue'
 import { Button } from './components/ui/button'
 import {
@@ -26,6 +27,7 @@ import {
 import { playgroundFontProvider } from './fonts'
 import { useEasyInkPrint } from './hooks/useEasyInkPrint'
 import { usePrinter } from './hooks/useHiPrint'
+import { useLodopPrint } from './hooks/useLodopPrint'
 import { useRenderApiService } from './hooks/useRenderApiService'
 
 const props = defineProps<{
@@ -53,9 +55,11 @@ const totalPages = ref(1)
 
 // Print channel integration
 const hiPrint = usePrinter()
+const lodopPrint = useLodopPrint()
 const easyInkPrint = useEasyInkPrint()
 const renderApi = useRenderApiService()
 const showHiPrintSettings = ref(false)
+const showLodopSettings = ref(false)
 const showEasyInkPrinterSettings = ref(false)
 const showRenderApiSettings = ref(false)
 const isPrinting = ref(false)
@@ -489,6 +493,30 @@ async function ensureHiPrintReady(): Promise<boolean> {
   return true
 }
 
+async function ensureLodopReady(): Promise<boolean> {
+  if (!lodopPrint.enabled.value) {
+    toast.error('请先在设置中启用 LODOP')
+    showLodopSettings.value = true
+    return false
+  }
+
+  if (!lodopPrint.isConnected.value) {
+    const progressId = toast.loading('正在检测 LODOP...')
+    try {
+      await lodopPrint.connect()
+      toast.dismiss(progressId)
+    }
+    catch (err) {
+      toast.dismiss(progressId)
+      toast.error(err instanceof Error ? err.message : 'LODOP 不可用')
+      showLodopSettings.value = true
+      return false
+    }
+  }
+
+  return true
+}
+
 async function ensureEasyInkPrintReady(): Promise<boolean> {
   if (!easyInkPrint.enabled.value) {
     toast.error('请先在设置中启用 EasyInk Printer')
@@ -546,6 +574,17 @@ async function runViewerPrint(driverId: string, pageSizeMode: 'driver' | 'fixed'
 async function handleHiPrintPrint() {
   if (await ensureHiPrintReady()) {
     await runManagedPrint('HiPrint 打印', callbacks => hiPrint.print({
+      schema: props.schema,
+      data: props.data,
+      pageSizeMode: 'driver',
+      ...callbacks,
+    }))
+  }
+}
+
+async function handleLodopPrint() {
+  if (await ensureLodopReady()) {
+    await runManagedPrint('LODOP 打印', callbacks => lodopPrint.print({
       schema: props.schema,
       data: props.data,
       pageSizeMode: 'driver',
@@ -619,6 +658,10 @@ async function runManagedPrint(
 
 function openHiPrintSettings() {
   showHiPrintSettings.value = true
+}
+
+function openLodopSettings() {
+  showLodopSettings.value = true
 }
 
 function openEasyInkPrinterSettings() {
@@ -706,6 +749,9 @@ async function handleExport() {
             <DropdownMenuItem :disabled="isPrinting" @click="handleHiPrintPrint">
               HiPrint 打印
             </DropdownMenuItem>
+            <DropdownMenuItem :disabled="isPrinting" @click="handleLodopPrint">
+              LODOP 打印
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
@@ -729,6 +775,9 @@ async function handleExport() {
             <DropdownMenuItem @click="openHiPrintSettings">
               HiPrint 客户端设置
             </DropdownMenuItem>
+            <DropdownMenuItem @click="openLodopSettings">
+              LODOP 设置
+            </DropdownMenuItem>
             <DropdownMenuItem @click="openEasyInkPrinterSettings">
               EasyInk Printer 服务设置
             </DropdownMenuItem>
@@ -750,6 +799,11 @@ async function handleExport() {
   <HiPrintSettingsDialog
     v-if="showHiPrintSettings"
     @close="showHiPrintSettings = false"
+  />
+
+  <LodopSettingsDialog
+    v-if="showLodopSettings"
+    @close="showLodopSettings = false"
   />
 
   <EasyInkPrinterSettingsDialog
