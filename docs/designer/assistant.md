@@ -245,10 +245,16 @@ location /easyink-assistant/ {
   proxy_pass http://easyink-assistant:3010/;
   proxy_http_version 1.1;
   proxy_set_header Host $host;
+  proxy_set_header X-Real-IP $remote_addr;
+  proxy_set_header X-Forwarded-Host $host;
   proxy_set_header X-Forwarded-Proto $scheme;
   proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
   proxy_buffering off;
   proxy_cache off;
+  proxy_read_timeout 1h;
+  proxy_send_timeout 1h;
+  gzip off;
 }
 ```
 
@@ -260,13 +266,96 @@ const assistant = createAssistantContribution({
 })
 ```
 
-如果你不走同源代理，而是让浏览器直接访问 `http://assistant.example.com:3010`，记得设置：
+这段配置的重点是 `proxy_pass` 末尾的 `/`：它会把 `/easyink-assistant/assistant/tasks` 转成后端服务看到的 `/assistant/tasks`。
+
+Assistant 的生成进度走 SSE，也就是一个长时间不断返回小块数据的 HTTP 响应。`proxy_buffering off`、`proxy_cache off` 和较长的 timeout 能避免 Nginx 把事件攒在缓冲区里，等请求结束才一次性发给浏览器。
+
+如果你想把 Assistant 作为独立后端服务暴露，比如 `https://assistant.example.com`，可以给它单独放一个 Nginx `server`：
+
+```nginx
+upstream easyink_assistant {
+  # Nginx 和容器在同一个 Docker network 时，可以写 easyink-assistant:3010。
+  # Nginx 跑在宿主机上时，通常写 127.0.0.1:3010。
+  server 127.0.0.1:3010;
+  keepalive 32;
+}
+
+server {
+  listen 443 ssl;
+  server_name assistant.example.com;
+
+  ssl_certificate /etc/letsencrypt/live/assistant.example.com/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/assistant.example.com/privkey.pem;
+
+  location / {
+    proxy_pass http://easyink_assistant;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+    proxy_buffering off;
+    proxy_cache off;
+    proxy_read_timeout 1h;
+    proxy_send_timeout 1h;
+    gzip off;
+  }
+}
+```
+
+这时前端 endpoint 写完整域名：
+
+```ts
+const assistant = createAssistantContribution({
+  endpoint: 'https://assistant.example.com',
+})
+```
+
+因为前端和 Assistant 已经不是同源，还要在 Assistant 服务端允许你的前端域名：
 
 ```dotenv
 EASYINK_ASSISTANT_CORS_ORIGIN=https://your-designer.example.com
 ```
 
 开发阶段可以用 `*`，生产环境建议写明确域名。
+
+### Nginx Proxy Manager {#nginx-proxy-manager}
+
+如果你用 Nginx Proxy Manager，可以先按普通 HTTP 服务来建 Proxy Host：
+
+- Domain Names：`assistant.example.com`
+- Scheme：`http`
+- Forward Hostname / IP：`easyink-assistant`、宿主机 IP 或 `127.0.0.1`
+- Forward Port：`3010`
+- SSL：申请证书，并打开 `Force SSL`
+
+SSE 不需要 WebSocket。你可以打开 WebSocket Support，它通常不会影响结果，但真正关键的是在 Advanced 里关掉缓冲：
+
+```nginx
+proxy_http_version 1.1;
+proxy_set_header Host $host;
+proxy_set_header X-Real-IP $remote_addr;
+proxy_set_header X-Forwarded-Host $host;
+proxy_set_header X-Forwarded-Proto $scheme;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+proxy_buffering off;
+proxy_cache off;
+proxy_read_timeout 1h;
+proxy_send_timeout 1h;
+gzip off;
+```
+
+保存后用下面两个请求确认代理已经通了：
+
+```bash
+curl https://assistant.example.com/health
+curl https://assistant.example.com/assistant/capabilities
+```
+
+如果 Designer 里能创建任务，但进度一直不刷新，再看浏览器 Network 面板里的 `/assistant/tasks/{id}/stream`。这个请求应该一直保持 pending，并持续收到 `event:` 或 `: ping` 数据。
 
 ## 应用结果的流程 {#apply-flow}
 
