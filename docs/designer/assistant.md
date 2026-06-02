@@ -2,7 +2,7 @@
 description: 在 Designer 中接入 EasyInk Assistant：注册助手面板、部署 orchestrator 服务、配置模型、持久化和上线检查。
 ---
 
-# Assistant 助手 {#assistant}
+# AI模板生成 {#assistant}
 
 Assistant 是官方的 Designer 模板生成助手。你把一个 Contribution 接进 Designer，再把前端连到 `assistant-orchestrator` 服务，用户就可以在设计器里描述要生成的票据、标签或表单，并在确认后应用到当前模板。
 
