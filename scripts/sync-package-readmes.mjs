@@ -179,6 +179,7 @@ function buildReadme({ packageName, description, repositoryUrl }) {
     '## License',
     '',
     `[MIT](${repositoryUrl}/blob/main/LICENSE) © 2025-present hackycy`,
+    '',
   ].join('\n')
 }
 
