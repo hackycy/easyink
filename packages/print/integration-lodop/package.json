@@ -1,0 +1,28 @@
+{
+  "name": "@easyink/print-integration-lodop",
+  "type": "module",
+  "version": "0.0.19",
+  "description": "Official LODOP client and managed document printer",
+  "author": "hackycy <hackycy@outlook.com>",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/index.d.mts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch"
+  },
+  "dependencies": {
+    "@easyink/print-core": "workspace:*",
+    "@easyink/viewer": "workspace:*"
+  }
+}

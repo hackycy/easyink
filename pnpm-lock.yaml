@@ -1015,6 +1015,15 @@ importers:
         specifier: catalog:testing
         version: 0.0.60
 
+  packages/print/integration-lodop:
+    dependencies:
+      '@easyink/print-core':
+        specifier: workspace:*
+        version: link:../core
+      '@easyink/viewer':
+        specifier: workspace:*
+        version: link:../../viewer
+
   packages/prop-schemas:
     dependencies:
       '@easyink/core':
