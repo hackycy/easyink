@@ -41,3 +41,7 @@ onBeforeUnmount(() => {
   observer?.disconnect()
 })
 </script>
+
+<template>
+  <span v-if="false" />
+</template>

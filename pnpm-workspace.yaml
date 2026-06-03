@@ -40,24 +40,25 @@ catalogs:
     vitepress: 2.0.0-alpha.17
     vue-tsc: ^3.3.1
   framework:
+    gsap: ^3.15.0
     '@anthropic-ai/sdk': ^0.91.0
     '@codemirror/commands': ^6.0.0
     '@codemirror/lang-javascript': ^6.0.0
     '@codemirror/language': ^6.0.0
     '@codemirror/state': ^6.0.0
     '@codemirror/view': ^6.0.0
+    '@langchain/core': ^1.1.48
+    '@langchain/langgraph': ^1.3.2
     '@lezer/highlight': ^1.0.0
+    '@tanstack/vue-query': ^5.100.14
     '@vueuse/core': ^14.3.0
+    '@xstate/vue': ^5.0.0
     ant-design-vue: ^4.2.6
     class-variance-authority: ^0.7.1
     clsx: ^2.1.1
-    dotenv: ^17.2.5
-    '@langchain/core': ^1.1.48
-    '@langchain/langgraph': ^1.3.2
-    '@tanstack/vue-query': ^5.100.14
-    '@xstate/vue': ^5.0.0
     curlconverter: ^4.12.0
     dexie: ^4.4.3
+    dotenv: ^17.2.5
     echarts: ^6.0.0
     h3: 2.0.1-rc.22
     hono: ^4.12.23

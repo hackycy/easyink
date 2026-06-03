@@ -5,6 +5,9 @@
   "scripts": {
     "typecheck": "vue-tsc --noEmit"
   },
+  "dependencies": {
+    "gsap": "catalog:framework"
+  },
   "devDependencies": {
     "vue": "catalog:framework"
   }
