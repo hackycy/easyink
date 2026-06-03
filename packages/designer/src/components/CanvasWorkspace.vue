@@ -728,6 +728,10 @@ onUnmounted(() => {
   inset: 0;
   top: 20px;
   left: 20px;
+  // grid pattern
+  background-image: radial-gradient(circle, rgb(175, 175, 175) 0.5px, transparent 0.5px);
+  background-size: 10px 10px;
+  background-position: 5px 5px;
 }
 
 .ei-canvas-page-wrapper {
