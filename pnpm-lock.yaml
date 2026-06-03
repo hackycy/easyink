@@ -347,6 +347,9 @@ importers:
 
   packages/assistant/capabilities:
     dependencies:
+      '@easyink/assistant-plugins':
+        specifier: workspace:*
+        version: link:../plugins
       '@easyink/datasource':
         specifier: workspace:*
         version: link:../../datasource
@@ -380,6 +383,9 @@ importers:
       '@easyink/assistant-capabilities':
         specifier: workspace:*
         version: link:../capabilities
+      '@easyink/assistant-plugins':
+        specifier: workspace:*
+        version: link:../plugins
       '@easyink/assistant-store':
         specifier: workspace:*
         version: link:../store
@@ -440,6 +446,9 @@ importers:
       '@easyink/assistant-material-knowledge':
         specifier: workspace:*
         version: link:../material-knowledge
+      '@easyink/assistant-plugins':
+        specifier: workspace:*
+        version: link:../plugins
       '@easyink/assistant-scenario-templates':
         specifier: workspace:*
         version: link:../scenario-templates
@@ -479,6 +488,30 @@ importers:
       pino:
         specifier: catalog:framework
         version: 10.3.1
+      zod:
+        specifier: catalog:framework
+        version: 3.25.76
+
+  packages/assistant/plugin-placeholder-images:
+    dependencies:
+      '@easyink/assistant-plugins':
+        specifier: workspace:*
+        version: link:../plugins
+
+  packages/assistant/plugin-prototype-designer:
+    dependencies:
+      '@easyink/assistant-plugins':
+        specifier: workspace:*
+        version: link:../plugins
+
+  packages/assistant/plugin-receipt-designer:
+    dependencies:
+      '@easyink/assistant-plugins':
+        specifier: workspace:*
+        version: link:../plugins
+
+  packages/assistant/plugins:
+    dependencies:
       zod:
         specifier: catalog:framework
         version: 3.25.76
@@ -573,6 +606,9 @@ importers:
       '@easyink/assistant-llm':
         specifier: workspace:*
         version: link:../llm
+      '@easyink/assistant-plugins':
+        specifier: workspace:*
+        version: link:../plugins
       '@easyink/assistant-store':
         specifier: workspace:*
         version: link:../store
@@ -1116,6 +1152,15 @@ importers:
       '@easyink/assistant-designer-bridge':
         specifier: workspace:*
         version: link:../packages/assistant/designer-bridge
+      '@easyink/assistant-plugin-placeholder-images':
+        specifier: workspace:*
+        version: link:../packages/assistant/plugin-placeholder-images
+      '@easyink/assistant-plugin-prototype-designer':
+        specifier: workspace:*
+        version: link:../packages/assistant/plugin-prototype-designer
+      '@easyink/assistant-plugin-receipt-designer':
+        specifier: workspace:*
+        version: link:../packages/assistant/plugin-receipt-designer
       '@easyink/designer':
         specifier: workspace:*
         version: link:../packages/designer

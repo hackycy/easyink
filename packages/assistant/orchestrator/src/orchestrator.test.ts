@@ -511,6 +511,41 @@ describe('assistantOrchestrator', () => {
     expect(planningBrief.styleHints).toEqual([])
   })
 
+  it('injects enabled plugin context into schema generation prompts', async () => {
+    const store = new MemoryAssistantStore()
+    const llm = createSchemaLLM()
+    const orchestrator = new AssistantOrchestrator({ store, llm })
+    const task = await store.createTask({
+      prompt: '生成一个原型页面',
+      materialManifest: textMaterialManifest(),
+      pluginSelection: {
+        plugins: [{
+          pluginId: 'plugin.prototype',
+          enabled: true,
+          contributions: [{
+            target: 'schema',
+            title: 'Prototype plugin',
+            content: 'Use prototype placeholder images.',
+          }],
+          contextItems: [{
+            id: 'brand-banner',
+            kind: 'image-reference',
+            title: 'Brand banner',
+            url: 'https://cdn.example.test/banner.png',
+          }],
+        }],
+      },
+    })
+
+    await orchestrator.runTask(task.id)
+
+    const schemaAgentRequest = llm.requests.at(-1) as { messages: Array<{ role: string, content: string }> }
+    const systemMessage = schemaAgentRequest.messages.find(message => message.role === 'system')?.content ?? ''
+    expect(systemMessage).toContain('## Enabled Assistant Plugins')
+    expect(systemMessage).toContain('Use prototype placeholder images.')
+    expect(systemMessage).toContain('https://cdn.example.test/banner.png')
+  })
+
   it('produces the v2 contract/layout/repair workflow step sequence', async () => {
     const graph = createAssistantWorkflowGraph()
     const result = await graph.invoke({ input: { prompt: '生成一张商超小票' }, steps: [] })

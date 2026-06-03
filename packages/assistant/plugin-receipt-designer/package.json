@@ -1,8 +1,8 @@
 {
-  "name": "@easyink/assistant-capabilities",
+  "name": "@easyink/assistant-plugin-receipt-designer",
   "type": "module",
   "version": "0.0.19",
-  "description": "Pure EasyInk Assistant capabilities for schema, datasource alignment, validation, preview, diff, and patch",
+  "description": "Official receipt designer persona plugin for EasyInk Assistant",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",
   "publishConfig": {
@@ -23,11 +23,6 @@
     "test": "vitest run src/**/*.test.ts"
   },
   "dependencies": {
-    "@easyink/assistant-plugins": "workspace:*",
-    "@easyink/datasource": "workspace:*",
-    "@easyink/schema": "workspace:*",
-    "@easyink/schema-tools": "workspace:*",
-    "@easyink/shared": "workspace:*",
-    "zod": "catalog:framework"
+    "@easyink/assistant-plugins": "workspace:*"
   }
 }

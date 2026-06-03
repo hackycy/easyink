@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import type { AssistantResult, AssistantSourceInput } from '@easyink/assistant-capabilities'
+import type { AssistantPluginSelection, AssistantPluginSelectionEntry } from '@easyink/assistant-plugins'
 import type { AssistantConversationRecord, AssistantEventRecord, AssistantTaskRecord } from '@easyink/assistant-store'
 import type { AssistantStreamHandle } from '../api'
 import type { AssistantConversationPanelEmits, AssistantConversationPanelProps, AssistantConversationView } from '../types'
 import { DexieAssistantStore } from '@easyink/assistant-store'
-import { IconHistory, IconManager, IconPlus } from '@easyink/icons'
+import { IconHistory, IconManager, IconPanelMaterials, IconPlus } from '@easyink/icons'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { createAssistantApiClient } from '../api'
 import { useConversationPresentation } from '../composables/useConversationPresentation'
@@ -16,6 +17,7 @@ import ConversationChatView from './ConversationChatView.vue'
 import ConversationHeader from './ConversationHeader.vue'
 import ConversationHistoryPanel from './ConversationHistoryPanel.vue'
 import LLMConfigPanel from './LLMConfigPanel.vue'
+import PluginCenterPanel from './PluginCenterPanel.vue'
 
 const props = withDefaults(defineProps<AssistantConversationPanelProps>(), {
   endpoint: '',
@@ -25,6 +27,7 @@ const props = withDefaults(defineProps<AssistantConversationPanelProps>(), {
   store: undefined,
   conversationId: 'default',
   llmConfig: undefined,
+  plugins: () => [],
   t: undefined,
 })
 
@@ -41,6 +44,7 @@ const activeView = ref<AssistantConversationView>('chat')
 const conversations = ref<AssistantConversationRecord[]>([])
 const activeConversationId = ref(props.conversationId)
 const draftMode = ref(false)
+const pluginEntries = ref<AssistantPluginSelectionEntry[]>([])
 const translate = computed(() => props.t)
 const llmConfigService = computed(() => props.llmConfig)
 const {
@@ -71,6 +75,7 @@ const browserStore = typeof indexedDB === 'undefined'
   : new DexieAssistantStore('easyink-assistant-ui')
 const store = computed(() => props.store ?? browserStore)
 const contentView = computed(() => activeView.value === 'settings' && !llmConfigEnabled.value ? 'chat' : activeView.value)
+const pluginStorageKey = computed(() => `easyink-assistant-plugins:${props.conversationId}`)
 
 const {
   narration,
@@ -164,6 +169,7 @@ async function submitMessage(payload: { prompt: string, source?: AssistantSource
       source: payload.source ?? { kind: 'none' },
       currentSchema: props.currentSchema,
       materialManifest: props.materialManifest,
+      pluginSelection: buildPluginSelection(),
     })
     taskId.value = created.id
     prompt.value = created.input.prompt
@@ -194,6 +200,10 @@ function toggleHistoryView() {
 
 function toggleSettingsView() {
   activeView.value = activeView.value === 'settings' ? 'chat' : 'settings'
+}
+
+function togglePluginsView() {
+  activeView.value = activeView.value === 'plugins' ? 'chat' : 'plugins'
 }
 
 async function selectConversation(id: string) {
@@ -392,10 +402,86 @@ async function saveConversationState() {
   await persistConversation(task, events.value, result.value)
 }
 
+function initializePluginEntries() {
+  const persisted = readPluginEntries(pluginStorageKey.value)
+  pluginEntries.value = props.plugins.map((plugin) => {
+    const existing = persisted.find(entry => entry.pluginId === plugin.manifest.id)
+    return {
+      pluginId: plugin.manifest.id,
+      enabled: existing?.enabled ?? Boolean(plugin.manifest.defaultEnabled),
+      state: existing?.state,
+      contributions: existing?.contributions,
+      contextItems: existing?.contextItems,
+      warnings: existing?.warnings,
+    }
+  })
+}
+
+function togglePlugin(pluginId: string, enabled: boolean) {
+  pluginEntries.value = pluginEntries.value.map(entry =>
+    entry.pluginId === pluginId ? { ...entry, enabled } : entry,
+  )
+  persistPluginEntries()
+}
+
+function updatePluginEntry(next: AssistantPluginSelectionEntry) {
+  const existing = pluginEntries.value.some(entry => entry.pluginId === next.pluginId)
+  pluginEntries.value = existing
+    ? pluginEntries.value.map(entry => entry.pluginId === next.pluginId ? next : entry)
+    : [...pluginEntries.value, next]
+  persistPluginEntries()
+}
+
+function buildPluginSelection(): AssistantPluginSelection | undefined {
+  const byId = new Map(props.plugins.map(plugin => [plugin.manifest.id, plugin]))
+  const plugins = pluginEntries.value
+    .filter(entry => entry.enabled && byId.has(entry.pluginId))
+    .map((entry) => {
+      const plugin = byId.get(entry.pluginId)!
+      return {
+        ...entry,
+        contributions: [
+          ...(plugin.manifest.staticContributions ?? []),
+          ...(entry.contributions ?? []),
+        ],
+      }
+    })
+  return plugins.length ? { plugins } : undefined
+}
+
+function persistPluginEntries() {
+  if (typeof localStorage === 'undefined')
+    return
+  localStorage.setItem(pluginStorageKey.value, JSON.stringify(pluginEntries.value))
+}
+
+function readPluginEntries(key: string): AssistantPluginSelectionEntry[] {
+  if (typeof localStorage === 'undefined')
+    return []
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) ?? '[]') as unknown
+    if (!Array.isArray(parsed))
+      return []
+    return parsed.filter(isPluginSelectionEntry)
+  }
+  catch {
+    return []
+  }
+}
+
+function isPluginSelectionEntry(value: unknown): value is AssistantPluginSelectionEntry {
+  return !!value
+    && typeof value === 'object'
+    && typeof (value as { pluginId?: unknown }).pluginId === 'string'
+    && typeof (value as { enabled?: unknown }).enabled === 'boolean'
+}
+
 watch(() => api.value, () => {
   if (taskId.value)
     openStream(taskId.value)
 })
+
+watch(() => props.plugins, initializePluginEntries, { deep: true })
 
 watch(derivedStatus, () => {
   emit('statusChange', derivedStatus.value)
@@ -405,6 +491,7 @@ watch(derivedStatus, () => {
 onBeforeUnmount(closeStream)
 onMounted(async () => {
   try {
+    initializePluginEntries()
     await loadLLMConfig(api.value)
     await restoreConversation()
   }
@@ -470,6 +557,17 @@ onMounted(async () => {
       @update:model="updateLLMConfigDraft({ model: $event })"
       @update:provider="setLLMProvider"
     />
+    <PluginCenterPanel
+      v-else-if="contentView === 'plugins'"
+      :current-schema="currentSchema"
+      :entries="pluginEntries"
+      :material-manifest="materialManifest"
+      :plugins="plugins"
+      :prompt="prompt"
+      :t="t"
+      @toggle="togglePlugin"
+      @update-entry="updatePluginEntry"
+    />
     <ComposerBar
       :running="running"
       :placeholder="derivedStatus === 'waiting' ? tr('designer.assistant.placeholder.clarification') : tr('designer.assistant.placeholder.prompt')"
@@ -496,6 +594,17 @@ onMounted(async () => {
           @click="toggleHistoryView"
         >
           <IconHistory :size="16" stroke-width="1.9" />
+        </button>
+        <button
+          v-if="plugins.length"
+          type="button"
+          class="assistant-composer__icon-btn assistant-composer__icon-btn--session"
+          :class="{ 'assistant-composer__icon-btn--active': activeView === 'plugins' }"
+          :title="tr('designer.assistant.action.plugins')"
+          :aria-label="tr('designer.assistant.action.plugins')"
+          @click="togglePluginsView"
+        >
+          <IconPanelMaterials :size="16" stroke-width="1.9" />
         </button>
         <button
           v-if="llmConfigEnabled"

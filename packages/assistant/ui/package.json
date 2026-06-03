@@ -30,6 +30,7 @@
   "dependencies": {
     "@easyink/assistant-capabilities": "workspace:*",
     "@easyink/assistant-llm": "workspace:*",
+    "@easyink/assistant-plugins": "workspace:*",
     "@easyink/assistant-store": "workspace:*",
     "@easyink/icons": "workspace:*",
     "@easyink/ui": "workspace:*"

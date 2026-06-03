@@ -1,4 +1,5 @@
 import type { AssistantMaterialManifest, AssistantPatchOperation, AssistantResult } from '@easyink/assistant-capabilities'
+import type { AssistantPlugin } from '@easyink/assistant-plugins'
 import type { AssistantConversationStatus, AssistantStore } from '@easyink/assistant-store'
 import type { AssistantApiClient } from './api'
 import type { AssistantTranslate } from './i18n'
@@ -12,6 +13,7 @@ export interface AssistantConversationPanelProps {
   store?: AssistantStore
   conversationId?: string
   llmConfig?: AssistantLLMConfigService
+  plugins?: AssistantPlugin[]
   t?: AssistantTranslate
 }
 
@@ -24,4 +26,4 @@ export interface AssistantConversationPanelEmits {
   statusChange: [status: AssistantConversationStatus]
 }
 
-export type AssistantConversationView = 'chat' | 'history' | 'settings'
+export type AssistantConversationView = 'chat' | 'history' | 'settings' | 'plugins'

@@ -3,6 +3,7 @@
  */
 import type { AssistantResult } from '@easyink/assistant-capabilities'
 import type { RuntimeLLMConfig } from '@easyink/assistant-llm'
+import type { AssistantPlugin } from '@easyink/assistant-plugins'
 import type { AssistantEventRecord, AssistantTaskRecord } from '@easyink/assistant-store'
 import type { AssistantApiClient, AssistantStreamHandlers } from '../api'
 import type { AssistantLLMConfigService } from '../runtime-llm'
@@ -275,6 +276,45 @@ describe('assistant conversation panel', () => {
     expect(document.body.textContent).toContain('API Key 仅用于本次浏览器侧请求配置转发')
     expect(document.querySelector('.assistant-settings-form')).toBeTruthy()
     expect(document.body.textContent).not.toContain('暂无历史会话')
+  })
+
+  it('shows registered plugins and submits enabled plugin context', async () => {
+    const task = createTask({ prompt: '生成原型' })
+    const { api } = createStreamingClient({ createTask: vi.fn().mockResolvedValue(task) })
+    const plugins: AssistantPlugin[] = [{
+      manifest: {
+        id: 'plugin.prototype',
+        name: '专业原型设计师',
+        version: '1.0.0',
+        category: '官方角色',
+        staticContributions: [{
+          target: 'schema',
+          content: 'Use prototype placeholder images.',
+        }],
+      },
+    }]
+    mount({ apiClient: api, plugins, conversationId: 'plugin-test' })
+    await flushPromises()
+
+    document.querySelector('button[aria-label="插件中心"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await flushPromises()
+    expect(document.body.textContent).toContain('专业原型设计师')
+
+    const toggle = document.querySelector('.assistant-plugin-switch input') as HTMLInputElement
+    toggle.checked = true
+    toggle.dispatchEvent(new Event('change', { bubbles: true }))
+    await flushPromises()
+
+    await submitPrompt('生成原型')
+    expect(api.createTask).toHaveBeenCalledWith(expect.objectContaining({
+      pluginSelection: {
+        plugins: [expect.objectContaining({
+          pluginId: 'plugin.prototype',
+          enabled: true,
+          contributions: [expect.objectContaining({ content: 'Use prototype placeholder images.' })],
+        })],
+      },
+    }))
   })
 
   it('requires user LLM config when the service has no server model configured', async () => {

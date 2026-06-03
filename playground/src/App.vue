@@ -3,6 +3,9 @@ import type { DataSourceDescriptor, DocumentSchema } from '@easyink/designer'
 import type { SampleTemplateEntry } from '@easyink/samples'
 import type { StoredTemplate } from './storage/template-store'
 import { createAssistantContribution, createBrowserAssistantLLMConfigService } from '@easyink/assistant-designer-bridge'
+import { placeholderImagesPlugin } from '@easyink/assistant-plugin-placeholder-images'
+import { prototypeDesignerPlugin } from '@easyink/assistant-plugin-prototype-designer'
+import { receiptDesignerPlugin } from '@easyink/assistant-plugin-receipt-designer'
 import { createLocalStoragePreferenceProvider, EasyInkDesigner } from '@easyink/designer'
 import { enUS, zhCN } from '@easyink/designer/locale'
 import { blankA4Template, flowInvoiceTemplate, invoiceDemoData, sampleDataSources } from '@easyink/samples'
@@ -240,6 +243,11 @@ const assistantEndpoint = import.meta.env.VITE_EASYINK_ASSISTANT_ENDPOINT || 'ht
 const contributions = [createAssistantContribution({
   endpoint: assistantEndpoint,
   llmConfig: createBrowserAssistantLLMConfigService({ persistence: 'local' }),
+  plugins: [
+    placeholderImagesPlugin,
+    prototypeDesignerPlugin,
+    receiptDesignerPlugin,
+  ],
 })]
 </script>
 

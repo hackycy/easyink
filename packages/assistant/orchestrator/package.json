@@ -35,6 +35,7 @@
     "@easyink/assistant-constraint-engine": "workspace:*",
     "@easyink/assistant-llm": "workspace:*",
     "@easyink/assistant-material-knowledge": "workspace:*",
+    "@easyink/assistant-plugins": "workspace:*",
     "@easyink/assistant-scenario-templates": "workspace:*",
     "@easyink/assistant-schema-builder": "workspace:*",
     "@easyink/assistant-store": "workspace:*",

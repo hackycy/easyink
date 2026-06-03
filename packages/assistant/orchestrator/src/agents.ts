@@ -4,6 +4,7 @@ import type { LLMClient } from '@easyink/assistant-llm'
 import type { AssistantStore } from '@easyink/assistant-store'
 import type { DocumentSchema, ExpectedDataSource, ExpectedField } from '@easyink/schema'
 import type { PromptContext } from './prompts'
+import { buildAssistantPluginContext } from '@easyink/assistant-plugins'
 import { formatSchemaValidationIssue, isValidSchema, validateSchemaIssues } from '@easyink/schema'
 import { normalizeAllFieldPaths, SchemaValidator } from '@easyink/schema-tools'
 import { z } from 'zod'
@@ -232,9 +233,10 @@ export async function runIntakeAgent(context: AssistantAgentContext, memorySumma
   const result = await completeJson(context.llm, IntakeSchema, {
     messages: [
       '你是 EasyInk Assistant 的 Intake Agent。判断任务类型，以及是否必须澄清。只输出 JSON。',
+      buildAssistantPluginContext(context.input.pluginSelection, { target: 'intake' }),
       `用户需求：${context.input.prompt}`,
       memorySummary ? `历史上下文：${memorySummary}` : '',
-    ],
+    ].filter(isNonEmptyString),
   }).catch(() => fallback)
   return {
     requiresClarification: result.requiresClarification ?? fallback.requiresClarification,
@@ -276,9 +278,10 @@ export async function runPlannerAgent(context: AssistantAgentContext, memorySumm
         'Put unresolved assumptions in uncertainty instead of filling defaults.',
         'If page is present, return page.reason as one short English sentence.',
       ].join('\n'),
+      buildAssistantPluginContext(context.input.pluginSelection, { target: 'planner' }),
       `用户需求：${context.input.prompt}`,
       memorySummary ? `历史上下文：${memorySummary}` : '',
-    ],
+    ].filter(isNonEmptyString),
   })
   return {
     documentIntent: result.documentIntent,
@@ -323,8 +326,9 @@ export async function runValidatorAgent(context: AssistantAgentContext): Promise
   return completeJson(context.llm, ValidatorSchema, {
     messages: [
       '你是 EasyInk Assistant 的 Validator Agent。解释可能的校验风险并给出 repair hint。只输出 JSON。',
+      buildAssistantPluginContext(context.input.pluginSelection, { target: 'repair' }),
       `用户需求：${context.input.prompt}`,
-    ],
+    ].filter(isNonEmptyString),
   })
 }
 
@@ -343,9 +347,10 @@ export async function runSchemaAgent(
   const planningBrief = buildPlanningBrief(planner)
   const promptCtx = buildPromptContext(planningBrief)
   const materialContext = buildMaterialContext(context.input.materialManifest, planningBrief.scenario)
+  const pluginContext = buildAssistantPluginContext(context.input.pluginSelection, { target: 'schema' })
   const result = await completeJson(context.llm, SchemaAgentSchema, {
     messages: [
-      buildSchemaSystemPrompt(materialContext, promptCtx),
+      buildSchemaSystemPrompt([materialContext, pluginContext].filter(Boolean).join('\n\n'), promptCtx),
       [
         `EasyInk planning brief:\n${JSON.stringify(planningBrief, null, 2)}`,
         isValidSchema(context.input.currentSchema)
@@ -396,13 +401,14 @@ export async function runContractAgent(
         'fields MUST be an array of field objects. sampleData MUST mirror every leaf field path exactly.',
         'Do NOT design layout or choose materials. Only describe the data contract.',
       ].join('\n'),
+      buildAssistantPluginContext(context.input.pluginSelection, { target: 'contract' }),
       `User request: ${context.input.prompt}`,
       planner.dataNeeds.length ? `Planned data needs: ${JSON.stringify(planner.dataNeeds)}` : '',
       Object.keys(source.fieldMeanings).length ? `Source field meanings:\n${JSON.stringify(source.fieldMeanings, null, 2)}` : '',
       context.sourceData ? `External source descriptor:\n${JSON.stringify(context.sourceData.descriptor, null, 2).slice(0, 8000)}` : '',
       context.sourceData ? `External source sample:\n${JSON.stringify(context.sourceData.sample, null, 2).slice(0, 8000)}` : '',
       memorySummary ? `Historical preference summary:\n${memorySummary}` : '',
-    ],
+    ].filter(isNonEmptyString),
   })
 
   const warnings = result.warnings ?? []
@@ -438,9 +444,10 @@ export async function runLayoutAgent(
   const pageHeight = briefPage?.height ?? (pageMode === 'continuous' ? (unit === 'px' ? 800 : 200) : (unit === 'px' ? 667 : 297))
 
   const materialContext = buildLayoutMaterialContext(context.input.materialManifest)
+  const pluginContext = buildAssistantPluginContext(context.input.pluginSelection, { target: 'layout' })
   const result = await completeJson(context.llm, LayoutSchema, {
     messages: [
-      buildLayoutSystemPrompt(materialContext, pageWidth, pageHeight, pageMode, unit),
+      [buildLayoutSystemPrompt(materialContext, pageWidth, pageHeight, pageMode, unit), pluginContext].filter(Boolean).join('\n\n'),
       [
         `User request: ${context.input.prompt}`,
         `Planning brief:\n${JSON.stringify(planningBrief, null, 2)}`,
@@ -470,9 +477,10 @@ export async function runSchemaRepairAgent(
   const planningBrief = request.schemaResult.planningBrief
   const promptCtx = buildPromptContext(planningBrief)
   const materialContext = buildMaterialContext(context.input.materialManifest, planningBrief.scenario)
+  const pluginContext = buildAssistantPluginContext(context.input.pluginSelection, { target: 'repair' })
   const result = await completeJson(context.llm, SchemaAgentSchema, {
     messages: [
-      buildSchemaRepairSystemPrompt(materialContext, promptCtx),
+      buildSchemaRepairSystemPrompt([materialContext, pluginContext].filter(Boolean).join('\n\n'), promptCtx),
       [
         `EasyInk planning brief:\n${JSON.stringify(planningBrief, null, 2)}`,
         `Current schema (must be repaired):\n${JSON.stringify(request.schemaResult.schema, null, 2).slice(0, 16000)}`,
@@ -678,6 +686,10 @@ function joinFieldPath(parentPath: string, path: string): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value)
+}
+
+function isNonEmptyString(value: string | undefined): value is string {
+  return typeof value === 'string' && value.length > 0
 }
 
 function normalizeSchemaAgentSchema(

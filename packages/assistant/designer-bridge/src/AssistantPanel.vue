@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { AssistantMaterialManifest, AssistantPatchOperation, AssistantResult } from '@easyink/assistant-capabilities'
+import type { AssistantPlugin } from '@easyink/assistant-plugins'
 import type { AssistantConversationStatus, AssistantStore } from '@easyink/assistant-store'
 import type { AssistantApiClient, AssistantLLMConfigService } from '@easyink/assistant-ui'
 import { AssistantWorkbench } from '@easyink/assistant-ui'
@@ -16,6 +17,7 @@ const props = defineProps<{
   store?: AssistantStore
   conversationId?: string
   llmConfig?: AssistantLLMConfigService
+  plugins?: AssistantPlugin[]
   t?: AssistantTranslate
 }>()
 
@@ -67,6 +69,7 @@ function tr(key: string): string {
             :store="store"
             :conversation-id="conversationId"
             :llm-config="llmConfig"
+            :plugins="plugins"
             :t="t"
             @apply="$emit('apply', $event)"
             @apply-patch="$emit('applyPatch', $event)"

@@ -9,6 +9,9 @@
   },
   "dependencies": {
     "@easyink/assistant-designer-bridge": "workspace:*",
+    "@easyink/assistant-plugin-placeholder-images": "workspace:*",
+    "@easyink/assistant-plugin-prototype-designer": "workspace:*",
+    "@easyink/assistant-plugin-receipt-designer": "workspace:*",
     "@easyink/designer": "workspace:*",
     "@easyink/export-plugin-dom-pdf": "workspace:*",
     "@easyink/export-runtime": "workspace:*",

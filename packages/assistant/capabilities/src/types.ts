@@ -1,5 +1,6 @@
 import type { DataSourceDescriptor } from '@easyink/datasource'
 import type { DocumentSchema } from '@easyink/schema'
+import { AssistantPluginSelectionSchema } from '@easyink/assistant-plugins'
 import { z } from 'zod'
 
 export const AssistantWorkflowStepSchema = z.enum([
@@ -148,6 +149,7 @@ export const AssistantTaskInputSchema = z.object({
   constraints: z.record(z.unknown()).optional(),
   currentSchema: z.unknown().optional(),
   materialManifest: AssistantMaterialManifestSchema.optional(),
+  pluginSelection: AssistantPluginSelectionSchema.optional(),
 })
 
 export type AssistantTaskInput = z.infer<typeof AssistantTaskInputSchema>

@@ -57,6 +57,104 @@ const contributions = [assistant]
 
 如果你的前端和 Assistant 服务在同一个域名下，可以不传 `endpoint`。这时面板会请求当前站点下的 `/assistant/*` 接口。
 
+## 启用插件中心 {#assistant-plugins}
+
+如果你想让用户在 Assistant 面板里勾选额外能力，可以给 `createAssistantContribution()` 传入插件列表。
+
+先安装你需要的官方插件包：
+
+```bash
+pnpm add \
+  @easyink/assistant-plugin-placeholder-images \
+  @easyink/assistant-plugin-prototype-designer \
+  @easyink/assistant-plugin-receipt-designer
+```
+
+然后把插件传给 Assistant Contribution：
+
+```ts
+import { createAssistantContribution } from '@easyink/assistant-designer-bridge'
+import { placeholderImagesPlugin } from '@easyink/assistant-plugin-placeholder-images'
+import { prototypeDesignerPlugin } from '@easyink/assistant-plugin-prototype-designer'
+import { receiptDesignerPlugin } from '@easyink/assistant-plugin-receipt-designer'
+
+const assistant = createAssistantContribution({
+  endpoint: import.meta.env.VITE_EASYINK_ASSISTANT_ENDPOINT,
+  plugins: [
+    placeholderImagesPlugin,
+    prototypeDesignerPlugin,
+    receiptDesignerPlugin,
+  ],
+})
+```
+
+传入 `plugins` 后，Assistant 面板里会出现插件中心入口。用户可以在插件中心里启用或停用插件；提交任务时，面板会把已启用插件的提示词和上下文结果一起发给 Assistant 服务。
+
+官方插件现在有三类：
+
+| 包 | 面板名称 | 作用 |
+|----|----------|------|
+| `@easyink/assistant-plugin-placeholder-images` | 占位图助手 | 原型、H5、海报缺少图片素材时，引导生成结果使用 `https://picsum.photos/{width}/{height}` 占位图 |
+| `@easyink/assistant-plugin-prototype-designer` | 专业原型设计师 | 强化屏幕原型、H5、产品 UI 的页面尺寸、信息层级和占位内容 |
+| `@easyink/assistant-plugin-receipt-designer` | 专业小票设计师 | 强化热敏小票的窄纸宽、连续纸、金额对齐和打印可读性 |
+
+如果你只需要其中一部分，就只传那几个插件：
+
+```ts
+const assistant = createAssistantContribution({
+  endpoint: '/easyink-assistant',
+  plugins: [
+    placeholderImagesPlugin,
+  ],
+})
+```
+
+Playground 已经内置了这三个官方插件。你可以本地打开 Playground，进入 Assistant 面板后切到插件中心，勾选插件再提交一次生成任务。
+
+## 编写自定义插件 {#custom-assistant-plugin}
+
+自定义插件也走同一套协议。插件可以提供静态提示词，也可以提供一个 Promise 动作，把第三方选择器、保存好的提示词或业务上下文转换成 Assistant 能接收的结构化结果。
+
+看一个最小插件：
+
+```ts
+import type { AssistantPlugin } from '@easyink/assistant-designer-bridge'
+
+export const savedPromptPlugin = {
+  manifest: {
+    id: 'your-app.saved-prompts',
+    name: '保存的提示词',
+    version: '1.0.0',
+    category: '业务插件',
+    actions: [
+      { id: 'select', label: '选择提示词' },
+    ],
+  },
+  async invoke() {
+    const prompt = await openSavedPromptPicker()
+
+    return {
+      contributions: [{
+        target: 'schema',
+        priority: 50,
+        title: 'Selected saved prompt',
+        content: prompt,
+      }],
+      contextItems: [{
+        id: 'selected-saved-prompt',
+        kind: 'saved-prompt',
+        title: '保存的提示词',
+        content: prompt,
+      }],
+    }
+  },
+} satisfies AssistantPlugin
+```
+
+这里的 `openSavedPromptPicker()` 由你的业务系统自己实现。Assistant 不关心它是素材库弹窗、提示词列表、品牌规范选择器，还是第三方 UI；它只等待 Promise 返回，然后把返回结果注入到任务里。
+
+关于插件协议，目前知道这些就够用了。更完整的实现边界可以看内部架构文档 `.github/architecture/25-ai-assistant.md` 里的 “Assistant 插件系统”。
+
 ## 配置接口地址 {#configure-endpoint}
 
 开发时最直接的方式，是把服务地址放进前端环境变量：
