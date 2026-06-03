@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { createChartBarPreviewOption, createChartBarRuntimeOption } from './options'
-import { CHART_BAR_DEFAULTS } from './schema'
+import { CHART_BAR_CAPABILITIES, CHART_BAR_DEFAULTS } from './schema'
 
 describe('chart bar options', () => {
+  it('allows outer element rotation', () => {
+    expect(CHART_BAR_CAPABILITIES.rotatable).toBe(true)
+  })
+
   it('uses preview data in the designer path', () => {
     const option = createChartBarPreviewOption(CHART_BAR_DEFAULTS)
     const series = option.series as Array<{ data: number[] }>

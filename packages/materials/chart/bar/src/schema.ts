@@ -31,7 +31,7 @@ export const CHART_BAR_DEFAULTS: ChartBarProps = {
 
 export const CHART_BAR_CAPABILITIES = {
   bindable: true,
-  rotatable: false,
+  rotatable: true,
   resizable: true,
   supportsChildren: false,
   supportsAnimation: false,
