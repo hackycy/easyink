@@ -13,6 +13,7 @@ export {
   AlignStartVertical as IconAlignTop,
   Barcode as IconBarcode,
   Bold as IconBold,
+  Bot as IconBot,
   Bug as IconBug,
   BarChart3 as IconChart,
   Check as IconCheck,

@@ -5,7 +5,7 @@ import type { AssistantConversationRecord, AssistantEventRecord, AssistantTaskRe
 import type { AssistantStreamHandle } from '../api'
 import type { AssistantConversationPanelEmits, AssistantConversationPanelProps, AssistantConversationView } from '../types'
 import { DexieAssistantStore } from '@easyink/assistant-store'
-import { IconHistory, IconManager, IconPanelMaterials, IconPlus } from '@easyink/icons'
+import { IconBot, IconHistory, IconPanelMaterials, IconPlus } from '@easyink/icons'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { createAssistantApiClient } from '../api'
 import { useConversationPresentation } from '../composables/useConversationPresentation'
@@ -615,7 +615,7 @@ onMounted(async () => {
           :aria-label="tr('designer.assistant.action.llmConfig')"
           @click="toggleSettingsView"
         >
-          <IconManager :size="16" stroke-width="1.9" />
+          <IconBot :size="16" stroke-width="1.9" />
         </button>
       </template>
     </ComposerBar>

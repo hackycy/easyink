@@ -30,6 +30,7 @@ export const IconAlignStart = /* @__PURE__ */ normalize(lucide.AlignStartHorizon
 export const IconAlignTop = /* @__PURE__ */ normalize(lucide.AlignStartVertical)
 export const IconBarcode = /* @__PURE__ */ normalize(lucide.Barcode)
 export const IconBold = /* @__PURE__ */ normalize(lucide.Bold)
+export const IconBot = /* @__PURE__ */ normalize(lucide.Bot)
 export const IconBug = /* @__PURE__ */ normalize(lucide.Bug)
 export const IconChart = /* @__PURE__ */ normalize(lucide.BarChart3)
 export const IconCheck = /* @__PURE__ */ normalize(lucide.Check)
