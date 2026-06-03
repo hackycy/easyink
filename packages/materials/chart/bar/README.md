@@ -1,8 +1,12 @@
 # @easyink/material-chart-bar
 
-EasyInk bar chart material backed by `@easyink/material-chart-kernel`.
+[![npm version](https://img.shields.io/npm/v/%40easyink%2Fmaterial-chart-bar?logo=npm)](https://www.npmjs.com/package/%40easyink%2Fmaterial-chart-bar) [![npm downloads](https://img.shields.io/npm/dm/%40easyink%2Fmaterial-chart-bar?logo=npm)](https://www.npmjs.com/package/%40easyink%2Fmaterial-chart-bar)
 
-The designer renders fixed preview data. Runtime values should come from element datasource binding.
+EasyInk bar chart material
+
+## Documentation
+
+- [Docs](https://hackycy.github.io/easyink/docs/)
 
 ## License
 

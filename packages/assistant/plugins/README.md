@@ -1,30 +1,13 @@
 # @easyink/assistant-plugins
 
-Plugin contribution protocol for EasyInk Assistant.
+[![npm version](https://img.shields.io/npm/v/%40easyink%2Fassistant-plugins?logo=npm)](https://www.npmjs.com/package/%40easyink%2Fassistant-plugins) [![npm downloads](https://img.shields.io/npm/dm/%40easyink%2Fassistant-plugins?logo=npm)](https://www.npmjs.com/package/%40easyink%2Fassistant-plugins)
 
-Plugins expose optional static prompt contributions and Promise-based actions.
-The Assistant UI owns presentation and state, while plugin actions only return
-structured context that can be passed into an Assistant task.
+Plugin contribution protocol for EasyInk Assistant
 
-## Shape
+## Documentation
 
-```ts
-import type { AssistantPlugin } from '@easyink/assistant-plugins'
+- [Docs](https://hackycy.github.io/easyink/docs/)
 
-export const myPlugin = {
-  manifest: {
-    id: 'example.prompt-library',
-    name: 'Prompt Library',
-    version: '1.0.0',
-    actions: [{ id: 'select', label: 'Select prompt' }],
-  },
-  async invoke() {
-    return {
-      contributions: [{
-        target: 'schema',
-        content: 'Use the selected saved prompt as design guidance.',
-      }],
-    }
-  },
-} satisfies AssistantPlugin
-```
+## License
+
+[MIT](https://github.com/hackycy/easyink/blob/main/LICENSE) © 2025-present hackycy

@@ -1,8 +1,12 @@
 # @easyink/material-chart-kernel
 
-Shared chart kernel for EasyInk chart materials.
+[![npm version](https://img.shields.io/npm/v/%40easyink%2Fmaterial-chart-kernel?logo=npm)](https://www.npmjs.com/package/%40easyink%2Fmaterial-chart-kernel) [![npm downloads](https://img.shields.io/npm/dm/%40easyink%2Fmaterial-chart-kernel?logo=npm)](https://www.npmjs.com/package/%40easyink%2Fmaterial-chart-kernel)
 
-It provides lightweight ECharts integration helpers for Designer preview and Viewer SVG rendering. Chart-specific packages own their schema and material registration.
+EasyInk shared chart kernel with ECharts integration helpers
+
+## Documentation
+
+- [Docs](https://hackycy.github.io/easyink/docs/)
 
 ## License
 
