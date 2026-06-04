@@ -6,133 +6,36 @@ interface HeartRenderSize {
   height: number
 }
 
-interface Point {
-  x: number
-  y: number
+const HEART_PATH = 'm12 21l-1.45-1.3q-2.525-2.275-4.175-3.925T3.75 12.812T2.388 10.4T2 8.15Q2 5.8 3.575 4.225T7.5 2.65q1.3 0 2.475.55T12 4.75q.85-1 2.025-1.55t2.475-.55q2.35 0 3.925 1.575T22 8.15q0 1.15-.387 2.25t-1.363 2.412t-2.625 2.963T13.45 19.7z'
+const PATH_X = 2
+const PATH_Y = 2.65
+const PATH_W = 20
+const PATH_H = 18.35
+
+export function buildSvgHeartMarkup(props: SvgHeartProps, size: HeartRenderSize = { width: 100, height: 90 }): string {
+  const borderWidth = Math.max(0, props.borderWidth || 0)
+  const fillColor = escapeHtml(props.fillColor || 'transparent')
+  const borderColor = escapeHtml(props.borderColor || '#000000')
+
+  const strokeW = borderWidth > 0 ? computeStrokeWidth(borderWidth, size) : 0
+  const pad = strokeW / 2
+  const vx = PATH_X - pad
+  const vy = PATH_Y - pad
+  const vw = PATH_W + strokeW
+  const vh = PATH_H + strokeW
+
+  const strokeAttr = strokeW > 0
+    ? ` stroke="${borderColor}" stroke-width="${fmt(strokeW)}" stroke-linejoin="round"`
+    : ''
+
+  return `<svg viewBox="${fmt(vx)} ${fmt(vy)} ${fmt(vw)} ${fmt(vh)}" preserveAspectRatio="none" style="width:100%;height:100%;display:block" xmlns="http://www.w3.org/2000/svg"><path d="${HEART_PATH}" fill="${fillColor}"${strokeAttr} /></svg>`
 }
 
-const VIEWBOX_SIZE = 100
-const HEART_POINT_COUNT = 72
-const DEFAULT_RENDER_SIZE: HeartRenderSize = {
-  width: 100,
-  height: 90,
+function computeStrokeWidth(borderWidth: number, size: HeartRenderSize): number {
+  const avgSize = (size.width + size.height) / 2
+  return (borderWidth / Math.max(avgSize, 1)) * PATH_W
 }
 
-export function buildSvgHeartMarkup(props: SvgHeartProps, size: HeartRenderSize = DEFAULT_RENDER_SIZE): string {
-  const normalized = normalizeHeartProps(props)
-  const outerPoints = buildHeartPoints(normalized)
-  const outerPath = serializePath(outerPoints)
-  const innerScale = getInnerScale(normalized.borderWidth, size)
-  const innerPath = canRenderInnerHeart(innerScale)
-    ? serializePath(scalePointsAroundCenter(outerPoints, innerScale))
-    : null
-  const hasContentFill = isVisibleFill(normalized.fillColor)
-
-  const layers = normalized.borderWidth > 0 && innerPath
-    ? [
-        `<path d="${outerPath} ${innerPath}" fill="${escapeHtml(normalized.borderColor || 'transparent')}" fill-rule="evenodd" />`,
-        ...(hasContentFill ? [`<path d="${innerPath}" fill="${escapeHtml(normalized.fillColor)}" />`] : []),
-      ]
-    : [`<path d="${outerPath}" fill="${escapeHtml(normalized.fillColor || 'transparent')}" />`]
-
-  return `<svg viewBox="0 0 ${VIEWBOX_SIZE} ${VIEWBOX_SIZE}" preserveAspectRatio="none" style="width:100%;height:100%;display:block;overflow:visible" xmlns="http://www.w3.org/2000/svg">${layers.join('')}</svg>`
-}
-
-function normalizeHeartProps(props: SvgHeartProps): SvgHeartProps {
-  return {
-    ...props,
-    borderWidth: Math.max(0, props.borderWidth || 0),
-    heartCleftDepth: clamp(props.heartCleftDepth || 18, 6, 34),
-    heartShoulderWidth: clamp(props.heartShoulderWidth || 18, 10, 30),
-  }
-}
-
-function getInnerScale(borderWidth: number, size: HeartRenderSize): Point {
-  return {
-    x: clamp((size.width - borderWidth * 2) / Math.max(size.width, Number.EPSILON), 0, 1),
-    y: clamp((size.height - borderWidth * 2) / Math.max(size.height, Number.EPSILON), 0, 1),
-  }
-}
-
-function canRenderInnerHeart(scale: Point): boolean {
-  return scale.x > 0 && scale.y > 0
-}
-
-function isVisibleFill(fillColor: string | undefined): boolean {
-  return !!fillColor && fillColor !== 'transparent'
-}
-
-function buildHeartPoints(props: SvgHeartProps): Point[] {
-  const basePoints: Point[] = []
-  const shoulderScale = mapRange(props.heartShoulderWidth, 10, 30, 0.88, 1.12)
-  const cleftScale = mapRange(props.heartCleftDepth, 6, 34, 0.72, 1.28)
-
-  for (let index = 0; index < HEART_POINT_COUNT; index += 1) {
-    const theta = (Math.PI * 2 * index) / HEART_POINT_COUNT
-    const rawX = 16 * Math.sin(theta) ** 3
-    const rawY = 13 * Math.cos(theta) - 5 * Math.cos(2 * theta) - 2 * Math.cos(3 * theta) - Math.cos(4 * theta)
-    const topBias = rawY > 0 ? cleftScale : 1
-
-    basePoints.push({
-      x: rawX * shoulderScale,
-      y: rawY * topBias,
-    })
-  }
-
-  return normalizePoints(basePoints)
-}
-
-function normalizePoints(points: Point[]): Point[] {
-  const bounds = getPointBounds(points)
-  return points.map(point => ({
-    x: ((point.x - bounds.minX) / Math.max(bounds.maxX - bounds.minX, Number.EPSILON)) * VIEWBOX_SIZE,
-    y: ((bounds.maxY - point.y) / Math.max(bounds.maxY - bounds.minY, Number.EPSILON)) * VIEWBOX_SIZE,
-  }))
-}
-
-function scalePointsAroundCenter(points: Point[], scale: Point): Point[] {
-  return points.map(point => ({
-    x: 50 + (point.x - 50) * scale.x,
-    y: 50 + (point.y - 50) * scale.y,
-  }))
-}
-
-function serializePath(points: Point[]): string {
-  if (points.length === 0)
-    return ''
-
-  const commands = [`M ${round(points[0].x)} ${round(points[0].y)}`]
-  for (let index = 1; index < points.length; index += 1)
-    commands.push(`L ${round(points[index].x)} ${round(points[index].y)}`)
-  commands.push('Z')
-  return commands.join(' ')
-}
-
-function getPointBounds(points: Point[]): { minX: number, minY: number, maxX: number, maxY: number } {
-  let minX = Number.POSITIVE_INFINITY
-  let minY = Number.POSITIVE_INFINITY
-  let maxX = Number.NEGATIVE_INFINITY
-  let maxY = Number.NEGATIVE_INFINITY
-
-  for (const point of points) {
-    minX = Math.min(minX, point.x)
-    minY = Math.min(minY, point.y)
-    maxX = Math.max(maxX, point.x)
-    maxY = Math.max(maxY, point.y)
-  }
-
-  return { minX, minY, maxX, maxY }
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value))
-}
-
-function mapRange(value: number, inputMin: number, inputMax: number, outputMin: number, outputMax: number): number {
-  const ratio = (value - inputMin) / Math.max(inputMax - inputMin, Number.EPSILON)
-  return outputMin + ratio * (outputMax - outputMin)
-}
-
-function round(value: number): string {
-  return value.toFixed(2).replace(/\.00$/, '')
+function fmt(value: number): string {
+  return value.toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1')
 }

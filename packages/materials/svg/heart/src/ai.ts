@@ -2,12 +2,12 @@ import type { AIMaterialDescriptor } from '@easyink/shared'
 
 export const svgHeartAIMaterialDescriptor = {
   type: 'svg-heart',
-  description: 'Heart SVG material with editable cleft depth and shoulder width.',
-  properties: ['fillColor', 'borderWidth', 'borderColor', 'heartCleftDepth', 'heartShoulderWidth'],
+  description: 'Cute rounded heart SVG material with fill and border controls.',
+  properties: ['fillColor', 'borderWidth', 'borderColor'],
   requiredProps: ['fillColor'],
   binding: 'none',
   usage: [
-    'Use this material for heart graphics that need shape-specific controls.',
+    'Use this material for heart graphics as decorative or emotional elements.',
   ],
   knowledge: {
     category: 'decoration',

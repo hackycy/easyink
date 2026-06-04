@@ -7,16 +7,12 @@ export interface SvgHeartProps {
   fillColor: string
   borderWidth: number
   borderColor: string
-  heartCleftDepth: number
-  heartShoulderWidth: number
 }
 
 export const SVG_HEART_DEFAULTS: SvgHeartProps = {
   fillColor: '#E5484D',
   borderWidth: 0,
   borderColor: '#000000',
-  heartCleftDepth: 18,
-  heartShoulderWidth: 18,
 }
 
 export const SVG_HEART_CAPABILITIES = {

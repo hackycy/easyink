@@ -170,8 +170,6 @@ const enUS: LocaleMessages = {
       starPoints: 'Star Points',
       starInnerRatio: 'Inner Ratio',
       svgStarEdit: 'Star Edit',
-      heartCleftDepth: 'Cleft Depth',
-      heartShoulderWidth: 'Shoulder Width',
       format: 'Format',
       headerBackground: 'Header Background',
       totalBackground: 'Total Background',

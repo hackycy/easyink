@@ -170,8 +170,6 @@ const zhCN: LocaleMessages = {
       starPoints: '星角数量',
       starInnerRatio: '内角比例',
       svgStarEdit: '星星编辑',
-      heartCleftDepth: '凹口深度',
-      heartShoulderWidth: '肩宽',
       format: '格式',
       headerBackground: '表头背景',
       totalBackground: '汇总背景',
