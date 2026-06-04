@@ -1,6 +1,6 @@
-import type { MaterialNode } from '@easyink/schema'
 import { readTrustedViewerHtml } from '@easyink/core'
 import { describe, expect, it } from 'vitest'
+import { svgCustomDesignerPropSchemas } from './prop-schemas'
 import { sanitizeSvgContent } from './sanitize'
 import { createSvgCustomNode } from './schema'
 import { renderSvgCustom } from './viewer'
@@ -61,21 +61,37 @@ describe('renderSvgCustom', () => {
     expect(output.match(/<svg/g)?.length).toBe(1)
   })
 
-  it('sanitizes content and escapes wrapper attributes', () => {
-    const node = {
-      id: 'svg_1',
-      type: 'svg',
-      x: 0,
-      y: 0,
-      width: 10,
-      height: 10,
+  it('uses pasted svg aspect ratio behavior when present', () => {
+    const node = createSvgCustomNode({
       props: {
-        content: '<circle r="5" onmouseover="alert(1)" /><script>alert(2)</script>',
-        viewBox: '0 0 10 10" onload="alert(3)',
-        preserveAspectRatio: 'xMidYMid meet',
-        fillColor: 'red" onclick="alert(4)',
+        content: '<svg viewBox="0 0 24 16" preserveAspectRatio="xMidYMid slice"><path d="M0 0H24V16Z" /></svg>',
       },
-    } satisfies MaterialNode
+    })
+
+    const output = readTrustedViewerHtml(renderSvgCustom(node).html!)
+
+    expect(output).toContain('viewBox="0 0 24 16"')
+    expect(output).toContain('preserveAspectRatio="xMidYMid slice"')
+  })
+
+  it('fits a pasted complete svg proportionally by default', () => {
+    const node = createSvgCustomNode({
+      props: {
+        content: '<svg viewBox="0 0 24 16"><path d="M0 0H24V16Z" /></svg>',
+      },
+    })
+
+    const output = readTrustedViewerHtml(renderSvgCustom(node).html!)
+
+    expect(output).toContain('preserveAspectRatio="xMidYMid meet"')
+  })
+
+  it('sanitizes content and escapes wrapper attributes', () => {
+    const node = createSvgCustomNode({
+      props: {
+        content: '<svg viewBox="0 0 10 10&quot; onload=&quot;alert(3)"><circle r="5" onmouseover="alert(1)" /><script>alert(2)</script></svg>',
+      },
+    })
 
     const output = readTrustedViewerHtml(renderSvgCustom(node).html!)
 
@@ -84,6 +100,11 @@ describe('renderSvgCustom', () => {
     expect(output).not.toContain('<script')
     expect(output).not.toContain('onload="alert')
     expect(output).not.toContain('onclick="alert')
-    expect(output).toContain('&quot;')
+  })
+})
+
+describe('svgCustomDesignerPropSchemas', () => {
+  it('keeps pasted svg advanced fields out of the default property panel', () => {
+    expect(svgCustomDesignerPropSchemas.map(item => item.key)).toEqual(['content'])
   })
 })

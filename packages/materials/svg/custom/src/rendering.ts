@@ -1,14 +1,23 @@
 import type { SvgCustomProps } from './schema'
 import { escapeHtml } from '@easyink/shared'
 import { sanitizeSvgContent } from './sanitize'
-import { SVG_CUSTOM_DEFAULTS } from './schema'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
+const SVG_CUSTOM_DEFAULT_VIEW_BOX = '0 0 100 100'
+const SVG_CUSTOM_DEFAULT_PRESERVE_ASPECT_RATIO = 'none'
+const SVG_ROOT_DEFAULT_PRESERVE_ASPECT_RATIO = 'xMidYMid meet'
 const DROPPED_ROOT_ATTRIBUTES = new Set(['xmlns', 'viewbox', 'width', 'height', 'preserveaspectratio', 'version'])
 
 interface ParsedSvgInput {
   content: string
   viewBox?: string
+  preserveAspectRatio?: string
+}
+
+interface NormalizedSvgCustomInput {
+  content: string
+  viewBox: string
+  preserveAspectRatio: string
 }
 
 export function buildSvgCustomMarkup(props: SvgCustomProps): string {
@@ -21,18 +30,17 @@ export function buildSvgCustomMarkup(props: SvgCustomProps): string {
 
   const normalized = normalizeSvgCustomProps(props)
   const content = sanitizeSvgContent(normalized.content)
-  return `<svg viewBox="${escapeHtml(normalized.viewBox)}" preserveAspectRatio="${escapeHtml(normalized.preserveAspectRatio)}" style="width:100%;height:100%;display:block" xmlns="http://www.w3.org/2000/svg" fill="${escapeHtml(normalized.fillColor)}">${content}</svg>`
+  return `<svg viewBox="${escapeHtml(normalized.viewBox)}" preserveAspectRatio="${escapeHtml(normalized.preserveAspectRatio)}" style="width:100%;height:100%;display:block" xmlns="http://www.w3.org/2000/svg">${content}</svg>`
 }
 
-export function normalizeSvgCustomProps(props: SvgCustomProps): SvgCustomProps {
+export function normalizeSvgCustomProps(props: SvgCustomProps): NormalizedSvgCustomInput {
   const parsed = parseSvgInput(props.content || '')
   return {
-    ...SVG_CUSTOM_DEFAULTS,
-    ...props,
     content: parsed?.content ?? props.content ?? '',
-    viewBox: parsed?.viewBox ?? props.viewBox ?? SVG_CUSTOM_DEFAULTS.viewBox,
-    preserveAspectRatio: props.preserveAspectRatio || SVG_CUSTOM_DEFAULTS.preserveAspectRatio,
-    fillColor: props.fillColor || SVG_CUSTOM_DEFAULTS.fillColor,
+    viewBox: parsed?.viewBox ?? SVG_CUSTOM_DEFAULT_VIEW_BOX,
+    preserveAspectRatio: parsed
+      ? (parsed.preserveAspectRatio ?? SVG_ROOT_DEFAULT_PRESERVE_ASPECT_RATIO)
+      : SVG_CUSTOM_DEFAULT_PRESERVE_ASPECT_RATIO,
   }
 }
 
@@ -59,6 +67,7 @@ function parseSvgInputWithDom(content: string): ParsedSvgInput | null {
 
   const serializer = new XMLSerializer()
   const viewBox = readRootViewBox(root)
+  const preserveAspectRatio = root.getAttribute('preserveAspectRatio') ?? undefined
   const contentRoot = document.createElementNS(SVG_NS, 'g')
   let hasRootAttrs = false
 
@@ -80,7 +89,7 @@ function parseSvgInputWithDom(content: string): ParsedSvgInput | null {
     ? serializer.serializeToString(contentRoot)
     : children.map(child => serializer.serializeToString(child)).join('')
 
-  return { content: innerContent, viewBox }
+  return { content: innerContent, viewBox, preserveAspectRatio }
 }
 
 function parseSvgInputWithPattern(content: string): ParsedSvgInput | null {
@@ -90,7 +99,8 @@ function parseSvgInputWithPattern(content: string): ParsedSvgInput | null {
 
   const attrs = match[1] ?? ''
   const viewBox = readAttribute(attrs, 'viewBox') ?? deriveViewBox(readAttribute(attrs, 'width'), readAttribute(attrs, 'height'))
-  return { content: match[2] ?? '', viewBox }
+  const preserveAspectRatio = readAttribute(attrs, 'preserveAspectRatio')
+  return { content: match[2] ?? '', viewBox, preserveAspectRatio }
 }
 
 function readRootViewBox(root: Element): string | undefined {

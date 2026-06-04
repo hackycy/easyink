@@ -5,16 +5,10 @@ export const SVG_CUSTOM_TYPE = 'svg'
 
 export interface SvgCustomProps {
   content: string
-  viewBox: string
-  preserveAspectRatio: string
-  fillColor: string
 }
 
 export const SVG_CUSTOM_DEFAULTS: SvgCustomProps = {
   content: '',
-  viewBox: '0 0 100 100',
-  preserveAspectRatio: 'none',
-  fillColor: '#000000',
 }
 
 export const SVG_CUSTOM_CAPABILITIES = {
@@ -30,7 +24,10 @@ export const SVG_CUSTOM_CAPABILITIES = {
 export function createSvgCustomNode(partial?: Partial<MaterialNode>, unit?: string): MaterialNode {
   const c = unit && unit !== 'mm' ? (value: number) => convertUnit(value, 'mm', unit) : (value: number) => value
   const partialNode = partial ? { ...partial } : undefined
-  const partialProps = (partial?.props ?? {}) as Partial<SvgCustomProps>
+  const inputProps = (partial?.props ?? {}) as Partial<Record<string, unknown>>
+  const partialProps: Partial<SvgCustomProps> = typeof inputProps.content === 'string'
+    ? { content: inputProps.content }
+    : {}
 
   if (partialNode)
     delete partialNode.props
