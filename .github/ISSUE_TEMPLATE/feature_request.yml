@@ -1,0 +1,152 @@
+name: Feature Request
+description: 提议新能力、行为改进、API 设计或开发体验优化
+title: '[Feature] '
+body:
+  - type: markdown
+    attributes:
+      value: |
+        欢迎提出能力建议。EasyInk 的边界比较清晰，好的需求描述通常需要回答三个问题：
+
+        - 它要解决的真实场景是什么？
+        - 更适合落在哪一层：Schema、Core、Designer、Viewer、打印/导出、Assistant，还是文档与工具链？
+        - 它会不会引入新的兼容、扩展或维护成本？
+
+        如果你已经有 API 草案、交互稿、示例 schema 或竞品参考，一并提供会很有帮助。
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: 提交前检查
+      options:
+        - label: 我已经搜索过现有 issue，确认这不是重复需求
+          required: true
+        - label: 我已经查看过相关文档或架构文档，确认当前能力尚未覆盖该场景
+          required: true
+        - label: 我确认描述中不包含敏感信息
+          required: true
+
+  - type: dropdown
+    id: request_type
+    attributes:
+      label: 需求类型
+      options:
+        - 新能力
+        - 现有能力增强
+        - API / 协议设计调整
+        - 性能 / 稳定性改进
+        - 开发体验 / 工具链改进
+        - 文档与示例增强
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: areas
+    attributes:
+      label: 主要影响范围
+      options:
+        - label: '`packages/designer`'
+        - label: '`packages/viewer`'
+        - label: '`packages/schema` / `packages/core` / `packages/datasource` / `packages/schema-tools`'
+        - label: '`packages/materials/*` / `packages/builtin` / `packages/prop-schemas`'
+        - label: '`packages/print/*`'
+        - label: '`packages/export/*`'
+        - label: '`packages/assistant/*`'
+        - label: '`internal-packages/render-api-service`'
+        - label: '`lib/EasyInk.Render`'
+        - label: '`playground`'
+        - label: '`docs`'
+        - label: Workspace / scripts / release / GitHub Actions
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 场景与当前痛点
+      description: 说明这个需求来自什么业务或使用流程，现状卡在哪里
+      placeholder: |
+        我希望在 ... 场景下完成 ...
+        当前只能通过 ... 方式绕过，但这会导致 ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 期望方案
+      description: 描述你希望系统最终支持什么行为、能力或接口
+      placeholder: |
+        我期望：
+        - ...
+        - ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: api_ux
+    attributes:
+      label: API、Schema 或交互草案
+      description: 可选，但非常推荐。能显著降低讨论成本
+      placeholder: |
+        例如：
+        ```ts
+        // API sketch
+        ```
+
+        或者：
+        ```json
+        // schema sketch
+        ```
+
+        或者直接描述交互流程。
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 备选方案与权衡
+      description: 你是否考虑过其他做法？为什么它们不合适？
+      placeholder: |
+        我考虑过：
+        - 方案 A：...
+        - 方案 B：...
+
+        最终不选它们的原因：
+        - ...
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收标准
+      description: 用可验证的条件定义“完成”的样子
+      placeholder: |
+        - [ ] 在 ... 场景下可以 ...
+        - [ ] 不影响现有 ...
+        - [ ] 文档 / 示例 / 测试补齐
+    validations:
+      required: true
+
+  - type: textarea
+    id: constraints
+    attributes:
+      label: 约束、风险与相关资料
+      description: 可填写兼容性要求、性能目标、第三方协议限制、相关 issue / PR / 文档链接
+      placeholder: |
+        约束：
+        - ...
+
+        风险：
+        - ...
+
+        相关链接：
+        - ...
+
+  - type: dropdown
+    id: contribution
+    attributes:
+      label: 你是否愿意参与实现或协助验证？
+      options:
+        - 愿意，且我可以提交 PR
+        - 愿意，我可以帮助补充场景和验证
+        - 暂时不方便
+    validations:
+      required: true

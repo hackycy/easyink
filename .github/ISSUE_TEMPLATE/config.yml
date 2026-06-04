@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: EasyInk Documentation
+    url: https://hackycy.github.io/easyink/docs/
+    about: 查看 Designer、Viewer、打印、导出与运行时文档，确认是否已有现成说明。
+  - name: Troubleshooting Guides
+    url: https://github.com/hackycy/easyink/tree/main/.github/troubleshooting
+    about: 提交 issue 前先检查已知兼容性、驱动和运行时问题。
+  - name: Architecture Notes
+    url: https://github.com/hackycy/easyink/tree/main/.github/architecture
+    about: 查看 monorepo 分层、包职责、Schema、渲染与扩展机制设计边界。

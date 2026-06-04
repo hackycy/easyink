@@ -1,0 +1,168 @@
+name: Bug Report
+description: 报告缺陷、回归、兼容性问题或运行时异常
+title: '[Bug] '
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。EasyInk 是一个覆盖 Designer、Viewer、Render、打印集成与文档站的 monorepo。
+
+        为了让问题更快被定位，请尽量先检查以下内容：
+
+        - 文档站: https://hackycy.github.io/easyink/docs/
+        - 已知排障: https://github.com/hackycy/easyink/tree/main/.github/troubleshooting
+        - 架构文档: https://github.com/hackycy/easyink/tree/main/.github/architecture
+
+        涉及打印、渲染、数据绑定、分页或运行时协议的问题时，请尽量提供最小可复现的 `schema / data / request / log`。
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: 提交前检查
+      options:
+        - label: 我已经搜索过现有 issue，确认这不是重复问题
+          required: true
+        - label: 我已经查看过相关文档或排障记录
+          required: true
+        - label: 我确认描述中不包含密钥、令牌、内网地址或其他敏感信息
+          required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: 问题类型
+      description: 请选择最接近的类型，方便初步分流
+      options:
+        - 回归问题（之前正常，现在异常）
+        - 设计器交互 / 工作台异常
+        - Viewer 预览 / 分页 / 渲染异常
+        - 打印 / 导出链路异常
+        - 数据源 / Schema / 绑定异常
+        - Assistant / 插件 / Contribution 异常
+        - 构建 / 安装 / CI / 发布异常
+        - 文档描述与实际行为不一致
+        - 其他
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: areas
+    attributes:
+      label: 影响范围
+      description: 可多选；如果不确定，按你观察到的现象勾选即可
+      options:
+        - label: '`packages/designer` - 设计器工作台、画布、面板、交互'
+        - label: '`packages/viewer` - 预览、分页、打印入口、导出入口'
+        - label: '`packages/schema` / `packages/core` / `packages/datasource` / `packages/schema-tools`'
+        - label: '`packages/materials/*` / `packages/builtin` / `packages/prop-schemas`'
+        - label: '`packages/print/*` - EasyInk Printer / HiPrint / Lodop 集成'
+        - label: '`packages/export/*` - 导出运行时或 PDF 导出插件'
+        - label: '`packages/assistant/*` - Assistant 平台、UI、orchestrator、plugins'
+        - label: '`internal-packages/render-api-service`'
+        - label: '`lib/EasyInk.Render` - Render host / sample / manifest'
+        - label: '`playground` - 示例、回归验证环境'
+        - label: '`docs` - 文档站或示例文档'
+        - label: Workspace / scripts / release / GitHub Actions
+    validations:
+      required: true
+
+  - type: dropdown
+    id: impact
+    attributes:
+      label: 影响程度
+      options:
+        - 阻塞核心流程或发布
+        - 常规功能异常，但存在绕过方式
+        - 局部体验问题或边缘场景问题
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: 问题概述
+      description: 用 2 到 5 句话描述问题是什么、出现在什么场景、为什么值得关注
+      placeholder: |
+        在 playground 中使用 HiPrint 打印 80mm 小票模板时，
+        浏览器预览正常，但实际输出被右侧裁切。
+        该问题只在开启模板纸张尺寸强制模式后出现。
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro_steps
+    attributes:
+      label: 复现步骤
+      description: 请尽量写成稳定、可执行的步骤；如果只有特定设备/模板/数据才能复现，请写清楚
+      placeholder: |
+        1. 进入 playground
+        2. 打开某个模板
+        3. 配置某个驱动 / 服务地址 / 纸张策略
+        4. 点击某个按钮
+        5. 观察到异常
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected_actual
+    attributes:
+      label: 期望结果与实际结果
+      placeholder: |
+        期望：
+        - ...
+
+        实际：
+        - ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro_assets
+    attributes:
+      label: 最小复现资产
+      description: 对渲染、打印、Schema、数据绑定类问题非常重要。可粘贴代码片段、JSON，或给出仓库/附件链接
+      placeholder: |
+        schema:
+        ```json
+        {}
+        ```
+
+        data:
+        ```json
+        {}
+        ```
+
+        request / config / driver params:
+        ```json
+        {}
+        ```
+
+        相关链接或附件：
+        - ...
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: 环境信息
+      description: 如果和问题无关的项可写 `N/A`
+      placeholder: |
+        OS:
+        Browser:
+        Node.js:
+        pnpm:
+        Package name(s) + version(s):
+        Playground / docs / local app:
+        Driver / printer / render service / runtime host:
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志、截图与补充信息
+      description: 可附错误日志、控制台输出、截图、录屏、对比结果、最近变更等
+      placeholder: |
+        - 控制台报错：
+        - 服务端日志：
+        - 截图或录屏：
+        - 最近一次确认正常的版本：

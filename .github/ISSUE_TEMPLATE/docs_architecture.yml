@@ -1,0 +1,110 @@
+name: Docs / Architecture
+description: 反馈文档缺失、描述错误、示例过时，或补充架构/排障沉淀
+title: '[Docs] '
+body:
+  - type: markdown
+    attributes:
+      value: |
+        这个仓库的文档不仅包含 API 和使用说明，还包含架构设计与排障沉淀。
+
+        适合使用这个模板的情况包括：
+
+        - 文档站内容错误、缺失、过时
+        - README、示例代码、包说明与当前实现不一致
+        - `.github/architecture` 里的设计边界需要更新
+        - `.github/troubleshooting` 里缺少一个已经反复出现的问题总结
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: 提交前检查
+      options:
+        - label: 我已经搜索过现有 issue，确认这不是重复反馈
+          required: true
+        - label: 我已经定位到相关页面、文件或目录
+          required: true
+
+  - type: dropdown
+    id: doc_type
+    attributes:
+      label: 反馈类型
+      options:
+        - 文档错误或示例失效
+        - 内容缺失，无法完成某个任务
+        - 架构文档与实际代码边界不一致
+        - 需要新增 troubleshooting / FAQ
+        - 文案不清晰，容易误解
+        - 其他
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: areas
+    attributes:
+      label: 涉及区域
+      options:
+        - label: '`README.md`'
+        - label: '`docs/` 文档站'
+        - label: '`.github/architecture/`'
+        - label: '`.github/troubleshooting/`'
+        - label: 包级 `README.md`
+        - label: 示例或 playground
+        - label: CI / release / contribution 指南
+    validations:
+      required: true
+
+  - type: input
+    id: location
+    attributes:
+      label: 相关页面或文件路径
+      description: 可填写 URL、仓库路径或两者都填
+      placeholder: docs/viewer/diagnostics.md
+    validations:
+      required: true
+
+  - type: textarea
+    id: issue
+    attributes:
+      label: 当前问题
+      description: 说明哪里不对、缺了什么，或者为什么会误导读者
+      placeholder: |
+        当前文档在 ... 部分描述了 ...
+        但实际代码 / 行为 / 最新结构已经变成 ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: 建议修改方式
+      description: 不需要写成最终文案，但请尽量说明应该补什么、改什么、删什么
+      placeholder: |
+        建议：
+        - 增加 ...
+        - 删除过时的 ...
+        - 把 ... 链接到 ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: audience
+    attributes:
+      label: 目标读者与使用场景
+      description: 这份文档主要是给谁看的？在哪个流程里会用到？
+      placeholder: |
+        目标读者：
+        - 初次接入 Viewer 的开发者
+
+        使用场景：
+        - 在本地搭建打印链路时排查 ...
+
+  - type: textarea
+    id: references
+    attributes:
+      label: 参考资料
+      description: 可附相关代码路径、PR、issue、截图、竞品文档或复现记录
+      placeholder: |
+        - 相关代码：
+        - 相关 issue / PR：
+        - 截图：
+        - 参考链接：
