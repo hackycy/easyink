@@ -123,6 +123,55 @@ describe('assistant conversation panel', () => {
     }
   })
 
+  it('does not submit when Enter confirms an IME composition', async () => {
+    const task = createTask()
+    const { api } = createStreamingClient({ createTask: vi.fn().mockResolvedValue(task) })
+    mount({ apiClient: api })
+    await flushPromises()
+
+    const textarea = document.querySelector('textarea') as HTMLTextAreaElement
+    textarea.value = '生成中文小票'
+    textarea.dispatchEvent(new Event('input', { bubbles: true }))
+    await nextTick()
+
+    textarea.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }))
+    textarea.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'Enter',
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      keyCode: 229,
+    }))
+    await flushPromises()
+
+    expect(api.createTask).not.toHaveBeenCalled()
+  })
+
+  it('submits when Enter is pressed outside IME composition', async () => {
+    const task = createTask()
+    const { api } = createStreamingClient({ createTask: vi.fn().mockResolvedValue(task) })
+    mount({ apiClient: api })
+    await flushPromises()
+
+    const textarea = document.querySelector('textarea') as HTMLTextAreaElement
+    textarea.value = '生成中文小票'
+    textarea.dispatchEvent(new Event('input', { bubbles: true }))
+    await nextTick()
+
+    textarea.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'Enter',
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+    }))
+    await flushPromises()
+
+    expect(api.createTask).toHaveBeenCalledTimes(1)
+    expect(api.createTask).toHaveBeenCalledWith(expect.objectContaining({
+      prompt: '生成中文小票',
+    }))
+  })
+
   it('restores the active conversation after the drawer unmounts', async () => {
     const store = new MemoryAssistantStore()
     const task = createTask()

@@ -20,6 +20,7 @@ const emit = defineEmits<{
 const text = ref('')
 const source = ref<AssistantSourceInput>()
 const textarea = ref<HTMLTextAreaElement>()
+const composing = ref(false)
 const sourceLabel = computed(() => {
   if (!source.value)
     return ''
@@ -65,6 +66,17 @@ function reparseSource() {
 
 function focusForReplace() {
   textarea.value?.focus()
+}
+
+function onKeydown(event: KeyboardEvent) {
+  if (event.key !== 'Enter')
+    return
+  if (event.shiftKey || event.ctrlKey || event.altKey || event.metaKey)
+    return
+  if (event.isComposing || composing.value || event.keyCode === 229)
+    return
+  event.preventDefault()
+  submit()
 }
 
 async function attachSourceFromClipboard() {
@@ -118,8 +130,10 @@ const sourceIcon = computed(() => {
         :placeholder="placeholder ?? tr('designer.assistant.placeholder.prompt')"
         :disabled="running"
         rows="2"
+        @compositionstart="composing = true"
+        @compositionend="composing = false"
         @paste="onPaste"
-        @keydown.enter.exact.prevent="submit"
+        @keydown="onKeydown"
       />
       <div class="assistant-composer__tools">
         <slot name="tools" />
