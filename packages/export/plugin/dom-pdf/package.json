@@ -24,7 +24,7 @@
   "dependencies": {
     "@easyink/export-runtime": "workspace:*",
     "@easyink/shared": "workspace:*",
-    "html2canvas": "^1.4.1",
-    "jspdf": "^2.5.2"
+    "html2canvas": "catalog:framework",
+    "jspdf": "catalog:framework"
   }
 }

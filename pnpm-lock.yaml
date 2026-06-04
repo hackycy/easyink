@@ -127,9 +127,15 @@ catalogs:
     hono:
       specifier: ^4.12.23
       version: 4.12.23
+    html2canvas:
+      specifier: ^1.4.1
+      version: 1.4.1
     jsbarcode:
       specifier: ^3.12.3
       version: 3.12.3
+    jspdf:
+      specifier: ^2.5.1
+      version: 2.5.2
     lucide-static:
       specifier: ^1.0.0
       version: 1.8.0
@@ -774,10 +780,10 @@ importers:
         specifier: workspace:*
         version: link:../../../shared
       html2canvas:
-        specifier: ^1.4.1
+        specifier: catalog:framework
         version: 1.4.1
       jspdf:
-        specifier: ^2.5.2
+        specifier: catalog:framework
         version: 2.5.2
 
   packages/export/runtime:
