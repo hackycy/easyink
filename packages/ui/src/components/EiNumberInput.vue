@@ -100,6 +100,21 @@ function roundToPrecision(val: number): number {
   return Math.round(val * factor) / factor
 }
 
+function preciseAdd(a: number, b: number): number {
+  const decA = getDecimalPlaces(a)
+  const decB = getDecimalPlaces(b)
+  const factor = 10 ** Math.max(decA, decB)
+  return (Math.round(a * factor) + Math.round(b * factor)) / factor
+}
+
+function getDecimalPlaces(val: number): number {
+  const str = String(val)
+  const dot = str.indexOf('.')
+  if (dot === -1)
+    return 0
+  return str.length - dot - 1
+}
+
 function normalizeValue(val: number | null | undefined): number | null {
   return val ?? null
 }
@@ -138,15 +153,15 @@ function onInput(event: Event) {
 
 function getEmptyStepValue(direction: 1 | -1): number {
   const step = effectiveStep.value
-  const base = direction > 0 && props.min != null && props.min > step ? props.min - step : 0
-  return clamp(roundToPrecision(base + step * direction))
+  const base = direction > 0 && props.min != null && props.min > step ? preciseAdd(props.min, -step) : 0
+  return clamp(roundToPrecision(preciseAdd(base, step * direction)))
 }
 
 function getStepBase(direction: 1 | -1): number {
   const current = parsedDisplayValue.value ?? props.modelValue
   if (current != null)
     return current
-  return getEmptyStepValue(direction) - effectiveStep.value * direction
+  return preciseAdd(getEmptyStepValue(direction), -(effectiveStep.value * direction))
 }
 
 function stepBy(direction: 1 | -1) {
@@ -157,7 +172,7 @@ function stepBy(direction: 1 | -1) {
   if (direction < 0 && !canStepDown.value)
     return
 
-  const finalValue = clamp(roundToPrecision(getStepBase(direction) + effectiveStep.value * direction))
+  const finalValue = clamp(roundToPrecision(preciseAdd(getStepBase(direction), effectiveStep.value * direction)))
   displayText.value = String(finalValue)
   emit('update:modelValue', finalValue)
   emit('commit', finalValue)
