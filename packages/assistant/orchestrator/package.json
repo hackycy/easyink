@@ -43,7 +43,7 @@
     "@easyink/assistant-type-aligner": "workspace:*",
     "@easyink/schema": "workspace:*",
     "@easyink/schema-tools": "workspace:*",
-    "@hono/node-server": "^1.19.14",
+    "@hono/node-server": "catalog:framework",
     "@langchain/core": "catalog:framework",
     "@langchain/langgraph": "catalog:framework",
     "dotenv": "catalog:framework",

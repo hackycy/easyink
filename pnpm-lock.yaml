@@ -88,6 +88,9 @@ catalogs:
     '@codemirror/view':
       specifier: ^6.0.0
       version: 6.41.1
+    '@hono/node-server':
+      specifier: ^1.19.14
+      version: 1.19.14
     '@langchain/core':
       specifier: ^1.1.48
       version: 1.1.48
@@ -484,7 +487,7 @@ importers:
         specifier: workspace:*
         version: link:../../schema-tools
       '@hono/node-server':
-        specifier: ^1.19.14
+        specifier: catalog:framework
         version: 1.19.14(hono@4.12.23)
       '@langchain/core':
         specifier: catalog:framework

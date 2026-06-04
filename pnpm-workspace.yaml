@@ -40,6 +40,7 @@ catalogs:
     vitepress: 2.0.0-alpha.17
     vue-tsc: ^3.3.1
   framework:
+    '@hono/node-server': ^1.19.14
     html2canvas: ^1.4.1
     jspdf: ^2.5.1
     gsap: ^3.15.0
