@@ -5,13 +5,13 @@ import { getNodeProps } from '@easyink/schema'
 import { buildStarSvgMarkup } from './rendering'
 import { SVG_STAR_DEFAULTS } from './schema'
 
-export function renderSvgStar(node: MaterialNode, unit = 'mm') {
+export function renderSvgStar(node: MaterialNode) {
   const props = {
     ...SVG_STAR_DEFAULTS,
     ...getNodeProps<SvgStarProps>(node),
   }
 
   return {
-    html: trustedViewerHtml(buildStarSvgMarkup(props, unit), 'sanitized-rich-text'),
+    html: trustedViewerHtml(buildStarSvgMarkup(props, node.width, node.height), 'sanitized-rich-text'),
   }
 }

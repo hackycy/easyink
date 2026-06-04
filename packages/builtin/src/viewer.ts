@@ -39,7 +39,7 @@ export function registerBuiltinViewerMaterials(register: BuiltinViewerRegistrar)
   })
   register(CHART_BAR_TYPE, { render: (node, ctx) => renderChartBar(node, ctx) })
   register(SVG_CUSTOM_TYPE, { render: node => renderSvgCustom(node) })
-  register(SVG_STAR_TYPE, { render: (node, ctx) => renderSvgStar(node, ctx.unit) })
+  register(SVG_STAR_TYPE, { render: node => renderSvgStar(node) })
   register(SVG_HEART_TYPE, { render: (node, ctx) => renderSvgHeart(node, ctx.unit) })
   register(PAGE_NUMBER_TYPE, {
     render: (node, ctx) => renderPageNumber(node, ctx),

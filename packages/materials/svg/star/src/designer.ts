@@ -6,6 +6,7 @@ import { getNodeProps } from '@easyink/schema'
 import { createPointerGesture } from '@easyink/shared'
 import { computed, defineComponent, h, onUnmounted } from 'vue'
 import { buildStarSvgMarkup, getStarControlRect, getStarEditGuide, resolveStarControl, updateStarControlFromLocalPoint } from './rendering'
+
 import { SVG_STAR_DEFAULTS } from './schema'
 
 const STAR_CONTROL_SELECTION_TYPE = 'svg-star.control'
@@ -237,7 +238,7 @@ function createStarDecorationComponent(context: MaterialExtensionContext) {
       function renderHandle(handle: SvgStarControlSelection['handle'], index: number, label: string) {
         const sel = currentSelection.value
         const selected = sel.handle === handle && sel.index === index
-        const guide = getStarEditGuide(starProps.value)
+        const guide = getStarEditGuide(starProps.value, props.node.width, props.node.height)
         const pos = guide.handles[index]
 
         return h('div', {
@@ -261,7 +262,7 @@ function createStarDecorationComponent(context: MaterialExtensionContext) {
       }
 
       return () => {
-        const guide = getStarEditGuide(starProps.value)
+        const guide = getStarEditGuide(starProps.value, props.node.width, props.node.height)
         const overlays = []
         const baseStyle = {
           position: 'absolute',
@@ -299,11 +300,12 @@ export function createSvgStarExtension(context: MaterialExtensionContext): Mater
   return {
     renderContent(nodeSignal, container) {
       function render() {
+        const node = nodeSignal.get()
         const props = {
           ...SVG_STAR_DEFAULTS,
-          ...getNodeProps<SvgStarProps>(nodeSignal.get()),
+          ...getNodeProps<SvgStarProps>(node),
         }
-        container.innerHTML = buildStarSvgMarkup(props)
+        container.innerHTML = buildStarSvgMarkup(props, node.width, node.height)
       }
 
       render()

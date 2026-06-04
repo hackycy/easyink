@@ -4,31 +4,134 @@ import type { SvgStarControlSelection, SvgStarProps } from './schema'
 import { escapeHtml } from '@easyink/shared'
 
 const VIEWBOX_SIZE = 100
-const STAR_CENTER = 50
-const STAR_OUTER_RADIUS = 50
 const STAR_HANDLE_SIZE = 6
-
-interface PointBounds {
-  minX: number
-  minY: number
-  maxX: number
-  maxY: number
-}
 
 export interface StarEditGuide {
   handles: Point[]
 }
 
-export function buildStarSvgMarkup(props: SvgStarProps, unit = 'mm'): string {
+interface Bounds {
+  minX: number
+  maxX: number
+  minY: number
+  maxY: number
+}
+
+function getRawStarPoints(props: SvgStarProps): Point[] {
+  const pointCount = clamp(Math.round(props.starPoints), 3, 24)
+  const innerRatio = clamp(props.starInnerRatio, 0.08, 0.95)
+  const points: Point[] = []
+  for (let i = 0; i < pointCount * 2; i++) {
+    const r = i % 2 === 0 ? 1 : innerRatio
+    const angle = degreesToRadians(props.starRotation + (i * 180) / pointCount)
+    points.push({ x: Math.cos(angle) * r, y: Math.sin(angle) * r })
+  }
+  return points
+}
+
+function getRawInnerHandlePoints(props: SvgStarProps): Point[] {
+  const pointCount = clamp(Math.round(props.starPoints), 3, 24)
+  const innerRatio = clamp(props.starInnerRatio, 0.08, 0.95)
+  const points: Point[] = []
+  for (let i = 0; i < pointCount; i++) {
+    const angle = degreesToRadians(props.starRotation + (2 * i + 1) * 180 / pointCount)
+    points.push({ x: Math.cos(angle) * innerRatio, y: Math.sin(angle) * innerRatio })
+  }
+  return points
+}
+
+function getBounds(points: Point[]): Bounds {
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+  for (const p of points) {
+    if (p.x < minX)
+      minX = p.x
+    if (p.x > maxX)
+      maxX = p.x
+    if (p.y < minY)
+      minY = p.y
+    if (p.y > maxY)
+      maxY = p.y
+  }
+  return { minX, maxX, minY, maxY }
+}
+
+function computeStrokeInset(props: SvgStarProps, nodeWidth: number, nodeHeight: number): { insetX: number, insetY: number } {
+  const bw = Math.max(0, props.borderWidth || 0)
+  if (bw <= 0)
+    return { insetX: 0, insetY: 0 }
+  return {
+    insetX: (bw / Math.max(nodeWidth, Number.EPSILON)) * VIEWBOX_SIZE / 2,
+    insetY: (bw / Math.max(nodeHeight, Number.EPSILON)) * VIEWBOX_SIZE / 2,
+  }
+}
+
+function fitPointToViewBox(p: Point, bounds: Bounds, insetX: number, insetY: number): Point {
+  const rangeX = bounds.maxX - bounds.minX
+  const rangeY = bounds.maxY - bounds.minY
+  const availX = VIEWBOX_SIZE - 2 * insetX
+  const availY = VIEWBOX_SIZE - 2 * insetY
+  return {
+    x: insetX + ((p.x - bounds.minX) / Math.max(rangeX, Number.EPSILON)) * availX,
+    y: insetY + ((p.y - bounds.minY) / Math.max(rangeY, Number.EPSILON)) * availY,
+  }
+}
+
+function fitPointsToViewBox(points: Point[], bounds: Bounds, insetX: number, insetY: number): Point[] {
+  return points.map(p => fitPointToViewBox(p, bounds, insetX, insetY))
+}
+
+function viewBoxToRaw(p: Point, bounds: Bounds, insetX: number, insetY: number): Point {
+  const rangeX = bounds.maxX - bounds.minX
+  const rangeY = bounds.maxY - bounds.minY
+  const availX = VIEWBOX_SIZE - 2 * insetX
+  const availY = VIEWBOX_SIZE - 2 * insetY
+  return {
+    x: bounds.minX + ((p.x - insetX) / Math.max(availX, Number.EPSILON)) * rangeX,
+    y: bounds.minY + ((p.y - insetY) / Math.max(availY, Number.EPSILON)) * rangeY,
+  }
+}
+
+function computeStrokeWidth(props: SvgStarProps, nodeWidth: number, nodeHeight: number): number {
+  const bw = Math.max(0, props.borderWidth || 0)
+  if (bw <= 0)
+    return 0
+  const minDim = Math.min(nodeWidth, nodeHeight)
+  if (minDim <= 0)
+    return 0
+  return (bw / minDim) * VIEWBOX_SIZE
+}
+
+export function buildStarSvgMarkup(props: SvgStarProps, nodeWidth: number, nodeHeight: number): string {
   const normalized = normalizeStarProps(props)
-  const points = normalizePointsToViewBox(getRawStarPolygonPoints(normalized))
-  return `<svg viewBox="0 0 100 100" preserveAspectRatio="none" style="width:100%;height:100%;display:block;overflow:visible" xmlns="http://www.w3.org/2000/svg">`
-    + `<polygon points="${serializePoints(points)}" ${getPaintAttrs(normalized, unit)} />`
+  const rawPoints = getRawStarPoints(normalized)
+  const bounds = getBounds(rawPoints)
+  const { insetX, insetY } = computeStrokeInset(normalized, nodeWidth, nodeHeight)
+  const vbPoints = fitPointsToViewBox(rawPoints, bounds, insetX, insetY)
+  const strokeWidth = computeStrokeWidth(normalized, nodeWidth, nodeHeight)
+
+  return `<svg viewBox="0 0 ${VIEWBOX_SIZE} ${VIEWBOX_SIZE}" preserveAspectRatio="none"`
+    + ` style="width:100%;height:100%;display:block;overflow:hidden" xmlns="http://www.w3.org/2000/svg">`
+    + `<polygon points="${serializePoints(vbPoints)}" ${getPaintAttrs(normalized, strokeWidth)} />`
     + `</svg>`
 }
 
+export function getStarEditGuide(props: SvgStarProps, nodeWidth: number, nodeHeight: number): StarEditGuide {
+  const normalized = normalizeStarProps(props)
+  const rawStarPoints = getRawStarPoints(normalized)
+  const bounds = getBounds(rawStarPoints)
+  const { insetX, insetY } = computeStrokeInset(normalized, nodeWidth, nodeHeight)
+  const rawHandlePoints = getRawInnerHandlePoints(normalized)
+  const handles = fitPointsToViewBox(rawHandlePoints, bounds, insetX, insetY)
+  return { handles }
+}
+
 export function getStarControlRect(node: MaterialNode, props: SvgStarProps, selection: SvgStarControlSelection): Rect {
-  const localPoint = getStarControlLocalPoint(node, props, selection.handle, selection.index)
+  const guide = getStarEditGuide(props, node.width, node.height)
+  const vbPoint = guide.handles[selection.index]
+  const localPoint = viewBoxToLocalPoint(node, vbPoint)
   const documentPoint = localToDocumentPoint(node, localPoint)
   return {
     x: documentPoint.x - STAR_HANDLE_SIZE / 2,
@@ -42,14 +145,15 @@ export function resolveStarControl(localPoint: Point, node: MaterialNode, props:
   if (!isPointInsideNode(localPoint, node))
     return null
 
-  const guide = getStarEditGuide(props)
+  const normalized = normalizeStarProps(props)
+  const guide = getStarEditGuide(normalized, node.width, node.height)
   const threshold = Math.max(5, Math.min(node.width, node.height) * 0.06)
 
   let minDistance = Infinity
   let minIndex = -1
 
   for (let i = 0; i < guide.handles.length; i++) {
-    const handleLocal = normalizedToLocalPoint(node, guide.handles[i])
+    const handleLocal = viewBoxToLocalPoint(node, guide.handles[i])
     const dist = distance(localPoint, handleLocal)
     if (dist < minDistance) {
       minDistance = dist
@@ -63,37 +167,22 @@ export function resolveStarControl(localPoint: Point, node: MaterialNode, props:
   return null
 }
 
-export function updateStarControlFromLocalPoint(node: MaterialNode, props: SvgStarProps, handle: SvgStarControlSelection['handle'], localPoint: Point): Partial<SvgStarProps> {
-  const normalizedProps = normalizeStarProps(props)
-  const bounds = getStarPointBounds(getRawStarPolygonPoints(normalizedProps))
-  const normalizedPoint = localToNormalizedPoint(node, localPoint)
-  const rawPoint = denormalizePointFromViewBox(normalizedPoint, bounds)
+export function updateStarControlFromLocalPoint(node: MaterialNode, props: SvgStarProps, _handle: SvgStarControlSelection['handle'], localPoint: Point): Partial<SvgStarProps> {
+  const normalized = normalizeStarProps(props)
+  const rawStarPoints = getRawStarPoints(normalized)
+  const bounds = getBounds(rawStarPoints)
+  const { insetX, insetY } = computeStrokeInset(normalized, node.width, node.height)
 
+  const vbPoint = localToViewBoxPoint(node, localPoint)
+  const rawPoint = viewBoxToRaw(vbPoint, bounds, insetX, insetY)
+  const dist = Math.hypot(rawPoint.x, rawPoint.y)
   return {
-    starInnerRatio: clamp(distance(rawPoint, { x: STAR_CENTER, y: STAR_CENTER }) / STAR_OUTER_RADIUS, 0.08, 0.95),
+    starInnerRatio: clamp(dist, 0.08, 0.95),
   }
-}
-
-export function getStarEditGuide(props: SvgStarProps): StarEditGuide {
-  const normalizedProps = normalizeStarProps(props)
-  const bounds = getStarPointBounds(getRawStarPolygonPoints(normalizedProps))
-  const innerRadius = STAR_OUTER_RADIUS * clamp(normalizedProps.starInnerRatio, 0.08, 0.95)
-  const pointCount = clamp(Math.round(normalizedProps.starPoints), 3, 24)
-
-  const handles: Point[] = []
-  for (let i = 0; i < pointCount; i++) {
-    const angle = degreesToRadians(normalizedProps.starRotation + (2 * i + 1) * 180 / pointCount)
-    handles.push(normalizePointToViewBox({
-      x: STAR_CENTER + Math.cos(angle) * innerRadius,
-      y: STAR_CENTER + Math.sin(angle) * innerRadius,
-    }, bounds))
-  }
-
-  return { handles }
 }
 
 export function getStarHandleRects(node: MaterialNode, props: SvgStarProps): Record<string, Rect> {
-  const guide = getStarEditGuide(props)
+  const guide = getStarEditGuide(props, node.width, node.height)
   const rects: Record<string, Rect> = {}
   for (let i = 0; i < guide.handles.length; i++) {
     rects[`inner-radius:${i}`] = getStarControlRect(node, props, { handle: 'inner-radius', index: i })
@@ -101,49 +190,14 @@ export function getStarHandleRects(node: MaterialNode, props: SvgStarProps): Rec
   return rects
 }
 
-function getRawStarPolygonPoints(props: SvgStarProps): Point[] {
-  const points: Point[] = []
-  const pointCount = clamp(Math.round(props.starPoints), 3, 24)
-  const innerRadius = STAR_OUTER_RADIUS * clamp(props.starInnerRatio, 0.08, 0.95)
-
-  for (let index = 0; index < pointCount * 2; index += 1) {
-    const radius = index % 2 === 0 ? STAR_OUTER_RADIUS : innerRadius
-    const angle = degreesToRadians(props.starRotation + (index * 180) / pointCount)
-    const x = STAR_CENTER + Math.cos(angle) * radius
-    const y = STAR_CENTER + Math.sin(angle) * radius
-    points.push({ x, y })
-  }
-
-  return points
-}
-
-function getPaintAttrs(props: SvgStarProps, unit: string): string {
-  const borderWidth = Math.max(0, props.borderWidth || 0)
-  return [
-    `fill="${escapeHtml(props.fillColor || 'transparent')}"`,
-    `stroke="${escapeHtml(borderWidth > 0 ? props.borderColor : 'transparent')}"`,
-    `stroke-width="${borderWidth}${unit}"`,
-    'vector-effect="non-scaling-stroke"',
-  ].join(' ')
-}
-
-function getStarControlLocalPoint(node: MaterialNode, props: SvgStarProps, handle: SvgStarControlSelection['handle'], index: number): Point {
-  const normalized = getStarControlNormalizedPoint(props, handle, index)
-  return normalizedToLocalPoint(node, normalized)
-}
-
-function getStarControlNormalizedPoint(props: SvgStarProps, _handle: SvgStarControlSelection['handle'], index: number): Point {
-  return getStarEditGuide(props).handles[index]
-}
-
-function normalizedToLocalPoint(node: MaterialNode, point: Point): Point {
+function viewBoxToLocalPoint(node: MaterialNode, point: Point): Point {
   return {
     x: (point.x / VIEWBOX_SIZE) * node.width,
     y: (point.y / VIEWBOX_SIZE) * node.height,
   }
 }
 
-function localToNormalizedPoint(node: MaterialNode, point: Point): Point {
+function localToViewBoxPoint(node: MaterialNode, point: Point): Point {
   return {
     x: (point.x / Math.max(node.width, Number.EPSILON)) * VIEWBOX_SIZE,
     y: (point.y / Math.max(node.height, Number.EPSILON)) * VIEWBOX_SIZE,
@@ -151,18 +205,25 @@ function localToNormalizedPoint(node: MaterialNode, point: Point): Point {
 }
 
 function localToDocumentPoint(node: MaterialNode, point: Point): Point {
-  const scaleX = (node as MaterialNode & { scaleX?: number }).scaleX ?? 1
-  const scaleY = (node as MaterialNode & { scaleY?: number }).scaleY ?? 1
   const radians = degreesToRadians(node.rotation ?? 0)
   const center = { x: node.x + node.width / 2, y: node.y + node.height / 2 }
-  const scaled = {
-    x: (point.x - node.width / 2) * scaleX,
-    y: (point.y - node.height / 2) * scaleY,
+  const offset = {
+    x: point.x - node.width / 2,
+    y: point.y - node.height / 2,
   }
   return {
-    x: center.x + scaled.x * Math.cos(radians) - scaled.y * Math.sin(radians),
-    y: center.y + scaled.x * Math.sin(radians) + scaled.y * Math.cos(radians),
+    x: center.x + offset.x * Math.cos(radians) - offset.y * Math.sin(radians),
+    y: center.y + offset.x * Math.sin(radians) + offset.y * Math.cos(radians),
   }
+}
+
+function getPaintAttrs(props: SvgStarProps, strokeWidth: number): string {
+  return [
+    `fill="${escapeHtml(props.fillColor || 'transparent')}"`,
+    `stroke="${escapeHtml(strokeWidth > 0 ? props.borderColor : 'transparent')}"`,
+    `stroke-width="${strokeWidth}"`,
+    'stroke-linejoin="round"',
+  ].join(' ')
 }
 
 function normalizeStarProps(props: SvgStarProps): SvgStarProps {
@@ -170,7 +231,7 @@ function normalizeStarProps(props: SvgStarProps): SvgStarProps {
     ...props,
     starPoints: clamp(Math.round(props.starPoints || 5), 3, 24),
     starInnerRatio: clamp(props.starInnerRatio || 0.381966, 0.08, 0.95),
-    starRotation: normalizeDegrees(props.starRotation ?? -90),
+    starRotation: props.starRotation ?? -90,
   }
 }
 
@@ -190,54 +251,6 @@ function degreesToRadians(value: number): number {
   return (value * Math.PI) / 180
 }
 
-function normalizeDegrees(value: number): number {
-  let normalized = value
-  while (normalized > 180)
-    normalized -= 360
-  while (normalized <= -180)
-    normalized += 360
-  return normalized
-}
-
-function getStarPointBounds(points: Point[]): PointBounds {
-  let minX = Number.POSITIVE_INFINITY
-  let minY = Number.POSITIVE_INFINITY
-  let maxX = Number.NEGATIVE_INFINITY
-  let maxY = Number.NEGATIVE_INFINITY
-
-  for (const point of points) {
-    minX = Math.min(minX, point.x)
-    minY = Math.min(minY, point.y)
-    maxX = Math.max(maxX, point.x)
-    maxY = Math.max(maxY, point.y)
-  }
-
-  return { minX, minY, maxX, maxY }
-}
-
-function normalizePointsToViewBox(points: Point[]): Point[] {
-  const bounds = getStarPointBounds(points)
-  return points.map(point => normalizePointToViewBox(point, bounds))
-}
-
-function normalizePointToViewBox(point: Point, bounds: PointBounds): Point {
-  return {
-    x: ((point.x - bounds.minX) / Math.max(bounds.maxX - bounds.minX, Number.EPSILON)) * VIEWBOX_SIZE,
-    y: ((point.y - bounds.minY) / Math.max(bounds.maxY - bounds.minY, Number.EPSILON)) * VIEWBOX_SIZE,
-  }
-}
-
-function denormalizePointFromViewBox(point: Point, bounds: PointBounds): Point {
-  return {
-    x: bounds.minX + (point.x / VIEWBOX_SIZE) * Math.max(bounds.maxX - bounds.minX, Number.EPSILON),
-    y: bounds.minY + (point.y / VIEWBOX_SIZE) * Math.max(bounds.maxY - bounds.minY, Number.EPSILON),
-  }
-}
-
 function serializePoints(points: Point[]): string {
-  return points.map(point => `${roundPoint(point.x)},${roundPoint(point.y)}`).join(' ')
-}
-
-function roundPoint(value: number): string {
-  return value.toFixed(2).replace(/\.00$/, '')
+  return points.map(p => `${p.x.toFixed(2).replace(/\.00$/, '')},${p.y.toFixed(2).replace(/\.00$/, '')}`).join(' ')
 }
