@@ -101,6 +101,7 @@ Viewer 在渲染前执行：
 
 - `BindingRef.fieldPath` 路径解析
 - `BindingRef.format` 显示格式解释
+- `DataContractBinding` 目标数据模型解析
 - 聚合规则求值
 
 显示格式规则由 Viewer 在绑定解析边界统一执行：
@@ -113,6 +114,28 @@ Viewer 在渲染前执行：
 6. 失败时保留原始显示值并发出 `datasource` warning
 
 自定义函数是同步、可信模板能力。函数可以读取当前字段值和 Viewer 正在消费的完整运行时 data；不应依赖物料差异、DOM、网络或异步副作用。
+
+### 6.6.0 Material Data Contract 解析
+
+`DataContractBinding` 不走普通 `resolvedProps` 投影。它由消费该目标数据模型的物料调用 `@easyink/core` 的 `resolveMaterialDataContract(contract, binding, data)` 解析，再把目标 records 转成物料运行时数据。
+
+当前 chart-bar 的路径是：
+
+1. 物料定义声明 `CHART_BAR_DATA_CONTRACT`：`model.kind='tabular'`，目标字段为 `category` 和 `value`。
+2. Designer 把用户拖拽字段写入 `node.binding.kind='data-contract'` 的 `mappings`。
+3. Viewer 渲染 chart-bar 时传入 `context.data`。
+4. `resolveMaterialDataContract()` 读取完整 `select.path`，推导 relation，并输出目标 records。
+5. chart-bar 将 records 转成 `{ label, value }[]` 后渲染 SVG 图表。
+
+Resolver 的推导规则：
+
+- 若多个 mapping 的完整 path 共享同一个数组父级，例如 `monthlySales/month` 与 `monthlySales/revenue`，按 record collection 解析。
+- 若 mapping 直接指向多个数组，例如 `category` 与 `values`，按 index 对齐，长度取最短数组。
+- 若 `data[sourceId]` 存在且该候选根能解析 mapping path 或 path 的父级集合，则优先从该 source-scoped root 读取；否则回退到全局 `data` 根读取。
+- `relation.kind='record'` 会要求 record collection 可解析；失败时返回 invalid 并产生 diagnostic。
+- `relation.kind='index'` 会跳过 record 推导，直接要求 index 对齐。
+
+这条链路的核心约束是：binding 保存 source mapping，不保存 resolver mode。Viewer 和物料渲染器不得把 `select.path` 截断成集合内字段后写回 schema。
 
 ### 6.6.1 table-data 单元格绑定预解析
 

@@ -66,7 +66,8 @@ Choose focused tests based on risk:
 - Viewer measure: runtime height/width, layout cache behavior, diagnostics.
 - Fragment pagination: split behavior under `auto-sheets`, preservation of `sourceNodeId`, and no source schema mutation.
 - Page-aware/repeat overlay: excluded from layout inputs, copied after pagination, receives `__pageNumber` and `__totalPages`.
-- Datasource drop: accepted/rejected zones, collection prefix compatibility, cell binding shape.
+- Datasource drop: accepted/rejected zones, collection prefix compatibility, cell binding shape, or data-contract target field mapping.
+- Data-contract resolver: shared record collection, top-level array index alignment, source-scoped root fallback, invalid relation diagnostics.
 - Registration: built-in Designer and Viewer registries include the new material.
 
 Useful commands:
@@ -80,6 +81,7 @@ Useful commands:
 
 - New material has Designer code but no Viewer registration.
 - New Viewer renderer manually resolves ordinary `node.binding`.
+- New data-contract material stores runtime data in `props.data`, truncates `mappings.*.select.path`, or exposes record/index mode in UI instead of using the relation resolver.
 - New property label is a hardcoded string while neighboring schemas use locale keys.
 - New deep-edit payload stores DOM or non-serializable values.
 - New table-like material duplicates preview rows into Schema.

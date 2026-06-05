@@ -12,7 +12,7 @@ Designer material catalog
   -> MaterialDesignerExtension.renderContent()
   -> viewer.open({ schema, data })
   -> collectFontFamilies(schema) and loadAndInjectFonts() into the Viewer host document
-  -> binding projection
+  -> ordinary binding projection / material data contract resolution
   -> material measure()
   -> runLayoutPipeline()
   -> runPagination()
@@ -156,7 +156,7 @@ Implement `MaterialViewerExtension` with:
 Viewer runtime stages:
 
 1. Normalize/validate schema and load fonts.
-2. Resolve bindings into `resolvedPropsMap`.
+2. Resolve ordinary bindings into `resolvedPropsMap`; data-contract materials resolve their target records inside their Viewer renderer with `resolveMaterialDataContract()`.
 3. Run material `measure()` with resolved props applied to a temporary node.
 4. Exclude repeated/page-aware nodes from layout inputs.
 5. Run `runLayoutPipeline()` and `runPagination()`.
@@ -187,6 +187,7 @@ Built-in materials:
 - `icon`: Vue icon component.
 - `category`: primary material category.
 - `capabilities`: controls binding, rotation, resizing, children, animation, union drop, page-aware, multi-binding, and aspect lock.
+- `dataContract`: optional target data model for structured datasource materials. When present, Designer writes `node.binding.kind='data-contract'` mappings instead of ordinary whole-element `BindingRef`.
 - `createDefaultNode`: default schema factory.
 - `factory`: Designer extension factory.
 - `propSchemas`: material-owned property schemas appended to base entries from `@easyink/prop-schemas`.

@@ -223,7 +223,7 @@ interface MaterialNode<TProps extends object = Record<string, unknown>> {
   locked?: boolean
   print?: PrintBehavior
   props: TProps
-  binding?: BindingRef | BindingRef[]
+  binding?: BindingRef | BindingRef[] | DataContractBinding
   animations?: AnimationSchema[]
   children?: MaterialNode[]
   diagnostics?: NodeDiagnosticState[]
@@ -275,7 +275,10 @@ interface ElementGroupSchema {
 
 ## 5.5 绑定模型
 
-绑定必须能完整回放拖拽结果，包含数据源引用、字段路径和多参数绑定位次。
+绑定必须能完整回放拖拽结果。EasyInk 当前有两类绑定：
+
+- 普通绑定：`BindingRef | BindingRef[]`，用于 text / image / barcode / qrcode 等直接把字段值投影到 props 的物料。
+- 目标模型绑定：`DataContractBinding`，用于 chart-bar 等物料声明“我要消费什么目标数据模型”，再由 binding 描述从数据源字段到目标字段的映射。
 
 ```typescript
 interface BindingRef {
@@ -345,6 +348,82 @@ interface BindingCustomFormat {
 - 自定义函数是可信模板能力，接收当前值和 Viewer 正在消费的完整运行时 data，不暴露 DOM、网络或异步能力
 - 格式化失败时 Viewer 保留原始显示值并发出 datasource warning，不把错误占位写入打印品
 - `union` 仅存在于 `DataFieldNode`（数据源字段树），不持久化到 `BindingRef`
+
+### `DataContractBinding` 与目标数据模型
+
+结构化物料不应把自身的数据需求拆成 `props.data`、`slots`、`recordset` 或多个互斥 mode。物料通过 `dataContract` 声明目标数据模型，节点上的 `binding` 只保存映射：
+
+```typescript
+interface MaterialDataContract {
+  version: 3
+  model: {
+    kind: 'tabular'
+    fields: Record<string, MaterialDataModelField>
+  }
+}
+
+interface MaterialDataModelField {
+  labelKey: string
+  type: 'string' | 'number' | 'boolean' | 'date' | 'object' | 'array'
+  required?: boolean
+  format?: 'display' | 'raw'
+}
+
+interface DataContractBinding {
+  kind: 'data-contract'
+  mappings: Record<string, DataContractFieldMapping>
+  relation?: DataContractRelation
+}
+
+interface DataContractFieldMapping {
+  sourceId: string
+  sourceName?: string
+  sourceTag?: string
+  select: {
+    path: string
+    key?: string
+    label?: string
+    tag?: string
+  }
+  format?: BindingDisplayFormat
+  required?: boolean
+  extensions?: Record<string, unknown>
+}
+
+type DataContractRelation =
+  | { kind: 'auto' }
+  | { kind: 'record' }
+  | { kind: 'index' }
+```
+
+示例：chart-bar 声明自己消费 `category` 和 `value` 两个目标字段。用户拖拽字段时，Designer 只把字段填进对应目标字段的 mapping：
+
+```typescript
+const chartBinding: DataContractBinding = {
+  kind: 'data-contract',
+  mappings: {
+    category: {
+      sourceId: 'report',
+      select: { path: 'monthlySales/month', label: '月份' },
+    },
+    value: {
+      sourceId: 'report',
+      select: { path: 'monthlySales/revenue', label: '销售额' },
+    },
+  },
+  relation: { kind: 'auto' },
+}
+```
+
+协议约束：
+
+- `dataContract.model` 属于物料定义，不写入每个节点；节点只保存 `DataContractBinding`。
+- `mappings` 的 key 是目标字段 id，如 `category`、`value`，不是数据源字段名。
+- `select.path` 永远保存完整 source path，例如 `monthlySales/month`。Resolver 如需集合内叶子路径，只能临时推导，不得把 path 截断写回 schema。
+- `relation.kind='auto'` 是默认值，表示 Resolver 自行判断共享 record collection 或 index 对齐；binding 不保存 `mode`。
+- `relation.kind='record'` 或 `'index'` 只表达显式约束，用于宿主或 AI 明确要求某种对齐方式的场景。
+- Designer 不因不同 collection、不同 sourceId 或顶层数组形态拒绝 mapping；这些运行时关系由 Resolver 统一诊断。
+- 普通文本类旧版 `BindingRef` schema 仍然有效；`DataContractBinding` 不是普通绑定的兼容层，而是结构化物料的新协议。
 
 ### `bindIndex` 示例
 

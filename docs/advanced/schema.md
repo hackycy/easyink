@@ -156,7 +156,7 @@ const node = {
 
 ## 数据绑定字段 {#binding}
 
-元素可以保存绑定引用：
+元素可以保存普通绑定引用。普通绑定适合 text / image / barcode / qrcode 这类“一个字段投影到一个 props”的物料：
 
 ```json
 {
@@ -176,6 +176,53 @@ const node = {
 ```
 
 Designer 负责把绑定写进节点。Viewer 在 `open({ schema, data })` 时解析绑定，然后把结果交给物料渲染器。
+
+结构化物料可以使用 `data-contract` binding。它不是普通绑定的替代品，而是给 chart-bar 这类物料描述目标数据模型和 source 映射：
+
+```json
+{
+  "id": "sales-chart",
+  "type": "chart-bar",
+  "x": 20,
+  "y": 40,
+  "width": 120,
+  "height": 70,
+  "props": {
+    "barColor": "#2563eb",
+    "backgroundColor": "#ffffff"
+  },
+  "binding": {
+    "kind": "data-contract",
+    "mappings": {
+      "category": {
+        "sourceId": "report",
+        "select": { "path": "monthlySales/month", "label": "月份" }
+      },
+      "value": {
+        "sourceId": "report",
+        "select": { "path": "monthlySales/revenue", "label": "销售额" }
+      }
+    },
+    "relation": { "kind": "auto" }
+  }
+}
+```
+
+`mappings` 的 key 是物料目标字段 id，不是源数据字段名。`select.path` 保存完整 source path；Resolver 在运行时推导共享集合或 index 对齐，不把 mode 写入 binding。
+
+当前 `MaterialNode.binding` 的规范形态是：
+
+```ts
+type MaterialBinding = BindingRef | BindingRef[] | DataContractBinding
+
+interface DataContractBinding {
+  kind: 'data-contract'
+  mappings: Record<string, DataContractFieldMapping>
+  relation?: { kind: 'auto' } | { kind: 'record' } | { kind: 'index' }
+}
+```
+
+普通文本类旧 schema 仍然有效；只有声明了 `dataContract` 的物料才会使用 `DataContractBinding`。
 
 ## 表格节点 {#table-node}
 

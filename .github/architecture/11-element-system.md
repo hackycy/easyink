@@ -153,6 +153,17 @@ interface MaterialCapabilities {
 - 格子内联内容编辑（深度编辑 content-editing 阶段，工具栏 + 属性面板设置文本属性）
 - 独立数据源绑定（`cell.staticBinding`），每个 cell 可绑定不同 source 的字段，与手动编辑互斥
 
+### `chart-bar`
+
+它需要：
+
+- 通过物料定义声明 `dataContract`，目标模型为 tabular records，字段包含 `category` 和 `value`
+- Schema 节点保存 `binding.kind='data-contract'`，其中 `mappings.category.select.path` 和 `mappings.value.select.path` 分别指向源数据字段
+- 不在 `props` 中保存运行时 `data`、`options` 或 chart-specific 数据结构；`props` 只保存视觉设置
+- Designer 拖拽字段时按未绑定的目标字段顺序填充 mapping，也支持在属性面板里把字段拖到指定目标字段
+- Designer 不因不同 collection 或顶层数组形态拒绝映射；共享集合、顶层数组、不同集合对齐由 Resolver 根据 `relation` 处理
+- Viewer 渲染时调用 `resolveMaterialDataContract()`，将目标 records 投影为 chart kernel 的 `{ label, value }[]`
+
 ### `table-data`
 
 它需要：

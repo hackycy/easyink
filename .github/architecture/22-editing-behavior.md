@@ -465,6 +465,8 @@ interface SubPropertySchema {
 
 selection 变化时框架自动调 `selectionType.getPropertySchema(sel, node)`，结果非 null 就 push 到属性面板"子选区"区段；返回 null 就 pop。**90% 场景物料不需要写任何"push panel"代码**。
 
+`SubPropertySchema.binding` 只表达普通 `BindingRef`。结构化物料的 `DataContractBinding` 由元素级 MaterialDataBindingEditor 维护，不作为子选区 overlay binding 暴露。
+
 属性面板渲染顺序固定为：
 
 ```

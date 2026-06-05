@@ -109,6 +109,123 @@ const dataSources: DataSourceDescriptor[] = [
 
 这也是为什么绑定是模板的一部分，而不是运行时的一次性状态。
 
+## 普通绑定与 Data Contract {#binding-kinds}
+
+大多数基础物料继续使用普通 `BindingRef`：
+
+```ts
+const textNode = {
+  type: 'text',
+  props: { content: '' },
+  binding: {
+    sourceId: 'order',
+    fieldPath: 'customer/name',
+    fieldLabel: '客户名称',
+  },
+}
+```
+
+这类绑定适合“一个字段值投影到一个 props”的场景，例如文本、图片、条码、二维码。旧版文本类 schema 仍然可用，不需要改成 data-contract。
+
+chart-bar 这类结构化物料使用 `data-contract`。它的重点不是“字段按第几个槽位绑定”，而是：
+
+- 物料声明目标数据模型，例如柱状图需要 `category` 和 `value`。
+- 用户拖拽字段时，只是在填写“目标字段从哪个 source path 来”。
+- Viewer 运行时由 Resolver 判断这些字段如何组成 records。
+
+柱状图的节点 binding 示例：
+
+```ts
+const chartNode = {
+  type: 'chart-bar',
+  props: {
+    barColor: '#2563eb',
+    backgroundColor: '#ffffff',
+  },
+  binding: {
+    kind: 'data-contract',
+    mappings: {
+      category: {
+        sourceId: 'report',
+        select: { path: 'monthlySales/month', label: '月份' },
+      },
+      value: {
+        sourceId: 'report',
+        select: { path: 'monthlySales/revenue', label: '销售额' },
+      },
+    },
+    relation: { kind: 'auto' },
+  },
+}
+```
+
+注意这里保存的是完整 `select.path`。即使 Resolver 后续要从 `monthlySales` 这个集合里读 `month`，schema 里也不会把 `monthlySales/month` 截成 `month`。
+
+## Data Contract 的运行时解析 {#data-contract-runtime}
+
+`data-contract` 的默认关系是 `relation: { kind: 'auto' }`。它不会把解析模式写进 binding，而是在 Viewer 中根据 runtime data 推导：
+
+```ts
+viewer.open({
+  schema,
+  data: {
+    monthlySales: [
+      { month: '1月', revenue: 98 },
+      { month: '2月', revenue: 112 },
+    ],
+  },
+})
+```
+
+当 `category` 指向 `monthlySales/month`，`value` 指向 `monthlySales/revenue` 时，Resolver 会发现它们共享 `monthlySales` 这个数组父级，于是按 record collection 解析。
+
+如果源数据是两个顶层数组：
+
+```ts
+viewer.open({
+  schema,
+  data: {
+    category: ['1月', '2月'],
+    values: [98, 112],
+  },
+})
+```
+
+对应 binding 可以写成：
+
+```ts
+binding: {
+  kind: 'data-contract',
+  mappings: {
+    category: { sourceId: 'report', select: { path: 'category' } },
+    value: { sourceId: 'report', select: { path: 'values' } },
+  },
+  relation: { kind: 'auto' },
+}
+```
+
+Resolver 会按 index 对齐，生成两条目标记录。
+
+如果你的运行时数据按 sourceId 分包，也可以这样传：
+
+```ts
+viewer.open({
+  schema,
+  data: {
+    report: {
+      monthlySales: [
+        { month: '1月', revenue: 98 },
+        { month: '2月', revenue: 112 },
+      ],
+    },
+  },
+})
+```
+
+Resolver 会优先尝试 `data[sourceId]`。但只有当完整 path 或它的父级集合能在 `data[sourceId]` 下解析时，才会使用这个 source-scoped root；否则会回退到全局 `data` 根。这样可以兼容一些宿主在 `data.report` 里放 source 元信息、真实数据仍放在顶层的情况。
+
+设计态不会把“同集合”“顶层数组”“不同集合”“record mode”“index mode”暴露给用户。拖拽只负责填 mapping，关系判断属于 Resolver。
+
 ## `fieldPath` 约定 {#field-path}
 
 到了运行时，Viewer 会统一解析节点上的绑定。
@@ -127,7 +244,7 @@ const data = {
 
 如果节点上的绑定路径是 `customer/name`，Viewer 就会去读这条路径对应的值。
 
-你可能会注意到绑定里还有 `sourceId`、`sourceName` 之类的信息。它们有用，但作用主要在设计时元数据和界面提示，不参与运行时根数据选择。
+你可能会注意到普通绑定里还有 `sourceId`、`sourceName` 之类的信息。它们有用，但作用主要在设计时元数据和界面提示，不参与普通 `BindingRef` 的运行时根数据选择。
 
 `fieldPath` 使用 `/` 分隔。解析时会从运行时 `data` 根对象开始逐段读取，也会避开 `__proto__`、`constructor` 这类危险路径。
 
@@ -146,6 +263,8 @@ const data = {
 - 运行时 `data` 里能不能取到值
 
 这意味着一件很重要的事：预览、打印和导出时，不要再把 `dataSources` 传给 Viewer。
+
+对于 `data-contract` 物料也是一样：Viewer 只消费 schema 里的 `DataContractBinding` 和运行时 `data`，不读取 Designer 的字段树。字段树只帮助用户在设计时找到字段。
 
 ## 常用字段 {#field-properties}
 

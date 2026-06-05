@@ -17,18 +17,20 @@ Start with the local repo, not memory. Prefer these files:
 - `.github/architecture/24-page-layout-orthogonal-system.md` for the current page model, layout, reflow, pagination, page overlay, and editor surface rules.
 - `docs/advanced/custom-materials.md` for the public custom material contract.
 - `docs/advanced/schema.md` for `DocumentSchemaInput` normalization, page layers, and persistent schema fields.
+- `.github/architecture/05-schema-dsl.md`, `.github/architecture/06-render-pipeline.md`, `.github/architecture/08-datasource.md`, and `docs/designer/data-binding.md` when the material consumes datasource fields, especially `DataContractBinding`.
 - `.github/architecture/25-ai-assistant.md` and `docs/advanced/contributions.md` when the material should be available to Assistant generation or custom-host AI flows.
 - `docs/advanced/exporters.md` and `docs/advanced/print-drivers.md` when output must be validated through export or print paths.
 - `docs/designer/fonts.md` when a material exposes `fontFamily`, page font, text measurement, or print/export output that depends on host-provided fonts.
 - `packages/schema/src/types.ts`, `packages/schema/src/defaults.ts`, and `packages/schema/src/validation.ts` for `MaterialNode`, binding, page layer defaults, and schema validity rules.
-- `packages/core/src/font.ts` and `packages/viewer/src/font-loader.ts` for `FontProvider`, `FontManager`, font collection, caching, and host-document `@font-face` injection.
+- `packages/core/src/font.ts`, `packages/core/src/material-data-contract.ts`, and `packages/viewer/src/font-loader.ts` for `FontProvider`, `FontManager`, material data contract resolution, font collection, caching, and host-document `@font-face` injection.
 - `packages/core/src/material-extension.ts` and `packages/core/src/material-viewer.ts` for Designer and Viewer extension contracts.
 - `packages/core/src/layout-strategy.ts`, `packages/core/src/reflow-engine.ts`, `packages/core/src/pagination-engine.ts`, and `packages/core/src/editor-surface-plan.ts` for runtime layout and edit-surface behavior.
 - `packages/designer/src/materials/registry.ts`, `packages/prop-schemas/src/index.ts`, and `packages/designer/src/components/PropertiesPanel.vue` for registration and page behavior property schemas.
-- `packages/viewer/src/runtime.ts`, `packages/viewer/src/render-surface.ts`, and `packages/viewer/src/material-registry.ts` for binding projection, measurement, pagination, repeated overlays, and renderer dispatch.
+- `packages/viewer/src/runtime.ts`, `packages/viewer/src/render-surface.ts`, and `packages/viewer/src/material-registry.ts` for ordinary binding projection, measurement, pagination, repeated overlays, and renderer dispatch.
 - `packages/builtin/src/designer.ts`, `packages/builtin/src/viewer.ts`, and `packages/builtin/src/ai.ts` for built-in registration.
 - `packages/shared/src/ai-generation.ts`, `packages/assistant/designer-bridge/src/material-manifest.ts`, `packages/assistant/material-knowledge/src/from-manifest.ts`, and `packages/assistant/orchestrator/src/prompts.ts` for Assistant material knowledge flow.
-- `packages/materials/text`, `packages/materials/rect`, and `packages/materials/image` for simple fixed-size patterns.
+- `packages/materials/text`, `packages/materials/rect`, and `packages/materials/image` for simple fixed-size and ordinary `BindingRef` patterns.
+- `packages/materials/chart/bar` for material `dataContract`, target data model mapping, relation resolver consumption, chart runtime diagnostics, and AI descriptor examples.
 - `packages/materials/page-number` for page-aware repeated overlays.
 - `packages/materials/flow-row` for runtime-height flow/flex behavior.
 - `packages/materials/table/data` and `packages/materials/table/kernel` for datasource drop, cell sub-properties, runtime measurement, fragment pagination, and resize side effects.
@@ -43,7 +45,7 @@ Start with the local repo, not memory. Prefer these files:
 5. Decide material page behavior deliberately. Use `node.placement` for flow/fixed positioning, `node.break` for auto-sheets pagination constraints, and `node.repeat.scope='every-output-page'` or Viewer `pageAware` for post-pagination overlays. Repeated/page-aware nodes must not influence flow, document height, or page count.
 6. If the material can split across `auto-sheets`, implement `fragmentPaginator`. It should produce virtual fragments with `sourceNodeId` preserved and avoid mutating source schema.
 7. Implement Designer rendering with `renderContent(nodeSignal, container, renderContextSignal?)`. Render immediately, subscribe to `nodeSignal`, escape user-controlled strings or use real DOM, and return deterministic cleanup. Subscribe to `renderContextSignal` only for Designer-owned transient context such as page-aware preview numbers; never persist it into Schema.
-8. Implement Viewer rendering with `trustedViewerHtml()` or an `HTMLElement`. Read ordinary runtime binding results from `context.resolvedProps`; add `measure()` only when runtime content changes physical size; use `getRenderSize()` only when wrapper size must differ from schema geometry.
+8. Implement Viewer rendering with `trustedViewerHtml()` or an `HTMLElement`. Read ordinary runtime binding results from `context.resolvedProps`. For `dataContract` materials, call `resolveMaterialDataContract(contract, node.binding, context.data ?? {})`, report diagnostics, and project target records into the renderer's runtime shape. Add `measure()` only when runtime content changes physical size; use `getRenderSize()` only when wrapper size must differ from schema geometry.
 9. If Viewer `measure()` or runtime data owns a dimension, add `MaterialDesignerExtension.resolveControlPolicy()` so Designer hides/disables matching geometry fields and outer resize handles. Guard behavior/deep-edit entry points that could mutate the blocked dimension.
 10. Register both sides. Built-ins go through `packages/builtin/src/designer.ts` and `packages/builtin/src/viewer.ts`; custom hosts register through `setupStore` and `viewer.registerMaterial()`. A Designer-only material renders `[Unknown: type]` in Viewer.
 11. For text-like materials, expose font choice through a `font` prop schema for `node.props.fontFamily` or the relevant sub-property. Do not load or inject fonts inside material renderers; Designer and Viewer own the `FontProvider` -> `FontManager` -> `@font-face` chain.
@@ -52,10 +54,10 @@ Start with the local repo, not memory. Prefer these files:
 14. Add deep editing only for meaningful sub-element selection. Define `MaterialGeometry`, JSON-safe namespaced `SelectionType`, behavior middleware, decorations, and `tx.run()` mutations with stable history labels and merge keys.
 15. Keep inline editors selection-scoped. Changing a cell, column, handle, or internal region must drop input mode back to selection highlight and require a fresh explicit edit entry.
 16. For material-local inline toolbars, render commands only. Prefer compact icon tools with localized `title` tooltips; anchor the toolbar to the material frame top-left outside the border unless a local interaction requires otherwise.
-17. Add datasource logic at the right layer. Whole-element binding uses `node.binding`; table-like internal binding owns `datasourceDrop` and cell-level `binding` or `staticBinding`.
+17. Add datasource logic at the right layer. Whole-element scalar binding uses ordinary `BindingRef` in `node.binding`; table-like internal binding owns `datasourceDrop` and cell-level `binding` or `staticBinding`; structured data materials should declare `MaterialDefinition.dataContract` and store `node.binding.kind='data-contract'` mappings from source paths to target model fields.
 18. Add i18n keys for visible labels, tooltips, property labels, reject reasons, history labels, placeholders, and material-local toolbar actions. Prefer `context.t()` and `store.t()` over hardcoded strings.
 19. Update `src/ai.ts` when the material should be generated by Assistant. Include `knowledge` for Assistant selection, sizing, binding, composability, and scenario fitness. Built-ins must register the descriptor in `packages/builtin/src/designer.ts` as `aiDescriptor` and keep `packages/builtin/src/ai.ts` aligned as the built-in descriptor list.
-20. Test the smallest useful surface: schema defaults, Designer refresh or deep behavior, control policy, page behavior props, repeated overlay behavior, fragment pagination, Viewer render or measure, binding projection, font-dependent output, registration fallout, AI config, and i18n.
+20. Test the smallest useful surface: schema defaults, Designer refresh or deep behavior, control policy, page behavior props, repeated overlay behavior, fragment pagination, Viewer render or measure, ordinary binding projection or data-contract resolution, font-dependent output, registration fallout, AI config, and i18n.
 
 ## Reference Files
 
@@ -78,7 +80,8 @@ Load only the reference needed for the current task:
 - Designer and Viewer must both know the material type.
 - Use `convertUnit()` inside default-node factories when default physical sizes are authored in mm.
 - Escape all user-controlled strings before HTML interpolation. Viewer HTML must be wrapped with `trustedViewerHtml()`.
-- Use `context.resolvedProps` or `node.props` after Viewer projection; do not hand-resolve ordinary `node.binding` inside material renderers.
+- Use `context.resolvedProps` or `node.props` after Viewer projection; do not hand-resolve ordinary `node.binding` inside material renderers. The exception is `DataContractBinding`: structured materials consume it through `resolveMaterialDataContract()`, not through ad hoc `context.data` walking.
+- For data-contract materials, contract describes the target data model and binding describes source mappings. Preserve complete `select.path` values, do not store record/index mode as a binding field, do not write `props.data`, `slots`, `recordset`, or chart-specific runtime arrays into Schema, and let the relation resolver infer shared records or index alignment.
 - Use `tx.run()` for deep-edit mutations so history, patches, and undo work. Use `mergeKey` for continuous drag/resize edits.
 - Keep selection payloads JSON-safe and namespaced, such as `table.cell` or `svg-star.control`.
 - Bind inline input/editor session meta to the current sub-selection.
@@ -94,4 +97,5 @@ Load only the reference needed for the current task:
 - Add or reuse locale keys for anything user-visible in Designer UI, including property labels and history labels.
 - Assistant sees material capabilities through the current Designer store manifest. Register custom material `aiDescriptor` on the Designer material entry.
 - Keep AI descriptors honest: do not list props, binding modes, child support, default sizes, or scenario fitness that the Designer/Viewer implementation cannot satisfy.
+- For data-contract materials, set descriptor `binding: 'data-contract'`, include mapping examples with `binding.kind='data-contract'`, and explain that relation mode is resolver-derived rather than a UI/schema mode.
 - Exporters and print drivers must consume Viewer-rendered pages and `ViewerPageMetrics`; do not reimplement material layout in those layers.

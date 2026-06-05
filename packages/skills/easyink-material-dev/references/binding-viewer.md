@@ -41,6 +41,53 @@ Primary binding defaults:
 
 Multi-binding requires explicit mapping in `binding-projector.ts` unless the material owns a custom schema such as table cell bindings.
 
+## Material Data Contract
+
+Use `DataContractBinding` when a material consumes a structured target model instead of projecting one field into one prop. Chart-like materials are the reference case: the material declares a `dataContract`, while `node.binding` stores mappings from source paths to target fields.
+
+The contract describes the target model:
+
+```ts
+const DATA_CONTRACT = {
+  version: 3,
+  model: {
+    kind: 'tabular',
+    fields: {
+      category: { labelKey: 'materials.chart.data.category', type: 'string', required: true, format: 'display' },
+      value: { labelKey: 'materials.chart.data.value', type: 'number', required: true, format: 'raw' },
+    },
+  },
+} as const
+```
+
+The binding stores source mappings:
+
+```ts
+const binding = {
+  kind: 'data-contract',
+  mappings: {
+    category: { sourceId: 'report', select: { path: 'monthlySales/month' } },
+    value: { sourceId: 'report', select: { path: 'monthlySales/revenue' } },
+  },
+  relation: { kind: 'auto' },
+} as const
+```
+
+Viewer rendering rules for data-contract materials:
+
+- Call `resolveMaterialDataContract(DATA_CONTRACT, node.binding, context.data ?? {})`.
+- Report every returned diagnostic through `context.reportDiagnostic?.({ ...diagnostic, nodeId: node.id })`.
+- Convert `resolution.records` into the renderer's runtime shape, such as chart points.
+- Keep visual options in `node.props`; do not store runtime arrays as `props.data`, chart options, slots, or recordsets.
+- Preserve full `mapping.select.path` values in Schema. If the resolver needs a collection parent or leaf path, derive it temporarily.
+
+Relation resolver rules:
+
+- Shared paths such as `monthlySales/month` and `monthlySales/revenue` resolve as record collection data.
+- Top-level arrays such as `category` and `values` resolve by index.
+- `data[sourceId]` is used only when the complete path or its parent collection resolves there; otherwise the resolver falls back to the global data root.
+- `relation.kind='auto'` is the normal choice. Do not add UI fields for record/index mode unless a host explicitly owns that policy.
+
 ## Datasource Drop
 
 If whole-element binding is enough, rely on default Designer behavior.
@@ -53,6 +100,8 @@ Implement `datasourceDrop` when the material owns internal drop zones:
 - Validate row, cell, source, and collection compatibility before committing.
 
 `table-data` uses this pattern to bind fields into cells. It rejects hidden rows and rejects repeat-template fields from a different collection prefix than existing repeat-template cells.
+
+Materials that declare `MaterialDefinition.dataContract` usually do not need a custom `datasourceDrop` just to bind whole-element data. Designer fills unbound target fields in contract order on canvas drop and exposes a MaterialDataBindingEditor for dropping a field onto a specific target field. The Designer should not reject different collections for data-contract mappings; the resolver owns runtime relation diagnostics.
 
 ## Table-Data Runtime Expansion
 

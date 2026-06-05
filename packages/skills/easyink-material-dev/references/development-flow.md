@@ -100,6 +100,7 @@ For font-bearing materials:
 Use `trustedViewerHtml()` for strings:
 
 - Read `context.resolvedProps` for ordinary element bindings.
+- For structured data materials, read `node.binding` only through `resolveMaterialDataContract(contract, node.binding, context.data ?? {})`, report diagnostics, and map target records to the renderer's runtime data.
 - `renderPages()` passes a `nodeForRender` whose `props` are already projected; direct `getNodeProps(node)` is acceptable when called through the Viewer pipeline, but `context.resolvedProps` communicates runtime intent better.
 - Escape runtime strings before interpolation.
 - Keep Viewer output print/export stable because print and export reuse the Viewer result.

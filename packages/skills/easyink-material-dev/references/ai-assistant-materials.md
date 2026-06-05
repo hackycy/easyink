@@ -78,9 +78,9 @@ Keep `description`, `usage`, `schemaRules`, `examples`, and `knowledge` short an
 - `category`: one of `data`, `layout`, `decoration`, `typography`, `visualization`; used in prompts and registry queries.
 - `composability.canBeChildOf`: include `'*'` only when the material really works at top level or in any container-like parent.
 - `composability.canContain`: list child material types only when the schema and Designer/Viewer support children.
-- `bindingSpec.mode`: use `none`, `scalar`, `collection`, or `multi-scalar`. This is richer than descriptor `binding` (`none`, `single`, `multi`).
+- `bindingSpec.mode`: use `none`, `scalar`, `collection`, or `multi-scalar`. This is richer than descriptor `binding` (`none`, `single`, `multi`, `data-contract`).
 - `bindingSpec.accepts`: match runtime data shape. Array/detail-list materials should set `types: ['array']`, `isArray: true`, and often `minChildren`.
-- `bindingSpec.produces`: describe the binding shape Assistant should emit, such as `scalar-field` or `collection-repeat`.
+- `bindingSpec.produces`: describe the binding shape Assistant should emit, such as `scalar-field`, `collection-repeat`, or a `data-contract` mappings shape.
 - `sizing`: values are in mm. Match factory defaults and real minimums. `growAxis` should reflect measurement/layout behavior.
 - `fitness`: scenario-based scoring that drives material selection. See "Fitness and Scenario Coverage" below.
 - `properties`: optional structured property specs. Add only when the plain `properties` string list is not enough.
@@ -181,6 +181,7 @@ Current flow:
 - `properties` names exist in `node.props` or material-owned top-level schema structures.
 - `requiredProps` are truly required by the renderer or schema generator.
 - Descriptor `binding` and `knowledge.bindingSpec.mode` match actual binding behavior.
+- Data-contract materials set descriptor `binding: 'data-contract'`, include examples with `binding.kind='data-contract'`, and preserve full source paths in `mappings.*.select.path`.
 - Array/detail-list materials use collection binding and examples with slash-separated child paths.
 - `schemaRules` forbid legacy aliases or deprecated shapes when the material has specialized schema.
 - `knowledge.sizing.defaultSize` matches `createXNode()` defaults in mm.
@@ -195,5 +196,6 @@ Current flow:
 - Assistant invents `table`, `rich-text`, or other aliases: descriptor/context is missing or schemaRules are too weak.
 - Assistant chooses a decorative material for data: category, bindingSpec, or fitness is misleading.
 - Assistant emits a scalar binding for array data: `binding` or `knowledge.bindingSpec.mode` is wrong.
+- Assistant emits `props.data`, slots, recordset, or explicit mode fields for chart-like data: data-contract descriptor examples or schemaRules are missing.
 - Generated elements are too small: `knowledge.sizing` or prompt examples disagree with factory defaults.
 - Custom material works in Designer but not Assistant: missing `aiDescriptor` on the Designer material entry.

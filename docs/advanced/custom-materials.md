@@ -229,6 +229,86 @@ viewer.open({
 
 如果你的物料想接管数据源拖放，比如表格单元格那样落到内部区域，再实现 `datasourceDrop`。
 
+### 结构化数据物料 {#data-contract}
+
+如果物料消费的不是单个字段，而是一组目标 records，例如柱状图、折线图、透视卡片，可以声明 `dataContract`。此时物料说清楚自己需要什么目标模型，binding 只保存用户从数据源拖来的映射。
+
+```ts
+import type { MaterialDataContract } from '@easyink/core'
+
+export const SALES_CHART_CONTRACT = {
+  version: 3,
+  model: {
+    kind: 'tabular',
+    fields: {
+      category: {
+        labelKey: 'materials.salesChart.data.category',
+        type: 'string',
+        required: true,
+        format: 'display',
+      },
+      value: {
+        labelKey: 'materials.salesChart.data.value',
+        type: 'number',
+        required: true,
+        format: 'raw',
+      },
+    },
+  },
+} satisfies MaterialDataContract
+```
+
+注册物料时把 contract 放到 `MaterialDefinition.dataContract`：
+
+```ts
+registerMaterialBundle(store, {
+  materials: [{
+    type: 'sales-chart',
+    name: '销售图表',
+    icon: IconChart,
+    category: 'chart',
+    capabilities: { bindable: true, resizable: true },
+    dataContract: SALES_CHART_CONTRACT,
+    props: [],
+    createDefaultNode: createSalesChartNode,
+    factory: createSalesChartDesignerExtension,
+  }],
+})
+```
+
+Viewer 渲染器里由物料自己消费 contract 解析结果：
+
+```ts
+import { resolveMaterialDataContract } from '@easyink/core'
+
+viewer.registerMaterial('sales-chart', {
+  render(node, context) {
+    const resolution = resolveMaterialDataContract(
+      SALES_CHART_CONTRACT,
+      node.binding,
+      context.data ?? {},
+    )
+
+    for (const diagnostic of resolution.diagnostics)
+      context.reportDiagnostic?.({ ...diagnostic, nodeId: node.id })
+
+    const points = resolution.records.map(record => ({
+      label: String(record.category ?? ''),
+      value: Number(record.value ?? 0),
+    }))
+
+    return renderSalesChart(points)
+  },
+})
+```
+
+保持这几个边界会让物料更容易扩展：
+
+- `props` 保存视觉设置，不保存运行时数据。
+- `dataContract.model` 描述目标数据模型，不描述数据源长什么样。
+- `DataContractBinding.mappings` 保存完整 source path，不截断集合内路径。
+- 不在 UI 或 schema 中暴露 record/index mode；默认用 `relation: { kind: 'auto' }` 交给 Resolver。
+
 ## 何时实现 measure {#measure}
 
 固定尺寸物料不需要 `measure()`。只有最终尺寸依赖运行时内容时才加：

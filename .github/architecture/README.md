@@ -10,6 +10,7 @@
 - Schema 区分"EasyInk 内部规范模型"和"对标产品兼容输入"，避免把历史原始 JSON 噪音扩散到内部实现
 - 页面模型覆盖 `mode / width / height / pages / scale / radius / offsetX / offsetY / copies / blankPolicy / grid / font / background / print / pageModel / layout / pagination / reflow`，并兼容 benchmark 输入里的 `viewer / xOffset / yOffset / blank`
 - 数据源协议覆盖 `id / name / tag / title / icon / expand / headless / fields / use / props / format / displayFormat / union / bindIndex / meta`，字段节点可声明 `format / displayFormat`
+- 数据绑定分为普通 `BindingRef` 和物料级 `data-contract`：普通元素消费字段路径，图表等结构化物料声明目标数据模型，binding 只保存 source path 到目标字段的映射，关系由 Resolver 推导
 - 顶部物料栏建模为"高频直达物料 + 分组目录物料"的混合入口
 - `table`、`chart`、`svg` 都是一级结构系统
 - 属性面板在同一窗口壳层中互斥展示"元素属性"与"页面属性"，支持 PropertyPanelOverlay 动态叠加层
@@ -57,7 +58,7 @@
 - EasyInk 当前优先对齐 `fixed-page` 文档/报表场景，并保留连续流式页面架构
 - 设计器中的工作台布局、面板开关、激活面板和工具组带布局属于工作台状态，不进入 Schema
 - 预览器独立完成字体加载、数据加载、分页、缩略图、打印和导出适配器加载，不复用画布 DOM
-- 数据绑定保存数据源引用、字段路径、显示格式和多参数绑定位次；字段可提供自有显示格式模板，Designer 只在创建或编辑该字段的绑定格式时采用
+- 数据绑定保存数据源引用、字段路径、显示格式和多参数绑定位次；`data-contract` 物料额外保存目标字段映射。字段可提供自有显示格式模板，Designer 只在创建或编辑该字段的绑定格式时采用
 - 表格类和容器类物料拥有独立内部模型
 - 样例资产既用于演示，也可作为回归测试资产库
 - 未识别物料、缺失数据、缺失字体、渲染失败都必须以可见诊断暴露，不允许静默吞掉

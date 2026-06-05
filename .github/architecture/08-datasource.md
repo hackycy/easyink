@@ -402,13 +402,15 @@ const bwipFields: DataFieldNode[] = [
 - `fieldLabel`
 - `bindIndex`
 - `format`
+- `DataContractBinding.mappings[*].select.path`（结构化物料目标字段映射）
 
 也就是说：
 
 - Designer 通过字段树帮助绑定
-- 模板通过绑定引用保持可回放性；显示格式最终固化在 `BindingRef.format`
+- 模板通过绑定引用保持可回放性；显示格式最终固化在 `BindingRef.format` 或 `DataContractFieldMapping.format`
 - Viewer 通过 `fieldPath` 直接从运行时 `data` 根对象解析值，不依赖数据源系统
-- `sourceId / sourceName / sourceTag` 是设计时重匹配、诊断和模板可读性元数据，不是 Viewer 的运行时数据选择器
+- 普通 `BindingRef` 中的 `sourceId / sourceName / sourceTag` 是设计时重匹配、诊断和模板可读性元数据，不是 Viewer 的运行时数据选择器
+- `DataContractBinding` 中的 `sourceId` 可作为 Resolver 的 source-scoped root 候选，但只有当完整 `select.path` 或其父级集合能在 `data[sourceId]` 下解析时才会使用；否则回退到全局 `data` 根
 - Viewer 不接受 `dataSources`，不根据数据源描述符评分、匹配、分包、重构 `data`，也不读取字段级 `displayFormat.customTemplates`
 
 ## 8.11 绑定解析函数
@@ -431,7 +433,71 @@ function resolveNodeBindings(
 
 Viewer 不做异步数据加载，宿主负责在调用 `viewer.open({ schema, data })` 前准备好数据。
 
-如果宿主确实有多个业务接口，宿主必须在调用 Viewer 前自行合并为模板 `fieldPath` 可直接命中的数据结构，或先转换 Schema 绑定路径。Viewer 不猜测哪个接口对应哪个 `sourceId`。
+如果宿主确实有多个业务接口，普通 `BindingRef` 场景下宿主必须在调用 Viewer 前自行合并为模板 `fieldPath` 可直接命中的数据结构，或先转换 Schema 绑定路径。Viewer 不猜测哪个接口对应哪个 `sourceId`。
+
+### Material Data Contract 解析函数
+
+结构化物料使用另一组绑定解析能力，仍位于 `@easyink/core`：
+
+```typescript
+function resolveMaterialDataContract(
+  contract: MaterialDataContract,
+  binding: MaterialBinding | undefined,
+  data: Record<string, unknown>
+): {
+  model: MaterialDataModel
+  records: Array<Record<string, unknown>>
+  mappings: Record<string, MaterialDataFieldResolution>
+  diagnostics: MaterialDataDiagnostic[]
+  mode: 'record' | 'index' | 'empty' | 'invalid'
+}
+```
+
+设计原则：
+
+- contract 描述目标数据模型，binding 描述 source 到目标模型的映射。
+- Resolver 从映射 path 和 runtime data 推导 record/index，不要求 UI 或 binding 暴露 role、mode、recordset、parallel arrays 等概念。
+- mapping 保留完整 source path，例如 `monthlySales/month`；集合父路径和叶子路径只在解析时临时计算。
+- 不同 collection、顶层数组、多 source 数据都由 `relation` 和 Resolver 对齐；Designer 只负责把字段映射到目标字段。
+
+chart-bar 示例：
+
+```typescript
+const binding = {
+  kind: 'data-contract',
+  mappings: {
+    category: { sourceId: 'report', select: { path: 'monthlySales/month' } },
+    value: { sourceId: 'report', select: { path: 'monthlySales/revenue' } },
+  },
+  relation: { kind: 'auto' },
+}
+```
+
+运行时数据可以是全局根形态：
+
+```typescript
+const data = {
+  monthlySales: [
+    { month: '1月', revenue: 98 },
+    { month: '2月', revenue: 112 },
+  ],
+}
+```
+
+也可以是 source-scoped 形态：
+
+```typescript
+const data = {
+  report: {
+    monthlySales: [
+      { month: '1月', revenue: 98 },
+      { month: '2月', revenue: 112 },
+    ],
+  },
+}
+```
+
+如果 `data.report` 只是元信息，而真实集合在全局根，Resolver 会因 `monthlySales/month` 无法在 `data.report` 下成立而回退到全局根。
 
 ## 8.12 路径与格式规则
 
@@ -456,7 +522,7 @@ function resolveBindingValue(
 ```
 
 - `fieldPath` 始终从 `data` 根开始遍历（绝对路径语义）
-- `sourceId` 与 `sourceTag` 不参与运行时查找
+- `sourceId` 与 `sourceTag` 不参与普通 `BindingRef` 的运行时查找
 - repeat-template 行的叶子字段值通过专用函数 `resolveFieldFromRecord(leafField, record)` 从集合项中解析，leafField 为 fieldPath 去掉集合前缀后的剩余部分
 
 ### 集合路径推导工具函数
@@ -477,8 +543,10 @@ function resolveFieldFromRecord(leafField: string, record: Record<string, unknow
 
 ### 格式规则
 
-- 当前不支持格式化能力，后续独立设计
-- 不支持模板内直接写任意脚本
+- `BindingRef.format` 和 `DataContractFieldMapping.format` 共享 `BindingDisplayFormat`
+- `mode='preset'` 使用内置格式化器；`mode='custom'` 使用可信模板函数表达式
+- 自定义函数只能同步处理当前值和完整运行时 data，不暴露 DOM、网络或异步能力
+- 格式化失败时保留原始值并上报 datasource warning
 
 ## 8.13 data-table 绑定模型
 

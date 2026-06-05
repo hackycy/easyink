@@ -9,6 +9,7 @@
 | SchemaStore | DocumentSchema CRUD、校验、遍历、序列化 |
 | Layout / Pagination Engine | 页面模型、回流、分页策略、表格 fragment 分页、overflow 诊断 |
 | BindingResolver | `fieldPath` 根路径解析、`bindIndex`、格式化诊断 |
+| MaterialDataContractResolver | 目标模型字段映射、共享 record collection 推导、顶层数组 index 对齐、source-scoped root 回退、诊断 |
 | DataSourceRegistry | Designer 字段树注册、usage 解释、命名空间隔离 |
 | CommandManager | 撤销/重做、命令合并、事务 |
 | UnitManager | 单位转换精度 |
@@ -22,9 +23,10 @@
 1. 加载模板 → Designer 传入数据源 → Viewer 传入调试数据 → 验证页面预览输出
 2. 设计器打开 → 添加元素 → 设置属性 → 导出 Schema
 3. 设计器打开 → 绑定字段 → 删除绑定 → 验证静态值恢复显示
-4. 设计器打开 → `table-data` 绑定集合字段 → 验证主数据源和相对字段约束
-5. 加载多页模板 → 验证 Viewer 分页结果、重复表头与 overflow 提示
-6. 设计器打开 → 多次操作 → 撤销/重做 → 验证状态
+4. 设计器打开 → `table-data` 绑定集合字段 → 验证集合前缀约束和绝对路径解析
+5. 设计器打开 → `chart-bar` 绑定 data-contract 字段 → 验证不同数据形态下 Viewer 可解析并展示
+6. 加载多页模板 → 验证 Viewer 分页结果、重复表头与 overflow 提示
+7. 设计器打开 → 多次操作 → 撤销/重做 → 验证状态
 ```
 
 ## 19.3 明确不测的核心职责

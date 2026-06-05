@@ -104,6 +104,13 @@ await viewer.open({
 
 绑定格式化器可以主动上报诊断。绑定解析本身抛错时，Viewer 会发出 `BINDING_RESOLVE_ERROR`，并回退到节点原始 `props` 继续渲染。
 
+结构化物料的 `data-contract` 解析诊断由物料渲染器转交给 Viewer。例如 chart-bar 在无法解析必填目标字段、record relation 不成立、index relation 无法对齐时，会通过 `context.reportDiagnostic()` 上报 warning。常见 code 包括：
+
+- `MATERIAL_DATA_FIELD_MISSING`：目标模型里的必填字段没有 mapping。
+- `MATERIAL_DATA_RECORD_RELATION_UNRESOLVED`：显式要求 record relation，但映射字段无法共享同一个集合。
+- `MATERIAL_DATA_RELATION_UNRESOLVED`：自动关系推导失败，无法生成目标 records。
+- `CHART_BAR_NO_VALID_POINTS`：chart-bar 已解析 records，但没有可用的数值点。
+
 ## 字体加载 {#font-loading}
 
 字体加载失败通常是可恢复问题。
