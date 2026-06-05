@@ -456,7 +456,7 @@ function resolveMaterialDataContract(
 设计原则：
 
 - contract 描述目标数据模型，binding 描述 source 到目标模型的映射。
-- Resolver 从映射 path 和 runtime data 推导 record/index，不要求 UI 或 binding 暴露 role、mode、recordset、parallel arrays 等概念。
+- Resolver 从映射 path 和 runtime data 推导 record/index 对齐关系。
 - mapping 保留完整 source path，例如 `monthlySales/month`；集合父路径和叶子路径只在解析时临时计算。
 - 不同 collection、顶层数组、多 source 数据都由 `relation` 和 Resolver 对齐；Designer 只负责把字段映射到目标字段。
 

@@ -351,7 +351,7 @@ interface BindingCustomFormat {
 
 ### `DataContractBinding` 与目标数据模型
 
-结构化物料不应把自身的数据需求拆成 `props.data`、`slots`、`recordset` 或多个互斥 mode。物料通过 `dataContract` 声明目标数据模型，节点上的 `binding` 只保存映射：
+结构化物料通过 `dataContract` 声明目标数据模型，节点上的 `binding` 保存 source 到目标字段的映射：
 
 ```typescript
 interface MaterialDataContract {
@@ -423,7 +423,7 @@ const chartBinding: DataContractBinding = {
 - `relation.kind='auto'` 是默认值，表示 Resolver 自行判断共享 record collection 或 index 对齐；binding 不保存 `mode`。
 - `relation.kind='record'` 或 `'index'` 只表达显式约束，用于宿主或 AI 明确要求某种对齐方式的场景。
 - Designer 不因不同 collection、不同 sourceId 或顶层数组形态拒绝 mapping；这些运行时关系由 Resolver 统一诊断。
-- 普通文本类旧版 `BindingRef` schema 仍然有效；`DataContractBinding` 不是普通绑定的兼容层，而是结构化物料的新协议。
+- 普通 `BindingRef` schema 继续用于文本、图片、条码、二维码等单字段物料；`DataContractBinding` 用于结构化数据物料。
 
 ### `bindIndex` 示例
 

@@ -2,6 +2,22 @@ import type { SchemaBuilder } from '@easyink/assistant-schema-builder'
 import type { ToolDefinition } from '../types'
 import { z } from 'zod'
 
+const dataContractBindingSchema = z.object({
+  kind: z.literal('data-contract'),
+  mappings: z.record(z.object({
+    sourceId: z.string().optional(),
+    sourceName: z.string().optional(),
+    select: z.object({
+      path: z.string(),
+      label: z.string().optional(),
+    }),
+    format: z.record(z.unknown()).optional(),
+  })),
+  relation: z.object({
+    kind: z.enum(['auto', 'record', 'index']),
+  }).optional(),
+})
+
 export function createSchemaTools(builder: SchemaBuilder): ToolDefinition[] {
   return [
     {
@@ -100,7 +116,7 @@ export function createSchemaTools(builder: SchemaBuilder): ToolDefinition[] {
     },
     {
       name: 'emit_element',
-      description: 'Add a generic element (image, barcode, qrcode, line, rect, etc).',
+      description: 'Add a generic element (image, barcode, qrcode, line, rect, chart-bar, etc). Use binding.kind="data-contract" for structured data materials such as chart-bar.',
       category: 'schema',
       parameters: z.object({
         id: z.string(),
@@ -112,6 +128,7 @@ export function createSchemaTools(builder: SchemaBuilder): ToolDefinition[] {
         props: z.record(z.unknown()).optional(),
         fieldPath: z.string().optional(),
         fieldLabel: z.string().optional(),
+        binding: dataContractBindingSchema.optional(),
       }),
       execute: (input) => {
         return builder.emitElement({
@@ -119,7 +136,7 @@ export function createSchemaTools(builder: SchemaBuilder): ToolDefinition[] {
           type: input.type,
           region: { x: input.x, y: input.y, width: input.width, height: input.height },
           props: input.props,
-          binding: input.fieldPath ? { fieldPath: input.fieldPath, fieldLabel: input.fieldLabel } : undefined,
+          binding: input.binding ?? (input.fieldPath ? { fieldPath: input.fieldPath, fieldLabel: input.fieldLabel } : undefined),
         })
       },
     },

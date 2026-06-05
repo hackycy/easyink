@@ -183,7 +183,7 @@ Current flow:
 - Descriptor `binding` and `knowledge.bindingSpec.mode` match actual binding behavior.
 - Data-contract materials set descriptor `binding: 'data-contract'`, include examples with `binding.kind='data-contract'`, and preserve full source paths in `mappings.*.select.path`.
 - Array/detail-list materials use collection binding and examples with slash-separated child paths.
-- `schemaRules` forbid legacy aliases or deprecated shapes when the material has specialized schema.
+- `schemaRules` describe the canonical schema shape when the material has specialized schema.
 - `knowledge.sizing.defaultSize` matches `createXNode()` defaults in mm.
 - `knowledge.sizing.growAxis` matches Viewer `measure()` and page layout behavior.
 - `composability` does not promise child support unless the material supports children end to end.
@@ -196,6 +196,6 @@ Current flow:
 - Assistant invents `table`, `rich-text`, or other aliases: descriptor/context is missing or schemaRules are too weak.
 - Assistant chooses a decorative material for data: category, bindingSpec, or fitness is misleading.
 - Assistant emits a scalar binding for array data: `binding` or `knowledge.bindingSpec.mode` is wrong.
-- Assistant emits `props.data`, slots, recordset, or explicit mode fields for chart-like data: data-contract descriptor examples or schemaRules are missing.
+- Assistant misses target-field mappings for chart-like data: data-contract descriptor examples or schemaRules are incomplete.
 - Generated elements are too small: `knowledge.sizing` or prompt examples disagree with factory defaults.
 - Custom material works in Designer but not Assistant: missing `aiDescriptor` on the Designer material entry.

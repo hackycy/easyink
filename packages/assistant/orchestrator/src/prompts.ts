@@ -39,6 +39,8 @@ export function buildMaterialContext(manifest: AssistantMaterialManifest | undef
         lines.push(`- Expects array data${spec.accepts.minChildren ? ` (min ${spec.accepts.minChildren} child fields)` : ''}`)
       if (spec.accepts.requiredChildFields?.length)
         lines.push(`- Required child fields: ${spec.accepts.requiredChildFields.join(', ')}`)
+      if (spec.examples?.length)
+        lines.push(`- Binding example: ${JSON.stringify(spec.examples[0]?.binding)}`)
     }
     if (knowledge?.sizing) {
       const s = knowledge.sizing
@@ -167,17 +169,22 @@ function buildBindingSegment(): string {
 - Field paths use slash-separated absolute paths such as "items/name" and "customer/address".
 - Use the same value as expectedDataSource.name for binding.sourceId and binding.sourceName.
 - Choose materials only from the list above. Use their Binding, Usage, Schema rule, capabilities, and examples as the sole source of material behavior.
+- Ordinary scalar materials use BindingRef: { sourceId, sourceName, fieldPath, fieldLabel }.
+- Table-data repeat cells use absolute child paths such as "items/name"; the repeat collection is inferred from the common path prefix.
+- Data-contract materials use binding.kind = "data-contract" with mappings keyed by target field id. Each mapping stores { sourceId, sourceName, select: { path, label } } and relation: { kind: "auto" }.
+- For chart-bar, map mappings.category.select.path and mappings.value.select.path from source fields. Preserve complete source paths such as "monthlySales/month".
 - If the registered materials cannot express a requested visual or data interaction, approximate with registered materials and add a warning; never invent a missing material type.`
 }
 
 function buildMaterialSelectionSegment(scenario?: string): string {
   const lines = [
     '## Material Selection Guide',
-    '- For array/list data: prefer materials with binding mode "collection" or "multi".',
+    '- For repeated row/detail data: prefer materials with binding mode "collection" or descriptor binding "multi" when the material context supports it.',
+    '- For chart-like comparisons over arrays or paired fields: prefer visualization materials with descriptor binding "data-contract" when available.',
     '- For scalar labels and values: prefer materials with binding mode "scalar" or "single".',
     '- For codes: barcode (CODE128/EAN) or qrcode (URLs/verification).',
     '- For separators: line.',
-    '- Match material binding mode to data shape: scalar fields -> binding "single", array fields -> binding "multi".',
+    '- Match material binding to data shape: scalar fields -> ordinary BindingRef; repeating tables -> table-data cell bindings; structured charts -> data-contract mappings.',
   ]
   if (scenario) {
     lines.push(`- Current scenario: "${scenario}". Prefer materials whose fitness scores match this scenario.`)
@@ -247,10 +254,11 @@ The \`expectedDataSource\` defines a runtime data contract — it declares what 
 - Example: field path \`customer/name\` -> sampleData must have \`{ customer: { name: "..." } }\`.
 - Example: field path \`items/quantity\` (under an array field \`items\`) -> sampleData must have \`{ items: [{ quantity: 10 }] }\`.
 
-### Scalar vs array bindings
+### Binding shapes
 - Materials with \`binding: "single"\` bind to a scalar field (string, number, boolean). The element displays one value.
-- Materials with \`binding: "multi"\` bind to an array field. The element repeats for each item in the array.
-- For multi-binding materials (e.g. table-data), the element's binding or cell bindings use paths under the array (e.g. \`items/name\`, \`items/price\`). The array field itself (\`items\`) must have \`type: "array"\` and \`children\` defining the item fields.
+- Materials with \`binding: "multi"\` or table-data-style collection behavior bind to paths under an array (e.g. \`items/name\`, \`items/price\`). The array field itself (\`items\`) must have \`type: "array"\` and \`children\` defining the item fields.
+- Materials with \`binding: "data-contract"\` bind through \`binding.kind = "data-contract"\`. Use target-field mappings such as \`mappings.category.select.path\` and \`mappings.value.select.path\`.
+- \`relation.kind = "auto"\` lets the resolver infer shared record collections or index alignment.
 
 ### Complete example
 \`\`\`json

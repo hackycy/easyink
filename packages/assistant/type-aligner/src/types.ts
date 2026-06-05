@@ -10,6 +10,7 @@ export interface TypedField {
   name: string
   title?: string
   type: FieldType
+  itemType?: FieldType
   isArray: boolean
   children?: TypedField[]
 }
@@ -61,3 +62,31 @@ export interface FieldTransform {
   targetType: FieldType
   transform: string
 }
+
+export interface GeneratedBindingRef {
+  sourceId: string
+  sourceName: string
+  fieldPath: string
+  fieldLabel?: string
+}
+
+export interface GeneratedDataContractFieldMapping {
+  sourceId: string
+  sourceName: string
+  select: {
+    path: string
+    label?: string
+  }
+}
+
+export interface GeneratedDataContractBinding {
+  kind: 'data-contract'
+  mappings: Record<string, GeneratedDataContractFieldMapping>
+  relation: { kind: 'auto' }
+}
+
+export type GeneratedMaterialBinding
+  = | { kind: 'none' }
+    | { kind: 'binding-ref', binding: GeneratedBindingRef }
+    | { kind: 'collection-path', collectionPath: string, fields: Record<string, string> }
+    | { kind: 'data-contract', binding: GeneratedDataContractBinding }

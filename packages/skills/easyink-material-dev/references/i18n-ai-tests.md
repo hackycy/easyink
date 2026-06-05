@@ -81,7 +81,7 @@ Useful commands:
 
 - New material has Designer code but no Viewer registration.
 - New Viewer renderer manually resolves ordinary `node.binding`.
-- New data-contract material stores runtime data in `props.data`, truncates `mappings.*.select.path`, or exposes record/index mode in UI instead of using the relation resolver.
+- New data-contract material keeps complete `mappings.*.select.path` values and uses relation resolver coverage in tests.
 - New property label is a hardcoded string while neighboring schemas use locale keys.
 - New deep-edit payload stores DOM or non-serializable values.
 - New table-like material duplicates preview rows into Schema.

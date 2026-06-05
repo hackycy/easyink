@@ -81,7 +81,7 @@ Load only the reference needed for the current task:
 - Use `convertUnit()` inside default-node factories when default physical sizes are authored in mm.
 - Escape all user-controlled strings before HTML interpolation. Viewer HTML must be wrapped with `trustedViewerHtml()`.
 - Use `context.resolvedProps` or `node.props` after Viewer projection; do not hand-resolve ordinary `node.binding` inside material renderers. The exception is `DataContractBinding`: structured materials consume it through `resolveMaterialDataContract()`, not through ad hoc `context.data` walking.
-- For data-contract materials, contract describes the target data model and binding describes source mappings. Preserve complete `select.path` values, do not store record/index mode as a binding field, do not write `props.data`, `slots`, `recordset`, or chart-specific runtime arrays into Schema, and let the relation resolver infer shared records or index alignment.
+- For data-contract materials, contract describes the target data model and binding describes source mappings. Preserve complete `select.path` values and let the relation resolver infer shared records or index alignment.
 - Use `tx.run()` for deep-edit mutations so history, patches, and undo work. Use `mergeKey` for continuous drag/resize edits.
 - Keep selection payloads JSON-safe and namespaced, such as `table.cell` or `svg-star.control`.
 - Bind inline input/editor session meta to the current sub-selection.

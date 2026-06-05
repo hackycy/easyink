@@ -125,7 +125,7 @@ const textNode = {
 }
 ```
 
-这类绑定适合“一个字段值投影到一个 props”的场景，例如文本、图片、条码、二维码。旧版文本类 schema 仍然可用，不需要改成 data-contract。
+这类绑定适合“一个字段值投影到一个 props”的场景，例如文本、图片、条码、二维码。普通 `BindingRef` schema 继续可用。
 
 chart-bar 这类结构化物料使用 `data-contract`。它的重点不是“字段按第几个槽位绑定”，而是：
 

@@ -78,7 +78,7 @@ Viewer rendering rules for data-contract materials:
 - Call `resolveMaterialDataContract(DATA_CONTRACT, node.binding, context.data ?? {})`.
 - Report every returned diagnostic through `context.reportDiagnostic?.({ ...diagnostic, nodeId: node.id })`.
 - Convert `resolution.records` into the renderer's runtime shape, such as chart points.
-- Keep visual options in `node.props`; do not store runtime arrays as `props.data`, chart options, slots, or recordsets.
+- Keep visual options in `node.props`; keep source-to-target data mappings in `node.binding`.
 - Preserve full `mapping.select.path` values in Schema. If the resolver needs a collection parent or leaf path, derive it temporarily.
 
 Relation resolver rules:
@@ -86,7 +86,7 @@ Relation resolver rules:
 - Shared paths such as `monthlySales/month` and `monthlySales/revenue` resolve as record collection data.
 - Top-level arrays such as `category` and `values` resolve by index.
 - `data[sourceId]` is used only when the complete path or its parent collection resolves there; otherwise the resolver falls back to the global data root.
-- `relation.kind='auto'` is the normal choice. Do not add UI fields for record/index mode unless a host explicitly owns that policy.
+- `relation.kind='auto'` is the normal choice for resolver-derived record or index alignment.
 
 ## Datasource Drop
 

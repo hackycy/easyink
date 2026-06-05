@@ -307,7 +307,7 @@ viewer.registerMaterial('sales-chart', {
 - `props` 保存视觉设置，不保存运行时数据。
 - `dataContract.model` 描述目标数据模型，不描述数据源长什么样。
 - `DataContractBinding.mappings` 保存完整 source path，不截断集合内路径。
-- 不在 UI 或 schema 中暴露 record/index mode；默认用 `relation: { kind: 'auto' }` 交给 Resolver。
+- 默认使用 `relation: { kind: 'auto' }` 交给 Resolver 推导 record/index 对齐关系。
 
 ## 何时实现 measure {#measure}
 

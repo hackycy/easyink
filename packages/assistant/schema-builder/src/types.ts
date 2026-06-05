@@ -11,7 +11,7 @@ export interface EmitElementInput {
   type: string
   region: { x: number, y: number, width: number, height: number }
   props?: Record<string, unknown>
-  binding?: EmitBindingInput
+  binding?: EmitBindingInput | EmitDataContractBindingInput
   children?: EmitElementInput[]
 }
 
@@ -19,6 +19,20 @@ export interface EmitBindingInput {
   fieldPath: string
   fieldLabel?: string
   format?: Record<string, unknown>
+}
+
+export interface EmitDataContractBindingInput {
+  kind: 'data-contract'
+  mappings: Record<string, {
+    sourceId?: string
+    sourceName?: string
+    select: {
+      path: string
+      label?: string
+    }
+    format?: Record<string, unknown>
+  }>
+  relation?: { kind: 'auto' | 'record' | 'index' }
 }
 
 export interface EmitTableDataInput {

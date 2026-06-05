@@ -2,6 +2,7 @@ import type { ConstraintContext, MaterialKnowledgeRegistry } from '@easyink/assi
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import type {
   EmitBindingInput,
+  EmitDataContractBindingInput,
   EmitElementInput,
   EmitTableDataInput,
   EmitTableStaticInput,
@@ -163,7 +164,7 @@ export class SchemaBuilder {
   }
 
   private buildNode(input: EmitElementInput): MaterialNode {
-    const binding = input.binding ? this.bindingRef(input.binding) : undefined
+    const binding = input.binding ? this.materialBinding(input.binding) : undefined
     return {
       id: input.id,
       type: input.type,
@@ -179,6 +180,30 @@ export class SchemaBuilder {
 
   private bindingRef(b: EmitBindingInput) {
     return { sourceId: this.context.dataSourceName, sourceName: this.context.dataSourceName, fieldPath: b.fieldPath, fieldLabel: b.fieldLabel }
+  }
+
+  private materialBinding(binding: EmitElementInput['binding']): MaterialNode['binding'] {
+    if (!binding)
+      return undefined
+    if (isDataContractBindingInput(binding)) {
+      return {
+        kind: 'data-contract',
+        mappings: Object.fromEntries(Object.entries(binding.mappings).map(([fieldId, mapping]) => [
+          fieldId,
+          {
+            sourceId: mapping.sourceId ?? this.context.dataSourceName,
+            sourceName: mapping.sourceName ?? this.context.dataSourceName,
+            select: {
+              path: mapping.select.path,
+              label: mapping.select.label,
+            },
+            format: mapping.format,
+          },
+        ])),
+        relation: binding.relation ?? { kind: 'auto' },
+      }
+    }
+    return this.bindingRef(binding)
   }
 
   private tableLayout(s: { borderWidth?: number, borderColor?: string }) {
@@ -198,4 +223,10 @@ export class SchemaBuilder {
   private ctx(): ConstraintContext {
     return { pageWidth: this.context.pageWidth, pageHeight: this.context.pageHeight, pageMode: this.context.pageMode, unit: this.context.unit, siblingTypes: this.elements.map(e => e.type) }
   }
+}
+
+function isDataContractBindingInput(
+  binding: EmitBindingInput | EmitDataContractBindingInput,
+): binding is EmitDataContractBindingInput {
+  return 'kind' in binding && binding.kind === 'data-contract'
 }

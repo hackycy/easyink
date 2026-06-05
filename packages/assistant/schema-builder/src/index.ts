@@ -1,6 +1,7 @@
 export { SchemaBuilder } from './builder'
 export type {
   EmitBindingInput,
+  EmitDataContractBindingInput,
   EmitElementInput,
   EmitTableDataInput,
   EmitTableStaticInput,
