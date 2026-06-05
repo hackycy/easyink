@@ -36,11 +36,14 @@ function makePage(overrides: Partial<PageSchema> = {}): PageSchema {
 }
 
 const chartDataContract = {
-  version: 1,
-  slots: [
-    { id: 'category', labelKey: 'materials.chartBar.data.category', required: true, kind: 'field', scope: 'series', bindIndex: 0 },
-    { id: 'value', labelKey: 'materials.chartBar.data.value', required: true, kind: 'field', scope: 'series', valueType: 'number', bindIndex: 1 },
-  ],
+  version: 3,
+  model: {
+    kind: 'tabular',
+    fields: {
+      category: { labelKey: 'materials.chartBar.data.category', type: 'string', required: true, format: 'display' },
+      value: { labelKey: 'materials.chartBar.data.value', type: 'number', required: true, format: 'raw' },
+    },
+  },
 } as const
 
 function makePageEl() {
@@ -670,21 +673,25 @@ describe('useDesignerDragDrop', () => {
     drag.startDatasourceDrag(makeDragEvent(0, 0, []), revenue)
     drag.onCanvasDrop(makeDragEvent(20, 20, [DATASOURCE_DRAG_MIME], { [DATASOURCE_DRAG_MIME]: JSON.stringify(revenue) }))
 
-    expect(node.binding).toEqual([
-      expect.objectContaining({
-        fieldPath: 'monthlySales/month',
-        bindIndex: 0,
-      }),
-      expect.objectContaining({
-        fieldPath: 'monthlySales/revenue',
-        bindIndex: 1,
-      }),
-    ])
+    expect(node.binding).toEqual({
+      kind: 'data-contract',
+      relation: { kind: 'auto' },
+      mappings: {
+        category: expect.objectContaining({
+          sourceId: 'sales-report',
+          select: expect.objectContaining({ path: 'monthlySales/month' }),
+        }),
+        value: expect.objectContaining({
+          sourceId: 'sales-report',
+          select: expect.objectContaining({ path: 'monthlySales/revenue' }),
+        }),
+      },
+    })
     expect(store.commands.execute).toHaveBeenCalledTimes(2)
     drag.cleanup()
   })
 
-  it('rejects data-contract canvas drops from another inferred collection', () => {
+  it('maps data-contract canvas drops from another collection without design-time rejection', () => {
     const pageEl = makePageEl()
     const node = createTextNode({
       id: 'target',
@@ -692,9 +699,13 @@ describe('useDesignerDragDrop', () => {
       y: 0,
       width: 100,
       height: 50,
-      binding: [
-        { sourceId: 'sales-report', fieldPath: 'monthlySales/month', bindIndex: 0 },
-      ],
+      binding: {
+        kind: 'data-contract',
+        relation: { kind: 'auto' },
+        mappings: {
+          category: { sourceId: 'sales-report', select: { path: 'monthlySales/month' } },
+        },
+      },
     })
     const store = makeStore([node], undefined, {
       textDataContract: chartDataContract,
@@ -713,10 +724,21 @@ describe('useDesignerDragDrop', () => {
     drag.startDatasourceDrag(makeDragEvent(0, 0, []), weeklyRevenue)
     drag.onCanvasDrop(makeDragEvent(20, 20, [DATASOURCE_DRAG_MIME], { [DATASOURCE_DRAG_MIME]: JSON.stringify(weeklyRevenue) }))
 
-    expect(node.binding).toEqual([
-      { sourceId: 'sales-report', fieldPath: 'monthlySales/month', bindIndex: 0 },
-    ])
-    expect(store.commands.execute).not.toHaveBeenCalled()
+    expect(node.binding).toEqual({
+      kind: 'data-contract',
+      relation: { kind: 'auto' },
+      mappings: {
+        category: expect.objectContaining({
+          sourceId: 'sales-report',
+          select: expect.objectContaining({ path: 'monthlySales/month' }),
+        }),
+        value: expect.objectContaining({
+          sourceId: 'sales-report',
+          select: expect.objectContaining({ path: 'weeklySales/revenue' }),
+        }),
+      },
+    })
+    expect(store.commands.execute).toHaveBeenCalledTimes(1)
     drag.cleanup()
   })
 })

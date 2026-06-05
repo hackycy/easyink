@@ -1,92 +1,111 @@
 import type { MaterialDataContract } from '@easyink/core'
-import type { BindingRef } from '@easyink/schema'
 import { describe, expect, it } from 'vitest'
 import {
-  applyMaterialDataSlotBinding,
-  canBindMaterialDataSlot,
-  clearMaterialDataSlotBinding,
-  findMaterialDataSlotBinding,
+  applyMaterialDataFieldMapping,
+  canBindMaterialDataField,
+  clearMaterialDataFieldMapping,
+  findMaterialDataFieldMapping,
 } from './material-data-binding'
 
 describe('material data binding helpers', () => {
   const contract: MaterialDataContract = {
-    version: 1,
-    slots: [
-      { id: 'category', labelKey: 'materials.chartBar.data.category', required: true, kind: 'field', scope: 'series', bindIndex: 0 },
-      { id: 'value', labelKey: 'materials.chartBar.data.value', required: true, kind: 'field', scope: 'series', valueType: 'number', bindIndex: 1 },
-    ],
+    version: 3,
+    model: {
+      kind: 'tabular',
+      fields: {
+        category: { labelKey: 'materials.chartBar.data.category', type: 'string', required: true, format: 'display' },
+        value: { labelKey: 'materials.chartBar.data.value', type: 'number', required: true, format: 'raw' },
+      },
+    },
   }
 
-  it('binds the first field role without creating a collection binding', () => {
-    const bindings = applyMaterialDataSlotBinding(contract, undefined, {
+  it('maps a source field to a target model field', () => {
+    const binding = applyMaterialDataFieldMapping(contract, undefined, {
       sourceId: 'sales-report',
       fieldPath: 'monthlySales/month',
       fieldLabel: '月份',
     }, 'category')
 
-    expect(bindings).toEqual([
-      expect.objectContaining({
-        sourceId: 'sales-report',
-        fieldPath: 'monthlySales/month',
-        bindIndex: 0,
-        fieldLabel: '月份',
-      }),
-    ])
+    expect(binding).toEqual({
+      kind: 'data-contract',
+      relation: { kind: 'auto' },
+      mappings: {
+        category: expect.objectContaining({
+          sourceId: 'sales-report',
+          select: {
+            path: 'monthlySales/month',
+            key: undefined,
+            label: '月份',
+            tag: undefined,
+          },
+        }),
+      },
+    })
   })
 
-  it('binds a scoped field into its ordered field role only', () => {
-    const bindings = applyMaterialDataSlotBinding(contract, undefined, {
+  it('keeps complete source paths for every mapping', () => {
+    const first = applyMaterialDataFieldMapping(contract, undefined, {
+      sourceId: 'sales-report',
+      fieldPath: 'monthlySales/month',
+      fieldLabel: '月份',
+    }, 'category')
+
+    const binding = applyMaterialDataFieldMapping(contract, first, {
       sourceId: 'sales-report',
       fieldPath: 'monthlySales/revenue',
       fieldLabel: '销售额',
     }, 'value')
 
-    expect(bindings).toEqual([
-      expect.objectContaining({
-        fieldPath: 'monthlySales/revenue',
-        bindIndex: 1,
-      }),
-    ])
+    expect(binding?.mappings.category?.select.path).toBe('monthlySales/month')
+    expect(binding?.mappings.value?.select.path).toBe('monthlySales/revenue')
   })
 
-  it('rejects scoped fields outside the already bound collection', () => {
-    const bindings: BindingRef[] = [
-      {
-        sourceId: 'sales-report',
-        fieldPath: 'monthlySales/month',
-        bindIndex: 0,
-      },
-    ]
+  it('does not reject fields from another collection at design time', () => {
+    const binding = applyMaterialDataFieldMapping(contract, undefined, {
+      sourceId: 'sales-report',
+      fieldPath: 'monthlySales/month',
+      fieldLabel: '月份',
+    }, 'category')
 
-    const result = canBindMaterialDataSlot(contract, bindings, {
+    const result = canBindMaterialDataField(contract, binding, {
       sourceId: 'sales-report',
       fieldPath: 'weeklySales/revenue',
       fieldLabel: '周销售额',
     }, 'value')
 
-    expect(result).toEqual({
-      accepted: false,
-      message: 'Collection path mismatch',
-      messageKey: 'designer.dataSource.collectionMismatch',
+    expect(result).toEqual({ accepted: true })
+  })
+
+  it('clears only the selected target field mapping', () => {
+    const withCategory = applyMaterialDataFieldMapping(contract, undefined, {
+      sourceId: 'sales-report',
+      fieldPath: 'monthlySales/month',
+      fieldLabel: '月份',
+    }, 'category')
+    const binding = applyMaterialDataFieldMapping(contract, withCategory, {
+      sourceId: 'sales-report',
+      fieldPath: 'monthlySales/revenue',
+      fieldLabel: '销售额',
+    }, 'value')
+
+    expect(clearMaterialDataFieldMapping(contract, binding, 'category')).toEqual({
+      kind: 'data-contract',
+      relation: { kind: 'auto' },
+      mappings: {
+        value: expect.objectContaining({
+          select: expect.objectContaining({ path: 'monthlySales/revenue' }),
+        }),
+      },
     })
   })
 
-  it('clears only the selected field role', () => {
-    const bindings: BindingRef[] = [
-      { sourceId: 'sales-report', fieldPath: 'monthlySales/month', bindIndex: 0 },
-      { sourceId: 'sales-report', fieldPath: 'monthlySales/revenue', bindIndex: 1 },
-    ]
+  it('finds mappings by target field id', () => {
+    const binding = applyMaterialDataFieldMapping(contract, undefined, {
+      sourceId: 'sales-report',
+      fieldPath: 'monthlySales/month',
+      fieldLabel: '月份',
+    }, 'category')
 
-    expect(clearMaterialDataSlotBinding(contract, bindings, 'category')).toEqual([
-      { sourceId: 'sales-report', fieldPath: 'monthlySales/revenue', bindIndex: 1 },
-    ])
-  })
-
-  it('finds bindings by bind index', () => {
-    const bindings: BindingRef[] = [
-      { sourceId: 'sales-report', fieldPath: 'monthlySales/month', bindIndex: 0 },
-    ]
-
-    expect(findMaterialDataSlotBinding(contract, bindings, 'category')?.fieldPath).toBe('monthlySales/month')
+    expect(findMaterialDataFieldMapping(contract, binding, 'category')?.select.path).toBe('monthlySales/month')
   })
 })

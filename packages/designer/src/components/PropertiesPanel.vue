@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { PropCommitContext, SubPropertySchema } from '@easyink/core'
-import type { BindingRef, DocumentSchema, MaterialNode, PageSchema } from '@easyink/schema'
+import type { BindingRef, DataContractBinding, DocumentSchema, MaterialNode, PageSchema } from '@easyink/schema'
 import type { BindingDisplayFormat } from '@easyink/shared'
 import type { Component } from 'vue'
 import type { PagePropertyContext, PagePropertyDescriptor, PagePropertyGroup } from '../page-properties'
@@ -614,7 +614,7 @@ function updateBindingFormat(format: BindingDisplayFormat | undefined, bindIndex
   store.commands.execute(cmd)
 }
 
-function updateMaterialDataBinding(binding: BindingRef[] | undefined) {
+function updateMaterialDataBinding(binding: DataContractBinding | undefined) {
   const el = selectedElement.value
   if (!el)
     return

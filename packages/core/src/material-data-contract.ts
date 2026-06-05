@@ -1,47 +1,39 @@
-import type { BindingRef } from '@easyink/schema'
+import type {
+  DataContractBinding,
+  DataContractFieldMapping,
+  DataContractRelation,
+  MaterialBinding,
+} from '@easyink/schema'
 import { deepClone, FIELD_PATH_SEPARATOR } from '@easyink/shared'
-import { resolveBindingValue } from './binding-utils'
 
-export type MaterialDataSlotKind = 'scalar' | 'field' | 'record' | 'computed'
+export type MaterialDataModelKind = 'tabular'
 export type MaterialDataValueType = 'string' | 'number' | 'boolean' | 'date' | 'object' | 'array'
+export type MaterialDataFieldFormat = 'display' | 'raw'
+export type MaterialDataResolutionMode = 'record' | 'index' | 'empty' | 'invalid'
 
 export interface MaterialDataContract {
-  version: 1
-  slots: readonly MaterialDataSlot[]
+  version: 3
+  model: MaterialDataModel
 }
 
-export interface MaterialDataSlot {
-  id: string
+export interface MaterialDataModel {
+  kind: MaterialDataModelKind
+  fields: Record<string, MaterialDataModelField>
+}
+
+export interface MaterialDataModelField {
   labelKey: string
-  required: boolean
-  kind: MaterialDataSlotKind
-  valueType?: MaterialDataValueType
-  /**
-   * Field slots with the same scope must come from the same inferred parent path.
-   * The scope is a relationship between field roles, not a persisted collection binding.
-   */
-  scope?: string
-  bindIndex: number
+  type: MaterialDataValueType
+  required?: boolean
+  format?: MaterialDataFieldFormat
 }
 
 export interface MaterialDataDiagnostic {
   code: string
   message: string
   severity: 'warning'
-  slotId?: string
+  fieldId?: string
   cause?: unknown
-}
-
-export interface MaterialDataSlotResolution {
-  slot: MaterialDataSlot
-  binding?: BindingRef
-  value: unknown
-  diagnostics: MaterialDataDiagnostic[]
-}
-
-export interface MaterialDataContractResolution {
-  slots: MaterialDataSlotResolution[]
-  diagnostics: MaterialDataDiagnostic[]
 }
 
 export interface MaterialDataBindingField {
@@ -52,254 +44,369 @@ export interface MaterialDataBindingField {
   fieldKey?: string
   fieldTag?: string
   fieldLabel?: string
-  format?: BindingRef['format']
+  format?: DataContractFieldMapping['format']
 }
 
-export interface MaterialDataSlotAcceptance {
+export interface MaterialDataMappingAcceptance {
   accepted: boolean
   message?: string
   messageKey?: string
 }
 
+export interface MaterialDataContractResolution {
+  model: MaterialDataModel
+  records: Array<Record<string, unknown>>
+  mappings: Record<string, MaterialDataFieldResolution>
+  diagnostics: MaterialDataDiagnostic[]
+  mode: MaterialDataResolutionMode
+}
+
+export interface MaterialDataFieldResolution {
+  field: MaterialDataModelField
+  mapping?: DataContractFieldMapping
+  value: unknown
+  diagnostics: MaterialDataDiagnostic[]
+}
+
+interface SourceSelection {
+  fieldId: string
+  mapping: DataContractFieldMapping
+  value: unknown
+  normalizedPath: string
+  sourceRoot: Record<string, unknown>
+}
+
+export function isDataContractBinding(binding: MaterialBinding | undefined): binding is DataContractBinding {
+  return !!binding && !Array.isArray(binding) && 'kind' in binding && binding.kind === 'data-contract'
+}
+
 export function resolveMaterialDataContract(
   contract: MaterialDataContract,
-  bindings: BindingRef | BindingRef[] | undefined,
+  binding: MaterialBinding | undefined,
   data: Record<string, unknown>,
 ): MaterialDataContractResolution {
-  const refs = normalizeBindings(bindings)
-  const slots = contract.slots.map((slot) => {
-    const binding = findSlotBinding(refs, slot)
-    const diagnostics: MaterialDataDiagnostic[] = []
-    if (!binding) {
-      if (slot.required) {
-        diagnostics.push({
-          code: 'MATERIAL_DATA_SLOT_MISSING',
+  const mappings = isDataContractBinding(binding) ? binding.mappings : {}
+  const diagnostics: MaterialDataDiagnostic[] = []
+  const fieldEntries = Object.entries(contract.model.fields)
+  const resolvedMappings: Record<string, MaterialDataFieldResolution> = {}
+  const selections: SourceSelection[] = []
+
+  for (const [fieldId, field] of fieldEntries) {
+    const mapping = mappings[fieldId]
+    const fieldDiagnostics: MaterialDataDiagnostic[] = []
+    if (!mapping) {
+      if (field.required) {
+        fieldDiagnostics.push({
+          code: 'MATERIAL_DATA_FIELD_MISSING',
           severity: 'warning',
-          slotId: slot.id,
-          message: `Required data slot "${slot.id}" is not bound.`,
+          fieldId,
+          message: `Required data field "${fieldId}" is not mapped.`,
         })
       }
-      return { slot, binding, value: undefined, diagnostics }
+      resolvedMappings[fieldId] = { field, mapping, value: undefined, diagnostics: fieldDiagnostics }
+      diagnostics.push(...fieldDiagnostics)
+      continue
     }
 
-    const value = resolveBindingValue(binding, data)
-    if (slot.required && value === undefined && slot.kind !== 'field') {
-      diagnostics.push({
-        code: 'MATERIAL_DATA_SLOT_VALUE_MISSING',
-        severity: 'warning',
-        slotId: slot.id,
-        message: `Required data slot "${slot.id}" resolved to no value.`,
-      })
+    const selection = resolveSelection(fieldId, mapping, data)
+    selections.push(selection)
+    resolvedMappings[fieldId] = {
+      field,
+      mapping,
+      value: selection.value,
+      diagnostics: fieldDiagnostics,
     }
-    return { slot, binding, value, diagnostics }
-  })
+  }
 
+  const projection = projectSelections(contract, selections, bindingRelation(binding), diagnostics)
   return {
-    slots,
-    diagnostics: slots.flatMap(slot => slot.diagnostics),
+    model: contract.model,
+    records: projection.records,
+    mappings: resolvedMappings,
+    diagnostics,
+    mode: projection.mode,
   }
 }
 
-export function getMaterialDataSlot(
-  resolution: MaterialDataContractResolution,
-  slotId: string,
-): MaterialDataSlotResolution | undefined {
-  return resolution.slots.find(slot => slot.slot.id === slotId)
-}
-
-export function canBindMaterialDataSlot(
+export function canBindMaterialDataField(
   contract: MaterialDataContract,
-  bindings: BindingRef | BindingRef[] | undefined,
-  field: MaterialDataBindingField,
-  slotId: string,
-): MaterialDataSlotAcceptance {
-  const slot = findContractSlot(contract, slotId)
-  if (!slot)
-    return { accepted: false, message: 'Unknown data slot', messageKey: 'designer.materialDataBinding.rejectUnknownSlot' }
-
-  if (slot.kind !== 'field')
-    return { accepted: true }
-
-  if (!slot.scope)
-    return { accepted: true }
-
-  const collectionPath = inferParentPath(field.fieldPath)
-  if (!collectionPath)
-    return { accepted: false, message: 'Drop a field inside a collection', messageKey: 'designer.materialDataBinding.rejectScopedField' }
-
-  for (const scopedSlot of contract.slots) {
-    if (scopedSlot.id === slot.id || scopedSlot.kind !== 'field' || scopedSlot.scope !== slot.scope)
-      continue
-    const scopedBinding = findMaterialDataSlotBinding(contract, bindings, scopedSlot.id)
-    if (!scopedBinding)
-      continue
-
-    if (scopedBinding.sourceId !== field.sourceId)
-      return { accepted: false, message: 'Data source mismatch', messageKey: 'designer.dataSource.sourceConflict' }
-
-    const scopedCollectionPath = inferParentPath(scopedBinding.fieldPath)
-    if (scopedCollectionPath !== collectionPath)
-      return { accepted: false, message: 'Collection path mismatch', messageKey: 'designer.dataSource.collectionMismatch' }
-  }
-
+  _binding: MaterialBinding | undefined,
+  _field: MaterialDataBindingField,
+  fieldId: string,
+): MaterialDataMappingAcceptance {
+  if (!contract.model.fields[fieldId])
+    return { accepted: false, message: 'Unknown data field', messageKey: 'designer.materialDataBinding.rejectUnknownSlot' }
   return { accepted: true }
 }
 
-export function applyMaterialDataSlotBinding(
+export function applyMaterialDataFieldMapping(
   contract: MaterialDataContract,
-  bindings: BindingRef | BindingRef[] | undefined,
+  binding: MaterialBinding | undefined,
   field: MaterialDataBindingField,
-  slotId: string,
-): BindingRef[] {
-  const slot = findContractSlot(contract, slotId)
-  if (!slot)
-    return normalizeBindings(bindings)
+  fieldId: string,
+): DataContractBinding | undefined {
+  if (!contract.model.fields[fieldId])
+    return isDataContractBinding(binding) ? binding : undefined
 
-  const current = normalizeBindings(bindings)
-  const acceptance = canBindMaterialDataSlot(contract, current, field, slotId)
-  if (!acceptance.accepted)
-    return current
-
-  return replaceSlotBinding(contract, current, createSlotBinding(slot, field, field.fieldPath, field.fieldLabel), slot)
+  const current = isDataContractBinding(binding)
+    ? deepClone(binding)
+    : createEmptyDataContractBinding()
+  current.mappings[fieldId] = createFieldMapping(field)
+  return current
 }
 
-export function clearMaterialDataSlotBinding(
-  contract: MaterialDataContract,
-  bindings: BindingRef | BindingRef[] | undefined,
-  slotId: string,
-): BindingRef[] {
-  const slot = findContractSlot(contract, slotId)
-  if (!slot)
-    return normalizeBindings(bindings)
-
-  const dependentSlotIds = new Set<string>([slot.id])
-
-  return normalizeBindings(bindings)
-    .filter(binding => !dependentSlotIds.has(readBindingSlotId(contract, binding)))
-    .sort(sortByBindIndex)
-}
-
-export function findMaterialDataSlotBinding(
-  contract: MaterialDataContract,
-  bindings: BindingRef | BindingRef[] | undefined,
-  slotId: string,
-): BindingRef | undefined {
-  const slot = findContractSlot(contract, slotId)
-  if (!slot)
+export function clearMaterialDataFieldMapping(
+  _contract: MaterialDataContract,
+  binding: MaterialBinding | undefined,
+  fieldId: string,
+): DataContractBinding | undefined {
+  if (!isDataContractBinding(binding))
     return undefined
-  return normalizeBindings(bindings).find(binding => (binding.bindIndex ?? 0) === slot.bindIndex)
+  const next = deepClone(binding)
+  delete next.mappings[fieldId]
+  return Object.keys(next.mappings).length > 0 ? next : undefined
 }
 
-export function swapMaterialDataSlotBindings(
+export function findMaterialDataFieldMapping(
   contract: MaterialDataContract,
-  bindings: BindingRef | BindingRef[] | undefined,
-  fromSlotId: string,
-  toSlotId: string,
-): BindingRef[] {
-  if (fromSlotId === toSlotId)
-    return normalizeBindings(bindings).sort(sortByBindIndex)
+  binding: MaterialBinding | undefined,
+  fieldId: string,
+): DataContractFieldMapping | undefined {
+  if (!contract.model.fields[fieldId] || !isDataContractBinding(binding))
+    return undefined
+  return binding.mappings[fieldId]
+}
 
-  const fromSlot = findContractSlot(contract, fromSlotId)
-  const toSlot = findContractSlot(contract, toSlotId)
-  if (!fromSlot || !toSlot)
-    return normalizeBindings(bindings).sort(sortByBindIndex)
+export function swapMaterialDataFieldMappings(
+  contract: MaterialDataContract,
+  binding: MaterialBinding | undefined,
+  fromFieldId: string,
+  toFieldId: string,
+): DataContractBinding | undefined {
+  if (fromFieldId === toFieldId)
+    return isDataContractBinding(binding) ? binding : undefined
+  if (!contract.model.fields[fromFieldId] || !contract.model.fields[toFieldId] || !isDataContractBinding(binding))
+    return isDataContractBinding(binding) ? binding : undefined
 
-  return normalizeBindings(bindings)
-    .map((binding) => {
-      const slotId = readBindingSlotId(contract, binding)
-      if (slotId === fromSlotId)
-        return retargetSlotBinding(binding, toSlot)
-      if (slotId === toSlotId)
-        return retargetSlotBinding(binding, fromSlot)
-      return binding
+  const next = deepClone(binding)
+  const from = next.mappings[fromFieldId]
+  const to = next.mappings[toFieldId]
+  if (to)
+    next.mappings[fromFieldId] = to
+  else
+    delete next.mappings[fromFieldId]
+  if (from)
+    next.mappings[toFieldId] = from
+  else
+    delete next.mappings[toFieldId]
+  return next
+}
+
+export function normalizeMaterialDataBinding(binding: MaterialBinding | undefined): DataContractBinding | undefined {
+  return isDataContractBinding(binding) ? binding : undefined
+}
+
+function projectSelections(
+  contract: MaterialDataContract,
+  selections: SourceSelection[],
+  relation: DataContractRelation | undefined,
+  diagnostics: MaterialDataDiagnostic[],
+): { records: Array<Record<string, unknown>>, mode: MaterialDataResolutionMode } {
+  if (selections.length === 0)
+    return { records: [], mode: 'empty' }
+
+  const relationKind = relation?.kind === 'auto' ? undefined : relation?.kind
+  const recordProjection = relationKind === 'index' ? undefined : projectSharedRecordSelections(selections)
+  if (recordProjection)
+    return { records: coerceRecords(contract, recordProjection.records), mode: 'record' }
+
+  if (relationKind === 'record') {
+    diagnostics.push({
+      code: 'MATERIAL_DATA_RECORD_RELATION_UNRESOLVED',
+      severity: 'warning',
+      message: 'Mapped fields do not share a resolvable record collection.',
     })
-    .sort(sortByBindIndex)
+    return { records: [], mode: 'invalid' }
+  }
+
+  const indexProjection = projectIndexedSelections(selections)
+  if (indexProjection)
+    return { records: coerceRecords(contract, indexProjection.records), mode: 'index' }
+
+  diagnostics.push({
+    code: 'MATERIAL_DATA_RELATION_UNRESOLVED',
+    severity: 'warning',
+    message: 'Mapped fields could not be resolved into target records.',
+  })
+  return { records: [], mode: 'invalid' }
 }
 
-export function normalizeMaterialDataBindings(bindings: BindingRef | BindingRef[] | undefined): BindingRef[] {
-  return normalizeBindings(bindings)
+function projectSharedRecordSelections(selections: SourceSelection[]): { records: Array<Record<string, unknown>> } | undefined {
+  const parents = selections.map((selection) => {
+    const parentPath = parentPathOf(selection.normalizedPath)
+    if (!parentPath)
+      return undefined
+    const collection = resolvePath(selection.sourceRoot, parentPath)
+    return Array.isArray(collection)
+      ? { parentPath, collection, leafPath: leafPathOf(selection.normalizedPath, parentPath) }
+      : undefined
+  })
+  if (parents.some(parent => !parent))
+    return undefined
+  const first = parents[0]!
+  if (!parents.every(parent => parent!.parentPath === first.parentPath && parent!.collection === first.collection))
+    return undefined
+
+  const records = first.collection.map((record) => {
+    const target: Record<string, unknown> = {}
+    selections.forEach((selection, index) => {
+      target[selection.fieldId] = resolvePath(record, parents[index]!.leafPath)
+    })
+    return target
+  })
+  return { records }
 }
 
-function findSlotBinding(bindings: BindingRef[], slot: MaterialDataSlot): BindingRef | undefined {
-  return bindings.find(binding => (binding.bindIndex ?? 0) === slot.bindIndex)
+function projectIndexedSelections(selections: SourceSelection[]): { records: Array<Record<string, unknown>> } | undefined {
+  const arrays = selections.map((selection) => {
+    if (Array.isArray(selection.value))
+      return selection.value
+    const parentPath = parentPathOf(selection.normalizedPath)
+    if (!parentPath)
+      return undefined
+    const collection = resolvePath(selection.sourceRoot, parentPath)
+    if (!Array.isArray(collection))
+      return undefined
+    const leafPath = leafPathOf(selection.normalizedPath, parentPath)
+    return collection.map(record => resolvePath(record, leafPath))
+  })
+  if (arrays.some(array => !array))
+    return undefined
+
+  const length = Math.min(...arrays.map(array => array!.length))
+  const records: Array<Record<string, unknown>> = []
+  for (let index = 0; index < length; index++) {
+    const record: Record<string, unknown> = {}
+    selections.forEach((selection, selectionIndex) => {
+      record[selection.fieldId] = arrays[selectionIndex]![index]
+    })
+    records.push(record)
+  }
+  return { records }
 }
 
-function createSlotBinding(
-  slot: MaterialDataSlot,
-  field: MaterialDataBindingField,
-  fieldPath: string,
-  fieldLabel: string | undefined,
-): BindingRef {
+function coerceRecords(contract: MaterialDataContract, records: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
+  return records.map((record) => {
+    const next: Record<string, unknown> = {}
+    for (const [fieldId, field] of Object.entries(contract.model.fields))
+      next[fieldId] = coerceFieldValue(record[fieldId], field)
+    return next
+  })
+}
+
+function coerceFieldValue(value: unknown, field: MaterialDataModelField): unknown {
+  if (value == null)
+    return value
+  if (field.type === 'number') {
+    const numeric = typeof value === 'number'
+      ? value
+      : typeof value === 'string' && value.trim() !== ''
+        ? Number(value)
+        : Number.NaN
+    return Number.isFinite(numeric) ? numeric : undefined
+  }
+  if (field.type === 'string')
+    return String(value)
+  return value
+}
+
+function resolveSelection(fieldId: string, mapping: DataContractFieldMapping, data: Record<string, unknown>): SourceSelection {
+  const normalizedPath = normalizePath(mapping.select.path)
+  const sourceRoot = data[mapping.sourceId]
+  if (isRecord(sourceRoot)) {
+    return {
+      fieldId,
+      mapping,
+      value: resolvePath(sourceRoot, normalizedPath),
+      normalizedPath,
+      sourceRoot,
+    }
+  }
+
+  const directValue = resolvePath(data, normalizedPath)
+  if (directValue !== undefined) {
+    return {
+      fieldId,
+      mapping,
+      value: directValue,
+      normalizedPath,
+      sourceRoot: data,
+    }
+  }
+
+  return {
+    fieldId,
+    mapping,
+    value: undefined,
+    normalizedPath,
+    sourceRoot: data,
+  }
+}
+
+function bindingRelation(binding: MaterialBinding | undefined): DataContractRelation | undefined {
+  return isDataContractBinding(binding) ? binding.relation : undefined
+}
+
+function createEmptyDataContractBinding(): DataContractBinding {
+  return {
+    kind: 'data-contract',
+    mappings: {},
+    relation: { kind: 'auto' },
+  }
+}
+
+function createFieldMapping(field: MaterialDataBindingField): DataContractFieldMapping {
   return {
     sourceId: field.sourceId,
     sourceName: field.sourceName,
     sourceTag: field.sourceTag,
-    fieldPath,
-    fieldKey: fieldPath === field.fieldPath ? field.fieldKey : undefined,
-    fieldLabel: fieldLabel || fieldPath,
+    select: {
+      path: field.fieldPath,
+      key: field.fieldKey,
+      label: field.fieldLabel,
+      tag: field.fieldTag,
+    },
     format: field.format ? deepClone(field.format) : undefined,
-    bindIndex: slot.bindIndex,
   }
 }
 
-function replaceSlotBinding(
-  contract: MaterialDataContract,
-  bindings: BindingRef[],
-  next: BindingRef,
-  slot: MaterialDataSlot,
-): BindingRef[] {
-  const remaining = bindings.filter(binding =>
-    readBindingSlotId(contract, binding) !== slot.id && (binding.bindIndex ?? 0) !== slot.bindIndex,
-  )
-  return [...remaining, next].sort((a, b) => (a.bindIndex ?? 0) - (b.bindIndex ?? 0))
-}
-
-function findContractSlot(contract: MaterialDataContract, slotId: string): MaterialDataSlot | undefined {
-  return contract.slots.find(slot => slot.id === slotId)
-}
-
-function retargetSlotBinding(binding: BindingRef, slot: MaterialDataSlot): BindingRef {
-  const next: BindingRef = {
-    ...binding,
-    bindIndex: slot.bindIndex,
+function resolvePath(root: unknown, path: string): unknown {
+  if (!path)
+    return root
+  const segments = path.split(FIELD_PATH_SEPARATOR).filter(Boolean)
+  let current = root
+  for (const segment of segments) {
+    if (!isRecord(current))
+      return undefined
+    current = current[segment]
   }
-  next.fieldLabel = stripSlotLabel(binding.fieldLabel) || binding.fieldPath
-  return next
+  return current
 }
 
-function readBindingSlotId(contract: MaterialDataContract, binding: BindingRef): string {
-  return contract.slots.find(slot => (binding.bindIndex ?? 0) === slot.bindIndex)?.id ?? ''
+function normalizePath(path: string): string {
+  return path.split(FIELD_PATH_SEPARATOR).filter(Boolean).join(FIELD_PATH_SEPARATOR)
 }
 
-function stripSlotLabel(label: string | undefined): string | undefined {
-  if (!label)
-    return undefined
-  const index = label.indexOf(':')
-  if (index < 0)
-    return label
-  return label.slice(index + 1)
+function parentPathOf(path: string): string | undefined {
+  const index = path.lastIndexOf(FIELD_PATH_SEPARATOR)
+  return index > 0 ? path.slice(0, index) : undefined
 }
 
-function normalizeBindings(bindings: BindingRef | BindingRef[] | undefined): BindingRef[] {
-  if (!bindings)
-    return []
-  return Array.isArray(bindings) ? bindings : [bindings]
+function leafPathOf(path: string, parentPath: string): string {
+  const prefix = `${parentPath}${FIELD_PATH_SEPARATOR}`
+  return path.startsWith(prefix) ? path.slice(prefix.length) : path
 }
 
-function normalizePath(path: string | undefined): string | undefined {
-  return path?.split(FIELD_PATH_SEPARATOR).filter(Boolean).join(FIELD_PATH_SEPARATOR)
-}
-
-function inferParentPath(fieldPath: string): string | undefined {
-  const normalized = normalizePath(fieldPath)
-  if (!normalized)
-    return undefined
-  const index = normalized.lastIndexOf(FIELD_PATH_SEPARATOR)
-  if (index <= 0)
-    return undefined
-  return normalized.slice(0, index)
-}
-
-function sortByBindIndex(a: BindingRef, b: BindingRef): number {
-  return (a.bindIndex ?? 0) - (b.bindIndex ?? 0)
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }

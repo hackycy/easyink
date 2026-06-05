@@ -1,18 +1,18 @@
 <script setup lang="ts">
 import type { MaterialDataContract } from '@easyink/core'
 import type { DataSourceDescriptor } from '@easyink/datasource'
-import type { BindingRef, MaterialNode } from '@easyink/schema'
+import type { BindingRef, DataContractBinding, DataContractFieldMapping, MaterialNode } from '@easyink/schema'
 import type { BindingDisplayFormat } from '@easyink/shared'
 import type { DatasourceFieldDragData } from '../composables/use-designer-drag-drop'
 import { IconGripVertical } from '@easyink/icons'
 import { computed, inject, onBeforeUnmount, ref, watchEffect } from 'vue'
 import { DESIGNER_DRAG_DROP_KEY } from '../composables/use-designer-drag-drop'
 import {
-  applyMaterialDataSlotBinding,
-  canBindMaterialDataSlot,
-  clearMaterialDataSlotBinding,
-  findMaterialDataSlotBinding,
-  swapMaterialDataSlotBindings,
+  applyMaterialDataFieldMapping,
+  canBindMaterialDataField,
+  clearMaterialDataFieldMapping,
+  findMaterialDataFieldMapping,
+  swapMaterialDataFieldMappings,
 } from '../material-data-binding'
 import BindingFormatEditor from './BindingFormatEditor.vue'
 
@@ -24,19 +24,16 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  updateBinding: [binding: BindingRef[] | undefined]
-  updateBindingFormat: [format: BindingDisplayFormat | undefined, bindIndex?: number]
+  updateBinding: [binding: DataContractBinding | undefined]
 }>()
 
 const dragDrop = inject(DESIGNER_DRAG_DROP_KEY, null)
 const unregisterTargets: Array<() => void> = []
-const draggingSlotId = ref<string>()
-const dragOverSlotId = ref<string>()
+const draggingFieldId = ref<string>()
+const dragOverFieldId = ref<string>()
 
-const slots = computed(() =>
-  [...props.contract.slots]
-    .filter(slot => slot.kind === 'field')
-    .sort((a, b) => a.bindIndex - b.bindIndex),
+const fields = computed(() =>
+  Object.entries(props.contract.model.fields).map(([id, field]) => ({ id, field })),
 )
 
 watchEffect((onCleanup) => {
@@ -44,22 +41,22 @@ watchEffect((onCleanup) => {
   if (!dragDrop)
     return
 
-  for (const slot of slots.value) {
+  for (const entry of fields.value) {
     const target = {
-      id: `${props.element.id}:material-data:${slot.id}`,
-      element: () => document.getElementById(slotElementId(slot.id)),
+      id: `${props.element.id}:material-data:${entry.id}`,
+      element: () => document.getElementById(fieldElementId(entry.id)),
       onDragOver: (data: DatasourceFieldDragData) => {
-        const result = canBindMaterialDataSlot(props.contract, props.element.binding, data, slot.id)
+        const result = canBindMaterialDataField(props.contract, props.element.binding, data, entry.id)
         return {
           status: result.accepted ? 'accepted' as const : 'rejected' as const,
-          label: result.accepted ? props.t(slot.labelKey) : result.messageKey ? props.t(result.messageKey) : result.message,
+          label: result.accepted ? props.t(entry.field.labelKey) : result.messageKey ? props.t(result.messageKey) : result.message,
         }
       },
       onDrop: (data: DatasourceFieldDragData) => {
-        const result = canBindMaterialDataSlot(props.contract, props.element.binding, data, slot.id)
+        const result = canBindMaterialDataField(props.contract, props.element.binding, data, entry.id)
         if (!result.accepted)
           return
-        commitBindings(applyMaterialDataSlotBinding(props.contract, props.element.binding, data, slot.id))
+        commitBinding(applyMaterialDataFieldMapping(props.contract, props.element.binding, data, entry.id))
       },
     }
     unregisterTargets.push(dragDrop.registerDatasourceDropTarget(target))
@@ -70,44 +67,86 @@ watchEffect((onCleanup) => {
 
 onBeforeUnmount(unregisterDropTargets)
 
-function bindingFor(slotId: string): BindingRef | undefined {
-  return findMaterialDataSlotBinding(props.contract, props.element.binding, slotId)
+function mappingFor(fieldId: string): DataContractFieldMapping | undefined {
+  return findMaterialDataFieldMapping(props.contract, props.element.binding, fieldId)
 }
 
-function slotElementId(slotId: string): string {
-  return `ei-material-data-slot-${props.element.id}-${slotId}`
+function mappingBindingFor(fieldId: string): BindingRef | undefined {
+  const mapping = mappingFor(fieldId)
+  if (!mapping)
+    return undefined
+  return {
+    sourceId: mapping.sourceId,
+    sourceName: mapping.sourceName,
+    sourceTag: mapping.sourceTag,
+    fieldPath: mapping.select.path,
+    fieldKey: mapping.select.key,
+    fieldLabel: mapping.select.label,
+    format: mapping.format,
+  }
 }
 
-function clearSlot(slotId: string) {
-  commitBindings(clearMaterialDataSlotBinding(props.contract, props.element.binding, slotId))
+function fieldElementId(fieldId: string): string {
+  return `ei-material-data-field-${props.element.id}-${fieldId}`
 }
 
-function startRoleDrag(slotId: string) {
-  draggingSlotId.value = slotId
+function clearField(fieldId: string) {
+  commitBinding(clearMaterialDataFieldMapping(props.contract, props.element.binding, fieldId))
 }
 
-function overRole(slotId: string) {
-  if (!draggingSlotId.value || draggingSlotId.value === slotId)
+function startFieldDrag(fieldId: string) {
+  draggingFieldId.value = fieldId
+}
+
+function overField(fieldId: string) {
+  if (!draggingFieldId.value || draggingFieldId.value === fieldId)
     return
-  dragOverSlotId.value = slotId
+  dragOverFieldId.value = fieldId
 }
 
-function dropRole(slotId: string) {
-  const fromSlotId = draggingSlotId.value
-  draggingSlotId.value = undefined
-  dragOverSlotId.value = undefined
-  if (!fromSlotId || fromSlotId === slotId)
+function dropField(fieldId: string) {
+  const fromFieldId = draggingFieldId.value
+  draggingFieldId.value = undefined
+  dragOverFieldId.value = undefined
+  if (!fromFieldId || fromFieldId === fieldId)
     return
-  commitBindings(swapMaterialDataSlotBindings(props.contract, props.element.binding, fromSlotId, slotId))
+  commitBinding(swapMaterialDataFieldMappings(props.contract, props.element.binding, fromFieldId, fieldId))
 }
 
-function endRoleDrag() {
-  draggingSlotId.value = undefined
-  dragOverSlotId.value = undefined
+function endFieldDrag() {
+  draggingFieldId.value = undefined
+  dragOverFieldId.value = undefined
 }
 
-function commitBindings(bindings: BindingRef[]) {
-  emit('updateBinding', bindings.length > 0 ? bindings : undefined)
+function updateFieldFormat(fieldId: string, format: BindingDisplayFormat | undefined) {
+  const binding = applyMaterialDataFieldFormat(props.element.binding, fieldId, format)
+  commitBinding(binding)
+}
+
+function applyMaterialDataFieldFormat(
+  binding: MaterialNode['binding'],
+  fieldId: string,
+  format: BindingDisplayFormat | undefined,
+): DataContractBinding | undefined {
+  const mapping = mappingFor(fieldId)
+  if (!mapping || !binding || Array.isArray(binding) || !('kind' in binding) || binding.kind !== 'data-contract')
+    return undefined
+  const next: DataContractBinding = {
+    ...binding,
+    mappings: {
+      ...binding.mappings,
+      [fieldId]: {
+        ...mapping,
+        select: { ...mapping.select },
+        format,
+      },
+    },
+  }
+  return next
+}
+
+function commitBinding(binding: DataContractBinding | undefined) {
+  emit('updateBinding', binding)
 }
 
 function unregisterDropTargets() {
@@ -120,64 +159,64 @@ function unregisterDropTargets() {
   <div class="ei-material-data-binding">
     <div class="ei-material-data-binding__slots">
       <div
-        v-for="slot in slots"
-        :id="slotElementId(slot.id)"
-        :key="slot.id"
+        v-for="entry in fields"
+        :id="fieldElementId(entry.id)"
+        :key="entry.id"
         class="ei-material-data-binding__slot"
         :class="{
-          'ei-material-data-binding__slot--over': dragOverSlotId === slot.id,
-          'ei-material-data-binding__slot--empty': !bindingFor(slot.id),
+          'ei-material-data-binding__slot--over': dragOverFieldId === entry.id,
+          'ei-material-data-binding__slot--empty': !mappingFor(entry.id),
         }"
-        @dragover.prevent="overRole(slot.id)"
-        @dragleave="dragOverSlotId = undefined"
-        @drop.prevent="dropRole(slot.id)"
+        @dragover.prevent="overField(entry.id)"
+        @dragleave="dragOverFieldId = undefined"
+        @drop.prevent="dropField(entry.id)"
       >
         <button
           class="ei-material-data-binding__handle"
           type="button"
           draggable="true"
-          @dragstart.stop="startRoleDrag(slot.id)"
-          @dragend="endRoleDrag"
+          @dragstart.stop="startFieldDrag(entry.id)"
+          @dragend="endFieldDrag"
         >
           <IconGripVertical :size="14" :stroke-width="1.6" />
         </button>
         <div class="ei-material-data-binding__content">
           <div class="ei-material-data-binding__head">
-            <span class="ei-material-data-binding__label">{{ t(slot.labelKey) }}</span>
-            <span v-if="slot.required" class="ei-material-data-binding__required">{{ t('designer.materialDataBinding.required') }}</span>
+            <span class="ei-material-data-binding__label">{{ t(entry.field.labelKey) }}</span>
+            <span v-if="entry.field.required" class="ei-material-data-binding__required">{{ t('designer.materialDataBinding.required') }}</span>
             <button
-              v-if="bindingFor(slot.id)"
+              v-if="mappingFor(entry.id)"
               type="button"
               class="ei-material-data-binding__clear"
-              @click="clearSlot(slot.id)"
+              @click="clearField(entry.id)"
             >
               {{ t('designer.materialDataBinding.clear') }}
             </button>
           </div>
 
-          <template v-if="bindingFor(slot.id)">
+          <template v-if="mappingFor(entry.id)">
             <div class="ei-material-data-binding__row">
               <span class="ei-material-data-binding__k">{{ t('designer.dataSource.source') }}</span>
-              <span class="ei-material-data-binding__v">{{ bindingFor(slot.id)?.sourceName || bindingFor(slot.id)?.sourceId }}</span>
+              <span class="ei-material-data-binding__v">{{ mappingFor(entry.id)?.sourceName || mappingFor(entry.id)?.sourceId }}</span>
             </div>
             <div class="ei-material-data-binding__row">
               <span class="ei-material-data-binding__k">{{ t('designer.dataSource.field') }}</span>
               <div class="ei-material-data-binding__field">
-                <span class="ei-material-data-binding__v">{{ bindingFor(slot.id)?.fieldLabel || bindingFor(slot.id)?.fieldPath }}</span>
+                <span class="ei-material-data-binding__v">{{ mappingFor(entry.id)?.select.label || mappingFor(entry.id)?.select.path }}</span>
                 <span
-                  v-if="bindingFor(slot.id)?.fieldLabel"
+                  v-if="mappingFor(entry.id)?.select.label"
                   class="ei-material-data-binding__path"
-                  :title="bindingFor(slot.id)?.fieldPath"
-                >{{ bindingFor(slot.id)?.fieldPath }}</span>
+                  :title="mappingFor(entry.id)?.select.path"
+                >{{ mappingFor(entry.id)?.select.path }}</span>
               </div>
             </div>
             <BindingFormatEditor
-              v-if="bindingFor(slot.id)"
-              :binding="bindingFor(slot.id)!"
-              :bind-index="slot.bindIndex"
+              v-if="mappingBindingFor(entry.id)"
+              :binding="mappingBindingFor(entry.id)!"
+              :bind-index="0"
               :t="t"
               :get-data-source="getDataSource"
-              @update-binding-format="emit('updateBindingFormat', $event, slot.bindIndex)"
+              @update-binding-format="format => updateFieldFormat(entry.id, format)"
             />
           </template>
           <div v-else class="ei-material-data-binding__empty">

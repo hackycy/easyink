@@ -1,7 +1,7 @@
 import type { MaterialNode } from '@easyink/schema'
 import type { FlowColumnDef, FlowRowProps } from './schema'
 import { extractCollectionPath, formatBindingDisplayValue, resolveBindingValue, resolveFieldFromRecord } from '@easyink/core'
-import { getNodeProps } from '@easyink/schema'
+import { getBindingRefs, getNodeProps } from '@easyink/schema'
 import { escapeAttr, escapeHtml } from '@easyink/shared'
 import { FLOW_ROW_DEFAULTS, FLOW_ROW_TYPOGRAPHY_DEFAULTS } from './schema'
 
@@ -95,7 +95,7 @@ export function buildSegments(columns: FlowColumnDef[]): FlowSegment[] {
 }
 
 export function inferCollectionPath(node: MaterialNode, props: FlowRowProps): string | undefined {
-  const binding = Array.isArray(node.binding) ? node.binding[0] : node.binding
+  const binding = getBindingRefs(node.binding)[0]
   if (binding?.fieldPath)
     return binding.fieldPath
   const columnPaths = props.columns
@@ -131,7 +131,7 @@ function resolveRecords(
   if (!collectionPath)
     return [data]
 
-  const collectionBinding = Array.isArray(node.binding) ? node.binding[0] : node.binding
+  const collectionBinding = getBindingRefs(node.binding)[0]
   const source = collectionBinding?.fieldPath
     ? resolveBindingValue(collectionBinding, data)
     : resolveBindingValue({ sourceId: '', fieldPath: collectionPath }, data)

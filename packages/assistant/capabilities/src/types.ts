@@ -71,7 +71,7 @@ export const AssistantAIMaterialDescriptorSchema = z.object({
   description: z.string(),
   properties: z.array(z.string()),
   requiredProps: z.array(z.string()).optional(),
-  binding: z.enum(['none', 'single', 'multi']).optional(),
+  binding: z.enum(['none', 'single', 'multi', 'data-contract']).optional(),
   usage: z.array(z.string()).optional(),
   schemaRules: z.array(z.string()).optional(),
   examples: z.array(z.record(z.unknown())).optional(),

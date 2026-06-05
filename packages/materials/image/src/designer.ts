@@ -1,7 +1,7 @@
 import type { MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { ImageProps } from './schema'
-import { getNodeProps } from '@easyink/schema'
+import { getBindingRefs, getNodeProps } from '@easyink/schema'
 import { escapeAttr } from '@easyink/shared'
 
 function buildHtml(node: MaterialNode, context: MaterialExtensionContext): string {
@@ -11,8 +11,8 @@ function buildHtml(node: MaterialNode, context: MaterialExtensionContext): strin
   const borderStyle = p.borderWidth ? `border:${p.borderWidth}${unit} ${DASH_MAP[p.borderType] || 'solid'} ${p.borderColor};` : ''
   const bgStyle = p.backgroundColor ? `background:${p.backgroundColor};` : ''
 
-  if (node.binding) {
-    const b = Array.isArray(node.binding) ? node.binding[0] : node.binding
+  const b = getBindingRefs(node.binding)[0]
+  if (b) {
     const label = context.getBindingLabel(b)
     return `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;${bgStyle || 'background:#f5f5f5;'};font-size:11px;overflow:hidden;box-sizing:border-box;${borderStyle}">`
       + `<span>{#${escapeAttr(label)}}</span></div>`

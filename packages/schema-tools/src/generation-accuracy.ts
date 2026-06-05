@@ -1,5 +1,6 @@
 import type { BindingRef, DocumentSchema, MaterialNode } from '@easyink/schema'
 import type { AIGenerationPlan } from '@easyink/shared'
+import { getBindingRefs } from '@easyink/schema'
 import { deepClone, FIELD_PATH_SEPARATOR, isObject } from '@easyink/shared'
 
 export interface GenerationRepairIssue {
@@ -212,7 +213,7 @@ function getElementBindings(element: MaterialNode): Array<{ binding: BindingRef,
   const result: Array<{ binding: BindingRef, path: string }> = []
 
   if (element.binding) {
-    const bindings = Array.isArray(element.binding) ? element.binding : [element.binding]
+    const bindings = getBindingRefs(element.binding)
     bindings.forEach((binding, index) => result.push({ binding, path: `binding${bindings.length > 1 ? `[${index}]` : ''}` }))
   }
 

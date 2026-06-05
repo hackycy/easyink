@@ -1,7 +1,7 @@
 import type { MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { QrcodeProps } from './schema'
-import { getNodeProps } from '@easyink/schema'
+import { getBindingRefs, getNodeProps } from '@easyink/schema'
 import { escapeHtml } from '@easyink/shared'
 import { generateQrcodeSvg } from './render'
 
@@ -21,8 +21,8 @@ function buildHtml(node: MaterialNode, context: MaterialExtensionContext): strin
   const borderStyle = p.borderWidth ? `border:${p.borderWidth}${unit} ${DASH_MAP[p.borderType] || 'solid'} ${p.borderColor};box-sizing:border-box;` : ''
 
   let label: string | undefined
-  if (node.binding) {
-    const b = Array.isArray(node.binding) ? node.binding[0] : node.binding
+  const b = getBindingRefs(node.binding)[0]
+  if (b) {
     label = `{#${escapeHtml(context.getBindingLabel(b))}}`
   }
 

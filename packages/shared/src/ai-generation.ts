@@ -32,7 +32,7 @@ export interface AIMaterialDescriptor {
   description: string
   properties: string[]
   requiredProps?: string[]
-  binding?: 'none' | 'single' | 'multi'
+  binding?: 'none' | 'single' | 'multi' | 'data-contract'
   usage?: string[]
   schemaRules?: string[]
   examples?: Array<Record<string, unknown>>

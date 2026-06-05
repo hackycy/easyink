@@ -54,13 +54,27 @@ function synthesizeFromDescriptor(type: string, ai: AIMaterialDescriptor): Mater
       preferredCompanions: [],
     },
     bindingSpec: {
-      mode: ai.binding === 'multi' ? 'collection' : ai.binding === 'single' ? 'scalar' : 'none',
+      mode: ai.binding === 'data-contract' || ai.binding === 'multi'
+        ? 'collection'
+        : ai.binding === 'single'
+          ? 'scalar'
+          : 'none',
       accepts: {
-        types: ai.binding === 'multi' ? ['array'] : ai.binding === 'single' ? ['string'] : [],
-        isArray: ai.binding === 'multi',
+        types: ai.binding === 'data-contract' || ai.binding === 'multi'
+          ? ['array']
+          : ai.binding === 'single'
+            ? ['string']
+            : [],
+        isArray: ai.binding === 'data-contract' || ai.binding === 'multi',
       },
       produces: {
-        kind: ai.binding === 'multi' ? 'collection-repeat' : ai.binding === 'single' ? 'scalar-field' : 'none',
+        kind: ai.binding === 'data-contract'
+          ? 'multi-field'
+          : ai.binding === 'multi'
+            ? 'collection-repeat'
+            : ai.binding === 'single'
+              ? 'scalar-field'
+              : 'none',
       },
       examples: [],
     },

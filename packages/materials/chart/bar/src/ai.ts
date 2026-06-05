@@ -2,16 +2,15 @@ import type { AIMaterialDescriptor } from '@easyink/shared'
 
 export const chartBarAIMaterialDescriptor = {
   type: 'chart-bar',
-  description: 'Simple bar chart for comparing numeric values from a material data contract: category field and value field, with the collection inferred from their shared parent path.',
+  description: 'Simple bar chart for comparing numeric values from a material data contract target model: category field and value field mapped from source paths by relation resolver.',
   properties: ['barColor', 'backgroundColor', 'axisColor', 'labelColor', 'showValueLabels', 'showGrid', 'showXAxisLabel', 'showYAxisLabel', 'showXAxisLine', 'showYAxisLine'],
   requiredProps: ['barColor', 'backgroundColor'],
-  binding: 'multi',
+  binding: 'data-contract',
   usage: [
     'Use chart-bar for small report charts where categories compare numeric values.',
-    'Prefer ordered multi-binding: bindIndex 0 is the category field and bindIndex 1 is the numeric value field.',
-    'The runtime infers the collection path from the shared parent of the two field paths, for example monthlySales/month and monthlySales/revenue infer monthlySales.',
+    'Use data-contract binding mappings: mappings.category selects the category source path and mappings.value selects the numeric value source path.',
+    'The resolver derives whether mappings share a record collection or should be aligned by index; this is not stored as a binding mode.',
     'Do not require datasource fields to use chart-specific names such as label/value; chart-bar projects ordinary business fields into chart points.',
-    'Legacy single binding to props.data is still accepted for old templates, but new templates should use ordered material data bindings.',
     'Designer preview uses built-in sample data only.',
     'Use showXAxisLabel/showYAxisLabel and showXAxisLine/showYAxisLine to hide axis labels or axis lines when a compact chart is needed.',
   ],
@@ -19,7 +18,7 @@ export const chartBarAIMaterialDescriptor = {
     'Element type must be chart-bar.',
     'Props should only contain visual settings such as colors and simple display switches.',
     'Do not set props.data, props.options, or chartType on new chart-bar nodes.',
-    'New chart-bar nodes should use two ordered field bindings: category field, value field.',
+    'Chart data should be described by binding.kind = "data-contract" with mappings for category and value.',
   ],
   knowledge: {
     category: 'visualization',
@@ -32,15 +31,17 @@ export const chartBarAIMaterialDescriptor = {
     bindingSpec: {
       mode: 'collection',
       accepts: { types: ['array'], isArray: true, minChildren: 2, requiredChildFields: ['category', 'value'] },
-      produces: { kind: 'multi-field', fieldCount: 'multiple', pathPattern: '{collection}/{categoryField} + {collection}/{valueField}' },
+      produces: { kind: 'multi-field', fieldCount: 'multiple', pathPattern: 'mappings.category.select.path + mappings.value.select.path' },
       examples: [
         {
           scenario: 'monthly sales',
           binding: {
-            slots: [
-              { sourceId: 'report', fieldPath: 'monthlySales/month', bindIndex: 0 },
-              { sourceId: 'report', fieldPath: 'monthlySales/revenue', bindIndex: 1 },
-            ],
+            kind: 'data-contract',
+            mappings: {
+              category: { sourceId: 'report', select: { path: 'monthlySales/month' } },
+              value: { sourceId: 'report', select: { path: 'monthlySales/revenue' } },
+            },
+            relation: { kind: 'auto' },
           },
           fieldStructure: { monthlySales: [{ month: 'string', revenue: 'number' }] },
         },

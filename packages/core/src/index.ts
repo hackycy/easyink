@@ -118,24 +118,27 @@ export { runLayoutPipeline } from './layout-strategy'
 export type { RunLayoutPipelineOptions } from './layout-strategy'
 
 export {
-  applyMaterialDataSlotBinding,
-  canBindMaterialDataSlot,
-  clearMaterialDataSlotBinding,
-  findMaterialDataSlotBinding,
-  getMaterialDataSlot,
-  normalizeMaterialDataBindings,
+  applyMaterialDataFieldMapping,
+  canBindMaterialDataField,
+  clearMaterialDataFieldMapping,
+  findMaterialDataFieldMapping,
+  isDataContractBinding,
+  normalizeMaterialDataBinding,
   resolveMaterialDataContract,
-  swapMaterialDataSlotBindings,
+  swapMaterialDataFieldMappings,
 } from './material-data-contract'
 export type {
   MaterialDataBindingField,
   MaterialDataContract,
   MaterialDataContractResolution,
   MaterialDataDiagnostic,
-  MaterialDataSlot,
-  MaterialDataSlotAcceptance,
-  MaterialDataSlotKind,
-  MaterialDataSlotResolution,
+  MaterialDataFieldFormat,
+  MaterialDataFieldResolution,
+  MaterialDataMappingAcceptance,
+  MaterialDataModel,
+  MaterialDataModelField,
+  MaterialDataModelKind,
+  MaterialDataResolutionMode,
   MaterialDataValueType,
 } from './material-data-contract'
 

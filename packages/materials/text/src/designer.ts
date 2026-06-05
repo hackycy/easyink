@@ -1,5 +1,6 @@
 import type { MaterialControlPolicy, MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
+import { getBindingRefs } from '@easyink/schema'
 import { escapeHtml } from '@easyink/shared'
 import { getTextProps, isTextAutoHeight, measureTextNode } from './layout'
 import { getTextContainerStyles, getTextContentStyles } from './rendering'
@@ -21,9 +22,9 @@ function buildHtml(node: MaterialNode, context: MaterialExtensionContext): strin
   let isPlaceholder = false
 
   let display: string
-  if (node.binding) {
-    const b = Array.isArray(node.binding) ? node.binding[0] : node.binding
-    const label = context.getBindingLabel(b)
+  const binding = getBindingRefs(node.binding)[0]
+  if (binding) {
+    const label = context.getBindingLabel(binding)
     display = `${prefix}{#${escapeHtml(label)}}${suffix}`
   }
   else {
@@ -51,9 +52,9 @@ function buildHtml(node: MaterialNode, context: MaterialExtensionContext): strin
 
 function resolveDesignerDisplayText(node: MaterialNode, context: MaterialExtensionContext): string {
   const p = getTextProps(node)
-  if (node.binding) {
-    const b = Array.isArray(node.binding) ? node.binding[0] : node.binding
-    return `${p.prefix || ''}{#${context.getBindingLabel(b)}}${p.suffix || ''}`
+  const binding = getBindingRefs(node.binding)[0]
+  if (binding) {
+    return `${p.prefix || ''}{#${context.getBindingLabel(binding)}}${p.suffix || ''}`
   }
   if (p.content)
     return `${p.prefix || ''}${p.content}${p.suffix || ''}`

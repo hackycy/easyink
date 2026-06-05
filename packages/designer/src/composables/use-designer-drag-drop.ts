@@ -1,4 +1,4 @@
-import type { DatasourceDropZone, DatasourceFieldInfo, MaterialDataContract, MaterialDataSlot, Rect } from '@easyink/core'
+import type { DatasourceDropZone, DatasourceFieldInfo, MaterialDataContract, MaterialDataModelField, Rect } from '@easyink/core'
 import type { DataUnionBinding } from '@easyink/datasource'
 import type { BindingRef, MaterialNode } from '@easyink/schema'
 import type { BindingDisplayFormat } from '@easyink/shared'
@@ -7,11 +7,11 @@ import type { DesignerStore } from '../store/designer-store'
 import type { MaterialCatalogEntry } from '../types'
 import {
   AddMaterialCommand,
-  applyMaterialDataSlotBinding,
+  applyMaterialDataFieldMapping,
   BindFieldCommand,
-  canBindMaterialDataSlot,
+  canBindMaterialDataField,
   createEditorSurfacePlan,
-  findMaterialDataSlotBinding,
+  findMaterialDataFieldMapping,
   pointInRect,
   projectEditorSurfacePointToDocument,
   UnitManager,
@@ -123,7 +123,8 @@ interface PreviewRect {
 }
 
 interface MaterialDataDropPlan {
-  slot: MaterialDataSlot
+  fieldId: string
+  field: MaterialDataModelField
   status: 'accepted' | 'rejected'
   label?: string
 }
@@ -466,13 +467,13 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
       const plan = resolveMaterialDataDropPlan(material.dataContract, resolved.target, fieldData)
       if (!plan || plan.status !== 'accepted')
         return
-      const binding = applyMaterialDataSlotBinding(
+      const binding = applyMaterialDataFieldMapping(
         material.dataContract,
         resolved.target.binding,
         fieldData,
-        plan.slot.id,
+        plan.fieldId,
       )
-      const cmd = new UpdateMaterialBindingCommand(ctx.store.schema.elements, resolved.target.id, binding.length > 0 ? binding : undefined)
+      const cmd = new UpdateMaterialBindingCommand(ctx.store.schema.elements, resolved.target.id, binding)
       ctx.store.commands.execute(cmd)
       selectOne(ctx.store, resolved.target.id)
       return
@@ -488,30 +489,32 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
     target: MaterialNode,
     data: DatasourceFieldDragData,
   ): MaterialDataDropPlan | null {
-    const visibleSlots = getVisibleMaterialDataSlots(contract)
-    if (visibleSlots.length === 0)
+    const visibleFields = getVisibleMaterialDataFields(contract)
+    if (visibleFields.length === 0)
       return null
 
-    for (const slot of visibleSlots) {
-      if (findMaterialDataSlotBinding(contract, target.binding, slot.id))
+    for (const entry of visibleFields) {
+      if (findMaterialDataFieldMapping(contract, target.binding, entry.id))
         continue
-      const result = canBindMaterialDataSlot(contract, target.binding, data, slot.id)
+      const result = canBindMaterialDataField(contract, target.binding, data, entry.id)
       if (result.accepted) {
         return {
-          slot,
+          fieldId: entry.id,
+          field: entry.field,
           status: 'accepted',
-          label: ctx.store.t(slot.labelKey),
+          label: ctx.store.t(entry.field.labelKey),
         }
       }
     }
 
-    for (const slot of visibleSlots) {
-      if (findMaterialDataSlotBinding(contract, target.binding, slot.id))
+    for (const entry of visibleFields) {
+      if (findMaterialDataFieldMapping(contract, target.binding, entry.id))
         continue
-      const result = canBindMaterialDataSlot(contract, target.binding, data, slot.id)
+      const result = canBindMaterialDataField(contract, target.binding, data, entry.id)
       if (!result.accepted) {
         return {
-          slot,
+          fieldId: entry.id,
+          field: entry.field,
           status: 'rejected',
           label: resolveMaterialDataMessage(result.messageKey, result.message),
         }
@@ -519,16 +522,15 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
     }
 
     return {
-      slot: visibleSlots[visibleSlots.length - 1]!,
+      fieldId: visibleFields[visibleFields.length - 1]!.id,
+      field: visibleFields[visibleFields.length - 1]!.field,
       status: 'rejected',
       label: resolveMaterialDataMessage('designer.materialDataBinding.allBound', 'All data roles are bound'),
     }
   }
 
-  function getVisibleMaterialDataSlots(contract: MaterialDataContract): MaterialDataSlot[] {
-    return [...contract.slots]
-      .filter(slot => slot.kind === 'field')
-      .sort((a, b) => a.bindIndex - b.bindIndex)
+  function getVisibleMaterialDataFields(contract: MaterialDataContract): Array<{ id: string, field: MaterialDataModelField }> {
+    return Object.entries(contract.model.fields).map(([id, field]) => ({ id, field }))
   }
 
   function resolveMaterialDataMessage(key: string | undefined, fallback: string | undefined): string | undefined {

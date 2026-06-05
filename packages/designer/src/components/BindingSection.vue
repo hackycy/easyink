@@ -33,7 +33,9 @@ const bindings = computed<BindingRef[]>(() => {
   const b = props.element.binding
   if (!b)
     return []
-  return Array.isArray(b) ? b : [b]
+  if (!Array.isArray(b) && 'kind' in b && b.kind === 'data-contract')
+    return []
+  return (Array.isArray(b) ? b : [b]).filter(isBindingRef)
 })
 
 const isExternal = computed(() => props.hasExternalBinding && props.externalBinding !== null)
@@ -49,6 +51,13 @@ function handleClear() {
 
 function bindIndex(ref: BindingRef, index: number): number {
   return ref.bindIndex ?? index
+}
+
+function isBindingRef(binding: unknown): binding is BindingRef {
+  return typeof binding === 'object'
+    && binding !== null
+    && 'sourceId' in binding
+    && 'fieldPath' in binding
 }
 </script>
 

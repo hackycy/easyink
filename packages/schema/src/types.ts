@@ -297,7 +297,7 @@ export interface MaterialNode<TProps extends object = Record<string, unknown>> {
   break?: NodeBreakConfig
   repeat?: NodeRepeatConfig
   props: TProps
-  binding?: BindingRef | BindingRef[]
+  binding?: MaterialBinding
   animations?: AnimationSchema[]
   children?: MaterialNode[]
   diagnostics?: NodeDiagnosticState[]
@@ -324,6 +324,50 @@ export interface BindingRef {
   bindIndex?: number
   required?: boolean
   extensions?: Record<string, unknown>
+}
+
+export type MaterialBinding = BindingRef | BindingRef[] | DataContractBinding
+
+export interface DataContractBinding {
+  kind: 'data-contract'
+  mappings: Record<string, DataContractFieldMapping>
+  relation?: DataContractRelation
+}
+
+export interface DataContractFieldMapping {
+  sourceId: string
+  sourceName?: string
+  sourceTag?: string
+  select: DataContractFieldSelect
+  format?: BindingDisplayFormat
+  required?: boolean
+  extensions?: Record<string, unknown>
+}
+
+export interface DataContractFieldSelect {
+  path: string
+  key?: string
+  label?: string
+  tag?: string
+}
+
+export type DataContractRelation
+  = | { kind: 'auto' }
+    | { kind: 'record' }
+    | { kind: 'index' }
+
+export function isDataContractBinding(binding: MaterialBinding | undefined): binding is DataContractBinding {
+  return !!binding && !Array.isArray(binding) && 'kind' in binding && binding.kind === 'data-contract'
+}
+
+export function isBindingRef(binding: MaterialBinding | BindingRef | undefined): binding is BindingRef {
+  return !!binding && !Array.isArray(binding) && !isDataContractBinding(binding)
+}
+
+export function getBindingRefs(binding: MaterialBinding | undefined): BindingRef[] {
+  if (!binding || isDataContractBinding(binding))
+    return []
+  return Array.isArray(binding) ? binding : [binding]
 }
 
 // ─── Animation ─────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
-import type { BindingRef, MaterialNode } from '@easyink/schema'
+import type { BindingRef, MaterialBinding, MaterialNode } from '@easyink/schema'
 import type { BindingDisplayFormat } from '@easyink/shared'
 import type { Command } from '../command'
+import { getBindingRefs } from '@easyink/schema'
 import { deepClone, generateId } from '@easyink/shared'
 import { findNode } from './helpers'
 
@@ -10,7 +11,7 @@ export class BindFieldCommand implements Command {
   readonly id = generateId('cmd')
   readonly type = 'bind-field'
   readonly description = 'Bind field'
-  private oldBinding: BindingRef | BindingRef[] | undefined
+  private oldBinding: MaterialBinding | undefined
 
   constructor(
     private elements: MaterialNode[],
@@ -38,7 +39,7 @@ export class ClearBindingCommand implements Command {
   readonly id = generateId('cmd')
   readonly type = 'clear-binding'
   readonly description = 'Clear binding'
-  private oldBinding: BindingRef | BindingRef[] | undefined
+  private oldBinding: MaterialBinding | undefined
 
   constructor(
     private elements: MaterialNode[],
@@ -65,12 +66,12 @@ export class UpdateMaterialBindingCommand implements Command {
   readonly id = generateId('cmd')
   readonly type = 'update-material-binding'
   readonly description = 'Update material binding'
-  private oldBinding: BindingRef | BindingRef[] | undefined
+  private oldBinding: MaterialBinding | undefined
 
   constructor(
     private elements: MaterialNode[],
     private nodeId: string,
-    private binding: BindingRef | BindingRef[] | undefined,
+    private binding: MaterialBinding | undefined,
   ) {}
 
   execute(): void {
@@ -93,7 +94,7 @@ export class UpdateBindingFormatCommand implements Command {
   readonly id = generateId('cmd')
   readonly type = 'update-binding-format'
   readonly description = 'Update binding format'
-  private oldBinding: BindingRef | BindingRef[] | undefined
+  private oldBinding: MaterialBinding | undefined
 
   constructor(
     private elements: MaterialNode[],
@@ -107,7 +108,7 @@ export class UpdateBindingFormatCommand implements Command {
     if (!node?.binding)
       return
     this.oldBinding = deepClone(node.binding)
-    const refs = Array.isArray(node.binding) ? node.binding : [node.binding]
+    const refs = getBindingRefs(node.binding)
     const target = refs.find(ref => (ref.bindIndex ?? 0) === this.bindIndex) ?? refs[0]
     if (!target)
       return

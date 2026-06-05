@@ -7,8 +7,8 @@ describe('chart bar options', () => {
     expect(CHART_BAR_CAPABILITIES.rotatable).toBe(true)
   })
 
-  it('declares multi binding because chart data is slot based', () => {
-    expect(CHART_BAR_CAPABILITIES.multiBinding).toBe(true)
+  it('uses data-contract binding instead of ordered multi binding', () => {
+    expect(CHART_BAR_CAPABILITIES.multiBinding).toBe(false)
   })
 
   it('uses preview data in the designer path', () => {

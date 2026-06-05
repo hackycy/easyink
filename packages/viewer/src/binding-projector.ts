@@ -1,6 +1,7 @@
 import type { MaterialNode } from '@easyink/schema'
 import type { ProjectedBinding } from './types'
 import { formatBindingDisplayValue, hasBindingFormat, resolveBindingValue } from '@easyink/core'
+import { getBindingRefs } from '@easyink/schema'
 
 /**
  * Resolve all bindings for a material node against the provided data.
@@ -9,10 +10,9 @@ export function projectBindings(
   node: MaterialNode,
   data: Record<string, unknown>,
 ): ProjectedBinding[] {
-  if (!node.binding)
+  const refs = getBindingRefs(node.binding)
+  if (refs.length === 0)
     return []
-
-  const refs = Array.isArray(node.binding) ? node.binding : [node.binding]
   const results: ProjectedBinding[] = []
 
   for (const ref of refs) {

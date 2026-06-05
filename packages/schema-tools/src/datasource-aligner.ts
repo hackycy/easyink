@@ -1,5 +1,6 @@
 import type { DataFieldNode, DataSourceDescriptor } from '@easyink/datasource'
 import type { BindingRef, DocumentSchema, MaterialNode } from '@easyink/schema'
+import { getBindingRefs } from '@easyink/schema'
 import { deepClone, FIELD_PATH_SEPARATOR } from '@easyink/shared'
 
 /**
@@ -134,7 +135,7 @@ export class DataSourceAligner {
       for (const element of elements) {
         // Direct binding
         if (element.binding) {
-          const refs = Array.isArray(element.binding) ? element.binding : [element.binding]
+          const refs = getBindingRefs(element.binding)
           for (const ref of refs) {
             bindings.push({ binding: ref, elementId: element.id })
           }
@@ -314,7 +315,7 @@ export class DataSourceAligner {
     const traverse = (elements: MaterialNode[]): void => {
       for (const element of elements) {
         if (element.binding) {
-          const refs = Array.isArray(element.binding) ? element.binding : [element.binding]
+          const refs = getBindingRefs(element.binding)
           for (const ref of refs) {
             const match = this.findFuzzyMatch(ref.fieldPath, dsFieldPaths)
             if (match && match.confidence === 'high') {

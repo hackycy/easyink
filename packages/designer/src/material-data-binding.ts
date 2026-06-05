@@ -1,12 +1,12 @@
 export {
-  applyMaterialDataSlotBinding,
-  canBindMaterialDataSlot,
-  clearMaterialDataSlotBinding,
-  findMaterialDataSlotBinding,
-  normalizeMaterialDataBindings,
-  swapMaterialDataSlotBindings,
+  applyMaterialDataFieldMapping,
+  canBindMaterialDataField,
+  clearMaterialDataFieldMapping,
+  findMaterialDataFieldMapping,
+  normalizeMaterialDataBinding,
+  swapMaterialDataFieldMappings,
 } from '@easyink/core'
 export type {
   MaterialDataBindingField,
-  MaterialDataSlotAcceptance,
+  MaterialDataMappingAcceptance,
 } from '@easyink/core'

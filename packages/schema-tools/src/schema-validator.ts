@@ -1,4 +1,5 @@
 import type { BindingRef, DocumentSchema, MaterialNode } from '@easyink/schema'
+import { getBindingRefs } from '@easyink/schema'
 import { BLOCKED_PATH_KEYS, deepClone, FIELD_PATH_SEPARATOR, generateId } from '@easyink/shared'
 
 /**
@@ -312,12 +313,7 @@ export class SchemaValidator {
     const traverse = (elements: MaterialNode[]): void => {
       for (const element of elements) {
         if (element.binding) {
-          if (Array.isArray(element.binding)) {
-            bindings.push(...element.binding)
-          }
-          else {
-            bindings.push(element.binding)
-          }
+          bindings.push(...getBindingRefs(element.binding))
         }
 
         // Check table cells
@@ -404,7 +400,7 @@ export function normalizeAllFieldPaths(schema: DocumentSchema): DocumentSchema {
     for (const element of elements) {
       // Fix binding paths
       if (element.binding) {
-        const bindings = Array.isArray(element.binding) ? element.binding : [element.binding]
+        const bindings = getBindingRefs(element.binding)
         for (const binding of bindings) {
           if (binding.fieldPath && binding.fieldPath.includes('.')) {
             binding.fieldPath = binding.fieldPath.replace(/\./g, FIELD_PATH_SEPARATOR)
