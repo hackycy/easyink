@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { MaterialDataContract } from '@easyink/core'
+import type { DataSourceDescriptor } from '@easyink/datasource'
 import type { BindingRef, MaterialNode } from '@easyink/schema'
+import type { BindingDisplayFormat } from '@easyink/shared'
 import type { DatasourceFieldDragData } from '../composables/use-designer-drag-drop'
 import { IconGripVertical } from '@easyink/icons'
 import { computed, inject, onBeforeUnmount, ref, watchEffect } from 'vue'
@@ -12,15 +14,18 @@ import {
   findMaterialDataSlotBinding,
   swapMaterialDataSlotBindings,
 } from '../material-data-binding'
+import BindingFormatEditor from './BindingFormatEditor.vue'
 
 const props = defineProps<{
   element: MaterialNode
   contract: MaterialDataContract
   t: (key: string) => string
+  getDataSource?: (sourceId: string) => DataSourceDescriptor | undefined
 }>()
 
 const emit = defineEmits<{
   updateBinding: [binding: BindingRef[] | undefined]
+  updateBindingFormat: [format: BindingDisplayFormat | undefined, bindIndex?: number]
 }>()
 
 const dragDrop = inject(DESIGNER_DRAG_DROP_KEY, null)
@@ -47,7 +52,7 @@ watchEffect((onCleanup) => {
         const result = canBindMaterialDataSlot(props.contract, props.element.binding, data, slot.id)
         return {
           status: result.accepted ? 'accepted' as const : 'rejected' as const,
-          label: result.accepted ? slot.label : result.messageKey ? props.t(result.messageKey) : result.message,
+          label: result.accepted ? props.t(slot.labelKey) : result.messageKey ? props.t(result.messageKey) : result.message,
         }
       },
       onDrop: (data: DatasourceFieldDragData) => {
@@ -138,7 +143,7 @@ function unregisterDropTargets() {
         </button>
         <div class="ei-material-data-binding__content">
           <div class="ei-material-data-binding__head">
-            <span class="ei-material-data-binding__label">{{ slot.label }}</span>
+            <span class="ei-material-data-binding__label">{{ t(slot.labelKey) }}</span>
             <span v-if="slot.required" class="ei-material-data-binding__required">{{ t('designer.materialDataBinding.required') }}</span>
             <button
               v-if="bindingFor(slot.id)"
@@ -166,6 +171,14 @@ function unregisterDropTargets() {
                 >{{ bindingFor(slot.id)?.fieldPath }}</span>
               </div>
             </div>
+            <BindingFormatEditor
+              v-if="bindingFor(slot.id)"
+              :binding="bindingFor(slot.id)!"
+              :bind-index="slot.bindIndex"
+              :t="t"
+              :get-data-source="getDataSource"
+              @update-binding-format="emit('updateBindingFormat', $event, slot.bindIndex)"
+            />
           </template>
           <div v-else class="ei-material-data-binding__empty">
             {{ t('designer.materialDataBinding.dropField') }}

@@ -788,7 +788,9 @@ function createImagePickRequest(schema: PropSchema): DesignerAssetPickRequest {
           :element="selectedElement"
           :contract="selectedMaterialDataContract"
           :t="store.t.bind(store)"
+          :get-data-source="getBindingDataSource"
           @update-binding="updateMaterialDataBinding"
+          @update-binding-format="updateBindingFormat"
         />
       </EiPanel>
 

@@ -581,6 +581,14 @@ const enUS: LocaleMessages = {
       confirmDeletePageWithElements: 'Delete this page and all elements on it?',
     },
   },
+  materials: {
+    chartBar: {
+      data: {
+        category: 'Category Field',
+        value: 'Value Field',
+      },
+    },
+  },
 }
 
 export default enUS

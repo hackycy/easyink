@@ -500,7 +500,7 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
         return {
           slot,
           status: 'accepted',
-          label: slot.label,
+          label: ctx.store.t(slot.labelKey),
         }
       }
     }

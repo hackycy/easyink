@@ -14,8 +14,8 @@ import { FIELD_PATH_SEPARATOR } from '@easyink/shared'
 export const CHART_BAR_DATA_CONTRACT = {
   version: 1,
   slots: [
-    { id: 'category', label: '分类字段', required: true, kind: 'field', scope: 'series', bindIndex: 0 },
-    { id: 'value', label: '数值字段', required: true, kind: 'field', scope: 'series', valueType: 'number', bindIndex: 1 },
+    { id: 'category', labelKey: 'materials.chartBar.data.category', required: true, kind: 'field', scope: 'series', bindIndex: 0 },
+    { id: 'value', labelKey: 'materials.chartBar.data.value', required: true, kind: 'field', scope: 'series', valueType: 'number', bindIndex: 1 },
   ],
 } as const
 

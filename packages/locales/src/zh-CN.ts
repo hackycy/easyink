@@ -581,6 +581,14 @@ const zhCN: LocaleMessages = {
       confirmDeletePageWithElements: '确定要删除该页面及页面上的所有元素吗？',
     },
   },
+  materials: {
+    chartBar: {
+      data: {
+        category: '分类字段',
+        value: '数值字段',
+      },
+    },
+  },
 }
 
 export default zhCN

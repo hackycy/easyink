@@ -12,7 +12,7 @@ export interface MaterialDataContract {
 
 export interface MaterialDataSlot {
   id: string
-  label: string
+  labelKey: string
   required: boolean
   kind: MaterialDataSlotKind
   valueType?: MaterialDataValueType
@@ -76,7 +76,7 @@ export function resolveMaterialDataContract(
           code: 'MATERIAL_DATA_SLOT_MISSING',
           severity: 'warning',
           slotId: slot.id,
-          message: `Required data slot "${slot.label}" is not bound.`,
+          message: `Required data slot "${slot.id}" is not bound.`,
         })
       }
       return { slot, binding, value: undefined, diagnostics }
@@ -88,7 +88,7 @@ export function resolveMaterialDataContract(
         code: 'MATERIAL_DATA_SLOT_VALUE_MISSING',
         severity: 'warning',
         slotId: slot.id,
-        message: `Required data slot "${slot.label}" resolved to no value.`,
+        message: `Required data slot "${slot.id}" resolved to no value.`,
       })
     }
     return { slot, binding, value, diagnostics }
