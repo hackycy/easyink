@@ -323,7 +323,7 @@ function coerceFieldValue(value: unknown, field: MaterialDataModelField): unknow
 function resolveSelection(fieldId: string, mapping: DataContractFieldMapping, data: Record<string, unknown>): SourceSelection {
   const normalizedPath = normalizePath(mapping.select.path)
   const sourceRoot = data[mapping.sourceId]
-  if (isRecord(sourceRoot)) {
+  if (isRecord(sourceRoot) && canResolveSelectionPath(sourceRoot, normalizedPath)) {
     return {
       fieldId,
       mapping,
@@ -333,12 +333,11 @@ function resolveSelection(fieldId: string, mapping: DataContractFieldMapping, da
     }
   }
 
-  const directValue = resolvePath(data, normalizedPath)
-  if (directValue !== undefined) {
+  if (canResolveSelectionPath(data, normalizedPath)) {
     return {
       fieldId,
       mapping,
-      value: directValue,
+      value: resolvePath(data, normalizedPath),
       normalizedPath,
       sourceRoot: data,
     }
@@ -351,6 +350,15 @@ function resolveSelection(fieldId: string, mapping: DataContractFieldMapping, da
     normalizedPath,
     sourceRoot: data,
   }
+}
+
+function canResolveSelectionPath(root: Record<string, unknown>, path: string): boolean {
+  if (resolvePath(root, path) !== undefined)
+    return true
+  const parentPath = parentPathOf(path)
+  if (!parentPath)
+    return false
+  return Array.isArray(resolvePath(root, parentPath))
 }
 
 function bindingRelation(binding: MaterialBinding | undefined): DataContractRelation | undefined {

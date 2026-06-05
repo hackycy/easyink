@@ -39,6 +39,34 @@ describe('chart bar data contract', () => {
     ])
   })
 
+  it('projects root shared record mappings when source metadata exists beside runtime data', () => {
+    const node = chartNode({
+      binding: {
+        kind: 'data-contract',
+        mappings: {
+          category: { sourceId: 'sales-report', sourceName: 'Sales Report', select: { path: 'monthlySales/month' } },
+          value: { sourceId: 'sales-report', sourceName: 'Sales Report', select: { path: 'monthlySales/revenue' } },
+        },
+        relation: { kind: 'auto' },
+      },
+    })
+
+    const resolved = resolveChartBarRuntimeData(node, CHART_BAR_DEFAULTS, {
+      'sales-report': { name: 'Sales Report' },
+      'monthlySales': [
+        { month: '1月', revenue: 98 },
+        { month: '2月', revenue: '112' },
+      ],
+    })
+
+    expect(resolved.mode).toBe('contract')
+    expect(resolved.diagnostics).toEqual([])
+    expect(resolved.data).toEqual([
+      { label: '1月', value: 98 },
+      { label: '2月', value: 112 },
+    ])
+  })
+
   it('projects top-level array mappings by index', () => {
     const node = chartNode({
       binding: {

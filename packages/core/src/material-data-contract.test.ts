@@ -38,6 +38,59 @@ describe('material data contract', () => {
     expect(resolution.diagnostics).toEqual([])
   })
 
+  it('resolves root record collections when source metadata exists beside runtime data', () => {
+    const binding = {
+      kind: 'data-contract',
+      mappings: {
+        category: { sourceId: 'report', select: { path: 'monthlySales/month' } },
+        value: { sourceId: 'report', select: { path: 'monthlySales/revenue' } },
+      },
+      relation: { kind: 'auto' },
+    } as const
+
+    const resolution = resolveMaterialDataContract(contract, binding, {
+      report: { name: 'Sales Report' },
+      monthlySales: [
+        { month: '1月', revenue: 98 },
+        { month: '2月', revenue: '112' },
+      ],
+    })
+
+    expect(resolution.mode).toBe('record')
+    expect(resolution.records).toEqual([
+      { category: '1月', value: 98 },
+      { category: '2月', value: 112 },
+    ])
+    expect(resolution.diagnostics).toEqual([])
+  })
+
+  it('resolves source-scoped record collections when source data owns the selected path', () => {
+    const binding = {
+      kind: 'data-contract',
+      mappings: {
+        category: { sourceId: 'report', select: { path: 'monthlySales/month' } },
+        value: { sourceId: 'report', select: { path: 'monthlySales/revenue' } },
+      },
+      relation: { kind: 'auto' },
+    } as const
+
+    const resolution = resolveMaterialDataContract(contract, binding, {
+      report: {
+        monthlySales: [
+          { month: '1月', revenue: 98 },
+          { month: '2月', revenue: '112' },
+        ],
+      },
+    })
+
+    expect(resolution.mode).toBe('record')
+    expect(resolution.records).toEqual([
+      { category: '1月', value: 98 },
+      { category: '2月', value: 112 },
+    ])
+    expect(resolution.diagnostics).toEqual([])
+  })
+
   it('resolves top-level arrays by index', () => {
     const binding = {
       kind: 'data-contract',
@@ -49,6 +102,30 @@ describe('material data contract', () => {
     } as const
 
     const resolution = resolveMaterialDataContract(contract, binding, {
+      category: ['1月', '2月'],
+      values: [98, '112'],
+    })
+
+    expect(resolution.mode).toBe('index')
+    expect(resolution.records).toEqual([
+      { category: '1月', value: 98 },
+      { category: '2月', value: 112 },
+    ])
+    expect(resolution.diagnostics).toEqual([])
+  })
+
+  it('resolves root top-level arrays when source metadata exists beside runtime data', () => {
+    const binding = {
+      kind: 'data-contract',
+      mappings: {
+        category: { sourceId: 'report', select: { path: 'category' } },
+        value: { sourceId: 'report', select: { path: 'values' } },
+      },
+      relation: { kind: 'auto' },
+    } as const
+
+    const resolution = resolveMaterialDataContract(contract, binding, {
+      report: { name: 'Sales Report' },
       category: ['1月', '2月'],
       values: [98, '112'],
     })
