@@ -7,6 +7,10 @@ import {
   certificateTemplate,
 } from './templates/certificate'
 import {
+  salesReportDemoData,
+  salesReportTemplate,
+} from './templates/sales-report'
+import {
   supermarketDemoData,
   supermarketFlexRowReceiptTemplate,
   supermarketReceiptTemplate,
@@ -28,6 +32,11 @@ export {
   certificateDemoData,
   certificateTemplate,
 } from './templates/certificate'
+export {
+  salesReportDataSource,
+  salesReportDemoData,
+  salesReportTemplate,
+} from './templates/sales-report'
 export {
   supermarketDataSource,
   supermarketDemoData,
@@ -235,6 +244,13 @@ export const sampleTemplates: SampleTemplateEntry[] = [
     name: '收据',
     category: 'receipt',
     schema: receiptTemplate,
+  },
+  {
+    id: 'sales-report',
+    name: '销售概览（柱状图）',
+    category: 'business',
+    schema: salesReportTemplate,
+    demoData: salesReportDemoData,
   },
   {
     id: 'supermarket-receipt',

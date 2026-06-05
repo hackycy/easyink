@@ -3,6 +3,7 @@ import type { DocumentSchema, TableDataSchema, TableNode } from '@easyink/schema
 import { SCHEMA_VERSION } from '@easyink/shared'
 import { badgeDataSource } from './templates/badge'
 import { certificateDataSource } from './templates/certificate'
+import { salesReportDataSource } from './templates/sales-report'
 import { supermarketDataSource } from './templates/supermarket-receipt'
 import { verticalMixedTextDataSource } from './templates/vertical-mixed-text'
 
@@ -223,6 +224,7 @@ export const sampleDataSources: DataSourceDescriptor[] = [
   orderListDataSource,
   certificateDataSource,
   badgeDataSource,
+  salesReportDataSource,
   supermarketDataSource,
   verticalMixedTextDataSource,
 ]
