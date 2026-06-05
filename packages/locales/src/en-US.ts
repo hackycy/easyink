@@ -503,6 +503,7 @@ const enUS: LocaleMessages = {
       updateGeometry: 'Update Geometry',
       bindField: 'Bind Field',
       clearBinding: 'Clear Binding',
+      updateMaterialBinding: 'Update Material Binding',
       updateBindingFormat: 'Update Binding Format',
       importTemplate: 'Import Template',
       batch: 'Batch Action',
@@ -522,6 +523,7 @@ const enUS: LocaleMessages = {
       updateFlowRowColumn: 'Update Flow Column',
       updateFlowRowHeight: 'Update Flow Row Height',
       updateTextHeight: 'Update Text Height',
+      updateUsage: 'Update Usage',
     },
     animation: {
       title: 'Animation',

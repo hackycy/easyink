@@ -503,6 +503,7 @@ const zhCN: LocaleMessages = {
       updateGeometry: '修改几何属性',
       bindField: '绑定字段',
       clearBinding: '清除绑定',
+      updateMaterialBinding: '修改物料绑定',
       updateBindingFormat: '修改绑定格式',
       importTemplate: '导入模板',
       batch: '批量操作',
@@ -522,6 +523,7 @@ const zhCN: LocaleMessages = {
       updateFlowRowColumn: '修改流式列',
       updateFlowRowHeight: '调整流式行高度',
       updateTextHeight: '调整文本高度',
+      updateUsage: '修改用途',
     },
     animation: {
       title: '动画',

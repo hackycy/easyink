@@ -24,6 +24,7 @@ const TYPE_TO_LOCALE: Record<string, string> = {
   'update-geometry': 'designer.history.updateGeometry',
   'bind-field': 'designer.history.bindField',
   'clear-binding': 'designer.history.clearBinding',
+  'update-material-binding': 'designer.history.updateMaterialBinding',
   'update-binding-format': 'designer.history.updateBindingFormat',
   'import-template': 'designer.history.importTemplate',
   'batch': 'designer.history.batch',
@@ -32,6 +33,7 @@ const TYPE_TO_LOCALE: Record<string, string> = {
   'insert-table-row': 'designer.history.insertTableRow',
   'remove-table-row': 'designer.history.removeTableRow',
   'resize-table-column': 'designer.history.resizeTableColumn',
+  'resize-table-row': 'designer.history.resizeTableRow',
   'update-table-visibility': 'designer.history.updateTableVisibility',
   'update-table-cell': 'designer.history.updateTableCell',
   'update-table-section': 'designer.history.updateTableSection',
@@ -39,6 +41,10 @@ const TYPE_TO_LOCALE: Record<string, string> = {
 }
 
 function localizeEntry(entry: HistoryEntry): string {
+  const localizedDescription = store.t(entry.description)
+  if (localizedDescription !== entry.description)
+    return localizedDescription
+
   const key = TYPE_TO_LOCALE[entry.type]
   return store.t(key ?? entry.description)
 }
