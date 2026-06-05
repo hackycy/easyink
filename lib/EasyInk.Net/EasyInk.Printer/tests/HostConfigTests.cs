@@ -96,7 +96,15 @@ public class HostConfigTests
     public void GetRenderBrowserVersionDir_CustomRoot_UsesRootVersionsDirectory()
     {
         Assert.Equal(
-            Path.Combine(@"D:\EasyInk\RenderBrowser", "versions", "126"),
+            Path.Combine(@"D:\EasyInk\RenderBrowser", "versions", RenderBrowserVersionCatalog.Chromium109Key),
+            HostConfig.GetRenderBrowserVersionDir(@"D:\EasyInk\RenderBrowser", RenderBrowserVersionCatalog.Chromium109Key));
+    }
+
+    [Fact]
+    public void GetRenderBrowserVersionDir_UnknownVersion_UsesStableVersion()
+    {
+        Assert.Equal(
+            Path.Combine(@"D:\EasyInk\RenderBrowser", "versions", RenderBrowserVersionCatalog.StableKey),
             HostConfig.GetRenderBrowserVersionDir(@"D:\EasyInk\RenderBrowser", "126"));
     }
 
