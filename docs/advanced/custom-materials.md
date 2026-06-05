@@ -18,6 +18,56 @@ import { IconText } from '@easyink/icons'
 
 export const PRICE_TAG_TYPE = 'price-tag'
 
+export const priceTagLocaleMessages = {
+  messages: {
+    materials: {
+      priceTag: {
+        name: '价格签',
+        property: {
+          label: '标题',
+          amount: '金额',
+        },
+        data: {
+          category: '分类字段',
+          value: '数值字段',
+        },
+      },
+    },
+  },
+  locales: {
+    'zh-CN': {
+      materials: {
+        priceTag: {
+          name: '价格签',
+          property: {
+            label: '标题',
+            amount: '金额',
+          },
+          data: {
+            category: '分类字段',
+            value: '数值字段',
+          },
+        },
+      },
+    },
+    'en-US': {
+      materials: {
+        priceTag: {
+          name: 'Price Tag',
+          property: {
+            label: 'Label',
+            amount: 'Amount',
+          },
+          data: {
+            category: 'Category Field',
+            value: 'Value Field',
+          },
+        },
+      },
+    },
+  },
+}
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, '&amp;')
@@ -62,7 +112,7 @@ export function registerPriceTagDesigner(store: DesignerStore) {
     materials: [
       {
         type: PRICE_TAG_TYPE,
-        name: '价格签',
+        name: 'materials.priceTag.name',
         icon: IconText,
         category: 'basic',
         capabilities: {
@@ -72,9 +122,10 @@ export function registerPriceTagDesigner(store: DesignerStore) {
         },
         createDefaultNode: createPriceTagNode,
         factory: createPriceTagDesignerExtension,
+        localeMessages: priceTagLocaleMessages,
         propSchemas: [
-          { key: 'label', label: '标题', type: 'string', group: 'content' },
-          { key: 'amount', label: '金额', type: 'string', group: 'content' },
+          { key: 'label', label: 'materials.priceTag.property.label', type: 'string', group: 'content' },
+          { key: 'amount', label: 'materials.priceTag.property.amount', type: 'string', group: 'content' },
         ],
       },
     ],
@@ -144,9 +195,10 @@ function setupStore(store) {
 </template>
 ```
 
-`registerMaterialBundle()` 会同时处理三类信息：
+`registerMaterialBundle()` 会同时处理四类信息：
 
 - `materials`：物料定义、属性面板字段、设计态 factory。
+- `localeMessages`：随物料注册的多语言文案，通常放在 material entry 上。
 - `quickMaterialTypes`：出现在物料面板的“基础”区域。
 - `groupedCatalog`：出现在 `data`、`chart`、`svg`、`utility` 分组里。
 
@@ -264,12 +316,13 @@ export const SALES_CHART_CONTRACT = {
 registerMaterialBundle(store, {
   materials: [{
     type: 'sales-chart',
-    name: '销售图表',
+    name: 'materials.salesChart.name',
     icon: IconChart,
     category: 'chart',
     capabilities: { bindable: true, resizable: true },
     dataContract: SALES_CHART_CONTRACT,
-    props: [],
+    propSchemas: [],
+    localeMessages: salesChartLocaleMessages,
     createDefaultNode: createSalesChartNode,
     factory: createSalesChartDesignerExtension,
   }],
@@ -430,11 +483,12 @@ export const priceTagAIMaterialDescriptor = {
 registerMaterialBundle(store, {
   materials: [{
     type: PRICE_TAG_TYPE,
-    name: '价格签',
+    name: 'materials.priceTag.name',
     icon: IconText,
     category: 'basic',
     capabilities: { bindable: true, resizable: true, rotatable: true },
     aiDescriptor: priceTagAIMaterialDescriptor,  // ← 传入 AI 描述
+    localeMessages: priceTagLocaleMessages,
     createDefaultNode: createPriceTagNode,
     factory: createPriceTagDesignerExtension,
   }],

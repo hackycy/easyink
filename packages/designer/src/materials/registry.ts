@@ -1,7 +1,6 @@
 import type { AIMaterialDescriptor } from '@easyink/shared'
 import type { DesignerStore } from '../store/designer-store'
-import type { MaterialCapabilities, MaterialCatalogEntry, MaterialDefinition, MaterialExtensionFactory, PanelSectionId, PropSchema } from '../types'
-import { getPropSchemas } from '@easyink/prop-schemas'
+import type { LocaleMessageRegistration, MaterialCapabilities, MaterialCatalogEntry, MaterialDefinition, MaterialExtensionFactory, PanelSectionId, PropSchema } from '../types'
 
 // ─── Material definitions ────────────────────────────────────────────
 
@@ -15,8 +14,9 @@ export interface DesignerMaterialRegistration {
   factory: MaterialExtensionFactory
   aiDescriptor?: AIMaterialDescriptor
   dataContract?: MaterialDefinition['dataContract']
-  /** Material-owned PropSchemas appended to designer's static registry entries. */
+  /** Designer property schemas owned by this material. */
   propSchemas?: PropSchema[]
+  localeMessages?: LocaleMessageRegistration
   sectionFilter?: MaterialDefinition['sectionFilter']
 }
 
@@ -34,6 +34,7 @@ export interface DesignerMaterialBundle {
   materials: DesignerMaterialRegistration[]
   quickMaterialTypes: string[]
   groupedCatalog: DesignerCatalogRegistration[]
+  localeMessages?: LocaleMessageRegistration
 }
 
 /**
@@ -55,19 +56,22 @@ function tableSectionFilter(sectionId: PanelSectionId): boolean {
  * Architecture ref: 11.1 (MaterialDefinition), 11.2 (catalog hierarchy),
  *                   10.2 (quick + grouped material bar)
  */
-export function registerMaterialBundle(store: DesignerStore, bundle: DesignerMaterialBundle): void {
+export function registerMaterialBundle(store: DesignerStore, bundle: DesignerMaterialBundle): () => void {
+  const unregisterLocaleMessages: Array<() => void> = []
+  if (bundle.localeMessages)
+    unregisterLocaleMessages.push(store.registerLocaleMessages(bundle.localeMessages))
+
   for (const entry of bundle.materials) {
-    const baseProps = getPropSchemas(entry.type)
-    const mergedProps = entry.propSchemas
-      ? [...baseProps, ...entry.propSchemas]
-      : baseProps
+    if (entry.localeMessages)
+      unregisterLocaleMessages.push(store.registerLocaleMessages(entry.localeMessages))
+
     const definition: MaterialDefinition = {
       type: entry.type,
       name: entry.name,
       icon: entry.icon,
       category: entry.category,
       capabilities: entry.capabilities,
-      props: mergedProps,
+      props: entry.propSchemas ? [...entry.propSchemas] : [],
       aiDescriptor: entry.aiDescriptor,
       dataContract: entry.dataContract,
       createDefaultNode: entry.createDefaultNode,
@@ -109,6 +113,11 @@ export function registerMaterialBundle(store: DesignerStore, bundle: DesignerMat
       dragData: entry.dragData,
       priority: 'grouped',
     })
+  }
+
+  return () => {
+    for (const unregister of unregisterLocaleMessages)
+      unregister()
   }
 }
 

@@ -52,7 +52,7 @@ describe('renderSvgHeart', () => {
 
   it('uses locale keys in the designer schema', () => {
     expect(svgHeartDesignerPropSchemas.map(item => item.label)).toEqual([
-      'designer.property.fillColor',
+      'materials.svgHeart.property.fillColor',
       'designer.property.borderWidth',
       'designer.property.borderColor',
     ])

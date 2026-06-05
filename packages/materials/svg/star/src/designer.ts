@@ -75,11 +75,11 @@ function createStarSelectionType(): SelectionType<SvgStarControlSelection> {
 
 function createStarSubPropertySchema(_selection: Selection<SvgStarControlSelection>, node: MaterialNode): SubPropertySchema {
   const schemas = [
-    { key: 'starInnerRatio', label: 'designer.property.starInnerRatio', type: 'number', group: 'shape', min: 0.08, max: 0.95, step: 0.01 },
+    { key: 'starInnerRatio', label: 'materials.svgStar.property.innerRatio', type: 'number', group: 'shape', min: 0.08, max: 0.95, step: 0.01 },
   ]
 
   return {
-    title: 'designer.property.svgStarEdit',
+    title: 'materials.svgStar.property.edit',
     schemas,
     read(key) {
       const props = {
@@ -101,7 +101,7 @@ function createStarSubPropertySchema(_selection: Selection<SvgStarControlSelecti
         draftProps[key] = Math.min(0.95, Math.max(0.08, numericValue))
       }, {
         mergeKey: `svg-star:property:${key}`,
-        label: 'designer.history.updateSvgStar',
+        label: 'materials.svgStar.history.update',
       })
     },
   }
@@ -159,7 +159,7 @@ function createStarHandleBehavior(): BehaviorRegistration {
           }
         }, {
           mergeKey: `svg-star:${payload.handle}`,
-          label: 'designer.history.updateSvgStar',
+          label: 'materials.svgStar.history.update',
         })
         ctx.session.setMeta('starInnerRatio', nextProps.starInnerRatio)
         return
@@ -287,7 +287,7 @@ function createStarDecorationComponent(context: MaterialExtensionContext) {
             pointerEvents: 'none',
           },
         }, guide.handles.map((_, index) =>
-          renderHandle('inner-radius', index, `${context.t('designer.property.starInnerRatio')} ${index + 1}`),
+          renderHandle('inner-radius', index, `${context.t('materials.svgStar.property.innerRatio')} ${index + 1}`),
         ))]))
 
         return h('div', {}, overlays)

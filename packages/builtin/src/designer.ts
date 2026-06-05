@@ -20,6 +20,8 @@ import {
   BARCODE_CAPABILITIES,
   BARCODE_TYPE,
   barcodeAIMaterialDescriptor,
+  barcodeDesignerPropSchemas,
+  barcodeLocaleMessages,
   createBarcodeExtension,
   createBarcodeNode,
 } from '@easyink/material-barcode'
@@ -29,6 +31,7 @@ import {
   CHART_BAR_TYPE,
   chartBarAIMaterialDescriptor,
   chartBarDesignerPropSchemas,
+  chartBarLocaleMessages,
   createChartBarExtension,
   createChartBarNode,
 } from '@easyink/material-chart-bar'
@@ -38,6 +41,8 @@ import {
   ELLIPSE_CAPABILITIES,
   ELLIPSE_TYPE,
   ellipseAIMaterialDescriptor,
+  ellipseDesignerPropSchemas,
+  ellipseLocaleMessages,
 } from '@easyink/material-ellipse'
 import {
   createFlowRowExtension,
@@ -45,6 +50,8 @@ import {
   FLOW_ROW_CAPABILITIES,
   FLOW_ROW_TYPE,
   flowRowAIMaterialDescriptor,
+  flowRowDesignerPropSchemas,
+  flowRowLocaleMessages,
 } from '@easyink/material-flow-row'
 import {
   createImageExtension,
@@ -52,6 +59,8 @@ import {
   IMAGE_CAPABILITIES,
   IMAGE_TYPE,
   imageAIMaterialDescriptor,
+  imageDesignerPropSchemas,
+  imageLocaleMessages,
 } from '@easyink/material-image'
 import {
   createLineExtension,
@@ -59,6 +68,8 @@ import {
   LINE_CAPABILITIES,
   LINE_TYPE,
   lineAIMaterialDescriptor,
+  lineDesignerPropSchemas,
+  lineLocaleMessages,
 } from '@easyink/material-line'
 import {
   createPageNumberExtension,
@@ -66,6 +77,8 @@ import {
   PAGE_NUMBER_CAPABILITIES,
   PAGE_NUMBER_TYPE,
   pageNumberAIMaterialDescriptor,
+  pageNumberDesignerPropSchemas,
+  pageNumberLocaleMessages,
 } from '@easyink/material-page-number'
 import {
   createQrcodeExtension,
@@ -73,6 +86,8 @@ import {
   QRCODE_CAPABILITIES,
   QRCODE_TYPE,
   qrcodeAIMaterialDescriptor,
+  qrcodeDesignerPropSchemas,
+  qrcodeLocaleMessages,
 } from '@easyink/material-qrcode'
 import {
   createRectExtension,
@@ -80,6 +95,8 @@ import {
   RECT_CAPABILITIES,
   RECT_TYPE,
   rectAIMaterialDescriptor,
+  rectDesignerPropSchemas,
+  rectLocaleMessages,
 } from '@easyink/material-rect'
 import {
   createSvgCustomExtension,
@@ -88,6 +105,7 @@ import {
   SVG_CUSTOM_TYPE,
   svgCustomAIMaterialDescriptor,
   svgCustomDesignerPropSchemas,
+  svgCustomLocaleMessages,
 } from '@easyink/material-svg-custom'
 import {
   createSvgHeartExtension,
@@ -96,6 +114,7 @@ import {
   SVG_HEART_TYPE,
   svgHeartAIMaterialDescriptor,
   svgHeartDesignerPropSchemas,
+  svgHeartLocaleMessages,
 } from '@easyink/material-svg-heart'
 import {
   createSvgStarExtension,
@@ -104,6 +123,7 @@ import {
   SVG_STAR_TYPE,
   svgStarAIMaterialDescriptor,
   svgStarDesignerPropSchemas,
+  svgStarLocaleMessages,
 } from '@easyink/material-svg-star'
 import {
   createTableDataExtension,
@@ -112,13 +132,17 @@ import {
   TABLE_DATA_TYPE,
   tableDataAIMaterialDescriptor,
   tableDataDesignerPropSchemas,
+  tableDataLocaleMessages,
 } from '@easyink/material-table-data'
+import { tableKernelLocaleMessages } from '@easyink/material-table-kernel'
 import {
   createTableStaticExtension,
   createTableStaticNode,
   TABLE_STATIC_CAPABILITIES,
   TABLE_STATIC_TYPE,
   tableStaticAIMaterialDescriptor,
+  tableStaticDesignerPropSchemas,
+  tableStaticLocaleMessages,
 } from '@easyink/material-table-static'
 import {
   createTextExtension,
@@ -126,6 +150,8 @@ import {
   TEXT_CAPABILITIES,
   TEXT_TYPE,
   textAIMaterialDescriptor,
+  textDesignerPropSchemas,
+  textLocaleMessages,
 } from '@easyink/material-text'
 
 function tableSectionFilter(sectionId: BuiltinPanelSectionId): boolean {
@@ -133,91 +159,108 @@ function tableSectionFilter(sectionId: BuiltinPanelSectionId): boolean {
 }
 
 export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
+  localeMessages: tableKernelLocaleMessages,
   materials: [
     {
       type: TEXT_TYPE,
-      name: 'designer.toolbar.text',
+      name: 'materials.text.name',
       icon: IconText,
       category: 'basic',
       capabilities: TEXT_CAPABILITIES,
       aiDescriptor: textAIMaterialDescriptor,
       createDefaultNode: createTextNode,
       factory: createTextExtension,
+      propSchemas: textDesignerPropSchemas,
+      localeMessages: textLocaleMessages,
     },
     {
       type: IMAGE_TYPE,
-      name: 'designer.toolbar.image',
+      name: 'materials.image.name',
       icon: IconImage,
       category: 'basic',
       capabilities: IMAGE_CAPABILITIES,
       aiDescriptor: imageAIMaterialDescriptor,
       createDefaultNode: createImageNode,
       factory: createImageExtension,
+      propSchemas: imageDesignerPropSchemas,
+      localeMessages: imageLocaleMessages,
     },
     {
       type: BARCODE_TYPE,
-      name: 'designer.toolbar.barcode',
+      name: 'materials.barcode.name',
       icon: IconBarcode,
       category: 'basic',
       capabilities: BARCODE_CAPABILITIES,
       aiDescriptor: barcodeAIMaterialDescriptor,
       createDefaultNode: createBarcodeNode,
       factory: createBarcodeExtension,
+      propSchemas: barcodeDesignerPropSchemas,
+      localeMessages: barcodeLocaleMessages,
     },
     {
       type: QRCODE_TYPE,
-      name: 'designer.toolbar.qrcode',
+      name: 'materials.qrcode.name',
       icon: IconQrcode,
       category: 'basic',
       capabilities: QRCODE_CAPABILITIES,
       aiDescriptor: qrcodeAIMaterialDescriptor,
       createDefaultNode: createQrcodeNode,
       factory: createQrcodeExtension,
+      propSchemas: qrcodeDesignerPropSchemas,
+      localeMessages: qrcodeLocaleMessages,
     },
     {
       type: LINE_TYPE,
-      name: 'designer.toolbar.line',
+      name: 'materials.line.name',
       icon: IconLine,
       category: 'basic',
       capabilities: LINE_CAPABILITIES,
       aiDescriptor: lineAIMaterialDescriptor,
       createDefaultNode: createLineNode,
       factory: createLineExtension,
+      propSchemas: lineDesignerPropSchemas,
+      localeMessages: lineLocaleMessages,
     },
     {
       type: RECT_TYPE,
-      name: 'designer.toolbar.rect',
+      name: 'materials.rect.name',
       icon: IconRect,
       category: 'basic',
       capabilities: RECT_CAPABILITIES,
       aiDescriptor: rectAIMaterialDescriptor,
       createDefaultNode: createRectNode,
       factory: createRectExtension,
+      propSchemas: rectDesignerPropSchemas,
+      localeMessages: rectLocaleMessages,
     },
     {
       type: ELLIPSE_TYPE,
-      name: 'designer.toolbar.ellipse',
+      name: 'materials.ellipse.name',
       icon: IconEllipse,
       category: 'basic',
       capabilities: ELLIPSE_CAPABILITIES,
       aiDescriptor: ellipseAIMaterialDescriptor,
       createDefaultNode: createEllipseNode,
       factory: createEllipseExtension,
+      propSchemas: ellipseDesignerPropSchemas,
+      localeMessages: ellipseLocaleMessages,
     },
     {
       type: TABLE_STATIC_TYPE,
-      name: 'designer.toolbar.table',
+      name: 'materials.tableStatic.name',
       icon: IconTable,
       category: 'data',
       capabilities: TABLE_STATIC_CAPABILITIES,
       aiDescriptor: tableStaticAIMaterialDescriptor,
       createDefaultNode: createTableStaticNode,
       factory: createTableStaticExtension,
+      propSchemas: tableStaticDesignerPropSchemas,
+      localeMessages: tableStaticLocaleMessages,
       sectionFilter: tableSectionFilter,
     },
     {
       type: TABLE_DATA_TYPE,
-      name: 'designer.toolbar.dataTable',
+      name: 'materials.tableData.name',
       icon: IconDataTable,
       category: 'data',
       capabilities: TABLE_DATA_CAPABILITIES,
@@ -225,21 +268,24 @@ export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
       createDefaultNode: createTableDataNode,
       factory: createTableDataExtension,
       propSchemas: tableDataDesignerPropSchemas,
+      localeMessages: tableDataLocaleMessages,
       sectionFilter: tableSectionFilter,
     },
     {
       type: FLOW_ROW_TYPE,
-      name: 'designer.toolbar.flowRow',
+      name: 'materials.flowRow.name',
       icon: IconLayoutPanelTop,
       category: 'data',
       capabilities: FLOW_ROW_CAPABILITIES,
       aiDescriptor: flowRowAIMaterialDescriptor,
       createDefaultNode: createFlowRowNode,
       factory: createFlowRowExtension,
+      propSchemas: flowRowDesignerPropSchemas,
+      localeMessages: flowRowLocaleMessages,
     },
     {
       type: CHART_BAR_TYPE,
-      name: 'designer.toolbar.chartBar',
+      name: 'materials.chartBar.name',
       icon: IconChart,
       category: 'chart',
       capabilities: CHART_BAR_CAPABILITIES,
@@ -248,10 +294,11 @@ export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
       createDefaultNode: createChartBarNode,
       factory: createChartBarExtension,
       propSchemas: chartBarDesignerPropSchemas,
+      localeMessages: chartBarLocaleMessages,
     },
     {
       type: SVG_CUSTOM_TYPE,
-      name: 'designer.toolbar.svgCustom',
+      name: 'materials.svgCustom.name',
       icon: IconSvg,
       category: 'svg',
       capabilities: SVG_CUSTOM_CAPABILITIES,
@@ -259,10 +306,11 @@ export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
       createDefaultNode: createSvgCustomNode,
       factory: createSvgCustomExtension,
       propSchemas: svgCustomDesignerPropSchemas,
+      localeMessages: svgCustomLocaleMessages,
     },
     {
       type: SVG_STAR_TYPE,
-      name: 'designer.toolbar.svgStar',
+      name: 'materials.svgStar.name',
       icon: IconStar,
       category: 'svg',
       capabilities: SVG_STAR_CAPABILITIES,
@@ -270,10 +318,11 @@ export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
       createDefaultNode: createSvgStarNode,
       factory: createSvgStarExtension,
       propSchemas: svgStarDesignerPropSchemas,
+      localeMessages: svgStarLocaleMessages,
     },
     {
       type: SVG_HEART_TYPE,
-      name: 'designer.toolbar.svgHeart',
+      name: 'materials.svgHeart.name',
       icon: IconHeart,
       category: 'svg',
       capabilities: SVG_HEART_CAPABILITIES,
@@ -281,16 +330,19 @@ export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
       createDefaultNode: createSvgHeartNode,
       factory: createSvgHeartExtension,
       propSchemas: svgHeartDesignerPropSchemas,
+      localeMessages: svgHeartLocaleMessages,
     },
     {
       type: PAGE_NUMBER_TYPE,
-      name: 'designer.toolbar.pageNumber',
+      name: 'materials.pageNumber.name',
       icon: IconPageNumber,
       category: 'utility',
       capabilities: PAGE_NUMBER_CAPABILITIES,
       aiDescriptor: pageNumberAIMaterialDescriptor,
       createDefaultNode: createPageNumberNode,
       factory: createPageNumberExtension,
+      propSchemas: pageNumberDesignerPropSchemas,
+      localeMessages: pageNumberLocaleMessages,
     },
   ],
   quickMaterialTypes: [

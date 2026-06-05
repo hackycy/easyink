@@ -27,8 +27,12 @@ export interface BuiltinDesignerMaterialRegistration {
   factory: MaterialExtensionFactory
   aiDescriptor?: AIMaterialDescriptor
   dataContract?: MaterialDataContract
-  /** Material-owned PropSchemas appended to the designer's static registry entries. */
+  /** Designer property schemas owned by this material. */
   propSchemas?: PropSchema[]
+  localeMessages?: {
+    messages?: BuiltinLocaleMessages
+    locales?: Record<string, BuiltinLocaleMessages>
+  }
   sectionFilter?: (sectionId: BuiltinPanelSectionId) => boolean
 }
 
@@ -46,6 +50,14 @@ export interface BuiltinDesignerMaterialBundle {
   materials: BuiltinDesignerMaterialRegistration[]
   quickMaterialTypes: string[]
   groupedCatalog: BuiltinDesignerCatalogRegistration[]
+  localeMessages?: {
+    messages?: BuiltinLocaleMessages
+    locales?: Record<string, BuiltinLocaleMessages>
+  }
 }
 
 export type BuiltinViewerRegistrar = (type: string, extension: MaterialViewerExtension) => void
+
+export interface BuiltinLocaleMessages {
+  [key: string]: string | BuiltinLocaleMessages
+}

@@ -4,19 +4,21 @@
 
 Prefer locale keys over hardcoded labels for Designer-facing UI:
 
-- Toolbar/catalog names: `designer.toolbar.*`.
-- Property labels: `designer.property.*`.
-- Property enum options: `designer.option.*`.
-- Placeholder text: `designer.placeholder.*`.
-- Table commands: `designer.table.*`.
+- Material catalog names: `materials.<material>.name`.
+- Material property labels: `materials.<material>.property.*`.
+- Material enum options: `materials.<material>.option.*`.
+- Material placeholders: `materials.<material>.placeholder.*`.
+- Material-local commands: `materials.<material>.action.*`.
 - Datasource hints and rejection messages: `designer.dataSource.*`.
-- History labels: `designer.history.*`.
+- Material command history labels: `materials.<material>.history.*`.
 - Page behavior labels: `designer.property.placementMode`, `designer.property.keepTogether`, `designer.property.pageBreakBefore`, `designer.property.pageBreakAfter`, and `designer.property.repeatEveryPage` already live in shared prop schemas; reuse them instead of material-local duplicates.
 
-Add keys to both:
+Add material keys in the material package:
 
-- `packages/locales/src/zh-CN.ts`
-- `packages/locales/src/en-US.ts`
+- `src/locale.ts`
+- Pass the export as `localeMessages` on the Designer material entry, or include it in the material bundle registration.
+
+`@easyink/locales` owns Designer common strings only: shared panels, page settings, data source UI, binding format UI, generic diagnostics, and generic history labels.
 
 Material code can translate with:
 
@@ -32,8 +34,8 @@ Property schemas can store label keys directly because `PropertiesPanel.vue` res
 - Decoration tooltips, material-local toolbar button titles, property titles, reject labels, placeholders, and history labels are localized.
 - Page-aware or fragment-pagination diagnostics that surface to users are stable, translated where they are Designer-facing, and use Viewer diagnostics for runtime-only failures.
 - `PropSchema.group` uses an existing group mapped by `GROUP_LABELS` in `PropertiesPanel.vue`, or the visible custom group text is intentional.
-- History panel can display the command label. Prefer stable `designer.history.*` keys for material commands.
-- Custom host-owned materials document how host locale messages are passed via `EasyInkDesigner` `locale`.
+- History panel can display the command label. Prefer stable `materials.<material>.history.*` keys for material commands.
+- Custom host-owned materials register their locale messages through `registerMaterialBundle()` instead of coupling them to `@easyink/locales`.
 
 ## AI Reminder
 

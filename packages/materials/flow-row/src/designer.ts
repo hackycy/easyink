@@ -64,8 +64,8 @@ interface FlowColumnSelectionPayload {
 }
 
 const WRAP_MODE_OPTIONS = [
-  { label: 'designer.option.flowRowInline', value: 'inline' },
-  { label: 'designer.option.flowRowBlock', value: 'block' },
+  { label: 'materials.flowRow.option.inline', value: 'inline' },
+  { label: 'materials.flowRow.option.block', value: 'block' },
 ]
 
 const HORIZONTAL_ALIGN_OPTIONS = [
@@ -268,11 +268,11 @@ function createColumnSubPropertySchema(
   }
 
   return {
-    title: context.t('designer.property.flowRowColumn'),
+    title: context.t('materials.flowRow.property.column'),
     schemas: [
       { key: 'content', label: 'designer.property.content', type: 'textarea', group: 'content' },
-      { key: 'wrapMode', label: 'designer.property.wrapMode', type: 'enum', group: 'layout', enum: WRAP_MODE_OPTIONS },
-      { key: 'ratio', label: 'designer.property.ratio', type: 'number', group: 'layout', min: 0.05, max: 10, step: 0.05 },
+      { key: 'wrapMode', label: 'materials.flowRow.property.wrapMode', type: 'enum', group: 'layout', enum: WRAP_MODE_OPTIONS },
+      { key: 'ratio', label: 'materials.flowRow.property.ratio', type: 'number', group: 'layout', min: 0.05, max: 10, step: 0.05 },
       { key: 'textAlign', label: 'designer.property.textAlign', type: 'enum', group: 'typography', enum: HORIZONTAL_ALIGN_OPTIONS },
       { key: 'verticalAlign', label: 'designer.property.verticalAlign', type: 'enum', group: 'typography', enum: VERTICAL_ALIGN_OPTIONS },
     ],
@@ -310,7 +310,7 @@ function createColumnSubPropertySchema(
         }
         draft.props = { ...props, columns: props.columns }
         applyDesignerAutoHeight(draft)
-      }, { label: 'designer.history.updateFlowRowColumn' })
+      }, { label: 'materials.flowRow.history.updateColumn' })
     },
     get binding() {
       return getColumn()?.binding
@@ -331,7 +331,7 @@ function createColumnSubPropertySchema(
         if (column?.binding)
           column.binding.format = format
         draft.props = { ...props, columns: props.columns }
-      }, { label: 'designer.history.updateFlowRowColumn' })
+      }, { label: 'materials.flowRow.history.updateColumn' })
     },
   }
 }
@@ -403,7 +403,7 @@ function createColumnKeyboardBehavior(): BehaviorRegistration {
           }
           draft.props = { ...draftProps, columns: draftProps.columns }
           applyDesignerAutoHeight(draft)
-        }, { label: 'designer.history.updateFlowRowColumn' })
+        }, { label: 'materials.flowRow.history.updateColumn' })
         return
       }
 
@@ -446,7 +446,7 @@ function createColumnCommandBehavior(): BehaviorRegistration {
           })
           draft.props = { ...props, columns: props.columns }
           applyDesignerAutoHeight(draft)
-        }, { label: 'designer.history.insertFlowRowColumn' })
+        }, { label: 'materials.flowRow.history.insertColumn' })
         ctx.selectionStore.set({
           type: FLOW_COLUMN_SELECTION_TYPE,
           nodeId: ctx.node.id,
@@ -464,7 +464,7 @@ function createColumnCommandBehavior(): BehaviorRegistration {
           props.columns.splice(payload.index, 1)
           draft.props = { ...props, columns: props.columns }
           applyDesignerAutoHeight(draft)
-        }, { label: 'designer.history.removeFlowRowColumn' })
+        }, { label: 'materials.flowRow.history.removeColumn' })
         ctx.selectionStore.set({
           type: FLOW_COLUMN_SELECTION_TYPE,
           nodeId: ctx.node.id,
@@ -485,7 +485,7 @@ function createColumnCommandBehavior(): BehaviorRegistration {
           }
           draft.props = { ...props, columns: props.columns }
           applyDesignerAutoHeight(draft)
-        }, { label: 'designer.history.updateFlowRowColumn' })
+        }, { label: 'materials.flowRow.history.updateColumn' })
         return
       }
 
@@ -503,7 +503,7 @@ function createColumnCommandBehavior(): BehaviorRegistration {
           applyDesignerAutoHeight(draft)
         }, {
           mergeKey: `flow-row:resize-column:${p.index}`,
-          label: 'designer.history.resizeFlowRowColumn',
+          label: 'materials.flowRow.history.resizeColumn',
         })
         return
       }
@@ -535,7 +535,7 @@ function createColumnCommandBehavior(): BehaviorRegistration {
             column.verticalAlign = 'bottom'
           draft.props = { ...props, columns: props.columns }
           applyDesignerAutoHeight(draft)
-        }, { label: 'designer.history.updateFlowRowColumn' })
+        }, { label: 'materials.flowRow.history.updateColumn' })
         return
       }
 
@@ -787,9 +787,9 @@ function createColumnDecorationComponent(context: MaterialExtensionContext) {
                 }),
               ]),
               h('div', { style: materialToolbarGroupStyle() }, [
-                actionButton(context.t('designer.flowRow.insertBefore'), 'flow-row.insert-before', IconChevronLeft),
-                actionButton(context.t('designer.flowRow.insertAfter'), 'flow-row.insert-after', IconChevronRight),
-                actionButton(context.t('designer.flowRow.removeColumn'), 'flow-row.remove-column', IconDelete, {
+                actionButton(context.t('materials.flowRow.action.insertBefore'), 'flow-row.insert-before', IconChevronLeft),
+                actionButton(context.t('materials.flowRow.action.insertAfter'), 'flow-row.insert-after', IconChevronRight),
+                actionButton(context.t('materials.flowRow.action.removeColumn'), 'flow-row.remove-column', IconDelete, {
                   danger: true,
                   disabled: !canRemoveColumn,
                 }),
@@ -866,7 +866,7 @@ export function createFlowRowExtension(context: MaterialExtensionContext): Mater
             draft.height = desiredHeight
           }, {
             mergeKey: `flow-row:auto-height:${node.id}`,
-            label: 'designer.history.updateFlowRowHeight',
+            label: 'materials.flowRow.history.updateHeight',
           })
         }
       }

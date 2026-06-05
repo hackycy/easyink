@@ -73,7 +73,7 @@ describe('renderSvgStar', () => {
       payload: { handle: 'inner-radius', index: 0 },
     }, node)
 
-    expect(schema?.title).toBe('designer.property.svgStarEdit')
+    expect(schema?.title).toBe('materials.svgStar.property.edit')
     expect(schema?.schemas.map(item => item.key)).toEqual(['starInnerRatio'])
     expect(schema?.read('starInnerRatio')).toBeCloseTo(0.381966, 5)
   })

@@ -30,13 +30,6 @@ const TYPE_TO_LOCALE: Record<string, string> = {
   'batch': 'designer.history.batch',
   'union-drop': 'designer.history.unionDrop',
   'patch': 'designer.history.patch',
-  'insert-table-row': 'designer.history.insertTableRow',
-  'remove-table-row': 'designer.history.removeTableRow',
-  'resize-table-column': 'designer.history.resizeTableColumn',
-  'resize-table-row': 'designer.history.resizeTableRow',
-  'update-table-visibility': 'designer.history.updateTableVisibility',
-  'update-table-cell': 'designer.history.updateTableCell',
-  'update-table-section': 'designer.history.updateTableSection',
   'update-usage': 'designer.history.updateUsage',
 }
 

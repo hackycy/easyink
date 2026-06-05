@@ -186,7 +186,7 @@ export function createTableKeyboardNavBehavior(delegate: TableEditingDelegate): 
           if (cell) {
             cell.content = { text: '' }
           }
-        }, { label: 'designer.history.updateTableCell' })
+        }, { label: 'materials.table.history.updateCell' })
         return
       }
 
@@ -287,7 +287,7 @@ export function createTableResizeBehavior(delegate: TableEditingDelegate): Behav
           d.width = newTableWidth
           for (let i = 0; i < d.table.topology.columns.length; i++)
             d.table.topology.columns[i]!.ratio = widths[i]! / newTableWidth
-        }, { mergeKey: `resize-col-${p.index}`, label: 'designer.history.resizeTableColumn' })
+        }, { mergeKey: `resize-col-${p.index}`, label: 'materials.table.history.resizeColumn' })
       }
       else {
         if (delegate.canResizeRow?.(node, p.index) === false)
@@ -317,7 +317,7 @@ export function createTableResizeBehavior(delegate: TableEditingDelegate): Behav
           d.height = resizeResult.totalHeight
           for (let i = 0; i < d.table.topology.rows.length; i++)
             d.table.topology.rows[i]!.height = resizeResult.rowHeights[i]!
-        }, { mergeKey: `resize-row-${p.index}`, label: 'designer.history.resizeTableRow' })
+        }, { mergeKey: `resize-row-${p.index}`, label: 'materials.table.history.resizeRow' })
       }
     },
   }
@@ -354,7 +354,7 @@ export function createTableCommandHandlerBehavior(delegate: TableEditingDelegate
                 c.content = {}
               c.content.text = p.text
             }
-          }, { label: 'designer.history.updateTableCell' })
+          }, { label: 'materials.table.history.updateCell' })
           break
         }
 
@@ -368,7 +368,7 @@ export function createTableCommandHandlerBehavior(delegate: TableEditingDelegate
               cells: Array.from({ length: colCount }, () => ({})),
             })
             d.height += avgHeight
-          }, { label: 'designer.table.insertRowAbove' })
+          }, { label: 'materials.table.history.insertRowAbove' })
           ctx.selectionStore.set({
             type: 'table.cell',
             nodeId: node.id,
@@ -386,7 +386,7 @@ export function createTableCommandHandlerBehavior(delegate: TableEditingDelegate
               cells: Array.from({ length: colCount }, () => ({})),
             })
             d.height += avgHeight
-          }, { label: 'designer.table.insertRowBelow' })
+          }, { label: 'materials.table.history.insertRowBelow' })
           break
 
         case 'remove-row': {
@@ -397,7 +397,7 @@ export function createTableCommandHandlerBehavior(delegate: TableEditingDelegate
           ctx.tx.run<TableNode>(node.id, (d) => {
             d.table.topology.rows.splice(row, 1)
             d.height -= removedHeight * rowScale
-          }, { label: 'designer.table.removeRow' })
+          }, { label: 'materials.table.history.removeRow' })
           const newRow = Math.min(row, node.table.topology.rows.length - 2)
           ctx.selectionStore.set({
             type: 'table.cell',
@@ -416,7 +416,7 @@ export function createTableCommandHandlerBehavior(delegate: TableEditingDelegate
               r.cells.splice(col, 0, {})
             }
             d.width += d.width * newRatio / totalRatio
-          }, { label: 'designer.table.insertColLeft' })
+          }, { label: 'materials.table.history.insertColLeft' })
           ctx.selectionStore.set({
             type: 'table.cell',
             nodeId: node.id,
@@ -433,7 +433,7 @@ export function createTableCommandHandlerBehavior(delegate: TableEditingDelegate
               r.cells.splice(col + 1, 0, {})
             }
             d.width += d.width * newRatio / totalRatio
-          }, { label: 'designer.table.insertColRight' })
+          }, { label: 'materials.table.history.insertColRight' })
           break
 
         case 'remove-col': {
@@ -447,7 +447,7 @@ export function createTableCommandHandlerBehavior(delegate: TableEditingDelegate
               r.cells.splice(col, 1)
             }
             d.width -= d.width * removedRatio / totalRatio
-          }, { label: 'designer.table.removeCol' })
+          }, { label: 'materials.table.history.removeCol' })
           const newCol = Math.min(col, node.table.topology.columns.length - 2)
           ctx.selectionStore.set({
             type: 'table.cell',
@@ -472,7 +472,7 @@ export function createTableCommandHandlerBehavior(delegate: TableEditingDelegate
             if (!c)
               return
             c.colSpan = ncs
-          }, { label: 'designer.table.mergeRight' })
+          }, { label: 'materials.table.history.mergeRight' })
           break
         }
 
@@ -491,7 +491,7 @@ export function createTableCommandHandlerBehavior(delegate: TableEditingDelegate
             if (!c)
               return
             c.rowSpan = nrs
-          }, { label: 'designer.table.mergeDown' })
+          }, { label: 'materials.table.history.mergeDown' })
           break
         }
 
@@ -506,7 +506,7 @@ export function createTableCommandHandlerBehavior(delegate: TableEditingDelegate
               return
             c.colSpan = undefined
             c.rowSpan = undefined
-          }, { label: 'designer.table.splitCell' })
+          }, { label: 'materials.table.history.splitCell' })
           break
         }
 
@@ -522,7 +522,7 @@ export function createTableCommandHandlerBehavior(delegate: TableEditingDelegate
             if (!c.typography)
               c.typography = {}
             c.typography.textAlign = align
-          }, { label: `designer.table.align${align === 'left' ? 'Left' : align === 'center' ? 'Center' : 'Right'}` })
+          }, { label: `materials.table.action.align${align === 'left' ? 'Left' : align === 'center' ? 'Center' : 'Right'}` })
           break
         }
 
@@ -538,7 +538,7 @@ export function createTableCommandHandlerBehavior(delegate: TableEditingDelegate
             if (!c.typography)
               c.typography = {}
             c.typography.verticalAlign = valign
-          }, { label: `designer.table.align${valign === 'top' ? 'Top' : valign === 'middle' ? 'Middle' : 'Bottom'}` })
+          }, { label: `materials.table.action.align${valign === 'top' ? 'Top' : valign === 'middle' ? 'Middle' : 'Bottom'}` })
           break
         }
 

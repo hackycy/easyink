@@ -6,7 +6,7 @@ import type { Component } from 'vue'
 import type { PagePropertyContext, PagePropertyDescriptor, PagePropertyGroup } from '../page-properties'
 import type { DesignerAssetPickRequest, DesignerResolvedAsset, PanelSectionId, PropSchema } from '../types'
 import { ClearBindingCommand, getByPath, setByPath, UpdateBindingFormatCommand, UpdateDocumentCommand, UpdateGeometryCommand, UpdateMaterialBindingCommand, UpdateMaterialMetaCommand, UpdateMaterialPropsCommand, UpdatePageCommand } from '@easyink/core'
-import { createLayoutBehaviorPropSchemas, getPropSchemas, groupPropSchemas } from '@easyink/prop-schemas'
+import { createLayoutBehaviorPropSchemas, groupPropSchemas } from '@easyink/prop-schemas'
 import { deepClone, PAPER_PRESETS } from '@easyink/shared'
 import { EiNumberInput, EiPanel, EiSwitch } from '@easyink/ui'
 import { computed, shallowRef, watchEffect } from 'vue'
@@ -353,11 +353,8 @@ const materialSchemas = computed<PropSchema[]>(() => {
   if (!selectedElement.value)
     return []
   const def = store.getMaterial(selectedElement.value.type)
-  const materialProps = def && def.props.length > 0
-    ? def.props
-    : getPropSchemas(selectedElement.value.type)
   return [
-    ...materialProps,
+    ...(def?.props ?? []),
     ...createLayoutBehaviorPropSchemas({ page: store.schema.page }),
   ]
 })

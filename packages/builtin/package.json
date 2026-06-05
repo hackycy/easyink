@@ -40,6 +40,7 @@
     "@easyink/material-svg-heart": "workspace:*",
     "@easyink/material-svg-star": "workspace:*",
     "@easyink/material-table-data": "workspace:*",
+    "@easyink/material-table-kernel": "workspace:*",
     "@easyink/material-table-static": "workspace:*",
     "@easyink/material-text": "workspace:*",
     "@easyink/schema": "workspace:*",

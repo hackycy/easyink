@@ -12,6 +12,11 @@ const props = defineProps<{
   disabled?: boolean
   pickRequest: DesignerAssetPickRequest
   t: (key: string) => string
+  pickTitleKey?: string
+  clearTitleKey?: string
+  previewTitleKey?: string
+  previewLoadingTitleKey?: string
+  previewFailedTitleKey?: string
 }>()
 
 const emit = defineEmits<{
@@ -29,11 +34,11 @@ const previewState = ref<'idle' | 'loading' | 'loaded' | 'error'>('idle')
 const value = computed(() => props.modelValue ?? '')
 const hasValue = computed(() => value.value.trim().length > 0)
 const canPickImage = computed(() => store.assetPickerAvailable)
-const pickTitle = computed(() => props.t('designer.action.pickImage'))
-const clearTitle = computed(() => props.t('designer.action.clearImage'))
-const previewTitle = computed(() => props.t('designer.action.imagePreview'))
-const previewLoadingTitle = computed(() => props.t('designer.action.imagePreviewLoading'))
-const previewFailedTitle = computed(() => props.t('designer.action.imagePreviewFailed'))
+const pickTitle = computed(() => props.t(props.pickTitleKey ?? 'designer.action.pickImage'))
+const clearTitle = computed(() => props.t(props.clearTitleKey ?? 'designer.action.clearImage'))
+const previewTitle = computed(() => props.t(props.previewTitleKey ?? 'designer.action.imagePreview'))
+const previewLoadingTitle = computed(() => props.t(props.previewLoadingTitleKey ?? 'designer.action.imagePreviewLoading'))
+const previewFailedTitle = computed(() => props.t(props.previewFailedTitleKey ?? 'designer.action.imagePreviewFailed'))
 
 watch(value, (next) => {
   previewState.value = next.trim() ? 'loading' : 'idle'

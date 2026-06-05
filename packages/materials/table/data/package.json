@@ -24,6 +24,7 @@
   "dependencies": {
     "@easyink/core": "workspace:*",
     "@easyink/material-table-kernel": "workspace:*",
+    "@easyink/prop-schemas": "workspace:*",
     "@easyink/schema": "workspace:*",
     "@easyink/shared": "workspace:*"
   }

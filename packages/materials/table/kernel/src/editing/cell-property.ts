@@ -85,7 +85,7 @@ export function createCellSubPropertySchema(
   }
 
   return {
-    title: delegate.t('designer.property.cellProperties'),
+    title: delegate.t('materials.table.property.cell'),
     schemas: [...CELL_PROP_SCHEMAS],
 
     read(key: string) {
@@ -105,14 +105,14 @@ export function createCellSubPropertySchema(
         tx.run<TableNode>(sel.nodeId, (d) => {
           const c = d.table.topology.rows[row]!.cells[col]!
           c.padding = { top: v, right: v, bottom: v, left: v }
-        }, { label: 'designer.history.updateTableCell' })
+        }, { label: 'materials.table.history.updateCell' })
         return
       }
       if (key === 'border') {
         tx.run<TableNode>(sel.nodeId, (d) => {
           const c = d.table.topology.rows[row]!.cells[col]!
           c.border = toCellBorder(value)
-        }, { label: 'designer.history.updateTableCell' })
+        }, { label: 'materials.table.history.updateCell' })
         return
       }
       // Typography property
@@ -121,7 +121,7 @@ export function createCellSubPropertySchema(
         if (!c.typography)
           c.typography = {}
         writeTypographyValue(c.typography, key, value)
-      }, { label: 'designer.history.updateTableCell' })
+      }, { label: 'materials.table.history.updateCell' })
     },
 
     get binding() {
@@ -164,14 +164,14 @@ export function createCellSubPropertySchema(
           const binding = d.table.topology.rows[row]!.cells[col]!.binding
           if (binding)
             binding.format = format
-        }, { label: 'designer.history.updateTableCell' })
+        }, { label: 'materials.table.history.updateCell' })
       }
       else {
         tx.run<TableNode>(sel.nodeId, (d) => {
           const binding = d.table.topology.rows[row]!.cells[col]!.staticBinding
           if (binding)
             binding.format = format
-        }, { label: 'designer.history.updateTableCell' })
+        }, { label: 'materials.table.history.updateCell' })
       }
     },
   }

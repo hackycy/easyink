@@ -48,6 +48,11 @@ const enumOptions = computed(() => {
   }))
 })
 
+function readEditorOptionString(key: string): string | undefined {
+  const value = props.schema.editorOptions?.[key]
+  return typeof value === 'string' ? value : undefined
+}
+
 /** Resolve the custom editor component if schema.editor is set */
 const customEditorComponent = computed<Component | undefined>(() => {
   const editorKey = props.schema.editor
@@ -122,6 +127,11 @@ function onImagePicked(result: DesignerResolvedAsset) {
           accept: ['image/*'],
           payload: { propKey: schema.key },
         }"
+        :pick-title-key="readEditorOptionString('pickTitle')"
+        :clear-title-key="readEditorOptionString('clearTitle')"
+        :preview-title-key="readEditorOptionString('previewTitle')"
+        :preview-loading-title-key="readEditorOptionString('previewLoadingTitle')"
+        :preview-failed-title-key="readEditorOptionString('previewFailedTitle')"
         :t="t"
         @update:model-value="onPreview"
         @commit="onCommit"

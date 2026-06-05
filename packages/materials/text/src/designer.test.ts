@@ -29,7 +29,7 @@ function createContext(overrides: Partial<MaterialExtensionContext> = {}): Mater
     on: () => () => {},
     getZoom: () => 1,
     getPageEl: () => null,
-    t: key => key === 'designer.placeholder.textMaterialEmpty' ? '请输入内容或绑定数据' : key,
+    t: key => key === 'materials.text.placeholder.empty' ? '请输入内容或绑定数据' : key,
     ...overrides,
   }
 }

@@ -2,6 +2,7 @@ import type { FontProvider } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { MaterialDefinition } from '../types'
 import { describe, expect, it, vi } from 'vitest'
+import { registerMaterialBundle } from '../materials/registry'
 import { DesignerStore } from './designer-store'
 
 describe('designer store schema initialization', () => {
@@ -100,6 +101,64 @@ describe('designer store schema initialization', () => {
     unregister()
 
     expect(store.t('plugin.action')).toBe('plugin.action')
+  })
+
+  it('registers bundle and material locale messages from material bundles', () => {
+    const store = new DesignerStore()
+
+    store.setLocale({}, 'en-US')
+    const unregister = registerMaterialBundle(store, {
+      localeMessages: {
+        messages: { bundle: { title: 'Bundle Default' } },
+        locales: {
+          'en-US': { bundle: { title: 'Bundle Title' } },
+        },
+      },
+      materials: [{
+        type: 'sample',
+        name: 'materials.sample.name',
+        icon: { render: () => null },
+        category: 'basic',
+        capabilities: {},
+        createDefaultNode: input => createNode(input?.id ?? 'sample-1'),
+        factory: vi.fn(() => ({ renderContent: () => () => {} })),
+        propSchemas: [
+          { key: 'label', label: 'materials.sample.property.label', type: 'string' },
+        ],
+        localeMessages: {
+          messages: {
+            materials: {
+              sample: {
+                name: 'Sample Default',
+                property: { label: 'Label Default' },
+              },
+            },
+          },
+          locales: {
+            'en-US': {
+              materials: {
+                sample: {
+                  name: 'Sample',
+                  property: { label: 'Label' },
+                },
+              },
+            },
+          },
+        },
+      }],
+      quickMaterialTypes: ['sample'],
+      groupedCatalog: [],
+    })
+
+    expect(store.t('bundle.title')).toBe('Bundle Title')
+    expect(store.t('materials.sample.name')).toBe('Sample')
+    expect(store.t('materials.sample.property.label')).toBe('Label')
+    expect(store.getMaterial('sample')?.props.map(schema => schema.label)).toEqual(['materials.sample.property.label'])
+
+    unregister()
+
+    expect(store.t('bundle.title')).toBe('bundle.title')
+    expect(store.t('materials.sample.name')).toBe('materials.sample.name')
   })
 
   it('delegates font loading while preserving font manager compatibility', async () => {

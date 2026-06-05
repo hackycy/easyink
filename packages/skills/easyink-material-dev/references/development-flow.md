@@ -180,7 +180,7 @@ For font properties:
 - Do not implement custom font preload logic in material-local property editors. The shared property panel prevents preview writes for font fields, loads the family on commit, and rolls back when loading fails.
 - The empty string means default/inherited font. Do not replace it with a hardcoded browser font unless the material intentionally owns that default.
 
-Built-in base material schemas live in `@easyink/prop-schemas`. Material package `src/prop-schemas.ts` files should contain only material-owned additions or overrides that need to travel with that material package.
+Material package `src/prop-schemas.ts` files own the full Designer property schema list for that material. `@easyink/prop-schemas` only provides shared option arrays and `createLayoutBehaviorPropSchemas()`; it must not know built-in material types or return material-specific schema lists.
 
 Base layout behavior props are appended by `PropertiesPanel.vue` through `createLayoutBehaviorPropSchemas({ page })`. Do not duplicate placement, break, or repeat controls in material packages unless the material has a truly different sub-selection UI.
 
@@ -203,7 +203,7 @@ For a new built-in material:
 4. Import and register Designer entry in `packages/builtin/src/designer.ts`.
 5. Import and register Viewer entry in `packages/builtin/src/viewer.ts`.
 6. Import and append the AI descriptor in `packages/builtin/src/ai.ts`, and pass the same descriptor as `aiDescriptor` in Designer registration so Assistant sees it.
-7. Add locale keys in `packages/locales/src/zh-CN.ts` and `packages/locales/src/en-US.ts` for material catalog labels, material-local toolbars, properties, table-kernel commands, history, page behavior labels, reject reasons, or placeholders.
+7. Add `src/locale.ts` in the material package and pass it as `localeMessages` on the Designer material entry. Keep `@easyink/locales` for Designer common strings only.
 8. Update tests or snapshots affected by built-in type lists.
 9. Run focused package tests and then broader validation when registration, descriptors, or shared Designer/Viewer behavior changed.
 

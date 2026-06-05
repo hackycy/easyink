@@ -190,7 +190,8 @@ Built-in materials:
 - `dataContract`: optional target data model for structured datasource materials. When present, Designer writes `node.binding.kind='data-contract'` mappings instead of ordinary whole-element `BindingRef`.
 - `createDefaultNode`: default schema factory.
 - `factory`: Designer extension factory.
-- `propSchemas`: material-owned property schemas appended to base entries from `@easyink/prop-schemas`.
+- `propSchemas`: the complete material-owned property schema list for the material. Use `@easyink/prop-schemas` only for shared option arrays and layout behavior helpers.
+- `localeMessages`: material-owned Designer locale messages for catalog labels, property labels, material-local actions, placeholders, history labels, and data-contract labels.
 - `sectionFilter`: hide or show property panel sections.
 
 `quickMaterialTypes` creates quick toolbar entries. `groupedCatalog` creates grouped catalog entries for data, chart, svg, and utility groups.

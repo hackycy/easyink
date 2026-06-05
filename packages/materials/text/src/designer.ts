@@ -32,7 +32,7 @@ function buildHtml(node: MaterialNode, context: MaterialExtensionContext): strin
       display = `${prefix}${escapeHtml(p.content)}${suffix}`
     }
     else {
-      display = escapeHtml(context.t('designer.placeholder.textMaterialEmpty'))
+      display = escapeHtml(context.t('materials.text.placeholder.empty'))
       isPlaceholder = true
     }
   }
@@ -58,7 +58,7 @@ function resolveDesignerDisplayText(node: MaterialNode, context: MaterialExtensi
   }
   if (p.content)
     return `${p.prefix || ''}${p.content}${p.suffix || ''}`
-  return context.t('designer.placeholder.textMaterialEmpty')
+  return context.t('materials.text.placeholder.empty')
 }
 
 function syncAutoHeight(node: MaterialNode, context: MaterialExtensionContext): void {
@@ -72,7 +72,7 @@ function syncAutoHeight(node: MaterialNode, context: MaterialExtensionContext): 
     draft.height = measured.height
   }, {
     mergeKey: `text:auto-height:${node.id}`,
-    label: 'designer.history.updateTextHeight',
+    label: 'materials.text.history.updateHeight',
   })
 }
 

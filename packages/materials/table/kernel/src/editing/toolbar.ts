@@ -53,11 +53,11 @@ export function createTableToolbarGroups(
     groups.push({
       id: 'table.rows',
       actions: [
-        { id: 'insert-row-above', label: t('designer.table.insertRowAbove'), icon: IconTableInsertRowAbove, command: 'insert-row-above' },
-        { id: 'insert-row-below', label: t('designer.table.insertRowBelow'), icon: IconTableInsertRowBelow, command: 'insert-row-below' },
+        { id: 'insert-row-above', label: t('materials.table.action.insertRowAbove'), icon: IconTableInsertRowAbove, command: 'insert-row-above' },
+        { id: 'insert-row-below', label: t('materials.table.action.insertRowBelow'), icon: IconTableInsertRowBelow, command: 'insert-row-below' },
         {
           id: 'remove-row',
-          label: t('designer.table.removeRow'),
+          label: t('materials.table.action.removeRow'),
           icon: IconTableRemoveRow,
           command: 'remove-row',
           disabled: node.table.topology.rows.length <= 1,
@@ -70,11 +70,11 @@ export function createTableToolbarGroups(
   groups.push({
     id: 'table.columns',
     actions: [
-      { id: 'insert-col-left', label: t('designer.table.insertColLeft'), icon: IconTableInsertColLeft, command: 'insert-col-left' },
-      { id: 'insert-col-right', label: t('designer.table.insertColRight'), icon: IconTableInsertColRight, command: 'insert-col-right' },
+      { id: 'insert-col-left', label: t('materials.table.action.insertColLeft'), icon: IconTableInsertColLeft, command: 'insert-col-left' },
+      { id: 'insert-col-right', label: t('materials.table.action.insertColRight'), icon: IconTableInsertColRight, command: 'insert-col-right' },
       {
         id: 'remove-col',
-        label: t('designer.table.removeCol'),
+        label: t('materials.table.action.removeCol'),
         icon: IconTableRemoveCol,
         command: 'remove-col',
         disabled: node.table.topology.columns.length <= 1,
@@ -88,12 +88,12 @@ export function createTableToolbarGroups(
     const hasSpan = (cell?.colSpan ?? 1) > 1 || (cell?.rowSpan ?? 1) > 1
     const showSplit = isHeaderFooter ? (cell?.colSpan ?? 1) > 1 : hasSpan
     const spanActions: MaterialToolbarGroup['actions'] = [
-      { id: 'merge-right', label: t('designer.table.mergeRight'), icon: IconTableMergeRight, command: 'merge-right' },
+      { id: 'merge-right', label: t('materials.table.action.mergeRight'), icon: IconTableMergeRight, command: 'merge-right' },
     ]
     if (kind === 'static')
-      spanActions.push({ id: 'merge-down', label: t('designer.table.mergeDown'), icon: IconTableMergeDown, command: 'merge-down' })
+      spanActions.push({ id: 'merge-down', label: t('materials.table.action.mergeDown'), icon: IconTableMergeDown, command: 'merge-down' })
     if (showSplit)
-      spanActions.push({ id: 'split-cell', label: t('designer.table.split'), icon: IconTableSplit, command: 'split-cell' })
+      spanActions.push({ id: 'split-cell', label: t('materials.table.action.split'), icon: IconTableSplit, command: 'split-cell' })
     groups.push({ id: 'table.spans', actions: spanActions })
   }
 
@@ -101,17 +101,17 @@ export function createTableToolbarGroups(
     {
       id: 'table.horizontal-align',
       actions: [
-        { id: 'align-left', label: t('designer.table.alignLeft'), icon: IconTextAlignLeft, command: 'align-left' },
-        { id: 'align-center', label: t('designer.table.alignCenter'), icon: IconTextAlignCenter, command: 'align-center' },
-        { id: 'align-right', label: t('designer.table.alignRight'), icon: IconTextAlignRight, command: 'align-right' },
+        { id: 'align-left', label: t('materials.table.action.alignLeft'), icon: IconTextAlignLeft, command: 'align-left' },
+        { id: 'align-center', label: t('materials.table.action.alignCenter'), icon: IconTextAlignCenter, command: 'align-center' },
+        { id: 'align-right', label: t('materials.table.action.alignRight'), icon: IconTextAlignRight, command: 'align-right' },
       ],
     },
     {
       id: 'table.vertical-align',
       actions: [
-        { id: 'valign-top', label: t('designer.table.alignTop'), icon: IconAlignTop, command: 'valign-top' },
-        { id: 'valign-middle', label: t('designer.table.alignMiddle'), icon: IconAlignMiddle, command: 'valign-middle' },
-        { id: 'valign-bottom', label: t('designer.table.alignBottom'), icon: IconAlignBottom, command: 'valign-bottom' },
+        { id: 'valign-top', label: t('materials.table.action.alignTop'), icon: IconAlignTop, command: 'valign-top' },
+        { id: 'valign-middle', label: t('materials.table.action.alignMiddle'), icon: IconAlignMiddle, command: 'valign-middle' },
+        { id: 'valign-bottom', label: t('materials.table.action.alignBottom'), icon: IconAlignBottom, command: 'valign-bottom' },
       ],
     },
   )

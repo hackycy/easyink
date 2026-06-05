@@ -1,33 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { createLayoutBehaviorPropSchemas, getPropSchemas, groupPropSchemas } from './index'
+import { createLayoutBehaviorPropSchemas, groupPropSchemas } from './index'
 
 describe('designer prop schemas', () => {
-  it('returns built-in material schemas without page-context behavior schemas', () => {
-    const schemas = getPropSchemas('text')
-
-    expect(schemas.map(schema => schema.key)).toContain('content')
-    expect(schemas.map(schema => schema.key)).not.toContain('placement.mode')
-  })
-
-  it('exposes the text layout model instead of the legacy autoWrap control', () => {
-    const keys = getPropSchemas('text').map(schema => schema.key)
-
-    expect(keys).toContain('heightMode')
-    expect(keys).toContain('wrapMode')
-    expect(keys).toContain('minHeight')
-    expect(keys).toContain('maxHeight')
-    expect(keys).not.toContain('autoWrap')
-  })
-
-  it('keeps text auto-height constraints nullable in the editor', () => {
-    const schemas = getPropSchemas('text')
-    const minHeight = schemas.find(schema => schema.key === 'minHeight')
-    const maxHeight = schemas.find(schema => schema.key === 'maxHeight')
-
-    expect(minHeight).toMatchObject({ default: null, nullable: true })
-    expect(maxHeight).toMatchObject({ default: null, nullable: true })
-  })
-
   it('creates page-context behavior schemas for auto-paged flow documents', () => {
     const schemas = createLayoutBehaviorPropSchemas({
       page: {

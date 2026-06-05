@@ -60,7 +60,7 @@ Framework helpers:
 
 Use `tx.run(nodeId, draft => { ... }, options)`:
 
-- `label`: use an i18n history key such as `designer.history.updateTableCell`.
+- `label`: use a material-owned i18n history key such as `materials.table.history.updateCell`.
 - `mergeKey`: use for continuous drag or resize, such as `svg-star:inner-radius` or `resize-col-2`.
 - `mergeWindowMs`: tune only when the default window is wrong.
 
