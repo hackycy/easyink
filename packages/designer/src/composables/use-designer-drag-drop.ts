@@ -1,4 +1,4 @@
-import type { DatasourceDropZone, DatasourceFieldInfo, Rect } from '@easyink/core'
+import type { DatasourceDropZone, DatasourceFieldInfo, MaterialDataContract, MaterialDataSlot, Rect } from '@easyink/core'
 import type { DataUnionBinding } from '@easyink/datasource'
 import type { BindingRef, MaterialNode } from '@easyink/schema'
 import type { BindingDisplayFormat } from '@easyink/shared'
@@ -7,11 +7,15 @@ import type { DesignerStore } from '../store/designer-store'
 import type { MaterialCatalogEntry } from '../types'
 import {
   AddMaterialCommand,
+  applyMaterialDataSlotBinding,
   BindFieldCommand,
+  canBindMaterialDataSlot,
   createEditorSurfacePlan,
+  findMaterialDataSlotBinding,
   pointInRect,
   projectEditorSurfacePointToDocument,
   UnitManager,
+  UpdateMaterialBindingCommand,
 } from '@easyink/core'
 import { deepClone } from '@easyink/shared'
 import { createGeometryService } from '../editing/geometry-service'
@@ -33,6 +37,7 @@ export interface DatasourceFieldDragData {
   sourceTag?: string
   fieldPath: string
   fieldKey?: string
+  fieldTag?: string
   fieldLabel?: string
   format?: BindingDisplayFormat
   use?: string
@@ -57,7 +62,15 @@ export interface DesignerDragDropController {
   onCanvasDragOver: (event: DragEvent) => void
   onCanvasDragLeave: (event: DragEvent) => void
   onCanvasDrop: (event: DragEvent) => void
+  registerDatasourceDropTarget: (target: DatasourcePanelDropTarget) => () => void
   cleanup: () => void
+}
+
+export interface DatasourcePanelDropTarget {
+  id: string
+  element: () => HTMLElement | null
+  onDragOver: (data: DatasourceFieldDragData) => { status: 'accepted' | 'rejected', label?: string }
+  onDrop: (data: DatasourceFieldDragData) => void
 }
 
 export const DESIGNER_DRAG_DROP_KEY: InjectionKey<DesignerDragDropController> = Symbol('easyinkDesignerDragDrop')
@@ -98,6 +111,7 @@ type MaterialDropTarget
 type DragIntent
   = | { kind: 'create-material', nodes: MaterialNode[], previewRects: Rect[], accepted: boolean }
     | { kind: 'bind-element', target: MaterialNode, zone: DatasourceDropZone, docPoint: { x: number, y: number }, accepted: boolean }
+    | { kind: 'bind-panel', target: DatasourcePanelDropTarget, rect: DOMRect, label?: string, accepted: boolean }
     | { kind: 'floating-preview', rect: { left: number, top: number, width: number, height: number }, label?: string }
     | { kind: 'cancel', reason: string }
 
@@ -106,6 +120,12 @@ interface PreviewRect {
   rect: Rect
   accepted: boolean
   primary?: boolean
+}
+
+interface MaterialDataDropPlan {
+  slot: MaterialDataSlot
+  status: 'accepted' | 'rejected'
+  label?: string
 }
 
 interface PreviewZone {
@@ -125,6 +145,7 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
   let pointerListenersAttached = false
   let suppressNextClick = false
   let clearClickSuppressionTimer: number | null = null
+  const datasourcePanelTargets = new Map<string, DatasourcePanelDropTarget>()
 
   function startMaterialPointerDrag(event: PointerEvent, entry: MaterialCatalogEntry) {
     if (!canStartPointerDrag(event))
@@ -298,11 +319,35 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
     if (activeSession.kind === 'material')
       return resolveMaterialIntent(activeSession.node, clientX, clientY)
 
+    const panelIntent = resolveDatasourcePanelIntent(activeSession.data, clientX, clientY)
+    if (panelIntent)
+      return panelIntent
+
     const target = resolveDatasourceDropTarget(clientX, clientY)
     const bindIntent = resolveDatasourceBindIntent(activeSession.data, target)
     if (bindIntent)
       return bindIntent
     return resolveDatasourceFloatingIntent(activeSession.data, clientX, clientY)
+  }
+
+  function resolveDatasourcePanelIntent(data: DatasourceFieldDragData, clientX: number, clientY: number): DragIntent | null {
+    for (const target of Array.from(datasourcePanelTargets.values()).reverse()) {
+      const el = target.element()
+      if (!el)
+        continue
+      const rect = el.getBoundingClientRect()
+      if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom)
+        continue
+      const result = target.onDragOver(data)
+      return {
+        kind: 'bind-panel',
+        target,
+        rect,
+        label: result.label,
+        accepted: result.status === 'accepted',
+      }
+    }
+    return null
   }
 
   function resolveMaterialIntent(node: MaterialNode | null, clientX: number, clientY: number): DragIntent {
@@ -343,6 +388,24 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
       }
     }
 
+    const material = ctx.store.getMaterial(hit.type)
+    if (material?.dataContract) {
+      const plan = resolveMaterialDataDropPlan(material.dataContract, hit, data)
+      if (!plan)
+        return null
+      return {
+        kind: 'bind-element',
+        target: hit,
+        zone: {
+          status: plan.status,
+          rect: { x: 0, y: 0, w: elementSize.width, h: elementSize.height },
+          label: plan.label,
+        },
+        docPoint: target.docPoint,
+        accepted: plan.status === 'accepted',
+      }
+    }
+
     return {
       kind: 'bind-element',
       target: hit,
@@ -373,6 +436,13 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
     if (!resolved.accepted)
       return
 
+    if (resolved.kind === 'bind-panel') {
+      const fieldData = session?.kind === 'datasource' ? session.data : null
+      if (fieldData)
+        resolved.target.onDrop(fieldData)
+      return
+    }
+
     if (resolved.kind === 'create-material') {
       const command = new AddMaterialCommand(ctx.store.schema.elements, resolved.nodes[0]!)
       ctx.store.commands.execute(command)
@@ -391,9 +461,78 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
       return
     }
 
+    const material = ctx.store.getMaterial(resolved.target.type)
+    if (material?.dataContract) {
+      const plan = resolveMaterialDataDropPlan(material.dataContract, resolved.target, fieldData)
+      if (!plan || plan.status !== 'accepted')
+        return
+      const binding = applyMaterialDataSlotBinding(
+        material.dataContract,
+        resolved.target.binding,
+        fieldData,
+        plan.slot.id,
+      )
+      const cmd = new UpdateMaterialBindingCommand(ctx.store.schema.elements, resolved.target.id, binding.length > 0 ? binding : undefined)
+      ctx.store.commands.execute(cmd)
+      selectOne(ctx.store, resolved.target.id)
+      return
+    }
+
     const cmd = new BindFieldCommand(ctx.store.schema.elements, resolved.target.id, createBinding(fieldData))
     ctx.store.commands.execute(cmd)
     selectOne(ctx.store, resolved.target.id)
+  }
+
+  function resolveMaterialDataDropPlan(
+    contract: MaterialDataContract,
+    target: MaterialNode,
+    data: DatasourceFieldDragData,
+  ): MaterialDataDropPlan | null {
+    const visibleSlots = getVisibleMaterialDataSlots(contract)
+    if (visibleSlots.length === 0)
+      return null
+
+    for (const slot of visibleSlots) {
+      if (findMaterialDataSlotBinding(contract, target.binding, slot.id))
+        continue
+      const result = canBindMaterialDataSlot(contract, target.binding, data, slot.id)
+      if (result.accepted) {
+        return {
+          slot,
+          status: 'accepted',
+          label: slot.label,
+        }
+      }
+    }
+
+    for (const slot of visibleSlots) {
+      if (findMaterialDataSlotBinding(contract, target.binding, slot.id))
+        continue
+      const result = canBindMaterialDataSlot(contract, target.binding, data, slot.id)
+      if (!result.accepted) {
+        return {
+          slot,
+          status: 'rejected',
+          label: resolveMaterialDataMessage(result.messageKey, result.message),
+        }
+      }
+    }
+
+    return {
+      slot: visibleSlots[visibleSlots.length - 1]!,
+      status: 'rejected',
+      label: resolveMaterialDataMessage('designer.materialDataBinding.allBound', 'All data roles are bound'),
+    }
+  }
+
+  function getVisibleMaterialDataSlots(contract: MaterialDataContract): MaterialDataSlot[] {
+    return [...contract.slots]
+      .filter(slot => slot.kind === 'field')
+      .sort((a, b) => a.bindIndex - b.bindIndex)
+  }
+
+  function resolveMaterialDataMessage(key: string | undefined, fallback: string | undefined): string | undefined {
+    return key ? ctx.store.t(key) : fallback
   }
 
   function resolveDatasourceDropTarget(clientX: number, clientY: number): DropTarget {
@@ -484,7 +623,7 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
       const localPoint = geometry.documentToLocal({ x: docX, y: docY }, element)
       if (pointInRect(localPoint, { x: 0, y: 0, width: elementSize.width, height: elementSize.height })) {
         const material = ctx.store.getMaterial(element.type)
-        if (material && material.capabilities.bindable === false)
+        if (material?.capabilities.bindable === false)
           continue
         return element
       }
@@ -500,6 +639,11 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
 
     if (resolved.kind === 'floating-preview') {
       renderFloatingPreview(resolved)
+      return
+    }
+
+    if (resolved.kind === 'bind-panel') {
+      renderPanelDropTarget(resolved)
       return
     }
 
@@ -638,6 +782,46 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
     overlay.style.display = 'block'
   }
 
+  function renderPanelDropTarget(preview: Extract<DragIntent, { kind: 'bind-panel' }>) {
+    const overlay = ensureOverlay()
+    overlay.innerHTML = ''
+    const rect = document.createElement('div')
+    rect.className = 'ei-designer-drag-preview__panel'
+    rect.style.cssText = [
+      'position:fixed',
+      'box-sizing:border-box',
+      `left:${preview.rect.left}px`,
+      `top:${preview.rect.top}px`,
+      `width:${preview.rect.width}px`,
+      `height:${preview.rect.height}px`,
+      `border:2px solid ${preview.accepted ? 'var(--ei-success-color, #52c41a)' : 'var(--ei-error-color, #ff4d4f)'}`,
+      `background:${preview.accepted ? 'rgba(82, 196, 26, 0.08)' : 'rgba(255, 77, 79, 0.08)'}`,
+      'border-radius:6px',
+    ].join(';')
+
+    if (preview.label) {
+      const label = document.createElement('span')
+      label.textContent = preview.label
+      label.style.cssText = [
+        'position:absolute',
+        'bottom:100%',
+        'left:0',
+        'margin-bottom:3px',
+        'padding:2px 6px',
+        'border-radius:3px',
+        'font-size:11px',
+        'line-height:1.4',
+        'white-space:nowrap',
+        'color:#fff',
+        `background:${preview.accepted ? 'var(--ei-success-color, #52c41a)' : 'var(--ei-error-color, #ff4d4f)'}`,
+      ].join(';')
+      rect.appendChild(label)
+    }
+
+    overlay.appendChild(rect)
+    overlay.style.display = 'block'
+  }
+
   function ensureOverlay(): HTMLElement {
     if (!overlayEl) {
       overlayEl = document.createElement('div')
@@ -738,6 +922,7 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
       sourceTag: data.sourceTag,
       fieldPath: data.fieldPath,
       fieldKey: data.fieldKey,
+      fieldTag: data.fieldTag,
       fieldLabel: data.fieldLabel,
       format: data.format,
       use: data.use,
@@ -798,6 +983,10 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
   function handleGlobalDrop(event: DragEvent) {
     if (!session || isEventInsidePage(event))
       return
+    if (hasUsablePointer(event)) {
+      const resolved = resolveIntent(event.clientX, event.clientY)
+      commitIntent(resolved)
+    }
     endDrag()
   }
 
@@ -929,6 +1118,14 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
     clearClickSuppressionTimer = null
   }
 
+  function registerDatasourceDropTarget(target: DatasourcePanelDropTarget): () => void {
+    datasourcePanelTargets.set(target.id, target)
+    return () => {
+      if (datasourcePanelTargets.get(target.id) === target)
+        datasourcePanelTargets.delete(target.id)
+    }
+  }
+
   return {
     startMaterialPointerDrag,
     startDatasourcePointerDrag,
@@ -940,6 +1137,7 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
     onCanvasDragOver,
     onCanvasDragLeave,
     onCanvasDrop,
+    registerDatasourceDropTarget,
     cleanup,
   }
 }

@@ -32,6 +32,7 @@ export {
   UpdateGeometryCommand,
   UpdateGuidesCommand,
   UpdateMaterialBehaviorCommand,
+  UpdateMaterialBindingCommand,
   UpdateMaterialMetaCommand,
   UpdateMaterialPropsCommand,
   UpdatePageCommand,
@@ -115,6 +116,28 @@ export type { FlowBreakConstraints, LayoutDiagnostic, LayoutDocument, LayoutFrag
 export { runLayoutPipeline } from './layout-strategy'
 
 export type { RunLayoutPipelineOptions } from './layout-strategy'
+
+export {
+  applyMaterialDataSlotBinding,
+  canBindMaterialDataSlot,
+  clearMaterialDataSlotBinding,
+  findMaterialDataSlotBinding,
+  getMaterialDataSlot,
+  normalizeMaterialDataBindings,
+  resolveMaterialDataContract,
+  swapMaterialDataSlotBindings,
+} from './material-data-contract'
+export type {
+  MaterialDataBindingField,
+  MaterialDataContract,
+  MaterialDataContractResolution,
+  MaterialDataDiagnostic,
+  MaterialDataSlot,
+  MaterialDataSlotAcceptance,
+  MaterialDataSlotKind,
+  MaterialDataSlotResolution,
+  MaterialDataValueType,
+} from './material-data-contract'
 
 export type {
   ContextAction,

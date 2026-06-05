@@ -1,4 +1,5 @@
 export * from './ai'
+export * from './data-contract'
 export * from './designer'
 export * from './options'
 export * from './prop-schemas'

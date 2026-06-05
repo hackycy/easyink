@@ -14,7 +14,18 @@ export const salesReportDataSource: DataSourceDescriptor = {
     { name: 'owner', title: '负责人', path: 'owner', use: 'text' },
     { name: 'totalRevenue', title: '总销售额', path: 'totalRevenue', use: 'text' },
     { name: 'targetCompletion', title: '目标达成率', path: 'targetCompletion', use: 'text' },
-    { name: 'monthlySales', title: '月度销售柱状图', path: 'monthlySales', use: 'chart-bar' },
+    {
+      name: 'monthlySales',
+      title: '月度销售数据',
+      path: 'monthlySales',
+      tag: 'collection',
+      use: 'chart-bar',
+      expand: true,
+      fields: [
+        { name: 'month', title: '月份', path: 'monthlySales/month', use: 'text' },
+        { name: 'revenue', title: '销售额', path: 'monthlySales/revenue', use: 'text' },
+      ],
+    },
   ],
 }
 
@@ -26,12 +37,12 @@ export const salesReportDemoData: Record<string, unknown> = {
   totalRevenue: '￥728,000',
   targetCompletion: '91%',
   monthlySales: [
-    { label: '1月', value: 98 },
-    { label: '2月', value: 112 },
-    { label: '3月', value: 135 },
-    { label: '4月', value: 121 },
-    { label: '5月', value: 146 },
-    { label: '6月', value: 116 },
+    { month: '1月', revenue: 98 },
+    { month: '2月', revenue: 112 },
+    { month: '3月', revenue: 135 },
+    { month: '4月', revenue: 121 },
+    { month: '5月', revenue: 146 },
+    { month: '6月', revenue: 116 },
   ],
 }
 
@@ -297,11 +308,20 @@ export const salesReportTemplate: DocumentSchema = {
         showXAxisLine: true,
         showYAxisLine: true,
       },
-      binding: {
-        sourceId: 'sales-report',
-        fieldPath: 'monthlySales',
-        fieldLabel: '月度销售柱状图',
-      },
+      binding: [
+        {
+          sourceId: 'sales-report',
+          fieldPath: 'monthlySales/month',
+          fieldLabel: '月份',
+          bindIndex: 0,
+        },
+        {
+          sourceId: 'sales-report',
+          fieldPath: 'monthlySales/revenue',
+          fieldLabel: '销售额',
+          bindIndex: 1,
+        },
+      ],
     },
   ],
 }

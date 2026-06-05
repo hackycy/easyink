@@ -401,6 +401,16 @@ const enUS: LocaleMessages = {
       collectionMismatch: 'Collection path mismatch',
       bindColumn: 'Bind to column',
     },
+    materialDataBinding: {
+      required: 'Required',
+      clear: 'Clear',
+      dropScopedField: 'Drop a field inside a collection',
+      dropField: 'Drop a data field',
+      allBound: 'All data roles are bound',
+      rejectUnknownSlot: 'Unknown data slot',
+      rejectCollection: 'Drop a collection field',
+      rejectScopedField: 'Drop a field inside a collection',
+    },
     flowRow: {
       insertBefore: 'Insert Left',
       insertAfter: 'Insert Right',

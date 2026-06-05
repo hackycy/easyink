@@ -192,6 +192,7 @@ export interface DatasourceFieldInfo {
   sourceTag?: string
   fieldPath: string
   fieldKey?: string
+  fieldTag?: string
   fieldLabel?: string
   format?: BindingDisplayFormat
   use?: string

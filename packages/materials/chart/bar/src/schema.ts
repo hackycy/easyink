@@ -36,7 +36,7 @@ export const CHART_BAR_CAPABILITIES = {
   supportsChildren: false,
   supportsAnimation: false,
   supportsUnionDrop: false,
-  multiBinding: false,
+  multiBinding: true,
 }
 
 export function createChartBarNode(partial?: Partial<MaterialNode>, unit?: string): MaterialNode {

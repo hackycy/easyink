@@ -25,6 +25,7 @@ import {
 } from '@easyink/material-barcode'
 import {
   CHART_BAR_CAPABILITIES,
+  CHART_BAR_DATA_CONTRACT,
   CHART_BAR_TYPE,
   chartBarAIMaterialDescriptor,
   chartBarDesignerPropSchemas,
@@ -243,6 +244,7 @@ export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
       category: 'chart',
       capabilities: CHART_BAR_CAPABILITIES,
       aiDescriptor: chartBarAIMaterialDescriptor,
+      dataContract: CHART_BAR_DATA_CONTRACT,
       createDefaultNode: createChartBarNode,
       factory: createChartBarExtension,
       propSchemas: chartBarDesignerPropSchemas,

@@ -61,6 +61,34 @@ export class ClearBindingCommand implements Command {
   }
 }
 
+export class UpdateMaterialBindingCommand implements Command {
+  readonly id = generateId('cmd')
+  readonly type = 'update-material-binding'
+  readonly description = 'Update material binding'
+  private oldBinding: BindingRef | BindingRef[] | undefined
+
+  constructor(
+    private elements: MaterialNode[],
+    private nodeId: string,
+    private binding: BindingRef | BindingRef[] | undefined,
+  ) {}
+
+  execute(): void {
+    const node = findNode(this.elements, this.nodeId)
+    if (!node)
+      return
+    this.oldBinding = deepClone(node.binding)
+    node.binding = this.binding ? deepClone(this.binding) : undefined
+  }
+
+  undo(): void {
+    const node = findNode(this.elements, this.nodeId)
+    if (!node)
+      return
+    node.binding = this.oldBinding
+  }
+}
+
 export class UpdateBindingFormatCommand implements Command {
   readonly id = generateId('cmd')
   readonly type = 'update-binding-format'

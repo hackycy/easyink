@@ -401,6 +401,16 @@ const zhCN: LocaleMessages = {
       collectionMismatch: '集合路径不匹配',
       bindColumn: '绑定到列',
     },
+    materialDataBinding: {
+      required: '必填',
+      clear: '清空',
+      dropScopedField: '拖入集合内字段',
+      dropField: '拖入数据字段',
+      allBound: '字段角色已绑定完成',
+      rejectUnknownSlot: '未知数据槽位',
+      rejectCollection: '请拖入集合字段',
+      rejectScopedField: '请拖入集合内字段',
+    },
     flowRow: {
       insertBefore: '左侧插入',
       insertAfter: '右侧插入',

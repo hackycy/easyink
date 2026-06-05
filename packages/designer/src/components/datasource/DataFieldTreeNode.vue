@@ -62,6 +62,7 @@ function createDragData(): DatasourceFieldDragData {
     sourceTag: props.source.tag,
     fieldPath: props.field.path || props.field.name,
     fieldKey: props.field.key,
+    fieldTag: props.field.tag,
     fieldLabel: props.field.title || props.field.name,
     format: props.field.format,
     use: props.field.use,
@@ -95,6 +96,7 @@ function onPointerUp() {
   <div v-if="!isLeaf()">
     <div
       class="ei-field-node__row ei-field-node__row--group"
+      :class="{ 'ei-field-node__row--draggable': isDraggable() }"
       draggable="false"
       :style="{ paddingLeft: `${depth * 16 + 4}px` }"
       @click="onToggle"
@@ -107,6 +109,12 @@ function onPointerUp() {
         :stroke-width="1.5"
         class="ei-field-node__chevron"
         :class="{ 'ei-field-node__chevron--expanded': expanded() }"
+      />
+      <IconGripVertical
+        v-if="isDraggable()"
+        :size="12"
+        :stroke-width="1.5"
+        class="ei-field-node__grip"
       />
       <component
         :is="expanded() ? IconFolderOpen : IconFolderClosed"
@@ -162,6 +170,14 @@ function onPointerUp() {
 
       &:hover {
         background: var(--ei-hover-bg, #f0f0f0);
+      }
+    }
+
+    &--draggable {
+      cursor: grab;
+
+      &:active {
+        cursor: grabbing;
       }
     }
 

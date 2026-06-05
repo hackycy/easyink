@@ -5,7 +5,7 @@ import type { BindingDisplayFormat } from '@easyink/shared'
 import type { Component } from 'vue'
 import type { PagePropertyContext, PagePropertyDescriptor, PagePropertyGroup } from '../page-properties'
 import type { DesignerAssetPickRequest, DesignerResolvedAsset, PanelSectionId, PropSchema } from '../types'
-import { ClearBindingCommand, getByPath, setByPath, UpdateBindingFormatCommand, UpdateDocumentCommand, UpdateGeometryCommand, UpdateMaterialMetaCommand, UpdateMaterialPropsCommand, UpdatePageCommand } from '@easyink/core'
+import { ClearBindingCommand, getByPath, setByPath, UpdateBindingFormatCommand, UpdateDocumentCommand, UpdateGeometryCommand, UpdateMaterialBindingCommand, UpdateMaterialMetaCommand, UpdateMaterialPropsCommand, UpdatePageCommand } from '@easyink/core'
 import { createLayoutBehaviorPropSchemas, getPropSchemas, groupPropSchemas } from '@easyink/prop-schemas'
 import { deepClone, PAPER_PRESETS } from '@easyink/shared'
 import { EiNumberInput, EiPanel, EiSwitch } from '@easyink/ui'
@@ -15,6 +15,7 @@ import { isElementRotatable } from '../materials/capabilities'
 import { canEditGeometry, isPropSchemaDisabled as isMaterialPropSchemaDisabled } from '../materials/control-policy'
 import { defaultDocumentPatch, defaultPagePatch, filterVisible, groupDescriptors, PAGE_PROPERTY_DESCRIPTORS, readPageProperty, splitPatch } from '../page-properties'
 import BindingSection from './BindingSection.vue'
+import MaterialDataBindingEditor from './MaterialDataBindingEditor.vue'
 import PagePropertyEditor from './PagePropertyEditor.vue'
 import PropSchemaEditor from './PropSchemaEditor.vue'
 
@@ -126,6 +127,13 @@ const externalBinding = computed<BindingRef | BindingRef[] | null | undefined>((
   return subPropertySchema.value?.binding as BindingRef | BindingRef[] | null | undefined
 })
 
+const selectedMaterialDataContract = computed(() => {
+  const el = selectedElement.value
+  if (!el)
+    return undefined
+  return store.getMaterial(el.type)?.dataContract
+})
+
 /** Should the BindingSection be hidden entirely? */
 const hideBindingSection = computed(() => {
   // Sub-property explicitly hides binding
@@ -133,6 +141,8 @@ const hideBindingSection = computed(() => {
     return true
   // Material has no bindable capability and no sub-property binding
   if (!hasSubBinding.value && selectedElement.value) {
+    if (selectedMaterialDataContract.value)
+      return true
     const def = store.getMaterial(selectedElement.value.type)
     if (def?.capabilities.bindable === false)
       return true
@@ -604,6 +614,14 @@ function updateBindingFormat(format: BindingDisplayFormat | undefined, bindIndex
   store.commands.execute(cmd)
 }
 
+function updateMaterialDataBinding(binding: BindingRef[] | undefined) {
+  const el = selectedElement.value
+  if (!el)
+    return
+  const cmd = new UpdateMaterialBindingCommand(store.schema.elements, el.id, binding)
+  store.commands.execute(cmd)
+}
+
 function getBindingDataSource(sourceId: string) {
   return store.dataSourceRegistry.getSourceSync(sourceId)
 }
@@ -765,6 +783,15 @@ function createImagePickRequest(schema: PropSchema): DesignerAssetPickRequest {
       </template>
 
       <!-- Data binding -->
+      <EiPanel v-if="canEditSelectedElement && !hasSubBinding && selectedMaterialDataContract && isSectionVisible('binding')" :title="store.t('designer.property.dataBinding')" collapsible flat>
+        <MaterialDataBindingEditor
+          :element="selectedElement"
+          :contract="selectedMaterialDataContract"
+          :t="store.t.bind(store)"
+          @update-binding="updateMaterialDataBinding"
+        />
+      </EiPanel>
+
       <EiPanel v-if="canEditSelectedElement && !hideBindingSection && (isSectionVisible('binding') || hasSubBinding)" :title="store.t('designer.property.dataBinding')" collapsible flat>
         <BindingSection
           :element="selectedElement"

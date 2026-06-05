@@ -1,4 +1,4 @@
-import type { MaterialExtensionFactory, MaterialViewerExtension, PropSchema } from '@easyink/core'
+import type { MaterialDataContract, MaterialExtensionFactory, MaterialViewerExtension, PropSchema } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { AIMaterialDescriptor, MaterialCategory } from '@easyink/shared'
 import type { Component } from 'vue'
@@ -26,6 +26,7 @@ export interface BuiltinDesignerMaterialRegistration {
   createDefaultNode: (input?: Partial<MaterialNode>, unit?: string) => MaterialNode
   factory: MaterialExtensionFactory
   aiDescriptor?: AIMaterialDescriptor
+  dataContract?: MaterialDataContract
   /** Material-owned PropSchemas appended to the designer's static registry entries. */
   propSchemas?: PropSchema[]
   sectionFilter?: (sectionId: BuiltinPanelSectionId) => boolean

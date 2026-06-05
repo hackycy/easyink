@@ -35,6 +35,14 @@ function makePage(overrides: Partial<PageSchema> = {}): PageSchema {
   return { mode: 'fixed', width: 500, height: 500, ...overrides }
 }
 
+const chartDataContract = {
+  version: 1,
+  slots: [
+    { id: 'category', label: '分类字段', required: true, kind: 'field', scope: 'series', bindIndex: 0 },
+    { id: 'value', label: '数值字段', required: true, kind: 'field', scope: 'series', valueType: 'number', bindIndex: 1 },
+  ],
+} as const
+
 function makePageEl() {
   const pageEl = document.createElement('div')
   pageEl.getBoundingClientRect = () => ({
@@ -97,7 +105,7 @@ function dispatchPointerEvent(type: string, clientX: number, clientY: number, po
 function makeStore(
   elements: MaterialNode[] = [],
   extension?: unknown,
-  options: { textCreateDefaultNode?: (partial?: Partial<MaterialNode>) => MaterialNode, page?: PageSchema } = {},
+  options: { textCreateDefaultNode?: (partial?: Partial<MaterialNode>) => MaterialNode, page?: PageSchema, textDataContract?: unknown } = {},
 ) {
   const textDef = {
     type: 'text',
@@ -105,6 +113,7 @@ function makeStore(
     icon: {},
     category: 'basic',
     capabilities: { bindable: true },
+    dataContract: options.textDataContract,
     props: [],
     createDefaultNode: options.textCreateDefaultNode ?? ((partial?: Partial<MaterialNode>) => createTextNode(partial)),
   }
@@ -130,6 +139,7 @@ function makeStore(
     getElements: () => elements,
     getElementSize: (node: MaterialNode) => ({ width: node.width, height: node.height }),
     getMaterial: (type: string) => type === 'text' ? textDef : type === 'line' ? lineDef : undefined,
+    t: (key: string) => key,
     getCatalog: () => [
       {
         id: 'quick-text',
@@ -584,6 +594,129 @@ describe('useDesignerDragDrop', () => {
     expect(onDragOver).toHaveBeenCalledTimes(2)
     expect(onDragOver.mock.calls[0]?.[1]).toMatchObject({ x: 20, y: 30 })
     expect(onDragOver.mock.calls[1]?.[1]).toMatchObject({ x: 35, y: 40 })
+    drag.cleanup()
+  })
+
+  it('commits datasource drops to registered panel targets before canvas binding', () => {
+    const pageEl = makePageEl()
+    const node = createTextNode({ id: 'target', x: 0, y: 0, width: 100, height: 50 })
+    const store = makeStore([node])
+    const drag = useDesignerDragDrop({
+      store: store as never,
+      getPageEl: () => pageEl,
+    })
+    const panelEl = document.createElement('div')
+    panelEl.getBoundingClientRect = () => ({
+      left: 10,
+      top: 10,
+      right: 110,
+      bottom: 70,
+      width: 100,
+      height: 60,
+      x: 10,
+      y: 10,
+      toJSON: () => ({}),
+    })
+    document.body.appendChild(panelEl)
+    const onDrop = vi.fn()
+    drag.registerDatasourceDropTarget({
+      id: 'slot',
+      element: () => panelEl,
+      onDragOver: () => ({ status: 'accepted', label: 'Slot' }),
+      onDrop,
+    })
+    const field = {
+      sourceId: 'order',
+      sourceName: 'Order',
+      fieldPath: 'order/no',
+      fieldLabel: 'No',
+    }
+
+    drag.startDatasourcePointerDrag(makePointerDown(0, 0), field)
+    dispatchPointerEvent('pointermove', 30, 30)
+    dispatchPointerEvent('pointerup', 30, 30)
+
+    expect(onDrop).toHaveBeenCalledWith(field)
+    expect(node.binding).toBeUndefined()
+    panelEl.remove()
+    drag.cleanup()
+  })
+
+  it('binds datasource fields to data-contract materials on canvas in role order', () => {
+    const pageEl = makePageEl()
+    const node = createTextNode({ id: 'target', x: 0, y: 0, width: 100, height: 50 })
+    const store = makeStore([node], undefined, {
+      textDataContract: chartDataContract,
+    })
+    const drag = useDesignerDragDrop({
+      store: store as never,
+      getPageEl: () => pageEl,
+    })
+    const month = {
+      sourceId: 'sales-report',
+      sourceName: 'Sales Report',
+      fieldPath: 'monthlySales/month',
+      fieldLabel: '月份',
+    }
+    const revenue = {
+      sourceId: 'sales-report',
+      sourceName: 'Sales Report',
+      fieldPath: 'monthlySales/revenue',
+      fieldLabel: '销售额',
+    }
+
+    drag.startDatasourceDrag(makeDragEvent(0, 0, []), month)
+    drag.onCanvasDrop(makeDragEvent(20, 20, [DATASOURCE_DRAG_MIME], { [DATASOURCE_DRAG_MIME]: JSON.stringify(month) }))
+    drag.startDatasourceDrag(makeDragEvent(0, 0, []), revenue)
+    drag.onCanvasDrop(makeDragEvent(20, 20, [DATASOURCE_DRAG_MIME], { [DATASOURCE_DRAG_MIME]: JSON.stringify(revenue) }))
+
+    expect(node.binding).toEqual([
+      expect.objectContaining({
+        fieldPath: 'monthlySales/month',
+        bindIndex: 0,
+      }),
+      expect.objectContaining({
+        fieldPath: 'monthlySales/revenue',
+        bindIndex: 1,
+      }),
+    ])
+    expect(store.commands.execute).toHaveBeenCalledTimes(2)
+    drag.cleanup()
+  })
+
+  it('rejects data-contract canvas drops from another inferred collection', () => {
+    const pageEl = makePageEl()
+    const node = createTextNode({
+      id: 'target',
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 50,
+      binding: [
+        { sourceId: 'sales-report', fieldPath: 'monthlySales/month', bindIndex: 0 },
+      ],
+    })
+    const store = makeStore([node], undefined, {
+      textDataContract: chartDataContract,
+    })
+    const drag = useDesignerDragDrop({
+      store: store as never,
+      getPageEl: () => pageEl,
+    })
+    const weeklyRevenue = {
+      sourceId: 'sales-report',
+      sourceName: 'Sales Report',
+      fieldPath: 'weeklySales/revenue',
+      fieldLabel: '周销售额',
+    }
+
+    drag.startDatasourceDrag(makeDragEvent(0, 0, []), weeklyRevenue)
+    drag.onCanvasDrop(makeDragEvent(20, 20, [DATASOURCE_DRAG_MIME], { [DATASOURCE_DRAG_MIME]: JSON.stringify(weeklyRevenue) }))
+
+    expect(node.binding).toEqual([
+      { sourceId: 'sales-report', fieldPath: 'monthlySales/month', bindIndex: 0 },
+    ])
+    expect(store.commands.execute).not.toHaveBeenCalled()
     drag.cleanup()
   })
 })

@@ -3,6 +3,7 @@ export {
   ClearBindingCommand,
   UnionDropCommand,
   UpdateBindingFormatCommand,
+  UpdateMaterialBindingCommand,
 } from './data'
 
 export {

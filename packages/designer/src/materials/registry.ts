@@ -14,6 +14,7 @@ export interface DesignerMaterialRegistration {
   createDefaultNode: MaterialDefinition['createDefaultNode']
   factory: MaterialExtensionFactory
   aiDescriptor?: AIMaterialDescriptor
+  dataContract?: MaterialDefinition['dataContract']
   /** Material-owned PropSchemas appended to designer's static registry entries. */
   propSchemas?: PropSchema[]
   sectionFilter?: MaterialDefinition['sectionFilter']
@@ -68,6 +69,7 @@ export function registerMaterialBundle(store: DesignerStore, bundle: DesignerMat
       capabilities: entry.capabilities,
       props: mergedProps,
       aiDescriptor: entry.aiDescriptor,
+      dataContract: entry.dataContract,
       createDefaultNode: entry.createDefaultNode,
       sectionFilter: entry.sectionFilter,
     }

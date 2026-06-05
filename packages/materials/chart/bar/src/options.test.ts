@@ -7,6 +7,10 @@ describe('chart bar options', () => {
     expect(CHART_BAR_CAPABILITIES.rotatable).toBe(true)
   })
 
+  it('declares multi binding because chart data is slot based', () => {
+    expect(CHART_BAR_CAPABILITIES.multiBinding).toBe(true)
+  })
+
   it('uses preview data in the designer path', () => {
     const option = createChartBarPreviewOption(CHART_BAR_DEFAULTS)
     const series = option.series as Array<{ data: number[] }>
