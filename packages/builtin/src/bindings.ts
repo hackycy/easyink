@@ -2,6 +2,7 @@ import type { MaterialBindingDefinition } from '@easyink/core'
 import { CHART_BAR_DATA_CONTRACT } from '@easyink/material-chart-bar'
 import { CHART_LINE_DATA_CONTRACT } from '@easyink/material-chart-line'
 import { CHART_PIE_DATA_CONTRACT } from '@easyink/material-chart-pie'
+import { CHART_SCATTER_DATA_CONTRACT } from '@easyink/material-chart-scatter'
 
 export const noMaterialBinding = { kind: 'none' } satisfies MaterialBindingDefinition
 export const customMaterialBinding = { kind: 'custom' } satisfies MaterialBindingDefinition
@@ -28,4 +29,9 @@ export const chartLineMaterialBinding = {
 export const chartPieMaterialBinding = {
   kind: 'data-contract',
   contract: CHART_PIE_DATA_CONTRACT,
+} satisfies MaterialBindingDefinition
+
+export const chartScatterMaterialBinding = {
+  kind: 'data-contract',
+  contract: CHART_SCATTER_DATA_CONTRACT,
 } satisfies MaterialBindingDefinition

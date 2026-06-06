@@ -659,6 +659,9 @@ importers:
       '@easyink/material-chart-pie':
         specifier: workspace:*
         version: link:../materials/chart/pie
+      '@easyink/material-chart-scatter':
+        specifier: workspace:*
+        version: link:../materials/chart/scatter
       '@easyink/material-ellipse':
         specifier: workspace:*
         version: link:../materials/ellipse
@@ -873,6 +876,21 @@ importers:
         version: link:../../../shared
 
   packages/materials/chart/pie:
+    dependencies:
+      '@easyink/core':
+        specifier: workspace:*
+        version: link:../../../core
+      '@easyink/material-chart-kernel':
+        specifier: workspace:*
+        version: link:../kernel
+      '@easyink/schema':
+        specifier: workspace:*
+        version: link:../../../schema
+      '@easyink/shared':
+        specifier: workspace:*
+        version: link:../../../shared
+
+  packages/materials/chart/scatter:
     dependencies:
       '@easyink/core':
         specifier: workspace:*

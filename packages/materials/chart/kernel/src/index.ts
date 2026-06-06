@@ -1,6 +1,7 @@
 export * from './charts/bar'
 export * from './charts/line'
 export * from './charts/pie'
+export * from './charts/scatter'
 export * from './core'
 export * from './data'
 export * from './types'

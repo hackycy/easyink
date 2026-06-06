@@ -3,6 +3,7 @@ import { BARCODE_TYPE, renderBarcode } from '@easyink/material-barcode'
 import { CHART_BAR_TYPE, renderChartBar } from '@easyink/material-chart-bar'
 import { CHART_LINE_TYPE, renderChartLine } from '@easyink/material-chart-line'
 import { CHART_PIE_TYPE, renderChartPie } from '@easyink/material-chart-pie'
+import { CHART_SCATTER_TYPE, renderChartScatter } from '@easyink/material-chart-scatter'
 import { ELLIPSE_TYPE, renderEllipse } from '@easyink/material-ellipse'
 import { FLOW_ROW_TYPE, measureFlowRow, renderFlowRow } from '@easyink/material-flow-row'
 import { IMAGE_TYPE, renderImage } from '@easyink/material-image'
@@ -21,6 +22,7 @@ import {
   chartBarMaterialBinding,
   chartLineMaterialBinding,
   chartPieMaterialBinding,
+  chartScatterMaterialBinding,
   customMaterialBinding,
   imageMaterialBinding,
   noMaterialBinding,
@@ -53,6 +55,7 @@ export function registerBuiltinViewerMaterials(register: BuiltinViewerRegistrar)
   register(CHART_BAR_TYPE, chartBarMaterialBinding, { render: (node, ctx) => renderChartBar(node, ctx) })
   register(CHART_LINE_TYPE, chartLineMaterialBinding, { render: (node, ctx) => renderChartLine(node, ctx) })
   register(CHART_PIE_TYPE, chartPieMaterialBinding, { render: (node, ctx) => renderChartPie(node, ctx) })
+  register(CHART_SCATTER_TYPE, chartScatterMaterialBinding, { render: (node, ctx) => renderChartScatter(node, ctx) })
   register(SVG_CUSTOM_TYPE, noMaterialBinding, { render: node => renderSvgCustom(node) })
   register(SVG_STAR_TYPE, noMaterialBinding, { render: node => renderSvgStar(node) })
   register(SVG_HEART_TYPE, noMaterialBinding, { render: (node, ctx) => renderSvgHeart(node, ctx.unit) })
