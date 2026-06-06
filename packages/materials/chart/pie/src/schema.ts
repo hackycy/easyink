@@ -12,6 +12,8 @@ export interface ChartPieProps {
   showValueLabels: boolean
   showLegend: boolean
   innerRadiusPercent: number
+  sectorGapAngle: number
+  sectorCornerRadius: number
 }
 
 export const CHART_PIE_DEFAULTS: ChartPieProps = {
@@ -21,6 +23,8 @@ export const CHART_PIE_DEFAULTS: ChartPieProps = {
   showValueLabels: true,
   showLegend: true,
   innerRadiusPercent: 0,
+  sectorGapAngle: 0,
+  sectorCornerRadius: 0,
 }
 
 export const CHART_PIE_CAPABILITIES = {

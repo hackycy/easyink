@@ -3,10 +3,21 @@ import type { EChartsCoreOption } from 'echarts/core'
 import type { ChartCategoryValuePoint, PieChartStyleOptions } from '../types'
 import { clamp } from '../utils'
 
+type PieSeriesOptionWithGap = PieSeriesOption & {
+  padAngle?: number
+  itemStyle?: NonNullable<PieSeriesOption['itemStyle']> & {
+    borderRadius?: number
+  }
+}
+
 export function createPieEChartsOption(data: ChartCategoryValuePoint[], style: PieChartStyleOptions): EChartsCoreOption {
-  const series: PieSeriesOption = {
+  const series: PieSeriesOptionWithGap = {
     type: 'pie',
     radius: [`${clamp(style.innerRadiusPercent, 0, 80)}%`, '72%'],
+    padAngle: clamp(style.sectorGapAngle, 0, 20),
+    itemStyle: {
+      borderRadius: clamp(style.sectorCornerRadius, 0, 20),
+    },
     center: ['50%', style.showLegend ? '44%' : '50%'],
     avoidLabelOverlap: true,
     data: data.map(point => createPieDataItem(point)),

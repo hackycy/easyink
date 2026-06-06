@@ -33,6 +33,8 @@ export function resolveChartPieProps(props: Partial<ChartPieProps>): PieChartSty
     showValueLabels: props.showValueLabels !== false,
     showLegend: props.showLegend !== false,
     innerRadiusPercent: normalizeInnerRadius(props.innerRadiusPercent),
+    sectorGapAngle: normalizeSectorGapAngle(props.sectorGapAngle),
+    sectorCornerRadius: normalizeSectorCornerRadius(props.sectorCornerRadius),
   }
 }
 
@@ -46,4 +48,16 @@ function normalizeInnerRadius(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value)
     ? value
     : CHART_PIE_DEFAULTS.innerRadiusPercent
+}
+
+function normalizeSectorGapAngle(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? value
+    : CHART_PIE_DEFAULTS.sectorGapAngle
+}
+
+function normalizeSectorCornerRadius(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? value
+    : CHART_PIE_DEFAULTS.sectorCornerRadius
 }

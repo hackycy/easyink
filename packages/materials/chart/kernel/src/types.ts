@@ -68,4 +68,6 @@ export interface PieChartStyleOptions {
   showValueLabels: boolean
   showLegend: boolean
   innerRadiusPercent: number
+  sectorGapAngle: number
+  sectorCornerRadius: number
 }

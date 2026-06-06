@@ -46,6 +46,28 @@ describe('chart pie options', () => {
     expect(resolveChartPieProps({ innerRadiusPercent: Number.NaN }).innerRadiusPercent).toBe(CHART_PIE_DEFAULTS.innerRadiusPercent)
   })
 
+  it('passes sector gap angle to ECharts pie series', () => {
+    const option = createChartPiePreviewOption({ ...CHART_PIE_DEFAULTS, sectorGapAngle: 6 })
+    const series = option.series as Array<{ padAngle?: number }>
+
+    expect(series[0]?.padAngle).toBe(6)
+  })
+
+  it('normalizes invalid sector gap angle values to the default', () => {
+    expect(resolveChartPieProps({ sectorGapAngle: Number.NaN }).sectorGapAngle).toBe(CHART_PIE_DEFAULTS.sectorGapAngle)
+  })
+
+  it('passes sector corner radius to ECharts pie series', () => {
+    const option = createChartPiePreviewOption({ ...CHART_PIE_DEFAULTS, sectorCornerRadius: 5 })
+    const series = option.series as Array<{ itemStyle?: { borderRadius?: number } }>
+
+    expect(series[0]?.itemStyle?.borderRadius).toBe(5)
+  })
+
+  it('normalizes invalid sector corner radius values to the default', () => {
+    expect(resolveChartPieProps({ sectorCornerRadius: Number.NaN }).sectorCornerRadius).toBe(CHART_PIE_DEFAULTS.sectorCornerRadius)
+  })
+
   it('normalizes invalid palette preset values to the default', () => {
     expect(resolveChartPieProps({ palettePreset: 'unknown' as never }).paletteColors).toEqual(CHART_PIE_PALETTES.classic)
   })

@@ -15,6 +15,8 @@ export const chartPieDesignerPropSchemas: PropSchema[] = [
   { key: 'backgroundColor', label: 'designer.property.background', type: 'color', group: 'appearance' },
   { key: 'labelColor', label: 'materials.chartPie.property.labelColor', type: 'color', group: 'appearance' },
   { key: 'innerRadiusPercent', label: 'materials.chartPie.property.innerRadiusPercent', type: 'number', group: 'content', min: 0, max: 80, step: 1 },
+  { key: 'sectorGapAngle', label: 'materials.chartPie.property.sectorGapAngle', type: 'number', group: 'content', min: 0, max: 20, step: 1 },
+  { key: 'sectorCornerRadius', label: 'materials.chartPie.property.sectorCornerRadius', type: 'number', group: 'content', min: 0, max: 20, step: 1 },
   { key: 'showValueLabels', label: 'materials.chartPie.property.showValueLabels', type: 'switch', group: 'content' },
   { key: 'showLegend', label: 'materials.chartPie.property.showLegend', type: 'switch', group: 'content' },
 ]

@@ -3,7 +3,7 @@ import type { AIMaterialDescriptor } from '@easyink/shared'
 export const chartPieAIMaterialDescriptor = {
   type: 'chart-pie',
   description: 'Simple pie chart for showing how category values contribute to a whole from a material data contract target model: category field, value field, and optional per-record color field mapped from source paths by relation resolver.',
-  properties: ['palettePreset', 'backgroundColor', 'labelColor', 'showValueLabels', 'showLegend', 'innerRadiusPercent'],
+  properties: ['palettePreset', 'backgroundColor', 'labelColor', 'showValueLabels', 'showLegend', 'innerRadiusPercent', 'sectorGapAngle', 'sectorCornerRadius'],
   requiredProps: ['palettePreset', 'backgroundColor'],
   binding: 'data-contract',
   usage: [
@@ -13,12 +13,14 @@ export const chartPieAIMaterialDescriptor = {
     'The resolver derives whether mappings share a record collection or should be aligned by index.',
     'Choose palettePreset from classic, business, or pastel for system-managed colors.',
     'Use innerRadiusPercent greater than 0 for a donut chart.',
+    'Use sectorGapAngle greater than 0 to add visual spacing between pie slices.',
+    'Use sectorCornerRadius greater than 0 to round pie slice corners.',
     'Designer preview uses built-in sample data only.',
     'Use showLegend or showValueLabels to reduce clutter in compact charts.',
   ],
   schemaRules: [
     'Element type must be chart-pie.',
-    'Props contain visual settings such as palettePreset, labels, legend display, and inner radius.',
+    'Props contain visual settings such as palettePreset, labels, legend display, inner radius, slice gap angle, and slice corner radius.',
     'Chart data should be described by binding.kind = "data-contract" with mappings for category and value, and optional color.',
   ],
   knowledge: {
