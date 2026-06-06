@@ -1,7 +1,8 @@
 import type { BuiltinDesignerMaterialBundle, BuiltinPanelSectionId } from './types'
 import {
   IconBarcode,
-  IconChart,
+  IconChartBar,
+  IconChartLine,
   IconDataTable,
   IconEllipse,
   IconHeart,
@@ -314,7 +315,7 @@ export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
     {
       type: CHART_BAR_TYPE,
       name: 'materials.chartBar.name',
-      icon: IconChart,
+      icon: IconChartBar,
       category: 'chart',
       capabilities: CHART_BAR_CAPABILITIES,
       binding: chartBarMaterialBinding,
@@ -327,7 +328,7 @@ export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
     {
       type: CHART_LINE_TYPE,
       name: 'materials.chartLine.name',
-      icon: IconChart,
+      icon: IconChartLine,
       category: 'chart',
       capabilities: CHART_LINE_CAPABILITIES,
       binding: chartLineMaterialBinding,
