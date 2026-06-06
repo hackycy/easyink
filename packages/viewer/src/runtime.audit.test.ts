@@ -231,7 +231,11 @@ describe('viewer audit risk regressions', () => {
       format: 'CODE128',
       params: { width: 2 },
     })
-    const props = applyBindingsToProps(node.props, projected, node.type)
+    const props = applyBindingsToProps(node.props, projected, {
+      kind: 'ordinary',
+      primaryProp: 'value',
+      indexedProps: { 1: 'format', 2: 'params' },
+    })
 
     expect(props.value).toBe(123456)
     expect(props.format).toBe('CODE128')

@@ -30,8 +30,7 @@ export function buildMaterialContext(manifest: AssistantMaterialManifest | undef
       lines.push(`- Properties: ${properties.join(', ')}`)
     if (ai?.requiredProps?.length)
       lines.push(`- Required props: ${ai.requiredProps.join(', ')}`)
-    if (ai?.binding)
-      lines.push(`- Binding: ${ai.binding}`)
+    lines.push(formatMaterialBinding(material))
     if (knowledge?.bindingSpec) {
       const spec = knowledge.bindingSpec
       lines.push(`- Binding mode: ${spec.mode} (accepts: ${spec.accepts.types.join('/')}, produces: ${spec.produces.kind})`)
@@ -70,6 +69,23 @@ export function buildMaterialContext(manifest: AssistantMaterialManifest | undef
   }
 
   return lines.join('\n')
+}
+
+function formatMaterialBinding(material: AssistantMaterialManifest['materials'][number]): string {
+  const binding = material.binding
+  if (binding.kind === 'ordinary') {
+    const indexed = binding.indexedProps ? `, indexed props: ${JSON.stringify(binding.indexedProps)}` : ''
+    return `- Binding: ordinary BindingRef; bindIndex 0 writes props.${binding.primaryProp}${indexed}`
+  }
+  if (binding.kind === 'data-contract') {
+    const fields = Object.entries(binding.contract.model.fields)
+      .map(([id, field]) => `${id}:${field.type}${field.required ? ':required' : ''}${field.format ? `:${field.format}` : ''}`)
+      .join(', ')
+    return `- Binding: data-contract; target fields: ${fields}`
+  }
+  if (binding.kind === 'custom')
+    return '- Binding: custom material-owned binding; follow this material examples and schema rules exactly.'
+  return '- Binding: none'
 }
 
 // --- Prompt segment builders ---
@@ -168,19 +184,19 @@ function buildBindingSegment(): string {
   return `## Binding Rules
 - Field paths use slash-separated absolute paths such as "items/name" and "customer/address".
 - Use the same value as expectedDataSource.name for binding.sourceId and binding.sourceName.
-- Choose materials only from the list above. Use their Binding, Usage, Schema rule, capabilities, and examples as the sole source of material behavior.
-- Ordinary scalar materials use BindingRef: { sourceId, sourceName, fieldPath, fieldLabel }.
-- Table-data repeat cells use absolute child paths such as "items/name"; the repeat collection is inferred from the common path prefix.
-- Data-contract materials use binding.kind = "data-contract" with mappings keyed by target field id. Each mapping stores { sourceId, sourceName, select: { path, label } } and relation: { kind: "auto" }.
-- For chart-bar, map mappings.category.select.path and mappings.value.select.path from source fields. Preserve complete source paths such as "monthlySales/month".
+- Choose materials only from the list above. Use each material's Binding, Usage, Schema rule, capabilities, target fields, and examples as the sole source of material behavior.
+- Materials with Binding "none" MUST NOT receive binding.
+- Materials with Binding "ordinary BindingRef" use binding: { sourceId, sourceName, fieldPath, fieldLabel }. Their target prop is declared in the material context; do not invent prop targets.
+- Materials with Binding "custom material-owned binding" MUST follow that material's examples and schema rules; do not invent whole-element BindingRef behavior for them.
+- Materials with Binding "data-contract" use binding.kind = "data-contract" with mappings keyed only by the declared target field ids. Each mapping stores { sourceId, sourceName, select: { path, label } } and relation: { kind: "auto" }. Preserve complete source paths such as "monthlySales/month".
 - If the registered materials cannot express a requested visual or data interaction, approximate with registered materials and add a warning; never invent a missing material type.`
 }
 
 function buildMaterialSelectionSegment(scenario?: string): string {
   const lines = [
     '## Material Selection Guide',
-    '- For repeated row/detail data: prefer materials with binding mode "collection" or descriptor binding "multi" when the material context supports it.',
-    '- For chart-like comparisons over arrays or paired fields: prefer visualization materials with descriptor binding "data-contract" when available.',
+    '- For repeated row/detail data: prefer materials whose context declares custom material-owned binding or collection-oriented knowledge when available.',
+    '- For chart-like comparisons over arrays or paired fields: prefer visualization materials whose material context declares Binding "data-contract".',
     '- For scalar labels and values: prefer materials with binding mode "scalar" or "single".',
     '- For codes: barcode (CODE128/EAN) or qrcode (URLs/verification).',
     '- For separators: line.',
@@ -255,9 +271,10 @@ The \`expectedDataSource\` defines a runtime data contract — it declares what 
 - Example: field path \`items/quantity\` (under an array field \`items\`) -> sampleData must have \`{ items: [{ quantity: 10 }] }\`.
 
 ### Binding shapes
-- Materials with \`binding: "single"\` bind to a scalar field (string, number, boolean). The element displays one value.
-- Materials with \`binding: "multi"\` or table-data-style collection behavior bind to paths under an array (e.g. \`items/name\`, \`items/price\`). The array field itself (\`items\`) must have \`type: "array"\` and \`children\` defining the item fields.
-- Materials with \`binding: "data-contract"\` bind through \`binding.kind = "data-contract"\`. Use target-field mappings such as \`mappings.category.select.path\` and \`mappings.value.select.path\`.
+- Materials whose context says \`Binding: ordinary BindingRef\` bind to one scalar field using \`{ sourceId, sourceName, fieldPath, fieldLabel }\`.
+- Materials whose context says \`Binding: data-contract\` bind through \`binding.kind = "data-contract"\`. Use only the target field ids declared for that material.
+- Materials whose context says \`Binding: custom material-owned binding\` bind through their own schema shape and examples.
+- Materials whose context says \`Binding: none\` must not receive \`binding\`.
 - \`relation.kind = "auto"\` lets the resolver infer shared record collections or index alignment.
 
 ### Complete example
@@ -358,7 +375,7 @@ export function buildLayoutMaterialContext(manifest: AssistantMaterialManifest |
   for (const material of manifest.materials) {
     const ai = material.ai
     const knowledge = ai?.knowledge
-    const binding = ai?.binding ?? 'none'
+    const binding = material.binding.kind
     const children = material.capabilities?.supportsChildren ? ', supports children' : ''
     const sizing = knowledge?.sizing ? `, default ${knowledge.sizing.defaultSize.width}x${knowledge.sizing.defaultSize.height}` : ''
     lines.push(`- ${material.type}: ${ai?.description ?? material.name} (binding: ${binding}${children}${sizing})`)

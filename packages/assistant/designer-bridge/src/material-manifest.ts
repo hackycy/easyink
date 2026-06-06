@@ -7,6 +7,7 @@ export function createAssistantMaterialManifest(store: DesignerStore): Assistant
       type: material.type,
       name: material.name,
       capabilities: material.capabilities,
+      binding: material.binding,
       props: material.props.map(prop => sanitizePropSchema(prop)),
       ai: material.aiDescriptor,
     })),

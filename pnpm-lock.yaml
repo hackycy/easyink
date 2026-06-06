@@ -653,6 +653,9 @@ importers:
       '@easyink/material-chart-bar':
         specifier: workspace:*
         version: link:../materials/chart/bar
+      '@easyink/material-chart-line':
+        specifier: workspace:*
+        version: link:../materials/chart/line
       '@easyink/material-ellipse':
         specifier: workspace:*
         version: link:../materials/ellipse
@@ -850,6 +853,21 @@ importers:
       echarts:
         specifier: catalog:framework
         version: 6.1.0
+
+  packages/materials/chart/line:
+    dependencies:
+      '@easyink/core':
+        specifier: workspace:*
+        version: link:../../../core
+      '@easyink/material-chart-kernel':
+        specifier: workspace:*
+        version: link:../kernel
+      '@easyink/schema':
+        specifier: workspace:*
+        version: link:../../../schema
+      '@easyink/shared':
+        specifier: workspace:*
+        version: link:../../../shared
 
   packages/materials/ellipse:
     dependencies:

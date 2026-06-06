@@ -43,7 +43,7 @@ Read `references/ai-assistant-materials.md` when AI behavior matters. In short:
 
 - Put `src/ai.ts` next to the material when it should be generated or selected by Assistant.
 - Include `AIMaterialDescriptor.knowledge` when Assistant needs reliable material selection, binding, sizing, compatibility, or scenario fitness.
-- Register built-in descriptors through Designer `aiDescriptor` and `packages/builtin/src/ai.ts`.
+- Register built-in descriptors through Designer `aiDescriptor`; `packages/builtin/src/ai.ts` is derived from the Designer bundle.
 - Register custom material descriptors on the Designer material entry; Assistant gets them from the live store manifest.
 
 The built-in descriptor list contains canonical material types, aliases, binding rules, and schema rules. If a type is added but not in the AI descriptor list, Assistant generation may reject or ignore it.
@@ -53,8 +53,7 @@ The built-in descriptor list contains canonical material types, aliases, binding
 - AI descriptor mentions a prop that does not exist or omits required specialized schema rules.
 - Descriptor binding says `single` or `multi` but `knowledge.bindingSpec.mode` says something incompatible.
 - `knowledge.sizing.defaultSize` does not match the factory default size in mm.
-- Custom material only updates `packages/builtin/src/ai.ts` but forgets Designer `aiDescriptor`.
-- Built-in material has `aiDescriptor` in Designer but is missing from `builtinAIMaterialDescriptors`.
+- Custom material tries to update a static AI list instead of registering Designer `aiDescriptor`.
 
 ## Tests to Add or Run
 

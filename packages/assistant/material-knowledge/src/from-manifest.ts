@@ -1,5 +1,5 @@
 import type { AIMaterialDescriptor, MaterialKnowledgeDescriptor } from '@easyink/shared'
-import type { MaterialKnowledge } from './types'
+import type { FieldType, MaterialBindingSpec, MaterialKnowledge, MaterialPropertySpec } from './types'
 import { MaterialKnowledgeRegistry } from './registry'
 
 export interface ManifestEntry {
@@ -7,10 +7,36 @@ export interface ManifestEntry {
   name?: string
   ai?: AIMaterialDescriptor
   knowledge?: MaterialKnowledgeDescriptor
+  binding?: ManifestMaterialBindingDefinition
+  props?: ManifestMaterialProp[]
 }
 
 export interface ManifestLike {
   materials: ManifestEntry[]
+}
+
+export type ManifestMaterialBindingDefinition
+  = | { kind: 'none' }
+    | { kind: 'ordinary', primaryProp: string, indexedProps?: Record<string | number, string> }
+    | { kind: 'data-contract', contract: ManifestMaterialDataContract }
+    | { kind: 'custom' }
+
+export interface ManifestMaterialDataContract {
+  version: number
+  model: {
+    kind: string
+    fields: Record<string, {
+      type: FieldType | 'image-url'
+      required?: boolean
+    }>
+  }
+}
+
+export interface ManifestMaterialProp {
+  key: string
+  type: string
+  default?: unknown
+  enum?: Array<{ value: unknown }>
 }
 
 export function createRegistryFromManifest(manifest: ManifestLike): MaterialKnowledgeRegistry {
@@ -36,6 +62,9 @@ export function createRegistryFromManifest(manifest: ManifestLike): MaterialKnow
     }
     else if (entry.ai) {
       registry.register(synthesizeFromDescriptor(entry.type, entry.ai))
+    }
+    else if (entry.binding) {
+      registry.register(synthesizeFromManifest(entry))
     }
   }
   return registry
@@ -89,6 +118,102 @@ function synthesizeFromDescriptor(type: string, ai: AIMaterialDescriptor): Mater
   }
 }
 
+function synthesizeFromManifest(entry: ManifestEntry): MaterialKnowledge {
+  return {
+    type: entry.type,
+    description: entry.name ?? entry.type,
+    category: inferCategory(entry.type),
+    constraints: [],
+    composability: {
+      canBeChildOf: ['*'],
+      canContain: [],
+      exclusiveWith: [],
+      preferredCompanions: [],
+    },
+    bindingSpec: synthesizeBindingSpec(entry.binding),
+    sizing: { minWidth: 10, minHeight: 10, defaultSize: { width: 50, height: 20 } },
+    fitness: [],
+    properties: (entry.props ?? []).map(synthesizePropertySpec),
+    requiredProps: [],
+  }
+}
+
+function synthesizeBindingSpec(binding: ManifestMaterialBindingDefinition | undefined): MaterialBindingSpec {
+  if (!binding || binding.kind === 'none') {
+    return {
+      mode: 'none',
+      accepts: { types: [] },
+      produces: { kind: 'none' },
+      examples: [],
+    }
+  }
+
+  if (binding.kind === 'ordinary') {
+    return {
+      mode: binding.indexedProps ? 'multi-scalar' : 'scalar',
+      accepts: { types: ['string', 'number', 'boolean', 'date', 'image-url'] },
+      produces: {
+        kind: binding.indexedProps ? 'multi-field' : 'scalar-field',
+        fieldCount: binding.indexedProps ? 'multiple' : 'single',
+      },
+      examples: [],
+    }
+  }
+
+  if (binding.kind === 'data-contract') {
+    const fields = Object.entries(binding.contract.model.fields)
+    return {
+      mode: 'collection',
+      accepts: {
+        types: uniqueFields(fields.map(([, field]) => field.type)),
+        isArray: true,
+        minChildren: fields.length,
+        requiredChildFields: fields.filter(([, field]) => field.required).map(([id]) => id),
+      },
+      produces: {
+        kind: 'multi-field',
+        fieldCount: fields.length > 1 ? 'multiple' : 'single',
+      },
+      examples: [],
+    }
+  }
+
+  return {
+    mode: 'collection',
+    accepts: { types: ['array', 'object'], isArray: true },
+    produces: { kind: 'collection-repeat', fieldCount: 'dynamic' },
+    examples: [],
+  }
+}
+
+function synthesizePropertySpec(prop: ManifestMaterialProp): MaterialPropertySpec {
+  const type = normalizePropertyType(prop.type)
+  return {
+    key: prop.key,
+    type,
+    required: prop.default === undefined,
+    defaultValue: prop.default,
+    enumValues: type === 'enum'
+      ? prop.enum?.map(option => String(option.value))
+      : undefined,
+  }
+}
+
+function normalizePropertyType(type: string): MaterialPropertySpec['type'] {
+  if (type === 'number' || type === 'boolean' || type === 'enum' || type === 'color' || type === 'object' || type === 'array')
+    return type
+  return 'string'
+}
+
+function uniqueFields(types: Array<FieldType | 'image-url'>): FieldType[] {
+  const result = new Set<FieldType>()
+  for (const type of types) {
+    if (type === 'string' || type === 'number' || type === 'boolean' || type === 'date' || type === 'image-url' || type === 'array' || type === 'object')
+      result.add(type)
+  }
+  return [...result]
+}
+
 function inferCategory(type: string): MaterialKnowledge['category'] {
   if (['table-data', 'table-static', 'flow-row', 'barcode', 'qrcode'].includes(type))
     return 'data'
@@ -96,7 +221,7 @@ function inferCategory(type: string): MaterialKnowledge['category'] {
     return 'layout'
   if (['line', 'rect', 'ellipse', 'image'].includes(type))
     return 'decoration'
-  if (['chart'].includes(type))
+  if (type === 'chart' || type.startsWith('chart-'))
     return 'visualization'
   return 'typography'
 }

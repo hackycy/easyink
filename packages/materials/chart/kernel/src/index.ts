@@ -1,6 +1,6 @@
-import type { BarSeriesOption } from 'echarts/charts'
+import type { BarSeriesOption, LineSeriesOption } from 'echarts/charts'
 import type { EChartsCoreOption } from 'echarts/core'
-import { BarChart } from 'echarts/charts'
+import { BarChart, LineChart } from 'echarts/charts'
 import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components'
 import { init, use } from 'echarts/core'
 import { SVGRenderer } from 'echarts/renderers'
@@ -28,6 +28,22 @@ export interface BarChartStyleOptions {
   showYAxisLine: boolean
 }
 
+export interface LineChartStyleOptions {
+  lineColor: string
+  pointColor: string
+  backgroundColor: string
+  axisColor: string
+  labelColor: string
+  showValueLabels: boolean
+  showGrid: boolean
+  showXAxisLabel: boolean
+  showYAxisLabel: boolean
+  showXAxisLine: boolean
+  showYAxisLine: boolean
+  showPoints: boolean
+  smooth: boolean
+}
+
 export const DEFAULT_CHART_PREVIEW_DATA: ChartCategoryValuePoint[] = [
   { label: 'A', value: 32 },
   { label: 'B', value: 56 },
@@ -44,7 +60,7 @@ let echartsRegistered = false
 export function ensureEChartsRegistered(): void {
   if (echartsRegistered)
     return
-  use([BarChart, GridComponent, LegendComponent, TooltipComponent, SVGRenderer])
+  use([BarChart, LineChart, GridComponent, LegendComponent, TooltipComponent, SVGRenderer])
   echartsRegistered = true
 }
 
@@ -61,6 +77,64 @@ export function createBarEChartsOption(data: ChartCategoryValuePoint[], style: B
     data: values,
     itemStyle: {
       color: style.barColor || '#2f80ed',
+    },
+    label: {
+      show: style.showValueLabels,
+      position: 'top',
+      color: style.labelColor || '#1f2937',
+      fontSize: 10,
+    },
+  }
+
+  return {
+    animation: false,
+    backgroundColor: style.backgroundColor || 'transparent',
+    grid: {
+      top: style.showValueLabels ? 18 : 8,
+      right: 10,
+      bottom: style.showXAxisLabel ? 24 : 8,
+      left: style.showYAxisLabel ? 32 : 10,
+      containLabel: false,
+    },
+    tooltip: {
+      show: false,
+    },
+    xAxis: {
+      type: 'category',
+      data: categories,
+      axisLine: { show: style.showXAxisLine, lineStyle: { color: style.axisColor || '#6b7280' } },
+      axisTick: { show: false },
+      axisLabel: { show: style.showXAxisLabel, color: style.labelColor || '#374151', fontSize: 10 },
+    },
+    yAxis: {
+      type: 'value',
+      splitLine: {
+        show: style.showGrid,
+        lineStyle: { color: '#e5e7eb' },
+      },
+      axisLine: { show: style.showYAxisLine, lineStyle: { color: style.axisColor || '#6b7280' } },
+      axisTick: { show: false },
+      axisLabel: { show: style.showYAxisLabel, color: style.labelColor || '#374151', fontSize: 10 },
+    },
+    series: [series],
+  }
+}
+
+export function createLineEChartsOption(data: ChartCategoryValuePoint[], style: LineChartStyleOptions): EChartsCoreOption {
+  const categories = data.map(point => point.label)
+  const values = data.map(point => point.value)
+  const series: LineSeriesOption = {
+    type: 'line',
+    data: values,
+    smooth: style.smooth,
+    showSymbol: style.showPoints,
+    symbolSize: 6,
+    lineStyle: {
+      color: style.lineColor || '#14b8a6',
+      width: 2,
+    },
+    itemStyle: {
+      color: style.pointColor || style.lineColor || '#14b8a6',
     },
     label: {
       show: style.showValueLabels,

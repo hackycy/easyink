@@ -10,10 +10,10 @@ export interface DesignerMaterialRegistration {
   icon: MaterialDefinition['icon']
   category: MaterialDefinition['category']
   capabilities: MaterialCapabilities
+  binding: MaterialDefinition['binding']
   createDefaultNode: MaterialDefinition['createDefaultNode']
   factory: MaterialExtensionFactory
   aiDescriptor?: AIMaterialDescriptor
-  dataContract?: MaterialDefinition['dataContract']
   /** Designer property schemas owned by this material. */
   propSchemas?: PropSchema[]
   localeMessages?: LocaleMessageRegistration
@@ -71,9 +71,9 @@ export function registerMaterialBundle(store: DesignerStore, bundle: DesignerMat
       icon: entry.icon,
       category: entry.category,
       capabilities: entry.capabilities,
+      binding: entry.binding,
       props: entry.propSchemas ? [...entry.propSchemas] : [],
       aiDescriptor: entry.aiDescriptor,
-      dataContract: entry.dataContract,
       createDefaultNode: entry.createDefaultNode,
       sectionFilter: entry.sectionFilter,
     }

@@ -1,7 +1,7 @@
 import type { DataSourceDescriptor } from '@easyink/datasource'
 import type { DocumentSchema, ExpectedDataSource, ExpectedField } from '@easyink/schema'
 import type { AssistantMaterialManifest, AssistantValidationIssue, AssistantValidationReport } from './types'
-import { traverseNodes, validateSchemaIssues } from '@easyink/schema'
+import { getBindingRefs, isDataContractBinding, traverseNodes, validateSchemaIssues } from '@easyink/schema'
 import { DataSourceAligner, normalizeAllFieldPaths, SchemaValidator } from '@easyink/schema-tools'
 
 export interface ValidateAssistantSchemaOptions {
@@ -102,6 +102,7 @@ export function collectDeterministicErrors(schema: unknown, options: Determinist
   const allowedTypes = options.materialManifest
     ? new Set(options.materialManifest.materials.map(material => material.type))
     : undefined
+  const materialByType = new Map(options.materialManifest?.materials.map(material => [material.type, material]))
   const requiredProps = new Map<string, string[]>()
   for (const material of options.materialManifest?.materials ?? []) {
     if (material.ai?.requiredProps?.length)
@@ -132,6 +133,9 @@ export function collectDeterministicErrors(schema: unknown, options: Determinist
       }
     }
     const binding = (node as { binding?: { fieldPath?: string } }).binding
+    const material = materialByType.get(node.type)
+    if (material)
+      issues.push(...validateNodeBindingAgainstMaterial(node, material))
     if (binding?.fieldPath && bindingPaths && !bindingPaths.has(binding.fieldPath)) {
       issues.push({
         code: 'BINDING_PATH_INVALID',
@@ -172,6 +176,68 @@ export function collectDeterministicErrors(schema: unknown, options: Determinist
     }
   }
 
+  return issues
+}
+
+function validateNodeBindingAgainstMaterial(
+  node: DocumentSchema['elements'][number],
+  material: AssistantMaterialManifest['materials'][number],
+): AssistantValidationIssue[] {
+  const issues: AssistantValidationIssue[] = []
+  const binding = node.binding
+  const definition = material.binding
+  if (!binding)
+    return issues
+
+  if (definition.kind === 'none') {
+    issues.push({
+      code: 'BINDING_NOT_SUPPORTED',
+      message: `Element "${node.id}" of type "${node.type}" declares a binding, but the registered material binding is "none".`,
+      path: `elements.${node.id}.binding`,
+    })
+    return issues
+  }
+
+  if (definition.kind === 'ordinary') {
+    if (isDataContractBinding(binding)) {
+      issues.push({
+        code: 'BINDING_KIND_INVALID',
+        message: `Element "${node.id}" of type "${node.type}" must use ordinary BindingRef, not data-contract binding.`,
+        path: `elements.${node.id}.binding`,
+      })
+    }
+    return issues
+  }
+
+  if (definition.kind === 'data-contract') {
+    if (!isDataContractBinding(binding)) {
+      issues.push({
+        code: 'BINDING_KIND_INVALID',
+        message: `Element "${node.id}" of type "${node.type}" must use binding.kind = "data-contract".`,
+        path: `elements.${node.id}.binding`,
+      })
+      return issues
+    }
+    const allowedFields = new Set(Object.keys(definition.contract.model.fields))
+    for (const fieldId of Object.keys(binding.mappings)) {
+      if (!allowedFields.has(fieldId)) {
+        issues.push({
+          code: 'BINDING_TARGET_FIELD_INVALID',
+          message: `Element "${node.id}" maps unknown data-contract target field "${fieldId}".`,
+          path: `elements.${node.id}.binding.mappings.${fieldId}`,
+        })
+      }
+    }
+    return issues
+  }
+
+  if (definition.kind === 'custom' && getBindingRefs(binding).length > 0) {
+    issues.push({
+      code: 'BINDING_KIND_INVALID',
+      message: `Element "${node.id}" of type "${node.type}" uses material-owned custom binding and cannot receive a whole-element BindingRef.`,
+      path: `elements.${node.id}.binding`,
+    })
+  }
   return issues
 }
 
@@ -223,6 +289,7 @@ function validateSchemaMaterialTypes(schema: unknown, manifest: AssistantMateria
     return []
 
   const allowedTypes = new Set(manifest.materials.map(material => material.type))
+  const materialByType = new Map(manifest.materials.map(material => [material.type, material]))
   const issues: AssistantValidationIssue[] = []
   traverseNodes(schema as DocumentSchema, (node) => {
     if (!allowedTypes.has(node.type)) {
@@ -231,7 +298,11 @@ function validateSchemaMaterialTypes(schema: unknown, manifest: AssistantMateria
         message: `Material type "${node.type}" is not registered in the active Designer material manifest.`,
         path: `elements.${node.id}`,
       })
+      return
     }
+    const material = materialByType.get(node.type)
+    if (material)
+      issues.push(...validateNodeBindingAgainstMaterial(node, material))
   })
   return issues
 }

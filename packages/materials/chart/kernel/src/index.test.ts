@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createBarEChartsOption, DEFAULT_CHART_PREVIEW_DATA, normalizeCategoryValueData } from './index'
+import { createBarEChartsOption, createLineEChartsOption, DEFAULT_CHART_PREVIEW_DATA, normalizeCategoryValueData } from './index'
 
 describe('normalizeCategoryValueData', () => {
   it('reads label/value record arrays', () => {
@@ -45,6 +45,37 @@ describe('createBarEChartsOption', () => {
     const xAxis = option.xAxis as { axisLabel: { show: boolean }, axisLine: { show: boolean } }
     const yAxis = option.yAxis as { axisLabel: { show: boolean }, axisLine: { show: boolean } }
 
+    expect(xAxis.axisLabel.show).toBe(false)
+    expect(xAxis.axisLine.show).toBe(false)
+    expect(yAxis.axisLabel.show).toBe(false)
+    expect(yAxis.axisLine.show).toBe(false)
+  })
+})
+
+describe('createLineEChartsOption', () => {
+  it('maps line visibility settings', () => {
+    const option = createLineEChartsOption(DEFAULT_CHART_PREVIEW_DATA, {
+      lineColor: '#111111',
+      pointColor: '#222222',
+      backgroundColor: '#ffffff',
+      axisColor: '#333333',
+      labelColor: '#444444',
+      showValueLabels: false,
+      showGrid: true,
+      showXAxisLabel: false,
+      showYAxisLabel: false,
+      showXAxisLine: false,
+      showYAxisLine: false,
+      showPoints: false,
+      smooth: true,
+    })
+
+    const series = option.series as Array<{ showSymbol: boolean, smooth: boolean }>
+    const xAxis = option.xAxis as { axisLabel: { show: boolean }, axisLine: { show: boolean } }
+    const yAxis = option.yAxis as { axisLabel: { show: boolean }, axisLine: { show: boolean } }
+
+    expect(series[0]?.showSymbol).toBe(false)
+    expect(series[0]?.smooth).toBe(true)
     expect(xAxis.axisLabel.show).toBe(false)
     expect(xAxis.axisLine.show).toBe(false)
     expect(yAxis.axisLabel.show).toBe(false)

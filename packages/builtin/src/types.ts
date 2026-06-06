@@ -1,4 +1,4 @@
-import type { MaterialDataContract, MaterialExtensionFactory, MaterialViewerExtension, PropSchema } from '@easyink/core'
+import type { MaterialBindingDefinition, MaterialExtensionFactory, MaterialViewerExtension, PropSchema } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { AIMaterialDescriptor, MaterialCategory } from '@easyink/shared'
 import type { Component } from 'vue'
@@ -23,10 +23,10 @@ export interface BuiltinDesignerMaterialRegistration {
   icon: Component
   category: MaterialCategory
   capabilities: BuiltinMaterialCapabilities
+  binding: MaterialBindingDefinition
   createDefaultNode: (input?: Partial<MaterialNode>, unit?: string) => MaterialNode
   factory: MaterialExtensionFactory
   aiDescriptor?: AIMaterialDescriptor
-  dataContract?: MaterialDataContract
   /** Designer property schemas owned by this material. */
   propSchemas?: PropSchema[]
   localeMessages?: {
@@ -56,7 +56,7 @@ export interface BuiltinDesignerMaterialBundle {
   }
 }
 
-export type BuiltinViewerRegistrar = (type: string, extension: MaterialViewerExtension) => void
+export type BuiltinViewerRegistrar = (type: string, binding: MaterialBindingDefinition, extension: MaterialViewerExtension) => void
 
 export interface BuiltinLocaleMessages {
   [key: string]: string | BuiltinLocaleMessages

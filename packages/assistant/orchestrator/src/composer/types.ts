@@ -1,3 +1,4 @@
+import type { AssistantMaterialManifest } from '@easyink/assistant-capabilities'
 import type { LLMClient } from '@easyink/assistant-llm'
 import type { MaterialKnowledgeRegistry } from '@easyink/assistant-material-knowledge'
 import type { ToolCallResult } from '@easyink/assistant-tool-registry'
@@ -17,7 +18,7 @@ export interface ComposerInput {
   pageMode?: 'fixed' | 'continuous'
   pageWidth?: number
   pageHeight?: number
-  materialManifest?: { materials: Array<{ type: string, name?: string, ai?: Record<string, unknown> }> }
+  materialManifest?: AssistantMaterialManifest
 }
 
 export interface ComposerResult {

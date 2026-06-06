@@ -11,6 +11,7 @@ describe('assistant material manifest bridge', () => {
           name: 'Text',
           category: 'basic',
           capabilities: { bindable: true, resizable: true },
+          binding: { kind: 'ordinary', primaryProp: 'content' },
           props: [
             {
               key: 'content',
@@ -37,6 +38,7 @@ describe('assistant material manifest bridge', () => {
         type: 'text',
         name: 'Text',
         capabilities: { bindable: true, resizable: true },
+        binding: { kind: 'ordinary', primaryProp: 'content' },
         props: [{
           key: 'content',
           label: 'Content',

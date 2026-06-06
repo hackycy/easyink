@@ -189,7 +189,7 @@ export function useDatasourceDrop(ctx: DatasourceDropContext) {
       const localPoint = documentPointToElementLocal({ x: docX, y: docY }, el)
       if (pointInRect(localPoint, { x: 0, y: 0, width: elementSize.width, height: elementSize.height })) {
         const mat = store.getMaterial(el.type)
-        if (mat && (mat.capabilities.bindable === false || mat.dataContract))
+        if (mat && (mat.capabilities.bindable === false || mat.binding.kind === 'data-contract'))
           continue
         return el
       }

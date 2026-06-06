@@ -1,4 +1,4 @@
-import type { MaterialDataContract, PropSchema } from '@easyink/core'
+import type { MaterialBindingDefinition, PropSchema } from '@easyink/core'
 import type { DataSourceDescriptor } from '@easyink/datasource'
 import type { LocaleMessages } from '@easyink/locales'
 import type { DocumentSchema, DocumentSchemaInput, MaterialNode } from '@easyink/schema'
@@ -195,8 +195,8 @@ export interface MaterialDefinition {
   category: MaterialCategory
   capabilities: MaterialCapabilities
   props: PropSchema[]
+  binding: MaterialBindingDefinition
   aiDescriptor?: AIMaterialDescriptor
-  dataContract?: MaterialDataContract
   createDefaultNode: (input?: Partial<MaterialNode>, unit?: string) => MaterialNode
   /**
    * Dynamic filter for PropertiesPanel sections.

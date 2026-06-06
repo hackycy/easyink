@@ -1,3 +1,4 @@
+import type { MaterialBindingDefinition } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { ProjectedBinding } from './types'
 import { formatBindingDisplayValue, hasBindingFormat, resolveBindingValue } from '@easyink/core'
@@ -38,9 +39,11 @@ export function projectBindings(
 export function applyBindingsToProps(
   props: Record<string, unknown>,
   projected: ProjectedBinding[],
-  nodeType: string,
+  bindingDefinition: MaterialBindingDefinition | undefined,
 ): Record<string, unknown> {
   if (projected.length === 0)
+    return props
+  if (bindingDefinition?.kind !== 'ordinary')
     return props
 
   const result = { ...props }
@@ -50,8 +53,8 @@ export function applyBindingsToProps(
       continue
 
     const propKey = binding.bindIndex === 0
-      ? getPrimaryBindProp(nodeType)
-      : getIndexedBindProp(nodeType, binding.bindIndex)
+      ? bindingDefinition.primaryProp
+      : bindingDefinition.indexedProps?.[binding.bindIndex]
 
     if (propKey) {
       result[propKey] = binding.value
@@ -59,24 +62,4 @@ export function applyBindingsToProps(
   }
 
   return result
-}
-
-const PRIMARY_BIND_MAP: Record<string, string> = {
-  'text': 'content',
-  'image': 'src',
-  'barcode': 'value',
-  'qrcode': 'value',
-  'chart-bar': 'data',
-}
-
-function getPrimaryBindProp(nodeType: string): string {
-  return PRIMARY_BIND_MAP[nodeType] || 'content'
-}
-
-const INDEXED_BIND_MAP: Record<string, Record<number, string>> = {
-  barcode: { 0: 'value', 1: 'format', 2: 'params' },
-}
-
-function getIndexedBindProp(nodeType: string, index: number): string | undefined {
-  return INDEXED_BIND_MAP[nodeType]?.[index]
 }

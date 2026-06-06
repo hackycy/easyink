@@ -31,7 +31,7 @@ describe('renderPages', () => {
       height: 60,
     }
 
-    registry.register('custom', {
+    registry.register('custom', { kind: 'none' }, {
       render: () => ({ html: trustedViewerHtml('<div>custom</div>') }),
       getRenderSize: () => ({ height: 7 }),
     })

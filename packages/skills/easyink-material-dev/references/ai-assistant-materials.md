@@ -7,8 +7,8 @@ Use this reference when a material should be generated, selected, repaired, or r
 - `packages/shared/src/ai-generation.ts`: source types for `AIMaterialDescriptor` and `MaterialKnowledgeDescriptor`.
 - `packages/designer/src/materials/registry.ts`: stores each registered Designer material's optional `aiDescriptor`.
 - `packages/builtin/src/designer.ts`: built-in Designer registration must pass `aiDescriptor` on the material entry.
-- `packages/builtin/src/ai.ts`: built-in descriptor list used by Assistant material knowledge consumers.
-- `packages/assistant/designer-bridge/src/material-manifest.ts`: exports the live Designer store as `AssistantMaterialManifest`; props are serialized and `material.aiDescriptor` becomes `manifest.materials[].ai`.
+- `packages/builtin/src/ai.ts`: derived descriptor list from the built-in Designer bundle, not a second hand-maintained registry.
+- `packages/assistant/designer-bridge/src/material-manifest.ts`: exports the live Designer store as `AssistantMaterialManifest`; props and binding definitions are serialized, and `material.aiDescriptor` becomes `manifest.materials[].ai`.
 - `packages/assistant/designer-bridge/src/contribution.ts`: passes `materialManifest` through a getter so Assistant sees newly registered materials without restart.
 - `packages/assistant/capabilities/src/types.ts`: runtime zod shape for `AssistantMaterialManifest` and `AssistantAIMaterialDescriptorSchema`.
 - `packages/assistant/orchestrator/src/prompts.ts`: linear Assistant pipeline turns manifest `ai` and `ai.knowledge` into layout/schema/repair prompts.
@@ -148,7 +148,7 @@ Built-in materials:
 
 1. Export `xAIMaterialDescriptor` from the material package.
 2. Add `aiDescriptor: xAIMaterialDescriptor` to the material entry in `packages/builtin/src/designer.ts`.
-3. Add the descriptor to `builtinAIMaterialDescriptors` in `packages/builtin/src/ai.ts`.
+3. Do not add material-specific prompt text. Assistant reads the live material manifest, including binding and data-contract target fields.
 4. Keep Designer capabilities, prop schemas, Viewer behavior, and AI descriptor claims aligned.
 
 Custom host materials:
@@ -187,7 +187,7 @@ Current flow:
 - `knowledge.sizing.defaultSize` matches `createXNode()` defaults in mm.
 - `knowledge.sizing.growAxis` matches Viewer `measure()` and page layout behavior.
 - `composability` does not promise child support unless the material supports children end to end.
-- Built-ins are registered in Designer, Viewer, and `packages/builtin/src/ai.ts` when Assistant should see them.
+- Built-ins are registered in Designer and Viewer when Assistant should see them; Assistant consumes Designer's live material manifest.
 - Custom materials register `aiDescriptor` with Designer.
 - Assistant manifest tests cover descriptor preservation when changing serialization behavior.
 

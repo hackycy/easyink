@@ -1,4 +1,4 @@
-import type { InternalHooks, PagePlan, PaginationResult, ViewerMeasureResult } from '@easyink/core'
+import type { InternalHooks, MaterialBindingDefinition, PagePlan, PaginationResult, ViewerMeasureResult } from '@easyink/core'
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import type {
   MaterialViewerExtension,
@@ -53,8 +53,8 @@ export class ViewerRuntime {
           : undefined)
     this._fontManager = new FontManager(options.fontProvider)
     this._hooks = createInternalHooks()
-    registerBuiltinViewerMaterials((type, extension) => {
-      this.registerMaterial(type, extension)
+    registerBuiltinViewerMaterials((type, binding, extension) => {
+      this.registerMaterial(type, binding, extension)
     })
   }
 
@@ -405,8 +405,8 @@ export class ViewerRuntime {
   // Registration API
   // ---------------------------------------------------------------------------
 
-  registerMaterial(type: string, extension: MaterialViewerExtension): void {
-    this._materialRegistry.register(type, extension)
+  registerMaterial(type: string, binding: MaterialBindingDefinition, extension: MaterialViewerExtension): void {
+    this._materialRegistry.register(type, binding, extension)
   }
 
   registerExporter(exporter: ViewerExporter): void {
@@ -599,7 +599,7 @@ export class ViewerRuntime {
             })
           }
         }
-        const resolvedProps = applyBindingsToProps(node.props, projected, node.type)
+        const resolvedProps = applyBindingsToProps(node.props, projected, this._materialRegistry.getBinding(node.type))
         resolvedMap.set(node.id, resolvedProps)
       }
       catch (err) {

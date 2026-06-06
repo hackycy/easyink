@@ -26,7 +26,7 @@ Rules for material developers:
 Ordinary element binding is handled by Viewer before material render:
 
 1. `ViewerRuntime.resolveAllBindings()` calls `projectBindings(node, data)`.
-2. `applyBindingsToProps(props, projected, node.type)` maps projected values into props.
+2. `applyBindingsToProps(props, projected, materialBindingDefinition)` maps projected values into props declared by the material registration.
 3. `measure()` receives a temporary node whose `props` are already resolved.
 4. `renderPages()` passes `context.resolvedProps` and a `nodeForRender` whose `props` are the resolved props.
 
@@ -43,7 +43,7 @@ Multi-binding requires explicit mapping in `binding-projector.ts` unless the mat
 
 ## Material Data Contract
 
-Use `DataContractBinding` when a material consumes a structured target model instead of projecting one field into one prop. Chart-like materials are the reference case: the material declares a `dataContract`, while `node.binding` stores mappings from source paths to target fields.
+Use `DataContractBinding` when a material consumes a structured target model instead of projecting one field into one prop. Chart-like materials are the reference case: the material declares `binding.kind='data-contract'` with a contract, while `node.binding` stores mappings from source paths to target fields.
 
 The contract describes the target model:
 
@@ -101,7 +101,7 @@ Implement `datasourceDrop` when the material owns internal drop zones:
 
 `table-data` uses this pattern to bind fields into cells. It rejects hidden rows and rejects repeat-template fields from a different collection prefix than existing repeat-template cells.
 
-Materials that declare `MaterialDefinition.dataContract` usually do not need a custom `datasourceDrop` just to bind whole-element data. Designer fills unbound target fields in contract order on canvas drop and exposes a MaterialDataBindingEditor for dropping a field onto a specific target field. The Designer should not reject different collections for data-contract mappings; the resolver owns runtime relation diagnostics.
+Materials that declare `MaterialDefinition.binding.kind='data-contract'` usually do not need a custom `datasourceDrop` just to bind whole-element data. Designer fills unbound target fields in contract order on canvas drop and exposes a MaterialDataBindingEditor for dropping a field onto a specific target field. The Designer should not reject different collections for data-contract mappings; the resolver owns runtime relation diagnostics.
 
 ## Table-Data Runtime Expansion
 

@@ -116,7 +116,7 @@ export function createSchemaTools(builder: SchemaBuilder): ToolDefinition[] {
     },
     {
       name: 'emit_element',
-      description: 'Add a generic element (image, barcode, qrcode, line, rect, chart-bar, etc). Use binding.kind="data-contract" for structured data materials such as chart-bar.',
+      description: 'Add a generic registered element. Use binding.kind="data-contract" only for materials whose manifest binding declares data-contract target fields.',
       category: 'schema',
       parameters: z.object({
         id: z.string(),

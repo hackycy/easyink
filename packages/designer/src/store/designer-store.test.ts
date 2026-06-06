@@ -120,6 +120,7 @@ describe('designer store schema initialization', () => {
         icon: { render: () => null },
         category: 'basic',
         capabilities: {},
+        binding: { kind: 'none' },
         createDefaultNode: input => createNode(input?.id ?? 'sample-1'),
         factory: vi.fn(() => ({ renderContent: () => () => {} })),
         propSchemas: [
@@ -192,6 +193,7 @@ function createMaterialDefinition(type: string): MaterialDefinition {
     icon: { render: () => null } as MaterialDefinition['icon'],
     category: 'basic',
     capabilities: {},
+    binding: { kind: 'none' },
     props: [],
     createDefaultNode: input => ({
       id: input?.id ?? 'sample-1',

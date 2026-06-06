@@ -120,6 +120,7 @@ export function registerPriceTagDesigner(store: DesignerStore) {
           resizable: true,
           rotatable: true,
         },
+        binding: { kind: 'ordinary', primaryProp: 'amount' },
         createDefaultNode: createPriceTagNode,
         factory: createPriceTagDesignerExtension,
         localeMessages: priceTagLocaleMessages,
@@ -135,7 +136,7 @@ export function registerPriceTagDesigner(store: DesignerStore) {
 }
 
 export function registerPriceTagViewer(viewer: ViewerRuntime) {
-  viewer.registerMaterial(PRICE_TAG_TYPE, {
+  viewer.registerMaterial(PRICE_TAG_TYPE, { kind: 'ordinary', primaryProp: 'amount' }, {
     render(_node, context) {
       const props = context.resolvedProps
       return {
@@ -243,7 +244,7 @@ import { createViewer } from '@easyink/viewer'
 
 const viewer = createViewer({ container })
 
-viewer.registerMaterial(PRICE_TAG_TYPE, {
+viewer.registerMaterial(PRICE_TAG_TYPE, { kind: 'ordinary', primaryProp: 'amount' }, {
   render(_node, context) {
     const props = context.resolvedProps
     return {
@@ -310,7 +311,7 @@ export const SALES_CHART_CONTRACT = {
 } satisfies MaterialDataContract
 ```
 
-注册物料时把 contract 放到 `MaterialDefinition.dataContract`：
+注册物料时把 contract 放到 `MaterialDefinition.binding`：
 
 ```ts
 registerMaterialBundle(store, {
@@ -320,7 +321,7 @@ registerMaterialBundle(store, {
     icon: IconChart,
     category: 'chart',
     capabilities: { bindable: true, resizable: true },
-    dataContract: SALES_CHART_CONTRACT,
+    binding: { kind: 'data-contract', contract: SALES_CHART_CONTRACT },
     propSchemas: [],
     localeMessages: salesChartLocaleMessages,
     createDefaultNode: createSalesChartNode,
@@ -334,7 +335,7 @@ Viewer 渲染器里由物料自己消费 contract 解析结果：
 ```ts
 import { resolveMaterialDataContract } from '@easyink/core'
 
-viewer.registerMaterial('sales-chart', {
+viewer.registerMaterial('sales-chart', { kind: 'data-contract', contract: SALES_CHART_CONTRACT }, {
   render(node, context) {
     const resolution = resolveMaterialDataContract(
       SALES_CHART_CONTRACT,
@@ -367,7 +368,7 @@ viewer.registerMaterial('sales-chart', {
 固定尺寸物料不需要 `measure()`。只有最终尺寸依赖运行时内容时才加：
 
 ```ts
-viewer.registerMaterial(PRICE_TAG_TYPE, {
+viewer.registerMaterial(PRICE_TAG_TYPE, { kind: 'ordinary', primaryProp: 'amount' }, {
   render(_node, context) {
     return {
       html: trustedViewerHtml(`<div>${escapeHtml(String(context.resolvedProps.amount ?? ''))}</div>`),
@@ -395,7 +396,7 @@ viewer.registerMaterial(PRICE_TAG_TYPE, {
 `pageAware` 表示这个物料要复制到每一页：
 
 ```ts
-viewer.registerMaterial('page-badge', {
+viewer.registerMaterial('page-badge', { kind: 'none' }, {
   pageAware: true,
   render(_node, context) {
     const props = context.resolvedProps

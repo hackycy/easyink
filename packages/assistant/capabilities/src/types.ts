@@ -66,6 +66,37 @@ export const AssistantMaterialPropSchema = z.object({
 
 export type AssistantMaterialProp = z.infer<typeof AssistantMaterialPropSchema>
 
+export const AssistantMaterialDataContractSchema = z.object({
+  version: z.literal(3),
+  model: z.object({
+    kind: z.literal('tabular'),
+    fields: z.record(z.object({
+      labelKey: z.string(),
+      type: z.enum(['string', 'number', 'boolean', 'date', 'object', 'array']),
+      required: z.boolean().optional(),
+      format: z.enum(['display', 'raw']).optional(),
+    })),
+  }),
+})
+
+export type AssistantMaterialDataContract = z.infer<typeof AssistantMaterialDataContractSchema>
+
+export const AssistantMaterialBindingDefinitionSchema = z.union([
+  z.object({ kind: z.literal('none') }),
+  z.object({
+    kind: z.literal('ordinary'),
+    primaryProp: z.string(),
+    indexedProps: z.record(z.string()).optional(),
+  }),
+  z.object({
+    kind: z.literal('data-contract'),
+    contract: AssistantMaterialDataContractSchema,
+  }),
+  z.object({ kind: z.literal('custom') }),
+])
+
+export type AssistantMaterialBindingDefinition = z.infer<typeof AssistantMaterialBindingDefinitionSchema>
+
 export const AssistantAIMaterialDescriptorSchema = z.object({
   type: z.string(),
   description: z.string(),
@@ -131,6 +162,7 @@ export const AssistantMaterialManifestEntrySchema = z.object({
   type: z.string(),
   name: z.string(),
   capabilities: AssistantMaterialCapabilitiesSchema,
+  binding: AssistantMaterialBindingDefinitionSchema,
   props: z.array(AssistantMaterialPropSchema).optional(),
   ai: AssistantAIMaterialDescriptorSchema.optional(),
 })

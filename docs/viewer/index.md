@@ -170,7 +170,7 @@ Viewer 允许你为某个物料 `type` 注册运行时渲染器。
 ```ts
 import { trustedViewerHtml } from '@easyink/core'
 
-viewer.registerMaterial('my-widget', {
+viewer.registerMaterial('my-widget', { kind: 'none' }, {
   render(node, context) {
     return {
       html: trustedViewerHtml('<div>Custom Widget</div>'),

@@ -131,7 +131,8 @@ const selectedMaterialDataContract = computed(() => {
   const el = selectedElement.value
   if (!el)
     return undefined
-  return store.getMaterial(el.type)?.dataContract
+  const binding = store.getMaterial(el.type)?.binding
+  return binding?.kind === 'data-contract' ? binding.contract : undefined
 })
 
 /** Should the BindingSection be hidden entirely? */

@@ -71,7 +71,7 @@ describe('useDatasourceDrop', () => {
       workbench: { viewport: { zoom: 1, scrollLeft: 0, scrollTop: 0 } },
       getElements: () => [node],
       getElementSize: current => ({ width: current.width, height: current.height }),
-      getMaterial: () => ({ capabilities: {} }),
+      getMaterial: () => ({ capabilities: {}, binding: { kind: 'ordinary', primaryProp: 'content' } }),
       getDesignerExtension: () => ({
         datasourceDrop: {
           onDragOver,

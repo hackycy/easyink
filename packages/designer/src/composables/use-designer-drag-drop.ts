@@ -390,8 +390,8 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
     }
 
     const material = ctx.store.getMaterial(hit.type)
-    if (material?.dataContract) {
-      const plan = resolveMaterialDataDropPlan(material.dataContract, hit, data)
+    if (material?.binding.kind === 'data-contract') {
+      const plan = resolveMaterialDataDropPlan(material.binding.contract, hit, data)
       if (!plan)
         return null
       return {
@@ -463,12 +463,12 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
     }
 
     const material = ctx.store.getMaterial(resolved.target.type)
-    if (material?.dataContract) {
-      const plan = resolveMaterialDataDropPlan(material.dataContract, resolved.target, fieldData)
+    if (material?.binding.kind === 'data-contract') {
+      const plan = resolveMaterialDataDropPlan(material.binding.contract, resolved.target, fieldData)
       if (!plan || plan.status !== 'accepted')
         return
       const binding = applyMaterialDataFieldMapping(
-        material.dataContract,
+        material.binding.contract,
         resolved.target.binding,
         fieldData,
         plan.fieldId,

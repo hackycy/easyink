@@ -1,3 +1,4 @@
+import type { MaterialBindingDefinition } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { FragmentPaginator, MaterialViewerExtension, ViewerMeasureContext, ViewerMeasureResult, ViewerRenderContext, ViewerRenderOutput, ViewerRenderSize } from './types'
 import { trustedViewerHtml } from '@easyink/core'
@@ -9,10 +10,12 @@ import { escapeHtml } from '@easyink/shared'
  */
 export class MaterialRendererRegistry {
   private _renderers = new Map<string, MaterialViewerExtension>()
+  private _bindings = new Map<string, MaterialBindingDefinition>()
   private _pageAwareTypes = new Set<string>()
 
-  register(type: string, extension: MaterialViewerExtension): void {
+  register(type: string, binding: MaterialBindingDefinition, extension: MaterialViewerExtension): void {
     this._renderers.set(type, extension)
+    this._bindings.set(type, binding)
     if (extension.pageAware) {
       this._pageAwareTypes.add(type)
     }
@@ -20,6 +23,7 @@ export class MaterialRendererRegistry {
 
   unregister(type: string): void {
     this._renderers.delete(type)
+    this._bindings.delete(type)
     this._pageAwareTypes.delete(type)
   }
 
@@ -62,12 +66,17 @@ export class MaterialRendererRegistry {
     return this._pageAwareTypes.has(type)
   }
 
+  getBinding(type: string): MaterialBindingDefinition | undefined {
+    return this._bindings.get(type)
+  }
+
   get registeredTypes(): string[] {
     return [...this._renderers.keys()]
   }
 
   clear(): void {
     this._renderers.clear()
+    this._bindings.clear()
     this._pageAwareTypes.clear()
   }
 }

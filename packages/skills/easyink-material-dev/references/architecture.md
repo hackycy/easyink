@@ -175,7 +175,7 @@ Built-in materials:
 
 - Add package imports and entries in `packages/builtin/src/designer.ts`.
 - Add Viewer registration in `packages/builtin/src/viewer.ts`.
-- Add AI descriptor import and entry in `packages/builtin/src/ai.ts` when generation should know it.
+- Add `aiDescriptor` to the Designer material registration when generation should know it. Assistant consumes the live Designer material manifest; do not add material-specific prompt rules.
 - Add `@easyink/material-x` dependency to `packages/builtin/package.json`.
 
 ## Catalog and Capabilities

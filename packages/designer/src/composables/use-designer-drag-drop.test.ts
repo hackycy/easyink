@@ -116,7 +116,9 @@ function makeStore(
     icon: {},
     category: 'basic',
     capabilities: { bindable: true },
-    dataContract: options.textDataContract,
+    binding: options.textDataContract
+      ? { kind: 'data-contract', contract: options.textDataContract }
+      : { kind: 'ordinary', primaryProp: 'content' },
     props: [],
     createDefaultNode: options.textCreateDefaultNode ?? ((partial?: Partial<MaterialNode>) => createTextNode(partial)),
   }
@@ -126,6 +128,7 @@ function makeStore(
     icon: {},
     category: 'basic',
     capabilities: { bindable: false },
+    binding: { kind: 'none' },
     props: [],
     createDefaultNode: (partial?: Partial<MaterialNode>) => createLineNode(partial),
   }

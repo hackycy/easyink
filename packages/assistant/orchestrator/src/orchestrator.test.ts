@@ -1,3 +1,4 @@
+import type { AssistantMaterialManifest } from '@easyink/assistant-capabilities'
 import { MemoryAssistantStore } from '@easyink/assistant-store'
 import { describe, expect, it, vi } from 'vitest'
 import { AssistantOrchestrator, createAssistantApp, createAssistantWorkflowGraph } from './index'
@@ -806,13 +807,14 @@ function schemaPayloadWithTitle(title: string) {
   }
 }
 
-function textMaterialManifest() {
+function textMaterialManifest(): AssistantMaterialManifest {
   return {
     materials: [
       {
         type: 'text',
         name: 'Text',
         capabilities: { bindable: true },
+        binding: { kind: 'ordinary', primaryProp: 'content' },
         ai: {
           type: 'text',
           description: 'Designer-registered text material.',

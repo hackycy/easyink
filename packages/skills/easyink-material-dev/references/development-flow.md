@@ -202,7 +202,7 @@ For a new built-in material:
 3. Add package dependency to `packages/builtin/package.json`.
 4. Import and register Designer entry in `packages/builtin/src/designer.ts`.
 5. Import and register Viewer entry in `packages/builtin/src/viewer.ts`.
-6. Import and append the AI descriptor in `packages/builtin/src/ai.ts`, and pass the same descriptor as `aiDescriptor` in Designer registration so Assistant sees it.
+6. Pass the material-local AI descriptor as `aiDescriptor` in Designer registration. `packages/builtin/src/ai.ts` is derived from the Designer bundle; do not hand-maintain a second descriptor list.
 7. Add `src/locale.ts` in the material package and pass it as `localeMessages` on the Designer material entry. Keep `@easyink/locales` for Designer common strings only.
 8. Update tests or snapshots affected by built-in type lists.
 9. Run focused package tests and then broader validation when registration, descriptors, or shared Designer/Viewer behavior changed.

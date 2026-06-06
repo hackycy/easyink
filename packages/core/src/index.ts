@@ -117,6 +117,14 @@ export { runLayoutPipeline } from './layout-strategy'
 
 export type { RunLayoutPipelineOptions } from './layout-strategy'
 
+export type {
+  MaterialBindingDefinition,
+  MaterialCustomBindingDefinition,
+  MaterialDataContractBindingDefinition,
+  MaterialNoBindingDefinition,
+  MaterialOrdinaryBindingDefinition,
+} from './material-binding'
+
 export {
   applyMaterialDataFieldMapping,
   canBindMaterialDataField,

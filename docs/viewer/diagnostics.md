@@ -139,7 +139,7 @@ await viewer.open({
 物料测量和物料渲染有不同处理。
 
 ```ts
-viewer.registerMaterial('my-widget', {
+viewer.registerMaterial('my-widget', { kind: 'none' }, {
   render() {
     throw new Error('render failed')
   },
