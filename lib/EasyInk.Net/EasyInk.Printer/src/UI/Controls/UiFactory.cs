@@ -141,7 +141,7 @@ internal static class UiFactory
     {
         var layout = new TableLayoutPanel
         {
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+            Dock = DockStyle.Top,
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             ColumnCount = 1,
@@ -152,19 +152,6 @@ internal static class UiFactory
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         return layout;
-    }
-
-    public static void UpdateSettingsLayoutWidth(Panel panel, Control layout)
-    {
-        var verticalScrollWidth = panel.VerticalScroll.Visible ? SystemInformation.VerticalScrollBarWidth : 0;
-        var targetLocation = new Point(panel.Padding.Left, panel.Padding.Top);
-        var targetWidth = Math.Max(320, panel.ClientSize.Width - panel.Padding.Horizontal - verticalScrollWidth);
-
-        if (layout.Location != targetLocation)
-            layout.Location = targetLocation;
-
-        if (layout.Width != targetWidth)
-            layout.Width = targetWidth;
     }
 
     public static TableLayoutPanel CreateSettingsTable(params ColumnStyle[] columnStyles)
@@ -184,7 +171,28 @@ internal static class UiFactory
         foreach (var columnStyle in columnStyles)
             table.ColumnStyles.Add(columnStyle);
 
-        table.SizeChanged += (s, e) => UpdateSettingsTableWrapping(table);
+        // Wrap description labels to the current width. Guarded so it only runs
+        // when the width actually changes, which keeps it free of the AutoSize
+        // re-measure feedback loop (height changes never re-trigger it).
+        var lastWidth = -1;
+        table.ClientSizeChanged += (s, e) =>
+        {
+            var width = Math.Max(220, table.ClientSize.Width - table.Padding.Horizontal);
+            if (width == lastWidth)
+                return;
+
+            lastWidth = width;
+            foreach (Control control in table.Controls)
+            {
+                if (!Equals(control.Tag, "SettingsDescription"))
+                    continue;
+
+                var maximumSize = new Size(width, 0);
+                if (control.MaximumSize != maximumSize)
+                    control.MaximumSize = maximumSize;
+            }
+        };
+
         return table;
     }
 
@@ -246,7 +254,6 @@ internal static class UiFactory
             Tag = "SettingsDescription"
         };
         AddSettingWideRow(table, description);
-        UpdateSettingsTableWrapping(table);
     }
 
     public static void StyleSettingsSection(Control root)
@@ -409,17 +416,4 @@ internal static class UiFactory
         content.Margin = new Padding(4, 3, 0, 3);
     }
 
-    private static void UpdateSettingsTableWrapping(TableLayoutPanel table)
-    {
-        var width = Math.Max(220, table.ClientSize.Width - table.Padding.Horizontal);
-        foreach (Control control in table.Controls)
-        {
-            if (!Equals(control.Tag, "SettingsDescription"))
-                continue;
-
-            var maximumSize = new Size(width, 0);
-            if (control.MaximumSize != maximumSize)
-                control.MaximumSize = maximumSize;
-        }
-    }
 }

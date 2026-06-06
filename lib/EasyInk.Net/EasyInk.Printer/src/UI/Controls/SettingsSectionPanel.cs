@@ -18,37 +18,11 @@ public class SettingsSectionPanel : RoundedPanel
         Radius = 8;
         Padding = new Padding(0);
 
-        var layout = new TableLayoutPanel
-        {
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            Dock = DockStyle.Top,
-            ColumnCount = 1,
-            RowCount = 2,
-            Padding = new Padding(0),
-            Margin = new Padding(0),
-            BackColor = UiTheme.SectionBackColor
-        };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, HeaderHeight));
-        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-
-        var titleLabel = new Label
-        {
-            Text = title,
-            Dock = DockStyle.Fill,
-            Font = UiTheme.BoldFont(9.5f),
-            ForeColor = UiTheme.TextColor,
-            BackColor = UiTheme.SectionBackColor,
-            TextAlign = ContentAlignment.MiddleLeft,
-            Padding = new Padding(16, 2, 16, 0)
-        };
-
         ContentPanel = new TableLayoutPanel
         {
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            Dock = DockStyle.Fill,
+            Dock = DockStyle.Top,
             ColumnCount = 1,
             Padding = new Padding(14, 0, 14, 14),
             Margin = new Padding(0),
@@ -56,8 +30,20 @@ public class SettingsSectionPanel : RoundedPanel
         };
         ContentPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
-        layout.Controls.Add(titleLabel, 0, 0);
-        layout.Controls.Add(ContentPanel, 0, 1);
-        Controls.Add(layout);
+        var titleLabel = new Label
+        {
+            Text = title,
+            Dock = DockStyle.Top,
+            Height = HeaderHeight,
+            Font = UiTheme.BoldFont(9.5f),
+            ForeColor = UiTheme.TextColor,
+            BackColor = UiTheme.SectionBackColor,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Padding = new Padding(16, 2, 16, 0)
+        };
+
+        // Add content first so the docked header settles above it.
+        Controls.Add(ContentPanel);
+        Controls.Add(titleLabel);
     }
 }

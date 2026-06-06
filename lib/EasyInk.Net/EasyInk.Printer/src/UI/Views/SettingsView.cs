@@ -68,8 +68,6 @@ internal sealed class SettingsView : UserControl, ISettingsView, IActivatableTab
         var settingsLayout = UiFactory.CreateSettingsLayoutPanel();
         settingsLayout.SuspendLayout();
         panel.Controls.Add(settingsLayout);
-        UiFactory.UpdateSettingsLayoutWidth(panel, settingsLayout);
-        panel.Resize += (s, e) => UiFactory.UpdateSettingsLayoutWidth(panel, settingsLayout);
 
         var grpBasic = UiFactory.CreateSettingsSection(LangManager.Get("Settings_Basic"));
         var basicPanel = UiFactory.CreateSettingsTable(
@@ -428,9 +426,7 @@ internal sealed class SettingsView : UserControl, ISettingsView, IActivatableTab
         _presenter.Attach(this);
 
         settingsLayout.ResumeLayout(false);
-        settingsLayout.PerformLayout();
         panel.ResumeLayout(false);
-        panel.PerformLayout();
         ResumeLayout(false);
     }
 
