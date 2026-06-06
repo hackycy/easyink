@@ -71,3 +71,17 @@ export interface PieChartStyleOptions {
   sectorGapAngle: number
   sectorCornerRadius: number
 }
+
+export interface RadarChartStyleOptions {
+  areaColor: string
+  lineColor: string
+  pointColor: string
+  backgroundColor: string
+  axisColor: string
+  labelColor: string
+  showValueLabels: boolean
+  showAxisLabels: boolean
+  showArea: boolean
+  showPoints: boolean
+  maxValue: number
+}

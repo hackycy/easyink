@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createBarEChartsOption, createLineEChartsOption, DEFAULT_CHART_PREVIEW_DATA, normalizeCategoryValueData } from './index'
+import { createBarEChartsOption, createLineEChartsOption, createRadarEChartsOption, DEFAULT_CHART_PREVIEW_DATA, normalizeCategoryValueData } from './index'
 
 describe('normalizeCategoryValueData', () => {
   it('reads label/value record arrays', () => {
@@ -80,5 +80,32 @@ describe('createLineEChartsOption', () => {
     expect(xAxis.axisLine.show).toBe(false)
     expect(yAxis.axisLabel.show).toBe(false)
     expect(yAxis.axisLine.show).toBe(false)
+  })
+})
+
+describe('createRadarEChartsOption', () => {
+  it('maps radar indicators and display settings', () => {
+    const option = createRadarEChartsOption(DEFAULT_CHART_PREVIEW_DATA, {
+      areaColor: '#93c5fd',
+      lineColor: '#111111',
+      pointColor: '#222222',
+      backgroundColor: '#ffffff',
+      axisColor: '#333333',
+      labelColor: '#444444',
+      showValueLabels: true,
+      showAxisLabels: false,
+      showArea: false,
+      showPoints: false,
+      maxValue: 120,
+    })
+
+    const radar = option.radar as { indicator: Array<{ name: string, max: number }>, axisName: { show: boolean } }
+    const series = option.series as Array<{ label: { show: boolean }, symbol: string, data: Array<{ value: number[] }> }>
+
+    expect(radar.indicator[0]).toEqual({ name: 'A', max: 120 })
+    expect(radar.axisName.show).toBe(false)
+    expect(series[0]?.label.show).toBe(true)
+    expect(series[0]?.symbol).toBe('none')
+    expect(series[0]?.data[0]?.value).toEqual(DEFAULT_CHART_PREVIEW_DATA.map(point => point.value))
   })
 })

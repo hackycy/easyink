@@ -19,6 +19,7 @@ export {
   ChartColumn as IconChartBar,
   ChartLine as IconChartLine,
   ChartPie as IconChartPie,
+  Radar as IconChartRadar,
   ChartScatter as IconChartScatter,
   Check as IconCheck,
   ChevronLeft as IconChevronLeft,

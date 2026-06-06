@@ -15,4 +15,11 @@ describe('builtin designer material bundle', () => {
       group: 'chart',
     })
   })
+
+  it('shows radar chart in the chart catalog group', () => {
+    expect(builtinDesignerMaterialBundle.groupedCatalog).toContainEqual({
+      type: 'chart-radar',
+      group: 'chart',
+    })
+  })
 })

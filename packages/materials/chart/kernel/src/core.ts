@@ -1,7 +1,7 @@
 import type { EChartsCoreOption } from 'echarts/core'
 import type { ChartMountHandle } from './types'
-import { BarChart, LineChart, PieChart, ScatterChart } from 'echarts/charts'
-import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components'
+import { BarChart, LineChart, PieChart, RadarChart, ScatterChart } from 'echarts/charts'
+import { GridComponent, LegendComponent, RadarComponent, TooltipComponent } from 'echarts/components'
 import { init, use } from 'echarts/core'
 import { SVGRenderer } from 'echarts/renderers'
 
@@ -10,7 +10,7 @@ let echartsRegistered = false
 export function ensureEChartsRegistered(): void {
   if (echartsRegistered)
     return
-  use([BarChart, LineChart, PieChart, ScatterChart, GridComponent, LegendComponent, TooltipComponent, SVGRenderer])
+  use([BarChart, LineChart, PieChart, RadarChart, ScatterChart, GridComponent, LegendComponent, RadarComponent, TooltipComponent, SVGRenderer])
   echartsRegistered = true
 }
 
