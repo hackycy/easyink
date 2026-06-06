@@ -2,6 +2,23 @@ import type { DataSourceDescriptor } from '@easyink/datasource'
 import type { DocumentSchema } from '@easyink/schema'
 import { SCHEMA_VERSION } from '@easyink/shared'
 
+export const salesReportDemoData: Record<string, unknown> = {
+  title: '2026 上半年销售概览',
+  reportDate: '2026-06-05',
+  region: '华东大区',
+  owner: '运营分析组',
+  totalRevenue: '￥728,000',
+  targetCompletion: '91%',
+  monthlySales: [
+    { month: '1月', revenue: 98 },
+    { month: '2月', revenue: 112 },
+    { month: '3月', revenue: 135 },
+    { month: '4月', revenue: 121 },
+    { month: '5月', revenue: 146 },
+    { month: '6月', revenue: 116 },
+  ],
+}
+
 export const salesReportDataSource: DataSourceDescriptor = {
   id: 'sales-report',
   name: 'sales-report',
@@ -26,23 +43,6 @@ export const salesReportDataSource: DataSourceDescriptor = {
         { name: 'revenue', title: '销售额', path: 'monthlySales/revenue', use: 'text' },
       ],
     },
-  ],
-}
-
-export const salesReportDemoData: Record<string, unknown> = {
-  title: '2026 上半年销售概览',
-  reportDate: '2026-06-05',
-  region: '华东大区',
-  owner: '运营分析组',
-  totalRevenue: '￥728,000',
-  targetCompletion: '91%',
-  monthlySales: [
-    { month: '1月', revenue: 98 },
-    { month: '2月', revenue: 112 },
-    { month: '3月', revenue: 135 },
-    { month: '4月', revenue: 121 },
-    { month: '5月', revenue: 146 },
-    { month: '6月', revenue: 116 },
   ],
 }
 
@@ -308,20 +308,28 @@ export const salesReportTemplate: DocumentSchema = {
         showXAxisLine: true,
         showYAxisLine: true,
       },
-      binding: [
-        {
-          sourceId: 'sales-report',
-          fieldPath: 'monthlySales/month',
-          fieldLabel: '月份',
-          bindIndex: 0,
+      binding: {
+        kind: 'data-contract',
+        relation: { kind: 'auto' },
+        mappings: {
+          category: {
+            sourceId: 'sales-report',
+            sourceName: 'sales-report',
+            select: {
+              path: 'monthlySales/month',
+              label: '月份',
+            },
+          },
+          value: {
+            sourceId: 'sales-report',
+            sourceName: 'sales-report',
+            select: {
+              path: 'monthlySales/revenue',
+              label: '销售额',
+            },
+          },
         },
-        {
-          sourceId: 'sales-report',
-          fieldPath: 'monthlySales/revenue',
-          fieldLabel: '销售额',
-          bindIndex: 1,
-        },
-      ],
+      },
     },
   ],
 }
