@@ -17,6 +17,7 @@ export {
   Bug as IconBug,
   BarChart3 as IconChart,
   ChartColumn as IconChartBar,
+  Gauge as IconChartGauge,
   ChartLine as IconChartLine,
   ChartPie as IconChartPie,
   Radar as IconChartRadar,

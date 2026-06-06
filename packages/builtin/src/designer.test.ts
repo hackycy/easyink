@@ -16,6 +16,13 @@ describe('builtin designer material bundle', () => {
     })
   })
 
+  it('shows gauge chart in the chart catalog group', () => {
+    expect(builtinDesignerMaterialBundle.groupedCatalog).toContainEqual({
+      type: 'chart-gauge',
+      group: 'chart',
+    })
+  })
+
   it('shows radar chart in the chart catalog group', () => {
     expect(builtinDesignerMaterialBundle.groupedCatalog).toContainEqual({
       type: 'chart-radar',

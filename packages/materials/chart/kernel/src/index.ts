@@ -1,4 +1,5 @@
 export * from './charts/bar'
+export * from './charts/gauge'
 export * from './charts/line'
 export * from './charts/pie'
 export * from './charts/radar'

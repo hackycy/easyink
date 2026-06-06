@@ -29,6 +29,7 @@
     "@easyink/icons": "workspace:*",
     "@easyink/material-barcode": "workspace:*",
     "@easyink/material-chart-bar": "workspace:*",
+    "@easyink/material-chart-gauge": "workspace:*",
     "@easyink/material-chart-line": "workspace:*",
     "@easyink/material-chart-pie": "workspace:*",
     "@easyink/material-chart-radar": "workspace:*",

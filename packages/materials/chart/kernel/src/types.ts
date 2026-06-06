@@ -13,6 +13,13 @@ export interface ChartScatterPoint {
   color?: string
 }
 
+export interface ChartGaugeValuePoint {
+  value: number
+  name?: string
+  unit?: string
+  color?: string
+}
+
 export interface ChartMountHandle {
   update: (option: EChartsCoreOption) => void
   dispose: () => void
@@ -70,6 +77,22 @@ export interface PieChartStyleOptions {
   innerRadiusPercent: number
   sectorGapAngle: number
   sectorCornerRadius: number
+}
+
+export interface GaugeChartStyleOptions {
+  minValue: number
+  maxValue: number
+  defaultName: string
+  defaultUnit: string
+  progressColor: string
+  trackColor: string
+  pointerColor: string
+  backgroundColor: string
+  labelColor: string
+  showPointer: boolean
+  showProgress: boolean
+  showTitle: boolean
+  showValue: boolean
 }
 
 export interface RadarChartStyleOptions {

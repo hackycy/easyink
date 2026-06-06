@@ -2,6 +2,7 @@ import type { BuiltinDesignerMaterialBundle, BuiltinPanelSectionId } from './typ
 import {
   IconBarcode,
   IconChartBar,
+  IconChartGauge,
   IconChartLine,
   IconChartPie,
   IconChartRadar,
@@ -38,6 +39,15 @@ import {
   createChartBarExtension,
   createChartBarNode,
 } from '@easyink/material-chart-bar'
+import {
+  CHART_GAUGE_CAPABILITIES,
+  CHART_GAUGE_TYPE,
+  chartGaugeAIMaterialDescriptor,
+  chartGaugeDesignerPropSchemas,
+  chartGaugeLocaleMessages,
+  createChartGaugeExtension,
+  createChartGaugeNode,
+} from '@easyink/material-chart-gauge'
 import {
   CHART_LINE_CAPABILITIES,
   CHART_LINE_TYPE,
@@ -195,6 +205,7 @@ import {
 import {
   barcodeMaterialBinding,
   chartBarMaterialBinding,
+  chartGaugeMaterialBinding,
   chartLineMaterialBinding,
   chartPieMaterialBinding,
   chartRadarMaterialBinding,
@@ -411,6 +422,19 @@ export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
       localeMessages: chartScatterLocaleMessages,
     },
     {
+      type: CHART_GAUGE_TYPE,
+      name: 'materials.chartGauge.name',
+      icon: IconChartGauge,
+      category: 'chart',
+      capabilities: CHART_GAUGE_CAPABILITIES,
+      binding: chartGaugeMaterialBinding,
+      aiDescriptor: chartGaugeAIMaterialDescriptor,
+      createDefaultNode: createChartGaugeNode,
+      factory: createChartGaugeExtension,
+      propSchemas: chartGaugeDesignerPropSchemas,
+      localeMessages: chartGaugeLocaleMessages,
+    },
+    {
       type: SVG_CUSTOM_TYPE,
       name: 'materials.svgCustom.name',
       icon: IconSvg,
@@ -481,6 +505,7 @@ export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
     { type: CHART_PIE_TYPE, group: 'chart' },
     { type: CHART_RADAR_TYPE, group: 'chart' },
     { type: CHART_SCATTER_TYPE, group: 'chart' },
+    { type: CHART_GAUGE_TYPE, group: 'chart' },
     { type: SVG_STAR_TYPE, group: 'svg' },
     { type: SVG_HEART_TYPE, group: 'svg' },
     { type: SVG_CUSTOM_TYPE, group: 'svg' },

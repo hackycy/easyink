@@ -1,5 +1,6 @@
 import type { MaterialBindingDefinition } from '@easyink/core'
 import { CHART_BAR_DATA_CONTRACT } from '@easyink/material-chart-bar'
+import { CHART_GAUGE_DATA_CONTRACT } from '@easyink/material-chart-gauge'
 import { CHART_LINE_DATA_CONTRACT } from '@easyink/material-chart-line'
 import { CHART_PIE_DATA_CONTRACT } from '@easyink/material-chart-pie'
 import { CHART_RADAR_DATA_CONTRACT } from '@easyink/material-chart-radar'
@@ -20,6 +21,11 @@ export const barcodeMaterialBinding = {
 export const chartBarMaterialBinding = {
   kind: 'data-contract',
   contract: CHART_BAR_DATA_CONTRACT,
+} satisfies MaterialBindingDefinition
+
+export const chartGaugeMaterialBinding = {
+  kind: 'data-contract',
+  contract: CHART_GAUGE_DATA_CONTRACT,
 } satisfies MaterialBindingDefinition
 
 export const chartLineMaterialBinding = {

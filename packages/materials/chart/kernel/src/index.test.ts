@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createBarEChartsOption, createLineEChartsOption, createRadarEChartsOption, DEFAULT_CHART_PREVIEW_DATA, normalizeCategoryValueData } from './index'
+import { createBarEChartsOption, createGaugeEChartsOption, createLineEChartsOption, createRadarEChartsOption, DEFAULT_CHART_PREVIEW_DATA, normalizeCategoryValueData } from './index'
 
 describe('normalizeCategoryValueData', () => {
   it('reads label/value record arrays', () => {
@@ -80,6 +80,40 @@ describe('createLineEChartsOption', () => {
     expect(xAxis.axisLine.show).toBe(false)
     expect(yAxis.axisLabel.show).toBe(false)
     expect(yAxis.axisLine.show).toBe(false)
+  })
+})
+
+describe('createGaugeEChartsOption', () => {
+  it('maps gauge value and display settings', () => {
+    const option = createGaugeEChartsOption([{ value: 72, name: 'Completion', unit: '%', color: '#111111' }], {
+      minValue: 0,
+      maxValue: 100,
+      defaultName: 'KPI',
+      defaultUnit: '%',
+      progressColor: '#222222',
+      trackColor: '#e5e7eb',
+      pointerColor: '#333333',
+      backgroundColor: '#ffffff',
+      labelColor: '#444444',
+      showPointer: true,
+      showProgress: true,
+      showTitle: true,
+      showValue: true,
+    })
+
+    const series = option.series as Array<{
+      min?: number
+      max?: number
+      progress?: { itemStyle?: { color?: string } }
+      pointer?: { show?: boolean }
+      data: Array<{ value: number, name?: string }>
+    }>
+
+    expect(series[0]?.min).toBe(0)
+    expect(series[0]?.max).toBe(100)
+    expect(series[0]?.progress?.itemStyle?.color).toBe('#111111')
+    expect(series[0]?.pointer?.show).toBe(true)
+    expect(series[0]?.data[0]).toEqual({ value: 72, name: 'Completion' })
   })
 })
 
