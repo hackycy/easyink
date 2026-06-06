@@ -1,6 +1,6 @@
-import type { BarSeriesOption, LineSeriesOption } from 'echarts/charts'
+import type { BarSeriesOption, LineSeriesOption, PieSeriesOption } from 'echarts/charts'
 import type { EChartsCoreOption } from 'echarts/core'
-import { BarChart, LineChart } from 'echarts/charts'
+import { BarChart, LineChart, PieChart } from 'echarts/charts'
 import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components'
 import { init, use } from 'echarts/core'
 import { SVGRenderer } from 'echarts/renderers'
@@ -8,6 +8,7 @@ import { SVGRenderer } from 'echarts/renderers'
 export interface ChartCategoryValuePoint {
   label: string
   value: number
+  color?: string
 }
 
 export interface ChartMountHandle {
@@ -44,6 +45,15 @@ export interface LineChartStyleOptions {
   smooth: boolean
 }
 
+export interface PieChartStyleOptions {
+  paletteColors: string[]
+  backgroundColor: string
+  labelColor: string
+  showValueLabels: boolean
+  showLegend: boolean
+  innerRadiusPercent: number
+}
+
 export const DEFAULT_CHART_PREVIEW_DATA: ChartCategoryValuePoint[] = [
   { label: 'A', value: 32 },
   { label: 'B', value: 56 },
@@ -60,7 +70,7 @@ let echartsRegistered = false
 export function ensureEChartsRegistered(): void {
   if (echartsRegistered)
     return
-  use([BarChart, LineChart, GridComponent, LegendComponent, TooltipComponent, SVGRenderer])
+  use([BarChart, LineChart, PieChart, GridComponent, LegendComponent, TooltipComponent, SVGRenderer])
   echartsRegistered = true
 }
 
@@ -178,6 +188,62 @@ export function createLineEChartsOption(data: ChartCategoryValuePoint[], style: 
   }
 }
 
+export function createPieEChartsOption(data: ChartCategoryValuePoint[], style: PieChartStyleOptions): EChartsCoreOption {
+  const series: PieSeriesOption = {
+    type: 'pie',
+    radius: [`${clamp(style.innerRadiusPercent, 0, 80)}%`, '72%'],
+    center: ['50%', style.showLegend ? '44%' : '50%'],
+    avoidLabelOverlap: true,
+    data: data.map(point => createPieDataItem(point)),
+    label: {
+      show: style.showValueLabels,
+      color: style.labelColor || '#1f2937',
+      fontSize: 10,
+      formatter: '{b}: {c}',
+    },
+    labelLine: {
+      show: style.showValueLabels,
+      length: 8,
+      length2: 6,
+    },
+  }
+
+  return {
+    animation: false,
+    color: style.paletteColors.length > 0 ? style.paletteColors : undefined,
+    backgroundColor: style.backgroundColor || 'transparent',
+    tooltip: {
+      show: false,
+    },
+    legend: {
+      show: style.showLegend,
+      type: 'plain',
+      bottom: 0,
+      left: 'center',
+      itemWidth: 8,
+      itemHeight: 8,
+      textStyle: {
+        color: style.labelColor || '#374151',
+        fontSize: 10,
+      },
+    },
+    series: [series],
+  }
+}
+
+function createPieDataItem(point: ChartCategoryValuePoint): NonNullable<PieSeriesOption['data']>[number] {
+  const item: NonNullable<PieSeriesOption['data']>[number] = {
+    name: point.label,
+    value: point.value,
+  }
+  if (point.color) {
+    item.itemStyle = {
+      color: point.color,
+    }
+  }
+  return item
+}
+
 export function mountECharts(container: HTMLElement, option: EChartsCoreOption): ChartMountHandle {
   ensureEChartsRegistered()
   prepareChartContainer(container)
@@ -279,6 +345,12 @@ function toPoint(label: unknown, value: unknown): ChartCategoryValuePoint | null
     label: label == null || label === '' ? 'Item' : String(label),
     value: numericValue,
   }
+}
+
+function clamp(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value))
+    return min
+  return Math.min(max, Math.max(min, value))
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

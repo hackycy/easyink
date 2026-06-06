@@ -656,6 +656,9 @@ importers:
       '@easyink/material-chart-line':
         specifier: workspace:*
         version: link:../materials/chart/line
+      '@easyink/material-chart-pie':
+        specifier: workspace:*
+        version: link:../materials/chart/pie
       '@easyink/material-ellipse':
         specifier: workspace:*
         version: link:../materials/ellipse
@@ -855,6 +858,21 @@ importers:
         version: 6.1.0
 
   packages/materials/chart/line:
+    dependencies:
+      '@easyink/core':
+        specifier: workspace:*
+        version: link:../../../core
+      '@easyink/material-chart-kernel':
+        specifier: workspace:*
+        version: link:../kernel
+      '@easyink/schema':
+        specifier: workspace:*
+        version: link:../../../schema
+      '@easyink/shared':
+        specifier: workspace:*
+        version: link:../../../shared
+
+  packages/materials/chart/pie:
     dependencies:
       '@easyink/core':
         specifier: workspace:*

@@ -30,6 +30,7 @@
     "@easyink/material-barcode": "workspace:*",
     "@easyink/material-chart-bar": "workspace:*",
     "@easyink/material-chart-line": "workspace:*",
+    "@easyink/material-chart-pie": "workspace:*",
     "@easyink/material-ellipse": "workspace:*",
     "@easyink/material-flow-row": "workspace:*",
     "@easyink/material-image": "workspace:*",
