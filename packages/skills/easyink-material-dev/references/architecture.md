@@ -170,6 +170,7 @@ Custom material hosts:
 
 - Designer: call `registerMaterialBundle(store, bundle)` inside `EasyInkDesigner` `setupStore`.
 - Viewer: call `viewer.registerMaterial(type, extension)`.
+- Heavy Designer renderers may use `lazyFactory` on the Designer material entry. Keep material metadata synchronous; only the `MaterialDesignerExtension` factory should live in the lazy chunk.
 
 Built-in materials:
 
@@ -187,9 +188,10 @@ Built-in materials:
 - `icon`: Vue icon component.
 - `category`: primary material category.
 - `capabilities`: controls binding, rotation, resizing, children, animation, union drop, page-aware, multi-binding, and aspect lock.
-- `dataContract`: optional target data model for structured datasource materials. When present, Designer writes `node.binding.kind='data-contract'` mappings instead of ordinary whole-element `BindingRef`.
+- `binding`: material binding definition: `none`, `ordinary`, `custom`, or `data-contract`. Data-contract definitions include the target model contract and make Designer write `node.binding.kind='data-contract'` mappings instead of ordinary whole-element `BindingRef`.
 - `createDefaultNode`: default schema factory.
-- `factory`: Designer extension factory.
+- `factory`: synchronous Designer extension factory or a lightweight fallback when `lazyFactory` is present.
+- `lazyFactory`: optional async Designer factory loader for heavyweight renderers. Do not use it for Viewer registration or material metadata.
 - `propSchemas`: the complete material-owned property schema list for the material. Use `@easyink/prop-schemas` only for shared option arrays and layout behavior helpers.
 - `localeMessages`: material-owned Designer locale messages for catalog labels, property labels, material-local actions, placeholders, history labels, and data-contract labels.
 - `sectionFilter`: hide or show property panel sections.

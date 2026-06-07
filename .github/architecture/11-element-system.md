@@ -18,6 +18,7 @@ interface MaterialDefinition {
   icon: string
   category: MaterialCategory
   capabilities: MaterialCapabilities
+  binding: MaterialBindingDefinition
   props: PropSchema[]
   createDefaultNode(input?: Partial<MaterialNode>): MaterialNode
 }
@@ -51,6 +52,10 @@ interface MaterialCapabilities {
 该能力不负责清理或迁移 schema 中已经存在的 `node.rotation`。原因是导入/旧模板可能已经保存了 rotation，Viewer 应继续按 schema 渲染以保证兼容；Designer 只阻止后续交互继续修改不可旋转物料的 rotation。
 
 物料包拥有自己的 props 类型，例如 `TextProps`、`TableDataProps`。通用注册表仍以 `MaterialNode` 接收节点；物料内部读取 props 时使用 `getNodeProps<TProps>(node)` 或返回 `MaterialNode<TProps>` 的工厂函数。`props` 是 schema 的开放扩展点，不在通用 PropertiesPanel / Viewer / codec 中硬编码具体物料 props 类型。
+
+Designer 注册物料时使用 `DesignerMaterialRegistration`。其中 `factory` 是同步兜底工厂；`lazyFactory?: LazyMaterialExtensionFactory` 是设计器侧异步加载入口，用于 ECharts 全量包、复杂编辑器等重型设计态渲染器。注册时必须同步提供 `type/name/icon/category/capabilities/binding/createDefaultNode/propSchemas/localeMessages/aiDescriptor` 等元数据，以保证物料面板、属性面板、绑定面板和 AI manifest 不依赖懒加载 chunk。只有 `MaterialDesignerExtension` 本体可以延迟加载。
+
+Viewer 注册保持同步：`viewer.registerMaterial(type, binding, extension)` 必须在渲染前完成。Viewer 面向预览、打印和导出稳定性，不把内置物料的渲染器拆成 Designer 同款懒加载路径。
 
 ## 11.2 目录层级
 
@@ -121,6 +126,7 @@ interface MaterialCapabilities {
 - `chart-radar`
 - `chart-scatter`
 - `chart-gauge-alt`
+- `chart-custom`
 - `chart-water-ball`
 - `chart-word-cloud`
 - `chart-echarts`
@@ -157,12 +163,23 @@ interface MaterialCapabilities {
 
 它需要：
 
-- 通过物料定义声明 `dataContract`，目标模型为 tabular records，字段包含 `category` 和 `value`
+- 通过物料定义声明 `binding.kind='data-contract'` 和目标模型 contract，字段包含 `category` 和 `value`
 - Schema 节点保存 `binding.kind='data-contract'`，其中 `mappings.category.select.path` 和 `mappings.value.select.path` 分别指向源数据字段
 - 不在 `props` 中保存运行时 `data`、`options` 或 chart-specific 数据结构；`props` 只保存视觉设置
 - Designer 拖拽字段时按未绑定的目标字段顺序填充 mapping，也支持在属性面板里把字段拖到指定目标字段
 - Designer 不因不同 collection 或顶层数组形态拒绝映射；共享集合、顶层数组、不同集合对齐由 Resolver 根据 `relation` 处理
 - Viewer 渲染时调用 `resolveMaterialDataContract()`，将目标 records 投影为 chart kernel 的 `{ label, value }[]`
+
+### `chart-custom`
+
+它面向内置图表类型无法覆盖的复杂 ECharts 场景，需要：
+
+- 使用普通绑定而不是 `DataContractBinding`：注册 `binding.kind='ordinary'`、`primaryProp='option'`、`formatEditor: { tabs: ['custom'], defaultTab: 'custom' }`。
+- 支持运行时数据源直接返回完整 ECharts option。绑定结果可为对象，也可为 JSON 字符串；Viewer 在普通绑定投影后从 `context.resolvedProps.option` 读取。
+- 支持设计器属性面板直接编辑 `props.optionCode`。这段代码是可信模板代码，只保存源码字符串，不把函数对象写入 Schema。
+- 支持 `return { ... }`、对象表达式、返回函数或声明 `function option(ctx) { ... }` 等写法。执行上下文提供运行时 `data`、绑定 option、节点、尺寸、单位和完整 `echarts` 包。
+- 默认设计态渲染器必须通过 `lazyFactory` 加载，避免把完整 ECharts 包拉进 Designer 初始路径；物料元数据、属性 schema、locale 和 AI descriptor 仍同步注册。
+- Viewer 端直接使用 `@easyink/material-chart-kernel/full` 渲染完整 ECharts SVG，优先保证输出路径稳定，不为内置 Viewer 做懒加载。
 
 ### `table-data`
 

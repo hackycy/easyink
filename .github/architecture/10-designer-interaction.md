@@ -332,7 +332,7 @@ interface PropertyPanelOverlay {
 
 物料通过 `ctx.requestPropertyPanel(overlay)` 推送叠加层，`null` 清除。
 
-`PropertyPanelOverlay.binding` 只用于普通 `BindingRef` 编辑，例如表格 cell 的 `binding` / `staticBinding`。声明了 `MaterialDefinition.dataContract` 的物料使用专用 MaterialDataBindingEditor，读写 `DataContractBinding.mappings`。
+`PropertyPanelOverlay.binding` 只用于普通 `BindingRef` 编辑，例如表格 cell 的 `binding` / `staticBinding`。声明了 `MaterialDefinition.binding.kind='data-contract'` 的物料使用专用 MaterialDataBindingEditor，读写 `DataContractBinding.mappings`。
 
 **渲染模型**（从上到下）：
 
@@ -346,7 +346,7 @@ interface PropertyPanelOverlay {
 
 - overlay 提供 `binding` 且非 `null` → 展示推送的 binding
 - overlay 提供 `binding === null` → 隐藏 BindingSection
-- 元素声明 `material.dataContract` → 展示 MaterialDataBindingEditor，隐藏普通 BindingSection
+- 元素声明 `material.binding.kind='data-contract'` → 展示 MaterialDataBindingEditor，隐藏普通 BindingSection
 - 无 overlay 且 `material.capabilities.bindable === false` → 隐藏
 - 否则 → 展示元素顶层 binding
 

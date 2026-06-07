@@ -89,11 +89,18 @@ pnpm add @easyink/designer @easyink/viewer
 - `@easyink/material-table-static`
 - `@easyink/material-table-data`
 - `@easyink/material-flow-row`
-- `@easyink/material-chart`
+- `@easyink/material-chart-bar`
+- `@easyink/material-chart-line`
+- `@easyink/material-chart-pie`
+- `@easyink/material-chart-radar`
+- `@easyink/material-chart-scatter`
+- `@easyink/material-chart-gauge`
+- `@easyink/material-chart-custom`
+- `@easyink/material-chart-kernel`
 
 你不用一开始就单独安装它们。多数情况下，它们会通过内置注册表进入 Designer 和 Viewer。
 
-只有当你在研究自定义物料、对照内置实现写扩展时，才需要逐个看这些包。
+只有当你在研究自定义物料、对照内置实现写扩展时，才需要逐个看这些包。图表物料使用拆分包：常规图表走轻量 chart kernel，自定义 ECharts 可通过 `@easyink/material-chart-kernel/full` 使用完整 ECharts 入口。
 
 ## AI 与 Assistant 平台
 

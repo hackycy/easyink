@@ -114,6 +114,34 @@ Viewer lessons:
 - In continuous paper, flow nodes after a taller flow-row may be pushed by `flow-y`.
 - In fixed-position nodes, measurement changes size but the node does not trigger break constraints.
 
+## chart-custom
+
+Use as the custom ECharts reference:
+
+- Schema type is `chart-custom`.
+- Props store `optionMode`, `optionCode`, `option`, and visual props such as `backgroundColor`.
+- `optionCode` is JavaScript source text, not a function value. Keep Schema JSON-safe.
+- Binding is ordinary: `binding.kind='ordinary'`, `primaryProp='option'`, and `formatEditor` exposes only `custom`.
+- Bound option values may be objects or JSON strings. Viewer reads them from `context.resolvedProps.option`.
+- Code-authored options support body and expression styles such as `return { ... }`, `({ ... })`, `(ctx) => ({ ... })`, and `function option(ctx) { ... }`.
+- Option code is trusted template code. It is not a sandbox; failures become warning diagnostics and fall back to a visible default option.
+- Designer registration keeps metadata synchronous and loads the heavy renderer through `lazyFactory`.
+- Viewer registration is synchronous and renders SVG through `@easyink/material-chart-kernel/full`.
+- `@easyink/material-chart-kernel` has a lightweight default entry for built-in chart types and a `./full` subpath for the complete ECharts package.
+
+What to copy:
+
+- Use ordinary binding for whole-object option projection when the data source already returns the material runtime configuration.
+- Use `type: 'code'` prop schemas with editor sizing and JavaScript language for authored option source.
+- Keep heavy Designer rendering behind `lazyFactory` while leaving catalog, binding, prop schemas, locale messages, and AI descriptor immediately available.
+- Convert option execution and JSON parsing errors into diagnostics instead of throwing through Viewer render.
+
+What not to copy blindly:
+
+- Do not use JS source props for untrusted template imports.
+- Do not hide material metadata in the lazy Designer chunk.
+- Do not use `DataContractBinding` when the material wants one complete runtime option object rather than a target record model.
+
 ## svg-star
 
 Source files:

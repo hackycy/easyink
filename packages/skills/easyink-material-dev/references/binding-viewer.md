@@ -32,6 +32,8 @@ Ordinary element binding is handled by Viewer before material render:
 
 For standard materials, do not manually walk `context.data` in `render()`. Read `context.resolvedProps` or `getNodeProps(node)` after the Viewer pipeline has projected props.
 
+Ordinary binding can project structured values, not only scalar display text. For example, a custom ECharts material can declare `binding.kind='ordinary'` with `primaryProp: 'option'`; Viewer will project the bound value into `context.resolvedProps.option`, and the material can accept either an option object or a JSON string. If the material executes JavaScript source to build that object, document it as trusted template code and report failures as material diagnostics.
+
 Primary binding defaults:
 
 - `text` maps binding 0 to `content`.

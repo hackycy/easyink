@@ -6,8 +6,8 @@ Follow existing packages such as `packages/materials/rect`, `packages/materials/
 
 Typical files:
 
-- `package.json`: package name, workspace deps, optional Vue peer dependency when Designer code imports Vue.
-- `tsdown.config.ts`: `entry: ['src/index.ts']`, `dts: true`, `exports: true`, `publint: true`.
+- `package.json`: package name, workspace deps, optional Vue peer dependency when Designer code imports Vue, and subpath exports for lazy-loaded entries such as `./designer`, `./schema`, `./prop-schemas`, `./locale`, or `./viewer`.
+- `tsdown.config.ts`: `entry: ['src/index.ts']` plus any public subpath entries, `dts: true`, `exports: true`, `publint: true`.
 - `src/schema.ts`: type constant, props interface, defaults, capabilities, `createXNode()`.
 - `src/designer.ts`: `createXExtension(context)`.
 - `src/viewer.ts`: render plus optional `measure()`, `getRenderSize()`, or `fragmentPaginator`.
@@ -87,6 +87,8 @@ Use `renderContent(nodeSignal, container, renderContextSignal?)`:
 Simple materials can set `container.innerHTML`. Complex materials can create Vue decorations or DOM manually, but cleanup must be deterministic.
 
 Designer coordinates and design-time page context come through framework-owned surface planning. Material code should use material-local coordinates in geometry and datasource drop protocols, and should not convert output page plans or `renderContextSignal` values back into schema coordinates or persisted props.
+
+For heavyweight Designer renderers, register a synchronous metadata entry and put only the extension factory behind `lazyFactory`. Keep `binding`, `propSchemas`, `localeMessages`, `aiDescriptor`, catalog entries, and `createDefaultNode` in the initial registration so Designer panels and Assistant manifest are complete before the renderer chunk loads. Use a lightweight `factory` fallback when the registration type requires one; the registry will show its loading extension while `lazyFactory` resolves and remount the canvas after `materialExtensionRevision` changes.
 
 For font-bearing materials:
 
@@ -173,6 +175,7 @@ Use `propSchemas` for simple `node.props` fields:
 - Labels should be i18n keys.
 - Group names should be one of the groups mapped in `PropertiesPanel.vue` or an intentionally visible custom group.
 - For `code` or `textarea` props whose value is commonly authored in a local text file, declare `editorOptions.valueInput = { kind: 'text-file', id, source, accept, pickTitle, maxBytes }`. For image or asset URL props, use `{ kind: 'asset-url', id, source, accept, pickTitle }`. The shared `PropSchemaEditor` calls Designer's interaction bridge and commits the returned value as the prop value. Do not add material-local `<input type="file">` controls, and do not persist file names, local paths, `File` objects, picker state, or import state in Schema.
+- For JavaScript authoring props such as custom ECharts option code, use `type: 'code'` with `editorOptions.language = 'javascript'`, editor height/dialog sizing, and localized labels/placeholders. Store source strings only. Treat execution as trusted template code, not a sandbox, and turn failures into diagnostics plus a stable fallback.
 
 For font properties:
 
@@ -203,10 +206,11 @@ For a new built-in material:
 3. Add package dependency to `packages/builtin/package.json`.
 4. Import and register Designer entry in `packages/builtin/src/designer.ts`.
 5. Import and register Viewer entry in `packages/builtin/src/viewer.ts`.
-6. Pass the material-local AI descriptor as `aiDescriptor` in Designer registration. `packages/builtin/src/ai.ts` is derived from the Designer bundle; do not hand-maintain a second descriptor list.
-7. Add `src/locale.ts` in the material package and pass it as `localeMessages` on the Designer material entry. Keep `@easyink/locales` for Designer common strings only.
-8. Update tests or snapshots affected by built-in type lists.
-9. Run focused package tests and then broader validation when registration, descriptors, or shared Designer/Viewer behavior changed.
+6. If Designer rendering is heavy, register metadata synchronously and use `lazyFactory` for the Designer extension chunk only; keep Viewer registration synchronous.
+7. Pass the material-local AI descriptor as `aiDescriptor` in Designer registration. `packages/builtin/src/ai.ts` is derived from the Designer bundle; do not hand-maintain a second descriptor list.
+8. Add `src/locale.ts` in the material package and pass it as `localeMessages` on the Designer material entry. Keep `@easyink/locales` for Designer common strings only.
+9. Update tests or snapshots affected by built-in type lists, catalog grouping, lazy registration, package subpath exports, or binding format tabs.
+10. Run focused package tests and then broader validation when registration, descriptors, or shared Designer/Viewer behavior changed.
 
 ## Export and Print Compatibility
 

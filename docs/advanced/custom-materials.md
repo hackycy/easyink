@@ -215,6 +215,40 @@ function setupStore(store) {
 物料面板里的图标来自 `MaterialCatalogEntry.icon`。如果你只在 `materials` 里传 `icon`，注册器会自动把它带到 quick 和 grouped catalog；如果 grouped catalog 想用另一个图标，也可以在 `groupedCatalog` 项里单独传 `icon`。
 :::
 
+### 懒加载设计态渲染器 {#lazy-designer-extension}
+
+如果物料的设计态依赖很重，例如完整 ECharts 包、复杂代码编辑器或大型交互内核，可以在 Designer 注册里使用 `lazyFactory`：
+
+```ts
+registerMaterialBundle(store, {
+  materials: [
+    {
+      type: 'sales-echarts',
+      name: 'materials.salesEcharts.name',
+      icon: IconChart,
+      category: 'chart',
+      capabilities: { bindable: true, resizable: true },
+      binding: {
+        kind: 'ordinary',
+        primaryProp: 'option',
+        formatEditor: { tabs: ['custom'], defaultTab: 'custom' },
+      },
+      createDefaultNode: createSalesEchartsNode,
+      factory: () => ({ renderContent: () => () => {} }),
+      lazyFactory: async () => (await import('./sales-echarts-designer')).createSalesEchartsExtension,
+      propSchemas: salesEchartsPropSchemas,
+      localeMessages: salesEchartsLocaleMessages,
+    },
+  ],
+  quickMaterialTypes: [],
+  groupedCatalog: [{ type: 'sales-echarts', group: 'chart' }],
+})
+```
+
+`lazyFactory` 只延迟加载 `MaterialDesignerExtension`。物料面板、属性面板、绑定面板和 AI manifest 需要的元数据仍然同步注册，所以 `type`、`name`、`icon`、`category`、`capabilities`、`binding`、`createDefaultNode`、`propSchemas` 和 `localeMessages` 不要放到懒加载 chunk 里。
+
+懒加载过程中，画布会先显示内置 loading 状态；加载完成后 Designer 会重新 mount 对应物料。Viewer 仍然需要在渲染前同步 `viewer.registerMaterial()`，不要假设 Viewer 会自动跟随 Designer 的懒加载注册。
+
 ## 属性值输入增强 {#prop-value-input}
 
 `propSchemas` 负责声明属性如何编辑。对于直接保存到 `node.props` 的属性，如果用户更常从宿主资产库或本地文件获得值，可以在 `editorOptions.valueInput` 上声明输入通道。
@@ -334,11 +368,41 @@ viewer.open({
 
 当节点保存了 `binding` 后，Viewer 会把绑定结果写进 `context.resolvedProps`。你的物料渲染器继续读 `resolvedProps`，不用手写 `getByPath(context.data, fieldPath)`。
 
+普通绑定不只适合字符串或数字。只要物料的 `primaryProp` 指向某个 props 字段，Viewer 就会把绑定结果投影到这个字段。例如自定义 ECharts 物料可以声明 `primaryProp: 'option'`，运行时数据源直接返回完整 option 对象：
+
+```ts
+const node = {
+  type: 'sales-echarts',
+  props: {
+    optionMode: 'bound',
+    option: null,
+  },
+  binding: {
+    sourceId: 'report',
+    fieldPath: 'echartsOption',
+  },
+}
+
+viewer.open({
+  schema,
+  data: {
+    echartsOption: {
+      tooltip: {},
+      xAxis: { type: 'category', data: ['A', 'B'] },
+      yAxis: { type: 'value' },
+      series: [{ type: 'bar', data: [12, 20] }],
+    },
+  },
+})
+```
+
+如果数据源返回 JSON 字符串，物料可以在自己的 Viewer renderer 中解析它；如果要执行 JavaScript 代码生成 option，应明确把它作为可信模板代码处理，不要把它当成不可信脚本沙箱。
+
 如果你的物料想接管数据源拖放，比如表格单元格那样落到内部区域，再实现 `datasourceDrop`。
 
 ### 结构化数据物料 {#data-contract}
 
-如果物料消费的不是单个字段，而是一组目标 records，例如柱状图、折线图、透视卡片，可以声明 `dataContract`。此时物料说清楚自己需要什么目标模型，binding 只保存用户从数据源拖来的映射。
+如果物料消费的不是单个字段，而是一组目标 records，例如柱状图、折线图、透视卡片，可以声明 `binding.kind='data-contract'` 并在其中放入 contract。此时物料说清楚自己需要什么目标模型，节点 binding 只保存用户从数据源拖来的映射。
 
 ```ts
 import type { MaterialDataContract } from '@easyink/core'
@@ -421,7 +485,7 @@ viewer.registerMaterial('sales-chart', {
 保持这几个边界会让物料更容易扩展：
 
 - `props` 保存视觉设置，不保存运行时数据。
-- `dataContract.model` 描述目标数据模型，不描述数据源长什么样。
+- `binding.contract.model` 描述目标数据模型，不描述数据源长什么样。
 - `DataContractBinding.mappings` 保存完整 source path，不截断集合内路径。
 - 默认使用 `relation: { kind: 'auto' }` 交给 Resolver 推导 record/index 对齐关系。
 - `formatEditor` 是物料注册能力声明，决定属性面板显示哪些格式 tab；Schema 里的 `BindingDisplayFormat` 只保存实际格式配置。

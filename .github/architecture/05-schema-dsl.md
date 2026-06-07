@@ -353,7 +353,7 @@ interface BindingCustomFormat {
 
 ### `DataContractBinding` 与目标数据模型
 
-结构化物料通过 `dataContract` 声明目标数据模型，节点上的 `binding` 保存 source 到目标字段的映射：
+结构化物料通过 `MaterialDefinition.binding.kind='data-contract'` 和其中的 `contract` 声明目标数据模型，节点上的 `binding` 保存 source 到目标字段的映射：
 
 ```typescript
 interface MaterialDataContract {
@@ -420,7 +420,7 @@ const chartBinding: DataContractBinding = {
 
 协议约束：
 
-- `dataContract.model` 属于物料定义，不写入每个节点；节点只保存 `DataContractBinding`。
+- `binding.contract.model` 属于物料定义，不写入每个节点；节点只保存 `DataContractBinding`。
 - `mappings` 的 key 是目标字段 id，如 `category`、`value`，不是数据源字段名。
 - `select.path` 永远保存完整 source path，例如 `monthlySales/month`。Resolver 如需集合内叶子路径，只能临时推导，不得把 path 截断写回 schema。
 - `relation.kind='auto'` 是默认值，表示 Resolver 自行判断共享 record collection 或 index 对齐；binding 不保存 `mode`。

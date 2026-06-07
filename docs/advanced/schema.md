@@ -224,7 +224,7 @@ interface DataContractBinding {
 }
 ```
 
-普通文本类旧 schema 仍然有效；只有声明了 `dataContract` 的物料才会使用 `DataContractBinding`。
+普通文本类旧 schema 仍然有效；只有声明了 `binding.kind='data-contract'` 的物料才会使用 `DataContractBinding`。
 
 ## 表格节点 {#table-node}
 

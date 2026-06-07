@@ -28,7 +28,7 @@ description: EasyInk API 索引：快速定位公开能力的包入口，涵盖 
 | `createDefaultSaveBranchMenu` | Function | 创建默认保存分支菜单状态 |
 | `tableSectionFilter` | Function | 表格属性面板过滤器 |
 
-类型导出：`DocumentSchema`, `DocumentSchemaInput`, `MaterialNode`, `DataSourceDescriptor`, `Contribution`, `ContributionContext`, `Command`, `PanelDescriptor`, `ToolbarActionDescriptor`, `DesignerConfirmRequest`, `DesignerConfirmSeverity`, `DesignerInteractionProvider`, `DesignerMaterialBundle`, `DesignerMaterialRegistration`, `DesignerCatalogRegistration`, `MaterialCapabilities`, `TemplateAutoSaveOptions`, `PreferenceProvider`, `PersistableWorkbenchState`, `LocaleMessages`, `FontDescriptor`, `FontProvider`
+类型导出：`DocumentSchema`, `DocumentSchemaInput`, `MaterialNode`, `DataSourceDescriptor`, `Contribution`, `ContributionContext`, `Command`, `PanelDescriptor`, `ToolbarActionDescriptor`, `DesignerConfirmRequest`, `DesignerConfirmSeverity`, `DesignerInteractionProvider`, `DesignerMaterialBundle`, `DesignerMaterialRegistration`, `DesignerCatalogRegistration`, `MaterialCapabilities`, `MaterialExtensionFactory`, `LazyMaterialExtensionFactory`, `MaterialBindingDefinition`, `TemplateAutoSaveOptions`, `PreferenceProvider`, `PersistableWorkbenchState`, `LocaleMessages`, `FontDescriptor`, `FontProvider`
 
 ## @easyink/core
 
@@ -38,8 +38,12 @@ description: EasyInk API 索引：快速定位公开能力的包入口，涵盖 
 |------|------|------|
 | `FontManager` | Class | 字体目录缓存、加载状态、批量加载和可选 `@font-face` 注入 |
 | `collectFontFamilies` | Function | 从 DocumentSchema 收集页面和元素字体引用 |
+| `trustedViewerHtml` | Function | 标记物料 Viewer HTML 为可信输出 |
+| `resolveMaterialDataContract` | Function | 解析 data-contract 物料的目标 records |
 
 字体相关类型导出：`FontDescriptor`, `FontProvider`, `FontSource`, `FontLoadRequest`, `FontLoadStatus`, `FontLoadState`, `FontLoadSuccess`, `FontLoadFailure`, `FontBatchLoadOptions`, `FontBatchLoadResult`, `FontPreloadResult`
+
+物料扩展类型导出：`MaterialDesignerExtension`, `MaterialExtensionFactory`, `LazyMaterialExtensionFactory`, `MaterialBindingDefinition`, `MaterialViewerExtension`, `ViewerRenderContext`, `ViewerMeasureContext`, `PropSchema`
 
 ## @easyink/viewer
 

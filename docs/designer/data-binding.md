@@ -125,7 +125,7 @@ const textNode = {
 }
 ```
 
-这类绑定适合“一个字段值投影到一个 props”的场景，例如文本、图片、条码、二维码。普通 `BindingRef` schema 继续可用。
+这类绑定适合“一个字段值投影到一个 props”的场景，例如文本、图片、条码、二维码。这个字段值不要求一定是标量；物料如果声明 `primaryProp: 'option'`，也可以让数据源直接返回对象或 JSON 字符串，并由物料在 Viewer 中解释为完整配置。普通 `BindingRef` schema 继续可用。
 
 chart-bar 这类结构化物料使用 `data-contract`。它的重点不是“字段按第几个槽位绑定”，而是：
 
