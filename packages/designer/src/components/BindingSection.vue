@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { BindingFormatEditorDefinition } from '@easyink/core'
 import type { DataSourceDescriptor } from '@easyink/datasource'
 import type { BindingRef, MaterialNode } from '@easyink/schema'
 import type { BindingDisplayFormat } from '@easyink/shared'
@@ -14,6 +15,7 @@ const props = defineProps<{
   /** Whether external binding is explicitly set (to distinguish undefined from not-provided) */
   hasExternalBinding?: boolean
   getDataSource?: (sourceId: string) => DataSourceDescriptor | undefined
+  formatEditor: BindingFormatEditorDefinition | false
 }>()
 
 const emit = defineEmits<{
@@ -88,10 +90,12 @@ function isBindingRef(binding: unknown): binding is BindingRef {
           </div>
         </div>
         <BindingFormatEditor
+          v-if="formatEditor"
           :binding="binding"
           :bind-index="bindIndex(binding, idx)"
           :t="t"
           :get-data-source="getDataSource"
+          :format-editor="formatEditor"
           @update-binding-format="emit('updateBindingFormat', $event, bindIndex(binding, idx))"
         />
       </div>

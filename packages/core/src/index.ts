@@ -3,6 +3,11 @@ export { keyboardCursorMiddleware, selectionMiddleware, undoBoundaryMiddleware }
 export { formatBindingDisplayValue, hasBindingFormat } from './binding-format'
 export type { BindingFormatContext, BindingFormatDiagnostic, BindingFormatResult } from './binding-format'
 
+export type {
+  BindingFormatEditorDefinition,
+  BindingFormatEditorTab,
+} from './binding-format-editor'
+
 export {
   extractCollectionPath,
   resolveBindingValue,

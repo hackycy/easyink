@@ -120,7 +120,11 @@ export function registerPriceTagDesigner(store: DesignerStore) {
           resizable: true,
           rotatable: true,
         },
-        binding: { kind: 'ordinary', primaryProp: 'amount' },
+        binding: {
+          kind: 'ordinary',
+          primaryProp: 'amount',
+          formatEditor: { tabs: ['preset', 'custom'], defaultTab: 'preset' },
+        },
         createDefaultNode: createPriceTagNode,
         factory: createPriceTagDesignerExtension,
         localeMessages: priceTagLocaleMessages,
@@ -136,7 +140,11 @@ export function registerPriceTagDesigner(store: DesignerStore) {
 }
 
 export function registerPriceTagViewer(viewer: ViewerRuntime) {
-  viewer.registerMaterial(PRICE_TAG_TYPE, { kind: 'ordinary', primaryProp: 'amount' }, {
+  viewer.registerMaterial(PRICE_TAG_TYPE, {
+    kind: 'ordinary',
+    primaryProp: 'amount',
+    formatEditor: { tabs: ['preset', 'custom'], defaultTab: 'preset' },
+  }, {
     render(_node, context) {
       const props = context.resolvedProps
       return {
@@ -286,7 +294,11 @@ import { createViewer } from '@easyink/viewer'
 
 const viewer = createViewer({ container })
 
-viewer.registerMaterial(PRICE_TAG_TYPE, { kind: 'ordinary', primaryProp: 'amount' }, {
+viewer.registerMaterial(PRICE_TAG_TYPE, {
+  kind: 'ordinary',
+  primaryProp: 'amount',
+  formatEditor: { tabs: ['preset', 'custom'], defaultTab: 'preset' },
+}, {
   render(_node, context) {
     const props = context.resolvedProps
     return {
@@ -363,7 +375,11 @@ registerMaterialBundle(store, {
     icon: IconChart,
     category: 'chart',
     capabilities: { bindable: true, resizable: true },
-    binding: { kind: 'data-contract', contract: SALES_CHART_CONTRACT },
+    binding: {
+      kind: 'data-contract',
+      contract: SALES_CHART_CONTRACT,
+      formatEditor: { tabs: ['custom'], defaultTab: 'custom' },
+    },
     propSchemas: [],
     localeMessages: salesChartLocaleMessages,
     createDefaultNode: createSalesChartNode,
@@ -377,7 +393,11 @@ Viewer 渲染器里由物料自己消费 contract 解析结果：
 ```ts
 import { resolveMaterialDataContract } from '@easyink/core'
 
-viewer.registerMaterial('sales-chart', { kind: 'data-contract', contract: SALES_CHART_CONTRACT }, {
+viewer.registerMaterial('sales-chart', {
+  kind: 'data-contract',
+  contract: SALES_CHART_CONTRACT,
+  formatEditor: { tabs: ['custom'], defaultTab: 'custom' },
+}, {
   render(node, context) {
     const resolution = resolveMaterialDataContract(
       SALES_CHART_CONTRACT,
@@ -404,13 +424,19 @@ viewer.registerMaterial('sales-chart', { kind: 'data-contract', contract: SALES_
 - `dataContract.model` 描述目标数据模型，不描述数据源长什么样。
 - `DataContractBinding.mappings` 保存完整 source path，不截断集合内路径。
 - 默认使用 `relation: { kind: 'auto' }` 交给 Resolver 推导 record/index 对齐关系。
+- `formatEditor` 是物料注册能力声明，决定属性面板显示哪些格式 tab；Schema 里的 `BindingDisplayFormat` 只保存实际格式配置。
+- svg、chart 这类非普通文本值投影的物料应优先声明 `formatEditor: { tabs: ['custom'], defaultTab: 'custom' }`，只在运行时确实消费预设格式时才开放 `preset`。
 
 ## 何时实现 measure {#measure}
 
 固定尺寸物料不需要 `measure()`。只有最终尺寸依赖运行时内容时才加：
 
 ```ts
-viewer.registerMaterial(PRICE_TAG_TYPE, { kind: 'ordinary', primaryProp: 'amount' }, {
+viewer.registerMaterial(PRICE_TAG_TYPE, {
+  kind: 'ordinary',
+  primaryProp: 'amount',
+  formatEditor: { tabs: ['preset', 'custom'], defaultTab: 'preset' },
+}, {
   render(_node, context) {
     return {
       html: trustedViewerHtml(`<div>${escapeHtml(String(context.resolvedProps.amount ?? ''))}</div>`),

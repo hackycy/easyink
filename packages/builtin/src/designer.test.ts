@@ -34,7 +34,26 @@ describe('builtin designer material bundle', () => {
     const material = builtinDesignerMaterialBundle.materials.find(item => item.type === 'svg')
 
     expect(material?.capabilities.bindable).toBe(true)
-    expect(material?.binding).toEqual({ kind: 'ordinary', primaryProp: 'content' })
+    expect(material?.binding).toEqual({
+      kind: 'ordinary',
+      primaryProp: 'content',
+      formatEditor: { tabs: ['custom'], defaultTab: 'custom' },
+    })
     expect(material?.aiDescriptor?.binding).toBe('single')
+  })
+
+  it('limits chart material data formatting to custom formatters', () => {
+    const chartMaterials = builtinDesignerMaterialBundle.materials.filter(material => material.category === 'chart')
+
+    expect(chartMaterials.map(material => material.type).sort()).toEqual([
+      'chart-bar',
+      'chart-gauge',
+      'chart-line',
+      'chart-pie',
+      'chart-radar',
+      'chart-scatter',
+    ])
+    for (const material of chartMaterials)
+      expect(material.binding).toMatchObject({ kind: 'data-contract', formatEditor: { tabs: ['custom'], defaultTab: 'custom' } })
   })
 })

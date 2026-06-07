@@ -267,7 +267,7 @@ function registerImageMaterialFixture(store: Store) {
       icon: { render: () => null },
       category: 'basic',
       capabilities: { bindable: true, resizable: true, rotatable: true },
-      binding: { kind: 'ordinary', primaryProp: 'src' },
+      binding: { kind: 'ordinary', primaryProp: 'src', formatEditor: { tabs: ['preset', 'custom'], defaultTab: 'preset' } },
       createDefaultNode: input => imageNode(input?.id ?? 'image-1', input?.props ?? {}),
       factory: vi.fn(() => ({ renderContent: () => () => {} })),
       propSchemas: [

@@ -52,7 +52,7 @@ describe('assistant capabilities', () => {
   it('accepts schema elements registered in the active material manifest', () => {
     const materialManifest: AssistantMaterialManifest = {
       materials: [
-        { type: 'text', name: 'Text', capabilities: {}, binding: { kind: 'ordinary', primaryProp: 'content' }, props: [] },
+        { type: 'text', name: 'Text', capabilities: {}, binding: { kind: 'ordinary', primaryProp: 'content', formatEditor: { tabs: ['preset', 'custom'], defaultTab: 'preset' } }, props: [] },
       ],
     }
     const report = validateAssistantSchema(schema, { materialManifest })
@@ -63,7 +63,7 @@ describe('assistant capabilities', () => {
   it('keeps repair validation scoped to the active material manifest', () => {
     const materialManifest: AssistantMaterialManifest = {
       materials: [
-        { type: 'image', name: 'Image', capabilities: {}, binding: { kind: 'ordinary', primaryProp: 'src' }, props: [] },
+        { type: 'image', name: 'Image', capabilities: {}, binding: { kind: 'ordinary', primaryProp: 'src', formatEditor: { tabs: ['preset', 'custom'], defaultTab: 'preset' } }, props: [] },
       ],
     }
 

@@ -814,7 +814,7 @@ function textMaterialManifest(): AssistantMaterialManifest {
         type: 'text',
         name: 'Text',
         capabilities: { bindable: true },
-        binding: { kind: 'ordinary', primaryProp: 'content' },
+        binding: { kind: 'ordinary', primaryProp: 'content', formatEditor: { tabs: ['preset', 'custom'], defaultTab: 'preset' } },
         ai: {
           type: 'text',
           description: 'Designer-registered text material.',

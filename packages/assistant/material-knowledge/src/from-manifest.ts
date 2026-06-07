@@ -17,9 +17,15 @@ export interface ManifestLike {
 
 export type ManifestMaterialBindingDefinition
   = | { kind: 'none' }
-    | { kind: 'ordinary', primaryProp: string, indexedProps?: Record<string | number, string> }
-    | { kind: 'data-contract', contract: ManifestMaterialDataContract }
+    | { kind: 'ordinary', primaryProp: string, indexedProps?: Record<string | number, string>, formatEditor: ManifestBindingFormatEditorDefinition | false }
+    | { kind: 'data-contract', contract: ManifestMaterialDataContract, formatEditor: ManifestBindingFormatEditorDefinition | false }
     | { kind: 'custom' }
+
+export interface ManifestBindingFormatEditorDefinition {
+  tabs: readonly string[]
+  defaultTab?: string
+  presetTypes?: readonly string[]
+}
 
 export interface ManifestMaterialDataContract {
   version: number

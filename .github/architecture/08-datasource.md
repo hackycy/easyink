@@ -202,6 +202,8 @@ EasyInk 的做法应是：
 | `headless` | 不作为独立显示根节点 | UI/兼容 |
 | `namespace` | 数据源命名空间 | AI / 外部适配器隔离、权限控制 |
 
+字段树只提供默认格式和自定义函数模板，不决定属性面板展示哪些格式 tab。格式 tab 是物料注册能力：`binding.formatEditor` 声明 `preset/custom` 等可用 tab。普通文本类物料可以开放 `preset/custom`；自定义 SVG、chart 类物料默认只开放 `custom`，避免出现运行时不消费的预设配置。
+
 ## 8.6 `use` 不是注释，而是物料推荐协议
 
 `use` 的职责是告诉 Designer：当用户拖拽这个字段到画布或空白区时，优先创建什么物料。

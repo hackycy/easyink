@@ -108,9 +108,10 @@ export interface BindingDisplayFormat {
   prefix?: string
   suffix?: string
   fallback?: string
-  mode?: 'preset' | 'custom'
+  mode?: 'preset' | 'custom' | (string & {})
   preset?: BindingPresetFormat
   custom?: BindingCustomFormat
+  extensions?: Record<string, unknown>
 }
 
 /**

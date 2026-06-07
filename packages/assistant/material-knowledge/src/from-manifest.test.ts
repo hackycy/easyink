@@ -8,7 +8,7 @@ describe('createRegistryFromManifest', () => {
         {
           type: 'external-title',
           name: 'External Title',
-          binding: { kind: 'ordinary', primaryProp: 'content' },
+          binding: { kind: 'ordinary', primaryProp: 'content', formatEditor: { tabs: ['preset', 'custom'], defaultTab: 'preset' } },
           props: [
             { key: 'content', type: 'string', default: '' },
             { key: 'fontSize', type: 'number', default: 14 },
@@ -39,6 +39,7 @@ describe('createRegistryFromManifest', () => {
           name: 'Line Chart',
           binding: {
             kind: 'data-contract',
+            formatEditor: { tabs: ['custom'], defaultTab: 'custom' },
             contract: {
               version: 3,
               model: {

@@ -4,7 +4,9 @@ import type {
   DataContractRelation,
   MaterialBinding,
 } from '@easyink/schema'
+import type { BindingFormatEditorDefinition } from './binding-format-editor'
 import { deepClone, FIELD_PATH_SEPARATOR } from '@easyink/shared'
+import { formatBindingDisplayValue, hasBindingFormat } from './binding-format'
 
 export type MaterialDataModelKind = 'tabular'
 export type MaterialDataValueType = 'string' | 'number' | 'boolean' | 'date' | 'object' | 'array'
@@ -26,6 +28,7 @@ export interface MaterialDataModelField {
   type: MaterialDataValueType
   required?: boolean
   format?: MaterialDataFieldFormat
+  formatEditor?: BindingFormatEditorDefinition | false
 }
 
 export interface MaterialDataDiagnostic {
@@ -72,6 +75,7 @@ interface SourceSelection {
   fieldId: string
   mapping: DataContractFieldMapping
   value: unknown
+  diagnostics: MaterialDataDiagnostic[]
   normalizedPath: string
   sourceRoot: Record<string, unknown>
 }
@@ -108,14 +112,16 @@ export function resolveMaterialDataContract(
       continue
     }
 
-    const selection = resolveSelection(fieldId, mapping, data)
+    const selection = formatSelection(resolveSelection(fieldId, mapping, data), data)
     selections.push(selection)
+    fieldDiagnostics.push(...selection.diagnostics)
     resolvedMappings[fieldId] = {
       field,
       mapping,
       value: selection.value,
       diagnostics: fieldDiagnostics,
     }
+    diagnostics.push(...fieldDiagnostics)
   }
 
   const projection = projectSelections(contract, selections, bindingRelation(binding), diagnostics)
@@ -216,7 +222,7 @@ function projectSelections(
     return { records: [], mode: 'empty' }
 
   const relationKind = relation?.kind === 'auto' ? undefined : relation?.kind
-  const recordProjection = relationKind === 'index' ? undefined : projectSharedRecordSelections(selections)
+  const recordProjection = relationKind === 'index' ? undefined : projectSharedRecordSelections(selections, diagnostics)
   if (recordProjection)
     return { records: coerceRecords(contract, recordProjection.records), mode: 'record' }
 
@@ -229,7 +235,7 @@ function projectSelections(
     return { records: [], mode: 'invalid' }
   }
 
-  const indexProjection = projectIndexedSelections(selections)
+  const indexProjection = projectIndexedSelections(selections, diagnostics)
   if (indexProjection)
     return { records: coerceRecords(contract, indexProjection.records), mode: 'index' }
 
@@ -241,7 +247,10 @@ function projectSelections(
   return { records: [], mode: 'invalid' }
 }
 
-function projectSharedRecordSelections(selections: SourceSelection[]): { records: Array<Record<string, unknown>> } | undefined {
+function projectSharedRecordSelections(
+  selections: SourceSelection[],
+  diagnostics: MaterialDataDiagnostic[],
+): { records: Array<Record<string, unknown>> } | undefined {
   const parents = selections.map((selection) => {
     const parentPath = parentPathOf(selection.normalizedPath)
     if (!parentPath)
@@ -260,17 +269,28 @@ function projectSharedRecordSelections(selections: SourceSelection[]): { records
   const records = first.collection.map((record) => {
     const target: Record<string, unknown> = {}
     selections.forEach((selection, index) => {
-      target[selection.fieldId] = resolvePath(record, parents[index]!.leafPath)
+      const raw = resolvePath(record, parents[index]!.leafPath)
+      const formatted = formatMappingValue(raw, selection.mapping, isRecord(record) ? record : {})
+      target[selection.fieldId] = formatted.value
+      diagnostics.push(...toMaterialDataDiagnostics(selection.fieldId, formatted.diagnostics))
     })
     return target
   })
   return { records }
 }
 
-function projectIndexedSelections(selections: SourceSelection[]): { records: Array<Record<string, unknown>> } | undefined {
+function projectIndexedSelections(
+  selections: SourceSelection[],
+  diagnostics: MaterialDataDiagnostic[],
+): { records: Array<Record<string, unknown>> } | undefined {
   const arrays = selections.map((selection) => {
-    if (Array.isArray(selection.value))
-      return selection.value
+    if (Array.isArray(selection.value)) {
+      return selection.value.map((item) => {
+        const formatted = formatMappingValue(item, selection.mapping, selection.sourceRoot)
+        diagnostics.push(...toMaterialDataDiagnostics(selection.fieldId, formatted.diagnostics))
+        return formatted.value
+      })
+    }
     const parentPath = parentPathOf(selection.normalizedPath)
     if (!parentPath)
       return undefined
@@ -278,7 +298,12 @@ function projectIndexedSelections(selections: SourceSelection[]): { records: Arr
     if (!Array.isArray(collection))
       return undefined
     const leafPath = leafPathOf(selection.normalizedPath, parentPath)
-    return collection.map(record => resolvePath(record, leafPath))
+    return collection.map((record) => {
+      const raw = resolvePath(record, leafPath)
+      const formatted = formatMappingValue(raw, selection.mapping, record as Record<string, unknown>)
+      diagnostics.push(...toMaterialDataDiagnostics(selection.fieldId, formatted.diagnostics))
+      return formatted.value
+    })
   })
   if (arrays.some(array => !array))
     return undefined
@@ -320,6 +345,53 @@ function coerceFieldValue(value: unknown, field: MaterialDataModelField): unknow
   return value
 }
 
+function formatSelection(selection: SourceSelection, data: Record<string, unknown>): SourceSelection {
+  if (Array.isArray(selection.value) || isCollectionLeafSelection(selection))
+    return { ...selection, diagnostics: [] }
+  const formatted = formatMappingValue(selection.value, selection.mapping, data)
+  return {
+    ...selection,
+    value: formatted.value,
+    diagnostics: toMaterialDataDiagnostics(selection.fieldId, formatted.diagnostics),
+  }
+}
+
+function isCollectionLeafSelection(selection: SourceSelection): boolean {
+  const parentPath = parentPathOf(selection.normalizedPath)
+  return !!parentPath && Array.isArray(resolvePath(selection.sourceRoot, parentPath))
+}
+
+function formatMappingValue(
+  value: unknown,
+  mapping: DataContractFieldMapping,
+  data: Record<string, unknown>,
+): { value: unknown, diagnostics: MaterialDataDiagnostic[] } {
+  if (!hasBindingFormat(mapping.format))
+    return { value, diagnostics: [] }
+  return formatBindingDisplayValue(value, {
+    sourceId: mapping.sourceId,
+    sourceName: mapping.sourceName,
+    sourceTag: mapping.sourceTag,
+    fieldPath: mapping.select.path,
+    fieldKey: mapping.select.key,
+    fieldLabel: mapping.select.label,
+    format: mapping.format,
+  }, { data })
+}
+
+function toMaterialDataDiagnostics(
+  fieldId: string,
+  diagnostics: Array<{ code: string, severity: 'warning', message: string, cause?: unknown }>,
+): MaterialDataDiagnostic[] {
+  return diagnostics.map(diagnostic => ({
+    code: diagnostic.code,
+    severity: diagnostic.severity,
+    fieldId,
+    message: diagnostic.message,
+    cause: diagnostic.cause,
+  }))
+}
+
 function resolveSelection(fieldId: string, mapping: DataContractFieldMapping, data: Record<string, unknown>): SourceSelection {
   const normalizedPath = normalizePath(mapping.select.path)
   const sourceRoot = data[mapping.sourceId]
@@ -328,6 +400,7 @@ function resolveSelection(fieldId: string, mapping: DataContractFieldMapping, da
       fieldId,
       mapping,
       value: resolvePath(sourceRoot, normalizedPath),
+      diagnostics: [],
       normalizedPath,
       sourceRoot,
     }
@@ -338,6 +411,7 @@ function resolveSelection(fieldId: string, mapping: DataContractFieldMapping, da
       fieldId,
       mapping,
       value: resolvePath(data, normalizedPath),
+      diagnostics: [],
       normalizedPath,
       sourceRoot: data,
     }
@@ -347,6 +421,7 @@ function resolveSelection(fieldId: string, mapping: DataContractFieldMapping, da
     fieldId,
     mapping,
     value: undefined,
+    diagnostics: [],
     normalizedPath,
     sourceRoot: data,
   }

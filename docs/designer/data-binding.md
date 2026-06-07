@@ -316,6 +316,30 @@ const dataSources: DataSourceDescriptor[] = [
 
 这里的关键词是“复制”。后面用户在属性面板里改显示格式，改的是模板里的 `BindingRef.format`，不会反写你的字段树。
 
+属性面板是否显示“预设”或“自定义”格式 tab，由物料注册时的 `binding.formatEditor` 决定，而不是由字段树决定。例如文本可以开放 `preset/custom`，自定义 SVG 和 chart 类物料通常只开放 `custom`：
+
+```ts
+const textBinding = {
+  kind: 'ordinary',
+  primaryProp: 'content',
+  formatEditor: { tabs: ['preset', 'custom'], defaultTab: 'preset' },
+}
+
+const svgBinding = {
+  kind: 'ordinary',
+  primaryProp: 'content',
+  formatEditor: { tabs: ['custom'], defaultTab: 'custom' },
+}
+
+const chartBinding = {
+  kind: 'data-contract',
+  contract: CHART_BAR_DATA_CONTRACT,
+  formatEditor: { tabs: ['custom'], defaultTab: 'custom' },
+}
+```
+
+`data-contract` 的 custom formatter 会在 Resolver 生成目标 records 前应用；预设格式只有在物料明确声明支持时才应开放。
+
 ## 字段函数模板 {#custom-format-templates}
 
 有时你不想直接给字段写死 `format`，而是想改变“自定义函数”里的默认示例。比如金额字段默认给一个金额函数，日期字段默认给一个中文日期函数。

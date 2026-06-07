@@ -66,6 +66,18 @@ export const AssistantMaterialPropSchema = z.object({
 
 export type AssistantMaterialProp = z.infer<typeof AssistantMaterialPropSchema>
 
+export const AssistantBindingFormatEditorSchema = z.object({
+  tabs: z.array(z.string()),
+  defaultTab: z.string().optional(),
+  presetTypes: z.array(z.string()).optional(),
+})
+
+export interface AssistantBindingFormatEditor {
+  tabs: readonly string[]
+  defaultTab?: string
+  presetTypes?: readonly string[]
+}
+
 export const AssistantMaterialDataContractSchema = z.object({
   version: z.literal(3),
   model: z.object({
@@ -75,11 +87,24 @@ export const AssistantMaterialDataContractSchema = z.object({
       type: z.enum(['string', 'number', 'boolean', 'date', 'object', 'array']),
       required: z.boolean().optional(),
       format: z.enum(['display', 'raw']).optional(),
+      formatEditor: z.union([AssistantBindingFormatEditorSchema, z.literal(false)]).optional(),
     })),
   }),
 })
 
-export type AssistantMaterialDataContract = z.infer<typeof AssistantMaterialDataContractSchema>
+export interface AssistantMaterialDataContract {
+  version: 3
+  model: {
+    kind: 'tabular'
+    fields: Record<string, {
+      labelKey: string
+      type: 'string' | 'number' | 'boolean' | 'date' | 'object' | 'array'
+      required?: boolean
+      format?: 'display' | 'raw'
+      formatEditor?: AssistantBindingFormatEditor | false
+    }>
+  }
+}
 
 export const AssistantMaterialBindingDefinitionSchema = z.union([
   z.object({ kind: z.literal('none') }),
@@ -87,15 +112,21 @@ export const AssistantMaterialBindingDefinitionSchema = z.union([
     kind: z.literal('ordinary'),
     primaryProp: z.string(),
     indexedProps: z.record(z.string()).optional(),
+    formatEditor: z.union([AssistantBindingFormatEditorSchema, z.literal(false)]),
   }),
   z.object({
     kind: z.literal('data-contract'),
     contract: AssistantMaterialDataContractSchema,
+    formatEditor: z.union([AssistantBindingFormatEditorSchema, z.literal(false)]),
   }),
   z.object({ kind: z.literal('custom') }),
 ])
 
-export type AssistantMaterialBindingDefinition = z.infer<typeof AssistantMaterialBindingDefinitionSchema>
+export type AssistantMaterialBindingDefinition
+  = | { kind: 'none' }
+    | { kind: 'ordinary', primaryProp: string, indexedProps?: Record<string, string>, formatEditor: AssistantBindingFormatEditor | false }
+    | { kind: 'data-contract', contract: AssistantMaterialDataContract, formatEditor: AssistantBindingFormatEditor | false }
+    | { kind: 'custom' }
 
 export const AssistantAIMaterialDescriptorSchema = z.object({
   type: z.string(),
@@ -167,13 +198,22 @@ export const AssistantMaterialManifestEntrySchema = z.object({
   ai: AssistantAIMaterialDescriptorSchema.optional(),
 })
 
-export type AssistantMaterialManifestEntry = z.infer<typeof AssistantMaterialManifestEntrySchema>
+export interface AssistantMaterialManifestEntry {
+  type: string
+  name: string
+  capabilities: AssistantMaterialCapabilities
+  binding: AssistantMaterialBindingDefinition
+  props?: AssistantMaterialProp[]
+  ai?: AssistantAIMaterialDescriptor
+}
 
 export const AssistantMaterialManifestSchema = z.object({
   materials: z.array(AssistantMaterialManifestEntrySchema),
 })
 
-export type AssistantMaterialManifest = z.infer<typeof AssistantMaterialManifestSchema>
+export interface AssistantMaterialManifest {
+  materials: AssistantMaterialManifestEntry[]
+}
 
 export const AssistantTaskInputSchema = z.object({
   prompt: z.string().min(1),
@@ -184,7 +224,14 @@ export const AssistantTaskInputSchema = z.object({
   pluginSelection: AssistantPluginSelectionSchema.optional(),
 })
 
-export type AssistantTaskInput = z.infer<typeof AssistantTaskInputSchema>
+export interface AssistantTaskInput {
+  prompt: string
+  source?: AssistantSourceInput
+  constraints?: Record<string, unknown>
+  currentSchema?: unknown
+  materialManifest?: AssistantMaterialManifest
+  pluginSelection?: z.infer<typeof AssistantPluginSelectionSchema>
+}
 
 export interface AssistantPatchOperation {
   op: 'add' | 'remove' | 'replace'

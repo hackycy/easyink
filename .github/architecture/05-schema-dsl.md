@@ -306,9 +306,10 @@ interface BindingDisplayFormat {
    */
   suffix?: string
   /** Either omit for raw display, or choose one formatter family. */
-  mode?: 'preset' | 'custom'
+  mode?: 'preset' | 'custom' | (string & {})
   preset?: BindingPresetFormat
   custom?: BindingCustomFormat
+  extensions?: Record<string, unknown>
 }
 
 type BindingFormatPresetType =
@@ -348,6 +349,7 @@ interface BindingCustomFormat {
 - 自定义函数是可信模板能力，接收当前值和 Viewer 正在消费的完整运行时 data，不暴露 DOM、网络或异步能力
 - 格式化失败时 Viewer 保留原始显示值并发出 datasource warning，不把错误占位写入打印品
 - `union` 仅存在于 `DataFieldNode`（数据源字段树），不持久化到 `BindingRef`
+- Designer 属性面板可展示的格式 tab 由物料注册时的 `binding.formatEditor` 声明，不由 Schema 推导。普通文本值投影物料可以声明 `preset/custom`，自定义 SVG、chart 类物料应只声明 `custom`，除非 Viewer/runtime 明确消费预设格式。
 
 ### `DataContractBinding` 与目标数据模型
 
@@ -367,6 +369,7 @@ interface MaterialDataModelField {
   type: 'string' | 'number' | 'boolean' | 'date' | 'object' | 'array'
   required?: boolean
   format?: 'display' | 'raw'
+  formatEditor?: BindingFormatEditorDefinition | false
 }
 
 interface DataContractBinding {

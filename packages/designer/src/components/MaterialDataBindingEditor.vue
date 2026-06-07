@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { MaterialDataContract } from '@easyink/core'
+import type { BindingFormatEditorDefinition, MaterialDataContract } from '@easyink/core'
 import type { DataSourceDescriptor } from '@easyink/datasource'
 import type { BindingRef, DataContractBinding, DataContractFieldMapping, MaterialNode } from '@easyink/schema'
 import type { BindingDisplayFormat } from '@easyink/shared'
@@ -21,6 +21,7 @@ const props = defineProps<{
   contract: MaterialDataContract
   t: (key: string) => string
   getDataSource?: (sourceId: string) => DataSourceDescriptor | undefined
+  resolveFormatEditor: (fieldId: string) => BindingFormatEditorDefinition | false
 }>()
 
 const emit = defineEmits<{
@@ -211,11 +212,12 @@ function unregisterDropTargets() {
               </div>
             </div>
             <BindingFormatEditor
-              v-if="mappingBindingFor(entry.id)"
+              v-if="mappingBindingFor(entry.id) && resolveFormatEditor(entry.id)"
               :binding="mappingBindingFor(entry.id)!"
               :bind-index="0"
               :t="t"
               :get-data-source="getDataSource"
+              :format-editor="resolveFormatEditor(entry.id) as BindingFormatEditorDefinition"
               @update-binding-format="format => updateFieldFormat(entry.id, format)"
             />
           </template>

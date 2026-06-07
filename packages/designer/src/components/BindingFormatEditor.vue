@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { BindingFormatEditorDefinition, BindingFormatEditorTab } from '@easyink/core'
 import type { DataSourceDescriptor } from '@easyink/datasource'
 import type { BindingRef } from '@easyink/schema'
 import type { BindingDisplayFormat, BindingFormatPresetType, BindingPresetFormat } from '@easyink/shared'
@@ -13,6 +14,7 @@ const props = defineProps<{
   bindIndex: number
   t: (key: string) => string
   getDataSource?: (sourceId: string) => DataSourceDescriptor | undefined
+  formatEditor: BindingFormatEditorDefinition
 }>()
 
 const emit = defineEmits<{
@@ -20,14 +22,21 @@ const emit = defineEmits<{
 }>()
 
 type BindingMode = 'none' | 'preset' | 'custom'
-type FormatTab = 'preset' | 'custom'
+
+const BUILTIN_TABS: Record<'preset' | 'custom', { labelKey: string }> = {
+  preset: { labelKey: 'designer.bindingFormat.preset' },
+  custom: { labelKey: 'designer.bindingFormat.custom' },
+}
 
 const BindingCodeEditor = defineAsyncComponent(() => import('./BindingCodeEditor.vue'))
 
-const modeOptions = computed<Array<{ label: string, value: FormatTab }>>(() => [
-  { label: props.t('designer.bindingFormat.preset'), value: 'preset' },
-  { label: props.t('designer.bindingFormat.custom'), value: 'custom' },
-])
+const availableTabs = computed(() =>
+  props.formatEditor.tabs.filter(isBuiltinFormatTab),
+)
+
+const modeOptions = computed<Array<{ label: string, value: BindingFormatEditorTab }>>(() =>
+  availableTabs.value.map(tab => ({ label: props.t(BUILTIN_TABS[tab].labelKey), value: tab })),
+)
 
 interface PresetChoice {
   id: string
@@ -36,7 +45,7 @@ interface PresetChoice {
   preset?: BindingPresetFormat
 }
 
-const presetGroups = computed<Array<{ label: string, choices: PresetChoice[] }>>(() => [
+const allPresetGroups = computed<Array<{ label: string, choices: PresetChoice[] }>>(() => [
   {
     label: props.t('designer.bindingFormat.presets.groupGeneral'),
     choices: [
@@ -67,9 +76,22 @@ const presetGroups = computed<Array<{ label: string, choices: PresetChoice[] }>>
   },
 ])
 
+const presetGroups = computed(() => {
+  const allowed = props.formatEditor.presetTypes
+  if (!allowed)
+    return allPresetGroups.value
+  const allowedSet = new Set(allowed)
+  return allPresetGroups.value
+    .map(group => ({
+      ...group,
+      choices: group.choices.filter(choice => !choice.preset || allowedSet.has(choice.preset.type)),
+    }))
+    .filter(group => group.choices.length > 0)
+})
+
 const presetChoices = computed(() => presetGroups.value.flatMap(group => group.choices))
 const formatDialogOpen = ref(false)
-const activeTab = ref<FormatTab>('preset')
+const activeTab = ref<BindingFormatEditorTab>('preset')
 const draftFormat = ref<BindingDisplayFormat>({})
 
 const activeCustomExamples = computed(() =>
@@ -104,11 +126,11 @@ function cleanFormat(format: BindingDisplayFormat): BindingDisplayFormat | undef
     next.prefix = format.prefix
   if (!isCustom && format.suffix)
     next.suffix = format.suffix
-  if (format.mode === 'preset' && format.preset) {
+  if (supportsTab('preset') && format.mode === 'preset' && format.preset) {
     next.mode = 'preset'
     next.preset = cleanPreset(format.preset)
   }
-  if (format.mode === 'custom' && format.custom?.source?.trim()) {
+  if (supportsTab('custom') && format.mode === 'custom' && format.custom?.source?.trim()) {
     next.mode = 'custom'
     next.custom = { source: format.custom.source }
   }
@@ -138,7 +160,7 @@ function updateDraftTextField(key: 'prefix' | 'suffix', value: string | number) 
   draftFormat.value = { ...draftFormat.value, [key]: String(value) }
 }
 
-function updateDraftMode(value: FormatTab) {
+function updateDraftMode(value: BindingFormatEditorTab) {
   const next = cloneDraftFormat()
   activeTab.value = value
   if (value === 'preset') {
@@ -193,15 +215,15 @@ function cloneDraftFormat(): BindingDisplayFormat {
 }
 
 function openFormatDialog() {
-  draftFormat.value = cloneFormat(props.binding)
-  activeTab.value = modeOf(props.binding) === 'custom' ? 'custom' : 'preset'
+  draftFormat.value = normalizeDraftForPolicy(cloneFormat(props.binding))
+  activeTab.value = resolveInitialTab()
   formatDialogOpen.value = true
 }
 
 function resetFormatDialog() {
   formatDialogOpen.value = false
   draftFormat.value = {}
-  activeTab.value = 'preset'
+  activeTab.value = firstAvailableTab()
 }
 
 function confirmFormatDialog() {
@@ -212,7 +234,7 @@ function confirmFormatDialog() {
 }
 
 function validateFormat(format: BindingDisplayFormat): string {
-  if (format.mode === 'preset' && format.preset) {
+  if (supportsTab('preset') && format.mode === 'preset' && format.preset) {
     const min = format.preset.minimumFractionDigits
     const max = format.preset.maximumFractionDigits
     if (typeof min === 'number' && !Number.isFinite(min))
@@ -264,6 +286,43 @@ function activePresetChoiceId(): string {
   if (draftFormat.value.mode !== 'preset' || !preset)
     return 'raw'
   return presetChoices.value.find(choice => choice.preset && isSamePreset(choice.preset, preset))?.id ?? preset.type
+}
+
+function supportsTab(tab: 'preset' | 'custom'): boolean {
+  return availableTabs.value.includes(tab)
+}
+
+function firstAvailableTab(): BindingFormatEditorTab {
+  return props.formatEditor.defaultTab && availableTabs.value.includes(props.formatEditor.defaultTab as 'preset' | 'custom')
+    ? props.formatEditor.defaultTab
+    : availableTabs.value[0] ?? 'custom'
+}
+
+function resolveInitialTab(): BindingFormatEditorTab {
+  const mode = modeOf(props.binding)
+  if (mode !== 'none' && supportsTab(mode))
+    return mode
+  return firstAvailableTab()
+}
+
+function normalizeDraftForPolicy(format: BindingDisplayFormat): BindingDisplayFormat {
+  if (format.mode === 'preset' && !supportsTab('preset'))
+    return {}
+  if (format.mode === 'custom' && !supportsTab('custom'))
+    return {}
+  if (!supportsTab('preset')) {
+    const { prefix: _prefix, suffix: _suffix, preset: _preset, ...rest } = format
+    return rest
+  }
+  if (!supportsTab('custom')) {
+    const { custom: _custom, ...rest } = format
+    return rest
+  }
+  return format
+}
+
+function isBuiltinFormatTab(tab: BindingFormatEditorTab): tab is 'preset' | 'custom' {
+  return tab === 'preset' || tab === 'custom'
 }
 
 function isSamePreset(a: BindingPresetFormat, b: BindingPresetFormat): boolean {

@@ -114,6 +114,54 @@ describe('material data contract', () => {
     expect(resolution.diagnostics).toEqual([])
   })
 
+  it('applies custom mapping formatters to indexed records', () => {
+    const binding = {
+      kind: 'data-contract',
+      mappings: {
+        category: { sourceId: 'report', select: { path: 'category' }, format: { mode: 'custom', custom: { source: 'value => String(value) + "月"' } } },
+        value: { sourceId: 'report', select: { path: 'values' }, format: { mode: 'custom', custom: { source: 'value => Number(value) / 100' } } },
+      },
+      relation: { kind: 'auto' },
+    } as const
+
+    const resolution = resolveMaterialDataContract(contract, binding, {
+      category: ['1', '2'],
+      values: [9800, '11200'],
+    })
+
+    expect(resolution.mode).toBe('index')
+    expect(resolution.records).toEqual([
+      { category: '1月', value: 98 },
+      { category: '2月', value: 112 },
+    ])
+    expect(resolution.diagnostics).toEqual([])
+  })
+
+  it('applies custom mapping formatters to shared record collections', () => {
+    const binding = {
+      kind: 'data-contract',
+      mappings: {
+        category: { sourceId: 'report', select: { path: 'monthlySales/month' }, format: { mode: 'custom', custom: { source: 'value => "M" + String(value)' } } },
+        value: { sourceId: 'report', select: { path: 'monthlySales/revenue' }, format: { mode: 'custom', custom: { source: 'value => Number(value) / 100' } } },
+      },
+      relation: { kind: 'auto' },
+    } as const
+
+    const resolution = resolveMaterialDataContract(contract, binding, {
+      monthlySales: [
+        { month: '01', revenue: 9800 },
+        { month: '02', revenue: '11200' },
+      ],
+    })
+
+    expect(resolution.mode).toBe('record')
+    expect(resolution.records).toEqual([
+      { category: 'M01', value: 98 },
+      { category: 'M02', value: 112 },
+    ])
+    expect(resolution.diagnostics).toEqual([])
+  })
+
   it('resolves root top-level arrays when source metadata exists beside runtime data', () => {
     const binding = {
       kind: 'data-contract',

@@ -287,6 +287,7 @@ describe('viewer audit risk regressions', () => {
       kind: 'ordinary',
       primaryProp: 'value',
       indexedProps: { 1: 'format', 2: 'params' },
+      formatEditor: { tabs: ['preset', 'custom'], defaultTab: 'preset' },
     })
 
     expect(props.value).toBe(123456)

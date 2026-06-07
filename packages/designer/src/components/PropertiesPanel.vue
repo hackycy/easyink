@@ -11,6 +11,7 @@ import { deepClone, PAPER_PRESETS } from '@easyink/shared'
 import { EiNumberInput, EiPanel, EiSwitch } from '@easyink/ui'
 import { computed, shallowRef, watchEffect } from 'vue'
 import { useDesignerStore } from '../composables'
+import { resolveDataContractFieldFormatEditor, resolveOrdinaryFormatEditor } from '../materials/binding-format-editor'
 import { isElementRotatable } from '../materials/capabilities'
 import { canEditGeometry, isPropSchemaDisabled as isMaterialPropSchemaDisabled } from '../materials/control-policy'
 import { defaultDocumentPatch, defaultPagePatch, filterVisible, groupDescriptors, PAGE_PROPERTY_DESCRIPTORS, readPageProperty, splitPatch } from '../page-properties'
@@ -134,6 +135,19 @@ const selectedMaterialDataContract = computed(() => {
   const binding = store.getMaterial(el.type)?.binding
   return binding?.kind === 'data-contract' ? binding.contract : undefined
 })
+
+const selectedMaterialBinding = computed(() => {
+  const el = selectedElement.value
+  return el ? store.getMaterial(el.type)?.binding : undefined
+})
+
+const selectedBindingFormatEditor = computed(() =>
+  resolveOrdinaryFormatEditor(selectedMaterialBinding.value),
+)
+
+function resolveSelectedDataContractFieldFormatEditor(fieldId: string) {
+  return resolveDataContractFieldFormatEditor(selectedMaterialBinding.value, fieldId)
+}
 
 /** Should the BindingSection be hidden entirely? */
 const hideBindingSection = computed(() => {
@@ -771,6 +785,7 @@ function isPropInputDisabled(schema: PropSchema): boolean {
           :contract="selectedMaterialDataContract"
           :t="store.t.bind(store)"
           :get-data-source="getBindingDataSource"
+          :resolve-format-editor="resolveSelectedDataContractFieldFormatEditor"
           @update-binding="updateMaterialDataBinding"
           @update-binding-format="updateBindingFormat"
         />
@@ -783,6 +798,7 @@ function isPropInputDisabled(schema: PropSchema): boolean {
           :external-binding="externalBinding"
           :has-external-binding="hasSubBinding"
           :get-data-source="getBindingDataSource"
+          :format-editor="selectedBindingFormatEditor"
           @clear-binding="clearBinding"
           @clear-external-binding="handleClearExternalBinding"
           @update-binding-format="updateBindingFormat"

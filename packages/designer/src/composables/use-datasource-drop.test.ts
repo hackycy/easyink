@@ -71,7 +71,10 @@ describe('useDatasourceDrop', () => {
       workbench: { viewport: { zoom: 1, scrollLeft: 0, scrollTop: 0 } },
       getElements: () => [node],
       getElementSize: current => ({ width: current.width, height: current.height }),
-      getMaterial: () => ({ capabilities: {}, binding: { kind: 'ordinary', primaryProp: 'content' } }),
+      getMaterial: () => ({
+        capabilities: {},
+        binding: { kind: 'ordinary', primaryProp: 'content', formatEditor: { tabs: ['preset', 'custom'], defaultTab: 'preset' } },
+      }),
       getDesignerExtension: () => ({
         datasourceDrop: {
           onDragOver,

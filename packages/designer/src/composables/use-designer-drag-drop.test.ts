@@ -117,8 +117,8 @@ function makeStore(
     category: 'basic',
     capabilities: { bindable: true },
     binding: options.textDataContract
-      ? { kind: 'data-contract', contract: options.textDataContract }
-      : { kind: 'ordinary', primaryProp: 'content' },
+      ? { kind: 'data-contract', contract: options.textDataContract, formatEditor: { tabs: ['custom'], defaultTab: 'custom' } }
+      : { kind: 'ordinary', primaryProp: 'content', formatEditor: { tabs: ['preset', 'custom'], defaultTab: 'preset' } },
     props: [],
     createDefaultNode: options.textCreateDefaultNode ?? ((partial?: Partial<MaterialNode>) => createTextNode(partial)),
   }
