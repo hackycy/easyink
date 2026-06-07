@@ -1,5 +1,5 @@
 import type { SvgCustomProps } from './schema'
-import { escapeHtml } from '@easyink/shared'
+import { escapeAttr, escapeHtml } from '@easyink/shared'
 import { sanitizeSvgContent } from './sanitize'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
@@ -21,27 +21,51 @@ interface NormalizedSvgCustomInput {
 }
 
 export function buildSvgCustomMarkup(props: SvgCustomProps): string {
-  if (!props.content) {
+  const contentValue = normalizeContentValue(props.content)
+  if (!contentValue) {
     return `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;border:1px dashed #d0d0d0;box-sizing:border-box">`
       + `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#bbb" stroke-width="1.5" xmlns="http://www.w3.org/2000/svg">`
       + `<path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>`
       + `</svg></div>`
   }
 
-  const normalized = normalizeSvgCustomProps(props)
+  if (isRemoteSvgSource(contentValue)) {
+    return `<img src="${escapeAttr(contentValue)}" alt="" draggable="false" style="width:100%;height:100%;object-fit:fill;display:block" />`
+  }
+
+  const normalized = normalizeSvgCustomProps({ ...props, content: contentValue })
   const content = sanitizeSvgContent(normalized.content)
   return `<svg viewBox="${escapeHtml(normalized.viewBox)}" preserveAspectRatio="${escapeHtml(normalized.preserveAspectRatio)}" style="width:100%;height:100%;display:block" xmlns="http://www.w3.org/2000/svg">${content}</svg>`
 }
 
 export function normalizeSvgCustomProps(props: SvgCustomProps): NormalizedSvgCustomInput {
-  const parsed = parseSvgInput(props.content || '')
+  const content = normalizeContentValue(props.content)
+  const parsed = parseSvgInput(content)
   return {
-    content: parsed?.content ?? props.content ?? '',
+    content: parsed?.content ?? content,
     viewBox: parsed?.viewBox ?? SVG_CUSTOM_DEFAULT_VIEW_BOX,
     preserveAspectRatio: parsed
       ? (parsed.preserveAspectRatio ?? SVG_ROOT_DEFAULT_PRESERVE_ASPECT_RATIO)
       : SVG_CUSTOM_DEFAULT_PRESERVE_ASPECT_RATIO,
   }
+}
+
+export function isRemoteSvgSource(value: string): boolean {
+  try {
+    const url = new URL(value.trim())
+    return url.protocol === 'http:' || url.protocol === 'https:'
+  }
+  catch {
+    return false
+  }
+}
+
+function normalizeContentValue(value: unknown): string {
+  if (value == null)
+    return ''
+  if (typeof value === 'string')
+    return value.trim()
+  return String(value).trim()
 }
 
 function parseSvgInput(content: string): ParsedSvgInput | null {

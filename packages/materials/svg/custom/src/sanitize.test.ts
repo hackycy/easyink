@@ -1,6 +1,7 @@
 import { readTrustedViewerHtml } from '@easyink/core'
 import { describe, expect, it } from 'vitest'
 import { svgCustomDesignerPropSchemas } from './prop-schemas'
+import { buildSvgCustomMarkup, isRemoteSvgSource } from './rendering'
 import { sanitizeSvgContent } from './sanitize'
 import { createSvgCustomNode } from './schema'
 import { renderSvgCustom } from './viewer'
@@ -100,6 +101,47 @@ describe('renderSvgCustom', () => {
     expect(output).not.toContain('<script')
     expect(output).not.toContain('onload="alert')
     expect(output).not.toContain('onclick="alert')
+  })
+
+  it('renders remote binding values as image sources', () => {
+    const node = createSvgCustomNode({
+      props: {
+        content: 'https://cdn.example.com/logo.svg?version=1&theme=<dark>',
+      },
+    })
+
+    const output = readTrustedViewerHtml(renderSvgCustom(node).html!)
+
+    expect(output).toContain('<img')
+    expect(output).toContain('src="https://cdn.example.com/logo.svg?version=1&amp;theme=&lt;dark&gt;"')
+    expect(output).toContain('object-fit:fill')
+    expect(output).not.toContain('<svg viewBox=')
+  })
+
+  it('keeps bound svg text on the sanitized inline svg path', () => {
+    const output = buildSvgCustomMarkup({
+      content: '<svg viewBox="0 0 10 10"><circle r="5" onclick="alert(1)" /></svg>',
+    })
+
+    expect(output).toContain('<svg viewBox="0 0 10 10"')
+    expect(output).toContain('<circle')
+    expect(output).not.toContain('onclick')
+    expect(output).not.toContain('<img')
+  })
+
+  it('normalizes non-string bound values without throwing', () => {
+    const output = buildSvgCustomMarkup({ content: 123 as unknown as string })
+
+    expect(output).toContain('>123</svg>')
+  })
+})
+
+describe('isRemoteSvgSource', () => {
+  it('accepts http and https values only', () => {
+    expect(isRemoteSvgSource('https://example.com/a.svg')).toBe(true)
+    expect(isRemoteSvgSource('http://example.com/a.svg')).toBe(true)
+    expect(isRemoteSvgSource('<svg viewBox="0 0 1 1" />')).toBe(false)
+    expect(isRemoteSvgSource('javascript:alert(1)')).toBe(false)
   })
 })
 

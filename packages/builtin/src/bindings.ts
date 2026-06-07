@@ -11,6 +11,7 @@ export const customMaterialBinding = { kind: 'custom' } satisfies MaterialBindin
 
 export const textMaterialBinding = { kind: 'ordinary', primaryProp: 'content' } satisfies MaterialBindingDefinition
 export const imageMaterialBinding = { kind: 'ordinary', primaryProp: 'src' } satisfies MaterialBindingDefinition
+export const svgCustomMaterialBinding = { kind: 'ordinary', primaryProp: 'content' } satisfies MaterialBindingDefinition
 export const qrcodeMaterialBinding = { kind: 'ordinary', primaryProp: 'value' } satisfies MaterialBindingDefinition
 export const barcodeMaterialBinding = {
   kind: 'ordinary',

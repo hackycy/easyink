@@ -18,6 +18,19 @@ function textNode(id: string, binding?: MaterialNode['binding'], props: Record<s
   }
 }
 
+function svgNode(id: string, binding?: MaterialNode['binding'], props: Record<string, unknown> = {}): MaterialNode {
+  return {
+    id,
+    type: 'svg',
+    x: 5,
+    y: 5,
+    width: 20,
+    height: 20,
+    props: { content: '', ...props },
+    binding,
+  }
+}
+
 function fixedSchema(elements: MaterialNode[]): DocumentSchema {
   return {
     version: '1.0.0',
@@ -148,6 +161,45 @@ describe('viewer audit risk regressions', () => {
 
     expect(container.textContent).toContain('Ada')
     expect(container.textContent).toContain('42')
+  })
+
+  it('projects bound remote svg urls into the custom svg renderer', async () => {
+    const container = document.createElement('div')
+    const viewer = createViewer({ container })
+
+    await viewer.open({
+      schema: fixedSchema([
+        svgNode('logo', { sourceId: 'brand', fieldPath: 'logoSvgUrl' }),
+      ]),
+      data: {
+        logoSvgUrl: 'https://cdn.example.com/logo.svg?version=1&theme=dark',
+      },
+    })
+
+    const image = container.querySelector('[data-element-id="logo"] img')
+
+    expect(image).not.toBeNull()
+    expect(image?.getAttribute('src')).toBe('https://cdn.example.com/logo.svg?version=1&theme=dark')
+  })
+
+  it('projects bound svg text into the sanitized custom svg renderer', async () => {
+    const container = document.createElement('div')
+    const viewer = createViewer({ container })
+
+    await viewer.open({
+      schema: fixedSchema([
+        svgNode('seal', { sourceId: 'brand', fieldPath: 'sealSvg' }),
+      ]),
+      data: {
+        sealSvg: '<svg viewBox="0 0 10 10"><circle r="5" onclick="alert(1)" /></svg>',
+      },
+    })
+
+    const wrapper = container.querySelector('[data-element-id="seal"]')
+
+    expect(wrapper?.querySelector('svg')).not.toBeNull()
+    expect(wrapper?.querySelector('circle')).not.toBeNull()
+    expect(wrapper?.innerHTML).not.toContain('onclick')
   })
 
   it('keeps root-shaped payloads when sourceId collides with a field name', async () => {

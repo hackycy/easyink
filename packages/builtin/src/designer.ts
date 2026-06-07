@@ -214,6 +214,7 @@ import {
   imageMaterialBinding,
   noMaterialBinding,
   qrcodeMaterialBinding,
+  svgCustomMaterialBinding,
   textMaterialBinding,
 } from './bindings'
 
@@ -440,7 +441,7 @@ export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
       icon: IconSvg,
       category: 'svg',
       capabilities: SVG_CUSTOM_CAPABILITIES,
-      binding: noMaterialBinding,
+      binding: svgCustomMaterialBinding,
       aiDescriptor: svgCustomAIMaterialDescriptor,
       createDefaultNode: createSvgCustomNode,
       factory: createSvgCustomExtension,

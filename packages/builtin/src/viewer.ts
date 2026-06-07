@@ -31,6 +31,7 @@ import {
   imageMaterialBinding,
   noMaterialBinding,
   qrcodeMaterialBinding,
+  svgCustomMaterialBinding,
   textMaterialBinding,
 } from './bindings'
 
@@ -62,7 +63,7 @@ export function registerBuiltinViewerMaterials(register: BuiltinViewerRegistrar)
   register(CHART_PIE_TYPE, chartPieMaterialBinding, { render: (node, ctx) => renderChartPie(node, ctx) })
   register(CHART_RADAR_TYPE, chartRadarMaterialBinding, { render: (node, ctx) => renderChartRadar(node, ctx) })
   register(CHART_SCATTER_TYPE, chartScatterMaterialBinding, { render: (node, ctx) => renderChartScatter(node, ctx) })
-  register(SVG_CUSTOM_TYPE, noMaterialBinding, { render: node => renderSvgCustom(node) })
+  register(SVG_CUSTOM_TYPE, svgCustomMaterialBinding, { render: node => renderSvgCustom(node) })
   register(SVG_STAR_TYPE, noMaterialBinding, { render: node => renderSvgStar(node) })
   register(SVG_HEART_TYPE, noMaterialBinding, { render: (node, ctx) => renderSvgHeart(node, ctx.unit) })
   register(PAGE_NUMBER_TYPE, noMaterialBinding, {

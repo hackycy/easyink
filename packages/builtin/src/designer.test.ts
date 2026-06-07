@@ -29,4 +29,12 @@ describe('builtin designer material bundle', () => {
       group: 'chart',
     })
   })
+
+  it('registers custom svg as an ordinary bindable material', () => {
+    const material = builtinDesignerMaterialBundle.materials.find(item => item.type === 'svg')
+
+    expect(material?.capabilities.bindable).toBe(true)
+    expect(material?.binding).toEqual({ kind: 'ordinary', primaryProp: 'content' })
+    expect(material?.aiDescriptor?.binding).toBe('single')
+  })
 })

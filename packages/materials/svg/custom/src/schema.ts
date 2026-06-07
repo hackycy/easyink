@@ -12,7 +12,7 @@ export const SVG_CUSTOM_DEFAULTS: SvgCustomProps = {
 }
 
 export const SVG_CUSTOM_CAPABILITIES = {
-  bindable: false,
+  bindable: true,
   rotatable: true,
   resizable: true,
   supportsChildren: false,
