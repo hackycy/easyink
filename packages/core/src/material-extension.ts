@@ -250,6 +250,9 @@ export interface DatasourceDropHandler {
 /** Factory that receives a context and returns a material extension instance. */
 export type MaterialExtensionFactory = (context: MaterialExtensionContext) => MaterialDesignerExtension
 
+/** Async designer factory loader. Used by heavyweight materials in Designer only. */
+export type LazyMaterialExtensionFactory = () => Promise<MaterialExtensionFactory>
+
 /** Context provided to material extension factories for querying state and issuing commands. */
 export interface MaterialExtensionContext {
   getSchema: () => DocumentSchema

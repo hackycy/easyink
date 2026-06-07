@@ -1,0 +1,36 @@
+{
+  "name": "@easyink/material-chart-custom",
+  "type": "module",
+  "version": "0.0.21",
+  "description": "EasyInk custom ECharts material",
+  "author": "hackycy <hackycy@outlook.com>",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./ai": "./dist/ai.mjs",
+    "./designer": "./dist/designer.mjs",
+    "./locale": "./dist/locale.mjs",
+    "./prop-schemas": "./dist/prop-schemas.mjs",
+    "./schema": "./dist/schema.mjs",
+    "./viewer": "./dist/viewer.mjs",
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/index.d.mts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch"
+  },
+  "dependencies": {
+    "@easyink/core": "workspace:*",
+    "@easyink/material-chart-kernel": "workspace:*",
+    "@easyink/schema": "workspace:*",
+    "@easyink/shared": "workspace:*"
+  }
+}

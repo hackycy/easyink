@@ -30,6 +30,21 @@ describe('builtin designer material bundle', () => {
     })
   })
 
+  it('shows custom ECharts in the chart catalog group with a distinct icon', () => {
+    expect(builtinDesignerMaterialBundle.groupedCatalog).toContainEqual({
+      type: 'chart-custom',
+      group: 'chart',
+    })
+
+    const chartCustom = builtinDesignerMaterialBundle.materials.find(item => item.type === 'chart-custom')
+    const chartMaterialIcons = builtinDesignerMaterialBundle.materials
+      .filter(item => item.category === 'chart' && item.type !== 'chart-custom')
+      .map(item => item.icon)
+
+    expect(chartCustom?.icon).toBeDefined()
+    expect(chartMaterialIcons).not.toContain(chartCustom?.icon)
+  })
+
   it('registers custom svg as an ordinary bindable material', () => {
     const material = builtinDesignerMaterialBundle.materials.find(item => item.type === 'svg')
 
@@ -42,18 +57,32 @@ describe('builtin designer material bundle', () => {
     expect(material?.aiDescriptor?.binding).toBe('single')
   })
 
-  it('limits chart material data formatting to custom formatters', () => {
+  it('limits structured chart material data formatting to custom formatters', () => {
     const chartMaterials = builtinDesignerMaterialBundle.materials.filter(material => material.category === 'chart')
 
     expect(chartMaterials.map(material => material.type).sort()).toEqual([
       'chart-bar',
+      'chart-custom',
       'chart-gauge',
       'chart-line',
       'chart-pie',
       'chart-radar',
       'chart-scatter',
     ])
-    for (const material of chartMaterials)
+    for (const material of chartMaterials.filter(item => item.type !== 'chart-custom'))
       expect(material.binding).toMatchObject({ kind: 'data-contract', formatEditor: { tabs: ['custom'], defaultTab: 'custom' } })
+  })
+
+  it('registers custom ECharts as an ordinary option-bound lazy material', () => {
+    const material = builtinDesignerMaterialBundle.materials.find(item => item.type === 'chart-custom')
+
+    expect(material?.capabilities.bindable).toBe(true)
+    expect(material?.binding).toEqual({
+      kind: 'ordinary',
+      primaryProp: 'option',
+      formatEditor: { tabs: ['custom'], defaultTab: 'custom' },
+    })
+    expect(material?.lazyFactory).toEqual(expect.any(Function))
+    expect(material?.aiDescriptor?.binding).toBe('single')
   })
 })

@@ -1,6 +1,6 @@
 import type { AIMaterialDescriptor } from '@easyink/shared'
 import type { DesignerStore } from '../store/designer-store'
-import type { LocaleMessageRegistration, MaterialCapabilities, MaterialCatalogEntry, MaterialDefinition, MaterialExtensionFactory, PanelSectionId, PropSchema } from '../types'
+import type { LazyMaterialExtensionFactory, LocaleMessageRegistration, MaterialCapabilities, MaterialCatalogEntry, MaterialDefinition, MaterialExtensionFactory, PanelSectionId, PropSchema } from '../types'
 
 // ─── Material definitions ────────────────────────────────────────────
 
@@ -13,6 +13,7 @@ export interface DesignerMaterialRegistration {
   binding: MaterialDefinition['binding']
   createDefaultNode: MaterialDefinition['createDefaultNode']
   factory: MaterialExtensionFactory
+  lazyFactory?: LazyMaterialExtensionFactory
   aiDescriptor?: AIMaterialDescriptor
   /** Designer property schemas owned by this material. */
   propSchemas?: PropSchema[]
@@ -79,7 +80,10 @@ export function registerMaterialBundle(store: DesignerStore, bundle: DesignerMat
     }
 
     store.registerMaterial(definition)
-    store.registerDesignerFactory(entry.type, entry.factory)
+    if (entry.lazyFactory)
+      store.registerLazyDesignerFactory(entry.type, entry.lazyFactory)
+    else
+      store.registerDesignerFactory(entry.type, entry.factory)
   }
 
   // Register quick material catalog entries

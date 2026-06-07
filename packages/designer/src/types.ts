@@ -21,6 +21,7 @@ export type {
   EditingSessionRef,
   EphemeralPanelDef,
   GeometryService,
+  LazyMaterialExtensionFactory,
   MaterialControlPolicy,
   MaterialControlPolicyContext,
   MaterialControlState,

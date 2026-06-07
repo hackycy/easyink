@@ -65,3 +65,9 @@ export const chartScatterMaterialBinding = {
   contract: CHART_SCATTER_DATA_CONTRACT,
   formatEditor: customOnlyFormatEditor,
 } satisfies MaterialBindingDefinition
+
+export const chartCustomMaterialBinding = {
+  kind: 'ordinary',
+  primaryProp: 'option',
+  formatEditor: customOnlyFormatEditor,
+} satisfies MaterialBindingDefinition

@@ -2,6 +2,7 @@ import type { BuiltinDesignerMaterialBundle, BuiltinPanelSectionId } from './typ
 import {
   IconBarcode,
   IconChartBar,
+  IconChartCustom,
   IconChartGauge,
   IconChartLine,
   IconChartPie,
@@ -39,6 +40,14 @@ import {
   createChartBarExtension,
   createChartBarNode,
 } from '@easyink/material-chart-bar'
+import { chartCustomAIMaterialDescriptor } from '@easyink/material-chart-custom/ai'
+import { chartCustomLocaleMessages } from '@easyink/material-chart-custom/locale'
+import { chartCustomDesignerPropSchemas } from '@easyink/material-chart-custom/prop-schemas'
+import {
+  CHART_CUSTOM_CAPABILITIES,
+  CHART_CUSTOM_TYPE,
+  createChartCustomNode,
+} from '@easyink/material-chart-custom/schema'
 import {
   CHART_GAUGE_CAPABILITIES,
   CHART_GAUGE_TYPE,
@@ -205,6 +214,7 @@ import {
 import {
   barcodeMaterialBinding,
   chartBarMaterialBinding,
+  chartCustomMaterialBinding,
   chartGaugeMaterialBinding,
   chartLineMaterialBinding,
   chartPieMaterialBinding,
@@ -436,6 +446,20 @@ export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
       localeMessages: chartGaugeLocaleMessages,
     },
     {
+      type: CHART_CUSTOM_TYPE,
+      name: 'materials.chartCustom.name',
+      icon: IconChartCustom,
+      category: 'chart',
+      capabilities: CHART_CUSTOM_CAPABILITIES,
+      binding: chartCustomMaterialBinding,
+      aiDescriptor: chartCustomAIMaterialDescriptor,
+      createDefaultNode: createChartCustomNode,
+      factory: () => ({ renderContent: () => () => {} }),
+      lazyFactory: async () => (await import('@easyink/material-chart-custom/designer')).createChartCustomExtension,
+      propSchemas: chartCustomDesignerPropSchemas,
+      localeMessages: chartCustomLocaleMessages,
+    },
+    {
       type: SVG_CUSTOM_TYPE,
       name: 'materials.svgCustom.name',
       icon: IconSvg,
@@ -507,6 +531,7 @@ export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
     { type: CHART_RADAR_TYPE, group: 'chart' },
     { type: CHART_SCATTER_TYPE, group: 'chart' },
     { type: CHART_GAUGE_TYPE, group: 'chart' },
+    { type: CHART_CUSTOM_TYPE, group: 'chart' },
     { type: SVG_STAR_TYPE, group: 'svg' },
     { type: SVG_HEART_TYPE, group: 'svg' },
     { type: SVG_CUSTOM_TYPE, group: 'svg' },

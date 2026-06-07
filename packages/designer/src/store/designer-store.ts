@@ -1,6 +1,6 @@
 import type { EphemeralPanelDef, FontLoadRequest, FontLoadStatus, FontManager, FontProvider, PropertyPanelOverlay } from '@easyink/core'
 import type { DocumentSchema, DocumentSchemaInput, ElementGroupSchema, MaterialNode } from '@easyink/schema'
-import type { DesignerInteractionProvider, LocaleMessageRegistration, LocaleMessages, MaterialCatalogEntry, MaterialDefinition, MaterialDesignerExtension, MaterialExtensionFactory, PreferenceProvider, SnapLine, StatusBarState } from '../types'
+import type { DesignerInteractionProvider, LazyMaterialExtensionFactory, LocaleMessageRegistration, LocaleMessages, MaterialCatalogEntry, MaterialDefinition, MaterialDesignerExtension, MaterialExtensionFactory, PreferenceProvider, SnapLine, StatusBarState } from '../types'
 import { CommandManager, SelectionModel } from '@easyink/core'
 import { DataSourceRegistry } from '@easyink/datasource'
 import { findNodeById, normalizeDocumentSchema } from '@easyink/schema'
@@ -58,6 +58,7 @@ export class DesignerStore {
    * itself is reactive.
    */
   snapActiveLines: readonly SnapLine[] = []
+  materialExtensionRevision = 0
 
   readonly materialRegistry: MaterialRegistry
 
@@ -307,9 +308,17 @@ export class DesignerStore {
     this.materialRegistry.registerDesignerFactory(type, factory)
   }
 
+  registerLazyDesignerFactory(type: string, loader: LazyMaterialExtensionFactory): void {
+    this.materialRegistry.registerLazyDesignerFactory(type, loader)
+  }
+
   /** Get or lazily instantiate an extension from its factory. */
   getDesignerExtension(type: string): MaterialDesignerExtension | undefined {
     return this.materialRegistry.getDesignerExtension(type, this)
+  }
+
+  notifyMaterialExtensionLoaded(): void {
+    this.materialExtensionRevision += 1
   }
 
   // ─── Locale ───────────────────────────────────────────────────

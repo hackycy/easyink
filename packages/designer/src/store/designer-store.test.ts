@@ -84,6 +84,23 @@ describe('designer store schema initialization', () => {
     expect(factory).toHaveBeenCalledTimes(1)
   })
 
+  it('returns a stable loading extension while a lazy designer factory loads', async () => {
+    const store = new DesignerStore()
+    const factory = vi.fn(() => ({ renderContent: () => () => {} }))
+    store.registerLazyDesignerFactory('lazy-sample', () => Promise.resolve(factory))
+
+    const loading = store.getDesignerExtension('lazy-sample')
+
+    expect(loading).toBe(store.getDesignerExtension('lazy-sample'))
+    expect(factory).not.toHaveBeenCalled()
+
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(store.getDesignerExtension('lazy-sample')).toBe(store.getDesignerExtension('lazy-sample'))
+    expect(factory).toHaveBeenCalledTimes(1)
+  })
+
   it('resolves registered locale messages after host locale overrides', () => {
     const store = new DesignerStore()
 

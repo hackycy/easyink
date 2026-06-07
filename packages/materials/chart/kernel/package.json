@@ -11,6 +11,7 @@
   "sideEffects": false,
   "exports": {
     ".": "./dist/index.mjs",
+    "./full": "./dist/full.mjs",
     "./package.json": "./package.json"
   },
   "types": "./dist/index.d.mts",

@@ -659,6 +659,9 @@ importers:
       '@easyink/material-chart-bar':
         specifier: workspace:*
         version: link:../materials/chart/bar
+      '@easyink/material-chart-custom':
+        specifier: workspace:*
+        version: link:../materials/chart/custom
       '@easyink/material-chart-gauge':
         specifier: workspace:*
         version: link:../materials/chart/gauge
@@ -834,6 +837,21 @@ importers:
         version: 3.12.3
 
   packages/materials/chart/bar:
+    dependencies:
+      '@easyink/core':
+        specifier: workspace:*
+        version: link:../../../core
+      '@easyink/material-chart-kernel':
+        specifier: workspace:*
+        version: link:../kernel
+      '@easyink/schema':
+        specifier: workspace:*
+        version: link:../../../schema
+      '@easyink/shared':
+        specifier: workspace:*
+        version: link:../../../shared
+
+  packages/materials/chart/custom:
     dependencies:
       '@easyink/core':
         specifier: workspace:*

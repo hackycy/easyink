@@ -162,6 +162,7 @@ export type {
   DatasourceDropHandler,
   DatasourceDropZone,
   DatasourceFieldInfo,
+  LazyMaterialExtensionFactory,
   MaterialControlPolicy,
   MaterialControlPolicyContext,
   MaterialControlState,

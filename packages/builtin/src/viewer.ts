@@ -1,6 +1,7 @@
 import type { BuiltinViewerRegistrar } from './types'
 import { BARCODE_TYPE, renderBarcode } from '@easyink/material-barcode'
 import { CHART_BAR_TYPE, renderChartBar } from '@easyink/material-chart-bar'
+import { CHART_CUSTOM_TYPE, renderChartCustom } from '@easyink/material-chart-custom'
 import { CHART_GAUGE_TYPE, renderChartGauge } from '@easyink/material-chart-gauge'
 import { CHART_LINE_TYPE, renderChartLine } from '@easyink/material-chart-line'
 import { CHART_PIE_TYPE, renderChartPie } from '@easyink/material-chart-pie'
@@ -22,6 +23,7 @@ import { getTextRenderSize, measureText, renderText, TEXT_TYPE } from '@easyink/
 import {
   barcodeMaterialBinding,
   chartBarMaterialBinding,
+  chartCustomMaterialBinding,
   chartGaugeMaterialBinding,
   chartLineMaterialBinding,
   chartPieMaterialBinding,
@@ -58,6 +60,7 @@ export function registerBuiltinViewerMaterials(register: BuiltinViewerRegistrar)
     measure: (node, ctx) => measureFlowRow(node, ctx),
   })
   register(CHART_BAR_TYPE, chartBarMaterialBinding, { render: (node, ctx) => renderChartBar(node, ctx) })
+  register(CHART_CUSTOM_TYPE, chartCustomMaterialBinding, { render: (node, ctx) => renderChartCustom(node, ctx) })
   register(CHART_GAUGE_TYPE, chartGaugeMaterialBinding, { render: (node, ctx) => renderChartGauge(node, ctx) })
   register(CHART_LINE_TYPE, chartLineMaterialBinding, { render: (node, ctx) => renderChartLine(node, ctx) })
   register(CHART_PIE_TYPE, chartPieMaterialBinding, { render: (node, ctx) => renderChartPie(node, ctx) })

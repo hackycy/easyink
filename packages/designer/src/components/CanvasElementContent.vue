@@ -68,7 +68,7 @@ watch(
 )
 
 watch(
-  () => props.nodeId,
+  () => [props.nodeId, store.materialExtensionRevision],
   () => mount(),
 )
 
