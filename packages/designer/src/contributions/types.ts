@@ -1,7 +1,7 @@
 import type { Component } from 'vue'
 import type { DesignerStore } from '../store/designer-store'
 import type { Diagnostic } from '../store/diagnostics'
-import type { DesignerAssetPickRequest, DesignerConfirmRequest, DesignerResolvedAsset } from '../types'
+import type { DesignerAssetPickRequest, DesignerConfirmRequest, DesignerResolvedAsset, DesignerResolvedTextFile, DesignerTextFilePickRequest } from '../types'
 
 /**
  * Descriptor for a panel contributed to the designer overlay layer.
@@ -54,6 +54,8 @@ export interface ContributionContext {
   confirm: <TPayload = unknown>(request: DesignerConfirmRequest<TPayload>) => Promise<boolean>
   /** Ask the host-controlled interaction layer for a stable asset URL. */
   pickAsset: <TPayload = unknown>(request: DesignerAssetPickRequest<TPayload>) => Promise<DesignerResolvedAsset | null>
+  /** Ask the host-controlled interaction layer to pick and read a text file. */
+  pickFileText: <TPayload = unknown>(request: DesignerTextFilePickRequest<TPayload>) => Promise<DesignerResolvedTextFile | null>
   /** Register a cleanup callback fired when the designer unmounts. */
   onDispose: (fn: () => void) => void
   /**

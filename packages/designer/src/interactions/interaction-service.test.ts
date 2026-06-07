@@ -193,4 +193,44 @@ describe('designer interaction service', () => {
 
     await expect(service.pickAsset({ id: 'error', source: 'image-material' })).rejects.toThrow('boom')
   })
+
+  it('delegates text file picker requests to host provider and preserves cancel', async () => {
+    const pickFileText = vi.fn(() => ({ text: '<svg />', name: 'logo.svg' }))
+    const service = new DesignerInteractionService()
+    service.setProvider({ pickFileText })
+
+    await expect(service.pickFileText({
+      id: 'designer.svgCustom.importFile',
+      source: 'svg-custom-content',
+      accept: ['.svg', 'image/svg+xml'],
+      payload: { propKey: 'content' },
+    })).resolves.toEqual({ text: '<svg />', name: 'logo.svg' })
+    expect(pickFileText).toHaveBeenCalledTimes(1)
+
+    service.setProvider({ pickFileText: () => null })
+    await expect(service.pickFileText({
+      id: 'designer.svgCustom.importFile',
+      source: 'svg-custom-content',
+    })).resolves.toBeNull()
+  })
+
+  it('uses the shell text file picker only when no host picker is registered', async () => {
+    const fallbackPickFileText = vi.fn(() => ({ text: 'fallback' }))
+    const hostPickFileText = vi.fn(() => ({ text: 'host' }))
+    const service = new DesignerInteractionService()
+    service.setFallbackProvider({ pickFileText: fallbackPickFileText })
+
+    expect(service.canPickFileText()).toBe(true)
+    await expect(
+      service.pickFileText({ id: 'fallback', source: 'prop-schema' }),
+    ).resolves.toEqual({ text: 'fallback' })
+
+    service.setProvider({ pickFileText: hostPickFileText })
+    expect(service.hasHostTextFilePicker()).toBe(true)
+    await expect(
+      service.pickFileText({ id: 'host', source: 'prop-schema' }),
+    ).resolves.toEqual({ text: 'host' })
+    expect(fallbackPickFileText).toHaveBeenCalledTimes(1)
+    expect(hostPickFileText).toHaveBeenCalledTimes(1)
+  })
 })

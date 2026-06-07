@@ -172,6 +172,7 @@ Use `propSchemas` for simple `node.props` fields:
 - Nested props can use dotted keys such as `typography.fontSize`.
 - Labels should be i18n keys.
 - Group names should be one of the groups mapped in `PropertiesPanel.vue` or an intentionally visible custom group.
+- For `code` or `textarea` props whose value is commonly authored in a local text file, declare `editorOptions.fileImport = { kind: 'text', id, source, accept, pickTitle, maxBytes }`. The shared `PropSchemaEditor` calls Designer's `pickFileText` bridge and commits the returned text as the prop value. Do not add material-local `<input type="file">` controls, and do not persist file names, local paths, `File` objects, or import state in Schema.
 
 For font properties:
 

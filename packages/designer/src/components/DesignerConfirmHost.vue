@@ -4,6 +4,7 @@ import { EiDialog } from '@easyink/ui'
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { useDesignerStore } from '../composables'
 import { pickAssetWithFileInput, uploadAssetAsDataUrl } from '../interactions/asset-file-picker'
+import { pickTextFileWithFileInput } from '../interactions/text-file-picker'
 
 interface PendingConfirm {
   request: DesignerConfirmRequest
@@ -44,7 +45,27 @@ function pickAsset(request: DesignerAssetPickRequest) {
   })
 }
 
-const provider: DesignerInteractionProvider = { confirm, pickAsset, uploadAsset: uploadAssetAsDataUrl }
+function pickFileText(request: Parameters<NonNullable<DesignerInteractionProvider['pickFileText']>>[0]) {
+  return pickTextFileWithFileInput(request, {
+    messages: {
+      documentMissing: text('designer.diagnostic.textFilePickerDocumentMissing', 'Text file picker requires a browser document.'),
+      unsupportedFileType: text('designer.diagnostic.textFilePickerUnsupportedFileType', 'Selected file type is not supported by this text field.'),
+      pickerOpenFailed: text('designer.diagnostic.textFilePickerOpenFailed', 'Failed to open text file picker.'),
+      fileTooLarge: text('designer.diagnostic.textFilePickerFileTooLarge', 'Selected text file is too large.'),
+      fileReadFailed: text('designer.diagnostic.textFilePickerFileReadFailed', 'Failed to read selected text file.'),
+    },
+    onDiagnostic(diagnostic) {
+      store.diagnostics.push({
+        source: 'designer-interaction',
+        severity: diagnostic.severity,
+        message: diagnostic.message,
+        detail: diagnostic.detail,
+      })
+    },
+  })
+}
+
+const provider: DesignerInteractionProvider = { confirm, pickAsset, uploadAsset: uploadAssetAsDataUrl, pickFileText }
 store.interactions.setFallbackProvider(provider)
 store.refreshInteractionAvailability()
 

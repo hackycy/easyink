@@ -298,6 +298,17 @@ export interface DesignerAssetPickRequest<TPayload = unknown> {
   payload?: TPayload
 }
 
+export interface DesignerTextFilePickRequest<TPayload = unknown> {
+  /** Stable action id, e.g. "designer.svgCustom.importFile". */
+  id: string
+  source: 'prop-schema' | string
+  title?: string
+  accept?: string[]
+  encoding?: string
+  maxBytes?: number
+  payload?: TPayload
+}
+
 export interface DesignerResolvedAsset {
   url: string
   assetId?: string
@@ -305,6 +316,15 @@ export interface DesignerResolvedAsset {
   width?: number
   height?: number
   name?: string
+  metadata?: Record<string, unknown>
+}
+
+export interface DesignerResolvedTextFile {
+  text: string
+  name?: string
+  type?: string
+  size?: number
+  lastModified?: number
   metadata?: Record<string, unknown>
 }
 
@@ -330,6 +350,8 @@ export interface DesignerInteractionProvider {
     DesignerAssetPickResult | null | Promise<DesignerAssetPickResult | null>
   uploadAsset?: <TPayload = unknown>(request: DesignerAssetUploadRequest<TPayload>) =>
     DesignerResolvedAsset | Promise<DesignerResolvedAsset>
+  pickFileText?: <TPayload = unknown>(request: DesignerTextFilePickRequest<TPayload>) =>
+    DesignerResolvedTextFile | null | Promise<DesignerResolvedTextFile | null>
 }
 
 // ─── Designer Props ────────────────────────────────────────────────

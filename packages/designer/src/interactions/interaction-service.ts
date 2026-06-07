@@ -1,4 +1,4 @@
-import type { DesignerAssetPickRequest, DesignerAssetPickResult, DesignerConfirmRequest, DesignerInteractionProvider, DesignerLocalAssetPickResult, DesignerResolvedAsset } from '../types'
+import type { DesignerAssetPickRequest, DesignerAssetPickResult, DesignerConfirmRequest, DesignerInteractionProvider, DesignerLocalAssetPickResult, DesignerResolvedAsset, DesignerResolvedTextFile, DesignerTextFilePickRequest } from '../types'
 
 /**
  * Central user-interaction bridge for designer-owned workflows.
@@ -23,11 +23,19 @@ export class DesignerInteractionService {
     return typeof this._provider?.uploadAsset === 'function'
   }
 
+  hasHostTextFilePicker(): boolean {
+    return typeof this._provider?.pickFileText === 'function'
+  }
+
   canPickAsset(): boolean {
     return this.hasHostAssetPicker() || (
       typeof this._fallbackProvider?.pickAsset === 'function'
       && (this.hasHostAssetUploader() || typeof this._fallbackProvider?.uploadAsset === 'function')
     )
+  }
+
+  canPickFileText(): boolean {
+    return this.hasHostTextFilePicker() || typeof this._fallbackProvider?.pickFileText === 'function'
   }
 
   setFallbackProvider(provider?: DesignerInteractionProvider): void {
@@ -73,6 +81,14 @@ export class DesignerInteractionService {
       file: picked.file,
       picked,
     })
+  }
+
+  async pickFileText<TPayload = unknown>(request: DesignerTextFilePickRequest<TPayload>): Promise<DesignerResolvedTextFile | null> {
+    const picker = this._provider?.pickFileText ? this._provider : this._fallbackProvider
+    if (!picker?.pickFileText)
+      return null
+
+    return await picker.pickFileText(request)
   }
 }
 

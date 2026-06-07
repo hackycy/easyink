@@ -67,6 +67,7 @@ const enUS: LocaleMessages = {
     action: {
       pickImage: 'Pick Image',
       clearImage: 'Clear Image',
+      importFile: 'Import File',
       imagePreview: 'Image Preview',
       imagePreviewLoading: 'Image Loading',
       imagePreviewFailed: 'Image Preview Failed',
@@ -453,6 +454,12 @@ const enUS: LocaleMessages = {
       assetPickerEmptyUrl: 'Asset picker returned an empty asset URL.',
       assetPickerFailed: 'Asset picker failed.',
       assetPickerDocumentMissing: 'Asset file picker requires a browser document.',
+      textFilePickerFailed: 'Text file picker failed.',
+      textFilePickerDocumentMissing: 'Text file picker requires a browser document.',
+      textFilePickerUnsupportedFileType: 'Selected text file type is not supported.',
+      textFilePickerOpenFailed: 'Failed to open text file picker.',
+      textFilePickerFileTooLarge: 'Selected text file is too large.',
+      textFilePickerFileReadFailed: 'Failed to read selected text file.',
     },
     message: {
       confirmNewTemplate: 'Create a new template? The current template will be reset.',

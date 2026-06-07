@@ -33,6 +33,7 @@ export class ContributionRegistry {
         this.executeCommand<TArgs, TResult>(id, args, ctx),
       confirm: request => store.interactions.confirm(request),
       pickAsset: request => store.interactions.pickAsset(request),
+      pickFileText: request => store.interactions.pickFileText(request),
       onDispose: fn => this._disposers.push(fn),
       onDiagnostic: (fn) => {
         const unsubscribe = store.diagnostics.subscribe(fn)

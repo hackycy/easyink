@@ -24,6 +24,7 @@ interface ContributionContext {
   executeCommand: <A, R>(id: string, args?: A) => Promise<R>
   confirm: (request: DesignerConfirmRequest) => Promise<boolean>
   pickAsset: (request: DesignerAssetPickRequest) => Promise<DesignerResolvedAsset | null>
+  pickFileText: (request: DesignerTextFilePickRequest) => Promise<DesignerResolvedTextFile | null>
   onDispose: (fn: () => void) => void
   onDiagnostic: (fn: (entry: Diagnostic) => void) => () => void
 }
@@ -141,10 +142,11 @@ ctx.registerPanel({
 
 ## 23.6 宿主交互
 
-Contribution 不应直接调用浏览器原生 API。破坏性确认和资产选择走宿主交互层：
+Contribution 不应直接调用浏览器原生 API。破坏性确认、资产选择和文本文件读取走宿主交互层：
 
 - `ctx.confirm(request)` → 进入宿主 `DesignerInteractionProvider`
 - `ctx.pickAsset(request)` → 进入宿主资产选择器
+- `ctx.pickFileText(request)` → 进入宿主文本文件选择器，返回文件文本而不是资产 URL
 
 这样宿主可以统一处理权限、审计和 UI 风格。
 

@@ -316,6 +316,23 @@ interface PropCommitContext {
 }
 ```
 
+`editorOptions.fileImport` 是属性编辑器的输入增强，而不是新的 Schema 字段。当前支持文本文件导入：
+
+```typescript
+editorOptions: {
+  fileImport: {
+    kind: 'text',
+    id: 'designer.svgCustom.importFile',
+    source: 'svg-custom-content',
+    accept: ['.svg', 'image/svg+xml'],
+    maxBytes: 262144,
+    pickTitle: 'materials.svgCustom.action.importFile',
+  },
+}
+```
+
+PropertiesPanel/PropSchemaEditor 通过 `DesignerInteractionProvider.pickFileText()` 读取文本文件，再按普通 `preview/change` 流程写入对应 prop。物料 Schema 仍只保存最终属性值，例如自定义 SVG 只保存 `props.content`，不得保存 `File`、本地路径、文件名或导入状态。
+
 ### 11.4.1 PropSchema.read / commit 钩子
 
 通用 PropertiesPanel 不允许包含任何物料类型分支（例如 `if (isTableNode(node))`）。

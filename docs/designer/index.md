@@ -192,7 +192,7 @@ function setupStore(store: DesignerStore) {
 
 ## 宿主交互接管 {#interaction-provider}
 
-Designer 支持把确认和资产选择这类交互交给宿主控制。
+Designer 支持把确认、资产选择、文本文件读取这类交互交给宿主控制。
 
 先看一个确认示例：
 
@@ -200,6 +200,17 @@ Designer 支持把确认和资产选择这类交互交给宿主控制。
 const interactionProvider = {
   async confirm(request) {
     return openBusinessConfirmDialog(request)
+  },
+  async pickFileText(request) {
+    const file = await openTextFileDialog(request.accept)
+    if (!file)
+      return null
+    return {
+      text: await file.text(),
+      name: file.name,
+      type: file.type,
+      size: file.size,
+    }
   },
 }
 ```
@@ -211,7 +222,7 @@ const interactionProvider = {
 />
 ```
 
-这很适合接你的业务弹窗、权限策略和审计流程。你不用去改 Designer 内部组件，就能把交互接回自己的系统。
+这很适合接你的业务弹窗、权限策略、审计流程和素材库。`pickAsset` 面向图片这类需要稳定 URL 的资源；`pickFileText` 面向 SVG/JSON/CSS 这类需要把文件文本写入属性值的场景，不会走上传或 data URL 链路。
 
 ## Store 访问 {#store-access}
 

@@ -67,6 +67,7 @@ const zhCN: LocaleMessages = {
     action: {
       pickImage: '选择图片',
       clearImage: '清空图片',
+      importFile: '导入文件',
       imagePreview: '图片预览',
       imagePreviewLoading: '图片加载中',
       imagePreviewFailed: '图片预览失败',
@@ -453,6 +454,12 @@ const zhCN: LocaleMessages = {
       assetPickerEmptyUrl: '资源选择器返回了空资源地址。',
       assetPickerFailed: '资源选择失败。',
       assetPickerDocumentMissing: '资源文件选择器需要浏览器文档环境。',
+      textFilePickerFailed: '文本文件选择失败。',
+      textFilePickerDocumentMissing: '文本文件选择器需要浏览器文档环境。',
+      textFilePickerUnsupportedFileType: '所选文本文件类型不支持。',
+      textFilePickerOpenFailed: '打开文本文件选择器失败。',
+      textFilePickerFileTooLarge: '所选文本文件过大。',
+      textFilePickerFileReadFailed: '读取所选文本文件失败。',
     },
     message: {
       confirmNewTemplate: '确定要新建模板吗？当前模板内容将被重置。',

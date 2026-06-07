@@ -428,10 +428,16 @@ interface DesignerInteractionProvider {
   confirm?: (request: DesignerConfirmRequest) => boolean | Promise<boolean>
   pickAsset?: (request: DesignerAssetPickRequest) => DesignerAssetPickResult | null | Promise<DesignerAssetPickResult | null>
   uploadAsset?: (request: DesignerAssetUploadRequest) => DesignerResolvedAsset | Promise<DesignerResolvedAsset>
+  pickFileText?: (request: DesignerTextFilePickRequest) => DesignerResolvedTextFile | null | Promise<DesignerResolvedTextFile | null>
 }
 ```
 
 `EasyInkDesigner.interactionProvider` 是宿主接管入口；未传入时，Designer shell 可以使用内置 `EiDialog` 作为 fallback。功能代码只提交稳定的 `request.id`、本地化文案和 payload，由宿主决定弹窗、权限、审计、二次验证或直接放行。
+
+资源选择和文本文件读取是两条不同语义：
+
+- `pickAsset` / `uploadAsset`：用于图片、背景图等需要得到稳定 URL 的资产字段；本地文件会进入宿主或 fallback 上传链路。
+- `pickFileText`：用于 `PropSchema.editorOptions.fileImport.kind = 'text'` 的属性导入；返回的是文件文本内容，不上传、不生成 data URL，也不把文件名等编辑态信息写入 Schema。
 
 当前内置确认场景：
 

@@ -5,6 +5,9 @@ const zhCN = {
       property: {
         content: 'SVG 内容',
       },
+      action: {
+        importFile: '导入 SVG 文件',
+      },
     },
   },
 }
@@ -15,6 +18,9 @@ const enUS = {
       name: 'Custom SVG',
       property: {
         content: 'SVG Content',
+      },
+      action: {
+        importFile: 'Import SVG File',
       },
     },
   },

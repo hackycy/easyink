@@ -103,7 +103,9 @@ describe('designer asset picker host', () => {
     const mounted = mountWithStore(store, DesignerConfirmHost)
 
     expect(store.assetPickerAvailable).toBe(true)
+    expect(store.textFilePickerAvailable).toBe(true)
     expect(store.hostAssetUploaderAvailable).toBe(false)
+    expect(store.hostTextFilePickerAvailable).toBe(false)
 
     mounted.unmount()
   })

@@ -39,6 +39,8 @@ export class DesignerStore {
   assetPickerAvailable = false
   hostAssetPickerAvailable = false
   hostAssetUploaderAvailable = false
+  textFilePickerAvailable = false
+  hostTextFilePickerAvailable = false
   // ─── Clipboard (internal, not in Schema) ──────────────────────
   clipboard: MaterialNode[] = []
 
@@ -117,6 +119,8 @@ export class DesignerStore {
     this.hostAssetPickerAvailable = this.interactions.hasHostAssetPicker()
     this.hostAssetUploaderAvailable = this.interactions.hasHostAssetUploader()
     this.assetPickerAvailable = this.interactions.canPickAsset()
+    this.hostTextFilePickerAvailable = this.interactions.hasHostTextFilePicker()
+    this.textFilePickerAvailable = this.interactions.canPickFileText()
   }
 
   get fontManager(): FontManager {

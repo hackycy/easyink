@@ -89,6 +89,7 @@ interface ContributionContext {
   executeCommand: <TArgs = unknown, TResult = unknown>(id: string, args?: TArgs) => Promise<TResult>
   confirm: (request: DesignerConfirmRequest) => Promise<boolean>
   pickAsset: (request: DesignerAssetPickRequest) => Promise<DesignerResolvedAsset | null>
+  pickFileText: (request: DesignerTextFilePickRequest) => Promise<DesignerResolvedTextFile | null>
   onDispose: (fn: () => void) => void
   onDiagnostic: (fn: (entry: Diagnostic) => void) => () => void
 }
@@ -218,9 +219,15 @@ const asset = await ctx.pickAsset({
   id: 'demo.pickLogo',
   source: 'demo-contribution',
 })
+
+const svg = await ctx.pickFileText({
+  id: 'demo.importLogoSvg',
+  source: 'demo-contribution',
+  accept: ['.svg', 'image/svg+xml'],
+})
 ```
 
-这样 Contribution 不需要自己实现浏览器弹窗或业务资产库。宿主可以统一处理权限、审计和 UI 风格。
+这样 Contribution 不需要自己实现浏览器弹窗、业务资产库或本地文本文件读取。宿主可以统一处理权限、审计和 UI 风格。
 
 ## 注册多语言文案 {#locale-messages}
 
