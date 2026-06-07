@@ -1,4 +1,5 @@
 import type { PropSchema } from '@easyink/core'
+import { CHART_PIE_PALETTE_OPTIONS } from './options'
 
 export const chartPieDesignerPropSchemas: PropSchema[] = [
   {
@@ -6,11 +7,7 @@ export const chartPieDesignerPropSchemas: PropSchema[] = [
     label: 'materials.chartPie.property.palettePreset',
     type: 'enum',
     group: 'appearance',
-    enum: [
-      { label: 'materials.chartPie.option.paletteClassic', value: 'classic' },
-      { label: 'materials.chartPie.option.paletteBusiness', value: 'business' },
-      { label: 'materials.chartPie.option.palettePastel', value: 'pastel' },
-    ],
+    enum: CHART_PIE_PALETTE_OPTIONS,
   },
   { key: 'backgroundColor', label: 'designer.property.background', type: 'color', group: 'appearance' },
   { key: 'labelColor', label: 'materials.chartPie.property.labelColor', type: 'color', group: 'appearance' },

@@ -3,7 +3,16 @@ import { convertUnit, generateId } from '@easyink/shared'
 
 export const CHART_PIE_TYPE = 'chart-pie'
 
-export type ChartPiePalettePreset = 'classic' | 'business' | 'pastel'
+export type ChartPiePalettePreset
+  = | 'product'
+    | 'primer'
+    | 'atlassian'
+    | 'spectrum'
+    | 'mint'
+    | 'sunset'
+    | 'aurora'
+    | 'earth'
+    | 'mono'
 
 export interface ChartPieProps {
   palettePreset: ChartPiePalettePreset
@@ -17,7 +26,7 @@ export interface ChartPieProps {
 }
 
 export const CHART_PIE_DEFAULTS: ChartPieProps = {
-  palettePreset: 'classic',
+  palettePreset: 'product',
   backgroundColor: '',
   labelColor: '#374151',
   showValueLabels: true,

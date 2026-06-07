@@ -11,7 +11,7 @@ export const chartPieAIMaterialDescriptor = {
     'Use data-contract binding mappings: mappings.category selects the category source path and mappings.value selects the numeric value source path.',
     'Use optional mappings.color when source data carries a per-slice CSS color such as #2f80ed; otherwise chart-pie uses the selected system palette.',
     'The resolver derives whether mappings share a record collection or should be aligned by index.',
-    'Choose palettePreset from classic, business, or pastel for system-managed colors.',
+    'Choose palettePreset from product, primer, atlassian, spectrum, mint, sunset, aurora, earth, or mono for system-managed colors.',
     'Use innerRadiusPercent greater than 0 for a donut chart.',
     'Use sectorGapAngle greater than 0 to add visual spacing between pie slices.',
     'Use sectorCornerRadius greater than 0 to round pie slice corners.',

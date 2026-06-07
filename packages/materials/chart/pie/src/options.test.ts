@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { CHART_PIE_PALETTES, createChartPiePreviewOption, createChartPieRuntimeOption, createChartPieRuntimeOptionFromData, resolveChartPieProps } from './options'
+import { chartPieLocaleMessages } from './locale'
+import { CHART_PIE_PALETTE_OPTIONS, CHART_PIE_PALETTES, createChartPiePreviewOption, createChartPieRuntimeOption, createChartPieRuntimeOptionFromData, resolveChartPieProps } from './options'
+import { chartPieDesignerPropSchemas } from './prop-schemas'
 import { CHART_PIE_CAPABILITIES, CHART_PIE_DEFAULTS } from './schema'
 
 describe('chart pie options', () => {
@@ -38,9 +40,22 @@ describe('chart pie options', () => {
   })
 
   it('passes the selected system palette to ECharts', () => {
-    const option = createChartPiePreviewOption({ ...CHART_PIE_DEFAULTS, palettePreset: 'business' })
+    const option = createChartPiePreviewOption({ ...CHART_PIE_DEFAULTS, palettePreset: 'atlassian' })
 
-    expect(option.color).toEqual(CHART_PIE_PALETTES.business)
+    expect(option.color).toEqual(CHART_PIE_PALETTES.atlassian)
+  })
+
+  it('keeps palette selector options aligned with palette colors and locale labels', () => {
+    const paletteProp = chartPieDesignerPropSchemas.find(prop => prop.key === 'palettePreset')
+    const zhOptions = chartPieLocaleMessages.locales['zh-CN'].materials.chartPie.option
+    const enOptions = chartPieLocaleMessages.locales['en-US'].materials.chartPie.option
+
+    expect(paletteProp?.enum).toEqual(CHART_PIE_PALETTE_OPTIONS)
+    for (const option of CHART_PIE_PALETTE_OPTIONS) {
+      expect(CHART_PIE_PALETTES[option.value]).toHaveLength(6)
+      expect(zhOptions).toHaveProperty(option.label.split('.').at(-1) ?? '')
+      expect(enOptions).toHaveProperty(option.label.split('.').at(-1) ?? '')
+    }
   })
 
   it('allows datasource colors to override individual slices', () => {
@@ -81,6 +96,6 @@ describe('chart pie options', () => {
   })
 
   it('normalizes invalid palette preset values to the default', () => {
-    expect(resolveChartPieProps({ palettePreset: 'unknown' as never }).paletteColors).toEqual(CHART_PIE_PALETTES.classic)
+    expect(resolveChartPieProps({ palettePreset: 'unknown' as never }).paletteColors).toEqual(CHART_PIE_PALETTES.product)
   })
 })
