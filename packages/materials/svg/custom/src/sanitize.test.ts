@@ -148,8 +148,8 @@ describe('isRemoteSvgSource', () => {
 describe('svgCustomDesignerPropSchemas', () => {
   it('keeps pasted svg advanced fields out of the default property panel and allows SVG file import', () => {
     expect(svgCustomDesignerPropSchemas.map(item => item.key)).toEqual(['content'])
-    expect(svgCustomDesignerPropSchemas[0]?.editorOptions?.fileImport).toEqual(expect.objectContaining({
-      kind: 'text',
+    expect(svgCustomDesignerPropSchemas[0]?.editorOptions?.valueInput).toEqual(expect.objectContaining({
+      kind: 'text-file',
       id: 'designer.svgCustom.importFile',
       source: 'svg-custom-content',
       accept: ['.svg', 'image/svg+xml'],

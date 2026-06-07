@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import type { AssetUrlPropertyValueInput, PropertyValueInput, TextFilePropertyValueInput } from '@easyink/core'
 import type { CodeEditorLanguage } from '@easyink/ui'
 import type { Component } from 'vue'
-import type { DesignerAssetPickRequest, DesignerResolvedAsset, PropSchema } from '../types'
+import type { DesignerResolvedAsset, PropSchema } from '../types'
 import { IconImport, IconLoader } from '@easyink/icons'
 import { EiBorderToggle, EiCheckbox, EiCodeEditor, EiColorPicker, EiFontPicker, EiIcon, EiInput, EiNumberInput, EiSelect, EiSwitch, EiTextarea } from '@easyink/ui'
 import { computed, nextTick, ref } from 'vue'
@@ -17,7 +18,6 @@ const props = defineProps<{
   t: (key: string) => string
   /** Custom editor component map: key = schema.editor value */
   customEditors?: Record<string, Component>
-  imagePickRequest?: DesignerAssetPickRequest
 }>()
 
 const emit = defineEmits<{
@@ -26,17 +26,6 @@ const emit = defineEmits<{
   imagePick: [key: string, result: DesignerResolvedAsset]
   loadFont: [family: string]
 }>()
-
-interface TextFileImportOptions {
-  id: string
-  source: string
-  title?: string
-  pickTitle?: string
-  accept?: string[]
-  encoding?: string
-  maxBytes?: number
-  payload?: Record<string, unknown>
-}
 
 const store = useDesignerStore()
 const textFileImportPending = ref(false)
@@ -83,28 +72,12 @@ const codeLanguage = computed<CodeEditorLanguage>(() => {
   return 'javascript'
 })
 
-const textFileImportOptions = computed<TextFileImportOptions | null>(() => {
-  const value = props.schema.editorOptions?.fileImport
-  if (!isRecord(value))
-    return null
-  const kind = value.kind
-  if (kind !== undefined && kind !== 'text')
-    return null
-  return {
-    id: readRecordString(value, 'id') ?? 'designer.propSchema.importTextFile',
-    source: readRecordString(value, 'source') ?? 'prop-schema',
-    title: readRecordString(value, 'title'),
-    pickTitle: readRecordString(value, 'pickTitle'),
-    accept: readRecordStringArray(value, 'accept'),
-    encoding: readRecordString(value, 'encoding'),
-    maxBytes: readRecordNumber(value, 'maxBytes'),
-    payload: readRecordObject(value, 'payload'),
-  }
-})
-
+const valueInput = computed(() => normalizePropertyValueInput(props.schema.editorOptions?.valueInput))
+const assetValueInput = computed(() => valueInput.value?.kind === 'asset-url' ? valueInput.value : null)
+const textFileValueInput = computed(() => valueInput.value?.kind === 'text-file' ? valueInput.value : null)
 const supportsTextFileImport = computed(() => props.schema.type === 'code' || props.schema.type === 'textarea')
-const canImportTextFile = computed(() => supportsTextFileImport.value && textFileImportOptions.value !== null)
-const textFileImportTitle = computed(() => props.t(textFileImportOptions.value?.pickTitle ?? 'designer.action.importFile'))
+const canImportTextFile = computed(() => supportsTextFileImport.value && textFileValueInput.value !== null)
+const textFileImportTitle = computed(() => props.t(textFileValueInput.value?.pickTitle ?? 'designer.action.importFile'))
 
 /** Resolve the custom editor component if schema.editor is set */
 const customEditorComponent = computed<Component | undefined>(() => {
@@ -148,23 +121,23 @@ function onImagePicked(result: DesignerResolvedAsset) {
 }
 
 async function importTextFile() {
-  const options = textFileImportOptions.value
-  if (!options || props.disabled || textFileImportPending.value || !store.textFilePickerAvailable)
+  const input = textFileValueInput.value
+  if (!input || props.disabled || textFileImportPending.value || !store.textFilePickerAvailable)
     return
 
   textFileImportPending.value = true
   try {
     const result = await store.interactions.pickFileText({
-      id: options.id,
-      source: options.source,
-      title: options.title,
-      accept: options.accept,
-      encoding: options.encoding,
-      maxBytes: options.maxBytes,
+      id: input.id,
+      source: input.source,
+      title: resolveText(input.title),
+      accept: input.accept,
+      encoding: input.encoding,
+      maxBytes: input.maxBytes,
       payload: {
         propKey: props.schema.key,
         propType: props.schema.type,
-        ...options.payload,
+        ...input.payload,
       },
     })
     if (!result)
@@ -179,7 +152,7 @@ async function importTextFile() {
       severity: 'error',
       message: text('designer.diagnostic.textFilePickerFailed', 'Text file picker failed.'),
       detail: {
-        requestId: options.id,
+        requestId: input.id,
         propKey: props.schema.key,
         error: error instanceof Error ? error.message : String(error),
       },
@@ -208,7 +181,7 @@ function readRecordString(record: Record<string, unknown>, key: string): string 
 
 function readRecordNumber(record: Record<string, unknown>, key: string): number | undefined {
   const value = record[key]
-  return typeof value === 'number' ? value : undefined
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
 function readRecordStringArray(record: Record<string, unknown>, key: string): string[] | undefined {
@@ -222,6 +195,73 @@ function readRecordStringArray(record: Record<string, unknown>, key: string): st
 function readRecordObject(record: Record<string, unknown>, key: string): Record<string, unknown> | undefined {
   const value = record[key]
   return isRecord(value) ? value : undefined
+}
+
+function normalizePropertyValueInput(value: unknown): PropertyValueInput | null {
+  if (!isRecord(value))
+    return null
+
+  const kind = value.kind
+  if (kind !== 'asset-url' && kind !== 'text-file')
+    return null
+
+  const id = readRecordString(value, 'id')
+  const source = readRecordString(value, 'source')
+  if (!id || !source)
+    return null
+
+  const base = {
+    id,
+    source,
+    title: readRecordString(value, 'title'),
+    pickTitle: readRecordString(value, 'pickTitle'),
+    accept: readRecordStringArray(value, 'accept'),
+    payload: readRecordObject(value, 'payload'),
+  }
+
+  if (kind === 'asset-url') {
+    return {
+      kind,
+      ...base,
+      clearTitle: readRecordString(value, 'clearTitle'),
+      previewTitle: readRecordString(value, 'previewTitle'),
+      previewLoadingTitle: readRecordString(value, 'previewLoadingTitle'),
+      previewFailedTitle: readRecordString(value, 'previewFailedTitle'),
+    } satisfies AssetUrlPropertyValueInput
+  }
+
+  return {
+    kind,
+    ...base,
+    encoding: readRecordString(value, 'encoding'),
+    maxBytes: readRecordNumber(value, 'maxBytes'),
+  } satisfies TextFilePropertyValueInput
+}
+
+function createAssetPickRequest(input: AssetUrlPropertyValueInput | null, currentUrl: string) {
+  const selectedId = store.selection.ids.length === 1 ? store.selection.ids[0] : undefined
+  const selectedNode = selectedId ? store.getElementById(selectedId) : undefined
+  return {
+    id: input?.id ?? 'designer.propSchema.pickAsset',
+    source: input?.source ?? 'prop-schema',
+    title: resolveText(input?.title) ?? label.value,
+    currentUrl,
+    accept: input?.accept ?? ['image/*'],
+    payload: {
+      nodeId: selectedNode?.id,
+      nodeType: selectedNode?.type,
+      propKey: props.schema.key,
+      propType: props.schema.type,
+      ...input?.payload,
+    },
+  }
+}
+
+function resolveText(key: string | undefined): string | undefined {
+  if (!key)
+    return undefined
+  const value = props.t(key)
+  return value === key ? key : value
 }
 </script>
 
@@ -250,18 +290,12 @@ function readRecordObject(record: Record<string, unknown>, key: string): Record<
         :model-value="(value as string) ?? ''"
         :placeholder="placeholder"
         :disabled="disabled"
-        :pick-request="imagePickRequest ?? {
-          id: 'designer.imageMaterial.pickImage',
-          source: 'image-material',
-          currentUrl: (value as string) ?? '',
-          accept: ['image/*'],
-          payload: { propKey: schema.key },
-        }"
-        :pick-title-key="readEditorOptionString('pickTitle')"
-        :clear-title-key="readEditorOptionString('clearTitle')"
-        :preview-title-key="readEditorOptionString('previewTitle')"
-        :preview-loading-title-key="readEditorOptionString('previewLoadingTitle')"
-        :preview-failed-title-key="readEditorOptionString('previewFailedTitle')"
+        :pick-request="createAssetPickRequest(assetValueInput, (value as string) ?? '')"
+        :pick-title-key="assetValueInput?.pickTitle"
+        :clear-title-key="assetValueInput?.clearTitle"
+        :preview-title-key="assetValueInput?.previewTitle"
+        :preview-loading-title-key="assetValueInput?.previewLoadingTitle"
+        :preview-failed-title-key="assetValueInput?.previewFailedTitle"
         :t="t"
         @update:model-value="onPreview"
         @commit="onCommit"

@@ -398,6 +398,12 @@ const BG_IMAGE_DESCRIPTOR: PagePropertyDescriptor = {
   label: 'designer.page.bgImage',
   persisted: 'schema',
   editor: 'asset',
+  valueInput: {
+    kind: 'asset-url',
+    id: 'designer.pageBackground.pickImage',
+    source: 'page-background',
+    accept: ['image/*'],
+  },
   normalize(value, ctx) {
     const existing = ctx.document.page.background ?? {}
     return { page: { background: { ...existing, image: value as string } } }

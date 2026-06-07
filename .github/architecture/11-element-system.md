@@ -316,12 +316,12 @@ interface PropCommitContext {
 }
 ```
 
-`editorOptions.fileImport` 是属性编辑器的输入增强，而不是新的 Schema 字段。当前支持文本文件导入：
+`editorOptions.valueInput` 是属性编辑器的值输入增强，而不是新的 Schema 字段。它描述“这个值可以从哪个交互通道获得”，当前内置 `asset-url` 与 `text-file` 两类：
 
 ```typescript
 editorOptions: {
-  fileImport: {
-    kind: 'text',
+  valueInput: {
+    kind: 'text-file',
     id: 'designer.svgCustom.importFile',
     source: 'svg-custom-content',
     accept: ['.svg', 'image/svg+xml'],
@@ -331,7 +331,19 @@ editorOptions: {
 }
 ```
 
-PropertiesPanel/PropSchemaEditor 通过 `DesignerInteractionProvider.pickFileText()` 读取文本文件，再按普通 `preview/change` 流程写入对应 prop。物料 Schema 仍只保存最终属性值，例如自定义 SVG 只保存 `props.content`，不得保存 `File`、本地路径、文件名或导入状态。
+```typescript
+editorOptions: {
+  valueInput: {
+    kind: 'asset-url',
+    id: 'designer.imageMaterial.pickImage',
+    source: 'image-material',
+    accept: ['image/*'],
+    pickTitle: 'materials.image.action.pick',
+  },
+}
+```
+
+PropertiesPanel/PropSchemaEditor 根据 `kind` 分发到 `DesignerInteractionProvider.pickAsset()` 或 `pickFileText()`，再按普通 `preview/change` 流程写入对应 prop。物料 Schema 仍只保存最终属性值，例如自定义 SVG 只保存 `props.content`，图片只保存 `props.src`，不得保存 `File`、本地路径、文件名、资产选择弹窗状态或导入状态。
 
 ### 11.4.1 PropSchema.read / commit 钩子
 

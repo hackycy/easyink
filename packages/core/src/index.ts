@@ -151,6 +151,8 @@ export type {
 } from './material-data-contract'
 
 export type {
+  AssetUrlPropertyValueInput,
+  BasePropertyValueInput,
   ContextAction,
   DatasourceDropHandler,
   DatasourceDropZone,
@@ -176,9 +178,12 @@ export type {
   PropCommitContext,
   PropertyPanelOverlay,
   PropertyPanelRequest,
+  PropertyValueInput,
   PropSchema,
+  PropSchemaEditorOptions,
   PropSchemaLike,
   SelectionSnapshot,
+  TextFilePropertyValueInput,
   ToolbarAction,
 } from './material-extension'
 

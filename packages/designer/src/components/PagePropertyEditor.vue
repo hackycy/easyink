@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { AssetUrlPropertyValueInput } from '@easyink/core'
 import type { PagePropertyDescriptor } from '../page-properties'
 import type { DesignerResolvedAsset } from '../types'
 import { EiColorPicker, EiFontPicker, EiInput, EiNumberInput, EiNumberSlider, EiSelect, EiSwitch } from '@easyink/ui'
@@ -23,6 +24,7 @@ const emit = defineEmits<{
 const store = useDesignerStore()
 
 const label = computed(() => props.t(props.descriptor.label))
+const assetValueInput = computed(() => props.descriptor.valueInput?.kind === 'asset-url' ? props.descriptor.valueInput : null)
 
 const enumOptions = computed(() => {
   if (!props.descriptor.enum)
@@ -43,6 +45,29 @@ function onCommit(val: unknown) {
 
 function onImagePicked(result: DesignerResolvedAsset) {
   onCommit(result.url)
+}
+
+function createAssetPickRequest(input: AssetUrlPropertyValueInput | null, currentUrl: string) {
+  return {
+    id: input?.id ?? 'designer.pageProperty.pickAsset',
+    source: input?.source ?? 'page-property',
+    title: resolveText(input?.title) ?? label.value,
+    currentUrl,
+    accept: input?.accept ?? ['image/*'],
+    payload: {
+      page: store.schema.page,
+      descriptorId: props.descriptor.id,
+      path: props.descriptor.path,
+      ...input?.payload,
+    },
+  }
+}
+
+function resolveText(key: string | undefined): string | undefined {
+  if (!key)
+    return undefined
+  const value = props.t(key)
+  return value === key ? key : value
 }
 </script>
 
@@ -115,14 +140,12 @@ function onImagePicked(result: DesignerResolvedAsset) {
       v-else-if="descriptor.editor === 'asset'"
       :label="label"
       :model-value="(value as string) ?? ''"
-      :pick-request="{
-        id: 'designer.pageBackground.pickImage',
-        source: 'page-background',
-        title: label,
-        currentUrl: (value as string) ?? '',
-        accept: ['image/*'],
-        payload: { page: store.schema.page },
-      }"
+      :pick-request="createAssetPickRequest(assetValueInput, (value as string) ?? '')"
+      :pick-title-key="assetValueInput?.pickTitle"
+      :clear-title-key="assetValueInput?.clearTitle"
+      :preview-title-key="assetValueInput?.previewTitle"
+      :preview-loading-title-key="assetValueInput?.previewLoadingTitle"
+      :preview-failed-title-key="assetValueInput?.previewFailedTitle"
       :t="t"
       @update:model-value="onPreview"
       @commit="onCommit"

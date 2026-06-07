@@ -322,8 +322,37 @@ export interface PropSchemaLike {
   /** Preserve null for empty numeric input instead of coercing to 0/default. */
   nullable?: boolean
   editor?: string
-  editorOptions?: Record<string, unknown>
+  editorOptions?: PropSchemaEditorOptions
   [extra: string]: unknown
+}
+
+export interface BasePropertyValueInput {
+  id: string
+  source: string
+  title?: string
+  pickTitle?: string
+  accept?: string[]
+  payload?: Record<string, unknown>
+}
+
+export interface AssetUrlPropertyValueInput extends BasePropertyValueInput {
+  kind: 'asset-url'
+  clearTitle?: string
+  previewTitle?: string
+  previewLoadingTitle?: string
+  previewFailedTitle?: string
+}
+
+export interface TextFilePropertyValueInput extends BasePropertyValueInput {
+  kind: 'text-file'
+  encoding?: string
+  maxBytes?: number
+}
+
+export type PropertyValueInput = AssetUrlPropertyValueInput | TextFilePropertyValueInput
+
+export type PropSchemaEditorOptions = Record<string, unknown> & {
+  valueInput?: PropertyValueInput
 }
 
 // ─── Property Schema (canonical) ─────────────────────────────────
@@ -357,7 +386,7 @@ export interface PropSchema {
   visible?: (props: Record<string, unknown>) => boolean
   disabled?: (props: Record<string, unknown>) => boolean
   editor?: string
-  editorOptions?: Record<string, unknown>
+  editorOptions?: PropSchemaEditorOptions
   /** Override default `node.props[key]` read. Returns the value to display. */
   read?: (node: MaterialNode) => unknown
   /**

@@ -207,9 +207,9 @@ function setupStore(store) {
 物料面板里的图标来自 `MaterialCatalogEntry.icon`。如果你只在 `materials` 里传 `icon`，注册器会自动把它带到 quick 和 grouped catalog；如果 grouped catalog 想用另一个图标，也可以在 `groupedCatalog` 项里单独传 `icon`。
 :::
 
-## 属性面板文件导入 {#prop-file-import}
+## 属性值输入增强 {#prop-value-input}
 
-`propSchemas` 负责声明属性如何编辑。对于直接保存到 `node.props` 的文本属性，如果用户更常从本地文件导入内容，可以在 `editorOptions.fileImport` 上声明文本文件导入能力：
+`propSchemas` 负责声明属性如何编辑。对于直接保存到 `node.props` 的属性，如果用户更常从宿主资产库或本地文件获得值，可以在 `editorOptions.valueInput` 上声明输入通道。
 
 ```ts
 propSchemas: [
@@ -220,8 +220,8 @@ propSchemas: [
     group: 'content',
     editorOptions: {
       language: 'html',
-      fileImport: {
-        kind: 'text',
+      valueInput: {
+        kind: 'text-file',
         id: 'designer.logoSvg.importFile',
         source: 'logo-svg-content',
         accept: ['.svg', 'image/svg+xml'],
@@ -233,7 +233,21 @@ propSchemas: [
 ]
 ```
 
-导入成功后，PropertiesPanel 会把文件文本当作普通属性值提交。Schema 里仍然只保存 `props.content`，不要额外保存 `File`、本地路径、文件名或“来源类型”。如果宿主需要接自己的文件库，可以通过 `<EasyInkDesigner :interaction-provider>` 提供 `pickFileText(request)`；不提供时，Designer shell 会使用浏览器文件选择器作为 fallback。
+图片 URL 字段使用同一套声明，只是 `kind` 为 `asset-url`：
+
+```ts
+editorOptions: {
+  valueInput: {
+    kind: 'asset-url',
+    id: 'designer.logoImage.pickImage',
+    source: 'logo-image',
+    accept: ['image/*'],
+    pickTitle: 'materials.logoImage.action.pick',
+  },
+}
+```
+
+选择成功后，PropertiesPanel 会把返回内容当作普通属性值提交。Schema 里仍然只保存最终值，例如 `props.content` 或 `props.src`，不要额外保存 `File`、本地路径、文件名或“来源类型”。如果宿主需要接自己的文件库，可以通过 `<EasyInkDesigner :interaction-provider>` 提供 `pickFileText(request)` 或 `pickAsset(request)`；不提供时，Designer shell 会使用浏览器能力作为 fallback。
 
 ## 渲染设计态 {#designer-extension}
 

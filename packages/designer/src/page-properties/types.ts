@@ -1,3 +1,4 @@
+import type { PropertyValueInput } from '@easyink/core'
 import type { DocumentSchema, PageSchema } from '@easyink/schema'
 
 /**
@@ -45,6 +46,7 @@ export interface PagePropertyDescriptor {
   max?: number
   step?: number
   nullable?: boolean
+  valueInput?: PropertyValueInput
   visible?: (ctx: PagePropertyContext) => boolean
   read?: (ctx: PagePropertyContext) => unknown
   normalize?: (value: unknown, ctx: PagePropertyContext) => PagePropertyPatch

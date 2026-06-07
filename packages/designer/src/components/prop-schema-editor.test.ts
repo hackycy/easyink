@@ -29,8 +29,8 @@ describe('prop schema editor text file import', () => {
       type: 'code',
       editorOptions: {
         language: 'html',
-        fileImport: {
-          kind: 'text',
+        valueInput: {
+          kind: 'text-file',
           id: 'designer.svgCustom.importFile',
           source: 'svg-custom-content',
           accept: ['.svg', 'image/svg+xml'],
@@ -72,8 +72,10 @@ describe('prop schema editor text file import', () => {
       label: 'designer.property.content',
       type: 'code',
       editorOptions: {
-        fileImport: {
-          kind: 'text',
+        valueInput: {
+          kind: 'text-file',
+          id: 'designer.svgCustom.importFile',
+          source: 'svg-custom-content',
           accept: ['.svg', 'image/svg+xml'],
         },
       },

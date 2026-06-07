@@ -4,7 +4,7 @@ import type { BindingRef, DataContractBinding, DocumentSchema, MaterialNode, Pag
 import type { BindingDisplayFormat } from '@easyink/shared'
 import type { Component } from 'vue'
 import type { PagePropertyContext, PagePropertyDescriptor, PagePropertyGroup } from '../page-properties'
-import type { DesignerAssetPickRequest, DesignerResolvedAsset, PanelSectionId, PropSchema } from '../types'
+import type { DesignerResolvedAsset, PanelSectionId, PropSchema } from '../types'
 import { ClearBindingCommand, getByPath, setByPath, UpdateBindingFormatCommand, UpdateDocumentCommand, UpdateGeometryCommand, UpdateMaterialBindingCommand, UpdateMaterialMetaCommand, UpdateMaterialPropsCommand, UpdatePageCommand } from '@easyink/core'
 import { createLayoutBehaviorPropSchemas, groupPropSchemas } from '@easyink/prop-schemas'
 import { deepClone, PAPER_PRESETS } from '@easyink/shared'
@@ -647,20 +647,6 @@ function isPropInputDisabled(schema: PropSchema): boolean {
     return true
   return isMaterialPropSchemaDisabled(store, el, schema)
 }
-
-function createImagePickRequest(schema: PropSchema): DesignerAssetPickRequest {
-  return {
-    id: 'designer.imageMaterial.pickImage',
-    source: 'image-material',
-    currentUrl: String(readPropValue(schema) ?? ''),
-    accept: ['image/*'],
-    payload: {
-      nodeId: selectedElement.value?.id,
-      nodeType: selectedElement.value?.type,
-      propKey: schema.key,
-    },
-  }
-}
 </script>
 
 <template>
@@ -741,7 +727,6 @@ function createImagePickRequest(schema: PropSchema): DesignerAssetPickRequest {
               :fonts="fontList"
               :font-statuses="fontStatuses"
               :t="store.t.bind(store)"
-              :image-pick-request="createImagePickRequest(schema)"
               @preview="previewProp"
               @change="updateProp"
               @image-pick="updateImagePropFromPicker"
@@ -770,7 +755,6 @@ function createImagePickRequest(schema: PropSchema): DesignerAssetPickRequest {
               :fonts="fontList"
               :font-statuses="fontStatuses"
               :t="store.t.bind(store)"
-              :image-pick-request="createImagePickRequest(schema)"
               @preview="previewSubProp"
               @change="updateSubProp"
               @image-pick="updateSubImagePropFromPicker"

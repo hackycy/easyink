@@ -437,7 +437,9 @@ interface DesignerInteractionProvider {
 资源选择和文本文件读取是两条不同语义：
 
 - `pickAsset` / `uploadAsset`：用于图片、背景图等需要得到稳定 URL 的资产字段；本地文件会进入宿主或 fallback 上传链路。
-- `pickFileText`：用于 `PropSchema.editorOptions.fileImport.kind = 'text'` 的属性导入；返回的是文件文本内容，不上传、不生成 data URL，也不把文件名等编辑态信息写入 Schema。
+- `pickFileText`：用于 `PropSchema.editorOptions.valueInput.kind = 'text-file'` 的属性导入；返回的是文件文本内容，不上传、不生成 data URL，也不把文件名等编辑态信息写入 Schema。
+
+属性面板里的输入增强统一通过 `valueInput` 声明：`asset-url` 进入 `pickAsset` / `uploadAsset`，`text-file` 进入 `pickFileText`。`valueInput` 是编辑期能力声明，不是持久化数据；Schema 仍只保存最终属性值。
 
 当前内置确认场景：
 

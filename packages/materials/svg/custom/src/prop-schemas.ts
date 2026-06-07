@@ -11,8 +11,8 @@ export const svgCustomDesignerPropSchemas: PropSchema[] = [
       rows: 8,
       editorHeight: 460,
       placeholder: '<svg viewBox="0 0 24 24">\n  <path d="..." />\n</svg>',
-      fileImport: {
-        kind: 'text',
+      valueInput: {
+        kind: 'text-file',
         id: 'designer.svgCustom.importFile',
         source: 'svg-custom-content',
         accept: ['.svg', 'image/svg+xml'],
