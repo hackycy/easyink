@@ -35,6 +35,19 @@ function createContext(overrides: Partial<MaterialExtensionContext> = {}): Mater
 }
 
 describe('createSvgCustomExtension', () => {
+  it('renders the svg logo placeholder when the node has no content', () => {
+    const container = document.createElement('div')
+    const extension = createSvgCustomExtension(createContext())
+    const node = createSvgCustomNode()
+
+    extension.renderContent(createNodeSignal(node), container)
+
+    expect(container.querySelector('svg')).not.toBeNull()
+    expect(container.textContent).toContain('SVG')
+    expect(container.innerHTML).not.toContain('{#')
+    expect(container.innerHTML).not.toContain('border:1px dashed')
+  })
+
   it('renders static svg content when the node is unbound', () => {
     const container = document.createElement('div')
     const extension = createSvgCustomExtension(createContext())
@@ -50,7 +63,7 @@ describe('createSvgCustomExtension', () => {
     expect(container.querySelector('circle')).not.toBeNull()
   })
 
-  it('shows the binding label instead of stale static svg content when bound', () => {
+  it('shows an svg binding preview instead of stale static svg content when bound', () => {
     const container = document.createElement('div')
     const extension = createSvgCustomExtension(createContext())
     const node = createSvgCustomNode({
@@ -66,7 +79,9 @@ describe('createSvgCustomExtension', () => {
 
     extension.renderContent(createNodeSignal(node), container)
 
+    expect(container.querySelector('svg')).not.toBeNull()
     expect(container.innerHTML).toContain('{#Logo SVG}')
     expect(container.querySelector('circle')).toBeNull()
+    expect(container.innerHTML).not.toContain('background:#f5f5f5')
   })
 })
