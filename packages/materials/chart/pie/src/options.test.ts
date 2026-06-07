@@ -18,6 +18,18 @@ describe('chart pie options', () => {
     expect(series[0]?.data.length).toBeGreaterThan(0)
   })
 
+  it('does not set a default background color', () => {
+    const option = createChartPiePreviewOption(CHART_PIE_DEFAULTS)
+
+    expect(option).not.toHaveProperty('backgroundColor')
+  })
+
+  it('keeps an explicitly configured background color', () => {
+    const option = createChartPiePreviewOption({ ...CHART_PIE_DEFAULTS, backgroundColor: '#ffffff' })
+
+    expect(option.backgroundColor).toBe('#ffffff')
+  })
+
   it('does not use preview data in the viewer runtime path', () => {
     const option = createChartPieRuntimeOption(CHART_PIE_DEFAULTS)
     const series = option.series as Array<{ data: Array<{ value: number }> }>

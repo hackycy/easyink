@@ -4,7 +4,7 @@ export const chartPieAIMaterialDescriptor = {
   type: 'chart-pie',
   description: 'Simple pie chart for showing how category values contribute to a whole from a material data contract target model: category field, value field, and optional per-record color field mapped from source paths by relation resolver.',
   properties: ['palettePreset', 'backgroundColor', 'labelColor', 'showValueLabels', 'showLegend', 'innerRadiusPercent', 'sectorGapAngle', 'sectorCornerRadius'],
-  requiredProps: ['palettePreset', 'backgroundColor'],
+  requiredProps: ['palettePreset'],
   binding: 'data-contract',
   usage: [
     'Use chart-pie for compact share-of-total visualizations where categories add up to a meaningful whole.',

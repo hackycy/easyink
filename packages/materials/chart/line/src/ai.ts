@@ -4,7 +4,7 @@ export const chartLineAIMaterialDescriptor = {
   type: 'chart-line',
   description: 'Simple line chart for showing numeric trends from a material data contract target model: category field and value field mapped from source paths by relation resolver.',
   properties: ['lineColor', 'pointColor', 'backgroundColor', 'axisColor', 'labelColor', 'showValueLabels', 'showGrid', 'showXAxisLabel', 'showYAxisLabel', 'showXAxisLine', 'showYAxisLine', 'showPoints', 'smooth'],
-  requiredProps: ['lineColor', 'backgroundColor'],
+  requiredProps: ['lineColor'],
   binding: 'data-contract',
   usage: [
     'Use chart-line for small report charts where ordered categories show a numeric trend.',

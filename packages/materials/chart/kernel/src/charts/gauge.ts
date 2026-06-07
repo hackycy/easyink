@@ -82,7 +82,7 @@ export function createGaugeEChartsOption(data: ChartGaugeValuePoint[], style: Ga
 
   return {
     animation: false,
-    backgroundColor: style.backgroundColor || 'transparent',
+    ...(style.backgroundColor ? { backgroundColor: style.backgroundColor } : {}),
     tooltip: {
       show: false,
     },

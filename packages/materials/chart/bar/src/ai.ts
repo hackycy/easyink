@@ -4,7 +4,7 @@ export const chartBarAIMaterialDescriptor = {
   type: 'chart-bar',
   description: 'Simple bar chart for comparing numeric values from a material data contract target model: category field and value field mapped from source paths by relation resolver.',
   properties: ['barColor', 'backgroundColor', 'axisColor', 'labelColor', 'showValueLabels', 'showGrid', 'showXAxisLabel', 'showYAxisLabel', 'showXAxisLine', 'showYAxisLine'],
-  requiredProps: ['barColor', 'backgroundColor'],
+  requiredProps: ['barColor'],
   binding: 'data-contract',
   usage: [
     'Use chart-bar for small report charts where categories compare numeric values.',

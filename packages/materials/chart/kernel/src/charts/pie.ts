@@ -37,7 +37,7 @@ export function createPieEChartsOption(data: ChartCategoryValuePoint[], style: P
   return {
     animation: false,
     color: style.paletteColors.length > 0 ? style.paletteColors : undefined,
-    backgroundColor: style.backgroundColor || 'transparent',
+    ...(style.backgroundColor ? { backgroundColor: style.backgroundColor } : {}),
     tooltip: {
       show: false,
     },

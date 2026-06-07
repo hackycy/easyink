@@ -18,6 +18,18 @@ describe('chart radar options', () => {
     expect(series[0]?.data[0]?.value.length).toBeGreaterThan(0)
   })
 
+  it('does not set a default background color', () => {
+    const option = createChartRadarPreviewOption(CHART_RADAR_DEFAULTS)
+
+    expect(option).not.toHaveProperty('backgroundColor')
+  })
+
+  it('keeps an explicitly configured background color', () => {
+    const option = createChartRadarPreviewOption({ ...CHART_RADAR_DEFAULTS, backgroundColor: '#ffffff' })
+
+    expect(option.backgroundColor).toBe('#ffffff')
+  })
+
   it('does not use preview data in the viewer runtime path', () => {
     const option = createChartRadarRuntimeOption(CHART_RADAR_DEFAULTS)
     const series = option.series as Array<{ data: Array<{ value: number[] }> }>

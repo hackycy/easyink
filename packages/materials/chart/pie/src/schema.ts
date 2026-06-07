@@ -18,7 +18,7 @@ export interface ChartPieProps {
 
 export const CHART_PIE_DEFAULTS: ChartPieProps = {
   palettePreset: 'classic',
-  backgroundColor: '#ffffff',
+  backgroundColor: '',
   labelColor: '#374151',
   showValueLabels: true,
   showLegend: true,

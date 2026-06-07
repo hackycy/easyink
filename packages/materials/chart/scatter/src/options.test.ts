@@ -18,6 +18,18 @@ describe('chart scatter options', () => {
     expect(series[0]?.data.length).toBeGreaterThan(0)
   })
 
+  it('does not set a default background color', () => {
+    const option = createChartScatterPreviewOption(CHART_SCATTER_DEFAULTS)
+
+    expect(option).not.toHaveProperty('backgroundColor')
+  })
+
+  it('keeps an explicitly configured background color', () => {
+    const option = createChartScatterPreviewOption({ ...CHART_SCATTER_DEFAULTS, backgroundColor: '#ffffff' })
+
+    expect(option.backgroundColor).toBe('#ffffff')
+  })
+
   it('does not use preview data in the viewer runtime path', () => {
     const option = createChartScatterRuntimeOption(CHART_SCATTER_DEFAULTS)
     const series = option.series as Array<{ data: Array<{ value: number[] }> }>

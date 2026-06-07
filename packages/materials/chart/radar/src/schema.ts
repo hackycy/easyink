@@ -21,7 +21,7 @@ export const CHART_RADAR_DEFAULTS: ChartRadarProps = {
   areaColor: '#93c5fd',
   lineColor: '#2563eb',
   pointColor: '#1d4ed8',
-  backgroundColor: '#ffffff',
+  backgroundColor: '',
   axisColor: '#cbd5e1',
   labelColor: '#374151',
   showValueLabels: false,

@@ -27,7 +27,7 @@ export const CHART_GAUGE_DEFAULTS: ChartGaugeProps = {
   progressColor: '#2f80ed',
   trackColor: '#e5e7eb',
   pointerColor: '#1f2937',
-  backgroundColor: '#ffffff',
+  backgroundColor: '',
   labelColor: '#374151',
   showPointer: true,
   showProgress: true,

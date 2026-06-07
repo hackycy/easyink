@@ -19,7 +19,7 @@ export interface ChartScatterProps {
 
 export const CHART_SCATTER_DEFAULTS: ChartScatterProps = {
   pointColor: '#2563eb',
-  backgroundColor: '#ffffff',
+  backgroundColor: '',
   axisColor: '#6b7280',
   labelColor: '#374151',
   showValueLabels: false,

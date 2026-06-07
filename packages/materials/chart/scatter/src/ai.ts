@@ -4,7 +4,7 @@ export const chartScatterAIMaterialDescriptor = {
   type: 'chart-scatter',
   description: 'Scatter chart for showing correlation or distribution between two numeric fields from a material data contract target model.',
   properties: ['pointColor', 'backgroundColor', 'axisColor', 'labelColor', 'showValueLabels', 'showGrid', 'showXAxisLabel', 'showYAxisLabel', 'showXAxisLine', 'showYAxisLine', 'symbolSize'],
-  requiredProps: ['pointColor', 'backgroundColor'],
+  requiredProps: ['pointColor'],
   binding: 'data-contract',
   usage: [
     'Use chart-scatter when two numeric fields should be compared as X and Y coordinates.',

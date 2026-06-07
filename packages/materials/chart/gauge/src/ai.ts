@@ -4,7 +4,7 @@ export const chartGaugeAIMaterialDescriptor = {
   type: 'chart-gauge',
   description: 'Single-value gauge chart for showing progress, score, completion, utilization, or other KPI values from a material data contract target model: required value field plus optional name, unit, and color fields mapped from source paths.',
   properties: ['minValue', 'maxValue', 'defaultName', 'defaultUnit', 'progressColor', 'trackColor', 'pointerColor', 'backgroundColor', 'labelColor', 'showPointer', 'showProgress', 'showTitle', 'showValue'],
-  requiredProps: ['minValue', 'maxValue', 'backgroundColor'],
+  requiredProps: ['minValue', 'maxValue'],
   binding: 'data-contract',
   usage: [
     'Use chart-gauge for one current KPI value such as completion rate, quality score, utilization, SLA progress, or quota attainment.',

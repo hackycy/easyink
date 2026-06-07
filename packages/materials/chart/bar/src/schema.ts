@@ -18,7 +18,7 @@ export interface ChartBarProps {
 
 export const CHART_BAR_DEFAULTS: ChartBarProps = {
   barColor: '#2f80ed',
-  backgroundColor: '#ffffff',
+  backgroundColor: '',
   axisColor: '#6b7280',
   labelColor: '#374151',
   showValueLabels: false,

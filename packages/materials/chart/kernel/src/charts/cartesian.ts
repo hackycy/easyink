@@ -28,7 +28,7 @@ export function createCartesianChartScaffold(data: ChartCategoryValuePoint[], st
     values,
     option: {
       animation: false,
-      backgroundColor: style.backgroundColor || 'transparent',
+      ...(style.backgroundColor ? { backgroundColor: style.backgroundColor } : {}),
       grid: {
         top: style.showValueLabels ? 18 : 8,
         right: 10,

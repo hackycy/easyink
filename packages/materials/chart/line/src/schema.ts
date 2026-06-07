@@ -22,7 +22,7 @@ export interface ChartLineProps {
 export const CHART_LINE_DEFAULTS: ChartLineProps = {
   lineColor: '#14b8a6',
   pointColor: '#0f766e',
-  backgroundColor: '#ffffff',
+  backgroundColor: '',
   axisColor: '#6b7280',
   labelColor: '#374151',
   showValueLabels: false,

@@ -4,7 +4,7 @@ export const chartRadarAIMaterialDescriptor = {
   type: 'chart-radar',
   description: 'Simple radar chart for comparing multiple category scores from a material data contract target model: category field and value field mapped from source paths by relation resolver.',
   properties: ['areaColor', 'lineColor', 'pointColor', 'backgroundColor', 'axisColor', 'labelColor', 'showValueLabels', 'showAxisLabels', 'showArea', 'showPoints', 'maxValue'],
-  requiredProps: ['lineColor', 'backgroundColor'],
+  requiredProps: ['lineColor'],
   binding: 'data-contract',
   usage: [
     'Use chart-radar for profile, scorecard, capability, or multi-metric comparisons where categories form axes around one polygon.',

@@ -25,7 +25,7 @@ export function createScatterEChartsOption(data: ChartScatterPoint[], style: Sca
 
   return {
     animation: false,
-    backgroundColor: style.backgroundColor || 'transparent',
+    ...(style.backgroundColor ? { backgroundColor: style.backgroundColor } : {}),
     grid: {
       top: style.showValueLabels ? 18 : 8,
       right: 10,
