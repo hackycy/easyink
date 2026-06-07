@@ -84,7 +84,7 @@ export interface MaterialKnowledgeDescriptor {
   }>
   properties?: Array<{
     key: string
-    type: 'string' | 'number' | 'boolean' | 'enum' | 'color' | 'object' | 'array'
+    type: 'string' | 'number' | 'boolean' | 'enum' | 'color' | 'object' | 'array' | 'code'
     required: boolean
     defaultValue?: unknown
     enumValues?: string[]

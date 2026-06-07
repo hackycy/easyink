@@ -142,6 +142,7 @@ export type PropSchemaType
     | 'boolean'
     | 'switch'
     | 'textarea'
+    | 'code'
     | 'color'
     | 'enum'
     | 'object'

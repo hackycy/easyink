@@ -200,7 +200,7 @@ function synthesizePropertySpec(prop: ManifestMaterialProp): MaterialPropertySpe
 }
 
 function normalizePropertyType(type: string): MaterialPropertySpec['type'] {
-  if (type === 'number' || type === 'boolean' || type === 'enum' || type === 'color' || type === 'object' || type === 'array')
+  if (type === 'number' || type === 'boolean' || type === 'enum' || type === 'color' || type === 'object' || type === 'array' || type === 'code')
     return type
   return 'string'
 }

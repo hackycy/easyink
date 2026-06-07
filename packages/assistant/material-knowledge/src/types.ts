@@ -90,7 +90,7 @@ export interface MaterialSizing {
 
 export interface MaterialPropertySpec {
   key: string
-  type: 'string' | 'number' | 'boolean' | 'enum' | 'color' | 'object' | 'array'
+  type: 'string' | 'number' | 'boolean' | 'enum' | 'color' | 'object' | 'array' | 'code'
   required: boolean
   defaultValue?: unknown
   enumValues?: string[]

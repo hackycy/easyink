@@ -27,7 +27,15 @@
     "vue": "catalog:framework"
   },
   "dependencies": {
+    "@codemirror/commands": "catalog:framework",
+    "@codemirror/lang-html": "catalog:framework",
+    "@codemirror/lang-javascript": "catalog:framework",
+    "@codemirror/lang-json": "catalog:framework",
+    "@codemirror/language": "catalog:framework",
+    "@codemirror/state": "catalog:framework",
+    "@codemirror/view": "catalog:framework",
     "@easyink/icons": "workspace:*",
-    "@easyink/shared": "workspace:*"
+    "@easyink/shared": "workspace:*",
+    "@lezer/highlight": "catalog:framework"
   }
 }

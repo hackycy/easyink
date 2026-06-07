@@ -147,7 +147,7 @@ export const AssistantAIMaterialDescriptorSchema = z.object({
     })).optional(),
     properties: z.array(z.object({
       key: z.string(),
-      type: z.enum(['string', 'number', 'boolean', 'enum', 'color', 'object', 'array']),
+      type: z.enum(['string', 'number', 'boolean', 'enum', 'color', 'object', 'array', 'code']),
       required: z.boolean(),
       defaultValue: z.unknown().optional(),
       enumValues: z.array(z.string()).optional(),

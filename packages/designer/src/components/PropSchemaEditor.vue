@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import type { CodeEditorLanguage } from '@easyink/ui'
 import type { Component } from 'vue'
 import type { DesignerAssetPickRequest, DesignerResolvedAsset, PropSchema } from '../types'
-import { EiBorderToggle, EiCheckbox, EiColorPicker, EiFontPicker, EiInput, EiNumberInput, EiSelect, EiSwitch, EiTextarea } from '@easyink/ui'
+import { EiBorderToggle, EiCheckbox, EiCodeEditor, EiColorPicker, EiFontPicker, EiInput, EiNumberInput, EiSelect, EiSwitch, EiTextarea } from '@easyink/ui'
 import { computed } from 'vue'
 import ImageSourceEditor from './ImageSourceEditor.vue'
 
@@ -52,6 +53,18 @@ function readEditorOptionString(key: string): string | undefined {
   const value = props.schema.editorOptions?.[key]
   return typeof value === 'string' ? value : undefined
 }
+
+function readEditorOptionNumber(key: string): number | undefined {
+  const value = props.schema.editorOptions?.[key]
+  return typeof value === 'number' ? value : undefined
+}
+
+const codeLanguage = computed<CodeEditorLanguage>(() => {
+  const language = props.schema.editorOptions?.language
+  if (language === 'html' || language === 'javascript' || language === 'json')
+    return language
+  return 'javascript'
+})
 
 /** Resolve the custom editor component if schema.editor is set */
 const customEditorComponent = computed<Component | undefined>(() => {
@@ -190,6 +203,24 @@ function onImagePicked(result: DesignerResolvedAsset) {
         :disabled="disabled"
         :placeholder="placeholder"
         :rows="(schema.editorOptions?.rows as number) ?? 3"
+        @update:model-value="onPreview"
+        @commit="onCommit"
+      />
+
+      <!-- code -->
+      <EiCodeEditor
+        v-else-if="schema.type === 'code'"
+        :label="label"
+        :model-value="(value as string) ?? ''"
+        :disabled="disabled"
+        :placeholder="placeholder"
+        :language="codeLanguage"
+        :rows="readEditorOptionNumber('rows') ?? 4"
+        :dialog-title="readEditorOptionString('dialogTitle') ? t(readEditorOptionString('dialogTitle') as string) : label"
+        :dialog-width="readEditorOptionNumber('dialogWidth') ?? 760"
+        :editor-height="readEditorOptionNumber('editorHeight') ?? 420"
+        :cancel-text="t('designer.dialog.cancel')"
+        :confirm-text="t('designer.dialog.confirm')"
         @update:model-value="onPreview"
         @commit="onCommit"
       />

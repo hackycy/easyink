@@ -28,11 +28,6 @@
     "vue": "catalog:framework"
   },
   "dependencies": {
-    "@codemirror/commands": "catalog:framework",
-    "@codemirror/lang-javascript": "catalog:framework",
-    "@codemirror/language": "catalog:framework",
-    "@codemirror/state": "catalog:framework",
-    "@codemirror/view": "catalog:framework",
     "@easyink/builtin": "workspace:*",
     "@easyink/core": "workspace:*",
     "@easyink/datasource": "workspace:*",
@@ -42,7 +37,6 @@
     "@easyink/schema": "workspace:*",
     "@easyink/shared": "workspace:*",
     "@easyink/ui": "workspace:*",
-    "@lezer/highlight": "catalog:framework",
     "mutative": "catalog:framework"
   }
 }
