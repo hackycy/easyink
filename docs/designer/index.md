@@ -44,7 +44,7 @@ const preferenceProvider = createLocalStoragePreferenceProvider()
 | `fontProvider` | 字体目录和字体加载器 |
 | `setupStore` | 初始化 store 后做自定义注册 |
 | `contributions` | 注册面板、工具栏动作和命令扩展 |
-| `interactionProvider` | 接管确认和资产选择这类交互 |
+| `interactionProvider` | 接管确认、资产选择、上传和文件读取这类交互 |
 
 如果你只是做业务接入，`schema`、`dataSources`、`locale`、`preferenceProvider` 和 `autoSave` 最常用。剩下几项通常在你开始做二次开发时才会用到。
 
@@ -192,15 +192,44 @@ function setupStore(store: DesignerStore) {
 
 ## 宿主交互接管 {#interaction-provider}
 
-Designer 支持把确认、资产选择、文本文件读取这类交互交给宿主控制。
+Designer 支持把确认、资产选择、上传、文本文件读取这类交互交给宿主控制。
 
-先看一个确认示例：
+先看一个完整一点的例子：
 
 ```ts
 const interactionProvider = {
   async confirm(request) {
     return openBusinessConfirmDialog(request)
   },
+
+  async pickAsset(request) {
+    const asset = await openAssetLibrary({
+      accept: request.accept,
+      currentUrl: request.currentUrl,
+      source: request.source,
+      payload: request.payload,
+    })
+
+    if (!asset)
+      return null
+
+    return {
+      url: asset.url,
+      assetId: asset.id,
+      alt: asset.alt,
+    }
+  },
+
+  async uploadAsset(request) {
+    const uploaded = await uploadToYourServer(request.file)
+
+    return {
+      url: uploaded.url,
+      assetId: uploaded.id,
+      name: request.picked.name,
+    }
+  },
+
   async pickFileText(request) {
     const file = await openTextFileDialog(request.accept)
     if (!file)
@@ -222,7 +251,50 @@ const interactionProvider = {
 />
 ```
 
-这很适合接你的业务弹窗、权限策略、审计流程和素材库。`pickAsset` 面向图片这类需要稳定 URL 的资源；`pickFileText` 面向 SVG/JSON/CSS 这类需要把文件文本写入属性值的场景，不会走上传或 data URL 链路。
+这很适合接你的业务弹窗、权限策略、审计流程和素材库。
+
+`pickAsset` 面向图片这类需要稳定 URL 的资源。如果你的素材库已经返回 URL，直接返回 `{ url }` 就行；如果用户从本地选了文件，可以让 `pickAsset` 返回 `{ file }`，Designer 会继续调用 `uploadAsset`，并把上传后的 URL 写回属性。
+
+```ts
+const interactionProvider = {
+  async pickAsset(request) {
+    const file = await openImageFileDialog(request.accept)
+    return file ? { file, name: file.name } : null
+  },
+
+  async uploadAsset(request) {
+    const uploaded = await uploadToYourServer(request.file)
+    return { url: uploaded.url }
+  },
+}
+```
+
+`pickFileText` 面向 SVG/JSON/CSS 这类需要把文件文本写入属性值的场景，不会走上传或 data URL 链路。自定义物料想触发这些能力时，不需要自己写文件输入框，而是在属性声明里加 `editorOptions.valueInput`：
+
+```ts
+const propSchemas = [
+  {
+    key: 'src',
+    label: 'materials.logo.property.src',
+    type: 'image',
+    editorOptions: {
+      valueInput: {
+        kind: 'asset-url',
+        id: 'designer.logo.pickImage',
+        source: 'logo-material',
+        accept: ['image/*'],
+      },
+    },
+  },
+]
+```
+
+这条声明和宿主回调的对应关系是固定的：
+
+- `valueInput.kind: 'asset-url'`：调用 `pickAsset`，如果返回 `{ file }`，继续调用 `uploadAsset`。
+- `valueInput.kind: 'text-file'`：调用 `pickFileText`，把返回的 `text` 写入属性。
+
+关于 `asset-url` 和 `text-file` 的物料侧声明，可以继续看 [自定义物料开发：属性值输入增强](/advanced/custom-materials#prop-value-input)。
 
 ## Store 访问 {#store-access}
 
