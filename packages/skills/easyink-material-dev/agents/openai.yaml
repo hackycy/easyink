@@ -1,4 +1,4 @@
 interface:
   display_name: EasyInk Material Dev
   short_description: EasyInk 物料、页面策略、Assistant AI 与复杂交互开发指南
-  default_prompt: 'Use $easyink-material-dev to implement or review an EasyInk material across Schema defaults, Designer registration, Viewer rendering, page behavior, binding, editing, Assistant material knowledge, MCP descriptors, and i18n.'
+  default_prompt: 'Use $easyink-material-dev to implement or review an EasyInk material across Schema defaults, Designer registration, Viewer rendering, page behavior, binding, editing, Assistant material knowledge, tests, and i18n.'

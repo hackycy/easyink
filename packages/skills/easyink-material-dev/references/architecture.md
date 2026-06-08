@@ -169,7 +169,7 @@ Viewer runtime stages:
 Custom material hosts:
 
 - Designer: call `registerMaterialBundle(store, bundle)` inside `EasyInkDesigner` `setupStore`.
-- Viewer: call `viewer.registerMaterial(type, extension)`.
+- Viewer: call `viewer.registerMaterial(type, binding, extension)` with the same material type and binding definition that Designer uses.
 - Heavy Designer renderers may use `lazyFactory` on the Designer material entry. Keep material metadata synchronous; only the `MaterialDesignerExtension` factory should live in the lazy chunk.
 
 Built-in materials:

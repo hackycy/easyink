@@ -1,26 +1,24 @@
 ---
 name: easyink-material-dev
-description: EasyInk material development workflow and review guide. Use when implementing, extending, debugging, or reviewing EasyInk built-in or custom materials that add or change a Schema-saved visual element across MaterialNode shape, createDefaultNode defaults, registerMaterialBundle wiring, Designer and Viewer parity, orthogonal page layout behavior, page-aware overlays, fragment pagination, runtime measurement, table-data or svg-star style deep editing, datasource binding, Assistant material knowledge, tests, and i18n.
+description: EasyInk material development and review guide. Use when implementing, extending, debugging, or reviewing built-in or custom EasyInk materials that add or change a Schema-saved visual element across MaterialNode shape, default-node factories, Designer registration/rendering/editing, Viewer registration/rendering/measurement, orthogonal page layout behavior, repeated overlays, fragment pagination, datasource binding, Assistant material knowledge, tests, and i18n.
 ---
 
 # EasyInk Material Dev
 
-Use this skill to work on EasyInk materials as complete system features, not isolated render functions. A material must line up across Schema, Designer registration and editing, Viewer rendering and measurement, page layout behavior, catalog exposure, data binding, Assistant material knowledge, tests, and i18n.
+Use this skill to work on EasyInk materials as complete system features, not isolated render functions. A material change is only done when Schema, Designer, Viewer, page behavior, binding, catalog exposure, Assistant knowledge, tests, and locale coverage still agree.
 
 If the request adds a panel, command, diagnostic subscription, host workflow, or toolbar action around existing elements without adding/changing a Schema-saved visual element, use `$easyink-contribution-dev` instead.
 
 ## First Read
 
-Start with the local repo, not memory. Prefer these files:
+Start from the current repo, not memory. Always read the touched material package plus the closest existing material with the same behavior.
+
+Core files:
 
 - `CLAUDE.md` for project coding rules: no `structuredClone`, no Unicode emoji, workspace deps, and `pnpm build`, `pnpm lint`, `pnpm typecheck` in order for broad validation.
 - `.github/architecture/24-page-layout-orthogonal-system.md` for the current page model, layout, reflow, pagination, page overlay, and editor surface rules.
 - `docs/advanced/custom-materials.md` for the public custom material contract.
 - `docs/advanced/schema.md` for `DocumentSchemaInput` normalization, page layers, and persistent schema fields.
-- `.github/architecture/05-schema-dsl.md`, `.github/architecture/06-render-pipeline.md`, `.github/architecture/08-datasource.md`, and `docs/designer/data-binding.md` when the material consumes datasource fields, especially `DataContractBinding`.
-- `.github/architecture/25-ai-assistant.md` and `docs/advanced/contributions.md` when the material should be available to Assistant generation or custom-host AI flows.
-- `docs/advanced/exporters.md` and `docs/advanced/print-drivers.md` when output must be validated through export or print paths.
-- `docs/designer/fonts.md` when a material exposes `fontFamily`, page font, text measurement, or print/export output that depends on host-provided fonts.
 - `packages/schema/src/types.ts`, `packages/schema/src/defaults.ts`, and `packages/schema/src/validation.ts` for `MaterialNode`, binding, page layer defaults, and schema validity rules.
 - `packages/core/src/font.ts`, `packages/core/src/material-data-contract.ts`, and `packages/viewer/src/font-loader.ts` for `FontProvider`, `FontManager`, material data contract resolution, font collection, caching, and host-document `@font-face` injection.
 - `packages/core/src/material-extension.ts` and `packages/core/src/material-viewer.ts` for Designer and Viewer extension contracts.
@@ -29,6 +27,13 @@ Start with the local repo, not memory. Prefer these files:
 - `packages/viewer/src/runtime.ts`, `packages/viewer/src/render-surface.ts`, and `packages/viewer/src/material-registry.ts` for ordinary binding projection, measurement, pagination, repeated overlays, and renderer dispatch.
 - `packages/builtin/src/designer.ts`, `packages/builtin/src/viewer.ts`, and `packages/builtin/src/bindings.ts` for built-in registration.
 - `packages/shared/src/ai-generation.ts`, `packages/assistant/designer-bridge/src/material-manifest.ts`, and `packages/assistant/material-knowledge/src/from-manifest.ts` for Assistant material knowledge flow. Do not add material-specific prompt rules to Assistant packages; prompts consume the live material manifest.
+
+Task-specific references:
+
+- `.github/architecture/05-schema-dsl.md`, `.github/architecture/06-render-pipeline.md`, `.github/architecture/08-datasource.md`, and `docs/designer/data-binding.md` when the material consumes datasource fields, especially `DataContractBinding`.
+- `.github/architecture/25-ai-assistant.md` and `docs/advanced/contributions.md` when the material should be available to Assistant generation or custom-host AI flows.
+- `docs/advanced/exporters.md` and `docs/advanced/print-drivers.md` when output must be validated through export or print paths.
+- `docs/designer/fonts.md` when a material exposes `fontFamily`, page font, text measurement, or print/export output that depends on host-provided fonts.
 - `packages/materials/text`, `packages/materials/rect`, and `packages/materials/image` for simple fixed-size and ordinary `BindingRef` patterns.
 - `packages/materials/chart/bar` for material `binding.kind='data-contract'`, target data model mapping, relation resolver consumption, chart runtime diagnostics, and AI descriptor examples.
 - `packages/materials/chart/custom` and `packages/materials/chart/kernel` for ordinary option binding, trusted JS option source handling, Designer lazy material loading, and full ECharts export boundaries.
@@ -39,27 +44,27 @@ Start with the local repo, not memory. Prefer these files:
 
 ## Workflow
 
-1. Confirm this is a material change. Create or extend a material only when a Schema node, Designer interaction, and Viewer render path are all affected.
-2. Define stable schema identity first: `TYPE`, props interface, defaults, capabilities, and `createXNode(partial?, unit?)`. Default nodes must render visibly without runtime data.
-3. Normalize page assumptions. Legal `page.mode` values are `fixed` and `continuous`. New behavior should read `page.pageModel`, `page.layout`, `page.reflow`, and `page.pagination`, not add another `page.mode` branch.
-4. Keep node coordinates semantic. `MaterialNode.x/y/width/height` are document coordinates; measurement, reflow, pagination, repeated overlays, and Designer projection must not silently write runtime output plans back into source schema.
-5. Decide material page behavior deliberately. Use `node.placement` for flow/fixed positioning, `node.break` for auto-sheets pagination constraints, and `node.repeat.scope='every-output-page'` or Viewer `pageAware` for post-pagination overlays. Repeated/page-aware nodes must not influence flow, document height, or page count.
-6. If the material can split across `auto-sheets`, implement `fragmentPaginator`. It should produce virtual fragments with `sourceNodeId` preserved and avoid mutating source schema.
-7. Implement Designer rendering with `renderContent(nodeSignal, container, renderContextSignal?)`. Render immediately, subscribe to `nodeSignal`, escape user-controlled strings or use real DOM, and return deterministic cleanup. Subscribe to `renderContextSignal` only for Designer-owned transient context such as page-aware preview numbers; never persist it into Schema.
-8. Implement Viewer rendering with `trustedViewerHtml()` or an `HTMLElement`. Read ordinary runtime binding results from `context.resolvedProps`. For `binding.kind='data-contract'` materials, call `resolveMaterialDataContract(contract, node.binding, context.data ?? {})`, report diagnostics, and project target records into the renderer's runtime shape. Add `measure()` only when runtime content changes physical size; use `getRenderSize()` only when wrapper size must differ from schema geometry.
-9. If Viewer `measure()` or runtime data owns a dimension, add `MaterialDesignerExtension.resolveControlPolicy()` so Designer hides/disables matching geometry fields and outer resize handles. Guard behavior/deep-edit entry points that could mutate the blocked dimension.
-10. Register both sides and expose the material in the catalog. Built-ins go through `packages/builtin/src/designer.ts` and `packages/builtin/src/viewer.ts`; custom hosts register through `setupStore` and `viewer.registerMaterial()`. For heavyweight Designer renderers, keep metadata synchronous and put only `MaterialDesignerExtension` loading behind `lazyFactory`; Viewer registration remains synchronous. For built-ins, adding a `DesignerMaterialRegistration` is not enough for the material panel: also add the material type to `quickMaterialTypes` or `groupedCatalog` as appropriate. A Designer-only material renders `[Unknown: type]` in Viewer; a Designer-registered material missing from the catalog will not appear in the material panel.
-11. For text-like materials, expose font choice through a `font` prop schema for `node.props.fontFamily` or the relevant sub-property. Do not load or inject fonts inside material renderers; Designer and Viewer own the `FontProvider` -> `FontManager` -> `@font-face` chain.
-12. Add `propSchemas` only for simple props-bag fields. Use custom `read` and `commit`, `requestPropertyPanel()`, or `SelectionType.getPropertySchema()` when a property lives outside `node.props` or changes multiple fields.
-    For props that should be filled through a host/file interaction, declare `editorOptions.valueInput`, for example `{ kind: 'text-file', ... }` for local text file content or `{ kind: 'asset-url', ... }` for image/asset URLs. Let Designer's interaction bridge read or resolve the value; do not store `File`, local paths, file names, picker state, or import state in Schema, and do not implement material-local file inputs.
-13. Use shared layout behavior props instead of material-local duplicates. `createLayoutBehaviorPropSchemas()` owns placement, break, and repeat UI visibility based on page strategy.
-14. Add deep editing only for meaningful sub-element selection. Define `MaterialGeometry`, JSON-safe namespaced `SelectionType`, behavior middleware, decorations, and `tx.run()` mutations with stable history labels and merge keys.
-15. Keep inline editors selection-scoped. Changing a cell, column, handle, or internal region must drop input mode back to selection highlight and require a fresh explicit edit entry.
-16. For material-local inline toolbars, render commands only. Prefer compact icon tools with localized `title` tooltips; anchor the toolbar to the material frame top-left outside the border unless a local interaction requires otherwise.
-17. Add datasource logic at the right layer. Every material registration declares `binding`: `none`, `ordinary`, `custom`, or `data-contract`. Whole-element prop binding uses ordinary `BindingRef` in `node.binding`, declares its target prop in `binding.primaryProp`, and declares `binding.formatEditor` for the supported format tabs; the projected value may be scalar or structured, such as a custom ECharts option object. Table-like internal binding owns `datasourceDrop` and cell-level `binding` or `staticBinding` and declares `binding.kind='custom'`; structured data materials declare `binding.kind='data-contract'` with a contract, declare `binding.formatEditor` or field-level `formatEditor`, and store `node.binding.kind='data-contract'` mappings from source paths to target model fields.
-18. Add i18n keys for visible labels, tooltips, property labels, reject reasons, history labels, placeholders, and material-local toolbar actions. Prefer `context.t()` and `store.t()` over hardcoded strings.
-19. Update material-local `src/ai.ts` when the material should be generated by Assistant. Include `knowledge` for Assistant selection, sizing, binding, composability, and scenario fitness. Built-ins register the descriptor in `packages/builtin/src/designer.ts` as `aiDescriptor`; Assistant sees it through the live Designer material manifest. Do not add material-specific prompt text to Assistant packages.
-20. Test the smallest useful surface: schema defaults, Designer refresh or deep behavior, control policy, page behavior props, repeated overlay behavior, fragment pagination, Viewer render or measure, ordinary binding projection or data-contract resolution, font-dependent output, registration fallout, AI config, and i18n.
+1. Confirm this is a material change: a Schema node, Designer interaction or registration, and Viewer render path are affected.
+2. Define schema identity first: canonical `TYPE`, props interface, defaults, capabilities, and `createXNode(partial?, unit?)`. Default nodes must be visible without runtime data.
+3. Keep Schema serializable. Persistent semantics belong in `MaterialNode`, `node.props`, `node.binding`, `node.placement`, `node.break`, `node.repeat`, `node.table`, or `extensions`; runtime plans, DOM refs, preview rows, measurements, loaded fonts, and editing state do not.
+4. Normalize page assumptions. Legal `page.mode` values are `fixed` and `continuous`, but new behavior should read the owning layer: `page.pageModel`, `page.layout`, `page.reflow`, or `page.pagination`.
+5. Keep node geometry semantic. `MaterialNode.x/y/width/height` are document coordinates; Designer projection, measurement, reflow, pagination, and overlay cloning must not silently write runtime output plans back to source schema.
+6. Decide page behavior deliberately. Use `node.placement` for flow/fixed positioning, `node.break` for `auto-sheets` constraints, and `node.repeat.scope='every-output-page'` or Viewer `pageAware` only for post-pagination overlays. Repeated/page-aware nodes must not affect flow, document height, or page count.
+7. Implement Designer rendering with `renderContent(nodeSignal, container, renderContextSignal?)`: render immediately, subscribe to `nodeSignal`, optionally subscribe to transient render context, escape user-controlled strings or use DOM text APIs, and return deterministic cleanup.
+8. Implement Viewer rendering with `trustedViewerHtml()` or an `HTMLElement`. Ordinary binding results are already projected into `context.resolvedProps` and the render node's props. `data-contract` materials must call `resolveMaterialDataContract(contract, node.binding, context.data ?? {})` and report diagnostics.
+9. Add `measure()` only when runtime content changes physical size. Add `fragmentPaginator` only when the measured material can split across `auto-sheets`; preserve `sourceNodeId` and avoid source schema mutation.
+10. If measurement or runtime data owns a dimension, return `MaterialDesignerExtension.resolveControlPolicy()` and also guard any deep-edit or behavior path that could mutate the blocked dimension.
+11. Register both sides. Built-ins update `packages/builtin/src/designer.ts`, `packages/builtin/src/viewer.ts`, `packages/builtin/src/bindings.ts`, and `packages/builtin/package.json`. Custom hosts register Designer through `setupStore` and Viewer through `viewer.registerMaterial(type, binding, extension)`.
+12. Expose catalog entries deliberately. Built-ins visible in the material panel must appear in `quickMaterialTypes` or `groupedCatalog`; Designer registration alone is not panel exposure. A Designer-only material renders `[Unknown: type]` in Viewer.
+13. Keep heavyweight Designer rendering behind `lazyFactory` only. Material type, binding definition, prop schemas, locale messages, catalog metadata, default factory, and AI descriptor stay synchronous; Viewer registration stays synchronous.
+14. Add `propSchemas` for simple props-bag fields. Use custom `read` and `commit`, `requestPropertyPanel()`, or `SelectionType.getPropertySchema()` when data lives outside `node.props` or a write touches multiple fields. Use `editorOptions.valueInput` for host/file input; do not store `File`, local paths, file names, picker state, or import state in Schema.
+15. Use shared layout behavior props instead of material-local duplicates. `createLayoutBehaviorPropSchemas()` owns placement, break, and repeat UI visibility based on page strategy.
+16. Add deep editing only for meaningful sub-element selection. Define `MaterialGeometry`, JSON-safe namespaced `SelectionType`, behavior middleware, decorations, and `tx.run()` mutations with stable history labels and merge keys. Inline editors must be selection-scoped.
+17. Put datasource logic at the right layer. Whole-element prop binding uses ordinary `BindingRef` plus `binding.primaryProp`; table-like internal binding uses `binding.kind='custom'`, `datasourceDrop`, and cell-level `binding` or `staticBinding`; structured charts use `binding.kind='data-contract'` plus target-field mappings in `node.binding.kind='data-contract'`.
+18. For font-bearing materials, expose a `font` prop schema for `node.props.fontFamily` or the relevant sub-property. Material renderers may emit `font-family` CSS from resolved props, but Designer and Viewer own `FontProvider` -> `FontManager` -> `@font-face`.
+19. Add i18n keys for visible labels, tooltips, property labels, reject reasons, history labels, placeholders, and material-local toolbar actions. Prefer `context.t()` and `store.t()` over hardcoded strings.
+20. Update material-local `src/ai.ts` when Assistant should generate or select the material. Register the descriptor as `aiDescriptor` on the Designer material entry; Assistant sees it through the live Designer material manifest, not material-specific prompt patches.
+21. Test the smallest useful surface: default factory, Designer repaint/deep behavior, control policy, page behavior props, repeated overlays, fragment pagination, Viewer render/measure, binding projection or data-contract resolution, font-dependent output, registration/catalog fallout, AI manifest, and i18n.
 
 ## Reference Files
 

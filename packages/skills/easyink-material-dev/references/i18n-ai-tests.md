@@ -46,14 +46,14 @@ Read `references/ai-assistant-materials.md` when AI behavior matters. In short:
 - Register built-in descriptors through Designer `aiDescriptor`; `packages/builtin/src/ai.ts` is derived from the Designer bundle.
 - Register custom material descriptors on the Designer material entry; Assistant gets them from the live store manifest.
 
-The built-in descriptor list contains canonical material types, aliases, binding rules, and schema rules. If a type is added but not in the AI descriptor list, Assistant generation may reject or ignore it.
+Assistant reads canonical material types, binding rules, props, and optional AI descriptors from the live Designer material manifest. If a generated material should be available to Assistant but lacks a Designer `aiDescriptor`, selection and schema generation become weaker even when Designer and Viewer registration are otherwise correct.
 
 ## AI Review Smells
 
 - AI descriptor mentions a prop that does not exist or omits required specialized schema rules.
 - Descriptor binding says `single` or `multi` but `knowledge.bindingSpec.mode` says something incompatible.
 - `knowledge.sizing.defaultSize` does not match the factory default size in mm.
-- Custom material tries to update a static AI list instead of registering Designer `aiDescriptor`.
+- Custom material tries to update prompt text or a static AI list instead of registering Designer `aiDescriptor`.
 
 ## Tests to Add or Run
 
@@ -82,7 +82,7 @@ Useful commands:
 
 - New material has Designer code but no Viewer registration.
 - New Viewer renderer manually resolves ordinary `node.binding`.
-- New data-contract material keeps complete `mappings.*.select.path` values and uses relation resolver coverage in tests.
+- New data-contract material truncates `mappings.*.select.path` values or lacks relation resolver coverage in tests.
 - New property label is a hardcoded string while neighboring schemas use locale keys.
 - New deep-edit payload stores DOM or non-serializable values.
 - New table-like material duplicates preview rows into Schema.

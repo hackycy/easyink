@@ -12,7 +12,7 @@ Typical files:
 - `src/designer.ts`: `createXExtension(context)`.
 - `src/viewer.ts`: render plus optional `measure()`, `getRenderSize()`, or `fragmentPaginator`.
 - `src/prop-schemas.ts`: material-owned property panel additions when needed.
-- `src/ai.ts`: `AIMaterialDescriptor` plus optional `knowledge` for Assistant generation and MCP material config.
+- `src/ai.ts`: `AIMaterialDescriptor` plus optional `knowledge` for Assistant generation, material selection, binding, sizing, and compatibility.
 - `src/index.ts`: export public symbols.
 - `src/*.test.ts`: focused tests for rendering, defaults, deep editing, measure, pagination, and schema behavior.
 
@@ -228,7 +228,7 @@ If export/print fails for a custom material, first confirm Viewer registration, 
 For a host-owned custom material outside built-ins:
 
 - Register Designer through `setupStore`.
-- Register Viewer through the created Viewer runtime.
+- Register Viewer through the created Viewer runtime with `viewer.registerMaterial(type, binding, extension)`.
 - Keep the same `type` string in both.
 - Ship the default-node factory, Designer factory, Viewer extension, icons, prop schemas, and any host locale messages together.
 - Verify templates using that `type` cannot reach Viewer without the host registration.
