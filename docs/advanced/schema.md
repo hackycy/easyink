@@ -73,6 +73,45 @@ const continuous = normalizeDocumentSchema({
 
 这就是为什么连续纸不能只改宽高。它还会切换布局、分页和回流策略。
 
+## 页面级渲染层 {#page-layers}
+
+`page.layers` 保存整页级、非元素级的渲染层。它不是物料节点，也不会出现在 `schema.elements` 里。当前内置支持文字水印层：
+
+```json
+{
+  "page": {
+    "mode": "fixed",
+    "width": 210,
+    "height": 297,
+    "layers": [
+      {
+        "id": "page-watermark",
+        "kind": "watermark",
+        "type": "text",
+        "enabled": true,
+        "placement": "over-content",
+        "zIndex": 0,
+        "text": "DRAFT",
+        "rotation": -30,
+        "opacity": 0.1,
+        "fontSize": 18,
+        "gap": 60,
+        "color": "#b8b8b8"
+      }
+    ]
+  }
+}
+```
+
+字段规则：
+
+- `placement` 可选 `under-content`、`over-content`、`top`，分别位于内容层下方、内容层上方和最上层。
+- `zIndex` 只在所属 `placement` band 内排序，合法范围是 `0..999`。
+- `fontSize` 和 `gap` 跟随 `schema.unit`。
+- `opacity` 是 `0..1`。
+
+`page.layers` 适合文字水印这类整页装饰。如果你需要可选中、可拖拽、可绑定数据或可作为空白页保留条件的页眉、页脚、Logo、页码，请使用普通物料节点，并在需要每页出现时设置 `node.repeat.scope='every-output-page'`。
+
 ## 校验和序列化 {#validation}
 
 本地保存、导入导出和服务端接收模板时，优先用 schema 包里的入口：

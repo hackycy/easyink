@@ -198,14 +198,14 @@ describe('normalizeDocumentSchema', () => {
     expect(schema.page.layers).toBeUndefined()
   })
 
-  it('drops legacy page watermark input as a breaking schema change', () => {
+  it('drops unsupported page fields from loose input', () => {
     const schema = normalizeDocumentSchema({
       page: {
-        watermark: { type: 'text', enabled: true, text: 'LEGACY' },
+        unsupportedRenderConfig: { enabled: true },
       },
     } as never)
 
-    expect('watermark' in schema.page).toBe(false)
+    expect('unsupportedRenderConfig' in schema.page).toBe(false)
     expect(schema.page.layers).toBeUndefined()
   })
 })

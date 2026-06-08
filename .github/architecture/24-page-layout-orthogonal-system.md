@@ -7,6 +7,7 @@
 - 合法 `PageMode` 只有 `fixed | continuous`。
 - 连续纸模板使用 `continuous + continuous-paper + stack-flow + flow-y + none`。
 - `page.pageModel / page.layout / page.reflow / page.pagination` 是策略语义来源，`normalizeDocumentSchema()` 会按 `mode` 补齐默认层。
+- `page.layers` 是页面级渲染层数组，和上述布局策略字段不是同一类概念；它用于整页水印等非 MaterialNode 的页面装饰。
 - Viewer 运行期通过 `runLayoutPipeline()` 与 `runPagination()` 生成 `LayoutDocument` 和 `OutputPagePlan[]`；`page-planner.ts` 只保留兼容 facade。
 - Designer 编辑态通过 `EditorSurfacePlan` 描述纸张和连续画布，不直接复用 Viewer 的输出页计划。
 
@@ -46,6 +47,7 @@ interface PageSchema {
   blankPolicy?: 'keep' | 'remove' | 'auto'
   background?: PageBackground
   print?: PagePrintConfig
+  layers?: PageLayerConfig[]
 
   pageModel?: PageModelConfig
   layout?: DocumentLayoutConfig
@@ -67,6 +69,23 @@ interface MaterialNode {
   }
   repeat?: { scope?: 'none' | 'every-output-page' }
 }
+
+type PageLayerPlacement = 'under-content' | 'over-content' | 'top'
+
+interface TextWatermarkPageLayerConfig {
+  id: string
+  kind: 'watermark'
+  type: 'text'
+  enabled?: boolean
+  placement?: PageLayerPlacement
+  zIndex?: number // 0..999, local to the placement band
+  text?: string
+  rotation?: number
+  opacity?: number // 0..1
+  fontSize?: number
+  gap?: number
+  color?: string
+}
 ```
 
 默认组合由 `packages/schema/src/defaults.ts` 生成：
@@ -77,6 +96,17 @@ interface MaterialNode {
 | `continuous` | `continuous-paper` | `stack-flow` | `flow-y` | `none` |
 
 Schema validation 只接受已声明的页面介质；`normalizeDocumentSchema()` 对 loose input 的未知 mode 只按默认模式回退，不做历史输入改写。
+
+### 24.3.1 页面级渲染层
+
+`page.layers` 表达整页级、非元素级的渲染层。当前支持 `kind='watermark'`、`type='text'` 的文字水印层。默认文字水印 id 为 `page-watermark`，默认 `placement='over-content'`，默认 `zIndex=0`，`zIndex` 只在所属 placement band 内排序，范围固定为 `0..999`，不能穿透到其它 band。
+
+Designer 和 Viewer 都通过 `@easyink/core` 的 `resolvePageLayerPlans()`、`groupPageLayerPlansByPlacement()` 和 `resolvePageLayerStackIndex()` 消费页面层计划；不得在两端各自实现 layer 排序、层级或水印 tile 生成规则。Viewer 对相同页面尺寸缓存 layer buckets，避免多页同尺寸重复生成水印 tile。
+
+`page.layers` 与 `node.repeat.scope='every-output-page'` 的边界：
+
+- `page.layers`：整页背景/前景装饰，当前用于文字水印；不是可选中、可拖拽、可绑定数据的 MaterialNode。
+- `repeat.scope`：元素级页眉、页脚、页码、Logo 或可编辑水印；源节点仍在 `schema.elements[]`，Designer 只有一份可编辑源节点，其它页是预览/输出复制。
 
 ## 24.4 Viewer 管线
 
@@ -90,7 +120,8 @@ ViewerRuntime 当前主流程：
 6. `runLayoutPipeline()` 根据 `reflow.strategy` 生成 `LayoutDocument`。
 7. `runPagination()` 根据 `pagination.strategy` 生成输出页，并通过 `FragmentPaginator` 处理可拆分页物料。
 8. 将 `repeat.scope='every-output-page'` 或 material 默认 page-aware 的元素按输出页复制为 page overlay，并注入页码上下文。
-9. 渲染 DOM，缓存 `ViewerPageMetrics` 供打印策略使用。
+9. `RenderSurface` 按页面尺寸解析并缓存 `page.layers` 的 render buckets，在内容层前后插入 `under-content / over-content / top` 层。
+10. 渲染 DOM，缓存 `ViewerPageMetrics` 供打印策略使用。
 
 `RenderSurface` 只消费页面计划和物料 registry，不根据 `page.mode` 或物料类型重新判断分页策略。
 
@@ -172,9 +203,9 @@ Designer 不直接读取 `page.width/page.height` 渲染唯一页面，而是消
 ## 24.8 代码边界
 
 - `@easyink/schema`：类型、默认层、validation，以及 invalid mode 的 loose input 回退。
-- `@easyink/core`：页面模型解析、回流、分页、编辑表面计划、页面增删命令。
-- `@easyink/viewer`：编排字体、绑定、测量、layout/pagination、page overlay 复制、渲染、打印策略。
-- `@easyink/designer`：消费 `EditorSurfacePlan` 做编辑态投影、重复预览和页面工具栏。
+- `@easyink/core`：页面模型解析、回流、分页、编辑表面计划、页面增删命令、页面 layer plan 与层级规则。
+- `@easyink/viewer`：编排字体、绑定、测量、layout/pagination、page overlay 复制、页面 layer 渲染、打印策略。
+- `@easyink/designer`：消费 `EditorSurfacePlan` 做编辑态投影、重复预览、页面 layer 预览和页面工具栏。
 - `@easyink/material-*`：只提供渲染、测量和局部分页能力，不决定全局页面模型。
 
 `packages/viewer/src/stack-flow-layout.ts` 仍作为历史 helper 和测试资产存在；ViewerRuntime 的主路径已经使用 `@easyink/core` 的正交 layout/pagination pipeline。

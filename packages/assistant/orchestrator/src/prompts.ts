@@ -184,7 +184,8 @@ function buildCriticalRulesSegment(unit: string): string {
 7. \`expectedDataSource.sampleData\` MUST mirror \`expectedDataSource.fields\` exactly: every leaf path appears, no orphan keys, sample values match the declared types AND the resolved document type.
 8. Field naming: English camelCase paths. \`fieldLabel\` / \`title\` follow the user's prompt language. Mixing languages within one schema is allowed only for established proper nouns (SKU, QR Code, ID), never for generic labels.
 9. \`expectedDataSource.fields\` MUST be an array of field objects. NEVER output a keyed object/map for fields or children.
-10. \`schema.unit\` MUST be "${unit}". All numeric values in the schema MUST be in ${unit}.`
+10. \`schema.unit\` MUST be "${unit}". All numeric values in the schema MUST be in ${unit}.
+11. Page-level render layers MUST use \`schema.page.layers[]\`; element-level repeated headers, footers, and page numbers use registered elements with \`repeat.scope\`.`
 }
 
 function buildSizingSegment(unit: string): string {
@@ -231,6 +232,16 @@ function buildLayoutSanitySegment(unit: string, mode: string): string {
     lines.push('- Fixed mode: arrange elements within the declared page bounds. No element may exceed page width or height.')
   }
   return lines.join('\n')
+}
+
+function buildPageLayerSegment(unit: string): string {
+  return `## Page render layers
+- \`schema.page.layers\` is optional. Use it only for whole-page render layers that are not editable MaterialNode elements.
+- The currently supported page layer is a text watermark:
+  \`{ "id": "page-watermark", "kind": "watermark", "type": "text", "enabled": true, "placement": "over-content", "zIndex": 0, "text": "DRAFT", "rotation": -30, "opacity": 0.1, "fontSize": 18, "gap": 60, "color": "#b8b8b8" }\`
+- \`placement\` is one of \`under-content\`, \`over-content\`, or \`top\`. \`zIndex\` is local to that placement band and MUST be 0..999.
+- \`fontSize\` and \`gap\` follow \`schema.unit\` (${unit}). \`opacity\` is 0..1.
+- Do not use \`page.layers\` for editable logos, labels, page numbers, headers, or footers; those must be registered elements.`
 }
 
 function buildBindingSegment(): string {
@@ -409,6 +420,7 @@ export function buildSchemaSystemPrompt(materialContext: string, ctx?: PromptCon
     buildCriticalRulesSegment(unit),
     buildSizingSegment(unit),
     buildLayoutSanitySegment(unit, mode),
+    buildPageLayerSegment(unit),
     buildSchemaStructureSegment(unit),
     buildElementRulesSegment(),
     buildDataSourceSegment(),

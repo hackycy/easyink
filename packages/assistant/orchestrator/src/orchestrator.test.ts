@@ -2,8 +2,18 @@ import type { AssistantMaterialManifest } from '@easyink/assistant-capabilities'
 import { MemoryAssistantStore } from '@easyink/assistant-store'
 import { describe, expect, it, vi } from 'vitest'
 import { AssistantOrchestrator, createAssistantApp, createAssistantWorkflowGraph } from './index'
+import { buildSchemaSystemPrompt } from './prompts'
 
 describe('assistantOrchestrator', () => {
+  it('teaches schema generation to use page layers for page-level render layers', () => {
+    const prompt = buildSchemaSystemPrompt('', { unit: 'mm', mode: 'fixed' })
+
+    expect(prompt).toContain('Page-level render layers MUST use `schema.page.layers[]`')
+    expect(prompt).toContain('schema.page.layers[]')
+    expect(prompt).toContain('"kind": "watermark"')
+    expect(prompt).toContain('`zIndex` is local to that placement band and MUST be 0..999')
+  })
+
   it('runs a task into review and stores result/events', async () => {
     const store = new MemoryAssistantStore()
     const orchestrator = new AssistantOrchestrator({ store, llm: createSchemaLLM() })
@@ -434,6 +444,56 @@ describe('assistantOrchestrator', () => {
     expect(result?.validation.valid).toBe(true)
     expect(result?.schema.page.pageModel?.kind).toBe('paged-paper')
     expect(result?.schema.page.pageModel?.paper.height).toBe(297)
+  })
+
+  it('preserves schema-agent page layers through validation and result creation', async () => {
+    const store = new MemoryAssistantStore()
+    const payload = defaultSchemaAgentPayload()
+    const orchestrator = new AssistantOrchestrator({
+      store,
+      llm: createSchemaLLM({
+        ...payload,
+        schema: {
+          ...payload.schema,
+          page: {
+            ...payload.schema.page,
+            layers: [{
+              id: 'page-watermark',
+              kind: 'watermark',
+              type: 'text',
+              enabled: true,
+              placement: 'over-content',
+              zIndex: 0,
+              text: 'DRAFT',
+              rotation: -30,
+              opacity: 0.1,
+              fontSize: 18,
+              gap: 60,
+              color: '#b8b8b8',
+            }],
+          },
+        },
+      }),
+    })
+    const task = await store.createTask({
+      prompt: '生成一个带 DRAFT 水印的报价单',
+      materialManifest: textMaterialManifest(),
+    })
+
+    const reviewed = await orchestrator.runTask(task.id)
+    const result = await store.getResult(reviewed.resultId!)
+
+    expect(reviewed.status).toBe('review')
+    expect(result?.validation.valid).toBe(true)
+    expect(result?.schema.page.layers).toEqual([
+      expect.objectContaining({
+        id: 'page-watermark',
+        kind: 'watermark',
+        type: 'text',
+        enabled: true,
+        text: 'DRAFT',
+      }),
+    ])
   })
 
   it('reports schema-agent material output that is not in the active manifest', async () => {

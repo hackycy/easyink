@@ -121,7 +121,7 @@ Font-dependent Viewer behavior:
 
 ## Page Layout and Behavior Rules
 
-New material work should respect the orthogonal page layers:
+New material work should respect the orthogonal page behavior fields:
 
 - `page.pageModel` describes media.
 - `page.layout` describes how elements enter document coordinates.
@@ -137,6 +137,8 @@ Do not implement material-specific page planning. Materials may provide:
 - and node-level `placement`, `break`, or `repeat` defaults.
 
 The Viewer owns layout, pagination, page overlay cloning, page number context, and `ViewerPageMetrics`.
+
+`page.layers` is not a material behavior field. It stores page-level render layers, currently text watermarks, and is resolved through `@easyink/core` page-layer helpers. New materials should not write `page.layers` unless the task is explicitly about page-level non-element rendering; editable or data-bound repeated visuals belong in `schema.elements[]` with `repeat.scope='every-output-page'`.
 
 ## Designer Control Policy Rules
 

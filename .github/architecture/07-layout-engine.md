@@ -81,6 +81,8 @@ interface LayoutFragment {
 
 `fixed-sheets + blankPolicy='remove'` 是一个例外边界：可见的 page overlay 不参与分页输入，但会作为 `retainBlankPage` 条件参与空白页过滤，确保只有重复页码/页眉/水印的纸张仍被输出。
 
+`page.layers` 是另一条页面级渲染层路径，不属于 MaterialNode，也不参与 layout/reflow/pagination/blankPolicy。当前文字水印通过 `page.layers[]` 在 RenderSurface 中按 placement 插入到内容层上下；可编辑、可绑定或需要作为空白页保留条件的页眉、页脚、页码、Logo 仍应建模为 `schema.elements[]` + `repeat.scope='every-output-page'`。
+
 ## 7.5 table-data 局部分页
 
 `table-data` 是第一个实现 `FragmentPaginator` 的物料：

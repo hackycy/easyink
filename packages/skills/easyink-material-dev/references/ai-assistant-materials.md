@@ -196,10 +196,12 @@ Current flow:
 - Built-ins are registered in Designer and Viewer when Assistant should see them; Assistant consumes Designer's live material manifest.
 - Custom materials register `aiDescriptor` with Designer.
 - Assistant manifest tests cover descriptor preservation when changing serialization behavior.
+- Assistant schema/prompt changes must keep page-level text watermarks on `schema.page.layers[]`; editable or data-bound repeated visuals stay as registered elements.
 
 ## Failure Signals
 
 - Assistant invents `table`, `rich-text`, or other aliases: descriptor/context is missing or schemaRules are too weak.
+- Assistant models whole-page watermarks as elements instead of `page.layers[]`: schema prompt or repair context is stale.
 - Assistant chooses a decorative material for data: category, bindingSpec, or fitness is misleading.
 - Assistant emits a scalar binding for array data: `binding` or `knowledge.bindingSpec.mode` is wrong.
 - Assistant misses target-field mappings for chart-like data: data-contract descriptor examples or schemaRules are incomplete.

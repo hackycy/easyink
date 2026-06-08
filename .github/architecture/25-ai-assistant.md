@@ -119,7 +119,35 @@ export const textAIMaterialDescriptor = {
 
 `knowledge` 是可选的。没有声明的物料仍可被 AI 使用，系统从 `binding`、`properties` 等字段推断最小知识。
 
-### 25.3.2 第三方物料接入
+### 25.3.2 页面级 layer 生成规则
+
+Assistant 的 Schema Agent 可以生成 `schema.page.layers`，但只能用于整页级非元素装饰。当前允许的页面层是文字水印：
+
+```json
+{
+  "id": "page-watermark",
+  "kind": "watermark",
+  "type": "text",
+  "enabled": true,
+  "placement": "over-content",
+  "zIndex": 0,
+  "text": "DRAFT",
+  "rotation": -30,
+  "opacity": 0.1,
+  "fontSize": 18,
+  "gap": 60,
+  "color": "#b8b8b8"
+}
+```
+
+AI 输出必须遵守：
+
+- 页面级渲染层只能写入 `schema.page.layers[]`。
+- `fontSize` 和 `gap` 使用 `schema.unit`；`opacity` 为 `0..1`；`zIndex` 为 `0..999`，且只在 `placement` band 内排序。
+- 可编辑或可绑定的页眉、页脚、页码、Logo、水印样式元素仍应使用注册物料并写入 `schema.elements[]`，需要每页出现时使用 `repeat.scope='every-output-page'`。
+- Assistant 不应把 `page.layers` 当作物料能力来源；物料选择仍只来自 Designer material manifest。
+
+### 25.3.3 第三方物料接入
 
 第三方物料只需在 `aiDescriptor` 中添加 `knowledge` 字段，注册后 AI 自动感知：
 

@@ -47,7 +47,7 @@ Rules:
 
 Legal `PageMode` values are `fixed` and `continuous`.
 
-Current semantics come from four page layers:
+Current page behavior semantics come from four orthogonal page fields:
 
 - `page.pageModel.kind`: `paged-paper` or `continuous-paper`.
 - `page.layout.strategy`: `absolute`, `stack-flow`, or `region-flow`.
@@ -66,6 +66,8 @@ Material rules:
 - Do not add new behavior branches keyed only on `page.mode`; use the layer that owns the semantic decision.
 - `page-planner.ts` is a compatibility facade. New runtime behavior should go through `runLayoutPipeline()` and `runPagination()`.
 
+`page.layers` is separate from those behavior fields. It is a page-level render-layer array for non-element page decorations such as text watermarks. It is resolved by `@easyink/core` into layer render plans and consumed by Designer/Viewer. Material code should not use `page.layers` as a custom extension point.
+
 ## Node Layout Behavior
 
 Node-level behavior lives outside material-specific props:
@@ -74,6 +76,8 @@ Node-level behavior lives outside material-specific props:
 - `node.placement.mode='fixed'`: keeps original document coordinates and ignores break constraints.
 - `node.break.keepTogether/before/after`: applies during `auto-sheets` pagination for flow nodes.
 - `node.repeat.scope='every-output-page'`: copied after pagination to every output page; does not affect page count or continuous-paper height.
+
+Use `repeat.scope` for editable or data-bound headers, footers, page numbers, logos, and repeated watermarks. Use `page.layers` only for whole-page render layers that are not `MaterialNode`s.
 
 Old `node.props.layoutMode`, `keepTogether`, `pageBreakBefore`, and `pageBreakAfter` are read only as compatibility fallbacks. New writes should use `placement`, `break`, and `repeat` through `UpdateMaterialBehaviorCommand`.
 
