@@ -8,6 +8,8 @@ import {
   getEditorSurfacePageLeft,
   projectDocumentPointToEditorSurface,
   readNodeRepeatScope,
+  resolvePageWatermark,
+  resolvePageWatermarkTilePlan,
 } from '@easyink/core'
 import { computed, onMounted, onUnmounted, provide, ref, watch } from 'vue'
 import { useDesignerStore } from '../composables'
@@ -218,6 +220,10 @@ const marqueeStyle = computed(() => {
 // delete as a group.
 const isMultiSelection = computed(() => store.selection.count > 1)
 
+const selectedControlElements = computed(() =>
+  elements.value.filter(el => store.selection.has(el.id) && editingNodeId.value !== el.id),
+)
+
 const groupSelectionFrame = computed(() => {
   if (!isMultiSelection.value)
     return null
@@ -239,19 +245,45 @@ const groupSelectionFrame = computed(() => {
   }
 })
 
+const watermarkPlansByPageSize = computed(() => {
+  const watermark = resolvePageWatermark(store.schema.page.watermark)
+  const plans = new Map<string, ReturnType<typeof resolvePageWatermarkTilePlan>>()
+  if (!watermark?.enabled || watermark.text.trim() === '')
+    return plans
+
+  for (const page of editorSurfacePlan.value.pages) {
+    const key = createPageSizeKey(page.width, page.height)
+    if (!plans.has(key)) {
+      plans.set(key, resolvePageWatermarkTilePlan(store.schema.page, {
+        width: page.width,
+        height: page.height,
+      }))
+    }
+  }
+  return plans
+})
+
 const pageFrames = computed(() => {
   const plan = editorSurfacePlan.value
   const unit = store.schema.unit
-  return plan.pages.map(page => ({
-    page,
-    style: {
+  const watermarkPlans = watermarkPlansByPageSize.value
+  return plan.pages.map((page) => {
+    const pagePositionStyle = {
       left: `${getEditorSurfacePageLeft(plan, page)}${unit}`,
       top: `${page.yOffset}${unit}`,
       width: `${page.width}${unit}`,
       height: `${page.height}${unit}`,
-      ...resolvePageBackgroundStyle(store.schema.page.background, unit),
-    },
-  }))
+    }
+    return {
+      page,
+      watermarkPlan: watermarkPlans.get(createPageSizeKey(page.width, page.height)),
+      style: {
+        ...pagePositionStyle,
+        ...resolvePageBackgroundStyle(store.schema.page.background, unit),
+      },
+      watermarkStyle: pagePositionStyle,
+    }
+  })
 })
 
 // ─── Helpers ─────────────────────────────────────────────────────
@@ -379,6 +411,20 @@ function projectRepeatPreviewStyle(node: ReturnType<typeof store.getElements>[nu
     ...style,
     opacity: node.hidden ? 0.45 : (node.alpha ?? 1) * 0.45,
   }
+}
+
+function resolveWatermarkTileStyle(tile: { x: number, y: number }, rotation: number, fontSize: number) {
+  const unit = store.schema.unit
+  return {
+    left: `${tile.x}${unit}`,
+    top: `${tile.y}${unit}`,
+    fontSize: `${fontSize}${unit}`,
+    transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
+  }
+}
+
+function createPageSizeKey(width: number, height: number): string {
+  return `${width}:${height}`
 }
 
 function isRepeatedEveryPage(node: ReturnType<typeof store.getElements>[number]): boolean {
@@ -612,45 +658,74 @@ onUnmounted(() => {
 
           <PageBreakRuler :surface-plan="editorSurfacePlan" />
 
-          <div
-            v-for="preview in repeatedPreviewElements"
-            :key="preview.key"
-            class="ei-canvas-element ei-canvas-element--repeat-preview"
-            :style="preview.style"
-          >
-            <div class="ei-canvas-element__content">
-              <CanvasElementContent :node-id="preview.sourceId" :render-context="preview.renderContext" />
+          <div class="ei-canvas-content-layer">
+            <div
+              v-for="preview in repeatedPreviewElements"
+              :key="preview.key"
+              class="ei-canvas-element ei-canvas-element--repeat-preview"
+              :style="preview.style"
+            >
+              <div class="ei-canvas-element__content">
+                <CanvasElementContent :node-id="preview.sourceId" :render-context="preview.renderContext" />
+              </div>
+            </div>
+
+            <!-- Elements -->
+            <div
+              v-for="el in elements"
+              :key="el.id"
+              class="ei-canvas-element"
+              :class="{
+                'ei-canvas-element--selected': store.selection.has(el.id),
+                'ei-canvas-element--locked': el.locked,
+                'ei-canvas-element--hidden': el.hidden,
+                'ei-canvas-element--deep-editing': editingNodeId === el.id,
+              }"
+              :style="projectNodeStyle(el)"
+              @pointerdown="handleElementPointerDown($event, el.id)"
+              @click="handleElementClick($event, el.id)"
+              @dblclick="handleElementDblClick($event, el.id)"
+            >
+              <div class="ei-canvas-element__content">
+                <CanvasElementContent :node-id="el.id" :render-context="elementRenderContexts.get(el.id)" />
+              </div>
             </div>
           </div>
 
-          <!-- Elements -->
+          <!-- Page watermark preview -->
           <div
-            v-for="el in elements"
-            :key="el.id"
-            class="ei-canvas-element"
-            :class="{
-              'ei-canvas-element--selected': store.selection.has(el.id),
-              'ei-canvas-element--locked': el.locked,
-              'ei-canvas-element--hidden': el.hidden,
-              'ei-canvas-element--deep-editing': editingNodeId === el.id,
+            v-for="frame in pageFrames"
+            :key="`watermark_${frame.page.index}`"
+            class="ei-canvas-watermark"
+            :style="{
+              ...frame.watermarkStyle,
+              color: frame.watermarkPlan?.watermark.color,
+              opacity: frame.watermarkPlan?.watermark.opacity,
+              display: frame.watermarkPlan ? undefined : 'none',
             }"
-            :style="projectNodeStyle(el)"
-            @pointerdown="handleElementPointerDown($event, el.id)"
-            @click="handleElementClick($event, el.id)"
-            @dblclick="handleElementDblClick($event, el.id)"
           >
-            <div class="ei-canvas-element__content">
-              <CanvasElementContent :node-id="el.id" :render-context="elementRenderContexts.get(el.id)" />
-            </div>
+            <template v-if="frame.watermarkPlan">
+              <span
+                v-for="tile in frame.watermarkPlan.tiles"
+                :key="tile.key"
+                class="ei-canvas-watermark__tile"
+                :style="resolveWatermarkTileStyle(tile, frame.watermarkPlan.watermark.rotation, frame.watermarkPlan.watermark.fontSize)"
+              >
+                {{ frame.watermarkPlan.watermark.text }}
+              </span>
+            </template>
+          </div>
 
-            <!-- Selection border, resize handles & rotation handle -->
-            <template v-if="store.selection.has(el.id) && editingNodeId !== el.id">
+          <div class="ei-canvas-control-layer">
+            <div
+              v-for="el in selectedControlElements"
+              :key="`controls_${el.id}`"
+              class="ei-canvas-element-control"
+              :style="projectNodeStyle(el)"
+            >
               <div v-if="!el.hidden || el.locked" class="ei-canvas-element__selection-border" />
 
-              <!-- Per-element transform handles only in single-selection mode.
-                   Multi-selection renders a single group frame outside this loop. -->
               <template v-if="!isMultiSelection && !el.locked && !el.hidden">
-                <!-- 8 resize handles -->
                 <div
                   v-for="handle in getElementResizeHandles(el.id)"
                   :key="handle"
@@ -660,7 +735,6 @@ onUnmounted(() => {
                   @pointerdown="handleResizePointerDown($event, el.id, handle)"
                 />
 
-                <!-- Rotation handle (hidden for non-rotatable materials like tables) -->
                 <div
                   v-if="isElementRotatable(store, el)"
                   class="ei-canvas-element__rotate-handle"
@@ -670,7 +744,7 @@ onUnmounted(() => {
                   <div class="ei-canvas-element__rotate-line" />
                 </div>
               </template>
-            </template>
+            </div>
           </div>
 
           <!-- Group selection frame (multi-selection only) -->
@@ -781,16 +855,57 @@ onUnmounted(() => {
   pointer-events: none;
   box-sizing: border-box;
   border: 1px solid rgba(0, 0, 0, 0.08);
+  overflow: hidden;
 
   &--continuous {
     min-height: 100%;
   }
 }
 
+.ei-canvas-content-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.ei-canvas-watermark {
+  position: absolute;
+  z-index: 12;
+  pointer-events: none;
+  user-select: none;
+  overflow: hidden;
+
+  &__tile {
+    position: absolute;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+    line-height: 1;
+    font-weight: 500;
+    transform-origin: center center;
+  }
+}
+
+.ei-canvas-control-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+}
+
+.ei-canvas-element-control {
+  position: absolute;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
 .ei-canvas-element {
   position: absolute;
   cursor: move;
   box-sizing: border-box;
+  pointer-events: auto;
 
   &--locked {
     cursor: default;
@@ -889,6 +1004,7 @@ onUnmounted(() => {
     border-radius: 1px;
     box-sizing: border-box;
     z-index: 1;
+    pointer-events: auto;
 
     &--nw {
       top: -4px;
@@ -945,6 +1061,7 @@ onUnmounted(() => {
     display: flex;
     flex-direction: column;
     align-items: center;
+    pointer-events: auto;
   }
 
   &__rotate-line {

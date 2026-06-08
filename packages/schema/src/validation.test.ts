@@ -52,6 +52,55 @@ describe('validateSchema', () => {
     ]))
   })
 
+  it('accepts text page watermark settings', () => {
+    expect(validateSchema({
+      ...validSchema,
+      page: {
+        ...validSchema.page,
+        watermark: {
+          type: 'text',
+          enabled: true,
+          text: 'CONFIDENTIAL',
+          rotation: -30,
+          opacity: 0.1,
+          fontSize: 18,
+          gap: 60,
+          color: '#b8b8b8',
+        },
+      },
+    })).toEqual([])
+  })
+
+  it('rejects invalid page watermark settings', () => {
+    const issues = validateSchemaIssues({
+      ...validSchema,
+      page: {
+        ...validSchema.page,
+        watermark: {
+          type: 'image',
+          enabled: 'yes',
+          text: 123,
+          rotation: Number.NaN,
+          opacity: 2,
+          fontSize: 0,
+          gap: -1,
+          color: 123,
+        },
+      },
+    })
+
+    expect(issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'page.watermark.type' }),
+      expect.objectContaining({ path: 'page.watermark.enabled' }),
+      expect.objectContaining({ path: 'page.watermark.text' }),
+      expect.objectContaining({ path: 'page.watermark.rotation' }),
+      expect.objectContaining({ path: 'page.watermark.opacity' }),
+      expect.objectContaining({ path: 'page.watermark.fontSize' }),
+      expect.objectContaining({ path: 'page.watermark.gap' }),
+      expect.objectContaining({ path: 'page.watermark.color' }),
+    ]))
+  })
+
   it('catches missing version', () => {
     const { version, ...rest } = validSchema
     const errors = validateSchema(rest)

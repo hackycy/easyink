@@ -4,7 +4,7 @@ import type { DocumentSchema, PageSchema } from '@easyink/schema'
 /**
  * Descriptor group for page properties.
  */
-export type PagePropertyGroup = 'document' | 'layout' | 'paper' | 'print' | 'assist' | 'background'
+export type PagePropertyGroup = 'document' | 'layout' | 'paper' | 'print' | 'assist' | 'background' | 'advanced'
 
 /**
  * Where the property value originates.
@@ -19,7 +19,7 @@ export type PagePropertyPersistence = 'schema' | 'compat' | 'derived'
 /**
  * Editor widget type for rendering.
  */
-export type PagePropertyEditorType = 'readonly' | 'number' | 'number-slider' | 'select' | 'switch' | 'color' | 'asset' | 'font'
+export type PagePropertyEditorType = 'readonly' | 'text' | 'number' | 'number-slider' | 'select' | 'switch' | 'color' | 'asset' | 'font'
 
 /**
  * Enum option for select editors.

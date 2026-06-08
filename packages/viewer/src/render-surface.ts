@@ -2,7 +2,7 @@ import type { PagePlanEntry, TrustedViewerHtml } from '@easyink/core'
 import type { MaterialNode, PageBackground, PageSchema } from '@easyink/schema'
 import type { MaterialRendererRegistry } from './material-registry'
 import type { ViewerDiagnosticEvent, ViewerRenderContext, ViewerRenderSize } from './types'
-import { readTrustedViewerHtml, trustedViewerHtml } from '@easyink/core'
+import { readTrustedViewerHtml, resolvePageWatermarkTilePlan, trustedViewerHtml } from '@easyink/core'
 import { escapeHtml, UNIT_FACTOR } from '@easyink/shared'
 import { isErrorSentinel, safeRender } from './diagnostic-middleware'
 
@@ -103,11 +103,71 @@ export function renderPages(
       pageEl.appendChild(elWrapper)
     }
 
+    appendPageWatermark(document, pageEl, pageSchema, page, unit, diagnostics)
+
     container.appendChild(wrapper)
     pageDOMs.push({ pageIndex: page.index, element: pageEl })
   }
 
   return pageDOMs
+}
+
+function appendPageWatermark(
+  document: Document,
+  pageEl: HTMLElement,
+  pageSchema: PageSchema,
+  page: PagePlanEntry,
+  unit: string,
+  diagnostics: ViewerDiagnosticEvent[],
+): void {
+  const plan = resolvePageWatermarkTilePlan(pageSchema, {
+    width: page.width,
+    height: page.height,
+  })
+  if (!plan)
+    return
+
+  const layer = document.createElement('div')
+  layer.className = 'ei-viewer-watermark'
+  layer.style.position = 'absolute'
+  layer.style.inset = '0'
+  layer.style.zIndex = '20'
+  layer.style.pointerEvents = 'none'
+  layer.style.userSelect = 'none'
+  layer.style.overflow = 'hidden'
+  layer.style.color = plan.watermark.color
+  layer.style.opacity = String(plan.watermark.opacity)
+
+  for (const tile of plan.tiles) {
+    const text = document.createElement('span')
+    text.className = 'ei-viewer-watermark__tile'
+    text.textContent = plan.watermark.text
+    text.style.position = 'absolute'
+    text.style.display = 'inline-flex'
+    text.style.alignItems = 'center'
+    text.style.justifyContent = 'center'
+    text.style.left = `${tile.x}${unit}`
+    text.style.top = `${tile.y}${unit}`
+    text.style.fontSize = `${plan.watermark.fontSize}${unit}`
+    text.style.fontWeight = '500'
+    text.style.lineHeight = '1'
+    text.style.whiteSpace = 'nowrap'
+    text.style.transform = `translate(-50%, -50%) rotate(${plan.watermark.rotation}deg)`
+    text.style.transformOrigin = 'center center'
+    layer.appendChild(text)
+  }
+
+  if (plan.truncated) {
+    diagnostics.push({
+      category: 'viewer',
+      severity: 'warning',
+      code: 'PAGE_WATERMARK_TRUNCATED',
+      message: `Page ${page.index + 1} watermark generated too many tiles and was truncated.`,
+      detail: { pageIndex: page.index, tileCount: plan.tiles.length },
+    })
+  }
+
+  pageEl.appendChild(layer)
 }
 
 function createPageElement(

@@ -215,6 +215,9 @@ export { createPagePlan } from './page-planner'
 
 export type { PagePlan, PagePlanDiagnostic, PagePlanEntry, PagePlanOptions } from './page-planner'
 
+export { resolvePageWatermark, resolvePageWatermarkTilePlan } from './page-watermark'
+export type { PageWatermarkTile, PageWatermarkTilePlan, ResolvedPageWatermark, ResolvedTextPageWatermark, ResolvePageWatermarkTilePlanOptions } from './page-watermark'
+
 export { runPagination } from './pagination-engine'
 export type { PaginationOptions, PaginationResult } from './pagination-engine'
 

@@ -226,6 +226,7 @@ const PAGE_GROUP_LABELS: Record<PagePropertyGroup, string> = {
   print: 'designer.page.groupPrint',
   assist: 'designer.page.groupAssist',
   background: 'designer.page.groupBackground',
+  advanced: 'designer.page.groupAdvanced',
 }
 
 function pageGroupLabel(group: PagePropertyGroup): string {

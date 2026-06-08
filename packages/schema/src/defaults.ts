@@ -1,5 +1,5 @@
 import type { LayoutStrategyKind, PageMode, PageModelKind, PaginationStrategyKind, ReflowStrategyKind, UnitType } from '@easyink/shared'
-import type { DocumentLayoutConfig, DocumentSchema, DocumentSchemaInput, GuideSchema, PageModelConfig, PageSchema, PaginationConfig, ReflowConfig } from './types'
+import type { DocumentLayoutConfig, DocumentSchema, DocumentSchemaInput, GuideSchema, PageModelConfig, PageSchema, PageWatermarkConfig, PaginationConfig, ReflowConfig, TextPageWatermarkConfig } from './types'
 import { DEFAULT_PAGE_HEIGHT_MM, DEFAULT_PAGE_WIDTH_MM, isObject, SCHEMA_VERSION } from '@easyink/shared'
 
 const UNIT_TYPES = new Set<UnitType>(['mm', 'pt', 'px', 'inch'])
@@ -8,6 +8,17 @@ const PAGE_MODEL_KINDS = new Set<PageModelKind>(['paged-paper', 'continuous-pape
 const LAYOUT_STRATEGIES = new Set<LayoutStrategyKind>(['absolute', 'stack-flow', 'region-flow'])
 const PAGINATION_STRATEGIES = new Set<PaginationStrategyKind>(['none', 'fixed-sheets', 'auto-sheets'])
 const REFLOW_STRATEGIES = new Set<ReflowStrategyKind>(['none', 'measure-only', 'flow-y'])
+
+export const DEFAULT_TEXT_PAGE_WATERMARK: Required<TextPageWatermarkConfig> = {
+  type: 'text',
+  enabled: false,
+  text: '',
+  rotation: -30,
+  opacity: 0.1,
+  fontSize: 18,
+  gap: 60,
+  color: '#b8b8b8',
+}
 
 export function createDefaultPage(): PageSchema {
   return normalizePageLayers({
@@ -58,6 +69,7 @@ function normalizePage(input: unknown, fallback: PageSchema): PageSchema {
     layout: isObject(input.layout) ? input.layout as unknown as PageSchema['layout'] : undefined,
     pagination: isObject(input.pagination) ? input.pagination as unknown as PageSchema['pagination'] : undefined,
     reflow: isObject(input.reflow) ? input.reflow as unknown as PageSchema['reflow'] : undefined,
+    watermark: normalizePageWatermark(input.watermark),
   })
 }
 
@@ -161,6 +173,36 @@ function normalizeReflowConfig(input: unknown, fallback: ReflowConfig): ReflowCo
       : fallback.preserveTrailingGap,
     collisionPolicy,
   }
+}
+
+function normalizePageWatermark(input: unknown): PageWatermarkConfig | undefined {
+  if (!isObject(input))
+    return undefined
+  if (input.type !== 'text')
+    return undefined
+
+  return {
+    type: 'text',
+    enabled: typeof input.enabled === 'boolean' ? input.enabled : DEFAULT_TEXT_PAGE_WATERMARK.enabled,
+    text: typeof input.text === 'string' ? input.text : DEFAULT_TEXT_PAGE_WATERMARK.text,
+    rotation: toFiniteNumber(input.rotation, DEFAULT_TEXT_PAGE_WATERMARK.rotation),
+    opacity: clamp(toFiniteNumber(input.opacity, DEFAULT_TEXT_PAGE_WATERMARK.opacity), 0, 1),
+    fontSize: toPositiveNumber(input.fontSize, DEFAULT_TEXT_PAGE_WATERMARK.fontSize),
+    gap: toPositiveNumber(input.gap, DEFAULT_TEXT_PAGE_WATERMARK.gap),
+    color: typeof input.color === 'string' && input.color.trim() ? input.color : DEFAULT_TEXT_PAGE_WATERMARK.color,
+  }
+}
+
+function toFiniteNumber(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
+function toPositiveNumber(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : fallback
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max)
 }
 
 function normalizeGuides(input: unknown, fallback: GuideSchema): GuideSchema {

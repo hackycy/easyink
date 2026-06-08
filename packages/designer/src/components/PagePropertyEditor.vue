@@ -81,6 +81,15 @@ function resolveText(key: string | undefined): string | undefined {
       disabled
     />
 
+    <!-- text -->
+    <EiInput
+      v-else-if="descriptor.editor === 'text'"
+      :label="label"
+      :model-value="String(value ?? '')"
+      @update:model-value="onPreview"
+      @commit="onCommit"
+    />
+
     <!-- number -->
     <EiNumberInput
       v-else-if="descriptor.editor === 'number'"

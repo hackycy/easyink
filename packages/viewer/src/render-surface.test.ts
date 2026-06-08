@@ -123,4 +123,78 @@ describe('renderPages', () => {
     expect(page).not.toBeNull()
     expect(page!.style.fontFamily).toBe('"ZCOOL KuaiLe"')
   })
+
+  it('renders text watermark as a page overlay', () => {
+    const container = document.createElement('div')
+    const registry = new MaterialRendererRegistry()
+    const pageSchema: PageSchema = {
+      mode: 'fixed',
+      width: 80,
+      height: 60,
+      watermark: {
+        type: 'text',
+        enabled: true,
+        text: 'DRAFT',
+        rotation: -30,
+        opacity: 0.1,
+        fontSize: 12,
+        gap: 40,
+        color: '#b8b8b8',
+      },
+    }
+
+    renderPages([{
+      index: 0,
+      width: 80,
+      height: 60,
+      elements: [],
+      yOffset: 0,
+    }], registry, {
+      container,
+      document,
+      zoom: 1,
+      unit: 'mm',
+      data: {},
+      resolvedPropsMap: new Map(),
+      pageSchema,
+    }, [])
+
+    const layer = container.querySelector('.ei-viewer-watermark') as HTMLElement | null
+    const tile = container.querySelector('.ei-viewer-watermark__tile') as HTMLElement | null
+    expect(layer).not.toBeNull()
+    expect(layer!.style.color).toBe('#b8b8b8')
+    expect(layer!.style.opacity).toBe('0.1')
+    expect(tile).not.toBeNull()
+    expect(tile!.textContent).toBe('DRAFT')
+    expect(tile!.style.fontSize).toBe('12mm')
+    expect(tile!.style.transform).toContain('rotate(-30deg)')
+  })
+
+  it('skips page watermark when disabled or blank', () => {
+    const container = document.createElement('div')
+    const registry = new MaterialRendererRegistry()
+
+    renderPages([{
+      index: 0,
+      width: 80,
+      height: 60,
+      elements: [],
+      yOffset: 0,
+    }], registry, {
+      container,
+      document,
+      zoom: 1,
+      unit: 'mm',
+      data: {},
+      resolvedPropsMap: new Map(),
+      pageSchema: {
+        mode: 'fixed',
+        width: 80,
+        height: 60,
+        watermark: { type: 'text', enabled: true, text: '   ' },
+      },
+    }, [])
+
+    expect(container.querySelector('.ei-viewer-watermark')).toBeNull()
+  })
 })

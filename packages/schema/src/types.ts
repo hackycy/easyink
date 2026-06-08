@@ -203,6 +203,7 @@ export interface PageSchema {
   grid?: GridConfig
   font?: string
   background?: PageBackground
+  watermark?: PageWatermarkConfig
   print?: PagePrintConfig
   pageModel?: PageModelConfig
   layout?: DocumentLayoutConfig
@@ -252,6 +253,19 @@ export interface PageBackground {
   height?: number
   offsetX?: number
   offsetY?: number
+}
+
+export type PageWatermarkConfig = TextPageWatermarkConfig
+
+export interface TextPageWatermarkConfig {
+  type: 'text'
+  enabled?: boolean
+  text?: string
+  rotation?: number
+  opacity?: number
+  fontSize?: number
+  gap?: number
+  color?: string
 }
 
 export interface PagePrintConfig {

@@ -109,6 +109,7 @@ export function validateSchemaIssues(schema: unknown): SchemaValidationIssue[] {
     validateLayoutConfig(page.layout, issues)
     validatePaginationConfig(page.pagination, issues)
     validateReflowConfig(page.reflow, issues)
+    validatePageWatermark(page.watermark, issues)
   }
 
   if (!isObject(schema.guides)) {
@@ -195,6 +196,39 @@ function validateReflowConfig(value: unknown, issues: SchemaValidationIssue[]): 
   }
   if (value.collisionPolicy != null && value.collisionPolicy !== 'diagnose' && value.collisionPolicy !== 'clip' && value.collisionPolicy !== 'push') {
     issues.push(createIssue('page.reflow.collisionPolicy', 'must be a supported collision policy', 'schema.page.reflow.collisionPolicy.invalid'))
+  }
+}
+
+function validatePageWatermark(value: unknown, issues: SchemaValidationIssue[]): void {
+  if (value == null)
+    return
+  if (!isObject(value)) {
+    issues.push(createIssue('page.watermark', 'must be an object', 'schema.page.watermark.invalid'))
+    return
+  }
+  if (value.type !== 'text') {
+    issues.push(createIssue('page.watermark.type', 'must be text', 'schema.page.watermark.type.invalid'))
+  }
+  if (value.enabled != null && typeof value.enabled !== 'boolean') {
+    issues.push(createIssue('page.watermark.enabled', 'must be a boolean when provided', 'schema.page.watermark.enabled.invalid'))
+  }
+  if (value.text != null && typeof value.text !== 'string') {
+    issues.push(createIssue('page.watermark.text', 'must be a string when provided', 'schema.page.watermark.text.invalid'))
+  }
+  if (value.rotation != null && (typeof value.rotation !== 'number' || !Number.isFinite(value.rotation))) {
+    issues.push(createIssue('page.watermark.rotation', 'must be a finite number when provided', 'schema.page.watermark.rotation.invalid'))
+  }
+  if (value.opacity != null && (typeof value.opacity !== 'number' || !Number.isFinite(value.opacity) || value.opacity < 0 || value.opacity > 1)) {
+    issues.push(createIssue('page.watermark.opacity', 'must be a number between 0 and 1 when provided', 'schema.page.watermark.opacity.invalid'))
+  }
+  if (value.fontSize != null && (typeof value.fontSize !== 'number' || !Number.isFinite(value.fontSize) || value.fontSize <= 0)) {
+    issues.push(createIssue('page.watermark.fontSize', 'must be a positive number when provided', 'schema.page.watermark.fontSize.invalid'))
+  }
+  if (value.gap != null && (typeof value.gap !== 'number' || !Number.isFinite(value.gap) || value.gap <= 0)) {
+    issues.push(createIssue('page.watermark.gap', 'must be a positive number when provided', 'schema.page.watermark.gap.invalid'))
+  }
+  if (value.color != null && typeof value.color !== 'string') {
+    issues.push(createIssue('page.watermark.color', 'must be a string when provided', 'schema.page.watermark.color.invalid'))
   }
 }
 

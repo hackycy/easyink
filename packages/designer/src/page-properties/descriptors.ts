@@ -1,6 +1,7 @@
 import type { PageSchema } from '@easyink/schema'
 import type { LayoutStrategyKind } from '@easyink/shared'
 import type { PagePropertyContext, PagePropertyDescriptor } from './types'
+import { DEFAULT_TEXT_PAGE_WATERMARK as DEFAULT_TEXT_WATERMARK } from '@easyink/schema'
 import { PAPER_PRESETS } from '@easyink/shared'
 
 const UNIT_OPTIONS: NonNullable<PagePropertyDescriptor['enum']> = [
@@ -520,6 +521,188 @@ const BG_OFFSET_Y_DESCRIPTOR: PagePropertyDescriptor = {
   },
 }
 
+// ─── Advanced Group ─────────────────────────────────────────────
+
+const WATERMARK_ENABLED_DESCRIPTOR: PagePropertyDescriptor = {
+  id: 'watermarkEnabled',
+  group: 'advanced',
+  source: 'page',
+  path: 'watermark.enabled',
+  label: 'designer.page.watermarkEnabled',
+  persisted: 'schema',
+  editor: 'switch',
+  read(ctx) {
+    return ctx.document.page.watermark?.type === 'text' ? ctx.document.page.watermark.enabled === true : false
+  },
+  normalize(value, ctx) {
+    return createTextWatermarkPatch(ctx, { enabled: value === true })
+  },
+}
+
+const WATERMARK_TEXT_DESCRIPTOR: PagePropertyDescriptor = {
+  id: 'watermarkText',
+  group: 'advanced',
+  source: 'page',
+  path: 'watermark.text',
+  label: 'designer.page.watermarkText',
+  persisted: 'schema',
+  editor: 'text',
+  visible: isTextWatermarkEnabled,
+  read(ctx) {
+    return readTextWatermark(ctx).text
+  },
+  normalize(value, ctx) {
+    return createTextWatermarkPatch(ctx, { text: String(value ?? '') })
+  },
+}
+
+const WATERMARK_ROTATION_DESCRIPTOR: PagePropertyDescriptor = {
+  id: 'watermarkRotation',
+  group: 'advanced',
+  source: 'page',
+  path: 'watermark.rotation',
+  label: 'designer.page.watermarkRotation',
+  persisted: 'schema',
+  editor: 'number',
+  min: -180,
+  max: 180,
+  step: 1,
+  visible: isTextWatermarkEnabled,
+  read(ctx) {
+    return readTextWatermark(ctx).rotation
+  },
+  normalize(value, ctx) {
+    const watermark = readTextWatermark(ctx)
+    return createTextWatermarkPatch(ctx, { rotation: toFiniteNumberInput(value, watermark.rotation) })
+  },
+}
+
+const WATERMARK_OPACITY_DESCRIPTOR: PagePropertyDescriptor = {
+  id: 'watermarkOpacity',
+  group: 'advanced',
+  source: 'page',
+  path: 'watermark.opacity',
+  label: 'designer.page.watermarkOpacity',
+  persisted: 'schema',
+  editor: 'number-slider',
+  min: 0,
+  max: 100,
+  step: 1,
+  nullable: false,
+  visible: isTextWatermarkEnabled,
+  read(ctx) {
+    return Math.round(readTextWatermark(ctx).opacity * 100)
+  },
+  normalize(value, ctx) {
+    const watermark = readTextWatermark(ctx)
+    const opacityPercent = toFiniteNumberInput(value, watermark.opacity * 100)
+    return createTextWatermarkPatch(ctx, { opacity: clamp(opacityPercent / 100, 0, 1) })
+  },
+}
+
+const WATERMARK_FONT_SIZE_DESCRIPTOR: PagePropertyDescriptor = {
+  id: 'watermarkFontSize',
+  group: 'advanced',
+  source: 'page',
+  path: 'watermark.fontSize',
+  label: 'designer.page.watermarkFontSize',
+  persisted: 'schema',
+  editor: 'number',
+  min: 1,
+  max: 500,
+  step: 1,
+  visible: isTextWatermarkEnabled,
+  read(ctx) {
+    return readTextWatermark(ctx).fontSize
+  },
+  normalize(value, ctx) {
+    const watermark = readTextWatermark(ctx)
+    return createTextWatermarkPatch(ctx, { fontSize: toPositiveNumberInput(value, watermark.fontSize) })
+  },
+}
+
+const WATERMARK_GAP_DESCRIPTOR: PagePropertyDescriptor = {
+  id: 'watermarkGap',
+  group: 'advanced',
+  source: 'page',
+  path: 'watermark.gap',
+  label: 'designer.page.watermarkGap',
+  persisted: 'schema',
+  editor: 'number',
+  min: 1,
+  max: 2000,
+  step: 1,
+  visible: isTextWatermarkEnabled,
+  read(ctx) {
+    return readTextWatermark(ctx).gap
+  },
+  normalize(value, ctx) {
+    const watermark = readTextWatermark(ctx)
+    return createTextWatermarkPatch(ctx, { gap: toPositiveNumberInput(value, watermark.gap) })
+  },
+}
+
+const WATERMARK_COLOR_DESCRIPTOR: PagePropertyDescriptor = {
+  id: 'watermarkColor',
+  group: 'advanced',
+  source: 'page',
+  path: 'watermark.color',
+  label: 'designer.page.watermarkColor',
+  persisted: 'schema',
+  editor: 'color',
+  visible: isTextWatermarkEnabled,
+  read(ctx) {
+    return readTextWatermark(ctx).color
+  },
+  normalize(value, ctx) {
+    return createTextWatermarkPatch(ctx, { color: String(value || DEFAULT_TEXT_WATERMARK.color) })
+  },
+}
+
+function isTextWatermarkEnabled(ctx: PagePropertyContext): boolean {
+  return ctx.document.page.watermark?.type === 'text' && ctx.document.page.watermark.enabled === true
+}
+
+function readTextWatermark(ctx: PagePropertyContext): typeof DEFAULT_TEXT_WATERMARK {
+  const watermark = ctx.document.page.watermark
+  if (watermark?.type !== 'text')
+    return DEFAULT_TEXT_WATERMARK
+  return {
+    ...DEFAULT_TEXT_WATERMARK,
+    ...watermark,
+  }
+}
+
+function createTextWatermarkPatch(
+  ctx: PagePropertyContext,
+  updates: Partial<Omit<typeof DEFAULT_TEXT_WATERMARK, 'type'>>,
+) {
+  const watermark = {
+    ...readTextWatermark(ctx),
+    ...updates,
+    type: 'text' as const,
+  }
+  return { page: { watermark } }
+}
+
+function clamp(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value))
+    return min
+  return Math.min(Math.max(value, min), max)
+}
+
+function toFiniteNumberInput(value: unknown, fallback: number): number {
+  if (value == null || value === '')
+    return fallback
+  const numeric = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(numeric) ? numeric : fallback
+}
+
+function toPositiveNumberInput(value: unknown, fallback: number): number {
+  const numeric = toFiniteNumberInput(value, fallback)
+  return numeric > 0 ? numeric : fallback
+}
+
 function createModePresetPatch(mode: PageSchema['mode'], page: PageSchema): Partial<PageSchema> {
   if (mode === 'continuous') {
     return {
@@ -607,4 +790,12 @@ export const PAGE_PROPERTY_DESCRIPTORS: PagePropertyDescriptor[] = [
   BG_HEIGHT_DESCRIPTOR,
   BG_OFFSET_X_DESCRIPTOR,
   BG_OFFSET_Y_DESCRIPTOR,
+  // advanced
+  WATERMARK_ENABLED_DESCRIPTOR,
+  WATERMARK_TEXT_DESCRIPTOR,
+  WATERMARK_ROTATION_DESCRIPTOR,
+  WATERMARK_OPACITY_DESCRIPTOR,
+  WATERMARK_FONT_SIZE_DESCRIPTOR,
+  WATERMARK_GAP_DESCRIPTOR,
+  WATERMARK_COLOR_DESCRIPTOR,
 ]

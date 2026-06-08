@@ -144,4 +144,42 @@ describe('normalizeDocumentSchema', () => {
     expect(schema.page.pagination).toMatchObject({ strategy: 'auto-sheets', pageCount: 3 })
     expect(schema.page.reflow?.strategy).toBe('measure-only')
   })
+
+  it('normalizes text page watermark settings', () => {
+    const schema = normalizeDocumentSchema({
+      page: {
+        watermark: {
+          type: 'text',
+          enabled: true,
+          text: 'CONFIDENTIAL',
+          rotation: Number.NaN,
+          opacity: 2,
+          fontSize: 0,
+          gap: 20,
+          color: '',
+        },
+      },
+    })
+
+    expect(schema.page.watermark).toEqual({
+      type: 'text',
+      enabled: true,
+      text: 'CONFIDENTIAL',
+      rotation: -30,
+      opacity: 1,
+      fontSize: 18,
+      gap: 20,
+      color: '#b8b8b8',
+    })
+  })
+
+  it('drops unsupported page watermark types from loose input', () => {
+    const schema = normalizeDocumentSchema({
+      page: {
+        watermark: { type: 'image', enabled: true },
+      },
+    } as never)
+
+    expect(schema.page.watermark).toBeUndefined()
+  })
 })
