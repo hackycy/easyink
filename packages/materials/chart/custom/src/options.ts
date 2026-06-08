@@ -89,15 +89,21 @@ function compileOptionCode(source: string): OptionFactory {
   if (cached)
     return cached
 
-  const factory = isFunctionBodySource(source)
-    ? createBodyFactory(source)
-    : createExpressionFactory(source)
+  // Prefer expression syntax when it compiles; this is syntax-only and never probes by running user code.
+  const expression = tryCreateFactory(() => createExpressionFactory(source))
+  const assignmentBody = tryCreateFactory(() => createAssignmentBodyFactory(source))
+  const factory = expression.factory ?? assignmentBody.factory ?? createBodyFactory(source)
   codeCache.set(source, factory)
   return factory
 }
 
-function isFunctionBodySource(source: string): boolean {
-  return /^(?:return\b|function\s+option\b|const\b|let\b|var\b)/.test(source)
+function tryCreateFactory(create: () => OptionFactory): { factory?: OptionFactory } {
+  try {
+    return { factory: create() }
+  }
+  catch {
+    return {}
+  }
 }
 
 function createBodyFactory(source: string): OptionFactory {
@@ -117,7 +123,7 @@ function createBodyFactory(source: string): OptionFactory {
   return ctx => fn(undefined, undefined, undefined, undefined, undefined, undefined, undefined, ctx, echarts)
 }
 
-function createExpressionFactory(source: string): OptionFactory {
+function createAssignmentBodyFactory(source: string): OptionFactory {
   // eslint-disable-next-line no-new-func -- Trusted material option source; documented as non-sandboxed.
   const fn = new Function(
     'window',
@@ -129,9 +135,27 @@ function createExpressionFactory(source: string): OptionFactory {
     'sessionStorage',
     'ctx',
     'echarts',
-    `"use strict"; return (${source});`,
+    `"use strict";\nlet option;\n${source}\n;if (typeof option === "function") return option;\nif (typeof option !== "undefined") return option;`,
   )
   return ctx => fn(undefined, undefined, undefined, undefined, undefined, undefined, undefined, ctx, echarts)
+}
+
+function createExpressionFactory(source: string): OptionFactory {
+  // eslint-disable-next-line no-new-func -- Trusted material option source; documented as non-sandboxed.
+  const fn = new Function(
+    'window',
+    'document',
+    'globalThis',
+    'fetch',
+    'XMLHttpRequest',
+    'localStorage',
+    'sessionStorage',
+    'option',
+    'ctx',
+    'echarts',
+    `"use strict"; return (${source});`,
+  )
+  return ctx => fn(undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, ctx, echarts)
 }
 
 function normalizeOption(raw: unknown, diagnostics: ChartCustomOptionDiagnostic[]): EChartsOption | null {

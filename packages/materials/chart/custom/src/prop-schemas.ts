@@ -1,4 +1,5 @@
 import type { PropSchema } from '@easyink/core'
+import { CHART_CUSTOM_DEFAULT_OPTION_CODE } from './schema'
 
 export const chartCustomDesignerPropSchemas: PropSchema[] = [
   {
@@ -12,7 +13,7 @@ export const chartCustomDesignerPropSchemas: PropSchema[] = [
       rows: 8,
       editorHeight: 520,
       dialogWidth: 920,
-      placeholder: 'return {\n  series: [{ type: "bar", data: [1, 2, 3] }]\n}',
+      placeholder: CHART_CUSTOM_DEFAULT_OPTION_CODE,
     },
   },
   { key: 'backgroundColor', label: 'designer.property.background', type: 'color', group: 'appearance' },

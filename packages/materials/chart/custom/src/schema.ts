@@ -9,7 +9,20 @@ export interface ChartCustomProps {
   backgroundColor: string
 }
 
-export const CHART_CUSTOM_DEFAULT_OPTION_CODE = `return {
+export const CHART_CUSTOM_DEFAULT_OPTION_CODE = `// Write trusted JavaScript that produces an ECharts option object.
+// Supported forms:
+// 1. return { ... }
+// 2. option = { ... }       // common ECharts documentation style
+// 3. const option = { ... }
+// 4. (ctx) => ({ ... })
+// Available context:
+// - ctx.data: viewer datasource object
+// - ctx.node: current material node
+// - ctx.width / ctx.height / ctx.unit: current material size
+// - ctx.echarts or echarts: full ECharts namespace
+// When this material has a datasource binding, the bound option object or JSON
+// string takes precedence over this code.
+return {
   tooltip: {},
   xAxis: { type: 'category', data: ['A', 'B', 'C'] },
   yAxis: { type: 'value' },
