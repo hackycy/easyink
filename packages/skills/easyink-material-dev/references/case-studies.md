@@ -119,10 +119,10 @@ Viewer lessons:
 Use as the custom ECharts reference:
 
 - Schema type is `chart-custom`.
-- Props store `optionMode`, `optionCode`, `option`, and visual props such as `backgroundColor`.
+- Props store `optionCode`, `option`, and visual props such as `backgroundColor`.
 - `optionCode` is JavaScript source text, not a function value. Keep Schema JSON-safe.
 - Binding is ordinary: `binding.kind='ordinary'`, `primaryProp='option'`, and `formatEditor` exposes only `custom`.
-- Bound option values may be objects or JSON strings. Viewer reads them from `context.resolvedProps.option`.
+- Bound option values may be objects or JSON strings. Viewer reads them from `context.resolvedProps.option`, prefers them when present, and falls back to `optionCode` when a binding has no value yet.
 - Code-authored options support body and expression styles such as `return { ... }`, `({ ... })`, `(ctx) => ({ ... })`, and `function option(ctx) { ... }`.
 - Option code is trusted template code. It is not a sandbox; failures become warning diagnostics and fall back to a visible default option.
 - Designer registration keeps metadata synchronous and loads the heavy renderer through `lazyFactory`.

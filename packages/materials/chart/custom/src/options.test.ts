@@ -36,8 +36,7 @@ describe('chart custom options', () => {
   it('uses bound object options', () => {
     const result = resolveChartCustomOption({
       ...CHART_CUSTOM_DEFAULTS,
-      optionMode: 'bound',
-    }, baseContext({ boundOption: { series: [{ type: 'scatter', data: [[1, 2]] }] } }))
+    }, baseContext({ boundOption: { series: [{ type: 'scatter', data: [[1, 2]] }] }, hasBinding: true }))
 
     expect(result.option).toMatchObject({ series: [{ type: 'scatter' }] })
   })
@@ -45,8 +44,7 @@ describe('chart custom options', () => {
   it('parses bound JSON options', () => {
     const result = resolveChartCustomOption({
       ...CHART_CUSTOM_DEFAULTS,
-      optionMode: 'bound',
-    }, baseContext({ boundOption: '{"series":[{"type":"gauge","data":[{"value":60}]}]}' }))
+    }, baseContext({ boundOption: '{"series":[{"type":"gauge","data":[{"value":60}]}]}', hasBinding: true }))
 
     expect(result.option).toMatchObject({ series: [{ type: 'gauge' }] })
   })
@@ -54,11 +52,28 @@ describe('chart custom options', () => {
   it('falls back to a visible option for invalid bound values', () => {
     const result = resolveChartCustomOption({
       ...CHART_CUSTOM_DEFAULTS,
-      optionMode: 'bound',
-    }, baseContext({ boundOption: 'not json' }))
+    }, baseContext({ boundOption: 'not json', hasBinding: true }))
 
     expect(result.diagnostics.map(item => item.code)).toContain('CHART_CUSTOM_OPTION_JSON_FAILED')
     expect(result.option).toMatchObject({ series: [{ type: 'bar' }] })
+  })
+
+  it('uses option code when no datasource binding is present', () => {
+    const result = resolveChartCustomOption({
+      ...CHART_CUSTOM_DEFAULTS,
+      optionCode: 'return { series: [{ type: "line", data: [9] }] }',
+    }, baseContext({ boundOption: { series: [{ type: 'scatter', data: [[1, 2]] }] }, hasBinding: false }))
+
+    expect(result.option).toMatchObject({ series: [{ type: 'line', data: [9] }] })
+  })
+
+  it('falls back to option code when a datasource binding has no value yet', () => {
+    const result = resolveChartCustomOption({
+      ...CHART_CUSTOM_DEFAULTS,
+      optionCode: 'return { series: [{ type: "line", data: [8] }] }',
+    }, baseContext({ boundOption: undefined, hasBinding: true }))
+
+    expect(result.option).toMatchObject({ series: [{ type: 'line', data: [8] }] })
   })
 })
 

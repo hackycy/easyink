@@ -2,21 +2,11 @@ import type { PropSchema } from '@easyink/core'
 
 export const chartCustomDesignerPropSchemas: PropSchema[] = [
   {
-    key: 'optionMode',
-    label: 'materials.chartCustom.property.optionMode',
-    type: 'enum',
-    group: 'content',
-    enum: [
-      { label: 'materials.chartCustom.optionMode.code', value: 'code' },
-      { label: 'materials.chartCustom.optionMode.bound', value: 'bound' },
-    ],
-  },
-  {
     key: 'optionCode',
     label: 'materials.chartCustom.property.optionCode',
     type: 'code',
     group: 'content',
-    visible: props => props.optionMode !== 'bound',
+    visible: props => props.__hasBinding !== true,
     editorOptions: {
       language: 'javascript',
       rows: 8,

@@ -29,6 +29,6 @@ describe('chart custom designer extension', () => {
       fieldLabel: 'Option',
       format: undefined,
     })
-    expect(draft.props.optionMode).toBe('bound')
+    expect(draft.props).not.toHaveProperty('optionMode')
   })
 })

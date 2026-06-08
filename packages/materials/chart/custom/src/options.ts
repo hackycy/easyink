@@ -15,6 +15,7 @@ const DEFAULT_OPTION: EChartsOption = {
 export interface ChartCustomOptionContext {
   data: Record<string, unknown>
   boundOption?: unknown
+  hasBinding?: boolean
   props: ChartCustomProps
   node: MaterialNode
   width: number
@@ -45,8 +46,8 @@ export function resolveChartCustomOption(
 ): ChartCustomOptionResult {
   const props = resolveChartCustomProps({ ...propsInput, ...context.props })
   const diagnostics: ChartCustomOptionDiagnostic[] = []
-  const raw = props.optionMode === 'bound'
-    ? context.boundOption ?? props.option
+  const raw = context.hasBinding && context.boundOption != null
+    ? context.boundOption
     : runOptionCode(props.optionCode, { ...context, props, echarts }, diagnostics)
   const option = normalizeOption(raw, diagnostics)
   return { option: option ?? deepClone(DEFAULT_OPTION), diagnostics }
@@ -54,7 +55,6 @@ export function resolveChartCustomOption(
 
 export function resolveChartCustomProps(props: Partial<ChartCustomProps>): ChartCustomProps {
   return {
-    optionMode: props.optionMode === 'bound' ? 'bound' : 'code',
     optionCode: typeof props.optionCode === 'string' ? props.optionCode : CHART_CUSTOM_DEFAULTS.optionCode,
     option: props.option ?? CHART_CUSTOM_DEFAULTS.option,
     backgroundColor: typeof props.backgroundColor === 'string' ? props.backgroundColor : CHART_CUSTOM_DEFAULTS.backgroundColor,

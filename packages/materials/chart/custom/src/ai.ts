@@ -3,13 +3,14 @@ import type { AIMaterialDescriptor } from '@easyink/shared'
 export const chartCustomAIMaterialDescriptor = {
   type: 'chart-custom',
   description: 'Custom ECharts material for advanced chart option code or a bound option object/JSON string.',
-  properties: ['optionMode', 'optionCode', 'option', 'backgroundColor'],
-  requiredProps: ['optionMode'],
+  properties: ['optionCode', 'backgroundColor'],
+  requiredProps: [],
   binding: 'single',
   usage: [
     'Use chart-custom only when built-in chart materials cannot express the requested chart.',
-    'Use props.optionMode = "code" and props.optionCode for trusted JavaScript that returns an ECharts option.',
+    'Use props.optionCode for trusted JavaScript that returns an ECharts option when no datasource field is bound.',
     'Use ordinary binding to bind a datasource field that already returns an ECharts option object or JSON string.',
+    'When ordinary binding exists, the bound datasource option takes precedence over props.optionCode.',
     'Do not use chart-custom for simple bar, line, pie, radar, scatter, or gauge charts when a dedicated material fits.',
   ],
   schemaRules: [

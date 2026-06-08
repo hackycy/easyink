@@ -2,7 +2,7 @@ import type { DatasourceDropHandler, MaterialDesignerExtension, MaterialExtensio
 import type { BindingRef, MaterialNode } from '@easyink/schema'
 import type { ChartCustomProps } from './schema'
 import { mountFullECharts } from '@easyink/material-chart-kernel/full'
-import { getNodeProps } from '@easyink/schema'
+import { getBindingRefs, getNodeProps } from '@easyink/schema'
 import { resolveChartCustomOption, resolveChartCustomProps } from './options'
 
 export function createChartCustomExtension(context: MaterialExtensionContext): MaterialDesignerExtension {
@@ -35,6 +35,7 @@ function createDesignerOption(node: MaterialNode) {
   return resolveChartCustomOption(props, {
     data: {},
     boundOption: props.option,
+    hasBinding: getBindingRefs(node.binding).length > 0,
     node,
     width: node.width,
     height: node.height,
@@ -55,10 +56,6 @@ function createDatasourceDropHandler(context: MaterialExtensionContext): Datasou
       const binding = createBinding(field)
       context.tx.run<MaterialNode>(node.id, (draft) => {
         draft.binding = binding
-        draft.props = {
-          ...draft.props,
-          optionMode: 'bound',
-        }
       }, { label: 'designer.history.bindField' })
     },
   }

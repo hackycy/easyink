@@ -374,7 +374,7 @@ viewer.open({
 const node = {
   type: 'sales-echarts',
   props: {
-    optionMode: 'bound',
+    optionCode: 'return { series: [{ type: "bar", data: [1, 2, 3] }] }',
     option: null,
   },
   binding: {

@@ -3,15 +3,10 @@ const zhCN = {
     chartCustom: {
       name: '自定义 ECharts',
       property: {
-        optionMode: 'Option 来源',
-        optionCode: 'Option 代码',
-      },
-      optionMode: {
-        code: '代码编辑',
-        bound: '数据绑定',
+        optionCode: '配置',
       },
       datasource: {
-        bindOption: '绑定为 ECharts option',
+        bindOption: '绑定为 ECharts Option',
       },
     },
   },
@@ -22,15 +17,10 @@ const enUS = {
     chartCustom: {
       name: 'Custom ECharts',
       property: {
-        optionMode: 'Option Source',
-        optionCode: 'Option Code',
-      },
-      optionMode: {
-        code: 'Code',
-        bound: 'Binding',
+        optionCode: 'Configuration',
       },
       datasource: {
-        bindOption: 'Bind as ECharts option',
+        bindOption: 'Bind as ECharts Option',
       },
     },
   },

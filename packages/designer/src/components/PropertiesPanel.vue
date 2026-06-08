@@ -7,6 +7,7 @@ import type { PagePropertyContext, PagePropertyDescriptor, PagePropertyGroup } f
 import type { DesignerResolvedAsset, PanelSectionId, PropSchema } from '../types'
 import { ClearBindingCommand, getByPath, setByPath, UpdateBindingFormatCommand, UpdateDocumentCommand, UpdateGeometryCommand, UpdateMaterialBindingCommand, UpdateMaterialMetaCommand, UpdateMaterialPropsCommand, UpdatePageCommand } from '@easyink/core'
 import { createLayoutBehaviorPropSchemas, groupPropSchemas } from '@easyink/prop-schemas'
+import { getBindingRefs } from '@easyink/schema'
 import { deepClone, PAPER_PRESETS } from '@easyink/shared'
 import { EiNumberInput, EiPanel, EiSwitch } from '@easyink/ui'
 import { computed, shallowRef, watchEffect } from 'vue'
@@ -380,6 +381,7 @@ const visibleSchemas = computed(() => {
     return []
   const elProps = {
     ...el.props,
+    __hasBinding: getBindingRefs(el.binding).length > 0,
     __placementMode: el.placement?.mode ?? ((el.props as Record<string, unknown>).layoutMode === 'fixed' ? 'fixed' : 'flow'),
   }
   return materialSchemas.value.filter(s => !s.visible || s.visible(elProps))

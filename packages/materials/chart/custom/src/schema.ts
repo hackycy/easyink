@@ -3,10 +3,7 @@ import { convertUnit, generateId } from '@easyink/shared'
 
 export const CHART_CUSTOM_TYPE = 'chart-custom'
 
-export type ChartCustomOptionMode = 'code' | 'bound'
-
 export interface ChartCustomProps {
-  optionMode: ChartCustomOptionMode
   optionCode: string
   option: unknown
   backgroundColor: string
@@ -20,7 +17,6 @@ export const CHART_CUSTOM_DEFAULT_OPTION_CODE = `return {
 }`
 
 export const CHART_CUSTOM_DEFAULTS: ChartCustomProps = {
-  optionMode: 'code',
   optionCode: CHART_CUSTOM_DEFAULT_OPTION_CODE,
   option: null,
   backgroundColor: '',
