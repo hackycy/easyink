@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createBarEChartsOption, createGaugeEChartsOption, createLineEChartsOption, createRadarEChartsOption, DEFAULT_CHART_PREVIEW_DATA, normalizeCategoryValueData } from './index'
+import { createBarEChartsOption, createChartDesignerRenderHost, createGaugeEChartsOption, createLineEChartsOption, createRadarEChartsOption, DEFAULT_CHART_PREVIEW_DATA, normalizeCategoryValueData } from './index'
 
 describe('normalizeCategoryValueData', () => {
   it('reads label/value record arrays', () => {
@@ -24,6 +24,25 @@ describe('normalizeCategoryValueData', () => {
 
   it('falls back to preview data for unsupported input', () => {
     expect(normalizeCategoryValueData('not chart data')).toEqual(DEFAULT_CHART_PREVIEW_DATA)
+  })
+})
+
+describe('createChartDesignerRenderHost', () => {
+  it('places a transparent interaction mask above the chart element', () => {
+    const container = document.createElement('div')
+    const { chartEl, maskEl } = createChartDesignerRenderHost(container)
+    const hostEl = container.firstElementChild as HTMLElement
+
+    expect(hostEl).toBeTruthy()
+    expect(hostEl.children).toHaveLength(2)
+    expect(hostEl.children[0]).toBe(chartEl)
+    expect(hostEl.children[1]).toBe(maskEl)
+    expect(hostEl.style.position).toBe('relative')
+    expect(chartEl.style.position).toBe('absolute')
+    expect(maskEl.style.position).toBe('absolute')
+    expect(maskEl.style.inset).toBe('0')
+    expect(maskEl.style.zIndex).toBe('1')
+    expect(maskEl.style.background).toBe('transparent')
   })
 })
 

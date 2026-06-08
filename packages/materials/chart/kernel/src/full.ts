@@ -2,6 +2,7 @@ import type { EChartsOption } from 'echarts'
 import type { ChartMountHandle } from './types'
 import * as echarts from 'echarts'
 
+export { createChartDesignerRenderHost } from './designer'
 export { echarts }
 export type { EChartsOption }
 

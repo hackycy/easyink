@@ -25,6 +25,11 @@ export interface ChartMountHandle {
   dispose: () => void
 }
 
+export interface ChartDesignerRenderHost {
+  chartEl: HTMLElement
+  maskEl: HTMLElement
+}
+
 export interface BarChartStyleOptions {
   barColor: string
   backgroundColor: string

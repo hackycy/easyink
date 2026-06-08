@@ -1,7 +1,7 @@
 import type { DatasourceDropHandler, MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
 import type { BindingRef, MaterialNode } from '@easyink/schema'
 import type { ChartCustomProps } from './schema'
-import { mountFullECharts } from '@easyink/material-chart-kernel/full'
+import { createChartDesignerRenderHost, mountFullECharts } from '@easyink/material-chart-kernel/full'
 import { getBindingRefs, getNodeProps } from '@easyink/schema'
 import { resolveChartCustomOption, resolveChartCustomProps } from './options'
 
@@ -9,10 +9,7 @@ export function createChartCustomExtension(context: MaterialExtensionContext): M
   return {
     renderContent(nodeSignal, container) {
       container.replaceChildren()
-      const chartEl = document.createElement('div')
-      chartEl.style.width = '100%'
-      chartEl.style.height = '100%'
-      container.appendChild(chartEl)
+      const { chartEl } = createChartDesignerRenderHost(container)
 
       const initialNode = nodeSignal.get()
       const mount = mountFullECharts(chartEl, createDesignerOption(initialNode))
