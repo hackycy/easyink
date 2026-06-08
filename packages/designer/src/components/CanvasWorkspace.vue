@@ -22,6 +22,7 @@ import { getVisibleResizeHandles } from '../materials/control-policy'
 import { getSelectionBox } from '../snap'
 import { clampWorkspaceWindows, hasUsableWorkspaceRect, resolveAnchoredWorkspaceWindows } from '../store/workspace-window-layout'
 import { CANVAS_CONTAINER_KEY } from './canvas-container'
+import { resolveScrollPositionForSurfaceCenter, resolveVisibleSurfaceRect } from './canvas-viewport'
 import CanvasContextMenu from './CanvasContextMenu.vue'
 import CanvasElementContent from './CanvasElementContent.vue'
 import CanvasRuler from './CanvasRuler.vue'
@@ -438,15 +439,25 @@ function updateViewportSurfaceRect() {
   const zoom = store.workbench.viewport.zoom || 1
   const scrollRect = scrollEl.getBoundingClientRect()
   const surfaceRect = surfaceEl.getBoundingClientRect()
-  viewportSurfaceRect.value = {
-    x: Math.max((scrollRect.left - surfaceRect.left) / zoom, 0),
-    y: Math.max((scrollRect.top - surfaceRect.top) / zoom, 0),
-    width: scrollRect.width / zoom,
-    height: scrollRect.height / zoom,
-  }
+  viewportSurfaceRect.value = resolveVisibleSurfaceRect({
+    unit: store.schema.unit,
+    zoom,
+    scrollRect: {
+      left: scrollRect.left,
+      top: scrollRect.top,
+    },
+    surfaceRect: {
+      left: surfaceRect.left,
+      top: surfaceRect.top,
+    },
+    viewportSize: {
+      width: scrollEl.clientWidth,
+      height: scrollEl.clientHeight,
+    },
+  })
 }
 
-function handleMinimapNavigate(point: { x: number, y: number }) {
+function handleMinimapNavigate(surfacePoint: { x: number, y: number }) {
   const scrollEl = scrollRef.value
   const surfaceEl = pageRef.value
   if (!scrollEl || !surfaceEl)
@@ -455,12 +466,30 @@ function handleMinimapNavigate(point: { x: number, y: number }) {
   const zoom = store.workbench.viewport.zoom || 1
   const scrollRect = scrollEl.getBoundingClientRect()
   const surfaceRect = surfaceEl.getBoundingClientRect()
-  const surfaceLeftInScroll = surfaceRect.left - scrollRect.left + scrollEl.scrollLeft
-  const surfaceTopInScroll = surfaceRect.top - scrollRect.top + scrollEl.scrollTop
+  const scrollPosition = resolveScrollPositionForSurfaceCenter(surfacePoint, {
+    unit: store.schema.unit,
+    zoom,
+    scrollRect: {
+      left: scrollRect.left,
+      top: scrollRect.top,
+    },
+    surfaceRect: {
+      left: surfaceRect.left,
+      top: surfaceRect.top,
+    },
+    scrollOffset: {
+      left: scrollEl.scrollLeft,
+      top: scrollEl.scrollTop,
+    },
+    viewportSize: {
+      width: scrollEl.clientWidth,
+      height: scrollEl.clientHeight,
+    },
+  })
 
   scrollEl.scrollTo({
-    left: surfaceLeftInScroll + point.x * zoom - scrollEl.clientWidth / 2,
-    top: surfaceTopInScroll + point.y * zoom - scrollEl.clientHeight / 2,
+    left: scrollPosition.left,
+    top: scrollPosition.top,
     behavior: 'smooth',
   })
 }

@@ -5,6 +5,11 @@ import { createEditorSurfacePlan } from '@easyink/core'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useDesignerStore } from '../composables'
 import { resolveMinimapLayout } from './minimap-layout'
+import {
+  projectMinimapClientPointToSurface,
+  resolveMinimapRectStyle,
+  resolveMinimapViewportRect,
+} from './minimap-viewport'
 
 const props = defineProps<{
   surfacePlan?: EditorSurfacePlan
@@ -12,7 +17,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  navigate: [point: { x: number, y: number }]
+  navigate: [surfacePoint: { x: number, y: number }]
 }>()
 
 const store = useDesignerStore()
@@ -37,18 +42,14 @@ const canvasStyle = computed(() => ({
 }))
 
 const viewportStyle = computed(() => {
-  if (!props.viewportRect)
+  const rect = resolveMinimapViewportRect(props.viewportRect, layout.value.bounds)
+  if (!rect)
     return null
-  const bounds = layout.value.bounds
-  const clipped = clipRect(props.viewportRect, bounds)
-  if (!clipped)
-    return null
-  if (rectContains(clipped, bounds))
-    return null
-  return rectStyle(clipped)
+  return rectStyle(rect)
 })
 
 let resizeObserver: ResizeObserver | null = null
+let activePointerId: number | null = null
 
 function measure() {
   const el = rootRef.value
@@ -58,35 +59,7 @@ function measure() {
 }
 
 function rectStyle(rect: Rect) {
-  const bounds = layout.value.bounds
-  return {
-    left: `${((rect.x - bounds.x) / bounds.width) * 100}%`,
-    top: `${((rect.y - bounds.y) / bounds.height) * 100}%`,
-    width: `${(rect.width / bounds.width) * 100}%`,
-    height: `${(rect.height / bounds.height) * 100}%`,
-  }
-}
-
-function clipRect(rect: Rect, bounds: Rect): Rect | null {
-  const left = Math.max(rect.x, bounds.x)
-  const top = Math.max(rect.y, bounds.y)
-  const right = Math.min(rect.x + rect.width, bounds.x + bounds.width)
-  const bottom = Math.min(rect.y + rect.height, bounds.y + bounds.height)
-  if (right <= left || bottom <= top)
-    return null
-  return {
-    x: left,
-    y: top,
-    width: right - left,
-    height: bottom - top,
-  }
-}
-
-function rectContains(rect: Rect, bounds: Rect): boolean {
-  return rect.x <= bounds.x
-    && rect.y <= bounds.y
-    && rect.x + rect.width >= bounds.x + bounds.width
-    && rect.y + rect.height >= bounds.y + bounds.height
+  return resolveMinimapRectStyle(rect, layout.value.bounds)
 }
 
 function frameStyle(frame: MinimapPageFrame) {
@@ -99,11 +72,41 @@ function elementStyle(element: MinimapElementFrame) {
 
 function handlePointerDown(event: PointerEvent) {
   const target = event.currentTarget as HTMLElement
+  activePointerId = event.pointerId
+  target.setPointerCapture?.(event.pointerId)
+  event.preventDefault()
+  navigateFromPointer(event)
+}
+
+function handlePointerMove(event: PointerEvent) {
+  if (activePointerId !== event.pointerId)
+    return
+  navigateFromPointer(event)
+}
+
+function handlePointerUp(event: PointerEvent) {
+  if (activePointerId !== event.pointerId)
+    return
+  activePointerId = null
+  const target = event.currentTarget as HTMLElement
+  target.releasePointerCapture?.(event.pointerId)
+}
+
+function navigateFromPointer(event: PointerEvent) {
+  const target = event.currentTarget as HTMLElement
   const rect = target.getBoundingClientRect()
-  const bounds = layout.value.bounds
-  const x = bounds.x + ((event.clientX - rect.left) / rect.width) * bounds.width
-  const y = bounds.y + ((event.clientY - rect.top) / rect.height) * bounds.height
-  emit('navigate', { x, y })
+  const point = projectMinimapClientPointToSurface(
+    { x: event.clientX, y: event.clientY },
+    {
+      left: rect.left,
+      top: rect.top,
+      width: rect.width,
+      height: rect.height,
+    },
+    layout.value.bounds,
+  )
+  if (point)
+    emit('navigate', point)
 }
 
 onMounted(() => {
@@ -128,6 +131,9 @@ onUnmounted(() => {
         class="ei-minimap-panel__canvas"
         :style="canvasStyle"
         @pointerdown="handlePointerDown"
+        @pointermove="handlePointerMove"
+        @pointerup="handlePointerUp"
+        @pointercancel="handlePointerUp"
       >
         <div
           v-for="frame in layout.pageFrames"
@@ -176,6 +182,7 @@ onUnmounted(() => {
     flex: 0 0 auto;
     overflow: hidden;
     cursor: crosshair;
+    touch-action: none;
     background:
       linear-gradient(rgba(0, 0, 0, 0.035) 1px, transparent 1px),
       linear-gradient(90deg, rgba(0, 0, 0, 0.035) 1px, transparent 1px),
