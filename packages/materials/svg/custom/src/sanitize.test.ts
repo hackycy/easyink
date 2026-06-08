@@ -65,7 +65,11 @@ describe('renderSvgCustom', () => {
   it('accepts complete svg documents with xml and doctype preambles', () => {
     const node = createSvgCustomNode({
       props: {
-        content: '<?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg width="24" height="16" fill="none"><path d="M0 0H24V16Z" /></svg>',
+        content: [
+          '<?xml version="1.0" standalone="no"?>',
+          '<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">',
+          '<svg width="24" height="16" fill="none"><path d="M0 0H24V16Z" /></svg>',
+        ].join('\n'),
       },
     })
 
@@ -77,6 +81,30 @@ describe('renderSvgCustom', () => {
     expect(output).not.toContain('<?xml')
     expect(output).not.toContain('<!DOCTYPE')
     expect(output.match(/<svg/g)?.length).toBe(1)
+  })
+
+  it('accepts svg documents with comments and an internal doctype subset before the root svg', () => {
+    const node = createSvgCustomNode({
+      props: {
+        content: [
+          '<!-- Created by vector editor -->',
+          '<!DOCTYPE svg [<!ENTITY app "EasyInk">]>',
+          '<svg viewBox="0 0 12 12" preserveAspectRatio="xMidYMid slice">',
+          '<defs><linearGradient id="grad"><stop offset="0" stop-color="#000" /></linearGradient></defs>',
+          '<rect width="12" height="12" fill="url(#grad)" />',
+          '</svg>',
+        ].join('\n'),
+      },
+    })
+
+    const output = readTrustedViewerHtml(renderSvgCustom(node).html!)
+
+    expect(output).toContain('viewBox="0 0 12 12"')
+    expect(output).toContain('preserveAspectRatio="xMidYMid slice"')
+    expect(output).toContain('<linearGradient')
+    expect(output).toContain('fill="url(#grad)"')
+    expect(output).not.toContain('<!DOCTYPE')
+    expect(output).not.toContain('Created by vector editor')
   })
 
   it('uses pasted svg aspect ratio behavior when present', () => {

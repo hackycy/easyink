@@ -77,11 +77,87 @@ function parseSvgInput(content: string): ParsedSvgInput | null {
 }
 
 function stripSvgDocumentPreamble(content: string): string {
-  return content
-    .trim()
-    .replace(/^<\?xml\b[\s\S]*?\?>\s*/i, '')
-    .replace(/^<!DOCTYPE\s+svg\b(?:[^>"']|"[^"]*"|'[^']*')*>\s*/i, '')
-    .trim()
+  let result = content.trim()
+  let previous = ''
+
+  while (result !== previous) {
+    previous = result
+
+    if (startsWithIgnoreCase(result, '<?xml')) {
+      const end = result.indexOf('?>')
+      if (end >= 0) {
+        result = result.slice(end + 2).trim()
+        continue
+      }
+    }
+
+    if (result.startsWith('<!--')) {
+      const end = result.indexOf('-->')
+      if (end >= 0) {
+        result = result.slice(end + 3).trim()
+        continue
+      }
+    }
+
+    const doctypeEnd = readSvgDoctypeEnd(result)
+    if (doctypeEnd != null)
+      result = result.slice(doctypeEnd + 1).trim()
+  }
+
+  return result
+}
+
+function startsWithIgnoreCase(value: string, prefix: string): boolean {
+  return value.slice(0, prefix.length).toLowerCase() === prefix.toLowerCase()
+}
+
+function readSvgDoctypeEnd(content: string): number | null {
+  const doctypePrefix = '<!doctype'
+  if (!startsWithIgnoreCase(content, doctypePrefix))
+    return null
+
+  let index = doctypePrefix.length
+  while (index < content.length && /\s/.test(content[index]!))
+    index++
+
+  const nameStart = index
+  while (index < content.length && !/[\s>[]/.test(content[index]!))
+    index++
+
+  if (content.slice(nameStart, index).toLowerCase() !== 'svg')
+    return null
+
+  let quote: string | null = null
+  let bracketDepth = 0
+
+  for (; index < content.length; index++) {
+    const char = content[index]!
+    if (quote) {
+      if (char === quote)
+        quote = null
+      continue
+    }
+
+    if (char === '"' || char === '\'') {
+      quote = char
+      continue
+    }
+
+    if (char === '[') {
+      bracketDepth++
+      continue
+    }
+
+    if (char === ']') {
+      bracketDepth = Math.max(0, bracketDepth - 1)
+      continue
+    }
+
+    if (char === '>' && bracketDepth === 0)
+      return index
+  }
+
+  return null
 }
 
 function parseSvgInputWithDom(content: string): ParsedSvgInput | null {
