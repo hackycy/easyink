@@ -52,52 +52,73 @@ describe('validateSchema', () => {
     ]))
   })
 
-  it('accepts text page watermark settings', () => {
+  it('accepts text watermark page layer settings', () => {
     expect(validateSchema({
       ...validSchema,
       page: {
         ...validSchema.page,
-        watermark: {
-          type: 'text',
-          enabled: true,
-          text: 'CONFIDENTIAL',
-          rotation: -30,
-          opacity: 0.1,
-          fontSize: 18,
-          gap: 60,
-          color: '#b8b8b8',
-        },
+        layers: [
+          {
+            id: 'page-watermark',
+            kind: 'watermark',
+            type: 'text',
+            enabled: true,
+            placement: 'over-content',
+            zIndex: 0,
+            text: 'CONFIDENTIAL',
+            rotation: -30,
+            opacity: 0.1,
+            fontSize: 18,
+            gap: 60,
+            color: '#b8b8b8',
+          },
+        ],
       },
     })).toEqual([])
   })
 
-  it('rejects invalid page watermark settings', () => {
+  it('rejects invalid page layer settings', () => {
     const issues = validateSchemaIssues({
       ...validSchema,
       page: {
         ...validSchema.page,
-        watermark: {
-          type: 'image',
-          enabled: 'yes',
-          text: 123,
-          rotation: Number.NaN,
-          opacity: 2,
-          fontSize: 0,
-          gap: -1,
-          color: 123,
-        },
+        layers: [
+          {
+            id: '',
+            kind: 'watermark',
+            type: 'text',
+            enabled: 'yes',
+            placement: 'middle',
+            zIndex: Number.NaN,
+            text: 123,
+            rotation: Number.NaN,
+            opacity: 2,
+            fontSize: 0,
+            gap: -1,
+            color: 123,
+          },
+          {
+            id: 'unsupported',
+            kind: 'unknown',
+            type: 'image',
+          },
+        ],
       },
     })
 
     expect(issues).toEqual(expect.arrayContaining([
-      expect.objectContaining({ path: 'page.watermark.type' }),
-      expect.objectContaining({ path: 'page.watermark.enabled' }),
-      expect.objectContaining({ path: 'page.watermark.text' }),
-      expect.objectContaining({ path: 'page.watermark.rotation' }),
-      expect.objectContaining({ path: 'page.watermark.opacity' }),
-      expect.objectContaining({ path: 'page.watermark.fontSize' }),
-      expect.objectContaining({ path: 'page.watermark.gap' }),
-      expect.objectContaining({ path: 'page.watermark.color' }),
+      expect.objectContaining({ path: 'page.layers.0.id' }),
+      expect.objectContaining({ path: 'page.layers.0.enabled' }),
+      expect.objectContaining({ path: 'page.layers.0.placement' }),
+      expect.objectContaining({ path: 'page.layers.0.zIndex' }),
+      expect.objectContaining({ path: 'page.layers.0.text' }),
+      expect.objectContaining({ path: 'page.layers.0.rotation' }),
+      expect.objectContaining({ path: 'page.layers.0.opacity' }),
+      expect.objectContaining({ path: 'page.layers.0.fontSize' }),
+      expect.objectContaining({ path: 'page.layers.0.gap' }),
+      expect.objectContaining({ path: 'page.layers.0.color' }),
+      expect.objectContaining({ path: 'page.layers.1.kind' }),
+      expect.objectContaining({ path: 'page.layers.1.type' }),
     ]))
   })
 

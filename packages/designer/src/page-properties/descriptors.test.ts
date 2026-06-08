@@ -1,4 +1,4 @@
-import type { DocumentSchema, PageSchema } from '@easyink/schema'
+import type { DocumentSchema, PageSchema, TextWatermarkPageLayerConfig } from '@easyink/schema'
 import { describe, expect, it } from 'vitest'
 import { PAGE_PROPERTY_DESCRIPTORS } from './descriptors'
 import { filterVisible } from './resolve'
@@ -122,11 +122,10 @@ describe('page watermark descriptors', () => {
     expect(disabledVisible).not.toContain('watermarkOpacity')
 
     const enabledVisible = visibleDescriptorIds({
-      watermark: {
-        type: 'text',
+      layers: [textWatermarkLayer({
         enabled: true,
         text: 'DRAFT',
-      },
+      })],
     })
     expect(enabledVisible).toContain('watermarkText')
     expect(enabledVisible).toContain('watermarkRotation')
@@ -141,47 +140,50 @@ describe('page watermark descriptors', () => {
     const descriptor = PAGE_PROPERTY_DESCRIPTORS.find(descriptor => descriptor.id === 'watermarkEnabled')
     const patch = descriptor?.normalize?.(true, { document })
 
-    expect(patch?.page?.watermark).toEqual({
+    expect(patch?.page?.layers).toEqual([{
+      id: 'page-watermark',
+      kind: 'watermark',
       type: 'text',
       enabled: true,
+      placement: 'over-content',
+      zIndex: 0,
       text: '',
       rotation: -30,
       opacity: 0.1,
       fontSize: 18,
       gap: 60,
       color: '#b8b8b8',
-    })
+    }])
   })
 
   it('stores opacity as 0..1 while exposing 0..100 in the editor', () => {
     const document = makeDocument({
-      watermark: {
-        type: 'text',
+      layers: [textWatermarkLayer({
         enabled: true,
         text: 'DRAFT',
         opacity: 0.25,
-      },
+      })],
     })
     const descriptor = PAGE_PROPERTY_DESCRIPTORS.find(descriptor => descriptor.id === 'watermarkOpacity')
 
     expect(descriptor?.read?.({ document })).toBe(25)
-    expect(descriptor?.normalize?.(10, { document })?.page?.watermark).toMatchObject({
-      type: 'text',
+    expect(descriptor?.normalize?.(10, { document })?.page?.layers?.[0]).toMatchObject({
+      id: 'page-watermark',
+      kind: 'watermark',
       opacity: 0.1,
     })
   })
 
   it('keeps existing numeric watermark values when editor input is invalid', () => {
     const document = makeDocument({
-      watermark: {
-        type: 'text',
+      layers: [textWatermarkLayer({
         enabled: true,
         text: 'DRAFT',
         rotation: -45,
         opacity: 0.25,
         fontSize: 24,
         gap: 80,
-      },
+      })],
     })
     const ctx = { document }
     const rotationDescriptor = PAGE_PROPERTY_DESCRIPTORS.find(descriptor => descriptor.id === 'watermarkRotation')
@@ -189,12 +191,21 @@ describe('page watermark descriptors', () => {
     const fontSizeDescriptor = PAGE_PROPERTY_DESCRIPTORS.find(descriptor => descriptor.id === 'watermarkFontSize')
     const gapDescriptor = PAGE_PROPERTY_DESCRIPTORS.find(descriptor => descriptor.id === 'watermarkGap')
 
-    expect(rotationDescriptor?.normalize?.(Number.NaN, ctx)?.page?.watermark).toMatchObject({ rotation: -45 })
-    expect(opacityDescriptor?.normalize?.('bad-value', ctx)?.page?.watermark).toMatchObject({ opacity: 0.25 })
-    expect(fontSizeDescriptor?.normalize?.(0, ctx)?.page?.watermark).toMatchObject({ fontSize: 24 })
-    expect(gapDescriptor?.normalize?.('', ctx)?.page?.watermark).toMatchObject({ gap: 80 })
+    expect(rotationDescriptor?.normalize?.(Number.NaN, ctx)?.page?.layers?.[0]).toMatchObject({ rotation: -45 })
+    expect(opacityDescriptor?.normalize?.('bad-value', ctx)?.page?.layers?.[0]).toMatchObject({ opacity: 0.25 })
+    expect(fontSizeDescriptor?.normalize?.(0, ctx)?.page?.layers?.[0]).toMatchObject({ fontSize: 24 })
+    expect(gapDescriptor?.normalize?.('', ctx)?.page?.layers?.[0]).toMatchObject({ gap: 80 })
   })
 })
+
+function textWatermarkLayer(overrides: Partial<TextWatermarkPageLayerConfig> = {}): TextWatermarkPageLayerConfig {
+  return {
+    id: 'page-watermark',
+    kind: 'watermark',
+    type: 'text',
+    ...overrides,
+  }
+}
 
 function visibleDescriptorIds(pagePatch: Partial<PageSchema>) {
   const document = makeDocument(pagePatch)

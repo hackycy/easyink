@@ -1,7 +1,7 @@
-import type { PageSchema } from '@easyink/schema'
+import type { PageSchema, TextWatermarkPageLayerConfig } from '@easyink/schema'
 import type { LayoutStrategyKind } from '@easyink/shared'
 import type { PagePropertyContext, PagePropertyDescriptor } from './types'
-import { DEFAULT_TEXT_PAGE_WATERMARK as DEFAULT_TEXT_WATERMARK } from '@easyink/schema'
+import { DEFAULT_TEXT_WATERMARK_PAGE_LAYER } from '@easyink/schema'
 import { PAPER_PRESETS } from '@easyink/shared'
 
 const UNIT_OPTIONS: NonNullable<PagePropertyDescriptor['enum']> = [
@@ -527,15 +527,15 @@ const WATERMARK_ENABLED_DESCRIPTOR: PagePropertyDescriptor = {
   id: 'watermarkEnabled',
   group: 'advanced',
   source: 'page',
-  path: 'watermark.enabled',
+  path: 'layers.page-watermark.enabled',
   label: 'designer.page.watermarkEnabled',
   persisted: 'schema',
   editor: 'switch',
   read(ctx) {
-    return ctx.document.page.watermark?.type === 'text' ? ctx.document.page.watermark.enabled === true : false
+    return readTextWatermarkLayer(ctx).enabled === true
   },
   normalize(value, ctx) {
-    return createTextWatermarkPatch(ctx, { enabled: value === true })
+    return createTextWatermarkLayerPatch(ctx, { enabled: value === true })
   },
 }
 
@@ -543,16 +543,16 @@ const WATERMARK_TEXT_DESCRIPTOR: PagePropertyDescriptor = {
   id: 'watermarkText',
   group: 'advanced',
   source: 'page',
-  path: 'watermark.text',
+  path: 'layers.page-watermark.text',
   label: 'designer.page.watermarkText',
   persisted: 'schema',
   editor: 'text',
   visible: isTextWatermarkEnabled,
   read(ctx) {
-    return readTextWatermark(ctx).text
+    return readTextWatermarkLayer(ctx).text
   },
   normalize(value, ctx) {
-    return createTextWatermarkPatch(ctx, { text: String(value ?? '') })
+    return createTextWatermarkLayerPatch(ctx, { text: String(value ?? '') })
   },
 }
 
@@ -560,7 +560,7 @@ const WATERMARK_ROTATION_DESCRIPTOR: PagePropertyDescriptor = {
   id: 'watermarkRotation',
   group: 'advanced',
   source: 'page',
-  path: 'watermark.rotation',
+  path: 'layers.page-watermark.rotation',
   label: 'designer.page.watermarkRotation',
   persisted: 'schema',
   editor: 'number',
@@ -569,11 +569,11 @@ const WATERMARK_ROTATION_DESCRIPTOR: PagePropertyDescriptor = {
   step: 1,
   visible: isTextWatermarkEnabled,
   read(ctx) {
-    return readTextWatermark(ctx).rotation
+    return readTextWatermarkLayer(ctx).rotation
   },
   normalize(value, ctx) {
-    const watermark = readTextWatermark(ctx)
-    return createTextWatermarkPatch(ctx, { rotation: toFiniteNumberInput(value, watermark.rotation) })
+    const layer = readTextWatermarkLayer(ctx)
+    return createTextWatermarkLayerPatch(ctx, { rotation: toFiniteNumberInput(value, layer.rotation) })
   },
 }
 
@@ -581,7 +581,7 @@ const WATERMARK_OPACITY_DESCRIPTOR: PagePropertyDescriptor = {
   id: 'watermarkOpacity',
   group: 'advanced',
   source: 'page',
-  path: 'watermark.opacity',
+  path: 'layers.page-watermark.opacity',
   label: 'designer.page.watermarkOpacity',
   persisted: 'schema',
   editor: 'number-slider',
@@ -591,12 +591,12 @@ const WATERMARK_OPACITY_DESCRIPTOR: PagePropertyDescriptor = {
   nullable: false,
   visible: isTextWatermarkEnabled,
   read(ctx) {
-    return Math.round(readTextWatermark(ctx).opacity * 100)
+    return Math.round(readTextWatermarkLayer(ctx).opacity * 100)
   },
   normalize(value, ctx) {
-    const watermark = readTextWatermark(ctx)
-    const opacityPercent = toFiniteNumberInput(value, watermark.opacity * 100)
-    return createTextWatermarkPatch(ctx, { opacity: clamp(opacityPercent / 100, 0, 1) })
+    const layer = readTextWatermarkLayer(ctx)
+    const opacityPercent = toFiniteNumberInput(value, layer.opacity * 100)
+    return createTextWatermarkLayerPatch(ctx, { opacity: clamp(opacityPercent / 100, 0, 1) })
   },
 }
 
@@ -604,7 +604,7 @@ const WATERMARK_FONT_SIZE_DESCRIPTOR: PagePropertyDescriptor = {
   id: 'watermarkFontSize',
   group: 'advanced',
   source: 'page',
-  path: 'watermark.fontSize',
+  path: 'layers.page-watermark.fontSize',
   label: 'designer.page.watermarkFontSize',
   persisted: 'schema',
   editor: 'number',
@@ -613,11 +613,11 @@ const WATERMARK_FONT_SIZE_DESCRIPTOR: PagePropertyDescriptor = {
   step: 1,
   visible: isTextWatermarkEnabled,
   read(ctx) {
-    return readTextWatermark(ctx).fontSize
+    return readTextWatermarkLayer(ctx).fontSize
   },
   normalize(value, ctx) {
-    const watermark = readTextWatermark(ctx)
-    return createTextWatermarkPatch(ctx, { fontSize: toPositiveNumberInput(value, watermark.fontSize) })
+    const layer = readTextWatermarkLayer(ctx)
+    return createTextWatermarkLayerPatch(ctx, { fontSize: toPositiveNumberInput(value, layer.fontSize) })
   },
 }
 
@@ -625,7 +625,7 @@ const WATERMARK_GAP_DESCRIPTOR: PagePropertyDescriptor = {
   id: 'watermarkGap',
   group: 'advanced',
   source: 'page',
-  path: 'watermark.gap',
+  path: 'layers.page-watermark.gap',
   label: 'designer.page.watermarkGap',
   persisted: 'schema',
   editor: 'number',
@@ -634,11 +634,11 @@ const WATERMARK_GAP_DESCRIPTOR: PagePropertyDescriptor = {
   step: 1,
   visible: isTextWatermarkEnabled,
   read(ctx) {
-    return readTextWatermark(ctx).gap
+    return readTextWatermarkLayer(ctx).gap
   },
   normalize(value, ctx) {
-    const watermark = readTextWatermark(ctx)
-    return createTextWatermarkPatch(ctx, { gap: toPositiveNumberInput(value, watermark.gap) })
+    const layer = readTextWatermarkLayer(ctx)
+    return createTextWatermarkLayerPatch(ctx, { gap: toPositiveNumberInput(value, layer.gap) })
   },
 }
 
@@ -646,43 +646,64 @@ const WATERMARK_COLOR_DESCRIPTOR: PagePropertyDescriptor = {
   id: 'watermarkColor',
   group: 'advanced',
   source: 'page',
-  path: 'watermark.color',
+  path: 'layers.page-watermark.color',
   label: 'designer.page.watermarkColor',
   persisted: 'schema',
   editor: 'color',
   visible: isTextWatermarkEnabled,
   read(ctx) {
-    return readTextWatermark(ctx).color
+    return readTextWatermarkLayer(ctx).color
   },
   normalize(value, ctx) {
-    return createTextWatermarkPatch(ctx, { color: String(value || DEFAULT_TEXT_WATERMARK.color) })
+    return createTextWatermarkLayerPatch(ctx, { color: String(value || DEFAULT_TEXT_WATERMARK_PAGE_LAYER.color) })
   },
 }
 
 function isTextWatermarkEnabled(ctx: PagePropertyContext): boolean {
-  return ctx.document.page.watermark?.type === 'text' && ctx.document.page.watermark.enabled === true
+  return readTextWatermarkLayer(ctx).enabled === true
 }
 
-function readTextWatermark(ctx: PagePropertyContext): typeof DEFAULT_TEXT_WATERMARK {
-  const watermark = ctx.document.page.watermark
-  if (watermark?.type !== 'text')
-    return DEFAULT_TEXT_WATERMARK
+function readTextWatermarkLayer(ctx: PagePropertyContext): Required<TextWatermarkPageLayerConfig> {
+  const layer = findTextWatermarkLayer(ctx.document.page.layers)
+  if (!layer)
+    return DEFAULT_TEXT_WATERMARK_PAGE_LAYER
   return {
-    ...DEFAULT_TEXT_WATERMARK,
-    ...watermark,
+    ...DEFAULT_TEXT_WATERMARK_PAGE_LAYER,
+    ...layer,
   }
 }
 
-function createTextWatermarkPatch(
+function createTextWatermarkLayerPatch(
   ctx: PagePropertyContext,
-  updates: Partial<Omit<typeof DEFAULT_TEXT_WATERMARK, 'type'>>,
+  updates: Partial<Omit<Required<TextWatermarkPageLayerConfig>, 'id' | 'kind' | 'type'>>,
 ) {
-  const watermark = {
-    ...readTextWatermark(ctx),
+  const layer = {
+    ...readTextWatermarkLayer(ctx),
     ...updates,
+    id: DEFAULT_TEXT_WATERMARK_PAGE_LAYER.id,
+    kind: 'watermark' as const,
     type: 'text' as const,
   }
-  return { page: { watermark } }
+  const layers = upsertPageLayer(ctx.document.page.layers, layer)
+  return { page: { layers } }
+}
+
+function findTextWatermarkLayer(layers: PageSchema['layers']): TextWatermarkPageLayerConfig | undefined {
+  return layers?.find(layer =>
+    layer.id === DEFAULT_TEXT_WATERMARK_PAGE_LAYER.id
+    && layer.kind === 'watermark'
+    && layer.type === 'text',
+  )
+}
+
+function upsertPageLayer(layers: PageSchema['layers'], layer: TextWatermarkPageLayerConfig): PageSchema['layers'] {
+  const next = [...(layers ?? [])]
+  const index = next.findIndex(item => item.id === layer.id)
+  if (index >= 0)
+    next[index] = layer
+  else
+    next.push(layer)
+  return next
 }
 
 function clamp(value: number, min: number, max: number): number {

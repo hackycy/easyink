@@ -203,7 +203,7 @@ export interface PageSchema {
   grid?: GridConfig
   font?: string
   background?: PageBackground
-  watermark?: PageWatermarkConfig
+  layers?: PageLayerConfig[]
   print?: PagePrintConfig
   pageModel?: PageModelConfig
   layout?: DocumentLayoutConfig
@@ -255,11 +255,21 @@ export interface PageBackground {
   offsetY?: number
 }
 
-export type PageWatermarkConfig = TextPageWatermarkConfig
+export type PageLayerPlacement = 'under-content' | 'over-content' | 'top'
 
-export interface TextPageWatermarkConfig {
-  type: 'text'
+export type PageLayerConfig = TextWatermarkPageLayerConfig
+
+export interface PageLayerBaseConfig {
+  id: string
+  kind: string
   enabled?: boolean
+  placement?: PageLayerPlacement
+  zIndex?: number
+}
+
+export interface TextWatermarkPageLayerConfig extends PageLayerBaseConfig {
+  kind: 'watermark'
+  type: 'text'
   text?: string
   rotation?: number
   opacity?: number

@@ -208,15 +208,15 @@ export type {
 } from './material-viewer'
 export { readTrustedViewerHtml, trustedViewerHtml } from './material-viewer'
 
+export { PAGE_CONTENT_LAYER_STACK_INDEX, resolvePageLayerPlans, resolvePageLayers, resolvePageLayerStackIndex } from './page-layers'
+export type { PageLayerRenderPlan, PageLayerTile, ResolvedPageLayer, ResolvedTextWatermarkPageLayer, ResolvePageLayerPlansOptions, TextWatermarkPageLayerPlan } from './page-layers'
+
 export { resolvePageModel } from './page-model'
 export type { ResolvedPageModel } from './page-model'
 
 export { createPagePlan } from './page-planner'
 
 export type { PagePlan, PagePlanDiagnostic, PagePlanEntry, PagePlanOptions } from './page-planner'
-
-export { resolvePageWatermark, resolvePageWatermarkTilePlan } from './page-watermark'
-export type { PageWatermarkTile, PageWatermarkTilePlan, ResolvedPageWatermark, ResolvedTextPageWatermark, ResolvePageWatermarkTilePlanOptions } from './page-watermark'
 
 export { runPagination } from './pagination-engine'
 export type { PaginationOptions, PaginationResult } from './pagination-engine'

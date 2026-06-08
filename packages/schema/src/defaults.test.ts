@@ -145,41 +145,67 @@ describe('normalizeDocumentSchema', () => {
     expect(schema.page.reflow?.strategy).toBe('measure-only')
   })
 
-  it('normalizes text page watermark settings', () => {
+  it('normalizes text watermark page layer settings', () => {
     const schema = normalizeDocumentSchema({
       page: {
-        watermark: {
-          type: 'text',
-          enabled: true,
-          text: 'CONFIDENTIAL',
-          rotation: Number.NaN,
-          opacity: 2,
-          fontSize: 0,
-          gap: 20,
-          color: '',
-        },
+        layers: [
+          {
+            id: '',
+            kind: 'watermark',
+            type: 'text',
+            enabled: true,
+            placement: 'top',
+            zIndex: Number.NaN,
+            text: 'CONFIDENTIAL',
+            rotation: Number.NaN,
+            opacity: 2,
+            fontSize: 0,
+            gap: 20,
+            color: '',
+          },
+        ],
       },
     })
 
-    expect(schema.page.watermark).toEqual({
-      type: 'text',
-      enabled: true,
-      text: 'CONFIDENTIAL',
-      rotation: -30,
-      opacity: 1,
-      fontSize: 18,
-      gap: 20,
-      color: '#b8b8b8',
-    })
+    expect(schema.page.layers).toEqual([
+      {
+        id: 'page-watermark',
+        kind: 'watermark',
+        type: 'text',
+        enabled: true,
+        placement: 'top',
+        zIndex: 0,
+        text: 'CONFIDENTIAL',
+        rotation: -30,
+        opacity: 1,
+        fontSize: 18,
+        gap: 20,
+        color: '#b8b8b8',
+      },
+    ])
   })
 
-  it('drops unsupported page watermark types from loose input', () => {
+  it('drops unsupported page layers from loose input', () => {
     const schema = normalizeDocumentSchema({
       page: {
-        watermark: { type: 'image', enabled: true },
+        layers: [
+          { id: 'image-watermark', kind: 'watermark', type: 'image', enabled: true },
+          { id: 'unknown', kind: 'unknown', enabled: true },
+        ],
       },
     } as never)
 
-    expect(schema.page.watermark).toBeUndefined()
+    expect(schema.page.layers).toBeUndefined()
+  })
+
+  it('drops legacy page watermark input as a breaking schema change', () => {
+    const schema = normalizeDocumentSchema({
+      page: {
+        watermark: { type: 'text', enabled: true, text: 'LEGACY' },
+      },
+    } as never)
+
+    expect('watermark' in schema.page).toBe(false)
+    expect(schema.page.layers).toBeUndefined()
   })
 })

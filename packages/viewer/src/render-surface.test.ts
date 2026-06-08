@@ -131,7 +131,9 @@ describe('renderPages', () => {
       mode: 'fixed',
       width: 80,
       height: 60,
-      watermark: {
+      layers: [{
+        id: 'page-watermark',
+        kind: 'watermark',
         type: 'text',
         enabled: true,
         text: 'DRAFT',
@@ -140,7 +142,7 @@ describe('renderPages', () => {
         fontSize: 12,
         gap: 40,
         color: '#b8b8b8',
-      },
+      }],
     }
 
     renderPages([{
@@ -159,9 +161,10 @@ describe('renderPages', () => {
       pageSchema,
     }, [])
 
-    const layer = container.querySelector('.ei-viewer-watermark') as HTMLElement | null
-    const tile = container.querySelector('.ei-viewer-watermark__tile') as HTMLElement | null
+    const layer = container.querySelector('.ei-viewer-page-layer--watermark') as HTMLElement | null
+    const tile = container.querySelector('.ei-viewer-page-layer__watermark-tile') as HTMLElement | null
     expect(layer).not.toBeNull()
+    expect(layer!.dataset.pageLayerId).toBe('page-watermark')
     expect(layer!.style.color).toBe('#b8b8b8')
     expect(layer!.style.opacity).toBe('0.1')
     expect(tile).not.toBeNull()
@@ -191,10 +194,10 @@ describe('renderPages', () => {
         mode: 'fixed',
         width: 80,
         height: 60,
-        watermark: { type: 'text', enabled: true, text: '   ' },
+        layers: [{ id: 'page-watermark', kind: 'watermark', type: 'text', enabled: true, text: '   ' }],
       },
     }, [])
 
-    expect(container.querySelector('.ei-viewer-watermark')).toBeNull()
+    expect(container.querySelector('.ei-viewer-page-layer--watermark')).toBeNull()
   })
 })

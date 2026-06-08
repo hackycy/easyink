@@ -1,8 +1,8 @@
-import type { PagePlanEntry, TrustedViewerHtml } from '@easyink/core'
+import type { PageLayerRenderPlan, PagePlanEntry, TextWatermarkPageLayerPlan, TrustedViewerHtml } from '@easyink/core'
 import type { MaterialNode, PageBackground, PageSchema } from '@easyink/schema'
 import type { MaterialRendererRegistry } from './material-registry'
 import type { ViewerDiagnosticEvent, ViewerRenderContext, ViewerRenderSize } from './types'
-import { readTrustedViewerHtml, resolvePageWatermarkTilePlan, trustedViewerHtml } from '@easyink/core'
+import { PAGE_CONTENT_LAYER_STACK_INDEX, readTrustedViewerHtml, resolvePageLayerPlans, resolvePageLayerStackIndex, trustedViewerHtml } from '@easyink/core'
 import { escapeHtml, UNIT_FACTOR } from '@easyink/shared'
 import { isErrorSentinel, safeRender } from './diagnostic-middleware'
 
@@ -40,6 +40,14 @@ export function renderPages(
 
   for (const page of pages) {
     const { wrapper, pageEl } = createPageElement(document, page, pageSchema, unit, zoom)
+    const contentLayer = createContentLayer(document)
+    const pageLayerPlans = resolvePageLayerPlans(pageSchema, {
+      width: page.width,
+      height: page.height,
+    })
+
+    appendPageLayers(document, pageEl, pageLayerPlans.filter(plan => plan.layer.placement === 'under-content'), page, unit, diagnostics)
+    pageEl.appendChild(contentLayer)
 
     const context: ViewerRenderContext = {
       data,
@@ -100,10 +108,10 @@ export function renderPages(
         setMaterialHtml(elWrapper, output.html)
       }
 
-      pageEl.appendChild(elWrapper)
+      contentLayer.appendChild(elWrapper)
     }
 
-    appendPageWatermark(document, pageEl, pageSchema, page, unit, diagnostics)
+    appendPageLayers(document, pageEl, pageLayerPlans.filter(plan => plan.layer.placement !== 'under-content'), page, unit, diagnostics)
 
     container.appendChild(wrapper)
     pageDOMs.push({ pageIndex: page.index, element: pageEl })
@@ -112,47 +120,59 @@ export function renderPages(
   return pageDOMs
 }
 
-function appendPageWatermark(
+function appendPageLayers(
   document: Document,
   pageEl: HTMLElement,
-  pageSchema: PageSchema,
+  plans: PageLayerRenderPlan[],
   page: PagePlanEntry,
   unit: string,
   diagnostics: ViewerDiagnosticEvent[],
 ): void {
-  const plan = resolvePageWatermarkTilePlan(pageSchema, {
-    width: page.width,
-    height: page.height,
-  })
-  if (!plan)
+  if (plans.length === 0)
     return
 
+  for (const plan of plans) {
+    if (isTextWatermarkLayerPlan(plan))
+      appendTextWatermarkLayer(document, pageEl, plan, page, unit, diagnostics)
+  }
+}
+
+function appendTextWatermarkLayer(
+  document: Document,
+  pageEl: HTMLElement,
+  plan: TextWatermarkPageLayerPlan,
+  page: PagePlanEntry,
+  unit: string,
+  diagnostics: ViewerDiagnosticEvent[],
+): void {
   const layer = document.createElement('div')
-  layer.className = 'ei-viewer-watermark'
+  layer.className = 'ei-viewer-page-layer ei-viewer-page-layer--watermark'
+  layer.setAttribute('data-page-layer-id', plan.layer.id)
+  layer.setAttribute('data-page-layer-kind', plan.layer.kind)
   layer.style.position = 'absolute'
   layer.style.inset = '0'
-  layer.style.zIndex = '20'
+  layer.style.zIndex = String(resolveViewerLayerZIndex(plan))
   layer.style.pointerEvents = 'none'
   layer.style.userSelect = 'none'
   layer.style.overflow = 'hidden'
-  layer.style.color = plan.watermark.color
-  layer.style.opacity = String(plan.watermark.opacity)
+  layer.style.color = plan.layer.color
+  layer.style.opacity = String(plan.layer.opacity)
 
   for (const tile of plan.tiles) {
     const text = document.createElement('span')
-    text.className = 'ei-viewer-watermark__tile'
-    text.textContent = plan.watermark.text
+    text.className = 'ei-viewer-page-layer__watermark-tile'
+    text.textContent = plan.layer.text
     text.style.position = 'absolute'
     text.style.display = 'inline-flex'
     text.style.alignItems = 'center'
     text.style.justifyContent = 'center'
     text.style.left = `${tile.x}${unit}`
     text.style.top = `${tile.y}${unit}`
-    text.style.fontSize = `${plan.watermark.fontSize}${unit}`
+    text.style.fontSize = `${plan.layer.fontSize}${unit}`
     text.style.fontWeight = '500'
     text.style.lineHeight = '1'
     text.style.whiteSpace = 'nowrap'
-    text.style.transform = `translate(-50%, -50%) rotate(${plan.watermark.rotation}deg)`
+    text.style.transform = `translate(-50%, -50%) rotate(${plan.layer.rotation}deg)`
     text.style.transformOrigin = 'center center'
     layer.appendChild(text)
   }
@@ -162,12 +182,29 @@ function appendPageWatermark(
       category: 'viewer',
       severity: 'warning',
       code: 'PAGE_WATERMARK_TRUNCATED',
-      message: `Page ${page.index + 1} watermark generated too many tiles and was truncated.`,
-      detail: { pageIndex: page.index, tileCount: plan.tiles.length },
+      message: `Page ${page.index + 1} layer ${plan.layer.id} generated too many watermark tiles and was truncated.`,
+      detail: { pageIndex: page.index, layerId: plan.layer.id, tileCount: plan.tiles.length },
     })
   }
 
   pageEl.appendChild(layer)
+}
+
+function isTextWatermarkLayerPlan(plan: PageLayerRenderPlan): plan is TextWatermarkPageLayerPlan {
+  return plan.layer.kind === 'watermark' && plan.layer.type === 'text'
+}
+
+function resolveViewerLayerZIndex(plan: PageLayerRenderPlan): number {
+  return resolvePageLayerStackIndex(plan)
+}
+
+function createContentLayer(document: Document): HTMLElement {
+  const layer = document.createElement('div')
+  layer.className = 'ei-viewer-content-layer'
+  layer.style.position = 'absolute'
+  layer.style.inset = '0'
+  layer.style.zIndex = String(PAGE_CONTENT_LAYER_STACK_INDEX)
+  return layer
 }
 
 function createPageElement(
@@ -300,6 +337,7 @@ function createElementWrapper(
   wrapper.style.width = `${renderSize.width}${unit}`
   wrapper.style.height = `${renderSize.height}${unit}`
   wrapper.style.overflow = 'hidden'
+  wrapper.style.zIndex = String(node.zIndex ?? 0)
 
   if (node.rotation) {
     wrapper.style.transform = `rotate(${node.rotation}deg)`

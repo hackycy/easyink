@@ -109,7 +109,7 @@ export function validateSchemaIssues(schema: unknown): SchemaValidationIssue[] {
     validateLayoutConfig(page.layout, issues)
     validatePaginationConfig(page.pagination, issues)
     validateReflowConfig(page.reflow, issues)
-    validatePageWatermark(page.watermark, issues)
+    validatePageLayers(page.layers, issues)
   }
 
   if (!isObject(schema.guides)) {
@@ -199,36 +199,68 @@ function validateReflowConfig(value: unknown, issues: SchemaValidationIssue[]): 
   }
 }
 
-function validatePageWatermark(value: unknown, issues: SchemaValidationIssue[]): void {
+function validatePageLayers(value: unknown, issues: SchemaValidationIssue[]): void {
   if (value == null)
     return
-  if (!isObject(value)) {
-    issues.push(createIssue('page.watermark', 'must be an object', 'schema.page.watermark.invalid'))
+  if (!Array.isArray(value)) {
+    issues.push(createIssue('page.layers', 'must be an array when provided', 'schema.page.layers.invalid'))
     return
   }
-  if (value.type !== 'text') {
-    issues.push(createIssue('page.watermark.type', 'must be text', 'schema.page.watermark.type.invalid'))
+
+  value.forEach((layer, index) => validatePageLayer(layer, index, issues))
+}
+
+function validatePageLayer(value: unknown, index: number, issues: SchemaValidationIssue[]): void {
+  const path = `page.layers.${index}`
+  if (!isObject(value)) {
+    issues.push(createIssue(path, 'must be an object', 'schema.page.layers.item.invalid'))
+    return
+  }
+
+  if (typeof value.id !== 'string' || value.id.trim() === '') {
+    issues.push(createIssue(`${path}.id`, 'must be a non-empty string', 'schema.page.layers.id.invalid'))
   }
   if (value.enabled != null && typeof value.enabled !== 'boolean') {
-    issues.push(createIssue('page.watermark.enabled', 'must be a boolean when provided', 'schema.page.watermark.enabled.invalid'))
+    issues.push(createIssue(`${path}.enabled`, 'must be a boolean when provided', 'schema.page.layers.enabled.invalid'))
   }
+  if (value.placement != null && value.placement !== 'under-content' && value.placement !== 'over-content' && value.placement !== 'top') {
+    issues.push(createIssue(`${path}.placement`, 'must be a supported layer placement', 'schema.page.layers.placement.invalid'))
+  }
+  if (value.zIndex != null && (typeof value.zIndex !== 'number' || !Number.isFinite(value.zIndex))) {
+    issues.push(createIssue(`${path}.zIndex`, 'must be a finite number when provided', 'schema.page.layers.zIndex.invalid'))
+  }
+
+  if (value.kind === 'watermark' && value.type === 'text') {
+    validateTextWatermarkLayer(value, path, issues)
+    return
+  }
+
+  if (value.kind !== 'watermark') {
+    issues.push(createIssue(`${path}.kind`, 'must be a supported page layer kind', 'schema.page.layers.kind.invalid'))
+  }
+  if (value.type !== 'text') {
+    issues.push(createIssue(`${path}.type`, 'must be a supported page layer type', 'schema.page.layers.type.invalid'))
+  }
+}
+
+function validateTextWatermarkLayer(value: Record<string, unknown>, path: string, issues: SchemaValidationIssue[]): void {
   if (value.text != null && typeof value.text !== 'string') {
-    issues.push(createIssue('page.watermark.text', 'must be a string when provided', 'schema.page.watermark.text.invalid'))
+    issues.push(createIssue(`${path}.text`, 'must be a string when provided', 'schema.page.layers.watermark.text.invalid'))
   }
   if (value.rotation != null && (typeof value.rotation !== 'number' || !Number.isFinite(value.rotation))) {
-    issues.push(createIssue('page.watermark.rotation', 'must be a finite number when provided', 'schema.page.watermark.rotation.invalid'))
+    issues.push(createIssue(`${path}.rotation`, 'must be a finite number when provided', 'schema.page.layers.watermark.rotation.invalid'))
   }
   if (value.opacity != null && (typeof value.opacity !== 'number' || !Number.isFinite(value.opacity) || value.opacity < 0 || value.opacity > 1)) {
-    issues.push(createIssue('page.watermark.opacity', 'must be a number between 0 and 1 when provided', 'schema.page.watermark.opacity.invalid'))
+    issues.push(createIssue(`${path}.opacity`, 'must be a number between 0 and 1 when provided', 'schema.page.layers.watermark.opacity.invalid'))
   }
   if (value.fontSize != null && (typeof value.fontSize !== 'number' || !Number.isFinite(value.fontSize) || value.fontSize <= 0)) {
-    issues.push(createIssue('page.watermark.fontSize', 'must be a positive number when provided', 'schema.page.watermark.fontSize.invalid'))
+    issues.push(createIssue(`${path}.fontSize`, 'must be a positive number when provided', 'schema.page.layers.watermark.fontSize.invalid'))
   }
   if (value.gap != null && (typeof value.gap !== 'number' || !Number.isFinite(value.gap) || value.gap <= 0)) {
-    issues.push(createIssue('page.watermark.gap', 'must be a positive number when provided', 'schema.page.watermark.gap.invalid'))
+    issues.push(createIssue(`${path}.gap`, 'must be a positive number when provided', 'schema.page.layers.watermark.gap.invalid'))
   }
   if (value.color != null && typeof value.color !== 'string') {
-    issues.push(createIssue('page.watermark.color', 'must be a string when provided', 'schema.page.watermark.color.invalid'))
+    issues.push(createIssue(`${path}.color`, 'must be a string when provided', 'schema.page.layers.watermark.color.invalid'))
   }
 }
 

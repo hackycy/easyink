@@ -6,10 +6,11 @@ import type { WorkspaceWindowState } from '../types'
 import {
   createEditorSurfacePlan,
   getEditorSurfacePageLeft,
+  PAGE_CONTENT_LAYER_STACK_INDEX,
   projectDocumentPointToEditorSurface,
   readNodeRepeatScope,
-  resolvePageWatermark,
-  resolvePageWatermarkTilePlan,
+  resolvePageLayerPlans,
+  resolvePageLayerStackIndex,
 } from '@easyink/core'
 import { computed, onMounted, onUnmounted, provide, ref, watch } from 'vue'
 import { useDesignerStore } from '../composables'
@@ -245,16 +246,19 @@ const groupSelectionFrame = computed(() => {
   }
 })
 
-const watermarkPlansByPageSize = computed(() => {
-  const watermark = resolvePageWatermark(store.schema.page.watermark)
-  const plans = new Map<string, ReturnType<typeof resolvePageWatermarkTilePlan>>()
-  if (!watermark?.enabled || watermark.text.trim() === '')
-    return plans
+const contentLayerStyle = {
+  zIndex: PAGE_CONTENT_LAYER_STACK_INDEX,
+}
+const controlLayerStyle = {
+  zIndex: 1_000_000,
+}
 
+const pageLayerPlansByPageSize = computed(() => {
+  const plans = new Map<string, ReturnType<typeof resolvePageLayerPlans>>()
   for (const page of editorSurfacePlan.value.pages) {
     const key = createPageSizeKey(page.width, page.height)
     if (!plans.has(key)) {
-      plans.set(key, resolvePageWatermarkTilePlan(store.schema.page, {
+      plans.set(key, resolvePageLayerPlans(store.schema.page, {
         width: page.width,
         height: page.height,
       }))
@@ -266,7 +270,7 @@ const watermarkPlansByPageSize = computed(() => {
 const pageFrames = computed(() => {
   const plan = editorSurfacePlan.value
   const unit = store.schema.unit
-  const watermarkPlans = watermarkPlansByPageSize.value
+  const pageLayerPlans = pageLayerPlansByPageSize.value
   return plan.pages.map((page) => {
     const pagePositionStyle = {
       left: `${getEditorSurfacePageLeft(plan, page)}${unit}`,
@@ -276,12 +280,12 @@ const pageFrames = computed(() => {
     }
     return {
       page,
-      watermarkPlan: watermarkPlans.get(createPageSizeKey(page.width, page.height)),
+      layerPlans: pageLayerPlans.get(createPageSizeKey(page.width, page.height)) ?? [],
       style: {
         ...pagePositionStyle,
         ...resolvePageBackgroundStyle(store.schema.page.background, unit),
       },
-      watermarkStyle: pagePositionStyle,
+      layerStyle: pagePositionStyle,
     }
   })
 })
@@ -421,6 +425,22 @@ function resolveWatermarkTileStyle(tile: { x: number, y: number }, rotation: num
     fontSize: `${fontSize}${unit}`,
     transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
   }
+}
+
+function isWatermarkLayerPlan(plan: ReturnType<typeof resolvePageLayerPlans>[number]) {
+  return plan.layer.kind === 'watermark' && plan.layer.type === 'text'
+}
+
+function resolvePageLayerPlanStyle(plan: ReturnType<typeof resolvePageLayerPlans>[number]) {
+  return {
+    zIndex: resolveCanvasLayerZIndex(plan),
+    color: plan.layer.kind === 'watermark' ? plan.layer.color : undefined,
+    opacity: plan.layer.kind === 'watermark' ? plan.layer.opacity : undefined,
+  }
+}
+
+function resolveCanvasLayerZIndex(plan: ReturnType<typeof resolvePageLayerPlans>[number]): number {
+  return resolvePageLayerStackIndex(plan)
 }
 
 function createPageSizeKey(width: number, height: number): string {
@@ -658,7 +678,7 @@ onUnmounted(() => {
 
           <PageBreakRuler :surface-plan="editorSurfacePlan" />
 
-          <div class="ei-canvas-content-layer">
+          <div class="ei-canvas-content-layer" :style="contentLayerStyle">
             <div
               v-for="preview in repeatedPreviewElements"
               :key="preview.key"
@@ -692,31 +712,38 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <!-- Page watermark preview -->
+          <!-- Page layer previews -->
           <div
             v-for="frame in pageFrames"
-            :key="`watermark_${frame.page.index}`"
-            class="ei-canvas-watermark"
+            :key="`layers_${frame.page.index}`"
+            class="ei-canvas-page-layers"
             :style="{
-              ...frame.watermarkStyle,
-              color: frame.watermarkPlan?.watermark.color,
-              opacity: frame.watermarkPlan?.watermark.opacity,
-              display: frame.watermarkPlan ? undefined : 'none',
+              ...frame.layerStyle,
+              display: frame.layerPlans.length > 0 ? undefined : 'none',
             }"
           >
-            <template v-if="frame.watermarkPlan">
-              <span
-                v-for="tile in frame.watermarkPlan.tiles"
-                :key="tile.key"
-                class="ei-canvas-watermark__tile"
-                :style="resolveWatermarkTileStyle(tile, frame.watermarkPlan.watermark.rotation, frame.watermarkPlan.watermark.fontSize)"
+            <template
+              v-for="layerPlan in frame.layerPlans"
+              :key="layerPlan.layer.id"
+            >
+              <div
+                v-if="isWatermarkLayerPlan(layerPlan)"
+                class="ei-canvas-page-layer ei-canvas-page-layer--watermark"
+                :style="resolvePageLayerPlanStyle(layerPlan)"
               >
-                {{ frame.watermarkPlan.watermark.text }}
-              </span>
+                <span
+                  v-for="tile in layerPlan.tiles"
+                  :key="tile.key"
+                  class="ei-canvas-page-layer__watermark-tile"
+                  :style="resolveWatermarkTileStyle(tile, layerPlan.layer.rotation, layerPlan.layer.fontSize)"
+                >
+                  {{ layerPlan.layer.text }}
+                </span>
+              </div>
             </template>
           </div>
 
-          <div class="ei-canvas-control-layer">
+          <div class="ei-canvas-control-layer" :style="controlLayerStyle">
             <div
               v-for="el in selectedControlElements"
               :key="`controls_${el.id}`"
@@ -869,14 +896,18 @@ onUnmounted(() => {
   pointer-events: none;
 }
 
-.ei-canvas-watermark {
+.ei-canvas-page-layers {
   position: absolute;
-  z-index: 12;
   pointer-events: none;
   user-select: none;
   overflow: hidden;
+}
 
-  &__tile {
+.ei-canvas-page-layer {
+  position: absolute;
+  inset: 0;
+
+  &__watermark-tile {
     position: absolute;
     display: inline-flex;
     align-items: center;
