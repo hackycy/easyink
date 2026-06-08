@@ -1,5 +1,6 @@
 import type { DocumentSchema } from './types'
 import { isObject, SCHEMA_VERSION } from '@easyink/shared'
+import { PAGE_LAYER_MAX_Z_INDEX, PAGE_LAYER_MIN_Z_INDEX } from './defaults'
 
 const UNIT_TYPES = new Set(['mm', 'pt', 'px', 'inch'])
 const PAGE_MODES = new Set(['fixed', 'continuous'])
@@ -226,8 +227,8 @@ function validatePageLayer(value: unknown, index: number, issues: SchemaValidati
   if (value.placement != null && value.placement !== 'under-content' && value.placement !== 'over-content' && value.placement !== 'top') {
     issues.push(createIssue(`${path}.placement`, 'must be a supported layer placement', 'schema.page.layers.placement.invalid'))
   }
-  if (value.zIndex != null && (typeof value.zIndex !== 'number' || !Number.isFinite(value.zIndex))) {
-    issues.push(createIssue(`${path}.zIndex`, 'must be a finite number when provided', 'schema.page.layers.zIndex.invalid'))
+  if (value.zIndex != null && (typeof value.zIndex !== 'number' || !Number.isFinite(value.zIndex) || value.zIndex < PAGE_LAYER_MIN_Z_INDEX || value.zIndex > PAGE_LAYER_MAX_Z_INDEX)) {
+    issues.push(createIssue(`${path}.zIndex`, `must be a number between ${PAGE_LAYER_MIN_Z_INDEX} and ${PAGE_LAYER_MAX_Z_INDEX} when provided`, 'schema.page.layers.zIndex.invalid'))
   }
 
   if (value.kind === 'watermark' && value.type === 'text') {

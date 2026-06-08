@@ -6,6 +6,7 @@ import type { WorkspaceWindowState } from '../types'
 import {
   createEditorSurfacePlan,
   getEditorSurfacePageLeft,
+  groupPageLayerPlansByPlacement,
   PAGE_CONTENT_LAYER_STACK_INDEX,
   projectDocumentPointToEditorSurface,
   readNodeRepeatScope,
@@ -253,24 +254,24 @@ const controlLayerStyle = {
   zIndex: 1_000_000,
 }
 
-const pageLayerPlansByPageSize = computed(() => {
-  const plans = new Map<string, ReturnType<typeof resolvePageLayerPlans>>()
+const pageLayerBucketsByPageSize = computed(() => {
+  const buckets = new Map<string, ReturnType<typeof groupPageLayerPlansByPlacement>>()
   for (const page of editorSurfacePlan.value.pages) {
     const key = createPageSizeKey(page.width, page.height)
-    if (!plans.has(key)) {
-      plans.set(key, resolvePageLayerPlans(store.schema.page, {
+    if (!buckets.has(key)) {
+      buckets.set(key, groupPageLayerPlansByPlacement(resolvePageLayerPlans(store.schema.page, {
         width: page.width,
         height: page.height,
-      }))
+      })))
     }
   }
-  return plans
+  return buckets
 })
 
 const pageFrames = computed(() => {
   const plan = editorSurfacePlan.value
   const unit = store.schema.unit
-  const pageLayerPlans = pageLayerPlansByPageSize.value
+  const pageLayerBuckets = pageLayerBucketsByPageSize.value
   return plan.pages.map((page) => {
     const pagePositionStyle = {
       left: `${getEditorSurfacePageLeft(plan, page)}${unit}`,
@@ -278,9 +279,11 @@ const pageFrames = computed(() => {
       width: `${page.width}${unit}`,
       height: `${page.height}${unit}`,
     }
+    const buckets = pageLayerBuckets.get(createPageSizeKey(page.width, page.height))
+    const layerPlans = buckets ? flattenPageLayerBuckets(buckets) : []
     return {
       page,
-      layerPlans: pageLayerPlans.get(createPageSizeKey(page.width, page.height)) ?? [],
+      layerPlans,
       style: {
         ...pagePositionStyle,
         ...resolvePageBackgroundStyle(store.schema.page.background, unit),
@@ -433,14 +436,18 @@ function isWatermarkLayerPlan(plan: ReturnType<typeof resolvePageLayerPlans>[num
 
 function resolvePageLayerPlanStyle(plan: ReturnType<typeof resolvePageLayerPlans>[number]) {
   return {
-    zIndex: resolveCanvasLayerZIndex(plan),
+    zIndex: resolvePageLayerStackIndex(plan),
     color: plan.layer.kind === 'watermark' ? plan.layer.color : undefined,
     opacity: plan.layer.kind === 'watermark' ? plan.layer.opacity : undefined,
   }
 }
 
-function resolveCanvasLayerZIndex(plan: ReturnType<typeof resolvePageLayerPlans>[number]): number {
-  return resolvePageLayerStackIndex(plan)
+function flattenPageLayerBuckets(buckets: ReturnType<typeof groupPageLayerPlansByPlacement>): ReturnType<typeof resolvePageLayerPlans> {
+  return [
+    ...buckets.underContent,
+    ...buckets.overContent,
+    ...buckets.top,
+  ]
 }
 
 function createPageSizeKey(width: number, height: number): string {

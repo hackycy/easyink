@@ -23,6 +23,8 @@ export const DEFAULT_TEXT_WATERMARK_PAGE_LAYER: Required<TextWatermarkPageLayerC
   gap: 60,
   color: '#b8b8b8',
 }
+export const PAGE_LAYER_MIN_Z_INDEX = 0
+export const PAGE_LAYER_MAX_Z_INDEX = 999
 
 export function createDefaultPage(): PageSchema {
   return normalizePageDerivedDefaults({
@@ -231,7 +233,7 @@ function normalizeTextWatermarkLayer(input: Record<string, unknown>): TextWaterm
     placement: input.placement === 'under-content' || input.placement === 'over-content' || input.placement === 'top'
       ? input.placement
       : DEFAULT_TEXT_WATERMARK_PAGE_LAYER.placement,
-    zIndex: toFiniteNumber(input.zIndex, DEFAULT_TEXT_WATERMARK_PAGE_LAYER.zIndex),
+    zIndex: clamp(toFiniteNumber(input.zIndex, DEFAULT_TEXT_WATERMARK_PAGE_LAYER.zIndex), PAGE_LAYER_MIN_Z_INDEX, PAGE_LAYER_MAX_Z_INDEX),
     text: typeof input.text === 'string' ? input.text : DEFAULT_TEXT_WATERMARK_PAGE_LAYER.text,
     rotation: toFiniteNumber(input.rotation, DEFAULT_TEXT_WATERMARK_PAGE_LAYER.rotation),
     opacity: clamp(toFiniteNumber(input.opacity, DEFAULT_TEXT_WATERMARK_PAGE_LAYER.opacity), 0, 1),

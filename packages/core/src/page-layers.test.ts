@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PAGE_CONTENT_LAYER_STACK_INDEX, resolvePageLayerPlans, resolvePageLayers, resolvePageLayerStackIndex } from './page-layers'
+import { groupPageLayerPlansByPlacement, PAGE_CONTENT_LAYER_STACK_INDEX, resolvePageLayerPlans, resolvePageLayers, resolvePageLayerStackIndex } from './page-layers'
 
 describe('page layers', () => {
   it('resolves text watermark layer defaults without enabling output implicitly', () => {
@@ -37,15 +37,33 @@ describe('page layers', () => {
   it('resolves shared stack indexes around the content layer', () => {
     const plans = resolvePageLayerPlans({
       layers: [
-        { id: 'under', kind: 'watermark', type: 'text', enabled: true, text: 'UNDER', placement: 'under-content' },
-        { id: 'over', kind: 'watermark', type: 'text', enabled: true, text: 'OVER', placement: 'over-content' },
+        { id: 'under-min', kind: 'watermark', type: 'text', enabled: true, text: 'UNDER', placement: 'under-content', zIndex: -1 },
+        { id: 'under-max', kind: 'watermark', type: 'text', enabled: true, text: 'UNDER MAX', placement: 'under-content', zIndex: 9999 },
+        { id: 'over-min', kind: 'watermark', type: 'text', enabled: true, text: 'OVER', placement: 'over-content', zIndex: -1 },
+        { id: 'over-max', kind: 'watermark', type: 'text', enabled: true, text: 'OVER MAX', placement: 'over-content', zIndex: 9999 },
         { id: 'top', kind: 'watermark', type: 'text', enabled: true, text: 'TOP', placement: 'top' },
       ],
     }, { width: 80, height: 60 })
 
     expect(resolvePageLayerStackIndex(plans[0]!)).toBeLessThan(PAGE_CONTENT_LAYER_STACK_INDEX)
-    expect(resolvePageLayerStackIndex(plans[1]!)).toBeGreaterThan(PAGE_CONTENT_LAYER_STACK_INDEX)
-    expect(resolvePageLayerStackIndex(plans[2]!)).toBeGreaterThan(resolvePageLayerStackIndex(plans[1]!))
+    expect(resolvePageLayerStackIndex(plans[1]!)).toBeLessThan(PAGE_CONTENT_LAYER_STACK_INDEX)
+    expect(resolvePageLayerStackIndex(plans[2]!)).toBeGreaterThan(PAGE_CONTENT_LAYER_STACK_INDEX)
+    expect(resolvePageLayerStackIndex(plans[3]!)).toBeLessThan(resolvePageLayerStackIndex(plans[4]!))
+  })
+
+  it('groups render plans by placement without changing order inside each bucket', () => {
+    const buckets = groupPageLayerPlansByPlacement(resolvePageLayerPlans({
+      layers: [
+        { id: 'over-low', kind: 'watermark', type: 'text', enabled: true, text: 'OVER LOW', placement: 'over-content', zIndex: 1 },
+        { id: 'top', kind: 'watermark', type: 'text', enabled: true, text: 'TOP', placement: 'top' },
+        { id: 'under', kind: 'watermark', type: 'text', enabled: true, text: 'UNDER', placement: 'under-content' },
+        { id: 'over-high', kind: 'watermark', type: 'text', enabled: true, text: 'OVER HIGH', placement: 'over-content', zIndex: 10 },
+      ],
+    }, { width: 80, height: 60 }))
+
+    expect(buckets.underContent.map(plan => plan.layer.id)).toEqual(['under'])
+    expect(buckets.overContent.map(plan => plan.layer.id)).toEqual(['over-low', 'over-high'])
+    expect(buckets.top.map(plan => plan.layer.id)).toEqual(['top'])
   })
 
   it('creates a repeated tile plan for enabled text watermark layers', () => {

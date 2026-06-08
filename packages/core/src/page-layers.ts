@@ -1,5 +1,5 @@
 import type { PageLayerConfig, PageLayerPlacement, PageSchema, TextWatermarkPageLayerConfig } from '@easyink/schema'
-import { DEFAULT_TEXT_WATERMARK_PAGE_LAYER } from '@easyink/schema'
+import { DEFAULT_TEXT_WATERMARK_PAGE_LAYER, PAGE_LAYER_MAX_Z_INDEX, PAGE_LAYER_MIN_Z_INDEX } from '@easyink/schema'
 
 export interface ResolvedPageLayerBase {
   id: string
@@ -40,6 +40,19 @@ export interface ResolvePageLayerPlansOptions {
   maxTiles?: number
 }
 
+export interface PageLayerRenderPlanBuckets {
+  underContent: PageLayerRenderPlan[]
+  overContent: PageLayerRenderPlan[]
+  top: PageLayerRenderPlan[]
+}
+
+type PageLayerResolver = (layer: PageLayerConfig) => ResolvedPageLayer | undefined
+type PageLayerPlanResolver = (
+  layer: ResolvedPageLayer,
+  pageSize: { width: number, height: number },
+  options: ResolvePageLayerPlansOptions,
+) => PageLayerRenderPlan | undefined
+
 export const PAGE_CONTENT_LAYER_STACK_INDEX = 1000
 
 const DEFAULT_MAX_WATERMARK_TILES = 1200
@@ -52,6 +65,16 @@ const PLACEMENT_STACK_INDEX: Record<PageLayerPlacement, number> = {
   'under-content': 0,
   'over-content': 2000,
   'top': 3000,
+}
+const PAGE_LAYER_RESOLVERS: Record<string, PageLayerResolver> = {
+  'watermark:text': layer => layer.kind === 'watermark' && layer.type === 'text'
+    ? resolveTextWatermarkLayer(layer)
+    : undefined,
+}
+const PAGE_LAYER_PLAN_RESOLVERS: Record<string, PageLayerPlanResolver> = {
+  'watermark:text': (layer, pageSize, options) => layer.kind === 'watermark' && layer.type === 'text'
+    ? resolveTextWatermarkLayerPlan(layer, pageSize, options)
+    : undefined,
 }
 
 export function resolvePageLayers(page: Pick<PageSchema, 'layers'>): ResolvedPageLayer[] {
@@ -87,10 +110,28 @@ export function resolvePageLayerStackIndex(plan: Pick<PageLayerRenderPlan, 'laye
   return PLACEMENT_STACK_INDEX[plan.layer.placement] + plan.layer.zIndex
 }
 
+export function groupPageLayerPlansByPlacement(plans: PageLayerRenderPlan[]): PageLayerRenderPlanBuckets {
+  const buckets: PageLayerRenderPlanBuckets = {
+    underContent: [],
+    overContent: [],
+    top: [],
+  }
+  for (const plan of plans) {
+    if (plan.layer.placement === 'under-content') {
+      buckets.underContent.push(plan)
+    }
+    else if (plan.layer.placement === 'top') {
+      buckets.top.push(plan)
+    }
+    else {
+      buckets.overContent.push(plan)
+    }
+  }
+  return buckets
+}
+
 function resolvePageLayer(layer: PageLayerConfig): ResolvedPageLayer | undefined {
-  if (layer.kind === 'watermark' && layer.type === 'text')
-    return resolveTextWatermarkLayer(layer)
-  return undefined
+  return PAGE_LAYER_RESOLVERS[createPageLayerKey(layer)]?.(layer)
 }
 
 function resolveTextWatermarkLayer(layer: TextWatermarkPageLayerConfig): ResolvedTextWatermarkPageLayer {
@@ -101,7 +142,7 @@ function resolveTextWatermarkLayer(layer: TextWatermarkPageLayerConfig): Resolve
     type: 'text',
     enabled: layer.enabled ?? DEFAULT_TEXT_WATERMARK_PAGE_LAYER.enabled,
     placement: resolveLayerPlacement(layer.placement, DEFAULT_TEXT_WATERMARK_PAGE_LAYER.placement),
-    zIndex: toFiniteNumber(layer.zIndex, DEFAULT_TEXT_WATERMARK_PAGE_LAYER.zIndex),
+    zIndex: clamp(toFiniteNumber(layer.zIndex, DEFAULT_TEXT_WATERMARK_PAGE_LAYER.zIndex), PAGE_LAYER_MIN_Z_INDEX, PAGE_LAYER_MAX_Z_INDEX),
     text: layer.text ?? DEFAULT_TEXT_WATERMARK_PAGE_LAYER.text,
     rotation: toFiniteNumber(layer.rotation, DEFAULT_TEXT_WATERMARK_PAGE_LAYER.rotation),
     opacity: clamp(toFiniteNumber(layer.opacity, DEFAULT_TEXT_WATERMARK_PAGE_LAYER.opacity), 0, 1),
@@ -118,9 +159,7 @@ function resolvePageLayerPlan(
   pageSize: { width: number, height: number },
   options: ResolvePageLayerPlansOptions,
 ): PageLayerRenderPlan | undefined {
-  if (layer.kind === 'watermark' && layer.type === 'text')
-    return resolveTextWatermarkLayerPlan(layer, pageSize, options)
-  return undefined
+  return PAGE_LAYER_PLAN_RESOLVERS[createPageLayerKey(layer)]?.(layer, pageSize, options)
 }
 
 function resolveTextWatermarkLayerPlan(
@@ -167,6 +206,10 @@ function compareResolvedPageLayers(a: ResolvedPageLayer, b: ResolvedPageLayer): 
 
 function resolveLayerPlacement(value: unknown, fallback: PageLayerPlacement): PageLayerPlacement {
   return value === 'under-content' || value === 'over-content' || value === 'top' ? value : fallback
+}
+
+function createPageLayerKey(layer: Pick<PageLayerConfig, 'kind' | 'type'>): string {
+  return `${layer.kind}:${layer.type}`
 }
 
 function toFiniteNumber(value: unknown, fallback: number): number {

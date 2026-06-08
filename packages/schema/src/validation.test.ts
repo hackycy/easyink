@@ -77,6 +77,26 @@ describe('validateSchema', () => {
     })).toEqual([])
   })
 
+  it('rejects page layer zIndex values outside the stack band', () => {
+    const highIssues = validateSchemaIssues({
+      ...validSchema,
+      page: {
+        ...validSchema.page,
+        layers: [{ id: 'page-watermark', kind: 'watermark', type: 'text', zIndex: 1000 }],
+      },
+    })
+    const lowIssues = validateSchemaIssues({
+      ...validSchema,
+      page: {
+        ...validSchema.page,
+        layers: [{ id: 'page-watermark', kind: 'watermark', type: 'text', zIndex: -1 }],
+      },
+    })
+
+    expect(highIssues).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'page.layers.0.zIndex' })]))
+    expect(lowIssues).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'page.layers.0.zIndex' })]))
+  })
+
   it('rejects invalid page layer settings', () => {
     const issues = validateSchemaIssues({
       ...validSchema,

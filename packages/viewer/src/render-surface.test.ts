@@ -173,6 +173,61 @@ describe('renderPages', () => {
     expect(tile!.style.transform).toContain('rotate(-30deg)')
   })
 
+  it('renders page layer placements around the content layer in stack order', () => {
+    const container = document.createElement('div')
+    const registry = new MaterialRendererRegistry()
+    const node: MaterialNode = {
+      id: 'content-1',
+      type: 'custom',
+      x: 0,
+      y: 0,
+      width: 10,
+      height: 10,
+      props: {},
+    }
+
+    registry.register('custom', { kind: 'none' }, {
+      render: () => ({ html: trustedViewerHtml('<div>content</div>') }),
+    })
+
+    renderPages([{
+      index: 0,
+      width: 80,
+      height: 60,
+      elements: [node],
+      yOffset: 0,
+    }], registry, {
+      container,
+      document,
+      zoom: 1,
+      unit: 'mm',
+      data: {},
+      resolvedPropsMap: new Map(),
+      pageSchema: {
+        mode: 'fixed',
+        width: 80,
+        height: 60,
+        layers: [
+          { id: 'top', kind: 'watermark', type: 'text', enabled: true, text: 'TOP', placement: 'top' },
+          { id: 'under', kind: 'watermark', type: 'text', enabled: true, text: 'UNDER', placement: 'under-content' },
+          { id: 'over', kind: 'watermark', type: 'text', enabled: true, text: 'OVER', placement: 'over-content' },
+        ],
+      },
+    }, [])
+
+    const page = container.querySelector('.ei-viewer-page') as HTMLElement | null
+    expect(page).not.toBeNull()
+    expect([...page!.children].map((child) => {
+      const element = child as HTMLElement
+      return element.dataset.pageLayerId ?? element.className
+    })).toEqual([
+      'under',
+      'ei-viewer-content-layer',
+      'over',
+      'top',
+    ])
+  })
+
   it('skips page watermark when disabled or blank', () => {
     const container = document.createElement('div')
     const registry = new MaterialRendererRegistry()

@@ -1,8 +1,8 @@
-import type { PageLayerRenderPlan, PagePlanEntry, TextWatermarkPageLayerPlan, TrustedViewerHtml } from '@easyink/core'
+import type { PageLayerRenderPlan, PageLayerRenderPlanBuckets, PagePlanEntry, TextWatermarkPageLayerPlan, TrustedViewerHtml } from '@easyink/core'
 import type { MaterialNode, PageBackground, PageSchema } from '@easyink/schema'
 import type { MaterialRendererRegistry } from './material-registry'
 import type { ViewerDiagnosticEvent, ViewerRenderContext, ViewerRenderSize } from './types'
-import { PAGE_CONTENT_LAYER_STACK_INDEX, readTrustedViewerHtml, resolvePageLayerPlans, resolvePageLayerStackIndex, trustedViewerHtml } from '@easyink/core'
+import { groupPageLayerPlansByPlacement, PAGE_CONTENT_LAYER_STACK_INDEX, readTrustedViewerHtml, resolvePageLayerPlans, resolvePageLayerStackIndex, trustedViewerHtml } from '@easyink/core'
 import { escapeHtml, UNIT_FACTOR } from '@easyink/shared'
 import { isErrorSentinel, safeRender } from './diagnostic-middleware'
 
@@ -37,16 +37,14 @@ export function renderPages(
   container.replaceChildren()
 
   const pageDOMs: PageDOM[] = []
+  const pageLayerBucketsBySize = new Map<string, PageLayerRenderPlanBuckets>()
 
   for (const page of pages) {
     const { wrapper, pageEl } = createPageElement(document, page, pageSchema, unit, zoom)
     const contentLayer = createContentLayer(document)
-    const pageLayerPlans = resolvePageLayerPlans(pageSchema, {
-      width: page.width,
-      height: page.height,
-    })
+    const pageLayerBuckets = resolveCachedPageLayerBuckets(pageLayerBucketsBySize, pageSchema, page)
 
-    appendPageLayers(document, pageEl, pageLayerPlans.filter(plan => plan.layer.placement === 'under-content'), page, unit, diagnostics)
+    appendPageLayers(document, pageEl, pageLayerBuckets.underContent, page, unit, diagnostics)
     pageEl.appendChild(contentLayer)
 
     const context: ViewerRenderContext = {
@@ -111,13 +109,32 @@ export function renderPages(
       contentLayer.appendChild(elWrapper)
     }
 
-    appendPageLayers(document, pageEl, pageLayerPlans.filter(plan => plan.layer.placement !== 'under-content'), page, unit, diagnostics)
+    appendPageLayers(document, pageEl, pageLayerBuckets.overContent, page, unit, diagnostics)
+    appendPageLayers(document, pageEl, pageLayerBuckets.top, page, unit, diagnostics)
 
     container.appendChild(wrapper)
     pageDOMs.push({ pageIndex: page.index, element: pageEl })
   }
 
   return pageDOMs
+}
+
+function resolveCachedPageLayerBuckets(
+  cache: Map<string, PageLayerRenderPlanBuckets>,
+  pageSchema: PageSchema,
+  page: Pick<PagePlanEntry, 'width' | 'height'>,
+): PageLayerRenderPlanBuckets {
+  const key = createPageSizeKey(page.width, page.height)
+  const cached = cache.get(key)
+  if (cached)
+    return cached
+
+  const buckets = groupPageLayerPlansByPlacement(resolvePageLayerPlans(pageSchema, {
+    width: page.width,
+    height: page.height,
+  }))
+  cache.set(key, buckets)
+  return buckets
 }
 
 function appendPageLayers(
@@ -360,6 +377,10 @@ function getPxFactorForLayout(unit: string): number {
   if (!factor)
     return 1
   return 96 / factor
+}
+
+function createPageSizeKey(width: number, height: number): string {
+  return `${width}:${height}`
 }
 
 function setMaterialHtml(element: HTMLElement, html: TrustedViewerHtml): void {
