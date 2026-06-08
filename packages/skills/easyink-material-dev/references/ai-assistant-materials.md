@@ -11,7 +11,8 @@ Use this reference when a material should be generated, selected, repaired, or r
 - `packages/assistant/designer-bridge/src/material-manifest.ts`: exports the live Designer store as `AssistantMaterialManifest`; props and binding definitions are serialized, and `material.aiDescriptor` becomes `manifest.materials[].ai`.
 - `packages/assistant/designer-bridge/src/contribution.ts`: passes `materialManifest` through a getter so Assistant sees newly registered materials without restart.
 - `packages/assistant/capabilities/src/types.ts`: runtime zod shape for `AssistantMaterialManifest` and `AssistantAIMaterialDescriptorSchema`.
-- `packages/assistant/orchestrator/src/prompts.ts`: linear Assistant pipeline turns manifest `ai` and `ai.knowledge` into layout/schema/repair prompts.
+- `packages/assistant/orchestrator/src/prompts.ts`: linear Assistant pipeline builds a lightweight Material Router index from manifest `ai` and `ai.knowledge`, then expands only the selected manifest into layout/schema/repair prompts.
+- `packages/assistant/orchestrator/src/agents.ts`: Material Router Agent selects the minimal registered Designer material set before layout and schema generation.
 - `packages/assistant/material-knowledge/src/from-manifest.ts`: builds `MaterialKnowledgeRegistry` from `entry.knowledge` or `entry.ai.knowledge`, falling back to synthesized minimal knowledge from plain `ai`.
 - `packages/assistant/tool-registry/src/tools/material-tools.ts`: exposes registry-backed material queries, binding specs, compatibility, and sizing.
 - `packages/assistant/orchestrator/src/composer/agent.ts`: Composer Agent builds a registry from `input.materialManifest` and calls material/data/layout/schema tools.
@@ -71,33 +72,34 @@ export const xAIMaterialDescriptor = {
 } satisfies AIMaterialDescriptor
 ```
 
-Keep `description`, `usage`, `schemaRules`, `examples`, and `knowledge` short and deterministic. They are prompt input, not user docs.
+Keep `description`, `usage`, `schemaRules`, `examples`, and `knowledge` short and deterministic. They are Assistant input, not user docs. `description`, category, capabilities, binding summary, and fitness help Material Router decide whether to select the material; `usage`, `schemaRules`, examples, sizing, binding details, and composability are expanded only after the material is selected.
 
 ## Knowledge Semantics
 
-- `category`: one of `data`, `layout`, `decoration`, `typography`, `visualization`; used in prompts and registry queries.
+- `category`: one of `data`, `layout`, `decoration`, `typography`, `visualization`; used in the Material Router index, selected-manifest prompts, and registry queries.
 - `composability.canBeChildOf`: include `'*'` only when the material really works at top level or in any container-like parent.
 - `composability.canContain`: list child material types only when the schema and Designer/Viewer support children.
 - `bindingSpec.mode`: use `none`, `scalar`, `collection`, or `multi-scalar`. This is richer than descriptor `binding` (`none`, `single`, `multi`, `data-contract`).
 - `bindingSpec.accepts`: match runtime data shape. Array/detail-list materials should set `types: ['array']`, `isArray: true`, and often `minChildren`.
 - `bindingSpec.produces`: describe the binding shape Assistant should emit, such as `scalar-field`, `collection-repeat`, or a `data-contract` mappings shape.
 - `sizing`: values are in mm. Match factory defaults and real minimums. `growAxis` should reflect measurement/layout behavior.
-- `fitness`: scenario-based scoring that drives material selection. See "Fitness and Scenario Coverage" below.
+- `fitness`: scenario-based scoring that drives Material Router selection and selected-manifest recommendations. See "Fitness and Scenario Coverage" below.
 - `properties`: optional structured property specs. Add only when the plain `properties` string list is not enough.
 
 If `knowledge` is omitted, Assistant can still synthesize minimal knowledge from `binding` and `properties`, but selection, sizing, binding, and compatibility will be weaker.
 
 ## Fitness and Scenario Coverage
 
-The `fitness` array declares which document scenarios a material is suitable for. The orchestrator's Planner Agent infers a free-form `scenario` string from the user's prompt, and `buildMaterialContext()` uses it to prioritize materials whose fitness matches.
+The `fitness` array declares which document scenarios a material is suitable for. The orchestrator's Planner Agent infers a free-form `scenario` string from the user's prompt, and Material Router uses `buildMaterialIndexContext()` to prioritize materials whose fitness matches before detailed material rules are loaded.
 
 ### How it works
 
 1. Planner infers `scenario` (e.g. `'invoice'`, `'h5-landing'`, `'poster'`, `'prototype'`).
-2. `buildMaterialContext(manifest, scenario)` filters each material's fitness:
+2. `buildMaterialIndexContext(manifest, scenario)` summarizes each material's fitness for Material Router:
    - If scenario is set: show entries matching that scenario + all entries with score >= 0.8.
    - If no scenario: show entries with score >= 0.8.
-3. Matching fitness entries appear as "Best for: ..." in the Schema Agent prompt.
+3. Material Router selects the smallest sufficient set of registered material types and `selectMaterialManifest()` creates the selected manifest.
+4. `buildMaterialContext(selectedManifest, scenario)` expands detailed material rules for Schema/Repair, where matching fitness entries appear as "Best for: ...".
 
 ### Scenario naming conventions
 
@@ -166,11 +168,15 @@ Current flow:
 2. `createAssistantMaterialManifest(store)` emits `{ type, name, capabilities, props, ai }`.
 3. `AssistantPanel` sends `materialManifest` with each task.
 4. Linear pipeline:
-   - Planner infers `scenario` (free string) and `page.unit` (`mm` | `px` | `pt`) from user prompt.
-   - `buildMaterialContext(manifest, scenario)` includes category, properties, required props, binding, bindingSpec, sizing, composability, fitness (filtered by scenario), usage, schemaRules, and examples.
-   - `buildSchemaSystemPrompt(materialContext, ctx)` assembles prompt segments based on `PromptContext { unit, mode, scenario }`.
-   - `buildLayoutMaterialContext()` lists type, binding, children, and sizing.
-   - Schema repair uses the same material context and prompt context; must not invent unregistered types.
+   - Source parses external data before planning.
+   - Planner infers `scenario` (free string) and `page.unit` (`mm` | `px` | `pt`) from user prompt and source semantics.
+   - Contract defines the field tree and `sampleData`.
+   - Material Router reads `buildMaterialIndexContext(manifest, scenario)` and chooses `selectedMaterials`.
+   - `selectMaterialManifest(manifest, selectedMaterials)` creates the selected manifest that bounds the rest of the task.
+   - `buildLayoutMaterialContext(selectedManifest)` lists selected types, binding, children, and sizing for Layout.
+   - `buildMaterialContext(selectedManifest, scenario)` includes category, properties, required props, binding, bindingSpec, sizing, composability, fitness (filtered by scenario), usage, schemaRules, and examples for Schema/Repair.
+   - `buildSchemaSystemPrompt(selectedMaterialContext, ctx)` assembles prompt segments based on `PromptContext { unit, mode, scenario }`.
+   - Schema repair uses the selected material context and prompt context; must not invent unregistered or unselected types.
 5. Composer Agent:
    - `createRegistryFromManifest()` builds `MaterialKnowledgeRegistry`.
    - material tools answer `query_material`, `get_binding_spec`, `check_compatibility`, and `get_material_sizing`.

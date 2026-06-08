@@ -1,4 +1,4 @@
-import type { AssistantMaterialManifest, AssistantMaterialProp } from '@easyink/assistant-capabilities'
+import type { AssistantMaterialBindingDefinition, AssistantMaterialManifest, AssistantMaterialProp } from '@easyink/assistant-capabilities'
 import type { DesignerStore, PropSchema } from '@easyink/designer'
 
 export function createAssistantMaterialManifest(store: DesignerStore): AssistantMaterialManifest {
@@ -7,11 +7,15 @@ export function createAssistantMaterialManifest(store: DesignerStore): Assistant
       type: material.type,
       name: material.name,
       capabilities: material.capabilities,
-      binding: material.binding,
+      binding: sanitizeBindingDefinition(material.binding),
       props: material.props.map(prop => sanitizePropSchema(prop)),
       ai: material.aiDescriptor,
     })),
   }
+}
+
+function sanitizeBindingDefinition(binding: unknown): AssistantMaterialBindingDefinition {
+  return toSerializable(binding) as AssistantMaterialBindingDefinition
 }
 
 function sanitizePropSchema(prop: PropSchema): AssistantMaterialProp {

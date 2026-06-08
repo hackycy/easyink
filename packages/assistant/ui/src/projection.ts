@@ -28,7 +28,8 @@ export interface ProjectChecklistInput {
 const CHECKLIST_PHASES: { id: string, titleKey: string, steps: string[] }[] = [
   { id: 'understand', titleKey: 'designer.assistant.checklist.understand', steps: ['intake'] },
   { id: 'data', titleKey: 'designer.assistant.checklist.data', steps: ['source'] },
-  { id: 'layout', titleKey: 'designer.assistant.checklist.layout', steps: ['plan', 'contract', 'layout'] },
+  { id: 'materials', titleKey: 'designer.assistant.checklist.materials', steps: ['plan', 'contract', 'materials'] },
+  { id: 'layout', titleKey: 'designer.assistant.checklist.layout', steps: ['layout'] },
   { id: 'compose', titleKey: 'designer.assistant.checklist.compose', steps: ['compose'] },
   { id: 'validate', titleKey: 'designer.assistant.checklist.validate', steps: ['validate', 'repair', 'review'] },
 ]

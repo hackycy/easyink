@@ -44,6 +44,7 @@ const zhCN = {
       checklist: {
         understand: '理解需求',
         data: '解析数据',
+        materials: '选择物料',
         layout: '规划版式',
         compose: '生成模板',
         validate: '校验结果',
@@ -81,6 +82,7 @@ const zhCN = {
         scenarioSuffix: '，继续细化生成方案。',
         confirmedGoal: '已确认主要目标，开始规划生成方案。',
         contract: '正在整理内容结构和字段关系。',
+        materials: '正在筛选本次模板需要加载的物料。',
         skeleton: '正在搭建主要区域和页面骨架。',
         repair: '发现细节问题，正在自动修正。',
         issueFound: '已发现问题：{error}',
@@ -151,6 +153,7 @@ const enUS = {
       checklist: {
         understand: 'Understand Request',
         data: 'Parse Data',
+        materials: 'Select Materials',
         layout: 'Plan Layout',
         compose: 'Generate Template',
         validate: 'Validate Result',
@@ -188,6 +191,7 @@ const enUS = {
         scenarioSuffix: ', continuing to refine the generation plan.',
         confirmedGoal: 'Main goal confirmed. Planning the generation approach.',
         contract: 'Organizing the content structure and field relationships.',
+        materials: 'Selecting the materials to load for this template.',
         skeleton: 'Building the main regions and page skeleton.',
         repair: 'Found detail issues and am fixing them automatically.',
         issueFound: 'Issue found: {error}',

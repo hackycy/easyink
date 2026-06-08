@@ -263,11 +263,11 @@ describe('assistantOrchestrator', () => {
     const orchestrator = new AssistantOrchestrator({ store, llm: createSchemaLLM() })
     const task = await store.createTask({ prompt: '生成一个报价单' })
 
-    await expect(orchestrator.runTask(task.id)).rejects.toThrow('Schema Agent requires an LLM client and a Designer material manifest.')
+    await expect(orchestrator.runTask(task.id)).rejects.toThrow('Material Router requires an LLM client and at least one selected Designer material.')
 
     const failed = await store.getTask(task.id)
     expect(failed?.status).toBe('failed')
-    expect(failed?.error).toContain('Schema Agent requires an LLM client and a Designer material manifest.')
+    expect(failed?.error).toContain('Material Router requires an LLM client and at least one selected Designer material.')
   })
 
   it('fails generation when no LLM client is configured', async () => {
@@ -275,7 +275,7 @@ describe('assistantOrchestrator', () => {
     const orchestrator = new AssistantOrchestrator({ store })
     const task = await store.createTask({ prompt: '生成一个报价单', materialManifest: textMaterialManifest() })
 
-    await expect(orchestrator.runTask(task.id)).rejects.toThrow('Schema Agent requires an LLM client and a Designer material manifest.')
+    await expect(orchestrator.runTask(task.id)).rejects.toThrow('Material Router requires an LLM client and at least one selected Designer material.')
 
     const failed = await store.getTask(task.id)
     expect(failed?.status).toBe('failed')
@@ -296,6 +296,38 @@ describe('assistantOrchestrator', () => {
     expect(result?.validation.valid).toBe(true)
     expect(result?.dataSource?.id).toBe('quote')
     expect(result?.preview.warnings.join('\n')).toContain('Schema Agent used registered Designer materials')
+  })
+
+  it('loads detailed material instructions only after the material router selects types', async () => {
+    const store = new MemoryAssistantStore()
+    const llm = createSchemaLLM()
+    const orchestrator = new AssistantOrchestrator({ store, llm })
+    const task = await store.createTask({
+      prompt: '生成一个报价单',
+      materialManifest: multiMaterialManifest(),
+    })
+
+    await orchestrator.runTask(task.id)
+
+    const materialRouterRequest = llm.requests[5] as { messages: Array<{ role: string, content: string }> }
+    const materialRouterSystem = materialRouterRequest.messages.find(message => message.role === 'system')?.content ?? ''
+    expect(materialRouterSystem).toContain('## Registered Material Index')
+    expect(materialRouterSystem).toContain('- text:')
+    expect(materialRouterSystem).toContain('- barcode:')
+    expect(materialRouterSystem).not.toContain('Properties: content, fontSize')
+    expect(materialRouterSystem).not.toContain('Usage: Render barcode values.')
+
+    const layoutRequest = llm.requests[6] as { messages: Array<{ role: string, content: string }> }
+    const layoutSystem = layoutRequest.messages.find(message => message.role === 'system')?.content ?? ''
+    expect(layoutSystem).toContain('- text:')
+    expect(layoutSystem).not.toContain('- barcode:')
+
+    const schemaRequest = llm.requests[7] as { messages: Array<{ role: string, content: string }> }
+    const schemaSystem = schemaRequest.messages.find(message => message.role === 'system')?.content ?? ''
+    expect(schemaSystem).toContain('### text')
+    expect(schemaSystem).toContain('Properties: content, fontSize')
+    expect(schemaSystem).not.toContain('### barcode')
+    expect(schemaSystem).not.toContain('Usage: Render barcode values.')
   })
 
   it('repairs missing schema shell fields before validating a schema-agent result', async () => {
@@ -489,6 +521,7 @@ describe('assistantOrchestrator', () => {
       {},
       { explanation: '校验前会经过 capability validate。' },
       { name: 'receipt', fields: [], sampleData: {}, warnings: [] },
+      materialRouterPayload(),
       { blocks: [], warnings: [] },
       defaultSchemaAgentPayload(),
     ])
@@ -547,15 +580,16 @@ describe('assistantOrchestrator', () => {
     expect(systemMessage).toContain('https://cdn.example.test/banner.png')
   })
 
-  it('produces the v2 contract/layout/repair workflow step sequence', async () => {
+  it('produces the material-router workflow step sequence', async () => {
     const graph = createAssistantWorkflowGraph()
     const result = await graph.invoke({ input: { prompt: '生成一张商超小票' }, steps: [] })
 
     expect(result.steps).toEqual([
       'intake',
-      'plan',
       'source',
+      'plan',
       'contract',
+      'materials',
       'layout',
       'compose',
       'validate',
@@ -671,6 +705,7 @@ function schemaLLMPayloads(schemaPayload: unknown = defaultSchemaAgentPayload())
       sampleData: { customer: '示例客户' },
       warnings: [],
     },
+    materialRouterPayload(),
     {
       blocks: [{ id: 'txt-title', type: 'text', x: 16, y: 16, width: 178, height: 8 }],
       warnings: [],
@@ -700,8 +735,17 @@ function upstreamLLMPayloads() {
       sampleData: { customer: '示例客户' },
       warnings: [],
     },
+    materialRouterPayload(),
     { blocks: [{ id: 'txt-title', type: 'text', x: 16, y: 16, width: 178, height: 8 }], warnings: [] },
   ]
+}
+
+function materialRouterPayload() {
+  return {
+    selectedMaterials: [{ type: 'text', reason: 'Text covers title and scalar fields.', usedFor: ['title', 'customer'] }],
+    missingCapabilities: [],
+    warnings: [],
+  }
 }
 
 function invalidSchemaAgentPayload() {
@@ -820,6 +864,27 @@ function textMaterialManifest(): AssistantMaterialManifest {
           description: 'Designer-registered text material.',
           properties: ['content', 'fontSize', 'fontWeight', 'textAlign', 'verticalAlign', 'color'],
           binding: 'single' as const,
+        },
+      },
+    ],
+  }
+}
+
+function multiMaterialManifest(): AssistantMaterialManifest {
+  return {
+    materials: [
+      ...textMaterialManifest().materials,
+      {
+        type: 'barcode',
+        name: 'Barcode',
+        capabilities: { bindable: true },
+        binding: { kind: 'ordinary', primaryProp: 'value', formatEditor: false },
+        ai: {
+          type: 'barcode',
+          description: 'Designer-registered barcode material.',
+          properties: ['value', 'format', 'displayValue'],
+          binding: 'single' as const,
+          usage: ['Render barcode values.'],
         },
       },
     ],

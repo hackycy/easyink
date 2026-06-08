@@ -26,7 +26,7 @@ Core files:
 - `packages/designer/src/materials/registry.ts`, `packages/prop-schemas/src/index.ts`, and `packages/designer/src/components/PropertiesPanel.vue` for registration and page behavior property schemas.
 - `packages/viewer/src/runtime.ts`, `packages/viewer/src/render-surface.ts`, and `packages/viewer/src/material-registry.ts` for ordinary binding projection, measurement, pagination, repeated overlays, and renderer dispatch.
 - `packages/builtin/src/designer.ts`, `packages/builtin/src/viewer.ts`, and `packages/builtin/src/bindings.ts` for built-in registration.
-- `packages/shared/src/ai-generation.ts`, `packages/assistant/designer-bridge/src/material-manifest.ts`, and `packages/assistant/material-knowledge/src/from-manifest.ts` for Assistant material knowledge flow. Do not add material-specific prompt rules to Assistant packages; prompts consume the live material manifest.
+- `packages/shared/src/ai-generation.ts`, `packages/assistant/designer-bridge/src/material-manifest.ts`, `packages/assistant/orchestrator/src/prompts.ts`, and `packages/assistant/material-knowledge/src/from-manifest.ts` for Assistant material knowledge flow. Do not add material-specific prompt rules to Assistant packages; Assistant uses the live material manifest to build a lightweight Material Router index, then expands only the selected manifest for layout/schema/repair prompts.
 
 Task-specific references:
 
@@ -63,7 +63,7 @@ Task-specific references:
 17. Put datasource logic at the right layer. Whole-element prop binding uses ordinary `BindingRef` plus `binding.primaryProp`; table-like internal binding uses `binding.kind='custom'`, `datasourceDrop`, and cell-level `binding` or `staticBinding`; structured charts use `binding.kind='data-contract'` plus target-field mappings in `node.binding.kind='data-contract'`.
 18. For font-bearing materials, expose a `font` prop schema for `node.props.fontFamily` or the relevant sub-property. Material renderers may emit `font-family` CSS from resolved props, but Designer and Viewer own `FontProvider` -> `FontManager` -> `@font-face`.
 19. Add i18n keys for visible labels, tooltips, property labels, reject reasons, history labels, placeholders, and material-local toolbar actions. Prefer `context.t()` and `store.t()` over hardcoded strings.
-20. Update material-local `src/ai.ts` when Assistant should generate or select the material. Register the descriptor as `aiDescriptor` on the Designer material entry; Assistant sees it through the live Designer material manifest, not material-specific prompt patches.
+20. Update material-local `src/ai.ts` when Assistant should generate or select the material. Register the descriptor as `aiDescriptor` on the Designer material entry; Assistant sees it through the live Designer material manifest, routes against lightweight descriptor knowledge first, and only loads detailed usage/schema rules when the material is selected.
 21. Test the smallest useful surface: default factory, Designer repaint/deep behavior, control policy, page behavior props, repeated overlays, fragment pagination, Viewer render/measure, binding projection or data-contract resolution, font-dependent output, registration/catalog fallout, AI manifest, and i18n.
 
 ## Reference Files
@@ -74,7 +74,7 @@ Load only the reference needed for the current task:
 - `references/development-flow.md`: built-in and custom material implementation checklist.
 - `references/deep-editing.md`: editing session, geometry, selection, behavior, decoration, overlay, inline editor, and resize rules.
 - `references/binding-viewer.md`: font loading, binding projection, runtime measurement, fragment pagination, page-aware overlays, trusted HTML, export, and print boundaries.
-- `references/ai-assistant-materials.md`: Assistant manifest, `AIMaterialDescriptor.knowledge`, prompt/registry consumers, and custom material AI flow.
+- `references/ai-assistant-materials.md`: Assistant manifest, `AIMaterialDescriptor.knowledge`, Material Router selection, selected-manifest prompt consumers, registry consumers, and custom material AI flow.
 - `references/i18n-ai-tests.md`: i18n, validation, test rules, and brief AI review reminders.
 - `references/case-studies.md`: distilled rules from `table-data`, `table-kernel`, `flow-row`, `svg-star`, `text`, and `page-number`.
 

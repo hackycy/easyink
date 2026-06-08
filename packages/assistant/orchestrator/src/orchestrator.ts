@@ -27,6 +27,7 @@ import {
   runContractAgent,
   runIntakeAgent,
   runLayoutAgent,
+  runMaterialRouterAgent,
   runMemoryAgent,
   runSchemaAgent,
   runSchemaRepairAgent,
@@ -161,10 +162,24 @@ export class AssistantOrchestrator {
       })
       await this.completeStep(taskId, 'contract')
 
+      current = await this.startStep(current, 'materials')
+      await this.store.appendEvent(taskId, { type: 'tool.started', taskId, toolId: 'materials', title: '选择模板物料' })
+      await this.think(taskId, '正在选择需要加载的模板物料。')
+      const materials = await runMaterialRouterAgent(agentContext, agents.planner, contract, agents.source, agents.memorySummary)
+      if (!materials?.materialManifest.materials.length)
+        throw new Error('Material Router requires an LLM client and at least one selected Designer material.')
+      await this.store.appendEvent(taskId, {
+        type: 'tool.completed',
+        taskId,
+        toolId: 'materials',
+        summary: `选择 ${materials.materialManifest.materials.length} 个物料：${materials.materialManifest.materials.map(material => material.type).join(', ')}。`,
+      })
+      await this.completeStep(taskId, 'materials')
+
       current = await this.startStep(current, 'layout')
       await this.store.appendEvent(taskId, { type: 'tool.started', taskId, toolId: 'layout', title: '规划版式骨架' })
       await this.think(taskId, '正在规划版式骨架。')
-      const layout = await runLayoutAgent(agentContext, agents.planner, contract, agents.memorySummary)
+      const layout = await runLayoutAgent(agentContext, agents.planner, contract, materials, agents.memorySummary)
       await this.store.appendEvent(taskId, {
         type: 'tool.completed',
         taskId,
@@ -182,7 +197,7 @@ export class AssistantOrchestrator {
         agents.planner,
         agents.source,
         agents.memorySummary,
-        { contract, layout },
+        { contract, materials, layout },
       ).catch((error: unknown) => {
         const message = error instanceof Error ? error.message : String(error)
         throw new Error(`Schema Agent 返回不可用。${message}`)
@@ -202,6 +217,8 @@ export class AssistantOrchestrator {
         'Schema Agent used registered Designer materials; legacy presets were not used.',
         ...schemaAgent.warnings,
         ...contract.warnings,
+        ...materials.warnings,
+        ...materials.missingCapabilities.map(capability => `Missing material capability: ${capability}`),
         ...layout.warnings,
         ...agents.planner.warnings,
         ...agents.source.warnings,
@@ -214,9 +231,9 @@ export class AssistantOrchestrator {
 
       current = await this.startStep(current, 'validate')
       await this.store.appendEvent(taskId, { type: 'tool.started', taskId, toolId: 'validate', title: '校验模板与数据绑定' })
-      let validation = validateAssistantSchema(schemaResult.schema, { materialManifest: current.input.materialManifest })
+      let validation = validateAssistantSchema(schemaResult.schema, { materialManifest: materials.materialManifest })
       let deterministicErrors = collectDeterministicErrors(schemaResult.schema, {
-        materialManifest: current.input.materialManifest,
+        materialManifest: materials.materialManifest,
         expectedDataSource: schemaResult.expectedDataSource,
         page: planningPage,
       })
@@ -242,17 +259,17 @@ export class AssistantOrchestrator {
           const repaired = await runSchemaRepairAgent(agentContext, {
             schemaResult,
             errors: [...validation.errors, ...deterministicErrors],
-            upstream: { contract, layout },
+            upstream: { contract, materials, layout },
             memorySummary: agents.memorySummary,
           }).catch(() => undefined)
 
           if (!repaired) {
-            const fallback = repairAssistantSchema(schemaResult.schema, { materialManifest: current.input.materialManifest })
+            const fallback = repairAssistantSchema(schemaResult.schema, { materialManifest: materials.materialManifest })
             schemaResult = { ...schemaResult, schema: fallback.schema }
             warnings.push(...fallback.repairs.map(issue => `Repair: ${issue.reason}`))
             validation = fallback.validation
             deterministicErrors = collectDeterministicErrors(schemaResult.schema, {
-              materialManifest: current.input.materialManifest,
+              materialManifest: materials.materialManifest,
               expectedDataSource: schemaResult.expectedDataSource,
               page: planningPage,
             })
@@ -267,9 +284,9 @@ export class AssistantOrchestrator {
 
           schemaResult = repaired
           warnings.push(...repaired.warnings)
-          validation = validateAssistantSchema(schemaResult.schema, { materialManifest: current.input.materialManifest })
+          validation = validateAssistantSchema(schemaResult.schema, { materialManifest: materials.materialManifest })
           deterministicErrors = collectDeterministicErrors(schemaResult.schema, {
-            materialManifest: current.input.materialManifest,
+            materialManifest: materials.materialManifest,
             expectedDataSource: schemaResult.expectedDataSource,
             page: planningPage,
           })

@@ -153,6 +153,8 @@ export const savedPromptPlugin = {
 
 这里的 `openSavedPromptPicker()` 由你的业务系统自己实现。Assistant 不关心它是素材库弹窗、提示词列表、品牌规范选择器，还是第三方 UI；它只等待 Promise 返回，然后把返回结果注入到任务里。
 
+`contributions[].target` 用来决定提示词注入到哪个 Agent 阶段。常用值包括 `intake`、`planner`、`contract`、`materials`、`layout`、`schema`、`repair` 和 `all`。如果插件要影响本次任务优先选择或规避哪些 Designer 物料，使用 `materials`；如果插件只约束最终 schema 生成规则，使用 `schema`。
+
 关于插件协议，目前知道这些就够用了。更完整的实现边界可以看内部架构文档 `.github/architecture/25-ai-assistant.md` 里的 “Assistant 插件系统”。
 
 ## 配置接口地址 {#configure-endpoint}

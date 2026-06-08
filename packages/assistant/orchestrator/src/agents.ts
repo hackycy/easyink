@@ -1,5 +1,5 @@
 import type { ParsedExternalData } from '@easyink/assistant-adapters'
-import type { AssistantTaskInput, AssistantValidationIssue } from '@easyink/assistant-capabilities'
+import type { AssistantMaterialManifest, AssistantTaskInput, AssistantValidationIssue } from '@easyink/assistant-capabilities'
 import type { LLMClient } from '@easyink/assistant-llm'
 import type { AssistantStore } from '@easyink/assistant-store'
 import type { DocumentSchema, ExpectedDataSource, ExpectedField } from '@easyink/schema'
@@ -8,7 +8,15 @@ import { buildAssistantPluginContext } from '@easyink/assistant-plugins'
 import { formatSchemaValidationIssue, isValidSchema, validateSchemaIssues } from '@easyink/schema'
 import { normalizeAllFieldPaths, SchemaValidator } from '@easyink/schema-tools'
 import { z } from 'zod'
-import { buildLayoutMaterialContext, buildLayoutSystemPrompt, buildMaterialContext, buildSchemaRepairSystemPrompt, buildSchemaSystemPrompt } from './prompts'
+import {
+  buildLayoutMaterialContext,
+  buildLayoutSystemPrompt,
+  buildMaterialContext,
+  buildMaterialIndexContext,
+  buildSchemaRepairSystemPrompt,
+  buildSchemaSystemPrompt,
+  selectMaterialManifest,
+} from './prompts'
 
 export interface AssistantAgentContext {
   input: AssistantTaskInput
@@ -60,6 +68,19 @@ export interface ContractAgentResult {
   warnings: string[]
 }
 
+export interface MaterialSelection {
+  type: string
+  reason?: string
+  usedFor: string[]
+}
+
+export interface MaterialRouterAgentResult {
+  selectedMaterials: MaterialSelection[]
+  missingCapabilities: string[]
+  warnings: string[]
+  materialManifest: AssistantMaterialManifest
+}
+
 export interface LayoutBox {
   id: string
   type: string
@@ -77,6 +98,7 @@ export interface LayoutAgentResult {
 
 export interface SchemaUpstreamContext {
   contract?: ContractAgentResult
+  materials?: MaterialRouterAgentResult
   layout?: LayoutAgentResult
 }
 
@@ -187,6 +209,16 @@ const ContractSchema = z.object({
   name: z.string().optional(),
   fields: z.unknown().optional(),
   sampleData: z.record(z.unknown()).optional(),
+  warnings: z.array(z.string()).optional(),
+})
+
+const MaterialRouterSchema = z.object({
+  selectedMaterials: z.array(z.object({
+    type: z.string(),
+    reason: z.string().optional(),
+    usedFor: z.array(z.string()).optional(),
+  })).optional(),
+  missingCapabilities: z.array(z.string()).optional(),
   warnings: z.array(z.string()).optional(),
 })
 
@@ -341,12 +373,13 @@ export async function runSchemaAgent(
 ): Promise<SchemaAgentResult | undefined> {
   if (!context.llm)
     return undefined
-  if (!context.input.materialManifest?.materials.length)
+  const materialManifest = upstream?.materials?.materialManifest
+  if (!materialManifest?.materials.length)
     return undefined
 
   const planningBrief = buildPlanningBrief(planner)
   const promptCtx = buildPromptContext(planningBrief)
-  const materialContext = buildMaterialContext(context.input.materialManifest, planningBrief.scenario)
+  const materialContext = buildMaterialContext(materialManifest, planningBrief.scenario)
   const pluginContext = buildAssistantPluginContext(context.input.pluginSelection, { target: 'schema' })
   const result = await completeJson(context.llm, SchemaAgentSchema, {
     messages: [
@@ -361,6 +394,9 @@ export async function runSchemaAgent(
           : '',
         upstream?.layout?.blocks?.length
           ? `Layout skeleton (id/type/x/y/width/height in ${promptCtx.unit}; refine props and bindings, keep ids and boxes):\n${JSON.stringify(upstream.layout.blocks, null, 2)}`
+          : '',
+        upstream?.materials?.selectedMaterials.length
+          ? `Selected material types (the only types you may use):\n${JSON.stringify(upstream.materials.selectedMaterials, null, 2)}`
           : '',
         context.sourceData
           ? `External source descriptor:\n${JSON.stringify(context.sourceData.descriptor, null, 2).slice(0, 12000)}`
@@ -428,10 +464,60 @@ export async function runContractAgent(
   }
 }
 
+export async function runMaterialRouterAgent(
+  context: AssistantAgentContext,
+  planner: PlannerAgentResult,
+  contract: ContractAgentResult,
+  source: SourceAgentResult,
+  memorySummary?: string,
+): Promise<MaterialRouterAgentResult | undefined> {
+  if (!context.llm)
+    return undefined
+  if (!context.input.materialManifest?.materials.length)
+    return undefined
+
+  const planningBrief = buildPlanningBrief(planner)
+  const materialIndex = buildMaterialIndexContext(context.input.materialManifest, planningBrief.scenario)
+  const result = await completeJson(context.llm, MaterialRouterSchema, {
+    messages: [
+      [
+        'You are EasyInk Assistant\'s Material Router. Output JSON only.',
+        'Choose the smallest sufficient set of Designer material types for this task.',
+        'You receive only a lightweight material index. Do not infer detailed props or binding schemas.',
+        'Select material types before layout/schema generation. Downstream agents will only receive the details for your selected types.',
+        '',
+        'Rules:',
+        '- Select only types present in the material index.',
+        '- Cover every required business block and data shape from the planning brief and data contract.',
+        '- Prefer fewer materials when one registered material can cover multiple uses.',
+        '- Use missingCapabilities for requirements that no indexed material can express.',
+        '',
+        'Return shape:',
+        '{ "selectedMaterials": [{ "type": "text", "reason": "...", "usedFor": ["title"] }], "missingCapabilities": [], "warnings": [] }',
+        '',
+        materialIndex,
+      ].join('\n'),
+      buildAssistantPluginContext(context.input.pluginSelection, { target: 'materials' }),
+      `User request: ${context.input.prompt}`,
+      `Planning brief:\n${JSON.stringify(planningBrief, null, 2)}`,
+      contract.dataSource
+        ? `Data contract:\n${JSON.stringify(contract.dataSource, null, 2)}`
+        : '',
+      Object.keys(source.fieldMeanings).length
+        ? `Source field meanings:\n${JSON.stringify(source.fieldMeanings, null, 2)}`
+        : '',
+      memorySummary ? `Historical preference summary:\n${memorySummary}` : '',
+    ].filter(isNonEmptyString),
+  })
+
+  return normalizeMaterialRouterResult(context.input.materialManifest, result)
+}
+
 export async function runLayoutAgent(
   context: AssistantAgentContext,
   planner: PlannerAgentResult,
   contract: ContractAgentResult,
+  materials: MaterialRouterAgentResult,
   memorySummary?: string,
 ): Promise<LayoutAgentResult> {
   if (!context.llm)
@@ -443,7 +529,7 @@ export async function runLayoutAgent(
   const pageWidth = briefPage?.width ?? (pageMode === 'continuous' ? (unit === 'px' ? 375 : 80) : (unit === 'px' ? 375 : 210))
   const pageHeight = briefPage?.height ?? (pageMode === 'continuous' ? (unit === 'px' ? 800 : 200) : (unit === 'px' ? 667 : 297))
 
-  const materialContext = buildLayoutMaterialContext(context.input.materialManifest)
+  const materialContext = buildLayoutMaterialContext(materials.materialManifest)
   const pluginContext = buildAssistantPluginContext(context.input.pluginSelection, { target: 'layout' })
   const result = await completeJson(context.llm, LayoutSchema, {
     messages: [
@@ -460,7 +546,7 @@ export async function runLayoutAgent(
   })
 
   const validTypes = new Set(
-    context.input.materialManifest?.materials.map(m => m.type) ?? [],
+    materials.materialManifest.materials.map(m => m.type),
   )
   return normalizeLayoutResult(result, validTypes, pageWidth, pageHeight)
 }
@@ -471,12 +557,13 @@ export async function runSchemaRepairAgent(
 ): Promise<SchemaAgentResult | undefined> {
   if (!context.llm)
     return undefined
-  if (!context.input.materialManifest?.materials.length)
+  const materialManifest = request.upstream?.materials?.materialManifest
+  if (!materialManifest?.materials.length)
     return undefined
 
   const planningBrief = request.schemaResult.planningBrief
   const promptCtx = buildPromptContext(planningBrief)
-  const materialContext = buildMaterialContext(context.input.materialManifest, planningBrief.scenario)
+  const materialContext = buildMaterialContext(materialManifest, planningBrief.scenario)
   const pluginContext = buildAssistantPluginContext(context.input.pluginSelection, { target: 'repair' })
   const result = await completeJson(context.llm, SchemaAgentSchema, {
     messages: [
@@ -487,6 +574,9 @@ export async function runSchemaRepairAgent(
         `Realized data contract:\n${JSON.stringify(request.schemaResult.expectedDataSource, null, 2)}`,
         request.upstream?.layout?.blocks?.length
           ? `Layout skeleton:\n${JSON.stringify(request.upstream.layout.blocks, null, 2)}`
+          : '',
+        request.upstream?.materials?.selectedMaterials.length
+          ? `Selected material types (the only types you may use):\n${JSON.stringify(request.upstream.materials.selectedMaterials, null, 2)}`
           : '',
         `Deterministic validation errors to fix:\n${JSON.stringify(request.errors.map(issue => ({ code: issue.code, message: issue.message, path: issue.path })), null, 2)}`,
         request.memorySummary ? `Historical preference summary:\n${request.memorySummary}` : '',
@@ -576,6 +666,43 @@ function buildPromptContext(brief: PlanningBrief): PromptContext {
     unit: brief.page?.unit ?? 'mm',
     mode: brief.page?.mode ?? 'fixed',
     scenario: brief.scenario,
+  }
+}
+
+function normalizeMaterialRouterResult(
+  manifest: AssistantMaterialManifest,
+  result: z.infer<typeof MaterialRouterSchema>,
+): MaterialRouterAgentResult {
+  const validTypes = new Set(manifest.materials.map(material => material.type))
+  const selectedTypes = new Set<string>()
+  const warnings: string[] = [...(result.warnings ?? [])]
+  const selectedMaterials: MaterialSelection[] = []
+
+  for (const item of result.selectedMaterials ?? []) {
+    const type = item.type.trim()
+    if (!validTypes.has(type)) {
+      warnings.push(`Material Router selected unregistered type "${type}"; removed.`)
+      continue
+    }
+    if (selectedTypes.has(type))
+      continue
+    selectedTypes.add(type)
+    selectedMaterials.push({
+      type,
+      reason: item.reason,
+      usedFor: item.usedFor ?? [],
+    })
+  }
+
+  const materialManifest = selectMaterialManifest(manifest, [...selectedTypes]) ?? { materials: [] }
+  if (!materialManifest.materials.length)
+    warnings.push('Material Router did not select any usable registered materials.')
+
+  return {
+    selectedMaterials,
+    missingCapabilities: result.missingCapabilities ?? [],
+    warnings,
+    materialManifest,
   }
 }
 

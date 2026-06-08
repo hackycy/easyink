@@ -6,9 +6,10 @@ import { z } from 'zod'
 export const AssistantWorkflowStepSchema = z.enum([
   'idle',
   'intake',
-  'plan',
   'source',
+  'plan',
   'contract',
+  'materials',
   'layout',
   'compose',
   'validate',
@@ -73,9 +74,9 @@ export const AssistantBindingFormatEditorSchema = z.object({
 })
 
 export interface AssistantBindingFormatEditor {
-  tabs: readonly string[]
+  tabs: string[]
   defaultTab?: string
-  presetTypes?: readonly string[]
+  presetTypes?: string[]
 }
 
 export const AssistantMaterialDataContractSchema = z.object({
@@ -224,14 +225,7 @@ export const AssistantTaskInputSchema = z.object({
   pluginSelection: AssistantPluginSelectionSchema.optional(),
 })
 
-export interface AssistantTaskInput {
-  prompt: string
-  source?: AssistantSourceInput
-  constraints?: Record<string, unknown>
-  currentSchema?: unknown
-  materialManifest?: AssistantMaterialManifest
-  pluginSelection?: z.infer<typeof AssistantPluginSelectionSchema>
-}
+export type AssistantTaskInput = z.infer<typeof AssistantTaskInputSchema>
 
 export interface AssistantPatchOperation {
   op: 'add' | 'remove' | 'replace'

@@ -12,8 +12,8 @@ describe('assistant projection', () => {
 
     const checklist = projectChecklist({ task: { status: 'running' }, events })
 
-    expect(checklist.map(item => item.title)).toEqual(['理解需求', '解析数据', '规划版式', '生成模板', '校验结果'])
-    expect(checklist.map(item => item.status)).toEqual(['done', 'done', 'running', 'pending', 'pending'])
+    expect(checklist.map(item => item.title)).toEqual(['理解需求', '解析数据', '选择物料', '规划版式', '生成模板', '校验结果'])
+    expect(checklist.map(item => item.status)).toEqual(['done', 'done', 'running', 'pending', 'pending', 'pending'])
   })
 
   it('keeps a phase running until all of its own steps complete', () => {
@@ -25,7 +25,7 @@ describe('assistant projection', () => {
 
     const checklist = projectChecklist({ task: { status: 'running' }, events })
 
-    expect(checklist.map(item => item.status)).toEqual(['done', 'done', 'running', 'pending', 'pending'])
+    expect(checklist.map(item => item.status)).toEqual(['done', 'done', 'running', 'pending', 'pending', 'pending'])
   })
 
   it('collects narration and hides answered clarification prompts', () => {

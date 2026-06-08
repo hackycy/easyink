@@ -8,6 +8,59 @@ export interface PromptContext {
 
 // --- Material context builder ---
 
+export function buildMaterialIndexContext(manifest: AssistantMaterialManifest | undefined, scenario?: string): string {
+  if (!manifest?.materials.length)
+    return ''
+
+  const lines: string[] = [
+    '## Registered Material Index',
+    'This is a lightweight index. Select material types from this index before detailed material instructions are loaded.',
+  ]
+
+  for (const material of manifest.materials) {
+    const ai = material.ai
+    const knowledge = ai?.knowledge
+    const description = ai?.description ?? material.name
+    const categories = [
+      knowledge?.category ? `category: ${knowledge.category}` : undefined,
+      `binding: ${material.binding.kind}`,
+      material.capabilities.supportsChildren ? 'supports children' : undefined,
+      material.capabilities.bindable ? 'bindable' : undefined,
+    ].filter(Boolean).join(', ')
+    lines.push(`- ${material.type}: ${description} (${categories})`)
+
+    if (knowledge?.bindingSpec) {
+      const spec = knowledge.bindingSpec
+      lines.push(`  data fit: ${spec.mode}; accepts ${spec.accepts.types.join('/')}${spec.accepts.isArray ? ' array' : ''}; produces ${spec.produces.kind}`)
+    }
+
+    const fitness = knowledge?.fitness?.length
+      ? knowledge.fitness
+          .filter(item => !scenario || item.scenario === scenario || item.score >= 0.8)
+          .slice(0, 4)
+      : []
+    if (fitness.length)
+      lines.push(`  scenarios: ${fitness.map(item => `${item.scenario} (${item.reason})`).join('; ')}`)
+
+    if (knowledge?.sizing)
+      lines.push(`  size: default ${knowledge.sizing.defaultSize.width}x${knowledge.sizing.defaultSize.height}, min ${knowledge.sizing.minWidth}x${knowledge.sizing.minHeight}`)
+  }
+
+  return lines.join('\n')
+}
+
+export function selectMaterialManifest(
+  manifest: AssistantMaterialManifest | undefined,
+  selectedTypes: string[],
+): AssistantMaterialManifest | undefined {
+  if (!manifest?.materials.length)
+    return undefined
+  const selected = new Set(selectedTypes)
+  return {
+    materials: manifest.materials.filter(material => selected.has(material.type)),
+  }
+}
+
 export function buildMaterialContext(manifest: AssistantMaterialManifest | undefined, scenario?: string): string {
   if (!manifest?.materials.length)
     return ''

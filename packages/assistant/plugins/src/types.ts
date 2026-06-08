@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const AssistantPluginScopeSchema = z.enum(['intake', 'planner', 'contract', 'layout', 'schema', 'repair', 'all'])
+export const AssistantPluginScopeSchema = z.enum(['intake', 'planner', 'contract', 'materials', 'layout', 'schema', 'repair', 'all'])
 export type AssistantPluginScope = z.infer<typeof AssistantPluginScopeSchema>
 
 export const AssistantPluginContributionSchema = z.object({
