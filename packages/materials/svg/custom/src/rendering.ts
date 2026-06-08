@@ -69,11 +69,19 @@ function normalizeContentValue(value: unknown): string {
 }
 
 function parseSvgInput(content: string): ParsedSvgInput | null {
-  const trimmed = content.trim()
+  const trimmed = stripSvgDocumentPreamble(content)
   if (!trimmed || !/^<svg[\s>]/i.test(trimmed))
     return null
 
   return parseSvgInputWithDom(trimmed) ?? parseSvgInputWithPattern(trimmed)
+}
+
+function stripSvgDocumentPreamble(content: string): string {
+  return content
+    .trim()
+    .replace(/^<\?xml\b[\s\S]*?\?>\s*/i, '')
+    .replace(/^<!DOCTYPE\s+svg\b(?:[^>"']|"[^"]*"|'[^']*')*>\s*/i, '')
+    .trim()
 }
 
 function parseSvgInputWithDom(content: string): ParsedSvgInput | null {

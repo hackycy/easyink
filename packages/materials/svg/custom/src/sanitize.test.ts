@@ -62,6 +62,23 @@ describe('renderSvgCustom', () => {
     expect(output.match(/<svg/g)?.length).toBe(1)
   })
 
+  it('accepts complete svg documents with xml and doctype preambles', () => {
+    const node = createSvgCustomNode({
+      props: {
+        content: '<?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg width="24" height="16" fill="none"><path d="M0 0H24V16Z" /></svg>',
+      },
+    })
+
+    const output = readTrustedViewerHtml(renderSvgCustom(node).html!)
+
+    expect(output).toContain('viewBox="0 0 24 16"')
+    expect(output).toContain('fill="none"')
+    expect(output).toContain('<path')
+    expect(output).not.toContain('<?xml')
+    expect(output).not.toContain('<!DOCTYPE')
+    expect(output.match(/<svg/g)?.length).toBe(1)
+  })
+
   it('uses pasted svg aspect ratio behavior when present', () => {
     const node = createSvgCustomNode({
       props: {
