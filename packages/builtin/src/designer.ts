@@ -17,6 +17,7 @@ import {
   IconPageNumber,
   IconQrcode,
   IconRect,
+  IconRingProgress,
   IconStar,
   IconSvg,
   IconTable,
@@ -157,6 +158,15 @@ import {
   rectLocaleMessages,
 } from '@easyink/material-rect'
 import {
+  createRingProgressExtension,
+  createRingProgressNode,
+  RING_PROGRESS_CAPABILITIES,
+  RING_PROGRESS_TYPE,
+  ringProgressAIMaterialDescriptor,
+  ringProgressDesignerPropSchemas,
+  ringProgressLocaleMessages,
+} from '@easyink/material-ring-progress'
+import {
   createSvgCustomExtension,
   createSvgCustomNode,
   SVG_CUSTOM_CAPABILITIES,
@@ -224,6 +234,7 @@ import {
   imageMaterialBinding,
   noMaterialBinding,
   qrcodeMaterialBinding,
+  ringProgressMaterialBinding,
   svgCustomMaterialBinding,
   textMaterialBinding,
 } from './bindings'
@@ -366,6 +377,19 @@ export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
       factory: createFlowRowExtension,
       propSchemas: flowRowDesignerPropSchemas,
       localeMessages: flowRowLocaleMessages,
+    },
+    {
+      type: RING_PROGRESS_TYPE,
+      name: 'materials.ringProgress.name',
+      icon: IconRingProgress,
+      category: 'data',
+      capabilities: RING_PROGRESS_CAPABILITIES,
+      binding: ringProgressMaterialBinding,
+      aiDescriptor: ringProgressAIMaterialDescriptor,
+      createDefaultNode: createRingProgressNode,
+      factory: createRingProgressExtension,
+      propSchemas: ringProgressDesignerPropSchemas,
+      localeMessages: ringProgressLocaleMessages,
     },
     {
       type: CHART_BAR_TYPE,
@@ -525,6 +549,7 @@ export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
     { type: TABLE_STATIC_TYPE, group: 'data' },
     { type: TABLE_DATA_TYPE, group: 'data' },
     { type: FLOW_ROW_TYPE, group: 'data' },
+    { type: RING_PROGRESS_TYPE, group: 'data' },
     { type: CHART_BAR_TYPE, group: 'chart' },
     { type: CHART_LINE_TYPE, group: 'chart' },
     { type: CHART_PIE_TYPE, group: 'chart' },

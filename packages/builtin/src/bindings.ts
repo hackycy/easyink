@@ -23,6 +23,7 @@ export const textMaterialBinding = { kind: 'ordinary', primaryProp: 'content', f
 export const imageMaterialBinding = { kind: 'ordinary', primaryProp: 'src', formatEditor: presetAndCustomFormatEditor } satisfies MaterialBindingDefinition
 export const svgCustomMaterialBinding = { kind: 'ordinary', primaryProp: 'content', formatEditor: customOnlyFormatEditor } satisfies MaterialBindingDefinition
 export const qrcodeMaterialBinding = { kind: 'ordinary', primaryProp: 'value', formatEditor: presetAndCustomFormatEditor } satisfies MaterialBindingDefinition
+export const ringProgressMaterialBinding = { kind: 'ordinary', primaryProp: 'value', formatEditor: customOnlyFormatEditor } satisfies MaterialBindingDefinition
 export const barcodeMaterialBinding = {
   kind: 'ordinary',
   primaryProp: 'value',

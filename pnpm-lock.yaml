@@ -698,6 +698,9 @@ importers:
       '@easyink/material-rect':
         specifier: workspace:*
         version: link:../materials/rect
+      '@easyink/material-ring-progress':
+        specifier: workspace:*
+        version: link:../materials/ring-progress
       '@easyink/material-svg-custom':
         specifier: workspace:*
         version: link:../materials/svg/custom
@@ -1047,6 +1050,21 @@ importers:
         version: 2.0.4
 
   packages/materials/rect:
+    dependencies:
+      '@easyink/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@easyink/prop-schemas':
+        specifier: workspace:*
+        version: link:../../prop-schemas
+      '@easyink/schema':
+        specifier: workspace:*
+        version: link:../../schema
+      '@easyink/shared':
+        specifier: workspace:*
+        version: link:../../shared
+
+  packages/materials/ring-progress:
     dependencies:
       '@easyink/core':
         specifier: workspace:*

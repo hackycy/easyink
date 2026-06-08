@@ -14,6 +14,7 @@ import { createLineViewerExtension, LINE_TYPE } from '@easyink/material-line'
 import { PAGE_NUMBER_TYPE, renderPageNumber } from '@easyink/material-page-number'
 import { QRCODE_TYPE, renderQrcode } from '@easyink/material-qrcode'
 import { RECT_TYPE, renderRect } from '@easyink/material-rect'
+import { renderRingProgress, RING_PROGRESS_TYPE } from '@easyink/material-ring-progress'
 import { renderSvgCustom, SVG_CUSTOM_TYPE } from '@easyink/material-svg-custom'
 import { renderSvgHeart, SVG_HEART_TYPE } from '@easyink/material-svg-heart'
 import { renderSvgStar, SVG_STAR_TYPE } from '@easyink/material-svg-star'
@@ -33,6 +34,7 @@ import {
   imageMaterialBinding,
   noMaterialBinding,
   qrcodeMaterialBinding,
+  ringProgressMaterialBinding,
   svgCustomMaterialBinding,
   textMaterialBinding,
 } from './bindings'
@@ -59,6 +61,7 @@ export function registerBuiltinViewerMaterials(register: BuiltinViewerRegistrar)
     render: (node, ctx) => renderFlowRow(node, ctx),
     measure: (node, ctx) => measureFlowRow(node, ctx),
   })
+  register(RING_PROGRESS_TYPE, ringProgressMaterialBinding, { render: (node, ctx) => renderRingProgress(node, ctx) })
   register(CHART_BAR_TYPE, chartBarMaterialBinding, { render: (node, ctx) => renderChartBar(node, ctx) })
   register(CHART_CUSTOM_TYPE, chartCustomMaterialBinding, { render: (node, ctx) => renderChartCustom(node, ctx) })
   register(CHART_GAUGE_TYPE, chartGaugeMaterialBinding, { render: (node, ctx) => renderChartGauge(node, ctx) })

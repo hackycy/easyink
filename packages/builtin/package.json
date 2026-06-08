@@ -42,6 +42,7 @@
     "@easyink/material-page-number": "workspace:*",
     "@easyink/material-qrcode": "workspace:*",
     "@easyink/material-rect": "workspace:*",
+    "@easyink/material-ring-progress": "workspace:*",
     "@easyink/material-svg-custom": "workspace:*",
     "@easyink/material-svg-heart": "workspace:*",
     "@easyink/material-svg-star": "workspace:*",

@@ -1,5 +1,12 @@
+import { createIcon } from './createIcon'
+
 export { createIcon } from './createIcon'
 export type { CreateIconOptions } from './createIcon'
+
+export const IconRingProgress = createIcon({
+  name: 'IconRingProgress',
+  svg: '<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 6.9 12"/><path d="M12 12h.01"/>',
+})
 
 export {
   AlignEndVertical as IconAlignBottom,

@@ -30,6 +30,25 @@ describe('builtin designer material bundle', () => {
     })
   })
 
+  it('shows ring progress in the data catalog group with custom-only formatting', () => {
+    expect(builtinDesignerMaterialBundle.groupedCatalog).toContainEqual({
+      type: 'ring-progress',
+      group: 'data',
+    })
+
+    const material = builtinDesignerMaterialBundle.materials.find(item => item.type === 'ring-progress')
+
+    expect(material?.category).toBe('data')
+    expect(material?.binding).toEqual({
+      kind: 'ordinary',
+      primaryProp: 'value',
+      formatEditor: { tabs: ['custom'], defaultTab: 'custom' },
+    })
+    expect(material?.icon).toBeDefined()
+    expect(material?.icon).not.toBe(builtinDesignerMaterialBundle.materials.find(item => item.type === 'chart-gauge')?.icon)
+    expect(material?.icon).not.toBe(builtinDesignerMaterialBundle.materials.find(item => item.type === 'ellipse')?.icon)
+  })
+
   it('shows custom ECharts in the chart catalog group with a distinct icon', () => {
     expect(builtinDesignerMaterialBundle.groupedCatalog).toContainEqual({
       type: 'chart-custom',

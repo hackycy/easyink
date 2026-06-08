@@ -19,6 +19,10 @@ function tableIcon(body: string): string {
   return `<svg class="lucide lucide-easyink-table" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`
 }
 
+function customIcon(name: string, body: string): string {
+  return `<svg class="lucide ${name}" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`
+}
+
 export const IconAlignBottom = /* @__PURE__ */ normalize(lucide.AlignEndVertical)
 export const IconAlignCenter = /* @__PURE__ */ normalize(lucide.AlignCenter)
 export const IconAlignCenterH = /* @__PURE__ */ normalize(lucide.AlignCenterHorizontal)
@@ -97,6 +101,7 @@ export const IconPrint = /* @__PURE__ */ normalize(lucide.Printer)
 export const IconQrcode = /* @__PURE__ */ normalize(lucide.QrCode)
 export const IconRect = /* @__PURE__ */ normalize(lucide.Square)
 export const IconRedo = /* @__PURE__ */ normalize(lucide.Redo2)
+export const IconRingProgress = /* @__PURE__ */ customIcon('lucide-easyink-ring-progress', '<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 6.9 12"/><path d="M12 12h.01"/>')
 export const IconPageNumber = /* @__PURE__ */ normalize(lucide.BookOpen)
 export const IconRestoreDefault = /* @__PURE__ */ normalize(lucide.RotateCcw)
 export const IconRotation = /* @__PURE__ */ normalize(lucide.RotateCw)
