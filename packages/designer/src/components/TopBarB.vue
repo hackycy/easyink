@@ -63,6 +63,7 @@ import { createClipboardActions } from '../interactions/clipboard-actions'
 import { hasGroupedElement, selectedLogicalGroupIds } from '../interactions/logical-groups'
 import { selectMany } from '../interactions/selection-api'
 import { filterRotatableElements } from '../materials/capabilities'
+import { getNextTopbarZoom } from './topbar-zoom'
 
 const contributionRegistry = inject(CONTRIBUTION_REGISTRY_KEY, undefined)
 const toolbarActions = computed(() => contributionRegistry?.registry.toolbarActions ?? [])
@@ -96,6 +97,10 @@ function toggleWindow(kind: string) {
   const win = store.workbench.windows.find(w => w.kind === kind)
   if (win)
     win.visible = !win.visible
+}
+
+function adjustZoom(direction: -1 | 1) {
+  store.workbench.viewport.zoom = getNextTopbarZoom(store.workbench.viewport.zoom, direction)
 }
 
 const visibleGroups = computed(() =>
@@ -862,7 +867,7 @@ function toggleSnapMenu(ev: MouseEvent) {
       <button
         class="ei-topbar-b__btn"
         :title="store.t('designer.toolbar.zoomOut')"
-        @click="store.workbench.viewport.zoom = Math.max(0.25, store.workbench.viewport.zoom - 0.1)"
+        @click="adjustZoom(-1)"
       >
         <IconZoomOut :size="16" :stroke-width="1.5" />
       </button>
@@ -870,7 +875,7 @@ function toggleSnapMenu(ev: MouseEvent) {
       <button
         class="ei-topbar-b__btn"
         :title="store.t('designer.toolbar.zoomIn')"
-        @click="store.workbench.viewport.zoom = Math.min(4, store.workbench.viewport.zoom + 0.1)"
+        @click="adjustZoom(1)"
       >
         <IconZoomIn :size="16" :stroke-width="1.5" />
       </button>
