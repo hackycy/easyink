@@ -15,8 +15,6 @@ const LOADING_EXTENSION: MaterialDesignerExtension = {
     el.style.alignItems = 'center'
     el.style.justifyContent = 'center'
     el.style.boxSizing = 'border-box'
-    el.style.border = '1px dashed #d0d5dd'
-    el.style.background = '#f9fafb'
     el.appendChild(createLoadingIndicator())
     container.appendChild(el)
     return () => container.replaceChildren()
