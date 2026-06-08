@@ -1,8 +1,12 @@
 <script setup lang="ts">
 import { IconClose } from '@easyink/icons'
-import { computed, onBeforeUnmount, watch } from 'vue'
+import { computed, onBeforeUnmount, useAttrs, watch } from 'vue'
 import EiButton from './EiButton.vue'
 import EiIcon from './EiIcon.vue'
+
+defineOptions({
+  inheritAttrs: false,
+})
 
 const props = withDefaults(
   defineProps<{
@@ -33,6 +37,8 @@ const emit = defineEmits<{
   (e: 'confirm'): void
   (e: 'close'): void
 }>()
+
+const attrs = useAttrs()
 
 const dialogStyle = computed(() => ({
   width: typeof props.width === 'number' ? `${props.width}px` : props.width,
@@ -90,6 +96,7 @@ onBeforeUnmount(() => {
       @pointerdown="onOverlayPointerDown"
     >
       <section
+        v-bind="attrs"
         class="ei-dialog"
         role="dialog"
         aria-modal="true"
