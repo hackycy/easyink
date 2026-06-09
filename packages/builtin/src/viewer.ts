@@ -17,6 +17,7 @@ import { QRCODE_TYPE, renderQrcode } from '@easyink/material-qrcode'
 import { RATING_TYPE, renderRating } from '@easyink/material-rating'
 import { RECT_TYPE, renderRect } from '@easyink/material-rect'
 import { renderRingProgress, RING_PROGRESS_TYPE } from '@easyink/material-ring-progress'
+import { renderSignature, SIGNATURE_TYPE } from '@easyink/material-signature'
 import { renderSvgCustom, SVG_CUSTOM_TYPE } from '@easyink/material-svg-custom'
 import { renderSvgHeart, SVG_HEART_TYPE } from '@easyink/material-svg-heart'
 import { renderSvgStar, SVG_STAR_TYPE } from '@easyink/material-svg-star'
@@ -54,6 +55,7 @@ export function registerBuiltinViewerMaterials(register: BuiltinViewerRegistrar)
   register(QRCODE_TYPE, qrcodeMaterialBinding, { render: node => renderQrcode(node) })
   register(LINE_TYPE, noMaterialBinding, createLineViewerExtension())
   register(RECT_TYPE, noMaterialBinding, { render: (node, ctx) => renderRect(node, ctx.unit) })
+  register(SIGNATURE_TYPE, noMaterialBinding, { render: node => renderSignature(node) })
   register(ELLIPSE_TYPE, noMaterialBinding, { render: (node, ctx) => renderEllipse(node, ctx.unit) })
   register(TABLE_STATIC_TYPE, customMaterialBinding, { render: (node, ctx) => renderTableStatic(node, ctx) })
   register(TABLE_DATA_TYPE, customMaterialBinding, {

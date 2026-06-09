@@ -20,6 +20,7 @@ import {
   IconRating,
   IconRect,
   IconRingProgress,
+  IconSignature,
   IconStar,
   IconSvg,
   IconTable,
@@ -187,6 +188,15 @@ import {
   ringProgressLocaleMessages,
 } from '@easyink/material-ring-progress'
 import {
+  createSignatureExtension,
+  createSignatureNode,
+  SIGNATURE_CAPABILITIES,
+  SIGNATURE_TYPE,
+  signatureAIMaterialDescriptor,
+  signatureDesignerPropSchemas,
+  signatureLocaleMessages,
+} from '@easyink/material-signature'
+import {
   createSvgCustomExtension,
   createSvgCustomNode,
   SVG_CUSTOM_CAPABILITIES,
@@ -345,6 +355,19 @@ export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
       factory: createRectExtension,
       propSchemas: rectDesignerPropSchemas,
       localeMessages: rectLocaleMessages,
+    },
+    {
+      type: SIGNATURE_TYPE,
+      name: 'materials.signature.name',
+      icon: IconSignature,
+      category: 'basic',
+      capabilities: SIGNATURE_CAPABILITIES,
+      binding: noMaterialBinding,
+      aiDescriptor: signatureAIMaterialDescriptor,
+      createDefaultNode: createSignatureNode,
+      factory: createSignatureExtension,
+      propSchemas: signatureDesignerPropSchemas,
+      localeMessages: signatureLocaleMessages,
     },
     {
       type: ELLIPSE_TYPE,
@@ -592,6 +615,7 @@ export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
     IMAGE_TYPE,
     QRCODE_TYPE,
     BARCODE_TYPE,
+    SIGNATURE_TYPE,
   ],
   groupedCatalog: [
     { type: TABLE_STATIC_TYPE, group: 'data' },

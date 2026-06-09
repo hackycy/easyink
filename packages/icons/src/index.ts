@@ -18,6 +18,11 @@ export const IconRating = createIcon({
   svg: '<path d="m6 4 1.1 2.2 2.4.4-1.7 1.7.4 2.4L6 9.6l-2.2 1.1.4-2.4-1.7-1.7 2.4-.4L6 4Z"/><path d="m15 4 .8 1.6 1.7.3-1.2 1.2.3 1.7L15 8l-1.6.8.3-1.7-1.2-1.2 1.7-.3L15 4Z"/><path d="M4 16h16"/><path d="M4 20h10"/>',
 })
 
+export const IconSignature = createIcon({
+  name: 'IconSignature',
+  svg: '<path d="M3 16h18"/><path d="M4 13c2.4-4.8 4.5-7.2 6.2-7.2 1.1 0 1.8.8 1.8 2.1 0 2.6-2.3 5.1-4.1 5.1-.8 0-1.1-.5-.8-1.2.6-1.5 2.9-2 4.5-.8 1.4 1 2.5 2 4.1 2 1.2 0 2.4-.5 4.3-1.8"/>',
+})
+
 export {
   AlignEndVertical as IconAlignBottom,
   AlignCenter as IconAlignCenter,

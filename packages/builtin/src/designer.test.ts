@@ -1,3 +1,4 @@
+import { IconFilePen, IconSignature } from '@easyink/icons'
 import { describe, expect, it } from 'vitest'
 import { builtinDesignerMaterialBundle } from './designer'
 
@@ -21,6 +22,19 @@ describe('builtin designer material bundle', () => {
       type: 'chart-gauge',
       group: 'chart',
     })
+  })
+
+  it('shows signature as a non-bindable basic quick material', () => {
+    const material = builtinDesignerMaterialBundle.materials.find(item => item.type === 'signature')
+
+    expect(builtinDesignerMaterialBundle.quickMaterialTypes).toContain('signature')
+    expect(material?.category).toBe('basic')
+    expect(material?.binding).toEqual({ kind: 'none' })
+    expect(material?.capabilities.bindable).toBe(false)
+    expect(material?.capabilities.rotatable).toBe(false)
+    expect(material?.icon).toBe(IconSignature)
+    expect(material?.icon).not.toBe(IconFilePen)
+    expect(material?.propSchemas?.map(schema => schema.key)).toEqual(['backgroundColor', 'penColor'])
   })
 
   it('shows radar chart in the chart catalog group', () => {

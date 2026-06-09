@@ -1,0 +1,35 @@
+{
+  "name": "@easyink/material-signature",
+  "type": "module",
+  "version": "0.0.22",
+  "description": "EasyInk signature material",
+  "author": "hackycy <hackycy@outlook.com>",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/index.d.mts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch"
+  },
+  "peerDependencies": {
+    "vue": "catalog:framework"
+  },
+  "dependencies": {
+    "@easyink/core": "workspace:*",
+    "@easyink/icons": "workspace:*",
+    "@easyink/prop-schemas": "workspace:*",
+    "@easyink/schema": "workspace:*",
+    "@easyink/shared": "workspace:*",
+    "signature_pad": "catalog:framework"
+  }
+}

@@ -45,6 +45,7 @@
     "@easyink/material-rating": "workspace:*",
     "@easyink/material-rect": "workspace:*",
     "@easyink/material-ring-progress": "workspace:*",
+    "@easyink/material-signature": "workspace:*",
     "@easyink/material-svg-custom": "workspace:*",
     "@easyink/material-svg-heart": "workspace:*",
     "@easyink/material-svg-star": "workspace:*",
