@@ -8,6 +8,11 @@ export const IconRingProgress = createIcon({
   svg: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4.5"/>',
 })
 
+export const IconProgress = createIcon({
+  name: 'IconProgress',
+  svg: '<rect width="18" height="6" x="3" y="9" rx="3"/><path d="M6 12h7"/>',
+})
+
 export {
   AlignEndVertical as IconAlignBottom,
   AlignCenter as IconAlignCenter,

@@ -692,6 +692,9 @@ importers:
       '@easyink/material-page-number':
         specifier: workspace:*
         version: link:../materials/page-number
+      '@easyink/material-progress':
+        specifier: workspace:*
+        version: link:../materials/progress
       '@easyink/material-qrcode':
         specifier: workspace:*
         version: link:../materials/qrcode
@@ -1017,6 +1020,21 @@ importers:
         version: link:../../shared
 
   packages/materials/page-number:
+    dependencies:
+      '@easyink/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@easyink/prop-schemas':
+        specifier: workspace:*
+        version: link:../../prop-schemas
+      '@easyink/schema':
+        specifier: workspace:*
+        version: link:../../schema
+      '@easyink/shared':
+        specifier: workspace:*
+        version: link:../../shared
+
+  packages/materials/progress:
     dependencies:
       '@easyink/core':
         specifier: workspace:*

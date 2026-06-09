@@ -40,6 +40,7 @@
     "@easyink/material-image": "workspace:*",
     "@easyink/material-line": "workspace:*",
     "@easyink/material-page-number": "workspace:*",
+    "@easyink/material-progress": "workspace:*",
     "@easyink/material-qrcode": "workspace:*",
     "@easyink/material-rect": "workspace:*",
     "@easyink/material-ring-progress": "workspace:*",
