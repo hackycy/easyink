@@ -3,6 +3,8 @@ import type {
   AssistantResult,
   AssistantSourceInput,
   AssistantTaskInput,
+  AssistantValidationIssue,
+  AssistantValidationReport,
   AssistantWorkflowStep,
 } from '@easyink/assistant-capabilities'
 import type { LLMClient } from '@easyink/assistant-llm'
@@ -213,6 +215,7 @@ export class AssistantOrchestrator {
             height: schemaAgent.planningBrief.page.height,
           }
         : undefined
+      const planningPageRenderLayers = schemaAgent.planningBrief.pageRenderLayers
       const warnings: string[] = [
         'Schema Agent used registered Designer materials; legacy presets were not used.',
         ...schemaAgent.warnings,
@@ -236,6 +239,7 @@ export class AssistantOrchestrator {
         materialManifest: materials.materialManifest,
         expectedDataSource: schemaResult.expectedDataSource,
         page: planningPage,
+        pageRenderLayers: planningPageRenderLayers,
       })
       const initialErrorCount = validation.errors.length + deterministicErrors.length
       if (validation.valid && deterministicErrors.length === 0) {
@@ -272,6 +276,7 @@ export class AssistantOrchestrator {
               materialManifest: materials.materialManifest,
               expectedDataSource: schemaResult.expectedDataSource,
               page: planningPage,
+              pageRenderLayers: planningPageRenderLayers,
             })
             await this.store.appendEvent(taskId, {
               type: 'tool.completed',
@@ -289,6 +294,7 @@ export class AssistantOrchestrator {
             materialManifest: materials.materialManifest,
             expectedDataSource: schemaResult.expectedDataSource,
             page: planningPage,
+            pageRenderLayers: planningPageRenderLayers,
           })
           const remaining = validation.errors.length + deterministicErrors.length
           await this.store.appendEvent(taskId, {
@@ -318,13 +324,14 @@ export class AssistantOrchestrator {
         ? current.input.currentSchema as DocumentSchema
         : undefined
       const diff = diffAssistantSchema(currentSchema, schemaResult.schema)
+      const finalValidation = mergeDeterministicValidation(validation, deterministicErrors)
       const result: AssistantResult = {
         id: createId('result'),
         schema: schemaResult.schema,
         dataSource,
         patch: diff.operations,
         diff,
-        validation,
+        validation: finalValidation,
         preview: createAssistantPreview(schemaResult.schema, dataSource, [
           ...warnings,
           ...(externalData?.warnings ?? []),
@@ -341,7 +348,7 @@ export class AssistantOrchestrator {
           intake.taskType ? `识别模板类型：${describeTaskType(intake.taskType)}` : '识别模板需求',
           `规划页面结构：${result.preview.elementCount} 个元素`,
           externalData ? `解析数据字段：${result.preview.dataFieldCount} 个` : '未使用外部数据源',
-          validation.valid ? '校验通过' : '存在需修复项',
+          finalValidation.valid ? '校验通过' : '存在需修复项',
         ],
       })
       current = await this.startStep(current, 'review')
@@ -593,6 +600,22 @@ const TASK_TYPE_LABELS: Record<string, string> = {
   'delivery': '送货单',
   'purchase': '采购单',
   'generic-document': '通用单据',
+}
+
+function mergeDeterministicValidation(
+  validation: AssistantValidationReport,
+  deterministicErrors: AssistantValidationIssue[],
+): AssistantValidationReport {
+  if (deterministicErrors.length === 0)
+    return validation
+  return {
+    ...validation,
+    valid: false,
+    errors: [
+      ...validation.errors,
+      ...deterministicErrors,
+    ],
+  }
 }
 
 function describeTaskType(taskType: string): string {

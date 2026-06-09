@@ -72,6 +72,13 @@ export interface DeterministicValidationOptions {
     width?: number
     height?: number
   }
+  pageRenderLayers?: DeterministicPageRenderLayerIntent[]
+}
+
+export interface DeterministicPageRenderLayerIntent {
+  kind: 'watermark'
+  type: 'text'
+  text?: string
 }
 
 /**
@@ -98,6 +105,8 @@ export function collectDeterministicErrors(schema: unknown, options: Determinist
     if (typeof height === 'number' && doc.page?.height !== height)
       issues.push({ code: 'PAGE_CONSTRAINT_MISMATCH', message: `Page height ${doc.page?.height} does not match the planned height ${height}.`, path: 'page.height' })
   }
+
+  validatePageRenderLayerIntents(doc, options.pageRenderLayers, issues)
 
   const allowedTypes = options.materialManifest
     ? new Set(options.materialManifest.materials.map(material => material.type))
@@ -177,6 +186,36 @@ export function collectDeterministicErrors(schema: unknown, options: Determinist
   }
 
   return issues
+}
+
+function validatePageRenderLayerIntents(
+  doc: DocumentSchema,
+  intents: DeterministicPageRenderLayerIntent[] | undefined,
+  issues: AssistantValidationIssue[],
+): void {
+  if (!intents?.length)
+    return
+
+  for (const intent of intents) {
+    if (intent.kind !== 'watermark' || intent.type !== 'text')
+      continue
+    const expectedText = intent.text?.trim()
+    const hasMatchingLayer = doc.page.layers?.some((layer) => {
+      if (layer.kind !== 'watermark' || layer.type !== 'text' || layer.enabled !== true)
+        return false
+      if (!expectedText)
+        return typeof layer.text === 'string' && layer.text.trim().length > 0
+      return layer.text?.trim() === expectedText
+    }) === true
+    if (hasMatchingLayer)
+      continue
+    const textHint = expectedText ? ` "${expectedText}"` : ''
+    issues.push({
+      code: 'PAGE_RENDER_LAYER_MISSING',
+      message: `Planning brief requires a page-level text watermark${textHint}, but schema.page.layers has no matching enabled watermark layer.`,
+      path: 'page.layers',
+    })
+  }
 }
 
 function validateNodeBindingAgainstMaterial(

@@ -237,6 +237,7 @@ function buildLayoutSanitySegment(unit: string, mode: string): string {
 function buildPageLayerSegment(unit: string): string {
   return `## Page render layers
 - \`schema.page.layers\` is optional. Use it only for whole-page render layers that are not editable MaterialNode elements.
+- If \`planningBrief.pageRenderLayers\` contains a text watermark intent, the schema MUST include a matching enabled \`schema.page.layers[]\` text watermark.
 - The currently supported page layer is a text watermark:
   \`{ "id": "page-watermark", "kind": "watermark", "type": "text", "enabled": true, "placement": "over-content", "zIndex": 0, "text": "DRAFT", "rotation": -30, "opacity": 0.1, "fontSize": 18, "gap": 60, "color": "#b8b8b8" }\`
 - \`placement\` is one of \`under-content\`, \`over-content\`, or \`top\`. \`zIndex\` is local to that placement band and MUST be 0..999.
@@ -379,6 +380,7 @@ function buildSelfCheckSegment(): string {
 Before emitting JSON, silently verify:
 - page honors provided \`planningBrief.page\` fields, or is directly justified by the current prompt when planningBrief.page is absent?
 - every explicit business requirement in the prompt is represented by an element, field, registered material construct, or warning?
+- every \`planningBrief.pageRenderLayers\` text watermark intent is represented by an enabled \`schema.page.layers[]\` text watermark, not a normal element?
 - every element type is in the material context?
 - every material-specific prop follows the material context?
 - every element binding.sourceId and binding.sourceName === expectedDataSource.name?

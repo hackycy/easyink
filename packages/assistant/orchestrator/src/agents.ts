@@ -37,6 +37,7 @@ export interface PlannerAgentResult {
   documentIntent?: string
   scenario?: string
   page?: PlannerPage
+  pageRenderLayers: PlannerPageRenderLayerIntent[]
   confidence?: 'high' | 'medium' | 'low'
   requiredBlocks: string[]
   dataNeeds: string[]
@@ -126,6 +127,13 @@ export interface PlannerPage {
   reason?: string
 }
 
+export interface PlannerPageRenderLayerIntent {
+  kind: 'watermark'
+  type: 'text'
+  text?: string
+  reason?: string
+}
+
 export interface PlanningBrief {
   documentIntent?: string
   scenario?: string
@@ -137,6 +145,7 @@ export interface PlanningBrief {
     unit: 'mm' | 'px' | 'pt'
     reason?: string
   }
+  pageRenderLayers: PlannerPageRenderLayerIntent[]
   fieldNaming: 'english-camel-path-chinese-label'
   sampleData: 'required'
   requiredBlocks: string[]
@@ -164,6 +173,12 @@ const PlannerSchema = z.object({
     pages: z.number().optional(),
     reason: z.string().optional(),
   }).optional(),
+  pageRenderLayers: z.array(z.object({
+    kind: z.literal('watermark'),
+    type: z.literal('text'),
+    text: z.string().optional(),
+    reason: z.string().optional(),
+  })).optional(),
   confidence: z.enum(['high', 'medium', 'low']).optional(),
   requiredBlocks: z.array(z.string()).optional(),
   dataNeeds: z.array(z.string()).optional(),
@@ -309,6 +324,11 @@ export async function runPlannerAgent(context: AssistantAgentContext, memorySumm
         '',
         'Put unresolved assumptions in uncertainty instead of filling defaults.',
         'If page is present, return page.reason as one short English sentence.',
+        '',
+        '## Page render layer intent',
+        'If the user asks for a whole-page, non-editable text watermark (for example "DRAFT", "CONFIDENTIAL", "草稿", or "水印"), include it in `pageRenderLayers`.',
+        'Use only `{ "kind": "watermark", "type": "text", "text": "...", "reason": "..." }` for now.',
+        'Do not use `pageRenderLayers` for editable headers, footers, page numbers, logos, or labels; those remain business blocks or style hints.',
       ].join('\n'),
       buildAssistantPluginContext(context.input.pluginSelection, { target: 'planner' }),
       `用户需求：${context.input.prompt}`,
@@ -319,6 +339,7 @@ export async function runPlannerAgent(context: AssistantAgentContext, memorySumm
     documentIntent: result.documentIntent,
     scenario: result.scenario,
     page: result.page,
+    pageRenderLayers: normalizePageRenderLayerIntents(result.pageRenderLayers),
     confidence: result.confidence,
     requiredBlocks: result.requiredBlocks ?? [],
     dataNeeds: result.dataNeeds ?? [],
@@ -331,6 +352,7 @@ export async function runPlannerAgent(context: AssistantAgentContext, memorySumm
 
 function emptyPlannerResult(): PlannerAgentResult {
   return {
+    pageRenderLayers: [],
     requiredBlocks: [],
     dataNeeds: [],
     styleHints: [],
@@ -651,6 +673,7 @@ function buildPlanningBrief(planner: PlannerAgentResult): PlanningBrief {
           reason: page.reason,
         }
       : undefined,
+    pageRenderLayers: planner.pageRenderLayers,
     fieldNaming: 'english-camel-path-chinese-label',
     sampleData: 'required',
     requiredBlocks: planner.requiredBlocks,
@@ -659,6 +682,24 @@ function buildPlanningBrief(planner: PlannerAgentResult): PlanningBrief {
     uncertainty: planner.uncertainty,
     warnings: planner.warnings,
   }
+}
+
+function normalizePageRenderLayerIntents(value: unknown): PlannerPageRenderLayerIntent[] {
+  if (!Array.isArray(value))
+    return []
+
+  const intents: PlannerPageRenderLayerIntent[] = []
+  for (const item of value) {
+    if (!isRecord(item) || item.kind !== 'watermark' || item.type !== 'text')
+      continue
+    intents.push({
+      kind: 'watermark',
+      type: 'text',
+      text: typeof item.text === 'string' ? item.text : undefined,
+      reason: typeof item.reason === 'string' ? item.reason : undefined,
+    })
+  }
+  return intents
 }
 
 function buildPromptContext(brief: PlanningBrief): PromptContext {

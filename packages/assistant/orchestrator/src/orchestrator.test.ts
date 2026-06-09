@@ -496,6 +496,63 @@ describe('assistantOrchestrator', () => {
     ])
   })
 
+  it('repairs missing page layers when the planning brief requires a watermark', async () => {
+    const store = new MemoryAssistantStore()
+    const repairedPayload = payloadWithTextWatermark(defaultSchemaAgentPayload(), 'DRAFT')
+    const llm = new SequenceLLMClient([
+      { requiresClarification: false, questions: [], suggestedAnswers: [], taskType: 'quote' },
+      { requiresClarification: false, questions: [], suggestedAnswers: [], taskType: 'quote' },
+      {
+        documentIntent: 'business quote document with draft watermark',
+        page: { mode: 'fixed', width: 210, height: 297, reason: 'A4 business document.' },
+        pageRenderLayers: [{ kind: 'watermark', type: 'text', text: 'DRAFT', reason: 'User requested a draft watermark.' }],
+        confidence: 'high',
+        requiredBlocks: ['title', 'customer information'],
+        dataNeeds: ['customer'],
+        styleHints: ['professional print layout'],
+        uncertainty: [],
+        warnings: [],
+      },
+      { explanation: '校验前会经过 capability validate。' },
+      {
+        name: 'quote',
+        fields: [{ name: 'customer', path: 'customer', title: '客户', type: 'string' }],
+        sampleData: { customer: '示例客户' },
+        warnings: [],
+      },
+      materialRouterPayload(),
+      {
+        blocks: [{ id: 'txt-title', type: 'text', x: 16, y: 16, width: 178, height: 8 }],
+        warnings: [],
+      },
+      defaultSchemaAgentPayload(),
+      repairedPayload,
+    ])
+    const orchestrator = new AssistantOrchestrator({ store, llm })
+    const task = await store.createTask({
+      prompt: '生成一个带 DRAFT 水印的报价单',
+      materialManifest: textMaterialManifest(),
+    })
+
+    const reviewed = await orchestrator.runTask(task.id)
+    const result = await store.getResult(reviewed.resultId!)
+    const events = await store.listEvents(task.id)
+
+    expect(reviewed.status).toBe('review')
+    expect(result?.validation.valid).toBe(true)
+    expect(result?.schema.page.layers).toEqual([
+      expect.objectContaining({
+        id: 'page-watermark',
+        kind: 'watermark',
+        type: 'text',
+        enabled: true,
+        text: 'DRAFT',
+      }),
+    ])
+    expect(events.some(record => record.event.type === 'tool.failed' && record.event.toolId === 'validate')).toBe(true)
+    expect(events.some(record => record.event.type === 'step.started' && record.event.step === 'repair')).toBe(true)
+  })
+
   it('reports schema-agent material output that is not in the active manifest', async () => {
     const store = new MemoryAssistantStore()
     const orchestrator = new AssistantOrchestrator({
@@ -907,6 +964,32 @@ function schemaPayloadWithTitle(title: string) {
           },
         }
       }),
+    },
+  }
+}
+
+function payloadWithTextWatermark(payload: ReturnType<typeof defaultSchemaAgentPayload>, text: string) {
+  return {
+    ...payload,
+    schema: {
+      ...payload.schema,
+      page: {
+        ...payload.schema.page,
+        layers: [{
+          id: 'page-watermark',
+          kind: 'watermark',
+          type: 'text',
+          enabled: true,
+          placement: 'over-content',
+          zIndex: 0,
+          text,
+          rotation: -30,
+          opacity: 0.1,
+          fontSize: 18,
+          gap: 60,
+          color: '#b8b8b8',
+        }],
+      },
     },
   }
 }
