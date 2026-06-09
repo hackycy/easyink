@@ -17,6 +17,7 @@ const emit = defineEmits<{
 }>()
 
 const snapshotValue = ref<string | number | undefined>()
+const isComposing = ref(false)
 
 function onFocus() {
   snapshotValue.value = props.modelValue
@@ -24,6 +25,22 @@ function onFocus() {
 
 function onInput(event: Event) {
   const input = event.target as HTMLInputElement
+  if (isComposing.value)
+    return
+  updateValue(input)
+}
+
+function onCompositionStart() {
+  isComposing.value = true
+}
+
+function onCompositionEnd(event: Event) {
+  isComposing.value = false
+  const input = event.target as HTMLInputElement
+  updateValue(input)
+}
+
+function updateValue(input: HTMLInputElement) {
   const next = constrainText(input.value)
   if (next !== input.value)
     input.value = next
@@ -44,11 +61,21 @@ function onCommit(event: Event) {
 function constrainText(value: string): string {
   if (props.type === 'number')
     return value
-  const chars = Array.from(value)
   const max = props.maxLength
+  const chars = splitCharacters(value)
   if (typeof max === 'number' && Number.isFinite(max) && max >= 0 && chars.length > max)
     return chars.slice(0, max).join('')
   return value
+}
+
+function splitCharacters(value: string): string[] {
+  if (typeof Intl.Segmenter === 'function') {
+    return Array.from(
+      new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(value),
+      part => part.segment,
+    )
+  }
+  return Array.from(value)
 }
 </script>
 
@@ -62,9 +89,10 @@ function constrainText(value: string): string {
       :placeholder="placeholder"
       :disabled="disabled"
       :minlength="minLength"
-      :maxlength="maxLength"
       @focus="onFocus"
       @input="onInput"
+      @compositionstart="onCompositionStart"
+      @compositionend="onCompositionEnd"
       @blur="onCommit"
       @keydown.enter="onCommit"
     >
