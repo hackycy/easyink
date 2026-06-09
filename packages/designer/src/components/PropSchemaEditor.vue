@@ -41,6 +41,8 @@ const placeholder = computed(() => {
 })
 
 const isNumberLike = computed(() => props.schema.type === 'number' || props.schema.type === 'unit')
+const stringMinLength = computed(() => normalizeStringLengthLimit(props.schema.min))
+const stringMaxLength = computed(() => normalizeStringLengthLimit(props.schema.max))
 
 const isNullableNumber = computed(() => {
   return isNumberLike.value && (props.schema.nullable === true || props.schema.editorOptions?.nullable === true)
@@ -98,6 +100,9 @@ function resolveValue(val: unknown): unknown {
       if (Number.isNaN(resolved as number))
         return undefined
     }
+  }
+  else if (props.schema.type === 'string') {
+    resolved = constrainStringValue(String(resolved ?? ''))
   }
   return resolved
 }
@@ -263,6 +268,18 @@ function resolveText(key: string | undefined): string | undefined {
   const value = props.t(key)
   return value === key ? key : value
 }
+
+function normalizeStringLengthLimit(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.floor(value) : undefined
+}
+
+function constrainStringValue(value: string): string {
+  const max = stringMaxLength.value
+  if (max === undefined)
+    return value
+  const chars = Array.from(value)
+  return chars.length > max ? chars.slice(0, max).join('') : value
+}
 </script>
 
 <template>
@@ -308,6 +325,8 @@ function resolveText(key: string | undefined): string | undefined {
         :model-value="(value as string) ?? ''"
         :placeholder="placeholder"
         :disabled="disabled"
+        :min-length="stringMinLength"
+        :max-length="stringMaxLength"
         @update:model-value="onPreview"
         @commit="onCommit"
       />

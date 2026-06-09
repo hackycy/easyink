@@ -7,6 +7,8 @@ const props = defineProps<{
   placeholder?: string
   disabled?: boolean
   label?: string
+  minLength?: number
+  maxLength?: number
 }>()
 
 const emit = defineEmits<{
@@ -21,15 +23,32 @@ function onFocus() {
 }
 
 function onInput(event: Event) {
-  emit('update:modelValue', (event.target as HTMLInputElement).value)
+  const input = event.target as HTMLInputElement
+  const next = constrainText(input.value)
+  if (next !== input.value)
+    input.value = next
+  emit('update:modelValue', next)
 }
 
 function onCommit(event: Event) {
-  const current = (event.target as HTMLInputElement).value
+  const input = event.target as HTMLInputElement
+  const current = constrainText(input.value)
+  if (current !== input.value)
+    input.value = current
   if (current !== snapshotValue.value) {
     emit('commit', current)
   }
   snapshotValue.value = current
+}
+
+function constrainText(value: string): string {
+  if (props.type === 'number')
+    return value
+  const chars = Array.from(value)
+  const max = props.maxLength
+  if (typeof max === 'number' && Number.isFinite(max) && max >= 0 && chars.length > max)
+    return chars.slice(0, max).join('')
+  return value
 }
 </script>
 
@@ -42,6 +61,8 @@ function onCommit(event: Event) {
       :value="modelValue"
       :placeholder="placeholder"
       :disabled="disabled"
+      :minlength="minLength"
+      :maxlength="maxLength"
       @focus="onFocus"
       @input="onInput"
       @blur="onCommit"

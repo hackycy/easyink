@@ -50,7 +50,7 @@ describe('renderRating', () => {
   it('keeps one display token for rating characters', () => {
     expect(normalizeRatingCharacter('满意')).toBe('满')
     expect(normalizeRatingCharacter('★☆')).toBe('★')
-    expect(normalizeRatingCharacter('good bad')).toBe('good')
+    expect(normalizeRatingCharacter('ABCD')).toBe('A')
     expect(normalizeRatingCharacter('')).toBe('★')
   })
 })

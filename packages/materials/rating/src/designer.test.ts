@@ -3,7 +3,6 @@ import type { MaterialNode } from '@easyink/schema'
 import { createDefaultSchema } from '@easyink/schema'
 import { describe, expect, it } from 'vitest'
 import { createRatingExtension } from './designer'
-import { ratingDesignerPropSchemas } from './prop-schemas'
 import { createRatingNode } from './schema'
 
 function createNodeSignal(node: MaterialNode): NodeSignal {
@@ -50,19 +49,5 @@ describe('createRatingExtension', () => {
     extension.renderContent(createNodeSignal(node), container)
 
     expect(container.innerHTML).toContain('{#满意度}/100')
-  })
-
-  it('commits only one rating character token from the property schema', () => {
-    const node = createRatingNode({ props: { character: '★' } })
-    const schema = ratingDesignerPropSchemas.find(item => item.key === 'character')
-    const command = schema?.commit?.(node, '满意度', {
-      flushPendingEdits: () => {},
-      activeEditingSession: null,
-      exitEditingSession: () => {},
-    })
-
-    command?.execute()
-
-    expect(node.props.character).toBe('满')
   })
 })

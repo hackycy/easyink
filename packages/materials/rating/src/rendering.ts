@@ -90,11 +90,7 @@ export function normalizeRatingCharacter(value: unknown): string {
   if (!text)
     return RATING_DEFAULTS.character
 
-  const firstToken = text.split(/\s+/)[0]
-  if (/^[\w-]+$/.test(firstToken))
-    return firstToken
-
-  return Array.from(firstToken)[0] || RATING_DEFAULTS.character
+  return Array.from(text)[0] || RATING_DEFAULTS.character
 }
 
 function roundCssNumber(value: number): string {

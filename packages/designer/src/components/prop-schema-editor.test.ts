@@ -15,6 +15,51 @@ afterEach(() => {
 })
 
 describe('prop schema editor text file import', () => {
+  it('limits string input by schema min and max character counts', async () => {
+    const store = createStore()
+    const events = {
+      previews: [] as Array<[string, unknown]>,
+      changes: [] as Array<[string, unknown]>,
+    }
+    const schema: PropSchema = {
+      key: 'character',
+      label: 'designer.property.content',
+      type: 'string',
+      min: 1,
+      max: 1,
+    }
+
+    const mounted = mountWithStore(store, PropSchemaEditor, {
+      schema,
+      value: '',
+      t: store.t.bind(store),
+      onPreview: (key: string, value: unknown) => events.previews.push([key, value]),
+      onChange: (key: string, value: unknown) => events.changes.push([key, value]),
+    })
+
+    const input = mounted.host.querySelector('input')
+    if (!input)
+      throw new Error('Expected string input.')
+
+    input.focus()
+    input.value = 'ABCD'
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    input.dispatchEvent(new Event('blur', { bubbles: true }))
+    await flush()
+
+    input.focus()
+    input.value = '满意'
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    input.dispatchEvent(new Event('blur', { bubbles: true }))
+    await flush()
+
+    expect(input.minLength).toBe(1)
+    expect(input.maxLength).toBe(1)
+    expect(events.previews).toEqual([['character', 'A'], ['character', '满']])
+    expect(events.changes).toEqual([['character', 'A'], ['character', '满']])
+    mounted.unmount()
+  })
+
   it('imports text files into code props through the interaction bridge', async () => {
     const store = createStore()
     const pickFileText = vi.fn(() => ({ text: '<svg viewBox="0 0 1 1"></svg>', name: 'logo.svg' }))
