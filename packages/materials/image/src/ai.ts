@@ -13,7 +13,7 @@ export const imageAIMaterialDescriptor = {
   knowledge: {
     category: 'decoration',
     composability: {
-      canBeChildOf: ['container', '*'],
+      canBeChildOf: ['*'],
       canContain: [],
       exclusiveWith: [],
       preferredCompanions: ['text'],

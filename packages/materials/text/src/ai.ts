@@ -15,7 +15,7 @@ export const textAIMaterialDescriptor = {
   knowledge: {
     category: 'typography',
     composability: {
-      canBeChildOf: ['container', '*'],
+      canBeChildOf: ['*'],
       canContain: [],
       exclusiveWith: [],
       preferredCompanions: ['line', 'rect'],

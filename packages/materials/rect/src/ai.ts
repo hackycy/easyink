@@ -12,7 +12,7 @@ export const rectAIMaterialDescriptor = {
   knowledge: {
     category: 'decoration',
     composability: {
-      canBeChildOf: ['container', '*'],
+      canBeChildOf: ['*'],
       canContain: [],
       exclusiveWith: [],
       preferredCompanions: ['text'],

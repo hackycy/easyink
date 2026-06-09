@@ -12,7 +12,7 @@ export const barcodeAIMaterialDescriptor = {
   knowledge: {
     category: 'data',
     composability: {
-      canBeChildOf: ['container', '*'],
+      canBeChildOf: ['*'],
       canContain: [],
       exclusiveWith: [],
       preferredCompanions: ['text'],

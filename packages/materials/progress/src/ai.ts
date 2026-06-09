@@ -14,7 +14,7 @@ export const progressAIMaterialDescriptor = {
   knowledge: {
     category: 'data',
     composability: {
-      canBeChildOf: ['container', '*'],
+      canBeChildOf: ['*'],
       canContain: [],
       exclusiveWith: [],
       preferredCompanions: ['text'],
