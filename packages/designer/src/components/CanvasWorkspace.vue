@@ -973,7 +973,6 @@ onUnmounted(() => {
   }
 
   &--deep-editing {
-    z-index: 5 !important;
     cursor: default;
     outline: 1px dashed var(--ei-deep-edit-border, var(--ei-primary, #1890ff));
     outline-offset: 3px;
