@@ -199,4 +199,4 @@ Use as the page-aware reference:
 - Rendering uses resolved runtime props, not schema-time page counts.
 - Designer shows one editable source node and non-interactive repeat previews on other pages. It uses `renderContextSignal.page` to display real design-time page numbers for both source and preview instances, while keeping those values out of Schema.
 
-Use this pattern for watermarks, repeated headers, and repeated footers. Ensure repeated overlays do not influence flow, continuous-paper height, output page count, or source-node editability.
+Use this pattern for editable or data-bound watermarks, repeated headers, and repeated footers. Ensure repeated overlays do not influence flow, continuous-paper height, output page count, or source-node editability.

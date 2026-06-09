@@ -197,7 +197,7 @@ Use `trustedViewerHtml(html, 'sanitized-rich-text')` only when the material has 
 There are two ways to request post-pagination repetition:
 
 - Viewer extension `pageAware: true`, used for material defaults such as `page-number`.
-- Schema field `node.repeat.scope='every-output-page'`, used when the user or factory explicitly repeats an element such as a header, footer, or watermark.
+- Schema field `node.repeat.scope='every-output-page'`, used when the user or factory explicitly repeats an editable or data-bound element such as a header, footer, logo, page number, or watermark.
 
 Viewer behavior:
 

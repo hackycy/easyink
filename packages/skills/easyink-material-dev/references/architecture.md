@@ -63,10 +63,10 @@ Material rules:
 
 - `MaterialNode.x/y/width/height` are document coordinates, not output page or editor-surface coordinates.
 - `measure()`, reflow, pagination, and repeated overlays can create runtime nodes/fragments, but must not silently write those results into source schema.
-- Do not add new behavior branches keyed only on `page.mode`; use the layer that owns the semantic decision.
+- Do not add new behavior branches keyed only on `page.mode`; read the owning page strategy field: `page.pageModel`, `page.layout`, `page.reflow`, or `page.pagination`.
 - `page-planner.ts` is a compatibility facade. New runtime behavior should go through `runLayoutPipeline()` and `runPagination()`.
 
-`page.layers` is separate from those behavior fields. It is a page-level render-layer array for non-element page decorations such as text watermarks. It is resolved by `@easyink/core` into layer render plans and consumed by Designer/Viewer. Material code should not use `page.layers` as a custom extension point.
+`page.layers` is separate from those behavior fields. It is a page-level render-layer array for non-element, non-editable, non-bindable page decorations such as text watermarks. It is resolved by `@easyink/core` into layer render plans and consumed by Designer/Viewer. Material code should not use `page.layers` as a material feature hook or custom extension point.
 
 ## Node Layout Behavior
 
@@ -77,7 +77,7 @@ Node-level behavior lives outside material-specific props:
 - `node.break.keepTogether/before/after`: applies during `auto-sheets` pagination for flow nodes.
 - `node.repeat.scope='every-output-page'`: copied after pagination to every output page; does not affect page count or continuous-paper height.
 
-Use `repeat.scope` for editable or data-bound headers, footers, page numbers, logos, and repeated watermarks. Use `page.layers` only for whole-page render layers that are not `MaterialNode`s.
+Use `repeat.scope` for editable or data-bound headers, footers, page numbers, logos, and repeated watermarks. Use `page.layers` only for whole-page render layers that are not `MaterialNode`s and do not need selection, dragging, binding, or source-node editing.
 
 Old `node.props.layoutMode`, `keepTogether`, `pageBreakBefore`, and `pageBreakAfter` are read only as compatibility fallbacks. New writes should use `placement`, `break`, and `repeat` through `UpdateMaterialBehaviorCommand`.
 

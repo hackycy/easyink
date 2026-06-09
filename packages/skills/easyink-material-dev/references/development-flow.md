@@ -70,7 +70,7 @@ const overlayDefaults = {
 }
 ```
 
-Only do this when the material is intentionally a post-pagination overlay. Ordinary headers, footers, and watermarks can also use `repeat.scope`, but they should still behave like one editable source node in Designer.
+Only do this when the material is intentionally a post-pagination overlay. Editable or data-bound headers, footers, and watermarks can also use `repeat.scope`, but they should still behave like one editable source node in Designer.
 
 ## Designer Rendering Rules
 
@@ -138,7 +138,7 @@ Do not implement material-specific page planning. Materials may provide:
 
 The Viewer owns layout, pagination, page overlay cloning, page number context, and `ViewerPageMetrics`.
 
-`page.layers` is not a material behavior field. It stores page-level render layers, currently text watermarks, and is resolved through `@easyink/core` page-layer helpers. New materials should not write `page.layers` unless the task is explicitly about page-level non-element rendering; editable or data-bound repeated visuals belong in `schema.elements[]` with `repeat.scope='every-output-page'`.
+`page.layers` is not a material behavior field. It stores page-level render layers, currently text watermarks, and is resolved through `@easyink/core` page-layer helpers. New materials should not write `page.layers` unless the task is explicitly about whole-page, non-element, non-editable, non-bindable rendering; editable or data-bound repeated visuals belong in `schema.elements[]` with `repeat.scope='every-output-page'`.
 
 ## Designer Control Policy Rules
 
