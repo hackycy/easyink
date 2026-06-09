@@ -13,6 +13,11 @@ export const IconProgress = createIcon({
   svg: '<rect width="18" height="6" x="3" y="9" rx="3"/><path d="M6 12h7"/>',
 })
 
+export const IconRating = createIcon({
+  name: 'IconRating',
+  svg: '<path d="m6 4 1.1 2.2 2.4.4-1.7 1.7.4 2.4L6 9.6l-2.2 1.1.4-2.4-1.7-1.7 2.4-.4L6 4Z"/><path d="m15 4 .8 1.6 1.7.3-1.2 1.2.3 1.7L15 8l-1.6.8.3-1.7-1.2-1.2 1.7-.3L15 4Z"/><path d="M4 16h16"/><path d="M4 20h10"/>',
+})
+
 export {
   AlignEndVertical as IconAlignBottom,
   AlignCenter as IconAlignCenter,

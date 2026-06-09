@@ -25,6 +25,7 @@ export const svgCustomMaterialBinding = { kind: 'ordinary', primaryProp: 'conten
 export const qrcodeMaterialBinding = { kind: 'ordinary', primaryProp: 'value', formatEditor: presetAndCustomFormatEditor } satisfies MaterialBindingDefinition
 export const ringProgressMaterialBinding = { kind: 'ordinary', primaryProp: 'value', formatEditor: customOnlyFormatEditor } satisfies MaterialBindingDefinition
 export const progressMaterialBinding = { kind: 'ordinary', primaryProp: 'value', formatEditor: customOnlyFormatEditor } satisfies MaterialBindingDefinition
+export const ratingMaterialBinding = { kind: 'ordinary', primaryProp: 'value', formatEditor: customOnlyFormatEditor } satisfies MaterialBindingDefinition
 export const barcodeMaterialBinding = {
   kind: 'ordinary',
   primaryProp: 'value',

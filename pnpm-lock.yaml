@@ -698,6 +698,9 @@ importers:
       '@easyink/material-qrcode':
         specifier: workspace:*
         version: link:../materials/qrcode
+      '@easyink/material-rating':
+        specifier: workspace:*
+        version: link:../materials/rating
       '@easyink/material-rect':
         specifier: workspace:*
         version: link:../materials/rect
@@ -1066,6 +1069,18 @@ importers:
       qrcode-generator:
         specifier: catalog:framework
         version: 2.0.4
+
+  packages/materials/rating:
+    dependencies:
+      '@easyink/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@easyink/schema':
+        specifier: workspace:*
+        version: link:../../schema
+      '@easyink/shared':
+        specifier: workspace:*
+        version: link:../../shared
 
   packages/materials/rect:
     dependencies:

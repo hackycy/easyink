@@ -69,6 +69,26 @@ describe('builtin designer material bundle', () => {
     expect(material?.icon).not.toBe(builtinDesignerMaterialBundle.materials.find(item => item.type === 'chart-bar')?.icon)
   })
 
+  it('shows rating in the data catalog group with custom-only value binding', () => {
+    expect(builtinDesignerMaterialBundle.groupedCatalog).toContainEqual({
+      type: 'rating',
+      group: 'data',
+    })
+
+    const material = builtinDesignerMaterialBundle.materials.find(item => item.type === 'rating')
+
+    expect(material?.category).toBe('data')
+    expect(material?.binding).toEqual({
+      kind: 'ordinary',
+      primaryProp: 'value',
+      formatEditor: { tabs: ['custom'], defaultTab: 'custom' },
+    })
+    expect(material?.capabilities.bindable).toBe(true)
+    expect(material?.aiDescriptor?.binding).toBe('single')
+    expect(material?.icon).toBeDefined()
+    expect(builtinDesignerMaterialBundle.materials.filter(item => item.type !== 'rating').map(item => item.icon)).not.toContain(material?.icon)
+  })
+
   it('shows custom ECharts in the chart catalog group with a distinct icon', () => {
     expect(builtinDesignerMaterialBundle.groupedCatalog).toContainEqual({
       type: 'chart-custom',
