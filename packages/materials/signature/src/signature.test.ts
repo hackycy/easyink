@@ -17,7 +17,7 @@ describe('signature material', () => {
     expect(node.width).toBe(80)
     expect(node.height).toBe(35)
     expect(getSignatureProps(node)).toMatchObject({
-      backgroundColor: '#ffffff',
+      backgroundColor: 'transparent',
       penColor: '#111827',
       data: [],
     })

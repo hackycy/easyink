@@ -27,7 +27,7 @@ export interface SignatureProps {
 }
 
 export const SIGNATURE_DEFAULTS: SignatureProps = {
-  backgroundColor: '#ffffff',
+  backgroundColor: 'transparent',
   penColor: '#111827',
   data: [],
 }
