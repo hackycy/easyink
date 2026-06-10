@@ -52,6 +52,7 @@
 | 23 | [Contribution 机制](./23-contribution.md) | ContributionRegistry、注入方式、响应式 Props、生命周期、命名空间 |
 | 24 | [页面布局正交体系](./24-page-layout-orthogonal-system.md) | 页面模型、布局策略、分页策略、测量重排引擎四层解耦 |
 | 25 | [AI Assistant 平台](./25-ai-assistant.md) | 物料知识声明、数据流链路、Orchestrator 工作流、ComposerAgent、知识与推理层 |
+| 26 | [跨平台 RenderPlan 管线](./26-portable-render-plan.md) | schema + data 编译为平台无关 RenderPlan，再由小程序、App、C# 等端侧 adapter 绘制 |
 
 ## 补充说明
 
@@ -73,6 +74,7 @@
 - **想了解代码结构?** -> [03-monorepo-structure](./03-monorepo-structure.md) + [04-layered-architecture](./04-layered-architecture.md)
 - **想了解模板模型?** -> [05-schema-dsl](./05-schema-dsl.md) + [08-datasource](./08-datasource.md)
 - **想了解预览与分页?** -> [06-render-pipeline](./06-render-pipeline.md) + [07-layout-engine](./07-layout-engine.md) + [24-page-layout-orthogonal-system](./24-page-layout-orthogonal-system.md)
+- **想了解跨平台渲染?** -> [26-portable-render-plan](./26-portable-render-plan.md)
 - **想了解设计器工作台?** -> [10-designer-interaction](./10-designer-interaction.md)
 - **想了解物料体系?** -> [11-element-system](./11-element-system.md)
 - **想了解命令与历史?** -> [12-command-undo-redo](./12-command-undo-redo.md)
