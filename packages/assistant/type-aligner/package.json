@@ -1,7 +1,7 @@
 {
   "name": "@easyink/assistant-type-aligner",
   "type": "module",
-  "version": "0.0.22",
+  "version": "0.0.23",
   "description": "Type-driven data alignment engine for automatic binding generation in EasyInk Assistant",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",

@@ -1,7 +1,7 @@
 {
   "name": "@easyink/export-plugin-dom-pdf",
   "type": "module",
-  "version": "0.0.22",
+  "version": "0.0.23",
   "description": "DOM-to-PDF export plugin for @easyink/export-runtime (html2canvas + jsPDF)",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",

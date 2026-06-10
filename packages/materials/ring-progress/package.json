@@ -1,7 +1,7 @@
 {
   "name": "@easyink/material-ring-progress",
   "type": "module",
-  "version": "0.0.22",
+  "version": "0.0.23",
   "description": "EasyInk ring progress material",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",

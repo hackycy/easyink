@@ -1,7 +1,7 @@
 {
   "name": "@easyink/material-progress",
   "type": "module",
-  "version": "0.0.22",
+  "version": "0.0.23",
   "description": "EasyInk horizontal progress material",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",
