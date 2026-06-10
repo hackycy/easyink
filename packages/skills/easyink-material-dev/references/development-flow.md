@@ -12,7 +12,7 @@ Typical files:
 - `src/designer.ts`: `createXExtension(context)`.
 - `src/viewer.ts`: render plus optional `measure()`, `getRenderSize()`, or `fragmentPaginator`.
 - `src/prop-schemas.ts`: material-owned property panel additions when needed.
-- `src/ai.ts`: `AIMaterialDescriptor` plus optional `knowledge` for Assistant generation, material selection, binding, sizing, and compatibility.
+- `src/ai.ts`: `AIMaterialDescriptor` plus optional `knowledge` for Assistant generation, material selection, binding, sizing, and scenario fit.
 - `src/index.ts`: export public symbols.
 - `src/*.test.ts`: focused tests for rendering, defaults, deep editing, measure, pagination, and schema behavior.
 
@@ -88,7 +88,7 @@ Simple materials can set `container.innerHTML`. Complex materials can create Vue
 
 Designer coordinates and design-time page context come through framework-owned surface planning. Material code should use material-local coordinates in geometry and datasource drop protocols, and should not convert output page plans or `renderContextSignal` values back into schema coordinates or persisted props.
 
-For heavyweight Designer renderers, register a synchronous metadata entry and put only the extension factory behind `lazyFactory`. Keep `binding`, `propSchemas`, `localeMessages`, `aiDescriptor`, catalog entries, and `createDefaultNode` in the initial registration so Designer panels and Assistant manifest are complete before the renderer chunk loads. Use a lightweight `factory` fallback when the registration type requires one; the registry will show its loading extension while `lazyFactory` resolves and remount the canvas after `materialExtensionRevision` changes.
+For heavyweight Designer renderers, register a synchronous metadata entry and put only the extension factory behind `lazyFactory`. Keep `binding`, `propSchemas`, `localeMessages`, `aiDescriptor`, catalog entries, and `createDefaultNode` in the initial registration so Designer panels and Assistant manifest are complete before the renderer chunk loads. Use a lightweight `factory` placeholder when the registration type requires one; the registry will show its loading extension while `lazyFactory` resolves and remount the canvas after `materialExtensionRevision` changes.
 
 For font-bearing materials:
 
@@ -115,7 +115,7 @@ Use `trustedViewerHtml()` for strings:
 Font-dependent Viewer behavior:
 
 - Viewer loads and injects fonts before `measure()` and `render()`, so text measurement can assume requested fonts have been attempted.
-- Material `measure()` must still tolerate browser fallback metrics when a font failed to load.
+- Material `measure()` must still tolerate browser font metrics when a font failed to load.
 - Material `render()` should emit only the `font-family` declaration needed for its own content. Page-level inheritance is handled by the Viewer page root from `schema.page.font`.
 - If a material stores fonts in nested data, add or update tests around `collectFontFamilies()` so preloading still happens before measurement and render.
 
@@ -177,7 +177,7 @@ Use `propSchemas` for simple `node.props` fields:
 - Labels should be i18n keys.
 - Group names should be one of the groups mapped in `PropertiesPanel.vue` or an intentionally visible custom group.
 - For `code` or `textarea` props whose value is commonly authored in a local text file, declare `editorOptions.valueInput = { kind: 'text-file', id, source, accept, pickTitle, maxBytes }`. For image or asset URL props, use `{ kind: 'asset-url', id, source, accept, pickTitle }`. The shared `PropSchemaEditor` calls Designer's interaction bridge and commits the returned value as the prop value. Do not add material-local `<input type="file">` controls, and do not persist file names, local paths, `File` objects, picker state, or import state in Schema.
-- For JavaScript authoring props such as custom ECharts option code, use `type: 'code'` with `editorOptions.language = 'javascript'`, editor height/dialog sizing, and localized labels/placeholders. Store source strings only. Treat execution as trusted template code, not a sandbox, and turn failures into diagnostics plus a stable fallback.
+- For JavaScript authoring props such as custom ECharts option code, use `type: 'code'` with `editorOptions.language = 'javascript'`, editor height/dialog sizing, and localized labels/placeholders. Store source strings only. Treat execution as trusted template code, not a sandbox, and turn failures into diagnostics plus stable placeholder output.
 
 For font properties:
 
@@ -211,8 +211,9 @@ For a new built-in material:
 6. If Designer rendering is heavy, register metadata synchronously and use `lazyFactory` for the Designer extension chunk only; keep Viewer registration synchronous.
 7. Pass the material-local AI descriptor as `aiDescriptor` in Designer registration. `packages/builtin/src/ai.ts` is derived from the Designer bundle; do not hand-maintain a second descriptor list.
 8. Add `src/locale.ts` in the material package and pass it as `localeMessages` on the Designer material entry. Keep `@easyink/locales` for Designer common strings only.
-9. Update tests or snapshots affected by built-in type lists, catalog grouping, lazy registration, package subpath exports, or binding format tabs.
-10. Run focused package tests and then broader validation when registration, descriptors, or shared Designer/Viewer behavior changed.
+9. Add the material to the appropriate `catalogs` group in `packages/builtin/src/designer.ts`. If you add a new group id, register `materials.catalog.<id>` in the bundle locale messages.
+10. Update tests or snapshots affected by built-in type lists, catalog grouping, lazy registration, package subpath exports, or binding format tabs.
+11. Run focused package tests and then broader validation when registration, descriptors, or shared Designer/Viewer behavior changed.
 
 ## Export and Print Compatibility
 
@@ -243,7 +244,7 @@ For a host-owned custom material outside built-ins:
 - Bound values do not change: renderer reads defaults instead of resolved props, or `viewer.open({ data })` data shape does not match `fieldPath`.
 - Page-aware content changes page count: repeated nodes were included in layout/pagination inputs.
 - Page numbers are missing: the material lacks `repeat.scope='every-output-page'`, Viewer `pageAware`, or reads schema-time counts instead of `__pageNumber` / `__totalPages`.
-- Break rules do nothing: the page does not use `auto-sheets`, the node is fixed-position, or the behavior is still stored only in legacy props.
+- Break rules do nothing: the page does not use `auto-sheets`, the node is fixed-position, or the node does not write behavior through `placement`, `break`, and `repeat`.
 - Undo groups every pointer move separately: continuous operations need a stable `mergeKey`.
 - Property panel writes to the wrong location: the schema needs custom `read` and `commit`, not a plain props-bag schema.
 - Resize breaks internals: implement a `MaterialResizeAdapter` or control policy.

@@ -19,7 +19,7 @@ Rules for material developers:
 - Do not call `FontProvider`, `FontManager`, or `loadAndInjectFonts()` from material `render()` or `measure()`.
 - Do not serialize font URLs, `ArrayBuffer`s, loaded/error status, style elements, or generated `@font-face` text into Schema.
 - When adding a new font-bearing prop outside `node.props.fontFamily`, also update `collectFontFamilies()` or the schema traversal model so Viewer and Designer can preload it.
-- Font load diagnostics are warnings. Materials should still render with CSS fallback behavior when a font is unavailable.
+- Font load diagnostics are warnings. Materials should still render with browser font behavior when a font is unavailable.
 
 ## Binding Projection
 
@@ -99,7 +99,7 @@ Implement `datasourceDrop` when the material owns internal drop zones:
 - `onDragOver(field, point, node)` returns accepted or rejected zone descriptors in material-local coordinates.
 - `onDrop(field, point, node)` commits binding via `context.tx.run()`.
 - Use `context.t()` for rejection labels.
-- Validate row, cell, source, and collection compatibility before committing.
+- Validate row, cell, source, and collection relationships before committing.
 
 `table-data` uses this pattern to bind fields into cells. It rejects hidden rows and rejects repeat-template fields from a different collection prefix than existing repeat-template cells.
 
@@ -125,7 +125,7 @@ Viewer expansion:
 6. Format via `formatBindingDisplayValue()`.
 7. Report diagnostics with `nodeId` when formatting fails.
 
-Empty or non-array data renders a single fallback row, not a schema mutation.
+Empty or non-array data renders a single placeholder row, not a schema mutation.
 
 ## Measurement
 
@@ -241,8 +241,8 @@ Diagnostics and feedback matter in downstream validation:
 Viewer wraps material render and measurement through diagnostic handling:
 
 - Missing material type renders `[Unknown: type]`.
-- Render errors produce a warning diagnostic and fallback placeholder.
+- Render errors produce a warning diagnostic and placeholder output.
 - Measure errors are warnings and leave the original node size unchanged.
 - Layout/reflow/pagination diagnostics are emitted as Viewer diagnostics.
 
-Tests should assert these fallback paths when adding risky runtime behavior.
+Tests should assert these recovery paths when adding risky runtime behavior.

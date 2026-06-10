@@ -138,19 +138,18 @@ if (!isValidSchema(restored)) {
 - `validateSchemaIssues()`：返回结构化问题，包含 `path`、`message` 和 `code`。
 - `isValidSchema()`：类型守卫。
 - `serializeSchema()` / `deserializeSchema()`：处理持久化 JSON。
-- `isCompatibleVersion()`：判断版本是否兼容。
 
-## 旧格式兼容 {#compat}
+## 外部输入解码 {#decode-external-input}
 
-旧模板或外部输入不要在业务层手写字段映射。先交给 codec：
+外部输入不要在业务层手写字段映射。先交给 codec：
 
 ```ts
 import { decodeBenchmarkInput } from '@easyink/schema'
 
-const schema = decodeBenchmarkInput(legacyInput)
+const schema = decodeBenchmarkInput(input)
 ```
 
-Schema codec 里包含 benchmark 输入的解码逻辑。兼容旧格式是明确代码路径，不是文档约定。普通 EasyInk JSON 仍然用 `deserializeSchema(json)`。
+Schema codec 里包含 benchmark 输入的解码逻辑。普通 EasyInk JSON 仍然用 `deserializeSchema(json)`。
 
 ## 元素节点 {#material-node}
 
@@ -340,7 +339,7 @@ import {
 
 - 默认值：`createDefaultSchema()`、`createDefaultPage()`、`createDefaultGuides()`。
 - 类型和访问：`isTableNode()`、`isTableDataNode()`、`getNodeProps<T>()`。
-- 校验和兼容：`validateSchemaIssues()`、`isCompatibleVersion()`、`normalizeDocumentSchema()`。
+- 校验和归一化：`validateSchemaIssues()`、`normalizeDocumentSchema()`。
 
 ## 完整示例 {#full-example}
 

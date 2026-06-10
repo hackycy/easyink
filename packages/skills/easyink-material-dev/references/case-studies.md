@@ -43,7 +43,7 @@ Viewer complexity:
 
 - `measureTableData()` expands runtime rows and computes auto heights before layout/reflow/pagination.
 - `renderTableData()` reuses measured layout through a WeakMap because the render node has the measured height.
-- Empty arrays render a single fallback row; they do not mutate Schema.
+- Empty arrays render a single placeholder row; they do not mutate Schema.
 - Static rows resolve `staticBinding` and repeat rows resolve item-level `binding`.
 - `tableDataFragmentPaginator` splits expanded runtime rows for `auto-sheets`, preserving `sourceNodeId` and keeping source schema untouched.
 

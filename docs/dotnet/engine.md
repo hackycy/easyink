@@ -107,7 +107,7 @@ using var api = new EngineApi(
 路由优先级是：
 
 ```text
-SumatraPDF fallback -> ESC/POS raw -> PDFium/GDI
+SumatraPDF -> ESC/POS raw -> PDFium/GDI
 ```
 
 - `sumatraPrinterNames` 命中且 `sumatraPdfPath` 可用时，走 SumatraPDF CLI。

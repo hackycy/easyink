@@ -53,7 +53,7 @@ Behaviors are Koa-style middleware:
 Framework helpers:
 
 - `selectionMiddleware()` performs pointer hit-testing and updates selection.
-- `keyboardCursorMiddleware()` lets Escape exit editing through the workbench fallback.
+- `keyboardCursorMiddleware()` lets Escape exit editing through the workbench keyboard path.
 - `undoBoundaryMiddleware()` helps selection changes become natural history boundaries.
 
 ## History and Transactions

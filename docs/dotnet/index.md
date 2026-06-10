@@ -54,7 +54,7 @@ PDF
      -> PdfiumPrintService
 ```
 
-路由优先级按代码实现是：SumatraPDF fallback、ESC/POS raw、默认 PDFium/GDI。
+路由优先级按代码实现是：SumatraPDF 通道、ESC/POS raw、默认 PDFium/GDI。
 
 - `PdfiumPrintService`：默认路径，渲染 PDF 位图，再通过 `PrintDocument` 交给 Windows Spooler。
 - `EscPosRawPrintService`：命中 `RawPrinterNames` 时，把 PDF 转成 ESC/POS 光栅指令直发。

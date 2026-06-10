@@ -41,7 +41,7 @@ Rules:
 - Normalize before assuming `schema.page`, `schema.guides`, and `schema.elements` are complete.
 - Use schema validation for complete internal schemas, not as a replacement for input normalization.
 - Preserve `DocumentSchema.extensions` and `MaterialNode.extensions` for host/plugin-owned serializable data.
-- Keep `compat` fields as compatibility state, not the primary home for new material semantics.
+- New material semantics belong in explicit schema fields, material props, or namespaced `extensions`.
 
 ## Orthogonal Page System
 
@@ -64,7 +64,7 @@ Material rules:
 - `MaterialNode.x/y/width/height` are document coordinates, not output page or editor-surface coordinates.
 - `measure()`, reflow, pagination, and repeated overlays can create runtime nodes/fragments, but must not silently write those results into source schema.
 - Do not add new behavior branches keyed only on `page.mode`; read the owning page strategy field: `page.pageModel`, `page.layout`, `page.reflow`, or `page.pagination`.
-- `page-planner.ts` is a compatibility facade. New runtime behavior should go through `runLayoutPipeline()` and `runPagination()`.
+- New runtime behavior should go through `runLayoutPipeline()` and `runPagination()`.
 
 `page.layers` is separate from those behavior fields. It is a page-level render-layer array for non-element, non-editable, non-bindable page decorations such as text watermarks. It is resolved by `@easyink/core` into layer render plans and consumed by Designer/Viewer. Material code should not use `page.layers` as a material feature hook or custom extension point.
 
@@ -79,7 +79,7 @@ Node-level behavior lives outside material-specific props:
 
 Use `repeat.scope` for editable or data-bound headers, footers, page numbers, logos, and repeated watermarks. Use `page.layers` only for whole-page render layers that are not `MaterialNode`s and do not need selection, dragging, binding, or source-node editing.
 
-Old `node.props.layoutMode`, `keepTogether`, `pageBreakBefore`, and `pageBreakAfter` are read only as compatibility fallbacks. New writes should use `placement`, `break`, and `repeat` through `UpdateMaterialBehaviorCommand`.
+Write page behavior through `placement`, `break`, and `repeat` with `UpdateMaterialBehaviorCommand`.
 
 Designer exposes these behaviors through `createLayoutBehaviorPropSchemas()`:
 
@@ -141,7 +141,7 @@ Viewer owns output-time font loading:
 
 - `ViewerRuntime` creates its own `FontManager` from `ViewerOptions.fontProvider`.
 - Before binding, measurement, layout, pagination, and DOM render, it calls `collectFontFamilies(schema)` and `loadAndInjectFonts()` for the Viewer host document.
-- Font failures emit Viewer diagnostics with `scope: 'font'`, but rendering continues with browser fallback fonts.
+- Font failures emit Viewer diagnostics with `scope: 'font'`, but rendering continues with browser font behavior.
 
 Material code should only store and render font family names. It should not call `FontProvider`, create `FontManager`, inject `@font-face`, or serialize font sources.
 
@@ -194,13 +194,13 @@ Built-in materials:
 - `capabilities`: controls binding, rotation, resizing, children, animation, union drop, page-aware, multi-binding, and aspect lock.
 - `binding`: material binding definition: `none`, `ordinary`, `custom`, or `data-contract`. Data-contract definitions include the target model contract and make Designer write `node.binding.kind='data-contract'` mappings instead of ordinary whole-element `BindingRef`.
 - `createDefaultNode`: default schema factory.
-- `factory`: synchronous Designer extension factory or a lightweight fallback when `lazyFactory` is present.
+- `factory`: synchronous Designer extension factory or a lightweight placeholder when `lazyFactory` is present.
 - `lazyFactory`: optional async Designer factory loader for heavyweight renderers. Do not use it for Viewer registration or material metadata.
 - `propSchemas`: the complete material-owned property schema list for the material. Use `@easyink/prop-schemas` only for shared option arrays and layout behavior helpers.
 - `localeMessages`: material-owned Designer locale messages for catalog labels, property labels, material-local actions, placeholders, history labels, and data-contract labels.
 - `sectionFilter`: hide or show property panel sections.
 
-`catalogs` creates material panel groups. Each group owns a stable `id`, a translatable `label`, optional ordering, and item entries. A built-in material can be fully registered for Designer and Viewer but still be invisible in the material panel if its type is missing from every catalog group; add a regression test when introducing a new built-in material.
+`catalogs` creates material panel groups. Each group owns a stable `id`, a translatable `label`, optional ordering, and item entries. Register catalog label keys in the same bundle locale messages when the group is custom or when the bundle must work with `builtin: 'none'`. A built-in material can be fully registered for Designer and Viewer but still be invisible in the material panel if its type is missing from every catalog group; add a regression test when introducing a new built-in material.
 
 ## Contribution Boundary
 

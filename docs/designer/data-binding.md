@@ -222,7 +222,7 @@ viewer.open({
 })
 ```
 
-Resolver 会优先尝试 `data[sourceId]`。但只有当完整 path 或它的父级集合能在 `data[sourceId]` 下解析时，才会使用这个 source-scoped root；否则会回退到全局 `data` 根。这样可以兼容一些宿主在 `data.report` 里放 source 元信息、真实数据仍放在顶层的情况。
+Resolver 会优先尝试 `data[sourceId]`。但只有当完整 path 或它的父级集合能在 `data[sourceId]` 下解析时，才会使用这个 source-scoped root；否则会回退到全局 `data` 根。这样既支持按 sourceId 分组的数据，也支持真实数据直接放在顶层的输入。
 
 设计态不会把“同集合”“顶层数组”“不同集合”“record mode”“index mode”暴露给用户。拖拽只负责填 mapping，关系判断属于 Resolver。
 
@@ -298,7 +298,6 @@ const dataSources: DataSourceDescriptor[] = [
         use: 'text',
         format: {
           prefix: '￥',
-          fallback: '--',
           mode: 'preset',
           preset: {
             type: 'number',

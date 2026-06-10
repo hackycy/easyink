@@ -31,6 +31,7 @@ Property schemas can store label keys directly because `PropertiesPanel.vue` res
 ## i18n Review Checklist
 
 - No new user-visible Chinese-only strings in built-in material registration unless intentionally not localized.
+- New material panel catalog groups use `materials.catalog.<id>` labels registered through bundle locale messages.
 - Decoration tooltips, material-local toolbar button titles, property titles, reject labels, placeholders, and history labels are localized.
 - Page-aware or fragment-pagination diagnostics that surface to users are stable, translated where they are Designer-facing, and use Viewer diagnostics for runtime-only failures.
 - `PropSchema.group` uses an existing group mapped by `GROUP_LABELS` in `PropertiesPanel.vue`, or the visible custom group text is intentional.
@@ -42,7 +43,7 @@ Property schemas can store label keys directly because `PropertiesPanel.vue` res
 Read `references/ai-assistant-materials.md` when AI behavior matters. In short:
 
 - Put `src/ai.ts` next to the material when it should be generated or selected by Assistant.
-- Include `AIMaterialDescriptor.knowledge` when Assistant needs reliable material selection, binding, sizing, compatibility, or scenario fitness.
+- Include `AIMaterialDescriptor.knowledge` when Assistant needs reliable material selection, binding, sizing, or scenario fitness.
 - Register built-in descriptors through Designer `aiDescriptor`; `packages/builtin/src/ai.ts` is derived from the Designer bundle.
 - Register custom material descriptors on the Designer material entry; Assistant gets them from the live store manifest.
 
@@ -51,7 +52,7 @@ Assistant reads canonical material types, binding rules, props, and optional AI 
 ## AI Review Smells
 
 - AI descriptor mentions a prop that does not exist or omits required specialized schema rules.
-- Descriptor binding says `single` or `multi` but `knowledge.bindingSpec.mode` says something incompatible.
+- Descriptor binding says `single` or `multi` but `knowledge.bindingSpec.mode` says a different data shape.
 - `knowledge.sizing.defaultSize` does not match the factory default size in mm.
 - Custom material tries to update prompt text or a static AI list instead of registering Designer `aiDescriptor`.
 
@@ -67,8 +68,8 @@ Choose focused tests based on risk:
 - Viewer measure: runtime height/width, layout cache behavior, diagnostics.
 - Fragment pagination: split behavior under `auto-sheets`, preservation of `sourceNodeId`, and no source schema mutation.
 - Page-aware/repeat overlay: excluded from layout inputs, copied after pagination, receives `__pageNumber` and `__totalPages`.
-- Datasource drop: accepted/rejected zones, collection prefix compatibility, cell binding shape, or data-contract target field mapping.
-- Data-contract resolver: shared record collection, top-level array index alignment, source-scoped root fallback, invalid relation diagnostics.
+- Datasource drop: accepted/rejected zones, collection prefix checks, cell binding shape, or data-contract target field mapping.
+- Data-contract resolver: shared record collection, top-level array index alignment, source-scoped root resolution, invalid relation diagnostics.
 - Registration: built-in Designer and Viewer registries include the new material.
 
 Useful commands:

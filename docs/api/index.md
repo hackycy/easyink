@@ -28,7 +28,7 @@ description: EasyInk API 索引：快速定位公开能力的包入口，涵盖 
 | `createDefaultSaveBranchMenu` | Function | 创建默认保存分支菜单状态 |
 | `tableSectionFilter` | Function | 表格属性面板过滤器 |
 
-类型导出：`DocumentSchema`, `DocumentSchemaInput`, `MaterialNode`, `DataSourceDescriptor`, `Contribution`, `ContributionContext`, `Command`, `PanelDescriptor`, `ToolbarActionDescriptor`, `DesignerConfirmRequest`, `DesignerConfirmSeverity`, `DesignerInteractionProvider`, `DesignerMaterialBundle`, `DesignerMaterialRegistration`, `DesignerCatalogRegistration`, `MaterialCapabilities`, `MaterialExtensionFactory`, `LazyMaterialExtensionFactory`, `MaterialBindingDefinition`, `TemplateAutoSaveOptions`, `PreferenceProvider`, `PersistableWorkbenchState`, `LocaleMessages`, `FontDescriptor`, `FontProvider`
+类型导出：`DocumentSchema`, `DocumentSchemaInput`, `MaterialNode`, `DataSourceDescriptor`, `Contribution`, `ContributionContext`, `Command`, `PanelDescriptor`, `ToolbarActionDescriptor`, `DesignerConfirmRequest`, `DesignerConfirmSeverity`, `DesignerInteractionProvider`, `DesignerMaterialBundle`, `DesignerMaterialRegistration`, `DesignerCatalogGroupRegistration`, `DesignerCatalogRegistration`, `MaterialCatalogGroup`, `MaterialCatalogEntry`, `MaterialCapabilities`, `MaterialExtensionFactory`, `LazyMaterialExtensionFactory`, `MaterialBindingDefinition`, `TemplateAutoSaveOptions`, `PreferenceProvider`, `PersistableWorkbenchState`, `LocaleMessages`, `FontDescriptor`, `FontProvider`
 
 ## @easyink/core
 
@@ -87,9 +87,8 @@ description: EasyInk API 索引：快速定位公开能力的包入口，涵盖 
 | `isValidSchema` | Function | 判断对象是否为完整合法 Schema |
 | `serializeSchema` | Function | 序列化 Schema 为 JSON 字符串 |
 | `deserializeSchema` | Function | 反序列化并校验 Schema |
-| `isCompatibleVersion` | Function | 判断 Schema 主版本是否兼容 |
 
-类型导出：`DocumentSchema`, `DocumentSchemaInput`, `DocumentMeta`, `PageSchema`, `PageModelConfig`, `DocumentLayoutConfig`, `PaginationConfig`, `ReflowConfig`, `MaterialNode`, `TableNode`, `TableSchema`, `BindingRef`, `AnimationSchema`, `SchemaValidationIssue`, `SchemaDeserializeError`, `SchemaMigrationError`
+类型导出：`DocumentSchema`, `DocumentSchemaInput`, `DocumentMeta`, `PageSchema`, `PageModelConfig`, `DocumentLayoutConfig`, `PaginationConfig`, `ReflowConfig`, `MaterialNode`, `TableNode`, `TableSchema`, `BindingRef`, `AnimationSchema`, `SchemaValidationIssue`, `SchemaDeserializeError`
 
 ## @easyink/export-runtime
 
@@ -209,7 +208,6 @@ electron-hiprint 官方前端集成。
 |------|------|------|
 | `createHiPrintClient` | Function | 创建并管理 `vue-plugin-hiprint` 连接的客户端 |
 | `createHiPrintRuntimeClient` | Function | 包装业务已有的 HiPrint runtime |
-| `createLegacyHiPrintClient` | Function | `createHiPrintRuntimeClient` 的兼容别名 |
 | `HiPrintClient` | Class | HiPrint 连接、设备和打印提交客户端 |
 | `HiPrintRuntimeClient` | Class | 只负责打印提交的 runtime adapter |
 | `DEFAULT_HIPRINT_URL` | Constant | 默认服务地址 `http://localhost:17521` |
@@ -226,7 +224,6 @@ LODOP/C-Lodop 官方前端集成。
 |------|------|------|
 | `createLodopClient` | Function | 创建并管理 LODOP script、runtime、设备和打印提交的客户端 |
 | `createLodopRuntimeClient` | Function | 包装业务已有的 LODOP runtime |
-| `createLegacyLodopClient` | Function | `createLodopRuntimeClient` 的兼容别名 |
 | `LodopClient` | Class | LODOP script 加载、设备枚举和打印提交客户端 |
 | `LodopRuntimeClient` | Class | 只负责打印提交的 runtime adapter |
 | `DEFAULT_CLODOP_SCRIPT_URLS` | Constant | 默认 C-Lodop script 地址 |

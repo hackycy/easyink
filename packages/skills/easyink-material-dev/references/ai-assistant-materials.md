@@ -14,7 +14,7 @@ Use this reference when a material should be generated, selected, repaired, or r
 - `packages/assistant/orchestrator/src/prompts.ts`: linear Assistant pipeline builds a lightweight Material Router index from manifest `ai` and `ai.knowledge`, then expands only the selected manifest into layout/schema/repair prompts.
 - `packages/assistant/orchestrator/src/agents.ts`: Material Router Agent selects the minimal registered Designer material set before layout and schema generation.
 - `packages/assistant/material-knowledge/src/from-manifest.ts`: builds `MaterialKnowledgeRegistry` from `entry.knowledge` or `entry.ai.knowledge`, falling back to synthesized minimal knowledge from plain `ai`.
-- `packages/assistant/tool-registry/src/tools/material-tools.ts`: exposes registry-backed material queries, binding specs, compatibility, and sizing.
+- `packages/assistant/tool-registry/src/tools/material-tools.ts`: exposes registry-backed material queries, binding specs, fit checks, and sizing.
 - `packages/assistant/orchestrator/src/composer/agent.ts`: Composer Agent builds a registry from `input.materialManifest` and calls material/data/layout/schema tools.
 
 Useful architecture docs:
@@ -41,7 +41,7 @@ export const xAIMaterialDescriptor = {
     'Use props.content for static text and binding for runtime values.',
   ],
   schemaRules: [
-    'Do not use legacy aliases.',
+    'Use the canonical material type.',
   ],
   examples: [
     { content: 'Example', fontSize: 4.23 },
@@ -86,7 +86,7 @@ Keep `description`, `usage`, `schemaRules`, `examples`, and `knowledge` short an
 - `fitness`: scenario-based scoring that drives Material Router selection and selected-manifest recommendations. See "Fitness and Scenario Coverage" below.
 - `properties`: optional structured property specs. Add only when the plain `properties` string list is not enough.
 
-If `knowledge` is omitted, Assistant can still synthesize minimal knowledge from `binding` and `properties`, but selection, sizing, binding, and compatibility will be weaker.
+If `knowledge` is omitted, Assistant can still synthesize minimal knowledge from `binding` and `properties`, but selection, sizing, binding, and scenario fit will be weaker.
 
 ## Fitness and Scenario Coverage
 
@@ -179,7 +179,7 @@ Current flow:
    - Schema repair uses the selected material context and prompt context; must not invent unregistered or unselected types.
 5. Composer Agent:
    - `createRegistryFromManifest()` builds `MaterialKnowledgeRegistry`.
-   - material tools answer `query_material`, `get_binding_spec`, `check_compatibility`, and `get_material_sizing`.
+   - material tools answer material queries, binding specs, fit checks, and sizing questions.
 
 ## Review Checklist
 

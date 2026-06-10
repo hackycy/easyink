@@ -13,6 +13,7 @@ export type {
 export { DesignerInteractionService } from './interactions'
 export { registerMaterialBundle, tableSectionFilter } from './materials/registry'
 export type {
+  DesignerCatalogGroupRegistration,
   DesignerCatalogRegistration,
   DesignerMaterialBundle,
   DesignerMaterialRegistration,

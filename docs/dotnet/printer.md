@@ -136,6 +136,6 @@ Raw 和 Sumatra 都是按打印机名称片段匹配，大小写不敏感。
 }
 ```
 
-命中顺序来自 Engine：先 SumatraPDF fallback，再 ESC/POS raw，最后默认 PDFium/GDI。不要把同一台打印机同时放进两个列表，除非你明确知道想让 Sumatra 优先。
+命中顺序来自 Engine：先 SumatraPDF 通道，再 ESC/POS raw，最后默认 PDFium/GDI。不要把同一台打印机同时放进两个列表，除非你明确知道想让 Sumatra 优先。
 
 关于 Printer 应用，目前知道这些就够用了。接口细节继续看 [API 参考](/dotnet/api-reference)。

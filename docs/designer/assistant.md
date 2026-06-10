@@ -274,15 +274,6 @@ EASYINK_ASSISTANT_LLM_MODEL=gpt-5-mini
 OPENAI_API_KEY=sk-your-key
 ```
 
-OpenAI-compatible 服务也走同一套 OpenAI 客户端，只是多传一个 base URL：
-
-```dotenv
-EASYINK_ASSISTANT_LLM_PROVIDER=openai-compatible
-EASYINK_ASSISTANT_LLM_BASE_URL=https://api.deepseek.com
-EASYINK_ASSISTANT_LLM_MODEL=deepseek-chat
-OPENAI_API_KEY=your-key
-```
-
 Anthropic 则换成：
 
 ```dotenv
@@ -301,7 +292,7 @@ ANTHROPIC_API_KEY=sk-ant-your-key
 
 ```dotenv
 EASYINK_ASSISTANT_REQUEST_LLM_CONFIG=1
-EASYINK_ASSISTANT_REQUEST_LLM_PROVIDERS=openai,openai-compatible,anthropic
+EASYINK_ASSISTANT_REQUEST_LLM_PROVIDERS=openai,anthropic
 EASYINK_ASSISTANT_REQUEST_LLM_ALLOWED_BASE_URLS=https://api.openai.com,https://api.deepseek.com
 EASYINK_ASSISTANT_REQUEST_LLM_PRIVATE_BASE_URL=0
 EASYINK_ASSISTANT_REQUEST_LLM_INSECURE_BASE_URL=0
@@ -319,7 +310,6 @@ const llmConfig = createBrowserAssistantLLMConfigService({
   persistence: 'session',
   providers: [
     { provider: 'openai', label: 'OpenAI', model: 'gpt-5-mini' },
-    { provider: 'openai-compatible', label: 'DeepSeek', baseURL: 'https://api.deepseek.com', model: 'deepseek-chat' },
     { provider: 'anthropic', label: 'Anthropic', model: 'claude-sonnet-4-5' },
   ],
 })

@@ -55,7 +55,7 @@ Task-specific references:
 9. Add `measure()` only when runtime content changes physical size. Add `fragmentPaginator` only when the measured material can split across `auto-sheets`; preserve `sourceNodeId` and avoid source schema mutation.
 10. If measurement or runtime data owns a dimension, return `MaterialDesignerExtension.resolveControlPolicy()` and also guard any deep-edit or behavior path that could mutate the blocked dimension.
 11. Register both sides. Built-ins update `packages/builtin/src/designer.ts`, `packages/builtin/src/viewer.ts`, `packages/builtin/src/bindings.ts`, and `packages/builtin/package.json`. Custom hosts register Designer through `setupStore` and Viewer through `viewer.registerMaterial(type, binding, extension)`.
-12. Expose catalog entries deliberately. Built-ins visible in the material panel must appear in `catalogs`; Designer registration alone is not panel exposure. A Designer-only material renders `[Unknown: type]` in Viewer.
+12. Expose catalog entries deliberately. Built-ins visible in the material panel must appear in `catalogs` with a stable group `id`, translatable group `label`, optional `order`, and item entries. Designer registration alone is not panel exposure. A Designer-only material renders `[Unknown: type]` in Viewer.
 13. Keep heavyweight Designer rendering behind `lazyFactory` only. Material type, binding definition, prop schemas, locale messages, catalog metadata, default factory, and AI descriptor stay synchronous; Viewer registration stays synchronous.
 14. Add `propSchemas` for simple props-bag fields. Use custom `read` and `commit`, `requestPropertyPanel()`, or `SelectionType.getPropertySchema()` when data lives outside `node.props` or a write touches multiple fields. Use `editorOptions.valueInput` for host/file input; do not store `File`, local paths, file names, picker state, or import state in Schema.
 15. Use shared layout behavior props instead of material-local duplicates. `createLayoutBehaviorPropSchemas()` owns placement, break, and repeat UI visibility based on page strategy.
@@ -85,7 +85,7 @@ Load only the reference needed for the current task:
 - Use `continuous + continuous-paper + stack-flow + flow-y + none` for continuous paper templates.
 - Do not branch material behavior solely on `page.mode`; read the owning page strategy field instead: `page.pageModel`, `page.layout`, `page.reflow`, or `page.pagination`.
 - Designer and Viewer must both know the material type.
-- Built-in materials that should be visible in the material panel must be present in `catalogs`; test that catalog entries point to registered materials and that the expected panel group includes the new type.
+- Built-in materials that should be visible in the material panel must be present in `catalogs`; test that catalog entries point to registered materials, the expected panel group includes the new type, and any new catalog label is registered in bundle locale messages.
 - Use `convertUnit()` inside default-node factories when default physical sizes are authored in mm.
 - Escape all user-controlled strings before HTML interpolation. Viewer HTML must be wrapped with `trustedViewerHtml()`.
 - Use `context.resolvedProps` or `node.props` after Viewer projection; do not hand-resolve ordinary `node.binding` inside material renderers. The exception is `DataContractBinding`: structured materials consume it through `resolveMaterialDataContract()`, not through ad hoc `context.data` walking.

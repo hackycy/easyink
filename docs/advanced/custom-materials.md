@@ -321,6 +321,10 @@ catalogs: [
 ]
 ```
 
+:::tip 提示
+如果你使用 `builtin: 'none'`，内置物料包不会注册 `materials.catalog.utility` 这类分类翻译。复用内置分类 id 时，如果页面仍要显示这个分类标题，请在自己的 bundle `localeMessages` 里一起注册对应翻译。
+:::
+
 关于分类，目前知道这些就够了。物料能不能被拖入、默认节点怎么创建，仍然由 `materials` 里的注册信息决定。
 
 ### 懒加载设计态渲染器 {#lazy-designer-extension}
@@ -402,7 +406,7 @@ editorOptions: {
 }
 ```
 
-选择成功后，PropertiesPanel 会把返回内容当作普通属性值提交。Schema 里仍然只保存最终值，例如 `props.content` 或 `props.src`，不要额外保存 `File`、本地路径、文件名或“来源类型”。如果宿主需要接自己的文件库，可以通过 `<EasyInkDesigner :interaction-provider>` 提供 `pickFileText(request)` 或 `pickAsset(request)`；不提供时，Designer shell 会使用浏览器能力作为 fallback。
+选择成功后，PropertiesPanel 会把返回内容当作普通属性值提交。Schema 里仍然只保存最终值，例如 `props.content` 或 `props.src`，不要额外保存 `File`、本地路径、文件名或“来源类型”。如果宿主需要接自己的文件库，可以通过 `<EasyInkDesigner :interaction-provider>` 提供 `pickFileText(request)` 或 `pickAsset(request)`；不提供时，Designer shell 会使用浏览器内置选择能力。
 
 ## 渲染设计态 {#designer-extension}
 
@@ -561,6 +565,11 @@ registerMaterialBundle(store, {
     localeMessages: salesChartLocaleMessages,
     createDefaultNode: createSalesChartNode,
     factory: createSalesChartDesignerExtension,
+  }],
+  catalogs: [{
+    id: 'chart',
+    label: 'materials.catalog.chart',
+    items: [{ type: 'sales-chart' }],
   }],
 })
 ```
@@ -737,6 +746,11 @@ registerMaterialBundle(store, {
     localeMessages: priceTagLocaleMessages,
     createDefaultNode: createPriceTagNode,
     factory: createPriceTagDesignerExtension,
+  }],
+  catalogs: [{
+    id: 'enterprise',
+    label: 'materials.catalog.enterprise',
+    items: [{ type: PRICE_TAG_TYPE }],
   }],
 })
 ```
