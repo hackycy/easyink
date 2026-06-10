@@ -6,43 +6,12 @@ description: EasyInk 自定义导出插件开发：Viewer 负责渲染页面，E
 
 导出扩展有两层：Viewer 负责拿到已渲染页面，Export Runtime 负责把输入转换成文件。
 
-先看 DOM 页面导出 PDF 的组合：
+如果你只是想把 Viewer 页面导出成 PDF 或图片，先看 [打印与导出](/viewer/print-export#official-file-export)。那里会直接使用官方插件：
 
-```ts
-import { createExportRuntime } from '@easyink/export-runtime'
-import { createDomPdfExportPlugin } from '@easyink/export-plugin-dom-pdf'
-import { toMillimeters } from '@easyink/print-core'
+- `@easyink/export-plugin-dom-pdf`
+- `@easyink/export-plugin-dom-image`
 
-const exportRuntime = createExportRuntime()
-exportRuntime.registerPlugin(createDomPdfExportPlugin())
-
-viewer.registerExporter({
-  id: 'pdf-export',
-  format: 'pdf',
-  async export(context) {
-    const pages = Array.from(
-      context.container?.querySelectorAll<HTMLElement>('.ei-viewer-page') ?? [],
-    )
-
-    return exportRuntime.exportDocument({
-      format: 'pdf',
-      input: {
-        pages,
-        pageSizes: context.renderedPages?.map(page => ({
-          widthMm: toMillimeters(page.width, page.unit),
-          heightMm: toMillimeters(page.height, page.unit),
-        })),
-      },
-      throwOnError: true,
-      onProgress: context.onProgress,
-    })
-  },
-})
-```
-
-这里 `ViewerExporter` 只负责把 Viewer 上下文整理成插件输入。真正生成 PDF 的是 `ExportFormatPlugin`。
-
-图片导出使用同一套接入方式。`@easyink/export-plugin-dom-image` 默认创建 `png` 插件；如果要导出 JPEG 或 WebP，可以用 `format` 和 `type` 创建独立插件实例。当前 Export Runtime 的插件返回值是单个 `Blob`，所以图片插件的 runtime 入口默认导出一个页面；需要多页图片时，可以直接调用 `renderPagesToImageBlobs()`。
+这一页会把它们当作参考实现，重点放在你怎么编写自己的导出插件。
 
 ## 选择接入层 {#choose-layer}
 

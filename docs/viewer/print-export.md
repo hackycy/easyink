@@ -194,24 +194,109 @@ const policy = resolvePrintPolicy({
 
 `sheetSize.source` 会告诉你尺寸来自 `schema` 还是已渲染页面。
 
-## PDF 导出路径 {#pdf-export-path}
+## 官方 PDF 与图片导出 {#official-file-export}
 
-Viewer 本身只定义导出器接口，不内置 PDF 导出实现。
+Viewer 本身只定义导出器接口，不内置 PDF 或图片编码。要快速导出文件，可以接入官方 DOM 导出插件。
+
+先注册 PDF 和 PNG 插件：
 
 ```ts
+import { createExportRuntime } from '@easyink/export-runtime'
+import { createDomImageExportPlugin } from '@easyink/export-plugin-dom-image'
+import { createDomPdfExportPlugin } from '@easyink/export-plugin-dom-pdf'
+import { toMillimeters } from '@easyink/print-core'
+
+const exportRuntime = createExportRuntime()
+
+exportRuntime.registerPlugin(createDomPdfExportPlugin())
+exportRuntime.registerPlugin(createDomImageExportPlugin())
+```
+
+然后把 Viewer 页面交给它们：
+
+```ts
+function resolvePageSizes(context) {
+  return context.renderedPages?.map(page => ({
+    widthMm: toMillimeters(page.width, page.unit),
+    heightMm: toMillimeters(page.height, page.unit),
+  }))
+}
+
+function resolveDomPages(context) {
+  return Array.from(
+    context.container?.querySelectorAll<HTMLElement>('.ei-viewer-page') ?? [],
+  )
+}
+
 viewer.registerExporter({
-  id: 'pdf-exporter',
+  id: 'pdf-export',
   format: 'pdf',
   async export(context) {
-    const pages = Array.from(
-      context.container?.querySelectorAll<HTMLElement>('.ei-viewer-page') ?? [],
-    )
+    return exportRuntime.exportDocument({
+      format: 'pdf',
+      input: {
+        pages: resolveDomPages(context),
+        pageSizes: resolvePageSizes(context),
+      },
+      throwOnError: true,
+      onProgress: context.onProgress,
+    })
+  },
+})
 
-    return renderPdfSomehow(pages, context.renderedPages ?? [])
+viewer.registerExporter({
+  id: 'png-export',
+  format: 'png',
+  async export(context) {
+    return exportRuntime.exportDocument({
+      format: 'png',
+      input: {
+        pages: resolveDomPages(context),
+        pageIndex: 0,
+        pageSizes: resolvePageSizes(context),
+      },
+      throwOnError: true,
+      onProgress: context.onProgress,
+    })
   },
 })
 ```
 
-如果你要使用官方 DOM 转 PDF 插件，继续看 [自定义导出插件](/advanced/exporters)。如果你要把 Viewer 接到打印设备，继续看 [自定义打印驱动](/advanced/print-drivers)。
+现在可以直接调用 Viewer：
+
+```ts
+const pdfBlob = await viewer.exportDocument({ format: 'pdf', throwOnError: true })
+const pngBlob = await viewer.exportDocument({ format: 'png', throwOnError: true })
+```
+
+`png` 导出里的 `pageIndex` 从 `0` 开始。如果你的预览界面有“当前页”状态，把它换成当前页索引就行。
+
+JPEG 需要一个单独的插件实例：
+
+```ts
+exportRuntime.registerPlugin(createDomImageExportPlugin({
+  id: 'jpeg-export-runtime',
+  format: 'jpeg',
+  type: 'image/jpeg',
+}))
+```
+
+然后注册 `jpeg` 导出器，调用 `exportDocument({ format: 'jpeg' })`。`input.quality` 可以控制 JPEG 质量，范围是 `0` 到 `1`。
+
+如果你想一次拿到多页图片，可以直接使用图片插件的纯函数：
+
+```ts
+import { renderPagesToImageBlobs } from '@easyink/export-plugin-dom-image'
+
+const imageBlobs = await renderPagesToImageBlobs({
+  pages: resolveDomPages(context),
+  pageSizes: resolvePageSizes(context),
+  type: 'image/png',
+})
+```
+
+这里会返回 `Blob[]`。你可以逐个下载，也可以在业务层打包成 zip。
+
+如果你要把 Viewer 接到打印设备，继续看 [自定义打印驱动](/advanced/print-drivers)。如果你要自己实现一种新导出格式，继续看 [自定义导出插件](/advanced/exporters)。
 
 关于打印与导出，目前知道这些就够用了。排查错误时可以继续看 [诊断系统](./diagnostics)。
