@@ -1,4 +1,4 @@
-import type { LazyMaterialExtensionFactory, MaterialCatalogEntry, MaterialDefinition, MaterialDesignerExtension, MaterialExtensionFactory } from '../types'
+import type { LazyMaterialExtensionFactory, MaterialCatalogEntry, MaterialCatalogGroup, MaterialDefinition, MaterialDesignerExtension, MaterialExtensionFactory } from '../types'
 import type { DesignerStore } from './designer-store'
 import { markRaw } from 'vue'
 import { createMaterialExtensionContext } from '../materials/extension-context'
@@ -66,7 +66,7 @@ export class MaterialRegistry {
   private lazyFactories = markRaw(new Map<string, LazyMaterialExtensionFactory>())
   private loadingLazyTypes = markRaw(new Set<string>())
   private cachedExtensions = markRaw(new Map<string, MaterialDesignerExtension>())
-  private catalog: MaterialCatalogEntry[] = []
+  private catalogGroups: MaterialCatalogGroup[] = []
 
   registerMaterial(definition: MaterialDefinition): void {
     this.materials.set(definition.type, markRaw({
@@ -83,23 +83,36 @@ export class MaterialRegistry {
     return Array.from(this.materials.values())
   }
 
-  registerCatalogEntry(entry: MaterialCatalogEntry): void {
-    this.catalog.push(markRaw({
-      ...entry,
-      icon: markRaw(entry.icon),
-    }))
+  registerCatalogGroup(group: MaterialCatalogGroup): void {
+    const normalized = markRaw({
+      ...group,
+      items: group.items
+        .map(entry => markRaw({
+          ...entry,
+          icon: markRaw(entry.icon),
+        }))
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+    })
+
+    const existing = this.catalogGroups.find(item => item.id === group.id)
+    if (existing) {
+      existing.items.push(...normalized.items)
+      existing.items.sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+      existing.label = normalized.label
+      existing.order = normalized.order
+      return
+    }
+
+    this.catalogGroups.push(normalized)
+    this.catalogGroups.sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
   }
 
   getCatalog(): MaterialCatalogEntry[] {
-    return this.catalog
+    return this.catalogGroups.flatMap(group => group.items)
   }
 
-  getQuickMaterials(): MaterialCatalogEntry[] {
-    return this.catalog.filter(entry => entry.priority === 'quick')
-  }
-
-  getGroupedMaterials(group: string): MaterialCatalogEntry[] {
-    return this.catalog.filter(entry => entry.group === group && entry.priority !== 'quick')
+  getCatalogGroups(): MaterialCatalogGroup[] {
+    return this.catalogGroups
   }
 
   registerDesignerFactory(type: string, factory: MaterialExtensionFactory): void {
@@ -146,7 +159,7 @@ export class MaterialRegistry {
     this.lazyFactories.clear()
     this.loadingLazyTypes.clear()
     this.cachedExtensions.clear()
-    this.catalog = []
+    this.catalogGroups = []
   }
 
   private loadLazyDesignerFactory(type: string, store: DesignerStore): void {

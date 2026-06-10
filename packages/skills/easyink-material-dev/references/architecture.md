@@ -200,7 +200,7 @@ Built-in materials:
 - `localeMessages`: material-owned Designer locale messages for catalog labels, property labels, material-local actions, placeholders, history labels, and data-contract labels.
 - `sectionFilter`: hide or show property panel sections.
 
-`quickMaterialTypes` creates quick toolbar entries. `groupedCatalog` creates grouped catalog entries for data, chart, svg, and utility groups. A built-in material can be fully registered for Designer and Viewer but still be invisible in the material panel if its type is missing from both catalog lists; add a regression test when introducing a new built-in material.
+`catalogs` creates material panel groups. Each group owns a stable `id`, a translatable `label`, optional ordering, and item entries. A built-in material can be fully registered for Designer and Viewer but still be invisible in the material panel if its type is missing from every catalog group; add a regression test when introducing a new built-in material.
 
 ## Contribution Boundary
 

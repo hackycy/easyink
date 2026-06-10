@@ -42,17 +42,23 @@ export interface BuiltinDesignerMaterialRegistration {
 export interface BuiltinDesignerCatalogRegistration {
   id?: string
   type: string
-  group: 'data' | 'chart' | 'svg' | 'utility'
   label?: string
   icon?: Component
   createDefaultNode?: (input?: Partial<MaterialNode>, unit?: string) => MaterialNode
   dragData?: string
+  order?: number
+}
+
+export interface BuiltinDesignerCatalogGroupRegistration {
+  id: string
+  label: string
+  order?: number
+  items: BuiltinDesignerCatalogRegistration[]
 }
 
 export interface BuiltinDesignerMaterialBundle {
   materials: BuiltinDesignerMaterialRegistration[]
-  quickMaterialTypes: string[]
-  groupedCatalog: BuiltinDesignerCatalogRegistration[]
+  catalogs: BuiltinDesignerCatalogGroupRegistration[]
   localeMessages?: {
     messages?: BuiltinLocaleMessages
     locales?: Record<string, BuiltinLocaleMessages>

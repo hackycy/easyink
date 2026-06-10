@@ -4,6 +4,10 @@ import { builtinDesignerMaterialSets, createBuiltinDesignerMaterialBundle } from
 
 const builtinDesignerMaterialBundle = createBuiltinDesignerMaterialBundle('all')
 
+function catalogItemTypes(groupId: string, bundle = builtinDesignerMaterialBundle): string[] {
+  return bundle.catalogs.find(group => group.id === groupId)?.items.map(item => item.type) ?? []
+}
+
 describe('builtin designer material bundle', () => {
   it('exposes all, basic, and none material sets', () => {
     expect(builtinDesignerMaterialSets.all.materials.length).toBeGreaterThan(0)
@@ -11,40 +15,35 @@ describe('builtin designer material bundle', () => {
     expect(builtinDesignerMaterialSets.basic.materials.map(material => material.type)).toContain('svg')
     expect(builtinDesignerMaterialSets.basic.materials.some(material => material.category === 'chart')).toBe(false)
     expect(builtinDesignerMaterialSets.basic.materials.map(material => material.type)).not.toContain('signature')
-    expect(builtinDesignerMaterialSets.basic.quickMaterialTypes).not.toContain('signature')
-    expect(builtinDesignerMaterialSets.basic.groupedCatalog.map(entry => entry.group)).not.toContain('chart')
+    expect(catalogItemTypes('basic', builtinDesignerMaterialSets.basic)).not.toContain('signature')
+    expect(builtinDesignerMaterialSets.basic.catalogs.map(group => group.id)).not.toContain('chart')
     expect(builtinDesignerMaterialSets.none).toEqual({
       materials: [],
-      quickMaterialTypes: [],
-      groupedCatalog: [],
+      catalogs: [],
     })
   })
 
-  it('exposes every grouped catalog entry as a registered material', () => {
+  it('exposes every catalog entry as a registered material', () => {
     const materialTypes = new Set(builtinDesignerMaterialBundle.materials.map(material => material.type))
 
-    for (const entry of builtinDesignerMaterialBundle.groupedCatalog)
-      expect(materialTypes.has(entry.type)).toBe(true)
+    for (const group of builtinDesignerMaterialBundle.catalogs) {
+      for (const entry of group.items)
+        expect(materialTypes.has(entry.type)).toBe(true)
+    }
   })
 
   it('shows scatter chart in the chart catalog group', () => {
-    expect(builtinDesignerMaterialBundle.groupedCatalog).toContainEqual({
-      type: 'chart-scatter',
-      group: 'chart',
-    })
+    expect(catalogItemTypes('chart')).toContain('chart-scatter')
   })
 
   it('shows gauge chart in the chart catalog group', () => {
-    expect(builtinDesignerMaterialBundle.groupedCatalog).toContainEqual({
-      type: 'chart-gauge',
-      group: 'chart',
-    })
+    expect(catalogItemTypes('chart')).toContain('chart-gauge')
   })
 
   it('shows signature as a non-bindable basic quick material', () => {
     const material = builtinDesignerMaterialBundle.materials.find(item => item.type === 'signature')
 
-    expect(builtinDesignerMaterialBundle.quickMaterialTypes).toContain('signature')
+    expect(catalogItemTypes('basic')).toContain('signature')
     expect(material?.category).toBe('basic')
     expect(material?.binding).toEqual({ kind: 'none' })
     expect(material?.capabilities.bindable).toBe(false)
@@ -55,17 +54,11 @@ describe('builtin designer material bundle', () => {
   })
 
   it('shows radar chart in the chart catalog group', () => {
-    expect(builtinDesignerMaterialBundle.groupedCatalog).toContainEqual({
-      type: 'chart-radar',
-      group: 'chart',
-    })
+    expect(catalogItemTypes('chart')).toContain('chart-radar')
   })
 
   it('shows ring progress in the data catalog group with custom-only formatting', () => {
-    expect(builtinDesignerMaterialBundle.groupedCatalog).toContainEqual({
-      type: 'ring-progress',
-      group: 'data',
-    })
+    expect(catalogItemTypes('data')).toContain('ring-progress')
 
     const material = builtinDesignerMaterialBundle.materials.find(item => item.type === 'ring-progress')
 
@@ -81,10 +74,7 @@ describe('builtin designer material bundle', () => {
   })
 
   it('shows progress in the data catalog group with custom-only formatting and a distinct icon', () => {
-    expect(builtinDesignerMaterialBundle.groupedCatalog).toContainEqual({
-      type: 'progress',
-      group: 'data',
-    })
+    expect(catalogItemTypes('data')).toContain('progress')
 
     const material = builtinDesignerMaterialBundle.materials.find(item => item.type === 'progress')
     const ringProgress = builtinDesignerMaterialBundle.materials.find(item => item.type === 'ring-progress')
@@ -101,10 +91,7 @@ describe('builtin designer material bundle', () => {
   })
 
   it('shows rating in the data catalog group with custom-only value binding', () => {
-    expect(builtinDesignerMaterialBundle.groupedCatalog).toContainEqual({
-      type: 'rating',
-      group: 'data',
-    })
+    expect(catalogItemTypes('data')).toContain('rating')
 
     const material = builtinDesignerMaterialBundle.materials.find(item => item.type === 'rating')
 
@@ -121,10 +108,7 @@ describe('builtin designer material bundle', () => {
   })
 
   it('shows custom ECharts in the chart catalog group with a distinct icon', () => {
-    expect(builtinDesignerMaterialBundle.groupedCatalog).toContainEqual({
-      type: 'chart-custom',
-      group: 'chart',
-    })
+    expect(catalogItemTypes('chart')).toContain('chart-custom')
 
     const chartCustom = builtinDesignerMaterialBundle.materials.find(item => item.type === 'chart-custom')
     const chartMaterialIcons = builtinDesignerMaterialBundle.materials

@@ -106,24 +106,28 @@ describe('designer store schema initialization', () => {
     expect(store.schema.groups).toEqual([])
   })
 
-  it('registers materials, catalog entries, and cached designer extensions', () => {
+  it('registers materials, catalog groups, and cached designer extensions', () => {
     const store = new DesignerStore()
     const definition = createMaterialDefinition('sample')
     const factory = vi.fn(() => ({ renderContent: () => () => {} }))
 
     store.registerMaterial(definition)
-    store.registerCatalogEntry({
-      id: 'quick-sample',
-      group: 'quick',
-      label: 'Sample',
-      icon: definition.icon,
-      materialType: 'sample',
-      priority: 'quick',
+    store.registerCatalogGroup({
+      id: 'basic',
+      label: 'materials.catalog.basic',
+      items: [{
+        id: 'basic-sample',
+        groupId: 'basic',
+        label: 'Sample',
+        icon: definition.icon,
+        materialType: 'sample',
+      }],
     })
     store.registerDesignerFactory('sample', factory)
 
     expect(store.getMaterial('sample')).toMatchObject({ type: 'sample', name: 'Sample' })
-    expect(store.getQuickMaterials()).toHaveLength(1)
+    expect(store.getCatalogGroups()).toHaveLength(1)
+    expect(store.getCatalogGroups()[0]?.items).toHaveLength(1)
     expect(store.getCatalog()).toHaveLength(1)
     expect(store.getDesignerExtension('sample')).toBe(store.getDesignerExtension('sample'))
     expect(factory).toHaveBeenCalledTimes(1)
@@ -209,8 +213,11 @@ describe('designer store schema initialization', () => {
           },
         },
       }],
-      quickMaterialTypes: ['sample'],
-      groupedCatalog: [],
+      catalogs: [{
+        id: 'basic',
+        label: 'materials.catalog.basic',
+        items: [{ type: 'sample' }],
+      }],
     })
 
     expect(store.t('bundle.title')).toBe('Bundle Title')

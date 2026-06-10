@@ -21,6 +21,9 @@ export const PRICE_TAG_TYPE = 'price-tag'
 export const priceTagLocaleMessages = {
   messages: {
     materials: {
+      catalog: {
+        enterprise: '企业物料',
+      },
       priceTag: {
         name: '价格签',
         property: {
@@ -37,6 +40,9 @@ export const priceTagLocaleMessages = {
   locales: {
     'zh-CN': {
       materials: {
+        catalog: {
+          enterprise: '企业物料',
+        },
         priceTag: {
           name: '价格签',
           property: {
@@ -52,6 +58,9 @@ export const priceTagLocaleMessages = {
     },
     'en-US': {
       materials: {
+        catalog: {
+          enterprise: 'Enterprise',
+        },
         priceTag: {
           name: 'Price Tag',
           property: {
@@ -133,8 +142,13 @@ export const priceTagDesignerBundle = {
       ],
     },
   ],
-  quickMaterialTypes: [PRICE_TAG_TYPE],
-  groupedCatalog: [{ type: PRICE_TAG_TYPE, group: 'utility' }],
+  catalogs: [
+    {
+      id: 'enterprise',
+      label: 'materials.catalog.enterprise',
+      items: [{ type: PRICE_TAG_TYPE }],
+    },
+  ],
 } satisfies DesignerMaterialBundle
 
 export function registerPriceTagDesigner(store: DesignerStore) {
@@ -240,12 +254,74 @@ function setupStore(store) {
 
 - `materials`：物料定义、属性面板字段、设计态 factory。
 - `localeMessages`：随物料注册的多语言文案，通常放在 material entry 上。
-- `quickMaterialTypes`：出现在物料面板的“基础”区域。
-- `groupedCatalog`：出现在 `data`、`chart`、`svg`、`utility` 分组里。
+- `catalogs`：物料面板分类，包含分类 id、标题翻译 key、排序和分类内物料。
 
 :::tip 提示
-物料面板里的图标来自 `MaterialCatalogEntry.icon`。如果你只在 `materials` 里传 `icon`，注册器会自动把它带到 quick 和 grouped catalog；如果 grouped catalog 想用另一个图标，也可以在 `groupedCatalog` 项里单独传 `icon`。
+物料面板里的图标来自 `MaterialCatalogEntry.icon`。如果你只在 `materials` 里传 `icon`，注册器会自动把它带到 `catalogs` 项里；如果某个分类里的入口想用另一个图标，也可以在 `catalogs[].items` 项里单独传 `icon`。
 :::
+
+### 物料面板分类 {#material-catalogs}
+
+`catalogs` 只负责物料面板怎么展示，不负责定义物料能力。
+
+```ts
+export const priceTagDesignerBundle = {
+  materials: [
+    // 这里注册 price-tag 的能力、属性、设计态渲染器
+  ],
+  catalogs: [
+    {
+      id: 'enterprise',
+      label: 'materials.catalog.enterprise',
+      order: 60,
+      items: [
+        { type: PRICE_TAG_TYPE },
+      ],
+    },
+  ],
+  localeMessages: {
+    messages: {
+      materials: {
+        catalog: {
+          enterprise: '企业物料',
+        },
+      },
+    },
+    locales: {
+      'en-US': {
+        materials: {
+          catalog: {
+            enterprise: 'Enterprise',
+          },
+        },
+      },
+    },
+  },
+} satisfies DesignerMaterialBundle
+```
+
+这段配置会新增一个“企业物料”分类，并把 `price-tag` 放进去。
+
+`catalogs` 里几个字段的分工是固定的：
+
+- `id`：分类稳定标识。相同 `id` 会合并到同一个分类，所以你可以把自定义物料追加到内置 `data`、`svg`、`utility` 分类里。
+- `label`：分类标题的翻译 key。新增分类时，记得在 `localeMessages` 里一起注册翻译。
+- `order`：分类排序。分类里的物料也可以在 `items` 上写 `order`。
+- `items`：分类里的入口。最小只需要 `{ type }`，其它字段默认从 `materials` 里的物料定义继承。
+
+如果你只是想把物料追加到已有分类，可以复用内置分类 id：
+
+```ts
+catalogs: [
+  {
+    id: 'utility',
+    label: 'materials.catalog.utility',
+    items: [{ type: PRICE_TAG_TYPE }],
+  },
+]
+```
+
+关于分类，目前知道这些就够了。物料能不能被拖入、默认节点怎么创建，仍然由 `materials` 里的注册信息决定。
 
 ### 懒加载设计态渲染器 {#lazy-designer-extension}
 
@@ -272,8 +348,13 @@ registerMaterialBundle(store, {
       localeMessages: salesEchartsLocaleMessages,
     },
   ],
-  quickMaterialTypes: [],
-  groupedCatalog: [{ type: 'sales-echarts', group: 'chart' }],
+  catalogs: [
+    {
+      id: 'chart',
+      label: 'materials.catalog.chart',
+      items: [{ type: 'sales-echarts' }],
+    },
+  ],
 })
 ```
 

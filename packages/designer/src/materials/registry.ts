@@ -1,6 +1,6 @@
 import type { AIMaterialDescriptor } from '@easyink/shared'
 import type { DesignerStore } from '../store/designer-store'
-import type { LazyMaterialExtensionFactory, LocaleMessageRegistration, MaterialCapabilities, MaterialCatalogEntry, MaterialDefinition, MaterialExtensionFactory, PanelSectionId, PropSchema } from '../types'
+import type { LazyMaterialExtensionFactory, LocaleMessageRegistration, MaterialCapabilities, MaterialCatalogEntry, MaterialCatalogGroup, MaterialDefinition, MaterialExtensionFactory, PanelSectionId, PropSchema } from '../types'
 
 // ─── Material definitions ────────────────────────────────────────────
 
@@ -24,17 +24,23 @@ export interface DesignerMaterialRegistration {
 export interface DesignerCatalogRegistration {
   id?: string
   type: string
-  group: MaterialCatalogEntry['group']
   label?: string
   icon?: MaterialCatalogEntry['icon']
   createDefaultNode?: MaterialDefinition['createDefaultNode']
   dragData?: string
+  order?: number
+}
+
+export interface DesignerCatalogGroupRegistration {
+  id: string
+  label: string
+  order?: number
+  items: DesignerCatalogRegistration[]
 }
 
 export interface DesignerMaterialBundle {
   materials: DesignerMaterialRegistration[]
-  quickMaterialTypes: string[]
-  groupedCatalog: DesignerCatalogRegistration[]
+  catalogs: DesignerCatalogGroupRegistration[]
   localeMessages?: LocaleMessageRegistration
 }
 
@@ -55,7 +61,7 @@ function tableSectionFilter(sectionId: PanelSectionId): boolean {
  * on the given DesignerStore.
  *
  * Architecture ref: 11.1 (MaterialDefinition), 11.2 (catalog hierarchy),
- *                   10.2 (quick + grouped material bar)
+ *                   10.2 (material catalog groups)
  */
 export function registerMaterialBundle(store: DesignerStore, bundle: DesignerMaterialBundle): () => void {
   const unregisterLocaleMessages: Array<() => void> = []
@@ -86,37 +92,32 @@ export function registerMaterialBundle(store: DesignerStore, bundle: DesignerMat
       store.registerDesignerFactory(entry.type, entry.factory)
   }
 
-  // Register quick material catalog entries
-  for (const type of bundle.quickMaterialTypes) {
-    const def = store.getMaterial(type)
-    if (!def)
+  for (const group of bundle.catalogs) {
+    const items: MaterialCatalogEntry[] = []
+    for (const entry of group.items) {
+      const def = store.getMaterial(entry.type)
+      if (!def)
+        continue
+      items.push({
+        id: entry.id ?? `${group.id}-${entry.type}`,
+        groupId: group.id,
+        label: entry.label ?? def.name,
+        icon: entry.icon ?? def.icon,
+        materialType: entry.type,
+        createDefaultNode: entry.createDefaultNode,
+        dragData: entry.dragData,
+        order: entry.order,
+      })
+    }
+    if (items.length === 0)
       continue
-    store.registerCatalogEntry({
-      id: `quick-${type}`,
-      group: 'quick',
-      label: def.name,
-      icon: def.icon,
-      materialType: type,
-      priority: 'quick',
-    })
-  }
-
-  // Register grouped material catalog entries
-  for (const entry of bundle.groupedCatalog) {
-    const { type, group } = entry
-    const def = store.getMaterial(type)
-    if (!def)
-      continue
-    store.registerCatalogEntry({
-      id: entry.id ?? `grouped-${type}`,
-      group,
-      label: entry.label ?? def.name,
-      icon: entry.icon ?? def.icon,
-      materialType: type,
-      createDefaultNode: entry.createDefaultNode,
-      dragData: entry.dragData,
-      priority: 'grouped',
-    })
+    const catalogGroup: MaterialCatalogGroup = {
+      id: group.id,
+      label: group.label,
+      order: group.order,
+      items,
+    }
+    store.registerCatalogGroup(catalogGroup)
   }
 
   return () => {

@@ -225,14 +225,21 @@ export interface MaterialCapabilities {
 
 export interface MaterialCatalogEntry {
   id: string
-  group: 'quick' | 'data' | 'chart' | 'svg' | 'utility'
+  groupId: string
   label: string
   icon: MaterialIcon
   materialType: string
   createDefaultNode?: MaterialDefinition['createDefaultNode']
   dragData?: string
   useTokens?: string[]
-  priority?: 'quick' | 'grouped'
+  order?: number
+}
+
+export interface MaterialCatalogGroup {
+  id: string
+  label: string
+  order?: number
+  items: MaterialCatalogEntry[]
 }
 
 // ─── Material Extensions (re-exported from @easyink/core) ─────────

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { MaterialCatalogEntry } from '../types'
+import type { MaterialCatalogEntry, MaterialCatalogGroup } from '../types'
 import { AddMaterialCommand } from '@easyink/core'
 import { computed, inject } from 'vue'
 import { useDesignerStore } from '../composables'
@@ -9,19 +9,12 @@ import { selectOne } from '../interactions/selection-api'
 const store = useDesignerStore()
 const dragDrop = inject(DESIGNER_DRAG_DROP_KEY, null)
 
-const quickMaterials = computed<MaterialCatalogEntry[]>(() => store.getQuickMaterials())
-
-const groupedCategories = computed(() => {
-  const groups = ['data', 'chart', 'svg', 'utility'] as const
-  return groups.map(group => ({
-    group,
-    label: store.t(`designer.toolbar.${group}`),
-    items: store.getGroupedMaterials(group),
-  })).filter(g => g.items.length > 0)
-})
+const visibleCatalogGroups = computed<MaterialCatalogGroup[]>(() =>
+  store.getCatalogGroups().filter(group => group.items.length > 0),
+)
 
 const hasRegisteredMaterials = computed(() =>
-  quickMaterials.value.length > 0 || groupedCategories.value.length > 0,
+  visibleCatalogGroups.value.length > 0,
 )
 
 function handleAddMaterial(entry: MaterialCatalogEntry) {
@@ -68,51 +61,31 @@ function handleKeyAdd(e: KeyboardEvent, entry: MaterialCatalogEntry) {
       </div>
     </div>
 
-    <div class="ei-material-panel__section">
+    <div
+      v-for="group in visibleCatalogGroups"
+      :key="group.id"
+      class="ei-material-panel__section"
+    >
       <div class="ei-material-panel__section-title">
-        {{ store.t('designer.panel.quickMaterials') }}
+        {{ store.t(group.label) }}
       </div>
       <div class="ei-material-panel__grid">
         <button
-          v-for="mat in quickMaterials"
-          :key="mat.id"
+          v-for="item in group.items"
+          :key="item.id"
           class="ei-material-panel__item"
           draggable="false"
-          :title="store.t(mat.label)"
-          @pointerdown="handlePointerDown($event, mat)"
-          @pointerup="handlePointerUp(mat)"
-          @keydown="handleKeyAdd($event, mat)"
+          :title="store.t(item.label)"
+          @pointerdown="handlePointerDown($event, item)"
+          @pointerup="handlePointerUp(item)"
+          @keydown="handleKeyAdd($event, item)"
           @dragstart.prevent
         >
-          <component :is="mat.icon" :size="20" :stroke-width="1.5" class="ei-material-panel__icon" />
-          <span class="ei-material-panel__label">{{ store.t(mat.label) }}</span>
+          <component :is="item.icon" :size="20" :stroke-width="1.5" class="ei-material-panel__icon" />
+          <span class="ei-material-panel__label">{{ store.t(item.label) }}</span>
         </button>
       </div>
     </div>
-
-    <template v-for="group in groupedCategories" :key="group.group">
-      <div class="ei-material-panel__section">
-        <div class="ei-material-panel__section-title">
-          {{ group.label }}
-        </div>
-        <div class="ei-material-panel__grid">
-          <button
-            v-for="item in group.items"
-            :key="item.id"
-            class="ei-material-panel__item"
-            draggable="false"
-            :title="store.t(item.label)"
-            @pointerdown="handlePointerDown($event, item)"
-            @pointerup="handlePointerUp(item)"
-            @keydown="handleKeyAdd($event, item)"
-            @dragstart.prevent
-          >
-            <component :is="item.icon" :size="20" :stroke-width="1.5" class="ei-material-panel__icon" />
-            <span class="ei-material-panel__label">{{ store.t(item.label) }}</span>
-          </button>
-        </div>
-      </div>
-    </template>
   </div>
 </template>
 

@@ -104,10 +104,15 @@ const runtimeConfig = {
 | 值 | 注册内容 | 适合场景 |
 | --- | --- | --- |
 | `'all'` | 注册全部内置物料 | 需要完整设计能力 |
-| `'basic'` | 注册物料栏里的基础快捷物料，排除签名 | 只需要文本、图片、线条、矩形、二维码、条码这类基础编辑能力 |
+| `'basic'` | 注册内置基础集合：排除图表和签名，保留文本、图片、线条、矩形、数据表格、SVG 等常用物料 | 需要常用编辑能力，但不想引入图表和签名 |
 | `'none'` | 不注册内置物料 | 你要完全使用自己的物料包 |
 
-`basic` 这里跟物料栏的“基础物料”保持一致。也就是说，它不是按 `category` 猜出来的分类，而是基于内置 bundle 里的 `quickMaterialTypes` 得到的基础集合。
+这里有两个概念容易混在一起：
+
+- `builtin: 'basic'` 控制的是“注册哪些内置物料能力”。
+- 物料栏里的“基础”“数据”“图表”等分组，来自物料 bundle 里的 `catalogs`。
+
+也就是说，`basic` 不是物料面板分类 API。它只是一个内置物料范围枚举；真正决定物料出现在哪个分类、分类标题怎么翻译、以及分类顺序的，是 `catalogs`。
 
 如果你选了 `'none'`，画布仍然能打开，但没有可拖拽的内置物料。这个模式通常要配合自定义物料 bundle 使用：
 
@@ -121,6 +126,35 @@ const runtimeConfig = {
 ```
 
 关于自定义物料 bundle 怎么写，可以继续看 [自定义物料开发](/advanced/custom-materials)。
+
+如果你要新增企业自己的分类，也是在自定义 bundle 里追加 `catalogs`：
+
+```ts
+const enterpriseMaterialBundle = {
+  materials: [
+    // 你的物料定义
+  ],
+  catalogs: [
+    {
+      id: 'enterprise',
+      label: 'materials.catalog.enterprise',
+      order: 60,
+      items: [{ type: 'price-tag' }],
+    },
+  ],
+  localeMessages: {
+    messages: {
+      materials: {
+        catalog: {
+          enterprise: '企业物料',
+        },
+      },
+    },
+  },
+}
+```
+
+`id` 是分类的稳定标识，`label` 是翻译 key，`order` 决定分类顺序。你可以复用内置的 `basic`、`data`、`chart`、`svg`、`utility` 来扩展已有分类，也可以用自己的 `enterprise`、`label`、`ticket` 这类业务分类。
 
 ## 纸张预设 {#paper-presets}
 

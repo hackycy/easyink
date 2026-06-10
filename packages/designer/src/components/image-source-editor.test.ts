@@ -310,8 +310,7 @@ function registerImageMaterialFixture(store: Store) {
         },
       },
     }],
-    quickMaterialTypes: [],
-    groupedCatalog: [],
+    catalogs: [],
   })
 }
 

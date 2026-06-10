@@ -2,7 +2,7 @@ import type { EphemeralPanelDef, FontLoadRequest, FontLoadStatus, FontManager, F
 import type { DocumentSchema, DocumentSchemaInput, ElementGroupSchema, MaterialNode } from '@easyink/schema'
 import type { PaperPreset } from '@easyink/shared'
 import type { DesignerRuntimeConfig } from '../runtime-config'
-import type { DesignerInteractionProvider, LazyMaterialExtensionFactory, LocaleMessageRegistration, LocaleMessages, MaterialCatalogEntry, MaterialDefinition, MaterialDesignerExtension, MaterialExtensionFactory, PreferenceProvider, SnapLine, StatusBarState } from '../types'
+import type { DesignerInteractionProvider, LazyMaterialExtensionFactory, LocaleMessageRegistration, LocaleMessages, MaterialCatalogEntry, MaterialCatalogGroup, MaterialDefinition, MaterialDesignerExtension, MaterialExtensionFactory, PreferenceProvider, SnapLine, StatusBarState } from '../types'
 import { CommandManager, SelectionModel } from '@easyink/core'
 import { DataSourceRegistry } from '@easyink/datasource'
 import { findNodeById, normalizeDocumentSchema } from '@easyink/schema'
@@ -321,20 +321,16 @@ export class DesignerStore {
     return this.materialRegistry.listMaterials()
   }
 
-  registerCatalogEntry(entry: MaterialCatalogEntry): void {
-    this.materialRegistry.registerCatalogEntry(entry)
+  registerCatalogGroup(group: MaterialCatalogGroup): void {
+    this.materialRegistry.registerCatalogGroup(group)
   }
 
   getCatalog(): MaterialCatalogEntry[] {
     return this.materialRegistry.getCatalog()
   }
 
-  getQuickMaterials(): MaterialCatalogEntry[] {
-    return this.materialRegistry.getQuickMaterials()
-  }
-
-  getGroupedMaterials(group: string): MaterialCatalogEntry[] {
-    return this.materialRegistry.getGroupedMaterials(group)
+  getCatalogGroups(): MaterialCatalogGroup[] {
+    return this.materialRegistry.getCatalogGroups()
   }
 
   // ─── Paper registry ───────────────────────────────────────────

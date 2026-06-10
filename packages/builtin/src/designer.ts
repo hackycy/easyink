@@ -1,4 +1,4 @@
-import type { BuiltinDesignerMaterialBundle, BuiltinDesignerMaterialSet, BuiltinPanelSectionId } from './types'
+import type { BuiltinDesignerMaterialBundle, BuiltinDesignerMaterialSet, BuiltinLocaleMessages, BuiltinPanelSectionId } from './types'
 import {
   IconBarcode,
   IconChartBar,
@@ -275,8 +275,77 @@ function tableSectionFilter(sectionId: BuiltinPanelSectionId): boolean {
   return sectionId !== 'binding'
 }
 
+const builtinCatalogLocaleMessages = {
+  messages: {
+    materials: {
+      catalog: {
+        basic: '基础',
+        data: '数据',
+        chart: '图表',
+        svg: 'SVG',
+        utility: '工具',
+      },
+    },
+  },
+  locales: {
+    'zh-CN': {
+      materials: {
+        catalog: {
+          basic: '基础',
+          data: '数据',
+          chart: '图表',
+          svg: 'SVG',
+          utility: '工具',
+        },
+      },
+    },
+    'en-US': {
+      materials: {
+        catalog: {
+          basic: 'Basic',
+          data: 'Data',
+          chart: 'Chart',
+          svg: 'SVG',
+          utility: 'Utility',
+        },
+      },
+    },
+  },
+}
+
+function mergeLocaleMessages(
+  base: NonNullable<BuiltinDesignerMaterialBundle['localeMessages']>,
+  extension: NonNullable<BuiltinDesignerMaterialBundle['localeMessages']>,
+): NonNullable<BuiltinDesignerMaterialBundle['localeMessages']> {
+  return {
+    messages: mergeLocaleObject(base.messages, extension.messages),
+    locales: {
+      ...base.locales,
+      ...Object.fromEntries(Object.entries(extension.locales ?? {}).map(([code, messages]) => [
+        code,
+        mergeLocaleObject(base.locales?.[code], messages),
+      ])),
+    },
+  }
+}
+
+function mergeLocaleObject(base?: BuiltinLocaleMessages, extension?: BuiltinLocaleMessages): BuiltinLocaleMessages {
+  const merged: BuiltinLocaleMessages = { ...(base ?? {}) }
+  for (const [key, value] of Object.entries(extension ?? {})) {
+    const current = merged[key]
+    merged[key] = isLocaleObject(current) && isLocaleObject(value)
+      ? mergeLocaleObject(current, value)
+      : value
+  }
+  return merged
+}
+
+function isLocaleObject(value: unknown): value is BuiltinLocaleMessages {
+  return typeof value === 'object' && value !== null
+}
+
 const ALL_BUILTIN_DESIGNER_MATERIAL_BUNDLE: BuiltinDesignerMaterialBundle = {
-  localeMessages: tableKernelLocaleMessages,
+  localeMessages: mergeLocaleMessages(tableKernelLocaleMessages, builtinCatalogLocaleMessages),
   materials: [
     {
       type: TEXT_TYPE,
@@ -607,34 +676,67 @@ const ALL_BUILTIN_DESIGNER_MATERIAL_BUNDLE: BuiltinDesignerMaterialBundle = {
       localeMessages: pageNumberLocaleMessages,
     },
   ],
-  quickMaterialTypes: [
-    LINE_TYPE,
-    RECT_TYPE,
-    ELLIPSE_TYPE,
-    TEXT_TYPE,
-    IMAGE_TYPE,
-    QRCODE_TYPE,
-    BARCODE_TYPE,
-    SIGNATURE_TYPE,
-  ],
-  groupedCatalog: [
-    { type: TABLE_STATIC_TYPE, group: 'data' },
-    { type: TABLE_DATA_TYPE, group: 'data' },
-    { type: FLOW_ROW_TYPE, group: 'data' },
-    { type: RING_PROGRESS_TYPE, group: 'data' },
-    { type: PROGRESS_TYPE, group: 'data' },
-    { type: RATING_TYPE, group: 'data' },
-    { type: CHART_BAR_TYPE, group: 'chart' },
-    { type: CHART_LINE_TYPE, group: 'chart' },
-    { type: CHART_PIE_TYPE, group: 'chart' },
-    { type: CHART_RADAR_TYPE, group: 'chart' },
-    { type: CHART_SCATTER_TYPE, group: 'chart' },
-    { type: CHART_GAUGE_TYPE, group: 'chart' },
-    { type: CHART_CUSTOM_TYPE, group: 'chart' },
-    { type: SVG_STAR_TYPE, group: 'svg' },
-    { type: SVG_HEART_TYPE, group: 'svg' },
-    { type: SVG_CUSTOM_TYPE, group: 'svg' },
-    { type: PAGE_NUMBER_TYPE, group: 'utility' },
+  catalogs: [
+    {
+      id: 'basic',
+      label: 'materials.catalog.basic',
+      order: 10,
+      items: [
+        { type: LINE_TYPE },
+        { type: RECT_TYPE },
+        { type: ELLIPSE_TYPE },
+        { type: TEXT_TYPE },
+        { type: IMAGE_TYPE },
+        { type: QRCODE_TYPE },
+        { type: BARCODE_TYPE },
+        { type: SIGNATURE_TYPE },
+      ],
+    },
+    {
+      id: 'data',
+      label: 'materials.catalog.data',
+      order: 20,
+      items: [
+        { type: TABLE_STATIC_TYPE },
+        { type: TABLE_DATA_TYPE },
+        { type: FLOW_ROW_TYPE },
+        { type: RING_PROGRESS_TYPE },
+        { type: PROGRESS_TYPE },
+        { type: RATING_TYPE },
+      ],
+    },
+    {
+      id: 'chart',
+      label: 'materials.catalog.chart',
+      order: 30,
+      items: [
+        { type: CHART_BAR_TYPE },
+        { type: CHART_LINE_TYPE },
+        { type: CHART_PIE_TYPE },
+        { type: CHART_RADAR_TYPE },
+        { type: CHART_SCATTER_TYPE },
+        { type: CHART_GAUGE_TYPE },
+        { type: CHART_CUSTOM_TYPE },
+      ],
+    },
+    {
+      id: 'svg',
+      label: 'materials.catalog.svg',
+      order: 40,
+      items: [
+        { type: SVG_STAR_TYPE },
+        { type: SVG_HEART_TYPE },
+        { type: SVG_CUSTOM_TYPE },
+      ],
+    },
+    {
+      id: 'utility',
+      label: 'materials.catalog.utility',
+      order: 50,
+      items: [
+        { type: PAGE_NUMBER_TYPE },
+      ],
+    },
   ],
 }
 
@@ -642,8 +744,7 @@ export function createBuiltinDesignerMaterialBundle(set: BuiltinDesignerMaterial
   if (set === 'none') {
     return {
       materials: [],
-      quickMaterialTypes: [],
-      groupedCatalog: [],
+      catalogs: [],
     }
   }
 
@@ -669,8 +770,12 @@ function filterBuiltinDesignerMaterialBundle(predicate: (material: BuiltinDesign
   return {
     localeMessages: ALL_BUILTIN_DESIGNER_MATERIAL_BUNDLE.localeMessages,
     materials,
-    quickMaterialTypes: ALL_BUILTIN_DESIGNER_MATERIAL_BUNDLE.quickMaterialTypes.filter(type => materialTypes.has(type)),
-    groupedCatalog: ALL_BUILTIN_DESIGNER_MATERIAL_BUNDLE.groupedCatalog.filter(entry => materialTypes.has(entry.type)),
+    catalogs: ALL_BUILTIN_DESIGNER_MATERIAL_BUNDLE.catalogs
+      .map(group => ({
+        ...group,
+        items: group.items.filter(entry => materialTypes.has(entry.type)),
+      }))
+      .filter(group => group.items.length > 0),
   }
 }
 
@@ -678,7 +783,9 @@ function cloneBuiltinDesignerMaterialBundle(bundle: BuiltinDesignerMaterialBundl
   return {
     localeMessages: bundle.localeMessages,
     materials: [...bundle.materials],
-    quickMaterialTypes: [...bundle.quickMaterialTypes],
-    groupedCatalog: [...bundle.groupedCatalog],
+    catalogs: bundle.catalogs.map(group => ({
+      ...group,
+      items: [...group.items],
+    })),
   }
 }

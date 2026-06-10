@@ -149,19 +149,17 @@ function makeStore(
     getCatalog: () => [
       {
         id: 'quick-text',
-        group: 'quick',
+        groupId: 'basic',
         label: 'Text',
         icon: {},
         materialType: 'text',
-        priority: 'quick',
       },
       {
         id: 'quick-line',
-        group: 'quick',
+        groupId: 'basic',
         label: 'Line',
         icon: {},
         materialType: 'line',
-        priority: 'quick',
       },
     ],
     getDesignerExtension: () => extension,
@@ -180,11 +178,10 @@ describe('useDesignerDragDrop', () => {
 
     drag.startMaterialDrag(makeDragEvent(10, 10, []), {
       id: 'quick-text',
-      group: 'quick',
+      groupId: 'basic',
       label: 'Text',
       icon: {},
       materialType: 'text',
-      priority: 'quick',
     })
     drag.onCanvasDrop(makeDragEvent(505, 505, [MATERIAL_DRAG_MIME], { [MATERIAL_DRAG_MIME]: 'text' }))
 
@@ -205,11 +202,10 @@ describe('useDesignerDragDrop', () => {
 
     drag.startMaterialDrag(makeDragEvent(10, 10, []), {
       id: 'quick-text',
-      group: 'quick',
+      groupId: 'basic',
       label: 'Text',
       icon: {},
       materialType: 'text',
-      priority: 'quick',
     })
     drag.onCanvasDrop(makeDragEvent(-40, 250, [MATERIAL_DRAG_MIME], { [MATERIAL_DRAG_MIME]: 'text' }))
 
@@ -230,11 +226,10 @@ describe('useDesignerDragDrop', () => {
 
     drag.startMaterialDrag(makeDragEvent(10, 10, []), {
       id: 'quick-text',
-      group: 'quick',
+      groupId: 'basic',
       label: 'Text',
       icon: {},
       materialType: 'text',
-      priority: 'quick',
     })
     drag.onCanvasDrop(makeDragEvent(530, 530, [MATERIAL_DRAG_MIME], { [MATERIAL_DRAG_MIME]: 'text' }))
 
@@ -253,11 +248,10 @@ describe('useDesignerDragDrop', () => {
 
     drag.startMaterialDrag(makeDragEvent(10, 10, []), {
       id: 'quick-text',
-      group: 'quick',
+      groupId: 'basic',
       label: 'Text',
       icon: {},
       materialType: 'text',
-      priority: 'quick',
     })
     expect(document.body.querySelector('.ei-designer-drag-preview__rect')).not.toBeNull()
 
@@ -278,11 +272,10 @@ describe('useDesignerDragDrop', () => {
 
     drag.startMaterialPointerDrag(makePointerDown(10, 10), {
       id: 'quick-text',
-      group: 'quick',
+      groupId: 'basic',
       label: 'Text',
       icon: {},
       materialType: 'text',
-      priority: 'quick',
     })
     dispatchPointerEvent('pointermove', 40, 40)
     const preview = document.body.querySelector('.ei-designer-drag-preview__rect') as HTMLElement | null
@@ -310,11 +303,10 @@ describe('useDesignerDragDrop', () => {
 
     drag.startMaterialPointerDrag(makePointerDown(10, 10), {
       id: 'quick-text',
-      group: 'quick',
+      groupId: 'basic',
       label: 'Text',
       icon: {},
       materialType: 'text',
-      priority: 'quick',
     })
     dispatchPointerEvent('pointerup', 220, 240)
 
@@ -334,11 +326,10 @@ describe('useDesignerDragDrop', () => {
     })
     const entry = {
       id: 'quick-text',
-      group: 'quick' as const,
+      groupId: 'basic',
       label: 'Text',
       icon: {},
       materialType: 'text',
-      priority: 'quick' as const,
     }
 
     drag.startMaterialPointerDrag(makePointerDown(10, 10, 1), entry)
@@ -366,11 +357,10 @@ describe('useDesignerDragDrop', () => {
 
     drag.startMaterialPointerDrag(makePointerDown(10, 10), {
       id: 'quick-text',
-      group: 'quick',
+      groupId: 'basic',
       label: 'Text',
       icon: {},
       materialType: 'text',
-      priority: 'quick',
     })
     dispatchPointerEvent('pointermove', 80, 90)
     dispatchPointerEvent('pointermove', 120, 130)
@@ -395,11 +385,10 @@ describe('useDesignerDragDrop', () => {
 
     drag.startMaterialPointerDrag(makePointerDown(10, 10, 7, sourceEl), {
       id: 'quick-text',
-      group: 'quick',
+      groupId: 'basic',
       label: 'Text',
       icon: {},
       materialType: 'text',
-      priority: 'quick',
     })
     dispatchPointerEvent('pointerup', 220, 240, 7)
 
@@ -419,19 +408,17 @@ describe('useDesignerDragDrop', () => {
     })
     const textEntry = {
       id: 'quick-text',
-      group: 'quick' as const,
+      groupId: 'basic',
       label: 'Text',
       icon: {},
       materialType: 'text',
-      priority: 'quick' as const,
     }
     const lineEntry = {
       id: 'quick-line',
-      group: 'quick' as const,
+      groupId: 'basic',
       label: 'Line',
       icon: {},
       materialType: 'line',
-      priority: 'quick' as const,
     }
 
     drag.startMaterialPointerDrag(makePointerDown(10, 10, 1), textEntry)
@@ -458,11 +445,10 @@ describe('useDesignerDragDrop', () => {
 
     drag.startMaterialPointerDrag(makePointerDown(10, 10), {
       id: 'quick-line',
-      group: 'quick',
+      groupId: 'basic',
       label: 'Line',
       icon: {},
       materialType: 'line',
-      priority: 'quick',
     })
     dispatchPointerEvent('pointerup', 220, -13)
 
@@ -486,11 +472,10 @@ describe('useDesignerDragDrop', () => {
 
     drag.startMaterialDrag(makeDragEvent(10, 10, []), {
       id: 'quick-text',
-      group: 'quick',
+      groupId: 'basic',
       label: 'Text',
       icon: {},
       materialType: 'text',
-      priority: 'quick',
     })
     drag.onCanvasDrop(makeDragEvent(250, 540, [MATERIAL_DRAG_MIME], { [MATERIAL_DRAG_MIME]: 'text' }))
 
