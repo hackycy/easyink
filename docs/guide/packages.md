@@ -57,6 +57,7 @@ pnpm add @easyink/designer @easyink/viewer
 | 包 | 作用 |
 | --- | --- |
 | `@easyink/export-runtime` | 导出运行时和插件注册表 |
+| `@easyink/export-plugin-dom-image` | 把 Viewer 页面导出成 PNG/JPEG/WebP 图片的官方插件 |
 | `@easyink/export-plugin-dom-pdf` | 把 Viewer 页面导出成 PDF 的官方插件 |
 
 这层设计的意思很简单：Viewer 负责把页面渲染出来，导出插件负责把这些页面变成文件。

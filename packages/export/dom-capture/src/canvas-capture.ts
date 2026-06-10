@@ -8,6 +8,7 @@ const TEXT_CAPTURE_BLEED_PX = 2
 export interface CanvasCaptureOptions {
   dpi: number
   captureId: string
+  backgroundColor?: string | null
 }
 
 export function createCanvasCaptureOptions(
@@ -18,7 +19,7 @@ export function createCanvasCaptureOptions(
     scale: resolveCanvasScale(page, options.dpi),
     foreignObjectRendering: false,
     useCORS: true,
-    backgroundColor: '#ffffff',
+    backgroundColor: options.backgroundColor === undefined ? '#ffffff' : options.backgroundColor,
     logging: false,
     removeContainer: true,
     scrollX: 0,
@@ -83,7 +84,7 @@ function expandElementCaptureBox(
   const insetY = (captureHeight - box.height) / 2
   const inner = element.ownerDocument.createElement('div')
 
-  inner.setAttribute('data-easyink-pdf-capture-inner', '')
+  inner.setAttribute('data-easyink-capture-inner', '')
   inner.style.position = 'absolute'
   inner.style.left = `${insetX}px`
   inner.style.top = `${insetY}px`

@@ -1,8 +1,8 @@
 {
-  "name": "@easyink/export-plugin-dom-pdf",
+  "name": "@easyink/export-plugin-dom-image",
   "type": "module",
   "version": "0.0.22",
-  "description": "DOM-to-PDF export plugin for @easyink/export-runtime (html2canvas + jsPDF)",
+  "description": "DOM-to-image export plugin for @easyink/export-runtime (html2canvas)",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",
   "publishConfig": {
@@ -24,8 +24,6 @@
   "dependencies": {
     "@easyink/export-dom-capture": "workspace:*",
     "@easyink/export-runtime": "workspace:*",
-    "@easyink/shared": "workspace:*",
-    "html2canvas": "catalog:framework",
-    "jspdf": "catalog:framework"
+    "html2canvas": "catalog:framework"
   }
 }

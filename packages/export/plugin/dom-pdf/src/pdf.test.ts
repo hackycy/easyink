@@ -160,7 +160,7 @@ describe('renderPagesToPdfBlob asset preflight', () => {
       heightMm: 60,
     })
 
-    expect(element.querySelector('[data-easyink-pdf-capture-inner]')).toBeNull()
+    expect(element.querySelector('[data-easyink-capture-inner]')).toBeNull()
     expect(element.style.transform).toBe('rotate(90deg)')
     expect(element.style.left).toBe('10px')
     expect(element.style.top).toBe('20px')
@@ -410,7 +410,7 @@ describe('renderPagesToPdfBlob asset preflight', () => {
       foreignObjectRendering: false,
     })
 
-    const captureInner = element.querySelector<HTMLElement>('[data-easyink-pdf-capture-inner]')
+    const captureInner = element.querySelector<HTMLElement>('[data-easyink-capture-inner]')
     expect(captureInner).not.toBeNull()
     expect(element.style.transform).toBe('none')
     expect(element.style.left).toBe('20px')
@@ -452,7 +452,7 @@ describe('renderPagesToPdfBlob asset preflight', () => {
       foreignObjectRendering: false,
     })
 
-    const captureInner = element.querySelector<HTMLElement>('[data-easyink-pdf-capture-inner]')
+    const captureInner = element.querySelector<HTMLElement>('[data-easyink-capture-inner]')
     expect(captureInner).not.toBeNull()
     expect(element.style.left).toBe('8px')
     expect(element.style.top).toBe('18px')

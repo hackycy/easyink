@@ -102,6 +102,21 @@ description: EasyInk API 索引：快速定位公开能力的包入口，涵盖 
 
 类型导出：`ExportFormatPlugin`, `ExportRuntimeContext`, `ExportDiagnostic`, `ExportProgress`
 
+## @easyink/export-dom-capture
+
+DOM 捕获共享工具，供浏览器端导出插件复用。
+
+| 导出 | 类型 | 说明 |
+|------|------|------|
+| `createCanvasCaptureOptions` | Function | 创建 html2canvas 普通 canvas 捕获配置 |
+| `createForeignObjectCaptureOptions` | Function | 创建 html2canvas foreignObject 捕获配置 |
+| `cropForeignObjectOffset` | Function | 修正 foreignObject 捕获偏移 |
+| `isLikelyBlankForeignObjectCanvas` | Function | 检测捕获结果是否疑似空白 |
+| `waitForRenderableAssets` | Function | 等待字体、图片和背景图资源 |
+| `resolveCanvasScale` | Function | 按 DPI 计算 html2canvas 缩放比例 |
+
+类型导出：`CanvasCaptureOptions`, `ForeignObjectCaptureOptions`, `CropForeignObjectOffsetOptions`
+
 ## @easyink/export-plugin-dom-pdf
 
 DOM-to-PDF 导出插件。
@@ -113,6 +128,20 @@ DOM-to-PDF 导出插件。
 | `resolveCanvasScale` | Function | 按 DPI 计算 html2canvas 缩放比例 |
 
 类型导出：`DomPdfExportInput`, `DomPdfExportPluginOptions`, `RenderPagesToPdfOptions`, `JsPDF`
+
+## @easyink/export-plugin-dom-image
+
+DOM-to-image 导出插件。
+
+| 导出 | 类型 | 说明 |
+|------|------|------|
+| `createDomImageExportPlugin` | Function | 创建 `png`、`jpeg` 或 `webp` 格式导出插件 |
+| `renderPageToImageBlob` | Function | 将单个 Viewer 页面 DOM 渲染为图片 Blob |
+| `renderPagesToImageBlob` | Function | 从多页输入中选择一个页面渲染为图片 Blob |
+| `renderPagesToImageBlobs` | Function | 将多个 Viewer 页面 DOM 渲染为图片 Blob 数组 |
+| `resolveCanvasScale` | Function | 按 DPI 计算 html2canvas 缩放比例 |
+
+类型导出：`DomImageExportInput`, `DomImageExportPluginOptions`, `ImageMimeType`, `ImagePageSize`, `RenderPageToImageOptions`, `RenderPagesToImageBlobOptions`, `RenderPagesToImageOptions`
 
 ## @easyink/datasource
 

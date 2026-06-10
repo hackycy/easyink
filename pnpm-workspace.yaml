@@ -9,6 +9,7 @@ packages:
   - packages/materials/svg/*
   - packages/materials/table/*
   - packages/export/runtime
+  - packages/export/dom-capture
   - packages/export/plugin/*
   - internal-packages/*
 catalogMode: prefer

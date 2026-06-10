@@ -1,5 +1,5 @@
 export function normalizeClonedCaptureDocument(clonedDocument: Document, captureId: string): HTMLElement | undefined {
-  const page = clonedDocument.querySelector<HTMLElement>(`[data-easyink-pdf-capture-id="${captureId}"]`)
+  const page = clonedDocument.querySelector<HTMLElement>(`[data-easyink-capture-id="${captureId}"]`)
   if (!page)
     return undefined
 

@@ -9,6 +9,7 @@ export interface ForeignObjectCaptureOptions {
   captureId: string
   widthMm: number
   heightMm: number
+  backgroundColor?: string | null
 }
 
 export function createForeignObjectCaptureOptions(
@@ -43,7 +44,7 @@ export function createForeignObjectCaptureOptions(
     scale,
     foreignObjectRendering: true,
     useCORS: true,
-    backgroundColor: '#ffffff',
+    backgroundColor: options.backgroundColor === undefined ? '#ffffff' : options.backgroundColor,
     logging: false,
     removeContainer: true,
     scrollX: 0,
@@ -78,10 +79,7 @@ export function cropForeignObjectOffset(
   const cssHeight = Math.max(1, Math.ceil(options.heightMm * CSS_PX_PER_MM))
   // Target output canvas size = what html2canvas would have produced for the
   // page without the inflate (matches Math.floor(width * scale) in
-  // ForeignObjectRenderer). pdf.addImage maps this canvas onto widthMm x heightMm
-  // in millimetres, so any size proportional to the page is acceptable, but we
-  // pick the unbiased target to keep PDF resolution identical to the pre-fix path
-  // when there was no image background.
+  // ForeignObjectRenderer).
   const targetWidth = Math.floor(cssWidth * scale)
   const targetHeight = Math.floor(cssHeight * scale)
   if (targetWidth <= 0 || targetHeight <= 0)

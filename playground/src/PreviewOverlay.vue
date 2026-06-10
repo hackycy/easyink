@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { ExportFormatPlugin, ExportProgress } from '@easyink/export-runtime'
-import type { DocumentSchema, ViewerDiagnosticEvent, ViewerHost, ViewerRuntime, ViewerTaskPhaseEvent, ViewerTaskProgressEvent } from '@easyink/viewer'
+import type { DocumentSchema, ViewerDiagnosticEvent, ViewerExportContext, ViewerHost, ViewerRuntime, ViewerTaskPhaseEvent, ViewerTaskProgressEvent } from '@easyink/viewer'
+import { createDomImageExportPlugin } from '@easyink/export-plugin-dom-image'
 import { createDomPdfExportPlugin } from '@easyink/export-plugin-dom-pdf'
 import { createExportRuntime } from '@easyink/export-runtime'
 import { IconChevronLeft, IconChevronRight, IconClose, IconDown, IconMinimize, IconPlus } from '@easyink/icons'
@@ -41,6 +42,8 @@ const emit = defineEmits<{
 
 const EXPORT_FORMAT = 'playground-demo-json'
 const PDF_FORMAT = 'pdf'
+const PNG_FORMAT = 'png'
+const JPEG_FORMAT = 'jpeg'
 const BROWSER_PRINT_DRIVER_ID = 'browser'
 
 const iframeRef = ref<HTMLIFrameElement>()
@@ -104,28 +107,60 @@ onBeforeUnmount(() => {
 
 function registerOutputIntegrations(runtime: ViewerRuntime) {
   exportRuntime.registerPlugin(createDomPdfExportPlugin())
+  exportRuntime.registerPlugin(createDomImageExportPlugin({ id: 'playground-dom-png-export', format: PNG_FORMAT, type: 'image/png' }))
+  exportRuntime.registerPlugin(createDomImageExportPlugin({ id: 'playground-dom-jpeg-export', format: JPEG_FORMAT, type: 'image/jpeg' }))
   exportRuntime.registerPlugin(createPlaygroundJsonExportPlugin())
 
   runtime.registerExporter({
     id: 'playground-pdf-export',
     format: PDF_FORMAT,
     async export(context) {
-      const renderedPages = context.renderedPages ?? []
-      const pdfPages = resolveViewerPdfPages({ ...context, renderedPages, printPolicy: resolvePrintPolicy({
-        schema: context.schema,
-        options: { pageSizeMode: 'fixed' },
-        renderedPages,
-      }) })
-      const pages = pdfPages.map(page => page.element)
-      const pageSizes = pdfPages.map(({ widthMm, heightMm }) => ({ widthMm, heightMm }))
-      const printSize = resolveFixedExportSize(context.schema, renderedPages)
-      const widthMm = toMillimeters(printSize.width, printSize.unit)
-      const heightMm = toMillimeters(printSize.height, printSize.unit)
+      const { pages, pageSizes, widthMm, heightMm } = resolvePreviewExportInput(context)
 
       return exportRuntime.exportDocument({
         format: PDF_FORMAT,
         entry: context.entry,
         input: { pages, pageSizes, widthMm, heightMm },
+        throwOnError: true,
+        onProgress: context.onProgress,
+        onDiagnostic: diagnostic => context.onDiagnostic?.(exportDiagnosticToViewerEvent(diagnostic)),
+      })
+    },
+  })
+
+  runtime.registerExporter({
+    id: 'playground-png-export',
+    format: PNG_FORMAT,
+    async export(context) {
+      const input = resolvePreviewExportInput(context)
+
+      return exportRuntime.exportDocument({
+        format: PNG_FORMAT,
+        entry: context.entry,
+        input: {
+          ...input,
+          pageIndex: resolveCurrentPageIndex(input.pages.length),
+        },
+        throwOnError: true,
+        onProgress: context.onProgress,
+        onDiagnostic: diagnostic => context.onDiagnostic?.(exportDiagnosticToViewerEvent(diagnostic)),
+      })
+    },
+  })
+
+  runtime.registerExporter({
+    id: 'playground-jpeg-export',
+    format: JPEG_FORMAT,
+    async export(context) {
+      const input = resolvePreviewExportInput(context)
+
+      return exportRuntime.exportDocument({
+        format: JPEG_FORMAT,
+        entry: context.entry,
+        input: {
+          ...input,
+          pageIndex: resolveCurrentPageIndex(input.pages.length),
+        },
         throwOnError: true,
         onProgress: context.onProgress,
         onDiagnostic: diagnostic => context.onDiagnostic?.(exportDiagnosticToViewerEvent(diagnostic)),
@@ -160,6 +195,31 @@ function createPlaygroundJsonExportPlugin(): ExportFormatPlugin<{ schema: Docume
       )
     },
   }
+}
+
+function resolvePreviewExportInput(context: ViewerExportContext): {
+  pages: HTMLElement[]
+  pageSizes: Array<{ widthMm: number, heightMm: number }>
+  widthMm: number
+  heightMm: number
+} {
+  const renderedPages = context.renderedPages ?? []
+  const pdfPages = resolveViewerPdfPages({ ...context, renderedPages, printPolicy: resolvePrintPolicy({
+    schema: context.schema,
+    options: { pageSizeMode: 'fixed' },
+    renderedPages,
+  }) })
+  const pages = pdfPages.map(page => page.element)
+  const pageSizes = pdfPages.map(({ widthMm, heightMm }) => ({ widthMm, heightMm }))
+  const printSize = resolveFixedExportSize(context.schema, renderedPages)
+  const widthMm = toMillimeters(printSize.width, printSize.unit)
+  const heightMm = toMillimeters(printSize.height, printSize.unit)
+
+  return { pages, pageSizes, widthMm, heightMm }
+}
+
+function resolveCurrentPageIndex(pageCount: number): number {
+  return Math.max(0, Math.min(currentPage.value - 1, pageCount - 1))
 }
 
 function resolveFixedExportSize(schema: DocumentSchema, renderedPages: NonNullable<ViewerRuntime['renderedPages']>): { width: number, height: number, unit: string } {
@@ -383,6 +443,14 @@ async function runViewerExport(format: string, filename: string, label: string) 
 
 async function handlePdfExport() {
   await runViewerExport(PDF_FORMAT, 'easyink-preview.pdf', '导出 PDF')
+}
+
+async function handlePngExport() {
+  await runViewerExport(PNG_FORMAT, `easyink-preview-page-${currentPage.value}.png`, '导出 PNG')
+}
+
+async function handleJpegExport() {
+  await runViewerExport(JPEG_FORMAT, `easyink-preview-page-${currentPage.value}.jpg`, '导出 JPEG')
 }
 
 async function handleJsonExport() {
@@ -715,6 +783,12 @@ async function handleExport() {
             <DropdownMenuLabel>本地导出</DropdownMenuLabel>
             <DropdownMenuItem :disabled="isPrinting" @click="handlePdfExport">
               PDF
+            </DropdownMenuItem>
+            <DropdownMenuItem :disabled="isPrinting" @click="handlePngExport">
+              PNG（当前页）
+            </DropdownMenuItem>
+            <DropdownMenuItem :disabled="isPrinting" @click="handleJpegExport">
+              JPEG（当前页）
             </DropdownMenuItem>
             <DropdownMenuItem :disabled="isPrinting" @click="handleExport">
               JSON

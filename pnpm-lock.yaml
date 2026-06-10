@@ -798,8 +798,29 @@ importers:
         specifier: catalog:framework
         version: 3.5.31(typescript@6.0.2)
 
+  packages/export/dom-capture:
+    dependencies:
+      '@easyink/export-runtime':
+        specifier: workspace:*
+        version: link:../runtime
+
+  packages/export/plugin/dom-image:
+    dependencies:
+      '@easyink/export-dom-capture':
+        specifier: workspace:*
+        version: link:../../dom-capture
+      '@easyink/export-runtime':
+        specifier: workspace:*
+        version: link:../../runtime
+      html2canvas:
+        specifier: catalog:framework
+        version: 1.4.1
+
   packages/export/plugin/dom-pdf:
     dependencies:
+      '@easyink/export-dom-capture':
+        specifier: workspace:*
+        version: link:../../dom-capture
       '@easyink/export-runtime':
         specifier: workspace:*
         version: link:../../runtime
@@ -1417,6 +1438,9 @@ importers:
       '@easyink/designer':
         specifier: workspace:*
         version: link:../packages/designer
+      '@easyink/export-plugin-dom-image':
+        specifier: workspace:*
+        version: link:../packages/export/plugin/dom-image
       '@easyink/export-plugin-dom-pdf':
         specifier: workspace:*
         version: link:../packages/export/plugin/dom-pdf

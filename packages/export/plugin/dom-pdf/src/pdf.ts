@@ -1,12 +1,17 @@
 import type { ExportDiagnostic, ExportFormatPlugin, ExportProgress } from '@easyink/export-runtime'
 import type { jsPDF as JsPDFType } from 'jspdf'
-import { createCanvasCaptureOptions } from './canvas-capture'
-import { createForeignObjectCaptureOptions, cropForeignObjectOffset, isLikelyBlankForeignObjectCanvas as isLikelyBlankCaptureCanvas } from './foreign-object-capture'
+import {
+  createCanvasCaptureOptions,
+  createForeignObjectCaptureOptions,
+  cropForeignObjectOffset,
+  isLikelyBlankForeignObjectCanvas as isLikelyBlankCaptureCanvas,
+  waitForRenderableAssets,
+} from '@easyink/export-dom-capture'
 
 const DEFAULT_EXPORT_DPI = 300
 const DEFAULT_ASSET_LOAD_TIMEOUT_MS = 10000
 
-export { resolveCanvasScale } from './canvas-capture'
+export { resolveCanvasScale } from '@easyink/export-dom-capture'
 
 export interface PdfPageSize {
   widthMm: number
@@ -88,10 +93,14 @@ export async function renderPagesToPdfBlob(options: RenderPagesToPdfOptions): Pr
     const page = pdfPage.element
     onProgress?.({ current: pageIndex + 1, total: pdfPages.length, message: `render-page:${pageIndex + 1}` })
     const captureId = `easyink-pdf-capture-${pageIndex}`
-    page.setAttribute('data-easyink-pdf-capture-id', captureId)
+    page.setAttribute('data-easyink-capture-id', captureId)
 
     try {
-      await waitForRenderableAssets(page, onDiagnostic, assetLoadTimeoutMs)
+      await waitForRenderableAssets(page, {
+        onDiagnostic,
+        timeoutMs: assetLoadTimeoutMs,
+        diagnosticPrefix: 'PDF',
+      })
 
       if (pageIndex > 0)
         pdf.addPage([pdfPage.widthMm, pdfPage.heightMm], resolvePdfOrientation(pdfPage))
@@ -133,7 +142,7 @@ export async function renderPagesToPdfBlob(options: RenderPagesToPdfOptions): Pr
       canvas.height = 0
     }
     finally {
-      page.removeAttribute('data-easyink-pdf-capture-id')
+      page.removeAttribute('data-easyink-capture-id')
     }
   }
 
@@ -204,205 +213,6 @@ function emitBlankPageWarning(
     scope: 'export-plugin',
     detail: { pageIndex },
   })
-}
-
-async function waitForRenderableAssets(
-  root: HTMLElement,
-  onDiagnostic: ((diagnostic: ExportDiagnostic) => void) | undefined,
-  timeoutMs = DEFAULT_ASSET_LOAD_TIMEOUT_MS,
-): Promise<void> {
-  const fonts = root.ownerDocument.fonts
-  if (fonts) {
-    try {
-      await fonts.ready
-    }
-    catch (err) {
-      onDiagnostic?.({
-        severity: 'warning',
-        code: 'PDF_FONT_READY_FAILED',
-        message: 'Font readiness check failed before PDF export; export will continue with current font state.',
-        scope: 'asset',
-        cause: serializeCause(err),
-      })
-    }
-  }
-
-  const images = Array.from(root.querySelectorAll('img'))
-  const backgroundUrls = collectBackgroundImageUrls(root)
-  await Promise.all([
-    ...images.map(image => waitForImage(image, onDiagnostic, timeoutMs)),
-    ...backgroundUrls.map(url => waitForBackgroundImage(root.ownerDocument, url, onDiagnostic, timeoutMs)),
-  ])
-}
-
-function waitForImage(
-  image: HTMLImageElement,
-  onDiagnostic: ((diagnostic: ExportDiagnostic) => void) | undefined,
-  timeoutMs: number,
-): Promise<void> {
-  if (image.complete) {
-    if (image.currentSrc && image.naturalWidth === 0)
-      emitImageWarning(image, onDiagnostic)
-    return Promise.resolve()
-  }
-
-  return new Promise((resolve) => {
-    let timeoutId: ReturnType<typeof setTimeout> | undefined
-    function cleanup() {
-      image.removeEventListener('load', onLoad)
-      image.removeEventListener('error', onError)
-      if (timeoutId !== undefined)
-        clearTimeout(timeoutId)
-    }
-    function onLoad() {
-      cleanup()
-      resolve()
-    }
-    function onError() {
-      cleanup()
-      emitImageWarning(image, onDiagnostic)
-      resolve()
-    }
-    function onTimeout() {
-      cleanup()
-      emitImageTimeoutWarning(image.currentSrc || image.src || image.alt || '', onDiagnostic)
-      resolve()
-    }
-
-    image.addEventListener('load', onLoad, { once: true })
-    image.addEventListener('error', onError, { once: true })
-    timeoutId = setTimeout(onTimeout, timeoutMs)
-  })
-}
-
-function waitForBackgroundImage(
-  document: Document,
-  src: string,
-  onDiagnostic: ((diagnostic: ExportDiagnostic) => void) | undefined,
-  timeoutMs: number,
-): Promise<void> {
-  const ImageCtor = document.defaultView?.Image ?? Image
-  const image = new ImageCtor()
-  image.src = src
-
-  if (image.complete) {
-    if (image.naturalWidth === 0)
-      emitBackgroundImageWarning(src, onDiagnostic)
-    return Promise.resolve()
-  }
-
-  return new Promise((resolve) => {
-    let timeoutId: ReturnType<typeof setTimeout> | undefined
-    function cleanup() {
-      image.removeEventListener('load', onLoad)
-      image.removeEventListener('error', onError)
-      if (timeoutId !== undefined)
-        clearTimeout(timeoutId)
-    }
-    function onLoad() {
-      cleanup()
-      resolve()
-    }
-    function onError() {
-      cleanup()
-      emitBackgroundImageWarning(src, onDiagnostic)
-      resolve()
-    }
-    function onTimeout() {
-      cleanup()
-      emitBackgroundImageTimeoutWarning(src, onDiagnostic)
-      resolve()
-    }
-
-    image.addEventListener('load', onLoad, { once: true })
-    image.addEventListener('error', onError, { once: true })
-    timeoutId = setTimeout(onTimeout, timeoutMs)
-  })
-}
-
-function collectBackgroundImageUrls(root: HTMLElement): string[] {
-  const urls = new Set<string>()
-  const view = root.ownerDocument.defaultView
-  const elements = [root, ...Array.from(root.querySelectorAll<HTMLElement>('*'))]
-
-  for (const element of elements) {
-    for (const value of [element.style.backgroundImage, view?.getComputedStyle(element).backgroundImage]) {
-      if (!value || value === 'none')
-        continue
-      for (const url of parseCssImageUrls(value))
-        urls.add(url)
-    }
-  }
-
-  return [...urls]
-}
-
-function parseCssImageUrls(value: string): string[] {
-  const urls: string[] = []
-  for (const match of value.matchAll(/url\((['"]?)(.*?)\1\)/g)) {
-    const url = match[2]?.trim()
-    if (url)
-      urls.push(url)
-  }
-  return urls
-}
-
-function emitImageWarning(
-  image: HTMLImageElement,
-  onDiagnostic: ((diagnostic: ExportDiagnostic) => void) | undefined,
-): void {
-  onDiagnostic?.({
-    severity: 'warning',
-    code: 'PDF_IMAGE_LOAD_FAILED',
-    message: 'Image failed to load before PDF export; export will continue without blocking.',
-    scope: 'asset',
-    detail: { src: image.currentSrc || image.src || image.alt || '' },
-  })
-}
-
-function emitImageTimeoutWarning(
-  src: string,
-  onDiagnostic: ((diagnostic: ExportDiagnostic) => void) | undefined,
-): void {
-  onDiagnostic?.({
-    severity: 'warning',
-    code: 'PDF_IMAGE_LOAD_TIMEOUT',
-    message: 'Image load timed out before PDF export; export will continue without blocking.',
-    scope: 'asset',
-    detail: { src },
-  })
-}
-
-function emitBackgroundImageWarning(
-  src: string,
-  onDiagnostic: ((diagnostic: ExportDiagnostic) => void) | undefined,
-): void {
-  onDiagnostic?.({
-    severity: 'warning',
-    code: 'PDF_BACKGROUND_IMAGE_LOAD_FAILED',
-    message: 'Background image failed to load before PDF export; export will continue without blocking.',
-    scope: 'asset',
-    detail: { src },
-  })
-}
-
-function emitBackgroundImageTimeoutWarning(
-  src: string,
-  onDiagnostic: ((diagnostic: ExportDiagnostic) => void) | undefined,
-): void {
-  onDiagnostic?.({
-    severity: 'warning',
-    code: 'PDF_BACKGROUND_IMAGE_LOAD_TIMEOUT',
-    message: 'Background image load timed out before PDF export; export will continue without blocking.',
-    scope: 'asset',
-    detail: { src },
-  })
-}
-
-function serializeCause(err: unknown): unknown {
-  if (err instanceof Error)
-    return { name: err.name, message: err.message, stack: err.stack }
-  return err
 }
 
 export type JsPDF = JsPDFType

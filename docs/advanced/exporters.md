@@ -42,6 +42,8 @@ viewer.registerExporter({
 
 这里 `ViewerExporter` 只负责把 Viewer 上下文整理成插件输入。真正生成 PDF 的是 `ExportFormatPlugin`。
 
+图片导出使用同一套接入方式。`@easyink/export-plugin-dom-image` 默认创建 `png` 插件；如果要导出 JPEG 或 WebP，可以用 `format` 和 `type` 创建独立插件实例。当前 Export Runtime 的插件返回值是单个 `Blob`，所以图片插件的 runtime 入口默认导出一个页面；需要多页图片时，可以直接调用 `renderPagesToImageBlobs()`。
+
 ## 选择接入层 {#choose-layer}
 
 你可以只写 `ViewerExporter`，也可以加一层 `ExportFormatPlugin`：
