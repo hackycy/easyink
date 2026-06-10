@@ -587,7 +587,7 @@ export const priceTagAIMaterialDescriptor = {
   knowledge: {
     category: 'typography',
     composability: {
-      canBeChildOf: ['container', '*'],
+      canBeChildOf: ['*'],
       canContain: [],
       exclusiveWith: [],
       preferredCompanions: ['barcode', 'image'],

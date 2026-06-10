@@ -372,7 +372,7 @@ function buildCommonMistakesSegment(): string {
 - Copying schema properties from examples for material types that are not registered in this task — the active Designer manifest is the only material source of truth.
 - Reusing the previous turn's invoice/customer sample data for an unrelated document type — sampleData mismatched to fields fails accuracy validation.
 - Chinese \`title\` mixed with English sample values like "Sample" — confuses end users; keep them in the prompt's language.
-- Inventing decorative, code, image, table, chart, or container materials that are not registered — approximate with registered materials and explain the limitation in warnings.`
+- Inventing material types that are not registered — approximate with registered materials and explain the limitation in warnings.`
 }
 
 function buildSelfCheckSegment(): string {

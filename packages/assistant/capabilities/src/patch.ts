@@ -93,7 +93,7 @@ function applyOperation(target: Record<string, unknown>, operation: AssistantPat
     return cursor[part]
   }, target)
   if (!isRecord(parent) && !Array.isArray(parent))
-    throw new Error(`Patch parent does not resolve to a container: ${operation.path}`)
+    throw new Error(`Patch parent does not resolve to an object or array: ${operation.path}`)
 
   if (Array.isArray(parent)) {
     if (operation.op === 'remove') {

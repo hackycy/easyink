@@ -53,7 +53,6 @@ export {
   Eraser as IconClear,
   X as IconClose,
   ChevronsUpDown as IconCollapse,
-  LayoutGrid as IconContainer,
   Copy as IconCopy,
   CopyPlus as IconCopyPlus,
   Database as IconDatabase,

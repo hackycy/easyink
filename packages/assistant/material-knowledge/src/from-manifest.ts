@@ -45,9 +45,14 @@ export interface ManifestMaterialProp {
   enum?: Array<{ value: unknown }>
 }
 
+const REMOVED_MATERIAL_TYPES = new Set(['container'])
+
 export function createRegistryFromManifest(manifest: ManifestLike): MaterialKnowledgeRegistry {
   const registry = new MaterialKnowledgeRegistry()
   for (const entry of manifest.materials) {
+    if (REMOVED_MATERIAL_TYPES.has(entry.type))
+      continue
+
     const descriptor = entry.knowledge ?? entry.ai?.knowledge
     if (descriptor) {
       registry.register({
@@ -223,8 +228,6 @@ function uniqueFields(types: Array<FieldType | 'image-url'>): FieldType[] {
 function inferCategory(type: string): MaterialKnowledge['category'] {
   if (['table-data', 'table-static', 'flow-row', 'barcode', 'qrcode'].includes(type))
     return 'data'
-  if (['container'].includes(type))
-    return 'layout'
   if (['line', 'rect', 'ellipse', 'image'].includes(type))
     return 'decoration'
   if (type === 'chart' || type.startsWith('chart-'))

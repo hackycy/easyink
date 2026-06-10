@@ -49,7 +49,7 @@ export const xAIMaterialDescriptor = {
   knowledge: {
     category: 'typography',
     composability: {
-      canBeChildOf: ['container', '*'],
+      canBeChildOf: ['*'],
       canContain: [],
       exclusiveWith: [],
       preferredCompanions: ['line'],
@@ -77,7 +77,7 @@ Keep `description`, `usage`, `schemaRules`, `examples`, and `knowledge` short an
 ## Knowledge Semantics
 
 - `category`: one of `data`, `layout`, `decoration`, `typography`, `visualization`; used in the Material Router index, selected-manifest prompts, and registry queries.
-- `composability.canBeChildOf`: include `'*'` only when the material really works at top level or in any container-like parent.
+- `composability.canBeChildOf`: include `'*'` only when the material works at top level and inside any registered parent material that supports children.
 - `composability.canContain`: list child material types only when the schema and Designer/Viewer support children.
 - `bindingSpec.mode`: use `none`, `scalar`, `collection`, or `multi-scalar`. This is richer than descriptor `binding` (`none`, `single`, `multi`, `data-contract`).
 - `bindingSpec.accepts`: match runtime data shape. Array/detail-list materials should set `types: ['array']`, `isArray: true`, and often `minChildren`.

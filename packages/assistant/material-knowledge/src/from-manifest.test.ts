@@ -69,4 +69,19 @@ describe('createRegistryFromManifest', () => {
       },
     })
   })
+
+  it('ignores the removed container material even if a stale manifest includes it', () => {
+    const registry = createRegistryFromManifest({
+      materials: [
+        {
+          type: 'container',
+          name: 'Removed Container',
+          binding: { kind: 'none' },
+        },
+      ],
+    })
+
+    expect(registry.has('container')).toBe(false)
+    expect(registry.types()).not.toContain('container')
+  })
 })

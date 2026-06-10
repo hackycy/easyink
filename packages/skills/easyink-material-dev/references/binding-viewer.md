@@ -133,7 +133,7 @@ Implement `measure()` only when runtime content can change dimensions. Good exam
 
 - data table expands to N runtime rows,
 - rich text expands with wrapped content,
-- container grows based on children,
+- custom nested material grows based on children,
 - flow/flex row reflows columns from runtime data.
 
 For fixed-size materials, omit `measure()`.

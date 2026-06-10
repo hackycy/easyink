@@ -170,8 +170,8 @@ export function useCanvasInteractionController(ctx: CanvasInteractionControllerC
 
     const ext = store.getDesignerExtension(node.type)
     // Uniform dblclick entry: any material that declares a `geometry`
-    // protocol (table / chart / svg / container …) is openable via
-    // dblclick. Materials without geometry have nothing to edit and remain
+    // protocol (table / chart / svg / custom nested materials) is openable
+    // via dblclick. Materials without geometry have nothing to edit and remain
     // inert here.
     if (ext?.geometry) {
       const initialPoint = pointToDocument(e)
