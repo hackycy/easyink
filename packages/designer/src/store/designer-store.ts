@@ -1,5 +1,7 @@
 import type { EphemeralPanelDef, FontLoadRequest, FontLoadStatus, FontManager, FontProvider, PropertyPanelOverlay } from '@easyink/core'
 import type { DocumentSchema, DocumentSchemaInput, ElementGroupSchema, MaterialNode } from '@easyink/schema'
+import type { PaperPreset } from '@easyink/shared'
+import type { DesignerRuntimeConfig } from '../runtime-config'
 import type { DesignerInteractionProvider, LazyMaterialExtensionFactory, LocaleMessageRegistration, LocaleMessages, MaterialCatalogEntry, MaterialDefinition, MaterialDesignerExtension, MaterialExtensionFactory, PreferenceProvider, SnapLine, StatusBarState } from '../types'
 import { CommandManager, SelectionModel } from '@easyink/core'
 import { DataSourceRegistry } from '@easyink/datasource'
@@ -10,6 +12,7 @@ import { DesignerInteractionService } from '../interactions/interaction-service'
 import { DiagnosticsChannel } from './diagnostics'
 import { FontService } from './font-service'
 import { MaterialRegistry } from './material-registry'
+import { PaperRegistry } from './paper-registry'
 import { applyPersistedWorkbench, loadWorkbenchPreferences } from './preference-persistence'
 import { SaveStatusManager } from './save-status-manager'
 import { createDefaultSaveBranchMenu, createDefaultWorkbenchState } from './workbench'
@@ -61,6 +64,7 @@ export class DesignerStore {
   materialExtensionRevision = 0
 
   readonly materialRegistry: MaterialRegistry
+  readonly paperRegistry: PaperRegistry
 
   // ─── Editing Session Manager ─────────────────────────────────────
   readonly editingSession: EditingSessionManager
@@ -77,10 +81,17 @@ export class DesignerStore {
   private _localeCode?: string
   private readonly _localeRegistrations: LocaleMessageRegistration[] = []
 
-  constructor(schema?: DocumentSchemaInput, preferenceProvider?: PreferenceProvider, interactionProvider?: DesignerInteractionProvider) {
+  constructor(
+    schema?: DocumentSchemaInput,
+    preferenceProvider?: PreferenceProvider,
+    interactionProvider?: DesignerInteractionProvider,
+    runtimeConfig?: DesignerRuntimeConfig,
+  ) {
     this._schema = normalizeDocumentSchema(schema)
     this.fontService = new FontService(this.diagnostics)
     this.materialRegistry = new MaterialRegistry()
+    this.paperRegistry = new PaperRegistry(runtimeConfig?.paper)
+    this.applyRuntimeDefaults(runtimeConfig, schema)
     this.setInteractionProvider(interactionProvider)
     // Mark editing session manager as raw: it owns Vue refs internally and
     // must not be auto-unwrapped by the surrounding reactive(store) proxy.
@@ -109,6 +120,30 @@ export class DesignerStore {
     this.commands.clear()
     this.editingSession.exit()
     void this.preloadDocumentFonts()
+  }
+
+  private applyRuntimeDefaults(config: DesignerRuntimeConfig | undefined, input: DocumentSchemaInput | undefined): void {
+    const defaults = config?.defaults
+    if (defaults?.document)
+      Object.assign(this._schema, defaults.document)
+
+    const defaultPreset = this.paperRegistry.getDefaultPreset()
+    if (defaultPreset && !hasExplicitPageSize(input)) {
+      Object.assign(this._schema.page, {
+        width: defaultPreset.width,
+        height: defaultPreset.height,
+        pageModel: syncPageModelPaper(this._schema.page, {
+          width: defaultPreset.width,
+          height: defaultPreset.height,
+        }),
+      })
+    }
+
+    if (defaults?.page) {
+      Object.assign(this._schema.page, defaults.page)
+      if (defaults.page.width != null || defaults.page.height != null)
+        this._schema.page.pageModel = syncPageModelPaper(this._schema.page, defaults.page)
+    }
   }
 
   setInteractionProvider(provider?: DesignerInteractionProvider): void {
@@ -302,6 +337,24 @@ export class DesignerStore {
     return this.materialRegistry.getGroupedMaterials(group)
   }
 
+  // ─── Paper registry ───────────────────────────────────────────
+
+  listPaperPresets(): PaperPreset[] {
+    return this.paperRegistry.listPresets()
+  }
+
+  registerPaperPreset(preset: PaperPreset): void {
+    this.paperRegistry.registerPreset(preset)
+  }
+
+  getPaperPreset(name: string): PaperPreset | undefined {
+    return this.paperRegistry.getPreset(name)
+  }
+
+  getPaperPresetBySize(width: number, height: number): PaperPreset | undefined {
+    return this.paperRegistry.resolveBySize(width, height)
+  }
+
   // ─── Extension Factory Registry ─────────────────────────────────
 
   registerDesignerFactory(type: string, factory: MaterialExtensionFactory): void {
@@ -431,6 +484,7 @@ export class DesignerStore {
     this.dataSourceRegistry.clear()
     this.fontService.clear()
     this.materialRegistry.clear()
+    this.paperRegistry.clear()
     this.clipboard = []
     this._propertyOverlay = null
     this._ephemeralPanel = null
@@ -438,5 +492,25 @@ export class DesignerStore {
     this.interactions.setFallbackProvider(undefined)
     this.refreshInteractionAvailability()
     this.editingSession.exit()
+  }
+}
+
+function hasExplicitPageSize(input: DocumentSchemaInput | undefined): boolean {
+  return typeof input?.page?.width === 'number' || typeof input?.page?.height === 'number'
+}
+
+function syncPageModelPaper(page: DocumentSchema['page'], updates: Partial<DocumentSchema['page']>): DocumentSchema['page']['pageModel'] {
+  const current = page.pageModel ?? {
+    kind: page.mode === 'continuous' ? 'continuous-paper' : 'paged-paper',
+    paper: { width: page.width, height: page.height },
+  }
+
+  return {
+    ...current,
+    paper: {
+      ...current.paper,
+      ...(updates.width != null ? { width: updates.width } : {}),
+      ...(updates.height != null ? { height: updates.height } : {}),
+    },
   }
 }

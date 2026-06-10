@@ -1,8 +1,25 @@
 import { IconFilePen, IconSignature } from '@easyink/icons'
 import { describe, expect, it } from 'vitest'
-import { builtinDesignerMaterialBundle } from './designer'
+import { builtinDesignerMaterialSets, createBuiltinDesignerMaterialBundle } from './designer'
+
+const builtinDesignerMaterialBundle = createBuiltinDesignerMaterialBundle('all')
 
 describe('builtin designer material bundle', () => {
+  it('exposes all, basic, and none material sets', () => {
+    expect(builtinDesignerMaterialSets.all.materials.length).toBeGreaterThan(0)
+    expect(builtinDesignerMaterialSets.basic.materials.map(material => material.type)).toContain('table-static')
+    expect(builtinDesignerMaterialSets.basic.materials.map(material => material.type)).toContain('svg')
+    expect(builtinDesignerMaterialSets.basic.materials.some(material => material.category === 'chart')).toBe(false)
+    expect(builtinDesignerMaterialSets.basic.materials.map(material => material.type)).not.toContain('signature')
+    expect(builtinDesignerMaterialSets.basic.quickMaterialTypes).not.toContain('signature')
+    expect(builtinDesignerMaterialSets.basic.groupedCatalog.map(entry => entry.group)).not.toContain('chart')
+    expect(builtinDesignerMaterialSets.none).toEqual({
+      materials: [],
+      quickMaterialTypes: [],
+      groupedCatalog: [],
+    })
+  })
+
   it('exposes every grouped catalog entry as a registered material', () => {
     const materialTypes = new Set(builtinDesignerMaterialBundle.materials.map(material => material.type))
 

@@ -5,6 +5,8 @@ import type { Component } from 'vue'
 
 export type BuiltinPanelSectionId = 'geometry' | 'props' | 'overlay' | 'binding' | 'visibility'
 
+export type BuiltinDesignerMaterialSet = 'all' | 'basic' | 'none'
+
 export interface BuiltinMaterialCapabilities {
   bindable?: boolean
   rotatable?: boolean

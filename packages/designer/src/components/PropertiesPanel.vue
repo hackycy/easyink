@@ -8,14 +8,14 @@ import type { DesignerResolvedAsset, PanelSectionId, PropSchema } from '../types
 import { ClearBindingCommand, getByPath, setByPath, UpdateBindingFormatCommand, UpdateDocumentCommand, UpdateGeometryCommand, UpdateMaterialBindingCommand, UpdateMaterialMetaCommand, UpdateMaterialPropsCommand, UpdatePageCommand } from '@easyink/core'
 import { createLayoutBehaviorPropSchemas, groupPropSchemas } from '@easyink/prop-schemas'
 import { getBindingRefs } from '@easyink/schema'
-import { deepClone, PAPER_PRESETS } from '@easyink/shared'
+import { deepClone } from '@easyink/shared'
 import { EiNumberInput, EiPanel, EiSwitch } from '@easyink/ui'
 import { computed, shallowRef, watchEffect } from 'vue'
 import { useDesignerStore } from '../composables'
 import { resolveDataContractFieldFormatEditor, resolveOrdinaryFormatEditor } from '../materials/binding-format-editor'
 import { isElementRotatable } from '../materials/capabilities'
 import { canEditGeometry, isPropSchemaDisabled as isMaterialPropSchemaDisabled } from '../materials/control-policy'
-import { defaultDocumentPatch, defaultPagePatch, filterVisible, groupDescriptors, PAGE_PROPERTY_DESCRIPTORS, readPageProperty, splitPatch } from '../page-properties'
+import { createPagePropertyDescriptors, defaultDocumentPatch, defaultPagePatch, filterVisible, groupDescriptors, readPageProperty, splitPatch } from '../page-properties'
 import BindingSection from './BindingSection.vue'
 import MaterialDataBindingEditor from './MaterialDataBindingEditor.vue'
 import PagePropertyEditor from './PagePropertyEditor.vue'
@@ -196,8 +196,12 @@ const pagePropertyContext = computed<PagePropertyContext>(() => ({
   selectedElementId: selectedElement.value?.id,
 }))
 
+const pagePropertyDescriptors = computed(() =>
+  createPagePropertyDescriptors(store.listPaperPresets()),
+)
+
 const visiblePageDescriptors = computed(() =>
-  filterVisible(PAGE_PROPERTY_DESCRIPTORS, pagePropertyContext.value),
+  filterVisible(pagePropertyDescriptors.value, pagePropertyContext.value),
 )
 
 const groupedPageDescriptors = computed(() =>
@@ -207,7 +211,7 @@ const groupedPageDescriptors = computed(() =>
 // Derive paper preset from current width/height
 const currentPaperPreset = computed(() => {
   const { width, height } = store.schema.page
-  const match = PAPER_PRESETS.find(p => p.width === width && p.height === height)
+  const match = store.getPaperPresetBySize(width, height)
   return match ? match.name : 'custom'
 })
 

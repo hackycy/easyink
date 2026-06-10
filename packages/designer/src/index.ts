@@ -17,7 +17,15 @@ export type {
   DesignerMaterialBundle,
   DesignerMaterialRegistration,
 } from './materials/registry'
+export type {
+  BuiltinDesignerMaterialSet,
+  DesignerDefaultsConfig,
+  DesignerMaterialConfig,
+  DesignerPaperConfig,
+  DesignerRuntimeConfig,
+} from './runtime-config'
 export { DesignerStore } from './store/designer-store'
+export { PaperRegistry } from './store/paper-registry'
 export { createLocalStoragePreferenceProvider } from './store/preference-persistence'
 export type { PersistableWorkbenchState } from './store/preference-persistence'
 export { TemplateHistoryManager } from './store/template-history'

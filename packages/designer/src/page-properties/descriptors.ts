@@ -1,8 +1,7 @@
 import type { PageSchema, TextWatermarkPageLayerConfig } from '@easyink/schema'
-import type { LayoutStrategyKind } from '@easyink/shared'
+import type { LayoutStrategyKind, PaperPreset } from '@easyink/shared'
 import type { PagePropertyContext, PagePropertyDescriptor } from './types'
 import { DEFAULT_TEXT_WATERMARK_PAGE_LAYER } from '@easyink/schema'
-import { PAPER_PRESETS } from '@easyink/shared'
 
 const UNIT_OPTIONS: NonNullable<PagePropertyDescriptor['enum']> = [
   { label: 'designer.option.unitMillimeter', value: 'mm' },
@@ -121,28 +120,30 @@ const LAYOUT_STRATEGY_DESCRIPTOR: PagePropertyDescriptor = {
 
 // ─── Paper Group ────────────────────────────────────────────────
 
-const PAPER_PRESET_DESCRIPTOR: PagePropertyDescriptor = {
-  id: 'paperPreset',
-  group: 'paper',
-  source: 'derived',
-  path: '',
-  label: 'designer.page.paperPreset',
-  persisted: 'derived',
-  editor: 'select',
-  enum: [
-    ...PAPER_PRESETS.map(p => ({ label: p.name, value: p.name })),
-    { label: 'designer.page.custom', value: 'custom' },
-  ],
-  normalize(value, ctx) {
-    const preset = PAPER_PRESETS.find(p => p.name === value)
-    if (preset) {
-      return {
-        page: syncPageDimensions(ctx.document.page, { width: preset.width, height: preset.height }),
+function createPaperPresetDescriptor(presets: PaperPreset[]): PagePropertyDescriptor {
+  return {
+    id: 'paperPreset',
+    group: 'paper',
+    source: 'derived',
+    path: '',
+    label: 'designer.page.paperPreset',
+    persisted: 'derived',
+    editor: 'select',
+    enum: [
+      ...presets.map(p => ({ label: p.name, value: p.name })),
+      { label: 'designer.page.custom', value: 'custom' },
+    ],
+    normalize(value, ctx) {
+      const preset = presets.find(p => p.name === value)
+      if (preset) {
+        return {
+          page: syncPageDimensions(ctx.document.page, { width: preset.width, height: preset.height }),
+        }
       }
-    }
-    // "custom" -- do nothing, user edits width/height directly
-    return {}
-  },
+      // "custom" -- do nothing, user edits width/height directly
+      return {}
+    },
+  }
 }
 
 const WIDTH_DESCRIPTOR: PagePropertyDescriptor = {
@@ -777,46 +778,48 @@ function syncPageModelPaper(page: PageSchema, updates: { width?: number, height?
 
 // ─── All Descriptors ────────────────────────────────────────────
 
-export const PAGE_PROPERTY_DESCRIPTORS: PagePropertyDescriptor[] = [
-  // document
-  MODE_DESCRIPTOR,
-  UNIT_DESCRIPTOR,
-  PAGE_COUNT_DESCRIPTOR,
-  // layout
-  LAYOUT_STRATEGY_DESCRIPTOR,
-  // paper
-  PAPER_PRESET_DESCRIPTOR,
-  WIDTH_DESCRIPTOR,
-  HEIGHT_DESCRIPTOR,
-  RADIUS_DESCRIPTOR,
-  // print
-  OFFSET_X_DESCRIPTOR,
-  OFFSET_Y_DESCRIPTOR,
-  PRINT_HORIZONTAL_OFFSET_DESCRIPTOR,
-  PRINT_VERTICAL_OFFSET_DESCRIPTOR,
-  PRINT_ORIENTATION_DESCRIPTOR,
-  COPIES_DESCRIPTOR,
-  BLANK_POLICY_DESCRIPTOR,
-  SCALE_DESCRIPTOR,
-  // assist
-  GRID_ENABLED_DESCRIPTOR,
-  GRID_WIDTH_DESCRIPTOR,
-  GRID_HEIGHT_DESCRIPTOR,
-  FONT_DESCRIPTOR,
-  // background
-  BG_COLOR_DESCRIPTOR,
-  BG_IMAGE_DESCRIPTOR,
-  BG_REPEAT_DESCRIPTOR,
-  BG_WIDTH_DESCRIPTOR,
-  BG_HEIGHT_DESCRIPTOR,
-  BG_OFFSET_X_DESCRIPTOR,
-  BG_OFFSET_Y_DESCRIPTOR,
-  // advanced
-  WATERMARK_ENABLED_DESCRIPTOR,
-  WATERMARK_TEXT_DESCRIPTOR,
-  WATERMARK_ROTATION_DESCRIPTOR,
-  WATERMARK_OPACITY_DESCRIPTOR,
-  WATERMARK_FONT_SIZE_DESCRIPTOR,
-  WATERMARK_GAP_DESCRIPTOR,
-  WATERMARK_COLOR_DESCRIPTOR,
-]
+export function createPagePropertyDescriptors(paperPresets: PaperPreset[]): PagePropertyDescriptor[] {
+  return [
+    // document
+    MODE_DESCRIPTOR,
+    UNIT_DESCRIPTOR,
+    PAGE_COUNT_DESCRIPTOR,
+    // layout
+    LAYOUT_STRATEGY_DESCRIPTOR,
+    // paper
+    createPaperPresetDescriptor(paperPresets),
+    WIDTH_DESCRIPTOR,
+    HEIGHT_DESCRIPTOR,
+    RADIUS_DESCRIPTOR,
+    // print
+    OFFSET_X_DESCRIPTOR,
+    OFFSET_Y_DESCRIPTOR,
+    PRINT_HORIZONTAL_OFFSET_DESCRIPTOR,
+    PRINT_VERTICAL_OFFSET_DESCRIPTOR,
+    PRINT_ORIENTATION_DESCRIPTOR,
+    COPIES_DESCRIPTOR,
+    BLANK_POLICY_DESCRIPTOR,
+    SCALE_DESCRIPTOR,
+    // assist
+    GRID_ENABLED_DESCRIPTOR,
+    GRID_WIDTH_DESCRIPTOR,
+    GRID_HEIGHT_DESCRIPTOR,
+    FONT_DESCRIPTOR,
+    // background
+    BG_COLOR_DESCRIPTOR,
+    BG_IMAGE_DESCRIPTOR,
+    BG_REPEAT_DESCRIPTOR,
+    BG_WIDTH_DESCRIPTOR,
+    BG_HEIGHT_DESCRIPTOR,
+    BG_OFFSET_X_DESCRIPTOR,
+    BG_OFFSET_Y_DESCRIPTOR,
+    // advanced
+    WATERMARK_ENABLED_DESCRIPTOR,
+    WATERMARK_TEXT_DESCRIPTOR,
+    WATERMARK_ROTATION_DESCRIPTOR,
+    WATERMARK_OPACITY_DESCRIPTOR,
+    WATERMARK_FONT_SIZE_DESCRIPTOR,
+    WATERMARK_GAP_DESCRIPTOR,
+    WATERMARK_COLOR_DESCRIPTOR,
+  ]
+}

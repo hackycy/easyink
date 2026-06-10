@@ -3,8 +3,9 @@ import type { FontProvider } from '@easyink/core'
 import type { DataSourceDescriptor } from '@easyink/datasource'
 import type { DocumentSchema, DocumentSchemaInput } from '@easyink/schema'
 import type { Contribution } from '../contributions'
+import type { DesignerRuntimeConfig } from '../runtime-config'
 import type { DesignerInteractionProvider, LocaleMessages, PreferenceProvider, StatusBarState, StoreSetup, TemplateAutoSaveOptions } from '../types'
-import { builtinDesignerMaterialBundle } from '@easyink/builtin'
+import { createBuiltinDesignerMaterialBundle } from '@easyink/builtin'
 import { builtinLocales } from '@easyink/locales'
 import { onBeforeUnmount, onMounted, provide, reactive, ref, shallowRef, watch } from 'vue'
 import { provideDesignerStore } from '../composables'
@@ -30,6 +31,7 @@ const props = defineProps<{
   setupStore?: StoreSetup
   contributions?: Contribution[]
   interactionProvider?: DesignerInteractionProvider
+  runtimeConfig?: DesignerRuntimeConfig
 }>()
 
 const emit = defineEmits<{
@@ -37,7 +39,12 @@ const emit = defineEmits<{
 }>()
 
 const designerRootRef = ref<HTMLElement | null>(null)
-const store = reactive(new DesignerStore(props.schema, props.preferenceProvider, props.interactionProvider)) as DesignerStore
+const store = reactive(new DesignerStore(
+  props.schema,
+  props.preferenceProvider,
+  props.interactionProvider,
+  props.runtimeConfig,
+)) as DesignerStore
 if (store.schema !== props.schema) {
   emit('update:schema', store.schema)
 }
@@ -45,7 +52,7 @@ if (store.schema !== props.schema) {
 // re-target it at the proxy so mutations made through tx.run trigger Vue
 // reactivity (otherwise patches mutate the raw store and templates stay stale).
 store.editingSession.setStore(store)
-registerMaterialBundle(store, builtinDesignerMaterialBundle)
+registerRuntimeMaterialBundles(store, props.runtimeConfig)
 store.setFontProvider(props.fontProvider)
 props.setupStore?.(store)
 provideDesignerStore(store)
@@ -112,6 +119,15 @@ function resolveLocaleCode(locale: LocaleMessages): string | undefined {
       return code
   }
   return undefined
+}
+
+function registerRuntimeMaterialBundles(store: DesignerStore, runtimeConfig: DesignerRuntimeConfig | undefined): void {
+  const builtinSet = runtimeConfig?.materials?.builtin ?? 'all'
+  if (builtinSet !== 'none')
+    registerMaterialBundle(store, createBuiltinDesignerMaterialBundle(builtinSet))
+
+  for (const bundle of runtimeConfig?.materials?.bundles ?? [])
+    registerMaterialBundle(store, bundle)
 }
 
 watch(() => props.interactionProvider, (newProvider) => {

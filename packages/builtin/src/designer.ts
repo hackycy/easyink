@@ -1,4 +1,4 @@
-import type { BuiltinDesignerMaterialBundle, BuiltinPanelSectionId } from './types'
+import type { BuiltinDesignerMaterialBundle, BuiltinDesignerMaterialSet, BuiltinPanelSectionId } from './types'
 import {
   IconBarcode,
   IconChartBar,
@@ -275,7 +275,7 @@ function tableSectionFilter(sectionId: BuiltinPanelSectionId): boolean {
   return sectionId !== 'binding'
 }
 
-export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
+const ALL_BUILTIN_DESIGNER_MATERIAL_BUNDLE: BuiltinDesignerMaterialBundle = {
   localeMessages: tableKernelLocaleMessages,
   materials: [
     {
@@ -636,4 +636,49 @@ export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
     { type: SVG_CUSTOM_TYPE, group: 'svg' },
     { type: PAGE_NUMBER_TYPE, group: 'utility' },
   ],
+}
+
+export function createBuiltinDesignerMaterialBundle(set: BuiltinDesignerMaterialSet = 'all'): BuiltinDesignerMaterialBundle {
+  if (set === 'none') {
+    return {
+      materials: [],
+      quickMaterialTypes: [],
+      groupedCatalog: [],
+    }
+  }
+
+  if (set === 'basic') {
+    return filterBuiltinDesignerMaterialBundle(material =>
+      material.category !== 'chart' && material.type !== SIGNATURE_TYPE,
+    )
+  }
+
+  return cloneBuiltinDesignerMaterialBundle(ALL_BUILTIN_DESIGNER_MATERIAL_BUNDLE)
+}
+
+export const builtinDesignerMaterialSets = {
+  all: createBuiltinDesignerMaterialBundle('all'),
+  basic: createBuiltinDesignerMaterialBundle('basic'),
+  none: createBuiltinDesignerMaterialBundle('none'),
+} satisfies Record<BuiltinDesignerMaterialSet, BuiltinDesignerMaterialBundle>
+
+function filterBuiltinDesignerMaterialBundle(predicate: (material: BuiltinDesignerMaterialBundle['materials'][number]) => boolean): BuiltinDesignerMaterialBundle {
+  const materials = ALL_BUILTIN_DESIGNER_MATERIAL_BUNDLE.materials.filter(predicate)
+  const materialTypes = new Set(materials.map(material => material.type))
+
+  return {
+    localeMessages: ALL_BUILTIN_DESIGNER_MATERIAL_BUNDLE.localeMessages,
+    materials,
+    quickMaterialTypes: ALL_BUILTIN_DESIGNER_MATERIAL_BUNDLE.quickMaterialTypes.filter(type => materialTypes.has(type)),
+    groupedCatalog: ALL_BUILTIN_DESIGNER_MATERIAL_BUNDLE.groupedCatalog.filter(entry => materialTypes.has(entry.type)),
+  }
+}
+
+function cloneBuiltinDesignerMaterialBundle(bundle: BuiltinDesignerMaterialBundle): BuiltinDesignerMaterialBundle {
+  return {
+    localeMessages: bundle.localeMessages,
+    materials: [...bundle.materials],
+    quickMaterialTypes: [...bundle.quickMaterialTypes],
+    groupedCatalog: [...bundle.groupedCatalog],
+  }
 }

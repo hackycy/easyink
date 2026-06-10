@@ -25,6 +25,51 @@ describe('designer store schema initialization', () => {
     expect(store.schema.elements).toEqual([])
   })
 
+  it('uses EasyInk paper presets by default', () => {
+    const store = new DesignerStore()
+
+    expect(store.listPaperPresets().map(preset => preset.name)).toContain('A4')
+    expect(store.getPaperPresetBySize(210, 297)?.name).toBe('A4')
+  })
+
+  it('can replace built-in paper presets with host presets', () => {
+    const store = new DesignerStore(undefined, undefined, undefined, {
+      paper: {
+        mode: 'replace',
+        presets: [{ name: 'Enterprise Label', width: 76, height: 42 }],
+      },
+    })
+
+    expect(store.listPaperPresets()).toEqual([
+      { name: 'Enterprise Label', width: 76, height: 42 },
+    ])
+    expect(store.getPaperPreset('A4')).toBeUndefined()
+  })
+
+  it('applies the configured default paper only when the input has no explicit page size', () => {
+    const runtimeConfig = {
+      paper: {
+        mode: 'replace' as const,
+        presets: [{ name: 'Enterprise Label', width: 76, height: 42 }],
+        defaultPreset: 'Enterprise Label',
+      },
+    }
+
+    const defaulted = new DesignerStore(undefined, undefined, undefined, runtimeConfig)
+    const explicit = new DesignerStore({ page: { width: 90 } }, undefined, undefined, runtimeConfig)
+
+    expect(defaulted.schema.page).toMatchObject({
+      width: 76,
+      height: 42,
+      pageModel: { paper: { width: 76, height: 42 } },
+    })
+    expect(explicit.schema.page).toMatchObject({
+      width: 90,
+      height: 297,
+      pageModel: { paper: { width: 90, height: 297 } },
+    })
+  })
+
   it('keeps save status transitions behind the store API', () => {
     const store = new DesignerStore()
 

@@ -1,6 +1,6 @@
 import type { AIMaterialDescriptor } from '@easyink/shared'
-import { builtinDesignerMaterialBundle } from './designer'
+import { createBuiltinDesignerMaterialBundle } from './designer'
 
-export const builtinAIMaterialDescriptors: AIMaterialDescriptor[] = builtinDesignerMaterialBundle.materials
-  .map(material => material.aiDescriptor)
-  .filter((descriptor): descriptor is AIMaterialDescriptor => !!descriptor)
+const builtinDesignerMaterials = createBuiltinDesignerMaterialBundle('all').materials
+
+export const builtinAIMaterialDescriptors: AIMaterialDescriptor[] = builtinDesignerMaterials.map(material => material.aiDescriptor).filter((descriptor): descriptor is AIMaterialDescriptor => !!descriptor)

@@ -1,7 +1,10 @@
 import type { DocumentSchema, PageSchema, TextWatermarkPageLayerConfig } from '@easyink/schema'
+import { PAPER_PRESETS } from '@easyink/shared'
 import { describe, expect, it } from 'vitest'
-import { PAGE_PROPERTY_DESCRIPTORS } from './descriptors'
+import { createPagePropertyDescriptors } from './descriptors'
 import { filterVisible } from './resolve'
+
+const PAGE_PROPERTY_DESCRIPTORS = createPagePropertyDescriptors(PAPER_PRESETS)
 
 describe('page background descriptors', () => {
   it('hides background size and offset fields in full repeat mode', () => {
@@ -110,6 +113,33 @@ describe('page paper descriptors', () => {
       width: 210,
       height: 297,
       pageModel: { kind: 'paged-paper', paper: { width: 210, height: 297 } },
+    })
+  })
+
+  it('uses injected paper presets when selecting a preset', () => {
+    const document = makeDocument({
+      width: 80,
+      height: 120,
+      pageModel: {
+        kind: 'paged-paper',
+        paper: { width: 80, height: 120 },
+      },
+    })
+
+    const descriptors = createPagePropertyDescriptors([
+      { name: 'Enterprise Label', width: 76, height: 42 },
+    ])
+    const descriptor = descriptors.find(descriptor => descriptor.id === 'paperPreset')
+    const patch = descriptor?.normalize?.('Enterprise Label', { document })
+
+    expect(descriptor?.enum).toEqual([
+      { label: 'Enterprise Label', value: 'Enterprise Label' },
+      { label: 'designer.page.custom', value: 'custom' },
+    ])
+    expect(patch?.page).toMatchObject({
+      width: 76,
+      height: 42,
+      pageModel: { kind: 'paged-paper', paper: { width: 76, height: 42 } },
     })
   })
 })
