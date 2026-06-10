@@ -42,11 +42,122 @@ const preferenceProvider = createLocalStoragePreferenceProvider()
 | `preferenceProvider` | 工作台偏好持久化 |
 | `autoSave` | 模板自动保存 |
 | `fontProvider` | 字体目录和字体加载器 |
+| `runtimeConfig` | 配置内置物料、纸张预设和新建模板默认值 |
 | `setupStore` | 初始化 store 后做自定义注册 |
 | `contributions` | 注册面板、工具栏动作和命令扩展 |
 | `interactionProvider` | 接管确认、资产选择、上传和文件读取这类交互 |
 
 如果你只是做业务接入，`schema`、`dataSources`、`locale`、`preferenceProvider` 和 `autoSave` 最常用。剩下几项通常在你开始做二次开发时才会用到。
+
+## 运行时配置 {#runtime-config}
+
+如果你想控制内置物料范围，或者给纸张下拉框加企业纸张，用 `runtimeConfig`。
+
+先看一个常见配置：
+
+```ts
+import type { DesignerRuntimeConfig } from '@easyink/designer'
+
+const runtimeConfig: DesignerRuntimeConfig = {
+  materials: {
+    builtin: 'basic',
+  },
+  paper: {
+    mode: 'append',
+    presets: [
+      { name: '企业标签 80x50', width: 80, height: 50 },
+      { name: '热敏票据 76x130', width: 76, height: 130 },
+    ],
+    defaultPreset: '企业标签 80x50',
+  },
+}
+```
+
+```vue
+<EasyInkDesigner
+  v-model:schema="schema"
+  :runtime-config="runtimeConfig"
+/>
+```
+
+上面这段配置做了两件事：
+
+- 物料栏只注册内置基础物料。
+- 在页面属性的纸张预设里追加两种企业纸张，并把新建空模板的默认纸张设为 `企业标签 80x50`。
+
+你可能已经有疑问了：`defaultPreset` 会不会覆盖已有模板？不会。它只在输入 schema 没有显式 `page.width` / `page.height` 时生效。如果你打开的是已有模板，模板自己的页面尺寸优先。
+
+## 内置物料范围 {#builtin-material-set}
+
+`runtimeConfig.materials.builtin` 用来选择内置物料注册范围。
+
+```ts
+const runtimeConfig = {
+  materials: {
+    builtin: 'all',
+  },
+}
+```
+
+可选值有三个：
+
+| 值 | 注册内容 | 适合场景 |
+| --- | --- | --- |
+| `'all'` | 注册全部内置物料 | 需要完整设计能力 |
+| `'basic'` | 注册物料栏里的基础快捷物料，排除签名 | 只需要文本、图片、线条、矩形、二维码、条码这类基础编辑能力 |
+| `'none'` | 不注册内置物料 | 你要完全使用自己的物料包 |
+
+`basic` 这里跟物料栏的“基础物料”保持一致。也就是说，它不是按 `category` 猜出来的分类，而是基于内置 bundle 里的 `quickMaterialTypes` 得到的基础集合。
+
+如果你选了 `'none'`，画布仍然能打开，但没有可拖拽的内置物料。这个模式通常要配合自定义物料 bundle 使用：
+
+```ts
+const runtimeConfig = {
+  materials: {
+    builtin: 'none',
+    bundles: [enterpriseMaterialBundle],
+  },
+}
+```
+
+关于自定义物料 bundle 怎么写，可以继续看 [自定义物料开发](/advanced/custom-materials)。
+
+## 纸张预设 {#paper-presets}
+
+纸张预设控制的是页面属性面板里的“纸张”下拉框。
+
+默认情况下，Designer 会带上 A3、A4、A5、Letter、Legal 等常用纸张。如果你只是想加企业自己的纸张，用 `append`：
+
+```ts
+const runtimeConfig = {
+  paper: {
+    mode: 'append',
+    presets: [
+      { name: '物流面单 100x150', width: 100, height: 150 },
+    ],
+  },
+}
+```
+
+如果你的业务不想展示 EasyInk 默认纸张，只想展示自己的纸张，用 `replace`：
+
+```ts
+const runtimeConfig = {
+  paper: {
+    mode: 'replace',
+    presets: [
+      { name: '价签 40x30', width: 40, height: 30 },
+      { name: '吊牌 55x90', width: 55, height: 90 },
+    ],
+  },
+}
+```
+
+纸张尺寸目前按模板单位里的毫米语义填写。用户选中预设时，Designer 会同步更新 `page.width`、`page.height` 和 `page.pageModel.paper`，所以 Viewer 和打印链路看到的是同一份页面尺寸。
+
+:::tip 提示
+`name` 同时用作下拉显示和值匹配。我们建议你给企业纸张取稳定名称，比如 `物流面单 100x150`，不要用会频繁变化的营销文案。
+:::
 
 ## `schema` 自动补齐 {#schema-normalization}
 

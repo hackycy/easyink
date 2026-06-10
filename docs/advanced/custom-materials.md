@@ -9,7 +9,7 @@ description: EasyInk 自定义物料开发：同时覆盖 Schema、Designer 和 
 先看一版最小实现：
 
 ```ts
-import type { DesignerStore, MaterialDesignerExtension } from '@easyink/designer'
+import type { DesignerMaterialBundle, DesignerStore, MaterialDesignerExtension } from '@easyink/designer'
 import type { MaterialNode } from '@easyink/schema'
 import type { ViewerRuntime } from '@easyink/viewer'
 import { trustedViewerHtml } from '@easyink/core'
@@ -107,36 +107,38 @@ export function createPriceTagDesignerExtension(): MaterialDesignerExtension {
   }
 }
 
-export function registerPriceTagDesigner(store: DesignerStore) {
-  registerMaterialBundle(store, {
-    materials: [
-      {
-        type: PRICE_TAG_TYPE,
-        name: 'materials.priceTag.name',
-        icon: IconText,
-        category: 'basic',
-        capabilities: {
-          bindable: true,
-          resizable: true,
-          rotatable: true,
-        },
-        binding: {
-          kind: 'ordinary',
-          primaryProp: 'amount',
-          formatEditor: { tabs: ['preset', 'custom'], defaultTab: 'preset' },
-        },
-        createDefaultNode: createPriceTagNode,
-        factory: createPriceTagDesignerExtension,
-        localeMessages: priceTagLocaleMessages,
-        propSchemas: [
-          { key: 'label', label: 'materials.priceTag.property.label', type: 'string', group: 'content' },
-          { key: 'amount', label: 'materials.priceTag.property.amount', type: 'string', group: 'content' },
-        ],
+export const priceTagDesignerBundle = {
+  materials: [
+    {
+      type: PRICE_TAG_TYPE,
+      name: 'materials.priceTag.name',
+      icon: IconText,
+      category: 'basic',
+      capabilities: {
+        bindable: true,
+        resizable: true,
+        rotatable: true,
       },
-    ],
-    quickMaterialTypes: [PRICE_TAG_TYPE],
-    groupedCatalog: [{ type: PRICE_TAG_TYPE, group: 'utility' }],
-  })
+      binding: {
+        kind: 'ordinary',
+        primaryProp: 'amount',
+        formatEditor: { tabs: ['preset', 'custom'], defaultTab: 'preset' },
+      },
+      createDefaultNode: createPriceTagNode,
+      factory: createPriceTagDesignerExtension,
+      localeMessages: priceTagLocaleMessages,
+      propSchemas: [
+        { key: 'label', label: 'materials.priceTag.property.label', type: 'string', group: 'content' },
+        { key: 'amount', label: 'materials.priceTag.property.amount', type: 'string', group: 'content' },
+      ],
+    },
+  ],
+  quickMaterialTypes: [PRICE_TAG_TYPE],
+  groupedCatalog: [{ type: PRICE_TAG_TYPE, group: 'utility' }],
+} satisfies DesignerMaterialBundle
+
+export function registerPriceTagDesigner(store: DesignerStore) {
+  registerMaterialBundle(store, priceTagDesignerBundle)
 }
 
 export function registerPriceTagViewer(viewer: ViewerRuntime) {
@@ -184,7 +186,32 @@ ctx.registerToolbarAction(...)
 
 ## 注册到 Designer {#register-designer}
 
-Designer 的入口是 `setupStore`。我们在初始化 store 后注册物料包：
+Designer 接收的是 `DesignerMaterialBundle`。你可以把这个 bundle 直接交给 `runtimeConfig.materials.bundles`：
+
+```vue
+<script setup lang="ts">
+import { EasyInkDesigner } from '@easyink/designer'
+import { priceTagDesignerBundle } from './price-tag'
+
+const runtimeConfig = {
+  materials: {
+    builtin: 'basic',
+    bundles: [priceTagDesignerBundle],
+  },
+}
+</script>
+
+<template>
+  <EasyInkDesigner
+    v-model:schema="schema"
+    :runtime-config="runtimeConfig"
+  />
+</template>
+```
+
+这段代码保留了内置基础物料，同时追加你的 `price-tag` 物料。这里的 `builtin: 'basic'` 不是必须的；如果你想保留全部内置物料，用默认值或写成 `'all'` 就行。
+
+如果你已经在项目里用 `setupStore` 注册物料，也不用改 bundle 结构。`setupStore` 仍然适合需要直接操作 store 的初始化逻辑：
 
 ```vue
 <script setup lang="ts">
@@ -203,6 +230,11 @@ function setupStore(store) {
   />
 </template>
 ```
+
+两种方式都注册同一份 `priceTagDesignerBundle`，区别只在接入位置：
+
+- `runtimeConfig.materials.bundles`：更适合声明“这个 Designer 要有哪些物料”。
+- `setupStore`：更适合同时做其它 store 初始化，比如注册纸张、读取宿主状态或挂接调试逻辑。
 
 `registerMaterialBundle()` 会同时处理四类信息：
 
