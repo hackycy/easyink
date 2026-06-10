@@ -74,6 +74,7 @@ const horizontalLines = computed(() =>
 .ei-snap-overlay {
   position: absolute;
   inset: 0;
+  z-index: 1000;
   pointer-events: none;
   overflow: visible;
 

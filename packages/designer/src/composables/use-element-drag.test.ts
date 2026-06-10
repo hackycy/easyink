@@ -280,6 +280,30 @@ describe('useElementDrag', () => {
     expect(store.snapActiveLines).toHaveLength(0)
   })
 
+  it('emits element snap feedback while dragging away from an overlapping element', () => {
+    const target1 = makeNode('a', 0, 0, 10, 10)
+    const overlapped = makeNode('b', 0, 0, 10, 10)
+    const store = makeStore([target1, overlapped], ['a'])
+    store.workbench.snap.enabled = true
+    store.workbench.snap.elementSnap = true
+    const drag = useElementDrag(makeCtx(store))
+
+    const target = document.createElement('div')
+    target.dataset.id = 'a'
+    document.body.appendChild(target)
+
+    startDrag(target, drag, 0, 0)
+    window.dispatchEvent(pdEvent('pointermove', 2, 0))
+
+    expect(target1.x).toBe(0)
+    expect(store.snapActiveLines).toContainEqual(expect.objectContaining({
+      orientation: 'vertical',
+      position: 0,
+      source: 'element',
+      targetId: 'b',
+    }))
+  })
+
   it('pointercancel rolls back position and skips command', () => {
     const node = makeNode('n1', 10, 20)
     const store = makeStore([node], ['n1'])
