@@ -194,7 +194,7 @@ DOM-to-image 导出插件。
 | `createManagedPrintViewer` | Function | 创建托管 Viewer 打印面 |
 | `resolvePrintDriverValue` | Function | 解析静态值或函数式打印配置 |
 
-类型导出：`PrintDriverRequestContext`, `PrintDriverBaseOptions`, `ManagedPrintViewerOptions`, `ManagedPrintViewer`, `ManagedPrintInput`, `PrinterDeviceLike`, `PrintJobLike`, `ViewerPdfPageSize`, `ViewerPdfPageInput`
+类型导出：`PrintDriverRequestContext`, `PrintDriverBaseOptions`, `ManagedPrintViewerSetup`, `ManagedPrintViewerOptions`, `ManagedPrintViewer`, `ManagedPrintInput`, `PrinterDeviceLike`, `PrintJobLike`, `ViewerPdfPageSize`, `ViewerPdfPageInput`
 
 ## @easyink/print-integration-easyink-printer
 

@@ -58,12 +58,15 @@ export interface PrintDriverBaseOptions<TClient, TRequestOptions> {
  */
 export type ManagedPrintViewerKind = 'iframe' | 'dom'
 
+export type ManagedPrintViewerSetup = (viewer: ViewerRuntime) => void | Promise<void>
+
 export interface ManagedPrintViewerOptions {
   viewer?: ManagedPrintViewerKind
   autoDestroy?: boolean
   container?: HTMLElement
   iframe?: HTMLIFrameElement
   document?: Document
+  setupViewer?: ManagedPrintViewerSetup
 }
 
 export interface ManagedPrintInput extends ViewerTaskCallbacks {
@@ -285,6 +288,7 @@ class ManagedPrintViewerRuntime implements ManagedPrintViewer {
 
   async printWithDriver(input: ManagedPrintInput, driver: PrintDriver): Promise<void> {
     const viewer = await this.ensureViewer()
+    await this.options.setupViewer?.(viewer)
     viewer.registerPrintDriver(driver)
     try {
       await viewer.open({

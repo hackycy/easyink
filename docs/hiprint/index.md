@@ -9,6 +9,7 @@ HiPrint 集成适合已经有 `electron-hiprint` 运行时的桌面项目。
 先看高层打印器：
 
 ```ts
+import { registerBuiltinViewerMaterials } from '@easyink/builtin/all'
 import { createHiPrintClient, createHiPrintPrinter } from '@easyink/print-integration-hiprint'
 
 const client = createHiPrintClient({
@@ -18,6 +19,11 @@ const client = createHiPrintClient({
 const printer = createHiPrintPrinter({
   client,
   viewer: 'iframe',
+  setupViewer(viewer) {
+    registerBuiltinViewerMaterials((type, binding, extension) => {
+      viewer.registerMaterial(type, binding, extension)
+    })
+  },
 })
 
 await client.useDefaultPrinter()

@@ -1,6 +1,7 @@
 import type { EasyInkPrinterDevice, EasyInkPrinterJob, EasyInkPrinterOffset, EasyInkPrinterPaperSize, EasyInkPrinterPrintHtmlInput, EasyInkPrinterPrintInput, EasyInkPrinterUserData } from '@easyink/print-integration-easyink-printer'
 import { createEasyInkPrinter, createEasyInkPrinterClient, DEFAULT_EASYINK_PRINTER_URL } from '@easyink/print-integration-easyink-printer'
 import { computed, reactive, ref, watch } from 'vue'
+import { setupPlaygroundViewerMaterials } from '../viewer-materials'
 
 const CONFIG_KEY = 'easyink:printServiceConfig'
 const DEFAULT_AUDIT_USER_DATA: EasyInkPrinterUserData = {
@@ -91,6 +92,7 @@ const client = createEasyInkPrinterClient({
 const printer = createEasyInkPrinter({
   client,
   viewer: 'iframe',
+  setupViewer: setupPlaygroundViewerMaterials,
 })
 const connectionState = ref(client.connectionState)
 const lastError = ref(client.lastError)

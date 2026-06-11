@@ -9,6 +9,7 @@ LODOP 集成适合已经部署 `LODOP` 或 `C-Lodop` 控件的浏览器项目。
 先看高层打印器：
 
 ```ts
+import { registerBuiltinViewerMaterials } from '@easyink/builtin/all'
 import { createLodopClient, createLodopPrinter } from '@easyink/print-integration-lodop'
 
 const client = createLodopClient({
@@ -20,6 +21,11 @@ const client = createLodopClient({
 const printer = createLodopPrinter({
   client,
   viewer: 'iframe',
+  setupViewer(viewer) {
+    registerBuiltinViewerMaterials((type, binding, extension) => {
+      viewer.registerMaterial(type, binding, extension)
+    })
+  },
 })
 
 await client.useDefaultPrinter()

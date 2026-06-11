@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { ExportFormatPlugin, ExportProgress } from '@easyink/export-runtime'
 import type { DocumentSchema, ViewerDiagnosticEvent, ViewerExportContext, ViewerHost, ViewerRuntime, ViewerTaskPhaseEvent, ViewerTaskProgressEvent } from '@easyink/viewer'
-import { registerBuiltinViewerMaterials } from '@easyink/builtin/all'
 import { createDomImageExportPlugin } from '@easyink/export-plugin-dom-image'
 import { createDomPdfExportPlugin } from '@easyink/export-plugin-dom-pdf'
 import { createExportRuntime } from '@easyink/export-runtime'
@@ -31,6 +30,7 @@ import { useEasyInkPrint } from './hooks/useEasyInkPrint'
 import { usePrinter } from './hooks/useHiPrint'
 import { useLodopPrint } from './hooks/useLodopPrint'
 import { useRenderApiService } from './hooks/useRenderApiService'
+import { setupPlaygroundViewerMaterials } from './viewer-materials'
 
 const props = defineProps<{
   schema: DocumentSchema
@@ -86,9 +86,7 @@ onMounted(async () => {
   })
 
   viewer = createViewer({ host: viewerHost, fontProvider: playgroundFontProvider })
-  registerBuiltinViewerMaterials((type, binding, extension) => {
-    viewer?.registerMaterial(type, binding, extension)
-  })
+  setupPlaygroundViewerMaterials(viewer)
   registerOutputIntegrations(viewer)
   await viewer.open({
     schema: props.schema,

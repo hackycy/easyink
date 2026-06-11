@@ -34,9 +34,11 @@ describe('easy ink printer', () => {
       printPdf: vi.fn(async () => 'job-12345678'),
       waitForJob: vi.fn(async () => ({ jobId: 'job-12345678', status: 'completed' })),
     }
+    const setupViewer = vi.fn()
     const printer = createEasyInkPrinter({
       client: client as never,
       viewer: 'dom',
+      setupViewer,
       defaults: {
         printerName: 'Printer A',
         copies: 3,
@@ -49,6 +51,7 @@ describe('easy ink printer', () => {
       data: {},
     })
 
+    expect(setupViewer).toHaveBeenCalledTimes(1)
     expect(renderPagesToPdfBlob).toHaveBeenCalledTimes(1)
     expect(client.printPdf).toHaveBeenCalledWith(expect.any(Blob), expect.objectContaining({
       copies: 3,

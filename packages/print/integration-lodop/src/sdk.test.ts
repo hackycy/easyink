@@ -23,9 +23,11 @@ describe('lodop printer', () => {
       useDefaultPrinter: vi.fn(async () => 'Printer A'),
       printPages: vi.fn(async () => {}),
     }
+    const setupViewer = vi.fn()
     const printer = createLodopPrinter({
       client: client as never,
       viewer: 'dom',
+      setupViewer,
       copies: () => 2,
       forcePageSize: () => true,
     })
@@ -35,6 +37,7 @@ describe('lodop printer', () => {
       data: {},
     })
 
+    expect(setupViewer).toHaveBeenCalledTimes(1)
     expect(client.printPages).toHaveBeenCalledTimes(1)
     expect(client.printPages).toHaveBeenCalledWith(expect.any(Array), expect.objectContaining({
       copies: 2,

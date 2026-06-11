@@ -107,4 +107,32 @@ describe('print core utilities', () => {
     expect(print).toHaveBeenCalledTimes(1)
     expect(document.body.childElementCount).toBe(before)
   })
+
+  it('runs setupViewer before opening the managed viewer', async () => {
+    let setupCompleted = false
+    const print = vi.fn(async () => {
+      expect(setupCompleted).toBe(true)
+    })
+    const setupViewer = vi.fn(async (viewer) => {
+      expect(viewer.schema).toBeUndefined()
+      await Promise.resolve()
+      setupCompleted = true
+    })
+    const managed = createManagedPrintViewer({
+      viewer: 'dom',
+      setupViewer,
+    })
+
+    await managed.printWithDriver({
+      schema: createFixedSchema(),
+      data: {},
+    }, {
+      id: 'managed-setup-test',
+      defaults: { pageSizeMode: 'fixed' },
+      print,
+    })
+
+    expect(setupViewer).toHaveBeenCalledTimes(1)
+    expect(print).toHaveBeenCalledTimes(1)
+  })
 })

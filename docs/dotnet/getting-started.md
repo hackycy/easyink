@@ -32,11 +32,17 @@ pnpm add @easyink/print-integration-easyink-printer
 先用默认 PDF 提交路径：
 
 ```ts
+import { registerBuiltinViewerMaterials } from '@easyink/builtin/all'
 import { createEasyInkPrinter } from '@easyink/print-integration-easyink-printer'
 
 const printer = createEasyInkPrinter({
   serviceUrl: 'http://localhost:18080',
   viewer: 'iframe',
+  setupViewer(viewer) {
+    registerBuiltinViewerMaterials((type, binding, extension) => {
+      viewer.registerMaterial(type, binding, extension)
+    })
+  },
 })
 
 await printer.ready()
@@ -157,6 +163,12 @@ await client.printPdfAndWait(file, {
 const printer = createEasyInkPrinter({
   serviceUrl: 'http://localhost:18080',
   apiKey: 'your-secret-key',
+  viewer: 'iframe',
+  setupViewer(viewer) {
+    registerBuiltinViewerMaterials((type, binding, extension) => {
+      viewer.registerMaterial(type, binding, extension)
+    })
+  },
 })
 ```
 
