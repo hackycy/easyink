@@ -12,6 +12,7 @@
     "dev": "vite build --watch"
   },
   "dependencies": {
+    "@easyink/builtin": "workspace:*",
     "@easyink/viewer": "workspace:*"
   },
   "devDependencies": {

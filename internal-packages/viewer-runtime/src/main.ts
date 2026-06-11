@@ -1,4 +1,5 @@
 import type { DocumentSchema, DocumentSchemaInput, ViewerDiagnosticEvent } from '@easyink/viewer'
+import { registerBuiltinViewerMaterials } from '@easyink/builtin/all'
 import { createViewer, normalizeDocumentSchema } from '@easyink/viewer'
 import './style.css'
 
@@ -26,6 +27,9 @@ async function boot(): Promise<void> {
 
     const schema = normalizeRuntimeSchema(payload.schema)
     const viewer = createViewer({ container: root })
+    registerBuiltinViewerMaterials((type, binding, extension) => {
+      viewer.registerMaterial(type, binding, extension)
+    })
     await viewer.open({
       schema,
       data: isRecord(payload.data) ? payload.data : {},

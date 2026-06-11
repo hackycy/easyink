@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import type { DataSourceDescriptor, DocumentSchema } from '@easyink/designer'
+import type { DataSourceDescriptor, DesignerRuntimeConfig, DocumentSchema } from '@easyink/designer'
 import type { SampleTemplateEntry } from '@easyink/samples'
 import type { StoredTemplate } from './storage/template-store'
 import { createAssistantContribution, createBrowserAssistantLLMConfigService } from '@easyink/assistant-designer-bridge'
 import { placeholderImagesPlugin } from '@easyink/assistant-plugin-placeholder-images'
 import { prototypeDesignerPlugin } from '@easyink/assistant-plugin-prototype-designer'
 import { receiptDesignerPlugin } from '@easyink/assistant-plugin-receipt-designer'
+import { builtinDesignerMaterialBundle } from '@easyink/builtin/all'
 import { createLocalStoragePreferenceProvider, EasyInkDesigner } from '@easyink/designer'
 import { enUS, zhCN } from '@easyink/designer/locale'
 import { blankA4Template, flowInvoiceTemplate, invoiceDemoData, sampleDataSources } from '@easyink/samples'
@@ -23,6 +24,11 @@ import { jsonToDataSource } from './utils/json-to-datasource'
 
 const schema = ref<DocumentSchema>(blankA4Template)
 const preferenceProvider = createLocalStoragePreferenceProvider()
+const runtimeConfig = {
+  materials: {
+    bundles: [builtinDesignerMaterialBundle],
+  },
+} satisfies DesignerRuntimeConfig
 
 // Workspace state
 // Either editing a stored template OR previewing a sample (not both).
@@ -258,6 +264,7 @@ const contributions = [createAssistantContribution({
     :font-provider="playgroundFontProvider"
     :locale="designerLocale"
     :preference-provider="preferenceProvider"
+    :runtime-config="runtimeConfig"
     :auto-save="autoSaveOptions"
     :contributions="contributions"
   >

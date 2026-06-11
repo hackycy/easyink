@@ -13,9 +13,13 @@ description: '@easyink/viewer 是独立的渲染运行时，接收 Schema 和数
 先看一段最小代码：
 
 ```ts
+import { registerBuiltinViewerMaterials } from '@easyink/builtin/all'
 import { createViewer } from '@easyink/viewer'
 
 const viewer = createViewer({ iframe: iframeElement })
+registerBuiltinViewerMaterials((type, binding, extension) => {
+  viewer.registerMaterial(type, binding, extension)
+})
 
 await viewer.open({
   schema: documentSchema,
@@ -30,10 +34,11 @@ viewer.destroy()
 这段代码做了三件事：
 
 - `createViewer({ iframe })` 创建运行时，并把渲染目标放进 iframe。
+- `registerBuiltinViewerMaterials()` 注册内置物料渲染器。
 - `open({ schema, data })` 校验 Schema、归一化 Schema，然后渲染页面。
 - `destroy()` 清理当前 Host 挂载内容、注册表和字体缓存。
 
-如果你只是想把模板预览出来，这就是最短路径。
+Viewer 不会自动内置官方物料；如果你的模板使用内置物料，需要先从 `@easyink/builtin/all` 或 `@easyink/builtin/basic` 注册对应渲染器。
 
 ## 创建 Viewer {#create-viewer}
 

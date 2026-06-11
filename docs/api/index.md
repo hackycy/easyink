@@ -68,6 +68,20 @@ description: EasyInk API 索引：快速定位公开能力的包入口，涵盖 
 
 类型导出：`ViewerHost`, `ViewerOptions`, `ViewerOpenInput`, `ViewerRenderResult`, `ViewerDiagnosticEvent`, `PrintDriver`, `ViewerPrintOptions`, `ViewerPrintPolicy`, `ViewerPrintContext`, `ViewerExporter`, `ViewerExportContext`, `ViewerExportOptions`, `ViewerTaskCallbacks`, `ViewerTaskPhaseEvent`, `ViewerTaskProgressEvent`, `MaterialViewerExtension`, `ViewerRenderContext`, `ViewerMeasureContext`, `FontDescriptor`, `FontProvider`
 
+## @easyink/builtin
+
+官方内置物料集合。推荐从子路径选择集合：`@easyink/builtin/all`、`@easyink/builtin/basic`、`@easyink/builtin/none`。
+
+| 导出 | 类型 | 说明 |
+|------|------|------|
+| `builtinDesignerMaterialBundle` | Object | 可传给 `runtimeConfig.materials.bundles` 的设计态物料包 |
+| `builtinDesignerMaterials` | Array | 当前子路径包含的设计态物料列表 |
+| `builtinViewerMaterialBundle` | Object | 当前子路径包含的 Viewer 渲染物料包 |
+| `builtinViewerMaterials` | Array | 当前子路径包含的 Viewer 渲染物料列表 |
+| `registerBuiltinViewerMaterials` | Function | 将当前子路径的 Viewer 渲染物料注册到 `ViewerRuntime` |
+
+类型导出：`BuiltinMaterialSet`, `BuiltinDesignerMaterialBundle`, `BuiltinDesignerMaterialRegistration`, `BuiltinDesignerCatalogGroupRegistration`, `BuiltinDesignerCatalogRegistration`, `BuiltinViewerMaterialBundle`, `BuiltinViewerMaterialRegistration`, `BuiltinViewerRegistrar`, `BuiltinLocaleMessages`
+
 ## @easyink/schema
 
 文档 Schema 类型定义和工具。

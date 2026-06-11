@@ -2,10 +2,7 @@ import type { DocumentSchema, PageSchema } from '@easyink/schema'
 import type { PaperPreset } from '@easyink/shared'
 import type { DesignerMaterialBundle } from './materials/registry'
 
-export type BuiltinDesignerMaterialSet = 'all' | 'basic' | 'none'
-
 export interface DesignerMaterialConfig {
-  builtin?: BuiltinDesignerMaterialSet
   bundles?: DesignerMaterialBundle[]
 }
 

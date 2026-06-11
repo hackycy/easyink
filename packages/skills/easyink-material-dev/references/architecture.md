@@ -172,7 +172,7 @@ Viewer runtime stages:
 
 Custom material hosts:
 
-- Designer: call `registerMaterialBundle(store, bundle)` inside `EasyInkDesigner` `setupStore`.
+- Designer: pass the bundle through `runtimeConfig.materials.bundles`, or call `registerMaterialBundle(store, bundle)` inside `EasyInkDesigner` `setupStore`.
 - Viewer: call `viewer.registerMaterial(type, binding, extension)` with the same material type and binding definition that Designer uses.
 - Heavy Designer renderers may use `lazyFactory` on the Designer material entry. Keep material metadata synchronous; only the `MaterialDesignerExtension` factory should live in the lazy chunk.
 
@@ -180,6 +180,7 @@ Built-in materials:
 
 - Add package imports and entries in `packages/builtin/src/designer.ts`.
 - Add Viewer registration in `packages/builtin/src/viewer.ts`.
+- Keep `@easyink/builtin/all`, `@easyink/builtin/basic`, and `@easyink/builtin/none` aligned. `all` exposes every built-in material; `basic` must only import the reduced set it registers; `none` must stay empty.
 - Add `aiDescriptor` to the Designer material registration when generation should know it. Assistant consumes the live Designer material manifest; do not add material-specific prompt rules.
 - Add `@easyink/material-x` dependency to `packages/builtin/package.json`.
 
@@ -200,7 +201,7 @@ Built-in materials:
 - `localeMessages`: material-owned Designer locale messages for catalog labels, property labels, material-local actions, placeholders, history labels, and data-contract labels.
 - `sectionFilter`: hide or show property panel sections.
 
-`catalogs` creates material panel groups. Each group owns a stable `id`, a translatable `label`, optional ordering, and item entries. Register catalog label keys in the same bundle locale messages when the group is custom or when the bundle must work with `builtin: 'none'`. A built-in material can be fully registered for Designer and Viewer but still be invisible in the material panel if its type is missing from every catalog group; add a regression test when introducing a new built-in material.
+`catalogs` creates material panel groups. Each group owns a stable `id`, a translatable `label`, optional ordering, and item entries. Register catalog label keys in the same bundle locale messages when the group is custom or when the host may omit the built-in bundle. A built-in material can be fully registered for Designer and Viewer but still be invisible in the material panel if its type is missing from every catalog group; add a regression test when introducing a new built-in material.
 
 ## Contribution Boundary
 

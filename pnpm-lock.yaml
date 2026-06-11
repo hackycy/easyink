@@ -341,6 +341,9 @@ importers:
 
   internal-packages/viewer-runtime:
     dependencies:
+      '@easyink/builtin':
+        specifier: workspace:*
+        version: link:../../packages/builtin
       '@easyink/viewer':
         specifier: workspace:*
         version: link:../../packages/viewer
@@ -764,9 +767,6 @@ importers:
 
   packages/designer:
     dependencies:
-      '@easyink/builtin':
-        specifier: workspace:*
-        version: link:../builtin
       '@easyink/core':
         specifier: workspace:*
         version: link:../core
@@ -1408,9 +1408,6 @@ importers:
 
   packages/viewer:
     dependencies:
-      '@easyink/builtin':
-        specifier: workspace:*
-        version: link:../builtin
       '@easyink/core':
         specifier: workspace:*
         version: link:../core
@@ -1435,6 +1432,9 @@ importers:
       '@easyink/assistant-plugin-receipt-designer':
         specifier: workspace:*
         version: link:../packages/assistant/plugin-receipt-designer
+      '@easyink/builtin':
+        specifier: workspace:*
+        version: link:../packages/builtin
       '@easyink/designer':
         specifier: workspace:*
         version: link:../packages/designer

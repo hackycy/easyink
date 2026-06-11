@@ -5,7 +5,6 @@ import type { DocumentSchema, DocumentSchemaInput } from '@easyink/schema'
 import type { Contribution } from '../contributions'
 import type { DesignerRuntimeConfig } from '../runtime-config'
 import type { DesignerInteractionProvider, LocaleMessages, PreferenceProvider, StatusBarState, StoreSetup, TemplateAutoSaveOptions } from '../types'
-import { createBuiltinDesignerMaterialBundle } from '@easyink/builtin'
 import { builtinLocales } from '@easyink/locales'
 import { onBeforeUnmount, onMounted, provide, reactive, ref, shallowRef, watch } from 'vue'
 import { provideDesignerStore } from '../composables'
@@ -122,10 +121,6 @@ function resolveLocaleCode(locale: LocaleMessages): string | undefined {
 }
 
 function registerRuntimeMaterialBundles(store: DesignerStore, runtimeConfig: DesignerRuntimeConfig | undefined): void {
-  const builtinSet = runtimeConfig?.materials?.builtin ?? 'all'
-  if (builtinSet !== 'none')
-    registerMaterialBundle(store, createBuiltinDesignerMaterialBundle(builtinSet))
-
   for (const bundle of runtimeConfig?.materials?.bundles ?? [])
     registerMaterialBundle(store, bundle)
 }

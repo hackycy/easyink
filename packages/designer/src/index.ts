@@ -19,7 +19,6 @@ export type {
   DesignerMaterialRegistration,
 } from './materials/registry'
 export type {
-  BuiltinDesignerMaterialSet,
   DesignerDefaultsConfig,
   DesignerMaterialConfig,
   DesignerPaperConfig,

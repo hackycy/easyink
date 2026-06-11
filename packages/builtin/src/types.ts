@@ -5,7 +5,7 @@ import type { Component } from 'vue'
 
 export type BuiltinPanelSectionId = 'geometry' | 'props' | 'overlay' | 'binding' | 'visibility'
 
-export type BuiltinDesignerMaterialSet = 'all' | 'basic' | 'none'
+export type BuiltinMaterialSet = 'all' | 'basic' | 'none'
 
 export interface BuiltinMaterialCapabilities {
   bindable?: boolean
@@ -66,6 +66,16 @@ export interface BuiltinDesignerMaterialBundle {
 }
 
 export type BuiltinViewerRegistrar = (type: string, binding: MaterialBindingDefinition, extension: MaterialViewerExtension) => void
+
+export interface BuiltinViewerMaterialRegistration {
+  type: string
+  binding: MaterialBindingDefinition
+  extension: MaterialViewerExtension
+}
+
+export interface BuiltinViewerMaterialBundle {
+  materials: BuiltinViewerMaterialRegistration[]
+}
 
 export interface BuiltinLocaleMessages {
   [key: string]: string | BuiltinLocaleMessages

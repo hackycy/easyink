@@ -1,13 +1,12 @@
-import type { BuiltinDesignerMaterialBundle, BuiltinLocaleMessages, BuiltinMaterialSet, BuiltinPanelSectionId } from './types'
+import type {
+  BuiltinDesignerMaterialBundle,
+  BuiltinLocaleMessages,
+  BuiltinPanelSectionId,
+  BuiltinViewerMaterialBundle,
+  BuiltinViewerRegistrar,
+} from './types'
 import {
   IconBarcode,
-  IconChartBar,
-  IconChartCustom,
-  IconChartGauge,
-  IconChartLine,
-  IconChartPie,
-  IconChartRadar,
-  IconChartScatter,
   IconDataTable,
   IconEllipse,
   IconHeart,
@@ -20,7 +19,6 @@ import {
   IconRating,
   IconRect,
   IconRingProgress,
-  IconSignature,
   IconStar,
   IconSvg,
   IconTable,
@@ -34,69 +32,8 @@ import {
   barcodeLocaleMessages,
   createBarcodeExtension,
   createBarcodeNode,
+  renderBarcode,
 } from '@easyink/material-barcode'
-import {
-  CHART_BAR_CAPABILITIES,
-  CHART_BAR_TYPE,
-  chartBarAIMaterialDescriptor,
-  chartBarDesignerPropSchemas,
-  chartBarLocaleMessages,
-  createChartBarExtension,
-  createChartBarNode,
-} from '@easyink/material-chart-bar'
-import { chartCustomAIMaterialDescriptor } from '@easyink/material-chart-custom/ai'
-import { chartCustomLocaleMessages } from '@easyink/material-chart-custom/locale'
-import { chartCustomDesignerPropSchemas } from '@easyink/material-chart-custom/prop-schemas'
-import {
-  CHART_CUSTOM_CAPABILITIES,
-  CHART_CUSTOM_TYPE,
-  createChartCustomNode,
-} from '@easyink/material-chart-custom/schema'
-import {
-  CHART_GAUGE_CAPABILITIES,
-  CHART_GAUGE_TYPE,
-  chartGaugeAIMaterialDescriptor,
-  chartGaugeDesignerPropSchemas,
-  chartGaugeLocaleMessages,
-  createChartGaugeExtension,
-  createChartGaugeNode,
-} from '@easyink/material-chart-gauge'
-import {
-  CHART_LINE_CAPABILITIES,
-  CHART_LINE_TYPE,
-  chartLineAIMaterialDescriptor,
-  chartLineDesignerPropSchemas,
-  chartLineLocaleMessages,
-  createChartLineExtension,
-  createChartLineNode,
-} from '@easyink/material-chart-line'
-import {
-  CHART_PIE_CAPABILITIES,
-  CHART_PIE_TYPE,
-  chartPieAIMaterialDescriptor,
-  chartPieDesignerPropSchemas,
-  chartPieLocaleMessages,
-  createChartPieExtension,
-  createChartPieNode,
-} from '@easyink/material-chart-pie'
-import {
-  CHART_RADAR_CAPABILITIES,
-  CHART_RADAR_TYPE,
-  chartRadarAIMaterialDescriptor,
-  chartRadarDesignerPropSchemas,
-  chartRadarLocaleMessages,
-  createChartRadarExtension,
-  createChartRadarNode,
-} from '@easyink/material-chart-radar'
-import {
-  CHART_SCATTER_CAPABILITIES,
-  CHART_SCATTER_TYPE,
-  chartScatterAIMaterialDescriptor,
-  chartScatterDesignerPropSchemas,
-  chartScatterLocaleMessages,
-  createChartScatterExtension,
-  createChartScatterNode,
-} from '@easyink/material-chart-scatter'
 import {
   createEllipseExtension,
   createEllipseNode,
@@ -105,6 +42,7 @@ import {
   ellipseAIMaterialDescriptor,
   ellipseDesignerPropSchemas,
   ellipseLocaleMessages,
+  renderEllipse,
 } from '@easyink/material-ellipse'
 import {
   createFlowRowExtension,
@@ -114,6 +52,8 @@ import {
   flowRowAIMaterialDescriptor,
   flowRowDesignerPropSchemas,
   flowRowLocaleMessages,
+  measureFlowRow,
+  renderFlowRow,
 } from '@easyink/material-flow-row'
 import {
   createImageExtension,
@@ -123,10 +63,12 @@ import {
   imageAIMaterialDescriptor,
   imageDesignerPropSchemas,
   imageLocaleMessages,
+  renderImage,
 } from '@easyink/material-image'
 import {
   createLineExtension,
   createLineNode,
+  createLineViewerExtension,
   LINE_CAPABILITIES,
   LINE_TYPE,
   lineAIMaterialDescriptor,
@@ -141,6 +83,7 @@ import {
   pageNumberAIMaterialDescriptor,
   pageNumberDesignerPropSchemas,
   pageNumberLocaleMessages,
+  renderPageNumber,
 } from '@easyink/material-page-number'
 import {
   createProgressExtension,
@@ -150,6 +93,7 @@ import {
   progressAIMaterialDescriptor,
   progressDesignerPropSchemas,
   progressLocaleMessages,
+  renderProgress,
 } from '@easyink/material-progress'
 import {
   createQrcodeExtension,
@@ -159,6 +103,7 @@ import {
   qrcodeAIMaterialDescriptor,
   qrcodeDesignerPropSchemas,
   qrcodeLocaleMessages,
+  renderQrcode,
 } from '@easyink/material-qrcode'
 import {
   createRatingExtension,
@@ -168,6 +113,7 @@ import {
   ratingAIMaterialDescriptor,
   ratingDesignerPropSchemas,
   ratingLocaleMessages,
+  renderRating,
 } from '@easyink/material-rating'
 import {
   createRectExtension,
@@ -177,10 +123,12 @@ import {
   rectAIMaterialDescriptor,
   rectDesignerPropSchemas,
   rectLocaleMessages,
+  renderRect,
 } from '@easyink/material-rect'
 import {
   createRingProgressExtension,
   createRingProgressNode,
+  renderRingProgress,
   RING_PROGRESS_CAPABILITIES,
   RING_PROGRESS_TYPE,
   ringProgressAIMaterialDescriptor,
@@ -188,17 +136,9 @@ import {
   ringProgressLocaleMessages,
 } from '@easyink/material-ring-progress'
 import {
-  createSignatureExtension,
-  createSignatureNode,
-  SIGNATURE_CAPABILITIES,
-  SIGNATURE_TYPE,
-  signatureAIMaterialDescriptor,
-  signatureDesignerPropSchemas,
-  signatureLocaleMessages,
-} from '@easyink/material-signature'
-import {
   createSvgCustomExtension,
   createSvgCustomNode,
+  renderSvgCustom,
   SVG_CUSTOM_CAPABILITIES,
   SVG_CUSTOM_TYPE,
   svgCustomAIMaterialDescriptor,
@@ -208,6 +148,7 @@ import {
 import {
   createSvgHeartExtension,
   createSvgHeartNode,
+  renderSvgHeart,
   SVG_HEART_CAPABILITIES,
   SVG_HEART_TYPE,
   svgHeartAIMaterialDescriptor,
@@ -217,6 +158,7 @@ import {
 import {
   createSvgStarExtension,
   createSvgStarNode,
+  renderSvgStar,
   SVG_STAR_CAPABILITIES,
   SVG_STAR_TYPE,
   svgStarAIMaterialDescriptor,
@@ -226,16 +168,20 @@ import {
 import {
   createTableDataExtension,
   createTableDataNode,
+  measureTableData,
+  renderTableData,
   TABLE_DATA_CAPABILITIES,
   TABLE_DATA_TYPE,
   tableDataAIMaterialDescriptor,
   tableDataDesignerPropSchemas,
+  tableDataFragmentPaginator,
   tableDataLocaleMessages,
 } from '@easyink/material-table-data'
 import { tableKernelLocaleMessages } from '@easyink/material-table-kernel'
 import {
   createTableStaticExtension,
   createTableStaticNode,
+  renderTableStatic,
   TABLE_STATIC_CAPABILITIES,
   TABLE_STATIC_TYPE,
   tableStaticAIMaterialDescriptor,
@@ -245,6 +191,9 @@ import {
 import {
   createTextExtension,
   createTextNode,
+  getTextRenderSize,
+  measureText,
+  renderText,
   TEXT_CAPABILITIES,
   TEXT_TYPE,
   textAIMaterialDescriptor,
@@ -253,13 +202,6 @@ import {
 } from '@easyink/material-text'
 import {
   barcodeMaterialBinding,
-  chartBarMaterialBinding,
-  chartCustomMaterialBinding,
-  chartGaugeMaterialBinding,
-  chartLineMaterialBinding,
-  chartPieMaterialBinding,
-  chartRadarMaterialBinding,
-  chartScatterMaterialBinding,
   customMaterialBinding,
   imageMaterialBinding,
   noMaterialBinding,
@@ -271,6 +213,18 @@ import {
   textMaterialBinding,
 } from './bindings'
 
+export type {
+  BuiltinDesignerCatalogGroupRegistration,
+  BuiltinDesignerCatalogRegistration,
+  BuiltinDesignerMaterialBundle,
+  BuiltinDesignerMaterialRegistration,
+  BuiltinLocaleMessages,
+  BuiltinMaterialSet,
+  BuiltinViewerMaterialBundle,
+  BuiltinViewerMaterialRegistration,
+  BuiltinViewerRegistrar,
+} from './types'
+
 function tableSectionFilter(sectionId: BuiltinPanelSectionId): boolean {
   return sectionId !== 'binding'
 }
@@ -281,7 +235,6 @@ const builtinCatalogLocaleMessages = {
       catalog: {
         basic: '基础',
         data: '数据',
-        chart: '图表',
         svg: 'SVG',
         utility: '工具',
       },
@@ -293,7 +246,6 @@ const builtinCatalogLocaleMessages = {
         catalog: {
           basic: '基础',
           data: '数据',
-          chart: '图表',
           svg: 'SVG',
           utility: '工具',
         },
@@ -304,7 +256,6 @@ const builtinCatalogLocaleMessages = {
         catalog: {
           basic: 'Basic',
           data: 'Data',
-          chart: 'Chart',
           svg: 'SVG',
           utility: 'Utility',
         },
@@ -344,7 +295,7 @@ function isLocaleObject(value: unknown): value is BuiltinLocaleMessages {
   return typeof value === 'object' && value !== null
 }
 
-const ALL_BUILTIN_DESIGNER_MATERIAL_BUNDLE: BuiltinDesignerMaterialBundle = {
+export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
   localeMessages: mergeLocaleMessages(tableKernelLocaleMessages, builtinCatalogLocaleMessages),
   materials: [
     {
@@ -424,19 +375,6 @@ const ALL_BUILTIN_DESIGNER_MATERIAL_BUNDLE: BuiltinDesignerMaterialBundle = {
       factory: createRectExtension,
       propSchemas: rectDesignerPropSchemas,
       localeMessages: rectLocaleMessages,
-    },
-    {
-      type: SIGNATURE_TYPE,
-      name: 'materials.signature.name',
-      icon: IconSignature,
-      category: 'basic',
-      capabilities: SIGNATURE_CAPABILITIES,
-      binding: noMaterialBinding,
-      aiDescriptor: signatureAIMaterialDescriptor,
-      createDefaultNode: createSignatureNode,
-      factory: createSignatureExtension,
-      propSchemas: signatureDesignerPropSchemas,
-      localeMessages: signatureLocaleMessages,
     },
     {
       type: ELLIPSE_TYPE,
@@ -532,98 +470,6 @@ const ALL_BUILTIN_DESIGNER_MATERIAL_BUNDLE: BuiltinDesignerMaterialBundle = {
       localeMessages: ratingLocaleMessages,
     },
     {
-      type: CHART_BAR_TYPE,
-      name: 'materials.chartBar.name',
-      icon: IconChartBar,
-      category: 'chart',
-      capabilities: CHART_BAR_CAPABILITIES,
-      binding: chartBarMaterialBinding,
-      aiDescriptor: chartBarAIMaterialDescriptor,
-      createDefaultNode: createChartBarNode,
-      factory: createChartBarExtension,
-      propSchemas: chartBarDesignerPropSchemas,
-      localeMessages: chartBarLocaleMessages,
-    },
-    {
-      type: CHART_LINE_TYPE,
-      name: 'materials.chartLine.name',
-      icon: IconChartLine,
-      category: 'chart',
-      capabilities: CHART_LINE_CAPABILITIES,
-      binding: chartLineMaterialBinding,
-      aiDescriptor: chartLineAIMaterialDescriptor,
-      createDefaultNode: createChartLineNode,
-      factory: createChartLineExtension,
-      propSchemas: chartLineDesignerPropSchemas,
-      localeMessages: chartLineLocaleMessages,
-    },
-    {
-      type: CHART_PIE_TYPE,
-      name: 'materials.chartPie.name',
-      icon: IconChartPie,
-      category: 'chart',
-      capabilities: CHART_PIE_CAPABILITIES,
-      binding: chartPieMaterialBinding,
-      aiDescriptor: chartPieAIMaterialDescriptor,
-      createDefaultNode: createChartPieNode,
-      factory: createChartPieExtension,
-      propSchemas: chartPieDesignerPropSchemas,
-      localeMessages: chartPieLocaleMessages,
-    },
-    {
-      type: CHART_RADAR_TYPE,
-      name: 'materials.chartRadar.name',
-      icon: IconChartRadar,
-      category: 'chart',
-      capabilities: CHART_RADAR_CAPABILITIES,
-      binding: chartRadarMaterialBinding,
-      aiDescriptor: chartRadarAIMaterialDescriptor,
-      createDefaultNode: createChartRadarNode,
-      factory: createChartRadarExtension,
-      propSchemas: chartRadarDesignerPropSchemas,
-      localeMessages: chartRadarLocaleMessages,
-    },
-    {
-      type: CHART_SCATTER_TYPE,
-      name: 'materials.chartScatter.name',
-      icon: IconChartScatter,
-      category: 'chart',
-      capabilities: CHART_SCATTER_CAPABILITIES,
-      binding: chartScatterMaterialBinding,
-      aiDescriptor: chartScatterAIMaterialDescriptor,
-      createDefaultNode: createChartScatterNode,
-      factory: createChartScatterExtension,
-      propSchemas: chartScatterDesignerPropSchemas,
-      localeMessages: chartScatterLocaleMessages,
-    },
-    {
-      type: CHART_GAUGE_TYPE,
-      name: 'materials.chartGauge.name',
-      icon: IconChartGauge,
-      category: 'chart',
-      capabilities: CHART_GAUGE_CAPABILITIES,
-      binding: chartGaugeMaterialBinding,
-      aiDescriptor: chartGaugeAIMaterialDescriptor,
-      createDefaultNode: createChartGaugeNode,
-      factory: createChartGaugeExtension,
-      propSchemas: chartGaugeDesignerPropSchemas,
-      localeMessages: chartGaugeLocaleMessages,
-    },
-    {
-      type: CHART_CUSTOM_TYPE,
-      name: 'materials.chartCustom.name',
-      icon: IconChartCustom,
-      category: 'chart',
-      capabilities: CHART_CUSTOM_CAPABILITIES,
-      binding: chartCustomMaterialBinding,
-      aiDescriptor: chartCustomAIMaterialDescriptor,
-      createDefaultNode: createChartCustomNode,
-      factory: () => ({ renderContent: () => () => {} }),
-      lazyFactory: async () => (await import('@easyink/material-chart-custom/designer')).createChartCustomExtension,
-      propSchemas: chartCustomDesignerPropSchemas,
-      localeMessages: chartCustomLocaleMessages,
-    },
-    {
       type: SVG_CUSTOM_TYPE,
       name: 'materials.svgCustom.name',
       icon: IconSvg,
@@ -689,7 +535,6 @@ const ALL_BUILTIN_DESIGNER_MATERIAL_BUNDLE: BuiltinDesignerMaterialBundle = {
         { type: IMAGE_TYPE },
         { type: QRCODE_TYPE },
         { type: BARCODE_TYPE },
-        { type: SIGNATURE_TYPE },
       ],
     },
     {
@@ -703,20 +548,6 @@ const ALL_BUILTIN_DESIGNER_MATERIAL_BUNDLE: BuiltinDesignerMaterialBundle = {
         { type: RING_PROGRESS_TYPE },
         { type: PROGRESS_TYPE },
         { type: RATING_TYPE },
-      ],
-    },
-    {
-      id: 'chart',
-      label: 'materials.catalog.chart',
-      order: 30,
-      items: [
-        { type: CHART_BAR_TYPE },
-        { type: CHART_LINE_TYPE },
-        { type: CHART_PIE_TYPE },
-        { type: CHART_RADAR_TYPE },
-        { type: CHART_SCATTER_TYPE },
-        { type: CHART_GAUGE_TYPE },
-        { type: CHART_CUSTOM_TYPE },
       ],
     },
     {
@@ -740,52 +571,63 @@ const ALL_BUILTIN_DESIGNER_MATERIAL_BUNDLE: BuiltinDesignerMaterialBundle = {
   ],
 }
 
-export function createBuiltinDesignerMaterialBundle(set: BuiltinMaterialSet = 'all'): BuiltinDesignerMaterialBundle {
-  if (set === 'none') {
-    return {
-      materials: [],
-      catalogs: [],
-    }
-  }
+export const builtinDesignerMaterials = builtinDesignerMaterialBundle.materials
 
-  if (set === 'basic') {
-    return filterBuiltinDesignerMaterialBundle(material =>
-      material.category !== 'chart' && material.type !== SIGNATURE_TYPE,
-    )
-  }
-
-  return cloneBuiltinDesignerMaterialBundle(ALL_BUILTIN_DESIGNER_MATERIAL_BUNDLE)
+export const builtinViewerMaterialBundle: BuiltinViewerMaterialBundle = {
+  materials: [
+    {
+      type: TEXT_TYPE,
+      binding: textMaterialBinding,
+      extension: {
+        render: (node, ctx) => renderText(node, ctx),
+        measure: (node, ctx) => measureText(node, ctx),
+        getRenderSize: (node, ctx) => getTextRenderSize(node, ctx),
+      },
+    },
+    { type: IMAGE_TYPE, binding: imageMaterialBinding, extension: { render: (node, ctx) => renderImage(node, ctx.unit) } },
+    { type: BARCODE_TYPE, binding: barcodeMaterialBinding, extension: { render: node => renderBarcode(node) } },
+    { type: QRCODE_TYPE, binding: qrcodeMaterialBinding, extension: { render: node => renderQrcode(node) } },
+    { type: LINE_TYPE, binding: noMaterialBinding, extension: createLineViewerExtension() },
+    { type: RECT_TYPE, binding: noMaterialBinding, extension: { render: (node, ctx) => renderRect(node, ctx.unit) } },
+    { type: ELLIPSE_TYPE, binding: noMaterialBinding, extension: { render: (node, ctx) => renderEllipse(node, ctx.unit) } },
+    { type: TABLE_STATIC_TYPE, binding: customMaterialBinding, extension: { render: (node, ctx) => renderTableStatic(node, ctx) } },
+    {
+      type: TABLE_DATA_TYPE,
+      binding: customMaterialBinding,
+      extension: {
+        render: (node, ctx) => renderTableData(node, ctx),
+        measure: (node, ctx) => measureTableData(node, ctx),
+        fragmentPaginator: tableDataFragmentPaginator,
+      },
+    },
+    {
+      type: FLOW_ROW_TYPE,
+      binding: customMaterialBinding,
+      extension: {
+        render: (node, ctx) => renderFlowRow(node, ctx),
+        measure: (node, ctx) => measureFlowRow(node, ctx),
+      },
+    },
+    { type: RING_PROGRESS_TYPE, binding: ringProgressMaterialBinding, extension: { render: (node, ctx) => renderRingProgress(node, ctx) } },
+    { type: PROGRESS_TYPE, binding: progressMaterialBinding, extension: { render: (node, ctx) => renderProgress(node, ctx) } },
+    { type: RATING_TYPE, binding: ratingMaterialBinding, extension: { render: (node, ctx) => renderRating(node, ctx) } },
+    { type: SVG_CUSTOM_TYPE, binding: svgCustomMaterialBinding, extension: { render: node => renderSvgCustom(node) } },
+    { type: SVG_STAR_TYPE, binding: noMaterialBinding, extension: { render: node => renderSvgStar(node) } },
+    { type: SVG_HEART_TYPE, binding: noMaterialBinding, extension: { render: (node, ctx) => renderSvgHeart(node, ctx.unit) } },
+    {
+      type: PAGE_NUMBER_TYPE,
+      binding: noMaterialBinding,
+      extension: {
+        render: (node, ctx) => renderPageNumber(node, ctx),
+        pageAware: true,
+      },
+    },
+  ],
 }
 
-export const builtinDesignerMaterialSets = {
-  all: createBuiltinDesignerMaterialBundle('all'),
-  basic: createBuiltinDesignerMaterialBundle('basic'),
-  none: createBuiltinDesignerMaterialBundle('none'),
-} satisfies Record<BuiltinMaterialSet, BuiltinDesignerMaterialBundle>
+export const builtinViewerMaterials = builtinViewerMaterialBundle.materials
 
-function filterBuiltinDesignerMaterialBundle(predicate: (material: BuiltinDesignerMaterialBundle['materials'][number]) => boolean): BuiltinDesignerMaterialBundle {
-  const materials = ALL_BUILTIN_DESIGNER_MATERIAL_BUNDLE.materials.filter(predicate)
-  const materialTypes = new Set(materials.map(material => material.type))
-
-  return {
-    localeMessages: ALL_BUILTIN_DESIGNER_MATERIAL_BUNDLE.localeMessages,
-    materials,
-    catalogs: ALL_BUILTIN_DESIGNER_MATERIAL_BUNDLE.catalogs
-      .map(group => ({
-        ...group,
-        items: group.items.filter(entry => materialTypes.has(entry.type)),
-      }))
-      .filter(group => group.items.length > 0),
-  }
-}
-
-function cloneBuiltinDesignerMaterialBundle(bundle: BuiltinDesignerMaterialBundle): BuiltinDesignerMaterialBundle {
-  return {
-    localeMessages: bundle.localeMessages,
-    materials: [...bundle.materials],
-    catalogs: bundle.catalogs.map(group => ({
-      ...group,
-      items: [...group.items],
-    })),
-  }
+export function registerBuiltinViewerMaterials(register: BuiltinViewerRegistrar): void {
+  for (const material of builtinViewerMaterials)
+    register(material.type, material.binding, material.extension)
 }

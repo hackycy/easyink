@@ -17,10 +17,10 @@ description: 5 分钟跑通 EasyInk 最小示例：嵌入 Designer、生成 Sche
 先安装两个最常用的包：
 
 ```bash
-pnpm add @easyink/designer @easyink/viewer
+pnpm add @easyink/designer @easyink/viewer @easyink/builtin
 ```
 
-上面这两个包已经覆盖了大多数业务的第一阶段接入。关于其它包怎么选，后面再看 [包概览](/guide/packages) 就行。
+上面这些包已经覆盖了大多数业务的第一阶段接入。`@easyink/builtin` 提供官方内置物料，你可以按子路径选择接入范围。关于其它包怎么选，后面再看 [包概览](/guide/packages) 就行。
 
 ## Designer 入门
 
@@ -31,6 +31,7 @@ pnpm add @easyink/designer @easyink/viewer
 ```vue
 <script setup lang="ts">
 import { ref } from 'vue'
+import { builtinDesignerMaterialBundle } from '@easyink/builtin/all'
 import { EasyInkDesigner, createLocalStoragePreferenceProvider } from '@easyink/designer'
 import { zhCN } from '@easyink/designer/locale'
 import '@easyink/designer/index.css'
@@ -47,6 +48,11 @@ const schema = ref({
 })
 
 const preferenceProvider = createLocalStoragePreferenceProvider()
+const runtimeConfig = {
+  materials: {
+    bundles: [builtinDesignerMaterialBundle],
+  },
+}
 </script>
 
 <template>
@@ -54,6 +60,7 @@ const preferenceProvider = createLocalStoragePreferenceProvider()
     v-model:schema="schema"
     :locale="zhCN"
     :preference-provider="preferenceProvider"
+    :runtime-config="runtimeConfig"
   />
 </template>
 ```
@@ -143,6 +150,7 @@ Viewer 是命令式运行时。你创建实例，调用 `open({ schema, data })`
 ```vue
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { registerBuiltinViewerMaterials } from '@easyink/builtin/all'
 import { createViewer } from '@easyink/viewer'
 
 const props = defineProps<{
@@ -158,6 +166,9 @@ onMounted(async () => {
     return
 
   viewer = createViewer({ iframe: iframeRef.value })
+  registerBuiltinViewerMaterials((type, binding, extension) => {
+    viewer?.registerMaterial(type, binding, extension)
+  })
   await viewer.open({
     schema: props.schema as never,
     data: props.data,

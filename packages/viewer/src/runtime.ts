@@ -15,7 +15,6 @@ import type {
   ViewerRenderResult,
 } from './types'
 import type { ViewerHost } from './viewer-host'
-import { registerBuiltinViewerMaterials } from '@easyink/builtin'
 import { createInternalHooks, FontManager, readNodeRepeatScope, runLayoutPipeline, runPagination } from '@easyink/core'
 import { normalizeDocumentSchema, traverseNodes, validateSchema } from '@easyink/schema'
 import { deepClone, UNIT_FACTOR } from '@easyink/shared'
@@ -53,9 +52,6 @@ export class ViewerRuntime {
           : undefined)
     this._fontManager = new FontManager(options.fontProvider)
     this._hooks = createInternalHooks()
-    registerBuiltinViewerMaterials((type, binding, extension) => {
-      this.registerMaterial(type, binding, extension)
-    })
   }
 
   // ---------------------------------------------------------------------------

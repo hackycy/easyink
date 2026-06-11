@@ -28,7 +28,6 @@
     "vue": "catalog:framework"
   },
   "dependencies": {
-    "@easyink/builtin": "workspace:*",
     "@easyink/core": "workspace:*",
     "@easyink/datasource": "workspace:*",
     "@easyink/icons": "workspace:*",

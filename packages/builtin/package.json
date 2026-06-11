@@ -10,7 +10,22 @@
   },
   "sideEffects": false,
   "exports": {
-    ".": "./dist/index.mjs",
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    },
+    "./all": {
+      "types": "./dist/all.d.mts",
+      "import": "./dist/all.mjs"
+    },
+    "./basic": {
+      "types": "./dist/basic.d.mts",
+      "import": "./dist/basic.mjs"
+    },
+    "./none": {
+      "types": "./dist/none.d.mts",
+      "import": "./dist/none.mjs"
+    },
     "./package.json": "./package.json"
   },
   "types": "./dist/index.d.mts",

@@ -7,6 +7,7 @@ Use this reference when a material should be generated, selected, repaired, or r
 - `packages/shared/src/ai-generation.ts`: source types for `AIMaterialDescriptor` and `MaterialKnowledgeDescriptor`.
 - `packages/designer/src/materials/registry.ts`: stores each registered Designer material's optional `aiDescriptor`.
 - `packages/builtin/src/designer.ts`: built-in Designer registration must pass `aiDescriptor` on the material entry.
+- `packages/builtin/src/all.ts`, `packages/builtin/src/basic.ts`, and `packages/builtin/src/none.ts`: package-size entry points expose the selected built-in Designer bundle and matching Viewer registrations.
 - `packages/builtin/src/ai.ts`: derived descriptor list from the built-in Designer bundle, not a second hand-maintained registry.
 - `packages/assistant/designer-bridge/src/material-manifest.ts`: exports the live Designer store as `AssistantMaterialManifest`; props and binding definitions are serialized, and `material.aiDescriptor` becomes `manifest.materials[].ai`.
 - `packages/assistant/designer-bridge/src/contribution.ts`: passes `materialManifest` through a getter so Assistant sees newly registered materials without restart.
@@ -150,8 +151,9 @@ Built-in materials:
 
 1. Export `xAIMaterialDescriptor` from the material package.
 2. Add `aiDescriptor: xAIMaterialDescriptor` to the material entry in `packages/builtin/src/designer.ts`.
-3. Do not add material-specific prompt text. Assistant reads the live material manifest, including binding and data-contract target fields.
-4. Keep Designer capabilities, prop schemas, Viewer behavior, and AI descriptor claims aligned.
+3. Keep `@easyink/builtin/all` and any applicable reduced-set entry point aligned so the live Designer material manifest reflects what the host registered.
+4. Do not add material-specific prompt text. Assistant reads the live material manifest, including binding and data-contract target fields.
+5. Keep Designer capabilities, prop schemas, Viewer behavior, and AI descriptor claims aligned.
 
 Custom host materials:
 

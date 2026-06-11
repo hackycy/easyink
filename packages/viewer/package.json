@@ -22,7 +22,6 @@
     "dev": "tsdown --watch"
   },
   "dependencies": {
-    "@easyink/builtin": "workspace:*",
     "@easyink/core": "workspace:*",
     "@easyink/schema": "workspace:*",
     "@easyink/shared": "workspace:*"

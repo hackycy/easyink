@@ -4,6 +4,26 @@
 
 Internal built-in material registry for EasyInk runtimes
 
+## Usage
+
+Choose a material set by subpath:
+
+```ts
+import { builtinDesignerMaterialBundle, registerBuiltinViewerMaterials } from '@easyink/builtin/all'
+
+const runtimeConfig = {
+  materials: {
+    bundles: [builtinDesignerMaterialBundle],
+  },
+}
+
+registerBuiltinViewerMaterials((type, binding, extension) => {
+  viewer.registerMaterial(type, binding, extension)
+})
+```
+
+Available subpaths: `@easyink/builtin/all`, `@easyink/builtin/basic`, `@easyink/builtin/none`.
+
 ## Documentation
 
 - [Docs](https://hackycy.github.io/easyink/docs/)
