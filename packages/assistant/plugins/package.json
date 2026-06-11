@@ -1,7 +1,7 @@
 {
   "name": "@easyink/assistant-plugins",
   "type": "module",
-  "version": "0.0.23",
+  "version": "0.0.24",
   "description": "Plugin contribution protocol for EasyInk Assistant",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",
