@@ -202,7 +202,7 @@ func TestRenderHTMLRendersChartSvgInBrowser(t *testing.T) {
 	var piePaths int
 	var placeholderText string
 	err = chromedp.Run(browserCtx,
-		chromedp.Navigate("data:text/html;base64,"+base64.StdEncoding.EncodeToString([]byte(html))),
+		chromedp.Navigate(browserHTMLDataURL(html)),
 		chromedp.WaitReady(".easyink-ready", chromedp.ByQuery),
 		chromedp.Evaluate(`document.querySelectorAll('[data-element-type="chart"]').length`, &chartCount),
 		chromedp.Evaluate(`document.querySelectorAll('[data-element-id="bar"] div').length`, &barRects),
@@ -262,7 +262,7 @@ func TestRenderHTMLFlowRowExpandsRecordsInBrowser(t *testing.T) {
 	var text string
 	var records int
 	err = chromedp.Run(browserCtx,
-		chromedp.Navigate("data:text/html;base64,"+base64.StdEncoding.EncodeToString([]byte(html))),
+		chromedp.Navigate(browserHTMLDataURL(html)),
 		chromedp.WaitReady(".easyink-ready", chromedp.ByQuery),
 		chromedp.Text(`[data-easyink-material="flow-row"]`, &text, chromedp.ByQuery),
 		chromedp.Evaluate(`document.querySelectorAll('[data-easyink-material="flow-row"] > div').length`, &records),
@@ -314,7 +314,7 @@ func TestRenderHTMLRendersCodeAndSanitizedSvgMaterialsInBrowser(t *testing.T) {
 	var svgPathCount int
 	var unsafeAttributes int
 	err = chromedp.Run(browserCtx,
-		chromedp.Navigate("data:text/html;base64,"+base64.StdEncoding.EncodeToString([]byte(html))),
+		chromedp.Navigate(browserHTMLDataURL(html)),
 		chromedp.WaitReady(".easyink-ready", chromedp.ByQuery),
 		chromedp.Evaluate(`document.querySelectorAll('[data-element-id="qr"] svg path').length`, &qrPaths),
 		chromedp.Evaluate(`document.querySelectorAll('[data-element-id="barcode"] svg rect').length`, &barcodeRects),
@@ -450,4 +450,8 @@ func TestRenderHTMLEscapesScriptBreakingPayload(t *testing.T) {
 	if !strings.Contains(html, `\u003c/script\u003e`) {
 		t.Fatalf("expected script-safe JSON escape: %s", html)
 	}
+}
+
+func browserHTMLDataURL(html string) string {
+	return "data:text/html;charset=utf-8;base64," + base64.StdEncoding.EncodeToString([]byte(html))
 }

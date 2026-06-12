@@ -1,8 +1,10 @@
 package render_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
+	"io"
 	"os"
 	"strings"
 	"testing"
@@ -11,6 +13,8 @@ import (
 	"easyink/render/host/internal/browser"
 	"easyink/render/host/internal/protocol"
 	"easyink/render/host/internal/render"
+
+	pdfparse "github.com/ledongthuc/pdf"
 )
 
 func TestRenderPrintPDFHTMLAndEasyInkWithBrowser(t *testing.T) {
@@ -153,6 +157,55 @@ func TestRenderPrintPDFUsesOfflineResourceBundle(t *testing.T) {
 	}
 	if !strings.HasPrefix(string(result.PDF), "%PDF-") {
 		t.Fatalf("expected PDF output")
+	}
+}
+
+func TestRenderPrintPDFPreservesCJKTextWithoutMetaCharset(t *testing.T) {
+	browserPath := os.Getenv("EASYINK_RENDER_BROWSER_PATH")
+	if browserPath == "" {
+		t.Skip("EASYINK_RENDER_BROWSER_PATH is not set")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	manager, err := browser.New(ctx, browserPath, t.TempDir())
+	if err != nil {
+		t.Fatalf("start browser: %v", err)
+	}
+	defer manager.Shutdown()
+	service := render.NewService(manager)
+
+	result, err := service.RenderPrintPDF(ctx, protocol.PrintPDFRequest{
+		RequestID: "req-cjk-html-no-meta",
+		Source: protocol.Source{
+			Type: "html",
+			HTML: `<!doctype html><html><head><title>中文打印测试</title><style>body{font-family:sans-serif;font-size:22px}</style></head><body><main class="easyink-ready">中文打印测试：商品名称 墨水 数量 价格 合计 ¥123.45</main></body></html>`,
+		},
+		PDF: protocol.PDFOptions{
+			PaperWidthMm:  80,
+			PaperHeightMm: 120,
+			MarginMm:      &protocol.MarginMm{Top: 4, Right: 4, Bottom: 4, Left: 4},
+		},
+	})
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	reader, err := pdfparse.NewReader(bytes.NewReader(result.PDF), int64(len(result.PDF)))
+	if err != nil {
+		t.Fatalf("read pdf: %v", err)
+	}
+	plainText, err := reader.GetPlainText()
+	if err != nil {
+		t.Fatalf("extract pdf text: %v", err)
+	}
+	textBytes, err := io.ReadAll(plainText)
+	if err != nil {
+		t.Fatalf("read pdf text: %v", err)
+	}
+	text := string(textBytes)
+	for _, expected := range []string{"中文打印测试", "商品名称", "墨水", "¥123.45"} {
+		if !strings.Contains(text, expected) {
+			t.Fatalf("expected extracted PDF text to include %q, got %q", expected, text)
+		}
 	}
 }
 

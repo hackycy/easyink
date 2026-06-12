@@ -178,7 +178,7 @@ func (s *Service) renderHTML(ctx context.Context, req protocol.PrintPDFRequest, 
 	chromedp.ListenTarget(renderCtx, tracker.handleEvent)
 
 	loadedHTML := htmlWithBaseURL(htmlWithInjectedHeadStyle(req.Source.HTML, fontCSS), req.Source.BaseURL)
-	htmlDataURL := "data:text/html;base64," + base64.StdEncoding.EncodeToString([]byte(loadedHTML))
+	dataURL := htmlDataURL(loadedHTML)
 	setupActions := []chromedp.Action{
 		network.Enable(),
 		runtime.Enable(),
@@ -186,7 +186,7 @@ func (s *Service) renderHTML(ctx context.Context, req protocol.PrintPDFRequest, 
 			{URLPattern: "*", RequestStage: fetch.RequestStageRequest},
 			{URLPattern: "*", RequestStage: fetch.RequestStageResponse},
 		}),
-		chromedp.Navigate(htmlDataURL),
+		chromedp.Navigate(dataURL),
 		chromedp.WaitReady("body", chromedp.ByQuery),
 	}
 	if err := chromedp.Run(renderCtx, setupActions...); err != nil {
@@ -539,19 +539,11 @@ func htmlWithBaseURL(htmlDoc, baseURL string) string {
 		return htmlDoc
 	}
 	baseTag := `<base href="` + html.EscapeString(baseURL) + `">`
-	lower := strings.ToLower(htmlDoc)
+	lower := asciiLower(htmlDoc)
 	if strings.Contains(lower, "<base") {
 		return htmlDoc
 	}
-	if idx := strings.Index(lower, "<head>"); idx >= 0 {
-		insertAt := idx + len("<head>")
-		return htmlDoc[:insertAt] + baseTag + htmlDoc[insertAt:]
-	}
-	if idx := strings.Index(lower, "<html>"); idx >= 0 {
-		insertAt := idx + len("<html>")
-		return htmlDoc[:insertAt] + "<head>" + baseTag + "</head>" + htmlDoc[insertAt:]
-	}
-	return "<head>" + baseTag + "</head>" + htmlDoc
+	return htmlWithHeadInsertion(htmlDoc, baseTag)
 }
 
 func htmlWithInjectedHeadStyle(htmlDoc, css string) string {
@@ -559,16 +551,144 @@ func htmlWithInjectedHeadStyle(htmlDoc, css string) string {
 		return htmlDoc
 	}
 	style := `<style data-easyink-offline-fonts>` + css + `</style>`
-	lower := strings.ToLower(htmlDoc)
-	if idx := strings.Index(lower, "<head>"); idx >= 0 {
-		insertAt := idx + len("<head>")
-		return htmlDoc[:insertAt] + style + htmlDoc[insertAt:]
+	return htmlWithHeadInsertion(htmlDoc, style)
+}
+
+func htmlWithHeadInsertion(htmlDoc, content string) string {
+	lower := asciiLower(htmlDoc)
+	if insertAt := headInsertionPoint(lower); insertAt >= 0 {
+		return htmlDoc[:insertAt] + content + htmlDoc[insertAt:]
 	}
-	if idx := strings.Index(lower, "<html>"); idx >= 0 {
-		insertAt := idx + len("<html>")
-		return htmlDoc[:insertAt] + "<head>" + style + "</head>" + htmlDoc[insertAt:]
+	if idx := findStartTagEnd(lower, "html"); idx >= 0 {
+		insertAt := idx
+		return htmlDoc[:insertAt] + "<head>" + content + "</head>" + htmlDoc[insertAt:]
 	}
-	return "<head>" + style + "</head>" + htmlDoc
+	return "<head>" + content + "</head>" + htmlDoc
+}
+
+func headInsertionPoint(lowerHTML string) int {
+	headStartEnd := findStartTagEnd(lowerHTML, "head")
+	if headStartEnd < 0 {
+		return -1
+	}
+	if charsetEnd := findHeadCharsetMetaEnd(lowerHTML, headStartEnd); charsetEnd >= 0 {
+		return charsetEnd
+	}
+	return headStartEnd
+}
+
+func findHeadCharsetMetaEnd(lowerHTML string, start int) int {
+	limit := len(lowerHTML)
+	if headEnd := strings.Index(lowerHTML[start:], "</head"); headEnd >= 0 {
+		limit = start + headEnd
+	}
+	for pos := start; pos < limit; {
+		idx := strings.Index(lowerHTML[pos:limit], "<meta")
+		if idx < 0 {
+			return -1
+		}
+		idx += pos
+		tagNameEnd := idx + len("<meta")
+		if !isTagNameBoundary(lowerHTML, tagNameEnd) {
+			pos = tagNameEnd
+			continue
+		}
+		tagEnd := htmlTagEnd(lowerHTML, tagNameEnd)
+		if tagEnd < 0 || tagEnd > limit {
+			return -1
+		}
+		if metaDeclaresCharset(lowerHTML[idx:tagEnd]) {
+			return tagEnd
+		}
+		pos = tagEnd
+	}
+	return -1
+}
+
+func metaDeclaresCharset(metaTag string) bool {
+	for pos := 0; pos < len(metaTag); {
+		idx := strings.Index(metaTag[pos:], "charset")
+		if idx < 0 {
+			return false
+		}
+		idx += pos
+		beforeOK := idx == 0 || !isAttributeNameByte(metaTag[idx-1])
+		after := idx + len("charset")
+		for after < len(metaTag) && isHTMLSpace(metaTag[after]) {
+			after++
+		}
+		if beforeOK && after < len(metaTag) && metaTag[after] == '=' {
+			return true
+		}
+		pos = idx + len("charset")
+	}
+	return false
+}
+
+func findStartTagEnd(lowerHTML, tag string) int {
+	search := "<" + tag
+	for pos := 0; pos < len(lowerHTML); {
+		idx := strings.Index(lowerHTML[pos:], search)
+		if idx < 0 {
+			return -1
+		}
+		idx += pos
+		tagNameEnd := idx + len(search)
+		if !isTagNameBoundary(lowerHTML, tagNameEnd) {
+			pos = tagNameEnd
+			continue
+		}
+		return htmlTagEnd(lowerHTML, tagNameEnd)
+	}
+	return -1
+}
+
+func htmlTagEnd(value string, start int) int {
+	var quote byte
+	for i := start; i < len(value); i++ {
+		switch value[i] {
+		case '\'', '"':
+			if quote == 0 {
+				quote = value[i]
+			} else if quote == value[i] {
+				quote = 0
+			}
+		case '>':
+			if quote == 0 {
+				return i + 1
+			}
+		}
+	}
+	return -1
+}
+
+func isTagNameBoundary(value string, idx int) bool {
+	if idx >= len(value) {
+		return false
+	}
+	return value[idx] == '>' || value[idx] == '/' || isHTMLSpace(value[idx])
+}
+
+func isAttributeNameByte(value byte) bool {
+	return value >= 'a' && value <= 'z' || value >= '0' && value <= '9' || value == '-' || value == '_' || value == ':'
+}
+
+func isHTMLSpace(value byte) bool {
+	return value == ' ' || value == '\n' || value == '\t' || value == '\r' || value == '\f'
+}
+
+func asciiLower(value string) string {
+	buf := []byte(value)
+	for i, c := range buf {
+		if c >= 'A' && c <= 'Z' {
+			buf[i] = c + ('a' - 'A')
+		}
+	}
+	return string(buf)
+}
+
+func htmlDataURL(htmlDoc string) string {
+	return "data:text/html;charset=utf-8;base64," + base64.StdEncoding.EncodeToString([]byte(htmlDoc))
 }
 
 func buildOfflineResources(source protocol.Source, maxInputBytes int64) (map[string]offlineResource, string, error) {

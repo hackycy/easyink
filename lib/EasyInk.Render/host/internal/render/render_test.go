@@ -53,6 +53,39 @@ func TestHTMLWithBaseURLPreservesExistingBase(t *testing.T) {
 	}
 }
 
+func TestHTMLDataURLDeclaresUTF8(t *testing.T) {
+	got := htmlDataURL("<html><body>中文</body></html>")
+	if !strings.HasPrefix(got, "data:text/html;charset=utf-8;base64,") {
+		t.Fatalf("data URL = %q", got)
+	}
+}
+
+func TestHeadInjectionKeepsCharsetMetaFirst(t *testing.T) {
+	input := `<!doctype html><html><head><meta charset="utf-8"><title>中文</title></head><body></body></html>`
+	got := htmlWithBaseURL(htmlWithInjectedHeadStyle(input, "body{font-family:sans-serif;}"), "https://example.com/templates/")
+
+	assertOrder(t, got,
+		`<meta charset="utf-8">`,
+		`<base href="https://example.com/templates/">`,
+		`<style data-easyink-offline-fonts>`,
+		`<title>中文</title>`,
+	)
+}
+
+func TestHeadInjectionRecognizesHeadAttributesAndHTTPEquivCharset(t *testing.T) {
+	input := `<!doctype html><html><head data-root=">"><meta http-equiv="content-type" content="text/html; charset=utf-8"><title>x</title></head></html>`
+	got := htmlWithInjectedHeadStyle(input, "body{}")
+
+	assertOrder(t, got,
+		`<meta http-equiv="content-type" content="text/html; charset=utf-8">`,
+		`<style data-easyink-offline-fonts>`,
+		`<title>x</title>`,
+	)
+	if strings.Count(got, "<head") != 1 {
+		t.Fatalf("expected existing head to be reused, got %s", got)
+	}
+}
+
 func TestBuildOfflineResourcesValidatesAndGeneratesFontCSS(t *testing.T) {
 	resources, css, err := buildOfflineResources(protocol.Source{
 		Resources: []protocol.Resource{
@@ -261,4 +294,19 @@ func escapePDFString(value string) string {
 	value = strings.ReplaceAll(value, `(`, `\(`)
 	value = strings.ReplaceAll(value, `)`, `\)`)
 	return value
+}
+
+func assertOrder(t *testing.T, value string, fragments ...string) {
+	t.Helper()
+	last := -1
+	for _, fragment := range fragments {
+		idx := strings.Index(value, fragment)
+		if idx < 0 {
+			t.Fatalf("expected %q in %s", fragment, value)
+		}
+		if idx <= last {
+			t.Fatalf("expected %q after previous fragment in %s", fragment, value)
+		}
+		last = idx
+	}
 }
