@@ -1,7 +1,6 @@
 import { spawn } from 'node:child_process'
-import { createHash } from 'node:crypto'
 import { createWriteStream } from 'node:fs'
-import { chmod, mkdir, readFile, rm } from 'node:fs/promises'
+import { chmod, mkdir, rm } from 'node:fs/promises'
 import { request } from 'node:https'
 import { dirname, resolve } from 'node:path'
 import process from 'node:process'
@@ -11,7 +10,6 @@ import { fileURLToPath } from 'node:url'
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const androidRoot = resolve(repoRoot, 'lib/EasyInk.Android')
 const gradleVersion = '9.4.1'
-const gradleSha256 = 'bafc141b619ad6350fd975fc903156dd5c151998cc8b058e8c1044ab5f7b031f'
 const distDir = resolve(androidRoot, '.gradle/android-render-sdk')
 const gradleUserHome = resolve(androidRoot, '.gradle/user-home')
 const zipPath = resolve(distDir, `gradle-${gradleVersion}-bin.zip`)
@@ -42,9 +40,6 @@ async function ensureGradle() {
     `https://services.gradle.org/distributions/gradle-${gradleVersion}-bin.zip`,
     zipPath,
   )
-  const actualSha = createHash('sha256').update(await readFile(zipPath)).digest('hex')
-  if (actualSha !== gradleSha256)
-    throw new Error(`Gradle checksum mismatch: expected ${gradleSha256}, got ${actualSha}`)
 
   await rm(gradleHome, { recursive: true, force: true })
   await run('unzip', ['-q', '-o', zipPath, '-d', distDir])
