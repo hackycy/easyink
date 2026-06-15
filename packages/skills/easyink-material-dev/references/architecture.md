@@ -180,7 +180,8 @@ Built-in materials:
 
 - Add package imports and entries in `packages/builtin/src/designer.ts`.
 - Add Viewer registration in `packages/builtin/src/viewer.ts`.
-- Keep `@easyink/builtin/all`, `@easyink/builtin/basic`, and `@easyink/builtin/none` aligned. `all` exposes every built-in material; `basic` must only import the reduced set it registers; `none` must stay empty.
+- Keep the public `@easyink/builtin` export surface aligned. `package.json` only exposes the root entry plus `./all`, `./basic`, `./none`, and `./package.json`; `src/designer.ts`, `src/viewer.ts`, and `src/bindings.ts` are internal sources, not public subpaths.
+- Root exports should expose the all-set legacy aliases plus explicit all/basic/none bundle aliases and Viewer registration helpers. `@easyink/builtin/all` exposes every built-in material; `@easyink/builtin/basic` must only import the reduced set it registers; `@easyink/builtin/none` must stay empty.
 - Add `aiDescriptor` to the Designer material registration when generation should know it. Assistant consumes the live Designer material manifest; do not add material-specific prompt rules.
 - Add `@easyink/material-x` dependency to `packages/builtin/package.json`.
 

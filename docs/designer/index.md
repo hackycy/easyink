@@ -97,7 +97,7 @@ const runtimeConfig: DesignerRuntimeConfig = {
 
 ## 内置物料范围 {#builtin-material-set}
 
-内置物料由 `@easyink/builtin` 提供。Designer 不会自动内置它；你需要从子路径选择一个集合，再把它作为普通 `DesignerMaterialBundle` 传给 `runtimeConfig.materials.bundles`。
+内置物料由 `@easyink/builtin` 提供。Designer 不会自动内置它；推荐从公开子路径选择一个集合，再把它作为普通 `DesignerMaterialBundle` 传给 `runtimeConfig.materials.bundles`。根入口 `@easyink/builtin` 保留 all 集合兼容导出，也提供 all/basic/none 的显式别名，但业务接入通常直接用下面的子路径更清晰。
 
 ```ts
 import { builtinDesignerMaterialBundle } from '@easyink/builtin/all'

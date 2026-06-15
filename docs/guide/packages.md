@@ -18,7 +18,7 @@ pnpm add @easyink/designer @easyink/viewer @easyink/builtin
 
 - `@easyink/designer` 提供设计器组件和相关扩展接口。
 - `@easyink/viewer` 提供预览、打印和导出所需的运行时。
-- `@easyink/builtin` 提供官方内置物料集合，由你按子路径显式注册。
+- `@easyink/builtin` 提供官方内置物料集合，由你按公开子路径显式注册；根入口默认等同 all 集合，并提供 all/basic/none 的显式别名。
 
 如果你现在处在“先把页面跑起来”的阶段，这两个包已经够用了。
 
@@ -69,7 +69,7 @@ pnpm add @easyink/designer @easyink/viewer @easyink/builtin
 
 | 包 | 作用 |
 | --- | --- |
-| `@easyink/builtin` | 内置物料集合，支持 `all`、`basic`、`none` 子路径 |
+| `@easyink/builtin` | 内置物料集合，根入口默认 all，公开支持 `all`、`basic`、`none` 子路径 |
 | `@easyink/locales` | 内置语言包实现，设计器会继续透出它们 |
 | `@easyink/ui` | 设计器内部共用 UI 组件 |
 | `@easyink/icons` | 图标资源 |
