@@ -70,7 +70,7 @@ async function run(command, args) {
       env: {
         ...process.env,
         GRADLE_USER_HOME: gradleUserHome,
-        JAVA_HOME: process.env.JAVA_HOME || '/opt/homebrew/opt/openjdk@17',
+        JAVA_HOME: process.env.JAVA_HOME,
       },
     })
     child.on('exit', (code) => {
