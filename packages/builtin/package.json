@@ -1,7 +1,7 @@
 {
   "name": "@easyink/builtin",
   "type": "module",
-  "version": "0.0.24",
+  "version": "0.0.25",
   "description": "Internal built-in material registry for EasyInk runtimes",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",
