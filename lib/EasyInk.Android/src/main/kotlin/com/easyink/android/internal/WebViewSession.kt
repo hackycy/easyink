@@ -18,6 +18,8 @@ import com.easyink.android.EasyInkRenderRequest
 import com.easyink.android.EasyInkRenderedPage
 import com.easyink.android.EasyInkWaitUntil
 import org.json.JSONArray
+import org.json.JSONObject
+import kotlin.math.ceil
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
@@ -44,7 +46,11 @@ internal class WebViewSession(
             val pages = readPages(view)
             val renderedPages = if (pages.isNotEmpty()) pages else prepared.pages
             layoutForPages(view, renderedPages)
-            val rects = readPageRects(view, renderedPages)
+            flushVisualState(view)
+            val geometry = readPageGeometry(view, renderedPages)
+            layoutForGeometry(view, geometry)
+            flushVisualState(view)
+            val rects = readPageGeometry(view, renderedPages).rects
             RenderedWebView(view, renderedPages, rects)
         }
     }
@@ -203,6 +209,16 @@ internal class WebViewSession(
     private suspend fun layoutForPages(view: WebView, pages: List<EasyInkRenderedPage>) {
         val widthPx = pages.maxOfOrNull { mmToPx(it.widthMm) } ?: 1
         val heightPx = pages.sumOf { mmToPx(it.heightMm).toInt() }.coerceAtLeast(1)
+        layoutView(view, widthPx, heightPx)
+    }
+
+    private suspend fun layoutForGeometry(view: WebView, geometry: PageGeometry) {
+        val widthPx = ceil(geometry.contentWidthPx).toInt().coerceAtLeast(1)
+        val heightPx = ceil(geometry.contentHeightPx).toInt().coerceAtLeast(1)
+        layoutView(view, widthPx, heightPx)
+    }
+
+    private suspend fun layoutView(view: WebView, widthPx: Int, heightPx: Int) {
         MainThread.run {
             view.measure(
                 android.view.View.MeasureSpec.makeMeasureSpec(widthPx, android.view.View.MeasureSpec.EXACTLY),
@@ -212,23 +228,67 @@ internal class WebViewSession(
         }
     }
 
-    private suspend fun readPageRects(
+    private suspend fun flushVisualState(view: WebView) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            suspendCoroutine<Unit> { continuation ->
+                MainThread.post {
+                    view.postVisualStateCallback(
+                        System.nanoTime(),
+                        object : WebView.VisualStateCallback() {
+                            override fun onComplete(requestId: Long) {
+                                continuation.resume(Unit)
+                            }
+                        },
+                    )
+                }
+            }
+            return
+        }
+        suspendCoroutine<Unit> { continuation ->
+            MainThread.post {
+                view.postDelayed({ continuation.resume(Unit) }, 100)
+            }
+        }
+    }
+
+    private suspend fun readPageGeometry(
         view: WebView,
         pages: List<EasyInkRenderedPage>,
-    ): List<RenderedPageRect> {
+    ): PageGeometry {
         val script = """
             (function () {
               var nodes = Array.prototype.slice.call(document.querySelectorAll('.ei-viewer-page'));
-              return JSON.stringify(nodes.map(function (node, index) {
+              var scale = window.devicePixelRatio || 1;
+              var rects = nodes.map(function (node, index) {
                 var rect = node.getBoundingClientRect();
                 return {
                   index: Number(node.getAttribute('data-page-index') || index),
-                  left: rect.left + window.scrollX,
-                  top: rect.top + window.scrollY,
-                  width: rect.width,
-                  height: rect.height
+                  left: (rect.left + window.scrollX) * scale,
+                  top: (rect.top + window.scrollY) * scale,
+                  width: rect.width * scale,
+                  height: rect.height * scale,
+                  right: (rect.left + window.scrollX + rect.width) * scale,
+                  bottom: (rect.top + window.scrollY + rect.height) * scale
                 };
-              }));
+              });
+              return JSON.stringify({
+                scale: scale,
+                viewportWidth: window.innerWidth * scale,
+                viewportHeight: window.innerHeight * scale,
+                documentWidth: Math.max(
+                  document.documentElement.scrollWidth,
+                  document.body ? document.body.scrollWidth : 0,
+                  document.documentElement.offsetWidth,
+                  document.body ? document.body.offsetWidth : 0
+                ) * scale,
+                documentHeight: Math.max(
+                  document.documentElement.scrollHeight,
+                  document.body ? document.body.scrollHeight : 0,
+                  document.documentElement.offsetHeight,
+                  document.body ? document.body.offsetHeight : 0
+                ) * scale,
+                rects: rects
+              });
             })()
         """.trimIndent()
         val json = evaluate(view, script)
@@ -238,7 +298,8 @@ internal class WebViewSession(
         else {
             json
         }
-        val array = JSONArray(text)
+        val payload = JSONObject(text)
+        val array = payload.optJSONArray("rects") ?: JSONArray()
         val rects = (0 until array.length()).map { index ->
             val item = array.getJSONObject(index)
             RenderedPageRect(
@@ -250,11 +311,29 @@ internal class WebViewSession(
             )
         }.filter { it.widthPx > 0f && it.heightPx > 0f }
         if (rects.isNotEmpty()) {
-            return rects
+            val rectRight = (0 until array.length()).maxOfOrNull { index ->
+                array.getJSONObject(index).optDouble("right")
+            } ?: 0.0
+            val rectBottom = (0 until array.length()).maxOfOrNull { index ->
+                array.getJSONObject(index).optDouble("bottom")
+            } ?: 0.0
+            return PageGeometry(
+                rects = rects,
+                contentWidthPx = maxOf(
+                    payload.optDouble("documentWidth", 0.0),
+                    payload.optDouble("viewportWidth", 0.0),
+                    rectRight,
+                ).toFloat(),
+                contentHeightPx = maxOf(
+                    payload.optDouble("documentHeight", 0.0),
+                    payload.optDouble("viewportHeight", 0.0),
+                    rectBottom,
+                ).toFloat(),
+            )
         }
 
         var top = 0f
-        return pages.map { page ->
+        val fallbackRects = pages.map { page ->
             val rect = RenderedPageRect(
                 index = page.index,
                 leftPx = 0f,
@@ -265,6 +344,11 @@ internal class WebViewSession(
             top += rect.heightPx
             rect
         }
+        return PageGeometry(
+            rects = fallbackRects,
+            contentWidthPx = fallbackRects.maxOfOrNull { it.leftPx + it.widthPx } ?: 1f,
+            contentHeightPx = fallbackRects.maxOfOrNull { it.topPx + it.heightPx } ?: 1f,
+        )
     }
 
     private suspend fun evaluate(view: WebView, script: String): String {
@@ -298,4 +382,10 @@ internal data class RenderedWebView(
     val webView: WebView,
     val pages: List<EasyInkRenderedPage>,
     val rects: List<RenderedPageRect>,
+)
+
+private data class PageGeometry(
+    val rects: List<RenderedPageRect>,
+    val contentWidthPx: Float,
+    val contentHeightPx: Float,
 )

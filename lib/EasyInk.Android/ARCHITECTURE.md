@@ -323,6 +323,9 @@ Android SDK 必须发布为 AAR。单纯 JAR 不适合作为 SDK 主产物，因
 ```text
 lib/EasyInk.Android/
   build.gradle.kts
+  samples/minimal/
+    build.gradle.kts
+    src/main/...
   src/main/
     AndroidManifest.xml
     assets/easyink-viewer/

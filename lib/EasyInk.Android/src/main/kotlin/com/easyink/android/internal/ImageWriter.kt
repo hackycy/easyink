@@ -2,7 +2,6 @@ package com.easyink.android.internal
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.graphics.Rect
 import android.webkit.WebView
 import com.easyink.android.EasyInkImageFormat
 import com.easyink.android.EasyInkImageOptions
@@ -42,9 +41,12 @@ internal object ImageWriter {
                 try {
                     val canvas = Canvas(bitmap)
                     canvas.drawColor(options.backgroundColor)
+                    canvas.save()
                     canvas.scale(options.scale, options.scale)
+                    canvas.clipRect(0f, 0f, rect.widthPx, rect.heightPx)
                     canvas.translate(-rect.leftPx, -rect.topPx)
                     webView.draw(canvas)
+                    canvas.restore()
                     val output = File(outputDir, outputName(requestId, page.index, options.format))
                     FileOutputStream(output).use { stream ->
                         val format = when (options.format) {

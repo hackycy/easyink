@@ -1,7 +1,6 @@
 package com.easyink.android.internal
 
 import android.graphics.pdf.PdfDocument
-import android.view.View
 import android.webkit.WebView
 import com.easyink.android.EasyInkPdfOptions
 import com.easyink.android.EasyInkRenderErrorCode
@@ -36,11 +35,6 @@ internal object PdfWriter {
                     val pageInfo = PdfDocument.PageInfo.Builder(widthPt, heightPt, page.index + 1).create()
                     val pdfPage = document.startPage(pageInfo)
                     val canvas = pdfPage.canvas
-                    webView.measure(
-                        View.MeasureSpec.makeMeasureSpec(widthPt, View.MeasureSpec.EXACTLY),
-                        View.MeasureSpec.makeMeasureSpec(heightPt, View.MeasureSpec.EXACTLY),
-                    )
-                    webView.layout(0, 0, widthPt, heightPt)
                     if (rect != null && rect.widthPx > 0f && rect.heightPx > 0f) {
                         canvas.scale(widthPt / rect.widthPx, heightPt / rect.heightPx)
                         canvas.translate(-rect.leftPx, -rect.topPx)

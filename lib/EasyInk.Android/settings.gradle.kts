@@ -15,3 +15,5 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "easyink-android-render"
+include(":sample-minimal")
+project(":sample-minimal").projectDir = file("samples/minimal")

@@ -202,8 +202,8 @@ window.__easyinkGetPages?.()
 
 任务：
 
-1. 添加最小 sample app 或 instrumentation test app。
-2. 覆盖 schema PDF、html PDF、离线图片、离线字体、资源失败、等待超时。
+1. 添加最小 sample app 或 instrumentation test app。已添加 `samples/minimal`。
+2. 覆盖 schema PDF、html PDF、离线图片、离线字体、资源失败、等待超时。当前 sample 覆盖 html PDF 和 html 图片输出；其余项待 instrumentation test 补齐。
 3. 准备至少两类模板：
 
 ```text
@@ -211,13 +211,13 @@ fixed receipt/page
 continuous receipt/page
 ```
 
-4. 在 CI 或手动验证文档中记录 Android 设备或模拟器要求。
+4. 在 CI 或手动验证文档中记录 Android 设备或模拟器要求。当前 README 已记录 Android Studio 打开方式。
 
 验证：
 
-- Android instrumentation test 可在模拟器上生成非空 PDF。
+- Android instrumentation test 可在模拟器上生成非空 PDF。待补。
 - diagnostics snapshot 中包含 `runtimeVersion`、`webViewVersion`、`durationMs`、`pageCount`。
-- AAR 解压资产检查纳入 build verification。
+- AAR 解压资产检查纳入 build verification。已完成。
 
 ## 9. 阶段七：图片输出
 

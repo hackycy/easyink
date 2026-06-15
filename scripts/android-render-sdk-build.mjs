@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url'
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const androidRoot = resolve(repoRoot, 'lib/EasyInk.Android')
-const gradleVersion = '9.5.1'
+const gradleVersion = '9.4.1'
 const gradleSha256 = 'bafc141b619ad6350fd975fc903156dd5c151998cc8b058e8c1044ab5f7b031f'
 const distDir = resolve(androidRoot, '.gradle/android-render-sdk')
 const gradleUserHome = resolve(androidRoot, '.gradle/user-home')
@@ -19,7 +19,15 @@ const gradleHome = resolve(distDir, `gradle-${gradleVersion}`)
 const gradleBin = resolve(gradleHome, 'bin/gradle')
 
 await ensureGradle()
-await run(gradleBin, ['--no-daemon', '-p', androidRoot, 'clean', 'assembleRelease', 'verifyAarRuntimeAssets'])
+await run(gradleBin, [
+  '--no-daemon',
+  '-p',
+  androidRoot,
+  'clean',
+  'assembleRelease',
+  'verifyAarRuntimeAssets',
+  ':sample-minimal:assembleDebug',
+])
 
 async function ensureGradle() {
   try {
