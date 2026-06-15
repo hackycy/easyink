@@ -12,6 +12,8 @@ interface RuntimePayload {
 declare global {
   interface Window {
     easyinkReady?: boolean
+    easyinkRenderedPages?: Array<{ index?: number, width: number, height: number, unit: string }>
+    __easyinkGetPages?: () => Array<{ index?: number, width: number, height: number, unit: string }>
   }
 }
 
@@ -36,6 +38,8 @@ async function boot(): Promise<void> {
       onDiagnostic: reportDiagnostic,
     })
 
+    window.easyinkRenderedPages = viewer.renderedPages
+    window.__easyinkGetPages = () => viewer.renderedPages
     applyRenderedPageCSS(viewer.renderedPages)
     root.classList.add('easyink-ready')
     root.setAttribute('data-easyink-runtime', payload.runtimeVersion || 'embedded')

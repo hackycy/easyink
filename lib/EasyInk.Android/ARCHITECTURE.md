@@ -2,6 +2,8 @@
 
 本文档定义 EasyInk Android 渲染 SDK 的架构方案。它只负责把 `html` 或 `easyink schema + data` 渲染为 PDF 或图片，不包含打印机枚举、物理打印、系统打印 UI、蓝牙/USB 打印机协议或厂商打印 SDK 对接。
 
+落地步骤、阶段拆分和验收检查记录在 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)。构建命令、产物路径和最小调用示例记录在 [README.md](README.md)。
+
 Android 方案参考 `EasyInk.Render` 的浏览器内核渲染管线思想：准备 HTML、加载运行时、等待渲染完成、采集诊断、输出文件。但 Android 端不引入 Go host、daemon、IPC、Chromium CDP 或外置浏览器管理。
 
 ## 1. 当前结论
@@ -9,7 +11,7 @@ Android 方案参考 `EasyInk.Render` 的浏览器内核渲染管线思想：准
 - Android SDK 是一个原生 Kotlin/AAR 包，宿主通过一句 API 调用渲染能力，不需要展示 EasyInk 原生界面。
 - SDK 内部使用隐藏 `WebView` 承载现有 `internal-packages/viewer-runtime` 生成的 HTML runtime，复用现有 DOM/SVG Viewer 渲染语义。
 - `source.type='easyink'` 与 `source.type='html'` 共享同一条离屏 WebView 管线。
-- PDF 输出使用 Android `PrintDocumentAdapter` 写入目标文件，不经由系统打印交互。
+- 第一版 PDF 输出使用 `PdfDocument` 绘制已渲染 WebView 到目标文件，不经由系统打印交互。
 - 图片输出使用已渲染 WebView 的页面区域截图，按页输出 PNG/JPEG。
 - SDK 不负责物理打印端；业务若要打印，应在拿到 PDF/图片后自行接系统打印、厂商 SDK 或设备协议。
 - SDK 不以 CDP 为契约。Android WebView 没有稳定公开的 `PrintToPDF` CDP 等价接口，架构只复用浏览器内核渲染阶段划分。
@@ -54,7 +56,7 @@ chromedp.Navigate(dataURL)      -> WebView.loadUrl(localhost runtime URL)
 CDP Fetch interception          -> localhost server route/resource resolver
 WaitReady(selector)             -> evaluateJavascript() / JS bridge
 console/runtime diagnostics     -> WebChromeClient + JS bridge
-page.PrintToPDF                 -> WebView.createPrintDocumentAdapter()
+page.PrintToPDF                 -> PdfDocument + WebView.draw(canvas)
 browser manager                 -> WebView pool + coroutine queue
 daemon queue                    -> in-process render queue
 ```
@@ -241,19 +243,19 @@ localhost server 约束：
 
 ## 6. PDF 输出
 
-PDF 输出使用 Android WebView 打印适配能力写文件：
+第一版 PDF 输出使用 Android `PdfDocument` 写文件，页面内容来自已完成渲染的 WebView 画布：
 
 ```text
 Rendered WebView
   |
   v
-createPrintDocumentAdapter(jobName)
+resolve renderedPages
   |
   v
-onLayout(attributes)
+create PdfDocument.PageInfo
   |
   v
-onWrite(PageRange.ALL_PAGES, ParcelFileDescriptor)
+WebView.draw(pdfPage.canvas)
   |
   v
 PDF File
@@ -269,7 +271,7 @@ PDF File
 
 已知边界：
 
-- Android `PrintDocumentAdapter` 的输出依赖系统 WebView/打印框架实现，可能存在设备差异。
+- `PdfDocument` 输出以 WebView 画布绘制为准，后续若需要更贴近系统 WebView 打印框架，可单独评估 `PrintDocumentAdapter` Java shim 或平台差异方案。
 - PDF 是文件输出能力，不触发系统打印 UI。
 - SDK 不承诺控制物理打印机缩放、不可打印区域或驱动分页。
 
@@ -281,7 +283,7 @@ PDF File
 Rendered pages
   |
   v
-resolve page rects and scale
+resolve .ei-viewer-page rects and scale
   |
   v
 capture page bitmap
@@ -309,7 +311,7 @@ enum class EasyInkImageFormat {
 
 - 图片输出以页为单位返回，不把多页拼接成一张长图作为默认行为。
 - 连续纸本身只有一个连续页面时，可以输出一张长图。
-- 图片尺寸由 `renderedPages` 和 `scale` 决定。
+- 图片尺寸由页面 DOM rect、`renderedPages` 和 `scale` 决定。
 - 若页面过高导致 Bitmap 超过设备限制，SDK 必须返回诊断并失败，不能静默裁切。
 
 ## 8. 构建与 Runtime 产物
