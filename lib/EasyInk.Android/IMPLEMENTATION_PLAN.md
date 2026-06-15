@@ -252,7 +252,45 @@ continuous receipt/page
 
 这个顺序的关键是先打通一条最小 PDF 闭环，再扩展图片、并发、批量渲染和发布细节。
 
-## 11. 风险与决策点
+当前状态：
+
+- 1、3、4、5、6、8 已完成主链路实现。
+- 2 已完成公开模型和基础请求校验，request normalize 单元测试待补。
+- 7 已完成 `samples/minimal`，instrumentation test 和完整场景矩阵待补。
+- 9 已完成 `maven-publish` 基础 publication，远程仓库配置、POM 元数据、签名、CI 发布和远程依赖验证待补。
+
+## 11. 阶段八：远程 Gradle 仓库发布
+
+Android AAR 发布到远程 Gradle 仓库时使用 Maven repository 格式。README 是发布说明入口，本文只记录实施任务。
+
+任务：
+
+1. 补齐 `publishing.repositories`，仓库地址、用户名和 token 从 Gradle properties 或 CI secrets 读取，不提交到仓库。
+2. 补齐 POM 元数据：`name`、`description`、`url`、`licenses`、`developers`、`scm`。
+3. 私有仓库或 GitHub Packages 先跑通 `publishReleasePublicationTo...Repository`。
+4. Maven Central 发布前补齐 GPG signing、Sonatype Central Portal namespace 验证和发布脚本。
+5. 发布后使用全新 Android 工程验证：
+   - `implementation("com.easyink:easyink-android-render:{version}")` 可解析。
+   - AAR assets 能被打入宿主 APK。
+   - `renderPdf()` 和 `renderImages()` 能在真机或模拟器输出非空文件。
+
+验证：
+
+```bash
+pnpm render:runtime
+./lib/EasyInk.Android/.gradle/android-render-sdk/gradle-9.5.1/bin/gradle \
+  --no-daemon \
+  --gradle-user-home lib/EasyInk.Android/.gradle/user-home \
+  -p lib/EasyInk.Android \
+  publishReleasePublicationToEasyInkRemoteRepository
+```
+
+当前完成度：
+
+- `maven-publish` 插件、release publication、artifactId、sources jar、javadoc jar 已配置。
+- 远程仓库配置、凭据、完整 POM、signing 和 CI 发布待补。
+
+## 12. 风险与决策点
 
 - WebView PDF 依赖系统 WebView 和 Android 打印框架，不同设备可能存在输出差异，需要 instrumentation test 做真实验证。
 - 完全离屏 WebView 在部分设备上可能无法稳定截图或打印，内部不可见容器需要作为实现兜底。
@@ -261,7 +299,9 @@ continuous receipt/page
 - `Html` source 和 `Schema` source 共用一条 WebView 管线，但两者的 payload wrapper 需要清晰区分，避免 HTML 模式误触 schema runtime。
 - 第一版默认串行渲染，等 PDF 闭环稳定后再考虑 WebView pool 和并发。
 
-## 12. 文档同步要求
+## 13. 文档同步要求
+
+[README.md](README.md) 是 EasyInk Android SDK 的文档入口。新增或变更 Android SDK 能力时，优先更新 README 的入口导航、当前状态、构建/运行/发布说明，再按需同步架构和计划文档。
 
 当新增或变更以下内容时，需要同步更新本文档和 [ARCHITECTURE.md](ARCHITECTURE.md)：
 
