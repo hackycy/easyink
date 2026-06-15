@@ -101,14 +101,6 @@ catalogs:
     '@types/lodash-es': ^4.17.12
     '@types/node': ^24.10.0
 ignoreWorkspaceRootCheck: true
-
-onlyBuiltDependencies:
-  - '@parcel/watcher'
-  - electron
-  - esbuild
-  - simple-git-hooks
-  - tree-sitter
-  - tree-sitter-bash
 shellEmulator: true
 trustPolicy: no-downgrade
 trustPolicyExclude:
@@ -118,3 +110,12 @@ trustPolicyExclude:
   - semver@6.3.1
   - undici-types
   - undici-types@6.21.0
+allowBuilds:
+  '@parcel/watcher': true
+  core-js: true
+  electron: true
+  esbuild: true
+  simple-git-hooks: true
+  tree-sitter: true
+  tree-sitter-bash: true
+  vue-demi: true

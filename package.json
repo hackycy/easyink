@@ -1,7 +1,7 @@
 {
   "type": "module",
   "private": true,
-  "packageManager": "pnpm@10.33.0",
+  "packageManager": "pnpm@11.6.0",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",
   "homepage": "https://github.com/hackycy/easyink#readme",
@@ -28,7 +28,7 @@
     "test": "vitest run --dom",
     "typecheck": "tsc && turbo run typecheck",
     "prepare": "simple-git-hooks",
-    "open:packages": "npx open-packages-on-npm",
+    "open:packages": "pnpx open-packages-on-npm",
     "catalog": "pnpx codemod pnpm/catalog",
     "changeset": "changeset",
     "changeset:version": "changeset version",
@@ -68,7 +68,7 @@
     "yaml": "catalog:testing"
   },
   "simple-git-hooks": {
-    "pre-commit": "pnpm i --frozen-lockfile --ignore-scripts --offline && npx lint-staged"
+    "pre-commit": "pnpm i --frozen-lockfile --ignore-scripts --offline && pnpx lint-staged"
   },
   "lint-staged": {
     "*": "eslint --fix"
