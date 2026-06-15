@@ -1,11 +1,22 @@
 # EasyInk Android Minimal Sample
 
-This sample app opens a tiny Android UI with two actions:
+This sample app opens a tiny Android UI with four actions:
 
-- Render PDF
-- Render Images
+- Render HTML PDF
+- Render HTML Images
+- Render Schema PDF
+- Render Schema Images
 
 It depends on the local EasyInk Android SDK module in this repository.
+
+The schema actions use the supermarket receipt sample from `packages/samples`:
+
+```text
+src/main/assets/easyink-samples/supermarket-receipt.schema.json
+src/main/assets/easyink-samples/supermarket-receipt.data.json
+```
+
+The schema is based on `supermarketReceiptTemplate`, and the data is based on `supermarketDemoData`.
 
 ## Open In Android Studio
 

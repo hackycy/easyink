@@ -38,43 +38,89 @@ class MainActivity : Activity() {
             text = "Ready. Tap a button to render with EasyInk Android SDK."
         }
 
-        val renderPdf = Button(this).apply {
-            text = "Render PDF"
-            setOnClickListener { renderPdf() }
+        val renderHtmlPdf = Button(this).apply {
+            text = "Render HTML PDF"
+            setOnClickListener { renderHtmlPdf() }
         }
-        val renderImages = Button(this).apply {
-            text = "Render Images"
-            setOnClickListener { renderImages() }
+        val renderHtmlImages = Button(this).apply {
+            text = "Render HTML Images"
+            setOnClickListener { renderHtmlImages() }
+        }
+        val renderSchemaPdf = Button(this).apply {
+            text = "Render Schema PDF"
+            setOnClickListener { renderSchemaPdf() }
+        }
+        val renderSchemaImages = Button(this).apply {
+            text = "Render Schema Images"
+            setOnClickListener { renderSchemaImages() }
         }
 
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(32, 32, 32, 32)
-            addView(renderPdf)
-            addView(renderImages)
+            addView(renderHtmlPdf)
+            addView(renderHtmlImages)
+            addView(renderSchemaPdf)
+            addView(renderSchemaImages)
             addView(output)
         }
         setContentView(ScrollView(this).apply { addView(content) })
     }
 
-    private fun renderPdf() {
+    private fun renderHtmlPdf() {
+        renderPdf(
+            label = "HTML PDF",
+            filePrefix = "easyink-html",
+            request = htmlRequest("sample-html-pdf"),
+        )
+    }
+
+    private fun renderHtmlImages() {
+        renderImages(
+            label = "HTML images",
+            filePrefix = "easyink-html-images",
+            request = htmlRequest("sample-html-images"),
+        )
+    }
+
+    private fun renderSchemaPdf() {
+        renderPdf(
+            label = "Schema PDF",
+            filePrefix = "easyink-supermarket-receipt",
+            request = supermarketReceiptRequest("sample-supermarket-receipt-pdf"),
+        )
+    }
+
+    private fun renderSchemaImages() {
+        renderImages(
+            label = "Schema images",
+            filePrefix = "easyink-supermarket-receipt-images",
+            request = supermarketReceiptRequest("sample-supermarket-receipt-images"),
+        )
+    }
+
+    private fun renderPdf(
+        label: String,
+        filePrefix: String,
+        request: EasyInkRenderRequest,
+    ) {
         output.text = "Rendering PDF..."
         runSuspend {
             val timestamp = System.currentTimeMillis()
-            val file = File(cacheDir, "easyink-sample-$timestamp.pdf")
+            val file = File(cacheDir, "$filePrefix-$timestamp.pdf")
             val result = EasyInkRenderer.renderPdf(
                 context = this,
-                request = htmlRequest("sample-pdf"),
+                request = request,
                 output = file,
             )
             val published = publishToDownloads(
                 source = result.output,
-                displayName = "easyink-sample-$timestamp.pdf",
+                displayName = "$filePrefix-$timestamp.pdf",
                 mimeType = "application/pdf",
                 relativePath = DOWNLOAD_DIR,
             )
             showOutput(buildString {
-                appendLine("PDF rendered")
+                appendLine("$label rendered")
                 appendLine("Downloads: ${published.displayPath}")
                 appendLine("Bytes: ${result.output.length()}")
                 appendLine("Pages: ${result.pageCount}")
@@ -86,14 +132,18 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun renderImages() {
+    private fun renderImages(
+        label: String,
+        filePrefix: String,
+        request: EasyInkRenderRequest,
+    ) {
         output.text = "Rendering images..."
         runSuspend {
             val timestamp = System.currentTimeMillis()
-            val dir = File(cacheDir, "easyink-sample-images-$timestamp")
+            val dir = File(cacheDir, "$filePrefix-$timestamp")
             val result = EasyInkRenderer.renderImages(
                 context = this,
-                request = htmlRequest("sample-images"),
+                request = request,
                 outputDir = dir,
                 options = EasyInkImageOptions(
                     format = EasyInkImageFormat.PNG,
@@ -109,7 +159,7 @@ class MainActivity : Activity() {
                 )
             }
             showOutput(buildString {
-                appendLine("Images rendered")
+                appendLine("$label rendered")
                 appendLine("Downloads directory: $DOWNLOAD_DIR/images")
                 appendLine("Files:")
                 published.forEach { item ->
@@ -220,6 +270,20 @@ class MainActivity : Activity() {
                 selector = ".easyink-ready",
             ),
         )
+    }
+
+    private fun supermarketReceiptRequest(requestId: String): EasyInkRenderRequest {
+        return EasyInkRenderRequest(
+            requestId = requestId,
+            source = EasyInkRenderSource.Schema(
+                schemaJson = readSampleAsset("easyink-samples/supermarket-receipt.schema.json"),
+                dataJson = readSampleAsset("easyink-samples/supermarket-receipt.data.json"),
+            ),
+        )
+    }
+
+    private fun readSampleAsset(path: String): String {
+        return assets.open(path).bufferedReader(Charsets.UTF_8).use { it.readText() }
     }
 
     private fun runSuspend(block: suspend () -> Unit) {
