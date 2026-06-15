@@ -1,6 +1,6 @@
 import { readTrustedViewerHtml } from '@easyink/core'
 import { describe, expect, it } from 'vitest'
-import { createBarcodeNode } from './schema'
+import { BARCODE_FORMATS, createBarcodeNode } from './schema'
 import { renderBarcode } from './viewer'
 
 describe('renderBarcode', () => {
@@ -41,5 +41,34 @@ describe('renderBarcode', () => {
     expect(html).toContain('fill="#111111"')
     expect(html).toContain('EasyInk')
     expect(html).not.toContain('aria-hidden="true"')
+  })
+
+  it('renders every supported JsBarcode format exposed by the material', () => {
+    for (const format of BARCODE_FORMATS) {
+      const node = createBarcodeNode({
+        props: {
+          value: format.sampleValue,
+          format: format.value,
+        },
+      })
+
+      const html = readTrustedViewerHtml(renderBarcode(node).html!)
+
+      expect(html, format.value).toContain('<svg')
+      expect(html, format.value).not.toContain('Invalid:')
+    }
+  })
+
+  it('defaults lineColor to black when it is not set', () => {
+    const node = createBarcodeNode({
+      props: {
+        value: 'EasyInk',
+        lineColor: '',
+      },
+    })
+
+    const html = readTrustedViewerHtml(renderBarcode(node).html!)
+
+    expect(html).toContain('fill="#000000"')
   })
 })

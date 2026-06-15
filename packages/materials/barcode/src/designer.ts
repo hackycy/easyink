@@ -1,20 +1,13 @@
 import type { MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { BarcodeProps } from './schema'
-import { getBindingRefs, getNodeProps } from '@easyink/schema'
+import { getBindingRefs } from '@easyink/schema'
 import { escapeHtml } from '@easyink/shared'
 import { generateBarcodeSvg } from './render'
+import { BARCODE_FORMATS, resolveBarcodeProps } from './schema'
 
 function buildPlaceholder(p: BarcodeProps, label: string): string {
-  const sampleValues: Record<string, string> = {
-    CODE128: 'EasyInk',
-    CODE39: 'EASYINK',
-    EAN13: '5901234123457',
-    EAN8: '96385074',
-    UPC: '123456789012',
-    ITF14: '98765432109213',
-  }
-  const sampleValue = sampleValues[p.format] || 'EasyInk'
+  const sampleValue = BARCODE_FORMATS.find(format => format.value === p.format)?.sampleValue || 'EasyInk'
 
   let svg: string
   try {
@@ -38,7 +31,7 @@ function buildErrorPlaceholder(p: BarcodeProps, value: string): string {
 }
 
 function buildHtml(node: MaterialNode, context: MaterialExtensionContext): string {
-  const p = getNodeProps<BarcodeProps>(node)
+  const p = resolveBarcodeProps(node)
   const unit = context.getSchema().unit
   const DASH_MAP: Record<string, string> = { dashed: 'dashed', dotted: 'dotted' }
   const borderStyle = p.borderWidth ? `border:${p.borderWidth}${unit} ${DASH_MAP[p.borderType] || 'solid'} ${p.borderColor};box-sizing:border-box;` : ''

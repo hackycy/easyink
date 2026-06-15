@@ -1,16 +1,10 @@
 import type { PropSchema } from '@easyink/core'
 import { STROKE_STYLE_OPTIONS } from '@easyink/prop-schemas'
+import { BARCODE_FORMATS } from './schema'
 
 export const barcodeDesignerPropSchemas: PropSchema[] = [
   { key: 'value', label: 'materials.barcode.property.value', type: 'string', group: 'content' },
-  { key: 'format', label: 'materials.barcode.property.format', type: 'enum', group: 'content', enum: [
-    { label: 'CODE128', value: 'CODE128' },
-    { label: 'CODE39', value: 'CODE39' },
-    { label: 'EAN13', value: 'EAN13' },
-    { label: 'EAN8', value: 'EAN8' },
-    { label: 'UPC', value: 'UPC' },
-    { label: 'ITF14', value: 'ITF14' },
-  ] },
+  { key: 'format', label: 'materials.barcode.property.format', type: 'enum', group: 'content', enum: BARCODE_FORMATS.map(format => ({ label: format.label, value: format.value })) },
   { key: 'showText', label: 'materials.barcode.property.showText', type: 'switch', group: 'content' },
   { key: 'lineWidth', label: 'materials.barcode.property.lineWidth', type: 'number', group: 'appearance', min: 1, max: 5, step: 1 },
   { key: 'lineColor', label: 'materials.barcode.property.lineColor', type: 'color', group: 'appearance' },
