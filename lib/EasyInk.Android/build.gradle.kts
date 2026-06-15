@@ -12,13 +12,13 @@ base {
 
 android {
     namespace = "com.easyink.android"
-    compileSdk = 36
+    compileSdk = 35
 
     defaultConfig {
         minSdk = 23
         consumerProguardFiles("consumer-rules.pro")
         aarMetadata {
-            minCompileSdk = 36
+            minCompileSdk = 23
         }
     }
 

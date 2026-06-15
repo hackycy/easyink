@@ -64,6 +64,12 @@ lib/EasyInk.Android/samples/minimal/build/outputs/apk/debug/sample-minimal-debug
 - Gradle 下载和缓存放在 `lib/EasyInk.Android/.gradle/` 下，不在仓库根目录生成 `.gradle/`。
 - `src/main/assets/easyink-viewer/` 是构建同步产物，已被 `.gitignore` 忽略，避免保留旧 runtime assets。
 
+## Android 版本兼容
+
+- SDK `minSdk` 为 23，因此运行时覆盖 Android 6.0 及以上，也包括 Android 9。
+- AAR 不设置 `minCompileSdk`，避免强制宿主应用必须升级到 SDK 35 或 36。
+- `compileSdk` 只影响编译期可见 API，不等于最低支持系统版本；宿主应用的 `targetSdk` 也可以按自己的发布节奏单独决定。
+
 ## Sample App
 
 Android Studio 打开目录：

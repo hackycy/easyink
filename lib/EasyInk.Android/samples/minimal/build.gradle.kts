@@ -4,12 +4,12 @@ plugins {
 
 android {
     namespace = "com.easyink.android.sample"
-    compileSdk = 36
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.easyink.android.sample"
         minSdk = 23
-        targetSdk = 36
+        targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
     }
