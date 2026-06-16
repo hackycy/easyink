@@ -17,12 +17,12 @@ curl http://localhost:18080/api/printers
 
 默认端口是 `18080`。如果这一步失败，先排查桌面应用、端口和系统打印机，不要急着改模板。
 
-## 安装前端包 {#install}
+## 安装包 {#install}
 
 安装 EasyInk Printer 集成包：
 
 ```bash
-pnpm add @easyink/print-integration-easyink-printer
+pnpm add @easyink/print-integration-easyink-printer @easyink/builtin
 ```
 
 这个包同时封装了 HTTP 打印机列表、WebSocket 打印提交、PDF 分片上传和高层托管 Viewer。

@@ -21,7 +21,7 @@ http://localhost:17521
 安装前端集成包：
 
 ```bash
-pnpm add @easyink/print-integration-hiprint
+pnpm add @easyink/print-integration-hiprint @easyink/builtin
 ```
 
 这个包内部使用 `vue-plugin-hiprint` 的 runtime 能力，同时提供 EasyInk 的高层打印器。

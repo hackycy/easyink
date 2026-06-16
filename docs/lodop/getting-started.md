@@ -27,7 +27,7 @@ http://localhost:18000/CLodopfuncs.js
 安装前端集成包：
 
 ```bash
-pnpm add @easyink/print-integration-lodop
+pnpm add @easyink/print-integration-lodop @easyink/builtin
 ```
 
 这个包不内置 LODOP 控件。它负责加载 `CLodopfuncs.js`、等待 runtime 可用，并把 EasyInk 渲染结果提交给 LODOP。
