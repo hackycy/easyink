@@ -297,6 +297,8 @@ const enUS: LocaleMessages = {
       fieldTree: 'Field Tree',
       search: 'Search fields...',
       clearSearch: 'Clear search',
+      expandAll: 'Expand all',
+      collapseAll: 'Collapse all',
       empty: 'No data sources',
       searchEmpty: 'No matching fields',
       dragHint: 'Drag fields onto the canvas to bind them',

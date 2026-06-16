@@ -87,6 +87,8 @@ export {
   ArrowUp as IconLayerUp,
   LayoutPanelTop as IconLayoutPanelTop,
   Minus as IconLine,
+  ListCollapse as IconListCollapse,
+  ListChevronsUpDown as IconListExpand,
   ListTree as IconListTree,
   Loader as IconLoader,
   Lock as IconLock,

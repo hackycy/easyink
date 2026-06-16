@@ -297,6 +297,8 @@ const zhCN: LocaleMessages = {
       fieldTree: '字段树',
       search: '搜索字段...',
       clearSearch: '清空搜索',
+      expandAll: '全部展开',
+      collapseAll: '全部折叠',
       empty: '暂无数据源',
       searchEmpty: '未找到匹配字段',
       dragHint: '拖拽字段到画布进行绑定',

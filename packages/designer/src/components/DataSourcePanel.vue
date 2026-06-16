@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { DataFieldNode, DataSourceDescriptor } from '@easyink/datasource'
-import { IconChevronRight, IconClose, IconDatabase, IconSearch } from '@easyink/icons'
+import { IconChevronRight, IconClose, IconDatabase, IconListCollapse, IconListExpand, IconSearch } from '@easyink/icons'
 import { computed, reactive, ref, watch } from 'vue'
 import { useDesignerStore } from '../composables'
 import DataFieldTreeNode from './datasource/DataFieldTreeNode.vue'
@@ -43,7 +43,7 @@ function isExpanded(key: string): boolean {
 }
 
 function isVisibleExpanded(key: string): boolean {
-  return hasSearch.value || isExpanded(key)
+  return isExpanded(key)
 }
 
 function toggleExpand(key: string) {
@@ -51,6 +51,28 @@ function toggleExpand(key: string) {
     expandedKeys.delete(key)
   else
     expandedKeys.add(key)
+}
+
+function expandAll() {
+  for (const source of sources.value) {
+    expandedKeys.add(source.id)
+    if (source.fields)
+      expandFields(source.id, source.fields)
+  }
+}
+
+function expandFields(sourceId: string, fields: DataFieldNode[]) {
+  for (const field of fields) {
+    if (!field.fields || field.fields.length === 0)
+      continue
+
+    expandedKeys.add(`${sourceId}:${field.path || field.name}`)
+    expandFields(sourceId, field.fields)
+  }
+}
+
+function collapseAll() {
+  expandedKeys.clear()
 }
 
 function initFieldExpand(sourceId: string, fields: DataFieldNode[]) {
@@ -126,25 +148,52 @@ function clearSearch() {
 
 <template>
   <div class="ei-datasource-panel">
-    <div v-if="hasData" class="ei-datasource-panel__search">
-      <IconSearch :size="14" :stroke-width="1.5" class="ei-datasource-panel__search-icon" />
-      <input
-        v-model="searchText"
-        type="search"
-        class="ei-datasource-panel__search-input"
-        :placeholder="store.t('designer.dataSource.search')"
-        @keydown.esc.prevent="clearSearch"
-      >
-      <button
-        v-if="hasSearch"
-        type="button"
-        class="ei-datasource-panel__search-clear"
-        :title="store.t('designer.dataSource.clearSearch')"
-        :aria-label="store.t('designer.dataSource.clearSearch')"
-        @click="clearSearch"
-      >
-        <IconClose :size="12" :stroke-width="1.5" />
-      </button>
+    <div v-if="hasData" class="ei-datasource-panel__controls">
+      <div class="ei-datasource-panel__toolbar">
+        <span class="ei-datasource-panel__toolbar-title">
+          {{ store.t('designer.dataSource.fieldTree') }}
+        </span>
+        <div class="ei-datasource-panel__toolbar-actions">
+          <button
+            type="button"
+            class="ei-datasource-panel__tool-button"
+            :title="store.t('designer.dataSource.expandAll')"
+            :aria-label="store.t('designer.dataSource.expandAll')"
+            @click="expandAll"
+          >
+            <IconListExpand :size="12" :stroke-width="1.5" />
+          </button>
+          <button
+            type="button"
+            class="ei-datasource-panel__tool-button"
+            :title="store.t('designer.dataSource.collapseAll')"
+            :aria-label="store.t('designer.dataSource.collapseAll')"
+            @click="collapseAll"
+          >
+            <IconListCollapse :size="12" :stroke-width="1.5" />
+          </button>
+        </div>
+      </div>
+      <div class="ei-datasource-panel__search">
+        <IconSearch :size="14" :stroke-width="1.5" class="ei-datasource-panel__search-icon" />
+        <input
+          v-model="searchText"
+          type="search"
+          class="ei-datasource-panel__search-input"
+          :placeholder="store.t('designer.dataSource.search')"
+          @keydown.esc.prevent="clearSearch"
+        >
+        <button
+          v-if="hasSearch"
+          type="button"
+          class="ei-datasource-panel__search-clear"
+          :title="store.t('designer.dataSource.clearSearch')"
+          :aria-label="store.t('designer.dataSource.clearSearch')"
+          @click="clearSearch"
+        >
+          <IconClose :size="12" :stroke-width="1.5" />
+        </button>
+      </div>
     </div>
     <div v-if="hasVisibleData" class="ei-datasource-panel__list">
       <div
@@ -197,16 +246,67 @@ function clearSearch() {
 .ei-datasource-panel {
   font-size: 12px;
 
-  &__search {
-    position: relative;
+  &__controls {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+
+  &__toolbar {
     display: flex;
     align-items: center;
-    margin-bottom: 6px;
+    min-height: 20px;
+    padding: 0 2px 0 4px;
+  }
+
+  &__toolbar-title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--ei-text-secondary, #999);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 20px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__toolbar-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
+  }
+
+  &__tool-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--ei-text-secondary, #999);
+    cursor: pointer;
+
+    &:hover {
+      background: var(--ei-hover-bg, #f0f0f0);
+      color: var(--ei-primary, #1890ff);
+    }
+  }
+
+  &__search {
+    position: relative;
   }
 
   &__search-icon {
     position: absolute;
+    top: 50%;
     left: 7px;
+    transform: translateY(-50%);
     color: var(--ei-text-secondary, #999);
     pointer-events: none;
   }
@@ -235,7 +335,9 @@ function clearSearch() {
 
   &__search-clear {
     position: absolute;
+    top: 50%;
     right: 4px;
+    transform: translateY(-50%);
     display: inline-flex;
     align-items: center;
     justify-content: center;
