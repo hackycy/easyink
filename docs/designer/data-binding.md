@@ -56,6 +56,12 @@ const dataSources: DataSourceDescriptor[] = [
 
 上面这一步只是把字段树交给 Designer。它还没有产生任何运行时值。
 
+## JSON 转数据源 {#json-to-datasource}
+
+如果你手上已经有一份业务 JSON，可以直接在这里转成 `DataSourceDescriptor` 结构。生成后把右侧结果复制到你的数据源配置里，再按业务语义补充或调整字段标题即可。
+
+<JsonToDatasource />
+
 ## 哪些字段能拖拽 {#draggable-fields}
 
 当前 Designer 的字段树有一个明确规则：叶子字段可以拖拽；带 `union` 的分组字段也可以拖拽。
