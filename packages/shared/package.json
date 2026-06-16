@@ -1,7 +1,7 @@
 {
   "name": "@easyink/shared",
   "type": "module",
-  "version": "0.0.25",
+  "version": "0.0.26",
   "description": "Common types, utilities, and constants for EasyInk",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",

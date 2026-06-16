@@ -1,7 +1,7 @@
 {
   "name": "@easyink/material-chart-kernel",
   "type": "module",
-  "version": "0.0.25",
+  "version": "0.0.26",
   "description": "EasyInk shared chart kernel with ECharts integration helpers",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",

@@ -1,7 +1,7 @@
 {
   "name": "@easyink/assistant-constraint-engine",
   "type": "module",
-  "version": "0.0.25",
+  "version": "0.0.26",
   "description": "Executable constraint engine for real-time material validation and auto-fix in EasyInk Assistant",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",

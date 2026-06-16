@@ -1,7 +1,7 @@
 {
   "name": "@easyink/print-integration-easyink-printer",
   "type": "module",
-  "version": "0.0.25",
+  "version": "0.0.26",
   "description": "Official EasyInk Printer client and managed document printer",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",

@@ -1,7 +1,7 @@
 {
   "name": "@easyink/material-rating",
   "type": "module",
-  "version": "0.0.25",
+  "version": "0.0.26",
   "description": "EasyInk rating material",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",
