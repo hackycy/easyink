@@ -14,8 +14,8 @@ export interface TableDataProps extends TableBaseProps {
 
 export const TABLE_DATA_DEFAULTS: TableDataProps = {
   ...TABLE_BASE_DEFAULTS,
-  headerBackground: '#f0f0f0',
-  summaryBackground: '#f9f9f9',
+  headerBackground: '',
+  summaryBackground: '',
   stripedRows: false,
   stripedColor: '#fafafa',
 }
@@ -37,7 +37,7 @@ export function createTableDataNode(partial?: Partial<MaterialNode>, unit?: stri
     x: 0,
     y: 0,
     width: c(180),
-    height: c(24),
+    height: c(40),
     props: {
       ...TABLE_DATA_DEFAULTS,
       borderWidth: c(TABLE_DATA_DEFAULTS.borderWidth),

@@ -12,6 +12,8 @@ export const tableDataAIMaterialDescriptor = {
     'Header and footer rows use content.text for static labels or staticBinding for independent scalar fields.',
     'Repeat-template row cells use binding with absolute slash-separated paths such as items/name. At runtime this single row expands into N records from the bound array.',
     'In the designer, 2 virtual preview rows are rendered after the repeat-template row for visual reference only. These are display-only and must NOT be encoded as schema rows.',
+    'Designer section labels and preview-row texture are editor-only visual aids; do not encode them as text, rows, cells, or props.',
+    'Header/footer background props default to empty. Only set headerBackground or summaryBackground when the user asks for colored table sections.',
     'All rows share the same column width ratios (topology.columns). Row heights are independent: header and footer have their own height, repeat-template row height applies uniformly to all data rows at runtime.',
     'Use showHeader=false or showFooter=false to hide header/footer when not needed.',
     'Do not use legacy type table, props.columns, props.repeatTemplate, headerStyle, rowStyle, or borderStyle.',
@@ -41,7 +43,7 @@ export const tableDataAIMaterialDescriptor = {
         { scenario: 'invoice line items', binding: { sourceId: 'invoice', fieldPath: 'items/name' }, fieldStructure: { items: [{ name: 'string', quantity: 'number', price: 'number' }] } },
       ],
     },
-    sizing: { minWidth: 30, minHeight: 15, growAxis: 'y', defaultSize: { width: 178, height: 80 } },
+    sizing: { minWidth: 30, minHeight: 15, growAxis: 'y', defaultSize: { width: 180, height: 40 } },
     fitness: [
       { scenario: 'invoice-items', score: 0.95, reason: 'primary choice for array/detail-list data' },
       { scenario: 'order-details', score: 0.95, reason: 'tabular array data with headers' },

@@ -35,6 +35,7 @@ const ROLE_BG_MAP: Record<string, keyof TableDataProps> = {
 }
 
 const PLACEHOLDER_ROW_COUNT = 2
+const PREVIEW_ROW_PATTERN = 'repeating-linear-gradient(135deg, transparent 0, transparent 4px, currentColor 4px, currentColor 5px, transparent 5px, transparent 9px)'
 
 const RUNTIME_HEIGHT_CONTROL_POLICY: MaterialControlPolicy = {
   geometry: {
@@ -50,6 +51,16 @@ const RUNTIME_HEIGHT_CONTROL_POLICY: MaterialControlPolicy = {
 function readRowBackground(props: TableDataProps, key: keyof TableDataProps): string {
   const value = props[key]
   return typeof value === 'string' ? value : ''
+}
+
+function renderSectionLabel(label: string): string {
+  return `<span style="position:absolute;left:1px;top:1px;max-width:calc(100% - 2px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:7px;line-height:1;color:rgba(15,23,42,0.42);pointer-events:none;user-select:none">${escapeHtml(label)}</span>`
+}
+
+function renderCellWithSectionLabel(content: string, label: string, isFirstCell: boolean): string {
+  if (!isFirstCell)
+    return content
+  return `<div style="position:relative;width:100%;height:100%;min-width:0">${renderSectionLabel(label)}${content}</div>`
 }
 
 /**
@@ -130,7 +141,7 @@ function buildHtml(node: MaterialNode, unit: UnitType, context: MaterialExtensio
         const verticalBorderWidth = bw + (borderBottom === 'none' ? 0 : bw)
         const innerHeight = Math.max(0, scaledRepeatHeight - verticalBorderWidth)
         const innerStyle = `box-sizing:border-box;height:${innerHeight}${unit};padding:${pad}${unit};overflow:hidden`
-        cells += `<td${cs} style="box-sizing:border-box;height:${scaledRepeatHeight}${unit};border-top:${borderTop};border-right:${borderRight};border-bottom:${borderBottom};border-left:${borderLeft};padding:0;background:rgba(0,0,0,0.04);vertical-align:top"><div style="${innerStyle}">&nbsp;</div></td>`
+        cells += `<td${cs} style="box-sizing:border-box;height:${scaledRepeatHeight}${unit};border-top:${borderTop};border-right:${borderRight};border-bottom:${borderBottom};border-left:${borderLeft};padding:0;background-image:${PREVIEW_ROW_PATTERN};color:rgba(100,116,139,0.32);vertical-align:top"><div style="${innerStyle}">&nbsp;</div></td>`
       }
       placeholderRowsHtml += `<tr style="height:${scaledRepeatHeight}${unit};pointer-events:none">${cells}</tr>`
     }
@@ -148,16 +159,28 @@ function buildHtml(node: MaterialNode, unit: UnitType, context: MaterialExtensio
     unit,
     elementHeight: node.height,
     tableStyle: virtualRowsConfig ? undefined : 'height:100%',
-    cellRenderer: (cell) => {
+    cellRenderer: (cell, rowIndex, colIndex) => {
+      let content = ''
       if (cell.binding) {
         const label = context.getBindingLabel(cell.binding)
-        return `<span style="">{#${escapeHtml(label)}}</span>`
+        content = `<span style="">{#${escapeHtml(label)}}</span>`
       }
-      if (cell.staticBinding) {
+      else if (cell.staticBinding) {
         const label = context.getBindingLabel(cell.staticBinding)
-        return `<span style="">{#${escapeHtml(label)}}</span>`
+        content = `<span style="">{#${escapeHtml(label)}}</span>`
       }
-      return renderPlainTextCell(cell.content?.text)
+      else {
+        content = renderPlainTextCell(cell.content?.text)
+      }
+
+      const row = node.table.topology.rows[rowIndex]
+      if (row?.role === 'header')
+        return renderCellWithSectionLabel(content, context.t('materials.tableData.section.header'), colIndex === 0)
+      if (row?.role === 'repeat-template')
+        return renderCellWithSectionLabel(content, context.t('materials.tableData.section.data'), colIndex === 0)
+      if (row?.role === 'footer')
+        return renderCellWithSectionLabel(content, context.t('materials.tableData.section.footer'), colIndex === 0)
+      return content
     },
     rowDecorator: (ri) => {
       const row = node.table.topology.rows[ri]
