@@ -51,7 +51,7 @@ describe('table-data designer', () => {
     expect(canResizeTableDataRow(node, 2)).toBe(true)
   })
 
-  it('renders section labels as absolute overlays and keeps preview row texture', () => {
+  it('renders section markers as icon overlays and keeps preview row texture', () => {
     const node = createTableDataNode() as TableNode
     const ext = createTableDataExtension({
       ...context,
@@ -76,10 +76,26 @@ describe('table-data designer', () => {
     expect(container.innerHTML).toContain('4.5px')
     expect(container.innerHTML).toContain('pointer-events:none')
     expect(container.innerHTML).toContain('position:absolute')
-    expect(container.innerHTML).toContain('font-size:6px')
-    expect(container.innerHTML).toContain('表头')
-    expect(container.innerHTML).toContain('数据行')
-    expect(container.innerHTML).toContain('表尾')
+    expect(container.innerHTML).toContain('width:9px;height:9px')
+    expect(container.innerHTML).toContain('border:0.5px solid rgba(15,23,42,0.12)')
+    expect(container.innerHTML).toContain('background:rgba(255,255,255,0.18)')
+    expect(container.innerHTML).toContain('color:rgba(71,85,105,0.44)')
+    expect(container.innerHTML).not.toContain('opacity:.72')
+    expect(container.innerHTML).toContain('width="7" height="7"')
+    expect(container.innerHTML).toContain('fill="#475569"')
+    expect(container.innerHTML).toContain('y="1.7"')
+    expect(container.innerHTML).toContain('y="4.25"')
+    expect(container.innerHTML).toContain('y="7.6"')
+    expect(container.innerHTML).toContain('fill-opacity=".32"')
+    expect(container.innerHTML).toContain('fill-opacity=".3"')
+    expect(container.querySelectorAll('span[role="img"]')).toHaveLength(3)
+    expect(container.querySelector('span[aria-label="表头"]')).toBeTruthy()
+    expect(container.querySelector('span[aria-label="数据行"]')).toBeTruthy()
+    expect(container.querySelector('span[aria-label="表尾"]')).toBeTruthy()
+    expect(container.innerHTML).not.toContain('font-size:6px')
+    expect(container.innerHTML).not.toContain('>表头</span>')
+    expect(container.innerHTML).not.toContain('>数据行</span>')
+    expect(container.innerHTML).not.toContain('>表尾</span>')
     expect(container.innerHTML).toContain('position:relative;display:flex')
     expect(container.innerHTML).not.toContain('position:relative;width:100%;height:100%;min-width:0')
     expect(container.innerHTML).not.toContain('rgba(24,144,255')

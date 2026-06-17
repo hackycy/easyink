@@ -37,6 +37,14 @@ const ROLE_BG_MAP: Record<string, keyof TableDataProps> = {
 const PLACEHOLDER_ROW_COUNT = 2
 const PREVIEW_ROW_PATTERN = 'repeating-linear-gradient(135deg, transparent 0, transparent 4px, rgba(100,116,139,0.16) 4px, rgba(100,116,139,0.16) 4.5px, transparent 4.5px, transparent 9px)'
 
+type SectionMarkerKind = 'header' | 'data' | 'footer'
+
+const SECTION_MARKER_ICON: Record<SectionMarkerKind, string> = {
+  header: '<svg xmlns="http://www.w3.org/2000/svg" width="7" height="7" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width=".9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="1.25" y="1.25" width="9.5" height="9.5" rx="1.25"/><rect x="1.7" y="1.7" width="8.6" height="2.7" rx=".7" fill="#475569" stroke="none" fill-opacity=".32"/><path d="M1.25 4h9.5"/><path d="M1.25 8h9.5"/><path d="M4.4 1.25v9.5"/><path d="M7.6 1.25v9.5"/></svg>',
+  data: '<svg xmlns="http://www.w3.org/2000/svg" width="7" height="7" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width=".9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="1.25" y="1.25" width="9.5" height="9.5" rx="1.25"/><rect x="1.7" y="4.25" width="8.6" height="3.5" rx=".7" fill="#475569" stroke="none" fill-opacity=".3"/><path d="M1.25 4h9.5"/><path d="M1.25 8h9.5"/><path d="M4.4 1.25v9.5"/><path d="M7.6 1.25v9.5"/></svg>',
+  footer: '<svg xmlns="http://www.w3.org/2000/svg" width="7" height="7" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width=".9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="1.25" y="1.25" width="9.5" height="9.5" rx="1.25"/><rect x="1.7" y="7.6" width="8.6" height="2.7" rx=".7" fill="#475569" stroke="none" fill-opacity=".32"/><path d="M1.25 4h9.5"/><path d="M1.25 8h9.5"/><path d="M4.4 1.25v9.5"/><path d="M7.6 1.25v9.5"/></svg>',
+}
+
 const RUNTIME_HEIGHT_CONTROL_POLICY: MaterialControlPolicy = {
   geometry: {
     width: { state: 'hidden', reason: 'designer.reason.runtimeHeight' },
@@ -53,14 +61,15 @@ function readRowBackground(props: TableDataProps, key: keyof TableDataProps): st
   return typeof value === 'string' ? value : ''
 }
 
-function renderSectionLabel(label: string): string {
-  return `<span style="position:absolute;left:1px;top:1px;max-width:calc(100% - 2px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:6px;line-height:1;color:rgba(15,23,42,0.42);pointer-events:none;user-select:none">${escapeHtml(label)}</span>`
+function renderSectionMarker(kind: SectionMarkerKind, label: string): string {
+  const icon = SECTION_MARKER_ICON[kind]
+  return `<span role="img" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}" style="position:absolute;left:1px;top:1px;display:inline-flex;align-items:center;justify-content:center;width:9px;height:9px;border:0.5px solid rgba(15,23,42,0.12);border-radius:1.5px;background:rgba(255,255,255,0.18);color:rgba(71,85,105,0.44);pointer-events:none;user-select:none;line-height:0">${icon}</span>`
 }
 
-function renderCellWithSectionLabel(content: string, label: string, isFirstCell: boolean): string {
+function renderCellWithSectionLabel(content: string, label: string, kind: SectionMarkerKind, isFirstCell: boolean): string {
   if (!isFirstCell)
     return content
-  return `${renderSectionLabel(label)}${content}`
+  return `${renderSectionMarker(kind, label)}${content}`
 }
 
 /**
@@ -175,11 +184,11 @@ function buildHtml(node: MaterialNode, unit: UnitType, context: MaterialExtensio
 
       const row = node.table.topology.rows[rowIndex]
       if (row?.role === 'header')
-        return renderCellWithSectionLabel(content, context.t('materials.tableData.section.header'), colIndex === 0)
+        return renderCellWithSectionLabel(content, context.t('materials.tableData.section.header'), 'header', colIndex === 0)
       if (row?.role === 'repeat-template')
-        return renderCellWithSectionLabel(content, context.t('materials.tableData.section.data'), colIndex === 0)
+        return renderCellWithSectionLabel(content, context.t('materials.tableData.section.data'), 'data', colIndex === 0)
       if (row?.role === 'footer')
-        return renderCellWithSectionLabel(content, context.t('materials.tableData.section.footer'), colIndex === 0)
+        return renderCellWithSectionLabel(content, context.t('materials.tableData.section.footer'), 'footer', colIndex === 0)
       return content
     },
     rowDecorator: (ri) => {
