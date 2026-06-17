@@ -1,7 +1,7 @@
 {
   "name": "@easyink/material-chart-bar",
   "type": "module",
-  "version": "0.0.28",
+  "version": "0.0.29",
   "description": "EasyInk bar chart material",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",

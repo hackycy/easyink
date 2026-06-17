@@ -1,7 +1,7 @@
 {
   "name": "@easyink/export-plugin-dom-image",
   "type": "module",
-  "version": "0.0.28",
+  "version": "0.0.29",
   "description": "DOM-to-image export plugin for @easyink/export-runtime (html2canvas)",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",

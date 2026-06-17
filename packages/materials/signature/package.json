@@ -1,7 +1,7 @@
 {
   "name": "@easyink/material-signature",
   "type": "module",
-  "version": "0.0.28",
+  "version": "0.0.29",
   "description": "EasyInk signature material",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",
