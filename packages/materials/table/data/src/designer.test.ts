@@ -72,11 +72,16 @@ describe('table-data designer', () => {
     } as never, container)
 
     expect(container.innerHTML).toContain('repeating-linear-gradient')
+    expect(container.innerHTML).toContain('rgba(100,116,139,0.16)')
+    expect(container.innerHTML).toContain('4.5px')
     expect(container.innerHTML).toContain('pointer-events:none')
     expect(container.innerHTML).toContain('position:absolute')
+    expect(container.innerHTML).toContain('font-size:6px')
     expect(container.innerHTML).toContain('表头')
     expect(container.innerHTML).toContain('数据行')
     expect(container.innerHTML).toContain('表尾')
+    expect(container.innerHTML).toContain('position:relative;display:flex')
+    expect(container.innerHTML).not.toContain('position:relative;width:100%;height:100%;min-width:0')
     expect(container.innerHTML).not.toContain('rgba(24,144,255')
 
     unsubscribe?.()

@@ -35,7 +35,7 @@ const ROLE_BG_MAP: Record<string, keyof TableDataProps> = {
 }
 
 const PLACEHOLDER_ROW_COUNT = 2
-const PREVIEW_ROW_PATTERN = 'repeating-linear-gradient(135deg, transparent 0, transparent 4px, currentColor 4px, currentColor 5px, transparent 5px, transparent 9px)'
+const PREVIEW_ROW_PATTERN = 'repeating-linear-gradient(135deg, transparent 0, transparent 4px, rgba(100,116,139,0.16) 4px, rgba(100,116,139,0.16) 4.5px, transparent 4.5px, transparent 9px)'
 
 const RUNTIME_HEIGHT_CONTROL_POLICY: MaterialControlPolicy = {
   geometry: {
@@ -54,13 +54,13 @@ function readRowBackground(props: TableDataProps, key: keyof TableDataProps): st
 }
 
 function renderSectionLabel(label: string): string {
-  return `<span style="position:absolute;left:1px;top:1px;max-width:calc(100% - 2px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:7px;line-height:1;color:rgba(15,23,42,0.42);pointer-events:none;user-select:none">${escapeHtml(label)}</span>`
+  return `<span style="position:absolute;left:1px;top:1px;max-width:calc(100% - 2px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:6px;line-height:1;color:rgba(15,23,42,0.42);pointer-events:none;user-select:none">${escapeHtml(label)}</span>`
 }
 
 function renderCellWithSectionLabel(content: string, label: string, isFirstCell: boolean): string {
   if (!isFirstCell)
     return content
-  return `<div style="position:relative;width:100%;height:100%;min-width:0">${renderSectionLabel(label)}${content}</div>`
+  return `${renderSectionLabel(label)}${content}`
 }
 
 /**
@@ -141,7 +141,7 @@ function buildHtml(node: MaterialNode, unit: UnitType, context: MaterialExtensio
         const verticalBorderWidth = bw + (borderBottom === 'none' ? 0 : bw)
         const innerHeight = Math.max(0, scaledRepeatHeight - verticalBorderWidth)
         const innerStyle = `box-sizing:border-box;height:${innerHeight}${unit};padding:${pad}${unit};overflow:hidden`
-        cells += `<td${cs} style="box-sizing:border-box;height:${scaledRepeatHeight}${unit};border-top:${borderTop};border-right:${borderRight};border-bottom:${borderBottom};border-left:${borderLeft};padding:0;background-image:${PREVIEW_ROW_PATTERN};color:rgba(100,116,139,0.32);vertical-align:top"><div style="${innerStyle}">&nbsp;</div></td>`
+        cells += `<td${cs} style="box-sizing:border-box;height:${scaledRepeatHeight}${unit};border-top:${borderTop};border-right:${borderRight};border-bottom:${borderBottom};border-left:${borderLeft};padding:0;background-image:${PREVIEW_ROW_PATTERN};vertical-align:top"><div style="${innerStyle}">&nbsp;</div></td>`
       }
       placeholderRowsHtml += `<tr style="height:${scaledRepeatHeight}${unit};pointer-events:none">${cells}</tr>`
     }

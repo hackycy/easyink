@@ -178,7 +178,7 @@ export function renderTableHtml(options: RenderTableHtmlOptions): string {
       const verticalBorderWidth = (borderVisibility.top ? bw : 0) + (borderVisibility.bottom ? bw : 0)
       const innerHeight = Math.max(0, cellHeight - verticalBorderWidth)
       const justify = vAlignToJustify[typo.verticalAlign] ?? 'center'
-      const innerStyle = `display:flex;flex-direction:column;justify-content:${justify};box-sizing:border-box;height:${innerHeight}${unit};padding:${pad}${unit};overflow:hidden;text-align:${typo.textAlign}`
+      const innerStyle = `position:relative;display:flex;flex-direction:column;justify-content:${justify};box-sizing:border-box;height:${innerHeight}${unit};padding:${pad}${unit};overflow:hidden;text-align:${typo.textAlign}`
 
       cells += `<td${rs}${cs} style="box-sizing:border-box;height:${cellHeight}${unit};border-top:${borderTop};border-right:${borderRight};border-bottom:${borderBottom};border-left:${borderLeft};padding:0;font-size:${typo.fontSize}${unit};color:${typo.color};font-weight:${typo.fontWeight};font-style:${typo.fontStyle};line-height:${typo.lineHeight};letter-spacing:${typo.letterSpacing}${unit};vertical-align:top${cellStyle}"><div style="${innerStyle}">${content}</div></td>`
     }

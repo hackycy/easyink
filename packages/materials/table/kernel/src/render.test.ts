@@ -47,6 +47,15 @@ describe('renderTableHtml', () => {
     expect(html).toContain('font-family:TableFont')
   })
 
+  it('makes the cell inner block the positioning context for overlays', () => {
+    const html = renderSimpleTable({
+      columns: [{ ratio: 1 }],
+      rows: [{ height: 10, role: 'normal', cells: [{ content: { text: 'A' } }] }],
+    })
+
+    expect(html).toContain('position:relative;display:flex')
+  })
+
   it('renders shared internal borders once in separate border mode', () => {
     const html = renderSimpleTable({
       columns: [{ ratio: 0.5 }, { ratio: 0.5 }],
