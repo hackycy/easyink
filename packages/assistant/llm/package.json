@@ -1,7 +1,7 @@
 {
   "name": "@easyink/assistant-llm",
   "type": "module",
-  "version": "0.0.26",
+  "version": "0.0.27",
   "description": "Provider-neutral LLM gateway for EasyInk Assistant",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",

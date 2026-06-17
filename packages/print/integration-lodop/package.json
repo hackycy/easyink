@@ -1,7 +1,7 @@
 {
   "name": "@easyink/print-integration-lodop",
   "type": "module",
-  "version": "0.0.26",
+  "version": "0.0.27",
   "description": "Official LODOP client and managed document printer",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",

@@ -1,7 +1,7 @@
 {
   "name": "@easyink/material-chart-radar",
   "type": "module",
-  "version": "0.0.26",
+  "version": "0.0.27",
   "description": "EasyInk radar chart material",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",
