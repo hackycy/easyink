@@ -29,7 +29,7 @@
 </p>
 
 <p align="center">
-	<img width="1920" height="1080" alt="EasyInk playground" src="https://github.com/user-attachments/assets/0884ea3c-3b13-4630-801b-4b0b8a26babe" />
+	<img width="1920" height="1080" alt="easyink" src="https://github.com/user-attachments/assets/6a431d74-19d6-4ada-b7ce-b8da3d9f2ffc" />
 </p>
 
 ## Overview
