@@ -11,6 +11,7 @@
 - 页面模型覆盖 `mode / width / height / pages / scale / radius / offsetX / offsetY / copies / blankPolicy / grid / font / background / print / pageModel / layout / pagination / reflow`，并兼容 benchmark 输入里的 `viewer / xOffset / yOffset / blank`
 - 数据源协议覆盖 `id / name / tag / title / icon / expand / headless / fields / use / props / format / displayFormat / union / bindIndex / meta`，字段节点可声明 `format / displayFormat`
 - 数据绑定分为普通 `BindingRef` 和物料级 `data-contract`：普通元素消费字段路径，图表等结构化物料声明目标数据模型，binding 只保存 source path 到目标字段的映射，关系由 Resolver 推导
+- 条件渲染由物料显式注册能力，Schema 保存结构化规则 AST，Viewer 在绑定、测量、布局与分页前生成派生运行时 Schema
 - 顶部物料栏建模为"高频直达物料 + 分组目录物料"的混合入口
 - `table`、`chart`、`svg` 都是一级结构系统
 - 属性面板在同一窗口壳层中互斥展示"元素属性"与"页面属性"，支持 PropertyPanelOverlay 动态叠加层
@@ -52,7 +53,7 @@
 | 23 | [Contribution 机制](./23-contribution.md) | ContributionRegistry、注入方式、响应式 Props、生命周期、命名空间 |
 | 24 | [页面布局正交体系](./24-page-layout-orthogonal-system.md) | 页面模型、布局策略、分页策略、测量重排引擎四层解耦 |
 | 25 | [AI Assistant 平台](./25-ai-assistant.md) | 物料知识声明、数据流链路、Orchestrator 工作流、ComposerAgent、知识与推理层 |
-| 26 | [跨平台 RenderPlan 管线](./26-portable-render-plan.md) | schema + data 编译为平台无关 RenderPlan，再由小程序、App、C# 等端侧 adapter 绘制 |
+| 26 | [条件渲染系统](./26-conditional-rendering.md) | 物料显式注册的结构化条件规则、Designer 编辑协议与 Viewer 布局语义 |
 
 ## 补充说明
 
@@ -74,7 +75,7 @@
 - **想了解代码结构?** -> [03-monorepo-structure](./03-monorepo-structure.md) + [04-layered-architecture](./04-layered-architecture.md)
 - **想了解模板模型?** -> [05-schema-dsl](./05-schema-dsl.md) + [08-datasource](./08-datasource.md)
 - **想了解预览与分页?** -> [06-render-pipeline](./06-render-pipeline.md) + [07-layout-engine](./07-layout-engine.md) + [24-page-layout-orthogonal-system](./24-page-layout-orthogonal-system.md)
-- **想了解跨平台渲染?** -> [26-portable-render-plan](./26-portable-render-plan.md)
+- **想了解条件渲染?** -> [26-conditional-rendering](./26-conditional-rendering.md)
 - **想了解设计器工作台?** -> [10-designer-interaction](./10-designer-interaction.md)
 - **想了解物料体系?** -> [11-element-system](./11-element-system.md)
 - **想了解命令与历史?** -> [12-command-undo-redo](./12-command-undo-redo.md)
