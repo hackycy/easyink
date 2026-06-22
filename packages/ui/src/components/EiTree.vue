@@ -19,6 +19,7 @@ const emit = defineEmits<{
 }>()
 
 defineSlots<{
+  label?: (props: { node: TreeNode }) => unknown
   indicator?: (props: { node: TreeNode }) => unknown
   suffix: (props: { node: TreeNode }) => unknown
 }>()
@@ -112,7 +113,11 @@ function resolveIcon(node: TreeNode): Component | undefined {
           :size="14"
           :stroke-width="1.5"
         />
-        <span class="ei-tree__label">{{ node.label }}</span>
+        <span class="ei-tree__label">
+          <slot name="label" :node="node">
+            {{ node.label }}
+          </slot>
+        </span>
         <span class="ei-tree__indicator">
           <slot name="indicator" :node="node" />
         </span>
@@ -133,6 +138,11 @@ function resolveIcon(node: TreeNode): Component | undefined {
         >
           <template #indicator="slotProps">
             <slot name="indicator" :node="slotProps.node" />
+          </template>
+          <template #label="slotProps">
+            <slot name="label" :node="slotProps.node">
+              {{ slotProps.node.label }}
+            </slot>
           </template>
           <template #suffix="slotProps">
             <slot name="suffix" :node="slotProps.node" />

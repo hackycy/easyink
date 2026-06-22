@@ -62,8 +62,13 @@ defineEmits<{
   }
 
   &--ghost {
-    border-color: transparent;
     background: transparent;
+    border-color: transparent;
+
+    &:hover:not(:disabled) {
+      background: var(--ei-hover-bg, #f0f0f0);
+      border-color: transparent;
+    }
   }
 
   &--sm {

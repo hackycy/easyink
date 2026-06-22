@@ -4,8 +4,7 @@ import type { MaterialNode, RenderCondition } from '@easyink/schema'
 import { IconDelete, IconPlus } from '@easyink/icons'
 import { deepClone } from '@easyink/shared'
 import { EiButton, EiIcon, EiSelect, EiSwitch } from '@easyink/ui'
-import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { DESIGNER_DRAG_DROP_KEY } from '../composables/use-designer-drag-drop'
+import { computed, ref, watch } from 'vue'
 import { createRenderCondition, isRenderConditionComplete } from '../conditions/editor-model'
 import ConditionRuleEditor from './ConditionRuleEditor.vue'
 
@@ -20,9 +19,6 @@ const emit = defineEmits<{
 
 const draft = ref<RenderCondition | undefined>(deepClone(props.element.renderCondition))
 const dirty = ref(false)
-const root = ref<HTMLElement | null>(null)
-const dragDrop = inject(DESIGNER_DRAG_DROP_KEY, null)
-let unregister: (() => void) | undefined
 
 const complete = computed(() => !!draft.value && isRenderConditionComplete(draft.value))
 const whenFalseOptions = computed(() => [
@@ -39,27 +35,6 @@ watch(() => props.element.renderCondition, (condition) => {
     draft.value = deepClone(condition)
   dirty.value = false
 }, { deep: true })
-
-onMounted(() => {
-  if (!dragDrop)
-    return
-  unregister = dragDrop.registerDatasourceDropTarget({
-    id: `condition-root:${props.element.id}`,
-    element: () => root.value,
-    onDragOver: data => data.union?.length
-      ? { status: 'rejected', label: 'Union fields are not supported in conditions' }
-      : { status: 'accepted', label: `创建 ${data.fieldLabel || data.fieldPath} 条件` },
-    onDrop: (data) => {
-      if (data.union?.length)
-        return
-      const next = createRenderCondition(data.fieldPath)
-      draft.value = next
-      dirty.value = true
-    },
-  })
-})
-
-onBeforeUnmount(() => unregister?.())
 
 function enable() {
   if (!draft.value) {
@@ -87,22 +62,25 @@ function remove() {
 </script>
 
 <template>
-  <div ref="root" class="condition-editor">
+  <div class="condition-editor">
     <div v-if="!draft" class="condition-editor__empty">
-      <p>按运行时数据决定是否输出该物料。也可以把数据字段直接拖到这里。</p>
+      <p class="condition-editor__eyebrow">
+        条件显示
+      </p>
+      <p>用运行时数据控制该物料是否输出。启用后，可在具体字段槽位中选择或拖入数据字段。</p>
       <EiButton size="sm" @click="enable">
         <EiIcon :icon="IconPlus" :size="13" />
-        添加条件
+        手动创建规则
       </EiButton>
     </div>
 
     <template v-else>
       <div class="condition-editor__header">
-        <EiSwitch
-          label="启用条件"
-          :model-value="draft.enabled !== false"
-          @update:model-value="update({ ...draft!, enabled: $event })"
-        />
+        <div class="condition-editor__header-copy">
+          <span class="condition-editor__title">条件显示</span>
+          <span class="condition-editor__summary">规则成立时显示该物料</span>
+        </div>
+        <EiSwitch :model-value="draft.enabled !== false" @update:model-value="update({ ...draft!, enabled: $event })" />
         <EiButton
           class="condition-editor__remove"
           variant="ghost"
@@ -115,6 +93,27 @@ function remove() {
         </EiButton>
       </div>
 
+      <div class="condition-editor__section">
+        <p class="condition-editor__section-title">
+          显示规则
+        </p>
+        <p class="condition-editor__section-copy">
+          当以下规则成立时显示。
+        </p>
+      </div>
+      <ConditionRuleEditor :model-value="draft.rule" :variables="[]" path="rule" @update:model-value="(rule, mergeKey) => update({ ...draft!, rule }, mergeKey)" />
+      <p v-if="!complete" class="condition-editor__hint">
+        规则尚未填写完整，完成前不会写入模板或撤销历史。
+      </p>
+
+      <div class="condition-editor__section condition-editor__section--outcome">
+        <p class="condition-editor__section-title">
+          否则
+        </p>
+        <p class="condition-editor__section-copy">
+          规则不成立或数据异常时如何处理该物料。
+        </p>
+      </div>
       <div class="condition-editor__settings">
         <EiSelect
           label="不满足时"
@@ -129,11 +128,6 @@ function remove() {
           @update:model-value="update({ ...draft!, onUnknown: $event as 'include' | 'exclude' })"
         />
       </div>
-
-      <ConditionRuleEditor :model-value="draft.rule" :variables="[]" path="rule" @update:model-value="(rule, mergeKey) => update({ ...draft!, rule }, mergeKey)" />
-      <p v-if="!complete" class="condition-editor__hint">
-        规则尚未填写完整，完成前不会写入模板或撤销历史。
-      </p>
     </template>
   </div>
 </template>
@@ -142,19 +136,55 @@ function remove() {
 .condition-editor {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 
   &__empty {
-    padding: 10px;
-    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    align-items: flex-start;
     color: var(--ei-text-secondary, #666);
-    border: 1px dashed var(--ei-border-color, #d9d9d9);
-    border-radius: 6px;
   }
-  &__empty p { margin: 0 0 8px; line-height: 1.5; }
-  &__header { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-  &__header > :first-child { flex: 1; }
-  &__remove { flex: 0 0 26px; width: 26px; padding: 0; color: var(--ei-danger, #d4380d); }
+  &__empty p { margin: 0; line-height: 1.5; }
+  &__eyebrow, &__title, &__section-title {
+    color: var(--ei-text, #222);
+    font-size: 12px;
+    line-height: 1.35;
+  }
+  &__eyebrow { font-weight: 500; }
+  &__header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 8px;
+    align-items: center;
+  }
+  &__header-copy {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 1px;
+  }
+  &__summary, &__section-copy {
+    color: var(--ei-text-secondary, #666);
+    font-size: 11px;
+    line-height: 1.4;
+  }
+  &__remove {
+    flex: 0 0 26px;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    color: var(--ei-danger, #d4380d);
+    border: 0;
+  }
+  &__section {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: 2px;
+  }
+  &__section--outcome { margin-top: 4px; }
+  &__section-title, &__section-copy { margin: 0; }
   &__settings { display: grid; grid-template-columns: 1fr; gap: 6px; }
   &__hint { margin: 0; color: var(--ei-warning, #d46b08); font-size: 11px; line-height: 1.4; }
 }

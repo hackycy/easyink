@@ -5,8 +5,8 @@ import { resolveConditionalSchema } from './conditional-schema'
 import { createViewer } from './index'
 import { MaterialRendererRegistry } from './material-registry'
 
-function schema(elements: MaterialNode[]): DocumentSchema {
-  return { version: '1.0.0', unit: 'mm', page: { mode: 'fixed', width: 100, height: 100 }, guides: { x: [], y: [] }, elements }
+function schema(elements: MaterialNode[], page: Partial<DocumentSchema['page']> = {}): DocumentSchema {
+  return { version: '1.0.0', unit: 'mm', page: { mode: 'fixed', width: 100, height: 100, ...page }, guides: { x: [], y: [] }, elements }
 }
 
 function node(id: string, path: string, whenFalse: 'remove' | 'reserve' = 'remove'): MaterialNode {
@@ -52,6 +52,91 @@ describe('resolveConditionalSchema', () => {
     await runtime.updateData({ show: true })
     expect(container.querySelector('[data-element-id="runtime"]')?.textContent).toBe('visible')
     expect(measure).toHaveBeenCalledTimes(1)
+  })
+
+  it('removes flow-y space for conditionally removed runtime nodes', async () => {
+    const container = document.createElement('div')
+    const runtime = createViewer({ container })
+    runtime.registerMaterial('conditional', { kind: 'none' }, {
+      condition: { scope: 'node', effects: ['remove', 'reserve'] },
+      render: node => ({ html: trustedViewerHtml(`<span>${node.id}</span>`) }),
+    })
+
+    await runtime.open({
+      schema: schema([
+        node('optional', 'show'),
+        { ...node('after', 'after'), y: 20, renderCondition: { rule: { kind: 'compare', operator: 'exists', operands: [{ kind: 'field', path: 'after' }] }, whenFalse: 'remove' } },
+      ], {
+        mode: 'continuous',
+        layout: { strategy: 'stack-flow', flowAxis: 'y' },
+        pagination: { strategy: 'none' },
+        reflow: { strategy: 'flow-y', preserveTrailingGap: false },
+      }),
+      data: { after: true },
+    })
+
+    const optionalEl = container.querySelector('[data-element-id="optional"]') as HTMLElement | null
+    const afterEl = container.querySelector('[data-element-id="after"]') as HTMLElement | null
+    expect(optionalEl).toBeNull()
+    expect(afterEl).not.toBeNull()
+    expect(Number.parseFloat(afterEl!.style.top)).toBe(10)
+  })
+
+  it('preserves flow-y space for conditionally reserved runtime nodes', async () => {
+    const container = document.createElement('div')
+    const runtime = createViewer({ container })
+    runtime.registerMaterial('conditional', { kind: 'none' }, {
+      condition: { scope: 'node', effects: ['remove', 'reserve'] },
+      render: node => ({ html: trustedViewerHtml(`<span>${node.id}</span>`) }),
+    })
+
+    await runtime.open({
+      schema: schema([
+        node('optional', 'show', 'reserve'),
+        { ...node('after', 'after'), y: 20, renderCondition: { rule: { kind: 'compare', operator: 'exists', operands: [{ kind: 'field', path: 'after' }] }, whenFalse: 'remove' } },
+      ], {
+        mode: 'continuous',
+        layout: { strategy: 'stack-flow', flowAxis: 'y' },
+        pagination: { strategy: 'none' },
+        reflow: { strategy: 'flow-y', preserveTrailingGap: false },
+      }),
+      data: { after: true },
+    })
+
+    const optionalEl = container.querySelector('[data-element-id="optional"]') as HTMLElement | null
+    const afterEl = container.querySelector('[data-element-id="after"]') as HTMLElement | null
+    expect(optionalEl).toBeNull()
+    expect(afterEl).not.toBeNull()
+    expect(Number.parseFloat(afterEl!.style.top)).toBe(20)
+  })
+
+  it('reflows conditionally removed space again after updateData', async () => {
+    const container = document.createElement('div')
+    const runtime = createViewer({ container })
+    runtime.registerMaterial('conditional', { kind: 'none' }, {
+      condition: { scope: 'node', effects: ['remove', 'reserve'] },
+      render: node => ({ html: trustedViewerHtml(`<span>${node.id}</span>`) }),
+    })
+    const input = schema([
+      node('optional', 'show'),
+      { ...node('after', 'after'), y: 20, renderCondition: { rule: { kind: 'compare', operator: 'exists', operands: [{ kind: 'field', path: 'after' }] }, whenFalse: 'remove' } },
+    ], {
+      mode: 'continuous',
+      layout: { strategy: 'stack-flow', flowAxis: 'y' },
+      pagination: { strategy: 'none' },
+      reflow: { strategy: 'flow-y', preserveTrailingGap: false },
+    })
+
+    await runtime.open({ schema: input, data: { show: true, after: true } })
+    expect(Number.parseFloat((container.querySelector('[data-element-id="after"]') as HTMLElement).style.top)).toBe(20)
+
+    await runtime.updateData({ after: true })
+    expect(container.querySelector('[data-element-id="optional"]')).toBeNull()
+    expect(Number.parseFloat((container.querySelector('[data-element-id="after"]') as HTMLElement).style.top)).toBe(10)
+
+    await runtime.updateData({ show: true, after: true })
+    expect(container.querySelector('[data-element-id="optional"]')).not.toBeNull()
+    expect(Number.parseFloat((container.querySelector('[data-element-id="after"]') as HTMLElement).style.top)).toBe(20)
   })
 
   it('ignores conditions on materials without the capability', () => {

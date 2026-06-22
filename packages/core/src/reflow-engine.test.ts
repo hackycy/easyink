@@ -16,6 +16,40 @@ function makeNode(id: string, overrides: Partial<MaterialNode> = {}): MaterialNo
 }
 
 describe('runFlowYReflow', () => {
+  it('pulls later flow nodes upward when an earlier runtime node is removed', () => {
+    const originalElements = [
+      makeNode('header', { y: 0, height: 10 }),
+      makeNode('optional', { y: 20, height: 12 }),
+      makeNode('summary', { y: 40, height: 5 }),
+    ]
+    const measuredElements = [
+      makeNode('header', { y: 0, height: 10 }),
+      makeNode('summary', { y: 40, height: 5 }),
+    ]
+
+    const result = runFlowYReflow({ originalElements, measuredElements })
+
+    expect(result.elements.map(node => node.id)).toEqual(['header', 'summary'])
+    expect(result.elements.find(node => node.id === 'summary')?.y).toBe(28)
+  })
+
+  it('does not pull later flow nodes upward when a removed runtime node is fixed', () => {
+    const originalElements = [
+      makeNode('header', { y: 0, height: 10 }),
+      makeNode('watermark', { y: 20, height: 12, props: { layoutMode: 'fixed' } }),
+      makeNode('summary', { y: 40, height: 5 }),
+    ]
+    const measuredElements = [
+      makeNode('header', { y: 0, height: 10 }),
+      makeNode('summary', { y: 40, height: 5 }),
+    ]
+
+    const result = runFlowYReflow({ originalElements, measuredElements })
+
+    expect(result.elements.map(node => node.id)).toEqual(['header', 'summary'])
+    expect(result.elements.find(node => node.id === 'summary')?.y).toBe(40)
+  })
+
   it('reports fixed overlaps introduced by flow-y reflow', () => {
     const originalElements = [
       makeNode('header', { y: 0, height: 10 }),

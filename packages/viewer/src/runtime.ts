@@ -144,8 +144,12 @@ export class ViewerRuntime {
     const layoutSchema = repeatedElements.length > 0
       ? { ...runtimeSchema, elements: runtimeSchema.elements.filter(el => !repeatedElements.includes(el)) }
       : runtimeSchema
+    const originalRepeatedIds = new Set(this.collectRepeatedPageElements(this._schema.elements).map(el => el.id))
+    const layoutOriginalSchema = originalRepeatedIds.size > 0
+      ? { ...this._schema, elements: this._schema.elements.filter(el => !originalRepeatedIds.has(el.id)) }
+      : this._schema
     const layoutDocument = runLayoutPipeline(layoutSchema, {
-      originalSchema: layoutSchema,
+      originalSchema: layoutOriginalSchema,
       measured: measurements,
     })
     const pagination = runPagination(layoutSchema, layoutDocument, {

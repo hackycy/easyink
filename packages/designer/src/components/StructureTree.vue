@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { MaterialNode } from '@easyink/schema'
 import type { TreeNode } from '@easyink/ui'
-import { IconDelete, IconHidden, IconLock, IconPreview, IconSliders } from '@easyink/icons'
+import { IconCondition, IconDelete, IconHidden, IconLock, IconPreview } from '@easyink/icons'
 import { EiIcon, EiTree } from '@easyink/ui'
 import { computed } from 'vue'
 import { useDesignerStore } from '../composables'
@@ -67,14 +67,17 @@ function visibilityTitle(node: MaterialNode): string {
     default-expand-all
     @select="handleSelect"
   >
-    <template #indicator="{ node }">
-      <span
-        v-if="(node.data as MaterialNode)?.renderCondition"
-        class="structure-tree__condition"
-        :class="{ 'is-disabled': (node.data as MaterialNode).renderCondition?.enabled === false }"
-        :title="store.t('designer.property.conditionalRendering')"
-      >
-        <EiIcon :icon="IconSliders" :size="12" :stroke-width="1.5" />
+    <template #label="{ node }">
+      <span class="structure-tree__label-content">
+        <span
+          v-if="(node.data as MaterialNode)?.renderCondition"
+          class="structure-tree__condition"
+          :class="{ 'is-disabled': (node.data as MaterialNode).renderCondition?.enabled === false }"
+          :title="store.t('designer.property.conditionalRendering')"
+        >
+          <EiIcon :icon="IconCondition" :size="12" :stroke-width="1.6" />
+        </span>
+        <span class="structure-tree__label-text">{{ node.label }}</span>
       </span>
     </template>
     <template #suffix="{ node }">
@@ -153,10 +156,24 @@ function visibilityTitle(node: MaterialNode): string {
   }
 }
 
-.structure-tree__condition {
-  width: 18px;
-  height: 18px;
+.structure-tree__label-content {
   display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.structure-tree__label-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.structure-tree__condition {
+  display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: center;
   color: var(--ei-primary, #1677ff);

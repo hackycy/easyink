@@ -53,6 +53,7 @@ export {
   Eraser as IconClear,
   X as IconClose,
   ChevronsUpDown as IconCollapse,
+  GitBranch as IconCondition,
   Copy as IconCopy,
   CopyPlus as IconCopyPlus,
   Database as IconDatabase,

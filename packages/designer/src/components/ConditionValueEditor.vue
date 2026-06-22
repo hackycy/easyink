@@ -8,6 +8,7 @@ const props = defineProps<{
   modelValue: ValueExpression
   variables: string[]
   slotId: string
+  label?: string
 }>()
 
 const emit = defineEmits<{
@@ -135,40 +136,53 @@ function updateNumberLiteral(value: number | null) {
 </script>
 
 <template>
-  <div ref="root" class="condition-value" :class="{ 'condition-value--field': pathExpression }">
-    <EiSelect class="condition-control condition-value__kind" :model-value="expressionKind" :options="kindOptions" @update:model-value="changeKind(String($event))" />
+  <div ref="root" class="condition-value">
+    <span v-if="label" class="condition-value__label">{{ label }}</span>
+    <div class="condition-value__controls" :class="{ 'condition-value__controls--path': pathExpression }">
+      <EiSelect class="condition-control condition-value__kind" :model-value="expressionKind" :options="kindOptions" @update:model-value="changeKind(String($event))" />
 
-    <template v-if="pathExpression">
-      <EiSelect v-if="pathExpression.kind === 'variable'" class="condition-control" :model-value="pathExpression.name" :options="variableOptions" @update:model-value="updateVariable(String($event))" />
-      <EiInput class="condition-control condition-value__path" :model-value="textDraft" placeholder="如 order.customer.name" @update:model-value="updatePath(String($event))" />
-      <EiSelect class="condition-control" :model-value="pathExpression.cast ?? ''" :options="castOptions" @update:model-value="updateCast(String($event))" />
-    </template>
+      <template v-if="pathExpression">
+        <EiSelect v-if="pathExpression.kind === 'variable'" class="condition-control" :model-value="pathExpression.name" :options="variableOptions" @update:model-value="updateVariable(String($event))" />
+        <EiInput class="condition-control condition-value__path" :model-value="textDraft" placeholder="如 order.customer.name" @update:model-value="updatePath(String($event))" />
+        <EiSelect class="condition-control condition-value__cast" :model-value="pathExpression.cast ?? ''" :options="castOptions" @update:model-value="updateCast(String($event))" />
+      </template>
 
-    <template v-else-if="modelValue.kind === 'literal'">
-      <EiSelect class="condition-control" :model-value="modelValue.value === null ? 'null' : typeof modelValue.value" :options="literalTypeOptions" @update:model-value="changeLiteralType(String($event))" />
-      <EiSwitch v-if="typeof modelValue.value === 'boolean'" class="condition-control condition-value__boolean" label="固定值" :model-value="modelValue.value" @update:model-value="$emit('update:modelValue', { kind: 'literal', value: $event })" />
-      <EiNumberInput v-else-if="typeof modelValue.value === 'number'" class="condition-control condition-value__path" :model-value="modelValue.value" :nullable="false" @update:model-value="updateNumberLiteral" />
-      <EiInput v-else-if="modelValue.value !== null" class="condition-control condition-value__path" :model-value="textDraft" @update:model-value="updateLiteral(String($event))" />
-    </template>
+      <template v-else-if="modelValue.kind === 'literal'">
+        <EiSelect class="condition-control" :model-value="modelValue.value === null ? 'null' : typeof modelValue.value" :options="literalTypeOptions" @update:model-value="changeLiteralType(String($event))" />
+        <EiSwitch v-if="typeof modelValue.value === 'boolean'" class="condition-control condition-value__boolean" label="固定值" :model-value="modelValue.value" @update:model-value="$emit('update:modelValue', { kind: 'literal', value: $event })" />
+        <EiNumberInput v-else-if="typeof modelValue.value === 'number'" class="condition-control condition-value__path" :model-value="modelValue.value" :nullable="false" @update:model-value="updateNumberLiteral" />
+        <EiInput v-else-if="modelValue.value !== null" class="condition-control condition-value__path" :model-value="textDraft" @update:model-value="updateLiteral(String($event))" />
+      </template>
+    </div>
   </div>
 </template>
 
 <style scoped lang="scss">
 .condition-value {
-  display: grid;
-  grid-template-columns: 76px minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   gap: 4px;
-  padding: 4px;
-  border: 1px dashed var(--ei-border-color, #d9d9d9);
-  border-radius: 5px;
 
-  &--field {
-    border-color: color-mix(in srgb, var(--ei-primary, #1677ff) 35%, transparent);
-    background: color-mix(in srgb, var(--ei-primary, #1677ff) 4%, transparent);
+  &__label {
+    color: var(--ei-text-secondary, #666);
+    font-size: 11px;
+    line-height: 1.3;
   }
 
-  &__kind { grid-row: span 2; }
+  &__controls {
+    display: grid;
+    grid-template-columns: 76px minmax(0, 1fr);
+    gap: 4px;
+    align-items: start;
+
+    &--path {
+      grid-template-columns: 76px minmax(0, 1fr);
+    }
+  }
+
+  &__kind { min-width: 0; }
   &__path { min-width: 0; }
+  &__cast { grid-column: 2; }
   &__boolean { min-height: 28px; }
 }
 </style>

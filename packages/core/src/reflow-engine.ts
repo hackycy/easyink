@@ -16,7 +16,7 @@ export interface ReflowEngineResult {
 interface OrderedNode {
   index: number
   original: MaterialNode
-  measured: MaterialNode
+  measured?: MaterialNode
 }
 
 interface ReflowNodePartition {
@@ -32,7 +32,7 @@ export function runFlowYReflow(input: ReflowEngineInput): ReflowEngineResult {
     .map((original, index): OrderedNode => ({
       index,
       original,
-      measured: measuredById.get(original.id) ?? original,
+      measured: measuredById.get(original.id),
     }))
     .sort((left, right) => {
       if (left.original.y !== right.original.y)
@@ -58,20 +58,22 @@ export function runFlowYReflow(input: ReflowEngineInput): ReflowEngineResult {
       currentBandY = entry.original.y
     }
 
-    const flow = readNodeFlowConstraints(entry.measured)
+    const flow = readNodeFlowConstraints(entry.measured ?? entry.original)
     participatesById.set(entry.original.id, flow.participates)
     const nextY = flow.participates
       ? entry.original.y + accumulatedDelta
       : entry.original.y
 
-    const laidOutNode = nextY === entry.measured.y
-      ? entry.measured
-      : { ...entry.measured, y: nextY }
+    if (entry.measured) {
+      const laidOutNode = nextY === entry.measured.y
+        ? entry.measured
+        : { ...entry.measured, y: nextY }
 
-    laidOutById.set(entry.original.id, laidOutNode)
+      laidOutById.set(entry.original.id, laidOutNode)
+    }
 
     if (flow.participates) {
-      pendingBandDelta += entry.measured.height - entry.original.height
+      pendingBandDelta += (entry.measured?.height ?? 0) - entry.original.height
     }
   }
 
