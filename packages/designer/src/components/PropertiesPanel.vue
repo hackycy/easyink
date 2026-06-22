@@ -5,7 +5,7 @@ import type { BindingDisplayFormat } from '@easyink/shared'
 import type { Component } from 'vue'
 import type { PagePropertyContext, PagePropertyDescriptor, PagePropertyGroup } from '../page-properties'
 import type { DesignerResolvedAsset, PanelSectionId, PropSchema } from '../types'
-import { ClearBindingCommand, getByPath, setByPath, UpdateBindingFormatCommand, UpdateDocumentCommand, UpdateGeometryCommand, UpdateMaterialBindingCommand, UpdateMaterialMetaCommand, UpdateMaterialPropsCommand, UpdatePageCommand } from '@easyink/core'
+import { ClearBindingCommand, getByPath, setByPath, UpdateBindingFormatCommand, UpdateDocumentCommand, UpdateGeometryCommand, UpdateMaterialBindingCommand, UpdateMaterialMetaCommand, UpdateMaterialPropsCommand, UpdatePageCommand, UpdateRenderConditionCommand } from '@easyink/core'
 import { createLayoutBehaviorPropSchemas, groupPropSchemas } from '@easyink/prop-schemas'
 import { getBindingRefs } from '@easyink/schema'
 import { deepClone } from '@easyink/shared'
@@ -17,6 +17,7 @@ import { isElementRotatable } from '../materials/capabilities'
 import { canEditGeometry, isPropSchemaDisabled as isMaterialPropSchemaDisabled } from '../materials/control-policy'
 import { createPagePropertyDescriptors, defaultDocumentPatch, defaultPagePatch, filterVisible, groupDescriptors, readPageProperty, splitPatch } from '../page-properties'
 import BindingSection from './BindingSection.vue'
+import ConditionEditor from './ConditionEditor.vue'
 import MaterialDataBindingEditor from './MaterialDataBindingEditor.vue'
 import PagePropertyEditor from './PagePropertyEditor.vue'
 import PropSchemaEditor from './PropSchemaEditor.vue'
@@ -38,6 +39,10 @@ const selectedElementRotatable = computed(() =>
 
 const selectedElementLocked = computed(() => selectedElement.value?.locked === true)
 const selectedElementHidden = computed(() => selectedElement.value?.hidden === true)
+const selectedConditionCapability = computed(() => {
+  const element = selectedElement.value
+  return element ? store.getMaterial(element.type)?.condition : undefined
+})
 const canEditSelectedElement = computed(() => !selectedElementLocked.value && !selectedElementHidden.value)
 const showHiddenSwitch = computed(() => !selectedElementLocked.value)
 const showLockedSwitch = computed(() => true)
@@ -612,6 +617,18 @@ function updateElementMeta(key: string, value: unknown) {
   store.commands.execute(cmd)
 }
 
+function updateRenderCondition(condition: MaterialNode['renderCondition'], mergeKey?: string) {
+  const element = selectedElement.value
+  if (!element)
+    return
+  store.commands.execute(new UpdateRenderConditionCommand(
+    store.schema.elements,
+    element.id,
+    condition,
+    mergeKey ? `condition:${element.id}:${mergeKey}` : undefined,
+  ))
+}
+
 // ─── Binding ────────────────────────────────────────────────────
 
 function clearBinding(nodeId: string) {
@@ -809,6 +826,14 @@ function isPropInputDisabled(schema: PropSchema): boolean {
           @clear-binding="clearBinding"
           @clear-external-binding="handleClearExternalBinding"
           @update-binding-format="updateBindingFormat"
+        />
+      </EiPanel>
+
+      <EiPanel v-if="canEditSelectedElement && selectedConditionCapability && isSectionVisible('condition')" :title="store.t('designer.property.conditionalRendering')" collapsible flat>
+        <ConditionEditor
+          :element="selectedElement"
+          :capability="selectedConditionCapability"
+          @update="updateRenderCondition"
         />
       </EiPanel>
 

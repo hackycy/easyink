@@ -51,6 +51,28 @@ describe('decodeBenchmarkInput', () => {
     expect(schema.unit).toBe('mm')
   })
 
+  it('round-trips renderCondition as a canonical node field', () => {
+    const input: BenchmarkDocumentInput = {
+      page: {},
+      elements: [{
+        id: 'conditional',
+        type: 'text',
+        x: 0,
+        y: 0,
+        width: 10,
+        height: 10,
+        renderCondition: {
+          rule: { kind: 'compare', operator: 'exists', operands: [{ kind: 'field', path: 'customer.name' }] },
+          whenFalse: 'remove',
+        },
+      }],
+    }
+    const schema = decodeBenchmarkInput(input)
+    expect(schema.elements[0]?.renderCondition).toEqual(input.elements[0]?.renderCondition)
+    expect(schema.elements[0]?.props).not.toHaveProperty('renderCondition')
+    expect(encodeToBenchmark(schema).elements[0]?.renderCondition).toEqual(input.elements[0]?.renderCondition)
+  })
+
   it('uses provided unit', () => {
     const input: BenchmarkDocumentInput = { unit: 'pt', page: {}, elements: [] }
     const schema = decodeBenchmarkInput(input)

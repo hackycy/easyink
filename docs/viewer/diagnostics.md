@@ -42,13 +42,13 @@ await viewer.print({
 
 ```ts
 interface ViewerDiagnosticEvent {
-  category: 'schema' | 'datasource' | 'viewer' | 'material' | 'print' | 'exporter'
+  category: 'schema' | 'datasource' | 'condition' | 'viewer' | 'material' | 'print' | 'exporter'
   severity: 'error' | 'warning' | 'info'
   code: string
   message: string
   nodeId?: string
   detail?: unknown
-  scope?: 'schema' | 'datasource' | 'font' | 'material' | 'print' | 'exporter' | 'hook'
+  scope?: 'schema' | 'datasource' | 'condition' | 'font' | 'material' | 'print' | 'exporter' | 'hook'
   cause?: unknown
 }
 ```
@@ -110,6 +110,12 @@ await viewer.open({
 - `MATERIAL_DATA_RECORD_RELATION_UNRESOLVED`：显式要求 record relation，但映射字段无法共享同一个集合。
 - `MATERIAL_DATA_RELATION_UNRESOLVED`：自动关系推导失败，无法生成目标 records。
 - `CHART_BAR_NO_VALID_POINTS`：chart-bar 已解析 records，但没有可用的数值点。
+
+## 条件求值 {#condition-evaluation}
+
+条件运行时问题使用 `category: 'condition'` 和 `scope: 'condition'`，均为 warning，不会中断整页渲染。常见诊断码包括 `CONDITION_FIELD_MISSING`、`CONDITION_CAST_FAILED`、`CONDITION_TYPE_MISMATCH`、`CONDITION_COLLECTION_EXPECTED`、`CONDITION_LIMIT_EXCEEDED` 和 `CONDITION_EVALUATION_FAILED`。
+
+同一次渲染会按节点、诊断码和规则位置去重。`detail` 只包含规则位置、字段路径等安全上下文，不包含实际业务值。完整语义见 [条件渲染](/advanced/conditional-rendering)。
 
 ## 字体加载 {#font-loading}
 

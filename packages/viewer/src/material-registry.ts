@@ -1,4 +1,4 @@
-import type { MaterialBindingDefinition } from '@easyink/core'
+import type { MaterialBindingDefinition, MaterialConditionDefinition } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { FragmentPaginator, MaterialViewerExtension, ViewerMeasureContext, ViewerMeasureResult, ViewerRenderContext, ViewerRenderOutput, ViewerRenderSize } from './types'
 import { trustedViewerHtml } from '@easyink/core'
@@ -68,6 +68,10 @@ export class MaterialRendererRegistry {
 
   getBinding(type: string): MaterialBindingDefinition | undefined {
     return this._bindings.get(type)
+  }
+
+  getCondition(type: string): MaterialConditionDefinition | undefined {
+    return this._renderers.get(type)?.condition
   }
 
   get registeredTypes(): string[] {

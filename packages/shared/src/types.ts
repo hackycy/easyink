@@ -165,6 +165,7 @@ export type DiagnosticSeverity = 'error' | 'warning' | 'info'
 export type DiagnosticCategory
   = | 'schema'
     | 'datasource'
+    | 'condition'
     | 'viewer'
     | 'material'
     | 'print'

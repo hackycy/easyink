@@ -23,6 +23,7 @@ export {
   UpdateMaterialMetaCommand,
   UpdateMaterialPropsCommand,
   UpdatePageCommand,
+  UpdateRenderConditionCommand,
 } from './document'
 
 export { getByPath, setByPath } from './helpers'

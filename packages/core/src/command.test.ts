@@ -2,7 +2,7 @@ import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import type { Command } from './command'
 import { describe, expect, it } from 'vitest'
 import { CommandManager } from './command'
-import { AddElementGroupCommand, RemoveElementGroupCommand, RemoveMaterialCommand, UpdateMaterialMetaCommand } from './commands'
+import { AddElementGroupCommand, RemoveElementGroupCommand, RemoveMaterialCommand, UpdateMaterialMetaCommand, UpdateRenderConditionCommand } from './commands'
 
 function makeCommand(id: string, log: string[]): Command {
   return {
@@ -287,6 +287,26 @@ describe('commandManager', () => {
     expect(mgr.historyEntries).toHaveLength(0)
     expect(mgr.cursor).toBe(0)
     expect(mgr.totalCount).toBe(0)
+  })
+})
+
+describe('updateRenderConditionCommand', () => {
+  it('stores full snapshots for undo and merges continuous edits by merge key', () => {
+    const elements: MaterialNode[] = [{ id: 'n', type: 'text', x: 0, y: 0, width: 1, height: 1, props: {} }]
+    const manager = new CommandManager()
+    const makeCondition = (path: string) => ({
+      rule: { kind: 'compare' as const, operator: 'exists' as const, operands: [{ kind: 'field' as const, path }] },
+    })
+
+    manager.execute(new UpdateRenderConditionCommand(elements, 'n', makeCondition('a'), 'field'))
+    manager.execute(new UpdateRenderConditionCommand(elements, 'n', makeCondition('abc'), 'field'))
+    expect(elements[0]?.renderCondition).toEqual(makeCondition('abc'))
+    expect(manager.cursor).toBe(1)
+
+    manager.undo()
+    expect(elements[0]?.renderCondition).toBeUndefined()
+    manager.redo()
+    expect(elements[0]?.renderCondition).toEqual(makeCondition('abc'))
   })
 })
 

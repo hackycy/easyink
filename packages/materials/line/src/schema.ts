@@ -1,5 +1,8 @@
+import type { MaterialConditionDefinition } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import { convertUnit, generateId } from '@easyink/shared'
+
+export const LINE_CONDITION: MaterialConditionDefinition = { scope: 'node', effects: ['remove', 'reserve'] }
 
 export const LINE_TYPE = 'line'
 

@@ -253,6 +253,7 @@ export default defineConfig({
             { text: '自定义打印驱动', link: '/advanced/print-drivers' },
             { text: '自定义导出插件', link: '/advanced/exporters' },
             { text: 'Schema 参考', link: '/advanced/schema' },
+            { text: '条件渲染', link: '/advanced/conditional-rendering' },
           ],
         },
       ],

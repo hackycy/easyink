@@ -1,5 +1,8 @@
+import type { MaterialConditionDefinition } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import { convertUnit, generateId } from '@easyink/shared'
+
+export const SIGNATURE_CONDITION: MaterialConditionDefinition = { scope: 'node', effects: ['remove', 'reserve'] }
 
 export const SIGNATURE_TYPE = 'signature'
 

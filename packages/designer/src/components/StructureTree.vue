@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { MaterialNode } from '@easyink/schema'
 import type { TreeNode } from '@easyink/ui'
-import { IconDelete, IconHidden, IconLock, IconPreview } from '@easyink/icons'
+import { IconDelete, IconHidden, IconLock, IconPreview, IconSliders } from '@easyink/icons'
 import { EiIcon, EiTree } from '@easyink/ui'
 import { computed } from 'vue'
 import { useDesignerStore } from '../composables'
@@ -67,6 +67,16 @@ function visibilityTitle(node: MaterialNode): string {
     default-expand-all
     @select="handleSelect"
   >
+    <template #indicator="{ node }">
+      <span
+        v-if="(node.data as MaterialNode)?.renderCondition"
+        class="structure-tree__condition"
+        :class="{ 'is-disabled': (node.data as MaterialNode).renderCondition?.enabled === false }"
+        :title="store.t('designer.property.conditionalRendering')"
+      >
+        <EiIcon :icon="IconSliders" :size="12" :stroke-width="1.5" />
+      </span>
+    </template>
     <template #suffix="{ node }">
       <button
         v-if="(node.data as MaterialNode)?.locked"
@@ -141,6 +151,17 @@ function visibilityTitle(node: MaterialNode): string {
       background: transparent;
     }
   }
+}
+
+.structure-tree__condition {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ei-primary, #1677ff);
+
+  &.is-disabled { opacity: 0.35; }
 }
 
 .structure-tree__action--danger {

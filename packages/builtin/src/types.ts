@@ -1,9 +1,9 @@
-import type { LazyMaterialExtensionFactory, MaterialBindingDefinition, MaterialExtensionFactory, MaterialViewerExtension, PropSchema } from '@easyink/core'
+import type { LazyMaterialExtensionFactory, MaterialBindingDefinition, MaterialConditionDefinition, MaterialExtensionFactory, MaterialViewerExtension, PropSchema } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { AIMaterialDescriptor, MaterialCategory } from '@easyink/shared'
 import type { Component } from 'vue'
 
-export type BuiltinPanelSectionId = 'geometry' | 'props' | 'overlay' | 'binding' | 'visibility'
+export type BuiltinPanelSectionId = 'geometry' | 'props' | 'overlay' | 'binding' | 'condition' | 'visibility'
 
 export type BuiltinMaterialSet = 'all' | 'basic' | 'none'
 
@@ -25,6 +25,7 @@ export interface BuiltinDesignerMaterialRegistration {
   icon: Component
   category: MaterialCategory
   capabilities: BuiltinMaterialCapabilities
+  condition?: MaterialConditionDefinition
   binding: MaterialBindingDefinition
   createDefaultNode: (input?: Partial<MaterialNode>, unit?: string) => MaterialNode
   factory: MaterialExtensionFactory

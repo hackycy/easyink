@@ -79,6 +79,7 @@ const enUS: LocaleMessages = {
       opacity: 'Opacity',
       style: 'Style',
       dataBinding: 'Data Binding',
+      conditionalRendering: 'Conditional Rendering',
       content: 'Content',
       default: 'Default',
       loadFont: 'Load font',

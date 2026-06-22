@@ -302,6 +302,60 @@ export interface NodeRepeatConfig {
 
 // ─── Material Node ─────────────────────────────────────────────────
 
+export type ValueCast = 'string' | 'trimmed-string' | 'number' | 'boolean' | 'datetime'
+
+export type CompareOperator
+  = | 'eq' | 'neq'
+    | 'gt' | 'gte' | 'lt' | 'lte'
+    | 'between' | 'notBetween'
+    | 'in' | 'notIn'
+    | 'contains' | 'notContains' | 'startsWith' | 'endsWith'
+    | 'exists' | 'notExists' | 'isEmpty' | 'isNotEmpty'
+
+export interface FieldValueExpression {
+  kind: 'field'
+  path: string
+  cast?: ValueCast
+}
+
+export interface VariableValueExpression {
+  kind: 'variable'
+  name: string
+  path?: string
+  cast?: ValueCast
+}
+
+export type ConditionPathExpression = FieldValueExpression | VariableValueExpression
+
+export type ValueExpression
+  = | ConditionPathExpression
+    | { kind: 'literal', value: string | number | boolean | null }
+    | { kind: 'count', value: ConditionPathExpression }
+
+export type ConditionNode
+  = | { kind: 'group', operator: 'and' | 'or', children: ConditionNode[] }
+    | { kind: 'not', child: ConditionNode }
+    | {
+      kind: 'compare'
+      operator: CompareOperator
+      operands: ValueExpression[]
+      options?: { caseSensitive?: boolean }
+    }
+    | {
+      kind: 'quantifier'
+      operator: 'any' | 'all' | 'none'
+      collection: ValueExpression
+      as: string
+      condition: ConditionNode
+    }
+
+export interface RenderCondition {
+  enabled?: boolean
+  rule: ConditionNode
+  whenFalse?: 'remove' | 'reserve'
+  onUnknown?: 'include' | 'exclude'
+}
+
 export interface MaterialNode<TProps extends object = Record<string, unknown>> {
   id: string
   type: string
@@ -315,6 +369,7 @@ export interface MaterialNode<TProps extends object = Record<string, unknown>> {
   alpha?: number
   zIndex?: number
   hidden?: boolean
+  renderCondition?: RenderCondition
   locked?: boolean
   print?: PrintBehavior
   placement?: NodePlacementConfig

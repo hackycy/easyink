@@ -19,6 +19,7 @@ import { createInternalHooks, FontManager, readNodeRepeatScope, runLayoutPipelin
 import { normalizeDocumentSchema, traverseNodes, validateSchema } from '@easyink/schema'
 import { deepClone, UNIT_FACTOR } from '@easyink/shared'
 import { applyBindingsToProps, projectBindings } from './binding-projector'
+import { resolveConditionalSchema } from './conditional-schema'
 import { collectFontFamilies, loadAndInjectFonts } from './font-loader'
 import { MaterialRendererRegistry } from './material-registry'
 import { PrintPolicyError, resolvePrintPolicy } from './print-policy'
@@ -104,16 +105,19 @@ export class ViewerRuntime {
     }
 
     const diagnostics: ViewerDiagnosticEvent[] = []
+    const conditional = resolveConditionalSchema(this._schema, this._data, this._materialRegistry)
+    const runtimeSchema = conditional.schema
+    diagnostics.push(...conditional.diagnostics)
 
     // Stage 1: Font loading
-    await this.loadFonts(diagnostics)
+    await this.loadFonts(diagnostics, runtimeSchema)
 
     // Stage 2: Binding projection
-    const resolvedPropsMap = this.resolveAllBindings(diagnostics)
+    const resolvedPropsMap = this.resolveAllBindings(diagnostics, runtimeSchema)
 
     // Stage 3: Hook - beforePagePlan
     try {
-      this._hooks.beforePagePlan.call({ schema: this._schema, mode: this._schema.page.mode })
+      this._hooks.beforePagePlan.call({ schema: runtimeSchema, mode: runtimeSchema.page.mode })
     }
     catch (err) {
       const diagnostic: ViewerDiagnosticEvent = {
@@ -130,16 +134,16 @@ export class ViewerRuntime {
     }
 
     // Stage 3.5: Measure elements that need expansion (e.g., table-data)
-    const { measurements, diagnostics: layoutDiagnostics } = this.measureRuntimeElements(resolvedPropsMap)
+    const { measurements, diagnostics: layoutDiagnostics } = this.measureRuntimeElements(resolvedPropsMap, runtimeSchema)
     diagnostics.push(...layoutDiagnostics)
 
     // Stage 4: Orthogonal layout + pagination planning. Page-repeated
     // elements are overlays resolved after pagination, so they must not
     // contribute to flow, document height, or page count.
-    const repeatedElements = this.collectRepeatedPageElements(this._schema.elements)
+    const repeatedElements = this.collectRepeatedPageElements(runtimeSchema.elements)
     const layoutSchema = repeatedElements.length > 0
-      ? { ...this._schema, elements: this._schema.elements.filter(el => !repeatedElements.includes(el)) }
-      : this._schema
+      ? { ...runtimeSchema, elements: runtimeSchema.elements.filter(el => !repeatedElements.includes(el)) }
+      : runtimeSchema
     const layoutDocument = runLayoutPipeline(layoutSchema, {
       originalSchema: layoutSchema,
       measured: measurements,
@@ -175,7 +179,7 @@ export class ViewerRuntime {
       index: page.index,
       width: page.width,
       height: page.height,
-      unit: this._schema!.unit,
+      unit: runtimeSchema.unit,
     }))
 
     if (this._host) {
@@ -186,10 +190,10 @@ export class ViewerRuntime {
           container: this._host.mount,
           document: this._host.document,
           zoom: this.resolveZoom(),
-          unit: this._schema.unit,
+          unit: runtimeSchema.unit,
           data: this._data,
           resolvedPropsMap,
-          pageSchema: this._schema.page,
+          pageSchema: runtimeSchema.page,
         },
         diagnostics,
       )
@@ -210,7 +214,7 @@ export class ViewerRuntime {
       this.emitDiagnostic(d)
     }
 
-    return { pages, thumbnails: createThumbnails(pages, this._schema.unit), diagnostics }
+    return { pages, thumbnails: createThumbnails(pages, runtimeSchema.unit), diagnostics }
   }
 
   async print(options: ViewerPrintOptions = {}): Promise<void> {
@@ -495,15 +499,12 @@ export class ViewerRuntime {
     }
   }
 
-  private measureRuntimeElements(resolvedPropsMap: Map<string, Record<string, unknown>>): { measurements: Map<string, ViewerMeasureResult>, diagnostics: ViewerDiagnosticEvent[] } {
-    if (!this._schema)
-      return { measurements: new Map(), diagnostics: [] }
-
+  private measureRuntimeElements(resolvedPropsMap: Map<string, Record<string, unknown>>, schema: DocumentSchema): { measurements: Map<string, ViewerMeasureResult>, diagnostics: ViewerDiagnosticEvent[] } {
     const diagnostics: ViewerDiagnosticEvent[] = []
     const measurements = new Map<string, ViewerMeasureResult>()
     const measureCtx: ViewerMeasureContext = {
       data: this._data,
-      unit: this._schema.unit,
+      unit: schema.unit,
       reportDiagnostic: diagnostic => diagnostics.push({
         category: 'datasource',
         severity: diagnostic.severity,
@@ -515,7 +516,7 @@ export class ViewerRuntime {
       }),
     }
 
-    for (const node of this._schema.elements) {
+    for (const node of schema.elements) {
       const resolvedProps = resolvedPropsMap.get(node.id) ?? node.props
       const nodeForMeasure = resolvedProps === node.props ? node : { ...node, props: resolvedProps }
       let result
@@ -542,11 +543,11 @@ export class ViewerRuntime {
     return { measurements, diagnostics }
   }
 
-  private async loadFonts(diagnostics: ViewerDiagnosticEvent[]): Promise<void> {
-    if (!this._schema || !this._fontManager.provider)
+  private async loadFonts(diagnostics: ViewerDiagnosticEvent[], schema: DocumentSchema): Promise<void> {
+    if (!this._fontManager.provider)
       return
 
-    const families = collectFontFamilies(this._schema)
+    const families = collectFontFamilies(schema)
     if (families.size === 0)
       return
 
@@ -569,12 +570,9 @@ export class ViewerRuntime {
     }
   }
 
-  private resolveAllBindings(diagnostics: ViewerDiagnosticEvent[]): Map<string, Record<string, unknown>> {
+  private resolveAllBindings(diagnostics: ViewerDiagnosticEvent[], schema: DocumentSchema): Map<string, Record<string, unknown>> {
     const resolvedMap = new Map<string, Record<string, unknown>>()
-    if (!this._schema)
-      return resolvedMap
-
-    traverseNodes(this._schema, (node) => {
+    traverseNodes(schema, (node) => {
       if (!node.binding) {
         resolvedMap.set(node.id, node.props)
         return

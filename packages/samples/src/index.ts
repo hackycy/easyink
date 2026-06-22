@@ -6,6 +6,7 @@ import {
   certificateDemoData,
   certificateTemplate,
 } from './templates/certificate'
+import { conditionalQrcodeDemoData, conditionalQrcodeTemplate } from './templates/conditional-qrcode'
 import {
   salesReportDemoData,
   salesReportTemplate,
@@ -32,6 +33,7 @@ export {
   certificateDemoData,
   certificateTemplate,
 } from './templates/certificate'
+export { conditionalQrcodeDemoData, conditionalQrcodeTemplate } from './templates/conditional-qrcode'
 export {
   salesReportDataSource,
   salesReportDemoData,
@@ -225,6 +227,13 @@ export const sampleTemplates: SampleTemplateEntry[] = [
     name: '简单发票',
     category: 'business',
     schema: simpleInvoiceTemplate,
+  },
+  {
+    id: 'conditional-qrcode',
+    name: '条件二维码',
+    category: 'business',
+    schema: conditionalQrcodeTemplate,
+    demoData: conditionalQrcodeDemoData,
   },
   {
     id: 'vat-electronic-invoice',

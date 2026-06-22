@@ -8,6 +8,29 @@ const PAGE_MODEL_KINDS = new Set(['paged-paper', 'continuous-paper'])
 const LAYOUT_STRATEGIES = new Set(['absolute', 'stack-flow', 'region-flow'])
 const PAGINATION_STRATEGIES = new Set(['none', 'fixed-sheets', 'auto-sheets'])
 const REFLOW_STRATEGIES = new Set(['none', 'measure-only', 'flow-y'])
+const CONDITION_MAX_DEPTH = 16
+const CONDITION_MAX_NODES = 256
+const CONDITION_CASTS = new Set(['string', 'trimmed-string', 'number', 'boolean', 'datetime'])
+const CONDITION_COMPARE_OPERATORS = new Set([
+  'eq',
+  'neq',
+  'gt',
+  'gte',
+  'lt',
+  'lte',
+  'between',
+  'notBetween',
+  'in',
+  'notIn',
+  'contains',
+  'notContains',
+  'startsWith',
+  'endsWith',
+  'exists',
+  'notExists',
+  'isEmpty',
+  'isNotEmpty',
+])
 
 export interface SchemaValidationIssue {
   path: string
@@ -129,8 +152,167 @@ export function validateSchemaIssues(schema: unknown): SchemaValidationIssue[] {
   if (!Array.isArray(schema.elements)) {
     issues.push(createIssue('elements', 'must be an array', 'schema.elements.required'))
   }
+  else {
+    validateElementConditions(schema.elements, 'elements', issues)
+  }
 
   return issues
+}
+
+function validateElementConditions(elements: unknown[], basePath: string, issues: SchemaValidationIssue[]): void {
+  elements.forEach((element, index) => {
+    const path = `${basePath}.${index}`
+    if (!isObject(element))
+      return
+    if (element.renderCondition != null)
+      validateRenderCondition(element.renderCondition, `${path}.renderCondition`, issues)
+    if (Array.isArray(element.children))
+      validateElementConditions(element.children, `${path}.children`, issues)
+  })
+}
+
+function validateRenderCondition(value: unknown, path: string, issues: SchemaValidationIssue[]): void {
+  if (!isObject(value)) {
+    issues.push(createIssue(path, 'must be an object', 'schema.condition.invalid'))
+    return
+  }
+  if (value.enabled != null && typeof value.enabled !== 'boolean')
+    issues.push(createIssue(`${path}.enabled`, 'must be a boolean when provided', 'schema.condition.enabled.invalid'))
+  if (value.whenFalse != null && value.whenFalse !== 'remove' && value.whenFalse !== 'reserve')
+    issues.push(createIssue(`${path}.whenFalse`, 'must be remove or reserve when provided', 'schema.condition.whenFalse.invalid'))
+  if (value.onUnknown != null && value.onUnknown !== 'include' && value.onUnknown !== 'exclude')
+    issues.push(createIssue(`${path}.onUnknown`, 'must be include or exclude when provided', 'schema.condition.onUnknown.invalid'))
+  if (!('rule' in value)) {
+    issues.push(createIssue(`${path}.rule`, 'is required', 'schema.condition.rule.required'))
+    return
+  }
+  const state = { nodes: 0, limitReported: false }
+  validateConditionNode(value.rule, `${path}.rule`, issues, new Set(), 1, state)
+}
+
+function validateConditionNode(
+  value: unknown,
+  path: string,
+  issues: SchemaValidationIssue[],
+  variables: ReadonlySet<string>,
+  depth: number,
+  state: { nodes: number, limitReported: boolean },
+): void {
+  state.nodes += 1
+  if ((depth > CONDITION_MAX_DEPTH || state.nodes > CONDITION_MAX_NODES) && !state.limitReported) {
+    state.limitReported = true
+    issues.push(createIssue(path, `exceeds the condition complexity limit (${CONDITION_MAX_DEPTH} levels, ${CONDITION_MAX_NODES} nodes)`, 'schema.condition.limit.exceeded'))
+  }
+  if (depth > CONDITION_MAX_DEPTH || state.nodes > CONDITION_MAX_NODES)
+    return
+  if (!isObject(value)) {
+    issues.push(createIssue(path, 'must be a condition node object', 'schema.condition.node.invalid'))
+    return
+  }
+
+  if (value.kind === 'group') {
+    if (value.operator !== 'and' && value.operator !== 'or')
+      issues.push(createIssue(`${path}.operator`, 'must be and or or', 'schema.condition.group.operator.invalid'))
+    if (!Array.isArray(value.children) || value.children.length === 0) {
+      issues.push(createIssue(`${path}.children`, 'must be a non-empty array', 'schema.condition.group.children.invalid'))
+      return
+    }
+    value.children.forEach((child, index) => validateConditionNode(child, `${path}.children.${index}`, issues, variables, depth + 1, state))
+    return
+  }
+
+  if (value.kind === 'not') {
+    if (!('child' in value))
+      issues.push(createIssue(`${path}.child`, 'is required', 'schema.condition.not.child.required'))
+    else
+      validateConditionNode(value.child, `${path}.child`, issues, variables, depth + 1, state)
+    return
+  }
+
+  if (value.kind === 'compare') {
+    if (typeof value.operator !== 'string' || !CONDITION_COMPARE_OPERATORS.has(value.operator))
+      issues.push(createIssue(`${path}.operator`, 'must be a supported comparison operator', 'schema.condition.compare.operator.invalid'))
+    if (!Array.isArray(value.operands)) {
+      issues.push(createIssue(`${path}.operands`, 'must be an array', 'schema.condition.compare.operands.invalid'))
+      return
+    }
+    const count = value.operands.length
+    const expected = value.operator === 'between' || value.operator === 'notBetween'
+      ? count === 3
+      : value.operator === 'in' || value.operator === 'notIn'
+        ? count >= 2
+        : value.operator === 'exists' || value.operator === 'notExists' || value.operator === 'isEmpty' || value.operator === 'isNotEmpty'
+          ? count === 1
+          : count === 2
+    if (!expected)
+      issues.push(createIssue(`${path}.operands`, 'has the wrong number of operands for this operator', 'schema.condition.compare.arity.invalid'))
+    value.operands.forEach((operand, index) => validateValueExpression(operand, `${path}.operands.${index}`, issues, variables))
+    if (value.options != null) {
+      if (!isObject(value.options) || (value.options.caseSensitive != null && typeof value.options.caseSensitive !== 'boolean'))
+        issues.push(createIssue(`${path}.options`, 'must contain only a boolean caseSensitive option', 'schema.condition.compare.options.invalid'))
+    }
+    return
+  }
+
+  if (value.kind === 'quantifier') {
+    if (value.operator !== 'any' && value.operator !== 'all' && value.operator !== 'none')
+      issues.push(createIssue(`${path}.operator`, 'must be any, all, or none', 'schema.condition.quantifier.operator.invalid'))
+    validateValueExpression(value.collection, `${path}.collection`, issues, variables)
+    if (typeof value.as !== 'string' || value.as.trim() === '') {
+      issues.push(createIssue(`${path}.as`, 'must be a non-empty variable name', 'schema.condition.quantifier.variable.invalid'))
+      validateConditionNode(value.condition, `${path}.condition`, issues, variables, depth + 1, state)
+      return
+    }
+    if (variables.has(value.as))
+      issues.push(createIssue(`${path}.as`, 'must not shadow an active quantifier variable', 'schema.condition.quantifier.variable.duplicate'))
+    const nestedVariables = new Set(variables)
+    nestedVariables.add(value.as)
+    validateConditionNode(value.condition, `${path}.condition`, issues, nestedVariables, depth + 1, state)
+    return
+  }
+
+  issues.push(createIssue(`${path}.kind`, 'must be a supported condition node kind', 'schema.condition.kind.invalid'))
+}
+
+function validateValueExpression(value: unknown, path: string, issues: SchemaValidationIssue[], variables: ReadonlySet<string>): void {
+  if (!isObject(value)) {
+    issues.push(createIssue(path, 'must be a value expression object', 'schema.condition.value.invalid'))
+    return
+  }
+  if (value.kind === 'literal') {
+    if (value.value !== null && !['string', 'number', 'boolean'].includes(typeof value.value))
+      issues.push(createIssue(`${path}.value`, 'must be a JSON scalar', 'schema.condition.literal.invalid'))
+    if (typeof value.value === 'number' && !Number.isFinite(value.value))
+      issues.push(createIssue(`${path}.value`, 'must be a finite number', 'schema.condition.literal.invalid'))
+    return
+  }
+  if (value.kind === 'count') {
+    validatePathExpression(value.value, `${path}.value`, issues, variables)
+    return
+  }
+  validatePathExpression(value, path, issues, variables)
+}
+
+function validatePathExpression(value: unknown, path: string, issues: SchemaValidationIssue[], variables: ReadonlySet<string>): void {
+  if (!isObject(value)) {
+    issues.push(createIssue(path, 'must be a path expression object', 'schema.condition.path.invalid'))
+    return
+  }
+  if (value.kind === 'field') {
+    if (typeof value.path !== 'string' || value.path.trim() === '')
+      issues.push(createIssue(`${path}.path`, 'must be a non-empty path', 'schema.condition.field.path.invalid'))
+  }
+  else if (value.kind === 'variable') {
+    if (typeof value.name !== 'string' || !variables.has(value.name))
+      issues.push(createIssue(`${path}.name`, 'must reference an active quantifier variable', 'schema.condition.variable.undefined'))
+    if (value.path != null && typeof value.path !== 'string')
+      issues.push(createIssue(`${path}.path`, 'must be a string when provided', 'schema.condition.variable.path.invalid'))
+  }
+  else {
+    issues.push(createIssue(`${path}.kind`, 'must be field or variable', 'schema.condition.path.kind.invalid'))
+  }
+  if (value.cast != null && (typeof value.cast !== 'string' || !CONDITION_CASTS.has(value.cast)))
+    issues.push(createIssue(`${path}.cast`, 'must be a supported cast', 'schema.condition.cast.invalid'))
 }
 
 function validatePageModel(value: unknown, issues: SchemaValidationIssue[]): void {

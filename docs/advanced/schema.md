@@ -173,6 +173,8 @@ Schema codec 里包含 benchmark 输入的解码逻辑。普通 EasyInk JSON 仍
 
 `type` 决定用哪个物料渲染，`x/y/width/height` 决定画布几何，`props` 保存物料自己的属性。
 
+支持条件能力的物料还可以在节点根部保存 `renderCondition`。它会影响布局和分页，因此不属于物料私有 `props`。完整规则和运行语义见 [条件渲染](/advanced/conditional-rendering)。
+
 自定义物料也走同一套结构：
 
 ```ts

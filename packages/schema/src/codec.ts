@@ -167,7 +167,7 @@ export function decodeBenchmarkInput(input: BenchmarkDocumentInput): DocumentSch
 function decodeBenchmarkElement(input: BenchmarkElementInput): DocumentSchema['elements'][number] {
   const { id, type, x = 0, y = 0, width = 100, height = 50, ...rest } = input
 
-  const knownKeys = new Set(['id', 'type', 'x', 'y', 'width', 'height', 'rotation', 'alpha', 'hidden', 'locked', 'zIndex', 'name', 'print'])
+  const knownKeys = new Set(['id', 'type', 'x', 'y', 'width', 'height', 'rotation', 'alpha', 'hidden', 'renderCondition', 'locked', 'zIndex', 'name', 'print'])
   const props: Record<string, unknown> = {}
 
   for (const [key, value] of Object.entries(rest)) {
@@ -192,6 +192,8 @@ function decodeBenchmarkElement(input: BenchmarkElementInput): DocumentSchema['e
     node.alpha = rest.alpha as number
   if (rest.hidden != null)
     node.hidden = rest.hidden as boolean
+  if (rest.renderCondition != null)
+    node.renderCondition = rest.renderCondition as MaterialNode['renderCondition']
   if (rest.locked != null)
     node.locked = rest.locked as boolean
   if (rest.zIndex != null)
@@ -334,6 +336,8 @@ function encodeBenchmarkElement(node: DocumentSchema['elements'][number]): Bench
     result.alpha = node.alpha
   if (node.hidden != null)
     result.hidden = node.hidden
+  if (node.renderCondition != null)
+    result.renderCondition = node.renderCondition
   if (node.locked != null)
     result.locked = node.locked
   if (node.zIndex != null)

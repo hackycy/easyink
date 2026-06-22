@@ -41,7 +41,25 @@ export {
   UpdateMaterialMetaCommand,
   UpdateMaterialPropsCommand,
   UpdatePageCommand,
+  UpdateRenderConditionCommand,
 } from './commands'
+export {
+  CONDITION_MAX_DEPTH,
+  CONDITION_MAX_NODES,
+  CONDITION_STEP_BUDGET,
+  evaluateCondition,
+  resolveConditionalNode,
+} from './condition'
+export type {
+  ConditionalNodeResolution,
+  ConditionalNodeState,
+  ConditionDiagnostic,
+  ConditionDiagnosticCode,
+  ConditionEffect,
+  ConditionEvaluationResult,
+  ConditionTruth,
+  MaterialConditionDefinition,
+} from './condition'
 
 // ─── Editing Behavior Architecture (Chapter 22) ───────────────────
 

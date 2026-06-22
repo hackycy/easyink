@@ -6,6 +6,8 @@ export function createViewer(options?: ViewerOptions): ViewerRuntime {
 }
 
 export { applyBindingsToProps, projectBindings } from './binding-projector'
+export { resolveConditionalSchema } from './conditional-schema'
+export type { ConditionalSchemaResolution } from './conditional-schema'
 export { collectFontFamilies, loadAndInjectFonts } from './font-loader'
 export { MaterialRendererRegistry } from './material-registry'
 export { PrintPolicyError, resolvePrintPolicy } from './print-policy'

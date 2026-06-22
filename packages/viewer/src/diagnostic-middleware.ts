@@ -31,7 +31,7 @@ function buildDiagnostic(
   message: string,
 ): ViewerDiagnosticEvent {
   const event: ViewerDiagnosticEvent = {
-    category: options.scope === 'schema' || options.scope === 'datasource'
+    category: options.scope === 'schema' || options.scope === 'datasource' || options.scope === 'condition'
       ? options.scope
       : options.scope === 'print'
         ? 'print'

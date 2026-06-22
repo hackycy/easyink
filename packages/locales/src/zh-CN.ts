@@ -79,6 +79,7 @@ const zhCN: LocaleMessages = {
       opacity: '透明度',
       style: '样式',
       dataBinding: '数据绑定',
+      conditionalRendering: '条件渲染',
       content: '内容',
       default: '默认',
       loadFont: '加载字体',

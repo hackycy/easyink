@@ -103,7 +103,7 @@ export interface ViewerDiagnosticEvent {
   nodeId?: string
   detail?: unknown
   /** 6.10: 诊断来源阶段 */
-  scope?: 'schema' | 'datasource' | 'font' | 'material' | 'print' | 'exporter' | 'hook'
+  scope?: 'schema' | 'datasource' | 'condition' | 'font' | 'material' | 'print' | 'exporter' | 'hook'
   /** 6.10: 原始异常对象，用于根因追踪 */
   cause?: unknown
 }

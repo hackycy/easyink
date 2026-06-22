@@ -64,7 +64,7 @@ describe('material data contract', () => {
     expect(resolution.diagnostics).toEqual([])
   })
 
-  it('resolves source-scoped record collections when source data owns the selected path', () => {
+  it('ignores sourceId and resolves complete paths from the global data root', () => {
     const binding = {
       kind: 'data-contract',
       mappings: {
@@ -77,10 +77,13 @@ describe('material data contract', () => {
     const resolution = resolveMaterialDataContract(contract, binding, {
       report: {
         monthlySales: [
-          { month: '1月', revenue: 98 },
-          { month: '2月', revenue: '112' },
+          { month: 'nested', revenue: 1 },
         ],
       },
+      monthlySales: [
+        { month: '1月', revenue: 98 },
+        { month: '2月', revenue: '112' },
+      ],
     })
 
     expect(resolution.mode).toBe('record')

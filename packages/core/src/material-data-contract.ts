@@ -5,7 +5,7 @@ import type {
   MaterialBinding,
 } from '@easyink/schema'
 import type { BindingFormatEditorDefinition } from './binding-format-editor'
-import { deepClone, FIELD_PATH_SEPARATOR } from '@easyink/shared'
+import { deepClone, FIELD_PATH_SEPARATOR, resolveFieldPath } from '@easyink/shared'
 import { formatBindingDisplayValue, hasBindingFormat } from './binding-format'
 
 export type MaterialDataModelKind = 'tabular'
@@ -394,18 +394,6 @@ function toMaterialDataDiagnostics(
 
 function resolveSelection(fieldId: string, mapping: DataContractFieldMapping, data: Record<string, unknown>): SourceSelection {
   const normalizedPath = normalizePath(mapping.select.path)
-  const sourceRoot = data[mapping.sourceId]
-  if (isRecord(sourceRoot) && canResolveSelectionPath(sourceRoot, normalizedPath)) {
-    return {
-      fieldId,
-      mapping,
-      value: resolvePath(sourceRoot, normalizedPath),
-      diagnostics: [],
-      normalizedPath,
-      sourceRoot,
-    }
-  }
-
   if (canResolveSelectionPath(data, normalizedPath)) {
     return {
       fieldId,
@@ -466,14 +454,7 @@ function createFieldMapping(field: MaterialDataBindingField): DataContractFieldM
 function resolvePath(root: unknown, path: string): unknown {
   if (!path)
     return root
-  const segments = path.split(FIELD_PATH_SEPARATOR).filter(Boolean)
-  let current = root
-  for (const segment of segments) {
-    if (!isRecord(current))
-      return undefined
-    current = current[segment]
-  }
-  return current
+  return resolveFieldPath(root, path)
 }
 
 function normalizePath(path: string): string {

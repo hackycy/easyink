@@ -1,4 +1,4 @@
-import type { DocumentSchema, ElementGroupSchema, GuideSchema, MaterialNode, PageSchema } from '@easyink/schema'
+import type { DocumentSchema, ElementGroupSchema, GuideSchema, MaterialNode, PageSchema, RenderCondition } from '@easyink/schema'
 import type { Command } from '../command'
 import type { EditorSurfacePlan } from '../editor-surface-plan'
 import type { MaterialResizeSideEffect } from '../material-extension'
@@ -377,6 +377,60 @@ export class UpdateMaterialMetaCommand implements Command {
     for (const key of Object.keys(this.oldValues) as MaterialMetaKey[]) {
       node[key] = this.oldValues[key]
     }
+  }
+}
+
+export class UpdateRenderConditionCommand implements Command {
+  readonly id = generateId('cmd')
+  readonly type = 'update-render-condition'
+  readonly description = 'Update render condition'
+  private oldCondition: RenderCondition | undefined
+  private captured = false
+
+  constructor(
+    private elements: MaterialNode[],
+    private nodeId: string,
+    private condition: RenderCondition | undefined,
+    private mergeKey?: string,
+    oldCondition?: RenderCondition,
+  ) {
+    if (oldCondition) {
+      this.oldCondition = deepClone(oldCondition)
+      this.captured = true
+    }
+  }
+
+  execute(): void {
+    const node = findNode(this.elements, this.nodeId)
+    if (!node)
+      return
+    if (!this.captured) {
+      this.oldCondition = deepClone(node.renderCondition)
+      this.captured = true
+    }
+    if (this.condition)
+      node.renderCondition = deepClone(this.condition)
+    else
+      delete node.renderCondition
+  }
+
+  undo(): void {
+    const node = findNode(this.elements, this.nodeId)
+    if (!node)
+      return
+    if (this.oldCondition)
+      node.renderCondition = deepClone(this.oldCondition)
+    else
+      delete node.renderCondition
+  }
+
+  merge(next: Command): Command | null {
+    if (next.type !== this.type || !this.mergeKey)
+      return null
+    const other = next as UpdateRenderConditionCommand
+    if (other.nodeId !== this.nodeId || other.mergeKey !== this.mergeKey)
+      return null
+    return new UpdateRenderConditionCommand(this.elements, this.nodeId, other.condition, this.mergeKey, this.oldCondition)
   }
 }
 
