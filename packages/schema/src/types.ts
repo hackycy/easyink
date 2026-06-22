@@ -315,6 +315,12 @@ export type CompareOperator
 export interface FieldValueExpression {
   kind: 'field'
   path: string
+  sourceId?: string
+  sourceName?: string
+  sourceTag?: string
+  fieldKey?: string
+  fieldLabel?: string
+  fieldTag?: string
   cast?: ValueCast
 }
 

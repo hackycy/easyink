@@ -73,10 +73,7 @@ function remove() {
 
     <template v-else>
       <div class="condition-editor__header">
-        <div class="condition-editor__header-copy">
-          <span class="condition-editor__title">{{ t('designer.condition.title') }}</span>
-          <span class="condition-editor__summary">{{ t('designer.condition.summary') }}</span>
-        </div>
+        <span class="condition-editor__title">{{ t('designer.condition.summary') }}</span>
         <EiSwitch :model-value="draft.enabled !== false" @update:model-value="update({ ...draft!, enabled: $event })" />
         <EiButton
           class="condition-editor__remove"
@@ -90,14 +87,6 @@ function remove() {
         </EiButton>
       </div>
 
-      <div class="condition-editor__section">
-        <p class="condition-editor__section-title">
-          {{ t('designer.condition.ruleSection') }}
-        </p>
-        <p class="condition-editor__section-copy">
-          {{ t('designer.condition.ruleSectionDescription') }}
-        </p>
-      </div>
       <ConditionRuleEditor :model-value="draft.rule" path="rule" :t="t" @update:model-value="(rule, mergeKey) => update({ ...draft!, rule }, mergeKey)" />
       <p v-if="!complete" class="condition-editor__hint">
         {{ t('designer.condition.incompleteHint') }}
@@ -106,9 +95,6 @@ function remove() {
       <div class="condition-editor__section condition-editor__section--outcome">
         <p class="condition-editor__section-title">
           {{ t('designer.condition.otherwise') }}
-        </p>
-        <p class="condition-editor__section-copy">
-          {{ t('designer.condition.otherwiseDescription') }}
         </p>
       </div>
       <div class="condition-editor__settings">
@@ -143,23 +129,16 @@ function remove() {
     color: var(--ei-text-secondary, #666);
   }
   &__empty p { margin: 0; line-height: 1.5; }
-  &__eyebrow, &__title, &__section-title {
+  &__title, &__section-title {
     color: var(--ei-text, #222);
     font-size: 12px;
     line-height: 1.35;
   }
-  &__eyebrow { font-weight: 500; }
   &__header {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto auto;
     gap: 8px;
     align-items: center;
-  }
-  &__header-copy {
-    display: flex;
-    min-width: 0;
-    flex-direction: column;
-    gap: 1px;
   }
   &__summary, &__section-copy {
     color: var(--ei-text-secondary, #666);

@@ -18,11 +18,6 @@ const emit = defineEmits<{
   'remove': []
 }>()
 
-const kindOptions = computed(() => [
-  { label: props.t('designer.condition.modeCompare'), value: 'compare' },
-  { label: props.t('designer.condition.modeGroup'), value: 'group' },
-  { label: props.t('designer.condition.modeNot'), value: 'not' },
-])
 const compareLabelKeys: Record<CompareOperator, string> = {
   eq: 'designer.condition.operatorEq',
   neq: 'designer.condition.operatorNeq',
@@ -48,22 +43,12 @@ const groupOptions = computed(() => [
   { label: props.t('designer.condition.groupAll'), value: 'and' },
   { label: props.t('designer.condition.groupAny'), value: 'or' },
 ])
+const canAddSibling = computed(() => props.modelValue.kind === 'compare' && !props.removable)
 const caseSensitiveOperators: CompareOperator[] = ['eq', 'neq', 'in', 'notIn', 'contains', 'notContains', 'startsWith', 'endsWith']
-
-const modeText = computed(() => {
-  if (props.modelValue.kind === 'group')
-    return props.t('designer.condition.modeTextGroup')
-  if (props.modelValue.kind === 'not')
-    return props.t('designer.condition.modeTextNot')
-  return props.t('designer.condition.modeTextCompare')
-})
 const compareOperands = computed<ValueExpression[]>(() => props.modelValue.kind === 'compare'
   ? normalizeCompareOperands(props.modelValue.operator, props.modelValue.operands)
   : [])
-
-function changeKind(kind: string) {
-  emit('update:modelValue', createConditionNode(kind as ConditionNode['kind']))
-}
+const hasCompareValue = computed(() => props.modelValue.kind === 'compare' && compareOperands.value.length > 1)
 
 function updateCompareOperator(operator: string) {
   if (props.modelValue.kind !== 'compare')
@@ -103,6 +88,14 @@ function addChild(kind: ConditionNode['kind'] = 'compare') {
   emit('update:modelValue', { ...props.modelValue, children: [...props.modelValue.children, createConditionNode(kind)] })
 }
 
+function addSibling(kind: ConditionNode['kind'] = 'compare') {
+  emit('update:modelValue', {
+    kind: 'group',
+    operator: 'and',
+    children: [props.modelValue, createConditionNode(kind)],
+  })
+}
+
 function updateGroupOperator(operator: string) {
   if (props.modelValue.kind === 'group')
     emit('update:modelValue', { ...props.modelValue, operator: operator as 'and' | 'or' })
@@ -126,71 +119,97 @@ function compareOperandLabel(operator: CompareOperator, index: number): string {
 
 <template>
   <div class="condition-rule" :class="`condition-rule--${modelValue.kind}`">
-    <div class="condition-rule__mode">
-      <div class="condition-rule__mode-copy">
-        <span class="condition-rule__mode-title">{{ t('designer.condition.mode') }}</span>
-        <span class="condition-rule__mode-text">{{ modeText }}</span>
-      </div>
-      <EiSelect class="condition-control condition-rule__mode-select" :model-value="modelValue.kind" :options="kindOptions" @update:model-value="changeKind(String($event))" />
-      <EiButton v-if="removable" class="condition-rule__remove" variant="ghost" size="sm" :title="t('designer.condition.deleteRule')" :aria-label="t('designer.condition.deleteRule')" @click="$emit('remove')">
+    <div v-if="removable" class="condition-rule__header">
+      <span class="condition-rule__header-title">{{ t('designer.condition.conditionItem') }}</span>
+      <EiButton class="condition-rule__remove" variant="ghost" size="sm" :title="t('designer.condition.deleteRule')" :aria-label="t('designer.condition.deleteRule')" @click="$emit('remove')">
         <EiIcon :icon="IconDelete" :size="13" />
       </EiButton>
     </div>
 
     <template v-if="modelValue.kind === 'compare'">
-      <ConditionValueEditor
-        :model-value="compareOperands[0]"
-        :slot-id="`${path}.operand.0`"
-        :label="compareOperandLabel(modelValue.operator, 0)"
-        :t="t"
-        @update:model-value="(value, mergeKey) => updateOperand(0, value, mergeKey)"
-      />
-      <EiSelect class="condition-control" :label="t('designer.condition.operator')" :model-value="modelValue.operator" :options="compareOptions" @update:model-value="updateCompareOperator(String($event))" />
-      <ConditionValueEditor
-        v-for="(operand, index) in compareOperands.slice(1)"
-        :key="`${path}.operand.${index + 1}`"
-        :model-value="operand"
-        :slot-id="`${path}.operand.${index + 1}`"
-        :label="compareOperandLabel(modelValue.operator, index + 1)"
-        :t="t"
-        @update:model-value="(value, mergeKey) => updateOperand(index + 1, value, mergeKey)"
-      />
-      <EiCheckbox
-        v-if="caseSensitiveOperators.includes(modelValue.operator)"
-        :label="t('designer.condition.caseSensitive')"
-        :model-value="modelValue.options?.caseSensitive !== false"
-        @update:model-value="$emit('update:modelValue', { ...modelValue, options: { ...modelValue.options, caseSensitive: $event } })"
-      />
-      <EiButton v-if="modelValue.operator === 'in' || modelValue.operator === 'notIn'" size="sm" @click="$emit('update:modelValue', { ...modelValue, operands: [...modelValue.operands, { kind: 'literal', value: '' }] })">
+      <div class="condition-rule__form">
+        <div class="condition-rule__row">
+          <span class="condition-rule__label">{{ compareOperandLabel(modelValue.operator, 0) }}</span>
+          <ConditionValueEditor
+            class="condition-rule__control"
+            :model-value="compareOperands[0]"
+            :slot-id="`${path}.operand.0`"
+            preferred-kind="field"
+            lock-kind
+            :t="t"
+            @update:model-value="(value, mergeKey) => updateOperand(0, value, mergeKey)"
+          />
+        </div>
+
+        <div class="condition-rule__row">
+          <span class="condition-rule__label">{{ t('designer.condition.operator') }}</span>
+          <EiSelect class="condition-control condition-rule__control" :model-value="modelValue.operator" :options="compareOptions" @update:model-value="updateCompareOperator(String($event))" />
+        </div>
+
+        <template v-if="hasCompareValue">
+          <div
+            v-for="(operand, index) in compareOperands.slice(1)"
+            :key="`${path}.operand.${index + 1}`"
+            class="condition-rule__row"
+          >
+            <span class="condition-rule__label">{{ compareOperandLabel(modelValue.operator, index + 1) }}</span>
+            <ConditionValueEditor
+              class="condition-rule__control"
+              :model-value="operand"
+              :slot-id="`${path}.operand.${index + 1}`"
+              :preferred-kind="operand.kind === 'field' ? 'field' : 'literal'"
+              :t="t"
+              @update:model-value="(value, mergeKey) => updateOperand(index + 1, value, mergeKey)"
+            />
+          </div>
+        </template>
+      </div>
+      <div class="condition-rule__row condition-rule__row--options">
+        <span class="condition-rule__label">{{ t('designer.condition.options') }}</span>
+        <div class="condition-rule__options">
+          <EiCheckbox
+            v-if="caseSensitiveOperators.includes(modelValue.operator)"
+            :label="t('designer.condition.caseSensitive')"
+            :model-value="modelValue.options?.caseSensitive !== false"
+            @update:model-value="$emit('update:modelValue', { ...modelValue, options: { ...modelValue.options, caseSensitive: $event } })"
+          />
+          <EiButton v-if="modelValue.operator === 'in' || modelValue.operator === 'notIn'" size="sm" @click="$emit('update:modelValue', { ...modelValue, operands: [...modelValue.operands, { kind: 'literal', value: '' }] })">
+            <EiIcon :icon="IconPlus" :size="12" />
+            {{ t('designer.condition.addCandidate') }}
+          </EiButton>
+        </div>
+      </div>
+      <EiButton v-if="canAddSibling" class="condition-rule__wide-action" size="sm" @click="addSibling('compare')">
         <EiIcon :icon="IconPlus" :size="12" />
-        {{ t('designer.condition.addCandidate') }}
+        {{ t('designer.condition.addCondition') }}
       </EiButton>
     </template>
 
     <template v-else-if="modelValue.kind === 'group'">
-      <div class="condition-rule__sentence">
-        <span>{{ t('designer.condition.groupWhen') }}</span>
+      <div class="condition-rule__row">
+        <span class="condition-rule__label">{{ t('designer.condition.groupWhen') }}</span>
         <EiSelect class="condition-control condition-rule__inline-select" :model-value="modelValue.operator" :options="groupOptions" @update:model-value="updateGroupOperator(String($event))" />
-        <span>{{ t('designer.condition.groupThen') }}</span>
       </div>
-      <div v-for="(child, index) in modelValue.children" :key="`${path}.child.${index}`" class="condition-rule__child">
-        <span class="condition-rule__child-index">{{ index + 1 }}</span>
-        <ConditionRuleEditor
-          class="condition-rule__child-body"
-          :model-value="child"
-          :path="`${path}.child.${index}`"
-          :removable="modelValue.children.length > 1"
-          :t="t"
-          @update:model-value="(value, mergeKey) => updateChild(index, value, mergeKey)"
-          @remove="removeChild(index)"
-        />
+      <div class="condition-rule__children">
+        <div v-for="(child, index) in modelValue.children" :key="`${path}.child.${index}`" class="condition-rule__child">
+          <span class="condition-rule__child-index">{{ index + 1 }}</span>
+          <ConditionRuleEditor
+            class="condition-rule__child-body"
+            :model-value="child"
+            :path="`${path}.child.${index}`"
+            :removable="modelValue.children.length > 1"
+            :t="t"
+            @update:model-value="(value, mergeKey) => updateChild(index, value, mergeKey)"
+            @remove="removeChild(index)"
+          />
+        </div>
       </div>
       <div class="condition-rule__add-row">
         <EiButton size="sm" @click="addChild('compare')">
           <EiIcon :icon="IconPlus" :size="12" />
           {{ t('designer.condition.addCondition') }}
         </EiButton>
-        <EiButton size="sm" @click="addChild('group')">
+        <EiButton variant="ghost" size="sm" @click="addChild('group')">
           <EiIcon :icon="IconPlus" :size="12" />
           {{ t('designer.condition.addGroup') }}
         </EiButton>
@@ -212,39 +231,25 @@ function compareOperandLabel(operator: CompareOperator, index: number): string {
   flex-direction: column;
   gap: 8px;
 
-  &__mode {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 104px auto;
-    gap: 6px;
-    align-items: center;
-  }
-
-  &__mode-copy {
+  &__header {
     display: flex;
-    min-width: 0;
-    flex-direction: column;
-    gap: 1px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
   }
 
-  &__mode-title {
+  &__header-title {
     color: var(--ei-text, #222);
     font-size: 12px;
     line-height: 1.35;
   }
 
-  &__mode-text, &__note {
+  &__note {
     color: var(--ei-text-secondary, #666);
     font-size: 11px;
     line-height: 1.4;
   }
 
-  &__mode-text {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  &__mode-select { min-width: 0; }
   &__remove {
     flex: 0 0 26px;
     width: 26px;
@@ -254,21 +259,42 @@ function compareOperandLabel(operator: CompareOperator, index: number): string {
     border: 0;
   }
 
-  &__sentence {
+  &__form {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr);
     gap: 6px;
-    align-items: center;
-    color: var(--ei-text-secondary, #666);
-    font-size: 12px;
+  }
+
+  &__row {
+    display: grid;
+    grid-template-columns: 54px minmax(0, 1fr);
+    gap: 6px;
+    align-items: start;
+  }
+
+  &__label {
+    padding-top: 7px;
+    color: var(--ei-text-secondary, #999);
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  &__control {
+    min-width: 0;
   }
 
   &__inline-select { min-width: 0; }
 
+  &__children {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
   &__child {
     display: grid;
-    grid-template-columns: 18px minmax(0, 1fr);
-    column-gap: 5px;
+    grid-template-columns: 14px minmax(0, 1fr);
+    column-gap: 4px;
     align-items: start;
   }
 
@@ -286,10 +312,26 @@ function compareOperandLabel(operator: CompareOperator, index: number): string {
     display: flex;
     gap: 6px;
     align-items: center;
-    padding-left: 23px;
+    padding-left: 20px;
   }
 
   &__add-row > * { flex: 1; }
+
+  &__options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    min-height: 28px;
+  }
+
+  &__options > * {
+    flex: 0 1 auto;
+  }
+
+  &__wide-action {
+    justify-content: center;
+  }
 
   &__note { margin: 0; }
 }
