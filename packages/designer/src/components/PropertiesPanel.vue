@@ -833,6 +833,7 @@ function isPropInputDisabled(schema: PropSchema): boolean {
         <ConditionEditor
           :element="selectedElement"
           :capability="selectedConditionCapability"
+          :t="store.t.bind(store)"
           @update="updateRenderCondition"
         />
       </EiPanel>

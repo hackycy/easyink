@@ -10,6 +10,7 @@ const props = defineProps<{
   modelValue: ConditionNode
   variables: string[]
   path: string
+  t: (key: string) => string
   removable?: boolean
 }>()
 
@@ -21,52 +22,52 @@ const emit = defineEmits<{
 const nodeVariables = computed(() => props.modelValue.kind === 'quantifier'
   ? [...props.variables, props.modelValue.as].filter(Boolean)
   : props.variables)
-const kindOptions = [
-  { label: '普通条件', value: 'compare' },
-  { label: '条件组', value: 'group' },
-  { label: '反向条件', value: 'not' },
-  { label: '集合条件', value: 'quantifier' },
-]
-const compareLabels: Record<CompareOperator, string> = {
-  eq: '等于',
-  neq: '不等于',
-  gt: '大于',
-  gte: '大于等于',
-  lt: '小于',
-  lte: '小于等于',
-  between: '介于',
-  notBetween: '不介于',
-  in: '属于任一',
-  notIn: '不属于任一',
-  contains: '包含',
-  notContains: '不包含',
-  startsWith: '开头是',
-  endsWith: '结尾是',
-  exists: '存在',
-  notExists: '不存在',
-  isEmpty: '为空',
-  isNotEmpty: '不为空',
+const kindOptions = computed(() => [
+  { label: props.t('designer.condition.modeCompare'), value: 'compare' },
+  { label: props.t('designer.condition.modeGroup'), value: 'group' },
+  { label: props.t('designer.condition.modeNot'), value: 'not' },
+  { label: props.t('designer.condition.modeQuantifier'), value: 'quantifier' },
+])
+const compareLabelKeys: Record<CompareOperator, string> = {
+  eq: 'designer.condition.operatorEq',
+  neq: 'designer.condition.operatorNeq',
+  gt: 'designer.condition.operatorGt',
+  gte: 'designer.condition.operatorGte',
+  lt: 'designer.condition.operatorLt',
+  lte: 'designer.condition.operatorLte',
+  between: 'designer.condition.operatorBetween',
+  notBetween: 'designer.condition.operatorNotBetween',
+  in: 'designer.condition.operatorIn',
+  notIn: 'designer.condition.operatorNotIn',
+  contains: 'designer.condition.operatorContains',
+  notContains: 'designer.condition.operatorNotContains',
+  startsWith: 'designer.condition.operatorStartsWith',
+  endsWith: 'designer.condition.operatorEndsWith',
+  exists: 'designer.condition.operatorExists',
+  notExists: 'designer.condition.operatorNotExists',
+  isEmpty: 'designer.condition.operatorIsEmpty',
+  isNotEmpty: 'designer.condition.operatorIsNotEmpty',
 }
-const compareOptions = COMPARE_OPERATORS.map(value => ({ label: compareLabels[value], value }))
-const groupOptions = [
-  { label: '全部条件', value: 'and' },
-  { label: '任一条件', value: 'or' },
-]
-const quantifierOptions = [
-  { label: '任一记录满足', value: 'any' },
-  { label: '全部记录满足', value: 'all' },
-  { label: '无记录满足', value: 'none' },
-]
+const compareOptions = computed(() => COMPARE_OPERATORS.map(value => ({ label: props.t(compareLabelKeys[value]), value })))
+const groupOptions = computed(() => [
+  { label: props.t('designer.condition.groupAll'), value: 'and' },
+  { label: props.t('designer.condition.groupAny'), value: 'or' },
+])
+const quantifierOptions = computed(() => [
+  { label: props.t('designer.condition.quantifierAny'), value: 'any' },
+  { label: props.t('designer.condition.quantifierAll'), value: 'all' },
+  { label: props.t('designer.condition.quantifierNone'), value: 'none' },
+])
 const caseSensitiveOperators: CompareOperator[] = ['eq', 'neq', 'in', 'notIn', 'contains', 'notContains', 'startsWith', 'endsWith']
 
 const modeText = computed(() => {
   if (props.modelValue.kind === 'group')
-    return '用一组规则共同决定是否显示'
+    return props.t('designer.condition.modeTextGroup')
   if (props.modelValue.kind === 'not')
-    return '当内部规则不成立时显示'
+    return props.t('designer.condition.modeTextNot')
   if (props.modelValue.kind === 'quantifier')
-    return '按集合中的记录判断是否显示'
-  return '用一个字段或固定值判断是否显示'
+    return props.t('designer.condition.modeTextQuantifier')
+  return props.t('designer.condition.modeTextCompare')
 })
 const compareOperands = computed<ValueExpression[]>(() => props.modelValue.kind === 'compare'
   ? normalizeCompareOperands(props.modelValue.operator, props.modelValue.operands)
@@ -146,12 +147,12 @@ function updateQuantifierCondition(condition: ConditionNode, mergeKey?: string) 
 
 function compareOperandLabel(operator: CompareOperator, index: number): string {
   if (index === 0)
-    return '判断对象'
+    return props.t('designer.condition.operandSubject')
   if (operator === 'between' || operator === 'notBetween')
-    return index === 1 ? '起始值' : '结束值'
+    return index === 1 ? props.t('designer.condition.operandStart') : props.t('designer.condition.operandEnd')
   if (operator === 'in' || operator === 'notIn')
-    return `候选值 ${index}`
-  return '比较值'
+    return `${props.t('designer.condition.operandCandidate')} ${index}`
+  return props.t('designer.condition.operandCompare')
 }
 </script>
 
@@ -159,11 +160,11 @@ function compareOperandLabel(operator: CompareOperator, index: number): string {
   <div class="condition-rule" :class="`condition-rule--${modelValue.kind}`">
     <div class="condition-rule__mode">
       <div class="condition-rule__mode-copy">
-        <span class="condition-rule__mode-title">规则模式</span>
+        <span class="condition-rule__mode-title">{{ t('designer.condition.mode') }}</span>
         <span class="condition-rule__mode-text">{{ modeText }}</span>
       </div>
       <EiSelect class="condition-control condition-rule__mode-select" :model-value="modelValue.kind" :options="kindOptions" @update:model-value="changeKind(String($event))" />
-      <EiButton v-if="removable" class="condition-rule__remove" variant="ghost" size="sm" title="删除规则" aria-label="删除规则" @click="$emit('remove')">
+      <EiButton v-if="removable" class="condition-rule__remove" variant="ghost" size="sm" :title="t('designer.condition.deleteRule')" :aria-label="t('designer.condition.deleteRule')" @click="$emit('remove')">
         <EiIcon :icon="IconDelete" :size="13" />
       </EiButton>
     </div>
@@ -174,9 +175,10 @@ function compareOperandLabel(operator: CompareOperator, index: number): string {
         :variables="variables"
         :slot-id="`${path}.operand.0`"
         :label="compareOperandLabel(modelValue.operator, 0)"
+        :t="t"
         @update:model-value="(value, mergeKey) => updateOperand(0, value, mergeKey)"
       />
-      <EiSelect class="condition-control" label="判断方式" :model-value="modelValue.operator" :options="compareOptions" @update:model-value="updateCompareOperator(String($event))" />
+      <EiSelect class="condition-control" :label="t('designer.condition.operator')" :model-value="modelValue.operator" :options="compareOptions" @update:model-value="updateCompareOperator(String($event))" />
       <ConditionValueEditor
         v-for="(operand, index) in compareOperands.slice(1)"
         :key="`${path}.operand.${index + 1}`"
@@ -184,25 +186,26 @@ function compareOperandLabel(operator: CompareOperator, index: number): string {
         :variables="variables"
         :slot-id="`${path}.operand.${index + 1}`"
         :label="compareOperandLabel(modelValue.operator, index + 1)"
+        :t="t"
         @update:model-value="(value, mergeKey) => updateOperand(index + 1, value, mergeKey)"
       />
       <EiCheckbox
         v-if="caseSensitiveOperators.includes(modelValue.operator)"
-        label="区分大小写"
+        :label="t('designer.condition.caseSensitive')"
         :model-value="modelValue.options?.caseSensitive !== false"
         @update:model-value="$emit('update:modelValue', { ...modelValue, options: { ...modelValue.options, caseSensitive: $event } })"
       />
       <EiButton v-if="modelValue.operator === 'in' || modelValue.operator === 'notIn'" size="sm" @click="$emit('update:modelValue', { ...modelValue, operands: [...modelValue.operands, { kind: 'literal', value: '' }] })">
         <EiIcon :icon="IconPlus" :size="12" />
-        添加候选值
+        {{ t('designer.condition.addCandidate') }}
       </EiButton>
     </template>
 
     <template v-else-if="modelValue.kind === 'group'">
       <div class="condition-rule__sentence">
-        <span>满足</span>
+        <span>{{ t('designer.condition.groupWhen') }}</span>
         <EiSelect class="condition-control condition-rule__inline-select" :model-value="modelValue.operator" :options="groupOptions" @update:model-value="updateGroupOperator(String($event))" />
-        <span>时显示</span>
+        <span>{{ t('designer.condition.groupThen') }}</span>
       </div>
       <div v-for="(child, index) in modelValue.children" :key="`${path}.child.${index}`" class="condition-rule__child">
         <span class="condition-rule__child-index">{{ index + 1 }}</span>
@@ -212,6 +215,7 @@ function compareOperandLabel(operator: CompareOperator, index: number): string {
           :variables="variables"
           :path="`${path}.child.${index}`"
           :removable="modelValue.children.length > 1"
+          :t="t"
           @update:model-value="(value, mergeKey) => updateChild(index, value, mergeKey)"
           @remove="removeChild(index)"
         />
@@ -219,30 +223,30 @@ function compareOperandLabel(operator: CompareOperator, index: number): string {
       <div class="condition-rule__add-row">
         <EiButton size="sm" @click="addChild('compare')">
           <EiIcon :icon="IconPlus" :size="12" />
-          添加条件
+          {{ t('designer.condition.addCondition') }}
         </EiButton>
         <EiButton size="sm" @click="addChild('group')">
           <EiIcon :icon="IconPlus" :size="12" />
-          添加条件组
+          {{ t('designer.condition.addGroup') }}
         </EiButton>
       </div>
     </template>
 
     <template v-else-if="modelValue.kind === 'not'">
       <p class="condition-rule__note">
-        内部规则不成立时，该物料会显示。
+        {{ t('designer.condition.notHint') }}
       </p>
-      <ConditionRuleEditor :model-value="modelValue.child" :variables="variables" :path="`${path}.not`" @update:model-value="updateNotChild" />
+      <ConditionRuleEditor :model-value="modelValue.child" :variables="variables" :path="`${path}.not`" :t="t" @update:model-value="updateNotChild" />
     </template>
 
     <template v-else>
-      <EiSelect class="condition-control" label="集合判断" :model-value="modelValue.operator" :options="quantifierOptions" @update:model-value="updateQuantifierOperator(String($event))" />
-      <ConditionValueEditor label="集合字段" :model-value="modelValue.collection" :variables="variables" :slot-id="`${path}.collection`" @update:model-value="updateQuantifierCollection" />
-      <EiInput class="condition-control" label="变量名" :model-value="modelValue.as" @update:model-value="updateQuantifierVariable(String($event))" />
+      <EiSelect class="condition-control" :label="t('designer.condition.quantifier')" :model-value="modelValue.operator" :options="quantifierOptions" @update:model-value="updateQuantifierOperator(String($event))" />
+      <ConditionValueEditor :label="t('designer.condition.collection')" :model-value="modelValue.collection" :variables="variables" :slot-id="`${path}.collection`" :t="t" @update:model-value="updateQuantifierCollection" />
+      <EiInput class="condition-control" :label="t('designer.condition.variableName')" :model-value="modelValue.as" @update:model-value="updateQuantifierVariable(String($event))" />
       <p class="condition-rule__note">
-        下面的规则会应用到集合中的每一条记录。
+        {{ t('designer.condition.quantifierHint') }}
       </p>
-      <ConditionRuleEditor :model-value="modelValue.condition" :variables="nodeVariables" :path="`${path}.condition`" @update:model-value="updateQuantifierCondition" />
+      <ConditionRuleEditor :model-value="modelValue.condition" :variables="nodeVariables" :path="`${path}.condition`" :t="t" @update:model-value="updateQuantifierCondition" />
     </template>
   </div>
 </template>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { MaterialConditionDefinition } from '@easyink/core'
 import type { MaterialNode, RenderCondition } from '@easyink/schema'
-import { IconDelete, IconPlus } from '@easyink/icons'
+import { IconDelete } from '@easyink/icons'
 import { deepClone } from '@easyink/shared'
 import { EiButton, EiIcon, EiSelect, EiSwitch } from '@easyink/ui'
 import { computed, ref, watch } from 'vue'
@@ -11,6 +11,7 @@ import ConditionRuleEditor from './ConditionRuleEditor.vue'
 const props = defineProps<{
   element: MaterialNode
   capability: MaterialConditionDefinition
+  t: (key: string) => string
 }>()
 
 const emit = defineEmits<{
@@ -22,13 +23,13 @@ const dirty = ref(false)
 
 const complete = computed(() => !!draft.value && isRenderConditionComplete(draft.value))
 const whenFalseOptions = computed(() => [
-  ...(props.capability.effects.includes('remove') ? [{ label: '移除且不占位', value: 'remove' }] : []),
-  ...(props.capability.effects.includes('reserve') ? [{ label: '隐藏但保留空间', value: 'reserve' }] : []),
+  ...(props.capability.effects.includes('remove') ? [{ label: props.t('designer.condition.whenFalseRemove'), value: 'remove' }] : []),
+  ...(props.capability.effects.includes('reserve') ? [{ label: props.t('designer.condition.whenFalseReserve'), value: 'reserve' }] : []),
 ])
-const unknownOptions = [
-  { label: '继续显示', value: 'include' },
-  { label: '按不满足处理', value: 'exclude' },
-]
+const unknownOptions = computed(() => [
+  { label: props.t('designer.condition.unknownInclude'), value: 'include' },
+  { label: props.t('designer.condition.unknownExclude'), value: 'exclude' },
+])
 
 watch(() => props.element.renderCondition, (condition) => {
   if (!dirty.value || condition)
@@ -64,29 +65,25 @@ function remove() {
 <template>
   <div class="condition-editor">
     <div v-if="!draft" class="condition-editor__empty">
-      <p class="condition-editor__eyebrow">
-        条件显示
-      </p>
-      <p>用运行时数据控制该物料是否输出。启用后，可在具体字段槽位中选择或拖入数据字段。</p>
+      <p>{{ t('designer.condition.emptyDescription') }}</p>
       <EiButton size="sm" @click="enable">
-        <EiIcon :icon="IconPlus" :size="13" />
-        手动创建规则
+        {{ t('designer.condition.enable') }}
       </EiButton>
     </div>
 
     <template v-else>
       <div class="condition-editor__header">
         <div class="condition-editor__header-copy">
-          <span class="condition-editor__title">条件显示</span>
-          <span class="condition-editor__summary">规则成立时显示该物料</span>
+          <span class="condition-editor__title">{{ t('designer.condition.title') }}</span>
+          <span class="condition-editor__summary">{{ t('designer.condition.summary') }}</span>
         </div>
         <EiSwitch :model-value="draft.enabled !== false" @update:model-value="update({ ...draft!, enabled: $event })" />
         <EiButton
           class="condition-editor__remove"
           variant="ghost"
           size="sm"
-          title="移除条件配置"
-          aria-label="移除条件配置"
+          :title="t('designer.condition.removeConfig')"
+          :aria-label="t('designer.condition.removeConfig')"
           @click="remove"
         >
           <EiIcon :icon="IconDelete" :size="14" />
@@ -95,34 +92,34 @@ function remove() {
 
       <div class="condition-editor__section">
         <p class="condition-editor__section-title">
-          显示规则
+          {{ t('designer.condition.ruleSection') }}
         </p>
         <p class="condition-editor__section-copy">
-          当以下规则成立时显示。
+          {{ t('designer.condition.ruleSectionDescription') }}
         </p>
       </div>
-      <ConditionRuleEditor :model-value="draft.rule" :variables="[]" path="rule" @update:model-value="(rule, mergeKey) => update({ ...draft!, rule }, mergeKey)" />
+      <ConditionRuleEditor :model-value="draft.rule" :variables="[]" path="rule" :t="t" @update:model-value="(rule, mergeKey) => update({ ...draft!, rule }, mergeKey)" />
       <p v-if="!complete" class="condition-editor__hint">
-        规则尚未填写完整，完成前不会写入模板或撤销历史。
+        {{ t('designer.condition.incompleteHint') }}
       </p>
 
       <div class="condition-editor__section condition-editor__section--outcome">
         <p class="condition-editor__section-title">
-          否则
+          {{ t('designer.condition.otherwise') }}
         </p>
         <p class="condition-editor__section-copy">
-          规则不成立或数据异常时如何处理该物料。
+          {{ t('designer.condition.otherwiseDescription') }}
         </p>
       </div>
       <div class="condition-editor__settings">
         <EiSelect
-          label="不满足时"
+          :label="t('designer.condition.whenFalse')"
           :model-value="draft.whenFalse ?? 'remove'"
           :options="whenFalseOptions"
           @update:model-value="update({ ...draft!, whenFalse: $event as 'remove' | 'reserve' })"
         />
         <EiSelect
-          label="数据异常时"
+          :label="t('designer.condition.onUnknown')"
           :model-value="draft.onUnknown ?? 'include'"
           :options="unknownOptions"
           @update:model-value="update({ ...draft!, onUnknown: $event as 'include' | 'exclude' })"

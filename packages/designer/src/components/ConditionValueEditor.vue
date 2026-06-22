@@ -8,6 +8,7 @@ const props = defineProps<{
   modelValue: ValueExpression
   variables: string[]
   slotId: string
+  t: (key: string) => string
   label?: string
 }>()
 
@@ -22,26 +23,26 @@ let unregister: (() => void) | undefined
 
 const expressionKind = computed(() => props.modelValue.kind)
 const kindOptions = computed(() => [
-  { label: '字段', value: 'field' },
-  ...(props.variables.length ? [{ label: '变量', value: 'variable' }] : []),
-  { label: '固定值', value: 'literal' },
-  { label: '集合数量', value: 'count' },
+  { label: props.t('designer.condition.valueKindField'), value: 'field' },
+  ...(props.variables.length ? [{ label: props.t('designer.condition.valueKindVariable'), value: 'variable' }] : []),
+  { label: props.t('designer.condition.valueKindLiteral'), value: 'literal' },
+  { label: props.t('designer.condition.valueKindCount'), value: 'count' },
 ])
 const variableOptions = computed(() => props.variables.map(value => ({ label: value, value })))
-const castOptions = [
-  { label: '原类型', value: '' },
-  { label: '文本', value: 'string' },
-  { label: '去空格文本', value: 'trimmed-string' },
-  { label: '数字', value: 'number' },
-  { label: '布尔', value: 'boolean' },
-  { label: '日期时间', value: 'datetime' },
-]
-const literalTypeOptions = [
-  { label: '文本', value: 'string' },
-  { label: '数字', value: 'number' },
-  { label: '布尔', value: 'boolean' },
-  { label: '空值', value: 'null' },
-]
+const castOptions = computed(() => [
+  { label: props.t('designer.condition.castRaw'), value: '' },
+  { label: props.t('designer.condition.castString'), value: 'string' },
+  { label: props.t('designer.condition.castTrimmedString'), value: 'trimmed-string' },
+  { label: props.t('designer.condition.castNumber'), value: 'number' },
+  { label: props.t('designer.condition.castBoolean'), value: 'boolean' },
+  { label: props.t('designer.condition.castDatetime'), value: 'datetime' },
+])
+const literalTypeOptions = computed(() => [
+  { label: props.t('designer.condition.literalString'), value: 'string' },
+  { label: props.t('designer.condition.literalNumber'), value: 'number' },
+  { label: props.t('designer.condition.literalBoolean'), value: 'boolean' },
+  { label: props.t('designer.condition.literalNull'), value: 'null' },
+])
 const pathExpression = computed<ConditionPathExpression | undefined>(() => {
   if (props.modelValue.kind === 'field' || props.modelValue.kind === 'variable')
     return props.modelValue
@@ -64,7 +65,7 @@ onMounted(() => {
     id: `condition:${props.slotId}`,
     element: () => root.value,
     onDragOver: data => data.union?.length
-      ? { status: 'rejected', label: 'Union fields are not supported in conditions' }
+      ? { status: 'rejected', label: props.t('designer.condition.rejectUnion') }
       : { status: 'accepted', label: data.fieldLabel || data.fieldPath },
     onDrop: (data) => {
       if (data.union?.length)
@@ -143,13 +144,13 @@ function updateNumberLiteral(value: number | null) {
 
       <template v-if="pathExpression">
         <EiSelect v-if="pathExpression.kind === 'variable'" class="condition-control" :model-value="pathExpression.name" :options="variableOptions" @update:model-value="updateVariable(String($event))" />
-        <EiInput class="condition-control condition-value__path" :model-value="textDraft" placeholder="如 order.customer.name" @update:model-value="updatePath(String($event))" />
+        <EiInput class="condition-control condition-value__path" :model-value="textDraft" :placeholder="t('designer.condition.pathPlaceholder')" @update:model-value="updatePath(String($event))" />
         <EiSelect class="condition-control condition-value__cast" :model-value="pathExpression.cast ?? ''" :options="castOptions" @update:model-value="updateCast(String($event))" />
       </template>
 
       <template v-else-if="modelValue.kind === 'literal'">
         <EiSelect class="condition-control" :model-value="modelValue.value === null ? 'null' : typeof modelValue.value" :options="literalTypeOptions" @update:model-value="changeLiteralType(String($event))" />
-        <EiSwitch v-if="typeof modelValue.value === 'boolean'" class="condition-control condition-value__boolean" label="固定值" :model-value="modelValue.value" @update:model-value="$emit('update:modelValue', { kind: 'literal', value: $event })" />
+        <EiSwitch v-if="typeof modelValue.value === 'boolean'" class="condition-control condition-value__boolean" :label="t('designer.condition.literalValue')" :model-value="modelValue.value" @update:model-value="$emit('update:modelValue', { kind: 'literal', value: $event })" />
         <EiNumberInput v-else-if="typeof modelValue.value === 'number'" class="condition-control condition-value__path" :model-value="modelValue.value" :nullable="false" @update:model-value="updateNumberLiteral" />
         <EiInput v-else-if="modelValue.value !== null" class="condition-control condition-value__path" :model-value="textDraft" @update:model-value="updateLiteral(String($event))" />
       </template>
