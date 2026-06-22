@@ -187,14 +187,13 @@ function validateRenderCondition(value: unknown, path: string, issues: SchemaVal
     return
   }
   const state = { nodes: 0, limitReported: false }
-  validateConditionNode(value.rule, `${path}.rule`, issues, new Set(), 1, state)
+  validateConditionNode(value.rule, `${path}.rule`, issues, 1, state)
 }
 
 function validateConditionNode(
   value: unknown,
   path: string,
   issues: SchemaValidationIssue[],
-  variables: ReadonlySet<string>,
   depth: number,
   state: { nodes: number, limitReported: boolean },
 ): void {
@@ -217,7 +216,7 @@ function validateConditionNode(
       issues.push(createIssue(`${path}.children`, 'must be a non-empty array', 'schema.condition.group.children.invalid'))
       return
     }
-    value.children.forEach((child, index) => validateConditionNode(child, `${path}.children.${index}`, issues, variables, depth + 1, state))
+    value.children.forEach((child, index) => validateConditionNode(child, `${path}.children.${index}`, issues, depth + 1, state))
     return
   }
 
@@ -225,7 +224,7 @@ function validateConditionNode(
     if (!('child' in value))
       issues.push(createIssue(`${path}.child`, 'is required', 'schema.condition.not.child.required'))
     else
-      validateConditionNode(value.child, `${path}.child`, issues, variables, depth + 1, state)
+      validateConditionNode(value.child, `${path}.child`, issues, depth + 1, state)
     return
   }
 
@@ -246,7 +245,7 @@ function validateConditionNode(
           : count === 2
     if (!expected)
       issues.push(createIssue(`${path}.operands`, 'has the wrong number of operands for this operator', 'schema.condition.compare.arity.invalid'))
-    value.operands.forEach((operand, index) => validateValueExpression(operand, `${path}.operands.${index}`, issues, variables))
+    value.operands.forEach((operand, index) => validateValueExpression(operand, `${path}.operands.${index}`, issues))
     if (value.options != null) {
       if (!isObject(value.options) || (value.options.caseSensitive != null && typeof value.options.caseSensitive !== 'boolean'))
         issues.push(createIssue(`${path}.options`, 'must contain only a boolean caseSensitive option', 'schema.condition.compare.options.invalid'))
@@ -254,27 +253,10 @@ function validateConditionNode(
     return
   }
 
-  if (value.kind === 'quantifier') {
-    if (value.operator !== 'any' && value.operator !== 'all' && value.operator !== 'none')
-      issues.push(createIssue(`${path}.operator`, 'must be any, all, or none', 'schema.condition.quantifier.operator.invalid'))
-    validateValueExpression(value.collection, `${path}.collection`, issues, variables)
-    if (typeof value.as !== 'string' || value.as.trim() === '') {
-      issues.push(createIssue(`${path}.as`, 'must be a non-empty variable name', 'schema.condition.quantifier.variable.invalid'))
-      validateConditionNode(value.condition, `${path}.condition`, issues, variables, depth + 1, state)
-      return
-    }
-    if (variables.has(value.as))
-      issues.push(createIssue(`${path}.as`, 'must not shadow an active quantifier variable', 'schema.condition.quantifier.variable.duplicate'))
-    const nestedVariables = new Set(variables)
-    nestedVariables.add(value.as)
-    validateConditionNode(value.condition, `${path}.condition`, issues, nestedVariables, depth + 1, state)
-    return
-  }
-
   issues.push(createIssue(`${path}.kind`, 'must be a supported condition node kind', 'schema.condition.kind.invalid'))
 }
 
-function validateValueExpression(value: unknown, path: string, issues: SchemaValidationIssue[], variables: ReadonlySet<string>): void {
+function validateValueExpression(value: unknown, path: string, issues: SchemaValidationIssue[]): void {
   if (!isObject(value)) {
     issues.push(createIssue(path, 'must be a value expression object', 'schema.condition.value.invalid'))
     return
@@ -286,31 +268,18 @@ function validateValueExpression(value: unknown, path: string, issues: SchemaVal
       issues.push(createIssue(`${path}.value`, 'must be a finite number', 'schema.condition.literal.invalid'))
     return
   }
-  if (value.kind === 'count') {
-    validatePathExpression(value.value, `${path}.value`, issues, variables)
-    return
-  }
-  validatePathExpression(value, path, issues, variables)
+  validateFieldExpression(value, path, issues)
 }
 
-function validatePathExpression(value: unknown, path: string, issues: SchemaValidationIssue[], variables: ReadonlySet<string>): void {
+function validateFieldExpression(value: unknown, path: string, issues: SchemaValidationIssue[]): void {
   if (!isObject(value)) {
     issues.push(createIssue(path, 'must be a path expression object', 'schema.condition.path.invalid'))
     return
   }
-  if (value.kind === 'field') {
-    if (typeof value.path !== 'string' || value.path.trim() === '')
-      issues.push(createIssue(`${path}.path`, 'must be a non-empty path', 'schema.condition.field.path.invalid'))
-  }
-  else if (value.kind === 'variable') {
-    if (typeof value.name !== 'string' || !variables.has(value.name))
-      issues.push(createIssue(`${path}.name`, 'must reference an active quantifier variable', 'schema.condition.variable.undefined'))
-    if (value.path != null && typeof value.path !== 'string')
-      issues.push(createIssue(`${path}.path`, 'must be a string when provided', 'schema.condition.variable.path.invalid'))
-  }
-  else {
-    issues.push(createIssue(`${path}.kind`, 'must be field or variable', 'schema.condition.path.kind.invalid'))
-  }
+  if (value.kind !== 'field')
+    issues.push(createIssue(`${path}.kind`, 'must be field', 'schema.condition.field.kind.invalid'))
+  else if (typeof value.path !== 'string' || value.path.trim() === '')
+    issues.push(createIssue(`${path}.path`, 'must be a non-empty path', 'schema.condition.field.path.invalid'))
   if (value.cast != null && (typeof value.cast !== 'string' || !CONDITION_CASTS.has(value.cast)))
     issues.push(createIssue(`${path}.cast`, 'must be a supported cast', 'schema.condition.cast.invalid'))
 }

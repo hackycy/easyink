@@ -1,7 +1,7 @@
 import type {
   CompareOperator,
   ConditionNode,
-  ConditionPathExpression,
+  FieldValueExpression,
   MaterialNode,
   ValueCast,
   ValueExpression,
@@ -25,7 +25,6 @@ export type ConditionDiagnosticCode
   = | 'CONDITION_FIELD_MISSING'
     | 'CONDITION_CAST_FAILED'
     | 'CONDITION_TYPE_MISMATCH'
-    | 'CONDITION_COLLECTION_EXPECTED'
     | 'CONDITION_LIMIT_EXCEEDED'
     | 'CONDITION_EVALUATION_FAILED'
 
@@ -50,7 +49,6 @@ export interface ConditionalNodeResolution extends ConditionEvaluationResult {
 
 interface EvaluationContext {
   data: Record<string, unknown>
-  variables: ReadonlyMap<string, unknown>
   diagnostics: ConditionDiagnostic[]
   steps: number
   limited: boolean
@@ -64,7 +62,6 @@ type ResolvedValue
 export function evaluateCondition(rule: ConditionNode, data: Record<string, unknown>): ConditionEvaluationResult {
   const context: EvaluationContext = {
     data,
-    variables: new Map(),
     diagnostics: [],
     steps: 0,
     limited: false,
@@ -119,40 +116,7 @@ function evaluateNode(node: ConditionNode, context: EvaluationContext, path: str
     return value === 'unknown' ? value : !value
   }
 
-  if (node.kind === 'compare')
-    return evaluateComparison(node.operator, node.operands, node.options?.caseSensitive !== false, context, path)
-
-  const collection = evaluateValue(node.collection, context, `${path}.collection`)
-  if (collection.status !== 'known')
-    return 'unknown'
-  if (!Array.isArray(collection.value)) {
-    addDiagnostic(context, 'CONDITION_COLLECTION_EXPECTED', 'Quantifier expected an array.', `${path}.collection`)
-    return 'unknown'
-  }
-
-  let sawUnknown = false
-  for (let index = 0; index < collection.value.length; index += 1) {
-    if (!consumeStep(context, `${path}.collection.${index}`)) {
-      addLimitDiagnostic(context, path)
-      return 'unknown'
-    }
-    const previousVariables = context.variables
-    const variables = new Map(previousVariables)
-    variables.set(node.as, collection.value[index])
-    context.variables = variables
-    const value = evaluateNode(node.condition, context, `${path}.condition`, depth + 1)
-    context.variables = previousVariables
-    if (node.operator === 'any' && value === true)
-      return true
-    if (node.operator === 'all' && value === false)
-      return false
-    if (node.operator === 'none' && value === true)
-      return false
-    sawUnknown ||= value === 'unknown'
-  }
-  if (sawUnknown)
-    return 'unknown'
-  return node.operator !== 'any'
+  return evaluateComparison(node.operator, node.operands, node.options?.caseSensitive !== false, context, path)
 }
 
 function evaluateComparison(
@@ -234,25 +198,12 @@ function evaluateComparison(
 function evaluateValue(expression: ValueExpression, context: EvaluationContext, path: string, ignoreCast = false): ResolvedValue {
   if (expression.kind === 'literal')
     return { status: 'known', value: expression.value }
-  if (expression.kind === 'count') {
-    const resolved = evaluatePath(expression.value, context, `${path}.value`, ignoreCast)
-    if (resolved.status !== 'known')
-      return resolved
-    if (!Array.isArray(resolved.value)) {
-      addDiagnostic(context, 'CONDITION_COLLECTION_EXPECTED', 'Count expected an array.', path)
-      return { status: 'unknown' }
-    }
-    return { status: 'known', value: resolved.value.length }
-  }
   return evaluatePath(expression, context, path, ignoreCast)
 }
 
-function evaluatePath(expression: ConditionPathExpression, context: EvaluationContext, path: string, ignoreCast = false): ResolvedValue {
-  const root = expression.kind === 'field' ? context.data : context.variables.get(expression.name)
-  if (expression.kind === 'variable' && !context.variables.has(expression.name))
-    return { status: 'unknown' }
-  const fieldPath = expression.kind === 'field' ? expression.path : expression.path ?? ''
-  const resolved = readPath(root, fieldPath)
+function evaluatePath(expression: FieldValueExpression, context: EvaluationContext, path: string, ignoreCast = false): ResolvedValue {
+  const fieldPath = expression.path
+  const resolved = readPath(context.data, fieldPath)
   if (!resolved.found) {
     addDiagnostic(context, 'CONDITION_FIELD_MISSING', 'Condition field is missing.', path, fieldPath)
     return { status: 'missing' }

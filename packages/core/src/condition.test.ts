@@ -46,20 +46,6 @@ describe('condition evaluator', () => {
     expect(evaluateCondition({ kind: 'not', child: missing }, {}).value).toBe('unknown')
   })
 
-  it('evaluates nested quantifiers and standard empty collection semantics', () => {
-    const anyPositive: ConditionNode = {
-      kind: 'quantifier',
-      operator: 'any',
-      collection: field('items'),
-      as: 'item',
-      condition: { kind: 'compare', operator: 'gt', operands: [{ kind: 'variable', name: 'item', path: 'qty' }, literal(0)] },
-    }
-    expect(evaluateCondition(anyPositive, { items: [{ qty: 0 }, { qty: 2 }] }).value).toBe(true)
-    expect(evaluateCondition(anyPositive, { items: [] }).value).toBe(false)
-    expect(evaluateCondition({ ...anyPositive, operator: 'all' }, { items: [] }).value).toBe(true)
-    expect(evaluateCondition({ ...anyPositive, operator: 'none' }, { items: [] }).value).toBe(true)
-  })
-
   it('blocks prototype paths and reports failures without exposing values', () => {
     const result = evaluateCondition(compare('eq', field('__proto__.polluted'), literal('secret')), {})
     expect(result.value).toBe('unknown')
@@ -89,16 +75,13 @@ describe('condition evaluator', () => {
     expect(evaluateCondition(rule, { left: '2025-02-30', right: '2025-03-02' }).value).toBe('unknown')
   })
 
-  it('supports count and stops quantifiers at the fixed step budget', () => {
-    expect(evaluateCondition(compare('eq', { kind: 'count', value: field('items') }, literal(2)), { items: [1, 2] }).value).toBe(true)
+  it('stops oversized rules at the fixed step budget', () => {
     const rule: ConditionNode = {
-      kind: 'quantifier',
-      operator: 'all',
-      collection: field('items'),
-      as: 'item',
-      condition: compare('gt', { kind: 'variable', name: 'item' }, literal(0)),
+      kind: 'group',
+      operator: 'or',
+      children: Array.from({ length: 10_001 }, () => compare('eq', literal(0), literal(1))),
     }
-    const result = evaluateCondition(rule, { items: Array.from({ length: 10_001 }).fill(1) })
+    const result = evaluateCondition(rule, {})
     expect(result.value).toBe('unknown')
     expect(result.diagnostics.filter(item => item.code === 'CONDITION_LIMIT_EXCEEDED')).toHaveLength(1)
   })

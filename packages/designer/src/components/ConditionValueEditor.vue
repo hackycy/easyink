@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import type { ConditionPathExpression, ValueCast, ValueExpression } from '@easyink/schema'
+import type { FieldValueExpression, ValueCast, ValueExpression } from '@easyink/schema'
 import { EiInput, EiNumberInput, EiSelect, EiSwitch } from '@easyink/ui'
 import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { DESIGNER_DRAG_DROP_KEY } from '../composables/use-designer-drag-drop'
 
 const props = defineProps<{
   modelValue: ValueExpression
-  variables: string[]
   slotId: string
   t: (key: string) => string
   label?: string
@@ -24,11 +23,8 @@ let unregister: (() => void) | undefined
 const expressionKind = computed(() => props.modelValue.kind)
 const kindOptions = computed(() => [
   { label: props.t('designer.condition.valueKindField'), value: 'field' },
-  ...(props.variables.length ? [{ label: props.t('designer.condition.valueKindVariable'), value: 'variable' }] : []),
   { label: props.t('designer.condition.valueKindLiteral'), value: 'literal' },
-  { label: props.t('designer.condition.valueKindCount'), value: 'count' },
 ])
-const variableOptions = computed(() => props.variables.map(value => ({ label: value, value })))
 const castOptions = computed(() => [
   { label: props.t('designer.condition.castRaw'), value: '' },
   { label: props.t('designer.condition.castString'), value: 'string' },
@@ -43,13 +39,7 @@ const literalTypeOptions = computed(() => [
   { label: props.t('designer.condition.literalBoolean'), value: 'boolean' },
   { label: props.t('designer.condition.literalNull'), value: 'null' },
 ])
-const pathExpression = computed<ConditionPathExpression | undefined>(() => {
-  if (props.modelValue.kind === 'field' || props.modelValue.kind === 'variable')
-    return props.modelValue
-  if (props.modelValue.kind === 'count')
-    return props.modelValue.value
-  return undefined
-})
+const pathExpression = computed<FieldValueExpression | undefined>(() => props.modelValue.kind === 'field' ? props.modelValue : undefined)
 
 watch(() => props.modelValue, (value) => {
   if (value.kind === 'literal')
@@ -80,10 +70,6 @@ onBeforeUnmount(() => unregister?.())
 function changeKind(kind: string) {
   if (kind === 'literal')
     emit('update:modelValue', { kind: 'literal', value: '' })
-  else if (kind === 'count')
-    emit('update:modelValue', { kind: 'count', value: { kind: 'field', path: '' } })
-  else if (kind === 'variable')
-    emit('update:modelValue', { kind: 'variable', name: props.variables.at(-1) ?? '', path: '' })
   else
     emit('update:modelValue', { kind: 'field', path: '' })
 }
@@ -94,14 +80,7 @@ function updatePath(path: string) {
   if (!current)
     return
   const next = { ...current, path }
-  emit('update:modelValue', props.modelValue.kind === 'count' ? { kind: 'count', value: next } : next, `${props.slotId}:path`)
-}
-
-function updateVariable(name: string) {
-  if (props.modelValue.kind === 'variable')
-    emit('update:modelValue', { ...props.modelValue, name })
-  else if (props.modelValue.kind === 'count' && props.modelValue.value.kind === 'variable')
-    emit('update:modelValue', { kind: 'count', value: { ...props.modelValue.value, name } })
+  emit('update:modelValue', next, `${props.slotId}:path`)
 }
 
 function updateCast(cast: string) {
@@ -109,7 +88,7 @@ function updateCast(cast: string) {
   if (!current)
     return
   const next = { ...current, cast: cast ? cast as ValueCast : undefined }
-  emit('update:modelValue', props.modelValue.kind === 'count' ? { kind: 'count', value: next } : next)
+  emit('update:modelValue', next)
 }
 
 function changeLiteralType(type: string) {
@@ -143,7 +122,6 @@ function updateNumberLiteral(value: number | null) {
       <EiSelect class="condition-control condition-value__kind" :model-value="expressionKind" :options="kindOptions" @update:model-value="changeKind(String($event))" />
 
       <template v-if="pathExpression">
-        <EiSelect v-if="pathExpression.kind === 'variable'" class="condition-control" :model-value="pathExpression.name" :options="variableOptions" @update:model-value="updateVariable(String($event))" />
         <EiInput class="condition-control condition-value__path" :model-value="textDraft" :placeholder="t('designer.condition.pathPlaceholder')" @update:model-value="updatePath(String($event))" />
         <EiSelect class="condition-control condition-value__cast" :model-value="pathExpression.cast ?? ''" :options="castOptions" @update:model-value="updateCast(String($event))" />
       </template>

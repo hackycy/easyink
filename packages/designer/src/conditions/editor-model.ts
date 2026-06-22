@@ -30,8 +30,6 @@ export function createConditionNode(kind: ConditionNode['kind'] = 'compare'): Co
     return { kind: 'group', operator: 'and', children: [createConditionNode()] }
   if (kind === 'not')
     return { kind: 'not', child: createConditionNode() }
-  if (kind === 'quantifier')
-    return { kind: 'quantifier', operator: 'any', collection: createValueExpression(), as: 'item', condition: createConditionNode() }
   return { kind: 'compare', operator: 'eq', operands: [createValueExpression(), { kind: 'literal', value: '' }] }
 }
 
@@ -60,33 +58,19 @@ export function normalizeCompareOperands(operator: CompareOperator, current: Val
 }
 
 export function isRenderConditionComplete(condition: RenderCondition): boolean {
-  return isConditionNodeComplete(condition.rule, new Set())
+  return isConditionNodeComplete(condition.rule)
 }
 
-function isConditionNodeComplete(node: ConditionNode, variables: ReadonlySet<string>): boolean {
+function isConditionNodeComplete(node: ConditionNode): boolean {
   if (node.kind === 'group')
-    return node.children.length > 0 && node.children.every(child => isConditionNodeComplete(child, variables))
+    return node.children.length > 0 && node.children.every(isConditionNodeComplete)
   if (node.kind === 'not')
-    return isConditionNodeComplete(node.child, variables)
-  if (node.kind === 'compare')
-    return normalizeCompareOperands(node.operator, node.operands).length === node.operands.length && node.operands.every(value => isValueComplete(value, variables))
-  if (!node.as.trim() || variables.has(node.as) || !isValueComplete(node.collection, variables))
-    return false
-  const nested = new Set(variables)
-  nested.add(node.as)
-  return isConditionNodeComplete(node.condition, nested)
+    return isConditionNodeComplete(node.child)
+  return normalizeCompareOperands(node.operator, node.operands).length === node.operands.length && node.operands.every(isValueComplete)
 }
 
-function isValueComplete(value: ValueExpression, variables: ReadonlySet<string>): boolean {
+function isValueComplete(value: ValueExpression): boolean {
   if (value.kind === 'literal')
     return typeof value.value !== 'string' || value.value.length > 0
-  if (value.kind === 'count')
-    return isPathComplete(value.value, variables)
-  return isPathComplete(value, variables)
-}
-
-function isPathComplete(value: Exclude<ValueExpression, { kind: 'literal' } | { kind: 'count' }>, variables: ReadonlySet<string>): boolean {
-  if (value.kind === 'field')
-    return value.path.trim().length > 0
-  return variables.has(value.name) && (value.path == null || typeof value.path === 'string')
+  return value.path.trim().length > 0
 }

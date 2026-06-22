@@ -56,7 +56,7 @@ const searchQuery = ref('')
 const triggerRef = ref<HTMLElement | null>(null)
 const triggerButtonRef = ref<HTMLElement | null>(null)
 const panelRef = ref<HTMLElement | null>(null)
-const panelPos = ref({ top: 0, left: 0, minWidth: 0, maxWidth: 0 })
+const panelPos = ref({ top: 0, left: 0, minWidth: 0 })
 
 const selectedIndex = computed(() =>
   props.options.findIndex(opt => isSameValue(opt.value, props.modelValue)),
@@ -87,8 +87,8 @@ const panelStyle = computed<CSSProperties>(() => {
     'top': `${panelPos.value.top}px`,
     'left': `${panelPos.value.left}px`,
     'minWidth': `${panelPos.value.minWidth}px`,
-    'width': width ?? `${panelPos.value.minWidth}px`,
-    'maxWidth': panelPos.value.maxWidth ? `${panelPos.value.maxWidth}px` : undefined,
+    'width': width ?? 'max-content',
+    'maxWidth': 'calc(100vw - 16px)',
     'zIndex': 9999,
     '--ei-select-max-height': `${props.maxHeight}px`,
   }
@@ -128,12 +128,18 @@ function setInitialActiveIndex() {
   activeIndex.value = findEnabledIndex(0, 1)
 }
 
-function calcPanelPos() {
+async function calcPanelPos() {
   const trigger = triggerRef.value
   if (!trigger)
     return
 
-  const rect = trigger.getBoundingClientRect()
+  let rect = trigger.getBoundingClientRect()
+  panelPos.value = { ...panelPos.value, minWidth: rect.width }
+  await nextTick()
+  if (!isOpen.value || !triggerRef.value || !panelRef.value)
+    return
+
+  rect = triggerRef.value.getBoundingClientRect()
   const panelH = panelRef.value?.offsetHeight ?? Math.min(props.maxHeight + 8, 260)
   const panelW = panelRef.value?.offsetWidth || rect.width
   const margin = 8
@@ -152,7 +158,6 @@ function calcPanelPos() {
     top,
     left,
     minWidth: rect.width,
-    maxWidth: window.innerWidth - margin * 2,
   }
 }
 

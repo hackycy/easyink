@@ -15,7 +15,7 @@ describe('validateSchema', () => {
     expect(validateSchema(validSchema)).toEqual([])
   })
 
-  it('validates recursive render conditions and quantifier variable scope', () => {
+  it('validates recursive render conditions and field expressions', () => {
     expect(validateSchema({
       ...validSchema,
       elements: [{
@@ -28,11 +28,12 @@ describe('validateSchema', () => {
         props: {},
         renderCondition: {
           rule: {
-            kind: 'quantifier',
-            operator: 'any',
-            collection: { kind: 'field', path: 'items' },
-            as: 'item',
-            condition: { kind: 'compare', operator: 'gt', operands: [{ kind: 'variable', name: 'item', path: 'qty' }, { kind: 'literal', value: 0 }] },
+            kind: 'group',
+            operator: 'and',
+            children: [
+              { kind: 'compare', operator: 'gt', operands: [{ kind: 'field', path: 'qty' }, { kind: 'literal', value: 0 }] },
+              { kind: 'not', child: { kind: 'compare', operator: 'isEmpty', operands: [{ kind: 'field', path: 'name' }] } },
+            ],
           },
         },
       }],
@@ -50,13 +51,13 @@ describe('validateSchema', () => {
         props: {},
         renderCondition: {
           enabled: false,
-          rule: { kind: 'compare', operator: 'between', operands: [{ kind: 'variable', name: 'missing' }] },
+          rule: { kind: 'compare', operator: 'between', operands: [{ kind: 'field', path: '' }] },
         },
       }],
     })
     expect(issues.map(issue => issue.code)).toEqual(expect.arrayContaining([
       'schema.condition.compare.arity.invalid',
-      'schema.condition.variable.undefined',
+      'schema.condition.field.path.invalid',
     ]))
   })
 

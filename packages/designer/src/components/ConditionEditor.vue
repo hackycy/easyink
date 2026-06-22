@@ -98,7 +98,7 @@ function remove() {
           {{ t('designer.condition.ruleSectionDescription') }}
         </p>
       </div>
-      <ConditionRuleEditor :model-value="draft.rule" :variables="[]" path="rule" :t="t" @update:model-value="(rule, mergeKey) => update({ ...draft!, rule }, mergeKey)" />
+      <ConditionRuleEditor :model-value="draft.rule" path="rule" :t="t" @update:model-value="(rule, mergeKey) => update({ ...draft!, rule }, mergeKey)" />
       <p v-if="!complete" class="condition-editor__hint">
         {{ t('designer.condition.incompleteHint') }}
       </p>

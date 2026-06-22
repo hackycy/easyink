@@ -318,19 +318,9 @@ export interface FieldValueExpression {
   cast?: ValueCast
 }
 
-export interface VariableValueExpression {
-  kind: 'variable'
-  name: string
-  path?: string
-  cast?: ValueCast
-}
-
-export type ConditionPathExpression = FieldValueExpression | VariableValueExpression
-
 export type ValueExpression
-  = | ConditionPathExpression
+  = | FieldValueExpression
     | { kind: 'literal', value: string | number | boolean | null }
-    | { kind: 'count', value: ConditionPathExpression }
 
 export type ConditionNode
   = | { kind: 'group', operator: 'and' | 'or', children: ConditionNode[] }
@@ -340,13 +330,6 @@ export type ConditionNode
       operator: CompareOperator
       operands: ValueExpression[]
       options?: { caseSensitive?: boolean }
-    }
-    | {
-      kind: 'quantifier'
-      operator: 'any' | 'all' | 'none'
-      collection: ValueExpression
-      as: string
-      condition: ConditionNode
     }
 
 export interface RenderCondition {

@@ -1,14 +1,13 @@
 <script setup lang="ts">
 import type { CompareOperator, ConditionNode, ValueExpression } from '@easyink/schema'
 import { IconDelete, IconPlus } from '@easyink/icons'
-import { EiButton, EiCheckbox, EiIcon, EiInput, EiSelect } from '@easyink/ui'
+import { EiButton, EiCheckbox, EiIcon, EiSelect } from '@easyink/ui'
 import { computed } from 'vue'
 import { COMPARE_OPERATORS, createConditionNode, normalizeCompareOperands } from '../conditions/editor-model'
 import ConditionValueEditor from './ConditionValueEditor.vue'
 
 const props = defineProps<{
   modelValue: ConditionNode
-  variables: string[]
   path: string
   t: (key: string) => string
   removable?: boolean
@@ -19,14 +18,10 @@ const emit = defineEmits<{
   'remove': []
 }>()
 
-const nodeVariables = computed(() => props.modelValue.kind === 'quantifier'
-  ? [...props.variables, props.modelValue.as].filter(Boolean)
-  : props.variables)
 const kindOptions = computed(() => [
   { label: props.t('designer.condition.modeCompare'), value: 'compare' },
   { label: props.t('designer.condition.modeGroup'), value: 'group' },
   { label: props.t('designer.condition.modeNot'), value: 'not' },
-  { label: props.t('designer.condition.modeQuantifier'), value: 'quantifier' },
 ])
 const compareLabelKeys: Record<CompareOperator, string> = {
   eq: 'designer.condition.operatorEq',
@@ -53,11 +48,6 @@ const groupOptions = computed(() => [
   { label: props.t('designer.condition.groupAll'), value: 'and' },
   { label: props.t('designer.condition.groupAny'), value: 'or' },
 ])
-const quantifierOptions = computed(() => [
-  { label: props.t('designer.condition.quantifierAny'), value: 'any' },
-  { label: props.t('designer.condition.quantifierAll'), value: 'all' },
-  { label: props.t('designer.condition.quantifierNone'), value: 'none' },
-])
 const caseSensitiveOperators: CompareOperator[] = ['eq', 'neq', 'in', 'notIn', 'contains', 'notContains', 'startsWith', 'endsWith']
 
 const modeText = computed(() => {
@@ -65,8 +55,6 @@ const modeText = computed(() => {
     return props.t('designer.condition.modeTextGroup')
   if (props.modelValue.kind === 'not')
     return props.t('designer.condition.modeTextNot')
-  if (props.modelValue.kind === 'quantifier')
-    return props.t('designer.condition.modeTextQuantifier')
   return props.t('designer.condition.modeTextCompare')
 })
 const compareOperands = computed<ValueExpression[]>(() => props.modelValue.kind === 'compare'
@@ -125,26 +113,6 @@ function updateNotChild(child: ConditionNode, mergeKey?: string) {
     emit('update:modelValue', { ...props.modelValue, child }, mergeKey)
 }
 
-function updateQuantifierOperator(operator: string) {
-  if (props.modelValue.kind === 'quantifier')
-    emit('update:modelValue', { ...props.modelValue, operator: operator as 'any' | 'all' | 'none' })
-}
-
-function updateQuantifierCollection(collection: ValueExpression, mergeKey?: string) {
-  if (props.modelValue.kind === 'quantifier')
-    emit('update:modelValue', { ...props.modelValue, collection }, mergeKey)
-}
-
-function updateQuantifierVariable(as: string) {
-  if (props.modelValue.kind === 'quantifier')
-    emit('update:modelValue', { ...props.modelValue, as })
-}
-
-function updateQuantifierCondition(condition: ConditionNode, mergeKey?: string) {
-  if (props.modelValue.kind === 'quantifier')
-    emit('update:modelValue', { ...props.modelValue, condition }, mergeKey)
-}
-
 function compareOperandLabel(operator: CompareOperator, index: number): string {
   if (index === 0)
     return props.t('designer.condition.operandSubject')
@@ -172,7 +140,6 @@ function compareOperandLabel(operator: CompareOperator, index: number): string {
     <template v-if="modelValue.kind === 'compare'">
       <ConditionValueEditor
         :model-value="compareOperands[0]"
-        :variables="variables"
         :slot-id="`${path}.operand.0`"
         :label="compareOperandLabel(modelValue.operator, 0)"
         :t="t"
@@ -183,7 +150,6 @@ function compareOperandLabel(operator: CompareOperator, index: number): string {
         v-for="(operand, index) in compareOperands.slice(1)"
         :key="`${path}.operand.${index + 1}`"
         :model-value="operand"
-        :variables="variables"
         :slot-id="`${path}.operand.${index + 1}`"
         :label="compareOperandLabel(modelValue.operator, index + 1)"
         :t="t"
@@ -212,7 +178,6 @@ function compareOperandLabel(operator: CompareOperator, index: number): string {
         <ConditionRuleEditor
           class="condition-rule__child-body"
           :model-value="child"
-          :variables="variables"
           :path="`${path}.child.${index}`"
           :removable="modelValue.children.length > 1"
           :t="t"
@@ -236,17 +201,7 @@ function compareOperandLabel(operator: CompareOperator, index: number): string {
       <p class="condition-rule__note">
         {{ t('designer.condition.notHint') }}
       </p>
-      <ConditionRuleEditor :model-value="modelValue.child" :variables="variables" :path="`${path}.not`" :t="t" @update:model-value="updateNotChild" />
-    </template>
-
-    <template v-else>
-      <EiSelect class="condition-control" :label="t('designer.condition.quantifier')" :model-value="modelValue.operator" :options="quantifierOptions" @update:model-value="updateQuantifierOperator(String($event))" />
-      <ConditionValueEditor :label="t('designer.condition.collection')" :model-value="modelValue.collection" :variables="variables" :slot-id="`${path}.collection`" :t="t" @update:model-value="updateQuantifierCollection" />
-      <EiInput class="condition-control" :label="t('designer.condition.variableName')" :model-value="modelValue.as" @update:model-value="updateQuantifierVariable(String($event))" />
-      <p class="condition-rule__note">
-        {{ t('designer.condition.quantifierHint') }}
-      </p>
-      <ConditionRuleEditor :model-value="modelValue.condition" :variables="nodeVariables" :path="`${path}.condition`" :t="t" @update:model-value="updateQuantifierCondition" />
+      <ConditionRuleEditor :model-value="modelValue.child" :path="`${path}.not`" :t="t" @update:model-value="updateNotChild" />
     </template>
   </div>
 </template>

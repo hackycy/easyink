@@ -113,7 +113,7 @@ await viewer.open({
 
 ## 条件求值 {#condition-evaluation}
 
-条件运行时问题使用 `category: 'condition'` 和 `scope: 'condition'`，均为 warning，不会中断整页渲染。常见诊断码包括 `CONDITION_FIELD_MISSING`、`CONDITION_CAST_FAILED`、`CONDITION_TYPE_MISMATCH`、`CONDITION_COLLECTION_EXPECTED`、`CONDITION_LIMIT_EXCEEDED` 和 `CONDITION_EVALUATION_FAILED`。
+条件运行时问题使用 `category: 'condition'` 和 `scope: 'condition'`，均为 warning，不会中断整页渲染。常见诊断码包括 `CONDITION_FIELD_MISSING`、`CONDITION_CAST_FAILED`、`CONDITION_TYPE_MISMATCH`、`CONDITION_LIMIT_EXCEEDED` 和 `CONDITION_EVALUATION_FAILED`。
 
 同一次渲染会按节点、诊断码和规则位置去重。`detail` 只包含规则位置、字段路径等安全上下文，不包含实际业务值。完整语义见 [条件渲染](/advanced/conditional-rendering)。
 
