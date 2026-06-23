@@ -101,6 +101,7 @@ watch(
       window.removeEventListener('scroll', compute, true)
     }
   },
+  { immediate: true },
 )
 
 onBeforeUnmount(() => {

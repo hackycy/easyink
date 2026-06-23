@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { ConditionRow, ConditionValue } from '@easyink/schema'
 import { IconDelete, IconPlus } from '@easyink/icons'
+import { castConditionLiteralValue } from '@easyink/schema'
 import { EiButton, EiIcon, EiInput, EiNumberInput, EiSelect } from '@easyink/ui'
 import { computed } from 'vue'
 import { defaultLiteralForType, isBetweenOperator, isInOperator, literal } from '../conditions/editor-model'
@@ -51,7 +52,8 @@ function literalNumber(value: ConditionValue): number | null {
 }
 
 function literalBoolean(value: ConditionValue): boolean {
-  return value.value === true
+  const cast = castConditionLiteralValue(value.value, 'boolean')
+  return cast.success && cast.value === true
 }
 
 function literalBooleanKey(value: ConditionValue): 'true' | 'false' {

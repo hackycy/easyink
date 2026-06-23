@@ -9,6 +9,7 @@ import {
 } from '@easyink/icons'
 import { inject } from 'vue'
 import { DESIGNER_DRAG_DROP_KEY } from '../../composables/use-designer-drag-drop'
+import { dataFieldTreeKey, resolveDataFieldPath } from './field-path'
 
 const props = defineProps<{
   field: DataFieldNode
@@ -31,11 +32,11 @@ const dragDrop = inject(DESIGNER_DRAG_DROP_KEY, null)
 let suppressNativeToggleClick = false
 
 function nodeKey(): string {
-  return `${props.source.id}:${fieldPath()}`
+  return dataFieldTreeKey(props.source.id, props.field, props.parentPath)
 }
 
 function fieldPath(): string {
-  return props.field.path || [props.parentPath, props.field.key || props.field.name].filter(Boolean).join('/')
+  return resolveDataFieldPath(props.field, props.parentPath)
 }
 
 function isLeaf(): boolean {
@@ -59,7 +60,7 @@ function expanded(): boolean {
 }
 
 function childKey(child: DataFieldNode): string {
-  return `${props.source.id}:${child.path || [fieldPath(), child.key || child.name].filter(Boolean).join('/')}`
+  return dataFieldTreeKey(props.source.id, child, fieldPath())
 }
 
 function toggleNode() {

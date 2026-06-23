@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { createApp, h, nextTick } from 'vue'
 import ConditionDialog from './ConditionDialog.vue'
 import ConditionFieldPicker from './ConditionFieldPicker.vue'
+import ConditionValueCell from './ConditionValueCell.vue'
 
 const sources: DataSourceDescriptor[] = [{
   id: 'orders',
@@ -187,6 +188,40 @@ describe('condition field picker', () => {
     app.unmount()
   })
 
+  it('derives full paths for nested fields without explicit paths', async () => {
+    const selected: unknown[] = []
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const nestedSources: DataSourceDescriptor[] = [{
+      id: 'orders',
+      name: 'Orders',
+      fields: [{
+        name: 'Customer',
+        key: 'customer',
+        fields: [{ name: 'Name', key: 'name' }],
+      }],
+    }]
+    const app = createApp({
+      render: () => h(ConditionFieldPicker, {
+        sources: nestedSources,
+        t: (key: string) => key.split('.').pop()!,
+        onSelect: (value: unknown) => selected.push(value),
+      }),
+    })
+    app.mount(host)
+    button('.condition-field-picker__trigger').click()
+    await nextTick()
+
+    expect(document.body.textContent).toContain('customer/name')
+    const nameNode = Array.from(document.body.querySelectorAll<HTMLElement>('.ei-field-node__row')).find(node => node.textContent?.includes('Name'))
+    expect(nameNode).toBeTruthy()
+    nameNode!.click()
+    await nextTick()
+
+    expect(selected[0]).toMatchObject({ path: 'customer/name', fieldLabel: 'Name' })
+    app.unmount()
+  })
+
   it('allows filtered tree nodes to be collapsed while searching', async () => {
     const host = document.createElement('div')
     document.body.appendChild(host)
@@ -213,6 +248,29 @@ describe('condition field picker', () => {
     await nextTick()
 
     expect(document.body.textContent).not.toContain('Price')
+    app.unmount()
+  })
+})
+
+describe('condition value cell', () => {
+  it('displays boolean string literals using the runtime cast semantics', async () => {
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const app = createApp({
+      render: () => h(ConditionValueCell, {
+        row: {
+          source: { path: 'enabled' },
+          operator: { compare: 'eq' },
+          valueType: 'boolean',
+          value: { kind: 'literal', value: 'true' },
+        },
+        t: (key: string) => key.endsWith('booleanTrue') ? 'true' : key.endsWith('booleanFalse') ? 'false' : key.split('.').pop()!,
+      }),
+    })
+    app.mount(host)
+    await nextTick()
+
+    expect(document.body.querySelector('.ei-select__value')?.textContent?.trim()).toBe('true')
     app.unmount()
   })
 })

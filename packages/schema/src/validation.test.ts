@@ -102,6 +102,31 @@ describe('validateSchema', () => {
     })).toEqual([])
   })
 
+  it('rejects condition literals that cannot be cast as their declared value type', () => {
+    const issues = validateSchemaIssues({
+      ...validSchema,
+      elements: [{
+        id: 'invalid-condition-value',
+        type: 'text',
+        x: 0,
+        y: 0,
+        width: 1,
+        height: 1,
+        props: {},
+        renderCondition: {
+          whenMatched: 'show',
+          groups: [{ conditions: [
+            { source: { path: 'qty' }, operator: { compare: 'gt' }, valueType: 'number', value: { kind: 'literal', value: 'abc' } },
+            { source: { path: 'enabled' }, operator: { compare: 'eq' }, valueType: 'boolean', value: { kind: 'literal', value: 'yes' } },
+            { source: { path: 'createdAt' }, operator: { compare: 'gt' }, valueType: 'datetime', value: { kind: 'literal', value: '2026-02-30' } },
+          ] }],
+        },
+      }],
+    })
+
+    expect(issues.filter(issue => issue.code === 'schema.condition.literal.type.invalid')).toHaveLength(3)
+  })
+
   it('accepts continuous mode and structured page layers', () => {
     expect(validateSchema({
       ...validSchema,

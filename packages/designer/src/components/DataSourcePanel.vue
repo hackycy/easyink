@@ -4,6 +4,7 @@ import { IconClose, IconListCollapse, IconListExpand, IconSearch } from '@easyin
 import { computed, reactive, ref, watch } from 'vue'
 import { useDesignerStore } from '../composables'
 import DataSourceTree from './datasource/DataSourceTree.vue'
+import { dataFieldTreeKey, resolveDataFieldPath } from './datasource/field-path'
 
 const store = useDesignerStore()
 const searchText = ref('')
@@ -57,17 +58,18 @@ function expandAll() {
   for (const source of sources.value) {
     expandedKeys.add(source.id)
     if (source.fields)
-      expandFields(source.id, source.fields)
+      expandFields(source.id, source.fields, '')
   }
 }
 
-function expandFields(sourceId: string, fields: DataFieldNode[]) {
+function expandFields(sourceId: string, fields: DataFieldNode[], parentPath: string) {
   for (const field of fields) {
     if (!field.fields || field.fields.length === 0)
       continue
 
-    expandedKeys.add(`${sourceId}:${field.path || field.name}`)
-    expandFields(sourceId, field.fields)
+    const fieldPath = resolveDataFieldPath(field, parentPath)
+    expandedKeys.add(dataFieldTreeKey(sourceId, field, parentPath))
+    expandFields(sourceId, field.fields, fieldPath)
   }
 }
 
@@ -75,12 +77,13 @@ function collapseAll() {
   expandedKeys.clear()
 }
 
-function initFieldExpand(sourceId: string, fields: DataFieldNode[]) {
+function initFieldExpand(sourceId: string, fields: DataFieldNode[], parentPath: string) {
   for (const field of fields) {
+    const fieldPath = resolveDataFieldPath(field, parentPath)
     if (field.expand)
-      expandedKeys.add(`${sourceId}:${field.path || field.name}`)
+      expandedKeys.add(dataFieldTreeKey(sourceId, field, parentPath))
     if (field.fields)
-      initFieldExpand(sourceId, field.fields)
+      initFieldExpand(sourceId, field.fields, fieldPath)
   }
 }
 
@@ -91,7 +94,7 @@ watch(sources, (s) => {
     if (source.expand !== false && !expandedKeys.has(source.id))
       expandedKeys.add(source.id)
     if (source.fields)
-      initFieldExpand(source.id, source.fields)
+      initFieldExpand(source.id, source.fields, '')
   }
 }, { immediate: true })
 

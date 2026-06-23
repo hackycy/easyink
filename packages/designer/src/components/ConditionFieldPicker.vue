@@ -5,6 +5,7 @@ import { IconSearch } from '@easyink/icons'
 import { EiIcon, EiInput, EiPopover } from '@easyink/ui'
 import { computed, reactive, ref, watch } from 'vue'
 import DataSourceTree from './datasource/DataSourceTree.vue'
+import { resolveDataFieldPath } from './datasource/field-path'
 
 const props = defineProps<{
   modelValue?: ConditionFieldRef
@@ -87,7 +88,7 @@ function matchesValue(queryValue: string, value: unknown): boolean {
 }
 
 function resolvePath(field: DataFieldNode, parentPath: string): string {
-  return field.path || [parentPath, field.key || field.name].filter(Boolean).join('/')
+  return resolveDataFieldPath(field, parentPath)
 }
 
 function resolvePathForSource(source: DataSourceDescriptor, target: DataFieldNode): string {

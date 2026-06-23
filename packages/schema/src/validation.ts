@@ -1,5 +1,6 @@
-import type { DocumentSchema } from './types'
+import type { ConditionValueType, DocumentSchema } from './types'
 import { isObject, SCHEMA_VERSION } from '@easyink/shared'
+import { isConditionLiteralValueValid, isConditionValueType } from './condition-values'
 import { PAGE_LAYER_MAX_Z_INDEX, PAGE_LAYER_MIN_Z_INDEX } from './defaults'
 
 const UNIT_TYPES = new Set(['mm', 'pt', 'px', 'inch'])
@@ -10,7 +11,6 @@ const PAGINATION_STRATEGIES = new Set(['none', 'fixed-sheets', 'auto-sheets'])
 const REFLOW_STRATEGIES = new Set(['none', 'measure-only', 'flow-y'])
 const CONDITION_MAX_GROUPS = 32
 const CONDITION_MAX_ROWS = 256
-const CONDITION_VALUE_TYPES = new Set(['string', 'trimmed-string', 'case-insensitive-string', 'number', 'boolean', 'datetime'])
 const CONDITION_QUANTIFIERS = new Set(['any', 'all', 'none'])
 const CONDITION_COMPARE_OPERATORS = new Set([
   'eq',
@@ -235,32 +235,33 @@ function validateConditionRow(value: unknown, path: string, issues: SchemaValida
       issues.push(createIssue(`${path}.valueType`, 'must be omitted for unary operators', 'schema.condition.valueType.unexpected'))
   }
   else {
-    if (typeof value.valueType !== 'string' || !CONDITION_VALUE_TYPES.has(value.valueType))
+    const valueType = isConditionValueType(value.valueType) ? value.valueType : undefined
+    if (!valueType)
       issues.push(createIssue(`${path}.valueType`, 'must be a supported value type', 'schema.condition.valueType.invalid'))
     if (compare === 'between' || compare === 'notBetween') {
       if (!Array.isArray(value.value) || value.value.length !== 2)
         issues.push(createIssue(`${path}.value`, 'must contain exactly two values', 'schema.condition.value.arity.invalid'))
       else
-        value.value.forEach((item, index) => validateConditionValue(item, `${path}.value.${index}`, issues))
+        value.value.forEach((item, index) => validateConditionValue(item, `${path}.value.${index}`, issues, valueType))
     }
     else if (compare === 'in' || compare === 'notIn') {
       if (!Array.isArray(value.value) || value.value.length === 0)
         issues.push(createIssue(`${path}.value`, 'must contain at least one value', 'schema.condition.value.arity.invalid'))
       else
-        value.value.forEach((item, index) => validateConditionValue(item, `${path}.value.${index}`, issues))
+        value.value.forEach((item, index) => validateConditionValue(item, `${path}.value.${index}`, issues, valueType))
     }
     else if (Array.isArray(value.value) || value.value == null) {
       issues.push(createIssue(`${path}.value`, 'must be a single condition value', 'schema.condition.value.arity.invalid'))
     }
     else {
-      validateConditionValue(value.value, `${path}.value`, issues)
+      validateConditionValue(value.value, `${path}.value`, issues, valueType)
     }
   }
   if (value.options != null)
     issues.push(createIssue(`${path}.options`, 'must be omitted', 'schema.condition.options.unexpected'))
 }
 
-function validateConditionValue(value: unknown, path: string, issues: SchemaValidationIssue[]): void {
+function validateConditionValue(value: unknown, path: string, issues: SchemaValidationIssue[], valueType: ConditionValueType | undefined): void {
   if (!isObject(value)) {
     issues.push(createIssue(path, 'must be a condition value object', 'schema.condition.value.invalid'))
     return
@@ -270,6 +271,8 @@ function validateConditionValue(value: unknown, path: string, issues: SchemaVali
       issues.push(createIssue(`${path}.value`, 'must be a JSON scalar', 'schema.condition.literal.invalid'))
     if (typeof value.value === 'number' && !Number.isFinite(value.value))
       issues.push(createIssue(`${path}.value`, 'must be a finite number', 'schema.condition.literal.invalid'))
+    if (valueType && !isConditionLiteralValueValid(value.value, valueType))
+      issues.push(createIssue(`${path}.value`, 'must match the condition value type', 'schema.condition.literal.type.invalid'))
     return
   }
   issues.push(createIssue(`${path}.kind`, 'must be literal', 'schema.condition.value.kind.invalid'))

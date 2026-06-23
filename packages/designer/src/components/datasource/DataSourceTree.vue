@@ -3,6 +3,7 @@ import type { DataFieldNode, DataSourceDescriptor } from '@easyink/datasource'
 import { IconChevronRight, IconDatabase } from '@easyink/icons'
 import { EiIcon } from '@easyink/ui'
 import DataFieldTreeNode from './DataFieldTreeNode.vue'
+import { dataFieldTreeKey } from './field-path'
 
 defineProps<{
   sources: DataSourceDescriptor[]
@@ -23,7 +24,7 @@ function sourceKey(source: DataSourceDescriptor): string {
 }
 
 function fieldKey(source: DataSourceDescriptor, field: DataFieldNode): string {
-  return `${source.id}:${field.path || field.name}`
+  return dataFieldTreeKey(source.id, field)
 }
 </script>
 
