@@ -11,6 +11,7 @@ const REFLOW_STRATEGIES = new Set(['none', 'measure-only', 'flow-y'])
 const CONDITION_MAX_GROUPS = 32
 const CONDITION_MAX_ROWS = 256
 const CONDITION_VALUE_TYPES = new Set(['string', 'trimmed-string', 'number', 'boolean', 'datetime'])
+const CONDITION_QUANTIFIERS = new Set(['any', 'all', 'none'])
 const CONDITION_COMPARE_OPERATORS = new Set([
   'eq',
   'neq',
@@ -205,38 +206,28 @@ function validateConditionGroup(value: unknown, path: string, issues: SchemaVali
     issues.push(createIssue(path, 'must be a condition group object', 'schema.condition.group.invalid'))
     return
   }
-  const collectionScoped = value.scope != null
-  if (collectionScoped)
-    validateCollectionScope(value.scope, `${path}.scope`, issues)
   if (!Array.isArray(value.conditions) || value.conditions.length === 0) {
     issues.push(createIssue(`${path}.conditions`, 'must be a non-empty array', 'schema.condition.group.conditions.invalid'))
     return
   }
-  value.conditions.forEach((row, index) => validateConditionRow(row, `${path}.conditions.${index}`, issues, collectionScoped))
+  value.conditions.forEach((row, index) => validateConditionRow(row, `${path}.conditions.${index}`, issues))
 }
 
-function validateCollectionScope(value: unknown, path: string, issues: SchemaValidationIssue[]): void {
-  if (!isObject(value)) {
-    issues.push(createIssue(path, 'must be a collection scope object', 'schema.condition.collection.invalid'))
-    return
-  }
-  if (value.kind !== 'collection')
-    issues.push(createIssue(`${path}.kind`, 'must be collection', 'schema.condition.collection.kind.invalid'))
-  if (typeof value.path !== 'string' || value.path.trim() === '')
-    issues.push(createIssue(`${path}.path`, 'must be a non-empty path', 'schema.condition.collection.path.invalid'))
-  if (value.quantifier !== 'any' && value.quantifier !== 'all' && value.quantifier !== 'none')
-    issues.push(createIssue(`${path}.quantifier`, 'must be any, all, or none', 'schema.condition.collection.quantifier.invalid'))
-}
-
-function validateConditionRow(value: unknown, path: string, issues: SchemaValidationIssue[], collectionScoped: boolean): void {
+function validateConditionRow(value: unknown, path: string, issues: SchemaValidationIssue[]): void {
   if (!isObject(value)) {
     issues.push(createIssue(path, 'must be a condition row object', 'schema.condition.row.invalid'))
     return
   }
-  validateConditionField(value.source, `${path}.source`, issues, collectionScoped)
-  if (typeof value.operator !== 'string' || !CONDITION_COMPARE_OPERATORS.has(value.operator))
-    issues.push(createIssue(`${path}.operator`, 'must be a supported comparison operator', 'schema.condition.operator.invalid'))
-  const unary = value.operator === 'exists' || value.operator === 'notExists' || value.operator === 'isEmpty' || value.operator === 'isNotEmpty'
+  validateConditionField(value.source, `${path}.source`, issues)
+  const operator = isObject(value.operator) ? value.operator : undefined
+  const compare = operator?.compare
+  if (!operator)
+    issues.push(createIssue(`${path}.operator`, 'must be a condition operator object', 'schema.condition.operator.invalid'))
+  else if (typeof compare !== 'string' || !CONDITION_COMPARE_OPERATORS.has(compare))
+    issues.push(createIssue(`${path}.operator.compare`, 'must be a supported comparison operator', 'schema.condition.operator.compare.invalid'))
+  if (operator?.quantifier != null && (typeof operator.quantifier !== 'string' || !CONDITION_QUANTIFIERS.has(operator.quantifier)))
+    issues.push(createIssue(`${path}.operator.quantifier`, 'must be any, all, or none when provided', 'schema.condition.operator.quantifier.invalid'))
+  const unary = compare === 'exists' || compare === 'notExists' || compare === 'isEmpty' || compare === 'isNotEmpty'
   if (unary) {
     if (value.value != null)
       issues.push(createIssue(`${path}.value`, 'must be omitted for unary operators', 'schema.condition.value.arity.invalid'))
@@ -246,30 +237,30 @@ function validateConditionRow(value: unknown, path: string, issues: SchemaValida
   else {
     if (typeof value.valueType !== 'string' || !CONDITION_VALUE_TYPES.has(value.valueType))
       issues.push(createIssue(`${path}.valueType`, 'must be a supported value type', 'schema.condition.valueType.invalid'))
-    if (value.operator === 'between' || value.operator === 'notBetween') {
+    if (compare === 'between' || compare === 'notBetween') {
       if (!Array.isArray(value.value) || value.value.length !== 2)
         issues.push(createIssue(`${path}.value`, 'must contain exactly two values', 'schema.condition.value.arity.invalid'))
       else
-        value.value.forEach((item, index) => validateConditionValue(item, `${path}.value.${index}`, issues, collectionScoped))
+        value.value.forEach((item, index) => validateConditionValue(item, `${path}.value.${index}`, issues))
     }
-    else if (value.operator === 'in' || value.operator === 'notIn') {
+    else if (compare === 'in' || compare === 'notIn') {
       if (!Array.isArray(value.value) || value.value.length === 0)
         issues.push(createIssue(`${path}.value`, 'must contain at least one value', 'schema.condition.value.arity.invalid'))
       else
-        value.value.forEach((item, index) => validateConditionValue(item, `${path}.value.${index}`, issues, collectionScoped))
+        value.value.forEach((item, index) => validateConditionValue(item, `${path}.value.${index}`, issues))
     }
     else if (Array.isArray(value.value) || value.value == null) {
       issues.push(createIssue(`${path}.value`, 'must be a single condition value', 'schema.condition.value.arity.invalid'))
     }
     else {
-      validateConditionValue(value.value, `${path}.value`, issues, collectionScoped)
+      validateConditionValue(value.value, `${path}.value`, issues)
     }
   }
   if (value.options != null && (!isObject(value.options) || (value.options.caseSensitive != null && typeof value.options.caseSensitive !== 'boolean')))
     issues.push(createIssue(`${path}.options`, 'must contain only a boolean caseSensitive option', 'schema.condition.options.invalid'))
 }
 
-function validateConditionValue(value: unknown, path: string, issues: SchemaValidationIssue[], collectionScoped: boolean): void {
+function validateConditionValue(value: unknown, path: string, issues: SchemaValidationIssue[]): void {
   if (!isObject(value)) {
     issues.push(createIssue(path, 'must be a condition value object', 'schema.condition.value.invalid'))
     return
@@ -285,20 +276,15 @@ function validateConditionValue(value: unknown, path: string, issues: SchemaVali
     issues.push(createIssue(`${path}.kind`, 'must be literal or field', 'schema.condition.value.kind.invalid'))
     return
   }
-  validateConditionField(value.field, `${path}.field`, issues, collectionScoped)
+  validateConditionField(value.field, `${path}.field`, issues)
 }
 
-function validateConditionField(value: unknown, path: string, issues: SchemaValidationIssue[], collectionScoped: boolean): void {
+function validateConditionField(value: unknown, path: string, issues: SchemaValidationIssue[]): void {
   if (!isObject(value)) {
     issues.push(createIssue(path, 'must be a field reference object', 'schema.condition.field.invalid'))
     return
   }
-  const scope = value.scope ?? 'root'
-  if (scope !== 'root' && scope !== 'item')
-    issues.push(createIssue(`${path}.scope`, 'must be root or item', 'schema.condition.field.scope.invalid'))
-  if (scope === 'item' && !collectionScoped)
-    issues.push(createIssue(`${path}.scope`, 'item fields require a collection group', 'schema.condition.field.scope.invalid'))
-  if (typeof value.path !== 'string' || (scope === 'root' && value.path.trim() === ''))
+  if (typeof value.path !== 'string' || value.path.trim() === '')
     issues.push(createIssue(`${path}.path`, 'must be a valid path', 'schema.condition.field.path.invalid'))
 }
 

@@ -1,13 +1,25 @@
-import type { CompareOperator, ConditionGroup, ConditionRow, ConditionValue, MaterialNode } from '@easyink/schema'
+import type { ConditionCompareOperator, ConditionGroup, ConditionQuantifier, ConditionRow, ConditionValue, MaterialNode } from '@easyink/schema'
 import { describe, expect, it } from 'vitest'
 import { evaluateCondition, resolveConditionalNode } from './condition'
 
 const literal = (value: string | number | boolean | null): ConditionValue => ({ kind: 'literal', value })
-function row(operator: CompareOperator, path: string, value?: ConditionValue | ConditionValue[], valueType: ConditionRow['valueType'] = 'string'): ConditionRow {
+function row(operator: ConditionCompareOperator, path: string, value?: ConditionValue | ConditionValue[], valueType: ConditionRow['valueType'] = 'string'): ConditionRow {
   return {
     source: { path },
-    operator,
+    operator: { compare: operator },
     ...(value === undefined ? {} : { value, valueType }),
+  }
+}
+function collectionRow(
+  quantifier: ConditionQuantifier,
+  operator: ConditionCompareOperator,
+  path: string,
+  value?: ConditionValue | ConditionValue[],
+  valueType: ConditionRow['valueType'] = 'string',
+): ConditionRow {
+  return {
+    ...row(operator, path, value, valueType),
+    operator: { compare: operator, quantifier },
   }
 }
 const groups = (...conditions: ConditionRow[]): ConditionGroup[] => [{ conditions }]
@@ -35,7 +47,7 @@ describe('condition evaluator', () => {
     ['notContains', 'easyink', literal('hard'), 'string', true],
     ['startsWith', 'easyink', literal('easy'), 'string', true],
     ['endsWith', 'easyink', literal('ink'), 'string', true],
-  ] as Array<[CompareOperator, string | number, ConditionValue | ConditionValue[], ConditionRow['valueType'], boolean]>)('evaluates %s', (operator, actual, value, valueType, expected) => {
+  ] as Array<[ConditionCompareOperator, string | number, ConditionValue | ConditionValue[], ConditionRow['valueType'], boolean]>)('evaluates %s', (operator, actual, value, valueType, expected) => {
     expect(evaluateCondition(groups(row(operator, 'value', value, valueType)), { value: actual }).value).toBe(expected)
   })
 
@@ -52,23 +64,19 @@ describe('condition evaluator', () => {
     expect(evaluateCondition([{ conditions: [missing] }, { conditions: [row('eq', 'one', literal(1), 'number')] }], { one: 1 }).value).toBe(true)
   })
 
-  it('evaluates collection conditions against the same record', () => {
+  it('evaluates quantified operators per full field path rather than as a group scope', () => {
     const conditionGroups: ConditionGroup[] = [{
-      scope: { kind: 'collection', path: 'items', quantifier: 'any' },
       conditions: [
-        { source: { scope: 'item', path: 'price' }, operator: 'gt', valueType: 'number', value: literal(100) },
-        { source: { scope: 'item', path: 'stock' }, operator: 'gt', valueType: 'number', value: literal(0) },
+        collectionRow('any', 'gt', 'items/price', literal(100), 'number'),
+        collectionRow('any', 'gt', 'items/stock', literal(0), 'number'),
       ],
     }]
-    expect(evaluateCondition(conditionGroups, { items: [{ price: 120, stock: 0 }, { price: 80, stock: 2 }] }).value).toBe(false)
-    expect(evaluateCondition(conditionGroups, { items: [{ price: 120, stock: 2 }] }).value).toBe(true)
+    expect(evaluateCondition(conditionGroups, { items: [{ price: 120, stock: 0 }, { price: 80, stock: 2 }] }).value).toBe(true)
+    expect(evaluateCondition(conditionGroups, { items: [{ price: 80, stock: 0 }] }).value).toBe(false)
   })
 
   it('implements any, all, none, and empty collection semantics', () => {
-    const scoped = (quantifier: 'any' | 'all' | 'none'): ConditionGroup[] => [{
-      scope: { kind: 'collection', path: 'items', quantifier },
-      conditions: [{ source: { scope: 'item', path: '' }, operator: 'gt', valueType: 'number', value: literal(0) }],
-    }]
+    const scoped = (quantifier: ConditionQuantifier): ConditionGroup[] => groups(collectionRow(quantifier, 'gt', 'items', literal(0), 'number'))
     expect(evaluateCondition(scoped('any'), { items: [] }).value).toBe(false)
     expect(evaluateCondition(scoped('all'), { items: [] }).value).toBe(true)
     expect(evaluateCondition(scoped('none'), { items: [] }).value).toBe(true)
@@ -76,13 +84,15 @@ describe('condition evaluator', () => {
     expect(evaluateCondition(scoped('none'), { items: [-1, 0] }).value).toBe(true)
   })
 
-  it('supports root fields inside a collection group and reports non-array collections', () => {
-    const conditionGroups: ConditionGroup[] = [{
-      scope: { kind: 'collection', path: 'items', quantifier: 'any' },
-      conditions: [{ source: { scope: 'item', path: 'price' }, operator: 'gt', valueType: 'number', value: { kind: 'field', field: { scope: 'root', path: 'threshold' } } }],
-    }]
+  it('supports field values with quantified operators and reports scalar fields used as collections', () => {
+    const conditionGroups: ConditionGroup[] = groups({
+      source: { path: 'items/price' },
+      operator: { compare: 'gt', quantifier: 'any' },
+      valueType: 'number',
+      value: { kind: 'field', field: { path: 'threshold' } },
+    })
     expect(evaluateCondition(conditionGroups, { threshold: 100, items: [{ price: 120 }] }).value).toBe(true)
-    const invalid = evaluateCondition(conditionGroups, { threshold: 100, items: {} })
+    const invalid = evaluateCondition(groups(collectionRow('any', 'gt', 'price', literal(100), 'number')), { price: 120 })
     expect(invalid.value).toBe('unknown')
     expect(invalid.diagnostics[0]?.code).toBe('CONDITION_COLLECTION_EXPECTED')
   })
@@ -111,17 +121,14 @@ describe('condition evaluator', () => {
   })
 
   it('validates datetime timezone rules through explicit types', () => {
-    const conditionGroups = groups({ source: { path: 'left' }, operator: 'eq', valueType: 'datetime', value: { kind: 'field', field: { path: 'right' } } })
+    const conditionGroups = groups({ source: { path: 'left' }, operator: { compare: 'eq' }, valueType: 'datetime', value: { kind: 'field', field: { path: 'right' } } })
     expect(evaluateCondition(conditionGroups, { left: '2025-01-01', right: '2025-01-01T00:00:00Z' }).value).toBe(true)
     expect(evaluateCondition(conditionGroups, { left: '2025-01-01T00:00:00', right: '2025-01-01T00:00:00Z' }).value).toBe('unknown')
     expect(evaluateCondition(conditionGroups, { left: '2025-02-30', right: '2025-03-02' }).value).toBe('unknown')
   })
 
   it('stops oversized collection scans at the fixed limit', () => {
-    const conditionGroups: ConditionGroup[] = [{
-      scope: { kind: 'collection', path: 'items', quantifier: 'any' },
-      conditions: [{ source: { scope: 'item', path: '' }, operator: 'eq', valueType: 'number', value: literal(-1) }],
-    }]
+    const conditionGroups: ConditionGroup[] = groups(collectionRow('any', 'eq', 'items', literal(-1), 'number'))
     const result = evaluateCondition(conditionGroups, { items: Array.from({ length: 10_001 }, (_, index) => index) })
     expect(result.value).toBe('unknown')
     expect(result.diagnostics.filter(item => item.code === 'CONDITION_LIMIT_EXCEEDED')).toHaveLength(1)

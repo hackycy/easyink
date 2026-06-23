@@ -302,7 +302,7 @@ export interface NodeRepeatConfig {
 
 // ─── Material Node ─────────────────────────────────────────────────
 
-export type CompareOperator
+export type ConditionCompareOperator
   = | 'eq' | 'neq'
     | 'gt' | 'gte' | 'lt' | 'lte'
     | 'between' | 'notBetween'
@@ -311,9 +311,14 @@ export type CompareOperator
     | 'exists' | 'notExists' | 'isEmpty' | 'isNotEmpty'
 
 export type ConditionValueType = 'string' | 'trimmed-string' | 'number' | 'boolean' | 'datetime'
+export type ConditionQuantifier = 'any' | 'all' | 'none'
+
+export interface ConditionOperator {
+  compare: ConditionCompareOperator
+  quantifier?: ConditionQuantifier
+}
 
 export interface ConditionFieldRef {
-  scope?: 'root' | 'item'
   path: string
   sourceId?: string
   sourceName?: string
@@ -329,26 +334,15 @@ export type ConditionValue
   = | { kind: 'literal', value: ConditionScalar }
     | { kind: 'field', field: ConditionFieldRef }
 
-export interface CollectionConditionScope {
-  kind: 'collection'
-  path: string
-  quantifier: 'any' | 'all' | 'none'
-  sourceId?: string
-  sourceName?: string
-  sourceTag?: string
-  fieldLabel?: string
-}
-
 export interface ConditionRow {
   source: ConditionFieldRef
-  operator: CompareOperator
+  operator: ConditionOperator
   valueType?: ConditionValueType
   value?: ConditionValue | ConditionValue[]
   options?: { caseSensitive?: boolean }
 }
 
 export interface ConditionGroup {
-  scope?: CollectionConditionScope
   conditions: ConditionRow[]
 }
 

@@ -64,7 +64,7 @@ describe('decodeBenchmarkInput', () => {
         renderCondition: {
           whenMatched: 'show',
           whenHidden: 'remove',
-          groups: [{ conditions: [{ source: { path: 'customer.name' }, operator: 'exists' }] }],
+          groups: [{ conditions: [{ source: { path: 'customer.name' }, operator: { compare: 'exists' } }] }],
         },
       }],
     }

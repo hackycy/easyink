@@ -16,6 +16,13 @@ const props = defineProps<{
   depth: number
   toggleExpand: (key: string) => void
   isExpanded: (key: string) => boolean
+  mode?: 'drag' | 'select'
+  isFieldSelectable?: (field: DataFieldNode, source: DataSourceDescriptor) => boolean
+  fieldBadge?: (field: DataFieldNode, source: DataSourceDescriptor) => string | undefined
+}>()
+
+const emit = defineEmits<{
+  select: [field: DataFieldNode, source: DataSourceDescriptor]
 }>()
 
 const dragDrop = inject(DESIGNER_DRAG_DROP_KEY, null)
@@ -34,7 +41,15 @@ function isLeaf(): boolean {
 }
 
 function isDraggable(): boolean {
-  return isLeaf() || !!props.field.union
+  return (props.mode ?? 'drag') === 'drag' && (isLeaf() || !!props.field.union)
+}
+
+function isSelectable(): boolean {
+  return (props.mode ?? 'drag') === 'select' && (props.isFieldSelectable?.(props.field, props.source) ?? false)
+}
+
+function isDisabledSelectLeaf(): boolean {
+  return (props.mode ?? 'drag') === 'select' && isLeaf() && !isSelectable()
 }
 
 function expanded(): boolean {
@@ -45,7 +60,7 @@ function childKey(child: DataFieldNode): string {
   return `${props.source.id}:${child.path || child.name}`
 }
 
-function onToggle() {
+function toggleNode() {
   if (suppressNativeToggleClick) {
     suppressNativeToggleClick = false
     return
@@ -53,6 +68,20 @@ function onToggle() {
   if (dragDrop?.consumeClickSuppression())
     return
   props.toggleExpand(nodeKey())
+}
+
+function onRowClick() {
+  if ((props.mode ?? 'drag') !== 'select') {
+    if (!isLeaf())
+      toggleNode()
+    return
+  }
+  if (isSelectable()) {
+    emit('select', props.field, props.source)
+    return
+  }
+  if (!isLeaf())
+    toggleNode()
 }
 
 function createDragData(): DatasourceFieldDragData {
@@ -73,12 +102,16 @@ function createDragData(): DatasourceFieldDragData {
 }
 
 function onPointerDown(e: PointerEvent) {
+  if ((props.mode ?? 'drag') !== 'drag')
+    return
   if (!isDraggable())
     return
   dragDrop?.startDatasourcePointerDrag(e, createDragData())
 }
 
 function onPointerUp() {
+  if ((props.mode ?? 'drag') !== 'drag')
+    return
   if (!isDraggable() || isLeaf())
     return
   if (dragDrop?.consumeClickSuppression())
@@ -96,10 +129,10 @@ function onPointerUp() {
   <div v-if="!isLeaf()">
     <div
       class="ei-field-node__row ei-field-node__row--group"
-      :class="{ 'ei-field-node__row--draggable': isDraggable() }"
+      :class="{ 'ei-field-node__row--draggable': isDraggable(), 'ei-field-node__row--selectable': isSelectable() }"
       draggable="false"
       :style="{ paddingLeft: `${depth * 16 + 4}px` }"
-      @click="onToggle"
+      @click="onRowClick"
       @pointerdown="onPointerDown"
       @pointerup="onPointerUp"
       @dragstart.prevent
@@ -109,6 +142,7 @@ function onPointerUp() {
         :stroke-width="1.5"
         class="ei-field-node__chevron"
         :class="{ 'ei-field-node__chevron--expanded': expanded() }"
+        @click.stop="toggleNode"
       />
       <IconGripVertical
         v-if="isDraggable()"
@@ -123,6 +157,9 @@ function onPointerUp() {
         class="ei-field-node__icon ei-field-node__icon--folder"
       />
       <span class="ei-field-node__label">{{ field.title || field.name }}</span>
+      <span v-if="fieldBadge?.(field, source)" class="ei-field-node__badge">
+        {{ fieldBadge(field, source) }}
+      </span>
     </div>
     <template v-if="expanded()">
       <DataFieldTreeNode
@@ -133,6 +170,10 @@ function onPointerUp() {
         :depth="depth + 1"
         :toggle-expand="toggleExpand"
         :is-expanded="isExpanded"
+        :mode="mode"
+        :is-field-selectable="isFieldSelectable"
+        :field-badge="fieldBadge"
+        @select="(field, selectedSource) => emit('select', field, selectedSource)"
       />
     </template>
   </div>
@@ -141,14 +182,19 @@ function onPointerUp() {
   <div
     v-else
     class="ei-field-node__row ei-field-node__row--leaf"
+    :class="{ 'ei-field-node__row--draggable': isDraggable(), 'ei-field-node__row--selectable': isSelectable(), 'ei-field-node__row--disabled': isDisabledSelectLeaf() }"
     draggable="false"
     :style="{ paddingLeft: `${depth * 16 + 4}px` }"
+    @click="onRowClick"
     @pointerdown="onPointerDown"
     @dragstart.prevent
   >
     <span class="ei-field-node__chevron-spacer" />
-    <IconGripVertical :size="12" :stroke-width="1.5" class="ei-field-node__grip" />
+    <IconGripVertical v-if="isDraggable()" :size="12" :stroke-width="1.5" class="ei-field-node__grip" />
     <span class="ei-field-node__label" :title="fieldPath()">{{ field.title || field.name }}</span>
+    <span v-if="fieldBadge?.(field, source)" class="ei-field-node__badge">
+      {{ fieldBadge(field, source) }}
+    </span>
   </div>
 </template>
 
@@ -181,13 +227,24 @@ function onPointerUp() {
       }
     }
 
-    &--leaf {
-      cursor: grab;
+    &--selectable {
+      cursor: pointer;
 
-      &:active {
-        cursor: grabbing;
+      &:hover {
+        background: var(--ei-hover-bg, #f0f0f0);
       }
+    }
 
+    &--disabled {
+      color: var(--ei-text-secondary, #999);
+      cursor: default;
+
+      &:hover {
+        background: transparent;
+      }
+    }
+
+    &--leaf {
       &:hover {
         background: var(--ei-hover-bg, #f0f0f0);
 
@@ -237,6 +294,16 @@ function onPointerUp() {
     white-space: nowrap;
     color: var(--ei-text, #333);
     font-size: 12px;
+  }
+
+  &__badge {
+    flex-shrink: 0;
+    padding: 1px 5px;
+    border-radius: 999px;
+    background: var(--ei-hover-bg, #f5f5f5);
+    color: var(--ei-text-secondary, #777);
+    font-size: 10px;
+    line-height: 14px;
   }
 }
 </style>

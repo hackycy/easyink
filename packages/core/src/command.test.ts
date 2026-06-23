@@ -296,7 +296,7 @@ describe('updateRenderConditionCommand', () => {
     const manager = new CommandManager()
     const makeCondition = (path: string) => ({
       whenMatched: 'show' as const,
-      groups: [{ conditions: [{ source: { path }, operator: 'exists' as const }] }],
+      groups: [{ conditions: [{ source: { path }, operator: { compare: 'exists' as const } }] }],
     })
 
     manager.execute(new UpdateRenderConditionCommand(elements, 'n', makeCondition('a'), 'field'))

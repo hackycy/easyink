@@ -1,7 +1,7 @@
-import type { CompareOperator, ConditionFieldRef, ConditionGroup, ConditionRow, ConditionValue, ConditionValueType, RenderCondition } from '@easyink/schema'
+import type { ConditionCompareOperator, ConditionFieldRef, ConditionGroup, ConditionOperator, ConditionQuantifier, ConditionRow, ConditionValue, ConditionValueType, RenderCondition } from '@easyink/schema'
 import { deepClone } from '@easyink/shared'
 
-export const COMPARE_OPERATORS: CompareOperator[] = [
+export const COMPARE_OPERATORS: ConditionCompareOperator[] = [
   'eq',
   'neq',
   'gt',
@@ -23,24 +23,25 @@ export const COMPARE_OPERATORS: CompareOperator[] = [
 ]
 
 export const CONDITION_VALUE_TYPES: ConditionValueType[] = ['string', 'trimmed-string', 'number', 'boolean', 'datetime']
-export const UNARY_OPERATORS: CompareOperator[] = ['exists', 'notExists', 'isEmpty', 'isNotEmpty']
+export const UNARY_OPERATORS: ConditionCompareOperator[] = ['exists', 'notExists', 'isEmpty', 'isNotEmpty']
+export const CONDITION_QUANTIFIERS: ConditionQuantifier[] = ['any', 'all', 'none']
+export type ConditionOperatorKey = ConditionCompareOperator | `${ConditionQuantifier}:${ConditionCompareOperator}`
 
 export function createConditionRow(source: ConditionFieldRef = { path: '' }): ConditionRow {
   return {
     source,
-    operator: 'eq',
+    operator: { compare: 'eq' },
     valueType: 'string',
     value: { kind: 'literal', value: '' },
   }
 }
 
 export function createConditionGroup(): ConditionGroup {
-  return { conditions: [createConditionRow()] }
+  return { conditions: [] }
 }
 
 export function createRenderCondition(): RenderCondition {
   return {
-    enabled: true,
     whenMatched: 'show',
     whenHidden: 'remove',
     onUnknown: 'show',
@@ -49,15 +50,12 @@ export function createRenderCondition(): RenderCondition {
 }
 
 export function createDialogDraft(condition?: RenderCondition): RenderCondition {
-  const draft = deepClone(condition ?? createRenderCondition())
-  if (draft.groups.length === 0)
-    draft.groups.push(createConditionGroup())
-  return draft
+  return deepClone(condition ?? createRenderCondition())
 }
 
-export function updateRowOperator(row: ConditionRow, operator: CompareOperator): ConditionRow {
+export function updateRowOperator(row: ConditionRow, operator: ConditionOperator): ConditionRow {
   const next: ConditionRow = { ...row, operator }
-  if (UNARY_OPERATORS.includes(operator)) {
+  if (isUnaryOperator(operator)) {
     delete next.value
     delete next.valueType
     delete next.options
@@ -65,9 +63,9 @@ export function updateRowOperator(row: ConditionRow, operator: CompareOperator):
   }
   next.valueType ??= 'string'
   const current = Array.isArray(row.value) ? row.value : row.value ? [row.value] : []
-  if (operator === 'between' || operator === 'notBetween')
+  if (isBetweenOperator(operator))
     next.value = [current[0] ?? literal(''), current[1] ?? literal('')]
-  else if (operator === 'in' || operator === 'notIn')
+  else if (isInOperator(operator))
     next.value = current.length > 0 ? current : [literal('')]
   else
     next.value = current[0] ?? literal('')
@@ -84,27 +82,26 @@ export function normalizeRenderCondition(condition: RenderCondition): RenderCond
 }
 
 export function isRenderConditionComplete(condition: RenderCondition): boolean {
-  return condition.groups.every(group => group.conditions.every(row => isBlankRow(row) || isConditionRowComplete(row, !!group.scope)))
+  return condition.groups.every(group => group.conditions.every(row => isBlankRow(row) || isConditionRowComplete(row)))
 }
 
-export function isConditionRowComplete(row: ConditionRow, collectionScoped: boolean): boolean {
-  if (!isFieldComplete(row.source, collectionScoped))
+export function isConditionRowComplete(row: ConditionRow): boolean {
+  if (!isFieldComplete(row.source))
     return false
-  if (UNARY_OPERATORS.includes(row.operator))
+  if (isUnaryOperator(row.operator))
     return true
   if (!row.valueType || row.value == null)
     return false
   const values = Array.isArray(row.value) ? row.value : [row.value]
-  if ((row.operator === 'between' || row.operator === 'notBetween') && values.length !== 2)
+  if (isBetweenOperator(row.operator) && values.length !== 2)
     return false
-  if ((row.operator === 'in' || row.operator === 'notIn') && values.length === 0)
+  if (isInOperator(row.operator) && values.length === 0)
     return false
-  return values.every(value => isConditionValueComplete(value, collectionScoped))
+  return values.every(value => isConditionValueComplete(value))
 }
 
 export function isBlankRow(row: ConditionRow): boolean {
   return row.source.path === ''
-    && (row.source.scope ?? 'root') === 'root'
     && !row.source.fieldLabel
     && !row.source.sourceId
 }
@@ -122,7 +119,7 @@ export function defaultLiteralForType(type: ConditionValueType): ConditionValue 
 }
 
 export function changeRowValueType(row: ConditionRow, type: ConditionValueType): ConditionRow {
-  if (UNARY_OPERATORS.includes(row.operator))
+  if (isUnaryOperator(row.operator))
     return row
   const convert = (value: ConditionValue): ConditionValue => value.kind === 'field' ? value : defaultLiteralForType(type)
   const value = Array.isArray(row.value)
@@ -131,13 +128,33 @@ export function changeRowValueType(row: ConditionRow, type: ConditionValueType):
   return { ...row, valueType: type, value }
 }
 
-function isConditionValueComplete(value: ConditionValue, collectionScoped: boolean): boolean {
-  return value.kind === 'literal' || isFieldComplete(value.field, collectionScoped)
+export function isUnaryOperator(operator: ConditionOperator): boolean {
+  return UNARY_OPERATORS.includes(operator.compare)
 }
 
-function isFieldComplete(field: ConditionFieldRef, collectionScoped: boolean): boolean {
-  const scope = field.scope ?? 'root'
-  if (scope === 'item')
-    return collectionScoped && (field.path !== '' || !!field.fieldLabel)
+export function isBetweenOperator(operator: ConditionOperator): boolean {
+  return operator.compare === 'between' || operator.compare === 'notBetween'
+}
+
+export function isInOperator(operator: ConditionOperator): boolean {
+  return operator.compare === 'in' || operator.compare === 'notIn'
+}
+
+export function conditionOperatorKey(operator: ConditionOperator): ConditionOperatorKey {
+  return operator.quantifier ? `${operator.quantifier}:${operator.compare}` : operator.compare
+}
+
+export function conditionOperatorFromKey(key: string): ConditionOperator {
+  const [first, second] = key.split(':') as [ConditionCompareOperator | ConditionQuantifier, ConditionCompareOperator | undefined]
+  if (second)
+    return { compare: second, quantifier: first as ConditionQuantifier }
+  return { compare: first as ConditionCompareOperator }
+}
+
+function isConditionValueComplete(value: ConditionValue): boolean {
+  return value.kind === 'literal' || isFieldComplete(value.field)
+}
+
+function isFieldComplete(field: ConditionFieldRef): boolean {
   return field.path.trim().length > 0
 }

@@ -15,7 +15,7 @@ describe('validateSchema', () => {
     expect(validateSchema(validSchema)).toEqual([])
   })
 
-  it('validates render condition groups and field scopes', () => {
+  it('validates render condition groups and field references', () => {
     expect(validateSchema({
       ...validSchema,
       elements: [{
@@ -29,8 +29,8 @@ describe('validateSchema', () => {
         renderCondition: {
           whenMatched: 'show',
           groups: [{ conditions: [
-            { source: { path: 'qty' }, operator: 'gt', valueType: 'number', value: { kind: 'literal', value: 0 } },
-            { source: { path: 'name' }, operator: 'isNotEmpty' },
+            { source: { path: 'qty' }, operator: { compare: 'gt', quantifier: 'any' }, valueType: 'number', value: { kind: 'literal', value: 0 } },
+            { source: { path: 'name' }, operator: { compare: 'isNotEmpty' } },
           ] }],
         },
       }],
@@ -49,13 +49,14 @@ describe('validateSchema', () => {
         renderCondition: {
           enabled: false,
           whenMatched: 'show',
-          groups: [{ conditions: [{ source: { scope: 'item', path: '' }, operator: 'between', valueType: 'number' }] }],
+          groups: [{ conditions: [{ source: { path: '' }, operator: { compare: 'between', quantifier: 'some' }, valueType: 'number' }] }],
         },
       }],
     })
     expect(issues.map(issue => issue.code)).toEqual(expect.arrayContaining([
       'schema.condition.value.arity.invalid',
-      'schema.condition.field.scope.invalid',
+      'schema.condition.field.path.invalid',
+      'schema.condition.operator.quantifier.invalid',
     ]))
   })
 
@@ -65,7 +66,7 @@ describe('validateSchema', () => {
       elements: [
         { id: 'empty-valid', type: 'text', x: 0, y: 0, width: 1, height: 1, props: {}, renderCondition: { whenMatched: 'show', groups: [] } },
         { id: 'empty-group', type: 'text', x: 0, y: 0, width: 1, height: 1, props: {}, renderCondition: { whenMatched: 'show', groups: [{ conditions: [] }] } },
-        { id: 'too-many', type: 'text', x: 0, y: 0, width: 1, height: 1, props: {}, renderCondition: { whenMatched: 'show', groups: Array.from({ length: 33 }, () => ({ conditions: [{ source: { path: 'value' }, operator: 'exists' }] })) } },
+        { id: 'too-many', type: 'text', x: 0, y: 0, width: 1, height: 1, props: {}, renderCondition: { whenMatched: 'show', groups: Array.from({ length: 33 }, () => ({ conditions: [{ source: { path: 'value' }, operator: { compare: 'exists' } }] })) } },
       ],
     })
     expect(issues.map(issue => issue.code)).toEqual(expect.arrayContaining([
@@ -74,7 +75,7 @@ describe('validateSchema', () => {
     ]))
   })
 
-  it('validates collection groups and relative item fields', () => {
+  it('validates quantified operators with full field paths', () => {
     expect(validateSchema({
       ...validSchema,
       elements: [{
@@ -88,8 +89,7 @@ describe('validateSchema', () => {
         renderCondition: {
           whenMatched: 'show',
           groups: [{
-            scope: { kind: 'collection', path: 'items', quantifier: 'any' },
-            conditions: [{ source: { scope: 'item', path: 'price' }, operator: 'gt', valueType: 'number', value: { kind: 'literal', value: 100 } }],
+            conditions: [{ source: { path: 'items/price' }, operator: { compare: 'gt', quantifier: 'any' }, valueType: 'number', value: { kind: 'literal', value: 100 } }],
           }],
         },
       }],

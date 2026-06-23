@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import type { DataFieldNode, DataSourceDescriptor } from '@easyink/datasource'
-import { IconChevronRight, IconClose, IconDatabase, IconListCollapse, IconListExpand, IconSearch } from '@easyink/icons'
+import { IconClose, IconListCollapse, IconListExpand, IconSearch } from '@easyink/icons'
 import { computed, reactive, ref, watch } from 'vue'
 import { useDesignerStore } from '../composables'
-import DataFieldTreeNode from './datasource/DataFieldTreeNode.vue'
+import DataSourceTree from './datasource/DataSourceTree.vue'
 
 const store = useDesignerStore()
 const searchText = ref('')
@@ -94,10 +94,6 @@ watch(sources, (s) => {
       initFieldExpand(source.id, source.fields)
   }
 }, { immediate: true })
-
-function childKey(source: DataSourceDescriptor, child: DataFieldNode): string {
-  return `${source.id}:${child.path || child.name}`
-}
 
 function matchesValue(query: string, value: unknown): boolean {
   return typeof value === 'string' && value.toLowerCase().includes(query)
@@ -196,39 +192,11 @@ function clearSearch() {
       </div>
     </div>
     <div v-if="hasVisibleData" class="ei-datasource-panel__list">
-      <div
-        v-for="source in displayedSources"
-        :key="source.id"
-        class="ei-datasource-panel__source"
-      >
-        <!-- Source header -->
-        <div
-          class="ei-datasource-panel__source-header"
-          @click="toggleExpand(source.id)"
-        >
-          <IconChevronRight
-            :size="14"
-            :stroke-width="1.5"
-            class="ei-datasource-panel__chevron"
-            :class="{ 'ei-datasource-panel__chevron--expanded': isVisibleExpanded(source.id) }"
-          />
-          <IconDatabase :size="14" :stroke-width="1.5" class="ei-datasource-panel__source-icon" />
-          <span class="ei-datasource-panel__source-name">{{ source.title || source.name }}</span>
-        </div>
-
-        <!-- Source body (fields tree) -->
-        <div v-if="isVisibleExpanded(source.id) && source.fields.length > 0" class="ei-datasource-panel__source-body">
-          <DataFieldTreeNode
-            v-for="child in source.fields"
-            :key="childKey(source, child)"
-            :field="child"
-            :source="source"
-            :depth="0"
-            :toggle-expand="toggleExpand"
-            :is-expanded="isVisibleExpanded"
-          />
-        </div>
-      </div>
+      <DataSourceTree
+        :sources="displayedSources"
+        :toggle-expand="toggleExpand"
+        :is-expanded="isVisibleExpanded"
+      />
     </div>
     <div v-else-if="hasData" class="ei-datasource-panel__empty">
       {{ store.t('designer.dataSource.searchEmpty') }}
@@ -353,52 +321,6 @@ function clearSearch() {
     &:hover {
       background: var(--ei-hover-bg, #f0f0f0);
       color: var(--ei-text, #333);
-    }
-  }
-
-  &__source {
-    margin-bottom: 4px;
-
-    &-header {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      padding: 4px 8px 4px 4px;
-      font-weight: 500;
-      cursor: pointer;
-      border-radius: 3px;
-      user-select: none;
-      color: var(--ei-text, #333);
-
-      &:hover {
-        background: var(--ei-hover-bg, #f0f0f0);
-      }
-    }
-
-    &-icon {
-      flex-shrink: 0;
-      color: var(--ei-text-secondary, #999);
-    }
-
-    &-name {
-      flex: 1;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    &-body {
-      padding-left: 16px;
-    }
-  }
-
-  &__chevron {
-    flex-shrink: 0;
-    color: var(--ei-text-secondary, #999);
-    transition: transform 0.15s ease;
-
-    &--expanded {
-      transform: rotate(90deg);
     }
   }
 

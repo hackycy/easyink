@@ -1,16 +1,15 @@
 <script setup lang="ts">
 import type { DataSourceDescriptor } from '@easyink/datasource'
-import type { CollectionConditionScope, ConditionRow, ConditionValue } from '@easyink/schema'
+import type { ConditionRow, ConditionValue } from '@easyink/schema'
 import { IconDelete, IconPlus } from '@easyink/icons'
 import { EiButton, EiIcon, EiInput, EiNumberInput, EiSelect, EiSwitch } from '@easyink/ui'
 import { computed } from 'vue'
-import { defaultLiteralForType, literal } from '../conditions/editor-model'
+import { defaultLiteralForType, isBetweenOperator, isInOperator, literal } from '../conditions/editor-model'
 import ConditionFieldPicker from './ConditionFieldPicker.vue'
 
 const props = defineProps<{
   row: ConditionRow
   sources: DataSourceDescriptor[]
-  collectionScope?: CollectionConditionScope
   t: (key: string) => string
 }>()
 
@@ -19,8 +18,8 @@ const emit = defineEmits<{
 }>()
 
 const values = computed(() => Array.isArray(props.row.value) ? props.row.value : props.row.value ? [props.row.value] : [])
-const multiple = computed(() => props.row.operator === 'between' || props.row.operator === 'notBetween' || props.row.operator === 'in' || props.row.operator === 'notIn')
-const canAdd = computed(() => props.row.operator === 'in' || props.row.operator === 'notIn')
+const multiple = computed(() => isBetweenOperator(props.row.operator) || isInOperator(props.row.operator))
+const canAdd = computed(() => isInOperator(props.row.operator))
 const kindOptions = computed(() => [
   { label: props.t('designer.condition.valueKindLiteral'), value: 'literal' },
   { label: props.t('designer.condition.valueKindField'), value: 'field' },
@@ -65,7 +64,7 @@ function literalBoolean(value: ConditionValue): boolean {
 }
 
 function labelFor(index: number): string {
-  if (props.row.operator === 'between' || props.row.operator === 'notBetween')
+  if (isBetweenOperator(props.row.operator))
     return index === 0 ? props.t('designer.condition.operandStart') : props.t('designer.condition.operandEnd')
   if (canAdd.value)
     return `${props.t('designer.condition.operandCandidate')} ${index + 1}`
@@ -83,7 +82,6 @@ function labelFor(index: number): string {
           v-if="value.kind === 'field'"
           :model-value="value.field"
           :sources="sources"
-          :collection-scope="collectionScope"
           :t="t"
           @select="updateAt(index, { kind: 'field', field: $event })"
         />
@@ -107,29 +105,30 @@ function labelFor(index: number): string {
   display: flex;
   min-width: 260px;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
 }
 
 .condition-value-cell__item {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
 }
 
 .condition-value-cell__item-label {
   color: var(--ei-text-secondary, #999);
   font-size: 10px;
-  line-height: 1;
+  line-height: 12px;
 }
 
 .condition-value-cell__editor {
   display: grid;
-  grid-template-columns: 78px minmax(150px, 1fr) auto;
-  gap: 4px;
-  align-items: center;
+  grid-template-columns: 82px minmax(150px, 1fr) auto;
+  gap: 6px;
+  align-items: start;
 }
 
 .condition-value-cell__add {
   align-self: flex-start;
+  margin-top: -1px;
 }
 </style>

@@ -1,16 +1,15 @@
 <script setup lang="ts">
 import type { MaterialConditionDefinition } from '@easyink/core'
 import type { DataSourceDescriptor } from '@easyink/datasource'
-import type { CollectionConditionScope, CompareOperator, ConditionFieldRef, ConditionRow, ConditionValue, ConditionValueType, RenderCondition } from '@easyink/schema'
-import { IconCopy, IconDelete, IconPlus } from '@easyink/icons'
+import type { ConditionCompareOperator, ConditionFieldRef, ConditionOperator, ConditionRow, ConditionValue, ConditionValueType, RenderCondition } from '@easyink/schema'
+import { IconCondition, IconCopy, IconDelete, IconGroup, IconPlus } from '@easyink/icons'
 import { deepClone } from '@easyink/shared'
 import { EiButton, EiCheckbox, EiDialog, EiIcon, EiSelect } from '@easyink/ui'
 import { computed, ref, watch } from 'vue'
-import { changeRowValueType, COMPARE_OPERATORS, CONDITION_VALUE_TYPES, createConditionGroup, createConditionRow, createDialogDraft, isRenderConditionComplete, normalizeRenderCondition, UNARY_OPERATORS, updateRowOperator } from '../conditions/editor-model'
+import { changeRowValueType, COMPARE_OPERATORS, CONDITION_QUANTIFIERS, CONDITION_VALUE_TYPES, conditionOperatorFromKey, conditionOperatorKey, createConditionGroup, createConditionRow, createDialogDraft, isRenderConditionComplete, isUnaryOperator, normalizeRenderCondition, updateRowOperator } from '../conditions/editor-model'
 import ConditionFieldPicker from './ConditionFieldPicker.vue'
 import ConditionValueCell from './ConditionValueCell.vue'
 
-type FieldSelection = ConditionFieldRef & { collectionScope?: CollectionConditionScope }
 type ValueSelection = ConditionValue | ConditionValue[]
 
 const props = defineProps<{
@@ -29,7 +28,13 @@ const emit = defineEmits<{
 const draft = ref<RenderCondition>(createDialogDraft(props.condition))
 
 const complete = computed(() => isRenderConditionComplete(draft.value))
-const operatorLabels: Record<CompareOperator, string> = {
+const logicHintText = computed(() => [
+  props.t(draft.value.whenMatched === 'hide' ? 'designer.condition.logicHintHide' : 'designer.condition.logicHintShow'),
+  props.t('designer.condition.logicHintGroups'),
+  props.t('designer.condition.logicHintEmpty'),
+  ...(!complete.value ? [props.t('designer.condition.incompleteHint')] : []),
+].join('\n'))
+const operatorLabels: Record<ConditionCompareOperator, string> = {
   eq: 'operatorEq',
   neq: 'operatorNeq',
   gt: 'operatorGt',
@@ -49,7 +54,20 @@ const operatorLabels: Record<CompareOperator, string> = {
   isEmpty: 'operatorIsEmpty',
   isNotEmpty: 'operatorIsNotEmpty',
 }
-const operatorOptions = computed(() => COMPARE_OPERATORS.map(value => ({ label: props.t(`designer.condition.${operatorLabels[value]}`), value })))
+const quantifierLabels = {
+  any: 'operatorQuantifierAny',
+  all: 'operatorQuantifierAll',
+  none: 'operatorQuantifierNone',
+} as const
+const operatorOptions = computed(() => [
+  ...COMPARE_OPERATORS.map(compare => ({ label: props.t(`designer.condition.${operatorLabels[compare]}`), value: compare })),
+  ...CONDITION_QUANTIFIERS.flatMap(quantifier =>
+    COMPARE_OPERATORS.map(compare => ({
+      label: `${props.t(`designer.condition.${quantifierLabels[quantifier]}`)}${props.t(`designer.condition.${operatorLabels[compare]}`)}`,
+      value: `${quantifier}:${compare}`,
+    })),
+  ),
+])
 const valueTypeOptions = computed(() => CONDITION_VALUE_TYPES.map(value => ({ label: props.t(`designer.condition.type${value.replace(/(^|-)(\w)/g, (_, _dash, char) => char.toUpperCase())}`), value })))
 const matchedOptions = computed(() => [
   { label: props.t('designer.condition.show'), value: 'show' },
@@ -59,12 +77,7 @@ const hiddenEffectOptions = computed(() => [
   ...(props.capability.hiddenEffects.includes('remove') ? [{ label: props.t('designer.condition.hiddenRemove'), value: 'remove' }] : []),
   ...(props.capability.hiddenEffects.includes('reserve') ? [{ label: props.t('designer.condition.hiddenReserve'), value: 'reserve' }] : []),
 ])
-const quantifierOptions = computed(() => [
-  { label: props.t('designer.condition.quantifierAny'), value: 'any' },
-  { label: props.t('designer.condition.quantifierAll'), value: 'all' },
-  { label: props.t('designer.condition.quantifierNone'), value: 'none' },
-])
-const caseSensitiveOperators: CompareOperator[] = ['eq', 'neq', 'in', 'notIn', 'contains', 'notContains', 'startsWith', 'endsWith']
+const caseSensitiveOperators: ConditionCompareOperator[] = ['eq', 'neq', 'in', 'notIn', 'contains', 'notContains', 'startsWith', 'endsWith']
 
 watch(() => props.open, (open) => {
   if (open)
@@ -88,14 +101,16 @@ function addGroup() {
 
 function removeGroup(index: number) {
   draft.value.groups.splice(index, 1)
-  if (draft.value.groups.length === 0)
-    draft.value.groups.push(createConditionGroup())
 }
 
 function addRow(groupIndex: number) {
   const group = draft.value.groups[groupIndex]
   if (group)
-    group.conditions.push(createConditionRow(group.scope ? { scope: 'item', path: '' } : { path: '' }))
+    group.conditions.push(createConditionRow())
+}
+
+function addFirstGroup() {
+  draft.value.groups.push(createConditionGroup())
 }
 
 function copyRow(groupIndex: number, rowIndex: number) {
@@ -106,7 +121,10 @@ function copyRow(groupIndex: number, rowIndex: number) {
 }
 
 function removeRow(groupIndex: number, rowIndex: number) {
-  draft.value.groups[groupIndex]?.conditions.splice(rowIndex, 1)
+  const group = draft.value.groups[groupIndex]
+  if (!group)
+    return
+  group.conditions.splice(rowIndex, 1)
 }
 
 function updateRow(groupIndex: number, rowIndex: number, row: ConditionRow) {
@@ -115,20 +133,17 @@ function updateRow(groupIndex: number, rowIndex: number, row: ConditionRow) {
     group.conditions[rowIndex] = row
 }
 
-function setSource(groupIndex: number, rowIndex: number, source: FieldSelection) {
+function setSource(groupIndex: number, rowIndex: number, source: ConditionFieldRef) {
   const row = draft.value.groups[groupIndex]?.conditions[rowIndex]
   if (!row)
     return
-  const { field, collectionScope } = normalizeFieldSelection(source)
-  applyCollectionSelection(groupIndex, collectionScope)
-  updateRow(groupIndex, rowIndex, { ...row, source: field })
-  reconcileGroupScope(groupIndex)
+  updateRow(groupIndex, rowIndex, { ...row, source })
 }
 
-function setOperator(groupIndex: number, rowIndex: number, operator: CompareOperator) {
+function setOperator(groupIndex: number, rowIndex: number, key: string) {
   const row = draft.value.groups[groupIndex]?.conditions[rowIndex]
   if (row)
-    updateRow(groupIndex, rowIndex, updateRowOperator(row, operator))
+    updateRow(groupIndex, rowIndex, updateRowOperator(row, conditionOperatorFromKey(key)))
 }
 
 function setValueType(groupIndex: number, rowIndex: number, type: ConditionValueType) {
@@ -141,56 +156,11 @@ function setValue(groupIndex: number, rowIndex: number, value: ValueSelection) {
   const row = draft.value.groups[groupIndex]?.conditions[rowIndex]
   if (!row)
     return
-  const normalized = normalizeValueSelection(value)
-  applyCollectionSelection(groupIndex, normalized.collectionScope)
-  updateRow(groupIndex, rowIndex, { ...row, value: normalized.value })
-  reconcileGroupScope(groupIndex)
+  updateRow(groupIndex, rowIndex, { ...row, value })
 }
 
-function normalizeFieldSelection(selection: FieldSelection): { field: ConditionFieldRef, collectionScope?: CollectionConditionScope } {
-  const { collectionScope, ...field } = selection
-  return { field, collectionScope }
-}
-
-function normalizeValueSelection(value: ValueSelection): { value: ConditionValue | ConditionValue[], collectionScope?: CollectionConditionScope } {
-  let collectionScope: CollectionConditionScope | undefined
-  const normalize = (item: ConditionValue): ConditionValue => {
-    if (item.kind !== 'field')
-      return item
-    const normalized = normalizeFieldSelection(item.field as FieldSelection)
-    collectionScope ??= normalized.collectionScope
-    return { kind: 'field', field: normalized.field }
-  }
-  return {
-    value: Array.isArray(value) ? value.map(normalize) : normalize(value),
-    collectionScope,
-  }
-}
-
-function applyCollectionSelection(groupIndex: number, scope?: CollectionConditionScope) {
-  const group = draft.value.groups[groupIndex]
-  if (!group || !scope)
-    return
-  group.scope = { ...scope, quantifier: group.scope?.quantifier ?? scope.quantifier }
-}
-
-function reconcileGroupScope(groupIndex: number) {
-  const group = draft.value.groups[groupIndex]
-  if (!group?.scope)
-    return
-  if (!group.conditions.some(hasItemReference))
-    delete group.scope
-}
-
-function hasItemReference(row: ConditionRow): boolean {
-  if ((row.source.scope ?? 'root') === 'item')
-    return true
-  const values = Array.isArray(row.value) ? row.value : row.value ? [row.value] : []
-  return values.some(value => value.kind === 'field' && (value.field.scope ?? 'root') === 'item')
-}
-
-function collectionTitle(scope: CollectionConditionScope): string {
-  return scope.fieldLabel || scope.path
+function isCaseSensitiveOperator(operator: ConditionOperator): boolean {
+  return caseSensitiveOperators.includes(operator.compare)
 }
 </script>
 
@@ -210,35 +180,65 @@ function collectionTitle(scope: CollectionConditionScope): string {
   >
     <div class="condition-dialog">
       <div class="condition-dialog__behavior">
-        <EiSelect :label="t('designer.condition.whenMatched')" :model-value="draft.whenMatched" :options="matchedOptions" @update:model-value="draft.whenMatched = $event as 'show' | 'hide'" />
-        <EiSelect :label="t('designer.condition.whenHidden')" :model-value="draft.whenHidden ?? 'remove'" :options="hiddenEffectOptions" @update:model-value="draft.whenHidden = $event as 'remove' | 'reserve'" />
-        <EiSelect :label="t('designer.condition.onUnknown')" :model-value="draft.onUnknown ?? 'show'" :options="matchedOptions" @update:model-value="draft.onUnknown = $event as 'show' | 'hide'" />
+        <label class="condition-dialog__behavior-field">
+          <span class="condition-dialog__behavior-label">
+            {{ t('designer.condition.whenMatched') }}
+          </span>
+          <EiSelect :model-value="draft.whenMatched" :options="matchedOptions" @update:model-value="draft.whenMatched = $event as 'show' | 'hide'" />
+        </label>
+        <label class="condition-dialog__behavior-field">
+          <span class="condition-dialog__behavior-label">
+            {{ t('designer.condition.whenHidden') }}
+          </span>
+          <EiSelect :model-value="draft.whenHidden ?? 'remove'" :options="hiddenEffectOptions" @update:model-value="draft.whenHidden = $event as 'remove' | 'reserve'" />
+        </label>
+        <label class="condition-dialog__behavior-field">
+          <span class="condition-dialog__behavior-label">
+            {{ t('designer.condition.onUnknown') }}
+          </span>
+          <EiSelect :model-value="draft.onUnknown ?? 'show'" :options="matchedOptions" @update:model-value="draft.onUnknown = $event as 'show' | 'hide'" />
+        </label>
       </div>
 
-      <p class="condition-dialog__logic-hint">
-        {{ t('designer.condition.logicHint') }}
-      </p>
+      <div class="condition-dialog__logic-hint" :class="{ 'condition-dialog__logic-hint--error': !complete }">
+        {{ logicHintText }}
+      </div>
+
+      <div v-if="draft.groups.length === 0" class="condition-dialog__empty">
+        <div class="condition-dialog__empty-copy">
+          <EiIcon :icon="IconCondition" :size="15" />
+          <p>{{ t('designer.condition.emptyConditionHint') }}</p>
+        </div>
+        <EiButton variant="ghost" size="sm" class="condition-dialog__add-action" @click="addFirstGroup">
+          <EiIcon :icon="IconPlus" :size="12" />{{ t('designer.condition.addGroup') }}
+        </EiButton>
+      </div>
+
+      <div v-if="draft.groups.length > 0" class="condition-dialog__groups-toolbar">
+        <EiButton variant="ghost" size="sm" class="condition-dialog__add-group condition-dialog__add-action" @click="addGroup">
+          <EiIcon :icon="IconPlus" :size="12" />{{ t('designer.condition.addGroup') }}
+        </EiButton>
+      </div>
 
       <div class="condition-dialog__groups">
         <template v-for="(group, groupIndex) in draft.groups" :key="groupIndex">
           <div v-if="groupIndex > 0" class="condition-dialog__or">
             <span>{{ t('designer.condition.or') }}</span>
           </div>
-          <section class="condition-group" :class="{ 'condition-group--collection': group.scope }">
+          <section class="condition-group">
             <header class="condition-group__header">
               <div class="condition-group__title">
+                <EiIcon :icon="IconGroup" :size="14" />
                 <strong>{{ t('designer.condition.group') }} {{ groupIndex + 1 }}</strong>
-                <span>{{ t('designer.condition.groupAndHint') }}</span>
               </div>
-              <div v-if="group.scope" class="condition-group__collection-rule">
-                <span class="condition-group__collection-name">{{ collectionTitle(group.scope) }}</span>
-                <span>{{ t('designer.condition.collectionInfix') }}</span>
-                <EiSelect class="condition-group__quantifier" :model-value="group.scope.quantifier" :options="quantifierOptions" @update:model-value="group.scope!.quantifier = $event as 'any' | 'all' | 'none'" />
-                <span>{{ t('designer.condition.collectionMatchSuffix') }}</span>
+              <div class="condition-group__header-actions">
+                <EiButton v-if="group.conditions.length > 0" variant="ghost" size="sm" class="condition-dialog__add-action" @click="addRow(groupIndex)">
+                  <EiIcon :icon="IconPlus" :size="12" />{{ t('designer.condition.addCondition') }}
+                </EiButton>
+                <EiButton variant="ghost" size="sm" class="condition-group__delete" :aria-label="t('designer.condition.deleteGroup')" @click="removeGroup(groupIndex)">
+                  <EiIcon :icon="IconDelete" :size="14" />
+                </EiButton>
               </div>
-              <EiButton variant="ghost" size="sm" class="condition-group__delete" :aria-label="t('designer.condition.deleteGroup')" @click="removeGroup(groupIndex)">
-                <EiIcon :icon="IconDelete" :size="14" />
-              </EiButton>
             </header>
 
             <div class="condition-group__table-wrap">
@@ -253,18 +253,30 @@ function collectionTitle(scope: CollectionConditionScope): string {
                   </tr>
                 </thead>
                 <tbody>
+                  <tr v-if="group.conditions.length === 0">
+                    <td colspan="5" class="condition-group__empty-cell">
+                      <div class="condition-group__empty">
+                        <span>{{ t('designer.condition.emptyGroupHint') }}</span>
+                        <EiButton variant="ghost" size="sm" class="condition-dialog__add-action" @click="addRow(groupIndex)">
+                          <EiIcon :icon="IconPlus" :size="12" />{{ t('designer.condition.addCondition') }}
+                        </EiButton>
+                      </div>
+                    </td>
+                  </tr>
                   <tr v-for="(row, rowIndex) in group.conditions" :key="rowIndex">
                     <td class="condition-group__source-cell">
-                      <ConditionFieldPicker :model-value="row.source" :sources="sources" :collection-scope="group.scope" :allow-collection="UNARY_OPERATORS.includes(row.operator)" :t="t" @select="setSource(groupIndex, rowIndex, $event)" />
+                      <ConditionFieldPicker :model-value="row.source" :sources="sources" :t="t" @select="setSource(groupIndex, rowIndex, $event)" />
                     </td>
-                    <td><EiSelect :model-value="row.operator" :options="operatorOptions" @update:model-value="setOperator(groupIndex, rowIndex, $event as CompareOperator)" /></td>
                     <td>
-                      <ConditionValueCell v-if="!UNARY_OPERATORS.includes(row.operator)" :row="row" :sources="sources" :collection-scope="group.scope" :t="t" @update="setValue(groupIndex, rowIndex, $event)" />
+                      <EiSelect :model-value="conditionOperatorKey(row.operator)" :options="operatorOptions" @update:model-value="setOperator(groupIndex, rowIndex, String($event))" />
+                    </td>
+                    <td>
+                      <ConditionValueCell v-if="!isUnaryOperator(row.operator)" :row="row" :sources="sources" :t="t" @update="setValue(groupIndex, rowIndex, $event)" />
                       <span v-else class="condition-group__not-applicable">--</span>
-                      <EiCheckbox v-if="caseSensitiveOperators.includes(row.operator)" class="condition-group__secondary-option" :label="t('designer.condition.caseSensitive')" :model-value="row.options?.caseSensitive !== false" @update:model-value="updateRow(groupIndex, rowIndex, { ...row, options: { ...row.options, caseSensitive: $event } })" />
+                      <EiCheckbox v-if="isCaseSensitiveOperator(row.operator)" class="condition-group__secondary-option" :label="t('designer.condition.caseSensitive')" :model-value="row.options?.caseSensitive !== false" @update:model-value="updateRow(groupIndex, rowIndex, { ...row, options: { ...row.options, caseSensitive: $event } })" />
                     </td>
                     <td>
-                      <EiSelect v-if="!UNARY_OPERATORS.includes(row.operator)" :model-value="row.valueType ?? 'string'" :options="valueTypeOptions" @update:model-value="setValueType(groupIndex, rowIndex, $event as ConditionValueType)" />
+                      <EiSelect v-if="!isUnaryOperator(row.operator)" :model-value="row.valueType ?? 'string'" :options="valueTypeOptions" @update:model-value="setValueType(groupIndex, rowIndex, $event as ConditionValueType)" />
                       <span v-else class="condition-group__not-applicable">--</span>
                     </td>
                     <td>
@@ -281,19 +293,9 @@ function collectionTitle(scope: CollectionConditionScope): string {
                 </tbody>
               </table>
             </div>
-            <EiButton size="sm" class="condition-group__add" @click="addRow(groupIndex)">
-              <EiIcon :icon="IconPlus" :size="12" />{{ t('designer.condition.addCondition') }}
-            </EiButton>
           </section>
         </template>
       </div>
-
-      <EiButton class="condition-dialog__add-group" @click="addGroup">
-        <EiIcon :icon="IconPlus" :size="13" />{{ t('designer.condition.addGroup') }}
-      </EiButton>
-      <p v-if="!complete" class="condition-dialog__error">
-        {{ t('designer.condition.incompleteHint') }}
-      </p>
     </div>
   </EiDialog>
 </template>
@@ -311,13 +313,57 @@ function collectionTitle(scope: CollectionConditionScope): string {
   gap: 12px;
 }
 
-.condition-dialog__logic-hint {
-  margin: 0;
-  padding: 8px 10px;
-  border-radius: 6px;
-  background: var(--ei-hover-bg, #f5f5f5);
+.condition-dialog__behavior-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.condition-dialog__behavior-label {
+  display: inline-flex;
+  align-items: center;
   color: var(--ei-text-secondary, #666);
   font-size: 12px;
+  line-height: 16px;
+}
+
+.condition-dialog__logic-hint {
+  padding: 9px 11px;
+  border-radius: 6px;
+  background: var(--ei-bg, #fafafa);
+  color: var(--ei-text-secondary, #666);
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-line;
+}
+
+.condition-dialog__logic-hint--error {
+  background: color-mix(in srgb, var(--ei-danger, #d4380d) 5%, var(--ei-bg, #fafafa));
+}
+
+.condition-dialog__empty {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  border-radius: 6px;
+  background: var(--ei-bg, #fafafa);
+}
+
+.condition-dialog__empty-copy {
+  min-width: 0;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  color: var(--ei-text-secondary, #666);
+
+  p {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.5;
+  }
 }
 
 .condition-dialog__groups {
@@ -326,13 +372,19 @@ function collectionTitle(scope: CollectionConditionScope): string {
   gap: 0;
 }
 
+.condition-dialog__groups-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: -6px;
+}
+
 .condition-dialog__or {
   position: relative;
-  height: 34px;
+  height: 30px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--ei-primary, #1890ff);
+  color: var(--ei-text-secondary, #999);
   font-size: 11px;
   font-weight: 600;
 
@@ -341,7 +393,7 @@ function collectionTitle(scope: CollectionConditionScope): string {
     right: 0;
     left: 0;
     height: 1px;
-    background: var(--ei-border-color, #e5e5e5);
+    background: color-mix(in srgb, var(--ei-border-color, #e5e5e5) 58%, transparent);
     content: '';
   }
 
@@ -354,71 +406,67 @@ function collectionTitle(scope: CollectionConditionScope): string {
 }
 
 .condition-dialog__add-group {
-  align-self: flex-start;
+  flex: 0 0 auto;
 }
 
-.condition-dialog__error {
-  margin: 0;
-  color: var(--ei-danger, #d4380d);
-  font-size: 12px;
+.condition-dialog__add-action {
+  background: color-mix(in srgb, var(--ei-primary, #1890ff) 7%, transparent);
+  color: var(--ei-primary, #1890ff);
+
+  &:hover {
+    background: color-mix(in srgb, var(--ei-primary, #1890ff) 12%, transparent);
+  }
 }
 
 .condition-group {
   padding: 12px;
-  border: 1px solid var(--ei-border-color, #e3e6ea);
-  border-radius: 8px;
-  background: var(--ei-bg-elevated, #fff);
-
-  &--collection {
-    border-color: color-mix(in srgb, var(--ei-primary, #1890ff) 28%, var(--ei-border-color, #e3e6ea));
-  }
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--ei-bg, #fafafa) 72%, var(--ei-bg-elevated, #fff));
 }
 
 .condition-group__header {
   display: grid;
-  grid-template-columns: minmax(120px, auto) minmax(0, 1fr) auto;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
   align-items: center;
-  margin-bottom: 12px;
+  justify-content: space-between;
+  margin-bottom: 10px;
 }
 
 .condition-group__title {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  color: var(--ei-text-secondary, #666);
 
   strong {
+    color: var(--ei-text, #333);
     font-size: 13px;
-  }
-
-  span {
-    color: var(--ei-text-secondary, #777);
-    font-size: 11px;
   }
 }
 
-.condition-group__collection-rule {
-  min-width: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+.condition-group__header-actions {
+  display: inline-flex;
   align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.condition-group__empty {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
   color: var(--ei-text-secondary, #666);
   font-size: 12px;
 }
 
-.condition-group__collection-name {
-  max-width: 220px;
-  overflow: hidden;
-  color: var(--ei-text, #333);
-  font-weight: 500;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.condition-group__quantifier {
-  width: 124px;
-  flex: 0 0 124px;
+.condition-group__operator-cell {
+  display: flex;
+  gap: 6px;
+  flex-direction: column;
 }
 
 .condition-group__delete {
@@ -427,8 +475,9 @@ function collectionTitle(scope: CollectionConditionScope): string {
 
 .condition-group__table-wrap {
   overflow-x: auto;
-  border: 1px solid var(--ei-border-color, #eceff3);
+  border: 1px solid var(--ei-border-color, #e1e5ea);
   border-radius: 6px;
+  background: var(--ei-bg-elevated, #fff);
 }
 
 .condition-group__table {
@@ -439,10 +488,10 @@ function collectionTitle(scope: CollectionConditionScope): string {
 }
 
 .condition-group__table th {
-  height: 32px;
+  height: 34px;
   padding: 0 10px;
-  border-bottom: 1px solid var(--ei-border-color, #eceff3);
-  background: var(--ei-hover-bg, #f7f8fa);
+  border-bottom: 1px solid var(--ei-border-color, #e1e5ea);
+  background: var(--ei-hover-bg, #f6f7f9);
   color: var(--ei-text-secondary, #777);
   font-size: 11px;
   font-weight: 500;
@@ -450,9 +499,9 @@ function collectionTitle(scope: CollectionConditionScope): string {
 }
 
 .condition-group__table td {
-  min-height: 44px;
-  padding: 5px 10px;
-  border-bottom: 1px solid var(--ei-border-color, #f0f1f3);
+  height: 42px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--ei-border-color, #eceff3);
   vertical-align: top;
 }
 
@@ -461,51 +510,74 @@ function collectionTitle(scope: CollectionConditionScope): string {
 }
 
 .condition-group__table th:nth-child(1) { width: 24%; }
-.condition-group__table th:nth-child(2) { width: 15%; }
-.condition-group__table th:nth-child(3) { width: 36%; }
+.condition-group__table th:nth-child(2) { width: 17%; }
+.condition-group__table th:nth-child(3) { width: 34%; }
 .condition-group__table th:nth-child(4) { width: 15%; }
 .condition-group__table th:nth-child(5) { width: 78px; }
+
+.condition-group__table th:nth-child(5),
+.condition-group__table td:nth-child(5) {
+  text-align: center;
+}
+
+.condition-group__empty-cell {
+  height: 72px;
+  padding: 0;
+  background: var(--ei-bg, #fafafa);
+  text-align: center;
+  vertical-align: middle;
+}
 
 .condition-group__source-cell {
   padding-left: 4px;
 }
 
 .condition-group__actions {
-  min-height: 34px;
+  height: 27px;
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: center;
   gap: 2px;
 }
 
 .condition-group__not-applicable {
   display: inline-flex;
-  min-height: 34px;
+  height: 27px;
   align-items: center;
   color: var(--ei-text-secondary, #999);
 }
 
 .condition-group__secondary-option {
-  margin-top: 4px;
+  margin-top: 6px;
   color: var(--ei-text-secondary, #777);
+  font-size: 12px;
 }
 
-.condition-group__add {
-  margin-top: 10px;
+.condition-group__table :deep(.condition-field-picker__trigger) {
+  min-height: 0;
+  padding: 4px 8px;
+  border-color: var(--ei-border-color, #d0d0d0);
+  background: var(--ei-input-bg, #fff);
 }
 
-.condition-group__table :deep(.ei-select__trigger),
-.condition-group__table :deep(.ei-input),
-.condition-group__table :deep(.ei-number-input) {
-  min-height: 34px;
-  border-color: transparent;
-  background: transparent;
+.condition-group__table :deep(.condition-field-picker__trigger:hover) {
+  border-color: var(--ei-primary, #1890ff);
+  background: var(--ei-input-bg, #fff);
+}
 
-  &:hover,
-  &:focus,
-  &:focus-within {
-    border-color: var(--ei-border-color, #d0d0d0);
-    background: var(--ei-input-bg, #fff);
-  }
+.condition-group__table :deep(.condition-field-picker__copy) {
+  display: block;
+}
+
+.condition-group__table :deep(.condition-field-picker__label) {
+  display: block;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 17px;
+}
+
+.condition-group__table :deep(.condition-field-picker__meta) {
+  display: none;
 }
 
 @media (max-width: 760px) {
@@ -515,10 +587,6 @@ function collectionTitle(scope: CollectionConditionScope): string {
 
   .condition-group__header {
     grid-template-columns: 1fr auto;
-  }
-
-  .condition-group__collection-rule {
-    grid-column: 1 / -1;
   }
 }
 </style>

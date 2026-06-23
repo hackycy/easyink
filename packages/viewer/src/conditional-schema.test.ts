@@ -18,7 +18,7 @@ function node(id: string, path: string, whenHidden: 'remove' | 'reserve' = 'remo
     width: 10,
     height: 10,
     props: {},
-    renderCondition: { whenMatched: 'show', groups: [{ conditions: [{ source: { path }, operator: 'exists' }] }], whenHidden },
+    renderCondition: { whenMatched: 'show', groups: [{ conditions: [{ source: { path }, operator: { compare: 'exists' } }] }], whenHidden },
   }
 }
 
@@ -159,8 +159,8 @@ describe('resolveConditionalSchema', () => {
       renderCondition: {
         whenMatched: 'show' as const,
         groups: [{ conditions: [
-          { source: { path: 'missing' }, operator: 'eq' as const, valueType: 'number' as const, value: { kind: 'literal' as const, value: 1 } },
-          { source: { path: 'missing' }, operator: 'eq' as const, valueType: 'number' as const, value: { kind: 'literal' as const, value: 2 } },
+          { source: { path: 'missing' }, operator: { compare: 'eq' as const }, valueType: 'number' as const, value: { kind: 'literal' as const, value: 1 } },
+          { source: { path: 'missing' }, operator: { compare: 'eq' as const }, valueType: 'number' as const, value: { kind: 'literal' as const, value: 2 } },
         ] }],
       },
     }

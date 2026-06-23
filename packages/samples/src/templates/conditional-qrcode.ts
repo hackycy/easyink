@@ -24,7 +24,7 @@ export const conditionalQrcodeTemplate: DocumentSchema = {
       renderCondition: {
         whenMatched: 'show',
         whenHidden: 'remove',
-        groups: [{ conditions: [{ source: { path: 'parentQrcode', fieldLabel: '主二维码' }, operator: 'exists' }] }],
+        groups: [{ conditions: [{ source: { path: 'parentQrcode', fieldLabel: '主二维码' }, operator: { compare: 'exists' } }] }],
       },
     },
     {
@@ -40,8 +40,8 @@ export const conditionalQrcodeTemplate: DocumentSchema = {
         whenMatched: 'show',
         whenHidden: 'remove',
         groups: [{ conditions: [
-          { source: { path: 'parentQrcode', fieldLabel: '主二维码' }, operator: 'notExists' },
-          { source: { path: 'qrCode', fieldLabel: '备用二维码' }, operator: 'exists' },
+          { source: { path: 'parentQrcode', fieldLabel: '主二维码' }, operator: { compare: 'notExists' } },
+          { source: { path: 'qrCode', fieldLabel: '备用二维码' }, operator: { compare: 'exists' } },
         ] }],
       },
     },

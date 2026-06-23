@@ -1,229 +1,150 @@
 <script setup lang="ts">
 import type { DataFieldNode, DataSourceDescriptor } from '@easyink/datasource'
-import type { CollectionConditionScope, ConditionFieldRef } from '@easyink/schema'
-import type { TreeNode } from '@easyink/ui'
-import { IconDatabase, IconDataTable, IconFolderClosed, IconHash, IconSearch } from '@easyink/icons'
-import { EiIcon, EiInput, EiPopover, EiTree } from '@easyink/ui'
-import { computed, ref } from 'vue'
-
-interface PickerOption {
-  label: string
-  meta: string
-  sourceId: string
-  sourceName: string
-  sourceTag?: string
-  path: string
-  rawPath: string
-  field: DataFieldNode
-  scope: 'root' | 'item'
-  collectionScope?: CollectionConditionScope
-  collection: boolean
-  selectable: boolean
-}
-
-type FieldSelection = ConditionFieldRef & { collectionScope?: CollectionConditionScope }
+import type { ConditionFieldRef } from '@easyink/schema'
+import { IconSearch } from '@easyink/icons'
+import { EiIcon, EiInput, EiPopover } from '@easyink/ui'
+import { computed, reactive, ref, watch } from 'vue'
+import DataSourceTree from './datasource/DataSourceTree.vue'
 
 const props = defineProps<{
   modelValue?: ConditionFieldRef
   sources: DataSourceDescriptor[]
   t: (key: string) => string
-  mode?: 'field' | 'collection'
-  collectionScope?: CollectionConditionScope
-  allowCollection?: boolean
 }>()
 
 const emit = defineEmits<{
-  select: [field: FieldSelection]
-  selectCollection: [scope: CollectionConditionScope]
+  select: [field: ConditionFieldRef]
 }>()
 
 const open = ref(false)
 const search = ref('')
+const collapsedKeys = reactive(new Set<string>())
 
 const query = computed(() => search.value.trim().toLowerCase())
-const nodes = computed<TreeNode[]>(() => props.sources.map(source => sourceNode(source)))
-const visibleNodes = computed<TreeNode[]>(() => {
+const visibleSources = computed<DataSourceDescriptor[]>(() => {
   if (!query.value)
-    return nodes.value
-  return filterNodes(nodes.value)
+    return props.sources
+  const result: DataSourceDescriptor[] = []
+  for (const source of props.sources) {
+    if (matchesSource(source, query.value)) {
+      result.push(source)
+      continue
+    }
+    const fields = filterFields(source.fields ?? [], query.value)
+    if (fields.length > 0)
+      result.push({ ...source, fields })
+  }
+  return result
 })
 const displayLabel = computed(() => props.modelValue?.fieldLabel || props.modelValue?.path || props.t('designer.condition.selectField'))
 const displayMeta = computed(() => displayPath(props.modelValue) || props.t('designer.condition.clickToSelect'))
-const triggerLabel = computed(() => props.mode === 'collection'
-  ? (props.modelValue?.fieldLabel || props.t('designer.condition.selectCollection'))
-  : displayLabel.value)
-const triggerMeta = computed(() => props.mode === 'collection'
-  ? (props.modelValue?.path || props.t('designer.condition.clickToSelect'))
-  : displayMeta.value)
-const selectedId = computed(() => {
-  if (!props.modelValue)
-    return undefined
-  const scope = props.modelValue.scope ?? 'root'
-  const path = scope === 'item' && props.collectionScope
-    ? [props.collectionScope.path, props.modelValue.path].filter(Boolean).join('/')
-    : props.modelValue.path
-  return `${scope}:${props.modelValue.sourceId ?? ''}:${path}`
-})
+const triggerLabel = computed(() => displayLabel.value)
+const triggerMeta = computed(() => displayMeta.value)
 
-const iconMap = {
-  collection: IconDataTable,
-  field: IconHash,
-  folder: IconFolderClosed,
-  source: IconDatabase,
+function isFieldSelectable(field: DataFieldNode, source: DataSourceDescriptor): boolean {
+  const rawPath = resolvePathForSource(source, field)
+  return rawPath.trim().length > 0
 }
 
-function sourceNode(source: DataSourceDescriptor): TreeNode {
-  return {
-    id: `root:${source.id}:`,
-    label: source.title || source.name,
-    icon: 'source',
-    data: { selectable: false, label: source.title || source.name, meta: source.name },
-    children: (source.fields ?? []).map(field => fieldNode(source, field, '')),
-  }
-}
-
-function fieldNode(source: DataSourceDescriptor, field: DataFieldNode, parentPath: string, collectionScope?: CollectionConditionScope): TreeNode {
-  const rawPath = resolvePath(field, parentPath)
-  const collection = isCollection(field)
-  const activeCollectionScope = collectionScope && (!props.collectionScope || sameCollectionScope(collectionScope, props.collectionScope))
-    ? collectionScope
-    : undefined
-  const blockedByDifferentCollection = !!collectionScope && !activeCollectionScope
-  const scope = activeCollectionScope ? 'item' : 'root'
-  const path = activeCollectionScope ? relativePath(rawPath, activeCollectionScope.path) : rawPath
-  const hasChildren = !!field.fields?.length
-  const selectable = isSelectable(hasChildren, collection, !!activeCollectionScope, blockedByDifferentCollection)
-  const nextCollectionScope = collection && props.mode !== 'collection'
-    ? createCollectionScope(source, field, rawPath)
-    : activeCollectionScope
-  const option: PickerOption = {
-    label: field.title || field.name,
-    meta: `${source.title || source.name} · ${rawPath}`,
-    sourceId: source.id,
-    sourceName: source.name,
-    sourceTag: source.tag,
-    path,
-    rawPath,
-    field,
-    scope,
-    collectionScope: activeCollectionScope,
-    collection,
-    selectable,
-  }
-  return {
-    id: `${scope}:${source.id}:${rawPath}`,
-    label: option.label,
-    icon: collection ? 'collection' : hasChildren ? 'folder' : 'field',
-    data: option,
-    children: hasChildren
-      ? (field.fields ?? []).map(child => fieldNode(source, child, rawPath, nextCollectionScope))
-      : undefined,
-  }
-}
-
-function isSelectable(hasChildren: boolean, collection: boolean, insideCollection: boolean, blocked: boolean): boolean {
-  if (blocked)
-    return false
-  if (props.mode === 'collection')
-    return collection
-  if (collection)
-    return props.allowCollection === true
-  return insideCollection || !hasChildren
-}
-
-function isCollection(field: DataFieldNode): boolean {
-  return field.tag === 'collection' || field.meta?.type === 'array' || field.meta?.collection === true
-}
-
-function filterNodes(nodes: TreeNode[]): TreeNode[] {
-  const result: TreeNode[] = []
-  for (const node of nodes) {
-    const children = node.children ? filterNodes(node.children) : undefined
-    if (matchesNode(node) || children?.length)
-      result.push({ ...node, children })
+function filterFields(fields: DataFieldNode[], value: string): DataFieldNode[] {
+  const result: DataFieldNode[] = []
+  for (const field of fields) {
+    if (matchesField(field, value)) {
+      result.push(field)
+      continue
+    }
+    if (!field.fields)
+      continue
+    const children = filterFields(field.fields, value)
+    if (children.length > 0)
+      result.push({ ...field, fields: children })
   }
   return result
 }
 
-function matchesNode(node: TreeNode): boolean {
-  const option = node.data as Partial<PickerOption> | undefined
+function matchesSource(source: DataSourceDescriptor, value: string): boolean {
   return [
-    node.label,
-    option?.meta,
-    option?.path,
-    option?.rawPath,
-    option?.sourceName,
-  ].some(value => typeof value === 'string' && value.toLowerCase().includes(query.value))
+    source.title,
+    source.name,
+    source.id,
+    source.tag,
+  ].some(item => matchesValue(value, item))
 }
 
-function createCollectionScope(source: DataSourceDescriptor, field: DataFieldNode, path: string): CollectionConditionScope {
-  return {
-    kind: 'collection',
-    path,
-    quantifier: 'any',
-    sourceId: source.id,
-    sourceName: source.name,
-    sourceTag: source.tag,
-    fieldLabel: field.title || field.name,
-  }
+function matchesField(field: DataFieldNode, value: string): boolean {
+  return [
+    field.title,
+    field.name,
+    field.path,
+    field.key,
+    field.id,
+    field.tag,
+  ].some(item => matchesValue(value, item))
 }
 
-function sameCollectionScope(left: CollectionConditionScope, right: CollectionConditionScope): boolean {
-  return left.path === right.path && (!left.sourceId || !right.sourceId || left.sourceId === right.sourceId)
+function matchesValue(queryValue: string, value: unknown): boolean {
+  return typeof value === 'string' && value.toLowerCase().includes(queryValue)
 }
 
 function resolvePath(field: DataFieldNode, parentPath: string): string {
   return field.path || [parentPath, field.key || field.name].filter(Boolean).join('/')
 }
 
-function relativePath(path: string, collectionPath: string): string {
-  const prefix = `${collectionPath}/`
-  return path.startsWith(prefix) ? path.slice(prefix.length) : path
+function resolvePathForSource(source: DataSourceDescriptor, target: DataFieldNode): string {
+  return findFieldPath(source.fields ?? [], target, '') ?? target.path ?? target.key ?? target.name
+}
+
+function findFieldPath(fields: DataFieldNode[], target: DataFieldNode, parentPath: string): string | undefined {
+  for (const field of fields) {
+    const path = resolvePath(field, parentPath)
+    if (field === target || path === target.path)
+      return path
+    const child = findFieldPath(field.fields ?? [], target, path)
+    if (child)
+      return child
+  }
+  return undefined
 }
 
 function displayPath(value?: ConditionFieldRef): string {
   if (!value?.path)
     return ''
-  if ((value.scope ?? 'root') === 'item' && props.collectionScope?.path)
-    return [props.collectionScope.fieldLabel || props.collectionScope.path, value.path].join(' / ')
   return value.path
 }
 
-function chooseNode(node: TreeNode) {
-  const option = node.data as PickerOption | undefined
-  if (!option?.selectable)
-    return
-  choose(option)
-}
-
-function choose(option: PickerOption) {
-  if (props.mode === 'collection') {
-    emit('selectCollection', {
-      kind: 'collection',
-      path: option.rawPath,
-      quantifier: 'any',
-      sourceId: option.sourceId,
-      sourceName: option.sourceName,
-      sourceTag: option.sourceTag,
-      fieldLabel: option.label,
-    })
-  }
-  else {
-    emit('select', {
-      scope: option.scope,
-      path: option.path,
-      sourceId: option.sourceId,
-      sourceName: option.sourceName,
-      sourceTag: option.sourceTag,
-      fieldKey: option.field.key,
-      fieldLabel: option.label,
-      fieldTag: option.field.tag,
-      collectionScope: option.collectionScope,
-    })
-  }
+function choose(field: DataFieldNode, source: DataSourceDescriptor) {
+  const label = field.title || field.name
+  const rawPath = resolvePathForSource(source, field)
+  emit('select', {
+    path: rawPath,
+    sourceId: source.id,
+    sourceName: source.name,
+    sourceTag: source.tag,
+    fieldKey: field.key,
+    fieldLabel: label,
+    fieldTag: field.tag,
+  })
   search.value = ''
   open.value = false
 }
+
+function isExpanded(key: string): boolean {
+  return !collapsedKeys.has(key)
+}
+
+function toggleExpand(key: string) {
+  if (collapsedKeys.has(key))
+    collapsedKeys.delete(key)
+  else
+    collapsedKeys.add(key)
+}
+
+watch(() => props.sources, (sources) => {
+  for (const source of sources) {
+    if (source.expand === false)
+      collapsedKeys.add(source.id)
+  }
+}, { immediate: true })
 </script>
 
 <template>
@@ -245,34 +166,15 @@ function choose(option: PickerOption) {
           <EiIcon :icon="IconSearch" :size="14" />
           <EiInput v-model="search" :placeholder="t('designer.condition.searchField')" />
         </div>
-        <div v-if="visibleNodes.length" class="condition-field-picker__tree">
-          <EiTree
-            :key="query"
-            :nodes="visibleNodes"
-            :selected-id="selectedId"
-            :icon-map="iconMap"
-            default-expand-all
-            @select="chooseNode"
-          >
-            <template #label="{ node }">
-              <span
-                class="condition-field-picker__node-label"
-                :class="{ 'condition-field-picker__node-label--disabled': !(node.data as PickerOption | undefined)?.selectable }"
-              >
-                {{ node.label }}
-              </span>
-            </template>
-            <template #indicator="{ node }">
-              <span v-if="(node.data as PickerOption | undefined)?.collection" class="condition-field-picker__tag">
-                {{ t('designer.condition.collectionTag') }}
-              </span>
-            </template>
-            <template #suffix="{ node }">
-              <span v-if="(node.data as PickerOption | undefined)?.path" class="condition-field-picker__path">
-                {{ (node.data as PickerOption).path }}
-              </span>
-            </template>
-          </EiTree>
+        <div v-if="visibleSources.length" class="condition-field-picker__tree">
+          <DataSourceTree
+            :sources="visibleSources"
+            mode="select"
+            :toggle-expand="toggleExpand"
+            :is-expanded="isExpanded"
+            :is-field-selectable="isFieldSelectable"
+            @select="choose"
+          />
         </div>
         <p v-else class="condition-field-picker__empty">
           {{ t('designer.condition.noMatchingField') }}
@@ -351,27 +253,6 @@ function choose(option: PickerOption) {
 .condition-field-picker__tree {
   max-height: 320px;
   overflow: auto;
-}
-
-.condition-field-picker__node-label--disabled {
-  color: var(--ei-text-secondary, #777);
-}
-
-.condition-field-picker__tag {
-  padding: 1px 5px;
-  border-radius: 999px;
-  background: var(--ei-hover-bg, #f5f5f5);
-  color: var(--ei-text-secondary, #777);
-  font-size: 10px;
-}
-
-.condition-field-picker__path {
-  max-width: 120px;
-  overflow: hidden;
-  color: var(--ei-text-secondary, #aaa);
-  font-size: 10px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .condition-field-picker__empty {
