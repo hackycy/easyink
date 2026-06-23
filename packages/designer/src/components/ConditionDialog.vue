@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import type { MaterialConditionDefinition } from '@easyink/core'
 import type { DataSourceDescriptor } from '@easyink/datasource'
-import type { ConditionCompareOperator, ConditionFieldRef, ConditionOperator, ConditionRow, ConditionValue, ConditionValueType, RenderCondition } from '@easyink/schema'
+import type { ConditionCompareOperator, ConditionFieldRef, ConditionRow, ConditionValue, ConditionValueType, RenderCondition } from '@easyink/schema'
 import { IconCondition, IconCopy, IconDelete, IconGroup, IconPlus } from '@easyink/icons'
 import { deepClone } from '@easyink/shared'
-import { EiButton, EiCheckbox, EiDialog, EiIcon, EiSelect } from '@easyink/ui'
+import { EiButton, EiDialog, EiIcon, EiSelect } from '@easyink/ui'
 import { computed, ref, watch } from 'vue'
 import { changeRowValueType, COMPARE_OPERATORS, CONDITION_QUANTIFIERS, CONDITION_VALUE_TYPES, conditionOperatorFromKey, conditionOperatorKey, createConditionGroup, createConditionRow, createDialogDraft, isRenderConditionComplete, isUnaryOperator, normalizeRenderCondition, updateRowOperator } from '../conditions/editor-model'
 import ConditionFieldPicker from './ConditionFieldPicker.vue'
@@ -77,7 +77,6 @@ const hiddenEffectOptions = computed(() => [
   ...(props.capability.hiddenEffects.includes('remove') ? [{ label: props.t('designer.condition.hiddenRemove'), value: 'remove' }] : []),
   ...(props.capability.hiddenEffects.includes('reserve') ? [{ label: props.t('designer.condition.hiddenReserve'), value: 'reserve' }] : []),
 ])
-const caseSensitiveOperators: ConditionCompareOperator[] = ['eq', 'neq', 'in', 'notIn', 'contains', 'notContains', 'startsWith', 'endsWith']
 
 watch(() => props.open, (open) => {
   if (open)
@@ -158,10 +157,6 @@ function setValue(groupIndex: number, rowIndex: number, value: ValueSelection) {
     return
   updateRow(groupIndex, rowIndex, { ...row, value })
 }
-
-function isCaseSensitiveOperator(operator: ConditionOperator): boolean {
-  return caseSensitiveOperators.includes(operator.compare)
-}
 </script>
 
 <template>
@@ -232,8 +227,16 @@ function isCaseSensitiveOperator(operator: ConditionOperator): boolean {
                 <strong>{{ t('designer.condition.group') }} {{ groupIndex + 1 }}</strong>
               </div>
               <div class="condition-group__header-actions">
-                <EiButton v-if="group.conditions.length > 0" variant="ghost" size="sm" class="condition-dialog__add-action" @click="addRow(groupIndex)">
-                  <EiIcon :icon="IconPlus" :size="12" />{{ t('designer.condition.addCondition') }}
+                <EiButton
+                  v-if="group.conditions.length > 0"
+                  variant="ghost"
+                  size="sm"
+                  class="condition-dialog__add-action"
+                  :aria-label="t('designer.condition.addCondition')"
+                  :title="t('designer.condition.addCondition')"
+                  @click="addRow(groupIndex)"
+                >
+                  <EiIcon :icon="IconPlus" :size="14" />
                 </EiButton>
                 <EiButton variant="ghost" size="sm" class="condition-group__delete" :aria-label="t('designer.condition.deleteGroup')" @click="removeGroup(groupIndex)">
                   <EiIcon :icon="IconDelete" :size="14" />
@@ -271,9 +274,8 @@ function isCaseSensitiveOperator(operator: ConditionOperator): boolean {
                       <EiSelect :model-value="conditionOperatorKey(row.operator)" :options="operatorOptions" @update:model-value="setOperator(groupIndex, rowIndex, String($event))" />
                     </td>
                     <td>
-                      <ConditionValueCell v-if="!isUnaryOperator(row.operator)" :row="row" :sources="sources" :t="t" @update="setValue(groupIndex, rowIndex, $event)" />
+                      <ConditionValueCell v-if="!isUnaryOperator(row.operator)" :row="row" :t="t" @update="setValue(groupIndex, rowIndex, $event)" />
                       <span v-else class="condition-group__not-applicable">--</span>
-                      <EiCheckbox v-if="isCaseSensitiveOperator(row.operator)" class="condition-group__secondary-option" :label="t('designer.condition.caseSensitive')" :model-value="row.options?.caseSensitive !== false" @update:model-value="updateRow(groupIndex, rowIndex, { ...row, options: { ...row.options, caseSensitive: $event } })" />
                     </td>
                     <td>
                       <EiSelect v-if="!isUnaryOperator(row.operator)" :model-value="row.valueType ?? 'string'" :options="valueTypeOptions" @update:model-value="setValueType(groupIndex, rowIndex, $event as ConditionValueType)" />
@@ -545,12 +547,6 @@ function isCaseSensitiveOperator(operator: ConditionOperator): boolean {
   height: 27px;
   align-items: center;
   color: var(--ei-text-secondary, #999);
-}
-
-.condition-group__secondary-option {
-  margin-top: 6px;
-  color: var(--ei-text-secondary, #777);
-  font-size: 12px;
 }
 
 .condition-group__table :deep(.condition-field-picker__trigger) {

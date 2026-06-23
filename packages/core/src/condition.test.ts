@@ -25,12 +25,23 @@ function collectionRow(
 const groups = (...conditions: ConditionRow[]): ConditionGroup[] => [{ conditions }]
 
 describe('condition evaluator', () => {
-  it('evaluates group AND, group OR, explicit types, and case options', () => {
+  it('evaluates group AND, group OR, and explicit types', () => {
     expect(evaluateCondition(groups(row('gt', 'qty', literal(2), 'number')), { qty: '3' }).value).toBe(true)
     expect(evaluateCondition([
       { conditions: [row('eq', 'state', literal('closed'))] },
-      { conditions: [{ ...row('eq', 'name', literal('INK')), options: { caseSensitive: false } }, row('gt', 'qty', literal(2), 'number')] },
+      { conditions: [row('eq', 'name', literal('ink')), row('gt', 'qty', literal(2), 'number')] },
     ], { state: 'open', name: 'ink', qty: 3 }).value).toBe(true)
+  })
+
+  it('uses fixed case-sensitive string comparison', () => {
+    expect(evaluateCondition(groups(row('eq', 'name', literal('INK'))), { name: 'ink' }).value).toBe(false)
+    expect(evaluateCondition(groups(row('contains', 'name', literal('INK'))), { name: 'easyink' }).value).toBe(false)
+  })
+
+  it('supports case-insensitive text through the value type', () => {
+    expect(evaluateCondition(groups(row('eq', 'name', literal('INK'), 'case-insensitive-string')), { name: 'ink' }).value).toBe(true)
+    expect(evaluateCondition(groups(row('contains', 'name', literal('INK'), 'case-insensitive-string')), { name: 'easyink' }).value).toBe(true)
+    expect(evaluateCondition(groups(row('in', 'name', [literal('VIP'), literal('STAFF')], 'case-insensitive-string')), { name: 'vip' }).value).toBe(true)
   })
 
   it.each([
@@ -84,14 +95,7 @@ describe('condition evaluator', () => {
     expect(evaluateCondition(scoped('none'), { items: [-1, 0] }).value).toBe(true)
   })
 
-  it('supports field values with quantified operators and reports scalar fields used as collections', () => {
-    const conditionGroups: ConditionGroup[] = groups({
-      source: { path: 'items/price' },
-      operator: { compare: 'gt', quantifier: 'any' },
-      valueType: 'number',
-      value: { kind: 'field', field: { path: 'threshold' } },
-    })
-    expect(evaluateCondition(conditionGroups, { threshold: 100, items: [{ price: 120 }] }).value).toBe(true)
+  it('reports scalar fields used as collections', () => {
     const invalid = evaluateCondition(groups(collectionRow('any', 'gt', 'price', literal(100), 'number')), { price: 120 })
     expect(invalid.value).toBe('unknown')
     expect(invalid.diagnostics[0]?.code).toBe('CONDITION_COLLECTION_EXPECTED')
@@ -121,10 +125,10 @@ describe('condition evaluator', () => {
   })
 
   it('validates datetime timezone rules through explicit types', () => {
-    const conditionGroups = groups({ source: { path: 'left' }, operator: { compare: 'eq' }, valueType: 'datetime', value: { kind: 'field', field: { path: 'right' } } })
-    expect(evaluateCondition(conditionGroups, { left: '2025-01-01', right: '2025-01-01T00:00:00Z' }).value).toBe(true)
-    expect(evaluateCondition(conditionGroups, { left: '2025-01-01T00:00:00', right: '2025-01-01T00:00:00Z' }).value).toBe('unknown')
-    expect(evaluateCondition(conditionGroups, { left: '2025-02-30', right: '2025-03-02' }).value).toBe('unknown')
+    const conditionGroups = groups({ source: { path: 'left' }, operator: { compare: 'eq' }, valueType: 'datetime', value: literal('2025-01-01T00:00:00Z') })
+    expect(evaluateCondition(conditionGroups, { left: '2025-01-01' }).value).toBe(true)
+    expect(evaluateCondition(conditionGroups, { left: '2025-01-01T00:00:00' }).value).toBe('unknown')
+    expect(evaluateCondition(conditionGroups, { left: '2025-02-30' }).value).toBe('unknown')
   })
 
   it('stops oversized collection scans at the fixed limit', () => {

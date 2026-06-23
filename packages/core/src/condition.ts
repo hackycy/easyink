@@ -203,12 +203,7 @@ function evaluateResolvedRow(row: ConditionRow, subject: ResolvedValue, context:
 }
 
 function evaluateValue(value: ConditionValue, valueType: ConditionValueType, context: EvaluationContext): ResolvedValue {
-  if (value.kind === 'literal')
-    return castResolved(value.value, valueType, undefined, context)
-  const resolved = evaluateField(value.field, context, false)
-  return resolved.status === 'known'
-    ? castResolved(resolved.value, valueType, value.field.path, context)
-    : resolved
+  return castResolved(value.value, valueType, undefined, context)
 }
 
 function evaluateField(field: ConditionFieldRef, context: EvaluationContext, ignoreMissingDiagnostic: boolean): ResolvedValue {
@@ -257,15 +252,14 @@ function compare(row: ConditionRow, raw: unknown[], context: EvaluationContext):
     addDiagnostic(context, 'CONDITION_TYPE_MISMATCH', 'Comparison operands must be scalar values.')
     return 'unknown'
   }
-  const caseSensitive = row.options?.caseSensitive !== false
   if (operator === 'eq' || operator === 'neq') {
-    const equal = scalarEqual(raw[0], raw[1], caseSensitive, context)
+    const equal = scalarEqual(raw[0], raw[1], context)
     return equal === 'unknown' ? equal : operator === 'eq' ? equal : !equal
   }
   if (operator === 'in' || operator === 'notIn') {
     let sawUnknown = false
     for (const candidate of raw.slice(1)) {
-      const equal = scalarEqual(raw[0], candidate, caseSensitive, context)
+      const equal = scalarEqual(raw[0], candidate, context)
       if (equal === true)
         return operator === 'in'
       sawUnknown ||= equal === 'unknown'
@@ -275,11 +269,9 @@ function compare(row: ConditionRow, raw: unknown[], context: EvaluationContext):
   if (operator === 'contains' || operator === 'notContains' || operator === 'startsWith' || operator === 'endsWith') {
     if (typeof raw[0] !== 'string' || typeof raw[1] !== 'string')
       return typeMismatch(context, 'String operator expected string operands.')
-    const left = caseSensitive ? raw[0] : raw[0].toLowerCase()
-    const right = caseSensitive ? raw[1] : raw[1].toLowerCase()
     const matched = operator === 'contains' || operator === 'notContains'
-      ? left.includes(right)
-      : operator === 'startsWith' ? left.startsWith(right) : left.endsWith(right)
+      ? raw[0].includes(raw[1])
+      : operator === 'startsWith' ? raw[0].startsWith(raw[1]) : raw[0].endsWith(raw[1])
     return operator === 'notContains' ? !matched : matched
   }
   if (operator === 'between' || operator === 'notBetween') {
@@ -372,11 +364,15 @@ function readPathCandidates(
 function castValue(value: unknown, type: ConditionValueType): { success: true, value: unknown } | { success: false } {
   if (value === null)
     return { success: true, value: null }
-  if (type === 'string' || type === 'trimmed-string') {
+  if (type === 'string' || type === 'trimmed-string' || type === 'case-insensitive-string') {
     if (!isScalar(value))
       return { success: false }
     const result = String(value)
-    return { success: true, value: type === 'trimmed-string' ? result.trim() : result }
+    if (type === 'trimmed-string')
+      return { success: true, value: result.trim() }
+    if (type === 'case-insensitive-string')
+      return { success: true, value: result.toLowerCase() }
+    return { success: true, value: result }
   }
   if (type === 'number') {
     if (typeof value === 'number')
@@ -411,11 +407,9 @@ function castValue(value: unknown, type: ConditionValueType): { success: true, v
   return { success: true, value: timestamp }
 }
 
-function scalarEqual(left: unknown, right: unknown, caseSensitive: boolean, context: EvaluationContext): ConditionTruth {
+function scalarEqual(left: unknown, right: unknown, context: EvaluationContext): ConditionTruth {
   if (typeof left !== typeof right)
     return typeMismatch(context, 'Comparison operands have different types.')
-  if (typeof left === 'string' && typeof right === 'string' && !caseSensitive)
-    return left.toLowerCase() === right.toLowerCase()
   return left === right
 }
 

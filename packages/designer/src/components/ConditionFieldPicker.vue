@@ -173,6 +173,7 @@ watch(() => props.sources, (sources) => {
             :toggle-expand="toggleExpand"
             :is-expanded="isExpanded"
             :is-field-selectable="isFieldSelectable"
+            :show-field-path="true"
             @select="choose"
           />
         </div>
@@ -239,7 +240,7 @@ watch(() => props.sources, (sources) => {
 }
 
 .condition-field-picker__panel {
-  width: min(460px, calc(100vw - 48px));
+  width: min(540px, calc(100vw - 48px));
 }
 
 .condition-field-picker__search {
@@ -251,7 +252,7 @@ watch(() => props.sources, (sources) => {
 }
 
 .condition-field-picker__tree {
-  max-height: 320px;
+  max-height: min(360px, calc(var(--ei-popover-available-height, 420px) - 48px));
   overflow: auto;
 }
 

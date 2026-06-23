@@ -14,11 +14,13 @@ const props = defineProps<{
   field: DataFieldNode
   source: DataSourceDescriptor
   depth: number
+  parentPath?: string
   toggleExpand: (key: string) => void
   isExpanded: (key: string) => boolean
   mode?: 'drag' | 'select'
   isFieldSelectable?: (field: DataFieldNode, source: DataSourceDescriptor) => boolean
   fieldBadge?: (field: DataFieldNode, source: DataSourceDescriptor) => string | undefined
+  showFieldPath?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -29,11 +31,11 @@ const dragDrop = inject(DESIGNER_DRAG_DROP_KEY, null)
 let suppressNativeToggleClick = false
 
 function nodeKey(): string {
-  return `${props.source.id}:${props.field.path || props.field.name}`
+  return `${props.source.id}:${fieldPath()}`
 }
 
 function fieldPath(): string {
-  return props.field.path || props.field.name
+  return props.field.path || [props.parentPath, props.field.key || props.field.name].filter(Boolean).join('/')
 }
 
 function isLeaf(): boolean {
@@ -57,7 +59,7 @@ function expanded(): boolean {
 }
 
 function childKey(child: DataFieldNode): string {
-  return `${props.source.id}:${child.path || child.name}`
+  return `${props.source.id}:${child.path || [fieldPath(), child.key || child.name].filter(Boolean).join('/')}`
 }
 
 function toggleNode() {
@@ -156,7 +158,10 @@ function onPointerUp() {
         :stroke-width="1.5"
         class="ei-field-node__icon ei-field-node__icon--folder"
       />
-      <span class="ei-field-node__label">{{ field.title || field.name }}</span>
+      <span class="ei-field-node__copy">
+        <span class="ei-field-node__label" :title="fieldPath()">{{ field.title || field.name }}</span>
+        <span v-if="showFieldPath" class="ei-field-node__path" :title="fieldPath()">{{ fieldPath() }}</span>
+      </span>
       <span v-if="fieldBadge?.(field, source)" class="ei-field-node__badge">
         {{ fieldBadge(field, source) }}
       </span>
@@ -168,11 +173,13 @@ function onPointerUp() {
         :field="child"
         :source="source"
         :depth="depth + 1"
+        :parent-path="fieldPath()"
         :toggle-expand="toggleExpand"
         :is-expanded="isExpanded"
         :mode="mode"
         :is-field-selectable="isFieldSelectable"
         :field-badge="fieldBadge"
+        :show-field-path="showFieldPath"
         @select="(field, selectedSource) => emit('select', field, selectedSource)"
       />
     </template>
@@ -191,7 +198,10 @@ function onPointerUp() {
   >
     <span class="ei-field-node__chevron-spacer" />
     <IconGripVertical v-if="isDraggable()" :size="12" :stroke-width="1.5" class="ei-field-node__grip" />
-    <span class="ei-field-node__label" :title="fieldPath()">{{ field.title || field.name }}</span>
+    <span class="ei-field-node__copy">
+      <span class="ei-field-node__label" :title="fieldPath()">{{ field.title || field.name }}</span>
+      <span v-if="showFieldPath" class="ei-field-node__path" :title="fieldPath()">{{ fieldPath() }}</span>
+    </span>
     <span v-if="fieldBadge?.(field, source)" class="ei-field-node__badge">
       {{ fieldBadge(field, source) }}
     </span>
@@ -287,13 +297,29 @@ function onPointerUp() {
     color: var(--ei-text-secondary, #999);
   }
 
-  &__label {
+  &__copy {
     flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  &__label {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     color: var(--ei-text, #333);
     font-size: 12px;
+  }
+
+  &__path {
+    overflow: hidden;
+    color: var(--ei-text-secondary, #999);
+    font-size: 10px;
+    line-height: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   &__badge {

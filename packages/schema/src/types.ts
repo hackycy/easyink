@@ -310,7 +310,7 @@ export type ConditionCompareOperator
     | 'contains' | 'notContains' | 'startsWith' | 'endsWith'
     | 'exists' | 'notExists' | 'isEmpty' | 'isNotEmpty'
 
-export type ConditionValueType = 'string' | 'trimmed-string' | 'number' | 'boolean' | 'datetime'
+export type ConditionValueType = 'string' | 'trimmed-string' | 'case-insensitive-string' | 'number' | 'boolean' | 'datetime'
 export type ConditionQuantifier = 'any' | 'all' | 'none'
 
 export interface ConditionOperator {
@@ -330,16 +330,16 @@ export interface ConditionFieldRef {
 
 export type ConditionScalar = string | number | boolean | null
 
-export type ConditionValue
-  = | { kind: 'literal', value: ConditionScalar }
-    | { kind: 'field', field: ConditionFieldRef }
+export interface ConditionValue {
+  kind: 'literal'
+  value: ConditionScalar
+}
 
 export interface ConditionRow {
   source: ConditionFieldRef
   operator: ConditionOperator
   valueType?: ConditionValueType
   value?: ConditionValue | ConditionValue[]
-  options?: { caseSensitive?: boolean }
 }
 
 export interface ConditionGroup {

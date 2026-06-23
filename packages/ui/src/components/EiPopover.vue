@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 
 /**
  * EiPopover: lightweight anchor-positioned popover.
@@ -30,18 +30,45 @@ const emit = defineEmits<{
 
 const triggerRef = ref<HTMLElement | null>(null)
 const panelRef = ref<HTMLElement | null>(null)
-const pos = ref({ top: 0, left: 0 })
+const pos = ref({ top: 0, left: 0, availableHeight: 320 })
 
-function compute() {
+async function compute() {
   const el = triggerRef.value
   if (!el)
     return
   const r = el.getBoundingClientRect()
-  const top = r.bottom + props.offset
-  const left = props.placement === 'bottom-end'
-    ? r.right - (panelRef.value?.offsetWidth ?? 0)
-    : r.left
-  pos.value = { top, left }
+  pos.value = {
+    ...pos.value,
+    top: r.bottom + props.offset,
+    left: props.placement === 'bottom-end'
+      ? r.right - (panelRef.value?.offsetWidth ?? 0)
+      : r.left,
+  }
+  await nextTick()
+  if (!props.open || !triggerRef.value || !panelRef.value)
+    return
+
+  const rect = triggerRef.value.getBoundingClientRect()
+  const panel = panelRef.value
+  const margin = 8
+  const gap = props.offset
+  const panelHeight = panel.offsetHeight
+  const panelWidth = panel.offsetWidth
+  const spaceBelow = window.innerHeight - rect.bottom - margin
+  const spaceAbove = rect.top - margin
+  const shouldFlip = spaceBelow < panelHeight && spaceAbove > spaceBelow
+  const availableHeight = Math.max(96, (shouldFlip ? spaceAbove : spaceBelow) - gap)
+  const renderedHeight = Math.min(panelHeight, availableHeight)
+
+  let top = shouldFlip ? rect.top - renderedHeight - gap : rect.bottom + gap
+  top = Math.max(margin, Math.min(top, window.innerHeight - renderedHeight - margin))
+
+  let left = props.placement === 'bottom-end'
+    ? rect.right - panelWidth
+    : rect.left
+  left = Math.max(margin, Math.min(left, window.innerWidth - panelWidth - margin))
+
+  pos.value = { top, left, availableHeight }
 }
 
 function onDocPointerDown(ev: PointerEvent) {
@@ -62,7 +89,7 @@ watch(
   (open) => {
     if (open) {
       requestAnimationFrame(() => {
-        compute()
+        void compute()
       })
       window.addEventListener('pointerdown', onDocPointerDown, true)
       window.addEventListener('resize', compute)
@@ -83,10 +110,11 @@ onBeforeUnmount(() => {
 })
 
 const panelStyle = computed(() => ({
-  position: 'fixed' as const,
-  top: `${pos.value.top}px`,
-  left: `${pos.value.left}px`,
-  zIndex: 9999,
+  'position': 'fixed' as const,
+  'top': `${pos.value.top}px`,
+  'left': `${pos.value.left}px`,
+  'zIndex': 9999,
+  '--ei-popover-available-height': `${pos.value.availableHeight}px`,
 }))
 </script>
 
@@ -112,5 +140,7 @@ const panelStyle = computed(() => ({
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
   padding: 8px;
   min-width: 180px;
+  max-height: var(--ei-popover-available-height, calc(100vh - 16px));
+  overflow: auto;
 }
 </style>

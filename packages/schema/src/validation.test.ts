@@ -30,6 +30,7 @@ describe('validateSchema', () => {
           whenMatched: 'show',
           groups: [{ conditions: [
             { source: { path: 'qty' }, operator: { compare: 'gt', quantifier: 'any' }, valueType: 'number', value: { kind: 'literal', value: 0 } },
+            { source: { path: 'code' }, operator: { compare: 'eq' }, valueType: 'case-insensitive-string', value: { kind: 'literal', value: 'vip' } },
             { source: { path: 'name' }, operator: { compare: 'isNotEmpty' } },
           ] }],
         },
@@ -49,7 +50,10 @@ describe('validateSchema', () => {
         renderCondition: {
           enabled: false,
           whenMatched: 'show',
-          groups: [{ conditions: [{ source: { path: '' }, operator: { compare: 'between', quantifier: 'some' }, valueType: 'number' }] }],
+          groups: [{ conditions: [
+            { source: { path: '' }, operator: { compare: 'between', quantifier: 'some' }, valueType: 'number' },
+            { source: { path: 'name' }, operator: { compare: 'eq' }, valueType: 'string', value: { kind: 'field', field: { path: 'other' } }, options: { caseSensitive: false } },
+          ] }],
         },
       }],
     })
@@ -57,6 +61,8 @@ describe('validateSchema', () => {
       'schema.condition.value.arity.invalid',
       'schema.condition.field.path.invalid',
       'schema.condition.operator.quantifier.invalid',
+      'schema.condition.value.kind.invalid',
+      'schema.condition.options.unexpected',
     ]))
   })
 

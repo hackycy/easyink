@@ -11,6 +11,7 @@ defineProps<{
   mode?: 'drag' | 'select'
   isFieldSelectable?: (field: DataFieldNode, source: DataSourceDescriptor) => boolean
   fieldBadge?: (field: DataFieldNode, source: DataSourceDescriptor) => string | undefined
+  showFieldPath?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -58,11 +59,13 @@ function fieldKey(source: DataSourceDescriptor, field: DataFieldNode): string {
           :field="field"
           :source="source"
           :depth="0"
+          parent-path=""
           :mode="mode"
           :toggle-expand="toggleExpand"
           :is-expanded="isExpanded"
           :is-field-selectable="isFieldSelectable"
           :field-badge="fieldBadge"
+          :show-field-path="showFieldPath"
           @select="(field, selectedSource) => emit('select', field, selectedSource)"
         />
       </div>

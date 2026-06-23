@@ -22,7 +22,7 @@ export const COMPARE_OPERATORS: ConditionCompareOperator[] = [
   'isNotEmpty',
 ]
 
-export const CONDITION_VALUE_TYPES: ConditionValueType[] = ['string', 'trimmed-string', 'number', 'boolean', 'datetime']
+export const CONDITION_VALUE_TYPES: ConditionValueType[] = ['string', 'trimmed-string', 'case-insensitive-string', 'number', 'boolean', 'datetime']
 export const UNARY_OPERATORS: ConditionCompareOperator[] = ['exists', 'notExists', 'isEmpty', 'isNotEmpty']
 export const CONDITION_QUANTIFIERS: ConditionQuantifier[] = ['any', 'all', 'none']
 export type ConditionOperatorKey = ConditionCompareOperator | `${ConditionQuantifier}:${ConditionCompareOperator}`
@@ -58,7 +58,6 @@ export function updateRowOperator(row: ConditionRow, operator: ConditionOperator
   if (isUnaryOperator(operator)) {
     delete next.value
     delete next.valueType
-    delete next.options
     return next
   }
   next.valueType ??= 'string'
@@ -121,10 +120,9 @@ export function defaultLiteralForType(type: ConditionValueType): ConditionValue 
 export function changeRowValueType(row: ConditionRow, type: ConditionValueType): ConditionRow {
   if (isUnaryOperator(row.operator))
     return row
-  const convert = (value: ConditionValue): ConditionValue => value.kind === 'field' ? value : defaultLiteralForType(type)
   const value = Array.isArray(row.value)
-    ? row.value.map(convert)
-    : row.value ? convert(row.value) : defaultLiteralForType(type)
+    ? row.value.map(() => defaultLiteralForType(type))
+    : defaultLiteralForType(type)
   return { ...row, valueType: type, value }
 }
 
@@ -151,8 +149,8 @@ export function conditionOperatorFromKey(key: string): ConditionOperator {
   return { compare: first as ConditionCompareOperator }
 }
 
-function isConditionValueComplete(value: ConditionValue): boolean {
-  return value.kind === 'literal' || isFieldComplete(value.field)
+function isConditionValueComplete(_value: ConditionValue): boolean {
+  return true
 }
 
 function isFieldComplete(field: ConditionFieldRef): boolean {

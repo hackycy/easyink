@@ -1,15 +1,12 @@
 <script setup lang="ts">
-import type { DataSourceDescriptor } from '@easyink/datasource'
 import type { ConditionRow, ConditionValue } from '@easyink/schema'
 import { IconDelete, IconPlus } from '@easyink/icons'
-import { EiButton, EiIcon, EiInput, EiNumberInput, EiSelect, EiSwitch } from '@easyink/ui'
+import { EiButton, EiIcon, EiInput, EiNumberInput, EiSelect } from '@easyink/ui'
 import { computed } from 'vue'
 import { defaultLiteralForType, isBetweenOperator, isInOperator, literal } from '../conditions/editor-model'
-import ConditionFieldPicker from './ConditionFieldPicker.vue'
 
 const props = defineProps<{
   row: ConditionRow
-  sources: DataSourceDescriptor[]
   t: (key: string) => string
 }>()
 
@@ -20,21 +17,15 @@ const emit = defineEmits<{
 const values = computed(() => Array.isArray(props.row.value) ? props.row.value : props.row.value ? [props.row.value] : [])
 const multiple = computed(() => isBetweenOperator(props.row.operator) || isInOperator(props.row.operator))
 const canAdd = computed(() => isInOperator(props.row.operator))
-const kindOptions = computed(() => [
-  { label: props.t('designer.condition.valueKindLiteral'), value: 'literal' },
-  { label: props.t('designer.condition.valueKindField'), value: 'field' },
+const booleanOptions = computed(() => [
+  { label: props.t('designer.condition.booleanTrue'), value: 'true' },
+  { label: props.t('designer.condition.booleanFalse'), value: 'false' },
 ])
 
 function updateAt(index: number, value: ConditionValue) {
   const next = [...values.value]
   next[index] = value
   emit('update', multiple.value ? next : value)
-}
-
-function changeKind(index: number, kind: string) {
-  updateAt(index, kind === 'field'
-    ? { kind: 'field', field: { path: '' } }
-    : defaultLiteralForType(props.row.valueType ?? 'string'))
 }
 
 function updateLiteral(index: number, value: string | number | boolean) {
@@ -52,15 +43,19 @@ function removeCandidate(index: number) {
 }
 
 function literalText(value: ConditionValue): string | number {
-  return value.kind === 'literal' && value.value != null ? String(value.value) : ''
+  return value.value != null ? String(value.value) : ''
 }
 
 function literalNumber(value: ConditionValue): number | null {
-  return value.kind === 'literal' && typeof value.value === 'number' ? value.value : null
+  return typeof value.value === 'number' ? value.value : null
 }
 
 function literalBoolean(value: ConditionValue): boolean {
-  return value.kind === 'literal' && value.value === true
+  return value.value === true
+}
+
+function literalBooleanKey(value: ConditionValue): 'true' | 'false' {
+  return literalBoolean(value) ? 'true' : 'false'
 }
 
 function labelFor(index: number): string {
@@ -77,15 +72,7 @@ function labelFor(index: number): string {
     <div v-for="(value, index) in values" :key="index" class="condition-value-cell__item">
       <span v-if="multiple" class="condition-value-cell__item-label">{{ labelFor(index) }}</span>
       <div class="condition-value-cell__editor">
-        <EiSelect :model-value="value.kind" :options="kindOptions" @update:model-value="changeKind(index, String($event))" />
-        <ConditionFieldPicker
-          v-if="value.kind === 'field'"
-          :model-value="value.field"
-          :sources="sources"
-          :t="t"
-          @select="updateAt(index, { kind: 'field', field: $event })"
-        />
-        <EiSwitch v-else-if="row.valueType === 'boolean'" :model-value="literalBoolean(value)" @update:model-value="updateLiteral(index, $event)" />
+        <EiSelect v-if="row.valueType === 'boolean'" :model-value="literalBooleanKey(value)" :options="booleanOptions" @update:model-value="updateLiteral(index, $event === 'true')" />
         <EiNumberInput v-else-if="row.valueType === 'number'" :model-value="literalNumber(value)" :nullable="false" @update:model-value="$event != null && updateLiteral(index, $event)" />
         <EiInput v-else :model-value="literalText(value)" :placeholder="row.valueType === 'datetime' ? '2026-01-01T00:00:00Z' : ''" @update:model-value="updateLiteral(index, String($event))" />
         <EiButton v-if="canAdd && values.length > 1" variant="ghost" size="sm" :aria-label="t('designer.condition.deleteValue')" @click="removeCandidate(index)">
@@ -122,7 +109,7 @@ function labelFor(index: number): string {
 
 .condition-value-cell__editor {
   display: grid;
-  grid-template-columns: 82px minmax(150px, 1fr) auto;
+  grid-template-columns: minmax(150px, 1fr) auto;
   gap: 6px;
   align-items: start;
 }

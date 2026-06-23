@@ -10,7 +10,7 @@ const PAGINATION_STRATEGIES = new Set(['none', 'fixed-sheets', 'auto-sheets'])
 const REFLOW_STRATEGIES = new Set(['none', 'measure-only', 'flow-y'])
 const CONDITION_MAX_GROUPS = 32
 const CONDITION_MAX_ROWS = 256
-const CONDITION_VALUE_TYPES = new Set(['string', 'trimmed-string', 'number', 'boolean', 'datetime'])
+const CONDITION_VALUE_TYPES = new Set(['string', 'trimmed-string', 'case-insensitive-string', 'number', 'boolean', 'datetime'])
 const CONDITION_QUANTIFIERS = new Set(['any', 'all', 'none'])
 const CONDITION_COMPARE_OPERATORS = new Set([
   'eq',
@@ -256,8 +256,8 @@ function validateConditionRow(value: unknown, path: string, issues: SchemaValida
       validateConditionValue(value.value, `${path}.value`, issues)
     }
   }
-  if (value.options != null && (!isObject(value.options) || (value.options.caseSensitive != null && typeof value.options.caseSensitive !== 'boolean')))
-    issues.push(createIssue(`${path}.options`, 'must contain only a boolean caseSensitive option', 'schema.condition.options.invalid'))
+  if (value.options != null)
+    issues.push(createIssue(`${path}.options`, 'must be omitted', 'schema.condition.options.unexpected'))
 }
 
 function validateConditionValue(value: unknown, path: string, issues: SchemaValidationIssue[]): void {
@@ -272,11 +272,7 @@ function validateConditionValue(value: unknown, path: string, issues: SchemaVali
       issues.push(createIssue(`${path}.value`, 'must be a finite number', 'schema.condition.literal.invalid'))
     return
   }
-  if (value.kind !== 'field') {
-    issues.push(createIssue(`${path}.kind`, 'must be literal or field', 'schema.condition.value.kind.invalid'))
-    return
-  }
-  validateConditionField(value.field, `${path}.field`, issues)
+  issues.push(createIssue(`${path}.kind`, 'must be literal', 'schema.condition.value.kind.invalid'))
 }
 
 function validateConditionField(value: unknown, path: string, issues: SchemaValidationIssue[]): void {
