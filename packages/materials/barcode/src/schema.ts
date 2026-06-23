@@ -2,7 +2,7 @@ import type { MaterialConditionDefinition } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import { convertUnit, generateId } from '@easyink/shared'
 
-export const BARCODE_CONDITION: MaterialConditionDefinition = { scope: 'node', effects: ['remove', 'reserve'] }
+export const BARCODE_CONDITION: MaterialConditionDefinition = { scope: 'node', hiddenEffects: ['remove', 'reserve'] }
 
 export const BARCODE_TYPE = 'barcode'
 

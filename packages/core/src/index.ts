@@ -44,8 +44,9 @@ export {
   UpdateRenderConditionCommand,
 } from './commands'
 export {
-  CONDITION_MAX_DEPTH,
-  CONDITION_MAX_NODES,
+  CONDITION_MAX_COLLECTION_RECORDS,
+  CONDITION_MAX_GROUPS,
+  CONDITION_MAX_ROWS,
   CONDITION_STEP_BUDGET,
   evaluateCondition,
   resolveConditionalNode,

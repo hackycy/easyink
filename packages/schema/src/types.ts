@@ -302,8 +302,6 @@ export interface NodeRepeatConfig {
 
 // ─── Material Node ─────────────────────────────────────────────────
 
-export type ValueCast = 'string' | 'trimmed-string' | 'number' | 'boolean' | 'datetime'
-
 export type CompareOperator
   = | 'eq' | 'neq'
     | 'gt' | 'gte' | 'lt' | 'lte'
@@ -312,8 +310,10 @@ export type CompareOperator
     | 'contains' | 'notContains' | 'startsWith' | 'endsWith'
     | 'exists' | 'notExists' | 'isEmpty' | 'isNotEmpty'
 
-export interface FieldValueExpression {
-  kind: 'field'
+export type ConditionValueType = 'string' | 'trimmed-string' | 'number' | 'boolean' | 'datetime'
+
+export interface ConditionFieldRef {
+  scope?: 'root' | 'item'
   path: string
   sourceId?: string
   sourceName?: string
@@ -321,28 +321,43 @@ export interface FieldValueExpression {
   fieldKey?: string
   fieldLabel?: string
   fieldTag?: string
-  cast?: ValueCast
 }
 
-export type ValueExpression
-  = | FieldValueExpression
-    | { kind: 'literal', value: string | number | boolean | null }
+export type ConditionScalar = string | number | boolean | null
 
-export type ConditionNode
-  = | { kind: 'group', operator: 'and' | 'or', children: ConditionNode[] }
-    | { kind: 'not', child: ConditionNode }
-    | {
-      kind: 'compare'
-      operator: CompareOperator
-      operands: ValueExpression[]
-      options?: { caseSensitive?: boolean }
-    }
+export type ConditionValue
+  = | { kind: 'literal', value: ConditionScalar }
+    | { kind: 'field', field: ConditionFieldRef }
+
+export interface CollectionConditionScope {
+  kind: 'collection'
+  path: string
+  quantifier: 'any' | 'all' | 'none'
+  sourceId?: string
+  sourceName?: string
+  sourceTag?: string
+  fieldLabel?: string
+}
+
+export interface ConditionRow {
+  source: ConditionFieldRef
+  operator: CompareOperator
+  valueType?: ConditionValueType
+  value?: ConditionValue | ConditionValue[]
+  options?: { caseSensitive?: boolean }
+}
+
+export interface ConditionGroup {
+  scope?: CollectionConditionScope
+  conditions: ConditionRow[]
+}
 
 export interface RenderCondition {
   enabled?: boolean
-  rule: ConditionNode
-  whenFalse?: 'remove' | 'reserve'
-  onUnknown?: 'include' | 'exclude'
+  whenMatched: 'show' | 'hide'
+  whenHidden?: 'remove' | 'reserve'
+  onUnknown?: 'show' | 'hide'
+  groups: ConditionGroup[]
 }
 
 export interface MaterialNode<TProps extends object = Record<string, unknown>> {

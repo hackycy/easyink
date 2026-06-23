@@ -89,7 +89,7 @@ const panelStyle = computed<CSSProperties>(() => {
     'minWidth': `${panelPos.value.minWidth}px`,
     'width': width ?? 'max-content',
     'maxWidth': 'calc(100vw - 16px)',
-    'zIndex': 9999,
+    'zIndex': 10020,
     '--ei-select-max-height': `${props.maxHeight}px`,
   }
 })

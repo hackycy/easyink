@@ -1,4 +1,5 @@
-import type { CompareOperator, ConditionNode, RenderCondition, ValueExpression } from '@easyink/schema'
+import type { CompareOperator, ConditionFieldRef, ConditionGroup, ConditionRow, ConditionValue, ConditionValueType, RenderCondition } from '@easyink/schema'
+import { deepClone } from '@easyink/shared'
 
 export const COMPARE_OPERATORS: CompareOperator[] = [
   'eq',
@@ -21,56 +22,122 @@ export const COMPARE_OPERATORS: CompareOperator[] = [
   'isNotEmpty',
 ]
 
-export function createValueExpression(): ValueExpression {
-  return { kind: 'field', path: '' }
-}
+export const CONDITION_VALUE_TYPES: ConditionValueType[] = ['string', 'trimmed-string', 'number', 'boolean', 'datetime']
+export const UNARY_OPERATORS: CompareOperator[] = ['exists', 'notExists', 'isEmpty', 'isNotEmpty']
 
-export function createConditionNode(kind: ConditionNode['kind'] = 'compare'): ConditionNode {
-  if (kind === 'group')
-    return { kind: 'group', operator: 'and', children: [createConditionNode()] }
-  if (kind === 'not')
-    return { kind: 'not', child: createConditionNode() }
-  return { kind: 'compare', operator: 'eq', operands: [createValueExpression(), { kind: 'literal', value: '' }] }
-}
-
-export function createRenderCondition(fieldPath = ''): RenderCondition {
+export function createConditionRow(source: ConditionFieldRef = { path: '' }): ConditionRow {
   return {
-    enabled: true,
-    rule: {
-      kind: 'compare',
-      operator: 'eq',
-      operands: [{ kind: 'field', path: fieldPath }, { kind: 'literal', value: '' }],
-    },
-    whenFalse: 'remove',
-    onUnknown: 'include',
+    source,
+    operator: 'eq',
+    valueType: 'string',
+    value: { kind: 'literal', value: '' },
   }
 }
 
-export function normalizeCompareOperands(operator: CompareOperator, current: ValueExpression[]): ValueExpression[] {
-  const count = operator === 'between' || operator === 'notBetween'
-    ? 3
-    : operator === 'exists' || operator === 'notExists' || operator === 'isEmpty' || operator === 'isNotEmpty'
-      ? 1
-      : 2
-  if (operator === 'in' || operator === 'notIn')
-    return current.length >= 2 ? current : [...current, ...Array.from({ length: 2 - current.length }, () => ({ kind: 'literal', value: '' } as ValueExpression))]
-  return Array.from({ length: count }, (_, index) => current[index] ?? ({ kind: 'literal', value: '' } as ValueExpression))
+export function createConditionGroup(): ConditionGroup {
+  return { conditions: [createConditionRow()] }
+}
+
+export function createRenderCondition(): RenderCondition {
+  return {
+    enabled: true,
+    whenMatched: 'show',
+    whenHidden: 'remove',
+    onUnknown: 'show',
+    groups: [],
+  }
+}
+
+export function createDialogDraft(condition?: RenderCondition): RenderCondition {
+  const draft = deepClone(condition ?? createRenderCondition())
+  if (draft.groups.length === 0)
+    draft.groups.push(createConditionGroup())
+  return draft
+}
+
+export function updateRowOperator(row: ConditionRow, operator: CompareOperator): ConditionRow {
+  const next: ConditionRow = { ...row, operator }
+  if (UNARY_OPERATORS.includes(operator)) {
+    delete next.value
+    delete next.valueType
+    delete next.options
+    return next
+  }
+  next.valueType ??= 'string'
+  const current = Array.isArray(row.value) ? row.value : row.value ? [row.value] : []
+  if (operator === 'between' || operator === 'notBetween')
+    next.value = [current[0] ?? literal(''), current[1] ?? literal('')]
+  else if (operator === 'in' || operator === 'notIn')
+    next.value = current.length > 0 ? current : [literal('')]
+  else
+    next.value = current[0] ?? literal('')
+  return next
+}
+
+export function normalizeRenderCondition(condition: RenderCondition): RenderCondition {
+  return {
+    ...deepClone(condition),
+    groups: condition.groups
+      .map(group => ({ ...deepClone(group), conditions: group.conditions.filter(row => !isBlankRow(row)) }))
+      .filter(group => group.conditions.length > 0),
+  }
 }
 
 export function isRenderConditionComplete(condition: RenderCondition): boolean {
-  return isConditionNodeComplete(condition.rule)
+  return condition.groups.every(group => group.conditions.every(row => isBlankRow(row) || isConditionRowComplete(row, !!group.scope)))
 }
 
-function isConditionNodeComplete(node: ConditionNode): boolean {
-  if (node.kind === 'group')
-    return node.children.length > 0 && node.children.every(isConditionNodeComplete)
-  if (node.kind === 'not')
-    return isConditionNodeComplete(node.child)
-  return normalizeCompareOperands(node.operator, node.operands).length === node.operands.length && node.operands.every(isValueComplete)
+export function isConditionRowComplete(row: ConditionRow, collectionScoped: boolean): boolean {
+  if (!isFieldComplete(row.source, collectionScoped))
+    return false
+  if (UNARY_OPERATORS.includes(row.operator))
+    return true
+  if (!row.valueType || row.value == null)
+    return false
+  const values = Array.isArray(row.value) ? row.value : [row.value]
+  if ((row.operator === 'between' || row.operator === 'notBetween') && values.length !== 2)
+    return false
+  if ((row.operator === 'in' || row.operator === 'notIn') && values.length === 0)
+    return false
+  return values.every(value => isConditionValueComplete(value, collectionScoped))
 }
 
-function isValueComplete(value: ValueExpression): boolean {
-  if (value.kind === 'literal')
-    return typeof value.value !== 'string' || value.value.length > 0
-  return value.path.trim().length > 0
+export function isBlankRow(row: ConditionRow): boolean {
+  return row.source.path === ''
+    && (row.source.scope ?? 'root') === 'root'
+    && !row.source.fieldLabel
+    && !row.source.sourceId
+}
+
+export function literal(value: string | number | boolean | null): ConditionValue {
+  return { kind: 'literal', value }
+}
+
+export function defaultLiteralForType(type: ConditionValueType): ConditionValue {
+  if (type === 'number')
+    return literal(0)
+  if (type === 'boolean')
+    return literal(false)
+  return literal('')
+}
+
+export function changeRowValueType(row: ConditionRow, type: ConditionValueType): ConditionRow {
+  if (UNARY_OPERATORS.includes(row.operator))
+    return row
+  const convert = (value: ConditionValue): ConditionValue => value.kind === 'field' ? value : defaultLiteralForType(type)
+  const value = Array.isArray(row.value)
+    ? row.value.map(convert)
+    : row.value ? convert(row.value) : defaultLiteralForType(type)
+  return { ...row, valueType: type, value }
+}
+
+function isConditionValueComplete(value: ConditionValue, collectionScoped: boolean): boolean {
+  return value.kind === 'literal' || isFieldComplete(value.field, collectionScoped)
+}
+
+function isFieldComplete(field: ConditionFieldRef, collectionScoped: boolean): boolean {
+  const scope = field.scope ?? 'root'
+  if (scope === 'item')
+    return collectionScoped && (field.path !== '' || !!field.fieldLabel)
+  return field.path.trim().length > 0
 }

@@ -13,6 +13,7 @@ const props = withDefaults(
     open: boolean
     title?: string
     width?: string | number
+    maxWidth?: string | number
     cancelText?: string
     confirmText?: string
     confirmDisabled?: boolean
@@ -42,6 +43,7 @@ const attrs = useAttrs()
 
 const dialogStyle = computed(() => ({
   width: typeof props.width === 'number' ? `${props.width}px` : props.width,
+  maxWidth: typeof props.maxWidth === 'number' ? `${props.maxWidth}px` : props.maxWidth,
 }))
 
 function close() {

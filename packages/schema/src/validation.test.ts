@@ -15,7 +15,7 @@ describe('validateSchema', () => {
     expect(validateSchema(validSchema)).toEqual([])
   })
 
-  it('validates recursive render conditions and field expressions', () => {
+  it('validates render condition groups and field scopes', () => {
     expect(validateSchema({
       ...validSchema,
       elements: [{
@@ -27,14 +27,11 @@ describe('validateSchema', () => {
         height: 10,
         props: {},
         renderCondition: {
-          rule: {
-            kind: 'group',
-            operator: 'and',
-            children: [
-              { kind: 'compare', operator: 'gt', operands: [{ kind: 'field', path: 'qty' }, { kind: 'literal', value: 0 }] },
-              { kind: 'not', child: { kind: 'compare', operator: 'isEmpty', operands: [{ kind: 'field', path: 'name' }] } },
-            ],
-          },
+          whenMatched: 'show',
+          groups: [{ conditions: [
+            { source: { path: 'qty' }, operator: 'gt', valueType: 'number', value: { kind: 'literal', value: 0 } },
+            { source: { path: 'name' }, operator: 'isNotEmpty' },
+          ] }],
         },
       }],
     })).toEqual([])
@@ -51,31 +48,52 @@ describe('validateSchema', () => {
         props: {},
         renderCondition: {
           enabled: false,
-          rule: { kind: 'compare', operator: 'between', operands: [{ kind: 'field', path: '' }] },
+          whenMatched: 'show',
+          groups: [{ conditions: [{ source: { scope: 'item', path: '' }, operator: 'between', valueType: 'number' }] }],
         },
       }],
     })
     expect(issues.map(issue => issue.code)).toEqual(expect.arrayContaining([
-      'schema.condition.compare.arity.invalid',
-      'schema.condition.field.path.invalid',
+      'schema.condition.value.arity.invalid',
+      'schema.condition.field.scope.invalid',
     ]))
   })
 
-  it('rejects empty groups and condition complexity beyond fixed limits', () => {
-    let deepRule: Record<string, unknown> = { kind: 'compare', operator: 'exists', operands: [{ kind: 'field', path: 'value' }] }
-    for (let index = 0; index < 16; index += 1)
-      deepRule = { kind: 'not', child: deepRule }
+  it('accepts empty conditions and rejects empty saved groups and fixed limits', () => {
     const issues = validateSchemaIssues({
       ...validSchema,
       elements: [
-        { id: 'empty', type: 'text', x: 0, y: 0, width: 1, height: 1, props: {}, renderCondition: { rule: { kind: 'group', operator: 'and', children: [] } } },
-        { id: 'deep', type: 'text', x: 0, y: 0, width: 1, height: 1, props: {}, renderCondition: { rule: deepRule } },
+        { id: 'empty-valid', type: 'text', x: 0, y: 0, width: 1, height: 1, props: {}, renderCondition: { whenMatched: 'show', groups: [] } },
+        { id: 'empty-group', type: 'text', x: 0, y: 0, width: 1, height: 1, props: {}, renderCondition: { whenMatched: 'show', groups: [{ conditions: [] }] } },
+        { id: 'too-many', type: 'text', x: 0, y: 0, width: 1, height: 1, props: {}, renderCondition: { whenMatched: 'show', groups: Array.from({ length: 33 }, () => ({ conditions: [{ source: { path: 'value' }, operator: 'exists' }] })) } },
       ],
     })
     expect(issues.map(issue => issue.code)).toEqual(expect.arrayContaining([
-      'schema.condition.group.children.invalid',
-      'schema.condition.limit.exceeded',
+      'schema.condition.group.conditions.invalid',
+      'schema.condition.groups.limit',
     ]))
+  })
+
+  it('validates collection groups and relative item fields', () => {
+    expect(validateSchema({
+      ...validSchema,
+      elements: [{
+        id: 'collection',
+        type: 'text',
+        x: 0,
+        y: 0,
+        width: 1,
+        height: 1,
+        props: {},
+        renderCondition: {
+          whenMatched: 'show',
+          groups: [{
+            scope: { kind: 'collection', path: 'items', quantifier: 'any' },
+            conditions: [{ source: { scope: 'item', path: 'price' }, operator: 'gt', valueType: 'number', value: { kind: 'literal', value: 100 } }],
+          }],
+        },
+      }],
+    })).toEqual([])
   })
 
   it('accepts continuous mode and structured page layers', () => {

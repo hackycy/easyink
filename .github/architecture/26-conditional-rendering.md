@@ -1,28 +1,34 @@
 # 26. 条件渲染系统
 
-本文档定义 EasyInk 的条件渲染架构与首期完成标准。
+本文档定义 EasyInk 的条件渲染数据模型、求值语义、Designer 编辑体验与 Viewer 执行边界。
 
-## 26.1 目标与首期边界
+## 26.1 目标与边界
 
-条件能力按可扩展规则系统设计，但首期只控制节点是否输出，不修改内容、绑定、样式或其他物料属性。
+条件渲染采用固定的两层逻辑模型：
 
-首期支持两种条件不满足效果：
+- 一个条件组内的所有条件使用 AND，全部成立时该组成立。
+- 多个条件组之间使用 OR，任意一组成立时整体条件成立。
+- 没有任何条件时整体条件成立。
+- 用户可以配置“条件成立时显示”或“条件成立时隐藏”。
 
-- `remove`：跳过绑定、测量、布局、分页和渲染。
-- `reserve`：仍执行绑定、测量、布局和分页，只跳过最终绘制；保留的是本次运行时测量后的真实空间。
+固定两层模型直接对应用户心智，不提供任意嵌套、组操作符切换和 `not` 节点。否定语义由 `neq`、`notIn`、`notContains`、`notExists` 等明确操作符表达。
+
+条件能力只控制节点是否输出，不修改内容、绑定、样式或其他物料属性。节点隐藏时支持两种布局效果：
+
+- `remove`：跳过绑定、测量、布局、分页和绘制。
+- `reserve`：仍执行绑定、测量、布局和分页，只跳过最终绘制；保留本次运行时测量后的真实空间。
 
 条件必须在布局和分页前求值。只在最终 DOM 阶段设置 `display: none` 不符合语义，因为被排除节点仍会占位并影响页数。
 
-首期不支持：
+本期不支持：
 
-- JavaScript 条件源码。
+- JavaScript 条件源码、算术表达式和正则表达式。
 - 条件属性赋值或条件绑定。
-- 算术表达式。
-- 正则表达式。
 - 表格、Flow Row 的逐记录过滤。
-- 容器子树条件的实际运行时接入。当前尚无已实现的容器节点；未来容器落地时再接入递归执行。
+- 容器子树条件的运行时接入。
+- 集合之间的 join、聚合、排序和跨集合关联判断。
 
-互斥内容使用多个节点分别配置条件。例如同一位置放置两个二维码节点，分别绑定 `parentQrcode` 与 `qrCode`，并设置互斥条件。首期不为单节点增加条件切换绑定能力。
+互斥内容使用多个节点分别配置条件。例如同一位置放置两个二维码节点，分别配置相反条件；不为单节点增加条件切换绑定能力。
 
 ## 26.2 物料能力注册
 
@@ -31,7 +37,7 @@
 ```ts
 interface MaterialConditionDefinition {
   scope: 'node'
-  effects: Array<'remove' | 'reserve'>
+  hiddenEffects: Array<'remove' | 'reserve'>
 }
 ```
 
@@ -47,17 +53,17 @@ interface MaterialViewerExtension {
 }
 ```
 
-物料包导出同一个条件能力常量供 Designer 与 Viewer 引用。条件不进入仅供 Designer 交互使用的 `MaterialCapabilities`，Viewer 现有 `registerMaterial(type, binding, extension)` 调用形式保持不变，Registry 直接从 extension 读取能力。
+物料包导出同一个条件能力常量供 Designer 与 Viewer 引用。
 
 职责边界：
 
-- 物料声明自己是否支持条件渲染以及允许的效果。
+- 物料声明自己是否支持条件渲染以及允许的隐藏效果。
 - Core/Viewer 统一负责规则求值、安全数据路径、诊断以及 `remove/reserve` 布局处理。
-- Designer 仅对声明能力的物料显示条件编辑区域。
-- Viewer 遇到未声明能力但 Schema 带条件的节点时直接忽略条件并正常输出，不产生运行时诊断；这种情况只作为防御性兜底，不属于预期工作流。
-- Designer 与 Viewer 注册应引用同一份物料条件定义，避免双端能力漂移。
+- Designer 仅对声明能力的物料显示条件配置入口。
+- Designer 与 Viewer 注册引用同一份物料条件定义，避免双端能力漂移。
+- Viewer 遇到未声明能力但 Schema 带条件的节点时忽略条件并正常输出。
 
-首期开放物料：
+本期开放物料：
 
 - `text`
 - `image`
@@ -68,69 +74,157 @@ interface MaterialViewerExtension {
 - `ellipse`
 - `signature`
 
-首期不开放表格、Flow Row、图表、页码、progress/rating 和 SVG 系列。
+本期不开放表格、Flow Row、图表、页码、progress/rating 和 SVG 系列。
 
-## 26.3 Schema 位置
+## 26.3 Schema 位置与顶层行为
 
 条件影响框架级布局与输出，保存为 `MaterialNode` 根部公共可选字段，不放入物料私有 `props`：
 
 ```ts
 interface MaterialNode {
   // existing fields
-  renderCondition?: {
-    enabled?: boolean
-    rule: ConditionNode
-    whenFalse?: 'remove' | 'reserve'
-    onUnknown?: 'include' | 'exclude'
-  }
+  renderCondition?: RenderCondition
+}
+
+interface RenderCondition {
+  enabled?: boolean
+  whenMatched: 'show' | 'hide'
+  whenHidden?: 'remove' | 'reserve'
+  onUnknown?: 'show' | 'hide'
+  groups: ConditionGroup[]
 }
 ```
 
-公共字段只表示统一持久化格式，不代表所有物料自动支持。能力仍由物料注册决定。
+字段语义：
 
-启用语义：
+- `enabled !== false` 时执行条件；`enabled: false` 时完整保留配置但不执行，节点正常显示。
+- `whenMatched` 决定整体条件为 `true` 时显示还是隐藏；条件为 `false` 时执行相反结果。
+- `whenHidden` 决定最终隐藏时移除布局还是保留占位，默认 `remove`。
+- `onUnknown` 决定整体结果为 `unknown` 时显示还是隐藏，默认 `show`，保证 fail-open。
+- `groups: []` 表示没有条件，整体结果为 `true`。
 
-- 没有 `renderCondition`：节点从未配置条件。
-- 存在且 `enabled !== false`：执行规则。
-- `enabled: false`：不执行条件但完整保留规则。
-- 空规则、空逻辑组和不完整比较均为无效 Schema，不能用来表达关闭。
+因此空条件是有效配置：
+
+- `whenMatched: 'show'` 表示始终显示。
+- `whenMatched: 'hide'` 表示始终隐藏。
+
+Designer 必须在摘要中明确显示“无条件，始终显示”或“无条件，始终隐藏”，避免空配置产生隐蔽行为。
 
 `hidden` 与条件的优先级：
 
 - `hidden: true` 始终优先，不再求值 `renderCondition`。
-- 为保证旧模板行为，静态 `hidden` 保留当前占位语义，等价于 `reserve`。
+- 静态 `hidden` 保留占位，等价于 `reserve`。
 - 条件不能让静态隐藏节点重新显示。
 
-## 26.4 规则 AST
+## 26.4 条件组与条件行
 
-条件使用结构化、JSON-safe、可递归的判别联合，不执行 JavaScript：
+持久化模型直接表达固定的组间 OR、组内 AND：
 
 ```ts
-type ConditionNode =
-  | {
-      kind: 'group'
-      operator: 'and' | 'or'
-      children: ConditionNode[]
-    }
-  | {
-      kind: 'not'
-      child: ConditionNode
-    }
-  | {
-      kind: 'compare'
-      operator: CompareOperator
-      operands: ValueExpression[]
-    }
+interface ConditionGroup {
+  scope?: CollectionConditionScope
+  conditions: ConditionRow[]
+}
+
+interface ConditionRow {
+  source: ConditionFieldRef
+  operator: CompareOperator
+  valueType?: ConditionValueType
+  value?: ConditionValue | ConditionValue[]
+  options?: {
+    caseSensitive?: boolean
+  }
+}
 ```
 
-规则支持字段与固定值、字段与字段比较。比较节点统一使用 `operands`，由操作符校验元数：
+约束：
 
-- `exists/isEmpty` 等一元操作符：1 个操作数。
-- `eq/gt/contains` 等二元操作符：2 个操作数。
-- `between/notBetween`：3 个操作数。
-- `in/notIn`：至少 2 个操作数，第一个为待判断值，其余为候选值。
+- `groups` 之间固定使用 OR，不保存可配置 operator。
+- `conditions` 之间固定使用 AND，不保存可配置 operator。
+- 已保存的 `ConditionGroup.conditions` 至少包含一条完整条件。
+- Dialog 中允许存在空的新组和不完整行，但它们只属于本地草稿。
+- 保存时删除空组；所有组均为空时写入 `groups: []`。
+- 不提供递归子组和 `not` 节点。
 
-首期操作符：
+整体标量求值等价于：
+
+```text
+group[0].condition[0]
+AND group[0].condition[1]
+OR
+group[1].condition[0]
+AND group[1].condition[1]
+```
+
+## 26.5 数据源、值与数据类型
+
+每一行在 UI 中固定显示四个主列，列语义稳定，但视觉上按表格行编辑：
+
+```text
+数据源 | 条件 | 值 | 数据类型 | 行操作
+```
+
+“数据源”列在交互上是字段选择入口，不是普通下拉框，也不直接暴露运行时的 `root/item` 概念。单元格点击后打开属性字段树选择器，用户从已有数据源结构中选择字段；保存时再由 Designer 写入 `ConditionFieldRef`。
+
+字段引用保存完整路径以及必要的设计态可读元数据：
+
+```ts
+interface ConditionFieldRef {
+  scope?: 'root' | 'item'
+  path: string
+  sourceId?: string
+  sourceName?: string
+  sourceTag?: string
+  fieldLabel?: string
+}
+```
+
+运行时只使用 `scope + path`：
+
+- `root` 从 Viewer 的全局 `data` 根解析绝对路径。
+- `item` 从当前集合记录解析相对路径，只允许出现在集合条件组内。
+- `sourceId/sourceName/sourceTag/fieldLabel` 只用于 Designer 重匹配、摘要和诊断，不是运行时数据路由依据。
+- Viewer 不读取 Designer 数据源描述，也不读取节点绑定后的 `resolvedProps`。
+
+值支持固定值和字段值：
+
+```ts
+type ConditionScalar = string | number | boolean | null
+
+type ConditionValue =
+  | { kind: 'literal', value: ConditionScalar }
+  | { kind: 'field', field: ConditionFieldRef }
+
+type ConditionValueType =
+  | 'string'
+  | 'trimmed-string'
+  | 'number'
+  | 'boolean'
+  | 'datetime'
+```
+
+默认使用固定值。需要字段与字段比较时，值单元格可以切换为数据源选择；同一行的 `valueType` 同时约束数据源值和比较值。
+
+值单元格随操作符变化：
+
+- `exists/notExists/isEmpty/isNotEmpty`：不显示值输入，`value` 必须省略。
+- `between/notBetween`：显示起始值和结束值，`value` 必须为两个值。
+- `in/notIn`：显示可增删的候选值列表，至少一个候选值。
+- 其他二元操作符：显示一个值。
+
+数据类型列控制固定值编辑器和运行时转换：
+
+- `string/trimmed-string`：文本输入。
+- `number`：数值输入。
+- `boolean`：布尔选择。
+- `datetime`：日期时间输入，按 ISO 8601 保存。
+- 一元状态操作符不需要数据类型，列中显示 `--`。
+
+Designer 可根据 `DataFieldNode.meta` 推断初始数据类型，但最终类型必须写入条件行；运行时不依赖数据源元数据猜测类型。
+
+## 26.6 操作符
+
+支持以下操作符：
 
 - 通用：`eq`、`neq`。
 - 排序：`gt`、`gte`、`lt`、`lte`。
@@ -142,104 +236,111 @@ type ConditionNode =
 补充语义：
 
 - `between(value, min, max)` 包含上下边界；`notBetween` 是其逻辑取反。
-- `in(value, ...candidates)` 使用与 `eq` 相同的严格标量比较和大小写选项。
-- `contains`、`notContains`、`startsWith`、`endsWith` 只处理字符串。
+- `in/notIn` 使用与 `eq/neq` 相同的严格标量比较和大小写选项。
+- 字符串操作符只处理字符串。
 - 排序操作符只处理同类 number、string 或转换后的 datetime。
-- 任一操作数为 missing、转换失败或不受支持的结构时，除 `exists/notExists` 外返回 `unknown`。
+- 对象和数组不能直接参与标量比较，只能使用 `isEmpty/isNotEmpty` 判断空状态。
+- 任一操作数缺失、转换失败或结构不受支持时，除 `exists/notExists` 外返回 `unknown`。
 
-## 26.5 值表达式
+## 26.7 集合条件组
 
-运行时 Viewer 只消费 `open({ schema, data })` 中的全局 `data: Record<string, unknown>`。条件系统完全不关注 `sourceId`，也不读取 Designer 数据源描述或节点绑定后的 `resolvedProps`。
-
-字段表达式只保存完整路径：
+集合判断必须保证同一条件组内的多条条件针对同一条集合记录求值。集合量化因此属于条件组，而不是单条条件：
 
 ```ts
-interface FieldValueExpression {
-  kind: 'field'
+interface CollectionConditionScope {
+  kind: 'collection'
   path: string
-  cast?: ValueCast
+  quantifier: 'any' | 'all' | 'none'
+  sourceId?: string
+  sourceName?: string
+  sourceTag?: string
+  fieldLabel?: string
 }
 ```
 
-Designer 可以按数据源分组展示和拖拽字段，但写入条件 Schema 的只有 `fieldPath`。条件、普通绑定和 `data-contract` 应统一从全局 `data` 根解析完整路径；`data-contract` 现有的 source-scoped 尝试应移除。
+语义：
 
-值表达式首期包含：
+- `any`：至少一条记录使组内所有条件同时成立。
+- `all`：每一条记录都使组内所有条件同时成立。
+- `none`：没有记录使组内所有条件同时成立。
+- 集合组中的 `item` 字段从当前记录解析，`root` 字段仍从全局数据根解析。
+- 不同集合路径不能在同一组中作为 `item` 字段混用。
 
-- 全局数据字段。
-- JSON 标量字面量：`string | number | boolean | null`。
-- 显式类型转换。
-
-规范类型：
+示例：订单明细中存在“金额大于 100 且库存大于 0”的同一条记录：
 
 ```ts
-type ValueCast = 'string' | 'trimmed-string' | 'number' | 'boolean' | 'datetime'
-
-type ValueExpression =
-  | {
-      kind: 'field'
-      path: string
-      cast?: ValueCast
-    }
-  | {
-      kind: 'literal'
-      value: string | number | boolean | null
-    }
+{
+  scope: {
+    kind: 'collection',
+    path: 'items',
+    quantifier: 'any',
+    fieldLabel: '订单明细',
+  },
+  conditions: [
+    {
+      source: { scope: 'item', path: 'price', fieldLabel: '金额' },
+      operator: 'gt',
+      valueType: 'number',
+      value: { kind: 'literal', value: 100 },
+    },
+    {
+      source: { scope: 'item', path: 'stock', fieldLabel: '库存' },
+      operator: 'gt',
+      valueType: 'number',
+      value: { kind: 'literal', value: 0 },
+    },
+  ],
+}
 ```
 
-对象和数组不能直接参与 `eq/neq/in/notIn`，但可以使用 `isEmpty/isNotEmpty` 判断空状态。
+空集合采用标准量化语义：
 
-不允许对象和数组作为固定值做相等比较。候选集合通过 `in/notIn` 的多个操作数表示；日期以字符串保存并显式转换为 `datetime`。
+- `any = false`
+- `all = true`
+- `none = true`
 
-## 26.6 类型与空值语义
+集合路径存在但值不是数组时返回 `unknown`。集合记录可以是对象或标量；标量记录只能通过 `item` 的空路径引用记录自身。
 
-默认严格比较，不使用 JavaScript 隐式转换。首期支持以下显式转换：
+Designer 中每个条件组有一个隐式数据上下文，但界面不暴露“当前数据对象、全局数据、集合范围、作用域”等模型概念。用户只通过数据源字段树选择字段；当选中的字段位于集合字段之下时，该条件组自动进入集合判断模式。
+
+集合判断模式只额外展示必要的匹配方式，组头文案按数据源语义表达为：
+
+```text
+[集合字段] 中 [至少一条 / 每一条 / 没有一条] 满足
+```
+
+其中“至少一条 / 每一条 / 没有一条”分别保存为 `any/all/none`。集合判断由所选数据源路径推导：选择 `商品明细 / 金额` 时，组的 `scope.path` 保存为 `商品明细` 的完整路径，条件行保存相对 `item` 路径 `金额`。当组内不再存在任何 `item` 字段引用时，Designer 可以自动移除该组的集合上下文。界面不提供单独的“限定到集合字段 / 取消限定”入口，避免用户在选择字段前先理解内部上下文模型。
+
+数据源字段树中的 `union` 表示一拖多投放建议，不表示运行时集合，因此不能作为集合条件范围。集合范围必须由字段节点的 `tag: 'collection'` 或明确的数组类型元数据标识，并保存可解析为数组的完整字段路径；不能仅凭字段拥有子节点就把普通对象推断为集合。
+
+## 26.8 类型、空值与三值逻辑
+
+默认严格比较，不使用 JavaScript 隐式转换。显式转换规则：
 
 - `string`：仅标量转字符串；`null` 保持 `null`。
-- `trimmed-string`：在 `string` 转换后移除首尾空格。
+- `trimmed-string`：在字符串转换后移除首尾空格。
 - `number`：接受有限数字或可完整解析的非空数字字符串；不把布尔值转成数字。
-- `boolean`：接受布尔值、大小写不敏感的 `"true"` / `"false"`，以及数字 `1` / `0`。
+- `boolean`：接受布尔值、大小写不敏感的 `"true"/"false"`，以及数字 `1/0`。
 - `datetime`：接受合法 ISO 8601 字符串或有限的 Unix 毫秒时间戳。
-
-路径缺失始终保持 missing，任何转换都不能把它变成值。转换失败返回 `unknown` 并产生诊断。
-
-字符串操作符可以通过比较节点的 `options.caseSensitive` 逐条配置大小写敏感性：
-
-- 默认 `caseSensitive: true`。
-- `eq`、`neq`、`in`、`notIn`、`contains`、`notContains`、`startsWith`、`endsWith` 支持忽略大小写。
-- 大小写选项不隐含 trim；需要去除首尾空格时显式使用 `trimmed-string`。
-- 不使用 locale 排序或运行环境语言设置。
-- 字符串 `gt`、`gte`、`lt`、`lte`、`between`、`notBetween` 使用稳定的 Unicode code-point 顺序。
-
-`datetime` 比较绝对时间点，不依赖运行设备的本地时区：
-
-- Unix 毫秒时间戳按 UTC 时间点解释。
-- 带 `Z` 或明确偏移量的 ISO 字符串按其偏移解析。
-- `YYYY-MM-DD` 按 UTC 当日零点解释。
-- 含时间但不带时区的字符串转换失败。
-- 比较前统一转换为 Unix 毫秒。
-
-类型错误、转换失败或结构不符不抛出并中断整页渲染，而是产生诊断并令当前结果为 `unknown`。
 
 路径与空值：
 
 - 路径存在且值为 `null`：`exists = true`，`isEmpty = true`。
-- 路径缺失：`exists = false`。
-- JavaScript 中属性值为 `undefined`：按路径缺失处理。
+- 路径缺失或属性值为 `undefined`：`exists = false`。
 - `isEmpty` 对 `null`、`""`、`[]`、`{}` 返回 true。
-- 仅含空格的字符串默认不为空；如需去空格，应使用明确的字符串转换能力。
+- 仅含空格的字符串默认不为空；需要去空格时使用 `trimmed-string`。
 
+字符串比较默认大小写敏感。支持大小写配置的操作符为 `eq/neq/in/notIn/contains/notContains/startsWith/endsWith`。字符串排序使用稳定的 Unicode code-point 顺序。
 
-## 26.7 三值逻辑与失败策略
+`datetime` 比较绝对时间点：日期按 UTC 当日零点解释，带时区的时间按其偏移解析，不带时区的日期时间转换失败。
 
-规则求值结果为：
+单条条件结果为：
 
 ```text
 true | false | unknown
 ```
 
-默认 fail-open：`unknown` 保留节点。节点可以通过 `onUnknown: 'exclude'` 显式改为排除。
-
-逻辑组合采用 Kleene 三值语义，并允许短路求值：
+组内 AND、组间 OR 和集合量化均采用 Kleene 三值逻辑并允许短路：
 
 ```text
 false AND unknown = false
@@ -247,43 +348,35 @@ true  AND unknown = unknown
 
 true  OR unknown = true
 false OR unknown = unknown
-
-NOT unknown = unknown
 ```
 
-最终节点状态至少包含：
+整体 `unknown` 最终由 `onUnknown` 转成显示或隐藏，不抛出并中断整页渲染。
 
-```text
-include | remove | reserve
-```
-
-其中静态 `hidden` 直接得到 `reserve`；条件为 false 时根据 `whenFalse` 得到 `remove` 或 `reserve`。
-
-规则资源限制为固定跨平台常量：
-
-```text
-AST 最大深度：16
-AST 最大节点数：256
-单个物料单次求值预算：10,000 steps
-```
-
-每访问一个 AST 节点消耗一个 step，并允许短路提前结束。超过任一限制时停止该节点求值，返回 `unknown`，产生一次资源限制诊断，再按 `onUnknown` 决定最终状态。首期不允许宿主覆盖这些上限。
-
-## 26.8 Viewer 管线
+## 26.9 Viewer 管线
 
 目标管线：
 
 ```text
 schema + raw data
   -> material condition capability lookup
-  -> condition evaluation
+  -> condition groups evaluation
+  -> visibility resolution
   -> node state partition
        remove:  stop
        reserve: binding -> measure -> layout -> pagination -> skip paint
        include: binding -> measure -> layout -> pagination -> paint
 ```
 
-条件只读取原始运行时 `data`，不读取格式化绑定值、`resolvedProps` 或物料私有计算结果。
+结果映射：
+
+```text
+condition = true    -> whenMatched
+condition = false   -> opposite(whenMatched)
+condition = unknown -> onUnknown, default show
+
+show -> include
+hide -> whenHidden, default remove
+```
 
 Viewer 在绑定前通过纯函数 `resolveConditionalSchema(schema, data, registry)` 生成派生 Schema，原始 Schema 始终不修改：
 
@@ -291,83 +384,151 @@ Viewer 在绑定前通过纯函数 `resolveConditionalSchema(schema, data, regis
 - `remove`：从派生 Schema 的 `elements` 中过滤。
 - `reserve`：克隆节点并设置运行时 `hidden: true`。
 
-后续绑定、测量、布局、分页与 RenderSurface 全部消费派生 Schema。这样 `reserve` 复用现有静态 hidden 占位行为，`remove` 也不需要污染 PagePlan 契约。
+后续绑定、测量、布局、分页与 RenderSurface 全部消费派生 Schema。
 
-条件运行时诊断使用独立的 `category: 'condition'` 与 `scope: 'condition'`，首期诊断码包括：
+固定资源限制：
+
+```text
+单节点最大条件组数：32
+单节点最大条件行数：256
+单个集合组最大扫描记录数：10,000
+单个物料单次求值预算：20,000 steps
+```
+
+超过限制时停止该节点求值，返回 `unknown`，产生一次资源限制诊断，再按 `onUnknown` 决定最终状态。每求值一条条件或访问一条集合记录至少消耗一个 step。
+
+运行时诊断使用 `category: 'condition'` 与 `scope: 'condition'`：
 
 - `CONDITION_FIELD_MISSING`
 - `CONDITION_CAST_FAILED`
 - `CONDITION_TYPE_MISMATCH`
+- `CONDITION_COLLECTION_EXPECTED`
 - `CONDITION_LIMIT_EXCEEDED`
 - `CONDITION_EVALUATION_FAILED`
 
-这些诊断均为 warning，不中断整页渲染。每次 render 按 `nodeId + code + AST 位置` 去重；`detail` 可以记录规则位置、字段路径和失败类型，但不得放入实际业务值。
+诊断均为 warning。每次 render 按 `nodeId + code + groupIndex + conditionIndex` 去重；detail 可以记录字段路径和失败类型，但不得包含实际业务值。
 
-## 26.9 Designer 编辑体验
+## 26.10 Designer 属性面板
 
 Designer 只负责编辑，不接收条件预览数据，也不执行条件。所有节点在画布中保持可见；条件实际效果由宿主集成 Viewer 测试。
 
-配置了 `renderCondition` 的节点在画布右上角和结构树节点旁显示小型条件图标；`enabled: false` 时图标弱化。标识不改变节点透明度或物料内容。
+配置了 `renderCondition` 的节点在画布右上角和结构树节点旁显示条件图标；`enabled: false` 时图标弱化。标识不改变节点透明度或物料内容。
 
-属性面板中新增独立“条件渲染”区块，位于“数据绑定”和“样式”之间，仅对注册能力的物料显示。
+属性面板中新增独立“条件渲染”区块，位于“数据绑定”和“样式”之间，仅对注册能力的物料显示。属性面板不内联编辑条件表格，只提供：
 
-规则树在窄属性栏中完整内联编辑，不使用模态窗口：
+- 启用开关。
+- 行为摘要，例如“任一组成立时显示；隐藏时移除布局”。
+- 规则摘要，例如“2 个条件组，共 5 条条件”。
+- 空条件摘要，例如“无条件，始终隐藏”。
+- “编辑条件”按钮，打开 Condition Dialog。
+- “移除条件”操作，删除整个 `renderCondition`。
 
-- 逻辑组使用纵向卡片。
-- 子组可折叠并显示摘要。
-- 字段操作数支持字段选择，也支持从现有数据源面板直接拖入。
-- 条件编辑器通过现有 `registerDatasourceDropTarget()` 注册每个字段操作数 drop slot。
-- 拖拽数据中的 `sourceId`、标题等只用于交互反馈；Schema 只写入 `fieldPath`。
-- 固定值根据显式类型显示相应输入控件。
-- 有效编辑通过可撤销命令写回 Schema。
-- 不完整的新规则保留在组件本地草稿中，不允许无效 AST 进入 Schema。
-- 字段拖到空面板或逻辑组的“添加条件”区域时，创建本地 `field eq [待填写]` 草稿。
-- 字段拖到已有字段操作数时替换其 `path`；拖到另一个可用操作数时形成字段与字段比较。
-- `union` 字段首期拒绝拖入，因为系统不能猜测多个字段之间应使用 `and`、`or` 还是比较关系。
+摘要最多展示两组简短的人类可读条件，超出部分显示计数；字段优先使用 `fieldLabel`，缺失时回退到路径。摘要不承担完整编辑职责。
 
-嵌套编辑的视觉压缩方式和规则摘要格式由实现沿用现有属性面板密度处理，不改变 AST 语义。
+## 26.11 Condition Dialog
 
-条件编辑使用专用 `UpdateRenderConditionCommand`，按用户逻辑动作记录撤销历史：
+Dialog 使用宽表格布局编辑完整条件，建议桌面宽度为工作区可用宽度的 70% 至 80%，并设置合理的最大宽度。窄屏时保持列语义，允许内容区横向滚动，不把每一行压缩成难以扫描的纵向表单。
 
-- 添加/删除条件、切换操作符、拖入字段、切换逻辑组，各生成一次撤销记录。
-- 常量文本和数字连续输入使用同一 `mergeKey` 合并，失焦后形成一次记录。
-- `enabled`、`whenFalse`、`onUnknown` 分别独立可撤销。
-- 本地未完成草稿不进入命令历史。
-- 命令保存修改前后的完整 `renderCondition` 快照，不为递归 AST 维护脆弱的路径级逆操作。
+界面目标是让用户理解为“配置几组业务判断”，而不是编辑底层表达式。运行时术语只保留在 Schema 和架构文档中；Dialog 文案优先使用“条件组、满足、否则、数据源、至少一条”等业务语言。
 
-## 26.10 Schema 校验与编解码
+Dialog 顶部配置：
+
+- 条件成立时：`显示 / 隐藏`，作为首要行为，可使用分段按钮或紧凑选择器。
+- 隐藏效果：`移除布局 / 保留占位`，仅在相关能力可用时展示。
+- 异常数据时：`显示 / 隐藏`，使用较弱层级，可放在更多设置或二级说明区域。
+
+每个条件组以分区卡片呈现：
+
+- 组标题显示“条件组 1”，组间固定显示“或者”。
+- 组头默认不展示任何上下文说明；普通字段条件不需要解释“当前对象”。
+- 组头不提供“限定到集合字段”入口；集合判断只能由数据源字段树中的集合子字段自动触发。
+- 当组内存在集合子字段时，组头显示自然语言摘要“[集合字段] 中 [至少一条] 满足”，并允许切换量化方式。
+- 表头固定为“数据源 / 条件 / 值 / 数据类型 / 操作”。
+- 组内行之间固定显示“并且”，不提供逻辑切换。
+- 组底提供“添加条件”。
+- Dialog 底部提供“添加条件组”。
+- 条件行提供“复制”和“删除”；复制后紧邻原行插入副本。
+- 条件组提供删除；至少保留一个可编辑的空组作为本地草稿外观。
+
+表格视觉规范：
+
+- 使用单一表格容器和轻量行分隔线，不给每个单元格和每个控件再叠加明显边框。
+- 行高保持一致，普通条件行建议最小高度 40px 至 44px；单元格内容垂直居中。
+- 单元格内控件统一高度，数据源、条件、数据类型选择器高度一致。
+- 值列可能因 `between/in` 变高；此时只让值列内部扩展，其他列顶部对齐到同一编辑基线。
+- 大小写敏感、候选值增删等低频配置不挤占主列高度，可放在值列内部的次级行或更多操作中。
+- 行操作使用弱化图标按钮，默认靠右对齐，不形成额外视觉噪音。
+
+点击数据源单元格是选择字段的主要入口。字段选择器应表现为类似 tree-select 的属性结构选择器，而不是扁平列表。选择器复用现有数据源树的搜索、展开、字段标签和类型信息，并遵循：
+
+- 普通叶子字段直接保存为 `root` 字段引用。
+- 集合字段作为可展开节点展示，集合节点本身只在 `isEmpty/isNotEmpty` 等允许集合判断的场景可被选择。
+- 选择集合节点下的子字段时，Designer 自动推导组集合上下文；集合路径保存到 `scope.path`，条件行只保存相对的 `item` 路径。
+- 不允许把 `union` 当成集合范围。
+- 字段选择完成后关闭选择器并回到当前单元格，不依赖拖拽才能完成配置。
+
+字段选择器布局：
+
+- 顶部为搜索框，支持按字段名、标题、路径搜索。
+- 主体为单一树结构：数据源作为一级节点，对象和集合字段可展开，叶子字段可选择。
+- 集合字段使用轻量标签标识“集合”，仅在组上下文选择或 `isEmpty/isNotEmpty` 等允许集合判断的场景可被选择。
+- 不显示“当前数据对象 / 当前记录 / 全局数据”分组；集合与普通对象的差异通过树层级和“集合”标签表达。
+- 触发器只显示一行主标签和一行弱路径，不使用卡片式边框堆叠；未选择时显示“选择字段”。
+
+字段选择器适合使用 Dialog 内的 popover 或侧滑面板，避免 Dialog 嵌套 Dialog。数据源窗口拖拽可以作为增强能力，但不是完成条件配置的必要路径。
+
+## 26.12 草稿、保存与撤销
+
+Condition Dialog 采用事务式草稿：
+
+- 打开时从当前 `renderCondition` 创建编辑草稿。
+- 添加、复制、删除、输入和切换只修改草稿，不持续写回 Schema。
+- “取消”或关闭 Dialog 不产生 Schema 和历史记录变化。
+- “保存”先校验并规范化草稿，再通过一次 `UpdateRenderConditionCommand` 写回完整快照。
+- 保存后的一次完整 Dialog 编辑对应一次撤销；属性面板的启用和移除各自对应独立命令。
+
+不完整行不能保存。校验错误直接定位到具体组、行和单元格，保留用户输入，不静默删除非空的不完整条件。
+
+空组保存时删除；如果所有组均为空，保存为 `groups: []`，表达空条件成立。
+
+## 26.13 Schema 校验与编解码
 
 `renderCondition` 是正式元素规范字段：
 
-- Schema validation 递归校验 AST kind、操作符、操作数元数、空逻辑组以及深度/节点数限制。
-- 非法条件令整个 Schema 校验失败，Viewer 拒绝打开；即使 `enabled: false` 也必须结构合法。
+- 校验 `whenMatched/whenHidden/onUnknown` 枚举值。
+- 校验条件组、集合范围、条件行、操作符、值元数和数据类型。
+- 校验全局组不能包含 `item` 字段，集合组的 item 路径必须相对集合记录。
+- 校验非空组不得包含空条件，`groups: []` 合法。
+- 校验组数、条件总数限制；集合扫描数属于运行时限制。
+- 非法条件令整个 Schema 校验失败；即使 `enabled: false` 也必须结构合法。
 - 运行时 `unknown` 只处理合法规则遇到异常数据，不替代 Schema 结构校验。
-- codec 将 `renderCondition` 加入元素 `knownKeys`，decode 做最小形状读取，encode 原样输出规范结构。
-- 不把条件放入 `compat.passthrough`，也不增加旧字段别名、迁移 shim 或兼容格式。
+- codec 将 `renderCondition` 作为元素 known key，decode 做最小形状读取，encode 输出规范结构。
 
-## 26.11 实施顺序
+## 26.14 实施顺序
 
 按依赖从底向上实施：
 
-1. Schema：新增条件类型、`MaterialNode.renderCondition`、递归 validation 和 codec 往返。
-2. Core：实现安全路径读取、值转换、三值 AST 求值器、复杂度预算和条件能力类型。
-3. Viewer：扩展条件诊断类型和 Material Registry，在绑定前生成派生运行时 Schema。
-4. 物料：为首期 8 个物料导出共享能力常量，并接入 Designer/Viewer 注册。
-5. Designer：新增 `UpdateRenderConditionCommand`、内联 ConditionEditor、数据源 drop slots、属性面板入口及画布/结构树标识。
-6. 文档与样例：补充 Schema、Designer、Viewer 用法和互斥二维码示例。
+1. Schema：定义 `RenderCondition/ConditionGroup/ConditionRow`、validation 和 codec 往返。
+2. Core：实现安全路径读取、值转换、三值条件组求值器、集合量化和复杂度预算。
+3. Viewer：扩展条件诊断与 Material Registry，在绑定前生成派生运行时 Schema。
+4. 物料：为本期 8 个物料导出共享能力常量，并接入 Designer/Viewer 注册。
+5. Designer 基础：增加 `UpdateRenderConditionCommand`、属性面板摘要、启停、移除和条件图标。
+6. Designer Dialog：实现条件组表格、字段选择器、集合范围、草稿校验、复制删除与保存事务。
+7. 文档与样例：补充空条件、互斥二维码、字段比较和集合组示例。
 
-每一步只实现当前已确定能力，不提前加入条件赋值、条件绑定、表格逐记录过滤、容器递归或脚本表达式。
-
-## 26.12 测试与完成标准
+## 26.15 测试与完成标准
 
 测试矩阵：
 
-- Schema：合法/非法 AST、变量作用域、操作数元数、深度/节点数限制、codec 往返。
-- 求值器：全部操作符、显式转换、空值、三值真值表、短路、step 预算和安全路径。
-- Designer：能力显隐、内联编辑、字段拖拽、union 拒绝、草稿不落 Schema、撤销/重做、条件图标。
-- Viewer：`include/remove/reserve`、静态 hidden 优先、unknown 策略、诊断去重和 `updateData()` 重算。
-- 物料：8 个首期物料验证 Designer 与 Viewer 使用同一能力定义。
-- 集成场景：两个重叠二维码按互斥条件切换；自动高度文本在 `reserve` 下保留本次运行时测量空间。
+- Schema：空 groups、合法/非法组、操作符值元数、root/item 作用域、资源上限和 codec 往返。
+- 求值器：组内 AND、组间 OR、空条件、全部操作符、显式转换、空值、三值短路和 step 预算。
+- 集合：any/all/none、空集合、同记录 AND、root/item 混合、非数组和扫描上限。
+- 行为：条件成立时显示/隐藏、条件不成立的反向结果、unknown 策略、remove/reserve。
+- Designer 属性面板：能力显隐、启停、摘要、空条件警示、移除和条件图标。
+- Condition Dialog：添加组、添加条件、复制、删除、字段选择、类型输入、草稿取消、校验定位、单次保存与撤销重做。
+- Viewer：静态 hidden 优先、诊断去重、`updateData()` 重算和派生 Schema 不修改原 Schema。
+- 物料：8 个本期物料验证 Designer 与 Viewer 使用同一能力定义。
+- 集成场景：两个重叠二维码按互斥条件切换；自动高度文本在 `reserve` 下保留测量空间；订单明细中同一记录满足多条件时显示节点。
 
 完成前依次通过：
 

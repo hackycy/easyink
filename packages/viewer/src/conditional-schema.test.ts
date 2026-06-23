@@ -9,7 +9,7 @@ function schema(elements: MaterialNode[], page: Partial<DocumentSchema['page']> 
   return { version: '1.0.0', unit: 'mm', page: { mode: 'fixed', width: 100, height: 100, ...page }, guides: { x: [], y: [] }, elements }
 }
 
-function node(id: string, path: string, whenFalse: 'remove' | 'reserve' = 'remove'): MaterialNode {
+function node(id: string, path: string, whenHidden: 'remove' | 'reserve' = 'remove'): MaterialNode {
   return {
     id,
     type: 'conditional',
@@ -18,14 +18,14 @@ function node(id: string, path: string, whenFalse: 'remove' | 'reserve' = 'remov
     width: 10,
     height: 10,
     props: {},
-    renderCondition: { rule: { kind: 'compare', operator: 'exists', operands: [{ kind: 'field', path }] }, whenFalse },
+    renderCondition: { whenMatched: 'show', groups: [{ conditions: [{ source: { path }, operator: 'exists' }] }], whenHidden },
   }
 }
 
 describe('resolveConditionalSchema', () => {
   it('partitions include, remove, and reserve without mutating input', () => {
     const registry = new MaterialRendererRegistry()
-    registry.register('conditional', { kind: 'none' }, { render: vi.fn(() => ({})), condition: { scope: 'node', effects: ['remove', 'reserve'] } })
+    registry.register('conditional', { kind: 'none' }, { render: vi.fn(() => ({})), condition: { scope: 'node', hiddenEffects: ['remove', 'reserve'] } })
     const original = schema([node('include', 'show'), node('remove', 'gone'), node('reserve', 'space', 'reserve')])
     const result = resolveConditionalSchema(original, { show: true }, registry)
     expect(result.schema.elements.map(item => item.id)).toEqual(['include', 'reserve'])
@@ -39,7 +39,7 @@ describe('resolveConditionalSchema', () => {
     const runtime = createViewer({ container })
     const measure = vi.fn(() => ({ width: 10, height: 10 }))
     runtime.registerMaterial('conditional', { kind: 'none' }, {
-      condition: { scope: 'node', effects: ['remove', 'reserve'] },
+      condition: { scope: 'node', hiddenEffects: ['remove', 'reserve'] },
       measure,
       render: () => ({ html: trustedViewerHtml('<span>visible</span>') }),
     })
@@ -58,14 +58,14 @@ describe('resolveConditionalSchema', () => {
     const container = document.createElement('div')
     const runtime = createViewer({ container })
     runtime.registerMaterial('conditional', { kind: 'none' }, {
-      condition: { scope: 'node', effects: ['remove', 'reserve'] },
+      condition: { scope: 'node', hiddenEffects: ['remove', 'reserve'] },
       render: node => ({ html: trustedViewerHtml(`<span>${node.id}</span>`) }),
     })
 
     await runtime.open({
       schema: schema([
         node('optional', 'show'),
-        { ...node('after', 'after'), y: 20, renderCondition: { rule: { kind: 'compare', operator: 'exists', operands: [{ kind: 'field', path: 'after' }] }, whenFalse: 'remove' } },
+        { ...node('after', 'after'), y: 20 },
       ], {
         mode: 'continuous',
         layout: { strategy: 'stack-flow', flowAxis: 'y' },
@@ -86,14 +86,14 @@ describe('resolveConditionalSchema', () => {
     const container = document.createElement('div')
     const runtime = createViewer({ container })
     runtime.registerMaterial('conditional', { kind: 'none' }, {
-      condition: { scope: 'node', effects: ['remove', 'reserve'] },
+      condition: { scope: 'node', hiddenEffects: ['remove', 'reserve'] },
       render: node => ({ html: trustedViewerHtml(`<span>${node.id}</span>`) }),
     })
 
     await runtime.open({
       schema: schema([
         node('optional', 'show', 'reserve'),
-        { ...node('after', 'after'), y: 20, renderCondition: { rule: { kind: 'compare', operator: 'exists', operands: [{ kind: 'field', path: 'after' }] }, whenFalse: 'remove' } },
+        { ...node('after', 'after'), y: 20 },
       ], {
         mode: 'continuous',
         layout: { strategy: 'stack-flow', flowAxis: 'y' },
@@ -114,12 +114,12 @@ describe('resolveConditionalSchema', () => {
     const container = document.createElement('div')
     const runtime = createViewer({ container })
     runtime.registerMaterial('conditional', { kind: 'none' }, {
-      condition: { scope: 'node', effects: ['remove', 'reserve'] },
+      condition: { scope: 'node', hiddenEffects: ['remove', 'reserve'] },
       render: node => ({ html: trustedViewerHtml(`<span>${node.id}</span>`) }),
     })
     const input = schema([
       node('optional', 'show'),
-      { ...node('after', 'after'), y: 20, renderCondition: { rule: { kind: 'compare', operator: 'exists', operands: [{ kind: 'field', path: 'after' }] }, whenFalse: 'remove' } },
+      { ...node('after', 'after'), y: 20 },
     ], {
       mode: 'continuous',
       layout: { strategy: 'stack-flow', flowAxis: 'y' },
@@ -146,21 +146,22 @@ describe('resolveConditionalSchema', () => {
 
   it('keeps static hidden priority even when reserve is not a declared condition effect', () => {
     const registry = new MaterialRendererRegistry()
-    registry.register('conditional', { kind: 'none' }, { render: () => ({}), condition: { scope: 'node', effects: ['remove'] } })
+    registry.register('conditional', { kind: 'none' }, { render: () => ({}), condition: { scope: 'node', hiddenEffects: ['remove'] } })
     const hidden = { ...node('hidden', 'show'), hidden: true }
     expect(resolveConditionalSchema(schema([hidden]), { show: true }, registry).states.get('hidden')).toBe('reserve')
   })
 
-  it('deduplicates diagnostics by node, code, and AST path', () => {
+  it('deduplicates diagnostics by node, code, group, and condition', () => {
     const registry = new MaterialRendererRegistry()
-    registry.register('conditional', { kind: 'none' }, { render: () => ({}), condition: { scope: 'node', effects: ['remove'] } })
+    registry.register('conditional', { kind: 'none' }, { render: () => ({}), condition: { scope: 'node', hiddenEffects: ['remove'] } })
     const repeatedMissing = {
       ...node('n', 'missing'),
       renderCondition: {
-        rule: { kind: 'group' as const, operator: 'and' as const, children: [
-          { kind: 'compare' as const, operator: 'eq' as const, operands: [{ kind: 'field' as const, path: 'missing' }, { kind: 'literal' as const, value: 1 }] },
-          { kind: 'compare' as const, operator: 'eq' as const, operands: [{ kind: 'field' as const, path: 'missing' }, { kind: 'literal' as const, value: 2 }] },
-        ] },
+        whenMatched: 'show' as const,
+        groups: [{ conditions: [
+          { source: { path: 'missing' }, operator: 'eq' as const, valueType: 'number' as const, value: { kind: 'literal' as const, value: 1 } },
+          { source: { path: 'missing' }, operator: 'eq' as const, valueType: 'number' as const, value: { kind: 'literal' as const, value: 2 } },
+        ] }],
       },
     }
     const result = resolveConditionalSchema(schema([repeatedMissing]), {}, registry)

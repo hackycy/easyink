@@ -11,7 +11,7 @@
 - 页面模型覆盖 `mode / width / height / pages / scale / radius / offsetX / offsetY / copies / blankPolicy / grid / font / background / print / pageModel / layout / pagination / reflow`，并兼容 benchmark 输入里的 `viewer / xOffset / yOffset / blank`
 - 数据源协议覆盖 `id / name / tag / title / icon / expand / headless / fields / use / props / format / displayFormat / union / bindIndex / meta`，字段节点可声明 `format / displayFormat`
 - 数据绑定分为普通 `BindingRef` 和物料级 `data-contract`：普通元素消费字段路径，图表等结构化物料声明目标数据模型，binding 只保存 source path 到目标字段的映射，关系由 Resolver 推导
-- 条件渲染由物料显式注册能力，Schema 保存结构化规则 AST，Viewer 在绑定、测量、布局与分页前生成派生运行时 Schema
+- 条件渲染由物料显式注册能力，Schema 以组内 AND、组间 OR 的条件组保存规则，Viewer 在绑定、测量、布局与分页前生成派生运行时 Schema
 - 顶部物料栏建模为"高频直达物料 + 分组目录物料"的混合入口
 - `table`、`chart`、`svg` 都是一级结构系统
 - 属性面板在同一窗口壳层中互斥展示"元素属性"与"页面属性"，支持 PropertyPanelOverlay 动态叠加层
@@ -53,7 +53,7 @@
 | 23 | [Contribution 机制](./23-contribution.md) | ContributionRegistry、注入方式、响应式 Props、生命周期、命名空间 |
 | 24 | [页面布局正交体系](./24-page-layout-orthogonal-system.md) | 页面模型、布局策略、分页策略、测量重排引擎四层解耦 |
 | 25 | [AI Assistant 平台](./25-ai-assistant.md) | 物料知识声明、数据流链路、Orchestrator 工作流、ComposerAgent、知识与推理层 |
-| 26 | [条件渲染系统](./26-conditional-rendering.md) | 物料显式注册的结构化条件规则、Designer 编辑协议与 Viewer 布局语义 |
+| 26 | [条件渲染系统](./26-conditional-rendering.md) | 组内 AND、组间 OR 的条件组、Dialog 编辑协议、集合判断与 Viewer 布局语义 |
 
 ## 补充说明
 

@@ -1,16 +1,18 @@
 import type {
-  CompareOperator,
-  ConditionNode,
-  FieldValueExpression,
+  ConditionFieldRef,
+  ConditionGroup,
+  ConditionRow,
+  ConditionValue,
+  ConditionValueType,
   MaterialNode,
-  ValueCast,
-  ValueExpression,
+  RenderCondition,
 } from '@easyink/schema'
 import { BLOCKED_PATH_KEYS, FIELD_PATH_SEPARATOR } from '@easyink/shared'
 
-export const CONDITION_MAX_DEPTH = 16
-export const CONDITION_MAX_NODES = 256
-export const CONDITION_STEP_BUDGET = 10_000
+export const CONDITION_MAX_GROUPS = 32
+export const CONDITION_MAX_ROWS = 256
+export const CONDITION_MAX_COLLECTION_RECORDS = 10_000
+export const CONDITION_STEP_BUDGET = 20_000
 
 export type ConditionTruth = true | false | 'unknown'
 export type ConditionalNodeState = 'include' | 'remove' | 'reserve'
@@ -18,13 +20,14 @@ export type ConditionEffect = Exclude<ConditionalNodeState, 'include'>
 
 export interface MaterialConditionDefinition {
   scope: 'node'
-  effects: ConditionEffect[]
+  hiddenEffects: ConditionEffect[]
 }
 
 export type ConditionDiagnosticCode
   = | 'CONDITION_FIELD_MISSING'
     | 'CONDITION_CAST_FAILED'
     | 'CONDITION_TYPE_MISMATCH'
+    | 'CONDITION_COLLECTION_EXPECTED'
     | 'CONDITION_LIMIT_EXCEEDED'
     | 'CONDITION_EVALUATION_FAILED'
 
@@ -34,7 +37,8 @@ export interface ConditionDiagnostic {
   severity: 'warning'
   code: ConditionDiagnosticCode
   message: string
-  astPath: string
+  groupIndex?: number
+  conditionIndex?: number
   fieldPath?: string
 }
 
@@ -49,9 +53,12 @@ export interface ConditionalNodeResolution extends ConditionEvaluationResult {
 
 interface EvaluationContext {
   data: Record<string, unknown>
+  item?: unknown
   diagnostics: ConditionDiagnostic[]
   steps: number
   limited: boolean
+  groupIndex?: number
+  conditionIndex?: number
 }
 
 type ResolvedValue
@@ -59,7 +66,7 @@ type ResolvedValue
     | { status: 'missing' }
     | { status: 'unknown' }
 
-export function evaluateCondition(rule: ConditionNode, data: Record<string, unknown>): ConditionEvaluationResult {
+export function evaluateCondition(groups: ConditionGroup[], data: Record<string, unknown>): ConditionEvaluationResult {
   const context: EvaluationContext = {
     data,
     diagnostics: [],
@@ -67,10 +74,26 @@ export function evaluateCondition(rule: ConditionNode, data: Record<string, unkn
     limited: false,
   }
   try {
-    return { value: evaluateNode(rule, context, '$', 1), diagnostics: context.diagnostics }
+    if (groups.length > CONDITION_MAX_GROUPS || countRows(groups) > CONDITION_MAX_ROWS) {
+      addLimitDiagnostic(context)
+      return { value: 'unknown', diagnostics: context.diagnostics }
+    }
+    if (groups.length === 0)
+      return { value: true, diagnostics: [] }
+
+    let sawUnknown = false
+    for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
+      context.groupIndex = groupIndex
+      context.conditionIndex = undefined
+      const value = evaluateGroup(groups[groupIndex]!, context)
+      if (value === true)
+        return { value: true, diagnostics: context.diagnostics }
+      sawUnknown ||= value === 'unknown'
+    }
+    return { value: sawUnknown ? 'unknown' : false, diagnostics: context.diagnostics }
   }
   catch {
-    addDiagnostic(context, 'CONDITION_EVALUATION_FAILED', 'Condition evaluation failed.', '$')
+    addDiagnostic(context, 'CONDITION_EVALUATION_FAILED', 'Condition evaluation failed.')
     return { value: 'unknown', diagnostics: context.diagnostics }
   }
 }
@@ -82,140 +105,183 @@ export function resolveConditionalNode(node: MaterialNode, data: Record<string, 
   if (!condition || condition.enabled === false)
     return { state: 'include', value: true, diagnostics: [] }
 
-  const result = evaluateCondition(condition.rule, data)
-  const excluded = result.value === false || (result.value === 'unknown' && condition.onUnknown === 'exclude')
+  const result = evaluateCondition(condition.groups, data)
+  const visibility = resolveVisibility(condition, result.value)
   return {
     ...result,
-    state: excluded ? (condition.whenFalse ?? 'remove') : 'include',
+    state: visibility === 'show' ? 'include' : (condition.whenHidden ?? 'remove'),
   }
 }
 
-function evaluateNode(node: ConditionNode, context: EvaluationContext, path: string, depth: number): ConditionTruth {
-  if (!consumeStep(context, path) || depth > CONDITION_MAX_DEPTH) {
-    addLimitDiagnostic(context, path)
+function resolveVisibility(condition: RenderCondition, value: ConditionTruth): 'show' | 'hide' {
+  if (value === 'unknown')
+    return condition.onUnknown ?? 'show'
+  if (value)
+    return condition.whenMatched
+  return condition.whenMatched === 'show' ? 'hide' : 'show'
+}
+
+function countRows(groups: ConditionGroup[]): number {
+  return groups.reduce((total, group) => total + group.conditions.length, 0)
+}
+
+function evaluateGroup(group: ConditionGroup, context: EvaluationContext): ConditionTruth {
+  if (!group.scope)
+    return evaluateRows(group.conditions, context, undefined)
+
+  const collection = readPath(context.data, group.scope.path)
+  if (!collection.found) {
+    addDiagnostic(context, 'CONDITION_FIELD_MISSING', 'Condition collection field is missing.', group.scope.path)
+    return 'unknown'
+  }
+  if (!Array.isArray(collection.value)) {
+    addDiagnostic(context, 'CONDITION_COLLECTION_EXPECTED', 'Condition collection field must be an array.', group.scope.path)
+    return 'unknown'
+  }
+  if (collection.value.length > CONDITION_MAX_COLLECTION_RECORDS) {
+    addLimitDiagnostic(context)
     return 'unknown'
   }
 
-  if (node.kind === 'group') {
-    let sawUnknown = false
-    for (let index = 0; index < node.children.length; index += 1) {
-      const value = evaluateNode(node.children[index]!, context, `${path}.children.${index}`, depth + 1)
-      if (node.operator === 'and' && value === false)
-        return false
-      if (node.operator === 'or' && value === true)
-        return true
-      sawUnknown ||= value === 'unknown'
-    }
-    if (sawUnknown)
+  let sawUnknown = false
+  for (const item of collection.value) {
+    if (!consumeStep(context))
       return 'unknown'
-    return node.operator === 'and'
+    const value = evaluateRows(group.conditions, context, item)
+    if (group.scope.quantifier === 'any' && value === true)
+      return true
+    if (group.scope.quantifier === 'all' && value === false)
+      return false
+    if (group.scope.quantifier === 'none' && value === true)
+      return false
+    sawUnknown ||= value === 'unknown'
   }
-
-  if (node.kind === 'not') {
-    const value = evaluateNode(node.child, context, `${path}.child`, depth + 1)
-    return value === 'unknown' ? value : !value
-  }
-
-  return evaluateComparison(node.operator, node.operands, node.options?.caseSensitive !== false, context, path)
+  if (sawUnknown)
+    return 'unknown'
+  return group.scope.quantifier !== 'any'
 }
 
-function evaluateComparison(
-  operator: CompareOperator,
-  operands: ValueExpression[],
-  caseSensitive: boolean,
-  context: EvaluationContext,
-  path: string,
-): ConditionTruth {
-  const values = operands.map((operand, index) => evaluateValue(
-    operand,
-    context,
-    `${path}.operands.${index}`,
-    operator === 'exists' || operator === 'notExists',
-  ))
-  if (operator === 'exists' || operator === 'notExists') {
-    const exists = values[0]?.status === 'known'
-    return operator === 'exists' ? exists : !exists
+function evaluateRows(rows: ConditionRow[], context: EvaluationContext, item: unknown): ConditionTruth {
+  const previousItem = context.item
+  context.item = item
+  let sawUnknown = false
+  for (let conditionIndex = 0; conditionIndex < rows.length; conditionIndex += 1) {
+    context.conditionIndex = conditionIndex
+    if (!consumeStep(context)) {
+      context.item = previousItem
+      return 'unknown'
+    }
+    const value = evaluateRow(rows[conditionIndex]!, context)
+    if (value === false) {
+      context.item = previousItem
+      return false
+    }
+    sawUnknown ||= value === 'unknown'
   }
-  if (values.some(value => value?.status !== 'known'))
-    return 'unknown'
+  context.item = previousItem
+  return sawUnknown ? 'unknown' : true
+}
 
-  const raw = values.map(value => (value as { status: 'known', value: unknown }).value)
-  if (operator === 'isEmpty' || operator === 'isNotEmpty') {
-    const empty = isEmpty(raw[0])
-    return operator === 'isEmpty' ? empty : !empty
+function evaluateRow(row: ConditionRow, context: EvaluationContext): ConditionTruth {
+  const subject = evaluateField(row.source, context, row.operator === 'exists' || row.operator === 'notExists')
+  if (row.operator === 'exists' || row.operator === 'notExists') {
+    const exists = subject.status === 'known'
+    return row.operator === 'exists' ? exists : !exists
   }
+  if (subject.status !== 'known')
+    return 'unknown'
+  if (row.operator === 'isEmpty' || row.operator === 'isNotEmpty') {
+    const empty = isEmpty(subject.value)
+    return row.operator === 'isEmpty' ? empty : !empty
+  }
+
+  const subjectValue = castResolved(subject.value, row.valueType!, row.source.path, context)
+  if (subjectValue.status !== 'known')
+    return 'unknown'
+  const inputs = Array.isArray(row.value) ? row.value : row.value ? [row.value] : []
+  const resolved = inputs.map(value => evaluateValue(value, row.valueType!, context))
+  if (resolved.some(value => value.status !== 'known'))
+    return 'unknown'
+  const values = [subjectValue.value, ...resolved.map(value => (value as { status: 'known', value: unknown }).value)]
+  return compare(row, values, context)
+}
+
+function evaluateValue(value: ConditionValue, valueType: ConditionValueType, context: EvaluationContext): ResolvedValue {
+  if (value.kind === 'literal')
+    return castResolved(value.value, valueType, undefined, context)
+  const resolved = evaluateField(value.field, context, false)
+  return resolved.status === 'known'
+    ? castResolved(resolved.value, valueType, value.field.path, context)
+    : resolved
+}
+
+function evaluateField(field: ConditionFieldRef, context: EvaluationContext, ignoreMissingDiagnostic: boolean): ResolvedValue {
+  const root = (field.scope ?? 'root') === 'item' ? context.item : context.data
+  const resolved = readPath(root, field.path)
+  if (!resolved.found) {
+    if (!ignoreMissingDiagnostic)
+      addDiagnostic(context, 'CONDITION_FIELD_MISSING', 'Condition field is missing.', field.path)
+    return { status: 'missing' }
+  }
+  return { status: 'known', value: resolved.value }
+}
+
+function castResolved(value: unknown, type: ConditionValueType, fieldPath: string | undefined, context: EvaluationContext): ResolvedValue {
+  const cast = castValue(value, type)
+  if (cast.success)
+    return { status: 'known', value: cast.value }
+  addDiagnostic(context, 'CONDITION_CAST_FAILED', `Failed to cast condition value to ${type}.`, fieldPath)
+  return { status: 'unknown' }
+}
+
+function compare(row: ConditionRow, raw: unknown[], context: EvaluationContext): ConditionTruth {
   if (raw.some(value => !isScalar(value))) {
-    addDiagnostic(context, 'CONDITION_TYPE_MISMATCH', 'Comparison operands must be scalar values.', path)
+    addDiagnostic(context, 'CONDITION_TYPE_MISMATCH', 'Comparison operands must be scalar values.')
     return 'unknown'
   }
-
-  if (operator === 'eq' || operator === 'neq') {
-    const equal = scalarEqual(raw[0], raw[1], caseSensitive, context, path)
-    return equal === 'unknown' ? equal : operator === 'eq' ? equal : !equal
+  const caseSensitive = row.options?.caseSensitive !== false
+  if (row.operator === 'eq' || row.operator === 'neq') {
+    const equal = scalarEqual(raw[0], raw[1], caseSensitive, context)
+    return equal === 'unknown' ? equal : row.operator === 'eq' ? equal : !equal
   }
-  if (operator === 'in' || operator === 'notIn') {
+  if (row.operator === 'in' || row.operator === 'notIn') {
     let sawUnknown = false
     for (const candidate of raw.slice(1)) {
-      const equal = scalarEqual(raw[0], candidate, caseSensitive, context, path)
+      const equal = scalarEqual(raw[0], candidate, caseSensitive, context)
       if (equal === true)
-        return operator === 'in'
+        return row.operator === 'in'
       sawUnknown ||= equal === 'unknown'
     }
-    return sawUnknown ? 'unknown' : operator === 'notIn'
+    return sawUnknown ? 'unknown' : row.operator === 'notIn'
   }
-  if (operator === 'contains' || operator === 'notContains' || operator === 'startsWith' || operator === 'endsWith') {
+  if (row.operator === 'contains' || row.operator === 'notContains' || row.operator === 'startsWith' || row.operator === 'endsWith') {
     if (typeof raw[0] !== 'string' || typeof raw[1] !== 'string')
-      return typeMismatch(context, path, 'String operator expected string operands.')
+      return typeMismatch(context, 'String operator expected string operands.')
     const left = caseSensitive ? raw[0] : raw[0].toLowerCase()
     const right = caseSensitive ? raw[1] : raw[1].toLowerCase()
-    const matched = operator === 'contains' || operator === 'notContains'
+    const matched = row.operator === 'contains' || row.operator === 'notContains'
       ? left.includes(right)
-      : operator === 'startsWith' ? left.startsWith(right) : left.endsWith(right)
-    return operator === 'notContains' ? !matched : matched
+      : row.operator === 'startsWith' ? left.startsWith(right) : left.endsWith(right)
+    return row.operator === 'notContains' ? !matched : matched
   }
-
-  if (operator === 'between' || operator === 'notBetween') {
-    const lower = compareOrder(raw[0], raw[1], context, path)
-    const upper = compareOrder(raw[0], raw[2], context, path)
+  if (row.operator === 'between' || row.operator === 'notBetween') {
+    const lower = compareOrder(raw[0], raw[1], context)
+    const upper = compareOrder(raw[0], raw[2], context)
     if (lower === 'unknown' || upper === 'unknown')
       return 'unknown'
     const inside = lower >= 0 && upper <= 0
-    return operator === 'between' ? inside : !inside
+    return row.operator === 'between' ? inside : !inside
   }
-
-  const order = compareOrder(raw[0], raw[1], context, path)
+  const order = compareOrder(raw[0], raw[1], context)
   if (order === 'unknown')
     return 'unknown'
-  if (operator === 'gt')
+  if (row.operator === 'gt')
     return order > 0
-  if (operator === 'gte')
+  if (row.operator === 'gte')
     return order >= 0
-  if (operator === 'lt')
+  if (row.operator === 'lt')
     return order < 0
   return order <= 0
-}
-
-function evaluateValue(expression: ValueExpression, context: EvaluationContext, path: string, ignoreCast = false): ResolvedValue {
-  if (expression.kind === 'literal')
-    return { status: 'known', value: expression.value }
-  return evaluatePath(expression, context, path, ignoreCast)
-}
-
-function evaluatePath(expression: FieldValueExpression, context: EvaluationContext, path: string, ignoreCast = false): ResolvedValue {
-  const fieldPath = expression.path
-  const resolved = readPath(context.data, fieldPath)
-  if (!resolved.found) {
-    addDiagnostic(context, 'CONDITION_FIELD_MISSING', 'Condition field is missing.', path, fieldPath)
-    return { status: 'missing' }
-  }
-  if (!expression.cast || ignoreCast)
-    return { status: 'known', value: resolved.value }
-  const cast = castValue(resolved.value, expression.cast)
-  if (!cast.success) {
-    addDiagnostic(context, 'CONDITION_CAST_FAILED', `Failed to cast condition value to ${expression.cast}.`, path, fieldPath)
-    return { status: 'unknown' }
-  }
-  return { status: 'known', value: cast.value }
 }
 
 function readPath(root: unknown, path: string): { found: boolean, value?: unknown } {
@@ -233,16 +299,16 @@ function readPath(root: unknown, path: string): { found: boolean, value?: unknow
   return current === undefined ? { found: false } : { found: true, value: current }
 }
 
-function castValue(value: unknown, cast: ValueCast): { success: true, value: unknown } | { success: false } {
+function castValue(value: unknown, type: ConditionValueType): { success: true, value: unknown } | { success: false } {
   if (value === null)
     return { success: true, value: null }
-  if (cast === 'string' || cast === 'trimmed-string') {
+  if (type === 'string' || type === 'trimmed-string') {
     if (!isScalar(value))
       return { success: false }
     const result = String(value)
-    return { success: true, value: cast === 'trimmed-string' ? result.trim() : result }
+    return { success: true, value: type === 'trimmed-string' ? result.trim() : result }
   }
-  if (cast === 'number') {
+  if (type === 'number') {
     if (typeof value === 'number')
       return Number.isFinite(value) ? { success: true, value } : { success: false }
     if (typeof value !== 'string' || value.trim() === '' || !/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(value.trim()))
@@ -250,7 +316,7 @@ function castValue(value: unknown, cast: ValueCast): { success: true, value: unk
     const number = Number(value)
     return Number.isFinite(number) ? { success: true, value: number } : { success: false }
   }
-  if (cast === 'boolean') {
+  if (type === 'boolean') {
     if (typeof value === 'boolean')
       return { success: true, value }
     if (value === 1 || value === 0)
@@ -275,17 +341,17 @@ function castValue(value: unknown, cast: ValueCast): { success: true, value: unk
   return { success: true, value: timestamp }
 }
 
-function scalarEqual(left: unknown, right: unknown, caseSensitive: boolean, context: EvaluationContext, path: string): ConditionTruth {
+function scalarEqual(left: unknown, right: unknown, caseSensitive: boolean, context: EvaluationContext): ConditionTruth {
   if (typeof left !== typeof right)
-    return typeMismatch(context, path, 'Comparison operands have different types.')
+    return typeMismatch(context, 'Comparison operands have different types.')
   if (typeof left === 'string' && typeof right === 'string' && !caseSensitive)
     return left.toLowerCase() === right.toLowerCase()
   return left === right
 }
 
-function compareOrder(left: unknown, right: unknown, context: EvaluationContext, path: string): number | 'unknown' {
+function compareOrder(left: unknown, right: unknown, context: EvaluationContext): number | 'unknown' {
   if (typeof left !== typeof right || (typeof left !== 'number' && typeof left !== 'string')) {
-    typeMismatch(context, path, 'Ordering operands must be numbers or strings of the same type.')
+    typeMismatch(context, 'Ordering operands must be numbers or strings of the same type.')
     return 'unknown'
   }
   if (typeof left === 'number')
@@ -318,32 +384,40 @@ function isEmpty(value: unknown): boolean {
   return typeof value === 'object' && value !== null && Object.keys(value).length === 0
 }
 
-function typeMismatch(context: EvaluationContext, path: string, message: string): 'unknown' {
-  addDiagnostic(context, 'CONDITION_TYPE_MISMATCH', message, path)
-  return 'unknown'
-}
-
-function consumeStep(context: EvaluationContext, path: string): boolean {
+function consumeStep(context: EvaluationContext): boolean {
   context.steps += 1
   if (context.steps <= CONDITION_STEP_BUDGET)
     return true
-  addLimitDiagnostic(context, path)
+  addLimitDiagnostic(context)
   return false
 }
 
-function addLimitDiagnostic(context: EvaluationContext, path: string): void {
+function typeMismatch(context: EvaluationContext, message: string): 'unknown' {
+  addDiagnostic(context, 'CONDITION_TYPE_MISMATCH', message)
+  return 'unknown'
+}
+
+function addLimitDiagnostic(context: EvaluationContext): void {
   if (context.limited)
     return
   context.limited = true
-  addDiagnostic(context, 'CONDITION_LIMIT_EXCEEDED', 'Condition evaluation exceeded its resource limit.', path)
+  addDiagnostic(context, 'CONDITION_LIMIT_EXCEEDED', 'Condition evaluation exceeded its fixed resource limit.')
 }
 
 function addDiagnostic(
   context: EvaluationContext,
   code: ConditionDiagnosticCode,
   message: string,
-  astPath: string,
   fieldPath?: string,
 ): void {
-  context.diagnostics.push({ category: 'condition', scope: 'condition', severity: 'warning', code, message, astPath, fieldPath })
+  context.diagnostics.push({
+    category: 'condition',
+    scope: 'condition',
+    severity: 'warning',
+    code,
+    message,
+    groupIndex: context.groupIndex,
+    conditionIndex: context.conditionIndex,
+    fieldPath,
+  })
 }

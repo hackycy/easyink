@@ -33,7 +33,7 @@ export function resolveConditionalSchema(
     const requestedState = resolution.state
     const state = node.hidden
       ? 'reserve'
-      : requestedState === 'include' || capability.effects.includes(requestedState)
+      : requestedState === 'include' || capability.hiddenEffects.includes(requestedState)
         ? requestedState
         : 'include'
     states.set(node.id, state)
@@ -65,7 +65,7 @@ function appendDiagnostics(
   keys: Set<string>,
 ): void {
   for (const diagnostic of source) {
-    const key = `${nodeId}:${diagnostic.code}:${diagnostic.astPath}`
+    const key = `${nodeId}:${diagnostic.code}:${diagnostic.groupIndex ?? ''}:${diagnostic.conditionIndex ?? ''}`
     if (keys.has(key))
       continue
     keys.add(key)
@@ -77,7 +77,8 @@ function appendDiagnostics(
       message: diagnostic.message,
       nodeId,
       detail: {
-        astPath: diagnostic.astPath,
+        groupIndex: diagnostic.groupIndex,
+        conditionIndex: diagnostic.conditionIndex,
         fieldPath: diagnostic.fieldPath,
       },
     })

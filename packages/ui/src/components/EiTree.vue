@@ -24,7 +24,7 @@ defineSlots<{
   suffix: (props: { node: TreeNode }) => unknown
 }>()
 
-const expandedIds = ref(new Set<string>())
+const expandedIds = ref(new Set<string>(props.defaultExpandAll ? collectAllIds(props.nodes) : []))
 
 function collectAllIds(nodes: TreeNode[]): string[] {
   const ids: string[] = []
@@ -45,13 +45,13 @@ function expandAll() {
 }
 
 onMounted(() => {
-  if (props.defaultExpandAll && props.depth === 0) {
+  if (props.defaultExpandAll) {
     expandAll()
   }
 })
 
 watch(() => props.nodes, () => {
-  if (props.defaultExpandAll && props.depth === 0) {
+  if (props.defaultExpandAll) {
     expandAll()
   }
 })
@@ -133,6 +133,7 @@ function resolveIcon(node: TreeNode): Component | undefined {
           :nodes="node.children"
           :selected-id="selectedId"
           :icon-map="iconMap"
+          :default-expand-all="defaultExpandAll"
           :depth="depth + 1"
           @select="emit('select', $event)"
         >

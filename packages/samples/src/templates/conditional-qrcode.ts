@@ -22,8 +22,9 @@ export const conditionalQrcodeTemplate: DocumentSchema = {
       props: { value: '', size: 30, errorCorrectionLevel: 'M', foreground: '#111111', background: '#ffffff', borderWidth: 0, borderColor: '#000000', borderType: 'solid' },
       binding: { sourceId: 'demo', fieldPath: 'parentQrcode', fieldLabel: '主二维码' },
       renderCondition: {
-        rule: { kind: 'compare', operator: 'exists', operands: [{ kind: 'field', path: 'parentQrcode' }] },
-        whenFalse: 'remove',
+        whenMatched: 'show',
+        whenHidden: 'remove',
+        groups: [{ conditions: [{ source: { path: 'parentQrcode', fieldLabel: '主二维码' }, operator: 'exists' }] }],
       },
     },
     {
@@ -36,15 +37,12 @@ export const conditionalQrcodeTemplate: DocumentSchema = {
       props: { value: '', size: 30, errorCorrectionLevel: 'M', foreground: '#1677ff', background: '#ffffff', borderWidth: 0, borderColor: '#000000', borderType: 'solid' },
       binding: { sourceId: 'demo', fieldPath: 'qrCode', fieldLabel: '备用二维码' },
       renderCondition: {
-        rule: {
-          kind: 'group',
-          operator: 'and',
-          children: [
-            { kind: 'compare', operator: 'notExists', operands: [{ kind: 'field', path: 'parentQrcode' }] },
-            { kind: 'compare', operator: 'exists', operands: [{ kind: 'field', path: 'qrCode' }] },
-          ],
-        },
-        whenFalse: 'remove',
+        whenMatched: 'show',
+        whenHidden: 'remove',
+        groups: [{ conditions: [
+          { source: { path: 'parentQrcode', fieldLabel: '主二维码' }, operator: 'notExists' },
+          { source: { path: 'qrCode', fieldLabel: '备用二维码' }, operator: 'exists' },
+        ] }],
       },
     },
   ],

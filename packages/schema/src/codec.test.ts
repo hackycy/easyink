@@ -62,8 +62,9 @@ describe('decodeBenchmarkInput', () => {
         width: 10,
         height: 10,
         renderCondition: {
-          rule: { kind: 'compare', operator: 'exists', operands: [{ kind: 'field', path: 'customer.name' }] },
-          whenFalse: 'remove',
+          whenMatched: 'show',
+          whenHidden: 'remove',
+          groups: [{ conditions: [{ source: { path: 'customer.name' }, operator: 'exists' }] }],
         },
       }],
     }

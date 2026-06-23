@@ -295,7 +295,8 @@ describe('updateRenderConditionCommand', () => {
     const elements: MaterialNode[] = [{ id: 'n', type: 'text', x: 0, y: 0, width: 1, height: 1, props: {} }]
     const manager = new CommandManager()
     const makeCondition = (path: string) => ({
-      rule: { kind: 'compare' as const, operator: 'exists' as const, operands: [{ kind: 'field' as const, path }] },
+      whenMatched: 'show' as const,
+      groups: [{ conditions: [{ source: { path }, operator: 'exists' as const }] }],
     })
 
     manager.execute(new UpdateRenderConditionCommand(elements, 'n', makeCondition('a'), 'field'))
