@@ -149,7 +149,7 @@ watch(() => props.sources, (sources) => {
 </script>
 
 <template>
-  <EiPopover v-model:open="open" class="condition-field-picker">
+  <EiPopover v-model:open="open" class="condition-field-picker condition-field-picker--field-tree">
     <button
       type="button"
       class="condition-field-picker__trigger"
@@ -174,7 +174,6 @@ watch(() => props.sources, (sources) => {
             :toggle-expand="toggleExpand"
             :is-expanded="isExpanded"
             :is-field-selectable="isFieldSelectable"
-            :show-field-path="true"
             @select="choose"
           />
         </div>
@@ -241,10 +240,15 @@ watch(() => props.sources, (sources) => {
 }
 
 .condition-field-picker__panel {
-  width: min(540px, calc(100vw - 48px));
+  max-height: calc(var(--ei-popover-available-height, 420px) - 16px);
+  width: min(360px, calc(100vw - 48px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .condition-field-picker__search {
+  flex: 0 0 auto;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 6px;
@@ -253,11 +257,17 @@ watch(() => props.sources, (sources) => {
 }
 
 .condition-field-picker__tree {
-  max-height: min(360px, calc(var(--ei-popover-available-height, 420px) - 48px));
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: auto;
 }
 
+.condition-field-picker :deep(.ei-popover-panel) {
+  overflow: hidden;
+}
+
 .condition-field-picker__empty {
+  flex: 0 0 auto;
   margin: 12px 4px;
   color: var(--ei-text-secondary, #999);
   font-size: 12px;

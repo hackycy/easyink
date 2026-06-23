@@ -21,7 +21,6 @@ const props = defineProps<{
   mode?: 'drag' | 'select'
   isFieldSelectable?: (field: DataFieldNode, source: DataSourceDescriptor) => boolean
   fieldBadge?: (field: DataFieldNode, source: DataSourceDescriptor) => string | undefined
-  showFieldPath?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -135,6 +134,7 @@ function onPointerUp() {
       :class="{ 'ei-field-node__row--draggable': isDraggable(), 'ei-field-node__row--selectable': isSelectable() }"
       draggable="false"
       :style="{ paddingLeft: `${depth * 16 + 4}px` }"
+      :title="fieldPath()"
       @click="onRowClick"
       @pointerdown="onPointerDown"
       @pointerup="onPointerUp"
@@ -161,7 +161,6 @@ function onPointerUp() {
       />
       <span class="ei-field-node__copy">
         <span class="ei-field-node__label" :title="fieldPath()">{{ field.title || field.name }}</span>
-        <span v-if="showFieldPath" class="ei-field-node__path" :title="fieldPath()">{{ fieldPath() }}</span>
       </span>
       <span v-if="fieldBadge?.(field, source)" class="ei-field-node__badge">
         {{ fieldBadge(field, source) }}
@@ -180,7 +179,6 @@ function onPointerUp() {
         :mode="mode"
         :is-field-selectable="isFieldSelectable"
         :field-badge="fieldBadge"
-        :show-field-path="showFieldPath"
         @select="(field, selectedSource) => emit('select', field, selectedSource)"
       />
     </template>
@@ -193,6 +191,7 @@ function onPointerUp() {
     :class="{ 'ei-field-node__row--draggable': isDraggable(), 'ei-field-node__row--selectable': isSelectable(), 'ei-field-node__row--disabled': isDisabledSelectLeaf() }"
     draggable="false"
     :style="{ paddingLeft: `${depth * 16 + 4}px` }"
+    :title="fieldPath()"
     @click="onRowClick"
     @pointerdown="onPointerDown"
     @dragstart.prevent
@@ -201,7 +200,6 @@ function onPointerUp() {
     <IconGripVertical v-if="isDraggable()" :size="12" :stroke-width="1.5" class="ei-field-node__grip" />
     <span class="ei-field-node__copy">
       <span class="ei-field-node__label" :title="fieldPath()">{{ field.title || field.name }}</span>
-      <span v-if="showFieldPath" class="ei-field-node__path" :title="fieldPath()">{{ fieldPath() }}</span>
     </span>
     <span v-if="fieldBadge?.(field, source)" class="ei-field-node__badge">
       {{ fieldBadge(field, source) }}
@@ -221,6 +219,7 @@ function onPointerUp() {
     -webkit-user-drag: none;
     gap: 4px;
     min-height: 26px;
+    overflow: hidden;
 
     &--group {
       cursor: pointer;
@@ -258,10 +257,6 @@ function onPointerUp() {
     &--leaf {
       &:hover {
         background: var(--ei-hover-bg, #f0f0f0);
-
-        .ei-field-node__path {
-          opacity: 1;
-        }
       }
     }
   }
@@ -302,25 +297,18 @@ function onPointerUp() {
     flex: 1;
     min-width: 0;
     display: flex;
-    flex-direction: column;
-    gap: 1px;
+    align-items: center;
+    line-height: 18px;
   }
 
   &__label {
+    flex: 1 1 auto;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     color: var(--ei-text, #333);
     font-size: 12px;
-  }
-
-  &__path {
-    overflow: hidden;
-    color: var(--ei-text-secondary, #999);
-    font-size: 10px;
-    line-height: 12px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   &__badge {
