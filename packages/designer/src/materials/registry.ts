@@ -1,4 +1,4 @@
-import type { MaterialConditionDefinition } from '@easyink/core'
+import type { MaterialConditionCapability } from '@easyink/core'
 import type { AIMaterialDescriptor } from '@easyink/shared'
 import type { DesignerStore } from '../store/designer-store'
 import type { LazyMaterialExtensionFactory, LocaleMessageRegistration, MaterialCapabilities, MaterialCatalogEntry, MaterialCatalogGroup, MaterialDefinition, MaterialExtensionFactory, PanelSectionId, PropSchema } from '../types'
@@ -11,7 +11,7 @@ export interface DesignerMaterialRegistration {
   icon: MaterialDefinition['icon']
   category: MaterialDefinition['category']
   capabilities: MaterialCapabilities
-  condition?: MaterialConditionDefinition
+  condition?: MaterialConditionCapability
   binding: MaterialDefinition['binding']
   createDefaultNode: MaterialDefinition['createDefaultNode']
   factory: MaterialExtensionFactory

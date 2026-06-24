@@ -5,7 +5,7 @@ import type { BindingDisplayFormat } from '@easyink/shared'
 import type { Component } from 'vue'
 import type { PagePropertyContext, PagePropertyDescriptor, PagePropertyGroup } from '../page-properties'
 import type { DesignerResolvedAsset, PanelSectionId, PropSchema } from '../types'
-import { ClearBindingCommand, getByPath, setByPath, UpdateBindingFormatCommand, UpdateDocumentCommand, UpdateGeometryCommand, UpdateMaterialBindingCommand, UpdateMaterialMetaCommand, UpdateMaterialPropsCommand, UpdatePageCommand, UpdateRenderConditionCommand } from '@easyink/core'
+import { ClearBindingCommand, getByPath, resolveMaterialConditionCapability, setByPath, UpdateBindingFormatCommand, UpdateDocumentCommand, UpdateGeometryCommand, UpdateMaterialBindingCommand, UpdateMaterialMetaCommand, UpdateMaterialPropsCommand, UpdatePageCommand, UpdateRenderConditionCommand } from '@easyink/core'
 import { createLayoutBehaviorPropSchemas, groupPropSchemas } from '@easyink/prop-schemas'
 import { getBindingRefs } from '@easyink/schema'
 import { deepClone } from '@easyink/shared'
@@ -41,7 +41,7 @@ const selectedElementLocked = computed(() => selectedElement.value?.locked === t
 const selectedElementHidden = computed(() => selectedElement.value?.hidden === true)
 const selectedConditionCapability = computed(() => {
   const element = selectedElement.value
-  return element ? store.getMaterial(element.type)?.condition : undefined
+  return element ? resolveMaterialConditionCapability(store.getMaterial(element.type)?.condition) : undefined
 })
 const canEditSelectedElement = computed(() => !selectedElementLocked.value && !selectedElementHidden.value)
 const showHiddenSwitch = computed(() => !selectedElementLocked.value)

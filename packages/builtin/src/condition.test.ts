@@ -4,22 +4,13 @@ import { createBuiltinDesignerMaterialBundle } from './designer'
 import { createBuiltinViewerMaterialBundle } from './viewer'
 
 describe('builtin conditional rendering capabilities', () => {
-  it('shares the same condition definition between designer and viewer for the first release materials', () => {
+  it('uses the framework default condition capability without builtin material overrides', () => {
     const designer = createBuiltinDesignerMaterialBundle('all')
     const viewer = createBuiltinViewerMaterialBundle('all')
-    const expected = ['text', 'image', 'barcode', 'qrcode', 'line', 'rect', 'ellipse', 'signature']
 
-    for (const type of expected) {
-      const designerCondition = designer.materials.find(material => material.type === type)?.condition
-      const viewerCondition = viewer.materials.find(material => material.type === type)?.extension.condition
-      expect(designerCondition, type).toBeDefined()
-      expect(viewerCondition, type).toBe(designerCondition)
-    }
-
-    expect(designer.materials.filter(material => material.condition).map(material => material.type).sort()).toEqual([...expected].sort())
-
-    for (const material of basicDesigner.materials.filter(item => item.condition)) {
-      expect(basicViewer.materials.find(item => item.type === material.type)?.extension.condition).toBe(material.condition)
-    }
+    expect(designer.materials.filter(material => material.condition !== undefined)).toEqual([])
+    expect(viewer.materials.filter(material => material.extension.condition !== undefined)).toEqual([])
+    expect(basicDesigner.materials.filter(material => material.condition !== undefined)).toEqual([])
+    expect(basicViewer.materials.filter(material => material.extension.condition !== undefined)).toEqual([])
   })
 })

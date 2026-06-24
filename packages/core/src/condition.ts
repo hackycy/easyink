@@ -25,6 +25,17 @@ export interface MaterialConditionDefinition {
   hiddenEffects: ConditionEffect[]
 }
 
+export type MaterialConditionCapability = MaterialConditionDefinition | false | undefined
+
+export const DEFAULT_MATERIAL_CONDITION: MaterialConditionDefinition = {
+  scope: 'node',
+  hiddenEffects: ['remove', 'reserve'],
+}
+
+export function resolveMaterialConditionCapability(capability: MaterialConditionCapability): MaterialConditionDefinition | undefined {
+  return capability === false ? undefined : (capability ?? DEFAULT_MATERIAL_CONDITION)
+}
+
 export type ConditionDiagnosticCode
   = | 'CONDITION_FIELD_MISSING'
     | 'CONDITION_CAST_FAILED'

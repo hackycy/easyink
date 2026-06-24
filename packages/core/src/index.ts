@@ -48,8 +48,10 @@ export {
   CONDITION_MAX_GROUPS,
   CONDITION_MAX_ROWS,
   CONDITION_STEP_BUDGET,
+  DEFAULT_MATERIAL_CONDITION,
   evaluateCondition,
   resolveConditionalNode,
+  resolveMaterialConditionCapability,
 } from './condition'
 export type {
   ConditionalNodeResolution,
@@ -59,6 +61,7 @@ export type {
   ConditionEffect,
   ConditionEvaluationResult,
   ConditionTruth,
+  MaterialConditionCapability,
   MaterialConditionDefinition,
 } from './condition'
 

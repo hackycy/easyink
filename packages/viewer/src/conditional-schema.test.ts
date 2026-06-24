@@ -139,9 +139,18 @@ describe('resolveConditionalSchema', () => {
     expect(Number.parseFloat((container.querySelector('[data-element-id="after"]') as HTMLElement).style.top)).toBe(20)
   })
 
-  it('ignores conditions on materials without the capability', () => {
+  it('uses default condition capability when no material override is declared', () => {
     const original = schema([node('plain', 'missing')])
-    expect(resolveConditionalSchema(original, {}, new MaterialRendererRegistry()).schema).toBe(original)
+    const result = resolveConditionalSchema(original, {}, new MaterialRendererRegistry())
+    expect(result.schema.elements).toEqual([])
+    expect(result.states.get('plain')).toBe('remove')
+  })
+
+  it('ignores conditions when a material explicitly disables the capability', () => {
+    const registry = new MaterialRendererRegistry()
+    registry.register('conditional', { kind: 'none' }, { render: () => ({}), condition: false })
+    const original = schema([node('plain', 'missing')])
+    expect(resolveConditionalSchema(original, {}, registry).schema).toBe(original)
   })
 
   it('keeps static hidden priority even when reserve is not a declared condition effect', () => {

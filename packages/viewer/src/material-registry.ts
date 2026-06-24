@@ -1,7 +1,7 @@
 import type { MaterialBindingDefinition, MaterialConditionDefinition } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { FragmentPaginator, MaterialViewerExtension, ViewerMeasureContext, ViewerMeasureResult, ViewerRenderContext, ViewerRenderOutput, ViewerRenderSize } from './types'
-import { trustedViewerHtml } from '@easyink/core'
+import { resolveMaterialConditionCapability, trustedViewerHtml } from '@easyink/core'
 import { escapeHtml } from '@easyink/shared'
 
 /**
@@ -71,7 +71,7 @@ export class MaterialRendererRegistry {
   }
 
   getCondition(type: string): MaterialConditionDefinition | undefined {
-    return this._renderers.get(type)?.condition
+    return resolveMaterialConditionCapability(this._renderers.get(type)?.condition)
   }
 
   get registeredTypes(): string[] {

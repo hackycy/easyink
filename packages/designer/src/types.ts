@@ -1,4 +1,4 @@
-import type { MaterialBindingDefinition, MaterialConditionDefinition, PropSchema } from '@easyink/core'
+import type { MaterialBindingDefinition, MaterialConditionCapability, PropSchema } from '@easyink/core'
 import type { DataSourceDescriptor } from '@easyink/datasource'
 import type { LocaleMessages } from '@easyink/locales'
 import type { DocumentSchema, DocumentSchemaInput, MaterialNode } from '@easyink/schema'
@@ -197,7 +197,7 @@ export interface MaterialDefinition {
   icon: MaterialIcon
   category: MaterialCategory
   capabilities: MaterialCapabilities
-  condition?: MaterialConditionDefinition
+  condition?: MaterialConditionCapability
   props: PropSchema[]
   binding: MaterialBindingDefinition
   aiDescriptor?: AIMaterialDescriptor
