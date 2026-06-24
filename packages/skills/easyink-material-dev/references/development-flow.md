@@ -26,6 +26,7 @@ In `schema.ts`:
 - Merge defaults before partial props, and do not let `partial.props` accidentally overwrite the entire node before you normalize it.
 - Default nodes must be visible without external data.
 - Capabilities must match actual behavior. Do not mark `bindable`, `multiBinding`, `resizable`, `rotatable`, `supportsChildren`, `pageAware`, or `aspectLock` optimistically.
+- Do not add material-local condition constants or default `condition` registrations. Conditional rendering is enabled by default for all materials with `remove` and `reserve`; only declare `condition: false` or a narrowed `hiddenEffects` override when the default behavior is wrong.
 - Use `placement`, `break`, and `repeat` for node-level page behavior. Do not add new page behavior fields under `node.props`.
 
 Pattern:
@@ -209,12 +210,13 @@ For a new built-in material:
 4. Import and register Designer entry in `packages/builtin/src/designer.ts`.
 5. Import and register Viewer entry in `packages/builtin/src/viewer.ts`.
 6. Update the public `@easyink/builtin` entries. `package.json` exposes only the root entry plus `./all`, `./basic`, `./none`, and `./package.json`; do not add or depend on public `./designer`, `./viewer`, or `./bindings` subpaths. Root exports must keep the all-set aliases plus explicit all/basic/none bundle aliases and Viewer registration helpers aligned. `all` must include the new material; `basic` includes it only if it belongs in the reduced set and must import only that reduced dependency set; `none` remains empty.
-7. If Designer rendering is heavy, register metadata synchronously and use `lazyFactory` for the Designer extension chunk only; keep Viewer registration synchronous.
-8. Pass the material-local AI descriptor as `aiDescriptor` in Designer registration. `packages/builtin/src/ai.ts` is derived from the Designer bundle; do not hand-maintain a second descriptor list.
-9. Add `src/locale.ts` in the material package and pass it as `localeMessages` on the Designer material entry. Keep `@easyink/locales` for Designer common strings only.
-10. Add the material to the appropriate `catalogs` group in `packages/builtin/src/designer.ts`. If you add a new group id, register `materials.catalog.<id>` in the bundle locale messages.
-11. Update tests or snapshots affected by built-in type lists, catalog grouping, lazy registration, root/subpath exports, package-size boundaries, or binding format tabs. Include a root-entry check when aliases or registration helpers change so consumers are not forced onto unpublished source subpaths.
-12. Run focused package tests and then broader validation when registration, descriptors, or shared Designer/Viewer behavior changed.
+7. Leave `condition` omitted unless this material explicitly opts out or narrows hidden effects; do not register the framework default.
+8. If Designer rendering is heavy, register metadata synchronously and use `lazyFactory` for the Designer extension chunk only; keep Viewer registration synchronous.
+9. Pass the material-local AI descriptor as `aiDescriptor` in Designer registration. `packages/builtin/src/ai.ts` is derived from the Designer bundle; do not hand-maintain a second descriptor list.
+10. Add `src/locale.ts` in the material package and pass it as `localeMessages` on the Designer material entry. Keep `@easyink/locales` for Designer common strings only.
+11. Add the material to the appropriate `catalogs` group in `packages/builtin/src/designer.ts`. If you add a new group id, register `materials.catalog.<id>` in the bundle locale messages.
+12. Update tests or snapshots affected by built-in type lists, catalog grouping, lazy registration, root/subpath exports, package-size boundaries, condition overrides, or binding format tabs. Include a root-entry check when aliases or registration helpers change so consumers are not forced onto unpublished source subpaths.
+13. Run focused package tests and then broader validation when registration, descriptors, or shared Designer/Viewer behavior changed.
 
 ## Export and Print Compatibility
 

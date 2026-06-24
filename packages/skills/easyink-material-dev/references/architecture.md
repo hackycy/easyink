@@ -12,6 +12,7 @@ Designer material catalog
   -> MaterialDesignerExtension.renderContent()
   -> viewer.open({ schema, data })
   -> collectFontFamilies(schema) and loadAndInjectFonts() into the Viewer host document
+  -> conditional schema resolution (default material capability unless explicitly disabled or narrowed)
   -> ordinary binding projection / material data contract resolution
   -> material measure()
   -> runLayoutPipeline()
@@ -180,6 +181,7 @@ Built-in materials:
 
 - Add package imports and entries in `packages/builtin/src/designer.ts`.
 - Add Viewer registration in `packages/builtin/src/viewer.ts`.
+- Do not add default condition capability registrations. Conditional rendering is a framework default for all materials. Only set `condition: false` to opt out, or set a `hiddenEffects` override to narrow `remove/reserve` support.
 - Keep the public `@easyink/builtin` export surface aligned. `package.json` only exposes the root entry plus `./all`, `./basic`, `./none`, and `./package.json`; `src/designer.ts`, `src/viewer.ts`, and `src/bindings.ts` are internal sources, not public subpaths.
 - Root exports should expose the all-set legacy aliases plus explicit all/basic/none bundle aliases and Viewer registration helpers. `@easyink/builtin/all` exposes every built-in material; `@easyink/builtin/basic` must only import the reduced set it registers; `@easyink/builtin/none` must stay empty.
 - Add `aiDescriptor` to the Designer material registration when generation should know it. Assistant consumes the live Designer material manifest; do not add material-specific prompt rules.
@@ -194,6 +196,7 @@ Built-in materials:
 - `icon`: Vue icon component.
 - `category`: primary material category.
 - `capabilities`: controls binding, rotation, resizing, children, animation, union drop, page-aware, multi-binding, and aspect lock.
+- `condition`: optional condition capability override. Omit it for normal materials; the framework default supports `remove` and `reserve`. Use `false` only to ignore `renderCondition`, or a definition only to narrow `hiddenEffects`.
 - `binding`: material binding definition: `none`, `ordinary`, `custom`, or `data-contract`. Data-contract definitions include the target model contract and make Designer write `node.binding.kind='data-contract'` mappings instead of ordinary whole-element `BindingRef`.
 - `createDefaultNode`: default schema factory.
 - `factory`: synchronous Designer extension factory or a lightweight placeholder when `lazyFactory` is present.
