@@ -1,7 +1,7 @@
 {
   "name": "@easyink/export-dom-capture",
   "type": "module",
-  "version": "0.0.29",
+  "version": "0.0.30",
   "description": "Shared DOM capture utilities for EasyInk browser export plugins",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",

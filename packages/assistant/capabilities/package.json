@@ -1,7 +1,7 @@
 {
   "name": "@easyink/assistant-capabilities",
   "type": "module",
-  "version": "0.0.29",
+  "version": "0.0.30",
   "description": "Pure EasyInk Assistant capabilities for schema, datasource alignment, validation, preview, diff, and patch",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",

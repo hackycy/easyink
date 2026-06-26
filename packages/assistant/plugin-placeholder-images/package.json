@@ -1,7 +1,7 @@
 {
   "name": "@easyink/assistant-plugin-placeholder-images",
   "type": "module",
-  "version": "0.0.29",
+  "version": "0.0.30",
   "description": "Official placeholder image prompt plugin for EasyInk Assistant",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",

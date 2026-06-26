@@ -1,7 +1,7 @@
 {
   "name": "@easyink/assistant-material-knowledge",
   "type": "module",
-  "version": "0.0.29",
+  "version": "0.0.30",
   "description": "Structured material knowledge graph with executable constraints for EasyInk Assistant",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",

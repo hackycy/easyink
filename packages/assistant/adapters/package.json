@@ -1,7 +1,7 @@
 {
   "name": "@easyink/assistant-adapters",
   "type": "module",
-  "version": "0.0.29",
+  "version": "0.0.30",
   "description": "Lightweight external data adapters for EasyInk Assistant",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",

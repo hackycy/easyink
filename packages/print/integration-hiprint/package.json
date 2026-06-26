@@ -1,7 +1,7 @@
 {
   "name": "@easyink/print-integration-hiprint",
   "type": "module",
-  "version": "0.0.29",
+  "version": "0.0.30",
   "description": "Official HiPrint client and managed document printer",
   "author": "hackycy <hackycy@outlook.com>",
   "license": "MIT",

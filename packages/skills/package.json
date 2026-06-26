@@ -1,7 +1,7 @@
 {
   "name": "@easyink/skills",
   "type": "module",
-  "version": "0.0.29",
+  "version": "0.0.30",
   "private": true,
   "description": "Codex skills for EasyInk development workflows",
   "author": "hackycy <hackycy@outlook.com>",
