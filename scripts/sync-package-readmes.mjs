@@ -8,7 +8,7 @@ const packagesRoot = resolve(repoRoot, 'packages')
 const systemIgnoredDirs = new Set(['.git', '.turbo', 'dist', 'node_modules'])
 const generatorConfig = {
   exclude: [],
-  ignoreDirs: ['skills'],
+  ignoreDirs: [],
   include: [],
 }
 
