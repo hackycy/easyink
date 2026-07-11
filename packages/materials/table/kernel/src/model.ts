@@ -161,13 +161,16 @@ export interface CreateTableModelOptions {
 
 const STABLE_ID_PATTERN = /^[\w.:-]+$/
 const textEncoder = new TextEncoder()
+export const TABLE_MODEL_MAX_CELLS = 100_000
+const TABLE_MODEL_MAX_DIMENSION = 100_000
+const TABLE_MODEL_MAX_JSON_NODES = 100_000
 
 export function isValidTableStableToken(value: unknown, maxBytes = 128): value is string {
-  return typeof value === 'string'
-    && Number.isSafeInteger(maxBytes)
-    && maxBytes > 0
-    && STABLE_ID_PATTERN.test(value)
-    && textEncoder.encode(value).byteLength <= maxBytes
+  if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0)
+    return false
+  if (typeof value !== 'string' || value.length === 0 || value.length > maxBytes)
+    return false
+  return STABLE_ID_PATTERN.test(value)
 }
 
 export class SequentialTableIdentityAllocator implements TableIdentityAllocator {
@@ -194,7 +197,7 @@ export function allocateTableIdentity<K extends TableIdentityKind>(
   kind: K,
   occupied: Set<string>,
 ): TableId<K> {
-  const token = allocator.allocate(kind, occupied)
+  const token = allocator.allocate(kind, new Set(occupied))
   if (!isValidTableStableToken(token))
     throw new Error('Table stable ID must contain 1..128 UTF-8 bytes using only [A-Za-z0-9._:-]')
   if (occupied.has(token))
@@ -206,11 +209,29 @@ export function allocateTableIdentity<K extends TableIdentityKind>(
 export const allocateTableId = allocateTableIdentity
 
 export function encodeTableOpaqueIdPart(value: string): string {
+  assertWellFormedUtf16(value)
   const bytes = textEncoder.encode(value)
   let hex = ''
   for (const byte of bytes)
     hex += byte.toString(16).padStart(2, '0')
   return `${bytes.byteLength}:${hex}`
+}
+
+function assertWellFormedUtf16(value: string): void {
+  for (let index = 0; index < value.length; index++) {
+    const codeUnit = value.charCodeAt(index)
+    if (codeUnit >= 0xD800 && codeUnit <= 0xDBFF) {
+      if (index + 1 >= value.length)
+        throw new Error('Opaque table ID parts must not contain unpaired UTF-16 surrogates')
+      const next = value.charCodeAt(index + 1)
+      if (next < 0xDC00 || next > 0xDFFF)
+        throw new Error('Opaque table ID parts must not contain unpaired UTF-16 surrogates')
+      index += 1
+    }
+    else if (codeUnit >= 0xDC00 && codeUnit <= 0xDFFF) {
+      throw new Error('Opaque table ID parts must not contain unpaired UTF-16 surrogates')
+    }
+  }
 }
 
 export function createTableModel(options: CreateTableModelOptions & { kind: 'static' }, allocator?: TableIdentityAllocator): StaticTableModel
@@ -220,24 +241,28 @@ export function createTableModel(
   options: CreateTableModelOptions,
   allocator: TableIdentityAllocator = createSequentialTableIdentityAllocator(),
 ): TableModel {
-  assertPositiveSafeCount(options.columnCount, 'columnCount')
-  assertPositiveSafeCount(options.rowCount, 'rowCount')
-  if (options.kind !== 'static' && options.kind !== 'data')
+  const kind = options.kind
+  const columnCount = options.columnCount
+  const rowCount = options.rowCount
+  assertPositiveSafeCount(columnCount, 'columnCount')
+  assertPositiveSafeCount(rowCount, 'rowCount')
+  if (kind !== 'static' && kind !== 'data')
     throw new Error('Table kind must be static or data')
-  if (options.kind === 'data' && options.rowCount !== 1)
+  if (kind === 'data' && rowCount !== 1)
     throw new Error('A data table rowCount must be exactly 1')
+  assertTableModelAllocationBudget(columnCount, rowCount)
 
   const occupied = new Set<string>()
-  const columns: TableColumn[] = Array.from({ length: options.columnCount }, () => ({
+  const columns: TableColumn[] = Array.from({ length: columnCount }, () => ({
     id: allocateTableIdentity(allocator, 'column', occupied),
     track: { kind: 'fr', weight: 1 },
   }))
   const band: TableBand = {
     id: allocateTableIdentity(allocator, 'band', occupied),
-    role: options.kind === 'data' ? 'detail' : 'body',
+    role: kind === 'data' ? 'detail' : 'body',
     rows: [],
   }
-  for (let rowIndex = 0; rowIndex < options.rowCount; rowIndex++) {
+  for (let rowIndex = 0; rowIndex < rowCount; rowIndex++) {
     const row: TableRow = {
       id: allocateTableIdentity(allocator, 'row', occupied),
       minHeight: 8,
@@ -251,12 +276,19 @@ export function createTableModel(
     band.rows.push(row)
   }
 
-  const model: TableModel = options.kind === 'data'
+  const model: TableModel = kind === 'data'
     ? { kind: 'data', columns, bands: [band], merges: [], style: {}, data: { collectionPort: 'records' } }
     : { kind: 'static', columns, bands: [band], merges: [], style: {} }
   assertValidTableModel(model)
   assertJsonValue(model)
   return model
+}
+
+interface ValidatedRowEntry {
+  row: TableRow
+  band: TableBand
+  index: number
+  cellsByColumnId: Map<string, TableCell>
 }
 
 export function assertValidTableModel(value: unknown): asserts value is TableModel {
@@ -277,9 +309,9 @@ export function assertValidTableModel(value: unknown): asserts value is TableMod
 
   const occupied = new Set<string>()
   const columns = value.columns.map((column, index) => validateColumn(column, index, occupied))
-  const columnById = new Map(columns.map(column => [column.id, column]))
+  const columnIndexById = new Map<string, number>(columns.map((column, index) => [column.id, index]))
   const bands: TableBand[] = []
-  const rowById = new Map<string, { row: TableRow, band: TableBand, index: number }>()
+  const rowById = new Map<string, ValidatedRowEntry>()
   const cellById = new Map<string, { cell: TableCell, row: TableRow, band: TableBand }>()
 
   for (let bandIndex = 0; bandIndex < value.bands.length; bandIndex++) {
@@ -299,14 +331,15 @@ export function assertValidTableModel(value: unknown): asserts value is TableMod
       claimExistingId(rawRow.id, 'row', occupied)
       validateOptionalStyle(rawRow.style, `row ${String(rawRow.id)}`)
       const row = rawRow as unknown as TableRow
-      rowById.set(row.id, { row, band, index: rowIndex })
+      const cellsByColumnId = new Map<string, TableCell>()
+      rowById.set(row.id, { row, band, index: rowIndex, cellsByColumnId })
       const coveredColumns = new Set<string>()
       for (let cellIndex = 0; cellIndex < rawRow.cells.length; cellIndex++) {
         const rawCell = rawRow.cells[cellIndex]
         if (!isRecord(rawCell) || typeof rawCell.columnId !== 'string' || !isRecord(rawCell.content))
           failModel(`cell ${cellIndex} in row ${row.id} has an invalid shape`)
         claimExistingId(rawCell.id, 'cell', occupied)
-        if (!columnById.has(rawCell.columnId as TableColumnId))
+        if (!columnIndexById.has(rawCell.columnId))
           failModel(`row ${row.id} coverage references an unknown column`)
         if (coveredColumns.has(rawCell.columnId))
           failModel(`row ${row.id} has duplicate column coverage`)
@@ -314,6 +347,7 @@ export function assertValidTableModel(value: unknown): asserts value is TableMod
         validateCellContent(rawCell.content, String(rawCell.id))
         validateOptionalStyle(rawCell.style, `cell ${String(rawCell.id)}`)
         const cell = rawCell as unknown as TableCell
+        cellsByColumnId.set(cell.columnId, cell)
         cellById.set(cell.id, { cell, row, band })
       }
       if (coveredColumns.size !== columns.length)
@@ -334,7 +368,7 @@ export function assertValidTableModel(value: unknown): asserts value is TableMod
     }
     claimExistingId(rawMerge.id, 'merge', occupied)
     const merge = rawMerge as unknown as TableMergeRegion
-    validateMerge(merge, rowById, columnById, cellById, mergedCells)
+    validateMerge(merge, rowById, columnIndexById, cellById, mergedCells)
   }
   validateOptionalStyle(value.style, 'table')
   validateAccessibility(value.accessibility)
@@ -343,6 +377,20 @@ export function assertValidTableModel(value: unknown): asserts value is TableMod
 function assertPositiveSafeCount(value: number, name: string): void {
   if (!Number.isSafeInteger(value) || value <= 0)
     throw new Error(`${name} must be a positive safe integer count`)
+}
+
+function assertTableModelAllocationBudget(columnCount: number, rowCount: number): void {
+  if (columnCount > TABLE_MODEL_MAX_DIMENSION || rowCount > TABLE_MODEL_MAX_DIMENSION) {
+    throw new Error(`Table dimensions exceed the maximum of ${TABLE_MODEL_MAX_DIMENSION}`)
+  }
+  if (rowCount > Math.floor(TABLE_MODEL_MAX_CELLS / columnCount))
+    throw new Error(`Table cell count exceeds the maximum allocation budget of ${TABLE_MODEL_MAX_CELLS}`)
+
+  const cellCount = columnCount * rowCount
+  const estimatedJsonNodes = 16 + columnCount * 5 + rowCount * 4 + cellCount * 6
+  if (estimatedJsonNodes > TABLE_MODEL_MAX_JSON_NODES) {
+    throw new Error(`Table estimated JSON nodes exceed the maximum allocation budget of ${TABLE_MODEL_MAX_JSON_NODES}`)
+  }
 }
 
 function validateColumn(value: unknown, index: number, occupied: Set<string>): TableColumn {
@@ -416,8 +464,8 @@ function validateModelKind(value: Record<string, unknown>, bands: TableBand[]): 
 
 function validateMerge(
   merge: TableMergeRegion,
-  rowById: Map<string, { row: TableRow, band: TableBand, index: number }>,
-  columnById: Map<string, TableColumn>,
+  rowById: Map<string, ValidatedRowEntry>,
+  columnIndexById: Map<string, number>,
   cellById: Map<string, { cell: TableCell, row: TableRow, band: TableBand }>,
   mergedCells: Set<string>,
 ): void {
@@ -440,18 +488,19 @@ function validateMerge(
     return entry.index
   })
   const columnIndexes = merge.columnIds.map((columnId) => {
-    if (!columnById.has(columnId))
+    const index = columnIndexById.get(columnId)
+    if (index === undefined)
       failModel(`merge ${merge.id} references an unknown column`)
-    return [...columnById.keys()].indexOf(columnId)
+    return index
   })
   if (!isContinuous(rowIndexes) || !isContinuous(columnIndexes))
     failModel(`merge ${merge.id} rows and columns must be continuous to form a rectangle`)
 
   const regionCells = new Set<string>()
   for (const rowId of merge.rowIds) {
-    const row = rowById.get(rowId)!.row
+    const row = rowById.get(rowId)!
     for (const columnId of merge.columnIds) {
-      const cell = row.cells.find(candidate => candidate.columnId === columnId)
+      const cell = row.cellsByColumnId.get(columnId)
       if (!cell)
         failModel(`merge ${merge.id} rectangle has missing cell coverage`)
       regionCells.add(cell.id)
@@ -557,7 +606,8 @@ function assertDistinctStrings(values: unknown[], owner: string): asserts values
 }
 
 function isContinuous(indexes: number[]): boolean {
-  return indexes.every((value, index) => index === 0 || value === indexes[index - 1]! + 1)
+  const sorted = [...indexes].sort((left, right) => left - right)
+  return sorted.every((value, index) => index === 0 || value === sorted[index - 1]! + 1)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

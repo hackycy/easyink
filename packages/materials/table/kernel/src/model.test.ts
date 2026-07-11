@@ -66,11 +66,36 @@ describe('table identity allocation', () => {
     expect(() => allocateTableIdentity(allocator, 'band', new Set(['taken']))).toThrow(/duplicate/i)
   })
 
+  it('isolates the authoritative occupied set from allocator mutations', () => {
+    const occupied = new Set<string>(['taken', 'kept'])
+    const allocator: TableIdentityAllocator = {
+      allocate(_kind, snapshot) {
+        const mutableSnapshot = snapshot as Set<string>
+        mutableSnapshot.clear()
+        mutableSnapshot.add('poisoned')
+        return 'taken'
+      },
+    }
+
+    expect(() => allocateTableIdentity(allocator, 'cell', occupied)).toThrow(/duplicate/i)
+    expect([...occupied]).toEqual(['taken', 'kept'])
+  })
+
   it('encodes opaque values without delimiter or Unicode collisions', () => {
     const values = ['', ':', 'a:b', 'a', '\u00E9', '\uD83D\uDE00']
     const encoded = values.map(encodeTableOpaqueIdPart)
     expect(new Set(encoded).size).toBe(values.length)
     expect(encoded).toEqual(['0:', '1:3a', '3:613a62', '1:61', '2:c3a9', '4:f09f9880'])
+  })
+
+  it('rejects unpaired UTF-16 surrogates before opaque UTF-8 encoding', () => {
+    expect(() => encodeTableOpaqueIdPart('\uD800')).toThrow(/surrogate|well-formed/i)
+    expect(() => encodeTableOpaqueIdPart('\uD801')).toThrow(/surrogate|well-formed/i)
+    expect(encodeTableOpaqueIdPart('\uFFFD')).toBe('3:efbfbd')
+  })
+
+  it('fast-rejects stable tokens longer than the accepted ASCII byte bound', () => {
+    expect(isValidTableStableToken('x'.repeat(1_000_000))).toBe(false)
   })
 })
 
@@ -109,6 +134,33 @@ describe('createTableModel', () => {
     const allocate = vi.fn(() => 'unused')
     expect(() => createTableModel(input, { allocate })).toThrow(/count|rowCount/i)
     expect(allocate).not.toHaveBeenCalled()
+  })
+
+  it('snapshots stateful counts once and rejects allocation budgets up front', () => {
+    let columnReads = 0
+    let rowReads = 0
+    const input = {
+      kind: 'static' as const,
+      get columnCount() {
+        columnReads += 1
+        return 2
+      },
+      get rowCount() {
+        rowReads += 1
+        return 2
+      },
+    }
+    expect(createTableModel(input).bands[0]!.rows).toHaveLength(2)
+    expect({ columnReads, rowReads }).toEqual({ columnReads: 1, rowReads: 1 })
+
+    for (const oversized of [
+      { kind: 'static' as const, columnCount: 1_000_000_000, rowCount: 1 },
+      { kind: 'static' as const, columnCount: 100_000, rowCount: 2 },
+    ]) {
+      const allocate = vi.fn(() => 'unused')
+      expect(() => createTableModel(oversized, { allocate })).toThrow(/limit|budget|maximum/i)
+      expect(allocate).not.toHaveBeenCalled()
+    }
   })
 
   it('rejects an injected allocator collision', () => {
@@ -258,6 +310,45 @@ describe('assertValidTableModel', () => {
       inactiveCellIds: [secondBand.rows[0]!.cells[0]!.id],
     })
     expectInvalid(crossBand, /one band/i)
+  })
+
+  it('accepts reverse-ordered row and column IDs for the same merge rectangle', () => {
+    const model = createTableModel({ kind: 'static', columnCount: 2, rowCount: 2 })
+    const cells = model.bands[0]!.rows.flatMap(row => row.cells)
+    model.merges.push({
+      id: 'merge:reverse' as typeof model.merges[number]['id'],
+      rowIds: model.bands[0]!.rows.map(row => row.id).reverse(),
+      columnIds: model.columns.map(column => column.id).reverse(),
+      anchorCellId: cells[0]!.id,
+      inactiveCellIds: cells.slice(1).map(cell => cell.id).reverse(),
+    })
+    expect(() => assertValidTableModel(model)).not.toThrow()
+  })
+
+  it('validates a full merge without linear coordinate lookups', () => {
+    const model = createTableModel({ kind: 'static', columnCount: 60, rowCount: 60 })
+    const cells = model.bands[0]!.rows.flatMap(row => row.cells)
+    model.merges.push({
+      id: 'merge:full' as typeof model.merges[number]['id'],
+      rowIds: model.bands[0]!.rows.map(row => row.id),
+      columnIds: model.columns.map(column => column.id),
+      anchorCellId: cells[0]!.id,
+      inactiveCellIds: cells.slice(1).map(cell => cell.id),
+    })
+
+    const findSpy = vi.spyOn(Array.prototype, 'find').mockImplementation(() => {
+      throw new Error('merge validation used Array.find')
+    })
+    const keysSpy = vi.spyOn(Map.prototype, 'keys').mockImplementation(() => {
+      throw new Error('merge validation rebuilt Map keys')
+    })
+    try {
+      assertValidTableModel(model)
+    }
+    finally {
+      findSpy.mockRestore()
+      keysSpy.mockRestore()
+    }
   })
 
   it('rejects a non-rectangular merge and overlapping merge regions', () => {
