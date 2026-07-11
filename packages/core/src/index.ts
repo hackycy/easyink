@@ -302,6 +302,7 @@ export type {
   FragmentPaginateResult,
   FragmentPaginator,
   MaterialViewerExtension,
+  MaterialViewerFacet,
   ViewerFacetCapabilities,
   ViewerMeasureContext,
   ViewerMeasureResult,
@@ -363,6 +364,7 @@ export {
 
 export type {
   SanitizedMarkup,
+  ViewerAttributeValue,
   ViewerElementNamespace,
   ViewerElementOptions,
   ViewerElementTree,
@@ -371,5 +373,6 @@ export type {
   ViewerImperativeHost,
   ViewerRenderTree,
   ViewerSanitizedMarkupTree,
+  ViewerStyleValue,
   ViewerTextTree,
 } from './viewer-render-tree'

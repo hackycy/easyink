@@ -10,6 +10,8 @@ export const VIEWER_TREE_ABSOLUTE_MAX_ATTRIBUTES = 128
 export const VIEWER_TREE_ABSOLUTE_MAX_TEXT_BYTES = 1024 * 1024
 
 export type ViewerElementNamespace = 'html' | 'svg'
+export type ViewerAttributeValue = string | number | boolean
+export type ViewerStyleValue = string | number
 
 export interface ViewerTextTree {
   readonly kind: 'text'
@@ -20,8 +22,8 @@ export interface ViewerElementTree {
   readonly kind: 'element'
   readonly tag: string
   readonly namespace: ViewerElementNamespace
-  readonly attributes: Readonly<Record<string, string>>
-  readonly style: Readonly<Record<string, string>>
+  readonly attributes: Readonly<Record<string, ViewerAttributeValue>>
+  readonly style: Readonly<Record<string, ViewerStyleValue>>
   readonly children: readonly ViewerRenderTree[]
 }
 
@@ -55,23 +57,26 @@ export type ViewerRenderTree
 
 export interface ViewerElementOptions {
   namespace?: ViewerElementNamespace
-  attributes?: Readonly<Record<string, string>>
-  style?: Readonly<Record<string, string>>
-  children?: readonly ViewerRenderTree[]
+  attributes?: Readonly<Record<string, ViewerAttributeValue>>
+  style?: Readonly<Record<string, ViewerStyleValue>>
 }
 
 export function viewerText(value: string): ViewerTextTree {
   return Object.freeze({ kind: 'text', value })
 }
 
-export function viewerElement(tag: string, options: ViewerElementOptions = {}): ViewerElementTree {
+export function viewerElement(
+  tag: string,
+  options: ViewerElementOptions = {},
+  children: readonly ViewerRenderTree[] = [],
+): ViewerElementTree {
   return Object.freeze({
     kind: 'element',
     tag,
     namespace: options.namespace ?? 'html',
     attributes: Object.freeze({ ...options.attributes }),
     style: Object.freeze({ ...options.style }),
-    children: Object.freeze([...(options.children ?? [])]),
+    children: Object.freeze([...children]),
   })
 }
 
@@ -147,8 +152,8 @@ export function assertViewerRenderTree(
       case 'element': {
         if (typeof frame.node.tag !== 'string' || (frame.node.namespace !== 'html' && frame.node.namespace !== 'svg'))
           fail('VIEWER_TREE_VALUE_INVALID')
-        assertStringRecord(frame.node.attributes)
-        assertStringRecord(frame.node.style)
+        assertScalarRecord(frame.node.attributes, true)
+        assertScalarRecord(frame.node.style, false)
         if (Object.keys(frame.node.attributes).length > VIEWER_TREE_ABSOLUTE_MAX_ATTRIBUTES)
           fail('VIEWER_TREE_ATTRIBUTES_EXCEEDED')
         if (!Array.isArray(frame.node.children))
@@ -177,9 +182,18 @@ export function assertViewerRenderTree(
   }
 }
 
-function assertStringRecord(value: unknown): asserts value is Record<string, string> {
-  if (!isRecord(value) || Object.values(value).some(item => typeof item !== 'string'))
+function assertScalarRecord(
+  value: unknown,
+  allowBoolean: boolean,
+): asserts value is Record<string, ViewerAttributeValue> {
+  if (!isRecord(value) || Object.values(value).some((item) => {
+    if (typeof item === 'number') {
+      return !Number.isFinite(item)
+    }
+    return typeof item !== 'string' && (!allowBoolean || typeof item !== 'boolean')
+  })) {
     fail('VIEWER_TREE_VALUE_INVALID')
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

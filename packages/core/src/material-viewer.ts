@@ -69,10 +69,14 @@ export interface FragmentPaginator {
 }
 
 export interface MaterialViewerExtension {
-  capabilities?: ViewerFacetCapabilities
   render: (node: MaterialNode, context: ViewerRenderContext) => ViewerRenderOutput
   measure?: (node: MaterialNode, context: ViewerMeasureContext) => ViewerMeasureResult
   getRenderSize?: (node: MaterialNode, context: ViewerRenderContext) => Partial<ViewerRenderSize>
   fragmentPaginator?: FragmentPaginator
   condition?: MaterialConditionCapability
+}
+
+export interface MaterialViewerFacet {
+  extension: MaterialViewerExtension
+  capabilities: ViewerFacetCapabilities
 }

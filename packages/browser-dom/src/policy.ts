@@ -68,6 +68,7 @@ const globalAttributes = [
   'role',
   'aria-label',
   'aria-hidden',
+  'aria-describedby',
   'title',
   'lang',
   'dir',
@@ -144,6 +145,11 @@ const globalAttributes = [
 const urlAttributes = ['src', 'href', 'xlink:href']
 const cssProperties = [
   'display',
+  'position',
+  'left',
+  'top',
+  'right',
+  'bottom',
   'visibility',
   'overflow',
   'overflow-x',

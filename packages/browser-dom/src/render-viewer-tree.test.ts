@@ -19,9 +19,39 @@ describe('renderViewerTree', () => {
     ['javascript URL', viewerElement('img', { attributes: { src: 'javascript:alert(1)' } })],
     ['event attribute', viewerElement('div', { attributes: { onclick: 'alert(1)' } })],
     ['dangerous CSS', viewerElement('div', { style: { color: 'url(https://bad.invalid)' } })],
-    ['unknown CSS property', viewerElement('div', { style: { position: 'fixed' } })],
+    ['unknown CSS property', viewerElement('div', { style: { 'z-index': 1 } })],
   ])('rejects %s', (_label, tree) => {
     expect(() => renderViewerTree(document.createElement('div'), tree)).toThrow(ViewerTreePolicyError)
+  })
+
+  it('allows planned accessibility and positioned-layout properties', () => {
+    const host = document.createElement('div')
+    const tree = viewerElement('div', {
+      attributes: { 'aria-describedby': 'description' },
+      style: { position: 'absolute', left: 1, top: 2, right: 3, bottom: 4 },
+    })
+
+    expect(() => renderViewerTree(host, tree)).not.toThrow()
+    expect(host.firstElementChild?.getAttribute('aria-describedby')).toBe('description')
+    expect((host.firstElementChild as HTMLElement).style.position).toBe('absolute')
+  })
+
+  it('replaces existing host content and never removes later replacements', () => {
+    const host = document.createElement('div')
+    host.append(document.createElement('aside'))
+
+    const first = renderViewerTree(host, viewerText('first'))
+    expect(host.querySelector('aside')).toBeNull()
+    expect(host.textContent).toBe('first')
+
+    const second = renderViewerTree(host, viewerText('second'))
+    expect(host.textContent).toBe('second')
+
+    const later = document.createElement('main')
+    host.replaceChildren(later)
+    second.dispose()
+    first.dispose()
+    expect(host.firstChild).toBe(later)
   })
 
   it('only renders sanitized markup minted by the current capability', () => {
@@ -76,13 +106,13 @@ describe('renderViewerTree', () => {
   it('makes disposal idempotent, removes host nodes, and shares nested node budget', () => {
     const capabilities = createBrowserDomCapabilities({ document, imperativeDom: ['nested'] })
     const tree = viewerImperativeDom('nested', (host) => {
-      host.render(viewerElement('div', { children: [viewerText('nested')] }))
+      host.render(viewerElement('div', {}, [viewerText('nested')]))
       return () => {}
     })
     const host = document.createElement('div')
     expect(() => renderViewerTree(host, tree, { capabilities, maxNodes: 2 })).toThrowError('VIEWER_TREE_NODE_LIMIT_EXCEEDED')
 
-    const mount = renderViewerTree(host, viewerElement('div', { children: [viewerText('ok')] }))
+    const mount = renderViewerTree(host, viewerElement('div', {}, [viewerText('ok')]))
     expect(mount.nodes).toHaveLength(1)
     mount.dispose()
     mount.dispose()

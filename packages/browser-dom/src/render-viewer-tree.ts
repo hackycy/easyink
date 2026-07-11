@@ -1,8 +1,10 @@
 import type {
   SanitizedMarkup,
+  ViewerAttributeValue,
   ViewerImperativeHost,
   ViewerRenderCapabilities,
   ViewerRenderTree,
+  ViewerStyleValue,
 } from '@easyink/core'
 import type { ViewerTreePolicy } from './policy'
 import {
@@ -145,9 +147,11 @@ export function renderViewerTree(
     store,
     budget: { remaining: maxNodes, textBytes: 0 },
   }
-  const scope = createScope(host)
+  const staging = document.createDocumentFragment()
+  const scope = createScope(staging)
   try {
-    renderInto(host, tree, state, scope, 0)
+    renderInto(staging, tree, state, scope, 0)
+    host.replaceChildren(...scope.nodes)
   }
   catch (error) {
     disposeScope(scope)
@@ -243,35 +247,37 @@ function createPolicyElement(
 
 function applyPolicyAttributes(
   element: Element,
-  attributes: Readonly<Record<string, string>>,
+  attributes: Readonly<Record<string, ViewerAttributeValue>>,
   state: RenderState,
 ): void {
   const entries = Object.entries(attributes)
   if (entries.length > state.policy.maxAttributesPerElement)
     throw new ViewerTreePolicyError('VIEWER_TREE_ATTRIBUTES_EXCEEDED')
   for (const [name, value] of entries) {
+    const serialized = String(value)
     const lowerName = name.toLowerCase()
     if (lowerName.startsWith('on') || lowerName === 'style' || !state.policy.globalAttributes.has(name))
       throw new ViewerTreePolicyError('VIEWER_TREE_ATTRIBUTE_REJECTED')
-    if (state.policy.urlAttributes.has(name) && !state.policy.allowUrl(value, state.document.baseURI || undefined))
+    if (state.policy.urlAttributes.has(name) && !state.policy.allowUrl(serialized, state.document.baseURI || undefined))
       throw new ViewerTreePolicyError('VIEWER_TREE_URL_REJECTED')
     if (isSvgPresentationAttribute(name))
-      assertSafeSvgPresentationValue(value)
-    element.setAttribute(name, value)
+      assertSafeSvgPresentationValue(serialized)
+    element.setAttribute(name, serialized)
   }
 }
 
 function applyPolicyStyle(
   element: HTMLElement | SVGElement,
-  style: Readonly<Record<string, string>>,
+  style: Readonly<Record<string, ViewerStyleValue>>,
   policy: ViewerTreePolicy,
 ): void {
   for (const [property, value] of Object.entries(style)) {
+    const serialized = String(value)
     assertKebabCaseProperty(property)
     if (!policy.cssProperties.has(property))
       throw new ViewerTreePolicyError('VIEWER_TREE_CSS_PROPERTY_REJECTED')
-    assertSafeCssValue(value)
-    element.style.setProperty(property, value)
+    assertSafeCssValue(serialized)
+    element.style.setProperty(property, serialized)
   }
 }
 

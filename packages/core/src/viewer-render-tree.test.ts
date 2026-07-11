@@ -1,3 +1,4 @@
+import type { MaterialViewerFacet } from './material-viewer'
 import { describe, expect, it, vi } from 'vitest'
 import {
   assertViewerRenderTree,
@@ -11,7 +12,7 @@ import {
 describe('viewer render tree', () => {
   it('shallow-freezes every semantic node produced by recursive builders', () => {
     const text = viewerText('safe')
-    const element = viewerElement('span', { children: [text] })
+    const element = viewerElement('span', {}, [text])
     const fragment = viewerFragment([element])
 
     expect(Object.isFrozen(text)).toBe(true)
@@ -20,6 +21,29 @@ describe('viewer render tree', () => {
     expect(Object.isFrozen(element.children)).toBe(true)
     expect(Object.isFrozen(fragment.children)).toBe(true)
     expect(() => assertViewerRenderTree(fragment)).not.toThrow()
+  })
+
+  it('uses the public third argument for children and accepts finite scalar values', () => {
+    const child = viewerText('child')
+    const tree = viewerElement('div', {
+      attributes: { count: 2, hidden: false },
+      style: { opacity: 0.5 },
+    }, [child])
+
+    expect(tree.children).toEqual([child])
+    expect(() => assertViewerRenderTree(tree)).not.toThrow()
+    expect(() => assertViewerRenderTree(viewerElement('div', { attributes: { bad: Number.NaN } }))).toThrow()
+    expect(() => assertViewerRenderTree(viewerElement('div', { style: { bad: Number.POSITIVE_INFINITY } }))).toThrow()
+  })
+
+  it('models viewer facet capabilities outside the extension', () => {
+    const facet: MaterialViewerFacet = {
+      extension: { render: () => ({ tree: viewerText('ok') }) },
+      capabilities: { sanitizedMarkup: true, imperativeDom: ['chart'] },
+    }
+
+    expect(facet.capabilities.imperativeDom).toEqual(['chart'])
+    expect('capabilities' in facet.extension).toBe(false)
   })
 
   it('publishes the single absolute node budget', () => {
