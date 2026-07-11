@@ -298,6 +298,34 @@ describe('loadDocumentWithProfile', () => {
     expect(result.nodeStates.size).toBe(3)
   })
 
+  it('rebuilds states from the final graph when a removed duplicate ID shadowed a live node', () => {
+    const base = createTestMaterialManifest({ type: 'seed' }).schemaAdapter
+    const box = createTestMaterialManifest({
+      type: 'box',
+      schemaAdapter: {
+        ...base,
+        validate: node => node.model.removed
+          ? [{ code: 'REMOVED_COPY', severity: 'error', path: '/model/removed', message: 'removed duplicate' }]
+          : [],
+      },
+    })
+    const owner = createTestMaterialManifest({
+      type: 'container',
+      slots: [{ id: 'default', key: { kind: 'exact', value: 'default' }, coordinateSpace: 'owner', layoutParticipation: 'owner', reparent: 'allowed' }],
+      schemaAdapter: { ...base, normalize: node => ({ ...node, slots: {} }) },
+    })
+    const profile = createTestCompiledMaterialProfile([box, owner])
+    const result = loadDocumentWithProfile(schemaWith(
+      { id: 'shared', type: 'box', props: {} },
+      { id: 'owner', type: 'container', children: [{ id: 'shared', type: 'box', props: { removed: true } }] },
+    ), profile)
+
+    expect(result.schema.elements.map(node => node.id)).toEqual(['shared', 'owner'])
+    expect(result.nodeStates.get('shared')?.status).toBe('ready')
+    expect(result.nodeStates.get('owner')?.status).toBe('ready')
+    expect(result.nodeStates.size).toBe(2)
+  })
+
   it('serializes hostile thrown values without allowing the diagnostic reporter to throw', () => {
     const base = createTestMaterialManifest({ type: 'seed' }).schemaAdapter
     const nullPrototype = Object.create(null) as Record<string, unknown>
@@ -354,6 +382,22 @@ describe('loadDocumentWithProfile', () => {
 
     expect(result.nodeStates.get('bad-compat-root')).toMatchObject({ status: 'quarantined', code: 'MATERIAL_COMPAT_INVALID' })
     expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: 'MATERIAL_COMPAT_INVALID', path: '/elements/0/compat' }))
+  })
+
+  it('preserves unknown JSON compat keys while validating known fields', () => {
+    const profile = createTestCompiledMaterialProfile([createTestMaterialManifest({ type: 'box' })])
+    const result = loadDocumentWithProfile(schemaWith({
+      id: 'vendor-compat',
+      type: 'box',
+      props: {},
+      compat: { vendorOpaque: { nested: ['kept'] }, rawProps: { known: true } },
+    }), profile)
+
+    expect(result.nodeStates.get('vendor-compat')?.status).toBe('ready')
+    expect(result.schema.elements[0]?.compat).toEqual({
+      vendorOpaque: { nested: ['kept'] },
+      rawProps: { known: true },
+    })
   })
 
   it('rejects malformed RFC 6901 adapter diagnostic paths', () => {

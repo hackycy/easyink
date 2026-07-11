@@ -193,6 +193,7 @@ export function loadDocumentWithProfile(
 
   const envelope = normalizeDocumentInput(snapshot)
   const nodeStates = new Map<string, MaterialNodeLoadState>()
+  const nodeStateOwners = new WeakMap<object, MaterialNodeLoadState>()
   const elements = envelope.elements.map((node, index) => loadNode(
     node,
     `/elements/${index}`,
@@ -200,8 +201,10 @@ export function loadDocumentWithProfile(
     profile,
     diagnostics,
     nodeStates,
+    nodeStateOwners,
   ))
   const schema = { ...envelope, elements } as DocumentSchema
+  rebuildFinalNodeStates(schema, nodeStates, nodeStateOwners)
   diagnostics.push(...validateMaterialGraph(schema, profile, new Set(
     [...nodeStates].filter(([, state]) => state.status === 'quarantined').map(([id]) => id),
   )))
@@ -292,6 +295,7 @@ function loadNode(
   profile: CompiledMaterialProfile,
   diagnostics: MaterialLoadDiagnostic[],
   nodeStates: Map<string, MaterialNodeLoadState>,
+  nodeStateOwners: WeakMap<object, MaterialNodeLoadState>,
 ): MaterialNode {
   let canonical: MaterialNode
   let envelopeValid = true
@@ -312,13 +316,13 @@ function loadNode(
   }
 
   // Standard child admission is independent of owner-private success.
-  canonical = { ...canonical, slots: loadSlots(canonical.slots as unknown as Record<string, MaterialNodeInput[]>, path, document, profile, diagnostics, nodeStates) }
+  canonical = { ...canonical, slots: loadSlots(canonical.slots as unknown as Record<string, MaterialNodeInput[]>, path, document, profile, diagnostics, nodeStates, nodeStateOwners) }
   if (!envelopeValid)
-    return quarantineNode(canonical, diagnostics, nodeStates)
+    return quarantineNode(canonical, diagnostics, nodeStates, nodeStateOwners)
   const manifest = profile.getManifest(canonical.type)
   if (!manifest) {
     appendDiagnostic(diagnostics, canonical, path, 'resolve', 'MATERIAL_TYPE_UNKNOWN', 'Unknown material type')
-    return quarantineNode(canonical, diagnostics, nodeStates)
+    return quarantineNode(canonical, diagnostics, nodeStates, nodeStateOwners)
   }
   canonical = { ...canonical, bindings: decodeLegacyBindings(input, canonical.bindings, manifest.common.binding) }
   const context: SchemaAdapterContext = {
@@ -330,22 +334,22 @@ function loadNode(
 
   const inputIssues = callIssues(manifest.schemaAdapter.validateInput, canonical, context, path, 'validate-input', diagnostics)
   if (!inputIssues.ok || inputIssues.hasErrors)
-    return quarantineNode(canonical, diagnostics, nodeStates)
+    return quarantineNode(canonical, diagnostics, nodeStates, nodeStateOwners)
 
-  const migration = runMigrations(canonical, manifest.schemaAdapter, context, path, document, profile, diagnostics, nodeStates)
+  const migration = runMigrations(canonical, manifest.schemaAdapter, context, path, document, profile, diagnostics, nodeStates, nodeStateOwners)
   if (!migration.ok)
-    return quarantineNode(migration.node as MaterialNode, diagnostics, nodeStates)
+    return quarantineNode(migration.node as MaterialNode, diagnostics, nodeStates, nodeStateOwners)
   let node = migration.node as MaterialNode
 
   const normalized = callNodeAdapter(manifest.schemaAdapter.normalize, node, context, path, 'normalize', diagnostics)
   if (!normalized.ok)
-    return quarantineNode(node, diagnostics, nodeStates)
+    return quarantineNode(node, diagnostics, nodeStates, nodeStateOwners)
   const guarded = assertAllowedAdapterMutation(node, normalized.node, path, 'normalize', diagnostics)
   if (!guarded.ok)
-    return quarantineNode(node, diagnostics, nodeStates)
+    return quarantineNode(node, diagnostics, nodeStates, nodeStateOwners)
   node = {
     ...guarded.node,
-    slots: reconcileSlots(guarded.node.slots ?? {}, node.slots, path, document, profile, diagnostics, nodeStates),
+    slots: reconcileSlots(guarded.node.slots ?? {}, node.slots, path, document, profile, diagnostics, nodeStates, nodeStateOwners),
   } as MaterialNode
 
   if (context.sourceUnit !== context.documentUnit) {
@@ -356,18 +360,18 @@ function loadNode(
       }
       catch (error) {
         appendDiagnostic(diagnostics, node, `${path}/model`, 'normalize', 'MATERIAL_ADAPTER_THROW', 'Material model unit conversion threw', error)
-        return quarantineNode(node, diagnostics, nodeStates)
+        return quarantineNode(node, diagnostics, nodeStates, nodeStateOwners)
       }
     }
   }
   node = { ...node, modelVersion: manifest.modelVersion }
   const currentIssues = callIssues(manifest.schemaAdapter.validate, node, context, path, 'validate', diagnostics)
   if (!currentIssues.ok || currentIssues.hasErrors)
-    return quarantineNode(node, diagnostics, nodeStates)
+    return quarantineNode(node, diagnostics, nodeStates, nodeStateOwners)
   const introspection = callIntrospection(manifest.schemaAdapter, node, context, path, diagnostics)
   if (!introspection.ok)
-    return quarantineNode(node, diagnostics, nodeStates)
-  recordReadyNode(node, diagnostics, nodeStates, introspection.value)
+    return quarantineNode(node, diagnostics, nodeStates, nodeStateOwners)
+  recordReadyNode(node, diagnostics, nodeStates, introspection.value, nodeStateOwners)
   return node
 }
 
@@ -528,11 +532,6 @@ function cloneBenchmarkCompat(value: unknown, path: `/${string}`): Record<string
   catch {
     throw new MaterialCompatValidationError(path)
   }
-  const allowed = new Set(['rawProps', 'rawBind', 'passthrough', 'materials'])
-  for (const key of Object.keys(compat)) {
-    if (!allowed.has(key))
-      throw new MaterialCompatValidationError(`${path}/${escapePointer(key)}`)
-  }
   for (const field of ['rawProps', 'passthrough'] as const) {
     if (field in compat && !isRecord(compat[field]))
       throw new MaterialCompatValidationError(`${path}/${field}`)
@@ -561,8 +560,9 @@ function runMigrations(
   profile: CompiledMaterialProfile,
   diagnostics: MaterialLoadDiagnostic[],
   nodeStates: Map<string, MaterialNodeLoadState>,
+  nodeStateOwners: WeakMap<object, MaterialNodeLoadState>,
 ): { ok: boolean, node: AdaptableMaterialNode } {
-  let current = cloneAdaptableNode(node)
+  let current = { ...cloneAdaptableNode(node), slots: node.slots }
   if (current.modelVersion > adapter.currentModelVersion) {
     appendDiagnostic(diagnostics, current as MaterialNode, `${path}/modelVersion`, 'migrate', 'MATERIAL_MODEL_VERSION_NEWER', 'Node model version is newer than the active adapter')
     return { ok: false, node: current }
@@ -587,7 +587,7 @@ function runMigrations(
     current = {
       ...guarded.node,
       modelVersion: migration.to,
-      slots: reconcileSlots(guarded.node.slots ?? {}, current.slots ?? {}, path, document, profile, diagnostics, nodeStates),
+      slots: reconcileSlots(guarded.node.slots ?? {}, current.slots ?? {}, path, document, profile, diagnostics, nodeStates, nodeStateOwners),
     }
   }
   return { ok: true, node: current }
@@ -710,6 +710,7 @@ function loadSlots(
   profile: CompiledMaterialProfile,
   diagnostics: MaterialLoadDiagnostic[],
   nodeStates: Map<string, MaterialNodeLoadState>,
+  nodeStateOwners: WeakMap<object, MaterialNodeLoadState>,
 ): MaterialNode['slots'] {
   const result: MaterialNode['slots'] = {}
   for (const [slot, children] of Object.entries(slots)) {
@@ -720,6 +721,7 @@ function loadSlots(
       profile,
       diagnostics,
       nodeStates,
+      nodeStateOwners,
     ))
   }
   return result
@@ -733,6 +735,7 @@ function reconcileSlots(
   profile: CompiledMaterialProfile,
   diagnostics: MaterialLoadDiagnostic[],
   nodeStates: Map<string, MaterialNodeLoadState>,
+  nodeStateOwners: WeakMap<object, MaterialNodeLoadState>,
 ): MaterialNode['slots'] {
   const candidateSlots = isRecord(candidate) ? candidate : {}
   const previousSlots = isRecord(previous) ? previous : {}
@@ -748,54 +751,23 @@ function reconcileSlots(
         reused.add(priorIndex)
       return priorIndex >= 0
         ? priorChildren[priorIndex] as MaterialNode
-        : loadNode(child, `${ownerPath}/slots/${escapePointer(slot)}/${index}`, document, profile, diagnostics, nodeStates)
+        : loadNode(child, `${ownerPath}/slots/${escapePointer(slot)}/${index}`, document, profile, diagnostics, nodeStates, nodeStateOwners)
     })
-  }
-
-  const retainedIds = collectCanonicalNodeIds(result)
-  for (const children of Object.values(previousSlots)) {
-    if (!Array.isArray(children))
-      continue
-    for (const child of children) {
-      for (const id of collectCanonicalNodeIdsFrom(child)) {
-        if (!retainedIds.has(id))
-          nodeStates.delete(id)
-      }
-    }
   }
   return result
 }
 
-function collectCanonicalNodeIds(slots: MaterialNode['slots']): Set<string> {
-  const ids = new Set<string>()
-  for (const children of Object.values(slots)) {
-    for (const child of children) {
-      for (const id of collectCanonicalNodeIdsFrom(child))
-        ids.add(id)
-    }
-  }
-  return ids
-}
-
-function collectCanonicalNodeIdsFrom(root: MaterialNodeInput): Set<string> {
-  const ids = new Set<string>()
-  const stack: unknown[] = [root]
-  const seen = new WeakSet<object>()
-  while (stack.length > 0) {
-    const value = stack.pop()
-    if (!isRecord(value) || seen.has(value))
-      continue
-    seen.add(value)
-    if (typeof value.id === 'string')
-      ids.add(value.id)
-    if (!isRecord(value.slots))
-      continue
-    for (const children of Object.values(value.slots)) {
-      if (Array.isArray(children))
-        stack.push(...children)
-    }
-  }
-  return ids
+function rebuildFinalNodeStates(
+  schema: DocumentSchema,
+  nodeStates: Map<string, MaterialNodeLoadState>,
+  nodeStateOwners: WeakMap<object, MaterialNodeLoadState>,
+): void {
+  nodeStates.clear()
+  walkCanonicalNodes(schema, (node) => {
+    const state = nodeStateOwners.get(node)
+    if (state)
+      nodeStates.set(node.id, state)
+  })
 }
 
 function validateCanonicalEnvelope(schema: DocumentSchema): MaterialLoadDiagnostic[] {
@@ -918,10 +890,17 @@ function walkCanonicalNodes(schema: DocumentSchema, visit: (node: MaterialNode, 
   }
 }
 
-function quarantineNode(node: MaterialNode, diagnostics: readonly MaterialLoadDiagnostic[], states: Map<string, MaterialNodeLoadState>): MaterialNode {
+function quarantineNode(
+  node: MaterialNode,
+  diagnostics: readonly MaterialLoadDiagnostic[],
+  states: Map<string, MaterialNodeLoadState>,
+  owners?: WeakMap<object, MaterialNodeLoadState>,
+): MaterialNode {
   const own = diagnostics.filter(diagnostic => diagnostic.nodeId === node.id)
   const firstError = own.find(diagnostic => diagnostic.severity === 'error')
-  states.set(node.id, freezeState('quarantined', own, undefined, firstError))
+  const state = freezeState('quarantined', own, undefined, firstError)
+  states.set(node.id, state)
+  owners?.set(node, state)
   return node
 }
 
@@ -930,8 +909,11 @@ function recordReadyNode(
   diagnostics: readonly MaterialLoadDiagnostic[],
   states: Map<string, MaterialNodeLoadState>,
   introspection: Readonly<MaterialIntrospection>,
+  owners?: WeakMap<object, MaterialNodeLoadState>,
 ): void {
-  states.set(node.id, freezeState('ready', diagnostics.filter(diagnostic => diagnostic.nodeId === node.id), introspection))
+  const state = freezeState('ready', diagnostics.filter(diagnostic => diagnostic.nodeId === node.id), introspection)
+  states.set(node.id, state)
+  owners?.set(node, state)
 }
 
 function freezeState(
