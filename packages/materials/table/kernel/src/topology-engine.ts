@@ -134,7 +134,9 @@ function valueAt(root: TableModel, path: TableTopologyPath): unknown {
   return value
 }
 
-function assertSafePathSegment(segment: string | number): void {
+function assertSafePathSegment(segment: unknown): asserts segment is string | number {
+  if (typeof segment !== 'string' && typeof segment !== 'number')
+    throw new Error('table topology path segment must be a string or number')
   if (typeof segment === 'number') {
     if (!Number.isSafeInteger(segment) || segment < 0)
       throw new Error('table topology path contains an invalid array index')
@@ -527,16 +529,21 @@ export class TableTopologyEngine {
     if (source.columns.length === 1)
       throw new Error('a table must retain at least one column')
     const removedColumn = source.columns[index]!
-    const removedCells: TableCell[] = []
-    const virtualBands = source.bands.map(band => ({
-      ...band,
-      rows: band.rows.map((row) => {
-        const cellIndex = row.cells.findIndex(cell => cell.columnId === columnId)
-        removedCells.push(row.cells[cellIndex]!)
-        return { ...row, cells: row.cells.filter(cell => cell.columnId !== columnId) }
-      }),
-    }))
     const virtualColumns = source.columns.filter(column => column.id !== columnId)
+    const rowPlans = allRows(source).map(({ row }) => ({
+      row,
+      removedCell: cellForColumn(row, columnId),
+      sourceIsCanonical: cellsMatchColumns(row.cells, source.columns),
+      nextCells: virtualColumns.map(column => cellForColumn(row, column.id)),
+    }))
+    const removedCells = rowPlans.map(plan => plan.removedCell)
+    const virtualBands = source.bands.map((band, bandIndex) => ({
+      ...band,
+      rows: band.rows.map((row, rowIndex) => ({
+        ...row,
+        cells: rowPlans[virtualRowOffset(source, bandIndex, rowIndex)]!.nextCells,
+      })),
+    }))
     const nextMerges = rebuildMerges(source, virtualColumns, virtualBands, merge => ({
       rowIds: merge.rowIds,
       columnIds: merge.columnIds.filter(id => id !== columnId),
@@ -544,10 +551,18 @@ export class TableTopologyEngine {
     const mergeEdits = mergesEdit(source.merges, nextMerges)
     const forward: TableTopologyEdit[] = [spliceEdit(['columns'], index, 1, [])]
     const inverse: TableTopologyEdit[] = []
-    allRows(source).forEach(({ bandIndex, rowIndex, row }) => {
-      const cellIndex = row.cells.findIndex(cell => cell.columnId === columnId)
-      forward.push(spliceEdit(['bands', bandIndex, 'rows', rowIndex, 'cells'], cellIndex, 1, []))
-      inverse.push(spliceEdit(['bands', bandIndex, 'rows', rowIndex, 'cells'], cellIndex, 0, [row.cells[cellIndex]!]))
+    allRows(source).forEach(({ bandIndex, rowIndex }, offset) => {
+      const plan = rowPlans[offset]!
+      const path = ['bands', bandIndex, 'rows', rowIndex, 'cells'] as const
+      if (plan.sourceIsCanonical) {
+        const cellIndex = plan.row.cells.findIndex(cell => cell.columnId === columnId)
+        forward.push(spliceEdit(path, cellIndex, 1, []))
+        inverse.push(spliceEdit(path, cellIndex, 0, [plan.removedCell]))
+      }
+      else {
+        forward.push(spliceEdit(path, 0, plan.row.cells.length, plan.nextCells))
+        inverse.push(spliceEdit(path, 0, plan.nextCells.length, plan.row.cells))
+      }
     })
     forward.push(...mergeEdits.forward)
     inverse.unshift(spliceEdit(['columns'], index, 0, [removedColumn]))

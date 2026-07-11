@@ -240,6 +240,50 @@ describe('tableTopologyEngine structural operations', () => {
     for (const row of canonicalized.bands[0]!.rows)
       expect(row.cells.map(cell => cell.columnId)).toEqual(canonicalized.columns.map(column => column.id))
     expect(materializeTableTopologyDelta(canonicalized, invertTableTopologyDelta(noOpReorder), 21)).toEqual(original)
+
+    const remove = TableTopologyEngine.planRemoveColumn(source, {
+      columnId: source.columns[1]!.id,
+      topologyRevision: 30,
+    })
+    expect(remove.forward.filter(edit => edit.path.at(-1) === 'cells')).toHaveLength(2)
+    const removed = materializeTableTopologyDelta(source, remove, 30)
+    for (const row of removed.bands[0]!.rows)
+      expect(row.cells.map(cell => cell.columnId)).toEqual(removed.columns.map(column => column.id))
+    expect(materializeTableTopologyDelta(removed, invertTableTopologyDelta(remove), 31)).toEqual(original)
+  })
+
+  it('rejects non-string and non-number path segments before property-key coercion', () => {
+    const source = createTableModel({ kind: 'static', columnCount: 2, rowCount: 1 })
+    const draft = Object.assign(deepClone(source), { true: 'owned' })
+    const base = TableTopologyEngine.planReorderColumn(source, {
+      columnId: source.columns[0]!.id,
+      target: { atEnd: true },
+      topologyRevision: 0,
+    })
+    const booleanPath: TableTopologyDelta = {
+      ...base,
+      forward: [{ kind: 'set', path: [true] as never, value: 'mutated' }],
+    }
+    expect(() => applyTableTopologyDelta(draft, booleanPath, 0)).toThrow(/path segment/)
+    expect(draft).toEqual(Object.assign(deepClone(source), { true: 'owned' }))
+
+    for (const segment of [1n, Symbol('path'), null, undefined]) {
+      const invalidPath: TableTopologyDelta = {
+        ...base,
+        forward: [{ kind: 'set', path: [segment] as never, value: 'mutated' }],
+      }
+      expect(() => applyTableTopologyDelta(draft, invalidPath, 0)).toThrow(/path segment/)
+      expect(draft).toEqual(Object.assign(deepClone(source), { true: 'owned' }))
+    }
+
+    const toString = vi.fn(() => 'kind')
+    const objectPath: TableTopologyDelta = {
+      ...base,
+      forward: [{ kind: 'set', path: [{ toString }] as never, value: 'data' }],
+    }
+    expect(() => applyTableTopologyDelta(draft, objectPath, 0)).toThrow(/path segment/)
+    expect(toString).not.toHaveBeenCalled()
+    expect(draft).toEqual(Object.assign(deepClone(source), { true: 'owned' }))
   })
 
   it('expands merges only across an inserted internal boundary and rejects discontinuous reorders', () => {
