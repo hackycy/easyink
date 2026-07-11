@@ -1327,6 +1327,10 @@ importers:
       '@easyink/core':
         specifier: workspace:*
         version: link:../core
+    devDependencies:
+      mutative:
+        specifier: catalog:framework
+        version: 1.3.0
 
   packages/samples:
     dependencies:

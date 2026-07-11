@@ -113,7 +113,6 @@ export function resolvePropertyAccessor<T>(descriptor: PropertyDescriptor<T>): P
 export function validatePropertyDescriptors(descriptors: readonly unknown[]): readonly PropertyDescriptorDiagnostic[] {
   const diagnostics: PropertyDescriptorDiagnostic[] = []
   const keys = new Set<string>()
-  const paths = new Set<string>()
 
   for (const candidate of descriptors) {
     if (!isPlainRecord(candidate)) {
@@ -138,8 +137,21 @@ export function validatePropertyDescriptors(descriptors: readonly unknown[]): re
       diagnostics.push({ code: 'PROPERTY_EDITOR_METADATA_INVALID', descriptorKey })
     }
 
-    if (candidate.accessor === undefined)
+    if (candidate.accessor === undefined) {
+      if (descriptorKey) {
+        try {
+          createModelPropertyAccessor(`/${escapePointerToken(descriptorKey)}`)
+        }
+        catch (error) {
+          diagnostics.push({
+            code: propertyAccessorPathErrorCode(error),
+            descriptorKey,
+            path: `/model/${escapePointerToken(descriptorKey)}`,
+          })
+        }
+      }
       continue
+    }
     if (!isPlainRecord(candidate.accessor)) {
       diagnostics.push({ code: 'PROPERTY_ACCESSOR_INVALID', descriptorKey })
       continue
@@ -155,6 +167,7 @@ export function validatePropertyDescriptors(descriptors: readonly unknown[]): re
     if (!Object.isFrozen(accessor.paths))
       diagnostics.push({ code: 'PROPERTY_ACCESSOR_PATHS_NOT_FROZEN', descriptorKey })
 
+    const accessorPaths = new Set<string>()
     for (const path of accessor.paths) {
       const pathValue = typeof path === 'string' ? path : undefined
       const status = inspectNodePointer(pathValue)
@@ -166,14 +179,20 @@ export function validatePropertyDescriptors(descriptors: readonly unknown[]): re
         diagnostics.push({ code: 'PROPERTY_ACCESSOR_PATH_UNSAFE', descriptorKey, path: pathValue })
         continue
       }
-      if (paths.has(pathValue!))
+      if (accessorPaths.has(pathValue!))
         diagnostics.push({ code: 'PROPERTY_ACCESSOR_PATH_DUPLICATE', descriptorKey, path: pathValue })
       else
-        paths.add(pathValue!)
+        accessorPaths.add(pathValue!)
     }
   }
 
   return Object.freeze(diagnostics.map(diagnostic => Object.freeze(diagnostic)))
+}
+
+function propertyAccessorPathErrorCode(error: unknown): 'PROPERTY_ACCESSOR_PATH_INVALID' | 'PROPERTY_ACCESSOR_PATH_UNSAFE' {
+  return error instanceof Error && error.message === 'PROPERTY_ACCESSOR_PATH_UNSAFE'
+    ? 'PROPERTY_ACCESSOR_PATH_UNSAFE'
+    : 'PROPERTY_ACCESSOR_PATH_INVALID'
 }
 
 function isValidDescriptor(value: Record<string, unknown>): boolean {
@@ -249,35 +268,25 @@ function readOwnPath(root: unknown, tokens: readonly string[]): unknown {
 }
 
 function writeOwnPath(root: unknown, tokens: readonly string[], value: unknown): void {
-  if (!isObjectLike(root))
+  if (!isWritableContainer(root))
     throw new Error('PROPERTY_ACCESSOR_CONTAINER_INVALID')
 
   let current = root
   for (const token of tokens.slice(0, -1)) {
-    const descriptor = Object.getOwnPropertyDescriptor(current, token)
-    if (!descriptor) {
+    if (!Object.hasOwn(current, token)) {
       const container: Record<string, unknown> = {}
-      Object.defineProperty(current, token, {
-        configurable: true,
-        enumerable: true,
-        writable: true,
-        value: container,
-      })
+      current[token] = container
       current = container
       continue
     }
-    if (!('value' in descriptor) || !isObjectLike(descriptor.value))
+    const nested = current[token]
+    if (!isWritableContainer(nested))
       throw new Error('PROPERTY_ACCESSOR_CONTAINER_INVALID')
-    current = descriptor.value
+    current = nested
   }
 
   const token = tokens.at(-1)!
-  const descriptor = Object.getOwnPropertyDescriptor(current, token)
-  if (descriptor && (!('value' in descriptor) || descriptor.writable === false))
-    throw new Error('PROPERTY_ACCESSOR_WRITE_FORBIDDEN')
-  Object.defineProperty(current, token, descriptor
-    ? { ...descriptor, value }
-    : { configurable: true, enumerable: true, writable: true, value })
+  current[token] = value
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
@@ -289,6 +298,13 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
 
 function isObjectLike(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
+}
+
+function isWritableContainer(value: unknown): value is Record<string, unknown> {
+  if (!isObjectLike(value))
+    return false
+  const prototype = Object.getPrototypeOf(value)
+  return prototype === Object.prototype || prototype === Array.prototype || prototype === null
 }
 
 function isNonemptyTrimmedString(value: unknown): value is string {

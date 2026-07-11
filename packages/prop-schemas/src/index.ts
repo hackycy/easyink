@@ -59,10 +59,8 @@ const placementAccessor: PropertyAccessor = {
   paths: Object.freeze(['/output/placement']),
   read: readPlacementMode,
   write: (node, value) => {
-    node.output = {
-      ...node.output,
-      placement: { ...node.output.placement, mode: value === 'fixed' ? 'fixed' : 'flow' },
-    }
+    node.output.placement ??= {}
+    node.output.placement.mode = value === 'fixed' ? 'fixed' : 'flow'
   },
 }
 
@@ -70,10 +68,8 @@ const keepTogetherAccessor: PropertyAccessor = {
   paths: Object.freeze(['/output/break']),
   read: node => readBreakConfig(node).keepTogether === true,
   write: (node, value) => {
-    node.output = {
-      ...node.output,
-      break: { ...readBreakConfig(node), keepTogether: value === true },
-    }
+    node.output.break ??= {}
+    node.output.break.keepTogether = value === true
   },
 }
 
@@ -81,10 +77,8 @@ const breakBeforeAccessor: PropertyAccessor = {
   paths: Object.freeze(['/output/break']),
   read: node => readBreakConfig(node).before === 'page',
   write: (node, value) => {
-    node.output = {
-      ...node.output,
-      break: { ...readBreakConfig(node), before: value === true ? 'page' : 'auto' },
-    }
+    node.output.break ??= {}
+    node.output.break.before = value === true ? 'page' : 'auto'
   },
 }
 
@@ -92,10 +86,8 @@ const breakAfterAccessor: PropertyAccessor = {
   paths: Object.freeze(['/output/break']),
   read: node => readBreakConfig(node).after === 'page',
   write: (node, value) => {
-    node.output = {
-      ...node.output,
-      break: { ...readBreakConfig(node), after: value === true ? 'page' : 'auto' },
-    }
+    node.output.break ??= {}
+    node.output.break.after = value === true ? 'page' : 'auto'
   },
 }
 
@@ -103,10 +95,8 @@ const repeatAccessor: PropertyAccessor = {
   paths: Object.freeze(['/output/repeat']),
   read: node => readRepeatConfig(node).scope === 'every-output-page',
   write: (node, value) => {
-    node.output = {
-      ...node.output,
-      repeat: { scope: value === true ? 'every-output-page' : 'none' },
-    }
+    node.output.repeat ??= {}
+    node.output.repeat.scope = value === true ? 'every-output-page' : 'none'
   },
 }
 

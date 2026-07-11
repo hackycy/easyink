@@ -1,3 +1,5 @@
+import { validatePropertyDescriptors } from '@easyink/core'
+import { create } from 'mutative'
 import { describe, expect, it } from 'vitest'
 import { createLayoutBehaviorPropSchemas, groupPropSchemas } from './index'
 
@@ -89,5 +91,65 @@ describe('designer prop schemas', () => {
       break: { keepTogether: true },
       repeat: { scope: 'every-output-page' },
     })
+  })
+
+  it('emits patches only below each declared output path and preserves siblings', () => {
+    const schemas = createLayoutBehaviorPropSchemas({
+      page: {
+        layout: { strategy: 'stack-flow' },
+        reflow: { strategy: 'flow-y' },
+        pagination: { strategy: 'auto-sheets' },
+      },
+    })
+    const original = {
+      id: 'node-1',
+      type: 'text',
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 20,
+      modelVersion: 1,
+      model: {},
+      slots: {},
+      bindings: {},
+      output: {
+        visibility: 'include' as const,
+        break: { before: 'page' as const, after: 'auto' as const },
+      },
+    }
+
+    for (const schema of schemas) {
+      const accessor = schema.accessor!
+      const value = schema.key === 'placement.mode'
+        ? 'fixed'
+        : schema.key !== 'break.before'
+      const [, patches] = create(original, (draft) => {
+        accessor.write(draft, value)
+      }, { enablePatches: true })
+      const declared = accessor.paths[0]!.slice(1).split('/')
+
+      expect(patches.length).toBeGreaterThan(0)
+      for (const patch of patches)
+        expect(patch.path.slice(0, declared.length)).toEqual(declared)
+    }
+
+    const keepTogether = schemas.find(schema => schema.key === 'break.keepTogether')!
+    const next = create(original, (draft) => {
+      keepTogether.accessor!.write(draft, true)
+    })
+    expect(next.output.break).toEqual({ before: 'page', after: 'auto', keepTogether: true })
+    expect(original.output.break).toEqual({ before: 'page', after: 'auto' })
+  })
+
+  it('passes descriptor validation when break accessors share a composite path', () => {
+    const schemas = createLayoutBehaviorPropSchemas({
+      page: {
+        layout: { strategy: 'stack-flow' },
+        reflow: { strategy: 'flow-y' },
+        pagination: { strategy: 'auto-sheets' },
+      },
+    })
+
+    expect(validatePropertyDescriptors(schemas)).toEqual([])
   })
 })

@@ -1,4 +1,5 @@
 import type { MaterialNode } from '@easyink/schema'
+import { create } from 'mutative'
 import { describe, expect, it } from 'vitest'
 import {
   createModelPropertyAccessor,
@@ -58,6 +59,36 @@ describe('property accessor', () => {
     expect(node.model).toEqual({ typography: { size: 12 } })
   })
 
+  it('writes existing paths through a Mutative draft and emits a nested patch', () => {
+    const accessor = createModelPropertyAccessor<string>('/typography/fontFamily')
+    const original = nodeWithModel({ typography: { fontFamily: 'Inter', fontSize: 12 } })
+
+    const [next, patches] = create(original, (draft) => {
+      accessor.write(draft, 'Noto Sans')
+    }, { enablePatches: true })
+
+    expect(original.model).toEqual({ typography: { fontFamily: 'Inter', fontSize: 12 } })
+    expect(next.model).toEqual({ typography: { fontFamily: 'Noto Sans', fontSize: 12 } })
+    expect(patches).toEqual([
+      { op: 'replace', path: ['model', 'typography', 'fontFamily'], value: 'Noto Sans' },
+    ])
+  })
+
+  it('creates missing paths through a Mutative draft without mutating the original', () => {
+    const accessor = createModelPropertyAccessor<number>('/typography/fontSize')
+    const original = nodeWithModel({ text: 'Label' })
+
+    const [next, patches] = create(original, (draft) => {
+      accessor.write(draft, 12)
+    }, { enablePatches: true })
+
+    expect(original.model).toEqual({ text: 'Label' })
+    expect(next.model).toEqual({ text: 'Label', typography: { fontSize: 12 } })
+    expect(patches).toEqual([
+      { op: 'add', path: ['model', 'typography'], value: { fontSize: 12 } },
+    ])
+  })
+
   it('uses RFC 6901 escaping for model keys and default descriptor accessors', () => {
     const explicit = createModelPropertyAccessor<string>('/a~1b/~0value')
     const fallback = resolvePropertyAccessor({ key: 'a/b', label: 'Value', type: 'string' })
@@ -80,25 +111,31 @@ describe('property accessor', () => {
     },
   )
 
-  it('never follows inherited containers while reading or writing', () => {
+  it('never follows inherited containers and rejects non-plain writable roots', () => {
     const accessor = createModelPropertyAccessor<string>('/typography/fontFamily')
     const node = nodeWithModel(Object.create({ typography: { fontFamily: 'inherited' } }) as Record<string, unknown>)
 
     expect(accessor.read(node)).toBeUndefined()
-    accessor.write(node, 'owned')
+    expect(() => accessor.write(node, 'owned')).toThrowError('PROPERTY_ACCESSOR_CONTAINER_INVALID')
 
-    expect(Object.hasOwn(node.model, 'typography')).toBe(true)
-    expect(accessor.read(node)).toBe('owned')
+    expect(Object.hasOwn(node.model, 'typography')).toBe(false)
+    expect(accessor.read(node)).toBeUndefined()
     expect(({} as Record<string, unknown>).polluted).toBeUndefined()
   })
 })
 
 describe('validatePropertyDescriptors', () => {
-  it('returns stable diagnostics for duplicate keys, unsafe paths, and duplicate paths', () => {
+  it('returns stable diagnostics for duplicate keys, unsafe paths, and repeated paths in one accessor', () => {
     const diagnostics = validatePropertyDescriptors([
       descriptor('font', '/model/typography/fontFamily'),
       descriptor('font', '/model/__proto__/polluted'),
-      descriptor('alias', '/model/typography/fontFamily'),
+      {
+        ...descriptor('alias', '/model/typography/fontFamily'),
+        accessor: {
+          ...descriptor('alias', '/model/typography/fontFamily').accessor,
+          paths: Object.freeze(['/model/typography/fontFamily', '/model/typography/fontFamily'] as const),
+        },
+      },
     ])
 
     expect(diagnostics).toEqual(expect.arrayContaining([
@@ -138,6 +175,23 @@ describe('validatePropertyDescriptors', () => {
     expect(validatePropertyDescriptors([
       descriptor('font', '/model/typography/fontFamily'),
       descriptor('placement', '/output/placement'),
+      descriptor('placement-mode', '/output/placement'),
+    ])).toEqual([])
+  })
+
+  it.each(['constructor', '__proto__', 'prototype'])(
+    'diagnoses an unsafe implicit accessor for default key %s',
+    (key) => {
+      expect(validatePropertyDescriptors([{ key, label: key, type: 'string' }])).toContainEqual(
+        expect.objectContaining({ code: 'PROPERTY_ACCESSOR_PATH_UNSAFE', descriptorKey: key }),
+      )
+    },
+  )
+
+  it('allows an implicit and explicit accessor to share a composite path', () => {
+    expect(validatePropertyDescriptors([
+      { key: 'title', label: 'Title', type: 'string' },
+      descriptor('title-alias', '/model/title'),
     ])).toEqual([])
   })
 })
