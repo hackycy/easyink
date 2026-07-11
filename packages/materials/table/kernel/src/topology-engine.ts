@@ -596,18 +596,129 @@ interface InsertBandInput extends RevisionInput {
   identities: TableIdentityAllocator
 }
 
+function snapshotInsertColumnInput(input: InsertColumnInput): InsertColumnInput {
+  const snapshot = snapshotPlannerJson({
+    topologyRevision: input.topologyRevision,
+    target: input.target,
+    before: input.before,
+    after: input.after,
+    track: input.track,
+  })
+  if (typeof snapshot.topologyRevision !== 'number' || !isRecord(snapshot.track))
+    throw new Error('column insert input has invalid revision or track fields')
+  return {
+    topologyRevision: snapshot.topologyRevision,
+    track: snapshot.track as unknown as TableTrack,
+    ...readOptionalTargets<TableColumnId>(snapshot),
+    identities: captureIdentityAllocator(input.identities),
+  }
+}
+
+function snapshotInsertRowInput(input: InsertRowInput): InsertRowInput {
+  const snapshot = snapshotPlannerJson({
+    topologyRevision: input.topologyRevision,
+    bandId: input.bandId,
+    target: input.target,
+    before: input.before,
+    after: input.after,
+    minHeight: input.minHeight,
+  })
+  if (typeof snapshot.topologyRevision !== 'number' || typeof snapshot.bandId !== 'string'
+    || typeof snapshot.minHeight !== 'number') {
+    throw new TypeError('row insert input has invalid revision, bandId, or minHeight fields')
+  }
+  return {
+    topologyRevision: snapshot.topologyRevision,
+    bandId: snapshot.bandId as TableBandId,
+    minHeight: snapshot.minHeight,
+    ...readOptionalTargets<TableRowId>(snapshot),
+    identities: captureIdentityAllocator(input.identities),
+  }
+}
+
+function snapshotInsertBandInput(input: InsertBandInput): InsertBandInput {
+  const snapshot = snapshotPlannerJson({
+    topologyRevision: input.topologyRevision,
+    role: input.role,
+    target: input.target,
+    before: input.before,
+    after: input.after,
+    minHeight: input.minHeight,
+  })
+  if (typeof snapshot.topologyRevision !== 'number' || typeof snapshot.role !== 'string'
+    || typeof snapshot.minHeight !== 'number') {
+    throw new TypeError('band insert input has invalid revision, role, or minHeight fields')
+  }
+  return {
+    topologyRevision: snapshot.topologyRevision,
+    role: snapshot.role as InsertBandInput['role'],
+    minHeight: snapshot.minHeight,
+    ...readOptionalTargets<TableBandId>(snapshot),
+    identities: captureIdentityAllocator(input.identities),
+  }
+}
+
+function snapshotPlannerJson(fields: Record<string, unknown>): Record<string, unknown> {
+  const definedFields: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(fields)) {
+    if (value !== undefined)
+      definedFields[key] = value
+  }
+  const snapshot = deepClone(definedFields)
+  assertJsonValue(snapshot)
+  return snapshot as Record<string, unknown>
+}
+
+function readOptionalTargets<T extends string>(snapshot: Record<string, unknown>): {
+  target?: StableSiblingTarget<T>
+  before?: T
+  after?: T
+} {
+  const result: { target?: StableSiblingTarget<T>, before?: T, after?: T } = {}
+  if (Object.hasOwn(snapshot, 'target')) {
+    if (!isRecord(snapshot.target))
+      throw new Error('stable sibling target must be an object')
+    result.target = snapshot.target as unknown as StableSiblingTarget<T>
+  }
+  if (Object.hasOwn(snapshot, 'before')) {
+    if (typeof snapshot.before !== 'string')
+      throw new Error('stable before sibling must be an identity')
+    result.before = snapshot.before as T
+  }
+  if (Object.hasOwn(snapshot, 'after')) {
+    if (typeof snapshot.after !== 'string')
+      throw new Error('stable after sibling must be an identity')
+    result.after = snapshot.after as T
+  }
+  return result
+}
+
+function captureIdentityAllocator(value: unknown): TableIdentityAllocator {
+  if (typeof value !== 'object' || value === null)
+    throw new Error('table identity allocator must be an object')
+  const allocate = (value as { allocate?: unknown }).allocate
+  if (typeof allocate !== 'function')
+    throw new Error('table identity allocator must provide allocate')
+  return {
+    allocate(kind, occupied) {
+      return Reflect.apply(allocate, value, [kind, occupied]) as string
+    },
+  }
+}
+
 export class TableTopologyEngine {
   static planInsertColumn(source: TableModel, input: InsertColumnInput): TableTopologyDelta {
+    const snapshot = snapshotInsertColumnInput(input)
     assertValidTableModel(source)
-    assertTopologyRevision(input.topologyRevision)
-    const target = normalizeInsertTarget(input, source.columns[0]?.id)
+    assertTopologyRevision(snapshot.topologyRevision)
+    const target = normalizeInsertTarget(snapshot, source.columns[0]?.id)
     const index = targetIndex(source.columns.map(column => column.id), target, 'column')
-    assertValidTrack(input.track)
-    assertInsertColumnCapacity(source, index, input.track)
+    assertValidTrack(snapshot.track)
+    assertInsertColumnCapacity(source, index, snapshot.track)
     const occupied = occupiedIdentities(source)
-    const columnId = allocateTableIdentity(input.identities, 'column', occupied)
-    const column: TableColumn = { id: columnId, track: deepClone(input.track) }
-    const insertedCells = allRows(source).map(() => emptyCell(columnId, input.identities, occupied))
+    const columnId = allocateTableIdentity(snapshot.identities, 'column', occupied)
+    const column: TableColumn = { id: columnId, track: deepClone(snapshot.track) }
+    const insertedCells = allRows(source).map(() => emptyCell(columnId, snapshot.identities, occupied))
     const rowPlans = allRows(source).map(({ row }, offset) => {
       const insertedCell = insertedCells[offset]!
       const sourceIsCanonical = cellsMatchColumns(row.cells, source.columns)
@@ -648,7 +759,7 @@ export class TableTopologyEngine {
     forward.push(...mergeEdits.forward)
     inverse.unshift(spliceEdit(['columns'], index, 1, []))
     inverse.unshift(...mergeEdits.inverse)
-    return finishDelta(input.topologyRevision, forward, inverse)
+    return finishDelta(snapshot.topologyRevision, forward, inverse)
   }
 
   static planRemoveColumn(
@@ -778,19 +889,20 @@ export class TableTopologyEngine {
   }
 
   static planInsertRow(source: TableModel, input: InsertRowInput): TableTopologyDelta {
+    const snapshot = snapshotInsertRowInput(input)
     assertValidTableModel(source)
-    assertTopologyRevision(input.topologyRevision)
-    const bandIndex = source.bands.findIndex(band => band.id === input.bandId)
+    assertTopologyRevision(snapshot.topologyRevision)
+    const bandIndex = source.bands.findIndex(band => band.id === snapshot.bandId)
     if (bandIndex < 0)
-      throw new Error(`band not found: ${input.bandId}`)
+      throw new Error(`band not found: ${snapshot.bandId}`)
     const band = source.bands[bandIndex]!
     if (source.kind === 'data' && band.role === 'detail')
       throw new Error('the data detail band must retain exactly one template row')
-    const target = normalizeInsertTarget(input, band.rows[0]?.id)
+    const target = normalizeInsertTarget(snapshot, band.rows[0]?.id)
     const index = targetIndex(band.rows.map(row => row.id), target, 'row')
     assertInsertRowCapacity(source, band, index)
     const occupied = occupiedIdentities(source)
-    const row = emptyRow(source.columns, input.minHeight, input.identities, occupied)
+    const row = emptyRow(source.columns, snapshot.minHeight, snapshot.identities, occupied)
     const virtualBands = source.bands.map((candidate, candidateIndex) => candidateIndex === bandIndex
       ? { ...candidate, rows: [...candidate.rows.slice(0, index), row, ...candidate.rows.slice(index)] }
       : candidate)
@@ -800,7 +912,7 @@ export class TableTopologyEngine {
       return { rowIds: expands ? [...merge.rowIds, row.id] : merge.rowIds, columnIds: merge.columnIds }
     })
     const mergeEdits = mergesEdit(source.merges, nextMerges)
-    return finishDelta(input.topologyRevision, [spliceEdit(['bands', bandIndex, 'rows'], index, 0, [row]), ...mergeEdits.forward], [...mergeEdits.inverse, spliceEdit(['bands', bandIndex, 'rows'], index, 1, [])])
+    return finishDelta(snapshot.topologyRevision, [spliceEdit(['bands', bandIndex, 'rows'], index, 0, [row]), ...mergeEdits.forward], [...mergeEdits.inverse, spliceEdit(['bands', bandIndex, 'rows'], index, 1, [])])
   }
 
   static planRemoveRow(
@@ -874,20 +986,21 @@ export class TableTopologyEngine {
   }
 
   static planInsertBand(source: TableModel, input: InsertBandInput): TableTopologyDelta {
+    const snapshot = snapshotInsertBandInput(input)
     assertValidTableModel(source)
-    assertTopologyRevision(input.topologyRevision)
+    assertTopologyRevision(snapshot.topologyRevision)
     if (source.kind !== 'data')
       throw new Error('band insertion is defined only for data tables')
-    if (input.role !== 'header' && input.role !== 'footer')
+    if (snapshot.role !== 'header' && snapshot.role !== 'footer')
       throw new Error('data table bands may only be inserted as header or footer')
-    const sameRole = source.bands.filter(band => band.role === input.role)
-    const target = normalizeBandTarget(input)
+    const sameRole = source.bands.filter(band => band.role === snapshot.role)
+    const target = normalizeBandTarget(snapshot)
     assertStableTarget(target)
-    assertMinHeight(input.minHeight)
+    assertMinHeight(snapshot.minHeight)
     assertInsertBandCapacity(source)
     let index: number
     if ('atEnd' in target) {
-      index = input.role === 'header'
+      index = snapshot.role === 'header'
         ? source.bands.findIndex(band => band.role !== 'header')
         : source.bands.length
       if (index < 0)
@@ -896,21 +1009,21 @@ export class TableTopologyEngine {
     else {
       const sibling = 'before' in target ? target.before : target.after
       const siblingBand = source.bands.find(band => band.id === sibling)
-      if (!siblingBand || siblingBand.role !== input.role)
-        throw new Error(`new ${input.role} band requires a same-role sibling`)
+      if (!siblingBand || siblingBand.role !== snapshot.role)
+        throw new Error(`new ${snapshot.role} band requires a same-role sibling`)
       const roleIndex = sameRole.findIndex(band => band.id === sibling)
       const insertionInRole = roleIndex + ('after' in target ? 1 : 0)
-      index = input.role === 'header'
+      index = snapshot.role === 'header'
         ? insertionInRole
         : source.bands.findIndex(band => band.role === 'footer') + insertionInRole
     }
     const occupied = occupiedIdentities(source)
     const band: TableBand = {
-      id: allocateTableIdentity(input.identities, 'band', occupied),
-      role: input.role,
-      rows: [emptyRow(source.columns, input.minHeight, input.identities, occupied)],
+      id: allocateTableIdentity(snapshot.identities, 'band', occupied),
+      role: snapshot.role,
+      rows: [emptyRow(source.columns, snapshot.minHeight, snapshot.identities, occupied)],
     }
-    return finishDelta(input.topologyRevision, [spliceEdit(['bands'], index, 0, [band])], [spliceEdit(['bands'], index, 1, [])])
+    return finishDelta(snapshot.topologyRevision, [spliceEdit(['bands'], index, 0, [band])], [spliceEdit(['bands'], index, 1, [])])
   }
 
   static planRemoveBand(

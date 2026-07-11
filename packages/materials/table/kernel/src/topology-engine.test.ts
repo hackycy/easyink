@@ -337,6 +337,143 @@ describe('tableTopologyEngine structural operations', () => {
     expect(materializeTableTopologyDelta(bandNeighbor, bandDelta, 3).bands).toHaveLength(2)
   })
 
+  it('snapshots every creating-planner input before allocation', () => {
+    const columnSource = createTableModel({ kind: 'static', columnCount: 2, rowCount: 2 })
+    const columnAllocator = createSequentialTableIdentityAllocator('snapshot-column')
+    const columnReads = { revision: 0, after: 0, track: 0, identities: 0 }
+    const columnInput = {
+      get topologyRevision() {
+        columnReads.revision += 1
+        return columnReads.revision === 1 ? 4 : -1
+      },
+      get after() {
+        columnReads.after += 1
+        return columnReads.after === 1 ? columnSource.columns[0]!.id : 'missing' as never
+      },
+      get track() {
+        columnReads.track += 1
+        return columnReads.track === 1
+          ? { kind: 'fr' as const, weight: 1 }
+          : { kind: 'fr' as const, weight: -1 }
+      },
+      get identities() {
+        columnReads.identities += 1
+        return columnAllocator
+      },
+    }
+    const columnDelta = TableTopologyEngine.planInsertColumn(columnSource, columnInput)
+    const insertedColumn = materializeTableTopologyDelta(columnSource, columnDelta, 4)
+    expect(columnReads).toEqual({ revision: 1, after: 1, track: 1, identities: 1 })
+    expect(insertedColumn.columns[1]!.track).toEqual({ kind: 'fr', weight: 1 })
+
+    const rowAllocator = createSequentialTableIdentityAllocator('snapshot-row')
+    const rowReads = { revision: 0, bandId: 0, target: 0, minHeight: 0, identities: 0 }
+    const rowInput = {
+      get topologyRevision() {
+        rowReads.revision += 1
+        return rowReads.revision === 1 ? 5 : -1
+      },
+      get bandId() {
+        rowReads.bandId += 1
+        return rowReads.bandId === 1 ? columnSource.bands[0]!.id : 'missing' as never
+      },
+      get target() {
+        rowReads.target += 1
+        return rowReads.target === 1 ? { atEnd: true as const } : { after: 'missing' as never }
+      },
+      get minHeight() {
+        rowReads.minHeight += 1
+        return rowReads.minHeight === 1 ? 8 : -1
+      },
+      get identities() {
+        rowReads.identities += 1
+        return rowAllocator
+      },
+    }
+    const rowDelta = TableTopologyEngine.planInsertRow(columnSource, rowInput)
+    const insertedRow = materializeTableTopologyDelta(columnSource, rowDelta, 5)
+    expect(rowReads).toEqual({ revision: 1, bandId: 1, target: 1, minHeight: 1, identities: 1 })
+    expect(insertedRow.bands[0]!.rows.at(-1)!.minHeight).toBe(8)
+
+    const data = createTableModel({ kind: 'data', columnCount: 2, rowCount: 1 })
+    const first = TableTopologyEngine.insertBand(data, {
+      role: 'header',
+      target: { atEnd: true },
+      minHeight: 8,
+      identities: createSequentialTableIdentityAllocator('snapshot-band-first'),
+    })
+    const firstHeader = first.bands[0]!
+    const bandAllocator = createSequentialTableIdentityAllocator('snapshot-band')
+    const bandReads = { revision: 0, role: 0, after: 0, minHeight: 0, identities: 0 }
+    const bandInput = {
+      get topologyRevision() {
+        bandReads.revision += 1
+        return bandReads.revision === 1 ? 6 : -1
+      },
+      get role() {
+        bandReads.role += 1
+        return bandReads.role === 1 ? 'header' as const : 'detail' as never
+      },
+      get after() {
+        bandReads.after += 1
+        return bandReads.after === 1 ? firstHeader.id : 'missing' as never
+      },
+      get minHeight() {
+        bandReads.minHeight += 1
+        return bandReads.minHeight === 1 ? 8 : -1
+      },
+      get identities() {
+        bandReads.identities += 1
+        return bandAllocator
+      },
+    }
+    const bandDelta = TableTopologyEngine.planInsertBand(first, bandInput)
+    const insertedBand = materializeTableTopologyDelta(first, bandDelta, 6)
+    expect(bandReads).toEqual({ revision: 1, role: 1, after: 1, minHeight: 1, identities: 1 })
+    expect(insertedBand.bands.slice(0, 2).map(band => band.role)).toEqual(['header', 'header'])
+    expect(insertedBand.bands[1]!.rows[0]!.minHeight).toBe(8)
+  })
+
+  it('counts a detached track proxy with large extra JSON before allocation', () => {
+    const source = createTableModel({ kind: 'static', columnCount: 100, rowCount: 160 })
+    const allocate = vi.fn(() => 'must-not-allocate')
+    let trackReads = 0
+    const largeTrack = new Proxy({
+      kind: 'fr' as const,
+      weight: 1,
+      extra: Array.from({ length: 10_000 }).fill(0),
+    }, {
+      get(target, property, receiver) {
+        trackReads += 1
+        return Reflect.get(target, property, receiver)
+      },
+    })
+    expect(() => TableTopologyEngine.planInsertColumn(source, {
+      topologyRevision: 0,
+      target: { atEnd: true },
+      track: largeTrack,
+      identities: { allocate },
+    })).toThrow(/budget|nodes/)
+    expect(trackReads).toBeGreaterThan(0)
+    expect(allocate).not.toHaveBeenCalled()
+
+    let identitiesReads = 0
+    const invalidInput = {
+      topologyRevision: 0,
+      target: { atEnd: true as const },
+      track: { kind: 'fr' as const, weight: 1, invalid: () => undefined },
+      get identities() {
+        identitiesReads += 1
+        return { allocate }
+      },
+    }
+    const before = deepClone(source)
+    expect(() => TableTopologyEngine.planInsertColumn(source, invalidInput)).toThrow(/JSON|Unsupported/)
+    expect(identitiesReads).toBe(0)
+    expect(allocate).not.toHaveBeenCalled()
+    expect(source).toEqual(before)
+  })
+
   it('deep clones edit payloads and emits bounded exact scripts', () => {
     const source = createTableModel({ kind: 'static', columnCount: 20, rowCount: 100 })
     const delta = TableTopologyEngine.planInsertColumn(source, {
