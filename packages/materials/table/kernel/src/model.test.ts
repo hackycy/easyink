@@ -68,17 +68,46 @@ describe('table identity allocation', () => {
 
   it('isolates the authoritative occupied set from allocator mutations', () => {
     const occupied = new Set<string>(['taken', 'kept'])
+    let snapshot: ReadonlySet<string> | undefined
     const allocator: TableIdentityAllocator = {
-      allocate(_kind, snapshot) {
-        const mutableSnapshot = snapshot as Set<string>
-        mutableSnapshot.clear()
-        mutableSnapshot.add('poisoned')
+      allocate(_kind, seen) {
+        snapshot = seen
         return 'taken'
       },
     }
 
     expect(() => allocateTableIdentity(allocator, 'cell', occupied)).toThrow(/duplicate/i)
     expect([...occupied]).toEqual(['taken', 'kept'])
+    expect(() => (snapshot as Set<string>).add('poisoned')).toThrow(/read.?only/i)
+    expect(() => (snapshot as Set<string>).delete('kept')).toThrow(/read.?only/i)
+    expect(() => (snapshot as Set<string>).clear()).toThrow(/read.?only/i)
+    expect(() => Set.prototype.clear.call(snapshot)).toThrow()
+    expect([...occupied]).toEqual(['taken', 'kept'])
+  })
+
+  it('passes a cached live readonly view and preserves allocator failures', () => {
+    const occupied = new Set<string>()
+    const views: ReadonlySet<string>[] = []
+    let counter = 0
+    const allocator: TableIdentityAllocator = {
+      allocate(_kind, seen) {
+        views.push(seen)
+        counter += 1
+        return `cached:${counter}`
+      },
+    }
+    const first = allocateTableIdentity(allocator, 'cell', occupied)
+    allocateTableIdentity(allocator, 'row', occupied)
+    expect(views[0]).toBe(views[1])
+    expect(views[0]!.has(first)).toBe(true)
+
+    const failure = new Error('allocator failed')
+    expect(() => allocateTableIdentity({
+      allocate: () => {
+        throw failure
+      },
+    }, 'band', occupied)).toThrow(failure)
+    expect([...occupied]).toEqual(['cached:1', 'cached:2'])
   })
 
   it('encodes opaque values without delimiter or Unicode collisions', () => {
@@ -161,6 +190,27 @@ describe('createTableModel', () => {
       expect(() => createTableModel(oversized, { allocate })).toThrow(/limit|budget|maximum/i)
       expect(allocate).not.toHaveBeenCalled()
     }
+  })
+
+  it('reuses one occupied view across a 100x100 allocation workload', () => {
+    const views = new Set<ReadonlySet<string>>()
+    let counter = 0
+    const allocator: TableIdentityAllocator = {
+      allocate(_kind, seen) {
+        views.add(seen)
+        counter += 1
+        return `scale:${counter}`
+      },
+    }
+    const model = createTableModel({ kind: 'static', columnCount: 100, rowCount: 100 }, allocator)
+    expect(model.bands[0]!.rows).toHaveLength(100)
+    expect(counter).toBe(10_201)
+    expect(views.size).toBe(1)
+  })
+
+  it('accepts the exact static JSON-node budget boundary case', () => {
+    const model = createTableModel({ kind: 'static', columnCount: 1, rowCount: 9_998 })
+    expect(model.bands[0]!.rows).toHaveLength(9_998)
   })
 
   it('rejects an injected allocator collision', () => {

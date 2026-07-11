@@ -164,6 +164,7 @@ const textEncoder = new TextEncoder()
 export const TABLE_MODEL_MAX_CELLS = 100_000
 const TABLE_MODEL_MAX_DIMENSION = 100_000
 const TABLE_MODEL_MAX_JSON_NODES = 100_000
+const readonlyOccupiedViews = new WeakMap<Set<string>, ReadonlySet<string>>()
 
 export function isValidTableStableToken(value: unknown, maxBytes = 128): value is string {
   if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0)
@@ -197,13 +198,54 @@ export function allocateTableIdentity<K extends TableIdentityKind>(
   kind: K,
   occupied: Set<string>,
 ): TableId<K> {
-  const token = allocator.allocate(kind, new Set(occupied))
+  const token = allocator.allocate(kind, getReadonlyOccupiedView(occupied))
   if (!isValidTableStableToken(token))
     throw new Error('Table stable ID must contain 1..128 UTF-8 bytes using only [A-Za-z0-9._:-]')
   if (occupied.has(token))
     throw new Error(`Duplicate table stable ID: ${token}`)
   occupied.add(token)
   return token as TableId<K>
+}
+
+function getReadonlyOccupiedView(occupied: Set<string>): ReadonlySet<string> {
+  const cached = readonlyOccupiedViews.get(occupied)
+  if (cached)
+    return cached
+
+  const rejectMutation = (): never => {
+    throw new Error('Table occupied ID view is read-only')
+  }
+  const view: ReadonlySet<string> = new Proxy(occupied, {
+    get(target, property, receiver) {
+      if (property === 'add' || property === 'delete' || property === 'clear')
+        return rejectMutation
+      if (property === 'size')
+        return target.size
+      if (property === 'has')
+        return target.has.bind(target)
+      if (property === 'entries')
+        return target.entries.bind(target)
+      if (property === 'keys')
+        return target.keys.bind(target)
+      if (property === 'values')
+        return target.values.bind(target)
+      if (property === Symbol.iterator)
+        return target[Symbol.iterator].bind(target)
+      if (property === 'forEach') {
+        return (callback: (value: string, value2: string, set: ReadonlySet<string>) => void, thisArg?: unknown): void => {
+          target.forEach(value => callback.call(thisArg, value, value, view))
+        }
+      }
+      return Reflect.get(target, property, receiver)
+    },
+    set: rejectMutation,
+    defineProperty: rejectMutation,
+    deleteProperty: rejectMutation,
+    preventExtensions: rejectMutation,
+    setPrototypeOf: rejectMutation,
+  })
+  readonlyOccupiedViews.set(occupied, view)
+  return view
 }
 
 export const allocateTableId = allocateTableIdentity
@@ -250,7 +292,7 @@ export function createTableModel(
     throw new Error('Table kind must be static or data')
   if (kind === 'data' && rowCount !== 1)
     throw new Error('A data table rowCount must be exactly 1')
-  assertTableModelAllocationBudget(columnCount, rowCount)
+  assertTableModelAllocationBudget(kind, columnCount, rowCount)
 
   const occupied = new Set<string>()
   const columns: TableColumn[] = Array.from({ length: columnCount }, () => ({
@@ -379,7 +421,7 @@ function assertPositiveSafeCount(value: number, name: string): void {
     throw new Error(`${name} must be a positive safe integer count`)
 }
 
-function assertTableModelAllocationBudget(columnCount: number, rowCount: number): void {
+function assertTableModelAllocationBudget(kind: TableModel['kind'], columnCount: number, rowCount: number): void {
   if (columnCount > TABLE_MODEL_MAX_DIMENSION || rowCount > TABLE_MODEL_MAX_DIMENSION) {
     throw new Error(`Table dimensions exceed the maximum of ${TABLE_MODEL_MAX_DIMENSION}`)
   }
@@ -387,7 +429,8 @@ function assertTableModelAllocationBudget(columnCount: number, rowCount: number)
     throw new Error(`Table cell count exceeds the maximum allocation budget of ${TABLE_MODEL_MAX_CELLS}`)
 
   const cellCount = columnCount * rowCount
-  const estimatedJsonNodes = 16 + columnCount * 5 + rowCount * 4 + cellCount * 6
+  const fixedNodes = kind === 'data' ? 12 : 10
+  const estimatedJsonNodes = fixedNodes + columnCount * 5 + rowCount * 4 + cellCount * 6
   if (estimatedJsonNodes > TABLE_MODEL_MAX_JSON_NODES) {
     throw new Error(`Table estimated JSON nodes exceed the maximum allocation budget of ${TABLE_MODEL_MAX_JSON_NODES}`)
   }
