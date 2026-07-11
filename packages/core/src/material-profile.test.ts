@@ -280,6 +280,11 @@ describe('compiledMaterialProfile.createNode', () => {
     [{ id: '' }, 'empty ID'],
     [{ width: -1 }, 'negative width'],
     [{ output: { visibility: 'bogus' } }, 'bogus visibility'],
+    [{ output: null }, 'null output'],
+    [{ bindings: null }, 'null bindings'],
+    [{ slots: null }, 'null slots'],
+    [{ slots: [] }, 'array slots'],
+    [{ model: { bad: undefined } }, 'invalid model JSON'],
     [{ unit: 'mm' }, 'legacy unit field'],
     [{ bogus: true }, 'unknown field'],
   ] as const)('rejects an invalid canonical envelope: %s', (input) => {
@@ -417,6 +422,30 @@ describe('compiledMaterialProfile.createNode', () => {
     const profile = compileMaterialProfile({ id: 'test', engineVersion: '0.0.30', packages: [packageOf([manifest])] })
 
     expect(() => profile.createNode('normalize-result', { id: 'n' }))
+      .toThrowError(expect.objectContaining({ code: 'MATERIAL_ADAPTER_NORMALIZE_RESULT_INVALID' }))
+  })
+
+  it.each(['model', 'slots', 'bindings', 'output'] as const)('rejects a normalized null %s record without materializing defaults', (field) => {
+    const base = createTestMaterialManifest({ type: 'seed' }).schemaAdapter
+    const normalize = (node: Parameters<SchemaAdapter['normalize']>[0]) => ({ ...node, [field]: null })
+    const manifest = createTestMaterialManifest({ type: `normalize-null-${field}`, schemaAdapter: { ...base, normalize } as never })
+    const profile = compileMaterialProfile({ id: 'test', engineVersion: '0.0.30', packages: [packageOf([manifest])] })
+
+    expect(() => profile.createNode(manifest.type, { id: 'n' }))
+      .toThrowError(expect.objectContaining({ code: 'MATERIAL_ADAPTER_NORMALIZE_RESULT_INVALID' }))
+  })
+
+  it.each(['model', 'slots', 'bindings', 'output'] as const)('rejects a normalized missing %s record', (field) => {
+    const base = createTestMaterialManifest({ type: 'seed' }).schemaAdapter
+    const normalize = (node: Parameters<SchemaAdapter['normalize']>[0]) => {
+      const result = { ...node }
+      delete result[field]
+      return result
+    }
+    const manifest = createTestMaterialManifest({ type: `normalize-missing-${field}`, schemaAdapter: { ...base, normalize } as never })
+    const profile = compileMaterialProfile({ id: 'test', engineVersion: '0.0.30', packages: [packageOf([manifest])] })
+
+    expect(() => profile.createNode(manifest.type, { id: 'n' }))
       .toThrowError(expect.objectContaining({ code: 'MATERIAL_ADAPTER_NORMALIZE_RESULT_INVALID' }))
   })
 

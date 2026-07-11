@@ -356,7 +356,7 @@ function createNodeFromManifest(
     materialType: manifest.type,
   }
   const defaultModel = cloneRecord(manifest.common.defaultNode.model)
-  const inputModel = input.model === undefined ? {} : cloneRecord(input.model)
+  const inputModel = input.model === undefined ? {} : cloneNodeRecord(input.model, manifest.type)
   let model = { ...defaultModel, ...inputModel }
   if (manifest.schemaAdapter.modelUnitPolicy === 'convertible' && sourceUnit !== documentUnit) {
     try {
@@ -368,16 +368,25 @@ function createNodeFromManifest(
     }
   }
 
+  const defaultBindings = manifest.common.defaultNode.bindings === undefined
+    ? {}
+    : cloneRecord(manifest.common.defaultNode.bindings)
+  const inputBindings = input.bindings === undefined ? {} : cloneNodeRecord(input.bindings, manifest.type)
   const bindings = {
-    ...cloneRecord(manifest.common.defaultNode.bindings ?? {}),
-    ...cloneRecord(input.bindings ?? {}),
+    ...defaultBindings,
+    ...inputBindings,
   }
   assertCanonicalMaterialBindingMap(manifest.common.binding, bindings)
+  const defaultOutput = manifest.common.defaultNode.output === undefined
+    ? {}
+    : cloneRecord(manifest.common.defaultNode.output)
+  const inputOutput = input.output === undefined ? {} : cloneNodeRecord(input.output, manifest.type)
   const output = {
     visibility: 'include' as const,
-    ...cloneRecord(manifest.common.defaultNode.output ?? {}),
-    ...cloneRecord(input.output ?? {}),
+    ...defaultOutput,
+    ...inputOutput,
   }
+  const slots = input.slots === undefined ? {} : cloneNodeRecord(input.slots, manifest.type)
   const initial = materializeCanonicalNode({
     ...copyOptionalNodeFields(input),
     id: input.id === undefined ? generateId(manifest.type) : input.id,
@@ -388,7 +397,7 @@ function createNodeFromManifest(
     height: input.height ?? convertUnit(manifest.common.defaultNode.height, sourceUnit, documentUnit),
     modelVersion: manifest.modelVersion,
     model,
-    slots: cloneRecord(input.slots ?? {}),
+    slots: slots as MaterialNode['slots'],
     bindings,
     output,
   }, manifest)
@@ -421,6 +430,7 @@ function createNodeFromManifest(
   try {
     normalizedSnapshot = cloneNode(snapshotStructure(normalized, snapshotLimits))
     assertAllowedNodeKeys(normalizedSnapshot, manifest.type)
+    assertNormalizedRecordShape(normalizedSnapshot, manifest.type)
   }
   catch {
     throw new MaterialNodeCreationError('MATERIAL_ADAPTER_NORMALIZE_RESULT_INVALID', manifest.type)
@@ -451,6 +461,24 @@ function createNodeFromManifest(
     throw new MaterialNodeCreationError('MATERIAL_ADAPTER_VALIDATE_MUTATION_INVALID', manifest.type)
   }
   return canonical
+}
+
+function cloneNodeRecord(value: unknown, materialType: string): Record<string, any> {
+  try {
+    return cloneRecord(value)
+  }
+  catch {
+    throw new MaterialNodeCreationError('MATERIAL_NODE_INVALID', materialType)
+  }
+}
+
+function assertNormalizedRecordShape(node: Record<string, unknown>, materialType: string): void {
+  if (!isPlainRecord(node.model)
+    || !isPlainRecord(node.slots)
+    || !isPlainRecord(node.bindings)
+    || !isPlainRecord(node.output)) {
+    throw new MaterialNodeCreationError('MATERIAL_ADAPTER_NORMALIZE_RESULT_INVALID', materialType)
+  }
 }
 
 function snapshotNodeCreateInput(input: unknown, materialType: string, limits: SnapshotLimits): MaterialNodeCreateInput {
@@ -503,9 +531,9 @@ function materializeCanonicalNode(node: AdaptableMaterialNode, manifest: Materia
     height: node.height,
     modelVersion: manifest.modelVersion,
     model: node.model,
-    slots: (node.slots ?? {}) as MaterialNode['slots'],
-    bindings: node.bindings ?? {},
-    output: { visibility: 'include', ...node.output },
+    slots: node.slots as MaterialNode['slots'],
+    bindings: node.bindings,
+    output: node.output,
   }
   for (const key of OPTIONAL_NODE_KEYS) {
     const value = node[key]
