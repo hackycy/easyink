@@ -1,5 +1,6 @@
 import type { DocumentSchema, DocumentSchemaInput, MaterialNode, MaterialNodeInput, PageSchema } from './types'
-import { isObject } from '@easyink/shared'
+import { assertJsonValue, isObject } from '@easyink/shared'
+import { validateSchemaIssues } from './validation'
 
 /** Benchmark (report-designer) compatibility input format. */
 export interface BenchmarkDocumentInput {
@@ -195,22 +196,22 @@ function encodeBenchmarkElement(node: MaterialNode): BenchmarkElementInput {
 }
 
 function assertCanonicalDocument(schema: DocumentSchema): void {
-  const stack: unknown[] = Array.isArray(schema?.elements) ? [...schema.elements] : []
-  while (stack.length > 0) {
-    const node = stack.pop()
-    if (!isObject(node)
-      || typeof node.modelVersion !== 'number'
-      || !isObject(node.model)
-      || !isObject(node.slots)
-      || !isObject(node.bindings)
-      || !isObject(node.output)
-      || ['props', 'binding', 'children', 'table', 'unit', 'hidden', 'locked', 'name'].some(key => Object.hasOwn(node, key))) {
-      throw new Error('BENCHMARK_ENCODE_REQUIRES_CANONICAL_SCHEMA')
+  try {
+    assertJsonValue(schema, { maxDepth: 256, maxNodes: 100_000, maxStringBytes: 4 * 1024 * 1024 })
+    if (validateSchemaIssues(schema).length > 0)
+      throw new Error('invalid canonical schema')
+    const stack: unknown[] = [...schema.elements]
+    while (stack.length > 0) {
+      const node = stack.pop()
+      if (!isObject(node)
+        || ['props', 'binding', 'children', 'table', 'unit', 'hidden', 'locked', 'name'].some(key => Object.hasOwn(node, key))) {
+        throw new Error('legacy material field')
+      }
+      for (const children of Object.values(node.slots))
+        stack.push(...children)
     }
-    for (const children of Object.values(node.slots)) {
-      if (!Array.isArray(children))
-        throw new Error('BENCHMARK_ENCODE_REQUIRES_CANONICAL_SCHEMA')
-      stack.push(...children)
-    }
+  }
+  catch {
+    throw new Error('BENCHMARK_ENCODE_REQUIRES_CANONICAL_SCHEMA')
   }
 }

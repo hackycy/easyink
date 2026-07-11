@@ -205,9 +205,11 @@ export function loadDocumentWithProfile(
   ))
   const schema = { ...envelope, elements } as DocumentSchema
   rebuildFinalNodeStates(schema, nodeStates, nodeStateOwners)
-  diagnostics.push(...validateMaterialGraph(schema, profile, new Set(
+  const graphDiagnostics = validateMaterialGraph(schema, profile, new Set(
     [...nodeStates].filter(([, state]) => state.status === 'quarantined').map(([id]) => id),
-  )))
+  ))
+  diagnostics.push(...graphDiagnostics)
+  integrateGraphDiagnostics(nodeStates, graphDiagnostics)
   return {
     schema,
     diagnostics: Object.freeze(diagnostics),
@@ -280,7 +282,9 @@ export function validateDocumentWithProfile(
       }
     })
   }
-  diagnostics.push(...validateMaterialGraph(schema, profile, excluded))
+  const graphDiagnostics = validateMaterialGraph(schema, profile, excluded)
+  diagnostics.push(...graphDiagnostics)
+  integrateGraphDiagnostics(nodeStates, graphDiagnostics)
   return {
     valid: diagnostics.every(diagnostic => diagnostic.severity !== 'error'),
     diagnostics: Object.freeze(diagnostics),
@@ -618,7 +622,7 @@ function callIssues(
   stage: 'validate-input' | 'validate',
   diagnostics: MaterialLoadDiagnostic[],
 ): { ok: boolean, hasErrors: boolean } {
-  let raw: readonly MaterialSchemaIssue[]
+  let raw: unknown
   try {
     raw = operation(cloneAdaptableNode(node), context)
   }
@@ -626,16 +630,34 @@ function callIssues(
     appendDiagnostic(diagnostics, node, path, stage, 'MATERIAL_ADAPTER_THROW', 'Material adapter threw', error)
     return { ok: false, hasErrors: true }
   }
-  if (!Array.isArray(raw)) {
+  let snapshot: unknown
+  try {
+    snapshot = cloneJsonValue(raw as JsonValue, { maxDepth: 8, maxNodes: 10_000, maxStringBytes: 1024 * 1024 })
+  }
+  catch {
+    appendDiagnostic(diagnostics, node, path, stage, 'MATERIAL_ADAPTER_ISSUES_INVALID', 'Material adapter issues are not admissible JSON')
+    return { ok: false, hasErrors: true }
+  }
+  if (!Array.isArray(snapshot)) {
     appendDiagnostic(diagnostics, node, path, stage, 'MATERIAL_ADAPTER_ISSUES_INVALID', 'Material adapter issues must be an array')
     return { ok: false, hasErrors: true }
   }
   let hasErrors = false
-  for (const issue of raw) {
-    const validPath = typeof issue?.path === 'string'
-      && JSON_POINTER_PATTERN.test(issue.path)
+  for (const candidate of snapshot) {
+    if (!isRecord(candidate)
+      || typeof candidate.code !== 'string'
+      || !candidate.code
+      || (candidate.severity !== 'error' && candidate.severity !== 'warning')
+      || typeof candidate.message !== 'string'
+      || typeof candidate.path !== 'string') {
+      appendDiagnostic(diagnostics, node, path, stage, 'MATERIAL_ADAPTER_ISSUES_INVALID', 'Material adapter issue is invalid')
+      hasErrors = true
+      continue
+    }
+    const issue = candidate as unknown as MaterialSchemaIssue
+    const validPath = JSON_POINTER_PATTERN.test(issue.path)
       && DIAGNOSTIC_ROOTS.some(root => issue.path === root || issue.path.startsWith(`${root}/`))
-    if (!issue || typeof issue.code !== 'string' || !issue.code || !['error', 'warning'].includes(issue.severity) || typeof issue.message !== 'string' || !validPath) {
+    if (!validPath) {
       appendDiagnostic(diagnostics, node, path, stage, 'MATERIAL_DIAGNOSTIC_PATH_INVALID', 'Material adapter diagnostic is invalid')
       hasErrors = true
       continue
@@ -743,18 +765,190 @@ function reconcileSlots(
   for (const [slot, rawChildren] of Object.entries(candidateSlots)) {
     const children = Array.isArray(rawChildren) ? rawChildren : []
     const priorChildren = Array.isArray(previousSlots[slot]) ? previousSlots[slot] : []
-    const reused = new Set<number>()
+    const fingerprintBudget = { remaining: Math.min(profile.admissionBudget.maxJsonNodes * 2, 200_000) }
+    const equalityBudget = { remaining: Math.min(profile.admissionBudget.maxJsonNodes * 2, 200_000) }
+    const buckets = new Map<string, { entries: Array<{ index: number, node: MaterialNodeInput }>, next: number }>()
+    for (let index = 0; index < priorChildren.length; index += 1) {
+      const prior = priorChildren[index]!
+      const fingerprint = canonicalFingerprint(prior, fingerprintBudget)
+      if (fingerprint === undefined)
+        continue
+      const bucket = buckets.get(fingerprint) ?? { entries: [], next: 0 }
+      bucket.entries.push({ index, node: prior })
+      buckets.set(fingerprint, bucket)
+    }
+    const moves: ReusedSlotMove[] = []
     result[slot] = children.map((child, index) => {
-      const priorIndex = priorChildren.findIndex((prior, candidateIndex) => !reused.has(candidateIndex)
-        && jsonEqual(child as unknown as JsonValue, prior as unknown as JsonValue))
-      if (priorIndex >= 0)
-        reused.add(priorIndex)
-      return priorIndex >= 0
-        ? priorChildren[priorIndex] as MaterialNode
-        : loadNode(child, `${ownerPath}/slots/${escapePointer(slot)}/${index}`, document, profile, diagnostics, nodeStates, nodeStateOwners)
+      const fingerprint = canonicalFingerprint(child, fingerprintBudget)
+      const bucket = fingerprint === undefined ? undefined : buckets.get(fingerprint)
+      if (bucket) {
+        while (bucket.next < bucket.entries.length) {
+          const prior = bucket.entries[bucket.next++]!
+          if (!canonicalJsonEqual(child, prior.node, equalityBudget))
+            continue
+          const reused = prior.node as MaterialNode
+          if (prior.index !== index) {
+            moves.push({
+              node: reused,
+              from: `${ownerPath}/slots/${escapePointer(slot)}/${prior.index}`,
+              to: `${ownerPath}/slots/${escapePointer(slot)}/${index}`,
+            })
+          }
+          return reused
+        }
+      }
+      return loadNode(child, `${ownerPath}/slots/${escapePointer(slot)}/${index}`, document, profile, diagnostics, nodeStates, nodeStateOwners)
     })
+    remapReusedSlotDiagnostics(moves, diagnostics, nodeStates, nodeStateOwners)
   }
   return result
+}
+
+interface ReusedSlotMove {
+  node: MaterialNode
+  from: string
+  to: string
+}
+
+interface FingerprintFrame {
+  token?: string
+  value?: unknown
+}
+
+function canonicalFingerprint(value: unknown, budget: { remaining: number }): string | undefined {
+  const tokens: string[] = []
+  const stack: FingerprintFrame[] = [{ value }]
+  while (stack.length > 0) {
+    const frame = stack.pop()!
+    if (frame.token !== undefined) {
+      tokens.push(frame.token)
+      continue
+    }
+    budget.remaining -= 1
+    if (budget.remaining < 0)
+      return undefined
+    const current = frame.value
+    if (current === null) {
+      tokens.push('null')
+      continue
+    }
+    if (typeof current === 'string') {
+      tokens.push(`s${current.length}:${current}`)
+      continue
+    }
+    if (typeof current === 'number') {
+      tokens.push(`n${Object.is(current, -0) ? '0' : String(current)}`)
+      continue
+    }
+    if (typeof current === 'boolean') {
+      tokens.push(current ? 'true' : 'false')
+      continue
+    }
+    if (Array.isArray(current)) {
+      tokens.push('[')
+      stack.push({ token: ']' })
+      for (let index = current.length - 1; index >= 0; index -= 1) {
+        stack.push({ value: current[index] })
+        if (index > 0)
+          stack.push({ token: ',' })
+      }
+      continue
+    }
+    if (!isRecord(current))
+      return undefined
+    const keys = Object.keys(current).sort()
+    tokens.push('{')
+    stack.push({ token: '}' })
+    for (let index = keys.length - 1; index >= 0; index -= 1) {
+      const key = keys[index]!
+      stack.push({ value: current[key] })
+      stack.push({ token: ':' })
+      stack.push({ token: `k${key.length}:${key}` })
+      if (index > 0)
+        stack.push({ token: ',' })
+    }
+  }
+  return tokens.join('')
+}
+
+function canonicalJsonEqual(left: unknown, right: unknown, budget: { remaining: number }): boolean {
+  const stack: Array<[unknown, unknown]> = [[left, right]]
+  while (stack.length > 0) {
+    budget.remaining -= 1
+    if (budget.remaining < 0)
+      return false
+    const [a, b] = stack.pop()!
+    if (Object.is(a, b))
+      continue
+    if (typeof a !== typeof b || a === null || b === null)
+      return false
+    if (Array.isArray(a) || Array.isArray(b)) {
+      if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length)
+        return false
+      for (let index = 0; index < a.length; index += 1)
+        stack.push([a[index], b[index]])
+      continue
+    }
+    if (!isRecord(a) || !isRecord(b))
+      return false
+    const aKeys = Object.keys(a).sort()
+    const bKeys = Object.keys(b).sort()
+    if (aKeys.length !== bKeys.length || aKeys.some((key, index) => key !== bKeys[index]))
+      return false
+    for (const key of aKeys)
+      stack.push([a[key], b[key]])
+  }
+  return true
+}
+
+function remapReusedSlotDiagnostics(
+  moves: readonly ReusedSlotMove[],
+  diagnostics: MaterialLoadDiagnostic[],
+  nodeStates: Map<string, MaterialNodeLoadState>,
+  nodeStateOwners: WeakMap<object, MaterialNodeLoadState>,
+): void {
+  if (moves.length === 0)
+    return
+  const movesByNodeId = new Map<string, ReusedSlotMove>()
+  for (const move of moves) {
+    walkNodeSubtree(move.node, (node) => {
+      movesByNodeId.set(node.id, move)
+      const prior = nodeStateOwners.get(node)
+      if (!prior)
+        return
+      const remapped = prior.diagnostics.map(diagnostic => hasPointerPrefix(diagnostic.path, move.from)
+        ? remapDiagnostic(diagnostic, move.from, move.to)
+        : diagnostic)
+      const primary = remapped.find(diagnostic => diagnostic.severity === 'error')
+      const state = freezeState(primary ? 'quarantined' : prior.status, remapped, prior.introspection, primary)
+      nodeStateOwners.set(node, state)
+      nodeStates.set(node.id, state)
+    })
+  }
+  for (let index = 0; index < diagnostics.length; index += 1) {
+    const diagnostic = diagnostics[index]!
+    const move = diagnostic.nodeId ? movesByNodeId.get(diagnostic.nodeId) : undefined
+    if (move && hasPointerPrefix(diagnostic.path, move.from))
+      diagnostics[index] = remapDiagnostic(diagnostic, move.from, move.to)
+  }
+}
+
+function walkNodeSubtree(root: MaterialNode, visit: (node: MaterialNode) => void): void {
+  const stack = [root]
+  while (stack.length > 0) {
+    const node = stack.pop()!
+    visit(node)
+    for (const children of Object.values(node.slots))
+      stack.push(...children)
+  }
+}
+
+function hasPointerPrefix(path: string, prefix: string): boolean {
+  return path === prefix || path.startsWith(`${prefix}/`)
+}
+
+function remapDiagnostic(diagnostic: MaterialLoadDiagnostic, from: string, to: string): MaterialLoadDiagnostic {
+  return freezeDiagnostic({ ...diagnostic, path: `${to}${diagnostic.path.slice(from.length)}` as `/${string}` })
 }
 
 function rebuildFinalNodeStates(
@@ -872,6 +1066,28 @@ function validateMaterialGraph(
     }
   })
   return diagnostics
+}
+
+function integrateGraphDiagnostics(
+  nodeStates: Map<string, MaterialNodeLoadState>,
+  graphDiagnostics: readonly MaterialLoadDiagnostic[],
+): void {
+  const byNode = new Map<string, MaterialLoadDiagnostic[]>()
+  for (const diagnostic of graphDiagnostics) {
+    if (!diagnostic.nodeId)
+      continue
+    const list = byNode.get(diagnostic.nodeId) ?? []
+    list.push(diagnostic)
+    byNode.set(diagnostic.nodeId, list)
+  }
+  for (const [nodeId, additions] of byNode) {
+    const prior = nodeStates.get(nodeId)
+    if (!prior)
+      continue
+    const combined = [...prior.diagnostics, ...additions]
+    const primary = combined.find(diagnostic => diagnostic.severity === 'error')
+    nodeStates.set(nodeId, freezeState(primary ? 'quarantined' : prior.status, combined, prior.introspection, primary))
+  }
 }
 
 function walkCanonicalNodes(schema: DocumentSchema, visit: (node: MaterialNode, path: `/${string}`) => void): void {
@@ -1004,7 +1220,7 @@ function assertMaterialBudget(input: DocumentSchemaInput | null | undefined, max
 
 function readonlyMap<K, V>(source: ReadonlyMap<K, V>): ReadonlyMap<K, V> {
   const snapshot = new Map(source)
-  return Object.freeze({
+  const view: ReadonlyMap<K, V> = Object.freeze({
     get size() { return snapshot.size },
     has: (key: K) => snapshot.has(key),
     get: (key: K) => snapshot.get(key),
@@ -1012,11 +1228,11 @@ function readonlyMap<K, V>(source: ReadonlyMap<K, V>): ReadonlyMap<K, V> {
     keys: () => snapshot.keys(),
     values: () => snapshot.values(),
     forEach: (callback: (value: V, key: K, map: ReadonlyMap<K, V>) => void, thisArg?: unknown) => {
-      const view = readonlyMap(snapshot)
       snapshot.forEach((value, key) => callback.call(thisArg, value, key, view))
     },
     [Symbol.iterator]: () => snapshot[Symbol.iterator](),
   }) as ReadonlyMap<K, V>
+  return view
 }
 
 function fallbackNode(raw: Record<string, unknown>, path: string): MaterialNode {

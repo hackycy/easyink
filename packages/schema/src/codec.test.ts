@@ -215,4 +215,69 @@ describe('encodeToBenchmark', () => {
     expect(encodedChild).not.toHaveProperty('bindings')
     expect(encodedChild).not.toHaveProperty('output')
   })
+
+  it('rejects cyclic canonical slots with a stable boundary error', () => {
+    const node = {
+      id: 'cycle',
+      type: 'container',
+      x: 0,
+      y: 0,
+      width: 1,
+      height: 1,
+      modelVersion: 1,
+      model: {},
+      slots: {} as Record<string, unknown[]>,
+      bindings: {},
+      output: { visibility: 'include' as const },
+    }
+    node.slots.default = [node]
+    const schema = {
+      version: '1.0.0',
+      unit: 'mm' as const,
+      page: { mode: 'fixed' as const, width: 1, height: 1 },
+      guides: { x: [], y: [] },
+      elements: [node],
+    }
+
+    expect(() => encodeToBenchmark(schema as never)).toThrow('BENCHMARK_ENCODE_REQUIRES_CANONICAL_SCHEMA')
+  })
+
+  it('rejects excessively deep canonical slots without overflowing the stack', () => {
+    let child: Record<string, unknown> | undefined
+    for (let index = 0; index < 20_000; index += 1) {
+      child = {
+        id: `deep-${index}`,
+        type: 'container',
+        x: 0,
+        y: 0,
+        width: 1,
+        height: 1,
+        modelVersion: 1,
+        model: {},
+        slots: child ? { default: [child] } : {},
+        bindings: {},
+        output: { visibility: 'include' },
+      }
+    }
+    const schema = {
+      version: '1.0.0',
+      unit: 'mm',
+      page: { mode: 'fixed', width: 1, height: 1 },
+      guides: { x: [], y: [] },
+      elements: [child],
+    }
+
+    expect(() => encodeToBenchmark(schema as never)).toThrow('BENCHMARK_ENCODE_REQUIRES_CANONICAL_SCHEMA')
+  })
+
+  it('rejects malformed top-level canonical envelopes with the stable boundary error', () => {
+    const malformed = {
+      version: '1.0.0',
+      unit: 'mm',
+      page: null,
+      guides: { x: [], y: [] },
+      elements: [],
+    }
+    expect(() => encodeToBenchmark(malformed as never)).toThrow('BENCHMARK_ENCODE_REQUIRES_CANONICAL_SCHEMA')
+  })
 })

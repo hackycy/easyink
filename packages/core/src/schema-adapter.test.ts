@@ -412,6 +412,94 @@ describe('loadDocumentWithProfile', () => {
     expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'PRIVATE' }))
   })
 
+  it('contains hostile adapter issue collections inside the validation stage', () => {
+    const base = createTestMaterialManifest({ type: 'seed' }).schemaAdapter
+    const revoked = Proxy.revocable([], {})
+    revoked.revoke()
+    const accessorIssue = Object.defineProperty({}, 'code', {
+      enumerable: true,
+      get: () => {
+        throw new Error('accessor')
+      },
+    })
+    for (const [type, issues] of [['revoked-issues', revoked.proxy], ['accessor-issues', [accessorIssue]]] as const) {
+      const profile = createTestCompiledMaterialProfile([createTestMaterialManifest({
+        type,
+        schemaAdapter: { ...base, validate: () => issues as never },
+      })])
+
+      const result = loadDocumentWithProfile(schemaWith({ id: type, type, props: {} }), profile)
+
+      expect(result.nodeStates.get(type)).toMatchObject({ status: 'quarantined', code: 'MATERIAL_ADAPTER_ISSUES_INVALID' })
+    }
+  })
+
+  it('quarantines graph-error nodes and includes graph diagnostics in their sidecars', () => {
+    const profile = createTestCompiledMaterialProfile([createTestMaterialManifest({ type: 'box' })])
+    const result = loadDocumentWithProfile(schemaWith({
+      id: 'owner',
+      type: 'box',
+      props: {},
+      children: [{ id: 'child', type: 'box', props: {} }],
+    }), profile)
+
+    expect(result.nodeStates.get('owner')).toMatchObject({ status: 'quarantined', code: 'MATERIAL_SLOT_POLICY_INVALID', stage: 'graph' })
+    expect(result.nodeStates.get('owner')?.diagnostics).toContainEqual(expect.objectContaining({ code: 'MATERIAL_SLOT_POLICY_INVALID' }))
+    expect(result.nodeStates.get('child')?.status).toBe('ready')
+  })
+
+  it('reconciles a wide reverse ordering with bounded canonical serialization work', () => {
+    const width = 300
+    const base = createTestMaterialManifest({ type: 'seed' }).schemaAdapter
+    let reverse = false
+    const owner = createTestMaterialManifest({
+      type: 'container',
+      slots: [{ id: 'default', key: { kind: 'exact', value: 'default' }, coordinateSpace: 'owner', layoutParticipation: 'owner', reparent: 'allowed' }],
+      schemaAdapter: { ...base, normalize: node => ({ ...node, slots: { default: reverse ? [...node.slots!.default!].reverse() : [...node.slots!.default!] } }) },
+    })
+    const profile = createTestCompiledMaterialProfile([owner, createTestMaterialManifest({ type: 'box' })])
+    const input = schemaWith({
+      id: 'wide',
+      type: 'container',
+      children: Array.from({ length: width }, (_, index) => ({ id: `child-${index}`, type: 'box', props: { index } })),
+    })
+    const stringify = vi.spyOn(JSON, 'stringify')
+    loadDocumentWithProfile(input, profile)
+    const baselineCalls = stringify.mock.calls.length
+    stringify.mockClear()
+    reverse = true
+
+    const result = loadDocumentWithProfile(input, profile)
+    const stringifyCalls = stringify.mock.calls.length
+    stringify.mockRestore()
+
+    expect(result.schema.elements[0]?.slots.default?.[0]?.id).toBe(`child-${width - 1}`)
+    expect(result.nodeStates.size).toBe(width + 1)
+    expect(stringifyCalls).toBeLessThan(baselineCalls + width * 5)
+  })
+
+  it('remaps reused child warnings to their final reordered slot paths', () => {
+    const base = createTestMaterialManifest({ type: 'seed' }).schemaAdapter
+    const box = createTestMaterialManifest({
+      type: 'box',
+      schemaAdapter: { ...base, validate: () => [{ code: 'CHILD_WARNING', severity: 'warning', path: '/model', message: 'warning' }] },
+    })
+    const owner = createTestMaterialManifest({
+      type: 'container',
+      slots: [{ id: 'default', key: { kind: 'exact', value: 'default' }, coordinateSpace: 'owner', layoutParticipation: 'owner', reparent: 'allowed' }],
+      schemaAdapter: { ...base, normalize: node => ({ ...node, slots: { default: [...node.slots!.default!].reverse() } }) },
+    })
+    const result = loadDocumentWithProfile(schemaWith({
+      id: 'owner',
+      type: 'container',
+      children: [{ id: 'first', type: 'box', props: {} }, { id: 'second', type: 'box', props: {} }],
+    }), createTestCompiledMaterialProfile([box, owner]))
+
+    expect(result.diagnostics.find(item => item.nodeId === 'first')?.path).toBe('/elements/0/slots/default/1/model')
+    expect(result.nodeStates.get('first')?.diagnostics[0]?.path).toBe('/elements/0/slots/default/1/model')
+    expect(result.diagnostics.find(item => item.nodeId === 'second')?.path).toBe('/elements/0/slots/default/0/model')
+  })
+
   it('freezes diagnostics, causes, states, introspection, and hides map mutation methods', () => {
     const result = loadDocumentWithProfile(schemaWith({ id: 'x', type: 'missing', props: {} }), createTestCompiledMaterialProfile())
     const state = result.nodeStates.get('x')!
@@ -421,6 +509,19 @@ describe('loadDocumentWithProfile', () => {
     expect(Object.isFrozen(state)).toBe(true)
     expect(Object.isFrozen(state.diagnostics)).toBe(true)
     expect((result.nodeStates as unknown as { set?: unknown }).set).toBeUndefined()
+  })
+
+  it('passes the same cached read-only map view to every forEach callback', () => {
+    const result = loadDocumentWithProfile(schemaWith(
+      { id: 'a', type: 'box', props: {} },
+      { id: 'b', type: 'box', props: {} },
+    ), createTestCompiledMaterialProfile())
+    const callbackMaps = new Set<ReadonlyMap<string, unknown>>()
+
+    result.nodeStates.forEach((_state, _id, map) => callbackMaps.add(map))
+    result.nodeStates.forEach((_state, _id, map) => callbackMaps.add(map))
+
+    expect(callbackMaps).toEqual(new Set([result.nodeStates]))
   })
 })
 
@@ -529,5 +630,7 @@ describe('validateDocumentWithProfile', () => {
 
     expect(report.valid).toBe(false)
     expect(report.diagnostics).toContainEqual(expect.objectContaining({ code: 'MATERIAL_NODE_ID_DUPLICATE', stage: 'graph' }))
+    expect(report.nodeStates.get('same')).toMatchObject({ status: 'quarantined', code: 'MATERIAL_NODE_ID_DUPLICATE', stage: 'graph' })
+    expect(report.nodeStates.get('same')?.diagnostics).toContainEqual(expect.objectContaining({ code: 'MATERIAL_NODE_ID_DUPLICATE' }))
   })
 })
