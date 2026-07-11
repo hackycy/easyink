@@ -20,11 +20,8 @@ export interface BindingFormatResult {
   diagnostics: BindingFormatDiagnostic[]
 }
 
-type TrustedFormatter = (value: unknown, data: Record<string, unknown>) => unknown
-
 const DEFAULT_LOCALE = 'zh-CN'
 const DEFAULT_DATE_PATTERN = 'yyyy-MM-dd HH:mm:ss'
-const formatterCache = new Map<string, TrustedFormatter>()
 const CHINESE_DIGITS = ['零', '壹', '贰', '叁', '肆', '伍', '陆', '柒', '捌', '玖']
 const SMALL_UNITS = ['', '拾', '佰', '仟']
 const BIG_UNITS = ['', '万', '亿', '兆']
@@ -32,13 +29,11 @@ const BIG_UNITS = ['', '万', '亿', '兆']
 export function formatBindingDisplayValue(
   value: unknown,
   binding: BindingRef,
-  context: Partial<BindingFormatContext> = {},
+  _context: Partial<BindingFormatContext> = {},
 ): BindingFormatResult {
   const diagnostics: BindingFormatDiagnostic[] = []
   const format = binding.format
   const fallback = format?.fallback ?? ''
-  const runtimeData = context.data ?? {}
-
   const valueForFormat = isEmptyValue(value) ? fallback : value
   let display = valueToString(valueForFormat)
 
@@ -56,21 +51,13 @@ export function formatBindingDisplayValue(
       display = valueToString(valueForFormat)
     }
   }
-  else if (format?.mode === 'custom' && format.custom?.source?.trim()) {
-    try {
-      const formatter = compileTrustedFormatter(format.custom.source)
-      const result = formatter(valueForFormat, runtimeData)
-      display = isEmptyValue(result) ? fallback : String(result)
-    }
-    catch (err) {
-      diagnostics.push({
-        code: 'BINDING_FORMAT_CUSTOM_FAILED',
-        severity: 'warning',
-        message: err instanceof Error ? err.message : String(err),
-        cause: toDiagnosticCause(err),
-      })
-      display = valueToString(valueForFormat)
-    }
+  else if (format?.mode === 'custom') {
+    diagnostics.push({
+      code: 'BINDING_FORMAT_CUSTOM_DISABLED',
+      severity: 'warning',
+      message: 'Custom binding formatters are disabled.',
+    })
+    display = valueToString(valueForFormat)
   }
 
   const isCustom = format?.mode === 'custom'
@@ -161,29 +148,6 @@ function formatChineseMoney(value: unknown) {
   if (parsed === undefined)
     return { ok: false as const, message: `Invalid money value: ${valueToString(value)}` }
   return { ok: true as const, value: toChineseMoney(parsed) }
-}
-
-function compileTrustedFormatter(source: string): TrustedFormatter {
-  const cached = formatterCache.get(source)
-  if (cached)
-    return cached
-
-  // eslint-disable-next-line no-new-func -- Trusted template formatter source; this is documented as non-sandboxed.
-  const factory = new Function(
-    'window',
-    'document',
-    'globalThis',
-    'fetch',
-    'XMLHttpRequest',
-    'localStorage',
-    'sessionStorage',
-    `return (function(){ "use strict"; return (${source}); })();`,
-  )
-  const formatter = factory(undefined, undefined, undefined, undefined, undefined, undefined, undefined)
-  if (typeof formatter !== 'function')
-    throw new TypeError('Custom binding formatter must evaluate to a function')
-  formatterCache.set(source, formatter as TrustedFormatter)
-  return formatter as TrustedFormatter
 }
 
 function isEmptyValue(value: unknown): boolean {
@@ -327,10 +291,4 @@ function fourDigitGroupToChinese(value: number): string {
     result += `${CHINESE_DIGITS[digit]}${SMALL_UNITS[unitIndex]}`
   }
   return result
-}
-
-function toDiagnosticCause(err: unknown): unknown {
-  return err instanceof Error
-    ? { name: err.name, message: err.message, stack: err.stack }
-    : err
 }

@@ -146,10 +146,10 @@ export type { RunLayoutPipelineOptions } from './layout-strategy'
 
 export type {
   MaterialBindingDefinition,
-  MaterialCustomBindingDefinition,
-  MaterialDataContractBindingDefinition,
+  MaterialBindingPortPolicy,
+  MaterialBindingValueShape,
   MaterialNoBindingDefinition,
-  MaterialOrdinaryBindingDefinition,
+  MaterialPortsBindingDefinition,
 } from './material-binding'
 
 export {
@@ -176,7 +176,6 @@ export type {
   MaterialDataResolutionMode,
   MaterialDataValueType,
 } from './material-data-contract'
-
 export type {
   AssetUrlPropertyValueInput,
   BasePropertyValueInput,
@@ -214,7 +213,33 @@ export type {
   TextFilePropertyValueInput,
   ToolbarAction,
 } from './material-extension'
+export type {
+  JsonPointer,
+  MaterialBindingSlot,
+  MaterialIdentityEncoding,
+  MaterialIdentityScope,
+  MaterialIdentitySlot,
+  MaterialIdentityTarget,
+  MaterialIntrospection,
+  MaterialReferenceSlot,
+  MaterialResourceSlot,
+  MaterialStructureSlot,
+} from './material-introspection'
+export { deepFreezeManifest, defineMaterialManifest, MATERIAL_API_VERSION, MATERIAL_MANIFEST_VERSION } from './material-manifest'
+export type {
+  MaterialAIFacet,
+  MaterialCommonFacet,
+  MaterialDefaultNode,
+  MaterialFacetActivationContext,
+  MaterialFacetFactory,
+  MaterialLayoutFacet,
+  MaterialManifest,
+  MaterialStructureFacet,
+  MaterialStructureSlotPolicy,
+  MaterialSurface,
+} from './material-manifest'
 
+export type { PropertyAccessor, PropertyDescriptor } from './material-properties'
 export type {
   FragmentPaginateInput,
   FragmentPaginateResult,
@@ -228,6 +253,7 @@ export type {
   ViewerRenderOutput,
   ViewerRenderSize,
 } from './material-viewer'
+
 export { readTrustedViewerHtml, trustedViewerHtml } from './material-viewer'
 
 export { groupPageLayerPlansByPlacement, PAGE_CONTENT_LAYER_STACK_INDEX, resolvePageLayerPlans, resolvePageLayers, resolvePageLayerStackIndex } from './page-layers'
@@ -237,10 +263,10 @@ export { resolvePageModel } from './page-model'
 export type { ResolvedPageModel } from './page-model'
 
 export { createPagePlan } from './page-planner'
-
 export type { PagePlan, PagePlanDiagnostic, PagePlanEntry, PagePlanOptions } from './page-planner'
 
 export { runPagination } from './pagination-engine'
+
 export type { PaginationOptions, PaginationResult } from './pagination-engine'
 
 export { applyJsonPatches, PatchCommand } from './patch-command'
@@ -248,6 +274,15 @@ export type { PatchCommandOptions } from './patch-command'
 
 export { runFlowYReflow } from './reflow-engine'
 export type { ReflowEngineInput, ReflowEngineResult } from './reflow-engine'
+
+export { recordSchemaAdapter } from './schema-adapter'
+export type {
+  AdaptableMaterialNode,
+  MaterialSchemaIssue,
+  SchemaAdapter,
+  SchemaAdapterContext,
+  SchemaMigration,
+} from './schema-adapter'
 
 export { isInteractable, isSelectable, SelectionModel } from './selection'
 
