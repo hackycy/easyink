@@ -53,8 +53,8 @@ export interface TableTypography {
   color?: string
   lineHeight?: number
   letterSpacing?: number
-  direction?: 'ltr' | 'rtl'
-  textAlign?: 'start' | 'center' | 'end' | 'justify'
+  direction?: 'auto' | 'ltr' | 'rtl'
+  textAlign?: 'start' | 'center' | 'end'
   verticalAlign?: 'top' | 'middle' | 'bottom'
 }
 
@@ -70,7 +70,7 @@ export interface TableStyle {
   background?: string
   typography?: TableTypography
   border?: TableLogicalBorder
-  overflow?: 'visible' | 'hidden' | 'clip'
+  overflow?: 'clip' | 'visible'
 }
 
 export interface TextCellContent {
@@ -477,7 +477,7 @@ function validateOptionalStyle(value: unknown, owner: string): void {
     return
   if (!isRecord(value))
     failModel(`${owner} style must be an object`)
-  if (value.overflow !== undefined && value.overflow !== 'visible' && value.overflow !== 'hidden' && value.overflow !== 'clip')
+  if (value.overflow !== undefined && value.overflow !== 'clip' && value.overflow !== 'visible')
     failModel(`${owner} style overflow is invalid`)
   if (value.background !== undefined && typeof value.background !== 'string')
     failModel(`${owner} style background is invalid`)
@@ -517,8 +517,8 @@ function validateTypography(value: Record<string, unknown>, owner: string): void
     || (value.color !== undefined && typeof value.color !== 'string')
     || (value.lineHeight !== undefined && !isPositiveFinite(value.lineHeight))
     || (value.letterSpacing !== undefined && !isFiniteNumber(value.letterSpacing))
-    || (value.direction !== undefined && value.direction !== 'ltr' && value.direction !== 'rtl')
-    || (value.textAlign !== undefined && value.textAlign !== 'start' && value.textAlign !== 'center' && value.textAlign !== 'end' && value.textAlign !== 'justify')
+    || (value.direction !== undefined && value.direction !== 'auto' && value.direction !== 'ltr' && value.direction !== 'rtl')
+    || (value.textAlign !== undefined && value.textAlign !== 'start' && value.textAlign !== 'center' && value.textAlign !== 'end')
     || (value.verticalAlign !== undefined && value.verticalAlign !== 'top' && value.verticalAlign !== 'middle' && value.verticalAlign !== 'bottom')) {
     failModel(`${owner} style typography is invalid`)
   }

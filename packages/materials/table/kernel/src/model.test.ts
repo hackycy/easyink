@@ -12,6 +12,7 @@ import type {
   TableMergeRegion,
   TableModel,
   TableRowId,
+  TableTypography,
 } from './model'
 import { describe, expect, it, vi } from 'vitest'
 import {
@@ -154,11 +155,22 @@ describe('assertValidTableModel', () => {
 
   it('accepts canonical partial padding, typography, accessibility, and data config', () => {
     const model = createTableModel({ kind: 'data', columnCount: 1, rowCount: 1 })
+    const direction: TableTypography['direction'] = 'auto'
     model.style.padding = { left: 1 }
-    model.style.typography = { fontWeight: 'bold', letterSpacing: 0, direction: 'rtl' }
+    model.style.typography = { fontWeight: 'bold', letterSpacing: 0, direction }
     model.accessibility = { caption: 'Orders', description: 'Order lines', decorative: false }
     model.data.detailKeyPort = 'recordId'
     expect(() => assertValidTableModel(model)).not.toThrow()
+  })
+
+  it('rejects non-canonical text alignment and overflow values', () => {
+    const justified = createTableModel({ kind: 'static', columnCount: 1, rowCount: 1 })
+    justified.style.typography = { textAlign: 'justify' } as unknown as typeof justified.style.typography
+    expectInvalid(justified, /typography/i)
+
+    const hidden = createTableModel({ kind: 'static', columnCount: 1, rowCount: 1 })
+    hidden.style.overflow = 'hidden' as unknown as typeof hidden.style.overflow
+    expectInvalid(hidden, /overflow/i)
   })
 
   it('rejects unknown and duplicate merge IDs', () => {
