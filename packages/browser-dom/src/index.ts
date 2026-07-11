@@ -2,10 +2,12 @@ export {
   DEFAULT_VIEWER_TREE_POLICY,
   ViewerTreePolicyError,
 } from './policy'
-export type { ViewerTreePolicy } from './policy'
+export type { ViewerTreePolicy, ViewerTreeReadonlySet } from './policy'
 export {
   createBrowserDomCapabilities,
   renderViewerTree,
+  SANITIZED_MARKUP_MAX_ATTRIBUTE_BYTES,
+  SANITIZED_MARKUP_MAX_SOURCE_BYTES,
 } from './render-viewer-tree'
 export type {
   BrowserDomCapabilities,

@@ -1,9 +1,12 @@
-import { viewerElement, viewerImperativeDom, viewerSanitizedMarkup, viewerText } from '@easyink/core'
+import { viewerElement, viewerFragment, viewerImperativeDom, viewerSanitizedMarkup, viewerText } from '@easyink/core'
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest'
 import {
   createBrowserDomCapabilities,
+  DEFAULT_VIEWER_TREE_POLICY,
   renderViewerTree,
+  SANITIZED_MARKUP_MAX_ATTRIBUTE_BYTES,
+  SANITIZED_MARKUP_MAX_SOURCE_BYTES,
   ViewerTreePolicyError,
 } from './index'
 
@@ -20,6 +23,11 @@ describe('renderViewerTree', () => {
     ['event attribute', viewerElement('div', { attributes: { onclick: 'alert(1)' } })],
     ['dangerous CSS', viewerElement('div', { style: { color: 'url(https://bad.invalid)' } })],
     ['unknown CSS property', viewerElement('div', { style: { 'z-index': 1 } })],
+    ['background shorthand', viewerElement('div', { style: { background: 'image-set("https://bad.invalid/a.png" 1x)' } })],
+    ['mixed-case image-set', viewerElement('div', { style: { color: 'ImAgE-SeT("https://bad.invalid/a.png" 1x)' } })],
+    ['comment-obfuscated CSS', viewerElement('div', { style: { color: 'image/**/-set("https://bad.invalid/a.png" 1x)' } })],
+    ['escaped CSS', viewerElement('div', { style: { color: 'image\\2d set("https://bad.invalid/a.png" 1x)' } })],
+    ['variable CSS', viewerElement('div', { style: { fill: 'var(--remote-paint)' } })],
   ])('rejects %s', (_label, tree) => {
     expect(() => renderViewerTree(document.createElement('div'), tree)).toThrow(ViewerTreePolicyError)
   })
@@ -34,6 +42,12 @@ describe('renderViewerTree', () => {
     expect(() => renderViewerTree(host, tree)).not.toThrow()
     expect(host.firstElementChild?.getAttribute('aria-describedby')).toBe('description')
     expect((host.firstElementChild as HTMLElement).style.position).toBe('absolute')
+  })
+
+  it('exposes policy sets through their actual minimal readonly surface', () => {
+    expect(DEFAULT_VIEWER_TREE_POLICY.htmlTags.has('div')).toBe(true)
+    expect([...DEFAULT_VIEWER_TREE_POLICY.htmlTags]).toContain('div')
+    expect((DEFAULT_VIEWER_TREE_POLICY.htmlTags as unknown as { add?: unknown }).add).toBeUndefined()
   })
 
   it('replaces existing host content and never removes later replacements', () => {
@@ -66,6 +80,52 @@ describe('renderViewerTree', () => {
       .toThrowError('SANITIZED_MARKUP_TOKEN_INVALID')
     expect(() => renderViewerTree(document.createElement('div'), viewerSanitizedMarkup({} as never), { capabilities: first }))
       .toThrowError('SANITIZED_MARKUP_TOKEN_INVALID')
+  })
+
+  it('accepts conservative local SVG fragments without a usable base URL', () => {
+    expect(DEFAULT_VIEWER_TREE_POLICY.allowUrl('#asset')).toBe(true)
+    expect(DEFAULT_VIEWER_TREE_POLICY.allowUrl('#1invalid')).toBe(false)
+    expect(DEFAULT_VIEWER_TREE_POLICY.allowUrl(' #asset ')).toBe(false)
+    expect(DEFAULT_VIEWER_TREE_POLICY.allowUrl('javascript:alert(1)')).toBe(false)
+
+    const detachedDocument = document.implementation.createHTMLDocument('')
+    const capabilities = createBrowserDomCapabilities({ document: detachedDocument })
+    const token = capabilities.sanitizeMarkup({
+      format: 'svg',
+      source: '<svg xmlns:xlink="http://www.w3.org/1999/xlink"><image id="asset" href="#asset" xlink:href="#asset"/></svg>',
+    })
+    const host = detachedDocument.createElement('div')
+    renderViewerTree(host, viewerSanitizedMarkup(token), { capabilities })
+    expect(host.querySelector('image')?.getAttribute('href')).toBe('#asset')
+    expect(host.querySelector('image')?.getAttribute('xlink:href')).toBe('#asset')
+  })
+
+  it('enforces source, parsed-node, and aggregate attribute budgets before mounting', () => {
+    expect(SANITIZED_MARKUP_MAX_SOURCE_BYTES).toBe(1024 * 1024)
+    expect(SANITIZED_MARKUP_MAX_ATTRIBUTE_BYTES).toBe(256 * 1024)
+    const capabilities = createBrowserDomCapabilities({ document })
+    expect(() => capabilities.sanitizeMarkup({
+      format: 'svg',
+      source: '<!DOCTYPE svg [<!ENTITY x "expanded">]><svg><text>&x;</text></svg>',
+    })).toThrowError('SANITIZED_MARKUP_SVG_INVALID')
+
+    const boundarySource = `<svg>${'x'.repeat(SANITIZED_MARKUP_MAX_SOURCE_BYTES - 11)}</svg>`
+    expect(() => capabilities.sanitizeMarkup({ format: 'svg', source: boundarySource })).not.toThrow()
+
+    const oversizedSource = `<svg><!--${'x'.repeat(SANITIZED_MARKUP_MAX_SOURCE_BYTES)}--></svg>`
+    expect(() => capabilities.sanitizeMarkup({ format: 'svg', source: oversizedSource }))
+      .toThrowError('SANITIZED_MARKUP_SOURCE_TOO_LARGE')
+
+    const boundaryAttributes = `<svg aria-label="${'x'.repeat(SANITIZED_MARKUP_MAX_ATTRIBUTE_BYTES - 'aria-label'.length)}"/>`
+    expect(() => capabilities.sanitizeMarkup({ format: 'svg', source: boundaryAttributes })).not.toThrow()
+
+    const oversizedAttributes = `<svg aria-label="${'x'.repeat(SANITIZED_MARKUP_MAX_ATTRIBUTE_BYTES)}"/>`
+    expect(() => capabilities.sanitizeMarkup({ format: 'svg', source: oversizedAttributes }))
+      .toThrowError('SANITIZED_MARKUP_ATTRIBUTES_TOO_LARGE')
+
+    const excessiveComments = `<svg>${'<!---->'.repeat(50_000)}</svg>`
+    expect(() => capabilities.sanitizeMarkup({ format: 'svg', source: excessiveComments }))
+      .toThrowError('VIEWER_TREE_NODE_LIMIT_EXCEEDED')
   })
 
   it('rejects malicious SVG while allowing approved SVG', () => {
@@ -117,5 +177,56 @@ describe('renderViewerTree', () => {
     mount.dispose()
     mount.dispose()
     expect(host.childNodes).toHaveLength(0)
+  })
+
+  it('applies each nested maxNodes to sanitized expansion and rolls back on failure', () => {
+    const capabilities = createBrowserDomCapabilities({ document, imperativeDom: ['nested', 'disposable'] })
+    const token = capabilities.sanitizeMarkup({ format: 'svg', source: '<svg><g><path d="M0 0"/></g></svg>' })
+    const nestedFailure = vi.fn()
+    const nestedDispose = vi.fn()
+    const disposable = viewerImperativeDom('disposable', ({ element }) => {
+      element.append(document.createElement('canvas'))
+      return nestedDispose
+    })
+    const tree = viewerImperativeDom('nested', (host) => {
+      try {
+        host.render(viewerFragment([disposable, viewerSanitizedMarkup(token)]), { maxNodes: 4 })
+      }
+      catch (error) {
+        nestedFailure(error)
+      }
+      return () => {}
+    })
+
+    const host = document.createElement('div')
+    renderViewerTree(host, tree, { capabilities, maxNodes: 10 })
+    expect(nestedFailure).toHaveBeenCalledWith(expect.objectContaining({ message: 'VIEWER_TREE_NODE_LIMIT_EXCEEDED' }))
+    expect(nestedDispose).toHaveBeenCalledOnce()
+    expect(host.querySelector('canvas')).toBeNull()
+    expect(host.querySelector('svg')).toBeNull()
+  })
+
+  it('applies nested quotas recursively and restores the shared budget after rollback', () => {
+    const capabilities = createBrowserDomCapabilities({ document, imperativeDom: ['outer', 'inner'] })
+    const nestedFailure = vi.fn()
+    const inner = viewerImperativeDom('inner', (host) => {
+      host.render(viewerElement('div', {}, [viewerText('too many')]))
+      return () => {}
+    })
+    const outer = viewerImperativeDom('outer', (host) => {
+      try {
+        host.render(inner, { maxNodes: 2 })
+      }
+      catch (error) {
+        nestedFailure(error)
+      }
+      host.render(viewerText('after rollback'), { maxNodes: 1 })
+      return () => {}
+    })
+
+    const host = document.createElement('div')
+    renderViewerTree(host, outer, { capabilities, maxNodes: 4 })
+    expect(nestedFailure).toHaveBeenCalledWith(expect.objectContaining({ message: 'VIEWER_TREE_NODE_LIMIT_EXCEEDED' }))
+    expect(host.textContent).toBe('after rollback')
   })
 })

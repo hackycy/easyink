@@ -5,15 +5,20 @@ import {
 } from '@easyink/core'
 
 export interface ViewerTreePolicy {
-  readonly htmlTags: ReadonlySet<string>
-  readonly svgTags: ReadonlySet<string>
-  readonly globalAttributes: ReadonlySet<string>
-  readonly urlAttributes: ReadonlySet<string>
-  readonly cssProperties: ReadonlySet<string>
+  readonly htmlTags: ViewerTreeReadonlySet<string>
+  readonly svgTags: ViewerTreeReadonlySet<string>
+  readonly globalAttributes: ViewerTreeReadonlySet<string>
+  readonly urlAttributes: ViewerTreeReadonlySet<string>
+  readonly cssProperties: ViewerTreeReadonlySet<string>
   readonly maxDepth: number
   readonly maxAttributesPerElement: number
   readonly maxTextBytes: number
   readonly allowUrl: (value: string, baseUrl?: string) => boolean
+}
+
+export interface ViewerTreeReadonlySet<T> extends Iterable<T> {
+  readonly size: number
+  has: (value: T) => boolean
 }
 
 export class ViewerTreePolicyError extends Error {
@@ -171,7 +176,6 @@ const cssProperties = [
   'padding-right',
   'padding-bottom',
   'padding-left',
-  'background',
   'background-color',
   'color',
   'opacity',
@@ -239,7 +243,6 @@ const cssProperties = [
   'border-spacing',
   'caption-side',
   'empty-cells',
-  'list-style',
   'list-style-position',
   'list-style-type',
   'fill',
@@ -278,6 +281,8 @@ function defaultAllowUrl(value: string, baseUrl?: string): boolean {
     return false
   }
   const normalized = value.trim()
+  if (normalized.startsWith('#'))
+    return /^#[A-Z_][\w.:-]*$/i.test(value)
   if (normalized.startsWith('//') && !baseUrl)
     return false
   if (/^data:/i.test(normalized))
@@ -291,16 +296,39 @@ function defaultAllowUrl(value: string, baseUrl?: string): boolean {
   }
 }
 
-export function assertSafeCssValue(value: string): void {
+export function assertSafeCssValue(property: string, value: string): void {
   const normalized = value.toLowerCase().replace(/\s+/g, '')
-  if (value.includes('\\') || normalized.includes('url(') || normalized.includes('expression(') || normalized.includes('@import'))
+  if (hasControlCharacter(value)
+    || value.includes('\\')
+    || value.includes('/*')
+    || value.includes('*/')
+    || normalized.includes('url(')
+    || normalized.includes('image-set(')
+    || normalized.includes('-webkit-image-set(')
+    || normalized.includes('expression(')
+    || normalized.includes('@import')
+    || normalized.includes('var(')) {
+    throw new ViewerTreePolicyError('VIEWER_TREE_CSS_VALUE_REJECTED')
+  }
+  if ((property === 'fill' || property === 'stroke') && !isSafePaintValue(value))
+    throw new ViewerTreePolicyError('VIEWER_TREE_CSS_VALUE_REJECTED')
+  if (property === 'clip-path' && !isSafeClipPathValue(value))
     throw new ViewerTreePolicyError('VIEWER_TREE_CSS_VALUE_REJECTED')
 }
 
 export function assertSafeSvgPresentationValue(value: string): void {
   const normalized = value.toLowerCase().replace(/\s+/g, '')
-  if (value.includes('\\') || normalized.includes('expression(') || normalized.includes('@import'))
+  if (hasControlCharacter(value)
+    || value.includes('\\')
+    || value.includes('/*')
+    || value.includes('*/')
+    || normalized.includes('expression(')
+    || normalized.includes('@import')
+    || normalized.includes('image-set(')
+    || normalized.includes('-webkit-image-set(')
+    || normalized.includes('var(')) {
     throw new ViewerTreePolicyError('VIEWER_TREE_CSS_VALUE_REJECTED')
+  }
   if (normalized.includes('url(') && !/^url\(#[a-z_][\w.:-]*\)$/i.test(normalized))
     throw new ViewerTreePolicyError('VIEWER_TREE_URL_REJECTED')
 }
@@ -310,20 +338,34 @@ export function assertKebabCaseProperty(property: string): void {
     throw new ViewerTreePolicyError('VIEWER_TREE_CSS_PROPERTY_REJECTED')
 }
 
-export function readonlySet<T>(values: Iterable<T>): ReadonlySet<T> {
+export function readonlySet<T>(values: Iterable<T>): ViewerTreeReadonlySet<T> {
   const set = new Set(values)
-  const facade: ReadonlySet<T> = Object.freeze({
+  return Object.freeze({
     get size() {
       return set.size
     },
     has: (value: T) => set.has(value),
-    entries: () => set.entries(),
-    keys: () => set.keys(),
-    values: () => set.values(),
-    forEach: (callback: (value: T, value2: T, set: ReadonlySet<T>) => void, thisArg?: unknown) => {
-      set.forEach(value => callback.call(thisArg, value, value, facade))
-    },
     [Symbol.iterator]: () => set[Symbol.iterator](),
   })
-  return facade
+}
+
+function hasControlCharacter(value: string): boolean {
+  return Array.from(value).some((character) => {
+    const code = character.charCodeAt(0)
+    return code <= 31 || code === 127
+  })
+}
+
+function isSafePaintValue(value: string): boolean {
+  const normalized = value.trim()
+  return /^(?:none|currentcolor|transparent|inherit|initial|unset|revert|context-fill|context-stroke)$/i.test(normalized)
+    || /^#[0-9a-f]{3,8}$/i.test(normalized)
+    || /^[a-z]+$/i.test(normalized)
+    || /^(?:rgb|rgba|hsl|hsla)\([\d.%+\-, /]+\)$/i.test(normalized)
+}
+
+function isSafeClipPathValue(value: string): boolean {
+  const normalized = value.trim()
+  return normalized === 'none'
+    || /^(?:inset|circle|ellipse|polygon|path)\([a-z\d.%+\-, /'"]+\)$/i.test(normalized)
 }

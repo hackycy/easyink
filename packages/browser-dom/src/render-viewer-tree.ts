@@ -6,7 +6,7 @@ import type {
   ViewerRenderTree,
   ViewerStyleValue,
 } from '@easyink/core'
-import type { ViewerTreePolicy } from './policy'
+import type { ViewerTreePolicy, ViewerTreeReadonlySet } from './policy'
 import {
   assertViewerRenderTree,
   VIEWER_TREE_ABSOLUTE_MAX_ATTRIBUTES,
@@ -24,6 +24,8 @@ import {
 } from './policy'
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
+export const SANITIZED_MARKUP_MAX_SOURCE_BYTES = VIEWER_TREE_ABSOLUTE_MAX_TEXT_BYTES
+export const SANITIZED_MARKUP_MAX_ATTRIBUTE_BYTES = 256 * 1024
 const SVG_PRESENTATION_ATTRIBUTES = new Set([
   'fill',
   'stroke',
@@ -55,13 +57,13 @@ interface CapabilityStore {
   readonly document: Document
   readonly policy: ViewerTreePolicy
   readonly tokens: WeakMap<SanitizedMarkup, SanitizedSvgTree>
-  readonly imperativeDom: ReadonlySet<string>
+  readonly imperativeDom: ViewerTreeReadonlySet<string>
 }
 
 const capabilityStores = new WeakMap<BrowserDomCapabilities, CapabilityStore>()
 
 export interface BrowserDomCapabilities extends ViewerRenderCapabilities {
-  readonly imperativeDom: ReadonlySet<string>
+  readonly imperativeDom: ViewerTreeReadonlySet<string>
 }
 
 export interface BrowserDomCapabilitiesOptions {
@@ -82,16 +84,16 @@ export interface ViewerTreeMount {
   readonly dispose: () => void
 }
 
-interface RenderBudget {
+interface RenderQuota {
   remaining: number
-  textBytes: number
+  parent?: RenderQuota
 }
 
 interface RenderState {
   document: Document
   policy: ViewerTreePolicy
   store: CapabilityStore
-  budget: RenderBudget
+  textBytes: number
 }
 
 interface RenderScope {
@@ -145,12 +147,13 @@ export function renderViewerTree(
     document,
     policy,
     store,
-    budget: { remaining: maxNodes, textBytes: 0 },
+    textBytes: 0,
   }
+  const rootQuota: RenderQuota = { remaining: maxNodes }
   const staging = document.createDocumentFragment()
   const scope = createScope(staging)
   try {
-    renderInto(staging, tree, state, scope, 0)
+    renderInto(staging, tree, state, scope, rootQuota, 0)
     host.replaceChildren(...scope.nodes)
   }
   catch (error) {
@@ -166,9 +169,10 @@ function renderInto(
   tree: ViewerRenderTree,
   state: RenderState,
   scope: RenderScope,
+  quota: RenderQuota,
   depth: number,
 ): void {
-  consumeNode(state, depth)
+  consumeNode(state, quota, depth)
   switch (tree.kind) {
     case 'text': {
       consumeText(state, tree.value)
@@ -177,7 +181,7 @@ function renderInto(
     }
     case 'fragment':
       for (const child of tree.children)
-        renderInto(parent, child, state, scope, depth + 1)
+        renderInto(parent, child, state, scope, quota, depth + 1)
       break
     case 'element': {
       const element = createPolicyElement(state, tree.namespace, tree.tag)
@@ -185,14 +189,14 @@ function renderInto(
       applyPolicyStyle(element, tree.style, state.policy)
       append(parent, element, scope)
       for (const child of tree.children)
-        renderInto(element, child, state, scope, depth + 1)
+        renderInto(element, child, state, scope, quota, depth + 1)
       break
     }
     case 'sanitized-markup': {
       const sanitized = state.store.tokens.get(tree.markup)
       if (!sanitized)
         throw new ViewerTreePolicyError('SANITIZED_MARKUP_TOKEN_INVALID')
-      const element = renderSanitizedNode(sanitized, state, depth)
+      const element = renderSanitizedNode(sanitized, state, quota, depth)
       append(parent, element, scope)
       break
     }
@@ -207,16 +211,26 @@ function renderInto(
           const requested = nestedOptions.maxNodes
           if (requested !== undefined)
             assertNodeBudget(requested)
-          if (state.budget.remaining < 1)
+          if (quota.remaining < 1)
             throw new Error('VIEWER_TREE_NODE_LIMIT_EXCEEDED')
-          const effectiveMax = Math.min(requested ?? state.budget.remaining, state.budget.remaining)
+          const effectiveMax = Math.min(requested ?? quota.remaining, quota.remaining)
           assertViewerRenderTree(nestedTree, { maxNodes: effectiveMax })
           const nestedScope = createScope(imperativeElement)
+          const nestedQuota: RenderQuota = { remaining: effectiveMax, parent: quota }
+          const quotaSnapshot = snapshotQuotaChain(quota)
+          const textBytesBefore = state.textBytes
           try {
-            renderInto(imperativeElement, nestedTree, state, nestedScope, depth + 1)
+            renderInto(imperativeElement, nestedTree, state, nestedScope, nestedQuota, depth + 1)
           }
           catch (error) {
-            disposeScope(nestedScope)
+            try {
+              disposeScope(nestedScope)
+            }
+            catch {
+              // Preserve the render failure after completing best-effort cleanup.
+            }
+            restoreQuotaChain(quotaSnapshot)
+            state.textBytes = textBytesBefore
             throw error
           }
           const dispose = () => disposeScope(nestedScope)
@@ -276,17 +290,30 @@ function applyPolicyStyle(
     assertKebabCaseProperty(property)
     if (!policy.cssProperties.has(property))
       throw new ViewerTreePolicyError('VIEWER_TREE_CSS_PROPERTY_REJECTED')
-    assertSafeCssValue(serialized)
+    assertSafeCssValue(property, serialized)
     element.style.setProperty(property, serialized)
   }
 }
 
+interface SanitizeCounters {
+  nodes: number
+  textBytes: number
+  attributeBytes: number
+}
+
 function sanitizeSvg(document: Document, source: string, policy: ViewerTreePolicy): SanitizedSvgTree {
+  const encoder = new TextEncoder()
+  if (source.length > SANITIZED_MARKUP_MAX_SOURCE_BYTES
+    || encoder.encode(source).byteLength > SANITIZED_MARKUP_MAX_SOURCE_BYTES) {
+    throw new ViewerTreePolicyError('SANITIZED_MARKUP_SOURCE_TOO_LARGE')
+  }
+  if (/<!doctype|<!entity/i.test(source))
+    throw new ViewerTreePolicyError('SANITIZED_MARKUP_SVG_INVALID')
   const Parser = document.defaultView?.DOMParser ?? DOMParser
   const parsed = new Parser().parseFromString(source, 'image/svg+xml')
   if (parsed.querySelector('parsererror') || parsed.documentElement.localName !== 'svg')
     throw new ViewerTreePolicyError('SANITIZED_MARKUP_SVG_INVALID')
-  const counters = { nodes: 0, textBytes: 0 }
+  const counters: SanitizeCounters = { nodes: 0, textBytes: 0, attributeBytes: 0 }
   return sanitizeSvgElement(parsed.documentElement, policy, document.baseURI || undefined, 0, counters)
 }
 
@@ -295,7 +322,7 @@ function sanitizeSvgElement(
   policy: ViewerTreePolicy,
   baseUrl: string | undefined,
   depth: number,
-  counters: { nodes: number, textBytes: number },
+  counters: SanitizeCounters,
 ): SanitizedSvgElement {
   if (depth > policy.maxDepth)
     throw new ViewerTreePolicyError('VIEWER_TREE_DEPTH_EXCEEDED')
@@ -307,6 +334,7 @@ function sanitizeSvgElement(
   if (element.attributes.length > policy.maxAttributesPerElement)
     throw new ViewerTreePolicyError('VIEWER_TREE_ATTRIBUTES_EXCEEDED')
   const attributes: Array<readonly [string, string]> = []
+  const encoder = new TextEncoder()
   for (const attribute of Array.from(element.attributes)) {
     const name = attribute.name
     const lowerName = name.toLowerCase()
@@ -316,6 +344,9 @@ function sanitizeSvgElement(
       throw new ViewerTreePolicyError('VIEWER_TREE_URL_REJECTED')
     if (isSvgPresentationAttribute(name))
       assertSafeSvgPresentationValue(attribute.value)
+    counters.attributeBytes += encoder.encode(name).byteLength + encoder.encode(attribute.value).byteLength
+    if (counters.attributeBytes > SANITIZED_MARKUP_MAX_ATTRIBUTE_BYTES)
+      throw new ViewerTreePolicyError('SANITIZED_MARKUP_ATTRIBUTES_TOO_LARGE')
     attributes.push(Object.freeze([name, attribute.value] as const))
   }
   const children: SanitizedSvgNode[] = []
@@ -323,18 +354,19 @@ function sanitizeSvgElement(
     if (child.nodeType === 1) {
       children.push(sanitizeSvgElement(child as Element, policy, baseUrl, depth + 1, counters))
     }
-    else if (child.nodeType === 3) {
-      const value = child.textContent ?? ''
+    else {
       counters.nodes++
-      counters.textBytes += new TextEncoder().encode(value).byteLength
       if (counters.nodes > VIEWER_TREE_ABSOLUTE_MAX_NODES)
         throw new ViewerTreePolicyError('VIEWER_TREE_NODE_LIMIT_EXCEEDED')
+      if (child.nodeType === 8)
+        continue
+      if (child.nodeType !== 3)
+        throw new ViewerTreePolicyError('SANITIZED_MARKUP_SVG_INVALID')
+      const value = child.textContent ?? ''
+      counters.textBytes += encoder.encode(value).byteLength
       if (counters.textBytes > policy.maxTextBytes)
         throw new ViewerTreePolicyError('VIEWER_TREE_TEXT_EXCEEDED')
       children.push(Object.freeze({ type: 'text', value }))
-    }
-    else if (child.nodeType !== 8) {
-      throw new ViewerTreePolicyError('SANITIZED_MARKUP_SVG_INVALID')
     }
   }
   return Object.freeze({
@@ -345,8 +377,8 @@ function sanitizeSvgElement(
   })
 }
 
-function renderSanitizedNode(node: SanitizedSvgNode, state: RenderState, depth: number): Node {
-  consumeNode(state, depth)
+function renderSanitizedNode(node: SanitizedSvgNode, state: RenderState, quota: RenderQuota, depth: number): Node {
+  consumeNode(state, quota, depth)
   if (node.type === 'text') {
     consumeText(state, node.value)
     return state.document.createTextNode(node.value)
@@ -355,7 +387,7 @@ function renderSanitizedNode(node: SanitizedSvgNode, state: RenderState, depth: 
   for (const [name, value] of node.attributes)
     element.setAttribute(name, value)
   for (const child of node.children)
-    element.appendChild(renderSanitizedNode(child, state, depth + 1))
+    element.appendChild(renderSanitizedNode(child, state, quota, depth + 1))
   return element
 }
 
@@ -392,17 +424,33 @@ function isSvgPresentationAttribute(name: string): boolean {
   return SVG_PRESENTATION_ATTRIBUTES.has(name)
 }
 
-function consumeNode(state: RenderState, depth: number): void {
+function consumeNode(state: RenderState, quota: RenderQuota, depth: number): void {
   if (depth > state.policy.maxDepth)
     throw new ViewerTreePolicyError('VIEWER_TREE_DEPTH_EXCEEDED')
-  if (state.budget.remaining-- < 1)
-    throw new Error('VIEWER_TREE_NODE_LIMIT_EXCEEDED')
+  for (let current: RenderQuota | undefined = quota; current; current = current.parent) {
+    if (current.remaining < 1)
+      throw new Error('VIEWER_TREE_NODE_LIMIT_EXCEEDED')
+  }
+  for (let current: RenderQuota | undefined = quota; current; current = current.parent)
+    current.remaining--
 }
 
 function consumeText(state: RenderState, value: string): void {
-  state.budget.textBytes += new TextEncoder().encode(value).byteLength
-  if (state.budget.textBytes > state.policy.maxTextBytes)
+  state.textBytes += new TextEncoder().encode(value).byteLength
+  if (state.textBytes > state.policy.maxTextBytes)
     throw new ViewerTreePolicyError('VIEWER_TREE_TEXT_EXCEEDED')
+}
+
+function snapshotQuotaChain(quota: RenderQuota): Array<readonly [RenderQuota, number]> {
+  const snapshot: Array<readonly [RenderQuota, number]> = []
+  for (let current: RenderQuota | undefined = quota; current; current = current.parent)
+    snapshot.push([current, current.remaining])
+  return snapshot
+}
+
+function restoreQuotaChain(snapshot: Array<readonly [RenderQuota, number]>): void {
+  for (const [quota, remaining] of snapshot)
+    quota.remaining = remaining
 }
 
 function assertNodeBudget(value: number): void {
