@@ -131,7 +131,8 @@ const DIAGNOSTIC_INDEXES = new WeakMap<readonly MaterialLoadDiagnostic[], Diagno
 
 interface DiagnosticIndex {
   byNode: Map<string, MaterialLoadDiagnostic[]>
-  positions: WeakMap<object, { index: number, nodeId: string }>
+  byOwner: WeakMap<object, MaterialLoadDiagnostic[]>
+  positions: WeakMap<object, { index: number, nodeId: string, owner?: object, ownerIndex?: number }>
 }
 
 class MaterialCompatValidationError extends Error {
@@ -307,10 +308,11 @@ function loadNode(
   nodeStates: Map<string, MaterialNodeLoadState>,
   nodeStateOwners: WeakMap<object, MaterialNodeLoadState>,
 ): MaterialNode {
+  const diagnosticOwner = {}
   let canonical: MaterialNode
   let envelopeValid = true
   try {
-    canonical = decodeNodeEnvelope(input, path, diagnostics)
+    canonical = decodeNodeEnvelope(input, path, diagnostics, diagnosticOwner)
   }
   catch (error) {
     envelopeValid = false
@@ -322,17 +324,17 @@ function loadNode(
       : error instanceof MaterialCompatValidationError
         ? 'MATERIAL_COMPAT_INVALID'
         : 'MATERIAL_ENVELOPE_INVALID'
-    appendDiagnostic(diagnostics, canonical, errorPath, 'envelope', code, 'Material envelope is invalid', error)
+    appendDiagnostic(diagnostics, canonical, errorPath, 'envelope', code, 'Material envelope is invalid', error, 'error', diagnosticOwner)
   }
 
   // Standard child admission is independent of owner-private success.
   canonical = { ...canonical, slots: loadSlots(canonical.slots as unknown as Record<string, MaterialNodeInput[]>, path, document, profile, diagnostics, nodeStates, nodeStateOwners) }
   if (!envelopeValid)
-    return quarantineNode(canonical, diagnostics, nodeStates, nodeStateOwners)
+    return quarantineNode(canonical, diagnostics, nodeStates, nodeStateOwners, diagnosticOwner)
   const manifest = profile.getManifest(canonical.type)
   if (!manifest) {
-    appendDiagnostic(diagnostics, canonical, path, 'resolve', 'MATERIAL_TYPE_UNKNOWN', 'Unknown material type')
-    return quarantineNode(canonical, diagnostics, nodeStates, nodeStateOwners)
+    appendDiagnostic(diagnostics, canonical, path, 'resolve', 'MATERIAL_TYPE_UNKNOWN', 'Unknown material type', undefined, 'error', diagnosticOwner)
+    return quarantineNode(canonical, diagnostics, nodeStates, nodeStateOwners, diagnosticOwner)
   }
   canonical = { ...canonical, bindings: decodeLegacyBindings(input, canonical.bindings, manifest.common.binding) }
   const context: SchemaAdapterContext = {
@@ -342,21 +344,21 @@ function loadNode(
     materialType: canonical.type,
   }
 
-  const inputIssues = callIssues(manifest.schemaAdapter.validateInput, canonical, context, path, 'validate-input', diagnostics)
+  const inputIssues = callIssues(manifest.schemaAdapter.validateInput, canonical, context, path, 'validate-input', diagnostics, diagnosticOwner)
   if (!inputIssues.ok || inputIssues.hasErrors)
-    return quarantineNode(canonical, diagnostics, nodeStates, nodeStateOwners)
+    return quarantineNode(canonical, diagnostics, nodeStates, nodeStateOwners, diagnosticOwner)
 
-  const migration = runMigrations(canonical, manifest.schemaAdapter, context, path, document, profile, diagnostics, nodeStates, nodeStateOwners)
+  const migration = runMigrations(canonical, manifest.schemaAdapter, context, path, document, profile, diagnostics, nodeStates, nodeStateOwners, diagnosticOwner)
   if (!migration.ok)
-    return quarantineNode(migration.node as MaterialNode, diagnostics, nodeStates, nodeStateOwners)
+    return quarantineNode(migration.node as MaterialNode, diagnostics, nodeStates, nodeStateOwners, diagnosticOwner)
   let node = migration.node as MaterialNode
 
-  const normalized = callNodeAdapter(manifest.schemaAdapter.normalize, node, context, path, 'normalize', diagnostics)
+  const normalized = callNodeAdapter(manifest.schemaAdapter.normalize, node, context, path, 'normalize', diagnostics, diagnosticOwner)
   if (!normalized.ok)
-    return quarantineNode(node, diagnostics, nodeStates, nodeStateOwners)
-  const guarded = assertAllowedAdapterMutation(node, normalized.node, path, 'normalize', diagnostics)
+    return quarantineNode(node, diagnostics, nodeStates, nodeStateOwners, diagnosticOwner)
+  const guarded = assertAllowedAdapterMutation(node, normalized.node, path, 'normalize', diagnostics, diagnosticOwner)
   if (!guarded.ok)
-    return quarantineNode(node, diagnostics, nodeStates, nodeStateOwners)
+    return quarantineNode(node, diagnostics, nodeStates, nodeStateOwners, diagnosticOwner)
   node = {
     ...guarded.node,
     slots: reconcileSlots(guarded.node.slots ?? {}, node.slots, path, document, profile, diagnostics, nodeStates, nodeStateOwners),
@@ -369,19 +371,19 @@ function loadNode(
         node = { ...node, model: cloneJsonRecord(manifest.schemaAdapter.convertModelUnits!(cloneJsonRecord(node.model), context.sourceUnit, context.documentUnit)) }
       }
       catch (error) {
-        appendDiagnostic(diagnostics, node, `${path}/model`, 'normalize', 'MATERIAL_ADAPTER_THROW', 'Material model unit conversion threw', error)
-        return quarantineNode(node, diagnostics, nodeStates, nodeStateOwners)
+        appendDiagnostic(diagnostics, node, `${path}/model`, 'normalize', 'MATERIAL_ADAPTER_THROW', 'Material model unit conversion threw', error, 'error', diagnosticOwner)
+        return quarantineNode(node, diagnostics, nodeStates, nodeStateOwners, diagnosticOwner)
       }
     }
   }
   node = { ...node, modelVersion: manifest.modelVersion }
-  const currentIssues = callIssues(manifest.schemaAdapter.validate, node, context, path, 'validate', diagnostics)
+  const currentIssues = callIssues(manifest.schemaAdapter.validate, node, context, path, 'validate', diagnostics, diagnosticOwner)
   if (!currentIssues.ok || currentIssues.hasErrors)
-    return quarantineNode(node, diagnostics, nodeStates, nodeStateOwners)
-  const introspection = callIntrospection(manifest.schemaAdapter, node, context, path, diagnostics)
+    return quarantineNode(node, diagnostics, nodeStates, nodeStateOwners, diagnosticOwner)
+  const introspection = callIntrospection(manifest.schemaAdapter, node, context, path, diagnostics, diagnosticOwner)
   if (!introspection.ok)
-    return quarantineNode(node, diagnostics, nodeStates, nodeStateOwners)
-  recordReadyNode(node, diagnostics, nodeStates, introspection.value, nodeStateOwners)
+    return quarantineNode(node, diagnostics, nodeStates, nodeStateOwners, diagnosticOwner)
+  recordReadyNode(node, diagnostics, nodeStates, introspection.value, nodeStateOwners, diagnosticOwner)
   return node
 }
 
@@ -418,7 +420,7 @@ function validateCurrentNode(
   recordReadyNode(node, diagnostics, nodeStates, introspection.value)
 }
 
-function decodeNodeEnvelope(input: MaterialNodeInput, path: `/${string}`, diagnostics: MaterialLoadDiagnostic[]): MaterialNode {
+function decodeNodeEnvelope(input: MaterialNodeInput, path: `/${string}`, diagnostics: MaterialLoadDiagnostic[], diagnosticOwner: object): MaterialNode {
   if (!isRecord(input))
     throw new TypeError('Material node must be an object')
   const raw = input
@@ -433,7 +435,7 @@ function decodeNodeEnvelope(input: MaterialNodeInput, path: `/${string}`, diagno
       materialType: typeof raw.type === 'string' ? raw.type : undefined,
       nodeId: typeof raw.id === 'string' ? raw.id : undefined,
       message: 'Legacy persisted diagnostics were ignored; load diagnostics are runtime sidecar state',
-    }))
+    }), diagnosticOwner)
   }
   if (!canonicalModel) {
     for (const [key, value] of Object.entries(raw)) {
@@ -571,16 +573,17 @@ function runMigrations(
   diagnostics: MaterialLoadDiagnostic[],
   nodeStates: Map<string, MaterialNodeLoadState>,
   nodeStateOwners: WeakMap<object, MaterialNodeLoadState>,
+  diagnosticOwner: object,
 ): { ok: boolean, node: AdaptableMaterialNode } {
   let current = { ...cloneAdaptableNode(node), slots: node.slots }
   if (current.modelVersion > adapter.currentModelVersion) {
-    appendDiagnostic(diagnostics, current as MaterialNode, `${path}/modelVersion`, 'migrate', 'MATERIAL_MODEL_VERSION_NEWER', 'Node model version is newer than the active adapter')
+    appendDiagnostic(diagnostics, current as MaterialNode, `${path}/modelVersion`, 'migrate', 'MATERIAL_MODEL_VERSION_NEWER', 'Node model version is newer than the active adapter', undefined, 'error', diagnosticOwner)
     return { ok: false, node: current }
   }
   while (current.modelVersion < adapter.currentModelVersion) {
     const migration = adapter.migrations.find(item => item.from === current.modelVersion && item.to === current.modelVersion + 1)
     if (!migration) {
-      appendDiagnostic(diagnostics, current as MaterialNode, `${path}/modelVersion`, 'migrate', 'MATERIAL_MIGRATION_PATH_MISSING', `Missing migration ${current.modelVersion} -> ${current.modelVersion + 1}`)
+      appendDiagnostic(diagnostics, current as MaterialNode, `${path}/modelVersion`, 'migrate', 'MATERIAL_MIGRATION_PATH_MISSING', `Missing migration ${current.modelVersion} -> ${current.modelVersion + 1}`, undefined, 'error', diagnosticOwner)
       return { ok: false, node: current }
     }
     let migrated: AdaptableMaterialNode
@@ -588,10 +591,10 @@ function runMigrations(
       migrated = cloneAdaptableNode(migration.migrate(cloneAdaptableNode(current), context))
     }
     catch (error) {
-      appendDiagnostic(diagnostics, current as MaterialNode, path, 'migrate', 'MATERIAL_ADAPTER_THROW', 'Material migration threw', error)
+      appendDiagnostic(diagnostics, current as MaterialNode, path, 'migrate', 'MATERIAL_ADAPTER_THROW', 'Material migration threw', error, 'error', diagnosticOwner)
       return { ok: false, node: current }
     }
-    const guarded = assertAllowedAdapterMutation(current as MaterialNode, migrated, path, 'migrate', diagnostics)
+    const guarded = assertAllowedAdapterMutation(current as MaterialNode, migrated, path, 'migrate', diagnostics, diagnosticOwner)
     if (!guarded.ok)
       return { ok: false, node: current }
     current = {
@@ -610,12 +613,13 @@ function callNodeAdapter(
   path: `/${string}`,
   stage: 'normalize',
   diagnostics: MaterialLoadDiagnostic[],
+  diagnosticOwner: object = node,
 ): { ok: true, node: AdaptableMaterialNode } | { ok: false } {
   try {
     return { ok: true, node: cloneAdaptableNode(operation(cloneAdaptableNode(node), context)) }
   }
   catch (error) {
-    appendDiagnostic(diagnostics, node, path, stage, 'MATERIAL_ADAPTER_THROW', 'Material adapter threw', error)
+    appendDiagnostic(diagnostics, node, path, stage, 'MATERIAL_ADAPTER_THROW', 'Material adapter threw', error, 'error', diagnosticOwner)
     return { ok: false }
   }
 }
@@ -627,13 +631,14 @@ function callIssues(
   path: `/${string}`,
   stage: 'validate-input' | 'validate',
   diagnostics: MaterialLoadDiagnostic[],
+  diagnosticOwner: object = node,
 ): { ok: boolean, hasErrors: boolean } {
   let raw: unknown
   try {
     raw = operation(cloneAdaptableNode(node), context)
   }
   catch (error) {
-    appendDiagnostic(diagnostics, node, path, stage, 'MATERIAL_ADAPTER_THROW', 'Material adapter threw', error)
+    appendDiagnostic(diagnostics, node, path, stage, 'MATERIAL_ADAPTER_THROW', 'Material adapter threw', error, 'error', diagnosticOwner)
     return { ok: false, hasErrors: true }
   }
   let snapshot: unknown
@@ -641,11 +646,11 @@ function callIssues(
     snapshot = cloneJsonValue(raw as JsonValue, { maxDepth: 8, maxNodes: 10_000, maxStringBytes: 1024 * 1024 })
   }
   catch {
-    appendDiagnostic(diagnostics, node, path, stage, 'MATERIAL_ADAPTER_ISSUES_INVALID', 'Material adapter issues are not admissible JSON')
+    appendDiagnostic(diagnostics, node, path, stage, 'MATERIAL_ADAPTER_ISSUES_INVALID', 'Material adapter issues are not admissible JSON', undefined, 'error', diagnosticOwner)
     return { ok: false, hasErrors: true }
   }
   if (!Array.isArray(snapshot)) {
-    appendDiagnostic(diagnostics, node, path, stage, 'MATERIAL_ADAPTER_ISSUES_INVALID', 'Material adapter issues must be an array')
+    appendDiagnostic(diagnostics, node, path, stage, 'MATERIAL_ADAPTER_ISSUES_INVALID', 'Material adapter issues must be an array', undefined, 'error', diagnosticOwner)
     return { ok: false, hasErrors: true }
   }
   let hasErrors = false
@@ -656,7 +661,7 @@ function callIssues(
       || (candidate.severity !== 'error' && candidate.severity !== 'warning')
       || typeof candidate.message !== 'string'
       || typeof candidate.path !== 'string') {
-      appendDiagnostic(diagnostics, node, path, stage, 'MATERIAL_ADAPTER_ISSUES_INVALID', 'Material adapter issue is invalid')
+      appendDiagnostic(diagnostics, node, path, stage, 'MATERIAL_ADAPTER_ISSUES_INVALID', 'Material adapter issue is invalid', undefined, 'error', diagnosticOwner)
       hasErrors = true
       continue
     }
@@ -664,11 +669,11 @@ function callIssues(
     const validPath = JSON_POINTER_PATTERN.test(issue.path)
       && DIAGNOSTIC_ROOTS.some(root => issue.path === root || issue.path.startsWith(`${root}/`))
     if (!validPath) {
-      appendDiagnostic(diagnostics, node, path, stage, 'MATERIAL_DIAGNOSTIC_PATH_INVALID', 'Material adapter diagnostic is invalid')
+      appendDiagnostic(diagnostics, node, path, stage, 'MATERIAL_DIAGNOSTIC_PATH_INVALID', 'Material adapter diagnostic is invalid', undefined, 'error', diagnosticOwner)
       hasErrors = true
       continue
     }
-    const diagnostic = appendDiagnostic(diagnostics, node, `${path}${issue.path}` as `/${string}`, stage, issue.code, issue.message, undefined, issue.severity)
+    const diagnostic = appendDiagnostic(diagnostics, node, `${path}${issue.path}` as `/${string}`, stage, issue.code, issue.message, undefined, issue.severity, diagnosticOwner)
     if (diagnostic.severity === 'error')
       hasErrors = true
   }
@@ -681,13 +686,14 @@ function callIntrospection(
   context: SchemaAdapterContext,
   path: `/${string}`,
   diagnostics: MaterialLoadDiagnostic[],
+  diagnosticOwner: object = node,
 ): { ok: true, value: Readonly<MaterialIntrospection> } | { ok: false } {
   try {
     const value = cloneJsonValue(adapter.introspect(cloneAdaptableNode(node) as MaterialNode, context) as unknown as JsonValue) as unknown as MaterialIntrospection
     return { ok: true, value: deepFreeze(value) }
   }
   catch (error) {
-    appendDiagnostic(diagnostics, node, path, 'introspect', 'MATERIAL_ADAPTER_THROW', 'Material introspection threw', error)
+    appendDiagnostic(diagnostics, node, path, 'introspect', 'MATERIAL_ADAPTER_THROW', 'Material introspection threw', error, 'error', diagnosticOwner)
     return { ok: false }
   }
 }
@@ -698,20 +704,21 @@ function assertAllowedAdapterMutation(
   path: `/${string}`,
   stage: 'migrate' | 'normalize',
   diagnostics: MaterialLoadDiagnostic[],
+  diagnosticOwner: object = before,
 ): { ok: true, node: AdaptableMaterialNode } | { ok: false } {
   let after: AdaptableMaterialNode
   try {
     after = cloneAdaptableNode(candidate)
   }
   catch (error) {
-    appendDiagnostic(diagnostics, before, path, stage, 'MATERIAL_ADAPTER_THROW', 'Material adapter returned invalid JSON', error)
+    appendDiagnostic(diagnostics, before, path, stage, 'MATERIAL_ADAPTER_THROW', 'Material adapter returned invalid JSON', error, 'error', diagnosticOwner)
     return { ok: false }
   }
   const protectedKeys = ['id', 'type', 'x', 'y', 'width', 'height', 'rotation', 'alpha', 'zIndex', 'editorState', 'output', 'extensions'] as const
   const changed = protectedKeys.some(key => !jsonEqual(before[key] as JsonValue | undefined, after[key] as JsonValue | undefined))
     || !jsonEqual(stripOwnedCompat(before.compat, before.type), stripOwnedCompat(after.compat, before.type))
   if (changed) {
-    appendDiagnostic(diagnostics, before, path, stage, 'MATERIAL_ADAPTER_ENVELOPE_MUTATION', 'Material adapter mutated a core-owned envelope field')
+    appendDiagnostic(diagnostics, before, path, stage, 'MATERIAL_ADAPTER_ENVELOPE_MUTATION', 'Material adapter mutated a core-owned envelope field', undefined, 'error', diagnosticOwner)
     return { ok: false }
   }
   return { ok: true, node: after }
@@ -1079,21 +1086,25 @@ function integrateNodeDiagnostics(
   nodeStates: Map<string, MaterialNodeLoadState>,
   diagnostics: MaterialLoadDiagnostic[],
 ): void {
-  const livePaths = new Map<string, Set<string>>()
+  const representatives = new Map<string, { node: MaterialNode, path: string }>()
   walkCanonicalNodes(schema, (node, path) => {
-    const paths = livePaths.get(node.id) ?? new Set<string>()
-    paths.add(path)
-    livePaths.set(node.id, paths)
+    representatives.set(node.id, { node, path })
   })
-  for (const [nodeId, ownDiagnostics] of getDiagnosticIndex(diagnostics).byNode) {
+  const diagnosticIndex = getDiagnosticIndex(diagnostics)
+  for (const [nodeId, ownDiagnostics] of diagnosticIndex.byNode) {
     const prior = nodeStates.get(nodeId)
     if (!prior)
       continue
     const existing = new Set(prior.diagnostics)
     const existingKeys = new Set(prior.diagnostics.map(diagnosticKey))
-    const paths = livePaths.get(nodeId)
+    const representative = representatives.get(nodeId)
     const additions = ownDiagnostics.filter((diagnostic) => {
-      if (existing.has(diagnostic) || paths === undefined || !isWithinLiveNodePath(diagnostic.path, paths))
+      if (existing.has(diagnostic) || representative === undefined)
+        return false
+      const owner = diagnosticIndex.positions.get(diagnostic)?.owner
+      if (diagnostic.stage !== 'graph' && owner !== representative.node)
+        return false
+      if (diagnostic.code === 'MATERIAL_NODE_ID_DUPLICATE' && !isWithinNodePath(diagnostic.path, representative.path))
         return false
       const key = diagnosticKey(diagnostic)
       if (existingKeys.has(key))
@@ -1123,10 +1134,10 @@ function diagnosticKey(diagnostic: MaterialLoadDiagnostic): string {
   ].map(value => `${value.length}:${value}`).join('|')
 }
 
-function isWithinLiveNodePath(path: string, livePaths: ReadonlySet<string>): boolean {
+function isWithinNodePath(path: string, nodePath: string): boolean {
   let candidate = path
   while (candidate.length > 0) {
-    if (livePaths.has(candidate))
+    if (candidate === nodePath)
       return true
     const separator = candidate.lastIndexOf('/')
     if (separator <= 0)
@@ -1140,32 +1151,40 @@ function getDiagnosticIndex(diagnostics: readonly MaterialLoadDiagnostic[]): Dia
   const existing = DIAGNOSTIC_INDEXES.get(diagnostics)
   if (existing)
     return existing
-  const index: DiagnosticIndex = { byNode: new Map(), positions: new WeakMap() }
+  const index: DiagnosticIndex = { byNode: new Map(), byOwner: new WeakMap(), positions: new WeakMap() }
   DIAGNOSTIC_INDEXES.set(diagnostics, index)
   for (const diagnostic of diagnostics)
     indexDiagnostic(index, diagnostic)
   return index
 }
 
-function indexDiagnostic(index: DiagnosticIndex, diagnostic: MaterialLoadDiagnostic): void {
+function indexDiagnostic(index: DiagnosticIndex, diagnostic: MaterialLoadDiagnostic, owner?: object): void {
   if (!diagnostic.nodeId)
     return
   const list = index.byNode.get(diagnostic.nodeId) ?? []
   const position = list.length
   list.push(diagnostic)
   index.byNode.set(diagnostic.nodeId, list)
-  index.positions.set(diagnostic, { index: position, nodeId: diagnostic.nodeId })
+  let ownerIndex: number | undefined
+  if (owner) {
+    const ownerDiagnostics = index.byOwner.get(owner) ?? []
+    ownerIndex = ownerDiagnostics.length
+    ownerDiagnostics.push(diagnostic)
+    index.byOwner.set(owner, ownerDiagnostics)
+  }
+  index.positions.set(diagnostic, { index: position, nodeId: diagnostic.nodeId, owner, ownerIndex })
 }
 
-function appendIndexedDiagnostic(diagnostics: MaterialLoadDiagnostic[], diagnostic: MaterialLoadDiagnostic): void {
+function appendIndexedDiagnostic(diagnostics: MaterialLoadDiagnostic[], diagnostic: MaterialLoadDiagnostic, owner?: object): void {
   const index = getDiagnosticIndex(diagnostics)
   diagnostics.push(diagnostic)
-  indexDiagnostic(index, diagnostic)
+  indexDiagnostic(index, diagnostic, owner)
 }
 
 function appendDiagnostics(diagnostics: MaterialLoadDiagnostic[], additions: readonly MaterialLoadDiagnostic[]): void {
+  const additionsIndex = getDiagnosticIndex(additions)
   for (const diagnostic of additions)
-    appendIndexedDiagnostic(diagnostics, diagnostic)
+    appendIndexedDiagnostic(diagnostics, diagnostic, additionsIndex.positions.get(diagnostic)?.owner)
 }
 
 function replaceDiagnostic(diagnostics: MaterialLoadDiagnostic[], index: number, replacement: MaterialLoadDiagnostic): void {
@@ -1179,12 +1198,14 @@ function replaceDiagnostic(diagnostics: MaterialLoadDiagnostic[], index: number,
   }
   const list = diagnosticIndex.byNode.get(position.nodeId)!
   list[position.index] = replacement
+  if (position.owner && position.ownerIndex !== undefined)
+    diagnosticIndex.byOwner.get(position.owner)![position.ownerIndex] = replacement
   diagnosticIndex.positions.delete(prior)
   diagnosticIndex.positions.set(replacement, position)
 }
 
-function diagnosticsForNode(diagnostics: readonly MaterialLoadDiagnostic[], nodeId: string): readonly MaterialLoadDiagnostic[] {
-  return getDiagnosticIndex(diagnostics).byNode.get(nodeId) ?? []
+function diagnosticsForOwner(diagnostics: readonly MaterialLoadDiagnostic[], owner: object): readonly MaterialLoadDiagnostic[] {
+  return getDiagnosticIndex(diagnostics).byOwner.get(owner) ?? []
 }
 
 function walkCanonicalNodes(schema: DocumentSchema, visit: (node: MaterialNode, path: `/${string}`) => void): void {
@@ -1208,8 +1229,9 @@ function quarantineNode(
   diagnostics: readonly MaterialLoadDiagnostic[],
   states: Map<string, MaterialNodeLoadState>,
   owners?: WeakMap<object, MaterialNodeLoadState>,
+  diagnosticOwner: object = node,
 ): MaterialNode {
-  const own = diagnosticsForNode(diagnostics, node.id)
+  const own = diagnosticsForOwner(diagnostics, diagnosticOwner)
   const firstError = own.find(diagnostic => diagnostic.severity === 'error')
   const state = freezeState('quarantined', own, undefined, firstError)
   states.set(node.id, state)
@@ -1223,8 +1245,9 @@ function recordReadyNode(
   states: Map<string, MaterialNodeLoadState>,
   introspection: Readonly<MaterialIntrospection>,
   owners?: WeakMap<object, MaterialNodeLoadState>,
+  diagnosticOwner: object = node,
 ): void {
-  const state = freezeState('ready', diagnosticsForNode(diagnostics, node.id), introspection)
+  const state = freezeState('ready', diagnosticsForOwner(diagnostics, diagnosticOwner), introspection)
   states.set(node.id, state)
   owners?.set(node, state)
 }
@@ -1252,6 +1275,7 @@ function appendDiagnostic(
   message: string,
   error?: unknown,
   severity: 'error' | 'warning' = 'error',
+  owner: object = node,
 ): MaterialLoadDiagnostic {
   const diagnostic = freezeDiagnostic({
     code,
@@ -1263,7 +1287,7 @@ function appendDiagnostic(
     message,
     ...(error === undefined ? {} : { cause: safeError(error) }),
   })
-  appendIndexedDiagnostic(diagnostics, diagnostic)
+  appendIndexedDiagnostic(diagnostics, diagnostic, owner)
   return diagnostic
 }
 

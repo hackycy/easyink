@@ -555,6 +555,39 @@ describe('loadDocumentWithProfile', () => {
     expect(result.nodeStates.get('warning-1')?.diagnostics).toContainEqual(expect.objectContaining({ code: 'WARNING' }))
     expect(largeFilterScans).toBeLessThan(10)
   })
+
+  it('keeps repeated-ID admission diagnostics occurrence-local before publishing one sidecar', () => {
+    const base = createTestMaterialManifest({ type: 'seed' }).schemaAdapter
+    const warning = createTestMaterialManifest({
+      type: 'warning',
+      schemaAdapter: { ...base, validate: () => [{ code: 'WARNING', severity: 'warning', path: '/model', message: 'warning' }] },
+    })
+    const profile = createTestCompiledMaterialProfile([warning])
+    const elements = Array.from({ length: 10_000 }, () => ({ id: 'shared', type: 'warning', props: {} }))
+    const originalFilter = Array.prototype.filter
+    let largeFilterScans = 0
+    const filter = vi.spyOn(Array.prototype, 'filter').mockImplementation(function (this: unknown[], callback: never, thisArg?: unknown) {
+      if (this.length > 100)
+        largeFilterScans += 1
+      return originalFilter.call(this, callback, thisArg)
+    } as never)
+
+    const result = loadDocumentWithProfile({
+      unit: 'mm',
+      page: { mode: 'fixed', width: 100, height: 100 },
+      elements,
+    }, profile)
+    filter.mockRestore()
+
+    const representativeWarning = result.diagnostics.find(diagnostic => diagnostic.code === 'WARNING' && diagnostic.path === '/elements/9999/model')
+    const state = result.nodeStates.get('shared')
+    expect(result.nodeStates.size).toBe(1)
+    expect(state).toMatchObject({ status: 'quarantined', code: 'MATERIAL_NODE_ID_DUPLICATE', stage: 'graph' })
+    expect(state?.diagnostics).toHaveLength(2)
+    expect(state?.diagnostics[0]).toBe(representativeWarning)
+    expect(state?.diagnostics[1]).toMatchObject({ code: 'MATERIAL_NODE_ID_DUPLICATE', path: '/elements/9999/id' })
+    expect(largeFilterScans).toBeLessThan(10)
+  })
 })
 
 describe('validateDocumentWithProfile', () => {
