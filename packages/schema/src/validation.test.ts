@@ -11,6 +11,66 @@ describe('validateSchema', () => {
     elements: [],
   }
 
+  const materialNode = (id: string, output: Record<string, unknown> = {}) => ({
+    id,
+    type: 'text',
+    x: 0,
+    y: 0,
+    width: 1,
+    height: 1,
+    modelVersion: 1,
+    model: {},
+    slots: {},
+    bindings: {},
+    output: { visibility: 'include', ...output },
+  })
+
+  describe('canonical material envelope', () => {
+    it('accepts model, slots, bindings, editorState, and output recursively', () => {
+      expect(validateSchemaIssues({
+        ...validSchema,
+        elements: [{
+          ...materialNode('container-1'),
+          type: 'container',
+          model: { tone: 'neutral' },
+          slots: { 'content/~': [{ ...materialNode('text-1'), model: { content: 'A' } }] },
+          bindings: { value: { sourceId: 'orders', fieldPath: 'name' } },
+          editorState: { name: 'Container', locked: false, hidden: false },
+          output: { visibility: 'include', repeat: { scope: 'none' } },
+        }],
+      })).toEqual([])
+    })
+
+    it.each(['props', 'binding', 'children', 'table'])('rejects legacy root field %s', (field) => {
+      const node = { ...materialNode('legacy-1'), [field]: {} }
+      expect(validateSchemaIssues({ ...validSchema, elements: [node] }))
+        .toContainEqual(expect.objectContaining({ code: 'schema.material.legacy-field', path: `/elements/0/${field}` }))
+    })
+
+    it('rejects undefined model members before envelope validation', () => {
+      const node = { ...materialNode('bad-1'), model: { content: undefined } }
+      expect(validateSchemaIssues({ ...validSchema, elements: [node] }))
+        .toContainEqual(expect.objectContaining({ path: '/elements/0/model/content' }))
+    })
+
+    it('escapes dynamic slot names in diagnostic paths', () => {
+      const node = { ...materialNode('bad-slot'), slots: { 'a/b~c': [null] } }
+      expect(validateSchemaIssues({ ...validSchema, elements: [node] }))
+        .toContainEqual(expect.objectContaining({ path: '/elements/0/slots/a~1b~0c/0' }))
+    })
+
+    it('validates binding references with escaped port paths', () => {
+      const node = {
+        ...materialNode('bad-binding'),
+        bindings: { 'value/~': { sourceId: '', fieldPath: 1 } },
+      }
+      expect(validateSchemaIssues({ ...validSchema, elements: [node] })).toEqual(expect.arrayContaining([
+        expect.objectContaining({ path: '/elements/0/bindings/value~1~0/sourceId' }),
+        expect.objectContaining({ path: '/elements/0/bindings/value~1~0/fieldPath' }),
+      ]))
+    })
+  })
+
   it('returns empty array for a valid schema', () => {
     expect(validateSchema(validSchema)).toEqual([])
   })
@@ -25,15 +85,18 @@ describe('validateSchema', () => {
         y: 0,
         width: 10,
         height: 10,
-        props: {},
-        renderCondition: {
+        modelVersion: 1,
+        model: {},
+        slots: {},
+        bindings: {},
+        output: { visibility: 'include', renderCondition: {
           whenMatched: 'show',
           groups: [{ conditions: [
             { source: { path: 'qty' }, operator: { compare: 'gt', quantifier: 'any' }, valueType: 'number', value: { kind: 'literal', value: 0 } },
             { source: { path: 'code' }, operator: { compare: 'eq' }, valueType: 'case-insensitive-string', value: { kind: 'literal', value: 'vip' } },
             { source: { path: 'name' }, operator: { compare: 'isNotEmpty' } },
           ] }],
-        },
+        } },
       }],
     })).toEqual([])
 
@@ -46,15 +109,18 @@ describe('validateSchema', () => {
         y: 0,
         width: 10,
         height: 10,
-        props: {},
-        renderCondition: {
+        modelVersion: 1,
+        model: {},
+        slots: {},
+        bindings: {},
+        output: { visibility: 'include', renderCondition: {
           enabled: false,
           whenMatched: 'show',
           groups: [{ conditions: [
             { source: { path: '' }, operator: { compare: 'between', quantifier: 'some' }, valueType: 'number' },
             { source: { path: 'name' }, operator: { compare: 'eq' }, valueType: 'string', value: { kind: 'field', field: { path: 'other' } }, options: { caseSensitive: false } },
           ] }],
-        },
+        } },
       }],
     })
     expect(issues.map(issue => issue.code)).toEqual(expect.arrayContaining([
@@ -70,9 +136,9 @@ describe('validateSchema', () => {
     const issues = validateSchemaIssues({
       ...validSchema,
       elements: [
-        { id: 'empty-valid', type: 'text', x: 0, y: 0, width: 1, height: 1, props: {}, renderCondition: { whenMatched: 'show', groups: [] } },
-        { id: 'empty-group', type: 'text', x: 0, y: 0, width: 1, height: 1, props: {}, renderCondition: { whenMatched: 'show', groups: [{ conditions: [] }] } },
-        { id: 'too-many', type: 'text', x: 0, y: 0, width: 1, height: 1, props: {}, renderCondition: { whenMatched: 'show', groups: Array.from({ length: 33 }, () => ({ conditions: [{ source: { path: 'value' }, operator: { compare: 'exists' } }] })) } },
+        materialNode('empty-valid', { renderCondition: { whenMatched: 'show', groups: [] } }),
+        materialNode('empty-group', { renderCondition: { whenMatched: 'show', groups: [{ conditions: [] }] } }),
+        materialNode('too-many', { renderCondition: { whenMatched: 'show', groups: Array.from({ length: 33 }, () => ({ conditions: [{ source: { path: 'value' }, operator: { compare: 'exists' } }] })) } }),
       ],
     })
     expect(issues.map(issue => issue.code)).toEqual(expect.arrayContaining([
@@ -91,13 +157,16 @@ describe('validateSchema', () => {
         y: 0,
         width: 1,
         height: 1,
-        props: {},
-        renderCondition: {
+        modelVersion: 1,
+        model: {},
+        slots: {},
+        bindings: {},
+        output: { visibility: 'include', renderCondition: {
           whenMatched: 'show',
           groups: [{
             conditions: [{ source: { path: 'items/price' }, operator: { compare: 'gt', quantifier: 'any' }, valueType: 'number', value: { kind: 'literal', value: 100 } }],
           }],
-        },
+        } },
       }],
     })).toEqual([])
   })
@@ -112,15 +181,18 @@ describe('validateSchema', () => {
         y: 0,
         width: 1,
         height: 1,
-        props: {},
-        renderCondition: {
+        modelVersion: 1,
+        model: {},
+        slots: {},
+        bindings: {},
+        output: { visibility: 'include', renderCondition: {
           whenMatched: 'show',
           groups: [{ conditions: [
             { source: { path: 'qty' }, operator: { compare: 'gt' }, valueType: 'number', value: { kind: 'literal', value: 'abc' } },
             { source: { path: 'enabled' }, operator: { compare: 'eq' }, valueType: 'boolean', value: { kind: 'literal', value: 'yes' } },
             { source: { path: 'createdAt' }, operator: { compare: 'gt' }, valueType: 'datetime', value: { kind: 'literal', value: '2026-02-30' } },
           ] }],
-        },
+        } },
       }],
     })
 
@@ -155,12 +227,12 @@ describe('validateSchema', () => {
     })
 
     expect(issues).toEqual(expect.arrayContaining([
-      expect.objectContaining({ path: 'page.pageModel.kind' }),
-      expect.objectContaining({ path: 'page.pageModel.paper.width' }),
-      expect.objectContaining({ path: 'page.layout.strategy' }),
-      expect.objectContaining({ path: 'page.pagination.strategy' }),
-      expect.objectContaining({ path: 'page.pagination.pageCount' }),
-      expect.objectContaining({ path: 'page.reflow.strategy' }),
+      expect.objectContaining({ path: '/page/pageModel/kind' }),
+      expect.objectContaining({ path: '/page/pageModel/paper/width' }),
+      expect.objectContaining({ path: '/page/layout/strategy' }),
+      expect.objectContaining({ path: '/page/pagination/strategy' }),
+      expect.objectContaining({ path: '/page/pagination/pageCount' }),
+      expect.objectContaining({ path: '/page/reflow/strategy' }),
     ]))
   })
 
@@ -205,8 +277,8 @@ describe('validateSchema', () => {
       },
     })
 
-    expect(highIssues).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'page.layers.0.zIndex' })]))
-    expect(lowIssues).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'page.layers.0.zIndex' })]))
+    expect(highIssues).toEqual(expect.arrayContaining([expect.objectContaining({ path: '/page/layers/0/zIndex' })]))
+    expect(lowIssues).toEqual(expect.arrayContaining([expect.objectContaining({ path: '/page/layers/0/zIndex' })]))
   })
 
   it('rejects invalid page layer settings', () => {
@@ -239,18 +311,18 @@ describe('validateSchema', () => {
     })
 
     expect(issues).toEqual(expect.arrayContaining([
-      expect.objectContaining({ path: 'page.layers.0.id' }),
-      expect.objectContaining({ path: 'page.layers.0.enabled' }),
-      expect.objectContaining({ path: 'page.layers.0.placement' }),
-      expect.objectContaining({ path: 'page.layers.0.zIndex' }),
-      expect.objectContaining({ path: 'page.layers.0.text' }),
-      expect.objectContaining({ path: 'page.layers.0.rotation' }),
-      expect.objectContaining({ path: 'page.layers.0.opacity' }),
-      expect.objectContaining({ path: 'page.layers.0.fontSize' }),
-      expect.objectContaining({ path: 'page.layers.0.gap' }),
-      expect.objectContaining({ path: 'page.layers.0.color' }),
-      expect.objectContaining({ path: 'page.layers.1.kind' }),
-      expect.objectContaining({ path: 'page.layers.1.type' }),
+      expect.objectContaining({ path: '/page/layers/0/id' }),
+      expect.objectContaining({ path: '/page/layers/0/enabled' }),
+      expect.objectContaining({ path: '/page/layers/0/placement' }),
+      expect.objectContaining({ path: '/page/layers/0/zIndex' }),
+      expect.objectContaining({ path: '/page/layers/0/text' }),
+      expect.objectContaining({ path: '/page/layers/0/rotation' }),
+      expect.objectContaining({ path: '/page/layers/0/opacity' }),
+      expect.objectContaining({ path: '/page/layers/0/fontSize' }),
+      expect.objectContaining({ path: '/page/layers/0/gap' }),
+      expect.objectContaining({ path: '/page/layers/0/color' }),
+      expect.objectContaining({ path: '/page/layers/1/kind' }),
+      expect.objectContaining({ path: '/page/layers/1/type' }),
     ]))
   })
 
@@ -298,7 +370,7 @@ describe('validateSchema', () => {
     expect(issues).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          path: 'page.width',
+          path: '/page/width',
           code: 'schema.page.width.invalid',
         }),
       ]),
@@ -313,8 +385,8 @@ describe('validateSchema', () => {
 
     expect(issues).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ path: 'guides.x' }),
-        expect.objectContaining({ path: 'guides.y' }),
+        expect.objectContaining({ path: '/guides/x' }),
+        expect.objectContaining({ path: '/guides/y' }),
       ]),
     )
   })
@@ -352,8 +424,8 @@ describe('validateSchema', () => {
     expect((error as SchemaDeserializeError).code).toBe('invalid-schema')
     expect((error as SchemaDeserializeError).issues).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ path: 'unit' }),
-        expect.objectContaining({ path: 'page' }),
+        expect.objectContaining({ path: '/unit' }),
+        expect.objectContaining({ path: '/page' }),
       ]),
     )
   })
@@ -379,7 +451,7 @@ describe('validateSchema', () => {
     expect((error as SchemaDeserializeError).code).toBe('invalid-schema')
     expect((error as SchemaDeserializeError).issues).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ path: 'page.mode' }),
+        expect.objectContaining({ path: '/page/mode' }),
       ]),
     )
   })

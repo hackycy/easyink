@@ -1,6 +1,7 @@
 import type { LayoutStrategyKind, PageMode, PageModelKind, PaginationStrategyKind, ReflowStrategyKind, UnitType } from '@easyink/shared'
-import type { DocumentLayoutConfig, DocumentSchema, DocumentSchemaInput, GuideSchema, PageLayerConfig, PageModelConfig, PageSchema, PaginationConfig, ReflowConfig, TextWatermarkPageLayerConfig } from './types'
+import type { DocumentLayoutConfig, DocumentSchema, DocumentSchemaInput, GuideSchema, MaterialNodeInput, PageLayerConfig, PageModelConfig, PageSchema, PaginationConfig, ReflowConfig, TextWatermarkPageLayerConfig } from './types'
 import { DEFAULT_PAGE_HEIGHT_MM, DEFAULT_PAGE_WIDTH_MM, isObject, SCHEMA_VERSION } from '@easyink/shared'
+import { formatSchemaValidationIssue, validateSchemaIssues } from './validation'
 
 const UNIT_TYPES = new Set<UnitType>(['mm', 'pt', 'px', 'inch'])
 const PAGE_MODES = new Set<PageMode>(['fixed', 'continuous'])
@@ -255,7 +256,9 @@ function normalizeGuides(input: unknown, fallback: GuideSchema): GuideSchema {
   }
 }
 
-export function normalizeDocumentSchema(input?: DocumentSchemaInput | null): DocumentSchema {
+export type NormalizedDocumentInput = Omit<DocumentSchema, 'elements'> & { elements: MaterialNodeInput[] }
+
+export function normalizeDocumentInput(input?: DocumentSchemaInput | null): NormalizedDocumentInput {
   const fallback = createDefaultSchema()
   if (!isObject(input))
     return fallback
@@ -270,4 +273,12 @@ export function normalizeDocumentSchema(input?: DocumentSchemaInput | null): Doc
     elements: Array.isArray(input.elements) ? input.elements : fallback.elements,
     groups: Array.isArray(input.groups) ? input.groups : undefined,
   }
+}
+
+export function normalizeDocumentSchema(input?: DocumentSchemaInput | null): DocumentSchema {
+  const normalized = normalizeDocumentInput(input)
+  const issues = validateSchemaIssues(normalized)
+  if (issues.length > 0)
+    throw new TypeError(`Document input does not contain canonical material nodes: ${issues.map(formatSchemaValidationIssue).join('; ')}`)
+  return normalized as DocumentSchema
 }

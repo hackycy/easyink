@@ -35,7 +35,7 @@ export interface DocumentSchema {
 export type DocumentSchemaInput = Partial<Omit<DocumentSchema, 'version' | 'page' | 'guides' | 'elements' | 'groups'>> & {
   page?: Partial<PageSchema>
   guides?: Partial<GuideSchema>
-  elements?: MaterialNode[]
+  elements?: MaterialNodeInput[]
   groups?: ElementGroupSchema[]
 }
 
@@ -354,11 +354,28 @@ export interface RenderCondition {
   groups: ConditionGroup[]
 }
 
-export interface MaterialNode<TProps extends object = Record<string, unknown>> {
+export type MaterialBindingMap = Record<string, MaterialBinding>
+export type MaterialSlotMap = Record<string, MaterialNode[]>
+
+export interface MaterialEditorState {
+  name?: string
+  locked?: boolean
+  hidden?: boolean
+}
+
+export interface MaterialOutput {
+  visibility: 'include' | 'remove' | 'reserve'
+  renderCondition?: RenderCondition
+  print?: PrintBehavior
+  placement?: NodePlacementConfig
+  break?: NodeBreakConfig
+  repeat?: NodeRepeatConfig
+  animations?: AnimationSchema[]
+}
+
+export interface MaterialNode<TModel = Record<string, unknown>> {
   id: string
   type: string
-  name?: string
-  unit?: UnitType
   x: number
   y: number
   width: number
@@ -366,21 +383,27 @@ export interface MaterialNode<TProps extends object = Record<string, unknown>> {
   rotation?: number
   alpha?: number
   zIndex?: number
-  hidden?: boolean
-  renderCondition?: RenderCondition
-  locked?: boolean
-  print?: PrintBehavior
-  placement?: NodePlacementConfig
-  break?: NodeBreakConfig
-  repeat?: NodeRepeatConfig
-  props: TProps
-  binding?: MaterialBinding
-  animations?: AnimationSchema[]
-  children?: MaterialNode[]
-  diagnostics?: NodeDiagnosticState[]
+  modelVersion: number
+  model: TModel
+  slots: MaterialSlotMap
+  bindings: MaterialBindingMap
+  editorState?: MaterialEditorState
+  output: MaterialOutput
   extensions?: Record<string, unknown>
   compat?: BenchmarkElementCompatState
 }
+
+export interface LegacyMaterialNodeInput extends Record<string, unknown> {
+  id?: unknown
+  type?: unknown
+  props?: unknown
+  binding?: unknown
+  children?: unknown
+  table?: unknown
+  unit?: unknown
+}
+
+export type MaterialNodeInput = MaterialNode | LegacyMaterialNodeInput
 
 export interface BenchmarkElementCompatState {
   rawProps?: Record<string, unknown>
@@ -467,17 +490,17 @@ export interface NodeDiagnosticState {
 
 // ─── Table Schema ──────────────────────────────────────────────────
 
-export interface TableNode<TProps extends object = Record<string, unknown>> extends MaterialNode<TProps> {
+export interface TableNode<TModel extends TableSchema = TableSchema> extends MaterialNode<TModel> {
   type: 'table-static' | 'table-data'
-  table: TableSchema
 }
 
-/**
- * Typed props view for material-owned code. Schema loading keeps props open;
- * material packages own the compile-time shape for their own node type.
- */
-export function getNodeProps<TProps extends object>(node: MaterialNode): TProps {
-  return node.props as TProps
+/** Typed model view for material-owned code. */
+export function getNodeModel<TModel>(node: MaterialNode<unknown>): TModel {
+  return node.model as TModel
+}
+
+export function getNodeBinding(node: MaterialNode, port = 'value'): MaterialBinding | undefined {
+  return node.bindings[port]
 }
 
 export interface TableSchema {
@@ -613,14 +636,13 @@ export interface LayoutDiagnostic {
 
 // ─── Type Guards ──────────────────────────────────────────────────
 
-/** Runtime discriminator for TableNode. Checks that node.type is a table type and node.table exists. */
-export function isTableNode(node: MaterialNode): node is TableNode {
+/** Runtime discriminator for the temporary material-private table node type. */
+export function isTableNode(node: MaterialNode<unknown>): node is TableNode {
   return (node.type === 'table-static' || node.type === 'table-data')
-    && 'table' in node
-    && node.table != null
+    && node.model != null
 }
 
-/** Narrow to TableNode with TableDataSchema (kind='data', has source). */
-export function isTableDataNode(node: MaterialNode): node is TableNode & { table: TableDataSchema } {
-  return isTableNode(node) && node.type === 'table-data' && node.table.kind === 'data'
+/** Narrow to a data table whose private model has kind='data'. */
+export function isTableDataNode(node: MaterialNode<unknown>): node is TableNode<TableDataSchema> {
+  return isTableNode(node) && node.type === 'table-data' && node.model.kind === 'data'
 }

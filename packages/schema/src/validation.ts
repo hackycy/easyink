@@ -1,5 +1,5 @@
 import type { ConditionValueType, DocumentSchema } from './types'
-import { isObject, SCHEMA_VERSION } from '@easyink/shared'
+import { assertJsonValue, isObject, JsonValueValidationError, SCHEMA_VERSION } from '@easyink/shared'
 import { isConditionLiteralValueValid, isConditionValueType } from './condition-values'
 import { PAGE_LAYER_MAX_Z_INDEX, PAGE_LAYER_MIN_Z_INDEX } from './defaults'
 
@@ -32,6 +32,8 @@ const CONDITION_COMPARE_OPERATORS = new Set([
   'isEmpty',
   'isNotEmpty',
 ])
+const LEGACY_MATERIAL_FIELDS = ['props', 'binding', 'children', 'table'] as const
+const PRINT_BEHAVIORS = new Set(['each', 'odd', 'even', 'first', 'last'])
 
 export interface SchemaValidationIssue {
   path: string
@@ -79,11 +81,25 @@ export class SchemaMigrationError extends Error {
 }
 
 function createIssue(path: string, message: string, code: string): SchemaValidationIssue {
-  return { path, message, code }
+  return { path: normalizeIssuePath(path), message, code }
+}
+
+function normalizeIssuePath(path: string): string {
+  if (path === '' || path === '$')
+    return ''
+  if (path.startsWith('/')) {
+    const lastSlash = path.lastIndexOf('/')
+    return `${path.slice(0, lastSlash + 1)}${path.slice(lastSlash + 1).replace(/\./g, '/')}`
+  }
+  return `/${path.split('.').map(escapePointer).join('/')}`
+}
+
+function escapePointer(token: string): string {
+  return token.replace(/~/g, '~0').replace(/\//g, '~1')
 }
 
 export function formatSchemaValidationIssue(issue: SchemaValidationIssue): string {
-  return issue.path === '$' ? issue.message : `${issue.path}: ${issue.message}`
+  return issue.path === '' ? issue.message : `${issue.path}: ${issue.message}`
 }
 
 /**
@@ -98,7 +114,7 @@ export function validateSchemaIssues(schema: unknown): SchemaValidationIssue[] {
   const issues: SchemaValidationIssue[] = []
 
   if (!isObject(schema)) {
-    issues.push(createIssue('$', 'Schema must be an object', 'schema.type'))
+    issues.push(createIssue('', 'Schema must be an object', 'schema.type'))
     return issues
   }
 
@@ -154,22 +170,190 @@ export function validateSchemaIssues(schema: unknown): SchemaValidationIssue[] {
     issues.push(createIssue('elements', 'must be an array', 'schema.elements.required'))
   }
   else {
-    validateElementConditions(schema.elements, 'elements', issues)
+    schema.elements.forEach((element, index) => validateMaterialNode(element, `/elements/${index}`, issues, true))
   }
 
   return issues
 }
 
-function validateElementConditions(elements: unknown[], basePath: string, issues: SchemaValidationIssue[]): void {
-  elements.forEach((element, index) => {
-    const path = `${basePath}.${index}`
-    if (!isObject(element))
-      return
-    if (element.renderCondition != null)
-      validateRenderCondition(element.renderCondition, `${path}.renderCondition`, issues)
-    if (Array.isArray(element.children))
-      validateElementConditions(element.children, `${path}.children`, issues)
-  })
+function validateMaterialNode(value: unknown, path: string, issues: SchemaValidationIssue[], validateJson: boolean): void {
+  if (validateJson) {
+    try {
+      assertJsonValue(value)
+    }
+    catch (error) {
+      if (error instanceof JsonValueValidationError) {
+        issues.push(createIssue(`${path}${error.path}`, error.message, `schema.material.json.${error.code.toLowerCase()}`))
+        return
+      }
+      throw error
+    }
+  }
+
+  if (!isObject(value)) {
+    issues.push(createIssue(path, 'must be an object', 'schema.material.invalid'))
+    return
+  }
+
+  for (const field of LEGACY_MATERIAL_FIELDS) {
+    if (Object.hasOwn(value, field))
+      issues.push(createIssue(`${path}/${field}`, 'is only accepted by the input migration boundary', 'schema.material.legacy-field'))
+  }
+
+  if (typeof value.id !== 'string' || value.id.length === 0)
+    issues.push(createIssue(`${path}/id`, 'must be a non-empty string', 'schema.material.id.invalid'))
+  if (typeof value.type !== 'string' || value.type.length === 0)
+    issues.push(createIssue(`${path}/type`, 'must be a non-empty string', 'schema.material.type.invalid'))
+  validateGeometry(value, path, issues)
+  if (!Number.isInteger(value.modelVersion) || (value.modelVersion as number) < 0)
+    issues.push(createIssue(`${path}/modelVersion`, 'must be a non-negative integer', 'schema.material.model-version.invalid'))
+  if (!isObject(value.model))
+    issues.push(createIssue(`${path}/model`, 'must be an object', 'schema.material.model.invalid'))
+
+  if (!isObject(value.slots)) {
+    issues.push(createIssue(`${path}/slots`, 'must be an object', 'schema.material.slots.invalid'))
+  }
+  else {
+    for (const [slot, children] of Object.entries(value.slots)) {
+      const slotPath = `${path}/slots/${escapePointer(slot)}`
+      if (!Array.isArray(children)) {
+        issues.push(createIssue(slotPath, 'must be an array', 'schema.material.slot.invalid'))
+        continue
+      }
+      children.forEach((child, index) => validateMaterialNode(child, `${slotPath}/${index}`, issues, false))
+    }
+  }
+
+  if (!isObject(value.bindings)) {
+    issues.push(createIssue(`${path}/bindings`, 'must be an object', 'schema.material.bindings.invalid'))
+  }
+  else {
+    for (const [port, binding] of Object.entries(value.bindings))
+      validateMaterialBinding(binding, `${path}/bindings/${escapePointer(port)}`, issues)
+  }
+  validateEditorState(value.editorState, path, issues)
+  validateMaterialOutput(value.output, path, issues)
+}
+
+function validateMaterialBinding(value: unknown, path: string, issues: SchemaValidationIssue[]): void {
+  if (Array.isArray(value)) {
+    value.forEach((binding, index) => validateBindingRef(binding, `${path}/${index}`, issues))
+    return
+  }
+  if (!isObject(value)) {
+    issues.push(createIssue(path, 'must be a binding reference, binding array, or data contract binding', 'schema.material.binding.invalid'))
+    return
+  }
+  if (value.kind === 'data-contract') {
+    validateDataContractBinding(value, path, issues)
+    return
+  }
+  validateBindingRef(value, path, issues)
+}
+
+function validateBindingRef(value: unknown, path: string, issues: SchemaValidationIssue[]): void {
+  if (!isObject(value)) {
+    issues.push(createIssue(path, 'must be a binding reference', 'schema.material.binding-ref.invalid'))
+    return
+  }
+  if (typeof value.sourceId !== 'string' || value.sourceId.length === 0)
+    issues.push(createIssue(`${path}/sourceId`, 'must be a non-empty string', 'schema.material.binding-ref.source-id.invalid'))
+  if (typeof value.fieldPath !== 'string' || value.fieldPath.length === 0)
+    issues.push(createIssue(`${path}/fieldPath`, 'must be a non-empty string', 'schema.material.binding-ref.field-path.invalid'))
+}
+
+function validateDataContractBinding(value: Record<string, unknown>, path: string, issues: SchemaValidationIssue[]): void {
+  if (!isObject(value.mappings)) {
+    issues.push(createIssue(`${path}/mappings`, 'must be an object', 'schema.material.data-contract.mappings.invalid'))
+    return
+  }
+  for (const [field, mapping] of Object.entries(value.mappings)) {
+    const mappingPath = `${path}/mappings/${escapePointer(field)}`
+    if (!isObject(mapping)) {
+      issues.push(createIssue(mappingPath, 'must be a field mapping', 'schema.material.data-contract.mapping.invalid'))
+      continue
+    }
+    if (typeof mapping.sourceId !== 'string' || mapping.sourceId.length === 0)
+      issues.push(createIssue(`${mappingPath}/sourceId`, 'must be a non-empty string', 'schema.material.data-contract.source-id.invalid'))
+    if (!isObject(mapping.select) || typeof mapping.select.path !== 'string' || mapping.select.path.length === 0)
+      issues.push(createIssue(`${mappingPath}/select/path`, 'must be a non-empty string', 'schema.material.data-contract.select-path.invalid'))
+  }
+}
+
+function validateGeometry(value: Record<string, unknown>, path: string, issues: SchemaValidationIssue[]): void {
+  for (const field of ['x', 'y'] as const) {
+    if (typeof value[field] !== 'number' || !Number.isFinite(value[field]))
+      issues.push(createIssue(`${path}/${field}`, 'must be a finite number', `schema.material.${field}.invalid`))
+  }
+  for (const field of ['width', 'height'] as const) {
+    if (typeof value[field] !== 'number' || !Number.isFinite(value[field]) || value[field] <= 0)
+      issues.push(createIssue(`${path}/${field}`, 'must be a positive finite number', `schema.material.${field}.invalid`))
+  }
+  for (const field of ['rotation', 'zIndex'] as const) {
+    if (value[field] != null && (typeof value[field] !== 'number' || !Number.isFinite(value[field])))
+      issues.push(createIssue(`${path}/${field}`, 'must be a finite number when provided', `schema.material.${field}.invalid`))
+  }
+  if (value.alpha != null && (typeof value.alpha !== 'number' || !Number.isFinite(value.alpha) || value.alpha < 0 || value.alpha > 1))
+    issues.push(createIssue(`${path}/alpha`, 'must be a number between 0 and 1 when provided', 'schema.material.alpha.invalid'))
+}
+
+function validateEditorState(value: unknown, path: string, issues: SchemaValidationIssue[]): void {
+  if (value == null)
+    return
+  const editorPath = `${path}/editorState`
+  if (!isObject(value)) {
+    issues.push(createIssue(editorPath, 'must be an object when provided', 'schema.material.editor-state.invalid'))
+    return
+  }
+  if (value.name != null && typeof value.name !== 'string')
+    issues.push(createIssue(`${editorPath}/name`, 'must be a string when provided', 'schema.material.editor-state.name.invalid'))
+  for (const field of ['locked', 'hidden'] as const) {
+    if (value[field] != null && typeof value[field] !== 'boolean')
+      issues.push(createIssue(`${editorPath}/${field}`, 'must be a boolean when provided', `schema.material.editor-state.${field}.invalid`))
+  }
+}
+
+function validateMaterialOutput(value: unknown, path: string, issues: SchemaValidationIssue[]): void {
+  const outputPath = `${path}/output`
+  if (!isObject(value)) {
+    issues.push(createIssue(outputPath, 'must be an object', 'schema.material.output.invalid'))
+    return
+  }
+  if (value.visibility !== 'include' && value.visibility !== 'remove' && value.visibility !== 'reserve')
+    issues.push(createIssue(`${outputPath}/visibility`, 'must be include, remove, or reserve', 'schema.material.output.visibility.invalid'))
+  if (value.renderCondition != null)
+    validateRenderCondition(value.renderCondition, `${outputPath}/renderCondition`, issues)
+  if (value.print != null && (typeof value.print !== 'string' || !PRINT_BEHAVIORS.has(value.print)))
+    issues.push(createIssue(`${outputPath}/print`, 'must be a supported print behavior', 'schema.material.output.print.invalid'))
+  if (value.placement != null) {
+    if (!isObject(value.placement))
+      issues.push(createIssue(`${outputPath}/placement`, 'must be an object when provided', 'schema.material.output.placement.invalid'))
+    else if (value.placement.mode != null && value.placement.mode !== 'flow' && value.placement.mode !== 'fixed')
+      issues.push(createIssue(`${outputPath}/placement/mode`, 'must be flow or fixed when provided', 'schema.material.output.placement.mode.invalid'))
+  }
+  if (value.break != null)
+    validateBreakConfig(value.break, `${outputPath}/break`, issues)
+  if (value.repeat != null) {
+    if (!isObject(value.repeat))
+      issues.push(createIssue(`${outputPath}/repeat`, 'must be an object when provided', 'schema.material.output.repeat.invalid'))
+    else if (value.repeat.scope != null && value.repeat.scope !== 'none' && value.repeat.scope !== 'every-output-page')
+      issues.push(createIssue(`${outputPath}/repeat/scope`, 'must be none or every-output-page when provided', 'schema.material.output.repeat.scope.invalid'))
+  }
+  if (value.animations != null && !Array.isArray(value.animations))
+    issues.push(createIssue(`${outputPath}/animations`, 'must be an array when provided', 'schema.material.output.animations.invalid'))
+}
+
+function validateBreakConfig(value: unknown, path: string, issues: SchemaValidationIssue[]): void {
+  if (!isObject(value)) {
+    issues.push(createIssue(path, 'must be an object when provided', 'schema.material.output.break.invalid'))
+    return
+  }
+  if (value.keepTogether != null && typeof value.keepTogether !== 'boolean')
+    issues.push(createIssue(`${path}/keepTogether`, 'must be a boolean when provided', 'schema.material.output.break.keep-together.invalid'))
+  for (const field of ['before', 'after'] as const) {
+    if (value[field] != null && value[field] !== 'auto' && value[field] !== 'page')
+      issues.push(createIssue(`${path}/${field}`, 'must be auto or page when provided', `schema.material.output.break.${field}.invalid`))
+  }
 }
 
 function validateRenderCondition(value: unknown, path: string, issues: SchemaValidationIssue[]): void {
