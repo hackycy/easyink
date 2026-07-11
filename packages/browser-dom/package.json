@@ -1,0 +1,27 @@
+{
+  "name": "@easyink/browser-dom",
+  "type": "module",
+  "version": "0.0.30",
+  "description": "Policy-enforced browser DOM mounting for EasyInk viewer render trees",
+  "author": "hackycy <hackycy@outlook.com>",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/index.d.mts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch"
+  },
+  "dependencies": {
+    "@easyink/core": "workspace:*"
+  }
+}

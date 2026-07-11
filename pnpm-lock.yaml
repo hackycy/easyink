@@ -651,6 +651,12 @@ importers:
         specifier: catalog:framework
         version: 3.5.31(typescript@6.0.2)
 
+  packages/browser-dom:
+    dependencies:
+      '@easyink/core':
+        specifier: workspace:*
+        version: link:../core
+
   packages/builtin:
     dependencies:
       '@easyink/core':

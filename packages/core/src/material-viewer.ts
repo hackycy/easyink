@@ -2,28 +2,15 @@ import type { MaterialNode } from '@easyink/schema'
 import type { BindingFormatDiagnostic } from './binding-format'
 import type { MaterialConditionCapability } from './condition'
 import type { LayoutDiagnostic, LayoutFragment } from './layout-plan'
+import type { SanitizedMarkup, ViewerRenderTree } from './viewer-render-tree'
 
-export type TrustedViewerHtmlSource = 'material-internal' | 'sanitized-rich-text'
-
-export interface TrustedViewerHtml {
-  readonly __easyinkTrustedViewerHtml: true
-  readonly value: string
-  readonly source: TrustedViewerHtmlSource
+export interface ViewerRenderCapabilities {
+  sanitizeMarkup: (input: { format: 'svg', source: string }) => SanitizedMarkup
 }
 
-export function trustedViewerHtml(
-  value: string,
-  source: TrustedViewerHtmlSource = 'material-internal',
-): TrustedViewerHtml {
-  return {
-    __easyinkTrustedViewerHtml: true,
-    value,
-    source,
-  }
-}
-
-export function readTrustedViewerHtml(html: TrustedViewerHtml): string {
-  return html.value
+export interface ViewerFacetCapabilities {
+  sanitizedMarkup?: boolean
+  imperativeDom?: readonly string[]
 }
 
 /**
@@ -37,12 +24,12 @@ export interface ViewerRenderContext {
   /** Document unit: 'mm' | 'pt' | 'px'. CSS unit suffix equals this value. */
   unit: string
   zoom: number
+  capabilities: ViewerRenderCapabilities
   reportDiagnostic?: (diagnostic: BindingFormatDiagnostic & { nodeId?: string }) => void
 }
 
 export interface ViewerRenderOutput {
-  html?: TrustedViewerHtml
-  element?: HTMLElement
+  tree: ViewerRenderTree
 }
 
 export interface ViewerRenderSize {
@@ -82,11 +69,10 @@ export interface FragmentPaginator {
 }
 
 export interface MaterialViewerExtension {
+  capabilities?: ViewerFacetCapabilities
   render: (node: MaterialNode, context: ViewerRenderContext) => ViewerRenderOutput
   measure?: (node: MaterialNode, context: ViewerMeasureContext) => ViewerMeasureResult
   getRenderSize?: (node: MaterialNode, context: ViewerRenderContext) => Partial<ViewerRenderSize>
   fragmentPaginator?: FragmentPaginator
-  /** When true, the element is replicated to every page by the pageAware post-processing step. */
-  pageAware?: boolean
   condition?: MaterialConditionCapability
 }

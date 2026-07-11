@@ -302,16 +302,14 @@ export type {
   FragmentPaginateResult,
   FragmentPaginator,
   MaterialViewerExtension,
-  TrustedViewerHtml,
-  TrustedViewerHtmlSource,
+  ViewerFacetCapabilities,
   ViewerMeasureContext,
   ViewerMeasureResult,
+  ViewerRenderCapabilities,
   ViewerRenderContext,
   ViewerRenderOutput,
   ViewerRenderSize,
 } from './material-viewer'
-
-export { readTrustedViewerHtml, trustedViewerHtml } from './material-viewer'
 
 export { groupPageLayerPlansByPlacement, PAGE_CONTENT_LAYER_STACK_INDEX, resolvePageLayerPlans, resolvePageLayers, resolvePageLayerStackIndex } from './page-layers'
 export type { PageLayerRenderPlan, PageLayerRenderPlanBuckets, PageLayerTile, ResolvedPageLayer, ResolvedTextWatermarkPageLayer, ResolvePageLayerPlansOptions, TextWatermarkPageLayerPlan } from './page-layers'
@@ -323,10 +321,10 @@ export { createPagePlan } from './page-planner'
 export type { PagePlan, PagePlanDiagnostic, PagePlanEntry, PagePlanOptions } from './page-planner'
 
 export { runPagination } from './pagination-engine'
-
 export type { PaginationOptions, PaginationResult } from './pagination-engine'
 
 export { applyJsonPatches, PatchCommand } from './patch-command'
+
 export type { PatchCommandOptions } from './patch-command'
 
 export { runFlowYReflow } from './reflow-engine'
@@ -348,5 +346,30 @@ export type {
 } from './schema-adapter'
 
 export { isInteractable, isSelectable, SelectionModel } from './selection'
-
 export { UnitManager } from './unit'
+
+export {
+  assertViewerRenderTree,
+  VIEWER_TREE_ABSOLUTE_MAX_ATTRIBUTES,
+  VIEWER_TREE_ABSOLUTE_MAX_DEPTH,
+  VIEWER_TREE_ABSOLUTE_MAX_NODES,
+  VIEWER_TREE_ABSOLUTE_MAX_TEXT_BYTES,
+  viewerElement,
+  viewerFragment,
+  viewerImperativeDom,
+  viewerSanitizedMarkup,
+  viewerText,
+} from './viewer-render-tree'
+
+export type {
+  SanitizedMarkup,
+  ViewerElementNamespace,
+  ViewerElementOptions,
+  ViewerElementTree,
+  ViewerFragmentTree,
+  ViewerImperativeDomTree,
+  ViewerImperativeHost,
+  ViewerRenderTree,
+  ViewerSanitizedMarkupTree,
+  ViewerTextTree,
+} from './viewer-render-tree'
