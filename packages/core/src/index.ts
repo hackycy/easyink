@@ -295,12 +295,18 @@ export type { PatchCommandOptions } from './patch-command'
 export { runFlowYReflow } from './reflow-engine'
 export type { ReflowEngineInput, ReflowEngineResult } from './reflow-engine'
 
-export { recordSchemaAdapter } from './schema-adapter'
+export { loadDocumentWithProfile, recordSchemaAdapter, validateDocumentWithProfile } from './schema-adapter'
 export type {
   AdaptableMaterialNode,
+  MaterialDocumentLoadResult,
+  MaterialDocumentValidationOptions,
+  MaterialDocumentValidationReport,
+  MaterialLoadDiagnostic,
+  MaterialNodeLoadState,
   MaterialSchemaIssue,
   SchemaAdapter,
   SchemaAdapterContext,
+  SchemaAdapterStage,
   SchemaMigration,
 } from './schema-adapter'
 

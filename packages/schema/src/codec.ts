@@ -1,10 +1,7 @@
-import type { DocumentSchema, MaterialNode, PageSchema, TableCellSchema, TableColumnSchema, TableNode, TableRowSchema, TableSchema } from './types'
+import type { DocumentSchema, DocumentSchemaInput, MaterialNode, MaterialNodeInput, PageSchema } from './types'
 import { isObject } from '@easyink/shared'
-import { isTableNode } from './types'
 
-/**
- * Benchmark (report-designer) compatibility input format.
- */
+/** Benchmark (report-designer) compatibility input format. */
 export interface BenchmarkDocumentInput {
   unit?: string
   x?: number[]
@@ -20,14 +17,13 @@ export interface BenchmarkElementInput {
   type?: string
   x?: number
   y?: number
+  left?: number
+  top?: number
   width?: number
   height?: number
   [key: string]: unknown
 }
 
-/**
- * Page field mapping from benchmark -> canonical.
- */
 const PAGE_FIELD_MAP: Record<string, keyof PageSchema> = {
   viewer: 'mode',
   width: 'width',
@@ -42,63 +38,38 @@ const PAGE_FIELD_MAP: Record<string, keyof PageSchema> = {
   font: 'font',
 }
 
-/**
- * Decode a benchmark-format document into canonical DocumentSchema.
- */
-export function decodeBenchmarkInput(input: BenchmarkDocumentInput): DocumentSchema {
+/** Decode benchmark data without resolving any material-private schema. */
+export function decodeBenchmarkInput(input: BenchmarkDocumentInput): DocumentSchemaInput {
   const passthrough: Record<string, unknown> = {}
-
-  // Guides
-  const guidesX = Array.isArray(input.x) ? input.x : []
-  const guidesY = Array.isArray(input.y) ? input.y : []
-
-  // Page
   const rawPage = isObject(input.page) ? input.page : {}
   const page: Record<string, unknown> = {}
-
   for (const [rawKey, canonicalKey] of Object.entries(PAGE_FIELD_MAP)) {
-    if (rawKey in rawPage) {
+    if (rawKey in rawPage)
       page[canonicalKey] = rawPage[rawKey]
-    }
   }
-
-  // Grid config
   if ('gridWidth' in rawPage || 'gridHeight' in rawPage) {
-    page.grid = {
-      enabled: true,
-      width: rawPage.gridWidth ?? 10,
-      height: rawPage.gridHeight ?? 10,
-    }
+    page.grid = { enabled: true, width: rawPage.gridWidth ?? 10, height: rawPage.gridHeight ?? 10 }
   }
+  const background: Record<string, unknown> = {}
+  if (typeof rawPage.background === 'string') {
+    if (rawPage.background.startsWith('http') || rawPage.background.startsWith('data:'))
+      background.image = rawPage.background
+    else
+      background.color = rawPage.background
+  }
+  for (const [rawKey, canonicalKey] of [
+    ['backgroundRepeat', 'repeat'],
+    ['backgroundWidth', 'width'],
+    ['backgroundHeight', 'height'],
+    ['backgroundXOffset', 'offsetX'],
+    ['backgroundYOffset', 'offsetY'],
+  ] as const) {
+    if (rawKey in rawPage)
+      background[canonicalKey] = rawPage[rawKey]
+  }
+  if (Object.keys(background).length > 0)
+    page.background = background
 
-  // Background
-  const bg: Record<string, unknown> = {}
-  if ('background' in rawPage) {
-    const bgVal = rawPage.background
-    if (typeof bgVal === 'string') {
-      if (bgVal.startsWith('http') || bgVal.startsWith('data:')) {
-        bg.image = bgVal
-      }
-      else {
-        bg.color = bgVal
-      }
-    }
-  }
-  if ('backgroundRepeat' in rawPage)
-    bg.repeat = rawPage.backgroundRepeat
-  if ('backgroundWidth' in rawPage)
-    bg.width = rawPage.backgroundWidth
-  if ('backgroundHeight' in rawPage)
-    bg.height = rawPage.backgroundHeight
-  if ('backgroundXOffset' in rawPage)
-    bg.offsetX = rawPage.backgroundXOffset
-  if ('backgroundYOffset' in rawPage)
-    bg.offsetY = rawPage.backgroundYOffset
-  if (Object.keys(bg).length > 0) {
-    page.background = bg
-  }
-
-  // Collect passthrough
   const knownPageKeys = new Set([
     ...Object.keys(PAGE_FIELD_MAP),
     'gridWidth',
@@ -110,192 +81,72 @@ export function decodeBenchmarkInput(input: BenchmarkDocumentInput): DocumentSch
     'backgroundXOffset',
     'backgroundYOffset',
   ])
-  for (const key of Object.keys(rawPage)) {
-    if (!knownPageKeys.has(key)) {
-      passthrough[`page.${key}`] = rawPage[key]
-    }
+  for (const [key, value] of Object.entries(rawPage)) {
+    if (!knownPageKeys.has(key))
+      passthrough[`page.${key}`] = value
+  }
+  for (const [key, value] of Object.entries(input)) {
+    if (!['unit', 'x', 'y', 'g', 'page', 'elements'].includes(key))
+      passthrough[key] = value
   }
 
-  // Top-level passthrough
-  const knownTopKeys = new Set(['unit', 'x', 'y', 'g', 'page', 'elements'])
-  for (const key of Object.keys(input)) {
-    if (!knownTopKeys.has(key)) {
-      passthrough[key] = input[key]
-    }
-  }
-
-  // Elements
-  const elements = Array.isArray(input.elements)
-    ? input.elements.map(decodeBenchmarkElement)
-    : []
-
-  const schema: DocumentSchema = {
-    version: '1.0.0',
+  const result: DocumentSchemaInput = {
     unit: (input.unit as DocumentSchema['unit']) || 'mm',
-    page: {
-      mode: 'fixed',
-      width: 210,
-      height: 297,
-      ...page,
-    } as DocumentSchema['page'],
+    page: { mode: 'fixed', width: 210, height: 297, ...page } as DocumentSchemaInput['page'],
     guides: {
-      x: guidesX,
-      y: guidesY,
-      groups: Array.isArray(input.g)
-        ? input.g.map((g, i) => ({
-          id: `g_${i}`,
-          x: [],
-          y: [],
-          ...(isObject(g) ? g : {}),
-        })) as DocumentSchema['guides']['groups']
-        : undefined,
+      x: Array.isArray(input.x) ? input.x : [],
+      y: Array.isArray(input.y) ? input.y : [],
+      ...(Array.isArray(input.g)
+        ? { groups: input.g.map((group, index) => ({ id: `g_${index}`, x: [], y: [], ...(isObject(group) ? group : {}) })) as never }
+        : {}),
     },
-    elements,
+    elements: Array.isArray(input.elements) ? input.elements.map(decodeBenchmarkElement) : [],
   }
-
-  if (Object.keys(passthrough).length > 0) {
-    schema.compat = { passthrough }
-  }
-
-  if (input.g) {
-    schema.compat = { ...schema.compat, rawGuideGroupKey: 'g' }
-  }
-
-  return schema
+  if (Object.keys(passthrough).length > 0 || input.g)
+    result.compat = { ...(input.g ? { rawGuideGroupKey: 'g' } : {}), ...(Object.keys(passthrough).length > 0 ? { passthrough } : {}) }
+  return result
 }
 
-function decodeBenchmarkElement(input: BenchmarkElementInput): DocumentSchema['elements'][number] {
-  const { id, type, x = 0, y = 0, width = 100, height = 50, ...rest } = input
-
-  const knownKeys = new Set(['id', 'type', 'x', 'y', 'width', 'height', 'rotation', 'alpha', 'hidden', 'renderCondition', 'locked', 'zIndex', 'name', 'print'])
-  const props: Record<string, unknown> = {}
-
-  for (const [key, value] of Object.entries(rest)) {
-    if (knownKeys.has(key))
-      continue
-    props[key] = value
-  }
-
-  const node: MaterialNode = {
-    id: id || `el_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
-    type: type || 'unknown',
-    x,
-    y,
-    width,
-    height,
-    props,
-  }
-
-  if (rest.rotation != null)
-    node.rotation = rest.rotation as number
-  if (rest.alpha != null)
-    node.alpha = rest.alpha as number
-  if (rest.hidden != null)
-    node.hidden = rest.hidden as boolean
-  if (rest.renderCondition != null)
-    node.renderCondition = rest.renderCondition as MaterialNode['renderCondition']
-  if (rest.locked != null)
-    node.locked = rest.locked as boolean
-  if (rest.zIndex != null)
-    node.zIndex = rest.zIndex as number
-  if (rest.name != null)
-    node.name = rest.name as string
-  if (rest.print != null)
-    node.print = rest.print as DocumentSchema['elements'][number]['print']
-
-  // Table elements: convert extensions.table to node.table
-  let decodedNode: MaterialNode | TableNode = node
-  if (isBenchmarkTableType(type) && rest.extensions && isObject(rest.extensions)) {
-    const ext = rest.extensions as Record<string, unknown>
-    const tableSchema = decodeTableExtensions(ext, type || '')
-    if (tableSchema) {
-      decodedNode = { ...node, type, table: tableSchema }
-    }
-  }
-
-  return decodedNode
+function decodeBenchmarkElement(input: BenchmarkElementInput): MaterialNodeInput {
+  const result: Record<string, unknown> = { ...input }
+  result.id = typeof input.id === 'string' && input.id ? input.id : `el_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`
+  result.type = typeof input.type === 'string' && input.type ? input.type : 'unknown'
+  result.x = input.x ?? input.left ?? 0
+  result.y = input.y ?? input.top ?? 0
+  result.width = input.width ?? 100
+  result.height = input.height ?? 50
+  delete result.left
+  delete result.top
+  return result as MaterialNodeInput
 }
 
-function isBenchmarkTableType(type: string | undefined): type is TableNode['type'] {
-  return type === 'table-static' || type === 'table-data'
-}
-
-function describeLegacyTableCellContent(value: unknown): string {
-  if (value === null)
-    return 'null'
-  if (Array.isArray(value))
-    return 'array'
-  return typeof value
-}
-
-function decodeLegacyTableCellContent(rawContent: unknown, rowIndex: number, colIndex: number): {
-  content?: TableCellSchema['content']
-  props?: TableCellSchema['props']
-  diagnostic?: NonNullable<TableSchema['diagnostics']>[number]
-} {
-  if (
-    typeof rawContent === 'string'
-    || typeof rawContent === 'number'
-    || typeof rawContent === 'boolean'
-    || typeof rawContent === 'bigint'
-  ) {
-    return { content: { text: String(rawContent) } }
-  }
-
-  const contentType = describeLegacyTableCellContent(rawContent)
-  return {
-    props: { benchmarkRawContent: rawContent },
-    diagnostic: {
-      code: 'benchmark-table-cell-content-invalid',
-      severity: 'warning',
-      message: `Unsupported legacy table cell content of type ${contentType} at row ${rowIndex + 1}, column ${colIndex + 1}; preserved as cell.props.benchmarkRawContent.`,
-      location: { rowIndex },
-    },
-  }
-}
-
-/**
- * Encode canonical DocumentSchema back to benchmark format.
- */
+/** Encode only admitted canonical documents. Material-private exports belong to profile tooling. */
 export function encodeToBenchmark(schema: DocumentSchema): BenchmarkDocumentInput {
+  assertCanonicalDocument(schema)
   const page: Record<string, unknown> = {}
-
-  // Reverse page field mapping
-  const reversePageMap: Partial<Record<keyof PageSchema, string>> = {}
   for (const [rawKey, canonicalKey] of Object.entries(PAGE_FIELD_MAP)) {
-    reversePageMap[canonicalKey] = rawKey
-  }
-
-  for (const canKey of Object.keys(reversePageMap) as Array<keyof PageSchema>) {
-    const rawKey = reversePageMap[canKey]!
-    const value = schema.page[canKey]
-    if (value !== undefined) {
+    const value = schema.page[canonicalKey]
+    if (value !== undefined)
       page[rawKey] = value
-    }
   }
-
-  // Grid
   if (schema.page.grid) {
     page.gridWidth = schema.page.grid.width
     page.gridHeight = schema.page.grid.height
   }
-
-  // Background
   if (schema.page.background) {
-    const bg = schema.page.background
-    page.background = bg.image || bg.color
-    if (bg.repeat)
-      page.backgroundRepeat = bg.repeat
-    if (bg.width)
-      page.backgroundWidth = bg.width
-    if (bg.height)
-      page.backgroundHeight = bg.height
-    if (bg.offsetX)
-      page.backgroundXOffset = bg.offsetX
-    if (bg.offsetY)
-      page.backgroundYOffset = bg.offsetY
+    const background = schema.page.background
+    page.background = background.image || background.color
+    if (background.repeat !== undefined)
+      page.backgroundRepeat = background.repeat
+    if (background.width !== undefined)
+      page.backgroundWidth = background.width
+    if (background.height !== undefined)
+      page.backgroundHeight = background.height
+    if (background.offsetX !== undefined)
+      page.backgroundXOffset = background.offsetX
+    if (background.offsetY !== undefined)
+      page.backgroundYOffset = background.offsetY
   }
-
   const result: BenchmarkDocumentInput = {
     unit: schema.unit,
     x: schema.guides.x,
@@ -303,24 +154,16 @@ export function encodeToBenchmark(schema: DocumentSchema): BenchmarkDocumentInpu
     page,
     elements: schema.elements.map(encodeBenchmarkElement),
   }
-
-  if (schema.guides.groups) {
+  if (schema.guides.groups)
     result.g = schema.guides.groups
+  for (const [key, value] of Object.entries(schema.compat?.passthrough ?? {})) {
+    if (!key.startsWith('page.'))
+      result[key] = value
   }
-
-  // Restore passthrough
-  if (schema.compat?.passthrough) {
-    for (const [key, value] of Object.entries(schema.compat.passthrough)) {
-      if (!key.startsWith('page.')) {
-        result[key] = value
-      }
-    }
-  }
-
   return result
 }
 
-function encodeBenchmarkElement(node: DocumentSchema['elements'][number]): BenchmarkElementInput {
+function encodeBenchmarkElement(node: MaterialNode): BenchmarkElementInput {
   const result: BenchmarkElementInput = {
     id: node.id,
     type: node.type,
@@ -328,242 +171,46 @@ function encodeBenchmarkElement(node: DocumentSchema['elements'][number]): Bench
     y: node.y,
     width: node.width,
     height: node.height,
-    ...node.props,
+    props: node.model,
   }
-  if (node.rotation != null)
-    result.rotation = node.rotation
-  if (node.alpha != null)
-    result.alpha = node.alpha
-  if (node.hidden != null)
-    result.hidden = node.hidden
-  if (node.renderCondition != null)
-    result.renderCondition = node.renderCondition
-  if (node.locked != null)
-    result.locked = node.locked
-  if (node.zIndex != null)
-    result.zIndex = node.zIndex
-  if (node.name)
-    result.name = node.name
-
-  if (node.compat?.rawProps) {
-    Object.assign(result, node.compat.rawProps)
+  for (const key of ['rotation', 'alpha', 'zIndex'] as const) {
+    if (node[key] !== undefined)
+      result[key] = node[key]
   }
-
-  // Table: encode table schema as extensions.table for benchmark compatibility
-  if (isTableNode(node)) {
-    result.extensions = { ...result.extensions as Record<string, unknown> || {}, table: encodeTableSchema(node.table) }
-  }
-
+  if (node.editorState?.name !== undefined)
+    result.name = node.editorState.name
+  if (node.editorState?.locked !== undefined)
+    result.locked = node.editorState.locked
+  if (node.editorState?.hidden !== undefined)
+    result.hidden = node.editorState.hidden
+  if (node.output.renderCondition !== undefined)
+    result.renderCondition = node.output.renderCondition
+  if (node.output.print !== undefined)
+    result.print = node.output.print
+  if (node.bindings.value !== undefined)
+    result.bind = node.bindings.value
+  if (node.slots.default !== undefined)
+    result.children = node.slots.default
   return result
 }
 
-/**
- * Decode old sections-based table data from extensions.table into topology+row.role format.
- * Old format: { sections: [{ kind, rows: [{ height, cells: [{ width?, ... }] }] }] }
- * New format: { kind, topology: { columns, rows (with role) }, layout }
- */
-function decodeTableExtensions(ext: Record<string, unknown>, tableType: string): TableSchema | null {
-  const raw = ext.table
-  if (!isObject(raw))
-    return null
-
-  const rawTable = raw as Record<string, unknown>
-
-  // Already in new format (has topology + kind)?
-  if (isTableSchema(raw)) {
-    return raw
-  }
-
-  // Already in intermediate format (has topology + bands but no kind)?
-  if (isBandsTableInput(rawTable)) {
-    return migrateBandsToRowRole(rawTable, tableType)
-  }
-
-  // Old sections format
-  const sections = rawTable.sections
-  if (!Array.isArray(sections) || sections.length === 0)
-    return null
-
-  // Map section kind to row role
-  const SECTION_KIND_TO_ROLE: Record<string, TableRowSchema['role']> = {
-    header: 'header',
-    data: 'repeat-template',
-    body: 'normal',
-    total: 'footer',
-    summary: 'footer',
-    footer: 'footer',
-  }
-
-  // Flatten all rows to determine column count from first row
-  const allRows: Array<{ height: number, cells: Array<Record<string, unknown>>, role: TableRowSchema['role'] }> = []
-  for (const section of sections) {
-    if (!isObject(section))
-      continue
-    const sec = section as Record<string, unknown>
-    const kind = (sec.kind as string) || 'body'
-    const role = SECTION_KIND_TO_ROLE[kind] || 'normal'
-    const sRows = sec.rows
-    if (!Array.isArray(sRows))
-      continue
-    for (const row of sRows) {
-      if (!isObject(row))
-        continue
-      const r = row as Record<string, unknown>
-      const cells = Array.isArray(r.cells) ? r.cells as Array<Record<string, unknown>> : []
-      allRows.push({ height: (r.height as number) || 24, cells, role })
+function assertCanonicalDocument(schema: DocumentSchema): void {
+  const stack: unknown[] = Array.isArray(schema?.elements) ? [...schema.elements] : []
+  while (stack.length > 0) {
+    const node = stack.pop()
+    if (!isObject(node)
+      || typeof node.modelVersion !== 'number'
+      || !isObject(node.model)
+      || !isObject(node.slots)
+      || !isObject(node.bindings)
+      || !isObject(node.output)
+      || ['props', 'binding', 'children', 'table', 'unit', 'hidden', 'locked', 'name'].some(key => Object.hasOwn(node, key))) {
+      throw new Error('BENCHMARK_ENCODE_REQUIRES_CANONICAL_SCHEMA')
     }
-  }
-
-  if (allRows.length === 0)
-    return null
-
-  // Determine column count from the row with most cells
-  const colCount = Math.max(1, ...allRows.map(r => r.cells.length))
-
-  // Infer column ratios from first row cell widths, or equal
-  const firstRow = allRows[0]!
-  const columns: TableColumnSchema[] = []
-  let hasWidths = false
-  const widths: number[] = []
-  for (let c = 0; c < colCount; c++) {
-    const cell = firstRow.cells[c]
-    const w = cell?.width as number | undefined
-    if (w && w > 0) {
-      hasWidths = true
-      widths.push(w)
+    for (const children of Object.values(node.slots)) {
+      if (!Array.isArray(children))
+        throw new Error('BENCHMARK_ENCODE_REQUIRES_CANONICAL_SCHEMA')
+      stack.push(...children)
     }
-    else {
-      widths.push(1)
-    }
-  }
-  const totalW = widths.reduce((a, b) => a + b, 0) || colCount
-  for (let c = 0; c < colCount; c++) {
-    columns.push({ ratio: hasWidths ? widths[c]! / totalW : 1 / colCount })
-  }
-
-  // Build rows with role
-  const diagnostics: NonNullable<TableSchema['diagnostics']> = []
-  const rows: TableRowSchema[] = allRows.map((r, rowIndex) => {
-    const cells = Array.from({ length: colCount }, (_, colIndex) => {
-      const rawCell = r.cells[colIndex]
-      if (!rawCell)
-        return {}
-      const cell: Record<string, unknown> = {}
-      if (rawCell.content !== undefined) {
-        const decodedContent = decodeLegacyTableCellContent(rawCell.content, rowIndex, colIndex)
-        if (decodedContent.content)
-          cell.content = decodedContent.content
-        if (decodedContent.props)
-          cell.props = decodedContent.props
-        if (decodedContent.diagnostic)
-          diagnostics.push(decodedContent.diagnostic)
-      }
-      if (rawCell.colSpan !== undefined)
-        cell.colSpan = rawCell.colSpan
-      if (rawCell.rowSpan !== undefined)
-        cell.rowSpan = rawCell.rowSpan
-      return cell
-    })
-    return { height: r.height, role: r.role, cells }
-  })
-
-  // Layout from table-level properties
-  const layout = readTableLayout(rawTable)
-
-  const kind: TableSchema['kind'] = tableType === 'table-data' ? 'data' : 'static'
-  const table: TableSchema = { kind, topology: { columns, rows }, layout }
-  if (diagnostics.length > 0)
-    table.diagnostics = diagnostics
-  return table
-}
-
-/** Migrate intermediate format (topology + bands) to new format (topology + row.role). */
-interface BandsTableInput {
-  topology: { columns: TableColumnSchema[], rows: Array<Partial<TableRowSchema>> }
-  bands: Array<{ kind: string, rowRange: { start: number, end: number } }>
-  layout?: unknown
-}
-
-function migrateBandsToRowRole(rawTable: BandsTableInput, tableType: string): TableSchema {
-  const { topology, bands } = rawTable
-
-  const BAND_KIND_TO_ROLE: Record<string, TableRowSchema['role']> = {
-    header: 'header',
-    data: 'repeat-template',
-    body: 'normal',
-    summary: 'footer',
-    footer: 'footer',
-  }
-
-  // Assign role to each row based on bands
-  const rows: TableRowSchema[] = topology.rows.map((row, ri) => {
-    let role: TableRowSchema['role'] = 'normal'
-    for (const band of bands) {
-      if (ri >= band.rowRange.start && ri < band.rowRange.end) {
-        role = BAND_KIND_TO_ROLE[band.kind] || 'normal'
-        break
-      }
-    }
-    return {
-      height: typeof row.height === 'number' ? row.height : 24,
-      role,
-      cells: row.cells || [],
-    }
-  })
-
-  const layout = isObject(rawTable.layout) ? readTableLayout(rawTable.layout) : {}
-  const kind: TableSchema['kind'] = tableType === 'table-data' ? 'data' : 'static'
-  return { kind, topology: { columns: topology.columns, rows }, layout }
-}
-
-function isTableSchema(value: unknown): value is TableSchema {
-  if (!isObject(value))
-    return false
-  if (value.kind !== 'static' && value.kind !== 'data')
-    return false
-  if (!isObject(value.topology))
-    return false
-  return Array.isArray(value.topology.columns)
-    && Array.isArray(value.topology.rows)
-    && isObject(value.layout)
-}
-
-function isBandsTableInput(value: Record<string, unknown>): value is Record<string, unknown> & BandsTableInput {
-  if (!isObject(value.topology) || !Array.isArray(value.topology.columns) || !Array.isArray(value.topology.rows))
-    return false
-  if (!Array.isArray(value.bands))
-    return false
-  return value.bands.every((band): band is { kind: string, rowRange: { start: number, end: number } } => {
-    if (!isObject(band) || typeof band.kind !== 'string' || !isObject(band.rowRange))
-      return false
-    return typeof band.rowRange.start === 'number' && typeof band.rowRange.end === 'number'
-  })
-}
-
-function readTableLayout(raw: Record<string, unknown>): TableSchema['layout'] {
-  const layout: TableSchema['layout'] = {}
-  if (typeof raw.gap === 'number')
-    layout.gap = raw.gap
-  if (raw.borderAppearance === 'all' || raw.borderAppearance === 'outer' || raw.borderAppearance === 'inner' || raw.borderAppearance === 'none')
-    layout.borderAppearance = raw.borderAppearance
-  if (typeof raw.borderWidth === 'number')
-    layout.borderWidth = raw.borderWidth
-  if (raw.borderType === 'solid' || raw.borderType === 'dashed' || raw.borderType === 'dotted')
-    layout.borderType = raw.borderType
-  if (typeof raw.borderColor === 'string')
-    layout.borderColor = raw.borderColor
-  if (typeof raw.fillBlankRows === 'boolean')
-    layout.fillBlankRows = raw.fillBlankRows
-  return layout
-}
-
-/**
- * Encode topology+role table schema back to a portable object for benchmark.
- */
-function encodeTableSchema(table: TableSchema): Record<string, unknown> {
-  return {
-    kind: table.kind,
-    topology: table.topology,
-    layout: table.layout,
   }
 }
