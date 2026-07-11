@@ -169,4 +169,50 @@ describe('encodeToBenchmark', () => {
     }
     expect(() => encodeToBenchmark(legacy as never)).toThrow('BENCHMARK_ENCODE_REQUIRES_CANONICAL_SCHEMA')
   })
+
+  it('recursively encodes default-slot children without leaking canonical fields', () => {
+    const child = {
+      id: 'child',
+      type: 'text',
+      x: 1,
+      y: 2,
+      width: 3,
+      height: 4,
+      modelVersion: 1,
+      model: { text: 'nested' },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' as const },
+    }
+    const parent = {
+      id: 'parent',
+      type: 'container',
+      x: 0,
+      y: 0,
+      width: 10,
+      height: 10,
+      modelVersion: 1,
+      model: {},
+      slots: { default: [child] },
+      bindings: {},
+      output: { visibility: 'include' as const },
+    }
+    const schema = {
+      version: '1.0.0',
+      unit: 'mm' as const,
+      page: { mode: 'fixed' as const, width: 10, height: 10 },
+      guides: { x: [], y: [] },
+      elements: [parent],
+    }
+
+    const encoded = encodeToBenchmark(schema)
+    const encodedChild = (encoded.elements[0]?.children as Array<Record<string, unknown>>)[0]!
+
+    expect(encodedChild).toMatchObject({ id: 'child', type: 'text', props: { text: 'nested' } })
+    expect(encodedChild).not.toHaveProperty('model')
+    expect(encodedChild).not.toHaveProperty('modelVersion')
+    expect(encodedChild).not.toHaveProperty('slots')
+    expect(encodedChild).not.toHaveProperty('bindings')
+    expect(encodedChild).not.toHaveProperty('output')
+  })
 })

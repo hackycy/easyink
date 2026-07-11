@@ -190,7 +190,7 @@ function encodeBenchmarkElement(node: MaterialNode): BenchmarkElementInput {
   if (node.bindings.value !== undefined)
     result.bind = node.bindings.value
   if (node.slots.default !== undefined)
-    result.children = node.slots.default
+    result.children = node.slots.default.map(encodeBenchmarkElement)
   return result
 }
 

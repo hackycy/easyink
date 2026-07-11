@@ -246,6 +246,128 @@ describe('loadDocumentWithProfile', () => {
     expect(result.nodeStates.size).toBe(2)
   })
 
+  it('stops an envelope-invalid owner while still admitting discoverable children', () => {
+    const validateInput = vi.fn(() => [])
+    const base = createTestMaterialManifest({ type: 'seed' }).schemaAdapter
+    const profile = createTestCompiledMaterialProfile([
+      createTestMaterialManifest({ type: 'box', schemaAdapter: { ...base, validateInput } }),
+    ])
+    const result = loadDocumentWithProfile(schemaWith({
+      id: 42,
+      type: 'box',
+      children: [{ id: 'child', type: 'box', props: {} }],
+    }), profile)
+
+    expect(validateInput).toHaveBeenCalledOnce()
+    expect(result.nodeStates.get('invalid:/elements/0')).toMatchObject({ status: 'quarantined', stage: 'envelope' })
+    expect(result.nodeStates.get('child')?.status).toBe('ready')
+  })
+
+  it('reconciles adapter-mutated slots without reloading unchanged children or retaining replaced states', () => {
+    const childValidateInput = vi.fn(() => [])
+    const childBase = createTestMaterialManifest({ type: 'seed' }).schemaAdapter
+    const child = createTestMaterialManifest({ type: 'box', schemaAdapter: { ...childBase, validateInput: childValidateInput } })
+    const ownerBase = createTestMaterialManifest({ type: 'seed' }).schemaAdapter
+    const owner = createTestMaterialManifest({
+      type: 'container',
+      slots: [{ id: 'default', key: { kind: 'exact', value: 'default' }, coordinateSpace: 'owner', layoutParticipation: 'owner', reparent: 'allowed' }],
+      schemaAdapter: {
+        ...ownerBase,
+        normalize: node => ({
+          ...node,
+          slots: {
+            default: [
+              { id: 'replacement', type: 'box', props: { added: true } },
+              node.slots!.default![0]!,
+            ],
+          },
+        }),
+      },
+    })
+    const profile = createTestCompiledMaterialProfile([owner, child])
+    const result = loadDocumentWithProfile(schemaWith({
+      id: 'owner',
+      type: 'container',
+      children: [{ id: 'unchanged', type: 'box', props: {} }, { id: 'removed', type: 'box', props: {} }],
+    }), profile)
+
+    expect(result.schema.elements[0]?.slots.default?.map(node => node.id)).toEqual(['replacement', 'unchanged'])
+    expect(childValidateInput).toHaveBeenCalledTimes(3)
+    expect(result.nodeStates.has('removed')).toBe(false)
+    expect(result.nodeStates.get('replacement')?.status).toBe('ready')
+    expect(result.nodeStates.size).toBe(3)
+  })
+
+  it('serializes hostile thrown values without allowing the diagnostic reporter to throw', () => {
+    const base = createTestMaterialManifest({ type: 'seed' }).schemaAdapter
+    const nullPrototype = Object.create(null) as Record<string, unknown>
+    nullPrototype.message = 'null prototype failure'
+    const revocable = Proxy.revocable({}, {})
+    revocable.revoke()
+    const thrownValues = [nullPrototype, revocable.proxy, Symbol('failure')]
+
+    for (const [index, thrown] of thrownValues.entries()) {
+      const manifest = createTestMaterialManifest({
+        type: `hostile-${index}`,
+        schemaAdapter: { ...base, normalize: () => { throw thrown } },
+      })
+      const result = loadDocumentWithProfile(schemaWith({ id: `n-${index}`, type: `hostile-${index}`, props: {} }), createTestCompiledMaterialProfile([manifest]))
+      expect(result.nodeStates.get(`n-${index}`)?.status).toBe('quarantined')
+      expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: 'MATERIAL_ADAPTER_THROW', cause: expect.objectContaining({ message: expect.any(String) }) }))
+    }
+  })
+
+  it('serializes a hostile preflight error only once', () => {
+    let coercions = 0
+    const thrown = {
+      [Symbol.toPrimitive]: () => {
+        coercions += 1
+        return 'hostile preflight'
+      },
+    }
+    const input = new Proxy({}, {
+      getPrototypeOf: () => {
+        throw thrown
+      },
+    })
+
+    const result = loadDocumentWithProfile(input as never, createTestCompiledMaterialProfile())
+
+    expect(result.diagnostics[0]?.cause?.message).toBe('hostile preflight')
+    expect(coercions).toBe(1)
+  })
+
+  it('quarantines invalid benchmark compat records before invoking an adapter', () => {
+    const validateInput = vi.fn(() => [])
+    const base = createTestMaterialManifest({ type: 'seed' }).schemaAdapter
+    const profile = createTestCompiledMaterialProfile([createTestMaterialManifest({ type: 'box', schemaAdapter: { ...base, validateInput } })])
+    const result = loadDocumentWithProfile(schemaWith({ id: 'bad-compat', type: 'box', props: {}, compat: { rawProps: [] } }), profile)
+
+    expect(validateInput).not.toHaveBeenCalled()
+    expect(result.nodeStates.get('bad-compat')).toMatchObject({ status: 'quarantined', stage: 'envelope' })
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: 'MATERIAL_COMPAT_INVALID', path: '/elements/0/compat/rawProps' }))
+  })
+
+  it('reports a non-record benchmark compat root at the compat boundary', () => {
+    const profile = createTestCompiledMaterialProfile([createTestMaterialManifest({ type: 'box' })])
+    const result = loadDocumentWithProfile(schemaWith({ id: 'bad-compat-root', type: 'box', props: {}, compat: [] }), profile)
+
+    expect(result.nodeStates.get('bad-compat-root')).toMatchObject({ status: 'quarantined', code: 'MATERIAL_COMPAT_INVALID' })
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: 'MATERIAL_COMPAT_INVALID', path: '/elements/0/compat' }))
+  })
+
+  it('rejects malformed RFC 6901 adapter diagnostic paths', () => {
+    const base = createTestMaterialManifest({ type: 'seed' }).schemaAdapter
+    const profile = createTestCompiledMaterialProfile([createTestMaterialManifest({
+      type: 'bad-path',
+      schemaAdapter: { ...base, validate: () => [{ code: 'PRIVATE', severity: 'error', path: '/model/bad~2escape', message: 'bad path' }] },
+    })])
+    const result = loadDocumentWithProfile(schemaWith({ id: 'bad-path', type: 'bad-path', props: {} }), profile)
+
+    expect(result.nodeStates.get('bad-path')).toMatchObject({ status: 'quarantined', code: 'MATERIAL_DIAGNOSTIC_PATH_INVALID' })
+    expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'PRIVATE' }))
+  })
+
   it('freezes diagnostics, causes, states, introspection, and hides map mutation methods', () => {
     const result = loadDocumentWithProfile(schemaWith({ id: 'x', type: 'missing', props: {} }), createTestCompiledMaterialProfile())
     const state = result.nodeStates.get('x')!
@@ -259,6 +381,21 @@ describe('loadDocumentWithProfile', () => {
 })
 
 describe('validateDocumentWithProfile', () => {
+  it('returns a complete quarantined sidecar for malformed canonical envelopes without adapter calls', () => {
+    const validate = vi.fn(() => [])
+    const base = createTestMaterialManifest({ type: 'seed' }).schemaAdapter
+    const profile = createTestCompiledMaterialProfile([createTestMaterialManifest({ type: 'box', schemaAdapter: { ...base, validate } })])
+    const malformed = canonicalSchema(profile.createNode('box', { id: 'bad' })) as unknown as { elements: Array<Record<string, unknown>> }
+    malformed.elements[0]!.slots = null
+    validate.mockClear()
+
+    const report = validateDocumentWithProfile(malformed as never, profile)
+
+    expect(report.valid).toBe(false)
+    expect(validate).not.toHaveBeenCalled()
+    expect(report.nodeStates.get('bad')).toMatchObject({ status: 'quarantined', stage: 'envelope' })
+    expect((report.nodeStates as unknown as { set?: unknown }).set).toBeUndefined()
+  })
   it('validates only affected ready nodes without input validation, migration, or normalization', () => {
     const validateInput = vi.fn(() => [])
     const migrate = vi.fn(node => ({ ...node, modelVersion: 1 }))

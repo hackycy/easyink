@@ -126,6 +126,14 @@ const LEGACY_COMMON_KEYS = new Set([
 ])
 const CANONICAL_UNITS = new Set<UnitType>(['mm', 'pt', 'px', 'inch'])
 const DIAGNOSTIC_ROOTS = ['/model', '/slots', '/bindings', '/editorState', '/output']
+const JSON_POINTER_PATTERN = /^(?:\/(?:[^~/]|~[01])*)+$/
+
+class MaterialCompatValidationError extends Error {
+  constructor(readonly path: `/${string}`) {
+    super('Benchmark material compat state is invalid')
+    this.name = 'MaterialCompatValidationError'
+  }
+}
 
 export function recordSchemaAdapter(currentModelVersion: number): SchemaAdapter {
   if (!Number.isInteger(currentModelVersion) || currentModelVersion < 0)
@@ -162,17 +170,19 @@ export function loadDocumentWithProfile(
     assertMaterialBudget(snapshot, profile.admissionBudget.maxMaterialNodes)
   }
   catch (error) {
-    const budgetError = error instanceof JsonValueValidationError
-      && ['JSON_VALUE_NODE_LIMIT', 'JSON_VALUE_DEPTH_LIMIT', 'JSON_VALUE_STRING_LIMIT'].includes(error.code)
+    const cause = safeError(error)
+    const jsonError = readJsonValueError(error)
+    const budgetError = jsonError !== undefined
+      && ['JSON_VALUE_NODE_LIMIT', 'JSON_VALUE_DEPTH_LIMIT', 'JSON_VALUE_STRING_LIMIT'].includes(jsonError.code)
     diagnostics.push(freezeDiagnostic({
       code: budgetError || readErrorCode(error) === 'MATERIAL_NODE_LIMIT'
         ? 'MATERIAL_ADMISSION_BUDGET_EXCEEDED'
         : 'MATERIAL_MODEL_NOT_JSON',
       severity: 'error',
-      path: error instanceof JsonValueValidationError ? (error.path || '/') : '/',
+      path: jsonError?.path || '/',
       stage: 'envelope',
-      message: safeError(error).message,
-      cause: safeError(error),
+      message: cause.message,
+      cause,
     }))
     return {
       schema: normalizeDocumentInput(null) as DocumentSchema,
@@ -208,6 +218,8 @@ export function validateDocumentWithProfile(
   options: MaterialDocumentValidationOptions = {},
 ): MaterialDocumentValidationReport {
   const diagnostics = validateCanonicalEnvelope(schema)
+  if (diagnostics.length > 0)
+    return invalidEnvelopeReport(schema, diagnostics)
   const nodeStates = new Map<string, MaterialNodeLoadState>()
   const excluded = new Set<string>()
   if (options.mode === 'history-restore') {
@@ -282,17 +294,27 @@ function loadNode(
   nodeStates: Map<string, MaterialNodeLoadState>,
 ): MaterialNode {
   let canonical: MaterialNode
+  let envelopeValid = true
   try {
     canonical = decodeNodeEnvelope(input, path, diagnostics)
   }
   catch (error) {
+    envelopeValid = false
     const raw = isRecord(input) ? input : {}
     canonical = fallbackNode(raw, path)
-    appendDiagnostic(diagnostics, canonical, path, 'envelope', error instanceof JsonValueValidationError ? 'MATERIAL_MODEL_NOT_JSON' : 'MATERIAL_ENVELOPE_INVALID', safeError(error).message, error)
+    const errorPath = error instanceof MaterialCompatValidationError ? error.path : path
+    const code = error instanceof JsonValueValidationError
+      ? 'MATERIAL_MODEL_NOT_JSON'
+      : error instanceof MaterialCompatValidationError
+        ? 'MATERIAL_COMPAT_INVALID'
+        : 'MATERIAL_ENVELOPE_INVALID'
+    appendDiagnostic(diagnostics, canonical, errorPath, 'envelope', code, 'Material envelope is invalid', error)
   }
 
   // Standard child admission is independent of owner-private success.
   canonical = { ...canonical, slots: loadSlots(canonical.slots as unknown as Record<string, MaterialNodeInput[]>, path, document, profile, diagnostics, nodeStates) }
+  if (!envelopeValid)
+    return quarantineNode(canonical, diagnostics, nodeStates)
   const manifest = profile.getManifest(canonical.type)
   if (!manifest) {
     appendDiagnostic(diagnostics, canonical, path, 'resolve', 'MATERIAL_TYPE_UNKNOWN', 'Unknown material type')
@@ -310,7 +332,7 @@ function loadNode(
   if (!inputIssues.ok || inputIssues.hasErrors)
     return quarantineNode(canonical, diagnostics, nodeStates)
 
-  const migration = runMigrations(canonical, manifest.schemaAdapter, context, path, diagnostics)
+  const migration = runMigrations(canonical, manifest.schemaAdapter, context, path, document, profile, diagnostics, nodeStates)
   if (!migration.ok)
     return quarantineNode(migration.node as MaterialNode, diagnostics, nodeStates)
   let node = migration.node as MaterialNode
@@ -321,7 +343,10 @@ function loadNode(
   const guarded = assertAllowedAdapterMutation(node, normalized.node, path, 'normalize', diagnostics)
   if (!guarded.ok)
     return quarantineNode(node, diagnostics, nodeStates)
-  node = guarded.node as MaterialNode
+  node = {
+    ...guarded.node,
+    slots: reconcileSlots(guarded.node.slots ?? {}, node.slots, path, document, profile, diagnostics, nodeStates),
+  } as MaterialNode
 
   if (context.sourceUnit !== context.documentUnit) {
     node = convertCanonicalEnvelopeGeometry(node, context.sourceUnit, context.documentUnit)
@@ -444,7 +469,7 @@ function decodeNodeEnvelope(input: MaterialNodeInput, path: `/${string}`, diagno
   }
   if (isRecord(raw.extensions))
     node.extensions = cloneJsonRecord(raw.extensions)
-  const compat = isRecord(raw.compat) ? cloneJsonRecord(raw.compat) : {}
+  const compat = raw.compat === undefined ? {} : cloneBenchmarkCompat(raw.compat, `${path}/compat`)
   const legacyBinding = raw.binding ?? raw.bind
   if ((Array.isArray(legacyBinding) || (isRecord(legacyBinding) && Number.isInteger(legacyBinding.bindIndex))) && !('rawBind' in compat))
     compat.rawBind = cloneJsonValue(legacyBinding as JsonValue)
@@ -495,6 +520,34 @@ function decodeScalarLegacyBinding(value: unknown): MaterialNode['bindings'] {
   return { value: binding as unknown as BindingRef }
 }
 
+function cloneBenchmarkCompat(value: unknown, path: `/${string}`): Record<string, unknown> {
+  let compat: Record<string, unknown>
+  try {
+    compat = cloneJsonRecord(value)
+  }
+  catch {
+    throw new MaterialCompatValidationError(path)
+  }
+  const allowed = new Set(['rawProps', 'rawBind', 'passthrough', 'materials'])
+  for (const key of Object.keys(compat)) {
+    if (!allowed.has(key))
+      throw new MaterialCompatValidationError(`${path}/${escapePointer(key)}`)
+  }
+  for (const field of ['rawProps', 'passthrough'] as const) {
+    if (field in compat && !isRecord(compat[field]))
+      throw new MaterialCompatValidationError(`${path}/${field}`)
+  }
+  if ('materials' in compat) {
+    if (!isRecord(compat.materials))
+      throw new MaterialCompatValidationError(`${path}/materials`)
+    for (const [type, payload] of Object.entries(compat.materials)) {
+      if (!isRecord(payload))
+        throw new MaterialCompatValidationError(`${path}/materials/${escapePointer(type)}`)
+    }
+  }
+  return compat
+}
+
 function portForPolicy(policy: MaterialBindingPortPolicy, position: number): string {
   return policy.key.kind === 'exact' ? policy.key.value : `${policy.key.value}${position}`
 }
@@ -504,7 +557,10 @@ function runMigrations(
   adapter: SchemaAdapter,
   context: SchemaAdapterContext,
   path: `/${string}`,
+  document: DocumentSchema,
+  profile: CompiledMaterialProfile,
   diagnostics: MaterialLoadDiagnostic[],
+  nodeStates: Map<string, MaterialNodeLoadState>,
 ): { ok: boolean, node: AdaptableMaterialNode } {
   let current = cloneAdaptableNode(node)
   if (current.modelVersion > adapter.currentModelVersion) {
@@ -528,7 +584,11 @@ function runMigrations(
     const guarded = assertAllowedAdapterMutation(current as MaterialNode, migrated, path, 'migrate', diagnostics)
     if (!guarded.ok)
       return { ok: false, node: current }
-    current = { ...guarded.node, modelVersion: migration.to }
+    current = {
+      ...guarded.node,
+      modelVersion: migration.to,
+      slots: reconcileSlots(guarded.node.slots ?? {}, current.slots ?? {}, path, document, profile, diagnostics, nodeStates),
+    }
   }
   return { ok: true, node: current }
 }
@@ -572,7 +632,9 @@ function callIssues(
   }
   let hasErrors = false
   for (const issue of raw) {
-    const validPath = typeof issue?.path === 'string' && DIAGNOSTIC_ROOTS.some(root => issue.path === root || issue.path.startsWith(`${root}/`))
+    const validPath = typeof issue?.path === 'string'
+      && JSON_POINTER_PATTERN.test(issue.path)
+      && DIAGNOSTIC_ROOTS.some(root => issue.path === root || issue.path.startsWith(`${root}/`))
     if (!issue || typeof issue.code !== 'string' || !issue.code || !['error', 'warning'].includes(issue.severity) || typeof issue.message !== 'string' || !validPath) {
       appendDiagnostic(diagnostics, node, path, stage, 'MATERIAL_DIAGNOSTIC_PATH_INVALID', 'Material adapter diagnostic is invalid')
       hasErrors = true
@@ -663,14 +725,153 @@ function loadSlots(
   return result
 }
 
+function reconcileSlots(
+  candidate: Record<string, MaterialNodeInput[]>,
+  previous: Record<string, MaterialNodeInput[]>,
+  ownerPath: `/${string}`,
+  document: DocumentSchema,
+  profile: CompiledMaterialProfile,
+  diagnostics: MaterialLoadDiagnostic[],
+  nodeStates: Map<string, MaterialNodeLoadState>,
+): MaterialNode['slots'] {
+  const candidateSlots = isRecord(candidate) ? candidate : {}
+  const previousSlots = isRecord(previous) ? previous : {}
+  const result: MaterialNode['slots'] = {}
+  for (const [slot, rawChildren] of Object.entries(candidateSlots)) {
+    const children = Array.isArray(rawChildren) ? rawChildren : []
+    const priorChildren = Array.isArray(previousSlots[slot]) ? previousSlots[slot] : []
+    const reused = new Set<number>()
+    result[slot] = children.map((child, index) => {
+      const priorIndex = priorChildren.findIndex((prior, candidateIndex) => !reused.has(candidateIndex)
+        && jsonEqual(child as unknown as JsonValue, prior as unknown as JsonValue))
+      if (priorIndex >= 0)
+        reused.add(priorIndex)
+      return priorIndex >= 0
+        ? priorChildren[priorIndex] as MaterialNode
+        : loadNode(child, `${ownerPath}/slots/${escapePointer(slot)}/${index}`, document, profile, diagnostics, nodeStates)
+    })
+  }
+
+  const retainedIds = collectCanonicalNodeIds(result)
+  for (const children of Object.values(previousSlots)) {
+    if (!Array.isArray(children))
+      continue
+    for (const child of children) {
+      for (const id of collectCanonicalNodeIdsFrom(child)) {
+        if (!retainedIds.has(id))
+          nodeStates.delete(id)
+      }
+    }
+  }
+  return result
+}
+
+function collectCanonicalNodeIds(slots: MaterialNode['slots']): Set<string> {
+  const ids = new Set<string>()
+  for (const children of Object.values(slots)) {
+    for (const child of children) {
+      for (const id of collectCanonicalNodeIdsFrom(child))
+        ids.add(id)
+    }
+  }
+  return ids
+}
+
+function collectCanonicalNodeIdsFrom(root: MaterialNodeInput): Set<string> {
+  const ids = new Set<string>()
+  const stack: unknown[] = [root]
+  const seen = new WeakSet<object>()
+  while (stack.length > 0) {
+    const value = stack.pop()
+    if (!isRecord(value) || seen.has(value))
+      continue
+    seen.add(value)
+    if (typeof value.id === 'string')
+      ids.add(value.id)
+    if (!isRecord(value.slots))
+      continue
+    for (const children of Object.values(value.slots)) {
+      if (Array.isArray(children))
+        stack.push(...children)
+    }
+  }
+  return ids
+}
+
 function validateCanonicalEnvelope(schema: DocumentSchema): MaterialLoadDiagnostic[] {
-  return validateSchemaIssues(schema).map(issue => freezeDiagnostic({
-    code: issue.code,
-    severity: 'error',
-    path: normalizePointer(issue.path),
-    stage: 'envelope',
-    message: issue.message,
-  }))
+  try {
+    return validateSchemaIssues(schema).map(issue => freezeDiagnostic({
+      code: issue.code,
+      severity: 'error',
+      path: normalizePointer(issue.path),
+      stage: 'envelope',
+      message: issue.message,
+    }))
+  }
+  catch (error) {
+    const cause = safeError(error)
+    return [freezeDiagnostic({
+      code: 'MATERIAL_CANONICAL_ENVELOPE_INVALID',
+      severity: 'error',
+      path: '/',
+      stage: 'envelope',
+      message: cause.message,
+      cause,
+    })]
+  }
+}
+
+function invalidEnvelopeReport(schema: DocumentSchema, diagnostics: MaterialLoadDiagnostic[]): MaterialDocumentValidationReport {
+  const nodeStates = new Map<string, MaterialNodeLoadState>()
+  walkDiscoverableNodes(schema, (id, type, path) => {
+    const diagnostic = freezeDiagnostic({
+      code: 'MATERIAL_CANONICAL_ENVELOPE_INVALID',
+      severity: 'error',
+      path,
+      stage: 'envelope',
+      materialType: type,
+      nodeId: id,
+      message: 'Canonical material envelope is invalid',
+    })
+    diagnostics.push(diagnostic)
+    nodeStates.set(id, freezeState('quarantined', [diagnostic], undefined, diagnostic))
+  })
+  return {
+    valid: false,
+    diagnostics: Object.freeze(diagnostics),
+    nodeStates: readonlyMap(nodeStates),
+  }
+}
+
+function walkDiscoverableNodes(schema: unknown, visit: (id: string, type: string | undefined, path: `/${string}`) => void): void {
+  const elements = safeOwnDataValue(schema, 'elements')
+  if (!safeIsArray(elements))
+    return
+  const stack: Array<{ value: unknown, path: `/${string}` }> = []
+  for (let index = elements.length - 1; index >= 0; index -= 1)
+    stack.push({ value: safeOwnDataValue(elements, String(index)), path: `/elements/${index}` })
+  const seen = new WeakSet<object>()
+  while (stack.length > 0) {
+    const current = stack.pop()!
+    if (!safeIsRecord(current.value) || seen.has(current.value))
+      continue
+    seen.add(current.value)
+    const id = safeOwnDataValue(current.value, 'id')
+    const type = safeOwnDataValue(current.value, 'type')
+    if (typeof id === 'string' && id)
+      visit(id, typeof type === 'string' ? type : undefined, current.path)
+    const slots = safeOwnDataValue(current.value, 'slots')
+    for (const [slot, children] of safeRecordEntries(slots)) {
+      if (!safeIsArray(children))
+        continue
+      for (let index = children.length - 1; index >= 0; index -= 1) {
+        stack.push({
+          value: safeOwnDataValue(children, String(index)),
+          path: `${current.path}/slots/${escapePointer(slot)}/${index}`,
+        })
+      }
+    }
+  }
 }
 
 function validateMaterialGraph(
@@ -846,10 +1047,22 @@ function fallbackNode(raw: Record<string, unknown>, path: string): MaterialNode 
     height: positiveOr(raw.height, 1),
     modelVersion: Number.isInteger(raw.modelVersion) ? raw.modelVersion as number : 0,
     model: isRecord(raw.model) ? { ...raw.model } : isRecord(raw.props) ? { ...raw.props } : {},
-    slots: {},
+    slots: discoverInputSlots(raw) as unknown as MaterialNode['slots'],
     bindings: {},
     output: { visibility: 'include' },
   }
+}
+
+function discoverInputSlots(raw: Record<string, unknown>): Record<string, MaterialNodeInput[]> {
+  if (isRecord(raw.slots)) {
+    const slots: Record<string, MaterialNodeInput[]> = {}
+    for (const [slot, children] of Object.entries(raw.slots)) {
+      if (Array.isArray(children))
+        slots[slot] = children as MaterialNodeInput[]
+    }
+    return slots
+  }
+  return Array.isArray(raw.children) ? { default: raw.children as MaterialNodeInput[] } : {}
 }
 
 function readLegacySourceUnit(input: MaterialNodeInput): UnitType | undefined {
@@ -861,18 +1074,108 @@ function readVisibility(value: unknown): MaterialNode['output']['visibility'] | 
 }
 
 function safeError(error: unknown): { name?: string, message: string } {
-  if (!isRecord(error))
-    return { message: typeof error === 'string' ? error : 'Unknown error' }
-  const name = Object.getOwnPropertyDescriptor(error, 'name')?.value
-    ?? Object.getOwnPropertyDescriptor(Object.getPrototypeOf(error) as object, 'name')?.value
-  const message = Object.getOwnPropertyDescriptor(error, 'message')?.value
-  return { ...(typeof name === 'string' ? { name } : {}), message: typeof message === 'string' ? message : 'Unknown error' }
+  let name: unknown
+  let message: unknown
+  const objectLike = (typeof error === 'object' && error !== null) || typeof error === 'function'
+  if (objectLike) {
+    try {
+      const ownName = Object.getOwnPropertyDescriptor(error, 'name')
+      const ownMessage = Object.getOwnPropertyDescriptor(error, 'message')
+      name = ownName && 'value' in ownName ? ownName.value : undefined
+      message = ownMessage && 'value' in ownMessage ? ownMessage.value : undefined
+      if (name === undefined) {
+        const prototype = Object.getPrototypeOf(error)
+        if (prototype !== null) {
+          const inheritedName = Object.getOwnPropertyDescriptor(prototype, 'name')
+          name = inheritedName && 'value' in inheritedName ? inheritedName.value : undefined
+        }
+      }
+    }
+    catch {
+      // Hostile proxies and descriptors must not escape diagnostic reporting.
+    }
+  }
+  if (typeof message !== 'string') {
+    try {
+      const rendered = String(error)
+      if (typeof rendered === 'string' && rendered)
+        message = rendered
+    }
+    catch {
+      // A throwing coercion falls back to the stable message below.
+    }
+  }
+  return {
+    ...(typeof name === 'string' ? { name } : {}),
+    message: typeof message === 'string' ? message : 'Unknown error',
+  }
+}
+
+function safeIsArray(value: unknown): value is unknown[] {
+  try {
+    return Array.isArray(value)
+  }
+  catch {
+    return false
+  }
+}
+
+function safeIsRecord(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null)
+    return false
+  return !safeIsArray(value)
+}
+
+function safeOwnDataValue(value: unknown, key: string): unknown {
+  if ((typeof value !== 'object' || value === null) && typeof value !== 'function')
+    return undefined
+  try {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key)
+    return descriptor && 'value' in descriptor ? descriptor.value : undefined
+  }
+  catch {
+    return undefined
+  }
+}
+
+function safeRecordEntries(value: unknown): Array<[string, unknown]> {
+  if (!safeIsRecord(value))
+    return []
+  try {
+    const entries: Array<[string, unknown]> = []
+    for (const key of Reflect.ownKeys(value)) {
+      if (typeof key !== 'string')
+        continue
+      const descriptor = Object.getOwnPropertyDescriptor(value, key)
+      if (descriptor && descriptor.enumerable && 'value' in descriptor)
+        entries.push([key, descriptor.value])
+    }
+    return entries
+  }
+  catch {
+    return []
+  }
 }
 
 function readErrorCode(error: unknown): string | undefined {
-  return isRecord(error) && typeof Object.getOwnPropertyDescriptor(error, 'message')?.value === 'string'
-    ? Object.getOwnPropertyDescriptor(error, 'message')?.value as string
-    : undefined
+  try {
+    const descriptor = (typeof error === 'object' && error !== null) || typeof error === 'function'
+      ? Object.getOwnPropertyDescriptor(error, 'message')
+      : undefined
+    return descriptor && 'value' in descriptor && typeof descriptor.value === 'string' ? descriptor.value : undefined
+  }
+  catch {
+    return undefined
+  }
+}
+
+function readJsonValueError(error: unknown): { code: string, path: `/${string}` | '' } | undefined {
+  try {
+    return error instanceof JsonValueValidationError ? { code: error.code, path: error.path } : undefined
+  }
+  catch {
+    return undefined
+  }
 }
 
 function requireString(value: unknown, path: string): string {
