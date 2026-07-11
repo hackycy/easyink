@@ -497,6 +497,7 @@ describe('loadDocumentWithProfile', () => {
 
     expect(result.diagnostics.find(item => item.nodeId === 'first')?.path).toBe('/elements/0/slots/default/1/model')
     expect(result.nodeStates.get('first')?.diagnostics[0]?.path).toBe('/elements/0/slots/default/1/model')
+    expect(result.nodeStates.get('first')?.diagnostics).toHaveLength(1)
     expect(result.diagnostics.find(item => item.nodeId === 'second')?.path).toBe('/elements/0/slots/default/0/model')
   })
 
@@ -522,6 +523,37 @@ describe('loadDocumentWithProfile', () => {
     result.nodeStates.forEach((_state, _id, map) => callbackMaps.add(map))
 
     expect(callbackMaps).toEqual(new Set([result.nodeStates]))
+  })
+
+  it('indexes diagnostics without rescanning the growing document list per node', () => {
+    const base = createTestMaterialManifest({ type: 'seed' }).schemaAdapter
+    const warning = createTestMaterialManifest({
+      type: 'warning',
+      schemaAdapter: { ...base, validate: () => [{ code: 'WARNING', severity: 'warning', path: '/model', message: 'warning' }] },
+    })
+    const profile = createTestCompiledMaterialProfile([warning])
+    const elements = Array.from({ length: 10_000 }, (_, index) => index % 2 === 0
+      ? { id: `unknown-${index}`, type: 'missing', props: {} }
+      : { id: `warning-${index}`, type: 'warning', props: {} })
+    const originalFilter = Array.prototype.filter
+    let largeFilterScans = 0
+    const filter = vi.spyOn(Array.prototype, 'filter').mockImplementation(function (this: unknown[], callback: never, thisArg?: unknown) {
+      if (this.length > 100)
+        largeFilterScans += 1
+      return originalFilter.call(this, callback, thisArg)
+    } as never)
+
+    const result = loadDocumentWithProfile({
+      unit: 'mm',
+      page: { mode: 'fixed', width: 100, height: 100 },
+      elements,
+    }, profile)
+    filter.mockRestore()
+
+    expect(result.nodeStates.size).toBe(10_000)
+    expect(result.nodeStates.get('unknown-0')?.status).toBe('quarantined')
+    expect(result.nodeStates.get('warning-1')?.diagnostics).toContainEqual(expect.objectContaining({ code: 'WARNING' }))
+    expect(largeFilterScans).toBeLessThan(10)
   })
 })
 
@@ -590,6 +622,7 @@ describe('validateDocumentWithProfile', () => {
     })
     expect(edited.valid).toBe(false)
     expect(edited.diagnostics).toContainEqual(expect.objectContaining({ code: 'MATERIAL_NODE_READ_ONLY', nodeId: 'opaque' }))
+    expect(edited.nodeStates.get('opaque')?.diagnostics).toContainEqual(expect.objectContaining({ code: 'MATERIAL_NODE_READ_ONLY' }))
 
     const deleted = validateDocumentWithProfile(canonicalSchema(box!), profile, {
       baselineNodeStates: loaded.nodeStates,

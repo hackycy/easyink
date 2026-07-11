@@ -127,6 +127,12 @@ const LEGACY_COMMON_KEYS = new Set([
 const CANONICAL_UNITS = new Set<UnitType>(['mm', 'pt', 'px', 'inch'])
 const DIAGNOSTIC_ROOTS = ['/model', '/slots', '/bindings', '/editorState', '/output']
 const JSON_POINTER_PATTERN = /^(?:\/(?:[^~/]|~[01])*)+$/
+const DIAGNOSTIC_INDEXES = new WeakMap<readonly MaterialLoadDiagnostic[], DiagnosticIndex>()
+
+interface DiagnosticIndex {
+  byNode: Map<string, MaterialLoadDiagnostic[]>
+  positions: WeakMap<object, { index: number, nodeId: string }>
+}
 
 class MaterialCompatValidationError extends Error {
   constructor(readonly path: `/${string}`) {
@@ -174,7 +180,7 @@ export function loadDocumentWithProfile(
     const jsonError = readJsonValueError(error)
     const budgetError = jsonError !== undefined
       && ['JSON_VALUE_NODE_LIMIT', 'JSON_VALUE_DEPTH_LIMIT', 'JSON_VALUE_STRING_LIMIT'].includes(jsonError.code)
-    diagnostics.push(freezeDiagnostic({
+    appendIndexedDiagnostic(diagnostics, freezeDiagnostic({
       code: budgetError || readErrorCode(error) === 'MATERIAL_NODE_LIMIT'
         ? 'MATERIAL_ADMISSION_BUDGET_EXCEEDED'
         : 'MATERIAL_MODEL_NOT_JSON',
@@ -208,8 +214,8 @@ export function loadDocumentWithProfile(
   const graphDiagnostics = validateMaterialGraph(schema, profile, new Set(
     [...nodeStates].filter(([, state]) => state.status === 'quarantined').map(([id]) => id),
   ))
-  diagnostics.push(...graphDiagnostics)
-  integrateGraphDiagnostics(nodeStates, graphDiagnostics)
+  appendDiagnostics(diagnostics, graphDiagnostics)
+  integrateNodeDiagnostics(schema, nodeStates, diagnostics)
   return {
     schema,
     diagnostics: Object.freeze(diagnostics),
@@ -245,7 +251,7 @@ export function validateDocumentWithProfile(
     })
     for (const targetId of options.targetNodeStates.keys()) {
       if (!liveIds.has(targetId)) {
-        diagnostics.push(freezeDiagnostic({
+        appendIndexedDiagnostic(diagnostics, freezeDiagnostic({
           code: 'MATERIAL_HISTORY_NODE_STATE_MISMATCH',
           severity: 'error',
           path: '/',
@@ -283,8 +289,8 @@ export function validateDocumentWithProfile(
     })
   }
   const graphDiagnostics = validateMaterialGraph(schema, profile, excluded)
-  diagnostics.push(...graphDiagnostics)
-  integrateGraphDiagnostics(nodeStates, graphDiagnostics)
+  appendDiagnostics(diagnostics, graphDiagnostics)
+  integrateNodeDiagnostics(schema, nodeStates, diagnostics)
   return {
     valid: diagnostics.every(diagnostic => diagnostic.severity !== 'error'),
     diagnostics: Object.freeze(diagnostics),
@@ -419,7 +425,7 @@ function decodeNodeEnvelope(input: MaterialNodeInput, path: `/${string}`, diagno
   const canonicalModel = isRecord(raw.model) && Number.isInteger(raw.modelVersion)
   const model = canonicalModel ? cloneJsonRecord(raw.model) : cloneJsonRecord(isRecord(raw.props) ? raw.props : {})
   if ('diagnostics' in raw) {
-    diagnostics.push(freezeDiagnostic({
+    appendIndexedDiagnostic(diagnostics, freezeDiagnostic({
       code: 'MATERIAL_LEGACY_DIAGNOSTICS_IGNORED',
       severity: 'warning',
       path: `${path}/diagnostics`,
@@ -929,7 +935,7 @@ function remapReusedSlotDiagnostics(
     const diagnostic = diagnostics[index]!
     const move = diagnostic.nodeId ? movesByNodeId.get(diagnostic.nodeId) : undefined
     if (move && hasPointerPrefix(diagnostic.path, move.from))
-      diagnostics[index] = remapDiagnostic(diagnostic, move.from, move.to)
+      replaceDiagnostic(diagnostics, index, remapDiagnostic(diagnostic, move.from, move.to))
   }
 }
 
@@ -999,7 +1005,7 @@ function invalidEnvelopeReport(schema: DocumentSchema, diagnostics: MaterialLoad
       nodeId: id,
       message: 'Canonical material envelope is invalid',
     })
-    diagnostics.push(diagnostic)
+    appendIndexedDiagnostic(diagnostics, diagnostic)
     nodeStates.set(id, freezeState('quarantined', [diagnostic], undefined, diagnostic))
   })
   return {
@@ -1068,26 +1074,117 @@ function validateMaterialGraph(
   return diagnostics
 }
 
-function integrateGraphDiagnostics(
+function integrateNodeDiagnostics(
+  schema: DocumentSchema,
   nodeStates: Map<string, MaterialNodeLoadState>,
-  graphDiagnostics: readonly MaterialLoadDiagnostic[],
+  diagnostics: MaterialLoadDiagnostic[],
 ): void {
-  const byNode = new Map<string, MaterialLoadDiagnostic[]>()
-  for (const diagnostic of graphDiagnostics) {
-    if (!diagnostic.nodeId)
-      continue
-    const list = byNode.get(diagnostic.nodeId) ?? []
-    list.push(diagnostic)
-    byNode.set(diagnostic.nodeId, list)
-  }
-  for (const [nodeId, additions] of byNode) {
+  const livePaths = new Map<string, Set<string>>()
+  walkCanonicalNodes(schema, (node, path) => {
+    const paths = livePaths.get(node.id) ?? new Set<string>()
+    paths.add(path)
+    livePaths.set(node.id, paths)
+  })
+  for (const [nodeId, ownDiagnostics] of getDiagnosticIndex(diagnostics).byNode) {
     const prior = nodeStates.get(nodeId)
     if (!prior)
+      continue
+    const existing = new Set(prior.diagnostics)
+    const existingKeys = new Set(prior.diagnostics.map(diagnosticKey))
+    const paths = livePaths.get(nodeId)
+    const additions = ownDiagnostics.filter((diagnostic) => {
+      if (existing.has(diagnostic) || paths === undefined || !isWithinLiveNodePath(diagnostic.path, paths))
+        return false
+      const key = diagnosticKey(diagnostic)
+      if (existingKeys.has(key))
+        return false
+      existingKeys.add(key)
+      return true
+    })
+    if (additions.length === 0)
       continue
     const combined = [...prior.diagnostics, ...additions]
     const primary = combined.find(diagnostic => diagnostic.severity === 'error')
     nodeStates.set(nodeId, freezeState(primary ? 'quarantined' : prior.status, combined, prior.introspection, primary))
   }
+}
+
+function diagnosticKey(diagnostic: MaterialLoadDiagnostic): string {
+  return [
+    diagnostic.code,
+    diagnostic.severity,
+    diagnostic.path,
+    diagnostic.stage,
+    diagnostic.materialType ?? '',
+    diagnostic.nodeId ?? '',
+    diagnostic.message,
+    diagnostic.cause?.name ?? '',
+    diagnostic.cause?.message ?? '',
+  ].map(value => `${value.length}:${value}`).join('|')
+}
+
+function isWithinLiveNodePath(path: string, livePaths: ReadonlySet<string>): boolean {
+  let candidate = path
+  while (candidate.length > 0) {
+    if (livePaths.has(candidate))
+      return true
+    const separator = candidate.lastIndexOf('/')
+    if (separator <= 0)
+      return false
+    candidate = candidate.slice(0, separator)
+  }
+  return false
+}
+
+function getDiagnosticIndex(diagnostics: readonly MaterialLoadDiagnostic[]): DiagnosticIndex {
+  const existing = DIAGNOSTIC_INDEXES.get(diagnostics)
+  if (existing)
+    return existing
+  const index: DiagnosticIndex = { byNode: new Map(), positions: new WeakMap() }
+  DIAGNOSTIC_INDEXES.set(diagnostics, index)
+  for (const diagnostic of diagnostics)
+    indexDiagnostic(index, diagnostic)
+  return index
+}
+
+function indexDiagnostic(index: DiagnosticIndex, diagnostic: MaterialLoadDiagnostic): void {
+  if (!diagnostic.nodeId)
+    return
+  const list = index.byNode.get(diagnostic.nodeId) ?? []
+  const position = list.length
+  list.push(diagnostic)
+  index.byNode.set(diagnostic.nodeId, list)
+  index.positions.set(diagnostic, { index: position, nodeId: diagnostic.nodeId })
+}
+
+function appendIndexedDiagnostic(diagnostics: MaterialLoadDiagnostic[], diagnostic: MaterialLoadDiagnostic): void {
+  const index = getDiagnosticIndex(diagnostics)
+  diagnostics.push(diagnostic)
+  indexDiagnostic(index, diagnostic)
+}
+
+function appendDiagnostics(diagnostics: MaterialLoadDiagnostic[], additions: readonly MaterialLoadDiagnostic[]): void {
+  for (const diagnostic of additions)
+    appendIndexedDiagnostic(diagnostics, diagnostic)
+}
+
+function replaceDiagnostic(diagnostics: MaterialLoadDiagnostic[], index: number, replacement: MaterialLoadDiagnostic): void {
+  const diagnosticIndex = getDiagnosticIndex(diagnostics)
+  const prior = diagnostics[index]!
+  diagnostics[index] = replacement
+  const position = diagnosticIndex.positions.get(prior)
+  if (!position || position.nodeId !== replacement.nodeId) {
+    indexDiagnostic(diagnosticIndex, replacement)
+    return
+  }
+  const list = diagnosticIndex.byNode.get(position.nodeId)!
+  list[position.index] = replacement
+  diagnosticIndex.positions.delete(prior)
+  diagnosticIndex.positions.set(replacement, position)
+}
+
+function diagnosticsForNode(diagnostics: readonly MaterialLoadDiagnostic[], nodeId: string): readonly MaterialLoadDiagnostic[] {
+  return getDiagnosticIndex(diagnostics).byNode.get(nodeId) ?? []
 }
 
 function walkCanonicalNodes(schema: DocumentSchema, visit: (node: MaterialNode, path: `/${string}`) => void): void {
@@ -1112,7 +1209,7 @@ function quarantineNode(
   states: Map<string, MaterialNodeLoadState>,
   owners?: WeakMap<object, MaterialNodeLoadState>,
 ): MaterialNode {
-  const own = diagnostics.filter(diagnostic => diagnostic.nodeId === node.id)
+  const own = diagnosticsForNode(diagnostics, node.id)
   const firstError = own.find(diagnostic => diagnostic.severity === 'error')
   const state = freezeState('quarantined', own, undefined, firstError)
   states.set(node.id, state)
@@ -1127,7 +1224,7 @@ function recordReadyNode(
   introspection: Readonly<MaterialIntrospection>,
   owners?: WeakMap<object, MaterialNodeLoadState>,
 ): void {
-  const state = freezeState('ready', diagnostics.filter(diagnostic => diagnostic.nodeId === node.id), introspection)
+  const state = freezeState('ready', diagnosticsForNode(diagnostics, node.id), introspection)
   states.set(node.id, state)
   owners?.set(node, state)
 }
@@ -1166,7 +1263,7 @@ function appendDiagnostic(
     message,
     ...(error === undefined ? {} : { cause: safeError(error) }),
   })
-  diagnostics.push(diagnostic)
+  appendIndexedDiagnostic(diagnostics, diagnostic)
   return diagnostic
 }
 
