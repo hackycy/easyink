@@ -113,27 +113,46 @@ describe('material facet host', () => {
     expect(instance.diagnostic?.cause?.message).toEqual(expect.any(String))
   })
 
-  it('continues host disposal after one value disposer fails and freezes diagnostics', async () => {
-    const failedDispose = vi.fn(async () => {
-      throw new Error('dispose failed')
+  it('disposes active instances sequentially and preserves failure diagnostic order', async () => {
+    let releaseFirst!: () => void
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve
+    })
+    const events: string[] = []
+    const firstDispose = vi.fn(async () => {
+      events.push('first:start')
+      await firstGate
+      events.push('first:settle')
+      throw new Error('first dispose failed')
+    })
+    const secondDispose = vi.fn(async () => {
+      events.push('second:start')
+      throw new Error('second dispose failed')
     })
     const healthyDispose = vi.fn(async () => {})
     const profile = createTestCompiledMaterialProfile([
-      createTestMaterialManifest({ type: 'broken', viewer: async () => ({ dispose: failedDispose }) }),
+      createTestMaterialManifest({ type: 'first', viewer: async () => ({ dispose: firstDispose }) }),
+      createTestMaterialManifest({ type: 'second', viewer: async () => ({ dispose: secondDispose }) }),
       createTestMaterialManifest({ type: 'healthy', viewer: async () => ({ dispose: healthyDispose }) }),
     ])
     const host = new MaterialFacetHost()
-    await Promise.all([
-      host.activate(profile, 'broken', 'viewer'),
-      host.activate(profile, 'healthy', 'viewer'),
-    ])
+    await host.activate(profile, 'first', 'viewer')
+    await host.activate(profile, 'second', 'viewer')
+    await host.activate(profile, 'healthy', 'viewer')
 
-    const diagnostics = await host.dispose()
+    const disposal = host.dispose()
+    expect(events).toEqual(['first:start'])
+    expect(secondDispose).not.toHaveBeenCalled()
+    expect(healthyDispose).not.toHaveBeenCalled()
+    releaseFirst()
+    const diagnostics = await disposal
 
-    expect(failedDispose).toHaveBeenCalledTimes(1)
+    expect(events).toEqual(['first:start', 'first:settle', 'second:start'])
+    expect(firstDispose).toHaveBeenCalledTimes(1)
+    expect(secondDispose).toHaveBeenCalledTimes(1)
     expect(healthyDispose).toHaveBeenCalledTimes(1)
-    expect(diagnostics).toHaveLength(1)
-    expect(diagnostics[0]?.code).toBe('MATERIAL_FACET_DISPOSE_FAILED')
+    expect(diagnostics.map(diagnostic => diagnostic.materialType)).toEqual(['first', 'second'])
+    expect(diagnostics.every(diagnostic => diagnostic.code === 'MATERIAL_FACET_DISPOSE_FAILED')).toBe(true)
     expect(Object.isFrozen(diagnostics)).toBe(true)
     expect(Object.isFrozen(diagnostics[0])).toBe(true)
   })

@@ -88,7 +88,7 @@ export class MaterialFacetHost {
 
   async dispose(): Promise<readonly FacetDiagnostic[]> {
     const diagnostics: FacetDiagnostic[] = []
-    await Promise.all([...this.active].map(async (instance) => {
+    for (const instance of [...this.active]) {
       try {
         await instance.dispose()
       }
@@ -97,7 +97,7 @@ export class MaterialFacetHost {
           ? error.diagnostic
           : createDiagnostic(instance.profile, instance.materialType, instance.surface, 'MATERIAL_FACET_DISPOSE_FAILED', error))
       }
-    }))
+    }
     return Object.freeze(diagnostics)
   }
 
