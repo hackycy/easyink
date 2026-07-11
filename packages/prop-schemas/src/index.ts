@@ -1,7 +1,6 @@
-import type { PropSchema } from '@easyink/core'
-import { UpdateMaterialBehaviorCommand } from '@easyink/core'
+import type { PropertyAccessor, PropertyDescriptor } from '@easyink/core'
 
-type MaterialNode = Parameters<NonNullable<PropSchema['read']>>[0]
+type MaterialNode = Parameters<PropertyAccessor['read']>[0]
 
 interface NodePlacementConfig {
   mode?: 'flow' | 'fixed'
@@ -17,29 +16,29 @@ interface NodeRepeatConfig {
   scope?: 'none' | 'every-output-page'
 }
 
-export const FONT_WEIGHT_OPTIONS: NonNullable<PropSchema['enum']> = [
+export const FONT_WEIGHT_OPTIONS: NonNullable<PropertyDescriptor['enum']> = [
   { label: 'designer.option.normal', value: 'normal' },
   { label: 'designer.option.bold', value: 'bold' },
 ]
 
-export const FONT_STYLE_OPTIONS: NonNullable<PropSchema['enum']> = [
+export const FONT_STYLE_OPTIONS: NonNullable<PropertyDescriptor['enum']> = [
   { label: 'designer.option.normal', value: 'normal' },
   { label: 'designer.option.italic', value: 'italic' },
 ]
 
-export const HORIZONTAL_ALIGN_OPTIONS: NonNullable<PropSchema['enum']> = [
+export const HORIZONTAL_ALIGN_OPTIONS: NonNullable<PropertyDescriptor['enum']> = [
   { label: 'designer.option.alignLeft', value: 'left' },
   { label: 'designer.option.alignCenter', value: 'center' },
   { label: 'designer.option.alignRight', value: 'right' },
 ]
 
-export const VERTICAL_ALIGN_OPTIONS: NonNullable<PropSchema['enum']> = [
+export const VERTICAL_ALIGN_OPTIONS: NonNullable<PropertyDescriptor['enum']> = [
   { label: 'designer.option.alignTop', value: 'top' },
   { label: 'designer.option.alignMiddle', value: 'middle' },
   { label: 'designer.option.alignBottom', value: 'bottom' },
 ]
 
-export const STROKE_STYLE_OPTIONS: NonNullable<PropSchema['enum']> = [
+export const STROKE_STYLE_OPTIONS: NonNullable<PropertyDescriptor['enum']> = [
   { label: 'designer.option.strokeSolid', value: 'solid' },
   { label: 'designer.option.strokeDashed', value: 'dashed' },
   { label: 'designer.option.strokeDotted', value: 'dotted' },
@@ -56,9 +55,64 @@ export interface LayoutBehaviorPropContext {
   }
 }
 
-export function createLayoutBehaviorPropSchemas(context: LayoutBehaviorPropContext): PropSchema[] {
+const placementAccessor: PropertyAccessor = {
+  paths: Object.freeze(['/output/placement']),
+  read: readPlacementMode,
+  write: (node, value) => {
+    node.output = {
+      ...node.output,
+      placement: { ...node.output.placement, mode: value === 'fixed' ? 'fixed' : 'flow' },
+    }
+  },
+}
+
+const keepTogetherAccessor: PropertyAccessor = {
+  paths: Object.freeze(['/output/break']),
+  read: node => readBreakConfig(node).keepTogether === true,
+  write: (node, value) => {
+    node.output = {
+      ...node.output,
+      break: { ...readBreakConfig(node), keepTogether: value === true },
+    }
+  },
+}
+
+const breakBeforeAccessor: PropertyAccessor = {
+  paths: Object.freeze(['/output/break']),
+  read: node => readBreakConfig(node).before === 'page',
+  write: (node, value) => {
+    node.output = {
+      ...node.output,
+      break: { ...readBreakConfig(node), before: value === true ? 'page' : 'auto' },
+    }
+  },
+}
+
+const breakAfterAccessor: PropertyAccessor = {
+  paths: Object.freeze(['/output/break']),
+  read: node => readBreakConfig(node).after === 'page',
+  write: (node, value) => {
+    node.output = {
+      ...node.output,
+      break: { ...readBreakConfig(node), after: value === true ? 'page' : 'auto' },
+    }
+  },
+}
+
+const repeatAccessor: PropertyAccessor = {
+  paths: Object.freeze(['/output/repeat']),
+  read: node => readRepeatConfig(node).scope === 'every-output-page',
+  write: (node, value) => {
+    node.output = {
+      ...node.output,
+      repeat: { scope: value === true ? 'every-output-page' : 'none' },
+    }
+  },
+}
+
+export function createLayoutBehaviorPropSchemas(context: LayoutBehaviorPropContext): PropertyDescriptor[] {
   const page = context.page
-  const schemas: PropSchema[] = []
+  const schemas: PropertyDescriptor[] = []
   const supportsFlow = page.layout?.strategy === 'stack-flow' && page.reflow?.strategy === 'flow-y'
   const supportsBreakRules = supportsFlow && page.pagination?.strategy === 'auto-sheets'
 
@@ -73,10 +127,7 @@ export function createLayoutBehaviorPropSchemas(context: LayoutBehaviorPropConte
         { label: 'designer.property.flow', value: 'flow' },
         { label: 'designer.property.fixedPosition', value: 'fixed' },
       ],
-      read: readPlacementMode,
-      commit: (node, value) => new UpdateMaterialBehaviorCommand(node, {
-        placement: { ...(node.placement ?? {}), mode: value === 'fixed' ? 'fixed' : 'flow' },
-      }),
+      accessor: placementAccessor,
     })
   }
 
@@ -89,10 +140,7 @@ export function createLayoutBehaviorPropSchemas(context: LayoutBehaviorPropConte
         group: 'pagination',
         default: false,
         visible: props => props.__placementMode !== 'fixed',
-        read: node => readBreakConfig(node).keepTogether === true,
-        commit: (node, value) => new UpdateMaterialBehaviorCommand(node, {
-          break: { ...readBreakConfig(node), keepTogether: value === true },
-        }),
+        accessor: keepTogetherAccessor,
       },
       {
         key: 'break.before',
@@ -101,10 +149,7 @@ export function createLayoutBehaviorPropSchemas(context: LayoutBehaviorPropConte
         group: 'pagination',
         default: false,
         visible: props => props.__placementMode !== 'fixed',
-        read: node => readBreakConfig(node).before === 'page',
-        commit: (node, value) => new UpdateMaterialBehaviorCommand(node, {
-          break: { ...readBreakConfig(node), before: value === true ? 'page' : 'auto' },
-        }),
+        accessor: breakBeforeAccessor,
       },
       {
         key: 'break.after',
@@ -113,10 +158,7 @@ export function createLayoutBehaviorPropSchemas(context: LayoutBehaviorPropConte
         group: 'pagination',
         default: false,
         visible: props => props.__placementMode !== 'fixed',
-        read: node => readBreakConfig(node).after === 'page',
-        commit: (node, value) => new UpdateMaterialBehaviorCommand(node, {
-          break: { ...readBreakConfig(node), after: value === true ? 'page' : 'auto' },
-        }),
+        accessor: breakAfterAccessor,
       },
     )
   }
@@ -127,41 +169,30 @@ export function createLayoutBehaviorPropSchemas(context: LayoutBehaviorPropConte
     type: 'switch',
     group: 'repeat',
     default: false,
-    read: node => readRepeatConfig(node).scope === 'every-output-page',
-    commit: (node, value) => new UpdateMaterialBehaviorCommand(node, {
-      repeat: { scope: value === true ? 'every-output-page' : 'none' },
-    }),
+    accessor: repeatAccessor,
   })
 
   return schemas
 }
 
 function readPlacementMode(node: MaterialNode): NonNullable<NodePlacementConfig['mode']> {
-  if (node.placement?.mode === 'fixed' || node.placement?.mode === 'flow')
-    return node.placement.mode
-  return (node.props as Record<string, unknown>).layoutMode === 'fixed' ? 'fixed' : 'flow'
+  return node.output.placement?.mode === 'fixed' ? 'fixed' : 'flow'
 }
 
 function readBreakConfig(node: MaterialNode): NodeBreakConfig {
-  const props = node.props as Record<string, unknown>
-  return {
-    ...node.break,
-    keepTogether: node.break?.keepTogether ?? (props.keepTogether === true),
-    before: node.break?.before ?? (props.pageBreakBefore === true ? 'page' : 'auto'),
-    after: node.break?.after ?? (props.pageBreakAfter === true ? 'page' : 'auto'),
-  }
+  return node.output.break ?? {}
 }
 
 function readRepeatConfig(node: MaterialNode): NodeRepeatConfig {
-  return node.repeat ?? { scope: 'none' }
+  return node.output.repeat ?? { scope: 'none' }
 }
 
 /**
- * Group PropSchema items by their group field.
+ * Group property descriptors by their group field.
  * Items without a group default to 'general'.
  */
-export function groupPropSchemas(schemas: PropSchema[]): Map<string, PropSchema[]> {
-  const groups = new Map<string, PropSchema[]>()
+export function groupPropSchemas(schemas: PropertyDescriptor[]): Map<string, PropertyDescriptor[]> {
+  const groups = new Map<string, PropertyDescriptor[]>()
   for (const schema of schemas) {
     const group = schema.group ?? 'general'
     const list = groups.get(group)

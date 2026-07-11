@@ -180,8 +180,6 @@ export type {
   MaterialDataValueType,
 } from './material-data-contract'
 export type {
-  AssetUrlPropertyValueInput,
-  BasePropertyValueInput,
   ContextAction,
   DatasourceDropHandler,
   DatasourceDropZone,
@@ -205,15 +203,10 @@ export type {
   MaterialResizeParams,
   MaterialResizeSideEffect,
   NodeSignal,
-  PropCommitContext,
+  PropertyDescriptorLike,
   PropertyPanelOverlay,
   PropertyPanelRequest,
-  PropertyValueInput,
-  PropSchema,
-  PropSchemaEditorOptions,
-  PropSchemaLike,
   SelectionSnapshot,
-  TextFilePropertyValueInput,
   ToolbarAction,
 } from './material-extension'
 export { admitMaterialGraph } from './material-graph-admission'
@@ -287,7 +280,21 @@ export type {
   SchemaAdmissionBudget,
 } from './material-profile'
 
-export type { PropertyAccessor, PropertyDescriptor } from './material-properties'
+export {
+  createModelPropertyAccessor,
+  resolvePropertyAccessor,
+  validatePropertyDescriptors,
+} from './material-properties'
+export type {
+  AssetUrlPropertyValueInput,
+  BasePropertyValueInput,
+  PropertyAccessor,
+  PropertyDescriptor,
+  PropertyDescriptorDiagnostic,
+  PropertyEditorOptions,
+  PropertyValueInput,
+  TextFilePropertyValueInput,
+} from './material-properties'
 export type {
   FragmentPaginateInput,
   FragmentPaginateResult,

@@ -1,7 +1,8 @@
-import type { BindingRef, MaterialNode } from '@easyink/schema'
+import type { MaterialNode } from '@easyink/schema'
 import type { BindingDisplayFormat, UnitType } from '@easyink/shared'
 import type { Point, Rect } from './geometry'
-import type { DatasourceFieldInfo, PropSchemaLike } from './material-extension'
+import type { BindingExpression } from './material-binding'
+import type { DatasourceFieldInfo, PropertyDescriptorLike } from './material-extension'
 
 // ─── Selection ──────────────────────────────────────────────────────
 
@@ -123,17 +124,17 @@ export interface SelectionDecorationDef {
 /** Sub-property schema auto-derived from selection for the properties panel. */
 export interface SubPropertySchema {
   title: string
-  schemas: PropSchemaLike[]
+  descriptors: PropertyDescriptorLike[]
   /** Read property value */
   read: (key: string) => unknown
   /** Write property value via transaction */
   write: (key: string, value: unknown, tx: TransactionAPI) => void
   /** Binding context */
-  binding?: BindingRef | BindingRef[] | null
+  binding?: BindingExpression | null
   /** Clear binding via transaction */
-  clearBinding?: (tx: TransactionAPI, bindIndex?: number) => void
+  clearBinding?: (tx: TransactionAPI, port: string) => void
   /** Update binding display format via transaction */
-  updateBindingFormat?: (tx: TransactionAPI, format: BindingDisplayFormat | undefined, bindIndex?: number) => void
+  updateBindingFormat?: (tx: TransactionAPI, format: BindingDisplayFormat | undefined, port?: string) => void
   /** Custom editor components */
   editors?: Record<string, unknown>
 }

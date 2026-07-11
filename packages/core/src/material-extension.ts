@@ -1,7 +1,9 @@
 import type { BindingRef, DocumentSchema, MaterialNode } from '@easyink/schema'
-import type { BindingDisplayFormat, PropSchemaType } from '@easyink/shared'
+import type { BindingDisplayFormat } from '@easyink/shared'
 import type { Command } from './command'
-import type { BehaviorRegistration, EditingSessionRef, MaterialGeometry, SelectionDecorationDef, SelectionType, TransactionAPI } from './editing-session'
+import type { BehaviorRegistration, MaterialGeometry, SelectionDecorationDef, SelectionType, TransactionAPI } from './editing-session'
+import type { BindingExpression } from './material-binding'
+import type { PropertyAccessor, PropertyEditorOptions } from './material-properties'
 
 // ─── Material Extensions ───────────────────────────────────────────
 
@@ -294,25 +296,25 @@ export interface PropertyPanelOverlay {
   id: string
   /** Section header title */
   title?: string
-  /** Property schema declarations for the overlay */
-  schemas: PropSchemaLike[]
+  /** Property declarations for the overlay */
+  descriptors: PropertyDescriptorLike[]
   /** Read property value; panel calls this on each render */
   readValue: (key: string) => unknown
   /** Write property value; material handles command generation */
   writeValue: (key: string, value: unknown) => void
-  /** Binding context: BindingRef = show, null = hide, undefined = default element binding */
-  binding?: BindingRef | BindingRef[] | null
-  /** Clear binding callback */
-  clearBinding?: (bindIndex?: number) => void
-  /** Custom editor component map: key = PropSchema.editor value, value = component */
+  /** Binding context: BindingExpression = show, null = hide, undefined = default element binding */
+  binding?: BindingExpression | null
+  /** Clear a canonical binding port. */
+  clearBinding?: (port: string) => void
+  /** Custom editor component map: key = PropertyDescriptor.editor value, value = component */
   editors?: Record<string, unknown>
 }
 
 /**
- * Minimal PropSchema shape used in PropertyPanelOverlay to avoid pulling designer-only
+ * Minimal property descriptor shape used in PropertyPanelOverlay to avoid pulling designer-only
  * schema registries into core. At runtime the same objects are passed.
  */
-export interface PropSchemaLike {
+export interface PropertyDescriptorLike {
   key: string
   label: string
   type: string
@@ -325,95 +327,10 @@ export interface PropSchemaLike {
   /** Preserve null for empty numeric input instead of coercing to 0/default. */
   nullable?: boolean
   editor?: string
-  editorOptions?: PropSchemaEditorOptions
-  [extra: string]: unknown
-}
-
-export interface BasePropertyValueInput {
-  id: string
-  source: string
-  title?: string
-  pickTitle?: string
-  accept?: string[]
-  payload?: Record<string, unknown>
-}
-
-export interface AssetUrlPropertyValueInput extends BasePropertyValueInput {
-  kind: 'asset-url'
-  clearTitle?: string
-  previewTitle?: string
-  previewLoadingTitle?: string
-  previewFailedTitle?: string
-}
-
-export interface TextFilePropertyValueInput extends BasePropertyValueInput {
-  kind: 'text-file'
-  encoding?: string
-  maxBytes?: number
-}
-
-export type PropertyValueInput = AssetUrlPropertyValueInput | TextFilePropertyValueInput
-
-export type PropSchemaEditorOptions = Record<string, unknown> & {
-  valueInput?: PropertyValueInput
-}
-
-// ─── Property Schema (canonical) ─────────────────────────────────
-
-/**
- * Material property schema entry. Drives the PropertiesPanel form rendering
- * and (optionally) overrides the default node.props read/write path.
- *
- * Default behavior (no `read`/`commit`):
- *   - read:   `node.props[key]` (with dot-path support via getByPath)
- *   - commit: dispatches `UpdateMaterialPropsCommand({ [key]: value })`
- *
- * Materials whose property lives outside `node.props` (e.g. table-data's
- * `node.table.showHeader`) declare a custom `read` and `commit` to integrate
- * with the standard panel without leaking material types into PropertiesPanel.
- */
-export interface PropSchema {
-  key: string
-  label: string
-  type: PropSchemaType
-  group?: string
-  default?: unknown
-  enum?: Array<{ label: string, value: unknown }>
-  min?: number
-  max?: number
-  step?: number
-  /** Preserve null for empty numeric input instead of coercing to 0/default. */
-  nullable?: boolean
-  properties?: PropSchema[]
-  items?: PropSchema
-  visible?: (props: Record<string, unknown>) => boolean
-  disabled?: (props: Record<string, unknown>) => boolean
-  editor?: string
-  editorOptions?: PropSchemaEditorOptions
-  /** Override default `node.props[key]` read. Returns the value to display. */
-  read?: (node: MaterialNode) => unknown
-  /**
-   * Override default `UpdateMaterialPropsCommand` commit. Return the Command
-   * to push into the history (or `null` to skip). Side-effects like
-   * `flushPendingEdits()` / `editingSession.exit()` belong here.
-   */
-  commit?: (node: MaterialNode, value: unknown, ctx: PropCommitContext) => Command | null
-}
-
-/**
- * Context passed to `PropSchema.commit`. Provides hooks the panel cannot
- * reach without leaking material-specific knowledge.
- */
-export interface PropCommitContext {
-  /**
-   * Force any in-progress inline editor (e.g. cell <textarea>) to commit its
-   * value synchronously. Implementations typically blur `document.activeElement`.
-   */
-  flushPendingEdits: () => void
-  /** Currently active editing session (or null if none). */
-  activeEditingSession: EditingSessionRef | null
-  /** Exit the active editing session, if any. */
-  exitEditingSession: () => void
+  editorOptions?: PropertyEditorOptions
+  visible?: (model: Readonly<Record<string, unknown>>) => boolean
+  disabled?: (model: Readonly<Record<string, unknown>>) => boolean
+  accessor?: PropertyAccessor
 }
 
 // (Old deep editing FSM protocol removed — replaced by Chapter 22 Editing Behavior Architecture)
