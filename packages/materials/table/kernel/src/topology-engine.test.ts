@@ -1,4 +1,4 @@
-import type { TableIdentityAllocator, TableMergeId } from './model'
+import type { TableIdentityAllocator, TableMergeId, TableModel } from './model'
 import type { TableTopologyDelta } from './topology-engine'
 import { deepClone } from '@easyink/shared'
 import { describe, expect, it, vi } from 'vitest'
@@ -6,6 +6,7 @@ import {
   assertValidTableModel,
   createSequentialTableIdentityAllocator,
   createTableModel,
+  TABLE_MODEL_MAX_JSON_NODES,
 
 } from './model'
 import {
@@ -693,5 +694,229 @@ describe('tableTopologyEngine structural operations', () => {
     expect(firstRemoved.merges[0]!.anchorCellId).toBe(firstRemoved.bands[0]!.rows[0]!.cells[0]!.id)
     const secondRemoved = TableTopologyEngine.removeRow(firstRemoved, firstRemoved.bands[0]!.rows[0]!.id).model
     expect(secondRemoved.merges).toEqual([])
+  })
+})
+
+describe('tableTopologyEngine lossless merge regions', () => {
+  function cellJson(model: TableModel): unknown[] {
+    return model.bands.flatMap(band => band.rows.flatMap(row => row.cells.map(cell => deepClone(cell))))
+  }
+
+  function countJsonNodes(value: unknown): number {
+    let count = 0
+    const stack = [value]
+    while (stack.length > 0) {
+      const current = stack.pop()
+      count += 1
+      if (current && typeof current === 'object')
+        stack.push(...(Array.isArray(current) ? current : Object.values(current)))
+    }
+    return count
+  }
+
+  it('merges a canonical rectangle without changing cells and restores it by splitting', () => {
+    const source = createTableModel({ kind: 'static', columnCount: 2, rowCount: 2 })
+    const rows = source.bands[0]!.rows
+    rows[0]!.cells[0]!.content = { kind: 'text', text: 'anchor' }
+    rows[0]!.cells[1]!.content = { kind: 'text', text: 'top-right', bindingPort: 'right' }
+    rows[1]!.cells[0]!.content = { kind: 'materials', slotId: `cell:${rows[1]!.cells[0]!.id}` }
+    rows[1]!.cells[1]!.content = { kind: 'text', text: 'bottom-right' }
+    rows[1]!.cells[1]!.style = { background: '#fff' }
+    const before = deepClone(source)
+    const cells = cellJson(source)
+
+    const merged = TableTopologyEngine.merge(source, {
+      rowIds: [...rows].reverse().map(row => row.id),
+      columnIds: [...source.columns].reverse().map(column => column.id),
+      anchorCellId: rows[0]!.cells[0]!.id,
+      identities: createSequentialTableIdentityAllocator('lossless'),
+    })
+
+    expect(source).toEqual(before)
+    expect(merged.merges).toEqual([{
+      id: 'lossless:merge:1',
+      rowIds: rows.map(row => row.id),
+      columnIds: source.columns.map(column => column.id),
+      anchorCellId: rows[0]!.cells[0]!.id,
+      inactiveCellIds: [rows[0]!.cells[1]!.id, rows[1]!.cells[0]!.id, rows[1]!.cells[1]!.id],
+    }])
+    expect(cellJson(merged)).toEqual(cells)
+    const split = TableTopologyEngine.split(merged, merged.merges[0]!.id)
+    expect(split.merges).toEqual([])
+    expect(cellJson(split)).toEqual(cells)
+    expect(merged.merges).toHaveLength(1)
+    assertValidTableModel(split)
+  })
+
+  it.each([
+    ['unknown row', (source: TableModel) => ({ rowIds: ['missing'], columnIds: [source.columns[0]!.id, source.columns[1]!.id] })],
+    ['duplicate row', (source: TableModel) => ({ rowIds: [source.bands[0]!.rows[0]!.id, source.bands[0]!.rows[0]!.id], columnIds: [source.columns[0]!.id, source.columns[1]!.id] })],
+    ['non-contiguous row', (source: TableModel) => ({ rowIds: [source.bands[0]!.rows[0]!.id, source.bands[0]!.rows[2]!.id], columnIds: [source.columns[0]!.id] })],
+    ['unknown column', (source: TableModel) => ({ rowIds: [source.bands[0]!.rows[0]!.id], columnIds: [source.columns[0]!.id, 'missing'] })],
+    ['duplicate column', (source: TableModel) => ({ rowIds: [source.bands[0]!.rows[0]!.id], columnIds: [source.columns[0]!.id, source.columns[0]!.id] })],
+    ['non-contiguous column', (source: TableModel) => ({ rowIds: [source.bands[0]!.rows[0]!.id], columnIds: [source.columns[0]!.id, source.columns[2]!.id] })],
+  ])('rejects an invalid rectangle with a %s', (_label, select) => {
+    const source = createTableModel({ kind: 'static', columnCount: 3, rowCount: 3 })
+    const before = deepClone(source)
+    const allocate = vi.fn(() => 'unused')
+    expect(() => TableTopologyEngine.merge(source, {
+      ...select(source),
+      anchorCellId: source.bands[0]!.rows[0]!.cells[0]!.id,
+      identities: { allocate },
+    } as never)).toThrow()
+    expect(allocate).not.toHaveBeenCalled()
+    expect(source).toEqual(before)
+  })
+
+  it('rejects cross-band, one-cell, outside-anchor, and overlapping regions before allocation', () => {
+    const data = createTableModel({ kind: 'data', columnCount: 2, rowCount: 1 })
+    const withHeader = TableTopologyEngine.insertBand(data, {
+      role: 'header',
+      target: { atEnd: true },
+      minHeight: 8,
+      identities: createSequentialTableIdentityAllocator('header'),
+    })
+    const allocate = vi.fn(() => 'unused')
+    const common = { identities: { allocate } }
+    const headerRow = withHeader.bands[0]!.rows[0]!
+    const detailRow = withHeader.bands[1]!.rows[0]!
+    expect(() => TableTopologyEngine.merge(withHeader, {
+      ...common,
+      rowIds: [headerRow.id, detailRow.id],
+      columnIds: [withHeader.columns[0]!.id],
+      anchorCellId: headerRow.cells[0]!.id,
+    })).toThrow(/band/)
+    expect(() => TableTopologyEngine.merge(withHeader, {
+      ...common,
+      rowIds: [headerRow.id],
+      columnIds: [withHeader.columns[0]!.id],
+      anchorCellId: headerRow.cells[0]!.id,
+    })).toThrow(/more than one|at least two/)
+    expect(() => TableTopologyEngine.merge(withHeader, {
+      ...common,
+      rowIds: [headerRow.id],
+      columnIds: withHeader.columns.map(column => column.id),
+      anchorCellId: detailRow.cells[0]!.id,
+    })).toThrow(/anchor/)
+
+    const first = TableTopologyEngine.merge(withHeader, {
+      rowIds: [headerRow.id],
+      columnIds: withHeader.columns.map(column => column.id),
+      anchorCellId: headerRow.cells[0]!.id,
+      identities: createSequentialTableIdentityAllocator('first'),
+    })
+    expect(() => TableTopologyEngine.merge(first, {
+      ...common,
+      rowIds: [headerRow.id],
+      columnIds: withHeader.columns.map(column => column.id),
+      anchorCellId: headerRow.cells[1]!.id,
+    })).toThrow(/overlap/)
+    expect(allocate).not.toHaveBeenCalled()
+  })
+
+  it('keeps other regions on split and rejects unknown merge ids without changing source', () => {
+    const source = createTableModel({ kind: 'static', columnCount: 4, rowCount: 1 })
+    const row = source.bands[0]!.rows[0]!
+    const allocator = createSequentialTableIdentityAllocator('multiple')
+    const first = TableTopologyEngine.merge(source, {
+      rowIds: [row.id],
+      columnIds: source.columns.slice(0, 2).map(column => column.id),
+      anchorCellId: row.cells[0]!.id,
+      identities: allocator,
+    })
+    const second = TableTopologyEngine.merge(first, {
+      rowIds: [row.id],
+      columnIds: source.columns.slice(2).map(column => column.id),
+      anchorCellId: row.cells[2]!.id,
+      identities: allocator,
+    })
+    const split = TableTopologyEngine.split(second, first.merges[0]!.id)
+    expect(split.merges).toEqual([second.merges[1]])
+    const before = deepClone(second)
+    expect(() => TableTopologyEngine.split(second, 'missing' as TableMergeId)).toThrow(/not found/)
+    expect(second).toEqual(before)
+  })
+
+  it('captures merge input and allocator capabilities once and resists allocator TOCTOU', () => {
+    const source = createTableModel({ kind: 'static', columnCount: 2, rowCount: 1 })
+    const row = source.bands[0]!.rows[0]!
+    const reads = { rows: 0, columns: 0, anchor: 0, identities: 0, allocate: 0 }
+    const allocate = vi.fn(() => 'captured:merge:1')
+    const allocator = {
+      get allocate() {
+        reads.allocate += 1
+        return reads.allocate === 1 ? allocate : () => source.columns[0]!.id
+      },
+    }
+    const input = {
+      get rowIds() {
+        reads.rows += 1
+        return reads.rows === 1 ? [row.id] : ['missing' as never]
+      },
+      get columnIds() {
+        reads.columns += 1
+        return reads.columns === 1 ? source.columns.map(column => column.id) : []
+      },
+      get anchorCellId() {
+        reads.anchor += 1
+        return reads.anchor === 1 ? row.cells[0]!.id : 'missing' as never
+      },
+      get identities() {
+        reads.identities += 1
+        return allocator
+      },
+    }
+    const merged = TableTopologyEngine.merge(source, input)
+    expect(merged.merges[0]!.id).toBe('captured:merge:1')
+    expect(reads).toEqual({ rows: 1, columns: 1, anchor: 1, identities: 1, allocate: 1 })
+    expect(allocate).toHaveBeenCalledOnce()
+
+    const collision = vi.fn(() => source.columns[0]!.id)
+    expect(() => TableTopologyEngine.merge(source, {
+      rowIds: [row.id],
+      columnIds: source.columns.map(column => column.id),
+      anchorCellId: row.cells[0]!.id,
+      identities: { allocate: collision },
+    })).toThrow(/Duplicate/)
+    expect(source.merges).toEqual([])
+  })
+
+  it('rejects malformed snapshots, hostile sources, and excess JSON capacity before allocation', () => {
+    const source = createTableModel({ kind: 'static', columnCount: 2, rowCount: 2 })
+    const rows = source.bands[0]!.rows
+    const allocate = vi.fn(() => 'must-not-allocate')
+    const invalidInput = {
+      rowIds: [rows[0]!.id],
+      columnIds: [source.columns[0]!.id, source.columns[1]!.id, () => undefined],
+      anchorCellId: rows[0]!.cells[0]!.id,
+      get identities() { throw new Error('must not read identities') },
+    }
+    expect(() => TableTopologyEngine.merge(source, invalidInput as never)).toThrow(/JSON|Unsupported/)
+
+    const hostile = new Proxy(source, {
+      ownKeys() { throw new Error('hostile source') },
+    })
+    expect(() => TableTopologyEngine.merge(hostile, {
+      rowIds: rows.map(row => row.id),
+      columnIds: source.columns.map(column => column.id),
+      anchorCellId: rows[0]!.cells[0]!.id,
+      identities: { allocate },
+    })).toThrow(/hostile source/)
+    expect(allocate).not.toHaveBeenCalled()
+
+    const nearBudget = deepClone(source) as TableModel & { style: { extra?: number[] } }
+    const mergeNodes = 5 + 2 + 2 + 4
+    const baseNodes = countJsonNodes(nearBudget)
+    nearBudget.style.extra = Array.from<number>({
+      length: TABLE_MODEL_MAX_JSON_NODES - mergeNodes + 1 - baseNodes - 1,
+    }).fill(0)
+    expect(countJsonNodes(nearBudget)).toBe(TABLE_MODEL_MAX_JSON_NODES - mergeNodes + 1)
+    expect(() => TableTopologyEngine.merge(nearBudget, {
+      rowIds: nearBudget.bands[0]!.rows.map(row => row.id),
+      columnIds: nearBudget.columns.map(column => column.id),
+      anchorCellId: nearBudget.bands[0]!.rows[0]!.cells[0]!.id,
+      identities: { allocate },
+    })).toThrow(/budget|nodes/)
+    expect(allocate).not.toHaveBeenCalled()
   })
 })

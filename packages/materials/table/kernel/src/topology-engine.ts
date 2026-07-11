@@ -5,6 +5,7 @@ import type {
   TableColumn,
   TableColumnId,
   TableIdentityAllocator,
+  TableMergeId,
   TableMergeRegion,
   TableModel,
   TableRow,
@@ -596,6 +597,13 @@ interface InsertBandInput extends RevisionInput {
   identities: TableIdentityAllocator
 }
 
+export interface MergeCellsInput {
+  rowIds: readonly TableRowId[]
+  columnIds: readonly TableColumnId[]
+  anchorCellId: TableCell['id']
+  identities: TableIdentityAllocator
+}
+
 function snapshotInsertColumnInput(input: InsertColumnInput): InsertColumnInput {
   const snapshot = snapshotPlannerJson({
     topologyRevision: input.topologyRevision,
@@ -654,6 +662,25 @@ function snapshotInsertBandInput(input: InsertBandInput): InsertBandInput {
     role: snapshot.role as InsertBandInput['role'],
     minHeight: snapshot.minHeight,
     ...readOptionalTargets<TableBandId>(snapshot),
+    identities: captureIdentityAllocator(input.identities),
+  }
+}
+
+function snapshotMergeCellsInput(input: MergeCellsInput): MergeCellsInput {
+  const snapshot = snapshotPlannerJson({
+    rowIds: input.rowIds,
+    columnIds: input.columnIds,
+    anchorCellId: input.anchorCellId,
+  })
+  if (!Array.isArray(snapshot.rowIds) || !snapshot.rowIds.every(id => typeof id === 'string')
+    || !Array.isArray(snapshot.columnIds) || !snapshot.columnIds.every(id => typeof id === 'string')
+    || typeof snapshot.anchorCellId !== 'string') {
+    throw new TypeError('merge input has invalid rowIds, columnIds, or anchorCellId fields')
+  }
+  return {
+    rowIds: snapshot.rowIds as TableRowId[],
+    columnIds: snapshot.columnIds as TableColumnId[],
+    anchorCellId: snapshot.anchorCellId as TableCell['id'],
     identities: captureIdentityAllocator(input.identities),
   }
 }
@@ -1143,6 +1170,92 @@ export class TableTopologyEngine {
   static reorderBand(source: TableModel, bandId: TableBandId, target: StableSiblingTarget<TableBandId>): TableModel {
     return materializeTableTopologyDelta(source, this.planReorderBand(source, bandId, { target, topologyRevision: 0 }), 0)
   }
+
+  static merge(source: TableModel, input: MergeCellsInput): TableModel {
+    const snapshot = snapshotMergeCellsInput(input)
+    const model = deepClone(source)
+    assertValidTableModel(model)
+    assertDistinctSelection(snapshot.rowIds, 'merge row IDs')
+    assertDistinctSelection(snapshot.columnIds, 'merge column IDs')
+
+    const rowsById = new Map<TableRowId, { band: TableBand, index: number, row: TableRow }>()
+    const cellsByRowId = new Map<TableRowId, Map<TableColumnId, TableCell>>()
+    for (const band of model.bands) {
+      band.rows.forEach((row, index) => {
+        rowsById.set(row.id, { band, index, row })
+        cellsByRowId.set(row.id, new Map(row.cells.map(cell => [cell.columnId, cell])))
+      })
+    }
+    const rowEntries = snapshot.rowIds.map((rowId) => {
+      const entry = rowsById.get(rowId)
+      if (!entry)
+        throw new Error(`merge row not found: ${rowId}`)
+      return entry
+    })
+    if (rowEntries.length === 0)
+      throw new Error('merge rectangle must contain rows')
+    const band = rowEntries[0]!.band
+    if (rowEntries.some(entry => entry.band.id !== band.id))
+      throw new Error('merge rows must belong to the same band')
+    const rowIndexes = rowEntries.map(entry => entry.index)
+    if (!continuous(rowIndexes))
+      throw new Error('merge rows must be continuous')
+
+    const columnIndexById = new Map(model.columns.map((column, index) => [column.id, index]))
+    const columnIndexes = snapshot.columnIds.map((columnId) => {
+      const index = columnIndexById.get(columnId)
+      if (index === undefined)
+        throw new Error(`merge column not found: ${columnId}`)
+      return index
+    })
+    if (columnIndexes.length === 0)
+      throw new Error('merge rectangle must contain columns')
+    if (!continuous(columnIndexes))
+      throw new Error('merge columns must be continuous')
+    if (rowEntries.length * columnIndexes.length <= 1)
+      throw new Error('merge rectangle must contain at least two cells')
+
+    const rowIds = [...rowEntries].sort((left, right) => left.index - right.index).map(entry => entry.row.id)
+    const columnIds = [...snapshot.columnIds].sort((left, right) => columnIndexById.get(left)! - columnIndexById.get(right)!)
+    const regionCells = rowIds.flatMap(rowId => columnIds.map(columnId => cellsByRowId.get(rowId)!.get(columnId)!))
+    if (!regionCells.some(cell => cell.id === snapshot.anchorCellId))
+      throw new Error('merge anchor must be a cell in its region')
+    const regionCellIds = new Set(regionCells.map(cell => cell.id))
+    for (const existing of model.merges) {
+      if ((existing.anchorCellId && regionCellIds.has(existing.anchorCellId))
+        || existing.inactiveCellIds.some(cellId => regionCellIds.has(cellId))) {
+        throw new Error(`merge rectangle overlaps existing merge ${existing.id}`)
+      }
+    }
+
+    assertProspectiveTableCapacity(model, 0, 5 + rowIds.length + columnIds.length + regionCells.length)
+    const id = allocateTableIdentity(snapshot.identities, 'merge', occupiedIdentities(model))
+    model.merges.push({
+      id,
+      rowIds,
+      columnIds,
+      anchorCellId: snapshot.anchorCellId,
+      inactiveCellIds: regionCells.filter(cell => cell.id !== snapshot.anchorCellId).map(cell => cell.id),
+    })
+    assertValidTableModel(model)
+    return model
+  }
+
+  static split(source: TableModel, mergeId: TableMergeId): TableModel {
+    const model = deepClone(source)
+    assertValidTableModel(model)
+    const index = model.merges.findIndex(merge => merge.id === mergeId)
+    if (index < 0)
+      throw new Error(`merge not found: ${mergeId}`)
+    model.merges.splice(index, 1)
+    assertValidTableModel(model)
+    return model
+  }
+}
+
+function assertDistinctSelection(values: readonly string[], owner: string): void {
+  if (new Set(values).size !== values.length)
+    throw new Error(`${owner} must not contain duplicates`)
 }
 
 function resultFromDelta(source: TableModel, delta: TableTopologyDelta): TableTopologyResult {
