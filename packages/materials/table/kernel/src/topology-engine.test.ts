@@ -176,6 +176,167 @@ describe('tableTopologyEngine structural operations', () => {
     expect(draft).toEqual(source)
   })
 
+  it('snapshots untrusted delta scripts once before committing the validated edits', () => {
+    const source = createTableModel({ kind: 'static', columnCount: 2, rowCount: 1 })
+    const base = TableTopologyEngine.planReorderColumn(source, {
+      columnId: source.columns[0]!.id,
+      target: { atEnd: true },
+      topologyRevision: 0,
+    })
+    const first = { kind: 'set', path: ['columns', 0, 'track'], value: { kind: 'fixed', size: 10 } } as const
+
+    for (const secondRead of ['throw', 'invalid'] as const) {
+      let valueReads = 0
+      const second = {
+        kind: 'set' as const,
+        path: ['columns', 1, 'track'] as const,
+        get value() {
+          valueReads += 1
+          if (valueReads === 1)
+            return { kind: 'fixed', size: 20 }
+          if (secondRead === 'throw')
+            throw new Error('payload read twice')
+          return { kind: 'invalid' }
+        },
+      }
+      const delta = { ...base, forward: [first, second] } as TableTopologyDelta
+      const draft = deepClone(source)
+      expect(() => applyTableTopologyDelta(draft, delta, 0)).not.toThrow()
+      expect(valueReads).toBe(1)
+      expect(draft.columns.map(column => column.track)).toEqual([
+        { kind: 'fixed', size: 10 },
+        { kind: 'fixed', size: 20 },
+      ])
+    }
+
+    const edits = [first, {
+      kind: 'set',
+      path: ['columns', 1, 'track'],
+      value: { kind: 'fixed', size: 30 },
+    }] as const
+    let forwardReads = 0
+    let secondIndexReads = 0
+    const proxiedEdits = new Proxy(edits, {
+      get(target, property, receiver) {
+        if (property === '1') {
+          secondIndexReads += 1
+          if (secondIndexReads > 1)
+            throw new Error('forward array index read twice')
+        }
+        return Reflect.get(target, property, receiver)
+      },
+    })
+    const delta = { ...base } as TableTopologyDelta
+    let expectedRevisionReads = 0
+    Object.defineProperty(delta, 'expectedTopologyRevision', {
+      enumerable: true,
+      get() {
+        expectedRevisionReads += 1
+        if (expectedRevisionReads > 1)
+          throw new Error('expected revision read twice')
+        return 0
+      },
+    })
+    Object.defineProperty(delta, 'forward', {
+      enumerable: true,
+      get() {
+        forwardReads += 1
+        if (forwardReads > 1)
+          throw new Error('forward read twice')
+        return proxiedEdits
+      },
+    })
+    const draft = deepClone(source)
+    expect(() => applyTableTopologyDelta(draft, delta, 0)).not.toThrow()
+    expect(expectedRevisionReads).toBe(1)
+    expect(forwardReads).toBe(1)
+    expect(secondIndexReads).toBe(1)
+    expect(draft.columns[1]!.track).toEqual({ kind: 'fixed', size: 30 })
+
+    const throwingDelta = { ...base } as TableTopologyDelta
+    Object.defineProperty(throwingDelta, 'forward', {
+      get() {
+        throw new Error('snapshot failed')
+      },
+    })
+    const unchanged = deepClone(source)
+    expect(() => applyTableTopologyDelta(unchanged, throwingDelta, 0)).toThrow('snapshot failed')
+    expect(unchanged).toEqual(source)
+  })
+
+  it.each([-1, Infinity, Number.NaN, 1.5])('rejects invalid equal topology revisions: %s', (revision) => {
+    const source = createTableModel({ kind: 'static', columnCount: 2, rowCount: 1 })
+    const valid = TableTopologyEngine.planReorderColumn(source, {
+      columnId: source.columns[0]!.id,
+      target: { atEnd: true },
+      topologyRevision: 0,
+    })
+    const delta = { ...valid, expectedTopologyRevision: revision }
+    const draft = deepClone(source)
+    expect(() => applyTableTopologyDelta(draft, delta, revision)).toThrow(/revision/)
+    expect(draft).toEqual(source)
+  })
+
+  it('rejects insert capacity before calling the real allocator and permits adjacent valid models', () => {
+    const allocate = vi.fn(() => 'must-not-allocate')
+    const identities = { allocate }
+    const staticLimit = createTableModel({ kind: 'static', columnCount: 100, rowCount: 164 })
+    expect(() => TableTopologyEngine.planInsertColumn(staticLimit, {
+      target: { atEnd: true },
+      track: { kind: 'fr', weight: 1 },
+      identities,
+      topologyRevision: 0,
+    })).toThrow(/budget|nodes/)
+    expect(allocate).not.toHaveBeenCalled()
+    expect(() => TableTopologyEngine.planInsertRow(staticLimit, {
+      bandId: staticLimit.bands[0]!.id,
+      target: { atEnd: true },
+      minHeight: 8,
+      identities,
+      topologyRevision: 0,
+    })).toThrow(/budget|nodes/)
+    expect(allocate).not.toHaveBeenCalled()
+
+    const dataLimit = createTableModel({ kind: 'data', columnCount: 9_000, rowCount: 1 })
+    expect(() => TableTopologyEngine.planInsertBand(dataLimit, {
+      role: 'header',
+      target: { atEnd: true },
+      minHeight: 8,
+      identities,
+      topologyRevision: 0,
+    })).toThrow(/budget|nodes/)
+    expect(allocate).not.toHaveBeenCalled()
+
+    const columnNeighbor = createTableModel({ kind: 'static', columnCount: 99, rowCount: 164 })
+    const columnDelta = TableTopologyEngine.planInsertColumn(columnNeighbor, {
+      target: { atEnd: true },
+      track: { kind: 'fr', weight: 1 },
+      identities: createSequentialTableIdentityAllocator('capacity-column'),
+      topologyRevision: 1,
+    })
+    expect(materializeTableTopologyDelta(columnNeighbor, columnDelta, 1).columns).toHaveLength(100)
+
+    const rowNeighbor = createTableModel({ kind: 'static', columnCount: 100, rowCount: 163 })
+    const rowDelta = TableTopologyEngine.planInsertRow(rowNeighbor, {
+      bandId: rowNeighbor.bands[0]!.id,
+      target: { atEnd: true },
+      minHeight: 8,
+      identities: createSequentialTableIdentityAllocator('capacity-row'),
+      topologyRevision: 2,
+    })
+    expect(materializeTableTopologyDelta(rowNeighbor, rowDelta, 2).bands[0]!.rows).toHaveLength(164)
+
+    const bandNeighbor = createTableModel({ kind: 'data', columnCount: 5_800, rowCount: 1 })
+    const bandDelta = TableTopologyEngine.planInsertBand(bandNeighbor, {
+      role: 'header',
+      target: { atEnd: true },
+      minHeight: 8,
+      identities: createSequentialTableIdentityAllocator('capacity-band'),
+      topologyRevision: 3,
+    })
+    expect(materializeTableTopologyDelta(bandNeighbor, bandDelta, 3).bands).toHaveLength(2)
+  })
+
   it('deep clones edit payloads and emits bounded exact scripts', () => {
     const source = createTableModel({ kind: 'static', columnCount: 20, rowCount: 100 })
     const delta = TableTopologyEngine.planInsertColumn(source, {

@@ -163,7 +163,7 @@ const STABLE_ID_PATTERN = /^[\w.:-]+$/
 const textEncoder = new TextEncoder()
 export const TABLE_MODEL_MAX_CELLS = 100_000
 const TABLE_MODEL_MAX_DIMENSION = 100_000
-const TABLE_MODEL_MAX_JSON_NODES = 100_000
+export const TABLE_MODEL_MAX_JSON_NODES = 100_000
 const readonlyOccupiedViews = new WeakMap<Set<string>, ReadonlySet<string>>()
 
 export function isValidTableStableToken(value: unknown, maxBytes = 128): value is string {

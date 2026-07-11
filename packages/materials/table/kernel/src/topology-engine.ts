@@ -11,8 +11,13 @@ import type {
   TableRowId,
   TableTrack,
 } from './model'
-import { deepClone } from '@easyink/shared'
-import { allocateTableIdentity, assertValidTableModel } from './model'
+import { assertJsonValue, deepClone } from '@easyink/shared'
+import {
+  allocateTableIdentity,
+  assertValidTableModel,
+  TABLE_MODEL_MAX_CELLS,
+  TABLE_MODEL_MAX_JSON_NODES,
+} from './model'
 
 export interface RemovedIdFallback<T extends string> {
   removedId: T
@@ -67,16 +72,72 @@ export function applyTableTopologyDelta(
   delta: TableTopologyDelta,
   currentTopologyRevision: number,
 ): void {
-  if (currentTopologyRevision !== delta.expectedTopologyRevision)
+  assertApplyRevision(currentTopologyRevision)
+  const expectedTopologyRevision = delta.expectedTopologyRevision
+  assertApplyRevision(expectedTopologyRevision)
+  if (currentTopologyRevision !== expectedTopologyRevision)
     throw new Error('TABLE_TOPOLOGY_REVISION_STALE')
+  const forward = snapshotTableTopologyEdits(delta.forward)
   const probe = deepClone(draft)
-  for (const edit of delta.forward) {
+  for (const edit of forward) {
     validateTableTopologyEdit(probe, edit)
     applyTableTopologyEdit(probe, edit)
   }
   assertValidTableModel(probe)
-  for (const edit of delta.forward)
+  for (const edit of forward)
     applyTableTopologyEdit(draft, edit)
+}
+
+function assertApplyRevision(value: number): void {
+  if (!Number.isSafeInteger(value) || value < 0)
+    throw new Error('table topology revision must be a non-negative safe integer')
+}
+
+function snapshotTableTopologyEdits(value: unknown): TableTopologyEdit[] {
+  const snapshot = deepClone(value)
+  if (!Array.isArray(snapshot))
+    throw new Error('table topology forward script must be an array')
+  for (const [index, candidate] of snapshot.entries()) {
+    if (!isRecord(candidate) || !Object.hasOwn(candidate, 'path') || !Array.isArray(candidate.path))
+      throw new Error(`table topology edit ${index} is missing its own path field`)
+    for (const segment of candidate.path)
+      assertSafePathSegment(segment)
+  }
+  assertJsonValue(snapshot)
+  return snapshot.map((candidate, index) => normalizeTableTopologyEdit(candidate, index))
+}
+
+function normalizeTableTopologyEdit(candidate: unknown, index: number): TableTopologyEdit {
+  if (!isRecord(candidate))
+    throw new Error(`table topology edit ${index} must be an object`)
+  if (!Object.hasOwn(candidate, 'kind') || !Object.hasOwn(candidate, 'path') || !Array.isArray(candidate.path))
+    throw new Error(`table topology edit ${index} is missing own kind or path fields`)
+  const path = [...candidate.path]
+  if (candidate.kind === 'splice') {
+    if (!Object.hasOwn(candidate, 'index') || !Object.hasOwn(candidate, 'deleteCount')
+      || !Object.hasOwn(candidate, 'values') || !Array.isArray(candidate.values)) {
+      throw new Error(`table topology splice edit ${index} is missing own fields`)
+    }
+    return {
+      kind: 'splice',
+      path,
+      index: candidate.index as number,
+      deleteCount: candidate.deleteCount as number,
+      values: [...candidate.values],
+    }
+  }
+  if (candidate.kind === 'set') {
+    if (!Object.hasOwn(candidate, 'value'))
+      throw new Error(`table topology set edit ${index} is missing its own value field`)
+    return { kind: 'set', path, value: candidate.value }
+  }
+  if (candidate.kind === 'delete')
+    return { kind: 'delete', path }
+  throw new Error('unknown table topology edit kind')
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 export function materializeTableTopologyDelta(
@@ -349,6 +410,82 @@ function cellForColumn(row: TableRow, columnId: TableColumnId): TableCell {
   return cell
 }
 
+function assertInsertColumnCapacity(source: TableModel, index: number, track: TableTrack): void {
+  const rows = allRows(source)
+  const columnIndexById = new Map(source.columns.map((column, columnIndex) => [column.id, columnIndex]))
+  let mergeNodes = 0
+  for (const merge of source.merges) {
+    const indexes = merge.columnIds.map(id => columnIndexById.get(id)!)
+    if (isInsideExistingBoundary(index, indexes))
+      mergeNodes += 1 + merge.rowIds.length
+  }
+  const columnNodes = 2 + countJsonNodes(track)
+  assertProspectiveTableCapacity(source, rows.length, columnNodes + rows.length * 6 + mergeNodes)
+}
+
+function assertInsertRowCapacity(source: TableModel, band: TableBand, index: number): void {
+  const rowIndexById = new Map(band.rows.map((row, rowIndex) => [row.id, rowIndex]))
+  let mergeNodes = 0
+  for (const merge of source.merges) {
+    const indexes = merge.rowIds.flatMap((id) => {
+      const rowIndex = rowIndexById.get(id)
+      return rowIndex === undefined ? [] : [rowIndex]
+    })
+    if (isInsideExistingBoundary(index, indexes))
+      mergeNodes += 1 + merge.columnIds.length
+  }
+  assertProspectiveTableCapacity(source, source.columns.length, 4 + source.columns.length * 6 + mergeNodes)
+}
+
+function isInsideExistingBoundary(index: number, values: readonly number[]): boolean {
+  if (values.length === 0)
+    return false
+  let minimum = values[0]!
+  let maximum = values[0]!
+  for (let offset = 1; offset < values.length; offset++) {
+    const value = values[offset]!
+    if (value < minimum)
+      minimum = value
+    if (value > maximum)
+      maximum = value
+  }
+  return index > minimum && index <= maximum
+}
+
+function assertInsertBandCapacity(source: TableModel): void {
+  assertProspectiveTableCapacity(source, source.columns.length, 8 + source.columns.length * 6)
+}
+
+function assertProspectiveTableCapacity(source: TableModel, addedCells: number, addedJsonNodes: number): void {
+  const existingCells = allRows(source).reduce((sum, entry) => sum + entry.row.cells.length, 0)
+  if (addedCells > TABLE_MODEL_MAX_CELLS - existingCells)
+    throw new Error(`Table cell count exceeds the maximum allocation budget of ${TABLE_MODEL_MAX_CELLS}`)
+  const existingJsonNodes = countJsonNodes(source)
+  if (addedJsonNodes > TABLE_MODEL_MAX_JSON_NODES - existingJsonNodes)
+    throw new Error(`Table JSON nodes exceed the maximum allocation budget of ${TABLE_MODEL_MAX_JSON_NODES}`)
+}
+
+function countJsonNodes(value: unknown): number {
+  assertJsonValue(value)
+  const stack: unknown[] = [value]
+  let count = 0
+  while (stack.length > 0) {
+    const current = stack.pop()
+    count += 1
+    if (current === null || typeof current !== 'object')
+      continue
+    if (Array.isArray(current)) {
+      for (let index = current.length - 1; index >= 0; index--)
+        stack.push(Object.getOwnPropertyDescriptor(current, String(index))!.value)
+      continue
+    }
+    const keys = Reflect.ownKeys(current)
+    for (let index = keys.length - 1; index >= 0; index--)
+      stack.push(Object.getOwnPropertyDescriptor(current, keys[index]!)!.value)
+  }
+  return count
+}
+
 function rowLocation(model: TableModel, rowId: TableRowId): { bandIndex: number, rowIndex: number, band: TableBand } {
   for (let bandIndex = 0; bandIndex < model.bands.length; bandIndex++) {
     const band = model.bands[bandIndex]!
@@ -466,6 +603,7 @@ export class TableTopologyEngine {
     const target = normalizeInsertTarget(input, source.columns[0]?.id)
     const index = targetIndex(source.columns.map(column => column.id), target, 'column')
     assertValidTrack(input.track)
+    assertInsertColumnCapacity(source, index, input.track)
     const occupied = occupiedIdentities(source)
     const columnId = allocateTableIdentity(input.identities, 'column', occupied)
     const column: TableColumn = { id: columnId, track: deepClone(input.track) }
@@ -487,7 +625,7 @@ export class TableTopologyEngine {
     const virtualColumns = [...source.columns.slice(0, index), column, ...source.columns.slice(index)]
     const nextMerges = rebuildMerges(source, virtualColumns, virtualBands, (merge) => {
       const indexes = merge.columnIds.map(id => source.columns.findIndex(column => column.id === id))
-      const expands = index > Math.min(...indexes) && index <= Math.max(...indexes)
+      const expands = isInsideExistingBoundary(index, indexes)
       return { rowIds: merge.rowIds, columnIds: expands ? [...merge.columnIds, columnId] : merge.columnIds }
     })
     const mergeEdits = mergesEdit(source.merges, nextMerges)
@@ -650,6 +788,7 @@ export class TableTopologyEngine {
       throw new Error('the data detail band must retain exactly one template row')
     const target = normalizeInsertTarget(input, band.rows[0]?.id)
     const index = targetIndex(band.rows.map(row => row.id), target, 'row')
+    assertInsertRowCapacity(source, band, index)
     const occupied = occupiedIdentities(source)
     const row = emptyRow(source.columns, input.minHeight, input.identities, occupied)
     const virtualBands = source.bands.map((candidate, candidateIndex) => candidateIndex === bandIndex
@@ -657,7 +796,7 @@ export class TableTopologyEngine {
       : candidate)
     const nextMerges = rebuildMerges(source, source.columns, virtualBands, (merge) => {
       const indexes = merge.rowIds.map(id => band.rows.findIndex(candidate => candidate.id === id)).filter(value => value >= 0)
-      const expands = indexes.length > 0 && index > Math.min(...indexes) && index <= Math.max(...indexes)
+      const expands = isInsideExistingBoundary(index, indexes)
       return { rowIds: expands ? [...merge.rowIds, row.id] : merge.rowIds, columnIds: merge.columnIds }
     })
     const mergeEdits = mergesEdit(source.merges, nextMerges)
@@ -745,6 +884,7 @@ export class TableTopologyEngine {
     const target = normalizeBandTarget(input)
     assertStableTarget(target)
     assertMinHeight(input.minHeight)
+    assertInsertBandCapacity(source)
     let index: number
     if ('atEnd' in target) {
       index = input.role === 'header'
