@@ -1,10 +1,11 @@
-import type { MaterialNode } from '@easyink/schema'
+import type { MaterialNode, SchemaValidationIssue } from '@easyink/schema'
 import type { UnitType } from '@easyink/shared'
 import type { CanonicalMaterialBindingMap } from './material-binding'
 import type { MaterialManifest, MaterialSurface } from './material-manifest'
 import type { AdaptableMaterialNode, MaterialSchemaIssue, SchemaAdapterContext } from './schema-adapter'
+import { validateSchemaIssues } from '@easyink/schema'
 import { assertJsonValue, cloneJsonValue, convertUnit, generateId } from '@easyink/shared'
-import { assertCanonicalMaterialBindingMap, MATERIAL_API_VERSION, MATERIAL_MANIFEST_VERSION } from './material-manifest'
+import { assertCanonicalMaterialBindingMap, defineMaterialManifest, MATERIAL_API_VERSION, MATERIAL_MANIFEST_VERSION } from './material-manifest'
 
 export const EASYINK_ENGINE_VERSION = '0.0.30' as const
 
@@ -80,6 +81,31 @@ interface PackageIssue {
 
 const BARE_MATERIAL_TYPE_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
 const CANONICAL_UNITS = new Set<UnitType>(['mm', 'pt', 'px', 'inch'])
+const PACKAGE_ID_PATTERN = /^(?:@[a-z][a-z0-9-]*\/[a-z][a-z0-9-]*|[a-z][a-z0-9-]*)$/
+const PROFILE_INPUT_KEYS = new Set(['id', 'engineVersion', 'packages', 'admissionBudget'])
+const PACKAGE_REGISTRATION_KEYS = new Set(['packageId', 'kind', 'namespace', 'required', 'manifests'])
+const ADMISSION_BUDGET_KEYS = new Set(['maxJsonNodes', 'maxStringBytes', 'maxMaterialNodes', 'maxDepth'])
+const ADAPTER_ISSUE_KEYS = new Set(['code', 'severity', 'path', 'message'])
+const MATERIAL_NODE_KEYS = new Set([
+  'id',
+  'type',
+  'x',
+  'y',
+  'width',
+  'height',
+  'rotation',
+  'alpha',
+  'zIndex',
+  'modelVersion',
+  'model',
+  'slots',
+  'bindings',
+  'editorState',
+  'output',
+  'extensions',
+  'compat',
+])
+const EMPTY_ADAPTER_ISSUES: readonly MaterialSchemaIssue[] = Object.freeze([])
 
 export class MaterialProfileCompileError extends Error {
   constructor(readonly code: string, readonly materialType?: string, readonly packageId?: string) {
@@ -89,29 +115,33 @@ export class MaterialProfileCompileError extends Error {
 }
 
 export class MaterialNodeCreationError extends Error {
-  constructor(readonly code: string, readonly materialType: string, readonly issues: readonly MaterialSchemaIssue[] = []) {
+  readonly issues: readonly MaterialSchemaIssue[]
+
+  constructor(readonly code: string, readonly materialType: string, issues: readonly MaterialSchemaIssue[] = EMPTY_ADAPTER_ISSUES) {
     super([code, materialType, ...issues.map(issue => issue.code)].join(': '))
     this.name = 'MaterialNodeCreationError'
+    this.issues = issues
   }
 }
 
 export function compileMaterialProfile(input: CompileMaterialProfileInput): CompiledMaterialProfile {
-  if (typeof input.id !== 'string' || !input.id.trim())
+  const snapshot = snapshotProfileInput(input)
+  if (typeof snapshot.id !== 'string' || !snapshot.id.trim())
     throw new MaterialProfileCompileError('MATERIAL_PROFILE_ID_INVALID')
-  assertEngineVersion(input.engineVersion)
-  assertUniquePackageIds(input.packages)
+  assertEngineVersion(snapshot.engineVersion)
+  assertUniquePackageIds(snapshot.packages)
 
-  const admissionBudget = resolveAdmissionBudget(input.admissionBudget)
+  const admissionBudget = resolveAdmissionBudget(snapshot.admissionBudget)
   const manifests = new Map<string, MaterialManifest>()
   const diagnostics: MaterialProfileDiagnostic[] = []
   const quarantinedPackages: string[] = []
   const packages = [
-    ...input.packages.filter(pkg => pkg.required).sort(byPackageId),
-    ...input.packages.filter(pkg => !pkg.required).sort(byPackageId),
+    ...snapshot.packages.filter(pkg => pkg.required).sort(byPackageId),
+    ...snapshot.packages.filter(pkg => !pkg.required).sort(byPackageId),
   ]
 
   for (const pkg of packages) {
-    const issue = validatePackageAtomically(pkg, input.engineVersion, manifests)
+    const issue = validatePackageAtomically(pkg, snapshot.engineVersion, manifests)
     if (issue) {
       if (pkg.required)
         throw new MaterialProfileCompileError(issue.code, issue.materialType, pkg.packageId)
@@ -133,8 +163,8 @@ export function compileMaterialProfile(input: CompileMaterialProfileInput): Comp
   const generatableTypes = readonlySet(materialTypes.filter(type => manifests.get(type)!.facets.ai?.generation.enabled === true))
 
   return Object.freeze({
-    id: input.id,
-    engineVersion: input.engineVersion,
+    id: snapshot.id,
+    engineVersion: snapshot.engineVersion,
     materialTypes,
     editableTypes,
     renderableTypes,
@@ -149,14 +179,41 @@ export function compileMaterialProfile(input: CompileMaterialProfileInput): Comp
         ? renderableTypes.has(type)
         : generatableTypes.has(type),
     createNode: (type: string, nodeInput?: MaterialNodeCreateInput, unit?: UnitType) =>
-      createNodeFromManifest(requireManifest(manifests, type), nodeInput, unit, input.engineVersion),
+      createNodeFromManifest(requireManifest(manifests, type), nodeInput, unit, snapshot.engineVersion),
   })
+}
+
+function snapshotProfileInput(input: unknown): CompileMaterialProfileInput {
+  let snapshot: unknown
+  try {
+    snapshot = snapshotStructure(input)
+  }
+  catch {
+    throw new MaterialProfileCompileError('MATERIAL_PROFILE_STRUCTURE_INVALID')
+  }
+  if (!isPlainRecord(snapshot)
+    || !hasOnlyKeys(snapshot, PROFILE_INPUT_KEYS)
+    || !Array.isArray(snapshot.packages)
+    || (snapshot.admissionBudget !== undefined
+      && (!isPlainRecord(snapshot.admissionBudget) || !hasOnlyKeys(snapshot.admissionBudget, ADMISSION_BUDGET_KEYS)))) {
+    throw new MaterialProfileCompileError('MATERIAL_PROFILE_STRUCTURE_INVALID')
+  }
+  for (const registration of snapshot.packages) {
+    if (!isPlainRecord(registration)
+      || !hasOnlyKeys(registration, PACKAGE_REGISTRATION_KEYS)
+      || typeof registration.required !== 'boolean'
+      || !Array.isArray(registration.manifests)
+      || (registration.namespace !== undefined && typeof registration.namespace !== 'string')) {
+      throw new MaterialProfileCompileError('MATERIAL_PROFILE_STRUCTURE_INVALID')
+    }
+  }
+  return snapshot as unknown as CompileMaterialProfileInput
 }
 
 function assertUniquePackageIds(packages: readonly MaterialPackageRegistration[]): void {
   const ids = new Set<string>()
   for (const pkg of packages) {
-    if (typeof pkg.packageId !== 'string' || !pkg.packageId.trim())
+    if (typeof pkg.packageId !== 'string' || !PACKAGE_ID_PATTERN.test(pkg.packageId))
       throw new MaterialProfileCompileError('MATERIAL_PACKAGE_ID_INVALID', undefined, pkg.packageId)
     if (ids.has(pkg.packageId))
       throw new MaterialProfileCompileError('MATERIAL_PACKAGE_ID_DUPLICATE', undefined, pkg.packageId)
@@ -177,7 +234,14 @@ function validatePackageAtomically(
     return issue('MATERIAL_NAMESPACE_INVALID')
 
   const packageTypes = new Set<string>()
-  for (const manifest of pkg.manifests) {
+  for (const candidate of pkg.manifests) {
+    let manifest: MaterialManifest
+    try {
+      manifest = defineMaterialManifest(candidate)
+    }
+    catch (error) {
+      return issue(readStableErrorCode(error, 'MATERIAL_MANIFEST_INVALID'))
+    }
     if (!manifest || typeof manifest !== 'object')
       return issue('MATERIAL_MANIFEST_INVALID')
     if (manifest.manifestVersion !== MATERIAL_MANIFEST_VERSION)
@@ -267,10 +331,11 @@ const OPTIONAL_NODE_KEYS = [
 
 function createNodeFromManifest(
   manifest: MaterialManifest,
-  input: MaterialNodeCreateInput = {},
+  rawInput: MaterialNodeCreateInput = {},
   requestedUnit: UnitType | undefined,
   engineVersion: string,
 ): MaterialNode {
+  const input = snapshotNodeCreateInput(rawInput, manifest.type)
   const sourceUnit = manifest.common.defaultNode.unit
   const documentUnit = requestedUnit ?? sourceUnit
   if (!CANONICAL_UNITS.has(sourceUnit) || !CANONICAL_UNITS.has(documentUnit))
@@ -287,11 +352,11 @@ function createNodeFromManifest(
   if (manifest.schemaAdapter.modelUnitPolicy === 'convertible' && sourceUnit !== documentUnit) {
     try {
       model = manifest.schemaAdapter.convertModelUnits!(model, sourceUnit, documentUnit)
+      model = cloneRecord(model)
     }
     catch {
       throw new MaterialNodeCreationError('MATERIAL_MODEL_UNIT_CONVERSION_FAILED', manifest.type)
     }
-    model = cloneRecord(model)
   }
 
   const bindings = {
@@ -318,9 +383,17 @@ function createNodeFromManifest(
     bindings,
     output,
   }, manifest)
+  assertCanonicalNode(initial, manifest)
   const adapterInput = cloneNode(initial)
   const inputValidationCandidate = cloneNode(adapterInput)
-  failOnAdapterIssues(manifest, manifest.schemaAdapter.validateInput(inputValidationCandidate, context))
+  let inputIssues: unknown
+  try {
+    inputIssues = manifest.schemaAdapter.validateInput(inputValidationCandidate, context)
+  }
+  catch {
+    throw new MaterialNodeCreationError('MATERIAL_ADAPTER_VALIDATE_INPUT_FAILED', manifest.type)
+  }
+  processAdapterIssues(manifest, inputIssues)
   cloneNode(inputValidationCandidate)
 
   let normalized: AdaptableMaterialNode
@@ -330,12 +403,61 @@ function createNodeFromManifest(
   catch {
     throw new MaterialNodeCreationError('MATERIAL_ADAPTER_NORMALIZE_FAILED', manifest.type)
   }
-  const canonical = materializeCanonicalNode(cloneNode(normalized), manifest)
-  assertCanonicalMaterialBindingMap(manifest.common.binding, canonical.bindings)
+  const normalizedSnapshot = cloneNode(normalized)
+  assertAllowedNodeKeys(normalizedSnapshot, manifest.type)
+  const canonical = materializeCanonicalNode(normalizedSnapshot, manifest)
+  assertCanonicalNode(canonical, manifest)
   const validationCandidate = cloneNode(canonical)
-  failOnAdapterIssues(manifest, manifest.schemaAdapter.validate(validationCandidate, context))
+  let validationIssues: unknown
+  try {
+    validationIssues = manifest.schemaAdapter.validate(validationCandidate, context)
+  }
+  catch {
+    throw new MaterialNodeCreationError('MATERIAL_ADAPTER_VALIDATE_FAILED', manifest.type)
+  }
+  processAdapterIssues(manifest, validationIssues)
   cloneNode(validationCandidate)
   return canonical
+}
+
+function snapshotNodeCreateInput(input: unknown, materialType: string): MaterialNodeCreateInput {
+  let snapshot: unknown
+  try {
+    snapshot = snapshotStructure(input)
+  }
+  catch {
+    throw new MaterialNodeCreationError('MATERIAL_NODE_INVALID', materialType)
+  }
+  assertAllowedNodeKeys(snapshot, materialType)
+  return snapshot as MaterialNodeCreateInput
+}
+
+function assertAllowedNodeKeys(value: unknown, materialType: string): asserts value is Record<string, unknown> {
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, MATERIAL_NODE_KEYS))
+    throw new MaterialNodeCreationError('MATERIAL_NODE_INVALID', materialType)
+}
+
+function assertCanonicalNode(node: MaterialNode, manifest: MaterialManifest): void {
+  assertAllowedNodeKeys(node, manifest.type)
+  assertCanonicalMaterialBindingMap(manifest.common.binding, node.bindings)
+  const schemaIssues = validateSchemaIssues({
+    version: '1.0.0',
+    unit: manifest.common.defaultNode.unit,
+    page: { mode: 'fixed', width: 1, height: 1 },
+    guides: { x: [], y: [] },
+    elements: [node],
+  }).filter(issue => issue.path.startsWith('/elements/0'))
+  if (schemaIssues.length > 0)
+    throw new MaterialNodeCreationError('MATERIAL_NODE_INVALID', manifest.type, freezeSchemaIssues(schemaIssues))
+}
+
+function freezeSchemaIssues(issues: readonly SchemaValidationIssue[]): readonly MaterialSchemaIssue[] {
+  return Object.freeze(issues.map(issue => Object.freeze({
+    code: issue.code,
+    severity: 'error' as const,
+    path: issue.path.replace(/^\/elements\/0/, '') as `/${string}`,
+    message: issue.message,
+  })))
 }
 
 function materializeCanonicalNode(node: AdaptableMaterialNode, manifest: MaterialManifest): MaterialNode {
@@ -381,11 +503,31 @@ function cloneNode<T>(value: T): T {
   return cloneJsonValue(value) as T
 }
 
-function failOnAdapterIssues(manifest: MaterialManifest, issues: readonly MaterialSchemaIssue[]): void {
-  if (!Array.isArray(issues))
+function processAdapterIssues(manifest: MaterialManifest, rawIssues: unknown): void {
+  let snapshot: unknown
+  try {
+    snapshot = snapshotStructure(rawIssues)
+  }
+  catch {
     throw new MaterialNodeCreationError('MATERIAL_ADAPTER_ISSUES_INVALID', manifest.type)
-  if (issues.length > 0)
-    throw new MaterialNodeCreationError('MATERIAL_ADAPTER_ISSUE', manifest.type, Object.freeze([...issues]))
+  }
+  if (!Array.isArray(snapshot))
+    throw new MaterialNodeCreationError('MATERIAL_ADAPTER_ISSUES_INVALID', manifest.type)
+  for (const candidate of snapshot) {
+    if (!isPlainRecord(candidate)
+      || !hasOnlyKeys(candidate, ADAPTER_ISSUE_KEYS)
+      || typeof candidate.code !== 'string'
+      || !candidate.code
+      || (candidate.severity !== 'error' && candidate.severity !== 'warning')
+      || typeof candidate.path !== 'string'
+      || !candidate.path.startsWith('/')
+      || typeof candidate.message !== 'string') {
+      throw new MaterialNodeCreationError('MATERIAL_ADAPTER_ISSUES_INVALID', manifest.type)
+    }
+  }
+  const issues = snapshot as unknown as readonly MaterialSchemaIssue[]
+  if (issues.some(issue => issue.severity === 'error'))
+    throw new MaterialNodeCreationError('MATERIAL_ADAPTER_ISSUE', manifest.type, issues)
 }
 
 function assertEngineVersion(version: string): void {
@@ -421,5 +563,120 @@ function compareSemver(left: readonly number[], right: readonly number[]): numbe
 }
 
 function byPackageId(left: MaterialPackageRegistration, right: MaterialPackageRegistration): number {
-  return left.packageId.localeCompare(right.packageId)
+  return ordinalCompare(left.packageId, right.packageId)
+}
+
+function ordinalCompare(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value))
+    return false
+  const prototype = Object.getPrototypeOf(value)
+  return prototype === Object.prototype || prototype === null
+}
+
+function hasOnlyKeys(value: Record<string, unknown>, allowed: ReadonlySet<string>): boolean {
+  return Object.keys(value).every(key => allowed.has(key))
+}
+
+function readStableErrorCode(error: unknown, fallback: string): string {
+  if (typeof error !== 'object' || error === null)
+    return fallback
+  const descriptor = Object.getOwnPropertyDescriptor(error, 'message')
+  return descriptor && 'value' in descriptor && typeof descriptor.value === 'string' && /^MATERIAL_[A-Z0-9_]+$/.test(descriptor.value)
+    ? descriptor.value
+    : fallback
+}
+
+interface SnapshotFrame {
+  source: object
+  target: Record<string, unknown> | unknown[]
+}
+
+function snapshotStructure<T>(value: T): T {
+  if (!isSnapshotContainer(value))
+    return value
+
+  const root = createSnapshotContainer(value)
+  const clones = new WeakMap<object, Record<string, unknown> | unknown[]>([[value, root]])
+  const stack: SnapshotFrame[] = [{ source: value, target: root }]
+  while (stack.length > 0) {
+    const { source, target } = stack.pop()!
+    const entries = readSnapshotEntries(source)
+    for (const [key, child] of entries) {
+      let snapshot = child
+      if (isSnapshotContainer(child)) {
+        const existing = clones.get(child)
+        if (existing) {
+          snapshot = existing
+        }
+        else {
+          const childTarget = createSnapshotContainer(child)
+          clones.set(child, childTarget)
+          stack.push({ source: child, target: childTarget })
+          snapshot = childTarget
+        }
+      }
+      Object.defineProperty(target, key, {
+        value: snapshot,
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      })
+    }
+    Object.freeze(target)
+  }
+  return root as T
+}
+
+function isSnapshotContainer(value: unknown): value is object {
+  return typeof value === 'object' && value !== null
+}
+
+function createSnapshotContainer(source: object): Record<string, unknown> | unknown[] {
+  if (Array.isArray(source)) {
+    if (Object.getPrototypeOf(source) !== Array.prototype)
+      throw new Error('STRUCTURE_INVALID')
+    return Array.from({ length: readSnapshotArrayLength(source) })
+  }
+  const prototype = Object.getPrototypeOf(source)
+  if (prototype !== Object.prototype && prototype !== null)
+    throw new Error('STRUCTURE_INVALID')
+  return Object.create(prototype) as Record<string, unknown>
+}
+
+function readSnapshotEntries(source: object): Array<[string, unknown]> {
+  const array = Array.isArray(source)
+  const length = array ? readSnapshotArrayLength(source) : 0
+  const entries: Array<[string, unknown]> = []
+  for (const key of Reflect.ownKeys(source)) {
+    if (array && key === 'length')
+      continue
+    if (typeof key !== 'string'
+      || (!array && (key === '__proto__' || key === 'prototype' || key === 'constructor'))
+      || (array && !isSnapshotArrayIndex(key, length))) {
+      throw new Error('STRUCTURE_INVALID')
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(source, key)
+    if (!descriptor || !('value' in descriptor) || !descriptor.enumerable)
+      throw new Error('STRUCTURE_INVALID')
+    entries.push([key, descriptor.value])
+  }
+  if (array && entries.length !== length)
+    throw new Error('STRUCTURE_INVALID')
+  return entries
+}
+
+function readSnapshotArrayLength(value: object): number {
+  const descriptor = Object.getOwnPropertyDescriptor(value, 'length')
+  if (!descriptor || !('value' in descriptor) || !Number.isSafeInteger(descriptor.value) || descriptor.value < 0)
+    throw new Error('STRUCTURE_INVALID')
+  return descriptor.value
+}
+
+function isSnapshotArrayIndex(key: string, length: number): boolean {
+  const index = Number(key)
+  return Number.isInteger(index) && index >= 0 && index < length && String(index) === key
 }

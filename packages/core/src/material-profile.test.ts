@@ -1,4 +1,5 @@
 import type { MaterialManifest } from './material-manifest'
+import type { MaterialNodeCreationError } from './material-profile'
 import type { SchemaAdapter } from './schema-adapter'
 import { describe, expect, it, vi } from 'vitest'
 import {
@@ -24,6 +25,71 @@ function packageOf(manifests: readonly MaterialManifest[], options: {
 }
 
 describe('compileMaterialProfile', () => {
+  it('rejects accessor-backed compile structures without invoking getters', () => {
+    let calls = 0
+    const packages = Array.from({ length: 1 })
+    Object.defineProperty(packages, '0', {
+      enumerable: true,
+      get: () => {
+        calls += 1
+        return packageOf([createTestMaterialManifest({ type: 'bypass' })])
+      },
+    })
+    expect(() => compileMaterialProfile({ id: 'test', engineVersion: '0.0.30', packages } as never))
+      .toThrowError(expect.objectContaining({ code: 'MATERIAL_PROFILE_STRUCTURE_INVALID' }))
+    expect(calls).toBe(0)
+
+    const registration = packageOf([createTestMaterialManifest({ type: 'safe' })]) as Record<string, unknown>
+    Object.defineProperty(registration, 'manifests', {
+      enumerable: true,
+      get: () => {
+        calls += 1
+        return [createTestMaterialManifest({ type: 'other/bypass' })]
+      },
+    })
+    expect(() => compileMaterialProfile({ id: 'test', engineVersion: '0.0.30', packages: [registration] } as never))
+      .toThrowError(expect.objectContaining({ code: 'MATERIAL_PROFILE_STRUCTURE_INVALID' }))
+    expect(calls).toBe(0)
+
+    const manifest = { ...createTestMaterialManifest({ type: 'safe' }) }
+    Object.defineProperty(manifest, 'type', {
+      enumerable: true,
+      get: () => {
+        calls += 1
+        return calls === 1 ? 'safe' : 'other/bypass'
+      },
+    })
+    expect(() => compileMaterialProfile({ id: 'test', engineVersion: '0.0.30', packages: [packageOf([manifest])] }))
+      .toThrowError(expect.objectContaining({ code: 'MATERIAL_PROFILE_STRUCTURE_INVALID' }))
+    expect(calls).toBe(0)
+  })
+
+  it('stores deeply frozen manifest snapshots insulated from caller mutation', () => {
+    const base = createTestMaterialManifest({ type: 'mutable' })
+    const source = {
+      ...base,
+      common: {
+        ...base.common,
+        defaultNode: { ...base.common.defaultNode, model: { value: 1 } },
+      },
+    }
+    const profile = compileMaterialProfile({
+      id: 'test',
+      engineVersion: '0.0.30',
+      packages: [packageOf([source])],
+    })
+    const admitted = profile.getManifest('mutable')!
+    source.type = 'changed'
+    source.common.defaultNode.model.value = 2
+
+    expect(admitted).not.toBe(source)
+    expect(profile.getManifest('mutable')).toBe(admitted)
+    expect(profile.getManifest('changed')).toBeUndefined()
+    expect(Object.isFrozen(admitted)).toBe(true)
+    expect(Object.isFrozen(admitted.common.defaultNode.model)).toBe(true)
+    expect(profile.createNode('mutable', { id: 'n' }).model).toEqual({ value: 1 })
+  })
+
   it('derives sorted independent surface sets with complete ReadonlySet behavior', () => {
     const editable = createTestMaterialManifest({ type: 'editable', designer: true })
     const printable = createTestMaterialManifest({ type: 'printable' })
@@ -45,7 +111,8 @@ describe('compileMaterialProfile', () => {
     const visited: string[] = []
     profile.editableTypes.forEach((value, key, set) => visited.push(`${value}:${key}:${set === profile.editableTypes}`))
     expect(visited).toEqual(['editable:editable:true', 'generated:generated:true'])
-    expect(profile.getManifest('printable')).toBe(printable)
+    expect(profile.getManifest('printable')).not.toBe(printable)
+    expect(profile.getManifest('printable')).toEqual(printable)
     expect(profile.hasSurface('generated', 'ai')).toBe(true)
     expect('add' in profile.editableTypes).toBe(false)
     expect('delete' in profile.editableTypes).toBe(false)
@@ -134,8 +201,16 @@ describe('compileMaterialProfile', () => {
         packageOf([shared], { packageId: 'required' }),
       ],
     })
-    expect(profile.getManifest('shared')).toBe(shared)
+    expect(profile.getManifest('shared')).toEqual(shared)
     expect(profile.quarantinedPackages).toEqual(['a-optional', 'z-optional'])
+  })
+
+  it('rejects package IDs outside the deterministic ASCII registration syntax', () => {
+    expect(() => compileMaterialProfile({
+      id: 'test',
+      engineVersion: '0.0.30',
+      packages: [packageOf([], { packageId: 'é-optional', required: false })],
+    })).toThrowError(expect.objectContaining({ code: 'MATERIAL_PACKAGE_ID_INVALID' }))
   })
 
   it('validates and freezes effective admission budgets', () => {
@@ -179,6 +254,22 @@ describe('compileMaterialProfile', () => {
 })
 
 describe('compiledMaterialProfile.createNode', () => {
+  it.each([
+    [{ id: '' }, 'empty ID'],
+    [{ width: -1 }, 'negative width'],
+    [{ output: { visibility: 'bogus' } }, 'bogus visibility'],
+    [{ unit: 'mm' }, 'legacy unit field'],
+    [{ bogus: true }, 'unknown field'],
+  ] as const)('rejects an invalid canonical envelope: %s', (input) => {
+    const profile = compileMaterialProfile({
+      id: 'test',
+      engineVersion: '0.0.30',
+      packages: [packageOf([createTestMaterialManifest({ type: 'envelope' })])],
+    })
+    expect(() => profile.createNode('envelope', input as never))
+      .toThrowError(expect.objectContaining({ code: 'MATERIAL_NODE_INVALID' }))
+  })
+
   it('converts envelope defaults, materializes canonical defaults, and never emits unit', () => {
     const profile = compileMaterialProfile({
       id: 'test',
@@ -244,6 +335,73 @@ describe('compiledMaterialProfile.createNode', () => {
       const profile = compileMaterialProfile({ id: 'test', engineVersion: '0.0.30', packages: [packageOf([manifest])] })
       expect(() => profile.createNode(type, { id: 'n' })).toThrow()
     }
+  })
+
+  it('allows warnings, freezes error diagnostics, and aborts only on errors', () => {
+    const warning = { code: 'WARN', severity: 'warning' as const, path: '/model' as const, message: 'warning' }
+    const warningBase = createTestMaterialManifest({ type: 'seed' }).schemaAdapter
+    const warningAdapter = { ...warningBase, validateInput: () => [warning], validate: () => [warning] }
+    const warningManifest = createTestMaterialManifest({ type: 'warning-node', schemaAdapter: warningAdapter })
+    const warningProfile = compileMaterialProfile({ id: 'test', engineVersion: '0.0.30', packages: [packageOf([warningManifest])] })
+    expect(warningProfile.createNode('warning-node', { id: 'warning' }).id).toBe('warning')
+
+    const issue = { code: 'BAD', severity: 'error' as const, path: '/model' as const, message: 'bad' }
+    const errorAdapter = { ...warningBase, validate: () => [issue] }
+    const errorManifest = createTestMaterialManifest({ type: 'error-node', schemaAdapter: errorAdapter })
+    const errorProfile = compileMaterialProfile({ id: 'test', engineVersion: '0.0.30', packages: [packageOf([errorManifest])] })
+    let thrown: MaterialNodeCreationError | undefined
+    try {
+      errorProfile.createNode('error-node', { id: 'error' })
+    }
+    catch (error) {
+      thrown = error as MaterialNodeCreationError
+    }
+    issue.message = 'mutated'
+    expect(thrown).toMatchObject({ code: 'MATERIAL_ADAPTER_ISSUE' })
+    expect(thrown?.issues).toEqual([{ code: 'BAD', severity: 'error', path: '/model', message: 'bad' }])
+    expect(Object.isFrozen(thrown?.issues)).toBe(true)
+    expect(Object.isFrozen(thrown?.issues[0])).toBe(true)
+  })
+
+  it.each([
+    ['validate-input', 'MATERIAL_ADAPTER_VALIDATE_INPUT_FAILED'],
+    ['normalize', 'MATERIAL_ADAPTER_NORMALIZE_FAILED'],
+    ['convert', 'MATERIAL_MODEL_UNIT_CONVERSION_FAILED'],
+    ['validate', 'MATERIAL_ADAPTER_VALIDATE_FAILED'],
+  ] as const)('wraps %s adapter exceptions in a stable node error', (phase, code) => {
+    const base = createTestMaterialManifest({ type: 'seed' }).schemaAdapter
+    const fail = () => {
+      throw new Error('private adapter failure')
+    }
+    const adapter: SchemaAdapter = phase === 'validate-input'
+      ? { ...base, validateInput: fail }
+      : phase === 'normalize'
+        ? { ...base, normalize: fail }
+        : phase === 'validate'
+          ? { ...base, validate: fail }
+          : { ...base, modelUnitPolicy: 'convertible', convertModelUnits: fail }
+    const manifest = createTestMaterialManifest({ type: `throws-${phase}`, schemaAdapter: adapter })
+    const profile = compileMaterialProfile({ id: 'test', engineVersion: '0.0.30', packages: [packageOf([manifest])] })
+    expect(() => profile.createNode(manifest.type, { id: 'n' }, phase === 'convert' ? 'px' : undefined))
+      .toThrowError(expect.objectContaining({ code }))
+  })
+
+  it('rejects invalid adapter-normalized envelopes before validate', () => {
+    const base = createTestMaterialManifest({ type: 'seed' }).schemaAdapter
+    const validate = vi.fn(() => [])
+    const adapter = {
+      ...base,
+      normalize: (node: Parameters<SchemaAdapter['normalize']>[0]) => ({
+        ...node,
+        output: { visibility: 'bogus' as never },
+      }),
+      validate,
+    } satisfies SchemaAdapter
+    const manifest = createTestMaterialManifest({ type: 'invalid-normalized', schemaAdapter: adapter })
+    const profile = compileMaterialProfile({ id: 'test', engineVersion: '0.0.30', packages: [packageOf([manifest])] })
+    expect(() => profile.createNode('invalid-normalized', { id: 'n' }))
+      .toThrowError(expect.objectContaining({ code: 'MATERIAL_NODE_INVALID' }))
+    expect(validate).not.toHaveBeenCalled()
   })
 
   it('rejects legacy and undeclared bindings before returning a node', () => {
@@ -321,13 +479,11 @@ describe('compiledMaterialProfile.createNode', () => {
         defaultNode: { ...manifest.common.defaultNode, unit: 'cm' },
       },
     } as unknown as MaterialManifest
-    const invalidProfile = compileMaterialProfile({
+    expect(() => compileMaterialProfile({
       id: 'invalid-default-unit',
       engineVersion: '0.0.30',
       packages: [packageOf([invalidDefault])],
-    })
-    expect(() => invalidProfile.createNode('unit-guard', { id: 'n' }))
-      .toThrowError(expect.objectContaining({ code: 'MATERIAL_NODE_UNIT_INVALID' }))
+    })).toThrowError(expect.objectContaining({ code: 'MATERIAL_DEFAULT_UNIT_INVALID' }))
     expect(convertModelUnits).not.toHaveBeenCalled()
     expect(normalize).not.toHaveBeenCalled()
   })
