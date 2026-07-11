@@ -174,8 +174,8 @@ describe('validatePropertyDescriptors', () => {
   it('accepts nonempty canonical frozen path declarations', () => {
     expect(validatePropertyDescriptors([
       descriptor('font', '/model/typography/fontFamily'),
-      descriptor('placement', '/output/placement'),
-      descriptor('placement-mode', '/output/placement'),
+      descriptor('break.before', '/output/break'),
+      descriptor('break.after', '/output/break'),
     ])).toEqual([])
   })
 
@@ -188,10 +188,35 @@ describe('validatePropertyDescriptors', () => {
     },
   )
 
-  it('allows an implicit and explicit accessor to share a composite path', () => {
+  it('rejects an implicit scalar accessor colliding with an explicit path', () => {
     expect(validatePropertyDescriptors([
       { key: 'title', label: 'Title', type: 'string' },
       descriptor('title-alias', '/model/title'),
-    ])).toEqual([])
+    ])).toContainEqual(expect.objectContaining({
+      code: 'PROPERTY_ACCESSOR_PATH_DUPLICATE',
+      descriptorKey: 'title-alias',
+      path: '/model/title',
+    }))
+  })
+
+  it('rejects an explicit descendant of an implicit scalar accessor', () => {
+    expect(validatePropertyDescriptors([
+      { key: 'typography', label: 'Typography', type: 'object' },
+      descriptor('font', '/model/typography/fontFamily'),
+    ])).toContainEqual(expect.objectContaining({
+      code: 'PROPERTY_ACCESSOR_PATH_CONFLICT',
+      descriptorKey: 'font',
+      path: '/model/typography/fontFamily',
+    }))
+  })
+
+  it('tracks duplicate implicit paths as accessor collisions', () => {
+    expect(validatePropertyDescriptors([
+      { key: 'title', label: 'Title', type: 'string' },
+      { key: 'title', label: 'Duplicate title', type: 'string' },
+    ])).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'PROPERTY_KEY_DUPLICATE', descriptorKey: 'title' }),
+      expect.objectContaining({ code: 'PROPERTY_ACCESSOR_PATH_DUPLICATE', descriptorKey: 'title', path: '/model/title' }),
+    ]))
   })
 })

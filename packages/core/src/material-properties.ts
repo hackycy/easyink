@@ -86,6 +86,7 @@ export interface PropertyDescriptorDiagnostic {
     | 'PROPERTY_ACCESSOR_PATH_INVALID'
     | 'PROPERTY_ACCESSOR_PATH_UNSAFE'
     | 'PROPERTY_ACCESSOR_PATH_DUPLICATE'
+    | 'PROPERTY_ACCESSOR_PATH_CONFLICT'
   descriptorKey?: string
   path?: string
 }
@@ -113,6 +114,7 @@ export function resolvePropertyAccessor<T>(descriptor: PropertyDescriptor<T>): P
 export function validatePropertyDescriptors(descriptors: readonly unknown[]): readonly PropertyDescriptorDiagnostic[] {
   const diagnostics: PropertyDescriptorDiagnostic[] = []
   const keys = new Set<string>()
+  const effectivePaths: EffectiveAccessorPath[] = []
 
   for (const candidate of descriptors) {
     if (!isPlainRecord(candidate)) {
@@ -140,7 +142,8 @@ export function validatePropertyDescriptors(descriptors: readonly unknown[]): re
     if (candidate.accessor === undefined) {
       if (descriptorKey) {
         try {
-          createModelPropertyAccessor(`/${escapePointerToken(descriptorKey)}`)
+          const accessor = createModelPropertyAccessor(`/${escapePointerToken(descriptorKey)}`)
+          registerEffectivePath(accessor.paths[0]!, false, descriptorKey, effectivePaths, diagnostics)
         }
         catch (error) {
           diagnostics.push({
@@ -179,14 +182,45 @@ export function validatePropertyDescriptors(descriptors: readonly unknown[]): re
         diagnostics.push({ code: 'PROPERTY_ACCESSOR_PATH_UNSAFE', descriptorKey, path: pathValue })
         continue
       }
-      if (accessorPaths.has(pathValue!))
+      if (accessorPaths.has(pathValue!)) {
         diagnostics.push({ code: 'PROPERTY_ACCESSOR_PATH_DUPLICATE', descriptorKey, path: pathValue })
-      else
+      }
+      else {
         accessorPaths.add(pathValue!)
+        registerEffectivePath(pathValue! as JsonPointer, true, descriptorKey, effectivePaths, diagnostics)
+      }
     }
   }
 
   return Object.freeze(diagnostics.map(diagnostic => Object.freeze(diagnostic)))
+}
+
+interface EffectiveAccessorPath {
+  path: JsonPointer
+  explicit: boolean
+}
+
+function registerEffectivePath(
+  path: JsonPointer,
+  explicit: boolean,
+  descriptorKey: string | undefined,
+  effectivePaths: EffectiveAccessorPath[],
+  diagnostics: PropertyDescriptorDiagnostic[],
+): void {
+  for (const existing of effectivePaths) {
+    if (path === existing.path) {
+      if (!explicit || !existing.explicit)
+        diagnostics.push({ code: 'PROPERTY_ACCESSOR_PATH_DUPLICATE', descriptorKey, path })
+      continue
+    }
+    if ((!explicit || !existing.explicit) && pathsOverlap(path, existing.path))
+      diagnostics.push({ code: 'PROPERTY_ACCESSOR_PATH_CONFLICT', descriptorKey, path })
+  }
+  effectivePaths.push({ path, explicit })
+}
+
+function pathsOverlap(left: JsonPointer, right: JsonPointer): boolean {
+  return left.startsWith(`${right}/`) || right.startsWith(`${left}/`)
 }
 
 function propertyAccessorPathErrorCode(error: unknown): 'PROPERTY_ACCESSOR_PATH_INVALID' | 'PROPERTY_ACCESSOR_PATH_UNSAFE' {
