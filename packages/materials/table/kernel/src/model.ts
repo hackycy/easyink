@@ -3,11 +3,11 @@ import { assertJsonValue } from '@easyink/shared'
 declare const tableIdBrand: unique symbol
 
 export type TableId<T extends string> = string & { readonly [tableIdBrand]: T }
-export type BandId = TableId<'band'>
-export type RowId = TableId<'row'>
-export type ColumnId = TableId<'column'>
-export type CellId = TableId<'cell'>
-export type MergeId = TableId<'merge'>
+export type TableBandId = TableId<'band'>
+export type TableRowId = TableId<'row'>
+export type TableColumnId = TableId<'column'>
+export type TableCellId = TableId<'cell'>
+export type TableMergeId = TableId<'merge'>
 export type RuntimeRowId = TableId<'runtime-row'>
 
 export type TableIdentityKind = 'band' | 'row' | 'column' | 'cell' | 'merge'
@@ -32,42 +32,44 @@ export interface FractionTrack {
 
 export type TableTrack = FixedTrack | FractionTrack
 
-export interface Insets {
+export interface TableInsets {
   top: number
   right: number
   bottom: number
   left: number
 }
 
-export interface Border {
+export interface TableBorderStyle {
   width: number
   style: 'none' | 'solid' | 'dashed' | 'dotted' | 'double'
   color: string
 }
 
-export interface Typography {
+export interface TableTypography {
   fontFamily?: string
   fontSize?: number
-  fontWeight?: number
+  fontWeight?: 'normal' | 'bold'
   fontStyle?: 'normal' | 'italic'
   color?: string
   lineHeight?: number
+  letterSpacing?: number
+  direction?: 'ltr' | 'rtl'
   textAlign?: 'start' | 'center' | 'end' | 'justify'
   verticalAlign?: 'top' | 'middle' | 'bottom'
 }
 
-export interface LogicalBorder {
-  blockStart?: Border
-  inlineEnd?: Border
-  blockEnd?: Border
-  inlineStart?: Border
+export interface TableLogicalBorder {
+  blockStart?: TableBorderStyle
+  inlineEnd?: TableBorderStyle
+  blockEnd?: TableBorderStyle
+  inlineStart?: TableBorderStyle
 }
 
 export interface TableStyle {
-  padding?: Insets
+  padding?: Partial<TableInsets>
   background?: string
-  typography?: Typography
-  border?: LogicalBorder
+  typography?: TableTypography
+  border?: TableLogicalBorder
   overflow?: 'visible' | 'hidden' | 'clip'
 }
 
@@ -85,14 +87,14 @@ export interface MaterialsCellContent {
 export type TableCellContent = TextCellContent | MaterialsCellContent
 
 export interface TableCell {
-  id: CellId
-  columnId: ColumnId
+  id: TableCellId
+  columnId: TableColumnId
   content: TableCellContent
   style?: TableStyle
 }
 
 export interface TableRow {
-  id: RowId
+  id: TableRowId
   minHeight: number
   cells: TableCell[]
   style?: TableStyle
@@ -101,51 +103,41 @@ export interface TableRow {
 export type TableBandRole = 'body' | 'header' | 'detail' | 'footer'
 
 export interface TableBand {
-  id: BandId
+  id: TableBandId
   role: TableBandRole
   rows: TableRow[]
   style?: TableStyle
 }
 
 export interface TableColumn {
-  id: ColumnId
+  id: TableColumnId
   track: TableTrack
   style?: TableStyle
 }
 
-export interface MergeRegion {
-  id: MergeId
-  bandId: BandId
-  rowIds: RowId[]
-  columnIds: ColumnId[]
-  anchorCellId: CellId
-  inactiveCellIds: CellId[]
+export interface TableMergeRegion {
+  id: TableMergeId
+  rowIds: TableRowId[]
+  columnIds: TableColumnId[]
+  anchorCellId: TableCellId
+  inactiveCellIds: TableCellId[]
 }
 
 export interface TableDataConfig {
   collectionPort: string
+  detailKeyPort?: string
 }
 
 export interface TableAccessibility {
-  label?: string
+  caption?: string
   description?: string
+  decorative?: boolean
 }
-
-export type Track = TableTrack
-export type FrTrack = FractionTrack
-export type Style = TableStyle
-export type CellContent = TableCellContent
-export type Cell = TableCell
-export type Row = TableRow
-export type Band = TableBand
-export type Column = TableColumn
-export type DataConfig = TableDataConfig
-export type Accessibility = TableAccessibility
 
 interface TableModelBase {
   columns: TableColumn[]
   bands: TableBand[]
-  merges: MergeRegion[]
+  merges: TableMergeRegion[]
   style: TableStyle
   accessibility?: TableAccessibility
 }
@@ -170,16 +162,18 @@ export interface CreateTableModelOptions {
 const STABLE_ID_PATTERN = /^[\w.:-]+$/
 const textEncoder = new TextEncoder()
 
-export function isValidTableIdentityToken(value: unknown): value is string {
+export function isValidTableStableToken(value: unknown, maxBytes = 128): value is string {
   return typeof value === 'string'
+    && Number.isSafeInteger(maxBytes)
+    && maxBytes > 0
     && STABLE_ID_PATTERN.test(value)
-    && textEncoder.encode(value).byteLength <= 128
+    && textEncoder.encode(value).byteLength <= maxBytes
 }
 
 export class SequentialTableIdentityAllocator implements TableIdentityAllocator {
   private readonly counters: Record<TableIdentityKind, number> = { band: 0, row: 0, column: 0, cell: 0, merge: 0 }
 
-  constructor(private readonly namespace: string) {}
+  constructor(private readonly namespace = 'default') {}
 
   allocate(kind: TableIdentityKind, occupied: ReadonlySet<string>): string {
     let candidate: string
@@ -191,7 +185,7 @@ export class SequentialTableIdentityAllocator implements TableIdentityAllocator 
   }
 }
 
-export function createSequentialTableIdentityAllocator(namespace: string): TableIdentityAllocator {
+export function createSequentialTableIdentityAllocator(namespace = 'default'): TableIdentityAllocator {
   return new SequentialTableIdentityAllocator(namespace)
 }
 
@@ -201,7 +195,7 @@ export function allocateTableIdentity<K extends TableIdentityKind>(
   occupied: Set<string>,
 ): TableId<K> {
   const token = allocator.allocate(kind, occupied)
-  if (!isValidTableIdentityToken(token))
+  if (!isValidTableStableToken(token))
     throw new Error('Table stable ID must contain 1..128 UTF-8 bytes using only [A-Za-z0-9._:-]')
   if (occupied.has(token))
     throw new Error(`Duplicate table stable ID: ${token}`)
@@ -224,7 +218,7 @@ export function createTableModel(options: CreateTableModelOptions & { kind: 'dat
 export function createTableModel(options: CreateTableModelOptions, allocator?: TableIdentityAllocator): TableModel
 export function createTableModel(
   options: CreateTableModelOptions,
-  allocator: TableIdentityAllocator = createSequentialTableIdentityAllocator('table'),
+  allocator: TableIdentityAllocator = createSequentialTableIdentityAllocator(),
 ): TableModel {
   assertPositiveSafeCount(options.columnCount, 'columnCount')
   assertPositiveSafeCount(options.rowCount, 'rowCount')
@@ -285,7 +279,6 @@ export function assertValidTableModel(value: unknown): asserts value is TableMod
   const columns = value.columns.map((column, index) => validateColumn(column, index, occupied))
   const columnById = new Map(columns.map(column => [column.id, column]))
   const bands: TableBand[] = []
-  const bandById = new Map<string, TableBand>()
   const rowById = new Map<string, { row: TableRow, band: TableBand, index: number }>()
   const cellById = new Map<string, { cell: TableCell, row: TableRow, band: TableBand }>()
 
@@ -299,7 +292,6 @@ export function assertValidTableModel(value: unknown): asserts value is TableMod
     validateOptionalStyle(rawBand.style, `band ${String(rawBand.id)}`)
     const band = rawBand as unknown as TableBand
     bands.push(band)
-    bandById.set(band.id, band)
     for (let rowIndex = 0; rowIndex < rawBand.rows.length; rowIndex++) {
       const rawRow = rawBand.rows[rowIndex]
       if (!isRecord(rawRow) || !isNonNegativeFinite(rawRow.minHeight) || !Array.isArray(rawRow.cells))
@@ -314,7 +306,7 @@ export function assertValidTableModel(value: unknown): asserts value is TableMod
         if (!isRecord(rawCell) || typeof rawCell.columnId !== 'string' || !isRecord(rawCell.content))
           failModel(`cell ${cellIndex} in row ${row.id} has an invalid shape`)
         claimExistingId(rawCell.id, 'cell', occupied)
-        if (!columnById.has(rawCell.columnId as ColumnId))
+        if (!columnById.has(rawCell.columnId as TableColumnId))
           failModel(`row ${row.id} coverage references an unknown column`)
         if (coveredColumns.has(rawCell.columnId))
           failModel(`row ${row.id} has duplicate column coverage`)
@@ -334,7 +326,6 @@ export function assertValidTableModel(value: unknown): asserts value is TableMod
   for (let mergeIndex = 0; mergeIndex < value.merges.length; mergeIndex++) {
     const rawMerge = value.merges[mergeIndex]
     if (!isRecord(rawMerge)
-      || typeof rawMerge.bandId !== 'string'
       || !Array.isArray(rawMerge.rowIds)
       || !Array.isArray(rawMerge.columnIds)
       || typeof rawMerge.anchorCellId !== 'string'
@@ -342,8 +333,8 @@ export function assertValidTableModel(value: unknown): asserts value is TableMod
       failModel(`merge ${mergeIndex} has an invalid shape`)
     }
     claimExistingId(rawMerge.id, 'merge', occupied)
-    const merge = rawMerge as unknown as MergeRegion
-    validateMerge(merge, bandById, rowById, columnById, cellById, mergedCells)
+    const merge = rawMerge as unknown as TableMergeRegion
+    validateMerge(merge, rowById, columnById, cellById, mergedCells)
   }
   validateOptionalStyle(value.style, 'table')
   validateAccessibility(value.accessibility)
@@ -382,7 +373,7 @@ function validateCellContent(content: Record<string, unknown>, cellId: string): 
   if (content.kind === 'text') {
     if (typeof content.text !== 'string')
       failModel(`cell ${cellId} text content is invalid`)
-    if (content.bindingPort !== undefined && (typeof content.bindingPort !== 'string' || content.bindingPort.length === 0))
+    if (content.bindingPort !== undefined && (typeof content.bindingPort !== 'string' || content.bindingPort.trim().length === 0))
       failModel(`cell ${cellId} bindingPort must be non-empty`)
     return
   }
@@ -403,8 +394,12 @@ function validateModelKind(value: Record<string, unknown>, bands: TableBand[]): 
     return
   }
 
-  if (!isRecord(value.data) || typeof value.data.collectionPort !== 'string' || value.data.collectionPort.length === 0)
+  if (!isRecord(value.data) || typeof value.data.collectionPort !== 'string' || value.data.collectionPort.trim().length === 0)
     failModel('data table model must have a non-empty collectionPort data config')
+  if (value.data.detailKeyPort !== undefined
+    && (typeof value.data.detailKeyPort !== 'string' || value.data.detailKeyPort.trim().length === 0)) {
+    failModel('data table model detailKeyPort must be non-empty when present')
+  }
   if (bands.some(band => band.role === 'body'))
     failModel('data table model must not contain a body band')
   const details = bands.filter(band => band.role === 'detail')
@@ -420,26 +415,26 @@ function validateModelKind(value: Record<string, unknown>, bands: TableBand[]): 
 }
 
 function validateMerge(
-  merge: MergeRegion,
-  bandById: Map<string, TableBand>,
+  merge: TableMergeRegion,
   rowById: Map<string, { row: TableRow, band: TableBand, index: number }>,
   columnById: Map<string, TableColumn>,
   cellById: Map<string, { cell: TableCell, row: TableRow, band: TableBand }>,
   mergedCells: Set<string>,
 ): void {
-  const band = bandById.get(merge.bandId)
-  if (!band)
-    failModel(`merge ${merge.id} references an unknown band`)
   if (merge.rowIds.length === 0 || merge.columnIds.length === 0)
     failModel(`merge ${merge.id} rectangle must contain rows and columns`)
   assertDistinctStrings(merge.rowIds, `merge ${merge.id} row IDs`)
   assertDistinctStrings(merge.columnIds, `merge ${merge.id} column IDs`)
   assertDistinctStrings(merge.inactiveCellIds, `merge ${merge.id} inactive cell IDs`)
 
-  const rowIndexes = merge.rowIds.map((rowId) => {
+  const rowEntries = merge.rowIds.map((rowId) => {
     const entry = rowById.get(rowId)
     if (!entry)
       failModel(`merge ${merge.id} references an unknown row`)
+    return entry
+  })
+  const band = rowEntries[0]!.band
+  const rowIndexes = rowEntries.map((entry) => {
     if (entry.band.id !== band.id)
       failModel(`merge ${merge.id} rows must belong to one band`)
     return entry.index
@@ -488,8 +483,10 @@ function validateOptionalStyle(value: unknown, owner: string): void {
     failModel(`${owner} style background is invalid`)
   if (value.padding !== undefined) {
     const padding = value.padding
-    if (!isRecord(padding) || !['top', 'right', 'bottom', 'left'].every(key => isNonNegativeFinite(padding[key])))
+    if (!isRecord(padding)
+      || !['top', 'right', 'bottom', 'left'].every(key => padding[key] === undefined || isNonNegativeFinite(padding[key]))) {
       failModel(`${owner} style padding is invalid`)
+    }
   }
   if (value.typography !== undefined && !isRecord(value.typography))
     failModel(`${owner} style typography is invalid`)
@@ -515,10 +512,12 @@ function validateOptionalStyle(value: unknown, owner: string): void {
 function validateTypography(value: Record<string, unknown>, owner: string): void {
   if ((value.fontFamily !== undefined && typeof value.fontFamily !== 'string')
     || (value.fontSize !== undefined && !isNonNegativeFinite(value.fontSize))
-    || (value.fontWeight !== undefined && !isNonNegativeFinite(value.fontWeight))
+    || (value.fontWeight !== undefined && value.fontWeight !== 'normal' && value.fontWeight !== 'bold')
     || (value.fontStyle !== undefined && value.fontStyle !== 'normal' && value.fontStyle !== 'italic')
     || (value.color !== undefined && typeof value.color !== 'string')
     || (value.lineHeight !== undefined && !isPositiveFinite(value.lineHeight))
+    || (value.letterSpacing !== undefined && !isFiniteNumber(value.letterSpacing))
+    || (value.direction !== undefined && value.direction !== 'ltr' && value.direction !== 'rtl')
     || (value.textAlign !== undefined && value.textAlign !== 'start' && value.textAlign !== 'center' && value.textAlign !== 'end' && value.textAlign !== 'justify')
     || (value.verticalAlign !== undefined && value.verticalAlign !== 'top' && value.verticalAlign !== 'middle' && value.verticalAlign !== 'bottom')) {
     failModel(`${owner} style typography is invalid`)
@@ -529,8 +528,10 @@ function validateAccessibility(value: unknown): void {
   if (value === undefined)
     return
   if (!isRecord(value)
-    || (value.label !== undefined && typeof value.label !== 'string')
-    || (value.description !== undefined && typeof value.description !== 'string')) {
+    || Object.hasOwn(value, 'label')
+    || (value.caption !== undefined && typeof value.caption !== 'string')
+    || (value.description !== undefined && typeof value.description !== 'string')
+    || (value.decorative !== undefined && typeof value.decorative !== 'boolean')) {
     failModel('table accessibility is invalid')
   }
 }
@@ -541,7 +542,7 @@ function validateOptionalBound(value: unknown, owner: string): void {
 }
 
 function claimExistingId(value: unknown, kind: TableIdentityKind, occupied: Set<string>): void {
-  if (!isValidTableIdentityToken(value))
+  if (!isValidTableStableToken(value))
     failModel(`${kind} stable ID must contain 1..128 UTF-8 bytes using only [A-Za-z0-9._:-]`)
   if (occupied.has(value))
     failModel(`table IDs must be globally unique; duplicate ${kind} ID ${value}`)
@@ -569,6 +570,10 @@ function isTableBandRole(value: unknown): value is TableBandRole {
 
 function isNonNegativeFinite(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
 }
 
 function isPositiveFinite(value: unknown): value is number {

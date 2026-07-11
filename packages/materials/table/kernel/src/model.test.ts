@@ -1,4 +1,18 @@
-import type { TableIdentityAllocator, TableModel } from './model'
+import type {
+  RuntimeRowId,
+  TableAccessibility,
+  TableBandId,
+  TableBorderStyle,
+  TableCellId,
+  TableColumnId,
+  TableDataConfig,
+  TableIdentityAllocator,
+  TableInsets,
+  TableMergeId,
+  TableMergeRegion,
+  TableModel,
+  TableRowId,
+} from './model'
 import { describe, expect, it, vi } from 'vitest'
 import {
   allocateTableIdentity,
@@ -6,7 +20,13 @@ import {
   createSequentialTableIdentityAllocator,
   createTableModel,
   encodeTableOpaqueIdPart,
+  isValidTableStableToken,
 } from './model'
+
+type CanonicalIdAliases = TableBandId | TableRowId | TableColumnId | TableCellId | TableMergeId | RuntimeRowId
+type CanonicalPublicShapes = TableMergeRegion | TableInsets | TableBorderStyle | TableDataConfig | TableAccessibility
+
+function acceptCanonicalPublicApi(_id: CanonicalIdAliases, _shape: CanonicalPublicShapes): void {}
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
@@ -24,6 +44,15 @@ describe('table identity allocation', () => {
     expect(allocateTableIdentity(allocator, 'cell', occupied)).toBe('report:cell:2')
     expect(allocateTableIdentity(allocator, 'cell', occupied)).toBe('report:cell:3')
     expect([...occupied]).toEqual(['report:cell:1', 'report:cell:2', 'report:cell:3'])
+  })
+
+  it('uses the canonical default namespace and exposes byte-limit validation', () => {
+    const occupied = new Set<string>()
+    expect(allocateTableIdentity(createSequentialTableIdentityAllocator(), 'cell', occupied)).toBe('default:cell:1')
+    expect(isValidTableStableToken('ab', 2)).toBe(true)
+    expect(isValidTableStableToken('ab', 1)).toBe(false)
+    expect(isValidTableStableToken('ab', 0)).toBe(false)
+    expect(acceptCanonicalPublicApi).toBeTypeOf('function')
   })
 
   it.each(['', 'has space', 'x'.repeat(129)])('rejects invalid allocator token %j', (token) => {
@@ -118,6 +147,18 @@ describe('assertValidTableModel', () => {
 
     cell.content = { kind: 'text', text: '', bindingPort: '' }
     expectInvalid(model, /bindingPort/i)
+
+    cell.content = { kind: 'text', text: '', bindingPort: '  \t' }
+    expectInvalid(model, /bindingPort/i)
+  })
+
+  it('accepts canonical partial padding, typography, accessibility, and data config', () => {
+    const model = createTableModel({ kind: 'data', columnCount: 1, rowCount: 1 })
+    model.style.padding = { left: 1 }
+    model.style.typography = { fontWeight: 'bold', letterSpacing: 0, direction: 'rtl' }
+    model.accessibility = { caption: 'Orders', description: 'Order lines', decorative: false }
+    model.data.detailKeyPort = 'recordId'
+    expect(() => assertValidTableModel(model)).not.toThrow()
   })
 
   it('rejects unknown and duplicate merge IDs', () => {
@@ -127,7 +168,6 @@ describe('assertValidTableModel', () => {
     const anchor = rows[0]!.cells[0]!
     base.merges.push({
       id: 'merge:1' as typeof base.merges[number]['id'],
-      bandId: base.bands[0]!.id,
       rowIds: [rows[0]!.id],
       columnIds: [columns[0]!.id, 'unknown-column' as typeof columns[0]['id']],
       anchorCellId: anchor.id,
@@ -138,7 +178,6 @@ describe('assertValidTableModel', () => {
     const duplicate = createTableModel({ kind: 'static', columnCount: 1, rowCount: 1 })
     duplicate.merges.push({
       id: duplicate.columns[0]!.id as unknown as typeof duplicate.merges[number]['id'],
-      bandId: duplicate.bands[0]!.id,
       rowIds: [duplicate.bands[0]!.rows[0]!.id],
       columnIds: [duplicate.columns[0]!.id],
       anchorCellId: duplicate.bands[0]!.rows[0]!.cells[0]!.id,
@@ -147,12 +186,73 @@ describe('assertValidTableModel', () => {
     expectInvalid(duplicate, /globally unique|duplicate/i)
   })
 
+  it('rejects unknown and duplicate merge row/column IDs', () => {
+    const unknownRow = createTableModel({ kind: 'static', columnCount: 1, rowCount: 1 })
+    unknownRow.merges.push({
+      id: 'merge:unknown-row' as typeof unknownRow.merges[number]['id'],
+      rowIds: ['row:unknown' as typeof unknownRow.bands[number]['rows'][number]['id']],
+      columnIds: [unknownRow.columns[0]!.id],
+      anchorCellId: unknownRow.bands[0]!.rows[0]!.cells[0]!.id,
+      inactiveCellIds: [],
+    })
+    expectInvalid(unknownRow, /unknown row/i)
+
+    const duplicateRow = createTableModel({ kind: 'static', columnCount: 1, rowCount: 1 })
+    const row = duplicateRow.bands[0]!.rows[0]!
+    duplicateRow.merges.push({
+      id: 'merge:duplicate-row' as typeof duplicateRow.merges[number]['id'],
+      rowIds: [row.id, row.id],
+      columnIds: [duplicateRow.columns[0]!.id],
+      anchorCellId: row.cells[0]!.id,
+      inactiveCellIds: [],
+    })
+    expectInvalid(duplicateRow, /row IDs.*duplicate/i)
+
+    const duplicateColumn = createTableModel({ kind: 'static', columnCount: 1, rowCount: 1 })
+    const column = duplicateColumn.columns[0]!
+    duplicateColumn.merges.push({
+      id: 'merge:duplicate-column' as typeof duplicateColumn.merges[number]['id'],
+      rowIds: [duplicateColumn.bands[0]!.rows[0]!.id],
+      columnIds: [column.id, column.id],
+      anchorCellId: duplicateColumn.bands[0]!.rows[0]!.cells[0]!.id,
+      inactiveCellIds: [],
+    })
+    expectInvalid(duplicateColumn, /column IDs.*duplicate/i)
+  })
+
+  it('accepts a canonical merge without bandId and rejects rows from different bands', () => {
+    const model = createTableModel({ kind: 'static', columnCount: 2, rowCount: 1 })
+    const row = model.bands[0]!.rows[0]!
+    model.merges.push({
+      id: 'merge:canonical' as typeof model.merges[number]['id'],
+      rowIds: [row.id],
+      columnIds: model.columns.map(column => column.id),
+      anchorCellId: row.cells[0]!.id,
+      inactiveCellIds: [row.cells[1]!.id],
+    })
+    expect(() => assertValidTableModel(model)).not.toThrow()
+
+    const crossBand = createTableModel({ kind: 'static', columnCount: 1, rowCount: 1 })
+    const secondBand = clone(crossBand.bands[0]!)
+    secondBand.id = 'band:second' as typeof secondBand.id
+    secondBand.rows[0]!.id = 'row:second' as typeof secondBand.rows[number]['id']
+    secondBand.rows[0]!.cells[0]!.id = 'cell:second' as typeof secondBand.rows[number]['cells'][number]['id']
+    crossBand.bands.push(secondBand)
+    crossBand.merges.push({
+      id: 'merge:cross-band' as typeof crossBand.merges[number]['id'],
+      rowIds: [crossBand.bands[0]!.rows[0]!.id, secondBand.rows[0]!.id],
+      columnIds: [crossBand.columns[0]!.id],
+      anchorCellId: crossBand.bands[0]!.rows[0]!.cells[0]!.id,
+      inactiveCellIds: [secondBand.rows[0]!.cells[0]!.id],
+    })
+    expectInvalid(crossBand, /one band/i)
+  })
+
   it('rejects a non-rectangular merge and overlapping merge regions', () => {
     const model = createTableModel({ kind: 'static', columnCount: 3, rowCount: 2 })
     const band = model.bands[0]!
     model.merges.push({
       id: 'merge:1' as typeof model.merges[number]['id'],
-      bandId: band.id,
       rowIds: band.rows.map(row => row.id),
       columnIds: [model.columns[0]!.id, model.columns[2]!.id],
       anchorCellId: band.rows[0]!.cells[0]!.id,
@@ -163,7 +263,6 @@ describe('assertValidTableModel', () => {
     const overlap = createTableModel({ kind: 'static', columnCount: 2, rowCount: 2 })
     const overlapBand = overlap.bands[0]!
     const region = {
-      bandId: overlapBand.id,
       rowIds: overlapBand.rows.map(row => row.id),
       columnIds: overlap.columns.map(column => column.id),
       anchorCellId: overlapBand.rows[0]!.cells[0]!.id,
@@ -181,7 +280,6 @@ describe('assertValidTableModel', () => {
     const band = model.bands[0]!
     model.merges.push({
       id: 'merge:1' as typeof model.merges[number]['id'],
-      bandId: band.id,
       rowIds: [band.rows[0]!.id],
       columnIds: model.columns.map(column => column.id),
       anchorCellId: band.rows[0]!.cells[0]!.id,
