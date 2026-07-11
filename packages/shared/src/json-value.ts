@@ -13,7 +13,6 @@ const DEFAULT_MAX_DEPTH = 128
 const DEFAULT_MAX_NODES = 100_000
 const DEFAULT_MAX_STRING_BYTES = 4 * 1024 * 1024
 const UNSAFE_KEYS = new Set(['__proto__', 'prototype', 'constructor'])
-const textEncoder = new TextEncoder()
 
 export class JsonValueValidationError extends Error {
   constructor(
@@ -58,7 +57,7 @@ export function assertJsonValue(value: unknown, options: JsonValueValidationOpti
     if (frame.value === null || typeof frame.value === 'boolean')
       continue
     if (typeof frame.value === 'string') {
-      stringBytes += textEncoder.encode(frame.value).byteLength
+      stringBytes += countUtf8BytesUntil(frame.value, maxStringBytes - stringBytes)
       if (stringBytes > maxStringBytes)
         fail('JSON_VALUE_STRING_LIMIT', frame.path, `JSON string content exceeds the maximum of ${maxStringBytes} UTF-8 bytes`)
       continue
@@ -110,6 +109,35 @@ export function assertJsonValue(value: unknown, options: JsonValueValidationOpti
       stack.push({ value: descriptor.value, path: childPath, depth: frame.depth + 1 })
     }
   }
+}
+
+function countUtf8BytesUntil(value: string, limit: number): number {
+  let bytes = 0
+  for (let index = 0; index < value.length; index++) {
+    const codeUnit = value.charCodeAt(index)
+    if (codeUnit <= 0x7F) {
+      bytes += 1
+    }
+    else if (codeUnit <= 0x7FF) {
+      bytes += 2
+    }
+    else if (codeUnit >= 0xD800 && codeUnit <= 0xDBFF) {
+      const next = value.charCodeAt(index + 1)
+      if (next >= 0xDC00 && next <= 0xDFFF) {
+        bytes += 4
+        index += 1
+      }
+      else {
+        bytes += 3
+      }
+    }
+    else {
+      bytes += 3
+    }
+    if (bytes > limit)
+      return limit + 1
+  }
+  return bytes
 }
 
 export function cloneJsonValue<T extends JsonValue>(value: T, options: JsonValueValidationOptions = {}): T {

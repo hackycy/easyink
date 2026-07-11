@@ -414,6 +414,7 @@ export interface BenchmarkElementCompatState {
 // ─── Binding ───────────────────────────────────────────────────────
 
 export interface BindingRef {
+  kind?: never
   sourceId: string
   sourceName?: string
   sourceTag?: string

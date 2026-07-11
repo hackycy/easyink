@@ -26,6 +26,30 @@ describe('validateSchema', () => {
   })
 
   describe('canonical material envelope', () => {
+    it('rejects element accessors without invoking them', () => {
+      let calls = 0
+      const elements: unknown[] = []
+      Object.defineProperty(elements, 0, {
+        enumerable: true,
+        get() {
+          calls += 1
+          return materialNode('accessor')
+        },
+      })
+
+      expect(validateSchemaIssues({ ...validSchema, elements }))
+        .toContainEqual(expect.objectContaining({ path: '/elements/0' }))
+      expect(calls).toBe(0)
+    })
+
+    it('rejects sparse top-level elements with a precise pointer', () => {
+      const elements: unknown[] = []
+      elements.length = 1
+
+      expect(validateSchemaIssues({ ...validSchema, elements }))
+        .toContainEqual(expect.objectContaining({ path: '/elements/0' }))
+    })
+
     it('accepts model, slots, bindings, editorState, and output recursively', () => {
       expect(validateSchemaIssues({
         ...validSchema,
@@ -100,6 +124,24 @@ describe('validateSchema', () => {
         expect.objectContaining({ path: '/elements/0/bindings/value/format/extensions' }),
         expect.objectContaining({ path: '/elements/0/bindings/value/extensions' }),
       ]))
+    })
+
+    it('rejects unknown binding discriminators', () => {
+      const node = {
+        ...materialNode('bad-binding-kind'),
+        bindings: { value: { kind: 'typo', sourceId: 'source', fieldPath: 'value' } },
+      }
+      expect(validateSchemaIssues({ ...validSchema, elements: [node] }))
+        .toContainEqual(expect.objectContaining({ path: '/elements/0/bindings/value/kind' }))
+    })
+
+    it('rejects a present null binding discriminator', () => {
+      const node = {
+        ...materialNode('null-binding-kind'),
+        bindings: { value: { kind: null, sourceId: 'source', fieldPath: 'value' } },
+      }
+      expect(validateSchemaIssues({ ...validSchema, elements: [node] }))
+        .toContainEqual(expect.objectContaining({ path: '/elements/0/bindings/value/kind' }))
     })
 
     it('validates data-contract relation, mappings, selects, required, and format', () => {
@@ -183,6 +225,63 @@ describe('validateSchema', () => {
       const node = { ...materialNode('bad-dot'), model: { 'a.b': undefined } }
       expect(validateSchemaIssues({ ...validSchema, elements: [node] }))
         .toContainEqual(expect.objectContaining({ path: '/elements/0/model/a.b' }))
+    })
+
+    it('validates extension, compat, and animation envelopes', () => {
+      const node = {
+        ...materialNode('bad-envelopes'),
+        extensions: 1,
+        compat: [],
+        output: {
+          visibility: 'include',
+          animations: [
+            null,
+            { trigger: 1, type: '', duration: 'long', delay: 'soon', options: [] },
+          ],
+        },
+      }
+      expect(validateSchemaIssues({ ...validSchema, elements: [node] })).toEqual(expect.arrayContaining([
+        expect.objectContaining({ path: '/elements/0/extensions' }),
+        expect.objectContaining({ path: '/elements/0/compat' }),
+        expect.objectContaining({ path: '/elements/0/output/animations/0' }),
+        expect.objectContaining({ path: '/elements/0/output/animations/1/trigger' }),
+        expect.objectContaining({ path: '/elements/0/output/animations/1/type' }),
+        expect.objectContaining({ path: '/elements/0/output/animations/1/duration' }),
+        expect.objectContaining({ path: '/elements/0/output/animations/1/delay' }),
+        expect.objectContaining({ path: '/elements/0/output/animations/1/options' }),
+      ]))
+    })
+
+    it('validates known compat members without interpreting extension values', () => {
+      const node = {
+        ...materialNode('bad-compat'),
+        extensions: { private: ['opaque', { value: true }] },
+        compat: { rawProps: [], rawBind: { opaque: true }, passthrough: 1 },
+      }
+      expect(validateSchemaIssues({ ...validSchema, elements: [node] })).toEqual(expect.arrayContaining([
+        expect.objectContaining({ path: '/elements/0/compat/rawProps' }),
+        expect.objectContaining({ path: '/elements/0/compat/passthrough' }),
+      ]))
+    })
+
+    it('rejects null record containers and animation option fields', () => {
+      const node = {
+        ...materialNode('null-envelopes'),
+        extensions: null,
+        compat: { rawProps: null, passthrough: null },
+        output: {
+          visibility: 'include',
+          animations: [{ trigger: 'load', type: 'fade', duration: null, delay: null, options: null }],
+        },
+      }
+      expect(validateSchemaIssues({ ...validSchema, elements: [node] })).toEqual(expect.arrayContaining([
+        expect.objectContaining({ path: '/elements/0/extensions' }),
+        expect.objectContaining({ path: '/elements/0/compat/rawProps' }),
+        expect.objectContaining({ path: '/elements/0/compat/passthrough' }),
+        expect.objectContaining({ path: '/elements/0/output/animations/0/duration' }),
+        expect.objectContaining({ path: '/elements/0/output/animations/0/delay' }),
+        expect.objectContaining({ path: '/elements/0/output/animations/0/options' }),
+      ]))
     })
   })
 

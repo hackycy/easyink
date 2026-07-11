@@ -58,6 +58,17 @@ describe('strict JSON values', () => {
       .toThrowError(expect.objectContaining({ code: 'JSON_VALUE_STRING_LIMIT', path: '/text' }))
   })
 
+  it('counts UTF-8 bytes incrementally across surrogate boundaries', () => {
+    expect(() => assertJsonValue('\u{1F600}', { maxStringBytes: 4 })).not.toThrow()
+    expect(() => assertJsonValue('\u{1F600}', { maxStringBytes: 3 }))
+      .toThrowError(expect.objectContaining({ code: 'JSON_VALUE_STRING_LIMIT' }))
+    expect(() => assertJsonValue('\uD800', { maxStringBytes: 3 })).not.toThrow()
+    expect(() => assertJsonValue('\uD800', { maxStringBytes: 2 }))
+      .toThrowError(expect.objectContaining({ code: 'JSON_VALUE_STRING_LIMIT' }))
+    expect(() => assertJsonValue('a'.repeat(1_000_000), { maxStringBytes: 1 }))
+      .toThrowError(expect.objectContaining({ code: 'JSON_VALUE_STRING_LIMIT' }))
+  })
+
   it('accepts values exactly at the default limits', () => {
     let depthBoundary: Record<string, unknown> = {}
     for (let depth = 0; depth < 128; depth++)

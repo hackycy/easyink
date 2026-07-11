@@ -169,30 +169,32 @@ export function validateSchemaIssues(schema: unknown): SchemaValidationIssue[] {
     }
   }
 
-  if (!Array.isArray(schema.elements)) {
+  const elementsDescriptor = Object.getOwnPropertyDescriptor(schema, 'elements')
+  if (!elementsDescriptor || !('value' in elementsDescriptor) || !Array.isArray(elementsDescriptor.value)) {
     issues.push(createIssue('elements', 'must be an array', 'schema.elements.required'))
   }
   else {
-    schema.elements.forEach((element, index) => validateMaterialNode(element, `/elements/${index}`, issues, true))
+    const elements = elementsDescriptor.value
+    try {
+      assertJsonValue(elements)
+    }
+    catch (error) {
+      if (error instanceof JsonValueValidationError) {
+        issues.push(createIssue(`/elements${error.path}`, error.message, `schema.material.json.${error.code.toLowerCase()}`))
+        return issues
+      }
+      throw error
+    }
+    for (let index = 0; index < elements.length; index++) {
+      const element = Object.getOwnPropertyDescriptor(elements, String(index))!.value
+      validateMaterialNode(element, `/elements/${index}`, issues)
+    }
   }
 
   return issues
 }
 
-function validateMaterialNode(value: unknown, path: string, issues: SchemaValidationIssue[], validateJson: boolean): void {
-  if (validateJson) {
-    try {
-      assertJsonValue(value)
-    }
-    catch (error) {
-      if (error instanceof JsonValueValidationError) {
-        issues.push(createIssue(`${path}${error.path}`, error.message, `schema.material.json.${error.code.toLowerCase()}`))
-        return
-      }
-      throw error
-    }
-  }
-
+function validateMaterialNode(value: unknown, path: string, issues: SchemaValidationIssue[]): void {
   if (!isObject(value)) {
     issues.push(createIssue(path, 'must be an object', 'schema.material.invalid'))
     return
@@ -212,6 +214,10 @@ function validateMaterialNode(value: unknown, path: string, issues: SchemaValida
     issues.push(createIssue(`${path}/modelVersion`, 'must be a non-negative integer', 'schema.material.model-version.invalid'))
   if (!isObject(value.model))
     issues.push(createIssue(`${path}/model`, 'must be an object', 'schema.material.model.invalid'))
+  if (Object.hasOwn(value, 'extensions') && !isObject(value.extensions))
+    issues.push(createIssue(`${path}/extensions`, 'must be an object when provided', 'schema.material.extensions.invalid'))
+  if (Object.hasOwn(value, 'compat'))
+    validateMaterialCompat(value.compat, path, issues)
 
   if (!isObject(value.slots)) {
     issues.push(createIssue(`${path}/slots`, 'must be an object', 'schema.material.slots.invalid'))
@@ -223,7 +229,7 @@ function validateMaterialNode(value: unknown, path: string, issues: SchemaValida
         issues.push(createIssue(slotPath, 'must be an array', 'schema.material.slot.invalid'))
         continue
       }
-      children.forEach((child, index) => validateMaterialNode(child, `${slotPath}/${index}`, issues, false))
+      children.forEach((child, index) => validateMaterialNode(child, `${slotPath}/${index}`, issues))
     }
   }
 
@@ -247,11 +253,27 @@ function validateMaterialBinding(value: unknown, path: string, issues: SchemaVal
     issues.push(createIssue(path, 'must be a binding reference, binding array, or data contract binding', 'schema.material.binding.invalid'))
     return
   }
+  if (Object.hasOwn(value, 'kind') && value.kind !== 'data-contract') {
+    issues.push(createIssue(`${path}/kind`, 'must be data-contract when provided', 'schema.material.binding.kind.invalid'))
+    return
+  }
   if (value.kind === 'data-contract') {
     validateDataContractBinding(value, path, issues)
     return
   }
   validateBindingRef(value, path, issues)
+}
+
+function validateMaterialCompat(value: unknown, path: string, issues: SchemaValidationIssue[]): void {
+  const compatPath = `${path}/compat`
+  if (!isObject(value)) {
+    issues.push(createIssue(compatPath, 'must be an object when provided', 'schema.material.compat.invalid'))
+    return
+  }
+  for (const field of ['rawProps', 'passthrough']) {
+    if (Object.hasOwn(value, field) && !isObject(value[field]))
+      issues.push(createIssue(`${compatPath}/${field}`, 'must be an object when provided', `schema.material.compat.${field}.invalid`))
+  }
 }
 
 function validateBindingRef(value: unknown, path: string, issues: SchemaValidationIssue[]): void {
@@ -266,12 +288,12 @@ function validateBindingRef(value: unknown, path: string, issues: SchemaValidati
   validateOptionalStrings(value, path, ['sourceName', 'sourceTag', 'fieldKey', 'fieldLabel'], issues, 'schema.material.binding-ref')
   validateRequiredAndFormat(value, path, issues, 'schema.material.binding-ref')
   validateExtensions(value.extensions, path, issues, 'schema.material.binding-ref')
-  if (value.bindIndex != null && (!Number.isInteger(value.bindIndex) || (value.bindIndex as number) < 0))
+  if (value.bindIndex !== undefined && (!Number.isInteger(value.bindIndex) || (value.bindIndex as number) < 0))
     issues.push(createIssue(`${path}/bindIndex`, 'must be a non-negative integer when provided', 'schema.material.binding-ref.bind-index.invalid'))
 }
 
 function validateDataContractBinding(value: Record<string, unknown>, path: string, issues: SchemaValidationIssue[]): void {
-  if (value.relation != null) {
+  if (value.relation !== undefined) {
     if (!isObject(value.relation))
       issues.push(createIssue(`${path}/relation`, 'must be an object when provided', 'schema.material.data-contract.relation.invalid'))
     else if (value.relation.kind !== 'auto' && value.relation.kind !== 'record' && value.relation.kind !== 'index')
@@ -302,9 +324,9 @@ function validateDataContractBinding(value: Record<string, unknown>, path: strin
 }
 
 function validateRequiredAndFormat(value: Record<string, unknown>, path: string, issues: SchemaValidationIssue[], codePrefix: string): void {
-  if (value.required != null && typeof value.required !== 'boolean')
+  if (value.required !== undefined && typeof value.required !== 'boolean')
     issues.push(createIssue(`${path}/required`, 'must be a boolean when provided', `${codePrefix}.required.invalid`))
-  if (value.format != null)
+  if (value.format !== undefined)
     validateBindingFormat(value.format, `${path}/format`, issues)
 }
 
@@ -316,7 +338,7 @@ function validateOptionalStrings(
   codePrefix: string,
 ): void {
   for (const field of fields) {
-    if (value[field] != null && typeof value[field] !== 'string')
+    if (value[field] !== undefined && typeof value[field] !== 'string')
       issues.push(createIssue(`${path}/${field}`, 'must be a string when provided', `${codePrefix}.${field}.invalid`))
   }
 }
@@ -328,7 +350,7 @@ function validateBindingFormat(value: unknown, path: string, issues: SchemaValid
   }
   validateOptionalStrings(value, path, ['prefix', 'suffix', 'fallback', 'mode'], issues, 'schema.material.binding-format')
   validateExtensions(value.extensions, path, issues, 'schema.material.binding-format')
-  if (value.preset != null) {
+  if (value.preset !== undefined) {
     if (!isObject(value.preset)) {
       issues.push(createIssue(`${path}/preset`, 'must be an object when provided', 'schema.material.binding-format.preset.invalid'))
     }
@@ -337,22 +359,22 @@ function validateBindingFormat(value: unknown, path: string, issues: SchemaValid
       if (typeof value.preset.type !== 'string' || !presetTypes.includes(value.preset.type))
         issues.push(createIssue(`${path}/preset/type`, 'must be a supported preset type', 'schema.material.binding-format.preset.type.invalid'))
       validateOptionalStrings(value.preset, `${path}/preset`, ['pattern', 'locale', 'timeZone', 'currency'], issues, 'schema.material.binding-format.preset')
-      if (value.preset.weekdayStyle != null && value.preset.weekdayStyle !== 'long' && value.preset.weekdayStyle !== 'short' && value.preset.weekdayStyle !== 'narrow')
+      if (value.preset.weekdayStyle !== undefined && value.preset.weekdayStyle !== 'long' && value.preset.weekdayStyle !== 'short' && value.preset.weekdayStyle !== 'narrow')
         issues.push(createIssue(`${path}/preset/weekdayStyle`, 'must be long, short, or narrow when provided', 'schema.material.binding-format.preset.weekday-style.invalid'))
       for (const field of ['minimumFractionDigits', 'maximumFractionDigits']) {
-        if (value.preset[field] != null && (!Number.isInteger(value.preset[field]) || (value.preset[field] as number) < 0))
+        if (value.preset[field] !== undefined && (!Number.isInteger(value.preset[field]) || (value.preset[field] as number) < 0))
           issues.push(createIssue(`${path}/preset/${field}`, 'must be a non-negative integer when provided', `schema.material.binding-format.preset.${field}.invalid`))
       }
     }
   }
-  if (value.custom != null) {
+  if (value.custom !== undefined) {
     if (!isObject(value.custom) || typeof value.custom.source !== 'string')
       issues.push(createIssue(`${path}/custom/source`, 'must be a string', 'schema.material.binding-format.custom.source.invalid'))
   }
 }
 
 function validateExtensions(value: unknown, path: string, issues: SchemaValidationIssue[], codePrefix: string): void {
-  if (value != null && !isObject(value))
+  if (value !== undefined && !isObject(value))
     issues.push(createIssue(`${path}/extensions`, 'must be an object when provided', `${codePrefix}.extensions.invalid`))
 }
 
@@ -415,8 +437,29 @@ function validateMaterialOutput(value: unknown, path: string, issues: SchemaVali
     else if (value.repeat.scope != null && value.repeat.scope !== 'none' && value.repeat.scope !== 'every-output-page')
       issues.push(createIssue(`${outputPath}/repeat/scope`, 'must be none or every-output-page when provided', 'schema.material.output.repeat.scope.invalid'))
   }
-  if (value.animations != null && !Array.isArray(value.animations))
-    issues.push(createIssue(`${outputPath}/animations`, 'must be an array when provided', 'schema.material.output.animations.invalid'))
+  if (Object.hasOwn(value, 'animations')) {
+    if (!Array.isArray(value.animations))
+      issues.push(createIssue(`${outputPath}/animations`, 'must be an array when provided', 'schema.material.output.animations.invalid'))
+    else
+      value.animations.forEach((animation, index) => validateAnimation(animation, `${outputPath}/animations/${index}`, issues))
+  }
+}
+
+function validateAnimation(value: unknown, path: string, issues: SchemaValidationIssue[]): void {
+  if (!isObject(value)) {
+    issues.push(createIssue(path, 'must be an animation object', 'schema.material.animation.invalid'))
+    return
+  }
+  for (const field of ['trigger', 'type']) {
+    if (typeof value[field] !== 'string' || value[field].length === 0)
+      issues.push(createIssue(`${path}/${field}`, 'must be a non-empty string', `schema.material.animation.${field}.invalid`))
+  }
+  for (const field of ['duration', 'delay']) {
+    if (Object.hasOwn(value, field) && (typeof value[field] !== 'number' || !Number.isFinite(value[field])))
+      issues.push(createIssue(`${path}/${field}`, 'must be a finite number when provided', `schema.material.animation.${field}.invalid`))
+  }
+  if (Object.hasOwn(value, 'options') && !isObject(value.options))
+    issues.push(createIssue(`${path}/options`, 'must be an object when provided', 'schema.material.animation.options.invalid'))
 }
 
 function validateBreakConfig(value: unknown, path: string, issues: SchemaValidationIssue[]): void {
