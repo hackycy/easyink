@@ -1071,56 +1071,20 @@ export function cloneMaterialGraph(
   if (hasErrors(diagnostics))
     return emptyCloneResult(diagnostics, identityMap)
 
-  preflightKeyRewrites(inspected, identityMap, diagnostics)
-  if (hasErrors(diagnostics))
+  const rewritePlan = planGraphRewrites(inspected, identityMap, diagnostics)
+  if (!rewritePlan)
     return emptyCloneResult(diagnostics, identityMap)
-
-  for (const record of inspected) {
-    for (const entry of record.introspection.identities.filter(item => item.location === 'value')) {
-      const replacement = identityMap.get(formatMaterialIdentityKey({
-        ownerNodeId: record.ownerNodeId,
-        scope: entry.target.scope,
-        kind: entry.target.kind,
-        value: entry.value,
-      }))!
-      rewriteEntry(record.node, entry, replacement)
-    }
+  try {
+    applyGraphRewritePlan(rewritePlan)
   }
-  for (const record of inspected) {
-    for (const entry of record.introspection.references) {
-      const replacement = identityMap.get(formatMaterialIdentityKey({
-        ownerNodeId: record.ownerNodeId,
-        scope: entry.target.scope,
-        kind: entry.target.kind,
-        value: entry.value,
-      }))
-      if (replacement) {
-        rewriteEntry(record.node, entry, replacement)
-      }
-      else {
-        diagnostics.push(diagnostic(
-          record.node,
-          'MATERIAL_REFERENCE_EXTERNAL',
-          entry.path,
-          'External reference was preserved',
-          'warning',
-        ))
-      }
-    }
-  }
-  for (const record of inspected) {
-    const keyIdentities = record.introspection.identities
-      .filter(item => item.location === 'key')
-      .toSorted((left, right) => right.path.length - left.path.length)
-    for (const entry of keyIdentities) {
-      const replacement = identityMap.get(formatMaterialIdentityKey({
-        ownerNodeId: record.ownerNodeId,
-        scope: entry.target.scope,
-        kind: entry.target.kind,
-        value: entry.value,
-      }))!
-      rewriteEntry(record.node, entry, replacement)
-    }
+  catch {
+    diagnostics.push({
+      code: 'MATERIAL_GRAPH_REWRITE_FAILED',
+      severity: 'error',
+      path: '/',
+      message: 'Material graph rewrite failed',
+    })
+    return emptyCloneResult(diagnostics, identityMap)
   }
   return {
     roots: clones,
@@ -1129,16 +1093,48 @@ export function cloneMaterialGraph(
   }
 }
 
-function preflightKeyRewrites(
+interface PlannedKeyRewrite {
+  kind: 'key'
+  node: MaterialNode
+  path: JsonPointer
+  parent: Record<string, unknown>
+  token: string
+  nextToken: string
+  descriptor: PropertyDescriptor
+  depth: number
+  order: number
+}
+
+interface PlannedValueRewrite {
+  kind: 'value'
+  node: MaterialNode
+  path: JsonPointer
+  parent: Record<string, unknown> | unknown[]
+  token: string
+  value: string
+  order: number
+}
+
+interface MaterialGraphRewritePlan {
+  keys: PlannedKeyRewrite[]
+  values: PlannedValueRewrite[]
+}
+
+function planGraphRewrites(
   inspected: readonly MaterialGraphSnapshot[],
   identityMap: ReadonlyMap<MaterialIdentityKey, string>,
   diagnostics: MaterialGraphDiagnostic[],
-): void {
+): MaterialGraphRewritePlan | undefined {
+  const keys: PlannedKeyRewrite[] = []
+  const values: PlannedValueRewrite[] = []
+  const plannedKeyTargets = new WeakMap<object, Map<string, string>>()
+  const plannedKeySources = new WeakMap<object, Set<string>>()
+  let order = 0
   for (const record of inspected) {
     const entries = [
       ...record.introspection.identities,
       ...record.introspection.references,
-    ].filter(entry => entry.location === 'key')
+    ]
     for (const entry of entries) {
       const replacement = identityMap.get(formatMaterialIdentityKey({
         ownerNodeId: record.ownerNodeId,
@@ -1146,42 +1142,103 @@ function preflightKeyRewrites(
         kind: entry.target.kind,
         value: entry.value,
       }))
-      if (!replacement)
+      if (!replacement) {
+        if ('required' in entry) {
+          diagnostics.push(diagnostic(
+            record.node,
+            'MATERIAL_REFERENCE_EXTERNAL',
+            entry.path,
+            'External reference was preserved',
+            'warning',
+          ))
+        }
         continue
-      const { parent, token } = pointerParent(record.node, entry.path)
-      const nextToken = `${entry.encoding?.prefix ?? ''}${replacement}${entry.encoding?.suffix ?? ''}`
-      if (nextToken !== token && Object.hasOwn(parent, nextToken)) {
+      }
+      try {
+        const { parent, token } = pointerParent(record.node, entry.path)
+        if (entry.location === 'value') {
+          const descriptor = Object.getOwnPropertyDescriptor(parent, token)
+          if (!descriptor || !('value' in descriptor) || descriptor.writable === false)
+            throw new Error('MATERIAL_POINTER_WRITE_FORBIDDEN')
+          values.push({
+            kind: 'value',
+            node: record.node,
+            path: entry.path,
+            parent,
+            token,
+            value: encodeIdentity(replacement, entry.encoding),
+            order,
+          })
+        }
+        else {
+          if (Array.isArray(parent))
+            throw new Error('MATERIAL_IDENTITY_KEY_ARRAY_FORBIDDEN')
+          const nextToken = encodeIdentity(replacement, entry.encoding)
+          const descriptor = Object.getOwnPropertyDescriptor(parent, token)
+          if (!descriptor || !('value' in descriptor) || descriptor.configurable === false)
+            throw new Error('MATERIAL_POINTER_REMOVE_FORBIDDEN')
+          if (nextToken !== token && Object.hasOwn(parent, nextToken))
+            throw new Error('MATERIAL_IDENTITY_KEY_COLLISION')
+          const targets = plannedKeyTargets.get(parent) ?? new Map<string, string>()
+          const sources = plannedKeySources.get(parent) ?? new Set<string>()
+          if ((targets.has(nextToken) && targets.get(nextToken) !== token) || sources.has(token))
+            throw new Error('MATERIAL_IDENTITY_KEY_COLLISION')
+          targets.set(nextToken, token)
+          sources.add(token)
+          plannedKeyTargets.set(parent, targets)
+          plannedKeySources.set(parent, sources)
+          keys.push({
+            kind: 'key',
+            node: record.node,
+            path: entry.path,
+            parent,
+            token,
+            nextToken,
+            descriptor,
+            depth: decodePointer(entry.path).length,
+            order,
+          })
+        }
+      }
+      catch {
         diagnostics.push(diagnostic(
           record.node,
-          'MATERIAL_IDENTITY_KEY_COLLISION',
+          'MATERIAL_GRAPH_REWRITE_FAILED',
           entry.path,
-          'Rekeyed object key already exists',
+          'Material graph rewrite could not be planned',
         ))
+        return undefined
       }
+      order += 1
     }
   }
+  return { keys, values }
 }
 
-function rewriteEntry(
-  node: MaterialNode,
-  entry: MaterialIdentitySlot | MaterialReferenceSlot,
-  replacement: string,
-): void {
-  if (entry.location === 'value') {
-    writePointer(node, entry.path, encodeIdentity(replacement, entry.encoding))
-    return
+function applyGraphRewritePlan(plan: MaterialGraphRewritePlan): void {
+  const renamedTokens = new WeakMap<object, Map<string, string>>()
+  const keys = plan.keys.toSorted((left, right) => (
+    right.depth - left.depth
+    || left.path.localeCompare(right.path)
+    || left.order - right.order
+  ))
+  for (const rewrite of keys) {
+    if (rewrite.token === rewrite.nextToken)
+      continue
+    Object.defineProperty(rewrite.parent, rewrite.nextToken, rewrite.descriptor)
+    if (!delete rewrite.parent[rewrite.token])
+      throw new Error('MATERIAL_POINTER_REMOVE_FORBIDDEN')
+    const parentRenames = renamedTokens.get(rewrite.parent) ?? new Map<string, string>()
+    parentRenames.set(rewrite.token, rewrite.nextToken)
+    renamedTokens.set(rewrite.parent, parentRenames)
   }
-  const { parent, token } = pointerParent(node, entry.path)
-  const nextToken = encodeIdentity(replacement, entry.encoding)
-  if (token === nextToken)
-    return
-  if (Object.hasOwn(parent, nextToken))
-    throw new Error('MATERIAL_IDENTITY_KEY_COLLISION')
-  const descriptor = Object.getOwnPropertyDescriptor(parent, token)
-  if (!descriptor || !('value' in descriptor))
-    throw new Error('MATERIAL_POINTER_MISSING')
-  Object.defineProperty(parent, nextToken, descriptor)
-  delete (parent as Record<string, unknown>)[token]
+  for (const rewrite of plan.values.toSorted((left, right) => left.order - right.order)) {
+    const token = renamedTokens.get(rewrite.parent)?.get(rewrite.token) ?? rewrite.token
+    const descriptor = Object.getOwnPropertyDescriptor(rewrite.parent, token)
+    if (!descriptor || !('value' in descriptor) || descriptor.writable === false)
+      throw new Error('MATERIAL_POINTER_WRITE_FORBIDDEN')
+    Object.defineProperty(rewrite.parent, token, { ...descriptor, value: rewrite.value })
+  }
 }
 
 function encodeIdentity(value: string, encoding?: MaterialIdentityEncoding): string {

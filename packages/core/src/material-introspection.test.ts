@@ -297,6 +297,110 @@ describe('material graph introspection', () => {
     })
   })
 
+  it('plans nested identity and reference key rewrites before mutation', () => {
+    const adapter = {
+      ...recordSchemaAdapter(1),
+      introspect: () => ({
+        identities: [
+          {
+            path: '/model/defs/a' as const,
+            location: 'key' as const,
+            value: 'a',
+            target: { scope: 'material' as const, kind: 'group' },
+          },
+          {
+            path: '/model/bId' as const,
+            location: 'value' as const,
+            value: 'b',
+            target: { scope: 'material' as const, kind: 'leaf' },
+          },
+        ],
+        structures: [],
+        resources: [],
+        bindings: [],
+        references: [
+          {
+            path: '/model/refs/a' as const,
+            location: 'key' as const,
+            value: 'a',
+            target: { scope: 'material' as const, kind: 'group' },
+            required: true,
+          },
+          {
+            path: '/model/refs/a/b' as const,
+            location: 'key' as const,
+            value: 'b',
+            target: { scope: 'material' as const, kind: 'leaf' },
+            required: true,
+          },
+          {
+            path: '/model/defs/a/b' as const,
+            location: 'key' as const,
+            value: 'b',
+            target: { scope: 'material' as const, kind: 'leaf' },
+            required: true,
+          },
+        ],
+      }),
+    }
+    const profile = createTestCompiledMaterialProfile([
+      createTestMaterialManifest({ type: 'nested-keys', schemaAdapter: adapter }),
+    ])
+    const node = profile.createNode('nested-keys', {
+      id: 'owner',
+      model: {
+        bId: 'b',
+        defs: { a: { b: { content: 'attached' } } },
+        refs: { a: { b: true } },
+      },
+    })
+
+    const result = cloneMaterialGraph([node], profile, {
+      createIdentity: identity => `copy-${identity.value}`,
+    })
+
+    expect(result.diagnostics.filter(item => item.severity === 'error')).toEqual([])
+    expect(result.roots[0]!.model).toMatchObject({
+      bId: 'copy-b',
+      defs: { 'copy-a': { 'copy-b': { content: 'attached' } } },
+      refs: { 'copy-a': { 'copy-b': true } },
+    })
+  })
+
+  it('rejects planned key collisions atomically without changing the source', () => {
+    const adapter = {
+      ...recordSchemaAdapter(1),
+      introspect: () => ({
+        identities: [{
+          path: '/model/defs/a' as const,
+          location: 'key' as const,
+          value: 'a',
+          target: { scope: 'material' as const, kind: 'group' },
+        }],
+        structures: [],
+        references: [],
+        resources: [],
+        bindings: [],
+      }),
+    }
+    const profile = createTestCompiledMaterialProfile([
+      createTestMaterialManifest({ type: 'collision', schemaAdapter: adapter }),
+    ])
+    const source = profile.createNode('collision', {
+      model: { defs: { 'a': 1, 'copy-a': 2 } },
+    })
+
+    const result = cloneMaterialGraph([source], profile, {
+      createIdentity: identity => `copy-${identity.value}`,
+    })
+
+    expect(result.roots).toEqual([])
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      code: 'MATERIAL_GRAPH_REWRITE_FAILED',
+    }))
+    expect(source.model).toEqual({ defs: { 'a': 1, 'copy-a': 2 } })
+  })
+
   it('rejects duplicate generated identities before mutating clones', () => {
     const profile = createTestCompiledMaterialProfile()
     const result = cloneMaterialGraph([
