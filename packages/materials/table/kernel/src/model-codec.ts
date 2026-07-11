@@ -22,6 +22,9 @@ interface SnapshotResult {
 }
 
 const MAX_DEPTH = 128
+const MAX_ISSUES = 256
+const MAX_STRING_BYTES = 4 * 1024 * 1024
+const ISSUE_TRUNCATED_MESSAGE = 'Table model diagnostics were truncated at the issue budget'
 const UNSAFE_KEYS = new Set(['__proto__', 'prototype', 'constructor'])
 const MODEL_KEYS = new Set(['kind', 'columns', 'bands', 'merges', 'style', 'data', 'accessibility'])
 const STYLE_KEYS = new Set(['padding', 'background', 'typography', 'border', 'overflow'])
@@ -120,7 +123,7 @@ function validateTrack(value: unknown, path: `/${string}`, issues: MaterialSchem
   if (Object.hasOwn(value, 'max'))
     nonnegative(value.max, at(path, 'max'), issues)
   if (finite(value.min) && finite(value.max) && value.min > value.max)
-    invalid(at(path, 'min'), issues, 'Track min must not exceed max')
+    invalid(at(path, 'max'), issues, 'Track max must not be less than min')
 }
 
 function validateBand(value: unknown, path: `/${string}`, issues: MaterialSchemaIssue[]): void {
@@ -165,7 +168,7 @@ function validateContent(value: unknown, path: `/${string}`, issues: MaterialSch
   if (value.kind === 'text') {
     exact(value, new Set(['kind', 'text', 'bindingPort']), path, issues)
     required(value, ['kind', 'text'], path, issues)
-    boundedString(value.text, at(path, 'text'), issues, 16_384, true)
+    boundedString(value.text, at(path, 'text'), issues, 1_000_000, true)
     if (Object.hasOwn(value, 'bindingPort'))
       token(value.bindingPort, at(path, 'bindingPort'), issues)
   }
@@ -292,19 +295,38 @@ function snapshotStrictJson(raw: unknown, root: `/${string}`): SnapshotResult {
   const issues: MaterialSchemaIssue[] = []
   const clones = new WeakMap<object, unknown>()
   const active = new WeakSet<object>()
-  let nodes = 0
+  let work = 0
+  let stringBytes = 0
+  let stopped = false
+
+  const takeWork = (path: `/${string}`): boolean => {
+    if (stopped)
+      return false
+    work += 1
+    if (work <= TABLE_MODEL_MAX_JSON_NODES)
+      return true
+    stopped = true
+    budgetInvalid(path, issues, 'Table model exceeds the JSON node/key work budget')
+    return false
+  }
 
   const visit = (value: unknown, path: `/${string}`, depth: number): unknown => {
-    nodes += 1
-    if (nodes > TABLE_MODEL_MAX_JSON_NODES) {
-      invalid(path, issues, 'Table model exceeds the JSON node budget')
+    if (!takeWork(path))
       return null
-    }
     if (depth > MAX_DEPTH) {
       invalid(path, issues, 'Table model exceeds the depth budget')
       return null
     }
-    if (value === null || typeof value === 'string' || typeof value === 'boolean')
+    if (typeof value === 'string') {
+      stringBytes += countUtf8BytesUntil(value, MAX_STRING_BYTES - stringBytes)
+      if (stringBytes > MAX_STRING_BYTES) {
+        stopped = true
+        budgetInvalid(path, issues, 'Table model exceeds the JSON string byte budget')
+        return ''
+      }
+      return value
+    }
+    if (value === null || typeof value === 'boolean')
       return value
     if (typeof value === 'number') {
       if (!Number.isFinite(value))
@@ -349,11 +371,15 @@ function snapshotStrictJson(raw: unknown, root: `/${string}`): SnapshotResult {
       else {
         const expected = new Set<PropertyKey>(['length', ...Array.from({ length }, (_, index) => String(index))])
         for (const key of descriptorKeys) {
+          if (!takeWork(at(path, String(key))))
+            break
           if (!expected.has(key))
             invalid(at(path, String(key)), issues, 'Arrays must contain only dense indexed values')
         }
         for (let index = 0; index < length; index++) {
           const key = String(index)
+          if (!takeWork(at(path, key)))
+            break
           const descriptor = descriptorFromMap(descriptors, key)
           if (!descriptor) {
             invalid(at(path, key), issues, 'Sparse arrays are forbidden')
@@ -369,6 +395,9 @@ function snapshotStrictJson(raw: unknown, root: `/${string}`): SnapshotResult {
     }
     else {
       for (const key of descriptorKeys) {
+        const candidatePath = typeof key === 'string' ? at(path, key) : path
+        if (!takeWork(candidatePath))
+          break
         if (typeof key !== 'string') {
           invalid(path, issues, 'Symbol keys are forbidden')
           continue
@@ -404,6 +433,35 @@ function snapshotStrictJson(raw: unknown, root: `/${string}`): SnapshotResult {
 
 function descriptorFromMap(map: PropertyDescriptorMap, key: PropertyKey): PropertyDescriptor | undefined {
   return Object.getOwnPropertyDescriptor(map, key)?.value as PropertyDescriptor | undefined
+}
+
+function countUtf8BytesUntil(value: string, limit: number): number {
+  let bytes = 0
+  for (let index = 0; index < value.length; index++) {
+    const codeUnit = value.charCodeAt(index)
+    if (codeUnit <= 0x7F) {
+      bytes += 1
+    }
+    else if (codeUnit <= 0x7FF) {
+      bytes += 2
+    }
+    else if (codeUnit >= 0xD800 && codeUnit <= 0xDBFF) {
+      const next = value.charCodeAt(index + 1)
+      if (next >= 0xDC00 && next <= 0xDFFF) {
+        bytes += 4
+        index += 1
+      }
+      else {
+        bytes += 3
+      }
+    }
+    else {
+      bytes += 3
+    }
+    if (bytes > limit)
+      return limit + 1
+  }
+  return bytes
 }
 
 function record(value: unknown, path: `/${string}`, issues: MaterialSchemaIssue[]): value is Record<string, unknown> {
@@ -482,7 +540,23 @@ function positive(value: unknown, path: `/${string}`, issues: MaterialSchemaIssu
 }
 
 function invalid(path: `/${string}`, issues: MaterialSchemaIssue[], message: string): void {
-  issues.push({ code: 'TABLE_MODEL_STRUCTURE_INVALID', severity: 'error', path, message })
+  if (issues[issues.length - 1]?.message === ISSUE_TRUNCATED_MESSAGE)
+    return
+  if (issues.length < MAX_ISSUES - 1) {
+    issues.push({ code: 'TABLE_MODEL_STRUCTURE_INVALID', severity: 'error', path, message })
+    return
+  }
+  issues.push({ code: 'TABLE_MODEL_STRUCTURE_INVALID', severity: 'error', path, message: ISSUE_TRUNCATED_MESSAGE })
+}
+
+function budgetInvalid(path: `/${string}`, issues: MaterialSchemaIssue[], message: string): void {
+  const budgetIssue = { code: 'TABLE_MODEL_STRUCTURE_INVALID', severity: 'error', path, message } as const
+  const existing = issues.findIndex(item => /budget/i.test(item.message) && item.message !== ISSUE_TRUNCATED_MESSAGE)
+  if (existing >= 0)
+    return
+  issues.splice(MAX_ISSUES - 2)
+  issues.push(budgetIssue)
+  issues.push({ code: 'TABLE_MODEL_STRUCTURE_INVALID', severity: 'error', path, message: ISSUE_TRUNCATED_MESSAGE })
 }
 
 function at(path: `/${string}`, tokenValue: string): `/${string}` {

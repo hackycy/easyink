@@ -112,4 +112,52 @@ describe('table model codec', () => {
       '/model/bands/0/rows/0/cells/0/content/slotId',
     ]))
   })
+
+  it('bounds structural work and diagnostics for oversized exact records', () => {
+    const model = createTableModel({ kind: 'static', columnCount: 1, rowCount: 1 }) as any
+    model.style = Object.fromEntries(Array.from({ length: 110_000 }, (_, index) => [`unknown${index}`, true]))
+    const result = decodeTableModelV1(model, '/model')
+    expect(result.value).toBeUndefined()
+    expect(result.issues.length).toBeLessThanOrEqual(256)
+    expect(result.issues).toContainEqual(expect.objectContaining({
+      code: 'TABLE_MODEL_STRUCTURE_INVALID',
+      message: expect.stringMatching(/budget/i),
+    }))
+    expect(result.issues).toContainEqual(expect.objectContaining({
+      code: 'TABLE_MODEL_STRUCTURE_INVALID',
+      message: expect.stringMatching(/truncated/i),
+    }))
+  })
+
+  it('allows one million text characters and rejects the next character', () => {
+    const model = createTableModel({ kind: 'static', columnCount: 1, rowCount: 1 }) as any
+    model.bands[0].rows[0].cells[0].content.text = 'x'.repeat(16_385)
+    expect(decodeTableModelV1(model, '/model').issues).toEqual([])
+    model.bands[0].rows[0].cells[0].content.text = 'x'.repeat(1_000_000)
+    expect(decodeTableModelV1(model, '/model').issues).toEqual([])
+    model.bands[0].rows[0].cells[0].content.text += 'x'
+    expect(decodeTableModelV1(model, '/model').issues).toContainEqual(expect.objectContaining({
+      path: '/model/bands/0/rows/0/cells/0/content/text',
+    }))
+  })
+
+  it('keeps the aggregate JSON string-byte budget independent from the text field limit', () => {
+    const model = createTableModel({ kind: 'static', columnCount: 2, rowCount: 1 })
+    for (const cell of model.bands[0]!.rows[0]!.cells)
+      cell.content = { kind: 'text', text: '\u8868'.repeat(800_000) }
+    expect(decodeTableModelV1(model, '/model').issues).toContainEqual(expect.objectContaining({
+      code: 'TABLE_MODEL_STRUCTURE_INVALID',
+      message: expect.stringMatching(/string byte budget/i),
+    }))
+  })
+
+  it.each(['fixed', 'fr'] as const)('anchors %s min/max inversions at max', (kind) => {
+    const model = createTableModel({ kind: 'static', columnCount: 1, rowCount: 1 }) as any
+    model.columns[0].track = kind === 'fixed'
+      ? { kind, size: 1, min: 2, max: 1 }
+      : { kind, weight: 1, min: 2, max: 1 }
+    expect(decodeTableModelV1(model, '/model').issues).toContainEqual(expect.objectContaining({
+      path: '/model/columns/0/track/max',
+    }))
+  })
 })

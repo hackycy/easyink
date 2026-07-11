@@ -123,4 +123,76 @@ describe('table schema adapter', () => {
     }))
     expect(reads).toBe(0)
   })
+
+  it('validates binding keys and canonical scalar expression structure', () => {
+    const model = createTableModel({ kind: 'static', columnCount: 1, rowCount: 1 })
+    model.bands[0]!.rows[0]!.cells[0]!.content = { kind: 'text', text: '', bindingPort: 'value' }
+    const input = node(model)
+    let reads = 0
+    const accessorExpression = { sourceId: 'source' } as Record<string, unknown>
+    Object.defineProperty(accessorExpression, 'fieldPath', {
+      enumerable: true,
+      get() {
+        reads += 1
+        return 'value'
+      },
+    })
+    input.bindings = {
+      'bad ~/port': { sourceId: 'source', fieldPath: 'value' },
+      'empty-source': { sourceId: '', fieldPath: 'value' },
+      'empty-path': { sourceId: 'source', fieldPath: '' },
+      'unknown': { sourceId: 'source', fieldPath: 'value', surprise: true },
+      'value': accessorExpression,
+    } as any
+    const issues = tableSchemaAdapter.validate(input, context)
+    expect(issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'TABLE_BINDING_PORT_INVALID', path: '/bindings/bad ~0~1port' }),
+      expect.objectContaining({ code: 'TABLE_BINDING_INVALID', path: '/bindings/empty-source' }),
+      expect.objectContaining({ code: 'TABLE_BINDING_INVALID', path: '/bindings/empty-path' }),
+      expect.objectContaining({ code: 'TABLE_BINDING_INVALID', path: '/bindings/unknown' }),
+      expect.objectContaining({ code: 'TABLE_BINDING_INVALID', path: '/bindings/value' }),
+    ]))
+    expect(reads).toBe(0)
+
+    const inspected = tableSchemaAdapter.introspect(input as MaterialNode, context)
+    expect(inspected.bindings).toEqual([])
+    expect(reads).toBe(0)
+
+    const mapAccessorNode = node(model) as MaterialNode
+    const mapAccessor = {}
+    Object.defineProperty(mapAccessor, 'value', {
+      enumerable: true,
+      get() {
+        reads += 1
+        return { sourceId: 'source', fieldPath: 'value' }
+      },
+    })
+    mapAccessorNode.bindings = mapAccessor
+    expect(tableSchemaAdapter.introspect(mapAccessorNode, context).bindings).toEqual([])
+    expect(reads).toBe(0)
+  })
+
+  it('accepts and introspects a canonical binding expression with optional fields', () => {
+    const model = createTableModel({ kind: 'static', columnCount: 1, rowCount: 1 })
+    model.bands[0]!.rows[0]!.cells[0]!.content = { kind: 'text', text: '', bindingPort: 'value' }
+    const input = node(model)
+    input.bindings = {
+      value: {
+        sourceId: 'source',
+        sourceName: 'Source',
+        fieldPath: 'record/value',
+        fieldKey: 'value',
+        required: true,
+        format: {
+          mode: 'preset',
+          preset: { type: 'number', minimumFractionDigits: 2 },
+          fallback: '-',
+        },
+        extensions: { owner: 'table' },
+      },
+    }
+    expect(tableSchemaAdapter.validate(input, context)).toEqual([])
+    expect(tableSchemaAdapter.introspect(input as MaterialNode, context).bindings)
+      .toContainEqual(expect.objectContaining({ port: 'value', path: '/bindings/value' }))
+  })
 })

@@ -9,7 +9,7 @@ import type { MaterialNode } from '@easyink/schema'
 import type { JsonValue, UnitType } from '@easyink/shared'
 import type { TableModel, TableStyle } from './model'
 import { cloneJsonValue, convertUnit } from '@easyink/shared'
-import { assertValidTableModel } from './model'
+import { assertValidTableModel, isValidTableStableToken } from './model'
 import { decodeTableModelV1 } from './model-codec'
 
 const NODE_KEYS = [
@@ -31,6 +31,29 @@ const NODE_KEYS = [
   'extensions',
   'compat',
 ] as const
+const BINDING_EXPRESSION_KEYS = new Set([
+  'sourceId',
+  'sourceName',
+  'sourceTag',
+  'fieldPath',
+  'fieldKey',
+  'fieldLabel',
+  'format',
+  'required',
+  'extensions',
+])
+const BINDING_FORMAT_KEYS = new Set(['prefix', 'suffix', 'fallback', 'mode', 'preset', 'custom', 'extensions'])
+const BINDING_PRESET_KEYS = new Set([
+  'type',
+  'pattern',
+  'locale',
+  'timeZone',
+  'weekdayStyle',
+  'minimumFractionDigits',
+  'maximumFractionDigits',
+  'currency',
+])
+const BINDING_PRESET_TYPES = new Set(['datetime', 'weekday', 'chinese-money', 'number', 'currency', 'percent'])
 
 export const tableSchemaAdapter: SchemaAdapter = {
   currentModelVersion: 1,
@@ -162,6 +185,8 @@ function validateEnvelope(node: AdaptableMaterialNode, model: TableModel, issues
   for (const key of Object.keys(bindings)) {
     const path = pointer('/bindings', key)
     const descriptor = Object.getOwnPropertyDescriptor(bindings, key)
+    if (!isValidTableStableToken(key))
+      issues.push(issue('TABLE_BINDING_PORT_INVALID', path, `Binding port is not a stable table token: ${key}`))
     if (!ports.has(key))
       issues.push(issue('TABLE_BINDING_ORPHAN', path, `Binding port is not declared by the table model: ${key}`))
     if (!descriptor || !('value' in descriptor)) {
@@ -238,10 +263,13 @@ function introspectTable(node: MaterialNode, model: TableModel): MaterialIntrosp
   collectFont(model.style, '/model/style', resources)
 
   const namedPorts = declaredPorts(model)
+  const bindingMap = ownData(node, 'bindings')
   for (const port of [...namedPorts].sort()) {
-    const expression = node.bindings[port]
-    if (isBindingExpression(expression))
-      bindings.push({ path: pointer('/bindings', port), value: expression, port })
+    if (!bindingMap.ok || !plainRecord(bindingMap.value))
+      break
+    const expression = ownData(bindingMap.value, port)
+    if (expression.ok && isBindingExpression(expression.value))
+      bindings.push({ path: pointer('/bindings', port), value: expression.value, port })
   }
   return { identities, structures, references, resources, bindings }
 }
@@ -371,23 +399,82 @@ function plainRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isBindingExpression(value: unknown): value is MaterialIntrospection['bindings'][number]['value'] {
-  if (!plainRecord(value))
-    return false
+  let snapshot: unknown
   try {
-    const descriptors = Object.getOwnPropertyDescriptors(value)
-    const sourceId = Object.getOwnPropertyDescriptor(descriptors, 'sourceId')?.value as PropertyDescriptor | undefined
-    const fieldPath = Object.getOwnPropertyDescriptor(descriptors, 'fieldPath')?.value as PropertyDescriptor | undefined
-    return sourceId !== undefined
-      && fieldPath !== undefined
-      && 'value' in sourceId
-      && 'value' in fieldPath
-      && typeof sourceId.value === 'string'
-      && typeof fieldPath.value === 'string'
-      && !Object.hasOwn(descriptors, 'kind')
+    snapshot = cloneJsonValue(value as JsonValue, {
+      maxDepth: 128,
+      maxNodes: 100_000,
+      maxStringBytes: 4 * 1024 * 1024,
+    })
   }
   catch {
     return false
   }
+  if (!plainRecord(snapshot) || !hasOnlyKeys(snapshot, BINDING_EXPRESSION_KEYS))
+    return false
+  if (!boundedNonemptyString(snapshot.sourceId) || !boundedNonemptyString(snapshot.fieldPath))
+    return false
+  if (!optionalBoundedStrings(snapshot, ['sourceName', 'sourceTag', 'fieldKey', 'fieldLabel']))
+    return false
+  if (snapshot.required !== undefined && typeof snapshot.required !== 'boolean')
+    return false
+  if (snapshot.extensions !== undefined && !plainRecord(snapshot.extensions))
+    return false
+  return snapshot.format === undefined || isBindingFormat(snapshot.format)
+}
+
+function isBindingFormat(value: unknown): boolean {
+  if (!plainRecord(value) || !hasOnlyKeys(value, BINDING_FORMAT_KEYS))
+    return false
+  if (!optionalBoundedStrings(value, ['prefix', 'suffix', 'fallback']))
+    return false
+  if (value.mode !== undefined && !boundedNonemptyString(value.mode, 128))
+    return false
+  if (value.extensions !== undefined && !plainRecord(value.extensions))
+    return false
+  if (value.preset !== undefined && !isBindingPreset(value.preset))
+    return false
+  if (value.custom !== undefined) {
+    if (!plainRecord(value.custom)
+      || !hasOnlyKeys(value.custom, new Set(['source']))
+      || !boundedNonemptyString(value.custom.source, 1_000_000)) {
+      return false
+    }
+  }
+  return true
+}
+
+function isBindingPreset(value: unknown): boolean {
+  if (!plainRecord(value) || !hasOnlyKeys(value, BINDING_PRESET_KEYS))
+    return false
+  if (typeof value.type !== 'string' || !BINDING_PRESET_TYPES.has(value.type))
+    return false
+  if (!optionalBoundedStrings(value, ['pattern', 'locale', 'timeZone', 'currency']))
+    return false
+  if (value.weekdayStyle !== undefined && !['long', 'short', 'narrow'].includes(value.weekdayStyle as string))
+    return false
+  for (const key of ['minimumFractionDigits', 'maximumFractionDigits']) {
+    const candidate = value[key]
+    if (candidate !== undefined && (!Number.isSafeInteger(candidate) || (candidate as number) < 0))
+      return false
+  }
+  return true
+}
+
+function hasOnlyKeys(value: Record<string, unknown>, allowed: ReadonlySet<string>): boolean {
+  return Object.keys(value).every(key => allowed.has(key))
+}
+
+function optionalBoundedStrings(value: Record<string, unknown>, keys: readonly string[]): boolean {
+  return keys.every(key => value[key] === undefined || boundedString(value[key]))
+}
+
+function boundedNonemptyString(value: unknown, max = 16_384): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= max
+}
+
+function boundedString(value: unknown, max = 16_384): value is string {
+  return typeof value === 'string' && value.length <= max
 }
 
 function issue(code: string, path: `/${string}`, message: string): MaterialSchemaIssue {
