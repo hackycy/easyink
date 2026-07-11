@@ -10,6 +10,25 @@ import {
   ViewerTreePolicyError,
 } from './index'
 
+function createDocumentWithParsedRootComments(commentCount: number): Document {
+  const root = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  const comments = Array.from({ length: commentCount }, () => ({ childNodes: [] }))
+  const parsedWithSiblings = {
+    childNodes: [...comments, root],
+    documentElement: root,
+    querySelector: () => null,
+  } as unknown as Document
+  const Parser = class {
+    parseFromString(): Document {
+      return parsedWithSiblings
+    }
+  }
+  return {
+    baseURI: 'about:blank',
+    defaultView: { DOMParser: Parser },
+  } as unknown as Document
+}
+
 describe('renderViewerTree', () => {
   it('renders text without parsing it as HTML', () => {
     const host = document.createElement('div')
@@ -125,6 +144,19 @@ describe('renderViewerTree', () => {
 
     const excessiveComments = `<svg>${'<!---->'.repeat(50_000)}</svg>`
     expect(() => capabilities.sanitizeMarkup({ format: 'svg', source: excessiveComments }))
+      .toThrowError('VIEWER_TREE_NODE_LIMIT_EXCEEDED')
+
+    const parsedDocumentBoundary = `${'<!---->'.repeat(49_999)}<svg/>`
+    const boundaryDocumentCapabilities = createBrowserDomCapabilities({
+      document: createDocumentWithParsedRootComments(49_999),
+    })
+    expect(() => boundaryDocumentCapabilities.sanitizeMarkup({ format: 'svg', source: parsedDocumentBoundary })).not.toThrow()
+
+    const excessiveRootSiblings = `${'<!---->'.repeat(50_001)}<svg/>`
+    const excessiveDocumentCapabilities = createBrowserDomCapabilities({
+      document: createDocumentWithParsedRootComments(50_001),
+    })
+    expect(() => excessiveDocumentCapabilities.sanitizeMarkup({ format: 'svg', source: excessiveRootSiblings }))
       .toThrowError('VIEWER_TREE_NODE_LIMIT_EXCEEDED')
   })
 

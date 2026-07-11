@@ -311,10 +311,23 @@ function sanitizeSvg(document: Document, source: string, policy: ViewerTreePolic
     throw new ViewerTreePolicyError('SANITIZED_MARKUP_SVG_INVALID')
   const Parser = document.defaultView?.DOMParser ?? DOMParser
   const parsed = new Parser().parseFromString(source, 'image/svg+xml')
+  assertParsedDocumentNodeBudget(parsed)
   if (parsed.querySelector('parsererror') || parsed.documentElement.localName !== 'svg')
     throw new ViewerTreePolicyError('SANITIZED_MARKUP_SVG_INVALID')
   const counters: SanitizeCounters = { nodes: 0, textBytes: 0, attributeBytes: 0 }
   return sanitizeSvgElement(parsed.documentElement, policy, document.baseURI || undefined, 0, counters)
+}
+
+function assertParsedDocumentNodeBudget(document: Document): void {
+  const stack = Array.from(document.childNodes)
+  let nodes = 0
+  while (stack.length > 0) {
+    const node = stack.pop()!
+    if (++nodes > VIEWER_TREE_ABSOLUTE_MAX_NODES)
+      throw new ViewerTreePolicyError('VIEWER_TREE_NODE_LIMIT_EXCEEDED')
+    for (let index = node.childNodes.length - 1; index >= 0; index--)
+      stack.push(node.childNodes[index])
+  }
 }
 
 function sanitizeSvgElement(
