@@ -186,29 +186,20 @@ describe('tableTopologyEngine structural operations', () => {
     })
     const first = { kind: 'set', path: ['columns', 0, 'track'], value: { kind: 'fixed', size: 10 } } as const
 
-    for (const secondRead of ['throw', 'invalid'] as const) {
-      let valueReads = 0
-      const second = {
-        kind: 'set' as const,
-        path: ['columns', 1, 'track'] as const,
-        get value() {
-          valueReads += 1
-          if (valueReads === 1)
-            return { kind: 'fixed', size: 20 }
-          if (secondRead === 'throw')
-            throw new Error('payload read twice')
-          return { kind: 'invalid' }
-        },
-      }
-      const delta = { ...base, forward: [first, second] } as TableTopologyDelta
-      const draft = deepClone(source)
-      expect(() => applyTableTopologyDelta(draft, delta, 0)).not.toThrow()
-      expect(valueReads).toBe(1)
-      expect(draft.columns.map(column => column.track)).toEqual([
-        { kind: 'fixed', size: 10 },
-        { kind: 'fixed', size: 20 },
-      ])
+    let valueReads = 0
+    const accessorEdit = {
+      kind: 'set' as const,
+      path: ['columns', 1, 'track'] as const,
+      get value() {
+        valueReads += 1
+        return { kind: 'fixed', size: 20 }
+      },
     }
+    const accessorDelta = { ...base, forward: [first, accessorEdit] } as TableTopologyDelta
+    const accessorDraft = deepClone(source)
+    expect(() => applyTableTopologyDelta(accessorDraft, accessorDelta, 0)).toThrow(/accessor/)
+    expect(valueReads).toBe(0)
+    expect(accessorDraft).toEqual(source)
 
     const edits = [first, {
       kind: 'set',
@@ -216,15 +207,15 @@ describe('tableTopologyEngine structural operations', () => {
       value: { kind: 'fixed', size: 30 },
     }] as const
     let forwardReads = 0
-    let secondIndexReads = 0
+    let secondIndexDescriptorReads = 0
     const proxiedEdits = new Proxy(edits, {
-      get(target, property, receiver) {
+      getOwnPropertyDescriptor(target, property) {
         if (property === '1') {
-          secondIndexReads += 1
-          if (secondIndexReads > 1)
-            throw new Error('forward array index read twice')
+          secondIndexDescriptorReads += 1
+          if (secondIndexDescriptorReads > 1)
+            throw new Error('forward array index descriptor read twice')
         }
-        return Reflect.get(target, property, receiver)
+        return Reflect.getOwnPropertyDescriptor(target, property)
       },
     })
     const delta = { ...base } as TableTopologyDelta
@@ -251,7 +242,7 @@ describe('tableTopologyEngine structural operations', () => {
     expect(() => applyTableTopologyDelta(draft, delta, 0)).not.toThrow()
     expect(expectedRevisionReads).toBe(1)
     expect(forwardReads).toBe(1)
-    expect(secondIndexReads).toBe(1)
+    expect(secondIndexDescriptorReads).toBe(1)
     expect(draft.columns[1]!.track).toEqual({ kind: 'fixed', size: 30 })
 
     const throwingDelta = { ...base } as TableTopologyDelta
@@ -439,6 +430,7 @@ describe('tableTopologyEngine structural operations', () => {
     const source = createTableModel({ kind: 'static', columnCount: 100, rowCount: 160 })
     const allocate = vi.fn(() => 'must-not-allocate')
     let trackReads = 0
+    let trackDescriptorReads = 0
     const largeTrack = new Proxy({
       kind: 'fr' as const,
       weight: 1,
@@ -448,6 +440,10 @@ describe('tableTopologyEngine structural operations', () => {
         trackReads += 1
         return Reflect.get(target, property, receiver)
       },
+      getOwnPropertyDescriptor(target, property) {
+        trackDescriptorReads += 1
+        return Reflect.getOwnPropertyDescriptor(target, property)
+      },
     })
     expect(() => TableTopologyEngine.planInsertColumn(source, {
       topologyRevision: 0,
@@ -455,7 +451,8 @@ describe('tableTopologyEngine structural operations', () => {
       track: largeTrack,
       identities: { allocate },
     })).toThrow(/budget|nodes/)
-    expect(trackReads).toBeGreaterThan(0)
+    expect(trackReads).toBe(0)
+    expect(trackDescriptorReads).toBeGreaterThan(0)
     expect(allocate).not.toHaveBeenCalled()
 
     let identitiesReads = 0
@@ -571,7 +568,7 @@ describe('tableTopologyEngine structural operations', () => {
         ...base,
         forward: [{ kind: 'set', path: [segment] as never, value: 'mutated' }],
       }
-      expect(() => applyTableTopologyDelta(draft, invalidPath, 0)).toThrow(/path segment/)
+      expect(() => applyTableTopologyDelta(draft, invalidPath, 0)).toThrow(/path segment|JSON|Unsupported/)
       expect(draft).toEqual(Object.assign(deepClone(source), { true: 'owned' }))
     }
 
@@ -580,7 +577,7 @@ describe('tableTopologyEngine structural operations', () => {
       ...base,
       forward: [{ kind: 'set', path: [{ toString }] as never, value: 'data' }],
     }
-    expect(() => applyTableTopologyDelta(draft, objectPath, 0)).toThrow(/path segment/)
+    expect(() => applyTableTopologyDelta(draft, objectPath, 0)).toThrow(/path segment|JSON|Unsupported/)
     expect(toString).not.toHaveBeenCalled()
     expect(draft).toEqual(Object.assign(deepClone(source), { true: 'owned' }))
   })
@@ -918,5 +915,126 @@ describe('tableTopologyEngine lossless merge regions', () => {
       identities: { allocate },
     })).toThrow(/budget|nodes/)
     expect(allocate).not.toHaveBeenCalled()
+  })
+
+  it('rejects nested merge accessors without invoking them or allocating', () => {
+    const source = createTableModel({ kind: 'static', columnCount: 2, rowCount: 1 })
+    const row = source.bands[0]!.rows[0]!
+    const rowIds: string[] = []
+    let getterCalls = 0
+    Object.defineProperty(rowIds, '0', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        getterCalls += 1
+        return row.id
+      },
+    })
+    rowIds.length = 1
+    const allocate = vi.fn(() => 'must-not-allocate')
+
+    expect(() => TableTopologyEngine.merge(source, {
+      rowIds: rowIds as never,
+      columnIds: source.columns.map(column => column.id),
+      anchorCellId: row.cells[0]!.id,
+      identities: { allocate },
+    })).toThrow(/accessor|JSON/i)
+    expect(getterCalls).toBe(0)
+    expect(allocate).not.toHaveBeenCalled()
+    expect(source.merges).toEqual([])
+  })
+
+  it('rejects source accessors without invoking them in merge or split', () => {
+    const source = createTableModel({ kind: 'static', columnCount: 2, rowCount: 1 })
+    const row = source.bands[0]!.rows[0]!
+    const allocate = vi.fn(() => 'must-not-allocate')
+    let textGetterCalls = 0
+    Object.defineProperty(row.cells[0]!.content, 'text', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        textGetterCalls += 1
+        return 'unsafe'
+      },
+    })
+    expect(() => TableTopologyEngine.merge(source, {
+      rowIds: [row.id],
+      columnIds: source.columns.map(column => column.id),
+      anchorCellId: row.cells[0]!.id,
+      identities: { allocate },
+    })).toThrow(/accessor|JSON/i)
+    expect(textGetterCalls).toBe(0)
+    expect(allocate).not.toHaveBeenCalled()
+    expect(source.merges).toEqual([])
+
+    const splittable = createTableModel({ kind: 'static', columnCount: 2, rowCount: 1 })
+    const splittableRow = splittable.bands[0]!.rows[0]!
+    const merged = TableTopologyEngine.merge(splittable, {
+      rowIds: [splittableRow.id],
+      columnIds: splittable.columns.map(column => column.id),
+      anchorCellId: splittableRow.cells[0]!.id,
+      identities: createSequentialTableIdentityAllocator('accessor-split'),
+    })
+    let anchorGetterCalls = 0
+    Object.defineProperty(merged.merges[0]!, 'anchorCellId', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        anchorGetterCalls += 1
+        return splittableRow.cells[0]!.id
+      },
+    })
+    expect(() => TableTopologyEngine.split(merged, merged.merges[0]!.id)).toThrow(/accessor|JSON/i)
+    expect(anchorGetterCalls).toBe(0)
+    expect(merged.merges).toHaveLength(1)
+  })
+
+  it('captures changing nested proxy descriptors exactly once', () => {
+    const source = createTableModel({ kind: 'static', columnCount: 2, rowCount: 1 })
+    const row = source.bands[0]!.rows[0]!
+    const descriptorReads = new Map<PropertyKey, number>()
+    const rowIds = new Proxy([row.id], {
+      getOwnPropertyDescriptor(target, property) {
+        const reads = (descriptorReads.get(property) ?? 0) + 1
+        descriptorReads.set(property, reads)
+        if (property === '0' && reads > 1) {
+          return { configurable: true, enumerable: true, writable: true, value: 'missing' }
+        }
+        return Reflect.getOwnPropertyDescriptor(target, property)
+      },
+    })
+    const merged = TableTopologyEngine.merge(source, {
+      rowIds,
+      columnIds: source.columns.map(column => column.id),
+      anchorCellId: row.cells[0]!.id,
+      identities: createSequentialTableIdentityAllocator('descriptor-once'),
+    })
+    expect(merged.merges).toHaveLength(1)
+    expect(descriptorReads.get('0')).toBe(1)
+    expect(descriptorReads.get('length')).toBe(1)
+  })
+
+  it('rejects non-canonical merge input arrays before allocation', () => {
+    const source = createTableModel({ kind: 'static', columnCount: 2, rowCount: 1 })
+    const row = source.bands[0]!.rows[0]!
+    const sparse: string[] = []
+    sparse.length = 1
+    const extra = Object.assign([row.id], { extra: row.id })
+    const cyclic: unknown[] = []
+    cyclic.push(cyclic)
+    const customPrototype = [row.id]
+    Object.setPrototypeOf(customPrototype, {})
+    const allocate = vi.fn(() => 'must-not-allocate')
+
+    for (const rowIds of [sparse, extra, cyclic, customPrototype]) {
+      expect(() => TableTopologyEngine.merge(source, {
+        rowIds: rowIds as never,
+        columnIds: source.columns.map(column => column.id),
+        anchorCellId: row.cells[0]!.id,
+        identities: { allocate },
+      })).toThrow(/JSON|snapshot|plain/i)
+    }
+    expect(allocate).not.toHaveBeenCalled()
+    expect(source.merges).toEqual([])
   })
 })

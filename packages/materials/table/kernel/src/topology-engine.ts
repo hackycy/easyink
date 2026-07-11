@@ -95,7 +95,7 @@ function assertApplyRevision(value: number): void {
 }
 
 function snapshotTableTopologyEdits(value: unknown): TableTopologyEdit[] {
-  const snapshot = deepClone(value)
+  const snapshot = snapshotTopologyJson(value)
   if (!Array.isArray(snapshot))
     throw new Error('table topology forward script must be an array')
   for (const [index, candidate] of snapshot.entries()) {
@@ -104,7 +104,6 @@ function snapshotTableTopologyEdits(value: unknown): TableTopologyEdit[] {
     for (const segment of candidate.path)
       assertSafePathSegment(segment)
   }
-  assertJsonValue(snapshot)
   return snapshot.map((candidate, index) => normalizeTableTopologyEdit(candidate, index))
 }
 
@@ -139,6 +138,113 @@ function normalizeTableTopologyEdit(candidate: unknown, index: number): TableTop
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+const TOPOLOGY_SNAPSHOT_MAX_DEPTH = 128
+const TOPOLOGY_SNAPSHOT_MAX_NODES = 100_000
+const UNSAFE_JSON_KEYS = new Set(['__proto__', 'prototype', 'constructor'])
+
+interface TopologySnapshotFrame {
+  source: object
+  target: Record<string, unknown> | unknown[]
+  depth: number
+}
+
+function snapshotTopologyJson<T>(value: T): T {
+  const clones = new WeakMap<object, Record<string, unknown> | unknown[]>()
+  const frames: TopologySnapshotFrame[] = []
+  let nodes = 0
+
+  const snapshotNode = (candidate: unknown, depth: number): unknown => {
+    nodes += 1
+    if (nodes > TOPOLOGY_SNAPSHOT_MAX_NODES)
+      throw new Error(`JSON snapshot exceeds the maximum of ${TOPOLOGY_SNAPSHOT_MAX_NODES} nodes`)
+    if (depth > TOPOLOGY_SNAPSHOT_MAX_DEPTH)
+      throw new Error(`JSON snapshot exceeds the maximum depth of ${TOPOLOGY_SNAPSHOT_MAX_DEPTH}`)
+    if (candidate === null || typeof candidate !== 'object')
+      return candidate
+    const existing = clones.get(candidate)
+    if (existing)
+      return existing
+    const target: Record<string, unknown> | unknown[] = Array.isArray(candidate) ? [] : {}
+    clones.set(candidate, target)
+    frames.push({ source: candidate, target, depth })
+    return target
+  }
+
+  const snapshot = snapshotNode(value, 0)
+  while (frames.length > 0) {
+    const frame = frames.pop()!
+    const isArray = Array.isArray(frame.source)
+    const prototype = Object.getPrototypeOf(frame.source)
+    if (isArray ? prototype !== Array.prototype : prototype !== Object.prototype && prototype !== null)
+      throw new Error('JSON snapshot records and arrays must use plain prototypes')
+    const descriptors = Object.getOwnPropertyDescriptors(frame.source)
+    const keys = Reflect.ownKeys(descriptors)
+    if (isArray) {
+      snapshotArrayDescriptors(frame, descriptors, keys, snapshotNode)
+      continue
+    }
+    for (const key of keys) {
+      if (typeof key !== 'string')
+        throw new Error('JSON snapshot record keys must be strings')
+      if (UNSAFE_JSON_KEYS.has(key))
+        throw new Error(`Unsafe JSON snapshot record key: ${key}`)
+      const descriptor = descriptorValue(descriptors, key)
+      assertSnapshotDataDescriptor(descriptor, key)
+      if (!descriptor.enumerable)
+        throw new Error(`JSON snapshot property must be enumerable: ${key}`)
+      Object.defineProperty(frame.target, key, {
+        value: snapshotNode(descriptor.value, frame.depth + 1),
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      })
+    }
+  }
+  assertJsonValue(snapshot)
+  return snapshot as T
+}
+
+function snapshotArrayDescriptors(
+  frame: TopologySnapshotFrame,
+  descriptors: PropertyDescriptorMap,
+  keys: readonly PropertyKey[],
+  snapshotNode: (candidate: unknown, depth: number) => unknown,
+): void {
+  const lengthDescriptor = descriptorValue(descriptors, 'length')
+  assertSnapshotDataDescriptor(lengthDescriptor, 'length')
+  const length = lengthDescriptor.value
+  if (!Number.isSafeInteger(length) || length < 0 || length > TOPOLOGY_SNAPSHOT_MAX_NODES)
+    throw new Error('JSON snapshot array length is invalid')
+  if (keys.length !== length + 1)
+    throw new Error('JSON snapshot arrays must only contain dense indexed values')
+  for (let index = 0; index < length; index++) {
+    const key = String(index)
+    const descriptor = descriptorValue(descriptors, key)
+    assertSnapshotDataDescriptor(descriptor, key)
+    Object.defineProperty(frame.target, key, {
+      value: snapshotNode(descriptor.value, frame.depth + 1),
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    })
+  }
+}
+
+function descriptorValue(descriptors: PropertyDescriptorMap, key: PropertyKey): PropertyDescriptor {
+  const descriptor = Object.getOwnPropertyDescriptor(descriptors, key)?.value
+  if (!descriptor)
+    throw new Error(`JSON snapshot property is missing: ${String(key)}`)
+  return descriptor as PropertyDescriptor
+}
+
+function assertSnapshotDataDescriptor(
+  descriptor: PropertyDescriptor,
+  key: string,
+): asserts descriptor is PropertyDescriptor & { value: unknown } {
+  if (!Object.hasOwn(descriptor, 'value'))
+    throw new Error(`JSON snapshot must not contain accessor properties: ${key}`)
 }
 
 export function materializeTableTopologyDelta(
@@ -691,9 +797,7 @@ function snapshotPlannerJson(fields: Record<string, unknown>): Record<string, un
     if (value !== undefined)
       definedFields[key] = value
   }
-  const snapshot = deepClone(definedFields)
-  assertJsonValue(snapshot)
-  return snapshot as Record<string, unknown>
+  return snapshotTopologyJson(definedFields)
 }
 
 function readOptionalTargets<T extends string>(snapshot: Record<string, unknown>): {
@@ -1173,7 +1277,7 @@ export class TableTopologyEngine {
 
   static merge(source: TableModel, input: MergeCellsInput): TableModel {
     const snapshot = snapshotMergeCellsInput(input)
-    const model = deepClone(source)
+    const model = snapshotTopologyJson(source)
     assertValidTableModel(model)
     assertDistinctSelection(snapshot.rowIds, 'merge row IDs')
     assertDistinctSelection(snapshot.columnIds, 'merge column IDs')
@@ -1242,7 +1346,7 @@ export class TableTopologyEngine {
   }
 
   static split(source: TableModel, mergeId: TableMergeId): TableModel {
-    const model = deepClone(source)
+    const model = snapshotTopologyJson(source)
     assertValidTableModel(model)
     const index = model.merges.findIndex(merge => merge.id === mergeId)
     if (index < 0)
