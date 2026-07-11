@@ -137,6 +137,12 @@ const BINDING_PRESET_KEYS = new Set([
   'currency',
 ])
 const UNSAFE_STRUCTURE_KEYS = new Set(['__proto__', 'prototype', 'constructor'])
+const MATERIAL_DATA_VALUE_TYPES = new Set(['string', 'number', 'boolean', 'date', 'object', 'array'])
+const MATERIAL_DATA_FIELD_FORMATS = new Set(['display', 'raw'])
+const MATERIAL_DATA_CONTRACT_KEYS = new Set(['version', 'model'])
+const MATERIAL_DATA_MODEL_KEYS = new Set(['kind', 'fields'])
+const MATERIAL_DATA_FIELD_KEYS = new Set(['labelKey', 'type', 'required', 'format', 'formatEditor'])
+const MATERIAL_DATA_FORMAT_EDITOR_KEYS = new Set(['tabs', 'defaultTab', 'presetTypes'])
 
 export function defineMaterialManifest<TDesigner, TViewer>(
   manifest: MaterialManifest<TDesigner, TViewer>,
@@ -339,13 +345,45 @@ function validateBindingExpression(binding: BindingExpression): void {
 
 function validateBindingDataContract(contract: unknown): void {
   if (!isPlainRecord(contract)
+    || !hasOnlyKeys(contract, MATERIAL_DATA_CONTRACT_KEYS)
     || contract.version !== 3
     || !isPlainRecord(contract.model)
+    || !hasOnlyKeys(contract.model, MATERIAL_DATA_MODEL_KEYS)
     || contract.model.kind !== 'tabular'
-    || !isPlainRecord(contract.model.fields)
-    || Object.values(contract.model.fields).some(field => !isPlainRecord(field))) {
+    || !isPlainRecord(contract.model.fields)) {
     fail('MATERIAL_BINDING_DATA_CONTRACT_INVALID')
   }
+  for (const [fieldId, field] of Object.entries(contract.model.fields)) {
+    if (!isNonemptyString(fieldId) || !isValidMaterialDataField(field))
+      fail('MATERIAL_BINDING_DATA_CONTRACT_INVALID')
+  }
+}
+
+function isValidMaterialDataField(field: unknown): boolean {
+  if (!isPlainRecord(field)
+    || !hasOnlyKeys(field, MATERIAL_DATA_FIELD_KEYS)
+    || !isNonemptyString(field.labelKey)
+    || typeof field.type !== 'string'
+    || !MATERIAL_DATA_VALUE_TYPES.has(field.type)
+    || (field.required !== undefined && typeof field.required !== 'boolean')
+    || (field.format !== undefined && (typeof field.format !== 'string' || !MATERIAL_DATA_FIELD_FORMATS.has(field.format)))) {
+    return false
+  }
+  if (field.formatEditor === undefined || field.formatEditor === false)
+    return true
+  if (field.format === 'raw'
+    || !isPlainRecord(field.formatEditor)
+    || !hasOnlyKeys(field.formatEditor, MATERIAL_DATA_FORMAT_EDITOR_KEYS)
+    || !Array.isArray(field.formatEditor.tabs)
+    || field.formatEditor.tabs.length !== 1
+    || field.formatEditor.tabs[0] !== 'preset'
+    || (field.formatEditor.defaultTab !== undefined && field.formatEditor.defaultTab !== 'preset')
+    || (field.formatEditor.presetTypes !== undefined
+      && (!Array.isArray(field.formatEditor.presetTypes)
+        || field.formatEditor.presetTypes.some(type => !BINDING_PRESET_TYPES.has(type))))) {
+    return false
+  }
+  return true
 }
 
 function validateBindingPolicy(policy: MaterialBindingPortPolicy): void {
@@ -613,17 +651,35 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return prototype === Object.prototype || prototype === null
 }
 
+function hasOnlyKeys(value: Record<string, unknown>, allowed: ReadonlySet<string>): boolean {
+  return Object.keys(value).every(key => allowed.has(key))
+}
+
 function walkManifestStructure(value: unknown, freeze: boolean): void {
   const active = new WeakSet<object>()
   const completed = new WeakSet<object>()
+  const stack: Array<
+    | { phase: 'enter', value: unknown }
+    | { phase: 'leave', value: object }
+  > = [{ phase: 'enter', value }]
 
-  const visit = (candidate: unknown): void => {
+  while (stack.length > 0) {
+    const frame = stack.pop()!
+    if (frame.phase === 'leave') {
+      active.delete(frame.value)
+      if (freeze)
+        Object.freeze(frame.value)
+      completed.add(frame.value)
+      continue
+    }
+
+    const candidate = frame.value
     if (typeof candidate === 'function' || typeof candidate !== 'object' || candidate === null)
-      return
+      continue
     if (active.has(candidate))
       fail('MATERIAL_MANIFEST_CYCLE')
     if (completed.has(candidate))
-      return
+      continue
 
     const array = Array.isArray(candidate)
     const prototype = Object.getPrototypeOf(candidate)
@@ -633,9 +689,11 @@ function walkManifestStructure(value: unknown, freeze: boolean): void {
     }
 
     active.add(candidate)
+    stack.push({ phase: 'leave', value: candidate })
     const keys = Reflect.ownKeys(candidate)
     const length = array ? readArrayLength(candidate) : 0
     let arrayEntries = 0
+    const children: unknown[] = []
     for (const key of keys) {
       if (array && key === 'length')
         continue
@@ -649,16 +707,13 @@ function walkManifestStructure(value: unknown, freeze: boolean): void {
         fail('MATERIAL_MANIFEST_STRUCTURE_INVALID')
       if (array)
         arrayEntries += 1
-      visit(descriptor.value)
+      children.push(descriptor.value)
     }
     if (array && arrayEntries !== length)
       fail('MATERIAL_MANIFEST_STRUCTURE_INVALID')
-    active.delete(candidate)
-    if (freeze)
-      Object.freeze(candidate)
-    completed.add(candidate)
+    for (let index = children.length - 1; index >= 0; index -= 1)
+      stack.push({ phase: 'enter', value: children[index] })
   }
-  visit(value)
 }
 
 function readArrayLength(value: unknown[]): number {

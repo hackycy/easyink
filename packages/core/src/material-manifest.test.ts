@@ -216,6 +216,20 @@ describe('defineMaterialManifest', () => {
     expect(() => defineMaterialManifest(input)).toThrowError('MATERIAL_MANIFEST_CYCLE')
   })
 
+  it('rejects very deep models with a stable depth error instead of overflowing the stack', () => {
+    const input = validManifest()
+    const root: Record<string, unknown> = {}
+    let cursor = root
+    for (let depth = 0; depth < 6_000; depth += 1) {
+      const next: Record<string, unknown> = {}
+      cursor.next = next
+      cursor = next
+    }
+    input.common.defaultNode.model = root
+
+    expect(captureError(() => defineMaterialManifest(input))).toMatchObject({ code: 'JSON_VALUE_DEPTH_LIMIT' })
+  })
+
   it.each(['nameKey', 'category', 'iconKey'] as const)('requires a nonempty common %s', (key) => {
     const input = validManifest()
     input.common[key] = ''
@@ -463,6 +477,51 @@ describe('defineMaterialManifest', () => {
     const dataContract = validManifest()
     dataContract.common.binding = { kind: 'ports', ports: [], dataContract: {} as never }
     expect(() => defineMaterialManifest(dataContract)).toThrowError('MATERIAL_BINDING_DATA_CONTRACT_INVALID')
+  })
+
+  it('fully validates material data-contract fields', () => {
+    const createInput = (field: Record<string, unknown>) => {
+      const input = validManifest()
+      input.common.binding = {
+        kind: 'ports',
+        ports: [],
+        dataContract: {
+          version: 3,
+          model: { kind: 'tabular', fields: { value: field as never } },
+        },
+      }
+      return input
+    }
+
+    expect(() => defineMaterialManifest(createInput({}))).toThrowError('MATERIAL_BINDING_DATA_CONTRACT_INVALID')
+    expect(() => defineMaterialManifest(createInput({ labelKey: 'value', type: 'script' }))).toThrowError('MATERIAL_BINDING_DATA_CONTRACT_INVALID')
+    expect(() => defineMaterialManifest(createInput({ labelKey: 'value', type: 'string', required: 'yes' }))).toThrowError('MATERIAL_BINDING_DATA_CONTRACT_INVALID')
+    expect(() => defineMaterialManifest(createInput({ labelKey: 'value', type: 'string', format: 'preset' }))).toThrowError('MATERIAL_BINDING_DATA_CONTRACT_INVALID')
+    expect(() => defineMaterialManifest(createInput({
+      labelKey: 'value',
+      type: 'string',
+      format: 'display',
+      formatEditor: { tabs: ['custom'], defaultTab: 'custom' },
+    }))).toThrowError('MATERIAL_BINDING_DATA_CONTRACT_INVALID')
+    expect(() => defineMaterialManifest(createInput({
+      labelKey: 'value',
+      type: 'string',
+      format: 'display',
+      formatEditor: { tabs: ['preset'], presetTypes: ['script'] },
+    }))).toThrowError('MATERIAL_BINDING_DATA_CONTRACT_INVALID')
+    expect(() => defineMaterialManifest(createInput({
+      labelKey: 'value',
+      type: 'string',
+      format: 'raw',
+      formatEditor: { tabs: ['preset'] },
+    }))).toThrowError('MATERIAL_BINDING_DATA_CONTRACT_INVALID')
+    expect(() => defineMaterialManifest(createInput({
+      labelKey: 'materials.value',
+      type: 'string',
+      required: true,
+      format: 'display',
+      formatEditor: { tabs: ['preset'], defaultTab: 'preset', presetTypes: ['number'] },
+    }))).not.toThrow()
   })
 
   it('requires convertible adapters to provide explicit private-model conversion', () => {
