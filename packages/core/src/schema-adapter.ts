@@ -1,10 +1,11 @@
 import type { BindingRef, DocumentSchema, DocumentSchemaInput, MaterialNode, MaterialNodeInput } from '@easyink/schema'
 import type { JsonValue, UnitType } from '@easyink/shared'
 import type { MaterialBindingDefinition, MaterialBindingPortPolicy } from './material-binding'
-import type { MaterialIntrospection } from './material-introspection'
-import type { CompiledMaterialProfile } from './material-profile'
+import type { MaterialGraphDiagnostic, MaterialIntrospection } from './material-introspection'
+import type { CompiledMaterialProfile, SchemaAdmissionBudget } from './material-profile'
 import { normalizeDocumentInput, validateSchemaIssues } from '@easyink/schema'
 import { cloneJsonValue, convertUnit, JsonValueValidationError } from '@easyink/shared'
+import { validateMaterialGraph as validateTypedMaterialGraph } from './material-introspection'
 
 export interface SchemaAdapterContext {
   documentVersion: string
@@ -212,9 +213,7 @@ export function loadDocumentWithProfile(
   ))
   const schema = { ...envelope, elements } as DocumentSchema
   rebuildFinalNodeStates(schema, nodeStates, nodeStateOwners)
-  const graphDiagnostics = validateMaterialGraph(schema, profile, new Set(
-    [...nodeStates].filter(([, state]) => state.status === 'quarantined').map(([id]) => id),
-  ))
+  const graphDiagnostics = runTypedGraphValidation(schema, profile, nodeStates)
   appendDiagnostics(diagnostics, graphDiagnostics)
   integrateNodeDiagnostics(schema, nodeStates, diagnostics)
   return {
@@ -289,7 +288,7 @@ export function validateDocumentWithProfile(
       }
     })
   }
-  const graphDiagnostics = validateMaterialGraph(schema, profile, excluded)
+  const graphDiagnostics = runTypedGraphValidation(schema, profile, nodeStates, excluded)
   appendDiagnostics(diagnostics, graphDiagnostics)
   integrateNodeDiagnostics(schema, nodeStates, diagnostics)
   return {
@@ -380,7 +379,15 @@ function loadNode(
   const currentIssues = callIssues(manifest.schemaAdapter.validate, node, context, path, 'validate', diagnostics, diagnosticOwner)
   if (!currentIssues.ok || currentIssues.hasErrors)
     return quarantineNode(node, diagnostics, nodeStates, nodeStateOwners, diagnosticOwner)
-  const introspection = callIntrospection(manifest.schemaAdapter, node, context, path, diagnostics, diagnosticOwner)
+  const introspection = callIntrospection(
+    manifest.schemaAdapter,
+    node,
+    context,
+    path,
+    diagnostics,
+    profile.admissionBudget,
+    diagnosticOwner,
+  )
   if (!introspection.ok)
     return quarantineNode(node, diagnostics, nodeStates, nodeStateOwners, diagnosticOwner)
   recordReadyNode(node, diagnostics, nodeStates, introspection.value, nodeStateOwners, diagnosticOwner)
@@ -412,7 +419,14 @@ function validateCurrentNode(
     quarantineNode(node, diagnostics, nodeStates)
     return
   }
-  const introspection = callIntrospection(manifest.schemaAdapter, node, context, path, diagnostics)
+  const introspection = callIntrospection(
+    manifest.schemaAdapter,
+    node,
+    context,
+    path,
+    diagnostics,
+    profile.admissionBudget,
+  )
   if (!introspection.ok) {
     quarantineNode(node, diagnostics, nodeStates)
     return
@@ -686,10 +700,18 @@ function callIntrospection(
   context: SchemaAdapterContext,
   path: `/${string}`,
   diagnostics: MaterialLoadDiagnostic[],
+  budget: Readonly<SchemaAdmissionBudget>,
   diagnosticOwner: object = node,
 ): { ok: true, value: Readonly<MaterialIntrospection> } | { ok: false } {
   try {
-    const value = cloneJsonValue(adapter.introspect(cloneAdaptableNode(node) as MaterialNode, context) as unknown as JsonValue) as unknown as MaterialIntrospection
+    const value = cloneJsonValue(
+      adapter.introspect(cloneAdaptableNode(node) as MaterialNode, context) as unknown as JsonValue,
+      {
+        maxDepth: budget.maxDepth,
+        maxNodes: budget.maxJsonNodes,
+        maxStringBytes: budget.maxStringBytes,
+      },
+    ) as unknown as MaterialIntrospection
     return { ok: true, value: deepFreeze(value) }
   }
   catch (error) {
@@ -1053,32 +1075,34 @@ function walkDiscoverableNodes(schema: unknown, visit: (id: string, type: string
   }
 }
 
-function validateMaterialGraph(
+function runTypedGraphValidation(
   schema: DocumentSchema,
   profile: CompiledMaterialProfile,
-  excluded: ReadonlySet<string>,
+  nodeStates: ReadonlyMap<string, MaterialNodeLoadState>,
+  excluded: ReadonlySet<string> = new Set(
+    [...nodeStates].filter(([, state]) => state.status === 'quarantined').map(([id]) => id),
+  ),
 ): MaterialLoadDiagnostic[] {
-  const diagnostics: MaterialLoadDiagnostic[] = []
-  const seen = new Set<string>()
-  walkCanonicalNodes(schema, (node, path) => {
-    if (seen.has(node.id))
-      appendDiagnostic(diagnostics, node, `${path}/id`, 'graph', 'MATERIAL_NODE_ID_DUPLICATE', 'Material node ID is duplicated')
-    else
-      seen.add(node.id)
-    if (excluded.has(node.id))
-      return
-    const manifest = profile.getManifest(node.type)
-    if (!manifest)
-      return
-    for (const slot of Object.keys(node.slots)) {
-      const matches = manifest.common.structure.slots.filter(policy => policy.key.kind === 'exact'
-        ? policy.key.value === slot
-        : slot.startsWith(policy.key.value))
-      if (matches.length !== 1)
-        appendDiagnostic(diagnostics, node, `${path}/slots/${escapePointer(slot)}`, 'graph', 'MATERIAL_SLOT_POLICY_INVALID', 'Material slot has no unique owner policy')
-    }
+  const introspectionByNodeId = new Map<string, Readonly<MaterialIntrospection>>()
+  for (const [nodeId, state] of nodeStates) {
+    if (state.introspection)
+      introspectionByNodeId.set(nodeId, state.introspection)
+  }
+  return validateTypedMaterialGraph(schema, profile, {
+    adapterExcludedNodeIds: excluded,
+    introspectionByNodeId,
+  }).map(toLoadGraphDiagnostic)
+}
+
+function toLoadGraphDiagnostic(item: MaterialGraphDiagnostic): MaterialLoadDiagnostic {
+  const code = item.code === 'MATERIAL_SLOT_POLICY_MISSING' || item.code === 'MATERIAL_SLOT_POLICY_AMBIGUOUS'
+    ? 'MATERIAL_SLOT_POLICY_INVALID'
+    : item.code
+  return freezeDiagnostic({
+    ...item,
+    code,
+    stage: 'graph',
   })
-  return diagnostics
 }
 
 function integrateNodeDiagnostics(

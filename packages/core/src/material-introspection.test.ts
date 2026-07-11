@@ -1,6 +1,7 @@
 import type { MaterialNode } from '@easyink/schema'
 import { describe, expect, it, vi } from 'vitest'
-import { admitMaterialGraph, cloneMaterialGraph, formatMaterialNodeAddress, inspectMaterialNode, readPointer, removePointer, validateMaterialGraph, walkMaterialNodes, writePointer } from './material-introspection'
+import { admitMaterialGraph } from './material-graph-admission'
+import { cloneMaterialGraph, evaluateMaterialSlotReparent, formatMaterialNodeAddress, inspectMaterialNode, readPointer, removePointer, validateMaterialGraph, walkMaterialNodes, writePointer } from './material-introspection'
 import { recordSchemaAdapter } from './schema-adapter'
 import { createTestCompiledMaterialProfile, createTestMaterialManifest } from './testing/material-profile'
 
@@ -129,23 +130,43 @@ describe('material graph introspection', () => {
     const adapter = {
       ...recordSchemaAdapter(1),
       introspect: (_node: MaterialNode) => ({
-        identities: [{
-          path: '/model/cells/c1/id' as const,
+        identities: [
+          ['/model/rows/r1/id', 'r1', 'table.row'],
+          ['/model/columns/c1/id', 'c1', 'table.column'],
+          ['/model/cells/cell1/id', 'cell1', 'table.cell'],
+          ['/model/bands/b1/id', 'b1', 'table.band'],
+          ['/model/merges/m1/id', 'm1', 'table.merge'],
+        ].map(([path, value, kind]) => ({
+          path: path as `/${string}`,
           location: 'value' as const,
-          value: 'c1',
-          target: { scope: 'material' as const, kind: 'table.cell' },
-        }],
+          value: value!,
+          target: { scope: 'material' as const, kind: kind! },
+        })),
         structures: [],
         resources: [],
         bindings: [],
-        references: [{
-          path: '/slots/cell:c1' as const,
-          location: 'key' as const,
-          encoding: { prefix: 'cell:' },
-          value: 'c1',
-          target: { scope: 'material' as const, kind: 'table.cell' },
-          required: true,
-        }],
+        references: [
+          ...[
+            ['/model/cells/cell1/rowId', 'r1', 'table.row'],
+            ['/model/cells/cell1/columnId', 'c1', 'table.column'],
+            ['/model/cells/cell1/bandId', 'b1', 'table.band'],
+            ['/model/cells/cell1/mergeId', 'm1', 'table.merge'],
+          ].map(([path, value, kind]) => ({
+            path: path as `/${string}`,
+            location: 'value' as const,
+            value: value!,
+            target: { scope: 'material' as const, kind: kind! },
+            required: true,
+          })),
+          {
+            path: '/slots/cell:cell1' as const,
+            location: 'key' as const,
+            encoding: { prefix: 'cell:' },
+            value: 'cell1',
+            target: { scope: 'material' as const, kind: 'table.cell' },
+            required: true,
+          },
+        ],
       }),
     }
     const profile = createTestCompiledMaterialProfile([
@@ -160,17 +181,36 @@ describe('material graph introspection', () => {
           reparent: 'same-material',
         }],
       }),
+      createTestMaterialManifest({ type: 'box' }),
     ])
-    const content = profile.createNode('private-table', { id: 'nested', model: { cells: { c1: { id: 'c1' } } }, slots: { 'cell:c1': [] } })
-    const result = cloneMaterialGraph([content], profile, {
-      createIdentity: identity => `copy-${identity.value}`,
+    const child = profile.createNode('box', { id: 'content' })
+    const content = profile.createNode('private-table', {
+      id: 'nested',
+      model: {
+        rows: { r1: { id: 'r1' } },
+        columns: { c1: { id: 'c1' } },
+        cells: { cell1: { id: 'cell1', rowId: 'r1', columnId: 'c1', bandId: 'b1', mergeId: 'm1' } },
+        bands: { b1: { id: 'b1' } },
+        merges: { m1: { id: 'm1' } },
+      },
+      slots: { 'cell:cell1': [child] },
     })
+    const createIdentity = vi.fn((identity: { value: string }) => `copy-${identity.value}`)
+    const result = cloneMaterialGraph([content], profile, { createIdentity })
 
     expect(result.diagnostics.filter(item => item.severity === 'error')).toEqual([])
+    expect(createIdentity).toHaveBeenCalledTimes(7)
+    expect(new Set(createIdentity.mock.calls.map(([identity]) => identity.value)).size).toBe(7)
     expect(result.roots[0]).toMatchObject({
       id: 'copy-nested',
-      model: { cells: { c1: { id: 'copy-c1' } } },
-      slots: { 'cell:copy-c1': [] },
+      model: {
+        rows: { r1: { id: 'copy-r1' } },
+        columns: { c1: { id: 'copy-c1' } },
+        cells: { cell1: { id: 'copy-cell1', rowId: 'copy-r1', columnId: 'copy-c1', bandId: 'copy-b1', mergeId: 'copy-m1' } },
+        bands: { b1: { id: 'copy-b1' } },
+        merges: { m1: { id: 'copy-m1' } },
+      },
+      slots: { 'cell:copy-cell1': [{ id: 'copy-content' }] },
     })
   })
 
@@ -195,6 +235,35 @@ describe('material graph introspection', () => {
     expect(validateMaterialGraph(schemaWith(first, second), profile)).toContainEqual(expect.objectContaining({
       code: 'MATERIAL_NODE_ID_DUPLICATE',
     }))
+  })
+
+  it('preserves value encoding while rekeying the logical identity', () => {
+    const adapter = {
+      ...recordSchemaAdapter(1),
+      introspect: () => ({
+        identities: [{
+          path: '/model/rowKey' as const,
+          location: 'value' as const,
+          encoding: { prefix: 'row:' },
+          value: 'r1',
+          target: { scope: 'material' as const, kind: 'table.row' },
+        }],
+        structures: [],
+        references: [],
+        resources: [],
+        bindings: [],
+      }),
+    }
+    const profile = createTestCompiledMaterialProfile([
+      createTestMaterialManifest({ type: 'encoded-box', schemaAdapter: adapter }),
+    ])
+    const node = profile.createNode('encoded-box', { model: { rowKey: 'row:r1' } })
+
+    const result = cloneMaterialGraph([node], profile, {
+      createIdentity: identity => `copy-${identity.value}`,
+    })
+
+    expect(result.roots[0]!.model.rowKey).toBe('row:copy-r1')
   })
 
   it('enforces a detached cumulative budget before invoking adapters', () => {
@@ -243,5 +312,62 @@ describe('material graph introspection', () => {
     expect(validateMaterialGraph(schemaWith(node), profile)).toContainEqual(expect.objectContaining({
       code: 'MATERIAL_REFERENCE_MISSING',
     }))
+  })
+
+  it('reintegrates graph errors into detached admission node states', () => {
+    const adapter = {
+      ...recordSchemaAdapter(1),
+      introspect: (node: MaterialNode) => ({
+        identities: [],
+        structures: [],
+        resources: [],
+        bindings: [],
+        references: [{
+          path: '/model/missing' as const,
+          location: 'value' as const,
+          value: String(node.model.missing),
+          target: { scope: 'document' as const, kind: 'node' },
+          required: true,
+        }],
+      }),
+    }
+    const profile = createTestCompiledMaterialProfile([
+      createTestMaterialManifest({ type: 'missing-reference', schemaAdapter: adapter }),
+    ])
+    const node = profile.createNode('missing-reference', { id: 'owner', model: { missing: 'outside' } })
+
+    const admitted = admitMaterialGraph([node], profile)
+
+    expect(admitted.nodeStates.get('owner')).toMatchObject({
+      status: 'quarantined',
+      code: 'MATERIAL_REFERENCE_MISSING',
+    })
+    expect(Object.isFrozen(admitted.nodeStates.get('owner'))).toBe(true)
+  })
+
+  it('evaluates both slot policies and treats same-slot reorder separately', () => {
+    const allowed = { reparent: 'allowed' as const }
+    const sameMaterial = { reparent: 'same-material' as const }
+    const forbidden = { reparent: 'forbidden' as const }
+    const base = {
+      sourceOwnerId: 'a',
+      sourceOwnerType: 'first',
+      sourceSlot: 'content',
+      targetOwnerId: 'b',
+      targetOwnerType: 'second',
+      targetSlot: 'content',
+    }
+
+    expect(evaluateMaterialSlotReparent({ ...base, sourcePolicy: forbidden, targetPolicy: allowed }).allowed).toBe(false)
+    expect(evaluateMaterialSlotReparent({ ...base, sourcePolicy: allowed, targetPolicy: sameMaterial }).allowed).toBe(false)
+    expect(evaluateMaterialSlotReparent({ ...base, targetOwnerType: 'first', sourcePolicy: sameMaterial, targetPolicy: allowed }).allowed).toBe(true)
+    expect(evaluateMaterialSlotReparent({ ...base, sourcePolicy: allowed, targetPolicy: allowed }).allowed).toBe(true)
+    expect(evaluateMaterialSlotReparent({
+      ...base,
+      sourceOwnerId: 'a',
+      targetOwnerId: 'a',
+      sourcePolicy: forbidden,
+      targetPolicy: forbidden,
+    }).allowed).toBe(true)
   })
 })

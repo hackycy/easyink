@@ -1,10 +1,9 @@
-import type { DocumentSchema, MaterialNode, UnitType } from '@easyink/schema'
-import type { JsonValue } from '@easyink/shared'
+import type { DocumentSchema, MaterialNode } from '@easyink/schema'
+import type { JsonValue, UnitType } from '@easyink/shared'
 import type { BindingExpression } from './material-binding'
-import type { CompiledMaterialProfile, SchemaAdmissionBudget } from './material-profile'
-import type { MaterialLoadDiagnostic, MaterialNodeLoadState } from './schema-adapter'
+import type { MaterialStructureSlotPolicy } from './material-manifest'
+import type { CompiledMaterialProfile } from './material-profile'
 import { cloneJsonValue, generateId } from '@easyink/shared'
-import { loadDocumentWithProfile } from './schema-adapter'
 
 export type JsonPointer = `/${string}`
 export type MaterialIdentityScope = 'document' | 'material'
@@ -93,9 +92,65 @@ export interface MaterialGraphDiagnostic {
 
 export interface MaterialGraphValidationOptions {
   adapterExcludedNodeIds?: ReadonlySet<string>
+  introspectionByNodeId?: ReadonlyMap<string, Readonly<MaterialIntrospection>>
+}
+
+export interface MaterialSlotReparentInput {
+  sourceOwnerId: string
+  sourceOwnerType: string
+  sourceSlot: string
+  sourcePolicy: Pick<MaterialStructureSlotPolicy, 'reparent'>
+  targetOwnerId: string
+  targetOwnerType: string
+  targetSlot: string
+  targetPolicy: Pick<MaterialStructureSlotPolicy, 'reparent'>
+}
+
+export interface MaterialSlotReparentResult {
+  allowed: boolean
+  reason?: 'forbidden' | 'material-type-mismatch'
+}
+
+export function evaluateMaterialSlotReparent(input: MaterialSlotReparentInput): MaterialSlotReparentResult {
+  if (input.sourceOwnerId === input.targetOwnerId && input.sourceSlot === input.targetSlot)
+    return { allowed: true }
+  if (input.sourcePolicy.reparent === 'forbidden' || input.targetPolicy.reparent === 'forbidden')
+    return { allowed: false, reason: 'forbidden' }
+  const requiresSameMaterial = input.sourcePolicy.reparent === 'same-material'
+    || input.targetPolicy.reparent === 'same-material'
+  if (requiresSameMaterial && input.sourceOwnerType !== input.targetOwnerType)
+    return { allowed: false, reason: 'material-type-mismatch' }
+  return { allowed: true }
 }
 
 const UNSAFE_TOKENS = new Set(['__proto__', 'prototype', 'constructor'])
+const INTROSPECTION_KEYS = new Set(['identities', 'structures', 'references', 'resources', 'bindings'])
+const IDENTITY_KEYS = new Set(['path', 'location', 'encoding', 'value', 'target'])
+const REFERENCE_KEYS = new Set([...IDENTITY_KEYS, 'required'])
+const RESOURCE_KEYS = new Set(['path', 'value', 'kind'])
+const BINDING_KEYS = new Set(['path', 'value', 'port'])
+const STRUCTURE_KEYS = new Set([
+  'path',
+  'slot',
+  'children',
+  'policyId',
+  'coordinateSpace',
+  'layoutParticipation',
+  'reparent',
+])
+const TARGET_KEYS = new Set(['scope', 'kind'])
+const ENCODING_KEYS = new Set(['prefix', 'suffix'])
+const BINDING_EXPRESSION_KEYS = new Set([
+  'sourceId',
+  'sourceName',
+  'sourceTag',
+  'fieldPath',
+  'fieldKey',
+  'fieldLabel',
+  'format',
+  'required',
+  'extensions',
+])
 
 function escapeToken(token: string): string {
   return token.replaceAll('~', '~0').replaceAll('/', '~1')
@@ -227,6 +282,7 @@ function inspectNode(
   profile: CompiledMaterialProfile,
   unit: UnitType,
   adapterExcluded: boolean,
+  admittedIntrospection?: Readonly<MaterialIntrospection>,
 ): { introspection: MaterialIntrospection, diagnostics: readonly MaterialGraphDiagnostic[] } {
   const diagnostics: MaterialGraphDiagnostic[] = []
   const standard = standardIntrospection(node, profile, diagnostics, adapterExcluded)
@@ -245,8 +301,10 @@ function inspectNode(
       maxNodes: profile.admissionBudget.maxJsonNodes,
       maxStringBytes: profile.admissionBudget.maxStringBytes,
     }) as unknown as MaterialNode
+    const rawCandidate = admittedIntrospection
+      ?? manifest.schemaAdapter.introspect(adapterNode, adapterContext(node.type, unit))
     const candidate = cloneJsonValue(
-      manifest.schemaAdapter.introspect(adapterNode, adapterContext(node.type, unit)) as unknown as JsonValue,
+      rawCandidate as unknown as JsonValue,
       {
         maxDepth: profile.admissionBudget.maxDepth,
         maxNodes: profile.admissionBudget.maxJsonNodes,
@@ -257,8 +315,14 @@ function inspectNode(
       throw new Error('MATERIAL_INTROSPECTION_INVALID')
     custom = candidate
   }
-  catch {
-    diagnostics.push(diagnostic(node, 'MATERIAL_INTROSPECTION_THROW', '/model', 'Material introspection failed'))
+  catch (error) {
+    const invalid = error instanceof Error && error.message === 'MATERIAL_INTROSPECTION_INVALID'
+    diagnostics.push(diagnostic(
+      node,
+      invalid ? 'MATERIAL_INTROSPECTION_INVALID' : 'MATERIAL_INTROSPECTION_THROW',
+      '/model',
+      invalid ? 'Material introspection is malformed' : 'Material introspection failed',
+    ))
   }
 
   const bindings = [...standard.bindings]
@@ -294,10 +358,140 @@ function inspectNode(
 }
 
 function isIntrospectionShape(value: unknown): value is MaterialIntrospection {
-  if (!value || typeof value !== 'object')
+  if (!isPlainRecord(value) || !hasOnlyOwnKeys(value, INTROSPECTION_KEYS))
     return false
-  return ['identities', 'structures', 'references', 'resources', 'bindings']
-    .every(key => Array.isArray(tryOwnValue(value, key)))
+  const identities = tryOwnArray(value, 'identities')
+  const structures = tryOwnArray(value, 'structures')
+  const references = tryOwnArray(value, 'references')
+  const resources = tryOwnArray(value, 'resources')
+  const bindings = tryOwnArray(value, 'bindings')
+  return identities?.every(isIdentityEntry) === true
+    && structures?.every(isStructureEntry) === true
+    && references?.every(isReferenceEntry) === true
+    && resources?.every(isResourceEntry) === true
+    && bindings?.every(isBindingEntry) === true
+}
+
+function isIdentityEntry(value: unknown): boolean {
+  return isPlainRecord(value)
+    && hasOnlyOwnKeys(value, IDENTITY_KEYS)
+    && isSemanticLocation(value)
+    && isTarget(tryOwnValue(value, 'target'))
+}
+
+function isReferenceEntry(value: unknown): boolean {
+  return isPlainRecord(value)
+    && hasOnlyOwnKeys(value, REFERENCE_KEYS)
+    && isSemanticLocation(value)
+    && isTarget(tryOwnValue(value, 'target'))
+    && typeof tryOwnValue(value, 'required') === 'boolean'
+}
+
+function isResourceEntry(value: unknown): boolean {
+  return isPlainRecord(value)
+    && hasOnlyOwnKeys(value, RESOURCE_KEYS)
+    && isCanonicalPointer(tryOwnValue(value, 'path'))
+    && typeof tryOwnValue(value, 'value') === 'string'
+    && ['asset', 'font'].includes(String(tryOwnValue(value, 'kind')))
+}
+
+function isBindingEntry(value: unknown): boolean {
+  const binding = isPlainRecord(value) ? tryOwnValue(value, 'value') : undefined
+  const sourceId = isPlainRecord(binding) ? tryOwnValue(binding, 'sourceId') : undefined
+  const fieldPath = isPlainRecord(binding) ? tryOwnValue(binding, 'fieldPath') : undefined
+  return isPlainRecord(value)
+    && hasOnlyOwnKeys(value, BINDING_KEYS)
+    && isCanonicalPointer(tryOwnValue(value, 'path'))
+    && typeof tryOwnValue(value, 'port') === 'string'
+    && String(tryOwnValue(value, 'port')).length > 0
+    && isPlainRecord(binding)
+    && hasOnlyOwnKeys(binding, BINDING_EXPRESSION_KEYS)
+    && typeof sourceId === 'string'
+    && sourceId.length > 0
+    && typeof fieldPath === 'string'
+    && fieldPath.length > 0
+    && ['sourceName', 'sourceTag', 'fieldKey', 'fieldLabel']
+      .every(key => optionalString(binding, key))
+      && optionalBoolean(binding, 'required')
+      && optionalRecord(binding, 'format')
+      && optionalRecord(binding, 'extensions')
+}
+
+function isStructureEntry(value: unknown): boolean {
+  return isPlainRecord(value)
+    && hasOnlyOwnKeys(value, STRUCTURE_KEYS)
+    && isCanonicalPointer(tryOwnValue(value, 'path'))
+    && typeof tryOwnValue(value, 'slot') === 'string'
+    && Array.isArray(tryOwnValue(value, 'children'))
+    && typeof tryOwnValue(value, 'policyId') === 'string'
+    && ['document', 'owner', 'slot'].includes(String(tryOwnValue(value, 'coordinateSpace')))
+    && ['independent', 'owner'].includes(String(tryOwnValue(value, 'layoutParticipation')))
+    && ['allowed', 'same-material', 'forbidden'].includes(String(tryOwnValue(value, 'reparent')))
+}
+
+function isSemanticLocation(value: unknown): boolean {
+  if (!isPlainRecord(value)
+    || !isCanonicalPointer(tryOwnValue(value, 'path'))
+    || !['value', 'key'].includes(String(tryOwnValue(value, 'location')))
+    || typeof tryOwnValue(value, 'value') !== 'string') {
+    return false
+  }
+  const encoding = tryOwnValue(value, 'encoding')
+  return encoding === undefined || (isPlainRecord(encoding)
+    && hasOnlyOwnKeys(encoding, ENCODING_KEYS)
+    && optionalString(encoding, 'prefix')
+    && optionalString(encoding, 'suffix'))
+}
+
+function isTarget(value: unknown): boolean {
+  return isPlainRecord(value)
+    && hasOnlyOwnKeys(value, TARGET_KEYS)
+    && ['document', 'material'].includes(String(tryOwnValue(value, 'scope')))
+    && typeof tryOwnValue(value, 'kind') === 'string'
+    && String(tryOwnValue(value, 'kind')).length > 0
+}
+
+function isCanonicalPointer(value: unknown): value is JsonPointer {
+  if (typeof value !== 'string' || !/^(?:\/(?:[^~/]|~[01])*)+$/u.test(value))
+    return false
+  try {
+    decodePointer(value as JsonPointer)
+    return true
+  }
+  catch {
+    return false
+  }
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    return false
+  const prototype = Object.getPrototypeOf(value)
+  return prototype === Object.prototype || prototype === null
+}
+
+function tryOwnArray(value: object, key: string): readonly unknown[] | undefined {
+  const candidate = tryOwnValue(value, key)
+  return Array.isArray(candidate) ? candidate : undefined
+}
+
+function optionalString(value: object, key: string): boolean {
+  const candidate = tryOwnValue(value, key)
+  return candidate === undefined || typeof candidate === 'string'
+}
+
+function optionalBoolean(value: object, key: string): boolean {
+  const candidate = tryOwnValue(value, key)
+  return candidate === undefined || typeof candidate === 'boolean'
+}
+
+function optionalRecord(value: object, key: string): boolean {
+  const candidate = tryOwnValue(value, key)
+  return candidate === undefined || isPlainRecord(candidate)
+}
+
+function hasOnlyOwnKeys(value: object, allowed: ReadonlySet<string>): boolean {
+  return Reflect.ownKeys(value).every(key => typeof key === 'string' && allowed.has(key))
 }
 
 function standardIntrospection(
@@ -345,7 +539,7 @@ function standardIntrospection(
   }
   const bindings = Object.entries(node.bindings).map(([port, value]): MaterialBindingSlot => ({
     path: `/bindings/${escapeToken(port)}`,
-    value,
+    value: value as unknown as BindingExpression,
     port,
   }))
   const resources: MaterialResourceSlot[] = []
@@ -394,7 +588,10 @@ function validateEntries(
           && token === `${entry.encoding?.prefix ?? ''}${String(entry.value)}${entry.encoding?.suffix ?? ''}`
       }
       else {
-        matches = semanticValuesEqual(readPointer(node, entry.path), entry.value)
+        const expected = entry.location === 'value' && typeof entry.value === 'string'
+          ? encodeIdentity(entry.value, entry.encoding)
+          : entry.value
+        matches = semanticValuesEqual(readPointer(node, entry.path), expected)
       }
     }
     catch {
@@ -494,12 +691,19 @@ function walkGraph(
   schema: DocumentSchema,
   profile: CompiledMaterialProfile,
   adapterExcludedNodeIds: ReadonlySet<string>,
-  visitor: MaterialNodeVisitor,
-  onDiagnostic?: (item: MaterialGraphDiagnostic) => void,
+  visitor: (
+    node: MaterialNode,
+    address: MaterialNodeAddress,
+    introspection: MaterialIntrospection,
+    nodePath: JsonPointer,
+  ) => void,
+  onDiagnostic?: (item: MaterialGraphDiagnostic, nodePath: JsonPointer) => void,
+  introspectionByNodeId?: ReadonlyMap<string, Readonly<MaterialIntrospection>>,
 ): void {
-  const stack = schema.elements.map(node => ({
+  const stack = schema.elements.map((node, index) => ({
     node,
     address: { nodeId: node.id, ancestors: [] as MaterialSlotAddress[] },
+    path: `/elements/${index}` as JsonPointer,
   })).reverse()
   while (stack.length > 0) {
     const current = stack.pop()!
@@ -508,8 +712,9 @@ function walkGraph(
       profile,
       schema.unit,
       adapterExcludedNodeIds.has(current.node.id),
+      introspectionByNodeId?.get(current.node.id),
     )
-    inspected.diagnostics.forEach(item => onDiagnostic?.(item))
+    inspected.diagnostics.forEach(item => onDiagnostic?.(item, current.path))
     visitor(
       current.node,
       Object.freeze({
@@ -517,6 +722,7 @@ function walkGraph(
         ancestors: Object.freeze([...current.address.ancestors]),
       }),
       inspected.introspection,
+      current.path,
     )
     const slots = Object.entries(current.node.slots)
     for (let slotIndex = slots.length - 1; slotIndex >= 0; slotIndex -= 1) {
@@ -531,6 +737,7 @@ function walkGraph(
               { ownerNodeId: current.node.id, slot, index },
             ],
           },
+          path: `${current.path}/slots/${escapeToken(slot)}/${index}`,
         })
       }
     }
@@ -544,9 +751,9 @@ export function validateMaterialGraph(
 ): MaterialGraphDiagnostic[] {
   const diagnostics: MaterialGraphDiagnostic[] = []
   const identities = new Map<MaterialIdentityKey, MaterialIdentitySlot>()
-  const references: Array<{ node: MaterialNode, entry: MaterialReferenceSlot }> = []
+  const references: Array<{ node: MaterialNode, entry: MaterialReferenceSlot, nodePath: JsonPointer }> = []
   const excluded = options.adapterExcludedNodeIds ?? new Set<string>()
-  walkGraph(schema, profile, excluded, (node, _address, introspection) => {
+  walkGraph(schema, profile, excluded, (node, _address, introspection, nodePath) => {
     for (const entry of introspection.identities) {
       const key = formatMaterialIdentityKey({
         ownerNodeId: node.id,
@@ -555,22 +762,22 @@ export function validateMaterialGraph(
         value: entry.value,
       })
       if (identities.has(key)) {
-        diagnostics.push(diagnostic(
+        diagnostics.push(withNodePath(diagnostic(
           node,
           entry.target.scope === 'document' && entry.target.kind === 'node'
             ? 'MATERIAL_NODE_ID_DUPLICATE'
             : 'MATERIAL_IDENTITY_DUPLICATE',
           entry.path,
           `Duplicate ${entry.target.kind} identity`,
-        ))
+        ), nodePath))
       }
       else {
         identities.set(key, entry)
       }
     }
-    references.push(...introspection.references.map(entry => ({ node, entry })))
-  }, item => diagnostics.push(item))
-  for (const { node, entry } of references) {
+    references.push(...introspection.references.map(entry => ({ node, entry, nodePath })))
+  }, (item, nodePath) => diagnostics.push(withNodePath(item, nodePath)), options.introspectionByNodeId)
+  for (const { node, entry, nodePath } of references) {
     const key = formatMaterialIdentityKey({
       ownerNodeId: node.id,
       scope: entry.target.scope,
@@ -578,16 +785,20 @@ export function validateMaterialGraph(
       value: entry.value,
     })
     if (!identities.has(key)) {
-      diagnostics.push(diagnostic(
+      diagnostics.push(withNodePath(diagnostic(
         node,
         entry.required ? 'MATERIAL_REFERENCE_MISSING' : 'MATERIAL_REFERENCE_EXTERNAL',
         entry.path,
         'Reference target is outside the material graph',
         entry.required ? 'error' : 'warning',
-      ))
+      ), nodePath))
     }
   }
   return diagnostics
+}
+
+function withNodePath(item: MaterialGraphDiagnostic, nodePath: JsonPointer): MaterialGraphDiagnostic {
+  return { ...item, path: `${nodePath}${item.path}` }
 }
 
 export interface MaterialIdentity {
@@ -796,11 +1007,11 @@ function rewriteEntry(
   replacement: string,
 ): void {
   if (entry.location === 'value') {
-    writePointer(node, entry.path, replacement)
+    writePointer(node, entry.path, encodeIdentity(replacement, entry.encoding))
     return
   }
   const { parent, token } = pointerParent(node, entry.path)
-  const nextToken = `${entry.encoding?.prefix ?? ''}${replacement}${entry.encoding?.suffix ?? ''}`
+  const nextToken = encodeIdentity(replacement, entry.encoding)
   if (token === nextToken)
     return
   if (Object.hasOwn(parent, nextToken))
@@ -809,7 +1020,11 @@ function rewriteEntry(
   if (!descriptor || !('value' in descriptor))
     throw new Error('MATERIAL_POINTER_MISSING')
   Object.defineProperty(parent, nextToken, descriptor)
-  delete parent[token]
+  delete (parent as Record<string, unknown>)[token]
+}
+
+function encodeIdentity(value: string, encoding?: MaterialIdentityEncoding): string {
+  return `${encoding?.prefix ?? ''}${value}${encoding?.suffix ?? ''}`
 }
 
 export function cloneMaterialSubgraph(
@@ -825,70 +1040,13 @@ export function cloneMaterialSubgraph(
   }
 }
 
-export function admitMaterialGraph(
-  roots: readonly unknown[],
-  profile: CompiledMaterialProfile,
-  budget: Partial<SchemaAdmissionBudget> = {},
-): Readonly<{
-  roots: readonly MaterialNode[]
-  nodeStates: ReadonlyMap<string, MaterialNodeLoadState>
-  diagnostics: readonly MaterialLoadDiagnostic[]
-}> {
-  const effectiveBudget = resolveAdmissionBudget(profile.admissionBudget, budget)
-  const admissionProfile = Object.create(profile) as CompiledMaterialProfile
-  Object.defineProperty(admissionProfile, 'admissionBudget', { value: effectiveBudget })
-  const loaded = loadDocumentWithProfile(detachedSchemaInput(roots), admissionProfile)
-  if (loaded.schema.elements.length === 0) {
-    return Object.freeze({
-      roots: Object.freeze([...loaded.schema.elements]),
-      nodeStates: loaded.nodeStates,
-      diagnostics: loaded.diagnostics,
-    })
-  }
-  const adapterExcludedNodeIds = new Set(
-    [...loaded.nodeStates]
-      .filter(([, state]) => state.status === 'quarantined')
-      .map(([nodeId]) => nodeId),
-  )
-  const graphDiagnostics = validateMaterialGraph(loaded.schema, admissionProfile, {
-    adapterExcludedNodeIds,
-  }).map(toLoadDiagnostic)
-  return Object.freeze({
-    roots: Object.freeze([...loaded.schema.elements]),
-    nodeStates: loaded.nodeStates,
-    diagnostics: Object.freeze([...loaded.diagnostics, ...graphDiagnostics]),
-  })
-}
-
-function resolveAdmissionBudget(
-  ceiling: Readonly<SchemaAdmissionBudget>,
-  requested: Partial<SchemaAdmissionBudget>,
-): Readonly<SchemaAdmissionBudget> {
-  const result = { ...ceiling }
-  for (const key of Object.keys(requested) as Array<keyof SchemaAdmissionBudget>) {
-    const value = requested[key]
-    if (!Number.isSafeInteger(value) || value! <= 0 || value! > ceiling[key])
-      throw new Error('MATERIAL_GRAPH_BUDGET_INVALID')
-    result[key] = value!
-  }
-  return Object.freeze(result)
-}
-
-function toLoadDiagnostic(item: MaterialGraphDiagnostic): MaterialLoadDiagnostic {
-  return Object.freeze({ ...item, stage: 'graph' })
-}
-
 function detachedSchema(roots: readonly MaterialNode[]): DocumentSchema {
-  return detachedSchemaInput(roots) as DocumentSchema
-}
-
-function detachedSchemaInput(roots: readonly unknown[]) {
   return {
     version: '1.0.0',
-    unit: 'mm' as const,
-    page: { mode: 'fixed' as const, width: 1, height: 1 },
+    unit: 'mm',
+    page: { mode: 'fixed', width: 1, height: 1 },
     guides: { x: [], y: [] },
-    elements: roots,
+    elements: [...roots],
   }
 }
 

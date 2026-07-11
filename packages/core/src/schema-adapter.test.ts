@@ -24,6 +24,66 @@ function canonicalSchema(...elements: MaterialNode[]): DocumentSchema {
 }
 
 describe('loadDocumentWithProfile', () => {
+  it('quarantines malformed introspection entries without throwing', () => {
+    const adapter: SchemaAdapter = {
+      ...createTestMaterialManifest({ type: 'seed' }).schemaAdapter,
+      introspect: () => ({
+        identities: [{
+          path: '/model/id',
+          location: 'value',
+          value: 'x',
+          target: { scope: 'material', kind: 'private' },
+          unexpected: true,
+        }] as never,
+        structures: [],
+        references: [],
+        resources: [],
+        bindings: [],
+      }),
+    }
+    const profile = createTestCompiledMaterialProfile([
+      createTestMaterialManifest({ type: 'malformed', schemaAdapter: adapter }),
+    ])
+
+    const result = loadDocumentWithProfile(schemaWith(profile.createNode('malformed')), profile)
+
+    expect(result.nodeStates.values().next().value).toMatchObject({
+      status: 'quarantined',
+      code: 'MATERIAL_INTROSPECTION_INVALID',
+    })
+  })
+
+  it('runs typed graph validation once using the admitted introspection sidecar', () => {
+    const introspect = vi.fn((node: MaterialNode) => ({
+      identities: [],
+      structures: [],
+      resources: [],
+      bindings: [],
+      references: [{
+        path: '/model/peer' as const,
+        location: 'value' as const,
+        value: String(node.model.peer),
+        target: { scope: 'document' as const, kind: 'node' },
+        required: true,
+      }],
+    }))
+    const adapter: SchemaAdapter = {
+      ...createTestMaterialManifest({ type: 'seed' }).schemaAdapter,
+      introspect,
+    }
+    const profile = createTestCompiledMaterialProfile([
+      createTestMaterialManifest({ type: 'graph-box', schemaAdapter: adapter }),
+    ])
+    const node = profile.createNode('graph-box', { id: 'owner', model: { peer: 'outside' } })
+
+    const result = loadDocumentWithProfile(schemaWith(node), profile)
+
+    expect(introspect).toHaveBeenCalledOnce()
+    expect(result.nodeStates.get('owner')).toMatchObject({
+      status: 'quarantined',
+      code: 'MATERIAL_REFERENCE_MISSING',
+    })
+  })
   it('runs the adapter stages in order through exact one-step migrations', () => {
     const phases: string[] = []
     const adapter: SchemaAdapter = {

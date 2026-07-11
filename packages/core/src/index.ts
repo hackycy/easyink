@@ -216,6 +216,7 @@ export type {
   TextFilePropertyValueInput,
   ToolbarAction,
 } from './material-extension'
+export { admitMaterialGraph } from './material-graph-admission'
 export type {
   CloneMaterialGraphOptions,
   CloneMaterialGraphResult,
@@ -235,13 +236,15 @@ export type {
   MaterialReferenceSlot,
   MaterialResourceSlot,
   MaterialSlotAddress,
+  MaterialSlotReparentInput,
+  MaterialSlotReparentResult,
   MaterialStructureSlot,
 } from './material-introspection'
 export {
-  admitMaterialGraph,
   cloneMaterialGraph,
   cloneMaterialSubgraph,
   createDefaultGraphIdentity,
+  evaluateMaterialSlotReparent,
   formatMaterialIdentityKey,
   formatMaterialNodeAddress,
   inspectMaterialNode,
