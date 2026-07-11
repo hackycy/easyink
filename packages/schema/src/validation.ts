@@ -240,7 +240,8 @@ function validateMaterialNode(value: unknown, path: string, issues: SchemaValida
     for (const [port, binding] of Object.entries(value.bindings))
       validateMaterialBinding(binding, `${path}/bindings/${escapePointer(port)}`, issues)
   }
-  validateEditorState(value.editorState, path, issues)
+  if (Object.hasOwn(value, 'editorState'))
+    validateEditorState(value.editorState, path, issues)
   validateMaterialOutput(value.output, path, issues)
 }
 
@@ -279,6 +280,10 @@ function validateMaterialCompat(value: unknown, path: string, issues: SchemaVali
 function validateBindingRef(value: unknown, path: string, issues: SchemaValidationIssue[]): void {
   if (!isObject(value)) {
     issues.push(createIssue(path, 'must be a binding reference', 'schema.material.binding-ref.invalid'))
+    return
+  }
+  if (Object.hasOwn(value, 'kind')) {
+    issues.push(createIssue(`${path}/kind`, 'must be omitted from binding references', 'schema.material.binding-ref.kind.invalid'))
     return
   }
   if (typeof value.sourceId !== 'string' || value.sourceId.length === 0)
@@ -388,25 +393,23 @@ function validateGeometry(value: Record<string, unknown>, path: string, issues: 
       issues.push(createIssue(`${path}/${field}`, 'must be a positive finite number', `schema.material.${field}.invalid`))
   }
   for (const field of ['rotation', 'zIndex'] as const) {
-    if (value[field] != null && (typeof value[field] !== 'number' || !Number.isFinite(value[field])))
+    if (Object.hasOwn(value, field) && (typeof value[field] !== 'number' || !Number.isFinite(value[field])))
       issues.push(createIssue(`${path}/${field}`, 'must be a finite number when provided', `schema.material.${field}.invalid`))
   }
-  if (value.alpha != null && (typeof value.alpha !== 'number' || !Number.isFinite(value.alpha) || value.alpha < 0 || value.alpha > 1))
+  if (Object.hasOwn(value, 'alpha') && (typeof value.alpha !== 'number' || !Number.isFinite(value.alpha) || value.alpha < 0 || value.alpha > 1))
     issues.push(createIssue(`${path}/alpha`, 'must be a number between 0 and 1 when provided', 'schema.material.alpha.invalid'))
 }
 
 function validateEditorState(value: unknown, path: string, issues: SchemaValidationIssue[]): void {
-  if (value == null)
-    return
   const editorPath = `${path}/editorState`
   if (!isObject(value)) {
     issues.push(createIssue(editorPath, 'must be an object when provided', 'schema.material.editor-state.invalid'))
     return
   }
-  if (value.name != null && typeof value.name !== 'string')
+  if (Object.hasOwn(value, 'name') && typeof value.name !== 'string')
     issues.push(createIssue(`${editorPath}/name`, 'must be a string when provided', 'schema.material.editor-state.name.invalid'))
   for (const field of ['locked', 'hidden'] as const) {
-    if (value[field] != null && typeof value[field] !== 'boolean')
+    if (Object.hasOwn(value, field) && typeof value[field] !== 'boolean')
       issues.push(createIssue(`${editorPath}/${field}`, 'must be a boolean when provided', `schema.material.editor-state.${field}.invalid`))
   }
 }
@@ -419,22 +422,22 @@ function validateMaterialOutput(value: unknown, path: string, issues: SchemaVali
   }
   if (value.visibility !== 'include' && value.visibility !== 'remove' && value.visibility !== 'reserve')
     issues.push(createIssue(`${outputPath}/visibility`, 'must be include, remove, or reserve', 'schema.material.output.visibility.invalid'))
-  if (value.renderCondition != null)
+  if (Object.hasOwn(value, 'renderCondition'))
     validateRenderCondition(value.renderCondition, `${outputPath}/renderCondition`, issues)
-  if (value.print != null && (typeof value.print !== 'string' || !PRINT_BEHAVIORS.has(value.print)))
+  if (Object.hasOwn(value, 'print') && (typeof value.print !== 'string' || !PRINT_BEHAVIORS.has(value.print)))
     issues.push(createIssue(`${outputPath}/print`, 'must be a supported print behavior', 'schema.material.output.print.invalid'))
-  if (value.placement != null) {
+  if (Object.hasOwn(value, 'placement')) {
     if (!isObject(value.placement))
       issues.push(createIssue(`${outputPath}/placement`, 'must be an object when provided', 'schema.material.output.placement.invalid'))
-    else if (value.placement.mode != null && value.placement.mode !== 'flow' && value.placement.mode !== 'fixed')
+    else if (Object.hasOwn(value.placement, 'mode') && value.placement.mode !== 'flow' && value.placement.mode !== 'fixed')
       issues.push(createIssue(`${outputPath}/placement/mode`, 'must be flow or fixed when provided', 'schema.material.output.placement.mode.invalid'))
   }
-  if (value.break != null)
+  if (Object.hasOwn(value, 'break'))
     validateBreakConfig(value.break, `${outputPath}/break`, issues)
-  if (value.repeat != null) {
+  if (Object.hasOwn(value, 'repeat')) {
     if (!isObject(value.repeat))
       issues.push(createIssue(`${outputPath}/repeat`, 'must be an object when provided', 'schema.material.output.repeat.invalid'))
-    else if (value.repeat.scope != null && value.repeat.scope !== 'none' && value.repeat.scope !== 'every-output-page')
+    else if (Object.hasOwn(value.repeat, 'scope') && value.repeat.scope !== 'none' && value.repeat.scope !== 'every-output-page')
       issues.push(createIssue(`${outputPath}/repeat/scope`, 'must be none or every-output-page when provided', 'schema.material.output.repeat.scope.invalid'))
   }
   if (Object.hasOwn(value, 'animations')) {
@@ -467,10 +470,10 @@ function validateBreakConfig(value: unknown, path: string, issues: SchemaValidat
     issues.push(createIssue(path, 'must be an object when provided', 'schema.material.output.break.invalid'))
     return
   }
-  if (value.keepTogether != null && typeof value.keepTogether !== 'boolean')
+  if (Object.hasOwn(value, 'keepTogether') && typeof value.keepTogether !== 'boolean')
     issues.push(createIssue(`${path}/keepTogether`, 'must be a boolean when provided', 'schema.material.output.break.keep-together.invalid'))
   for (const field of ['before', 'after'] as const) {
-    if (value[field] != null && value[field] !== 'auto' && value[field] !== 'page')
+    if (Object.hasOwn(value, field) && value[field] !== 'auto' && value[field] !== 'page')
       issues.push(createIssue(`${path}/${field}`, 'must be auto or page when provided', `schema.material.output.break.${field}.invalid`))
   }
 }
@@ -480,13 +483,13 @@ function validateRenderCondition(value: unknown, path: string, issues: SchemaVal
     issues.push(createIssue(path, 'must be an object', 'schema.condition.invalid'))
     return
   }
-  if (value.enabled != null && typeof value.enabled !== 'boolean')
+  if (Object.hasOwn(value, 'enabled') && typeof value.enabled !== 'boolean')
     issues.push(createIssue(joinPointer(path, 'enabled'), 'must be a boolean when provided', 'schema.condition.enabled.invalid'))
   if (value.whenMatched !== 'show' && value.whenMatched !== 'hide')
     issues.push(createIssue(joinPointer(path, 'whenMatched'), 'must be show or hide', 'schema.condition.whenMatched.invalid'))
-  if (value.whenHidden != null && value.whenHidden !== 'remove' && value.whenHidden !== 'reserve')
+  if (Object.hasOwn(value, 'whenHidden') && value.whenHidden !== 'remove' && value.whenHidden !== 'reserve')
     issues.push(createIssue(joinPointer(path, 'whenHidden'), 'must be remove or reserve when provided', 'schema.condition.whenHidden.invalid'))
-  if (value.onUnknown != null && value.onUnknown !== 'show' && value.onUnknown !== 'hide')
+  if (Object.hasOwn(value, 'onUnknown') && value.onUnknown !== 'show' && value.onUnknown !== 'hide')
     issues.push(createIssue(joinPointer(path, 'onUnknown'), 'must be show or hide when provided', 'schema.condition.onUnknown.invalid'))
   if (!Array.isArray(value.groups)) {
     issues.push(createIssue(joinPointer(path, 'groups'), 'must be an array', 'schema.condition.groups.invalid'))
@@ -528,13 +531,13 @@ function validateConditionRow(value: unknown, path: string, issues: SchemaValida
     issues.push(createIssue(joinPointer(path, 'operator'), 'must be a condition operator object', 'schema.condition.operator.invalid'))
   else if (typeof compare !== 'string' || !CONDITION_COMPARE_OPERATORS.has(compare))
     issues.push(createIssue(joinPointer(path, 'operator', 'compare'), 'must be a supported comparison operator', 'schema.condition.operator.compare.invalid'))
-  if (operator?.quantifier != null && (typeof operator.quantifier !== 'string' || !CONDITION_QUANTIFIERS.has(operator.quantifier)))
+  if (operator && Object.hasOwn(operator, 'quantifier') && (typeof operator.quantifier !== 'string' || !CONDITION_QUANTIFIERS.has(operator.quantifier)))
     issues.push(createIssue(joinPointer(path, 'operator', 'quantifier'), 'must be any, all, or none when provided', 'schema.condition.operator.quantifier.invalid'))
   const unary = compare === 'exists' || compare === 'notExists' || compare === 'isEmpty' || compare === 'isNotEmpty'
   if (unary) {
-    if (value.value != null)
+    if (Object.hasOwn(value, 'value'))
       issues.push(createIssue(joinPointer(path, 'value'), 'must be omitted for unary operators', 'schema.condition.value.arity.invalid'))
-    if (value.valueType != null)
+    if (Object.hasOwn(value, 'valueType'))
       issues.push(createIssue(joinPointer(path, 'valueType'), 'must be omitted for unary operators', 'schema.condition.valueType.unexpected'))
   }
   else {
@@ -560,7 +563,7 @@ function validateConditionRow(value: unknown, path: string, issues: SchemaValida
       validateConditionValue(value.value, joinPointer(path, 'value'), issues, valueType)
     }
   }
-  if (value.options != null)
+  if (Object.hasOwn(value, 'options'))
     issues.push(createIssue(joinPointer(path, 'options'), 'must be omitted', 'schema.condition.options.unexpected'))
 }
 

@@ -144,6 +144,15 @@ describe('validateSchema', () => {
         .toContainEqual(expect.objectContaining({ path: '/elements/0/bindings/value/kind' }))
     })
 
+    it('rejects unknown discriminators inside binding arrays', () => {
+      const node = {
+        ...materialNode('array-binding-kind'),
+        bindings: { value: [{ kind: 'typo', sourceId: 'source', fieldPath: 'value' }] },
+      }
+      expect(validateSchemaIssues({ ...validSchema, elements: [node] }))
+        .toContainEqual(expect.objectContaining({ path: '/elements/0/bindings/value/0/kind' }))
+    })
+
     it('validates data-contract relation, mappings, selects, required, and format', () => {
       const node = {
         ...materialNode('bad-contract'),
@@ -282,6 +291,35 @@ describe('validateSchema', () => {
         expect.objectContaining({ path: '/elements/0/output/animations/0/delay' }),
         expect.objectContaining({ path: '/elements/0/output/animations/0/options' }),
       ]))
+    })
+
+    it.each([
+      ['rotation', (node: Record<string, unknown>) => { node.rotation = null }, '/elements/0/rotation'],
+      ['alpha', (node: Record<string, unknown>) => { node.alpha = null }, '/elements/0/alpha'],
+      ['zIndex', (node: Record<string, unknown>) => { node.zIndex = null }, '/elements/0/zIndex'],
+      ['editorState', (node: Record<string, unknown>) => { node.editorState = null }, '/elements/0/editorState'],
+      ['editorState.name', (node: Record<string, unknown>) => { node.editorState = { name: null } }, '/elements/0/editorState/name'],
+      ['editorState.locked', (node: Record<string, unknown>) => { node.editorState = { locked: null } }, '/elements/0/editorState/locked'],
+      ['editorState.hidden', (node: Record<string, unknown>) => { node.editorState = { hidden: null } }, '/elements/0/editorState/hidden'],
+      ['output.renderCondition', (node: Record<string, unknown>) => { (node.output as Record<string, unknown>).renderCondition = null }, '/elements/0/output/renderCondition'],
+      ['output.renderCondition.enabled', (node: Record<string, unknown>) => { (node.output as Record<string, unknown>).renderCondition = { whenMatched: 'show', groups: [], enabled: null } }, '/elements/0/output/renderCondition/enabled'],
+      ['output.renderCondition.whenHidden', (node: Record<string, unknown>) => { (node.output as Record<string, unknown>).renderCondition = { whenMatched: 'show', groups: [], whenHidden: null } }, '/elements/0/output/renderCondition/whenHidden'],
+      ['output.renderCondition.onUnknown', (node: Record<string, unknown>) => { (node.output as Record<string, unknown>).renderCondition = { whenMatched: 'show', groups: [], onUnknown: null } }, '/elements/0/output/renderCondition/onUnknown'],
+      ['output.print', (node: Record<string, unknown>) => { (node.output as Record<string, unknown>).print = null }, '/elements/0/output/print'],
+      ['output.placement', (node: Record<string, unknown>) => { (node.output as Record<string, unknown>).placement = null }, '/elements/0/output/placement'],
+      ['output.placement.mode', (node: Record<string, unknown>) => { (node.output as Record<string, unknown>).placement = { mode: null } }, '/elements/0/output/placement/mode'],
+      ['output.break', (node: Record<string, unknown>) => { (node.output as Record<string, unknown>).break = null }, '/elements/0/output/break'],
+      ['output.break.keepTogether', (node: Record<string, unknown>) => { (node.output as Record<string, unknown>).break = { keepTogether: null } }, '/elements/0/output/break/keepTogether'],
+      ['output.break.before', (node: Record<string, unknown>) => { (node.output as Record<string, unknown>).break = { before: null } }, '/elements/0/output/break/before'],
+      ['output.break.after', (node: Record<string, unknown>) => { (node.output as Record<string, unknown>).break = { after: null } }, '/elements/0/output/break/after'],
+      ['output.repeat', (node: Record<string, unknown>) => { (node.output as Record<string, unknown>).repeat = null }, '/elements/0/output/repeat'],
+      ['output.repeat.scope', (node: Record<string, unknown>) => { (node.output as Record<string, unknown>).repeat = { scope: null } }, '/elements/0/output/repeat/scope'],
+      ['output.animations', (node: Record<string, unknown>) => { (node.output as Record<string, unknown>).animations = null }, '/elements/0/output/animations'],
+    ])('rejects explicit null for optional canonical field %s', (_name, mutate, path) => {
+      const node = materialNode('null-option') as Record<string, unknown>
+      mutate(node)
+      expect(validateSchemaIssues({ ...validSchema, elements: [node] }))
+        .toContainEqual(expect.objectContaining({ path }))
     })
   })
 
