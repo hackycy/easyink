@@ -64,6 +64,28 @@ describe('compileMaterialProfile', () => {
     expect(calls).toBe(0)
   })
 
+  it.each([1_000_000, 0xFFFF_FFFF])('rejects sparse package arrays of length %s before target allocation', (length) => {
+    const packages: unknown[] = []
+    packages.length = length
+    const originalFrom = Array.from
+    const allocations: number[] = []
+    const from = vi.spyOn(Array, 'from').mockImplementation(((value: ArrayLike<unknown>) => {
+      const candidateLength = typeof value?.length === 'number' ? value.length : 0
+      allocations.push(candidateLength)
+      if (candidateLength > 10_000)
+        throw new Error('LARGE_TARGET_ALLOCATION_ATTEMPTED')
+      return originalFrom(value)
+    }) as typeof Array.from)
+    try {
+      expect(() => compileMaterialProfile({ id: 'test', engineVersion: '0.0.30', packages } as never))
+        .toThrowError(expect.objectContaining({ code: 'MATERIAL_PROFILE_STRUCTURE_INVALID' }))
+      expect(allocations.every(size => size <= 10_000)).toBe(true)
+    }
+    finally {
+      from.mockRestore()
+    }
+  })
+
   it('stores deeply frozen manifest snapshots insulated from caller mutation', () => {
     const base = createTestMaterialManifest({ type: 'mutable' })
     const source = {
@@ -383,6 +405,37 @@ describe('compiledMaterialProfile.createNode', () => {
     const manifest = createTestMaterialManifest({ type: `throws-${phase}`, schemaAdapter: adapter })
     const profile = compileMaterialProfile({ id: 'test', engineVersion: '0.0.30', packages: [packageOf([manifest])] })
     expect(() => profile.createNode(manifest.type, { id: 'n' }, phase === 'convert' ? 'px' : undefined))
+      .toThrowError(expect.objectContaining({ code }))
+  })
+
+  it.each([
+    ['undefined', () => undefined as never],
+    ['invalid JSON', (node: Parameters<SchemaAdapter['normalize']>[0]) => ({ ...node, model: { invalid: undefined } })],
+  ] as const)('wraps a normalize %s result without leaking a JSON validation error', (_name, normalize) => {
+    const base = createTestMaterialManifest({ type: 'seed' }).schemaAdapter
+    const manifest = createTestMaterialManifest({ type: 'normalize-result', schemaAdapter: { ...base, normalize } })
+    const profile = compileMaterialProfile({ id: 'test', engineVersion: '0.0.30', packages: [packageOf([manifest])] })
+
+    expect(() => profile.createNode('normalize-result', { id: 'n' }))
+      .toThrowError(expect.objectContaining({ code: 'MATERIAL_ADAPTER_NORMALIZE_RESULT_INVALID' }))
+  })
+
+  it.each([
+    ['validate-input', 'MATERIAL_ADAPTER_VALIDATE_INPUT_MUTATION_INVALID'],
+    ['validate', 'MATERIAL_ADAPTER_VALIDATE_MUTATION_INVALID'],
+  ] as const)('wraps invalid %s candidate mutation in a stable phase error', (phase, code) => {
+    const base = createTestMaterialManifest({ type: 'seed' }).schemaAdapter
+    const mutate = (node: Parameters<SchemaAdapter['validate']>[0]) => {
+      ;(node.model as Record<string, unknown>).invalid = undefined
+      return []
+    }
+    const adapter = phase === 'validate-input'
+      ? { ...base, validateInput: mutate }
+      : { ...base, validate: mutate }
+    const manifest = createTestMaterialManifest({ type: `mutation-${phase}`, schemaAdapter: adapter })
+    const profile = compileMaterialProfile({ id: 'test', engineVersion: '0.0.30', packages: [packageOf([manifest])] })
+
+    expect(() => profile.createNode(manifest.type, { id: 'n' }))
       .toThrowError(expect.objectContaining({ code }))
   })
 

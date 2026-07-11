@@ -106,6 +106,10 @@ const MATERIAL_NODE_KEYS = new Set([
   'compat',
 ])
 const EMPTY_ADAPTER_ISSUES: readonly MaterialSchemaIssue[] = Object.freeze([])
+const ABSOLUTE_SNAPSHOT_LIMITS = Object.freeze({
+  maxNodes: MATERIAL_ADMISSION_BUDGET_CEILINGS.maxJsonNodes,
+  maxArrayLength: MATERIAL_ADMISSION_BUDGET_CEILINGS.maxJsonNodes,
+})
 
 export class MaterialProfileCompileError extends Error {
   constructor(readonly code: string, readonly materialType?: string, readonly packageId?: string) {
@@ -179,14 +183,14 @@ export function compileMaterialProfile(input: CompileMaterialProfileInput): Comp
         ? renderableTypes.has(type)
         : generatableTypes.has(type),
     createNode: (type: string, nodeInput?: MaterialNodeCreateInput, unit?: UnitType) =>
-      createNodeFromManifest(requireManifest(manifests, type), nodeInput, unit, snapshot.engineVersion),
+      createNodeFromManifest(requireManifest(manifests, type), nodeInput, unit, snapshot.engineVersion, admissionBudget),
   })
 }
 
 function snapshotProfileInput(input: unknown): CompileMaterialProfileInput {
   let snapshot: unknown
   try {
-    snapshot = snapshotStructure(input)
+    snapshot = snapshotStructure(input, ABSOLUTE_SNAPSHOT_LIMITS)
   }
   catch {
     throw new MaterialProfileCompileError('MATERIAL_PROFILE_STRUCTURE_INVALID')
@@ -334,8 +338,13 @@ function createNodeFromManifest(
   rawInput: MaterialNodeCreateInput = {},
   requestedUnit: UnitType | undefined,
   engineVersion: string,
+  admissionBudget: Readonly<SchemaAdmissionBudget>,
 ): MaterialNode {
-  const input = snapshotNodeCreateInput(rawInput, manifest.type)
+  const snapshotLimits = {
+    maxNodes: admissionBudget.maxJsonNodes,
+    maxArrayLength: admissionBudget.maxJsonNodes,
+  }
+  const input = snapshotNodeCreateInput(rawInput, manifest.type, snapshotLimits)
   const sourceUnit = manifest.common.defaultNode.unit
   const documentUnit = requestedUnit ?? sourceUnit
   if (!CANONICAL_UNITS.has(sourceUnit) || !CANONICAL_UNITS.has(documentUnit))
@@ -352,7 +361,7 @@ function createNodeFromManifest(
   if (manifest.schemaAdapter.modelUnitPolicy === 'convertible' && sourceUnit !== documentUnit) {
     try {
       model = manifest.schemaAdapter.convertModelUnits!(model, sourceUnit, documentUnit)
-      model = cloneRecord(model)
+      model = cloneRecord(snapshotStructure(model, snapshotLimits))
     }
     catch {
       throw new MaterialNodeCreationError('MATERIAL_MODEL_UNIT_CONVERSION_FAILED', manifest.type)
@@ -393,8 +402,13 @@ function createNodeFromManifest(
   catch {
     throw new MaterialNodeCreationError('MATERIAL_ADAPTER_VALIDATE_INPUT_FAILED', manifest.type)
   }
-  processAdapterIssues(manifest, inputIssues)
-  cloneNode(inputValidationCandidate)
+  processAdapterIssues(manifest, inputIssues, snapshotLimits)
+  try {
+    cloneNode(snapshotStructure(inputValidationCandidate, snapshotLimits))
+  }
+  catch {
+    throw new MaterialNodeCreationError('MATERIAL_ADAPTER_VALIDATE_INPUT_MUTATION_INVALID', manifest.type)
+  }
 
   let normalized: AdaptableMaterialNode
   try {
@@ -403,10 +417,24 @@ function createNodeFromManifest(
   catch {
     throw new MaterialNodeCreationError('MATERIAL_ADAPTER_NORMALIZE_FAILED', manifest.type)
   }
-  const normalizedSnapshot = cloneNode(normalized)
-  assertAllowedNodeKeys(normalizedSnapshot, manifest.type)
-  const canonical = materializeCanonicalNode(normalizedSnapshot, manifest)
-  assertCanonicalNode(canonical, manifest)
+  let normalizedSnapshot: AdaptableMaterialNode
+  try {
+    normalizedSnapshot = cloneNode(snapshotStructure(normalized, snapshotLimits))
+    assertAllowedNodeKeys(normalizedSnapshot, manifest.type)
+  }
+  catch {
+    throw new MaterialNodeCreationError('MATERIAL_ADAPTER_NORMALIZE_RESULT_INVALID', manifest.type)
+  }
+  let canonical: MaterialNode
+  try {
+    canonical = materializeCanonicalNode(normalizedSnapshot, manifest)
+    assertCanonicalNode(canonical, manifest)
+  }
+  catch (error) {
+    if (error instanceof MaterialNodeCreationError || readStableErrorCode(error, '').startsWith('MATERIAL_BINDING_'))
+      throw error
+    throw new MaterialNodeCreationError('MATERIAL_ADAPTER_NORMALIZE_RESULT_INVALID', manifest.type)
+  }
   const validationCandidate = cloneNode(canonical)
   let validationIssues: unknown
   try {
@@ -415,15 +443,20 @@ function createNodeFromManifest(
   catch {
     throw new MaterialNodeCreationError('MATERIAL_ADAPTER_VALIDATE_FAILED', manifest.type)
   }
-  processAdapterIssues(manifest, validationIssues)
-  cloneNode(validationCandidate)
+  processAdapterIssues(manifest, validationIssues, snapshotLimits)
+  try {
+    cloneNode(snapshotStructure(validationCandidate, snapshotLimits))
+  }
+  catch {
+    throw new MaterialNodeCreationError('MATERIAL_ADAPTER_VALIDATE_MUTATION_INVALID', manifest.type)
+  }
   return canonical
 }
 
-function snapshotNodeCreateInput(input: unknown, materialType: string): MaterialNodeCreateInput {
+function snapshotNodeCreateInput(input: unknown, materialType: string, limits: SnapshotLimits): MaterialNodeCreateInput {
   let snapshot: unknown
   try {
-    snapshot = snapshotStructure(input)
+    snapshot = snapshotStructure(input, limits)
   }
   catch {
     throw new MaterialNodeCreationError('MATERIAL_NODE_INVALID', materialType)
@@ -503,10 +536,10 @@ function cloneNode<T>(value: T): T {
   return cloneJsonValue(value) as T
 }
 
-function processAdapterIssues(manifest: MaterialManifest, rawIssues: unknown): void {
+function processAdapterIssues(manifest: MaterialManifest, rawIssues: unknown, limits: SnapshotLimits): void {
   let snapshot: unknown
   try {
-    snapshot = snapshotStructure(rawIssues)
+    snapshot = snapshotStructure(rawIssues, limits)
   }
   catch {
     throw new MaterialNodeCreationError('MATERIAL_ADAPTER_ISSUES_INVALID', manifest.type)
@@ -591,20 +624,30 @@ function readStableErrorCode(error: unknown, fallback: string): string {
 }
 
 interface SnapshotFrame {
-  source: object
   target: Record<string, unknown> | unknown[]
+  entries: readonly (readonly [string, unknown])[]
 }
 
-function snapshotStructure<T>(value: T): T {
+interface SnapshotLimits {
+  maxNodes: number
+  maxArrayLength: number
+}
+
+interface SnapshotBudget extends SnapshotLimits {
+  nodes: number
+}
+
+function snapshotStructure<T>(value: T, limits: SnapshotLimits): T {
   if (!isSnapshotContainer(value))
     return value
 
-  const root = createSnapshotContainer(value)
+  const budget: SnapshotBudget = { ...limits, nodes: 1 }
+  const rootInspection = inspectSnapshotContainer(value, budget)
+  const root = rootInspection.target
   const clones = new WeakMap<object, Record<string, unknown> | unknown[]>([[value, root]])
-  const stack: SnapshotFrame[] = [{ source: value, target: root }]
+  const stack: SnapshotFrame[] = [{ target: root, entries: rootInspection.entries }]
   while (stack.length > 0) {
-    const { source, target } = stack.pop()!
-    const entries = readSnapshotEntries(source)
+    const { entries, target } = stack.pop()!
     for (const [key, child] of entries) {
       let snapshot = child
       if (isSnapshotContainer(child)) {
@@ -613,9 +656,10 @@ function snapshotStructure<T>(value: T): T {
           snapshot = existing
         }
         else {
-          const childTarget = createSnapshotContainer(child)
+          const inspection = inspectSnapshotContainer(child, budget)
+          const childTarget = inspection.target
           clones.set(child, childTarget)
-          stack.push({ source: child, target: childTarget })
+          stack.push({ target: childTarget, entries: inspection.entries })
           snapshot = childTarget
         }
       }
@@ -635,21 +679,19 @@ function isSnapshotContainer(value: unknown): value is object {
   return typeof value === 'object' && value !== null
 }
 
-function createSnapshotContainer(source: object): Record<string, unknown> | unknown[] {
-  if (Array.isArray(source)) {
-    if (Object.getPrototypeOf(source) !== Array.prototype)
-      throw new Error('STRUCTURE_INVALID')
-    return Array.from({ length: readSnapshotArrayLength(source) })
-  }
-  const prototype = Object.getPrototypeOf(source)
-  if (prototype !== Object.prototype && prototype !== null)
-    throw new Error('STRUCTURE_INVALID')
-  return Object.create(prototype) as Record<string, unknown>
-}
-
-function readSnapshotEntries(source: object): Array<[string, unknown]> {
+function inspectSnapshotContainer(source: object, budget: SnapshotBudget): {
+  target: Record<string, unknown> | unknown[]
+  entries: readonly (readonly [string, unknown])[]
+} {
   const array = Array.isArray(source)
+  const prototype = Object.getPrototypeOf(source)
+  if ((array && prototype !== Array.prototype)
+    || (!array && prototype !== Object.prototype && prototype !== null)) {
+    throw new Error('STRUCTURE_INVALID')
+  }
   const length = array ? readSnapshotArrayLength(source) : 0
+  if (length > budget.maxArrayLength)
+    throw new Error('STRUCTURE_LIMIT')
   const entries: Array<[string, unknown]> = []
   for (const key of Reflect.ownKeys(source)) {
     if (array && key === 'length')
@@ -663,10 +705,16 @@ function readSnapshotEntries(source: object): Array<[string, unknown]> {
     if (!descriptor || !('value' in descriptor) || !descriptor.enumerable)
       throw new Error('STRUCTURE_INVALID')
     entries.push([key, descriptor.value])
+    budget.nodes += 1
+    if (budget.nodes > budget.maxNodes)
+      throw new Error('STRUCTURE_LIMIT')
   }
   if (array && entries.length !== length)
     throw new Error('STRUCTURE_INVALID')
-  return entries
+  return {
+    target: array ? [] : Object.create(prototype) as Record<string, unknown>,
+    entries,
+  }
 }
 
 function readSnapshotArrayLength(value: object): number {
