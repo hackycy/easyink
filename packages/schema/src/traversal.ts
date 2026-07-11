@@ -8,23 +8,20 @@ export function traverseNodes(
   schema: DocumentSchema,
   callback: (node: MaterialNode, parent?: MaterialNode) => void | false,
 ): void {
-  for (const node of schema.elements) {
-    if (walkNode(node, undefined, callback) === false)
+  const stack = schema.elements.map(node => ({ node, parent: undefined as MaterialNode | undefined })).reverse()
+  const seen = new WeakSet<object>()
+  while (stack.length > 0) {
+    const { node, parent } = stack.pop()!
+    if (seen.has(node))
+      continue
+    seen.add(node)
+    if (callback(node, parent) === false)
       return
-  }
-}
-
-function walkNode(
-  node: MaterialNode,
-  parent: MaterialNode | undefined,
-  callback: (node: MaterialNode, parent?: MaterialNode) => void | false,
-): void | false {
-  if (callback(node, parent) === false)
-    return false
-  for (const children of Object.values(node.slots)) {
-    for (const child of children) {
-      if (walkNode(child, node, callback) === false)
-        return false
+    const slots = Object.values(node.slots)
+    for (let slotIndex = slots.length - 1; slotIndex >= 0; slotIndex -= 1) {
+      const children = slots[slotIndex]!
+      for (let index = children.length - 1; index >= 0; index -= 1)
+        stack.push({ node: children[index]!, parent: node })
     }
   }
 }

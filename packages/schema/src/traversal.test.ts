@@ -60,6 +60,18 @@ describe('traverseNodes', () => {
     })
     expect(visited).toEqual(['a', 'b'])
   })
+
+  it('walks deeply nested canonical slots without call-stack recursion', () => {
+    const root = makeNode('0')
+    let owner = root
+    for (let index = 1; index <= 5_000; index += 1) {
+      const child = makeNode(String(index))
+      owner.slots.content = [child]
+      owner = child
+    }
+
+    expect(countNodes(makeSchema([root]))).toBe(5_001)
+  })
 })
 
 describe('findNodeById', () => {

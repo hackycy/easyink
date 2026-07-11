@@ -349,7 +349,8 @@ export function collectFontFamilies(schema: DocumentSchema, profile?: CompiledMa
     })
   }
   else {
-    // Removed when Designer and Viewer require a compiled profile in Tasks 11-12.
+    // Generic legacy fallback until Tasks 11-12 inject the active profile into
+    // Designer and Viewer. It intentionally knows no private material schema.
     const stack = [...schema.elements]
     while (stack.length) {
       const node = stack.pop()!

@@ -30,8 +30,12 @@ export function createClipboardActions(
   }
 
   function cloneNodes(nodes: readonly MaterialNode[], rekey: boolean): MaterialNode[] {
-    if (!materialProfile)
-      return nodes.map(node => deepClone(node))
+    if (!materialProfile) {
+      const clones = nodes.map(node => deepClone(node))
+      if (rekey)
+        rekeyFallbackNodes(clones)
+      return clones
+    }
     const result = cloneMaterialGraph(nodes, materialProfile, {
       createIdentity: identity => rekey ? generateId(identity.kind.replaceAll('.', '-')) : identity.value,
     })
@@ -39,6 +43,33 @@ export function createClipboardActions(
     if (error)
       throw new Error(`${error.code}: ${error.message}`)
     return result.roots
+  }
+
+  function rekeyFallbackNodes(roots: readonly MaterialNode[]): void {
+    const reserved = new Set<string>()
+    const existing = [...store.schema.elements]
+    while (existing.length > 0) {
+      const node = existing.pop()!
+      reserved.add(node.id)
+      Object.values(node.slots).forEach(children => existing.push(...children))
+    }
+    const nodes: MaterialNode[] = []
+    const stack = [...roots]
+    while (stack.length > 0) {
+      const node = stack.pop()!
+      nodes.push(node)
+      Object.values(node.slots).forEach(children => stack.push(...children))
+    }
+    const identityMap = new Map<MaterialNode, string>()
+    for (const node of nodes) {
+      let next = generateId('el')
+      while (reserved.has(next))
+        next = generateId('el')
+      reserved.add(next)
+      identityMap.set(node, next)
+    }
+    for (const [node, identity] of identityMap)
+      node.id = identity
   }
 
   function pasteOffset(): number {

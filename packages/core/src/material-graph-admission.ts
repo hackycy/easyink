@@ -38,8 +38,12 @@ function resolveAdmissionBudget(
   const result = { ...ceiling }
   for (const key of Object.keys(requested) as Array<keyof SchemaAdmissionBudget>) {
     const value = requested[key]
-    if (!Number.isSafeInteger(value) || value! <= 0 || value! > ceiling[key])
+    if (!Object.hasOwn(ceiling, key)
+      || !Number.isSafeInteger(value)
+      || value! <= 0
+      || value! > ceiling[key]) {
       throw new Error('MATERIAL_GRAPH_BUDGET_INVALID')
+    }
     result[key] = value!
   }
   return Object.freeze(result)

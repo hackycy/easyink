@@ -1,7 +1,8 @@
 import type { MaterialNode } from '@easyink/schema'
 import { describe, expect, it, vi } from 'vitest'
 import { admitMaterialGraph } from './material-graph-admission'
-import { cloneMaterialGraph, evaluateMaterialSlotReparent, formatMaterialNodeAddress, inspectMaterialNode, readPointer, removePointer, validateMaterialGraph, walkMaterialNodes, writePointer } from './material-introspection'
+import { cloneMaterialGraph, evaluateMaterialSlotReparent, formatMaterialNodeAddress, inspectMaterialNode, MaterialGraphWalkError, readPointer, removePointer, validateMaterialGraph, walkMaterialNodes, writePointer } from './material-introspection'
+import { compileMaterialProfile } from './material-profile'
 import { recordSchemaAdapter } from './schema-adapter'
 import { createTestCompiledMaterialProfile, createTestMaterialManifest } from './testing/material-profile'
 
@@ -88,6 +89,70 @@ describe('material graph introspection', () => {
     expect(node.model).not.toHaveProperty('mutated')
   })
 
+  it('returns deeply immutable snapshots without freezing source nodes', () => {
+    const adapter = {
+      ...recordSchemaAdapter(1),
+      introspect: () => ({
+        identities: [{
+          path: '/model/token' as const,
+          location: 'value' as const,
+          encoding: { prefix: 'id:' },
+          value: 'x',
+          target: { scope: 'material' as const, kind: 'private' },
+        }],
+        structures: [],
+        references: [],
+        resources: [],
+        bindings: [],
+      }),
+    }
+    const profile = createTestCompiledMaterialProfile([
+      createTestMaterialManifest({
+        type: 'immutable',
+        schemaAdapter: adapter,
+        slots: [{
+          id: 'content',
+          key: { kind: 'exact', value: 'content' },
+          coordinateSpace: 'owner',
+          layoutParticipation: 'owner',
+          reparent: 'allowed',
+        }],
+        binding: {
+          kind: 'ports',
+          ports: [{
+            id: 'value',
+            key: { kind: 'exact', value: 'value' },
+            role: 'semantic',
+            valueShape: 'scalar',
+            formatEditor: false,
+          }],
+        },
+      }),
+      createTestMaterialManifest({ type: 'box' }),
+    ])
+    const child = profile.createNode('box', { id: 'child' })
+    const node = profile.createNode('immutable', {
+      id: 'owner',
+      model: { token: 'id:x' },
+      slots: { content: [child] },
+      bindings: { value: { sourceId: 'orders', fieldPath: 'name' } },
+    })
+    const inspected = inspectMaterialNode(node, profile).introspection
+    const structure = inspected.structures[0]!
+    const identity = inspected.identities.find(item => item.target.kind === 'private')!
+    const binding = inspected.bindings[0]!
+
+    expect(Object.isFrozen(structure.children)).toBe(true)
+    expect(Object.isFrozen(identity.target)).toBe(true)
+    expect(Object.isFrozen(identity.encoding)).toBe(true)
+    expect(Object.isFrozen(binding.value)).toBe(true)
+    expect(() => (structure.children as MaterialNode[]).push(child)).toThrow()
+    expect(() => Object.assign(binding.value, { sourceId: 'changed' })).toThrow()
+    expect(node.bindings.value).toMatchObject({ sourceId: 'orders' })
+    expect(Object.isFrozen(node.bindings.value)).toBe(false)
+    expect(Object.isFrozen(child)).toBe(false)
+  })
+
   it('rekeys references across multiple selected roots', () => {
     const adapter = {
       ...recordSchemaAdapter(1),
@@ -106,6 +171,24 @@ describe('material graph introspection', () => {
     const result = cloneMaterialGraph([first, second], profile, { createIdentity: identity => `copy-${identity.value}` })
     expect(result.roots.map(node => node.id)).toEqual(['copy-a', 'copy-b'])
     expect(result.roots.map(node => node.model.peerId)).toEqual(['copy-b', 'copy-a'])
+  })
+
+  it('introspects every cloned occurrence exactly once', () => {
+    const introspect = vi.fn(recordSchemaAdapter(1).introspect)
+    const profile = createTestCompiledMaterialProfile([
+      createTestMaterialManifest({
+        type: 'counted-box',
+        schemaAdapter: { ...recordSchemaAdapter(1), introspect },
+      }),
+    ])
+
+    const result = cloneMaterialGraph([
+      profile.createNode('counted-box', { id: 'a' }),
+      profile.createNode('counted-box', { id: 'b' }),
+    ], profile, { createIdentity: identity => `copy-${identity.value}` })
+
+    expect(result.roots).toHaveLength(2)
+    expect(introspect).toHaveBeenCalledTimes(2)
   })
 
   it('preserves external optional references with a diagnostic', () => {
@@ -227,6 +310,18 @@ describe('material graph introspection', () => {
     }))
   })
 
+  it('turns identity factory exceptions into an atomic diagnostic', () => {
+    const profile = createTestCompiledMaterialProfile()
+    const result = cloneMaterialGraph([profile.createNode('box', { id: 'a' })], profile, {
+      createIdentity: () => { throw new Error('identity service unavailable') },
+    })
+
+    expect(result.roots).toEqual([])
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      code: 'MATERIAL_IDENTITY_CREATE_FAILED',
+    }))
+  })
+
   it('rejects duplicate source node identities', () => {
     const profile = createTestCompiledMaterialProfile()
     const first = profile.createNode('box', { id: 'duplicate' })
@@ -283,6 +378,58 @@ describe('material graph introspection', () => {
       code: 'MATERIAL_ADMISSION_BUDGET_EXCEEDED',
     }))
     expect(introspect).not.toHaveBeenCalled()
+  })
+
+  it('rejects unknown detached budget keys', () => {
+    const profile = createTestCompiledMaterialProfile()
+    expect(() => admitMaterialGraph([], profile, { unknown: 1 } as never))
+      .toThrow('MATERIAL_GRAPH_BUDGET_INVALID')
+  })
+
+  it('bounds cyclic, deep, and oversized material walks', () => {
+    const manifest = createTestMaterialManifest({
+      type: 'container',
+      slots: [{
+        id: 'content',
+        key: { kind: 'exact', value: 'content' },
+        coordinateSpace: 'owner',
+        layoutParticipation: 'owner',
+        reparent: 'allowed',
+      }],
+    })
+    const profile = compileMaterialProfile({
+      id: 'bounded',
+      engineVersion: '0.0.30',
+      admissionBudget: { maxDepth: 2, maxMaterialNodes: 1 },
+      packages: [{ packageId: '@easyink/test', kind: 'builtin', required: true, manifests: [manifest] }],
+    })
+    const cyclic = profile.createNode('container', { id: 'cycle' })
+    cyclic.slots.content = [cyclic]
+    expect(() => walkMaterialNodes(schemaWith(cyclic), profile, () => {})).toThrow(MaterialGraphWalkError)
+    expect(validateMaterialGraph(schemaWith(cyclic), profile)).toContainEqual(expect.objectContaining({
+      code: 'MATERIAL_GRAPH_CYCLE',
+    }))
+
+    const depthProfile = compileMaterialProfile({
+      id: 'depth-bounded',
+      engineVersion: '0.0.30',
+      admissionBudget: { maxDepth: 1, maxMaterialNodes: 10 },
+      packages: [{ packageId: '@easyink/test', kind: 'builtin', required: true, manifests: [manifest] }],
+    })
+    const deep = depthProfile.createNode('container', { id: 'root' })
+    const middle = depthProfile.createNode('container', { id: 'middle' })
+    const leaf = depthProfile.createNode('container', { id: 'leaf' })
+    deep.slots.content = [middle]
+    middle.slots.content = [leaf]
+    expect(validateMaterialGraph(schemaWith(deep), depthProfile)).toContainEqual(expect.objectContaining({
+      code: 'MATERIAL_GRAPH_DEPTH_LIMIT',
+    }))
+    expect(validateMaterialGraph(schemaWith(
+      profile.createNode('container', { id: 'first' }),
+      profile.createNode('container', { id: 'second' }),
+    ), profile)).toContainEqual(expect.objectContaining({
+      code: 'MATERIAL_GRAPH_NODE_LIMIT',
+    }))
   })
 
   it('validates required reference targets by scope and kind', () => {

@@ -111,6 +111,22 @@ export interface MaterialSlotReparentResult {
   reason?: 'forbidden' | 'material-type-mismatch'
 }
 
+export type MaterialGraphWalkErrorCode
+  = | 'MATERIAL_GRAPH_CYCLE'
+    | 'MATERIAL_GRAPH_DEPTH_LIMIT'
+    | 'MATERIAL_GRAPH_NODE_LIMIT'
+
+export class MaterialGraphWalkError extends Error {
+  constructor(
+    readonly code: MaterialGraphWalkErrorCode,
+    readonly path: JsonPointer,
+    readonly nodeId?: string,
+  ) {
+    super(code)
+    this.name = 'MaterialGraphWalkError'
+  }
+}
+
 export function evaluateMaterialSlotReparent(input: MaterialSlotReparentInput): MaterialSlotReparentResult {
   if (input.sourceOwnerId === input.targetOwnerId && input.sourceSlot === input.targetSlot)
     return { allowed: true }
@@ -247,16 +263,45 @@ function adapterContext(type: string, unit: UnitType) {
 }
 
 function freezeIntrospection(value: MaterialIntrospection): MaterialIntrospection {
-  const freezeList = <T extends object>(items: readonly T[]) => Object.freeze(
-    items.map(item => Object.freeze({ ...item })),
-  )
   return Object.freeze({
-    identities: freezeList(value.identities),
-    structures: freezeList(value.structures),
-    references: freezeList(value.references),
-    resources: freezeList(value.resources),
-    bindings: freezeList(value.bindings),
+    identities: Object.freeze(value.identities.map(item => Object.freeze({
+      ...item,
+      target: Object.freeze({ ...item.target }),
+      ...(item.encoding ? { encoding: Object.freeze({ ...item.encoding }) } : {}),
+    }))),
+    structures: Object.freeze(value.structures.map(item => Object.freeze({
+      ...item,
+      children: Object.freeze([...item.children]),
+    }))),
+    references: Object.freeze(value.references.map(item => Object.freeze({
+      ...item,
+      target: Object.freeze({ ...item.target }),
+      ...(item.encoding ? { encoding: Object.freeze({ ...item.encoding }) } : {}),
+    }))),
+    resources: Object.freeze(value.resources.map(item => Object.freeze({ ...item }))),
+    bindings: Object.freeze(value.bindings.map(item => Object.freeze({
+      ...item,
+      value: cloneAndFreezeJson(item.value) as unknown as BindingExpression,
+    }))),
   })
+}
+
+function cloneAndFreezeJson(value: unknown): JsonValue {
+  const snapshot = cloneJsonValue(value as JsonValue)
+  const stack: Array<{ value: JsonValue, leave: boolean }> = [{ value: snapshot, leave: false }]
+  while (stack.length > 0) {
+    const frame = stack.pop()!
+    if (!frame.value || typeof frame.value !== 'object')
+      continue
+    if (frame.leave) {
+      Object.freeze(frame.value)
+      continue
+    }
+    stack.push({ value: frame.value, leave: true })
+    for (const child of Object.values(frame.value))
+      stack.push({ value: child, leave: false })
+  }
+  return snapshot
 }
 
 function diagnostic(
@@ -326,8 +371,9 @@ function inspectNode(
   }
 
   const bindings = [...standard.bindings]
+  const standardBindingsByPath = new Map(standard.bindings.map(binding => [binding.path, binding]))
   for (const binding of custom.bindings) {
-    const standardBinding = standard.bindings.find(candidate => candidate.path === binding.path)
+    const standardBinding = standardBindingsByPath.get(binding.path)
     if (standardBinding) {
       if (!sameBinding(standardBinding, binding)) {
         diagnostics.push(diagnostic(
@@ -700,13 +746,38 @@ function walkGraph(
   onDiagnostic?: (item: MaterialGraphDiagnostic, nodePath: JsonPointer) => void,
   introspectionByNodeId?: ReadonlyMap<string, Readonly<MaterialIntrospection>>,
 ): void {
-  const stack = schema.elements.map((node, index) => ({
-    node,
-    address: { nodeId: node.id, ancestors: [] as MaterialSlotAddress[] },
-    path: `/elements/${index}` as JsonPointer,
-  })).reverse()
+  interface WalkEntry {
+    node: MaterialNode
+    address: { nodeId: string, ancestors: MaterialSlotAddress[] }
+    path: JsonPointer
+  }
+  type WalkFrame = { phase: 'enter', entry: WalkEntry } | { phase: 'leave', node: MaterialNode }
+  const stack: WalkFrame[] = schema.elements.map((node, index) => ({
+    phase: 'enter',
+    entry: {
+      node,
+      address: { nodeId: node.id, ancestors: [] },
+      path: `/elements/${index}`,
+    },
+  })).reverse() as WalkFrame[]
+  const active = new WeakSet<object>()
+  let visited = 0
   while (stack.length > 0) {
-    const current = stack.pop()!
+    const frame = stack.pop()!
+    if (frame.phase === 'leave') {
+      active.delete(frame.node)
+      continue
+    }
+    const current = frame.entry
+    if (active.has(current.node))
+      throw new MaterialGraphWalkError('MATERIAL_GRAPH_CYCLE', current.path, current.node.id)
+    if (current.address.ancestors.length > profile.admissionBudget.maxDepth)
+      throw new MaterialGraphWalkError('MATERIAL_GRAPH_DEPTH_LIMIT', current.path, current.node.id)
+    visited += 1
+    if (visited > profile.admissionBudget.maxMaterialNodes)
+      throw new MaterialGraphWalkError('MATERIAL_GRAPH_NODE_LIMIT', current.path, current.node.id)
+    active.add(current.node)
+    stack.push({ phase: 'leave', node: current.node })
     const inspected = inspectNode(
       current.node,
       profile,
@@ -729,15 +800,18 @@ function walkGraph(
       const [slot, children] = slots[slotIndex]!
       for (let index = children.length - 1; index >= 0; index -= 1) {
         stack.push({
-          node: children[index]!,
-          address: {
-            nodeId: children[index]!.id,
-            ancestors: [
-              ...current.address.ancestors,
-              { ownerNodeId: current.node.id, slot, index },
-            ],
+          phase: 'enter',
+          entry: {
+            node: children[index]!,
+            address: {
+              nodeId: children[index]!.id,
+              ancestors: [
+                ...current.address.ancestors,
+                { ownerNodeId: current.node.id, slot, index },
+              ],
+            },
+            path: `${current.path}/slots/${escapeToken(slot)}/${index}`,
           },
-          path: `${current.path}/slots/${escapeToken(slot)}/${index}`,
         })
       }
     }
@@ -749,34 +823,103 @@ export function validateMaterialGraph(
   profile: CompiledMaterialProfile,
   options: MaterialGraphValidationOptions = {},
 ): MaterialGraphDiagnostic[] {
+  try {
+    const collected = collectGraphSnapshots(schema, profile, options)
+    return validateGraphSnapshots(collected.snapshots, collected.diagnostics)
+  }
+  catch (error) {
+    if (error instanceof MaterialGraphCollectionError) {
+      return [...error.diagnostics, {
+        code: error.walkError.code,
+        severity: 'error',
+        path: error.walkError.path,
+        nodeId: error.walkError.nodeId,
+        message: error.walkError.code,
+      }]
+    }
+    throw error
+  }
+}
+
+interface MaterialGraphSnapshot {
+  node: MaterialNode
+  address: MaterialNodeAddress
+  nodePath: JsonPointer
+  ownerNodeId: string
+  introspection: MaterialIntrospection
+}
+
+class MaterialGraphCollectionError extends Error {
+  constructor(
+    readonly walkError: MaterialGraphWalkError,
+    readonly diagnostics: readonly MaterialGraphDiagnostic[],
+  ) {
+    super(walkError.code)
+  }
+}
+
+function collectGraphSnapshots(
+  schema: DocumentSchema,
+  profile: CompiledMaterialProfile,
+  options: MaterialGraphValidationOptions = {},
+): { snapshots: MaterialGraphSnapshot[], diagnostics: MaterialGraphDiagnostic[] } {
+  const snapshots: MaterialGraphSnapshot[] = []
   const diagnostics: MaterialGraphDiagnostic[] = []
+  try {
+    walkGraph(
+      schema,
+      profile,
+      options.adapterExcludedNodeIds ?? new Set(),
+      (node, address, introspection, nodePath) => {
+        snapshots.push({ node, address, nodePath, ownerNodeId: node.id, introspection })
+      },
+      (item, nodePath) => diagnostics.push(withNodePath(item, nodePath)),
+      options.introspectionByNodeId,
+    )
+  }
+  catch (error) {
+    if (error instanceof MaterialGraphWalkError)
+      throw new MaterialGraphCollectionError(error, diagnostics)
+    throw error
+  }
+  return { snapshots, diagnostics }
+}
+
+function validateGraphSnapshots(
+  snapshots: readonly MaterialGraphSnapshot[],
+  initialDiagnostics: readonly MaterialGraphDiagnostic[],
+): MaterialGraphDiagnostic[] {
+  const diagnostics = [...initialDiagnostics]
   const identities = new Map<MaterialIdentityKey, MaterialIdentitySlot>()
   const references: Array<{ node: MaterialNode, entry: MaterialReferenceSlot, nodePath: JsonPointer }> = []
-  const excluded = options.adapterExcludedNodeIds ?? new Set<string>()
-  walkGraph(schema, profile, excluded, (node, _address, introspection, nodePath) => {
-    for (const entry of introspection.identities) {
+  for (const snapshot of snapshots) {
+    for (const entry of snapshot.introspection.identities) {
       const key = formatMaterialIdentityKey({
-        ownerNodeId: node.id,
+        ownerNodeId: snapshot.ownerNodeId,
         scope: entry.target.scope,
         kind: entry.target.kind,
         value: entry.value,
       })
       if (identities.has(key)) {
         diagnostics.push(withNodePath(diagnostic(
-          node,
+          snapshot.node,
           entry.target.scope === 'document' && entry.target.kind === 'node'
             ? 'MATERIAL_NODE_ID_DUPLICATE'
             : 'MATERIAL_IDENTITY_DUPLICATE',
           entry.path,
           `Duplicate ${entry.target.kind} identity`,
-        ), nodePath))
+        ), snapshot.nodePath))
       }
       else {
         identities.set(key, entry)
       }
     }
-    references.push(...introspection.references.map(entry => ({ node, entry, nodePath })))
-  }, (item, nodePath) => diagnostics.push(withNodePath(item, nodePath)), options.introspectionByNodeId)
+    references.push(...snapshot.introspection.references.map(entry => ({
+      node: snapshot.node,
+      entry,
+      nodePath: snapshot.nodePath,
+    })))
+  }
   for (const { node, entry, nodePath } of references) {
     const key = formatMaterialIdentityKey({
       ownerNodeId: node.id,
@@ -829,23 +972,12 @@ export interface CloneMaterialGraphResult {
   diagnostics: readonly MaterialGraphDiagnostic[]
 }
 
-interface InspectedClone {
-  node: MaterialNode
-  address: MaterialNodeAddress
-  ownerNodeId: string
-  introspection: MaterialIntrospection
-}
-
 export function cloneMaterialGraph(
   roots: readonly MaterialNode[],
   profile: CompiledMaterialProfile,
   options: CloneMaterialGraphOptions,
 ): CloneMaterialGraphResult {
-  const sourceSchema = detachedSchema(roots)
-  const diagnostics = validateMaterialGraph(sourceSchema, profile)
-  if (hasErrors(diagnostics))
-    return emptyCloneResult(diagnostics)
-
+  let diagnostics: MaterialGraphDiagnostic[] = []
   let clones: MaterialNode[]
   try {
     clones = roots.map(root => cloneJsonValue(root as unknown as JsonValue) as unknown as MaterialNode)
@@ -860,10 +992,27 @@ export function cloneMaterialGraph(
     return emptyCloneResult(diagnostics)
   }
 
-  const inspected: InspectedClone[] = []
-  walkMaterialNodes(detachedSchema(clones), profile, (node, address, introspection) => {
-    inspected.push({ node, address, ownerNodeId: node.id, introspection })
-  })
+  let inspected: MaterialGraphSnapshot[]
+  try {
+    const collected = collectGraphSnapshots(detachedSchema(clones), profile)
+    inspected = collected.snapshots
+    diagnostics = validateGraphSnapshots(inspected, collected.diagnostics)
+  }
+  catch (error) {
+    if (!(error instanceof MaterialGraphCollectionError))
+      throw error
+    diagnostics.push(...error.diagnostics, {
+      code: error.walkError.code,
+      severity: 'error',
+      path: error.walkError.path,
+      nodeId: error.walkError.nodeId,
+      message: error.walkError.code,
+    })
+    return emptyCloneResult(diagnostics)
+  }
+  if (hasErrors(diagnostics))
+    return emptyCloneResult(diagnostics)
+
   const identityMap = new Map<MaterialIdentityKey, string>()
   const generated = new Set<MaterialIdentityKey>()
   for (const record of inspected) {
@@ -884,7 +1033,19 @@ export function cloneMaterialGraph(
         ))
         continue
       }
-      const replacement = options.createIdentity(identity, record.address)
+      let replacement: string
+      try {
+        replacement = options.createIdentity(identity, record.address)
+      }
+      catch {
+        diagnostics.push(diagnostic(
+          record.node,
+          'MATERIAL_IDENTITY_CREATE_FAILED',
+          entry.path,
+          'Identity creation failed',
+        ))
+        continue
+      }
       if (typeof replacement !== 'string' || replacement.length === 0) {
         diagnostics.push(diagnostic(
           record.node,
@@ -969,7 +1130,7 @@ export function cloneMaterialGraph(
 }
 
 function preflightKeyRewrites(
-  inspected: readonly InspectedClone[],
+  inspected: readonly MaterialGraphSnapshot[],
   identityMap: ReadonlyMap<MaterialIdentityKey, string>,
   diagnostics: MaterialGraphDiagnostic[],
 ): void {

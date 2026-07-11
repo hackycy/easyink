@@ -105,6 +105,30 @@ describe('createClipboardActions', () => {
     expect(store.schema.elements[1]).toMatchObject({ x: 90, y: 90 })
   })
 
+  it('preserves copied IDs but generates unique fallback IDs for duplicate and paste', () => {
+    const child = makeNode('child')
+    const first = { ...makeNode('first'), slots: { content: [child] } }
+    const second = makeNode('second')
+    const store = makeStore([first, second], ['first', 'second'])
+    const actions = createClipboardActions(store, () => [first, second])
+
+    actions.copySelection()
+    expect(store.clipboard.map(node => node.id)).toEqual(['first', 'second'])
+    expect(store.clipboard[0]!.slots.content![0]!.id).toBe('child')
+
+    actions.duplicateSelection()
+    actions.pasteClipboard()
+
+    const ids: string[] = []
+    const stack = [...store.schema.elements]
+    while (stack.length > 0) {
+      const node = stack.pop()!
+      ids.push(node.id)
+      Object.values(node.slots).forEach(children => stack.push(...children))
+    }
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+
   it('rekeys references across duplicated roots with one identity map', () => {
     const adapter = {
       ...recordSchemaAdapter(1),
