@@ -218,6 +218,28 @@ describe('normalizeDocumentSchema', () => {
     expect(() => normalizeDocumentSchema(input)).toThrow(/canonical material/i)
   })
 
+  it('preserves node.unit only at the unresolved input boundary', () => {
+    const input = {
+      elements: [{
+        id: 'legacy-unit',
+        type: 'text',
+        unit: 'px',
+        x: 0,
+        y: 0,
+        width: 1,
+        height: 1,
+        modelVersion: 1,
+        model: {},
+        slots: {},
+        bindings: {},
+        output: { visibility: 'include' },
+      }],
+    }
+
+    expect(normalizeDocumentInput(input).elements).toEqual(input.elements)
+    expect(() => normalizeDocumentSchema(input)).toThrow(/\/elements\/0\/unit/)
+  })
+
   it('accepts canonical material inputs', () => {
     const node = {
       id: 'text-1',

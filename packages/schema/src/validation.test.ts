@@ -47,6 +47,12 @@ describe('validateSchema', () => {
         .toContainEqual(expect.objectContaining({ code: 'schema.material.legacy-field', path: `/elements/0/${field}` }))
     })
 
+    it('rejects canonical nodes with a per-node unit', () => {
+      const node = { ...materialNode('unit-1'), unit: 'mm' }
+      expect(validateSchemaIssues({ ...validSchema, elements: [node] }))
+        .toContainEqual(expect.objectContaining({ code: 'schema.material.legacy-field', path: '/elements/0/unit' }))
+    })
+
     it('rejects undefined model members before envelope validation', () => {
       const node = { ...materialNode('bad-1'), model: { content: undefined } }
       expect(validateSchemaIssues({ ...validSchema, elements: [node] }))
@@ -68,6 +74,115 @@ describe('validateSchema', () => {
         expect.objectContaining({ path: '/elements/0/bindings/value~1~0/sourceId' }),
         expect.objectContaining({ path: '/elements/0/bindings/value~1~0/fieldPath' }),
       ]))
+    })
+
+    it('validates optional binding reference fields', () => {
+      const node = {
+        ...materialNode('bad-binding-options'),
+        bindings: {
+          value: {
+            sourceId: 'source',
+            fieldPath: 'value',
+            required: 'yes',
+            bindIndex: 1.5,
+            format: { prefix: 1, preset: { type: 'unknown', minimumFractionDigits: -1 }, custom: { source: 2 }, extensions: [] },
+            extensions: [],
+          },
+        },
+      }
+      expect(validateSchemaIssues({ ...validSchema, elements: [node] })).toEqual(expect.arrayContaining([
+        expect.objectContaining({ path: '/elements/0/bindings/value/required' }),
+        expect.objectContaining({ path: '/elements/0/bindings/value/bindIndex' }),
+        expect.objectContaining({ path: '/elements/0/bindings/value/format/prefix' }),
+        expect.objectContaining({ path: '/elements/0/bindings/value/format/preset/type' }),
+        expect.objectContaining({ path: '/elements/0/bindings/value/format/preset/minimumFractionDigits' }),
+        expect.objectContaining({ path: '/elements/0/bindings/value/format/custom/source' }),
+        expect.objectContaining({ path: '/elements/0/bindings/value/format/extensions' }),
+        expect.objectContaining({ path: '/elements/0/bindings/value/extensions' }),
+      ]))
+    })
+
+    it('validates data-contract relation, mappings, selects, required, and format', () => {
+      const node = {
+        ...materialNode('bad-contract'),
+        bindings: {
+          value: {
+            kind: 'data-contract',
+            relation: { kind: 'many' },
+            mappings: {
+              'field/~': {
+                sourceId: 'source',
+                sourceName: 1,
+                required: 'yes',
+                format: { suffix: false },
+                select: { path: 'value', key: 1, label: false, tag: [] },
+                extensions: [],
+              },
+            },
+          },
+        },
+      }
+      expect(validateSchemaIssues({ ...validSchema, elements: [node] })).toEqual(expect.arrayContaining([
+        expect.objectContaining({ path: '/elements/0/bindings/value/relation/kind' }),
+        expect.objectContaining({ path: '/elements/0/bindings/value/mappings/field~1~0/sourceName' }),
+        expect.objectContaining({ path: '/elements/0/bindings/value/mappings/field~1~0/required' }),
+        expect.objectContaining({ path: '/elements/0/bindings/value/mappings/field~1~0/format/suffix' }),
+        expect.objectContaining({ path: '/elements/0/bindings/value/mappings/field~1~0/select/key' }),
+        expect.objectContaining({ path: '/elements/0/bindings/value/mappings/field~1~0/select/label' }),
+        expect.objectContaining({ path: '/elements/0/bindings/value/mappings/field~1~0/select/tag' }),
+        expect.objectContaining({ path: '/elements/0/bindings/value/mappings/field~1~0/extensions' }),
+      ]))
+    })
+
+    it('accepts complete declared binding shapes', () => {
+      const node = {
+        ...materialNode('valid-bindings'),
+        bindings: {
+          value: {
+            sourceId: 'source',
+            sourceName: 'Source',
+            sourceTag: 'primary',
+            fieldPath: 'value',
+            fieldKey: 'value',
+            fieldLabel: 'Value',
+            required: true,
+            bindIndex: 0,
+            extensions: { plugin: true },
+            format: {
+              prefix: '$',
+              suffix: ' USD',
+              fallback: '-',
+              mode: 'preset',
+              extensions: { plugin: true },
+              preset: { type: 'currency', locale: 'en-US', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 },
+              custom: { source: '(value) => String(value)' },
+            },
+          },
+          rows: {
+            kind: 'data-contract',
+            relation: { kind: 'record' },
+            mappings: {
+              total: {
+                sourceId: 'source',
+                sourceName: 'Source',
+                sourceTag: 'primary',
+                required: false,
+                extensions: { plugin: true },
+                select: { path: 'total', key: 'total', label: 'Total', tag: 'money' },
+                format: { preset: { type: 'number' } },
+              },
+            },
+          },
+        },
+      }
+
+      expect(validateSchemaIssues({ ...validSchema, elements: [node] })).toEqual([])
+    })
+
+    it('keeps dots literal when composing strict JSON error pointers', () => {
+      const node = { ...materialNode('bad-dot'), model: { 'a.b': undefined } }
+      expect(validateSchemaIssues({ ...validSchema, elements: [node] }))
+        .toContainEqual(expect.objectContaining({ path: '/elements/0/model/a.b' }))
     })
   })
 

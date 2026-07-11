@@ -11,6 +11,8 @@ describe('strict JSON values', () => {
     Number.POSITIVE_INFINITY,
     new Date(),
     new Map(),
+    new class Example {}(),
+    document.createElement('div'),
   ])('rejects non-JSON value %s', (value) => {
     expect(() => assertJsonValue({ nested: [value] })).toThrow(JsonValueValidationError)
   })
@@ -34,13 +36,50 @@ describe('strict JSON values', () => {
       .toThrowError(expect.objectContaining({ code: 'JSON_VALUE_KEY_UNSAFE', path: '/safe~1part/~0key/constructor' }))
   })
 
+  it.each(['__proto__', 'prototype', 'constructor'])('rejects unsafe key %s', (key) => {
+    expect(() => assertJsonValue(JSON.parse(`{"${key}":true}`)))
+      .toThrowError(expect.objectContaining({ code: 'JSON_VALUE_KEY_UNSAFE', path: `/${key}` }))
+  })
+
+  it('keeps dots literal in RFC 6901 paths', () => {
+    expect(() => assertJsonValue({ 'a.b': undefined }))
+      .toThrowError(expect.objectContaining({ path: '/a.b' }))
+  })
+
   it('enforces depth, node, and UTF-8 string byte limits', () => {
+    expect(() => assertJsonValue({ nested: {} }, { maxDepth: 1 })).not.toThrow()
     expect(() => assertJsonValue({ nested: { tooDeep: {} } }, { maxDepth: 1 }))
       .toThrowError(expect.objectContaining({ code: 'JSON_VALUE_DEPTH_LIMIT', path: '/nested/tooDeep' }))
+    expect(() => assertJsonValue([1], { maxNodes: 2 })).not.toThrow()
     expect(() => assertJsonValue([1, 2], { maxNodes: 2 }))
       .toThrowError(expect.objectContaining({ code: 'JSON_VALUE_NODE_LIMIT', path: '/1' }))
+    expect(() => assertJsonValue({ text: '\u00E9' }, { maxStringBytes: 2 })).not.toThrow()
     expect(() => assertJsonValue({ text: '\u00E9' }, { maxStringBytes: 1 }))
       .toThrowError(expect.objectContaining({ code: 'JSON_VALUE_STRING_LIMIT', path: '/text' }))
+  })
+
+  it('accepts values exactly at the default limits', () => {
+    let depthBoundary: Record<string, unknown> = {}
+    for (let depth = 0; depth < 128; depth++)
+      depthBoundary = { nested: depthBoundary }
+    const tooDeep = { nested: depthBoundary }
+
+    expect(() => assertJsonValue(depthBoundary)).not.toThrow()
+    expect(() => assertJsonValue(tooDeep)).toThrowError(expect.objectContaining({ code: 'JSON_VALUE_DEPTH_LIMIT' }))
+    expect(() => assertJsonValue(Array.from({ length: 99_999 }).fill(null))).not.toThrow()
+    expect(() => assertJsonValue(Array.from({ length: 100_000 }).fill(null))).toThrowError(expect.objectContaining({ code: 'JSON_VALUE_NODE_LIMIT' }))
+    expect(() => assertJsonValue('x'.repeat(4 * 1024 * 1024))).not.toThrow()
+    expect(() => assertJsonValue('x'.repeat(4 * 1024 * 1024 + 1))).toThrowError(expect.objectContaining({ code: 'JSON_VALUE_STRING_LIMIT' }))
+  })
+
+  it('accepts shared references without treating them as cycles', () => {
+    const shared = { value: 1 }
+    expect(() => assertJsonValue({ left: shared, right: shared })).not.toThrow()
+  })
+
+  it('accepts null-prototype records', () => {
+    const value = Object.assign(Object.create(null) as Record<string, unknown>, { value: 1 })
+    expect(() => assertJsonValue(value)).not.toThrow()
   })
 
   it('clones without sharing arrays or records and preserves null prototypes', () => {
@@ -55,5 +94,20 @@ describe('strict JSON values', () => {
     expect(cloned.rows).not.toBe(input.rows)
     expect(Object.getPrototypeOf(cloned)).toBeNull()
     expect(Object.getPrototypeOf(cloned.rows[0])).toBeNull()
+  })
+
+  it('tracks source identity during iterative cloning', () => {
+    const shared = { value: 1 }
+    const cloned = cloneJsonValue({ left: shared, right: shared })
+
+    expect(cloned.left).toBe(cloned.right)
+    expect(cloned.left).not.toBe(shared)
+  })
+
+  it('rejects cycles when cloning', () => {
+    const cyclic: Record<string, unknown> = {}
+    cyclic.self = cyclic
+    expect(() => cloneJsonValue(cyclic as never))
+      .toThrowError(expect.objectContaining({ code: 'JSON_VALUE_CYCLE', path: '/self' }))
   })
 })

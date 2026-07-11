@@ -32,7 +32,7 @@ const CONDITION_COMPARE_OPERATORS = new Set([
   'isEmpty',
   'isNotEmpty',
 ])
-const LEGACY_MATERIAL_FIELDS = ['props', 'binding', 'children', 'table'] as const
+const LEGACY_MATERIAL_FIELDS = ['props', 'binding', 'children', 'table', 'unit'] as const
 const PRINT_BEHAVIORS = new Set(['each', 'odd', 'even', 'first', 'last'])
 
 export interface SchemaValidationIssue {
@@ -88,14 +88,17 @@ function normalizeIssuePath(path: string): string {
   if (path === '' || path === '$')
     return ''
   if (path.startsWith('/')) {
-    const lastSlash = path.lastIndexOf('/')
-    return `${path.slice(0, lastSlash + 1)}${path.slice(lastSlash + 1).replace(/\./g, '/')}`
+    return path
   }
   return `/${path.split('.').map(escapePointer).join('/')}`
 }
 
 function escapePointer(token: string): string {
   return token.replace(/~/g, '~0').replace(/\//g, '~1')
+}
+
+function joinPointer(path: string, ...tokens: string[]): string {
+  return `${path}/${tokens.map(escapePointer).join('/')}`
 }
 
 export function formatSchemaValidationIssue(issue: SchemaValidationIssue): string {
@@ -260,9 +263,20 @@ function validateBindingRef(value: unknown, path: string, issues: SchemaValidati
     issues.push(createIssue(`${path}/sourceId`, 'must be a non-empty string', 'schema.material.binding-ref.source-id.invalid'))
   if (typeof value.fieldPath !== 'string' || value.fieldPath.length === 0)
     issues.push(createIssue(`${path}/fieldPath`, 'must be a non-empty string', 'schema.material.binding-ref.field-path.invalid'))
+  validateOptionalStrings(value, path, ['sourceName', 'sourceTag', 'fieldKey', 'fieldLabel'], issues, 'schema.material.binding-ref')
+  validateRequiredAndFormat(value, path, issues, 'schema.material.binding-ref')
+  validateExtensions(value.extensions, path, issues, 'schema.material.binding-ref')
+  if (value.bindIndex != null && (!Number.isInteger(value.bindIndex) || (value.bindIndex as number) < 0))
+    issues.push(createIssue(`${path}/bindIndex`, 'must be a non-negative integer when provided', 'schema.material.binding-ref.bind-index.invalid'))
 }
 
 function validateDataContractBinding(value: Record<string, unknown>, path: string, issues: SchemaValidationIssue[]): void {
+  if (value.relation != null) {
+    if (!isObject(value.relation))
+      issues.push(createIssue(`${path}/relation`, 'must be an object when provided', 'schema.material.data-contract.relation.invalid'))
+    else if (value.relation.kind !== 'auto' && value.relation.kind !== 'record' && value.relation.kind !== 'index')
+      issues.push(createIssue(`${path}/relation/kind`, 'must be auto, record, or index', 'schema.material.data-contract.relation.kind.invalid'))
+  }
   if (!isObject(value.mappings)) {
     issues.push(createIssue(`${path}/mappings`, 'must be an object', 'schema.material.data-contract.mappings.invalid'))
     return
@@ -275,9 +289,71 @@ function validateDataContractBinding(value: Record<string, unknown>, path: strin
     }
     if (typeof mapping.sourceId !== 'string' || mapping.sourceId.length === 0)
       issues.push(createIssue(`${mappingPath}/sourceId`, 'must be a non-empty string', 'schema.material.data-contract.source-id.invalid'))
-    if (!isObject(mapping.select) || typeof mapping.select.path !== 'string' || mapping.select.path.length === 0)
+    validateOptionalStrings(mapping, mappingPath, ['sourceName', 'sourceTag'], issues, 'schema.material.data-contract.mapping')
+    validateRequiredAndFormat(mapping, mappingPath, issues, 'schema.material.data-contract.mapping')
+    validateExtensions(mapping.extensions, mappingPath, issues, 'schema.material.data-contract.mapping')
+    if (!isObject(mapping.select) || typeof mapping.select.path !== 'string' || mapping.select.path.length === 0) {
       issues.push(createIssue(`${mappingPath}/select/path`, 'must be a non-empty string', 'schema.material.data-contract.select-path.invalid'))
+    }
+    else {
+      validateOptionalStrings(mapping.select, `${mappingPath}/select`, ['key', 'label', 'tag'], issues, 'schema.material.data-contract.select')
+    }
   }
+}
+
+function validateRequiredAndFormat(value: Record<string, unknown>, path: string, issues: SchemaValidationIssue[], codePrefix: string): void {
+  if (value.required != null && typeof value.required !== 'boolean')
+    issues.push(createIssue(`${path}/required`, 'must be a boolean when provided', `${codePrefix}.required.invalid`))
+  if (value.format != null)
+    validateBindingFormat(value.format, `${path}/format`, issues)
+}
+
+function validateOptionalStrings(
+  value: Record<string, unknown>,
+  path: string,
+  fields: string[],
+  issues: SchemaValidationIssue[],
+  codePrefix: string,
+): void {
+  for (const field of fields) {
+    if (value[field] != null && typeof value[field] !== 'string')
+      issues.push(createIssue(`${path}/${field}`, 'must be a string when provided', `${codePrefix}.${field}.invalid`))
+  }
+}
+
+function validateBindingFormat(value: unknown, path: string, issues: SchemaValidationIssue[]): void {
+  if (!isObject(value)) {
+    issues.push(createIssue(path, 'must be an object when provided', 'schema.material.binding-format.invalid'))
+    return
+  }
+  validateOptionalStrings(value, path, ['prefix', 'suffix', 'fallback', 'mode'], issues, 'schema.material.binding-format')
+  validateExtensions(value.extensions, path, issues, 'schema.material.binding-format')
+  if (value.preset != null) {
+    if (!isObject(value.preset)) {
+      issues.push(createIssue(`${path}/preset`, 'must be an object when provided', 'schema.material.binding-format.preset.invalid'))
+    }
+    else {
+      const presetTypes = ['datetime', 'weekday', 'chinese-money', 'number', 'currency', 'percent']
+      if (typeof value.preset.type !== 'string' || !presetTypes.includes(value.preset.type))
+        issues.push(createIssue(`${path}/preset/type`, 'must be a supported preset type', 'schema.material.binding-format.preset.type.invalid'))
+      validateOptionalStrings(value.preset, `${path}/preset`, ['pattern', 'locale', 'timeZone', 'currency'], issues, 'schema.material.binding-format.preset')
+      if (value.preset.weekdayStyle != null && value.preset.weekdayStyle !== 'long' && value.preset.weekdayStyle !== 'short' && value.preset.weekdayStyle !== 'narrow')
+        issues.push(createIssue(`${path}/preset/weekdayStyle`, 'must be long, short, or narrow when provided', 'schema.material.binding-format.preset.weekday-style.invalid'))
+      for (const field of ['minimumFractionDigits', 'maximumFractionDigits']) {
+        if (value.preset[field] != null && (!Number.isInteger(value.preset[field]) || (value.preset[field] as number) < 0))
+          issues.push(createIssue(`${path}/preset/${field}`, 'must be a non-negative integer when provided', `schema.material.binding-format.preset.${field}.invalid`))
+      }
+    }
+  }
+  if (value.custom != null) {
+    if (!isObject(value.custom) || typeof value.custom.source !== 'string')
+      issues.push(createIssue(`${path}/custom/source`, 'must be a string', 'schema.material.binding-format.custom.source.invalid'))
+  }
+}
+
+function validateExtensions(value: unknown, path: string, issues: SchemaValidationIssue[], codePrefix: string): void {
+  if (value != null && !isObject(value))
+    issues.push(createIssue(`${path}/extensions`, 'must be an object when provided', `${codePrefix}.extensions.invalid`))
 }
 
 function validateGeometry(value: Record<string, unknown>, path: string, issues: SchemaValidationIssue[]): void {
@@ -362,27 +438,27 @@ function validateRenderCondition(value: unknown, path: string, issues: SchemaVal
     return
   }
   if (value.enabled != null && typeof value.enabled !== 'boolean')
-    issues.push(createIssue(`${path}.enabled`, 'must be a boolean when provided', 'schema.condition.enabled.invalid'))
+    issues.push(createIssue(joinPointer(path, 'enabled'), 'must be a boolean when provided', 'schema.condition.enabled.invalid'))
   if (value.whenMatched !== 'show' && value.whenMatched !== 'hide')
-    issues.push(createIssue(`${path}.whenMatched`, 'must be show or hide', 'schema.condition.whenMatched.invalid'))
+    issues.push(createIssue(joinPointer(path, 'whenMatched'), 'must be show or hide', 'schema.condition.whenMatched.invalid'))
   if (value.whenHidden != null && value.whenHidden !== 'remove' && value.whenHidden !== 'reserve')
-    issues.push(createIssue(`${path}.whenHidden`, 'must be remove or reserve when provided', 'schema.condition.whenHidden.invalid'))
+    issues.push(createIssue(joinPointer(path, 'whenHidden'), 'must be remove or reserve when provided', 'schema.condition.whenHidden.invalid'))
   if (value.onUnknown != null && value.onUnknown !== 'show' && value.onUnknown !== 'hide')
-    issues.push(createIssue(`${path}.onUnknown`, 'must be show or hide when provided', 'schema.condition.onUnknown.invalid'))
+    issues.push(createIssue(joinPointer(path, 'onUnknown'), 'must be show or hide when provided', 'schema.condition.onUnknown.invalid'))
   if (!Array.isArray(value.groups)) {
-    issues.push(createIssue(`${path}.groups`, 'must be an array', 'schema.condition.groups.invalid'))
+    issues.push(createIssue(joinPointer(path, 'groups'), 'must be an array', 'schema.condition.groups.invalid'))
     return
   }
   if (value.groups.length > CONDITION_MAX_GROUPS)
-    issues.push(createIssue(`${path}.groups`, `must contain at most ${CONDITION_MAX_GROUPS} groups`, 'schema.condition.groups.limit'))
+    issues.push(createIssue(joinPointer(path, 'groups'), `must contain at most ${CONDITION_MAX_GROUPS} groups`, 'schema.condition.groups.limit'))
   let rowCount = 0
   value.groups.forEach((group, index) => {
     if (isObject(group) && Array.isArray(group.conditions))
       rowCount += group.conditions.length
-    validateConditionGroup(group, `${path}.groups.${index}`, issues)
+    validateConditionGroup(group, joinPointer(path, 'groups', String(index)), issues)
   })
   if (rowCount > CONDITION_MAX_ROWS)
-    issues.push(createIssue(`${path}.groups`, `must contain at most ${CONDITION_MAX_ROWS} conditions`, 'schema.condition.rows.limit'))
+    issues.push(createIssue(joinPointer(path, 'groups'), `must contain at most ${CONDITION_MAX_ROWS} conditions`, 'schema.condition.rows.limit'))
 }
 
 function validateConditionGroup(value: unknown, path: string, issues: SchemaValidationIssue[]): void {
@@ -391,10 +467,10 @@ function validateConditionGroup(value: unknown, path: string, issues: SchemaVali
     return
   }
   if (!Array.isArray(value.conditions) || value.conditions.length === 0) {
-    issues.push(createIssue(`${path}.conditions`, 'must be a non-empty array', 'schema.condition.group.conditions.invalid'))
+    issues.push(createIssue(joinPointer(path, 'conditions'), 'must be a non-empty array', 'schema.condition.group.conditions.invalid'))
     return
   }
-  value.conditions.forEach((row, index) => validateConditionRow(row, `${path}.conditions.${index}`, issues))
+  value.conditions.forEach((row, index) => validateConditionRow(row, joinPointer(path, 'conditions', String(index)), issues))
 }
 
 function validateConditionRow(value: unknown, path: string, issues: SchemaValidationIssue[]): void {
@@ -402,47 +478,47 @@ function validateConditionRow(value: unknown, path: string, issues: SchemaValida
     issues.push(createIssue(path, 'must be a condition row object', 'schema.condition.row.invalid'))
     return
   }
-  validateConditionField(value.source, `${path}.source`, issues)
+  validateConditionField(value.source, joinPointer(path, 'source'), issues)
   const operator = isObject(value.operator) ? value.operator : undefined
   const compare = operator?.compare
   if (!operator)
-    issues.push(createIssue(`${path}.operator`, 'must be a condition operator object', 'schema.condition.operator.invalid'))
+    issues.push(createIssue(joinPointer(path, 'operator'), 'must be a condition operator object', 'schema.condition.operator.invalid'))
   else if (typeof compare !== 'string' || !CONDITION_COMPARE_OPERATORS.has(compare))
-    issues.push(createIssue(`${path}.operator.compare`, 'must be a supported comparison operator', 'schema.condition.operator.compare.invalid'))
+    issues.push(createIssue(joinPointer(path, 'operator', 'compare'), 'must be a supported comparison operator', 'schema.condition.operator.compare.invalid'))
   if (operator?.quantifier != null && (typeof operator.quantifier !== 'string' || !CONDITION_QUANTIFIERS.has(operator.quantifier)))
-    issues.push(createIssue(`${path}.operator.quantifier`, 'must be any, all, or none when provided', 'schema.condition.operator.quantifier.invalid'))
+    issues.push(createIssue(joinPointer(path, 'operator', 'quantifier'), 'must be any, all, or none when provided', 'schema.condition.operator.quantifier.invalid'))
   const unary = compare === 'exists' || compare === 'notExists' || compare === 'isEmpty' || compare === 'isNotEmpty'
   if (unary) {
     if (value.value != null)
-      issues.push(createIssue(`${path}.value`, 'must be omitted for unary operators', 'schema.condition.value.arity.invalid'))
+      issues.push(createIssue(joinPointer(path, 'value'), 'must be omitted for unary operators', 'schema.condition.value.arity.invalid'))
     if (value.valueType != null)
-      issues.push(createIssue(`${path}.valueType`, 'must be omitted for unary operators', 'schema.condition.valueType.unexpected'))
+      issues.push(createIssue(joinPointer(path, 'valueType'), 'must be omitted for unary operators', 'schema.condition.valueType.unexpected'))
   }
   else {
     const valueType = isConditionValueType(value.valueType) ? value.valueType : undefined
     if (!valueType)
-      issues.push(createIssue(`${path}.valueType`, 'must be a supported value type', 'schema.condition.valueType.invalid'))
+      issues.push(createIssue(joinPointer(path, 'valueType'), 'must be a supported value type', 'schema.condition.valueType.invalid'))
     if (compare === 'between' || compare === 'notBetween') {
       if (!Array.isArray(value.value) || value.value.length !== 2)
-        issues.push(createIssue(`${path}.value`, 'must contain exactly two values', 'schema.condition.value.arity.invalid'))
+        issues.push(createIssue(joinPointer(path, 'value'), 'must contain exactly two values', 'schema.condition.value.arity.invalid'))
       else
-        value.value.forEach((item, index) => validateConditionValue(item, `${path}.value.${index}`, issues, valueType))
+        value.value.forEach((item, index) => validateConditionValue(item, joinPointer(path, 'value', String(index)), issues, valueType))
     }
     else if (compare === 'in' || compare === 'notIn') {
       if (!Array.isArray(value.value) || value.value.length === 0)
-        issues.push(createIssue(`${path}.value`, 'must contain at least one value', 'schema.condition.value.arity.invalid'))
+        issues.push(createIssue(joinPointer(path, 'value'), 'must contain at least one value', 'schema.condition.value.arity.invalid'))
       else
-        value.value.forEach((item, index) => validateConditionValue(item, `${path}.value.${index}`, issues, valueType))
+        value.value.forEach((item, index) => validateConditionValue(item, joinPointer(path, 'value', String(index)), issues, valueType))
     }
     else if (Array.isArray(value.value) || value.value == null) {
-      issues.push(createIssue(`${path}.value`, 'must be a single condition value', 'schema.condition.value.arity.invalid'))
+      issues.push(createIssue(joinPointer(path, 'value'), 'must be a single condition value', 'schema.condition.value.arity.invalid'))
     }
     else {
-      validateConditionValue(value.value, `${path}.value`, issues, valueType)
+      validateConditionValue(value.value, joinPointer(path, 'value'), issues, valueType)
     }
   }
   if (value.options != null)
-    issues.push(createIssue(`${path}.options`, 'must be omitted', 'schema.condition.options.unexpected'))
+    issues.push(createIssue(joinPointer(path, 'options'), 'must be omitted', 'schema.condition.options.unexpected'))
 }
 
 function validateConditionValue(value: unknown, path: string, issues: SchemaValidationIssue[], valueType: ConditionValueType | undefined): void {
@@ -452,14 +528,14 @@ function validateConditionValue(value: unknown, path: string, issues: SchemaVali
   }
   if (value.kind === 'literal') {
     if (value.value !== null && !['string', 'number', 'boolean'].includes(typeof value.value))
-      issues.push(createIssue(`${path}.value`, 'must be a JSON scalar', 'schema.condition.literal.invalid'))
+      issues.push(createIssue(joinPointer(path, 'value'), 'must be a JSON scalar', 'schema.condition.literal.invalid'))
     if (typeof value.value === 'number' && !Number.isFinite(value.value))
-      issues.push(createIssue(`${path}.value`, 'must be a finite number', 'schema.condition.literal.invalid'))
+      issues.push(createIssue(joinPointer(path, 'value'), 'must be a finite number', 'schema.condition.literal.invalid'))
     if (valueType && !isConditionLiteralValueValid(value.value, valueType))
-      issues.push(createIssue(`${path}.value`, 'must match the condition value type', 'schema.condition.literal.type.invalid'))
+      issues.push(createIssue(joinPointer(path, 'value'), 'must match the condition value type', 'schema.condition.literal.type.invalid'))
     return
   }
-  issues.push(createIssue(`${path}.kind`, 'must be literal', 'schema.condition.value.kind.invalid'))
+  issues.push(createIssue(joinPointer(path, 'kind'), 'must be literal', 'schema.condition.value.kind.invalid'))
 }
 
 function validateConditionField(value: unknown, path: string, issues: SchemaValidationIssue[]): void {
@@ -468,7 +544,7 @@ function validateConditionField(value: unknown, path: string, issues: SchemaVali
     return
   }
   if (typeof value.path !== 'string' || value.path.trim() === '')
-    issues.push(createIssue(`${path}.path`, 'must be a valid path', 'schema.condition.field.path.invalid'))
+    issues.push(createIssue(joinPointer(path, 'path'), 'must be a valid path', 'schema.condition.field.path.invalid'))
 }
 
 function validatePageModel(value: unknown, issues: SchemaValidationIssue[]): void {

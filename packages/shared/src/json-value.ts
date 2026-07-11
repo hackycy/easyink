@@ -118,6 +118,7 @@ export function cloneJsonValue<T extends JsonValue>(value: T, options: JsonValue
     return value
 
   const root = createCloneContainer(value)
+  const clones = new WeakMap<object, JsonArray | JsonObject>([[value, root]])
   const stack: Array<{ source: JsonArray | JsonObject, target: JsonArray | JsonObject }> = [
     { source: value, target: root },
   ]
@@ -127,17 +128,22 @@ export function cloneJsonValue<T extends JsonValue>(value: T, options: JsonValue
     const keys = Array.isArray(source) ? Array.from({ length: source.length }, (_, index) => String(index)) : Object.keys(source)
     for (const key of keys) {
       const sourceValue = Object.getOwnPropertyDescriptor(source, key)!.value as JsonValue
-      const clonedValue = sourceValue !== null && typeof sourceValue === 'object'
+      const existingClone = sourceValue !== null && typeof sourceValue === 'object'
+        ? clones.get(sourceValue)
+        : undefined
+      const clonedValue = existingClone ?? (sourceValue !== null && typeof sourceValue === 'object'
         ? createCloneContainer(sourceValue)
-        : sourceValue
+        : sourceValue)
       Object.defineProperty(target, key, {
         value: clonedValue,
         enumerable: true,
         configurable: true,
         writable: true,
       })
-      if (sourceValue !== null && typeof sourceValue === 'object')
+      if (sourceValue !== null && typeof sourceValue === 'object' && !existingClone) {
+        clones.set(sourceValue, clonedValue as JsonArray | JsonObject)
         stack.push({ source: sourceValue, target: clonedValue as JsonArray | JsonObject })
+      }
     }
   }
 
