@@ -209,6 +209,15 @@ export type {
   SelectionSnapshot,
   ToolbarAction,
 } from './material-extension'
+export { MaterialFacetHost } from './material-facet-host'
+export type {
+  FacetDiagnostic,
+  FacetDiagnosticCode,
+  FacetInstance,
+  FacetState,
+  MaterialFacetHostOptions,
+  RuntimeMaterialSurface,
+} from './material-facet-host'
 export { admitMaterialGraph } from './material-graph-admission'
 export type {
   CloneMaterialGraphOptions,
@@ -249,6 +258,7 @@ export {
   walkMaterialNodes,
   writePointer,
 } from './material-introspection'
+
 export { deepFreezeManifest, defineMaterialManifest, MATERIAL_API_VERSION, MATERIAL_MANIFEST_VERSION } from './material-manifest'
 export type {
   MaterialAIFacet,
