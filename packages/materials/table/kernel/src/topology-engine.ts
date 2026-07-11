@@ -74,6 +74,7 @@ export function applyTableTopologyDelta(
     validateTableTopologyEdit(probe, edit)
     applyTableTopologyEdit(probe, edit)
   }
+  assertValidTableModel(probe)
   for (const edit of delta.forward)
     applyTableTopologyEdit(draft, edit)
 }
@@ -99,6 +100,8 @@ export function invertTableTopologyDelta(delta: TableTopologyDelta): TableTopolo
 }
 
 function validateTableTopologyEdit(root: TableModel, edit: TableTopologyEdit): void {
+  if (edit.kind !== 'splice' && edit.kind !== 'set' && edit.kind !== 'delete')
+    throw new Error(`unknown table topology edit kind: ${String((edit as { kind?: unknown }).kind)}`)
   if (edit.kind === 'splice') {
     const target = valueAt(root, edit.path)
     if (!Array.isArray(target))
@@ -155,8 +158,10 @@ function applyTableTopologyEdit(root: TableModel, edit: TableTopologyEdit): void
   const key = edit.path.at(-1)!
   if (edit.kind === 'delete')
     delete parent[key]
-  else
+  else if (edit.kind === 'set')
     parent[key] = deepClone(edit.value)
+  else
+    throw new Error(`unknown table topology edit kind: ${String((edit as { kind?: unknown }).kind)}`)
 }
 
 function finishDelta(
@@ -331,6 +336,17 @@ function allRows(model: TableModel): Array<{ bandIndex: number, rowIndex: number
     band.rows.map((row, rowIndex) => ({ bandIndex, rowIndex, row })))
 }
 
+function cellsMatchColumns(cells: readonly TableCell[], columns: readonly TableColumn[]): boolean {
+  return cells.length === columns.length && cells.every((cell, index) => cell.columnId === columns[index]!.id)
+}
+
+function cellForColumn(row: TableRow, columnId: TableColumnId): TableCell {
+  const cell = row.cells.find(candidate => candidate.columnId === columnId)
+  if (!cell)
+    throw new Error(`row ${row.id} has no cell for column ${columnId}`)
+  return cell
+}
+
 function rowLocation(model: TableModel, rowId: TableRowId): { bandIndex: number, rowIndex: number, band: TableBand } {
   for (let bandIndex = 0; bandIndex < model.bands.length; bandIndex++) {
     const band = model.bands[bandIndex]!
@@ -452,11 +468,18 @@ export class TableTopologyEngine {
     const columnId = allocateTableIdentity(input.identities, 'column', occupied)
     const column: TableColumn = { id: columnId, track: deepClone(input.track) }
     const insertedCells = allRows(source).map(() => emptyCell(columnId, input.identities, occupied))
+    const rowPlans = allRows(source).map(({ row }, offset) => {
+      const insertedCell = insertedCells[offset]!
+      const sourceIsCanonical = cellsMatchColumns(row.cells, source.columns)
+      const canonicalCells = source.columns.map(sourceColumn => cellForColumn(row, sourceColumn.id))
+      const nextCells = [...canonicalCells.slice(0, index), insertedCell, ...canonicalCells.slice(index)]
+      return { row, insertedCell, sourceIsCanonical, nextCells }
+    })
     const virtualBands = source.bands.map((band, bandIndex) => ({
       ...band,
       rows: band.rows.map((row, rowIndex) => ({
         ...row,
-        cells: [...row.cells.slice(0, index), insertedCells[virtualRowOffset(source, bandIndex, rowIndex)]!, ...row.cells.slice(index)],
+        cells: rowPlans[virtualRowOffset(source, bandIndex, rowIndex)]!.nextCells,
       })),
     }))
     const virtualColumns = [...source.columns.slice(0, index), column, ...source.columns.slice(index)]
@@ -469,8 +492,16 @@ export class TableTopologyEngine {
     const forward: TableTopologyEdit[] = [spliceEdit(['columns'], index, 0, [column])]
     const inverse: TableTopologyEdit[] = []
     allRows(source).forEach(({ bandIndex, rowIndex, row }, offset) => {
-      forward.push(spliceEdit(['bands', bandIndex, 'rows', rowIndex, 'cells'], index, 0, [insertedCells[offset]!]))
-      inverse.push(spliceEdit(['bands', bandIndex, 'rows', rowIndex, 'cells'], index, 1, []))
+      const plan = rowPlans[offset]!
+      const path = ['bands', bandIndex, 'rows', rowIndex, 'cells'] as const
+      if (plan.sourceIsCanonical) {
+        forward.push(spliceEdit(path, index, 0, [plan.insertedCell]))
+        inverse.push(spliceEdit(path, index, 1, []))
+      }
+      else {
+        forward.push(spliceEdit(path, 0, row.cells.length, plan.nextCells))
+        inverse.push(spliceEdit(path, 0, plan.nextCells.length, row.cells))
+      }
       if (row.cells.length !== source.columns.length)
         throw new Error('row coverage is invalid')
     })
@@ -542,31 +573,51 @@ export class TableTopologyEngine {
     if (!input)
       throw new Error('column reorder options are required')
     const moved = reorderedIds(source.columns.map(column => column.id), columnId, input.target, 'column')
-    if (moved.from === moved.to)
-      return finishDelta(input.topologyRevision, [], [])
     const virtualColumns = moved.ids.map(id => source.columns.find(column => column.id === id)!)
-    const virtualBands = source.bands.map(band => ({
+    const rowPlans = allRows(source).map(({ row }) => ({
+      row,
+      sourceIsCanonical: cellsMatchColumns(row.cells, source.columns),
+      movedCell: cellForColumn(row, columnId),
+      nextCells: moved.ids.map(id => cellForColumn(row, id)),
+    }))
+    if (moved.from === moved.to && rowPlans.every(plan => plan.sourceIsCanonical))
+      return finishDelta(input.topologyRevision, [], [])
+    const virtualBands = source.bands.map((band, bandIndex) => ({
       ...band,
-      rows: band.rows.map(row => ({
+      rows: band.rows.map((row, rowIndex) => ({
         ...row,
-        cells: moved.ids.map(id => row.cells.find(cell => cell.columnId === id)!),
+        cells: rowPlans[virtualRowOffset(source, bandIndex, rowIndex)]!.nextCells,
       })),
     }))
     const nextMerges = rebuildMerges(source, virtualColumns, virtualBands, merge => merge)
     const mergeEdits = mergesEdit(source.merges, nextMerges)
-    const forward: TableTopologyEdit[] = [
-      spliceEdit(['columns'], moved.from, 1, []),
-      spliceEdit(['columns'], moved.to, 0, [source.columns[moved.from]!]),
-    ]
-    const inverse: TableTopologyEdit[] = [
-      spliceEdit(['columns'], moved.to, 1, []),
-      spliceEdit(['columns'], moved.from, 0, [source.columns[moved.from]!]),
-    ]
-    allRows(source).forEach(({ bandIndex, rowIndex, row }) => {
-      forward.push(spliceEdit(['bands', bandIndex, 'rows', rowIndex, 'cells'], moved.from, 1, []))
-      forward.push(spliceEdit(['bands', bandIndex, 'rows', rowIndex, 'cells'], moved.to, 0, [row.cells[moved.from]!]))
-      inverse.push(spliceEdit(['bands', bandIndex, 'rows', rowIndex, 'cells'], moved.to, 1, []))
-      inverse.push(spliceEdit(['bands', bandIndex, 'rows', rowIndex, 'cells'], moved.from, 0, [row.cells[moved.from]!]))
+    const forward: TableTopologyEdit[] = moved.from === moved.to
+      ? []
+      : [
+          spliceEdit(['columns'], moved.from, 1, []),
+          spliceEdit(['columns'], moved.to, 0, [source.columns[moved.from]!]),
+        ]
+    const inverse: TableTopologyEdit[] = moved.from === moved.to
+      ? []
+      : [
+          spliceEdit(['columns'], moved.to, 1, []),
+          spliceEdit(['columns'], moved.from, 0, [source.columns[moved.from]!]),
+        ]
+    allRows(source).forEach(({ bandIndex, rowIndex }, offset) => {
+      const plan = rowPlans[offset]!
+      const path = ['bands', bandIndex, 'rows', rowIndex, 'cells'] as const
+      if (plan.sourceIsCanonical && moved.from === moved.to)
+        return
+      if (plan.sourceIsCanonical) {
+        forward.push(spliceEdit(path, moved.from, 1, []))
+        forward.push(spliceEdit(path, moved.to, 0, [plan.movedCell]))
+        inverse.push(spliceEdit(path, moved.to, 1, []))
+        inverse.push(spliceEdit(path, moved.from, 0, [plan.movedCell]))
+      }
+      else {
+        forward.push(spliceEdit(path, 0, plan.row.cells.length, plan.nextCells))
+        inverse.push(spliceEdit(path, 0, plan.nextCells.length, plan.row.cells))
+      }
     })
     forward.push(...mergeEdits.forward)
     inverse.unshift(...mergeEdits.inverse)

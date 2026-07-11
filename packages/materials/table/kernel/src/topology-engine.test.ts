@@ -148,6 +148,32 @@ describe('tableTopologyEngine structural operations', () => {
     }
     expect(() => applyTableTopologyDelta(draft, lateFailure, 0)).toThrow(/bounds/)
     expect(draft).toEqual(source)
+
+    const invalidModel: TableTopologyDelta = {
+      ...delta,
+      expectedTopologyRevision: 0,
+      forward: [{ kind: 'set', path: ['kind'], value: 'data' }],
+    }
+    expect(() => applyTableTopologyDelta(draft, invalidModel, 0)).toThrow(/data table model/)
+    expect(draft).toEqual(source)
+
+    const oneColumn = createTableModel({ kind: 'static', columnCount: 1, rowCount: 1 })
+    const removesSoleColumn: TableTopologyDelta = {
+      ...delta,
+      expectedTopologyRevision: 0,
+      forward: [{ kind: 'splice', path: ['columns'], index: 0, deleteCount: 1, values: [] }],
+    }
+    const oneColumnDraft = deepClone(oneColumn)
+    expect(() => applyTableTopologyDelta(oneColumnDraft, removesSoleColumn, 0)).toThrow(/at least one column/)
+    expect(oneColumnDraft).toEqual(oneColumn)
+
+    const unknownKind: TableTopologyDelta = {
+      ...delta,
+      expectedTopologyRevision: 0,
+      forward: [{ kind: 'replace', path: ['kind'], value: 'data' } as never],
+    }
+    expect(() => applyTableTopologyDelta(draft, unknownKind, 0)).toThrow(/edit kind/)
+    expect(draft).toEqual(source)
   })
 
   it('deep clones edit payloads and emits bounded exact scripts', () => {
@@ -168,6 +194,52 @@ describe('tableTopologyEngine structural operations', () => {
       (insertedEdit.values[0] as { track: { weight: number } }).track.weight = 99
     expect(changed.columns[1]!.track).toEqual({ kind: 'fr', weight: 1 })
     expect(materializeTableTopologyDelta(changed, invertTableTopologyDelta(delta), 8)).toEqual(source)
+  })
+
+  it('canonicalizes reversed cell storage by column id and inverts to the exact source', () => {
+    const source = createTableModel({ kind: 'static', columnCount: 3, rowCount: 2 })
+    for (const row of source.bands[0]!.rows)
+      row.cells.reverse()
+    assertValidTableModel(source)
+    const original = deepClone(source)
+    const insert = TableTopologyEngine.planInsertColumn(source, {
+      target: { after: source.columns[0]!.id },
+      track: { kind: 'fr', weight: 1 },
+      identities: createSequentialTableIdentityAllocator('reversed-insert'),
+      topologyRevision: 9,
+    })
+    expect(insert.forward.filter(edit => edit.path.at(-1) === 'cells')).toHaveLength(2)
+    const inserted = materializeTableTopologyDelta(source, insert, 9)
+    for (const row of inserted.bands[0]!.rows) {
+      expect(row.cells.map(cell => cell.columnId)).toEqual(inserted.columns.map(column => column.id))
+      for (const originalCell of original.bands[0]!.rows.find(candidate => candidate.id === row.id)!.cells)
+        expect(row.cells.find(cell => cell.id === originalCell.id)).toEqual(originalCell)
+    }
+    expect(materializeTableTopologyDelta(inserted, invertTableTopologyDelta(insert), 10)).toEqual(original)
+
+    const reorder = TableTopologyEngine.planReorderColumn(source, {
+      columnId: source.columns[0]!.id,
+      target: { atEnd: true },
+      topologyRevision: 14,
+    })
+    expect(reorder.forward.filter(edit => edit.path.at(-1) === 'cells')).toHaveLength(2)
+    const reordered = materializeTableTopologyDelta(source, reorder, 14)
+    for (const row of reordered.bands[0]!.rows) {
+      expect(row.cells.map(cell => cell.columnId)).toEqual(reordered.columns.map(column => column.id))
+      for (const originalCell of original.bands[0]!.rows.find(candidate => candidate.id === row.id)!.cells)
+        expect(row.cells.find(cell => cell.id === originalCell.id)).toEqual(originalCell)
+    }
+    expect(materializeTableTopologyDelta(reordered, invertTableTopologyDelta(reorder), 15)).toEqual(original)
+
+    const noOpReorder = TableTopologyEngine.planReorderColumn(source, {
+      columnId: source.columns[0]!.id,
+      target: { before: source.columns[0]!.id },
+      topologyRevision: 20,
+    })
+    const canonicalized = materializeTableTopologyDelta(source, noOpReorder, 20)
+    for (const row of canonicalized.bands[0]!.rows)
+      expect(row.cells.map(cell => cell.columnId)).toEqual(canonicalized.columns.map(column => column.id))
+    expect(materializeTableTopologyDelta(canonicalized, invertTableTopologyDelta(noOpReorder), 21)).toEqual(original)
   })
 
   it('expands merges only across an inserted internal boundary and rejects discontinuous reorders', () => {
