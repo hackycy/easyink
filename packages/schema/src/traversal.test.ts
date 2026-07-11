@@ -10,8 +10,11 @@ function makeNode(id: string, children?: MaterialNode[]): MaterialNode {
     y: 0,
     width: 100,
     height: 50,
-    props: {},
-    children,
+    modelVersion: 1,
+    model: {},
+    slots: children ? { content: children } : {},
+    bindings: {},
+    output: { visibility: 'include' },
   }
 }
 

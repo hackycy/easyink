@@ -1,10 +1,24 @@
 import type { MaterialNode, PageSchema } from '@easyink/schema'
+import { recordSchemaAdapter } from '@easyink/core'
+import { createTestCompiledMaterialProfile, createTestMaterialManifest } from '@easyink/core/testing'
 import { describe, expect, it, vi } from 'vitest'
 import { DesignerStore } from '../store/designer-store'
 import { createClipboardActions } from './clipboard-actions'
 
 function makeNode(id: string, x = 0, y = 0): MaterialNode {
-  return { id, type: 'rect', x, y, width: 50, height: 50, props: {} } as MaterialNode
+  return {
+    id,
+    type: 'rect',
+    x,
+    y,
+    width: 50,
+    height: 50,
+    modelVersion: 1,
+    model: {},
+    slots: {},
+    bindings: {},
+    output: { visibility: 'include' },
+  }
 }
 
 function makeStore(elements: MaterialNode[], selected: string[] = [], page: PageSchema = { mode: 'fixed', width: 1000, height: 1000 }): DesignerStore {
@@ -89,5 +103,51 @@ describe('createClipboardActions', () => {
 
     expect(store.schema.elements).toHaveLength(2)
     expect(store.schema.elements[1]).toMatchObject({ x: 90, y: 90 })
+  })
+
+  it('rekeys references across duplicated roots with one identity map', () => {
+    const adapter = {
+      ...recordSchemaAdapter(1),
+      introspect: (node: MaterialNode) => ({
+        identities: [],
+        structures: [],
+        resources: [],
+        bindings: [],
+        references: typeof node.model.peerId === 'string'
+          ? [{
+              path: '/model/peerId' as const,
+              location: 'value' as const,
+              value: node.model.peerId,
+              target: { scope: 'document' as const, kind: 'node' },
+              required: true,
+            }]
+          : [],
+      }),
+    }
+    const profile = createTestCompiledMaterialProfile([
+      createTestMaterialManifest({ type: 'reference-box', schemaAdapter: adapter }),
+    ])
+    const first = profile.createNode('reference-box', { id: 'a', model: { peerId: 'b' } })
+    const second = profile.createNode('reference-box', { id: 'b', model: { peerId: 'a' } })
+    const store = makeStore([first, second], ['a', 'b'])
+    const actions = createClipboardActions(store, () => [first, second], profile)
+
+    actions.duplicateSelection()
+
+    const duplicates = store.schema.elements.slice(2)
+    expect(duplicates).toHaveLength(2)
+    expect(duplicates[0]!.model.peerId).toBe(duplicates[1]!.id)
+    expect(duplicates[1]!.model.peerId).toBe(duplicates[0]!.id)
+  })
+
+  it('rejects an invalid selection atomically before starting a paste transaction', () => {
+    const profile = createTestCompiledMaterialProfile()
+    const store = makeStore([])
+    const actions = createClipboardActions(store, () => [], profile)
+    store.clipboard = [makeNode('unknown')]
+
+    expect(() => actions.pasteClipboard()).toThrow('MATERIAL_TYPE_UNKNOWN')
+    expect(store.commands.beginTransaction).not.toHaveBeenCalled()
+    expect(store.schema.elements).toEqual([])
   })
 })

@@ -2,6 +2,8 @@ import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import type { FontDescriptor, FontProvider } from './font'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { collectFontFamilies, FontManager } from './font'
+import { recordSchemaAdapter } from './schema-adapter'
+import { createTestCompiledMaterialProfile, createTestMaterialManifest } from './testing/material-profile'
 
 function createSchema(input: { page?: Partial<DocumentSchema['page']>, elements?: MaterialNode[] }): DocumentSchema {
   return {
@@ -263,46 +265,27 @@ describe('fontManager', () => {
       ],
     }))
 
-    expect([...families]).toEqual(['TableFont', 'FlowFont'])
+    expect(families).toEqual(new Set(['TableFont', 'FlowFont']))
   })
 
-  it('collectFontFamilies traverses hosted table cell elements', () => {
-    const families = collectFontFamilies(createSchema({
-      elements: [
-        {
-          id: 'table-1',
-          type: 'table-static',
-          x: 0,
-          y: 0,
-          width: 80,
-          height: 20,
-          props: {},
-          table: {
-            kind: 'static',
-            topology: {
-              columns: [{ ratio: 1 }],
-              rows: [{
-                height: 20,
-                cells: [{
-                  content: {
-                    elements: [{
-                      id: 'text-1',
-                      type: 'text',
-                      x: 0,
-                      y: 0,
-                      width: 10,
-                      height: 10,
-                      props: { fontFamily: 'HostedFont' },
-                    }],
-                  },
-                }],
-              }],
-            },
-            layout: {},
-          },
-        } as unknown as MaterialNode,
-      ],
-    }))
+  it('collectFontFamilies reads private table typography through resource introspection', () => {
+    const adapter = {
+      ...recordSchemaAdapter(1),
+      introspect: (node: MaterialNode) => ({
+        identities: [],
+        structures: [],
+        references: [],
+        bindings: [],
+        resources: [{
+          path: '/model/cells/byId/c1/typography/fontFamily' as const,
+          value: String((node.model.cells as { byId: { c1: { typography: { fontFamily: string } } } }).byId.c1.typography.fontFamily),
+          kind: 'font' as const,
+        }],
+      }),
+    }
+    const profile = createTestCompiledMaterialProfile([createTestMaterialManifest({ type: 'table-static', schemaAdapter: adapter })])
+    const table = profile.createNode('table-static', { id: 'table-1', model: { cells: { byId: { c1: { typography: { fontFamily: 'HostedFont' } } } } } })
+    const families = collectFontFamilies(createSchema({ elements: [table] }), profile)
 
     expect([...families]).toEqual(['HostedFont'])
   })

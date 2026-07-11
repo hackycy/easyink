@@ -1,7 +1,9 @@
+import type { CompiledMaterialProfile } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { DesignerStore } from '../store/designer-store'
 import {
   AddMaterialCommand,
+  cloneMaterialGraph,
   isInteractable,
   RemoveMaterialCommand,
   UnitManager,
@@ -20,13 +22,23 @@ export interface ClipboardActions {
 export function createClipboardActions(
   store: DesignerStore,
   getSelectedNodes: () => readonly MaterialNode[],
+  // Tasks 11-12 make the active profile mandatory at the Designer host boundary.
+  materialProfile?: CompiledMaterialProfile,
 ): ClipboardActions {
   function snapshotSelectedNodes(): MaterialNode[] {
     return [...getSelectedNodes()]
   }
 
-  function cloneNodes(nodes: readonly MaterialNode[]): MaterialNode[] {
-    return nodes.map(node => deepClone(node))
+  function cloneNodes(nodes: readonly MaterialNode[], rekey: boolean): MaterialNode[] {
+    if (!materialProfile)
+      return nodes.map(node => deepClone(node))
+    const result = cloneMaterialGraph(nodes, materialProfile, {
+      createIdentity: identity => rekey ? generateId(identity.kind.replaceAll('.', '-')) : identity.value,
+    })
+    const error = result.diagnostics.find(item => item.severity === 'error')
+    if (error)
+      throw new Error(`${error.code}: ${error.message}`)
+    return result.roots
   }
 
   function pasteOffset(): number {
@@ -50,7 +62,7 @@ export function createClipboardActions(
     const nodes = snapshotSelectedNodes().filter(isInteractable)
     if (nodes.length === 0)
       return
-    store.clipboard = cloneNodes(nodes)
+    store.clipboard = cloneNodes(nodes, false)
   }
 
   function cutSelection() {
@@ -58,7 +70,7 @@ export function createClipboardActions(
     if (nodes.length === 0)
       return
 
-    store.clipboard = cloneNodes(nodes)
+    store.clipboard = cloneNodes(nodes, false)
     const elements = store.schema.elements
 
     runTransaction('Cut', () => {
@@ -76,12 +88,12 @@ export function createClipboardActions(
     const elements = store.schema.elements
     const offset = pasteOffset()
     const newIds: string[] = []
+    const cloned = cloneNodes(store.clipboard, true)
 
     runTransaction('Paste', () => {
-      for (const node of store.clipboard) {
+      for (const node of cloned) {
         const pasted: MaterialNode = {
-          ...deepClone(node),
-          id: generateId('el'),
+          ...node,
           x: node.x + offset,
           y: node.y + offset,
         }
@@ -101,12 +113,12 @@ export function createClipboardActions(
     const elements = store.schema.elements
     const offset = pasteOffset()
     const newIds: string[] = []
+    const cloned = cloneNodes(nodes, true)
 
     runTransaction('Duplicate', () => {
-      for (const node of nodes) {
+      for (const node of cloned) {
         const duplicate: MaterialNode = {
-          ...deepClone(node),
-          id: generateId('el'),
+          ...node,
           x: node.x + offset,
           y: node.y + offset,
         }

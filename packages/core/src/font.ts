@@ -1,5 +1,6 @@
-import type { DocumentSchema } from '@easyink/schema'
-import { traverseNodes } from '@easyink/schema'
+import type { DocumentSchema, MaterialNode } from '@easyink/schema'
+import type { CompiledMaterialProfile } from './material-profile'
+import { walkMaterialNodes } from './material-introspection'
 
 /**
  * Font descriptor from a font provider.
@@ -333,15 +334,31 @@ function isSystemFontSource(source: FontSource): source is SystemFontSource {
   return typeof source === 'object' && !(source instanceof ArrayBuffer) && source.type === 'system'
 }
 
-export function collectFontFamilies(schema: DocumentSchema): Set<string> {
+export function collectFontFamilies(schema: DocumentSchema, profile?: CompiledMaterialProfile): Set<string> {
   const families = new Set<string>()
 
-  if (schema.page.font)
-    families.add(schema.page.font)
+  if (schema.page.font?.trim())
+    families.add(schema.page.font.trim())
 
-  traverseNodes(schema, (node) => {
-    collectPropsFontFamilies(node.props, families)
-  })
+  if (profile) {
+    walkMaterialNodes(schema, profile, (_node, _address, introspection) => {
+      for (const resource of introspection.resources) {
+        if (resource.kind === 'font' && resource.value.trim())
+          families.add(resource.value.trim())
+      }
+    })
+  }
+  else {
+    // Removed when Designer and Viewer require a compiled profile in Tasks 11-12.
+    const stack = [...schema.elements]
+    while (stack.length) {
+      const node = stack.pop()!
+      const legacy = node as unknown as { props?: Record<string, unknown>, slots?: Record<string, MaterialNode[]> }
+      collectPropsFontFamilies(legacy.props, families)
+      if (legacy.slots)
+        Object.values(legacy.slots).forEach(children => stack.push(...children))
+    }
+  }
 
   return families
 }

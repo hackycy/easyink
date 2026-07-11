@@ -1,5 +1,4 @@
 import type { DocumentSchema, MaterialNode } from './types'
-import { isTableNode } from './types'
 
 /**
  * Traverse all material nodes in a schema (depth-first).
@@ -22,23 +21,10 @@ function walkNode(
 ): void | false {
   if (callback(node, parent) === false)
     return false
-  if (node.children) {
-    for (const child of node.children) {
+  for (const children of Object.values(node.slots)) {
+    for (const child of children) {
       if (walkNode(child, node, callback) === false)
         return false
-    }
-  }
-  // Recurse into table cell hosted elements
-  if (isTableNode(node)) {
-    for (const row of node.table.topology.rows) {
-      for (const cell of row.cells) {
-        if (cell.content?.elements) {
-          for (const el of cell.content.elements) {
-            if (walkNode(el, node, callback) === false)
-              return false
-          }
-        }
-      }
     }
   }
 }

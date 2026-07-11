@@ -217,16 +217,39 @@ export type {
   ToolbarAction,
 } from './material-extension'
 export type {
+  CloneMaterialGraphOptions,
+  CloneMaterialGraphResult,
   JsonPointer,
   MaterialBindingSlot,
+  MaterialGraphDiagnostic,
+  MaterialGraphValidationOptions,
+  MaterialIdentity,
   MaterialIdentityEncoding,
+  MaterialIdentityKey,
   MaterialIdentityScope,
   MaterialIdentitySlot,
   MaterialIdentityTarget,
   MaterialIntrospection,
+  MaterialNodeAddress,
+  MaterialNodeVisitor,
   MaterialReferenceSlot,
   MaterialResourceSlot,
+  MaterialSlotAddress,
   MaterialStructureSlot,
+} from './material-introspection'
+export {
+  admitMaterialGraph,
+  cloneMaterialGraph,
+  cloneMaterialSubgraph,
+  createDefaultGraphIdentity,
+  formatMaterialIdentityKey,
+  formatMaterialNodeAddress,
+  inspectMaterialNode,
+  readPointer,
+  removePointer,
+  validateMaterialGraph,
+  walkMaterialNodes,
+  writePointer,
 } from './material-introspection'
 export { deepFreezeManifest, defineMaterialManifest, MATERIAL_API_VERSION, MATERIAL_MANIFEST_VERSION } from './material-manifest'
 export type {
