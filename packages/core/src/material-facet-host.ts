@@ -47,6 +47,7 @@ interface ActivationOperation {
   activatingSynchronously: boolean
   recursionDetected: boolean
   recursiveInstance?: FacetInstance<unknown>
+  updateRecursiveDiagnostic?: (diagnostic: FacetDiagnostic) => void
 }
 
 interface Deferred<T> {
@@ -103,12 +104,16 @@ export class MaterialFacetHost {
     if (operation) {
       if (operation.activatingSynchronously) {
         operation.recursionDetected = true
-        operation.recursiveInstance ??= createQuarantinedInstance(
-          profile,
-          materialType,
-          surface,
-          createDiagnostic(profile, materialType, surface, 'MATERIAL_FACET_ACTIVATION_FAILED', 'Recursive material facet activation'),
-        )
+        if (!operation.recursiveInstance) {
+          const recursive = createMutableQuarantinedInstance<T>(
+            profile,
+            materialType,
+            surface,
+            createDiagnostic(profile, materialType, surface, 'MATERIAL_FACET_ACTIVATION_FAILED', 'Recursive material facet activation'),
+          )
+          operation.recursiveInstance = recursive.instance as FacetInstance<unknown>
+          operation.updateRecursiveDiagnostic = recursive.updateDiagnostic
+        }
         return Promise.resolve(operation.recursiveInstance as FacetInstance<T>)
       }
       return operation.promise as Promise<FacetInstance<T>>
@@ -221,9 +226,30 @@ export class MaterialFacetHost {
           operation.activatingSynchronously = false
         }
         const value = await activation
-        instance = operation.recursionDetected
-          ? operation.recursiveInstance as FacetInstance<T>
-          : this.createActiveInstance(profile, materialType, surface, value, cache, key)
+        if (operation.recursionDetected) {
+          if (value !== operation.recursiveInstance) {
+            try {
+              operation.activatingSynchronously = true
+              const cleanup = disposeFacetValue(value)
+              operation.activatingSynchronously = false
+              await cleanup
+            }
+            catch {
+              operation.activatingSynchronously = false
+              operation.updateRecursiveDiagnostic?.(createDiagnostic(
+                profile,
+                materialType,
+                surface,
+                'MATERIAL_FACET_ACTIVATION_FAILED',
+                'Recursive activation cleanup failed',
+              ))
+            }
+          }
+          instance = operation.recursiveInstance as FacetInstance<T>
+        }
+        else {
+          instance = this.createActiveInstance(profile, materialType, surface, value, cache, key)
+        }
       }
     }
     catch (error) {
@@ -314,6 +340,29 @@ function createQuarantinedInstance<T>(
     diagnostic,
     dispose: async () => {},
   })
+}
+
+function createMutableQuarantinedInstance<T>(
+  profile: CompiledMaterialProfile,
+  materialType: string,
+  surface: RuntimeMaterialSurface,
+  initialDiagnostic: FacetDiagnostic,
+): { instance: FacetInstance<T>, updateDiagnostic: (diagnostic: FacetDiagnostic) => void } {
+  let diagnostic = initialDiagnostic
+  const instance: FacetInstance<T> = Object.freeze({
+    profile,
+    materialType,
+    surface,
+    state: 'quarantined' as const,
+    get diagnostic() { return diagnostic },
+    dispose: async () => {},
+  })
+  return {
+    instance,
+    updateDiagnostic: (nextDiagnostic) => {
+      diagnostic = nextDiagnostic
+    },
+  }
 }
 
 function facetKey(materialType: string, surface: RuntimeMaterialSurface): string {

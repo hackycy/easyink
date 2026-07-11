@@ -114,6 +114,71 @@ describe('material facet host', () => {
     expect(factory).toHaveBeenCalledTimes(1)
   })
 
+  it('cleans up a disposable value returned after same-key activation recursion exactly once', async () => {
+    const events: string[] = []
+    const valueDispose = vi.fn(() => {
+      events.push('value:disposed')
+    })
+    const host = new MaterialFacetHost()
+    let profile!: ReturnType<typeof createTestCompiledMaterialProfile>
+    const factory = vi.fn(() => {
+      void host.activate(profile, 'recursive-value', 'viewer')
+      events.push('factory:return')
+      return { dispose: valueDispose }
+    })
+    profile = createTestCompiledMaterialProfile([
+      createTestMaterialManifest({ type: 'recursive-value', viewer: factory }),
+    ])
+
+    const instance = await host.activate(profile, 'recursive-value', 'viewer')
+    events.push('activation:settled')
+
+    expect(instance.state).toBe('quarantined')
+    expect(events).toEqual(['factory:return', 'value:disposed', 'activation:settled'])
+    expect(valueDispose).toHaveBeenCalledTimes(1)
+    expect(host.peek(profile, 'recursive-value', 'viewer')).toBe(instance)
+    await host.dispose()
+    expect(valueDispose).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the exact recursion quarantine and records bounded cleanup failure', async () => {
+    const reflected = vi.fn(() => {
+      throw new Error('cleanup error reflection must not run')
+    })
+    const cleanupFailure = new Proxy({}, {
+      getOwnPropertyDescriptor: reflected,
+      getPrototypeOf: reflected,
+    })
+    let valueDisposeCalls = 0
+    const valueDispose = () => {
+      valueDisposeCalls += 1
+      throw cleanupFailure
+    }
+    const host = new MaterialFacetHost()
+    let profile!: ReturnType<typeof createTestCompiledMaterialProfile>
+    let recursiveActivation!: ReturnType<MaterialFacetHost['activate']>
+    const factory = vi.fn(() => {
+      recursiveActivation = host.activate(profile, 'recursive-cleanup-failure', 'viewer')
+      return { dispose: valueDispose }
+    })
+    profile = createTestCompiledMaterialProfile([
+      createTestMaterialManifest({ type: 'recursive-cleanup-failure', viewer: factory }),
+    ])
+
+    const outerInstance = await host.activate(profile, 'recursive-cleanup-failure', 'viewer')
+    const recursiveInstance = await recursiveActivation
+
+    expect(outerInstance).toBe(recursiveInstance)
+    expect(outerInstance.state).toBe('quarantined')
+    expect(outerInstance.diagnostic?.code).toBe('MATERIAL_FACET_ACTIVATION_FAILED')
+    expect(outerInstance.diagnostic?.cause?.message).toBe('Recursive activation cleanup failed')
+    expect(host.peek(profile, 'recursive-cleanup-failure', 'viewer')).toBe(outerInstance)
+    expect(valueDisposeCalls).toBe(1)
+    expect(reflected).not.toHaveBeenCalled()
+    await expect(host.dispose()).resolves.toEqual([])
+    expect(valueDisposeCalls).toBe(1)
+  })
+
   it.each([
     ['primitive', 'primitive failure'],
     ['hostile error', hostileError()],
