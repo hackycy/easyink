@@ -242,6 +242,22 @@ export type {
   MaterialSurface,
 } from './material-manifest'
 
+export {
+  compileMaterialProfile,
+  DEFAULT_SCHEMA_ADMISSION_BUDGET,
+  EASYINK_ENGINE_VERSION,
+  MATERIAL_ADMISSION_BUDGET_CEILINGS,
+  MaterialNodeCreationError,
+  MaterialProfileCompileError,
+} from './material-profile'
+export type {
+  CompiledMaterialProfile,
+  CompileMaterialProfileInput,
+  MaterialPackageRegistration,
+  MaterialProfileDiagnostic,
+  SchemaAdmissionBudget,
+} from './material-profile'
+
 export type { PropertyAccessor, PropertyDescriptor } from './material-properties'
 export type {
   FragmentPaginateInput,
