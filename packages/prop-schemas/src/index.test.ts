@@ -118,6 +118,13 @@ describe('designer prop schemas', () => {
       },
     }
 
+    const expectedPaths: Record<string, Array<{ op: string, path: string[], value: unknown }>> = {
+      'placement.mode': [{ op: 'add', path: ['output', 'placement'], value: { mode: 'fixed' } }],
+      'break.keepTogether': [{ op: 'add', path: ['output', 'break', 'keepTogether'], value: true }],
+      'break.before': [{ op: 'replace', path: ['output', 'break', 'before'], value: 'auto' }],
+      'break.after': [{ op: 'replace', path: ['output', 'break', 'after'], value: 'page' }],
+      'repeat.scope': [{ op: 'add', path: ['output', 'repeat'], value: { scope: 'every-output-page' } }],
+    }
     for (const schema of schemas) {
       const accessor = schema.accessor!
       const value = schema.key === 'placement.mode'
@@ -131,6 +138,7 @@ describe('designer prop schemas', () => {
       expect(patches.length).toBeGreaterThan(0)
       for (const patch of patches)
         expect(patch.path.slice(0, declared.length)).toEqual(declared)
+      expect(patches).toEqual(expectedPaths[schema.key])
     }
 
     const keepTogether = schemas.find(schema => schema.key === 'break.keepTogether')!
@@ -139,6 +147,60 @@ describe('designer prop schemas', () => {
     })
     expect(next.output.break).toEqual({ before: 'page', after: 'auto', keepTogether: true })
     expect(original.output.break).toEqual({ before: 'page', after: 'auto' })
+  })
+
+  it('creates own output composites without invoking polluted prototype setters', () => {
+    const schemas = createLayoutBehaviorPropSchemas({
+      page: {
+        layout: { strategy: 'stack-flow' },
+        reflow: { strategy: 'flow-y' },
+        pagination: { strategy: 'auto-sheets' },
+      },
+    })
+    let setterCalls = 0
+    const previous = new Map(['placement', 'break', 'repeat'].map(key =>
+      [key, Object.getOwnPropertyDescriptor(Object.prototype, key)] as const))
+    try {
+      for (const key of previous.keys()) {
+        // Intentional prototype pollution probe for canonical output writes.
+        // eslint-disable-next-line no-extend-native
+        Object.defineProperty(Object.prototype, key, {
+          configurable: true,
+          get: () => undefined,
+          set: () => { setterCalls++ },
+        })
+      }
+      for (const schema of schemas) {
+        const node = {
+          id: schema.key,
+          type: 'text',
+          x: 0,
+          y: 0,
+          width: 10,
+          height: 10,
+          modelVersion: 1,
+          model: {},
+          slots: {},
+          bindings: {},
+          output: { visibility: 'include' as const },
+        }
+        const value = schema.key === 'placement.mode' ? 'fixed' : true
+        schema.accessor!.write(node, value)
+        expect(Object.hasOwn(node.output, schema.accessor!.paths[0]!.split('/')[2]!)).toBe(true)
+      }
+    }
+    finally {
+      for (const [key, descriptor] of previous) {
+        if (descriptor) {
+          // eslint-disable-next-line no-extend-native
+          Object.defineProperty(Object.prototype, key, descriptor)
+        }
+        else {
+          delete (Object.prototype as Record<string, unknown>)[key]
+        }
+      }
+    }
+    expect(setterCalls).toBe(0)
   })
 
   it('passes descriptor validation when break accessors share a composite path', () => {

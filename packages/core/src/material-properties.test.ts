@@ -136,20 +136,42 @@ describe('property accessor', () => {
     expect({ getterCalls, setterCalls }).toEqual({ getterCalls: 0, setterCalls: 0 })
   })
 
-  it('rejects non-writable, frozen, and non-extensible write targets', () => {
+  it('rejects non-writable and missing writes on non-extensible targets', () => {
     const nonWritable: Record<string, unknown> = {}
     Object.defineProperty(nonWritable, 'value', { enumerable: true, value: 'fixed', writable: false })
     const valueAccessor = createModelPropertyAccessor<string>('/value')
     expect(() => valueAccessor.write(nodeWithModel(nonWritable), 'next'))
       .toThrowError('PROPERTY_ACCESSOR_WRITE_FORBIDDEN')
 
-    const frozen = Object.freeze({ nested: { value: 'fixed' } })
-    expect(() => createModelPropertyAccessor<string>('/nested/value').write(nodeWithModel(frozen), 'next'))
-      .toThrowError('PROPERTY_ACCESSOR_CONTAINER_FROZEN')
-
     const sealed = Object.preventExtensions<Record<string, unknown>>({ existing: true })
     expect(() => valueAccessor.write(nodeWithModel(sealed), 'next'))
       .toThrowError('PROPERTY_ACCESSOR_CONTAINER_NOT_EXTENSIBLE')
+  })
+
+  it('allows safe existing and descendant writes under sealed or frozen parents', () => {
+    const sealed = Object.preventExtensions({ value: 'before' })
+    createModelPropertyAccessor<string>('/value').write(nodeWithModel(sealed), 'after')
+    expect(sealed.value).toBe('after')
+
+    const nested = { value: 'before' }
+    const frozenParent = Object.freeze({ nested })
+    createModelPropertyAccessor<string>('/nested/value').write(nodeWithModel(frozenParent), 'after')
+    expect(nested.value).toBe('after')
+  })
+
+  it('allows Mutative to virtualize a frozen writable target while direct writes stay rejected', () => {
+    const frozen = Object.freeze({ value: 'before' })
+    const accessor = createModelPropertyAccessor<string>('/value')
+    expect(() => accessor.write(nodeWithModel(frozen), 'after'))
+      .toThrowError('PROPERTY_ACCESSOR_WRITE_FORBIDDEN')
+
+    const original = nodeWithModel(frozen)
+    const [next, patches] = create(original, (draft) => {
+      accessor.write(draft, 'after')
+    }, { enablePatches: true })
+    expect(next.model).toEqual({ value: 'after' })
+    expect(original.model).toEqual({ value: 'before' })
+    expect(patches).toEqual([{ op: 'replace', path: ['model', 'value'], value: 'after' }])
   })
 
   it('rejects accessors on Mutative drafts without triggering side effects', () => {
@@ -203,6 +225,51 @@ describe('property accessor', () => {
     expect(original.model).toEqual({})
     expect(next.model).toEqual({ matrix: [['cell']] })
     expect(patches).toEqual([{ op: 'add', path: ['model', 'matrix'], value: [['cell']] }])
+  })
+
+  it('constructs dense arrays without invoking inherited index setters', () => {
+    let setterCalls = 0
+    const previous = Object.getOwnPropertyDescriptor(Array.prototype, '0')
+    const accessor = createModelPropertyAccessor<string>('/matrix/0/0')
+    const install = () => {
+      // Intentional prototype pollution probe for safe offline construction.
+      // eslint-disable-next-line no-extend-native
+      return Object.defineProperty(Array.prototype, '0', {
+        configurable: true,
+        get: () => undefined,
+        set: () => { setterCalls++ },
+      })
+    }
+    const restore = () => {
+      if (previous) {
+        // eslint-disable-next-line no-extend-native
+        Object.defineProperty(Array.prototype, '0', previous)
+      }
+      else {
+        delete (Array.prototype as unknown as Record<string, unknown>)['0']
+      }
+    }
+    const direct = nodeWithModel({})
+    install()
+    try {
+      accessor.write(direct, 'direct')
+    }
+    finally {
+      restore()
+    }
+    const [next] = create(nodeWithModel({}), (draft) => {
+      install()
+      try {
+        accessor.write(draft, 'draft')
+      }
+      finally {
+        restore()
+      }
+    }, { enablePatches: true })
+
+    expect(setterCalls).toBe(0)
+    expect(direct.model).toEqual({ matrix: [['direct']] })
+    expect(next.model).toEqual({ matrix: [['draft']] })
   })
 
   it.each(['/rows/01/name', '/rows/-/name', '/rows/name', '/rows/2/name'])(
@@ -313,6 +380,40 @@ describe('validatePropertyDescriptors', () => {
       'PROPERTY_ACCESSOR_PATH_DUPLICATE',
       'PROPERTY_ACCESSOR_PATH_INVALID',
     ]))
+  })
+
+  it('never evaluates inherited or accessor descriptor metadata', () => {
+    let getterCalls = 0
+    const accessorDescriptor = Object.create(null) as Record<string, unknown>
+    Object.defineProperties(accessorDescriptor, {
+      key: {
+        enumerable: true,
+        get: () => {
+          getterCalls++
+          return 'unsafe'
+        },
+      },
+      label: { enumerable: true, value: 'Unsafe' },
+      type: { enumerable: true, value: 'string' },
+    })
+    const inherited = Object.create({ key: 'inherited', label: 'Inherited', type: 'string' })
+    const metadataGetter = { key: 'meta', label: 'Meta', type: 'string' }
+    Object.defineProperty(metadataGetter, 'editorOptions', {
+      enumerable: true,
+      get: () => {
+        getterCalls++
+        return {}
+      },
+    })
+
+    const diagnostics = validatePropertyDescriptors([accessorDescriptor, inherited, metadataGetter])
+
+    expect(getterCalls).toBe(0)
+    expect(diagnostics.filter(item => item.code === 'PROPERTY_DESCRIPTOR_INVALID')).toHaveLength(3)
+    expect(diagnostics).toContainEqual(expect.objectContaining({
+      code: 'PROPERTY_EDITOR_METADATA_INVALID',
+      descriptorKey: 'meta',
+    }))
   })
 
   it('accepts nonempty canonical frozen path declarations', () => {

@@ -34,6 +34,8 @@ const ASSET_VALUE_INPUT_KEYS = new Set([
   'previewFailedTitle',
 ])
 const TEXT_FILE_VALUE_INPUT_KEYS = new Set([...BASE_VALUE_INPUT_KEYS, 'kind', 'encoding', 'maxBytes'])
+const MISSING_PROPERTY = Symbol('missing-property')
+const INVALID_PROPERTY = Symbol('invalid-property')
 
 export interface BasePropertyValueInput {
   id: string
@@ -71,6 +73,13 @@ export interface PropertyAccessor<T = unknown> {
   write: (draft: MaterialNode, value: T) => void
 }
 
+export interface NodePropertyAccessorOptions<T> {
+  paths?: readonly JsonPointer[]
+  pathSharingGroup?: string
+  readValue?: (stored: unknown) => T
+  writeValue?: (value: T) => unknown
+}
+
 export interface PropertyDescriptor<T = unknown> {
   key: string
   label: string
@@ -105,19 +114,46 @@ export interface PropertyDescriptorDiagnostic {
 }
 
 export function createModelPropertyAccessor<T>(path: JsonPointer): PropertyAccessor<T> {
-  const tokens = decodePropertyPointer(path)
   const fullPath = `/model${path}` as JsonPointer
-  const paths = Object.freeze([fullPath])
+  decodePropertyPointer(path)
+  return createCanonicalPropertyAccessor<T>(fullPath, {}, false)
+}
 
-  return Object.freeze({
+export function createNodePropertyAccessor<T>(
+  path: JsonPointer,
+  options: NodePropertyAccessorOptions<T> = {},
+): PropertyAccessor<T> {
+  return createCanonicalPropertyAccessor(path, options, true)
+}
+
+function createCanonicalPropertyAccessor<T>(
+  path: JsonPointer,
+  options: NodePropertyAccessorOptions<T>,
+  shadowInheritedAccessors: boolean,
+): PropertyAccessor<T> {
+  const tokens = decodePropertyPointer(path)
+  const paths = Object.freeze([...(options.paths ?? [path])])
+  for (const declaredPath of paths)
+    decodePropertyPointer(declaredPath)
+
+  const accessor: PropertyAccessor<T> = {
     paths,
     read(node: MaterialNode): T {
-      return readOwnPath(node.model, tokens) as T
+      const stored = readOwnPath(node, tokens)
+      return options.readValue ? options.readValue(stored) : stored as T
     },
     write(draft: MaterialNode, value: T): void {
-      writeOwnPath(draft.model, tokens, value)
+      writeOwnPath(
+        draft,
+        tokens,
+        options.writeValue ? options.writeValue(value) : value,
+        shadowInheritedAccessors,
+      )
     },
-  })
+  }
+  if (options.pathSharingGroup !== undefined)
+    accessor.pathSharingGroup = options.pathSharingGroup
+  return Object.freeze(accessor)
 }
 
 export function resolvePropertyAccessor<T>(descriptor: PropertyDescriptor<T>): PropertyAccessor<T> {
@@ -135,7 +171,8 @@ export function validatePropertyDescriptors(descriptors: readonly unknown[]): re
       continue
     }
 
-    const key = typeof candidate.key === 'string' ? candidate.key : undefined
+    const keyValue = readOwnEnumerableData(candidate, 'key')
+    const key = typeof keyValue === 'string' ? keyValue : undefined
     const descriptorKey = key && key.trim() === key ? key : undefined
     if (!isValidDescriptor(candidate))
       diagnostics.push({ code: 'PROPERTY_DESCRIPTOR_INVALID', descriptorKey })
@@ -147,11 +184,14 @@ export function validatePropertyDescriptors(descriptors: readonly unknown[]): re
         keys.add(descriptorKey)
     }
 
-    if (candidate.editorOptions !== undefined && !isValidEditorOptions(candidate.editorOptions)) {
+    const editorOptions = readOwnEnumerableData(candidate, 'editorOptions')
+    if (editorOptions === INVALID_PROPERTY
+      || (editorOptions !== MISSING_PROPERTY && !isValidEditorOptions(editorOptions))) {
       diagnostics.push({ code: 'PROPERTY_EDITOR_METADATA_INVALID', descriptorKey })
     }
 
-    if (candidate.accessor === undefined) {
+    const accessorCandidate = readOwnEnumerableData(candidate, 'accessor')
+    if (accessorCandidate === MISSING_PROPERTY) {
       if (descriptorKey) {
         try {
           const accessor = createModelPropertyAccessor(`/${escapePointerToken(descriptorKey)}`)
@@ -167,25 +207,28 @@ export function validatePropertyDescriptors(descriptors: readonly unknown[]): re
       }
       continue
     }
-    if (!isPlainRecord(candidate.accessor)) {
+    if (accessorCandidate === INVALID_PROPERTY || !isPlainRecord(accessorCandidate)) {
       diagnostics.push({ code: 'PROPERTY_ACCESSOR_INVALID', descriptorKey })
       continue
     }
 
-    const accessor = candidate.accessor
-    if (typeof accessor.read !== 'function' || typeof accessor.write !== 'function')
+    const accessorPaths = readOwnEnumerableData(accessorCandidate, 'paths')
+    const accessorRead = readOwnEnumerableData(accessorCandidate, 'read')
+    const accessorWrite = readOwnEnumerableData(accessorCandidate, 'write')
+    const sharingGroup = readOwnEnumerableData(accessorCandidate, 'pathSharingGroup')
+    if (typeof accessorRead !== 'function' || typeof accessorWrite !== 'function')
       diagnostics.push({ code: 'PROPERTY_ACCESSOR_INVALID', descriptorKey })
-    if (accessor.pathSharingGroup !== undefined && !isNonemptyTrimmedString(accessor.pathSharingGroup))
+    if (sharingGroup !== MISSING_PROPERTY && !isNonemptyTrimmedString(sharingGroup))
       diagnostics.push({ code: 'PROPERTY_ACCESSOR_INVALID', descriptorKey })
-    if (!Array.isArray(accessor.paths) || accessor.paths.length === 0) {
+    if (!Array.isArray(accessorPaths) || accessorPaths.length === 0) {
       diagnostics.push({ code: 'PROPERTY_ACCESSOR_INVALID', descriptorKey })
       continue
     }
-    if (!Object.isFrozen(accessor.paths))
+    if (!Object.isFrozen(accessorPaths))
       diagnostics.push({ code: 'PROPERTY_ACCESSOR_PATHS_NOT_FROZEN', descriptorKey })
 
-    const accessorPaths = new Set<string>()
-    for (const path of accessor.paths) {
+    const uniqueAccessorPaths = new Set<string>()
+    for (const path of accessorPaths) {
       const pathValue = typeof path === 'string' ? path : undefined
       const status = inspectNodePointer(pathValue)
       if (status === 'invalid') {
@@ -196,16 +239,16 @@ export function validatePropertyDescriptors(descriptors: readonly unknown[]): re
         diagnostics.push({ code: 'PROPERTY_ACCESSOR_PATH_UNSAFE', descriptorKey, path: pathValue })
         continue
       }
-      if (accessorPaths.has(pathValue!)) {
+      if (uniqueAccessorPaths.has(pathValue!)) {
         diagnostics.push({ code: 'PROPERTY_ACCESSOR_PATH_DUPLICATE', descriptorKey, path: pathValue })
       }
       else {
-        accessorPaths.add(pathValue!)
+        uniqueAccessorPaths.add(pathValue!)
         effectivePaths.push(createEffectivePath(
           pathValue! as JsonPointer,
           true,
           descriptorKey,
-          typeof accessor.pathSharingGroup === 'string' ? accessor.pathSharingGroup : undefined,
+          typeof sharingGroup === 'string' ? sharingGroup : undefined,
         ))
       }
     }
@@ -300,35 +343,49 @@ function propertyAccessorPathErrorCode(error: unknown): 'PROPERTY_ACCESSOR_PATH_
 }
 
 function isValidDescriptor(value: Record<string, unknown>): boolean {
-  return isNonemptyTrimmedString(value.key)
-    && isNonemptyTrimmedString(value.label)
-    && PROPERTY_TYPES.has(value.type as PropSchemaType)
-    && (value.group === undefined || isNonemptyTrimmedString(value.group))
-    && (value.editor === undefined || isNonemptyTrimmedString(value.editor))
-    && (value.nullable === undefined || typeof value.nullable === 'boolean')
-    && finiteOrUndefined(value.min)
-    && finiteOrUndefined(value.max)
-    && finiteOrUndefined(value.step)
-    && validNumericRange(value)
-    && (value.visible === undefined || typeof value.visible === 'function')
-    && (value.disabled === undefined || typeof value.disabled === 'function')
-    && (!Object.hasOwn(value, 'default') || isJsonMetadata(value.default))
-    && isValidEnum(value.enum)
+  const key = readOwnEnumerableData(value, 'key')
+  const label = readOwnEnumerableData(value, 'label')
+  const type = readOwnEnumerableData(value, 'type')
+  const group = readOwnEnumerableData(value, 'group')
+  const editor = readOwnEnumerableData(value, 'editor')
+  const nullable = readOwnEnumerableData(value, 'nullable')
+  const min = readOwnEnumerableData(value, 'min')
+  const max = readOwnEnumerableData(value, 'max')
+  const step = readOwnEnumerableData(value, 'step')
+  const visible = readOwnEnumerableData(value, 'visible')
+  const disabled = readOwnEnumerableData(value, 'disabled')
+  const defaultValue = readOwnEnumerableData(value, 'default')
+  const enumValue = readOwnEnumerableData(value, 'enum')
+  const editorOptions = readOwnEnumerableData(value, 'editorOptions')
+  const accessor = readOwnEnumerableData(value, 'accessor')
+  return isNonemptyTrimmedString(key)
+    && isNonemptyTrimmedString(label)
+    && PROPERTY_TYPES.has(type as PropSchemaType)
+    && optionalField(group, isNonemptyTrimmedString)
+    && optionalField(editor, isNonemptyTrimmedString)
+    && optionalField(nullable, item => typeof item === 'boolean')
+    && optionalField(min, isFiniteNumber)
+    && optionalField(max, isFiniteNumber)
+    && optionalField(step, isFiniteNumber)
+    && validNumericRange(min, max, step)
+    && optionalField(visible, item => typeof item === 'function')
+    && optionalField(disabled, item => typeof item === 'function')
+    && optionalField(defaultValue, isJsonMetadata)
+    && optionalField(enumValue, isValidEnum)
+    && editorOptions !== INVALID_PROPERTY
+    && accessor !== INVALID_PROPERTY
 }
 
-function validNumericRange(value: Record<string, unknown>): boolean {
-  if (typeof value.min === 'number' && typeof value.max === 'number' && value.min > value.max)
+function validNumericRange(min: unknown, max: unknown, step: unknown): boolean {
+  if (typeof min === 'number' && typeof max === 'number' && min > max)
     return false
-  return value.step === undefined || (typeof value.step === 'number' && Number.isFinite(value.step) && value.step > 0)
+  return step === MISSING_PROPERTY || (typeof step === 'number' && Number.isFinite(step) && step > 0)
 }
 
 function isValidEnum(value: unknown): boolean {
-  if (value === undefined)
-    return true
   return Array.isArray(value) && value.every(item => isPlainRecord(item)
-    && isNonemptyTrimmedString(item.label)
-    && Object.hasOwn(item, 'value')
-    && isJsonMetadata(item.value))
+    && isNonemptyTrimmedString(readOwnEnumerableData(item, 'label'))
+    && validRequiredJsonField(item, 'value'))
 }
 
 function isJsonMetadata(value: unknown): boolean {
@@ -344,32 +401,39 @@ function isJsonMetadata(value: unknown): boolean {
 function isValidEditorOptions(value: unknown): boolean {
   if (!isPlainRecord(value) || !isJsonMetadata(value))
     return false
-  if (!Object.hasOwn(value, 'valueInput'))
+  const valueInput = readOwnEnumerableData(value, 'valueInput')
+  if (valueInput === MISSING_PROPERTY)
     return true
-  return isValidPropertyValueInput(value.valueInput)
+  return valueInput !== INVALID_PROPERTY && isValidPropertyValueInput(valueInput)
 }
 
 function isValidPropertyValueInput(value: unknown): boolean {
-  if (!isPlainRecord(value)
-    || !isNonemptyTrimmedString(value.id)
-    || !isNonemptyTrimmedString(value.source)
+  if (!isPlainRecord(value))
+    return false
+  const kind = readOwnEnumerableData(value, 'kind')
+  const id = readOwnEnumerableData(value, 'id')
+  const source = readOwnEnumerableData(value, 'source')
+  const payload = readOwnEnumerableData(value, 'payload')
+  if (!isNonemptyTrimmedString(id)
+    || !isNonemptyTrimmedString(source)
     || !optionalString(value, 'title')
     || !optionalString(value, 'pickTitle')
     || !optionalStringArray(value, 'accept')
-    || (value.payload !== undefined && !isPlainRecord(value.payload))) {
+    || !optionalField(payload, isPlainRecord)) {
     return false
   }
-  if (value.kind === 'asset-url') {
+  if (kind === 'asset-url') {
     return hasOnlyOwnKeys(value, ASSET_VALUE_INPUT_KEYS)
       && optionalString(value, 'clearTitle')
       && optionalString(value, 'previewTitle')
       && optionalString(value, 'previewLoadingTitle')
       && optionalString(value, 'previewFailedTitle')
   }
-  if (value.kind === 'text-file') {
+  if (kind === 'text-file') {
+    const maxBytes = readOwnEnumerableData(value, 'maxBytes')
     return hasOnlyOwnKeys(value, TEXT_FILE_VALUE_INPUT_KEYS)
       && optionalString(value, 'encoding')
-      && (value.maxBytes === undefined || (Number.isSafeInteger(value.maxBytes) && (value.maxBytes as number) > 0))
+      && optionalField(maxBytes, item => Number.isSafeInteger(item) && (item as number) > 0)
   }
   return false
 }
@@ -418,10 +482,15 @@ function readOwnPath(root: unknown, tokens: readonly string[]): unknown {
   return current
 }
 
-function writeOwnPath(root: unknown, tokens: readonly string[], value: unknown): void {
+function writeOwnPath(
+  root: unknown,
+  tokens: readonly string[],
+  value: unknown,
+  shadowInheritedAccessors = false,
+): void {
   let current = root
   for (let index = 0; index < tokens.length; index++) {
-    const source = assertWritableContainer(current)
+    const source = assertContainer(current)
     const token = resolveContainerToken(current, tokens[index]!, true)
     const leaf = index === tokens.length - 1
     const sourceDescriptor = Object.getOwnPropertyDescriptor(source, token)
@@ -432,7 +501,7 @@ function writeOwnPath(root: unknown, tokens: readonly string[], value: unknown):
     if (sourceDescriptor && !('value' in sourceDescriptor))
       throw new Error('PROPERTY_ACCESSOR_ACCESSOR_FORBIDDEN')
     if (currentDescriptor) {
-      assertDataDescriptorWritableWhenAssigned(currentDescriptor, leaf)
+      assertDataDescriptorWritableWhenAssigned(currentDescriptor, leaf, isDraft(current))
       if (leaf) {
         current[token] = value
         return
@@ -441,15 +510,16 @@ function writeOwnPath(root: unknown, tokens: readonly string[], value: unknown):
       continue
     }
 
+    assertCanAddProperty(source)
     if (sourceDescriptor)
-      assertDataDescriptorWritableWhenAssigned(sourceDescriptor, true)
+      assertDataDescriptorWritableWhenAssigned(sourceDescriptor, true, isDraft(current))
     else
-      assertMissingAssignmentSafe(source, token)
+      assertMissingAssignmentSafe(source, token, shadowInheritedAccessors)
     if (leaf) {
-      current[token] = value
+      safeOwnDataWrite(current, token, value)
       return
     }
-    current[token] = buildMissingSubtree(tokens.slice(index + 1), value)
+    safeOwnDataWrite(current, token, buildMissingSubtree(tokens.slice(index + 1), value))
     return
   }
 }
@@ -463,11 +533,11 @@ function buildMissingSubtree(tokens: readonly string[], value: unknown): unknown
 function writeNewSubtree(container: Record<string, unknown>, tokens: readonly string[], value: unknown): void {
   const token = resolveContainerToken(container, tokens[0]!, true)
   if (tokens.length === 1) {
-    container[token] = value
+    safeOwnDataWrite(container, token, value)
     return
   }
   const nested: Record<string, unknown> = isArrayIndexToken(tokens[1]!) ? [] : Object.create(null)
-  container[token] = nested
+  safeOwnDataWrite(container, token, nested)
   writeNewSubtree(nested, tokens.slice(1), value)
 }
 
@@ -475,40 +545,58 @@ function sourceContainer(container: Record<string, unknown>): Record<string, unk
   return isDraft(container) ? original(container) as Record<string, unknown> : container
 }
 
-function assertWritableContainer(value: unknown): Record<string, unknown> {
+function assertContainer(value: unknown): Record<string, unknown> {
   if (!isObjectLike(value))
     throw new Error('PROPERTY_ACCESSOR_CONTAINER_INVALID')
-  const source = sourceContainer(value)
-  if (Object.isFrozen(source))
-    throw new Error('PROPERTY_ACCESSOR_CONTAINER_FROZEN')
-  if (!Object.isExtensible(source))
+  return sourceContainer(value)
+}
+
+function assertCanAddProperty(container: Record<string, unknown>): void {
+  if (!Object.isExtensible(container))
     throw new Error('PROPERTY_ACCESSOR_CONTAINER_NOT_EXTENSIBLE')
-  return source
 }
 
 function assertDataDescriptorWritableWhenAssigned(
   descriptor: NonNullable<ReturnType<typeof Object.getOwnPropertyDescriptor>>,
   assigned: boolean,
+  virtualized: boolean,
 ): void {
   if (!('value' in descriptor))
     throw new Error('PROPERTY_ACCESSOR_ACCESSOR_FORBIDDEN')
-  if (assigned && descriptor.writable === false)
+  if (assigned && descriptor.writable === false && !virtualized)
     throw new Error('PROPERTY_ACCESSOR_WRITE_FORBIDDEN')
 }
 
-function assertMissingAssignmentSafe(container: Record<string, unknown>, token: string): void {
+function assertMissingAssignmentSafe(
+  container: Record<string, unknown>,
+  token: string,
+  shadowInheritedAccessors: boolean,
+): void {
   let prototype = Object.getPrototypeOf(container)
   while (prototype) {
     const inherited = Object.getOwnPropertyDescriptor(prototype, token)
     if (inherited) {
-      if (!('value' in inherited))
+      if (!('value' in inherited) && !shadowInheritedAccessors)
         throw new Error('PROPERTY_ACCESSOR_ACCESSOR_FORBIDDEN')
-      if (inherited.writable === false)
+      if ('value' in inherited && inherited.writable === false && !shadowInheritedAccessors)
         throw new Error('PROPERTY_ACCESSOR_WRITE_FORBIDDEN')
       return
     }
     prototype = Object.getPrototypeOf(prototype)
   }
+}
+
+function safeOwnDataWrite(container: Record<string, unknown>, token: string, value: unknown): void {
+  if (isDraft(container)) {
+    container[token] = value
+    return
+  }
+  Object.defineProperty(container, token, {
+    configurable: true,
+    enumerable: true,
+    writable: true,
+    value,
+  })
 }
 
 function resolveContainerToken(container: Record<string, unknown>, token: string, writing: boolean): string {
@@ -545,19 +633,42 @@ function isNonemptyTrimmedString(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0 && value.trim() === value
 }
 
-function finiteOrUndefined(value: unknown): boolean {
-  return value === undefined || (typeof value === 'number' && Number.isFinite(value))
-}
-
 function optionalString(value: Record<string, unknown>, key: string): boolean {
-  return value[key] === undefined || isNonemptyTrimmedString(value[key])
+  return optionalField(readOwnEnumerableData(value, key), isNonemptyTrimmedString)
 }
 
 function optionalStringArray(value: Record<string, unknown>, key: string): boolean {
-  return value[key] === undefined
-    || (Array.isArray(value[key]) && value[key].every(item => isNonemptyTrimmedString(item)))
+  return optionalField(
+    readOwnEnumerableData(value, key),
+    item => Array.isArray(item) && item.every(entry => isNonemptyTrimmedString(entry)),
+  )
 }
 
 function hasOnlyOwnKeys(value: Record<string, unknown>, allowed: ReadonlySet<string>): boolean {
   return Object.keys(value).every(key => allowed.has(key))
+}
+
+function readOwnEnumerableData(
+  value: Record<string, unknown>,
+  key: string,
+): unknown | typeof MISSING_PROPERTY | typeof INVALID_PROPERTY {
+  const descriptor = Object.getOwnPropertyDescriptor(value, key)
+  if (!descriptor)
+    return MISSING_PROPERTY
+  if (!descriptor.enumerable || !('value' in descriptor))
+    return INVALID_PROPERTY
+  return descriptor.value
+}
+
+function optionalField(value: unknown, validate: (value: unknown) => boolean): boolean {
+  return value === MISSING_PROPERTY || (value !== INVALID_PROPERTY && validate(value))
+}
+
+function isFiniteNumber(value: unknown): boolean {
+  return typeof value === 'number' && Number.isFinite(value)
+}
+
+function validRequiredJsonField(value: Record<string, unknown>, key: string): boolean {
+  const field = readOwnEnumerableData(value, key)
+  return field !== MISSING_PROPERTY && field !== INVALID_PROPERTY && isJsonMetadata(field)
 }

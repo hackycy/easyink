@@ -1,20 +1,5 @@
 import type { PropertyAccessor, PropertyDescriptor } from '@easyink/core'
-
-type MaterialNode = Parameters<PropertyAccessor['read']>[0]
-
-interface NodePlacementConfig {
-  mode?: 'flow' | 'fixed'
-}
-
-interface NodeBreakConfig {
-  keepTogether?: boolean
-  before?: 'auto' | 'page'
-  after?: 'auto' | 'page'
-}
-
-interface NodeRepeatConfig {
-  scope?: 'none' | 'every-output-page'
-}
+import { createNodePropertyAccessor } from '@easyink/core'
 
 export const FONT_WEIGHT_OPTIONS: NonNullable<PropertyDescriptor['enum']> = [
   { label: 'designer.option.normal', value: 'normal' },
@@ -55,53 +40,38 @@ export interface LayoutBehaviorPropContext {
   }
 }
 
-const placementAccessor: PropertyAccessor = {
-  paths: Object.freeze(['/output/placement']),
-  read: readPlacementMode,
-  write: (node, value) => {
-    node.output.placement ??= {}
-    node.output.placement.mode = value === 'fixed' ? 'fixed' : 'flow'
-  },
-}
+const placementAccessor: PropertyAccessor = createNodePropertyAccessor<unknown>('/output/placement/mode', {
+  paths: ['/output/placement'],
+  readValue: value => value === 'fixed' ? 'fixed' : 'flow',
+  writeValue: value => value === 'fixed' ? 'fixed' : 'flow',
+})
 
-const keepTogetherAccessor: PropertyAccessor = {
-  paths: Object.freeze(['/output/break']),
+const keepTogetherAccessor: PropertyAccessor = createNodePropertyAccessor<unknown>('/output/break/keepTogether', {
+  paths: ['/output/break'],
   pathSharingGroup: 'output.break',
-  read: node => readBreakConfig(node).keepTogether === true,
-  write: (node, value) => {
-    node.output.break ??= {}
-    node.output.break.keepTogether = value === true
-  },
-}
+  readValue: value => value === true,
+  writeValue: value => value === true,
+})
 
-const breakBeforeAccessor: PropertyAccessor = {
-  paths: Object.freeze(['/output/break']),
+const breakBeforeAccessor: PropertyAccessor = createNodePropertyAccessor<unknown>('/output/break/before', {
+  paths: ['/output/break'],
   pathSharingGroup: 'output.break',
-  read: node => readBreakConfig(node).before === 'page',
-  write: (node, value) => {
-    node.output.break ??= {}
-    node.output.break.before = value === true ? 'page' : 'auto'
-  },
-}
+  readValue: value => value === 'page',
+  writeValue: value => value === true ? 'page' : 'auto',
+})
 
-const breakAfterAccessor: PropertyAccessor = {
-  paths: Object.freeze(['/output/break']),
+const breakAfterAccessor: PropertyAccessor = createNodePropertyAccessor<unknown>('/output/break/after', {
+  paths: ['/output/break'],
   pathSharingGroup: 'output.break',
-  read: node => readBreakConfig(node).after === 'page',
-  write: (node, value) => {
-    node.output.break ??= {}
-    node.output.break.after = value === true ? 'page' : 'auto'
-  },
-}
+  readValue: value => value === 'page',
+  writeValue: value => value === true ? 'page' : 'auto',
+})
 
-const repeatAccessor: PropertyAccessor = {
-  paths: Object.freeze(['/output/repeat']),
-  read: node => readRepeatConfig(node).scope === 'every-output-page',
-  write: (node, value) => {
-    node.output.repeat ??= {}
-    node.output.repeat.scope = value === true ? 'every-output-page' : 'none'
-  },
-}
+const repeatAccessor: PropertyAccessor = createNodePropertyAccessor<unknown>('/output/repeat/scope', {
+  paths: ['/output/repeat'],
+  readValue: value => value === 'every-output-page',
+  writeValue: value => value === true ? 'every-output-page' : 'none',
+})
 
 export function createLayoutBehaviorPropSchemas(context: LayoutBehaviorPropContext): PropertyDescriptor[] {
   const page = context.page
@@ -166,18 +136,6 @@ export function createLayoutBehaviorPropSchemas(context: LayoutBehaviorPropConte
   })
 
   return schemas
-}
-
-function readPlacementMode(node: MaterialNode): NonNullable<NodePlacementConfig['mode']> {
-  return node.output.placement?.mode === 'fixed' ? 'fixed' : 'flow'
-}
-
-function readBreakConfig(node: MaterialNode): NodeBreakConfig {
-  return node.output.break ?? {}
-}
-
-function readRepeatConfig(node: MaterialNode): NodeRepeatConfig {
-  return node.output.repeat ?? { scope: 'none' }
 }
 
 /**

@@ -282,12 +282,14 @@ export type {
 
 export {
   createModelPropertyAccessor,
+  createNodePropertyAccessor,
   resolvePropertyAccessor,
   validatePropertyDescriptors,
 } from './material-properties'
 export type {
   AssetUrlPropertyValueInput,
   BasePropertyValueInput,
+  NodePropertyAccessorOptions,
   PropertyAccessor,
   PropertyDescriptor,
   PropertyDescriptorDiagnostic,
