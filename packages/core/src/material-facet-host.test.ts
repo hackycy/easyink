@@ -98,6 +98,22 @@ describe('material facet host', () => {
     expect(await host.activate(profile, 'viewer-only', 'designer')).toBe(instance)
   })
 
+  it('quarantines synchronous same-key activation recursion without self-waiting', async () => {
+    const host = new MaterialFacetHost()
+    let profile!: ReturnType<typeof createTestCompiledMaterialProfile>
+    const factory = vi.fn(() => host.activate(profile, 'recursive', 'viewer'))
+    profile = createTestCompiledMaterialProfile([
+      createTestMaterialManifest({ type: 'recursive', viewer: factory }),
+    ])
+
+    const instance = await settlesWithin(host.activate(profile, 'recursive', 'viewer'))
+
+    expect(instance.state).toBe('quarantined')
+    expect(instance.diagnostic?.code).toBe('MATERIAL_FACET_ACTIVATION_FAILED')
+    expect(host.peek(profile, 'recursive', 'viewer')).toBe(instance)
+    expect(factory).toHaveBeenCalledTimes(1)
+  })
+
   it.each([
     ['primitive', 'primitive failure'],
     ['hostile error', hostileError()],
@@ -111,6 +127,64 @@ describe('material facet host', () => {
 
     expect(instance.state).toBe('quarantined')
     expect(instance.diagnostic?.cause?.message).toEqual(expect.any(String))
+  })
+
+  it('bounds primitive causes and does not reflect over thrown proxies', async () => {
+    const reflected = vi.fn(() => {
+      throw new Error('reflection must not run')
+    })
+    const hostile = new Proxy({}, {
+      getOwnPropertyDescriptor: reflected,
+      getPrototypeOf: reflected,
+    })
+    const profile = createTestCompiledMaterialProfile([
+      createTestMaterialManifest({ type: 'large', viewer: async () => { throw 'x'.repeat(1024 * 1024) } }),
+      createTestMaterialManifest({ type: 'proxy', viewer: async () => { throw hostile } }),
+    ])
+    const host = new MaterialFacetHost()
+
+    const large = await host.activate(profile, 'large', 'viewer')
+    const proxy = await settlesWithin(host.activate(profile, 'proxy', 'viewer'))
+
+    expect(large.diagnostic?.cause?.message.length).toBeLessThanOrEqual(1024)
+    expect(proxy.diagnostic?.cause).toEqual({ message: 'Unknown error' })
+    expect(reflected).not.toHaveBeenCalled()
+  })
+
+  it('waits for pre-shutdown activation and rejects later activation with stable quarantine', async () => {
+    let releaseActivation!: () => void
+    const activationGate = new Promise<void>((resolve) => {
+      releaseActivation = resolve
+    })
+    const valueDispose = vi.fn(async () => {})
+    const factory = vi.fn(async () => {
+      await activationGate
+      return { dispose: valueDispose }
+    })
+    const profile = createTestCompiledMaterialProfile([
+      createTestMaterialManifest({ type: 'pending', viewer: factory }),
+      createTestMaterialManifest({ type: 'missing', designer: false }),
+    ])
+    const host = new MaterialFacetHost()
+    const retainedQuarantine = await host.activate(profile, 'missing', 'designer')
+    const pending = host.activate(profile, 'pending', 'viewer')
+
+    const shutdown = host.dispose()
+    const rejectedDuringShutdown = await host.activate(profile, 'pending', 'viewer')
+    expect(rejectedDuringShutdown.state).toBe('quarantined')
+    expect(rejectedDuringShutdown.diagnostic?.code).toBe('MATERIAL_FACET_ACTIVATION_FAILED')
+    expect(valueDispose).not.toHaveBeenCalled()
+    releaseActivation()
+    const pendingInstance = await pending
+    await shutdown
+
+    expect(pendingInstance.state).toBe('disposed')
+    expect(valueDispose).toHaveBeenCalledTimes(1)
+    expect(host.peek(profile, 'pending', 'viewer')?.state).not.toBe('active')
+    expect(host.peek(profile, 'missing', 'designer')).toBe(retainedQuarantine)
+    expect(await host.activate(profile, 'missing', 'designer')).toBe(retainedQuarantine)
+    expect(await host.activate(profile, 'pending', 'viewer')).toBe(rejectedDuringShutdown)
+    expect(factory).toHaveBeenCalledTimes(1)
   })
 
   it('disposes active instances sequentially and preserves failure diagnostic order', async () => {
@@ -141,20 +215,104 @@ describe('material facet host', () => {
     await host.activate(profile, 'healthy', 'viewer')
 
     const disposal = host.dispose()
+    const joinedDisposal = host.dispose()
+    expect(joinedDisposal).toBe(disposal)
     expect(events).toEqual(['first:start'])
     expect(secondDispose).not.toHaveBeenCalled()
     expect(healthyDispose).not.toHaveBeenCalled()
     releaseFirst()
-    const diagnostics = await disposal
+    const [diagnostics, joinedDiagnostics] = await Promise.all([disposal, joinedDisposal])
 
     expect(events).toEqual(['first:start', 'first:settle', 'second:start'])
     expect(firstDispose).toHaveBeenCalledTimes(1)
     expect(secondDispose).toHaveBeenCalledTimes(1)
     expect(healthyDispose).toHaveBeenCalledTimes(1)
     expect(diagnostics.map(diagnostic => diagnostic.materialType)).toEqual(['first', 'second'])
+    expect(joinedDiagnostics).toBe(diagnostics)
     expect(diagnostics.every(diagnostic => diagnostic.code === 'MATERIAL_FACET_DISPOSE_FAILED')).toBe(true)
     expect(Object.isFrozen(diagnostics)).toBe(true)
     expect(Object.isFrozen(diagnostics[0])).toBe(true)
+  })
+
+  it('joins an in-flight instance disposal and reports its failure during host shutdown', async () => {
+    let releaseDispose!: () => void
+    const disposeGate = new Promise<void>((resolve) => {
+      releaseDispose = resolve
+    })
+    let releaseActivation!: () => void
+    const activationGate = new Promise<void>((resolve) => {
+      releaseActivation = resolve
+    })
+    const valueDispose = vi.fn(async () => {
+      await disposeGate
+      throw new Error('in-flight dispose failed')
+    })
+    const profile = createTestCompiledMaterialProfile([
+      createTestMaterialManifest({ type: 'racing', viewer: async () => ({ dispose: valueDispose }) }),
+      createTestMaterialManifest({ type: 'pending-race', viewer: async () => {
+        await activationGate
+        return {}
+      } }),
+    ])
+    const host = new MaterialFacetHost()
+    const instance = await host.activate(profile, 'racing', 'viewer')
+    const pendingActivation = host.activate(profile, 'pending-race', 'viewer')
+
+    const directDisposal = instance.dispose().catch(() => {})
+    const shutdown = host.dispose()
+    releaseDispose()
+    await directDisposal
+    releaseActivation()
+    await pendingActivation
+    const diagnostics = await shutdown
+
+    expect(valueDispose).toHaveBeenCalledTimes(1)
+    expect(diagnostics.map(diagnostic => diagnostic.materialType)).toEqual(['racing'])
+    expect(host.peek(profile, 'racing', 'viewer')).toBeUndefined()
+  })
+
+  it('settles synchronous re-entrant instance disposal while invoking the value disposer once', async () => {
+    let instance!: Awaited<ReturnType<MaterialFacetHost['activate']>>
+    const valueDispose = vi.fn(async () => {
+      await instance.dispose()
+    })
+    const profile = createTestCompiledMaterialProfile([
+      createTestMaterialManifest({ type: 'reentrant', viewer: async () => ({ dispose: valueDispose }) }),
+    ])
+    const host = new MaterialFacetHost()
+    instance = await host.activate(profile, 'reentrant', 'viewer')
+
+    await settlesWithin(instance.dispose())
+
+    expect(valueDispose).toHaveBeenCalledTimes(1)
+    expect(instance.state).toBe('disposed')
+    expect(host.peek(profile, 'reentrant', 'viewer')).toBeUndefined()
+  })
+
+  it('bounds hostile disposer discovery and never invokes a dispose accessor', async () => {
+    const accessor = vi.fn(() => {
+      throw new Error('dispose getter must not run')
+    })
+    const accessorValue = Object.defineProperty({}, 'dispose', { enumerable: true, get: accessor })
+    const descriptorTrap = vi.fn(() => {
+      throw new Error('descriptor trap failed')
+    })
+    const hostileValue = new Proxy({}, { getOwnPropertyDescriptor: descriptorTrap })
+    const profile = createTestCompiledMaterialProfile([
+      createTestMaterialManifest({ type: 'accessor', viewer: async () => accessorValue }),
+      createTestMaterialManifest({ type: 'hostile', viewer: async () => hostileValue }),
+    ])
+    const host = new MaterialFacetHost()
+    await host.activate(profile, 'accessor', 'viewer')
+    await host.activate(profile, 'hostile', 'viewer')
+
+    const diagnostics = await settlesWithin(host.dispose())
+
+    expect(accessor).not.toHaveBeenCalled()
+    expect(descriptorTrap).toHaveBeenCalledTimes(1)
+    expect(diagnostics.map(diagnostic => diagnostic.materialType)).toEqual(['hostile'])
+    expect(host.peek(profile, 'accessor', 'viewer')).toBeUndefined()
+    expect(host.peek(profile, 'hostile', 'viewer')).toBeUndefined()
   })
 
   it('reactivates an explicitly disposed active key while retaining quarantined keys', async () => {
@@ -224,4 +382,19 @@ function cyclicError(): object {
 
 function throwValue(value: unknown): never {
   throw value
+}
+
+async function settlesWithin<T>(promise: Promise<T>): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_resolve, reject) => {
+        timeout = setTimeout(() => reject(new Error('operation did not settle within 50ms')), 50)
+      }),
+    ])
+  }
+  finally {
+    clearTimeout(timeout)
+  }
 }
