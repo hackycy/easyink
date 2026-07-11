@@ -253,6 +253,7 @@ export {
 export type {
   CompiledMaterialProfile,
   CompileMaterialProfileInput,
+  MaterialNodeCreateInput,
   MaterialPackageRegistration,
   MaterialProfileDiagnostic,
   SchemaAdmissionBudget,

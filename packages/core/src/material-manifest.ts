@@ -11,6 +11,7 @@ import type { JsonPointer } from './material-introspection'
 import type { PropertyDescriptor } from './material-properties'
 import type { SchemaAdapter } from './schema-adapter'
 import { assertJsonValue } from '@easyink/shared'
+import { resolveMaterialBindingPortPolicyDefinition } from './material-binding'
 
 export const MATERIAL_MANIFEST_VERSION = 1 as const
 export const MATERIAL_API_VERSION = 1 as const
@@ -143,6 +144,17 @@ const MATERIAL_DATA_CONTRACT_KEYS = new Set(['version', 'model'])
 const MATERIAL_DATA_MODEL_KEYS = new Set(['kind', 'fields'])
 const MATERIAL_DATA_FIELD_KEYS = new Set(['labelKey', 'type', 'required', 'format', 'formatEditor'])
 const MATERIAL_DATA_FORMAT_EDITOR_KEYS = new Set(['tabs', 'defaultTab', 'presetTypes'])
+const BINDING_EXPRESSION_KEYS = new Set([
+  'sourceId',
+  'sourceName',
+  'sourceTag',
+  'fieldPath',
+  'fieldKey',
+  'fieldLabel',
+  'format',
+  'required',
+  'extensions',
+])
 
 export function defineMaterialManifest<TDesigner, TViewer>(
   manifest: MaterialManifest<TDesigner, TViewer>,
@@ -249,7 +261,7 @@ function validateCommonFacet(common: MaterialCommonFacet): void {
       fail('MATERIAL_STRUCTURE_POLICY_INVALID')
     }
   }
-  validateBinding(common.binding, common.defaultNode.bindings)
+  assertCanonicalMaterialBindingMap(common.binding, common.defaultNode.bindings)
 }
 
 function validateAdapter(adapter: SchemaAdapter): void {
@@ -283,9 +295,14 @@ function validateAdapter(adapter: SchemaAdapter): void {
   }
 }
 
-function validateBinding(definition: MaterialBindingDefinition, bindings: CanonicalMaterialBindingMap | undefined): void {
+export function assertCanonicalMaterialBindingMap(
+  definition: MaterialBindingDefinition,
+  bindings: unknown,
+): asserts bindings is CanonicalMaterialBindingMap | undefined {
   if (!isPlainRecord(definition))
     fail('MATERIAL_BINDING_DEFINITION_INVALID')
+  if (bindings !== undefined && !isPlainRecord(bindings))
+    fail('MATERIAL_BINDING_EXPRESSION_INVALID')
   if (definition.kind === 'none') {
     if (bindings && Object.keys(bindings).length > 0)
       fail('MATERIAL_BINDING_KEY_UNMATCHED')
@@ -300,10 +317,13 @@ function validateBinding(definition: MaterialBindingDefinition, bindings: Canoni
   for (const policy of definition.ports)
     validateBindingPolicy(policy)
   for (const [key, binding] of Object.entries(bindings ?? {})) {
-    const matches = definition.ports.filter(policy => policyMatches(policy, key))
-    if (matches.length !== 1)
+    let policy: MaterialBindingPortPolicy
+    try {
+      policy = resolveMaterialBindingPortPolicyDefinition(definition, key)
+    }
+    catch {
       fail('MATERIAL_BINDING_KEY_UNMATCHED')
-    const policy = matches[0]!
+    }
     validateBindingExpression(binding)
     const format = binding.format
     if (format !== undefined && !isPlainRecord(format))
@@ -328,9 +348,12 @@ function validateBinding(definition: MaterialBindingDefinition, bindings: Canoni
 
 function validateBindingExpression(binding: BindingExpression): void {
   if (!isPlainRecord(binding)
+    || !hasOnlyKeys(binding, BINDING_EXPRESSION_KEYS)
     || Object.hasOwn(binding, 'bindIndex')
     || Object.hasOwn(binding, 'kind')
     || (binding.extensions !== undefined && !isPlainRecord(binding.extensions))
+    || !optionalStrings(binding, ['sourceName', 'sourceTag', 'fieldKey', 'fieldLabel'])
+    || (binding.required !== undefined && typeof binding.required !== 'boolean')
     || !isNonemptyString(binding.sourceId)
     || !isNonemptyString(binding.fieldPath)) {
     fail('MATERIAL_BINDING_EXPRESSION_INVALID')
@@ -587,10 +610,6 @@ function policiesOverlap(left: DeterministicKeyPolicy, right: DeterministicKeyPo
   const exact = left.key.kind === 'exact' ? left.key.value : right.key.value
   const prefix = left.key.kind === 'prefix' ? left.key.value : right.key.value
   return exact.startsWith(prefix)
-}
-
-function policyMatches(policy: DeterministicKeyPolicy, key: string): boolean {
-  return policy.key.kind === 'exact' ? key === policy.key.value : key.startsWith(policy.key.value)
 }
 
 function parseSemver(value: string | undefined): readonly [bigint, bigint, bigint] | undefined {

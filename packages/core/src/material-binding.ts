@@ -59,6 +59,15 @@ export function resolveMaterialBindingPortPolicy(
   port: string,
   rawValue: unknown,
 ): MaterialBindingPortPolicy {
+  const policy = resolveMaterialBindingPortPolicyDefinition(definition, port)
+  assertMaterialBindingValue(rawValue, policy.valueShape)
+  return policy
+}
+
+export function resolveMaterialBindingPortPolicyDefinition(
+  definition: MaterialBindingDefinition,
+  port: string,
+): MaterialBindingPortPolicy {
   const matches = definition.kind === 'ports'
     ? definition.ports.filter(policy => policy.key.kind === 'exact'
         ? policy.key.value === port
@@ -68,9 +77,7 @@ export function resolveMaterialBindingPortPolicy(
     throw new Error('MATERIAL_BINDING_POLICY_UNMATCHED')
   if (matches.length !== 1)
     throw new Error('MATERIAL_BINDING_POLICY_AMBIGUOUS')
-  const policy = matches[0]!
-  assertMaterialBindingValue(rawValue, policy.valueShape)
-  return policy
+  return matches[0]!
 }
 
 function isJsonRecord(value: JsonValue): boolean {

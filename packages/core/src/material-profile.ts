@@ -1,9 +1,10 @@
 import type { MaterialNode } from '@easyink/schema'
 import type { UnitType } from '@easyink/shared'
+import type { CanonicalMaterialBindingMap } from './material-binding'
 import type { MaterialManifest, MaterialSurface } from './material-manifest'
 import type { AdaptableMaterialNode, MaterialSchemaIssue, SchemaAdapterContext } from './schema-adapter'
 import { assertJsonValue, cloneJsonValue, convertUnit, generateId } from '@easyink/shared'
-import { MATERIAL_API_VERSION, MATERIAL_MANIFEST_VERSION } from './material-manifest'
+import { assertCanonicalMaterialBindingMap, MATERIAL_API_VERSION, MATERIAL_MANIFEST_VERSION } from './material-manifest'
 
 export const EASYINK_ENGINE_VERSION = '0.0.30' as const
 
@@ -41,7 +42,11 @@ export interface CompiledMaterialProfile {
   readonly admissionBudget: Readonly<SchemaAdmissionBudget>
   getManifest: (type: string) => MaterialManifest | undefined
   hasSurface: (type: string, surface: MaterialSurface) => boolean
-  createNode: (type: string, input?: Partial<MaterialNode>, unit?: UnitType) => MaterialNode
+  createNode: (type: string, input?: MaterialNodeCreateInput, unit?: UnitType) => MaterialNode
+}
+
+export type MaterialNodeCreateInput = Omit<Partial<MaterialNode>, 'bindings'> & {
+  bindings?: CanonicalMaterialBindingMap
 }
 
 export interface CompileMaterialProfileInput {
@@ -74,6 +79,7 @@ interface PackageIssue {
 }
 
 const BARE_MATERIAL_TYPE_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
+const CANONICAL_UNITS = new Set<UnitType>(['mm', 'pt', 'px', 'inch'])
 
 export class MaterialProfileCompileError extends Error {
   constructor(readonly code: string, readonly materialType?: string, readonly packageId?: string) {
@@ -142,7 +148,7 @@ export function compileMaterialProfile(input: CompileMaterialProfileInput): Comp
       : surface === 'viewer'
         ? renderableTypes.has(type)
         : generatableTypes.has(type),
-    createNode: (type: string, nodeInput?: Partial<MaterialNode>, unit?: UnitType) =>
+    createNode: (type: string, nodeInput?: MaterialNodeCreateInput, unit?: UnitType) =>
       createNodeFromManifest(requireManifest(manifests, type), nodeInput, unit, input.engineVersion),
   })
 }
@@ -261,12 +267,14 @@ const OPTIONAL_NODE_KEYS = [
 
 function createNodeFromManifest(
   manifest: MaterialManifest,
-  input: Partial<MaterialNode> = {},
+  input: MaterialNodeCreateInput = {},
   requestedUnit: UnitType | undefined,
   engineVersion: string,
 ): MaterialNode {
   const sourceUnit = manifest.common.defaultNode.unit
   const documentUnit = requestedUnit ?? sourceUnit
+  if (!CANONICAL_UNITS.has(sourceUnit) || !CANONICAL_UNITS.has(documentUnit))
+    throw new MaterialNodeCreationError('MATERIAL_NODE_UNIT_INVALID', manifest.type)
   const context: SchemaAdapterContext = {
     documentVersion: engineVersion,
     sourceUnit,
@@ -290,6 +298,7 @@ function createNodeFromManifest(
     ...cloneRecord(manifest.common.defaultNode.bindings ?? {}),
     ...cloneRecord(input.bindings ?? {}),
   }
+  assertCanonicalMaterialBindingMap(manifest.common.binding, bindings)
   const output = {
     visibility: 'include' as const,
     ...cloneRecord(manifest.common.defaultNode.output ?? {}),
@@ -322,6 +331,7 @@ function createNodeFromManifest(
     throw new MaterialNodeCreationError('MATERIAL_ADAPTER_NORMALIZE_FAILED', manifest.type)
   }
   const canonical = materializeCanonicalNode(cloneNode(normalized), manifest)
+  assertCanonicalMaterialBindingMap(manifest.common.binding, canonical.bindings)
   const validationCandidate = cloneNode(canonical)
   failOnAdapterIssues(manifest, manifest.schemaAdapter.validate(validationCandidate, context))
   cloneNode(validationCandidate)
@@ -350,7 +360,7 @@ function materializeCanonicalNode(node: AdaptableMaterialNode, manifest: Materia
   return cloneNode(canonical) as MaterialNode
 }
 
-function copyOptionalNodeFields(input: Partial<MaterialNode>): Partial<MaterialNode> {
+function copyOptionalNodeFields(input: MaterialNodeCreateInput): Partial<MaterialNode> {
   const result: Partial<MaterialNode> = {}
   for (const key of OPTIONAL_NODE_KEYS) {
     if (input[key] !== undefined)

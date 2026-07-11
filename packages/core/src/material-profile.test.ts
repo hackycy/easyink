@@ -245,4 +245,90 @@ describe('compiledMaterialProfile.createNode', () => {
       expect(() => profile.createNode(type, { id: 'n' })).toThrow()
     }
   })
+
+  it('rejects legacy and undeclared bindings before returning a node', () => {
+    const noneManifest = createTestMaterialManifest({ type: 'none' })
+    const portsManifest = createTestMaterialManifest({
+      type: 'ports',
+      binding: {
+        kind: 'ports',
+        ports: [{
+          id: 'value',
+          key: { kind: 'exact', value: 'value' },
+          role: 'semantic',
+          valueShape: 'scalar',
+          formatEditor: false,
+        }],
+      },
+    })
+    const profile = compileMaterialProfile({
+      id: 'test',
+      engineVersion: '0.0.30',
+      packages: [packageOf([noneManifest, portsManifest])],
+    })
+    const expression = { sourceId: 'source', fieldPath: 'value' }
+
+    expect(() => profile.createNode('none', { bindings: { value: expression } } as never))
+      .toThrowError('MATERIAL_BINDING_KEY_UNMATCHED')
+    expect(() => profile.createNode('ports', { bindings: { unexpected: expression } } as never))
+      .toThrowError('MATERIAL_BINDING_KEY_UNMATCHED')
+    expect(() => profile.createNode('ports', { bindings: { value: [expression] } } as never))
+      .toThrowError('MATERIAL_BINDING_EXPRESSION_INVALID')
+    expect(() => profile.createNode('ports', { bindings: { value: { kind: 'data-contract', mappings: {} } } } as never))
+      .toThrowError('MATERIAL_BINDING_EXPRESSION_INVALID')
+    expect(() => profile.createNode('ports', { bindings: { value: { ...expression, bindIndex: 0 } } } as never))
+      .toThrowError('MATERIAL_BINDING_EXPRESSION_INVALID')
+  })
+
+  it('validates bindings again after adapter normalization', () => {
+    const base = createTestMaterialManifest({ type: 'seed' }).schemaAdapter
+    const adapter = {
+      ...base,
+      normalize: (node: Parameters<SchemaAdapter['normalize']>[0]) => ({
+        ...node,
+        bindings: { unexpected: { sourceId: 'source', fieldPath: 'value' } },
+      }),
+    } satisfies SchemaAdapter
+    const manifest = createTestMaterialManifest({ type: 'normalized-binding', schemaAdapter: adapter })
+    const profile = compileMaterialProfile({ id: 'test', engineVersion: '0.0.30', packages: [packageOf([manifest])] })
+
+    expect(() => profile.createNode('normalized-binding', { id: 'n' }))
+      .toThrowError('MATERIAL_BINDING_KEY_UNMATCHED')
+  })
+
+  it('rejects unsupported runtime units before invoking an adapter', () => {
+    const base = createTestMaterialManifest({ type: 'seed' }).schemaAdapter
+    const normalize = vi.fn(base.normalize)
+    const convertModelUnits = vi.fn((model: Readonly<Record<string, unknown>>) => ({ ...model }))
+    const adapter = {
+      ...base,
+      modelUnitPolicy: 'convertible',
+      normalize,
+      convertModelUnits,
+    } satisfies SchemaAdapter
+    const manifest = createTestMaterialManifest({ type: 'unit-guard', schemaAdapter: adapter })
+    const profile = compileMaterialProfile({ id: 'test', engineVersion: '0.0.30', packages: [packageOf([manifest])] })
+
+    expect(() => profile.createNode('unit-guard', { id: 'n' }, 'cm' as never))
+      .toThrowError(expect.objectContaining({ code: 'MATERIAL_NODE_UNIT_INVALID' }))
+    expect(convertModelUnits).not.toHaveBeenCalled()
+    expect(normalize).not.toHaveBeenCalled()
+
+    const invalidDefault = {
+      ...manifest,
+      common: {
+        ...manifest.common,
+        defaultNode: { ...manifest.common.defaultNode, unit: 'cm' },
+      },
+    } as unknown as MaterialManifest
+    const invalidProfile = compileMaterialProfile({
+      id: 'invalid-default-unit',
+      engineVersion: '0.0.30',
+      packages: [packageOf([invalidDefault])],
+    })
+    expect(() => invalidProfile.createNode('unit-guard', { id: 'n' }))
+      .toThrowError(expect.objectContaining({ code: 'MATERIAL_NODE_UNIT_INVALID' }))
+    expect(convertModelUnits).not.toHaveBeenCalled()
+    expect(normalize).not.toHaveBeenCalled()
+  })
 })

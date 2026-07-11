@@ -1,3 +1,4 @@
+import type { MaterialBindingDefinition } from '../material-binding'
 import type { MaterialAIFacet, MaterialFacetFactory, MaterialManifest, MaterialStructureSlotPolicy } from '../material-manifest'
 import type { SchemaAdapter } from '../schema-adapter'
 import { defineMaterialManifest } from '../material-manifest'
@@ -9,6 +10,7 @@ export function createTestMaterialManifest(options: {
   slots?: readonly MaterialStructureSlotPolicy[]
   schemaAdapter?: SchemaAdapter
   defaultModel?: Record<string, unknown>
+  binding?: MaterialBindingDefinition
   designer?: boolean | MaterialFacetFactory<unknown>
   viewer?: boolean | MaterialFacetFactory<unknown>
   ai?: boolean | MaterialAIFacet
@@ -25,7 +27,7 @@ export function createTestMaterialManifest(options: {
       iconKey: 'box',
       defaultNode: { width: 10, height: 10, unit: 'mm', model: options.defaultModel ?? {} },
       interaction: { rotatable: true, resizable: true },
-      binding: { kind: 'none' },
+      binding: options.binding ?? { kind: 'none' },
       layout: { intrinsicSize: 'none', fragmentation: 'none', pageRepeat: 'none', overflow: 'clip' },
       structure: { slots: options.slots ?? [] },
       properties: [],
