@@ -66,6 +66,7 @@ const placementAccessor: PropertyAccessor = {
 
 const keepTogetherAccessor: PropertyAccessor = {
   paths: Object.freeze(['/output/break']),
+  pathSharingGroup: 'output.break',
   read: node => readBreakConfig(node).keepTogether === true,
   write: (node, value) => {
     node.output.break ??= {}
@@ -75,6 +76,7 @@ const keepTogetherAccessor: PropertyAccessor = {
 
 const breakBeforeAccessor: PropertyAccessor = {
   paths: Object.freeze(['/output/break']),
+  pathSharingGroup: 'output.break',
   read: node => readBreakConfig(node).before === 'page',
   write: (node, value) => {
     node.output.break ??= {}
@@ -84,6 +86,7 @@ const breakBeforeAccessor: PropertyAccessor = {
 
 const breakAfterAccessor: PropertyAccessor = {
   paths: Object.freeze(['/output/break']),
+  pathSharingGroup: 'output.break',
   read: node => readBreakConfig(node).after === 'page',
   write: (node, value) => {
     node.output.break ??= {}

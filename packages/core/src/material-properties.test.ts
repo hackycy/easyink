@@ -1,6 +1,6 @@
 import type { MaterialNode } from '@easyink/schema'
 import { create } from 'mutative'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   createModelPropertyAccessor,
   resolvePropertyAccessor,
@@ -33,6 +33,14 @@ function descriptor(key: string, path: `/${string}`) {
       read: () => undefined,
       write: () => undefined,
     },
+  }
+}
+
+function sharedDescriptor(key: string, path: `/${string}`, pathSharingGroup: string) {
+  const value = descriptor(key, path)
+  return {
+    ...value,
+    accessor: { ...value.accessor, pathSharingGroup },
   }
 }
 
@@ -89,6 +97,134 @@ describe('property accessor', () => {
     ])
   })
 
+  it('composes sibling missing-path writes in one Mutative transaction', () => {
+    const original = nodeWithModel({})
+
+    const [next] = create(original, (draft) => {
+      createModelPropertyAccessor<string>('/typography/fontFamily').write(draft, 'Inter')
+      createModelPropertyAccessor<number>('/typography/fontSize').write(draft, 12)
+    }, { enablePatches: true })
+
+    expect(next.model).toEqual({ typography: { fontFamily: 'Inter', fontSize: 12 } })
+    expect(original.model).toEqual({})
+  })
+
+  it('never executes own or inherited accessors while writing', () => {
+    let getterCalls = 0
+    let setterCalls = 0
+    const ownAccessorModel: Record<string, unknown> = {}
+    Object.defineProperty(ownAccessorModel, 'value', {
+      configurable: true,
+      get: () => {
+        getterCalls++
+        return 'unsafe'
+      },
+    })
+    const inheritedAccessorModel = Object.create({
+      get value() { return undefined },
+      set value(_value: unknown) {
+        setterCalls++
+      },
+    }) as Record<string, unknown>
+    const accessor = createModelPropertyAccessor<string>('/value')
+
+    expect(accessor.read(nodeWithModel(ownAccessorModel))).toBeUndefined()
+    expect(() => accessor.write(nodeWithModel(ownAccessorModel), 'next'))
+      .toThrowError('PROPERTY_ACCESSOR_ACCESSOR_FORBIDDEN')
+    expect(() => accessor.write(nodeWithModel(inheritedAccessorModel), 'next'))
+      .toThrowError('PROPERTY_ACCESSOR_ACCESSOR_FORBIDDEN')
+    expect({ getterCalls, setterCalls }).toEqual({ getterCalls: 0, setterCalls: 0 })
+  })
+
+  it('rejects non-writable, frozen, and non-extensible write targets', () => {
+    const nonWritable: Record<string, unknown> = {}
+    Object.defineProperty(nonWritable, 'value', { enumerable: true, value: 'fixed', writable: false })
+    const valueAccessor = createModelPropertyAccessor<string>('/value')
+    expect(() => valueAccessor.write(nodeWithModel(nonWritable), 'next'))
+      .toThrowError('PROPERTY_ACCESSOR_WRITE_FORBIDDEN')
+
+    const frozen = Object.freeze({ nested: { value: 'fixed' } })
+    expect(() => createModelPropertyAccessor<string>('/nested/value').write(nodeWithModel(frozen), 'next'))
+      .toThrowError('PROPERTY_ACCESSOR_CONTAINER_FROZEN')
+
+    const sealed = Object.preventExtensions<Record<string, unknown>>({ existing: true })
+    expect(() => valueAccessor.write(nodeWithModel(sealed), 'next'))
+      .toThrowError('PROPERTY_ACCESSOR_CONTAINER_NOT_EXTENSIBLE')
+  })
+
+  it('rejects accessors on Mutative drafts without triggering side effects', () => {
+    let setterCalls = 0
+    const model: Record<string, unknown> = {}
+    Object.defineProperty(model, 'value', {
+      configurable: true,
+      enumerable: true,
+      get: () => undefined,
+      set: () => { setterCalls++ },
+    })
+    const node = nodeWithModel(model)
+
+    expect(() => create(node, (draft) => {
+      createModelPropertyAccessor<string>('/value').write(draft, 'next')
+    }, { enablePatches: true })).toThrowError('PROPERTY_ACCESSOR_ACCESSOR_FORBIDDEN')
+
+    const inherited = nodeWithModel(Object.create({
+      get value() { return undefined },
+      set value(_value: unknown) { setterCalls++ },
+    }) as Record<string, unknown>)
+    expect(() => create(inherited, (draft) => {
+      createModelPropertyAccessor<string>('/value').write(draft, 'next')
+    }, { enablePatches: true })).toThrowError('PROPERTY_ACCESSOR_ACCESSOR_FORBIDDEN')
+    expect(setterCalls).toBe(0)
+  })
+
+  it('reads, writes, and appends canonical array indices', () => {
+    const existing = createModelPropertyAccessor<string>('/rows/0/name')
+    const append = createModelPropertyAccessor<string>('/rows/1/name')
+    const original = nodeWithModel({ rows: [{ name: 'first' }] })
+
+    const [next, patches] = create(original, (draft) => {
+      existing.write(draft, 'updated')
+      append.write(draft, 'second')
+    }, { enablePatches: true })
+
+    expect(original.model).toEqual({ rows: [{ name: 'first' }] })
+    expect(next.model).toEqual({ rows: [{ name: 'updated' }, { name: 'second' }] })
+    expect(patches.every(patch => patch.path[0] === 'model' && patch.path[1] === 'rows')).toBe(true)
+  })
+
+  it('infers nested arrays from following numeric tokens', () => {
+    const accessor = createModelPropertyAccessor<string>('/matrix/0/0')
+    const original = nodeWithModel({})
+
+    const [next, patches] = create(original, (draft) => {
+      accessor.write(draft, 'cell')
+    }, { enablePatches: true })
+
+    expect(original.model).toEqual({})
+    expect(next.model).toEqual({ matrix: [['cell']] })
+    expect(patches).toEqual([{ op: 'add', path: ['model', 'matrix'], value: [['cell']] }])
+  })
+
+  it.each(['/rows/01/name', '/rows/-/name', '/rows/name', '/rows/2/name'])(
+    'rejects invalid or sparse contextual array path %s',
+    (path) => {
+      const node = nodeWithModel({ rows: [{ name: 'first' }] })
+      expect(() => createModelPropertyAccessor(path as `/${string}`).write(node, 'next')).toThrowError(
+        path === '/rows/2/name' ? 'PROPERTY_ACCESSOR_ARRAY_GAP_FORBIDDEN' : 'PROPERTY_ACCESSOR_ARRAY_INDEX_INVALID',
+      )
+      expect(node.model).toEqual({ rows: [{ name: 'first' }] })
+    },
+  )
+
+  it('rejects sparse array writes on a Mutative draft without changing the original', () => {
+    const original = nodeWithModel({ rows: [{ name: 'first' }] })
+
+    expect(() => create(original, (draft) => {
+      createModelPropertyAccessor<string>('/rows/2/name').write(draft, 'third')
+    }, { enablePatches: true })).toThrowError('PROPERTY_ACCESSOR_ARRAY_GAP_FORBIDDEN')
+    expect(original.model).toEqual({ rows: [{ name: 'first' }] })
+  })
+
   it('uses RFC 6901 escaping for model keys and default descriptor accessors', () => {
     const explicit = createModelPropertyAccessor<string>('/a~1b/~0value')
     const fallback = resolvePropertyAccessor({ key: 'a/b', label: 'Value', type: 'string' })
@@ -100,7 +236,7 @@ describe('property accessor', () => {
     expect(node.model['a/b']).toBe('flat')
   })
 
-  it.each(['', '/', '/__proto__/polluted', '/constructor/value', '/bad~2token'])(
+  it.each(['', '/__proto__/polluted', '/constructor/value', '/bad~2token'])(
     'rejects malformed, root, or unsafe model path %j',
     (path) => {
       expect(() => createModelPropertyAccessor(path as `/${string}`)).toThrowError(
@@ -111,15 +247,23 @@ describe('property accessor', () => {
     },
   )
 
-  it('never follows inherited containers and rejects non-plain writable roots', () => {
+  it('treats slash as the empty model member rather than the document root', () => {
+    const accessor = createModelPropertyAccessor<string>('/')
+    const node = nodeWithModel({ '': 'before' })
+
+    expect(accessor.paths).toEqual(['/model/'])
+    accessor.write(node, 'after')
+    expect(node.model).toEqual({ '': 'after' })
+  })
+
+  it('never follows inherited containers while reading', () => {
     const accessor = createModelPropertyAccessor<string>('/typography/fontFamily')
     const node = nodeWithModel(Object.create({ typography: { fontFamily: 'inherited' } }) as Record<string, unknown>)
 
     expect(accessor.read(node)).toBeUndefined()
-    expect(() => accessor.write(node, 'owned')).toThrowError('PROPERTY_ACCESSOR_CONTAINER_INVALID')
-
-    expect(Object.hasOwn(node.model, 'typography')).toBe(false)
-    expect(accessor.read(node)).toBeUndefined()
+    accessor.write(node, 'owned')
+    expect(Object.hasOwn(node.model, 'typography')).toBe(true)
+    expect(accessor.read(node)).toBe('owned')
     expect(({} as Record<string, unknown>).polluted).toBeUndefined()
   })
 })
@@ -174,8 +318,8 @@ describe('validatePropertyDescriptors', () => {
   it('accepts nonempty canonical frozen path declarations', () => {
     expect(validatePropertyDescriptors([
       descriptor('font', '/model/typography/fontFamily'),
-      descriptor('break.before', '/output/break'),
-      descriptor('break.after', '/output/break'),
+      sharedDescriptor('break.before', '/output/break', 'output.break'),
+      sharedDescriptor('break.after', '/output/break', 'output.break'),
     ])).toEqual([])
   })
 
@@ -218,5 +362,77 @@ describe('validatePropertyDescriptors', () => {
       expect.objectContaining({ code: 'PROPERTY_KEY_DUPLICATE', descriptorKey: 'title' }),
       expect.objectContaining({ code: 'PROPERTY_ACCESSOR_PATH_DUPLICATE', descriptorKey: 'title', path: '/model/title' }),
     ]))
+  })
+
+  it('rejects unequal explicit ancestor and descendant paths', () => {
+    expect(validatePropertyDescriptors([
+      descriptor('typography', '/model/typography'),
+      descriptor('font', '/model/typography/fontFamily'),
+    ])).toContainEqual(expect.objectContaining({
+      code: 'PROPERTY_ACCESSOR_PATH_CONFLICT',
+      descriptorKey: 'font',
+    }))
+  })
+
+  it('requires matching sharing groups for exact explicit composite paths', () => {
+    expect(validatePropertyDescriptors([
+      descriptor('break.before', '/output/break'),
+      descriptor('break.after', '/output/break'),
+    ])).toContainEqual(expect.objectContaining({ code: 'PROPERTY_ACCESSOR_PATH_DUPLICATE' }))
+  })
+
+  it('validates numeric ranges and property value input metadata', () => {
+    const diagnostics = validatePropertyDescriptors([
+      { key: 'size', label: 'Size', type: 'number', min: 10, max: 1, step: 0 },
+      {
+        key: 'asset',
+        label: 'Asset',
+        type: 'string',
+        editorOptions: { valueInput: { kind: 'asset-url', id: '', source: 'picker', accept: [1] } },
+      },
+      {
+        key: 'file',
+        label: 'File',
+        type: 'string',
+        editorOptions: { valueInput: { kind: 'text-file', id: 'file', source: 'picker', maxBytes: 0 } },
+      },
+    ])
+
+    expect(diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'PROPERTY_DESCRIPTOR_INVALID', descriptorKey: 'size' }),
+      expect.objectContaining({ code: 'PROPERTY_EDITOR_METADATA_INVALID', descriptorKey: 'asset' }),
+      expect.objectContaining({ code: 'PROPERTY_EDITOR_METADATA_INVALID', descriptorKey: 'file' }),
+    ]))
+  })
+
+  it('accepts complete property value input variants', () => {
+    expect(validatePropertyDescriptors([
+      {
+        key: 'asset',
+        label: 'Asset',
+        type: 'string',
+        editorOptions: { valueInput: { kind: 'asset-url', id: 'asset', source: 'picker', accept: ['image/png'] } },
+      },
+      {
+        key: 'file',
+        label: 'File',
+        type: 'string',
+        editorOptions: { valueInput: { kind: 'text-file', id: 'file', source: 'picker', encoding: 'utf-8', maxBytes: 1024 } },
+      },
+    ])).toEqual([])
+  })
+
+  it('keeps path collision comparisons sub-quadratic for 32k descriptors', () => {
+    const compare = vi.spyOn(String.prototype, 'localeCompare')
+    const descriptors = Array.from({ length: 32_768 }, (_, index) =>
+      descriptor(`field-${index}`, `/model/fields/${index}`))
+    try {
+      expect(validatePropertyDescriptors(descriptors)).toEqual([])
+      expect(compare.mock.calls.length).toBeGreaterThan(0)
+      expect(compare.mock.calls.length).toBeLessThan(32_768 * 20)
+    }
+    finally {
+      compare.mockRestore()
+    }
   })
 })
