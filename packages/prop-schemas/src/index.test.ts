@@ -188,6 +188,25 @@ describe('designer prop schemas', () => {
         schema.accessor!.write(node, value)
         expect(Object.hasOwn(node.output, schema.accessor!.paths[0]!.split('/')[2]!)).toBe(true)
       }
+
+      const breakAccessor = schemas.find(schema => schema.key === 'break.keepTogether')!.accessor!
+      const original = {
+        id: 'draft-break',
+        type: 'text',
+        x: 0,
+        y: 0,
+        width: 10,
+        height: 10,
+        modelVersion: 1,
+        model: {},
+        slots: {},
+        bindings: {},
+        output: { visibility: 'include' as const },
+      }
+      expect(() => create(original, (draft) => {
+        breakAccessor.write(draft, true)
+      }, { enablePatches: true })).toThrowError('PROPERTY_ACCESSOR_INHERITED_WRITE_UNSAFE')
+      expect(original.output).toEqual({ visibility: 'include' })
     }
     finally {
       for (const [key, descriptor] of previous) {

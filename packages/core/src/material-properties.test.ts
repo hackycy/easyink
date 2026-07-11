@@ -174,6 +174,22 @@ describe('property accessor', () => {
     expect(patches).toEqual([{ op: 'replace', path: ['model', 'value'], value: 'after' }])
   })
 
+  it('allows Mutative to add a property to a non-extensible source while direct creation rejects', () => {
+    const model = Object.preventExtensions<Record<string, unknown>>({})
+    const accessor = createModelPropertyAccessor<string>('/value')
+    expect(() => accessor.write(nodeWithModel(model), 'direct'))
+      .toThrowError('PROPERTY_ACCESSOR_CONTAINER_NOT_EXTENSIBLE')
+
+    const original = nodeWithModel(model)
+    const [next, patches] = create(original, (draft) => {
+      accessor.write(draft, 'draft')
+    }, { enablePatches: true })
+
+    expect(original.model).toEqual({})
+    expect(next.model).toEqual({ value: 'draft' })
+    expect(patches).toEqual([{ op: 'add', path: ['model', 'value'], value: 'draft' }])
+  })
+
   it('rejects accessors on Mutative drafts without triggering side effects', () => {
     let setterCalls = 0
     const model: Record<string, unknown> = {}

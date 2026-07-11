@@ -510,11 +510,12 @@ function writeOwnPath(
       continue
     }
 
-    assertCanAddProperty(source)
+    const virtualized = isDraft(current)
+    assertCanAddProperty(source, virtualized)
     if (sourceDescriptor)
       assertDataDescriptorWritableWhenAssigned(sourceDescriptor, true, isDraft(current))
     else
-      assertMissingAssignmentSafe(source, token, shadowInheritedAccessors)
+      assertMissingAssignmentSafe(source, token, shadowInheritedAccessors, virtualized)
     if (leaf) {
       safeOwnDataWrite(current, token, value)
       return
@@ -551,8 +552,8 @@ function assertContainer(value: unknown): Record<string, unknown> {
   return sourceContainer(value)
 }
 
-function assertCanAddProperty(container: Record<string, unknown>): void {
-  if (!Object.isExtensible(container))
+function assertCanAddProperty(container: Record<string, unknown>, virtualized: boolean): void {
+  if (!virtualized && !Object.isExtensible(container))
     throw new Error('PROPERTY_ACCESSOR_CONTAINER_NOT_EXTENSIBLE')
 }
 
@@ -571,11 +572,15 @@ function assertMissingAssignmentSafe(
   container: Record<string, unknown>,
   token: string,
   shadowInheritedAccessors: boolean,
+  virtualized: boolean,
 ): void {
   let prototype = Object.getPrototypeOf(container)
   while (prototype) {
     const inherited = Object.getOwnPropertyDescriptor(prototype, token)
     if (inherited) {
+      const unsafe = !('value' in inherited) || inherited.writable === false
+      if (virtualized && unsafe)
+        throw new Error('PROPERTY_ACCESSOR_INHERITED_WRITE_UNSAFE')
       if (!('value' in inherited) && !shadowInheritedAccessors)
         throw new Error('PROPERTY_ACCESSOR_ACCESSOR_FORBIDDEN')
       if ('value' in inherited && inherited.writable === false && !shadowInheritedAccessors)
