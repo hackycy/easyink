@@ -117,35 +117,36 @@ describe('material data contract', () => {
     expect(resolution.diagnostics).toEqual([])
   })
 
-  it('applies custom mapping formatters to indexed records', () => {
+  it('does not execute custom mapping formatters for indexed records', () => {
     const binding = {
       kind: 'data-contract',
       mappings: {
-        category: { sourceId: 'report', select: { path: 'category' }, format: { mode: 'custom', custom: { source: 'value => String(value) + "月"' } } },
-        value: { sourceId: 'report', select: { path: 'values' }, format: { mode: 'custom', custom: { source: 'value => Number(value) / 100' } } },
+        category: { sourceId: 'report', select: { path: 'category' }, format: { mode: 'custom', custom: { source: '(() => { throw new Error("executed") })()' } } },
+        value: { sourceId: 'report', select: { path: 'values' }, format: { mode: 'custom', fallback: '0', custom: { source: '(() => { throw new Error("executed") })()' } } },
       },
       relation: { kind: 'auto' },
     } as const
 
     const resolution = resolveMaterialDataContract(contract, binding, {
       category: ['1', '2'],
-      values: [9800, '11200'],
+      values: [null, '11200'],
     })
 
     expect(resolution.mode).toBe('index')
     expect(resolution.records).toEqual([
-      { category: '1月', value: 98 },
-      { category: '2月', value: 112 },
+      { category: '1', value: 0 },
+      { category: '2', value: 11200 },
     ])
-    expect(resolution.diagnostics).toEqual([])
+    expect(resolution.diagnostics).toHaveLength(4)
+    expect(resolution.diagnostics.every(({ code }) => code === 'BINDING_FORMAT_CUSTOM_DISABLED')).toBe(true)
   })
 
-  it('applies custom mapping formatters to shared record collections', () => {
+  it('does not execute custom mapping formatters for shared record collections', () => {
     const binding = {
       kind: 'data-contract',
       mappings: {
-        category: { sourceId: 'report', select: { path: 'monthlySales/month' }, format: { mode: 'custom', custom: { source: 'value => "M" + String(value)' } } },
-        value: { sourceId: 'report', select: { path: 'monthlySales/revenue' }, format: { mode: 'custom', custom: { source: 'value => Number(value) / 100' } } },
+        category: { sourceId: 'report', select: { path: 'monthlySales/month' }, format: { mode: 'custom', custom: { source: '(() => { throw new Error("executed") })()' } } },
+        value: { sourceId: 'report', select: { path: 'monthlySales/revenue' }, format: { mode: 'custom', custom: { source: '(() => { throw new Error("executed") })()' } } },
       },
       relation: { kind: 'auto' },
     } as const
@@ -159,10 +160,11 @@ describe('material data contract', () => {
 
     expect(resolution.mode).toBe('record')
     expect(resolution.records).toEqual([
-      { category: 'M01', value: 98 },
-      { category: 'M02', value: 112 },
+      { category: '01', value: 9800 },
+      { category: '02', value: 11200 },
     ])
-    expect(resolution.diagnostics).toEqual([])
+    expect(resolution.diagnostics).toHaveLength(4)
+    expect(resolution.diagnostics.every(({ code }) => code === 'BINDING_FORMAT_CUSTOM_DISABLED')).toBe(true)
   })
 
   it('resolves root top-level arrays when source metadata exists beside runtime data', () => {

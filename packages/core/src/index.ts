@@ -145,12 +145,15 @@ export { runLayoutPipeline } from './layout-strategy'
 export type { RunLayoutPipelineOptions } from './layout-strategy'
 
 export type {
+  BindingExpression,
+  CanonicalMaterialBindingMap,
   MaterialBindingDefinition,
   MaterialBindingPortPolicy,
   MaterialBindingValueShape,
   MaterialNoBindingDefinition,
   MaterialPortsBindingDefinition,
 } from './material-binding'
+export { assertMaterialBindingValue, resolveMaterialBindingPortPolicy } from './material-binding'
 
 export {
   applyMaterialDataFieldMapping,

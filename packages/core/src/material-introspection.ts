@@ -1,4 +1,5 @@
-import type { MaterialBinding, MaterialNode } from '@easyink/schema'
+import type { MaterialNode } from '@easyink/schema'
+import type { BindingExpression } from './material-binding'
 
 export type JsonPointer = `/${string}`
 export type MaterialIdentityScope = 'document' | 'material'
@@ -48,7 +49,7 @@ export interface MaterialResourceSlot {
 
 export interface MaterialBindingSlot {
   path: JsonPointer
-  value: MaterialBinding
+  value: BindingExpression
   port: string
 }
 

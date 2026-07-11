@@ -1,5 +1,6 @@
 import type { MaterialManifest } from './material-manifest'
 import { describe, expect, it } from 'vitest'
+import { assertMaterialBindingValue, resolveMaterialBindingPortPolicy } from './material-binding'
 import { defineMaterialManifest } from './material-manifest'
 import { recordSchemaAdapter } from './schema-adapter'
 
@@ -154,6 +155,32 @@ describe('defineMaterialManifest', () => {
     expect(() => defineMaterialManifest(duplicateSlots)).toThrowError('MATERIAL_STRUCTURE_POLICY_ID_DUPLICATE')
   })
 
+  it('strictly validates property descriptors and accessors', () => {
+    const malformed = validManifest()
+    malformed.common.properties = [null as never]
+    expect(() => defineMaterialManifest(malformed)).toThrowError('MATERIAL_PROPERTY_DESCRIPTOR_INVALID')
+
+    const descriptor = validManifest()
+    descriptor.common.properties = [{ key: 'color', label: '', type: 'unknown' as never }]
+    expect(() => defineMaterialManifest(descriptor)).toThrowError('MATERIAL_PROPERTY_DESCRIPTOR_INVALID')
+
+    const accessor = validManifest()
+    accessor.common.properties = [{
+      key: 'color',
+      label: 'Color',
+      type: 'color',
+      accessor: { paths: ['/model/color'], read: 'read' as never, write: () => undefined },
+    }]
+    expect(() => defineMaterialManifest(accessor)).toThrowError('MATERIAL_PROPERTY_ACCESSOR_INVALID')
+  })
+
+  it('strictly validates the condition capability', () => {
+    const input = validManifest()
+    input.common.condition = { scope: 'document', hiddenEffects: ['hide'] } as never
+
+    expect(() => defineMaterialManifest(input)).toThrowError('MATERIAL_CONDITION_INVALID')
+  })
+
   it('rejects overlapping exact and prefix structure policies', () => {
     const input = validManifest()
     input.common.structure.slots = [
@@ -212,26 +239,20 @@ describe('defineMaterialManifest', () => {
     expect(() => defineMaterialManifest(disabledDisplayFormat)).toThrowError('MATERIAL_BINDING_FORMAT_POLICY_INVALID')
   })
 
-  it('forbids legacy display formatting inside semantic data-contract bindings', () => {
+  it('rejects legacy arrays, bindIndex, and data-contract objects from canonical defaults', () => {
     const input = validManifest()
     input.common.binding = {
       kind: 'ports',
-      ports: [{ id: 'dataset', key: { kind: 'exact', value: 'dataset' }, role: 'semantic', valueShape: 'record-array', formatEditor: false }],
+      ports: [{ id: 'value', key: { kind: 'exact', value: 'value' }, role: 'semantic', valueShape: 'scalar', formatEditor: false }],
     }
-    input.common.defaultNode.bindings = {
-      dataset: {
-        kind: 'data-contract',
-        mappings: {
-          amount: {
-            sourceId: 'source',
-            select: { path: 'amount' },
-            format: { mode: 'preset', preset: { type: 'number' } },
-          },
-        },
-      },
-    }
+    input.common.defaultNode.bindings = { value: [{ sourceId: 'source', fieldPath: 'value' }] } as never
+    expect(() => defineMaterialManifest(input)).toThrowError('MATERIAL_BINDING_EXPRESSION_INVALID')
 
-    expect(() => defineMaterialManifest(input)).toThrowError('MATERIAL_BINDING_ROLE_INVALID')
+    input.common.defaultNode.bindings = { value: { sourceId: 'source', fieldPath: 'value', bindIndex: 0 } } as never
+    expect(() => defineMaterialManifest(input)).toThrowError('MATERIAL_BINDING_EXPRESSION_INVALID')
+
+    input.common.defaultNode.bindings = { value: { kind: 'data-contract', mappings: {} } } as never
+    expect(() => defineMaterialManifest(input)).toThrowError('MATERIAL_BINDING_EXPRESSION_INVALID')
   })
 
   it('requires convertible adapters to provide explicit private-model conversion', () => {
@@ -242,6 +263,33 @@ describe('defineMaterialManifest', () => {
     }
 
     expect(() => defineMaterialManifest(input)).toThrowError('MATERIAL_ADAPTER_UNIT_CONVERSION_REQUIRED')
+  })
+
+  it('forbids converters on independent model-unit adapters', () => {
+    const input = validManifest()
+    input.schemaAdapter = { ...recordSchemaAdapter(1), convertModelUnits: model => ({ ...model }) }
+
+    expect(() => defineMaterialManifest(input)).toThrowError('MATERIAL_ADAPTER_UNIT_CONVERSION_FORBIDDEN')
+  })
+
+  it('requires a complete continuous migration chain', () => {
+    const empty = validManifest()
+    empty.schemaAdapter = { ...recordSchemaAdapter(1), migrations: [] }
+    expect(() => defineMaterialManifest(empty)).toThrowError('MATERIAL_ADAPTER_MIGRATIONS_INVALID')
+
+    const malformed = validManifest()
+    malformed.schemaAdapter = {
+      ...recordSchemaAdapter(1),
+      migrations: [null as never],
+    }
+    expect(() => defineMaterialManifest(malformed)).toThrowError('MATERIAL_ADAPTER_MIGRATIONS_INVALID')
+
+    const skipped = validManifest()
+    skipped.schemaAdapter = {
+      ...recordSchemaAdapter(1),
+      migrations: [{ from: 0, to: 2, migrate: 'migrate' as never }],
+    }
+    expect(() => defineMaterialManifest(skipped)).toThrowError('MATERIAL_ADAPTER_MIGRATIONS_INVALID')
   })
 
   it('requires valid model-relative RFC 6901 paths', () => {
@@ -255,6 +303,29 @@ describe('defineMaterialManifest', () => {
     const ai = validManifest()
     ai.facets = { ai: { generation: { enabled: false, examples: [], requiredModelPaths: ['/model/color'] } } }
     expect(() => defineMaterialManifest(ai)).toThrowError('MATERIAL_AI_MODEL_PATH_INVALID')
+
+    const malformedList = validManifest()
+    malformedList.facets = { ai: { generation: { enabled: false, examples: [], requiredModelPaths: 'color' as never } } }
+    expect(() => defineMaterialManifest(malformedList)).toThrowError('MATERIAL_AI_MODEL_PATH_INVALID')
+  })
+
+  it('validates facet factories and preset allowlists', () => {
+    const facet = validManifest({ facets: { designer: {} as never } })
+    expect(() => defineMaterialManifest(facet)).toThrowError('MATERIAL_FACET_FACTORY_INVALID')
+
+    const preset = validManifest()
+    preset.common.binding = {
+      kind: 'ports',
+      ports: [{
+        id: 'label',
+        key: { kind: 'exact', value: 'label' },
+        role: 'display',
+        valueShape: 'scalar',
+        modelPath: '/model/label',
+        formatEditor: { tabs: ['preset'], presetTypes: ['script' as never] },
+      }],
+    }
+    expect(() => defineMaterialManifest(preset)).toThrowError('MATERIAL_BINDING_FORMAT_POLICY_INVALID')
   })
 
   it.each([
@@ -278,6 +349,70 @@ describe('defineMaterialManifest', () => {
     }
 
     expect(captureError(() => defineMaterialManifest(input))).toMatchObject({ code: 'JSON_VALUE_TYPE' })
+  })
+
+  it('requires AI portable schemas and examples to be JSON objects', () => {
+    const missing = validManifest()
+    missing.facets = { ai: null as never }
+    expect(() => defineMaterialManifest(missing)).toThrowError('MATERIAL_AI_GENERATION_INVALID')
+
+    const schema = validManifest()
+    schema.facets = { ai: { generation: { enabled: false, modelSchema: [] as never, examples: [] } } }
+    expect(() => defineMaterialManifest(schema)).toThrowError('MATERIAL_AI_GENERATION_INVALID')
+
+    const example = validManifest()
+    example.facets = { ai: { generation: { enabled: false, examples: [1 as never] } } }
+    expect(() => defineMaterialManifest(example)).toThrowError('MATERIAL_AI_GENERATION_INVALID')
+  })
+})
+
+describe('material binding value policies', () => {
+  it.each([
+    ['scalar', null],
+    ['scalar', 'value'],
+    ['record', { value: 1 }],
+    ['record-array', [{ value: 1 }]],
+    ['json', [1, { nested: true }]],
+  ] as const)('accepts %s values', (shape, value) => {
+    expect(() => assertMaterialBindingValue(value, shape)).not.toThrow()
+  })
+
+  it.each([
+    ['scalar', { value: 1 }],
+    ['record', []],
+    ['record-array', [1]],
+    ['json', undefined],
+  ] as const)('rejects invalid %s values', (shape, value) => {
+    expect(() => assertMaterialBindingValue(value, shape)).toThrowError('MATERIAL_BINDING_VALUE_INVALID')
+  })
+
+  it('rejects accessor-backed values', () => {
+    const value = {}
+    Object.defineProperty(value, 'secret', { enumerable: true, get: () => 'value' })
+
+    expect(() => assertMaterialBindingValue(value, 'record')).toThrowError('MATERIAL_BINDING_VALUE_INVALID')
+  })
+
+  it('rejects unknown value-shape tokens', () => {
+    expect(() => assertMaterialBindingValue(null, 'collection' as never)).toThrowError('MATERIAL_BINDING_VALUE_SHAPE_INVALID')
+  })
+
+  it('resolves exactly one policy and validates its raw value shape', () => {
+    const definition = {
+      kind: 'ports',
+      ports: [
+        { id: 'title', key: { kind: 'exact', value: 'title' }, role: 'display', valueShape: 'scalar', modelPath: '/model/title', formatEditor: false },
+        { id: 'series', key: { kind: 'prefix', value: 'series-' }, role: 'semantic', valueShape: 'record-array', formatEditor: false },
+      ],
+    } as const
+
+    expect(resolveMaterialBindingPortPolicy(definition, 'series-sales', [{ value: 1 }]).id).toBe('series')
+    expect(() => resolveMaterialBindingPortPolicy(definition, 'missing', null)).toThrowError('MATERIAL_BINDING_POLICY_UNMATCHED')
+    expect(() => resolveMaterialBindingPortPolicy(definition, 'series-sales', 1)).toThrowError('MATERIAL_BINDING_VALUE_INVALID')
+    expect(() => resolveMaterialBindingPortPolicy({
+      kind: 'ports',
+      ports: [definition.ports[1], { ...definition.ports[1], id: 'duplicate' }],
+    }, 'series-sales', [])).toThrowError('MATERIAL_BINDING_POLICY_AMBIGUOUS')
   })
 })
 

@@ -1,7 +1,12 @@
 import type { MaterialNode } from '@easyink/schema'
-import type { JsonObject, UnitType } from '@easyink/shared'
+import type { JsonObject, PropSchemaType, UnitType } from '@easyink/shared'
 import type { MaterialConditionCapability } from './condition'
-import type { MaterialBindingDefinition, MaterialBindingPortPolicy } from './material-binding'
+import type {
+  BindingExpression,
+  CanonicalMaterialBindingMap,
+  MaterialBindingDefinition,
+  MaterialBindingPortPolicy,
+} from './material-binding'
 import type { JsonPointer } from './material-introspection'
 import type { PropertyDescriptor } from './material-properties'
 import type { SchemaAdapter } from './schema-adapter'
@@ -36,7 +41,7 @@ export interface MaterialDefaultNode {
   height: number
   unit: UnitType
   model: Record<string, unknown>
-  bindings?: MaterialNode['bindings']
+  bindings?: CanonicalMaterialBindingMap
   output?: Partial<MaterialNode['output']>
 }
 
@@ -103,6 +108,24 @@ const MATERIAL_TYPE_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\/[a-z][a-z0-9]*
 const SEMVER_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/
 const JSON_POINTER_PATTERN = /^(?:\/(?:[^~/]|~[01])*)+$/
 const UNITS = new Set<UnitType>(['mm', 'pt', 'px', 'inch'])
+const PROPERTY_TYPES = new Set<PropSchemaType>([
+  'string',
+  'number',
+  'boolean',
+  'switch',
+  'textarea',
+  'code',
+  'color',
+  'enum',
+  'object',
+  'array',
+  'rich-text',
+  'image',
+  'font',
+  'unit',
+  'border-toggle',
+])
+const BINDING_PRESET_TYPES = new Set(['datetime', 'weekday', 'chinese-money', 'number', 'currency', 'percent'])
 
 export function defineMaterialManifest<TDesigner, TViewer>(
   manifest: MaterialManifest<TDesigner, TViewer>,
@@ -148,7 +171,7 @@ function validateManifest(manifest: MaterialManifest): void {
     fail('MATERIAL_TYPE_INVALID')
   validateEngineRange(manifest.engineRange)
   validateCommonFacet(manifest.common)
-  validateAI(manifest.facets.ai)
+  validateFacets(manifest.facets)
 }
 
 function validateEngineRange(range: MaterialManifest['engineRange']): void {
@@ -167,8 +190,6 @@ function validateCommonFacet(common: MaterialCommonFacet): void {
     fail('MATERIAL_DEFAULT_UNIT_INVALID')
 
   assertJsonValue(common.defaultNode.model)
-  if (common.defaultNode.bindings !== undefined)
-    assertJsonValue(common.defaultNode.bindings)
   if (common.defaultNode.output !== undefined)
     assertJsonValue(common.defaultNode.output)
 
@@ -192,7 +213,12 @@ function validateCommonFacet(common: MaterialCommonFacet): void {
 
   if (!Array.isArray(common.properties))
     fail('MATERIAL_PROPERTIES_INVALID')
+  if (common.properties.some(descriptor => !isPlainRecord(descriptor)))
+    fail('MATERIAL_PROPERTY_DESCRIPTOR_INVALID')
   validateUniqueIds(common.properties, descriptor => descriptor.key, 'MATERIAL_PROPERTY_KEY_INVALID', 'MATERIAL_PROPERTY_KEY_DUPLICATE')
+  for (const descriptor of common.properties)
+    validatePropertyDescriptor(descriptor)
+  validateCondition(common.condition)
   validatePolicies(common.structure?.slots, 'MATERIAL_STRUCTURE')
   for (const policy of common.structure.slots) {
     if (!['document', 'owner', 'slot'].includes(policy.coordinateSpace)
@@ -209,6 +235,8 @@ function validateAdapter(adapter: SchemaAdapter): void {
     fail('MATERIAL_ADAPTER_UNIT_POLICY_INVALID')
   if (adapter.modelUnitPolicy === 'convertible' && typeof adapter.convertModelUnits !== 'function')
     fail('MATERIAL_ADAPTER_UNIT_CONVERSION_REQUIRED')
+  if (adapter.modelUnitPolicy === 'independent' && adapter.convertModelUnits !== undefined)
+    fail('MATERIAL_ADAPTER_UNIT_CONVERSION_FORBIDDEN')
   if (!Array.isArray(adapter.migrations)
     || typeof adapter.validateInput !== 'function'
     || typeof adapter.normalize !== 'function'
@@ -216,9 +244,22 @@ function validateAdapter(adapter: SchemaAdapter): void {
     || typeof adapter.introspect !== 'function') {
     fail('MATERIAL_ADAPTER_INVALID')
   }
+  if (adapter.migrations.length !== adapter.currentModelVersion)
+    fail('MATERIAL_ADAPTER_MIGRATIONS_INVALID')
+  for (let from = 0; from < adapter.migrations.length; from += 1) {
+    const migration = adapter.migrations[from]!
+    if (!isPlainRecord(migration)
+      || !isNonnegativeInteger(migration.from)
+      || !isNonnegativeInteger(migration.to)
+      || migration.from !== from
+      || migration.to !== from + 1
+      || typeof migration.migrate !== 'function') {
+      fail('MATERIAL_ADAPTER_MIGRATIONS_INVALID')
+    }
+  }
 }
 
-function validateBinding(definition: MaterialBindingDefinition, bindings: MaterialNode['bindings'] | undefined): void {
+function validateBinding(definition: MaterialBindingDefinition, bindings: CanonicalMaterialBindingMap | undefined): void {
   if (definition.kind === 'none') {
     if (bindings && Object.keys(bindings).length > 0)
       fail('MATERIAL_BINDING_KEY_UNMATCHED')
@@ -235,31 +276,36 @@ function validateBinding(definition: MaterialBindingDefinition, bindings: Materi
     if (matches.length !== 1)
       fail('MATERIAL_BINDING_KEY_UNMATCHED')
     const policy = matches[0]!
-    if (Array.isArray(binding))
-      fail('MATERIAL_BINDING_ARRAY_UNSUPPORTED')
-    if (binding && 'kind' in binding) {
-      if (policy.role !== 'semantic'
-        || Object.values(binding.mappings).some(mapping => mapping.format !== undefined)) {
-        fail('MATERIAL_BINDING_ROLE_INVALID')
+    validateBindingExpression(binding)
+    if (binding.format?.mode === 'custom')
+      fail('MATERIAL_BINDING_CUSTOM_FORMAT_UNSUPPORTED')
+    if (policy.role === 'semantic' && binding.format !== undefined)
+      fail('MATERIAL_BINDING_ROLE_INVALID')
+    if (policy.role === 'display' && binding.format !== undefined) {
+      if (policy.formatEditor === false
+        || binding.format.mode !== 'preset'
+        || !binding.format.preset
+        || (policy.formatEditor.presetTypes
+          && !policy.formatEditor.presetTypes.includes(binding.format.preset.type))) {
+        fail('MATERIAL_BINDING_FORMAT_POLICY_INVALID')
       }
     }
-    else if (binding) {
-      if (binding.bindIndex !== undefined)
-        fail('MATERIAL_BINDING_INDEX_UNSUPPORTED')
-      if (binding.format?.mode === 'custom')
-        fail('MATERIAL_BINDING_CUSTOM_FORMAT_UNSUPPORTED')
-      if (policy.role === 'semantic' && binding.format !== undefined)
-        fail('MATERIAL_BINDING_ROLE_INVALID')
-      if (policy.role === 'display' && binding.format !== undefined) {
-        if (policy.formatEditor === false
-          || binding.format.mode !== 'preset'
-          || !binding.format.preset
-          || (policy.formatEditor.presetTypes
-            && !policy.formatEditor.presetTypes.includes(binding.format.preset.type))) {
-          fail('MATERIAL_BINDING_FORMAT_POLICY_INVALID')
-        }
-      }
-    }
+  }
+}
+
+function validateBindingExpression(binding: BindingExpression): void {
+  if (!isPlainRecord(binding)
+    || Object.hasOwn(binding, 'bindIndex')
+    || Object.hasOwn(binding, 'kind')
+    || !isNonemptyString(binding.sourceId)
+    || !isNonemptyString(binding.fieldPath)) {
+    fail('MATERIAL_BINDING_EXPRESSION_INVALID')
+  }
+  try {
+    assertJsonValue(binding)
+  }
+  catch {
+    fail('MATERIAL_BINDING_EXPRESSION_INVALID')
   }
 }
 
@@ -281,6 +327,11 @@ function validateBindingPolicy(policy: MaterialBindingPortPolicy): void {
       || policy.formatEditor.tabs[0] !== 'preset') {
       fail('MATERIAL_BINDING_FORMAT_POLICY_INVALID')
     }
+    if (policy.formatEditor.presetTypes !== undefined
+      && (!Array.isArray(policy.formatEditor.presetTypes)
+        || policy.formatEditor.presetTypes.some(type => !BINDING_PRESET_TYPES.has(type)))) {
+      fail('MATERIAL_BINDING_FORMAT_POLICY_INVALID')
+    }
   }
 }
 
@@ -300,23 +351,105 @@ function validatePolicies(policies: readonly DeterministicKeyPolicy[] | undefine
   }
 }
 
+function validateFacets(facets: MaterialManifest['facets']): void {
+  if (!isPlainRecord(facets))
+    fail('MATERIAL_FACETS_INVALID')
+  if ((facets.designer !== undefined && typeof facets.designer !== 'function')
+    || (facets.viewer !== undefined && typeof facets.viewer !== 'function')) {
+    fail('MATERIAL_FACET_FACTORY_INVALID')
+  }
+  validateAI(facets.ai)
+}
+
 function validateAI(ai: MaterialAIFacet | undefined): void {
-  if (!ai)
+  if (ai === undefined)
     return
+  if (!isPlainRecord(ai))
+    fail('MATERIAL_AI_GENERATION_INVALID')
   const generation = ai.generation
   if (!generation || typeof generation.enabled !== 'boolean' || !Array.isArray(generation.examples))
     fail('MATERIAL_AI_GENERATION_INVALID')
-  if (generation.modelSchema !== undefined)
+  if (generation.modelSchema !== undefined) {
+    if (!isPlainRecord(generation.modelSchema))
+      fail('MATERIAL_AI_GENERATION_INVALID')
     assertJsonValue(generation.modelSchema)
-  if (generation.bindingShape !== undefined)
+  }
+  if (generation.bindingShape !== undefined) {
+    if (!isPlainRecord(generation.bindingShape))
+      fail('MATERIAL_AI_GENERATION_INVALID')
     assertJsonValue(generation.bindingShape)
-  for (const example of generation.examples)
+  }
+  for (const example of generation.examples) {
+    if (!isPlainRecord(example))
+      fail('MATERIAL_AI_GENERATION_INVALID')
     assertJsonValue(example)
-  if (ai.descriptor !== undefined)
+  }
+  if (ai.descriptor !== undefined) {
+    if (!isPlainRecord(ai.descriptor))
+      fail('MATERIAL_AI_DESCRIPTOR_INVALID')
     assertJsonValue(ai.descriptor)
+  }
+  if (generation.requiredModelPaths !== undefined && !Array.isArray(generation.requiredModelPaths))
+    fail('MATERIAL_AI_MODEL_PATH_INVALID')
   for (const path of generation.requiredModelPaths ?? []) {
     if (!isJsonPointer(path) || path === '/model' || path.startsWith('/model/'))
       fail('MATERIAL_AI_MODEL_PATH_INVALID')
+  }
+}
+
+function validatePropertyDescriptor(descriptor: PropertyDescriptor): void {
+  if (!isNonemptyString(descriptor.label)
+    || !PROPERTY_TYPES.has(descriptor.type)
+    || (descriptor.group !== undefined && !isNonemptyString(descriptor.group))
+    || (descriptor.editor !== undefined && !isNonemptyString(descriptor.editor))
+    || (descriptor.nullable !== undefined && typeof descriptor.nullable !== 'boolean')
+    || !optionalFiniteNumbers(descriptor, ['min', 'max', 'step'])
+    || (descriptor.visible !== undefined && typeof descriptor.visible !== 'function')
+    || (descriptor.disabled !== undefined && typeof descriptor.disabled !== 'function')) {
+    fail('MATERIAL_PROPERTY_DESCRIPTOR_INVALID')
+  }
+  if (Object.hasOwn(descriptor, 'default'))
+    assertDescriptorJson(descriptor.default)
+  if (descriptor.enum !== undefined) {
+    if (!Array.isArray(descriptor.enum))
+      fail('MATERIAL_PROPERTY_DESCRIPTOR_INVALID')
+    for (const item of descriptor.enum) {
+      if (!isPlainRecord(item) || !isNonemptyString(item.label) || !Object.hasOwn(item, 'value'))
+        fail('MATERIAL_PROPERTY_DESCRIPTOR_INVALID')
+      assertDescriptorJson(item.value)
+    }
+  }
+  if (descriptor.editorOptions !== undefined)
+    assertDescriptorJson(descriptor.editorOptions)
+  if (descriptor.accessor !== undefined) {
+    if (!isPlainRecord(descriptor.accessor)
+      || !Array.isArray(descriptor.accessor.paths)
+      || descriptor.accessor.paths.length === 0
+      || descriptor.accessor.paths.some(path => typeof path !== 'string' || !isJsonPointer(path))
+      || typeof descriptor.accessor.read !== 'function'
+      || typeof descriptor.accessor.write !== 'function') {
+      fail('MATERIAL_PROPERTY_ACCESSOR_INVALID')
+    }
+  }
+}
+
+function assertDescriptorJson(value: unknown): void {
+  try {
+    assertJsonValue(value)
+  }
+  catch {
+    fail('MATERIAL_PROPERTY_DESCRIPTOR_INVALID')
+  }
+}
+
+function validateCondition(condition: MaterialConditionCapability): void {
+  if (condition === undefined || condition === false)
+    return
+  if (!isPlainRecord(condition)
+    || condition.scope !== 'node'
+    || !Array.isArray(condition.hiddenEffects)
+    || condition.hiddenEffects.some(effect => effect !== 'remove' && effect !== 'reserve')) {
+    fail('MATERIAL_CONDITION_INVALID')
   }
 }
 
@@ -392,6 +525,17 @@ function isPositiveFinite(value: unknown): value is number {
 
 function optionalBooleans<T extends object>(value: T, keys: readonly (keyof T)[]): boolean {
   return keys.every(key => value[key] === undefined || typeof value[key] === 'boolean')
+}
+
+function optionalFiniteNumbers<T extends object>(value: T, keys: readonly (keyof T)[]): boolean {
+  return keys.every(key => value[key] === undefined || (typeof value[key] === 'number' && Number.isFinite(value[key])))
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value))
+    return false
+  const prototype = Object.getPrototypeOf(value)
+  return prototype === Object.prototype || prototype === null
 }
 
 function assertManifestAcyclic(value: unknown): void {
