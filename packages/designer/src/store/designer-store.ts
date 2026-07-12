@@ -133,6 +133,8 @@ export class DesignerStore {
     // must not be auto-unwrapped by the surrounding reactive(store) proxy.
     this.editingSession = markRaw(new EditingSessionManager(this))
     this.disposeDocumentSubscription = this.documentStore.subscribe((event) => {
+      if (this.destroyed)
+        return
       this.documentViewRevision += 1
       if (event.kind !== 'preview' && event.kind !== 'preview-cancel' && event.document === this.documentStore.committedDocument)
         this.selection.reconcile(event.index.nodeIds())
@@ -141,7 +143,11 @@ export class DesignerStore {
         this._materialNodeStates = event.validationReport.nodeStates
       }
     })
-    this.disposeSelectionSubscription = this.selection.onChange(() => this.documentTransactions.markHistoryBarrier())
+    this.disposeSelectionSubscription = this.selection.onChange(() => {
+      if (this.destroyed)
+        return
+      this.documentTransactions.markHistoryBarrier()
+    })
     markRaw(this.dataSourceRegistry)
     markRaw(this.diagnostics)
 

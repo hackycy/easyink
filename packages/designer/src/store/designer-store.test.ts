@@ -312,6 +312,17 @@ describe('designer store schema initialization', () => {
     store.destroy()
   })
 
+  it('ignores queued document events after destroy', async () => {
+    const store = unknownAndBoxStore()
+    store.selection.select('box')
+    store.removeElement('box')
+    store.destroy()
+    store.selection.select('box')
+    await Promise.resolve()
+    expect(store.selection.ids).toEqual(['box'])
+    store.destroy()
+  })
+
   it('records escaped extension writes as document transactions with undo', () => {
     const store = new DesignerStore()
     const before = store.schema
