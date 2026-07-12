@@ -1,9 +1,8 @@
-import type { FontProvider } from '@easyink/core'
-import type { MaterialNode } from '@easyink/schema'
-import type { DesignerMaterialBundle } from '../materials/registry'
-import type { MaterialDefinition } from '../types'
+import type { FontProvider, SchemaAdapter } from '@easyink/core'
+import type { DocumentSchema, MaterialNode } from '@easyink/schema'
+import { createTestMaterialManifest } from '@easyink/core/testing'
 import { describe, expect, it, vi } from 'vitest'
-import { registerMaterialBundle } from '../materials/registry'
+import { createDesignerTestManifest, createDesignerTestProfile } from '../testing/material-profile'
 import { DesignerStore } from './designer-store'
 
 describe('designer store schema initialization', () => {
@@ -16,14 +15,20 @@ describe('designer store schema initialization', () => {
     expect(store.schema.elements).toEqual([])
   })
 
-  it('normalizes partial schema replacements', () => {
-    const store = new DesignerStore()
+  it('normalizes partial schema replacements and clears selection and history', () => {
+    const store = new DesignerStore({ elements: [createNode('old')] }, undefined, undefined, runtimeWith(boxProfile()))
+    store.selection.select('old')
+    store.commands.execute(command())
+    store.commands.undo()
 
-    store.setSchema({ page: { width: 80 } })
+    store.setSchema({ page: { width: 80 }, elements: [createNode('fresh')] })
 
     expect(store.schema.page).toMatchObject({ mode: 'fixed', width: 80, height: 297 })
     expect(store.schema.guides).toEqual({ x: [], y: [] })
-    expect(store.schema.elements).toEqual([])
+    expect(store.schema.elements.map(node => node.id)).toEqual(['fresh'])
+    expect(store.materialNodeStates.get('fresh')?.status).toBe('ready')
+    expect(store.selection.isEmpty).toBe(true)
+    expect(store.commands).toMatchObject({ canUndo: false, canRedo: false, cursor: 0, totalCount: 0 })
   })
 
   it('uses EasyInk paper presets by default', () => {
@@ -41,9 +46,7 @@ describe('designer store schema initialization', () => {
       },
     })
 
-    expect(store.listPaperPresets()).toEqual([
-      { name: 'Enterprise Label', width: 76, height: 42 },
-    ])
+    expect(store.listPaperPresets()).toEqual([{ name: 'Enterprise Label', width: 76, height: 42 }])
     expect(store.getPaperPreset('A4')).toBeUndefined()
   })
 
@@ -55,20 +58,11 @@ describe('designer store schema initialization', () => {
         defaultPreset: 'Enterprise Label',
       },
     }
-
     const defaulted = new DesignerStore(undefined, undefined, undefined, runtimeConfig)
     const explicit = new DesignerStore({ page: { width: 90 } }, undefined, undefined, runtimeConfig)
 
-    expect(defaulted.schema.page).toMatchObject({
-      width: 76,
-      height: 42,
-      pageModel: { paper: { width: 76, height: 42 } },
-    })
-    expect(explicit.schema.page).toMatchObject({
-      width: 90,
-      height: 297,
-      pageModel: { paper: { width: 90, height: 297 } },
-    })
+    expect(defaulted.schema.page).toMatchObject({ width: 76, height: 42, pageModel: { paper: { width: 76, height: 42 } } })
+    expect(explicit.schema.page).toMatchObject({ width: 90, height: 297, pageModel: { paper: { width: 90, height: 297 } } })
   })
 
   it('keeps save status transitions behind the store API', () => {
@@ -76,15 +70,11 @@ describe('designer store schema initialization', () => {
 
     store.queueSave()
     expect(store.workbench.status).toMatchObject({ draft: 'modified', savePhase: 'queued' })
-
     store.startSave()
     expect(store.workbench.status.savePhase).toBe('saving')
-
     store.completeSave()
-    expect(store.workbench.status.draft).toBe('clean')
-    expect(store.workbench.status.savePhase).toBe('success')
+    expect(store.workbench.status).toMatchObject({ draft: 'clean', savePhase: 'success' })
     expect(store.workbench.status.saveUpdatedAt).toEqual(expect.any(Number))
-
     store.resetTemplateSaveState()
     expect(store.workbench.status).toMatchObject({ draft: 'clean', savePhase: 'idle' })
     expect(store.workbench.status.saveUpdatedAt).toBeUndefined()
@@ -92,177 +82,164 @@ describe('designer store schema initialization', () => {
 
   it('prunes removed elements from logical groups', () => {
     const store = new DesignerStore({
-      elements: [
-        createNode('a'),
-        createNode('b'),
-        createNode('c'),
-      ],
+      elements: [createNode('a'), createNode('b'), createNode('c')],
       groups: [{ id: 'grp_1', memberIds: ['a', 'b', 'c'] }],
-    })
+    }, undefined, undefined, runtimeWith(boxProfile()))
 
     store.removeElement('b')
     expect(store.schema.groups).toEqual([{ id: 'grp_1', memberIds: ['a', 'c'] }])
-
     store.removeElement('a')
     expect(store.schema.groups).toEqual([])
   })
 
-  it('registers materials, catalog groups, and cached designer extensions', () => {
-    const store = new DesignerStore()
-    const definition = createMaterialDefinition('sample')
-    const factory = vi.fn(() => ({ renderContent: () => () => {} }))
+  it('runs constructor admission phases in order and stores only canonical nodes', () => {
+    const phases: string[] = []
+    const base = createTestMaterialManifest({ type: 'seed' }).schemaAdapter
+    const adapter: SchemaAdapter = {
+      ...base,
+      currentModelVersion: 1,
+      migrations: [{ from: 0, to: 1, migrate: (node) => {
+        phases.push('migrate')
+        return { ...node, modelVersion: 1, model: { count: Number(node.model.count) } }
+      } }],
+      validateInput: () => {
+        phases.push('validate-input')
+        return []
+      },
+      normalize: (node) => {
+        phases.push('normalize')
+        return { ...node, model: { ...node.model, normalized: true } }
+      },
+      validate: () => {
+        phases.push('validate')
+        return []
+      },
+      introspect: () => {
+        phases.push('introspect')
+        return { identities: [], structures: [], references: [], resources: [], bindings: [] }
+      },
+    }
+    const profile = createDesignerTestProfile([createDesignerTestManifest({ type: 'box', schemaAdapter: adapter })])
 
-    store.registerMaterial(definition)
-    store.registerCatalogGroup({
-      id: 'basic',
-      label: 'materials.catalog.basic',
-      items: [{
-        id: 'basic-sample',
-        groupId: 'basic',
-        label: 'Sample',
-        icon: definition.icon,
-        materialType: 'sample',
-      }],
-    })
-    store.registerDesignerFactory('sample', factory)
+    const store = new DesignerStore({ elements: [{ id: 'box', type: 'box', props: { count: '2' } }] }, undefined, undefined, runtimeWith(profile))
 
-    expect(store.getMaterial('sample')).toMatchObject({ type: 'sample', name: 'Sample' })
-    expect(store.getCatalogGroups()).toHaveLength(1)
-    expect(store.getCatalogGroups()[0]?.items).toHaveLength(1)
-    expect(store.getCatalog()).toHaveLength(1)
-    expect(store.getDesignerExtension('sample')).toBe(store.getDesignerExtension('sample'))
-    expect(factory).toHaveBeenCalledTimes(1)
+    expect(phases).toEqual(['validate-input', 'migrate', 'normalize', 'validate', 'introspect'])
+    expect(store.schema.elements[0]).toEqual(expect.objectContaining({
+      id: 'box',
+      type: 'box',
+      modelVersion: 1,
+      model: { count: 2, normalized: true },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
+    }))
+    expect(store.schema.elements[0]).not.toHaveProperty('props')
   })
 
-  it('returns a stable loading extension while a lazy designer factory loads', async () => {
-    const store = new DesignerStore()
-    const factory = vi.fn(() => ({ renderContent: () => () => {} }))
-    store.registerLazyDesignerFactory('lazy-sample', () => Promise.resolve(factory))
+  it('retains the compiled profile identity and exposes immutable type lists without mutation APIs', () => {
+    const profile = boxProfile()
+    const store = new DesignerStore(undefined, undefined, undefined, runtimeWith(profile))
 
-    const loading = store.getDesignerExtension('lazy-sample')
+    expect(store.materialProfile).toBe(profile)
+    expect(store.listEditableMaterialTypes()).toEqual(['box'])
+    expect(Object.isFrozen(profile.editableTypes)).toBe(true)
+    expect('registerMaterial' in store).toBe(false)
+  })
 
-    expect(loading).toBe(store.getDesignerExtension('lazy-sample'))
-    expect(factory).not.toHaveBeenCalled()
+  it('loads ready and unknown nodes with complete sidecars', () => {
+    const store = unknownAndBoxStore()
 
-    await Promise.resolve()
-    await Promise.resolve()
+    expect(store.schema.elements.map(node => node.id)).toEqual(['unknown', 'box'])
+    expect(store.materialNodeStates.get('unknown')).toMatchObject({ status: 'quarantined', code: 'MATERIAL_TYPE_UNKNOWN' })
+    expect(store.materialNodeStates.get('box')).toMatchObject({ status: 'ready' })
+    expect(store.materialDiagnostics).toContainEqual(expect.objectContaining({ code: 'MATERIAL_TYPE_UNKNOWN', nodeId: 'unknown' }))
+  })
 
-    expect(store.getDesignerExtension('lazy-sample')).toBe(store.getDesignerExtension('lazy-sample'))
-    expect(factory).toHaveBeenCalledTimes(1)
+  it('publishes an editable node change while preserving complete unknown and ready states', () => {
+    const store = unknownAndBoxStore()
+    const unknownState = store.materialNodeStates.get('unknown')
+    const candidate = structuredClone(store.schema)
+    candidate.elements[1]!.x = 24
+
+    expect(store.publishSchemaCandidate(candidate, new Set(['box']))).toBe(true)
+    expect(store.schema).toBe(candidate)
+    expect(store.schema.elements[1]?.x).toBe(24)
+    expect(store.materialNodeStates.size).toBe(2)
+    expect(store.materialNodeStates.get('unknown')).toBe(unknownState)
+    expect(store.materialNodeStates.get('box')?.status).toBe('ready')
+  })
+
+  it('atomically rejects moving an unknown node without changing history or sidecars', () => {
+    const store = unknownAndBoxStore()
+    store.commands.execute(command())
+    store.commands.undo()
+    const schema = store.schema
+    const states = store.materialNodeStates
+    const diagnostics = store.materialDiagnostics
+    const candidate = structuredClone(schema)
+    candidate.elements[0]!.x = 99
+
+    expect(store.publishSchemaCandidate(candidate, new Set(['unknown']))).toBe(false)
+    expect(store.schema).toBe(schema)
+    expect(store.materialNodeStates).toBe(states)
+    expect(store.materialDiagnostics).toBe(diagnostics)
+    expect(store.commands).toMatchObject({ cursor: 0, canRedo: true, totalCount: 1 })
+  })
+
+  it('allows deleting an unknown node', () => {
+    const store = unknownAndBoxStore()
+    const candidate = structuredClone(store.schema)
+    candidate.elements = candidate.elements.filter(node => node.id !== 'unknown')
+
+    expect(store.publishSchemaCandidate(candidate, new Set(['unknown']))).toBe(true)
+    expect(store.schema.elements.map(node => node.id)).toEqual(['box'])
+    expect([...store.materialNodeStates.keys()]).toEqual(['box'])
+  })
+
+  it('restores captured schema and states in history mode', () => {
+    const store = unknownAndBoxStore()
+    const capturedSchema = structuredClone(store.schema)
+    const capturedStates = store.materialNodeStates
+    const candidate = structuredClone(store.schema)
+    candidate.elements = candidate.elements.filter(node => node.id !== 'unknown')
+    expect(store.publishSchemaCandidate(candidate, new Set(['unknown']))).toBe(true)
+
+    expect(store.restoreSchemaFromHistory(capturedSchema, capturedStates)).toBe(true)
+    expect(store.schema).toBe(capturedSchema)
+    expect(store.materialNodeStates.get('unknown')).toBe(capturedStates.get('unknown'))
+    expect(store.materialNodeStates.get('box')).toBe(capturedStates.get('box'))
+  })
+
+  it('serializes only the canonical schema, never admission sidecars', () => {
+    const store = unknownAndBoxStore()
+    const saved = JSON.parse(JSON.stringify(store.schema)) as DocumentSchema
+
+    expect(saved).toEqual(store.schema)
+    expect(saved).not.toHaveProperty('materialDiagnostics')
+    expect(saved).not.toHaveProperty('materialNodeStates')
+    expect(saved.elements[0]).not.toHaveProperty('diagnostics')
   })
 
   it('resolves registered locale messages after host locale overrides', () => {
     const store = new DesignerStore()
-
     store.setLocale({ plugin: { title: 'Host Title' } }, 'en-US')
     const unregister = store.registerLocaleMessages({
-      messages: { plugin: { title: 'Default Title', action: '默认操作' } },
-      locales: {
-        'en-US': { plugin: { title: 'Registered Title', action: 'Registered Action' } },
-      },
+      messages: { plugin: { title: 'Default Title', action: 'Default Action' } },
+      locales: { 'en-US': { plugin: { title: 'Registered Title', action: 'Registered Action' } } },
     })
 
     expect(store.t('plugin.title')).toBe('Host Title')
     expect(store.t('plugin.action')).toBe('Registered Action')
-
     unregister()
-
     expect(store.t('plugin.action')).toBe('plugin.action')
-  })
-
-  it('registers bundle and material locale messages from material bundles', () => {
-    const store = new DesignerStore()
-
-    store.setLocale({}, 'en-US')
-    const unregister = registerMaterialBundle(store, {
-      localeMessages: {
-        messages: { bundle: { title: 'Bundle Default' } },
-        locales: {
-          'en-US': { bundle: { title: 'Bundle Title' } },
-        },
-      },
-      materials: [{
-        type: 'sample',
-        name: 'materials.sample.name',
-        icon: { render: () => null },
-        category: 'basic',
-        capabilities: {},
-        binding: { kind: 'none' },
-        createDefaultNode: input => createNode(input?.id ?? 'sample-1'),
-        factory: vi.fn(() => ({ renderContent: () => () => {} })),
-        propSchemas: [
-          { key: 'label', label: 'materials.sample.property.label', type: 'string' },
-        ],
-        localeMessages: {
-          messages: {
-            materials: {
-              sample: {
-                name: 'Sample Default',
-                property: { label: 'Label Default' },
-              },
-            },
-          },
-          locales: {
-            'en-US': {
-              materials: {
-                sample: {
-                  name: 'Sample',
-                  property: { label: 'Label' },
-                },
-              },
-            },
-          },
-        },
-      }],
-      catalogs: [{
-        id: 'basic',
-        label: 'materials.catalog.basic',
-        items: [{ type: 'sample' }],
-      }],
-    })
-
-    expect(store.t('bundle.title')).toBe('Bundle Title')
-    expect(store.t('materials.sample.name')).toBe('Sample')
-    expect(store.t('materials.sample.property.label')).toBe('Label')
-    expect(store.getMaterial('sample')?.props.map(schema => schema.label)).toEqual(['materials.sample.property.label'])
-
-    unregister()
-
-    expect(store.t('bundle.title')).toBe('bundle.title')
-    expect(store.t('materials.sample.name')).toBe('materials.sample.name')
-  })
-
-  it('unwinds overlapping material bundle registrations without removing later owners', () => {
-    const store = new DesignerStore()
-    const first = registerMaterialBundle(store, createBundle('sample', 'First'))
-    const second = registerMaterialBundle(store, createBundle('sample', 'Second'))
-
-    expect(store.getMaterial('sample')?.name).toBe('Second')
-    expect(store.getCatalog()).toHaveLength(1)
-    expect(store.getCatalog()[0]?.label).toBe('Second')
-
-    first()
-    expect(store.getMaterial('sample')?.name).toBe('Second')
-
-    second()
-    expect(store.getMaterial('sample')).toBeUndefined()
-    expect(store.getDesignerExtension('sample')).toBeUndefined()
-    expect(store.getCatalog()).toEqual([])
   })
 
   it('delegates font loading while preserving font manager compatibility', async () => {
     const store = new DesignerStore()
     const provider: FontProvider = {
-      listFonts: async () => [{
-        family: 'Inter',
-        displayName: 'Inter',
-        weights: ['400'],
-        styles: ['normal'],
-        source: 'system',
-      }],
+      listFonts: async () => [{ family: 'Inter', displayName: 'Inter', weights: ['400'], styles: ['normal'], source: 'system' }],
       loadFont: async () => ({ type: 'system' }),
     }
-
     store.setFontProvider(provider)
     const revision = store.fontRevision
 
@@ -274,36 +251,22 @@ describe('designer store schema initialization', () => {
   })
 })
 
-function createMaterialDefinition(type: string): MaterialDefinition {
-  return {
-    type,
-    name: 'Sample',
-    icon: { render: () => null } as MaterialDefinition['icon'],
-    category: 'basic',
-    capabilities: {},
-    binding: { kind: 'none' },
-    props: [],
-    createDefaultNode: input => ({
-      id: input?.id ?? 'sample-1',
-      type,
-      x: 0,
-      y: 0,
-      width: 10,
-      height: 10,
-      modelVersion: 1,
-      model: {},
-      slots: {},
-      bindings: {},
-      output: { visibility: 'include' },
-      ...input,
-    } satisfies MaterialNode),
-  }
+function boxProfile() {
+  return createDesignerTestProfile([createDesignerTestManifest({ type: 'box' })])
 }
 
-function createNode(id: string): MaterialNode {
+function runtimeWith(profile: ReturnType<typeof boxProfile>) {
+  return { materials: { profile } }
+}
+
+function unknownAndBoxStore() {
+  return new DesignerStore({ elements: [createNode('unknown', 'missing'), createNode('box')] }, undefined, undefined, runtimeWith(boxProfile()))
+}
+
+function createNode(id: string, type = 'box'): MaterialNode {
   return {
     id,
-    type: 'sample',
+    type,
     x: 0,
     y: 0,
     width: 10,
@@ -316,18 +279,6 @@ function createNode(id: string): MaterialNode {
   }
 }
 
-function createBundle(type: string, name: string): DesignerMaterialBundle {
-  const definition = createMaterialDefinition(type)
-  return {
-    materials: [{
-      ...definition,
-      name,
-      factory: () => ({ renderContent: () => () => {} }),
-    }],
-    catalogs: [{
-      id: 'basic',
-      label: 'Basic',
-      items: [{ id: `basic-${type}`, type, label: name }],
-    }],
-  }
+function command() {
+  return { id: 'test', type: 'test', description: 'test', execute: vi.fn(), undo: vi.fn() }
 }

@@ -67,6 +67,13 @@ function makeCtx(store: DesignerStore, onDragMoved?: () => void): ElementDragCon
   }
 }
 
+function live(store: DesignerStore, id: string): MaterialNode {
+  const node = store.getElementById(id)
+  if (!node)
+    throw new Error(`Missing live node ${id}`)
+  return node
+}
+
 function pdEvent(name: string, x: number, y: number, opts: { meta?: boolean, ctrl?: boolean } = {}): PointerEvent {
   return new PointerEvent(name, {
     clientX: x,
@@ -97,8 +104,8 @@ describe('useElementDrag', () => {
     startDrag(target, drag, 0, 0)
     window.dispatchEvent(pdEvent('pointermove', 30, 40))
 
-    expect(node.x).toBe(40)
-    expect(node.y).toBe(60)
+    expect(live(store, 'n1').x).toBe(40)
+    expect(live(store, 'n1').y).toBe(60)
 
     window.dispatchEvent(pdEvent('pointerup', 30, 40))
     expect(store.commands.execute).toHaveBeenCalledOnce()
@@ -118,10 +125,10 @@ describe('useElementDrag', () => {
     startDrag(target, drag, 50, 50)
     window.dispatchEvent(pdEvent('pointermove', 70, 80))
 
-    expect(a.x).toBe(20)
-    expect(a.y).toBe(30)
-    expect(b.x).toBe(120)
-    expect(b.y).toBe(130)
+    expect(live(store, 'a').x).toBe(20)
+    expect(live(store, 'a').y).toBe(30)
+    expect(live(store, 'b').x).toBe(120)
+    expect(live(store, 'b').y).toBe(130)
   })
 
   it('moves multi-selection continuously across fixed-sheet page breaks', () => {
@@ -142,8 +149,8 @@ describe('useElementDrag', () => {
     startDrag(target, drag, 0, 80)
     window.dispatchEvent(pdEvent('pointermove', 0, 130))
 
-    expect(a.y).toBe(130)
-    expect(b.y).toBe(200)
+    expect(live(store, 'a').y).toBe(130)
+    expect(live(store, 'b').y).toBe(200)
   })
 
   it('keeps page boundary snap as an auxiliary page reference', () => {
@@ -158,7 +165,7 @@ describe('useElementDrag', () => {
     startDrag(target, drag, 0, 0)
     window.dispatchEvent(pdEvent('pointermove', -9, 0))
 
-    expect(node.x).toBe(0)
+    expect(live(store, 'n1').x).toBe(0)
     expect(store.snapActiveLines).toContainEqual(expect.objectContaining({
       orientation: 'vertical',
       position: 0,
@@ -183,7 +190,7 @@ describe('useElementDrag', () => {
     startDrag(target, drag, 0, 150)
     window.dispatchEvent(pdEvent('pointermove', 0, 189))
 
-    expect(node.y).toBe(190)
+    expect(live(store, 'n1').y).toBe(190)
     expect(store.snapActiveLines).toContainEqual(expect.objectContaining({
       orientation: 'horizontal',
       position: 200,
@@ -267,8 +274,8 @@ describe('useElementDrag', () => {
     window.dispatchEvent(pdEvent('pointermove', 40, 60))
 
     // 40 screen px / zoom 2 = 20 doc units
-    expect(node.x).toBe(20)
-    expect(node.y).toBe(30)
+    expect(live(store, 'n1').x).toBe(20)
+    expect(live(store, 'n1').y).toBe(30)
   })
 
   it('bypasses snap when Cmd / Ctrl is held', () => {
@@ -288,7 +295,7 @@ describe('useElementDrag', () => {
     window.dispatchEvent(pdEvent('pointermove', 99, 0, { meta: true }))
 
     // Snap bypassed, position is exact delta
-    expect(target1.x).toBe(99)
+    expect(live(store, 'a').x).toBe(99)
     expect(store.snapActiveLines).toHaveLength(0)
   })
 
@@ -307,7 +314,7 @@ describe('useElementDrag', () => {
     startDrag(target, drag, 0, 0)
     window.dispatchEvent(pdEvent('pointermove', 2, 0))
 
-    expect(target1.x).toBe(0)
+    expect(live(store, 'a').x).toBe(0)
     expect(store.snapActiveLines).toContainEqual(expect.objectContaining({
       orientation: 'vertical',
       position: 0,
@@ -329,8 +336,8 @@ describe('useElementDrag', () => {
     window.dispatchEvent(pdEvent('pointermove', 30, 40))
     window.dispatchEvent(pdEvent('pointercancel', 30, 40))
 
-    expect(node.x).toBe(10)
-    expect(node.y).toBe(20)
+    expect(live(store, 'n1').x).toBe(10)
+    expect(live(store, 'n1').y).toBe(20)
     expect(store.snapActiveLines).toHaveLength(0)
     expect(store.commands.execute).not.toHaveBeenCalled()
   })

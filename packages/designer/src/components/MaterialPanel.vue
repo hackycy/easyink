@@ -1,12 +1,11 @@
 <script setup lang="ts">
 import type { MaterialCatalogEntry, MaterialCatalogGroup } from '../types'
 import { AddMaterialCommand } from '@easyink/core'
-import { IconRect } from '@easyink/icons'
 import { computed, inject } from 'vue'
 import { useDesignerStore } from '../composables'
 import { DESIGNER_DRAG_DROP_KEY } from '../composables/use-designer-drag-drop'
 import { selectOne } from '../interactions/selection-api'
-import { builtinMaterialIcons } from '../material-host'
+import { resolveBuiltinMaterialIcon } from '../material-host'
 
 const store = useDesignerStore()
 const dragDrop = inject(DESIGNER_DRAG_DROP_KEY, null)
@@ -23,7 +22,7 @@ const visibleCatalogGroups = computed<MaterialCatalogGroup[]>(() => {
       id: type,
       groupId: id,
       label: manifest.common.nameKey,
-      icon: builtinMaterialIcons[manifest.common.iconKey] ?? IconRect,
+      icon: resolveBuiltinMaterialIcon(manifest.common.iconKey),
       materialType: type,
     })
     groups.set(id, group)

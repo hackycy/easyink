@@ -1,4 +1,4 @@
-import type { MaterialControlPolicy, MaterialDesignerExtension } from '@easyink/core'
+import type { MaterialControlPolicy } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { DesignerStore } from '../store/designer-store'
 import type { MaterialDefinition, PropSchema } from '../types'
@@ -18,17 +18,20 @@ const node: MaterialNode = {
   y: 0,
   width: 100,
   height: 20,
+  modelVersion: 1,
   model: {},
+  slots: {},
+  bindings: {},
+  output: { visibility: 'include' },
 }
 
 function makeStore(policy: MaterialControlPolicy, capabilities: MaterialDefinition['capabilities'] = { resizable: true }): DesignerStore {
   return {
     schema: {},
     t: (key: string) => key,
-    getMaterial: () => ({ capabilities }),
-    getDesignerExtension: (): MaterialDesignerExtension => ({
-      renderContent: () => () => {},
-      resolveControlPolicy: () => policy,
+    getMaterialManifest: () => ({ common: { interaction: capabilities } }),
+    peekDesignerFacet: () => ({
+      value: { extension: { renderContent: () => () => {}, resolveControlPolicy: () => policy } },
     }),
   } as unknown as DesignerStore
 }

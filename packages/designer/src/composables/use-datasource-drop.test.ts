@@ -10,13 +10,13 @@ interface FakeStore {
   workbench: { viewport: { zoom: number, scrollLeft: number, scrollTop: number } }
   getElements: () => MaterialNode[]
   getElementSize: (node: MaterialNode) => { width: number, height: number }
-  getMaterial: () => { capabilities: { bindable?: boolean } } | null
-  getDesignerExtension: () => {
+  getMaterialManifest: () => { common: { binding: { kind: 'ports' } } }
+  peekDesignerFacet: () => { value: { extension: {
     datasourceDrop?: {
       onDragOver: (field: { sourceId: string, fieldPath: string }, point: { x: number, y: number }, node: MaterialNode) => { status: 'accepted', rect: { x: number, y: number, w: number, h: number }, label?: string } | null
       onDrop: () => void
     }
-  }
+  } } }
 }
 
 type DragOverCall = [
@@ -34,7 +34,11 @@ function makeNode(extra: Partial<MaterialNode> = {}): MaterialNode {
     width: 100,
     height: 40,
     rotation: 90,
-    props: {},
+    modelVersion: 1,
+    model: {},
+    slots: {},
+    bindings: {},
+    output: { visibility: 'include' },
     ...extra,
   } as MaterialNode
 }
@@ -71,14 +75,15 @@ describe('useDatasourceDrop', () => {
       workbench: { viewport: { zoom: 1, scrollLeft: 0, scrollTop: 0 } },
       getElements: () => [node],
       getElementSize: current => ({ width: current.width, height: current.height }),
-      getMaterial: () => ({
-        capabilities: {},
-        binding: { kind: 'ordinary', primaryProp: 'content', formatEditor: { tabs: ['preset', 'custom'], defaultTab: 'preset' } },
-      }),
-      getDesignerExtension: () => ({
-        datasourceDrop: {
-          onDragOver,
-          onDrop: vi.fn(),
+      getMaterialManifest: () => ({ common: { binding: { kind: 'ports' } } }),
+      peekDesignerFacet: () => ({
+        value: {
+          extension: {
+            datasourceDrop: {
+              onDragOver,
+              onDrop: vi.fn(),
+            },
+          },
         },
       }),
     }

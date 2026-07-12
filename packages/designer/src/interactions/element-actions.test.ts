@@ -39,13 +39,14 @@ describe('element actions', () => {
   it('toggles hidden state through an undoable transaction', () => {
     const node = makeNode('a')
     const store = makeStore([node])
+    const liveNode = store.getElementById('a')!
 
-    expect(toggleMaterialHidden(store, node)).toBe(true)
+    expect(toggleMaterialHidden(store, liveNode)).toBe(true)
 
-    expect(node.editorState?.hidden).toBe(true)
+    expect(liveNode.editorState?.hidden).toBe(true)
     expect(store.commands.beginTransaction).toHaveBeenCalledWith('Hide')
     store.commands.undo()
-    expect(node.editorState?.hidden).toBeUndefined()
+    expect(liveNode.editorState?.hidden).toBeUndefined()
   })
 
   it('deletes hidden unlocked nodes and removes them from selection', () => {
@@ -53,7 +54,7 @@ describe('element actions', () => {
     const locked = makeNode('locked', { editorState: { locked: true } })
     const store = makeStore([hidden, locked], ['hidden', 'locked'])
 
-    expect(deleteMaterialNodes(store, [hidden, locked])).toBe(1)
+    expect(deleteMaterialNodes(store, [store.getElementById('hidden')!, store.getElementById('locked')!])).toBe(1)
 
     expect(store.schema.elements.map(node => node.id)).toEqual(['locked'])
     expect(store.selection.ids).toEqual(['locked'])

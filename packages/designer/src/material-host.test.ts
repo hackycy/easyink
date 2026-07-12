@@ -1,8 +1,15 @@
-import type { MaterialDesignerFacet, MaterialExtensionContext } from '@easyink/core'
-import { compileMaterialProfile, defineStandardMaterialManifest, recordSchemaAdapter } from '@easyink/core'
+/**
+ * @vitest-environment happy-dom
+ */
+import type { MaterialNode } from '@easyink/schema'
 import { createTestMaterialManifest } from '@easyink/core/testing'
 import { describe, expect, it, vi } from 'vitest'
-import { builtinCatalogGroupLabels, builtinMaterialIcons, prepareDesignerMaterialBundle } from './material-host'
+import { createApp, defineComponent, h, nextTick } from 'vue'
+import CanvasElementContent from './components/CanvasElementContent.vue'
+import { provideDesignerStore } from './composables'
+import { builtinCatalogGroupLabels, builtinMaterialIcons, resolveBuiltinMaterialIcon } from './material-host'
+import { DesignerStore } from './store/designer-store'
+import { createDesignerTestManifest, createDesignerTestProfile } from './testing/material-profile'
 
 describe('designer builtin material host metadata', () => {
   it('owns every builtin icon and catalog label outside the manifest package', () => {
@@ -42,95 +49,87 @@ describe('designer builtin material host metadata', () => {
     })
   })
 
-  it('prepares basic, all, and none profiles from their manifest designer facets', async () => {
-    const first = manifest('first', 10)
-    const second = manifest('second', 20)
-    const basic = profile('basic', [first])
-    const all = profile('all', [first, second])
-    const none = profile('none', [])
-
-    const [basicPrepared, allPrepared, nonePrepared] = await Promise.all([
-      prepareDesignerMaterialBundle(basic, {} as MaterialExtensionContext),
-      prepareDesignerMaterialBundle(all, {} as MaterialExtensionContext),
-      prepareDesignerMaterialBundle(none, {} as MaterialExtensionContext),
-    ])
-
-    expect(basicPrepared.bundle.materials.map(item => item.type)).toEqual(['first'])
-    expect(allPrepared.bundle.materials.map(item => item.type).sort()).toEqual(['first', 'second'])
-    expect(nonePrepared.bundle.materials).toEqual([])
-    expect(new Set(allPrepared.bundle.materials.map(item => item.type)).size).toBe(2)
-    expect(allPrepared.manifests).toHaveLength(2)
-    expect(allPrepared.manifests[0]).toBe(all.getManifest('first'))
-    expect(allPrepared.manifests[1]).toBe(all.getManifest('second'))
-    expect(allPrepared.bundle.catalogs.flatMap(group => group.items).map(item => item.order)).toEqual([10, 20])
-  })
-
-  it('preserves facet activation and disposal failure semantics', async () => {
-    const dispose = vi.fn(async () => {
-      throw new Error('dispose failed')
-    })
-    const good = standardManifest('good', 1, dispose)
-    const bad = createTestMaterialManifest({
-      type: 'bad',
-      designer: () => { throw new Error('prepare failed') },
-    })
-    const prepared = await prepareDesignerMaterialBundle(profile('lifecycle', [good, bad]), {} as MaterialExtensionContext)
-
-    expect(prepared.bundle.materials.map(item => item.type)).toEqual(['good'])
-    expect(prepared.diagnostics).toMatchObject([{ code: 'MATERIAL_FACET_ACTIVATION_FAILED', materialType: 'bad' }])
-    const diagnostics = await prepared.dispose()
-    expect(diagnostics).toMatchObject([{ code: 'MATERIAL_FACET_DISPOSE_FAILED', materialType: 'good' }])
-    await expect(prepared.dispose()).resolves.toBe(diagnostics)
-    expect(dispose).toHaveBeenCalledTimes(1)
+  it('resolves host icons and uses the rectangle icon as a stable fallback', () => {
+    expect(resolveBuiltinMaterialIcon('image')).toBe(builtinMaterialIcons.image)
+    expect(resolveBuiltinMaterialIcon('host-unknown')).toBe(builtinMaterialIcons.rect)
   })
 })
 
-function manifest(type: string, order: number) {
-  return createTestMaterialManifest({ type, designer: () => facet(order) })
-}
+describe('designerStore material facet host', () => {
+  it('activates and peeks a designer facet while excluding viewer-only types', async () => {
+    const extension = { renderContent: vi.fn(() => () => {}) }
+    const profile = createDesignerTestProfile([
+      createDesignerTestManifest({ type: 'editable', extension }),
+      createTestMaterialManifest({ type: 'viewer-only', designer: false }),
+    ])
+    const store = new DesignerStore(undefined, undefined, undefined, { materials: { profile } })
 
-function facet(order: number, extension: Record<string, unknown> = {}): MaterialDesignerFacet {
+    expect(store.peekDesignerFacet('editable')).toBeUndefined()
+    await expect(store.activateDesignerFacet('editable')).resolves.toMatchObject({ state: 'active', value: { extension } })
+    expect(store.peekDesignerFacet('editable')?.value?.extension).toBe(extension)
+    expect(store.listEditableMaterialTypes()).toEqual(['editable'])
+  })
+
+  it('quarantines preparation failures without caching a usable value', async () => {
+    const profile = createDesignerTestProfile([
+      createDesignerTestManifest({ type: 'broken', designerFactory: () => { throw new Error('prepare failed') } }),
+    ])
+    const store = new DesignerStore(undefined, undefined, undefined, { materials: { profile } })
+
+    const instance = await store.activateDesignerFacet('broken')
+
+    expect(instance).toMatchObject({ state: 'quarantined', diagnostic: { code: 'MATERIAL_FACET_ACTIVATION_FAILED' } })
+    expect(instance.value).toBeUndefined()
+    expect(store.peekDesignerFacet('broken')).toBe(instance)
+  })
+
+  it('runs render cleanup on unmount and extension disposal once', async () => {
+    const renderCleanup = vi.fn()
+    const dispose = vi.fn()
+    const extension = { renderContent: vi.fn(() => renderCleanup), dispose }
+    const profile = createDesignerTestProfile([createDesignerTestManifest({ type: 'editable', extension })])
+    const store = new DesignerStore({ elements: [node('editable')] }, undefined, undefined, { materials: { profile } })
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const app = createApp(defineComponent({
+      setup() {
+        provideDesignerStore(store)
+        return () => h(CanvasElementContent, { nodeId: 'editable' })
+      },
+    }))
+
+    app.mount(host)
+    await flush()
+    expect(extension.renderContent).toHaveBeenCalledOnce()
+
+    app.unmount()
+    expect(renderCleanup).toHaveBeenCalledOnce()
+    store.destroy()
+    await flush()
+    expect(dispose).toHaveBeenCalledOnce()
+    host.remove()
+  })
+})
+
+function node(id: string): MaterialNode {
   return {
-    extension: extension as never,
-    catalog: { group: 'basic', order },
-    localeMessages: { messages: { material: order } },
+    id,
+    type: 'editable',
+    x: 0,
+    y: 0,
+    width: 10,
+    height: 10,
+    modelVersion: 1,
+    model: {},
+    slots: {},
+    bindings: {},
+    output: { visibility: 'include' },
   }
 }
 
-function profile(id: string, manifests: ReturnType<typeof createTestMaterialManifest>[]) {
-  return compileMaterialProfile({
-    id,
-    engineVersion: '0.0.30',
-    packages: [{ packageId: `@easyink/test-${id}`, kind: 'builtin', required: true, manifests }],
-  })
-}
-
-function standardManifest(type: string, order: number, dispose: () => Promise<void>) {
-  return defineStandardMaterialManifest({
-    type,
-    nameKey: `materials.${type}.name`,
-    category: 'basic',
-    iconKey: 'box',
-    catalogOrder: order,
-    defaultNode: {
-      id: type,
-      type,
-      x: 0,
-      y: 0,
-      width: 10,
-      height: 10,
-      modelVersion: 1,
-      model: {},
-      bindings: {},
-    },
-    interaction: { rotatable: true, resizable: true },
-    binding: { kind: 'none' },
-    layout: { intrinsicSize: 'none', fragmentation: 'none', pageRepeat: 'none', overflow: 'clip' },
-    properties: [],
-    schemaAdapter: recordSchemaAdapter(1),
-    designerFactory: () => ({ renderContent: () => () => {}, dispose }),
-    viewerExtension: { render: () => ({ tree: { type: 'text', value: '' } }) },
-    aiDescriptor: {},
-    generation: { enabled: false },
-  })
+async function flush() {
+  await Promise.resolve()
+  await Promise.resolve()
+  await new Promise(resolve => setTimeout(resolve, 0))
+  await nextTick()
 }

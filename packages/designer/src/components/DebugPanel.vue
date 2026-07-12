@@ -7,6 +7,7 @@ import { isObject } from '@easyink/shared'
 import { EiIcon } from '@easyink/ui'
 import { computed, ref } from 'vue'
 import { useDesignerStore } from '../composables'
+import { collectMaterialDiagnostics } from '../store/material-diagnostics'
 
 const store = useDesignerStore()
 
@@ -17,7 +18,26 @@ const schemaJson = computed(() => {
 const elementCount = computed(() => store.getElements().length)
 const selectedCount = computed(() => store.selection.count)
 
-const diagnostics = computed(() => [...store.diagnostics.entries].reverse())
+interface DisplayDiagnostic {
+  id: string | number
+  source: string
+  severity: DiagnosticSeverity
+  message: string
+  timestamp: number
+  detail?: Record<string, unknown>
+}
+
+const diagnostics = computed<DisplayDiagnostic[]>(() => {
+  const materialEntries = collectMaterialDiagnostics(store.materialDiagnostics, store.materialNodeStates).map(item => ({
+    id: `material:${item.code}:${item.path}:${item.nodeId ?? ''}`,
+    source: 'material-admission',
+    severity: item.severity === 'warning' ? 'warn' as const : item.severity,
+    message: item.message,
+    timestamp: 0,
+    detail: { code: item.code, path: item.path, ...(item.nodeId ? { nodeId: item.nodeId } : {}) },
+  }))
+  return [...[...store.diagnostics.entries].reverse(), ...materialEntries]
+})
 
 const errorCount = computed(() => diagnostics.value.filter(d => d.severity === 'error').length)
 const warnCount = computed(() => diagnostics.value.filter(d => d.severity === 'warn').length)

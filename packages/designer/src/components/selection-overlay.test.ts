@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest'
 import { createApp, defineComponent, h, nextTick, reactive } from 'vue'
 import { provideDesignerStore } from '../composables'
 import { DesignerStore } from '../store/designer-store'
+import { createDesignerTestManifest, createDesignerTestProfile } from '../testing/material-profile'
 import SelectionOverlay from './SelectionOverlay.vue'
 
 function createNode(): MaterialNode {
@@ -34,16 +35,17 @@ function createDecorationComponent(layer: string) {
   })
 }
 
-function mountSelectionOverlay(extension: MaterialDesignerExtension) {
+async function mountSelectionOverlay(extension: MaterialDesignerExtension) {
   const node = createNode()
   const store = reactive(new DesignerStore({
     elements: [node],
+  }, undefined, undefined, {
+    materials: { profile: createDesignerTestProfile([createDesignerTestManifest({ type: 'test', extension })]) },
   })) as DesignerStore
   store.editingSession.setStore(store)
-  store.registerDesignerFactory('test', () => extension)
-
-  const resolvedExtension = store.getDesignerExtension('test')
-  if (!resolvedExtension)
+  const facet = await store.activateDesignerFacet('test')
+  const resolvedExtension = facet.value?.extension
+  if (facet.state !== 'active' || !resolvedExtension)
     throw new Error('missing test extension')
   const session = store.editingSession.enter(node.id, resolvedExtension)
   if (!session)
@@ -77,7 +79,7 @@ function mountSelectionOverlay(extension: MaterialDesignerExtension) {
 
 describe('selection overlay', () => {
   it('renders deep-edit decorations into their declared overlay layers', async () => {
-    const mounted = mountSelectionOverlay({
+    const mounted = await mountSelectionOverlay({
       renderContent: () => () => {},
       geometry: {
         getContentLayout: node => ({ contentBox: { x: node.x, y: node.y, width: node.width, height: node.height } }),

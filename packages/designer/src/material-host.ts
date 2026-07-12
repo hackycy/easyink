@@ -62,3 +62,7 @@ export const builtinCatalogGroupLabels = Object.freeze({
   svg: 'materials.catalog.svg',
   utility: 'materials.catalog.utility',
 })
+
+export function resolveBuiltinMaterialIcon(iconKey: string): Component {
+  return builtinMaterialIcons[iconKey] ?? IconRect
+}

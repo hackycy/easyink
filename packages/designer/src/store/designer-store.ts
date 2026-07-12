@@ -508,6 +508,8 @@ export class DesignerStore {
   // ─── Cleanup ──────────────────────────────────────────────────
 
   destroy(): void {
+    this.designerFacetCache.clear()
+    void this.materialFacetHost.dispose()
     this.commands.clear()
     this.selection.clear()
     this.dataSourceRegistry.clear()

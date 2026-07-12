@@ -2,7 +2,9 @@
  * @vitest-environment happy-dom
  */
 import type { MaterialNode, PageSchema } from '@easyink/schema'
+import { createTestMaterialManifest } from '@easyink/core/testing'
 import { describe, expect, it, vi } from 'vitest'
+import { createDesignerTestProfile } from '../testing/material-profile'
 import { DATASOURCE_DRAG_MIME, MATERIAL_DRAG_MIME, useDesignerDragDrop } from './use-designer-drag-drop'
 
 function createTextNode(partial: Partial<MaterialNode> = {}): MaterialNode {
@@ -13,23 +15,6 @@ function createTextNode(partial: Partial<MaterialNode> = {}): MaterialNode {
     y: 0,
     width: 100,
     height: 50,
-    modelVersion: 1,
-    model: {},
-    slots: {},
-    bindings: {},
-    output: { visibility: 'include' },
-    ...partial,
-  } as MaterialNode
-}
-
-function createLineNode(partial: Partial<MaterialNode> = {}): MaterialNode {
-  return {
-    id: `line-${Math.random()}`,
-    type: 'line',
-    x: 0,
-    y: 0,
-    width: 100,
-    height: 1,
     modelVersion: 1,
     model: {},
     slots: {},
@@ -118,28 +103,25 @@ function makeStore(
   extension?: unknown,
   options: { textCreateDefaultNode?: (partial?: Partial<MaterialNode>) => MaterialNode, page?: PageSchema, textDataContract?: unknown } = {},
 ) {
-  const textDef = {
-    type: 'text',
-    name: 'Text',
-    icon: {},
-    category: 'basic',
-    capabilities: { bindable: true },
-    binding: options.textDataContract
-      ? { kind: 'data-contract', contract: options.textDataContract, formatEditor: { tabs: ['custom'], defaultTab: 'custom' } }
-      : { kind: 'ordinary', primaryProp: 'content', formatEditor: { tabs: ['preset', 'custom'], defaultTab: 'preset' } },
-    props: [],
-    createDefaultNode: options.textCreateDefaultNode ?? ((partial?: Partial<MaterialNode>) => createTextNode(partial)),
-  }
-  const lineDef = {
-    type: 'line',
-    name: 'Line',
-    icon: {},
-    category: 'basic',
-    capabilities: { bindable: false },
-    binding: { kind: 'none' },
-    props: [],
-    createDefaultNode: (partial?: Partial<MaterialNode>) => createLineNode(partial),
-  }
+  const textBinding = options.textDataContract
+    ? {
+        kind: 'ports' as const,
+        dataContract: options.textDataContract as typeof chartDataContract,
+        ports: [{ id: 'value', key: { kind: 'exact' as const, value: 'value' }, role: 'semantic' as const, valueShape: 'record-array' as const, formatEditor: false as const }],
+      }
+    : {
+        kind: 'ports' as const,
+        ports: [{ id: 'content', key: { kind: 'exact' as const, value: 'content' }, role: 'display' as const, valueShape: 'scalar' as const, modelPath: '/model/content' as const, formatEditor: { tabs: ['preset'] as const } }],
+      }
+  const textBase = createTestMaterialManifest({ type: 'text', binding: textBinding, designer: true })
+  const lineBase = createTestMaterialManifest({ type: 'line', binding: { kind: 'none' }, designer: true })
+  const profile = createDesignerTestProfile([
+    { ...textBase, common: { ...textBase.common, defaultNode: { ...textBase.common.defaultNode, width: 100, height: 50 } } },
+    { ...lineBase, common: { ...lineBase.common, defaultNode: { ...lineBase.common.defaultNode, width: 100, height: 1 } } },
+  ])
+  const createNode = vi.fn((type: string, partial?: Parameters<typeof profile.createNode>[1]) => options.textCreateDefaultNode && type === 'text'
+    ? options.textCreateDefaultNode(partial)
+    : profile.createNode(type, partial))
   return {
     schema: { unit: 'px', page: options.page ?? makePage(), elements, groups: [] },
     workbench: { viewport: { zoom: 1, scrollLeft: 0, scrollTop: 0 } },
@@ -152,25 +134,10 @@ function makeStore(
     },
     getElements: () => elements,
     getElementSize: (node: MaterialNode) => ({ width: node.width, height: node.height }),
-    getMaterial: (type: string) => type === 'text' ? textDef : type === 'line' ? lineDef : undefined,
+    materialProfile: { ...profile, createNode },
+    getMaterialManifest: (type: string) => profile.getManifest(type),
     t: (key: string) => key,
-    getCatalog: () => [
-      {
-        id: 'quick-text',
-        groupId: 'basic',
-        label: 'Text',
-        icon: {},
-        materialType: 'text',
-      },
-      {
-        id: 'quick-line',
-        groupId: 'basic',
-        label: 'Line',
-        icon: {},
-        materialType: 'line',
-      },
-    ],
-    getDesignerExtension: () => extension,
+    peekDesignerFacet: () => extension ? { value: { extension } } : undefined,
   }
 }
 

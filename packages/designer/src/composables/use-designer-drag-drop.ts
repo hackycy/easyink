@@ -1,4 +1,4 @@
-import type { DatasourceDropZone, DatasourceFieldInfo, Rect } from '@easyink/core'
+import type { DatasourceDropZone, DatasourceFieldInfo, MaterialDataContract, MaterialDataModelField, Rect } from '@easyink/core'
 import type { DataUnionBinding } from '@easyink/datasource'
 import type { BindingRef, MaterialNode } from '@easyink/schema'
 import type { BindingDisplayFormat } from '@easyink/shared'
@@ -7,11 +7,15 @@ import type { DesignerStore } from '../store/designer-store'
 import type { MaterialCatalogEntry } from '../types'
 import {
   AddMaterialCommand,
+  applyMaterialDataFieldMapping,
   BindFieldCommand,
+  canBindMaterialDataField,
   createEditorSurfacePlan,
+  findMaterialDataFieldMapping,
   pointInRect,
   projectEditorSurfacePointToDocument,
   UnitManager,
+  UpdateMaterialBindingCommand,
 } from '@easyink/core'
 import { IconRect } from '@easyink/icons'
 import { deepClone } from '@easyink/shared'
@@ -124,6 +128,13 @@ interface PreviewZone {
   elementSize: { width: number, height: number }
   zone: DatasourceDropZone
   accepted: boolean
+}
+
+interface MaterialDataDropPlan {
+  fieldId: string
+  field: MaterialDataModelField
+  status: 'accepted' | 'rejected'
+  label?: string
 }
 
 export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragDropController {
@@ -379,6 +390,24 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
       }
     }
 
+    const binding = ctx.store.getMaterialManifest(hit.type)?.common.binding
+    if (binding?.kind === 'ports' && binding.dataContract) {
+      const plan = resolveMaterialDataDropPlan(binding.dataContract, hit, data)
+      if (!plan)
+        return null
+      return {
+        kind: 'bind-element',
+        target: hit,
+        zone: {
+          status: plan.status,
+          rect: { x: 0, y: 0, w: elementSize.width, h: elementSize.height },
+          label: plan.label,
+        },
+        docPoint: target.docPoint,
+        accepted: plan.status === 'accepted',
+      }
+    }
+
     return {
       kind: 'bind-element',
       target: hit,
@@ -434,9 +463,69 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
       return
     }
 
+    const binding = ctx.store.getMaterialManifest(resolved.target.type)?.common.binding
+    if (binding?.kind === 'ports' && binding.dataContract) {
+      const plan = resolveMaterialDataDropPlan(binding.dataContract, resolved.target, fieldData)
+      if (!plan || plan.status !== 'accepted')
+        return
+      const nextBinding = applyMaterialDataFieldMapping(
+        binding.dataContract,
+        resolved.target.bindings.value,
+        fieldData,
+        plan.fieldId,
+      )
+      ctx.store.commands.execute(new UpdateMaterialBindingCommand(ctx.store.schema.elements, resolved.target.id, nextBinding))
+      selectOne(ctx.store, resolved.target.id)
+      return
+    }
+
     const cmd = new BindFieldCommand(ctx.store.schema.elements, resolved.target.id, createBinding(fieldData))
     ctx.store.commands.execute(cmd)
     selectOne(ctx.store, resolved.target.id)
+  }
+
+  function resolveMaterialDataDropPlan(
+    contract: MaterialDataContract,
+    target: MaterialNode,
+    data: DatasourceFieldDragData,
+  ): MaterialDataDropPlan | null {
+    const fields = Object.entries(contract.model.fields).map(([id, field]) => ({ id, field }))
+    if (fields.length === 0)
+      return null
+
+    for (const entry of fields) {
+      if (findMaterialDataFieldMapping(contract, target.bindings.value, entry.id))
+        continue
+      const result = canBindMaterialDataField(contract, target.bindings.value, data, entry.id)
+      if (result.accepted) {
+        return {
+          fieldId: entry.id,
+          field: entry.field,
+          status: 'accepted',
+          label: ctx.store.t(entry.field.labelKey),
+        }
+      }
+    }
+
+    for (const entry of fields) {
+      const result = canBindMaterialDataField(contract, target.bindings.value, data, entry.id)
+      if (!result.accepted) {
+        return {
+          fieldId: entry.id,
+          field: entry.field,
+          status: 'rejected',
+          label: result.messageKey ? ctx.store.t(result.messageKey) : result.message,
+        }
+      }
+    }
+
+    const last = fields[fields.length - 1]!
+    return {
+      fieldId: last.id,
+      field: last.field,
+      status: 'rejected',
+      label: ctx.store.t('designer.materialDataBinding.allBound'),
+    }
   }
   function resolveDatasourceDropTarget(clientX: number, clientY: number): DropTarget {
     const pageEl = ctx.getPageEl()

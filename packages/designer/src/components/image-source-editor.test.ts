@@ -1,15 +1,17 @@
+import type { MaterialNode } from '@easyink/schema'
 /**
  * @vitest-environment happy-dom
  */
 import type { Component } from 'vue'
 import type { DesignerStore } from '../store/designer-store'
 import type { DesignerResolvedAsset } from '../types'
+import { defineStandardMaterialManifest, recordSchemaAdapter, viewerText } from '@easyink/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createApp, defineComponent, h, nextTick, ref } from 'vue'
 import enUS from '../../../locales/src/en-US'
 import { provideDesignerStore } from '../composables'
-import { registerMaterialBundle } from '../materials/registry'
 import { DesignerStore as Store } from '../store/designer-store'
+import { createDesignerTestProfile } from '../testing/material-profile'
 import DesignerConfirmHost from './DesignerConfirmHost.vue'
 import ImageSourceEditor from './ImageSourceEditor.vue'
 import PropertiesPanel from './PropertiesPanel.vue'
@@ -253,68 +255,82 @@ function mountWithStore(
 }
 
 function createStore(schema: ConstructorParameters<typeof Store>[0] = {}) {
-  const store = new Store(schema)
+  const profile = createDesignerTestProfile([imageManifest()])
+  const store = new Store(schema, undefined, undefined, { materials: { profile } })
   store.setLocale(enUS)
-  registerImageMaterialFixture(store)
+  void store.activateDesignerFacet('image')
   return store
 }
 
-function registerImageMaterialFixture(store: Store) {
-  registerMaterialBundle(store, {
-    materials: [{
-      type: 'image',
-      name: 'materials.image.name',
-      icon: { render: () => null },
-      category: 'basic',
-      capabilities: { bindable: true, resizable: true, rotatable: true },
-      binding: { kind: 'ordinary', primaryProp: 'src', formatEditor: { tabs: ['preset', 'custom'], defaultTab: 'preset' } },
-      createDefaultNode: input => imageNode(input?.id ?? 'image-1', input?.props ?? {}),
-      factory: vi.fn(() => ({ renderContent: () => () => {} })),
-      propSchemas: [
-        {
-          key: 'src',
-          label: 'materials.image.property.src',
-          type: 'image',
-          group: 'content',
-          editorOptions: {
-            valueInput: {
-              kind: 'asset-url',
-              id: 'designer.imageMaterial.pickImage',
-              source: 'image-material',
-              accept: ['image/*'],
-              pickTitle: 'materials.image.action.pick',
-              clearTitle: 'materials.image.action.clear',
-              previewTitle: 'materials.image.action.preview',
-              previewLoadingTitle: 'materials.image.action.previewLoading',
-              previewFailedTitle: 'materials.image.action.previewFailed',
-            },
+function imageManifest() {
+  return defineStandardMaterialManifest({
+    type: 'image',
+    nameKey: 'materials.image.name',
+    category: 'basic',
+    iconKey: 'image',
+    catalogOrder: 0,
+    defaultNode: imageNode('image-1', {}),
+    interaction: { resizable: true, rotatable: true },
+    binding: {
+      kind: 'ports',
+      ports: [{
+        id: 'src',
+        key: { kind: 'exact', value: 'src' },
+        role: 'display',
+        valueShape: 'scalar',
+        modelPath: '/model/src',
+        formatEditor: { tabs: ['preset'] },
+      }],
+    },
+    layout: { intrinsicSize: 'none', fragmentation: 'none', pageRepeat: 'none', overflow: 'clip' },
+    properties: [
+      {
+        key: 'src',
+        label: 'materials.image.property.src',
+        type: 'image',
+        group: 'content',
+        editorOptions: {
+          valueInput: {
+            kind: 'asset-url',
+            id: 'designer.imageMaterial.pickImage',
+            source: 'image-material',
+            accept: ['image/*'],
+            pickTitle: 'designer.action.pickImage',
+            clearTitle: 'designer.action.clearImage',
+            previewTitle: 'designer.action.imagePreview',
+            previewLoadingTitle: 'designer.action.imagePreviewLoading',
+            previewFailedTitle: 'designer.action.imagePreviewFailed',
           },
         },
-        { key: 'alt', label: 'materials.image.property.alt', type: 'string', group: 'content' },
-      ],
-      localeMessages: {
-        messages: {
-          materials: {
-            image: {
-              name: 'Image',
-              property: { src: 'Image URL', alt: 'Alt Text' },
-              action: {
-                pick: 'Pick Image',
-                clear: 'Clear Image',
-                preview: 'Image Preview',
-                previewLoading: 'Image Loading',
-                previewFailed: 'Image Preview Failed',
-              },
+      },
+      { key: 'alt', label: 'materials.image.property.alt', type: 'string', group: 'content' },
+    ],
+    schemaAdapter: recordSchemaAdapter(1),
+    designerFactory: () => ({ renderContent: () => () => {} }),
+    localeMessages: {
+      messages: {
+        materials: {
+          image: {
+            name: 'Image',
+            property: { src: 'Image URL', alt: 'Alt Text' },
+            action: {
+              pick: 'Pick Image',
+              clear: 'Clear Image',
+              preview: 'Image Preview',
+              previewLoading: 'Image Loading',
+              previewFailed: 'Image Preview Failed',
             },
           },
         },
       },
-    }],
-    catalogs: [],
+    },
+    viewerExtension: { render: () => ({ tree: viewerText('') }) },
+    aiDescriptor: {},
+    generation: { enabled: false },
   })
 }
 
-function imageNode(id: string, props: Record<string, unknown>) {
+function imageNode(id: string, props: Record<string, unknown>): MaterialNode {
   return {
     id,
     type: 'image',
