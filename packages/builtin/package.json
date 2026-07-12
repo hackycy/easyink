@@ -72,6 +72,8 @@
   "devDependencies": {
     "@easyink/browser-dom": "workspace:*",
     "@easyink/core": "workspace:*",
+    "@types/node": "catalog:types",
+    "happy-dom": "catalog:testing",
     "tsx": "catalog:cli"
   }
 }

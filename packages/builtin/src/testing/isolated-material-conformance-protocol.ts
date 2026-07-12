@@ -30,7 +30,7 @@ const reflectApply = Reflect.apply
 const isProxy = utilTypes.isProxy.bind(utilTypes)
 
 const MAX_REPORTS = 1_000
-const MAX_ISSUES = 10_000
+const MAX_ISSUES = 512
 const MAX_MATERIAL_TYPE_LENGTH = 1_024
 const MAX_CODE_LENGTH = 256
 const MAX_PATH_LENGTH = 4_096
@@ -164,8 +164,10 @@ function quote(value: string): string {
 }
 
 function strictArray(value: unknown, maxLength: number): readonly unknown[] {
-  if (isProxy(value) || !arrayIsArray(value) || getPrototypeOf(value) !== arrayPrototype || value.length > maxLength)
+  if (isProxy(value) || !arrayIsArray(value) || getPrototypeOf(value) !== arrayPrototype)
     throw new Error('CONFORMANCE_ISOLATED_EXECUTION_REPORT_INVALID')
+  if (value.length > maxLength)
+    throw new Error('CONFORMANCE_ISOLATED_EXECUTION_REPORT_BUDGET_EXCEEDED')
   const keys = ownKeys(value)
   if (keys.length !== value.length + 1 || keys[keys.length - 1] !== 'length')
     throw new Error('CONFORMANCE_ISOLATED_EXECUTION_REPORT_INVALID')
@@ -215,7 +217,9 @@ function dataValue(value: object, key: string): unknown {
 }
 
 function boundedString(value: unknown, maxLength: number): string {
-  if (typeof value !== 'string' || value.length > maxLength)
+  if (typeof value !== 'string')
     throw new Error('CONFORMANCE_ISOLATED_EXECUTION_REPORT_INVALID')
+  if (value.length > maxLength)
+    throw new Error('CONFORMANCE_ISOLATED_EXECUTION_REPORT_BUDGET_EXCEEDED')
   return value
 }

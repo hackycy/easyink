@@ -645,6 +645,12 @@ function validatePropertyDescriptor(descriptor: PropertyDescriptor): void {
       assertDescriptorJson(item.value)
     }
   }
+  if (descriptor.conformanceValues !== undefined) {
+    if (!Array.isArray(descriptor.conformanceValues) || descriptor.conformanceValues.length === 0)
+      fail('MATERIAL_PROPERTY_DESCRIPTOR_INVALID')
+    for (const value of descriptor.conformanceValues)
+      assertDescriptorJson(value)
+  }
   if (descriptor.editorOptions !== undefined) {
     if (!isPlainRecord(descriptor.editorOptions))
       fail('MATERIAL_PROPERTY_DESCRIPTOR_INVALID')

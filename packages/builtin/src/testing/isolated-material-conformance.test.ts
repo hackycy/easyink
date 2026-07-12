@@ -13,6 +13,8 @@ const fixtureModule = pathToFileURL(join(process.cwd(), 'packages/builtin/src/te
 const invalidIpcModule = pathToFileURL(join(process.cwd(), 'packages/builtin/src/testing/fixtures/invalid-ipc-fixture.ts')).href
 const spoofedResultModule = pathToFileURL(join(process.cwd(), 'packages/builtin/src/testing/fixtures/spoofed-result-fixture.ts')).href
 const spoofedExitModule = pathToFileURL(join(process.cwd(), 'packages/builtin/src/testing/fixtures/spoofed-result-exit-fixture.ts')).href
+const descendantSpawnModule = pathToFileURL(join(process.cwd(), 'packages/builtin/src/testing/fixtures/descendant-spawn-fixture.ts')).href
+const budgetReportModule = pathToFileURL(join(process.cwd(), 'packages/builtin/src/testing/fixtures/budget-report-fixture.ts')).href
 const cleanupPaths: string[] = []
 
 afterEach(() => {
@@ -92,6 +94,56 @@ describe('isolated material conformance process', () => {
     }, { deadlineMs: 5_000 })
     expect(reports[0]?.issues[0]?.code).toBe('CONFORMANCE_ISOLATED_EXECUTION_CRASH')
   }, 10_000)
+
+  it('denies descendant processes and leaves no sentinel', async () => {
+    const sentinelPath = join(tmpdir(), `easyink-descendant-${randomUUID()}`)
+    cleanupPaths.push(sentinelPath)
+    const reports = await runIsolatedMaterialConformance({
+      moduleSpecifier: descendantSpawnModule,
+      exportName: 'descendantSpawnManifest',
+      materialType: 'fixture-descendant-spawn',
+    }, {
+      deadlineMs: 5_000,
+      environment: { EASYINK_CONFORMANCE_SENTINEL_PATH: sentinelPath },
+    })
+    expect(reports[0]).toEqual(expect.objectContaining({
+      valid: false,
+      issues: expect.arrayContaining([expect.objectContaining({
+        code: 'CONFORMANCE_VIEWER_FAILED',
+        message: expect.stringMatching(/permission|access denied|ERR_ACCESS_DENIED/i),
+      })]),
+    }))
+    await new Promise(resolve => setTimeout(resolve, 250))
+    expect(existsSync(sentinelPath)).toBe(false)
+  }, 10_000)
+
+  it('cleans up and returns a stable runner error when onSpawn throws', async () => {
+    let pid = 0
+    const reports = await runIsolatedMaterialConformance({
+      moduleSpecifier: fixtureModule,
+      exportName: 'isolatedMaterialFixturePackage',
+      materialType: 'fixture-scheduled-after-report',
+    }, {
+      deadlineMs: 5_000,
+      onSpawn: (childPid) => {
+        pid = childPid
+        throw new Error('callback failed')
+      },
+    })
+    expect(reports[0]?.issues[0]?.code).toBe('CONFORMANCE_ISOLATED_RUNNER_ERROR')
+    expectProcessGone(pid)
+  }, 10_000)
+
+  it('accepts a deterministic capped report over authenticated IPC', async () => {
+    const reports = await runIsolatedMaterialConformance({
+      moduleSpecifier: budgetReportModule,
+      exportName: 'budgetReportManifest',
+      materialType: 'fixture-budget-report',
+    }, { deadlineMs: 10_000 })
+    expect(reports[0]?.issues).toHaveLength(512)
+    expect(reports[0]?.issues.filter(issue => issue.code === 'CONFORMANCE_ISSUES_TRUNCATED')).toHaveLength(1)
+    expect(Object.isFrozen(reports[0]?.issues[0])).toBe(true)
+  }, 15_000)
 
   it('reports child crashes and invalid IPC with stable codes after cleanup', async () => {
     let crashPid = 0

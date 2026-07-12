@@ -1,7 +1,7 @@
 import type { MaterialConformanceOptions } from './material-conformance'
 import type { MaterialViewerFacet } from './material-viewer'
 import { describe, expect, it, vi } from 'vitest'
-import { assertMaterialConformance, runMaterialConformance } from './material-conformance'
+import { assertMaterialConformance, compareMaterialConformanceIssues, runMaterialConformance } from './material-conformance'
 import { defineMaterialFacetFactory } from './material-manifest'
 import { createTestMaterialManifest } from './testing/material-profile'
 import { viewerText } from './viewer-render-tree'
@@ -267,6 +267,69 @@ describe('material conformance', () => {
     expect(report.issues.some(issue => issue.path === '/schemaAdapter/migrations/0/conformance/fixtures/0')).toBe(false)
   })
 
+  it('caps issue output with one deterministic truncation marker', async () => {
+    const model = Object.fromEntries(Array.from({ length: 600 }, (_, index) => [`value${index}`, 0]))
+    const properties = Array.from({ length: 600 }, (_, index) => ({
+      key: `value${index}`,
+      label: `value${index}`,
+      type: 'number' as const,
+      accessor: {
+        paths: [`/model/value${index}` as const],
+        read: (node: any) => node.model[`value${index}`],
+        write: () => {},
+      },
+    }))
+    const manifest = createTestMaterialManifest({ type: 'issue-cap', defaultModel: model, properties, viewer: () => viewerFacet() })
+    const first = await runMaterialConformance(manifest, options())
+    const second = await runMaterialConformance(manifest, options())
+    expect(first.issues).toHaveLength(512)
+    expect(first.issues.filter(issue => issue.code === 'CONFORMANCE_ISSUES_TRUNCATED')).toHaveLength(1)
+    expect(second.issues).toEqual(first.issues)
+  })
+
+  it('bounds changed-pointer traversal for a near-limit fixture', async () => {
+    const large = Array.from({ length: 80_000 }).fill(0)
+    const manifest = createTestMaterialManifest({
+      type: 'changed-pointer-budget',
+      defaultModel: { large },
+      properties: [{
+        key: 'large',
+        label: 'large',
+        type: 'array',
+        accessor: {
+          paths: ['/model/large'],
+          read: node => node.model.large,
+          write: (node) => {
+            const values = node.model.large as number[]
+            for (let index = 0; index < values.length; index++)
+              values[index] = 1
+          },
+        },
+      }],
+      viewer: () => viewerFacet(),
+    })
+    const started = Date.now()
+    const report = await runMaterialConformance(manifest, options())
+    expect(Date.now() - started).toBeLessThan(8_000)
+    expect(report.issues).toContainEqual(expect.objectContaining({
+      code: 'CONFORMANCE_PROPERTY_ACCESSOR_FAILED',
+      message: 'CONFORMANCE_WORK_BUDGET_EXCEEDED',
+    }))
+  }, 10_000)
+
+  it('sorts issues with an ordinal comparator without locale APIs', () => {
+    const localeCompare = vi.spyOn(String.prototype, 'localeCompare').mockImplementation(() => {
+      throw new Error('locale sort must not run')
+    })
+    try {
+      const issues = ['中', 'é', 'a', 'A'].map(code => ({ code, path: '' as const, message: '' }))
+      expect(issues.toSorted(compareMaterialConformanceIssues).map(issue => issue.code)).toEqual(['A', 'a', 'é', '中'])
+    }
+    finally {
+      localeCompare.mockRestore()
+    }
+  })
+
   it('does not allow a declared property leaf to authorize ancestor replacement', async () => {
     const manifest = createTestMaterialManifest({
       type: 'property-containment',
@@ -299,6 +362,44 @@ describe('material conformance', () => {
       'write changed undeclared path /model',
       'write changed undeclared path /model/rows/0',
     ]))
+  })
+
+  it('requires alternate-value roundtrips and detects reads that mutate the node', async () => {
+    const manifest = createTestMaterialManifest({
+      type: 'property-roundtrip',
+      defaultModel: { empty: 1, wrong: 1, mutating: 1 },
+      properties: [
+        {
+          key: 'empty',
+          label: 'empty',
+          type: 'number',
+          accessor: { paths: ['/model/empty'], read: node => node.model.empty, write: () => {} },
+        },
+        {
+          key: 'wrong',
+          label: 'wrong',
+          type: 'number',
+          accessor: { paths: ['/model/wrong'], read: node => node.model.wrong, write: (node) => { node.model.wrong = 1 } },
+        },
+        {
+          key: 'mutating',
+          label: 'mutating',
+          type: 'number',
+          accessor: {
+            paths: ['/model/mutating'],
+            read: (node) => {
+              node.model.sideEffect = true
+              return node.model.mutating
+            },
+            write: (node, value) => { node.model.mutating = value },
+          },
+        },
+      ],
+      viewer: () => viewerFacet(),
+    })
+    const report = await runMaterialConformance(manifest, options())
+    expect(report.issues.filter(issue => issue.code === 'CONFORMANCE_PROPERTY_ROUNDTRIP_FAILED')).toHaveLength(2)
+    expect(report.issues.map(issue => issue.code)).toContain('CONFORMANCE_PROPERTY_READ_MUTATED')
   })
 
   it('decodes identity and reference encodings for value and key locations', async () => {

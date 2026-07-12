@@ -42,12 +42,16 @@ const MAX_STRING_BYTES = 4 * 1024 * 1024
 const MAX_DEPTH = 128
 const MAX_OPERATIONS = 10_000
 const MAX_DURATION_MS = 5_000
+const MAX_ISSUES = 512
+const MAX_ISSUE_PATH_LENGTH = 4_096
+const MAX_ISSUE_MESSAGE_LENGTH = 1_024
 
 interface State {
   manifest: MaterialManifest
   options: MaterialConformanceOptions
   issues: MaterialConformanceIssue[]
   operations: number
+  issuesTruncated: boolean
   deadline: number
   profile?: CompiledMaterialProfile
   node?: MaterialNode
@@ -64,7 +68,7 @@ export async function runMaterialConformance(
   manifest: MaterialManifest,
   options: MaterialConformanceOptions = {},
 ): Promise<MaterialConformanceReport> {
-  const state: State = { manifest, options, issues: [], operations: 0, deadline: Date.now() + MAX_DURATION_MS }
+  const state: State = { manifest, options, issues: [], operations: 0, issuesTruncated: false, deadline: Date.now() + MAX_DURATION_MS }
   if (options.executionMode !== 'trusted-in-process') {
     issue(state, 'CONFORMANCE_ISOLATED_EXECUTION_REQUIRED', '', 'material hooks require a disposable process or Worker')
     return freezeReport(state, '')
@@ -86,7 +90,7 @@ export async function runMaterialConformance(
 
 function freezeReport(state: State, materialType = safeType(state.manifest)): MaterialConformanceReport {
   const issues = Object.freeze(state.issues
-    .toSorted((left, right) => left.code.localeCompare(right.code) || left.path.localeCompare(right.path) || left.message.localeCompare(right.message))
+    .toSorted(compareMaterialConformanceIssues)
     .map(issue => Object.freeze(issue)))
   return Object.freeze({ materialType, valid: issues.length === 0, issues })
 }
@@ -224,7 +228,7 @@ async function checkMigrations(state: State): Promise<void> {
         issue(state, 'CONFORMANCE_MIGRATION_NOT_DETERMINISTIC', fixturePath, 'migration produced different outputs for equal inputs')
       if (first.modelVersion !== migration.to)
         issue(state, 'CONFORMANCE_MIGRATION_VERSION_INVALID', fixturePath, 'migration output did not declare its exact target version')
-      const undeclared = changedPointers(baseline, first)
+      const undeclared = changedPointers(state, baseline, first)
         .filter(changed => !declaredWritePaths.some(declared => containsPointer(declared, changed)))
       for (const changed of undeclared)
         issue(state, 'CONFORMANCE_MIGRATION_UNDECLARED_WRITE', fixturePath, `migration changed undeclared path ${changed}`)
@@ -348,14 +352,71 @@ async function checkProperties(state: State): Promise<void> {
     if (!Array.isArray(accessor.paths) || accessor.paths.length === 0)
       throw new Error('property accessor has no declared paths')
     const draft = snapshot(node)
-    const before = snapshot(draft)
+    const beforeRead = snapshot(draft)
     const current = await invokeHook(state, accessor.read, [draft], accessor)
-    await invokeHook(state, accessor.write, [draft, current], accessor)
-    const changes = changedPointers(before, draft)
+    if (!same(beforeRead, draft))
+      issue(state, 'CONFORMANCE_PROPERTY_READ_MUTATED', path, 'property read mutated the node')
+    const alternate = propertyAlternateValue(descriptor, current)
+    const beforeWrite = snapshot(draft)
+    await invokeHook(state, accessor.write, [draft, snapshot(alternate)], accessor)
+    const changes = same(beforeWrite, draft) ? [] : changedPointers(state, beforeWrite, draft)
     const undeclared = changes.filter(change => !accessor.paths.some(declared => containsPointer(declared, change)))
     if (undeclared.length > 0)
       issue(state, 'CONFORMANCE_PROPERTY_UNDECLARED_WRITE', path, `write changed undeclared path ${undeclared[0]}`)
+    const afterWrite = snapshot(draft)
+    const roundtrip = await invokeHook(state, accessor.read, [draft], accessor)
+    if (!same(afterWrite, draft))
+      issue(state, 'CONFORMANCE_PROPERTY_READ_MUTATED', path, 'property read mutated the node')
+    if (!same(roundtrip, alternate))
+      issue(state, 'CONFORMANCE_PROPERTY_ROUNDTRIP_FAILED', path, 'property write did not roundtrip an alternate value')
   }
+}
+
+function propertyAlternateValue(descriptor: State['manifest']['common']['properties'][number], current: unknown): JsonValue {
+  const candidates: unknown[] = [
+    ...(descriptor.conformanceValues ?? []),
+    ...(descriptor.enum?.map(item => item.value) ?? []),
+  ]
+  if (Object.hasOwn(descriptor, 'default'))
+    candidates.push(descriptor.default)
+  if (descriptor.nullable)
+    candidates.push(null)
+  candidates.push(generatedPropertyValue(descriptor, current))
+  for (const candidate of candidates) {
+    if (candidate !== undefined && !same(candidate, current))
+      return snapshot(candidate as JsonValue)
+  }
+  throw new ConformanceHookError('CONFORMANCE_PROPERTY_ALTERNATE_VALUE_REQUIRED')
+}
+
+function generatedPropertyValue(
+  descriptor: State['manifest']['common']['properties'][number],
+  current: unknown,
+): JsonValue | undefined {
+  if (descriptor.type === 'boolean' || descriptor.type === 'switch' || descriptor.type === 'border-toggle')
+    return typeof current === 'boolean' ? !current : true
+  if (descriptor.type === 'number' || descriptor.type === 'unit') {
+    const base = typeof current === 'number' && Number.isFinite(current) ? current : descriptor.min ?? 0
+    const step = descriptor.step ?? 1
+    if (descriptor.max === undefined || base + step <= descriptor.max)
+      return base + step
+    if (descriptor.min === undefined || base - step >= descriptor.min)
+      return base - step
+    return descriptor.min
+  }
+  if (descriptor.type === 'array')
+    return Array.isArray(current) && current.length === 0 ? [null] : []
+  if (descriptor.type === 'object')
+    return isRecord(current) && !Array.isArray(current) && Object.keys(current).length === 0 ? { conformance: true } : {}
+  if (descriptor.type === 'color')
+    return current === '#123456' ? '#654321' : '#123456'
+  if (descriptor.type === 'image')
+    return current === 'https://example.invalid/easyink-conformance.png' ? '' : 'https://example.invalid/easyink-conformance.png'
+  if (descriptor.type === 'font')
+    return current === 'sans-serif' ? 'serif' : 'sans-serif'
+  if (['string', 'textarea', 'code', 'rich-text'].includes(descriptor.type))
+    return current === '__easyink_conformance__' ? '__easyink_conformance_alt__' : '__easyink_conformance__'
+  return undefined
 }
 
 async function checkCommonModels(state: State): Promise<void> {
@@ -660,13 +721,19 @@ function summarizeIssues(value: readonly { code: string, severity: 'error' | 'wa
   return value.filter(item => item.severity === 'error').map(item => `${item.code} ${item.path}`).sort().join(', ') || 'adapter validation failed'
 }
 
-function changedPointers(left: unknown, right: unknown, path = ''): `/${string}`[] {
+function changedPointers(state: State, left: unknown, right: unknown, path = ''): `/${string}`[] {
+  consume(state)
   if (Object.is(left, right))
     return []
   if (!isRecord(left) || !isRecord(right) || Array.isArray(left) !== Array.isArray(right))
     return [path as `/${string}`]
   const keys = new Set([...Object.keys(left), ...Object.keys(right)])
-  return [...keys].sort().flatMap(key => changedPointers(left[key], right[key], `${path}/${escapePointer(key)}`))
+  const changes: `/${string}`[] = []
+  for (const key of [...keys].sort()) {
+    consume(state)
+    changes.push(...changedPointers(state, left[key], right[key], `${path}/${escapePointer(key)}`))
+  }
+  return changes
 }
 
 function containsPointer(declared: string, changed: string): boolean {
@@ -712,7 +779,32 @@ function consume(state: State): void {
 }
 
 function issue(state: State, code: string, path: `/${string}` | '', message: string): void {
-  state.issues.push({ code, path, message: message.slice(0, 1024) })
+  if (state.issuesTruncated)
+    return
+  if (state.issues.length >= MAX_ISSUES - 1) {
+    state.issuesTruncated = true
+    state.issues.push({
+      code: 'CONFORMANCE_ISSUES_TRUNCATED',
+      path: '',
+      message: `conformance issues exceeded ${MAX_ISSUES - 1}`,
+    })
+    return
+  }
+  state.issues.push({
+    code: code.slice(0, 256),
+    path: path.slice(0, MAX_ISSUE_PATH_LENGTH) as `/${string}` | '',
+    message: message.slice(0, MAX_ISSUE_MESSAGE_LENGTH),
+  })
+}
+
+export function compareMaterialConformanceIssues(left: MaterialConformanceIssue, right: MaterialConformanceIssue): number {
+  return ordinalCompare(left.code, right.code)
+    || ordinalCompare(left.path, right.path)
+    || ordinalCompare(left.message, right.message)
+}
+
+function ordinalCompare(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0
 }
 
 function stableError(error: unknown): string {

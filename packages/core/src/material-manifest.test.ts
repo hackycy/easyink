@@ -580,6 +580,17 @@ describe('defineMaterialManifest', () => {
       .toThrowError('MATERIAL_ADAPTER_MIGRATION_CONFORMANCE_INVALID')
   })
 
+  it('validates and freezes detached property conformance values', () => {
+    const input = validManifest()
+    input.common.properties = [{ key: 'color', label: 'color', type: 'color', conformanceValues: ['#123456'] }]
+    const manifest = defineMaterialManifest(input)
+    expect(Object.isFrozen(manifest.common.properties[0]!.conformanceValues)).toBe(true)
+
+    const malformed = validManifest()
+    malformed.common.properties = [{ key: 'color', label: 'color', type: 'color', conformanceValues: [] }]
+    expect(() => defineMaterialManifest(malformed)).toThrowError('MATERIAL_PROPERTY_DESCRIPTOR_INVALID')
+  })
+
   it('requires valid model-relative RFC 6901 paths', () => {
     const binding = validManifest()
     binding.common.binding = {

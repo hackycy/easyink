@@ -4,7 +4,8 @@ import process from 'node:process'
 import { createBrowserDomCapabilities, renderViewerTree } from '@easyink/browser-dom'
 import { runMaterialConformance } from '@easyink/core'
 import { Window } from 'happy-dom'
-import { createAuthenticatedResultMessage, createHandshakeMessage, createIsolatedConformanceSession } from './isolated-material-conformance-protocol'
+// @ts-expect-error Node's native TypeScript loader requires the explicit extension.
+import { createAuthenticatedResultMessage, createHandshakeMessage, createIsolatedConformanceSession } from './isolated-material-conformance-protocol.ts'
 
 interface RunMessage {
   kind: 'run'
@@ -50,7 +51,22 @@ async function run(message: unknown): Promise<void> {
       }],
     }]
   }
-  capturedSend?.(createAuthenticatedResultMessage(session, reports))
+  let resultMessage: unknown
+  try {
+    resultMessage = createAuthenticatedResultMessage(session, reports)
+  }
+  catch {
+    resultMessage = createAuthenticatedResultMessage(session, [{
+      materialType: message.source.materialType ?? '',
+      valid: false,
+      issues: [{
+        code: 'CONFORMANCE_ISOLATED_EXECUTION_REPORT_BUDGET_EXCEEDED',
+        path: '',
+        message: 'isolated conformance report exceeded protocol budget',
+      }],
+    }])
+  }
+  capturedSend?.(resultMessage)
 }
 
 async function runOne(manifest: MaterialManifest): Promise<MaterialConformanceReport> {

@@ -762,6 +762,12 @@ importers:
       '@easyink/browser-dom':
         specifier: workspace:*
         version: link:../browser-dom
+      '@types/node':
+        specifier: catalog:types
+        version: 24.10.0
+      happy-dom:
+        specifier: catalog:testing
+        version: 20.8.9
       tsx:
         specifier: catalog:cli
         version: 4.21.0

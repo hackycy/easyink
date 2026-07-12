@@ -104,6 +104,7 @@ export interface PropertyDescriptor<T = unknown> {
   visible?: (model: Readonly<Record<string, unknown>>) => boolean
   disabled?: (model: Readonly<Record<string, unknown>>) => boolean
   accessor?: PropertyAccessor<T>
+  conformanceValues?: readonly T[]
 }
 
 export interface PropertyDescriptorDiagnostic {
@@ -366,6 +367,7 @@ function isValidDescriptor(value: Record<string, unknown>): boolean {
   const enumValue = readOwnEnumerableData(value, 'enum')
   const editorOptions = readOwnEnumerableData(value, 'editorOptions')
   const accessor = readOwnEnumerableData(value, 'accessor')
+  const conformanceValues = readOwnEnumerableData(value, 'conformanceValues')
   return isNonemptyTrimmedString(key)
     && isNonemptyTrimmedString(label)
     && PROPERTY_TYPES.has(type as PropSchemaType)
@@ -380,8 +382,13 @@ function isValidDescriptor(value: Record<string, unknown>): boolean {
     && optionalField(disabled, item => typeof item === 'function')
     && optionalField(defaultValue, isJsonMetadata)
     && optionalField(enumValue, isValidEnum)
+    && optionalField(conformanceValues, isValidConformanceValues)
     && editorOptions !== INVALID_PROPERTY
     && accessor !== INVALID_PROPERTY
+}
+
+function isValidConformanceValues(value: unknown): boolean {
+  return Array.isArray(value) && value.length > 0 && value.every(isJsonMetadata)
 }
 
 function validNumericRange(min: unknown, max: unknown, step: unknown): boolean {

@@ -1,6 +1,6 @@
 import type { MaterialConformanceIssue, MaterialConformanceReport } from '@easyink/core'
 import type { ChildProcess } from 'node:child_process'
-import { fork } from 'node:child_process'
+import { fork, spawn } from 'node:child_process'
 import { resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
@@ -33,15 +33,14 @@ export async function runIsolatedMaterialConformance(
   options: IsolatedMaterialConformanceOptions = {},
 ): Promise<readonly MaterialConformanceReport[]> {
   const deadlineMs = options.deadlineMs ?? DEFAULT_DEADLINE_MS
+  const workspaceRoot = process.cwd()
   const child = fork(CHILD_ENTRY, [], {
+    detached: process.platform !== 'win32',
     env: { ...process.env, ...options.environment },
-    execArgv: ['--import', 'tsx'],
+    execArgv: ['--permission', `--allow-fs-read=${workspaceRoot}`],
     serialization: 'advanced',
     stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
   })
-  if (child.pid !== undefined)
-    options.onSpawn?.(child.pid)
-
   return await new Promise((resolve) => {
     let finishing = false
     const receiver = createAuthenticatedResultReceiver()
@@ -71,6 +70,14 @@ export async function runIsolatedMaterialConformance(
       if (!finishing)
         void finish([failureReport(source, 'CONFORMANCE_ISOLATED_EXECUTION_CRASH', `isolated conformance process exited before reporting (${code ?? signal ?? 'unknown'})`)])
     })
+    try {
+      if (child.pid !== undefined)
+        options.onSpawn?.(child.pid)
+    }
+    catch {
+      void finish([failureReport(source, 'CONFORMANCE_ISOLATED_RUNNER_ERROR', 'isolated conformance onSpawn callback failed')])
+      return
+    }
     child.send({ kind: 'run', source }, (error) => {
       if (error)
         void finish([failureReport(source, 'CONFORMANCE_ISOLATED_EXECUTION_CRASH', 'isolated conformance request could not be sent')])
@@ -102,8 +109,44 @@ async function terminateAndWait(child: ChildProcess): Promise<void> {
   if (child.exitCode !== null || child.signalCode !== null)
     return
   const exited = new Promise<void>(resolve => child.once('exit', () => resolve()))
-  child.kill('SIGKILL')
+  const pid = child.pid
+  if (process.platform === 'win32' && isProcessId(pid)) {
+    await taskkill(pid)
+    if (child.exitCode === null && child.signalCode === null)
+      child.kill('SIGKILL')
+  }
+  else if (isProcessId(pid)) {
+    try {
+      process.kill(-pid, 'SIGKILL')
+    }
+    catch {
+      child.kill('SIGKILL')
+    }
+  }
+  else {
+    child.kill('SIGKILL')
+  }
   await exited
+}
+
+async function taskkill(pid: number): Promise<void> {
+  await new Promise<void>((resolve) => {
+    const killer = spawn('taskkill.exe', ['/PID', `${pid}`, '/T', '/F'], {
+      shell: false,
+      stdio: 'ignore',
+      windowsHide: true,
+    })
+    killer.once('error', () => {
+      resolve()
+    })
+    killer.once('exit', () => {
+      resolve()
+    })
+  })
+}
+
+function isProcessId(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
 }
 
 function failureReport(
