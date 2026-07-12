@@ -3,7 +3,6 @@ import { CommandManager, createNodePropertyAccessor, resolvePropertyAccessor } f
 import { deepClone } from '@easyink/shared'
 import { describe, expect, it } from 'vitest'
 import { reactive } from 'vue'
-import { tableDataDesignerPropSchemas } from '../../../materials/table/data/src/prop-schemas'
 import { createTransactionService } from '../editing/transaction-service'
 import { commitMaterialPropertyPreview, MaterialPropertyPreviewSession } from './material-property-preview'
 
@@ -81,7 +80,28 @@ function showHeaderAccessor() {
 }
 
 function showHeaderDescriptor() {
-  return tableDataDesignerPropSchemas.find(schema => schema.key === 'showHeader')!
+  return {
+    key: 'showHeader',
+    label: 'Show header',
+    type: 'switch' as const,
+    accessor: {
+      paths: Object.freeze(['/model/bands', '/bindings', '/slots'] as const),
+      read: (node: MaterialNode) => bandRoles(node).includes('header'),
+      write: (draft: MaterialNode, visible: boolean) => {
+        if (visible)
+          return
+        const model = draft.model as { bands: Array<{ role: string, rows: Array<{ cells: Array<{ content: { bindingPort?: string, slotId?: string } }> }> }> }
+        const removed = model.bands.filter(band => band.role === 'header')
+        model.bands = model.bands.filter(band => band.role !== 'header')
+        for (const cell of removed.flatMap(band => band.rows).flatMap(row => row.cells)) {
+          if (cell.content.bindingPort)
+            delete draft.bindings[cell.content.bindingPort]
+          if (cell.content.slotId)
+            delete draft.slots[cell.content.slotId]
+        }
+      },
+    },
+  }
 }
 
 function bandRoles(node: MaterialNode): string[] {

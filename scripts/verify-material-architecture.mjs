@@ -14,6 +14,16 @@ const forbiddenSourcePatterns = [
   { label: 'legacy material root access', pattern: /\b(?:node|draft|element|input)\.(?:props|binding|children|table)\b/g },
   { label: 'nested legacy table model', pattern: /\bmodel\.table\b|\.model\.table\b/g },
 ]
+const frameworkSourceRoots = [
+  'packages/assistant',
+  'packages/browser-dom',
+  'packages/core',
+  'packages/designer',
+  'packages/schema',
+  'packages/schema-tools',
+  'packages/viewer',
+]
+const materialSourceImport = /(?:from\s+|import\s*\()['"][^'"]*\.\.\/materials\/[^'"]*\/src(?:\/[^'"]*)?['"]/g
 
 for (const sourceRoot of forbiddenSourceRoots) {
   for (const file of await filesBelow(resolve(root, sourceRoot))) {
@@ -24,6 +34,16 @@ for (const sourceRoot of forbiddenSourceRoots) {
       for (const match of content.matchAll(pattern))
         failures.push(`${slash(relative(root, file))}:${lineAt(content, match.index)}: ${label}: ${match[0]}`)
     }
+  }
+}
+
+for (const sourceRoot of frameworkSourceRoots) {
+  for (const file of await filesBelow(resolve(root, sourceRoot))) {
+    if (!file.endsWith('.ts') && !file.endsWith('.vue') && !file.endsWith('.mjs'))
+      continue
+    const content = await readFile(file, 'utf8')
+    for (const match of content.matchAll(materialSourceImport))
+      failures.push(`${slash(relative(root, file))}:${lineAt(content, match.index)}: framework source must not import material package source: ${match[0]}`)
   }
 }
 

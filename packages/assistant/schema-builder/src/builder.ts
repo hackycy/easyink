@@ -1,4 +1,4 @@
-import type { ConstraintContext, MaterialKnowledgeRegistry } from '@easyink/assistant-material-knowledge'
+import type { ConstraintContext } from '@easyink/assistant-material-knowledge'
 import type { DocumentSchema, MaterialBinding, MaterialNode } from '@easyink/schema'
 import type {
   EmitBindingInput,
@@ -9,6 +9,7 @@ import type {
   SchemaBuilderContext,
 } from './types'
 import { ConstraintEngine } from '@easyink/assistant-constraint-engine'
+import { MaterialKnowledgeRegistry } from '@easyink/assistant-material-knowledge'
 
 export class SchemaBuilder {
   private readonly context: SchemaBuilderContext
@@ -16,7 +17,7 @@ export class SchemaBuilder {
   private readonly engine: ConstraintEngine
   private elements: MaterialNode[] = []
 
-  constructor(context: SchemaBuilderContext, registry: MaterialKnowledgeRegistry) {
+  constructor(context: SchemaBuilderContext, registry: MaterialKnowledgeRegistry = new MaterialKnowledgeRegistry()) {
     this.context = context
     this.registry = registry
     this.engine = new ConstraintEngine(registry)

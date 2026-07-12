@@ -1,6 +1,5 @@
 import { MaterialKnowledgeRegistry } from '@easyink/assistant-material-knowledge'
 import { describe, expect, it } from 'vitest'
-import { decodeTableModelV1, tableSchemaAdapter } from '../../../materials/table/kernel/src'
 import { SchemaBuilder } from './builder'
 
 describe('schema builder', () => {
@@ -82,10 +81,8 @@ describe('schema builder', () => {
     })
     expect(result.element.bindings.records).toMatchObject({ fieldPath: 'items' })
     expect(Object.hasOwn(result.element.model, 'table')).toBe(false)
-    const decoded = decodeTableModelV1(result.element.model)
-    expect(decoded.issues).toEqual([])
-    expect(tableSchemaAdapter.validate(result.element, adapterContext('table-data'))).toEqual([])
-    expect(decoded.value?.bands[0]?.rows[0]?.cells.map(cell => cell.style?.typography?.textAlign)).toEqual(['start', 'end'])
+    const header = (result.element.model.bands as Array<{ rows: Array<{ cells: Array<{ style?: { typography?: { textAlign?: string } } }> }> }>)[0]
+    expect(header?.rows[0]?.cells.map(cell => cell.style?.typography?.textAlign)).toEqual(['start', 'end'])
   })
 
   it('infers the collection parent from one column path', () => {
@@ -96,8 +93,6 @@ describe('schema builder', () => {
     })
 
     expect(result.element.bindings.records).toMatchObject({ fieldPath: 'items' })
-    expect(decodeTableModelV1(result.element.model).issues).toEqual([])
-    expect(tableSchemaAdapter.validate(result.element, adapterContext('table-data'))).toEqual([])
   })
 
   it('emits static table merges and bindings through direct model resources', () => {
@@ -115,10 +110,8 @@ describe('schema builder', () => {
     expect((result.element.model.merges as unknown[])).toHaveLength(1)
     expect(Object.keys(result.element.bindings)).toHaveLength(1)
     expect(Object.hasOwn(result.element, 'props')).toBe(false)
-    const decoded = decodeTableModelV1(result.element.model)
-    expect(decoded.issues).toEqual([])
-    expect(tableSchemaAdapter.validate(result.element, adapterContext('table-static'))).toEqual([])
-    expect(decoded.value?.bands[0]?.rows[0]?.cells[2]?.style?.typography?.textAlign).toBe('end')
+    const body = (result.element.model.bands as Array<{ rows: Array<{ cells: Array<{ style?: { typography?: { textAlign?: string } } }> }> }>)[0]
+    expect(body?.rows[0]?.cells[2]?.style?.typography?.textAlign).toBe('end')
   })
 })
 
@@ -130,13 +123,4 @@ function createBuilder(): SchemaBuilder {
     unit: 'mm',
     dataSourceName: 'report',
   }, new MaterialKnowledgeRegistry())
-}
-
-function adapterContext(materialType: 'table-data' | 'table-static') {
-  return {
-    documentVersion: '1.0.0',
-    sourceUnit: 'mm' as const,
-    documentUnit: 'mm' as const,
-    materialType,
-  }
 }
