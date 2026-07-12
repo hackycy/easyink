@@ -1,6 +1,7 @@
 export { applyAssistantPatchToDesigner, applyAssistantResultToDesigner, rollbackAssistantDesigner } from './apply'
 export { createAssistantContribution } from './contribution'
 export type { CreateAssistantContributionOptions } from './contribution'
+export { createAssistantMaterialManifest } from './material-manifest'
 export type { AssistantPlugin } from '@easyink/assistant-plugins'
 export { createBrowserAssistantLLMConfigService } from '@easyink/assistant-ui'
 export type { AssistantLLMConfigService, BrowserAssistantLLMConfigServiceOptions } from '@easyink/assistant-ui'

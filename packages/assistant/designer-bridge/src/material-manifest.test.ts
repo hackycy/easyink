@@ -1,7 +1,7 @@
 import { defineMaterialManifest } from '@easyink/core'
 import { createTestCompiledMaterialProfile, createTestMaterialManifest } from '@easyink/core/testing'
 import { describe, expect, it } from 'vitest'
-import { createAssistantMaterialManifest } from './material-manifest'
+import { createAssistantMaterialManifest } from './index'
 
 describe('assistant material manifest bridge', () => {
   it('projects only the editable-renderable-AI intersection', () => {
