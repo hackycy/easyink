@@ -1,6 +1,7 @@
 import type { DataSourceDescriptor } from '@easyink/datasource'
 import type { DocumentSchema } from '@easyink/schema'
 import type { AssistantMaterialManifest } from './types'
+import { deepClone } from '@easyink/shared'
 import { describe, expect, it } from 'vitest'
 import { collectDeterministicErrors, createAssistantPreview, repairAssistantSchema, validateAssistantSchema } from './index'
 import { AssistantMaterialManifestSchema } from './types'
@@ -140,6 +141,47 @@ describe('assistant capabilities', () => {
     expect(validateAssistantSchema(schema, { materialManifest: root }).errors)
       .not
       .toContainEqual(expect.objectContaining({ code: 'MATERIAL_PROPS_MISSING' }))
+  })
+
+  it('enforces portable generation completeness and required example paths', () => {
+    const prefixed = materialManifest('text')
+    prefixed.materials[0]!.generation.requiredModelPaths = ['/model/foo']
+    expect(AssistantMaterialManifestSchema.safeParse(prefixed).success).toBe(false)
+
+    const missing = materialManifest('text')
+    missing.materials[0]!.generation.requiredModelPaths = ['/content']
+    missing.materials[0]!.generation.examples = [{}]
+    expect(AssistantMaterialManifestSchema.safeParse(missing).success).toBe(false)
+
+    const incomplete = materialManifest('text')
+    delete (incomplete.materials[0]!.generation as { modelSchema?: unknown }).modelSchema
+    expect(AssistantMaterialManifestSchema.safeParse(incomplete).success).toBe(false)
+  })
+
+  it('accepts root pointers for primitive and null examples', () => {
+    for (const example of [1, null]) {
+      const manifest = materialManifest('text')
+      manifest.materials[0]!.generation.requiredModelPaths = ['']
+      manifest.materials[0]!.generation.examples = [example]
+      expect(AssistantMaterialManifestSchema.safeParse(manifest).success).toBe(true)
+    }
+  })
+
+  it('rejects duplicate material types and permits incomplete disabled generation', () => {
+    const duplicate = materialManifest('text')
+    duplicate.materials.push(deepClone(duplicate.materials[0]!))
+    expect(AssistantMaterialManifestSchema.safeParse(duplicate).success).toBe(false)
+
+    const disabled = materialManifest('text')
+    disabled.materials[0]!.generation = { enabled: false, examples: [] } as never
+    expect(AssistantMaterialManifestSchema.safeParse(disabled).success).toBe(true)
+    expect(validateAssistantSchema(schema, { materialManifest: disabled }).errors)
+      .not
+      .toContainEqual(expect.objectContaining({ code: 'MATERIAL_PROPS_MISSING' }))
+
+    const disabledBadPath = materialManifest('text')
+    disabledBadPath.materials[0]!.generation = { enabled: false, examples: [], requiredModelPaths: ['/model/content'] } as never
+    expect(AssistantMaterialManifestSchema.safeParse(disabledBadPath).success).toBe(false)
   })
 
   it('requires planned page-level text watermarks to use page layers', () => {

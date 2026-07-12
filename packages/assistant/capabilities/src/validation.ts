@@ -124,7 +124,7 @@ export function collectDeterministicErrors(schema: unknown, options: Determinist
       })
     }
     const material = materialByType.get(node.type)
-    for (const path of material?.generation.requiredModelPaths ?? []) {
+    for (const path of material?.generation.enabled ? material.generation.requiredModelPaths ?? [] : []) {
       if (!jsonPointerExists(node.model, path)) {
         issues.push({
           code: 'MATERIAL_PROPS_MISSING',
@@ -213,6 +213,8 @@ function validateNodeGenerationContract(
   node: DocumentSchema['elements'][number],
   material: AssistantMaterialManifest['materials'][number],
 ): AssistantValidationIssue[] {
+  if (!material.generation.enabled || !material.generation.modelSchema || !material.generation.bindingShape)
+    return []
   const issues: AssistantValidationIssue[] = []
   for (const issue of validateJsonSchema(material.generation.modelSchema, node.model)) {
     issues.push({

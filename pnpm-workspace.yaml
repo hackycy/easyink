@@ -41,6 +41,7 @@ catalogs:
     vitepress: 2.0.0-alpha.17
     vue-tsc: ^3.3.1
   framework:
+    '@cfworker/json-schema': ^4.1.1
     '@hono/node-server': ^1.19.14
     html2canvas: ^1.4.1
     jspdf: ^2.5.1
@@ -60,7 +61,6 @@ catalogs:
     '@vueuse/core': ^14.3.0
     '@xstate/vue': ^5.0.0
     ant-design-vue: ^4.2.6
-    ajv: ^8.17.1
     class-variance-authority: ^0.7.1
     clsx: ^2.1.1
     curlconverter: ^4.12.0

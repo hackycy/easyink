@@ -22,7 +22,7 @@
     "dev": "tsdown --watch"
   },
   "dependencies": {
-    "ajv": "catalog:framework",
+    "@cfworker/json-schema": "catalog:framework",
     "lodash-es": "catalog:inlined"
   },
   "devDependencies": {

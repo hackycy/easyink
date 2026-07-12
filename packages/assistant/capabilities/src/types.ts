@@ -1,8 +1,8 @@
 import type { DataSourceDescriptor } from '@easyink/datasource'
 import type { DocumentSchema } from '@easyink/schema'
-import type { JsonObject, JsonValue } from '@easyink/shared'
+import type { JsonObject, JsonValue, Rfc6901Pointer } from '@easyink/shared'
 import { AssistantPluginSelectionSchema } from '@easyink/assistant-plugins'
-import { assertJsonValue, compileJsonSchema, isRfc6901Pointer } from '@easyink/shared'
+import { assertJsonValue, compileJsonSchema, isRfc6901Pointer, jsonPointerExists } from '@easyink/shared'
 import { z } from 'zod'
 
 export const AssistantWorkflowStepSchema = z.enum([
@@ -217,13 +217,50 @@ const AssistantMaterialStructureSchema = z.object({
   }).strict()),
 }).strict()
 
+const RequiredModelPathSchema = z.string()
+  .refine((path): path is Rfc6901Pointer => isRfc6901Pointer(path), 'Expected an RFC 6901 pointer')
+  .superRefine((path, context) => {
+    if (path === '/model' || path.startsWith('/model/'))
+      context.addIssue({ code: z.ZodIssueCode.custom, message: 'Model paths are relative and must not start with /model' })
+  })
+
 const AssistantMaterialGenerationSchema = z.object({
-  enabled: z.literal(true),
-  modelSchema: PortableJsonSchema,
-  bindingShape: PortableJsonSchema,
-  requiredModelPaths: z.array(z.string().refine(isRfc6901Pointer, 'Expected an RFC 6901 pointer')).optional(),
-  examples: z.array(JsonValueSchema).min(1),
-}).strict()
+  enabled: z.boolean(),
+  modelSchema: PortableJsonSchema.optional(),
+  bindingShape: PortableJsonSchema.optional(),
+  requiredModelPaths: z.array(RequiredModelPathSchema).optional(),
+  examples: z.array(JsonValueSchema),
+}).strict().superRefine((generation, context) => {
+  if (generation.enabled) {
+    if (generation.modelSchema === undefined) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['modelSchema'], message: 'Enabled generation requires modelSchema' })
+    }
+    if (generation.bindingShape === undefined) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['bindingShape'], message: 'Enabled generation requires bindingShape' })
+    }
+    if (generation.examples.length === 0) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['examples'], message: 'Enabled generation requires at least one example' })
+    }
+  }
+  validateGenerationExamplePaths(generation, context)
+})
+
+function validateGenerationExamplePaths(
+  generation: { examples: JsonValue[], requiredModelPaths?: Rfc6901Pointer[] },
+  context: z.RefinementCtx,
+): void {
+  generation.examples.forEach((example, exampleIndex) => {
+    generation.requiredModelPaths?.forEach((path, pathIndex) => {
+      if (isRfc6901Pointer(path) && !jsonPointerExists(example, path)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['examples', exampleIndex],
+          message: `Example does not contain required model path at index ${pathIndex}: ${path}`,
+        })
+      }
+    })
+  })
+}
 
 export const AssistantMaterialManifestEntrySchema = z.object({
   type: z.string(),
@@ -255,7 +292,19 @@ export const AssistantMaterialManifestSchema = z.object({
   profileId: z.string(),
   engineVersion: z.string(),
   materials: z.array(AssistantMaterialManifestEntrySchema),
-}).strict()
+}).strict().superRefine((manifest, context) => {
+  const seen = new Set<string>()
+  manifest.materials.forEach((material, index) => {
+    if (seen.has(material.type)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['materials', index, 'type'],
+        message: `Duplicate material type: ${material.type}`,
+      })
+    }
+    seen.add(material.type)
+  })
+})
 
 export interface AssistantMaterialManifest {
   version: 1
