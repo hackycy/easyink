@@ -526,7 +526,7 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
       const localPoint = geometry.documentToLocal({ x: docX, y: docY }, element)
       if (pointInRect(localPoint, { x: 0, y: 0, width: elementSize.width, height: elementSize.height })) {
         const material = ctx.store.getMaterialManifest(element.type)
-        if (material?.common.binding.kind === false)
+        if (material?.common.binding.kind === 'none')
           continue
         return element
       }
