@@ -4,6 +4,7 @@ import { fork } from 'node:child_process'
 import { resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
+import { parseAuthenticatedResultMessage, parseHandshakeMessage } from './isolated-material-conformance-protocol'
 
 export interface MaterialConformanceSourceDescriptor {
   moduleSpecifier: string
@@ -17,9 +18,8 @@ export interface IsolatedMaterialConformanceOptions {
   onSpawn?: (pid: number) => void
 }
 
-interface ChildResultMessage {
-  kind: 'result'
-  reports: readonly MaterialConformanceReport[]
+export interface AuthenticatedResultReceiver {
+  accept: (message: unknown) => readonly MaterialConformanceReport[] | undefined
 }
 
 const childEntryUrl = new URL('./isolated-material-conformance-child.ts', import.meta.url)
@@ -44,6 +44,7 @@ export async function runIsolatedMaterialConformance(
 
   return await new Promise((resolve) => {
     let finishing = false
+    const receiver = createAuthenticatedResultReceiver()
     let timer: ReturnType<typeof setTimeout>
     const finish = async (reports: readonly MaterialConformanceReport[]) => {
       if (finishing)
@@ -57,12 +58,11 @@ export async function runIsolatedMaterialConformance(
       void finish([failureReport(source, 'CONFORMANCE_ISOLATED_EXECUTION_TIMEOUT', `isolated conformance process exceeded ${deadlineMs}ms`)])
     }, deadlineMs)
 
-    child.once('message', (message: unknown) => {
-      if (!isChildResultMessage(message)) {
-        void finish([failureReport(source, 'CONFORMANCE_ISOLATED_EXECUTION_INVALID_IPC', 'isolated conformance process returned invalid IPC')])
+    child.on('message', (message: unknown) => {
+      const reports = receiver.accept(message)
+      if (!reports)
         return
-      }
-      void finish(message.reports)
+      void finish(reports)
     })
     child.once('error', () => {
       void finish([failureReport(source, 'CONFORMANCE_ISOLATED_EXECUTION_CRASH', 'isolated conformance process failed to start')])
@@ -76,6 +76,26 @@ export async function runIsolatedMaterialConformance(
         void finish([failureReport(source, 'CONFORMANCE_ISOLATED_EXECUTION_CRASH', 'isolated conformance request could not be sent')])
     })
   })
+}
+
+export function createAuthenticatedResultReceiver(): AuthenticatedResultReceiver {
+  let resultAccepted = false
+  let session: ReturnType<typeof parseHandshakeMessage>
+  return {
+    accept: (message) => {
+      if (!session) {
+        session = parseHandshakeMessage(message)
+        return undefined
+      }
+      if (resultAccepted)
+        return undefined
+      const reports = parseAuthenticatedResultMessage(message, session)
+      if (!reports)
+        return undefined
+      resultAccepted = true
+      return reports
+    },
+  }
 }
 
 async function terminateAndWait(child: ChildProcess): Promise<void> {
@@ -93,21 +113,4 @@ function failureReport(
 ): MaterialConformanceReport {
   const issue: MaterialConformanceIssue = Object.freeze({ code, path: '', message })
   return Object.freeze({ materialType: source.materialType ?? '', valid: false, issues: Object.freeze([issue]) })
-}
-
-function isChildResultMessage(value: unknown): value is ChildResultMessage {
-  if (!isRecord(value) || value.kind !== 'result' || !Array.isArray(value.reports))
-    return false
-  return value.reports.every(report => isRecord(report)
-    && typeof report.materialType === 'string'
-    && typeof report.valid === 'boolean'
-    && Array.isArray(report.issues)
-    && report.issues.every(issue => isRecord(issue)
-      && typeof issue.code === 'string'
-      && typeof issue.path === 'string'
-      && typeof issue.message === 'string'))
-}
-
-function isRecord(value: unknown): value is Record<string, any> {
-  return typeof value === 'object' && value !== null
 }

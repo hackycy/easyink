@@ -4,6 +4,7 @@ import process from 'node:process'
 import { createBrowserDomCapabilities, renderViewerTree } from '@easyink/browser-dom'
 import { runMaterialConformance } from '@easyink/core'
 import { Window } from 'happy-dom'
+import { createAuthenticatedResultMessage, createHandshakeMessage, createIsolatedConformanceSession } from './isolated-material-conformance-protocol'
 
 interface RunMessage {
   kind: 'run'
@@ -14,36 +15,42 @@ interface RunMessage {
   }
 }
 
+const capturedGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor
+const capturedArrayIsArray = Array.isArray
+const capturedReflectApply = Reflect.apply
+const capturedSend = process.send?.bind(process)
+const capturedStringSlice = String.prototype.slice
+
 process.once('message', (message: unknown) => {
   void run(message)
 })
 
 async function run(message: unknown): Promise<void> {
+  if (!isRunMessage(message))
+    return
+  const session = createIsolatedConformanceSession()
+  capturedSend?.(createHandshakeMessage(session))
+  let reports: readonly MaterialConformanceReport[]
   try {
-    if (!isRunMessage(message))
-      throw new Error('CONFORMANCE_ISOLATED_EXECUTION_INVALID_REQUEST')
     const imported = await import(message.source.moduleSpecifier) as Record<string, unknown>
     const manifests = selectManifests(imported[message.source.exportName], message.source.materialType)
-    const reports: MaterialConformanceReport[] = []
-    for (const manifest of manifests)
-      reports.push(await runOne(manifest))
-    process.send?.({ kind: 'result', reports })
+    const collected: MaterialConformanceReport[] = []
+    for (let index = 0; index < manifests.length; index++)
+      collected[collected.length] = await runOne(manifests[index]!)
+    reports = collected
   }
   catch (error) {
-    const materialType = isRunMessage(message) ? message.source.materialType ?? '' : ''
-    process.send?.({
-      kind: 'result',
-      reports: [{
-        materialType,
-        valid: false,
-        issues: [{
-          code: 'CONFORMANCE_ISOLATED_EXECUTION_CHILD_FAILED',
-          path: '',
-          message: stableError(error),
-        }],
+    reports = [{
+      materialType: message.source.materialType ?? '',
+      valid: false,
+      issues: [{
+        code: 'CONFORMANCE_ISOLATED_EXECUTION_CHILD_FAILED',
+        path: '',
+        message: stableError(error),
       }],
-    })
+    }]
   }
+  capturedSend?.(createAuthenticatedResultMessage(session, reports))
 }
 
 async function runOne(manifest: MaterialManifest): Promise<MaterialConformanceReport> {
@@ -77,19 +84,34 @@ function selectManifests(value: unknown, materialType?: string): readonly Materi
     ? value.manifests
     : isManifest(value)
       ? [value]
-      : Array.isArray(value) && value.every(isManifest)
+      : isManifestArray(value)
         ? value
         : undefined
   if (!manifests)
     throw new Error('CONFORMANCE_ISOLATED_EXECUTION_EXPORT_INVALID')
-  const selected = materialType === undefined ? manifests : manifests.filter(manifest => manifest.type === materialType)
+  const selected: MaterialManifest[] = []
+  for (let index = 0; index < manifests.length; index++) {
+    const manifest = manifests[index]!
+    if (materialType === undefined || manifest.type === materialType)
+      selected[selected.length] = manifest
+  }
   if (selected.length === 0)
     throw new Error('CONFORMANCE_ISOLATED_EXECUTION_MATERIAL_NOT_FOUND')
   return selected
 }
 
 function isPackage(value: unknown): value is MaterialPackageRegistration {
-  return isRecord(value) && Array.isArray(value.manifests) && value.manifests.every(isManifest)
+  return isRecord(value) && isManifestArray(value.manifests)
+}
+
+function isManifestArray(value: unknown): value is MaterialManifest[] {
+  if (!capturedArrayIsArray(value))
+    return false
+  for (let index = 0; index < value.length; index++) {
+    if (!isManifest(value[index]))
+      return false
+  }
+  return true
 }
 
 function isManifest(value: unknown): value is MaterialManifest {
@@ -106,7 +128,12 @@ function isRunMessage(value: unknown): value is RunMessage {
 }
 
 function stableError(error: unknown): string {
-  return error instanceof Error ? error.message.slice(0, 1024) : 'Unknown child error'
+  if (typeof error !== 'object' || error === null)
+    return 'Unknown child error'
+  const descriptor = capturedGetOwnPropertyDescriptor(error, 'message')
+  return descriptor && 'value' in descriptor && typeof descriptor.value === 'string'
+    ? capturedReflectApply(capturedStringSlice, descriptor.value, [0, 1024])
+    : 'Unknown child error'
 }
 
 function isRecord(value: unknown): value is Record<string, any> {
