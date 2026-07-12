@@ -72,5 +72,7 @@ describe('documentStore', () => {
     expect(store.revision).toBe(0)
     expect(store.document.elements[0]!.x).toBe(7)
     expect(Object.isFrozen(store.document)).toBe(true)
+    expect(store.index.getNode('a')).toBe(store.document.elements[0])
+    expect(store.index.getNode('a')!.x).toBe(7)
   })
 })

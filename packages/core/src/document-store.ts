@@ -84,7 +84,9 @@ export class DocumentStore {
       this.committed = write.kind === 'reset'
         ? freezeDocument(cloneJsonValue(write.document as unknown as JsonValue, this.jsonValidation) as unknown as DocumentSchema)
         : acceptFrozenCandidate(write.document)
-      this.committedIndexValue = write.index
+      this.committedIndexValue = write.kind === 'reset'
+        ? DocumentIndexSnapshot.build(this.committed, this.profile, 0)
+        : write.index
       this.preview = null
       this.previewIndexValue = null
       this.materialNodeStatesValue = write.validationReport.nodeStates
