@@ -5,7 +5,7 @@ export const svgHeartAIMaterialDescriptor = {
   description: 'Cute rounded heart SVG material with fill and border controls.',
   properties: ['fillColor', 'borderWidth', 'borderColor'],
   requiredProps: ['fillColor'],
-  binding: 'none',
+  bindings: 'none',
   usage: [
     'Use this material for heart graphics as decorative or emotional elements.',
   ],

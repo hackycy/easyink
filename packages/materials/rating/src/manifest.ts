@@ -22,4 +22,5 @@ export const ratingMaterialManifest = defineStandardMaterialManifest({
   localeMessages: ratingLocaleMessages,
   viewerExtension: { render: renderRating },
   aiDescriptor: ratingAIMaterialDescriptor,
+  generation: { enabled: true, modelSchema: 'infer-from-default', bindingShape: 'infer-from-binding', examples: 'default-model', requiredModelPaths: ['/value'] },
 })

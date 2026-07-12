@@ -29,5 +29,5 @@ export const tableDataMaterialManifest = defineStandardMaterialManifest({
   localeMessages: tableDataLocaleMessages,
   viewerExtension: { render: renderTableData, measure: measureTableData, fragmentPaginator: tableDataFragmentPaginator },
   aiDescriptor: tableDataAIMaterialDescriptor,
-  requiredModelPaths: ['/columns', '/bands', '/data/collectionPort'],
+  generation: { enabled: true, modelSchema: 'infer-from-default', bindingShape: 'infer-from-binding', examples: 'default-model', requiredModelPaths: ['/columns', '/bands', '/data/collectionPort'] },
 })

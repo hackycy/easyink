@@ -22,4 +22,5 @@ export const progressMaterialManifest = defineStandardMaterialManifest({
   localeMessages: progressLocaleMessages,
   viewerExtension: { render: renderProgress },
   aiDescriptor: progressAIMaterialDescriptor,
+  generation: { enabled: true, modelSchema: 'infer-from-default', bindingShape: 'infer-from-binding', examples: 'default-model', requiredModelPaths: ['/value'] },
 })

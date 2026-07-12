@@ -5,7 +5,7 @@ export const lineAIMaterialDescriptor = {
   description: 'Straight separator line. The element width and height define line length and thickness.',
   properties: ['lineColor', 'lineType'],
   requiredProps: ['lineColor', 'lineType'],
-  binding: 'none',
+  bindings: 'none',
   usage: [
     'Use for receipt separators, section rules, and simple borders.',
     'Use only the current model.lineColor and model.lineType fields.',

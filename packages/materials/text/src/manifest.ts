@@ -24,4 +24,5 @@ export const textMaterialManifest = defineStandardMaterialManifest({
   localeMessages: textLocaleMessages,
   viewerExtension: { render: renderText, measure: measureText, getRenderSize: getTextRenderSize },
   aiDescriptor: textAIMaterialDescriptor,
+  generation: { enabled: true, modelSchema: 'infer-from-default', bindingShape: 'infer-from-binding', examples: 'default-model', requiredModelPaths: ['/content'] },
 })

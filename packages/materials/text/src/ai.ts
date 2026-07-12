@@ -5,10 +5,10 @@ export const textAIMaterialDescriptor = {
   description: 'Text block for static labels and data-bound scalar fields. Supports fixed-height clipping and auto-height flow layout.',
   properties: ['content', 'writingMode', 'heightMode', 'fontSize', 'fontFamily', 'fontWeight', 'fontStyle', 'color', 'backgroundColor', 'textAlign', 'verticalAlign', 'lineHeight', 'letterSpacing', 'wrapMode', 'overflow', 'minHeight', 'maxHeight', 'prefix', 'suffix', 'borderWidth', 'borderColor', 'borderType'],
   requiredProps: ['content', 'fontSize', 'textAlign', 'verticalAlign', 'color'],
-  binding: 'single',
+  bindings: 'single',
   usage: [
     'Use model.content for static text and placeholders such as {#fieldLabel}.',
-    'Use binding for dynamic scalar fields; keep fieldPath slash-separated.',
+    'Use bindings.value for dynamic scalar fields; keep fieldPath slash-separated.',
     'Use model.heightMode="auto" when long or bound text should grow vertically and participate in stack flow layout.',
     'Use model.wrapMode for wrapping behavior: "wrap" for word wrapping, "anywhere" for long codes/CJK-heavy labels, and "nowrap" for single-line text.',
   ],
@@ -25,7 +25,7 @@ export const textAIMaterialDescriptor = {
       accepts: { types: ['string', 'number', 'boolean', 'date'], isArray: false },
       produces: { kind: 'scalar-field', fieldCount: 'single', pathPattern: '{fieldPath}' },
       examples: [
-        { scenario: 'invoice title', binding: { sourceId: 'invoice', fieldPath: 'title' }, fieldStructure: { title: 'string' } },
+        { scenario: 'invoice title', bindings: { value: { sourceId: 'invoice', fieldPath: 'title' } }, fieldStructure: { title: 'string' } },
       ],
     },
     sizing: { minWidth: 10, minHeight: 4, growAxis: 'y', defaultSize: { width: 40, height: 6 } },

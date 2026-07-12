@@ -26,4 +26,5 @@ export const flowRowMaterialManifest = defineStandardMaterialManifest({
   localeMessages: flowRowLocaleMessages,
   viewerExtension: { render: renderFlowRow, measure: measureFlowRow },
   aiDescriptor: flowRowAIMaterialDescriptor,
+  generation: { enabled: true, modelSchema: 'infer-from-default', bindingShape: 'infer-from-binding', examples: 'default-model', requiredModelPaths: ['/columns'] },
 })

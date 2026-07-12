@@ -6,7 +6,7 @@ export const flowRowAIMaterialDescriptor = {
   description: 'Receipt/detail row with mixed block and inline columns. Block columns take a full line; inline columns share a line by ratio, axis insets, and per-column alignment.',
   properties: ['columns', 'gap', 'paddingX', 'paddingY', 'typography', 'backgroundColor'],
   requiredProps: ['columns', 'gap', 'typography'],
-  binding: 'multi',
+  bindings: 'multi',
   usage: [
     'Use flow-row for receipt item details where a long name should occupy its own line and numeric columns should continue on the next inline row.',
     'Use bindings.value for an optional collection path and columns[].bindingPort for field-binding ports.',
@@ -33,7 +33,7 @@ export const flowRowAIMaterialDescriptor = {
       accepts: { types: ['array'], isArray: true, minChildren: 1 },
       produces: { kind: 'collection-repeat', fieldCount: 'dynamic', pathPattern: '{collection}/{field}' },
       examples: [
-        { scenario: 'receipt item', binding: { sourceId: 'receipt', fieldPath: 'items' }, fieldStructure: { items: [{ name: 'string', qty: 'number', amount: 'number' }] } },
+        { scenario: 'receipt item', bindings: { 'value': { sourceId: 'receipt', fieldPath: 'items' }, 'flow-port:item-name': { sourceId: 'receipt', fieldPath: 'items/name' } }, fieldStructure: { items: [{ name: 'string', qty: 'number', amount: 'number' }] } },
       ],
     },
     sizing: { minWidth: 20, minHeight: 8, growAxis: 'y', defaultSize: { width: 72, height: 10 } },

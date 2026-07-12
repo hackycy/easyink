@@ -5,7 +5,7 @@ export const tableStaticAIMaterialDescriptor = {
   description: 'Fixed table for forms, headers, and non-repeating grid layouts.',
   properties: ['borderWidth', 'cellPadding', 'typography'],
   requiredProps: ['typography', 'borderWidth', 'cellPadding'],
-  binding: 'multi',
+  bindings: 'multi',
   usage: [
     'Use table-static only when row count is fixed and not driven by an array.',
     'Cells use direct model band row content and canonical cell:* bindings or slots.',

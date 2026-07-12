@@ -24,4 +24,5 @@ export const chartRadarMaterialManifest = defineStandardMaterialManifest({
   viewerExtension: { render: renderChartRadar },
   viewerCapabilities: { sanitizedMarkup: true },
   aiDescriptor: chartRadarAIMaterialDescriptor,
+  generation: { enabled: true, modelSchema: 'infer-from-default', bindingShape: 'infer-from-binding', examples: 'default-model', requiredModelPaths: ['/maxValue'] },
 })

@@ -3,7 +3,7 @@ import type { JsonObject, JsonValue } from '@easyink/shared'
 import type { MaterialConditionCapability } from './condition'
 import type { CanonicalMaterialBindingMap, MaterialBindingDefinition } from './material-binding'
 import type { MaterialDesignerFacet, MaterialExtensionContext, MaterialExtensionFactory } from './material-extension'
-import type { MaterialLayoutFacet, MaterialStructureFacet } from './material-manifest'
+import type { MaterialAIFacet, MaterialLayoutFacet, MaterialStructureFacet } from './material-manifest'
 import type { PropertyDescriptor } from './material-properties'
 import type { MaterialViewerExtension, MaterialViewerFacet, ViewerFacetCapabilities } from './material-viewer'
 import type { SchemaAdapter } from './schema-adapter'
@@ -34,13 +34,32 @@ export interface StandardMaterialManifestInput {
   viewerExtension: MaterialViewerExtension
   viewerCapabilities?: ViewerFacetCapabilities
   aiDescriptor: Record<string, unknown>
-  modelSchema?: JsonObject
-  requiredModelPaths?: readonly `/${string}`[]
+  generation: StandardMaterialGenerationDeclaration
 }
+
+export type StandardMaterialGenerationDeclaration
+  = | { enabled: false }
+    | {
+      enabled: true
+      modelSchema: JsonObject | 'infer-from-default'
+      bindingShape: 'infer-from-binding'
+      examples: 'default-model'
+      requiredModelPaths: readonly `/${string}`[]
+    }
 
 export function defineStandardMaterialManifest(input: StandardMaterialManifestInput) {
   const defaultModel = input.defaultNode.model as JsonObject
-  const requiredModelPaths = input.requiredModelPaths ?? Object.keys(defaultModel).map(key => `/${escapePointer(key)}` as const)
+  const generation: MaterialAIFacet['generation'] = input.generation.enabled
+    ? {
+        enabled: true,
+        modelSchema: input.generation.modelSchema === 'infer-from-default'
+          ? schemaFor(defaultModel)
+          : input.generation.modelSchema,
+        bindingShape: bindingSchema(input.binding),
+        requiredModelPaths: input.generation.requiredModelPaths,
+        examples: [defaultModel],
+      }
+    : { enabled: false, examples: [] }
   return defineMaterialManifest<MaterialDesignerFacet, MaterialViewerFacet>({
     manifestVersion: 1,
     apiVersion: 1,
@@ -75,13 +94,7 @@ export function defineStandardMaterialManifest(input: StandardMaterialManifestIn
       }),
       viewer: () => ({ extension: input.viewerExtension, capabilities: input.viewerCapabilities ?? {} }),
       ai: {
-        generation: {
-          enabled: true,
-          modelSchema: input.modelSchema ?? schemaFor(defaultModel),
-          bindingShape: bindingSchema(input.binding),
-          requiredModelPaths,
-          examples: [defaultModel],
-        },
+        generation,
         descriptor: input.aiDescriptor as JsonObject,
       },
     },
@@ -106,12 +119,9 @@ function bindingSchema(binding: MaterialBindingDefinition): JsonObject {
   const properties: JsonObject = {}
   const patternProperties: JsonObject = {}
   for (const port of binding.ports) {
-    const expression = {
-      type: 'object',
-      required: ['sourceId', 'fieldPath'],
-      properties: { sourceId: { type: 'string' }, fieldPath: { type: 'string' } },
-      additionalProperties: true,
-    } satisfies JsonObject
+    const expression = binding.dataContract && port.role === 'semantic'
+      ? dataContractBindingSchema()
+      : bindingReferenceSchema()
     if (port.key.kind === 'exact')
       properties[port.key.value] = expression
     else
@@ -125,8 +135,41 @@ function bindingSchema(binding: MaterialBindingDefinition): JsonObject {
   }
 }
 
-function escapePointer(value: string): string {
-  return value.replaceAll('~', '~0').replaceAll('/', '~1')
+function bindingReferenceSchema(): JsonObject {
+  return {
+    type: 'object',
+    required: ['sourceId', 'fieldPath'],
+    properties: { sourceId: { type: 'string' }, fieldPath: { type: 'string' } },
+    additionalProperties: true,
+  }
+}
+
+function dataContractBindingSchema(): JsonObject {
+  return {
+    type: 'object',
+    required: ['kind', 'mappings'],
+    properties: {
+      kind: { const: 'data-contract' },
+      mappings: {
+        type: 'object',
+        additionalProperties: {
+          type: 'object',
+          required: ['sourceId', 'select'],
+          properties: {
+            sourceId: { type: 'string' },
+            select: {
+              type: 'object',
+              required: ['path'],
+              properties: { path: { type: 'string' } },
+              additionalProperties: true,
+            },
+          },
+          additionalProperties: true,
+        },
+      },
+    },
+    additionalProperties: true,
+  }
 }
 
 function escapeRegex(value: string): string {

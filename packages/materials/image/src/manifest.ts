@@ -23,4 +23,5 @@ export const imageMaterialManifest = defineStandardMaterialManifest({
   localeMessages: imageLocaleMessages,
   viewerExtension: { render: renderImage },
   aiDescriptor: imageAIMaterialDescriptor,
+  generation: { enabled: true, modelSchema: 'infer-from-default', bindingShape: 'infer-from-binding', examples: 'default-model', requiredModelPaths: ['/src'] },
 })

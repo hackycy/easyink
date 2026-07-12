@@ -32,7 +32,7 @@ export interface AIMaterialDescriptor {
   description: string
   properties: string[]
   requiredProps?: string[]
-  binding?: 'none' | 'single' | 'multi' | 'data-contract'
+  bindings?: 'none' | 'single' | 'multi' | 'data-contract'
   usage?: string[]
   schemaRules?: string[]
   examples?: Array<Record<string, unknown>>
@@ -66,7 +66,7 @@ export interface MaterialKnowledgeDescriptor {
     }
     examples?: Array<{
       scenario: string
-      binding: Record<string, unknown>
+      bindings: Record<string, unknown>
       fieldStructure: Record<string, unknown>
     }>
   }

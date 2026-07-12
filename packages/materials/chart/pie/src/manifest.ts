@@ -24,4 +24,5 @@ export const chartPieMaterialManifest = defineStandardMaterialManifest({
   viewerExtension: { render: renderChartPie },
   viewerCapabilities: { sanitizedMarkup: true },
   aiDescriptor: chartPieAIMaterialDescriptor,
+  generation: { enabled: true, modelSchema: 'infer-from-default', bindingShape: 'infer-from-binding', examples: 'default-model', requiredModelPaths: ['/palettePreset'] },
 })

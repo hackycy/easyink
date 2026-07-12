@@ -5,10 +5,10 @@ export const chartScatterAIMaterialDescriptor = {
   description: 'Scatter chart for showing correlation or distribution between two numeric fields from a material data contract target model.',
   properties: ['pointColor', 'backgroundColor', 'axisColor', 'labelColor', 'showValueLabels', 'showGrid', 'showXAxisLabel', 'showYAxisLabel', 'showXAxisLine', 'showYAxisLine', 'symbolSize'],
   requiredProps: ['pointColor'],
-  binding: 'data-contract',
+  bindings: 'data-contract',
   usage: [
     'Use chart-scatter when two numeric fields should be compared as X and Y coordinates.',
-    'Use data-contract binding mappings: mappings.x selects the X numeric source path and mappings.y selects the Y numeric source path.',
+    'Use bindings.value data-contract mappings: mappings.x selects the X numeric source path and mappings.y selects the Y numeric source path.',
     'Optional mappings.label can name points and mappings.color can override individual point colors.',
     'The resolver derives whether mappings share a record collection or should be aligned by index.',
     'Designer preview uses built-in sample data only.',
@@ -35,14 +35,16 @@ export const chartScatterAIMaterialDescriptor = {
       examples: [
         {
           scenario: 'quality correlation',
-          binding: {
-            kind: 'data-contract',
-            mappings: {
-              x: { sourceId: 'report', select: { path: 'measurements/temperature' } },
-              y: { sourceId: 'report', select: { path: 'measurements/defectRate' } },
-              label: { sourceId: 'report', select: { path: 'measurements/batch' } },
+          bindings: {
+            value: {
+              kind: 'data-contract',
+              mappings: {
+                x: { sourceId: 'report', select: { path: 'measurements/temperature' } },
+                y: { sourceId: 'report', select: { path: 'measurements/defectRate' } },
+                label: { sourceId: 'report', select: { path: 'measurements/batch' } },
+              },
+              relation: { kind: 'auto' },
             },
-            relation: { kind: 'auto' },
           },
           fieldStructure: { measurements: [{ batch: 'string', temperature: 'number', defectRate: 'number' }] },
         },

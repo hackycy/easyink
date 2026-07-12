@@ -95,7 +95,7 @@ export function buildMaterialContext(manifest: AssistantMaterialManifest | undef
       if (spec.accepts.requiredChildFields?.length)
         lines.push(`- Required child fields: ${spec.accepts.requiredChildFields.join(', ')}`)
       if (spec.examples?.length)
-        lines.push(`- Binding example: ${JSON.stringify(spec.examples[0]?.binding)}`)
+        lines.push(`- Bindings example: ${JSON.stringify(spec.examples[0]?.bindings)}`)
     }
     if (knowledge?.sizing) {
       const s = knowledge.sizing

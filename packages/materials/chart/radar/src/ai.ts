@@ -5,10 +5,10 @@ export const chartRadarAIMaterialDescriptor = {
   description: 'Simple radar chart for comparing multiple category scores from a material data contract target model: category field and value field mapped from source paths by relation resolver.',
   properties: ['areaColor', 'lineColor', 'pointColor', 'backgroundColor', 'axisColor', 'labelColor', 'showValueLabels', 'showAxisLabels', 'showArea', 'showPoints', 'maxValue'],
   requiredProps: ['lineColor'],
-  binding: 'data-contract',
+  bindings: 'data-contract',
   usage: [
     'Use chart-radar for profile, scorecard, capability, or multi-metric comparisons where categories form axes around one polygon.',
-    'Use data-contract binding mappings: mappings.category selects the radar axis label source path and mappings.value selects the numeric score source path.',
+    'Use bindings.value data-contract mappings: mappings.category selects the radar axis label source path and mappings.value selects the numeric score source path.',
     'The resolver derives whether mappings share a record collection or should be aligned by index.',
     'Designer preview uses built-in sample data only.',
     'Use maxValue to set a consistent scale across comparable radar charts.',
@@ -35,13 +35,15 @@ export const chartRadarAIMaterialDescriptor = {
       examples: [
         {
           scenario: 'capability scorecard',
-          binding: {
-            kind: 'data-contract',
-            mappings: {
-              category: { sourceId: 'report', select: { path: 'capabilities/name' } },
-              value: { sourceId: 'report', select: { path: 'capabilities/score' } },
+          bindings: {
+            value: {
+              kind: 'data-contract',
+              mappings: {
+                category: { sourceId: 'report', select: { path: 'capabilities/name' } },
+                value: { sourceId: 'report', select: { path: 'capabilities/score' } },
+              },
+              relation: { kind: 'auto' },
             },
-            relation: { kind: 'auto' },
           },
           fieldStructure: { capabilities: [{ name: 'string', score: 'number' }] },
         },

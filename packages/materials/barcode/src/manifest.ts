@@ -24,4 +24,5 @@ export const barcodeMaterialManifest = defineStandardMaterialManifest({
   viewerExtension: { render: renderBarcode },
   viewerCapabilities: { sanitizedMarkup: true },
   aiDescriptor: barcodeAIMaterialDescriptor,
+  generation: { enabled: true, modelSchema: 'infer-from-default', bindingShape: 'infer-from-binding', examples: 'default-model', requiredModelPaths: ['/value'] },
 })

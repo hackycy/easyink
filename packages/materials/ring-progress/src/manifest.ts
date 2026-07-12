@@ -22,4 +22,5 @@ export const ringProgressMaterialManifest = defineStandardMaterialManifest({
   localeMessages: ringProgressLocaleMessages,
   viewerExtension: { render: renderRingProgress },
   aiDescriptor: ringProgressAIMaterialDescriptor,
+  generation: { enabled: true, modelSchema: 'infer-from-default', bindingShape: 'infer-from-binding', examples: 'default-model', requiredModelPaths: ['/value'] },
 })

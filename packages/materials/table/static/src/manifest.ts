@@ -25,5 +25,5 @@ export const tableStaticMaterialManifest = defineStandardMaterialManifest({
   localeMessages: tableStaticLocaleMessages,
   viewerExtension: { render: renderTableStatic },
   aiDescriptor: tableStaticAIMaterialDescriptor,
-  requiredModelPaths: ['/columns', '/bands'],
+  generation: { enabled: true, modelSchema: 'infer-from-default', bindingShape: 'infer-from-binding', examples: 'default-model', requiredModelPaths: ['/columns', '/bands'] },
 })

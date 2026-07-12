@@ -5,7 +5,7 @@ export const rectAIMaterialDescriptor = {
   description: 'Rectangle shape for borders, backgrounds, frames, and simple visual blocks.',
   properties: ['fillColor', 'borderWidth', 'borderColor', 'borderType', 'borderRadius'],
   requiredProps: ['fillColor', 'borderWidth', 'borderColor', 'borderType'],
-  binding: 'none',
+  bindings: 'none',
   usage: [
     'Use model.fillColor and model.borderColor.',
   ],

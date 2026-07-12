@@ -5,7 +5,7 @@ export const pageNumberAIMaterialDescriptor = {
   description: 'Automatic page number display for paginated fixed documents.',
   properties: ['format', 'fontSize', 'fontFamily', 'fontWeight', 'fontStyle', 'color', 'backgroundColor', 'textAlign', 'verticalAlign', 'lineHeight', 'letterSpacing'],
   requiredProps: ['format', 'fontSize', 'textAlign', 'verticalAlign', 'color'],
-  binding: 'none',
+  bindings: 'none',
   usage: [
     'Use for A4 reports, invoices, and documents that can span pages.',
     'Usually unnecessary for narrow receipts and labels.',

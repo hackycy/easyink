@@ -9,8 +9,14 @@ import { TABLE_DATA_DEFAULTS } from './schema'
 /**
  * Filter rows to only include visible ones based on showHeader/showFooter settings.
  */
-function filterVisibleRows(rows: TableRowSchema[], showHeader: boolean, showFooter: boolean): TableRowSchema[] {
-  return rows.filter((row) => {
+interface RuntimeTableRow {
+  row: TableRowSchema
+  canonicalRowId: string
+  sourceRowKey: string
+}
+
+function filterVisibleRows(rows: RuntimeTableRow[], showHeader: boolean, showFooter: boolean): RuntimeTableRow[] {
+  return rows.filter(({ row }) => {
     if (row.role === 'header' && !showHeader)
       return false
     if (row.role === 'footer' && !showFooter)
@@ -30,6 +36,8 @@ function filterVisibleRows(rows: TableRowSchema[], showHeader: boolean, showFoot
  */
 interface ResolvedRuntimeLayout {
   rows: TableRowSchema[]
+  rowSources: Array<{ canonicalRowId: string, sourceRowKey: string }>
+  columnIds: string[]
   rowHeights: number[]
   totalHeight: number
 }
@@ -54,8 +62,9 @@ function resolveRuntimeLayout(
   declaredElementHeight: number,
   reportDiagnostic?: ViewerRenderContext['reportDiagnostic'],
 ): ResolvedRuntimeLayout {
-  const { topology } = projectTableTopology(node)
-  const expandedRows = expandRepeatTemplateRows(topology.rows, data, node.id, reportDiagnostic)
+  const projection = projectTableTopology(node)
+  const { topology } = projection
+  const expandedRows = expandRepeatTemplateRows(topology.rows, projection.rowIds, data, node.id, reportDiagnostic)
   const visibleRows = filterVisibleRows(expandedRows, true, true)
 
   const repeatRow = topology.rows.find(row => row.role === 'repeat-template')
@@ -65,11 +74,11 @@ function resolveRuntimeLayout(
     undefined,
     repeatRow ? { rowHeight: repeatRow.height, count: TABLE_DATA_PLACEHOLDER_ROW_COUNT } : undefined,
   )
-  const baselineHeights = visibleRows.map(row => row.height * baselineScale)
+  const baselineHeights = visibleRows.map(({ row }) => row.height * baselineScale)
 
   const props: TableDataProps = { ...TABLE_DATA_DEFAULTS, ...resolveTableBaseProps(node) }
   const rowHeights = computeAutoRowHeights({
-    topology: { columns: topology.columns, rows: visibleRows },
+    topology: { columns: topology.columns, rows: visibleRows.map(item => item.row) },
     elementWidth: node.width,
     baselineHeights,
     props,
@@ -78,7 +87,13 @@ function resolveRuntimeLayout(
   for (const h of rowHeights)
     totalHeight += h
 
-  return { rows: visibleRows, rowHeights, totalHeight }
+  return {
+    rows: visibleRows.map(item => item.row),
+    rowSources: visibleRows.map(({ canonicalRowId, sourceRowKey }) => ({ canonicalRowId, sourceRowKey })),
+    columnIds: [...projection.columnIds],
+    rowHeights,
+    totalHeight,
+  }
 }
 
 /**
@@ -117,7 +132,7 @@ export const tableDataFragmentPaginator: FragmentPaginator = {
       return { currentPage: input.fragment, diagnostics: [] }
     }
 
-    const split = splitRuntimeRows(cached.rows, cached.rowHeights, input.availableHeight)
+    const split = splitRuntimeRows(cached.rows, cached.rowSources, cached.rowHeights, input.availableHeight)
     if (!split) {
       return {
         currentPage: input.fragment,
@@ -131,8 +146,8 @@ export const tableDataFragmentPaginator: FragmentPaginator = {
       }
     }
 
-    const current = createVirtualTableFragment(input.fragment, tableNode, split.currentRows, split.currentHeights, split.currentHeight, `p${input.pageContext.pageIndex}`)
-    const next = createVirtualTableFragment(input.fragment, tableNode, split.nextRows, split.nextHeights, split.nextHeight, `p${input.pageContext.pageIndex + 1}`)
+    const current = createVirtualTableFragment(input.fragment, tableNode, split.currentRows, split.currentSources, cached.columnIds, split.currentHeights, split.currentHeight, `p${input.pageContext.pageIndex}`)
+    const next = createVirtualTableFragment(input.fragment, tableNode, split.nextRows, split.nextSources, cached.columnIds, split.nextHeights, split.nextHeight, `p${input.pageContext.pageIndex + 1}`)
 
     return {
       currentPage: current,
@@ -158,7 +173,7 @@ export function renderTableData(node: MaterialNode<unknown>, context?: ViewerRen
   // from it here. Fall back to a direct compute when render is called
   // without a prior measure (e.g. unit tests).
   const cached = runtimeLayoutCache.get(tableNode)
-  const { rows: visibleRows, rowHeights, totalHeight } = cached
+  const { rows: visibleRows, rowSources, columnIds, rowHeights, totalHeight } = cached
     ?? resolveRuntimeLayout(tableNode, data, node.height, context?.reportDiagnostic)
 
   const sizedRows: TableRowSchema[] = visibleRows.map((row, i) => ({
@@ -173,6 +188,9 @@ export function renderTableData(node: MaterialNode<unknown>, context?: ViewerRen
     unit: context?.unit ?? 'mm',
     elementHeight: totalHeight,
     slotOutputs: context?.slotOutputs,
+    canonicalRowIds: rowSources.map(source => source.canonicalRowId),
+    canonicalColumnIds: columnIds,
+    sourceRowKeys: rowSources.map(source => source.sourceRowKey),
     cellText: cell => cell.content?.text || '',
     cellBackground: (ri) => {
       const row = sizedRows[ri]
@@ -191,16 +209,18 @@ export function renderTableData(node: MaterialNode<unknown>, context?: ViewerRen
  */
 function expandRepeatTemplateRows(
   rows: TableRowSchema[],
+  rowIds: readonly string[],
   data: Record<string, unknown>,
   nodeId: string,
   reportDiagnostic?: ViewerRenderContext['reportDiagnostic'],
-): TableRowSchema[] {
-  const result: TableRowSchema[] = []
+): RuntimeTableRow[] {
+  const result: RuntimeTableRow[] = []
 
-  for (const row of rows) {
+  for (const [rowIndex, row] of rows.entries()) {
+    const canonicalRowId = rowIds[rowIndex] ?? `row-${rowIndex}`
     if (row.role !== 'repeat-template') {
       // Header/footer/normal: resolve staticBinding into content
-      result.push(resolveStaticRow(row, data, nodeId, reportDiagnostic))
+      result.push({ row: resolveStaticRow(row, data, nodeId, reportDiagnostic), canonicalRowId, sourceRowKey: canonicalRowId })
       continue
     }
 
@@ -212,13 +232,13 @@ function expandRepeatTemplateRows(
 
     if (fieldPaths.length === 0) {
       // No bindings — render as single row with static content
-      result.push(row)
+      result.push({ row, canonicalRowId, sourceRowKey: canonicalRowId })
       continue
     }
 
     const collectionPath = extractCollectionPath(fieldPaths)
     if (!collectionPath) {
-      result.push(row)
+      result.push({ row, canonicalRowId, sourceRowKey: canonicalRowId })
       continue
     }
 
@@ -232,12 +252,12 @@ function expandRepeatTemplateRows(
     const collectionData = resolveBindingValue(collectionBinding, data)
     if (!Array.isArray(collectionData) || collectionData.length === 0) {
       // Empty or non-array — render single empty row
-      result.push(row)
+      result.push({ row, canonicalRowId, sourceRowKey: canonicalRowId })
       continue
     }
 
     // Expand: one row per collection item
-    for (const item of collectionData) {
+    for (const [recordIndex, item] of collectionData.entries()) {
       const record = (typeof item === 'object' && item !== null ? item : {}) as Record<string, unknown>
       const expandedCells: TableCellSchema[] = row.cells.map((cell) => {
         if (!cell.binding?.fieldPath)
@@ -250,7 +270,11 @@ function expandRepeatTemplateRows(
           content: { text: formatted },
         }
       })
-      result.push({ height: row.height, role: 'normal', cells: expandedCells })
+      result.push({
+        row: { height: row.height, role: 'repeat-template', cells: expandedCells },
+        canonicalRowId,
+        sourceRowKey: `${canonicalRowId}:record-${recordIndex}`,
+      })
     }
   }
 
@@ -259,15 +283,21 @@ function expandRepeatTemplateRows(
 
 function splitRuntimeRows(
   rows: TableRowSchema[],
+  rowSources: Array<{ canonicalRowId: string, sourceRowKey: string }>,
   rowHeights: number[],
   availableHeight: number,
-): { currentRows: TableRowSchema[], currentHeights: number[], currentHeight: number, nextRows: TableRowSchema[], nextHeights: number[], nextHeight: number } | null {
-  const header: Array<{ row: TableRowSchema, height: number }> = []
-  const body: Array<{ row: TableRowSchema, height: number }> = []
-  const footer: Array<{ row: TableRowSchema, height: number }> = []
+): { currentRows: TableRowSchema[], currentSources: Array<{ canonicalRowId: string, sourceRowKey: string }>, currentHeights: number[], currentHeight: number, nextRows: TableRowSchema[], nextSources: Array<{ canonicalRowId: string, sourceRowKey: string }>, nextHeights: number[], nextHeight: number } | null {
+  interface Entry {
+    row: TableRowSchema
+    source: { canonicalRowId: string, sourceRowKey: string }
+    height: number
+  }
+  const header: Entry[] = []
+  const body: Entry[] = []
+  const footer: Entry[] = []
 
   rows.forEach((row, index) => {
-    const entry = { row, height: rowHeights[index] ?? row.height }
+    const entry = { row, source: rowSources[index]!, height: rowHeights[index] ?? row.height }
     if (row.role === 'header')
       header.push(entry)
     else if (row.role === 'footer')
@@ -291,9 +321,11 @@ function splitRuntimeRows(
   const nextEntries = [...header, ...body.slice(bodyCut), ...footer]
   return {
     currentRows: currentEntries.map(entry => entry.row),
+    currentSources: currentEntries.map(entry => entry.source),
     currentHeights: currentEntries.map(entry => entry.height),
     currentHeight: sumHeights(currentEntries),
     nextRows: nextEntries.map(entry => entry.row),
+    nextSources: nextEntries.map(entry => entry.source),
     nextHeights: nextEntries.map(entry => entry.height),
     nextHeight: sumHeights(nextEntries),
   }
@@ -303,6 +335,8 @@ function createVirtualTableFragment(
   source: LayoutFragment,
   node: MaterialNode<unknown>,
   rows: TableRowSchema[],
+  rowSources: Array<{ canonicalRowId: string, sourceRowKey: string }>,
+  columnIds: string[],
   rowHeights: number[],
   height: number,
   suffix: string,
@@ -312,7 +346,7 @@ function createVirtualTableFragment(
     id: `${node.id}__${suffix}`,
     height,
   }
-  runtimeLayoutCache.set(virtualNode, { rows, rowHeights, totalHeight: height })
+  runtimeLayoutCache.set(virtualNode, { rows, rowSources, columnIds, rowHeights, totalHeight: height })
   return {
     ...createFragmentFromNode(virtualNode),
     sourceNodeId: source.sourceNodeId,

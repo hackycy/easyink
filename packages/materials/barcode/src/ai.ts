@@ -5,7 +5,7 @@ export const barcodeAIMaterialDescriptor = {
   description: 'Barcode generated from model.value or the canonical bindings.value port.',
   properties: ['value', 'format', 'showText', 'lineWidth', 'lineColor', 'backgroundColor', 'borderWidth', 'borderColor', 'borderType'],
   requiredProps: ['value', 'format', 'showText', 'lineWidth', 'lineColor', 'backgroundColor'],
-  binding: 'single',
+  bindings: 'single',
   usage: [
     'Use CODE128 for generic order numbers and EAN13/EAN8 for retail goods codes.',
   ],
@@ -22,7 +22,7 @@ export const barcodeAIMaterialDescriptor = {
       accepts: { types: ['string', 'number'], isArray: false },
       produces: { kind: 'scalar-field', fieldCount: 'single', pathPattern: '{fieldPath}' },
       examples: [
-        { scenario: 'order barcode', binding: { sourceId: 'order', fieldPath: 'orderNo' }, fieldStructure: { orderNo: 'string' } },
+        { scenario: 'order barcode', bindings: { value: { sourceId: 'order', fieldPath: 'orderNo' } }, fieldStructure: { orderNo: 'string' } },
       ],
     },
     sizing: { minWidth: 20, minHeight: 8, growAxis: 'none', defaultSize: { width: 50, height: 15 } },

@@ -23,4 +23,5 @@ export const svgCustomMaterialManifest = defineStandardMaterialManifest({
   viewerExtension: { render: renderSvgCustom },
   viewerCapabilities: { sanitizedMarkup: true },
   aiDescriptor: svgCustomAIMaterialDescriptor,
+  generation: { enabled: true, modelSchema: 'infer-from-default', bindingShape: 'infer-from-binding', examples: 'default-model', requiredModelPaths: ['/content'] },
 })

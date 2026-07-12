@@ -5,7 +5,7 @@ export const ratingAIMaterialDescriptor = {
   description: 'Character-based rating material for a preset 0-100 score or one bound scalar value.',
   properties: ['value', 'character', 'characterCount', 'characterSize', 'activeColor', 'backgroundColor'],
   requiredProps: ['value', 'character', 'characterCount', 'characterSize', 'activeColor', 'backgroundColor'],
-  binding: 'single',
+  bindings: 'single',
   usage: [
     'Use for rating, score, satisfaction, quality, or star-style scalar evaluations.',
     'Bind one numeric field to value when runtime data should drive the rating; leave unbound to show the preset value.',
@@ -24,7 +24,7 @@ export const ratingAIMaterialDescriptor = {
       accepts: { types: ['number', 'string'], isArray: false },
       produces: { kind: 'scalar-field', fieldCount: 'single', pathPattern: '{fieldPath}' },
       examples: [
-        { scenario: 'customer satisfaction score', binding: { sourceId: 'survey', fieldPath: 'satisfactionScore' }, fieldStructure: { satisfactionScore: 'number' } },
+        { scenario: 'customer satisfaction score', bindings: { value: { sourceId: 'survey', fieldPath: 'satisfactionScore' } }, fieldStructure: { satisfactionScore: 'number' } },
       ],
     },
     sizing: { minWidth: 12, minHeight: 4, growAxis: 'x', defaultSize: { width: 36, height: 8 } },

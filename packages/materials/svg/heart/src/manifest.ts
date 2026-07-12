@@ -22,4 +22,5 @@ export const svgHeartMaterialManifest = defineStandardMaterialManifest({
   localeMessages: svgHeartLocaleMessages,
   viewerExtension: { render: (node, context) => renderSvgHeart(node, context.unit) },
   aiDescriptor: svgHeartAIMaterialDescriptor,
+  generation: { enabled: true, modelSchema: 'infer-from-default', bindingShape: 'infer-from-binding', examples: 'default-model', requiredModelPaths: ['/fillColor'] },
 })

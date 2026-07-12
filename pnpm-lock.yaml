@@ -665,9 +665,6 @@ importers:
       '@easyink/core':
         specifier: workspace:*
         version: link:../core
-      '@easyink/icons':
-        specifier: workspace:*
-        version: link:../icons
       '@easyink/material-barcode':
         specifier: workspace:*
         version: link:../materials/barcode
@@ -752,9 +749,6 @@ importers:
       '@easyink/shared':
         specifier: workspace:*
         version: link:../shared
-      vue:
-        specifier: catalog:framework
-        version: 3.5.31(typescript@6.0.2)
 
   packages/core:
     dependencies:

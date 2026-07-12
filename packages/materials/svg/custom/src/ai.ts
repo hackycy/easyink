@@ -2,13 +2,13 @@ import type { AIMaterialDescriptor } from '@easyink/shared'
 
 export const svgCustomAIMaterialDescriptor = {
   type: 'svg-custom',
-  description: 'Custom SVG material that accepts a complete pasted <svg>, sanitized SVG child markup, or a bound remote SVG URL.',
+  description: 'Custom SVG material that accepts complete pasted <svg> documents or sanitized SVG child markup.',
   properties: ['content'],
   requiredProps: ['content'],
-  binding: 'single',
+  bindings: 'single',
   usage: [
     'Use this material only when the user needs to paste or generate raw SVG markup directly.',
-    'Bind this material when the data source provides raw SVG text or a remote SVG URL.',
+    'Bind this material only when the data source provides raw SVG text; remote SVG URLs are rejected by the Viewer.',
     'For built-in shapes such as star, ellipse, or heart, use the dedicated SVG shape materials instead of writing SVG content.',
   ],
   knowledge: {
@@ -24,8 +24,7 @@ export const svgCustomAIMaterialDescriptor = {
       accepts: { types: ['string'], isArray: false },
       produces: { kind: 'scalar-field', fieldCount: 'single', pathPattern: '{fieldPath}' },
       examples: [
-        { scenario: 'bound logo svg', binding: { sourceId: 'brand', fieldPath: 'logoSvg' }, fieldStructure: { logoSvg: 'string' } },
-        { scenario: 'bound remote svg url', binding: { sourceId: 'brand', fieldPath: 'logoSvgUrl' }, fieldStructure: { logoSvgUrl: 'string' } },
+        { scenario: 'bound logo svg', bindings: { value: { sourceId: 'brand', fieldPath: 'logoSvg' } }, fieldStructure: { logoSvg: 'string' } },
       ],
     },
     sizing: { minWidth: 10, minHeight: 10, aspectRatio: 'free', growAxis: 'none', defaultSize: { width: 30, height: 30 } },

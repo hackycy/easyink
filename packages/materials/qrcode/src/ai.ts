@@ -5,7 +5,7 @@ export const qrcodeAIMaterialDescriptor = {
   description: 'QR code generated from model.value or the canonical bindings.value port.',
   properties: ['value', 'size', 'errorCorrectionLevel', 'foreground', 'background', 'borderWidth', 'borderColor', 'borderType'],
   requiredProps: ['value', 'size', 'errorCorrectionLevel', 'foreground', 'background'],
-  binding: 'single',
+  bindings: 'single',
   usage: [
     'Use for payment URLs, receipt verification URLs, and label traceability links.',
     'Keep width and height equal for square codes.',
@@ -23,7 +23,7 @@ export const qrcodeAIMaterialDescriptor = {
       accepts: { types: ['string'], isArray: false },
       produces: { kind: 'scalar-field', fieldCount: 'single', pathPattern: '{fieldPath}' },
       examples: [
-        { scenario: 'payment QR', binding: { sourceId: 'receipt', fieldPath: 'paymentUrl' }, fieldStructure: { paymentUrl: 'string' } },
+        { scenario: 'payment QR', bindings: { value: { sourceId: 'receipt', fieldPath: 'paymentUrl' } }, fieldStructure: { paymentUrl: 'string' } },
       ],
     },
     sizing: { minWidth: 15, minHeight: 15, aspectRatio: 1, growAxis: 'none', defaultSize: { width: 20, height: 20 } },

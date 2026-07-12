@@ -24,4 +24,5 @@ export const chartScatterMaterialManifest = defineStandardMaterialManifest({
   viewerExtension: { render: renderChartScatter },
   viewerCapabilities: { sanitizedMarkup: true },
   aiDescriptor: chartScatterAIMaterialDescriptor,
+  generation: { enabled: true, modelSchema: 'infer-from-default', bindingShape: 'infer-from-binding', examples: 'default-model', requiredModelPaths: ['/symbolSize'] },
 })

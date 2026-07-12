@@ -16,55 +16,71 @@ export interface RenderTableTreeOptions {
   cellText: (cell: TableCellSchema, rowIndex: number, columnIndex: number) => string
   cellBackground?: (rowIndex: number) => string | undefined
   slotOutputs?: Readonly<Record<string, readonly ViewerRenderTree[]>>
+  canonicalRowIds?: readonly string[]
+  canonicalColumnIds?: readonly string[]
+  sourceRowKeys?: readonly string[]
 }
 
 export function renderTableTree(options: RenderTableTreeOptions): ViewerRenderTree {
   const { node, topology, props, unit } = options
   const model = getTableMaterialModel(node)
   const modelRows = model.bands.flatMap(band => band.rows)
+  const rowsById = new Map<string, (typeof modelRows)[number]>(modelRows.map(row => [row.id, row]))
   const scale = computeRowScaleWithVirtualRows(topology.rows, options.elementHeight)
   const headerIds = topology.columns.map((_, ci) => {
     const ri = topology.rows.findIndex(row => row.role === 'header')
-    return ri >= 0 ? cellId(node.id, modelRows[ri]?.cells[ci]?.id, ri, ci) : undefined
+    if (ri < 0)
+      return undefined
+    const canonicalRow = canonicalRowAt(ri)
+    const canonicalCell = canonicalCellAt(canonicalRow, ci)
+    return cellId(node.id, canonicalCell?.id, ri, ci)
   })
   const spanned = coveredCells(topology)
-  const rows = topology.rows.map((row, ri) => viewerElement('tr', {
-    attributes: { id: `${node.id}-row-${ri}` },
-    style: { height: `${row.height * scale}${unit}` },
-  }, row.cells.flatMap((cell, ci) => {
-    if (spanned.has(`${ri}:${ci}`))
-      return []
-    const canonical = modelRows[ri]?.cells[ci]
-    const id = cellId(node.id, canonical?.id, ri, ci)
-    const isHeader = row.role === 'header'
-    const tag = isHeader ? 'th' : 'td'
-    const colSpan = Math.max(1, cell.colSpan ?? 1)
-    const headers = headerIds.slice(ci, ci + colSpan).filter(Boolean).join(' ')
-    const typography = resolveCellTypography(cell, props.typography ?? TABLE_TYPOGRAPHY_DEFAULTS)
-    const slotId = canonical?.content.kind === 'materials' ? canonical.content.slotId : undefined
-    const children = slotId
-      ? [...(options.slotOutputs?.[`cell:${canonical.id}`] ?? options.slotOutputs?.[slotId] ?? [])]
-      : [viewerText(options.cellText(cell, ri, ci))]
-    return [viewerElement(tag, { attributes: {
-      id,
-      ...(isHeader ? { scope: 'col' } : headers ? { headers } : {}),
-      ...(cell.rowSpan && cell.rowSpan > 1 ? { rowspan: cell.rowSpan } : {}),
-      ...(cell.colSpan && cell.colSpan > 1 ? { colspan: cell.colSpan } : {}),
-    }, style: {
-      'box-sizing': 'border-box',
-      'padding': `${props.cellPadding ?? TABLE_BASE_DEFAULTS.cellPadding}${unit}`,
-      'border': `${props.borderWidth ?? TABLE_BASE_DEFAULTS.borderWidth}${unit} ${props.borderType || 'solid'} ${props.borderColor || '#000'}`,
-      'font-size': `${typography.fontSize}${unit}`,
-      'color': typography.color,
-      'font-weight': typography.fontWeight,
-      'font-style': typography.fontStyle,
-      'line-height': typography.lineHeight,
-      'letter-spacing': `${typography.letterSpacing}${unit}`,
-      'text-align': typography.textAlign,
-      'vertical-align': typography.verticalAlign,
-      ...(options.cellBackground?.(ri) ? { background: options.cellBackground(ri)! } : {}),
-    } }, children)]
-  })))
+  const rows = topology.rows.map((row, ri) => {
+    const canonicalRow = canonicalRowAt(ri)
+    const sourceRowKey = options.sourceRowKeys?.[ri]
+    const instanceKey = sourceRowKey && sourceRowKey !== canonicalRow?.id ? sourceRowKey : undefined
+    return viewerElement('tr', {
+      attributes: { id: `${node.id}-row-${stableDomToken(sourceRowKey ?? canonicalRow?.id ?? String(ri))}` },
+      style: { height: `${row.height * scale}${unit}` },
+    }, row.cells.flatMap((cell, ci) => {
+      if (spanned.has(`${ri}:${ci}`))
+        return []
+      const canonical = canonicalCellAt(canonicalRow, ci)
+      const id = cellId(node.id, canonical?.id, ri, ci, instanceKey)
+      const isHeader = row.role === 'header'
+      const tag = isHeader ? 'th' : 'td'
+      const colSpan = Math.max(1, cell.colSpan ?? 1)
+      const headers = headerIds.slice(ci, ci + colSpan).filter(Boolean).join(' ')
+      const typography = resolveCellTypography(cell, props.typography ?? TABLE_TYPOGRAPHY_DEFAULTS)
+      const slotId = canonical?.content.kind === 'materials' ? canonical.content.slotId : undefined
+      const canonicalSlotOutput = canonical
+        ? options.slotOutputs?.[`cell:${canonical.id}`]
+        : undefined
+      const children = slotId
+        ? [...(canonicalSlotOutput ?? options.slotOutputs?.[slotId] ?? [])]
+        : [viewerText(options.cellText(cell, ri, ci))]
+      return [viewerElement(tag, { attributes: {
+        id,
+        ...(isHeader ? { scope: 'col' } : headers ? { headers } : {}),
+        ...(cell.rowSpan && cell.rowSpan > 1 ? { rowspan: cell.rowSpan } : {}),
+        ...(cell.colSpan && cell.colSpan > 1 ? { colspan: cell.colSpan } : {}),
+      }, style: {
+        'box-sizing': 'border-box',
+        'padding': `${props.cellPadding ?? TABLE_BASE_DEFAULTS.cellPadding}${unit}`,
+        'border': `${props.borderWidth ?? TABLE_BASE_DEFAULTS.borderWidth}${unit} ${props.borderType || 'solid'} ${props.borderColor || '#000'}`,
+        'font-size': `${typography.fontSize}${unit}`,
+        'color': typography.color,
+        'font-weight': typography.fontWeight,
+        'font-style': typography.fontStyle,
+        'line-height': typography.lineHeight,
+        'letter-spacing': `${typography.letterSpacing}${unit}`,
+        'text-align': typography.textAlign,
+        'vertical-align': typography.verticalAlign,
+        ...(options.cellBackground?.(ri) ? { background: options.cellBackground(ri)! } : {}),
+      } }, children)]
+    }))
+  })
 
   const head = rowsByRole(rows, topology.rows, row => row.role === 'header')
   const foot = rowsByRole(rows, topology.rows, row => row.role === 'footer')
@@ -85,6 +101,18 @@ export function renderTableTree(options: RenderTableTreeOptions): ViewerRenderTr
     viewerElement('tbody', {}, body),
     ...(foot.length ? [viewerElement('tfoot', {}, foot)] : []),
   ])
+
+  function canonicalRowAt(rowIndex: number) {
+    const rowId = options.canonicalRowIds?.[rowIndex]
+    return rowId ? rowsById.get(rowId) : modelRows[rowIndex]
+  }
+
+  function canonicalCellAt(canonicalRow: (typeof modelRows)[number] | undefined, columnIndex: number) {
+    const columnId = options.canonicalColumnIds?.[columnIndex]
+    return columnId
+      ? canonicalRow?.cells.find(cell => cell.columnId === columnId)
+      : canonicalRow?.cells[columnIndex]
+  }
 }
 
 function rowsByRole(
@@ -108,6 +136,11 @@ function coveredCells(topology: TableTopologySchema): Set<string> {
   return covered
 }
 
-function cellId(nodeId: string, canonicalId: string | undefined, rowIndex: number, columnIndex: number): string {
-  return `${nodeId}-cell-${canonicalId || `${rowIndex}-${columnIndex}`}`
+function cellId(nodeId: string, canonicalId: string | undefined, rowIndex: number, columnIndex: number, instanceKey?: string): string {
+  const base = `${nodeId}-cell-${canonicalId || `${rowIndex}-${columnIndex}`}`
+  return instanceKey ? `${base}--${stableDomToken(instanceKey)}` : base
+}
+
+function stableDomToken(value: string): string {
+  return value.replace(/[^\w.-]/g, '_')
 }

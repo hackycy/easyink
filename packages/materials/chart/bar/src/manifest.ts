@@ -24,4 +24,5 @@ export const chartBarMaterialManifest = defineStandardMaterialManifest({
   viewerExtension: { render: renderChartBar },
   viewerCapabilities: { sanitizedMarkup: true },
   aiDescriptor: chartBarAIMaterialDescriptor,
+  generation: { enabled: true, modelSchema: 'infer-from-default', bindingShape: 'infer-from-binding', examples: 'default-model', requiredModelPaths: ['/backgroundColor'] },
 })

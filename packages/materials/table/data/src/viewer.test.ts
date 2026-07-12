@@ -1,8 +1,9 @@
+import type { ViewerElementTree, ViewerRenderTree } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
-import { createFragmentFromNode } from '@easyink/core'
+import { createFragmentFromNode, viewerText } from '@easyink/core'
 import { describe, expect, it } from 'vitest'
 import { createDefaultDataTableModel } from './schema'
-import { measureTableData, tableDataFragmentPaginator } from './viewer'
+import { measureTableData, renderTableData, tableDataFragmentPaginator } from './viewer'
 
 function createNode(): MaterialNode<unknown> {
   return {
@@ -46,4 +47,43 @@ describe('tableDataFragmentPaginator', () => {
     expect(result.nextPage!.node.id).toContain('__p1')
     expect(model).toEqual(before)
   })
+
+  it('reuses canonical detail slots for every expanded record without shifting footer identities', () => {
+    const node = createNode()
+    const model = node.model as ReturnType<typeof createDefaultDataTableModel>
+    const header = model.bands.find(band => band.role === 'header')!.rows[0]!
+    const detail = model.bands.find(band => band.role === 'detail')!.rows[0]!
+    const footer = model.bands.find(band => band.role === 'footer')!.rows[0]!
+    const hosted = detail.cells[0]!
+    hosted.content = { kind: 'materials', slotId: `cell:${hosted.id}` }
+    detail.cells[1]!.content = { kind: 'text', text: '', bindingPort: 'detail:name' }
+    node.bindings['detail:name'] = { sourceId: 'invoice', fieldPath: 'items/name' }
+
+    const output = renderTableData(node, {
+      data: { items: [{ name: 'A' }, { name: 'B' }] },
+      resolvedProps: {},
+      pageIndex: 0,
+      unit: 'mm',
+      zoom: 1,
+      capabilities: { sanitizeMarkup: () => { throw new Error('unused') } },
+      slotOutputs: { [`cell:${hosted.id}`]: [viewerText('HOSTED')] },
+    }).tree
+    const json = JSON.stringify(output)
+
+    expect(json.match(/HOSTED/g)).toHaveLength(2)
+    expect(findElements(output, 'td').filter(cell => String(cell.attributes.id).includes(hosted.id))).toHaveLength(2)
+    for (const cell of findElements(output, 'td').filter(cell => String(cell.attributes.id).includes(hosted.id)))
+      expect(cell.attributes.headers).toContain(header.cells[0]!.id)
+    for (const cell of footer.cells)
+      expect(json).toContain(`table-data-cell-${cell.id}`)
+  })
 })
+
+function findElements(tree: ViewerRenderTree, tag: string): ViewerElementTree[] {
+  if (tree.kind !== 'element')
+    return []
+  return [
+    ...(tree.tag === tag ? [tree] : []),
+    ...tree.children.flatMap(child => findElements(child, tag)),
+  ]
+}

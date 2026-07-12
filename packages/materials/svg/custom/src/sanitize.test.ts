@@ -1,5 +1,5 @@
 import type { SanitizedMarkup, ViewerElementTree, ViewerRenderContext } from '@easyink/core'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { svgCustomDesignerPropSchemas } from './prop-schemas'
 import { buildSvgCustomMarkup, isRemoteSvgSource } from './rendering'
 import { sanitizeSvgContent } from './sanitize'
@@ -165,7 +165,7 @@ describe('renderSvgCustom', () => {
     expect(output).not.toContain('onclick="alert')
   })
 
-  it('renders remote binding values as image sources', () => {
+  it('rejects remote SVG URLs without loading them', () => {
     const node = createSvgCustomNode({
       model: {
         content: 'https://cdn.example.com/logo.svg?version=1&theme=<dark>',
@@ -178,15 +178,31 @@ describe('renderSvgCustom', () => {
       pageIndex: 0,
       unit: 'mm',
       zoom: 1,
-      capabilities: { sanitizeMarkup: () => {
-        throw new Error('unexpected sanitizer')
-      } },
+      capabilities: { sanitizeMarkup: vi.fn() },
     } satisfies ViewerRenderContext
     const output = renderSvgCustom(node, context).tree as ViewerElementTree
 
-    expect(output.tag).toBe('img')
-    expect(output.attributes.src).toBe('https://cdn.example.com/logo.svg?version=1&theme=<dark>')
-    expect(output.style['object-fit']).toBe('fill')
+    expect(output.tag).toBe('div')
+    expect(JSON.stringify(output)).not.toContain('cdn.example.com')
+    expect(JSON.stringify(output)).not.toContain('"tag":"img"')
+    expect(context.capabilities.sanitizeMarkup).not.toHaveBeenCalled()
+  })
+
+  it('fails closed when sanitized markup capability is unavailable', () => {
+    const node = createSvgCustomNode({ model: { content: '<circle r="5" />' } })
+    const context = {
+      data: {},
+      resolvedProps: {},
+      pageIndex: 0,
+      unit: 'mm',
+      zoom: 1,
+      capabilities: { sanitizeMarkup: () => { throw new Error('capability unavailable') } },
+    } satisfies ViewerRenderContext
+
+    expect(() => renderSvgCustom(node, context)).not.toThrow()
+    const output = renderSvgCustom(node, context).tree as ViewerElementTree
+    expect(output.tag).toBe('div')
+    expect(JSON.stringify(output)).not.toContain('circle')
   })
 
   it('keeps bound svg text on the sanitized inline svg path', () => {

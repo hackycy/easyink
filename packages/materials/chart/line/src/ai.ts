@@ -5,10 +5,10 @@ export const chartLineAIMaterialDescriptor = {
   description: 'Simple line chart for showing numeric trends from a material data contract target model: category field and value field mapped from source paths by relation resolver.',
   properties: ['lineColor', 'pointColor', 'backgroundColor', 'axisColor', 'labelColor', 'showValueLabels', 'showGrid', 'showXAxisLabel', 'showYAxisLabel', 'showXAxisLine', 'showYAxisLine', 'showPoints', 'smooth'],
   requiredProps: ['lineColor'],
-  binding: 'data-contract',
+  bindings: 'data-contract',
   usage: [
     'Use chart-line for small report charts where ordered categories show a numeric trend.',
-    'Use data-contract binding mappings: mappings.category selects the category source path and mappings.value selects the numeric value source path.',
+    'Use bindings.value data-contract mappings: mappings.category selects the category source path and mappings.value selects the numeric value source path.',
     'The resolver derives whether mappings share a record collection or should be aligned by index.',
     'Chart-line projects ordinary business fields into ordered chart points.',
     'Designer preview uses built-in sample data only.',
@@ -35,13 +35,15 @@ export const chartLineAIMaterialDescriptor = {
       examples: [
         {
           scenario: 'monthly trend',
-          binding: {
-            kind: 'data-contract',
-            mappings: {
-              category: { sourceId: 'report', select: { path: 'monthlySales/month' } },
-              value: { sourceId: 'report', select: { path: 'monthlySales/revenue' } },
+          bindings: {
+            value: {
+              kind: 'data-contract',
+              mappings: {
+                category: { sourceId: 'report', select: { path: 'monthlySales/month' } },
+                value: { sourceId: 'report', select: { path: 'monthlySales/revenue' } },
+              },
+              relation: { kind: 'auto' },
             },
-            relation: { kind: 'auto' },
           },
           fieldStructure: { monthlySales: [{ month: 'string', revenue: 'number' }] },
         },

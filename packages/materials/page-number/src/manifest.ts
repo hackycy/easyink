@@ -22,4 +22,5 @@ export const pageNumberMaterialManifest = defineStandardMaterialManifest({
   localeMessages: pageNumberLocaleMessages,
   viewerExtension: { render: renderPageNumber },
   aiDescriptor: pageNumberAIMaterialDescriptor,
+  generation: { enabled: true, modelSchema: 'infer-from-default', bindingShape: 'infer-from-binding', examples: 'default-model', requiredModelPaths: ['/format'] },
 })

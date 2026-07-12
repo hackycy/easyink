@@ -23,14 +23,20 @@ export const chartCustomMaterialManifest = defineStandardMaterialManifest({
   viewerExtension: { render: renderChartCustom },
   viewerCapabilities: { sanitizedMarkup: true },
   aiDescriptor: chartCustomAIMaterialDescriptor,
-  modelSchema: {
-    type: 'object',
-    required: ['optionCode', 'option', 'backgroundColor'],
-    properties: {
-      optionCode: { type: 'string' },
-      option: {},
-      backgroundColor: { type: 'string' },
+  generation: {
+    enabled: true,
+    modelSchema: {
+      type: 'object',
+      required: ['optionCode', 'option', 'backgroundColor'],
+      properties: {
+        optionCode: { type: 'string' },
+        option: {},
+        backgroundColor: { type: 'string' },
+      },
+      additionalProperties: false,
     },
-    additionalProperties: false,
+    bindingShape: 'infer-from-binding',
+    examples: 'default-model',
+    requiredModelPaths: ['/option'],
   },
 })

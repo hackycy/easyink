@@ -24,4 +24,5 @@ export const qrcodeMaterialManifest = defineStandardMaterialManifest({
   viewerExtension: { render: renderQrcode },
   viewerCapabilities: { sanitizedMarkup: true },
   aiDescriptor: qrcodeAIMaterialDescriptor,
+  generation: { enabled: true, modelSchema: 'infer-from-default', bindingShape: 'infer-from-binding', examples: 'default-model', requiredModelPaths: ['/value'] },
 })

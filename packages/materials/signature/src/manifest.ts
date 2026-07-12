@@ -24,4 +24,5 @@ export const signatureMaterialManifest = defineStandardMaterialManifest({
   viewerExtension: { render: renderSignature },
   viewerCapabilities: { sanitizedMarkup: true },
   aiDescriptor: signatureAIMaterialDescriptor,
+  generation: { enabled: true, modelSchema: 'infer-from-default', bindingShape: 'infer-from-binding', examples: 'default-model', requiredModelPaths: ['/data'] },
 })

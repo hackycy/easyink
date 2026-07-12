@@ -5,7 +5,7 @@ export const signatureAIMaterialDescriptor = {
   description: 'Handwritten signature pad that stores internal stroke data and renders as SVG.',
   properties: ['backgroundColor', 'penColor'],
   requiredProps: ['backgroundColor', 'penColor'],
-  binding: 'none',
+  bindings: 'none',
   usage: [
     'Use for signature areas and handwritten approval fields.',
     'Do not bind signature to a data source; stroke data is material-internal.',

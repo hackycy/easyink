@@ -23,4 +23,5 @@ export const lineMaterialManifest = defineStandardMaterialManifest({
   localeMessages: lineLocaleMessages,
   viewerExtension: createLineViewerExtension(),
   aiDescriptor: lineAIMaterialDescriptor,
+  generation: { enabled: true, modelSchema: 'infer-from-default', bindingShape: 'infer-from-binding', examples: 'default-model', requiredModelPaths: ['/lineColor'] },
 })

@@ -23,4 +23,5 @@ export const ellipseMaterialManifest = defineStandardMaterialManifest({
   localeMessages: ellipseLocaleMessages,
   viewerExtension: { render: (node, context) => renderEllipse(node, context.unit) },
   aiDescriptor: ellipseAIMaterialDescriptor,
+  generation: { enabled: true, modelSchema: 'infer-from-default', bindingShape: 'infer-from-binding', examples: 'default-model', requiredModelPaths: ['/fillColor'] },
 })

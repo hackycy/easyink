@@ -23,4 +23,5 @@ export const rectMaterialManifest = defineStandardMaterialManifest({
   localeMessages: rectLocaleMessages,
   viewerExtension: { render: (node, context) => renderRect(node, context.unit) },
   aiDescriptor: rectAIMaterialDescriptor,
+  generation: { enabled: true, modelSchema: 'infer-from-default', bindingShape: 'infer-from-binding', examples: 'default-model', requiredModelPaths: ['/fillColor'] },
 })

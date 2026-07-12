@@ -70,7 +70,7 @@ export interface BindingShape {
 
 export interface BindingExample {
   scenario: string
-  binding: Record<string, unknown>
+  bindings: Record<string, unknown>
   fieldStructure: Record<string, unknown>
 }
 

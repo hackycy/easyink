@@ -94,25 +94,25 @@ function synthesizeFromDescriptor(type: string, ai: AIMaterialDescriptor): Mater
       preferredCompanions: [],
     },
     bindingSpec: {
-      mode: ai.binding === 'data-contract' || ai.binding === 'multi'
+      mode: ai.bindings === 'data-contract' || ai.bindings === 'multi'
         ? 'collection'
-        : ai.binding === 'single'
+        : ai.bindings === 'single'
           ? 'scalar'
           : 'none',
       accepts: {
-        types: ai.binding === 'data-contract' || ai.binding === 'multi'
+        types: ai.bindings === 'data-contract' || ai.bindings === 'multi'
           ? ['array']
-          : ai.binding === 'single'
+          : ai.bindings === 'single'
             ? ['string']
             : [],
-        isArray: ai.binding === 'data-contract' || ai.binding === 'multi',
+        isArray: ai.bindings === 'data-contract' || ai.bindings === 'multi',
       },
       produces: {
-        kind: ai.binding === 'data-contract'
+        kind: ai.bindings === 'data-contract'
           ? 'multi-field'
-          : ai.binding === 'multi'
+          : ai.bindings === 'multi'
             ? 'collection-repeat'
-            : ai.binding === 'single'
+            : ai.bindings === 'single'
               ? 'scalar-field'
               : 'none',
       },

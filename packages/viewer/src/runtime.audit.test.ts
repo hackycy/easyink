@@ -171,7 +171,7 @@ describe('viewer audit risk regressions', () => {
     expect(container.textContent).toContain('42')
   })
 
-  it('projects bound remote svg urls into the custom svg renderer', async () => {
+  it('does not project bound remote svg urls into image loads', async () => {
     const container = document.createElement('div')
     const viewer = createViewer({ container })
 
@@ -184,10 +184,8 @@ describe('viewer audit risk regressions', () => {
       },
     })
 
-    const image = container.querySelector('[data-element-id="logo"] img')
-
-    expect(image).not.toBeNull()
-    expect(image?.getAttribute('src')).toBe('https://cdn.example.com/logo.svg?version=1&theme=dark')
+    expect(container.querySelector('[data-element-id="logo"] img')).toBeNull()
+    expect(container.innerHTML).not.toContain('cdn.example.com')
   })
 
   it('projects bound svg text into the sanitized custom svg renderer', async () => {

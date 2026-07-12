@@ -22,4 +22,5 @@ export const svgStarMaterialManifest = defineStandardMaterialManifest({
   localeMessages: svgStarLocaleMessages,
   viewerExtension: { render: renderSvgStar },
   aiDescriptor: svgStarAIMaterialDescriptor,
+  generation: { enabled: true, modelSchema: 'infer-from-default', bindingShape: 'infer-from-binding', examples: 'default-model', requiredModelPaths: ['/fillColor'] },
 })

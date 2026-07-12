@@ -5,11 +5,11 @@ export const chartCustomAIMaterialDescriptor = {
   description: 'Custom ECharts material for advanced chart option code or a bound option object/JSON string.',
   properties: ['optionCode', 'backgroundColor'],
   requiredProps: [],
-  binding: 'single',
+  bindings: 'single',
   usage: [
     'Use chart-custom only when built-in chart materials cannot express the requested chart.',
     'Use model.optionCode for trusted JavaScript that returns an ECharts option when no datasource field is bound.',
-    'Use ordinary binding to bind a datasource field that already returns an ECharts option object or JSON string.',
+    'Use bindings.value for a datasource field that already returns an ECharts option object or JSON string.',
     'When bindings.value exists, its datasource option takes precedence over model.optionCode.',
     'Do not use chart-custom for simple bar, line, pie, radar, scatter, or gauge charts when a dedicated material fits.',
   ],
@@ -33,7 +33,7 @@ export const chartCustomAIMaterialDescriptor = {
       examples: [
         {
           scenario: 'precomputed chart option',
-          binding: { sourceId: 'report', fieldPath: 'echartsOption' },
+          bindings: { value: { sourceId: 'report', fieldPath: 'echartsOption' } },
           fieldStructure: { echartsOption: 'object' },
         },
       ],

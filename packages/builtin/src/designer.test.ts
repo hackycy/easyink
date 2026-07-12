@@ -1,14 +1,21 @@
+import fs from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { builtinAllMaterialPackage, builtinCatalogGroupLabels, builtinMaterialIcons } from './index'
 
-describe('builtin Designer host metadata', () => {
-  it('resolves every manifest icon independently from facet semantics', () => {
-    for (const manifest of builtinAllMaterialPackage.manifests)
-      expect(builtinMaterialIcons[manifest.common.iconKey], manifest.type).toBeDefined()
-  })
+describe('builtin framework-neutral boundary', () => {
+  it('does not depend on Vue or icon components', () => {
+    const packageRoot = path.resolve(import.meta.dirname, '..')
+    const packageJson = JSON.parse(fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf8')) as {
+      dependencies?: Record<string, string>
+      peerDependencies?: Record<string, string>
+    }
+    const source = fs.readdirSync(path.join(packageRoot, 'src'))
+      .filter(file => file.endsWith('.ts'))
+      .map(file => fs.readFileSync(path.join(packageRoot, 'src', file), 'utf8'))
+      .join('\n')
 
-  it('resolves every catalog group label independently', () => {
-    for (const manifest of builtinAllMaterialPackage.manifests)
-      expect(builtinCatalogGroupLabels[manifest.facets.designer ? manifest.common.category as keyof typeof builtinCatalogGroupLabels : 'basic']).toBeDefined()
+    expect(packageJson.dependencies ?? {}).not.toHaveProperty('@easyink/icons')
+    expect(packageJson.peerDependencies ?? {}).not.toHaveProperty('vue')
+    expect(source).not.toMatch(/from ['"](?:vue|@easyink\/icons)['"]/)
   })
 })

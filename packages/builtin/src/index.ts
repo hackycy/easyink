@@ -1,33 +1,5 @@
 import type { CompiledMaterialProfile, MaterialPackageRegistration } from '@easyink/core'
-import type { Component } from 'vue'
 import { compileMaterialProfile, EASYINK_ENGINE_VERSION } from '@easyink/core'
-import {
-  IconBarcode,
-  IconChartBar,
-  IconChartCustom,
-  IconChartGauge,
-  IconChartLine,
-  IconChartPie,
-  IconChartRadar,
-  IconChartScatter,
-  IconDataTable,
-  IconEllipse,
-  IconHeart,
-  IconImage,
-  IconLayoutPanelTop,
-  IconLine,
-  IconPageNumber,
-  IconProgress,
-  IconQrcode,
-  IconRating,
-  IconRect,
-  IconRingProgress,
-  IconSignature,
-  IconStar,
-  IconSvg,
-  IconTable,
-  IconText,
-} from '@easyink/icons'
 import { barcodeMaterialManifest } from '@easyink/material-barcode'
 import { chartBarMaterialManifest } from '@easyink/material-chart-bar'
 import { chartCustomMaterialManifest } from '@easyink/material-chart-custom'
@@ -114,39 +86,3 @@ export function getBuiltinMaterialPackage(set: 'basic' | 'all' | 'none'): Materi
 export function compileBuiltinMaterialProfile(set: 'basic' | 'all' | 'none', engineVersion = EASYINK_ENGINE_VERSION): CompiledMaterialProfile {
   return compileMaterialProfile({ id: `builtin:${set}`, engineVersion, packages: [getBuiltinMaterialPackage(set)] })
 }
-
-export const builtinMaterialIcons: Readonly<Record<string, Component>> = Object.freeze({
-  'text': IconText,
-  'image': IconImage,
-  'barcode': IconBarcode,
-  'qrcode': IconQrcode,
-  'line': IconLine,
-  'rect': IconRect,
-  'ellipse': IconEllipse,
-  'table': IconTable,
-  'table-data': IconDataTable,
-  'flow-row': IconLayoutPanelTop,
-  'ring-progress': IconRingProgress,
-  'progress': IconProgress,
-  'rating': IconRating,
-  'svg-custom': IconSvg,
-  'svg-star': IconStar,
-  'svg-heart': IconHeart,
-  'page-number': IconPageNumber,
-  'signature': IconSignature,
-  'chart-bar': IconChartBar,
-  'chart-line': IconChartLine,
-  'chart-pie': IconChartPie,
-  'chart-radar': IconChartRadar,
-  'chart-scatter': IconChartScatter,
-  'chart-gauge': IconChartGauge,
-  'chart-custom': IconChartCustom,
-})
-
-export const builtinCatalogGroupLabels = Object.freeze({
-  basic: 'materials.catalog.basic',
-  data: 'materials.catalog.data',
-  chart: 'materials.catalog.chart',
-  svg: 'materials.catalog.svg',
-  utility: 'materials.catalog.utility',
-})

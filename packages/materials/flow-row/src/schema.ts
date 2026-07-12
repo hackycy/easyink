@@ -39,10 +39,10 @@ export const FLOW_ROW_TYPOGRAPHY_DEFAULTS: TableTypography = {
 }
 
 export const FLOW_ROW_DEFAULT_COLUMNS: FlowColumnDef[] = [
-  { id: 'default-1', ratio: 0.44, textAlign: 'left', verticalAlign: 'middle', wrapMode: 'block', content: '商品名称' },
-  { id: 'default-2', ratio: 0.12, textAlign: 'center', verticalAlign: 'middle', wrapMode: 'inline', content: '1' },
-  { id: 'default-3', ratio: 0.20, textAlign: 'right', verticalAlign: 'middle', wrapMode: 'inline', content: '12.00' },
-  { id: 'default-4', ratio: 0.24, textAlign: 'right', verticalAlign: 'middle', wrapMode: 'inline', content: '12.00' },
+  { id: 'default-0', ratio: 0.44, textAlign: 'left', verticalAlign: 'middle', wrapMode: 'block', content: '商品名称' },
+  { id: 'default-1', ratio: 0.12, textAlign: 'center', verticalAlign: 'middle', wrapMode: 'inline', content: '1' },
+  { id: 'default-2', ratio: 0.20, textAlign: 'right', verticalAlign: 'middle', wrapMode: 'inline', content: '12.00' },
+  { id: 'default-3', ratio: 0.24, textAlign: 'right', verticalAlign: 'middle', wrapMode: 'inline', content: '12.00' },
 ]
 
 export const FLOW_ROW_DEFAULTS: FlowRowProps = {
@@ -66,7 +66,7 @@ export const FLOW_ROW_CAPABILITIES = {
 
 export function cloneFlowColumns(columns: readonly FlowColumnDef[]): FlowColumnDef[] {
   return columns.map((column, index) => ({
-    id: column.id || `default-${index + 1}`,
+    id: column.id || `default-${index}`,
     ratio: column.ratio,
     textAlign: column.textAlign,
     ...(column.verticalAlign !== undefined ? { verticalAlign: column.verticalAlign } : {}),

@@ -5,10 +5,10 @@ export const chartGaugeAIMaterialDescriptor = {
   description: 'Single-value gauge chart for showing progress, score, completion, utilization, or other KPI values from a material data contract target model: required value field plus optional name, unit, and color fields mapped from source paths.',
   properties: ['minValue', 'maxValue', 'defaultName', 'defaultUnit', 'progressColor', 'trackColor', 'pointerColor', 'backgroundColor', 'labelColor', 'showPointer', 'showProgress', 'showTitle', 'showValue'],
   requiredProps: ['minValue', 'maxValue'],
-  binding: 'data-contract',
+  bindings: 'data-contract',
   usage: [
     'Use chart-gauge for one current KPI value such as completion rate, quality score, utilization, SLA progress, or quota attainment.',
-    'Use data-contract binding mappings: mappings.value selects the numeric source path.',
+    'Use bindings.value data-contract mappings: mappings.value selects the numeric source path.',
     'Use optional mappings.name to override the title, mappings.unit to override the unit suffix, and mappings.color to override the progress color with a safe CSS color.',
     'Scalar numeric fields are accepted for single KPI values; collection bindings use the first valid resolved record.',
     'Set minValue and maxValue to the meaningful gauge domain, commonly 0 and 100 for percentages.',
@@ -35,15 +35,17 @@ export const chartGaugeAIMaterialDescriptor = {
       examples: [
         {
           scenario: 'completion KPI',
-          binding: {
-            kind: 'data-contract',
-            mappings: {
-              value: { sourceId: 'report', select: { path: 'metrics/completion' } },
-              name: { sourceId: 'report', select: { path: 'metrics/title' } },
-              unit: { sourceId: 'report', select: { path: 'metrics/unit' } },
-              color: { sourceId: 'report', select: { path: 'metrics/color' } },
+          bindings: {
+            value: {
+              kind: 'data-contract',
+              mappings: {
+                value: { sourceId: 'report', select: { path: 'metrics/completion' } },
+                name: { sourceId: 'report', select: { path: 'metrics/title' } },
+                unit: { sourceId: 'report', select: { path: 'metrics/unit' } },
+                color: { sourceId: 'report', select: { path: 'metrics/color' } },
+              },
+              relation: { kind: 'auto' },
             },
-            relation: { kind: 'auto' },
           },
           fieldStructure: { metrics: { completion: 'number', title: 'string', unit: 'string', color: 'string' } },
         },

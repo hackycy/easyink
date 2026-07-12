@@ -24,4 +24,5 @@ export const chartLineMaterialManifest = defineStandardMaterialManifest({
   viewerExtension: { render: renderChartLine },
   viewerCapabilities: { sanitizedMarkup: true },
   aiDescriptor: chartLineAIMaterialDescriptor,
+  generation: { enabled: true, modelSchema: 'infer-from-default', bindingShape: 'infer-from-binding', examples: 'default-model', requiredModelPaths: ['/backgroundColor'] },
 })

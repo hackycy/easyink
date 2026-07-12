@@ -662,7 +662,7 @@ function validateEntries(
     }
     seen.add(key)
   }
-  introspection.identities.forEach(entry => check('identity', entry, ['/id', '/model', '/slots']))
+  introspection.identities.forEach(entry => check('identity', entry, ['/id', '/model', '/bindings', '/slots']))
   introspection.references.forEach(entry => check('reference', entry, ['/model', '/bindings', '/slots']))
   introspection.resources.forEach(entry => check('resource', entry, ['/model', '/bindings', '/slots']))
   introspection.bindings.forEach(entry => check('binding', entry, ['/bindings']))

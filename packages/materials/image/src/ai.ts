@@ -5,7 +5,7 @@ export const imageAIMaterialDescriptor = {
   description: 'Image block for logos, product images, stamps, and externally supplied image URLs.',
   properties: ['src', 'fit', 'alt', 'backgroundColor', 'borderWidth', 'borderColor', 'borderType'],
   requiredProps: ['src', 'fit', 'alt'],
-  binding: 'single',
+  bindings: 'single',
   usage: [
     'Use fit contain for logos and cover for cropped photos.',
     'Bind image fields only when the data source provides an image URL.',
@@ -23,7 +23,7 @@ export const imageAIMaterialDescriptor = {
       accepts: { types: ['image-url', 'string'], isArray: false },
       produces: { kind: 'scalar-field', fieldCount: 'single', pathPattern: '{fieldPath}' },
       examples: [
-        { scenario: 'company logo', binding: { sourceId: 'company', fieldPath: 'logoUrl' }, fieldStructure: { logoUrl: 'string' } },
+        { scenario: 'company logo', bindings: { src: { sourceId: 'company', fieldPath: 'logoUrl' } }, fieldStructure: { logoUrl: 'string' } },
       ],
     },
     sizing: { minWidth: 8, minHeight: 8, aspectRatio: 'free', growAxis: 'none', defaultSize: { width: 25, height: 25 } },

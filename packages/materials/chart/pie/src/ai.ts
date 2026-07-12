@@ -5,10 +5,10 @@ export const chartPieAIMaterialDescriptor = {
   description: 'Simple pie chart for showing how category values contribute to a whole from a material data contract target model: category field, value field, and optional per-record color field mapped from source paths by relation resolver.',
   properties: ['palettePreset', 'backgroundColor', 'labelColor', 'showValueLabels', 'showLegend', 'innerRadiusPercent', 'sectorGapAngle', 'sectorCornerRadius'],
   requiredProps: ['palettePreset'],
-  binding: 'data-contract',
+  bindings: 'data-contract',
   usage: [
     'Use chart-pie for compact share-of-total visualizations where categories add up to a meaningful whole.',
-    'Use data-contract binding mappings: mappings.category selects the category source path and mappings.value selects the numeric value source path.',
+    'Use bindings.value data-contract mappings: mappings.category selects the category source path and mappings.value selects the numeric value source path.',
     'Use optional mappings.color when source data carries a per-slice CSS color such as #2f80ed; otherwise chart-pie uses the selected system palette.',
     'The resolver derives whether mappings share a record collection or should be aligned by index.',
     'Choose palettePreset from product, primer, atlassian, spectrum, mint, sunset, aurora, earth, or mono for system-managed colors.',
@@ -38,14 +38,16 @@ export const chartPieAIMaterialDescriptor = {
       examples: [
         {
           scenario: 'expense split',
-          binding: {
-            kind: 'data-contract',
-            mappings: {
-              category: { sourceId: 'report', select: { path: 'expenses/type' } },
-              value: { sourceId: 'report', select: { path: 'expenses/amount' } },
-              color: { sourceId: 'report', select: { path: 'expenses/color' } },
+          bindings: {
+            value: {
+              kind: 'data-contract',
+              mappings: {
+                category: { sourceId: 'report', select: { path: 'expenses/type' } },
+                value: { sourceId: 'report', select: { path: 'expenses/amount' } },
+                color: { sourceId: 'report', select: { path: 'expenses/color' } },
+              },
+              relation: { kind: 'auto' },
             },
-            relation: { kind: 'auto' },
           },
           fieldStructure: { expenses: [{ type: 'string', amount: 'number', color: 'string' }] },
         },

@@ -24,4 +24,5 @@ export const chartGaugeMaterialManifest = defineStandardMaterialManifest({
   viewerExtension: { render: renderChartGauge },
   viewerCapabilities: { sanitizedMarkup: true },
   aiDescriptor: chartGaugeAIMaterialDescriptor,
+  generation: { enabled: true, modelSchema: 'infer-from-default', bindingShape: 'infer-from-binding', examples: 'default-model', requiredModelPaths: ['/minValue', '/maxValue'] },
 })

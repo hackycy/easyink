@@ -5,10 +5,10 @@ export const chartBarAIMaterialDescriptor = {
   description: 'Simple bar chart for comparing numeric values from a material data contract target model: category field and value field mapped from source paths by relation resolver.',
   properties: ['barColor', 'backgroundColor', 'axisColor', 'labelColor', 'showValueLabels', 'showGrid', 'showXAxisLabel', 'showYAxisLabel', 'showXAxisLine', 'showYAxisLine'],
   requiredProps: ['barColor'],
-  binding: 'data-contract',
+  bindings: 'data-contract',
   usage: [
     'Use chart-bar for small report charts where categories compare numeric values.',
-    'Use data-contract binding mappings: mappings.category selects the category source path and mappings.value selects the numeric value source path.',
+    'Use bindings.value data-contract mappings: mappings.category selects the category source path and mappings.value selects the numeric value source path.',
     'The resolver derives whether mappings share a record collection or should be aligned by index.',
     'Chart-bar projects ordinary business fields into chart points.',
     'Designer preview uses built-in sample data only.',
@@ -34,13 +34,15 @@ export const chartBarAIMaterialDescriptor = {
       examples: [
         {
           scenario: 'monthly sales',
-          binding: {
-            kind: 'data-contract',
-            mappings: {
-              category: { sourceId: 'report', select: { path: 'monthlySales/month' } },
-              value: { sourceId: 'report', select: { path: 'monthlySales/revenue' } },
+          bindings: {
+            value: {
+              kind: 'data-contract',
+              mappings: {
+                category: { sourceId: 'report', select: { path: 'monthlySales/month' } },
+                value: { sourceId: 'report', select: { path: 'monthlySales/revenue' } },
+              },
+              relation: { kind: 'auto' },
             },
-            relation: { kind: 'auto' },
           },
           fieldStructure: { monthlySales: [{ month: 'string', revenue: 'number' }] },
         },

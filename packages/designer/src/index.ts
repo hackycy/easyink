@@ -11,6 +11,7 @@ export type {
   ToolbarActionDescriptor,
 } from './contributions'
 export { DesignerInteractionService } from './interactions'
+export { builtinCatalogGroupLabels, builtinMaterialIcons } from './material-host'
 export { registerMaterialBundle, tableSectionFilter } from './materials/registry'
 export type {
   DesignerCatalogGroupRegistration,

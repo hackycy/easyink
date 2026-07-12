@@ -134,7 +134,7 @@ export const AssistantAIMaterialDescriptorSchema = z.object({
   description: z.string(),
   properties: z.array(z.string()),
   requiredProps: z.array(z.string()).optional(),
-  binding: z.enum(['none', 'single', 'multi', 'data-contract']).optional(),
+  bindings: z.enum(['none', 'single', 'multi', 'data-contract']).optional(),
   usage: z.array(z.string()).optional(),
   schemaRules: z.array(z.string()).optional(),
   examples: z.array(z.record(z.unknown())).optional(),
@@ -161,7 +161,7 @@ export const AssistantAIMaterialDescriptorSchema = z.object({
       }),
       examples: z.array(z.object({
         scenario: z.string(),
-        binding: z.record(z.unknown()),
+        bindings: z.record(z.unknown()),
         fieldStructure: z.record(z.unknown()),
       })).optional(),
     }),
