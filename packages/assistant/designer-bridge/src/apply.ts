@@ -54,7 +54,7 @@ export function applySelectedAssistantElementsToDesigner(
   store: ContributionContext['store'],
   operations: AssistantPatchOperation[],
 ): boolean {
-  const selectedOperations = selectAssistantPatchOperationsForElements(operations, store.schema, store.selection.ids)
+  const selectedOperations = selectAssistantPatchOperationsForElements(operations, store.schema, [...store.selection.ids])
   return applyAssistantPatchToDesigner(store, selectedOperations)
 }
 
