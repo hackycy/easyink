@@ -83,6 +83,7 @@ export function createTableCellDecorationComponent(delegate: TableEditingDelegat
       })
 
       const editText = ref('')
+      const editTextarea = ref<HTMLTextAreaElement | null>(null)
       const activeEditTarget = ref<TableCellPayload | null>(null)
       const disposeSelectionInvalidation = props.session.onSelectionInvalidated?.((event) => {
         if (event.reason === 'identity-changed')
@@ -215,6 +216,9 @@ export function createTableCellDecorationComponent(delegate: TableEditingDelegat
 
       function cancelEdit() {
         activeEditTarget.value = null
+        editText.value = ''
+        if (editTextarea.value)
+          editTextarea.value.value = ''
         props.session.clearMeta('editingCell')
       }
 
@@ -382,9 +386,8 @@ export function createTableCellDecorationComponent(delegate: TableEditingDelegat
         if (isEditingThis.value) {
           children.push(h('textarea', {
             ref: (el: unknown) => {
-              if (el) {
-                (el as HTMLTextAreaElement).focus()
-              }
+              editTextarea.value = el as HTMLTextAreaElement | null
+              editTextarea.value?.focus()
             },
             value: editText.value,
             onInput: (e: Event) => {

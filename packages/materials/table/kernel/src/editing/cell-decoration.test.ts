@@ -123,6 +123,7 @@ describe('table cell decoration edit lifecycle', () => {
     const header = getTableMaterialModel(node).bands[0]!
     applyTableTopologyResultToNode(node, TableTopologyEngine.removeBand(getTableMaterialModel(node), header.id))
     invalidateSelectionIdentity()
+    expect(mounted.textarea.value).toBe('')
     await nextTick()
 
     const detailCell = getTableMaterialModel(node).bands[0]!.rows[0]!.cells[0]!
