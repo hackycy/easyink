@@ -11,7 +11,8 @@ describe('builtin material conformance', () => {
       let capabilities: BrowserDomCapabilities | undefined
       await assertMaterialConformance(manifest, {
         hardTimeoutExecutor: {
-          execute: (hook, args, timeoutMs) => runInNewContext('hook(...args)', { args, hook }, { timeout: timeoutMs }),
+          capabilities: { sync: 'hard-terminable' },
+          executeSync: (hook, args, timeoutMs) => runInNewContext('hook(...args)', { args, hook }, { timeout: timeoutMs }),
         },
         createRenderCapabilities: (facet) => {
           capabilities = createBrowserDomCapabilities({

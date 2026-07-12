@@ -2,7 +2,7 @@ import type { MaterialBindingDefinition } from '../material-binding'
 import type { MaterialAIFacet, MaterialFacetFactory, MaterialManifest, MaterialStructureSlotPolicy } from '../material-manifest'
 import type { PropertyDescriptor } from '../material-properties'
 import type { SchemaAdapter } from '../schema-adapter'
-import { defineMaterialManifest } from '../material-manifest'
+import { defineMaterialFacetFactory, defineMaterialManifest } from '../material-manifest'
 import { compileMaterialProfile } from '../material-profile'
 import { recordSchemaAdapter } from '../schema-adapter'
 
@@ -36,8 +36,12 @@ export function createTestMaterialManifest(options: {
     },
     schemaAdapter: options.schemaAdapter ?? recordSchemaAdapter(1),
     facets: {
-      designer: typeof options.designer === 'function' ? options.designer : options.designer ? async () => ({}) : undefined,
-      viewer: typeof options.viewer === 'function' ? options.viewer : options.viewer === false ? undefined : async () => ({}),
+      designer: typeof options.designer === 'function'
+        ? markTestFactory(options.designer)
+        : options.designer ? defineMaterialFacetFactory('sync', () => ({})) : undefined,
+      viewer: typeof options.viewer === 'function'
+        ? markTestFactory(options.viewer)
+        : options.viewer === false ? undefined : defineMaterialFacetFactory('sync', () => ({})),
       ai: typeof options.ai === 'object'
         ? options.ai
         : options.ai
@@ -45,6 +49,13 @@ export function createTestMaterialManifest(options: {
           : undefined,
     },
   })
+}
+
+function markTestFactory<T>(factory: MaterialFacetFactory<T>): MaterialFacetFactory<T> {
+  if (factory.activationMode)
+    return factory
+  const mode = factory.constructor.name === 'AsyncFunction' ? 'async-isolated' : 'sync'
+  return defineMaterialFacetFactory(mode, factory)
 }
 
 export function createTestCompiledMaterialProfile(manifests: readonly MaterialManifest[] = []) {

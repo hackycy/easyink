@@ -7,7 +7,7 @@ import type { MaterialAIFacet, MaterialLayoutFacet, MaterialStructureFacet } fro
 import type { PropertyDescriptor } from './material-properties'
 import type { MaterialViewerExtension, MaterialViewerFacet, ViewerFacetCapabilities } from './material-viewer'
 import type { SchemaAdapter } from './schema-adapter'
-import { defineMaterialManifest } from './material-manifest'
+import { defineMaterialFacetFactory, defineMaterialManifest } from './material-manifest'
 
 export interface StandardMaterialManifestInput {
   type: string
@@ -87,7 +87,7 @@ export function defineStandardMaterialManifest(input: StandardMaterialManifestIn
     },
     schemaAdapter: input.schemaAdapter,
     facets: {
-      designer: (context) => {
+      designer: defineMaterialFacetFactory('sync', (context) => {
         const extension = input.designerFactory(context.services as MaterialExtensionContext)
         return {
           extension,
@@ -95,8 +95,8 @@ export function defineStandardMaterialManifest(input: StandardMaterialManifestIn
           localeMessages: input.localeMessages,
           ...(extension.dispose ? { dispose: () => extension.dispose!() } : {}),
         }
-      },
-      viewer: () => ({ extension: input.viewerExtension, capabilities: input.viewerCapabilities ?? {} }),
+      }),
+      viewer: defineMaterialFacetFactory('sync', () => ({ extension: input.viewerExtension, capabilities: input.viewerCapabilities ?? {} })),
       ai: {
         generation,
         descriptor: input.aiDescriptor as JsonObject,

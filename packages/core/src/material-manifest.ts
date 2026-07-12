@@ -83,7 +83,24 @@ export interface MaterialFacetActivationContext {
   services: unknown
 }
 
-export type MaterialFacetFactory<T> = (context: MaterialFacetActivationContext) => T | Promise<T>
+export type MaterialFacetActivationMode = 'sync' | 'async-isolated'
+
+export type MaterialFacetFactory<T> = ((context: MaterialFacetActivationContext) => T | Promise<T>) & {
+  readonly activationMode?: MaterialFacetActivationMode
+}
+
+export function defineMaterialFacetFactory<T>(
+  activationMode: MaterialFacetActivationMode,
+  factory: (context: MaterialFacetActivationContext) => T | Promise<T>,
+): MaterialFacetFactory<T> {
+  Object.defineProperty(factory, 'activationMode', {
+    configurable: false,
+    enumerable: false,
+    writable: false,
+    value: activationMode,
+  })
+  return factory as MaterialFacetFactory<T>
+}
 
 export interface MaterialManifest<TDesigner = unknown, TViewer = unknown> {
   manifestVersion: typeof MATERIAL_MANIFEST_VERSION

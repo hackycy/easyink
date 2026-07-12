@@ -266,12 +266,13 @@ export {
   writePointer,
 } from './material-introspection'
 
-export { deepFreezeManifest, defineMaterialManifest, MATERIAL_API_VERSION, MATERIAL_MANIFEST_VERSION } from './material-manifest'
+export { deepFreezeManifest, defineMaterialFacetFactory, defineMaterialManifest, MATERIAL_API_VERSION, MATERIAL_MANIFEST_VERSION } from './material-manifest'
 export type {
   MaterialAIFacet,
   MaterialCommonFacet,
   MaterialDefaultNode,
   MaterialFacetActivationContext,
+  MaterialFacetActivationMode,
   MaterialFacetFactory,
   MaterialLayoutFacet,
   MaterialManifest,

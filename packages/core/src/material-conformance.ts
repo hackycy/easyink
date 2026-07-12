@@ -25,7 +25,17 @@ export interface MaterialConformanceOptions {
 }
 
 export interface MaterialConformanceHardTimeoutExecutor {
-  execute: (hook: (...args: any[]) => unknown, args: readonly unknown[], timeoutMs: number) => unknown
+  readonly capabilities: {
+    readonly sync: 'hard-terminable'
+    readonly asyncIsolated?: 'worker-or-process'
+  }
+  /** Executes synchronously and must interrupt JavaScript when timeoutMs expires. */
+  executeSync: (hook: (...args: any[]) => unknown, args: readonly unknown[], timeoutMs: number) => unknown
+  /**
+   * Executes in a disposable worker/process/package isolate. The implementation
+   * must terminate that isolate before rejecting at timeoutMs.
+   */
+  executeAsyncIsolated?: (hook: (...args: any[]) => unknown, args: readonly unknown[], timeoutMs: number) => Promise<unknown>
 }
 
 export interface MaterialConformanceReport {
@@ -54,12 +64,19 @@ interface State {
   node?: MaterialNode
 }
 
+class ConformanceHookError extends Error {
+  constructor(readonly code: string, message = code) {
+    super(message)
+    this.name = 'ConformanceHookError'
+  }
+}
+
 export async function runMaterialConformance(
   manifest: MaterialManifest,
   options: MaterialConformanceOptions = {},
 ): Promise<MaterialConformanceReport> {
   const state: State = { manifest, options, issues: [], operations: 0, deadline: Date.now() + MAX_DURATION_MS }
-  if (!options.hardTimeoutExecutor)
+  if (options.hardTimeoutExecutor?.capabilities.sync !== 'hard-terminable')
     issue(state, 'CONFORMANCE_HARD_TIMEOUT_EXECUTOR_REQUIRED', '', 'a hard timeout executor is required for untrusted hooks')
   await check(state, 'CONFORMANCE_MANIFEST_INVALID', '/manifest', () => checkManifest(state))
   await check(state, 'CONFORMANCE_DEFAULT_CREATION_FAILED', '/common/defaultNode', () => checkDefault(state))
@@ -109,7 +126,7 @@ async function check(state: State, code: string, path: `/${string}`, operation: 
     }
   }
   catch (error) {
-    issue(state, code, path, stableError(error))
+    issue(state, error instanceof ConformanceHookError ? error.code : code, path, stableError(error))
   }
 }
 
@@ -183,15 +200,17 @@ async function checkMigrations(state: State): Promise<void> {
     const path = `/schemaAdapter/migrations/${index}` as const
     if (migration.to !== migration.from + 1)
       issue(state, 'CONFORMANCE_MIGRATION_NOT_ONE_STEP', path, 'migration edge must advance exactly one version')
-    const fixtures = migration.conformance?.fixtures.filter(fixture => fixture.materialType === undefined || fixture.materialType === state.manifest.type) ?? []
+    const fixtures = (migration.conformance?.fixtures ?? [])
+      .map((fixture, originalIndex) => ({ fixture, originalIndex }))
+      .filter(({ fixture }) => fixture.materialType === undefined || fixture.materialType === state.manifest.type)
     const declaredWritePaths = migration.conformance?.declaredWritePaths ?? []
     if (fixtures.length === 0 || declaredWritePaths.length === 0) {
       issue(state, 'CONFORMANCE_MIGRATION_FIXTURE_REQUIRED', path, 'migration must declare an applicable fixture and write paths')
       continue
     }
-    for (const [fixtureIndex, fixture] of fixtures.entries()) {
+    for (const { fixture, originalIndex } of fixtures) {
       consume(state)
-      const fixturePath = `${path}/conformance/fixtures/${fixtureIndex}` as `/${string}`
+      const fixturePath = `${path}/conformance/fixtures/${originalIndex}` as `/${string}`
       const baseline = migrationFixtureNode(state.manifest, migration.from, fixture.input)
       const inputIssues = await invokeHook(state, state.manifest.schemaAdapter.validateInput, [snapshot(baseline), context], state.manifest.schemaAdapter)
       assertIssues(inputIssues)
@@ -384,12 +403,26 @@ async function checkViewer(state: State): Promise<void> {
   if (!state.manifest.facets.viewer)
     return
   const profile = requireProfile(state)
-  const facet = await invokeHook(state, state.manifest.facets.viewer, [{
+  const factory = state.manifest.facets.viewer
+  const declaration = await invokeHook(state, inspectFacetFactory, [factory]) as FacetFactoryDeclaration
+  let facet: unknown
+  const activationArgs = [{
     profileId: profile.id,
     materialType: state.manifest.type,
     surface: 'viewer',
     services: undefined,
-  }], state.manifest.facets)
+  }] as const
+  if (declaration.activationMode === 'async-isolated') {
+    facet = await invokeAsyncIsolatedHook(state, factory, activationArgs, state.manifest.facets)
+  }
+  else if (declaration.activationMode === 'sync') {
+    if (declaration.nativeAsync)
+      throw new ConformanceHookError('CONFORMANCE_UNDECLARED_ASYNC_HOOK')
+    facet = await invokeHook(state, factory, activationArgs, state.manifest.facets)
+  }
+  else {
+    throw new ConformanceHookError('CONFORMANCE_FACET_ACTIVATION_MODE_REQUIRED')
+  }
   if (!isViewerFacet(facet))
     throw new Error('viewer activation returned an invalid facet')
   try {
@@ -533,25 +566,54 @@ async function invokeHook(
 ): Promise<unknown> {
   consume(state)
   const executor = state.options.hardTimeoutExecutor
-  if (!executor)
-    throw new Error('CONFORMANCE_HARD_TIMEOUT_EXECUTOR_REQUIRED')
+  if (executor?.capabilities.sync !== 'hard-terminable')
+    throw new ConformanceHookError('CONFORMANCE_HARD_TIMEOUT_EXECUTOR_REQUIRED')
   const remaining = Math.min(MAX_HOOK_DURATION_MS, state.deadline - Date.now())
   if (remaining <= 0)
     throw new Error('CONFORMANCE_WORK_BUDGET_EXCEEDED')
-  const result = executor.execute(invokeWithReceiver, [hook, receiver, args], remaining)
-  let timeout: ReturnType<typeof setTimeout> | undefined
-  try {
-    return await Promise.race([
-      Promise.resolve(result),
-      new Promise<never>((_resolve, reject) => {
-        timeout = setTimeout(() => reject(new Error('CONFORMANCE_HOOK_TIMEOUT')), remaining)
-      }),
-    ])
-  }
-  finally {
-    if (timeout !== undefined)
-      clearTimeout(timeout)
-  }
+  const result = executor.executeSync(invokeSyncWithReceiver, [hook, receiver, args], remaining)
+  if (!isSyncHookResult(result))
+    throw new ConformanceHookError('CONFORMANCE_HARD_TIMEOUT_EXECUTOR_INVALID')
+  if (result.status === 'undeclared-async')
+    throw new ConformanceHookError('CONFORMANCE_UNDECLARED_ASYNC_HOOK')
+  return result.value
+}
+
+async function invokeAsyncIsolatedHook(
+  state: State,
+  hook: (...args: any[]) => unknown,
+  args: readonly unknown[],
+  receiver?: unknown,
+): Promise<unknown> {
+  consume(state)
+  const executor = state.options.hardTimeoutExecutor
+  if (executor?.capabilities.asyncIsolated !== 'worker-or-process' || !executor.executeAsyncIsolated)
+    throw new ConformanceHookError('CONFORMANCE_ASYNC_HARD_TIMEOUT_EXECUTOR_REQUIRED')
+  const remaining = Math.min(MAX_HOOK_DURATION_MS, state.deadline - Date.now())
+  if (remaining <= 0)
+    throw new Error('CONFORMANCE_WORK_BUDGET_EXCEEDED')
+  return await executor.executeAsyncIsolated(invokeWithReceiver, [hook, receiver, args], remaining)
+}
+
+interface SyncHookResult {
+  status: 'value' | 'undeclared-async'
+  value?: unknown
+}
+
+interface FacetFactoryDeclaration {
+  activationMode?: 'sync' | 'async-isolated'
+  nativeAsync: boolean
+}
+
+function invokeSyncWithReceiver(
+  hook: (...args: any[]) => unknown,
+  receiver: unknown,
+  args: readonly unknown[],
+): SyncHookResult {
+  const value = Reflect.apply(hook, receiver, args)
+  return hasThenProperty(value)
+    ? { status: 'undeclared-async' }
+    : { status: 'value', value }
 }
 
 function invokeWithReceiver(
@@ -560,6 +622,35 @@ function invokeWithReceiver(
   args: readonly unknown[],
 ): unknown {
   return Reflect.apply(hook, receiver, args)
+}
+
+function inspectFacetFactory(factory: (...args: any[]) => unknown): FacetFactoryDeclaration {
+  const descriptor = Object.getOwnPropertyDescriptor(factory, 'activationMode')
+  const activationMode = descriptor && 'value' in descriptor
+    && (descriptor.value === 'sync' || descriptor.value === 'async-isolated')
+    ? descriptor.value
+    : undefined
+  const asyncFunctionPrototype = Object.getPrototypeOf(async () => {})
+  return { activationMode, nativeAsync: Object.getPrototypeOf(factory) === asyncFunctionPrototype }
+}
+
+function hasThenProperty(value: unknown): boolean {
+  if ((typeof value !== 'object' || value === null) && typeof value !== 'function')
+    return false
+  let candidate = value
+  for (let depth = 0; depth < 32 && candidate !== null; depth++) {
+    if (Object.getOwnPropertyDescriptor(candidate, 'then'))
+      return true
+    candidate = Object.getPrototypeOf(candidate)
+  }
+  if (candidate !== null)
+    throw new Error('CONFORMANCE_HOOK_RESULT_PROTOTYPE_DEPTH_EXCEEDED')
+  return false
+}
+
+function isSyncHookResult(value: unknown): value is SyncHookResult {
+  return isRecord(value)
+    && (value.status === 'value' || value.status === 'undeclared-async')
 }
 
 function ownDataFunction(value: object, key: string): ((...args: any[]) => unknown) | undefined {
