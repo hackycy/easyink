@@ -7,8 +7,14 @@ interface PathSnapshot {
   path: PropertyAccessor['paths'][number]
   exists: boolean
   value?: unknown
-  arrayLength?: number
+  arrayOwners: readonly ArrayOwnerSnapshot[]
   missingAncestors: readonly PropertyAccessor['paths'][number][]
+}
+
+interface ArrayOwnerSnapshot {
+  parentPath: PropertyAccessor['paths'][number]
+  index: number
+  originalLength: number
 }
 
 interface ActivePreview<TContext> {
@@ -97,6 +103,7 @@ function capturePaths(node: MaterialNode, paths: PropertyAccessor['paths']): rea
 
 function restorePaths(node: MaterialNode, snapshots: readonly PathSnapshot[]): void {
   const ordered = [...snapshots].sort(compareRestoreOrder)
+  const arrayOwners = collectArrayOwners(node, ordered)
   for (const snapshot of ordered) {
     const leaf = tryResolveParent(node, snapshot.path)
     if (leaf) {
@@ -114,7 +121,7 @@ function restorePaths(node: MaterialNode, snapshots: readonly PathSnapshot[]): v
         const current = leaf.parent[leaf.token as keyof typeof leaf.parent]
         const retainConcurrentContainer = hasDeclaredDescendant(snapshot.path, ordered) && !isEmptyContainer(current)
         if (!retainConcurrentContainer)
-          removeOwnValue(leaf.parent, leaf.token, snapshot.arrayLength)
+          removeOwnValue(leaf.parent, leaf.token, isPreviewOwnedArrayEntry(snapshot.path, snapshot.arrayOwners))
       }
     }
 
@@ -124,9 +131,46 @@ function restorePaths(node: MaterialNode, snapshots: readonly PathSnapshot[]): v
         continue
       const value = ancestor.parent[ancestor.token as keyof typeof ancestor.parent]
       if (isEmptyContainer(value))
-        removeOwnValue(ancestor.parent, ancestor.token)
+        removeOwnValue(ancestor.parent, ancestor.token, isPreviewOwnedArrayEntry(ancestorPath, snapshot.arrayOwners))
     }
   }
+  restoreArrayLengths(arrayOwners)
+}
+
+function collectArrayOwners(root: MaterialNode, snapshots: readonly PathSnapshot[]) {
+  const owners = new Map<PropertyAccessor['paths'][number], { array: unknown[], originalLength: number, ownedIndices: Set<number> }>()
+  for (const snapshot of snapshots) {
+    for (const owner of snapshot.arrayOwners) {
+      const array = tryResolveValue(root, owner.parentPath)
+      if (!Array.isArray(array))
+        continue
+      let collected = owners.get(owner.parentPath)
+      if (!collected) {
+        collected = { array, originalLength: owner.originalLength, ownedIndices: new Set() }
+        owners.set(owner.parentPath, collected)
+      }
+      collected.ownedIndices.add(owner.index)
+    }
+  }
+  return owners
+}
+
+function restoreArrayLengths(owners: ReadonlyMap<PropertyAccessor['paths'][number], { array: unknown[], originalLength: number, ownedIndices: Set<number> }>): void {
+  for (const { array, originalLength, ownedIndices } of owners.values()) {
+    for (const index of ownedIndices)
+      delete array[index]
+    let requiredLength = originalLength
+    for (const key of Object.keys(array)) {
+      const index = numericToken(key)
+      if (index !== undefined && index >= originalLength && !ownedIndices.has(index))
+        requiredLength = Math.max(requiredLength, index + 1)
+    }
+    array.length = requiredLength
+  }
+}
+
+function isPreviewOwnedArrayEntry(path: PropertyAccessor['paths'][number], owners: readonly ArrayOwnerSnapshot[]): boolean {
+  return owners.some(owner => path === `${owner.parentPath}/${owner.index}`)
 }
 
 function hasDeclaredDescendant(path: PropertyAccessor['paths'][number], snapshots: readonly PathSnapshot[]): boolean {
@@ -169,12 +213,25 @@ function capturePath(root: unknown, path: PropertyAccessor['paths'][number]): Pa
         path,
         exists: false,
         missingAncestors,
-        ...(index === tokens.length - 1 && Array.isArray(current) ? { arrayLength: current.length } : {}),
+        arrayOwners: captureArrayOwner(current, tokens, index),
       }
     }
     current = (current as Record<string, unknown>)[token]
   }
-  return { path, exists: true, value: deepClone(current), missingAncestors: [] }
+  return { path, exists: true, value: deepClone(current), arrayOwners: [], missingAncestors: [] }
+}
+
+function captureArrayOwner(current: unknown, tokens: readonly string[], missingIndex: number): readonly ArrayOwnerSnapshot[] {
+  if (!Array.isArray(current))
+    return []
+  const index = numericToken(tokens[missingIndex])
+  if (index === undefined)
+    return []
+  return [{
+    parentPath: encodePointer(tokens.slice(0, missingIndex)),
+    index,
+    originalLength: current.length,
+  }]
 }
 
 function tryResolveParent(root: unknown, path: PropertyAccessor['paths'][number]): { parent: Record<string, unknown> | unknown[], token: string } | undefined {
@@ -190,6 +247,16 @@ function tryResolveParent(root: unknown, path: PropertyAccessor['paths'][number]
   return { parent: current as Record<string, unknown> | unknown[], token: tokens.at(-1)! }
 }
 
+function tryResolveValue(root: unknown, path: PropertyAccessor['paths'][number]): unknown {
+  let current = root
+  for (const token of decodePointer(path)) {
+    if (!current || typeof current !== 'object' || !Object.hasOwn(current, token))
+      return undefined
+    current = (current as Record<string, unknown>)[token]
+  }
+  return current
+}
+
 function decodePointer(path: PropertyAccessor['paths'][number]): string[] {
   return path.slice(1).split('/').map(token => token.replaceAll('~1', '/').replaceAll('~0', '~'))
 }
@@ -198,10 +265,10 @@ function encodePointer(tokens: readonly string[]): PropertyAccessor['paths'][num
   return `/${tokens.map(token => token.replaceAll('~', '~0').replaceAll('/', '~1')).join('/')}`
 }
 
-function removeOwnValue(parent: Record<string, unknown> | unknown[], token: string, originalArrayLength?: number): void {
+function removeOwnValue(parent: Record<string, unknown> | unknown[], token: string, preserveArrayIndex = false): void {
   if (Array.isArray(parent)) {
     const index = arrayIndex(token, parent.length, false)
-    if (originalArrayLength !== undefined && index < originalArrayLength)
+    if (preserveArrayIndex)
       delete parent[index]
     else
       parent.splice(index, 1)

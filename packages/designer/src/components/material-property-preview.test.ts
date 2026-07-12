@@ -255,6 +255,91 @@ describe('propertiesPanel material property preview lifecycle', () => {
     expect((node.model.items as unknown[])[2]).toBe('tail')
   })
 
+  it('restores the exact original length after previewing beyond an empty array', () => {
+    const node = createTableNode()
+    node.model.items = []
+    const accessor = {
+      paths: Object.freeze(['/model/items/5'] as const),
+      read: () => '',
+      write: (draft: MaterialNode, value: string) => { (draft.model.items as unknown[])[5] = value },
+    }
+    const descriptor = { key: 'item', label: 'Item', type: 'string' as const, accessor }
+    const preview = new MaterialPropertyPreviewSession()
+
+    preview.preview(node, descriptor, draft => accessor.write(draft, 'preview'))
+    expect(node.model.items).toHaveLength(6)
+    preview.cancel()
+
+    expect(node.model.items).toHaveLength(0)
+    expect(Object.hasOwn(node.model.items as unknown[], 5)).toBe(false)
+  })
+
+  it('restores an empty array after commit and transaction undo at a distant index', () => {
+    const node = createTableNode()
+    node.model.items = []
+    const accessor = {
+      paths: Object.freeze(['/model/items/5'] as const),
+      read: () => '',
+      write: (draft: MaterialNode, value: string) => { (draft.model.items as unknown[])[5] = value },
+    }
+    const descriptor = { key: 'item', label: 'Item', type: 'string' as const, accessor }
+    const preview = new MaterialPropertyPreviewSession()
+    const commands = new CommandManager()
+    const tx = createTransactionService(id => id === node.id ? node : undefined, commands)
+
+    preview.preview(node, descriptor, draft => accessor.write(draft, 'preview'))
+    commitMaterialPropertyPreview(preview, node, 'item', () =>
+      tx.run(node.id, draft => accessor.write(draft, 'committed')))
+    expect(node.model.items).toHaveLength(6)
+
+    commands.undo()
+    expect(node.model.items).toHaveLength(0)
+    expect(Object.hasOwn(node.model.items as unknown[], 5)).toBe(false)
+  })
+
+  it('retains concurrent indices beyond the original length while removing the preview index', () => {
+    const node = createTableNode()
+    node.model.items = []
+    const accessor = {
+      paths: Object.freeze(['/model/items/5'] as const),
+      read: () => '',
+      write: (draft: MaterialNode, value: string) => { (draft.model.items as unknown[])[5] = value },
+    }
+    const descriptor = { key: 'item', label: 'Item', type: 'string' as const, accessor }
+    const preview = new MaterialPropertyPreviewSession()
+
+    preview.preview(node, descriptor, draft => accessor.write(draft, 'preview'))
+    ;(node.model.items as unknown[])[6] = 'concurrent'
+    preview.cancel()
+
+    expect(node.model.items).toHaveLength(7)
+    expect(Object.hasOwn(node.model.items as unknown[], 5)).toBe(false)
+    expect((node.model.items as unknown[])[6]).toBe('concurrent')
+  })
+
+  it('removes multiple distant preview-owned indices without leaving array length behind', () => {
+    const node = createTableNode()
+    node.model.items = []
+    const accessor = {
+      paths: Object.freeze(['/model/items/5', '/model/items/8'] as const),
+      read: () => undefined,
+      write: (draft: MaterialNode) => {
+        const items = draft.model.items as unknown[]
+        items[5] = 'five'
+        items[8] = 'eight'
+      },
+    }
+    const descriptor = { key: 'items', label: 'Items', type: 'array' as const, accessor }
+    const preview = new MaterialPropertyPreviewSession()
+
+    preview.preview(node, descriptor, draft => accessor.write(draft))
+    preview.cancel()
+
+    expect(node.model.items).toHaveLength(0)
+    expect(Object.hasOwn(node.model.items as unknown[], 5)).toBe(false)
+    expect(Object.hasOwn(node.model.items as unknown[], 8)).toBe(false)
+  })
+
   it('deduplicates overlapping parent and child paths while retaining concurrent siblings', () => {
     const node = createTableNode()
     node.model = {}
