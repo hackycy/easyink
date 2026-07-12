@@ -5,6 +5,7 @@ import { createTestCompiledMaterialProfile, createTestMaterialManifest } from '@
 import { isBindingRef } from '@easyink/schema'
 import { describe, expect, it } from 'vitest'
 import { collectDocumentBindingSlots, DataSourceAligner } from './datasource-aligner'
+import { collectAdapterQuarantinedAddresses } from './diagnostic-address'
 
 describe('dataSourceAligner material introspection', () => {
   it('discovers and writes escaped custom binding ports in nested slots', () => {
@@ -152,7 +153,7 @@ describe('dataSourceAligner material introspection', () => {
       id: `healthy-${index}`,
       bindings: { value: { sourceId: 'data', fieldPath: `healthy.${index}` } },
     }))
-    roots[1] = { ...profile.createNode('healthy', { id: 'bad-owner', bindings: { value: { sourceId: 'data', fieldPath: 'bad.owner' } } }), type: 'invalid-child' }
+    roots[0] = { ...profile.createNode('healthy', { id: 'bad-owner', bindings: { value: { sourceId: 'data', fieldPath: 'bad.owner' } } }), type: 'invalid-child' }
     const schema = makeSchema([owner, ...roots])
 
     const slots = new DataSourceAligner().extractBindings(schema, profile)
@@ -161,7 +162,7 @@ describe('dataSourceAligner material introspection', () => {
     expect(slots.map(slot => slot.nodeAddress.nodeId)).toEqual([
       'owner',
       'warning-child',
-      'healthy-0',
+      'healthy-1',
       'healthy-2',
       'healthy-3',
       'healthy-4',
@@ -184,6 +185,78 @@ describe('dataSourceAligner material introspection', () => {
 
     expect(slots.map(slot => slot.nodeAddress.path)).toEqual(['/elements/0', '/elements/1'])
   })
+
+  it.each([
+    ['second', false, true, ['/elements/0']],
+    ['first', true, false, ['/elements/1']],
+  ] as const)('quarantines only the %s same-ID occurrence with an adapter error', (_label, firstInvalid, secondInvalid, expected) => {
+    const profile = createAddressQuarantineProfile()
+    const makeDuplicate = (invalid: boolean, fieldPath: string) => ({
+      ...profile.createNode('healthy', { id: 'same', bindings: { value: { sourceId: 'data', fieldPath } } }),
+      type: invalid ? 'invalid' : 'healthy',
+    })
+    const schema = makeSchema([
+      makeDuplicate(firstInvalid, 'first.value'),
+      makeDuplicate(secondInvalid, 'second.value'),
+    ])
+
+    const slots = new DataSourceAligner().extractBindings(schema, profile)
+
+    expect(slots.map(slot => slot.nodeAddress.path)).toEqual(expected)
+  })
+
+  it('quarantines the exact nested duplicate under an escaped slot address', () => {
+    const profile = createAddressQuarantineProfile()
+    const healthy = profile.createNode('healthy', { id: 'same-child', bindings: { value: { sourceId: 'data', fieldPath: 'healthy.value' } } })
+    const invalid = {
+      ...profile.createNode('healthy', { id: 'same-child', bindings: { value: { sourceId: 'data', fieldPath: 'invalid.value' } } }),
+      type: 'invalid',
+    }
+    const owner = profile.createNode('escaped-owner', {
+      id: 'escaped-owner',
+      bindings: { value: { sourceId: 'data', fieldPath: 'owner.value' } },
+      slots: { 'a/b~c': [healthy, invalid] },
+    })
+
+    const slots = new DataSourceAligner().extractBindings(makeSchema([owner]), profile)
+
+    expect(slots.map(slot => slot.nodeAddress.path)).toEqual([
+      '/elements/0',
+      '/elements/0/slots/a~1b~0c/0',
+    ])
+  })
+
+  it('does not quarantine nodes for a document-level error without an address match', () => {
+    const schema = makeSchema([createProfile().createNode('custom-binding')])
+
+    const addresses = collectAdapterQuarantinedAddresses(schema, [{
+      code: 'DOCUMENT_INVALID',
+      severity: 'error',
+      path: '/unit',
+      stage: 'envelope',
+      message: 'invalid document unit',
+    }])
+
+    expect(addresses).toEqual(new Set())
+  })
+
+  it('attributes an escaped slot diagnostic to its nearest owner address', () => {
+    const profile = createAddressQuarantineProfile()
+    const child = profile.createNode('healthy', { id: 'child' })
+    const owner = profile.createNode('escaped-owner', { id: 'owner', slots: { 'a/b~c': [child] } })
+    const schema = makeSchema([owner])
+
+    const addresses = collectAdapterQuarantinedAddresses(schema, [{
+      code: 'SLOT_INVALID',
+      severity: 'error',
+      path: '/elements/0/slots/a~1b~0c',
+      stage: 'validate',
+      nodeId: 'owner',
+      message: 'invalid slot',
+    }])
+
+    expect(addresses).toEqual(new Set(['/elements/0']))
+  })
 })
 
 function bindingDefinition() {
@@ -201,6 +274,23 @@ function createProfile() {
   return createTestCompiledMaterialProfile([
     createTestMaterialManifest({ type: 'owner', slots: [{ id: 'content', key: { kind: 'exact', value: 'content' }, coordinateSpace: 'owner', layoutParticipation: 'owner', reparent: 'allowed' }] }),
     createTestMaterialManifest({ type: 'custom-binding', defaultModel: { value: '' }, binding: bindingDefinition() }),
+  ])
+}
+
+function createAddressQuarantineProfile() {
+  const invalidAdapter: SchemaAdapter = {
+    ...recordSchemaAdapter(1),
+    validate: () => [{ code: 'INVALID', severity: 'error', path: '/model', message: 'invalid' }],
+  }
+  return createTestCompiledMaterialProfile([
+    createTestMaterialManifest({ type: 'healthy', defaultModel: { value: '' }, binding: bindingDefinition() }),
+    createTestMaterialManifest({ type: 'invalid', defaultModel: { value: '' }, schemaAdapter: invalidAdapter, binding: bindingDefinition() }),
+    createTestMaterialManifest({
+      type: 'escaped-owner',
+      defaultModel: { value: '' },
+      binding: bindingDefinition(),
+      slots: [{ id: 'escaped', key: { kind: 'exact', value: 'a/b~c' }, coordinateSpace: 'owner', layoutParticipation: 'owner', reparent: 'allowed' }],
+    }),
   ])
 }
 

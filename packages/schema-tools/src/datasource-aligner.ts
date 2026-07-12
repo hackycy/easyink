@@ -1,9 +1,10 @@
-import type { AddressedMaterialBindingSlot, CompiledMaterialProfile, JsonPointer, MaterialLoadDiagnostic, MaterialNodeAddress } from '@easyink/core'
+import type { AddressedMaterialBindingSlot, CompiledMaterialProfile, JsonPointer, MaterialNodeAddress } from '@easyink/core'
 import type { DataFieldNode, DataSourceDescriptor } from '@easyink/datasource'
 import type { BindingRef, DocumentSchema } from '@easyink/schema'
 import { loadDocumentWithProfile, readPointer, walkMaterialNodes, writePointer } from '@easyink/core'
 import { deepClone, FIELD_PATH_SEPARATOR } from '@easyink/shared'
 import { cloneAndFreezeBindingRef, visitMaterialBindingRefs } from './binding-ref'
+import { collectAdapterQuarantinedAddresses } from './diagnostic-address'
 
 /**
  * Alignment result.
@@ -147,9 +148,9 @@ export class DataSourceAligner {
     const bindings: DocumentBindingSlot[] = []
     if (profile) {
       const loaded = loadDocumentWithProfile(schema, profile)
-      const quarantinedNodeIds = collectAdapterQuarantinedNodeIds(loaded.diagnostics)
+      const quarantinedAddresses = collectAdapterQuarantinedAddresses(schema, loaded.diagnostics)
       walkMaterialNodes(schema, profile, (_node, address, introspection) => {
-        if (quarantinedNodeIds.has(address.nodeId))
+        if (quarantinedAddresses.has(address.path))
           return
         for (const slot of introspection.bindings)
           bindings.push(Object.freeze({ binding: slot.value, nodeAddress: address, path: slot.path }))
@@ -299,9 +300,9 @@ export class DataSourceAligner {
 export function collectDocumentBindingSlots(schema: DocumentSchema, profile: CompiledMaterialProfile): readonly AddressedMaterialBindingSlot[] {
   const slots: AddressedMaterialBindingSlot[] = []
   const loaded = loadDocumentWithProfile(schema, profile)
-  const quarantinedNodeIds = collectAdapterQuarantinedNodeIds(loaded.diagnostics)
+  const quarantinedAddresses = collectAdapterQuarantinedAddresses(schema, loaded.diagnostics)
   walkMaterialNodes(schema, profile, (_node, address, introspection) => {
-    if (quarantinedNodeIds.has(address.nodeId))
+    if (quarantinedAddresses.has(address.path))
       return
     for (const slot of introspection.bindings)
       slots.push(Object.freeze({ ...slot, nodeAddress: address }))
@@ -327,16 +328,6 @@ function collectPortableDocumentBindings(schema: DocumentSchema, result: Documen
     }
   }
   schema.elements.forEach((node, index) => visit(node, `/elements/${index}`, []))
-}
-
-function collectAdapterQuarantinedNodeIds(
-  diagnostics: readonly MaterialLoadDiagnostic[],
-): ReadonlySet<string> {
-  return new Set(diagnostics.flatMap(diagnostic => (
-    diagnostic.severity === 'error' && diagnostic.stage !== 'graph' && diagnostic.nodeId
-      ? [diagnostic.nodeId]
-      : []
-  )))
 }
 
 function resolveAddressedNode(schema: DocumentSchema, address: MaterialNodeAddress): DocumentSchema['elements'][number] {
