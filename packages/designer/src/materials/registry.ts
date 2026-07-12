@@ -66,13 +66,13 @@ function tableSectionFilter(sectionId: PanelSectionId): boolean {
  *                   10.2 (material catalog groups)
  */
 export function registerMaterialBundle(store: DesignerStore, bundle: DesignerMaterialBundle): () => void {
-  const unregisterLocaleMessages: Array<() => void> = []
+  const unregister: Array<() => void> = []
   if (bundle.localeMessages)
-    unregisterLocaleMessages.push(store.registerLocaleMessages(bundle.localeMessages))
+    unregister.push(store.registerLocaleMessages(bundle.localeMessages))
 
   for (const entry of bundle.materials) {
     if (entry.localeMessages)
-      unregisterLocaleMessages.push(store.registerLocaleMessages(entry.localeMessages))
+      unregister.push(store.registerLocaleMessages(entry.localeMessages))
 
     const definition: MaterialDefinition = {
       type: entry.type,
@@ -88,11 +88,11 @@ export function registerMaterialBundle(store: DesignerStore, bundle: DesignerMat
       sectionFilter: entry.sectionFilter,
     }
 
-    store.registerMaterial(definition)
+    unregister.push(store.registerMaterial(definition))
     if (entry.lazyFactory)
-      store.registerLazyDesignerFactory(entry.type, entry.lazyFactory)
+      unregister.push(store.registerLazyDesignerFactory(entry.type, entry.lazyFactory))
     else
-      store.registerDesignerFactory(entry.type, entry.factory)
+      unregister.push(store.registerDesignerFactory(entry.type, entry.factory))
   }
 
   for (const group of bundle.catalogs) {
@@ -120,12 +120,12 @@ export function registerMaterialBundle(store: DesignerStore, bundle: DesignerMat
       order: group.order,
       items,
     }
-    store.registerCatalogGroup(catalogGroup)
+    unregister.push(store.registerCatalogGroup(catalogGroup))
   }
 
   return () => {
-    for (const unregister of unregisterLocaleMessages)
-      unregister()
+    for (let index = unregister.length - 1; index >= 0; index--)
+      unregister[index]!()
   }
 }
 

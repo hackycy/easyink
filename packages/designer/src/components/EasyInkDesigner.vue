@@ -12,9 +12,8 @@ import { useTemplateAutoSave } from '../composables/use-template-autosave'
 import { useWorkbenchPersistence } from '../composables/use-workbench-persistence'
 import { ContributionRegistry } from '../contributions/contribution-registry'
 import { CONTRIBUTION_REGISTRY_KEY } from '../contributions/injection'
-import { prepareDesignerMaterialBundle } from '../material-host'
-import { createMaterialExtensionContext } from '../materials/extension-context'
 import { registerMaterialBundle } from '../materials/registry'
+import { createRuntimeMaterialProfileRegistration } from '../materials/runtime-profile-registration'
 import { DesignerStore } from '../store/designer-store'
 import CanvasWorkspace from './CanvasWorkspace.vue'
 import DesignerConfirmHost from './DesignerConfirmHost.vue'
@@ -53,8 +52,8 @@ if (store.schema !== props.schema) {
 // re-target it at the proxy so mutations made through tx.run trigger Vue
 // reactivity (otherwise patches mutate the raw store and templates stay stale).
 store.editingSession.setStore(store)
-const preparedMaterialBundles = registerRuntimeMaterialBundles(store, props.runtimeConfig)
-let materialProfilesDisposed = false
+const unregisterRuntimeMaterialBundles = registerRuntimeMaterialBundles(store, props.runtimeConfig)
+const runtimeMaterialProfiles = createRuntimeMaterialProfileRegistration(store)
 store.setFontProvider(props.fontProvider)
 props.setupStore?.(store)
 provideDesignerStore(store)
@@ -124,30 +123,18 @@ function resolveLocaleCode(locale: LocaleMessages): string | undefined {
 }
 
 function registerRuntimeMaterialBundles(store: DesignerStore, runtimeConfig: DesignerRuntimeConfig | undefined) {
-  const prepared: Array<Awaited<ReturnType<typeof prepareDesignerMaterialBundle>>> = []
+  const unregister: Array<() => void> = []
   for (const bundle of runtimeConfig?.materials?.bundles ?? [])
-    registerMaterialBundle(store, bundle)
-  for (const profile of runtimeConfig?.materials?.profiles ?? []) {
-    void prepareDesignerMaterialBundle(profile, createMaterialExtensionContext(store)).then((result) => {
-      if (materialProfilesDisposed) {
-        void result.dispose()
-        return
-      }
-      prepared.push(result)
-      registerMaterialBundle(store, result.bundle)
-      store.notifyMaterialExtensionLoaded()
-      for (const diagnostic of result.diagnostics) {
-        store.diagnostics.push({
-          source: 'material-extension',
-          severity: diagnostic.severity,
-          message: diagnostic.message,
-          detail: diagnostic,
-        })
-      }
-    })
+    unregister.push(registerMaterialBundle(store, bundle))
+  return () => {
+    for (let index = unregister.length - 1; index >= 0; index--)
+      unregister[index]!()
   }
-  return prepared
 }
+
+watch(() => props.runtimeConfig?.materials?.profiles ?? [], (profiles) => {
+  runtimeMaterialProfiles.update(profiles)
+}, { immediate: true })
 
 watch(() => props.interactionProvider, (newProvider) => {
   store.setInteractionProvider(newProvider)
@@ -203,9 +190,8 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  materialProfilesDisposed = true
-  for (const prepared of preparedMaterialBundles)
-    void prepared.dispose()
+  void runtimeMaterialProfiles.dispose()
+  unregisterRuntimeMaterialBundles()
   store.setFontTarget(undefined)
   window.removeEventListener('pointerdown', handleGlobalPointerDown, true)
   window.removeEventListener('focusin', handleGlobalFocusIn, true)

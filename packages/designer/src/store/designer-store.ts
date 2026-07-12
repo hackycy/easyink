@@ -309,8 +309,8 @@ export class DesignerStore {
 
   // ─── Material registry ────────────────────────────────────────
 
-  registerMaterial(definition: MaterialDefinition): void {
-    this.materialRegistry.registerMaterial(definition)
+  registerMaterial(definition: MaterialDefinition): () => void {
+    return this.materialRegistry.registerMaterial(definition)
   }
 
   getMaterial(type: string): MaterialDefinition | undefined {
@@ -321,8 +321,8 @@ export class DesignerStore {
     return this.materialRegistry.listMaterials()
   }
 
-  registerCatalogGroup(group: MaterialCatalogGroup): void {
-    this.materialRegistry.registerCatalogGroup(group)
+  registerCatalogGroup(group: MaterialCatalogGroup): () => void {
+    return this.materialRegistry.registerCatalogGroup(group)
   }
 
   getCatalog(): MaterialCatalogEntry[] {
@@ -353,12 +353,12 @@ export class DesignerStore {
 
   // ─── Extension Factory Registry ─────────────────────────────────
 
-  registerDesignerFactory(type: string, factory: MaterialExtensionFactory): void {
-    this.materialRegistry.registerDesignerFactory(type, factory)
+  registerDesignerFactory(type: string, factory: MaterialExtensionFactory): () => void {
+    return this.materialRegistry.registerDesignerFactory(type, factory)
   }
 
-  registerLazyDesignerFactory(type: string, loader: LazyMaterialExtensionFactory): void {
-    this.materialRegistry.registerLazyDesignerFactory(type, loader)
+  registerLazyDesignerFactory(type: string, loader: LazyMaterialExtensionFactory): () => void {
+    return this.materialRegistry.registerLazyDesignerFactory(type, loader)
   }
 
   /** Get or lazily instantiate an extension from its factory. */

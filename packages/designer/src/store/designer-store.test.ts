@@ -1,5 +1,6 @@
 import type { FontProvider } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
+import type { DesignerMaterialBundle } from '../materials/registry'
 import type { MaterialDefinition } from '../types'
 import { describe, expect, it, vi } from 'vitest'
 import { registerMaterialBundle } from '../materials/registry'
@@ -231,6 +232,24 @@ describe('designer store schema initialization', () => {
     expect(store.t('materials.sample.name')).toBe('materials.sample.name')
   })
 
+  it('unwinds overlapping material bundle registrations without removing later owners', () => {
+    const store = new DesignerStore()
+    const first = registerMaterialBundle(store, createBundle('sample', 'First'))
+    const second = registerMaterialBundle(store, createBundle('sample', 'Second'))
+
+    expect(store.getMaterial('sample')?.name).toBe('Second')
+    expect(store.getCatalog()).toHaveLength(1)
+    expect(store.getCatalog()[0]?.label).toBe('Second')
+
+    first()
+    expect(store.getMaterial('sample')?.name).toBe('Second')
+
+    second()
+    expect(store.getMaterial('sample')).toBeUndefined()
+    expect(store.getDesignerExtension('sample')).toBeUndefined()
+    expect(store.getCatalog()).toEqual([])
+  })
+
   it('delegates font loading while preserving font manager compatibility', async () => {
     const store = new DesignerStore()
     const provider: FontProvider = {
@@ -294,5 +313,21 @@ function createNode(id: string): MaterialNode {
     slots: {},
     bindings: {},
     output: { visibility: 'include' },
+  }
+}
+
+function createBundle(type: string, name: string): DesignerMaterialBundle {
+  const definition = createMaterialDefinition(type)
+  return {
+    materials: [{
+      ...definition,
+      name,
+      factory: () => ({ renderContent: () => () => {} }),
+    }],
+    catalogs: [{
+      id: 'basic',
+      label: 'Basic',
+      items: [{ id: `basic-${type}`, type, label: name }],
+    }],
   }
 }
