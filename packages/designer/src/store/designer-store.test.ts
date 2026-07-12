@@ -263,6 +263,18 @@ describe('designer store schema initialization', () => {
     expect(store.selection.isEmpty).toBe(true)
     expect(store.getMaterialNodeState('replacement')?.status).toBe('quarantined')
   })
+
+  it('owns immutable schema snapshots and indexed transaction results', () => {
+    const store = new DesignerStore({}, undefined, undefined, runtimeWith(boxProfile()))
+    const before = store.schema
+    expect(() => store.schema.elements.push(createNode('forbidden'))).toThrow()
+    store.documentTransactions.transact((draft) => {
+      draft.elements.push(createNode('x'))
+    }, { label: 'Insert', operation: { kind: 'structure.insert', sessionPath: [], targetIds: ['node:x'], fieldPaths: ['/elements'], selectionLineage: null, structural: true } })
+    expect(store.schema).not.toBe(before)
+    expect(store.getElementById('x')?.id).toBe('x')
+    expect(store.documentStore.index.getNode('x')?.id).toBe('x')
+  })
 })
 
 function boxProfile() {

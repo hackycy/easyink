@@ -133,7 +133,7 @@ export class DesignerStore {
       this.documentViewRevision += 1
       if (event.kind !== 'preview' && event.kind !== 'preview-cancel')
         this.selection.reconcile(event.index.nodeIds())
-      if (event.validationReport && event.document === this.documentStore.document) {
+      if (event.validationReport && event.document === this.documentStore.committedDocument) {
         this._materialDiagnostics = event.validationReport.diagnostics
         this._materialNodeStates = event.validationReport.nodeStates
       }
