@@ -1,65 +1,32 @@
-# 19. 测试策略
+# 19. 测试与完成矩阵
 
-## 19.1 单元测试（Vitest）
+本页是 Material Platform Foundation 的权威 completion matrix。状态只依据当前公开导出和可执行测试，不从历史计划推导。
 
-覆盖核心引擎的所有纯逻辑模块：
+## 19.1 Completion matrix
 
-| 模块 | 测试重点 |
-|------|----------|
-| SchemaStore | DocumentSchema CRUD、校验、遍历、序列化 |
-| Layout / Pagination Engine | 页面模型、回流、分页策略、表格 fragment 分页、overflow 诊断 |
-| BindingResolver | `fieldPath` 根路径解析、`bindIndex`、格式化诊断 |
-| MaterialDataContractResolver | 目标模型字段映射、共享 record collection 推导、顶层数组 index 对齐、source-scoped root 回退、诊断 |
-| DataSourceRegistry | Designer 字段树注册、usage 解释、命名空间隔离 |
-| CommandManager | 撤销/重做、命令合并、事务 |
-| UnitManager | 单位转换精度 |
-| MigrationRegistry | 版本迁移链路 |
+| 合同 | 状态 | 实现/导出 | 证明测试 |
+| --- | --- | --- | --- |
+| compile profile、冻结 snapshot、surface sets | 已完成 | [`material-profile.ts`](../../packages/core/src/material-profile.ts) | [`material-profile.test.ts`](../../packages/core/src/material-profile.test.ts) |
+| namespace 与 optional package 原子 quarantine | 已完成 | [`material-profile.ts`](../../packages/core/src/material-profile.ts) | [`material-profile.test.ts`](../../packages/core/src/material-profile.test.ts) |
+| canonical node 与 empty `model/slots/bindings/output` | 已完成 | [`types.ts`](../../packages/schema/src/types.ts)、[`material-profile.ts`](../../packages/core/src/material-profile.ts) | [`material-profile.test.ts`](../../packages/core/src/material-profile.test.ts)、[`node-envelope.test.ts`](../../packages/builtin/src/node-envelope.test.ts) |
+| codec 无物料/table 分支 | 已完成 | [`codec.ts`](../../packages/schema/src/codec.ts) | [`codec.test.ts`](../../packages/schema/src/codec.test.ts) |
+| load phase order 与 load sidecar | 已完成 | [`schema-adapter.ts`](../../packages/core/src/schema-adapter.ts) | [`schema-adapter.test.ts`](../../packages/core/src/schema-adapter.test.ts) |
+| edit/history validation sidecars | 已完成 | [`schema-adapter.ts`](../../packages/core/src/schema-adapter.ts) | [`schema-adapter.test.ts`](../../packages/core/src/schema-adapter.test.ts) |
+| Designer publish/restore 原子边界 | 边界已完成 | [`designer-store.ts`](../../packages/designer/src/store/designer-store.ts) | [`designer-store.test.ts`](../../packages/designer/src/store/designer-store.test.ts) |
+| 全 command/history 接入 publish/restore | 后续依赖 | Transaction 计划 | 不在 Foundation 完成范围 |
+| binding ports 与 private model | 已完成 | [`material-binding.ts`](../../packages/core/src/material-binding.ts) | [`material-manifest.test.ts`](../../packages/core/src/material-manifest.test.ts) |
+| identity scopes、introspection、graph clone/validation | 已完成 | [`material-introspection.ts`](../../packages/core/src/material-introspection.ts) | [`material-introspection.test.ts`](../../packages/core/src/material-introspection.test.ts) |
+| property accessor canonical paths | 已完成 | [`material-properties.ts`](../../packages/core/src/material-properties.ts) | [`material-properties.test.ts`](../../packages/core/src/material-properties.test.ts) |
+| direct v1 `TableModel` in `node.model` | 已完成 | [`table/kernel/model.ts`](../../packages/materials/table/kernel/src/model.ts) | [`schema-adapter.test.ts`](../../packages/materials/table/kernel/src/schema-adapter.test.ts)、[`manifest.test.ts`](../../packages/materials/table/data/src/manifest.test.ts) |
+| `break-opportunities` core scheduling declaration | 已完成 | [`material-manifest.ts`](../../packages/core/src/material-manifest.ts)、[`layout-plan.ts`](../../packages/core/src/layout-plan.ts) | [`material-manifest.test.ts`](../../packages/core/src/material-manifest.test.ts) |
+| 完整 Viewer break API/layout 接线 | 后续依赖 | Viewer Layout 计划 | 不在 Foundation 完成范围 |
+| facet host 与 surface-local quarantine | 已完成 | [`material-facet-host.ts`](../../packages/core/src/material-facet-host.ts) | [`material-facet-host.test.ts`](../../packages/core/src/material-facet-host.test.ts) |
+| sanitized token 与 imperative lifecycle | 已完成 | [`viewer-render-tree.ts`](../../packages/core/src/viewer-render-tree.ts)、[`render-surface.ts`](../../packages/viewer/src/render-surface.ts) | [`render-viewer-tree.test.ts`](../../packages/browser-dom/src/render-viewer-tree.test.ts)、[`render-surface.test.ts`](../../packages/viewer/src/render-surface.test.ts) |
+| Assistant manifest v1 portable projection | 已完成 | [`material-manifest.ts`](../../packages/assistant/designer-bridge/src/material-manifest.ts) | [`material-manifest.test.ts`](../../packages/assistant/designer-bridge/src/material-manifest.test.ts)、[`schema.test.ts`](../../packages/assistant/capabilities/src/schema.test.ts) |
+| isolated built-in conformance gate | 已完成 | [`isolated-material-conformance.ts`](../../packages/builtin/src/testing/isolated-material-conformance.ts) | [`conformance.test.ts`](../../packages/builtin/src/conformance.test.ts)、[`isolated-material-conformance.test.ts`](../../packages/builtin/src/testing/isolated-material-conformance.test.ts) |
 
-## 19.2 E2E 测试（Playwright）
+## 19.2 Gate
 
-覆盖关键用户路径：
+Foundation 合并门禁为：focused tests、根 `pnpm test`、`pnpm build`、`pnpm lint`、`pnpm typecheck`、package `publint`、dependency ownership scan、forbidden scans 和 `git diff --check` 全部通过。
 
-```
-1. 加载模板 → Designer 传入数据源 → Viewer 传入调试数据 → 验证页面预览输出
-2. 设计器打开 → 添加元素 → 设置属性 → 导出 Schema
-3. 设计器打开 → 绑定字段 → 删除绑定 → 验证静态值恢复显示
-4. 设计器打开 → `table-data` 绑定集合字段 → 验证集合前缀约束和绝对路径解析
-5. 设计器打开 → `chart-bar` 绑定 data-contract 字段 → 验证不同数据形态下 Viewer 可解析并展示
-6. 加载多页模板 → 验证 Viewer 分页结果、重复表头与 overflow 提示
-7. 设计器打开 → 多次操作 → 撤销/重做 → 验证状态
-```
-
-## 19.3 明确不测的核心职责
-
-- 模板动态计算
-- 具体 PDF 引擎实现
-- 具体图片导出引擎实现
-- 物理打印设备可扫描性
-
-这些能力不属于当前核心承诺，应由各业务输出链路自行验证。
-
-## 19.4 测试工具
-
-```jsonc
-// vitest.config.ts
-{
-  "test": {
-    "workspace": [
-      "packages/core",
-      "packages/viewer",
-      "packages/designer"
-    ]
-  }
-}
-```
-
-## 19.5 强制覆盖（核心交互回归）
-
-下列测试是 PR 准入护栏，删除或绕过将被拒绝合并：
-
-- `packages/designer/src/interactions/canvas-interaction-controller.test.ts` — 覆盖画布手势仲裁全部决策路径（Cmd 多选、drag-then-click、dblclick 进入 editing-session、pointerdown 不进入、background pointerdown 退出顺序、右键保留、editing-session 路由 owner pointerdown）。对应审计 `.github/audit/202605010152.md` 与 `202605011431.md`。
-- `packages/shared/src/pointer-gesture.test.ts` — 覆盖 pointercancel 与 pointerup 走同一 teardown 路径，capture acquire/release throw 不影响 onEnd 单次触发。对应 `202605011431.md` item 3。
-- `packages/designer/src/editing/transaction-service.test.ts` / `behavior-dispatcher.test.ts` — 校验失败路径推送到 `DiagnosticsChannel` 而不是 silent console.error。
-- `packages/core/src/page-planner.test.ts` / `pagination-engine.test.ts` / `editor-surface-plan.test.ts` / `binding-utils.test.ts` / `font.test.ts` — 协议边界回归。
-
-新增交互/行为类协议时必须同步加测试；只改实现不加用例的 PR 默认拒绝。
+forbidden scan 覆盖已移除的可变物料入口、旧 DOM 信任入口、旧节点访问器/命令、canonical 根级兼容字段、schema-tools 物料分支和 Assistant 的隐式物料推导。唯一允许的旧格式数据是迁移测试 fixture，扫描用精确 glob 排除 `**/testing/fixtures/**` 与对应 `*.test.ts`，不能宽泛排除生产目录。

@@ -128,7 +128,7 @@ easyink/
 
 - 维护内置物料的基础属性面板 Schema，例如 text / image / barcode / qrcode / table / flow-row 等公共字段矩阵
 - 只依赖 `@easyink/core` 的 `PropSchema` 类型，不反向依赖 `@easyink/designer`
-- 物料包仍可通过自身 `propSchemas` 提供 material-owned 追加项；Designer 注册时先取基础 Schema，再合并物料包追加 Schema
+- 物料属性由 manifest property descriptors 与 canonical accessor paths 声明；Designer 不合并运行时私有属性注册表
 - 属性字段、分组、枚举、显示条件等维护通常只影响该包；只有属性面板协议、Store、提交行为或画布交互变化才属于 Designer 核心层变化
 
 ### `@easyink/material-*`
@@ -191,16 +191,16 @@ playground ── designer + viewer + export-runtime + samples + schema
 
 依赖原则：
 
-- `designer` 依赖 `builtin`、`core`、`datasource`、`schema`、`shared`、`ui`、`icons`、`locales`、`prop-schemas` 与 `material-table-kernel`，默认启用内置物料；调用方可通过 `setupStore` 继续扩展或覆盖
+- `designer` 依赖 `core`、`datasource`、`schema`、`shared`、`ui`、`icons`、`locales` 与 `prop-schemas`；调用方通过 `materials.profile` 或 `materials.packages` 提供唯一编译 profile
 - `locales` 与 `prop-schemas` 是 Designer 静态资源边界包：前者维护内置语言包，后者维护基础属性 Schema。它们可独立构建、测试和发布，但应用层稳定入口仍优先使用 `@easyink/designer` 及其 `./locale` facade
 - 已被 designer 内部直接使用且宿主不应手动补齐的第三方运行时依赖（如 `codemirror`）必须声明为 `dependencies`；只有需要与宿主单例对齐的框架依赖（当前为 `vue`）才保留为 `peerDependencies`
-- `viewer` 依赖 `builtin`、`core`、`schema`、`shared`，默认启用内置物料；调用方可通过 `viewer.registerMaterial()` 继续扩展或覆盖。`viewer` 不依赖 `datasource`
+- `viewer` 依赖 `browser-dom`、`core`、`schema`、`shared`，并要求构造时提供唯一 `CompiledMaterialProfile`。`viewer` 不依赖 `datasource`
 - `export-runtime` 仅依赖 `shared`，不绑定任何导出格式实现，不依赖 `viewer`、`designer` 或 Vue
 - `export-plugin-dom-pdf` 依赖 `export-runtime`、`shared` 与按需装载的 `html2canvas` / `jspdf`；任何具体导出链路一律走独立 plugin 包，不再回灌到 runtime
 - `print-core` 只承接打印驱动共享逻辑；具体打印通道放在 `packages/print/*` 下独立包中
 - `print-integration-easyink-printer` 依赖 `print-core`、`viewer` 与 `export-plugin-dom-pdf`；负责 EasyInk.Printer 通道的协议和 Viewer 驱动
 - `print-integration-hiprint` 依赖 `print-core`、`viewer` 与 `vue-plugin-hiprint`；负责 HiPrint 通道的协议和 Viewer 驱动
-- `builtin` 依赖全部内置 `material-*` 包，集中维护 Designer / Viewer / Assistant 三侧共享的默认物料清单
+- `builtin` 依赖全部内置 `material-*` 包，发布 `all/basic/none` 原子 package 与编译 profile
 - `ui` 依赖 `icons` 和 `shared`，不依赖 `designer`；方向为 designer 依赖 ui
 - `samples` 依赖 `datasource`、`schema`、`shared`，不依赖 `designer`
 - `schema-tools` 仅依赖 `datasource`、`schema`、`shared`；无 Vue 依赖；可在 Node 与浏览器双端运行

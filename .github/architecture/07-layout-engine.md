@@ -48,7 +48,7 @@ interface LayoutFragment {
 
 - `box` 是当前阶段的文档坐标，不是页面局部坐标。
 - `sourceNodeId` 指向原始 schema 节点；虚拟 fragment 也必须保留它。
-- `flow` 由 `node.placement / node.break` 投影而来；旧 `node.props.layoutMode / keepTogether / pageBreakBefore / pageBreakAfter` 只作为兼容 fallback。
+- `flow` 由 canonical `node.output.placement` 与 `node.output.break` 投影而来；旧输入必须在 load adapter 阶段归一化，layout 阶段不定义另一套根级文档合同。
 - 运行态测量和分页不能回写原始 schema。
 
 ## 7.3 测量与 flow-y 回流

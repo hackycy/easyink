@@ -1,28 +1,25 @@
 # @easyink/builtin
 
-[![npm version](https://img.shields.io/npm/v/%40easyink%2Fbuiltin?logo=npm)](https://www.npmjs.com/package/%40easyink%2Fbuiltin) [![npm downloads](https://img.shields.io/npm/dm/%40easyink%2Fbuiltin?logo=npm)](https://www.npmjs.com/package/%40easyink%2Fbuiltin)
+[![npm version](https://img.shields.io/npm/v/%40easyink%2Fbuiltin?logo=npm)](https://www.npmjs.com/package/%40easyink%2Fbuiltin)
 
-Internal built-in material registry for EasyInk runtimes
+Immutable built-in material packages and compiled profiles for EasyInk runtimes.
 
 ## Usage
 
-Choose a material set by subpath:
-
 ```ts
-import { builtinDesignerMaterialBundle, registerBuiltinViewerMaterials } from '@easyink/builtin/all'
+import { compileBuiltinMaterialProfile } from '@easyink/builtin/all'
 
-const runtimeConfig = {
-  materials: {
-    bundles: [builtinDesignerMaterialBundle],
-  },
-}
-
-registerBuiltinViewerMaterials((type, binding, extension) => {
-  viewer.registerMaterial(type, binding, extension)
-})
+const profile = compileBuiltinMaterialProfile('all')
 ```
 
-Available subpaths: `@easyink/builtin/all`, `@easyink/builtin/basic`, `@easyink/builtin/none`.
+Pass the same `CompiledMaterialProfile` contract to Designer or Viewer:
+
+```ts
+const runtimeConfig = { materials: { profile } }
+const viewer = createViewer({ profile, host })
+```
+
+Available public subpaths are `@easyink/builtin/all`, `@easyink/builtin/basic`, and `@easyink/builtin/none`. Each exposes its immutable `builtinMaterialPackage` plus `compileBuiltinMaterialProfile`. Built-in conformance runs in an authenticated, bounded child-process gate.
 
 ## Documentation
 

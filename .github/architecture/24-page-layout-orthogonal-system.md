@@ -103,10 +103,10 @@ Schema validation 只接受已声明的页面介质；`normalizeDocumentSchema()
 
 Designer 和 Viewer 都通过 `@easyink/core` 的 `resolvePageLayerPlans()`、`groupPageLayerPlansByPlacement()` 和 `resolvePageLayerStackIndex()` 消费页面层计划；不得在两端各自实现 layer 排序、层级或水印 tile 生成规则。Viewer 对相同页面尺寸缓存 layer buckets，避免多页同尺寸重复生成水印 tile。
 
-`page.layers` 与 `node.repeat.scope='every-output-page'` 的边界：
+`page.layers` 与 `node.output.repeat.scope='every-output-page'` 的边界：
 
 - `page.layers`：整页背景/前景装饰，当前用于文字水印；不是可选中、可拖拽、可绑定数据的 MaterialNode。
-- `repeat.scope`：元素级页眉、页脚、页码、Logo 或可编辑水印；源节点仍在 `schema.elements[]`，Designer 只有一份可编辑源节点，其它页是预览/输出复制。
+- `output.repeat.scope`：元素级页眉、页脚、页码、Logo 或可编辑水印；源节点仍在 `schema.elements[]`，Designer 只有一份可编辑源节点，其它页是预览/输出复制。
 
 ## 24.4 Viewer 管线
 
@@ -133,7 +133,7 @@ ViewerRuntime 当前主流程：
 | `auto-sheets` | 按页面高度自动切页；支持 `pageBreakBefore / pageBreakAfter / keepTogether`；元素过高时优先调用 `FragmentPaginator`，否则输出 overflow 诊断。 |
 | `none` | 连续纸只输出一张 sheet；高度为内容底边加尾部留白，且不因 page break 约束切成固定页。 |
 
-分页控制字段从 `node.placement / node.break` 读取并投影为 `LayoutFragment.flow`，旧模板中的 `node.props.layoutMode / keepTogether / pageBreakBefore / pageBreakAfter` 只作为兼容 fallback。当前约定：`placement.mode !== 'fixed'` 的节点参与 flow；固定节点不会被 `flow-y` 推移，也不触发分页 break；若回流后与 flow 节点新增重叠，输出 `FLOW_Y_FIXED_OVERLAP`。
+分页控制字段从 `node.output.placement` 与 `node.output.break` 读取并投影为 `LayoutFragment.flow`。旧输入由 load adapter 归一化为 canonical envelope，不作为 layout 阶段的第二套合同。当前约定：`output.placement.mode !== 'fixed'` 的节点参与 flow；固定节点不会被 `flow-y` 推移，也不触发分页 break；若回流后与 flow 节点新增重叠，输出 `FLOW_Y_FIXED_OVERLAP`。
 
 ## 24.5.1 节点局部行为
 
@@ -141,9 +141,9 @@ ViewerRuntime 当前主流程：
 
 | 行为 | 字段 | 生效阶段 | UI 语义 |
 | --- | --- | --- | --- |
-| 位置行为 | `placement.mode` | reflow | 跟随内容 / 固定位置 |
-| 跨页规则 | `break.keepTogether / before / after` | `auto-sheets` pagination | 保持整体、前置分页、后置分页 |
-| 每页重复 | `repeat.scope='every-output-page'` | pagination 之后 | 每个输出页都显示 |
+| 位置行为 | `output.placement.mode` | reflow | 跟随内容 / 固定位置 |
+| 跨页规则 | `output.break.keepTogether / before / after` | `auto-sheets` pagination | 保持整体、前置分页、后置分页 |
+| 每页重复 | `output.repeat.scope='every-output-page'` | pagination 之后 | 每个输出页都显示 |
 
 跨页规则只对参与 flow 的节点生效；固定位置节点即使保留旧 break 字段，也不会切页。每页重复节点不参与 layout/reflow/pagination，它们是分页完成后的 page overlay，因此不会影响页数或连续纸高度。但在 `fixed-sheets + blankPolicy='remove'` 下，可见的每页重复 overlay 会保留对应输出纸张，避免只有页码、页眉、页脚或水印的页面被误判为空白页。
 
@@ -155,7 +155,7 @@ Designer 属性面板按页面策略注入行为项：
 | `stack-flow + flow-y + none` | 跟随内容 / 固定位置、每页重复 |
 | `stack-flow + flow-y + auto-sheets` | 跟随内容 / 固定位置、跨页规则、每页重复 |
 
-每页重复不是隐藏的高级能力。页码物料默认 `repeat.scope='every-output-page'`，普通文本、图片等也可显式开启，用于页眉、页脚、水印等通用场景。
+每页重复不是隐藏的高级能力。页码物料默认 `output.repeat.scope='every-output-page'`，普通文本、图片等也可显式开启，用于页眉、页脚、水印等通用场景。
 
 ## 24.6 可分页物料
 

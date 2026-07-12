@@ -292,7 +292,7 @@ const amountField: DataFieldNode = {
 
 拖拽规则：
 
-- 普通元素绑定复制到 `element.binding.format`
+- 普通元素绑定复制到 manifest 声明的 display port，即 `element.bindings[port].format`
 - `table-data` repeat-template 单元格复制到 `cell.binding.format`
 - `table-static` 或非 repeat 行单元格复制到 `cell.staticBinding.format`
 - 后续用户在属性面板修改绑定格式，只修改模板绑定，不反写数据源字段树

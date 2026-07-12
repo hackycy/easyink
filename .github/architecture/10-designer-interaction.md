@@ -332,12 +332,12 @@ interface PropertyPanelOverlay {
 
 物料通过 `ctx.requestPropertyPanel(overlay)` 推送叠加层，`null` 清除。
 
-`PropertyPanelOverlay.binding` 只用于普通 `BindingRef` 编辑，例如表格 cell 的 `binding` / `staticBinding`。声明了 `MaterialDefinition.binding.kind='data-contract'` 的物料使用专用 MaterialDataBindingEditor，读写 `DataContractBinding.mappings`。
+`PropertyPanelOverlay.binding` 只用于 deep-editing 子对象的普通 `BindingRef` 编辑，例如表格 cell 的 binding。元素级绑定能力来自 `MaterialManifest.common.binding`：`kind: 'ports'` 且声明 `dataContract` 时使用专用 `MaterialDataBindingEditor`，并在 manifest 声明的 semantic port 下读写 `DataContractBinding.mappings`。
 
 **渲染模型**（从上到下）：
 
 1. **Geometry** -- 位置/尺寸，始终显示
-2. **基础层** -- `MaterialDefinition.props` 驱动，始终显示；内置物料的基础字段由 `@easyink/prop-schemas` 提供，注册时再合并物料包自身的 `propSchemas`
+2. **基础层** -- `MaterialManifest.common.properties` 的 property descriptor 与 accessor 驱动，始终显示；accessor 声明完整 RFC 6901 canonical 路径
 3. **叠加层** -- `PropertyPanelOverlay.schemas` 驱动，仅 deep editing 推送时显示
 4. **BindingSection** -- 按规则显隐（见下）
 5. **可见性/锁定** -- 始终显示
@@ -346,25 +346,15 @@ interface PropertyPanelOverlay {
 
 - overlay 提供 `binding` 且非 `null` → 展示推送的 binding
 - overlay 提供 `binding === null` → 隐藏 BindingSection
-- 元素声明 `material.binding.kind='data-contract'` → 展示 MaterialDataBindingEditor，隐藏普通 BindingSection
-- 无 overlay 且 `material.capabilities.bindable === false` → 隐藏
-- 否则 → 展示元素顶层 binding
+- manifest 的 `common.binding` 声明 data contract → 展示 MaterialDataBindingEditor，隐藏普通 BindingSection
+- 无 overlay 且 `common.binding.kind === 'none'` 或没有唯一 display port → 隐藏
+- 否则 → 展示 manifest 声明的 display binding port
 
 **自动清除**：PropertiesPanel watch editing session 状态，session 退出时自动 `setPropertyOverlay(null)`。90% 场景由 `selectionType.getPropertySchema` 自动派生（见 [22 章 S22.6.3](./22-editing-behavior.md)），仅 EphemeralPanel 场景需要手动推送。
 
 **自定义编辑器**：物料包可定义 Vue 组件，通过 `editors` 映射传入。面板按 `PropSchema.editor` 字段查找，匹配到自定义编辑器时渲染该组件。
 
-**sectionFilter 声明**：
-
-`MaterialDefinition` 可选声明 `sectionFilter` 控制面板 section 显隐：
-
-```typescript
-sectionFilter?: (sectionId: PanelSectionId, context: SectionFilterContext) => boolean
-// PanelSectionId = 'geometry' | 'props' | 'overlay' | 'binding' | 'visibility'
-// SectionFilterContext = { node: MaterialNode, isEditing: boolean }
-```
-
-返回 `false` 隐藏该 section。表格物料注册时声明 `sectionFilter: (id) => id !== 'binding'`，因为表格绑定粒度是单元格级而非元素级（cell 级 binding 通过 `PropertyPanelOverlay.binding` 在 cell-selected 阶段展示）。
+**Section 显隐**：基础属性来自 manifest 的 descriptor 集合；binding section 只依据 overlay 的显式 binding 上下文与 `common.binding` 的端口策略显示。表格 cell 等 deep-editing 粒度通过 `PropertyPanelOverlay.binding` 提供局部上下文，不引入另一个物料级过滤回调。
 
 **状态管理**：
 

@@ -100,13 +100,13 @@ class FontManager {
 
 ## 14.3 字体发现
 
-模板字体引用由 `collectFontFamilies(schema)` 收集。收集范围包括：
+模板字体引用由 `collectFontFamilies(schema, profile)` 收集。收集范围包括：
 
 - `schema.page.font`
-- 元素 `node.props.fontFamily`
-- 通过 schema traversal 访问到的子节点和表格单元格 hosted elements
+- 物料 adapter introspection 声明的 `kind: 'font'` resource（例如文本物料的 `/model/fontFamily`）
+- `walkMaterialNodes(schema, profile, visitor)` 访问到的 slot 子节点与物料私有结构
 
-不要在 Viewer 或 Designer 侧各自手写递归逻辑；未来如果 Schema 承载结构扩展，应优先扩展 `@easyink/schema` 的 traversal。
+不要在 Viewer 或 Designer 侧各自手写递归逻辑；私有 model 中的字体与 hosted node 必须由 manifest adapter introspection 声明，core 通过 profile 驱动的 material graph traversal 统一收集。
 
 ## 14.4 Designer 字体策略
 

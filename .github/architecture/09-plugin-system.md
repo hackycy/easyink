@@ -1,148 +1,33 @@
-# 9. 内部扩展机制
+# 9. 物料包与扩展系统
 
-EasyInk 当前保留扩展抽象，但它的目标是支撑内置体系演进，而不是立刻开放成稳定的第三方插件平台。
+物料平台以不可变 manifest、原子 package 和编译 profile 为边界。这里的“插件”不表示进程级 mutable registration。
 
-## 9.1 当前边界
+## 9.1 Manifest 与 package
 
-当前版本的扩展机制只服务以下场景：
+`MaterialManifest` 包含版本、engine range、type、modelVersion、common contract、schema adapter 以及可选 designer/viewer/AI facets。`defineMaterialManifest()` 校验并深冻结完整声明。
 
-- 内置物料包接入
-- Designer 面板和工具栏扩展
-- Viewer 运行时适配器扩展
-- 数据源字段推荐扩展
+`MaterialPackageRegistration` 声明 `packageId / kind / required / manifests`。外部包必须提供 namespace，物料 type 使用 `namespace/name`；内置包使用无 namespace 的稳定 type。重复 package/type、越权 namespace 和不兼容版本在 compile 时确定性失败或隔离。
 
-不在当前稳定扩展面中的能力：
+package 是隔离原子：required package 失败会终止编译；optional package 任一 manifest 失败时整包 quarantine，不允许半包覆盖或 last-write-wins。
 
-- 模板内执行任意脚本
-- 模板内注册自定义表达式语言
-- 运行时动态注入任意渲染器
-- 面向第三方生态的兼容性承诺
+## 9.2 Compile profile
 
-## 9.2 扩展主题
+宿主调用：
 
-内部扩展抽象围绕五类对象组织：
-
-### 物料扩展
-
-- 注册物料定义
-- 注册 Designer 交互能力（factory 模式，按需创建扩展实例）
-- 注册 Viewer 渲染能力
-- 注册数据源投放提示
-
-Designer 与 Viewer 各自维护独立的物料注册表。Viewer 运行在 iframe 内是独立进程，无法共享同一个注册表实例。物料包分别导出 `designer.ts` 和 `viewer.ts`，由各自的初始化流程调用注册。
-
-### 数据源扩展
-
-- 扩展字段推荐
-- 扩展示例数据来源
-
-### 工作台扩展
-
-- 注册面板
-- 注册顶部工具栏动作
-- 注册右键菜单动作
-
-### Viewer 扩展
-
-- 打印适配器
-- 导出适配器
-- 字体加载器
-- 缩略图生成器
-
-### 诊断扩展
-
-- 订阅诊断事件
-- 映射到工作台面板或宿主日志系统
-
-## 9.3 内部扩展上下文
-
-```typescript
-interface InternalExtensionContext {
-  materials: MaterialExtensionRegistry
-  datasource: DataSourceExtensionRegistry
-  designer: DesignerExtensionRegistry
-  viewer: ViewerExtensionRegistry
-  hooks: InternalHooks
-}
-
-// factory 在需要时被调用，返回包含 renderContent / geometry / behaviors / decorations(可选，见 22 章) 的扩展实例
-type MaterialExtensionFactory = (context: MaterialExtensionContext) => MaterialDesignerExtension
-
-interface MaterialExtensionRegistry {
-  register(definition: MaterialDefinition): void
-  registerDesigner(type: string, factory: MaterialExtensionFactory): void
-  registerViewer(type: string, viewer: MaterialViewerExtension): void
-}
+```ts
+const profile = compileMaterialProfile({
+  id: 'host',
+  engineVersion: EASYINK_ENGINE_VERSION,
+  packages,
+})
 ```
 
-注意：`MaterialExtensionRegistry` 是逻辑接口，Designer 和 Viewer 各自实现。Designer 进程只调用 `register()` 和 `registerDesigner()`，Viewer 进程只调用 `register()` 和 `registerViewer()`。不存在跨进程共享的单例注册表。
+`CompiledMaterialProfile` 发布冻结 manifest snapshot、admission budget、diagnostics、materialTypes 以及独立的 surface sets，并提供 `getManifest / hasSurface / createNode`。创建节点由 profile 物化 canonical empty maps、合并默认私有 model、验证 binding ports，并运行 adapter；宿主不直接拼接物料根字段。
 
-```typescript
-interface DataSourceExtensionRegistry {
-  // 数据源扩展当前无注册方法，预留接口
-}
+## 9.3 Facet host
 
-interface DesignerExtensionRegistry {
-  addPanel(panel: DesignerPanelDefinition): void
-  addToolbarItem(item: ToolbarItemDefinition): void
-  addContextAction(action: ContextActionDefinition): void
-}
+`MaterialFacetHost` 负责 designer/viewer facet 的延迟激活、并发去重、surface-local quarantine、服务注入与确定性 dispose。激活模式只有 `sync` 与显式 `async-isolated`。AI facet 是 portable data，不在 facet host 内执行代码。
 
-interface ViewerExtensionRegistry {
-  registerPrintDriver(driver: PrintDriver): void
-  registerExporter(exporter: ViewerExporter): void
-  registerFontLoader(loader: FontLoader): void
-}
-```
+profile 是 Viewer 与 Designer 的共同输入。内置包由 `compileBuiltinMaterialProfile('all' | 'basic' | 'none')` 提供；自定义宿主把自己的原子 package 一并编译，而不是修改全局 registry。
 
-PrintDriver 接收的是打印上下文，不是普通导出上下文。ViewerRuntime 会先解析统一的打印策略，再把同一份策略传给 driver 和浏览器 fallback：
-
-```typescript
-interface ViewerPrintContext extends ViewerExportContext {
-  printPolicy: ViewerPrintPolicy
-  renderedPages: ViewerPageMetrics[]
-  container?: HTMLElement
-}
-
-interface PrintDriver {
-  id: string
-  print(context: ViewerPrintContext): Promise<void>
-}
-```
-
-打印驱动必须消费 `context.printPolicy` 或 `context.renderedPages` 中的尺寸信息，不能重新从 `.ei-viewer-page` 的 inline style 反推打印纸张。这样 continuous-paper 策略和固定纸张导出在 driver 和浏览器 fallback 两条路径上保持同一语义。
-
-## 9.4 Hook 设计
-
-Hook 只做有限可控的编排，不承担任意业务脚本执行。
-
-```typescript
-interface InternalHooks {
-  beforeSchemaNormalize: SyncWaterfallHook<[DocumentSchema]>
-  beforePagePlan: SyncWaterfallHook<[PagePlanningContext]>
-  beforeMaterialRender: SyncWaterfallHook<[MaterialRenderPayload]>
-  diagnosticsEmitted: AsyncEvent<[ViewerDiagnosticEvent]>
-  commandCommitted: AsyncEvent<[CommandRecord]>
-  workbenchReady: AsyncEvent<[]>
-}
-```
-
-设计原则：
-
-- 允许补齐上下文和注入受控能力
-- 不允许执行不透明业务逻辑来改写模板语义
-- Hook 失败应可诊断，不应静默吞掉
-
-## 9.5 为什么暂不开放第三方插件
-
-原因不是“不需要扩展”，而是核心模型还在收敛：
-
-- Schema 还在建立稳定的报表设计器语义
-- Designer 交互模型仍在向对标产品靠拢
-- Viewer 的打印、导出和缩略图链路还没有完全固化
-
-因此当前策略是：
-
-- 先把扩展点做成内部抽象
-- 观察真实实现是否稳定
-- 再选择性公开最小必要接口
+API 见 [`packages/core/src/material-profile.ts`](../../packages/core/src/material-profile.ts)、[`packages/core/src/material-manifest.ts`](../../packages/core/src/material-manifest.ts) 和 [`packages/core/src/material-facet-host.ts`](../../packages/core/src/material-facet-host.ts)。

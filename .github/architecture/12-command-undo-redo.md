@@ -84,7 +84,10 @@ class CommandManager {
 - `MoveMaterialCommand`
 - `ResizeMaterialCommand`（仅几何 + 一个不透明的 `MaterialResizeSideEffect`；详见下方说明）
 - `RotateMaterialCommand`
-- `UpdateMaterialPropsCommand`
+- `UpdateMaterialModelCommand`
+- `UpdateMaterialBindingCommand`
+- `UpdateMaterialOutputCommand`
+- `UpdateMaterialEditorStateCommand`
 - `UpdatePageCommand`
 - `UpdateGuidesCommand`
 - `UpdateGeometryCommand`（属性面板 X/Y/W/H/rotation/opacity 修改，支持 merge 和 precomputedOldValues）
@@ -259,7 +262,7 @@ ctx.tx.run(nodeId, draft => {
 
 ### precomputedOldValues 机制
 
-由于 preview 路径直接修改了 node.props / page / document，commit 时创建 Command 需要知道编辑前的原始值。`UpdateMaterialPropsCommand`、`UpdatePageCommand`、`UpdateDocumentCommand`、`UpdateGeometryCommand` 均接受可选的 `precomputedOldValues` 参数。上层在首次 preview 时快照原始值，commit 时传入 Command 构造函数。
+preview session 在首次修改前保存 canonical node/page/document 快照；commit 通过属性 accessor 写入 transaction draft，并使用 merge key 合并连续输入。发布候选 Schema 时必须经过 edit sidecar 校验。把所有 command/undo/redo 统一接入 publish/restore 边界属于 Transaction 后续计划。
 
 ## 12.9 历史面板
 

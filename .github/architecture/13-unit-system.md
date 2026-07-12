@@ -194,7 +194,7 @@ UnitManager 仍用于：
 ```typescript
 // 示例：TEXT_DEFAULTS.fontSize = 4.23 (mm, 约等于 12pt)
 const node = createTextNode({}, 'pt')
-// → node.props.fontSize ≈ 12 (pt)
+// → node.model.fontSize ≈ 12 (pt)
 // → node.width ≈ 226.77 (pt, 从 80mm 转换)
 ```
 
