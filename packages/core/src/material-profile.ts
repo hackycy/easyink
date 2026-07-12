@@ -376,7 +376,7 @@ function createNodeFromManifest(
     ...defaultBindings,
     ...inputBindings,
   }
-  assertCanonicalMaterialBindingMap(manifest.common.binding, bindings)
+  assertCanonicalMaterialBindingMap(manifest.common.binding, bindings, model)
   const defaultOutput = manifest.common.defaultNode.output === undefined
     ? {}
     : cloneRecord(manifest.common.defaultNode.output)
@@ -500,7 +500,7 @@ function assertAllowedNodeKeys(value: unknown, materialType: string): asserts va
 
 function assertCanonicalNode(node: MaterialNode, manifest: MaterialManifest): void {
   assertAllowedNodeKeys(node, manifest.type)
-  assertCanonicalMaterialBindingMap(manifest.common.binding, node.bindings)
+  assertCanonicalMaterialBindingMap(manifest.common.binding, node.bindings, node.model)
   const schemaIssues = validateSchemaIssues({
     version: '1.0.0',
     unit: manifest.common.defaultNode.unit,

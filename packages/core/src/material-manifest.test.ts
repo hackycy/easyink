@@ -1,7 +1,7 @@
 import type { MaterialManifest } from './material-manifest'
 import { describe, expect, it } from 'vitest'
-import { assertMaterialBindingValue, resolveMaterialBindingPortPolicy } from './material-binding'
-import { deepFreezeManifest, defineMaterialManifest } from './material-manifest'
+import { assertMaterialBindingValue, resolveMaterialBindingPortPolicy, resolveMaterialBindingPortPolicyDefinition } from './material-binding'
+import { assertCanonicalMaterialBindingMap, deepFreezeManifest, defineMaterialManifest } from './material-manifest'
 import { recordSchemaAdapter } from './schema-adapter'
 
 function validManifest(overrides: Partial<MaterialManifest> = {}): MaterialManifest {
@@ -682,6 +682,29 @@ describe('material binding value policies', () => {
       kind: 'ports',
       ports: [definition.ports[1], { ...definition.ports[1], id: 'duplicate' }],
     }, 'series-sales', [])).toThrowError('MATERIAL_BINDING_POLICY_AMBIGUOUS')
+  })
+
+  it('resolves binding keys declared by exact and wildcard model paths', () => {
+    const definition = {
+      kind: 'ports',
+      ports: [
+        { id: 'collection', key: { kind: 'model', paths: ['/data/collectionPort'] }, role: 'semantic', valueShape: 'record-array', formatEditor: false },
+        { id: 'cell', key: { kind: 'model', paths: ['/bands/*/rows/*/cells/*/content/bindingPort'] }, role: 'display', valueShape: 'scalar', modelPath: '/model/bands', formatEditor: false },
+      ],
+    } as const
+    const model = {
+      data: { collectionPort: 'orders' },
+      bands: [{ rows: [{ cells: [{ content: { bindingPort: 'detail:name' } }] }] }],
+    }
+
+    expect(resolveMaterialBindingPortPolicyDefinition(definition, 'orders', model).id).toBe('collection')
+    expect(resolveMaterialBindingPortPolicyDefinition(definition, 'detail:name', model).id).toBe('cell')
+    expect(() => resolveMaterialBindingPortPolicyDefinition(definition, 'missing', model))
+      .toThrowError('MATERIAL_BINDING_POLICY_UNMATCHED')
+    expect(() => assertCanonicalMaterialBindingMap(definition, {
+      'orders': { sourceId: 'invoice', fieldPath: 'orders' },
+      'detail:name': { sourceId: 'invoice', fieldPath: 'orders/name' },
+    }, model)).not.toThrow()
   })
 })
 

@@ -1,7 +1,7 @@
 import type { FragmentPaginator, LayoutFragment, ViewerMeasureContext, ViewerMeasureResult, ViewerRenderContext, ViewerRenderOutput } from '@easyink/core'
 import type { BindingRef, MaterialNode, TableCellSchema, TableRowSchema } from '@easyink/schema'
 import type { TableDataProps } from './schema'
-import { createFragmentFromNode, extractCollectionPath, formatBindingDisplayValue, resolveBindingValue, resolveFieldFromRecord, viewerElement, viewerText } from '@easyink/core'
+import { createFragmentFromNode, formatBindingDisplayValue, resolveBindingValue, resolveFieldFromRecord, viewerElement, viewerText } from '@easyink/core'
 import { computeAutoRowHeights, computeRowScaleWithVirtualRows, getTableMaterialModel, projectTableTopology, renderTableTree, resolveTableBaseProps } from '@easyink/material-table-kernel'
 import { TABLE_DATA_PLACEHOLDER_ROW_COUNT } from './layout'
 import { TABLE_DATA_DEFAULTS } from './schema'
@@ -64,7 +64,7 @@ function resolveRuntimeLayout(
 ): ResolvedRuntimeLayout {
   const projection = projectTableTopology(node)
   const { topology } = projection
-  const expandedRows = expandRepeatTemplateRows(topology.rows, projection.rowIds, data, node.id, reportDiagnostic)
+  const expandedRows = expandRepeatTemplateRows(topology.rows, projection.rowIds, node, data, reportDiagnostic)
   const visibleRows = filterVisibleRows(expandedRows, true, true)
 
   const repeatRow = topology.rows.find(row => row.role === 'repeat-template')
@@ -210,61 +210,46 @@ export function renderTableData(node: MaterialNode<unknown>, context?: ViewerRen
 function expandRepeatTemplateRows(
   rows: TableRowSchema[],
   rowIds: readonly string[],
+  node: MaterialNode<unknown>,
   data: Record<string, unknown>,
-  nodeId: string,
   reportDiagnostic?: ViewerRenderContext['reportDiagnostic'],
 ): RuntimeTableRow[] {
   const result: RuntimeTableRow[] = []
+  const model = getTableMaterialModel(node)
+  const collectionBinding = model.kind === 'data' ? bindingAt(node, model.data.collectionPort) : undefined
+  const collectionData = collectionBinding ? resolveBindingValue(collectionBinding, data) : undefined
+  const records = Array.isArray(collectionData) ? collectionData : undefined
+  const detailKeyBinding = model.kind === 'data' && model.data.detailKeyPort
+    ? bindingAt(node, model.data.detailKeyPort)
+    : undefined
+  const recordIdentities = records && collectionBinding
+    ? resolveRecordIdentities(records, collectionBinding, detailKeyBinding, node.id, reportDiagnostic)
+    : []
 
   for (const [rowIndex, row] of rows.entries()) {
     const canonicalRowId = rowIds[rowIndex] ?? `row-${rowIndex}`
     if (row.role !== 'repeat-template') {
       // Header/footer/normal: resolve staticBinding into content
-      result.push({ row: resolveStaticRow(row, data, nodeId, reportDiagnostic), canonicalRowId, sourceRowKey: canonicalRowId })
+      result.push({ row: resolveStaticRow(row, data, node.id, reportDiagnostic), canonicalRowId, sourceRowKey: canonicalRowId })
       continue
     }
 
-    // Collect all binding field paths from repeat-template cells
-    const bindings = row.cells
-      .map(c => c.binding)
-      .filter((binding): binding is BindingRef => !!binding?.fieldPath)
-    const fieldPaths = bindings.map(binding => binding.fieldPath)
-
-    if (fieldPaths.length === 0) {
-      // No bindings — render as single row with static content
-      result.push({ row, canonicalRowId, sourceRowKey: canonicalRowId })
-      continue
-    }
-
-    const collectionPath = extractCollectionPath(fieldPaths)
-    if (!collectionPath) {
-      result.push({ row, canonicalRowId, sourceRowKey: canonicalRowId })
-      continue
-    }
-
-    // Resolve collection from data
-    const firstBinding = bindings[0]
-    const collectionBinding: BindingRef = {
-      sourceId: firstBinding?.sourceId ?? '',
-      sourceTag: firstBinding?.sourceTag,
-      fieldPath: collectionPath,
-    }
-    const collectionData = resolveBindingValue(collectionBinding, data)
-    if (!Array.isArray(collectionData) || collectionData.length === 0) {
-      // Empty or non-array — render single empty row
+    // The configured collection port owns detail repetition, even for hosted-only rows.
+    if (!records || !collectionBinding || records.length === 0) {
+      // Keep one template row as an empty-state placeholder.
       result.push({ row, canonicalRowId, sourceRowKey: canonicalRowId })
       continue
     }
 
     // Expand: one row per collection item
-    for (const [recordIndex, item] of collectionData.entries()) {
+    for (const [recordIndex, item] of records.entries()) {
       const record = (typeof item === 'object' && item !== null ? item : {}) as Record<string, unknown>
       const expandedCells: TableCellSchema[] = row.cells.map((cell) => {
         if (!cell.binding?.fieldPath)
           return { ...cell }
-        const leafField = cell.binding.fieldPath.substring(collectionPath.length + 1)
+        const leafField = relativeRecordPath(cell.binding.fieldPath, collectionBinding.fieldPath)
         const value = resolveFieldFromRecord(leafField, record)
-        const formatted = formatCellValue(value, cell.binding, data, nodeId, reportDiagnostic)
+        const formatted = formatCellValue(value, cell.binding, data, node.id, reportDiagnostic)
         return {
           ...cell,
           content: { text: formatted },
@@ -273,12 +258,101 @@ function expandRepeatTemplateRows(
       result.push({
         row: { height: row.height, role: 'repeat-template', cells: expandedCells },
         canonicalRowId,
-        sourceRowKey: `${canonicalRowId}:record-${recordIndex}`,
+        sourceRowKey: `${canonicalRowId}:${recordIdentities[recordIndex] ?? `record-${recordIndex}`}`,
       })
     }
   }
 
   return result
+}
+
+function bindingAt(node: MaterialNode<unknown>, port: string): BindingRef | undefined {
+  const binding = node.bindings[port]
+  return binding && !Array.isArray(binding) ? binding as BindingRef : undefined
+}
+
+function relativeRecordPath(fieldPath: string, collectionPath: string): string {
+  const prefix = `${collectionPath}/`
+  return fieldPath.startsWith(prefix) ? fieldPath.slice(prefix.length) : fieldPath
+}
+
+function resolveRecordIdentities(
+  records: readonly unknown[],
+  collectionBinding: BindingRef,
+  detailKeyBinding: BindingRef | undefined,
+  nodeId: string,
+  reportDiagnostic?: ViewerRenderContext['reportDiagnostic'],
+): string[] {
+  if (!detailKeyBinding)
+    return records.map((_, index) => `record-${index}`)
+  const keyPath = relativeRecordPath(detailKeyBinding.fieldPath, collectionBinding.fieldPath)
+  const keys = records.map((record) => {
+    const value = typeof record === 'object' && record !== null
+      ? resolveFieldFromRecord(keyPath, record as Record<string, unknown>)
+      : undefined
+    return stableRecordKey(value)
+  })
+  const counts = new Map<string, number>()
+  const tokenValues = new Map<string, Set<string>>()
+  for (const key of keys) {
+    if (key) {
+      counts.set(key.raw, (counts.get(key.raw) ?? 0) + 1)
+      const values = tokenValues.get(key.token) ?? new Set<string>()
+      values.add(key.raw)
+      tokenValues.set(key.token, values)
+    }
+  }
+  return keys.map((key, index) => {
+    if (!key) {
+      reportDiagnostic?.({
+        code: 'TABLE_DATA_DETAIL_KEY_MISSING',
+        severity: 'warning',
+        message: `Table ${nodeId} record ${index} has no usable detail key.`,
+        nodeId,
+      })
+      return `record-${index}`
+    }
+    if ((counts.get(key.raw) ?? 0) > 1) {
+      reportDiagnostic?.({
+        code: 'TABLE_DATA_DETAIL_KEY_DUPLICATE',
+        severity: 'warning',
+        message: `Table ${nodeId} record ${index} has a duplicate detail key.`,
+        nodeId,
+      })
+      return `record-${index}`
+    }
+    if ((tokenValues.get(key.token)?.size ?? 0) > 1) {
+      reportDiagnostic?.({
+        code: 'TABLE_DATA_DETAIL_KEY_COLLISION',
+        severity: 'warning',
+        message: `Table ${nodeId} record ${index} has a colliding detail key token.`,
+        nodeId,
+      })
+      return `record-${index}`
+    }
+    return `key-${key.token}`
+  })
+}
+
+function stableRecordKey(value: unknown): { raw: string, token: string } | undefined {
+  if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean')
+    return undefined
+  if (typeof value === 'number' && !Number.isFinite(value))
+    return undefined
+  const raw = `${typeof value}:${typeof value === 'number' && Object.is(value, -0) ? '-0' : String(value)}`
+  return {
+    raw,
+    token: `${raw.length.toString(36)}-${hashKey(raw, 0x811C9DC5)}-${hashKey(raw, 0x9E3779B9)}`,
+  }
+}
+
+function hashKey(value: string, seed: number): string {
+  let hash = seed >>> 0
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index)
+    hash = Math.imul(hash, 0x01000193) >>> 0
+  }
+  return hash.toString(36)
 }
 
 function splitRuntimeRows(

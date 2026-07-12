@@ -128,14 +128,14 @@ function bindingSchema(binding: MaterialBindingDefinition): JsonObject {
       : bindingReferenceSchema()
     if (port.key.kind === 'exact')
       properties[port.key.value] = expression
-    else
+    else if (port.key.kind === 'prefix')
       patternProperties[`^${escapeRegex(port.key.value)}`] = expression
   }
   return {
     type: 'object',
     properties,
     ...(Object.keys(patternProperties).length ? { patternProperties } : {}),
-    additionalProperties: false,
+    additionalProperties: binding.ports.some(port => port.key.kind === 'model') ? bindingReferenceSchema() : false,
   }
 }
 

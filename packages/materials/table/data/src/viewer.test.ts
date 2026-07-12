@@ -22,12 +22,24 @@ function createNode(): MaterialNode<unknown> {
 }
 
 describe('tableDataFragmentPaginator', () => {
+  it('expands records from the configured collection port without requiring detail cell bindings', () => {
+    const node = createNode()
+    const model = node.model as ReturnType<typeof createDefaultDataTableModel>
+    model.data.collectionPort = 'orders'
+    node.bindings.orders = { sourceId: 'invoice', fieldPath: 'orders' }
+
+    const output = renderTableData(node, renderContext({ orders: [{ id: 1 }, { id: 2 }] })).tree
+
+    expect(bodyRows(output)).toHaveLength(2)
+  })
+
   it('splits projected runtime rows without mutating the canonical model', () => {
     const node = createNode()
     const model = node.model as ReturnType<typeof createDefaultDataTableModel>
     const detailCells = model.bands.find(band => band.role === 'detail')!.rows[0]!.cells
     detailCells[0]!.content = { kind: 'text', text: '', bindingPort: 'detail:name' }
     detailCells[1]!.content = { kind: 'text', text: '', bindingPort: 'detail:qty' }
+    node.bindings.records = { sourceId: 'invoice', fieldPath: 'items' }
     node.bindings['detail:name'] = { sourceId: 'invoice', fieldPath: 'items/name' }
     node.bindings['detail:qty'] = { sourceId: 'invoice', fieldPath: 'items/qty' }
     const before = structuredClone(model)
@@ -38,7 +50,7 @@ describe('tableDataFragmentPaginator', () => {
     })
     const result = tableDataFragmentPaginator.paginateFragment({
       fragment: createFragmentFromNode(node),
-      availableHeight: 24,
+      availableHeight: 20,
       pageContext: { pageIndex: 0 },
     })
 
@@ -55,8 +67,7 @@ describe('tableDataFragmentPaginator', () => {
     const footer = model.bands.find(band => band.role === 'footer')!.rows[0]!
     const hosted = detail.cells[0]!
     hosted.content = { kind: 'materials', slotId: `cell:${hosted.id}` }
-    detail.cells[1]!.content = { kind: 'text', text: '', bindingPort: 'detail:name' }
-    node.bindings['detail:name'] = { sourceId: 'invoice', fieldPath: 'items/name' }
+    node.bindings.records = { sourceId: 'invoice', fieldPath: 'items' }
 
     const output = renderTableData(node, {
       data: { items: [{ name: 'A' }, { name: 'B' }] },
@@ -80,7 +91,90 @@ describe('tableDataFragmentPaginator', () => {
     expect(footerCells).toHaveLength(footer.cells.length)
     expect(footerCells.every(cell => !bodyCells.some(body => body.attributes.id === cell.attributes.id))).toBe(true)
   })
+
+  it('keeps keyed row and cell ids stable when records reorder', () => {
+    const node = createNode()
+    const model = node.model as ReturnType<typeof createDefaultDataTableModel>
+    model.data.collectionPort = 'orders'
+    model.data.detailKeyPort = 'orderId'
+    const detail = model.bands.find(band => band.role === 'detail')!.rows[0]!
+    detail.cells[0]!.content = { kind: 'text', text: '', bindingPort: 'detail:name' }
+    node.bindings.orders = { sourceId: 'invoice', fieldPath: 'orders' }
+    node.bindings.orderId = { sourceId: 'invoice', fieldPath: 'orders/id' }
+    node.bindings['detail:name'] = { sourceId: 'invoice', fieldPath: 'orders/name' }
+
+    const first = renderTableData(node, renderContext({ orders: [{ id: 'a', name: 'Alpha' }, { id: 'b', name: 'Beta' }] })).tree
+    const second = renderTableData(node, renderContext({ orders: [{ id: 'b', name: 'Beta' }, { id: 'a', name: 'Alpha' }] })).tree
+
+    expect(rowIdentityByText(second)).toEqual(rowIdentityByText(first))
+  })
+
+  it('uses unique deterministic fallbacks and reports duplicate or missing detail keys', () => {
+    const node = createNode()
+    const model = node.model as ReturnType<typeof createDefaultDataTableModel>
+    model.data.detailKeyPort = 'detailKey'
+    node.bindings.records = { sourceId: 'invoice', fieldPath: 'items' }
+    node.bindings.detailKey = { sourceId: 'invoice', fieldPath: 'items/id' }
+    const diagnostics: Array<{ code: string }> = []
+    const data = { items: [{ id: 'same' }, { id: 'same' }, { name: 'missing' }] }
+
+    const first = renderTableData(node, renderContext(data, diagnostic => diagnostics.push(diagnostic))).tree
+    const second = renderTableData(node, renderContext(data)).tree
+    const firstIds = bodyRows(first).map(row => row.attributes.id)
+
+    expect(new Set(firstIds).size).toBe(3)
+    expect(bodyRows(second).map(row => row.attributes.id)).toEqual(firstIds)
+    expect(diagnostics.map(item => item.code)).toEqual([
+      'TABLE_DATA_DETAIL_KEY_DUPLICATE',
+      'TABLE_DATA_DETAIL_KEY_DUPLICATE',
+      'TABLE_DATA_DETAIL_KEY_MISSING',
+    ])
+  })
+
+  it('preserves keyed row metadata across pagination', () => {
+    const node = createNode()
+    const model = node.model as ReturnType<typeof createDefaultDataTableModel>
+    model.data.detailKeyPort = 'detailKey'
+    node.bindings.records = { sourceId: 'invoice', fieldPath: 'items' }
+    node.bindings.detailKey = { sourceId: 'invoice', fieldPath: 'items/id' }
+    const data = { items: [{ id: 'a' }, { id: 'b' }, { id: 'c' }] }
+    measureTableData(node, { data, unit: 'mm' })
+
+    const pages = tableDataFragmentPaginator.paginateFragment({
+      fragment: createFragmentFromNode(node),
+      availableHeight: 20,
+      pageContext: { pageIndex: 0 },
+    })
+    expect(pages.nextPage).toBeDefined()
+    const rendered = [pages.currentPage, pages.nextPage!]
+      .flatMap(page => bodyRows(renderTableData(page.node, renderContext(data)).tree))
+
+    expect(new Set(rendered.map(row => row.attributes.id)).size).toBe(rendered.length)
+  })
 })
+
+function renderContext(data: Record<string, unknown>, reportDiagnostic?: (diagnostic: any) => void) {
+  return {
+    data,
+    resolvedProps: {},
+    pageIndex: 0,
+    unit: 'mm',
+    zoom: 1,
+    capabilities: { sanitizeMarkup: () => { throw new Error('unused') } },
+    reportDiagnostic,
+  }
+}
+
+function bodyRows(tree: ViewerRenderTree): ViewerElementTree[] {
+  return findElements(tree, 'tbody').flatMap(body => findElements(body, 'tr'))
+}
+
+function rowIdentityByText(tree: ViewerRenderTree): Record<string, string> {
+  return Object.fromEntries(bodyRows(tree).map(row => [
+    JSON.stringify(row).includes('Alpha') ? 'Alpha' : 'Beta',
+    String(row.attributes.id),
+  ]))
+}
 
 function findElements(tree: ViewerRenderTree, tag: string): ViewerElementTree[] {
   if (tree.kind !== 'element')

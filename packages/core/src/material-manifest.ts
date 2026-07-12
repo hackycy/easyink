@@ -11,7 +11,7 @@ import type { JsonPointer } from './material-introspection'
 import type { PropertyDescriptor } from './material-properties'
 import type { SchemaAdapter } from './schema-adapter'
 import { assertJsonValue } from '@easyink/shared'
-import { resolveMaterialBindingPortPolicyDefinition } from './material-binding'
+import { createMaterialBindingPortPolicyResolver } from './material-binding'
 
 export const MATERIAL_MANIFEST_VERSION = 1 as const
 export const MATERIAL_API_VERSION = 1 as const
@@ -261,7 +261,7 @@ function validateCommonFacet(common: MaterialCommonFacet): void {
       fail('MATERIAL_STRUCTURE_POLICY_INVALID')
     }
   }
-  assertCanonicalMaterialBindingMap(common.binding, common.defaultNode.bindings)
+  assertCanonicalMaterialBindingMap(common.binding, common.defaultNode.bindings, common.defaultNode.model)
 }
 
 function validateAdapter(adapter: SchemaAdapter): void {
@@ -298,6 +298,7 @@ function validateAdapter(adapter: SchemaAdapter): void {
 export function assertCanonicalMaterialBindingMap(
   definition: MaterialBindingDefinition,
   bindings: unknown,
+  model?: unknown,
 ): asserts bindings is CanonicalMaterialBindingMap | undefined {
   if (!isPlainRecord(definition))
     fail('MATERIAL_BINDING_DEFINITION_INVALID')
@@ -313,13 +314,14 @@ export function assertCanonicalMaterialBindingMap(
   if (definition.dataContract !== undefined)
     validateBindingDataContract(definition.dataContract)
 
-  validatePolicies(definition.ports, 'MATERIAL_BINDING')
+  validateBindingPolicies(definition.ports)
   for (const policy of definition.ports)
     validateBindingPolicy(policy)
+  const resolvePolicy = createMaterialBindingPortPolicyResolver(definition, model)
   for (const [key, binding] of Object.entries(bindings ?? {})) {
     let policy: MaterialBindingPortPolicy
     try {
-      policy = resolveMaterialBindingPortPolicyDefinition(definition, key)
+      policy = resolvePolicy(key)
     }
     catch {
       fail('MATERIAL_BINDING_KEY_UNMATCHED')
@@ -435,6 +437,33 @@ function validateBindingPolicy(policy: MaterialBindingPortPolicy): void {
       && (!Array.isArray(policy.formatEditor.presetTypes)
         || policy.formatEditor.presetTypes.some(type => !BINDING_PRESET_TYPES.has(type)))) {
       fail('MATERIAL_BINDING_FORMAT_POLICY_INVALID')
+    }
+  }
+}
+
+function validateBindingPolicies(policies: readonly MaterialBindingPortPolicy[]): void {
+  if (!Array.isArray(policies) || policies.some(policy => !isPlainRecord(policy)))
+    fail('MATERIAL_BINDING_POLICY_INVALID')
+  validateUniqueIds(policies, policy => policy.id, 'MATERIAL_BINDING_POLICY_ID_INVALID', 'MATERIAL_BINDING_POLICY_ID_DUPLICATE')
+  const deterministic = policies.filter(policy => policy.key.kind !== 'model') as Array<MaterialBindingPortPolicy & { key: { kind: 'exact' | 'prefix', value: string } }>
+  for (const policy of policies) {
+    if (!isPlainRecord(policy.key))
+      fail('MATERIAL_BINDING_POLICY_KEY_INVALID')
+    if (policy.key.kind === 'model') {
+      if (!Array.isArray(policy.key.paths)
+        || policy.key.paths.length === 0
+        || policy.key.paths.some(path => typeof path !== 'string' || !isModelPortPointer(path))) {
+        fail('MATERIAL_BINDING_POLICY_KEY_INVALID')
+      }
+    }
+    else if (!isDeterministicKey(policy.key)) {
+      fail('MATERIAL_BINDING_POLICY_KEY_INVALID')
+    }
+  }
+  for (let left = 0; left < deterministic.length; left += 1) {
+    for (let right = left + 1; right < deterministic.length; right += 1) {
+      if (policiesOverlap(deterministic[left]!, deterministic[right]!))
+        fail('MATERIAL_BINDING_POLICY_OVERLAP')
     }
   }
 }
@@ -629,6 +658,10 @@ function compareSemver(left: readonly bigint[], right: readonly bigint[]): numbe
 
 function isNodeModelPointer(value: string): boolean {
   return value.startsWith('/model/') && isJsonPointer(value)
+}
+
+function isModelPortPointer(value: string): boolean {
+  return isJsonPointer(value) && value.split('/').slice(1).every(segment => segment === '*' || !segment.includes('*'))
 }
 
 function isJsonPointer(value: string): value is JsonPointer {
