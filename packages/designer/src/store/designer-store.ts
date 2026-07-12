@@ -394,6 +394,10 @@ export class DesignerStore {
     return [...this.materialProfile.editableTypes]
   }
 
+  listEditableMaterialManifests() {
+    return this.listEditableMaterialTypes().map(type => this.materialProfile.getManifest(type)!).filter(Boolean)
+  }
+
   listMaterials(): MaterialDefinition[] {
     return this.materialRegistry.listMaterials()
   }

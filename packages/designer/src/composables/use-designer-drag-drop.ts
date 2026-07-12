@@ -17,6 +17,7 @@ import {
   UnitManager,
   UpdateMaterialBindingCommand,
 } from '@easyink/core'
+import { IconRect } from '@easyink/icons'
 import { deepClone } from '@easyink/shared'
 import { createGeometryService } from '../editing/geometry-service'
 import { selectMany, selectOne } from '../interactions/selection-api'
@@ -391,7 +392,7 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
     }
 
     const material = ctx.store.getMaterialManifest(hit.type)
-    if (material?.binding.kind === 'data-contract') {
+    if (material?.common.binding.kind === 'data-contract') {
       const plan = resolveMaterialDataDropPlan(material[MATERIAL_BINDING_KEY].contract, hit, data)
       if (!plan)
         return null
@@ -464,7 +465,7 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
     }
 
     const material = ctx.store.getMaterialManifest(resolved.target.type)
-    if (material?.binding.kind === 'data-contract') {
+    if (material?.common.binding.kind === 'data-contract') {
       const plan = resolveMaterialDataDropPlan(material[MATERIAL_BINDING_KEY].contract, resolved.target, fieldData)
       if (!plan || plan.status !== 'accepted')
         return
@@ -626,7 +627,7 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
       const localPoint = geometry.documentToLocal({ x: docX, y: docY }, element)
       if (pointInRect(localPoint, { x: 0, y: 0, width: elementSize.width, height: elementSize.height })) {
         const material = ctx.store.getMaterialManifest(element.type)
-        if (material?.capabilities.bindable === false)
+        if (material?.common.binding.kind === false)
           continue
         return element
       }
@@ -894,15 +895,12 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
   }
 
   function resolveCatalogEntry(dragData: string): MaterialCatalogEntry | undefined {
-    return ctx.store.listEditableMaterialManifests().find(entry => entry.dragData === dragData || entry.materialType === dragData)
+    const manifest = ctx.store.listEditableMaterialManifests().find(entry => entry.type === dragData)
+    return manifest && { id: manifest.type, groupId: manifest.common.category, label: manifest.common.nameKey, icon: IconRect, materialType: manifest.type }
   }
 
   function createMaterialNodeDraft(entry: MaterialCatalogEntry): MaterialNode | null {
-    const definition = ctx.store.getMaterialManifest(entry.materialType)
-    if (!definition)
-      return null
-    const createNode = entry.createDefaultNode ?? definition.createDefaultNode
-    return createNode({}, ctx.store.schema.unit)
+    return ctx.store.materialProfile.createNode(entry.materialType, {}, ctx.store.schema.unit)
   }
 
   function createBinding(data: DatasourceFieldDragData): BindingRef {
