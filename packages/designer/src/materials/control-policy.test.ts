@@ -18,11 +18,7 @@ const node: MaterialNode = {
   y: 0,
   width: 100,
   height: 20,
-  modelVersion: 1,
   model: {},
-  slots: {},
-  bindings: {},
-  output: { visibility: 'include' },
 }
 
 function makeStore(policy: MaterialControlPolicy, capabilities: MaterialDefinition['capabilities'] = { resizable: true }): DesignerStore {

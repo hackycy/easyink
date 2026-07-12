@@ -71,11 +71,7 @@ describe('createGeometryService', () => {
       width: 100,
       height: 50,
       rotation: 90,
-      modelVersion: 1,
       model: {},
-      slots: {},
-      bindings: {},
-      output: { visibility: 'include' },
     }
     store.schema.elements.push(node)
 
@@ -98,11 +94,7 @@ describe('createGeometryService', () => {
       width: 100,
       height: 50,
       rotation: 90,
-      modelVersion: 1,
       model: {},
-      slots: {},
-      bindings: {},
-      output: { visibility: 'include' },
     }
 
     const geometry = createGeometryService(store)
