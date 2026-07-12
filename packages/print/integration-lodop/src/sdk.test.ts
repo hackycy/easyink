@@ -1,6 +1,9 @@
 import type { DocumentSchema } from '@easyink/viewer'
+import { createTestCompiledMaterialProfile } from '@easyink/core/testing'
 import { describe, expect, it, vi } from 'vitest'
 import { createLodopPrinter } from './sdk'
+
+const profile = createTestCompiledMaterialProfile([])
 
 function createFixedSchema(): DocumentSchema {
   return {
@@ -25,6 +28,7 @@ describe('lodop printer', () => {
     }
     const setupViewer = vi.fn()
     const printer = createLodopPrinter({
+      profile,
       client: client as never,
       viewer: 'dom',
       setupViewer,

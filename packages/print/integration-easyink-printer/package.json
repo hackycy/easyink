@@ -27,5 +27,8 @@
     "@easyink/viewer": "workspace:*",
     "@vueuse/core": "catalog:framework",
     "vue": "catalog:framework"
+  },
+  "devDependencies": {
+    "@easyink/core": "workspace:*"
   }
 }

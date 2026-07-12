@@ -1,7 +1,12 @@
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
+import type { ViewerOptions } from './types'
+import { compileBuiltinMaterialProfile } from '@easyink/builtin'
 import { describe, expect, it } from 'vitest'
-import { createViewer } from './index'
+import { createViewer as createProfileViewer } from './index'
 import { applyStackFlowLayout } from './stack-flow-layout'
+
+const builtinProfile = compileBuiltinMaterialProfile('all')
+const createViewer = (options: Omit<ViewerOptions, 'profile'> & { profile?: ViewerOptions['profile'] }) => createProfileViewer({ ...options, profile: options.profile ?? builtinProfile })
 
 function makeNode(id: string, overrides: Partial<MaterialNode> = {}): MaterialNode {
   return {
@@ -47,6 +52,7 @@ function makeTableNode(id: string, overrides: Record<string, unknown> = {}): Mat
     } as unknown as Record<string, unknown>,
     slots: {},
     bindings: {
+      'records': { sourceId: 'invoice', fieldPath: 'items' },
       'items:name': { sourceId: 'invoice', fieldPath: 'items/name', fieldLabel: '名称' },
       'items:qty': { sourceId: 'invoice', fieldPath: 'items/qty', fieldLabel: '数量' },
     },

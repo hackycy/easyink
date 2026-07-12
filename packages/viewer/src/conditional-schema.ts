@@ -1,8 +1,7 @@
-import type { ConditionalNodeState, ConditionDiagnostic } from '@easyink/core'
+import type { CompiledMaterialProfile, ConditionalNodeState, ConditionDiagnostic } from '@easyink/core'
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
-import type { MaterialRendererRegistry } from './material-registry'
 import type { ViewerDiagnosticEvent } from './types'
-import { resolveConditionalNode } from '@easyink/core'
+import { resolveConditionalNode, resolveMaterialConditionCapability } from '@easyink/core'
 
 export interface ConditionalSchemaResolution {
   schema: DocumentSchema
@@ -13,7 +12,7 @@ export interface ConditionalSchemaResolution {
 export function resolveConditionalSchema(
   schema: DocumentSchema,
   data: Record<string, unknown>,
-  registry: MaterialRendererRegistry,
+  profile: CompiledMaterialProfile,
 ): ConditionalSchemaResolution {
   const elements: MaterialNode[] = []
   const diagnostics: ViewerDiagnosticEvent[] = []
@@ -22,7 +21,8 @@ export function resolveConditionalSchema(
   let changed = false
 
   for (const node of schema.elements) {
-    const capability = registry.getCondition(node.type)
+    const manifest = profile.getManifest(node.type)
+    const capability = manifest ? resolveMaterialConditionCapability(manifest.common.condition) : undefined
     if (!capability || !node.output.renderCondition) {
       states.set(node.id, node.editorState?.hidden ? 'reserve' : 'include')
       elements.push(node)

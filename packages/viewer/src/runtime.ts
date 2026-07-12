@@ -1,7 +1,6 @@
-import type { InternalHooks, MaterialBindingDefinition, MaterialLayoutFacet, PagePlan, PaginationResult, ViewerMeasureResult } from '@easyink/core'
+import type { InternalHooks, MaterialLoadDiagnostic, MaterialNodeLoadState, PagePlan, PaginationResult, ViewerMeasureResult } from '@easyink/core'
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import type {
-  MaterialViewerExtension,
   PrintDriver,
   ViewerDiagnosticEvent,
   ViewerExporter,
@@ -15,13 +14,12 @@ import type {
   ViewerRenderResult,
 } from './types'
 import type { ViewerHost } from './viewer-host'
-import { createInternalHooks, FontManager, readNodeRepeatScope, runLayoutPipeline, runPagination } from '@easyink/core'
-import { normalizeDocumentSchema, traverseNodes, validateSchema } from '@easyink/schema'
+import { createInternalHooks, FontManager, loadDocumentWithProfile, runLayoutPipeline, runPagination, VIEWER_TREE_ABSOLUTE_MAX_NODES, walkMaterialNodes } from '@easyink/core'
 import { deepClone, UNIT_FACTOR } from '@easyink/shared'
-import { applyBindingsToProps, projectBindings } from './binding-projector'
+import { applyBindingsToProps, projectBindings, walkProfileMaterialNodes } from './binding-projector'
 import { resolveConditionalSchema } from './conditional-schema'
 import { collectFontFamilies, loadAndInjectFonts } from './font-loader'
-import { MaterialRendererRegistry } from './material-registry'
+import { ProfileMaterialRuntime } from './material-runtime'
 import { PrintPolicyError, resolvePrintPolicy } from './print-policy'
 import { runPrintWithIsolation } from './print-service'
 import { renderPages } from './render-surface'
@@ -35,16 +33,27 @@ export class ViewerRuntime {
   private _diagnosticHandler?: (event: ViewerDiagnosticEvent) => void
   private _exporters: ViewerExporter[] = []
   private _printDrivers: PrintDriver[] = []
-  private _materialRegistry = new MaterialRendererRegistry()
+  private _materials: ProfileMaterialRuntime
+  private _nodeStates: ReadonlyMap<string, MaterialNodeLoadState> = new Map()
+  private _loadDiagnostics: ViewerDiagnosticEvent[] = []
   private _fontManager: FontManager
   private _hooks: InternalHooks
   private _host?: ViewerHost
   private _renderedPageMetrics: ViewerPageMetrics[] = []
   private _destroyed = false
   private _emittingHookFailure = false
+  private _pageDisposers: Array<() => void> = []
+  private _operation = 0
 
-  constructor(options: ViewerOptions = {}) {
+  constructor(options: ViewerOptions) {
+    if (!options?.profile)
+      throw new Error('VIEWER_PROFILE_REQUIRED')
     this._options = options
+    const maxNodes = options.browserDom?.maxNodes ?? VIEWER_TREE_ABSOLUTE_MAX_NODES
+    if (!Number.isInteger(maxNodes) || maxNodes < 1 || maxNodes > VIEWER_TREE_ABSOLUTE_MAX_NODES)
+      throw new Error('VIEWER_MAX_NODES_INVALID')
+    this._options = { ...options, browserDom: { ...options.browserDom, maxNodes } }
+    this._materials = new ProfileMaterialRuntime(options.profile)
     this._host = options.host
       ?? (options.iframe
         ? createIframeViewerHost(options.iframe)
@@ -61,32 +70,28 @@ export class ViewerRuntime {
 
   async open(input: ViewerOpenInput): Promise<void> {
     this.ensureNotDestroyed()
+    const operation = ++this._operation
     this._diagnosticHandler = input.onDiagnostic
 
-    // 1. Validate schema
-    const errors = validateSchema(input.schema)
-    if (errors.length > 0) {
-      const event: ViewerDiagnosticEvent = {
-        category: 'schema',
-        severity: 'error',
-        code: 'INVALID_SCHEMA',
-        message: errors.join('; '),
-        scope: 'schema',
-      }
-      this.emitDiagnostic(event)
-      throw new Error(`Invalid schema: ${errors.join('; ')}`)
-    }
-
-    // 2. Hook: beforeSchemaNormalize + schema normalization
-    const schemaForNormalize = this.callSchemaNormalizeHook(input.schema)
-    const normalizedSchema = normalizeDocumentSchema(schemaForNormalize)
-    this._schema = normalizedSchema
-
+    const loaded = loadDocumentWithProfile(input.schema, this._options.profile)
+    const types = collectMaterialTypes(loaded.schema, this._options.profile)
+    const facetDiagnostics = await this._materials.prepare(types)
+    if (operation !== this._operation || this._destroyed)
+      return
+    const diagnostics = [
+      ...this._options.profile.diagnostics.map(profileDiagnosticToViewer),
+      ...loaded.diagnostics.map(loadDiagnosticToViewer),
+      ...facetDiagnostics.map(facetDiagnosticToViewer),
+    ]
+    this._schema = loaded.schema
+    this._nodeStates = loaded.nodeStates
+    this._loadDiagnostics = diagnostics
     this._data = input.data ?? {}
+    diagnostics.forEach(diagnostic => this.emitDiagnostic(diagnostic))
 
     // 3. Render (font loading + binding + page plan + DOM)
     if (this._host) {
-      await this.render()
+      await this.render(operation)
     }
   }
 
@@ -98,19 +103,22 @@ export class ViewerRuntime {
     }
   }
 
-  async render(): Promise<ViewerRenderResult> {
+  async render(expectedOperation?: number): Promise<ViewerRenderResult> {
     this.ensureNotDestroyed()
     if (!this._schema) {
       throw new Error('No schema loaded. Call open() first.')
     }
 
-    const diagnostics: ViewerDiagnosticEvent[] = []
-    const conditional = resolveConditionalSchema(this._schema, this._data, this._materialRegistry)
+    const operation = expectedOperation ?? ++this._operation
+    const diagnostics: ViewerDiagnosticEvent[] = [...this._loadDiagnostics]
+    const conditional = resolveConditionalSchema(this._schema, this._data, this._options.profile)
     const runtimeSchema = conditional.schema
     diagnostics.push(...conditional.diagnostics)
 
     // Stage 1: Font loading
     await this.loadFonts(diagnostics, runtimeSchema)
+    if (operation !== this._operation || this._destroyed)
+      return emptyRenderResult(diagnostics)
 
     // Stage 2: Binding projection
     const resolvedPropsMap = this.resolveAllBindings(diagnostics, runtimeSchema)
@@ -154,7 +162,7 @@ export class ViewerRuntime {
     })
     const pagination = runPagination(layoutSchema, layoutDocument, {
       originalSchema: layoutSchema,
-      resolveFragmentPaginator: fragment => this._materialRegistry.getFragmentPaginator(fragment.node),
+      resolveFragmentPaginator: fragment => this.isNodeReady(fragment.node) ? this._materials.getFragmentPaginator(fragment.node) : undefined,
       retainBlankPage: repeatedElements.some(el => !el.editorState?.hidden) ? () => true : undefined,
     })
     const plan = toPagePlan(pagination)
@@ -187,9 +195,10 @@ export class ViewerRuntime {
     }))
 
     if (this._host) {
+      this.disposePageMounts(diagnostics)
       const pageDOMs = renderPages(
         plan.pages,
-        this._materialRegistry,
+        this._materials,
         {
           container: this._host.mount,
           document: this._host.document,
@@ -198,9 +207,12 @@ export class ViewerRuntime {
           data: this._data,
           resolvedPropsMap,
           pageSchema: runtimeSchema.page,
+          nodeStates: this._nodeStates,
+          browserDom: this._options.browserDom as Required<NonNullable<ViewerOptions['browserDom']>>,
         },
         diagnostics,
       )
+      this._pageDisposers = pageDOMs.map(page => page.dispose)
 
       for (const dom of pageDOMs) {
         const page = pages.find(p => p.index === dom.pageIndex)
@@ -214,7 +226,7 @@ export class ViewerRuntime {
     }
 
     // Emit all diagnostics
-    for (const d of diagnostics) {
+    for (const d of diagnostics.slice(this._loadDiagnostics.length)) {
       this.emitDiagnostic(d)
     }
 
@@ -393,30 +405,26 @@ export class ViewerRuntime {
     }
   }
 
-  destroy(): void {
+  async destroy(): Promise<void> {
+    if (this._destroyed)
+      return
     this._destroyed = true
+    ++this._operation
+    this.disposePageMounts([])
+    const materialDisposal = this._materials.dispose()
     this._schema = undefined
     this._data = {}
-    this._materialRegistry.clear()
     this._exporters = []
     this._printDrivers = []
     this._renderedPageMetrics = []
     this._fontManager.clear()
     this._host?.clear()
+    await materialDisposal
   }
 
   // ---------------------------------------------------------------------------
   // Registration API
   // ---------------------------------------------------------------------------
-
-  registerMaterial(
-    type: string,
-    binding: MaterialBindingDefinition,
-    extension: MaterialViewerExtension,
-    layout?: Pick<MaterialLayoutFacet, 'pageRepeat'>,
-  ): void {
-    this._materialRegistry.register(type, binding, extension, layout)
-  }
 
   registerExporter(exporter: ViewerExporter): void {
     const index = this._exporters.findIndex(item => item.id === exporter.id)
@@ -458,8 +466,8 @@ export class ViewerRuntime {
     return this._fontManager
   }
 
-  get materialRegistry(): MaterialRendererRegistry {
-    return this._materialRegistry
+  get materials(): ProfileMaterialRuntime {
+    return this._materials
   }
 
   // ---------------------------------------------------------------------------
@@ -468,8 +476,7 @@ export class ViewerRuntime {
 
   private collectRepeatedPageElements(elements: MaterialNode[]): MaterialNode[] {
     return elements.filter(el =>
-      readNodeRepeatScope(el) === 'every-output-page'
-      || this._materialRegistry.isPageAware(el.type),
+      this._materials.isPageRepeated(el.type),
     )
   }
 
@@ -530,7 +537,7 @@ export class ViewerRuntime {
       const nodeForMeasure = resolvedProps === node.model ? node : { ...node, model: resolvedProps }
       let result
       try {
-        result = this._materialRegistry.measure(nodeForMeasure, measureCtx)
+        result = this.isNodeReady(node) ? this._materials.measure(nodeForMeasure, measureCtx) : null
       }
       catch (err) {
         diagnostics.push({
@@ -556,7 +563,7 @@ export class ViewerRuntime {
     if (!this._fontManager.provider)
       return
 
-    const families = collectFontFamilies(schema)
+    const families = collectFontFamilies(schema, this._options.profile)
     if (families.size === 0)
       return
 
@@ -581,7 +588,7 @@ export class ViewerRuntime {
 
   private resolveAllBindings(diagnostics: ViewerDiagnosticEvent[], schema: DocumentSchema): Map<string, Record<string, unknown>> {
     const resolvedMap = new Map<string, Record<string, unknown>>()
-    traverseNodes(schema, (node) => {
+    walkProfileMaterialNodes(schema, this._options.profile, (node) => {
       if (Object.keys(node.bindings).length === 0) {
         resolvedMap.set(node.id, node.model)
         return
@@ -602,7 +609,7 @@ export class ViewerRuntime {
             })
           }
         }
-        const resolvedProps = applyBindingsToProps(node.model, projected, this._materialRegistry.getBinding(node.type))
+        const resolvedProps = applyBindingsToProps(node.model, projected, this._materials.getBinding(node.type))
         resolvedMap.set(node.id, resolvedProps)
       }
       catch (err) {
@@ -623,6 +630,30 @@ export class ViewerRuntime {
     })
 
     return resolvedMap
+  }
+
+  private isNodeReady(node: MaterialNode<unknown>): boolean {
+    return this._nodeStates.get(node.id)?.status !== 'quarantined'
+      && this._materials.get(node.type)?.state === 'active'
+  }
+
+  private disposePageMounts(diagnostics: ViewerDiagnosticEvent[]): void {
+    for (let index = this._pageDisposers.length - 1; index >= 0; index--) {
+      try {
+        this._pageDisposers[index]!()
+      }
+      catch (error) {
+        diagnostics.push({
+          category: 'viewer',
+          severity: 'warning',
+          code: 'MATERIAL_DISPOSE_ERROR',
+          message: error instanceof Error ? error.message : String(error),
+          scope: 'material',
+          cause: serializeCause(error),
+        })
+      }
+    }
+    this._pageDisposers = []
   }
 
   private ensureNotDestroyed(): void {
@@ -694,23 +725,6 @@ export class ViewerRuntime {
     this.emitDiagnostic(event)
   }
 
-  private callSchemaNormalizeHook(schema: DocumentSchema): DocumentSchema {
-    try {
-      return this._hooks.beforeSchemaNormalize.call(schema)
-    }
-    catch (err) {
-      this.emitDiagnostic({
-        category: 'viewer',
-        severity: 'error',
-        code: 'SCHEMA_NORMALIZE_HOOK_ERROR',
-        message: `Schema normalize hook failed: ${err instanceof Error ? err.message : String(err)}`,
-        scope: 'hook',
-        cause: serializeCause(err),
-      })
-      throw err
-    }
-  }
-
   private emitExportError(
     exporterId: string,
     format: string | undefined,
@@ -780,4 +794,50 @@ function serializeCause(err: unknown): unknown {
   if (err instanceof Error)
     return { name: err.name, message: err.message, stack: err.stack }
   return err
+}
+
+function collectMaterialTypes(schema: DocumentSchema, profile: ViewerOptions['profile']): string[] {
+  const types: string[] = []
+  walkMaterialNodes(schema, profile, node => types.push(node.type))
+  return types
+}
+
+function loadDiagnosticToViewer(diagnostic: MaterialLoadDiagnostic): ViewerDiagnosticEvent {
+  return {
+    category: 'schema',
+    severity: diagnostic.severity,
+    code: diagnostic.code,
+    message: diagnostic.message,
+    nodeId: diagnostic.nodeId,
+    detail: { path: diagnostic.path, stage: diagnostic.stage, materialType: diagnostic.materialType },
+    scope: 'schema',
+    cause: diagnostic.cause,
+  }
+}
+
+function profileDiagnosticToViewer(diagnostic: ViewerOptions['profile']['diagnostics'][number]): ViewerDiagnosticEvent {
+  return {
+    category: 'viewer',
+    severity: diagnostic.severity,
+    code: diagnostic.code,
+    message: diagnostic.message,
+    detail: { packageId: diagnostic.packageId, materialType: diagnostic.materialType },
+    scope: 'material',
+  }
+}
+
+function facetDiagnosticToViewer(diagnostic: Awaited<ReturnType<ProfileMaterialRuntime['prepare']>>[number]): ViewerDiagnosticEvent {
+  return {
+    category: 'viewer',
+    severity: diagnostic.severity,
+    code: diagnostic.code,
+    message: diagnostic.message,
+    detail: { profileId: diagnostic.profileId, materialType: diagnostic.materialType, surface: diagnostic.surface },
+    scope: 'material',
+    cause: diagnostic.cause,
+  }
+}
+
+function emptyRenderResult(diagnostics: ViewerDiagnosticEvent[]): ViewerRenderResult {
+  return { pages: [], thumbnails: [], diagnostics }
 }

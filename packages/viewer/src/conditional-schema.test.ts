@@ -1,9 +1,21 @@
+import type { MaterialConditionCapability, MaterialViewerExtension } from '@easyink/core'
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
-import { viewerElement, viewerText } from '@easyink/core'
+import { defineMaterialManifest, viewerElement, viewerText } from '@easyink/core'
+import { createTestCompiledMaterialProfile, createTestMaterialManifest } from '@easyink/core/testing'
 import { describe, expect, it, vi } from 'vitest'
 import { resolveConditionalSchema } from './conditional-schema'
 import { createViewer } from './index'
-import { MaterialRendererRegistry } from './material-registry'
+
+function materialProfile(
+  extension: MaterialViewerExtension = { render: () => ({ tree: viewerText('') }) },
+  condition?: MaterialConditionCapability,
+) {
+  const base = createTestMaterialManifest({ type: 'conditional', viewer: () => ({ extension, capabilities: {} }) })
+  return createTestCompiledMaterialProfile([defineMaterialManifest({
+    ...base,
+    common: condition === undefined ? base.common : { ...base.common, condition },
+  })])
+}
 
 function schema(elements: MaterialNode[], page: Partial<DocumentSchema['page']> = {}): DocumentSchema {
   return { version: '1.0.0', unit: 'mm', page: { mode: 'fixed', width: 100, height: 100, ...page }, guides: { x: [], y: [] }, elements }
@@ -30,10 +42,9 @@ function node(id: string, path: string, whenHidden: 'remove' | 'reserve' = 'remo
 
 describe('resolveConditionalSchema', () => {
   it('partitions include, remove, and reserve without mutating input', () => {
-    const registry = new MaterialRendererRegistry()
-    registry.register('conditional', { kind: 'none' }, { render: vi.fn(() => ({ tree: viewerText('') })), condition: { scope: 'node', hiddenEffects: ['remove', 'reserve'] } })
+    const profile = materialProfile({ render: vi.fn(() => ({ tree: viewerText('') })) })
     const original = schema([node('include', 'show'), node('remove', 'gone'), node('reserve', 'space', 'reserve')])
-    const result = resolveConditionalSchema(original, { show: true }, registry)
+    const result = resolveConditionalSchema(original, { show: true }, profile)
     expect(result.schema.elements.map(item => item.id)).toEqual(['include', 'reserve'])
     expect(result.schema.elements[1]?.editorState?.hidden).toBe(true)
     expect(original.elements[1]?.editorState?.hidden).toBeUndefined()
@@ -42,13 +53,11 @@ describe('resolveConditionalSchema', () => {
 
   it('recomputes conditions on updateData before binding, measurement, and paint', async () => {
     const container = document.createElement('div')
-    const runtime = createViewer({ container })
     const measure = vi.fn(() => ({ width: 10, height: 10 }))
-    runtime.registerMaterial('conditional', { kind: 'none' }, {
-      condition: { scope: 'node', hiddenEffects: ['remove', 'reserve'] },
+    const runtime = createViewer({ container, profile: materialProfile({
       measure,
       render: () => ({ tree: viewerElement('span', {}, [viewerText('visible')]) }),
-    })
+    }) })
     const conditional = node('runtime', 'show')
 
     await runtime.open({ schema: schema([conditional]), data: {} })
@@ -62,11 +71,9 @@ describe('resolveConditionalSchema', () => {
 
   it('removes flow-y space for conditionally removed runtime nodes', async () => {
     const container = document.createElement('div')
-    const runtime = createViewer({ container })
-    runtime.registerMaterial('conditional', { kind: 'none' }, {
-      condition: { scope: 'node', hiddenEffects: ['remove', 'reserve'] },
+    const runtime = createViewer({ container, profile: materialProfile({
       render: node => ({ tree: viewerElement('span', {}, [viewerText(node.id)]) }),
-    })
+    }) })
 
     await runtime.open({
       schema: schema([
@@ -90,11 +97,9 @@ describe('resolveConditionalSchema', () => {
 
   it('preserves flow-y space for conditionally reserved runtime nodes', async () => {
     const container = document.createElement('div')
-    const runtime = createViewer({ container })
-    runtime.registerMaterial('conditional', { kind: 'none' }, {
-      condition: { scope: 'node', hiddenEffects: ['remove', 'reserve'] },
+    const runtime = createViewer({ container, profile: materialProfile({
       render: node => ({ tree: viewerElement('span', {}, [viewerText(node.id)]) }),
-    })
+    }) })
 
     await runtime.open({
       schema: schema([
@@ -118,11 +123,9 @@ describe('resolveConditionalSchema', () => {
 
   it('reflows conditionally removed space again after updateData', async () => {
     const container = document.createElement('div')
-    const runtime = createViewer({ container })
-    runtime.registerMaterial('conditional', { kind: 'none' }, {
-      condition: { scope: 'node', hiddenEffects: ['remove', 'reserve'] },
+    const runtime = createViewer({ container, profile: materialProfile({
       render: node => ({ tree: viewerElement('span', {}, [viewerText(node.id)]) }),
-    })
+    }) })
     const input = schema([
       node('optional', 'show'),
       { ...node('after', 'after'), y: 20 },
@@ -147,28 +150,22 @@ describe('resolveConditionalSchema', () => {
 
   it('uses default condition capability when no material override is declared', () => {
     const original = schema([node('plain', 'missing')])
-    const result = resolveConditionalSchema(original, {}, new MaterialRendererRegistry())
+    const result = resolveConditionalSchema(original, {}, materialProfile())
     expect(result.schema.elements).toEqual([])
     expect(result.states.get('plain')).toBe('remove')
   })
 
   it('ignores conditions when a material explicitly disables the capability', () => {
-    const registry = new MaterialRendererRegistry()
-    registry.register('conditional', { kind: 'none' }, { render: () => ({ tree: viewerText('') }), condition: false })
     const original = schema([node('plain', 'missing')])
-    expect(resolveConditionalSchema(original, {}, registry).schema).toBe(original)
+    expect(resolveConditionalSchema(original, {}, materialProfile(undefined, false)).schema).toBe(original)
   })
 
   it('keeps static hidden priority even when reserve is not a declared condition effect', () => {
-    const registry = new MaterialRendererRegistry()
-    registry.register('conditional', { kind: 'none' }, { render: () => ({ tree: viewerText('') }), condition: { scope: 'node', hiddenEffects: ['remove'] } })
     const hidden = { ...node('hidden', 'show'), editorState: { hidden: true } }
-    expect(resolveConditionalSchema(schema([hidden]), { show: true }, registry).states.get('hidden')).toBe('reserve')
+    expect(resolveConditionalSchema(schema([hidden]), { show: true }, materialProfile(undefined, { scope: 'node', hiddenEffects: ['remove'] })).states.get('hidden')).toBe('reserve')
   })
 
   it('deduplicates diagnostics by node, code, group, and condition', () => {
-    const registry = new MaterialRendererRegistry()
-    registry.register('conditional', { kind: 'none' }, { render: () => ({ tree: viewerText('') }), condition: { scope: 'node', hiddenEffects: ['remove'] } })
     const repeatedMissing = {
       ...node('n', 'missing'),
       output: {
@@ -182,7 +179,7 @@ describe('resolveConditionalSchema', () => {
         },
       },
     }
-    const result = resolveConditionalSchema(schema([repeatedMissing]), {}, registry)
+    const result = resolveConditionalSchema(schema([repeatedMissing]), {}, materialProfile(undefined, { scope: 'node', hiddenEffects: ['remove'] }))
     expect(result.diagnostics).toHaveLength(2)
     expect(result.diagnostics.every(item => item.category === 'condition' && item.scope === 'condition')).toBe(true)
   })

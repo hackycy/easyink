@@ -1,7 +1,7 @@
-import type { MaterialBindingDefinition } from '@easyink/core'
-import type { MaterialNode } from '@easyink/schema'
+import type { CompiledMaterialProfile, MaterialBindingDefinition } from '@easyink/core'
+import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import type { ProjectedBinding } from './types'
-import { formatBindingDisplayValue, hasBindingFormat, resolveBindingValue } from '@easyink/core'
+import { formatBindingDisplayValue, hasBindingFormat, inspectMaterialNode, resolveBindingValue } from '@easyink/core'
 import { getBindingRefs } from '@easyink/schema'
 
 /**
@@ -52,6 +52,32 @@ export function applyBindingsToProps(
   }
 
   return result
+}
+
+/** Iteratively discovers nested material nodes through profile introspection. */
+export function walkProfileMaterialNodes(
+  schema: DocumentSchema,
+  profile: CompiledMaterialProfile,
+  visitor: (node: MaterialNode) => void,
+): void {
+  const stack = [...schema.elements].reverse()
+  const seen = new WeakSet<object>()
+  let count = 0
+  while (stack.length > 0) {
+    const node = stack.pop()!
+    if (seen.has(node))
+      continue
+    seen.add(node)
+    if (++count > profile.admissionBudget.maxMaterialNodes)
+      throw new Error('MATERIAL_GRAPH_NODE_LIMIT')
+    visitor(node)
+    const inspected = inspectMaterialNode(node, profile, schema.unit)
+    for (let structureIndex = inspected.introspection.structures.length - 1; structureIndex >= 0; structureIndex--) {
+      const children = inspected.introspection.structures[structureIndex]!.children
+      for (let childIndex = children.length - 1; childIndex >= 0; childIndex--)
+        stack.push(children[childIndex]!)
+    }
+  }
 }
 
 function writeModelPath(model: Record<string, unknown>, path: `/${string}`, value: unknown): void {

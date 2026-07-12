@@ -1,7 +1,7 @@
 import type { HiPrintDevice, HiPrintPrintRequest } from '@easyink/print-integration-hiprint'
 import { createHiPrintClient, createHiPrintPrinter, DEFAULT_HIPRINT_URL } from '@easyink/print-integration-hiprint'
 import { computed, reactive, ref, watch } from 'vue'
-import { setupPlaygroundViewerMaterials } from '../viewer-materials'
+import { playgroundViewerProfile } from '../viewer-materials'
 
 export const DEFAULT_PRINTER_HOST = DEFAULT_HIPRINT_URL
 export const DEFAULT_PRINTER_COPIES = 1
@@ -65,9 +65,9 @@ const client = createHiPrintClient({
   forcePageSize: config.forcePageSize,
 })
 const printer = createHiPrintPrinter({
+  profile: playgroundViewerProfile,
   client,
   viewer: 'iframe',
-  setupViewer: setupPlaygroundViewerMaterials,
   printerName: () => config.printerDevice,
   copies: () => config.printCopies ?? DEFAULT_PRINTER_COPIES,
   forcePageSize: () => config.forcePageSize ?? false,

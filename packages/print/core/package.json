@@ -22,6 +22,7 @@
     "dev": "tsdown --watch"
   },
   "dependencies": {
+    "@easyink/core": "workspace:*",
     "@easyink/export-runtime": "workspace:*",
     "@easyink/viewer": "workspace:*"
   }

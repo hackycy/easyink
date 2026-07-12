@@ -1279,6 +1279,9 @@ importers:
 
   packages/print/core:
     dependencies:
+      '@easyink/core':
+        specifier: workspace:*
+        version: link:../../core
       '@easyink/export-runtime':
         specifier: workspace:*
         version: link:../../export/runtime
@@ -1303,6 +1306,10 @@ importers:
       vue:
         specifier: catalog:framework
         version: 3.5.31(typescript@6.0.2)
+    devDependencies:
+      '@easyink/core':
+        specifier: workspace:*
+        version: link:../../core
 
   packages/print/integration-hiprint:
     dependencies:
@@ -1315,6 +1322,10 @@ importers:
       vue-plugin-hiprint:
         specifier: catalog:testing
         version: 0.0.60
+    devDependencies:
+      '@easyink/core':
+        specifier: workspace:*
+        version: link:../../core
 
   packages/print/integration-lodop:
     dependencies:
@@ -1324,6 +1335,10 @@ importers:
       '@easyink/viewer':
         specifier: workspace:*
         version: link:../../viewer
+    devDependencies:
+      '@easyink/core':
+        specifier: workspace:*
+        version: link:../../core
 
   packages/prop-schemas:
     dependencies:
@@ -1428,6 +1443,10 @@ importers:
       '@easyink/shared':
         specifier: workspace:*
         version: link:../shared
+    devDependencies:
+      '@easyink/builtin':
+        specifier: workspace:*
+        version: link:../builtin
 
   playground:
     dependencies:

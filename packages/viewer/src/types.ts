@@ -1,5 +1,6 @@
-import type { BindingFormatDiagnostic, FontProvider, FragmentPaginateInput, FragmentPaginateResult, FragmentPaginator, MaterialViewerExtension, ViewerMeasureContext, ViewerMeasureResult, ViewerRenderContext, ViewerRenderOutput, ViewerRenderSize } from '@easyink/core'
-import type { DocumentSchema } from '@easyink/schema'
+import type { ViewerTreePolicy } from '@easyink/browser-dom'
+import type { BindingFormatDiagnostic, CompiledMaterialProfile, FontProvider, FragmentPaginateInput, FragmentPaginateResult, FragmentPaginator, MaterialViewerExtension, ViewerMeasureContext, ViewerMeasureResult, ViewerRenderContext, ViewerRenderOutput, ViewerRenderSize } from '@easyink/core'
+import type { DocumentSchema, DocumentSchemaInput } from '@easyink/schema'
 import type { DiagnosticCategory, DiagnosticSeverity, ExportEntry, ExportFormat, ExportPhase } from '@easyink/shared'
 import type { ViewerHost } from './viewer-host'
 
@@ -13,15 +14,21 @@ export type { FragmentPaginateInput, FragmentPaginateResult, FragmentPaginator, 
 // ---------------------------------------------------------------------------
 
 export interface ViewerOptions {
+  profile: CompiledMaterialProfile
   mode?: DocumentSchema['page']['mode']
   container?: HTMLElement
   host?: ViewerHost
   iframe?: HTMLIFrameElement
   fontProvider?: FontProvider
+  browserDom?: {
+    policy?: ViewerTreePolicy
+    imperativeDom?: Iterable<string>
+    maxNodes?: number
+  }
 }
 
 export interface ViewerOpenInput {
-  schema: DocumentSchema
+  schema: DocumentSchemaInput
   data?: Record<string, unknown>
   onDiagnostic?: (event: ViewerDiagnosticEvent) => void
 }

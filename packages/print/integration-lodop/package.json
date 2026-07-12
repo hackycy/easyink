@@ -24,5 +24,8 @@
   "dependencies": {
     "@easyink/print-core": "workspace:*",
     "@easyink/viewer": "workspace:*"
+  },
+  "devDependencies": {
+    "@easyink/core": "workspace:*"
   }
 }

@@ -1,7 +1,6 @@
-import type { MaterialViewerFacet } from '@easyink/core'
-import type { DocumentSchema, DocumentSchemaInput, ViewerDiagnosticEvent } from '@easyink/viewer'
-import { builtinMaterialPackage } from '@easyink/builtin/all'
-import { createViewer, normalizeDocumentSchema } from '@easyink/viewer'
+import type { DocumentSchemaInput, ViewerDiagnosticEvent } from '@easyink/viewer'
+import { compileBuiltinMaterialProfile } from '@easyink/builtin'
+import { createViewer } from '@easyink/viewer'
 import './style.css'
 
 interface RuntimePayload {
@@ -28,12 +27,8 @@ async function boot(): Promise<void> {
     if (!root)
       throw new Error('easyink root is missing')
 
-    const schema = normalizeRuntimeSchema(payload.schema)
-    const viewer = createViewer({ container: root })
-    for (const manifest of builtinMaterialPackage.manifests) {
-      const facet = await manifest.facets.viewer!({ profileId: 'render-runtime', materialType: manifest.type, surface: 'viewer', services: {} }) as MaterialViewerFacet
-      viewer.registerMaterial(manifest.type, manifest.common.binding, facet.extension, manifest.common.layout)
-    }
+    const schema = isRecord(payload.schema) ? payload.schema as DocumentSchemaInput : {}
+    const viewer = createViewer({ container: root, profile: compileBuiltinMaterialProfile('all') })
     await viewer.open({
       schema,
       data: isRecord(payload.data) ? payload.data : {},
@@ -85,31 +80,6 @@ function readPayload(): RuntimePayload {
   if (!node)
     throw new Error('easyink payload is missing')
   return JSON.parse(node.textContent || '{}') as RuntimePayload
-}
-
-function normalizeRuntimeSchema(input: unknown): DocumentSchema {
-  if (!isRecord(input))
-    return normalizeDocumentSchema({})
-
-  const page = isRecord(input.page) ? input.page : {}
-  const unit = typeof input.unit === 'string'
-    ? input.unit
-    : typeof page.unit === 'string'
-      ? page.unit
-      : 'mm'
-  const mode = typeof page.mode === 'string' ? page.mode : 'fixed'
-  const guides = isRecord(input.guides) ? input.guides : { x: [], y: [] }
-
-  return normalizeDocumentSchema({
-    ...input,
-    unit,
-    page: {
-      ...page,
-      mode,
-    },
-    guides,
-    elements: Array.isArray(input.elements) ? input.elements : [],
-  } as DocumentSchemaInput)
 }
 
 function reportDiagnostic(event: ViewerDiagnosticEvent): void {

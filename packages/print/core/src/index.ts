@@ -1,3 +1,4 @@
+import type { CompiledMaterialProfile } from '@easyink/core'
 import type { ExportDiagnostic } from '@easyink/export-runtime'
 import type {
   DocumentSchema,
@@ -61,6 +62,7 @@ export type ManagedPrintViewerKind = 'iframe' | 'dom'
 export type ManagedPrintViewerSetup = (viewer: ViewerRuntime) => void | Promise<void>
 
 export interface ManagedPrintViewerOptions {
+  profile: CompiledMaterialProfile
   viewer?: ManagedPrintViewerKind
   autoDestroy?: boolean
   container?: HTMLElement
@@ -272,7 +274,7 @@ export function resolvePrintDriverValue<T>(value: PrintDriverValue<T> | undefine
  * stay focused on client connection + print input while the printer owns the
  * transient render surface.
  */
-export function createManagedPrintViewer(options: ManagedPrintViewerOptions = {}): ManagedPrintViewer {
+export function createManagedPrintViewer(options: ManagedPrintViewerOptions): ManagedPrintViewer {
   return new ManagedPrintViewerRuntime(options)
 }
 
@@ -330,7 +332,7 @@ class ManagedPrintViewerRuntime implements ManagedPrintViewer {
       ? await this.createIframeHost(doc)
       : this.createDomHost(doc)
 
-    this.viewerRuntime = createViewer({ host })
+    this.viewerRuntime = createViewer({ host, profile: this.options.profile })
     return this.viewerRuntime
   }
 

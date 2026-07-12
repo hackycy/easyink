@@ -1,9 +1,13 @@
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import type { ViewerRuntime } from './runtime'
-import type { ViewerExportContext, ViewerPageMetrics, ViewerPrintContext, ViewerPrintOptions, ViewerPrintPolicy } from './types'
+import type { ViewerExportContext, ViewerOptions, ViewerPageMetrics, ViewerPrintContext, ViewerPrintOptions, ViewerPrintPolicy } from './types'
+import { compileBuiltinMaterialProfile } from '@easyink/builtin'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createViewer, resolvePrintPolicy } from './index'
+import { createViewer as createProfileViewer, resolvePrintPolicy } from './index'
 import { buildPrintStyles } from './print-service'
+
+const builtinProfile = compileBuiltinMaterialProfile('all')
+const createViewer = (options: Omit<ViewerOptions, 'profile'> & { profile?: ViewerOptions['profile'] }) => createProfileViewer({ ...options, profile: options.profile ?? builtinProfile })
 
 function createItemsTable(): MaterialNode {
   const columns = [
@@ -32,6 +36,7 @@ function createItemsTable(): MaterialNode {
     } as unknown as Record<string, unknown>,
     slots: {},
     bindings: {
+      'records': { sourceId: 'invoice', fieldPath: 'items' },
       'items:name': { sourceId: 'invoice', fieldPath: 'items/name', fieldLabel: '名称' },
       'items:qty': { sourceId: 'invoice', fieldPath: 'items/qty', fieldLabel: '数量' },
     },
@@ -165,10 +170,9 @@ describe('viewer runtime print policy', () => {
     expect(policy.pageBreakBehavior).toEqual({ after: 'auto', inside: 'auto' })
   })
 
-  it('rejects schemas with unknown page modes during viewer validation', async () => {
+  it('normalizes unknown page modes through profile schema admission', async () => {
     const container = document.createElement('div')
     const viewer = createViewer({ container })
-    const diagnostics: unknown[] = []
 
     await expect(viewer.open({
       schema: {
@@ -180,15 +184,8 @@ describe('viewer runtime print policy', () => {
         },
       } as never,
       data: createData(),
-      onDiagnostic: event => diagnostics.push(event),
-    })).rejects.toThrow('Invalid schema')
-
-    expect(diagnostics).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        category: 'schema',
-        code: 'INVALID_SCHEMA',
-      }),
-    ]))
+    })).resolves.toBeUndefined()
+    expect(viewer.schema?.page.mode).toBe('fixed')
   })
 
   it('uses configured orientation for continuous-mode driver printing', () => {

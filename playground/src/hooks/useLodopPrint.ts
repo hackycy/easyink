@@ -1,7 +1,7 @@
 import type { LodopDevice, LodopPrintRequest, LodopRuntime } from '@easyink/print-integration-lodop'
 import { createLodopClient, createLodopPrinter, DEFAULT_CLODOP_SCRIPT_URLS, loadLodopScript } from '@easyink/print-integration-lodop'
 import { computed, reactive, ref, watch } from 'vue'
-import { setupPlaygroundViewerMaterials } from '../viewer-materials'
+import { playgroundViewerProfile } from '../viewer-materials'
 
 const CONFIG_KEY = 'easyink:lodopPrintConfig'
 const DEFAULT_COPIES = 1
@@ -79,9 +79,9 @@ const client = createLodopClient({
 })
 
 const printer = createLodopPrinter({
+  profile: playgroundViewerProfile,
   client,
   viewer: 'iframe',
-  setupViewer: setupPlaygroundViewerMaterials,
   printerName: () => config.printerName,
   copies: () => config.copies,
   forcePageSize: () => config.forcePageSize,

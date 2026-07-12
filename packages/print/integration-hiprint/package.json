@@ -25,5 +25,8 @@
     "@easyink/print-core": "workspace:*",
     "@easyink/viewer": "workspace:*",
     "vue-plugin-hiprint": "catalog:testing"
+  },
+  "devDependencies": {
+    "@easyink/core": "workspace:*"
   }
 }

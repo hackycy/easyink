@@ -1,6 +1,9 @@
 import type { DocumentSchema } from '@easyink/viewer'
+import { createTestCompiledMaterialProfile } from '@easyink/core/testing'
 import { describe, expect, it, vi } from 'vitest'
 import { createManagedPrintViewer, EasyInkPrintError, getViewerPages, resolvePrintLandscape, resolvePrintOffset, resolvePrintSize, resolveViewerPdfPages, toMillimeters } from './index'
+
+const profile = createTestCompiledMaterialProfile([])
 
 function createFixedSchema(): DocumentSchema {
   return {
@@ -92,7 +95,7 @@ describe('print core utilities', () => {
 
   it('creates a managed DOM viewer and destroys owned nodes after printing', async () => {
     const print = vi.fn(async () => {})
-    const managed = createManagedPrintViewer({ viewer: 'dom' })
+    const managed = createManagedPrintViewer({ viewer: 'dom', profile })
     const before = document.body.childElementCount
 
     await managed.printWithDriver({
@@ -120,6 +123,7 @@ describe('print core utilities', () => {
     })
     const managed = createManagedPrintViewer({
       viewer: 'dom',
+      profile,
       setupViewer,
     })
 

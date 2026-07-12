@@ -1,6 +1,9 @@
 import type { DocumentSchema } from '@easyink/viewer'
+import { createTestCompiledMaterialProfile } from '@easyink/core/testing'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createEasyInkPrinter } from './sdk'
+
+const profile = createTestCompiledMaterialProfile([])
 
 const { renderPagesToPdfBlob } = vi.hoisted(() => ({
   renderPagesToPdfBlob: vi.fn(async () => new Blob(['pdf'])),
@@ -36,6 +39,7 @@ describe('easy ink printer', () => {
     }
     const setupViewer = vi.fn()
     const printer = createEasyInkPrinter({
+      profile,
       client: client as never,
       viewer: 'dom',
       setupViewer,
@@ -68,6 +72,7 @@ describe('easy ink printer', () => {
       waitForJob: vi.fn(async () => ({ jobId: 'job-render-1234', status: 'completed' })),
     }
     const printer = createEasyInkPrinter({
+      profile,
       client: client as never,
       viewer: 'dom',
       printerName: 'Printer A',
@@ -107,6 +112,7 @@ describe('easy ink printer', () => {
       waitForJob: vi.fn(async () => ({ jobId: 'job-html-1234', status: 'completed' })),
     }
     const printer = createEasyInkPrinter({
+      profile,
       client: client as never,
       viewer: 'dom',
       printerName: 'Printer A',
@@ -137,6 +143,7 @@ describe('easy ink printer', () => {
       waitForJob: vi.fn(async () => ({ jobId: 'job-pdf-direct', status: 'completed' })),
     }
     const printer = createEasyInkPrinter({
+      profile,
       client: client as never,
       viewer: 'dom',
       defaults: {
@@ -162,6 +169,7 @@ describe('easy ink printer', () => {
       waitForJob: vi.fn(async () => ({ jobId: 'job-html-direct', status: 'completed' })),
     }
     const printer = createEasyInkPrinter({
+      profile,
       client: client as never,
       viewer: 'dom',
       defaults: {

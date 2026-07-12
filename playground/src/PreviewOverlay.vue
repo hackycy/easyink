@@ -30,7 +30,7 @@ import { useEasyInkPrint } from './hooks/useEasyInkPrint'
 import { usePrinter } from './hooks/useHiPrint'
 import { useLodopPrint } from './hooks/useLodopPrint'
 import { useRenderApiService } from './hooks/useRenderApiService'
-import { setupPlaygroundViewerMaterials } from './viewer-materials'
+import { playgroundViewerProfile } from './viewer-materials'
 
 const props = defineProps<{
   schema: DocumentSchema
@@ -85,8 +85,7 @@ onMounted(async () => {
     print: iframeHost.print,
   })
 
-  viewer = createViewer({ host: viewerHost, fontProvider: playgroundFontProvider })
-  setupPlaygroundViewerMaterials(viewer)
+  viewer = createViewer({ host: viewerHost, fontProvider: playgroundFontProvider, profile: playgroundViewerProfile })
   registerOutputIntegrations(viewer)
   await viewer.open({
     schema: props.schema,

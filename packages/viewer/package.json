@@ -26,5 +26,8 @@
     "@easyink/core": "workspace:*",
     "@easyink/schema": "workspace:*",
     "@easyink/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@easyink/builtin": "workspace:*"
   }
 }

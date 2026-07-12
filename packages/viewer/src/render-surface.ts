@@ -1,9 +1,11 @@
-import type { PageLayerRenderPlan, PageLayerRenderPlanBuckets, PagePlanEntry, TextWatermarkPageLayerPlan } from '@easyink/core'
+import type { BrowserDomCapabilities, ViewerTreeMount, ViewerTreePolicy } from '@easyink/browser-dom'
+import type { MaterialNodeLoadState, PageLayerRenderPlan, PageLayerRenderPlanBuckets, PagePlanEntry, TextWatermarkPageLayerPlan } from '@easyink/core'
 import type { MaterialNode, PageBackground, PageSchema } from '@easyink/schema'
-import type { MaterialRendererRegistry } from './material-registry'
+import type { UnitType } from '@easyink/shared'
+import type { ProfileMaterialRuntime } from './material-runtime'
 import type { ViewerDiagnosticEvent, ViewerRenderContext, ViewerRenderSize } from './types'
 import { createBrowserDomCapabilities, renderViewerTree } from '@easyink/browser-dom'
-import { groupPageLayerPlansByPlacement, PAGE_CONTENT_LAYER_STACK_INDEX, resolvePageLayerPlans, resolvePageLayerStackIndex } from '@easyink/core'
+import { groupPageLayerPlansByPlacement, inspectMaterialNode, PAGE_CONTENT_LAYER_STACK_INDEX, resolvePageLayerPlans, resolvePageLayerStackIndex } from '@easyink/core'
 import { UNIT_FACTOR } from '@easyink/shared'
 
 export interface RenderSurfaceOptions {
@@ -14,12 +16,25 @@ export interface RenderSurfaceOptions {
   data: Record<string, unknown>
   resolvedPropsMap: Map<string, Record<string, unknown>>
   pageSchema: PageSchema
+  nodeStates?: ReadonlyMap<string, MaterialNodeLoadState>
+  browserDom?: {
+    policy?: ViewerTreePolicy
+    imperativeDom?: Iterable<string>
+    maxNodes: number
+  }
 }
 
 export interface PageDOM {
   pageIndex: number
   element: HTMLElement
+  dispose: () => void
 }
+
+const deniedRenderCapabilities: ViewerRenderContext['capabilities'] = Object.freeze({
+  sanitizeMarkup() {
+    throw new Error('VIEWER_SANITIZED_MARKUP_NOT_DECLARED')
+  },
+})
 
 /**
  * Render all pages into the container element.
@@ -29,16 +44,17 @@ export interface PageDOM {
  */
 export function renderPages(
   pages: PagePlanEntry[],
-  registry: MaterialRendererRegistry,
+  materials: ProfileMaterialRuntime,
   options: RenderSurfaceOptions,
   diagnostics: ViewerDiagnosticEvent[],
 ): PageDOM[] {
-  const { container, document, zoom, unit, data, resolvedPropsMap, pageSchema } = options
+  const { container, document, zoom, unit, data, resolvedPropsMap, pageSchema, browserDom } = options
+  const nodeStates = options.nodeStates ?? new Map<string, MaterialNodeLoadState>()
   container.replaceChildren()
 
   const pageDOMs: PageDOM[] = []
   const pageLayerBucketsBySize = new Map<string, PageLayerRenderPlanBuckets>()
-  const capabilities = createBrowserDomCapabilities({ document })
+  const hostImperativeDom = new Set(browserDom?.imperativeDom ?? [])
 
   for (const page of pages) {
     const { wrapper, pageEl } = createPageElement(document, page, pageSchema, unit, zoom)
@@ -54,7 +70,7 @@ export function renderPages(
       pageIndex: page.index,
       unit,
       zoom,
-      capabilities,
+      capabilities: deniedRenderCapabilities,
       reportDiagnostic: diagnostic => diagnostics.push({
         category: 'datasource',
         severity: diagnostic.severity,
@@ -69,6 +85,7 @@ export function renderPages(
     // Sort elements by zIndex for proper layering
     const sorted = [...page.elements].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0))
 
+    const mounts: ViewerTreeMount[] = []
     for (const node of sorted) {
       if (node.editorState?.hidden)
         continue
@@ -76,12 +93,26 @@ export function renderPages(
       const resolved = resolvedPropsMap.get(node.id) ?? node.model as Record<string, unknown>
       context.resolvedProps = resolved
 
-      const nodeForRender: MaterialNode = { ...node, model: resolved }
+      const nodeForRender: MaterialNode<unknown> = { ...node, model: resolved }
       try {
-        const output = registry.render(nodeForRender, context)
-        const renderSize = registry.getRenderSize(nodeForRender, context)
+        const facetCapabilities = materials.getCapabilities(node.type)
+        const imperativeDom = facetCapabilities?.imperativeDom?.filter(capability => hostImperativeDom.has(capability)) ?? []
+        const capabilities = createBrowserDomCapabilities({
+          document,
+          policy: browserDom?.policy,
+          imperativeDom,
+        })
+        context.capabilities = facetCapabilities?.sanitizedMarkup ? capabilities : deniedRenderCapabilities
+        const admitted = nodeStates.get(node.id)?.status !== 'quarantined'
+        context.slotOutputs = admitted ? renderSlotOutputs(nodeForRender, materials, context, capabilities, nodeStates, resolvedPropsMap) : undefined
+        const output = materials.render(nodeForRender, context, admitted)
+        const renderSize = admitted ? materials.getRenderSize(nodeForRender, context) : { width: node.width, height: node.height }
         const elWrapper = createElementWrapper(document, nodeForRender, page, unit, renderSize)
-        renderViewerTree(elWrapper, output.tree, { document, capabilities })
+        mounts.push(renderViewerTree(elWrapper, output.tree, {
+          document,
+          capabilities,
+          maxNodes: browserDom?.maxNodes,
+        }))
         contentLayer.appendChild(elWrapper)
       }
       catch (error) {
@@ -94,13 +125,62 @@ export function renderPages(
     appendPageLayers(document, pageEl, pageLayerBuckets.top, page, unit, diagnostics)
 
     container.appendChild(wrapper)
-    pageDOMs.push({ pageIndex: page.index, element: pageEl })
+    pageDOMs.push({
+      pageIndex: page.index,
+      element: pageEl,
+      dispose: () => disposeMounts(mounts),
+    })
   }
 
   return pageDOMs
 }
 
-function materialRenderDiagnostic(node: MaterialNode, error: unknown): ViewerDiagnosticEvent {
+function renderSlotOutputs(
+  owner: MaterialNode<unknown>,
+  materials: ProfileMaterialRuntime,
+  context: ViewerRenderContext,
+  browserCapabilities: BrowserDomCapabilities,
+  nodeStates: ReadonlyMap<string, MaterialNodeLoadState>,
+  resolvedPropsMap: ReadonlyMap<string, Record<string, unknown>>,
+): Readonly<Record<string, readonly ReturnType<ProfileMaterialRuntime['render']>['tree'][]>> {
+  const slots = new Map<string, MaterialNode<unknown>[]>()
+  for (const structure of inspectMaterialNode(owner as MaterialNode, materials.profile, context.unit as UnitType).introspection.structures) {
+    const children = slots.get(structure.slot) ?? []
+    for (const child of structure.children) {
+      if (!children.includes(child))
+        children.push(child)
+    }
+    slots.set(structure.slot, children)
+  }
+  return Object.freeze(Object.fromEntries([...slots].map(([key, nodes]) => [
+    key,
+    Object.freeze(nodes.map((node) => {
+      const admitted = nodeStates.get(node.id)?.status !== 'quarantined'
+      const childContext: ViewerRenderContext = { ...context, resolvedProps: resolvedPropsMap.get(node.id) ?? node.model as Record<string, unknown>, slotOutputs: undefined }
+      childContext.capabilities = materials.getCapabilities(node.type)?.sanitizedMarkup ? browserCapabilities : deniedRenderCapabilities
+      childContext.slotOutputs = admitted ? renderSlotOutputs(node, materials, childContext, browserCapabilities, nodeStates, resolvedPropsMap) : undefined
+      const childForRender = { ...node, model: childContext.resolvedProps }
+      const output = materials.render(childForRender, childContext, admitted).tree
+      return output
+    })),
+  ])))
+}
+
+function disposeMounts(mounts: readonly ViewerTreeMount[]): void {
+  let firstError: unknown
+  for (let index = mounts.length - 1; index >= 0; index--) {
+    try {
+      mounts[index]!.dispose()
+    }
+    catch (error) {
+      firstError ??= error
+    }
+  }
+  if (firstError)
+    throw firstError
+}
+
+function materialRenderDiagnostic(node: MaterialNode<unknown>, error: unknown): ViewerDiagnosticEvent {
   const message = error instanceof Error ? error.message : String(error)
   return {
     category: 'viewer',
@@ -117,7 +197,7 @@ function materialRenderDiagnostic(node: MaterialNode, error: unknown): ViewerDia
 
 function createMaterialRenderFallback(
   document: Document,
-  node: MaterialNode,
+  node: MaterialNode<unknown>,
   page: PagePlanEntry,
   unit: string,
 ): HTMLElement {
@@ -356,7 +436,7 @@ function applyPageBackground(el: HTMLElement, bg: PageBackground | undefined, un
 
 function createElementWrapper(
   document: Document,
-  node: MaterialNode,
+  node: MaterialNode<unknown>,
   page: PagePlanEntry,
   unit: string,
   renderSize: ViewerRenderSize,

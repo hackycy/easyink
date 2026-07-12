@@ -1,14 +1,15 @@
-import type { PagePlanEntry } from '@easyink/core'
+import type { MaterialViewerExtension, PagePlanEntry, ViewerFacetCapabilities } from '@easyink/core'
 import type { MaterialNode, PageSchema } from '@easyink/schema'
-import { viewerElement, viewerText } from '@easyink/core'
+import type { ViewerDiagnosticEvent } from './types'
+import { viewerElement, viewerImperativeDom, viewerText } from '@easyink/core'
+import { createTestCompiledMaterialProfile, createTestMaterialManifest } from '@easyink/core/testing'
 import { describe, expect, it } from 'vitest'
-import { MaterialRendererRegistry } from './material-registry'
+import { ProfileMaterialRuntime } from './material-runtime'
 import { renderPages } from './render-surface'
 
 describe('renderPages', () => {
-  it('uses the registered render-size callback for wrapper dimensions', () => {
+  it('uses the registered render-size callback for wrapper dimensions', async () => {
     const container = document.createElement('div')
-    const registry = new MaterialRendererRegistry()
     const node: MaterialNode = {
       id: 'custom-1',
       type: 'custom',
@@ -35,12 +36,12 @@ describe('renderPages', () => {
       height: 60,
     }
 
-    registry.register('custom', { kind: 'none' }, {
+    const materials = await createMaterials({
       render: () => ({ tree: viewerElement('div', {}, [viewerText('custom')]) }),
       getRenderSize: () => ({ height: 7 }),
     })
 
-    renderPages(pages, registry, {
+    renderPages(pages, materials, {
       container,
       document,
       zoom: 1,
@@ -58,7 +59,7 @@ describe('renderPages', () => {
 
   it('applies page background styles consistently for repeat modes', () => {
     const container = document.createElement('div')
-    const registry = new MaterialRendererRegistry()
+    const materials = emptyMaterials()
     const pageSchema: PageSchema = {
       mode: 'fixed',
       width: 80,
@@ -78,7 +79,7 @@ describe('renderPages', () => {
       height: 60,
       elements: [],
       yOffset: 0,
-    }], registry, {
+    }], materials, {
       container,
       document,
       zoom: 1,
@@ -99,7 +100,7 @@ describe('renderPages', () => {
 
   it('applies page font to the viewer page root', () => {
     const container = document.createElement('div')
-    const registry = new MaterialRendererRegistry()
+    const materials = emptyMaterials()
     const pageSchema: PageSchema = {
       mode: 'fixed',
       width: 80,
@@ -113,7 +114,7 @@ describe('renderPages', () => {
       height: 60,
       elements: [],
       yOffset: 0,
-    }], registry, {
+    }], materials, {
       container,
       document,
       zoom: 1,
@@ -130,7 +131,7 @@ describe('renderPages', () => {
 
   it('renders text watermark as a page overlay', () => {
     const container = document.createElement('div')
-    const registry = new MaterialRendererRegistry()
+    const materials = emptyMaterials()
     const pageSchema: PageSchema = {
       mode: 'fixed',
       width: 80,
@@ -155,7 +156,7 @@ describe('renderPages', () => {
       height: 60,
       elements: [],
       yOffset: 0,
-    }], registry, {
+    }], materials, {
       container,
       document,
       zoom: 1,
@@ -177,9 +178,8 @@ describe('renderPages', () => {
     expect(tile!.style.transform).toContain('rotate(-30deg)')
   })
 
-  it('renders page layer placements around the content layer in stack order', () => {
+  it('renders page layer placements around the content layer in stack order', async () => {
     const container = document.createElement('div')
-    const registry = new MaterialRendererRegistry()
     const node: MaterialNode = {
       id: 'content-1',
       type: 'custom',
@@ -194,7 +194,7 @@ describe('renderPages', () => {
       output: { visibility: 'include' },
     }
 
-    registry.register('custom', { kind: 'none' }, {
+    const materials = await createMaterials({
       render: () => ({ tree: viewerElement('div', {}, [viewerText('content')]) }),
     })
 
@@ -204,7 +204,7 @@ describe('renderPages', () => {
       height: 60,
       elements: [node],
       yOffset: 0,
-    }], registry, {
+    }], materials, {
       container,
       document,
       zoom: 1,
@@ -238,7 +238,7 @@ describe('renderPages', () => {
 
   it('skips page watermark when disabled or blank', () => {
     const container = document.createElement('div')
-    const registry = new MaterialRendererRegistry()
+    const materials = emptyMaterials()
 
     renderPages([{
       index: 0,
@@ -246,7 +246,7 @@ describe('renderPages', () => {
       height: 60,
       elements: [],
       yOffset: 0,
-    }], registry, {
+    }], materials, {
       container,
       document,
       zoom: 1,
@@ -263,4 +263,58 @@ describe('renderPages', () => {
 
     expect(container.querySelector('.ei-viewer-page-layer--watermark')).toBeNull()
   })
+
+  it('allows imperative DOM only when the facet and host both declare it', async () => {
+    const extension: MaterialViewerExtension = {
+      render: () => ({ tree: viewerImperativeDom('chart', (host) => {
+        const mount = host.render(viewerText('chart'))
+        return () => mount.dispose()
+      }) }),
+    }
+    const materials = await createMaterials(extension, { imperativeDom: ['chart'] })
+    const node: MaterialNode = {
+      id: 'custom-1',
+      type: 'custom',
+      x: 0,
+      y: 0,
+      width: 10,
+      height: 10,
+      modelVersion: 1,
+      model: {},
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
+    }
+    const pages: PagePlanEntry[] = [{ index: 0, width: 80, height: 60, elements: [node], yOffset: 0 }]
+    const options = {
+      container: document.createElement('div'),
+      document,
+      zoom: 1,
+      unit: 'mm',
+      data: {},
+      resolvedPropsMap: new Map(),
+      pageSchema: { mode: 'fixed' as const, width: 80, height: 60 },
+    }
+
+    renderPages(pages, materials, { ...options, browserDom: { imperativeDom: ['chart'], maxNodes: 100 } }, [])
+    expect(options.container.textContent).toContain('chart')
+
+    const diagnostics: ViewerDiagnosticEvent[] = []
+    renderPages(pages, materials, { ...options, browserDom: { maxNodes: 100 } }, diagnostics)
+    expect(options.container.querySelector('[data-render-error="true"]')).not.toBeNull()
+    expect(diagnostics).toEqual([expect.objectContaining({ code: 'MATERIAL_RENDER_ERROR' })])
+  })
 })
+
+function emptyMaterials(): ProfileMaterialRuntime {
+  return new ProfileMaterialRuntime(createTestCompiledMaterialProfile([]))
+}
+
+async function createMaterials(extension: MaterialViewerExtension, capabilities: ViewerFacetCapabilities = {}): Promise<ProfileMaterialRuntime> {
+  const profile = createTestCompiledMaterialProfile([
+    createTestMaterialManifest({ type: 'custom', viewer: () => ({ extension, capabilities }) }),
+  ])
+  const materials = new ProfileMaterialRuntime(profile)
+  await materials.prepare(['custom'])
+  return materials
+}
