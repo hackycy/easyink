@@ -34,6 +34,7 @@ export interface MaterialFacetHostOptions {
     materialType: string,
     surface: RuntimeMaterialSurface,
   ) => unknown
+  onInstanceDisposed?: (instance: FacetInstance<unknown>) => void
 }
 
 interface ProfileFacetCache {
@@ -68,10 +69,12 @@ export class MaterialFacetHost {
   private readonly active = new Set<FacetInstance<unknown>>()
   private readonly pendingOperations = new Set<Promise<FacetInstance<unknown>>>()
   private readonly getActivationServices?: MaterialFacetHostOptions['getActivationServices']
+  private readonly onInstanceDisposed?: MaterialFacetHostOptions['onInstanceDisposed']
   private shutdownPromise?: Promise<readonly FacetDiagnostic[]>
 
   constructor(options: MaterialFacetHostOptions = {}) {
     this.getActivationServices = options.getActivationServices
+    this.onInstanceDisposed = options.onInstanceDisposed
   }
 
   activate<T>(
@@ -316,6 +319,12 @@ export class MaterialFacetHost {
           finally {
             invokingValueDisposer = false
             this.active.delete(instance as FacetInstance<unknown>)
+            try {
+              this.onInstanceDisposed?.(instance as FacetInstance<unknown>)
+            }
+            catch {
+              // Host lifecycle observers must not change facet disposal semantics.
+            }
           }
         }
         void completeDisposal()

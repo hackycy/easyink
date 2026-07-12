@@ -55,7 +55,7 @@ export const builtinMaterialIcons: Readonly<Record<string, Component>> = Object.
   'chart-custom': IconChartCustom,
 })
 
-export const builtinCatalogGroupLabels = Object.freeze({
+export const builtinMaterialGroupLabels = Object.freeze({
   basic: 'materials.catalog.basic',
   data: 'materials.catalog.data',
   chart: 'materials.catalog.chart',

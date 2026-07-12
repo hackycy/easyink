@@ -33,6 +33,8 @@ export class DesignerStore {
   readonly propertyEditorRegistry = markRaw(new PropertyEditorRegistry())
   readonly materialFacetHost: MaterialFacetHost
   private readonly designerFacetCache = new Map<string, FacetInstance<MaterialDesignerFacet>>()
+  private readonly designerFacetLocaleDisposers = new WeakMap<object, () => void>()
+  private readonly designerFacetLocaleCleanups = new Set<() => void>()
   // ─── Template state (enters Schema + command history) ─────────
   private _schema: DocumentSchema
   private _materialDiagnostics: readonly MaterialLoadDiagnostic[] = Object.freeze([])
@@ -110,6 +112,7 @@ export class DesignerStore {
         resolveMaterialIcon: this.resolveMaterialIcon.bind(this),
         runtimeConfig: this.runtimeConfig,
       }),
+      onInstanceDisposed: instance => this.releaseDesignerFacetLocale(instance),
     }))
     const loaded = loadDocumentWithProfile(schema, this.materialProfile)
     this._schema = loaded.schema
@@ -372,7 +375,23 @@ export class DesignerStore {
   async activateDesignerFacet(type: string) {
     const instance = await this.materialFacetHost.activate<MaterialDesignerFacet>(this.materialProfile, type, 'designer')
     this.designerFacetCache.set(type, instance)
+    if (instance.state === 'active' && instance.value?.localeMessages && !this.designerFacetLocaleDisposers.has(instance)) {
+      const unregister = this.registerLocaleMessages(instance.value.localeMessages as LocaleMessageRegistration)
+      this.designerFacetLocaleDisposers.set(instance, unregister)
+      this.designerFacetLocaleCleanups.add(unregister)
+    }
     return instance
+  }
+
+  private releaseDesignerFacetLocale(instance: FacetInstance<unknown>): void {
+    if (this.designerFacetCache.get(instance.materialType) === instance)
+      this.designerFacetCache.delete(instance.materialType)
+    const unregister = this.designerFacetLocaleDisposers.get(instance)
+    if (!unregister)
+      return
+    this.designerFacetLocaleDisposers.delete(instance)
+    this.designerFacetLocaleCleanups.delete(unregister)
+    unregister()
   }
 
   peekDesignerFacet(type: string) {
@@ -526,6 +545,9 @@ export class DesignerStore {
   // ─── Cleanup ──────────────────────────────────────────────────
 
   destroy(): void {
+    for (const unregister of this.designerFacetLocaleCleanups)
+      unregister()
+    this.designerFacetLocaleCleanups.clear()
     this.designerFacetCache.clear()
     void this.materialFacetHost.dispose()
     this.commands.clear()

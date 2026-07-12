@@ -11,7 +11,7 @@ export type {
   ToolbarActionDescriptor,
 } from './contributions'
 export { DesignerInteractionService } from './interactions'
-export { builtinCatalogGroupLabels, builtinMaterialIcons } from './material-host'
+export { builtinMaterialGroupLabels, builtinMaterialIcons } from './material-host'
 export { PropertyEditorRegistry, PropertyEditorRegistryError } from './properties/property-editor-registry'
 export type { PropertyEditorRegistration } from './properties/property-editor-registry'
 export type {

@@ -206,4 +206,63 @@ describe('propertiesPanel material property preview lifecycle', () => {
     expect(node.model.items).toBe(items)
     expect(node.model.items).toEqual(['first', 'second'])
   })
+
+  it('prunes missing object ancestors on cancel and transaction undo', () => {
+    const node = createTableNode()
+    node.model = {}
+    const accessor = createNodePropertyAccessor<string>('/model/style/color')
+    const descriptor = { key: 'color', label: 'Color', type: 'color' as const, accessor }
+    const preview = new MaterialPropertyPreviewSession()
+    const commands = new CommandManager()
+    const tx = createTransactionService(id => id === node.id ? node : undefined, commands)
+
+    preview.preview(node, descriptor, draft => accessor.write(draft, '#fff'))
+    preview.cancel()
+    expect(node.model).toEqual({})
+
+    preview.preview(node, descriptor, draft => accessor.write(draft, '#eee'))
+    commitMaterialPropertyPreview(preview, node, 'color', () =>
+      tx.run(node.id, draft => accessor.write(draft, '#000')))
+    expect(node.model).toEqual({ style: { color: '#000' } })
+
+    commands.undo()
+    expect(node.model).toEqual({})
+  })
+
+  it('keeps concurrent siblings in preview-created ancestors', () => {
+    const node = createTableNode()
+    node.model = {}
+    const accessor = createNodePropertyAccessor<string>('/model/style/color')
+    const descriptor = { key: 'color', label: 'Color', type: 'color' as const, accessor }
+    const preview = new MaterialPropertyPreviewSession()
+
+    preview.preview(node, descriptor, draft => accessor.write(draft, '#fff'))
+    const style = node.model.style as Record<string, unknown>
+    style.other = 'concurrent'
+    preview.cancel()
+
+    expect(node.model).toEqual({ style: { other: 'concurrent' } })
+  })
+
+  it('prunes multilevel missing array entries but retains pre-existing empty containers', () => {
+    const node = createTableNode()
+    node.model = { rows: [], style: {} }
+    const rows = node.model.rows
+    const style = node.model.style
+    const arrayAccessor = createNodePropertyAccessor<string>('/model/rows/0/style/color')
+    const arrayDescriptor = { key: 'rowColor', label: 'Row Color', type: 'color' as const, accessor: arrayAccessor }
+    const styleAccessor = createNodePropertyAccessor<string>('/model/style/color')
+    const styleDescriptor = { key: 'styleColor', label: 'Style Color', type: 'color' as const, accessor: styleAccessor }
+    const preview = new MaterialPropertyPreviewSession()
+
+    preview.preview(node, arrayDescriptor, draft => arrayAccessor.write(draft, '#fff'))
+    preview.cancel()
+    expect(node.model.rows).toBe(rows)
+    expect(node.model.rows).toEqual([])
+
+    preview.preview(node, styleDescriptor, draft => styleAccessor.write(draft, '#fff'))
+    preview.cancel()
+    expect(node.model.style).toBe(style)
+    expect(node.model.style).toEqual({})
+  })
 })

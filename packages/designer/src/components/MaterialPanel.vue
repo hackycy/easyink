@@ -15,7 +15,7 @@ interface MaterialPanelGroup {
   items: MaterialDragEntry[]
 }
 
-const visibleCatalogGroups = computed<MaterialPanelGroup[]>(() => {
+const visibleMaterialGroups = computed<MaterialPanelGroup[]>(() => {
   const groups = new Map<string, MaterialPanelGroup>()
   for (const type of store.listEditableMaterialTypes()) {
     const manifest = store.getManifest(type)
@@ -36,7 +36,7 @@ const visibleCatalogGroups = computed<MaterialPanelGroup[]>(() => {
 })
 
 const hasRegisteredMaterials = computed(() =>
-  visibleCatalogGroups.value.length > 0,
+  visibleMaterialGroups.value.length > 0,
 )
 
 function handleAddMaterial(entry: MaterialDragEntry) {
@@ -81,7 +81,7 @@ function handleKeyAdd(e: KeyboardEvent, entry: MaterialDragEntry) {
     </div>
 
     <div
-      v-for="group in visibleCatalogGroups"
+      v-for="group in visibleMaterialGroups"
       :key="group.id"
       class="ei-material-panel__section"
     >

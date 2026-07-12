@@ -8,12 +8,12 @@ import { createApp, defineComponent, h, nextTick } from 'vue'
 import { compileBuiltinMaterialProfile } from '../../builtin/src'
 import CanvasElementContent from './components/CanvasElementContent.vue'
 import { provideDesignerStore } from './composables'
-import { builtinCatalogGroupLabels, builtinMaterialIcons, resolveBuiltinMaterialIcon } from './material-host'
+import { builtinMaterialGroupLabels, builtinMaterialIcons, resolveBuiltinMaterialIcon } from './material-host'
 import { DesignerStore } from './store/designer-store'
 import { createDesignerTestManifest, createDesignerTestProfile } from './testing/material-profile'
 
 describe('designer builtin material host metadata', () => {
-  it('owns every builtin icon and catalog label outside the manifest package', () => {
+  it('owns every builtin icon and material group label outside the manifest package', () => {
     expect(Object.keys(builtinMaterialIcons).sort()).toEqual([
       'barcode',
       'chart-bar',
@@ -41,7 +41,7 @@ describe('designer builtin material host metadata', () => {
       'table-data',
       'text',
     ])
-    expect(builtinCatalogGroupLabels).toEqual({
+    expect(builtinMaterialGroupLabels).toEqual({
       basic: 'materials.catalog.basic',
       data: 'materials.catalog.data',
       chart: 'materials.catalog.chart',
@@ -128,6 +128,33 @@ describe('designerStore material facet host', () => {
     store.destroy()
   })
 
+  it('registers builtin facet locale metadata once and releases it per store lifecycle', async () => {
+    const profile = compileBuiltinMaterialProfile('basic')
+    const first = new DesignerStore(undefined, undefined, undefined, { materials: { profile } })
+    const second = new DesignerStore(undefined, undefined, undefined, { materials: { profile } })
+    first.setLocale({}, 'en-US')
+    second.setLocale({}, 'en-US')
+
+    expect(first.t('materials.text.name')).toBe('materials.text.name')
+    const [firstActivation, concurrentActivation] = await Promise.all([
+      first.activateDesignerFacet('text'),
+      first.activateDesignerFacet('text'),
+    ])
+    expect(firstActivation).toBe(concurrentActivation)
+    expect(first.t('materials.text.name')).toBe('Text')
+
+    await second.activateDesignerFacet('text')
+    expect(second.t('materials.text.name')).toBe('Text')
+
+    await firstActivation.dispose()
+    expect(first.t('materials.text.name')).toBe('materials.text.name')
+    expect(first.peekDesignerFacet('text')).toBeUndefined()
+    expect(second.t('materials.text.name')).toBe('Text')
+
+    second.destroy()
+    expect(second.t('materials.text.name')).toBe('materials.text.name')
+  })
+
   it('activates and peeks a designer facet while excluding viewer-only types', async () => {
     const extension = { renderContent: vi.fn(() => () => {}) }
     const profile = createDesignerTestProfile([
@@ -153,6 +180,7 @@ describe('designerStore material facet host', () => {
     expect(instance).toMatchObject({ state: 'quarantined', diagnostic: { code: 'MATERIAL_FACET_ACTIVATION_FAILED' } })
     expect(instance.value).toBeUndefined()
     expect(store.peekDesignerFacet('broken')).toBe(instance)
+    expect(store.t('materials.broken.name')).toBe('materials.broken.name')
   })
 
   it('runs render cleanup on unmount and extension disposal once', async () => {
