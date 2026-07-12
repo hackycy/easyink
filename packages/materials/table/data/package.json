@@ -27,5 +27,8 @@
     "@easyink/prop-schemas": "workspace:*",
     "@easyink/schema": "workspace:*",
     "@easyink/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@easyink/designer": "workspace:*"
   }
 }

@@ -4,6 +4,7 @@ import Vue from 'unplugin-vue/rolldown'
 export default defineConfig({
   entry: [
     'src/index.ts',
+    'src/testing.ts',
     'src/locale/index.ts',
   ],
   deps: {

@@ -1,6 +1,7 @@
 import type { Selection } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import { resolvePropertyAccessor, validatePropertyDescriptors } from '@easyink/core'
+import { commitMaterialPropertyPreview, MaterialPropertyPreviewSession } from '@easyink/designer/testing'
 import { assertValidTableModel, createTableCellSelectionType, getTableMaterialModel } from '@easyink/material-table-kernel'
 import { describe, expect, it } from 'vitest'
 import { tableDataDesignerPropSchemas } from './prop-schemas'
@@ -61,6 +62,47 @@ describe('table-data band descriptors', () => {
     accessor('showHeader').write(source as MaterialNode, true)
     accessor('showFooter').write(source as MaterialNode, true)
     expect(getTableMaterialModel(source).bands.map(band => band.role)).toEqual(['header', 'detail', 'footer'])
+    assertValidTableModel(getTableMaterialModel(source))
+  })
+
+  it('integrates real band accessors with Designer preview, commit, and selection rebase', () => {
+    const source = node()
+    const descriptor = tableDataDesignerPropSchemas.find(candidate => candidate.key === 'showHeader')!
+    const showHeader = resolvePropertyAccessor(descriptor)
+    const originalHeader = getTableMaterialModel(source).bands.find(band => band.role === 'header')!
+    const originalHeaderId = originalHeader.id
+    const headerCells = originalHeader.rows[0]!.cells
+    const slotId = `cell:${headerCells[1]!.id}`
+    headerCells[0]!.content = { kind: 'text', text: '', bindingPort: 'header:value' }
+    headerCells[1]!.content = { kind: 'materials', slotId }
+    source.bindings['header:value'] = { sourceId: 'source', fieldPath: 'header' }
+    source.slots[slotId] = []
+    const baseline = structuredClone(source)
+    const preview = new MaterialPropertyPreviewSession()
+
+    preview.preview(source, descriptor, draft => showHeader.write(draft, false))
+    expect(getTableMaterialModel(source).bands.map(band => band.role)).toEqual(['detail', 'footer'])
+    expect(source.bindings['header:value']).toBeUndefined()
+    expect(source.slots[slotId]).toBeUndefined()
+    preview.cancel()
+    expect(source).toEqual(baseline)
+
+    preview.preview(source, descriptor, draft => showHeader.write(draft, false))
+    const committed = commitMaterialPropertyPreview(preview, source, descriptor.key, () => showHeader.write(source, false))
+    const selection: Selection<{ row: number, col: number }> = { type: 'table.cell', nodeId: source.id, payload: { row: 0, col: 0 } }
+    const rebased = tableCellSelectionType.rebase?.(
+      selection,
+      committed.before,
+      source,
+      committed.result?.selectionRebase?.hint,
+    )
+    expect(rebased).toEqual({ selection: { ...selection, payload: { row: 0, col: 0 } }, identityChanged: true })
+
+    showHeader.write(source, true)
+    const restoredHeader = getTableMaterialModel(source).bands.find(band => band.role === 'header')!
+    expect(restoredHeader.id).not.toBe(originalHeaderId)
+    const identities = getTableMaterialModel(source).bands.flatMap(band => [band.id, ...band.rows.flatMap(row => [row.id, ...row.cells.map(cell => cell.id)])])
+    expect(new Set(identities).size).toBe(identities.length)
     assertValidTableModel(getTableMaterialModel(source))
   })
 

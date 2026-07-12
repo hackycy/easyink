@@ -1244,6 +1244,10 @@ importers:
       '@easyink/shared':
         specifier: workspace:*
         version: link:../../../shared
+    devDependencies:
+      '@easyink/designer':
+        specifier: workspace:*
+        version: link:../../../designer
 
   packages/materials/table/kernel:
     dependencies:
