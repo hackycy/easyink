@@ -49,7 +49,7 @@ export function assertPatchScopedJsonCandidate(
   for (const patch of patches) {
     if (!patch || typeof patch !== 'object' || !Array.isArray(patch.path))
       fail('JSON_VALUE_PATH', '', 'Document patch path is invalid')
-    assertSafePatchPathAndCandidateContainers(document, patch.path, aggregate, probe)
+    assertSafePatchPathAndCandidateContainers(document, patch.path, patch.op, aggregate, probe)
     if ('value' in patch)
       consumeChangedJsonValue(patch.value, patch.path.length, aggregate, probe)
   }
@@ -131,6 +131,7 @@ export function validatePreviewWithProfile(input: PreviewProfileValidationInput)
 function assertSafePatchPathAndCandidateContainers(
   document: DocumentSchema,
   path: readonly unknown[],
+  operation: Patch['op'],
   budget: PatchJsonBudget,
   probe?: DocumentPreviewWorkProbe,
 ): void {
@@ -143,10 +144,19 @@ function assertSafePatchPathAndCandidateContainers(
     const segment = path[offset]
     const final = offset === path.length - 1
     if (Array.isArray(current)) {
-      if (!Number.isInteger(segment) || (segment as number) < 0 || (segment as number) >= current.length)
+      if (!Number.isInteger(segment) || (segment as number) < 0)
+        fail('JSON_VALUE_PATH', formatPath(path.slice(0, offset + 1)), 'Document patch array index is invalid')
+      if (!final && (segment as number) >= current.length)
         fail('JSON_VALUE_PATH', formatPath(path.slice(0, offset + 1)), 'Document patch array index is out of range')
-      if (!Object.hasOwn(current, segment as number))
+      if (final && operation === 'remove' && (segment as number) > current.length)
+        fail('JSON_VALUE_PATH', formatPath(path.slice(0, offset + 1)), 'Document patch remove index is out of range')
+      const present = Object.hasOwn(current, segment as number)
+      if (!final && !present)
         fail('JSON_VALUE_ARRAY_SPARSE', formatPath(path.slice(0, offset + 1)), 'Document patch path crosses a sparse array')
+      if (final && operation !== 'remove' && (!present || (segment as number) >= current.length))
+        fail('JSON_VALUE_PATH', formatPath(path.slice(0, offset + 1)), 'Document patch array leaf is out of range')
+      if (final && !present)
+        continue
       const descriptor = Object.getOwnPropertyDescriptor(current, String(segment))!
       assertDataDescriptor(descriptor, formatPath(path.slice(0, offset + 1)))
       if (!final)
@@ -158,8 +168,13 @@ function assertSafePatchPathAndCandidateContainers(
       fail('JSON_VALUE_OBJECT_PROTOTYPE', formatPath(path.slice(0, offset)), 'Document patch containers must be plain records')
     if (typeof segment !== 'string' || UNSAFE_KEYS.has(segment))
       fail('JSON_VALUE_KEY_UNSAFE', formatPath(path.slice(0, offset + 1)), 'Document patch key is unsafe')
-    if (!Object.hasOwn(current, segment))
+    const present = Object.hasOwn(current, segment)
+    if (!final && !present)
       fail('JSON_VALUE_PATH', formatPath(path.slice(0, offset + 1)), 'Document patch path must use own properties')
+    if (final && operation !== 'remove' && !present)
+      fail('JSON_VALUE_PATH', formatPath(path.slice(0, offset + 1)), 'Document patch leaf must be an own property')
+    if (final && !present)
+      continue
     const descriptor = Object.getOwnPropertyDescriptor(current, segment)!
     assertDataDescriptor(descriptor, formatPath(path.slice(0, offset + 1)))
     if (!descriptor.enumerable)

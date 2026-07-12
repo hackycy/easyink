@@ -129,7 +129,7 @@ describe('previewTransaction', () => {
     expect(engine.totalCount).toBe(1)
   })
 
-  it('does not traverse a 100k-cell opaque model on every slider preview', () => {
+  it('does not traverse a 100k-scale opaque model on every slider preview', () => {
     const fullValidate = vi.fn(() => [])
     const previewValidate = vi.fn((..._args: Parameters<NonNullable<import('./schema-adapter').SchemaAdapter['validatePreview']>>) => [])
     const introspect = vi.fn(() => ({ identities: [], structures: [], references: [], resources: [], bindings: [] }))
@@ -282,6 +282,29 @@ describe('previewTransaction', () => {
       { op: 'replace', path: ['page', 'width'], value: '123' },
       { op: 'replace', path: ['page', 'height'], value: '456' },
     ], { maxStringBytes: 5 })).toThrowError(expect.objectContaining({ code: 'JSON_VALUE_STRING_LIMIT' }))
+  })
+
+  it('allows removing an optional model field but rejects unsafe remove keys', () => {
+    const profile = createTestCompiledMaterialProfile()
+    const schema = createCanonicalDefaultSchema()
+    schema.elements = [profile.createNode('box', { id: 'a', model: { optional: 'value', retained: true } })]
+    const store = new DocumentStore(schema, profile)
+    const engine = new DocumentTransactionEngine(store)
+    const preview = engine.beginPreview({ label: 'Remove optional field', operation: moveOperation })
+
+    preview.run('a', (draft) => {
+      delete draft.model.optional
+    })
+
+    expect(store.document.elements[0]!.model).toEqual({ retained: true })
+    preview.commit()
+    expect(store.committedDocument.elements[0]!.model).toEqual({ retained: true })
+    expect(() => assertPatchScopedJsonCandidate(store.committedDocument, [
+      { op: 'remove', path: ['__proto__'] },
+    ], store.jsonValidation)).toThrowError(expect.objectContaining({ code: 'JSON_VALUE_KEY_UNSAFE' }))
+    expect(() => assertPatchScopedJsonCandidate(store.committedDocument, [
+      { op: 'remove', path: ['elements', 99] },
+    ], store.jsonValidation)).toThrowError(expect.objectContaining({ code: 'JSON_VALUE_PATH' }))
   })
 
   it('keys preview validation cache by revision, node identity, and sorted path set', () => {
