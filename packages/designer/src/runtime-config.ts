@@ -1,11 +1,25 @@
-import type { CompiledMaterialProfile } from '@easyink/core'
+import type { CompiledMaterialProfile, MaterialPackageRegistration } from '@easyink/core'
 import type { DocumentSchema, PageSchema } from '@easyink/schema'
 import type { PaperPreset } from '@easyink/shared'
-import type { DesignerMaterialBundle } from './materials/registry'
+import { compileMaterialProfile, EASYINK_ENGINE_VERSION } from '@easyink/core'
 
 export interface DesignerMaterialConfig {
-  bundles?: DesignerMaterialBundle[]
-  profiles?: CompiledMaterialProfile[]
+  profile?: CompiledMaterialProfile
+  packages?: readonly MaterialPackageRegistration[]
+  engineVersion?: string
+  icons?: Readonly<Record<string, unknown>>
+}
+
+export function resolveDesignerMaterialProfile(config?: DesignerMaterialConfig): CompiledMaterialProfile {
+  if (config?.profile && config.packages)
+    throw new Error('DESIGNER_MATERIAL_PROFILE_CONFIG_CONFLICT')
+  if (config?.profile)
+    return config.profile
+  return compileMaterialProfile({
+    id: 'designer-runtime',
+    engineVersion: config?.engineVersion ?? EASYINK_ENGINE_VERSION,
+    packages: config?.packages ?? [],
+  })
 }
 
 export interface DesignerPaperConfig {

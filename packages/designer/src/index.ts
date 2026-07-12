@@ -20,6 +20,8 @@ export type {
   DesignerMaterialBundle,
   DesignerMaterialRegistration,
 } from './materials/registry'
+export { PropertyEditorRegistry, PropertyEditorRegistryError } from './properties/property-editor-registry'
+export type { PropertyEditorRegistration } from './properties/property-editor-registry'
 export type {
   DesignerDefaultsConfig,
   DesignerMaterialConfig,

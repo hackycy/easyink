@@ -12,8 +12,6 @@ import { useTemplateAutoSave } from '../composables/use-template-autosave'
 import { useWorkbenchPersistence } from '../composables/use-workbench-persistence'
 import { ContributionRegistry } from '../contributions/contribution-registry'
 import { CONTRIBUTION_REGISTRY_KEY } from '../contributions/injection'
-import { registerMaterialBundle } from '../materials/registry'
-import { createRuntimeMaterialProfileRegistration } from '../materials/runtime-profile-registration'
 import { DesignerStore } from '../store/designer-store'
 import CanvasWorkspace from './CanvasWorkspace.vue'
 import DesignerConfirmHost from './DesignerConfirmHost.vue'
@@ -52,8 +50,6 @@ if (store.schema !== props.schema) {
 // re-target it at the proxy so mutations made through tx.run trigger Vue
 // reactivity (otherwise patches mutate the raw store and templates stay stale).
 store.editingSession.setStore(store)
-const unregisterRuntimeMaterialBundles = registerRuntimeMaterialBundles(store, props.runtimeConfig)
-const runtimeMaterialProfiles = createRuntimeMaterialProfileRegistration(store)
 store.setFontProvider(props.fontProvider)
 props.setupStore?.(store)
 provideDesignerStore(store)
@@ -122,20 +118,6 @@ function resolveLocaleCode(locale: LocaleMessages): string | undefined {
   return undefined
 }
 
-function registerRuntimeMaterialBundles(store: DesignerStore, runtimeConfig: DesignerRuntimeConfig | undefined) {
-  const unregister: Array<() => void> = []
-  for (const bundle of runtimeConfig?.materials?.bundles ?? [])
-    unregister.push(registerMaterialBundle(store, bundle))
-  return () => {
-    for (let index = unregister.length - 1; index >= 0; index--)
-      unregister[index]!()
-  }
-}
-
-watch(() => props.runtimeConfig?.materials?.profiles ?? [], (profiles) => {
-  runtimeMaterialProfiles.update(profiles)
-}, { immediate: true })
-
 watch(() => props.interactionProvider, (newProvider) => {
   store.setInteractionProvider(newProvider)
 })
@@ -190,8 +172,6 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  void runtimeMaterialProfiles.dispose()
-  unregisterRuntimeMaterialBundles()
   store.setFontTarget(undefined)
   window.removeEventListener('pointerdown', handleGlobalPointerDown, true)
   window.removeEventListener('focusin', handleGlobalFocusIn, true)
