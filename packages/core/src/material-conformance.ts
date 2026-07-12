@@ -19,23 +19,13 @@ export interface MaterialConformanceIssue {
 }
 
 export interface MaterialConformanceOptions {
-  hardTimeoutExecutor?: MaterialConformanceHardTimeoutExecutor
+  /**
+   * Executes hooks in the current realm. This mode is only for trusted tests or
+   * a disposable process/Worker whose owner enforces the hard deadline.
+   */
+  executionMode?: 'trusted-in-process'
   createRenderCapabilities?: (facet: MaterialViewerFacet) => ViewerRenderCapabilities
   mountViewerTree?: (tree: ViewerRenderTree, facet: MaterialViewerFacet) => { dispose: () => void }
-}
-
-export interface MaterialConformanceHardTimeoutExecutor {
-  readonly capabilities: {
-    readonly sync: 'hard-terminable'
-    readonly asyncIsolated?: 'worker-or-process'
-  }
-  /** Executes synchronously and must interrupt JavaScript when timeoutMs expires. */
-  executeSync: (hook: (...args: any[]) => unknown, args: readonly unknown[], timeoutMs: number) => unknown
-  /**
-   * Executes in a disposable worker/process/package isolate. The implementation
-   * must terminate that isolate before rejecting at timeoutMs.
-   */
-  executeAsyncIsolated?: (hook: (...args: any[]) => unknown, args: readonly unknown[], timeoutMs: number) => Promise<unknown>
 }
 
 export interface MaterialConformanceReport {
@@ -52,7 +42,6 @@ const MAX_STRING_BYTES = 4 * 1024 * 1024
 const MAX_DEPTH = 128
 const MAX_OPERATIONS = 10_000
 const MAX_DURATION_MS = 5_000
-const MAX_HOOK_DURATION_MS = 100
 
 interface State {
   manifest: MaterialManifest
@@ -76,8 +65,10 @@ export async function runMaterialConformance(
   options: MaterialConformanceOptions = {},
 ): Promise<MaterialConformanceReport> {
   const state: State = { manifest, options, issues: [], operations: 0, deadline: Date.now() + MAX_DURATION_MS }
-  if (options.hardTimeoutExecutor?.capabilities.sync !== 'hard-terminable')
-    issue(state, 'CONFORMANCE_HARD_TIMEOUT_EXECUTOR_REQUIRED', '', 'a hard timeout executor is required for untrusted hooks')
+  if (options.executionMode !== 'trusted-in-process') {
+    issue(state, 'CONFORMANCE_ISOLATED_EXECUTION_REQUIRED', '', 'material hooks require a disposable process or Worker')
+    return freezeReport(state, '')
+  }
   await check(state, 'CONFORMANCE_MANIFEST_INVALID', '/manifest', () => checkManifest(state))
   await check(state, 'CONFORMANCE_DEFAULT_CREATION_FAILED', '/common/defaultNode', () => checkDefault(state))
   await check(state, 'CONFORMANCE_ADAPTER_PIPELINE_FAILED', '/schemaAdapter', () => checkAdapterPipeline(state))
@@ -90,10 +81,14 @@ export async function runMaterialConformance(
   await check(state, 'CONFORMANCE_SURFACE_INVALID', '/facets', () => checkSurfaces(state))
   await check(state, 'CONFORMANCE_VIEWER_FAILED', '/facets/viewer', () => checkViewer(state))
 
+  return freezeReport(state)
+}
+
+function freezeReport(state: State, materialType = safeType(state.manifest)): MaterialConformanceReport {
   const issues = Object.freeze(state.issues
     .toSorted((left, right) => left.code.localeCompare(right.code) || left.path.localeCompare(right.path) || left.message.localeCompare(right.message))
     .map(issue => Object.freeze(issue)))
-  return Object.freeze({ materialType: safeType(manifest), valid: issues.length === 0, issues })
+  return Object.freeze({ materialType, valid: issues.length === 0, issues })
 }
 
 export async function assertMaterialConformance(
@@ -565,15 +560,11 @@ async function invokeHook(
   receiver?: unknown,
 ): Promise<unknown> {
   consume(state)
-  const executor = state.options.hardTimeoutExecutor
-  if (executor?.capabilities.sync !== 'hard-terminable')
-    throw new ConformanceHookError('CONFORMANCE_HARD_TIMEOUT_EXECUTOR_REQUIRED')
-  const remaining = Math.min(MAX_HOOK_DURATION_MS, state.deadline - Date.now())
-  if (remaining <= 0)
+  if (state.options.executionMode !== 'trusted-in-process')
+    throw new ConformanceHookError('CONFORMANCE_ISOLATED_EXECUTION_REQUIRED')
+  if (state.deadline - Date.now() <= 0)
     throw new Error('CONFORMANCE_WORK_BUDGET_EXCEEDED')
-  const result = executor.executeSync(invokeSyncWithReceiver, [hook, receiver, args], remaining)
-  if (!isSyncHookResult(result))
-    throw new ConformanceHookError('CONFORMANCE_HARD_TIMEOUT_EXECUTOR_INVALID')
+  const result = invokeSyncWithReceiver(hook, receiver, args)
   if (result.status === 'undeclared-async')
     throw new ConformanceHookError('CONFORMANCE_UNDECLARED_ASYNC_HOOK')
   return result.value
@@ -586,13 +577,11 @@ async function invokeAsyncIsolatedHook(
   receiver?: unknown,
 ): Promise<unknown> {
   consume(state)
-  const executor = state.options.hardTimeoutExecutor
-  if (executor?.capabilities.asyncIsolated !== 'worker-or-process' || !executor.executeAsyncIsolated)
-    throw new ConformanceHookError('CONFORMANCE_ASYNC_HARD_TIMEOUT_EXECUTOR_REQUIRED')
-  const remaining = Math.min(MAX_HOOK_DURATION_MS, state.deadline - Date.now())
-  if (remaining <= 0)
+  if (state.options.executionMode !== 'trusted-in-process')
+    throw new ConformanceHookError('CONFORMANCE_ISOLATED_EXECUTION_REQUIRED')
+  if (state.deadline - Date.now() <= 0)
     throw new Error('CONFORMANCE_WORK_BUDGET_EXCEEDED')
-  return await executor.executeAsyncIsolated(invokeWithReceiver, [hook, receiver, args], remaining)
+  return await invokeWithReceiver(hook, receiver, args)
 }
 
 interface SyncHookResult {
@@ -646,11 +635,6 @@ function hasThenProperty(value: unknown): boolean {
   if (candidate !== null)
     throw new Error('CONFORMANCE_HOOK_RESULT_PROTOTYPE_DEPTH_EXCEEDED')
   return false
-}
-
-function isSyncHookResult(value: unknown): value is SyncHookResult {
-  return isRecord(value)
-    && (value.status === 'value' || value.status === 'undeclared-async')
 }
 
 function ownDataFunction(value: object, key: string): ((...args: any[]) => unknown) | undefined {

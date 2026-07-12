@@ -762,6 +762,9 @@ importers:
       '@easyink/browser-dom':
         specifier: workspace:*
         version: link:../browser-dom
+      tsx:
+        specifier: catalog:cli
+        version: 4.21.0
 
   packages/core:
     dependencies:

@@ -1,6 +1,5 @@
 import type { MaterialConformanceOptions } from './material-conformance'
 import type { MaterialViewerFacet } from './material-viewer'
-import { runInNewContext } from 'node:vm'
 import { describe, expect, it, vi } from 'vitest'
 import { assertMaterialConformance, runMaterialConformance } from './material-conformance'
 import { defineMaterialFacetFactory } from './material-manifest'
@@ -11,14 +10,8 @@ function viewerFacet(): MaterialViewerFacet {
   return { capabilities: {}, extension: { render: () => ({ tree: viewerText('ok') }) } }
 }
 
-const hardTimeoutExecutor = {
-  capabilities: { sync: 'hard-terminable' as const },
-  executeSync: (hook: (...args: any[]) => unknown, args: readonly unknown[], timeoutMs: number) =>
-    runInNewContext('hook(...args)', { args, hook }, { timeout: timeoutMs }),
-}
-
 function options(extra: MaterialConformanceOptions = {}): MaterialConformanceOptions {
-  return { hardTimeoutExecutor, ...extra }
+  return { executionMode: 'trusted-in-process', ...extra }
 }
 
 describe('material conformance', () => {
@@ -127,30 +120,44 @@ describe('material conformance', () => {
     ]))
   })
 
-  it('interrupts synchronous infinite hooks and continues independent checks', async () => {
+  it('fails closed before invoking any hook unless trusted execution is explicit', async () => {
+    let calls = 0
     const manifest = createTestMaterialManifest({
-      type: 'infinite',
-      viewer: false,
+      type: 'isolation-required',
+      viewer: defineMaterialFacetFactory('async-isolated', async () => {
+        calls++
+        await new Promise(resolve => setTimeout(resolve, 1))
+        while (true)
+          continue
+      }),
       schemaAdapter: {
         ...createTestMaterialManifest({ type: 'adapter-source' }).schemaAdapter,
         normalize: () => {
-          while (true)
-            continue
+          calls++
+          return {} as never
         },
       },
     })
+    const inaccessible = new Proxy(manifest, {
+      get: () => {
+        calls++
+        throw new Error('manifest must remain untouched without isolation')
+      },
+    })
     const started = Date.now()
-    const report = await runMaterialConformance(manifest, options())
-    expect(Date.now() - started).toBeLessThan(6_000)
-    expect(report.issues.map(issue => issue.code)).toContain('CONFORMANCE_VIEWER_REQUIRED')
-    expect(report.issues.some(issue => issue.message.includes('timed out'))).toBe(true)
+    const report = await runMaterialConformance(inaccessible)
+    expect(Date.now() - started).toBeLessThan(1_000)
+    expect(calls).toBe(0)
+    expect(report.issues).toEqual([expect.objectContaining({
+      code: 'CONFORMANCE_ISOLATED_EXECUTION_REQUIRED',
+      path: '',
+    })])
+    await expect(assertMaterialConformance(inaccessible)).rejects.toThrow('CONFORMANCE_ISOLATED_EXECUTION_REQUIRED')
+    expect(calls).toBe(0)
   })
 
-  it('fails closed without an executor and safely summarizes hostile thrown values', async () => {
-    const valid = createTestMaterialManifest({ type: 'executor-required', viewer: () => viewerFacet() })
-    expect((await runMaterialConformance(valid)).issues.map(issue => issue.code))
-      .toContain('CONFORMANCE_HARD_TIMEOUT_EXECUTOR_REQUIRED')
-
+  it('safely summarizes hostile thrown values in trusted execution', async () => {
+    const valid = createTestMaterialManifest({ type: 'trusted-errors', viewer: () => viewerFacet() })
     const hostile = createTestMaterialManifest({
       type: 'hostile-throw',
       viewer: false,
@@ -170,27 +177,6 @@ describe('material conformance', () => {
     expect(report.issues.map(issue => issue.code)).toContain('CONFORMANCE_VIEWER_REQUIRED')
   })
 
-  it('rejects declared async factories before invocation without an isolated executor', async () => {
-    let called = false
-    const manifest = createTestMaterialManifest({
-      type: 'async-isolation-required',
-      viewer: defineMaterialFacetFactory('async-isolated', async () => {
-        called = true
-        await new Promise(resolve => setTimeout(resolve, 1))
-        while (true)
-          continue
-      }),
-    })
-    const started = Date.now()
-    const report = await runMaterialConformance(manifest, options())
-    expect(Date.now() - started).toBeLessThan(1_000)
-    expect(called).toBe(false)
-    expect(report.issues).toContainEqual(expect.objectContaining({
-      code: 'CONFORMANCE_ASYNC_HARD_TIMEOUT_EXECUTOR_REQUIRED',
-      path: '/facets/viewer',
-    }))
-  })
-
   it('rejects promise-returning factories declared as synchronous without awaiting them', async () => {
     const manifest = createTestMaterialManifest({
       type: 'undeclared-async',
@@ -203,54 +189,19 @@ describe('material conformance', () => {
     }))
   })
 
-  it('activates declared async factories through an isolated executor capability', async () => {
-    let isolatedCalls = 0
+  it('activates declared async factories inside an explicitly trusted isolate', async () => {
+    let calls = 0
     const manifest = createTestMaterialManifest({
       type: 'isolated-async',
       viewer: defineMaterialFacetFactory('async-isolated', async () => {
-        throw new Error('inline async factory must not execute in the conformance process')
+        calls++
+        await Promise.resolve()
+        return viewerFacet()
       }),
     })
-    const report = await runMaterialConformance(manifest, options({
-      hardTimeoutExecutor: {
-        ...hardTimeoutExecutor,
-        capabilities: { sync: 'hard-terminable', asyncIsolated: 'worker-or-process' },
-        executeAsyncIsolated: async () => {
-          isolatedCalls++
-          return viewerFacet()
-        },
-      },
-    }))
+    const report = await runMaterialConformance(manifest, options())
     expect(report.valid).toBe(true)
-    expect(isolatedCalls).toBe(1)
-  })
-
-  it('returns after an isolated executor terminates a never-settling activation', async () => {
-    let terminated = false
-    const manifest = createTestMaterialManifest({
-      type: 'isolated-timeout',
-      viewer: defineMaterialFacetFactory('async-isolated', async () => await new Promise<never>(() => {})),
-    })
-    const started = Date.now()
-    const report = await runMaterialConformance(manifest, options({
-      hardTimeoutExecutor: {
-        ...hardTimeoutExecutor,
-        capabilities: { sync: 'hard-terminable', asyncIsolated: 'worker-or-process' },
-        executeAsyncIsolated: async (_hook, _args, timeoutMs) => await new Promise((_resolve, reject) => {
-          setTimeout(() => {
-            terminated = true
-            reject(new Error('ISOLATED_TIMEOUT'))
-          }, timeoutMs)
-        }),
-      },
-    }))
-    expect(Date.now() - started).toBeLessThan(1_000)
-    expect(terminated).toBe(true)
-    expect(report.issues).toContainEqual(expect.objectContaining({
-      code: 'CONFORMANCE_VIEWER_FAILED',
-      message: 'ISOLATED_TIMEOUT',
-      path: '/facets/viewer',
-    }))
+    expect(calls).toBe(1)
   })
 
   it('requires migration fixtures and reports protected writes without hiding other failures', async () => {

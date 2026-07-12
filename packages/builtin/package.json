@@ -71,6 +71,7 @@
   },
   "devDependencies": {
     "@easyink/browser-dom": "workspace:*",
-    "@easyink/core": "workspace:*"
+    "@easyink/core": "workspace:*",
+    "tsx": "catalog:cli"
   }
 }

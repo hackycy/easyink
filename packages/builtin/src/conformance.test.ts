@@ -1,33 +1,27 @@
-import type { BrowserDomCapabilities } from '@easyink/browser-dom'
-import { runInNewContext } from 'node:vm'
-import { createBrowserDomCapabilities, renderViewerTree } from '@easyink/browser-dom'
-import { assertMaterialConformance } from '@easyink/core'
-import { describe, it } from 'vitest'
+import type { MaterialConformanceReport } from '@easyink/core'
+import process from 'node:process'
+import { beforeAll, describe, expect, it } from 'vitest'
 import { builtinAllMaterialPackage } from './index'
+import { runIsolatedMaterialConformance } from './testing/isolated-material-conformance'
+
+const materialTypes = builtinAllMaterialPackage.manifests.map(manifest => manifest.type)
+let reports: readonly MaterialConformanceReport[] = []
+let childPid = 0
 
 describe('builtin material conformance', () => {
-  for (const manifest of builtinAllMaterialPackage.manifests) {
-    it(manifest.type, async () => {
-      let capabilities: BrowserDomCapabilities | undefined
-      await assertMaterialConformance(manifest, {
-        hardTimeoutExecutor: {
-          capabilities: { sync: 'hard-terminable' },
-          executeSync: (hook, args, timeoutMs) => runInNewContext('hook(...args)', { args, hook }, { timeout: timeoutMs }),
-        },
-        createRenderCapabilities: (facet) => {
-          capabilities = createBrowserDomCapabilities({
-            document,
-            imperativeDom: facet.capabilities.imperativeDom ?? [],
-          })
-          return capabilities
-        },
-        mountViewerTree: (tree) => {
-          if (!capabilities)
-            throw new Error('CONFORMANCE_RENDER_CAPABILITIES_MISSING')
-          const host = document.createElement('div')
-          return renderViewerTree(host, tree, { capabilities, maxNodes: 50_000 })
-        },
-      })
+  beforeAll(async () => {
+    reports = await runIsolatedMaterialConformance({
+      moduleSpecifier: '@easyink/builtin',
+      exportName: 'builtinAllMaterialPackage',
+    }, { deadlineMs: 15_000, onSpawn: pid => childPid = pid })
+  }, 20_000)
+
+  for (const materialType of materialTypes) {
+    it(materialType, () => {
+      expect(reports).toHaveLength(25)
+      expect(reports.map(report => report.materialType)).toHaveLength(new Set(reports.map(report => report.materialType)).size)
+      expect(reports.find(report => report.materialType === materialType)).toEqual(expect.objectContaining({ valid: true }))
+      expect(() => process.kill(childPid, 0)).toThrow()
     })
   }
 })
