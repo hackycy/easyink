@@ -1,9 +1,10 @@
 import type { MaterialNode } from '@easyink/schema'
-import { CommandManager, createNodePropertyAccessor, resolvePropertyAccessor } from '@easyink/core'
+import { createNodePropertyAccessor, DocumentStore, DocumentTransactionEngine, resolvePropertyAccessor } from '@easyink/core'
+import { createTestCompiledMaterialProfile, createTestMaterialManifest } from '@easyink/core/testing'
+import { createDefaultSchema } from '@easyink/schema'
 import { deepClone } from '@easyink/shared'
 import { describe, expect, it } from 'vitest'
 import { reactive } from 'vue'
-import { createTransactionService } from '../editing/transaction-service'
 import { commitMaterialPropertyPreview, MaterialPropertyPreviewSession } from './material-property-preview'
 
 function createTableNode(id = 'data'): MaterialNode {
@@ -75,6 +76,49 @@ function createTableNode(id = 'data'): MaterialNode {
   }
 }
 
+function createPreviewTransaction(node: MaterialNode): DocumentTransactionEngine {
+  const profile = createTestCompiledMaterialProfile([
+    createTestMaterialManifest({ type: 'table-data', slots: [{ id: 'header-cell', key: { kind: 'exact', value: 'cell:cell:header-b' }, coordinateSpace: 'owner', layoutParticipation: 'owner', reparent: 'allowed' }] }),
+    createTestMaterialManifest({ type: 'text' }),
+  ])
+  const schema = stripUndefined({ ...createDefaultSchema(), elements: [stripUndefined(node)] })
+  const engine = new DocumentTransactionEngine(new DocumentStore(schema, profile))
+  const sync = () => {
+    const current = engine.store.index.getNode(node.id)
+    if (!current)
+      return
+    for (const key of Object.keys(node))
+      delete (node as any)[key]
+    Object.assign(node, structuredClone(current))
+  }
+  const run = engine.run.bind(engine)
+  ;(engine as any).run = (...args: any[]) => {
+    const result = run.apply(engine, args as any)
+    sync()
+    return result
+  }
+  const undo = engine.undo.bind(engine)
+  ;(engine as any).undo = () => {
+    undo()
+    sync()
+  }
+  return engine
+}
+
+function stripUndefined<T>(value: T): T {
+  if (Array.isArray(value))
+    return value.map(stripUndefined).filter(item => item !== undefined) as T
+  if (value && typeof value === 'object') {
+    const output: Record<string, unknown> = {}
+    for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+      if (item !== undefined)
+        output[key] = stripUndefined(item)
+    }
+    return output as T
+  }
+  return value
+}
+
 function showHeaderAccessor() {
   return resolvePropertyAccessor(showHeaderDescriptor())
 }
@@ -114,8 +158,7 @@ describe('propertiesPanel material property preview lifecycle', () => {
     const before = deepClone(node)
     const preview = new MaterialPropertyPreviewSession()
     const accessor = showHeaderAccessor()
-    const commands = new CommandManager()
-    const tx = createTransactionService(id => id === node.id ? node : undefined, commands)
+    const tx = createPreviewTransaction(node)
 
     preview.preview(node, showHeaderDescriptor(), draft => accessor.write(draft, false))
     expect(bandRoles(node)).toEqual(['detail'])
@@ -127,7 +170,7 @@ describe('propertiesPanel material property preview lifecycle', () => {
     expect(committed.before).toEqual(before)
     expect(bandRoles(node)).toEqual(['detail'])
 
-    commands.undo()
+    tx.undo()
     expect(node).toEqual(before)
   })
 
@@ -153,8 +196,7 @@ describe('propertiesPanel material property preview lifecycle', () => {
     const preview = new MaterialPropertyPreviewSession()
     const accessor = createNodePropertyAccessor<number>('/width')
     const descriptor = { key: 'width', label: 'Width', type: 'number' as const, accessor }
-    const commands = new CommandManager()
-    const tx = createTransactionService(id => id === node.id ? node : undefined, commands)
+    const tx = createPreviewTransaction(node)
 
     preview.preview(node, descriptor, draft => accessor.write(draft, 120))
     expect(node.width).toBe(120)
@@ -162,7 +204,7 @@ describe('propertiesPanel material property preview lifecycle', () => {
       tx.run(node.id, draft => accessor.write(draft, 140)))
     expect(node.width).toBe(140)
 
-    commands.undo()
+    tx.undo()
     expect(node.width).toBe(90)
   })
 
@@ -304,15 +346,11 @@ describe('propertiesPanel material property preview lifecycle', () => {
     }
     const descriptor = { key: 'item', label: 'Item', type: 'string' as const, accessor }
     const preview = new MaterialPropertyPreviewSession()
-    const commands = new CommandManager()
-    const tx = createTransactionService(id => id === node.id ? node : undefined, commands)
+    const tx = createPreviewTransaction(node)
 
     preview.preview(node, descriptor, draft => accessor.write(draft, 'preview'))
-    commitMaterialPropertyPreview(preview, node, 'item', () =>
-      tx.run(node.id, draft => accessor.write(draft, 'committed')))
-    expect(node.model.items).toHaveLength(6)
-
-    commands.undo()
+    expect(() => commitMaterialPropertyPreview(preview, node, 'item', () =>
+      tx.run(node.id, draft => accessor.write(draft, 'committed')))).toThrow('JSON arrays must not be sparse')
     expect(node.model.items).toHaveLength(0)
     expect(Object.hasOwn(node.model.items as unknown[], 5)).toBe(false)
   })
@@ -384,8 +422,7 @@ describe('propertiesPanel material property preview lifecycle', () => {
     const accessor = createNodePropertyAccessor<string>('/model/style/color')
     const descriptor = { key: 'color', label: 'Color', type: 'color' as const, accessor }
     const preview = new MaterialPropertyPreviewSession()
-    const commands = new CommandManager()
-    const tx = createTransactionService(id => id === node.id ? node : undefined, commands)
+    const tx = createPreviewTransaction(node)
 
     preview.preview(node, descriptor, draft => accessor.write(draft, '#fff'))
     preview.cancel()
@@ -396,7 +433,7 @@ describe('propertiesPanel material property preview lifecycle', () => {
       tx.run(node.id, draft => accessor.write(draft, '#000')))
     expect(node.model).toEqual({ style: { color: '#000' } })
 
-    commands.undo()
+    tx.undo()
     expect(node.model).toEqual({})
   })
 

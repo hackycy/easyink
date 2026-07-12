@@ -1,4 +1,4 @@
-import type { CompiledMaterialProfile, EphemeralPanelDef, FacetInstance, FontLoadRequest, FontLoadStatus, FontManager, FontProvider, MaterialDesignerFacet, MaterialFacetHost, MaterialLoadDiagnostic, MaterialNodeLoadState, PropertyPanelOverlay, TransactionAPI, DocumentStore, DocumentTransactionEngine } from '@easyink/core'
+import type { CompiledMaterialProfile, DocumentStore, DocumentTransactionEngine, EphemeralPanelDef, FacetInstance, FontLoadRequest, FontLoadStatus, FontManager, FontProvider, MaterialDesignerFacet, MaterialFacetHost, MaterialLoadDiagnostic, MaterialNodeLoadState, PropertyPanelOverlay, TransactionAPI } from '@easyink/core'
 import type { DocumentSchema, DocumentSchemaInput, ElementGroupSchema, MaterialNode } from '@easyink/schema'
 import type { PaperPreset } from '@easyink/shared'
 import type { Component } from 'vue'
@@ -6,7 +6,6 @@ import type { DesignerRuntimeConfig } from '../runtime-config'
 import type { DesignerInteractionProvider, LocaleMessageRegistration, LocaleMessages, PreferenceProvider, SnapLine, StatusBarState } from '../types'
 import { CommandManager, DocumentStore as CoreDocumentStore, DocumentTransactionEngine as CoreDocumentTransactionEngine, MaterialFacetHost as CoreMaterialFacetHost, loadDocumentWithProfile, SelectionModel, validateDocumentWithProfile } from '@easyink/core'
 import { DataSourceRegistry } from '@easyink/datasource'
-import { findNodeById } from '@easyink/schema'
 import { markRaw } from 'vue'
 import { EditingSessionManager } from '../editing/editing-session-manager'
 import { DesignerInteractionService } from '../interactions/interaction-service'
@@ -329,7 +328,8 @@ export class DesignerStore {
   /** Delete an extension value by key. */
   deleteExtension(key: string): void {
     this.documentTransactions.transact((draft) => {
-      if (!draft.extensions) return
+      if (!draft.extensions)
+        return
       const next = { ...draft.extensions }
       delete next[key]
       draft.extensions = next
@@ -359,7 +359,9 @@ export class DesignerStore {
   }
 
   addElement(node: MaterialNode): void {
-    this.documentTransactions.transact(draft => { draft.elements.push(node) }, { label: 'Add element', operation: { kind: 'structure.insert', sessionPath: [], targetIds: [`node:${node.id}`], fieldPaths: ['/elements'], selectionLineage: null, structural: true } })
+    this.documentTransactions.transact((draft) => {
+      draft.elements.push(node)
+    }, { label: 'Add element', operation: { kind: 'structure.insert', sessionPath: [], targetIds: [`node:${node.id}`], fieldPaths: ['/elements'], selectionLineage: null, structural: true } })
   }
 
   removeElement(id: string): MaterialNode | undefined {
@@ -367,21 +369,24 @@ export class DesignerStore {
     if (idx < 0)
       return undefined
     const removed = this.schema.elements[idx]
-    this.documentTransactions.transact(draft => {
+    this.documentTransactions.transact((draft) => {
       draft.elements.splice(idx, 1)
       if (draft.groups) {
         draft.groups = draft.groups.map(group => ({ ...group, memberIds: group.memberIds.filter(memberId => memberId !== id) })).filter(group => group.memberIds.length >= 2)
       }
     }, { label: 'Remove element', operation: { kind: 'structure.remove', sessionPath: [], targetIds: [`node:${id}`], fieldPaths: ['/elements'], selectionLineage: null, structural: true } })
     this.selection.remove(id)
-    if (this.editingSession.activeNodeId === id) this.editingSession.exit()
+    if (this.editingSession.activeNodeId === id)
+      this.editingSession.exit()
     return removed
   }
 
   updateElement(id: string, updates: Partial<MaterialNode>): void {
     if (!this.getElementById(id))
       return
-    this.documentTransactions.run(id, draft => { Object.assign(draft, updates) }, { label: 'Update element', operation: { kind: 'material.property', sessionPath: [], targetIds: [`node:${id}`], fieldPaths: Object.keys(updates).map(key => `/${key}`) as any, selectionLineage: null, structural: false } })
+    this.documentTransactions.run(id, (draft) => {
+      Object.assign(draft, updates)
+    }, { label: 'Update element', operation: { kind: 'material.property', sessionPath: [], targetIds: [`node:${id}`], fieldPaths: Object.keys(updates).map(key => `/${key}`) as any, selectionLineage: null, structural: false } })
   }
 
   async activateDesignerFacet(type: string) {
