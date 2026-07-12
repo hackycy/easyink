@@ -1,6 +1,8 @@
 import type {
   SanitizedMarkup,
   ViewerAttributeValue,
+  ViewerHostMountReference,
+  ViewerHostMountTree,
   ViewerImperativeHost,
   ViewerRenderCapabilities,
   ViewerRenderTree,
@@ -36,6 +38,7 @@ const SVG_PRESENTATION_ATTRIBUTES = new Set([
   'filter',
   'mask',
   'color',
+  'pointer-events',
 ])
 
 interface SanitizedSvgElement {
@@ -58,6 +61,7 @@ interface CapabilityStore {
   readonly policy: ViewerTreePolicy
   readonly tokens: WeakMap<SanitizedMarkup, SanitizedSvgTree>
   readonly imperativeDom: ViewerTreeReadonlySet<string>
+  readonly hostMounts: WeakMap<ViewerHostMountReference, BrowserDomHostMount>
 }
 
 const capabilityStores = new WeakMap<BrowserDomCapabilities, CapabilityStore>()
@@ -94,7 +98,10 @@ interface RenderState {
   policy: ViewerTreePolicy
   store: CapabilityStore
   textBytes: number
+  mountedHostRefs: WeakSet<ViewerHostMountReference>
 }
+
+export type BrowserDomHostMount = (host: HTMLElement) => ViewerTreeMount
 
 interface RenderScope {
   parent: Node
@@ -119,8 +126,20 @@ export function createBrowserDomCapabilities(options: BrowserDomCapabilitiesOpti
       return token
     },
   })
-  capabilityStores.set(capabilities, { document: options.document, policy, tokens, imperativeDom })
+  capabilityStores.set(capabilities, { document: options.document, policy, tokens, imperativeDom, hostMounts: new WeakMap() })
   return capabilities
+}
+
+export function createBrowserDomHostMount(
+  capabilities: BrowserDomCapabilities,
+  mount: BrowserDomHostMount,
+): ViewerHostMountTree {
+  const store = capabilityStores.get(capabilities)
+  if (!store)
+    throw new ViewerTreePolicyError('VIEWER_CAPABILITIES_INVALID')
+  const reference = Object.freeze({}) as ViewerHostMountReference
+  store.hostMounts.set(reference, mount)
+  return Object.freeze({ kind: 'host-mount', reference })
 }
 
 export function renderViewerTree(
@@ -148,6 +167,7 @@ export function renderViewerTree(
     policy,
     store,
     textBytes: 0,
+    mountedHostRefs: new WeakSet(),
   }
   const rootQuota: RenderQuota = { remaining: maxNodes }
   const staging = document.createDocumentFragment()
@@ -241,6 +261,18 @@ function renderInto(
       scope.disposers.push(tree.mount(host))
       break
     }
+    case 'host-mount': {
+      const mount = state.store.hostMounts.get(tree.reference)
+      if (!mount)
+        throw new ViewerTreePolicyError('VIEWER_HOST_MOUNT_INVALID')
+      if (state.mountedHostRefs.has(tree.reference))
+        throw new ViewerTreePolicyError('VIEWER_HOST_MOUNT_REUSED')
+      state.mountedHostRefs.add(tree.reference)
+      const hostElement = state.document.createElement('div')
+      append(parent, hostElement, scope)
+      scope.disposers.push(mount(hostElement).dispose)
+      break
+    }
   }
 }
 
@@ -310,12 +342,30 @@ function sanitizeSvg(document: Document, source: string, policy: ViewerTreePolic
   if (/<!doctype|<!entity/i.test(source))
     throw new ViewerTreePolicyError('SANITIZED_MARKUP_SVG_INVALID')
   const Parser = document.defaultView?.DOMParser ?? DOMParser
-  const parsed = new Parser().parseFromString(source, 'image/svg+xml')
+  const preparedSource = /<style[\s>]/i.test(source)
+    ? removeForbiddenSvgElements(document, source, Parser)
+    : source
+  const parsed = new Parser().parseFromString(preparedSource, 'image/svg+xml')
   assertParsedDocumentNodeBudget(parsed)
   if (parsed.querySelector('parsererror') || parsed.documentElement.localName !== 'svg')
     throw new ViewerTreePolicyError('SANITIZED_MARKUP_SVG_INVALID')
   const counters: SanitizeCounters = { nodes: 0, textBytes: 0, attributeBytes: 0 }
   return sanitizeSvgElement(parsed.documentElement, policy, document.baseURI || undefined, 0, counters)
+}
+
+function removeForbiddenSvgElements(
+  document: Document,
+  source: string,
+  Parser: typeof DOMParser,
+): string {
+  const parsed = new Parser().parseFromString(source, 'text/html')
+  const roots = Array.from(parsed.body.children)
+  if (roots.length !== 1 || roots[0]!.localName !== 'svg')
+    throw new ViewerTreePolicyError('SANITIZED_MARKUP_SVG_INVALID')
+  const root = roots[0]!
+  root.querySelectorAll('style').forEach(element => element.remove())
+  const Serializer = document.defaultView?.XMLSerializer ?? XMLSerializer
+  return new Serializer().serializeToString(root)
 }
 
 function assertParsedDocumentNodeBudget(document: Document): void {
@@ -351,7 +401,11 @@ function sanitizeSvgElement(
   for (const attribute of Array.from(element.attributes)) {
     const name = attribute.name
     const lowerName = name.toLowerCase()
-    if (lowerName.startsWith('on') || lowerName === 'style' || !policy.globalAttributes.has(name))
+    // Sanitized SVG is an explicit capability boundary. Drop active styling
+    // attributes before applying the same geometry/URL allowlists as trees.
+    if (lowerName.startsWith('on') || lowerName === 'style')
+      continue
+    if (!policy.globalAttributes.has(name))
       throw new ViewerTreePolicyError('VIEWER_TREE_ATTRIBUTE_REJECTED')
     if (policy.urlAttributes.has(name) && !policy.allowUrl(attribute.value, baseUrl))
       throw new ViewerTreePolicyError('VIEWER_TREE_URL_REJECTED')

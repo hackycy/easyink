@@ -4,8 +4,8 @@ import type { MaterialNode, PageBackground, PageSchema } from '@easyink/schema'
 import type { UnitType } from '@easyink/shared'
 import type { ProfileMaterialRuntime } from './material-runtime'
 import type { ViewerDiagnosticEvent, ViewerRenderContext, ViewerRenderSize } from './types'
-import { createBrowserDomCapabilities, renderViewerTree } from '@easyink/browser-dom'
-import { groupPageLayerPlansByPlacement, inspectMaterialNode, PAGE_CONTENT_LAYER_STACK_INDEX, resolvePageLayerPlans, resolvePageLayerStackIndex } from '@easyink/core'
+import { createBrowserDomCapabilities, createBrowserDomHostMount, renderViewerTree } from '@easyink/browser-dom'
+import { groupPageLayerPlansByPlacement, inspectMaterialNode, PAGE_CONTENT_LAYER_STACK_INDEX, resolvePageLayerPlans, resolvePageLayerStackIndex, viewerElement, viewerText } from '@easyink/core'
 import { UNIT_FACTOR } from '@easyink/shared'
 
 export interface RenderSurfaceOptions {
@@ -96,15 +96,12 @@ export function renderPages(
       const nodeForRender: MaterialNode<unknown> = { ...node, model: resolved }
       try {
         const facetCapabilities = materials.getCapabilities(node.type)
-        const imperativeDom = facetCapabilities?.imperativeDom?.filter(capability => hostImperativeDom.has(capability)) ?? []
-        const capabilities = createBrowserDomCapabilities({
-          document,
-          policy: browserDom?.policy,
-          imperativeDom,
-        })
+        const capabilities = createNodeCapabilities(document, facetCapabilities, hostImperativeDom, browserDom?.policy)
         context.capabilities = facetCapabilities?.sanitizedMarkup ? capabilities : deniedRenderCapabilities
         const admitted = nodeStates.get(node.id)?.status !== 'quarantined'
-        context.slotOutputs = admitted ? renderSlotOutputs(nodeForRender, materials, context, capabilities, nodeStates, resolvedPropsMap) : undefined
+        context.slotOutputs = admitted
+          ? createSlotMountOutputs(nodeForRender, materials, context, capabilities, nodeStates, resolvedPropsMap, hostImperativeDom, browserDom, diagnostics)
+          : undefined
         const output = materials.render(nodeForRender, context, admitted)
         const renderSize = admitted ? materials.getRenderSize(nodeForRender, context) : { width: node.width, height: node.height }
         const elWrapper = createElementWrapper(document, nodeForRender, page, unit, renderSize)
@@ -117,7 +114,13 @@ export function renderPages(
       }
       catch (error) {
         diagnostics.push(materialRenderDiagnostic(node, error))
-        contentLayer.appendChild(createMaterialRenderFallback(document, nodeForRender, page, unit))
+        const fallbackWrapper = createElementWrapper(document, nodeForRender, page, unit, { width: node.width, height: node.height })
+        fallbackWrapper.setAttribute('data-render-error', 'true')
+        mounts.push(renderViewerTree(fallbackWrapper, materialRenderFallbackTree(node), {
+          document,
+          capabilities: createBrowserDomCapabilities({ document }),
+        }))
+        contentLayer.appendChild(fallbackWrapper)
       }
     }
 
@@ -135,13 +138,16 @@ export function renderPages(
   return pageDOMs
 }
 
-function renderSlotOutputs(
+function createSlotMountOutputs(
   owner: MaterialNode<unknown>,
   materials: ProfileMaterialRuntime,
   context: ViewerRenderContext,
-  browserCapabilities: BrowserDomCapabilities,
+  ownerCapabilities: BrowserDomCapabilities,
   nodeStates: ReadonlyMap<string, MaterialNodeLoadState>,
   resolvedPropsMap: ReadonlyMap<string, Record<string, unknown>>,
+  hostImperativeDom: ReadonlySet<string>,
+  browserDom: RenderSurfaceOptions['browserDom'],
+  diagnostics: ViewerDiagnosticEvent[],
 ): Readonly<Record<string, readonly ReturnType<ProfileMaterialRuntime['render']>['tree'][]>> {
   const slots = new Map<string, MaterialNode<unknown>[]>()
   for (const structure of inspectMaterialNode(owner as MaterialNode, materials.profile, context.unit as UnitType).introspection.structures) {
@@ -154,16 +160,76 @@ function renderSlotOutputs(
   }
   return Object.freeze(Object.fromEntries([...slots].map(([key, nodes]) => [
     key,
-    Object.freeze(nodes.map((node) => {
-      const admitted = nodeStates.get(node.id)?.status !== 'quarantined'
-      const childContext: ViewerRenderContext = { ...context, resolvedProps: resolvedPropsMap.get(node.id) ?? node.model as Record<string, unknown>, slotOutputs: undefined }
-      childContext.capabilities = materials.getCapabilities(node.type)?.sanitizedMarkup ? browserCapabilities : deniedRenderCapabilities
-      childContext.slotOutputs = admitted ? renderSlotOutputs(node, materials, childContext, browserCapabilities, nodeStates, resolvedPropsMap) : undefined
-      const childForRender = { ...node, model: childContext.resolvedProps }
-      const output = materials.render(childForRender, childContext, admitted).tree
-      return output
-    })),
+    Object.freeze(nodes.map(node => createBrowserDomHostMount(ownerCapabilities, host => mountSlotMaterial(
+      host,
+      node,
+      materials,
+      context,
+      nodeStates,
+      resolvedPropsMap,
+      hostImperativeDom,
+      browserDom,
+      diagnostics,
+    )))),
   ])))
+}
+
+function mountSlotMaterial(
+  host: HTMLElement,
+  node: MaterialNode<unknown>,
+  materials: ProfileMaterialRuntime,
+  parentContext: ViewerRenderContext,
+  nodeStates: ReadonlyMap<string, MaterialNodeLoadState>,
+  resolvedPropsMap: ReadonlyMap<string, Record<string, unknown>>,
+  hostImperativeDom: ReadonlySet<string>,
+  browserDom: RenderSurfaceOptions['browserDom'],
+  diagnostics: ViewerDiagnosticEvent[],
+): ViewerTreeMount {
+  const facetCapabilities = materials.getCapabilities(node.type)
+  const capabilities = createNodeCapabilities(host.ownerDocument, facetCapabilities, hostImperativeDom, browserDom?.policy)
+  const admitted = nodeStates.get(node.id)?.status !== 'quarantined'
+  const childContext: ViewerRenderContext = {
+    ...parentContext,
+    resolvedProps: resolvedPropsMap.get(node.id) ?? node.model as Record<string, unknown>,
+    capabilities: facetCapabilities?.sanitizedMarkup ? capabilities : deniedRenderCapabilities,
+    slotOutputs: undefined,
+  }
+  const childForRender = { ...node, model: childContext.resolvedProps }
+  try {
+    childContext.slotOutputs = admitted
+      ? createSlotMountOutputs(childForRender, materials, childContext, capabilities, nodeStates, resolvedPropsMap, hostImperativeDom, browserDom, diagnostics)
+      : undefined
+    const output = materials.render(childForRender, childContext, admitted)
+    if (admitted)
+      materials.getRenderSize(childForRender, childContext)
+    return renderViewerTree(host, output.tree, {
+      document: host.ownerDocument,
+      capabilities,
+      maxNodes: browserDom?.maxNodes,
+    })
+  }
+  catch (error) {
+    diagnostics.push(materialRenderDiagnostic(node, error))
+    host.setAttribute('data-render-error', 'true')
+    host.setAttribute('data-element-id', node.id)
+    return renderViewerTree(host, materialRenderFallbackTree(node), {
+      document: host.ownerDocument,
+      capabilities: createBrowserDomCapabilities({ document: host.ownerDocument }),
+    })
+  }
+}
+
+function createNodeCapabilities(
+  document: Document,
+  facetCapabilities: ReturnType<ProfileMaterialRuntime['getCapabilities']>,
+  hostImperativeDom: ReadonlySet<string>,
+  policy?: ViewerTreePolicy,
+): BrowserDomCapabilities {
+  return createBrowserDomCapabilities({
+    document,
+    policy,
+    imperativeDom: facetCapabilities?.imperativeDom?.filter(capability => hostImperativeDom.has(capability)) ?? [],
+  })
 }
 
 function disposeMounts(mounts: readonly ViewerTreeMount[]): void {
@@ -195,29 +261,22 @@ function materialRenderDiagnostic(node: MaterialNode<unknown>, error: unknown): 
   }
 }
 
-function createMaterialRenderFallback(
-  document: Document,
-  node: MaterialNode<unknown>,
-  page: PagePlanEntry,
-  unit: string,
-): HTMLElement {
-  const wrapper = createElementWrapper(document, node, page, unit, { width: node.width, height: node.height })
-  wrapper.setAttribute('data-render-error', 'true')
-  const fallback = document.createElement('div')
-  fallback.setAttribute('title', 'Render failed')
-  fallback.style.width = '100%'
-  fallback.style.height = '100%'
-  fallback.style.display = 'flex'
-  fallback.style.alignItems = 'center'
-  fallback.style.justifyContent = 'center'
-  fallback.style.backgroundColor = '#fff3f3'
-  fallback.style.border = '1px dashed #ff4d4f'
-  fallback.style.color = '#ff4d4f'
-  fallback.style.fontSize = '11px'
-  fallback.style.boxSizing = 'border-box'
-  fallback.textContent = `[${node.type}]`
-  wrapper.appendChild(fallback)
-  return wrapper
+function materialRenderFallbackTree(node: MaterialNode<unknown>) {
+  return viewerElement('div', {
+    attributes: { title: 'Render failed' },
+    style: {
+      'width': '100%',
+      'height': '100%',
+      'display': 'flex',
+      'align-items': 'center',
+      'justify-content': 'center',
+      'background-color': '#fff3f3',
+      'border': '1px dashed #ff4d4f',
+      'color': '#ff4d4f',
+      'font-size': '11px',
+      'box-sizing': 'border-box',
+    },
+  }, [viewerText(`[${node.type}]`)])
 }
 
 function resolveCachedPageLayerBuckets(

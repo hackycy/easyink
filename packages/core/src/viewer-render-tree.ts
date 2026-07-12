@@ -1,4 +1,5 @@
 const sanitizedMarkupBrand: unique symbol = Symbol('SanitizedMarkup')
+const viewerHostMountBrand: unique symbol = Symbol('ViewerHostMountReference')
 const VIEWER_CHILDREN_KEY = 'children'
 
 export interface SanitizedMarkup {
@@ -49,12 +50,22 @@ export interface ViewerImperativeDomTree {
   readonly mount: (host: ViewerImperativeHost) => () => void
 }
 
+export interface ViewerHostMountReference {
+  readonly [viewerHostMountBrand]: true
+}
+
+export interface ViewerHostMountTree {
+  readonly kind: 'host-mount'
+  readonly reference: ViewerHostMountReference
+}
+
 export type ViewerRenderTree
   = | ViewerTextTree
     | ViewerElementTree
     | ViewerFragmentTree
     | ViewerSanitizedMarkupTree
     | ViewerImperativeDomTree
+    | ViewerHostMountTree
 
 export interface ViewerElementOptions {
   namespace?: ViewerElementNamespace
@@ -175,6 +186,10 @@ export function assertViewerRenderTree(
         break
       case 'imperative-dom':
         if (typeof frame.node.capability !== 'string' || typeof frame.node.mount !== 'function')
+          fail('VIEWER_TREE_VALUE_INVALID')
+        break
+      case 'host-mount':
+        if (!isRecord(frame.node.reference))
           fail('VIEWER_TREE_VALUE_INVALID')
         break
       default:

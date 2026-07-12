@@ -5,6 +5,7 @@ export {
 export type { ViewerTreePolicy, ViewerTreeReadonlySet } from './policy'
 export {
   createBrowserDomCapabilities,
+  createBrowserDomHostMount,
   renderViewerTree,
   SANITIZED_MARKUP_MAX_ATTRIBUTE_BYTES,
   SANITIZED_MARKUP_MAX_SOURCE_BYTES,
@@ -12,6 +13,7 @@ export {
 export type {
   BrowserDomCapabilities,
   BrowserDomCapabilitiesOptions,
+  BrowserDomHostMount,
   RenderViewerTreeOptions,
   ViewerTreeMount,
 } from './render-viewer-tree'

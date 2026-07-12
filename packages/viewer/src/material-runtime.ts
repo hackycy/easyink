@@ -112,7 +112,7 @@ function assertViewerFacet(value: unknown): MaterialViewerFacet {
       ...(imperativeDom === undefined ? {} : { imperativeDom: Object.freeze([...imperativeDom]) }),
     }),
     ...(dispose ? { dispose: () => Reflect.apply(dispose, value, []) } : {}),
-  }) as MaterialViewerFacet
+  }) as unknown as MaterialViewerFacet
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

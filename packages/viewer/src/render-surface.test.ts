@@ -1,7 +1,7 @@
-import type { MaterialViewerExtension, PagePlanEntry, ViewerFacetCapabilities } from '@easyink/core'
+import type { MaterialManifest, MaterialViewerExtension, PagePlanEntry, ViewerFacetCapabilities } from '@easyink/core'
 import type { MaterialNode, PageSchema } from '@easyink/schema'
 import type { ViewerDiagnosticEvent } from './types'
-import { viewerElement, viewerImperativeDom, viewerText } from '@easyink/core'
+import { defineMaterialManifest, viewerElement, viewerFragment, viewerImperativeDom, viewerSanitizedMarkup, viewerText } from '@easyink/core'
 import { createTestCompiledMaterialProfile, createTestMaterialManifest } from '@easyink/core/testing'
 import { describe, expect, it } from 'vitest'
 import { ProfileMaterialRuntime } from './material-runtime'
@@ -304,6 +304,73 @@ describe('renderPages', () => {
     expect(options.container.querySelector('[data-render-error="true"]')).not.toBeNull()
     expect(diagnostics).toEqual([expect.objectContaining({ code: 'MATERIAL_RENDER_ERROR' })])
   })
+
+  it.each([
+    { ownerDeclared: false, childDeclared: true, hostEnabled: true, rendered: true },
+    { ownerDeclared: true, childDeclared: false, hostEnabled: true, rendered: false },
+    { ownerDeclared: false, childDeclared: true, hostEnabled: false, rendered: false },
+    { ownerDeclared: true, childDeclared: true, hostEnabled: true, rendered: true },
+  ])('scopes nested imperative DOM independently: $ownerDeclared/$childDeclared/$hostEnabled', async ({ ownerDeclared, childDeclared, hostEnabled, rendered }) => {
+    const childExtension: MaterialViewerExtension = {
+      render: () => ({ tree: viewerImperativeDom('chart', (host) => {
+        const mount = host.render(viewerText('child-chart'))
+        return () => mount.dispose()
+      }) }),
+    }
+    const { materials, owner, options } = await createNestedSurface({
+      ownerCapabilities: ownerDeclared ? { imperativeDom: ['chart'] } : {},
+      children: [{ type: 'child', extension: childExtension, capabilities: childDeclared ? { imperativeDom: ['chart'] } : {} }],
+      hostImperativeDom: hostEnabled ? ['chart'] : [],
+    })
+    const diagnostics: ViewerDiagnosticEvent[] = []
+
+    renderPages(pageWith(owner), materials, options, diagnostics)
+
+    expect(options.container.textContent?.includes('child-chart')).toBe(rendered)
+    expect(diagnostics.some(item => item.nodeId === 'child')).toBe(!rendered)
+    expect(diagnostics.some(item => item.nodeId === 'owner')).toBe(false)
+  })
+
+  it('does not let an owner borrow a child imperative capability', async () => {
+    const childExtension: MaterialViewerExtension = { render: () => ({ tree: viewerText('child') }) }
+    const ownerExtension: MaterialViewerExtension = {
+      render: (_node, context) => ({ tree: viewerFragment([
+        ...(context.slotOutputs?.content ?? []),
+        viewerImperativeDom('chart', host => () => host.element.replaceChildren()),
+      ]) }),
+    }
+    const { materials, owner, options } = await createNestedSurface({
+      ownerExtension,
+      children: [{ type: 'child', extension: childExtension, capabilities: { imperativeDom: ['chart'] } }],
+      hostImperativeDom: ['chart'],
+    })
+    const diagnostics: ViewerDiagnosticEvent[] = []
+
+    renderPages(pageWith(owner), materials, options, diagnostics)
+
+    expect(options.container.querySelector('[data-element-id="owner"]')?.getAttribute('data-render-error')).toBe('true')
+    expect(diagnostics).toEqual([expect.objectContaining({ nodeId: 'owner', code: 'MATERIAL_RENDER_ERROR' })])
+  })
+
+  it('isolates nested render, size, and tree policy failures per child', async () => {
+    const children = [
+      { type: 'good-child', extension: { render: () => ({ tree: viewerText('healthy sibling') }) } },
+      { type: 'bad-url-child', extension: { render: () => ({ tree: viewerElement('a', { attributes: { href: 'javascript:alert(1)' } }) }) } },
+      { type: 'bad-tag-child', extension: { render: () => ({ tree: viewerElement('script') }) } },
+      { type: 'bad-token-child', extension: { render: () => ({ tree: viewerSanitizedMarkup({} as never) }) } },
+      { type: 'oversized-child', extension: { render: () => ({ tree: viewerFragment(Array.from({ length: 101 }, () => viewerText('x'))) }) } },
+      { type: 'bad-size-child', extension: { render: () => ({ tree: viewerText('not mounted') }), getRenderSize: () => { throw new Error('size') } } },
+    ] satisfies Array<{ type: string, extension: MaterialViewerExtension }>
+    const { materials, owner, options } = await createNestedSurface({ children, maxNodes: 100 })
+    const diagnostics: ViewerDiagnosticEvent[] = []
+
+    renderPages(pageWith(owner), materials, options, diagnostics)
+
+    expect(options.container.textContent).toContain('healthy sibling')
+    expect(options.container.querySelector('[data-element-id="owner"]')?.getAttribute('data-render-error')).toBeNull()
+    expect(options.container.querySelectorAll('[data-render-error="true"]')).toHaveLength(5)
+    expect(diagnostics.map(item => item.nodeId).sort()).toEqual(children.slice(1).map(item => item.type).sort())
+  })
 })
 
 function emptyMaterials(): ProfileMaterialRuntime {
@@ -317,4 +384,82 @@ async function createMaterials(extension: MaterialViewerExtension, capabilities:
   const materials = new ProfileMaterialRuntime(profile)
   await materials.prepare(['custom'])
   return materials
+}
+
+interface NestedChildSpec {
+  type: string
+  extension: MaterialViewerExtension
+  capabilities?: ViewerFacetCapabilities
+}
+
+async function createNestedSurface(input: {
+  ownerExtension?: MaterialViewerExtension
+  ownerCapabilities?: ViewerFacetCapabilities
+  children: NestedChildSpec[]
+  hostImperativeDom?: string[]
+  maxNodes?: number
+}) {
+  const ownerExtension = input.ownerExtension ?? {
+    render: (_node, context) => ({ tree: viewerFragment(context.slotOutputs?.content ?? []) }),
+  }
+  const ownerBase = createTestMaterialManifest({
+    type: 'owner',
+    slots: [{ id: 'content', key: { kind: 'exact', value: 'content' }, coordinateSpace: 'owner', layoutParticipation: 'owner', reparent: 'allowed' }],
+    viewer: () => ({ extension: ownerExtension, capabilities: input.ownerCapabilities ?? {} }),
+  })
+  const manifests: MaterialManifest[] = [
+    defineMaterialManifest({ ...ownerBase, facets: { ...ownerBase.facets, viewer: () => ({ extension: ownerExtension, capabilities: input.ownerCapabilities ?? {} }) } }),
+    ...input.children.map(child => createTestMaterialManifest({
+      type: child.type,
+      viewer: () => ({ extension: child.extension, capabilities: child.capabilities ?? {} }),
+    })),
+  ]
+  const profile = createTestCompiledMaterialProfile(manifests)
+  const materials = new ProfileMaterialRuntime(profile)
+  await materials.prepare(['owner', ...input.children.map(child => child.type)])
+  const children = input.children.map((child, index): MaterialNode => ({
+    id: child.type,
+    type: child.type,
+    x: 0,
+    y: 0,
+    width: 10,
+    height: 10,
+    modelVersion: 1,
+    model: {},
+    slots: {},
+    bindings: {},
+    output: { visibility: 'include' },
+    zIndex: index,
+  }))
+  const owner: MaterialNode = {
+    id: 'owner',
+    type: 'owner',
+    x: 0,
+    y: 0,
+    width: 40,
+    height: 20,
+    modelVersion: 1,
+    model: {},
+    slots: { content: children },
+    bindings: {},
+    output: { visibility: 'include' },
+  }
+  return {
+    materials,
+    owner,
+    options: {
+      container: document.createElement('div'),
+      document,
+      zoom: 1,
+      unit: 'mm',
+      data: {},
+      resolvedPropsMap: new Map<string, Record<string, unknown>>(),
+      pageSchema: { mode: 'fixed' as const, width: 80, height: 60 },
+      browserDom: { imperativeDom: input.hostImperativeDom ?? [], maxNodes: input.maxNodes ?? 1000 },
+    },
+  }
+}
+
+function pageWith(node: MaterialNode): PagePlanEntry[] {
+  return [{ index: 0, width: 80, height: 60, elements: [node], yOffset: 0 }]
 }

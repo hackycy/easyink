@@ -140,7 +140,7 @@ describe('viewer audit risk regressions', () => {
     expect(container.textContent).toContain('[Unavailable: unknown-material]')
   })
 
-  it('disposes prior page mounts in reverse order before rerender and destroy', async () => {
+  it('disposes nested page mounts in reverse order before rerender and destroy', async () => {
     const disposed: string[] = []
     const extension: MaterialViewerExtension = {
       render: node => ({ tree: viewerImperativeDom('test', (host) => {
@@ -151,17 +151,31 @@ describe('viewer audit risk regressions', () => {
         }
       }) }),
     }
-    const profile = createTestCompiledMaterialProfile([viewerManifest('disposable', extension, 'none', { imperativeDom: ['test'] })])
+    const ownerManifest = createTestMaterialManifest({
+      type: 'owner',
+      slots: [{ id: 'content', key: { kind: 'exact', value: 'content' }, coordinateSpace: 'owner', layoutParticipation: 'owner', reparent: 'allowed' }],
+      viewer: () => ({
+        extension: { render: (_node: MaterialNode, context: any) => ({ tree: viewerFragment(context.slotOutputs?.content ?? []) }) },
+        capabilities: {},
+      }),
+    })
+    const profile = createTestCompiledMaterialProfile([
+      ownerManifest,
+      viewerManifest('disposable', extension, 'none', { imperativeDom: ['test'] }),
+    ])
     const first = textNode('first')
     first.type = 'disposable'
     const second = textNode('second')
     second.type = 'disposable'
+    const owner = textNode('owner')
+    owner.type = 'owner'
+    owner.slots = { content: [first, second] }
     const viewer = createViewer({
       container: document.createElement('div'),
       profile,
       browserDom: { imperativeDom: ['test'] },
     })
-    await viewer.open({ schema: fixedSchema([first, second]) })
+    await viewer.open({ schema: fixedSchema([owner]) })
 
     await viewer.render()
     expect(disposed).toEqual(['second', 'first'])
@@ -344,7 +358,7 @@ describe('viewer audit risk regressions', () => {
     expect(container.innerHTML).not.toContain('cdn.example.com')
   })
 
-  it('keeps bound svg text inside the sanitized custom svg boundary', async () => {
+  it('renders bound SVG through the sanitized custom SVG boundary', async () => {
     const container = document.createElement('div')
     const viewer = createViewer({ container })
 
@@ -353,14 +367,36 @@ describe('viewer audit risk regressions', () => {
         svgNode('seal', { sourceId: 'brand', fieldPath: 'sealSvg' }),
       ]),
       data: {
-        sealSvg: '<svg viewBox="0 0 10 10"><circle r="5" /></svg>',
+        sealSvg: '<svg viewBox="0 0 10 10" style="display:block"><circle r="5" onclick="alert(1)" /></svg>',
       },
     })
 
     const wrapper = container.querySelector('[data-element-id="seal"]')
-    expect(wrapper?.textContent).toBe('[SVG]')
-    expect(wrapper?.querySelector('circle')).toBeNull()
+    expect(wrapper?.querySelector('svg')).not.toBeNull()
+    expect(wrapper?.querySelector('circle')).not.toBeNull()
     expect(wrapper?.innerHTML).not.toContain('onclick')
+    expect(wrapper?.querySelector('[style]')).toBeNull()
+  })
+
+  it('renders signature, chart, barcode, and QR SVG without style attributes', async () => {
+    const container = document.createElement('div')
+    const types = ['signature', 'chart-bar', 'barcode', 'qrcode'] as const
+    const elements = types.map((type, index) => builtinProfile.createNode(type, {
+      id: type,
+      x: 5,
+      y: 5 + index * 12,
+      width: 40,
+      height: 10,
+    }))
+    const viewer = createViewer({ container })
+
+    await viewer.open({ schema: fixedSchema(elements) })
+
+    for (const type of types) {
+      const wrapper = container.querySelector(`[data-element-id="${type}"]`)
+      expect(wrapper?.querySelector('svg'), type).not.toBeNull()
+      expect(wrapper?.querySelector('svg[style], svg [style]'), type).toBeNull()
+    }
   })
 
   it('keeps root-shaped payloads when sourceId collides with a field name', async () => {

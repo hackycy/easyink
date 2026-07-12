@@ -385,6 +385,8 @@ export type {
   ViewerElementOptions,
   ViewerElementTree,
   ViewerFragmentTree,
+  ViewerHostMountReference,
+  ViewerHostMountTree,
   ViewerImperativeDomTree,
   ViewerImperativeHost,
   ViewerRenderTree,

@@ -3,6 +3,7 @@ import { viewerElement, viewerFragment, viewerImperativeDom, viewerSanitizedMark
 import { describe, expect, it, vi } from 'vitest'
 import {
   createBrowserDomCapabilities,
+  createBrowserDomHostMount,
   DEFAULT_VIEWER_TREE_POLICY,
   renderViewerTree,
   SANITIZED_MARKUP_MAX_ATTRIBUTE_BYTES,
@@ -176,6 +177,23 @@ describe('renderViewerTree', () => {
     expect(host.querySelector('path')?.getAttribute('fill')).toBe('url(#paint)')
   })
 
+  it('strips style and event attributes only inside sanitized SVG', () => {
+    const capabilities = createBrowserDomCapabilities({ document })
+    const token = capabilities.sanitizeMarkup({
+      format: 'svg',
+      source: '<svg style="display:block" onclick="alert(1)"><circle cx="2" cy="2" r="1" style="fill:red" onmouseover="alert(2)"/></svg>',
+    })
+    const host = document.createElement('div')
+
+    renderViewerTree(host, viewerSanitizedMarkup(token), { capabilities })
+
+    expect(host.querySelector('svg circle')).not.toBeNull()
+    expect(host.querySelector('[style]')).toBeNull()
+    expect(host.querySelector('[onclick], [onmouseover]')).toBeNull()
+    expect(() => renderViewerTree(document.createElement('div'), viewerElement('svg', { attributes: { style: 'display:block' }, namespace: 'svg' })))
+      .toThrowError('VIEWER_TREE_ATTRIBUTE_REJECTED')
+  })
+
   it('denies imperative DOM by default and disposes it once when allowed', () => {
     const dispose = vi.fn()
     const tree = viewerImperativeDom('chart', ({ element }) => {
@@ -193,6 +211,30 @@ describe('renderViewerTree', () => {
     mount.dispose()
     expect(dispose).toHaveBeenCalledTimes(1)
     expect(host.childNodes).toHaveLength(0)
+  })
+
+  it('mounts only opaque references minted by the current capability store', () => {
+    const first = createBrowserDomCapabilities({ document })
+    const second = createBrowserDomCapabilities({ document })
+    const dispose = vi.fn()
+    const tree = createBrowserDomHostMount(first, (host) => {
+      const mount = renderViewerTree(host, viewerText('child'), { capabilities: second })
+      return { nodes: mount.nodes, dispose: () => {
+        dispose()
+        mount.dispose()
+      } }
+    })
+    const host = document.createElement('div')
+    const mount = renderViewerTree(host, tree, { capabilities: first })
+
+    expect(host.textContent).toBe('child')
+    expect(() => renderViewerTree(document.createElement('div'), tree, { capabilities: second }))
+      .toThrowError('VIEWER_HOST_MOUNT_INVALID')
+    expect(() => renderViewerTree(document.createElement('div'), { kind: 'host-mount', reference: {} } as never, { capabilities: first }))
+      .toThrowError('VIEWER_HOST_MOUNT_INVALID')
+
+    mount.dispose()
+    expect(dispose).toHaveBeenCalledOnce()
   })
 
   it('makes disposal idempotent, removes host nodes, and shares nested node budget', () => {
