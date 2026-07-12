@@ -1,11 +1,12 @@
+import { createTestMaterialManifest } from '@easyink/core/testing'
 import { describe, expect, it } from 'vitest'
 import { filterRotatableElements, isElementRotatable, isMaterialRotatable } from './capabilities'
 
 describe('material capability helpers', () => {
   it('treats missing material or missing rotatable flag as rotatable', () => {
     const store = {
-      getMaterial: (type: string) => type === 'registered'
-        ? { capabilities: {} }
+      getMaterialManifest: (type: string) => type === 'registered'
+        ? createTestMaterialManifest({ type })
         : undefined,
     }
 
@@ -16,9 +17,7 @@ describe('material capability helpers', () => {
 
   it('only blocks elements whose material explicitly disables rotation', () => {
     const store = {
-      getMaterial: (type: string) => ({
-        capabilities: { rotatable: type !== 'table-data' },
-      }),
+      getMaterialManifest: (type: string) => manifest(type, type !== 'table-data'),
     }
 
     expect(isElementRotatable(store, { type: 'table-data' })).toBe(false)
@@ -27,9 +26,7 @@ describe('material capability helpers', () => {
 
   it('filters mixed selections to rotatable elements', () => {
     const store = {
-      getMaterial: (type: string) => ({
-        capabilities: { rotatable: type !== 'chart' },
-      }),
+      getMaterialManifest: (type: string) => manifest(type, type !== 'chart'),
     }
     const nodes = [
       { id: 'text-1', type: 'text' },
@@ -41,3 +38,8 @@ describe('material capability helpers', () => {
     ])
   })
 })
+
+function manifest(type: string, rotatable: boolean) {
+  const base = createTestMaterialManifest({ type })
+  return { ...base, common: { ...base.common, interaction: { ...base.common.interaction, rotatable } } }
+}
