@@ -17,8 +17,14 @@ function node(id: string, path: string, whenHidden: 'remove' | 'reserve' = 'remo
     y: 0,
     width: 10,
     height: 10,
-    props: {},
-    renderCondition: { whenMatched: 'show', groups: [{ conditions: [{ source: { path }, operator: { compare: 'exists' } }] }], whenHidden },
+    modelVersion: 1,
+    model: {},
+    slots: {},
+    bindings: {},
+    output: {
+      visibility: 'include',
+      renderCondition: { whenMatched: 'show', groups: [{ conditions: [{ source: { path }, operator: { compare: 'exists' } }] }], whenHidden },
+    },
   }
 }
 
@@ -29,8 +35,8 @@ describe('resolveConditionalSchema', () => {
     const original = schema([node('include', 'show'), node('remove', 'gone'), node('reserve', 'space', 'reserve')])
     const result = resolveConditionalSchema(original, { show: true }, registry)
     expect(result.schema.elements.map(item => item.id)).toEqual(['include', 'reserve'])
-    expect(result.schema.elements[1]?.hidden).toBe(true)
-    expect(original.elements[1]?.hidden).toBeUndefined()
+    expect(result.schema.elements[1]?.editorState?.hidden).toBe(true)
+    expect(original.elements[1]?.editorState?.hidden).toBeUndefined()
     expect(result.states).toEqual(new Map([['include', 'include'], ['remove', 'remove'], ['reserve', 'reserve']]))
   })
 
@@ -156,7 +162,7 @@ describe('resolveConditionalSchema', () => {
   it('keeps static hidden priority even when reserve is not a declared condition effect', () => {
     const registry = new MaterialRendererRegistry()
     registry.register('conditional', { kind: 'none' }, { render: () => ({}), condition: { scope: 'node', hiddenEffects: ['remove'] } })
-    const hidden = { ...node('hidden', 'show'), hidden: true }
+    const hidden = { ...node('hidden', 'show'), editorState: { hidden: true } }
     expect(resolveConditionalSchema(schema([hidden]), { show: true }, registry).states.get('hidden')).toBe('reserve')
   })
 
@@ -165,12 +171,15 @@ describe('resolveConditionalSchema', () => {
     registry.register('conditional', { kind: 'none' }, { render: () => ({}), condition: { scope: 'node', hiddenEffects: ['remove'] } })
     const repeatedMissing = {
       ...node('n', 'missing'),
-      renderCondition: {
-        whenMatched: 'show' as const,
-        groups: [{ conditions: [
-          { source: { path: 'missing' }, operator: { compare: 'eq' as const }, valueType: 'number' as const, value: { kind: 'literal' as const, value: 1 } },
-          { source: { path: 'missing' }, operator: { compare: 'eq' as const }, valueType: 'number' as const, value: { kind: 'literal' as const, value: 2 } },
-        ] }],
+      output: {
+        visibility: 'include' as const,
+        renderCondition: {
+          whenMatched: 'show' as const,
+          groups: [{ conditions: [
+            { source: { path: 'missing' }, operator: { compare: 'eq' as const }, valueType: 'number' as const, value: { kind: 'literal' as const, value: 1 } },
+            { source: { path: 'missing' }, operator: { compare: 'eq' as const }, valueType: 'number' as const, value: { kind: 'literal' as const, value: 2 } },
+          ] }],
+        },
       },
     }
     const result = resolveConditionalSchema(schema([repeatedMissing]), {}, registry)

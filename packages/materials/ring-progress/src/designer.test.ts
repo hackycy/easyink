@@ -39,10 +39,12 @@ describe('createRingProgressExtension', () => {
     const container = document.createElement('div')
     const extension = createRingProgressExtension(createContext())
     const node = createRingProgressNode({
-      binding: {
-        sourceId: 'report',
-        fieldPath: 'completionRate',
-        fieldLabel: '完成率',
+      bindings: {
+        value: {
+          sourceId: 'report',
+          fieldPath: 'completionRate',
+          fieldLabel: '完成率',
+        },
       },
     })
 

@@ -35,16 +35,20 @@ describe('flow-row designer', () => {
   it('does not enter inline edit for a bound column', async () => {
     const ext = createFlowRowExtension(context as never)
     const node = createFlowRowNode({
-      props: {
+      model: {
         columns: [
           {
+            id: 'name',
             ratio: 1,
             textAlign: 'left',
             verticalAlign: 'middle',
             wrapMode: 'block',
-            binding: { sourceId: 'receipt', fieldPath: 'items/name' },
+            bindingPort: 'column:name:value',
           },
         ],
+      },
+      bindings: {
+        'column:name:value': { sourceId: 'receipt', fieldPath: 'items/name' },
       },
     })
     const behavior = ext.behaviors?.find(item => item.id === 'flow-row.column-keyboard')

@@ -34,6 +34,7 @@ export const PAGE_NUMBER_DEFAULTS: PageNumberProps = {
 
 export function createPageNumberNode(partial?: Partial<MaterialNode>, unit?: string): MaterialNode {
   const c = unit && unit !== 'mm' ? (v: number) => convertUnit(v, 'mm', unit) : (v: number) => v
+  const { model: inputModel, output, ...envelope } = partial ?? {}
   return canonicalizeMaterialNode(PAGE_NUMBER_TYPE, {
     id: generateId('pgnum'),
     type: PAGE_NUMBER_TYPE,
@@ -41,14 +42,19 @@ export function createPageNumberNode(partial?: Partial<MaterialNode>, unit?: str
     y: 0,
     width: c(26),
     height: c(8),
-    placement: { mode: 'fixed' },
-    repeat: { scope: 'every-output-page' },
     model: {
       ...PAGE_NUMBER_DEFAULTS,
       fontSize: c(PAGE_NUMBER_DEFAULTS.fontSize),
       letterSpacing: c(PAGE_NUMBER_DEFAULTS.letterSpacing),
+      ...inputModel,
     },
-    ...partial,
+    ...envelope,
+    output: {
+      ...output,
+      visibility: 'include',
+      placement: { mode: 'fixed' },
+      repeat: { scope: 'every-output-page' },
+    },
   })
 }
 

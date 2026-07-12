@@ -355,7 +355,8 @@ describe('assistantOrchestrator', () => {
             y: 16,
             width: 178,
             height: 8,
-            props: {
+            modelVersion: 1,
+            model: {
               content: '直出报价单',
               fontSize: 5,
               fontWeight: 'bold',
@@ -363,6 +364,9 @@ describe('assistantOrchestrator', () => {
               verticalAlign: 'middle',
               color: '#111827',
             },
+            slots: {},
+            bindings: {},
+            output: { visibility: 'include' },
           }],
         },
         expectedDataSource: {
@@ -413,7 +417,8 @@ describe('assistantOrchestrator', () => {
             y: 16,
             width: 178,
             height: 8,
-            props: {
+            modelVersion: 1,
+            model: {
               content: '页面模型修复验证',
               fontSize: 5,
               fontWeight: 'bold',
@@ -421,6 +426,9 @@ describe('assistantOrchestrator', () => {
               verticalAlign: 'middle',
               color: '#111827',
             },
+            slots: {},
+            bindings: {},
+            output: { visibility: 'include' },
           }],
         },
         expectedDataSource: {
@@ -570,7 +578,11 @@ describe('assistantOrchestrator', () => {
             y: 24,
             width: 178,
             height: 40,
-            props: {},
+            modelVersion: 1,
+            model: {},
+            slots: {},
+            bindings: {},
+            output: { visibility: 'include' },
           }],
         },
         expectedDataSource: {
@@ -772,7 +784,11 @@ function createSchema(text: string) {
       y: 0,
       width: 20,
       height: 6,
-      props: { text },
+      modelVersion: 1,
+      model: { text },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' as const },
     }],
   }
 }
@@ -879,7 +895,11 @@ function invalidSchemaAgentPayload() {
         y: 24,
         width: 178,
         height: 40,
-        props: {},
+        modelVersion: 1,
+        model: {},
+        slots: {},
+        bindings: {},
+        output: { visibility: 'include' },
       }],
     },
     expectedDataSource: {
@@ -905,7 +925,8 @@ function defaultSchemaAgentPayload() {
           y: 16,
           width: 178,
           height: 8,
-          props: {
+          modelVersion: 1,
+          model: {
             content: '直出报价单',
             fontSize: 5,
             fontWeight: 'bold',
@@ -913,6 +934,9 @@ function defaultSchemaAgentPayload() {
             verticalAlign: 'middle',
             color: '#111827',
           },
+          slots: {},
+          bindings: {},
+          output: { visibility: 'include' },
         },
         {
           id: 'txt-customer',
@@ -921,19 +945,22 @@ function defaultSchemaAgentPayload() {
           y: 28,
           width: 178,
           height: 5,
-          props: {
+          modelVersion: 1,
+          model: {
             content: '客户：',
             fontSize: 3,
             textAlign: 'left',
             verticalAlign: 'middle',
             color: '#111827',
           },
-          binding: {
+          slots: {},
+          bindings: { value: {
             sourceId: 'quote',
             sourceName: 'quote',
             fieldPath: 'customer',
             fieldLabel: '客户',
-          },
+          } },
+          output: { visibility: 'include' },
         },
       ],
     },
@@ -958,7 +985,7 @@ function schemaPayloadWithTitle(title: string) {
           return element
         return {
           ...element,
-          props: {
+          model: {
             ...element.model,
             content: title,
           },

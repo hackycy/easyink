@@ -6,7 +6,7 @@ import { getTextRenderSize, measureText, renderText } from './viewer'
 describe('renderText', () => {
   it('renders vertical writing mode with native vertical styles', () => {
     const node = createTextNode({
-      props: {
+      model: {
         writingMode: 'vertical',
         overflow: 'ellipsis',
         textAlign: 'right',
@@ -25,7 +25,7 @@ describe('renderText', () => {
 
   it('treats legacy rich text content as escaped plain text', () => {
     const node = createTextNode({
-      props: {
+      model: {
         content: '<b>unsafe</b>',
         richText: true,
       },
@@ -39,7 +39,7 @@ describe('renderText', () => {
 
   it('maps legacy autoWrap false to the no-wrap layout mode', () => {
     const node = createTextNode({
-      props: {
+      model: {
         content: 'single line',
         autoWrap: false,
       },
@@ -55,7 +55,7 @@ describe('renderText', () => {
     const node = createTextNode({
       width: 12,
       height: 4,
-      props: {
+      model: {
         content: 'long long long long text',
         overflow: 'visible',
         wrapMode: 'anywhere',
@@ -75,7 +75,7 @@ describe('renderText', () => {
     const node = createTextNode({
       width: 12,
       height: 4,
-      props: {
+      model: {
         content: 'abcdefghijabcdefghij',
         heightMode: 'auto',
         wrapMode: 'anywhere',
@@ -97,7 +97,7 @@ describe('renderText', () => {
     const node = createTextNode({
       width: 12,
       height: 4,
-      props: {
+      model: {
         content: 'abcdefghijabcdefghij',
         heightMode: 'auto',
         wrapMode: 'anywhere',

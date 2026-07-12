@@ -5,7 +5,7 @@ import { renderProgress } from './viewer'
 
 describe('renderProgress', () => {
   it('renders the preset value and default suffix when unbound', () => {
-    const node = createProgressNode({ props: { value: 72 } })
+    const node = createProgressNode({ model: { value: 72 } })
     const html = readTrustedViewerHtml(renderProgress(node).html!)
 
     expect(html).toContain('>72%</div>')
@@ -14,7 +14,7 @@ describe('renderProgress', () => {
   })
 
   it('clamps projected values into a 0-100 progress range', () => {
-    const node = createProgressNode({ props: { value: '128.5' } as never })
+    const node = createProgressNode({ model: { value: '128.5' } as never })
     const html = readTrustedViewerHtml(renderProgress(node).html!)
 
     expect(html).toContain('>100%</div>')
@@ -22,14 +22,14 @@ describe('renderProgress', () => {
   })
 
   it('can hide the progress text', () => {
-    const node = createProgressNode({ props: { value: 45, showText: false } })
+    const node = createProgressNode({ model: { value: 45, showText: false } })
     const html = readTrustedViewerHtml(renderProgress(node).html!)
 
     expect(html).not.toContain('>45%</div>')
   })
 
   it('can place the progress text below the bar', () => {
-    const node = createProgressNode({ props: { value: 45, textPosition: 'bottom' } })
+    const node = createProgressNode({ model: { value: 45, textPosition: 'bottom' } })
     const html = readTrustedViewerHtml(renderProgress(node).html!)
 
     expect(html.indexOf('background:#e5e7eb')).toBeLessThan(html.indexOf('>45%</div>'))

@@ -1,8 +1,19 @@
-import type { DatasourceDropHandler, MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
+import type { DatasourceDropHandler, MaterialDesignerExtension, MaterialExtensionContext, SelectionType } from '@easyink/core'
+import type { TableEditingDelegate } from '@easyink/material-table-kernel'
 import type { BindingRef, MaterialNode } from '@easyink/schema'
 import type { UnitType } from '@easyink/shared'
+import { keyboardCursorMiddleware, selectionMiddleware, undoBoundaryMiddleware, UnitManager } from '@easyink/core'
 import {
   computeCellRect,
+  createTableCellDecorationComponent,
+  createTableCellEditBehavior,
+  createTableCellSelectBehavior,
+  createTableCellSelectionType,
+  createTableCommandHandlerBehavior,
+  createTableGeometry,
+  createTableKeyboardNavBehavior,
+  createTableResizeAdapter,
+  createTableResizeBehavior,
   escapeHtml,
   getTableMaterialModel,
   hitTestGridCell,
@@ -12,6 +23,20 @@ import {
   resolveMergeOwner,
   resolveTableBaseProps,
 } from '@easyink/material-table-kernel'
+
+function createDelegate(context: MaterialExtensionContext): TableEditingDelegate {
+  const unitManager = new UnitManager(context.getSchema().unit)
+  return {
+    getNode: nodeId => context.getNode(nodeId),
+    getTableKind: () => 'static',
+    getPlaceholderRowCount: () => 0,
+    getUnit: () => context.getSchema().unit,
+    screenToDoc: (value, origin, zoom) => unitManager.screenToDocument(value, origin, 0, zoom),
+    getZoom: () => context.getZoom(),
+    getPageEl: () => context.getPageEl(),
+    t: key => context.t(key),
+  }
+}
 
 function buildHtml(node: MaterialNode<unknown>, unit: UnitType, context: MaterialExtensionContext): string {
   if (node.type !== 'table-static') {
@@ -92,6 +117,7 @@ function createDatasourceDropHandler(context: MaterialExtensionContext): Datasou
 }
 
 export function createTableStaticExtension(context: MaterialExtensionContext): MaterialDesignerExtension {
+  const delegate = createDelegate(context)
   return {
     renderContent(nodeSignal, container) {
       function render() {
@@ -102,6 +128,24 @@ export function createTableStaticExtension(context: MaterialExtensionContext): M
       return nodeSignal.subscribe(render)
     },
 
+    geometry: createTableGeometry(delegate),
+    selectionTypes: [createTableCellSelectionType(delegate) as SelectionType<unknown>],
+    behaviors: [
+      selectionMiddleware(),
+      undoBoundaryMiddleware({ groupBy: 'cell' }),
+      createTableCellSelectBehavior(delegate),
+      createTableKeyboardNavBehavior(delegate),
+      createTableCellEditBehavior(delegate),
+      createTableResizeBehavior(delegate),
+      createTableCommandHandlerBehavior(delegate),
+      keyboardCursorMiddleware(),
+    ],
+    decorations: [{
+      selectionTypes: ['table.cell'],
+      component: createTableCellDecorationComponent(delegate),
+      layer: 'above-content',
+    }],
     datasourceDrop: createDatasourceDropHandler(context),
+    resize: createTableResizeAdapter({ getHiddenRowMask: node => projectTableTopology(node).topology.rows.map(() => false) }),
   }
 }

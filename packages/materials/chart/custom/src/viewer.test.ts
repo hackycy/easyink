@@ -5,7 +5,7 @@ import { renderChartCustom } from './viewer'
 describe('chart custom viewer', () => {
   it('renders a custom option as SVG', () => {
     const node = createChartCustomNode({
-      props: {
+      model: {
         optionCode: 'return { series: [{ type: "pie", data: [{ value: 1, name: "A" }] }] }',
         option: null,
         backgroundColor: '',

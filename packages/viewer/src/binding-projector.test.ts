@@ -28,15 +28,18 @@ describe('projectBindings', () => {
       y: 0,
       width: 40,
       height: 10,
-      props: {},
-      binding: {
+      modelVersion: 1,
+      model: {},
+      slots: {},
+      bindings: { value: {
         sourceId: 'invoice',
         fieldPath: 'customer/name',
         format: {
           mode: 'custom',
           custom: { source: '(value, data) => value + " / " + data.invoiceNo' },
         },
-      },
+      } },
+      output: { visibility: 'include' },
     }, data)
 
     expect(projected).toEqual([{

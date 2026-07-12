@@ -9,7 +9,19 @@ import { DesignerStore } from '../store/designer-store'
 import { useElementDrag } from './use-element-drag'
 
 function makeNode(id: string, x: number, y: number, w = 50, h = 50): MaterialNode {
-  return { id, type: 'rect', x, y, width: w, height: h, props: {} } as MaterialNode
+  return {
+    id,
+    type: 'rect',
+    x,
+    y,
+    width: w,
+    height: h,
+    modelVersion: 1,
+    model: {},
+    slots: {},
+    bindings: {},
+    output: { visibility: 'include' },
+  } as MaterialNode
 }
 
 function makeStore(elements: MaterialNode[], selected: string[], page: PageSchema = { mode: 'fixed', width: 1000, height: 1000 }): DesignerStore {

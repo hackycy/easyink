@@ -1,9 +1,25 @@
-import type { DatasourceDropHandler, MaterialControlPolicy, MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
+import type { DatasourceDropHandler, MaterialControlPolicy, MaterialDesignerExtension, MaterialExtensionContext, SelectionType } from '@easyink/core'
+import type { TableEditingDelegate } from '@easyink/material-table-kernel'
 import type { BindingRef, MaterialNode } from '@easyink/schema'
 import type { UnitType } from '@easyink/shared'
 import type { TableDataProps } from './schema'
 import {
+  keyboardCursorMiddleware,
+  selectionMiddleware,
+  undoBoundaryMiddleware,
+  UnitManager,
+} from '@easyink/core'
+import {
   computeCellRect,
+  createTableCellDecorationComponent,
+  createTableCellEditBehavior,
+  createTableCellSelectBehavior,
+  createTableCellSelectionType,
+  createTableCommandHandlerBehavior,
+  createTableGeometry,
+  createTableKeyboardNavBehavior,
+  createTableResizeAdapter,
+  createTableResizeBehavior,
   escapeHtml,
   getTableMaterialModel,
   hitTestGridCell,
@@ -24,6 +40,22 @@ const RUNTIME_HEIGHT_CONTROL_POLICY: MaterialControlPolicy = {
     width: { state: 'hidden', reason: 'designer.reason.runtimeHeight' },
     height: { state: 'hidden', reason: 'designer.reason.runtimeHeight' },
   },
+}
+
+function createDelegate(context: MaterialExtensionContext): TableEditingDelegate {
+  const unitManager = new UnitManager(context.getSchema().unit)
+  return {
+    getNode: nodeId => context.getNode(nodeId),
+    getTableKind: () => 'data',
+    getPlaceholderRowCount: () => 2,
+    getUnit: () => context.getSchema().unit,
+    screenToDoc: (value, origin, zoom) => unitManager.screenToDocument(value, origin, 0, zoom),
+    getZoom: () => context.getZoom(),
+    getPageEl: () => context.getPageEl(),
+    t: key => context.t(key),
+    getHiddenRowMask: node => projectTableTopology(node).topology.rows.map(() => false),
+    canResizeRow: (node, rowIndex) => canResizeTableDataRow(node, rowIndex),
+  }
 }
 
 export function canResizeTableDataRow(node: MaterialNode<unknown>, rowIndex: number): boolean {
@@ -52,11 +84,9 @@ function buildHtml(node: MaterialNode<unknown>, unit: UnitType, context: Materia
     },
     rowDecorator: (index) => {
       const role = projection.topology.rows[index]?.role
-      const background = role === 'header'
-        ? props.headerBackground
-        : role === 'footer'
-          ? props.summaryBackground
-          : props.stripedRows && index % 2 === 1 ? props.stripedColor : ''
+      const modelRole = role === 'repeat-template' ? 'detail' : role === 'normal' ? 'body' : role
+      const background = getTableMaterialModel(node).bands.find(band => band.role === modelRole)?.style?.background
+        ?? (props.stripedRows && index % 2 === 1 ? props.stripedColor : '')
       return background ? { cellStyle: `;background:${background}` } : {}
     },
   })
@@ -110,6 +140,7 @@ function createDatasourceDropHandler(context: MaterialExtensionContext): Datasou
 }
 
 export function createTableDataExtension(context: MaterialExtensionContext): MaterialDesignerExtension {
+  const delegate = createDelegate(context)
   return {
     renderContent(nodeSignal, container) {
       function render() {
@@ -118,7 +149,25 @@ export function createTableDataExtension(context: MaterialExtensionContext): Mat
       render()
       return nodeSignal.subscribe(render)
     },
+    geometry: createTableGeometry(delegate),
+    selectionTypes: [createTableCellSelectionType(delegate) as SelectionType<unknown>],
+    behaviors: [
+      selectionMiddleware(),
+      undoBoundaryMiddleware({ groupBy: 'cell' }),
+      createTableCellSelectBehavior(delegate),
+      createTableKeyboardNavBehavior(delegate),
+      createTableCellEditBehavior(delegate),
+      createTableResizeBehavior(delegate),
+      createTableCommandHandlerBehavior(delegate),
+      keyboardCursorMiddleware(),
+    ],
+    decorations: [{
+      selectionTypes: ['table.cell'],
+      component: createTableCellDecorationComponent(delegate),
+      layer: 'above-content',
+    }],
     resolveControlPolicy: () => RUNTIME_HEIGHT_CONTROL_POLICY,
     datasourceDrop: createDatasourceDropHandler(context),
+    resize: createTableResizeAdapter({ getHiddenRowMask: node => projectTableTopology(node).topology.rows.map(() => false) }),
   }
 }

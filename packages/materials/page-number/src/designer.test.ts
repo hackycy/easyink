@@ -61,7 +61,7 @@ describe('createPageNumberExtension', () => {
     const container = document.createElement('div')
     const extension = createPageNumberExtension(createContext())
     const node = createPageNumberNode({
-      props: {
+      model: {
         format: 'Page {current} of {total}',
       },
     })

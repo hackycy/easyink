@@ -1,6 +1,14 @@
-import type { PropertyDescriptor } from '@easyink/core'
+import type { PropertyAccessor, PropertyDescriptor } from '@easyink/core'
+import type { TableBandRole } from '@easyink/material-table-kernel'
+import type { MaterialNode } from '@easyink/schema'
 import { createModelPropertyAccessor, createNodePropertyAccessor } from '@easyink/core'
-import { createTableBorderPropertyAccessor, createTablePaddingPropertyAccessor } from '@easyink/material-table-kernel'
+import {
+  createSequentialTableIdentityAllocator,
+  createTableBorderPropertyAccessor,
+  createTablePaddingPropertyAccessor,
+  getTableMaterialModel,
+  TableTopologyEngine,
+} from '@easyink/material-table-kernel'
 import {
   FONT_STYLE_OPTIONS,
   FONT_WEIGHT_OPTIONS,
@@ -13,6 +21,45 @@ const TABLE_TEXT_ALIGN_ACCESSOR = createNodePropertyAccessor<'left' | 'center' |
   readValue: value => value === 'start' ? 'left' : value === 'end' ? 'right' : 'center',
   writeValue: value => value === 'left' ? 'start' : value === 'right' ? 'end' : 'center',
 })
+
+function createBandVisibilityAccessor(role: 'header' | 'footer'): PropertyAccessor<boolean> {
+  return {
+    paths: ['/model/bands'],
+    read: node => getTableMaterialModel(node).bands.some(band => band.role === role),
+    write(draft, visible) {
+      let model = getTableMaterialModel(draft)
+      const matching = model.bands.filter(band => band.role === role)
+      if (visible && matching.length === 0) {
+        const minHeight = model.bands.flatMap(band => band.rows)[0]?.minHeight ?? 8
+        model = TableTopologyEngine.insertBand(model, {
+          role,
+          target: { atEnd: true },
+          minHeight,
+          identities: createSequentialTableIdentityAllocator(`${draft.id}-${role}`),
+        })
+      }
+      else if (!visible) {
+        for (const band of matching)
+          model = TableTopologyEngine.removeBand(model, band.id).model
+      }
+      draft.model = model
+    },
+  }
+}
+
+function createBandBackgroundAccessor(role: TableBandRole): PropertyAccessor<string> {
+  return {
+    paths: ['/model/bands'],
+    read: node => getTableMaterialModel(node).bands.find(band => band.role === role)?.style?.background ?? '',
+    write(draft: MaterialNode, value: string) {
+      const band = getTableMaterialModel(draft).bands.find(candidate => candidate.role === role)
+      if (!band)
+        return
+      band.style ??= {}
+      band.style.background = value
+    },
+  }
+}
 
 export const tableDataBaseDesignerPropSchemas: PropertyDescriptor[] = [
   { key: 'borderWidth', accessor: createTableBorderPropertyAccessor('width') as PropertyDescriptor['accessor'], label: 'designer.property.borderWidth', type: 'number', group: 'table-border', min: 0, max: 10, step: 1 },
@@ -36,4 +83,10 @@ export const tableDataBaseDesignerPropSchemas: PropertyDescriptor[] = [
  * Table controls declare explicit model accessors. The editing transaction owns
  * commit lifecycle and session cleanup.
  */
-export const tableDataDesignerPropSchemas: PropertyDescriptor[] = [...tableDataBaseDesignerPropSchemas]
+export const tableDataDesignerPropSchemas: PropertyDescriptor[] = [
+  ...tableDataBaseDesignerPropSchemas,
+  { key: 'showHeader', accessor: createBandVisibilityAccessor('header'), label: 'materials.tableData.property.showHeader', type: 'switch', group: 'table-appearance', default: true },
+  { key: 'showFooter', accessor: createBandVisibilityAccessor('footer'), label: 'materials.tableData.property.showFooter', type: 'switch', group: 'table-appearance', default: true },
+  { key: 'headerBackground', accessor: createBandBackgroundAccessor('header'), label: 'materials.tableData.property.headerBackground', type: 'color', group: 'table-appearance' },
+  { key: 'summaryBackground', accessor: createBandBackgroundAccessor('footer'), label: 'materials.tableData.property.summaryBackground', type: 'color', group: 'table-appearance' },
+]

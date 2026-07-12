@@ -94,8 +94,8 @@ function setup(opts: { onBgPointerDown?: (e: PointerEvent) => void } = {}) {
   const store = new DesignerStore()
   store.registerDesignerFactory('rect', () => plainExtension())
   store.schema.elements.push(
-    { id: 'a', type: 'rect', x: 0, y: 0, width: 50, height: 50, rotation: 0, props: {} } as never,
-    { id: 'b', type: 'rect', x: 100, y: 0, width: 50, height: 50, rotation: 0, props: {} } as never,
+    canonicalNode('a', 'rect', 0),
+    canonicalNode('b', 'rect', 100),
   )
   const pageEl = makePageEl()
   const target = document.createElement('div')
@@ -111,6 +111,23 @@ function setup(opts: { onBgPointerDown?: (e: PointerEvent) => void } = {}) {
     controller.handleElementPointerDown(e, elementId)
   }
   return { store, controller, pdOn, pageEl }
+}
+
+function canonicalNode(id: string, type: string, x: number) {
+  return {
+    id,
+    type,
+    x,
+    y: 0,
+    width: type === 'rect' ? 50 : 80,
+    height: type === 'rect' ? 50 : 80,
+    rotation: 0,
+    modelVersion: 1,
+    model: {},
+    slots: {},
+    bindings: {},
+    output: { visibility: 'include' as const },
+  }
 }
 
 describe('useCanvasInteractionController', () => {
@@ -223,7 +240,7 @@ describe('useCanvasInteractionController', () => {
     const { store, pdOn } = setup()
     store.registerDesignerFactory('cell-table', () => geometryExtension())
     store.schema.elements.push(
-      { id: 't', type: 'cell-table', x: 200, y: 0, width: 80, height: 80, rotation: 0, props: {} } as never,
+      canonicalNode('t', 'cell-table', 200),
     )
 
     pdOn('t', pdEvent('pointerdown', 210, 10))
@@ -236,7 +253,7 @@ describe('useCanvasInteractionController', () => {
     const { store, controller } = setup()
     store.registerDesignerFactory('cell-table', () => geometryExtension())
     store.schema.elements.push(
-      { id: 't', type: 'cell-table', x: 200, y: 0, width: 80, height: 80, rotation: 0, props: {} } as never,
+      canonicalNode('t', 'cell-table', 200),
     )
     const dispatchSpy = vi.spyOn(store.editingSession, 'dispatch')
 
@@ -256,7 +273,7 @@ describe('useCanvasInteractionController', () => {
     const { store, controller } = setup()
     store.registerDesignerFactory('cell-table', () => geometryExtension())
     store.schema.elements.push(
-      { id: 't', type: 'cell-table', x: 200, y: 0, width: 80, height: 80, rotation: 0, props: {} } as never,
+      canonicalNode('t', 'cell-table', 200),
     )
 
     controller.handleElementDblClick(dblClickEvent(210, 10), 't')
@@ -271,7 +288,7 @@ describe('useCanvasInteractionController', () => {
     const { store, controller, pdOn } = setup()
     store.registerDesignerFactory('cell-table', () => geometryExtension())
     store.schema.elements.push(
-      { id: 't', type: 'cell-table', x: 200, y: 0, width: 80, height: 80, rotation: 0, props: {} } as never,
+      canonicalNode('t', 'cell-table', 200),
     )
     controller.handleElementDblClick(dblClickEvent(210, 10), 't')
     expect(store.editingSession.isActive).toBe(true)
@@ -292,7 +309,7 @@ describe('useCanvasInteractionController', () => {
     })
     store.registerDesignerFactory('cell-table', () => geometryExtension())
     store.schema.elements.push(
-      { id: 't', type: 'cell-table', x: 200, y: 0, width: 80, height: 80, rotation: 0, props: {} } as never,
+      canonicalNode('t', 'cell-table', 200),
     )
     controller.handleElementDblClick(dblClickEvent(210, 10), 't')
     expect(store.editingSession.isActive).toBe(true)

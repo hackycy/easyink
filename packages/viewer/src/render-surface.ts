@@ -71,11 +71,11 @@ export function renderPages(
       if (node.editorState?.hidden)
         continue
 
-      const resolved = resolvedPropsMap.get(node.id) ?? node.model
+      const resolved = resolvedPropsMap.get(node.id) ?? node.model as Record<string, unknown>
       context.resolvedProps = resolved
 
       // Render through the material registry, wrapped by unified diagnostic middleware.
-      const nodeForRender: MaterialNode = { ...node, props: resolved }
+      const nodeForRender: MaterialNode = { ...node, model: resolved }
       const fallbackHtml = trustedViewerHtml(`<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#fff3f3;border:1px dashed #ff4d4f;color:#ff4d4f;font-size:11px;box-sizing:border-box;" title="Render failed">&#x26A0; [${escapeHtml(node.type)}]</div>`)
 
       const safeResult = safeRender(

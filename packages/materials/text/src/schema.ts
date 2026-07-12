@@ -1,4 +1,4 @@
-import type { MaterialConditionDefinition } from '@easyink/core'
+import type { AdaptableMaterialNode, MaterialConditionDefinition, SchemaMigration } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import { canonicalizeMaterialNode } from '@easyink/schema'
 import { convertUnit, generateId } from '@easyink/shared'
@@ -58,6 +58,23 @@ export const TEXT_DEFAULTS: TextProps = {
   borderWidth: 0,
   borderColor: '#000000',
   borderType: 'solid',
+}
+
+export const migrateTextModelV0ToV1: SchemaMigration = {
+  from: 0,
+  to: 1,
+  migrate(node: AdaptableMaterialNode): AdaptableMaterialNode {
+    const source = node.model as Partial<TextProps> & { autoWrap?: boolean }
+    const { autoWrap, ...model } = source
+    return {
+      ...node,
+      modelVersion: 1,
+      model: {
+        ...model,
+        wrapMode: model.wrapMode ?? (autoWrap === false ? 'nowrap' : TEXT_DEFAULTS.wrapMode),
+      },
+    }
+  },
 }
 
 export function createTextNode(partial?: Partial<MaterialNode>, unit?: string): MaterialNode {

@@ -43,8 +43,11 @@ describe('generated schema accuracy', () => {
         y: 0,
         width: 100,
         height: 20,
-        props: {},
-        binding: { sourceId: 'receipt', fieldPath: 'store.name' },
+        modelVersion: 1,
+        model: {},
+        slots: {},
+        bindings: { value: { sourceId: 'receipt', fieldPath: 'store.name' } },
+        output: { visibility: 'include' },
       }],
     })
 
@@ -58,7 +61,7 @@ describe('generated schema accuracy', () => {
       pagination: { strategy: 'none' },
     })
     expect(repaired.schema.elements[0]?.type).toBe('table-data')
-    expect(repaired.schema.elements[0]?.binding).toMatchObject({ fieldPath: 'store/name' })
+    expect(repaired.schema.elements[0]?.bindings.value).toMatchObject({ fieldPath: 'store/name' })
     expect(repaired.issues.map(issue => issue.code)).toEqual(expect.arrayContaining([
       'PAGE_PLAN_MISMATCH_FIXED',
       'MATERIAL_ALIAS_FIXED',
@@ -66,7 +69,7 @@ describe('generated schema accuracy', () => {
     ]))
   })
 
-  it('rejects legacy table props instead of migrating table structure silently', () => {
+  it('rejects invalid canonical table models instead of repairing structure silently', () => {
     const schema = makeSchema({
       elements: [{
         id: 'items',
@@ -75,13 +78,16 @@ describe('generated schema accuracy', () => {
         y: 0,
         width: 100,
         height: 20,
-        props: { columns: [] },
+        modelVersion: 1,
+        model: { columns: [] },
+        slots: {},
+        bindings: {},
+        output: { visibility: 'include' },
       }],
     })
 
     const issues = validateGeneratedSchemaAccuracy(schema, { allowedMaterialTypes, materialAliases })
 
-    expect(issues.map(issue => issue.code)).toContain('LEGACY_TABLE_SCHEMA')
     expect(issues.map(issue => issue.code)).toContain('INVALID_TABLE_DATA_SCHEMA')
   })
 })

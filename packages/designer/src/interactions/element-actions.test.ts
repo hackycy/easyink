@@ -4,7 +4,20 @@ import { DesignerStore } from '../store/designer-store'
 import { deleteMaterialNodes, toggleMaterialHidden } from './element-actions'
 
 function makeNode(id: string, input: Partial<MaterialNode> = {}): MaterialNode {
-  return { id, type: 'rect', x: 0, y: 0, width: 10, height: 10, props: {}, ...input } as MaterialNode
+  return {
+    id,
+    type: 'rect',
+    x: 0,
+    y: 0,
+    width: 10,
+    height: 10,
+    modelVersion: 1,
+    model: {},
+    slots: {},
+    bindings: {},
+    output: { visibility: 'include' },
+    ...input,
+  } as MaterialNode
 }
 
 function makeStore(elements: MaterialNode[], selected: string[] = []): DesignerStore {
@@ -36,8 +49,8 @@ describe('element actions', () => {
   })
 
   it('deletes hidden unlocked nodes and removes them from selection', () => {
-    const hidden = makeNode('hidden', { hidden: true })
-    const locked = makeNode('locked', { locked: true })
+    const hidden = makeNode('hidden', { editorState: { hidden: true } })
+    const locked = makeNode('locked', { editorState: { locked: true } })
     const store = makeStore([hidden, locked], ['hidden', 'locked'])
 
     expect(deleteMaterialNodes(store, [hidden, locked])).toBe(1)

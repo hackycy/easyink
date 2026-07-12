@@ -521,8 +521,8 @@ export class ViewerRuntime {
     }
 
     for (const node of schema.elements) {
-      const resolvedProps = resolvedPropsMap.get(node.id) ?? node.model
-      const nodeForMeasure = resolvedProps === node.model ? node : { ...node, props: resolvedProps }
+      const resolvedProps = resolvedPropsMap.get(node.id) ?? node.model as Record<string, unknown>
+      const nodeForMeasure = resolvedProps === node.model ? node : { ...node, model: resolvedProps }
       let result
       try {
         result = this._materialRegistry.measure(nodeForMeasure, measureCtx)

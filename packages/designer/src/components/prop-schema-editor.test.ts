@@ -54,7 +54,7 @@ describe('prop schema editor text file import', () => {
     await flush()
 
     expect(input.minLength).toBe(1)
-    expect(input.maxLength).toBe(1)
+    expect(input.hasAttribute('maxlength')).toBe(false)
     expect(events.previews).toEqual([['character', 'A'], ['character', '满']])
     expect(events.changes).toEqual([['character', 'A'], ['character', '满']])
     mounted.unmount()

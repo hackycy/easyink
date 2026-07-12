@@ -51,6 +51,16 @@ describe('table-data designer', () => {
     expect(canResizeTableDataRow(node, 1)).toBe(true)
     expect(canResizeTableDataRow(node, 2)).toBe(true)
     expect(policy?.geometry?.height?.state).toBe('disabled')
+    expect(extension.selectionTypes?.map(type => type.id)).toContain('table.cell')
+    expect(extension.behaviors?.map(behavior => behavior.id)).toEqual(expect.arrayContaining([
+      'table.cell-select',
+      'table.keyboard-nav',
+      'table.cell-edit',
+      'table.resize',
+      'table.command-handler',
+    ]))
+    expect(extension.decorations?.[0]).toMatchObject({ selectionTypes: ['table.cell'], layer: 'above-content' })
+    expect(extension.resize).toBeDefined()
   })
 
   it('writes dropped fields through a stable cell binding port', () => {

@@ -159,7 +159,7 @@ describe('properties panel image source writes', () => {
     button(mounted.host, PICK_TITLE).click()
     await flush()
 
-    expect(store.schema.elements[0]?.props).toMatchObject({
+    expect(store.schema.elements[0]?.model).toMatchObject({
       src: 'https://example.com/material.png',
       alt: 'Generated alt',
     })
@@ -181,7 +181,7 @@ describe('properties panel image source writes', () => {
     button(mounted.host, PICK_TITLE).click()
     await flush()
 
-    expect(store.schema.elements[0]?.props).toMatchObject({
+    expect(store.schema.elements[0]?.model).toMatchObject({
       src: 'https://example.com/material.png',
       alt: 'Keep me',
     })
@@ -323,7 +323,11 @@ function imageNode(id: string, props: Record<string, unknown>) {
     width: 40,
     height: 30,
     rotation: 0,
-    props,
+    modelVersion: 1,
+    model: props,
+    slots: {},
+    bindings: {},
+    output: { visibility: 'include' },
   }
 }
 

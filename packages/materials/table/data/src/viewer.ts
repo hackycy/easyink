@@ -2,7 +2,7 @@ import type { FragmentPaginator, LayoutFragment } from '@easyink/core'
 import type { BindingRef, MaterialNode, TableCellSchema, TableRowSchema } from '@easyink/schema'
 import type { TableDataProps } from './schema'
 import { createFragmentFromNode, extractCollectionPath, formatBindingDisplayValue, resolveBindingValue, resolveFieldFromRecord, trustedViewerHtml } from '@easyink/core'
-import { computeAutoRowHeights, computeRowScaleWithVirtualRows, projectTableTopology, renderPlainTextCell, renderTableHtml, resolveTableBaseProps } from '@easyink/material-table-kernel'
+import { computeAutoRowHeights, computeRowScaleWithVirtualRows, getTableMaterialModel, projectTableTopology, renderPlainTextCell, renderTableHtml, resolveTableBaseProps } from '@easyink/material-table-kernel'
 import { TABLE_DATA_PLACEHOLDER_ROW_COUNT } from './layout'
 import { TABLE_DATA_DEFAULTS } from './schema'
 
@@ -202,11 +202,8 @@ export function renderTableData(node: MaterialNode<unknown>, context?: ViewerRen
       const row = sizedRows[ri]
       if (!row)
         return {}
-      const bg = row.role === 'header'
-        ? props.headerBackground
-        : row.role === 'footer'
-          ? props.summaryBackground
-          : ''
+      const modelRole = row.role === 'repeat-template' ? 'detail' : row.role === 'normal' ? 'body' : row.role
+      const bg = getTableMaterialModel(node).bands.find(band => band.role === modelRole)?.style?.background ?? ''
       if (bg)
         return { cellStyle: `;background:${bg}` }
       // Striped rows: apply to non-header/footer rows at odd indices

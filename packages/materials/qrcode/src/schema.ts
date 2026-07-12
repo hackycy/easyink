@@ -31,6 +31,7 @@ export const QRCODE_DEFAULTS: QrcodeProps = {
 
 export function createQrcodeNode(partial?: Partial<MaterialNode>, unit?: string): MaterialNode {
   const c = unit && unit !== 'mm' ? (v: number) => convertUnit(v, 'mm', unit) : (v: number) => v
+  const { model: inputModel, ...envelope } = partial ?? {}
   return canonicalizeMaterialNode(QRCODE_TYPE, {
     id: generateId('qr'),
     type: QRCODE_TYPE,
@@ -38,8 +39,8 @@ export function createQrcodeNode(partial?: Partial<MaterialNode>, unit?: string)
     y: 0,
     width: c(100),
     height: c(100),
-    model: { ...QRCODE_DEFAULTS },
-    ...partial,
+    ...envelope,
+    model: { ...QRCODE_DEFAULTS, ...inputModel },
   })
 }
 

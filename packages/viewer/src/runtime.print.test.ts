@@ -1,12 +1,12 @@
-import type { DocumentSchema, TableNode } from '@easyink/schema'
+import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import type { ViewerRuntime } from './runtime'
 import type { ViewerExportContext, ViewerPageMetrics, ViewerPrintContext, ViewerPrintOptions, ViewerPrintPolicy } from './types'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createViewer, resolvePrintPolicy } from './index'
 import { buildPrintStyles } from './print-service'
 
-function createItemsTable(): TableNode {
-  return {
+function createItemsTable(): MaterialNode<unknown> {
+  const legacy = {
     id: 'items',
     type: 'table-data',
     x: 5,
@@ -42,7 +42,50 @@ function createItemsTable(): TableNode {
         ],
       },
       layout: {},
-    } as TableNode['table'],
+    },
+  }
+  return canonicalTableFixture(legacy)
+}
+
+function canonicalTableFixture(legacy: any): MaterialNode<unknown> {
+  const bindings: MaterialNode['bindings'] = {}
+  const columns = legacy.table.topology.columns.map((column: any, index: number) => ({
+    id: `column-${index}`,
+    track: { kind: 'fr', weight: column.ratio },
+  }))
+  const bands = legacy.table.topology.rows.map((row: any, rowIndex: number) => {
+    const role = row.role === 'repeat-template' ? 'detail' : row.role === 'normal' ? 'body' : row.role
+    return {
+      id: `band-${rowIndex}`,
+      role,
+      rows: [{
+        id: `row-${rowIndex}`,
+        minHeight: row.height,
+        cells: row.cells.map((cell: any, columnIndex: number) => {
+          const port = cell.binding ? `cell-${rowIndex}-${columnIndex}` : undefined
+          if (port)
+            bindings[port] = cell.binding
+          return {
+            id: `cell-${rowIndex}-${columnIndex}`,
+            columnId: columns[columnIndex].id,
+            content: { kind: 'text', text: cell.content?.text ?? '', ...(port ? { bindingPort: port } : {}) },
+          }
+        }),
+      }],
+    }
+  })
+  return {
+    id: legacy.id,
+    type: legacy.type,
+    x: legacy.x,
+    y: legacy.y,
+    width: legacy.width,
+    height: legacy.height,
+    modelVersion: 1,
+    model: { kind: 'data', columns, bands, merges: [], style: {}, data: { collectionPort: 'records' } },
+    slots: {},
+    bindings,
+    output: { visibility: 'include' },
   }
 }
 
@@ -68,10 +111,14 @@ function createContinuousSchema(pageHeight = 100): DocumentSchema {
         y: 62,
         width: 70,
         height: 8,
-        props: {
+        modelVersion: 1,
+        model: {
           lineColor: '#000000',
           lineType: 'solid',
         },
+        slots: {},
+        bindings: {},
+        output: { visibility: 'include' },
       },
     ],
   }

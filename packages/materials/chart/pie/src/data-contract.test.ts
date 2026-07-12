@@ -83,7 +83,8 @@ describe('chart pie data contract', () => {
   })
 })
 
-function chartNode(partial: Partial<MaterialNode> = {}): MaterialNode {
+function chartNode(partial: Partial<MaterialNode> & { binding?: MaterialNode['bindings'][string] } = {}): MaterialNode {
+  const { binding, ...envelope } = partial
   return {
     id: 'chart',
     type: 'chart-pie',
@@ -91,7 +92,11 @@ function chartNode(partial: Partial<MaterialNode> = {}): MaterialNode {
     y: 0,
     width: 120,
     height: 100,
-    props: { ...CHART_PIE_DEFAULTS },
-    ...partial,
+    modelVersion: 1,
+    model: { ...CHART_PIE_DEFAULTS },
+    slots: {},
+    bindings: binding ? { value: binding } : {},
+    output: { visibility: 'include' },
+    ...envelope,
   }
 }

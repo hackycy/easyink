@@ -36,6 +36,7 @@ export function getLineThickness(node: Pick<MaterialNode, 'height' | 'model'>): 
 
 export function createLineNode(partial?: Partial<MaterialNode>, unit?: string): MaterialNode {
   const c = unit && unit !== 'mm' ? (v: number) => convertUnit(v, 'mm', unit) : (v: number) => v
+  const { model: inputModel, ...envelope } = partial ?? {}
   return canonicalizeMaterialNode(LINE_TYPE, {
     id: generateId('line'),
     type: LINE_TYPE,
@@ -43,8 +44,8 @@ export function createLineNode(partial?: Partial<MaterialNode>, unit?: string): 
     y: 0,
     width: c(100),
     height: c(0.26),
-    model: { ...LINE_DEFAULTS },
-    ...partial,
+    ...envelope,
+    model: { ...LINE_DEFAULTS, ...inputModel },
   })
 }
 

@@ -1,4 +1,4 @@
-import type { DocumentSchema, MaterialNode, TableNode } from '@easyink/schema'
+import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import { describe, expect, it } from 'vitest'
 import { createViewer } from './index'
 import { applyStackFlowLayout } from './stack-flow-layout'
@@ -11,13 +11,17 @@ function makeNode(id: string, overrides: Partial<MaterialNode> = {}): MaterialNo
     y: 0,
     width: 80,
     height: 10,
-    props: {},
+    modelVersion: 1,
+    model: {},
+    slots: {},
+    bindings: {},
+    output: { visibility: 'include' },
     ...overrides,
   }
 }
 
-function makeTableNode(id: string, overrides: Partial<TableNode> = {}): TableNode {
-  return {
+function makeTableNode(id: string, overrides: Record<string, unknown> = {}): MaterialNode<unknown> {
+  const legacy = {
     id,
     type: 'table-data',
     x: 0,
@@ -55,6 +59,43 @@ function makeTableNode(id: string, overrides: Partial<TableNode> = {}): TableNod
       layout: {},
     } as TableNode['table'],
     ...overrides,
+  }
+  return canonicalTableFixture(legacy)
+}
+
+function canonicalTableFixture(legacy: any): MaterialNode<unknown> {
+  const bindings: MaterialNode['bindings'] = {}
+  const columns = legacy.table.topology.columns.map((column: any, index: number) => ({ id: `column-${index}`, track: { kind: 'fr', weight: column.ratio } }))
+  const bands = legacy.table.topology.rows.map((row: any, rowIndex: number) => ({
+    id: `band-${rowIndex}`,
+    role: row.role === 'repeat-template' ? 'detail' : row.role === 'normal' ? 'body' : row.role,
+    rows: [{
+      id: `row-${rowIndex}`,
+      minHeight: row.height,
+      cells: row.cells.map((cell: any, columnIndex: number) => {
+        const port = cell.binding ? `cell-${rowIndex}-${columnIndex}` : undefined
+        if (port)
+          bindings[port] = cell.binding
+        return {
+          id: `cell-${rowIndex}-${columnIndex}`,
+          columnId: columns[columnIndex].id,
+          content: { kind: 'text', text: cell.content?.text ?? '', ...(port ? { bindingPort: port } : {}) },
+        }
+      }),
+    }],
+  }))
+  return {
+    id: legacy.id,
+    type: legacy.type,
+    x: legacy.x,
+    y: legacy.y,
+    width: legacy.width,
+    height: legacy.height,
+    modelVersion: 1,
+    model: { kind: 'data', columns, bands, merges: [], style: {}, data: { collectionPort: 'records' } },
+    slots: {},
+    bindings,
+    output: { visibility: 'include' },
   }
 }
 
@@ -119,12 +160,12 @@ describe('applyStackFlowLayout', () => {
   it('keeps fixed nodes in place and emits overlap diagnostics', () => {
     const original = [
       makeNode('table', { y: 10, height: 20 }),
-      makeNode('stamp', { y: 95, height: 20, props: { layoutMode: 'fixed' } }),
+      makeNode('stamp', { y: 95, height: 20, output: { visibility: 'include', placement: { mode: 'fixed' } } }),
       makeNode('summary', { y: 60, height: 12 }),
     ]
     const measured = [
       makeNode('table', { y: 10, height: 50 }),
-      makeNode('stamp', { y: 95, height: 20, props: { layoutMode: 'fixed' } }),
+      makeNode('stamp', { y: 95, height: 20, output: { visibility: 'include', placement: { mode: 'fixed' } } }),
       makeNode('summary', { y: 60, height: 12 }),
     ]
 
@@ -212,21 +253,21 @@ describe('viewer runtime stack-flow reflow', () => {
           y: 10,
           width: 12,
           height: 4,
-          props: {
+          model: {
             content: '',
             heightMode: 'auto',
             wrapMode: 'anywhere',
             fontSize: 4,
             lineHeight: 1,
           },
-          binding: { sourceId: 'order', fieldPath: 'note' },
+          bindings: { value: { sourceId: 'order', fieldPath: 'note' } },
         }),
         makeNode('after-text', {
           y: 20,
           x: 5,
           width: 70,
           height: 8,
-          props: { content: 'After' },
+          model: { content: 'After' },
         }),
       ],
     }
@@ -287,7 +328,7 @@ describe('viewer runtime stack-flow reflow', () => {
     expect(pageBottom - afterBottom).toBeCloseTo(trailingGap, 2)
   })
 
-  it('keeps legacy line templates visible by promoting lineWidth into render height', async () => {
+  it('keeps canonical line templates visible at their declared height', async () => {
     const container = document.createElement('div')
     const viewer = createViewer({ container })
 
@@ -307,12 +348,15 @@ describe('viewer runtime stack-flow reflow', () => {
           x: 5,
           y: 10,
           width: 60,
-          height: 0,
-          props: {
-            lineWidth: 0.5,
+          height: 0.5,
+          modelVersion: 1,
+          model: {
             lineColor: '#333333',
             lineType: 'solid',
           },
+          slots: {},
+          bindings: {},
+          output: { visibility: 'include' },
         },
       ],
     }

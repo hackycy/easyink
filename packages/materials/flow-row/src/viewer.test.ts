@@ -2,7 +2,7 @@ import type { FlowRowProps } from './schema'
 import { readTrustedViewerHtml } from '@easyink/core'
 import { describe, expect, it } from 'vitest'
 import { isFlowRowRuntimeRepeating, renderFlowRowsHtml } from './rendering'
-import { createFlowRowNode, FLOW_ROW_DEFAULTS } from './schema'
+import { createFlowRowNode, FLOW_ROW_DEFAULTS, migrateFlowRowModelV0ToV1 } from './schema'
 import { measureFlowRow, renderFlowRow } from './viewer'
 
 const viewerContext = {
@@ -16,7 +16,7 @@ const viewerContext = {
 describe('flow-row viewer', () => {
   it('converts default physical props but preserves partial props in the requested unit', () => {
     const node = createFlowRowNode({
-      props: {
+      model: {
         gap: 2,
         typography: {
           ...FLOW_ROW_DEFAULTS.typography,
@@ -36,11 +36,11 @@ describe('flow-row viewer', () => {
 
   it('renders block columns before following inline groups', () => {
     const node = createFlowRowNode({
-      props: {
+      model: {
         columns: [
-          { ratio: 1, textAlign: 'left', wrapMode: 'block', content: 'Long item name' },
-          { ratio: 1, textAlign: 'center', wrapMode: 'inline', content: '2' },
-          { ratio: 2, textAlign: 'right', wrapMode: 'inline', content: '6.00' },
+          { id: 'name', ratio: 1, textAlign: 'left', wrapMode: 'block', content: 'Long item name' },
+          { id: 'quantity', ratio: 1, textAlign: 'center', wrapMode: 'inline', content: '2' },
+          { id: 'amount', ratio: 2, textAlign: 'right', wrapMode: 'inline', content: '6.00' },
         ],
       },
     })
@@ -73,12 +73,12 @@ describe('flow-row viewer', () => {
 
   it('renders padded cells with horizontal and vertical alignment', () => {
     const node = createFlowRowNode({
-      props: {
+      model: {
         paddingX: 2,
         paddingY: 3,
         columns: [
-          { ratio: 1, textAlign: 'center', verticalAlign: 'middle', wrapMode: 'inline', content: 'Centered' },
-          { ratio: 1, textAlign: 'right', verticalAlign: 'bottom', wrapMode: 'inline', content: 'Bottom' },
+          { id: 'center', ratio: 1, textAlign: 'center', verticalAlign: 'middle', wrapMode: 'inline', content: 'Centered' },
+          { id: 'bottom', ratio: 1, textAlign: 'right', verticalAlign: 'bottom', wrapMode: 'inline', content: 'Bottom' },
         ],
       },
     })
@@ -94,7 +94,7 @@ describe('flow-row viewer', () => {
 
   it('applies flow-row typography font family to the material', () => {
     const node = createFlowRowNode({
-      props: {
+      model: {
         typography: {
           ...FLOW_ROW_DEFAULTS.typography,
           fontFamily: 'FlowFont',
@@ -108,33 +108,45 @@ describe('flow-row viewer', () => {
   })
 
   it('reads legacy padding as both horizontal and vertical padding', () => {
-    const node = createFlowRowNode({
-      props: {
-        padding: 4,
-      },
+    const source = createFlowRowNode()
+    const node = migrateFlowRowModelV0ToV1.migrate({
+      ...source,
+      modelVersion: 0,
+      model: { ...source.model, padding: 4, paddingX: undefined, paddingY: undefined },
     })
-    const html = readTrustedViewerHtml(renderFlowRow(node, viewerContext).html!)
+    const props = node.model as unknown as FlowRowProps
+    const html = renderFlowRowsHtml(node, {
+      rows: [props.columns.map((column, index) => ({ column, index, text: column.content ?? '' }))],
+    }, viewerContext.unit)
 
+    expect(props.paddingX).toBe(4)
+    expect(props.paddingY).toBe(4)
     expect(html).toContain('padding:4mm 4mm')
   })
 
   it('expands collection-bound rows and escapes resolved content', () => {
     const node = createFlowRowNode({
       height: 10,
-      binding: { sourceId: 'receipt', fieldPath: 'items' },
-      props: {
+      bindings: {
+        value: { sourceId: 'receipt', fieldPath: 'items' },
+        name: { sourceId: 'receipt', fieldPath: 'items/name' },
+        amount: { sourceId: 'receipt', fieldPath: 'items/amount' },
+      },
+      model: {
         columns: [
           {
+            id: 'name',
             ratio: 1,
             textAlign: 'left',
             wrapMode: 'block',
-            binding: { sourceId: 'receipt', fieldPath: 'items/name' },
+            bindingPort: 'name',
           },
           {
+            id: 'amount',
             ratio: 1,
             textAlign: 'right',
             wrapMode: 'inline',
-            binding: { sourceId: 'receipt', fieldPath: 'items/amount' },
+            bindingPort: 'amount',
           },
         ],
       },
@@ -160,13 +172,17 @@ describe('flow-row viewer', () => {
 
   it('identifies runtime-repeating flow rows from element or column collection bindings', () => {
     const elementBound = createFlowRowNode({
-      binding: { sourceId: 'receipt', fieldPath: 'items' },
+      bindings: { value: { sourceId: 'receipt', fieldPath: 'items' } },
     })
     const columnBound = createFlowRowNode({
-      props: {
+      bindings: {
+        name: { sourceId: 'receipt', fieldPath: 'items/name' },
+        amount: { sourceId: 'receipt', fieldPath: 'items/amount' },
+      },
+      model: {
         columns: [
-          { ratio: 1, textAlign: 'left', wrapMode: 'block', binding: { sourceId: 'receipt', fieldPath: 'items/name' } },
-          { ratio: 1, textAlign: 'right', wrapMode: 'inline', binding: { sourceId: 'receipt', fieldPath: 'items/amount' } },
+          { id: 'name', ratio: 1, textAlign: 'left', wrapMode: 'block', bindingPort: 'name' },
+          { id: 'amount', ratio: 1, textAlign: 'right', wrapMode: 'inline', bindingPort: 'amount' },
         ],
       },
     })

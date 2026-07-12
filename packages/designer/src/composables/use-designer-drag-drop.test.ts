@@ -13,7 +13,11 @@ function createTextNode(partial: Partial<MaterialNode> = {}): MaterialNode {
     y: 0,
     width: 100,
     height: 50,
-    props: {},
+    modelVersion: 1,
+    model: {},
+    slots: {},
+    bindings: {},
+    output: { visibility: 'include' },
     ...partial,
   } as MaterialNode
 }
@@ -26,7 +30,11 @@ function createLineNode(partial: Partial<MaterialNode> = {}): MaterialNode {
     y: 0,
     width: 100,
     height: 1,
-    props: {},
+    modelVersion: 1,
+    model: {},
+    slots: {},
+    bindings: {},
+    output: { visibility: 'include' },
     ...partial,
   } as MaterialNode
 }
@@ -687,11 +695,13 @@ describe('useDesignerDragDrop', () => {
       y: 0,
       width: 100,
       height: 50,
-      binding: {
-        kind: 'data-contract',
-        relation: { kind: 'auto' },
-        mappings: {
-          category: { sourceId: 'sales-report', select: { path: 'monthlySales/month' } },
+      bindings: {
+        value: {
+          kind: 'data-contract',
+          relation: { kind: 'auto' },
+          mappings: {
+            category: { sourceId: 'sales-report', select: { path: 'monthlySales/month' } },
+          },
         },
       },
     })

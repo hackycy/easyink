@@ -6,7 +6,7 @@ import { renderQrcode } from './viewer'
 describe('renderQrcode', () => {
   it('renders an empty-state svg without legacy placeholder text or border', () => {
     const node = createQrcodeNode({
-      props: {
+      model: {
         value: '',
         foreground: '#123456',
         background: '#ffffff',
@@ -24,7 +24,7 @@ describe('renderQrcode', () => {
 
   it('renders a real qrcode svg when value exists', () => {
     const node = createQrcodeNode({
-      props: {
+      model: {
         value: 'https://easyink.dev',
         foreground: '#111111',
         background: '#eeeeee',

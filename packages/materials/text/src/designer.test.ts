@@ -49,10 +49,12 @@ describe('createTextExtension', () => {
     const container = document.createElement('div')
     const extension = createTextExtension(createContext())
     const node = createTextNode({
-      binding: {
-        sourceId: 'receipt',
-        fieldPath: 'customer/name',
-        fieldLabel: '客户姓名',
+      bindings: {
+        value: {
+          sourceId: 'receipt',
+          fieldPath: 'customer/name',
+          fieldLabel: '客户姓名',
+        },
       },
     })
 
@@ -69,7 +71,7 @@ describe('createTextExtension', () => {
       t: key => key,
     })
     const autoPolicy = extension.resolveControlPolicy?.(createTextNode({
-      props: { heightMode: 'auto' },
+      model: { heightMode: 'auto' },
     }), {
       getSchema: () => createDefaultSchema(),
       t: key => key,
@@ -86,7 +88,7 @@ describe('createTextExtension', () => {
     const node = createTextNode({
       width: 12,
       height: 4,
-      props: {
+      model: {
         content: 'abcdefghijabcdefghij',
         heightMode: 'auto',
         wrapMode: 'anywhere',

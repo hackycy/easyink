@@ -271,7 +271,11 @@ function createMaterialDefinition(type: string): MaterialDefinition {
       y: 0,
       width: 10,
       height: 10,
-      props: {},
+      modelVersion: 1,
+      model: {},
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
       ...input,
     } satisfies MaterialNode),
   }
@@ -285,6 +289,10 @@ function createNode(id: string): MaterialNode {
     y: 0,
     width: 10,
     height: 10,
-    props: {},
+    modelVersion: 1,
+    model: {},
+    slots: {},
+    bindings: {},
+    output: { visibility: 'include' },
   }
 }

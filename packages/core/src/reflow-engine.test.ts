@@ -10,7 +10,11 @@ function makeNode(id: string, overrides: Partial<MaterialNode> = {}): MaterialNo
     y: 0,
     width: 10,
     height: 10,
-    props: {},
+    modelVersion: 1,
+    model: {},
+    slots: {},
+    bindings: {},
+    output: { visibility: 'include' },
     ...overrides,
   }
 }
@@ -36,7 +40,7 @@ describe('runFlowYReflow', () => {
   it('does not pull later flow nodes upward when a removed runtime node is fixed', () => {
     const originalElements = [
       makeNode('header', { y: 0, height: 10 }),
-      makeNode('watermark', { y: 20, height: 12, props: { layoutMode: 'fixed' } }),
+      makeNode('watermark', { y: 20, height: 12, output: { visibility: 'include', placement: { mode: 'fixed' } } }),
       makeNode('summary', { y: 40, height: 5 }),
     ]
     const measuredElements = [
@@ -54,12 +58,12 @@ describe('runFlowYReflow', () => {
     const originalElements = [
       makeNode('header', { y: 0, height: 10 }),
       makeNode('summary', { y: 20, height: 5 }),
-      makeNode('stamp', { y: 25, height: 10, props: { layoutMode: 'fixed' } }),
+      makeNode('stamp', { y: 25, height: 10, output: { visibility: 'include', placement: { mode: 'fixed' } } }),
     ]
     const measuredElements = [
       makeNode('header', { y: 0, height: 15 }),
       makeNode('summary', { y: 20, height: 5 }),
-      makeNode('stamp', { y: 25, height: 10, props: { layoutMode: 'fixed' } }),
+      makeNode('stamp', { y: 25, height: 10, output: { visibility: 'include', placement: { mode: 'fixed' } } }),
     ]
 
     const result = runFlowYReflow({ originalElements, measuredElements })

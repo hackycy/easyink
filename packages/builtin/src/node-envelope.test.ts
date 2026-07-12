@@ -8,7 +8,7 @@ import { createChartPieNode } from '@easyink/material-chart-pie'
 import { createChartRadarNode } from '@easyink/material-chart-radar'
 import { createChartScatterNode } from '@easyink/material-chart-scatter'
 import { createEllipseNode } from '@easyink/material-ellipse'
-import { createFlowRowNode } from '@easyink/material-flow-row'
+import { createFlowRowNode, migrateFlowRowModelV0ToV1 } from '@easyink/material-flow-row'
 import { createImageNode } from '@easyink/material-image'
 import { createLineNode } from '@easyink/material-line'
 import { createPageNumberNode } from '@easyink/material-page-number'
@@ -21,7 +21,7 @@ import { createSignatureNode } from '@easyink/material-signature'
 import { createSvgCustomNode } from '@easyink/material-svg-custom'
 import { createSvgHeartNode } from '@easyink/material-svg-heart'
 import { createSvgStarNode } from '@easyink/material-svg-star'
-import { createTextNode } from '@easyink/material-text'
+import { createTextNode, migrateTextModelV0ToV1 } from '@easyink/material-text'
 import { describe, expect, it, vi } from 'vitest'
 
 const factories = [
@@ -71,12 +71,25 @@ describe('builtin node envelopes', () => {
     const node = factory({
       type: 'injected',
       modelVersion: 999,
+      unit: 'px',
+      unknownRoot: true,
       props: { injected: true },
+      binding: { fieldPath: 'legacy' },
       children: [],
       table: {},
+      hidden: true,
     } as never)
     assertCanonical(node)
     expect(node.type).not.toBe('injected')
+    expect(node).not.toHaveProperty('unit')
+    expect(node).not.toHaveProperty('unknownRoot')
+    expect(node).not.toHaveProperty('hidden')
+  })
+
+  it.each(factories)('does not drop model defaults for a partial model', (factory) => {
+    const defaults = factory().model as Record<string, unknown>
+    const node = factory({ model: { __probe: true } } as never)
+    expect(node.model).toMatchObject(defaults)
   })
 
   it('keeps table construction profile-owned', async () => {
@@ -96,5 +109,64 @@ describe('builtin node envelopes', () => {
   it('does not admit removed v1 text and flow-row model fields', () => {
     expect(createTextNode({ model: { autoWrap: false } } as never).model).not.toHaveProperty('autoWrap')
     expect(createFlowRowNode({ model: { padding: 4 } } as never).model).not.toHaveProperty('padding')
+  })
+
+  it('keeps page-number placement and repetition in canonical output', () => {
+    const node = createPageNumberNode({
+      output: {
+        visibility: 'remove',
+        placement: { mode: 'flow' },
+        repeat: { scope: 'none' },
+      },
+    })
+    expect(node.output).toEqual(expect.objectContaining({
+      visibility: 'include',
+      placement: { mode: 'fixed' },
+      repeat: { scope: 'every-output-page' },
+    }))
+    expect(node).not.toHaveProperty('placement')
+    expect(node).not.toHaveProperty('repeat')
+  })
+
+  it('migrates legacy text wrapping without retaining autoWrap', () => {
+    const migrated = migrateTextModelV0ToV1.migrate({
+      ...createTextNode(),
+      modelVersion: 0,
+      model: { content: 'legacy', autoWrap: false },
+    }, {} as never)
+    expect(migrated.model).toMatchObject({ content: 'legacy', wrapMode: 'nowrap' })
+    expect(migrated.model).not.toHaveProperty('autoWrap')
+  })
+
+  it('migrates flow padding and private column bindings to canonical ports', () => {
+    const migrated = migrateFlowRowModelV0ToV1.migrate({
+      ...createFlowRowNode(),
+      modelVersion: 0,
+      model: {
+        padding: 4,
+        columns: [{
+          ratio: 1,
+          textAlign: 'left',
+          wrapMode: 'inline',
+          content: 'legacy',
+          privateValue: true,
+          binding: { sourceId: 'orders', fieldPath: 'orders.name' },
+        }],
+      },
+    } as never, {} as never)
+    expect(migrated.model).toMatchObject({ paddingX: 4, paddingY: 4 })
+    expect(migrated.model).not.toHaveProperty('padding')
+    expect((migrated.model as any).columns[0]).toEqual({
+      id: 'default-1',
+      ratio: 1,
+      textAlign: 'left',
+      wrapMode: 'inline',
+      content: 'legacy',
+      bindingPort: 'column:default-1:value',
+    })
+    expect(migrated.bindings['column:default-1:value']).toMatchObject({
+      sourceId: 'orders',
+      fieldPath: 'orders.name',
+    })
   })
 })

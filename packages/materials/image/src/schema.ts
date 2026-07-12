@@ -29,6 +29,7 @@ export const IMAGE_DEFAULTS: ImageProps = {
 
 export function createImageNode(partial?: Partial<MaterialNode>, unit?: string): MaterialNode {
   const c = unit && unit !== 'mm' ? (v: number) => convertUnit(v, 'mm', unit) : (v: number) => v
+  const { model: inputModel, ...envelope } = partial ?? {}
   return canonicalizeMaterialNode(IMAGE_TYPE, {
     id: generateId('img'),
     type: IMAGE_TYPE,
@@ -36,8 +37,8 @@ export function createImageNode(partial?: Partial<MaterialNode>, unit?: string):
     y: 0,
     width: c(100),
     height: c(100),
-    model: { ...IMAGE_DEFAULTS },
-    ...partial,
+    ...envelope,
+    model: { ...IMAGE_DEFAULTS, ...inputModel },
   })
 }
 

@@ -103,7 +103,7 @@ describe('migrationRegistry', () => {
     expect(error).toBeInstanceOf(SchemaMigrationError)
     expect((error as SchemaMigrationError).issues).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ path: 'page.mode' }),
+        expect.objectContaining({ path: '/page/mode' }),
       ]),
     )
   })
@@ -126,7 +126,7 @@ describe('migrationRegistry', () => {
     expect(error).toBeInstanceOf(SchemaMigrationError)
     expect((error as SchemaMigrationError).issues).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ path: 'page.width' }),
+        expect.objectContaining({ path: '/page/width' }),
       ]),
     )
   })

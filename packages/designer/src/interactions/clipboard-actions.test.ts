@@ -75,7 +75,7 @@ describe('createClipboardActions', () => {
   })
 
   it('skips locked nodes when deleting selection', () => {
-    const locked = { ...makeNode('locked'), locked: true }
+    const locked = { ...makeNode('locked'), editorState: { locked: true } }
     const unlocked = makeNode('open')
     const store = makeStore([locked, unlocked], ['locked', 'open'])
     const actions = createClipboardActions(store, () => [locked, unlocked])

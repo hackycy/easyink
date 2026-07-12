@@ -39,10 +39,12 @@ describe('createRatingExtension', () => {
     const container = document.createElement('div')
     const extension = createRatingExtension(createContext())
     const node = createRatingNode({
-      binding: {
-        sourceId: 'survey',
-        fieldPath: 'score',
-        fieldLabel: '满意度',
+      bindings: {
+        value: {
+          sourceId: 'survey',
+          fieldPath: 'score',
+          fieldLabel: '满意度',
+        },
       },
     })
 

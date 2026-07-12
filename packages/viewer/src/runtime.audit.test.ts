@@ -1,11 +1,11 @@
-import type { DocumentSchema, MaterialNode, TableNode } from '@easyink/schema'
+import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import type { ViewerRuntime } from './runtime'
 import type { ViewerDiagnosticEvent } from './types'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { applyBindingsToProps, projectBindings } from './binding-projector'
 import { createIframeViewerHost, createViewer } from './index'
 
-function textNode(id: string, binding?: MaterialNode['binding'], props: Record<string, unknown> = {}): MaterialNode {
+function textNode(id: string, binding?: MaterialNode['bindings'][string], props: Record<string, unknown> = {}): MaterialNode {
   return {
     id,
     type: 'text',
@@ -13,12 +13,15 @@ function textNode(id: string, binding?: MaterialNode['binding'], props: Record<s
     y: 5,
     width: 40,
     height: 8,
-    props: { content: '', ...props },
-    binding,
+    modelVersion: 1,
+    model: { content: '', ...props },
+    slots: {},
+    bindings: binding ? { value: binding } : {},
+    output: { visibility: 'include' },
   }
 }
 
-function svgNode(id: string, binding?: MaterialNode['binding'], props: Record<string, unknown> = {}): MaterialNode {
+function svgNode(id: string, binding?: MaterialNode['bindings'][string], props: Record<string, unknown> = {}): MaterialNode {
   return {
     id,
     type: 'svg',
@@ -26,8 +29,11 @@ function svgNode(id: string, binding?: MaterialNode['binding'], props: Record<st
     y: 5,
     width: 20,
     height: 20,
-    props: { content: '', ...props },
-    binding,
+    modelVersion: 1,
+    model: { content: '', ...props },
+    slots: {},
+    bindings: binding ? { value: binding } : {},
+    output: { visibility: 'include' },
   }
 }
 
@@ -41,7 +47,23 @@ function fixedSchema(elements: MaterialNode[]): DocumentSchema {
   }
 }
 
-function tableNode(sourceId = 'invoice'): TableNode {
+function tableNode(sourceId = 'invoice'): MaterialNode<unknown> {
+  const model = {
+    kind: 'data',
+    columns: [{ id: 'column-1', track: { kind: 'fr', weight: 1 } }],
+    bands: [{
+      id: 'band-detail',
+      role: 'detail',
+      rows: [{
+        id: 'row-detail',
+        minHeight: 8,
+        cells: [{ id: 'cell-detail', columnId: 'column-1', content: { kind: 'text', text: '', bindingPort: 'cell:value' } }],
+      }],
+    }],
+    merges: [],
+    style: {},
+    data: { collectionPort: 'records' },
+  }
   return {
     id: 'items',
     type: 'table-data',
@@ -49,25 +71,11 @@ function tableNode(sourceId = 'invoice'): TableNode {
     y: 10,
     width: 70,
     height: 16,
-    props: {},
-    table: {
-      kind: 'data',
-      showHeader: false,
-      showFooter: false,
-      topology: {
-        columns: [{ ratio: 1 }],
-        rows: [
-          {
-            height: 8,
-            role: 'repeat-template',
-            cells: [
-              { binding: { sourceId, fieldPath: 'items/name', fieldLabel: 'Name' } },
-            ],
-          },
-        ],
-      },
-      layout: {},
-    } as TableNode['table'],
+    modelVersion: 1,
+    model,
+    slots: {},
+    bindings: { 'cell:value': { sourceId, fieldPath: 'items/name', fieldLabel: 'Name' } },
+    output: { visibility: 'include' },
   }
 }
 
@@ -270,12 +278,15 @@ describe('viewer audit risk regressions', () => {
       y: 0,
       width: 30,
       height: 10,
-      props: {},
-      binding: [
+      modelVersion: 1,
+      model: {},
+      slots: {},
+      bindings: { value: [
         { sourceId: 'product', fieldPath: 'value', bindIndex: 0 },
         { sourceId: 'product', fieldPath: 'format', bindIndex: 1 },
         { sourceId: 'product', fieldPath: 'params', bindIndex: 2 },
-      ],
+      ] },
+      output: { visibility: 'include' },
     }
 
     const projected = projectBindings(node, {

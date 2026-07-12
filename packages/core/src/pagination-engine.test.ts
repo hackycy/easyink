@@ -12,7 +12,11 @@ function makeNode(id: string, overrides: Partial<MaterialNode> = {}): MaterialNo
     y: 10,
     width: 80,
     height: 130,
-    props: {},
+    modelVersion: 1,
+    model: {},
+    slots: {},
+    bindings: {},
+    output: { visibility: 'include' },
     ...overrides,
   }
 }

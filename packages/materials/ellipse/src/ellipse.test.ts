@@ -22,7 +22,7 @@ describe('renderEllipse', () => {
 
   it('merges partial props with defaults when creating a node', () => {
     const node = createEllipseNode({
-      props: {
+      model: {
         borderType: 'dashed',
       },
     })

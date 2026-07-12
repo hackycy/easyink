@@ -7,7 +7,7 @@ describe('renderLine', () => {
   it('uses element height as the line thickness in runtime output', () => {
     const node = createLineNode({
       height: 0.5,
-      props: {
+      model: {
         lineColor: '#333333',
         lineType: 'solid',
       },
@@ -33,14 +33,14 @@ describe('renderLine', () => {
   it('keeps dashed and dotted line types in viewer output', () => {
     const dashed = createLineNode({
       height: 1,
-      props: {
+      model: {
         lineColor: '#111111',
         lineType: 'dashed',
       },
     })
     const dotted = createLineNode({
       height: 1,
-      props: {
+      model: {
         lineColor: '#222222',
         lineType: 'dotted',
       },
@@ -48,14 +48,14 @@ describe('renderLine', () => {
 
     const dashedOutput = renderLine(dashed, {
       data: {},
-      resolvedProps: dashed.props,
+      resolvedProps: dashed.model,
       pageIndex: 0,
       unit: 'mm',
       zoom: 1,
     })
     const dottedOutput = renderLine(dotted, {
       data: {},
-      resolvedProps: dotted.props,
+      resolvedProps: dotted.model,
       pageIndex: 0,
       unit: 'mm',
       zoom: 1,
@@ -75,7 +75,7 @@ describe('renderLine', () => {
   it('falls back to legacy lineWidth when old templates still have zero height', () => {
     const legacyNode = createLineNode({
       height: 0,
-      props: {
+      model: {
         lineWidth: 0.5,
         lineColor: '#444444',
         lineType: 'solid',

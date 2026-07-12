@@ -39,10 +39,12 @@ describe('createProgressExtension', () => {
     const container = document.createElement('div')
     const extension = createProgressExtension(createContext())
     const node = createProgressNode({
-      binding: {
-        sourceId: 'report',
-        fieldPath: 'completionRate',
-        fieldLabel: '完成率',
+      bindings: {
+        value: {
+          sourceId: 'report',
+          fieldPath: 'completionRate',
+          fieldLabel: '完成率',
+        },
       },
     })
 

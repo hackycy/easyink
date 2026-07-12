@@ -16,7 +16,11 @@ const schema: DocumentSchema = {
     y: 10,
     width: 100,
     height: 8,
-    props: { content: '标题', fontSize: 12 },
+    modelVersion: 1,
+    model: { content: '标题', fontSize: 12 },
+    slots: {},
+    bindings: {},
+    output: { visibility: 'include' },
   }],
 }
 

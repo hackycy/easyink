@@ -28,7 +28,7 @@ describe('signature material', () => {
     const node = createSignatureNode({
       width: 100,
       height: 40,
-      props: {
+      model: {
         backgroundColor: '#fffdf5',
         penColor: '#0f172a',
         data: [

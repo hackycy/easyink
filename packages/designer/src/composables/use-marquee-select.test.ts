@@ -24,7 +24,20 @@ interface FakeStore {
 }
 
 function makeNode(id: string, x: number, y: number, w = 50, h = 50, extra: Partial<MaterialNode> = {}): MaterialNode {
-  return { id, type: 'rect', x, y, width: w, height: h, props: {}, ...extra } as MaterialNode
+  return {
+    id,
+    type: 'rect',
+    x,
+    y,
+    width: w,
+    height: h,
+    modelVersion: 1,
+    model: {},
+    slots: {},
+    bindings: {},
+    output: { visibility: 'include' },
+    ...extra,
+  } as MaterialNode
 }
 
 function makePage(overrides: Partial<PageSchema> = {}): PageSchema {
@@ -121,8 +134,8 @@ describe('useMarqueeSelect', () => {
 
   it('skips locked and hidden elements', () => {
     const a = makeNode('a', 0, 0)
-    const locked = makeNode('locked', 60, 0, 50, 50, { locked: true })
-    const hidden = makeNode('hidden', 0, 60, 50, 50, { hidden: true })
+    const locked = makeNode('locked', 60, 0, 50, 50, { editorState: { locked: true } })
+    const hidden = makeNode('hidden', 0, 60, 50, 50, { editorState: { hidden: true } })
     const store = makeStore([a, locked, hidden])
     const { ctx } = makeCtx(store)
     const marquee = useMarqueeSelect(ctx)

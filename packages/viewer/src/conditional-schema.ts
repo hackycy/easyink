@@ -45,7 +45,7 @@ export function resolveConditionalSchema(
     }
     if (state === 'reserve' && !node.editorState?.hidden) {
       changed = true
-      elements.push({ ...node, hidden: true })
+      elements.push({ ...node, editorState: { ...node.editorState, hidden: true } })
       continue
     }
     elements.push(node)

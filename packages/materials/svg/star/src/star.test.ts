@@ -10,7 +10,7 @@ import { renderSvgStar } from './viewer'
 describe('renderSvgStar', () => {
   it('renders polygon content with configurable star props', () => {
     const node = createSvgStarNode({
-      props: {
+      model: {
         fillColor: '#ffcc00',
         borderWidth: 0.5,
         borderColor: '#111111',
@@ -74,7 +74,7 @@ describe('renderSvgStar', () => {
     }, node)
 
     expect(schema?.title).toBe('materials.svgStar.property.edit')
-    expect(schema?.schemas.map(item => item.key)).toEqual(['starInnerRatio'])
+    expect(schema?.descriptors.map(item => item.key)).toEqual(['starInnerRatio'])
     expect(schema?.read('starInnerRatio')).toBeCloseTo(0.381966, 5)
   })
 

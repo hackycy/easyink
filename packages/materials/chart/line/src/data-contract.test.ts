@@ -80,7 +80,8 @@ describe('chart line data contract', () => {
   })
 })
 
-function chartNode(partial: Partial<MaterialNode> = {}): MaterialNode {
+function chartNode(partial: Partial<MaterialNode> & { binding?: MaterialNode['bindings'][string] } = {}): MaterialNode {
+  const { binding, ...envelope } = partial
   return {
     id: 'chart',
     type: 'chart-line',
@@ -88,7 +89,11 @@ function chartNode(partial: Partial<MaterialNode> = {}): MaterialNode {
     y: 0,
     width: 160,
     height: 90,
-    props: { ...CHART_LINE_DEFAULTS },
-    ...partial,
+    modelVersion: 1,
+    model: { ...CHART_LINE_DEFAULTS },
+    slots: {},
+    bindings: binding ? { value: binding } : {},
+    output: { visibility: 'include' },
+    ...envelope,
   }
 }

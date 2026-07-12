@@ -6,7 +6,7 @@ import { renderBarcode } from './viewer'
 describe('renderBarcode', () => {
   it('renders an empty-state svg without legacy placeholder text or border', () => {
     const node = createBarcodeNode({
-      props: {
+      model: {
         value: '',
         lineColor: '#123456',
         backgroundColor: '#ffffff',
@@ -24,7 +24,7 @@ describe('renderBarcode', () => {
 
   it('renders a real barcode svg when value exists', () => {
     const node = createBarcodeNode({
-      props: {
+      model: {
         value: 'EasyInk',
         format: 'CODE128',
         lineWidth: 2,
@@ -46,7 +46,7 @@ describe('renderBarcode', () => {
   it('renders every supported JsBarcode format exposed by the material', () => {
     for (const format of BARCODE_FORMATS) {
       const node = createBarcodeNode({
-        props: {
+        model: {
           value: format.sampleValue,
           format: format.value,
         },
@@ -61,7 +61,7 @@ describe('renderBarcode', () => {
 
   it('defaults lineColor to black when it is not set', () => {
     const node = createBarcodeNode({
-      props: {
+      model: {
         value: 'EasyInk',
         lineColor: '',
       },

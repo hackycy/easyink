@@ -17,7 +17,11 @@ function createNode(): MaterialNode {
     y: 12,
     width: 40,
     height: 20,
-    props: {},
+    modelVersion: 1,
+    model: {},
+    slots: {},
+    bindings: {},
+    output: { visibility: 'include' },
   }
 }
 

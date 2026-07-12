@@ -11,42 +11,42 @@ import {
 
 describe('assistant designer bridge apply', () => {
   it('applies patch operations and rolls back to the previous schema', () => {
-    const store = new DesignerStore(createSchema([{ id: 'title', props: { text: 'Old' } }]))
+    const store = new DesignerStore(createSchema([{ id: 'title', model: { text: 'Old' } }]))
 
     const applied = applyAssistantPatchToDesigner(store, [
-      { op: 'replace', path: '/elements/0/props/text', value: 'New' },
+      { op: 'replace', path: '/elements/0/model/text', value: 'New' },
     ])
 
     expect(applied).toBe(true)
-    expect(store.schema.elements[0]?.props).toMatchObject({ text: 'New' })
+    expect(store.schema.elements[0]?.model).toMatchObject({ text: 'New' })
     expect(rollbackAssistantDesigner(store)).toBe(true)
-    expect(store.schema.elements[0]?.props).toMatchObject({ text: 'Old' })
+    expect(store.schema.elements[0]?.model).toMatchObject({ text: 'Old' })
   })
 
   it('applies only operations targeting the current selection', () => {
     const store = new DesignerStore(createSchema([
-      { id: 'title', props: { text: 'Old' } },
-      { id: 'total', props: { text: 'Old total' } },
+      { id: 'title', model: { text: 'Old' } },
+      { id: 'total', model: { text: 'Old total' } },
     ]))
     store.selection.select('total')
 
     const operations: AssistantPatchOperation[] = [
-      { op: 'replace', path: '/elements/0/props/text', value: 'Ignored' },
-      { op: 'replace', path: '/elements/1/props/text', value: 'Selected' },
+      { op: 'replace', path: '/elements/0/model/text', value: 'Ignored' },
+      { op: 'replace', path: '/elements/1/model/text', value: 'Selected' },
     ]
 
     expect(applySelectedAssistantElementsToDesigner(store, operations)).toBe(true)
-    expect(store.schema.elements[0]?.props).toMatchObject({ text: 'Old' })
-    expect(store.schema.elements[1]?.props).toMatchObject({ text: 'Selected' })
+    expect(store.schema.elements[0]?.model).toMatchObject({ text: 'Old' })
+    expect(store.schema.elements[1]?.model).toMatchObject({ text: 'Selected' })
   })
 
   it('registers datasource-only results without replacing schema', () => {
-    const store = new DesignerStore(createSchema([{ id: 'title', props: { text: 'Old' } }]))
+    const store = new DesignerStore(createSchema([{ id: 'title', model: { text: 'Old' } }]))
     const result = createResult()
 
     applyAssistantDataSourceToDesigner(store, result.dataSource!)
 
-    expect(store.schema.elements[0]?.props).toMatchObject({ text: 'Old' })
+    expect(store.schema.elements[0]?.model).toMatchObject({ text: 'Old' })
     expect(store.dataSourceRegistry.getSources()[0]?.id).toBe('orders')
   })
 
@@ -61,7 +61,7 @@ describe('assistant designer bridge apply', () => {
   })
 })
 
-function createSchema(elements: Array<{ id: string, props: Record<string, unknown> }>) {
+function createSchema(elements: Array<{ id: string, model: Record<string, unknown> }>) {
   return {
     version: '1',
     unit: 'mm' as const,
@@ -74,7 +74,11 @@ function createSchema(elements: Array<{ id: string, props: Record<string, unknow
       y: index * 8,
       width: 20,
       height: 6,
-      props: element.model,
+      modelVersion: 1,
+      model: element.model,
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' as const },
     })),
   }
 }
@@ -82,7 +86,7 @@ function createSchema(elements: Array<{ id: string, props: Record<string, unknow
 function createResult(): AssistantResult {
   return {
     id: 'result_1',
-    schema: createSchema([{ id: 'title', props: { text: 'Assistant' } }]),
+    schema: createSchema([{ id: 'title', model: { text: 'Assistant' } }]),
     dataSource: {
       id: 'orders',
       name: 'orders',

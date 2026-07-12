@@ -9,7 +9,7 @@ describe('renderSvgHeart', () => {
     const node = createSvgHeartNode({
       width: 80,
       height: 72,
-      props: {
+      model: {
         fillColor: '#ff7a90',
         borderWidth: 6,
         borderColor: '#7a1020',
@@ -37,7 +37,7 @@ describe('renderSvgHeart', () => {
     const node = createSvgHeartNode({
       width: 100,
       height: 90,
-      props: {
+      model: {
         fillColor: 'transparent',
         borderWidth: 6,
         borderColor: '#7a1020',

@@ -1,4 +1,5 @@
-import type { MaterialNode, TableTypography } from '@easyink/schema'
+import type { AdaptableMaterialNode, SchemaMigration } from '@easyink/core'
+import type { BindingRef, MaterialNode, TableTypography } from '@easyink/schema'
 import { canonicalizeMaterialNode } from '@easyink/schema'
 import { convertUnit, generateId } from '@easyink/shared'
 
@@ -63,11 +64,58 @@ export const FLOW_ROW_CAPABILITIES = {
   multiBinding: true,
 }
 
-export function cloneFlowColumns(columns: FlowColumnDef[]): FlowColumnDef[] {
+export function cloneFlowColumns(columns: readonly FlowColumnDef[]): FlowColumnDef[] {
   return columns.map((column, index) => ({
-    ...column,
     id: column.id || `default-${index + 1}`,
+    ratio: column.ratio,
+    textAlign: column.textAlign,
+    ...(column.verticalAlign !== undefined ? { verticalAlign: column.verticalAlign } : {}),
+    ...(column.content !== undefined ? { content: column.content } : {}),
+    wrapMode: column.wrapMode,
+    ...(column.bindingPort !== undefined ? { bindingPort: column.bindingPort } : {}),
   }))
+}
+
+interface LegacyFlowColumn extends Partial<FlowColumnDef> {
+  binding?: BindingRef
+}
+
+export const migrateFlowRowModelV0ToV1: SchemaMigration = {
+  from: 0,
+  to: 1,
+  migrate(node: AdaptableMaterialNode): AdaptableMaterialNode {
+    const source = node.model as Partial<FlowRowProps> & { padding?: number, columns?: LegacyFlowColumn[] }
+    const { padding, columns: sourceColumns, ...sourceModel } = source
+    const bindings = { ...node.bindings }
+    const columns = (sourceColumns ?? FLOW_ROW_DEFAULT_COLUMNS).map((column, index): FlowColumnDef => {
+      const id = typeof column.id === 'string' && column.id ? column.id : `default-${index + 1}`
+      const bindingPort = typeof column.bindingPort === 'string' && column.bindingPort
+        ? column.bindingPort
+        : column.binding ? `column:${id}:value` : undefined
+      if (bindingPort && column.binding)
+        bindings[bindingPort] = { ...column.binding }
+      return {
+        id,
+        ratio: typeof column.ratio === 'number' ? column.ratio : 1,
+        textAlign: column.textAlign ?? 'left',
+        ...(column.verticalAlign !== undefined ? { verticalAlign: column.verticalAlign } : {}),
+        ...(column.content !== undefined ? { content: column.content } : {}),
+        wrapMode: column.wrapMode ?? 'inline',
+        ...(bindingPort ? { bindingPort } : {}),
+      }
+    })
+    return {
+      ...node,
+      modelVersion: 1,
+      model: {
+        ...sourceModel,
+        columns,
+        paddingX: source.paddingX ?? padding ?? FLOW_ROW_DEFAULTS.paddingX,
+        paddingY: source.paddingY ?? padding ?? FLOW_ROW_DEFAULTS.paddingY,
+      },
+      bindings,
+    }
+  },
 }
 
 export function createFlowRowNode(partial?: Partial<MaterialNode>, unit?: string): MaterialNode {

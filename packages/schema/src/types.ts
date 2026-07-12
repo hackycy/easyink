@@ -519,36 +519,42 @@ export function canonicalizeMaterialNode<TModel>(
   candidate: Partial<MaterialNode<TModel>> & Record<string, unknown>,
 ): MaterialNode<TModel> {
   const {
-    type: _type,
-    modelVersion: _modelVersion,
-    props: _props,
-    binding: _binding,
-    children: _children,
-    table: _table,
-    hidden: _hidden,
-    locked: _locked,
-    renderCondition: _renderCondition,
-    print: _print,
-    placement: _placement,
-    break: _break,
-    repeat: _repeat,
-    animations: _animations,
+    id,
+    x,
+    y,
+    width,
+    height,
+    rotation,
+    alpha,
+    zIndex,
     model,
     slots,
     bindings,
+    editorState,
     output,
-    ...envelope
+    extensions,
+    compat,
   } = candidate
 
   return {
-    ...envelope,
+    id: id as string,
     type,
+    x: x as number,
+    y: y as number,
+    width: width as number,
+    height: height as number,
+    ...(rotation !== undefined ? { rotation } : {}),
+    ...(alpha !== undefined ? { alpha } : {}),
+    ...(zIndex !== undefined ? { zIndex } : {}),
     modelVersion: 1,
     model: (model ?? {}) as TModel,
     slots: slots ?? {},
     bindings: bindings ?? {},
+    ...(editorState !== undefined ? { editorState } : {}),
     output: { visibility: 'include', ...output },
-  } as MaterialNode<TModel>
+    ...(extensions !== undefined ? { extensions } : {}),
+    ...(compat !== undefined ? { compat } : {}),
+  }
 }
 
 export interface TableSchema {

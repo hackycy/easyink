@@ -6,7 +6,7 @@ import { renderRating } from './viewer'
 
 describe('renderRating', () => {
   it('renders the preset value when unbound', () => {
-    const node = createRatingNode({ props: { value: 46 } })
+    const node = createRatingNode({ model: { value: 46 } })
     const html = readTrustedViewerHtml(renderRating(node).html!)
 
     expect(html).toContain('aria-label="46/100"')
@@ -18,7 +18,7 @@ describe('renderRating', () => {
   })
 
   it('projects resolved bound values over preset props', () => {
-    const node = createRatingNode({ props: { value: 20 } })
+    const node = createRatingNode({ model: { value: 20 } })
     const html = readTrustedViewerHtml(renderRating(node, {
       data: {},
       resolvedProps: { value: 80 },
@@ -38,7 +38,7 @@ describe('renderRating', () => {
   })
 
   it('normalizes custom characters and escapes generated markup', () => {
-    const node = createRatingNode({ props: { character: '<x>', activeColor: 'red', backgroundColor: 'blue' } })
+    const node = createRatingNode({ model: { character: '<x>', activeColor: 'red', backgroundColor: 'blue' } })
     const html = readTrustedViewerHtml(renderRating(node).html!)
 
     expect(html).toContain('&lt;')

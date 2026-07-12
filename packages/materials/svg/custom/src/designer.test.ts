@@ -52,7 +52,7 @@ describe('createSvgCustomExtension', () => {
     const container = document.createElement('div')
     const extension = createSvgCustomExtension(createContext())
     const node = createSvgCustomNode({
-      props: {
+      model: {
         content: '<svg viewBox="0 0 10 10"><circle r="5" /></svg>',
       },
     })
@@ -67,13 +67,15 @@ describe('createSvgCustomExtension', () => {
     const container = document.createElement('div')
     const extension = createSvgCustomExtension(createContext())
     const node = createSvgCustomNode({
-      props: {
+      model: {
         content: '<svg viewBox="0 0 10 10"><circle r="5" /></svg>',
       },
-      binding: {
-        sourceId: 'brand',
-        fieldPath: 'logoSvg',
-        fieldLabel: 'Logo SVG',
+      bindings: {
+        value: {
+          sourceId: 'brand',
+          fieldPath: 'logoSvg',
+          fieldLabel: 'Logo SVG',
+        },
       },
     })
 

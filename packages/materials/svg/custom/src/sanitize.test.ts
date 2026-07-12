@@ -36,7 +36,7 @@ describe('sanitizeSvgContent', () => {
 describe('renderSvgCustom', () => {
   it('defaults custom SVG scaling to fill the material box', () => {
     const node = createSvgCustomNode({
-      props: {
+      model: {
         content: '<path d="M0 0H100V100Z" />',
       },
     })
@@ -48,7 +48,7 @@ describe('renderSvgCustom', () => {
 
   it('accepts a pasted complete svg and uses its own coordinate box', () => {
     const node = createSvgCustomNode({
-      props: {
+      model: {
         content: '<svg width="24" height="16" fill="none"><path d="M0 0H24V16Z" /></svg>',
       },
     })
@@ -64,7 +64,7 @@ describe('renderSvgCustom', () => {
 
   it('accepts complete svg documents with xml and doctype preambles', () => {
     const node = createSvgCustomNode({
-      props: {
+      model: {
         content: [
           '<?xml version="1.0" standalone="no"?>',
           '<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">',
@@ -85,7 +85,7 @@ describe('renderSvgCustom', () => {
 
   it('accepts svg documents with comments and an internal doctype subset before the root svg', () => {
     const node = createSvgCustomNode({
-      props: {
+      model: {
         content: [
           '<!-- Created by vector editor -->',
           '<!DOCTYPE svg [<!ENTITY app "EasyInk">]>',
@@ -109,7 +109,7 @@ describe('renderSvgCustom', () => {
 
   it('uses pasted svg aspect ratio behavior when present', () => {
     const node = createSvgCustomNode({
-      props: {
+      model: {
         content: '<svg viewBox="0 0 24 16" preserveAspectRatio="xMidYMid slice"><path d="M0 0H24V16Z" /></svg>',
       },
     })
@@ -122,7 +122,7 @@ describe('renderSvgCustom', () => {
 
   it('fits a pasted complete svg proportionally by default', () => {
     const node = createSvgCustomNode({
-      props: {
+      model: {
         content: '<svg viewBox="0 0 24 16"><path d="M0 0H24V16Z" /></svg>',
       },
     })
@@ -134,7 +134,7 @@ describe('renderSvgCustom', () => {
 
   it('sanitizes content and escapes wrapper attributes', () => {
     const node = createSvgCustomNode({
-      props: {
+      model: {
         content: '<svg viewBox="0 0 10 10&quot; onload=&quot;alert(3)"><circle r="5" onmouseover="alert(1)" /><script>alert(2)</script></svg>',
       },
     })
@@ -150,7 +150,7 @@ describe('renderSvgCustom', () => {
 
   it('renders remote binding values as image sources', () => {
     const node = createSvgCustomNode({
-      props: {
+      model: {
         content: 'https://cdn.example.com/logo.svg?version=1&theme=<dark>',
       },
     })
