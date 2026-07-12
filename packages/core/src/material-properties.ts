@@ -71,7 +71,14 @@ export interface PropertyAccessor<T = unknown> {
   paths: readonly JsonPointer[]
   pathSharingGroup?: string
   read: (node: MaterialNode) => T
-  write: (draft: MaterialNode, value: T) => void
+  write: (draft: MaterialNode, value: T) => PropertyWriteResult | void
+}
+
+export interface PropertyWriteResult {
+  selectionRebase?: {
+    type: string
+    hint: unknown
+  }
 }
 
 export interface NodePropertyAccessorOptions<T> {
@@ -489,7 +496,8 @@ function writeOwnPath(
   value: unknown,
   shadowInheritedAccessors = false,
 ): void {
-  let current = root
+  assertContainer(root)
+  let current = root as Record<string, unknown>
   for (let index = 0; index < tokens.length; index++) {
     const source = assertContainer(current)
     const token = resolveContainerToken(current, tokens[index]!, true)
@@ -507,7 +515,9 @@ function writeOwnPath(
         current[token] = value
         return
       }
-      current = current[token]
+      const next = current[token]
+      assertContainer(next)
+      current = next as Record<string, unknown>
       continue
     }
 

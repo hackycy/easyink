@@ -1,11 +1,12 @@
+import type { Selection } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import { resolvePropertyAccessor, validatePropertyDescriptors } from '@easyink/core'
-import { assertValidTableModel, getTableMaterialModel } from '@easyink/material-table-kernel'
+import { assertValidTableModel, createTableCellSelectionType, getTableMaterialModel } from '@easyink/material-table-kernel'
 import { describe, expect, it } from 'vitest'
 import { tableDataDesignerPropSchemas } from './prop-schemas'
 import { createDefaultDataTableModel } from './schema'
 
-function node(): MaterialNode<unknown> {
+function node(): MaterialNode {
   return {
     id: 'data',
     type: 'table-data',
@@ -14,7 +15,7 @@ function node(): MaterialNode<unknown> {
     width: 90,
     height: 30,
     modelVersion: 1,
-    model: createDefaultDataTableModel(),
+    model: createDefaultDataTableModel() as unknown as Record<string, unknown>,
     slots: {},
     bindings: {},
     output: { visibility: 'include' },
@@ -24,6 +25,17 @@ function node(): MaterialNode<unknown> {
 function accessor(key: string) {
   return resolvePropertyAccessor(tableDataDesignerPropSchemas.find(descriptor => descriptor.key === key)!)
 }
+
+const tableCellSelectionType = createTableCellSelectionType({
+  getNode: () => undefined,
+  getTableKind: () => 'data',
+  getPlaceholderRowCount: () => 2,
+  getUnit: () => 'px',
+  screenToDoc: value => value,
+  getZoom: () => 1,
+  getPageEl: () => null,
+  t: key => key,
+})
 
 describe('table-data band descriptors', () => {
   it('declares valid recursively frozen shared band accessors', () => {
@@ -59,5 +71,31 @@ describe('table-data band descriptors', () => {
     expect(accessor('headerBackground').read(source as MaterialNode)).toBe('#f00')
     expect(accessor('summaryBackground').read(source as MaterialNode)).toBe('#0f0')
     expect(getTableMaterialModel(source).bands.find(band => band.role === 'header')?.style?.background).toBe('#f00')
+  })
+
+  it.each([
+    { key: 'showHeader', selectedRow: 0, expectedRow: 0 },
+    { key: 'showFooter', selectedRow: 2, expectedRow: 1 },
+  ])('returns topology rebase data when $key removes the selected band', ({ key, selectedRow, expectedRow }) => {
+    const source = node()
+    const before = structuredClone(source)
+    const selection: Selection<{ row: number, col: number }> = {
+      type: 'table.cell',
+      nodeId: source.id,
+      payload: { row: selectedRow, col: 0 },
+    }
+
+    const result = accessor(key).write(source as MaterialNode, false)
+    expect(result?.selectionRebase?.type).toBe('table.cell')
+    const rebased = tableCellSelectionType.rebase?.(
+      selection,
+      before,
+      source,
+      result?.selectionRebase?.hint,
+    )
+
+    expect(rebased?.payload).toEqual({ row: expectedRow, col: 0 })
+    const row = getTableMaterialModel(source).bands.flatMap(band => band.rows)[expectedRow]
+    expect(row).toBeDefined()
   })
 })

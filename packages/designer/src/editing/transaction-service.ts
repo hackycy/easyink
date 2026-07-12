@@ -21,23 +21,24 @@ export function createTransactionService(
   diagnostics?: DiagnosticsChannel,
 ): TransactionAPI {
   return {
-    run<TNode extends MaterialNode = MaterialNode>(nodeId: string, mutator: (draft: TNode) => void, options?: TxOptions): void {
+    run<TNode extends MaterialNode = MaterialNode, TResult = void>(nodeId: string, mutator: (draft: TNode) => TResult, options?: TxOptions): TResult | void {
       const node = getNode(nodeId)
       if (!node) {
         throw new Error(`[EasyInk] tx.run: node "${nodeId}" not found`)
       }
 
       // Use mutative to generate patches from the draft mutation
+      let result!: TResult
       const [, patches, inversePatches] = create(
         node,
         (draft) => {
-          mutator(draft as TNode)
+          result = mutator(draft as TNode)
         },
         { enablePatches: true },
       )
 
       if (patches.length === 0)
-        return
+        return result
 
       const cmd = new PatchCommand(
         () => getNode(nodeId)!,
@@ -52,6 +53,7 @@ export function createTransactionService(
 
       // CommandManager handles execution + history push + merge
       commands.execute(cmd)
+      return result
     },
 
     batch<T>(fn: () => T): T {

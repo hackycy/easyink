@@ -305,6 +305,7 @@ export type {
   PropertyDescriptorDiagnostic,
   PropertyEditorOptions,
   PropertyValueInput,
+  PropertyWriteResult,
   TextFilePropertyValueInput,
 } from './material-properties'
 export type {

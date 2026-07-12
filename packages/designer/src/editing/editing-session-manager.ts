@@ -1,4 +1,5 @@
-import type { BehaviorEvent, MaterialDesignerExtension } from '@easyink/core'
+import type { BehaviorEvent, MaterialDesignerExtension, PropertyWriteResult } from '@easyink/core'
+import type { MaterialNode } from '@easyink/schema'
 import type { DesignerStore } from '../store/designer-store'
 import { shallowRef } from 'vue'
 import { applySelectionIntent } from '../interactions/selection-intent'
@@ -121,5 +122,9 @@ export class EditingSessionManager {
     if (!this._activeSession.value)
       return
     this._activeSession.value.dispatch(event)
+  }
+
+  rebaseSelection(before: MaterialNode, after: MaterialNode, result?: PropertyWriteResult | void): void {
+    this._activeSession.value?.rebaseSelection(before, after, result?.selectionRebase)
   }
 }

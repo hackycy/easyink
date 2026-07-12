@@ -8,18 +8,19 @@ import {
   removeTableRow,
   splitTableCell,
 } from './commands'
+import { applyTableTopologyResultToNode } from './editing/canonical'
 import { createTableModel } from './model'
 
-function node(): MaterialNode {
+function node(kind: 'static' | 'data' = 'static'): MaterialNode {
   return {
     id: 'table',
-    type: 'table-static',
+    type: kind === 'data' ? 'table-data' : 'table-static',
     x: 0,
     y: 0,
     width: 90,
     height: 30,
     modelVersion: 1,
-    model: createTableModel({ kind: 'static', columnCount: 3, rowCount: 3 }) as unknown as Record<string, unknown>,
+    model: createTableModel({ kind, columnCount: 3, rowCount: kind === 'data' ? 1 : 3 }) as unknown as Record<string, unknown>,
     slots: {},
     bindings: {},
     output: { visibility: 'include' },
@@ -81,6 +82,49 @@ describe('canonical table editing operations', () => {
     expect(result?.effects.removedCellIds).toEqual(expect.arrayContaining(removedCells.map(cell => cell.id)))
     expect(source.bindings['column:value']).toBeUndefined()
     expect(source.slots[slotId]).toBeUndefined()
+  })
+
+  it('retains a binding port while a surviving cell still references it', () => {
+    const source = node()
+    const model = source.model as unknown as ReturnType<typeof createTableModel>
+    const row = model.bands[0]!.rows[0]!
+    row.cells[0]!.content = { kind: 'text', text: '', bindingPort: 'shared:value' }
+    row.cells[1]!.content = { kind: 'text', text: '', bindingPort: 'shared:value' }
+    source.bindings['shared:value'] = { sourceId: 'source', fieldPath: 'value' }
+
+    removeTableColumn(source, 0)
+
+    expect(source.bindings['shared:value']).toEqual({ sourceId: 'source', fieldPath: 'value' })
+    expect((source.model as unknown as ReturnType<typeof createTableModel>).bands[0]!.rows[0]!.cells[0]!.content)
+      .toMatchObject({ bindingPort: 'shared:value' })
+  })
+
+  it('retains data ports and surviving material slots referenced by the result model', () => {
+    const source = node('data')
+    const model = source.model as unknown as ReturnType<typeof createTableModel>
+    const secondCell = model.bands[0]!.rows[0]!.cells[1]!
+    if (model.kind !== 'data')
+      throw new Error('expected data table model')
+    model.data.detailKeyPort = 'record:key'
+    const slotId = `cell:${secondCell.id}`
+    secondCell.content = { kind: 'materials', slotId }
+    source.bindings.records = { sourceId: 'source', fieldPath: 'records' }
+    source.bindings['record:key'] = { sourceId: 'source', fieldPath: 'id' }
+    source.slots[slotId] = []
+
+    applyTableTopologyResultToNode(source, {
+      model,
+      rebase: { rows: [], columns: [] },
+      effects: {
+        removedCellIds: [],
+        releasedBindingPorts: ['records', 'record:key'],
+        releasedSlotIds: [slotId],
+      },
+    })
+
+    expect(source.bindings.records).toBeDefined()
+    expect(source.bindings['record:key']).toBeDefined()
+    expect(source.slots[slotId]).toEqual([])
   })
 
   it('merges and splits by stable row, column, and cell IDs', () => {

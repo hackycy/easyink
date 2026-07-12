@@ -456,6 +456,13 @@ function groupLabel(group: string): string {
 
 const propSnapshots = new Map<string, unknown>()
 
+function writePropertyWithSelectionRebase(accessor: ReturnType<typeof resolvePropertyAccessor>, node: MaterialNode, value: unknown) {
+  const before = deepClone(node)
+  const result = accessor.write(node, value)
+  store.editingSession.rebaseSelection(before, node, result)
+  return result
+}
+
 function previewProp(key: string, value: unknown) {
   const el = selectedElement.value
   if (!el)
@@ -470,7 +477,7 @@ function previewProp(key: string, value: unknown) {
     propSnapshots.set(key, deepClone(resolvePropertyAccessor(schema).read(el)))
   }
   // Direct mutation for preview (no command)
-  resolvePropertyAccessor(schema).write(el, value)
+  writePropertyWithSelectionRebase(resolvePropertyAccessor(schema), el, value)
 }
 
 async function updateProp(key: string, value: unknown) {
@@ -493,8 +500,12 @@ async function updateProp(key: string, value: unknown) {
   const oldValue = propSnapshots.get(key)
   propSnapshots.delete(key)
   if (hadPreview)
-    accessor.write(el, oldValue)
-  propertyTx.run(el.id, draft => accessor.write(draft, value), { mergeKey: `property:${key}`, label: 'designer.history.updateProperty' })
+    writePropertyWithSelectionRebase(accessor, el, oldValue)
+  const before = deepClone(el)
+  const result = propertyTx.run(el.id, draft => accessor.write(draft, value), { mergeKey: `property:${key}`, label: 'designer.history.updateProperty' })
+  const updated = store.getElementById(el.id)
+  if (updated)
+    store.editingSession.rebaseSelection(before, updated, result)
 }
 
 function rollbackPropPreview(key: string) {
@@ -505,7 +516,7 @@ function rollbackPropPreview(key: string) {
   propSnapshots.delete(key)
   const schema = materialSchemas.value.find(item => item.key === key)
   if (schema)
-    resolvePropertyAccessor(schema).write(el, oldValue)
+    writePropertyWithSelectionRebase(resolvePropertyAccessor(schema), el, oldValue)
 }
 
 function updateImagePropFromPicker(key: string, result: DesignerResolvedAsset) {

@@ -30,6 +30,8 @@ export interface SelectionType<T = unknown> {
   resolveLocation: (sel: Selection<T>, node: MaterialNode) => Rect[]
   /** Validate payload shape (default: JSON round-trip check) */
   validate?: (payload: unknown) => payload is T
+  /** Reconcile a selection after a property write changes material topology. */
+  rebase?: (sel: Selection<T>, before: MaterialNode, after: MaterialNode, hint: unknown) => Selection<T> | null
 }
 
 // ─── MaterialGeometry ───────────────────────────────────────────────
@@ -158,7 +160,7 @@ export interface EphemeralPanelDef {
 /** Transaction API for draft-based mutations. */
 export interface TransactionAPI {
   /** Run a mutation on a node. Generates patches and creates a PatchCommand. */
-  run: <TNode extends MaterialNode = MaterialNode>(nodeId: string, mutator: (draft: TNode) => void, options?: TxOptions) => void
+  run: <TNode extends MaterialNode = MaterialNode, TResult = void>(nodeId: string, mutator: (draft: TNode) => TResult, options?: TxOptions) => TResult | void
   /** Batch multiple run() calls into a single Command. */
   batch: <T>(fn: () => T) => T
 }
@@ -239,4 +241,6 @@ export interface EditingSessionRef {
    * changes away from the selection that was current at write time.
    */
   setSelectionScopedMeta: (key: string, value: unknown, selection?: Selection | null) => void
+  /** Reconcile the active selection after a topology-changing property write. */
+  rebaseSelection: (before: MaterialNode, after: MaterialNode, rebase?: { type: string, hint: unknown }) => void
 }

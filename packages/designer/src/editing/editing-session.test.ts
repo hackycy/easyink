@@ -1,10 +1,10 @@
-import type { GeometryService, MaterialDesignerExtension, MaterialGeometry, TransactionAPI } from '@easyink/core'
+import type { GeometryService, MaterialDesignerExtension, MaterialGeometry, SelectionType, TransactionAPI } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { EditingSession } from './editing-session'
 import { createSelectionStore } from './selection-store'
 
-function makeSession() {
+function makeSession(selectionTypes?: SelectionType<unknown>[]) {
   const node: MaterialNode = {
     id: 'n1',
     type: 'test',
@@ -12,8 +12,12 @@ function makeSession() {
     y: 0,
     width: 100,
     height: 50,
-    props: {},
-  } as MaterialNode
+    modelVersion: 1,
+    model: {},
+    slots: {},
+    bindings: {},
+    output: { visibility: 'include' },
+  }
 
   const materialGeometry: MaterialGeometry = {
     getContentLayout: () => ({ contentBox: { x: 0, y: 0, width: 100, height: 50 } }),
@@ -24,6 +28,7 @@ function makeSession() {
   const extension: MaterialDesignerExtension = {
     renderContent: () => () => {},
     geometry: materialGeometry,
+    selectionTypes,
   }
 
   const selectionStore = createSelectionStore()
@@ -64,5 +69,33 @@ describe('editingSession', () => {
     selectionStore.set({ type: 'svg-star.control', nodeId: 'n1', payload: { handle: 'inner-radius', index: 1 } })
 
     expect(session.meta.starInnerRatio).toBe(0.42)
+  })
+
+  it('rebases active selections through their registered selection type', () => {
+    const rebase = vi.fn(selection => ({
+      ...selection,
+      payload: { row: 0, col: 0 },
+    }))
+    const selectionType: SelectionType<unknown> = {
+      id: 'table.cell',
+      resolveLocation: () => [],
+      rebase,
+    }
+    const { session, selectionStore } = makeSession([selectionType])
+    const before = { id: 'n1' } as MaterialNode
+    const after = { id: 'n1' } as MaterialNode
+
+    selectionStore.set({ type: 'table.cell', nodeId: 'n1', payload: { row: 2, col: 0 } })
+    session.setSelectionScopedMeta('editingCell', { row: 2, col: 0 })
+    session.rebaseSelection(before, after, { type: 'table.cell', hint: { removedRow: 'footer' } })
+
+    expect(rebase).toHaveBeenCalledWith(
+      { type: 'table.cell', nodeId: 'n1', payload: { row: 2, col: 0 } },
+      before,
+      after,
+      { removedRow: 'footer' },
+    )
+    expect(selectionStore.selection?.payload).toEqual({ row: 0, col: 0 })
+    expect(session.meta.editingCell).toBeUndefined()
   })
 })

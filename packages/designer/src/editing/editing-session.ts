@@ -120,6 +120,16 @@ export class EditingSession implements EditingSessionRef {
     this.pruneSelectionScopedMeta()
   }
 
+  rebaseSelection(before: MaterialNode, after: MaterialNode, rebase?: { type: string, hint: unknown }): void {
+    const selection = this.selectionStore.selection
+    if (!selection || !rebase || rebase.type !== selection.type)
+      return
+    const selectionType = this.extension.selectionTypes?.find(candidate => candidate.id === selection.type)
+    if (!selectionType?.rebase)
+      return
+    this.selectionStore.set(selectionType.rebase(selection, before, after, rebase.hint))
+  }
+
   private pruneSelectionScopedMeta(): void {
     if (this._destroyed || this._selectionScopedMeta.size === 0)
       return

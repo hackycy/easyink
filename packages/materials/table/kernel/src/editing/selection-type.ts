@@ -1,7 +1,7 @@
 import type { Selection, SelectionType } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { TableCellPayload, TableEditingDelegate } from './types'
-import { isEditableTableNode } from './canonical'
+import { isEditableTableNode, rebaseTableCellSelection } from './canonical'
 import { createCellSubPropertySchema } from './cell-property'
 import { computeCellRectWithPlaceholders } from './geometry'
 
@@ -18,6 +18,10 @@ export function createTableCellSelectionType(delegate: TableEditingDelegate): Se
         return false
       const p = payload as Record<string, unknown>
       return typeof p.row === 'number' && typeof p.col === 'number'
+    },
+
+    rebase(selection, before, after, hint) {
+      return rebaseTableCellSelection(selection, before, after, hint)
     },
 
     resolveLocation(sel: Selection<TableCellPayload>, node: MaterialNode) {

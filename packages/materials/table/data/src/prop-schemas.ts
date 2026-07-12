@@ -7,6 +7,7 @@ import {
   createSequentialTableIdentityAllocator,
   createTableBorderPropertyAccessor,
   createTablePaddingPropertyAccessor,
+  createTableTopologySelectionRebaseHint,
   getTableMaterialModel,
   TableTopologyEngine,
 } from '@easyink/material-table-kernel'
@@ -32,6 +33,7 @@ function createBandVisibilityAccessor(role: 'header' | 'footer'): PropertyAccess
     read: (node: MaterialNode) => getTableMaterialModel(node).bands.some(band => band.role === role),
     write(draft: MaterialNode, visible: boolean) {
       let model = getTableMaterialModel(draft)
+      const removals = []
       const matching = model.bands.filter(band => band.role === role)
       if (visible && matching.length === 0) {
         const minHeight = model.bands.flatMap(band => band.rows)[0]?.minHeight ?? 8
@@ -46,10 +48,19 @@ function createBandVisibilityAccessor(role: 'header' | 'footer'): PropertyAccess
         for (const band of matching) {
           const result = TableTopologyEngine.removeBand(model, band.id)
           applyTableTopologyResultToNode(draft, result)
+          removals.push(result)
           model = result.model
         }
       }
       draft.model = model as unknown as Record<string, unknown>
+      if (removals.length > 0) {
+        return {
+          selectionRebase: {
+            type: 'table.cell',
+            hint: createTableTopologySelectionRebaseHint(removals),
+          },
+        }
+      }
     },
   })
 }
