@@ -29,7 +29,7 @@ const activeDecorations = computed<SelectionDecorationDef[]>(() => {
   if (!sel)
     return []
 
-  return ext.decorations.filter((d: any) =>
+  return ext.decorations.filter(d =>
     d.selectionTypes.includes(sel.type),
   )
 })

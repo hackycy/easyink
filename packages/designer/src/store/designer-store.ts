@@ -1,4 +1,4 @@
-import type { CompiledMaterialProfile, EphemeralPanelDef, FacetInstance, FontLoadRequest, FontLoadStatus, FontManager, FontProvider, MaterialFacetHost, MaterialLoadDiagnostic, MaterialNodeLoadState, PropertyPanelOverlay, TransactionAPI } from '@easyink/core'
+import type { CompiledMaterialProfile, EphemeralPanelDef, FacetInstance, FontLoadRequest, FontLoadStatus, FontManager, FontProvider, MaterialDesignerFacet, MaterialFacetHost, MaterialLoadDiagnostic, MaterialNodeLoadState, PropertyPanelOverlay, TransactionAPI } from '@easyink/core'
 import type { DocumentSchema, DocumentSchemaInput, ElementGroupSchema, MaterialNode } from '@easyink/schema'
 import type { PaperPreset } from '@easyink/shared'
 import type { DesignerRuntimeConfig } from '../runtime-config'
@@ -27,7 +27,7 @@ export class DesignerStore {
   readonly materialProfile: CompiledMaterialProfile
   readonly propertyEditorRegistry = markRaw(new PropertyEditorRegistry())
   readonly materialFacetHost: MaterialFacetHost
-  private readonly designerFacetCache = new Map<string, FacetInstance<any>>()
+  private readonly designerFacetCache = new Map<string, FacetInstance<MaterialDesignerFacet>>()
   // ─── Template state (enters Schema + command history) ─────────
   private _schema: DocumentSchema
   private _materialDiagnostics: readonly MaterialLoadDiagnostic[] = Object.freeze([])
@@ -356,7 +356,7 @@ export class DesignerStore {
   }
 
   async activateDesignerFacet(type: string) {
-    const instance = await this.materialFacetHost.activate(this.materialProfile, type, 'designer')
+    const instance = await this.materialFacetHost.activate<MaterialDesignerFacet>(this.materialProfile, type, 'designer')
     this.designerFacetCache.set(type, instance)
     return instance
   }
