@@ -332,6 +332,93 @@ describe('documentTransactionEngine', () => {
     expect(engine.store.document.elements[0]!.x).toBe(1)
   })
 
+  it('rejects nested run without publishing a lost update and releases the guard after failure', () => {
+    const profile = createTestCompiledMaterialProfile()
+    const schema = createCanonicalDefaultSchema()
+    schema.elements = [profile.createNode('box', { id: 'a', x: 0, y: 0 })]
+    const store = new DocumentStore(schema, profile)
+    const engine = new DocumentTransactionEngine(store)
+
+    let rejection: unknown
+    try {
+      engine.transact((draft) => {
+        draft.elements[0]!.x = 1
+        engine.run('a', (nestedDraft) => {
+          nestedDraft.y = 2
+        })
+      }, { label: 'Outer edit', operation: moveOperation })
+    }
+    catch (error) {
+      rejection = error
+    }
+    expect(rejection).toMatchObject({
+      name: 'DocumentTransactionReentrancyError',
+      code: 'DOCUMENT_TRANSACTION_REENTRANT',
+      message: 'DOCUMENT_TRANSACTION_REENTRANT: document history mutation is already in progress',
+    })
+    expect(store.document.elements[0]).toMatchObject({ x: 0, y: 0 })
+    expect(store.revision).toBe(0)
+    expect(engine.totalCount).toBe(0)
+
+    engine.run('a', (draft) => {
+      draft.x = 3
+    })
+    engine.undo()
+    expect(store.document.elements[0]!.x).toBe(0)
+    engine.redo()
+    expect(store.document.elements[0]!.x).toBe(3)
+  })
+
+  it.each([
+    ['transact', (engine: DocumentTransactionEngine) => engine.transact(() => {}, { label: 'Nested', operation: moveOperation })],
+    ['batch', (engine: DocumentTransactionEngine) => engine.batch(() => {})],
+    ['undo', (engine: DocumentTransactionEngine) => engine.undo()],
+    ['redo', (engine: DocumentTransactionEngine) => engine.redo()],
+    ['goTo', (engine: DocumentTransactionEngine) => engine.goTo(0)],
+    ['clear', (engine: DocumentTransactionEngine) => engine.clear()],
+    ['reset', (engine: DocumentTransactionEngine) => engine.reset(createCanonicalDefaultSchema())],
+    ['barrier', (engine: DocumentTransactionEngine) => engine.markHistoryBarrier()],
+  ])('rejects the %s history entry point during a transaction', (_case, reenter) => {
+    const profile = createTestCompiledMaterialProfile()
+    const schema = createCanonicalDefaultSchema()
+    schema.elements = [profile.createNode('box', { id: 'a', x: 0 })]
+    const store = new DocumentStore(schema, profile)
+    const engine = new DocumentTransactionEngine(store)
+
+    expect(() => engine.transact((draft) => {
+      draft.elements[0]!.x = 1
+      reenter(engine)
+    }, { label: 'Outer edit', operation: moveOperation })).toThrow('DOCUMENT_TRANSACTION_REENTRANT')
+    expect(store.document.elements[0]!.x).toBe(0)
+    expect(store.revision).toBe(0)
+    expect(engine.totalCount).toBe(0)
+  })
+
+  it('allows a store listener to enqueue a new transaction after asynchronous publication', async () => {
+    const profile = createTestCompiledMaterialProfile()
+    const schema = createCanonicalDefaultSchema()
+    schema.elements = [profile.createNode('box', { id: 'a', x: 0, y: 0 })]
+    const store = new DocumentStore(schema, profile)
+    const engine = new DocumentTransactionEngine(store)
+    store.subscribe((event) => {
+      if (event.kind === 'commit' && event.document.elements[0]!.y === 0) {
+        engine.run('a', (draft) => {
+          draft.y = 2
+        })
+      }
+    })
+
+    engine.run('a', (draft) => {
+      draft.x = 1
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(store.document.elements[0]).toMatchObject({ x: 1, y: 2 })
+    expect(store.revision).toBe(2)
+    expect(engine.totalCount).toBe(2)
+  })
+
   it('batches nested edits atomically and abandons recipes when the batch throws', () => {
     const profile = createTestCompiledMaterialProfile()
     const schema = createCanonicalDefaultSchema()

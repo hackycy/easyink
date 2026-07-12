@@ -12,6 +12,16 @@ import { DOCUMENT_STORE_WRITER } from './document-store-internal'
 import { validateDocumentWithProfile } from './schema-adapter'
 
 const DOCUMENT_MUTATIVE_MARK = markSimpleObject
+const DOCUMENT_TRANSACTION_REENTRANT = 'DOCUMENT_TRANSACTION_REENTRANT'
+
+class DocumentTransactionReentrancyError extends Error {
+  readonly code = DOCUMENT_TRANSACTION_REENTRANT
+
+  constructor() {
+    super(`${DOCUMENT_TRANSACTION_REENTRANT}: document history mutation is already in progress`)
+    this.name = 'DocumentTransactionReentrancyError'
+  }
+}
 
 export type DocumentRecipe = (draft: DocumentSchema) => void | DocumentSchema
 
@@ -51,6 +61,7 @@ export class DocumentTransactionEngine implements TransactionAPI {
   }> | null = null
 
   private barrierGeneration = 0
+  private transactionDepth = 0
   private readonly now: () => number
   private readonly createId: () => string
 
@@ -72,14 +83,17 @@ export class DocumentTransactionEngine implements TransactionAPI {
   }
 
   transact(recipe: DocumentRecipe, options: DocumentTransactionOptions): DocumentChangeSet | null {
-    const [next, forward, inverse] = create(this.store.committedDocument, recipe, {
-      enablePatches: true,
-      enableAutoFreeze: true,
-      mark: DOCUMENT_MUTATIVE_MARK,
+    this.assertHistoryMutationAllowed()
+    return this.withTransactionGuard(() => {
+      const [next, forward, inverse] = create(this.store.committedDocument, recipe, {
+        enablePatches: true,
+        enableAutoFreeze: true,
+        mark: DOCUMENT_MUTATIVE_MARK,
+      })
+      if (forward.length === 0)
+        return null
+      return this.commitCandidate(next as unknown as DocumentSchema, forward, inverse, options)
     })
-    if (forward.length === 0)
-      return null
-    return this.commitCandidate(next as unknown as DocumentSchema, forward, inverse, options)
   }
 
   run<TNode extends MaterialNode = MaterialNode, TResult = void>(
@@ -87,6 +101,8 @@ export class DocumentTransactionEngine implements TransactionAPI {
     mutator: (draft: TNode) => TResult,
     options?: TxOptions,
   ): TResult | void {
+    if (this.transactionDepth > 0)
+      throw new DocumentTransactionReentrancyError()
     const createsBarrier = !options?.operation
     const transactionOptions: DocumentTransactionOptions = {
       label: options?.label ?? 'Edit',
@@ -107,6 +123,8 @@ export class DocumentTransactionEngine implements TransactionAPI {
   }
 
   batch<T>(fn: () => T): T {
+    if (this.transactionDepth > 0)
+      throw new DocumentTransactionReentrancyError()
     if (this.batchRecipes)
       return fn()
     this.batchRecipes = []
@@ -131,37 +149,56 @@ export class DocumentTransactionEngine implements TransactionAPI {
     }
   }
 
-  undo(): void { this.applyHistory('undo') }
-  redo(): void { this.applyHistory('redo') }
+  undo(): void {
+    this.assertHistoryMutationAllowed()
+    this.withTransactionGuard(() => this.applyHistory('undo'))
+  }
+
+  redo(): void {
+    this.assertHistoryMutationAllowed()
+    this.withTransactionGuard(() => this.applyHistory('redo'))
+  }
 
   markHistoryBarrier(): void {
+    this.assertHistoryMutationAllowed()
     this.barrierGeneration += 1
   }
 
   goTo(index: number): void {
+    this.assertHistoryMutationAllowed()
     if (!Number.isInteger(index) || index < 0 || index > this.totalCount)
       throw new RangeError(`History index ${index} is out of range`)
-    while (this.cursor > index)
-      this.undo()
-    while (this.cursor < index)
-      this.redo()
+    this.withTransactionGuard(() => {
+      while (this.cursor > index)
+        this.applyHistory('undo')
+      while (this.cursor < index)
+        this.applyHistory('redo')
+    })
   }
 
   clear(): void {
+    this.assertHistoryMutationAllowed()
+    this.withTransactionGuard(() => this.clearHistory())
+  }
+
+  private clearHistory(): void {
     this.undoStack = []
     this.redoStack = []
     this.notify()
   }
 
   reset(document: DocumentSchema, nodeStates?: ReadonlyMap<string, MaterialNodeLoadState>): void {
-    assertJsonValue(document, this.store.jsonValidation)
-    const report = nodeStates
-      ? validateDocumentWithProfile(document, this.store.profile, { mode: 'history-restore', targetNodeStates: nodeStates })
-      : validateDocumentWithProfile(document, this.store.profile, { affectedNodeIds: 'all' })
-    assertValidReport(report)
-    this.markHistoryBarrier()
-    this.store[DOCUMENT_STORE_WRITER]({ kind: 'reset', document, validationReport: report })
-    this.clear()
+    this.assertHistoryMutationAllowed()
+    this.withTransactionGuard(() => {
+      assertJsonValue(document, this.store.jsonValidation)
+      const report = nodeStates
+        ? validateDocumentWithProfile(document, this.store.profile, { mode: 'history-restore', targetNodeStates: nodeStates })
+        : validateDocumentWithProfile(document, this.store.profile, { affectedNodeIds: 'all' })
+      assertValidReport(report)
+      this.barrierGeneration += 1
+      this.store[DOCUMENT_STORE_WRITER]({ kind: 'reset', document, validationReport: report })
+      this.clearHistory()
+    })
   }
 
   onChange(listener: () => void): () => void {
@@ -227,6 +264,21 @@ export class DocumentTransactionEngine implements TransactionAPI {
     catch (error) {
       this.barrierGeneration = priorGeneration
       throw error
+    }
+  }
+
+  private assertHistoryMutationAllowed(): void {
+    if (this.transactionDepth > 0 || this.batchRecipes)
+      throw new DocumentTransactionReentrancyError()
+  }
+
+  private withTransactionGuard<T>(fn: () => T): T {
+    this.transactionDepth += 1
+    try {
+      return fn()
+    }
+    finally {
+      this.transactionDepth -= 1
     }
   }
 
