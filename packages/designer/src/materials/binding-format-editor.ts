@@ -3,19 +3,19 @@ import type { BindingFormatEditorDefinition, MaterialBindingDefinition } from '@
 export function resolveOrdinaryFormatEditor(
   binding: MaterialBindingDefinition | undefined,
 ): BindingFormatEditorDefinition | false {
-  if (binding?.kind !== 'ordinary')
+  if (binding?.kind !== 'ports')
     return false
-  return binding.formatEditor
+  return binding.ports[0]?.formatEditor ?? false
 }
 
 export function resolveDataContractFieldFormatEditor(
   binding: MaterialBindingDefinition | undefined,
   fieldId: string,
 ): BindingFormatEditorDefinition | false {
-  if (binding?.kind !== 'data-contract')
+  if (binding?.kind !== 'ports' || !binding.dataContract)
     return false
-  const field = binding.contract.model.fields[fieldId]
+  const field = binding.dataContract.model.fields[fieldId]
   if (!field)
     return false
-  return field.formatEditor ?? binding.formatEditor
+  return field.formatEditor ?? binding.ports[0]?.formatEditor ?? false
 }
