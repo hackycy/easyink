@@ -1,14 +1,15 @@
-import type { EphemeralPanelDef, FontLoadRequest, FontLoadStatus, FontManager, FontProvider, PropertyPanelOverlay } from '@easyink/core'
+import type { CompiledMaterialProfile, EphemeralPanelDef, FontLoadRequest, FontLoadStatus, FontManager, FontProvider, MaterialFacetHost, PropertyPanelOverlay } from '@easyink/core'
 import type { DocumentSchema, DocumentSchemaInput, ElementGroupSchema, MaterialNode } from '@easyink/schema'
 import type { PaperPreset } from '@easyink/shared'
 import type { DesignerRuntimeConfig } from '../runtime-config'
 import type { DesignerInteractionProvider, LazyMaterialExtensionFactory, LocaleMessageRegistration, LocaleMessages, MaterialCatalogEntry, MaterialCatalogGroup, MaterialDefinition, MaterialDesignerExtension, MaterialExtensionFactory, PreferenceProvider, SnapLine, StatusBarState } from '../types'
-import { CommandManager, SelectionModel } from '@easyink/core'
+import { CommandManager, MaterialFacetHost as CoreMaterialFacetHost, SelectionModel } from '@easyink/core'
 import { DataSourceRegistry } from '@easyink/datasource'
 import { findNodeById, normalizeDocumentSchema } from '@easyink/schema'
 import { markRaw } from 'vue'
 import { EditingSessionManager } from '../editing/editing-session-manager'
 import { DesignerInteractionService } from '../interactions/interaction-service'
+import { resolveDesignerMaterialProfile } from '../runtime-config'
 import { DiagnosticsChannel } from './diagnostics'
 import { FontService } from './font-service'
 import { MaterialRegistry } from './material-registry'
@@ -22,6 +23,8 @@ import { createDefaultSaveBranchMenu, createDefaultWorkbenchState } from './work
  * It composes template state, workbench state, and interaction context.
  */
 export class DesignerStore {
+  readonly materialProfile: CompiledMaterialProfile
+  readonly materialFacetHost: MaterialFacetHost
   // ─── Template state (enters Schema + command history) ─────────
   private _schema: DocumentSchema
 
@@ -87,6 +90,8 @@ export class DesignerStore {
     interactionProvider?: DesignerInteractionProvider,
     runtimeConfig?: DesignerRuntimeConfig,
   ) {
+    this.materialProfile = resolveDesignerMaterialProfile(runtimeConfig?.materials)
+    this.materialFacetHost = markRaw(new CoreMaterialFacetHost())
     this._schema = normalizeDocumentSchema(schema)
     this.fontService = new FontService(this.diagnostics)
     this.materialRegistry = new MaterialRegistry()
@@ -314,7 +319,22 @@ export class DesignerStore {
   }
 
   getMaterial(type: string): MaterialDefinition | undefined {
+    const manifest = this.materialProfile.getManifest(type)
+    if (manifest && !this.materialRegistry.getMaterial(type))
+      return undefined
     return this.materialRegistry.getMaterial(type)
+  }
+
+  activateDesignerFacet(type: string) {
+    return this.materialFacetHost.activate(this.materialProfile, type, 'designer')
+  }
+
+  getManifest(type: string) {
+    return this.materialProfile.getManifest(type)
+  }
+
+  listEditableMaterialTypes(): readonly string[] {
+    return [...this.materialProfile.editableTypes]
   }
 
   listMaterials(): MaterialDefinition[] {
