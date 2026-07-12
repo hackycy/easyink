@@ -7,6 +7,7 @@ import type {
   MaterialDesignerExtension,
   MaterialGeometry,
   Selection,
+  SelectionRebaseResult,
   SelectionStore,
   SurfacesAPI,
   TransactionAPI,
@@ -127,7 +128,20 @@ export class EditingSession implements EditingSessionRef {
     const selectionType = this.extension.selectionTypes?.find(candidate => candidate.id === selection.type)
     if (!selectionType?.rebase)
       return
-    this.selectionStore.set(selectionType.rebase(selection, before, after, rebase.hint))
+    const outcome = selectionType.rebase(selection, before, after, rebase.hint)
+    if (isSelectionRebaseResult(outcome)) {
+      if (outcome.identityChanged)
+        this.clearSelectionScopedMeta()
+      this.selectionStore.set(outcome.selection)
+      return
+    }
+    this.selectionStore.set(outcome)
+  }
+
+  private clearSelectionScopedMeta(): void {
+    for (const key of this._selectionScopedMeta.keys())
+      delete this.meta[key]
+    this._selectionScopedMeta.clear()
   }
 
   private pruneSelectionScopedMeta(): void {
@@ -151,4 +165,8 @@ export class EditingSession implements EditingSessionRef {
     this._ephemeralPanel = null
     this._onEphemeralPanelChange?.(null)
   }
+}
+
+function isSelectionRebaseResult(value: unknown): value is SelectionRebaseResult {
+  return typeof value === 'object' && value !== null && Object.hasOwn(value, 'selection')
 }

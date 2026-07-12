@@ -81,6 +81,7 @@ export type {
   PageGeometrySnapshot,
   Selection,
   SelectionDecorationDef,
+  SelectionRebaseResult,
   SelectionStore,
   SelectionType,
   SubPropertySchema,

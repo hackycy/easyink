@@ -18,6 +18,13 @@ export interface Selection<T = unknown> {
   anchor?: T
 }
 
+/** Selection reconciliation with an explicit semantic-identity signal. */
+export interface SelectionRebaseResult<T = unknown> {
+  selection: Selection<T> | null
+  /** True when the returned coordinates identify a different logical entity. */
+  identityChanged?: boolean
+}
+
 // ─── SelectionType ──────────────────────────────────────────────────
 
 /** Material registers selection types to declare sub-element selection semantics. */
@@ -31,7 +38,7 @@ export interface SelectionType<T = unknown> {
   /** Validate payload shape (default: JSON round-trip check) */
   validate?: (payload: unknown) => payload is T
   /** Reconcile a selection after a property write changes material topology. */
-  rebase?: (sel: Selection<T>, before: MaterialNode, after: MaterialNode, hint: unknown) => Selection<T> | null
+  rebase?: (sel: Selection<T>, before: MaterialNode, after: MaterialNode, hint: unknown) => Selection<T> | SelectionRebaseResult<T> | null
 }
 
 // ─── MaterialGeometry ───────────────────────────────────────────────

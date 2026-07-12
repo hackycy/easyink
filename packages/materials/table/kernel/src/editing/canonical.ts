@@ -1,4 +1,4 @@
-import type { Selection } from '@easyink/core'
+import type { Selection, SelectionRebaseResult } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { TableCell, TableColumnId, TableModel, TableRow, TableRowId } from '../model'
 import type { TableSelectionRebaseHint, TableTopologyEffects, TableTopologyResult } from '../topology-engine'
@@ -73,7 +73,7 @@ export function rebaseTableCellSelection(
   before: MaterialNode,
   after: MaterialNode,
   hint: unknown,
-): Selection<TableCellPayload> | null {
+): Selection<TableCellPayload> | SelectionRebaseResult<TableCellPayload> | null {
   if (!isTableTopologySelectionRebaseHint(hint))
     return selection
   const beforeProjection = tableProjection(before)
@@ -110,7 +110,8 @@ export function rebaseTableCellSelection(
   const col = afterProjection.columnIds.indexOf(columnId)
   if (row < 0 || col < 0)
     return null
-  return { ...selection, payload: { row, col } }
+  const rebased = { ...selection, payload: { row, col } }
+  return survivingCell ? rebased : { selection: rebased, identityChanged: true }
 }
 
 function collectTableModelResourceReferences(model: TableModel): { bindingPorts: Set<string>, slotIds: Set<string> } {

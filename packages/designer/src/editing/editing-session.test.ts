@@ -98,4 +98,46 @@ describe('editingSession', () => {
     expect(selectionStore.selection?.payload).toEqual({ row: 0, col: 0 })
     expect(session.meta.editingCell).toBeUndefined()
   })
+
+  it('keeps selection-scoped meta when semantic identity and coordinates are preserved', () => {
+    const selectionType: SelectionType<unknown> = {
+      id: 'table.cell',
+      resolveLocation: () => [],
+      rebase: selection => ({ ...selection }),
+    }
+    const { session, selectionStore } = makeSession([selectionType])
+    const selection = { type: 'table.cell', nodeId: 'n1', payload: { row: 0, col: 0 } }
+
+    selectionStore.set(selection)
+    session.setSelectionScopedMeta('editingCell', { buffer: 'header value' })
+    session.rebaseSelection({ id: 'n1' } as MaterialNode, { id: 'n1' } as MaterialNode, {
+      type: 'table.cell',
+      hint: {},
+    })
+
+    expect(selectionStore.selection).toEqual(selection)
+    expect(session.meta.editingCell).toEqual({ buffer: 'header value' })
+  })
+
+  it('clears selection-scoped meta when semantic identity changes at the same coordinates', () => {
+    const selectionType: SelectionType<unknown> = {
+      id: 'table.cell',
+      resolveLocation: () => [],
+      rebase: selection => ({ selection: { ...selection }, identityChanged: true }),
+    }
+    const { session, selectionStore } = makeSession([selectionType])
+    const selection = { type: 'table.cell', nodeId: 'n1', payload: { row: 0, col: 0 } }
+
+    selectionStore.set(selection)
+    session.setSelectionScopedMeta('editingCell', { buffer: 'header value' })
+    session.setMeta('plainState', 'preserved')
+    session.rebaseSelection({ id: 'n1' } as MaterialNode, { id: 'n1' } as MaterialNode, {
+      type: 'table.cell',
+      hint: { removedRow: 'header' },
+    })
+
+    expect(selectionStore.selection).toEqual(selection)
+    expect(session.meta.editingCell).toBeUndefined()
+    expect(session.meta.plainState).toBe('preserved')
+  })
 })

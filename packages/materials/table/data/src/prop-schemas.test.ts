@@ -94,7 +94,10 @@ describe('table-data band descriptors', () => {
       result?.selectionRebase?.hint,
     )
 
-    expect(rebased?.payload).toEqual({ row: expectedRow, col: 0 })
+    expect(rebased).toEqual({
+      selection: { ...selection, payload: { row: expectedRow, col: 0 } },
+      identityChanged: true,
+    })
     const row = getTableMaterialModel(source).bands.flatMap(band => band.rows)[expectedRow]
     expect(row).toBeDefined()
   })
