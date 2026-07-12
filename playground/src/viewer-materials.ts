@@ -8,6 +8,6 @@ export function setupPlaygroundViewerMaterials(viewer: ViewerRuntime): void {
     if (result instanceof Promise)
       throw new Error('PLAYGROUND_ASYNC_VIEWER_FACET_UNSUPPORTED')
     const facet = result as MaterialViewerFacet
-    viewer.registerMaterial(manifest.type, manifest.common.binding, facet.extension)
+    viewer.registerMaterial(manifest.type, manifest.common.binding, facet.extension, manifest.common.layout)
   }
 }

@@ -96,6 +96,48 @@ afterEach(() => {
 })
 
 describe('viewer audit risk regressions', () => {
+  it('repeats legacy nodes from registration metadata and clears it on replacement or destroy', async () => {
+    const container = document.createElement('div')
+    const viewer = createViewer({ container })
+    const marker = (id: string, type: string, y: number): MaterialNode => ({
+      id,
+      type,
+      x: 2,
+      y,
+      width: 20,
+      height: 5,
+      modelVersion: 1,
+      model: {},
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
+    })
+    const markerExtension = {
+      render: (_node: MaterialNode, context: any) => ({ tree: viewerText(String(context.resolvedProps.__pageNumber ?? 'legacy')) }),
+    }
+    viewer.registerMaterial('legacy-marker', { kind: 'none' }, markerExtension, { pageRepeat: 'every-output-page' })
+    viewer.registerMaterial('ordinary-marker', { kind: 'none' }, markerExtension)
+    viewer.registerMaterial('content', { kind: 'none' }, { render: () => ({ tree: viewerText('page two') }) })
+
+    const schema = fixedSchema([
+      marker('legacy', 'legacy-marker', 2),
+      marker('ordinary', 'ordinary-marker', 10),
+      marker('content', 'content', 70),
+    ])
+    schema.page.pagination = { strategy: 'fixed-sheets', pageCount: 2 }
+    await viewer.open({ schema })
+
+    expect(container.querySelectorAll('[data-element-type="legacy-marker"]')).toHaveLength(2)
+    expect(container.querySelectorAll('[data-element-type="ordinary-marker"]')).toHaveLength(1)
+
+    viewer.registerMaterial('legacy-marker', { kind: 'none' }, markerExtension, { pageRepeat: 'none' })
+    await viewer.render()
+    expect(container.querySelectorAll('[data-element-type="legacy-marker"]')).toHaveLength(1)
+
+    viewer.destroy()
+    expect(viewer.materialRegistry.isPageAware('legacy-marker')).toBe(false)
+  })
+
   it('isolates every material render stage and continues rendering healthy nodes', async () => {
     const container = document.createElement('div')
     const diagnostics: ViewerDiagnosticEvent[] = []

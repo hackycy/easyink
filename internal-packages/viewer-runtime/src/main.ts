@@ -32,7 +32,7 @@ async function boot(): Promise<void> {
     const viewer = createViewer({ container: root })
     for (const manifest of builtinMaterialPackage.manifests) {
       const facet = await manifest.facets.viewer!({ profileId: 'render-runtime', materialType: manifest.type, surface: 'viewer', services: {} }) as MaterialViewerFacet
-      viewer.registerMaterial(manifest.type, manifest.common.binding, facet.extension)
+      viewer.registerMaterial(manifest.type, manifest.common.binding, facet.extension, manifest.common.layout)
     }
     await viewer.open({
       schema,

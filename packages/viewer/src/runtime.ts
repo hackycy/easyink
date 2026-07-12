@@ -1,4 +1,4 @@
-import type { InternalHooks, MaterialBindingDefinition, PagePlan, PaginationResult, ViewerMeasureResult } from '@easyink/core'
+import type { InternalHooks, MaterialBindingDefinition, MaterialLayoutFacet, PagePlan, PaginationResult, ViewerMeasureResult } from '@easyink/core'
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import type {
   MaterialViewerExtension,
@@ -409,8 +409,13 @@ export class ViewerRuntime {
   // Registration API
   // ---------------------------------------------------------------------------
 
-  registerMaterial(type: string, binding: MaterialBindingDefinition, extension: MaterialViewerExtension): void {
-    this._materialRegistry.register(type, binding, extension)
+  registerMaterial(
+    type: string,
+    binding: MaterialBindingDefinition,
+    extension: MaterialViewerExtension,
+    layout?: Pick<MaterialLayoutFacet, 'pageRepeat'>,
+  ): void {
+    this._materialRegistry.register(type, binding, extension, layout)
   }
 
   registerExporter(exporter: ViewerExporter): void {

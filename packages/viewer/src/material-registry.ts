@@ -1,4 +1,4 @@
-import type { MaterialBindingDefinition, MaterialConditionDefinition } from '@easyink/core'
+import type { MaterialBindingDefinition, MaterialConditionDefinition, MaterialLayoutFacet } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { FragmentPaginator, MaterialViewerExtension, ViewerMeasureContext, ViewerMeasureResult, ViewerRenderContext, ViewerRenderOutput, ViewerRenderSize } from './types'
 import { resolveMaterialConditionCapability, viewerElement, viewerText } from '@easyink/core'
@@ -12,9 +12,18 @@ export class MaterialRendererRegistry {
   private _bindings = new Map<string, MaterialBindingDefinition>()
   private _pageAwareTypes = new Set<string>()
 
-  register(type: string, binding: MaterialBindingDefinition, extension: MaterialViewerExtension): void {
+  register(
+    type: string,
+    binding: MaterialBindingDefinition,
+    extension: MaterialViewerExtension,
+    layout?: Pick<MaterialLayoutFacet, 'pageRepeat'>,
+  ): void {
     this._renderers.set(type, extension)
     this._bindings.set(type, binding)
+    if (layout?.pageRepeat === 'every-output-page')
+      this._pageAwareTypes.add(type)
+    else
+      this._pageAwareTypes.delete(type)
   }
 
   unregister(type: string): void {
