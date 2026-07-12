@@ -42,7 +42,8 @@ interface ResolvedRuntimeLayout {
   totalHeight: number
 }
 
-const runtimeLayoutCache = new WeakMap<MaterialNode<unknown>, ResolvedRuntimeLayout>()
+const runtimeLayoutCache = new WeakMap<object, ResolvedRuntimeLayout>()
+const fragmentIdEncoder = new TextEncoder()
 
 /**
  * Resolve the visible row sequence + per-row heights for a data table
@@ -112,7 +113,7 @@ export function measureTableData(node: MaterialNode<unknown>, context: ViewerMea
   const layout = resolveRuntimeLayout(tableNode, data, node.height, context.reportDiagnostic)
   // Cache so render() reuses the exact same per-row heights without
   // re-deriving baseline scale from the (about to be overwritten) node.height.
-  runtimeLayoutCache.set(tableNode, layout)
+  runtimeLayoutCache.set(runtimeLayoutKey(tableNode), layout)
   return { width: node.width, height: layout.totalHeight }
 }
 
@@ -127,7 +128,7 @@ export const tableDataFragmentPaginator: FragmentPaginator = {
     }
     const tableNode = node
 
-    const cached = runtimeLayoutCache.get(tableNode)
+    const cached = runtimeLayoutCache.get(runtimeLayoutKey(tableNode))
     if (!cached || input.availableHeight >= cached.totalHeight) {
       return { currentPage: input.fragment, diagnostics: [] }
     }
@@ -146,8 +147,8 @@ export const tableDataFragmentPaginator: FragmentPaginator = {
       }
     }
 
-    const current = createVirtualTableFragment(input.fragment, tableNode, split.currentRows, split.currentSources, cached.columnIds, split.currentHeights, split.currentHeight, `p${input.pageContext.pageIndex}`)
-    const next = createVirtualTableFragment(input.fragment, tableNode, split.nextRows, split.nextSources, cached.columnIds, split.nextHeights, split.nextHeight, `p${input.pageContext.pageIndex + 1}`)
+    const current = createVirtualTableFragment(input.fragment, tableNode, split.currentRows, split.currentSources, cached.columnIds, split.currentHeights, split.currentHeight, input.pageContext.pageIndex)
+    const next = createVirtualTableFragment(input.fragment, tableNode, split.nextRows, split.nextSources, cached.columnIds, split.nextHeights, split.nextHeight, input.pageContext.pageIndex + 1)
 
     return {
       currentPage: current,
@@ -172,7 +173,7 @@ export function renderTableData(node: MaterialNode<unknown>, context?: ViewerRen
   // overwritten by ViewerRuntime, so we cannot recompute baseline scale
   // from it here. Fall back to a direct compute when render is called
   // without a prior measure (e.g. unit tests).
-  const cached = runtimeLayoutCache.get(tableNode)
+  const cached = runtimeLayoutCache.get(runtimeLayoutKey(tableNode))
   const { rows: visibleRows, rowSources, columnIds, rowHeights, totalHeight } = cached
     ?? resolveRuntimeLayout(tableNode, data, node.height, context?.reportDiagnostic)
 
@@ -413,19 +414,33 @@ function createVirtualTableFragment(
   columnIds: string[],
   rowHeights: number[],
   height: number,
-  suffix: string,
+  pageIndex: number,
 ): LayoutFragment {
+  const id = createTableFragmentId(source.sourceNodeId, pageIndex)
   const virtualNode: MaterialNode<unknown> = {
     ...node,
-    id: `${node.id}__${suffix}`,
+    id,
     height,
+    model: { ...node.model as Record<string, unknown> },
   }
-  runtimeLayoutCache.set(virtualNode, { rows, rowSources, columnIds, rowHeights, totalHeight: height })
+  runtimeLayoutCache.set(runtimeLayoutKey(virtualNode), { rows, rowSources, columnIds, rowHeights, totalHeight: height })
   return {
     ...createFragmentFromNode(virtualNode),
     sourceNodeId: source.sourceNodeId,
     flow: source.flow,
   }
+}
+
+function runtimeLayoutKey(node: MaterialNode<unknown>): object {
+  return typeof node.model === 'object' && node.model !== null ? node.model : node
+}
+
+function createTableFragmentId(sourceNodeId: string, pageIndex: number): string {
+  const suffix = `__p${pageIndex}`
+  const literal = `${sourceNodeId}${suffix}`
+  if (fragmentIdEncoder.encode(literal).byteLength <= 256)
+    return literal
+  return `table-fragment-${sourceNodeId.length.toString(36)}-${hashKey(sourceNodeId, 0x811C9DC5)}-${hashKey(sourceNodeId, 0x9E3779B9)}${suffix}`
 }
 
 function sumHeights(entries: Array<{ height: number }>): number {

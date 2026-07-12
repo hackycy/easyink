@@ -1,6 +1,6 @@
 import type { ViewerElementTree, ViewerRenderTree } from '@easyink/core'
-import type { MaterialNode } from '@easyink/schema'
-import { createFragmentFromNode, viewerText } from '@easyink/core'
+import type { DocumentSchema, MaterialNode } from '@easyink/schema'
+import { createFragmentFromNode, runLayoutPipeline, runPagination, viewerText } from '@easyink/core'
 import { describe, expect, it } from 'vitest'
 import { createDefaultDataTableModel } from './schema'
 import { measureTableData, renderTableData, tableDataFragmentPaginator } from './viewer'
@@ -22,6 +22,19 @@ function createNode(): MaterialNode<unknown> {
 }
 
 describe('tableDataFragmentPaginator', () => {
+  it('paginates 200 records recursively with stable bounded identities across 50+ pages', () => {
+    const first = paginateAndRender(200)
+    const second = paginateAndRender(200)
+
+    expect(first.pageTrees.length).toBeGreaterThan(50)
+    expect(first.diagnostics).toEqual([])
+    expect(first.sourceNodeIds.every(id => id === 'table-data')).toBe(true)
+    expect(first.fragmentIds).toEqual(first.fragmentIds.map((_, index) => `table-data__p${index}`))
+    expect(new Set(first.fragmentIds).size).toBe(first.fragmentIds.length)
+    expect(new Set(first.domIds).size).toBe(first.domIds.length)
+    expect(second).toEqual(first)
+  })
+
   it('expands records from the configured collection port without requiring detail cell bindings', () => {
     const node = createNode()
     const model = node.model as ReturnType<typeof createDefaultDataTableModel>
@@ -162,6 +175,47 @@ function renderContext(data: Record<string, unknown>, reportDiagnostic?: (diagno
     zoom: 1,
     capabilities: { sanitizeMarkup: () => { throw new Error('unused') } },
     reportDiagnostic,
+  }
+}
+
+function paginateAndRender(recordCount: number) {
+  const node = createNode()
+  const model = node.model as ReturnType<typeof createDefaultDataTableModel>
+  model.data.detailKeyPort = 'detailKey'
+  node.bindings.records = { sourceId: 'invoice', fieldPath: 'items' }
+  node.bindings.detailKey = { sourceId: 'invoice', fieldPath: 'items/id' }
+  const data = { items: Array.from({ length: recordCount }, (_, index) => ({ id: `record-${index}` })) }
+  const measurement = measureTableData(node, { data, unit: 'mm' })
+  const schema: DocumentSchema = {
+    version: '1.0.0',
+    unit: 'mm',
+    page: {
+      mode: 'fixed',
+      width: 100,
+      height: 20,
+      pageModel: { kind: 'paged-paper', paper: { width: 100, height: 20 } },
+      layout: { strategy: 'absolute' },
+      reflow: { strategy: 'measure-only' },
+      pagination: { strategy: 'auto-sheets' },
+    },
+    guides: { x: [], y: [] },
+    elements: [node],
+  }
+  const layout = runLayoutPipeline(schema, { measured: new Map([[node.id, measurement]]) })
+  const pagination = runPagination(schema, layout, {
+    resolveFragmentPaginator: fragment => fragment.node.type === 'table-data' ? tableDataFragmentPaginator : undefined,
+  })
+  const fragments = pagination.pages.flatMap(page => page.fragments)
+  const pageTrees = fragments.map((fragment, pageIndex) => renderTableData(fragment.node, {
+    ...renderContext(data),
+    pageIndex,
+  }).tree)
+  return {
+    diagnostics: pagination.diagnostics,
+    fragmentIds: fragments.map(fragment => fragment.id),
+    sourceNodeIds: fragments.map(fragment => fragment.sourceNodeId),
+    domIds: pageTrees.flatMap(tree => findElements(tree, 'tr').concat(findElements(tree, 'th'), findElements(tree, 'td')).map(element => String(element.attributes.id))),
+    pageTrees,
   }
 }
 
