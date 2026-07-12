@@ -78,7 +78,7 @@ export function canCoalesceDocumentChanges(previous: DocumentChangeSet, next: Do
 export function mergeDocumentChangeSets(previous: DocumentChangeSet, next: DocumentChangeSet): DocumentChangeSet | null {
   if (!canCoalesceDocumentChanges(previous, next))
     return null
-  return createDocumentChangeSet({ ...next, baseRevision: previous.baseRevision, startedAt: previous.startedAt, affectedNodeIds: [...previous.affectedNodeIds, ...next.affectedNodeIds], operation: previous.operation })
+  return createDocumentChangeSet({ ...next, baseRevision: previous.baseRevision, startedAt: previous.startedAt, affectedNodeIds: [...previous.affectedNodeIds, ...next.affectedNodeIds], operation: next.operation })
 }
 
 export function combineStableOperationDescriptors(kind: string, operations: readonly DocumentOperationDescriptor[]): DocumentOperationDescriptor {
