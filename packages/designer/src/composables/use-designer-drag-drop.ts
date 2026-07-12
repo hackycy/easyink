@@ -2,9 +2,8 @@ import type { DatasourceDropZone, DatasourceFieldInfo, MaterialDataContract, Mat
 import type { DataUnionBinding } from '@easyink/datasource'
 import type { BindingRef, MaterialNode } from '@easyink/schema'
 import type { BindingDisplayFormat } from '@easyink/shared'
-import type { InjectionKey } from 'vue'
+import type { Component, InjectionKey } from 'vue'
 import type { DesignerStore } from '../store/designer-store'
-import type { MaterialCatalogEntry } from '../types'
 import {
   AddMaterialCommand,
   applyMaterialDataFieldMapping,
@@ -21,9 +20,19 @@ import { IconRect } from '@easyink/icons'
 import { deepClone } from '@easyink/shared'
 import { createGeometryService } from '../editing/geometry-service'
 import { selectMany, selectOne } from '../interactions/selection-api'
+import { resolveDefaultDatasourceBindingPort } from '../materials/binding-port'
 
 export const MATERIAL_DRAG_MIME = 'application/x-easyink-material'
 export const DATASOURCE_DRAG_MIME = 'application/x-easyink-field'
+
+export interface MaterialDragEntry {
+  id: string
+  groupId: string
+  label: string
+  icon: Component
+  materialType: string
+  dragData?: string
+}
 
 const MATERIAL_PREVIEW_MIN_SIZE_PX = 32
 const DATASOURCE_FLOATING_PREVIEW = {
@@ -53,10 +62,10 @@ export interface DesignerDragDropContext {
 }
 
 export interface DesignerDragDropController {
-  startMaterialPointerDrag: (event: PointerEvent, entry: MaterialCatalogEntry) => void
+  startMaterialPointerDrag: (event: PointerEvent, entry: MaterialDragEntry) => void
   startDatasourcePointerDrag: (event: PointerEvent, data: DatasourceFieldDragData) => void
   consumeClickSuppression: () => boolean
-  startMaterialDrag: (event: DragEvent, entry: MaterialCatalogEntry) => void
+  startMaterialDrag: (event: DragEvent, entry: MaterialDragEntry) => void
   startDatasourceDrag: (event: DragEvent, data: DatasourceFieldDragData) => void
   updateDragPosition: (event: DragEvent) => void
   endDrag: () => void
@@ -77,13 +86,13 @@ export interface DatasourcePanelDropTarget {
 export const DESIGNER_DRAG_DROP_KEY: InjectionKey<DesignerDragDropController> = Symbol('easyinkDesignerDragDrop')
 
 type DragSession
-  = | { kind: 'material', entry: MaterialCatalogEntry, dragData: string, node: MaterialNode | null }
+  = | { kind: 'material', entry: MaterialDragEntry, dragData: string, node: MaterialNode | null }
     | { kind: 'datasource', data: DatasourceFieldDragData }
 
 type PointerSession
   = | {
     kind: 'material'
-    entry: MaterialCatalogEntry
+    entry: MaterialDragEntry
     node: MaterialNode | null
     pointerId: number
     captureTarget: Element | null
@@ -149,7 +158,7 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
   let clearClickSuppressionTimer: number | null = null
   const datasourcePanelTargets = new Map<string, DatasourcePanelDropTarget>()
 
-  function startMaterialPointerDrag(event: PointerEvent, entry: MaterialCatalogEntry) {
+  function startMaterialPointerDrag(event: PointerEvent, entry: MaterialDragEntry) {
     if (!canStartPointerDrag(event))
       return
     event.preventDefault()
@@ -195,7 +204,7 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
     return shouldSuppress
   }
 
-  function startMaterialDrag(event: DragEvent, entry: MaterialCatalogEntry) {
+  function startMaterialDrag(event: DragEvent, entry: MaterialDragEntry) {
     if (!event.dataTransfer)
       return
     const dragData = entry.dragData ?? entry.materialType
@@ -408,6 +417,9 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
       }
     }
 
+    if (!resolveDefaultDatasourceBindingPort(binding))
+      return null
+
     return {
       kind: 'bind-element',
       target: hit,
@@ -479,7 +491,11 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
       return
     }
 
-    const cmd = new BindFieldCommand(ctx.store.schema.elements, resolved.target.id, createBinding(fieldData))
+    const port = resolveDefaultDatasourceBindingPort(binding)
+    if (!port)
+      return
+
+    const cmd = new BindFieldCommand(ctx.store.schema.elements, resolved.target.id, createBinding(fieldData), port)
     ctx.store.commands.execute(cmd)
     selectOne(ctx.store, resolved.target.id)
   }
@@ -882,25 +898,25 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
     emptyDragImageEl = null
   }
 
-  function resolveCatalogEntry(dragData: string): MaterialCatalogEntry | undefined {
+  function resolveCatalogEntry(dragData: string): MaterialDragEntry | undefined {
     const manifest = ctx.store.listEditableMaterialManifests().find(entry => entry.type === dragData)
     return manifest && { id: manifest.type, groupId: manifest.common.category, label: manifest.common.nameKey, icon: IconRect, materialType: manifest.type }
   }
 
-  function createMaterialNodeDraft(entry: MaterialCatalogEntry): MaterialNode | null {
+  function createMaterialNodeDraft(entry: MaterialDragEntry): MaterialNode | null {
     return ctx.store.materialProfile.createNode(entry.materialType, {}, ctx.store.schema.unit)
   }
 
   function createBinding(data: DatasourceFieldDragData): BindingRef {
     return {
       sourceId: data.sourceId,
-      sourceName: data.sourceName,
-      sourceTag: data.sourceTag,
       fieldPath: data.fieldPath,
-      fieldKey: data.fieldKey,
-      fieldLabel: data.fieldLabel,
-      format: data.format ? deepClone(data.format) : undefined,
-      bindIndex: data.bindIndex,
+      ...(data.sourceName !== undefined ? { sourceName: data.sourceName } : {}),
+      ...(data.sourceTag !== undefined ? { sourceTag: data.sourceTag } : {}),
+      ...(data.fieldKey !== undefined ? { fieldKey: data.fieldKey } : {}),
+      ...(data.fieldLabel !== undefined ? { fieldLabel: data.fieldLabel } : {}),
+      ...(data.format !== undefined ? { format: deepClone(data.format) } : {}),
+      ...(data.bindIndex !== undefined ? { bindIndex: data.bindIndex } : {}),
     }
   }
 

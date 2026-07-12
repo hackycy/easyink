@@ -21,4 +21,22 @@ describe('propertyEditorRegistry', () => {
     dispose()
     expect(registry.get('pkg/editor')).toBeUndefined()
   })
+
+  it('keeps a replacement registration when an old disposer runs', () => {
+    const registry = new PropertyEditorRegistry()
+    const first = defineComponent({ name: 'First' })
+    const replacement = defineComponent({ name: 'Replacement' })
+    const disposeFirst = registry.register({ id: 'pkg/editor', ownerPackageId: 'owner', component: first })
+
+    expect(registry.unregister('pkg/editor', 'owner')).toBe(true)
+    const disposeReplacement = registry.register({ id: 'pkg/editor', ownerPackageId: 'owner', component: replacement })
+
+    disposeFirst()
+    disposeFirst()
+    expect(registry.get('pkg/editor')).toBe(replacement)
+
+    disposeReplacement()
+    disposeReplacement()
+    expect(registry.get('pkg/editor')).toBeUndefined()
+  })
 })

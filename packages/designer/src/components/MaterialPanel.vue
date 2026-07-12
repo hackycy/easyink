@@ -1,17 +1,22 @@
 <script setup lang="ts">
-import type { MaterialCatalogEntry, MaterialCatalogGroup } from '../types'
+import type { MaterialDragEntry } from '../composables/use-designer-drag-drop'
 import { AddMaterialCommand } from '@easyink/core'
 import { computed, inject } from 'vue'
 import { useDesignerStore } from '../composables'
 import { DESIGNER_DRAG_DROP_KEY } from '../composables/use-designer-drag-drop'
 import { selectOne } from '../interactions/selection-api'
-import { resolveBuiltinMaterialIcon } from '../material-host'
 
 const store = useDesignerStore()
 const dragDrop = inject(DESIGNER_DRAG_DROP_KEY, null)
 
-const visibleCatalogGroups = computed<MaterialCatalogGroup[]>(() => {
-  const groups = new Map<string, MaterialCatalogGroup>()
+interface MaterialPanelGroup {
+  id: string
+  label: string
+  items: MaterialDragEntry[]
+}
+
+const visibleCatalogGroups = computed<MaterialPanelGroup[]>(() => {
+  const groups = new Map<string, MaterialPanelGroup>()
   for (const type of store.listEditableMaterialTypes()) {
     const manifest = store.getManifest(type)
     if (!manifest)
@@ -22,7 +27,7 @@ const visibleCatalogGroups = computed<MaterialCatalogGroup[]>(() => {
       id: type,
       groupId: id,
       label: manifest.common.nameKey,
-      icon: resolveBuiltinMaterialIcon(manifest.common.iconKey),
+      icon: store.resolveMaterialIcon(manifest.common.iconKey),
       materialType: type,
     })
     groups.set(id, group)
@@ -34,7 +39,7 @@ const hasRegisteredMaterials = computed(() =>
   visibleCatalogGroups.value.length > 0,
 )
 
-function handleAddMaterial(entry: MaterialCatalogEntry) {
+function handleAddMaterial(entry: MaterialDragEntry) {
   if (dragDrop?.consumeClickSuppression())
     return
   const node = store.materialProfile.createNode(entry.materialType, {
@@ -46,17 +51,17 @@ function handleAddMaterial(entry: MaterialCatalogEntry) {
   selectOne(store, node.id)
 }
 
-function handlePointerDown(e: PointerEvent, entry: MaterialCatalogEntry) {
+function handlePointerDown(e: PointerEvent, entry: MaterialDragEntry) {
   dragDrop?.startMaterialPointerDrag(e, entry)
 }
 
-function handlePointerUp(entry: MaterialCatalogEntry) {
+function handlePointerUp(entry: MaterialDragEntry) {
   if (dragDrop?.consumeClickSuppression())
     return
   handleAddMaterial(entry)
 }
 
-function handleKeyAdd(e: KeyboardEvent, entry: MaterialCatalogEntry) {
+function handleKeyAdd(e: KeyboardEvent, entry: MaterialDragEntry) {
   if (e.key !== 'Enter' && e.key !== ' ')
     return
   e.preventDefault()

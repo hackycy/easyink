@@ -77,7 +77,11 @@ function createTableNode(id = 'data'): MaterialNode {
 }
 
 function showHeaderAccessor() {
-  return resolvePropertyAccessor(tableDataDesignerPropSchemas.find(schema => schema.key === 'showHeader')!)
+  return resolvePropertyAccessor(showHeaderDescriptor())
+}
+
+function showHeaderDescriptor() {
+  return tableDataDesignerPropSchemas.find(schema => schema.key === 'showHeader')!
 }
 
 function bandRoles(node: MaterialNode): string[] {
@@ -93,7 +97,7 @@ describe('propertiesPanel material property preview lifecycle', () => {
     const commands = new CommandManager()
     const tx = createTransactionService(id => id === node.id ? node : undefined, commands)
 
-    preview.preview(node, 'showHeader', draft => accessor.write(draft, false))
+    preview.preview(node, showHeaderDescriptor(), draft => accessor.write(draft, false))
     expect(bandRoles(node)).toEqual(['detail'])
     expect(node.bindings['header:value']).toBeUndefined()
     expect(node.slots['cell:cell:header-b']).toBeUndefined()
@@ -115,8 +119,8 @@ describe('propertiesPanel material property preview lifecycle', () => {
     const preview = new MaterialPropertyPreviewSession()
     const accessor = showHeaderAccessor()
 
-    preview.preview(first, 'showHeader', draft => accessor.write(draft, false))
-    preview.preview(second, 'showHeader', draft => accessor.write(draft, false))
+    preview.preview(first, showHeaderDescriptor(), draft => accessor.write(draft, false))
+    preview.preview(second, showHeaderDescriptor(), draft => accessor.write(draft, false))
     expect(first).toEqual(firstBefore)
     expect(bandRoles(second)).toEqual(['detail'])
 
@@ -128,10 +132,11 @@ describe('propertiesPanel material property preview lifecycle', () => {
     const node = createTableNode()
     const preview = new MaterialPropertyPreviewSession()
     const accessor = createNodePropertyAccessor<number>('/width')
+    const descriptor = { key: 'width', label: 'Width', type: 'number' as const, accessor }
     const commands = new CommandManager()
     const tx = createTransactionService(id => id === node.id ? node : undefined, commands)
 
-    preview.preview(node, 'width', draft => accessor.write(draft, 120))
+    preview.preview(node, descriptor, draft => accessor.write(draft, 120))
     expect(node.width).toBe(120)
     commitMaterialPropertyPreview(preview, node, 'width', () =>
       tx.run(node.id, draft => accessor.write(draft, 140)))
@@ -139,5 +144,66 @@ describe('propertiesPanel material property preview lifecycle', () => {
 
     commands.undo()
     expect(node.width).toBe(90)
+  })
+
+  it('preserves concurrent editor, output, and unrelated model updates on cancel and commit', () => {
+    const node = createTableNode()
+    node.model.sibling = 'before'
+    const accessor = showHeaderAccessor()
+    const descriptor = showHeaderDescriptor()
+    const preview = new MaterialPropertyPreviewSession()
+
+    preview.preview(node, descriptor, draft => accessor.write(draft, false))
+    node.editorState = { locked: true }
+    node.output.visibility = 'reserve'
+    node.model.sibling = 'concurrent-cancel'
+    preview.cancel()
+
+    expect(bandRoles(node)).toEqual(['header', 'detail'])
+    expect(node.editorState).toEqual({ locked: true })
+    expect(node.output.visibility).toBe('reserve')
+    expect(node.model.sibling).toBe('concurrent-cancel')
+
+    preview.preview(node, descriptor, draft => accessor.write(draft, false))
+    node.editorState.hidden = true
+    node.output.visibility = 'remove'
+    node.model.sibling = 'concurrent-commit'
+    commitMaterialPropertyPreview(preview, node, 'showHeader', () => accessor.write(node, false))
+
+    expect(bandRoles(node)).toEqual(['detail'])
+    expect(node.editorState).toEqual({ locked: true, hidden: true })
+    expect(node.output.visibility).toBe('remove')
+    expect(node.model.sibling).toBe('concurrent-commit')
+  })
+
+  it('restores a previously missing property as missing', () => {
+    const node = createTableNode()
+    const accessor = createNodePropertyAccessor<string>('/model/temporary')
+    const descriptor = { key: 'temporary', label: 'Temporary', type: 'string' as const, accessor }
+    const preview = new MaterialPropertyPreviewSession()
+
+    preview.preview(node, descriptor, draft => accessor.write(draft, 'preview'))
+    expect(node.model).toHaveProperty('temporary', 'preview')
+    preview.cancel()
+
+    expect(node.model).not.toHaveProperty('temporary')
+  })
+
+  it('restores declared array index paths without replacing the array', () => {
+    const node = createTableNode()
+    node.model.items = ['first', 'second']
+    const items = node.model.items
+    const accessor = createNodePropertyAccessor<string>('/model/items/1')
+    const descriptor = { key: 'item', label: 'Item', type: 'string' as const, accessor }
+    const preview = new MaterialPropertyPreviewSession()
+
+    preview.preview(node, descriptor, draft => accessor.write(draft, 'preview-one'))
+    preview.preview(node, descriptor, draft => accessor.write(draft, 'preview-two'))
+    expect(node.model.items).toBe(items)
+    expect(node.model.items).toEqual(['first', 'preview-two'])
+
+    preview.cancel()
+    expect(node.model.items).toBe(items)
+    expect(node.model.items).toEqual(['first', 'second'])
   })
 })

@@ -17,14 +17,15 @@ export class BindFieldCommand implements Command {
     private elements: MaterialNode[],
     private nodeId: string,
     private binding: BindingRef,
+    private port = 'value',
   ) {}
 
   execute(): void {
     const node = findNode(this.elements, this.nodeId)
     if (!node)
       return
-    this.oldBinding = deepClone(getNodeBinding(node))
-    node.bindings.value = deepClone(this.binding)
+    this.oldBinding = deepClone(node.bindings[this.port])
+    node.bindings[this.port] = deepClone(this.binding)
   }
 
   undo(): void {
@@ -32,9 +33,9 @@ export class BindFieldCommand implements Command {
     if (!node)
       return
     if (this.oldBinding)
-      node.bindings.value = this.oldBinding
+      node.bindings[this.port] = this.oldBinding
     else
-      delete node.bindings.value
+      delete node.bindings[this.port]
   }
 }
 

@@ -5,6 +5,7 @@ import type { DesignerStore } from '../store/designer-store'
 import { BindFieldCommand, pointInRect } from '@easyink/core'
 import { createGeometryService } from '../editing/geometry-service'
 import { selectOne } from '../interactions/selection-api'
+import { resolveDefaultDatasourceBindingPort } from '../materials/binding-port'
 
 /**
  * MIME type used for datasource field drag data.
@@ -244,6 +245,11 @@ export function useDatasourceDrop(ctx: DatasourceDropContext) {
       }
     }
     else {
+      const port = resolveDefaultDatasourceBindingPort(store.getMaterialManifest(target.type)?.common.binding)
+      if (!port) {
+        hideDropZone()
+        return
+      }
       // Default: highlight the whole element
       showDropZone(
         { status: 'accepted', rect: { x: 0, y: 0, w: elementSize.width, h: elementSize.height } },
@@ -291,18 +297,22 @@ export function useDatasourceDrop(ctx: DatasourceDropContext) {
       return
     }
 
+    const port = resolveDefaultDatasourceBindingPort(store.getMaterialManifest(target.type)?.common.binding)
+    if (!port)
+      return
+
     // Default: scalar element binding
     const binding: BindingRef = {
       sourceId: fieldData.sourceId,
-      sourceName: fieldData.sourceName,
-      sourceTag: fieldData.sourceTag,
       fieldPath: fieldData.fieldPath,
-      fieldKey: fieldData.fieldKey,
-      fieldLabel: fieldData.fieldLabel,
-      format: fieldData.format,
+      ...(fieldData.sourceName !== undefined ? { sourceName: fieldData.sourceName } : {}),
+      ...(fieldData.sourceTag !== undefined ? { sourceTag: fieldData.sourceTag } : {}),
+      ...(fieldData.fieldKey !== undefined ? { fieldKey: fieldData.fieldKey } : {}),
+      ...(fieldData.fieldLabel !== undefined ? { fieldLabel: fieldData.fieldLabel } : {}),
+      ...(fieldData.format !== undefined ? { format: fieldData.format } : {}),
     }
 
-    const cmd = new BindFieldCommand(store.schema.elements, target.id, binding)
+    const cmd = new BindFieldCommand(store.schema.elements, target.id, binding, port)
     store.commands.execute(cmd)
     selectOne(store, target.id)
   }

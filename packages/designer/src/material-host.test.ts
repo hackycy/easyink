@@ -5,6 +5,7 @@ import type { MaterialNode } from '@easyink/schema'
 import { createTestMaterialManifest } from '@easyink/core/testing'
 import { describe, expect, it, vi } from 'vitest'
 import { createApp, defineComponent, h, nextTick } from 'vue'
+import { compileBuiltinMaterialProfile } from '../../builtin/src'
 import CanvasElementContent from './components/CanvasElementContent.vue'
 import { provideDesignerStore } from './composables'
 import { builtinCatalogGroupLabels, builtinMaterialIcons, resolveBuiltinMaterialIcon } from './material-host'
@@ -53,9 +54,80 @@ describe('designer builtin material host metadata', () => {
     expect(resolveBuiltinMaterialIcon('image')).toBe(builtinMaterialIcons.image)
     expect(resolveBuiltinMaterialIcon('host-unknown')).toBe(builtinMaterialIcons.rect)
   })
+
+  it('lets runtime icons override builtins while keeping the deterministic fallback', () => {
+    const customImage = defineComponent({ name: 'HostImageIcon' })
+    const runtimeConfig = Object.freeze({
+      materials: Object.freeze({ icons: Object.freeze({ image: customImage }) }),
+    })
+    const store = new DesignerStore(undefined, undefined, undefined, runtimeConfig)
+
+    expect(store.resolveMaterialIcon('image')).toBe(customImage)
+    expect(store.resolveMaterialIcon('missing')).toBe(builtinMaterialIcons.rect)
+  })
 })
 
 describe('designerStore material facet host', () => {
+  it('provides the shared transaction and designer host services lazily', async () => {
+    let activationServices: unknown
+    const manifest = createTestMaterialManifest({
+      type: 'services',
+      designer: (context) => {
+        activationServices = context.services
+        return {
+          extension: { renderContent: () => () => {} },
+          catalog: { group: 'test', order: 0 },
+        }
+      },
+    })
+    const profile = createDesignerTestProfile([manifest])
+    const icon = defineComponent({ name: 'HostServiceIcon' })
+    const runtimeConfig = { materials: { profile, icons: { service: icon } } }
+    const store = new DesignerStore(undefined, undefined, undefined, runtimeConfig)
+
+    expect(activationServices).toBeUndefined()
+    await store.activateDesignerFacet('services')
+
+    expect(activationServices).toMatchObject({
+      tx: store.materialTransaction,
+      propertyEditorRegistry: store.propertyEditorRegistry,
+      runtimeConfig,
+    })
+    const services = activationServices as {
+      registerLocaleMessages: unknown
+      resolveMaterialIcon: (key: string) => unknown
+    }
+    expect(services.registerLocaleMessages).toEqual(expect.any(Function))
+    expect(services.resolveMaterialIcon('service')).toBe(icon)
+  })
+
+  it('activates real builtin text and flow-row facets with live extension services', async () => {
+    const profile = compileBuiltinMaterialProfile('basic')
+    const flow = profile.createNode('flow-row', { id: 'flow' })
+    const text = profile.createNode('text', { id: 'text' })
+    const store = new DesignerStore({ elements: [flow, text] }, undefined, undefined, { materials: { profile } })
+
+    const [textFacet, flowFacet] = await Promise.all([
+      store.activateDesignerFacet('text'),
+      store.activateDesignerFacet('flow-row'),
+    ])
+
+    expect(textFacet.state).toBe('active')
+    expect(flowFacet.state).toBe('active')
+    expect(store.peekDesignerFacet('text')).toBe(textFacet)
+    expect(store.peekDesignerFacet('flow-row')).toBe(flowFacet)
+
+    const liveFlow = store.getElementById('flow')!
+    flowFacet.value!.extension.datasourceDrop!.onDrop(
+      { sourceId: 'orders', fieldPath: 'items/name', fieldLabel: 'Name' },
+      { x: 1, y: 1 },
+      liveFlow,
+    )
+    expect(Object.keys(liveFlow.bindings)).toContainEqual(expect.stringMatching(/^column:/))
+    expect(store.commands.canUndo).toBe(true)
+    store.destroy()
+  })
+
   it('activates and peeks a designer facet while excluding viewer-only types', async () => {
     const extension = { renderContent: vi.fn(() => () => {}) }
     const profile = createDesignerTestProfile([

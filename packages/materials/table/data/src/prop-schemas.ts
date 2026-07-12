@@ -23,7 +23,7 @@ const TABLE_TEXT_ALIGN_ACCESSOR = createNodePropertyAccessor<'left' | 'center' |
   readValue: value => value === 'start' ? 'left' : value === 'end' ? 'right' : 'center',
   writeValue: value => value === 'left' ? 'start' : value === 'right' ? 'end' : 'center',
 })
-const TABLE_DATA_BANDS_PATHS = Object.freeze(['/model/bands'] as const)
+const TABLE_DATA_BANDS_PATHS = Object.freeze(['/model/bands', '/bindings', '/slots'] as const)
 const TABLE_DATA_BANDS_SHARING_GROUP = 'table-data-bands'
 
 function createBandVisibilityAccessor(role: 'header' | 'footer'): PropertyAccessor<boolean> {

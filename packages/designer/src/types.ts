@@ -1,12 +1,9 @@
-import type { MaterialBindingDefinition, MaterialConditionCapability, PropertyDescriptor, PropertyDescriptorLike, PropertyEditorOptions } from '@easyink/core'
+import type { PropertyDescriptor, PropertyDescriptorLike, PropertyEditorOptions } from '@easyink/core'
 import type { DataSourceDescriptor } from '@easyink/datasource'
 import type { LocaleMessages } from '@easyink/locales'
 import type { DocumentSchema, DocumentSchemaInput, MaterialNode } from '@easyink/schema'
-import type { AIMaterialDescriptor, MaterialCategory } from '@easyink/shared'
-import type { Component } from 'vue'
 import type { Contribution } from './contributions/types'
 
-export type MaterialIcon = Component
 export type PropSchema = PropertyDescriptor
 export type PropSchemaEditorOptions = PropertyEditorOptions
 export type PropSchemaLike = PropertyDescriptorLike
@@ -184,66 +181,9 @@ export interface StatusBarState {
 /** Identifiers for the sections in PropertiesPanel. */
 export type PanelSectionId = 'geometry' | 'props' | 'overlay' | 'binding' | 'condition' | 'visibility'
 
-/** Context passed to MaterialDefinition.sectionFilter for dynamic decisions. */
-export interface SectionFilterContext {
-  node: MaterialNode
-  /** Whether an editing session is active for this node */
-  isEditing: boolean
-}
-
 // ─── Material Definition ───────────────────────────────────────────
 
-export interface MaterialDefinition {
-  type: string
-  name: string
-  icon: MaterialIcon
-  category: MaterialCategory
-  capabilities: MaterialCapabilities
-  condition?: MaterialConditionCapability
-  props: PropSchema[]
-  binding: MaterialBindingDefinition
-  aiDescriptor?: AIMaterialDescriptor
-  createDefaultNode: (input?: Partial<MaterialNode>, unit?: string) => MaterialNode
-  /**
-   * Dynamic filter for PropertiesPanel sections.
-   * Return false to hide a section. When absent, all sections are shown.
-   */
-  sectionFilter?: (sectionId: PanelSectionId, context: SectionFilterContext) => boolean
-}
-
-export interface MaterialCapabilities {
-  bindable?: boolean
-  rotatable?: boolean
-  resizable?: boolean
-  supportsChildren?: boolean
-  supportsAnimation?: boolean
-  supportsUnionDrop?: boolean
-  pageAware?: boolean
-  multiBinding?: boolean
-  /** Maintain aspect ratio during element-level resize handle drag. */
-  keepAspectRatio?: boolean
-}
-
 // ─── Material Catalog ──────────────────────────────────────────────
-
-export interface MaterialCatalogEntry {
-  id: string
-  groupId: string
-  label: string
-  icon: MaterialIcon
-  materialType: string
-  createDefaultNode?: MaterialDefinition['createDefaultNode']
-  dragData?: string
-  useTokens?: string[]
-  order?: number
-}
-
-export interface MaterialCatalogGroup {
-  id: string
-  label: string
-  order?: number
-  items: MaterialCatalogEntry[]
-}
 
 // ─── Material Extensions (re-exported from @easyink/core) ─────────
 

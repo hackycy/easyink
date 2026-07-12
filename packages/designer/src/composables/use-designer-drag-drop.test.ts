@@ -1,7 +1,9 @@
 /**
  * @vitest-environment happy-dom
  */
+import type { MaterialManifest } from '@easyink/core'
 import type { MaterialNode, PageSchema } from '@easyink/schema'
+import { validateDocumentWithProfile } from '@easyink/core'
 import { createTestMaterialManifest } from '@easyink/core/testing'
 import { describe, expect, it, vi } from 'vitest'
 import { createDesignerTestProfile } from '../testing/material-profile'
@@ -101,7 +103,12 @@ function dispatchPointerEvent(type: string, clientX: number, clientY: number, po
 function makeStore(
   elements: MaterialNode[] = [],
   extension?: unknown,
-  options: { textCreateDefaultNode?: (partial?: Partial<MaterialNode>) => MaterialNode, page?: PageSchema, textDataContract?: unknown } = {},
+  options: {
+    textCreateDefaultNode?: (partial?: Partial<MaterialNode>) => MaterialNode
+    page?: PageSchema
+    textDataContract?: unknown
+    extraManifests?: readonly MaterialManifest[]
+  } = {},
 ) {
   const textBinding = options.textDataContract
     ? {
@@ -111,13 +118,14 @@ function makeStore(
       }
     : {
         kind: 'ports' as const,
-        ports: [{ id: 'content', key: { kind: 'exact' as const, value: 'content' }, role: 'display' as const, valueShape: 'scalar' as const, modelPath: '/model/content' as const, formatEditor: { tabs: ['preset'] as const } }],
+        ports: [{ id: 'value', key: { kind: 'exact' as const, value: 'value' }, role: 'display' as const, valueShape: 'scalar' as const, modelPath: '/model/content' as const, formatEditor: { tabs: ['preset'] as const } }],
       }
   const textBase = createTestMaterialManifest({ type: 'text', binding: textBinding, designer: true })
   const lineBase = createTestMaterialManifest({ type: 'line', binding: { kind: 'none' }, designer: true })
   const profile = createDesignerTestProfile([
     { ...textBase, common: { ...textBase.common, defaultNode: { ...textBase.common.defaultNode, width: 100, height: 50 } } },
     { ...lineBase, common: { ...lineBase.common, defaultNode: { ...lineBase.common.defaultNode, width: 100, height: 1 } } },
+    ...(options.extraManifests ?? []),
   ])
   const createNode = vi.fn((type: string, partial?: Parameters<typeof profile.createNode>[1]) => options.textCreateDefaultNode && type === 'text'
     ? options.textCreateDefaultNode(partial)
@@ -487,6 +495,80 @@ describe('useDesignerDragDrop', () => {
     expect(elements).toHaveLength(0)
     expect(store.commands.execute).not.toHaveBeenCalled()
     drag.cleanup()
+  })
+
+  it('binds scalar fields to the exact canonical port declared by text and image manifests', () => {
+    const pageEl = makePageEl()
+    const text = createTextNode({ id: 'text-target', x: 0, y: 0 })
+    const image = createTextNode({ id: 'image-target', type: 'image', x: 150, y: 0 })
+    const imageManifest = createTestMaterialManifest({
+      type: 'image',
+      binding: {
+        kind: 'ports',
+        ports: [{ id: 'src', key: { kind: 'exact', value: 'src' }, role: 'display', valueShape: 'scalar', modelPath: '/model/src', formatEditor: { tabs: ['preset'] } }],
+      },
+      designer: true,
+    })
+    const store = makeStore([text, image], undefined, { extraManifests: [imageManifest] })
+    const drag = useDesignerDragDrop({ store: store as never, getPageEl: () => pageEl })
+    const field = { sourceId: 'order', fieldPath: 'order/value', fieldLabel: 'Value' }
+
+    drag.startDatasourceDrag(makeDragEvent(0, 0, []), field)
+    drag.onCanvasDrop(makeDragEvent(20, 20, [DATASOURCE_DRAG_MIME], { [DATASOURCE_DRAG_MIME]: JSON.stringify(field) }))
+    drag.startDatasourceDrag(makeDragEvent(0, 0, []), field)
+    drag.onCanvasDrop(makeDragEvent(170, 20, [DATASOURCE_DRAG_MIME], { [DATASOURCE_DRAG_MIME]: JSON.stringify(field) }))
+
+    expect(text.bindings).toEqual({ value: expect.objectContaining({ fieldPath: 'order/value' }) })
+    expect(image.bindings).toEqual({ src: expect.objectContaining({ fieldPath: 'order/value' }) })
+    expect(image.bindings.value).toBeUndefined()
+    const report = validateDocumentWithProfile({
+      version: '1.0.0',
+      unit: 'px',
+      page: makePage(),
+      guides: { x: [], y: [] },
+      elements: [text, image],
+    }, store.materialProfile)
+    expect(report.diagnostics).toEqual([])
+    expect(report.valid).toBe(true)
+    drag.cleanup()
+  })
+
+  it('does not fall back to value for prefix ports and delegates custom materials to their extension', () => {
+    const pageEl = makePageEl()
+    const table = createTextNode({ id: 'table', type: 'table-static', x: 0, y: 0 })
+    const custom = createTextNode({ id: 'custom', type: 'chart-custom', x: 150, y: 0 })
+    const prefixBinding = {
+      kind: 'ports' as const,
+      ports: [{ id: 'cell', key: { kind: 'prefix' as const, value: 'cell:' }, role: 'display' as const, valueShape: 'scalar' as const, modelPath: '/model/cells' as const, formatEditor: false as const }],
+    }
+    const manifests = [
+      createTestMaterialManifest({ type: 'table-static', binding: prefixBinding, designer: true }),
+      createTestMaterialManifest({ type: 'chart-custom', binding: prefixBinding, designer: true }),
+    ]
+    const onDrop = vi.fn()
+    const extension = {
+      datasourceDrop: {
+        onDragOver: () => ({ status: 'accepted' as const, rect: { x: 0, y: 0, w: 100, h: 50 } }),
+        onDrop,
+      },
+    }
+    const tableStore = makeStore([table], undefined, { extraManifests: manifests })
+    const tableDrag = useDesignerDragDrop({ store: tableStore as never, getPageEl: () => pageEl })
+    const customStore = makeStore([custom], extension, { extraManifests: manifests })
+    const customDrag = useDesignerDragDrop({ store: customStore as never, getPageEl: () => pageEl })
+    const field = { sourceId: 'order', fieldPath: 'order/value' }
+
+    tableDrag.startDatasourceDrag(makeDragEvent(0, 0, []), field)
+    tableDrag.onCanvasDrop(makeDragEvent(20, 20, [DATASOURCE_DRAG_MIME], { [DATASOURCE_DRAG_MIME]: JSON.stringify(field) }))
+    customDrag.startDatasourceDrag(makeDragEvent(0, 0, []), field)
+    customDrag.onCanvasDrop(makeDragEvent(170, 20, [DATASOURCE_DRAG_MIME], { [DATASOURCE_DRAG_MIME]: JSON.stringify(field) }))
+
+    expect(table.bindings).toEqual({})
+    expect(tableStore.commands.execute).not.toHaveBeenCalled()
+    expect(onDrop).toHaveBeenCalledOnce()
+    expect(custom.bindings.value).toBeUndefined()
+    tableDrag.cleanup()
+    customDrag.cleanup()
   })
 
   it('passes real datasource field info to material drop handlers during hover', () => {

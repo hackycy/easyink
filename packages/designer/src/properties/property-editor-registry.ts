@@ -27,7 +27,11 @@ export class PropertyEditorRegistry {
       throw new PropertyEditorRegistryError('PROPERTY_EDITOR_DUPLICATE', input.id)
     const registration = { ...input, component: markRaw(input.component) }
     this.registrations.set(input.id, registration)
-    return () => this.unregister(input.id, input.ownerPackageId)
+    return () => {
+      if (this.registrations.get(registration.id) !== registration)
+        return
+      this.registrations.delete(registration.id)
+    }
   }
 
   unregister(id: string, ownerPackageId: string): boolean {

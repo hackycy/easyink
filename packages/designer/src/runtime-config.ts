@@ -1,13 +1,14 @@
 import type { CompiledMaterialProfile, MaterialPackageRegistration } from '@easyink/core'
 import type { DocumentSchema, PageSchema } from '@easyink/schema'
 import type { PaperPreset } from '@easyink/shared'
+import type { Component } from 'vue'
 import { compileMaterialProfile, EASYINK_ENGINE_VERSION } from '@easyink/core'
 
 export interface DesignerMaterialConfig {
   profile?: CompiledMaterialProfile
   packages?: readonly MaterialPackageRegistration[]
   engineVersion?: string
-  icons?: Readonly<Record<string, unknown>>
+  icons?: Readonly<Record<string, Component>>
 }
 
 export function resolveDesignerMaterialProfile(config?: DesignerMaterialConfig): CompiledMaterialProfile {

@@ -1,7 +1,7 @@
 import type { MaterialControlPolicy } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { DesignerStore } from '../store/designer-store'
-import type { MaterialDefinition, PropSchema } from '../types'
+import type { PropSchema } from '../types'
 import { describe, expect, it } from 'vitest'
 import {
   canEditGeometry,
@@ -25,7 +25,7 @@ const node: MaterialNode = {
   output: { visibility: 'include' },
 }
 
-function makeStore(policy: MaterialControlPolicy, capabilities: MaterialDefinition['capabilities'] = { resizable: true }): DesignerStore {
+function makeStore(policy: MaterialControlPolicy, capabilities: { resizable?: boolean } = { resizable: true }): DesignerStore {
   return {
     schema: {},
     t: (key: string) => key,

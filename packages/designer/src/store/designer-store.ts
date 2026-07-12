@@ -1,6 +1,7 @@
 import type { CompiledMaterialProfile, EphemeralPanelDef, FacetInstance, FontLoadRequest, FontLoadStatus, FontManager, FontProvider, MaterialDesignerFacet, MaterialFacetHost, MaterialLoadDiagnostic, MaterialNodeLoadState, PropertyPanelOverlay, TransactionAPI } from '@easyink/core'
 import type { DocumentSchema, DocumentSchemaInput, ElementGroupSchema, MaterialNode } from '@easyink/schema'
 import type { PaperPreset } from '@easyink/shared'
+import type { Component } from 'vue'
 import type { DesignerRuntimeConfig } from '../runtime-config'
 import type { DesignerInteractionProvider, LocaleMessageRegistration, LocaleMessages, PreferenceProvider, SnapLine, StatusBarState } from '../types'
 import { CommandManager, MaterialFacetHost as CoreMaterialFacetHost, loadDocumentWithProfile, SelectionModel, validateDocumentWithProfile } from '@easyink/core'
@@ -10,6 +11,8 @@ import { markRaw } from 'vue'
 import { EditingSessionManager } from '../editing/editing-session-manager'
 import { createTransactionService } from '../editing/transaction-service'
 import { DesignerInteractionService } from '../interactions/interaction-service'
+import { resolveBuiltinMaterialIcon } from '../material-host'
+import { createMaterialExtensionContext } from '../materials/extension-context'
 import { PropertyEditorRegistry } from '../properties/property-editor-registry'
 import { resolveDesignerMaterialProfile } from '../runtime-config'
 import { DiagnosticsChannel } from './diagnostics'
@@ -24,7 +27,9 @@ import { createDefaultSaveBranchMenu, createDefaultWorkbenchState } from './work
  * It composes template state, workbench state, and interaction context.
  */
 export class DesignerStore {
+  readonly runtimeConfig?: DesignerRuntimeConfig
   readonly materialProfile: CompiledMaterialProfile
+  private readonly materialIcons: Readonly<Record<string, Component>>
   readonly propertyEditorRegistry = markRaw(new PropertyEditorRegistry())
   readonly materialFacetHost: MaterialFacetHost
   private readonly designerFacetCache = new Map<string, FacetInstance<MaterialDesignerFacet>>()
@@ -95,8 +100,17 @@ export class DesignerStore {
     interactionProvider?: DesignerInteractionProvider,
     runtimeConfig?: DesignerRuntimeConfig,
   ) {
+    this.runtimeConfig = runtimeConfig
+    this.materialIcons = markRaw({ ...runtimeConfig?.materials?.icons })
     this.materialProfile = resolveDesignerMaterialProfile(runtimeConfig?.materials)
-    this.materialFacetHost = markRaw(new CoreMaterialFacetHost())
+    this.materialFacetHost = markRaw(new CoreMaterialFacetHost({
+      getActivationServices: () => Object.assign(createMaterialExtensionContext(this), {
+        propertyEditorRegistry: this.propertyEditorRegistry,
+        registerLocaleMessages: this.registerLocaleMessages.bind(this),
+        resolveMaterialIcon: this.resolveMaterialIcon.bind(this),
+        runtimeConfig: this.runtimeConfig,
+      }),
+    }))
     const loaded = loadDocumentWithProfile(schema, this.materialProfile)
     this._schema = loaded.schema
     this._materialDiagnostics = loaded.diagnostics
@@ -371,6 +385,10 @@ export class DesignerStore {
 
   getManifest(type: string) {
     return this.getMaterialManifest(type)
+  }
+
+  resolveMaterialIcon(iconKey: string): Component {
+    return this.materialIcons[iconKey] ?? resolveBuiltinMaterialIcon(iconKey)
   }
 
   listEditableMaterialTypes(): readonly string[] {

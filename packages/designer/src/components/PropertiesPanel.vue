@@ -449,18 +449,20 @@ function groupLabel(group: string): string {
 // ─── Material prop preview/commit ──────────────────────────────
 
 interface PropertyPreviewContext {
+  session: object | null
   sessionNodeId?: string
   selection: Selection | null
 }
 
 const propertyPreview = new MaterialPropertyPreviewSession<PropertyPreviewContext>({
   captureContext: () => ({
+    session: store.editingSession.activeSession,
     sessionNodeId: store.editingSession.activeSession?.nodeId,
     selection: deepClone(store.editingSession.activeSession?.selectionStore.selection ?? null),
   }),
   restoreContext: (context) => {
     const session = store.editingSession.activeSession
-    if (session && session.nodeId === context.sessionNodeId)
+    if (session && session === context.session && session.nodeId === context.sessionNodeId)
       session.selectionStore.set(deepClone(context.selection))
   },
 })
@@ -489,7 +491,7 @@ function previewProp(key: string, value: unknown) {
   if (schema?.type === 'font')
     return
   const accessor = resolvePropertyAccessor(schema)
-  propertyPreview.preview(el, key, node => writePropertyWithSelectionRebase(accessor, node, value))
+  propertyPreview.preview(el, schema, node => writePropertyWithSelectionRebase(accessor, node, value))
 }
 
 async function updateProp(key: string, value: unknown) {
