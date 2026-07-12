@@ -1,4 +1,4 @@
-import type { CompiledMaterialProfile, EphemeralPanelDef, FontLoadRequest, FontLoadStatus, FontManager, FontProvider, MaterialFacetHost, MaterialLoadDiagnostic, MaterialNodeLoadState, PropertyPanelOverlay } from '@easyink/core'
+import type { CompiledMaterialProfile, EphemeralPanelDef, FontLoadRequest, FontLoadStatus, FontManager, FontProvider, MaterialFacetHost, MaterialLoadDiagnostic, MaterialNodeLoadState, PropertyPanelOverlay, TransactionAPI } from '@easyink/core'
 import type { DocumentSchema, DocumentSchemaInput, ElementGroupSchema, MaterialNode } from '@easyink/schema'
 import type { PaperPreset } from '@easyink/shared'
 import type { DesignerRuntimeConfig } from '../runtime-config'
@@ -8,6 +8,7 @@ import { DataSourceRegistry } from '@easyink/datasource'
 import { findNodeById } from '@easyink/schema'
 import { markRaw } from 'vue'
 import { EditingSessionManager } from '../editing/editing-session-manager'
+import { createTransactionService } from '../editing/transaction-service'
 import { DesignerInteractionService } from '../interactions/interaction-service'
 import { PropertyEditorRegistry } from '../properties/property-editor-registry'
 import { resolveDesignerMaterialProfile } from '../runtime-config'
@@ -37,6 +38,7 @@ export class DesignerStore {
   readonly selection = new SelectionModel()
   readonly dataSourceRegistry = new DataSourceRegistry()
   readonly interactions = markRaw(new DesignerInteractionService())
+  readonly materialTransaction: TransactionAPI
 
   /**
    * Designer-level diagnostics channel. Recoverable errors (rejected
@@ -101,6 +103,7 @@ export class DesignerStore {
     this._materialDiagnostics = loaded.diagnostics
     this._materialNodeStates = loaded.nodeStates
     this.fontService = new FontService(this.diagnostics)
+    this.materialTransaction = markRaw(createTransactionService(id => this.getElementById(id), this.commands, this.diagnostics))
     this.materialRegistry = new MaterialRegistry()
     this.paperRegistry = new PaperRegistry(runtimeConfig?.paper)
     this.applyRuntimeDefaults(runtimeConfig, schema)

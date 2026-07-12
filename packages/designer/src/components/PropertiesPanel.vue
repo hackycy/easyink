@@ -12,7 +12,6 @@ import { deepClone } from '@easyink/shared'
 import { EiNumberInput, EiPanel, EiSwitch } from '@easyink/ui'
 import { computed, onUnmounted, shallowRef, watch, watchEffect } from 'vue'
 import { useDesignerStore } from '../composables'
-import { createTransactionService } from '../editing/transaction-service'
 import { resolveDataContractFieldFormatEditor, resolveOrdinaryFormatEditor } from '../materials/binding-format-editor'
 import { isElementRotatable } from '../materials/capabilities'
 import { canEditGeometry, isPropSchemaDisabled as isMaterialPropSchemaDisabled } from '../materials/control-policy'
@@ -25,7 +24,7 @@ import PagePropertyEditor from './PagePropertyEditor.vue'
 import PropSchemaEditor from './PropSchemaEditor.vue'
 
 const store = useDesignerStore()
-const propertyTx = createTransactionService(id => store.getElementById(id), store.commands, store.diagnostics)
+const propertyTx = store.materialTransaction
 
 const selectedElements = computed(() => {
   const ids = store.selection.ids
@@ -516,7 +515,7 @@ async function updateProp(key: string, value: unknown) {
     return
   const accessor = resolvePropertyAccessor(schema)
   const { before, result } = commitMaterialPropertyPreview(propertyPreview, el, key, () =>
-    propertyTx.run(el.id, draft => accessor.write(draft, value), { mergeKey: `property:${key}`, label: 'designer.history.updateProperty' }))
+    propertyTx.run(el.id, draft => accessor.write(draft, value), { mergeKey: `property:${el.id}:${key}`, label: schema.label }))
   const updated = store.getElementById(el.id)
   if (updated)
     store.editingSession.rebaseSelection(before, updated, result)
