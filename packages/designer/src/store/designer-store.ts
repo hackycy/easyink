@@ -38,6 +38,9 @@ export class DesignerStore {
   private documentViewRevision = 0
   private _materialDiagnostics: readonly MaterialLoadDiagnostic[] = Object.freeze([])
   private _materialNodeStates: ReadonlyMap<string, MaterialNodeLoadState> = new Map()
+  private disposeDocumentSubscription?: () => void
+  private disposeSelectionSubscription?: () => void
+  private destroyed = false
 
   // ─── Core services ────────────────────────────────────────────
   readonly commands = new CommandManager()
@@ -129,16 +132,16 @@ export class DesignerStore {
     // Mark editing session manager as raw: it owns Vue refs internally and
     // must not be auto-unwrapped by the surrounding reactive(store) proxy.
     this.editingSession = markRaw(new EditingSessionManager(this))
-    this.documentStore.subscribe((event) => {
+    this.disposeDocumentSubscription = this.documentStore.subscribe((event) => {
       this.documentViewRevision += 1
-      if (event.kind !== 'preview' && event.kind !== 'preview-cancel')
+      if (event.kind !== 'preview' && event.kind !== 'preview-cancel' && event.document === this.documentStore.committedDocument)
         this.selection.reconcile(event.index.nodeIds())
       if (event.validationReport && event.document === this.documentStore.committedDocument) {
         this._materialDiagnostics = event.validationReport.diagnostics
         this._materialNodeStates = event.validationReport.nodeStates
       }
     })
-    this.selection.onChange(() => this.documentTransactions.markHistoryBarrier())
+    this.disposeSelectionSubscription = this.selection.onChange(() => this.documentTransactions.markHistoryBarrier())
     markRaw(this.dataSourceRegistry)
     markRaw(this.diagnostics)
 
@@ -577,6 +580,13 @@ export class DesignerStore {
   // ─── Cleanup ──────────────────────────────────────────────────
 
   destroy(): void {
+    if (this.destroyed)
+      return
+    this.destroyed = true
+    this.disposeDocumentSubscription?.()
+    this.disposeDocumentSubscription = undefined
+    this.disposeSelectionSubscription?.()
+    this.disposeSelectionSubscription = undefined
     for (const unregister of this.designerFacetLocaleCleanups)
       unregister()
     this.designerFacetLocaleCleanups.clear()

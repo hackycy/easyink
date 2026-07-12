@@ -293,6 +293,25 @@ describe('designer store schema initialization', () => {
     expect(store.getMaterialNodeState('box')).toBe(committedState)
   })
 
+  it('does not let stale remove events clear a selection restored by undo', async () => {
+    const store = unknownAndBoxStore()
+    store.selection.select('box')
+    store.removeElement('box')
+    store.documentTransactions.undo()
+    store.selection.select('box')
+    await Promise.resolve()
+    expect(store.selection.ids).toEqual(['box'])
+  })
+
+  it('unsubscribes document and selection listeners on destroy', () => {
+    const store = unknownAndBoxStore()
+    const tx = store.documentTransactions
+    store.destroy()
+    expect(() => tx.markHistoryBarrier()).not.toThrow()
+    expect(() => store.selection.select('box')).not.toThrow()
+    store.destroy()
+  })
+
   it('records escaped extension writes as document transactions with undo', () => {
     const store = new DesignerStore()
     const before = store.schema
