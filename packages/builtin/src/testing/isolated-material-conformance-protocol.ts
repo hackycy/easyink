@@ -38,6 +38,11 @@ const MAX_MATERIAL_TYPE_LENGTH = 1_024
 const MAX_CODE_LENGTH = 256
 const MAX_PATH_LENGTH = 4_096
 const MAX_MESSAGE_LENGTH = 1_024
+const emergencyTruncationIssue: MaterialConformanceIssue = freeze({
+  code: 'CONFORMANCE_ISSUES_TRUNCATED',
+  path: '',
+  message: 'material issues exceeded serialized budget',
+})
 
 export function createIsolatedConformanceSession(): IsolatedConformanceSession {
   return {
@@ -112,11 +117,11 @@ export function cloneAndFreezeMaterialConformanceReports(value: unknown): readon
 export function boundAndFreezeMaterialConformanceReports(value: unknown): readonly MaterialConformanceReport[] {
   const reports = cloneReports(value, MAX_ISSUES_PER_REPORT, MAX_REPORTS * MAX_ISSUES_PER_REPORT, false)
   if (reports.length === 0)
-    return reports
+    return cloneAndFreezeMaterialConformanceReports(reports)
   const countQuota = Math.max(1, Math.min(MAX_ISSUES_PER_REPORT, Math.floor(MAX_TOTAL_ISSUES / reports.length)))
   let low = 1
   let high = countQuota
-  let bounded = boundReports(reports, 1)
+  let bounded: readonly MaterialConformanceReport[] | undefined
   while (low <= high) {
     const quota = low + Math.floor((high - low) / 2)
     const candidate = boundReports(reports, quota)
@@ -128,7 +133,7 @@ export function boundAndFreezeMaterialConformanceReports(value: unknown): readon
       high = quota - 1
     }
   }
-  return bounded
+  return cloneAndFreezeMaterialConformanceReports(bounded ?? compactReportsForSerializedBudget(reports))
 }
 
 function cloneReports(
@@ -194,6 +199,18 @@ function boundReports(reports: readonly MaterialConformanceReport[], quota: numb
     bounded[bounded.length] = freeze({ materialType: report.materialType, valid: false, issues: freeze(issues) })
   }
   return freeze(bounded)
+}
+
+function compactReportsForSerializedBudget(reports: readonly MaterialConformanceReport[]): readonly MaterialConformanceReport[] {
+  const compacted: MaterialConformanceReport[] = []
+  for (let reportIndex = 0; reportIndex < reports.length; reportIndex++) {
+    compacted[compacted.length] = freeze({
+      materialType: reports[reportIndex]!.materialType,
+      valid: false,
+      issues: freeze([emergencyTruncationIssue]),
+    })
+  }
+  return freeze(compacted)
 }
 
 function serializedReportBytes(reports: readonly MaterialConformanceReport[]): number {

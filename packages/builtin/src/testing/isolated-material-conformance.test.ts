@@ -294,6 +294,44 @@ describe('isolated material conformance process', () => {
     expect(bounded[4]).toEqual({ materialType: 'healthy', valid: true, issues: [] })
     expect(bounded.slice(0, 4).every(report => report.issues.some(issue => issue.code === 'CONFORMANCE_ISSUES_TRUNCATED'))).toBe(true)
   })
+
+  it('emergency-compacts escaped single issues within the serialized budget', () => {
+    const escaped = '"\\\u0001'
+    const unicode = '\u754C\uD83D\uDE00'
+    const reports = Array.from({ length: 1_000 }, (_, reportIndex) => ({
+      materialType: `${reportIndex}:${escaped.repeat(341)}${unicode}`.slice(0, 1_024),
+      valid: reportIndex % 2 === 0,
+      issues: [{
+        code: escaped.repeat(86).slice(0, 256),
+        path: `/${escaped.repeat(1_365)}`.slice(0, 4_096),
+        message: `${unicode}${escaped}`.repeat(256).slice(0, 1_024),
+      }],
+    }))
+    expect(() => cloneAndFreezeMaterialConformanceReports(reports)).toThrow('CONFORMANCE_ISOLATED_EXECUTION_REPORT_BUDGET_EXCEEDED')
+
+    const bounded = boundAndFreezeMaterialConformanceReports(reports)
+    const rebound = boundAndFreezeMaterialConformanceReports(bounded)
+    expect(bounded.map(report => report.materialType)).toEqual(reports.map(report => report.materialType))
+    expect(bounded.every(report => !report.valid
+      && report.issues.length === 1
+      && report.issues[0]?.code === 'CONFORMANCE_ISSUES_TRUNCATED')).toBe(true)
+    expect(Object.isFrozen(bounded)).toBe(true)
+    expect(Object.isFrozen(bounded[999])).toBe(true)
+    expect(Object.isFrozen(bounded[999]?.issues)).toBe(true)
+    expect(Object.isFrozen(bounded[999]?.issues[0])).toBe(true)
+    expect(() => cloneAndFreezeMaterialConformanceReports(bounded)).not.toThrow()
+    expect(JSON.stringify(rebound)).toBe(JSON.stringify(bounded))
+
+    const withEmptyInvalid = reports.map((report, reportIndex) => reportIndex === 999
+      ? { ...report, valid: false, issues: [] }
+      : report)
+    const emptyInvalidBounded = boundAndFreezeMaterialConformanceReports(withEmptyInvalid)
+    expect(emptyInvalidBounded[999]?.issues).toEqual([{
+      code: 'CONFORMANCE_ISSUES_TRUNCATED',
+      path: '',
+      message: 'material issues exceeded serialized budget',
+    }])
+  })
 })
 
 function expectProcessGone(pid: number): void {
