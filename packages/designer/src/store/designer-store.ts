@@ -355,6 +355,32 @@ export class DesignerStore {
     Object.assign(el, updates)
   }
 
+  async activateDesignerFacet(type: string) {
+    const instance = await this.materialFacetHost.activate(this.materialProfile, type, 'designer')
+    this.designerFacetCache.set(type, instance)
+    return instance
+  }
+
+  peekDesignerFacet(type: string) {
+    return this.designerFacetCache.get(type)
+  }
+
+  getMaterialManifest(type: string) {
+    return this.materialProfile.getManifest(type)
+  }
+
+  getManifest(type: string) {
+    return this.getMaterialManifest(type)
+  }
+
+  listEditableMaterialTypes(): readonly string[] {
+    return [...this.materialProfile.editableTypes]
+  }
+
+  listEditableMaterialManifests() {
+    return this.listEditableMaterialTypes().map(type => this.materialProfile.getManifest(type)!).filter(Boolean)
+  }
+
   // ─── Material registry ────────────────────────────────────────
   // ─── Paper registry ───────────────────────────────────────────
 
