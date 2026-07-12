@@ -108,12 +108,12 @@ export const tableSchemaAdapter: SchemaAdapter = {
     const expectedKind = expectedKindFor(node, context)
     if (expectedKind && model.kind !== expectedKind)
       issues.push(issue('TABLE_MODEL_KIND_MISMATCH', '/model/kind', 'Table model kind does not match its material type'))
-    validateEnvelope(node, model, issues)
+    validateTableEnvelopeReferences(node, model, issues)
     return issues
   },
-  introspect(node) {
+  introspect(node, context) {
     const snapshot = snapshotIntrospectionEnvelope(node)
-    if (!snapshot)
+    if (!snapshot || !admitIntrospectionSnapshot(snapshot, context))
       return emptyIntrospection()
     return introspectTable(snapshot, snapshot.model)
   },
@@ -147,7 +147,7 @@ export const tableSchemaAdapter: SchemaAdapter = {
   },
 }
 
-function validateEnvelope(node: AdaptableMaterialNode, model: TableModel, issues: MaterialSchemaIssue[]): void {
+function validateTableEnvelopeReferences(node: AdaptableMaterialNode, model: TableModel, issues: MaterialSchemaIssue[]): void {
   const expectedSlots = new Map<string, string>()
   const ports = new Set<string>()
   for (const band of model.bands) {
@@ -210,6 +210,28 @@ function validateEnvelope(node: AdaptableMaterialNode, model: TableModel, issues
     }
     if (!isBindingExpression(value))
       appendEnvelopeIssue(issues, issue('TABLE_BINDING_INVALID', path, 'Table binding expression is invalid'))
+  }
+}
+
+function admitIntrospectionSnapshot(
+  snapshot: TableIntrospectionEnvelope,
+  context: SchemaAdapterContext,
+): boolean {
+  try {
+    assertValidTableModel(snapshot.model)
+    const expectedKind = context.materialType === 'table-static'
+      ? 'static'
+      : context.materialType === 'table-data'
+        ? 'data'
+        : undefined
+    if (!expectedKind || snapshot.model.kind !== expectedKind)
+      return false
+    const issues: MaterialSchemaIssue[] = []
+    validateTableEnvelopeReferences(snapshot as unknown as AdaptableMaterialNode, snapshot.model, issues)
+    return issues.every(item => item.severity !== 'error')
+  }
+  catch {
+    return false
   }
 }
 

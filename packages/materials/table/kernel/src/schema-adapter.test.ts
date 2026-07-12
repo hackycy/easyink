@@ -72,6 +72,69 @@ describe('table schema adapter', () => {
     expect(result.structures).toContainEqual(expect.objectContaining({ slot: `cell:${cell.id}`, policyId: 'table-cell-free', coordinateSpace: 'slot' }))
     expect(result.resources).toContainEqual(expect.objectContaining({ kind: 'font', value: 'Inter' }))
     expect(result.identities.map(entry => entry.value)).toEqual(expect.arrayContaining([cell.id, model.columns[0]!.id]))
+    expect(result.references).toContainEqual(expect.objectContaining({
+      path: '/model/bands/0/rows/0/cells/0/content/slotId',
+      value: cell.id,
+    }))
+  })
+
+  it('admits the complete detached snapshot before producing introspection claims', () => {
+    const empty = { identities: [], structures: [], references: [], resources: [], bindings: [] }
+
+    const duplicate = createTableModel({ kind: 'static', columnCount: 2, rowCount: 1 })
+    duplicate.columns[1]!.id = duplicate.columns[0]!.id
+    expect(tableSchemaAdapter.introspect(node(duplicate) as MaterialNode, context)).toEqual(empty)
+
+    const missingSlot = createTableModel({ kind: 'static', columnCount: 1, rowCount: 1 })
+    const cell = missingSlot.bands[0]!.rows[0]!.cells[0]!
+    cell.content = { kind: 'materials', slotId: `cell:${cell.id}` }
+    expect(tableSchemaAdapter.introspect(node(missingSlot) as MaterialNode, context)).toEqual(empty)
+
+    const orphanSlot = node() as MaterialNode
+    orphanSlot.slots = { 'cell:orphan': [] }
+    expect(tableSchemaAdapter.introspect(orphanSlot, context)).toEqual(empty)
+
+    const orphanBinding = node() as MaterialNode
+    orphanBinding.bindings = { orphan: { sourceId: 'source', fieldPath: 'value' } }
+    expect(tableSchemaAdapter.introspect(orphanBinding, context)).toEqual(empty)
+
+    const invalidBinding = node() as MaterialNode
+    invalidBinding.bindings = { orphan: { sourceId: '', fieldPath: 'value' } }
+    expect(tableSchemaAdapter.introspect(invalidBinding, context)).toEqual(empty)
+
+    const data = createTableModel({ kind: 'data', columnCount: 1, rowCount: 1 })
+    expect(tableSchemaAdapter.introspect(node(data as any) as MaterialNode, context)).toEqual(empty)
+  })
+
+  it('re-admits a stateful model descriptor within the introspection stage', () => {
+    const valid = createTableModel({ kind: 'static', columnCount: 2, rowCount: 1 })
+    const duplicate = cloneJsonValue(valid as any)
+    duplicate.columns[1].id = duplicate.columns[0].id
+    const source = node(valid)
+    let modelDescriptors = 0
+    const stateful = new Proxy(source, {
+      getOwnPropertyDescriptor(target, key) {
+        if (key === 'model') {
+          modelDescriptors += 1
+          return {
+            value: modelDescriptors === 1 ? valid : duplicate,
+            enumerable: true,
+            configurable: true,
+            writable: true,
+          }
+        }
+        return Reflect.getOwnPropertyDescriptor(target, key)
+      },
+    })
+    expect(tableSchemaAdapter.validate(stateful, context)).toEqual([])
+    expect(tableSchemaAdapter.introspect(stateful as MaterialNode, context)).toEqual({
+      identities: [],
+      structures: [],
+      references: [],
+      resources: [],
+      bindings: [],
+    })
+    expect(modelDescriptors).toBe(2)
   })
 
   it('converts every physical model length while preserving ratios and line height', () => {
