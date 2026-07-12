@@ -343,9 +343,22 @@ export function encodeTableOpaqueIdPart(value: string): string {
 }
 
 export function encodeTableOpaqueIdPartBounded(value: string, maxBytes: number): string {
+  const bytes = preflightTableOpaqueIdPart(value, maxBytes)
+  return encodeTableOpaqueIdPartBytes(bytes)
+}
+
+export function assertTableOpaqueIdPartWithin(value: string, maxBytes: number): void {
+  preflightTableOpaqueIdPart(value, maxBytes)
+}
+
+function preflightTableOpaqueIdPart(value: string, maxBytes: number): Uint8Array {
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 1)
     throw new Error('Opaque table ID part byte limit must be a positive safe integer')
-  return encodeTableOpaqueIdPartInternal(value, maxBytes)
+  assertWellFormedUtf16(value)
+  const bytes = textEncoder.encode(value)
+  if (bytes.byteLength > maxBytes)
+    throw new Error('Opaque table ID part exceeds its byte limit')
+  return bytes
 }
 
 function encodeTableOpaqueIdPartInternal(value: string, maxBytes?: number): string {
@@ -353,6 +366,10 @@ function encodeTableOpaqueIdPartInternal(value: string, maxBytes?: number): stri
   const bytes = textEncoder.encode(value)
   if (maxBytes !== undefined && bytes.byteLength > maxBytes)
     throw new Error('Opaque table ID part exceeds its byte limit')
+  return encodeTableOpaqueIdPartBytes(bytes)
+}
+
+function encodeTableOpaqueIdPartBytes(bytes: Uint8Array): string {
   let hex = ''
   for (const byte of bytes)
     hex += byte.toString(16).padStart(2, '0')

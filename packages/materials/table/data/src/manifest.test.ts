@@ -66,4 +66,38 @@ describe('table data manifest binding admission', () => {
       path,
     }))
   })
+
+  it.each([
+    ['x'.repeat(257), '257 UTF-8 bytes'],
+    ['\uD800', 'unpaired surrogate'],
+  ])('rejects table root id %s during profile admission', (id) => {
+    const profile = compileMaterialProfile({
+      id: 'table-data-id-admission',
+      engineVersion: '0.0.30',
+      packages: [{ packageId: '@easyink/table-data-id-admission', kind: 'builtin', required: true, manifests: [tableDataMaterialManifest] }],
+    })
+
+    let error: MaterialNodeCreationError | undefined
+    try {
+      profile.createNode('table-data', { id })
+    }
+    catch (cause) {
+      error = cause as MaterialNodeCreationError
+    }
+
+    expect(error?.code).toBe('MATERIAL_ADAPTER_ISSUE')
+    expect(error?.issues).toContainEqual(expect.objectContaining({
+      code: 'TABLE_NODE_ID_INVALID',
+      path: '/id',
+    }))
+  })
+
+  it('admits a 256-byte table root id', () => {
+    const profile = compileMaterialProfile({
+      id: 'table-data-id-boundary',
+      engineVersion: '0.0.30',
+      packages: [{ packageId: '@easyink/table-data-id-boundary', kind: 'builtin', required: true, manifests: [tableDataMaterialManifest] }],
+    })
+    expect(profile.createNode('table-data', { id: 'x'.repeat(256) }).id).toBe('x'.repeat(256))
+  })
 })

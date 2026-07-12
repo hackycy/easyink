@@ -18,6 +18,7 @@ import type {
 import { describe, expect, it, vi } from 'vitest'
 import {
   allocateTableIdentity,
+  assertTableOpaqueIdPartWithin,
   assertValidTableModel,
   createSequentialTableIdentityAllocator,
   createTableModel,
@@ -160,6 +161,12 @@ describe('table identity allocation', () => {
     expect(encodeTableOpaqueIdPartBounded('\u{1F600}'.repeat(64), 256)).toMatch(/^256:/)
     expect(() => encodeTableOpaqueIdPartBounded(`${'x'.repeat(253)}\u{1F600}`, 256)).toThrow(/byte limit/i)
     expect(() => encodeTableOpaqueIdPartBounded('x', 0)).toThrow(/byte limit/i)
+  })
+
+  it('preflights opaque ID bytes without constructing hex', () => {
+    expect(() => assertTableOpaqueIdPartWithin('x'.repeat(256), 256)).not.toThrow()
+    expect(() => assertTableOpaqueIdPartWithin('x'.repeat(257), 256)).toThrow(/byte limit/i)
+    expect(() => assertTableOpaqueIdPartWithin('\uD800', 256)).toThrow(/surrogate|well-formed/i)
   })
 
   it('fast-rejects stable tokens longer than the accepted ASCII byte bound', () => {

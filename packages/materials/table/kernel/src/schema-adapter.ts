@@ -11,7 +11,7 @@ import type { JsonValue, UnitType } from '@easyink/shared'
 import type { TableModel, TableStyle } from './model'
 import { cloneJsonValue, convertUnit } from '@easyink/shared'
 import { migrateLegacyTableV0ToV1, validateLegacyTableV0Input } from './legacy-migration'
-import { assertValidTableModel, isValidTableStableToken } from './model'
+import { assertTableOpaqueIdPartWithin, assertValidTableModel, isValidTableStableToken } from './model'
 import { decodeCanonicalBindingExpression, decodeTableModelV1 } from './model-codec'
 
 const NODE_KEYS = [
@@ -43,17 +43,18 @@ export const tableSchemaAdapter: SchemaAdapter = {
   modelUnitPolicy: 'convertible',
   migrations: [migrateLegacyTableV0ToV1],
   validateInput(node, context) {
+    const issues = validateTableRootId(node)
     const version = ownData(node, 'modelVersion')
     if (!version.ok)
-      return [issue('TABLE_MODEL_STRUCTURE_INVALID', '/model', 'Table modelVersion must be an own data property')]
+      return [...issues, issue('TABLE_MODEL_STRUCTURE_INVALID', '/model', 'Table modelVersion must be an own data property')]
     if (version.value === 0)
-      return validateLegacyTableV0Input(node, context)
+      return [...issues, ...validateLegacyTableV0Input(node, context)]
     if (version.value !== 1)
-      return [issue('TABLE_MODEL_VERSION_UNSUPPORTED', '/model', 'Table modelVersion must be 0 or 1')]
+      return [...issues, issue('TABLE_MODEL_VERSION_UNSUPPORTED', '/model', 'Table modelVersion must be 0 or 1')]
     const model = ownData(node, 'model')
     if (!model.ok)
-      return [issue('TABLE_MODEL_STRUCTURE_INVALID', '/model', 'Table model must be an own data property')]
-    return decodeTableModelV1(model.value, '/model').issues
+      return [...issues, issue('TABLE_MODEL_STRUCTURE_INVALID', '/model', 'Table model must be an own data property')]
+    return [...issues, ...decodeTableModelV1(model.value, '/model').issues]
   },
   normalize(node) {
     const clone = cloneJsonValue(node as unknown as JsonValue) as unknown as AdaptableMaterialNode
@@ -69,14 +70,14 @@ export const tableSchemaAdapter: SchemaAdapter = {
     return normalized as unknown as AdaptableMaterialNode
   },
   validate(node, context) {
+    const issues = validateTableRootId(node)
     const modelProperty = ownData(node, 'model')
     if (!modelProperty.ok)
-      return [issue('TABLE_MODEL_STRUCTURE_INVALID', '/model', 'Table model must be an own data property')]
+      return [...issues, issue('TABLE_MODEL_STRUCTURE_INVALID', '/model', 'Table model must be an own data property')]
     const decoded = decodeTableModelV1(modelProperty.value, '/model')
     if (!decoded.value)
-      return decoded.issues
+      return [...issues, ...decoded.issues]
     const model = decoded.value
-    const issues: MaterialSchemaIssue[] = []
     try {
       assertValidTableModel(model)
     }
@@ -131,6 +132,19 @@ export const tableSchemaAdapter: SchemaAdapter = {
     }
     return converted as unknown as Record<string, unknown>
   },
+}
+
+function validateTableRootId(node: object): MaterialSchemaIssue[] {
+  const id = ownData(node, 'id')
+  if (!id.ok || typeof id.value !== 'string')
+    return [issue('TABLE_NODE_ID_INVALID', '/id', 'Table root id must be an own string data property')]
+  try {
+    assertTableOpaqueIdPartWithin(id.value, 256)
+    return []
+  }
+  catch {
+    return [issue('TABLE_NODE_ID_INVALID', '/id', 'Table root id must be well-formed UTF-16 and at most 256 UTF-8 bytes')]
+  }
 }
 
 function validateTableEnvelopeReferences(node: AdaptableMaterialNode, model: TableModel, issues: MaterialSchemaIssue[]): void {

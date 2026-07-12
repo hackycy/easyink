@@ -80,6 +80,29 @@ describe('table schema adapter', () => {
     })])
   })
 
+  it('admits only table root ids that fit the DOM identity component contract', () => {
+    const valid = node()
+    valid.id = 'x'.repeat(256)
+    expect(tableSchemaAdapter.validateInput(valid, context)).toEqual([])
+
+    for (const id of ['x'.repeat(257), '\uD800']) {
+      const invalid = node()
+      invalid.id = id
+      expect(tableSchemaAdapter.validateInput(invalid, context)).toContainEqual({
+        code: 'TABLE_NODE_ID_INVALID',
+        severity: 'error',
+        path: '/id',
+        message: expect.stringMatching(/UTF-8|UTF-16|256/i),
+      })
+      const normalized = tableSchemaAdapter.normalize(invalid, context)
+      expect(normalized.id).toBe(id)
+      expect(tableSchemaAdapter.validate(normalized, context)).toContainEqual(expect.objectContaining({
+        code: 'TABLE_NODE_ID_INVALID',
+        path: '/id',
+      }))
+    }
+  })
+
   it('introspects dynamic cells, references, named bindings, and fonts', () => {
     const model = createTableModel({ kind: 'static', columnCount: 1, rowCount: 1 })
     const cell = model.bands[0]!.rows[0]!.cells[0]!
