@@ -10,7 +10,7 @@ import BindingFormatEditor from './BindingFormatEditor.vue'
 const props = defineProps<{
   element: MaterialNode
   t: (key: string) => string
-  /** External binding override (from overlay). When provided, overrides element.binding. */
+  /** External binding override (from overlay). When provided, overrides element.bindings.value. */
   externalBinding?: BindingRef | BindingRef[] | null
   /** Whether external binding is explicitly set (to distinguish undefined from not-provided) */
   hasExternalBinding?: boolean
@@ -32,7 +32,7 @@ const bindings = computed<BindingRef[]>(() => {
     return Array.isArray(props.externalBinding) ? props.externalBinding : [props.externalBinding]
   }
   // Default: element-level binding
-  const b = props.element.binding
+  const b = props.element.bindings.value
   if (!b)
     return []
   if (!Array.isArray(b) && 'kind' in b && b.kind === 'data-contract')

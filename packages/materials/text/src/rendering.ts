@@ -33,7 +33,7 @@ export function getTextContainerStyles(props: Partial<Pick<TextProps, 'backgroun
   ].filter(Boolean)
 }
 
-export function getTextContentStyles(props: Partial<Pick<TextProps, 'fontSize' | 'fontFamily' | 'fontWeight' | 'fontStyle' | 'color' | 'lineHeight' | 'letterSpacing' | 'autoWrap' | 'wrapMode' | 'overflow' | 'textAlign' | 'writingMode'>>, unit: string) {
+export function getTextContentStyles(props: Partial<Pick<TextProps, 'fontSize' | 'fontFamily' | 'fontWeight' | 'fontStyle' | 'color' | 'lineHeight' | 'letterSpacing' | 'wrapMode' | 'overflow' | 'textAlign' | 'writingMode'>>, unit: string) {
   const resolved = resolveTextProps(props)
   const writingMode = resolved.writingMode
   const overflow = resolveTextOverflow(resolved)
@@ -62,7 +62,7 @@ export function getTextContentStyles(props: Partial<Pick<TextProps, 'fontSize' |
   ].filter(Boolean)
 }
 
-function getWrapStyles(props: Partial<Pick<TextProps, 'autoWrap' | 'wrapMode' | 'writingMode' | 'overflow'>>): string[] {
+function getWrapStyles(props: Partial<Pick<TextProps, 'wrapMode' | 'writingMode' | 'overflow'>>): string[] {
   const writingMode = resolveTextWritingMode(props)
   const overflow = resolveTextOverflow(props)
   if (overflow === 'ellipsis')

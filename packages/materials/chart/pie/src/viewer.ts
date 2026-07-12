@@ -3,13 +3,13 @@ import type { MaterialNode } from '@easyink/schema'
 import type { ChartPieProps } from './schema'
 import { trustedViewerHtml } from '@easyink/core'
 import { renderEChartsSvg } from '@easyink/material-chart-kernel'
-import { getNodeProps } from '@easyink/schema'
+import { getNodeModel } from '@easyink/schema'
 import { UNIT_FACTOR } from '@easyink/shared'
 import { resolveChartPieRuntimeData } from './data-contract'
 import { createChartPieRuntimeOptionFromData } from './options'
 
 export function renderChartPie(node: MaterialNode, context?: ViewerRenderContext) {
-  const props = getNodeProps<ChartPieProps>(node)
+  const props = getNodeModel<ChartPieProps>(node)
   const resolvedData = resolveChartPieRuntimeData(node, props, context?.data ?? {})
   for (const diagnostic of resolvedData.diagnostics)
     context?.reportDiagnostic?.({ ...diagnostic, nodeId: node.id })

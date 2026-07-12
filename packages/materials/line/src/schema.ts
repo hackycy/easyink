@@ -1,5 +1,6 @@
 import type { MaterialConditionDefinition } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
+import { canonicalizeMaterialNode, getNodeModel } from '@easyink/schema'
 import { convertUnit, generateId } from '@easyink/shared'
 
 export const LINE_CONDITION: MaterialConditionDefinition = { scope: 'node', hiddenEffects: ['remove', 'reserve'] }
@@ -21,12 +22,12 @@ function readPositiveNumber(value: unknown): number | null {
   return Number.isFinite(numeric) && numeric > 0 ? numeric : null
 }
 
-export function getLineThickness(node: Pick<MaterialNode, 'height' | 'props'>): number {
+export function getLineThickness(node: Pick<MaterialNode, 'height' | 'model'>): number {
   const height = readPositiveNumber(node.height)
   if (height != null)
     return height
 
-  const legacyLineWidth = readPositiveNumber(node.props.lineWidth)
+  const legacyLineWidth = readPositiveNumber(getNodeModel<Record<string, unknown>>(node as MaterialNode).lineWidth)
   if (legacyLineWidth != null)
     return legacyLineWidth
 
@@ -35,16 +36,16 @@ export function getLineThickness(node: Pick<MaterialNode, 'height' | 'props'>): 
 
 export function createLineNode(partial?: Partial<MaterialNode>, unit?: string): MaterialNode {
   const c = unit && unit !== 'mm' ? (v: number) => convertUnit(v, 'mm', unit) : (v: number) => v
-  return {
+  return canonicalizeMaterialNode(LINE_TYPE, {
     id: generateId('line'),
     type: LINE_TYPE,
     x: 0,
     y: 0,
     width: c(100),
     height: c(0.26),
-    props: { ...LINE_DEFAULTS },
+    model: { ...LINE_DEFAULTS },
     ...partial,
-  }
+  })
 }
 
 export const LINE_CAPABILITIES = {

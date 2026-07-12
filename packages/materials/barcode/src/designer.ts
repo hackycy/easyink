@@ -37,7 +37,7 @@ function buildHtml(node: MaterialNode, context: MaterialExtensionContext): strin
   const borderStyle = p.borderWidth ? `border:${p.borderWidth}${unit} ${DASH_MAP[p.borderType] || 'solid'} ${p.borderColor};box-sizing:border-box;` : ''
 
   let label: string | undefined
-  const b = getBindingRefs(node.binding)[0]
+  const b = getBindingRefs(node.bindings.value)[0]
   if (b) {
     label = `{#${escapeHtml(context.getBindingLabel(b))}}`
   }

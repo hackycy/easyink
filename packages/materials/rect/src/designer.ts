@@ -1,6 +1,6 @@
 import type { MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
 import type { RectProps } from './schema'
-import { getNodeProps } from '@easyink/schema'
+import { getNodeModel } from '@easyink/schema'
 
 function buildHtml(props: RectProps, unit: string): string {
   const bw = props.borderWidth || 0
@@ -22,7 +22,7 @@ export function createRectExtension(context: MaterialExtensionContext): Material
     renderContent(nodeSignal, container) {
       function render() {
         const node = nodeSignal.get()
-        container.innerHTML = buildHtml(getNodeProps<RectProps>(node), context.getSchema().unit)
+        container.innerHTML = buildHtml(getNodeModel<RectProps>(node), context.getSchema().unit)
       }
       render()
       const unsub = nodeSignal.subscribe(render)

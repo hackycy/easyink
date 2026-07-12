@@ -10,7 +10,11 @@ function makeNode(id: string, overrides: Partial<MaterialNode> = {}): MaterialNo
     y: 0,
     width: 100,
     height: 50,
-    props: {},
+    modelVersion: 1,
+    model: {},
+    slots: {},
+    bindings: {},
+    output: { visibility: 'include' },
     ...overrides,
   }
 }
@@ -70,7 +74,7 @@ describe('createPagePlan', () => {
         makeNode('page-number', {
           y: 280,
           height: 10,
-          repeat: { scope: 'every-output-page' },
+          output: { visibility: 'include', repeat: { scope: 'every-output-page' } },
         }),
       ])
 
@@ -93,7 +97,7 @@ describe('createPagePlan', () => {
         makeNode('page-number', {
           y: 280,
           height: 10,
-          repeat: { scope: 'every-output-page' },
+          output: { visibility: 'include', repeat: { scope: 'every-output-page' } },
         }),
       ])
 

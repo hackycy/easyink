@@ -57,7 +57,7 @@ describe('renderSvgStar', () => {
 
   it('only resolves the deep-edit control when the pointer is near the handle', () => {
     const node = createSvgStarNode()
-    const props = node.props as unknown as SvgStarProps
+    const props = node.model as unknown as SvgStarProps
 
     expect(resolveStarControl({ x: 10, y: 10 }, node, props)).toBeNull()
     expect(resolveStarControl({ x: 62, y: 38 }, node, props)).toEqual({ handle: 'inner-radius', index: 0 })
@@ -93,9 +93,9 @@ describe('renderSvgStar', () => {
 
     expect(node.width).toBe(100)
     expect(node.height).toBe(100)
-    expect((node.props as Record<string, unknown>).fillColor).toBe('transparent')
-    expect((node.props as Record<string, unknown>).borderWidth).toBe(0.26)
-    expect((node.props as Record<string, unknown>).starPoints).toBe(5)
-    expect((node.props as Record<string, unknown>).starInnerRatio).toBeCloseTo(0.381966, 5)
+    expect((node.model as Record<string, unknown>).fillColor).toBe('transparent')
+    expect((node.model as Record<string, unknown>).borderWidth).toBe(0.26)
+    expect((node.model as Record<string, unknown>).starPoints).toBe(5)
+    expect((node.model as Record<string, unknown>).starInnerRatio).toBeCloseTo(0.381966, 5)
   })
 })

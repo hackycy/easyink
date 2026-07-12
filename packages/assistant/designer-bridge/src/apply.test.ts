@@ -74,7 +74,7 @@ function createSchema(elements: Array<{ id: string, props: Record<string, unknow
       y: index * 8,
       width: 20,
       height: 6,
-      props: element.props,
+      props: element.model,
     })),
   }
 }

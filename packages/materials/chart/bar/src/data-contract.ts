@@ -43,7 +43,7 @@ export function resolveChartBarRuntimeData(
   _props: ChartBarProps,
   runtimeData: Record<string, unknown>,
 ): ChartBarResolvedData {
-  const resolution = resolveMaterialDataContract(CHART_BAR_DATA_CONTRACT, node.binding, runtimeData)
+  const resolution = resolveMaterialDataContract(CHART_BAR_DATA_CONTRACT, node.bindings.value, runtimeData)
   const diagnostics: ChartBarDataDiagnostic[] = [...resolution.diagnostics]
   const data = resolution.records
     .map((record, index) => readPointFromTargetRecord(record, index))

@@ -1,4 +1,4 @@
-import type { PropSchema } from '@easyink/core'
+import type { PropertyDescriptor } from '@easyink/core'
 import {
   FONT_STYLE_OPTIONS,
   FONT_WEIGHT_OPTIONS,
@@ -6,7 +6,7 @@ import {
   VERTICAL_ALIGN_OPTIONS,
 } from '@easyink/prop-schemas'
 
-export const pageNumberDesignerPropSchemas: PropSchema[] = [
+export const pageNumberDesignerPropSchemas: PropertyDescriptor[] = [
   { key: 'format', label: 'materials.pageNumber.property.format', type: 'string', group: 'content' },
   { key: 'fontFamily', label: 'designer.property.font', type: 'font', group: 'typography' },
   { key: 'fontSize', label: 'designer.property.fontSize', type: 'number', group: 'typography', min: 1, max: 200, step: 1 },

@@ -1,4 +1,5 @@
 import type { MaterialNode } from '@easyink/schema'
+import { canonicalizeMaterialNode } from '@easyink/schema'
 import { convertUnit, generateId } from '@easyink/shared'
 
 export const SVG_CUSTOM_TYPE = 'svg'
@@ -24,25 +25,25 @@ export const SVG_CUSTOM_CAPABILITIES = {
 export function createSvgCustomNode(partial?: Partial<MaterialNode>, unit?: string): MaterialNode {
   const c = unit && unit !== 'mm' ? (value: number) => convertUnit(value, 'mm', unit) : (value: number) => value
   const partialNode = partial ? { ...partial } : undefined
-  const inputProps = (partial?.props ?? {}) as Partial<Record<string, unknown>>
-  const partialProps: Partial<SvgCustomProps> = typeof inputProps.content === 'string'
+  const inputProps = (partial?.model ?? {}) as Partial<Record<string, unknown>>
+  const partialModel: Partial<SvgCustomProps> = typeof inputProps.content === 'string'
     ? { content: inputProps.content }
     : {}
 
   if (partialNode)
-    delete partialNode.props
+    delete partialNode.model
 
-  return {
+  return canonicalizeMaterialNode(SVG_CUSTOM_TYPE, {
     id: generateId('svgc'),
     type: SVG_CUSTOM_TYPE,
     x: 0,
     y: 0,
     width: c(100),
     height: c(100),
-    props: {
+    model: {
       ...SVG_CUSTOM_DEFAULTS,
-      ...partialProps,
+      ...partialModel,
     },
     ...partialNode,
-  }
+  })
 }

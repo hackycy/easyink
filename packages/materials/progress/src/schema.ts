@@ -1,4 +1,5 @@
 import type { MaterialNode } from '@easyink/schema'
+import { canonicalizeMaterialNode } from '@easyink/schema'
 import { convertUnit, generateId } from '@easyink/shared'
 
 export const PROGRESS_TYPE = 'progress'
@@ -38,26 +39,26 @@ export const PROGRESS_DEFAULTS: ProgressProps = {
 export function createProgressNode(partial?: Partial<MaterialNode>, unit?: string): MaterialNode {
   const c = unit && unit !== 'mm' ? (v: number) => convertUnit(v, 'mm', unit) : (v: number) => v
   const partialNode = partial ? { ...partial } : undefined
-  const partialProps = (partial?.props ?? {}) as Partial<ProgressProps>
+  const partialModel = (partial?.model ?? {}) as Partial<ProgressProps>
 
   if (partialNode)
-    delete partialNode.props
+    delete partialNode.model
 
-  return {
+  return canonicalizeMaterialNode(PROGRESS_TYPE, {
     id: generateId('prog'),
     type: PROGRESS_TYPE,
     x: 0,
     y: 0,
     width: c(60),
     height: c(12),
-    props: {
+    model: {
       ...PROGRESS_DEFAULTS,
       progressHeight: c(PROGRESS_DEFAULTS.progressHeight),
       fontSize: c(PROGRESS_DEFAULTS.fontSize),
-      ...partialProps,
+      ...partialModel,
     },
     ...partialNode,
-  }
+  })
 }
 
 export const PROGRESS_CAPABILITIES = {

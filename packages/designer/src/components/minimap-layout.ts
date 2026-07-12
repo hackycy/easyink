@@ -45,8 +45,8 @@ function projectElementFrame(surfacePlan: EditorSurfacePlan, element: MaterialNo
     y: point.y,
     width: Math.max(element.width, MIN_SIZE),
     height: Math.max(element.height, MIN_SIZE),
-    hidden: element.hidden,
-    locked: element.locked,
+    hidden: element.editorState?.hidden,
+    locked: element.editorState?.locked,
   }
 }
 

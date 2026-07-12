@@ -2,7 +2,7 @@ import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import type { Command } from './command'
 import { describe, expect, it } from 'vitest'
 import { CommandManager } from './command'
-import { AddElementGroupCommand, RemoveElementGroupCommand, RemoveMaterialCommand, UpdateMaterialMetaCommand, UpdateRenderConditionCommand } from './commands'
+import { AddElementGroupCommand, RemoveElementGroupCommand, RemoveMaterialCommand, UpdateMaterialEditorStateCommand, UpdateRenderConditionCommand } from './commands'
 
 function makeCommand(id: string, log: string[]): Command {
   return {
@@ -292,7 +292,7 @@ describe('commandManager', () => {
 
 describe('updateRenderConditionCommand', () => {
   it('stores full snapshots for undo and merges continuous edits by merge key', () => {
-    const elements: MaterialNode[] = [{ id: 'n', type: 'text', x: 0, y: 0, width: 1, height: 1, props: {} }]
+    const elements: MaterialNode[] = [{ id: 'n', type: 'text', x: 0, y: 0, width: 1, height: 1, modelVersion: 1, model: {}, slots: {}, bindings: {}, output: { visibility: 'include' } }]
     const manager = new CommandManager()
     const makeCondition = (path: string) => ({
       whenMatched: 'show' as const,
@@ -301,19 +301,19 @@ describe('updateRenderConditionCommand', () => {
 
     manager.execute(new UpdateRenderConditionCommand(elements, 'n', makeCondition('a'), 'field'))
     manager.execute(new UpdateRenderConditionCommand(elements, 'n', makeCondition('abc'), 'field'))
-    expect(elements[0]?.renderCondition).toEqual(makeCondition('abc'))
+    expect(elements[0]?.output.renderCondition).toEqual(makeCondition('abc'))
     expect(manager.cursor).toBe(1)
 
     manager.undo()
-    expect(elements[0]?.renderCondition).toBeUndefined()
+    expect(elements[0]?.output.renderCondition).toBeUndefined()
     manager.redo()
-    expect(elements[0]?.renderCondition).toEqual(makeCondition('abc'))
+    expect(elements[0]?.output.renderCondition).toEqual(makeCondition('abc'))
   })
 })
 
 describe('logical element group commands', () => {
   function makeNode(id: string): MaterialNode {
-    return { id, type: 'rect', x: 0, y: 0, width: 10, height: 10, props: {} }
+    return { id, type: 'rect', x: 0, y: 0, width: 10, height: 10, modelVersion: 1, model: {}, slots: {}, bindings: {}, output: { visibility: 'include' } }
   }
 
   function makeSchema(): DocumentSchema {
@@ -365,22 +365,22 @@ describe('logical element group commands', () => {
     schema.elements = [
       {
         ...makeNode('parent'),
-        children: [makeNode('child')],
+        slots: { default: [makeNode('child')] },
       },
     ]
     const manager = new CommandManager()
 
-    manager.execute(new UpdateMaterialMetaCommand(schema.elements, 'child', { hidden: true }))
-    expect(schema.elements[0]!.children![0]!.hidden).toBe(true)
+    manager.execute(new UpdateMaterialEditorStateCommand(schema.elements, 'child', { hidden: true }))
+    expect(schema.elements[0]!.slots.default![0]!.editorState?.hidden).toBe(true)
 
     manager.execute(new RemoveMaterialCommand(schema.elements, 'child', schema))
-    expect(schema.elements[0]!.children).toEqual([])
+    expect(schema.elements[0]!.slots.default).toEqual([])
 
     manager.undo()
-    expect(schema.elements[0]!.children!.map(node => node.id)).toEqual(['child'])
-    expect(schema.elements[0]!.children![0]!.hidden).toBe(true)
+    expect(schema.elements[0]!.slots.default!.map(node => node.id)).toEqual(['child'])
+    expect(schema.elements[0]!.slots.default![0]!.editorState?.hidden).toBe(true)
 
     manager.undo()
-    expect(schema.elements[0]!.children![0]!.hidden).toBeUndefined()
+    expect(schema.elements[0]!.slots.default![0]!.editorState?.hidden).toBeUndefined()
   })
 })

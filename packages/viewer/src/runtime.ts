@@ -155,7 +155,7 @@ export class ViewerRuntime {
     const pagination = runPagination(layoutSchema, layoutDocument, {
       originalSchema: layoutSchema,
       resolveFragmentPaginator: fragment => this._materialRegistry.getFragmentPaginator(fragment.node),
-      retainBlankPage: repeatedElements.some(el => !el.hidden) ? () => true : undefined,
+      retainBlankPage: repeatedElements.some(el => !el.editorState?.hidden) ? () => true : undefined,
     })
     const plan = toPagePlan(pagination)
 
@@ -493,7 +493,7 @@ export class ViewerRuntime {
         }
         page.elements.push(virtualNode)
 
-        const baseProps = resolvedPropsMap.get(el.id) ?? el.props
+        const baseProps = resolvedPropsMap.get(el.id) ?? el.model
         resolvedPropsMap.set(virtualId, {
           ...baseProps,
           __pageNumber: page.index + 1,
@@ -521,8 +521,8 @@ export class ViewerRuntime {
     }
 
     for (const node of schema.elements) {
-      const resolvedProps = resolvedPropsMap.get(node.id) ?? node.props
-      const nodeForMeasure = resolvedProps === node.props ? node : { ...node, props: resolvedProps }
+      const resolvedProps = resolvedPropsMap.get(node.id) ?? node.model
+      const nodeForMeasure = resolvedProps === node.model ? node : { ...node, props: resolvedProps }
       let result
       try {
         result = this._materialRegistry.measure(nodeForMeasure, measureCtx)
@@ -577,8 +577,8 @@ export class ViewerRuntime {
   private resolveAllBindings(diagnostics: ViewerDiagnosticEvent[], schema: DocumentSchema): Map<string, Record<string, unknown>> {
     const resolvedMap = new Map<string, Record<string, unknown>>()
     traverseNodes(schema, (node) => {
-      if (!node.binding) {
-        resolvedMap.set(node.id, node.props)
+      if (!node.bindings.value) {
+        resolvedMap.set(node.id, node.model)
         return
       }
 
@@ -597,7 +597,7 @@ export class ViewerRuntime {
             })
           }
         }
-        const resolvedProps = applyBindingsToProps(node.props, projected, this._materialRegistry.getBinding(node.type))
+        const resolvedProps = applyBindingsToProps(node.model, projected, this._materialRegistry.getBinding(node.type))
         resolvedMap.set(node.id, resolvedProps)
       }
       catch (err) {
@@ -613,7 +613,7 @@ export class ViewerRuntime {
           scope: 'datasource',
           cause,
         })
-        resolvedMap.set(node.id, node.props)
+        resolvedMap.set(node.id, node.model)
       }
     })
 

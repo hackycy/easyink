@@ -1,49 +1,19 @@
-import type { DatasourceDropHandler, MaterialControlPolicy, MaterialDesignerExtension, MaterialExtensionContext, SelectionType } from '@easyink/core'
-import type { TableEditingDelegate } from '@easyink/material-table-kernel'
-import type { BindingRef, MaterialNode, TableDataSchema, TableNode, TableRowSchema } from '@easyink/schema'
+import type { DatasourceDropHandler, MaterialControlPolicy, MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
+import type { BindingRef, MaterialNode } from '@easyink/schema'
 import type { UnitType } from '@easyink/shared'
 import type { TableDataProps } from './schema'
 import {
-  keyboardCursorMiddleware,
-  selectionMiddleware,
-  undoBoundaryMiddleware,
-  UnitManager,
-} from '@easyink/core'
-import {
-  computeCellRectWithPlaceholders,
-  computeRowScaleWithVirtualRows,
-  createTableCellDecorationComponent,
-  createTableCellEditBehavior,
-  createTableCellSelectBehavior,
-  createTableCellSelectionType,
-  createTableCommandHandlerBehavior,
-  createTableGeometry,
-  createTableKeyboardNavBehavior,
-  createTableResizeAdapter,
-  createTableResizeBehavior,
+  computeCellRect,
   escapeHtml,
-  hitTestWithPlaceholders,
+  getTableMaterialModel,
+  hitTestGridCell,
+  projectTableTopology,
   renderPlainTextCell,
   renderTableHtml,
   resolveMergeOwner,
+  resolveTableBaseProps,
 } from '@easyink/material-table-kernel'
-import { getNodeProps, isTableNode } from '@easyink/schema'
-
-const ROLE_BG_MAP: Record<string, keyof TableDataProps> = {
-  header: 'headerBackground',
-  footer: 'summaryBackground',
-}
-
-const PLACEHOLDER_ROW_COUNT = 2
-const PREVIEW_ROW_PATTERN = 'repeating-linear-gradient(135deg, transparent 0, transparent 4px, rgba(100,116,139,0.16) 4px, rgba(100,116,139,0.16) 4.5px, transparent 4.5px, transparent 9px)'
-
-type SectionMarkerKind = 'header' | 'data' | 'footer'
-
-const SECTION_MARKER_ICON: Record<SectionMarkerKind, string> = {
-  header: '<svg xmlns="http://www.w3.org/2000/svg" width="7" height="7" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width=".9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="1.25" y="1.25" width="9.5" height="9.5" rx="1.25"/><rect x="1.7" y="1.7" width="8.6" height="2.7" rx=".7" fill="#475569" stroke="none" fill-opacity=".32"/><path d="M1.25 4h9.5"/><path d="M1.25 8h9.5"/><path d="M4.4 1.25v9.5"/><path d="M7.6 1.25v9.5"/></svg>',
-  data: '<svg xmlns="http://www.w3.org/2000/svg" width="7" height="7" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width=".9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="1.25" y="1.25" width="9.5" height="9.5" rx="1.25"/><rect x="1.7" y="4.25" width="8.6" height="3.5" rx=".7" fill="#475569" stroke="none" fill-opacity=".3"/><path d="M1.25 4h9.5"/><path d="M1.25 8h9.5"/><path d="M4.4 1.25v9.5"/><path d="M7.6 1.25v9.5"/></svg>',
-  footer: '<svg xmlns="http://www.w3.org/2000/svg" width="7" height="7" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width=".9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="1.25" y="1.25" width="9.5" height="9.5" rx="1.25"/><rect x="1.7" y="7.6" width="8.6" height="2.7" rx=".7" fill="#475569" stroke="none" fill-opacity=".32"/><path d="M1.25 4h9.5"/><path d="M1.25 8h9.5"/><path d="M4.4 1.25v9.5"/><path d="M7.6 1.25v9.5"/></svg>',
-}
+import { TABLE_DATA_DEFAULTS } from './schema'
 
 const RUNTIME_HEIGHT_CONTROL_POLICY: MaterialControlPolicy = {
   geometry: {
@@ -56,238 +26,63 @@ const RUNTIME_HEIGHT_CONTROL_POLICY: MaterialControlPolicy = {
   },
 }
 
-function readRowBackground(props: TableDataProps, key: keyof TableDataProps): string {
-  const value = props[key]
-  return typeof value === 'string' ? value : ''
+export function canResizeTableDataRow(node: MaterialNode<unknown>, rowIndex: number): boolean {
+  return node.type === 'table-data' && Boolean(projectTableTopology(node).rowIds[rowIndex])
 }
 
-function renderSectionMarker(kind: SectionMarkerKind, label: string): string {
-  const icon = SECTION_MARKER_ICON[kind]
-  return `<span role="img" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}" style="position:absolute;left:1px;top:1px;display:inline-flex;align-items:center;justify-content:center;width:9px;height:9px;border:0.5px solid rgba(15,23,42,0.12);border-radius:1.5px;background:rgba(255,255,255,0.18);color:rgba(71,85,105,0.44);pointer-events:none;user-select:none;line-height:0">${icon}</span>`
-}
-
-function renderCellWithSectionLabel(content: string, label: string, kind: SectionMarkerKind, isFirstCell: boolean): string {
-  if (!isFirstCell)
-    return content
-  return `${renderSectionMarker(kind, label)}${content}`
-}
-
-/**
- * Build per-row hidden mask from showHeader/showFooter switches.
- * Row index aligns with `node.table.topology.rows`.
- */
-function getHiddenRowMask(node: TableNode): boolean[] {
-  const td = node.table as TableDataSchema
-  const headerHidden = td.showHeader === false
-  const footerHidden = td.showFooter === false
-  return node.table.topology.rows.map((row) => {
-    if (row.role === 'header')
-      return headerHidden
-    if (row.role === 'footer')
-      return footerHidden
-    return false
-  })
-}
-
-export function canResizeTableDataRow(node: TableNode, rowIndex: number): boolean {
-  const hidden = getHiddenRowMask(node)
-  return Boolean(node.table.topology.rows[rowIndex]) && !hidden[rowIndex]
-}
-
-function buildHtml(node: MaterialNode, unit: UnitType, context: MaterialExtensionContext): string {
-  if (!isTableNode(node)) {
+function buildHtml(node: MaterialNode<unknown>, unit: UnitType, context: MaterialExtensionContext): string {
+  if (node.type !== 'table-data') {
     const label = escapeHtml(context.t('materials.tableData.name'))
     return `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#999;font-size:11px">${label}</div>`
   }
 
-  const p = getNodeProps<TableDataProps>(node)
-  const hidden = getHiddenRowMask(node)
-
-  // Find the repeat-template row for placeholder rendering
-  let repeatTemplateIndex = -1
-  for (let i = 0; i < node.table.topology.rows.length; i++) {
-    if (node.table.topology.rows[i]!.role === 'repeat-template') {
-      repeatTemplateIndex = i
-      break
-    }
-  }
-
-  // Build placeholder rows HTML to inject between repeat-template and footer
-  let virtualRowsConfig: Parameters<typeof renderTableHtml>[0]['virtualRows']
-  if (repeatTemplateIndex >= 0) {
-    const repeatRow = node.table.topology.rows[repeatTemplateIndex]!
-    const bw = p.borderWidth ?? 1
-    const bc = p.borderColor || '#000'
-    const bt = p.borderType || 'solid'
-    const pad = p.cellPadding ?? 4
-    // rowScale must use the SAME hidden mask as renderTableHtml so the
-    // placeholder height matches the actually-rendered repeat-template row.
-    const rowScale = computeRowScaleWithVirtualRows(
-      node.table.topology.rows,
-      node.height,
-      hidden,
-      { rowHeight: repeatRow.height, count: PLACEHOLDER_ROW_COUNT },
-    )
-    const scaledRepeatHeight = repeatRow.height * rowScale
-
-    let placeholderRowsHtml = ''
-    // Wrap placeholder content in a fixed-height inner div to match the main
-    // renderer — keeps <tr> from growing past schema row.height (otherwise
-    // &nbsp; + padding can exceed the requested row height when small).
-    const hasVisibleRowsAfterRepeat = node.table.topology.rows.some((_, index) => index > repeatTemplateIndex && !hidden[index])
-    for (let pr = 0; pr < 2; pr++) {
-      let cells = ''
-      for (let ci = 0; ci < repeatRow.cells.length; ci++) {
-        const cell = repeatRow.cells[ci]!
-        const cs = cell.colSpan && cell.colSpan > 1 ? ` colspan="${cell.colSpan}"` : ''
-        const colSpan = cell.colSpan ?? 1
-        const isLastCol = ci + colSpan >= repeatRow.cells.length
-        const isLastPreviewRow = pr === 1
-        const borderTop = `${bw}${unit} ${bt} ${bc}`
-        const borderRight = isLastCol ? `${bw}${unit} ${bt} ${bc}` : 'none'
-        const borderBottom = isLastPreviewRow && !hasVisibleRowsAfterRepeat ? `${bw}${unit} ${bt} ${bc}` : 'none'
-        const borderLeft = `${bw}${unit} ${bt} ${bc}`
-        const verticalBorderWidth = bw + (borderBottom === 'none' ? 0 : bw)
-        const innerHeight = Math.max(0, scaledRepeatHeight - verticalBorderWidth)
-        const innerStyle = `box-sizing:border-box;height:${innerHeight}${unit};padding:${pad}${unit};overflow:hidden`
-        cells += `<td${cs} style="box-sizing:border-box;height:${scaledRepeatHeight}${unit};border-top:${borderTop};border-right:${borderRight};border-bottom:${borderBottom};border-left:${borderLeft};padding:0;background-image:${PREVIEW_ROW_PATTERN};vertical-align:top"><div style="${innerStyle}">&nbsp;</div></td>`
-      }
-      placeholderRowsHtml += `<tr style="height:${scaledRepeatHeight}${unit};pointer-events:none">${cells}</tr>`
-    }
-    virtualRowsConfig = {
-      afterRowIndex: repeatTemplateIndex,
-      count: 2,
-      rowHeight: repeatRow.height,
-      rowsHtml: placeholderRowsHtml,
-    }
-  }
-
+  const projection = projectTableTopology(node)
+  const props: TableDataProps = { ...TABLE_DATA_DEFAULTS, ...resolveTableBaseProps(node) }
   return renderTableHtml({
-    topology: node.table.topology,
-    props: p,
+    topology: projection.topology,
+    props,
     unit,
     elementHeight: node.height,
-    tableStyle: virtualRowsConfig ? undefined : 'height:100%',
-    cellRenderer: (cell, rowIndex, colIndex) => {
-      let content = ''
-      if (cell.binding) {
-        const label = context.getBindingLabel(cell.binding)
-        content = `<span style="">{#${escapeHtml(label)}}</span>`
-      }
-      else if (cell.staticBinding) {
-        const label = context.getBindingLabel(cell.staticBinding)
-        content = `<span style="">{#${escapeHtml(label)}}</span>`
-      }
-      else {
-        content = renderPlainTextCell(cell.content?.text)
-      }
-
-      const row = node.table.topology.rows[rowIndex]
-      if (row?.role === 'header')
-        return renderCellWithSectionLabel(content, context.t('materials.tableData.section.header'), 'header', colIndex === 0)
-      if (row?.role === 'repeat-template')
-        return renderCellWithSectionLabel(content, context.t('materials.tableData.section.data'), 'data', colIndex === 0)
-      if (row?.role === 'footer')
-        return renderCellWithSectionLabel(content, context.t('materials.tableData.section.footer'), 'footer', colIndex === 0)
-      return content
+    tableStyle: 'height:100%',
+    cellRenderer: (cell) => {
+      const binding = cell.binding ?? cell.staticBinding
+      if (binding)
+        return `<span>{#${escapeHtml(context.getBindingLabel(binding))}}</span>`
+      return renderPlainTextCell(cell.content?.text)
     },
-    rowDecorator: (ri) => {
-      const row = node.table.topology.rows[ri]
-      if (!row)
-        return {}
-      // Hidden header/footer rows: skip rendering entirely (no DOM node).
-      // node.height is already adjusted by UpdateTableVisibilityCommand so
-      // visible rows fill the element exactly.
-      if (hidden[ri])
-        return { skip: true }
-      const bgKey = ROLE_BG_MAP[row.role]
-      const bg = bgKey ? readRowBackground(p, bgKey) : ''
-      if (bg)
-        return { cellStyle: `;background:${bg}` }
-      if (p.stripedRows && p.stripedColor && !bgKey && ri % 2 === 1)
-        return { cellStyle: `;background:${p.stripedColor}` }
-      return {}
+    rowDecorator: (index) => {
+      const role = projection.topology.rows[index]?.role
+      const background = role === 'header'
+        ? props.headerBackground
+        : role === 'footer'
+          ? props.summaryBackground
+          : props.stripedRows && index % 2 === 1 ? props.stripedColor : ''
+      return background ? { cellStyle: `;background:${background}` } : {}
     },
-    virtualRows: virtualRowsConfig,
   })
-}
-
-function createDelegate(context: MaterialExtensionContext): TableEditingDelegate {
-  const unitManager = new UnitManager(context.getSchema().unit)
-
-  return {
-    getNode(nodeId) {
-      const node = context.getNode(nodeId)
-      return node && isTableNode(node) ? node : undefined
-    },
-    getTableKind: () => 'data' as const,
-    screenToDoc(screenVal, screenOrigin, zoom) {
-      return unitManager.screenToDocument(screenVal, screenOrigin, 0, zoom)
-    },
-    getZoom: () => context.getZoom(),
-    getPageEl: () => context.getPageEl(),
-    getUnit: () => context.getSchema().unit,
-    getPlaceholderRowCount: () => PLACEHOLDER_ROW_COUNT,
-    t: (key: string) => context.t(key),
-    getHiddenRowMask: node => getHiddenRowMask(node),
-    canResizeRow: (node, rowIndex) => canResizeTableDataRow(node, rowIndex),
-  }
 }
 
 function createDatasourceDropHandler(context: MaterialExtensionContext): DatasourceDropHandler {
   return {
     onDragOver(field, point, node) {
-      if (!isTableNode(node))
+      if (node.type !== 'table-data')
         return null
-
-      const hidden = getHiddenRowMask(node)
-      const gridCell = hitTestWithPlaceholders(node, point.x, point.y, PLACEHOLDER_ROW_COUNT, hidden)
+      const projection = projectTableTopology(node)
+      const gridCell = hitTestGridCell(projection.topology, node.width, node.height, point.x, point.y)
       if (!gridCell)
         return null
-      const cell = resolveMergeOwner(node.table.topology, gridCell.row, gridCell.col)
-      const row = node.table.topology.rows[cell.row]
-      if (!row)
-        return null
-      // Hidden header/footer rows reject any drop.
-      if (hidden[cell.row])
-        return null
-
-      if (row.role === 'repeat-template' && field.sourceId && field.fieldPath) {
-        const incomingPrefix = getFieldCollectionPrefix(field.fieldPath)
-        const existingPrefixes = getRowCollectionPrefixes(row)
-        if (existingPrefixes.length > 0 && existingPrefixes[0] !== incomingPrefix) {
-          const cellRect = computeCellRectWithPlaceholders(node, cell.row, cell.col, PLACEHOLDER_ROW_COUNT, hidden)
-          if (!cellRect)
-            return null
-          return {
-            status: 'rejected',
-            rect: cellRect,
-            label: context.t('designer.dataSource.collectionMismatch'),
-          }
-        }
-      }
-
-      const cellRect = computeCellRectWithPlaceholders(node, cell.row, cell.col, PLACEHOLDER_ROW_COUNT, hidden)
-      if (!cellRect)
-        return null
-      return { status: 'accepted', rect: cellRect, label: field.fieldLabel }
+      const cell = resolveMergeOwner(projection.topology, gridCell.row, gridCell.col)
+      const rect = computeCellRect(projection.topology, node.width, node.height, cell.row, cell.col)
+      return rect ? { status: 'accepted', rect, label: field.fieldLabel } : null
     },
-
     onDrop(field, point, node) {
-      if (!isTableNode(node))
+      if (node.type !== 'table-data')
         return
-
-      const hidden = getHiddenRowMask(node)
-      const gridCell = hitTestWithPlaceholders(node, point.x, point.y, PLACEHOLDER_ROW_COUNT, hidden)
+      const projection = projectTableTopology(node)
+      const gridCell = hitTestGridCell(projection.topology, node.width, node.height, point.x, point.y)
       if (!gridCell)
         return
-      const cell = resolveMergeOwner(node.table.topology, gridCell.row, gridCell.col)
-      const row = node.table.topology.rows[cell.row]
-      if (!row)
-        return
-      if (hidden[cell.row])
-        return
-
+      const owner = resolveMergeOwner(projection.topology, gridCell.row, gridCell.col)
       const binding: BindingRef = {
         sourceId: field.sourceId,
         sourceName: field.sourceName,
@@ -297,78 +92,33 @@ function createDatasourceDropHandler(context: MaterialExtensionContext): Datasou
         fieldLabel: field.fieldLabel,
         format: field.format,
       }
-
-      if (row.role === 'repeat-template') {
-        const incomingPrefix = getFieldCollectionPrefix(field.fieldPath)
-        const existingPrefixes = getRowCollectionPrefixes(row)
-        if (existingPrefixes.length > 0 && existingPrefixes[0] !== incomingPrefix)
+      context.tx.run(node.id, (draft) => {
+        const model = getTableMaterialModel(draft)
+        const rowId = projection.rowIds[owner.row]
+        const columnId = projection.columnIds[owner.col]
+        const target = model.bands.flatMap(band => band.rows).find(row => row.id === rowId)?.cells.find(cell => cell.columnId === columnId)
+        if (!target)
           return
-
-        context.tx.run<TableNode>(node.id, (d) => {
-          d.table.topology.rows[cell.row]!.cells[cell.col]!.binding = { ...binding }
-        }, { label: 'designer.history.bindField' })
-      }
-      else {
-        context.tx.run<TableNode>(node.id, (d) => {
-          const c = d.table.topology.rows[cell.row]!.cells[cell.col]!
-          c.staticBinding = { ...binding }
-          c.content = undefined
-        }, { label: 'designer.history.bindField' })
-      }
+        const port = target.content.kind === 'text' && target.content.bindingPort
+          ? target.content.bindingPort
+          : `cell:${target.id}:value`
+        draft.bindings[port] = binding
+        target.content = { kind: 'text', text: '', bindingPort: port }
+      }, { label: 'designer.history.bindField' })
     },
   }
 }
 
-function getFieldCollectionPrefix(fieldPath: string): string {
-  const lastSep = fieldPath.lastIndexOf('/')
-  return lastSep > 0 ? fieldPath.substring(0, lastSep) : ''
-}
-
-function getRowCollectionPrefixes(row: TableRowSchema): string[] {
-  const prefixes = new Set<string>()
-  for (const cell of row.cells) {
-    if (cell.binding?.fieldPath) {
-      prefixes.add(getFieldCollectionPrefix(cell.binding.fieldPath))
-    }
-  }
-  return [...prefixes]
-}
-
 export function createTableDataExtension(context: MaterialExtensionContext): MaterialDesignerExtension {
-  const delegate = createDelegate(context)
-  const tableGeometry = createTableGeometry(delegate)
-  const cellSelectionType = createTableCellSelectionType(delegate)
-
   return {
     renderContent(nodeSignal, container) {
       function render() {
-        const schema = context.getSchema()
-        container.innerHTML = buildHtml(nodeSignal.get(), schema.unit, context)
+        container.innerHTML = buildHtml(nodeSignal.get(), context.getSchema().unit, context)
       }
       render()
       return nodeSignal.subscribe(render)
     },
-
     resolveControlPolicy: () => RUNTIME_HEIGHT_CONTROL_POLICY,
-    geometry: tableGeometry,
-    selectionTypes: [cellSelectionType as SelectionType<unknown>],
-    behaviors: [
-      selectionMiddleware(),
-      undoBoundaryMiddleware({ groupBy: 'cell' }),
-      createTableCellSelectBehavior(delegate),
-      createTableKeyboardNavBehavior(delegate),
-      createTableCellEditBehavior(delegate),
-      createTableResizeBehavior(delegate),
-      createTableCommandHandlerBehavior(delegate),
-      keyboardCursorMiddleware(),
-    ],
-    decorations: [{
-      selectionTypes: ['table.cell'],
-      component: createTableCellDecorationComponent(delegate),
-      layer: 'above-content',
-    }],
     datasourceDrop: createDatasourceDropHandler(context),
-    resize: createTableResizeAdapter({ getHiddenRowMask }),
-
   }
 }

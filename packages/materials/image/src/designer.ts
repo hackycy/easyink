@@ -1,17 +1,17 @@
 import type { MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { ImageProps } from './schema'
-import { getBindingRefs, getNodeProps } from '@easyink/schema'
+import { getBindingRefs, getNodeModel } from '@easyink/schema'
 import { escapeAttr } from '@easyink/shared'
 
 function buildHtml(node: MaterialNode, context: MaterialExtensionContext): string {
-  const p = getNodeProps<ImageProps>(node)
+  const p = getNodeModel<ImageProps>(node)
   const unit = context.getSchema().unit
   const DASH_MAP: Record<string, string> = { dashed: 'dashed', dotted: 'dotted' }
   const borderStyle = p.borderWidth ? `border:${p.borderWidth}${unit} ${DASH_MAP[p.borderType] || 'solid'} ${p.borderColor};` : ''
   const bgStyle = p.backgroundColor ? `background:${p.backgroundColor};` : ''
 
-  const b = getBindingRefs(node.binding)[0]
+  const b = getBindingRefs(node.bindings.value)[0]
   if (b) {
     const label = context.getBindingLabel(b)
     return `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;${bgStyle || 'background:#f5f5f5;'};font-size:11px;overflow:hidden;box-sizing:border-box;${borderStyle}">`
@@ -33,8 +33,8 @@ function buildHtml(node: MaterialNode, context: MaterialExtensionContext): strin
 }
 
 function getContentKey(node: MaterialNode): string {
-  const p = getNodeProps<ImageProps>(node)
-  const binding = node.binding ? JSON.stringify(node.binding) : ''
+  const p = getNodeModel<ImageProps>(node)
+  const binding = node.bindings.value ? JSON.stringify(node.bindings.value) : ''
   return `${p.src}\0${p.fit}\0${p.alt}\0${p.backgroundColor}\0${p.borderWidth}\0${p.borderColor}\0${p.borderType}\0${binding}`
 }
 

@@ -2,12 +2,12 @@ import type { ViewerRenderContext } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { PageNumberProps } from './schema'
 import { trustedViewerHtml } from '@easyink/core'
-import { getNodeProps } from '@easyink/schema'
+import { getNodeModel } from '@easyink/schema'
 import { escapeHtml } from '@easyink/shared'
 import { formatPageNumberDisplay } from './rendering'
 
 export function renderPageNumber(node: MaterialNode, context: ViewerRenderContext) {
-  const props = getNodeProps<PageNumberProps>(node)
+  const props = getNodeModel<PageNumberProps>(node)
   const resolved = context.resolvedProps
 
   const current = (resolved.__pageNumber as number) ?? 1

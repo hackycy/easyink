@@ -406,6 +406,7 @@ export interface LegacyMaterialNodeInput extends Record<string, unknown> {
 export type MaterialNodeInput = MaterialNode | LegacyMaterialNodeInput
 
 export interface BenchmarkElementCompatState {
+  [key: string]: unknown
   rawProps?: Record<string, unknown>
   rawBind?: unknown
   passthrough?: Record<string, unknown>
@@ -502,6 +503,52 @@ export function getNodeModel<TModel>(node: MaterialNode<unknown>): TModel {
 
 export function getNodeBinding(node: MaterialNode, port = 'value'): MaterialBinding | undefined {
   return node.bindings[port]
+}
+
+export function getDefaultMaterialSlot(node: MaterialNode): MaterialNode[] {
+  return node.slots.default ?? []
+}
+
+export function isNodeEditorHidden(node: MaterialNode): boolean {
+  return node.editorState?.hidden === true
+}
+
+/** Finalizes a material-owned factory result as a canonical v1 node envelope. */
+export function canonicalizeMaterialNode<TModel>(
+  type: string,
+  candidate: Partial<MaterialNode<TModel>> & Record<string, unknown>,
+): MaterialNode<TModel> {
+  const {
+    type: _type,
+    modelVersion: _modelVersion,
+    props: _props,
+    binding: _binding,
+    children: _children,
+    table: _table,
+    hidden: _hidden,
+    locked: _locked,
+    renderCondition: _renderCondition,
+    print: _print,
+    placement: _placement,
+    break: _break,
+    repeat: _repeat,
+    animations: _animations,
+    model,
+    slots,
+    bindings,
+    output,
+    ...envelope
+  } = candidate
+
+  return {
+    ...envelope,
+    type,
+    modelVersion: 1,
+    model: (model ?? {}) as TModel,
+    slots: slots ?? {},
+    bindings: bindings ?? {},
+    output: { visibility: 'include', ...output },
+  } as MaterialNode<TModel>
 }
 
 export interface TableSchema {

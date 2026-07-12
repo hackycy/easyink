@@ -68,10 +68,10 @@ export function renderPages(
     const sorted = [...page.elements].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0))
 
     for (const node of sorted) {
-      if (node.hidden)
+      if (node.editorState?.hidden)
         continue
 
-      const resolved = resolvedPropsMap.get(node.id) ?? node.props
+      const resolved = resolvedPropsMap.get(node.id) ?? node.model
       context.resolvedProps = resolved
 
       // Render through the material registry, wrapped by unified diagnostic middleware.

@@ -11,8 +11,8 @@ import { selectOne } from '../interactions/selection-api'
 const store = useDesignerStore()
 
 function getNodeLabel(node: MaterialNode): string {
-  if (node.name)
-    return node.name
+  if (node.editorState?.name)
+    return node.editorState.name
   const def = store.getMaterial(node.type)
   if (def)
     return store.t(def.name)
@@ -25,7 +25,7 @@ function toTreeNode(node: MaterialNode): TreeNode {
     id: node.id,
     label: getNodeLabel(node),
     icon: definition?.icon,
-    children: node.children?.map(toTreeNode),
+    children: node.slots.default?.map(toTreeNode),
     data: node,
   }
 }
@@ -56,7 +56,7 @@ function handleDelete(node: MaterialNode) {
 }
 
 function visibilityTitle(node: MaterialNode): string {
-  return store.t(node.hidden ? 'designer.context.show' : 'designer.context.hide')
+  return store.t(node.editorState?.hidden ? 'designer.context.show' : 'designer.context.hide')
 }
 </script>
 
@@ -70,9 +70,9 @@ function visibilityTitle(node: MaterialNode): string {
     <template #label="{ node }">
       <span class="structure-tree__label-content">
         <span
-          v-if="(node.data as MaterialNode)?.renderCondition"
+          v-if="(node.data as MaterialNode)?.output.renderCondition"
           class="structure-tree__condition"
-          :class="{ 'is-disabled': (node.data as MaterialNode).renderCondition?.enabled === false }"
+          :class="{ 'is-disabled': (node.data as MaterialNode).output.renderCondition?.enabled === false }"
           :title="store.t('designer.property.conditionalRendering')"
         >
           <EiIcon :icon="IconCondition" :size="12" :stroke-width="1.6" />
@@ -82,7 +82,7 @@ function visibilityTitle(node: MaterialNode): string {
     </template>
     <template #suffix="{ node }">
       <button
-        v-if="(node.data as MaterialNode)?.locked"
+        v-if="(node.data as MaterialNode)?.editorState?.locked"
         type="button"
         class="structure-tree__action"
         :title="store.t('designer.context.unlock')"
@@ -98,13 +98,13 @@ function visibilityTitle(node: MaterialNode): string {
       <button
         type="button"
         class="structure-tree__action"
-        :disabled="(node.data as MaterialNode)?.locked"
+        :disabled="(node.data as MaterialNode)?.editorState?.locked"
         :title="visibilityTitle(node.data as MaterialNode)"
         :aria-label="visibilityTitle(node.data as MaterialNode)"
         @click.stop="handleToggleHidden(node.data as MaterialNode)"
       >
         <EiIcon
-          :icon="(node.data as MaterialNode)?.hidden ? IconHidden : IconPreview"
+          :icon="(node.data as MaterialNode)?.editorState?.hidden ? IconHidden : IconPreview"
           :size="12"
           :stroke-width="1.5"
         />
@@ -112,7 +112,7 @@ function visibilityTitle(node: MaterialNode): string {
       <button
         type="button"
         class="structure-tree__action structure-tree__action--danger"
-        :disabled="(node.data as MaterialNode)?.locked"
+        :disabled="(node.data as MaterialNode)?.editorState?.locked"
         :title="store.t('designer.context.delete')"
         :aria-label="store.t('designer.context.delete')"
         @click.stop="handleDelete(node.data as MaterialNode)"

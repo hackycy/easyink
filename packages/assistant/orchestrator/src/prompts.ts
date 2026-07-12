@@ -1,5 +1,8 @@
 import type { AssistantMaterialManifest } from '@easyink/assistant-capabilities'
 
+const MATERIAL_BINDING_KEY = 'binding'
+const MATERIAL_PROPS_KEY = 'props'
+
 export interface PromptContext {
   unit: 'mm' | 'px' | 'pt'
   mode: 'fixed' | 'continuous'
@@ -23,7 +26,7 @@ export function buildMaterialIndexContext(manifest: AssistantMaterialManifest | 
     const description = ai?.description ?? material.name
     const categories = [
       knowledge?.category ? `category: ${knowledge.category}` : undefined,
-      `binding: ${material.binding.kind}`,
+      `binding: ${material[MATERIAL_BINDING_KEY].kind}`,
       material.capabilities.supportsChildren ? 'supports children' : undefined,
       material.capabilities.bindable ? 'bindable' : undefined,
     ].filter(Boolean).join(', ')
@@ -78,7 +81,7 @@ export function buildMaterialContext(manifest: AssistantMaterialManifest | undef
       lines.push(`- Category: ${knowledge.category}`)
     const properties = ai?.properties?.length
       ? ai.properties
-      : material.props?.map(prop => prop.key) ?? []
+      : material[MATERIAL_PROPS_KEY]?.map(prop => prop.key) ?? []
     if (properties.length)
       lines.push(`- Properties: ${properties.join(', ')}`)
     if (ai?.requiredProps?.length)
@@ -125,7 +128,7 @@ export function buildMaterialContext(manifest: AssistantMaterialManifest | undef
 }
 
 function formatMaterialBinding(material: AssistantMaterialManifest['materials'][number]): string {
-  const binding = material.binding
+  const binding = material[MATERIAL_BINDING_KEY]
   if (binding.kind === 'ordinary') {
     const indexed = binding.indexedProps ? `, indexed props: ${JSON.stringify(binding.indexedProps)}` : ''
     return `- Binding: ordinary BindingRef; bindIndex 0 writes props.${binding.primaryProp}${indexed}`
@@ -442,7 +445,7 @@ export function buildLayoutMaterialContext(manifest: AssistantMaterialManifest |
   for (const material of manifest.materials) {
     const ai = material.ai
     const knowledge = ai?.knowledge
-    const binding = material.binding.kind
+    const binding = material[MATERIAL_BINDING_KEY].kind
     const children = material.capabilities?.supportsChildren ? ', supports children' : ''
     const sizing = knowledge?.sizing ? `, default ${knowledge.sizing.defaultSize.width}x${knowledge.sizing.defaultSize.height}` : ''
     lines.push(`- ${material.type}: ${ai?.description ?? material.name} (binding: ${binding}${children}${sizing})`)

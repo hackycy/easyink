@@ -1,6 +1,6 @@
-import type { PropSchema } from '@easyink/core'
+import type { PropertyDescriptor } from '@easyink/core'
 
-export const chartGaugeDesignerPropSchemas: PropSchema[] = [
+export const chartGaugeDesignerPropSchemas: PropertyDescriptor[] = [
   { key: 'progressColor', label: 'materials.chartGauge.property.progressColor', type: 'color', group: 'appearance' },
   { key: 'trackColor', label: 'materials.chartGauge.property.trackColor', type: 'color', group: 'appearance' },
   { key: 'pointerColor', label: 'materials.chartGauge.property.pointerColor', type: 'color', group: 'appearance' },

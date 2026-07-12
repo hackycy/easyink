@@ -1,11 +1,11 @@
 import type { MaterialNode } from '@easyink/schema'
 import type { QrcodeProps } from './schema'
 import { trustedViewerHtml } from '@easyink/core'
-import { getNodeProps } from '@easyink/schema'
+import { getNodeModel } from '@easyink/schema'
 import { generateQrcodeEmptySvg, generateQrcodeSvg } from './render'
 
 export function renderQrcode(node: MaterialNode) {
-  const props = getNodeProps<QrcodeProps>(node)
+  const props = getNodeModel<QrcodeProps>(node)
   const value = props.value == null ? '' : String(props.value)
 
   if (!value) {

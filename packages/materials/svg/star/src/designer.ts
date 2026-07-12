@@ -2,7 +2,7 @@ import type { BehaviorRegistration, EditingSessionRef, MaterialDesignerExtension
 import type { MaterialNode } from '@easyink/schema'
 import type { SvgStarControlSelection, SvgStarProps } from './schema'
 import { undoBoundaryMiddleware } from '@easyink/core'
-import { getNodeProps } from '@easyink/schema'
+import { getNodeModel } from '@easyink/schema'
 import { createPointerGesture } from '@easyink/shared'
 import { computed, defineComponent, h, onUnmounted } from 'vue'
 import { buildStarSvgMarkup, getStarControlRect, getStarEditGuide, resolveStarControl, updateStarControlFromLocalPoint } from './rendering'
@@ -29,14 +29,14 @@ function createStarGeometry(): MaterialGeometry {
 
       const props = {
         ...SVG_STAR_DEFAULTS,
-        ...getNodeProps<SvgStarProps>(node),
+        ...getNodeModel<SvgStarProps>(node),
       }
       return [getStarControlRect(node, props, selection.payload as SvgStarControlSelection)]
     },
     hitTest(point, node) {
       const props = {
         ...SVG_STAR_DEFAULTS,
-        ...getNodeProps<SvgStarProps>(node),
+        ...getNodeModel<SvgStarProps>(node),
       }
       const control = resolveStarControl(point, node, props)
       if (!control && !(point.x >= 0 && point.y >= 0 && point.x <= node.width && point.y <= node.height))
@@ -57,7 +57,7 @@ function createStarSelectionType(): SelectionType<SvgStarControlSelection> {
     resolveLocation(sel, node) {
       const props = {
         ...SVG_STAR_DEFAULTS,
-        ...getNodeProps<SvgStarProps>(node),
+        ...getNodeModel<SvgStarProps>(node),
       }
       return [getStarControlRect(node, props, sel.payload)]
     },
@@ -74,17 +74,17 @@ function createStarSelectionType(): SelectionType<SvgStarControlSelection> {
 }
 
 function createStarSubPropertySchema(_selection: Selection<SvgStarControlSelection>, node: MaterialNode): SubPropertySchema {
-  const schemas = [
+  const descriptors = [
     { key: 'starInnerRatio', label: 'materials.svgStar.property.innerRatio', type: 'number', group: 'shape', min: 0.08, max: 0.95, step: 0.01 },
   ]
 
   return {
     title: 'materials.svgStar.property.edit',
-    schemas,
+    descriptors,
     read(key) {
       const props = {
         ...SVG_STAR_DEFAULTS,
-        ...getNodeProps<SvgStarProps>(node),
+        ...getNodeModel<SvgStarProps>(node),
       }
       if (key === 'starInnerRatio')
         return props.starInnerRatio
@@ -97,7 +97,7 @@ function createStarSubPropertySchema(_selection: Selection<SvgStarControlSelecti
       if (Number.isNaN(numericValue))
         return
       tx.run<MaterialNode>(node.id, (draft) => {
-        const draftProps = draft.props ?? (draft.props = {})
+        const draftProps = draft.model ?? (draft.model = {})
         draftProps[key] = Math.min(0.95, Math.max(0.08, numericValue))
       }, {
         mergeKey: `svg-star:property:${key}`,
@@ -131,7 +131,7 @@ function createStarHandleBehavior(): BehaviorRegistration {
         if (!ctx.selection) {
           const currentProps = {
             ...SVG_STAR_DEFAULTS,
-            ...getNodeProps<SvgStarProps>(ctx.node),
+            ...getNodeModel<SvgStarProps>(ctx.node),
           }
           ctx.selectionStore.set({
             type: STAR_CONTROL_SELECTION_TYPE,
@@ -149,12 +149,12 @@ function createStarHandleBehavior(): BehaviorRegistration {
         const localPoint = ctx.geometry.documentToLocal(documentPoint, ctx.node)
         const currentProps = {
           ...SVG_STAR_DEFAULTS,
-          ...getNodeProps<SvgStarProps>(ctx.node),
+          ...getNodeModel<SvgStarProps>(ctx.node),
         }
         const nextProps = updateStarControlFromLocalPoint(ctx.node, currentProps, payload.handle, localPoint)
         ctx.tx.run<MaterialNode>(ctx.node.id, (draft) => {
-          draft.props = {
-            ...(draft.props ?? {}),
+          draft.model = {
+            ...(draft.model ?? {}),
             ...nextProps,
           }
         }, {
@@ -183,7 +183,7 @@ function createStarDecorationComponent(context: MaterialExtensionContext) {
     setup(props) {
       const currentSelection = computed(() => props.selection.payload as SvgStarControlSelection)
       const starProps = computed(() => {
-        const nodeProps = getNodeProps<SvgStarProps>(props.node)
+        const nodeProps = getNodeModel<SvgStarProps>(props.node)
         const metaRatio = props.session.meta.starInnerRatio as number | undefined
         return {
           ...SVG_STAR_DEFAULTS,
@@ -303,7 +303,7 @@ export function createSvgStarExtension(context: MaterialExtensionContext): Mater
         const node = nodeSignal.get()
         const props = {
           ...SVG_STAR_DEFAULTS,
-          ...getNodeProps<SvgStarProps>(node),
+          ...getNodeModel<SvgStarProps>(node),
         }
         container.innerHTML = buildStarSvgMarkup(props, node.width, node.height)
       }

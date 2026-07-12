@@ -27,7 +27,7 @@ describe('renderEllipse', () => {
       },
     })
 
-    expect(node.props).toMatchObject({
+    expect(node.model).toMatchObject({
       fillColor: 'transparent',
       borderWidth: 0.26,
       borderColor: '#000000',

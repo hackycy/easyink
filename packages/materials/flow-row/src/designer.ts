@@ -30,6 +30,7 @@ import {
 } from '@easyink/icons/svg-strings'
 import {
   createPointerGesture,
+  generateId,
   materialToolbarButtonStyle,
   materialToolbarDockStyle,
   materialToolbarGroupStyle,
@@ -40,6 +41,7 @@ import { computed, defineComponent, h, onUnmounted, ref, watch } from 'vue'
 import {
   computeFlowColumnRects,
   createFlowRowPlaceholderRows,
+  getFlowColumnBinding,
   getFlowRowProps,
   inferCollectionPath,
   measureFlowRows,
@@ -49,6 +51,18 @@ import {
 const FLOW_COLUMN_SELECTION_TYPE = 'flow-row.column'
 const FLOW_ROW_PLACEHOLDER_ROW_COUNT = 1
 const renderedLayoutCache = new Map<string, { signature: string, rects: FlowColumnLayoutRect[], height: number }>()
+
+function setFlowColumnBinding(node: MaterialNode, column: FlowColumnDef, binding: BindingRef): void {
+  const port = column.bindingPort ?? `column:${column.id}`
+  column.bindingPort = port
+  node.bindings[port] = binding
+}
+
+function clearFlowColumnBinding(node: MaterialNode, column: FlowColumnDef): void {
+  if (column.bindingPort)
+    delete node.bindings[column.bindingPort]
+  delete column.bindingPort
+}
 
 const RUNTIME_HEIGHT_CONTROL_POLICY: MaterialControlPolicy = {
   geometry: {
@@ -86,7 +100,8 @@ function createDesignerRowModel(node: MaterialNode, getBindingLabel?: (binding: 
     rows: [props.columns.map((column, index) => ({
       column,
       index,
-      text: column.binding && getBindingLabel ? `{#${getBindingLabel(column.binding)}}` : (column.content ?? ''),
+      text: getFlowColumnBinding(node, column) && getBindingLabel ? `{#${getBindingLabel(getFlowColumnBinding(node, column)!)}}` : (column.content ?? ''),
+      binding: getFlowColumnBinding(node, column),
     }))],
   }
 }
@@ -114,8 +129,8 @@ function createLayoutSignature(node: MaterialNode): string {
       textAlign: column.textAlign,
       verticalAlign: column.verticalAlign,
       content: column.content,
-      binding: column.binding?.fieldPath,
-      format: column.binding?.format,
+      binding: getFlowColumnBinding(node, column)?.fieldPath,
+      format: getFlowColumnBinding(node, column)?.format,
     })),
     gap: props.gap,
     paddingX: props.paddingX,
@@ -130,7 +145,8 @@ function getDesignerColumnRects(node: MaterialNode): FlowColumnLayoutRect[] {
 }
 
 function isColumnBound(node: MaterialNode, index: number): boolean {
-  return Boolean(getFlowRowProps(node).columns[index]?.binding)
+  const column = getFlowRowProps(node).columns[index]
+  return Boolean(column && getFlowColumnBinding(node, column))
 }
 
 function measureRenderedLayout(container: HTMLElement, node: MaterialNode): { rects: FlowColumnLayoutRect[], height: number } | null {
@@ -269,7 +285,7 @@ function createColumnSubPropertySchema(
 
   return {
     title: context.t('materials.flowRow.property.column'),
-    schemas: [
+    descriptors: [
       { key: 'content', label: 'designer.property.content', type: 'textarea', group: 'content' },
       { key: 'wrapMode', label: 'materials.flowRow.property.wrapMode', type: 'enum', group: 'layout', enum: WRAP_MODE_OPTIONS },
       { key: 'ratio', label: 'materials.flowRow.property.ratio', type: 'number', group: 'layout', min: 0.05, max: 10, step: 0.05 },
@@ -290,7 +306,7 @@ function createColumnSubPropertySchema(
           return
         if (key === 'content') {
           column.content = typeof value === 'string' ? value : String(value ?? '')
-          column.binding = undefined
+          clearFlowColumnBinding(draft, column)
         }
         else if (key === 'wrapMode') {
           column.wrapMode = value === 'block' ? 'block' : 'inline'
@@ -308,29 +324,32 @@ function createColumnSubPropertySchema(
           if (value === 'top' || value === 'middle' || value === 'bottom')
             column.verticalAlign = value
         }
-        draft.props = { ...props, columns: props.columns }
+        draft.model = { ...props, columns: props.columns }
         applyDesignerAutoHeight(draft)
       }, { label: 'materials.flowRow.history.updateColumn' })
     },
     get binding() {
-      return getColumn()?.binding
+      const current = context.getNode(sel.nodeId) ?? node
+      const column = getColumn()
+      return column ? getFlowColumnBinding(current, column) : undefined
     },
     clearBinding(tx: TransactionAPI) {
       tx.run<MaterialNode>(sel.nodeId, (draft) => {
         const props = getFlowRowProps(draft)
         const column = props.columns[sel.payload.index]
         if (column)
-          column.binding = undefined
-        draft.props = { ...props, columns: props.columns }
+          clearFlowColumnBinding(draft, column)
+        draft.model = { ...props, columns: props.columns }
       }, { label: 'designer.history.clearBinding' })
     },
     updateBindingFormat(tx: TransactionAPI, format: BindingDisplayFormat | undefined) {
       tx.run<MaterialNode>(sel.nodeId, (draft) => {
         const props = getFlowRowProps(draft)
         const column = props.columns[sel.payload.index]
-        if (column?.binding)
-          column.binding.format = format
-        draft.props = { ...props, columns: props.columns }
+        const binding = column ? getFlowColumnBinding(draft, column) : undefined
+        if (binding)
+          binding.format = format
+        draft.model = { ...props, columns: props.columns }
       }, { label: 'materials.flowRow.history.updateColumn' })
     },
   }
@@ -399,9 +418,9 @@ function createColumnKeyboardBehavior(): BehaviorRegistration {
           const column = draftProps.columns[payload.index]
           if (column) {
             column.content = ''
-            column.binding = undefined
+            clearFlowColumnBinding(draft, column)
           }
-          draft.props = { ...draftProps, columns: draftProps.columns }
+          draft.model = { ...draftProps, columns: draftProps.columns }
           applyDesignerAutoHeight(draft)
         }, { label: 'materials.flowRow.history.updateColumn' })
         return
@@ -438,13 +457,14 @@ function createColumnCommandBehavior(): BehaviorRegistration {
           const props = getFlowRowProps(draft)
           const base = props.columns[payload.index] ?? props.columns[0]
           props.columns.splice(insertIndex, 0, {
+            id: generateId('flow-column'),
             ratio: base?.ratio ?? 1,
             textAlign: base?.textAlign ?? 'left',
             verticalAlign: base?.verticalAlign ?? 'middle',
             wrapMode: base?.wrapMode ?? 'inline',
             content: '',
           })
-          draft.props = { ...props, columns: props.columns }
+          draft.model = { ...props, columns: props.columns }
           applyDesignerAutoHeight(draft)
         }, { label: 'materials.flowRow.history.insertColumn' })
         ctx.selectionStore.set({
@@ -461,8 +481,11 @@ function createColumnCommandBehavior(): BehaviorRegistration {
           const props = getFlowRowProps(draft)
           if (props.columns.length <= 1)
             return
+          const removed = props.columns[payload.index]
+          if (removed)
+            clearFlowColumnBinding(draft, removed)
           props.columns.splice(payload.index, 1)
-          draft.props = { ...props, columns: props.columns }
+          draft.model = { ...props, columns: props.columns }
           applyDesignerAutoHeight(draft)
         }, { label: 'materials.flowRow.history.removeColumn' })
         ctx.selectionStore.set({
@@ -479,11 +502,11 @@ function createColumnCommandBehavior(): BehaviorRegistration {
         ctx.tx.run<MaterialNode>(ctx.node.id, (draft) => {
           const props = getFlowRowProps(draft)
           const column = props.columns[p.index]
-          if (column && !column.binding) {
+          if (column && !getFlowColumnBinding(draft, column)) {
             column.content = p.text
-            column.binding = undefined
+            clearFlowColumnBinding(draft, column)
           }
-          draft.props = { ...props, columns: props.columns }
+          draft.model = { ...props, columns: props.columns }
           applyDesignerAutoHeight(draft)
         }, { label: 'materials.flowRow.history.updateColumn' })
         return
@@ -499,7 +522,7 @@ function createColumnCommandBehavior(): BehaviorRegistration {
           const column = props.columns[p.index]
           if (column)
             column.ratio = Math.max(0.05, column.ratio + docDelta / Math.max(1, draft.width))
-          draft.props = { ...props, columns: props.columns }
+          draft.model = { ...props, columns: props.columns }
           applyDesignerAutoHeight(draft)
         }, {
           mergeKey: `flow-row:resize-column:${p.index}`,
@@ -533,7 +556,7 @@ function createColumnCommandBehavior(): BehaviorRegistration {
             column.verticalAlign = 'middle'
           else if (command === 'flow-row.valign-bottom')
             column.verticalAlign = 'bottom'
-          draft.props = { ...props, columns: props.columns }
+          draft.model = { ...props, columns: props.columns }
           applyDesignerAutoHeight(draft)
         }, { label: 'materials.flowRow.history.updateColumn' })
         return
@@ -571,14 +594,14 @@ function createDatasourceDropHandler(context: MaterialExtensionContext): Datasou
         const column = props.columns[rect.index]
         if (!column)
           return
-        column.binding = binding
+        setFlowColumnBinding(draft, column, binding)
         column.content = ''
-        if (!draft.binding) {
+        if (!draft.bindings.value) {
           const collectionBinding = getCollectionBindingForField(binding)
           if (collectionBinding)
-            draft.binding = collectionBinding
+            draft.bindings.value = collectionBinding
         }
-        draft.props = { ...props, columns: props.columns }
+        draft.model = { ...props, columns: props.columns }
         applyDesignerAutoHeight(draft)
       }, { label: 'designer.history.bindField' })
     },
@@ -600,7 +623,7 @@ function createColumnDecorationComponent(context: MaterialExtensionContext) {
       const payload = computed(() => props.selection.payload as FlowColumnSelectionPayload)
       const editingColumn = computed(() => props.session.meta.editingColumn as { index: number } | undefined)
       const selectedColumn = computed(() => getFlowRowProps(props.node).columns[payload.value.index])
-      const isEditingThis = computed(() => editingColumn.value?.index === payload.value.index && !selectedColumn.value?.binding)
+      const isEditingThis = computed(() => editingColumn.value?.index === payload.value.index && !(selectedColumn.value && getFlowColumnBinding(props.node, selectedColumn.value)))
       const editText = ref('')
       const activeEditTarget = ref<number | null>(null)
       let activeGesture: ReturnType<typeof createPointerGesture> | null = null

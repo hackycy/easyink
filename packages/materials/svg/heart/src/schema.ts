@@ -1,4 +1,5 @@
 import type { MaterialNode } from '@easyink/schema'
+import { canonicalizeMaterialNode } from '@easyink/schema'
 import { convertUnit, generateId } from '@easyink/shared'
 
 export const SVG_HEART_TYPE = 'svg-heart'
@@ -28,22 +29,22 @@ export const SVG_HEART_CAPABILITIES = {
 export function createSvgHeartNode(partial?: Partial<MaterialNode>, unit?: string): MaterialNode {
   const c = unit && unit !== 'mm' ? (value: number) => convertUnit(value, 'mm', unit) : (value: number) => value
   const partialNode = partial ? { ...partial } : undefined
-  const partialProps = (partial?.props ?? {}) as Partial<SvgHeartProps>
+  const partialModel = (partial?.model ?? {}) as Partial<SvgHeartProps>
 
   if (partialNode)
-    delete partialNode.props
+    delete partialNode.model
 
-  return {
+  return canonicalizeMaterialNode(SVG_HEART_TYPE, {
     id: generateId('svgh'),
     type: SVG_HEART_TYPE,
     x: 0,
     y: 0,
     width: c(100),
     height: c(90),
-    props: {
+    model: {
       ...SVG_HEART_DEFAULTS,
-      ...partialProps,
+      ...partialModel,
     },
     ...partialNode,
-  }
+  })
 }

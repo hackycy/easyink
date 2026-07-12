@@ -1,12 +1,12 @@
 import type { MaterialDesignerExtension, MaterialDesignerRenderContext, MaterialExtensionContext } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { PageNumberProps } from './schema'
-import { getNodeProps } from '@easyink/schema'
+import { getNodeModel } from '@easyink/schema'
 import { escapeHtml } from '@easyink/shared'
 import { formatPageNumberDisplay } from './rendering'
 
 function buildHtml(node: MaterialNode, unit: string, renderContext?: MaterialDesignerRenderContext): string {
-  const p = getNodeProps<PageNumberProps>(node)
+  const p = getNodeModel<PageNumberProps>(node)
   const pageContext = renderContext?.page
   const current = pageContext?.pageNumber ?? 1
   const total = pageContext?.totalPages ?? 1

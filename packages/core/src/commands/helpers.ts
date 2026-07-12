@@ -1,4 +1,5 @@
 import type { MaterialNode } from '@easyink/schema'
+import { getDefaultMaterialSlot } from '@easyink/schema'
 
 export function findNode(elements: MaterialNode[], id: string): MaterialNode | undefined {
   return findNodeLocation(elements, id)?.node
@@ -17,8 +18,9 @@ export function findNodeLocation(elements: MaterialNode[], id: string, basePath:
     const path = [...basePath, index]
     if (node.id === id)
       return { node, collection: elements, index, path }
-    if (node.children) {
-      const child = findNodeLocation(node.children, id, path)
+    const children = getDefaultMaterialSlot(node)
+    if (children.length > 0) {
+      const child = findNodeLocation(children, id, path)
       if (child)
         return child
     }

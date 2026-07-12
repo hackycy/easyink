@@ -1,4 +1,5 @@
 const sanitizedMarkupBrand: unique symbol = Symbol('SanitizedMarkup')
+const VIEWER_CHILDREN_KEY = 'children'
 
 export interface SanitizedMarkup {
   readonly [sanitizedMarkupBrand]: true
@@ -156,17 +157,17 @@ export function assertViewerRenderTree(
         assertScalarRecord(frame.node.style, false)
         if (Object.keys(frame.node.attributes).length > VIEWER_TREE_ABSOLUTE_MAX_ATTRIBUTES)
           fail('VIEWER_TREE_ATTRIBUTES_EXCEEDED')
-        if (!Array.isArray(frame.node.children))
+        if (!Array.isArray(frame.node[VIEWER_CHILDREN_KEY]))
           fail('VIEWER_TREE_VALUE_INVALID')
-        for (let index = frame.node.children.length - 1; index >= 0; index--)
-          stack.push({ node: frame.node.children[index], depth: frame.depth + 1, exit: false })
+        for (let index = frame.node[VIEWER_CHILDREN_KEY].length - 1; index >= 0; index--)
+          stack.push({ node: frame.node[VIEWER_CHILDREN_KEY][index], depth: frame.depth + 1, exit: false })
         break
       }
       case 'fragment':
-        if (!Array.isArray(frame.node.children))
+        if (!Array.isArray(frame.node[VIEWER_CHILDREN_KEY]))
           fail('VIEWER_TREE_VALUE_INVALID')
-        for (let index = frame.node.children.length - 1; index >= 0; index--)
-          stack.push({ node: frame.node.children[index], depth: frame.depth + 1, exit: false })
+        for (let index = frame.node[VIEWER_CHILDREN_KEY].length - 1; index >= 0; index--)
+          stack.push({ node: frame.node[VIEWER_CHILDREN_KEY][index], depth: frame.depth + 1, exit: false })
         break
       case 'sanitized-markup':
         if (!isRecord(frame.node.markup))

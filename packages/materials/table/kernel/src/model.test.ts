@@ -1,3 +1,4 @@
+import type { MaterialNode } from '@easyink/schema'
 import type {
   RuntimeRowId,
   TableAccessibility,
@@ -22,12 +23,43 @@ import {
   createTableModel,
   encodeTableOpaqueIdPart,
   isValidTableStableToken,
+  projectTableTopology,
 } from './model'
 
 type CanonicalIdAliases = TableBandId | TableRowId | TableColumnId | TableCellId | TableMergeId | RuntimeRowId
 type CanonicalPublicShapes = TableMergeRegion | TableInsets | TableBorderStyle | TableDataConfig | TableAccessibility
 
 function acceptCanonicalPublicApi(_id: CanonicalIdAliases, _shape: CanonicalPublicShapes): void {}
+
+describe('table material projection', () => {
+  it('projects bands, stable identities, merges, and binding ports without changing the model', () => {
+    const model = createTableModel({ kind: 'static', columnCount: 2, rowCount: 2 })
+    const firstBand = model.bands[0]!
+    const firstCell = firstBand.rows[0]!.cells[0]!
+    firstCell.content = { kind: 'text', text: 'bound', bindingPort: 'cell:value' }
+    const node: MaterialNode<unknown> = {
+      id: 'table',
+      type: 'table-static',
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 40,
+      modelVersion: 1,
+      model,
+      slots: {},
+      bindings: { 'cell:value': { sourceId: 'data', fieldPath: 'name' } },
+      output: { visibility: 'include' },
+    }
+    const before = structuredClone(model)
+
+    const projected = projectTableTopology(node)
+
+    expect(projected.rowIds).toEqual(firstBand.rows.map(row => row.id))
+    expect(projected.columnIds).toEqual(model.columns.map(column => column.id))
+    expect(projected.topology.rows[0]!.cells[0]!.staticBinding).toMatchObject({ fieldPath: 'name' })
+    expect(model).toEqual(before)
+  })
+})
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T

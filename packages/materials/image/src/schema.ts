@@ -1,5 +1,6 @@
 import type { MaterialConditionDefinition } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
+import { canonicalizeMaterialNode } from '@easyink/schema'
 import { convertUnit, generateId } from '@easyink/shared'
 
 export const IMAGE_CONDITION: MaterialConditionDefinition = { scope: 'node', hiddenEffects: ['remove', 'reserve'] }
@@ -28,16 +29,16 @@ export const IMAGE_DEFAULTS: ImageProps = {
 
 export function createImageNode(partial?: Partial<MaterialNode>, unit?: string): MaterialNode {
   const c = unit && unit !== 'mm' ? (v: number) => convertUnit(v, 'mm', unit) : (v: number) => v
-  return {
+  return canonicalizeMaterialNode(IMAGE_TYPE, {
     id: generateId('img'),
     type: IMAGE_TYPE,
     x: 0,
     y: 0,
     width: c(100),
     height: c(100),
-    props: { ...IMAGE_DEFAULTS },
+    model: { ...IMAGE_DEFAULTS },
     ...partial,
-  }
+  })
 }
 
 export const IMAGE_CAPABILITIES = {

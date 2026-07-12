@@ -103,8 +103,8 @@ function repairElements(
 
     normalizeBindings(element, issues, elementPath)
 
-    if (element.children)
-      repairElements(element.children, options, issues, `${elementPath}.children`)
+    if (element.slots.default)
+      repairElements(element.slots.default, options, issues, `${elementPath}.children`)
   }
 }
 
@@ -162,8 +162,8 @@ function validateElements(
     if (element.type === 'table-static')
       validateTableStatic(elementRecord, issues, elementPath)
 
-    if (element.children)
-      validateElements(element.children, options, issues, `${elementPath}.children`)
+    if (element.slots.default)
+      validateElements(element.slots.default, options, issues, `${elementPath}.children`)
   }
 }
 
@@ -172,7 +172,7 @@ function validateTableData(
   issues: GenerationAccuracyIssue[],
   elementPath: string,
 ): void {
-  const props = isObject(element.props) ? element.props : {}
+  const props = isObject(element.model) ? element.model : {}
   for (const legacyKey of ['columns', 'repeatTemplate', 'headerStyle', 'rowStyle', 'borderStyle']) {
     if (hasOwn(props, legacyKey)) {
       issues.push({
@@ -183,7 +183,7 @@ function validateTableData(
     }
   }
 
-  const table = isObject(element.table) ? element.table : undefined
+  const table = isObject(element.model) ? element.model : undefined
   const topology = isObject(table?.topology) ? table.topology : undefined
   const rows = Array.isArray(topology?.rows) ? topology.rows : []
   const columns = Array.isArray(topology?.columns) ? topology.columns : []
@@ -201,7 +201,7 @@ function validateTableStatic(
   issues: GenerationAccuracyIssue[],
   elementPath: string,
 ): void {
-  const table = isObject(element.table) ? element.table : undefined
+  const table = isObject(element.model) ? element.model : undefined
   const topology = isObject(table?.topology) ? table.topology : undefined
   if (!table || table.kind !== 'static')
     issues.push({ code: 'INVALID_TABLE_STATIC_SCHEMA', message: 'table-static must include table.kind = static.', path: `${elementPath}.table.kind` })
@@ -212,8 +212,8 @@ function validateTableStatic(
 function getElementBindings(element: MaterialNode): Array<{ binding: BindingRef, path: string }> {
   const result: Array<{ binding: BindingRef, path: string }> = []
 
-  if (element.binding) {
-    const bindings = getBindingRefs(element.binding)
+  if (element.bindings.value) {
+    const bindings = getBindingRefs(element.bindings.value)
     bindings.forEach((binding, index) => result.push({ binding, path: `binding${bindings.length > 1 ? `[${index}]` : ''}` }))
   }
 

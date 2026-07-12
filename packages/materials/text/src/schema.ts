@@ -1,5 +1,6 @@
 import type { MaterialConditionDefinition } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
+import { canonicalizeMaterialNode } from '@easyink/schema'
 import { convertUnit, generateId } from '@easyink/shared'
 
 export const TEXT_CONDITION: MaterialConditionDefinition = { scope: 'node', hiddenEffects: ['remove', 'reserve'] }
@@ -24,8 +25,6 @@ export interface TextProps {
   lineHeight: number
   letterSpacing: number
   wrapMode: TextWrapMode
-  /** @deprecated Use wrapMode. Kept for older schemas. */
-  autoWrap: boolean
   overflow: 'visible' | 'hidden' | 'ellipsis'
   minHeight: number | null
   maxHeight: number | null
@@ -51,7 +50,6 @@ export const TEXT_DEFAULTS: TextProps = {
   lineHeight: 1.5,
   letterSpacing: 0,
   wrapMode: 'anywhere',
-  autoWrap: true,
   overflow: 'hidden',
   minHeight: null,
   maxHeight: null,
@@ -65,27 +63,27 @@ export const TEXT_DEFAULTS: TextProps = {
 export function createTextNode(partial?: Partial<MaterialNode>, unit?: string): MaterialNode {
   const c = unit && unit !== 'mm' ? (v: number) => convertUnit(v, 'mm', unit) : (v: number) => v
   const partialNode = partial ? { ...partial } : undefined
-  const partialProps = { ...((partial?.props ?? {}) as Partial<TextProps>) }
-  if (partialProps.wrapMode == null && partialProps.autoWrap != null)
-    partialProps.wrapMode = partialProps.autoWrap === false ? 'nowrap' : 'anywhere'
+  const { autoWrap: _legacyAutoWrap, ...partialModel } = {
+    ...((partial?.model ?? {}) as Partial<TextProps> & { autoWrap?: boolean }),
+  }
   if (partialNode)
-    delete partialNode.props
+    delete partialNode.model
 
-  return {
+  return canonicalizeMaterialNode(TEXT_TYPE, {
     id: generateId('text'),
     type: TEXT_TYPE,
     x: 0,
     y: 0,
     width: c(80),
     height: c(20),
-    props: {
+    model: {
       ...TEXT_DEFAULTS,
       fontSize: c(TEXT_DEFAULTS.fontSize),
       letterSpacing: c(TEXT_DEFAULTS.letterSpacing),
-      ...partialProps,
+      ...partialModel,
     },
     ...partialNode,
-  }
+  })
 }
 
 export const TEXT_CAPABILITIES = {

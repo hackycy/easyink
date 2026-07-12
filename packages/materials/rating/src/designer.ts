@@ -1,12 +1,12 @@
 import type { MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { RatingProps } from './schema'
-import { getBindingRefs, getNodeProps } from '@easyink/schema'
+import { getBindingRefs, getNodeModel } from '@easyink/schema'
 import { buildRatingHtml } from './rendering'
 
 function buildDesignerHtml(node: MaterialNode, context: MaterialExtensionContext): string {
-  const props = getNodeProps<RatingProps>(node)
-  const binding = getBindingRefs(node.binding)[0]
+  const props = getNodeModel<RatingProps>(node)
+  const binding = getBindingRefs(node.bindings.value)[0]
   const labelOverride = binding ? `{#${context.getBindingLabel(binding)}}/100` : undefined
   return buildRatingHtml(node, props, { labelOverride, unit: context.getSchema().unit })
 }

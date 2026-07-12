@@ -22,7 +22,7 @@ export interface PagePlanEntry {
   index: number
   width: number
   height: number
-  elements: MaterialNode[]
+  elements: MaterialNode<unknown>[]
   isBlank?: boolean
   copyIndex?: number
   /** Y offset in document coordinates -- used by the render surface to position elements within the page. */
@@ -53,7 +53,7 @@ export function createPagePlan(schema: DocumentSchema, options: PagePlanOptions 
   const document = runLayoutPipeline(layoutSchema)
   const result = runPagination(layoutSchema, document, {
     originalSchema,
-    retainBlankPage: repeatedElements.some(el => !el.hidden) ? () => true : undefined,
+    retainBlankPage: repeatedElements.some(el => !el.editorState?.hidden) ? () => true : undefined,
   })
 
   return {
@@ -77,7 +77,7 @@ export function createPagePlan(schema: DocumentSchema, options: PagePlanOptions 
   }
 }
 
-function resolveRepeatedElementLocalY(node: MaterialNode, pageHeight: number): number {
+function resolveRepeatedElementLocalY(node: MaterialNode<unknown>, pageHeight: number): number {
   if (pageHeight <= 0)
     return node.y
   const localY = node.y % pageHeight

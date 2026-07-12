@@ -3,13 +3,13 @@ import type { MaterialNode } from '@easyink/schema'
 import type { ChartBarProps } from './schema'
 import { trustedViewerHtml } from '@easyink/core'
 import { renderEChartsSvg } from '@easyink/material-chart-kernel'
-import { getNodeProps } from '@easyink/schema'
+import { getNodeModel } from '@easyink/schema'
 import { UNIT_FACTOR } from '@easyink/shared'
 import { resolveChartBarRuntimeData } from './data-contract'
 import { createChartBarRuntimeOptionFromData } from './options'
 
 export function renderChartBar(node: MaterialNode, context?: ViewerRenderContext) {
-  const props = getNodeProps<ChartBarProps>(node)
+  const props = getNodeModel<ChartBarProps>(node)
   const resolvedData = resolveChartBarRuntimeData(node, props, context?.data ?? {})
   for (const diagnostic of resolvedData.diagnostics)
     context?.reportDiagnostic?.({ ...diagnostic, nodeId: node.id })

@@ -1,5 +1,6 @@
 import type { MaterialConditionDefinition } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
+import { canonicalizeMaterialNode } from '@easyink/schema'
 import { convertUnit, generateId } from '@easyink/shared'
 
 export const RECT_CONDITION: MaterialConditionDefinition = { scope: 'node', hiddenEffects: ['remove', 'reserve'] }
@@ -24,19 +25,19 @@ export const RECT_DEFAULTS: RectProps = {
 
 export function createRectNode(partial?: Partial<MaterialNode>, unit?: string): MaterialNode {
   const c = unit && unit !== 'mm' ? (v: number) => convertUnit(v, 'mm', unit) : (v: number) => v
-  return {
+  return canonicalizeMaterialNode(RECT_TYPE, {
     id: generateId('rect'),
     type: RECT_TYPE,
     x: 0,
     y: 0,
     width: c(100),
     height: c(60),
-    props: {
+    model: {
       ...RECT_DEFAULTS,
       borderWidth: c(RECT_DEFAULTS.borderWidth),
     },
     ...partial,
-  }
+  })
 }
 
 export const RECT_CAPABILITIES = {

@@ -7,7 +7,7 @@ export const flowRowConstraints: MaterialConstraint[] = [
     severity: 'error',
     message: 'flow-row must have a non-empty props.columns array',
     check: (node: MaterialNode) => {
-      const props = node.props as Record<string, unknown> | undefined
+      const props = node.model as Record<string, unknown> | undefined
       const columns = props?.columns
       return { passed: Array.isArray(columns) && columns.length > 0 }
     },
@@ -17,7 +17,7 @@ export const flowRowConstraints: MaterialConstraint[] = [
     severity: 'error',
     message: 'Each flow-row column must have ratio, textAlign, and wrapMode',
     check: (node: MaterialNode) => {
-      const props = node.props as Record<string, unknown> | undefined
+      const props = node.model as Record<string, unknown> | undefined
       const columns = props?.columns as Array<Record<string, unknown>> | undefined
       if (!Array.isArray(columns))
         return { passed: false }

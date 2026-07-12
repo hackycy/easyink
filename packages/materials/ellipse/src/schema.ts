@@ -1,5 +1,6 @@
 import type { MaterialConditionDefinition } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
+import { canonicalizeMaterialNode } from '@easyink/schema'
 import { convertUnit, generateId } from '@easyink/shared'
 
 export const ELLIPSE_CONDITION: MaterialConditionDefinition = { scope: 'node', hiddenEffects: ['remove', 'reserve'] }
@@ -23,25 +24,25 @@ export const ELLIPSE_DEFAULTS: EllipseProps = {
 export function createEllipseNode(partial?: Partial<MaterialNode>, unit?: string): MaterialNode {
   const c = unit && unit !== 'mm' ? (v: number) => convertUnit(v, 'mm', unit) : (v: number) => v
   const partialNode = partial ? { ...partial } : undefined
-  const partialProps = (partial?.props ?? {}) as Partial<EllipseProps>
+  const partialModel = (partial?.model ?? {}) as Partial<EllipseProps>
 
   if (partialNode)
-    delete partialNode.props
+    delete partialNode.model
 
-  return {
+  return canonicalizeMaterialNode(ELLIPSE_TYPE, {
     id: generateId('ell'),
     type: ELLIPSE_TYPE,
     x: 0,
     y: 0,
     width: c(100),
     height: c(80),
-    props: {
+    model: {
       ...ELLIPSE_DEFAULTS,
       borderWidth: c(ELLIPSE_DEFAULTS.borderWidth),
-      ...partialProps,
+      ...partialModel,
     },
     ...partialNode,
-  }
+  })
 }
 
 export const ELLIPSE_CAPABILITIES = {

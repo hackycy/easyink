@@ -1,5 +1,5 @@
 import type { ConstraintContext, MaterialKnowledgeRegistry } from '@easyink/assistant-material-knowledge'
-import type { DocumentSchema, MaterialNode } from '@easyink/schema'
+import type { DocumentSchema, MaterialBinding, MaterialNode } from '@easyink/schema'
 import type {
   EmitBindingInput,
   EmitDataContractBindingInput,
@@ -160,7 +160,7 @@ export class SchemaBuilder {
   }
 
   private mk(id: string, type: string, region: { x: number, y: number, width: number, height: number }, props: Record<string, unknown>): MaterialNode {
-    return { id, type, x: region.x, y: region.y, width: region.width, height: region.height, props } as MaterialNode
+    return { id, type, x: region.x, y: region.y, width: region.width, height: region.height, modelVersion: 1, model: props, slots: {}, bindings: {}, output: { visibility: 'include' } }
   }
 
   private buildNode(input: EmitElementInput): MaterialNode {
@@ -172,17 +172,19 @@ export class SchemaBuilder {
       y: input.region.y,
       width: input.region.width,
       height: input.region.height,
-      props: input.props ?? {},
-      ...(binding ? { binding } : {}),
-      ...(input.children ? { children: input.children.map(c => this.buildNode(c)) } : {}),
-    } as MaterialNode
+      modelVersion: 1,
+      model: input.props ?? {},
+      slots: input.children ? { default: input.children.map(c => this.buildNode(c)) } : {},
+      bindings: binding ? { value: binding } : {},
+      output: { visibility: 'include' },
+    }
   }
 
   private bindingRef(b: EmitBindingInput) {
     return { sourceId: this.context.dataSourceName, sourceName: this.context.dataSourceName, fieldPath: b.fieldPath, fieldLabel: b.fieldLabel }
   }
 
-  private materialBinding(binding: EmitElementInput['binding']): MaterialNode['binding'] {
+  private materialBinding(binding: EmitElementInput['binding']): MaterialBinding | undefined {
     if (!binding)
       return undefined
     if (isDataContractBindingInput(binding)) {

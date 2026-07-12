@@ -23,15 +23,15 @@ export function resolveConditionalSchema(
 
   for (const node of schema.elements) {
     const capability = registry.getCondition(node.type)
-    if (!capability || !node.renderCondition) {
-      states.set(node.id, node.hidden ? 'reserve' : 'include')
+    if (!capability || !node.output.renderCondition) {
+      states.set(node.id, node.editorState?.hidden ? 'reserve' : 'include')
       elements.push(node)
       continue
     }
 
     const resolution = resolveConditionalNode(node, data)
     const requestedState = resolution.state
-    const state = node.hidden
+    const state = node.editorState?.hidden
       ? 'reserve'
       : requestedState === 'include' || capability.hiddenEffects.includes(requestedState)
         ? requestedState
@@ -43,7 +43,7 @@ export function resolveConditionalSchema(
       changed = true
       continue
     }
-    if (state === 'reserve' && !node.hidden) {
+    if (state === 'reserve' && !node.editorState?.hidden) {
       changed = true
       elements.push({ ...node, hidden: true })
       continue

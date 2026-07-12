@@ -1,7 +1,7 @@
 import type { MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
 import type { ChartGaugeProps } from './schema'
 import { createChartDesignerRenderHost, mountECharts } from '@easyink/material-chart-kernel'
-import { getNodeProps } from '@easyink/schema'
+import { getNodeModel } from '@easyink/schema'
 import { createChartGaugePreviewOption } from './options'
 
 export function createChartGaugeExtension(_context: MaterialExtensionContext): MaterialDesignerExtension {
@@ -10,9 +10,9 @@ export function createChartGaugeExtension(_context: MaterialExtensionContext): M
       container.replaceChildren()
       const { chartEl } = createChartDesignerRenderHost(container)
 
-      const mount = mountECharts(chartEl, createChartGaugePreviewOption(getNodeProps<ChartGaugeProps>(nodeSignal.get())))
+      const mount = mountECharts(chartEl, createChartGaugePreviewOption(getNodeModel<ChartGaugeProps>(nodeSignal.get())))
       const unsubscribe = nodeSignal.subscribe((node) => {
-        mount.update(createChartGaugePreviewOption(getNodeProps<ChartGaugeProps>(node)))
+        mount.update(createChartGaugePreviewOption(getNodeModel<ChartGaugeProps>(node)))
       })
 
       return () => {

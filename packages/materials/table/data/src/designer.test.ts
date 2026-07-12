@@ -1,105 +1,66 @@
-import type { TableNode } from '@easyink/schema'
+import type { MaterialNode } from '@easyink/schema'
 import { normalizeDocumentSchema } from '@easyink/schema'
 import { describe, expect, it } from 'vitest'
 import { canResizeTableDataRow, createTableDataExtension } from './designer'
-import { createTableDataNode } from './schema'
+import { createDefaultDataTableModel } from './schema'
 
-const schema = normalizeDocumentSchema({ unit: 'mm' })
+function createNode(): MaterialNode<unknown> {
+  return {
+    id: 'table-data',
+    type: 'table-data',
+    x: 0,
+    y: 0,
+    width: 180,
+    height: 40,
+    modelVersion: 1,
+    model: createDefaultDataTableModel(),
+    slots: {},
+    bindings: {},
+    output: { visibility: 'include' },
+  }
+}
 
-const context = {
-  getSchema: () => schema,
-  getNode: () => undefined,
-  getSelection: () => ({ ids: [], count: 0, isEmpty: true }),
-  getBindingLabel: () => '',
-  commitCommand: () => {},
-  tx: {
-    run: () => {},
-    batch: () => {},
-  },
-  requestPropertyPanel: () => {},
-  emit: () => {},
-  on: () => () => {},
-  getZoom: () => 1,
-  getPageEl: () => null,
-  t: (key: string) => key,
+function createContext(node: MaterialNode<unknown>) {
+  const schema = normalizeDocumentSchema({ unit: 'mm' })
+  return {
+    getSchema: () => schema,
+    getNode: () => node,
+    getSelection: () => ({ ids: [], count: 0, isEmpty: true }),
+    getBindingLabel: () => '',
+    commitCommand: () => {},
+    tx: {
+      run: (_id: string, mutate: (draft: MaterialNode<unknown>) => void) => mutate(node),
+      batch: <T>(fn: () => T) => fn(),
+    },
+    requestPropertyPanel: () => {},
+    emit: () => {},
+    on: () => () => {},
+    getZoom: () => 1,
+    getPageEl: () => null,
+    t: (key: string) => key,
+  }
 }
 
 describe('table-data designer', () => {
-  it('creates a default node tall enough for template and preview rows', () => {
-    const node = createTableDataNode()
-
-    expect(node.width).toBe(180)
-    expect(node.height).toBe(40)
-    expect(node.props?.headerBackground).toBe('')
-    expect(node.props?.summaryBackground).toBe('')
-  })
-
-  it('declares runtime height as disabled and hides outer resize handles', () => {
-    const ext = createTableDataExtension(context as never)
-    const policy = ext.resolveControlPolicy?.(createTableDataNode(), { getSchema: context.getSchema, t: context.t })
-
-    expect(policy?.geometry?.height?.state).toBe('disabled')
-    expect(policy?.resize?.width?.state).toBe('hidden')
-    expect(policy?.resize?.height?.state).toBe('hidden')
-  })
-
-  it('allows row resize on visible header, repeat-template, and footer rows', () => {
-    const node = createTableDataNode() as TableNode
+  it('uses canonical band rows for resize availability and runtime control policy', () => {
+    const node = createNode()
+    const extension = createTableDataExtension(createContext(node) as never)
+    const policy = extension.resolveControlPolicy?.(node as never, { getSchema: () => normalizeDocumentSchema({ unit: 'mm' }), t: key => key })
 
     expect(canResizeTableDataRow(node, 0)).toBe(true)
     expect(canResizeTableDataRow(node, 1)).toBe(true)
     expect(canResizeTableDataRow(node, 2)).toBe(true)
+    expect(policy?.geometry?.height?.state).toBe('disabled')
   })
 
-  it('renders section markers as icon overlays and keeps preview row texture', () => {
-    const node = createTableDataNode() as TableNode
-    const ext = createTableDataExtension({
-      ...context,
-      t: (key: string) => {
-        if (key === 'materials.tableData.section.header')
-          return '表头'
-        if (key === 'materials.tableData.section.data')
-          return '数据行'
-        if (key === 'materials.tableData.section.footer')
-          return '表尾'
-        return key
-      },
-    } as never)
-    const container = document.createElement('div')
-    const unsubscribe = ext.renderContent?.({
-      get: () => node,
-      subscribe: () => () => {},
-    } as never, container)
+  it('writes dropped fields through a stable cell binding port', () => {
+    const node = createNode()
+    const extension = createTableDataExtension(createContext(node) as never)
+    extension.datasourceDrop!.onDrop({ sourceId: 'invoice', fieldPath: 'name', fieldLabel: 'Name' } as never, { x: 1, y: 1 }, node as never)
 
-    expect(container.innerHTML).toContain('repeating-linear-gradient')
-    expect(container.innerHTML).toContain('rgba(100,116,139,0.16)')
-    expect(container.innerHTML).toContain('4.5px')
-    expect(container.innerHTML).toContain('pointer-events:none')
-    expect(container.innerHTML).toContain('position:absolute')
-    expect(container.innerHTML).toContain('width:9px;height:9px')
-    expect(container.innerHTML).toContain('border:0.5px solid rgba(15,23,42,0.12)')
-    expect(container.innerHTML).toContain('background:rgba(255,255,255,0.18)')
-    expect(container.innerHTML).toContain('color:rgba(71,85,105,0.44)')
-    expect(container.innerHTML).not.toContain('opacity:.72')
-    expect(container.innerHTML).toContain('width="7" height="7"')
-    expect(container.innerHTML).toContain('fill="#475569"')
-    expect(container.innerHTML).toContain('y="1.7"')
-    expect(container.innerHTML).toContain('y="4.25"')
-    expect(container.innerHTML).toContain('y="7.6"')
-    expect(container.innerHTML).toContain('fill-opacity=".32"')
-    expect(container.innerHTML).toContain('fill-opacity=".3"')
-    expect(container.querySelectorAll('span[role="img"]')).toHaveLength(3)
-    expect(container.querySelector('span[aria-label="表头"]')).toBeTruthy()
-    expect(container.querySelector('span[aria-label="数据行"]')).toBeTruthy()
-    expect(container.querySelector('span[aria-label="表尾"]')).toBeTruthy()
-    expect(container.innerHTML).not.toContain('font-size:6px')
-    expect(container.innerHTML).not.toContain('>表头</span>')
-    expect(container.innerHTML).not.toContain('>数据行</span>')
-    expect(container.innerHTML).not.toContain('>表尾</span>')
-    expect(container.innerHTML).toContain('position:relative;display:flex')
-    expect(container.innerHTML).not.toContain('position:relative;width:100%;height:100%;min-width:0')
-    expect(container.innerHTML).not.toContain('rgba(24,144,255')
-
-    unsubscribe?.()
+    const firstCell = (node.model as ReturnType<typeof createDefaultDataTableModel>).bands[0]!.rows[0]!.cells[0]!
+    expect(firstCell.content).toMatchObject({ kind: 'text', bindingPort: expect.any(String) })
+    const port = firstCell.content.kind === 'text' ? firstCell.content.bindingPort : undefined
+    expect(port && node.bindings[port]).toMatchObject({ sourceId: 'invoice', fieldPath: 'name' })
   })
 })

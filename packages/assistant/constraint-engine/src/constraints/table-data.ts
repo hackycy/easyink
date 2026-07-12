@@ -7,11 +7,11 @@ export const tableDataConstraints: MaterialConstraint[] = [
     severity: 'error',
     message: 'table-data element must have table.kind = "data"',
     check: (node: MaterialNode) => {
-      const table = (node.props as Record<string, unknown>)?.table as Record<string, unknown> | undefined
+      const table = (node.model as Record<string, unknown>)?.table as Record<string, unknown> | undefined
       return { passed: table?.kind === 'data' }
     },
     autoFix: (node: MaterialNode) => {
-      const props = { ...(node.props as Record<string, unknown>) }
+      const props = { ...(node.model as Record<string, unknown>) }
       const table = { ...(props.table as Record<string, unknown> ?? {}) }
       table.kind = 'data'
       props.table = table
@@ -23,7 +23,7 @@ export const tableDataConstraints: MaterialConstraint[] = [
     severity: 'error',
     message: 'Column width ratios must sum to 1',
     check: (node: MaterialNode) => {
-      const table = (node.props as Record<string, unknown>)?.table as Record<string, unknown> | undefined
+      const table = (node.model as Record<string, unknown>)?.table as Record<string, unknown> | undefined
       const topology = table?.topology as Record<string, unknown> | undefined
       const columns = topology?.columns as Array<{ width: number }> | undefined
       if (!columns || columns.length === 0)
@@ -32,7 +32,7 @@ export const tableDataConstraints: MaterialConstraint[] = [
       return { passed: Math.abs(sum - 1) < 0.01, details: `Sum is ${sum}` }
     },
     autoFix: (node: MaterialNode) => {
-      const props = { ...(node.props as Record<string, unknown>) }
+      const props = { ...(node.model as Record<string, unknown>) }
       const table = { ...(props.table as Record<string, unknown> ?? {}) }
       const topology = { ...(table.topology as Record<string, unknown> ?? {}) }
       const columns = [...(topology.columns as Array<{ width: number }> ?? [])]
@@ -52,7 +52,7 @@ export const tableDataConstraints: MaterialConstraint[] = [
     severity: 'error',
     message: 'table-data must have at least one repeat-template row',
     check: (node: MaterialNode) => {
-      const table = (node.props as Record<string, unknown>)?.table as Record<string, unknown> | undefined
+      const table = (node.model as Record<string, unknown>)?.table as Record<string, unknown> | undefined
       const topology = table?.topology as Record<string, unknown> | undefined
       const rows = topology?.rows as Array<{ role: string }> | undefined
       if (!rows)
@@ -65,7 +65,7 @@ export const tableDataConstraints: MaterialConstraint[] = [
     severity: 'error',
     message: 'table-data must include table.layout with borderAppearance, borderWidth, borderType, borderColor',
     check: (node: MaterialNode) => {
-      const table = (node.props as Record<string, unknown>)?.table as Record<string, unknown> | undefined
+      const table = (node.model as Record<string, unknown>)?.table as Record<string, unknown> | undefined
       const layout = table?.layout as Record<string, unknown> | undefined
       if (!layout)
         return { passed: false, details: 'No table.layout' }

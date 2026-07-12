@@ -29,10 +29,10 @@ describe('element actions', () => {
 
     expect(toggleMaterialHidden(store, node)).toBe(true)
 
-    expect(node.hidden).toBe(true)
+    expect(node.editorState?.hidden).toBe(true)
     expect(store.commands.beginTransaction).toHaveBeenCalledWith('Hide')
     store.commands.undo()
-    expect(node.hidden).toBeUndefined()
+    expect(node.editorState?.hidden).toBeUndefined()
   })
 
   it('deletes hidden unlocked nodes and removes them from selection', () => {

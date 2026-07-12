@@ -22,7 +22,7 @@ function buildHtml(node: MaterialNode, context: MaterialExtensionContext): strin
   let isPlaceholder = false
 
   let display: string
-  const binding = getBindingRefs(node.binding)[0]
+  const binding = getBindingRefs(node.bindings.value)[0]
   if (binding) {
     const label = context.getBindingLabel(binding)
     display = `${prefix}{#${escapeHtml(label)}}${suffix}`
@@ -52,7 +52,7 @@ function buildHtml(node: MaterialNode, context: MaterialExtensionContext): strin
 
 function resolveDesignerDisplayText(node: MaterialNode, context: MaterialExtensionContext): string {
   const p = getTextProps(node)
-  const binding = getBindingRefs(node.binding)[0]
+  const binding = getBindingRefs(node.bindings.value)[0]
   if (binding) {
     return `${p.prefix || ''}{#${context.getBindingLabel(binding)}}${p.suffix || ''}`
   }

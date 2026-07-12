@@ -1,6 +1,6 @@
-import type { PropSchema } from '@easyink/core'
+import type { PropertyDescriptor } from '@easyink/core'
 
-export const chartRadarDesignerPropSchemas: PropSchema[] = [
+export const chartRadarDesignerPropSchemas: PropertyDescriptor[] = [
   { key: 'areaColor', label: 'materials.chartRadar.property.areaColor', type: 'color', group: 'appearance' },
   { key: 'lineColor', label: 'materials.chartRadar.property.lineColor', type: 'color', group: 'appearance' },
   { key: 'pointColor', label: 'materials.chartRadar.property.pointColor', type: 'color', group: 'appearance' },

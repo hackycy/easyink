@@ -1,6 +1,6 @@
-import type { PropSchema } from '@easyink/core'
+import type { PropertyDescriptor } from '@easyink/core'
 
-export const chartLineDesignerPropSchemas: PropSchema[] = [
+export const chartLineDesignerPropSchemas: PropertyDescriptor[] = [
   { key: 'lineColor', label: 'materials.chartLine.property.lineColor', type: 'color', group: 'appearance' },
   { key: 'pointColor', label: 'materials.chartLine.property.pointColor', type: 'color', group: 'appearance' },
   { key: 'backgroundColor', label: 'designer.property.background', type: 'color', group: 'appearance' },

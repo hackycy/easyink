@@ -1,7 +1,7 @@
 import type { MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
 import type { ChartRadarProps } from './schema'
 import { createChartDesignerRenderHost, mountECharts } from '@easyink/material-chart-kernel'
-import { getNodeProps } from '@easyink/schema'
+import { getNodeModel } from '@easyink/schema'
 import { createChartRadarPreviewOption } from './options'
 
 export function createChartRadarExtension(_context: MaterialExtensionContext): MaterialDesignerExtension {
@@ -10,9 +10,9 @@ export function createChartRadarExtension(_context: MaterialExtensionContext): M
       container.replaceChildren()
       const { chartEl } = createChartDesignerRenderHost(container)
 
-      const mount = mountECharts(chartEl, createChartRadarPreviewOption(getNodeProps<ChartRadarProps>(nodeSignal.get())))
+      const mount = mountECharts(chartEl, createChartRadarPreviewOption(getNodeModel<ChartRadarProps>(nodeSignal.get())))
       const unsubscribe = nodeSignal.subscribe((node) => {
-        mount.update(createChartRadarPreviewOption(getNodeProps<ChartRadarProps>(node)))
+        mount.update(createChartRadarPreviewOption(getNodeModel<ChartRadarProps>(node)))
       })
 
       return () => {

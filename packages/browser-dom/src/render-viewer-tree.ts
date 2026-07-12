@@ -399,7 +399,8 @@ function renderSanitizedNode(node: SanitizedSvgNode, state: RenderState, quota: 
   const element = state.document.createElementNS(SVG_NAMESPACE, node.tag)
   for (const [name, value] of node.attributes)
     element.setAttribute(name, value)
-  for (const child of node.children)
+  const { children } = node
+  for (const child of children)
     element.appendChild(renderSanitizedNode(child, state, quota, depth + 1))
   return element
 }

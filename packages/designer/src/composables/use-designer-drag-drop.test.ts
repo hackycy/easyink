@@ -628,7 +628,7 @@ describe('useDesignerDragDrop', () => {
     dispatchPointerEvent('pointerup', 30, 30)
 
     expect(onDrop).toHaveBeenCalledWith(field)
-    expect(node.binding).toBeUndefined()
+    expect(node.bindings.value).toBeUndefined()
     panelEl.remove()
     drag.cleanup()
   })
@@ -661,7 +661,7 @@ describe('useDesignerDragDrop', () => {
     drag.startDatasourceDrag(makeDragEvent(0, 0, []), revenue)
     drag.onCanvasDrop(makeDragEvent(20, 20, [DATASOURCE_DRAG_MIME], { [DATASOURCE_DRAG_MIME]: JSON.stringify(revenue) }))
 
-    expect(node.binding).toEqual({
+    expect(node.bindings.value).toEqual({
       kind: 'data-contract',
       relation: { kind: 'auto' },
       mappings: {
@@ -712,7 +712,7 @@ describe('useDesignerDragDrop', () => {
     drag.startDatasourceDrag(makeDragEvent(0, 0, []), weeklyRevenue)
     drag.onCanvasDrop(makeDragEvent(20, 20, [DATASOURCE_DRAG_MIME], { [DATASOURCE_DRAG_MIME]: JSON.stringify(weeklyRevenue) }))
 
-    expect(node.binding).toEqual({
+    expect(node.bindings.value).toEqual({
       kind: 'data-contract',
       relation: { kind: 'auto' },
       mappings: {

@@ -11,7 +11,7 @@ export function projectBindings(
   node: MaterialNode,
   data: Record<string, unknown>,
 ): ProjectedBinding[] {
-  const refs = getBindingRefs(node.binding)
+  const refs = getBindingRefs(node.bindings.value)
   if (refs.length === 0)
     return []
   const results: ProjectedBinding[] = []

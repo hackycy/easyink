@@ -2,6 +2,8 @@ import { IconFilePen, IconSignature } from '@easyink/icons'
 import { describe, expect, it } from 'vitest'
 import { builtinDesignerMaterialSets, createBuiltinDesignerMaterialBundle } from './designer'
 
+const MATERIAL_BINDING_KEY = 'binding'
+
 const builtinDesignerMaterialBundle = createBuiltinDesignerMaterialBundle('all')
 
 function catalogItemTypes(groupId: string, bundle = builtinDesignerMaterialBundle): string[] {
@@ -144,7 +146,7 @@ describe('builtin designer material bundle', () => {
       'chart-scatter',
     ])
     for (const material of chartMaterials.filter(item => item.type !== 'chart-custom'))
-      expect(material.binding).toMatchObject({ kind: 'data-contract', formatEditor: { tabs: ['custom'], defaultTab: 'custom' } })
+      expect(material[MATERIAL_BINDING_KEY]).toMatchObject({ kind: 'data-contract', formatEditor: { tabs: ['custom'], defaultTab: 'custom' } })
   })
 
   it('registers custom ECharts as an ordinary option-bound lazy material', () => {

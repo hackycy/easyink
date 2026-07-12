@@ -25,6 +25,7 @@ export const MATERIAL_DRAG_MIME = 'application/x-easyink-material'
 export const DATASOURCE_DRAG_MIME = 'application/x-easyink-field'
 
 const MATERIAL_PREVIEW_MIN_SIZE_PX = 32
+const MATERIAL_BINDING_KEY = 'binding'
 const DATASOURCE_FLOATING_PREVIEW = {
   width: 136,
   height: 34,
@@ -391,7 +392,7 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
 
     const material = ctx.store.getMaterial(hit.type)
     if (material?.binding.kind === 'data-contract') {
-      const plan = resolveMaterialDataDropPlan(material.binding.contract, hit, data)
+      const plan = resolveMaterialDataDropPlan(material[MATERIAL_BINDING_KEY].contract, hit, data)
       if (!plan)
         return null
       return {
@@ -464,12 +465,12 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
 
     const material = ctx.store.getMaterial(resolved.target.type)
     if (material?.binding.kind === 'data-contract') {
-      const plan = resolveMaterialDataDropPlan(material.binding.contract, resolved.target, fieldData)
+      const plan = resolveMaterialDataDropPlan(material[MATERIAL_BINDING_KEY].contract, resolved.target, fieldData)
       if (!plan || plan.status !== 'accepted')
         return
       const binding = applyMaterialDataFieldMapping(
-        material.binding.contract,
-        resolved.target.binding,
+        material[MATERIAL_BINDING_KEY].contract,
+        resolved.target.bindings.value,
         fieldData,
         plan.fieldId,
       )
@@ -494,9 +495,9 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
       return null
 
     for (const entry of visibleFields) {
-      if (findMaterialDataFieldMapping(contract, target.binding, entry.id))
+      if (findMaterialDataFieldMapping(contract, target.bindings.value, entry.id))
         continue
-      const result = canBindMaterialDataField(contract, target.binding, data, entry.id)
+      const result = canBindMaterialDataField(contract, target.bindings.value, data, entry.id)
       if (result.accepted) {
         return {
           fieldId: entry.id,
@@ -508,9 +509,9 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
     }
 
     for (const entry of visibleFields) {
-      if (findMaterialDataFieldMapping(contract, target.binding, entry.id))
+      if (findMaterialDataFieldMapping(contract, target.bindings.value, entry.id))
         continue
-      const result = canBindMaterialDataField(contract, target.binding, data, entry.id)
+      const result = canBindMaterialDataField(contract, target.bindings.value, data, entry.id)
       if (!result.accepted) {
         return {
           fieldId: entry.id,
@@ -619,7 +620,7 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
     const elements = ctx.store.getElements()
     for (let i = elements.length - 1; i >= 0; i--) {
       const element = elements[i]!
-      if (element.hidden || element.locked)
+      if (element.editorState?.hidden || element.editorState?.locked)
         continue
       const elementSize = ctx.store.getElementSize(element)
       const localPoint = geometry.documentToLocal({ x: docX, y: docY }, element)

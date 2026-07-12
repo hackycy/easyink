@@ -1,8 +1,6 @@
 import type { MaterialNode } from '@easyink/schema'
-import type { TableStaticProps } from './schema'
 import { formatBindingDisplayValue, resolveBindingValue, trustedViewerHtml } from '@easyink/core'
-import { renderPlainTextCell, renderTableHtml } from '@easyink/material-table-kernel'
-import { getNodeProps, isTableNode } from '@easyink/schema'
+import { projectTableTopology, renderPlainTextCell, renderTableHtml, resolveTableBaseProps } from '@easyink/material-table-kernel'
 
 interface ViewerRenderContext {
   data: Record<string, unknown>
@@ -10,19 +8,20 @@ interface ViewerRenderContext {
   reportDiagnostic?: (diagnostic: { code: string, message: string, severity: 'warning', nodeId?: string, cause?: unknown }) => void
 }
 
-export function renderTableStatic(node: MaterialNode, contextOrUnit: ViewerRenderContext | string = 'mm') {
+export function renderTableStatic(node: MaterialNode<unknown>, contextOrUnit: ViewerRenderContext | string = 'mm') {
   const context = typeof contextOrUnit === 'string' ? undefined : contextOrUnit
   const unit = typeof contextOrUnit === 'string' ? contextOrUnit : contextOrUnit.unit
   const data = context?.data ?? {}
-  if (!isTableNode(node)) {
+  if (node.type !== 'table-static') {
     return {
       html: trustedViewerHtml('<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#f9f9f9;color:#999;font-size:12px;">[Table]</div>'),
     }
   }
 
-  const props = getNodeProps<TableStaticProps>(node)
+  const props = resolveTableBaseProps(node)
+  const { topology } = projectTableTopology(node)
   const html = renderTableHtml({
-    topology: node.table.topology,
+    topology,
     props,
     unit,
     elementHeight: node.height,

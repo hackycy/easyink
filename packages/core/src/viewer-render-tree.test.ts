@@ -9,6 +9,8 @@ import {
   viewerText,
 } from './viewer-render-tree'
 
+const VIEWER_CHILDREN_KEY = 'children'
+
 describe('viewer render tree', () => {
   it('shallow-freezes every semantic node produced by recursive builders', () => {
     const text = viewerText('safe')
@@ -18,7 +20,7 @@ describe('viewer render tree', () => {
     expect(Object.isFrozen(text)).toBe(true)
     expect(Object.isFrozen(element)).toBe(true)
     expect(Object.isFrozen(fragment)).toBe(true)
-    expect(Object.isFrozen(element.children)).toBe(true)
+    expect(Object.isFrozen(element[VIEWER_CHILDREN_KEY])).toBe(true)
     expect(Object.isFrozen(fragment.children)).toBe(true)
     expect(() => assertViewerRenderTree(fragment)).not.toThrow()
   })

@@ -1,4 +1,5 @@
 import type { MaterialNode } from '@easyink/schema'
+import { canonicalizeMaterialNode } from '@easyink/schema'
 import { convertUnit, generateId } from '@easyink/shared'
 
 export const CHART_LINE_TYPE = 'chart-line'
@@ -48,22 +49,22 @@ export const CHART_LINE_CAPABILITIES = {
 export function createChartLineNode(partial?: Partial<MaterialNode>, unit?: string): MaterialNode {
   const c = unit && unit !== 'mm' ? (value: number) => convertUnit(value, 'mm', unit) : (value: number) => value
   const partialNode = partial ? { ...partial } : undefined
-  const partialProps = (partial?.props ?? {}) as Partial<ChartLineProps>
+  const partialModel = (partial?.model ?? {}) as Partial<ChartLineProps>
 
   if (partialNode)
-    delete partialNode.props
+    delete partialNode.model
 
-  return {
+  return canonicalizeMaterialNode(CHART_LINE_TYPE, {
     id: generateId('chartl'),
     type: CHART_LINE_TYPE,
     x: 0,
     y: 0,
     width: c(160),
     height: c(90),
-    props: {
+    model: {
       ...CHART_LINE_DEFAULTS,
-      ...partialProps,
+      ...partialModel,
     },
     ...partialNode,
-  }
+  })
 }

@@ -21,7 +21,7 @@ export interface FlowBreakConstraints {
 export interface LayoutFragment {
   id: string
   sourceNodeId: string
-  node: MaterialNode
+  node: MaterialNode<unknown>
   box: {
     x: number
     y: number
@@ -55,7 +55,7 @@ export interface OutputPagePlan {
   }
 }
 
-export function createFragmentFromNode(node: MaterialNode, measured?: ViewerMeasureResult): LayoutFragment {
+export function createFragmentFromNode(node: MaterialNode<unknown>, measured?: ViewerMeasureResult): LayoutFragment {
   return {
     id: node.id,
     sourceNodeId: node.id,
@@ -71,19 +71,19 @@ export function createFragmentFromNode(node: MaterialNode, measured?: ViewerMeas
   }
 }
 
-export function readNodeFlowConstraints(node: MaterialNode): LayoutFragment['flow'] {
-  const props = node.props as Record<string, unknown>
-  const placement = node.placement
-  const breakConfig = node.break
-  const participates = placement?.mode != null ? placement.mode !== 'fixed' : props.layoutMode !== 'fixed'
+export function readNodeFlowConstraints(node: MaterialNode<unknown>): LayoutFragment['flow'] {
+  const model = node.model as Record<string, unknown>
+  const placement = node.output.placement
+  const breakConfig = node.output.break
+  const participates = placement?.mode != null ? placement.mode !== 'fixed' : model.layoutMode !== 'fixed'
   return {
     participates,
-    keepTogether: participates && (breakConfig?.keepTogether === true || props.keepTogether === true),
-    pageBreakBefore: participates && (breakConfig?.before === 'page' || props.pageBreakBefore === true),
-    pageBreakAfter: participates && (breakConfig?.after === 'page' || props.pageBreakAfter === true),
+    keepTogether: participates && (breakConfig?.keepTogether === true || model.keepTogether === true),
+    pageBreakBefore: participates && (breakConfig?.before === 'page' || model.pageBreakBefore === true),
+    pageBreakAfter: participates && (breakConfig?.after === 'page' || model.pageBreakAfter === true),
   }
 }
 
-export function readNodeRepeatScope(node: MaterialNode): 'none' | 'every-output-page' {
-  return node.repeat?.scope === 'every-output-page' ? 'every-output-page' : 'none'
+export function readNodeRepeatScope(node: MaterialNode<unknown>): 'none' | 'every-output-page' {
+  return node.output.repeat?.scope === 'every-output-page' ? 'every-output-page' : 'none'
 }

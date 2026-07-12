@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { MaterialNode } from '@easyink/schema'
 import type { Component } from 'vue'
-import { AddElementGroupCommand, isInteractable, RemoveElementGroupCommand, UpdateMaterialMetaCommand } from '@easyink/core'
+import { AddElementGroupCommand, isInteractable, RemoveElementGroupCommand, UpdateMaterialEditorStateCommand } from '@easyink/core'
 import {
   IconCopy,
   IconCopyPlus,
@@ -80,11 +80,11 @@ function buildGroups(isBlank: boolean): ContextMenuGroup[] {
 
   if (nodes.some(n => !isInteractable(n))) {
     const controlItems: ContextMenuItem[] = []
-    if (nodes.some(n => n.locked))
+    if (nodes.some(n => n.editorState?.locked))
       controlItems.push({ id: 'unlock', label: store.t('designer.context.unlock'), icon: IconUnlock })
-    else if (nodes.some(n => n.hidden))
+    else if (nodes.some(n => n.editorState?.hidden))
       controlItems.push({ id: 'show', label: store.t('designer.context.show'), icon: IconHidden })
-    if (nodes.every(n => !n.locked) && nodes.some(n => n.hidden))
+    if (nodes.every(n => !n.editorState?.locked) && nodes.some(n => n.editorState?.hidden))
       controlItems.push({ id: 'lock', label: store.t('designer.context.lock'), icon: IconLock })
     return controlItems.length > 0 ? [{ id: 'control', items: controlItems }] : []
   }
@@ -124,7 +124,7 @@ function buildGroups(isBlank: boolean): ContextMenuGroup[] {
 
   // Group 4: control
   const controlItems: ContextMenuItem[] = []
-  const allLocked = nodes.every(n => n.locked)
+  const allLocked = nodes.every(n => n.editorState?.locked)
   if (allLocked) {
     controlItems.push({ id: 'unlock', label: store.t('designer.context.unlock'), icon: IconUnlock })
   }
@@ -297,11 +297,11 @@ function handleAction(item: ContextMenuItem) {
       break
 
     case 'unlock':
-      runMetaTransaction('Unlock', nodes.filter(node => node.locked), { locked: false })
+      runMetaTransaction('Unlock', nodes.filter(node => node.editorState?.locked), { locked: false })
       break
 
     case 'show':
-      runMetaTransaction('Show', nodes.filter(node => node.hidden && !node.locked), { hidden: false })
+      runMetaTransaction('Show', nodes.filter(node => node.editorState?.hidden && !node.editorState?.locked), { hidden: false })
       break
 
     case 'select-all':
@@ -322,7 +322,7 @@ function runMetaTransaction(label: string, nodes: MaterialNode[], updates: Parti
   store.commands.beginTransaction(label)
   try {
     for (const node of nodes)
-      store.commands.execute(new UpdateMaterialMetaCommand(store.schema.elements, node.id, updates))
+      store.commands.execute(new UpdateMaterialEditorStateCommand(store.schema.elements, node.id, updates))
     store.commands.commitTransaction()
   }
   catch (err) {

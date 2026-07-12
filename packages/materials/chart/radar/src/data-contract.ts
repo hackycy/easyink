@@ -43,7 +43,7 @@ export function resolveChartRadarRuntimeData(
   _props: ChartRadarProps,
   runtimeData: Record<string, unknown>,
 ): ChartRadarResolvedData {
-  const resolution = resolveMaterialDataContract(CHART_RADAR_DATA_CONTRACT, node.binding, runtimeData)
+  const resolution = resolveMaterialDataContract(CHART_RADAR_DATA_CONTRACT, node.bindings.value, runtimeData)
   const diagnostics: ChartRadarDataDiagnostic[] = [...resolution.diagnostics]
   const data = resolution.records
     .map((record, index) => readPointFromTargetRecord(record, index))

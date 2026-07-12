@@ -1,5 +1,6 @@
 import type { MaterialConditionDefinition } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
+import { canonicalizeMaterialNode } from '@easyink/schema'
 import { convertUnit, generateId } from '@easyink/shared'
 
 export const QRCODE_CONDITION: MaterialConditionDefinition = { scope: 'node', hiddenEffects: ['remove', 'reserve'] }
@@ -30,16 +31,16 @@ export const QRCODE_DEFAULTS: QrcodeProps = {
 
 export function createQrcodeNode(partial?: Partial<MaterialNode>, unit?: string): MaterialNode {
   const c = unit && unit !== 'mm' ? (v: number) => convertUnit(v, 'mm', unit) : (v: number) => v
-  return {
+  return canonicalizeMaterialNode(QRCODE_TYPE, {
     id: generateId('qr'),
     type: QRCODE_TYPE,
     x: 0,
     y: 0,
     width: c(100),
     height: c(100),
-    props: { ...QRCODE_DEFAULTS },
+    model: { ...QRCODE_DEFAULTS },
     ...partial,
-  }
+  })
 }
 
 export const QRCODE_CAPABILITIES = {

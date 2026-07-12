@@ -1,15 +1,15 @@
-import type { PropSchema } from '@easyink/core'
+import type { PropertyDescriptor } from '@easyink/core'
 import {
   FONT_STYLE_OPTIONS,
   FONT_WEIGHT_OPTIONS,
 } from '@easyink/prop-schemas'
 
-const TEXT_POSITION_OPTIONS: NonNullable<PropSchema['enum']> = [
+const TEXT_POSITION_OPTIONS: NonNullable<PropertyDescriptor['enum']> = [
   { label: 'materials.progress.option.textPositionTop', value: 'top' },
   { label: 'materials.progress.option.textPositionBottom', value: 'bottom' },
 ]
 
-export const progressDesignerPropSchemas: PropSchema[] = [
+export const progressDesignerPropSchemas: PropertyDescriptor[] = [
   { key: 'value', label: 'materials.progress.property.value', type: 'number', group: 'content', min: 0, max: 100, step: 1 },
   { key: 'suffix', label: 'materials.progress.property.suffix', type: 'string', group: 'content' },
   { key: 'showText', label: 'materials.progress.property.showText', type: 'switch', group: 'content' },

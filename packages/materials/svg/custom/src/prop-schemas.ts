@@ -1,6 +1,6 @@
-import type { PropSchema } from '@easyink/core'
+import type { PropertyDescriptor } from '@easyink/core'
 
-export const svgCustomDesignerPropSchemas: PropSchema[] = [
+export const svgCustomDesignerPropSchemas: PropertyDescriptor[] = [
   {
     key: 'content',
     label: 'materials.svgCustom.property.content',

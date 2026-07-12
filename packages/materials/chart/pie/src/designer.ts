@@ -1,7 +1,7 @@
 import type { MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
 import type { ChartPieProps } from './schema'
 import { createChartDesignerRenderHost, mountECharts } from '@easyink/material-chart-kernel'
-import { getNodeProps } from '@easyink/schema'
+import { getNodeModel } from '@easyink/schema'
 import { createChartPiePreviewOption } from './options'
 
 export function createChartPieExtension(_context: MaterialExtensionContext): MaterialDesignerExtension {
@@ -10,9 +10,9 @@ export function createChartPieExtension(_context: MaterialExtensionContext): Mat
       container.replaceChildren()
       const { chartEl } = createChartDesignerRenderHost(container)
 
-      const mount = mountECharts(chartEl, createChartPiePreviewOption(getNodeProps<ChartPieProps>(nodeSignal.get())))
+      const mount = mountECharts(chartEl, createChartPiePreviewOption(getNodeModel<ChartPieProps>(nodeSignal.get())))
       const unsubscribe = nodeSignal.subscribe((node) => {
-        mount.update(createChartPiePreviewOption(getNodeProps<ChartPieProps>(node)))
+        mount.update(createChartPiePreviewOption(getNodeModel<ChartPieProps>(node)))
       })
 
       return () => {

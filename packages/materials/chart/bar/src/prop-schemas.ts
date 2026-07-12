@@ -1,6 +1,6 @@
-import type { PropSchema } from '@easyink/core'
+import type { PropertyDescriptor } from '@easyink/core'
 
-export const chartBarDesignerPropSchemas: PropSchema[] = [
+export const chartBarDesignerPropSchemas: PropertyDescriptor[] = [
   { key: 'barColor', label: 'materials.chartBar.property.barColor', type: 'color', group: 'appearance' },
   { key: 'backgroundColor', label: 'designer.property.background', type: 'color', group: 'appearance' },
   { key: 'axisColor', label: 'materials.chartBar.property.axisColor', type: 'color', group: 'appearance' },

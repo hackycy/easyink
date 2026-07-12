@@ -3,13 +3,13 @@ import type { MaterialNode } from '@easyink/schema'
 import type { ChartRadarProps } from './schema'
 import { trustedViewerHtml } from '@easyink/core'
 import { renderEChartsSvg } from '@easyink/material-chart-kernel'
-import { getNodeProps } from '@easyink/schema'
+import { getNodeModel } from '@easyink/schema'
 import { UNIT_FACTOR } from '@easyink/shared'
 import { resolveChartRadarRuntimeData } from './data-contract'
 import { createChartRadarRuntimeOptionFromData } from './options'
 
 export function renderChartRadar(node: MaterialNode, context?: ViewerRenderContext) {
-  const props = getNodeProps<ChartRadarProps>(node)
+  const props = getNodeModel<ChartRadarProps>(node)
   const resolvedData = resolveChartRadarRuntimeData(node, props, context?.data ?? {})
   for (const diagnostic of resolvedData.diagnostics)
     context?.reportDiagnostic?.({ ...diagnostic, nodeId: node.id })

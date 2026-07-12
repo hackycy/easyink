@@ -1,4 +1,5 @@
 import type { MaterialNode } from '@easyink/schema'
+import { canonicalizeMaterialNode } from '@easyink/schema'
 import { convertUnit, generateId } from '@easyink/shared'
 
 export const RING_PROGRESS_TYPE = 'ring-progress'
@@ -34,26 +35,26 @@ export const RING_PROGRESS_DEFAULTS: RingProgressProps = {
 export function createRingProgressNode(partial?: Partial<MaterialNode>, unit?: string): MaterialNode {
   const c = unit && unit !== 'mm' ? (v: number) => convertUnit(v, 'mm', unit) : (v: number) => v
   const partialNode = partial ? { ...partial } : undefined
-  const partialProps = (partial?.props ?? {}) as Partial<RingProgressProps>
+  const partialModel = (partial?.model ?? {}) as Partial<RingProgressProps>
 
   if (partialNode)
-    delete partialNode.props
+    delete partialNode.model
 
-  return {
+  return canonicalizeMaterialNode(RING_PROGRESS_TYPE, {
     id: generateId('ringp'),
     type: RING_PROGRESS_TYPE,
     x: 0,
     y: 0,
     width: c(36),
     height: c(36),
-    props: {
+    model: {
       ...RING_PROGRESS_DEFAULTS,
       progressWidth: c(RING_PROGRESS_DEFAULTS.progressWidth),
       fontSize: c(RING_PROGRESS_DEFAULTS.fontSize),
-      ...partialProps,
+      ...partialModel,
     },
     ...partialNode,
-  }
+  })
 }
 
 export const RING_PROGRESS_CAPABILITIES = {

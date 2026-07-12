@@ -1,7 +1,7 @@
 import type { BindingRef, MaterialBinding, MaterialNode } from '@easyink/schema'
 import type { BindingDisplayFormat } from '@easyink/shared'
 import type { Command } from '../command'
-import { getBindingRefs } from '@easyink/schema'
+import { getBindingRefs, getNodeBinding } from '@easyink/schema'
 import { deepClone, generateId } from '@easyink/shared'
 import { findNode } from './helpers'
 
@@ -23,15 +23,18 @@ export class BindFieldCommand implements Command {
     const node = findNode(this.elements, this.nodeId)
     if (!node)
       return
-    this.oldBinding = deepClone(node.binding)
-    node.binding = deepClone(this.binding)
+    this.oldBinding = deepClone(getNodeBinding(node))
+    node.bindings.value = deepClone(this.binding)
   }
 
   undo(): void {
     const node = findNode(this.elements, this.nodeId)
     if (!node)
       return
-    node.binding = this.oldBinding
+    if (this.oldBinding)
+      node.bindings.value = this.oldBinding
+    else
+      delete node.bindings.value
   }
 }
 
@@ -50,15 +53,18 @@ export class ClearBindingCommand implements Command {
     const node = findNode(this.elements, this.nodeId)
     if (!node)
       return
-    this.oldBinding = deepClone(node.binding)
-    node.binding = undefined
+    this.oldBinding = deepClone(getNodeBinding(node))
+    delete node.bindings.value
   }
 
   undo(): void {
     const node = findNode(this.elements, this.nodeId)
     if (!node)
       return
-    node.binding = this.oldBinding
+    if (this.oldBinding)
+      node.bindings.value = this.oldBinding
+    else
+      delete node.bindings.value
   }
 }
 
@@ -78,15 +84,21 @@ export class UpdateMaterialBindingCommand implements Command {
     const node = findNode(this.elements, this.nodeId)
     if (!node)
       return
-    this.oldBinding = deepClone(node.binding)
-    node.binding = this.binding ? deepClone(this.binding) : undefined
+    this.oldBinding = deepClone(getNodeBinding(node))
+    if (this.binding)
+      node.bindings.value = deepClone(this.binding)
+    else
+      delete node.bindings.value
   }
 
   undo(): void {
     const node = findNode(this.elements, this.nodeId)
     if (!node)
       return
-    node.binding = this.oldBinding
+    if (this.oldBinding)
+      node.bindings.value = this.oldBinding
+    else
+      delete node.bindings.value
   }
 }
 
@@ -105,10 +117,11 @@ export class UpdateBindingFormatCommand implements Command {
 
   execute(): void {
     const node = findNode(this.elements, this.nodeId)
-    if (!node?.binding)
+    const binding = node ? getNodeBinding(node) : undefined
+    if (!node || !binding)
       return
-    this.oldBinding = deepClone(node.binding)
-    const refs = getBindingRefs(node.binding)
+    this.oldBinding = deepClone(binding)
+    const refs = getBindingRefs(node.bindings.value)
     const target = refs.find(ref => (ref.bindIndex ?? 0) === this.bindIndex) ?? refs[0]
     if (!target)
       return
@@ -119,7 +132,10 @@ export class UpdateBindingFormatCommand implements Command {
     const node = findNode(this.elements, this.nodeId)
     if (!node)
       return
-    node.binding = this.oldBinding
+    if (this.oldBinding)
+      node.bindings.value = this.oldBinding
+    else
+      delete node.bindings.value
   }
 }
 

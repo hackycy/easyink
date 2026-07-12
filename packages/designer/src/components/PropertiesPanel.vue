@@ -1,17 +1,18 @@
 <script setup lang="ts">
-import type { PropCommitContext, SubPropertySchema } from '@easyink/core'
+import type { SubPropertySchema } from '@easyink/core'
 import type { BindingRef, DataContractBinding, DocumentSchema, MaterialNode, PageSchema } from '@easyink/schema'
 import type { BindingDisplayFormat } from '@easyink/shared'
 import type { Component } from 'vue'
 import type { PagePropertyContext, PagePropertyDescriptor, PagePropertyGroup } from '../page-properties'
 import type { DesignerResolvedAsset, PanelSectionId, PropSchema } from '../types'
-import { ClearBindingCommand, getByPath, resolveMaterialConditionCapability, setByPath, UpdateBindingFormatCommand, UpdateDocumentCommand, UpdateGeometryCommand, UpdateMaterialBindingCommand, UpdateMaterialMetaCommand, UpdateMaterialPropsCommand, UpdatePageCommand, UpdateRenderConditionCommand } from '@easyink/core'
+import { ClearBindingCommand, resolveMaterialConditionCapability, resolvePropertyAccessor, UpdateBindingFormatCommand, UpdateDocumentCommand, UpdateGeometryCommand, UpdateMaterialBindingCommand, UpdateMaterialEditorStateCommand, UpdateMaterialModelCommand, UpdatePageCommand, UpdateRenderConditionCommand } from '@easyink/core'
 import { createLayoutBehaviorPropSchemas, groupPropSchemas } from '@easyink/prop-schemas'
 import { getBindingRefs } from '@easyink/schema'
 import { deepClone } from '@easyink/shared'
 import { EiNumberInput, EiPanel, EiSwitch } from '@easyink/ui'
 import { computed, shallowRef, watchEffect } from 'vue'
 import { useDesignerStore } from '../composables'
+import { createTransactionService } from '../editing/transaction-service'
 import { resolveDataContractFieldFormatEditor, resolveOrdinaryFormatEditor } from '../materials/binding-format-editor'
 import { isElementRotatable } from '../materials/capabilities'
 import { canEditGeometry, isPropSchemaDisabled as isMaterialPropSchemaDisabled } from '../materials/control-policy'
@@ -23,6 +24,7 @@ import PagePropertyEditor from './PagePropertyEditor.vue'
 import PropSchemaEditor from './PropSchemaEditor.vue'
 
 const store = useDesignerStore()
+const propertyTx = createTransactionService(id => store.getElementById(id), store.commands, store.diagnostics)
 
 const selectedElements = computed(() => {
   const ids = store.selection.ids
@@ -37,8 +39,8 @@ const selectedElementRotatable = computed(() =>
   isElementRotatable(store, selectedElement.value),
 )
 
-const selectedElementLocked = computed(() => selectedElement.value?.locked === true)
-const selectedElementHidden = computed(() => selectedElement.value?.hidden === true)
+const selectedElementLocked = computed(() => selectedElement.value?.editorState?.locked === true)
+const selectedElementHidden = computed(() => selectedElement.value?.editorState?.hidden === true)
 const selectedConditionCapability = computed(() => {
   const element = selectedElement.value
   return element ? resolveMaterialConditionCapability(store.getMaterial(element.type)?.condition) : undefined
@@ -77,7 +79,7 @@ const subPropertySchema = computed<SubPropertySchema | null>(() => {
 const subGroupedSchemas = computed(() => {
   if (!subPropertySchema.value)
     return new Map<string, PropSchema[]>()
-  return groupPropSchemas(subPropertySchema.value.schemas as PropSchema[])
+  return groupPropSchemas(subPropertySchema.value.descriptors as PropSchema[])
 })
 
 function readSubValue(schema: PropSchema): unknown {
@@ -88,7 +90,7 @@ function previewSubProp(_key: string, value: unknown) {
   const session = store.editingSession.activeSession
   if (!session || !subPropertySchema.value)
     return
-  const schema = subPropertySchema.value.schemas.find(s => s.key === _key)
+  const schema = subPropertySchema.value.descriptors.find(s => s.key === _key)
   if (schema?.type === 'font')
     return
   subPropertySchema.value.write(_key, value, session.tx)
@@ -98,7 +100,7 @@ async function updateSubProp(key: string, value: unknown) {
   const session = store.editingSession.activeSession
   if (!session || !subPropertySchema.value)
     return
-  const schema = subPropertySchema.value.schemas.find(s => s.key === key)
+  const schema = subPropertySchema.value.descriptors.find(s => s.key === key)
   if (schema?.type === 'font' && typeof value === 'string') {
     const loaded = await store.ensureFontLoaded({ family: value })
     if (!loaded)
@@ -175,7 +177,7 @@ function handleClearExternalBinding(bindIndex?: number) {
   const session = store.editingSession.activeSession
   if (!session || !subPropertySchema.value?.clearBinding)
     return
-  subPropertySchema.value.clearBinding(session.tx, bindIndex)
+  subPropertySchema.value.clearBinding(session.tx, bindIndex == null ? 'value' : String(bindIndex))
 }
 
 // ─── Section Filter ─────────────────────────────────────────────────
@@ -390,9 +392,9 @@ const visibleSchemas = computed(() => {
   if (!el)
     return []
   const elProps = {
-    ...el.props,
-    __hasBinding: getBindingRefs(el.binding).length > 0,
-    __placementMode: el.placement?.mode ?? ((el.props as Record<string, unknown>).layoutMode === 'fixed' ? 'fixed' : 'flow'),
+    ...el.model,
+    __hasBinding: getBindingRefs(el.bindings.value).length > 0,
+    __placementMode: el.output.placement?.mode ?? ((el.model as Record<string, unknown>).layoutMode === 'fixed' ? 'fixed' : 'flow'),
   }
   return materialSchemas.value.filter(s => !s.visible || s.visible(elProps))
 })
@@ -458,22 +460,17 @@ function previewProp(key: string, value: unknown) {
   const el = selectedElement.value
   if (!el)
     return
-  // Schemas with a custom commit own the entire write path; skip the default
-  // props-bag preview to avoid writing into the wrong location (e.g. table fields).
   const schema = materialSchemas.value.find(s => s.key === key)
-  if (schema?.commit)
+  if (!schema)
     return
   if (schema?.type === 'font')
     return
   // Snapshot before first preview
   if (!propSnapshots.has(key)) {
-    propSnapshots.set(key, deepClone(getByPath(el.props, key)))
+    propSnapshots.set(key, deepClone(resolvePropertyAccessor(schema).read(el)))
   }
   // Direct mutation for preview (no command)
-  if (key.includes('.'))
-    setByPath(el.props, key, value)
-  else
-    el.props[key] = value
+  resolvePropertyAccessor(schema).write(el, value)
 }
 
 async function updateProp(key: string, value: unknown) {
@@ -489,34 +486,15 @@ async function updateProp(key: string, value: unknown) {
     }
   }
 
-  // PropSchema can override the default props-bag commit path (e.g. table.showHeader
-  // lives on `node.table` and needs UpdateTableVisibilityCommand + session cleanup).
-  if (schema?.commit) {
-    const ctx: PropCommitContext = {
-      flushPendingEdits: () => {
-        const active = document.activeElement as HTMLElement | null
-        if (active && typeof active.blur === 'function')
-          active.blur()
-      },
-      activeEditingSession: store.editingSession.activeSession,
-      exitEditingSession: () => store.editingSession.exit(),
-    }
-    const cmd = schema.commit(el, value, ctx)
-    if (cmd)
-      store.commands.execute(cmd)
-    propSnapshots.delete(key)
+  if (!schema)
     return
-  }
-
+  const accessor = resolvePropertyAccessor(schema)
+  const hadPreview = propSnapshots.has(key)
   const oldValue = propSnapshots.get(key)
   propSnapshots.delete(key)
-  const cmd = new UpdateMaterialPropsCommand(
-    store.schema.elements,
-    el.id,
-    { [key]: value },
-    oldValue !== undefined ? { [key]: oldValue } : undefined,
-  )
-  store.commands.execute(cmd)
+  if (hadPreview)
+    accessor.write(el, oldValue)
+  propertyTx.run(el.id, draft => accessor.write(draft, value), { mergeKey: `property:${key}`, label: 'designer.history.updateProperty' })
 }
 
 function rollbackPropPreview(key: string) {
@@ -525,15 +503,9 @@ function rollbackPropPreview(key: string) {
     return
   const oldValue = propSnapshots.get(key)
   propSnapshots.delete(key)
-  if (key.includes('.')) {
-    setByPath(el.props, key, oldValue)
-  }
-  else if (oldValue === undefined) {
-    delete el.props[key]
-  }
-  else {
-    el.props[key] = oldValue
-  }
+  const schema = materialSchemas.value.find(item => item.key === key)
+  if (schema)
+    resolvePropertyAccessor(schema).write(el, oldValue)
 }
 
 function updateImagePropFromPicker(key: string, result: DesignerResolvedAsset) {
@@ -548,12 +520,12 @@ function updateImagePropFromPicker(key: string, result: DesignerResolvedAsset) {
     oldValues[key] = oldValue
   propSnapshots.delete(key)
 
-  if (key === 'src' && result.alt && isBlankAlt(el.props.alt)) {
+  if (key === 'src' && result.alt && isBlankAlt(el.model.alt)) {
     updates.alt = result.alt
-    oldValues.alt = el.props.alt
+    oldValues.alt = el.model.alt
   }
 
-  const cmd = new UpdateMaterialPropsCommand(
+  const cmd = new UpdateMaterialModelCommand(
     store.schema.elements,
     el.id,
     updates,
@@ -609,7 +581,7 @@ function updateElementMeta(key: string, value: unknown) {
   if (key !== 'hidden' && key !== 'locked')
     return
   const boolValue = value === true
-  const cmd = new UpdateMaterialMetaCommand(
+  const cmd = new UpdateMaterialEditorStateCommand(
     store.schema.elements,
     selectedElement.value.id,
     { [key]: boolValue },
@@ -617,7 +589,7 @@ function updateElementMeta(key: string, value: unknown) {
   store.commands.execute(cmd)
 }
 
-function updateRenderCondition(condition: MaterialNode['renderCondition'], mergeKey?: string) {
+function updateRenderCondition(condition: MaterialNode['output']['renderCondition'], mergeKey?: string) {
   const element = selectedElement.value
   if (!element)
     return
@@ -641,7 +613,7 @@ function updateBindingFormat(format: BindingDisplayFormat | undefined, bindIndex
     const session = store.editingSession.activeSession
     if (!session || !subPropertySchema.value?.updateBindingFormat)
       return
-    subPropertySchema.value.updateBindingFormat(session.tx, format, bindIndex)
+    subPropertySchema.value.updateBindingFormat(session.tx, format, bindIndex == null ? 'value' : String(bindIndex))
     return
   }
   if (!selectedElement.value)
@@ -666,11 +638,7 @@ function readPropValue(schema: PropSchema): unknown {
   const el = selectedElement.value
   if (!el)
     return undefined
-  if (schema.read) {
-    const v = schema.read(el)
-    return v ?? schema.default
-  }
-  const value = getByPath(el.props, schema.key)
+  const value = resolvePropertyAccessor(schema).read(el)
   return value ?? schema.default
 }
 
@@ -844,13 +812,13 @@ function isPropInputDisabled(schema: PropSchema): boolean {
           <EiSwitch
             v-if="showHiddenSwitch"
             :label="store.t('designer.property.hidden')"
-            :model-value="selectedElement.hidden ?? false"
+            :model-value="selectedElement.editorState?.hidden ?? false"
             @update:model-value="updateElementMeta('hidden', $event)"
           />
           <EiSwitch
             v-if="showLockedSwitch"
             :label="store.t('designer.property.locked')"
-            :model-value="selectedElement.locked ?? false"
+            :model-value="selectedElement.editorState?.locked ?? false"
             @update:model-value="updateElementMeta('locked', $event)"
           />
         </div>

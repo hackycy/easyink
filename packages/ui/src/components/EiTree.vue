@@ -29,12 +29,18 @@ const expandedIds = ref(new Set<string>(props.defaultExpandAll ? collectAllIds(p
 function collectAllIds(nodes: TreeNode[]): string[] {
   const ids: string[] = []
   for (const node of nodes) {
-    if (node.children && node.children.length > 0) {
+    const children = childrenOf(node)
+    if (children.length > 0) {
       ids.push(node.id)
-      ids.push(...collectAllIds(node.children))
+      ids.push(...collectAllIds(children))
     }
   }
   return ids
+}
+
+function childrenOf(node: TreeNode): TreeNode[] {
+  const { children = [] } = node
+  return children
 }
 
 function expandAll() {
@@ -89,7 +95,7 @@ function resolveIcon(node: TreeNode): Component | undefined {
         @click="emit('select', node)"
       >
         <span
-          v-if="node.children && node.children.length > 0"
+          v-if="childrenOf(node).length > 0"
           class="ei-tree__toggle"
           @click.stop="toggleExpand(node.id)"
         >
@@ -126,11 +132,11 @@ function resolveIcon(node: TreeNode): Component | undefined {
         </span>
       </div>
       <div
-        v-if="node.children && node.children.length > 0 && isExpanded(node.id)"
+        v-if="childrenOf(node).length > 0 && isExpanded(node.id)"
         class="ei-tree__children"
       >
         <EiTree
-          :nodes="node.children"
+          :nodes="childrenOf(node)"
           :selected-id="selectedId"
           :icon-map="iconMap"
           :default-expand-all="defaultExpandAll"

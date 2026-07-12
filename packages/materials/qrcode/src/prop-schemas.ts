@@ -1,7 +1,7 @@
-import type { PropSchema } from '@easyink/core'
+import type { PropertyDescriptor } from '@easyink/core'
 import { STROKE_STYLE_OPTIONS } from '@easyink/prop-schemas'
 
-export const qrcodeDesignerPropSchemas: PropSchema[] = [
+export const qrcodeDesignerPropSchemas: PropertyDescriptor[] = [
   { key: 'value', label: 'materials.qrcode.property.value', type: 'string', group: 'content' },
   { key: 'size', label: 'designer.property.size', type: 'number', group: 'content', min: 10, max: 500, step: 1 },
   { key: 'errorCorrectionLevel', label: 'materials.qrcode.property.errorLevel', type: 'enum', group: 'content', enum: [

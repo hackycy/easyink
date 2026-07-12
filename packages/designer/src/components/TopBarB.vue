@@ -10,8 +10,8 @@ import {
   RemoveElementGroupCommand,
   RotateMaterialCommand,
   UpdateGuidesCommand,
-  UpdateMaterialMetaCommand,
-  UpdateMaterialPropsCommand,
+  UpdateMaterialEditorStateCommand,
+  UpdateMaterialModelCommand,
 } from '@easyink/core'
 import {
   IconAlignCenter,
@@ -135,7 +135,7 @@ const groupedSelectionIds = computed(() => selectedLogicalGroupIds(store))
 
 const canUngroupSelection = computed(() => groupedSelectionIds.value.length > 0)
 
-const canToggleVisibility = computed(() => selectedNodes.value.length > 0 && selectedNodes.value.every(node => !node.locked))
+const canToggleVisibility = computed(() => selectedNodes.value.length > 0 && selectedNodes.value.every(node => !node.editorState?.locked))
 
 const rotatableSelectedNodes = computed(() => filterRotatableElements(store, editableSelectedNodes.value))
 
@@ -244,7 +244,7 @@ function toggleFontProp(prop: 'fontWeight' | 'fontStyle' | 'textDecoration') {
   const elements = store.schema.elements
   store.commands.beginTransaction(`Toggle ${prop}`)
   for (const node of nodes) {
-    const current = node.props[prop]
+    const current = node.model[prop]
     let next: unknown
     if (prop === 'fontWeight') {
       next = current === 'bold' ? 'normal' : 'bold'
@@ -256,7 +256,7 @@ function toggleFontProp(prop: 'fontWeight' | 'fontStyle' | 'textDecoration') {
       next = current === 'underline' ? 'none' : 'underline'
     }
     store.commands.execute(
-      new UpdateMaterialPropsCommand(elements, node.id, { [prop]: next }),
+      new UpdateMaterialModelCommand(elements, node.id, { [prop]: next }),
     )
   }
   store.commands.commitTransaction()
@@ -291,11 +291,11 @@ function handleRotation() {
 
 // ─── Visibility ──────────────────────────────────────────────
 function handleVisibility() {
-  const nodes = selectedNodes.value.filter(node => !node.locked)
+  const nodes = selectedNodes.value.filter(node => !node.editorState?.locked)
   if (nodes.length === 0)
     return
 
-  const allHidden = nodes.every(node => node.hidden)
+  const allHidden = nodes.every(node => node.editorState?.hidden)
   runMetaTransaction(allHidden ? 'Show' : 'Hide', nodes, { hidden: !allHidden })
 }
 
@@ -454,8 +454,8 @@ function handleLock() {
   if (nodes.length === 0)
     return
 
-  const allLocked = nodes.every(n => n.locked)
-  runMetaTransaction(allLocked ? 'Unlock' : 'Lock', nodes.filter(node => allLocked ? node.locked : !node.locked), { locked: !allLocked })
+  const allLocked = nodes.every(n => n.editorState?.locked)
+  runMetaTransaction(allLocked ? 'Unlock' : 'Lock', nodes.filter(node => allLocked ? node.editorState?.locked : !node.editorState?.locked), { locked: !allLocked })
 }
 
 function runMetaTransaction(label: string, nodes: MaterialNode[], updates: Partial<Record<'hidden' | 'locked', boolean | undefined>>) {
@@ -464,7 +464,7 @@ function runMetaTransaction(label: string, nodes: MaterialNode[], updates: Parti
   store.commands.beginTransaction(label)
   try {
     for (const node of nodes)
-      store.commands.execute(new UpdateMaterialMetaCommand(store.schema.elements, node.id, updates))
+      store.commands.execute(new UpdateMaterialEditorStateCommand(store.schema.elements, node.id, updates))
     store.commands.commitTransaction()
   }
   catch (err) {
@@ -751,7 +751,7 @@ function toggleSnapMenu(ev: MouseEvent) {
           <button
             class="ei-topbar-b__btn"
             :disabled="!hasSelection"
-            :title="selectedNodes.every(n => n.locked) ? store.t('designer.toolbar.unlock') : store.t('designer.toolbar.lock')"
+            :title="selectedNodes.every(n => n.editorState?.locked) ? store.t('designer.toolbar.unlock') : store.t('designer.toolbar.lock')"
             @click="handleLock"
           >
             <IconLock :size="16" :stroke-width="1.5" />

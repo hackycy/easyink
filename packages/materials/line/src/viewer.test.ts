@@ -15,7 +15,7 @@ describe('renderLine', () => {
 
     const output = renderLine(node, {
       data: {},
-      resolvedProps: node.props,
+      resolvedProps: node.model,
       pageIndex: 0,
       unit: 'mm',
       zoom: 1,

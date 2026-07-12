@@ -1,4 +1,5 @@
 import type { MaterialNode } from '@easyink/schema'
+import { canonicalizeMaterialNode } from '@easyink/schema'
 import { convertUnit, generateId } from '@easyink/shared'
 
 export const PAGE_NUMBER_TYPE = 'page-number'
@@ -33,7 +34,7 @@ export const PAGE_NUMBER_DEFAULTS: PageNumberProps = {
 
 export function createPageNumberNode(partial?: Partial<MaterialNode>, unit?: string): MaterialNode {
   const c = unit && unit !== 'mm' ? (v: number) => convertUnit(v, 'mm', unit) : (v: number) => v
-  return {
+  return canonicalizeMaterialNode(PAGE_NUMBER_TYPE, {
     id: generateId('pgnum'),
     type: PAGE_NUMBER_TYPE,
     x: 0,
@@ -42,13 +43,13 @@ export function createPageNumberNode(partial?: Partial<MaterialNode>, unit?: str
     height: c(8),
     placement: { mode: 'fixed' },
     repeat: { scope: 'every-output-page' },
-    props: {
+    model: {
       ...PAGE_NUMBER_DEFAULTS,
       fontSize: c(PAGE_NUMBER_DEFAULTS.fontSize),
       letterSpacing: c(PAGE_NUMBER_DEFAULTS.letterSpacing),
     },
     ...partial,
-  }
+  })
 }
 
 export const PAGE_NUMBER_CAPABILITIES = {

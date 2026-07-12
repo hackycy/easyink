@@ -47,17 +47,17 @@ watchEffect((onCleanup) => {
       id: `${props.element.id}:material-data:${entry.id}`,
       element: () => document.getElementById(fieldElementId(entry.id)),
       onDragOver: (data: DatasourceFieldDragData) => {
-        const result = canBindMaterialDataField(props.contract, props.element.binding, data, entry.id)
+        const result = canBindMaterialDataField(props.contract, props.element.bindings.value, data, entry.id)
         return {
           status: result.accepted ? 'accepted' as const : 'rejected' as const,
           label: result.accepted ? props.t(entry.field.labelKey) : result.messageKey ? props.t(result.messageKey) : result.message,
         }
       },
       onDrop: (data: DatasourceFieldDragData) => {
-        const result = canBindMaterialDataField(props.contract, props.element.binding, data, entry.id)
+        const result = canBindMaterialDataField(props.contract, props.element.bindings.value, data, entry.id)
         if (!result.accepted)
           return
-        commitBinding(applyMaterialDataFieldMapping(props.contract, props.element.binding, data, entry.id))
+        commitBinding(applyMaterialDataFieldMapping(props.contract, props.element.bindings.value, data, entry.id))
       },
     }
     unregisterTargets.push(dragDrop.registerDatasourceDropTarget(target))
@@ -69,7 +69,7 @@ watchEffect((onCleanup) => {
 onBeforeUnmount(unregisterDropTargets)
 
 function mappingFor(fieldId: string): DataContractFieldMapping | undefined {
-  return findMaterialDataFieldMapping(props.contract, props.element.binding, fieldId)
+  return findMaterialDataFieldMapping(props.contract, props.element.bindings.value, fieldId)
 }
 
 function mappingBindingFor(fieldId: string): BindingRef | undefined {
@@ -92,7 +92,7 @@ function fieldElementId(fieldId: string): string {
 }
 
 function clearField(fieldId: string) {
-  commitBinding(clearMaterialDataFieldMapping(props.contract, props.element.binding, fieldId))
+  commitBinding(clearMaterialDataFieldMapping(props.contract, props.element.bindings.value, fieldId))
 }
 
 function startFieldDrag(fieldId: string) {
@@ -111,7 +111,7 @@ function dropField(fieldId: string) {
   dragOverFieldId.value = undefined
   if (!fromFieldId || fromFieldId === fieldId)
     return
-  commitBinding(swapMaterialDataFieldMappings(props.contract, props.element.binding, fromFieldId, fieldId))
+  commitBinding(swapMaterialDataFieldMappings(props.contract, props.element.bindings.value, fromFieldId, fieldId))
 }
 
 function endFieldDrag() {
@@ -120,12 +120,12 @@ function endFieldDrag() {
 }
 
 function updateFieldFormat(fieldId: string, format: BindingDisplayFormat | undefined) {
-  const binding = applyMaterialDataFieldFormat(props.element.binding, fieldId, format)
+  const binding = applyMaterialDataFieldFormat(props.element.bindings.value, fieldId, format)
   commitBinding(binding)
 }
 
 function applyMaterialDataFieldFormat(
-  binding: MaterialNode['binding'],
+  binding: MaterialNode['bindings']['value'],
   fieldId: string,
   format: BindingDisplayFormat | undefined,
 ): DataContractBinding | undefined {

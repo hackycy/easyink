@@ -1,4 +1,5 @@
-import type { TableTypography } from '@easyink/schema'
+import type { MaterialNode, TableTypography } from '@easyink/schema'
+import { getTableMaterialModel } from './model'
 
 /**
  * Shared table base props -- the property fields common to all table types.
@@ -30,6 +31,23 @@ export const TABLE_BASE_DEFAULTS: TableBaseProps = {
   borderType: 'solid',
   cellPadding: 0.53,
   typography: { ...TABLE_TYPOGRAPHY_DEFAULTS },
+}
+
+export function resolveTableBaseProps(node: MaterialNode<unknown>): TableBaseProps {
+  const style = getTableMaterialModel(node).style
+  const border = style.border?.blockStart
+  const typography = style.typography
+  return {
+    borderWidth: border?.width ?? TABLE_BASE_DEFAULTS.borderWidth,
+    borderColor: border?.color ?? TABLE_BASE_DEFAULTS.borderColor,
+    borderType: border?.style === 'dashed' || border?.style === 'dotted' ? border.style : 'solid',
+    cellPadding: style.padding?.top ?? TABLE_BASE_DEFAULTS.cellPadding,
+    typography: {
+      ...TABLE_TYPOGRAPHY_DEFAULTS,
+      ...typography,
+      textAlign: typography?.textAlign === 'start' ? 'left' : typography?.textAlign === 'end' ? 'right' : typography?.textAlign ?? TABLE_TYPOGRAPHY_DEFAULTS.textAlign,
+    },
+  }
 }
 
 /**

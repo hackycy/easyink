@@ -2,7 +2,7 @@ import type { MaterialViewerExtension, ViewerRenderContext, ViewerRenderSize } f
 import type { MaterialNode } from '@easyink/schema'
 import type { LineProps } from './schema'
 import { trustedViewerHtml } from '@easyink/core'
-import { getNodeProps } from '@easyink/schema'
+import { getNodeModel } from '@easyink/schema'
 
 import { getLineThickness } from './schema'
 
@@ -39,7 +39,7 @@ export function getLineRenderSize(node: MaterialNode): Partial<ViewerRenderSize>
 }
 
 export function renderLine(node: MaterialNode, _context: ViewerRenderContext) {
-  const p = getNodeProps<Partial<LineProps>>(node)
+  const p = getNodeModel<Partial<LineProps>>(node)
   const lineColor = p.lineColor || '#000000'
   const lineType = p.lineType || 'solid'
   const thickness = resolveLineRenderHeight(node)

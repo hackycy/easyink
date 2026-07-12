@@ -712,7 +712,8 @@ function validateBinding(value: unknown, path: `/${string}`, issues: MaterialSch
     issues.push(issue('TABLE_LEGACY_BINDING_INVALID', `${path}/sourceId`, 'Binding sourceId must be a non-empty trimmed string'))
   if (typeof record.value.fieldPath !== 'string' || record.value.fieldPath.trim() !== record.value.fieldPath || record.value.fieldPath.length === 0)
     issues.push(issue('TABLE_LEGACY_BINDING_INVALID', `${path}/fieldPath`, 'Binding fieldPath must be a non-empty trimmed string'))
-  if (record.value.bindIndex !== undefined && (!Number.isSafeInteger(record.value.bindIndex) || record.value.bindIndex < 0))
+  const bindIndex = record.value.bindIndex
+  if (bindIndex !== undefined && (!Number.isSafeInteger(bindIndex) || typeof bindIndex !== 'number' || bindIndex < 0))
     issues.push(issue('TABLE_LEGACY_BINDING_INVALID', `${path}/bindIndex`, 'Binding bindIndex must be a non-negative safe integer'))
   if (!decodeCanonicalBindingExpression(canonicalBinding(record.value)))
     issues.push(issue('TABLE_LEGACY_BINDING_INVALID', path, 'Binding expression or display format is invalid'))

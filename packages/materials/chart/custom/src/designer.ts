@@ -2,7 +2,7 @@ import type { DatasourceDropHandler, MaterialDesignerExtension, MaterialExtensio
 import type { BindingRef, MaterialNode } from '@easyink/schema'
 import type { ChartCustomProps } from './schema'
 import { createChartDesignerRenderHost, mountFullECharts } from '@easyink/material-chart-kernel/full'
-import { getBindingRefs, getNodeProps } from '@easyink/schema'
+import { getBindingRefs, getNodeModel } from '@easyink/schema'
 import { resolveChartCustomOption, resolveChartCustomProps } from './options'
 
 export function createChartCustomExtension(context: MaterialExtensionContext): MaterialDesignerExtension {
@@ -12,9 +12,10 @@ export function createChartCustomExtension(context: MaterialExtensionContext): M
       const { chartEl } = createChartDesignerRenderHost(container)
 
       const initialNode = nodeSignal.get()
-      const mount = mountFullECharts(chartEl, createDesignerOption(initialNode))
+      const unit = context.getSchema().unit
+      const mount = mountFullECharts(chartEl, createDesignerOption(initialNode, unit))
       const unsubscribe = nodeSignal.subscribe((node) => {
-        mount.update(createDesignerOption(node))
+        mount.update(createDesignerOption(node, unit))
       })
 
       return () => {
@@ -27,16 +28,16 @@ export function createChartCustomExtension(context: MaterialExtensionContext): M
   }
 }
 
-function createDesignerOption(node: MaterialNode) {
-  const props = resolveChartCustomProps(getNodeProps<ChartCustomProps>(node))
+function createDesignerOption(node: MaterialNode, unit: string) {
+  const props = resolveChartCustomProps(getNodeModel<ChartCustomProps>(node))
   return resolveChartCustomOption(props, {
     data: {},
     boundOption: props.option,
-    hasBinding: getBindingRefs(node.binding).length > 0,
+    hasBinding: getBindingRefs(node.bindings.value).length > 0,
     node,
     width: node.width,
     height: node.height,
-    unit: node.unit ?? 'mm',
+    unit,
   }).option
 }
 
@@ -52,7 +53,7 @@ function createDatasourceDropHandler(context: MaterialExtensionContext): Datasou
     onDrop(field, _point, node) {
       const binding = createBinding(field)
       context.tx.run<MaterialNode>(node.id, (draft) => {
-        draft.binding = binding
+        draft.bindings.value = binding
       }, { label: 'designer.history.bindField' })
     },
   }

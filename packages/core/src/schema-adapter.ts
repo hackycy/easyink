@@ -7,6 +7,8 @@ import { normalizeDocumentInput, validateSchemaIssues } from '@easyink/schema'
 import { cloneJsonValue, convertUnit, JsonValueValidationError } from '@easyink/shared'
 import { validateMaterialGraph as validateTypedMaterialGraph } from './material-introspection'
 
+const LEGACY_CHILDREN_KEY = 'children'
+
 export interface SchemaAdapterContext {
   documentVersion: string
   sourceUnit: UnitType
@@ -1352,8 +1354,8 @@ function assertMaterialBudget(input: DocumentSchemaInput | null | undefined, max
     count += 1
     if (count > max)
       throw new Error('MATERIAL_NODE_LIMIT')
-    if (Array.isArray(node.children))
-      stack.push(...node.children)
+    if (Array.isArray(node[LEGACY_CHILDREN_KEY]))
+      stack.push(...node[LEGACY_CHILDREN_KEY])
     if (isRecord(node.slots)) {
       for (const children of Object.values(node.slots)) {
         if (Array.isArray(children))

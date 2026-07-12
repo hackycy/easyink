@@ -91,7 +91,7 @@ export function useElementResize(ctx: ElementResizeContext) {
     // re-collecting per pointermove would burn O(n) allocation each frame.
     const snapStateAtStart = store.workbench.snap
     const otherNodes = store.getElements().filter(
-      n => n.id !== elementId && !n.hidden && !n.locked,
+      n => n.id !== elementId && !n.editorState?.hidden && !n.editorState?.locked,
     )
     const pageRects = createEditorSurfacePlan(store.schema).pages.map(page => ({
       x: 0,

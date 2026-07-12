@@ -959,7 +959,7 @@ function schemaPayloadWithTitle(title: string) {
         return {
           ...element,
           props: {
-            ...element.props,
+            ...element.model,
             content: title,
           },
         }

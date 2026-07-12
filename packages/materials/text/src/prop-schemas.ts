@@ -1,4 +1,4 @@
-import type { PropSchema } from '@easyink/core'
+import type { PropertyDescriptor } from '@easyink/core'
 import {
   FONT_STYLE_OPTIONS,
   FONT_WEIGHT_OPTIONS,
@@ -7,29 +7,29 @@ import {
   VERTICAL_ALIGN_OPTIONS,
 } from '@easyink/prop-schemas'
 
-const WRITING_MODE_OPTIONS: NonNullable<PropSchema['enum']> = [
+const WRITING_MODE_OPTIONS: NonNullable<PropertyDescriptor['enum']> = [
   { label: 'materials.text.option.writingModeHorizontal', value: 'horizontal' },
   { label: 'materials.text.option.writingModeVertical', value: 'vertical' },
 ]
 
-const HEIGHT_MODE_OPTIONS: NonNullable<PropSchema['enum']> = [
+const HEIGHT_MODE_OPTIONS: NonNullable<PropertyDescriptor['enum']> = [
   { label: 'materials.text.option.heightModeFixed', value: 'fixed' },
   { label: 'materials.text.option.heightModeAuto', value: 'auto' },
 ]
 
-const TEXT_WRAP_MODE_OPTIONS: NonNullable<PropSchema['enum']> = [
+const TEXT_WRAP_MODE_OPTIONS: NonNullable<PropertyDescriptor['enum']> = [
   { label: 'materials.text.option.wrapNormal', value: 'wrap' },
   { label: 'materials.text.option.wrapNoWrap', value: 'nowrap' },
   { label: 'materials.text.option.wrapAnywhere', value: 'anywhere' },
 ]
 
-const OVERFLOW_OPTIONS: NonNullable<PropSchema['enum']> = [
+const OVERFLOW_OPTIONS: NonNullable<PropertyDescriptor['enum']> = [
   { label: 'materials.text.option.overflowVisible', value: 'visible' },
   { label: 'materials.text.option.overflowHidden', value: 'hidden' },
   { label: 'materials.text.option.overflowEllipsis', value: 'ellipsis' },
 ]
 
-export const textDesignerPropSchemas: PropSchema[] = [
+export const textDesignerPropSchemas: PropertyDescriptor[] = [
   { key: 'content', label: 'materials.text.property.content', type: 'textarea', group: 'content' },
   { key: 'prefix', label: 'materials.text.property.prefix', type: 'string', group: 'content' },
   { key: 'suffix', label: 'materials.text.property.suffix', type: 'string', group: 'content' },

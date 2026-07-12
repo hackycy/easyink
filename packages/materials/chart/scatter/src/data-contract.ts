@@ -55,7 +55,7 @@ export function resolveChartScatterRuntimeData(
   _props: ChartScatterProps,
   runtimeData: Record<string, unknown>,
 ): ChartScatterResolvedData {
-  const resolution = resolveMaterialDataContract(CHART_SCATTER_DATA_CONTRACT, node.binding, runtimeData)
+  const resolution = resolveMaterialDataContract(CHART_SCATTER_DATA_CONTRACT, node.bindings.value, runtimeData)
   const diagnostics: ChartScatterDataDiagnostic[] = [...resolution.diagnostics]
   const data = resolution.records
     .map((record, index) => readPointFromTargetRecord(record, index))

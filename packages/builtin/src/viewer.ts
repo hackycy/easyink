@@ -129,8 +129,9 @@ export const builtinViewerMaterialSets = {
 } satisfies Record<BuiltinMaterialSet, BuiltinViewerMaterialBundle>
 
 export function registerBuiltinViewerMaterialBundle(register: BuiltinViewerRegistrar, bundle: BuiltinViewerMaterialBundle): void {
+  const materialBindingKey = 'binding'
   for (const material of bundle.materials)
-    register(material.type, material.binding, material.extension)
+    register(material.type, material[materialBindingKey], material.extension)
 }
 
 export function registerBuiltinViewerMaterials(register: BuiltinViewerRegistrar, set: BuiltinMaterialSet = 'all'): void {

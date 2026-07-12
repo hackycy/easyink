@@ -1,6 +1,6 @@
-import type { PropSchema } from '@easyink/core'
+import type { PropertyDescriptor } from '@easyink/core'
 
-export const ratingDesignerPropSchemas: PropSchema[] = [
+export const ratingDesignerPropSchemas: PropertyDescriptor[] = [
   { key: 'value', label: 'materials.rating.property.value', type: 'number', group: 'content', min: 0, max: 100, step: 1 },
   { key: 'character', label: 'materials.rating.property.character', type: 'string', group: 'content', min: 1, max: 1 },
   { key: 'characterCount', label: 'materials.rating.property.characterCount', type: 'number', group: 'content', min: 1, max: 100, step: 1 },

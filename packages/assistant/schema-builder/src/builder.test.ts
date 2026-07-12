@@ -27,7 +27,7 @@ describe('schema builder', () => {
       },
     })
 
-    expect(result.element.binding).toEqual({
+    expect(result.element.bindings.value).toEqual({
       kind: 'data-contract',
       mappings: {
         category: {

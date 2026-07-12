@@ -20,7 +20,7 @@ describe('chart custom designer extension', () => {
     expect(txRun).toHaveBeenCalledWith('chart-1', expect.any(Function), { label: 'designer.history.bindField' })
     const draft = createChartCustomNode({ id: 'chart-1' })
     txRun.mock.calls[0][1](draft)
-    expect(draft.binding).toEqual({
+    expect(draft.bindings.value).toEqual({
       sourceId: 'report',
       sourceName: undefined,
       sourceTag: undefined,
@@ -29,6 +29,6 @@ describe('chart custom designer extension', () => {
       fieldLabel: 'Option',
       format: undefined,
     })
-    expect(draft.props).not.toHaveProperty('optionMode')
+    expect(draft.model).not.toHaveProperty('optionMode')
   })
 })

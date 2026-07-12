@@ -628,6 +628,7 @@ export const builtinViewerMaterialBundle: BuiltinViewerMaterialBundle = {
 export const builtinViewerMaterials = builtinViewerMaterialBundle.materials
 
 export function registerBuiltinViewerMaterials(register: BuiltinViewerRegistrar): void {
+  const materialBindingKey = 'binding'
   for (const material of builtinViewerMaterials)
-    register(material.type, material.binding, material.extension)
+    register(material.type, material[materialBindingKey], material.extension)
 }

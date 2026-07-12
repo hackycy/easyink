@@ -1,4 +1,5 @@
 import type { MaterialNode } from '@easyink/schema'
+import { canonicalizeMaterialNode } from '@easyink/schema'
 import { convertUnit, generateId } from '@easyink/shared'
 
 export const SVG_STAR_TYPE = 'svg-star'
@@ -39,23 +40,23 @@ export const SVG_STAR_CAPABILITIES = {
 export function createSvgStarNode(partial?: Partial<MaterialNode>, unit?: string): MaterialNode {
   const c = unit && unit !== 'mm' ? (value: number) => convertUnit(value, 'mm', unit) : (value: number) => value
   const partialNode = partial ? { ...partial } : undefined
-  const partialProps = (partial?.props ?? {}) as Partial<SvgStarProps>
+  const partialModel = (partial?.model ?? {}) as Partial<SvgStarProps>
 
   if (partialNode)
-    delete partialNode.props
+    delete partialNode.model
 
-  return {
+  return canonicalizeMaterialNode(SVG_STAR_TYPE, {
     id: generateId('svgs'),
     type: SVG_STAR_TYPE,
     x: 0,
     y: 0,
     width: c(100),
     height: c(100),
-    props: {
+    model: {
       ...SVG_STAR_DEFAULTS,
       borderWidth: c(SVG_STAR_DEFAULTS.borderWidth),
-      ...partialProps,
+      ...partialModel,
     },
     ...partialNode,
-  }
+  })
 }

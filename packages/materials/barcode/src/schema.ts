@@ -1,5 +1,6 @@
 import type { MaterialConditionDefinition } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
+import { canonicalizeMaterialNode, getNodeModel } from '@easyink/schema'
 import { convertUnit, generateId } from '@easyink/shared'
 
 export const BARCODE_CONDITION: MaterialConditionDefinition = { scope: 'node', hiddenEffects: ['remove', 'reserve'] }
@@ -57,7 +58,7 @@ export const BARCODE_DEFAULTS: BarcodeProps = {
 }
 
 export function resolveBarcodeProps(node: MaterialNode): BarcodeProps {
-  const props = { ...BARCODE_DEFAULTS, ...node.props }
+  const props = { ...BARCODE_DEFAULTS, ...getNodeModel<Partial<BarcodeProps>>(node) }
   return {
     ...props,
     format: props.format || BARCODE_DEFAULTS.format,
@@ -71,8 +72,8 @@ export function resolveBarcodeProps(node: MaterialNode): BarcodeProps {
 
 export function createBarcodeNode(partial?: Partial<MaterialNode>, unit?: string): MaterialNode {
   const c = unit && unit !== 'mm' ? (v: number) => convertUnit(v, 'mm', unit) : (v: number) => v
-  const { props, ...rest } = partial ?? {}
-  return {
+  const { model, ...rest } = partial ?? {}
+  return canonicalizeMaterialNode(BARCODE_TYPE, {
     id: generateId('bc'),
     type: BARCODE_TYPE,
     x: 0,
@@ -80,8 +81,8 @@ export function createBarcodeNode(partial?: Partial<MaterialNode>, unit?: string
     width: c(150),
     height: c(60),
     ...rest,
-    props: { ...BARCODE_DEFAULTS, ...props },
-  }
+    model: { ...BARCODE_DEFAULTS, ...model },
+  })
 }
 
 export const BARCODE_CAPABILITIES = {

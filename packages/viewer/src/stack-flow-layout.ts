@@ -83,7 +83,7 @@ export function applyStackFlowLayout(
 }
 
 export function resolveStackLayoutMode(node: MaterialNode): StackLayoutMode {
-  return node.props.layoutMode === 'fixed' ? 'fixed' : 'flow'
+  return node.model.layoutMode === 'fixed' ? 'fixed' : 'flow'
 }
 
 function getFlowFootprintHeight(node: MaterialNode): number {

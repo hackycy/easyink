@@ -1,4 +1,5 @@
 import type { MaterialNode } from '@easyink/schema'
+import { canonicalizeMaterialNode } from '@easyink/schema'
 import { convertUnit, generateId } from '@easyink/shared'
 
 export const CHART_PIE_TYPE = 'chart-pie'
@@ -49,22 +50,22 @@ export const CHART_PIE_CAPABILITIES = {
 export function createChartPieNode(partial?: Partial<MaterialNode>, unit?: string): MaterialNode {
   const c = unit && unit !== 'mm' ? (value: number) => convertUnit(value, 'mm', unit) : (value: number) => value
   const partialNode = partial ? { ...partial } : undefined
-  const partialProps = (partial?.props ?? {}) as Partial<ChartPieProps>
+  const partialModel = (partial?.model ?? {}) as Partial<ChartPieProps>
 
   if (partialNode)
-    delete partialNode.props
+    delete partialNode.model
 
-  return {
+  return canonicalizeMaterialNode(CHART_PIE_TYPE, {
     id: generateId('chartp'),
     type: CHART_PIE_TYPE,
     x: 0,
     y: 0,
     width: c(120),
     height: c(100),
-    props: {
+    model: {
       ...CHART_PIE_DEFAULTS,
-      ...partialProps,
+      ...partialModel,
     },
     ...partialNode,
-  }
+  })
 }

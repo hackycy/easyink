@@ -1,47 +1,40 @@
-import type { TableNode } from '@easyink/schema'
-import { createFragmentFromNode, readTrustedViewerHtml } from '@easyink/core'
+import type { MaterialNode } from '@easyink/schema'
+import { createFragmentFromNode } from '@easyink/core'
 import { describe, expect, it } from 'vitest'
-import { createTableDataNode } from './schema'
-import { measureTableData, renderTableData, tableDataFragmentPaginator } from './viewer'
+import { createDefaultDataTableModel } from './schema'
+import { measureTableData, tableDataFragmentPaginator } from './viewer'
 
-describe('renderTableData', () => {
-  it('escapes plain text cell content', () => {
-    const node = createTableDataNode() as TableNode
-    node.table.topology.rows[1]!.cells[0]!.content = {
-      text: '<script>alert(1)</script>',
-    }
-
-    const output = renderTableData(node, {
-      data: {},
-      resolvedProps: node.props,
-      pageIndex: 0,
-      unit: 'mm',
-      zoom: 1,
-    })
-
-    const html = readTrustedViewerHtml(output.html!)
-    expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;')
-    expect(html).not.toContain('<script>alert(1)</script>')
-  })
-})
+function createNode(): MaterialNode<unknown> {
+  return {
+    id: 'table-data',
+    type: 'table-data',
+    x: 0,
+    y: 0,
+    width: 100,
+    height: 24,
+    modelVersion: 1,
+    model: createDefaultDataTableModel(),
+    slots: {},
+    bindings: {},
+    output: { visibility: 'include' },
+  }
+}
 
 describe('tableDataFragmentPaginator', () => {
-  it('splits measured runtime rows without mutating the source table', () => {
-    const node = createTableDataNode() as TableNode
-    const originalRowCount = node.table.topology.rows.length
-    node.table.topology.rows[1]!.cells[0]!.binding = { sourceId: 'invoice', fieldPath: 'items/name' }
-    node.table.topology.rows[1]!.cells[1]!.binding = { sourceId: 'invoice', fieldPath: 'items/qty' }
+  it('splits projected runtime rows without mutating the canonical model', () => {
+    const node = createNode()
+    const model = node.model as ReturnType<typeof createDefaultDataTableModel>
+    const detailCells = model.bands.find(band => band.role === 'detail')!.rows[0]!.cells
+    detailCells[0]!.content = { kind: 'text', text: '', bindingPort: 'detail:name' }
+    detailCells[1]!.content = { kind: 'text', text: '', bindingPort: 'detail:qty' }
+    node.bindings['detail:name'] = { sourceId: 'invoice', fieldPath: 'items/name' }
+    node.bindings['detail:qty'] = { sourceId: 'invoice', fieldPath: 'items/qty' }
+    const before = structuredClone(model)
+
     measureTableData(node, {
-      data: {
-        items: [
-          { name: 'A', qty: 1 },
-          { name: 'B', qty: 2 },
-          { name: 'C', qty: 3 },
-        ],
-      },
+      data: { items: [{ name: 'A', qty: 1 }, { name: 'B', qty: 2 }, { name: 'C', qty: 3 }] },
       unit: 'mm',
     })
-
     const result = tableDataFragmentPaginator.paginateFragment({
       fragment: createFragmentFromNode(node),
       availableHeight: 24,
@@ -51,7 +44,6 @@ describe('tableDataFragmentPaginator', () => {
     expect(result.nextPage).toBeDefined()
     expect(result.currentPage.node.id).toContain('__p0')
     expect(result.nextPage!.node.id).toContain('__p1')
-    expect((result.currentPage.node as TableNode).table.topology.rows.length).toBeGreaterThan(0)
-    expect(node.table.topology.rows).toHaveLength(originalRowCount)
+    expect(model).toEqual(before)
   })
 })

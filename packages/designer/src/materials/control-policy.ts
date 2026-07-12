@@ -97,5 +97,5 @@ export function getPropSchemaControlState(store: DesignerStore, node: MaterialNo
 
 export function isPropSchemaDisabled(store: DesignerStore, node: MaterialNode, schema: PropSchema): boolean {
   const state = getPropSchemaControlState(store, node, schema)
-  return state.state !== 'enabled' || Boolean(schema.disabled?.(node.props))
+  return state.state !== 'enabled' || Boolean(schema.disabled?.(node.model))
 }

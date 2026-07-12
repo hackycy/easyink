@@ -1,10 +1,10 @@
 import type { MaterialNode } from '@easyink/schema'
 import type { RectProps } from './schema'
 import { trustedViewerHtml } from '@easyink/core'
-import { getNodeProps } from '@easyink/schema'
+import { getNodeModel } from '@easyink/schema'
 
 export function renderRect(node: MaterialNode, unit = 'mm') {
-  const props = getNodeProps<RectProps>(node)
+  const props = getNodeModel<RectProps>(node)
   const bw = props.borderWidth || 0
   const bc = props.borderColor || 'transparent'
   const bt = props.borderType || 'solid'

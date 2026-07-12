@@ -19,7 +19,7 @@ const emit = defineEmits<{
 
 const store = useDesignerStore()
 const dialogOpen = ref(false)
-const condition = computed(() => props.element.renderCondition)
+const condition = computed(() => props.element.output.renderCondition)
 const sources = computed(() => store.dataSourceRegistry.getSources())
 const groupCount = computed(() => condition.value?.groups.length ?? 0)
 const rowCount = computed(() => condition.value?.groups.reduce((total, group) => total + group.conditions.length, 0) ?? 0)

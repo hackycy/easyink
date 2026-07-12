@@ -1,5 +1,8 @@
 import type { AssistantMaterialBindingDefinition, AssistantMaterialManifest, AssistantMaterialProp } from '@easyink/assistant-capabilities'
-import type { DesignerStore, PropSchema } from '@easyink/designer'
+import type { DesignerStore, PropertyDescriptor } from '@easyink/designer'
+
+const MATERIAL_BINDING_KEY = 'binding'
+const MATERIAL_PROPS_KEY = 'props'
 
 export function createAssistantMaterialManifest(store: DesignerStore): AssistantMaterialManifest {
   return {
@@ -7,8 +10,8 @@ export function createAssistantMaterialManifest(store: DesignerStore): Assistant
       type: material.type,
       name: material.name,
       capabilities: material.capabilities,
-      binding: sanitizeBindingDefinition(material.binding),
-      props: material.props.map(prop => sanitizePropSchema(prop)),
+      binding: sanitizeBindingDefinition(material[MATERIAL_BINDING_KEY]),
+      props: material[MATERIAL_PROPS_KEY].map(prop => sanitizePropSchema(prop)),
       ai: material.aiDescriptor,
     })),
   }
@@ -18,14 +21,14 @@ function sanitizeBindingDefinition(binding: unknown): AssistantMaterialBindingDe
   return toSerializable(binding) as AssistantMaterialBindingDefinition
 }
 
-function sanitizePropSchema(prop: PropSchema): AssistantMaterialProp {
+function sanitizePropSchema(prop: PropertyDescriptor): AssistantMaterialProp {
   return compactObject({
     key: prop.key,
     label: prop.label,
     type: prop.type,
     group: prop.group,
     default: toSerializable(prop.default),
-    enum: prop.enum?.map(option => compactObject({
+    enum: prop.enum?.map((option: { label: string, value: unknown }) => compactObject({
       label: option.label,
       value: toSerializable(option.value),
     })),

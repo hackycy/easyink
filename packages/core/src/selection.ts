@@ -7,7 +7,7 @@ import type { MaterialNode } from '@easyink/schema'
  * drag / nudge / resize / rotate / deep-edit operations.
  */
 export function isInteractable(node: MaterialNode): boolean {
-  return !node.locked && !node.hidden
+  return node.editorState?.locked !== true && node.editorState?.hidden !== true
 }
 
 export function isSelectable(node: MaterialNode): boolean {

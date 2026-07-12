@@ -1,7 +1,7 @@
-import type { PropSchema } from '@easyink/core'
+import type { PropertyDescriptor } from '@easyink/core'
 import { CHART_PIE_PALETTE_OPTIONS } from './options'
 
-export const chartPieDesignerPropSchemas: PropSchema[] = [
+export const chartPieDesignerPropSchemas: PropertyDescriptor[] = [
   {
     key: 'palettePreset',
     label: 'materials.chartPie.property.palettePreset',

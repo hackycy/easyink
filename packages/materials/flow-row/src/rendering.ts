@@ -1,7 +1,7 @@
-import type { MaterialNode } from '@easyink/schema'
+import type { BindingRef, MaterialNode } from '@easyink/schema'
 import type { FlowColumnDef, FlowRowProps } from './schema'
 import { extractCollectionPath, formatBindingDisplayValue, resolveBindingValue, resolveFieldFromRecord } from '@easyink/core'
-import { getBindingRefs, getNodeProps } from '@easyink/schema'
+import { getBindingRefs, getNodeModel } from '@easyink/schema'
 import { escapeAttr, escapeHtml } from '@easyink/shared'
 import { FLOW_ROW_DEFAULTS, FLOW_ROW_TYPOGRAPHY_DEFAULTS } from './schema'
 
@@ -22,6 +22,7 @@ export interface FlowRenderCell {
   column: FlowColumnDef
   index: number
   text: string
+  binding?: BindingRef
   placeholder?: boolean
 }
 
@@ -36,8 +37,8 @@ export interface FlowRuntimeContext {
 }
 
 export function getFlowRowProps(node: MaterialNode): FlowRowProps {
-  const raw = getNodeProps<Partial<FlowRowProps>>(node)
-  const { padding: legacyPadding, ...rawProps } = raw
+  const raw = getNodeModel<Partial<FlowRowProps>>(node)
+  const { padding: legacyPadding, ...rawProps } = raw as Partial<FlowRowProps> & { padding?: number }
   return {
     ...FLOW_ROW_DEFAULTS,
     ...rawProps,
@@ -53,18 +54,19 @@ export function getFlowRowProps(node: MaterialNode): FlowRowProps {
 
 export function normalizeColumns(columns: FlowColumnDef[] | undefined): FlowColumnDef[] {
   const source = columns && columns.length > 0 ? columns : FLOW_ROW_DEFAULTS.columns
-  return source.map((column) => {
+  return source.map((column, index) => {
     const ratio = typeof column.ratio === 'number' && column.ratio > 0 ? column.ratio : 1
     const textAlign = column.textAlign === 'center' || column.textAlign === 'right' ? column.textAlign : 'left'
     const verticalAlign = column.verticalAlign === 'top' || column.verticalAlign === 'bottom' ? column.verticalAlign : 'middle'
     const wrapMode = column.wrapMode === 'block' ? 'block' : 'inline'
     return {
+      id: column.id || `default-${index + 1}`,
       ratio,
       textAlign,
       verticalAlign,
       wrapMode,
       content: typeof column.content === 'string' ? column.content : '',
-      binding: column.binding ? { ...column.binding } : undefined,
+      bindingPort: column.bindingPort,
     }
   })
 }
@@ -95,11 +97,11 @@ export function buildSegments(columns: FlowColumnDef[]): FlowSegment[] {
 }
 
 export function inferCollectionPath(node: MaterialNode, props: FlowRowProps): string | undefined {
-  const binding = getBindingRefs(node.binding)[0]
+  const binding = getBindingRefs(node.bindings.value)[0]
   if (binding?.fieldPath)
     return binding.fieldPath
   const columnPaths = props.columns
-    .map(column => column.binding?.fieldPath)
+    .map(column => getFlowColumnBinding(node, column)?.fieldPath)
     .filter((fieldPath): fieldPath is string => !!fieldPath)
   return extractCollectionPath(columnPaths)
 }
@@ -117,7 +119,8 @@ export function resolveFlowRows(node: MaterialNode, context: FlowRuntimeContext)
     rows: records.map(record => props.columns.map((column, index) => ({
       column,
       index,
-      text: resolveColumnText(column, record, collectionPath, context),
+      binding: getFlowColumnBinding(node, column),
+      text: resolveColumnText(node, column, record, collectionPath, context),
     }))),
   }
 }
@@ -131,7 +134,7 @@ function resolveRecords(
   if (!collectionPath)
     return [data]
 
-  const collectionBinding = getBindingRefs(node.binding)[0]
+  const collectionBinding = getBindingRefs(node.bindings.value)[0]
   const source = collectionBinding?.fieldPath
     ? resolveBindingValue(collectionBinding, data)
     : resolveBindingValue({ sourceId: '', fieldPath: collectionPath }, data)
@@ -143,25 +146,27 @@ function resolveRecords(
   }
 
   const hasColumnCollectionBindings = props.columns.some(column =>
-    column.binding?.fieldPath.startsWith(`${collectionPath}/`),
+    getFlowColumnBinding(node, column)?.fieldPath.startsWith(`${collectionPath}/`),
   )
   return hasColumnCollectionBindings ? [{}] : [data]
 }
 
 function resolveColumnText(
+  node: MaterialNode,
   column: FlowColumnDef,
   record: Record<string, unknown>,
   collectionPath: string | undefined,
   context: FlowRuntimeContext,
 ): string {
-  if (!column.binding?.fieldPath)
+  const binding = getFlowColumnBinding(node, column)
+  if (!binding?.fieldPath)
     return column.content ?? ''
 
-  const value = collectionPath && column.binding.fieldPath.startsWith(`${collectionPath}/`)
-    ? resolveFieldFromRecord(column.binding.fieldPath.slice(collectionPath.length + 1), record)
-    : resolveBindingValue(column.binding, context.data)
+  const value = collectionPath && binding.fieldPath.startsWith(`${collectionPath}/`)
+    ? resolveFieldFromRecord(binding.fieldPath.slice(collectionPath.length + 1), record)
+    : resolveBindingValue(binding, context.data)
 
-  const formatted = formatBindingDisplayValue(value, column.binding, { data: context.data })
+  const formatted = formatBindingDisplayValue(value, binding, { data: context.data })
   for (const diagnostic of formatted.diagnostics)
     context.reportDiagnostic?.({ ...diagnostic, nodeId: context.nodeId })
   return formatted.value
@@ -350,7 +355,7 @@ function renderCell(
 ): string {
   const column = cell.column
   const content = cell.placeholder ? '<span style="display:block;width:100%;height:1em;border-radius:2px;background:currentColor;opacity:.4">&nbsp;</span>' : cell.text ? escapeHtml(cell.text) : '&nbsp;'
-  const label = column.binding ? ` data-flow-row-bound="${escapeAttr(column.binding.fieldLabel || column.binding.fieldPath)}"` : ''
+  const label = cell.binding ? ` data-flow-row-bound="${escapeAttr(cell.binding.fieldLabel || cell.binding.fieldPath)}"` : ''
   const alignItems = column.verticalAlign === 'bottom' ? 'flex-end' : column.verticalAlign === 'middle' ? 'center' : 'flex-start'
   const style = [
     'display:flex',
@@ -366,6 +371,12 @@ function renderCell(
     `padding:${layout.paddingY}${unit} ${layout.paddingX}${unit}`,
   ].join(';')
   return `<div data-flow-row-column="${cell.index}"${label} style="${style}"><span style="display:block;width:100%">${content}</span></div>`
+}
+
+export function getFlowColumnBinding(node: MaterialNode, column: FlowColumnDef): BindingRef | undefined {
+  if (!column.bindingPort)
+    return undefined
+  return getBindingRefs(node.bindings[column.bindingPort])[0]
 }
 
 function renderEmptyPlaceholder(): string {

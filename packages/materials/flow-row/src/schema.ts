@@ -1,4 +1,5 @@
-import type { BindingRef, MaterialNode, TableTypography } from '@easyink/schema'
+import type { MaterialNode, TableTypography } from '@easyink/schema'
+import { canonicalizeMaterialNode } from '@easyink/schema'
 import { convertUnit, generateId } from '@easyink/shared'
 
 export const FLOW_ROW_TYPE = 'flow-row'
@@ -6,12 +7,13 @@ export const FLOW_ROW_TYPE = 'flow-row'
 export type FlowRowWrapMode = 'inline' | 'block'
 
 export interface FlowColumnDef {
+  id: string
   ratio: number
   textAlign: 'left' | 'center' | 'right'
   verticalAlign?: 'top' | 'middle' | 'bottom'
-  binding?: BindingRef
   content?: string
   wrapMode: FlowRowWrapMode
+  bindingPort?: string
 }
 
 export interface FlowRowProps {
@@ -19,8 +21,6 @@ export interface FlowRowProps {
   gap: number
   paddingX: number
   paddingY: number
-  /** @deprecated Use paddingX and paddingY. Kept for older schemas. */
-  padding?: number
   typography: TableTypography
   backgroundColor: string
 }
@@ -38,10 +38,10 @@ export const FLOW_ROW_TYPOGRAPHY_DEFAULTS: TableTypography = {
 }
 
 export const FLOW_ROW_DEFAULT_COLUMNS: FlowColumnDef[] = [
-  { ratio: 0.44, textAlign: 'left', verticalAlign: 'middle', wrapMode: 'block', content: '商品名称' },
-  { ratio: 0.12, textAlign: 'center', verticalAlign: 'middle', wrapMode: 'inline', content: '1' },
-  { ratio: 0.20, textAlign: 'right', verticalAlign: 'middle', wrapMode: 'inline', content: '12.00' },
-  { ratio: 0.24, textAlign: 'right', verticalAlign: 'middle', wrapMode: 'inline', content: '12.00' },
+  { id: 'default-1', ratio: 0.44, textAlign: 'left', verticalAlign: 'middle', wrapMode: 'block', content: '商品名称' },
+  { id: 'default-2', ratio: 0.12, textAlign: 'center', verticalAlign: 'middle', wrapMode: 'inline', content: '1' },
+  { id: 'default-3', ratio: 0.20, textAlign: 'right', verticalAlign: 'middle', wrapMode: 'inline', content: '12.00' },
+  { id: 'default-4', ratio: 0.24, textAlign: 'right', verticalAlign: 'middle', wrapMode: 'inline', content: '12.00' },
 ]
 
 export const FLOW_ROW_DEFAULTS: FlowRowProps = {
@@ -64,17 +64,17 @@ export const FLOW_ROW_CAPABILITIES = {
 }
 
 export function cloneFlowColumns(columns: FlowColumnDef[]): FlowColumnDef[] {
-  return columns.map(column => ({
+  return columns.map((column, index) => ({
     ...column,
-    binding: column.binding ? { ...column.binding } : undefined,
+    id: column.id || `default-${index + 1}`,
   }))
 }
 
 export function createFlowRowNode(partial?: Partial<MaterialNode>, unit?: string): MaterialNode {
   const c = unit && unit !== 'mm' ? (value: number) => convertUnit(value, 'mm', unit) : (value: number) => value
   const partialNode = partial ? { ...partial } : undefined
-  const rawPartialProps = (partial?.props ?? {}) as Partial<FlowRowProps>
-  const { padding: legacyPadding, ...partialProps } = rawPartialProps
+  const rawPartialProps = (partial?.model ?? {}) as Partial<FlowRowProps>
+  const { padding: _legacyPadding, ...partialModel } = rawPartialProps as Partial<FlowRowProps> & { padding?: number }
   const defaultProps: FlowRowProps = {
     ...FLOW_ROW_DEFAULTS,
     gap: c(FLOW_ROW_DEFAULTS.gap),
@@ -89,27 +89,27 @@ export function createFlowRowNode(partial?: Partial<MaterialNode>, unit?: string
   }
 
   if (partialNode)
-    delete partialNode.props
+    delete partialNode.model
 
-  return {
+  return canonicalizeMaterialNode(FLOW_ROW_TYPE, {
     id: generateId('fr'),
     type: FLOW_ROW_TYPE,
     x: 0,
     y: 0,
     width: c(72),
     height: c(26.3),
-    props: {
+    model: {
       ...defaultProps,
-      ...partialProps,
+      ...partialModel,
       typography: {
         ...defaultProps.typography,
-        ...(partialProps.typography ?? {}),
+        ...(partialModel.typography ?? {}),
       },
-      columns: cloneFlowColumns(partialProps.columns ?? FLOW_ROW_DEFAULT_COLUMNS),
-      paddingX: partialProps.paddingX ?? legacyPadding ?? defaultProps.paddingX,
-      paddingY: partialProps.paddingY ?? legacyPadding ?? defaultProps.paddingY,
-      backgroundColor: partialProps.backgroundColor ?? FLOW_ROW_DEFAULTS.backgroundColor,
+      columns: cloneFlowColumns(partialModel.columns ?? FLOW_ROW_DEFAULT_COLUMNS),
+      paddingX: partialModel.paddingX ?? defaultProps.paddingX,
+      paddingY: partialModel.paddingY ?? defaultProps.paddingY,
+      backgroundColor: partialModel.backgroundColor ?? FLOW_ROW_DEFAULTS.backgroundColor,
     },
     ...partialNode,
-  }
+  })
 }

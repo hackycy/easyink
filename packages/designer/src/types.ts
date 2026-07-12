@@ -1,4 +1,4 @@
-import type { MaterialBindingDefinition, MaterialConditionCapability, PropSchema } from '@easyink/core'
+import type { MaterialBindingDefinition, MaterialConditionCapability, PropertyDescriptor, PropertyDescriptorLike, PropertyEditorOptions } from '@easyink/core'
 import type { DataSourceDescriptor } from '@easyink/datasource'
 import type { LocaleMessages } from '@easyink/locales'
 import type { DocumentSchema, DocumentSchemaInput, MaterialNode } from '@easyink/schema'
@@ -7,6 +7,9 @@ import type { Component } from 'vue'
 import type { Contribution } from './contributions/types'
 
 export type MaterialIcon = Component
+export type PropSchema = PropertyDescriptor
+export type PropSchemaEditorOptions = PropertyEditorOptions
+export type PropSchemaLike = PropertyDescriptorLike
 
 export type {
   BehaviorContext,
@@ -41,13 +44,12 @@ export type {
   MaterialResizeParams,
   MaterialResizeSideEffect,
   NodeSignal,
-  PropCommitContext,
+  PropertyDescriptor,
+  PropertyDescriptorLike,
+  PropertyEditorOptions,
   PropertyPanelOverlay,
   PropertyPanelRequest,
   PropertyValueInput,
-  PropSchema,
-  PropSchemaEditorOptions,
-  PropSchemaLike,
   Selection,
   SelectionDecorationDef,
   SelectionSnapshot,

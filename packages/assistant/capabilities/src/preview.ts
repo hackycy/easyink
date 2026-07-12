@@ -1,5 +1,5 @@
 import type { DataFieldNode, DataSourceDescriptor } from '@easyink/datasource'
-import type { DocumentSchema } from '@easyink/schema'
+import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import type { AssistantPreview } from './types'
 
 export function createAssistantPreview(
@@ -21,9 +21,9 @@ export function createAssistantPreview(
   }
 }
 
-function countElements(elements: Array<{ children?: unknown[] }>): number {
+function countElements(elements: MaterialNode[]): number {
   return elements.reduce((total, element) => {
-    const children = Array.isArray(element.children) ? countElements(element.children as Array<{ children?: unknown[] }>) : 0
+    const children = Object.values(element.slots).reduce((count, slot) => count + countElements(slot), 0)
     return total + 1 + children
   }, 0)
 }

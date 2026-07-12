@@ -1,10 +1,10 @@
-import type { PropSchema } from '@easyink/core'
+import type { PropertyDescriptor } from '@easyink/core'
 import {
   FONT_STYLE_OPTIONS,
   FONT_WEIGHT_OPTIONS,
 } from '@easyink/prop-schemas'
 
-export const ringProgressDesignerPropSchemas: PropSchema[] = [
+export const ringProgressDesignerPropSchemas: PropertyDescriptor[] = [
   { key: 'value', label: 'materials.ringProgress.property.value', type: 'number', group: 'content', min: 0, max: 100, step: 1 },
   { key: 'suffix', label: 'materials.ringProgress.property.suffix', type: 'string', group: 'content' },
   { key: 'showText', label: 'materials.ringProgress.property.showText', type: 'switch', group: 'content' },

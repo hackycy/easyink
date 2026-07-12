@@ -1,10 +1,10 @@
 import type { FragmentPaginator, LayoutFragment } from '@easyink/core'
-import type { BindingRef, MaterialNode, TableCellSchema, TableDataSchema, TableRowSchema } from '@easyink/schema'
+import type { BindingRef, MaterialNode, TableCellSchema, TableRowSchema } from '@easyink/schema'
 import type { TableDataProps } from './schema'
 import { createFragmentFromNode, extractCollectionPath, formatBindingDisplayValue, resolveBindingValue, resolveFieldFromRecord, trustedViewerHtml } from '@easyink/core'
-import { computeAutoRowHeights, computeRowScaleWithVirtualRows, renderPlainTextCell, renderTableHtml } from '@easyink/material-table-kernel'
-import { getNodeProps, isTableNode } from '@easyink/schema'
+import { computeAutoRowHeights, computeRowScaleWithVirtualRows, projectTableTopology, renderPlainTextCell, renderTableHtml, resolveTableBaseProps } from '@easyink/material-table-kernel'
 import { TABLE_DATA_PLACEHOLDER_ROW_COUNT } from './layout'
+import { TABLE_DATA_DEFAULTS } from './schema'
 
 interface ViewerRenderContext {
   data: Record<string, unknown>
@@ -47,11 +47,11 @@ function filterVisibleRows(rows: TableRowSchema[], showHeader: boolean, showFoot
 
 /**
  * Cache resolved runtime layout per table-data schema instance, keyed by
- * `node.table` (object identity). Render needs the same per-row heights
+ * `node.model` (object identity). Render needs the same per-row heights
  * the measure pass produced, but ViewerRuntime overwrites `node.height`
  * after measure — so re-deriving the baseline scale from the post-measure
  * `node.height` would multiply the heights again. The runtime preserves
- * `node.table` by reference across the spread, so this WeakMap survives
+ * `node.model` by reference across the spread, so this WeakMap survives
  * the measure→render hop with zero schema mutation.
  */
 interface ResolvedRuntimeLayout {
@@ -60,7 +60,7 @@ interface ResolvedRuntimeLayout {
   totalHeight: number
 }
 
-const runtimeLayoutCache = new WeakMap<TableDataSchema, ResolvedRuntimeLayout>()
+const runtimeLayoutCache = new WeakMap<MaterialNode<unknown>, ResolvedRuntimeLayout>()
 
 /**
  * Resolve the visible row sequence + per-row heights for a data table
@@ -75,30 +75,27 @@ const runtimeLayoutCache = new WeakMap<TableDataSchema, ResolvedRuntimeLayout>()
  * Architecture ref: 07-layout-engine.md §7.3
  */
 function resolveRuntimeLayout(
-  node: MaterialNode & { table: TableDataSchema },
+  node: MaterialNode<unknown>,
   data: Record<string, unknown>,
   declaredElementHeight: number,
   reportDiagnostic?: ViewerRenderContext['reportDiagnostic'],
 ): ResolvedRuntimeLayout {
-  const tableData = node.table
-  const showHeader = tableData.showHeader !== false
-  const showFooter = tableData.showFooter !== false
+  const { topology } = projectTableTopology(node)
+  const expandedRows = expandRepeatTemplateRows(topology.rows, data, node.id, reportDiagnostic)
+  const visibleRows = filterVisibleRows(expandedRows, true, true)
 
-  const expandedRows = expandRepeatTemplateRows(node.table.topology.rows, data, node.id, reportDiagnostic)
-  const visibleRows = filterVisibleRows(expandedRows, showHeader, showFooter)
-
-  const repeatRow = node.table.topology.rows.find(row => row.role === 'repeat-template')
+  const repeatRow = topology.rows.find(row => row.role === 'repeat-template')
   const baselineScale = computeRowScaleWithVirtualRows(
-    node.table.topology.rows,
+    topology.rows,
     declaredElementHeight,
     undefined,
     repeatRow ? { rowHeight: repeatRow.height, count: TABLE_DATA_PLACEHOLDER_ROW_COUNT } : undefined,
   )
   const baselineHeights = visibleRows.map(row => row.height * baselineScale)
 
-  const props = getNodeProps<TableDataProps>(node)
+  const props: TableDataProps = { ...TABLE_DATA_DEFAULTS, ...resolveTableBaseProps(node) }
   const rowHeights = computeAutoRowHeights({
-    topology: { columns: node.table.topology.columns, rows: visibleRows },
+    topology: { columns: topology.columns, rows: visibleRows },
     elementWidth: node.width,
     baselineHeights,
     props,
@@ -117,31 +114,31 @@ function resolveRuntimeLayout(
  * designer's static layout.
  * Architecture ref: 07-layout-engine.md §7.3
  */
-export function measureTableData(node: MaterialNode, context: ViewerMeasureContext): ViewerMeasureResult {
-  if (!isTableNode(node)) {
+export function measureTableData(node: MaterialNode<unknown>, context: ViewerMeasureContext): ViewerMeasureResult {
+  if (node.type !== 'table-data') {
     return { width: node.width, height: node.height }
   }
   const data = context.data ?? {}
-  const tableNode = node as MaterialNode & { table: TableDataSchema }
+  const tableNode = node
   const layout = resolveRuntimeLayout(tableNode, data, node.height, context.reportDiagnostic)
   // Cache so render() reuses the exact same per-row heights without
   // re-deriving baseline scale from the (about to be overwritten) node.height.
-  runtimeLayoutCache.set(tableNode.table, layout)
+  runtimeLayoutCache.set(tableNode, layout)
   return { width: node.width, height: layout.totalHeight }
 }
 
 export const tableDataFragmentPaginator: FragmentPaginator = {
   canPaginate(node) {
-    return isTableNode(node) && node.type === 'table-data'
+    return node.type === 'table-data'
   },
   paginateFragment(input) {
     const node = input.fragment.node
-    if (!isTableNode(node) || node.type !== 'table-data') {
+    if (node.type !== 'table-data') {
       return { currentPage: input.fragment, diagnostics: [] }
     }
-    const tableNode = node as MaterialNode & { table: TableDataSchema }
+    const tableNode = node
 
-    const cached = runtimeLayoutCache.get(tableNode.table)
+    const cached = runtimeLayoutCache.get(tableNode)
     if (!cached || input.availableHeight >= cached.totalHeight) {
       return { currentPage: input.fragment, diagnostics: [] }
     }
@@ -171,22 +168,22 @@ export const tableDataFragmentPaginator: FragmentPaginator = {
   },
 }
 
-export function renderTableData(node: MaterialNode, context?: ViewerRenderContext): ViewerRenderOutput {
-  if (!isTableNode(node)) {
+export function renderTableData(node: MaterialNode<unknown>, context?: ViewerRenderContext): ViewerRenderOutput {
+  if (node.type !== 'table-data') {
     return {
       html: trustedViewerHtml('<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#f9f9f9;color:#999;font-size:12px;">[Data Table]</div>'),
     }
   }
 
-  const props = getNodeProps<TableDataProps>(node)
+  const props: TableDataProps = { ...TABLE_DATA_DEFAULTS, ...resolveTableBaseProps(node) }
   const data = context?.data ?? {}
-  const tableNode = node as MaterialNode & { table: TableDataSchema }
+  const tableNode = node
 
   // Prefer the layout produced by measure() — `node.height` has been
   // overwritten by ViewerRuntime, so we cannot recompute baseline scale
   // from it here. Fall back to a direct compute when render is called
   // without a prior measure (e.g. unit tests).
-  const cached = runtimeLayoutCache.get(tableNode.table)
+  const cached = runtimeLayoutCache.get(tableNode)
   const { rows: visibleRows, rowHeights, totalHeight } = cached
     ?? resolveRuntimeLayout(tableNode, data, node.height, context?.reportDiagnostic)
 
@@ -196,7 +193,7 @@ export function renderTableData(node: MaterialNode, context?: ViewerRenderContex
   }))
 
   const html = renderTableHtml({
-    topology: { columns: node.table.topology.columns, rows: sizedRows },
+    topology: { columns: projectTableTopology(node).topology.columns, rows: sizedRows },
     props,
     unit: context?.unit ?? 'mm',
     elementHeight: totalHeight,
@@ -337,26 +334,18 @@ function splitRuntimeRows(
 
 function createVirtualTableFragment(
   source: LayoutFragment,
-  node: MaterialNode & { table: TableDataSchema },
+  node: MaterialNode<unknown>,
   rows: TableRowSchema[],
   rowHeights: number[],
   height: number,
   suffix: string,
 ): LayoutFragment {
-  const virtualTable: TableDataSchema = {
-    ...node.table,
-    topology: {
-      ...node.table.topology,
-      rows: rows.map((row, index) => ({ ...row, height: rowHeights[index] ?? row.height })),
-    },
-  }
-  const virtualNode = {
+  const virtualNode: MaterialNode<unknown> = {
     ...node,
     id: `${node.id}__${suffix}`,
     height,
-    table: virtualTable,
   }
-  runtimeLayoutCache.set(virtualTable, { rows, rowHeights, totalHeight: height })
+  runtimeLayoutCache.set(virtualNode, { rows, rowHeights, totalHeight: height })
   return {
     ...createFragmentFromNode(virtualNode),
     sourceNodeId: source.sourceNodeId,

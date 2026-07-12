@@ -7,7 +7,7 @@ export const commonConstraints: MaterialConstraint[] = [
     severity: 'error',
     message: 'Element is missing required properties',
     check: (node: MaterialNode, _context: ConstraintContext) => {
-      const props = node.props as Record<string, unknown> | undefined
+      const props = node.model as Record<string, unknown> | undefined
       if (!props)
         return { passed: false, details: 'No props object' }
       return { passed: true }

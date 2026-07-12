@@ -4,6 +4,8 @@ import type { AssistantMaterialManifest, AssistantValidationIssue, AssistantVali
 import { getBindingRefs, isDataContractBinding, traverseNodes, validateSchemaIssues } from '@easyink/schema'
 import { DataSourceAligner, normalizeAllFieldPaths, SchemaValidator } from '@easyink/schema-tools'
 
+const MATERIAL_BINDING_KEY = 'binding'
+
 export interface ValidateAssistantSchemaOptions {
   materialManifest?: AssistantMaterialManifest
 }
@@ -223,8 +225,8 @@ function validateNodeBindingAgainstMaterial(
   material: AssistantMaterialManifest['materials'][number],
 ): AssistantValidationIssue[] {
   const issues: AssistantValidationIssue[] = []
-  const binding = node.binding
-  const definition = material.binding
+  const binding = node.bindings.value
+  const definition = material[MATERIAL_BINDING_KEY]
   if (!binding)
     return issues
 

@@ -108,8 +108,8 @@ describe('renderText', () => {
 
     const measured = measureText(node)
 
-    expect(node.props.minHeight).toBeNull()
-    expect(node.props.maxHeight).toBeNull()
+    expect(node.model.minHeight).toBeNull()
+    expect(node.model.maxHeight).toBeNull()
     expect(measured.height).toBeGreaterThan(10)
     expect(measured.overflow).toBe(false)
   })

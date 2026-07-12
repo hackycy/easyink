@@ -49,7 +49,7 @@ export function resolveChartPieRuntimeData(
   _props: ChartPieProps,
   runtimeData: Record<string, unknown>,
 ): ChartPieResolvedData {
-  const resolution = resolveMaterialDataContract(CHART_PIE_DATA_CONTRACT, node.binding, runtimeData)
+  const resolution = resolveMaterialDataContract(CHART_PIE_DATA_CONTRACT, node.bindings.value, runtimeData)
   const diagnostics: ChartPieDataDiagnostic[] = [...resolution.diagnostics]
   const data = resolution.records
     .map((record, index) => readPointFromTargetRecord(record, index))

@@ -1,4 +1,4 @@
-import type { DocumentSchema, ElementGroupSchema, GuideSchema, MaterialNode, PageSchema, RenderCondition } from '@easyink/schema'
+import type { DocumentSchema, ElementGroupSchema, GuideSchema, MaterialEditorState, MaterialNode, MaterialOutput, PageSchema, RenderCondition } from '@easyink/schema'
 import type { Command } from '../command'
 import type { EditorSurfacePlan } from '../editor-surface-plan'
 import type { MaterialResizeSideEffect } from '../material-extension'
@@ -140,7 +140,7 @@ function resolveCollectionByPath(elements: MaterialNode[], parentPath: number[])
     const node = collection[index]
     if (!node)
       return undefined
-    collection = node.children ?? (node.children = [])
+    collection = node.slots.default ?? (node.slots.default = [])
   }
   return collection
 }
@@ -293,10 +293,10 @@ export class RotateMaterialCommand implements Command {
   }
 }
 
-export class UpdateMaterialPropsCommand implements Command {
+export class UpdateMaterialModelCommand implements Command {
   readonly id = generateId('cmd')
-  readonly type = 'update-material-props'
-  readonly description = 'Update material props'
+  readonly type = 'update-material-model'
+  readonly description = 'Update material model'
   private oldValues: Record<string, unknown> = {}
 
   constructor(
@@ -317,14 +317,14 @@ export class UpdateMaterialPropsCommand implements Command {
     for (const key of Object.keys(this.updates)) {
       if (!(key in this.oldValues)) {
         if (key.includes('.'))
-          this.oldValues[key] = deepClone(getByPath(node.props, key))
+          this.oldValues[key] = deepClone(getByPath(node.model as Record<string, unknown>, key))
         else
-          this.oldValues[key] = deepClone(node.props[key])
+          this.oldValues[key] = deepClone((node.model as Record<string, unknown>)[key])
       }
       if (key.includes('.'))
-        setByPath(node.props, key, deepClone(this.updates[key]))
+        setByPath(node.model as Record<string, unknown>, key, deepClone(this.updates[key]))
       else
-        node.props[key] = deepClone(this.updates[key])
+        (node.model as Record<string, unknown>)[key] = deepClone(this.updates[key])
     }
   }
 
@@ -334,26 +334,26 @@ export class UpdateMaterialPropsCommand implements Command {
       return
     for (const key of Object.keys(this.oldValues)) {
       if (key.includes('.'))
-        setByPath(node.props, key, this.oldValues[key])
+        setByPath(node.model as Record<string, unknown>, key, this.oldValues[key])
       else
-        node.props[key] = this.oldValues[key]
+        (node.model as Record<string, unknown>)[key] = this.oldValues[key]
     }
   }
 }
 
-export type MaterialMetaKey = 'hidden' | 'locked'
+export type MaterialEditorStateKey = keyof MaterialEditorState
 
-export class UpdateMaterialMetaCommand implements Command {
+export class UpdateMaterialEditorStateCommand implements Command {
   readonly id = generateId('cmd')
-  readonly type = 'update-material-meta'
-  readonly description = 'Update material meta'
-  private oldValues: Partial<Record<MaterialMetaKey, boolean | undefined>> = {}
+  readonly type = 'update-material-editor-state'
+  readonly description = 'Update material editor state'
+  private oldValues: Partial<MaterialEditorState> = {}
 
   constructor(
     private elements: MaterialNode[],
     private nodeId: string,
-    private updates: Partial<Record<MaterialMetaKey, boolean | undefined>>,
-    precomputedOldValues?: Partial<Record<MaterialMetaKey, boolean | undefined>>,
+    private updates: Partial<MaterialEditorState>,
+    precomputedOldValues?: Partial<MaterialEditorState>,
   ) {
     if (precomputedOldValues)
       this.oldValues = { ...precomputedOldValues }
@@ -363,10 +363,15 @@ export class UpdateMaterialMetaCommand implements Command {
     const node = findNode(this.elements, this.nodeId)
     if (!node)
       return
-    for (const key of Object.keys(this.updates) as MaterialMetaKey[]) {
+    const editorState = node.editorState ?? (node.editorState = {})
+    for (const key of Object.keys(this.updates) as MaterialEditorStateKey[]) {
       if (!(key in this.oldValues))
-        this.oldValues[key] = node[key]
-      node[key] = this.updates[key]
+        this.oldValues[key] = editorState[key] as never
+      const value = this.updates[key]
+      if (value === undefined)
+        delete editorState[key]
+      else
+        editorState[key] = value as never
     }
   }
 
@@ -374,8 +379,13 @@ export class UpdateMaterialMetaCommand implements Command {
     const node = findNode(this.elements, this.nodeId)
     if (!node)
       return
-    for (const key of Object.keys(this.oldValues) as MaterialMetaKey[]) {
-      node[key] = this.oldValues[key]
+    const editorState = node.editorState ?? (node.editorState = {})
+    for (const key of Object.keys(this.oldValues) as MaterialEditorStateKey[]) {
+      const value = this.oldValues[key]
+      if (value === undefined)
+        delete editorState[key]
+      else
+        editorState[key] = value as never
     }
   }
 }
@@ -405,13 +415,13 @@ export class UpdateRenderConditionCommand implements Command {
     if (!node)
       return
     if (!this.captured) {
-      this.oldCondition = deepClone(node.renderCondition)
+      this.oldCondition = deepClone(node.output.renderCondition)
       this.captured = true
     }
     if (this.condition)
-      node.renderCondition = deepClone(this.condition)
+      node.output.renderCondition = deepClone(this.condition)
     else
-      delete node.renderCondition
+      delete node.output.renderCondition
   }
 
   undo(): void {
@@ -419,9 +429,9 @@ export class UpdateRenderConditionCommand implements Command {
     if (!node)
       return
     if (this.oldCondition)
-      node.renderCondition = deepClone(this.oldCondition)
+      node.output.renderCondition = deepClone(this.oldCondition)
     else
-      delete node.renderCondition
+      delete node.output.renderCondition
   }
 
   merge(next: Command): Command | null {
@@ -434,42 +444,42 @@ export class UpdateRenderConditionCommand implements Command {
   }
 }
 
-export type MaterialBehaviorKey = 'placement' | 'break' | 'repeat'
+export type MaterialOutputKey = keyof MaterialOutput
 
-export class UpdateMaterialBehaviorCommand implements Command {
+export class UpdateMaterialOutputCommand implements Command {
   readonly id = generateId('cmd')
-  readonly type = 'update-material-behavior'
-  readonly description = 'Update material behavior'
-  private oldValues: Partial<Pick<MaterialNode, MaterialBehaviorKey>> = {}
+  readonly type = 'update-material-output'
+  readonly description = 'Update material output'
+  private oldValues: Partial<MaterialOutput> = {}
 
   constructor(
     private node: MaterialNode,
-    private updates: Partial<Pick<MaterialNode, MaterialBehaviorKey>>,
-    precomputedOldValues?: Partial<Pick<MaterialNode, MaterialBehaviorKey>>,
+    private updates: Partial<MaterialOutput>,
+    precomputedOldValues?: Partial<MaterialOutput>,
   ) {
     if (precomputedOldValues)
       this.oldValues = deepClone(precomputedOldValues)
   }
 
   execute(): void {
-    for (const key of Object.keys(this.updates) as MaterialBehaviorKey[]) {
+    for (const key of Object.keys(this.updates) as MaterialOutputKey[]) {
       if (!(key in this.oldValues))
-        this.oldValues[key] = deepClone(this.node[key])
+        this.oldValues[key] = deepClone(this.node.output[key]) as never
       const value = deepClone(this.updates[key])
       if (value == null)
-        delete this.node[key]
+        delete this.node.output[key]
       else
-        this.node[key] = value as never
+        this.node.output[key] = value as never
     }
   }
 
   undo(): void {
-    for (const key of Object.keys(this.oldValues) as MaterialBehaviorKey[]) {
+    for (const key of Object.keys(this.oldValues) as MaterialOutputKey[]) {
       const value = deepClone(this.oldValues[key])
       if (value == null)
-        delete this.node[key]
+        delete this.node.output[key]
       else
-        this.node[key] = value as never
+        this.node.output[key] = value as never
     }
   }
 }

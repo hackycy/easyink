@@ -24,7 +24,7 @@ describe('flow-row viewer', () => {
         },
       },
     }, 'pt')
-    const props = node.props as unknown as FlowRowProps
+    const props = node.model as unknown as FlowRowProps
 
     expect(node.width).toBeGreaterThan(72)
     expect(node.height).toBeGreaterThan(26)
@@ -54,7 +54,7 @@ describe('flow-row viewer', () => {
 
   it('uses node height as the material frame and renders designer repeat placeholders', () => {
     const node = createFlowRowNode({ height: 32 })
-    const props = node.props as unknown as FlowRowProps
+    const props = node.model as unknown as FlowRowProps
     const model = {
       rows: [props.columns.map((column, index) => ({
         column,

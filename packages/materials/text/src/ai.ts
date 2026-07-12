@@ -3,7 +3,7 @@ import type { AIMaterialDescriptor } from '@easyink/shared'
 export const textAIMaterialDescriptor = {
   type: 'text',
   description: 'Text block for static labels and data-bound scalar fields. Supports fixed-height clipping and auto-height flow layout.',
-  properties: ['content', 'writingMode', 'heightMode', 'fontSize', 'fontFamily', 'fontWeight', 'fontStyle', 'color', 'backgroundColor', 'textAlign', 'verticalAlign', 'lineHeight', 'letterSpacing', 'wrapMode', 'autoWrap', 'overflow', 'minHeight', 'maxHeight', 'prefix', 'suffix', 'borderWidth', 'borderColor', 'borderType'],
+  properties: ['content', 'writingMode', 'heightMode', 'fontSize', 'fontFamily', 'fontWeight', 'fontStyle', 'color', 'backgroundColor', 'textAlign', 'verticalAlign', 'lineHeight', 'letterSpacing', 'wrapMode', 'overflow', 'minHeight', 'maxHeight', 'prefix', 'suffix', 'borderWidth', 'borderColor', 'borderType'],
   requiredProps: ['content', 'fontSize', 'textAlign', 'verticalAlign', 'color'],
   binding: 'single',
   usage: [

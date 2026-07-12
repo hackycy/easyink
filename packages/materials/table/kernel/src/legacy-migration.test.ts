@@ -375,7 +375,7 @@ describe('legacy table v0 migration', () => {
     const loaded = loadDocumentWithProfile({
       unit: 'mm',
       page: { mode: 'fixed', width: 100, height: 100 },
-      elements: [hostile],
+      elements: [hostile as unknown as import('@easyink/schema').MaterialNodeInput],
     }, profile)
     expect(loaded.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'MATERIAL_ADAPTER_ISSUES_INVALID' }))
     expect(loaded.nodeStates.get(hostile.id)).toMatchObject({ status: 'quarantined', stage: 'validate-input' })
@@ -411,7 +411,7 @@ describe('legacy table v0 migration', () => {
     const result = loadDocumentWithProfile({
       unit: 'mm',
       page: { mode: 'fixed', width: 100, height: 100 },
-      elements: [source],
+      elements: [source as unknown as import('@easyink/schema').MaterialNodeInput],
     }, profile)
     expect(result.nodeStates.get(source.id)?.status).toBe('ready')
     expect(result.diagnostics).toEqual([])

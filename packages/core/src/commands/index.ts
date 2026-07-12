@@ -19,9 +19,9 @@ export {
   UpdateDocumentCommand,
   UpdateGeometryCommand,
   UpdateGuidesCommand,
-  UpdateMaterialBehaviorCommand,
-  UpdateMaterialMetaCommand,
-  UpdateMaterialPropsCommand,
+  UpdateMaterialEditorStateCommand,
+  UpdateMaterialModelCommand,
+  UpdateMaterialOutputCommand,
   UpdatePageCommand,
   UpdateRenderConditionCommand,
 } from './document'

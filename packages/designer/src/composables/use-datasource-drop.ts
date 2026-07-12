@@ -183,7 +183,7 @@ export function useDatasourceDrop(ctx: DatasourceDropContext) {
     const elements = store.getElements()
     for (let i = elements.length - 1; i >= 0; i--) {
       const el = elements[i]!
-      if (el.hidden || el.locked)
+      if (el.editorState?.hidden || el.editorState?.locked)
         continue
       const elementSize = store.getElementSize(el)
       const localPoint = documentPointToElementLocal({ x: docX, y: docY }, el)

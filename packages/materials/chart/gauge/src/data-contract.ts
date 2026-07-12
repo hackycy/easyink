@@ -55,7 +55,7 @@ export function resolveChartGaugeRuntimeData(
   _props: ChartGaugeProps,
   runtimeData: Record<string, unknown>,
 ): ChartGaugeResolvedData {
-  const resolution = resolveMaterialDataContract(CHART_GAUGE_DATA_CONTRACT, node.binding, runtimeData)
+  const resolution = resolveMaterialDataContract(CHART_GAUGE_DATA_CONTRACT, node.bindings.value, runtimeData)
   const recordPoint = resolution.records
     .map(record => readPointFromTargetRecord(record))
     .find((point): point is ChartGaugeValuePoint => !!point)

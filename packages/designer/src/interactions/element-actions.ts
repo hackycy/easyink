@@ -1,6 +1,6 @@
 import type { MaterialNode } from '@easyink/schema'
 import type { DesignerStore } from '../store/designer-store'
-import { RemoveMaterialCommand, UpdateMaterialMetaCommand } from '@easyink/core'
+import { RemoveMaterialCommand, UpdateMaterialEditorStateCommand } from '@easyink/core'
 import { removeFromSelection } from './selection-api'
 
 type MaterialMetaUpdates = Partial<Record<'hidden' | 'locked', boolean | undefined>>
@@ -29,21 +29,21 @@ export function updateMaterialMeta(
 
   runTransaction(store, label, () => {
     for (const node of nodes)
-      store.commands.execute(new UpdateMaterialMetaCommand(store.schema.elements, node.id, updates))
+      store.commands.execute(new UpdateMaterialEditorStateCommand(store.schema.elements, node.id, updates))
   })
   return nodes.length
 }
 
 export function toggleMaterialHidden(store: DesignerStore, node: MaterialNode): boolean {
-  if (node.locked)
+  if (node.editorState?.locked)
     return false
-  const hidden = node.hidden !== true
+  const hidden = node.editorState?.hidden !== true
   updateMaterialMeta(store, hidden ? 'Hide' : 'Show', [node], { hidden })
   return true
 }
 
 export function deleteMaterialNodes(store: DesignerStore, nodes: readonly MaterialNode[]): number {
-  const deletableNodes = nodes.filter(node => !node.locked)
+  const deletableNodes = nodes.filter(node => !node.editorState?.locked)
   if (deletableNodes.length === 0)
     return 0
 

@@ -312,8 +312,8 @@ export class SchemaValidator {
 
     const traverse = (elements: MaterialNode[]): void => {
       for (const element of elements) {
-        if (element.binding) {
-          bindings.push(...getBindingRefs(element.binding))
+        if (element.bindings.value) {
+          bindings.push(...getBindingRefs(element.bindings.value))
         }
 
         // Check table cells
@@ -334,8 +334,8 @@ export class SchemaValidator {
         }
 
         // Traverse children
-        if (element.children) {
-          traverse(element.children)
+        if (element.slots.default) {
+          traverse(element.slots.default)
         }
       }
     }
@@ -399,8 +399,8 @@ export function normalizeAllFieldPaths(schema: DocumentSchema): DocumentSchema {
   const traverse = (elements: MaterialNode[]): void => {
     for (const element of elements) {
       // Fix binding paths
-      if (element.binding) {
-        const bindings = getBindingRefs(element.binding)
+      if (element.bindings.value) {
+        const bindings = getBindingRefs(element.bindings.value)
         for (const binding of bindings) {
           if (binding.fieldPath && binding.fieldPath.includes('.')) {
             binding.fieldPath = binding.fieldPath.replace(/\./g, FIELD_PATH_SEPARATOR)
@@ -427,8 +427,8 @@ export function normalizeAllFieldPaths(schema: DocumentSchema): DocumentSchema {
         }
       }
 
-      if (element.children) {
-        traverse(element.children)
+      if (element.slots.default) {
+        traverse(element.slots.default)
       }
     }
   }

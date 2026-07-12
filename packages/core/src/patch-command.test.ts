@@ -49,30 +49,30 @@ describe('applyJsonPatches', () => {
 
 describe('patchCommand', () => {
   function makeNode(): MaterialNode {
-    return { id: 'n1', type: 'test', x: 0, y: 0, width: 100, height: 50, props: { color: 'red' } } as MaterialNode
+    return { id: 'n1', type: 'test', x: 0, y: 0, width: 100, height: 50, modelVersion: 1, model: { color: 'red' }, slots: {}, bindings: {}, output: { visibility: 'include' } }
   }
 
   it('executes patches forward', () => {
     const node = makeNode()
     const cmd = new PatchCommand(
       () => node,
-      [{ op: 'replace', path: ['props', 'color'], value: 'blue' }],
-      [{ op: 'replace', path: ['props', 'color'], value: 'red' }],
+      [{ op: 'replace', path: ['model', 'color'], value: 'blue' }],
+      [{ op: 'replace', path: ['model', 'color'], value: 'red' }],
     )
     cmd.execute()
-    expect(node.props.color).toBe('blue')
+    expect(node.model.color).toBe('blue')
   })
 
   it('undoes patches', () => {
     const node = makeNode()
     const cmd = new PatchCommand(
       () => node,
-      [{ op: 'replace', path: ['props', 'color'], value: 'blue' }],
-      [{ op: 'replace', path: ['props', 'color'], value: 'red' }],
+      [{ op: 'replace', path: ['model', 'color'], value: 'blue' }],
+      [{ op: 'replace', path: ['model', 'color'], value: 'red' }],
     )
     cmd.execute()
     cmd.undo()
-    expect(node.props.color).toBe('red')
+    expect(node.model.color).toBe('red')
   })
 
   it('merges commands with same mergeKey within window', () => {

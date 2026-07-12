@@ -1,3 +1,5 @@
+import type { BindingRef, MaterialNode, TableCellSchema, TableRowSchema, TableTopologySchema } from '@easyink/schema'
+import { getBindingRefs, getNodeModel } from '@easyink/schema'
 import { assertJsonValue } from '@easyink/shared'
 
 declare const tableIdBrand: unique symbol
@@ -152,6 +154,87 @@ export interface DataTableModel extends TableModelBase {
 }
 
 export type TableModel = StaticTableModel | DataTableModel
+
+export function getTableMaterialModel(node: MaterialNode<unknown>): TableModel {
+  return getNodeModel<TableModel>(node)
+}
+
+export interface ProjectedTableTopology {
+  topology: TableTopologySchema
+  rowIds: TableRowId[]
+  columnIds: TableColumnId[]
+}
+
+/** Read-only grid projection for legacy DOM geometry/rendering surfaces. */
+export function projectTableTopology(node: MaterialNode<unknown>): ProjectedTableTopology {
+  const model = getTableMaterialModel(node)
+  const rows: TableRowSchema[] = []
+  const rowIds: TableRowId[] = []
+  const columnIds = model.columns.map(column => column.id)
+  const totalTrack = model.columns.reduce((sum, column) => sum + tableTrackValue(column.track), 0) || 1
+
+  for (const band of model.bands) {
+    for (const row of band.rows) {
+      rowIds.push(row.id)
+      rows.push({
+        height: row.minHeight,
+        role: band.role === 'detail' ? 'repeat-template' : band.role === 'body' ? 'normal' : band.role,
+        cells: model.columns.map(column => projectCell(node, model, row, column.id, band.role)),
+      })
+    }
+  }
+
+  for (const merge of model.merges) {
+    const rowIndex = rowIds.indexOf(merge.rowIds[0]!)
+    const columnIndex = columnIds.indexOf(merge.columnIds[0]!)
+    if (rowIndex < 0 || columnIndex < 0)
+      continue
+    const anchor = rows[rowIndex]?.cells[columnIndex]
+    if (!anchor)
+      continue
+    anchor.rowSpan = merge.rowIds.length
+    anchor.colSpan = merge.columnIds.length
+  }
+
+  return {
+    topology: {
+      columns: model.columns.map(column => ({ ratio: tableTrackValue(column.track) / totalTrack })),
+      rows,
+    },
+    rowIds,
+    columnIds,
+  }
+}
+
+function projectCell(
+  node: MaterialNode<unknown>,
+  model: TableModel,
+  row: TableRow,
+  columnId: TableColumnId,
+  role: TableBandRole,
+): TableCellSchema {
+  const cell = row.cells.find(candidate => candidate.columnId === columnId)
+  if (!cell)
+    return {}
+  const projected: TableCellSchema = {}
+  if (cell.content.kind === 'text') {
+    projected.content = { text: cell.content.text }
+    if (cell.content.bindingPort) {
+      const binding = getBindingRefs(node.bindings[cell.content.bindingPort])[0]
+      if (binding) {
+        if (model.kind === 'data' && role === 'detail')
+          projected.binding = binding as BindingRef
+        else
+          projected.staticBinding = binding as BindingRef
+      }
+    }
+  }
+  return projected
+}
+
+function tableTrackValue(track: TableTrack): number {
+  return track.kind === 'fixed' ? track.size : track.weight
+}
 
 export interface CreateTableModelOptions {
   kind: TableModel['kind']

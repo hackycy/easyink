@@ -1,14 +1,14 @@
-import type { PropSchema } from '@easyink/core'
+import type { PropertyDescriptor } from '@easyink/core'
 import { STROKE_STYLE_OPTIONS } from '@easyink/prop-schemas'
 
-const IMAGE_FIT_OPTIONS: NonNullable<PropSchema['enum']> = [
+const IMAGE_FIT_OPTIONS: NonNullable<PropertyDescriptor['enum']> = [
   { label: 'materials.image.option.fitContain', value: 'contain' },
   { label: 'materials.image.option.fitCover', value: 'cover' },
   { label: 'materials.image.option.fitFill', value: 'fill' },
   { label: 'materials.image.option.fitNone', value: 'none' },
 ]
 
-export const imageDesignerPropSchemas: PropSchema[] = [
+export const imageDesignerPropSchemas: PropertyDescriptor[] = [
   {
     key: 'src',
     label: 'materials.image.property.src',

@@ -1,7 +1,7 @@
-import type { PropSchema } from '@easyink/core'
+import type { PropertyDescriptor } from '@easyink/core'
 import { CHART_CUSTOM_DEFAULT_OPTION_CODE } from './schema'
 
-export const chartCustomDesignerPropSchemas: PropSchema[] = [
+export const chartCustomDesignerPropSchemas: PropertyDescriptor[] = [
   {
     key: 'optionCode',
     label: 'materials.chartCustom.property.optionCode',

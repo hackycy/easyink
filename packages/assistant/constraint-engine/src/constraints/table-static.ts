@@ -7,11 +7,11 @@ export const tableStaticConstraints: MaterialConstraint[] = [
     severity: 'error',
     message: 'table-static element must have table.kind = "static"',
     check: (node: MaterialNode) => {
-      const table = (node.props as Record<string, unknown>)?.table as Record<string, unknown> | undefined
+      const table = (node.model as Record<string, unknown>)?.table as Record<string, unknown> | undefined
       return { passed: table?.kind === 'static' }
     },
     autoFix: (node: MaterialNode) => {
-      const props = { ...(node.props as Record<string, unknown>) }
+      const props = { ...(node.model as Record<string, unknown>) }
       const table = { ...(props.table as Record<string, unknown> ?? {}) }
       table.kind = 'static'
       props.table = table
@@ -23,7 +23,7 @@ export const tableStaticConstraints: MaterialConstraint[] = [
     severity: 'error',
     message: 'table-static must include table.topology with columns and rows',
     check: (node: MaterialNode) => {
-      const table = (node.props as Record<string, unknown>)?.table as Record<string, unknown> | undefined
+      const table = (node.model as Record<string, unknown>)?.table as Record<string, unknown> | undefined
       const topology = table?.topology as Record<string, unknown> | undefined
       if (!topology)
         return { passed: false, details: 'No topology' }
@@ -37,7 +37,7 @@ export const tableStaticConstraints: MaterialConstraint[] = [
     severity: 'error',
     message: 'table-static must not have repeat-template rows (use table-data instead)',
     check: (node: MaterialNode) => {
-      const table = (node.props as Record<string, unknown>)?.table as Record<string, unknown> | undefined
+      const table = (node.model as Record<string, unknown>)?.table as Record<string, unknown> | undefined
       const topology = table?.topology as Record<string, unknown> | undefined
       const rows = topology?.rows as Array<{ role: string }> | undefined
       if (!rows)

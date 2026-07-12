@@ -1,6 +1,6 @@
 import type { MaterialNode } from '@easyink/schema'
 import type { TextHeightMode, TextProps, TextWrapMode } from './schema'
-import { getNodeProps } from '@easyink/schema'
+import { getNodeModel } from '@easyink/schema'
 import { TEXT_DEFAULTS } from './schema'
 
 export interface ResolvedTextProps extends Omit<TextProps, 'minHeight' | 'maxHeight'> {
@@ -21,10 +21,10 @@ export interface TextMeasureResult {
 const CJK_RE = /[\u3000-\u9FFF\uF900-\uFAFF]/
 
 export function getTextProps(node: MaterialNode): ResolvedTextProps {
-  return resolveTextProps(getNodeProps<Partial<TextProps>>(node))
+  return resolveTextProps(getNodeModel<Partial<TextProps>>(node))
 }
 
-export function resolveTextProps(raw: Partial<TextProps> = {}): ResolvedTextProps {
+export function resolveTextProps(raw: Partial<TextProps> & { autoWrap?: boolean } = {}): ResolvedTextProps {
   const wrapMode = raw.wrapMode === 'wrap' || raw.wrapMode === 'nowrap' || raw.wrapMode === 'anywhere'
     ? raw.wrapMode
     : raw.autoWrap === false
@@ -39,7 +39,6 @@ export function resolveTextProps(raw: Partial<TextProps> = {}): ResolvedTextProp
     textAlign: raw.textAlign === 'left' || raw.textAlign === 'right' ? raw.textAlign : 'center',
     verticalAlign: raw.verticalAlign === 'top' || raw.verticalAlign === 'bottom' ? raw.verticalAlign : 'middle',
     wrapMode,
-    autoWrap: wrapMode !== 'nowrap',
     overflow: raw.overflow === 'visible' || raw.overflow === 'ellipsis' ? raw.overflow : 'hidden',
     minHeight: Math.max(0, toFiniteNumber(raw.minHeight, 0)),
     maxHeight: Math.max(0, toFiniteNumber(raw.maxHeight, 0)),

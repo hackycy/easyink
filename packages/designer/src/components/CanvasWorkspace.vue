@@ -180,7 +180,7 @@ const repeatedPreviewElements = computed(() => {
   for (const node of elements.value) {
     if (!isRepeatedEveryPage(node))
       continue
-    if (node.hidden)
+    if (node.editorState?.hidden)
       continue
     const sourcePage = resolveRepeatSourcePage(node, pages)
     const localY = node.y - sourcePage.yOffset
@@ -407,7 +407,7 @@ function projectNodeStyle(node: ReturnType<typeof store.getElements>[number], ov
     width: `${node.width}${unit}`,
     height: `${node.height}${unit}`,
     transform: node.rotation ? `rotate(${node.rotation}deg)` : undefined,
-    opacity: node.hidden ? 1 : (node.alpha ?? 1),
+    opacity: node.editorState?.hidden ? 1 : (node.alpha ?? 1),
     zIndex: node.zIndex ?? 'auto',
   }
 }
@@ -416,7 +416,7 @@ function projectRepeatPreviewStyle(node: ReturnType<typeof store.getElements>[nu
   const style = projectNodeStyle(node, overrideY)
   return {
     ...style,
-    opacity: node.hidden ? 0.45 : (node.alpha ?? 1) * 0.45,
+    opacity: node.editorState?.hidden ? 0.45 : (node.alpha ?? 1) * 0.45,
   }
 }
 
@@ -704,8 +704,8 @@ onUnmounted(() => {
               class="ei-canvas-element"
               :class="{
                 'ei-canvas-element--selected': store.selection.has(el.id),
-                'ei-canvas-element--locked': el.locked,
-                'ei-canvas-element--hidden': el.hidden,
+                'ei-canvas-element--locked': el.editorState?.locked,
+                'ei-canvas-element--hidden': el.editorState?.hidden,
                 'ei-canvas-element--deep-editing': editingNodeId === el.id,
               }"
               :style="projectNodeStyle(el)"
@@ -757,9 +757,9 @@ onUnmounted(() => {
               class="ei-canvas-element-control"
               :style="projectNodeStyle(el)"
             >
-              <div v-if="!el.hidden || el.locked" class="ei-canvas-element__selection-border" />
+              <div v-if="!el.editorState?.hidden || el.editorState?.locked" class="ei-canvas-element__selection-border" />
 
-              <template v-if="!isMultiSelection && !el.locked && !el.hidden">
+              <template v-if="!isMultiSelection && !el.editorState?.locked && !el.editorState?.hidden">
                 <div
                   v-for="handle in getElementResizeHandles(el.id)"
                   :key="handle"

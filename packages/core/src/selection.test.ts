@@ -73,8 +73,8 @@ describe('selectionModel', () => {
     const sel = new SelectionModel()
     sel.selectMultiple(['a', 'b', 'c'])
     sel.reconcile([
-      { id: 'a', type: 'text', x: 0, y: 0, width: 10, height: 10, props: {} },
-      { id: 'c', type: 'text', x: 0, y: 0, width: 10, height: 10, props: {} },
+      { id: 'a', type: 'text', x: 0, y: 0, width: 10, height: 10, modelVersion: 1, model: {}, slots: {}, bindings: {}, output: { visibility: 'include' } },
+      { id: 'c', type: 'text', x: 0, y: 0, width: 10, height: 10, modelVersion: 1, model: {}, slots: {}, bindings: {}, output: { visibility: 'include' } },
     ])
     expect(sel.has('b')).toBe(false)
     expect(sel.count).toBe(2)
@@ -137,8 +137,8 @@ describe('selectionModel', () => {
       sel.selectMultiple(['a', 'b'])
       expect(calls()).toBe(1)
       sel.reconcile([
-        { id: 'a', type: 'text', x: 0, y: 0, width: 10, height: 10, props: {} },
-        { id: 'b', type: 'text', x: 0, y: 0, width: 10, height: 10, props: {} },
+        { id: 'a', type: 'text', x: 0, y: 0, width: 10, height: 10, modelVersion: 1, model: {}, slots: {}, bindings: {}, output: { visibility: 'include' } },
+        { id: 'b', type: 'text', x: 0, y: 0, width: 10, height: 10, modelVersion: 1, model: {}, slots: {}, bindings: {}, output: { visibility: 'include' } },
       ])
       expect(calls()).toBe(1)
     })

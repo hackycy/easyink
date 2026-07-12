@@ -116,12 +116,15 @@ describe('condition evaluator', () => {
       y: 0,
       width: 1,
       height: 1,
-      props: {},
-      renderCondition: { whenMatched: 'show' as const, groups: groups(row('eq', 'missing', literal(1), 'number')), onUnknown: 'hide' as const, whenHidden: 'reserve' as const },
+      modelVersion: 1,
+      model: {},
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' as const, renderCondition: { whenMatched: 'show' as const, groups: groups(row('eq', 'missing', literal(1), 'number')), onUnknown: 'hide' as const, whenHidden: 'reserve' as const } },
     } satisfies MaterialNode
     expect(resolveConditionalNode(node, {}).state).toBe('reserve')
-    expect(resolveConditionalNode({ ...node, renderCondition: { ...node.renderCondition, whenMatched: 'hide', groups: [] } }, {}).state).toBe('reserve')
-    expect(resolveConditionalNode({ ...node, hidden: true }, {}).diagnostics).toEqual([])
+    expect(resolveConditionalNode({ ...node, output: { ...node.output, renderCondition: { ...node.output.renderCondition, whenMatched: 'hide', groups: [] } } }, {}).state).toBe('reserve')
+    expect(resolveConditionalNode({ ...node, editorState: { hidden: true } }, {}).diagnostics).toEqual([])
   })
 
   it('validates datetime timezone rules through explicit types', () => {

@@ -3,13 +3,13 @@ import type { MaterialNode } from '@easyink/schema'
 import type { ChartLineProps } from './schema'
 import { trustedViewerHtml } from '@easyink/core'
 import { renderEChartsSvg } from '@easyink/material-chart-kernel'
-import { getNodeProps } from '@easyink/schema'
+import { getNodeModel } from '@easyink/schema'
 import { UNIT_FACTOR } from '@easyink/shared'
 import { resolveChartLineRuntimeData } from './data-contract'
 import { createChartLineRuntimeOptionFromData } from './options'
 
 export function renderChartLine(node: MaterialNode, context?: ViewerRenderContext) {
-  const props = getNodeProps<ChartLineProps>(node)
+  const props = getNodeModel<ChartLineProps>(node)
   const resolvedData = resolveChartLineRuntimeData(node, props, context?.data ?? {})
   for (const diagnostic of resolvedData.diagnostics)
     context?.reportDiagnostic?.({ ...diagnostic, nodeId: node.id })

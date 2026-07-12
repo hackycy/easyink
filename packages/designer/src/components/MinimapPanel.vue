@@ -70,6 +70,16 @@ function elementStyle(element: MinimapElementFrame) {
   return rectStyle(element)
 }
 
+function isElementHidden(element: MinimapElementFrame): boolean {
+  const { hidden } = element
+  return hidden
+}
+
+function isElementLocked(element: MinimapElementFrame): boolean {
+  const { locked } = element
+  return locked
+}
+
 function handlePointerDown(event: PointerEvent) {
   const target = event.currentTarget as HTMLElement
   activePointerId = event.pointerId
@@ -150,8 +160,8 @@ onUnmounted(() => {
           class="ei-minimap-panel__element"
           :class="{
             'ei-minimap-panel__element--selected': store.selection.has(el.id),
-            'ei-minimap-panel__element--hidden': el.hidden,
-            'ei-minimap-panel__element--locked': el.locked,
+            'ei-minimap-panel__element--hidden': isElementHidden(el),
+            'ei-minimap-panel__element--locked': isElementLocked(el),
           }"
           :style="elementStyle(el)"
         />

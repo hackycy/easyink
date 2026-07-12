@@ -1,12 +1,12 @@
 import type { MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { ProgressProps } from './schema'
-import { getBindingRefs, getNodeProps } from '@easyink/schema'
+import { getBindingRefs, getNodeModel } from '@easyink/schema'
 import { buildProgressHtml } from './rendering'
 
 function buildDesignerHtml(node: MaterialNode, context: MaterialExtensionContext): string {
-  const props = getNodeProps<ProgressProps>(node)
-  const binding = getBindingRefs(node.binding)[0]
+  const props = getNodeModel<ProgressProps>(node)
+  const binding = getBindingRefs(node.bindings.value)[0]
   const textOverride = binding && props.showText
     ? `{#${context.getBindingLabel(binding)}}${props.suffix || ''}`
     : undefined

@@ -110,7 +110,7 @@ function createSignatureBehavior(context: MaterialExtensionContext): BehaviorReg
         if (ctx.event.command === 'signature.clear') {
           ctx.tx.run<MaterialNode>(ctx.node.id, (draft) => {
             const props = getSignatureProps(draft)
-            draft.props = { ...props, data: [] }
+            draft.model = { ...props, data: [] }
           }, { label: 'materials.signature.history.clear' })
           ctx.session.setMeta('drawEnabled', false)
           context.emit('signature:draw-mode', { nodeId: ctx.node.id, enabled: false })
@@ -550,7 +550,7 @@ export function createSignatureExtension(context: MaterialExtensionContext): Mat
         const node = nodeSignal.get()
         context.tx.run<MaterialNode>(node.id, (draft) => {
           const props = getSignatureProps(draft)
-          draft.props = { ...props, data }
+          draft.model = { ...props, data }
         }, { label, mergeKey: `${node.id}:signature-data`, mergeWindowMs: 1000 })
       }
 

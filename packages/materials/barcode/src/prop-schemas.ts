@@ -1,8 +1,8 @@
-import type { PropSchema } from '@easyink/core'
+import type { PropertyDescriptor } from '@easyink/core'
 import { STROKE_STYLE_OPTIONS } from '@easyink/prop-schemas'
 import { BARCODE_FORMATS } from './schema'
 
-export const barcodeDesignerPropSchemas: PropSchema[] = [
+export const barcodeDesignerPropSchemas: PropertyDescriptor[] = [
   { key: 'value', label: 'materials.barcode.property.value', type: 'string', group: 'content' },
   { key: 'format', label: 'materials.barcode.property.format', type: 'enum', group: 'content', enum: BARCODE_FORMATS.map(format => ({ label: format.label, value: format.value })) },
   { key: 'showText', label: 'materials.barcode.property.showText', type: 'switch', group: 'content' },

@@ -22,6 +22,7 @@ const PROPERTY_TYPES = new Set<PropSchemaType>([
   'border-toggle',
 ])
 const UNSAFE_POINTER_TOKENS = new Set(['__proto__', 'prototype', 'constructor'])
+const TRIE_CHILDREN_KEY = 'children'
 const JSON_POINTER_PATTERN = /^(?:\/(?:[^~/]|~[01])*)+$/u
 const ARRAY_INDEX_PATTERN = /^(?:0|[1-9]\d*)$/u
 const BASE_VALUE_INPUT_KEYS = new Set(['id', 'source', 'title', 'pickTitle', 'accept', 'payload'])
@@ -293,14 +294,14 @@ function validateEffectivePaths(
     for (const token of claim.tokens) {
       if (node.claims.length > 0)
         ancestorConflict = true
-      let child = node.children.get(token)
+      let child = node[TRIE_CHILDREN_KEY].get(token)
       if (!child) {
         child = { children: new Map(), claims: [] }
-        node.children.set(token, child)
+        node[TRIE_CHILDREN_KEY].set(token, child)
       }
       node = child
     }
-    if (node.children.size > 0 && trieHasClaims(node))
+    if (node[TRIE_CHILDREN_KEY].size > 0 && trieHasClaims(node))
       ancestorConflict = true
     if (ancestorConflict) {
       diagnostics.push({
@@ -323,7 +324,7 @@ function validateEffectivePaths(
 function trieHasClaims(node: PathTrieNode): boolean {
   if (node.claims.length > 0)
     return true
-  for (const child of node.children.values()) {
+  for (const child of node[TRIE_CHILDREN_KEY].values()) {
     if (trieHasClaims(child))
       return true
   }

@@ -134,8 +134,8 @@ export class DataSourceAligner {
     const traverse = (elements: MaterialNode[]): void => {
       for (const element of elements) {
         // Direct binding
-        if (element.binding) {
-          const refs = getBindingRefs(element.binding)
+        if (element.bindings.value) {
+          const refs = getBindingRefs(element.bindings.value)
           for (const ref of refs) {
             bindings.push({ binding: ref, elementId: element.id })
           }
@@ -179,8 +179,8 @@ export class DataSourceAligner {
           }
         }
 
-        if (element.children) {
-          traverse(element.children)
+        if (element.slots.default) {
+          traverse(element.slots.default)
         }
       }
     }
@@ -314,8 +314,8 @@ export class DataSourceAligner {
 
     const traverse = (elements: MaterialNode[]): void => {
       for (const element of elements) {
-        if (element.binding) {
-          const refs = getBindingRefs(element.binding)
+        if (element.bindings.value) {
+          const refs = getBindingRefs(element.bindings.value)
           for (const ref of refs) {
             const match = this.findFuzzyMatch(ref.fieldPath, dsFieldPaths)
             if (match && match.confidence === 'high') {
@@ -360,8 +360,8 @@ export class DataSourceAligner {
           }
         }
 
-        if (element.children) {
-          traverse(element.children)
+        if (element.slots.default) {
+          traverse(element.slots.default)
         }
       }
     }

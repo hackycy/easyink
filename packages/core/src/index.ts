@@ -36,10 +36,10 @@ export {
   UpdateDocumentCommand,
   UpdateGeometryCommand,
   UpdateGuidesCommand,
-  UpdateMaterialBehaviorCommand,
   UpdateMaterialBindingCommand,
-  UpdateMaterialMetaCommand,
-  UpdateMaterialPropsCommand,
+  UpdateMaterialEditorStateCommand,
+  UpdateMaterialModelCommand,
+  UpdateMaterialOutputCommand,
   UpdatePageCommand,
   UpdateRenderConditionCommand,
 } from './commands'
