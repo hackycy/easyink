@@ -7,6 +7,7 @@ import type { ViewerDiagnosticEvent, ViewerRenderContext, ViewerRenderSize } fro
 import { createBrowserDomCapabilities, createBrowserDomHostMount, renderViewerTree } from '@easyink/browser-dom'
 import { groupPageLayerPlansByPlacement, inspectMaterialNode, PAGE_CONTENT_LAYER_STACK_INDEX, resolvePageLayerPlans, resolvePageLayerStackIndex, viewerElement, viewerText } from '@easyink/core'
 import { UNIT_FACTOR } from '@easyink/shared'
+import { safeSummarizeThrown } from './safe-thrown'
 
 export interface RenderSurfaceOptions {
   container: HTMLElement
@@ -27,7 +28,7 @@ export interface RenderSurfaceOptions {
 export interface PageDOM {
   pageIndex: number
   element: HTMLElement
-  dispose: () => void
+  dispose: (onError?: (error: unknown) => void) => void
 }
 
 const deniedRenderCapabilities: ViewerRenderContext['capabilities'] = Object.freeze({
@@ -94,32 +95,46 @@ export function renderPages(
       context.resolvedProps = resolved
 
       const nodeForRender: MaterialNode<unknown> = { ...node, model: resolved }
+      let capabilities: BrowserDomCapabilities | undefined
       try {
         const facetCapabilities = materials.getCapabilities(node.type)
-        const capabilities = createNodeCapabilities(document, facetCapabilities, hostImperativeDom, browserDom?.policy, browserDom?.maxNodes)
+        capabilities = createNodeCapabilities(document, facetCapabilities, hostImperativeDom, browserDom?.policy, browserDom?.maxNodes)
         context.capabilities = facetCapabilities?.sanitizedMarkup ? capabilities : deniedRenderCapabilities
-        const admitted = nodeStates.get(node.id)?.status !== 'quarantined'
+        const admitted = isNodeAdmitted(node, nodeStates)
+        if (!admitted) {
+          const sourceNodeId = readVirtualSourceNodeId(node)
+          if (sourceNodeId) {
+            diagnostics.push({
+              category: 'viewer',
+              severity: 'error',
+              code: 'MATERIAL_REPEAT_QUARANTINED',
+              message: `Repeated node "${sourceNodeId}" is quarantined on virtual node "${node.id}"`,
+              nodeId: node.id,
+              detail: { sourceNodeId, virtualNodeId: node.id },
+              scope: 'material',
+            })
+          }
+        }
         context.slotOutputs = admitted
           ? createSlotMountOutputs(nodeForRender, materials, context, capabilities, nodeStates, resolvedPropsMap, hostImperativeDom, browserDom, diagnostics)
           : undefined
         const output = materials.render(nodeForRender, context, admitted)
         const renderSize = admitted ? materials.getRenderSize(nodeForRender, context) : { width: node.width, height: node.height }
         const elWrapper = createElementWrapper(document, nodeForRender, page, unit, renderSize)
-        mounts.push(renderViewerTree(elWrapper, output.tree, {
+        const mount = renderViewerTree(elWrapper, output.tree, {
           document,
           capabilities,
           maxNodes: browserDom?.maxNodes,
-        }))
+        })
+        mounts.push(withCapabilityDisposal(mount, capabilities))
         contentLayer.appendChild(elWrapper)
       }
       catch (error) {
+        capabilities?.dispose()
         diagnostics.push(materialRenderDiagnostic(node, error))
         const fallbackWrapper = createElementWrapper(document, nodeForRender, page, unit, { width: node.width, height: node.height })
         fallbackWrapper.setAttribute('data-render-error', 'true')
-        mounts.push(renderViewerTree(fallbackWrapper, materialRenderFallbackTree(node), {
-          document,
-          capabilities: createBrowserDomCapabilities({ document }),
-        }))
+        mounts.push(renderMaterialFallback(fallbackWrapper, node, browserDom, diagnostics))
         contentLayer.appendChild(fallbackWrapper)
       }
     }
@@ -131,7 +146,7 @@ export function renderPages(
     pageDOMs.push({
       pageIndex: page.index,
       element: pageEl,
-      dispose: () => disposeMounts(mounts),
+      dispose: onError => disposeMounts(mounts, onError),
     })
   }
 
@@ -187,7 +202,7 @@ function mountSlotMaterial(
 ): ViewerTreeMount {
   const facetCapabilities = materials.getCapabilities(node.type)
   const capabilities = createNodeCapabilities(host.ownerDocument, facetCapabilities, hostImperativeDom, browserDom?.policy, browserDom?.maxNodes)
-  const admitted = nodeStates.get(node.id)?.status !== 'quarantined'
+  const admitted = isNodeAdmitted(node, nodeStates)
   const childContext: ViewerRenderContext = {
     ...parentContext,
     resolvedProps: resolvedPropsMap.get(node.id) ?? node.model as Record<string, unknown>,
@@ -202,20 +217,19 @@ function mountSlotMaterial(
     const output = materials.render(childForRender, childContext, admitted)
     if (admitted)
       materials.getRenderSize(childForRender, childContext)
-    return renderViewerTree(host, output.tree, {
+    const mount = renderViewerTree(host, output.tree, {
       document: host.ownerDocument,
       capabilities,
       maxNodes: browserDom?.maxNodes,
     })
+    return withCapabilityDisposal(mount, capabilities)
   }
   catch (error) {
+    capabilities.dispose()
     diagnostics.push(materialRenderDiagnostic(node, error))
     host.setAttribute('data-render-error', 'true')
     host.setAttribute('data-element-id', node.id)
-    return renderViewerTree(host, materialRenderFallbackTree(node), {
-      document: host.ownerDocument,
-      capabilities: createBrowserDomCapabilities({ document: host.ownerDocument }),
-    })
+    return renderMaterialFallback(host, node, browserDom, diagnostics)
   }
 }
 
@@ -234,33 +248,94 @@ function createNodeCapabilities(
   })
 }
 
-function disposeMounts(mounts: readonly ViewerTreeMount[]): void {
+function disposeMounts(mounts: readonly ViewerTreeMount[], onError?: (error: unknown) => void): void {
   let firstError: unknown
   for (let index = mounts.length - 1; index >= 0; index--) {
     try {
       mounts[index]!.dispose()
     }
     catch (error) {
+      onError?.(error)
       firstError ??= error
     }
   }
-  if (firstError)
+  if (firstError && !onError)
     throw firstError
 }
 
+function withCapabilityDisposal(mount: ViewerTreeMount, capabilities: BrowserDomCapabilities): ViewerTreeMount {
+  return Object.freeze({
+    nodes: mount.nodes,
+    dispose() {
+      try {
+        mount.dispose()
+      }
+      finally {
+        capabilities.dispose()
+      }
+    },
+  })
+}
+
+function renderMaterialFallback(
+  host: HTMLElement,
+  node: MaterialNode<unknown>,
+  browserDom: RenderSurfaceOptions['browserDom'],
+  diagnostics: ViewerDiagnosticEvent[],
+): ViewerTreeMount {
+  const capabilities = createBrowserDomCapabilities({
+    document: host.ownerDocument,
+    policy: browserDom?.policy,
+    maxNodes: browserDom?.maxNodes,
+  })
+  try {
+    const mount = renderViewerTree(host, materialRenderFallbackTree(node), {
+      document: host.ownerDocument,
+      capabilities,
+      maxNodes: browserDom?.maxNodes,
+    })
+    return withCapabilityDisposal(mount, capabilities)
+  }
+  catch (error) {
+    capabilities.dispose()
+    const thrown = safeSummarizeThrown(error)
+    diagnostics.push({
+      category: 'viewer',
+      severity: 'error',
+      code: 'MATERIAL_FALLBACK_BUDGET_EXHAUSTED',
+      message: `Fallback for node "${node.id}" could not be rendered: ${thrown.message}`,
+      nodeId: node.id,
+      scope: 'material',
+      cause: thrown.cause,
+    })
+    return Object.freeze({ nodes: Object.freeze([]), dispose() {} })
+  }
+}
+
 function materialRenderDiagnostic(node: MaterialNode<unknown>, error: unknown): ViewerDiagnosticEvent {
-  const message = error instanceof Error ? error.message : String(error)
+  const thrown = safeSummarizeThrown(error)
+  const sourceNodeId = readVirtualSourceNodeId(node)
   return {
     category: 'viewer',
     severity: 'error',
     code: 'MATERIAL_RENDER_ERROR',
-    message: `MATERIAL_RENDER_ERROR for node "${node.id}": ${message}`,
+    message: `MATERIAL_RENDER_ERROR for node "${node.id}": ${thrown.message}`,
     nodeId: node.id,
+    ...(sourceNodeId ? { detail: { sourceNodeId, virtualNodeId: node.id } } : {}),
     scope: 'material',
-    cause: error instanceof Error
-      ? { name: error.name, message: error.message, stack: error.stack }
-      : error,
+    cause: thrown.cause,
   }
+}
+
+function isNodeAdmitted(node: MaterialNode<unknown>, nodeStates: ReadonlyMap<string, MaterialNodeLoadState>): boolean {
+  const sourceNodeId = readVirtualSourceNodeId(node)
+  const state = nodeStates.get(sourceNodeId ?? node.id)
+  return sourceNodeId ? state?.status === 'ready' : state?.status !== 'quarantined'
+}
+
+function readVirtualSourceNodeId(node: MaterialNode<unknown>): string | undefined {
+  const value = (node as MaterialNode<unknown> & { sourceNodeId?: unknown }).sourceNodeId
+  return typeof value === 'string' ? value : undefined
 }
 
 function materialRenderFallbackTree(node: MaterialNode<unknown>) {

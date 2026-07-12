@@ -273,6 +273,64 @@ describe('renderViewerTree', () => {
     expect(dispose).toHaveBeenCalledOnce()
   })
 
+  it('consumes host-mount references globally before invoking callbacks', () => {
+    const capabilities = createBrowserDomCapabilities({ document })
+    let recursiveError: unknown
+    const tree = createBrowserDomHostMount(capabilities, () => {
+      try {
+        renderViewerTree(document.createElement('div'), tree, { capabilities })
+      }
+      catch (error) {
+        recursiveError = error
+      }
+      throw new Error('mount failed')
+    })
+
+    expect(() => renderViewerTree(document.createElement('div'), tree, { capabilities })).toThrowError('mount failed')
+    expect(recursiveError).toMatchObject({ message: 'VIEWER_HOST_MOUNT_REUSED' })
+    expect(() => renderViewerTree(document.createElement('div'), tree, { capabilities }))
+      .toThrowError('VIEWER_HOST_MOUNT_REUSED')
+  })
+
+  it('rejects consumed, cross-document, cross-store, and disposed-store host mounts', () => {
+    const capabilities = createBrowserDomCapabilities({ document })
+    const second = createBrowserDomCapabilities({ document })
+    const otherDocument = document.implementation.createHTMLDocument('other')
+    const tree = createBrowserDomHostMount(capabilities, host => renderViewerTree(host, viewerText('once')))
+    const mounted = renderViewerTree(document.createElement('div'), tree, { capabilities })
+    mounted.dispose()
+    expect(() => renderViewerTree(document.createElement('div'), tree, { capabilities }))
+      .toThrowError('VIEWER_HOST_MOUNT_REUSED')
+    expect(() => renderViewerTree(document.createElement('div'), tree, { capabilities: second }))
+      .toThrowError('VIEWER_HOST_MOUNT_INVALID')
+    expect(() => renderViewerTree(otherDocument.createElement('div'), tree, { capabilities, document: otherDocument }))
+      .toThrowError('VIEWER_CAPABILITIES_DOCUMENT_MISMATCH')
+
+    const fresh = createBrowserDomHostMount(second, host => renderViewerTree(host, viewerText('unused')))
+    second.dispose()
+    expect(() => renderViewerTree(document.createElement('div'), fresh, { capabilities: second }))
+      .toThrowError('VIEWER_CAPABILITIES_DISPOSED')
+    expect(() => createBrowserDomHostMount(second, () => ({ nodes: [], dispose() {} })))
+      .toThrowError('VIEWER_CAPABILITIES_DISPOSED')
+  })
+
+  it('snapshots capability policy and imperative options', () => {
+    const htmlTags = new Set(DEFAULT_VIEWER_TREE_POLICY.htmlTags)
+    const imperativeDom = new Set(['chart'])
+    const policy = { ...DEFAULT_VIEWER_TREE_POLICY, htmlTags }
+    const capabilities = createBrowserDomCapabilities({ document, policy, imperativeDom })
+    htmlTags.delete('div')
+    htmlTags.add('main')
+    imperativeDom.clear()
+
+    expect(() => renderViewerTree(document.createElement('div'), viewerElement('div'), { capabilities })).not.toThrow()
+    expect(() => renderViewerTree(document.createElement('div'), viewerElement('main'), { capabilities }))
+      .toThrowError('VIEWER_TREE_TAG_REJECTED')
+    expect(() => renderViewerTree(document.createElement('div'), viewerImperativeDom('chart', () => () => {}), { capabilities }))
+      .not
+      .toThrow()
+  })
+
   it('makes disposal idempotent, removes host nodes, and shares nested node budget', () => {
     const capabilities = createBrowserDomCapabilities({ document, imperativeDom: ['nested'] })
     const tree = viewerImperativeDom('nested', (host) => {
@@ -338,5 +396,83 @@ describe('renderViewerTree', () => {
     renderViewerTree(host, outer, { capabilities, maxNodes: 4 })
     expect(nestedFailure).toHaveBeenCalledWith(expect.objectContaining({ message: 'VIEWER_TREE_NODE_LIMIT_EXCEEDED' }))
     expect(host.textContent).toBe('after rollback')
+  })
+
+  it('shares aggregate node and text budgets across host-mount child renders', () => {
+    const policy = { ...DEFAULT_VIEWER_TREE_POLICY, maxTextBytes: 5 }
+    const owner = createBrowserDomCapabilities({ document, policy })
+    const child = createBrowserDomCapabilities({ document })
+    const first = createBrowserDomHostMount(owner, host => renderViewerTree(host, viewerText('abc'), { capabilities: child }))
+    const second = createBrowserDomHostMount(owner, host => renderViewerTree(host, viewerText('def'), { capabilities: child }))
+
+    expect(() => renderViewerTree(document.createElement('div'), viewerFragment([first, second]), { capabilities: owner, maxNodes: 5 }))
+      .toThrowError('VIEWER_TREE_TEXT_EXCEEDED')
+
+    const nodeOwner = createBrowserDomCapabilities({ document })
+    const nodeChild = createBrowserDomCapabilities({ document })
+    const nodeTrees = [
+      createBrowserDomHostMount(nodeOwner, host => renderViewerTree(host, viewerText('a'), { capabilities: nodeChild })),
+      createBrowserDomHostMount(nodeOwner, host => renderViewerTree(host, viewerText('b'), { capabilities: nodeChild })),
+    ]
+    expect(() => renderViewerTree(document.createElement('div'), viewerFragment(nodeTrees), { capabilities: nodeOwner, maxNodes: 4 }))
+      .toThrowError('VIEWER_TREE_NODE_LIMIT_EXCEEDED')
+  })
+
+  it('rolls back failed child budgets before rendering fallback and healthy siblings', () => {
+    const owner = createBrowserDomCapabilities({ document })
+    const child = createBrowserDomCapabilities({ document })
+    const failed = createBrowserDomHostMount(owner, (host) => {
+      try {
+        return renderViewerTree(host, viewerElement('div', {}, [viewerText('too many')]), { capabilities: child, maxNodes: 1 })
+      }
+      catch {
+        return renderViewerTree(host, viewerText('fallback'), { capabilities: child })
+      }
+    })
+    const healthy = createBrowserDomHostMount(owner, host => renderViewerTree(host, viewerText('healthy'), { capabilities: child }))
+    const host = document.createElement('div')
+    renderViewerTree(host, viewerFragment([failed, healthy]), { capabilities: owner, maxNodes: 5 })
+    expect(host.textContent).toBe('fallbackhealthy')
+  })
+
+  it('charges nested sanitized expansion to the shared host-mount budget', () => {
+    const owner = createBrowserDomCapabilities({ document })
+    const child = createBrowserDomCapabilities({ document })
+    const token = child.sanitizeMarkup({ format: 'svg', source: '<svg><g><path d="M0 0"/></g></svg>' })
+    const nested = createBrowserDomHostMount(owner, host => renderViewerTree(host, viewerSanitizedMarkup(token), { capabilities: child }))
+    expect(() => renderViewerTree(document.createElement('div'), nested, { capabilities: owner, maxNodes: 4 }))
+      .toThrowError('VIEWER_TREE_NODE_LIMIT_EXCEEDED')
+  })
+
+  it('bounds wide host-mount siblings by one aggregate node budget', () => {
+    const owner = createBrowserDomCapabilities({ document })
+    const child = createBrowserDomCapabilities({ document })
+    const callbacks = vi.fn()
+    const siblings = Array.from({ length: 40 }, (_, index) => createBrowserDomHostMount(owner, (host) => {
+      callbacks(index)
+      return renderViewerTree(host, viewerText(String(index)), { capabilities: child })
+    }))
+    const host = document.createElement('div')
+
+    expect(() => renderViewerTree(host, viewerFragment(siblings), { capabilities: owner, maxNodes: 30 }))
+      .toThrowError('VIEWER_TREE_NODE_LIMIT_EXCEEDED')
+    expect(callbacks.mock.calls.length).toBeLessThan(siblings.length)
+    expect(host.childNodes).toHaveLength(0)
+  })
+
+  it('rejects deep host-mount chains at logical depth before stack exhaustion', () => {
+    const policy = { ...DEFAULT_VIEWER_TREE_POLICY, maxDepth: 12 }
+    const capabilities = Array.from({ length: 40 }, () => createBrowserDomCapabilities({ document, policy }))
+    let tree = viewerText('leaf') as ReturnType<typeof viewerText> | ReturnType<typeof createBrowserDomHostMount>
+    for (let index = capabilities.length - 1; index >= 0; index--) {
+      const childTree = tree
+      const childCapabilities = capabilities[index + 1]
+      tree = createBrowserDomHostMount(capabilities[index]!, host => childCapabilities
+        ? renderViewerTree(host, childTree, { capabilities: childCapabilities })
+        : renderViewerTree(host, childTree))
+    }
+
+    expect(() => renderViewerTree(document.createElement('div'), tree, { capabilities: capabilities[0] }))
+      .toThrowError('VIEWER_TREE_DEPTH_EXCEEDED')
   })
 })

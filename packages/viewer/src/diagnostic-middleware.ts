@@ -1,5 +1,6 @@
 import type { ViewerRenderTree } from '@easyink/core'
 import type { ViewerDiagnosticEvent } from './types'
+import { safeSummarizeThrown } from './safe-thrown'
 
 export type DiagnosticScope = NonNullable<ViewerDiagnosticEvent['scope']>
 
@@ -17,19 +18,13 @@ export interface SafeCallOptions {
   onError?: (cause: unknown) => void
 }
 
-function serializeCause(err: unknown): unknown {
-  if (err instanceof Error) {
-    return { name: err.name, message: err.message, stack: err.stack }
-  }
-  return err
-}
-
 function buildDiagnostic(
   options: SafeRenderOptions | SafeCallOptions,
   err: unknown,
   severity: ViewerDiagnosticEvent['severity'],
   message: string,
 ): ViewerDiagnosticEvent {
+  const thrown = safeSummarizeThrown(err)
   const event: ViewerDiagnosticEvent = {
     category: options.scope === 'schema' || options.scope === 'datasource' || options.scope === 'condition'
       ? options.scope
@@ -43,7 +38,7 @@ function buildDiagnostic(
     message,
     nodeId: options.nodeId,
     scope: options.scope,
-    cause: serializeCause(err),
+    cause: thrown.cause,
   }
   return event
 }
@@ -61,9 +56,10 @@ export function safeRender<T>(
     return fn()
   }
   catch (err) {
+    const thrown = safeSummarizeThrown(err)
     const message = options.nodeId
-      ? `${options.code} for node "${options.nodeId}": ${err instanceof Error ? err.message : String(err)}`
-      : `${options.code}: ${err instanceof Error ? err.message : String(err)}`
+      ? `${options.code} for node "${options.nodeId}": ${thrown.message}`
+      : `${options.code}: ${thrown.message}`
 
     diagnostics.push(buildDiagnostic(options, err, 'error', message))
 
@@ -111,9 +107,10 @@ export async function safeCall(
     await fn()
   }
   catch (err) {
+    const thrown = safeSummarizeThrown(err)
     const message = options.nodeId
-      ? `${options.code} for node "${options.nodeId}": ${err instanceof Error ? err.message : String(err)}`
-      : `${options.code}: ${err instanceof Error ? err.message : String(err)}`
+      ? `${options.code} for node "${options.nodeId}": ${thrown.message}`
+      : `${options.code}: ${thrown.message}`
 
     diagnostics.push(buildDiagnostic(options, err, 'error', message))
     options.onError?.(err)

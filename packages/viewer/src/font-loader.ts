@@ -1,5 +1,6 @@
 import type { FontManager } from '@easyink/core'
 import type { ViewerDiagnosticEvent } from './types'
+import { safeSummarizeThrown } from './safe-thrown'
 
 export { collectFontFamilies } from '@easyink/core'
 
@@ -28,13 +29,14 @@ export async function loadAndInjectFonts(
       return
     const family = familyList[index]!
     const state = fontManager.getLoadState(family)
+    const thrown = safeSummarizeThrown(entry.reason)
     diagnostics.push({
       category: 'viewer',
       severity: 'warning',
       code: 'FONT_LOAD_FAILED',
-      message: `Failed to load font "${family}": ${state.message ?? (entry.reason instanceof Error ? entry.reason.message : String(entry.reason))}`,
+      message: `Failed to load font "${family}": ${state.message ?? thrown.message}`,
       scope: 'font',
-      cause: state.cause,
+      cause: state.cause === undefined ? thrown.cause : safeSummarizeThrown(state.cause).cause,
     })
   })
 

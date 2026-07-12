@@ -22,6 +22,7 @@ import {
   assertSafeSvgPresentationValue,
   DEFAULT_VIEWER_TREE_POLICY,
   readonlySet,
+  snapshotViewerTreePolicy,
   ViewerTreePolicyError,
 } from './policy'
 
@@ -61,13 +62,20 @@ interface CapabilityStore {
   readonly policy: ViewerTreePolicy
   readonly tokens: WeakMap<SanitizedMarkup, SanitizedSvgTree>
   readonly imperativeDom: ViewerTreeReadonlySet<string>
-  readonly hostMounts: WeakMap<ViewerHostMountReference, BrowserDomHostMount>
+  readonly hostMounts: WeakMap<ViewerHostMountReference, HostMountRecord>
+  disposed: boolean
+}
+
+interface HostMountRecord {
+  readonly mount: BrowserDomHostMount
+  state: 'fresh' | 'mounting' | 'consumed'
 }
 
 const capabilityStores = new WeakMap<BrowserDomCapabilities, CapabilityStore>()
 
 export interface BrowserDomCapabilities extends ViewerRenderCapabilities {
   readonly imperativeDom: ViewerTreeReadonlySet<string>
+  readonly dispose: () => void
 }
 
 export interface BrowserDomCapabilitiesOptions {
@@ -99,8 +107,24 @@ interface RenderState {
   policy: ViewerTreePolicy
   store: CapabilityStore
   textBytes: number
-  mountedHostRefs: WeakSet<ViewerHostMountReference>
+  baseDepth: number
+  shared: SharedRenderBudget
 }
+
+interface SharedRenderBudget {
+  remainingNodes: number
+  textBytes: number
+  readonly maxTextBytes: number
+  readonly maxDepth: number
+}
+
+interface ActiveHostRenderContext {
+  readonly document: Document
+  readonly shared: SharedRenderBudget
+  readonly depth: number
+}
+
+const activeHostRenderContexts = new WeakMap<HTMLElement, ActiveHostRenderContext>()
 
 export type BrowserDomHostMount = (host: HTMLElement) => ViewerTreeMount
 
@@ -112,7 +136,7 @@ interface RenderScope {
 }
 
 export function createBrowserDomCapabilities(options: BrowserDomCapabilitiesOptions): BrowserDomCapabilities {
-  const policy = options.policy ?? DEFAULT_VIEWER_TREE_POLICY
+  const policy = snapshotViewerTreePolicy(options.policy ?? DEFAULT_VIEWER_TREE_POLICY)
   assertPolicyLimits(policy)
   const maxNodes = options.maxNodes ?? VIEWER_TREE_ABSOLUTE_MAX_NODES
   assertNodeBudget(maxNodes)
@@ -120,7 +144,14 @@ export function createBrowserDomCapabilities(options: BrowserDomCapabilitiesOpti
   const imperativeDom = readonlySet(options.imperativeDom ?? [])
   const capabilities: BrowserDomCapabilities = Object.freeze({
     imperativeDom,
+    dispose() {
+      const store = capabilityStores.get(capabilities)
+      if (store)
+        store.disposed = true
+    },
     sanitizeMarkup(input: { format: 'svg', source: string }): SanitizedMarkup {
+      if (capabilityStores.get(capabilities)?.disposed)
+        throw new ViewerTreePolicyError('VIEWER_CAPABILITIES_DISPOSED')
       if (input.format !== 'svg')
         throw new ViewerTreePolicyError('SANITIZED_MARKUP_FORMAT_INVALID')
       const tree = sanitizeSvg(options.document, input.source, policy, maxNodes)
@@ -129,7 +160,7 @@ export function createBrowserDomCapabilities(options: BrowserDomCapabilitiesOpti
       return token
     },
   })
-  capabilityStores.set(capabilities, { document: options.document, policy, tokens, imperativeDom, hostMounts: new WeakMap() })
+  capabilityStores.set(capabilities, { document: options.document, policy, tokens, imperativeDom, hostMounts: new WeakMap(), disposed: false })
   return capabilities
 }
 
@@ -140,8 +171,10 @@ export function createBrowserDomHostMount(
   const store = capabilityStores.get(capabilities)
   if (!store)
     throw new ViewerTreePolicyError('VIEWER_CAPABILITIES_INVALID')
+  if (store.disposed)
+    throw new ViewerTreePolicyError('VIEWER_CAPABILITIES_DISPOSED')
   const reference = Object.freeze({}) as ViewerHostMountReference
-  store.hostMounts.set(reference, mount)
+  store.hostMounts.set(reference, { mount, state: 'fresh' })
   return Object.freeze({ kind: 'host-mount', reference })
 }
 
@@ -158,29 +191,49 @@ export function renderViewerTree(
   const store = capabilityStores.get(capabilities)
   if (!store)
     throw new ViewerTreePolicyError('VIEWER_CAPABILITIES_INVALID')
+  if (store.disposed)
+    throw new ViewerTreePolicyError('VIEWER_CAPABILITIES_DISPOSED')
   if (store.document !== document)
     throw new ViewerTreePolicyError('VIEWER_CAPABILITIES_DOCUMENT_MISMATCH')
-  const policy = options.policy ?? store.policy
+  const policy = options.policy ? snapshotViewerTreePolicy(options.policy) : store.policy
   assertPolicyLimits(policy)
   const maxNodes = options.maxNodes ?? VIEWER_TREE_ABSOLUTE_MAX_NODES
   assertViewerRenderTree(tree, { maxNodes })
+  const inherited = activeHostRenderContexts.get(host)
+  if (inherited && inherited.document !== document)
+    throw new ViewerTreePolicyError('VIEWER_HOST_MOUNT_DOCUMENT_MISMATCH')
+  const baseDepth = inherited?.depth ?? 0
+  const shared = inherited?.shared ?? {
+    remainingNodes: maxNodes,
+    textBytes: 0,
+    maxTextBytes: policy.maxTextBytes,
+    maxDepth: policy.maxDepth,
+  }
 
   const state: RenderState = {
     document,
     policy,
     store,
     textBytes: 0,
-    mountedHostRefs: new WeakSet(),
+    baseDepth,
+    shared,
   }
   const rootQuota: RenderQuota = { remaining: maxNodes }
   const staging = document.createDocumentFragment()
   const scope = createScope(staging)
+  const sharedSnapshot = snapshotSharedBudget(shared)
   try {
-    renderInto(staging, tree, state, scope, rootQuota, 0)
+    renderInto(staging, tree, state, scope, rootQuota, baseDepth)
     host.replaceChildren(...scope.nodes)
   }
   catch (error) {
-    disposeScope(scope)
+    try {
+      disposeScope(scope)
+    }
+    catch {
+      // Preserve the render failure after completing best-effort cleanup.
+    }
+    restoreSharedBudget(shared, sharedSnapshot)
     throw error
   }
   const nodes = Object.freeze([...scope.nodes])
@@ -241,6 +294,7 @@ function renderInto(
           const nestedScope = createScope(imperativeElement)
           const nestedQuota: RenderQuota = { remaining: effectiveMax, parent: quota }
           const quotaSnapshot = snapshotQuotaChain(quota)
+          const sharedSnapshot = snapshotSharedBudget(state.shared)
           const textBytesBefore = state.textBytes
           try {
             renderInto(imperativeElement, nestedTree, state, nestedScope, nestedQuota, depth + 1)
@@ -253,6 +307,7 @@ function renderInto(
               // Preserve the render failure after completing best-effort cleanup.
             }
             restoreQuotaChain(quotaSnapshot)
+            restoreSharedBudget(state.shared, sharedSnapshot)
             state.textBytes = textBytesBefore
             throw error
           }
@@ -265,15 +320,22 @@ function renderInto(
       break
     }
     case 'host-mount': {
-      const mount = state.store.hostMounts.get(tree.reference)
-      if (!mount)
+      const record = state.store.hostMounts.get(tree.reference)
+      if (!record)
         throw new ViewerTreePolicyError('VIEWER_HOST_MOUNT_INVALID')
-      if (state.mountedHostRefs.has(tree.reference))
+      if (record.state !== 'fresh')
         throw new ViewerTreePolicyError('VIEWER_HOST_MOUNT_REUSED')
-      state.mountedHostRefs.add(tree.reference)
+      record.state = 'mounting'
       const hostElement = state.document.createElement('div')
       append(parent, hostElement, scope)
-      scope.disposers.push(mount(hostElement).dispose)
+      activeHostRenderContexts.set(hostElement, { document: state.document, shared: state.shared, depth: depth + 1 })
+      try {
+        scope.disposers.push(record.mount(hostElement).dispose)
+      }
+      finally {
+        activeHostRenderContexts.delete(hostElement)
+        record.state = 'consumed'
+      }
       break
     }
   }
@@ -524,20 +586,36 @@ function isSvgPresentationAttribute(name: string): boolean {
 }
 
 function consumeNode(state: RenderState, quota: RenderQuota, depth: number): void {
-  if (depth > state.policy.maxDepth)
+  if (depth - state.baseDepth > state.policy.maxDepth || depth > state.shared.maxDepth)
     throw new ViewerTreePolicyError('VIEWER_TREE_DEPTH_EXCEEDED')
+  if (state.shared.remainingNodes < 1)
+    throw new ViewerTreePolicyError('VIEWER_TREE_NODE_LIMIT_EXCEEDED')
   for (let current: RenderQuota | undefined = quota; current; current = current.parent) {
     if (current.remaining < 1)
       throw new Error('VIEWER_TREE_NODE_LIMIT_EXCEEDED')
   }
   for (let current: RenderQuota | undefined = quota; current; current = current.parent)
     current.remaining--
+  state.shared.remainingNodes--
 }
 
 function consumeText(state: RenderState, value: string): void {
-  state.textBytes += new TextEncoder().encode(value).byteLength
+  const bytes = new TextEncoder().encode(value).byteLength
+  state.textBytes += bytes
+  state.shared.textBytes += bytes
   if (state.textBytes > state.policy.maxTextBytes)
     throw new ViewerTreePolicyError('VIEWER_TREE_TEXT_EXCEEDED')
+  if (state.shared.textBytes > state.shared.maxTextBytes)
+    throw new ViewerTreePolicyError('VIEWER_TREE_TEXT_EXCEEDED')
+}
+
+function snapshotSharedBudget(budget: SharedRenderBudget): readonly [number, number] {
+  return [budget.remainingNodes, budget.textBytes]
+}
+
+function restoreSharedBudget(budget: SharedRenderBudget, snapshot: readonly [number, number]): void {
+  budget.remainingNodes = snapshot[0]
+  budget.textBytes = snapshot[1]
 }
 
 function snapshotQuotaChain(quota: RenderQuota): Array<readonly [RenderQuota, number]> {

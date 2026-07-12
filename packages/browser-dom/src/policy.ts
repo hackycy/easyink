@@ -353,6 +353,20 @@ export function readonlySet<T>(values: Iterable<T>): ViewerTreeReadonlySet<T> {
   })
 }
 
+export function snapshotViewerTreePolicy(policy: ViewerTreePolicy): ViewerTreePolicy {
+  return Object.freeze({
+    htmlTags: readonlySet(policy.htmlTags),
+    svgTags: readonlySet(policy.svgTags),
+    globalAttributes: readonlySet(policy.globalAttributes),
+    urlAttributes: readonlySet(policy.urlAttributes),
+    cssProperties: readonlySet(policy.cssProperties),
+    maxDepth: policy.maxDepth,
+    maxAttributesPerElement: policy.maxAttributesPerElement,
+    maxTextBytes: policy.maxTextBytes,
+    allowUrl: policy.allowUrl,
+  })
+}
+
 function hasControlCharacter(value: string): boolean {
   return Array.from(value).some((character) => {
     const code = character.charCodeAt(0)

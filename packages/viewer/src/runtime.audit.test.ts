@@ -2,6 +2,7 @@ import type { MaterialManifest, MaterialViewerExtension, ViewerFacetCapabilities
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import type { ViewerRuntime } from './runtime'
 import type { ViewerDiagnosticEvent, ViewerOptions } from './types'
+import { DEFAULT_VIEWER_TREE_POLICY } from '@easyink/browser-dom'
 import { compileBuiltinMaterialProfile } from '@easyink/builtin'
 import { defineMaterialManifest, VIEWER_TREE_ABSOLUTE_MAX_NODES, viewerElement, viewerFragment, viewerImperativeDom, viewerSanitizedMarkup, viewerText } from '@easyink/core'
 import { createTestCompiledMaterialProfile, createTestMaterialManifest } from '@easyink/core/testing'
@@ -124,6 +125,33 @@ describe('viewer audit risk regressions', () => {
     expect(() => createViewer({ browserDom: { maxNodes: 1 } })).not.toThrow()
   })
 
+  it('snapshots browser DOM options when the viewer is created', async () => {
+    const container = document.createElement('div')
+    const imperativeDom = new Set(['chart'])
+    const htmlTags = new Set(['div'])
+    const policy = { ...DEFAULT_VIEWER_TREE_POLICY, htmlTags }
+    const extension: MaterialViewerExtension = {
+      render: () => ({ tree: viewerImperativeDom('chart', (host) => {
+        host.element.append(document.createTextNode('snapshot'))
+        return () => {}
+      }) }),
+    }
+    const viewer = createViewer({
+      container,
+      profile: createTestCompiledMaterialProfile([viewerManifest('snapshot', extension, 'none', { imperativeDom: ['chart'] })]),
+      browserDom: { imperativeDom, policy },
+    })
+    imperativeDom.clear()
+    htmlTags.clear()
+    htmlTags.add('script')
+
+    const node = textNode('snapshot-node')
+    node.type = 'snapshot'
+    await viewer.open({ schema: fixedSchema([node]) })
+    expect(container.textContent).toContain('snapshot')
+    await viewer.destroy()
+  })
+
   it('diagnoses unknown materials and renders an admission sentinel', async () => {
     const container = document.createElement('div')
     const diagnostics: ViewerDiagnosticEvent[] = []
@@ -184,6 +212,44 @@ describe('viewer audit risk regressions', () => {
     expect(disposed).toEqual(['second', 'first', 'second', 'first'])
   })
 
+  it('reports teardown failures during destroy and continues remaining disposers', async () => {
+    const container = document.createElement('div')
+    const diagnostics: ViewerDiagnosticEvent[] = []
+    const disposed: string[] = []
+    const facetDisposed = vi.fn()
+    const manifest = createTestMaterialManifest({
+      type: 'throw-dispose',
+      viewer: () => ({
+        capabilities: { imperativeDom: ['teardown'] },
+        extension: {
+          render: node => ({ tree: viewerImperativeDom('teardown', () => () => {
+            disposed.push(node.id)
+            throw Object.defineProperty({}, 'message', { value: `dispose ${node.id}` })
+          }) }),
+        },
+        dispose() {
+          facetDisposed()
+          throw Object.defineProperty({}, 'message', { value: 'facet dispose' })
+        },
+      }),
+    })
+    const nodes = [textNode('first-dispose'), textNode('second-dispose')]
+    nodes.forEach(node => node.type = 'throw-dispose')
+    const viewer = createViewer({
+      container,
+      profile: createTestCompiledMaterialProfile([manifest]),
+      browserDom: { imperativeDom: ['teardown'] },
+    })
+    await viewer.open({ schema: fixedSchema(nodes), onDiagnostic: diagnostic => diagnostics.push(diagnostic) })
+
+    await viewer.destroy()
+
+    expect(disposed).toEqual(['second-dispose', 'first-dispose'])
+    expect(facetDisposed).toHaveBeenCalledOnce()
+    expect(diagnostics.filter(item => item.code === 'MATERIAL_DISPOSE_ERROR')).toHaveLength(2)
+    expect(diagnostics.some(item => item.code === 'MATERIAL_FACET_DISPOSE_FAILED')).toBe(true)
+  })
+
   it('repeats legacy page-number nodes from manifest layout metadata', async () => {
     const container = document.createElement('div')
     const marker = (id: string, type: string, y: number): MaterialNode => ({
@@ -219,6 +285,35 @@ describe('viewer audit risk regressions', () => {
     expect(container.querySelectorAll('[data-element-type="legacy-marker"]')).toHaveLength(2)
     expect(container.querySelectorAll('[data-element-type="ordinary-marker"]')).toHaveLength(1)
 
+    await viewer.destroy()
+  })
+
+  it('keeps quarantined repeated nodes quarantined on every virtual page', async () => {
+    const container = document.createElement('div')
+    const diagnostics: ViewerDiagnosticEvent[] = []
+    const renderRepeated = vi.fn(() => ({ tree: viewerText('must not render') }))
+    const profile = createTestCompiledMaterialProfile([
+      viewerManifest('repeated-invalid', { render: renderRepeated }, 'every-output-page'),
+      viewerManifest('duplicate', { render: () => ({ tree: viewerText('duplicate') }) }),
+    ])
+    const repeated = textNode('duplicate-id')
+    repeated.type = 'repeated-invalid'
+    const duplicate = textNode('duplicate-id')
+    duplicate.type = 'duplicate'
+    duplicate.y = 70
+    const schema = fixedSchema([repeated, duplicate])
+    schema.page.pagination = { strategy: 'fixed-sheets', pageCount: 2 }
+    const viewer = createViewer({ container, profile })
+
+    await viewer.open({ schema, onDiagnostic: diagnostic => diagnostics.push(diagnostic) })
+
+    expect(renderRepeated).not.toHaveBeenCalled()
+    expect(container.querySelectorAll('[data-element-type="repeated-invalid"]')).toHaveLength(2)
+    expect(container.textContent).not.toContain('must not render')
+    expect(diagnostics.filter(item => item.code === 'MATERIAL_REPEAT_QUARANTINED')).toEqual([
+      expect.objectContaining({ nodeId: 'duplicate-id__p0', detail: { sourceNodeId: 'duplicate-id', virtualNodeId: 'duplicate-id__p0' } }),
+      expect.objectContaining({ nodeId: 'duplicate-id__p1', detail: { sourceNodeId: 'duplicate-id', virtualNodeId: 'duplicate-id__p1' } }),
+    ])
     await viewer.destroy()
   })
 
@@ -263,6 +358,47 @@ describe('viewer audit risk regressions', () => {
     expect(container.querySelectorAll('[data-render-error="true"]')).toHaveLength(badTypes.length)
     expect(diagnostics.filter(item => item.code === 'MATERIAL_RENDER_ERROR').map(item => item.nodeId).sort())
       .toEqual(badTypes.map(type => `${type}-node`).sort())
+  })
+
+  it('contains hostile thrown values per node without invoking traps or leaking originals', async () => {
+    const container = document.createElement('div')
+    const diagnostics: ViewerDiagnosticEvent[] = []
+    const throwingToString = {
+      toString() {
+        throw new Error('toString secret')
+      },
+    }
+    const getterMessage = Object.defineProperties({}, {
+      message: { get() { throw new Error('message getter secret') } },
+      stack: { get() { throw new Error('stack getter secret') } },
+    })
+    const proxy = new Proxy({}, {
+      getOwnPropertyDescriptor() {
+        throw new Error('proxy trap secret')
+      },
+    })
+    const thrownValues = [throwingToString, getterMessage, proxy]
+    const extensions = [
+      ...thrownValues.map((value, index) => viewerManifest(`hostile-${index}`, { render: () => { throw value } })),
+      viewerManifest('healthy-hostile-sibling', { render: () => ({ tree: viewerText('healthy after hostile throws') }) }),
+    ]
+    const nodes = extensions.map((manifest, index) => {
+      const node = textNode(`hostile-node-${index}`)
+      node.type = manifest.type
+      node.y = index * 8
+      return node
+    })
+    const viewer = createViewer({ container, profile: createTestCompiledMaterialProfile(extensions) })
+
+    await viewer.open({ schema: fixedSchema(nodes), onDiagnostic: diagnostic => diagnostics.push(diagnostic) })
+
+    expect(container.textContent).toContain('healthy after hostile throws')
+    const failures = diagnostics.filter(item => item.code === 'MATERIAL_RENDER_ERROR')
+    expect(failures).toHaveLength(thrownValues.length)
+    expect(failures.every(item => item.message.includes('Unknown thrown value'))).toBe(true)
+    expect(failures.every(item => !thrownValues.includes(item.cause as object))).toBe(true)
+    expect(JSON.stringify(failures)).not.toContain('secret')
+    await viewer.destroy()
   })
 
   it('renders and prints through an iframe host document', async () => {

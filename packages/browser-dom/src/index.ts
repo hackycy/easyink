@@ -1,5 +1,6 @@
 export {
   DEFAULT_VIEWER_TREE_POLICY,
+  snapshotViewerTreePolicy,
   ViewerTreePolicyError,
 } from './policy'
 export type { ViewerTreePolicy, ViewerTreeReadonlySet } from './policy'

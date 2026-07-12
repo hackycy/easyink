@@ -14,15 +14,17 @@ import type {
   ViewerRenderResult,
 } from './types'
 import type { ViewerHost } from './viewer-host'
+import { snapshotViewerTreePolicy } from '@easyink/browser-dom'
 import { createInternalHooks, FontManager, loadDocumentWithProfile, runLayoutPipeline, runPagination, VIEWER_TREE_ABSOLUTE_MAX_NODES, walkMaterialNodes } from '@easyink/core'
 import { deepClone, UNIT_FACTOR } from '@easyink/shared'
 import { applyBindingsToProps, projectBindings, walkProfileMaterialNodes } from './binding-projector'
 import { resolveConditionalSchema } from './conditional-schema'
 import { collectFontFamilies, loadAndInjectFonts } from './font-loader'
 import { ProfileMaterialRuntime } from './material-runtime'
-import { PrintPolicyError, resolvePrintPolicy } from './print-policy'
+import { resolvePrintPolicy } from './print-policy'
 import { runPrintWithIsolation } from './print-service'
 import { renderPages } from './render-surface'
+import { safeSummarizeThrown } from './safe-thrown'
 import { createThumbnails } from './thumbnail-pipeline'
 import { createBrowserViewerHost, createIframeViewerHost } from './viewer-host'
 
@@ -42,7 +44,7 @@ export class ViewerRuntime {
   private _renderedPageMetrics: ViewerPageMetrics[] = []
   private _destroyed = false
   private _emittingHookFailure = false
-  private _pageDisposers: Array<() => void> = []
+  private _pageDisposers: Array<(onError?: (error: unknown) => void) => void> = []
   private _operation = 0
 
   constructor(options: ViewerOptions) {
@@ -52,7 +54,12 @@ export class ViewerRuntime {
     const maxNodes = options.browserDom?.maxNodes ?? VIEWER_TREE_ABSOLUTE_MAX_NODES
     if (!Number.isInteger(maxNodes) || maxNodes < 1 || maxNodes > VIEWER_TREE_ABSOLUTE_MAX_NODES)
       throw new Error('VIEWER_MAX_NODES_INVALID')
-    this._options = { ...options, browserDom: { ...options.browserDom, maxNodes } }
+    const browserDom = Object.freeze({
+      maxNodes,
+      imperativeDom: Object.freeze([...(options.browserDom?.imperativeDom ?? [])]),
+      ...(options.browserDom?.policy ? { policy: snapshotViewerTreePolicy(options.browserDom.policy) } : {}),
+    })
+    this._options = Object.freeze({ ...options, browserDom })
     this._materials = new ProfileMaterialRuntime(options.profile)
     this._host = options.host
       ?? (options.iframe
@@ -128,13 +135,14 @@ export class ViewerRuntime {
       this._hooks.beforePagePlan.call({ schema: runtimeSchema, mode: runtimeSchema.page.mode })
     }
     catch (err) {
+      const thrown = safeSummarizeThrown(err)
       const diagnostic: ViewerDiagnosticEvent = {
         category: 'viewer',
         severity: 'error',
         code: 'BEFORE_PAGE_PLAN_HOOK_ERROR',
-        message: `beforePagePlan hook failed: ${err instanceof Error ? err.message : String(err)}`,
+        message: `beforePagePlan hook failed: ${thrown.message}`,
         scope: 'hook',
-        cause: serializeCause(err),
+        cause: thrown.cause,
       }
       diagnostics.push(diagnostic)
       this.emitDiagnostic(diagnostic)
@@ -331,18 +339,14 @@ export class ViewerRuntime {
     onDiagnostic?: (event: ViewerDiagnosticEvent) => void,
     code?: string,
   ): void {
-    const cause = err instanceof Error
-      ? { name: err.name, message: err.message, stack: err.stack }
-      : err
+    const thrown = safeSummarizeThrown(err)
     this.emitTaskDiagnostic({
       category: 'print',
       severity: 'error',
-      code: code ?? (err instanceof PrintPolicyError ? err.code : 'PRINT_ERROR'),
-      message: err instanceof PrintPolicyError
-        ? err.message
-        : `Print failed: ${err instanceof Error ? err.message : String(err)}`,
+      code: code ?? thrown.code ?? 'PRINT_ERROR',
+      message: `Print failed: ${thrown.message}`,
       scope: 'print',
-      cause,
+      cause: thrown.cause,
     }, onDiagnostic)
   }
 
@@ -362,13 +366,14 @@ export class ViewerRuntime {
 
     if (!exporter) {
       const err = new Error(`No exporter found for format: ${format || 'default'}`)
+      const thrown = safeSummarizeThrown(err)
       this.emitTaskDiagnostic({
         category: 'exporter',
         severity: 'error',
         code: 'NO_EXPORTER',
         message: err.message,
         scope: 'exporter',
-        cause: serializeCause(err),
+        cause: thrown.cause,
       }, options.onDiagnostic)
       if (options.throwOnError)
         throw err
@@ -410,7 +415,8 @@ export class ViewerRuntime {
       return
     this._destroyed = true
     ++this._operation
-    this.disposePageMounts([])
+    const diagnostics: ViewerDiagnosticEvent[] = []
+    this.disposePageMounts(diagnostics)
     const materialDisposal = this._materials.dispose()
     this._schema = undefined
     this._data = {}
@@ -419,7 +425,9 @@ export class ViewerRuntime {
     this._renderedPageMetrics = []
     this._fontManager.clear()
     this._host?.clear()
-    await materialDisposal
+    const facetDiagnostics = await materialDisposal
+    diagnostics.push(...facetDiagnostics.map(facetDiagnosticToViewer))
+    diagnostics.forEach(diagnostic => this.emitDiagnostic(diagnostic))
   }
 
   // ---------------------------------------------------------------------------
@@ -501,6 +509,8 @@ export class ViewerRuntime {
         const virtualNode = {
           ...deepClone(el),
           id: virtualId,
+          sourceNodeId: el.id,
+          sourceAdmissionStatus: this._nodeStates.get(el.id)?.status ?? 'missing',
           y: page.yOffset + resolveRepeatedElementLocalY(el, page.height),
         }
         page.elements.push(virtualNode)
@@ -540,14 +550,15 @@ export class ViewerRuntime {
         result = this.isNodeReady(node) ? this._materials.measure(nodeForMeasure, measureCtx) : null
       }
       catch (err) {
+        const thrown = safeSummarizeThrown(err)
         diagnostics.push({
           category: 'viewer',
           severity: 'warning',
           code: 'MATERIAL_MEASURE_ERROR',
-          message: `Material measure failed for ${node.id}: ${err instanceof Error ? err.message : String(err)}`,
+          message: `Material measure failed for ${node.id}: ${thrown.message}`,
           nodeId: node.id,
           scope: 'material',
-          cause: serializeCause(err),
+          cause: thrown.cause,
         })
         continue
       }
@@ -575,13 +586,14 @@ export class ViewerRuntime {
       diagnostics.push(...fontDiags)
     }
     catch (err) {
+      const thrown = safeSummarizeThrown(err)
       diagnostics.push({
         category: 'viewer',
         severity: 'warning',
         code: 'FONT_LOAD_ERROR',
-        message: `Font loading failed: ${err instanceof Error ? err.message : String(err)}`,
+        message: `Font loading failed: ${thrown.message}`,
         scope: 'font',
-        cause: serializeCause(err),
+        cause: thrown.cause,
       })
     }
   }
@@ -613,17 +625,15 @@ export class ViewerRuntime {
         resolvedMap.set(node.id, resolvedProps)
       }
       catch (err) {
-        const cause = err instanceof Error
-          ? { name: err.name, message: err.message, stack: err.stack }
-          : err
+        const thrown = safeSummarizeThrown(err)
         diagnostics.push({
           category: 'datasource',
           severity: 'warning',
           code: 'BINDING_RESOLVE_ERROR',
-          message: `Binding resolution failed for ${node.id}: ${err instanceof Error ? err.message : String(err)}`,
+          message: `Binding resolution failed for ${node.id}: ${thrown.message}`,
           nodeId: node.id,
           scope: 'datasource',
-          cause,
+          cause: thrown.cause,
         })
         resolvedMap.set(node.id, node.model)
       }
@@ -640,17 +650,10 @@ export class ViewerRuntime {
   private disposePageMounts(diagnostics: ViewerDiagnosticEvent[]): void {
     for (let index = this._pageDisposers.length - 1; index >= 0; index--) {
       try {
-        this._pageDisposers[index]!()
+        this._pageDisposers[index]!(error => diagnostics.push(disposeDiagnostic(error)))
       }
       catch (error) {
-        diagnostics.push({
-          category: 'viewer',
-          severity: 'warning',
-          code: 'MATERIAL_DISPOSE_ERROR',
-          message: error instanceof Error ? error.message : String(error),
-          scope: 'material',
-          cause: serializeCause(error),
-        })
+        diagnostics.push(disposeDiagnostic(error))
       }
     }
     this._pageDisposers = []
@@ -731,13 +734,14 @@ export class ViewerRuntime {
     err: unknown,
     onDiagnostic?: (event: ViewerDiagnosticEvent) => void,
   ): void {
+    const thrown = safeSummarizeThrown(err)
     this.emitTaskDiagnostic({
       category: 'exporter',
       severity: 'error',
       code: 'EXPORTER_ERROR',
-      message: `Exporter "${exporterId}" failed for format "${format || 'default'}": ${err instanceof Error ? err.message : String(err)}`,
+      message: `Exporter "${exporterId}" failed for format "${format || 'default'}": ${thrown.message}`,
       scope: 'exporter',
-      cause: serializeCause(err),
+      cause: thrown.cause,
     }, onDiagnostic)
   }
 
@@ -790,16 +794,22 @@ function resolveRepeatedElementLocalY(node: MaterialNode, pageHeight: number): n
   return localY < 0 ? localY + pageHeight : localY
 }
 
-function serializeCause(err: unknown): unknown {
-  if (err instanceof Error)
-    return { name: err.name, message: err.message, stack: err.stack }
-  return err
-}
-
 function collectMaterialTypes(schema: DocumentSchema, profile: ViewerOptions['profile']): string[] {
   const types: string[] = []
   walkMaterialNodes(schema, profile, node => types.push(node.type))
   return types
+}
+
+function disposeDiagnostic(error: unknown): ViewerDiagnosticEvent {
+  const thrown = safeSummarizeThrown(error)
+  return {
+    category: 'viewer',
+    severity: 'warning',
+    code: 'MATERIAL_DISPOSE_ERROR',
+    message: thrown.message,
+    scope: 'material',
+    cause: thrown.cause,
+  }
 }
 
 function loadDiagnosticToViewer(diagnostic: MaterialLoadDiagnostic): ViewerDiagnosticEvent {
