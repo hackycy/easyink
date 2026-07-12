@@ -1,4 +1,4 @@
-import { readTrustedViewerHtml } from '@easyink/core'
+import type { ViewerElementTree, ViewerTextTree } from '@easyink/core'
 import { describe, expect, it } from 'vitest'
 import { createTextNode, migrateTextModelV0ToV1 } from './schema'
 import { getTextRenderSize, measureText, renderText } from './viewer'
@@ -14,13 +14,12 @@ describe('renderText', () => {
       },
     })
 
-    const html = readTrustedViewerHtml(renderText(node).html!)
+    const tree = renderText(node).tree as ViewerElementTree
+    const span = tree.children[0] as ViewerElementTree
 
-    expect(html).toContain('writing-mode:vertical-rl')
-    expect(html).toContain('text-orientation:mixed')
-    expect(html).toContain('text-align:end')
-    expect(html).toContain('justify-content:flex-end')
-    expect(html).not.toContain('text-overflow:ellipsis')
+    expect(span.style).toMatchObject({ 'writing-mode': 'vertical-rl', 'text-orientation': 'mixed', 'text-align': 'end' })
+    expect(tree.style).toMatchObject({ 'justify-content': 'flex-end' })
+    expect(span.style).not.toHaveProperty('text-overflow')
   })
 
   it('treats legacy rich text content as escaped plain text', () => {
@@ -31,10 +30,9 @@ describe('renderText', () => {
       },
     })
 
-    const html = readTrustedViewerHtml(renderText(node).html!)
-
-    expect(html).toContain('&lt;b&gt;unsafe&lt;/b&gt;')
-    expect(html).not.toContain('<b>unsafe</b>')
+    const tree = renderText(node).tree as ViewerElementTree
+    const span = tree.children[0] as ViewerElementTree
+    expect((span.children[0] as ViewerTextTree).value).toBe('<b>unsafe</b>')
   })
 
   it('strips legacy autoWrap without changing the current wrap mode', () => {
@@ -73,10 +71,10 @@ describe('renderText', () => {
       },
     })
 
-    const html = readTrustedViewerHtml(renderText(node).html!)
+    const tree = renderText(node).tree as ViewerElementTree
     const renderSize = getTextRenderSize(node)
 
-    expect(html).toContain('overflow:visible')
+    expect(tree.style.overflow).toBe('visible')
     expect(renderSize.height).toBeGreaterThan(node.height)
   })
 

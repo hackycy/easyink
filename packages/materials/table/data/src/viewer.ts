@@ -1,36 +1,10 @@
-import type { FragmentPaginator, LayoutFragment } from '@easyink/core'
+import type { FragmentPaginator, LayoutFragment, ViewerMeasureContext, ViewerMeasureResult, ViewerRenderContext, ViewerRenderOutput } from '@easyink/core'
 import type { BindingRef, MaterialNode, TableCellSchema, TableRowSchema } from '@easyink/schema'
 import type { TableDataProps } from './schema'
-import { createFragmentFromNode, extractCollectionPath, formatBindingDisplayValue, resolveBindingValue, resolveFieldFromRecord, trustedViewerHtml } from '@easyink/core'
-import { computeAutoRowHeights, computeRowScaleWithVirtualRows, getTableMaterialModel, projectTableTopology, renderPlainTextCell, renderTableHtml, resolveTableBaseProps } from '@easyink/material-table-kernel'
+import { createFragmentFromNode, extractCollectionPath, formatBindingDisplayValue, resolveBindingValue, resolveFieldFromRecord, viewerElement, viewerText } from '@easyink/core'
+import { computeAutoRowHeights, computeRowScaleWithVirtualRows, getTableMaterialModel, projectTableTopology, renderTableTree, resolveTableBaseProps } from '@easyink/material-table-kernel'
 import { TABLE_DATA_PLACEHOLDER_ROW_COUNT } from './layout'
 import { TABLE_DATA_DEFAULTS } from './schema'
-
-interface ViewerRenderContext {
-  data: Record<string, unknown>
-  resolvedProps: Record<string, unknown>
-  pageIndex: number
-  unit: string
-  zoom: number
-  reportDiagnostic?: (diagnostic: { code: string, message: string, severity: 'warning', nodeId?: string, cause?: unknown }) => void
-}
-
-interface ViewerRenderOutput {
-  html?: ReturnType<typeof trustedViewerHtml>
-  element?: HTMLElement
-}
-
-interface ViewerMeasureContext {
-  data: Record<string, unknown>
-  unit: string
-  reportDiagnostic?: ViewerRenderContext['reportDiagnostic']
-}
-
-interface ViewerMeasureResult {
-  width: number
-  height: number
-  overflow?: boolean
-}
 
 /**
  * Filter rows to only include visible ones based on showHeader/showFooter settings.
@@ -171,7 +145,7 @@ export const tableDataFragmentPaginator: FragmentPaginator = {
 export function renderTableData(node: MaterialNode<unknown>, context?: ViewerRenderContext): ViewerRenderOutput {
   if (node.type !== 'table-data') {
     return {
-      html: trustedViewerHtml('<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#f9f9f9;color:#999;font-size:12px;">[Data Table]</div>'),
+      tree: viewerElement('div', { style: { 'width': '100%', 'height': '100%', 'display': 'flex', 'align-items': 'center', 'justify-content': 'center', 'background': '#f9f9f9', 'color': '#999', 'font-size': '12px' } }, [viewerText('[Data Table]')]),
     }
   }
 
@@ -192,24 +166,23 @@ export function renderTableData(node: MaterialNode<unknown>, context?: ViewerRen
     height: rowHeights[i] ?? row.height,
   }))
 
-  const html = renderTableHtml({
+  const tree = renderTableTree({
+    node,
     topology: { columns: projectTableTopology(node).topology.columns, rows: sizedRows },
     props,
     unit: context?.unit ?? 'mm',
     elementHeight: totalHeight,
-    cellRenderer: cell => renderPlainTextCell(cell.content?.text),
-    rowDecorator: (ri) => {
+    slotOutputs: context?.slotOutputs,
+    cellText: cell => cell.content?.text || '',
+    cellBackground: (ri) => {
       const row = sizedRows[ri]
       if (!row)
-        return {}
+        return undefined
       const modelRole = row.role === 'repeat-template' ? 'detail' : row.role === 'normal' ? 'body' : row.role
-      const bg = getTableMaterialModel(node).bands.find(band => band.role === modelRole)?.style?.background ?? ''
-      if (bg)
-        return { cellStyle: `;background:${bg}` }
-      return {}
+      return getTableMaterialModel(node).bands.find(band => band.role === modelRole)?.style?.background
     },
   })
-  return { html: trustedViewerHtml(html) }
+  return { tree }
 }
 
 /**

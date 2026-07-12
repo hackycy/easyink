@@ -3,8 +3,8 @@ import { FLOW_ROW_TYPE } from './schema'
 
 export const flowRowAIMaterialDescriptor = {
   type: FLOW_ROW_TYPE,
-  description: 'Receipt/detail row with mixed block and inline columns. Block columns take a full line; inline columns share a line by ratio, horizontal/vertical padding, and per-column alignment.',
-  properties: ['columns', 'gap', 'paddingX', 'paddingY', 'typography', 'backgroundColor', 'binding'],
+  description: 'Receipt/detail row with mixed block and inline columns. Block columns take a full line; inline columns share a line by ratio, axis insets, and per-column alignment.',
+  properties: ['columns', 'gap', 'paddingX', 'paddingY', 'typography', 'backgroundColor'],
   requiredProps: ['columns', 'gap', 'typography'],
   binding: 'multi',
   usage: [
@@ -14,7 +14,8 @@ export const flowRowAIMaterialDescriptor = {
   ],
   schemaRules: [
     'Element type must be flow-row.',
-    'props.columns must be a non-empty array of { ratio, textAlign, verticalAlign?, wrapMode, content?, binding? }.',
+    'model.columns must be a non-empty array of { id, ratio, textAlign, verticalAlign?, wrapMode, content?, bindingPort? }.',
+    'A column bindingPort references the same canonical key in bindings; use flow-port:* keys for generated column ports.',
     'Use model.paddingX and model.paddingY for horizontal and vertical cell content inset.',
     'Column binding ports may resolve absolute collection paths such as items/name; bindings.value may point to items.',
     'Do not encode header/footer/table topology in flow-row; use table-data for table semantics.',

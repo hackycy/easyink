@@ -17,8 +17,8 @@ export const chartGaugeAIMaterialDescriptor = {
   ],
   schemaRules: [
     'Element type must be chart-gauge.',
-    'Props contain visual settings such as minValue, maxValue, defaultName, defaultUnit, colors, and visibility toggles.',
-    'Chart data should be described by binding.kind = "data-contract" with a required value mapping and optional name, unit, and color mappings.',
+    'Model contains minValue, maxValue, defaultName, defaultUnit, colors, and visibility toggles.',
+    'Chart data uses the canonical bindings.value semantic port with required value and optional name, unit, and color mappings.',
   ],
   knowledge: {
     category: 'visualization',

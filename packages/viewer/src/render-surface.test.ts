@@ -1,6 +1,6 @@
 import type { PagePlanEntry } from '@easyink/core'
 import type { MaterialNode, PageSchema } from '@easyink/schema'
-import { trustedViewerHtml } from '@easyink/core'
+import { viewerElement, viewerText } from '@easyink/core'
 import { describe, expect, it } from 'vitest'
 import { MaterialRendererRegistry } from './material-registry'
 import { renderPages } from './render-surface'
@@ -16,7 +16,11 @@ describe('renderPages', () => {
       y: 10,
       width: 30,
       height: 20,
-      props: {},
+      modelVersion: 1,
+      model: {},
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     }
     const pages: PagePlanEntry[] = [{
       index: 0,
@@ -32,7 +36,7 @@ describe('renderPages', () => {
     }
 
     registry.register('custom', { kind: 'none' }, {
-      render: () => ({ html: trustedViewerHtml('<div>custom</div>') }),
+      render: () => ({ tree: viewerElement('div', {}, [viewerText('custom')]) }),
       getRenderSize: () => ({ height: 7 }),
     })
 
@@ -183,11 +187,15 @@ describe('renderPages', () => {
       y: 0,
       width: 10,
       height: 10,
-      props: {},
+      modelVersion: 1,
+      model: {},
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     }
 
     registry.register('custom', { kind: 'none' }, {
-      render: () => ({ html: trustedViewerHtml('<div>content</div>') }),
+      render: () => ({ tree: viewerElement('div', {}, [viewerText('content')]) }),
     })
 
     renderPages([{

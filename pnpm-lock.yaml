@@ -344,6 +344,9 @@ importers:
       '@easyink/builtin':
         specifier: workspace:*
         version: link:../../packages/builtin
+      '@easyink/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@easyink/viewer':
         specifier: workspace:*
         version: link:../../packages/viewer
@@ -1419,6 +1422,9 @@ importers:
 
   packages/viewer:
     dependencies:
+      '@easyink/browser-dom':
+        specifier: workspace:*
+        version: link:../browser-dom
       '@easyink/core':
         specifier: workspace:*
         version: link:../core
@@ -1446,6 +1452,9 @@ importers:
       '@easyink/builtin':
         specifier: workspace:*
         version: link:../packages/builtin
+      '@easyink/core':
+        specifier: workspace:*
+        version: link:../packages/core
       '@easyink/designer':
         specifier: workspace:*
         version: link:../packages/designer

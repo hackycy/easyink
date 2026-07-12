@@ -2,7 +2,7 @@ import type { MaterialNode } from '@easyink/schema'
 import { canonicalizeMaterialNode } from '@easyink/schema'
 import { convertUnit, generateId } from '@easyink/shared'
 
-export const SVG_CUSTOM_TYPE = 'svg'
+export const SVG_CUSTOM_TYPE = 'svg-custom'
 
 export interface SvgCustomProps {
   content: string

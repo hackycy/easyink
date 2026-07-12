@@ -43,7 +43,7 @@ describe('projectBindings', () => {
     }, data)
 
     expect(projected).toEqual([{
-      bindIndex: 0,
+      port: 'value',
       value: 'Ada / INV-001',
       diagnostics: [],
     }])

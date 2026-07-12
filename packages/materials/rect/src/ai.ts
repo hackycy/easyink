@@ -7,7 +7,7 @@ export const rectAIMaterialDescriptor = {
   requiredProps: ['fillColor', 'borderWidth', 'borderColor', 'borderType'],
   binding: 'none',
   usage: [
-    'Use fillColor and borderColor; do not use legacy fill or stroke props.',
+    'Use model.fillColor and model.borderColor.',
   ],
   knowledge: {
     category: 'decoration',

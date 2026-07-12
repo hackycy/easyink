@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@easyink/builtin": "workspace:*",
+    "@easyink/core": "workspace:*",
     "@easyink/viewer": "workspace:*"
   },
   "devDependencies": {

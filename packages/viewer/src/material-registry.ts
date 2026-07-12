@@ -1,8 +1,7 @@
 import type { MaterialBindingDefinition, MaterialConditionDefinition } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { FragmentPaginator, MaterialViewerExtension, ViewerMeasureContext, ViewerMeasureResult, ViewerRenderContext, ViewerRenderOutput, ViewerRenderSize } from './types'
-import { resolveMaterialConditionCapability, trustedViewerHtml } from '@easyink/core'
-import { escapeHtml } from '@easyink/shared'
+import { resolveMaterialConditionCapability, viewerElement, viewerText } from '@easyink/core'
 
 /**
  * Registry mapping material type strings to their viewer render extensions.
@@ -16,9 +15,6 @@ export class MaterialRendererRegistry {
   register(type: string, binding: MaterialBindingDefinition, extension: MaterialViewerExtension): void {
     this._renderers.set(type, extension)
     this._bindings.set(type, binding)
-    if (extension.pageAware) {
-      this._pageAwareTypes.add(type)
-    }
   }
 
   unregister(type: string): void {
@@ -86,8 +82,18 @@ export class MaterialRendererRegistry {
 }
 
 function renderUnknownMaterial(node: MaterialNode): ViewerRenderOutput {
-  const typeText = escapeHtml(node.type)
   return {
-    html: trustedViewerHtml(`<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#fff3f3;border:1px dashed #ff4d4f;color:#ff4d4f;font-size:12px;box-sizing:border-box;">[Unknown: ${typeText}]</div>`),
+    tree: viewerElement('div', { style: {
+      'width': '100%',
+      'height': '100%',
+      'display': 'flex',
+      'align-items': 'center',
+      'justify-content': 'center',
+      'background-color': '#fff3f3',
+      'border': '1px dashed #ff4d4f',
+      'color': '#ff4d4f',
+      'font-size': '12px',
+      'box-sizing': 'border-box',
+    } }, [viewerText(`[Unknown: ${node.type}]`)]),
   }
 }

@@ -1,6 +1,6 @@
 import type { AIMaterialDescriptor } from '@easyink/shared'
-import { createBuiltinDesignerMaterialBundle } from './designer'
+import { builtinAllMaterialPackage } from './index'
 
-const builtinDesignerMaterials = createBuiltinDesignerMaterialBundle('all').materials
-
-export const builtinAIMaterialDescriptors: AIMaterialDescriptor[] = builtinDesignerMaterials.map(material => material.aiDescriptor).filter((descriptor): descriptor is AIMaterialDescriptor => !!descriptor)
+export const builtinAIMaterialDescriptors = builtinAllMaterialPackage.manifests
+  .map(manifest => manifest.facets.ai?.descriptor)
+  .filter(descriptor => descriptor !== undefined) as unknown as AIMaterialDescriptor[]

@@ -1,6 +1,6 @@
 import type { MaterialNode } from '@easyink/schema'
 import type { RectProps } from './schema'
-import { trustedViewerHtml } from '@easyink/core'
+import { viewerElement } from '@easyink/core'
 import { getNodeModel } from '@easyink/schema'
 
 export function renderRect(node: MaterialNode, unit = 'mm') {
@@ -12,11 +12,13 @@ export function renderRect(node: MaterialNode, unit = 'mm') {
   const fc = props.fillColor || 'transparent'
 
   return {
-    html: trustedViewerHtml(`<div style="`
-      + `width:100%;height:100%;box-sizing:border-box;`
-      + `background:${fc};`
-      + `border:${bw}${unit} ${bt} ${bc};`
-      + `border-radius:${r}${unit}`
-      + `"></div>`),
+    tree: viewerElement('div', { style: {
+      'width': '100%',
+      'height': '100%',
+      'box-sizing': 'border-box',
+      'background': fc,
+      'border': `${bw}${unit} ${bt} ${bc}`,
+      'border-radius': `${r}${unit}`,
+    } }),
   }
 }

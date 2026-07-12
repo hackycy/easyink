@@ -1,10 +1,27 @@
-import { readTrustedViewerHtml } from '@easyink/core'
+import type { SanitizedMarkup, ViewerElementTree, ViewerRenderContext } from '@easyink/core'
 import { describe, expect, it } from 'vitest'
 import { svgCustomDesignerPropSchemas } from './prop-schemas'
 import { buildSvgCustomMarkup, isRemoteSvgSource } from './rendering'
 import { sanitizeSvgContent } from './sanitize'
 import { createSvgCustomNode } from './schema'
 import { renderSvgCustom } from './viewer'
+
+function renderSanitizedSource(node: ReturnType<typeof createSvgCustomNode>): string {
+  let source = ''
+  const context = {
+    data: {},
+    resolvedProps: {},
+    pageIndex: 0,
+    unit: 'mm',
+    zoom: 1,
+    capabilities: { sanitizeMarkup(input: { format: 'svg', source: string }) {
+      source = input.source
+      return {} as SanitizedMarkup
+    } },
+  } satisfies ViewerRenderContext
+  expect(renderSvgCustom(node, context).tree.kind).toBe('sanitized-markup')
+  return source
+}
 
 describe('sanitizeSvgContent', () => {
   it('removes script elements and event handler attributes', () => {
@@ -41,7 +58,7 @@ describe('renderSvgCustom', () => {
       },
     })
 
-    const output = readTrustedViewerHtml(renderSvgCustom(node).html!)
+    const output = renderSanitizedSource(node)
 
     expect(output).toContain('preserveAspectRatio="none"')
   })
@@ -53,7 +70,7 @@ describe('renderSvgCustom', () => {
       },
     })
 
-    const output = readTrustedViewerHtml(renderSvgCustom(node).html!)
+    const output = renderSanitizedSource(node)
 
     expect(output).toContain('viewBox="0 0 24 16"')
     expect(output).toContain('fill="none"')
@@ -73,7 +90,7 @@ describe('renderSvgCustom', () => {
       },
     })
 
-    const output = readTrustedViewerHtml(renderSvgCustom(node).html!)
+    const output = renderSanitizedSource(node)
 
     expect(output).toContain('viewBox="0 0 24 16"')
     expect(output).toContain('fill="none"')
@@ -97,7 +114,7 @@ describe('renderSvgCustom', () => {
       },
     })
 
-    const output = readTrustedViewerHtml(renderSvgCustom(node).html!)
+    const output = renderSanitizedSource(node)
 
     expect(output).toContain('viewBox="0 0 12 12"')
     expect(output).toContain('preserveAspectRatio="xMidYMid slice"')
@@ -114,7 +131,7 @@ describe('renderSvgCustom', () => {
       },
     })
 
-    const output = readTrustedViewerHtml(renderSvgCustom(node).html!)
+    const output = renderSanitizedSource(node)
 
     expect(output).toContain('viewBox="0 0 24 16"')
     expect(output).toContain('preserveAspectRatio="xMidYMid slice"')
@@ -127,7 +144,7 @@ describe('renderSvgCustom', () => {
       },
     })
 
-    const output = readTrustedViewerHtml(renderSvgCustom(node).html!)
+    const output = renderSanitizedSource(node)
 
     expect(output).toContain('preserveAspectRatio="xMidYMid meet"')
   })
@@ -139,7 +156,7 @@ describe('renderSvgCustom', () => {
       },
     })
 
-    const output = readTrustedViewerHtml(renderSvgCustom(node).html!)
+    const output = renderSanitizedSource(node)
 
     expect(output).toContain('<circle')
     expect(output).not.toContain('onmouseover')
@@ -155,12 +172,21 @@ describe('renderSvgCustom', () => {
       },
     })
 
-    const output = readTrustedViewerHtml(renderSvgCustom(node).html!)
+    const context = {
+      data: {},
+      resolvedProps: {},
+      pageIndex: 0,
+      unit: 'mm',
+      zoom: 1,
+      capabilities: { sanitizeMarkup: () => {
+        throw new Error('unexpected sanitizer')
+      } },
+    } satisfies ViewerRenderContext
+    const output = renderSvgCustom(node, context).tree as ViewerElementTree
 
-    expect(output).toContain('<img')
-    expect(output).toContain('src="https://cdn.example.com/logo.svg?version=1&amp;theme=&lt;dark&gt;"')
-    expect(output).toContain('object-fit:fill')
-    expect(output).not.toContain('<svg viewBox=')
+    expect(output.tag).toBe('img')
+    expect(output.attributes.src).toBe('https://cdn.example.com/logo.svg?version=1&theme=<dark>')
+    expect(output.style['object-fit']).toBe('fill')
   })
 
   it('keeps bound svg text on the sanitized inline svg path', () => {

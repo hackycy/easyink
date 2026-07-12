@@ -577,7 +577,7 @@ export class ViewerRuntime {
   private resolveAllBindings(diagnostics: ViewerDiagnosticEvent[], schema: DocumentSchema): Map<string, Record<string, unknown>> {
     const resolvedMap = new Map<string, Record<string, unknown>>()
     traverseNodes(schema, (node) => {
-      if (!node.bindings.value) {
+      if (Object.keys(node.bindings).length === 0) {
         resolvedMap.set(node.id, node.model)
         return
       }

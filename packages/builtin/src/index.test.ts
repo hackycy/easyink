@@ -1,54 +1,37 @@
 import { describe, expect, it } from 'vitest'
 import {
-  builtinAllDesignerMaterialBundle,
-  builtinAllDesignerMaterials,
-  builtinAllViewerMaterialBundle,
-  builtinAllViewerMaterials,
-  builtinBasicDesignerMaterialBundle,
-  builtinBasicViewerMaterialBundle,
-  builtinDesignerMaterialBundle,
-  builtinDesignerMaterials,
-  builtinDesignerMaterialSets,
-  builtinNoneDesignerMaterialBundle,
-  builtinNoneViewerMaterialBundle,
-  builtinViewerMaterialBundle,
-  builtinViewerMaterials,
-  builtinViewerMaterialSets,
-  registerAllBuiltinViewerMaterials,
-  registerBasicBuiltinViewerMaterials,
-  registerNoneBuiltinViewerMaterials,
+  builtinAllMaterialPackage,
+  builtinBasicMaterialPackage,
+  builtinNoneMaterialPackage,
+  compileBuiltinMaterialProfile,
 } from './index'
 
-describe('builtin root entry', () => {
-  it('exposes all material bundle aliases equivalent to the all set', () => {
-    expect(builtinDesignerMaterialBundle).toBe(builtinDesignerMaterialSets.all)
-    expect(builtinDesignerMaterials).toBe(builtinDesignerMaterialSets.all.materials)
-    expect(builtinViewerMaterialBundle).toBe(builtinViewerMaterialSets.all)
-    expect(builtinViewerMaterials).toBe(builtinViewerMaterialSets.all.materials)
-    expect(builtinAllDesignerMaterialBundle).toBe(builtinDesignerMaterialSets.all)
-    expect(builtinAllDesignerMaterials).toBe(builtinDesignerMaterialSets.all.materials)
-    expect(builtinAllViewerMaterialBundle).toBe(builtinViewerMaterialSets.all)
-    expect(builtinAllViewerMaterials).toBe(builtinViewerMaterialSets.all.materials)
+describe('builtin material packages', () => {
+  it('uses one manifest object per type across all surfaces', () => {
+    const all = builtinAllMaterialPackage.manifests
+    expect(new Set(all.map(manifest => manifest.type)).size).toBe(all.length)
+    expect(all.every(manifest => manifest.facets.viewer)).toBe(true)
+    expect(all
+      .filter(manifest => manifest.facets.ai?.generation.enabled)
+      .every(manifest => manifest.facets.designer))
+      .toBe(true)
   })
 
-  it('exposes basic and none material bundles from the root entry', () => {
-    expect(builtinBasicDesignerMaterialBundle).toBe(builtinDesignerMaterialSets.basic)
-    expect(builtinBasicViewerMaterialBundle).toBe(builtinViewerMaterialSets.basic)
-    expect(builtinNoneDesignerMaterialBundle).toBe(builtinDesignerMaterialSets.none)
-    expect(builtinNoneViewerMaterialBundle).toBe(builtinViewerMaterialSets.none)
+  it('compiles basic, all, and none through the same package boundary', () => {
+    expect(compileBuiltinMaterialProfile('basic').materialTypes)
+      .toEqual([...builtinBasicMaterialPackage.manifests.map(item => item.type)].sort())
+    expect(compileBuiltinMaterialProfile('all').materialTypes)
+      .toEqual([...builtinAllMaterialPackage.manifests.map(item => item.type)].sort())
+    expect(compileBuiltinMaterialProfile('none').materialTypes).toEqual([])
+    expect(builtinNoneMaterialPackage.manifests).toEqual([])
   })
 
-  it('registers all, basic, and none viewer materials without subpath imports', () => {
-    const allTypes: string[] = []
-    const basicTypes: string[] = []
-    const noneTypes: string[] = []
-
-    registerAllBuiltinViewerMaterials(type => allTypes.push(type))
-    registerBasicBuiltinViewerMaterials(type => basicTypes.push(type))
-    registerNoneBuiltinViewerMaterials(type => noneTypes.push(type))
-
-    expect(allTypes).toEqual(builtinViewerMaterialSets.all.materials.map(material => material.type))
-    expect(basicTypes).toEqual(builtinViewerMaterialSets.basic.materials.map(material => material.type))
-    expect(noneTypes).toEqual([])
+  it('creates every default node from the manifest model', () => {
+    const profile = compileBuiltinMaterialProfile('all')
+    for (const manifest of builtinAllMaterialPackage.manifests) {
+      const node = profile.createNode(manifest.type)
+      expect(node.model, manifest.type).toEqual(manifest.common.defaultNode.model)
+      expect(node.modelVersion, manifest.type).toBe(1)
+    }
   })
 })

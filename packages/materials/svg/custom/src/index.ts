@@ -1,6 +1,7 @@
 export * from './ai'
 export * from './designer'
 export * from './locale'
+export * from './manifest'
 export * from './prop-schemas'
 export * from './rendering'
 export * from './sanitize'

@@ -1,9 +1,10 @@
-import type { PageLayerRenderPlan, PageLayerRenderPlanBuckets, PagePlanEntry, TextWatermarkPageLayerPlan, TrustedViewerHtml } from '@easyink/core'
+import type { PageLayerRenderPlan, PageLayerRenderPlanBuckets, PagePlanEntry, TextWatermarkPageLayerPlan } from '@easyink/core'
 import type { MaterialNode, PageBackground, PageSchema } from '@easyink/schema'
 import type { MaterialRendererRegistry } from './material-registry'
 import type { ViewerDiagnosticEvent, ViewerRenderContext, ViewerRenderSize } from './types'
-import { groupPageLayerPlansByPlacement, PAGE_CONTENT_LAYER_STACK_INDEX, readTrustedViewerHtml, resolvePageLayerPlans, resolvePageLayerStackIndex, trustedViewerHtml } from '@easyink/core'
-import { escapeHtml, UNIT_FACTOR } from '@easyink/shared'
+import { createBrowserDomCapabilities, renderViewerTree } from '@easyink/browser-dom'
+import { groupPageLayerPlansByPlacement, PAGE_CONTENT_LAYER_STACK_INDEX, resolvePageLayerPlans, resolvePageLayerStackIndex, viewerElement, viewerText } from '@easyink/core'
+import { UNIT_FACTOR } from '@easyink/shared'
 import { isErrorSentinel, safeRender } from './diagnostic-middleware'
 
 export interface RenderSurfaceOptions {
@@ -38,6 +39,7 @@ export function renderPages(
 
   const pageDOMs: PageDOM[] = []
   const pageLayerBucketsBySize = new Map<string, PageLayerRenderPlanBuckets>()
+  const capabilities = createBrowserDomCapabilities({ document })
 
   for (const page of pages) {
     const { wrapper, pageEl } = createPageElement(document, page, pageSchema, unit, zoom)
@@ -53,6 +55,7 @@ export function renderPages(
       pageIndex: page.index,
       unit,
       zoom,
+      capabilities,
       reportDiagnostic: diagnostic => diagnostics.push({
         category: 'datasource',
         severity: diagnostic.severity,
@@ -76,7 +79,18 @@ export function renderPages(
 
       // Render through the material registry, wrapped by unified diagnostic middleware.
       const nodeForRender: MaterialNode = { ...node, model: resolved }
-      const fallbackHtml = trustedViewerHtml(`<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#fff3f3;border:1px dashed #ff4d4f;color:#ff4d4f;font-size:11px;box-sizing:border-box;" title="Render failed">&#x26A0; [${escapeHtml(node.type)}]</div>`)
+      const fallbackTree = viewerElement('div', { attributes: { title: 'Render failed' }, style: {
+        'width': '100%',
+        'height': '100%',
+        'display': 'flex',
+        'align-items': 'center',
+        'justify-content': 'center',
+        'background-color': '#fff3f3',
+        'border': '1px dashed #ff4d4f',
+        'color': '#ff4d4f',
+        'font-size': '11px',
+        'box-sizing': 'border-box',
+      } }, [viewerText(`[${node.type}]`)])
 
       const safeResult = safeRender(
         () => registry.render(nodeForRender, context),
@@ -84,14 +98,14 @@ export function renderPages(
           scope: 'material',
           code: 'MATERIAL_RENDER_ERROR',
           nodeId: node.id,
-          placeholderHtml: fallbackHtml,
+          placeholderTree: fallbackTree,
         },
         diagnostics,
       )
 
       let output
       if (isErrorSentinel(safeResult)) {
-        output = { html: safeResult.html }
+        output = { tree: safeResult.tree }
       }
       else {
         output = safeResult
@@ -99,12 +113,7 @@ export function renderPages(
 
       const renderSize = registry.getRenderSize(nodeForRender, context)
       const elWrapper = createElementWrapper(document, nodeForRender, page, unit, renderSize)
-      if (output.element) {
-        elWrapper.appendChild(output.element)
-      }
-      else if (output.html) {
-        setMaterialHtml(elWrapper, output.html)
-      }
+      renderViewerTree(elWrapper, output.tree, { document, capabilities })
 
       contentLayer.appendChild(elWrapper)
     }
@@ -381,10 +390,4 @@ function getPxFactorForLayout(unit: string): number {
 
 function createPageSizeKey(width: number, height: number): string {
   return `${width}:${height}`
-}
-
-function setMaterialHtml(element: HTMLElement, html: TrustedViewerHtml): void {
-  const template = element.ownerDocument.createElement('template')
-  template.innerHTML = readTrustedViewerHtml(html)
-  element.replaceChildren(template.content.cloneNode(true))
 }

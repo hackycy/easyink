@@ -11,21 +11,15 @@ export function projectBindings(
   node: MaterialNode,
   data: Record<string, unknown>,
 ): ProjectedBinding[] {
-  const refs = getBindingRefs(node.bindings.value)
-  if (refs.length === 0)
-    return []
   const results: ProjectedBinding[] = []
-
-  for (const ref of refs) {
-    const value = resolveBindingValue(ref, data)
-    const formatted = hasBindingFormat(ref.format)
-      ? formatBindingDisplayValue(value, ref, { data })
-      : { value, diagnostics: [] }
-    results.push({
-      bindIndex: ref.bindIndex ?? 0,
-      value: formatted.value,
-      diagnostics: formatted.diagnostics,
-    })
+  for (const [port, binding] of Object.entries(node.bindings)) {
+    for (const ref of getBindingRefs(binding)) {
+      const value = resolveBindingValue(ref, data)
+      const formatted = hasBindingFormat(ref.format)
+        ? formatBindingDisplayValue(value, ref, { data })
+        : { value, diagnostics: [] }
+      results.push({ port, value: formatted.value, diagnostics: formatted.diagnostics })
+    }
   }
 
   return results
@@ -43,7 +37,7 @@ export function applyBindingsToProps(
 ): Record<string, unknown> {
   if (projected.length === 0)
     return props
-  if (bindingDefinition?.kind !== 'ordinary')
+  if (bindingDefinition?.kind !== 'ports')
     return props
 
   const result = { ...props }
@@ -52,14 +46,24 @@ export function applyBindingsToProps(
     if (binding.value === undefined)
       continue
 
-    const propKey = binding.bindIndex === 0
-      ? bindingDefinition.primaryProp
-      : bindingDefinition.indexedProps?.[binding.bindIndex]
-
-    if (propKey) {
-      result[propKey] = binding.value
-    }
+    const policy = bindingDefinition.ports.find(item => item.key.kind === 'exact' && item.key.value === binding.port)
+    if (policy?.role === 'display' && policy.modelPath)
+      writeModelPath(result, policy.modelPath, binding.value)
   }
 
   return result
+}
+
+function writeModelPath(model: Record<string, unknown>, path: `/${string}`, value: unknown): void {
+  const tokens = path.split('/').slice(2).map(token => token.replaceAll('~1', '/').replaceAll('~0', '~'))
+  if (tokens.length === 0)
+    return
+  let target = model
+  for (const token of tokens.slice(0, -1)) {
+    const current = target[token]
+    if (!current || typeof current !== 'object' || Array.isArray(current))
+      return
+    target = current as Record<string, unknown>
+  }
+  target[tokens.at(-1)!] = value
 }

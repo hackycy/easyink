@@ -8,7 +8,7 @@ export const lineAIMaterialDescriptor = {
   binding: 'none',
   usage: [
     'Use for receipt separators, section rules, and simple borders.',
-    'Do not use legacy stroke, strokeWidth, x1, y1, x2, or y2 props.',
+    'Use only the current model.lineColor and model.lineType fields.',
   ],
   knowledge: {
     category: 'decoration',

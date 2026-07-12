@@ -17,8 +17,8 @@ export const chartRadarAIMaterialDescriptor = {
   ],
   schemaRules: [
     'Element type must be chart-radar.',
-    'Props contain visual settings such as colors, maxValue, and simple display switches.',
-    'Chart data should be described by binding.kind = "data-contract" with mappings for category and value.',
+    'Model contains visual settings such as colors, maxValue, and simple display switches.',
+    'Chart data uses the canonical bindings.value semantic port with category and value mappings.',
   ],
   knowledge: {
     category: 'visualization',

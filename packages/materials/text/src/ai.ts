@@ -7,10 +7,10 @@ export const textAIMaterialDescriptor = {
   requiredProps: ['content', 'fontSize', 'textAlign', 'verticalAlign', 'color'],
   binding: 'single',
   usage: [
-    'Use props.content for static text and placeholders such as {#fieldLabel}.',
+    'Use model.content for static text and placeholders such as {#fieldLabel}.',
     'Use binding for dynamic scalar fields; keep fieldPath slash-separated.',
-    'Use props.heightMode="auto" when long or bound text should grow vertically and participate in stack flow layout.',
-    'Use props.wrapMode for wrapping behavior: "wrap" for word wrapping, "anywhere" for long codes/CJK-heavy labels, and "nowrap" for single-line text.',
+    'Use model.heightMode="auto" when long or bound text should grow vertically and participate in stack flow layout.',
+    'Use model.wrapMode for wrapping behavior: "wrap" for word wrapping, "anywhere" for long codes/CJK-heavy labels, and "nowrap" for single-line text.',
   ],
   knowledge: {
     category: 'typography',

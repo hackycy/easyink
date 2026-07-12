@@ -1,3 +1,4 @@
+import type { SanitizedMarkup, ViewerElementTree, ViewerSanitizedMarkupTree } from '@easyink/core'
 import { describe, expect, it } from 'vitest'
 import { createChartCustomNode } from './schema'
 import { renderChartCustom } from './viewer'
@@ -11,14 +12,20 @@ describe('chart custom viewer', () => {
         backgroundColor: '',
       },
     })
+    let source = ''
     const output = renderChartCustom(node, {
       data: {},
       resolvedProps: node.model,
       pageIndex: 0,
       unit: 'mm',
       zoom: 1,
+      capabilities: { sanitizeMarkup(input) {
+        source = input.source
+        return {} as SanitizedMarkup
+      } },
     })
 
-    expect(output.html?.value).toContain('<svg')
+    expect(source).toContain('<svg')
+    expect(((output.tree as ViewerElementTree).children[0] as ViewerSanitizedMarkupTree).kind).toBe('sanitized-markup')
   })
 })

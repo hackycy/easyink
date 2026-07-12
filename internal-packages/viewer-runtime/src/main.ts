@@ -1,5 +1,6 @@
+import type { MaterialViewerFacet } from '@easyink/core'
 import type { DocumentSchema, DocumentSchemaInput, ViewerDiagnosticEvent } from '@easyink/viewer'
-import { registerBuiltinViewerMaterials } from '@easyink/builtin/all'
+import { builtinMaterialPackage } from '@easyink/builtin/all'
 import { createViewer, normalizeDocumentSchema } from '@easyink/viewer'
 import './style.css'
 
@@ -29,9 +30,10 @@ async function boot(): Promise<void> {
 
     const schema = normalizeRuntimeSchema(payload.schema)
     const viewer = createViewer({ container: root })
-    registerBuiltinViewerMaterials((type, binding, extension) => {
-      viewer.registerMaterial(type, binding, extension)
-    })
+    for (const manifest of builtinMaterialPackage.manifests) {
+      const facet = await manifest.facets.viewer!({ profileId: 'render-runtime', materialType: manifest.type, surface: 'viewer', services: {} }) as MaterialViewerFacet
+      viewer.registerMaterial(manifest.type, manifest.common.binding, facet.extension)
+    }
     await viewer.open({
       schema,
       data: isRecord(payload.data) ? payload.data : {},

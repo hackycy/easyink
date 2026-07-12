@@ -1,7 +1,7 @@
 import type { AIMaterialDescriptor } from '@easyink/shared'
 
 export const svgCustomAIMaterialDescriptor = {
-  type: 'svg',
+  type: 'svg-custom',
   description: 'Custom SVG material that accepts a complete pasted <svg>, sanitized SVG child markup, or a bound remote SVG URL.',
   properties: ['content'],
   requiredProps: ['content'],

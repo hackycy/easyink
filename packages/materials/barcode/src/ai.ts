@@ -2,7 +2,7 @@ import type { AIMaterialDescriptor } from '@easyink/shared'
 
 export const barcodeAIMaterialDescriptor = {
   type: 'barcode',
-  description: 'Barcode generated from props.value or a bound code field.',
+  description: 'Barcode generated from model.value or the canonical bindings.value port.',
   properties: ['value', 'format', 'showText', 'lineWidth', 'lineColor', 'backgroundColor', 'borderWidth', 'borderColor', 'borderType'],
   requiredProps: ['value', 'format', 'showText', 'lineWidth', 'lineColor', 'backgroundColor'],
   binding: 'single',

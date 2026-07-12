@@ -174,7 +174,7 @@ export interface PrintDriver {
 // ---------------------------------------------------------------------------
 
 export interface ProjectedBinding {
-  bindIndex: number
+  port: string
   value: unknown
   diagnostics?: BindingFormatDiagnostic[]
 }

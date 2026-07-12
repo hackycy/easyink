@@ -17,8 +17,8 @@ export const chartScatterAIMaterialDescriptor = {
   ],
   schemaRules: [
     'Element type must be chart-scatter.',
-    'Props contain visual settings such as colors, point size, and simple display switches.',
-    'Chart data should be described by binding.kind = "data-contract" with mappings for x and y, plus optional label and color mappings.',
+    'Model contains visual settings such as colors, point size, and simple display switches.',
+    'Chart data uses the canonical bindings.value semantic port with x, y, and optional label and color mappings.',
   ],
   knowledge: {
     category: 'visualization',

@@ -2,7 +2,7 @@ import type { AIMaterialDescriptor } from '@easyink/shared'
 
 export const qrcodeAIMaterialDescriptor = {
   type: 'qrcode',
-  description: 'QR code generated from props.value or a bound text/URL field.',
+  description: 'QR code generated from model.value or the canonical bindings.value port.',
   properties: ['value', 'size', 'errorCorrectionLevel', 'foreground', 'background', 'borderWidth', 'borderColor', 'borderType'],
   requiredProps: ['value', 'size', 'errorCorrectionLevel', 'foreground', 'background'],
   binding: 'single',

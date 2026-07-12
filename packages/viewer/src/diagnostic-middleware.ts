@@ -1,4 +1,4 @@
-import type { TrustedViewerHtml } from '@easyink/core'
+import type { ViewerRenderTree } from '@easyink/core'
 import type { ViewerDiagnosticEvent } from './types'
 
 export type DiagnosticScope = NonNullable<ViewerDiagnosticEvent['scope']>
@@ -7,7 +7,7 @@ export interface SafeRenderOptions {
   scope: DiagnosticScope
   code: string
   nodeId?: string
-  placeholderHtml: TrustedViewerHtml
+  placeholderTree: ViewerRenderTree
 }
 
 export interface SafeCallOptions {
@@ -67,8 +67,8 @@ export function safeRender<T>(
 
     diagnostics.push(buildDiagnostic(options, err, 'error', message))
 
-    if ('placeholderHtml' in options && options.placeholderHtml) {
-      return buildErrorSentinel(options.placeholderHtml)
+    if ('placeholderTree' in options && options.placeholderTree) {
+      return buildErrorSentinel(options.placeholderTree)
     }
     throw err
   }
@@ -82,11 +82,11 @@ export function safeRender<T>(
  */
 export interface ErrorSentinel {
   __errorSentinel: true
-  html: TrustedViewerHtml
+  tree: ViewerRenderTree
 }
 
-function buildErrorSentinel(html: TrustedViewerHtml): ErrorSentinel {
-  return { __errorSentinel: true, html }
+function buildErrorSentinel(tree: ViewerRenderTree): ErrorSentinel {
+  return { __errorSentinel: true, tree }
 }
 
 /** Returns true if the value was produced by safeRender as an error fallback. */

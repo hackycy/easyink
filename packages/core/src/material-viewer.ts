@@ -25,6 +25,8 @@ export interface ViewerRenderContext {
   unit: string
   zoom: number
   capabilities: ViewerRenderCapabilities
+  /** Host-rendered slot output keyed by the manifest slot key. */
+  slotOutputs?: Readonly<Record<string, readonly ViewerRenderTree[]>>
   reportDiagnostic?: (diagnostic: BindingFormatDiagnostic & { nodeId?: string }) => void
 }
 

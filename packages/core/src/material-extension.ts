@@ -333,4 +333,14 @@ export interface PropertyDescriptorLike {
   accessor?: PropertyAccessor
 }
 
+/** Framework-neutral Designer facet activated from a material manifest. */
+export interface MaterialDesignerFacet {
+  extension: MaterialDesignerExtension
+  catalog: { group: string, order: number }
+  localeMessages?: {
+    messages?: Record<string, unknown>
+    locales?: Record<string, Record<string, unknown>>
+  }
+}
+
 // (Old deep editing FSM protocol removed — replaced by Chapter 22 Editing Behavior Architecture)

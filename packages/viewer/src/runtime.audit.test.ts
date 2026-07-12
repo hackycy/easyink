@@ -281,11 +281,7 @@ describe('viewer audit risk regressions', () => {
       modelVersion: 1,
       model: {},
       slots: {},
-      bindings: { value: [
-        { sourceId: 'product', fieldPath: 'value', bindIndex: 0 },
-        { sourceId: 'product', fieldPath: 'format', bindIndex: 1 },
-        { sourceId: 'product', fieldPath: 'params', bindIndex: 2 },
-      ] },
+      bindings: { value: { sourceId: 'product', fieldPath: 'value' } },
       output: { visibility: 'include' },
     }
 
@@ -295,15 +291,11 @@ describe('viewer audit risk regressions', () => {
       params: { width: 2 },
     })
     const props = applyBindingsToProps(node.model, projected, {
-      kind: 'ordinary',
-      primaryProp: 'value',
-      indexedProps: { 1: 'format', 2: 'params' },
-      formatEditor: { tabs: ['preset', 'custom'], defaultTab: 'preset' },
+      kind: 'ports',
+      ports: [{ id: 'value', key: { kind: 'exact', value: 'value' }, role: 'display', valueShape: 'scalar', modelPath: '/model/value', formatEditor: { tabs: ['preset'] } }],
     })
 
     expect(props.value).toBe(123456)
-    expect(props.format).toBe('CODE128')
-    expect(props.params).toEqual({ width: 2 })
   })
 
   it('returns one thumbnail entry per rendered page', async () => {

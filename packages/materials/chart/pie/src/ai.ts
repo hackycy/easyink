@@ -20,8 +20,8 @@ export const chartPieAIMaterialDescriptor = {
   ],
   schemaRules: [
     'Element type must be chart-pie.',
-    'Props contain visual settings such as palettePreset, labels, legend display, inner radius, slice gap angle, and slice corner radius.',
-    'Chart data should be described by binding.kind = "data-contract" with mappings for category and value, and optional color.',
+    'Model contains palettePreset, labels, legend display, inner radius, slice gap angle, and slice corner radius.',
+    'Chart data uses the canonical bindings.value semantic port with category, value, and optional color mappings.',
   ],
   knowledge: {
     category: 'visualization',

@@ -13,6 +13,7 @@
     "@easyink/assistant-plugin-prototype-designer": "workspace:*",
     "@easyink/assistant-plugin-receipt-designer": "workspace:*",
     "@easyink/builtin": "workspace:*",
+    "@easyink/core": "workspace:*",
     "@easyink/designer": "workspace:*",
     "@easyink/export-plugin-dom-image": "workspace:*",
     "@easyink/export-plugin-dom-pdf": "workspace:*",

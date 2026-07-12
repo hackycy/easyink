@@ -1,7 +1,7 @@
 import type { MaterialNode } from '@easyink/schema'
 import type { TextHeightMode, TextProps, TextWrapMode } from './schema'
 import { getNodeModel } from '@easyink/schema'
-import { TEXT_DEFAULTS } from './schema'
+import { normalizeTextModelV1 } from './schema-adapter'
 
 export interface ResolvedTextProps extends Omit<TextProps, 'minHeight' | 'maxHeight'> {
   heightMode: TextHeightMode
@@ -25,25 +25,11 @@ export function getTextProps(node: MaterialNode): ResolvedTextProps {
 }
 
 export function resolveTextProps(raw: Partial<TextProps> = {}): ResolvedTextProps {
-  const wrapMode = raw.wrapMode === 'wrap' || raw.wrapMode === 'nowrap' || raw.wrapMode === 'anywhere'
-    ? raw.wrapMode
-    : TEXT_DEFAULTS.wrapMode
-
+  const normalized = normalizeTextModelV1(raw as Record<string, unknown>)
   return {
-    ...TEXT_DEFAULTS,
-    ...raw,
-    writingMode: raw.writingMode === 'vertical' ? 'vertical' : 'horizontal',
-    heightMode: raw.heightMode === 'auto' ? 'auto' : 'fixed',
-    textAlign: raw.textAlign === 'left' || raw.textAlign === 'right' ? raw.textAlign : 'center',
-    verticalAlign: raw.verticalAlign === 'top' || raw.verticalAlign === 'bottom' ? raw.verticalAlign : 'middle',
-    wrapMode,
-    overflow: raw.overflow === 'visible' || raw.overflow === 'ellipsis' ? raw.overflow : 'hidden',
-    minHeight: Math.max(0, toFiniteNumber(raw.minHeight, 0)),
-    maxHeight: Math.max(0, toFiniteNumber(raw.maxHeight, 0)),
-    fontSize: Math.max(0.1, toFiniteNumber(raw.fontSize, TEXT_DEFAULTS.fontSize)),
-    lineHeight: Math.max(0.1, toFiniteNumber(raw.lineHeight, TEXT_DEFAULTS.lineHeight)),
-    letterSpacing: toFiniteNumber(raw.letterSpacing, TEXT_DEFAULTS.letterSpacing),
-    borderWidth: Math.max(0, toFiniteNumber(raw.borderWidth, TEXT_DEFAULTS.borderWidth)),
+    ...normalized,
+    minHeight: normalized.minHeight ?? 0,
+    maxHeight: normalized.maxHeight ?? 0,
   }
 }
 
@@ -166,8 +152,4 @@ function estimateVerticalInlineSize(text: string, props: ResolvedTextProps): num
 
 function splitTextLines(text: string): string[] {
   return String(text || ' ').split(/\r?\n/)
-}
-
-function toFiniteNumber(value: unknown, fallback: number): number {
-  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
 }

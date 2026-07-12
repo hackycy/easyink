@@ -8,11 +8,11 @@ export const tableStaticAIMaterialDescriptor = {
   binding: 'multi',
   usage: [
     'Use table-static only when row count is fixed and not driven by an array.',
-    'Cells use content.text for static labels or staticBinding for independent scalar fields.',
+    'Cells use direct model band row content and canonical cell:* bindings or slots.',
   ],
   schemaRules: [
-    'Element must include table.kind = static.',
-    'Element must include table.topology.columns and table.topology.rows.',
+    'Model.kind must be static.',
+    'Model must include direct columns, bands, merges, and style fields.',
   ],
   knowledge: {
     category: 'data',

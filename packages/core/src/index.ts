@@ -192,6 +192,7 @@ export type {
   MaterialControlState,
   MaterialControlStateKind,
   MaterialDesignerExtension,
+  MaterialDesignerFacet,
   MaterialDesignerRenderContext,
   MaterialDesignerRenderContextSignal,
   MaterialDesignerRenderPageContext,
@@ -358,8 +359,10 @@ export type {
   SchemaAdapterStage,
   SchemaMigration,
 } from './schema-adapter'
-
 export { isInteractable, isSelectable, SelectionModel } from './selection'
+export { defineStandardMaterialManifest } from './standard-material-manifest'
+
+export type { StandardMaterialManifestInput } from './standard-material-manifest'
 export { UnitManager } from './unit'
 
 export {

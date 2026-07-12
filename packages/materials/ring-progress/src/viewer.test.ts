@@ -1,28 +1,17 @@
-import { readTrustedViewerHtml } from '@easyink/core'
+import type { ViewerElementTree, ViewerTextTree } from '@easyink/core'
 import { describe, expect, it } from 'vitest'
 import { createRingProgressNode } from './schema'
 import { renderRingProgress } from './viewer'
 
 describe('renderRingProgress', () => {
-  it('renders the preset value and default suffix when unbound', () => {
-    const node = createRingProgressNode({ model: { value: 72 } })
-    const html = readTrustedViewerHtml(renderRingProgress(node).html!)
-
-    expect(html).toContain('>72%</text>')
-    expect(html).toContain('stroke="#2f80ed"')
+  it('renders clamped text in a semantic SVG tree', () => {
+    const tree = renderRingProgress(createRingProgressNode({ model: { value: 128 } })).tree as ViewerElementTree
+    const text = tree.children.find(child => child.kind === 'element' && child.tag === 'text') as ViewerElementTree
+    expect((text.children[0] as ViewerTextTree).value).toBe('100%')
   })
 
-  it('clamps projected values into a 0-100 progress range', () => {
-    const node = createRingProgressNode({ model: { value: '128.5' } as never })
-    const html = readTrustedViewerHtml(renderRingProgress(node).html!)
-
-    expect(html).toContain('>100%</text>')
-  })
-
-  it('can hide the progress text', () => {
-    const node = createRingProgressNode({ model: { value: 45, showText: false } })
-    const html = readTrustedViewerHtml(renderRingProgress(node).html!)
-
-    expect(html).not.toContain('<text')
+  it('omits text when disabled', () => {
+    const tree = renderRingProgress(createRingProgressNode({ model: { showText: false } })).tree as ViewerElementTree
+    expect(tree.children.every(child => child.kind !== 'element' || child.tag !== 'text')).toBe(true)
   })
 })

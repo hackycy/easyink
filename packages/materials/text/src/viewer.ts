@@ -1,30 +1,48 @@
 import type { ViewerMeasureContext, ViewerRenderContext, ViewerRenderSize } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
-import { trustedViewerHtml } from '@easyink/core'
-import { escapeHtml } from '@easyink/shared'
+import { viewerElement, viewerText } from '@easyink/core'
 import { getTextDisplayValue, getTextProps, isTextAutoHeight, measureTextNode } from './layout'
-import { getTextContainerStyles, getTextContentStyles } from './rendering'
 
 export function renderText(node: MaterialNode, contextOrData?: ViewerRenderContext | Record<string, unknown>, unit = 'mm') {
   const props = getTextProps(node)
   const context = isViewerRenderContext(contextOrData) ? contextOrData : undefined
   const resolvedUnit = context?.unit ?? unit
-  const prefix = props.prefix ? escapeHtml(props.prefix) : ''
-  const suffix = props.suffix ? escapeHtml(props.suffix) : ''
   const raw = props.content == null ? '' : String(props.content)
-  const displayText = escapeHtml(raw)
-  const display = `${prefix}${displayText}${suffix}`
-
-  const outerStyle = [
-    ...getTextContainerStyles(props, resolvedUnit),
-  ].filter(Boolean).join(';')
-
-  const innerStyle = [
-    ...getTextContentStyles(props, resolvedUnit),
-  ].filter(Boolean).join(';')
+  const display = `${props.prefix || ''}${raw}${props.suffix || ''}`
+  const vertical = props.writingMode === 'vertical'
+  const effectiveOverflow = vertical && props.overflow === 'ellipsis' ? 'hidden' : props.overflow
+  const overflow = effectiveOverflow === 'visible' ? 'visible' : 'hidden'
+  const align = vertical
+    ? ({ top: 'flex-end', middle: 'center', bottom: 'flex-start' } as const)[props.verticalAlign]
+    : ({ top: 'flex-start', middle: 'center', bottom: 'flex-end' } as const)[props.verticalAlign]
+  const whiteSpace = effectiveOverflow === 'ellipsis' || props.wrapMode === 'nowrap' ? 'pre' : 'pre-wrap'
 
   return {
-    html: trustedViewerHtml(`<div style="${outerStyle}"><span style="${innerStyle}">${display || '&nbsp;'}</span></div>`),
+    tree: viewerElement('div', { style: {
+      'width': '100%',
+      'height': '100%',
+      'display': 'flex',
+      'box-sizing': 'border-box',
+      overflow,
+      ...(vertical ? { 'justify-content': align } : { 'align-items': align }),
+      ...(props.backgroundColor ? { background: props.backgroundColor } : {}),
+      ...(props.borderWidth ? { border: `${props.borderWidth}${resolvedUnit} ${props.borderType} ${props.borderColor}` } : {}),
+    } }, [viewerElement('span', { style: {
+      'display': 'block',
+      ...(vertical ? { 'height': '100%', 'writing-mode': 'vertical-rl', 'text-orientation': 'mixed' } : { 'width': '100%', 'min-width': '0' }),
+      'text-align': vertical ? ({ left: 'start', center: 'center', right: 'end' } as const)[props.textAlign] : props.textAlign,
+      'font-size': `${props.fontSize}${resolvedUnit}`,
+      ...(props.fontFamily ? { 'font-family': props.fontFamily } : {}),
+      'font-weight': props.fontWeight,
+      'font-style': props.fontStyle,
+      'color': props.color,
+      'line-height': props.lineHeight,
+      ...(props.letterSpacing ? { 'letter-spacing': `${props.letterSpacing}${resolvedUnit}` } : {}),
+      'white-space': whiteSpace,
+      'word-break': props.wrapMode === 'anywhere' ? 'break-word' : 'normal',
+      'overflow-wrap': props.wrapMode === 'anywhere' ? 'anywhere' : 'normal',
+      ...(effectiveOverflow === 'ellipsis' ? { 'overflow': 'hidden', 'text-overflow': 'ellipsis' } : { overflow }),
+    } }, [viewerText(display || '\u00A0')])]),
   }
 }
 
