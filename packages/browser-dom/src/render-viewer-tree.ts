@@ -74,6 +74,7 @@ export interface BrowserDomCapabilitiesOptions {
   document: Document
   policy?: ViewerTreePolicy
   imperativeDom?: Iterable<string>
+  maxNodes?: number
 }
 
 export interface RenderViewerTreeOptions {
@@ -113,6 +114,8 @@ interface RenderScope {
 export function createBrowserDomCapabilities(options: BrowserDomCapabilitiesOptions): BrowserDomCapabilities {
   const policy = options.policy ?? DEFAULT_VIEWER_TREE_POLICY
   assertPolicyLimits(policy)
+  const maxNodes = options.maxNodes ?? VIEWER_TREE_ABSOLUTE_MAX_NODES
+  assertNodeBudget(maxNodes)
   const tokens = new WeakMap<SanitizedMarkup, SanitizedSvgTree>()
   const imperativeDom = readonlySet(options.imperativeDom ?? [])
   const capabilities: BrowserDomCapabilities = Object.freeze({
@@ -120,7 +123,7 @@ export function createBrowserDomCapabilities(options: BrowserDomCapabilitiesOpti
     sanitizeMarkup(input: { format: 'svg', source: string }): SanitizedMarkup {
       if (input.format !== 'svg')
         throw new ViewerTreePolicyError('SANITIZED_MARKUP_FORMAT_INVALID')
-      const tree = sanitizeSvg(options.document, input.source, policy)
+      const tree = sanitizeSvg(options.document, input.source, policy, maxNodes)
       const token = Object.freeze({}) as SanitizedMarkup
       tokens.set(token, tree)
       return token
@@ -333,7 +336,7 @@ interface SanitizeCounters {
   attributeBytes: number
 }
 
-function sanitizeSvg(document: Document, source: string, policy: ViewerTreePolicy): SanitizedSvgTree {
+function sanitizeSvg(document: Document, source: string, policy: ViewerTreePolicy, maxNodes: number): SanitizedSvgTree {
   const encoder = new TextEncoder()
   if (source.length > SANITIZED_MARKUP_MAX_SOURCE_BYTES
     || encoder.encode(source).byteLength > SANITIZED_MARKUP_MAX_SOURCE_BYTES) {
@@ -342,39 +345,66 @@ function sanitizeSvg(document: Document, source: string, policy: ViewerTreePolic
   if (/<!doctype|<!entity/i.test(source))
     throw new ViewerTreePolicyError('SANITIZED_MARKUP_SVG_INVALID')
   const Parser = document.defaultView?.DOMParser ?? DOMParser
-  const preparedSource = /<style[\s>]/i.test(source)
-    ? removeForbiddenSvgElements(document, source, Parser)
+  const hasForbiddenElements = /<style[\s>]/i.test(source)
+  const preparedSource = hasForbiddenElements
+    ? removeForbiddenSvgElements(document, source, Parser, maxNodes)
     : source
   const parsed = new Parser().parseFromString(preparedSource, 'image/svg+xml')
-  assertParsedDocumentNodeBudget(parsed)
+  assertParsedDocumentNodeBudget(parsed, maxNodes, hasForbiddenElements ? 'post-strip' : 'original')
   if (parsed.querySelector('parsererror') || parsed.documentElement.localName !== 'svg')
     throw new ViewerTreePolicyError('SANITIZED_MARKUP_SVG_INVALID')
   const counters: SanitizeCounters = { nodes: 0, textBytes: 0, attributeBytes: 0 }
-  return sanitizeSvgElement(parsed.documentElement, policy, document.baseURI || undefined, 0, counters)
+  return sanitizeSvgElement(parsed.documentElement, policy, document.baseURI || undefined, 0, counters, maxNodes)
 }
 
 function removeForbiddenSvgElements(
   document: Document,
   source: string,
   Parser: typeof DOMParser,
+  maxNodes: number,
 ): string {
+  const svgDocument = new Parser().parseFromString(source, 'image/svg+xml')
+  assertParsedDocumentNodeBudget(svgDocument, maxNodes, 'original')
+  if (!svgDocument.querySelector('parsererror') && svgDocument.documentElement.localName === 'svg') {
+    svgDocument.documentElement.querySelectorAll('style').forEach(element => element.remove())
+    const Serializer = document.defaultView?.XMLSerializer ?? XMLSerializer
+    return new Serializer().serializeToString(svgDocument.documentElement)
+  }
+
   const parsed = new Parser().parseFromString(source, 'text/html')
   const roots = Array.from(parsed.body.children)
   if (roots.length !== 1 || roots[0]!.localName !== 'svg')
     throw new ViewerTreePolicyError('SANITIZED_MARKUP_SVG_INVALID')
   const root = roots[0]!
+  assertOriginalHtmlSvgNodeBudget(parsed.body, maxNodes)
   root.querySelectorAll('style').forEach(element => element.remove())
   const Serializer = document.defaultView?.XMLSerializer ?? XMLSerializer
   return new Serializer().serializeToString(root)
 }
 
-function assertParsedDocumentNodeBudget(document: Document): void {
-  const stack = Array.from(document.childNodes)
+function assertParsedDocumentNodeBudget(
+  document: Document,
+  maxNodes: number,
+  stage: 'original' | 'post-strip',
+): void {
+  const stack: Node[] = [document]
   let nodes = 0
   while (stack.length > 0) {
     const node = stack.pop()!
-    if (++nodes > VIEWER_TREE_ABSOLUTE_MAX_NODES)
-      throw new ViewerTreePolicyError('VIEWER_TREE_NODE_LIMIT_EXCEEDED')
+    if (++nodes > maxNodes)
+      throw new ViewerTreePolicyError(stage === 'original' ? 'SANITIZED_MARKUP_ORIGINAL_NODE_LIMIT_EXCEEDED' : 'VIEWER_TREE_NODE_LIMIT_EXCEEDED')
+    for (let index = node.childNodes.length - 1; index >= 0; index--)
+      stack.push(node.childNodes[index])
+  }
+}
+
+function assertOriginalHtmlSvgNodeBudget(body: HTMLElement, maxNodes: number): void {
+  const stack = Array.from(body.childNodes)
+  let nodes = 1 // Count one virtual SVG document node instead of the inert parser's HTML wrappers.
+  while (stack.length > 0) {
+    const node = stack.pop()!
+    if (++nodes > maxNodes)
+      throw new ViewerTreePolicyError('SANITIZED_MARKUP_ORIGINAL_NODE_LIMIT_EXCEEDED')
     for (let index = node.childNodes.length - 1; index >= 0; index--)
       stack.push(node.childNodes[index])
   }
@@ -386,10 +416,11 @@ function sanitizeSvgElement(
   baseUrl: string | undefined,
   depth: number,
   counters: SanitizeCounters,
+  maxNodes: number,
 ): SanitizedSvgElement {
   if (depth > policy.maxDepth)
     throw new ViewerTreePolicyError('VIEWER_TREE_DEPTH_EXCEEDED')
-  if (++counters.nodes > VIEWER_TREE_ABSOLUTE_MAX_NODES)
+  if (++counters.nodes > maxNodes)
     throw new ViewerTreePolicyError('VIEWER_TREE_NODE_LIMIT_EXCEEDED')
   const tag = element.localName
   if (tag === 'foreignObject' || !policy.svgTags.has(tag))
@@ -419,11 +450,11 @@ function sanitizeSvgElement(
   const children: SanitizedSvgNode[] = []
   for (const child of Array.from(element.childNodes)) {
     if (child.nodeType === 1) {
-      children.push(sanitizeSvgElement(child as Element, policy, baseUrl, depth + 1, counters))
+      children.push(sanitizeSvgElement(child as Element, policy, baseUrl, depth + 1, counters, maxNodes))
     }
     else {
       counters.nodes++
-      if (counters.nodes > VIEWER_TREE_ABSOLUTE_MAX_NODES)
+      if (counters.nodes > maxNodes)
         throw new ViewerTreePolicyError('VIEWER_TREE_NODE_LIMIT_EXCEEDED')
       if (child.nodeType === 8)
         continue

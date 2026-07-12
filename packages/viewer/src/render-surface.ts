@@ -96,7 +96,7 @@ export function renderPages(
       const nodeForRender: MaterialNode<unknown> = { ...node, model: resolved }
       try {
         const facetCapabilities = materials.getCapabilities(node.type)
-        const capabilities = createNodeCapabilities(document, facetCapabilities, hostImperativeDom, browserDom?.policy)
+        const capabilities = createNodeCapabilities(document, facetCapabilities, hostImperativeDom, browserDom?.policy, browserDom?.maxNodes)
         context.capabilities = facetCapabilities?.sanitizedMarkup ? capabilities : deniedRenderCapabilities
         const admitted = nodeStates.get(node.id)?.status !== 'quarantined'
         context.slotOutputs = admitted
@@ -186,7 +186,7 @@ function mountSlotMaterial(
   diagnostics: ViewerDiagnosticEvent[],
 ): ViewerTreeMount {
   const facetCapabilities = materials.getCapabilities(node.type)
-  const capabilities = createNodeCapabilities(host.ownerDocument, facetCapabilities, hostImperativeDom, browserDom?.policy)
+  const capabilities = createNodeCapabilities(host.ownerDocument, facetCapabilities, hostImperativeDom, browserDom?.policy, browserDom?.maxNodes)
   const admitted = nodeStates.get(node.id)?.status !== 'quarantined'
   const childContext: ViewerRenderContext = {
     ...parentContext,
@@ -224,10 +224,12 @@ function createNodeCapabilities(
   facetCapabilities: ReturnType<ProfileMaterialRuntime['getCapabilities']>,
   hostImperativeDom: ReadonlySet<string>,
   policy?: ViewerTreePolicy,
+  maxNodes?: number,
 ): BrowserDomCapabilities {
   return createBrowserDomCapabilities({
     document,
     policy,
+    maxNodes,
     imperativeDom: facetCapabilities?.imperativeDom?.filter(capability => hostImperativeDom.has(capability)) ?? [],
   })
 }

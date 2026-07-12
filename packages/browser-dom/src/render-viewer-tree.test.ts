@@ -145,20 +145,56 @@ describe('renderViewerTree', () => {
 
     const excessiveComments = `<svg>${'<!---->'.repeat(50_000)}</svg>`
     expect(() => capabilities.sanitizeMarkup({ format: 'svg', source: excessiveComments }))
-      .toThrowError('VIEWER_TREE_NODE_LIMIT_EXCEEDED')
+      .toThrowError('SANITIZED_MARKUP_ORIGINAL_NODE_LIMIT_EXCEEDED')
 
-    const parsedDocumentBoundary = `${'<!---->'.repeat(49_999)}<svg/>`
+    const parsedDocumentBoundary = `${'<!---->'.repeat(49_998)}<svg/>`
     const boundaryDocumentCapabilities = createBrowserDomCapabilities({
-      document: createDocumentWithParsedRootComments(49_999),
+      document: createDocumentWithParsedRootComments(49_998),
     })
     expect(() => boundaryDocumentCapabilities.sanitizeMarkup({ format: 'svg', source: parsedDocumentBoundary })).not.toThrow()
 
-    const excessiveRootSiblings = `${'<!---->'.repeat(50_001)}<svg/>`
+    const excessiveRootSiblings = `${'<!---->'.repeat(49_999)}<svg/>`
     const excessiveDocumentCapabilities = createBrowserDomCapabilities({
-      document: createDocumentWithParsedRootComments(50_001),
+      document: createDocumentWithParsedRootComments(49_999),
     })
     expect(() => excessiveDocumentCapabilities.sanitizeMarkup({ format: 'svg', source: excessiveRootSiblings }))
-      .toThrowError('VIEWER_TREE_NODE_LIMIT_EXCEEDED')
+      .toThrowError('SANITIZED_MARKUP_ORIGINAL_NODE_LIMIT_EXCEEDED')
+  })
+
+  it('counts original SVG documents consistently before stripping forbidden elements', () => {
+    const plainSource = '<svg><!--c--><g>x</g></svg>'
+    expect(() => createBrowserDomCapabilities({ document, maxNodes: 5 }).sanitizeMarkup({ format: 'svg', source: plainSource }))
+      .not
+      .toThrow()
+    expect(() => createBrowserDomCapabilities({ document, maxNodes: 4 }).sanitizeMarkup({ format: 'svg', source: plainSource }))
+      .toThrowError('SANITIZED_MARKUP_ORIGINAL_NODE_LIMIT_EXCEEDED')
+
+    const styledSource = '<svg><style></style><!--c--><g>x</g></svg>'
+    expect(() => createBrowserDomCapabilities({ document, maxNodes: 6 }).sanitizeMarkup({ format: 'svg', source: styledSource }))
+      .not
+      .toThrow()
+    expect(() => createBrowserDomCapabilities({ document, maxNodes: 5 }).sanitizeMarkup({ format: 'svg', source: styledSource }))
+      .toThrowError('SANITIZED_MARKUP_ORIGINAL_NODE_LIMIT_EXCEEDED')
+  })
+
+  it('rejects oversized forbidden content before removing it', () => {
+    const source = `<svg>${'<style></style>'.repeat(50_001)}<circle/></svg>`
+    expect(new TextEncoder().encode(source).byteLength).toBeLessThan(SANITIZED_MARKUP_MAX_SOURCE_BYTES)
+    expect(() => createBrowserDomCapabilities({ document }).sanitizeMarkup({ format: 'svg', source }))
+      .toThrowError('SANITIZED_MARKUP_ORIGINAL_NODE_LIMIT_EXCEEDED')
+  })
+
+  it('admits then strips a forbidden element nested inside an exact-budget SVG', () => {
+    const source = `<svg>${'<g>'.repeat(16)}<style></style><circle/>${'</g>'.repeat(16)}</svg>`
+    expect(() => createBrowserDomCapabilities({ document, maxNodes: 19 }).sanitizeMarkup({ format: 'svg', source }))
+      .toThrowError('SANITIZED_MARKUP_ORIGINAL_NODE_LIMIT_EXCEEDED')
+
+    const capabilities = createBrowserDomCapabilities({ document, maxNodes: 20 })
+    const token = capabilities.sanitizeMarkup({ format: 'svg', source })
+    const host = document.createElement('div')
+    renderViewerTree(host, viewerSanitizedMarkup(token), { capabilities })
+    expect(host.querySelector('circle')).not.toBeNull()
+    expect(host.querySelector('style')).toBeNull()
   })
 
   it('rejects malicious SVG while allowing approved SVG', () => {
