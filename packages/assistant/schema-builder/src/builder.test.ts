@@ -1,5 +1,6 @@
 import { MaterialKnowledgeRegistry } from '@easyink/assistant-material-knowledge'
 import { describe, expect, it } from 'vitest'
+import { decodeTableModelV1, tableSchemaAdapter } from '../../../materials/table/kernel/src'
 import { SchemaBuilder } from './builder'
 
 describe('schema builder', () => {
@@ -36,13 +37,11 @@ describe('schema builder', () => {
           sourceId: 'report',
           sourceName: 'report',
           select: { path: 'monthlySales/month', label: '月份' },
-          format: undefined,
         },
         value: {
           sourceId: 'report',
           sourceName: 'report',
           select: { path: 'monthlySales/revenue', label: '销售额' },
-          format: undefined,
         },
       },
       relation: { kind: 'auto' },
@@ -70,8 +69,8 @@ describe('schema builder', () => {
       region: { x: 0, y: 0, width: 100, height: 40 },
       collectionField: 'items',
       columns: [
-        { label: 'Name', field: 'items/name', ratio: 2 },
-        { label: 'Price', field: 'items/price', ratio: 1 },
+        { label: 'Name', field: 'items/name', ratio: 2, align: 'left' },
+        { label: 'Price', field: 'items/price', ratio: 1, align: 'right' },
       ],
     })
 
@@ -83,6 +82,22 @@ describe('schema builder', () => {
     })
     expect(result.element.bindings.records).toMatchObject({ fieldPath: 'items' })
     expect(Object.hasOwn(result.element.model, 'table')).toBe(false)
+    const decoded = decodeTableModelV1(result.element.model)
+    expect(decoded.issues).toEqual([])
+    expect(tableSchemaAdapter.validate(result.element, adapterContext('table-data'))).toEqual([])
+    expect(decoded.value?.bands[0]?.rows[0]?.cells.map(cell => cell.style?.typography?.textAlign)).toEqual(['start', 'end'])
+  })
+
+  it('infers the collection parent from one column path', () => {
+    const result = createBuilder().emitTableData({
+      id: 'single-column',
+      region: { x: 0, y: 0, width: 100, height: 40 },
+      columns: [{ label: 'Name', field: 'items/name', ratio: 1 }],
+    })
+
+    expect(result.element.bindings.records).toMatchObject({ fieldPath: 'items' })
+    expect(decodeTableModelV1(result.element.model).issues).toEqual([])
+    expect(tableSchemaAdapter.validate(result.element, adapterContext('table-data'))).toEqual([])
   })
 
   it('emits static table merges and bindings through direct model resources', () => {
@@ -92,7 +107,7 @@ describe('schema builder', () => {
       region: { x: 0, y: 0, width: 100, height: 20 },
       rows: [{ cells: [
         { text: 'Total', colSpan: 2 },
-        { valueBinding: { fieldPath: 'total' } },
+        { valueBinding: { fieldPath: 'total' }, align: 'right' },
       ] }],
     })
 
@@ -100,6 +115,10 @@ describe('schema builder', () => {
     expect((result.element.model.merges as unknown[])).toHaveLength(1)
     expect(Object.keys(result.element.bindings)).toHaveLength(1)
     expect(Object.hasOwn(result.element, 'props')).toBe(false)
+    const decoded = decodeTableModelV1(result.element.model)
+    expect(decoded.issues).toEqual([])
+    expect(tableSchemaAdapter.validate(result.element, adapterContext('table-static'))).toEqual([])
+    expect(decoded.value?.bands[0]?.rows[0]?.cells[2]?.style?.typography?.textAlign).toBe('end')
   })
 })
 
@@ -111,4 +130,13 @@ function createBuilder(): SchemaBuilder {
     unit: 'mm',
     dataSourceName: 'report',
   }, new MaterialKnowledgeRegistry())
+}
+
+function adapterContext(materialType: 'table-data' | 'table-static') {
+  return {
+    documentVersion: '1.0.0',
+    sourceUnit: 'mm' as const,
+    documentUnit: 'mm' as const,
+    materialType,
+  }
 }

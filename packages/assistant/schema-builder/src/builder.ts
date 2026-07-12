@@ -54,7 +54,7 @@ export class SchemaBuilder {
             content: { kind: 'text', text: cols[index]!.label },
             style: {
               background: s.headerBg ?? '#f5f5f5',
-              typography: { textAlign: cols[index]!.align ?? 'start', fontWeight: 'bold' },
+              typography: { textAlign: tableTextAlign(cols[index]!.align), fontWeight: 'bold' },
             },
           })),
         }]
@@ -65,7 +65,7 @@ export class SchemaBuilder {
         id: `${input.id}:detail:cell:${index}`,
         columnId: column.id,
         content: { kind: 'text', text: '', bindingPort: port },
-        style: { typography: { textAlign: cols[index]!.align ?? 'start' } },
+        style: { typography: { textAlign: tableTextAlign(cols[index]!.align) } },
       }
     })
     const bands = [
@@ -115,7 +115,7 @@ export class SchemaBuilder {
         anchor.style = {
           ...(cell.bg ? { background: cell.bg } : {}),
           ...(cell.align || cell.bold
-            ? { typography: { ...(cell.align ? { textAlign: cell.align } : {}), ...(cell.bold ? { fontWeight: 'bold' } : {}) } }
+            ? { typography: { ...(cell.align ? { textAlign: tableTextAlign(cell.align) } : {}), ...(cell.bold ? { fontWeight: 'bold' } : {}) } }
             : {}),
         }
         if (cell.valueBinding) {
@@ -244,7 +244,13 @@ export class SchemaBuilder {
   }
 
   private bindingRef(b: EmitBindingInput) {
-    return { sourceId: this.context.dataSourceName, sourceName: this.context.dataSourceName, fieldPath: b.fieldPath, fieldLabel: b.fieldLabel }
+    return {
+      sourceId: this.context.dataSourceName,
+      sourceName: this.context.dataSourceName,
+      fieldPath: b.fieldPath,
+      ...(b.fieldLabel === undefined ? {} : { fieldLabel: b.fieldLabel }),
+      ...(b.format === undefined ? {} : { format: b.format }),
+    }
   }
 
   private materialBinding(binding: EmitBindingInput | EmitDataContractBindingInput): MaterialBinding {
@@ -258,9 +264,9 @@ export class SchemaBuilder {
             sourceName: mapping.sourceName ?? this.context.dataSourceName,
             select: {
               path: mapping.select.path,
-              label: mapping.select.label,
+              ...(mapping.select.label === undefined ? {} : { label: mapping.select.label }),
             },
-            format: mapping.format,
+            ...(mapping.format === undefined ? {} : { format: mapping.format }),
           },
         ])),
         relation: binding.relation ?? { kind: 'auto' },
@@ -295,7 +301,12 @@ function inferCollectionField(fields: readonly string[]): string {
       break
     prefix.push(candidate)
   }
-  return prefix.length > 0 && prefix.length < segments[0]!.length ? prefix.join('/') : 'records'
+  const collection = prefix.length === segments[0]!.length ? prefix.slice(0, -1) : prefix
+  return collection.length > 0 ? collection.join('/') : 'records'
+}
+
+function tableTextAlign(align: 'left' | 'center' | 'right' | undefined): 'start' | 'center' | 'end' {
+  return align === 'right' ? 'end' : align === 'center' ? 'center' : 'start'
 }
 
 function isDataContractBindingInput(

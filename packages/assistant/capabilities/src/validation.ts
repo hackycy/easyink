@@ -1,7 +1,7 @@
 import type { DataSourceDescriptor } from '@easyink/datasource'
-import type { DocumentSchema, ExpectedDataSource, ExpectedField } from '@easyink/schema'
+import type { DocumentSchema, ExpectedDataSource, ExpectedField, MaterialBinding } from '@easyink/schema'
 import type { AssistantMaterialManifest, AssistantValidationIssue, AssistantValidationReport } from './types'
-import { traverseNodes, validateSchemaIssues } from '@easyink/schema'
+import { getBindingRefs, isDataContractBinding, traverseNodes, validateSchemaIssues } from '@easyink/schema'
 import { DataSourceAligner, normalizeAllFieldPaths, SchemaValidator } from '@easyink/schema-tools'
 import { jsonPointerExists, jsonSchemaDiagnosticCode, validateJsonSchema } from '@easyink/shared'
 
@@ -133,15 +133,20 @@ export function collectDeterministicErrors(schema: unknown, options: Determinist
         })
       }
     }
-    const binding = (node as { binding?: { fieldPath?: string } }).binding
     if (material)
       issues.push(...validateNodeGenerationContract(node, material))
-    if (binding?.fieldPath && bindingPaths && !bindingPaths.has(binding.fieldPath)) {
-      issues.push({
-        code: 'BINDING_PATH_INVALID',
-        message: `Binding path "${binding.fieldPath}" on element "${node.id}" is not present in the expected data contract.`,
-        path: `elements.${node.id}.binding.fieldPath`,
-      })
+    if (bindingPaths) {
+      for (const [port, binding] of Object.entries(node.bindings)) {
+        for (const candidate of bindingFieldPaths(binding)) {
+          if (!bindingPaths.has(candidate.fieldPath)) {
+            issues.push({
+              code: 'BINDING_PATH_INVALID',
+              message: `Binding path "${candidate.fieldPath}" on element "${node.id}" is not present in the expected data contract.`,
+              path: `elements.${node.id}.bindings.${port}${candidate.suffix}`,
+            })
+          }
+        }
+      }
     }
   })
 
@@ -177,6 +182,19 @@ export function collectDeterministicErrors(schema: unknown, options: Determinist
   }
 
   return issues
+}
+
+function bindingFieldPaths(binding: MaterialBinding): Array<{ fieldPath: string, suffix: string }> {
+  if (isDataContractBinding(binding)) {
+    return Object.entries(binding.mappings).map(([fieldId, mapping]) => ({
+      fieldPath: mapping.select.path,
+      suffix: `.mappings.${fieldId}.select.path`,
+    }))
+  }
+  return getBindingRefs(binding).map((reference, index, references) => ({
+    fieldPath: reference.fieldPath,
+    suffix: `${references.length > 1 ? `.${index}` : ''}.fieldPath`,
+  }))
 }
 
 function validatePageRenderLayerIntents(

@@ -184,6 +184,30 @@ describe('assistant capabilities', () => {
     expect(AssistantMaterialManifestSchema.safeParse(disabledBadPath).success).toBe(false)
   })
 
+  it('validates canonical value binding paths against the expected data source', () => {
+    const expectedDataSource = {
+      name: 'document',
+      fields: [{ name: 'title', type: 'string' as const, path: 'title' }],
+    }
+    const candidate = {
+      ...schema,
+      elements: [{
+        ...schema.elements[0]!,
+        bindings: { value: { sourceId: 'document', fieldPath: 'missing' } },
+      }],
+    }
+
+    expect(collectDeterministicErrors(candidate, { expectedDataSource })).toContainEqual(expect.objectContaining({
+      code: 'BINDING_PATH_INVALID',
+      path: 'elements.txt-title.bindings.value.fieldPath',
+    }))
+
+    candidate.elements[0]!.bindings.value!.fieldPath = 'title'
+    expect(collectDeterministicErrors(candidate, { expectedDataSource }))
+      .not
+      .toContainEqual(expect.objectContaining({ code: 'BINDING_PATH_INVALID' }))
+  })
+
   it('requires planned page-level text watermarks to use page layers', () => {
     const issues = collectDeterministicErrors(schema, {
       pageRenderLayers: [{ kind: 'watermark', type: 'text', text: 'DRAFT' }],

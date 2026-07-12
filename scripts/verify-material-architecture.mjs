@@ -6,6 +6,7 @@ const root = resolve(import.meta.dirname, '..')
 const failures = []
 
 const forbiddenSourceRoots = [
+  'packages/assistant/capabilities/src',
   'packages/assistant/constraint-engine/src',
   'packages/assistant/schema-builder/src',
 ]
