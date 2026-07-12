@@ -30,6 +30,7 @@ const MAX_SCHEMA_PROPERTIES = 512
 const MAX_SCHEMA_ENUM = 256
 const MAX_SCHEMA_COMBINATOR = 32
 const MAX_SCHEMA_REFS = 256
+const MAX_SCHEMA_VALIDATION_WORK = 32_768
 const MAX_INSTANCE_NODES = 4_096
 const MAX_INSTANCE_DEPTH = 64
 const MAX_INSTANCE_STRING_BYTES = 4 * 1024 * 1024
@@ -82,6 +83,11 @@ export function compileJsonSchema(schema: JsonObject): CompiledJsonSchema {
       maxStringBytes: MAX_SCHEMA_STRING_BYTES,
     })
     snapshot = cloneJsonValue(schema)
+    assertJsonValue(snapshot, {
+      maxDepth: MAX_SCHEMA_DEPTH,
+      maxNodes: MAX_SCHEMA_NODES,
+      maxStringBytes: MAX_SCHEMA_STRING_BYTES,
+    })
     admitPortableSchema(snapshot)
   }
   catch (error) {
@@ -157,19 +163,29 @@ interface AdmissionState {
   nodes: number
   stringBytes: number
   refs: Array<{ source: string, target: string }>
+  refTargets: Map<string, string>
   schemas: Map<string, JsonObject | boolean>
   edges: Map<string, string[]>
 }
 
 function admitPortableSchema(root: JsonObject): void {
-  const state: AdmissionState = { nodes: 0, stringBytes: 0, refs: [], schemas: new Map(), edges: new Map() }
+  const state: AdmissionState = { nodes: 0, stringBytes: 0, refs: [], refTargets: new Map(), schemas: new Map(), edges: new Map() }
   visitSchema(root, '', 0, state)
   for (const ref of state.refs) {
     if (!state.schemas.has(ref.target))
       throw compileFailure('$ref', ref.source, `Local reference does not resolve: #${ref.target}`)
     state.edges.get(ref.source)!.push(ref.target)
+    state.refTargets.set(ref.source, ref.target)
   }
   detectSchemaCycles(state.edges)
+  const estimate = estimateSchemaWork('', state, new Map())
+  // Same-instance applicators expand fully; structural children share the global instance-node budget.
+  const work = saturatingAdd(
+    estimate.self,
+    saturatingMultiply(MAX_INSTANCE_NODES - 1, estimate.descendant),
+  )
+  if (work > MAX_SCHEMA_VALIDATION_WORK)
+    throw compileFailure('schemaWork', '', 'JSON Schema exceeds the expanded validation work limit')
 }
 
 function visitSchema(value: JsonValue, path: string, depth: number, state: AdmissionState): void {
@@ -269,7 +285,13 @@ function visitSingleSchema(value: JsonValue | undefined, path: string, depth: nu
   edges.push(path)
 }
 
-function visitSchemaArray(value: JsonValue | undefined, path: string, depth: number, state: AdmissionState, edges: string[]): void {
+function visitSchemaArray(
+  value: JsonValue | undefined,
+  path: string,
+  depth: number,
+  state: AdmissionState,
+  edges: string[],
+): void {
   if (value === undefined)
     return
   if (!Array.isArray(value) || value.length === 0 || value.length > MAX_SCHEMA_COMBINATOR)
@@ -279,6 +301,108 @@ function visitSchemaArray(value: JsonValue | undefined, path: string, depth: num
     visitSchema(child, childPath, depth + 1, state)
     edges.push(childPath)
   })
+}
+
+interface SchemaWorkEstimate {
+  self: number
+  descendant: number
+}
+
+function estimateSchemaWork(path: string, state: AdmissionState, memo: Map<string, SchemaWorkEstimate>): SchemaWorkEstimate {
+  const cached = memo.get(path)
+  if (cached !== undefined)
+    return cached
+  const schema = state.schemas.get(path)
+  if (schema === undefined)
+    return { self: MAX_SCHEMA_VALIDATION_WORK + 1, descendant: 0 }
+  if (typeof schema === 'boolean') {
+    const estimate = { self: 1, descendant: 0 }
+    memo.set(path, estimate)
+    return estimate
+  }
+
+  const estimate: SchemaWorkEstimate = { self: 1, descendant: 0 }
+  const addSameInstance = (child: SchemaWorkEstimate, multiplier = 1): void => {
+    estimate.self = saturatingAdd(estimate.self, saturatingMultiply(child.self, multiplier))
+    estimate.descendant = saturatingAdd(estimate.descendant, saturatingMultiply(child.descendant, multiplier))
+  }
+  const childEstimate = (childPath: string): SchemaWorkEstimate => estimateSchemaWork(childPath, state, memo)
+  const childUnitCost = (child: SchemaWorkEstimate): number => Math.max(child.self, child.descendant)
+  const addSameInstanceArray = (keyword: string): void => {
+    const value = schema[keyword]
+    if (!Array.isArray(value))
+      return
+    value.forEach((_item, index) => addSameInstance(childEstimate(appendPath(appendPath(path, keyword), String(index)))))
+  }
+
+  const refTarget = state.refTargets.get(path)
+  if (refTarget !== undefined)
+    addSameInstance(childEstimate(refTarget))
+  addSameInstanceChild(schema, path, 'not', childEstimate, addSameInstance)
+  addSameInstanceArray('allOf')
+  addSameInstanceArray('anyOf')
+  addSameInstanceArray('oneOf')
+
+  let propertyCost = 0
+  const properties = schema.properties
+  if (isRecord(properties)) {
+    for (const key of Object.keys(properties))
+      propertyCost = Math.max(propertyCost, childUnitCost(childEstimate(appendPath(appendPath(path, 'properties'), key))))
+  }
+  let patternCost = 0
+  const patterns = schema.patternProperties
+  if (isRecord(patterns)) {
+    for (const key of Object.keys(patterns))
+      patternCost = saturatingAdd(patternCost, childUnitCost(childEstimate(appendPath(appendPath(path, 'patternProperties'), key))))
+  }
+  const additional = optionalChildEstimate(schema, path, 'additionalProperties', childEstimate)
+  estimate.descendant = Math.max(estimate.descendant, saturatingAdd(propertyCost, patternCost), childUnitCostOrZero(additional))
+
+  const items = optionalChildEstimate(schema, path, 'items', childEstimate)
+  estimate.descendant = Math.max(estimate.descendant, childUnitCostOrZero(items))
+  if (schema.uniqueItems === true)
+    estimate.self = saturatingAdd(estimate.self, saturatingMultiply(MAX_INSTANCE_WIDTH, MAX_INSTANCE_WIDTH))
+
+  memo.set(path, estimate)
+  return estimate
+}
+
+function addSameInstanceChild(
+  schema: JsonObject,
+  path: string,
+  keyword: string,
+  childEstimate: (path: string) => SchemaWorkEstimate,
+  add: (estimate: SchemaWorkEstimate) => void,
+): void {
+  const value = schema[keyword]
+  if (typeof value === 'boolean' || isRecord(value))
+    add(childEstimate(appendPath(path, keyword)))
+}
+
+function optionalChildEstimate(
+  schema: JsonObject,
+  path: string,
+  keyword: string,
+  childEstimate: (path: string) => SchemaWorkEstimate,
+): SchemaWorkEstimate | undefined {
+  const value = schema[keyword]
+  return typeof value === 'boolean' || isRecord(value) ? childEstimate(appendPath(path, keyword)) : undefined
+}
+
+function childUnitCostOrZero(estimate: SchemaWorkEstimate | undefined): number {
+  return estimate === undefined ? 0 : Math.max(estimate.self, estimate.descendant)
+}
+
+function saturatingAdd(left: number, right: number): number {
+  const ceiling = MAX_SCHEMA_VALIDATION_WORK + 1
+  return left >= ceiling || right >= ceiling || left > ceiling - right ? ceiling : left + right
+}
+
+function saturatingMultiply(left: number, right: number): number {
+  const ceiling = MAX_SCHEMA_VALIDATION_WORK + 1
+  if (left === 0 || right === 0)
+    return 0
+  return left >= ceiling || right >= ceiling || left > Math.floor(ceiling / right) ? ceiling : left * right
 }
 
 function detectSchemaCycles(edges: ReadonlyMap<string, readonly string[]>): void {
@@ -469,8 +593,12 @@ function between(value: string, prefix: string, suffix: string): string | undefi
 }
 
 function canonicalStringify(value: JsonValue): string {
-  if (value === null || typeof value !== 'object')
-    return JSON.stringify(value)
+  if (value === null || typeof value !== 'object') {
+    const serialized = JSON.stringify(value)
+    if (serialized === undefined)
+      throw compileFailure('schema', '', 'JSON Schema contains an unserializable value')
+    return serialized
+  }
   if (Array.isArray(value))
     return `[${value.map(canonicalStringify).join(',')}]`
   return `{${Object.keys(value).sort(compareText).map(key => `${JSON.stringify(key)}:${canonicalStringify(value[key]!)}`).join(',')}}`

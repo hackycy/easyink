@@ -147,4 +147,87 @@ describe('json schema validation', () => {
     const refProperties = Object.fromEntries(Array.from({ length: 257 }, (_, index) => [`value-${index}`, { $ref: `#/$defs/value-${index}` }]))
     expect(() => compileJsonSchema({ $defs: defs, type: 'object', properties: refProperties })).toThrow(JsonSchemaCompileError)
   })
+
+  it('rejects exponentially expanded reference work without expanding the DAG', () => {
+    expect(() => compileJsonSchema(refDag(8, 3))).not.toThrow()
+
+    const started = performance.now()
+    expect(() => compileJsonSchema(refDag(8, 8))).toThrow(JsonSchemaCompileError)
+    expect(performance.now() - started).toBeLessThan(1_000)
+  })
+
+  it('counts each shared reference occurrence and array item work', () => {
+    const sharedProperties = Object.fromEntries(Array.from({ length: 200 }, (_, index) => [
+      `field-${index}`,
+      { $ref: '#/$defs/shared' },
+    ]))
+    expect(() => compileJsonSchema({
+      $defs: { shared: { type: 'string' } },
+      type: 'object',
+      properties: sharedProperties,
+    })).not.toThrow()
+
+    expect(() => compileJsonSchema({
+      type: 'array',
+      items: {
+        type: 'array',
+        items: {
+          type: 'array',
+          items: { allOf: Array.from({ length: 8 }, () => ({ type: 'string' })) },
+        },
+      },
+    })).toThrow(JsonSchemaCompileError)
+  })
+
+  it.each(['function', 'undefined'] as const)('rejects a Proxy that injects %s while cloning', (injected) => {
+    let descriptorReads = 0
+    const schema = new Proxy({ type: 'string' }, {
+      getOwnPropertyDescriptor(target, key) {
+        descriptorReads += 1
+        if (descriptorReads <= 2)
+          return Reflect.getOwnPropertyDescriptor(target, key)
+        return { configurable: true, enumerable: true, writable: true, value: injected === 'function' ? () => undefined : undefined }
+      },
+    })
+
+    expect(() => compileJsonSchema(schema as JsonObject)).toThrow(JsonSchemaCompileError)
+    expect(() => compileJsonSchema({ type: 'string' })).not.toThrow()
+  })
+
+  it('rejects changing or throwing Proxy traps and accepts normal frozen schemas', () => {
+    let ownKeyReads = 0
+    const changing = new Proxy({ type: 'string' }, {
+      ownKeys() {
+        ownKeyReads += 1
+        return ownKeyReads <= 2 ? ['type'] : ['type', 'injected']
+      },
+      getOwnPropertyDescriptor(target, key) {
+        return key === 'injected'
+          ? { configurable: true, enumerable: true, writable: true, value: undefined }
+          : Reflect.getOwnPropertyDescriptor(target, key)
+      },
+    })
+    expect(() => compileJsonSchema(changing as JsonObject)).toThrow(JsonSchemaCompileError)
+
+    let descriptorReads = 0
+    const throwing = new Proxy({ type: 'string' }, {
+      getOwnPropertyDescriptor(target, key) {
+        descriptorReads += 1
+        if (descriptorReads > 2)
+          throw new Error('proxy trap failed')
+        return Reflect.getOwnPropertyDescriptor(target, key)
+      },
+    })
+    expect(() => compileJsonSchema(throwing as JsonObject)).toThrow(JsonSchemaCompileError)
+    expect(() => compileJsonSchema(Object.freeze({ type: 'string' }))).not.toThrow()
+  })
 })
+
+function refDag(branches: number, layers: number): JsonObject {
+  const defs: JsonObject = { leaf: { type: 'string' } }
+  for (let layer = 1; layer <= layers; layer += 1) {
+    const target = layer === 1 ? 'leaf' : `layer-${layer - 1}`
+    defs[`layer-${layer}`] = { anyOf: Array.from({ length: branches }, () => ({ $ref: `#/$defs/${target}` })) }
+  }
+  return { $defs: defs, $ref: `#/$defs/layer-${layers}` }
+}
