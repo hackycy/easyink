@@ -21,11 +21,13 @@ export interface DocumentStoreEvent {
 export type DocumentStoreWrite
   = | { kind: 'preview', document: DocumentSchema, index: DocumentIndexSnapshot }
     | { kind: 'preview-cancel' }
-    | { kind: Exclude<DocumentStoreEventKind, 'preview' | 'preview-cancel'>, document: DocumentSchema, index: DocumentIndexSnapshot, validationReport: MaterialDocumentValidationReport }
+    | { kind: Exclude<DocumentStoreEventKind, 'preview' | 'preview-cancel' | 'reset'>, document: DocumentSchema, index: DocumentIndexSnapshot, validationReport: MaterialDocumentValidationReport }
+    | { kind: 'reset', document: DocumentSchema, validationReport: MaterialDocumentValidationReport }
 
 export interface DocumentStoreOptions {
   nodeStates?: ReadonlyMap<string, MaterialNodeLoadState>
   jsonValidation?: JsonValueValidationOptions
+  onListenerError?: (error: unknown, event: DocumentStoreEvent) => void
 }
 
 export class DocumentStore {
@@ -35,11 +37,15 @@ export class DocumentStore {
   private previewIndexValue: DocumentIndexSnapshot | null = null
   private materialNodeStatesValue: ReadonlyMap<string, MaterialNodeLoadState>
   private listeners = new Set<(event: DocumentStoreEvent) => void>()
+  private readonly eventQueue: Array<{ event: DocumentStoreEvent, listeners: readonly ((event: DocumentStoreEvent) => void)[] }> = []
+  private eventDispatchScheduled = false
+  private readonly onListenerError?: (error: unknown, event: DocumentStoreEvent) => void
   private revisionValue = 0
   readonly jsonValidation: Readonly<JsonValueValidationOptions>
 
   constructor(initial: DocumentSchema, readonly profile: CompiledMaterialProfile, options: DocumentStoreOptions = {}) {
     this.jsonValidation = Object.freeze({ ...options.jsonValidation })
+    this.onListenerError = options.onListenerError
     assertJsonValue(initial, this.jsonValidation)
     this.committed = freezeDocument(cloneJsonValue(initial, this.jsonValidation))
     const report = options.nodeStates
@@ -100,8 +106,34 @@ export class DocumentStore {
     }
     if ('validationReport' in write)
       event.validationReport = write.validationReport
-    for (const listener of this.listeners)
-      listener(event)
+    Object.freeze(event)
+    this.eventQueue.push({ event, listeners: [...this.listeners] })
+    this.scheduleEventDispatch()
+  }
+
+  private scheduleEventDispatch(): void {
+    if (this.eventDispatchScheduled)
+      return
+    this.eventDispatchScheduled = true
+    queueMicrotask(() => this.dispatchEvents())
+  }
+
+  private dispatchEvents(): void {
+    this.eventDispatchScheduled = false
+    while (this.eventQueue.length > 0) {
+      const entry = this.eventQueue.shift()!
+      for (const listener of entry.listeners) {
+        try {
+          listener(entry.event)
+        }
+        catch (error) {
+          try {
+            this.onListenerError?.(error, entry.event)
+          }
+          catch { /* Error reporting must not affect other listeners. */ }
+        }
+      }
+    }
   }
 }
 

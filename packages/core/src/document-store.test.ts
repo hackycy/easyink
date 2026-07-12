@@ -37,7 +37,7 @@ describe('documentStore', () => {
     }).toThrow()
   })
 
-  it('publishes preview and committed events, and clears preview on commit', () => {
+  it('publishes preview and committed events, and clears preview on commit', async () => {
     const { profile, schema } = schemaWithX(1)
     const store = new DocumentStore(schema, profile)
     const events: string[] = []
@@ -55,6 +55,7 @@ describe('documentStore', () => {
     freeze(committed)
     const report = { valid: true, diagnostics: [], nodeStates: store.materialNodeStates } as any
     ;(store as any)[DOCUMENT_STORE_WRITER]({ kind: 'commit', document: committed, index: store.createIndex(committed, 1), validationReport: report })
+    await Promise.resolve()
     expect(store.committedDocument.elements[0]!.x).toBe(3)
     expect(store.revision).toBe(1)
     expect(events).toEqual(['preview:1->2', 'preview-cancel:2->1', 'commit:1->3'])
@@ -67,12 +68,42 @@ describe('documentStore', () => {
     const candidate = schemaWithX(4).schema
     expect(() => (store as any)[DOCUMENT_STORE_WRITER]({ kind: 'commit', document: candidate, index: store.createIndex(candidate, 1), validationReport: report })).toThrow(/auto-frozen/u)
     const reset = schemaWithX(7).schema
-    ;(store as any)[DOCUMENT_STORE_WRITER]({ kind: 'reset', document: reset, index: store.createIndex(reset, 0), validationReport: report })
+    ;(store as any)[DOCUMENT_STORE_WRITER]({ kind: 'reset', document: reset, validationReport: report })
     reset.elements[0]!.x = 99
     expect(store.revision).toBe(0)
     expect(store.document.elements[0]!.x).toBe(7)
     expect(Object.isFrozen(store.document)).toBe(true)
     expect(store.index.getNode('a')).toBe(store.document.elements[0])
     expect(store.index.getNode('a')!.x).toBe(7)
+  })
+
+  it('queues FIFO events, snapshots subscribers, and isolates listener errors', async () => {
+    const { profile, schema } = schemaWithX(1)
+    const errors: unknown[] = []
+    const store = new DocumentStore(schema, profile, { onListenerError: error => errors.push(error) })
+    const seen: string[] = []
+    let subscribed = false
+    const report = { valid: true, diagnostics: [], nodeStates: store.materialNodeStates } as any
+    const write = (x: number) => {
+      const candidate = cloneJsonValue(schema as never) as typeof schema
+      candidate.elements[0]!.x = x
+      freeze(candidate)
+      ;(store as any)[DOCUMENT_STORE_WRITER]({ kind: 'commit', document: candidate, index: store.createIndex(candidate, x), validationReport: report })
+    }
+    store.subscribe((event) => {
+      seen.push(`${event.kind}:${event.document.elements[0]!.x}`)
+      if (!subscribed) {
+        subscribed = true
+        store.subscribe(event2 => seen.push(`late:${event2.document.elements[0]!.x}`))
+        write(3)
+      }
+      throw new Error('listener failure')
+    })
+    write(2)
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(seen).toEqual(['commit:2', 'commit:3', 'late:3'])
+    expect(errors).toHaveLength(2)
+    expect(store.document.elements[0]!.x).toBe(3)
   })
 })
