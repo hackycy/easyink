@@ -592,6 +592,8 @@ function cloneBenchmarkCompat(value: unknown, path: `/${string}`): Record<string
 }
 
 function portForPolicy(policy: MaterialBindingPortPolicy, position: number): string {
+  if (policy.key.kind === 'model')
+    throw new Error('MATERIAL_BINDING_MODEL_PORT_REQUIRES_RESOLUTION')
   return policy.key.kind === 'exact' ? policy.key.value : `${policy.key.value}${position}`
 }
 

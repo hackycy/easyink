@@ -26,7 +26,7 @@ const schema = ref<DocumentSchema>(blankA4Template)
 const preferenceProvider = createLocalStoragePreferenceProvider()
 const runtimeConfig = {
   materials: {
-    profiles: [compileBuiltinMaterialProfile('all')],
+    profile: compileBuiltinMaterialProfile('all'),
   },
 } satisfies DesignerRuntimeConfig
 

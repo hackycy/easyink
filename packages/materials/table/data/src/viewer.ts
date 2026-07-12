@@ -1,5 +1,6 @@
 import type { FragmentPaginator, LayoutFragment, ViewerMeasureContext, ViewerMeasureResult, ViewerRenderContext, ViewerRenderOutput } from '@easyink/core'
-import type { BindingRef, MaterialNode, TableCellSchema, TableRowSchema } from '@easyink/schema'
+import type { TableCellSchema, TableRowSchema } from '@easyink/material-table-kernel'
+import type { BindingRef, MaterialNode } from '@easyink/schema'
 import type { TableDataProps } from './schema'
 import { createFragmentFromNode, formatBindingDisplayValue, resolveBindingValue, resolveFieldFromRecord, viewerElement, viewerText } from '@easyink/core'
 import { computeAutoRowHeights, computeRowScaleWithVirtualRows, getTableMaterialModel, projectTableTopology, renderTableTree, resolveTableBaseProps } from '@easyink/material-table-kernel'

@@ -1,4 +1,4 @@
-import type { CellTypography, TableCellSchema, TableTypography } from '@easyink/schema'
+import type { CellTypography, ProjectedTableTypography, TableCellSchema } from './projection-types'
 
 /**
  * Resolve a cell's effective typography by merging cell-level overrides
@@ -6,7 +6,7 @@ import type { CellTypography, TableCellSchema, TableTypography } from '@easyink/
  */
 export function resolveCellTypography(
   cell: TableCellSchema,
-  tableTypography: TableTypography,
+  tableTypography: ProjectedTableTypography,
 ): Required<CellTypography> {
   return {
     fontSize: cell.typography?.fontSize ?? tableTypography.fontSize,

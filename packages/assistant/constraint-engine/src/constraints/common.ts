@@ -3,13 +3,12 @@ import type { MaterialNode } from '@easyink/schema'
 
 export const commonConstraints: MaterialConstraint[] = [
   {
-    id: 'required-props',
+    id: 'required-model',
     severity: 'error',
-    message: 'Element is missing required properties',
+    message: 'Element is missing its canonical model',
     check: (node: MaterialNode, _context: ConstraintContext) => {
-      const props = node.model as Record<string, unknown> | undefined
-      if (!props)
-        return { passed: false, details: 'No props object' }
+      if (node.model === null || typeof node.model !== 'object' || Array.isArray(node.model))
+        return { passed: false, details: 'No model object' }
       return { passed: true }
     },
   },

@@ -5,30 +5,28 @@ export const tableStaticConstraints: MaterialConstraint[] = [
   {
     id: 'table-static-kind',
     severity: 'error',
-    message: 'table-static element must have table.kind = "static"',
+    message: 'table-static element must have model.kind = "static"',
     check: (node: MaterialNode) => {
-      const table = (node.model as Record<string, unknown>)?.table as Record<string, unknown> | undefined
-      return { passed: table?.kind === 'static' }
+      const model = node.model as Record<string, unknown>
+      return { passed: model.kind === 'static' }
     },
     autoFix: (node: MaterialNode) => {
-      const props = { ...(node.model as Record<string, unknown>) }
-      const table = { ...(props.table as Record<string, unknown> ?? {}) }
-      table.kind = 'static'
-      props.table = table
-      return { ...node, props } as MaterialNode
+      return { ...node, model: { ...(node.model as Record<string, unknown>), kind: 'static' } } as MaterialNode
     },
   },
   {
-    id: 'table-static-has-topology',
+    id: 'table-static-has-structure',
     severity: 'error',
-    message: 'table-static must include table.topology with columns and rows',
+    message: 'table-static must include model columns and band rows',
     check: (node: MaterialNode) => {
-      const table = (node.model as Record<string, unknown>)?.table as Record<string, unknown> | undefined
-      const topology = table?.topology as Record<string, unknown> | undefined
-      if (!topology)
-        return { passed: false, details: 'No topology' }
-      const hasColumns = Array.isArray(topology.columns) && (topology.columns as unknown[]).length > 0
-      const hasRows = Array.isArray(topology.rows) && (topology.rows as unknown[]).length > 0
+      const model = node.model as Record<string, unknown>
+      const hasColumns = Array.isArray(model.columns) && model.columns.length > 0
+      const bands = Array.isArray(model.bands) ? model.bands : []
+      const hasRows = bands.some((band) => {
+        return band !== null && typeof band === 'object' && !Array.isArray(band)
+          && Array.isArray((band as Record<string, unknown>).rows)
+          && ((band as Record<string, unknown>).rows as unknown[]).length > 0
+      })
       return { passed: hasColumns && hasRows }
     },
   },
@@ -37,12 +35,17 @@ export const tableStaticConstraints: MaterialConstraint[] = [
     severity: 'error',
     message: 'table-static must not have repeat-template rows (use table-data instead)',
     check: (node: MaterialNode) => {
-      const table = (node.model as Record<string, unknown>)?.table as Record<string, unknown> | undefined
-      const topology = table?.topology as Record<string, unknown> | undefined
-      const rows = topology?.rows as Array<{ role: string }> | undefined
-      if (!rows)
+      const model = node.model as Record<string, unknown>
+      const bands = Array.isArray(model.bands) ? model.bands : []
+      const rows = bands.flatMap((band) => {
+        if (band === null || typeof band !== 'object' || Array.isArray(band))
+          return []
+        const value = (band as Record<string, unknown>).rows
+        return Array.isArray(value) ? value : []
+      })
+      if (rows.length === 0)
         return { passed: true }
-      return { passed: !rows.some(r => r.role === 'repeat-template') }
+      return { passed: !rows.some(row => row !== null && typeof row === 'object' && !Array.isArray(row) && (row as Record<string, unknown>).role === 'repeat-template') }
     },
   },
 ]

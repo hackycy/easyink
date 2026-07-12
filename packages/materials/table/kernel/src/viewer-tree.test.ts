@@ -1,6 +1,7 @@
 import type { ViewerElementTree, ViewerRenderTree } from '@easyink/core'
-import type { MaterialNode, TableTopologySchema } from '@easyink/schema'
+import type { MaterialNode } from '@easyink/schema'
 import type { TableModel } from './model'
+import type { TableTopologySchema } from './projection-types'
 import { describe, expect, it } from 'vitest'
 import { TABLE_BASE_DEFAULTS } from './types'
 import { renderTableTree } from './viewer-tree'

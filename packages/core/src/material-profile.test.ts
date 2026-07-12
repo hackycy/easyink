@@ -287,7 +287,7 @@ describe('compiledMaterialProfile.createNode', () => {
     [{ model: { bad: undefined } }, 'invalid model JSON'],
     [{ unit: 'mm' }, 'legacy unit field'],
     [{ bogus: true }, 'unknown field'],
-  ] as const)('rejects an invalid canonical envelope: %s', (input) => {
+  ] as const)('rejects an invalid canonical envelope: %s', (input, _label) => {
     const profile = compileMaterialProfile({
       id: 'test',
       engineVersion: '0.0.30',
@@ -355,7 +355,7 @@ describe('compiledMaterialProfile.createNode', () => {
 
   it('fails on adapter issues and invalid adapter JSON', () => {
     const base = createTestMaterialManifest({ type: 'seed' }).schemaAdapter
-    const issueAdapter = { ...base, validate: () => [{ code: 'BAD', severity: 'error' as const, path: '/model', message: 'bad' }] }
+    const issueAdapter = { ...base, validate: () => [{ code: 'BAD', severity: 'error' as const, path: '/model' as const, message: 'bad' }] }
     const invalidJsonAdapter = { ...base, normalize: (node: Parameters<SchemaAdapter['normalize']>[0]) => ({ ...node, model: { bad: undefined } }) }
     for (const [type, adapter] of [['issue', issueAdapter], ['invalid-json', invalidJsonAdapter]] as const) {
       const manifest = createTestMaterialManifest({ type, schemaAdapter: adapter })

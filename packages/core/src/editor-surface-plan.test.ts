@@ -87,7 +87,7 @@ describe('createEditorSurfacePlan', () => {
         reflow: { strategy: 'measure-only' },
       },
       guides: { x: [], y: [] },
-      elements: [{ id: 'a', type: 'text', x: -40, y: 190, width: 20, height: 10, props: {} }],
+      elements: [{ id: 'a', type: 'text', x: -40, y: 190, width: 20, height: 10, modelVersion: 1, model: {}, slots: {}, bindings: {}, output: { visibility: 'include' } }],
     })
 
     expect(plan.pages).toHaveLength(2)
@@ -116,7 +116,7 @@ describe('createEditorSurfacePlan', () => {
         reflow: { strategy: 'flow-y', preserveTrailingGap: true },
       },
       guides: { x: [], y: [] },
-      elements: [{ id: 'a', type: 'text', x: 0, y: 120, width: 10, height: 20, props: {} }],
+      elements: [{ id: 'a', type: 'text', x: 0, y: 120, width: 10, height: 20, modelVersion: 1, model: {}, slots: {}, bindings: {}, output: { visibility: 'include' } }],
     })
 
     expect(plan.pages).toHaveLength(1)
@@ -140,7 +140,7 @@ describe('createEditorSurfacePlan', () => {
         reflow: { strategy: 'flow-y', preserveTrailingGap: true },
       },
       guides: { x: [], y: [] },
-      elements: [{ id: 'a', type: 'text', x: 0, y: 180, width: 10, height: 20, props: {} }],
+      elements: [{ id: 'a', type: 'text', x: 0, y: 180, width: 10, height: 20, modelVersion: 1, model: {}, slots: {}, bindings: {}, output: { visibility: 'include' } }],
     })
 
     expect(plan.coordinate).toEqual({ width: 80, height: 120 })

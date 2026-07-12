@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
-import type { MaterialManifest } from '@easyink/core'
+import type { MaterialManifest, MaterialNodeCreateInput } from '@easyink/core'
 import type { MaterialNode, PageSchema } from '@easyink/schema'
 import { validateDocumentWithProfile } from '@easyink/core'
 import { createTestMaterialManifest } from '@easyink/core/testing'
@@ -9,7 +9,9 @@ import { describe, expect, it, vi } from 'vitest'
 import { createDesignerTestProfile } from '../testing/material-profile'
 import { DATASOURCE_DRAG_MIME, MATERIAL_DRAG_MIME, useDesignerDragDrop } from './use-designer-drag-drop'
 
-function createTextNode(partial: Partial<MaterialNode> = {}): MaterialNode {
+function createTextNode(partial?: Partial<MaterialNode>): MaterialNode
+function createTextNode(partial?: MaterialNodeCreateInput): MaterialNode
+function createTextNode(partial: Partial<MaterialNode> | MaterialNodeCreateInput = {}): MaterialNode {
   return {
     id: `text-${Math.random()}`,
     type: 'text',
@@ -104,7 +106,7 @@ function makeStore(
   elements: MaterialNode[] = [],
   extension?: unknown,
   options: {
-    textCreateDefaultNode?: (partial?: Partial<MaterialNode>) => MaterialNode
+    textCreateDefaultNode?: (partial?: MaterialNodeCreateInput) => MaterialNode
     page?: PageSchema
     textDataContract?: unknown
     textDataContractPort?: string
@@ -332,7 +334,7 @@ describe('useDesignerDragDrop', () => {
   it('creates the material node draft once per pointer drag instead of on every move', () => {
     const pageEl = makePageEl()
     const elements: MaterialNode[] = []
-    const createDefaultNode = vi.fn((partial?: Partial<MaterialNode>) => createTextNode(partial))
+    const createDefaultNode = vi.fn((partial?: MaterialNodeCreateInput) => createTextNode(partial))
     const store = makeStore(elements, undefined, { textCreateDefaultNode: createDefaultNode })
     const drag = useDesignerDragDrop({
       store: store as never,

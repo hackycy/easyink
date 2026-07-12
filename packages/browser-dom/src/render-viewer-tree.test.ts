@@ -521,7 +521,7 @@ describe('renderViewerTree', () => {
     const hugeText = viewerText('x'.repeat(2 * 1024 * 1024))
     let encodedCodeUnits = 0
     const originalEncode = TextEncoder.prototype.encode
-    const encode = vi.spyOn(TextEncoder.prototype, 'encode').mockImplementation(function (value = '') {
+    const encode = vi.spyOn(TextEncoder.prototype, 'encode').mockImplementation(function (this: TextEncoder, value = '') {
       encodedCodeUnits += value.length
       return originalEncode.call(this, value)
     })

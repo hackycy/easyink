@@ -220,7 +220,7 @@ describe('fontManager', () => {
     expect(document.head.querySelector('style[data-easyink-font="Brand|normal|normal"]')).toBeNull()
   })
 
-  it('collectFontFamilies includes page and element fonts', () => {
+  it('collectFontFamilies reads the public page font without guessing a private model', () => {
     const families = collectFontFamilies(createSchema({
       page: {
         font: 'PageFont',
@@ -233,15 +233,19 @@ describe('fontManager', () => {
           y: 0,
           width: 10,
           height: 10,
-          props: { fontFamily: 'ElementFont' },
+          modelVersion: 1,
+          model: { fontFamily: 'ElementFont' },
+          slots: {},
+          bindings: {},
+          output: { visibility: 'include' },
         },
       ],
     }))
 
-    expect([...families]).toEqual(['PageFont', 'ElementFont'])
+    expect([...families]).toEqual(['PageFont'])
   })
 
-  it('collectFontFamilies includes material typography fonts', () => {
+  it('collectFontFamilies requires profile introspection for material fonts', () => {
     const families = collectFontFamilies(createSchema({
       elements: [
         {
@@ -251,7 +255,11 @@ describe('fontManager', () => {
           y: 0,
           width: 10,
           height: 10,
-          props: { typography: { fontFamily: 'TableFont' } },
+          modelVersion: 1,
+          model: { typography: { fontFamily: 'TableFont' } },
+          slots: {},
+          bindings: {},
+          output: { visibility: 'include' },
         },
         {
           id: 'flow-1',
@@ -260,12 +268,16 @@ describe('fontManager', () => {
           y: 0,
           width: 10,
           height: 10,
-          props: { typography: { fontFamily: 'FlowFont' } },
+          modelVersion: 1,
+          model: { typography: { fontFamily: 'FlowFont' } },
+          slots: {},
+          bindings: {},
+          output: { visibility: 'include' },
         },
       ],
     }))
 
-    expect(families).toEqual(new Set(['TableFont', 'FlowFont']))
+    expect(families).toEqual(new Set())
   })
 
   it('collectFontFamilies reads private table typography through resource introspection', () => {

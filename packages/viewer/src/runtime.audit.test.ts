@@ -222,7 +222,7 @@ describe('viewer audit risk regressions', () => {
       viewer: () => ({
         capabilities: { imperativeDom: ['teardown'] },
         extension: {
-          render: node => ({ tree: viewerImperativeDom('teardown', () => () => {
+          render: (node: MaterialNode) => ({ tree: viewerImperativeDom('teardown', () => () => {
             disposed.push(node.id)
             throw Object.defineProperty({}, 'message', { value: `dispose ${node.id}` })
           }) }),

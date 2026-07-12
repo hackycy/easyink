@@ -245,16 +245,16 @@ function buildBindingSegment(): string {
 - Use the same value as expectedDataSource.name for binding.sourceId and binding.sourceName.
 - Choose materials only from the list above. Use each material's Binding, Usage, Schema rule, capabilities, target fields, and examples as the sole source of material behavior.
 - Materials with Binding "none" MUST NOT receive binding.
-- Materials with Binding "ordinary BindingRef" use binding: { sourceId, sourceName, fieldPath, fieldLabel }. Their target prop is declared in the material context; do not invent prop targets.
-- Materials with Binding "custom material-owned binding" MUST follow that material's examples and schema rules; do not invent whole-element BindingRef behavior for them.
-- Materials with Binding "data-contract" use binding.kind = "data-contract" with mappings keyed only by the declared target field ids. Each mapping stores { sourceId, sourceName, select: { path, label } } and relation: { kind: "auto" }. Preserve complete source paths such as "monthlySales/month".
+- Display ports use bindings.<port> = { sourceId, sourceName, fieldPath, fieldLabel }. Use only ports declared by the material context.
+- Semantic ports follow the declared port value shape and examples; never infer a private model target.
+- Data-contract values use kind = "data-contract" with mappings keyed only by declared target field ids. Each mapping stores { sourceId, sourceName, select: { path, label } } and relation: { kind: "auto" }. Preserve complete source paths such as "monthlySales/month".
 - If the registered materials cannot express a requested visual or data interaction, approximate with registered materials and add a warning; never invent a missing material type.`
 }
 
 function buildMaterialSelectionSegment(scenario?: string): string {
   const lines = [
     '## Material Selection Guide',
-    '- For repeated row/detail data: prefer materials whose context declares custom material-owned binding or collection-oriented knowledge when available.',
+    '- For repeated row/detail data: prefer materials with declared collection/record-array semantic ports.',
     '- For chart-like comparisons over arrays or paired fields: prefer visualization materials whose material context declares Binding "data-contract".',
     '- For scalar labels and values: prefer materials with binding mode "scalar" or "single".',
     '- For codes: barcode (CODE128/EAN) or qrcode (URLs/verification).',
@@ -280,21 +280,30 @@ function buildSchemaStructureSegment(unit: string): string {
       "id": "el-title",
       "type": "<registered-material-type>",
       "x": ${unit === 'px' ? 16 : 20}, "y": ${unit === 'px' ? 16 : 20}, "width": ${unit === 'px' ? 343 : 170}, "height": ${unit === 'px' ? 32 : 10},
-      "props": {
+      "modelVersion": 1,
+      "model": {
         "<propertyFromRegisteredMaterial>": "value"
-      }
+      },
+      "slots": {},
+      "bindings": {},
+      "output": { "visibility": "include" }
     },
     {
       "id": "el-bound-value",
       "type": "<registered-bindable-material-type>",
       "x": ${unit === 'px' ? 16 : 20}, "y": ${unit === 'px' ? 56 : 35}, "width": ${unit === 'px' ? 343 : 170}, "height": ${unit === 'px' ? 48 : 20},
-      "props": {},
-      "binding": {
-        "sourceId": "purchaseOrder",
-        "sourceName": "purchaseOrder",
-        "fieldPath": "customer/name",
-        "fieldLabel": "客户名称"
-      }
+      "modelVersion": 1,
+      "model": {},
+      "slots": {},
+      "bindings": {
+        "<declared-port>": {
+          "sourceId": "purchaseOrder",
+          "sourceName": "purchaseOrder",
+          "fieldPath": "customer/name",
+          "fieldLabel": "客户名称"
+        }
+      },
+      "output": { "visibility": "include" }
     }
   ]
 }
@@ -317,12 +326,12 @@ The \`expectedDataSource\` defines a runtime data contract — it declares what 
 1. \`expectedDataSource.name\` is the data source identifier (e.g. "invoice", "receipt").
 2. \`expectedDataSource.fields\` is a tree of field definitions. Each field has \`name\`, \`path\`, \`type\`, and optionally \`children\`.
 3. \`expectedDataSource.sampleData\` is a nested object whose structure mirrors the field paths exactly.
-4. Elements reference the data source via \`binding\`: \`{ sourceId, sourceName, fieldPath, fieldLabel }\`.
+4. Elements reference data through a declared entry in \`bindings\`: \`{ sourceId, sourceName, fieldPath, fieldLabel }\`.
 
 ### Binding rules
-- \`binding.sourceId\` and \`binding.sourceName\` MUST both equal \`expectedDataSource.name\`. They are the same value.
-- \`binding.fieldPath\` is a slash-separated absolute path (e.g. \`customer/name\`, \`items/quantity\`). It MUST exist in \`expectedDataSource.fields\`.
-- \`binding.fieldLabel\` is the user-facing display label for the field.
+- Each binding expression's \`sourceId\` and \`sourceName\` MUST both equal \`expectedDataSource.name\`.
+- Each \`fieldPath\` is a slash-separated path (e.g. \`customer/name\`, \`items/quantity\`) present in \`expectedDataSource.fields\`.
+- \`fieldLabel\` is the user-facing display label for the field.
 
 ### Field paths and sampleData
 - Paths use \`/\` as separator. The path segments map to nested keys in sampleData.
@@ -330,10 +339,10 @@ The \`expectedDataSource\` defines a runtime data contract — it declares what 
 - Example: field path \`items/quantity\` (under an array field \`items\`) -> sampleData must have \`{ items: [{ quantity: 10 }] }\`.
 
 ### Binding shapes
-- Materials whose context says \`Binding: ordinary BindingRef\` bind to one scalar field using \`{ sourceId, sourceName, fieldPath, fieldLabel }\`.
-- Materials whose context says \`Binding: data-contract\` bind through \`binding.kind = "data-contract"\`. Use only the target field ids declared for that material.
-- Materials whose context says \`Binding: custom material-owned binding\` bind through their own schema shape and examples.
-- Materials whose context says \`Binding: none\` must not receive \`binding\`.
+- Display ports bind to one scalar field using a binding expression at the declared \`bindings.<port>\` key.
+- Data-contract ports store a data-contract value at the declared key and use only declared target field ids.
+- Semantic ports follow their declared value shape and examples.
+- Materials whose context says \`Binding: none\` must keep \`bindings\` empty.
 - \`relation.kind = "auto"\` lets the resolver infer shared record collections or index alignment.
 
 ### Complete example

@@ -37,7 +37,11 @@ function createContext(hit: Selection | null): BehaviorContext {
       y: 0,
       width: 100,
       height: 40,
-      props: {},
+      modelVersion: 1,
+      model: {},
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     materialGeometry: {
       getContentLayout: () => ({ contentBox: { x: 0, y: 0, width: 100, height: 40 } }),

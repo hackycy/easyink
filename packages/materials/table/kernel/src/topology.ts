@@ -1,4 +1,4 @@
-import type { TableTopologySchema } from '@easyink/schema'
+import type { TableTopologySchema } from './projection-types'
 
 /**
  * Resolve a grid position to the merge-owner (primary) cell.

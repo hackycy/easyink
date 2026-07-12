@@ -26,7 +26,7 @@ describe('page sheet commands', () => {
     const schema = fixedSchema()
     schema.page.pages = 3
     schema.page.pagination = { strategy: 'fixed-sheets', pageCount: 3 }
-    schema.elements.push({ id: 'third', type: 'text', x: 0, y: 210, width: 10, height: 10, props: {} })
+    schema.elements.push(canonicalNode('third', 210))
     const commands = new CommandManager()
 
     commands.execute(new RemovePageSheetCommand(schema, createEditorSurfacePlan(schema), 1))
@@ -61,8 +61,24 @@ function fixedSchema(): DocumentSchema {
     },
     guides: { x: [], y: [] },
     elements: [
-      { id: 'first', type: 'text', x: 0, y: 10, width: 10, height: 10, props: {} },
-      { id: 'second', type: 'text', x: 0, y: 110, width: 10, height: 10, props: {} },
+      canonicalNode('first', 10),
+      canonicalNode('second', 110),
     ],
+  }
+}
+
+function canonicalNode(id: string, y: number): DocumentSchema['elements'][number] {
+  return {
+    id,
+    type: 'text',
+    x: 0,
+    y,
+    width: 10,
+    height: 10,
+    modelVersion: 1,
+    model: {},
+    slots: {},
+    bindings: {},
+    output: { visibility: 'include' },
   }
 }

@@ -1,4 +1,4 @@
-import type { TableCellSchema, TableRowSchema, TableTopologySchema, TableTypography } from '@easyink/schema'
+import type { ProjectedTableTypography, TableCellSchema, TableRowSchema, TableTopologySchema } from './projection-types'
 import type { TableBaseProps } from './types'
 import { computeColumnWidths } from './geometry'
 import { TABLE_BASE_DEFAULTS, TABLE_TYPOGRAPHY_DEFAULTS } from './types'
@@ -73,7 +73,7 @@ export interface CellAutoHeightInput {
   /** Total width spanned by the cell (already accounts for colSpan), in document units. */
   width: number
   cellPadding: number
-  tableTypography: TableTypography
+  tableTypography: ProjectedTableTypography
 }
 
 /**

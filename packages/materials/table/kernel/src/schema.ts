@@ -1,5 +1,5 @@
-import type { TableLayoutConfig, TableRowSchema, TableTopologySchema } from '@easyink/schema'
 import type { TableRowRole } from '@easyink/shared'
+import type { TableLayoutConfig, TableRowSchema, TableTopologySchema } from './projection-types'
 
 /**
  * Create a default table topology with equal column ratios and uniform row height.

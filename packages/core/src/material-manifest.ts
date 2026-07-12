@@ -1,5 +1,5 @@
 import type { MaterialNode } from '@easyink/schema'
-import type { BindingFormatPresetType, BindingPresetFormat, JsonObject, JsonValue, PropSchemaType, Rfc6901Pointer, UnitType } from '@easyink/shared'
+import type { BindingFormatPresetType, JsonObject, JsonValue, PropSchemaType, Rfc6901Pointer, UnitType } from '@easyink/shared'
 import type { MaterialConditionCapability } from './condition'
 import type {
   BindingExpression,
@@ -396,7 +396,7 @@ export function assertCanonicalMaterialBindingMap(
   }
 }
 
-function validateBindingExpression(binding: BindingExpression): void {
+function validateBindingExpression(binding: unknown): asserts binding is BindingExpression {
   if (!isPlainRecord(binding)
     || !hasOnlyKeys(binding, BINDING_EXPRESSION_KEYS)
     || Object.hasOwn(binding, 'bindIndex')
@@ -500,7 +500,7 @@ function validateBindingPolicies(policies: readonly MaterialBindingPortPolicy[])
     if (policy.key.kind === 'model') {
       if (!Array.isArray(policy.key.paths)
         || policy.key.paths.length === 0
-        || policy.key.paths.some(path => typeof path !== 'string' || !isModelPortPointer(path))) {
+        || policy.key.paths.some((path: unknown) => typeof path !== 'string' || !isModelPortPointer(path))) {
         fail('MATERIAL_BINDING_POLICY_KEY_INVALID')
       }
     }
@@ -517,7 +517,7 @@ function validateBindingPolicies(policies: readonly MaterialBindingPortPolicy[])
 }
 
 function validateActualPreset(
-  preset: BindingPresetFormat | undefined,
+  preset: unknown,
   policyPresetTypes: readonly BindingFormatPresetType[] | undefined,
 ): void {
   if (!isPlainRecord(preset)
@@ -705,7 +705,7 @@ function validateUniqueIds<T>(
   }
 }
 
-function isDeterministicKey(key: DeterministicKeyPolicy['key'] | undefined): boolean {
+function isDeterministicKey(key: MaterialBindingPortPolicy['key'] | undefined): key is DeterministicKeyPolicy['key'] {
   return !!key && (key.kind === 'exact' || key.kind === 'prefix') && isNonemptyString(key.value)
 }
 

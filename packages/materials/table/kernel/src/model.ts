@@ -1,4 +1,5 @@
-import type { BindingRef, MaterialNode, TableCellSchema, TableRowSchema, TableTopologySchema } from '@easyink/schema'
+import type { BindingRef, MaterialNode } from '@easyink/schema'
+import type { TableCellSchema, TableRowSchema, TableTopologySchema } from './projection-types'
 import { getBindingRefs, getNodeModel } from '@easyink/schema'
 import { assertJsonValue } from '@easyink/shared'
 

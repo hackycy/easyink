@@ -46,7 +46,7 @@ export interface CompiledMaterialProfile {
   createNode: (type: string, input?: MaterialNodeCreateInput, unit?: UnitType) => MaterialNode
 }
 
-export type MaterialNodeCreateInput = Omit<Partial<MaterialNode>, 'bindings'> & {
+export type MaterialNodeCreateInput = Omit<Partial<MaterialNode<unknown>>, 'bindings'> & {
   bindings?: CanonicalMaterialBindingMap
 }
 
@@ -305,7 +305,9 @@ function resolveAdmissionBudget(overrides: Partial<SchemaAdmissionBudget> | unde
 
 function readonlySet<T>(values: readonly T[]): ReadonlySet<T> {
   const set = new Set(values)
-  const view: ReadonlySet<T> = Object.freeze({
+  // ES2025 adds derived-set methods to ReadonlySet. This deliberately smaller
+  // facade remains portable and, unlike a frozen Set, exposes no mutators.
+  const view = Object.freeze({
     get size() { return set.size },
     has: (value: T) => set.has(value),
     values: () => set.values(),
@@ -315,7 +317,7 @@ function readonlySet<T>(values: readonly T[]): ReadonlySet<T> {
       set.forEach(value => callback.call(thisArg, value, value, view))
     },
     [Symbol.iterator]: () => set[Symbol.iterator](),
-  })
+  }) as unknown as ReadonlySet<T>
   return view
 }
 

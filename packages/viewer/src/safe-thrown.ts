@@ -10,6 +10,8 @@ export function safeSummarizeThrown(value: unknown): SafeThrownSummary {
   const primitive = summarizePrimitive(value)
   if (primitive !== undefined)
     return freezeSummary(primitive)
+  if ((typeof value !== 'object' || value === null) && typeof value !== 'function')
+    return freezeSummary('Unknown thrown value')
 
   try {
     const message = readOwnDataString(value, 'message')

@@ -1,5 +1,6 @@
 import type { AdaptableMaterialNode, SchemaAdapterContext } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
+import type { TableModel } from './model'
 import { cloneJsonValue, convertUnit } from '@easyink/shared'
 import { describe, expect, it } from 'vitest'
 import { createTableModel } from './model'
@@ -12,7 +13,7 @@ const context: SchemaAdapterContext = {
   materialType: 'table-static',
 }
 
-function node(model = createTableModel({ kind: 'static', columnCount: 2, rowCount: 1 })): AdaptableMaterialNode {
+function node(model: TableModel = createTableModel({ kind: 'static', columnCount: 2, rowCount: 1 })): AdaptableMaterialNode {
   return {
     id: 'node',
     type: 'table-static',

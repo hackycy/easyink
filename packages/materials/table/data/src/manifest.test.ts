@@ -18,7 +18,7 @@ describe('table data manifest binding admission', () => {
     })
 
     const node = profile.createNode('table-data', {
-      model,
+      model: { ...model },
       bindings: {
         'orders': { sourceId: 'invoice', fieldPath: 'orders' },
         'orderId': { sourceId: 'invoice', fieldPath: 'orders/id' },
@@ -52,7 +52,7 @@ describe('table data manifest binding admission', () => {
     let error: MaterialNodeCreationError | undefined
     try {
       profile.createNode('table-data', {
-        model,
+        model: { ...model },
         bindings: { [model.data.collectionPort]: { sourceId: 'invoice', fieldPath: 'orders' } },
       })
     }

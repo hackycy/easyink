@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { createDefaultDataTableModel } from './schema'
 import { measureTableData, renderTableData, tableDataFragmentPaginator } from './viewer'
 
-function createNode(): MaterialNode<unknown> {
+function createNode(): MaterialNode {
   return {
     id: 'table-data',
     type: 'table-data',
@@ -14,7 +14,7 @@ function createNode(): MaterialNode<unknown> {
     width: 100,
     height: 24,
     modelVersion: 1,
-    model: createDefaultDataTableModel(),
+    model: { ...createDefaultDataTableModel() },
     slots: {},
     bindings: {},
     output: { visibility: 'include' },
@@ -37,7 +37,7 @@ describe('tableDataFragmentPaginator', () => {
 
   it('expands records from the configured collection port without requiring detail cell bindings', () => {
     const node = createNode()
-    const model = node.model as ReturnType<typeof createDefaultDataTableModel>
+    const model = tableModel(node)
     model.data.collectionPort = 'orders'
     node.bindings.orders = { sourceId: 'invoice', fieldPath: 'orders' }
 
@@ -48,7 +48,7 @@ describe('tableDataFragmentPaginator', () => {
 
   it('splits projected runtime rows without mutating the canonical model', () => {
     const node = createNode()
-    const model = node.model as ReturnType<typeof createDefaultDataTableModel>
+    const model = tableModel(node)
     const detailCells = model.bands.find(band => band.role === 'detail')!.rows[0]!.cells
     detailCells[0]!.content = { kind: 'text', text: '', bindingPort: 'detail:name' }
     detailCells[1]!.content = { kind: 'text', text: '', bindingPort: 'detail:qty' }
@@ -75,7 +75,7 @@ describe('tableDataFragmentPaginator', () => {
 
   it('reuses canonical detail slots for every expanded record without shifting footer identities', () => {
     const node = createNode()
-    const model = node.model as ReturnType<typeof createDefaultDataTableModel>
+    const model = tableModel(node)
     const detail = model.bands.find(band => band.role === 'detail')!.rows[0]!
     const footer = model.bands.find(band => band.role === 'footer')!.rows[0]!
     const hosted = detail.cells[0]!
@@ -107,7 +107,7 @@ describe('tableDataFragmentPaginator', () => {
 
   it('keeps keyed row and cell ids stable when records reorder', () => {
     const node = createNode()
-    const model = node.model as ReturnType<typeof createDefaultDataTableModel>
+    const model = tableModel(node)
     model.data.collectionPort = 'orders'
     model.data.detailKeyPort = 'orderId'
     const detail = model.bands.find(band => band.role === 'detail')!.rows[0]!
@@ -124,7 +124,7 @@ describe('tableDataFragmentPaginator', () => {
 
   it('uses unique deterministic fallbacks and reports duplicate or missing detail keys', () => {
     const node = createNode()
-    const model = node.model as ReturnType<typeof createDefaultDataTableModel>
+    const model = tableModel(node)
     model.data.detailKeyPort = 'detailKey'
     node.bindings.records = { sourceId: 'invoice', fieldPath: 'items' }
     node.bindings.detailKey = { sourceId: 'invoice', fieldPath: 'items/id' }
@@ -146,7 +146,7 @@ describe('tableDataFragmentPaginator', () => {
 
   it('preserves keyed row metadata across pagination', () => {
     const node = createNode()
-    const model = node.model as ReturnType<typeof createDefaultDataTableModel>
+    const model = tableModel(node)
     model.data.detailKeyPort = 'detailKey'
     node.bindings.records = { sourceId: 'invoice', fieldPath: 'items' }
     node.bindings.detailKey = { sourceId: 'invoice', fieldPath: 'items/id' }
@@ -180,7 +180,7 @@ function renderContext(data: Record<string, unknown>, reportDiagnostic?: (diagno
 
 function paginateAndRender(recordCount: number) {
   const node = createNode()
-  const model = node.model as ReturnType<typeof createDefaultDataTableModel>
+  const model = tableModel(node)
   model.data.detailKeyPort = 'detailKey'
   node.bindings.records = { sourceId: 'invoice', fieldPath: 'items' }
   node.bindings.detailKey = { sourceId: 'invoice', fieldPath: 'items/id' }
@@ -217,6 +217,10 @@ function paginateAndRender(recordCount: number) {
     domIds: pageTrees.flatMap(tree => findElements(tree, 'tr').concat(findElements(tree, 'th'), findElements(tree, 'td')).map(element => String(element.attributes.id))),
     pageTrees,
   }
+}
+
+function tableModel(node: MaterialNode): ReturnType<typeof createDefaultDataTableModel> {
+  return node.model as unknown as ReturnType<typeof createDefaultDataTableModel>
 }
 
 function bodyRows(tree: ViewerRenderTree): ViewerElementTree[] {

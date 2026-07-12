@@ -1,4 +1,4 @@
-import type { TableCellSchema, TableTopologySchema } from '@easyink/schema'
+import type { TableCellSchema, TableTopologySchema } from './projection-types'
 import type { TableBaseProps } from './types'
 import { escapeAttr, escapeHtml } from '@easyink/shared'
 import { computeRowScaleWithVirtualRows, normalizeColumnRatios } from './geometry'

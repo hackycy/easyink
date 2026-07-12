@@ -1,4 +1,4 @@
-import type { DocumentSchema, MaterialNode } from '@easyink/schema'
+import type { DocumentSchema } from '@easyink/schema'
 import type { CompiledMaterialProfile } from './material-profile'
 import { walkMaterialNodes } from './material-introspection'
 
@@ -348,36 +348,8 @@ export function collectFontFamilies(schema: DocumentSchema, profile?: CompiledMa
       }
     })
   }
-  else {
-    // Generic legacy fallback until Tasks 11-12 inject the active profile into
-    // Designer and Viewer. It intentionally knows no private material schema.
-    const stack = [...schema.elements]
-    while (stack.length) {
-      const node = stack.pop()!
-      const legacy = node as unknown as { props?: Record<string, unknown>, slots?: Record<string, MaterialNode[]> }
-      collectPropsFontFamilies(legacy.props, families)
-      if (legacy.slots)
-        Object.values(legacy.slots).forEach(children => stack.push(...children))
-    }
-  }
 
   return families
-}
-
-function collectPropsFontFamilies(props: Record<string, unknown> | undefined, families: Set<string>): void {
-  if (!props)
-    return
-
-  const fontFamily = props.fontFamily
-  if (typeof fontFamily === 'string' && fontFamily)
-    families.add(fontFamily)
-
-  const typography = props.typography
-  if (typography && typeof typography === 'object' && !Array.isArray(typography)) {
-    const typographyFontFamily = (typography as Record<string, unknown>).fontFamily
-    if (typeof typographyFontFamily === 'string' && typographyFontFamily)
-      families.add(typographyFontFamily)
-  }
 }
 
 function createFontFaceStyle(input: {

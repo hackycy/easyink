@@ -1,5 +1,6 @@
 import type { ViewerRenderTree } from '@easyink/core'
-import type { MaterialNode, TableCellSchema, TableRowSchema, TableTopologySchema } from '@easyink/schema'
+import type { MaterialNode } from '@easyink/schema'
+import type { TableCellSchema, TableRowSchema, TableTopologySchema } from './projection-types'
 import type { TableBaseProps } from './types'
 import { viewerElement, viewerText } from '@easyink/core'
 import { computeRowScaleWithVirtualRows } from './geometry'

@@ -1,11 +1,23 @@
 import type { AdaptableMaterialNode, SchemaMigration } from '@easyink/core'
-import type { BindingRef, MaterialNode, TableTypography } from '@easyink/schema'
+import type { BindingRef, MaterialNode } from '@easyink/schema'
 import { canonicalizeMaterialNode } from '@easyink/schema'
 import { convertUnit, generateId } from '@easyink/shared'
 
 export const FLOW_ROW_TYPE = 'flow-row'
 
 export type FlowRowWrapMode = 'inline' | 'block'
+
+export interface FlowRowTypography {
+  fontFamily?: string
+  fontSize: number
+  color: string
+  fontWeight: 'normal' | 'bold'
+  fontStyle: 'normal' | 'italic'
+  lineHeight: number
+  letterSpacing: number
+  textAlign: 'left' | 'center' | 'right'
+  verticalAlign: 'top' | 'middle' | 'bottom'
+}
 
 export interface FlowColumnDef {
   id: string
@@ -22,11 +34,11 @@ export interface FlowRowProps {
   gap: number
   paddingX: number
   paddingY: number
-  typography: TableTypography
+  typography: FlowRowTypography
   backgroundColor: string
 }
 
-export const FLOW_ROW_TYPOGRAPHY_DEFAULTS: TableTypography = {
+export const FLOW_ROW_TYPOGRAPHY_DEFAULTS: FlowRowTypography = {
   fontFamily: '',
   fontSize: 3.18,
   color: '#000000',

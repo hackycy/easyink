@@ -1,4 +1,5 @@
-import type { MaterialNode, TableTypography } from '@easyink/schema'
+import type { MaterialNode } from '@easyink/schema'
+import type { ProjectedTableTypography } from './projection-types'
 import { getTableMaterialModel } from './model'
 
 /**
@@ -10,10 +11,10 @@ export interface TableBaseProps {
   borderColor: string
   borderType: 'solid' | 'dashed' | 'dotted'
   cellPadding: number
-  typography: TableTypography
+  typography: ProjectedTableTypography
 }
 
-export const TABLE_TYPOGRAPHY_DEFAULTS: TableTypography = {
+export const TABLE_TYPOGRAPHY_DEFAULTS: ProjectedTableTypography = {
   fontFamily: '',
   fontSize: 3.18,
   color: '#000000',

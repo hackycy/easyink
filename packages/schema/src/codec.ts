@@ -207,8 +207,13 @@ function assertCanonicalDocument(schema: DocumentSchema): void {
         || ['props', 'binding', 'children', 'table', 'unit', 'hidden', 'locked', 'name'].some(key => Object.hasOwn(node, key))) {
         throw new Error('legacy material field')
       }
-      for (const children of Object.values(node.slots))
+      if (!isObject(node.slots))
+        throw new Error('invalid canonical slots')
+      for (const children of Object.values(node.slots)) {
+        if (!Array.isArray(children))
+          throw new Error('invalid canonical slot')
         stack.push(...children)
+      }
     }
   }
   catch {
