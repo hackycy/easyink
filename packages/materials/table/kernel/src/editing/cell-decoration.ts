@@ -84,6 +84,10 @@ export function createTableCellDecorationComponent(delegate: TableEditingDelegat
 
       const editText = ref('')
       const activeEditTarget = ref<TableCellPayload | null>(null)
+      const disposeSelectionInvalidation = props.session.onSelectionInvalidated?.((event) => {
+        if (event.reason === 'identity-changed')
+          cancelEdit()
+      })
 
       // When entering edit mode, initialize text from cell content
       watch(isEditingThis, (editing) => {
@@ -104,6 +108,7 @@ export function createTableCellDecorationComponent(delegate: TableEditingDelegat
       const toolbarGroups = computed(() => createTableToolbarGroups(payload.value, tableNode.value ?? undefined, delegate))
 
       onUnmounted(() => {
+        disposeSelectionInvalidation?.()
         if (activeEditTarget.value)
           commitEdit()
       })

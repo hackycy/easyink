@@ -25,6 +25,10 @@ export interface SelectionRebaseResult<T = unknown> {
   identityChanged?: boolean
 }
 
+export interface SelectionInvalidation {
+  reason: 'identity-changed'
+}
+
 // ─── SelectionType ──────────────────────────────────────────────────
 
 /** Material registers selection types to declare sub-element selection semantics. */
@@ -250,4 +254,6 @@ export interface EditingSessionRef {
   setSelectionScopedMeta: (key: string, value: unknown, selection?: Selection | null) => void
   /** Reconcile the active selection after a topology-changing property write. */
   rebaseSelection: (before: MaterialNode, after: MaterialNode, rebase?: { type: string, hint: unknown }) => void
+  /** Observe semantic selection invalidation before selection-scoped state is cleared. */
+  onSelectionInvalidated?: (listener: (event: SelectionInvalidation) => void) => () => void
 }

@@ -7,6 +7,7 @@ import type {
   MaterialDesignerExtension,
   MaterialGeometry,
   Selection,
+  SelectionInvalidation,
   SelectionRebaseResult,
   SelectionStore,
   SurfacesAPI,
@@ -43,6 +44,7 @@ export class EditingSession implements EditingSessionRef {
   private _diagnostics?: DiagnosticsChannel
   private _selectionChangeDispose?: () => void
   private _selectionScopedMeta = new Map<string, string>()
+  private _selectionInvalidationListeners = new Set<(event: SelectionInvalidation) => void>()
   private _destroyed = false
 
   constructor(opts: {
@@ -121,6 +123,11 @@ export class EditingSession implements EditingSessionRef {
     this.pruneSelectionScopedMeta()
   }
 
+  onSelectionInvalidated(listener: (event: SelectionInvalidation) => void): () => void {
+    this._selectionInvalidationListeners.add(listener)
+    return () => this._selectionInvalidationListeners.delete(listener)
+  }
+
   rebaseSelection(before: MaterialNode, after: MaterialNode, rebase?: { type: string, hint: unknown }): void {
     const selection = this.selectionStore.selection
     if (!selection || !rebase || rebase.type !== selection.type)
@@ -130,8 +137,12 @@ export class EditingSession implements EditingSessionRef {
       return
     const outcome = selectionType.rebase(selection, before, after, rebase.hint)
     if (isSelectionRebaseResult(outcome)) {
-      if (outcome.identityChanged)
+      if (outcome.identityChanged) {
+        const event: SelectionInvalidation = { reason: 'identity-changed' }
+        for (const listener of [...this._selectionInvalidationListeners])
+          listener(event)
         this.clearSelectionScopedMeta()
+      }
       this.selectionStore.set(outcome.selection)
       return
     }
@@ -160,6 +171,7 @@ export class EditingSession implements EditingSessionRef {
     this._destroyed = true
     this._selectionChangeDispose?.()
     this._selectionChangeDispose = undefined
+    this._selectionInvalidationListeners.clear()
     this._selectionScopedMeta.clear()
     this.selectionStore.set(null)
     this._ephemeralPanel = null

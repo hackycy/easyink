@@ -131,12 +131,17 @@ describe('editingSession', () => {
     selectionStore.set(selection)
     session.setSelectionScopedMeta('editingCell', { buffer: 'header value' })
     session.setMeta('plainState', 'preserved')
+    const invalidated = vi.fn(() => {
+      expect(session.meta.editingCell).toEqual({ buffer: 'header value' })
+    })
+    session.onSelectionInvalidated(invalidated)
     session.rebaseSelection({ id: 'n1' } as MaterialNode, { id: 'n1' } as MaterialNode, {
       type: 'table.cell',
       hint: { removedRow: 'header' },
     })
 
     expect(selectionStore.selection).toEqual(selection)
+    expect(invalidated).toHaveBeenCalledWith({ reason: 'identity-changed' })
     expect(session.meta.editingCell).toBeUndefined()
     expect(session.meta.plainState).toBe('preserved')
   })
