@@ -1,6 +1,7 @@
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import type { ViewerRuntime } from './runtime'
 import type { ViewerDiagnosticEvent } from './types'
+import { VIEWER_TREE_ABSOLUTE_MAX_NODES, viewerElement, viewerFragment, viewerSanitizedMarkup, viewerText } from '@easyink/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { applyBindingsToProps, projectBindings } from './binding-projector'
 import { createIframeViewerHost, createViewer } from './index'
@@ -95,6 +96,61 @@ afterEach(() => {
 })
 
 describe('viewer audit risk regressions', () => {
+  it('isolates every material render stage and continues rendering healthy nodes', async () => {
+    const container = document.createElement('div')
+    const diagnostics: ViewerDiagnosticEvent[] = []
+    const viewer = createViewer({ container })
+    const badTypes = ['throw-render', 'throw-size', 'bad-url', 'bad-tag', 'bad-css', 'bad-token', 'oversized']
+    const nodes = ['good', ...badTypes].map((type, index): MaterialNode => ({
+      id: `${type}-node`,
+      type,
+      x: 2,
+      y: 2 + index * 6,
+      width: 30,
+      height: 5,
+      modelVersion: 1,
+      model: {},
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
+    }))
+    viewer.registerMaterial('good', { kind: 'none' }, {
+      render: () => ({ tree: viewerElement('div', {}, [viewerText('healthy sibling')]) }),
+    })
+    viewer.registerMaterial('throw-render', { kind: 'none' }, {
+      render: () => { throw new Error('render failed') },
+    })
+    viewer.registerMaterial('throw-size', { kind: 'none' }, {
+      render: () => ({ tree: viewerText('unmounted') }),
+      getRenderSize: () => { throw new Error('size failed') },
+    })
+    viewer.registerMaterial('bad-url', { kind: 'none' }, {
+      render: () => ({ tree: viewerElement('a', { attributes: { href: 'javascript:alert(1)' } }, [viewerText('unsafe')]) }),
+    })
+    viewer.registerMaterial('bad-tag', { kind: 'none' }, {
+      render: () => ({ tree: viewerElement('script', {}, [viewerText('unsafe')]) }),
+    })
+    viewer.registerMaterial('bad-css', { kind: 'none' }, {
+      render: () => ({ tree: viewerElement('div', { style: { behavior: 'url(x)' } }, []) }),
+    })
+    viewer.registerMaterial('bad-token', { kind: 'none' }, {
+      render: () => ({ tree: viewerSanitizedMarkup({} as never) }),
+    })
+    viewer.registerMaterial('oversized', { kind: 'none' }, {
+      render: () => ({ tree: viewerFragment(Array.from({ length: VIEWER_TREE_ABSOLUTE_MAX_NODES + 1 }, () => viewerText('x'))) }),
+    })
+
+    await expect(viewer.open({
+      schema: fixedSchema(nodes),
+      onDiagnostic: diagnostic => diagnostics.push(diagnostic),
+    })).resolves.toBeUndefined()
+
+    expect(container.textContent).toContain('healthy sibling')
+    expect(container.querySelectorAll('[data-render-error="true"]')).toHaveLength(badTypes.length)
+    expect(diagnostics.filter(item => item.code === 'MATERIAL_RENDER_ERROR').map(item => item.nodeId).sort())
+      .toEqual(badTypes.map(type => `${type}-node`).sort())
+  })
+
   it('renders and prints through an iframe host document', async () => {
     const iframe = document.createElement('iframe')
     document.body.appendChild(iframe)

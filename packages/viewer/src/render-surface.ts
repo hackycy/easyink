@@ -3,9 +3,8 @@ import type { MaterialNode, PageBackground, PageSchema } from '@easyink/schema'
 import type { MaterialRendererRegistry } from './material-registry'
 import type { ViewerDiagnosticEvent, ViewerRenderContext, ViewerRenderSize } from './types'
 import { createBrowserDomCapabilities, renderViewerTree } from '@easyink/browser-dom'
-import { groupPageLayerPlansByPlacement, PAGE_CONTENT_LAYER_STACK_INDEX, resolvePageLayerPlans, resolvePageLayerStackIndex, viewerElement, viewerText } from '@easyink/core'
+import { groupPageLayerPlansByPlacement, PAGE_CONTENT_LAYER_STACK_INDEX, resolvePageLayerPlans, resolvePageLayerStackIndex } from '@easyink/core'
 import { UNIT_FACTOR } from '@easyink/shared'
-import { isErrorSentinel, safeRender } from './diagnostic-middleware'
 
 export interface RenderSurfaceOptions {
   container: HTMLElement
@@ -77,45 +76,18 @@ export function renderPages(
       const resolved = resolvedPropsMap.get(node.id) ?? node.model as Record<string, unknown>
       context.resolvedProps = resolved
 
-      // Render through the material registry, wrapped by unified diagnostic middleware.
       const nodeForRender: MaterialNode = { ...node, model: resolved }
-      const fallbackTree = viewerElement('div', { attributes: { title: 'Render failed' }, style: {
-        'width': '100%',
-        'height': '100%',
-        'display': 'flex',
-        'align-items': 'center',
-        'justify-content': 'center',
-        'background-color': '#fff3f3',
-        'border': '1px dashed #ff4d4f',
-        'color': '#ff4d4f',
-        'font-size': '11px',
-        'box-sizing': 'border-box',
-      } }, [viewerText(`[${node.type}]`)])
-
-      const safeResult = safeRender(
-        () => registry.render(nodeForRender, context),
-        {
-          scope: 'material',
-          code: 'MATERIAL_RENDER_ERROR',
-          nodeId: node.id,
-          placeholderTree: fallbackTree,
-        },
-        diagnostics,
-      )
-
-      let output
-      if (isErrorSentinel(safeResult)) {
-        output = { tree: safeResult.tree }
+      try {
+        const output = registry.render(nodeForRender, context)
+        const renderSize = registry.getRenderSize(nodeForRender, context)
+        const elWrapper = createElementWrapper(document, nodeForRender, page, unit, renderSize)
+        renderViewerTree(elWrapper, output.tree, { document, capabilities })
+        contentLayer.appendChild(elWrapper)
       }
-      else {
-        output = safeResult
+      catch (error) {
+        diagnostics.push(materialRenderDiagnostic(node, error))
+        contentLayer.appendChild(createMaterialRenderFallback(document, nodeForRender, page, unit))
       }
-
-      const renderSize = registry.getRenderSize(nodeForRender, context)
-      const elWrapper = createElementWrapper(document, nodeForRender, page, unit, renderSize)
-      renderViewerTree(elWrapper, output.tree, { document, capabilities })
-
-      contentLayer.appendChild(elWrapper)
     }
 
     appendPageLayers(document, pageEl, pageLayerBuckets.overContent, page, unit, diagnostics)
@@ -126,6 +98,46 @@ export function renderPages(
   }
 
   return pageDOMs
+}
+
+function materialRenderDiagnostic(node: MaterialNode, error: unknown): ViewerDiagnosticEvent {
+  const message = error instanceof Error ? error.message : String(error)
+  return {
+    category: 'viewer',
+    severity: 'error',
+    code: 'MATERIAL_RENDER_ERROR',
+    message: `MATERIAL_RENDER_ERROR for node "${node.id}": ${message}`,
+    nodeId: node.id,
+    scope: 'material',
+    cause: error instanceof Error
+      ? { name: error.name, message: error.message, stack: error.stack }
+      : error,
+  }
+}
+
+function createMaterialRenderFallback(
+  document: Document,
+  node: MaterialNode,
+  page: PagePlanEntry,
+  unit: string,
+): HTMLElement {
+  const wrapper = createElementWrapper(document, node, page, unit, { width: node.width, height: node.height })
+  wrapper.setAttribute('data-render-error', 'true')
+  const fallback = document.createElement('div')
+  fallback.setAttribute('title', 'Render failed')
+  fallback.style.width = '100%'
+  fallback.style.height = '100%'
+  fallback.style.display = 'flex'
+  fallback.style.alignItems = 'center'
+  fallback.style.justifyContent = 'center'
+  fallback.style.backgroundColor = '#fff3f3'
+  fallback.style.border = '1px dashed #ff4d4f'
+  fallback.style.color = '#ff4d4f'
+  fallback.style.fontSize = '11px'
+  fallback.style.boxSizing = 'border-box'
+  fallback.textContent = `[${node.type}]`
+  wrapper.appendChild(fallback)
+  return wrapper
 }
 
 function resolveCachedPageLayerBuckets(
