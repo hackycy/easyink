@@ -1,17 +1,35 @@
 <script setup lang="ts">
 import type { MaterialCatalogEntry, MaterialCatalogGroup } from '../types'
 import { AddMaterialCommand } from '@easyink/core'
+import { IconRect } from '@easyink/icons'
 import { computed, inject } from 'vue'
 import { useDesignerStore } from '../composables'
 import { DESIGNER_DRAG_DROP_KEY } from '../composables/use-designer-drag-drop'
 import { selectOne } from '../interactions/selection-api'
+import { builtinMaterialIcons } from '../material-host'
 
 const store = useDesignerStore()
 const dragDrop = inject(DESIGNER_DRAG_DROP_KEY, null)
 
-const visibleCatalogGroups = computed<MaterialCatalogGroup[]>(() =>
-  store.getCatalogGroups().filter(group => group.items.length > 0),
-)
+const visibleCatalogGroups = computed<MaterialCatalogGroup[]>(() => {
+  const groups = new Map<string, MaterialCatalogGroup>()
+  for (const type of store.listEditableMaterialTypes()) {
+    const manifest = store.getManifest(type)
+    if (!manifest)
+      continue
+    const id = manifest.common.category
+    const group = groups.get(id) ?? { id, label: id, items: [] }
+    group.items.push({
+      id: type,
+      groupId: id,
+      label: manifest.common.nameKey,
+      icon: builtinMaterialIcons[manifest.common.iconKey] ?? IconRect,
+      materialType: type,
+    })
+    groups.set(id, group)
+  }
+  return [...groups.values()]
+})
 
 const hasRegisteredMaterials = computed(() =>
   visibleCatalogGroups.value.length > 0,
@@ -20,10 +38,7 @@ const hasRegisteredMaterials = computed(() =>
 function handleAddMaterial(entry: MaterialCatalogEntry) {
   if (dragDrop?.consumeClickSuppression())
     return
-  const definition = store.getMaterial(entry.materialType)
-  if (!definition)
-    return
-  const node = (entry.createDefaultNode ?? definition.createDefaultNode)({
+  const node = store.materialProfile.createNode(entry.materialType, {
     x: 50,
     y: 50,
   }, store.schema.unit)
