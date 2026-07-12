@@ -43,7 +43,7 @@ const selectedElementLocked = computed(() => selectedElement.value?.editorState?
 const selectedElementHidden = computed(() => selectedElement.value?.editorState?.hidden === true)
 const selectedConditionCapability = computed(() => {
   const element = selectedElement.value
-  return element ? resolveMaterialConditionCapability(store.getMaterial(element.type)?.condition) : undefined
+  return element ? resolveMaterialConditionCapability(store.getMaterialManifest(element.type)?.common.condition) : undefined
 })
 const canEditSelectedElement = computed(() => !selectedElementLocked.value && !selectedElementHidden.value)
 const showHiddenSwitch = computed(() => !selectedElementLocked.value)
@@ -64,11 +64,11 @@ const subPropertySchema = computed<SubPropertySchema | null>(() => {
   if (!node)
     return null
 
-  const ext = store.getDesignerExtension(node.type)
+  const ext = store.peekDesignerFacet(node.type)?.value?.extension
   if (!ext?.selectionTypes)
     return null
 
-  const selType = ext.selectionTypes.find(t => t.id === sel.type)
+  const selType = ext.selectionTypes.find((t: any) => t.id === sel.type)
   if (!selType?.getPropertySchema)
     return null
 
@@ -140,13 +140,13 @@ const selectedMaterialDataContract = computed(() => {
   const el = selectedElement.value
   if (!el)
     return undefined
-  const binding = store.getMaterial(el.type)?.binding
-  return binding?.kind === 'data-contract' ? binding.contract : undefined
+  const binding = store.getMaterialManifest(el.type)?.common.binding
+  return (binding as any)?.kind === 'data-contract' ? (binding as any).contract : undefined
 })
 
 const selectedMaterialBinding = computed(() => {
   const el = selectedElement.value
-  return el ? store.getMaterial(el.type)?.binding : undefined
+  return el ? store.getMaterialManifest(el.type)?.common.binding : undefined
 })
 
 const selectedBindingFormatEditor = computed(() =>
@@ -166,8 +166,8 @@ const hideBindingSection = computed(() => {
   if (!hasSubBinding.value && selectedElement.value) {
     if (selectedMaterialDataContract.value)
       return true
-    const def = store.getMaterial(selectedElement.value.type)
-    if (def?.capabilities.bindable === false)
+    const def = store.getMaterialManifest(selectedElement.value.type)
+    if (def?.common.binding.kind === 'none')
       return true
   }
   return false
@@ -182,17 +182,11 @@ function handleClearExternalBinding(bindIndex?: number) {
 
 // ─── Section Filter ─────────────────────────────────────────────────
 
-function isSectionVisible(sectionId: PanelSectionId): boolean {
+function isSectionVisible(_sectionId: PanelSectionId): boolean {
   const el = selectedElement.value
   if (!el)
     return true
-  const def = store.getMaterial(el.type)
-  if (!def?.sectionFilter)
-    return true
-  return def.sectionFilter(sectionId, {
-    node: el,
-    isEditing: store.editingSession.activeNodeId === el.id,
-  })
+  return true
 }
 
 // ─── Page property descriptor system ─────────────────────────────
@@ -380,9 +374,9 @@ function rollbackPagePreview(descriptorId: string) {
 const materialSchemas = computed<PropSchema[]>(() => {
   if (!selectedElement.value)
     return []
-  const def = store.getMaterial(selectedElement.value.type)
+  const def = store.getMaterialManifest(selectedElement.value.type)
   return [
-    ...(def?.props ?? []),
+    ...(def?.common.properties ?? []),
     ...createLayoutBehaviorPropSchemas({ page: store.schema.page }),
   ]
 })

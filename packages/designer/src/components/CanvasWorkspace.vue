@@ -456,7 +456,7 @@ function createPageSizeKey(width: number, height: number): string {
 
 function isRepeatedEveryPage(node: ReturnType<typeof store.getElements>[number]): boolean {
   return readNodeRepeatScope(node) === 'every-output-page'
-    || store.getMaterial(node.type)?.capabilities.pageAware === true
+    || store.getMaterialManifest(node.type)?.common.layout.pageRepeat === 'every-output-page'
 }
 
 function createPageRenderContext(pageIndex: number, totalPages: number): MaterialDesignerRenderContext {

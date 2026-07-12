@@ -13,18 +13,16 @@ const store = useDesignerStore()
 function getNodeLabel(node: MaterialNode): string {
   if (node.editorState?.name)
     return node.editorState.name
-  const def = store.getMaterial(node.type)
+  const def = store.getMaterialManifest(node.type)
   if (def)
-    return store.t(def.name)
+    return store.t(def.common.nameKey)
   return `${node.type} (${node.id.slice(0, 8)})`
 }
 
 function toTreeNode(node: MaterialNode): TreeNode {
-  const definition = store.getMaterial(node.type)
   return {
     id: node.id,
     label: getNodeLabel(node),
-    icon: definition?.icon,
     children: node.slots.default?.map(toTreeNode),
     data: node,
   }
