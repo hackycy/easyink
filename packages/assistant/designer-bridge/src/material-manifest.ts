@@ -1,24 +1,67 @@
-import type { AssistantMaterialBindingDefinition, AssistantMaterialManifest, AssistantMaterialProp } from '@easyink/assistant-capabilities'
+import type { AssistantMaterialBindingDefinition, AssistantMaterialDataContract, AssistantMaterialManifest, AssistantMaterialProp } from '@easyink/assistant-capabilities'
 import type { DesignerStore, PropertyDescriptor } from '@easyink/designer'
 
-const MATERIAL_BINDING_KEY = 'binding'
-const MATERIAL_PROPS_KEY = 'props'
+type DesignerMaterialManifest = ReturnType<DesignerStore['listEditableMaterialManifests']>[number]
+type DesignerMaterialBinding = DesignerMaterialManifest['common']['binding']
 
 export function createAssistantMaterialManifest(store: DesignerStore): AssistantMaterialManifest {
   return {
-    materials: store.listMaterials().map(material => ({
+    materials: store.listEditableMaterialManifests().map(material => ({
       type: material.type,
-      name: material.name,
-      capabilities: material.capabilities,
-      binding: sanitizeBindingDefinition(material[MATERIAL_BINDING_KEY]),
-      props: material[MATERIAL_PROPS_KEY].map(prop => sanitizePropSchema(prop)),
-      ai: material.aiDescriptor,
+      name: store.t(material.common.nameKey),
+      capabilities: mapCapabilities(material),
+      binding: mapBindingDefinition(material.common.binding),
+      props: material.common.properties.map(prop => sanitizePropSchema(prop)),
+      ai: toSerializable(material.facets.ai?.descriptor) as AssistantMaterialManifest['materials'][number]['ai'],
     })),
   }
 }
 
-function sanitizeBindingDefinition(binding: unknown): AssistantMaterialBindingDefinition {
-  return toSerializable(binding) as AssistantMaterialBindingDefinition
+function mapCapabilities(material: DesignerMaterialManifest): AssistantMaterialManifest['materials'][number]['capabilities'] {
+  const { interaction, binding, structure } = material.common
+  return compactObject({
+    bindable: binding.kind !== 'none',
+    rotatable: interaction.rotatable,
+    resizable: interaction.resizable,
+    supportsChildren: structure.slots.length > 0,
+    supportsAnimation: interaction.supportsAnimation,
+    supportsUnionDrop: interaction.supportsUnionDrop,
+    multiBinding: binding.kind === 'ports' && binding.ports.length > 1,
+    keepAspectRatio: interaction.keepAspectRatio,
+  })
+}
+
+function mapBindingDefinition(binding: DesignerMaterialBinding): AssistantMaterialBindingDefinition {
+  if (binding.kind === 'none')
+    return { kind: 'none' }
+
+  if (binding.dataContract) {
+    const editor = binding.ports.find(port => port.formatEditor !== false)?.formatEditor ?? false
+    return {
+      kind: 'data-contract',
+      contract: toSerializable(binding.dataContract) as AssistantMaterialDataContract,
+      formatEditor: cloneFormatEditor(editor),
+    } as AssistantMaterialBindingDefinition
+  }
+
+  const displayPorts = binding.ports.filter(port => port.role === 'display' && port.key.kind === 'exact')
+  if (displayPorts.length !== 1)
+    return { kind: 'custom' }
+  const port = displayPorts[0]!
+  const modelPath = port.modelPath?.match(/^\/model\/([^/]+)$/)?.[1]
+  if (!modelPath)
+    return { kind: 'custom' }
+  return {
+    kind: 'ordinary',
+    primaryProp: modelPath.replaceAll('~1', '/').replaceAll('~0', '~'),
+    formatEditor: cloneFormatEditor(port.formatEditor),
+  }
+}
+
+function cloneFormatEditor(editor: false | { tabs: readonly ['preset'], presetTypes?: readonly string[] }) {
+  return editor === false
+    ? false
+    : { tabs: [...editor.tabs], defaultTab: 'preset', presetTypes: editor.presetTypes ? [...editor.presetTypes] : undefined }
 }
 
 function sanitizePropSchema(prop: PropertyDescriptor): AssistantMaterialProp {

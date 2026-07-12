@@ -2,10 +2,11 @@ import type { BindingFormatEditorDefinition, MaterialBindingDefinition } from '@
 
 export function resolveOrdinaryFormatEditor(
   binding: MaterialBindingDefinition | undefined,
+  port: string | undefined,
 ): BindingFormatEditorDefinition | false {
-  if (binding?.kind !== 'ports')
+  if (binding?.kind !== 'ports' || !port)
     return false
-  const editor = binding.ports[0]?.formatEditor
+  const editor = binding.ports.find(policy => policy.key.kind === 'exact' && policy.key.value === port)?.formatEditor
   return editor ? { ...editor, presetTypes: editor.presetTypes ? [...editor.presetTypes] : undefined } : false
 }
 

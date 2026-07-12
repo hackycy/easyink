@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { defineComponent, isReactive } from 'vue'
+import { defineComponent, isReactive, markRaw } from 'vue'
 import { PropertyEditorRegistry, PropertyEditorRegistryError } from './property-editor-registry'
 
 describe('propertyEditorRegistry', () => {
@@ -37,6 +37,30 @@ describe('propertyEditorRegistry', () => {
 
     disposeReplacement()
     disposeReplacement()
+    expect(registry.get('pkg/editor')).toBeUndefined()
+  })
+
+  it('owns frozen snapshots that caller and returned values cannot retarget', () => {
+    const registry = new PropertyEditorRegistry()
+    const component = markRaw(defineComponent({ name: 'Original' }))
+    const replacement = markRaw(defineComponent({ name: 'Replacement' }))
+    const input = { id: 'pkg/editor', ownerPackageId: 'owner', component }
+    const dispose = registry.register(input)
+
+    input.id = 'pkg/other'
+    input.ownerPackageId = 'attacker'
+    input.component = replacement
+    const registration = registry.getRegistration('pkg/editor')!
+    const listed = registry.list()
+
+    expect(registration).toEqual({ id: 'pkg/editor', ownerPackageId: 'owner', component })
+    expect(Object.isFrozen(registration)).toBe(true)
+    expect(Object.isFrozen(listed)).toBe(true)
+    expect(() => Object.assign(registration, { ownerPackageId: 'attacker', component: replacement })).toThrow()
+    expect(registry.unregister('pkg/editor', 'attacker')).toBe(false)
+    expect(registry.get('pkg/editor')).toBe(component)
+
+    dispose()
     expect(registry.get('pkg/editor')).toBeUndefined()
   })
 })

@@ -7,6 +7,7 @@ interface PathSnapshot {
   path: PropertyAccessor['paths'][number]
   exists: boolean
   value?: unknown
+  arrayLength?: number
   missingAncestors: readonly PropertyAccessor['paths'][number][]
 }
 
@@ -91,11 +92,12 @@ export function commitMaterialPropertyPreview<TContext, TResult>(
 }
 
 function capturePaths(node: MaterialNode, paths: PropertyAccessor['paths']): readonly PathSnapshot[] {
-  return paths.map(path => capturePath(node, path))
+  return [...new Set(paths)].map(path => capturePath(node, path))
 }
 
 function restorePaths(node: MaterialNode, snapshots: readonly PathSnapshot[]): void {
-  for (const snapshot of snapshots) {
+  const ordered = [...snapshots].sort(compareRestoreOrder)
+  for (const snapshot of ordered) {
     const leaf = tryResolveParent(node, snapshot.path)
     if (leaf) {
       const exists = Object.hasOwn(leaf.parent, leaf.token)
@@ -109,7 +111,10 @@ function restorePaths(node: MaterialNode, snapshots: readonly PathSnapshot[]): v
         }
       }
       else if (exists) {
-        removeOwnValue(leaf.parent, leaf.token)
+        const current = leaf.parent[leaf.token as keyof typeof leaf.parent]
+        const retainConcurrentContainer = hasDeclaredDescendant(snapshot.path, ordered) && !isEmptyContainer(current)
+        if (!retainConcurrentContainer)
+          removeOwnValue(leaf.parent, leaf.token, snapshot.arrayLength)
       }
     }
 
@@ -124,6 +129,33 @@ function restorePaths(node: MaterialNode, snapshots: readonly PathSnapshot[]): v
   }
 }
 
+function hasDeclaredDescendant(path: PropertyAccessor['paths'][number], snapshots: readonly PathSnapshot[]): boolean {
+  const prefix = `${path}/`
+  return snapshots.some(snapshot => snapshot.path.startsWith(prefix))
+}
+
+function compareRestoreOrder(left: PathSnapshot, right: PathSnapshot): number {
+  const leftTokens = decodePointer(left.path)
+  const rightTokens = decodePointer(right.path)
+  const leftParent = encodePointer(leftTokens.slice(0, -1))
+  const rightParent = encodePointer(rightTokens.slice(0, -1))
+  if (leftParent === rightParent) {
+    const leftIndex = numericToken(leftTokens.at(-1))
+    const rightIndex = numericToken(rightTokens.at(-1))
+    if (leftIndex !== undefined && rightIndex !== undefined)
+      return rightIndex - leftIndex
+  }
+  // Children must be restored before a declared parent path can remove its container.
+  return rightTokens.length - leftTokens.length
+}
+
+function numericToken(token: string | undefined): number | undefined {
+  if (token === undefined || !/^(?:0|[1-9]\d*)$/.test(token))
+    return undefined
+  const index = Number(token)
+  return Number.isSafeInteger(index) ? index : undefined
+}
+
 function capturePath(root: unknown, path: PropertyAccessor['paths'][number]): PathSnapshot {
   const tokens = decodePointer(path)
   let current = root
@@ -133,7 +165,12 @@ function capturePath(root: unknown, path: PropertyAccessor['paths'][number]): Pa
       const missingAncestors = tokens
         .slice(index, -1)
         .map((_, offset) => encodePointer(tokens.slice(0, index + offset + 1)))
-      return { path, exists: false, missingAncestors }
+      return {
+        path,
+        exists: false,
+        missingAncestors,
+        ...(index === tokens.length - 1 && Array.isArray(current) ? { arrayLength: current.length } : {}),
+      }
     }
     current = (current as Record<string, unknown>)[token]
   }
@@ -161,11 +198,17 @@ function encodePointer(tokens: readonly string[]): PropertyAccessor['paths'][num
   return `/${tokens.map(token => token.replaceAll('~', '~0').replaceAll('/', '~1')).join('/')}`
 }
 
-function removeOwnValue(parent: Record<string, unknown> | unknown[], token: string): void {
-  if (Array.isArray(parent))
-    parent.splice(arrayIndex(token, parent.length, false), 1)
-  else
+function removeOwnValue(parent: Record<string, unknown> | unknown[], token: string, originalArrayLength?: number): void {
+  if (Array.isArray(parent)) {
+    const index = arrayIndex(token, parent.length, false)
+    if (originalArrayLength !== undefined && index < originalArrayLength)
+      delete parent[index]
+    else
+      parent.splice(index, 1)
+  }
+  else {
     delete parent[token]
+  }
 }
 
 function isEmptyContainer(value: unknown): boolean {

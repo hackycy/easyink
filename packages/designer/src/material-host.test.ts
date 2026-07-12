@@ -183,6 +183,43 @@ describe('designerStore material facet host', () => {
     expect(store.t('materials.broken.name')).toBe('materials.broken.name')
   })
 
+  it.each([
+    ['top-level getter', () => {
+      const facet = validFacet() as Record<string, unknown>
+      Object.defineProperty(facet, 'localeMessages', { enumerable: true, get: () => {
+        throw new Error('getter')
+      } })
+      return facet
+    }],
+    ['nested getter', () => {
+      const messages: Record<string, unknown> = {}
+      Object.defineProperty(messages, 'plugin', { enumerable: true, get: () => {
+        throw new Error('nested getter')
+      } })
+      return { ...validFacet(), localeMessages: { messages } }
+    }],
+    ['proxy trap', () => ({
+      ...validFacet(),
+      localeMessages: { messages: new Proxy({}, { ownKeys: () => { throw new Error('proxy') } }) },
+    })],
+    ['oversize tree', () => ({
+      ...validFacet(),
+      localeMessages: { messages: { plugin: { title: 'x'.repeat(140_000) } } },
+    })],
+  ])('quarantines hostile locale metadata (%s) without rejecting activation or breaking t()', async (_label, createFacet) => {
+    const manifest = createTestMaterialManifest({ type: 'hostile-locale', designer: () => createFacet() as any })
+    const profile = createDesignerTestProfile([manifest])
+    const store = new DesignerStore(undefined, undefined, undefined, { materials: { profile } })
+
+    const instance = await store.activateDesignerFacet('hostile-locale')
+
+    expect(instance).toMatchObject({ state: 'quarantined', diagnostic: { code: 'MATERIAL_FACET_ACTIVATION_FAILED' } })
+    expect(instance.value).toBeUndefined()
+    expect(store.peekDesignerFacet('hostile-locale')).toBe(instance)
+    expect(() => store.t('plugin.title')).not.toThrow()
+    expect(store.t('plugin.title')).toBe('plugin.title')
+  })
+
   it('runs render cleanup on unmount and extension disposal once', async () => {
     const renderCleanup = vi.fn()
     const dispose = vi.fn()
@@ -232,4 +269,11 @@ async function flush() {
   await Promise.resolve()
   await new Promise(resolve => setTimeout(resolve, 0))
   await nextTick()
+}
+
+function validFacet() {
+  return {
+    extension: { renderContent: () => () => {} },
+    catalog: { group: 'test', order: 0 },
+  }
 }

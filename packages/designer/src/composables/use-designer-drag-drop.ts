@@ -20,7 +20,7 @@ import { IconRect } from '@easyink/icons'
 import { deepClone } from '@easyink/shared'
 import { createGeometryService } from '../editing/geometry-service'
 import { selectMany, selectOne } from '../interactions/selection-api'
-import { resolveDefaultDatasourceBindingPort } from '../materials/binding-port'
+import { resolveDataContractBindingPort, resolveDefaultDatasourceBindingPort } from '../materials/binding-port'
 
 export const MATERIAL_DRAG_MIME = 'application/x-easyink-material'
 export const DATASOURCE_DRAG_MIME = 'application/x-easyink-field'
@@ -401,7 +401,10 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
 
     const binding = ctx.store.getMaterialManifest(hit.type)?.common.binding
     if (binding?.kind === 'ports' && binding.dataContract) {
-      const plan = resolveMaterialDataDropPlan(binding.dataContract, hit, data)
+      const port = resolveDataContractBindingPort(binding)
+      if (!port)
+        return null
+      const plan = resolveMaterialDataDropPlan(binding.dataContract, hit.bindings[port], data)
       if (!plan)
         return null
       return {
@@ -477,16 +480,20 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
 
     const binding = ctx.store.getMaterialManifest(resolved.target.type)?.common.binding
     if (binding?.kind === 'ports' && binding.dataContract) {
-      const plan = resolveMaterialDataDropPlan(binding.dataContract, resolved.target, fieldData)
+      const port = resolveDataContractBindingPort(binding)
+      if (!port)
+        return
+      const currentBinding = resolved.target.bindings[port]
+      const plan = resolveMaterialDataDropPlan(binding.dataContract, currentBinding, fieldData)
       if (!plan || plan.status !== 'accepted')
         return
       const nextBinding = applyMaterialDataFieldMapping(
         binding.dataContract,
-        resolved.target.bindings.value,
+        currentBinding,
         fieldData,
         plan.fieldId,
       )
-      ctx.store.commands.execute(new UpdateMaterialBindingCommand(ctx.store.schema.elements, resolved.target.id, nextBinding))
+      ctx.store.commands.execute(new UpdateMaterialBindingCommand(ctx.store.schema.elements, resolved.target.id, nextBinding, port))
       selectOne(ctx.store, resolved.target.id)
       return
     }
@@ -502,7 +509,7 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
 
   function resolveMaterialDataDropPlan(
     contract: MaterialDataContract,
-    target: MaterialNode,
+    currentBinding: MaterialNode['bindings'][string],
     data: DatasourceFieldDragData,
   ): MaterialDataDropPlan | null {
     const fields = Object.entries(contract.model.fields).map(([id, field]) => ({ id, field }))
@@ -510,9 +517,9 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
       return null
 
     for (const entry of fields) {
-      if (findMaterialDataFieldMapping(contract, target.bindings.value, entry.id))
+      if (findMaterialDataFieldMapping(contract, currentBinding, entry.id))
         continue
-      const result = canBindMaterialDataField(contract, target.bindings.value, data, entry.id)
+      const result = canBindMaterialDataField(contract, currentBinding, data, entry.id)
       if (result.accepted) {
         return {
           fieldId: entry.id,
@@ -524,7 +531,7 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
     }
 
     for (const entry of fields) {
-      const result = canBindMaterialDataField(contract, target.bindings.value, data, entry.id)
+      const result = canBindMaterialDataField(contract, currentBinding, data, entry.id)
       if (!result.accepted) {
         return {
           fieldId: entry.id,

@@ -2,9 +2,9 @@ import type { Component } from 'vue'
 import { markRaw } from 'vue'
 
 export interface PropertyEditorRegistration {
-  id: string
-  ownerPackageId: string
-  component: Component
+  readonly id: string
+  readonly ownerPackageId: string
+  readonly component: Component
 }
 
 export class PropertyEditorRegistryError extends Error {
@@ -25,12 +25,17 @@ export class PropertyEditorRegistry {
       throw new PropertyEditorRegistryError('PROPERTY_EDITOR_ID_INVALID', input.id)
     if (this.registrations.has(input.id))
       throw new PropertyEditorRegistryError('PROPERTY_EDITOR_DUPLICATE', input.id)
-    const registration = { ...input, component: markRaw(input.component) }
+    const id = input.id
+    const registration: PropertyEditorRegistration = Object.freeze({
+      id,
+      ownerPackageId: input.ownerPackageId,
+      component: markRaw(input.component),
+    })
     this.registrations.set(input.id, registration)
     return () => {
-      if (this.registrations.get(registration.id) !== registration)
+      if (this.registrations.get(id) !== registration)
         return
-      this.registrations.delete(registration.id)
+      this.registrations.delete(id)
     }
   }
 

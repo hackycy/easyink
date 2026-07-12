@@ -12,6 +12,7 @@ import { EditingSessionManager } from '../editing/editing-session-manager'
 import { createTransactionService } from '../editing/transaction-service'
 import { DesignerInteractionService } from '../interactions/interaction-service'
 import { builtinMaterialGroupLabels, resolveBuiltinMaterialIcon } from '../material-host'
+import { prepareDesignerFacetMetadata } from '../materials/designer-facet-metadata'
 import { createMaterialExtensionContext } from '../materials/extension-context'
 import { PropertyEditorRegistry } from '../properties/property-editor-registry'
 import { resolveDesignerMaterialProfile } from '../runtime-config'
@@ -113,6 +114,7 @@ export class DesignerStore {
         runtimeConfig: this.runtimeConfig,
       }),
       onInstanceDisposed: instance => this.releaseDesignerFacetLocale(instance),
+      prepareValue: (value, _profile, _materialType, surface) => prepareDesignerFacetMetadata(value, surface),
     }))
     const loaded = loadDocumentWithProfile(schema, this.materialProfile)
     this._schema = loaded.schema
@@ -423,7 +425,8 @@ export class DesignerStore {
   }
 
   // ─── Material registry ────────────────────────────────────────
-  // ─── Paper registry ───────────────────────────────────────────
+
+  // ─── Paper registry ───────────────────────────────────────────
 
   listPaperPresets(): PaperPreset[] {
     return this.paperRegistry.listPresets()
@@ -440,7 +443,8 @@ export class DesignerStore {
   getPaperPresetBySize(width: number, height: number): PaperPreset | undefined {
     return this.paperRegistry.resolveBySize(width, height)
   }
-  notifyMaterialExtensionLoaded(): void {
+
+  notifyMaterialExtensionLoaded(): void {
     this.materialExtensionRevision += 1
   }
 
@@ -476,11 +480,12 @@ export class DesignerStore {
 
   private resolveRegisteredLocaleMessages(registration: LocaleMessageRegistration): LocaleMessages | undefined {
     if (this._localeCode) {
-      const current = registration.locales?.[this._localeCode]
+      const locales = this.readOwnLocaleData(registration, 'locales')
+      const current = this.readOwnLocaleData(locales, this._localeCode)
       if (current)
-        return current
+        return current as LocaleMessages
     }
-    return registration.messages
+    return this.readOwnLocaleData(registration, 'messages') as LocaleMessages | undefined
   }
 
   private lookupLocaleMessage(locale: LocaleMessages | undefined, key: string): string | undefined {
@@ -489,11 +494,23 @@ export class DesignerStore {
     const parts = key.split('.')
     let current: unknown = locale
     for (const part of parts) {
-      if (typeof current !== 'object' || current === null)
+      current = this.readOwnLocaleData(current, part)
+      if (current === undefined)
         return undefined
-      current = (current as Record<string, unknown>)[part]
     }
     return typeof current === 'string' ? current : undefined
+  }
+
+  private readOwnLocaleData(value: unknown, key: string): unknown {
+    if (typeof value !== 'object' || value === null)
+      return undefined
+    try {
+      const descriptor = Object.getOwnPropertyDescriptor(value, key)
+      return descriptor?.enumerable === true && 'value' in descriptor ? descriptor.value : undefined
+    }
+    catch {
+      return undefined
+    }
   }
 
   // ─── Element geometry ───────────────────────────────────────────

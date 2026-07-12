@@ -107,6 +107,7 @@ function makeStore(
     textCreateDefaultNode?: (partial?: Partial<MaterialNode>) => MaterialNode
     page?: PageSchema
     textDataContract?: unknown
+    textDataContractPort?: string
     extraManifests?: readonly MaterialManifest[]
   } = {},
 ) {
@@ -114,7 +115,7 @@ function makeStore(
     ? {
         kind: 'ports' as const,
         dataContract: options.textDataContract as typeof chartDataContract,
-        ports: [{ id: 'value', key: { kind: 'exact' as const, value: 'value' }, role: 'semantic' as const, valueShape: 'record-array' as const, formatEditor: false as const }],
+        ports: [{ id: 'data', key: { kind: 'exact' as const, value: options.textDataContractPort ?? 'value' }, role: 'semantic' as const, valueShape: 'record-array' as const, formatEditor: false as const }],
       }
     : {
         kind: 'ports' as const,
@@ -695,6 +696,7 @@ describe('useDesignerDragDrop', () => {
     const node = createTextNode({ id: 'target', x: 0, y: 0, width: 100, height: 50 })
     const store = makeStore([node], undefined, {
       textDataContract: chartDataContract,
+      textDataContractPort: 'dataset',
     })
     const drag = useDesignerDragDrop({
       store: store as never,
@@ -718,7 +720,7 @@ describe('useDesignerDragDrop', () => {
     drag.startDatasourceDrag(makeDragEvent(0, 0, []), revenue)
     drag.onCanvasDrop(makeDragEvent(20, 20, [DATASOURCE_DRAG_MIME], { [DATASOURCE_DRAG_MIME]: JSON.stringify(revenue) }))
 
-    expect(node.bindings.value).toEqual({
+    expect(node.bindings.dataset).toEqual({
       kind: 'data-contract',
       relation: { kind: 'auto' },
       mappings: {
@@ -745,7 +747,7 @@ describe('useDesignerDragDrop', () => {
       width: 100,
       height: 50,
       bindings: {
-        value: {
+        dataset: {
           kind: 'data-contract',
           relation: { kind: 'auto' },
           mappings: {
@@ -756,6 +758,7 @@ describe('useDesignerDragDrop', () => {
     })
     const store = makeStore([node], undefined, {
       textDataContract: chartDataContract,
+      textDataContractPort: 'dataset',
     })
     const drag = useDesignerDragDrop({
       store: store as never,
@@ -771,7 +774,7 @@ describe('useDesignerDragDrop', () => {
     drag.startDatasourceDrag(makeDragEvent(0, 0, []), weeklyRevenue)
     drag.onCanvasDrop(makeDragEvent(20, 20, [DATASOURCE_DRAG_MIME], { [DATASOURCE_DRAG_MIME]: JSON.stringify(weeklyRevenue) }))
 
-    expect(node.bindings.value).toEqual({
+    expect(node.bindings.dataset).toEqual({
       kind: 'data-contract',
       relation: { kind: 'auto' },
       mappings: {

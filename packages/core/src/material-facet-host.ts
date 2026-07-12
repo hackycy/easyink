@@ -35,6 +35,12 @@ export interface MaterialFacetHostOptions {
     surface: RuntimeMaterialSurface,
   ) => unknown
   onInstanceDisposed?: (instance: FacetInstance<unknown>) => void
+  prepareValue?: (
+    value: unknown,
+    profile: CompiledMaterialProfile,
+    materialType: string,
+    surface: RuntimeMaterialSurface,
+  ) => unknown | Promise<unknown>
 }
 
 interface ProfileFacetCache {
@@ -70,11 +76,13 @@ export class MaterialFacetHost {
   private readonly pendingOperations = new Set<Promise<FacetInstance<unknown>>>()
   private readonly getActivationServices?: MaterialFacetHostOptions['getActivationServices']
   private readonly onInstanceDisposed?: MaterialFacetHostOptions['onInstanceDisposed']
+  private readonly prepareValue?: MaterialFacetHostOptions['prepareValue']
   private shutdownPromise?: Promise<readonly FacetDiagnostic[]>
 
   constructor(options: MaterialFacetHostOptions = {}) {
     this.getActivationServices = options.getActivationServices
     this.onInstanceDisposed = options.onInstanceDisposed
+    this.prepareValue = options.prepareValue
   }
 
   activate<T>(
@@ -251,7 +259,22 @@ export class MaterialFacetHost {
           instance = operation.recursiveInstance as FacetInstance<T>
         }
         else {
-          instance = this.createActiveInstance(profile, materialType, surface, value, cache, key)
+          let preparedValue: unknown
+          try {
+            preparedValue = this.prepareValue
+              ? await this.prepareValue(value, profile, materialType, surface)
+              : value
+          }
+          catch (error) {
+            try {
+              await disposeFacetValue(value)
+            }
+            catch {
+              // Preparation remains the primary activation failure.
+            }
+            throw error
+          }
+          instance = this.createActiveInstance(profile, materialType, surface, preparedValue as T, cache, key)
         }
       }
     }

@@ -13,6 +13,7 @@ import { EiNumberInput, EiPanel, EiSwitch } from '@easyink/ui'
 import { computed, onUnmounted, shallowRef, watch, watchEffect } from 'vue'
 import { useDesignerStore } from '../composables'
 import { resolveDataContractFieldFormatEditor, resolveOrdinaryFormatEditor } from '../materials/binding-format-editor'
+import { resolveBindingPanelPort, resolveDataContractBindingPort } from '../materials/binding-port'
 import { isElementRotatable } from '../materials/capabilities'
 import { canEditGeometry, isPropSchemaDisabled as isMaterialPropSchemaDisabled } from '../materials/control-policy'
 import { createPagePropertyDescriptors, defaultDocumentPatch, defaultPagePatch, filterVisible, groupDescriptors, readPageProperty, splitPatch } from '../page-properties'
@@ -141,7 +142,7 @@ const selectedMaterialDataContract = computed(() => {
   if (!el)
     return undefined
   const binding = store.getMaterialManifest(el.type)?.common.binding
-  return (binding as any)?.kind === 'data-contract' ? (binding as any).contract : undefined
+  return binding?.kind === 'ports' ? binding.dataContract : undefined
 })
 
 const selectedMaterialBinding = computed(() => {
@@ -149,8 +150,11 @@ const selectedMaterialBinding = computed(() => {
   return el ? store.getMaterialManifest(el.type)?.common.binding : undefined
 })
 
+const selectedBindingPort = computed(() => resolveBindingPanelPort(selectedMaterialBinding.value))
+const selectedDataContractPort = computed(() => resolveDataContractBindingPort(selectedMaterialBinding.value))
+
 const selectedBindingFormatEditor = computed(() =>
-  resolveOrdinaryFormatEditor(selectedMaterialBinding.value),
+  resolveOrdinaryFormatEditor(selectedMaterialBinding.value, selectedBindingPort.value),
 )
 
 function resolveSelectedDataContractFieldFormatEditor(fieldId: string) {
@@ -168,6 +172,8 @@ const hideBindingSection = computed(() => {
       return true
     const def = store.getMaterialManifest(selectedElement.value.type)
     if (def?.common.binding.kind === 'none')
+      return true
+    if (!selectedBindingPort.value)
       return true
   }
   return false
@@ -387,7 +393,9 @@ const visibleSchemas = computed(() => {
     return []
   const elProps = {
     ...el.model,
-    __hasBinding: getBindingRefs(el.bindings.value).length > 0,
+    __hasBinding: selectedBindingPort.value
+      ? getBindingRefs(el.bindings[selectedBindingPort.value]).length > 0
+      : false,
     __placementMode: el.output.placement?.mode ?? ((el.model as Record<string, unknown>).layoutMode === 'fixed' ? 'fixed' : 'flow'),
   }
   return materialSchemas.value.filter(s => !s.visible || s.visible(elProps))
@@ -616,12 +624,12 @@ function updateRenderCondition(condition: MaterialNode['output']['renderConditio
 
 // ─── Binding ────────────────────────────────────────────────────
 
-function clearBinding(nodeId: string) {
-  const cmd = new ClearBindingCommand(store.schema.elements, nodeId)
+function clearBinding(nodeId: string, port: string) {
+  const cmd = new ClearBindingCommand(store.schema.elements, nodeId, port)
   store.commands.execute(cmd)
 }
 
-function updateBindingFormat(format: BindingDisplayFormat | undefined, bindIndex?: number) {
+function updateBindingFormat(format: BindingDisplayFormat | undefined, port: string | undefined, bindIndex?: number) {
   if (hasSubBinding.value) {
     const session = store.editingSession.activeSession
     if (!session || !subPropertySchema.value?.updateBindingFormat)
@@ -629,9 +637,9 @@ function updateBindingFormat(format: BindingDisplayFormat | undefined, bindIndex
     subPropertySchema.value.updateBindingFormat(session.tx, format, bindIndex == null ? 'value' : String(bindIndex))
     return
   }
-  if (!selectedElement.value)
+  if (!selectedElement.value || !port)
     return
-  const cmd = new UpdateBindingFormatCommand(store.schema.elements, selectedElement.value.id, format, bindIndex)
+  const cmd = new UpdateBindingFormatCommand(store.schema.elements, selectedElement.value.id, format, bindIndex, port)
   store.commands.execute(cmd)
 }
 
@@ -639,7 +647,10 @@ function updateMaterialDataBinding(binding: DataContractBinding | undefined) {
   const el = selectedElement.value
   if (!el)
     return
-  const cmd = new UpdateMaterialBindingCommand(store.schema.elements, el.id, binding)
+  const port = selectedDataContractPort.value
+  if (!port)
+    return
+  const cmd = new UpdateMaterialBindingCommand(store.schema.elements, el.id, binding, port)
   store.commands.execute(cmd)
 }
 
@@ -784,9 +795,10 @@ function isPropInputDisabled(schema: PropSchema): boolean {
       </template>
 
       <!-- Data binding -->
-      <EiPanel v-if="canEditSelectedElement && !hasSubBinding && selectedMaterialDataContract && isSectionVisible('binding')" :title="store.t('designer.property.dataBinding')" collapsible flat>
+      <EiPanel v-if="canEditSelectedElement && !hasSubBinding && selectedMaterialDataContract && selectedDataContractPort && isSectionVisible('binding')" :title="store.t('designer.property.dataBinding')" collapsible flat>
         <MaterialDataBindingEditor
           :element="selectedElement"
+          :port="selectedDataContractPort"
           :contract="selectedMaterialDataContract"
           :t="store.t.bind(store)"
           :get-data-source="getBindingDataSource"
@@ -799,6 +811,7 @@ function isPropInputDisabled(schema: PropSchema): boolean {
       <EiPanel v-if="canEditSelectedElement && !hideBindingSection && (isSectionVisible('binding') || hasSubBinding)" :title="store.t('designer.property.dataBinding')" collapsible flat>
         <BindingSection
           :element="selectedElement"
+          :port="selectedBindingPort"
           :t="store.t.bind(store)"
           :external-binding="externalBinding"
           :has-external-binding="hasSubBinding"

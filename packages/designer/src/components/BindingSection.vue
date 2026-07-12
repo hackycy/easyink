@@ -9,8 +9,9 @@ import BindingFormatEditor from './BindingFormatEditor.vue'
 
 const props = defineProps<{
   element: MaterialNode
+  port?: string
   t: (key: string) => string
-  /** External binding override (from overlay). When provided, overrides element.bindings.value. */
+  /** External binding override (from overlay). When provided, overrides the element port. */
   externalBinding?: BindingRef | BindingRef[] | null
   /** Whether external binding is explicitly set (to distinguish undefined from not-provided) */
   hasExternalBinding?: boolean
@@ -19,9 +20,9 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  clearBinding: [nodeId: string]
+  clearBinding: [nodeId: string, port: string]
   clearExternalBinding: [bindIndex?: number]
-  updateBindingFormat: [format: BindingDisplayFormat | undefined, bindIndex?: number]
+  updateBindingFormat: [format: BindingDisplayFormat | undefined, port: string | undefined, bindIndex?: number]
 }>()
 
 const bindings = computed<BindingRef[]>(() => {
@@ -32,7 +33,7 @@ const bindings = computed<BindingRef[]>(() => {
     return Array.isArray(props.externalBinding) ? props.externalBinding : [props.externalBinding]
   }
   // Default: element-level binding
-  const b = props.element.bindings.value
+  const b = props.port ? props.element.bindings[props.port] : undefined
   if (!b)
     return []
   if (!Array.isArray(b) && 'kind' in b && b.kind === 'data-contract')
@@ -47,7 +48,8 @@ function handleClear() {
     emit('clearExternalBinding')
   }
   else {
-    emit('clearBinding', props.element.id)
+    if (props.port)
+      emit('clearBinding', props.element.id, props.port)
   }
 }
 
@@ -96,7 +98,7 @@ function isBindingRef(binding: unknown): binding is BindingRef {
           :t="t"
           :get-data-source="getDataSource"
           :format-editor="formatEditor"
-          @update-binding-format="emit('updateBindingFormat', $event, bindIndex(binding, idx))"
+          @update-binding-format="emit('updateBindingFormat', $event, props.port, bindIndex(binding, idx))"
         />
       </div>
       <div class="ei-binding-section__footer">

@@ -193,7 +193,11 @@ describe('propertiesPanel material property preview lifecycle', () => {
     const node = createTableNode()
     node.model.items = ['first', 'second']
     const items = node.model.items
-    const accessor = createNodePropertyAccessor<string>('/model/items/1')
+    const accessor = {
+      paths: Object.freeze(['/model/items/1'] as const),
+      read: (draft: MaterialNode) => (draft.model.items as string[])[1] ?? '',
+      write: (draft: MaterialNode, value: string) => { (draft.model.items as unknown[])[1] = value },
+    }
     const descriptor = { key: 'item', label: 'Item', type: 'string' as const, accessor }
     const preview = new MaterialPropertyPreviewSession()
 
@@ -205,6 +209,68 @@ describe('propertiesPanel material property preview lifecycle', () => {
     preview.cancel()
     expect(node.model.items).toBe(items)
     expect(node.model.items).toEqual(['first', 'second'])
+  })
+
+  it('removes multiple preview-created array indices in descending order', () => {
+    const node = createTableNode()
+    node.model.items = []
+    const accessor = {
+      paths: Object.freeze(['/model/items/0', '/model/items/1'] as const),
+      read: () => undefined,
+      write: (draft: MaterialNode) => {
+        const items = draft.model.items as unknown[]
+        items[0] = 'first'
+        items[1] = 'second'
+      },
+    }
+    const descriptor = { key: 'items', label: 'Items', type: 'array' as const, accessor }
+    const preview = new MaterialPropertyPreviewSession()
+
+    preview.preview(node, descriptor, draft => accessor.write(draft))
+    preview.cancel()
+
+    expect(node.model.items).toEqual([])
+  })
+
+  it('preserves sparse array length and holes when restoring missing indices', () => {
+    const node = createTableNode()
+    const items: unknown[] = []
+    items.length = 3
+    items[2] = 'tail'
+    node.model.items = items
+    const accessor = {
+      paths: Object.freeze(['/model/items/1'] as const),
+      read: (draft: MaterialNode) => (draft.model.items as string[])[1] ?? '',
+      write: (draft: MaterialNode, value: string) => { (draft.model.items as unknown[])[1] = value },
+    }
+    const descriptor = { key: 'item', label: 'Item', type: 'string' as const, accessor }
+    const preview = new MaterialPropertyPreviewSession()
+
+    preview.preview(node, descriptor, draft => accessor.write(draft, 'preview'))
+    preview.cancel()
+
+    expect(node.model.items).toHaveLength(3)
+    expect(Object.hasOwn(node.model.items as unknown[], 0)).toBe(false)
+    expect(Object.hasOwn(node.model.items as unknown[], 1)).toBe(false)
+    expect((node.model.items as unknown[])[2]).toBe('tail')
+  })
+
+  it('deduplicates overlapping parent and child paths while retaining concurrent siblings', () => {
+    const node = createTableNode()
+    node.model = {}
+    const accessor = {
+      paths: Object.freeze(['/model/style', '/model/style/color', '/model/style/color'] as const),
+      read: () => undefined,
+      write: (draft: MaterialNode) => { draft.model.style = { color: '#fff' } },
+    }
+    const descriptor = { key: 'style', label: 'Style', type: 'object' as const, accessor }
+    const preview = new MaterialPropertyPreviewSession()
+
+    preview.preview(node, descriptor, draft => accessor.write(draft))
+    ;(node.model.style as Record<string, unknown>).other = 'concurrent'
+    preview.cancel()
+
+    expect(node.model).toEqual({ style: { other: 'concurrent' } })
   })
 
   it('prunes missing object ancestors on cancel and transaction undo', () => {
