@@ -2,7 +2,7 @@ import type { DataSourceDescriptor } from '@easyink/datasource'
 import type { DocumentSchema } from '@easyink/schema'
 import type { JsonObject, JsonValue } from '@easyink/shared'
 import { AssistantPluginSelectionSchema } from '@easyink/assistant-plugins'
-import { assertJsonValue } from '@easyink/shared'
+import { assertJsonValue, compileJsonSchema, isRfc6901Pointer } from '@easyink/shared'
 import { z } from 'zod'
 
 export const AssistantWorkflowStepSchema = z.enum([
@@ -52,6 +52,15 @@ const JsonObjectSchema = JsonValueSchema.refine(
   (value): value is JsonObject => typeof value === 'object' && value !== null && !Array.isArray(value),
   'Expected a JSON object',
 )
+
+const PortableJsonSchema = JsonObjectSchema.superRefine((schema, context) => {
+  try {
+    compileJsonSchema(schema)
+  }
+  catch (error) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: error instanceof Error ? error.message : 'Invalid JSON Schema' })
+  }
+})
 
 export const AssistantMaterialPropSchema = z.object({
   key: z.string(),
@@ -210,10 +219,10 @@ const AssistantMaterialStructureSchema = z.object({
 
 const AssistantMaterialGenerationSchema = z.object({
   enabled: z.literal(true),
-  modelSchema: JsonObjectSchema,
-  bindingShape: JsonObjectSchema,
-  requiredModelPaths: z.array(z.string()).optional(),
-  examples: z.array(JsonObjectSchema).min(1),
+  modelSchema: PortableJsonSchema,
+  bindingShape: PortableJsonSchema,
+  requiredModelPaths: z.array(z.string().refine(isRfc6901Pointer, 'Expected an RFC 6901 pointer')).optional(),
+  examples: z.array(JsonValueSchema).min(1),
 }).strict()
 
 export const AssistantMaterialManifestEntrySchema = z.object({

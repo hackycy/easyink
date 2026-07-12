@@ -60,6 +60,7 @@ catalogs:
     '@vueuse/core': ^14.3.0
     '@xstate/vue': ^5.0.0
     ant-design-vue: ^4.2.6
+    ajv: ^8.17.1
     class-variance-authority: ^0.7.1
     clsx: ^2.1.1
     curlconverter: ^4.12.0

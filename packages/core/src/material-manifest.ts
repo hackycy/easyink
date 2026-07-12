@@ -1,5 +1,5 @@
 import type { MaterialNode } from '@easyink/schema'
-import type { BindingFormatPresetType, BindingPresetFormat, JsonObject, PropSchemaType, UnitType } from '@easyink/shared'
+import type { BindingFormatPresetType, BindingPresetFormat, JsonObject, JsonValue, PropSchemaType, Rfc6901Pointer, UnitType } from '@easyink/shared'
 import type { MaterialConditionCapability } from './condition'
 import type {
   BindingExpression,
@@ -10,7 +10,7 @@ import type {
 import type { JsonPointer } from './material-introspection'
 import type { PropertyDescriptor } from './material-properties'
 import type { SchemaAdapter } from './schema-adapter'
-import { assertJsonValue } from '@easyink/shared'
+import { assertJsonValue, compileJsonSchema, isRfc6901Pointer, jsonPointerExists } from '@easyink/shared'
 import { createMaterialBindingPortPolicyResolver } from './material-binding'
 
 export const MATERIAL_MANIFEST_VERSION = 1 as const
@@ -70,8 +70,8 @@ export interface MaterialAIFacet {
     enabled: boolean
     modelSchema?: JsonObject
     bindingShape?: JsonObject
-    requiredModelPaths?: readonly JsonPointer[]
-    examples: readonly JsonObject[]
+    requiredModelPaths?: readonly Rfc6901Pointer[]
+    examples: readonly JsonValue[]
   }
   descriptor?: JsonObject
 }
@@ -528,15 +528,25 @@ function validateAI(ai: MaterialAIFacet | undefined): void {
     if (!isPlainRecord(generation.modelSchema))
       fail('MATERIAL_AI_GENERATION_INVALID')
     assertJsonValue(generation.modelSchema)
+    try {
+      compileJsonSchema(generation.modelSchema)
+    }
+    catch {
+      fail('MATERIAL_AI_MODEL_SCHEMA_INVALID')
+    }
   }
   if (generation.bindingShape !== undefined) {
     if (!isPlainRecord(generation.bindingShape))
       fail('MATERIAL_AI_GENERATION_INVALID')
     assertJsonValue(generation.bindingShape)
+    try {
+      compileJsonSchema(generation.bindingShape)
+    }
+    catch {
+      fail('MATERIAL_AI_BINDING_SCHEMA_INVALID')
+    }
   }
   for (const example of generation.examples) {
-    if (!isPlainRecord(example))
-      fail('MATERIAL_AI_GENERATION_INVALID')
     assertJsonValue(example)
   }
   if (ai.descriptor !== undefined) {
@@ -547,7 +557,7 @@ function validateAI(ai: MaterialAIFacet | undefined): void {
   if (generation.requiredModelPaths !== undefined && !Array.isArray(generation.requiredModelPaths))
     fail('MATERIAL_AI_MODEL_PATH_INVALID')
   for (const path of generation.requiredModelPaths ?? []) {
-    if (!isJsonPointer(path) || path === '/model' || path.startsWith('/model/'))
+    if (!isRfc6901Pointer(path) || path === '/model' || path.startsWith('/model/'))
       fail('MATERIAL_AI_MODEL_PATH_INVALID')
   }
   if (!generation.enabled)
@@ -564,20 +574,6 @@ function validateAI(ai: MaterialAIFacet | undefined): void {
         fail(`MATERIAL_AI_REQUIRED_PATH_MISSING:${index}:${path}`)
     }
   }
-}
-
-function jsonPointerExists(root: unknown, pointer: string): boolean {
-  let value = root
-  for (const encoded of pointer.slice(1).split('/')) {
-    const token = encoded.replaceAll('~1', '/').replaceAll('~0', '~')
-    if (UNSAFE_STRUCTURE_KEYS.has(token) || !value || typeof value !== 'object')
-      return false
-    const descriptor = Object.getOwnPropertyDescriptor(value, token)
-    if (!descriptor || !('value' in descriptor))
-      return false
-    value = descriptor.value
-  }
-  return true
 }
 
 function validatePropertyDescriptor(descriptor: PropertyDescriptor): void {

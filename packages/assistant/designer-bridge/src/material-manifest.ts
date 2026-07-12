@@ -1,10 +1,10 @@
 import type { AssistantMaterialManifest, AssistantMaterialProp } from '@easyink/assistant-capabilities'
 import type { CompiledMaterialProfile, MaterialCommonFacet, PropertyDescriptor } from '@easyink/core'
 import type { JsonValue } from '@easyink/shared'
-import { cloneJsonValue } from '@easyink/shared'
+import { cloneJsonValue, deepFreezeJsonValue } from '@easyink/shared'
 
 export function createAssistantMaterialManifest(profile: CompiledMaterialProfile): AssistantMaterialManifest {
-  return {
+  const projected: AssistantMaterialManifest = {
     version: 1,
     profileId: profile.id,
     engineVersion: profile.engineVersion,
@@ -24,6 +24,7 @@ export function createAssistantMaterialManifest(profile: CompiledMaterialProfile
       }
     }),
   }
+  return deepFreezeJsonValue(projected as unknown as JsonValue) as unknown as AssistantMaterialManifest
 }
 
 function projectCommonFacet(common: MaterialCommonFacet): AssistantMaterialManifest['materials'][number]['common'] {

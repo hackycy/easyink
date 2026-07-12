@@ -22,6 +22,7 @@
     "dev": "tsdown --watch"
   },
   "dependencies": {
+    "ajv": "catalog:framework",
     "lodash-es": "catalog:inlined"
   },
   "devDependencies": {

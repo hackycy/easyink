@@ -16,8 +16,16 @@ describe('material graph introspection', () => {
     const child = profile.createNode('box', { id: 'child' })
     const root = profile.createNode('container', { id: 'root', slots: { content: [child] } })
     const seen: string[] = []
-    walkMaterialNodes(schemaWith(root), profile, (_node, address) => seen.push(formatMaterialNodeAddress(address)))
+    const paths: string[] = []
+    walkMaterialNodes(schemaWith(root), profile, (_node, address) => {
+      seen.push(formatMaterialNodeAddress(address))
+      paths.push(address.path)
+      expect(Object.isFrozen(address)).toBe(true)
+      expect(Object.isFrozen(address.ancestors)).toBe(true)
+      expect(address.ancestors.every(Object.isFrozen)).toBe(true)
+    })
     expect(seen).toEqual(['root', 'root/slots/content/0:child'])
+    expect(paths).toEqual(['/elements/0', '/elements/0/slots/content/0'])
   })
 
   it('reads and writes escaped JSON pointers without prototype paths', () => {

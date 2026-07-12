@@ -223,6 +223,7 @@ export type {
 } from './material-facet-host'
 export { admitMaterialGraph } from './material-graph-admission'
 export type {
+  AddressedMaterialBindingSlot,
   CloneMaterialGraphOptions,
   CloneMaterialGraphResult,
   JsonPointer,

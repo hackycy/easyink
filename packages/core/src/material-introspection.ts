@@ -52,9 +52,9 @@ export interface MaterialResourceSlot {
 }
 
 export interface MaterialBindingSlot {
-  path: JsonPointer
-  value: BindingExpression
-  port: string
+  readonly path: JsonPointer
+  readonly value: BindingExpression
+  readonly port: string
 }
 
 export interface MaterialIntrospection {
@@ -66,14 +66,19 @@ export interface MaterialIntrospection {
 }
 
 export interface MaterialSlotAddress {
-  ownerNodeId: string
-  slot: string
-  index: number
+  readonly ownerNodeId: string
+  readonly slot: string
+  readonly index: number
 }
 
 export interface MaterialNodeAddress {
-  nodeId: string
-  ancestors: readonly MaterialSlotAddress[]
+  readonly nodeId: string
+  readonly path: JsonPointer
+  readonly ancestors: readonly MaterialSlotAddress[]
+}
+
+export interface AddressedMaterialBindingSlot extends MaterialBindingSlot {
+  readonly nodeAddress: MaterialNodeAddress
 }
 
 export type MaterialNodeVisitor = (
@@ -790,7 +795,8 @@ function walkGraph(
       current.node,
       Object.freeze({
         nodeId: current.node.id,
-        ancestors: Object.freeze([...current.address.ancestors]),
+        path: current.path,
+        ancestors: Object.freeze(current.address.ancestors.map(entry => Object.freeze({ ...entry }))),
       }),
       inspected.introspection,
       current.path,

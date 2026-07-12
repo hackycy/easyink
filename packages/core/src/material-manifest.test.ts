@@ -620,7 +620,7 @@ describe('defineMaterialManifest', () => {
     expect(captureError(() => defineMaterialManifest(input))).toMatchObject({ code: 'JSON_VALUE_TYPE' })
   })
 
-  it('requires AI portable schemas and examples to be JSON objects', () => {
+  it('requires AI portable schemas to be JSON objects and examples to be JSON values', () => {
     const missing = validManifest()
     missing.facets = { ai: null as never }
     expect(() => defineMaterialManifest(missing)).toThrowError('MATERIAL_AI_GENERATION_INVALID')
@@ -630,8 +630,8 @@ describe('defineMaterialManifest', () => {
     expect(() => defineMaterialManifest(schema)).toThrowError('MATERIAL_AI_GENERATION_INVALID')
 
     const example = validManifest()
-    example.facets = { ai: { generation: { enabled: false, examples: [1 as never] } } }
-    expect(() => defineMaterialManifest(example)).toThrowError('MATERIAL_AI_GENERATION_INVALID')
+    example.facets = { ai: { generation: { enabled: false, examples: [1, null] } } }
+    expect(() => defineMaterialManifest(example)).not.toThrow()
   })
 
   it('requires complete enabled AI generation contracts', () => {
@@ -659,6 +659,30 @@ describe('defineMaterialManifest', () => {
     } } }
 
     expect(() => defineMaterialManifest(input)).toThrowError('MATERIAL_AI_REQUIRED_PATH_MISSING:1:/a~1b/~0key')
+  })
+
+  it('allows empty model-relative pointers to resolve primitive and null example roots', () => {
+    for (const example of [null, 1, 'value']) {
+      const input = validManifest()
+      input.facets = { ai: { generation: {
+        enabled: true,
+        modelSchema: {},
+        bindingShape: {},
+        requiredModelPaths: [''],
+        examples: [example],
+      } } }
+      expect(() => defineMaterialManifest(input)).not.toThrow()
+    }
+  })
+
+  it('rejects invalid portable JSON schemas during manifest definition', () => {
+    const model = validManifest()
+    model.facets = { ai: { generation: { enabled: true, modelSchema: { type: 'invalid' }, bindingShape: {}, examples: [{}] } } }
+    expect(() => defineMaterialManifest(model)).toThrowError('MATERIAL_AI_MODEL_SCHEMA_INVALID')
+
+    const binding = validManifest()
+    binding.facets = { ai: { generation: { enabled: true, modelSchema: {}, bindingShape: { oneOf: 'invalid' }, examples: [{}] } } }
+    expect(() => defineMaterialManifest(binding)).toThrowError('MATERIAL_AI_BINDING_SCHEMA_INVALID')
   })
 })
 

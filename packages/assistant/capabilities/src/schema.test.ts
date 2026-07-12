@@ -100,6 +100,48 @@ describe('assistant capabilities', () => {
     expect(AssistantMaterialManifestSchema.safeParse(nested).success).toBe(false)
   })
 
+  it('uses shared JSON Schema semantics and escaped deterministic diagnostic paths', () => {
+    const manifest = materialManifest('text')
+    manifest.materials[0]!.generation.modelSchema = {
+      type: 'object',
+      required: ['mode', 'rows'],
+      properties: {
+        mode: { enum: ['a', 'b'] },
+        rows: { type: 'array', items: { oneOf: [{ type: 'number' }, { const: 'auto' }] } },
+      },
+      additionalProperties: false,
+    }
+    manifest.materials[0]!.generation.bindingShape = { type: 'object', properties: {}, additionalProperties: false }
+    const candidate = {
+      ...schema,
+      elements: [{
+        ...schema.elements[0]!,
+        model: { mode: 'bad', rows: [false] },
+        bindings: { 'a/b': { sourceId: 'data', fieldPath: 'value' } },
+      }],
+    }
+
+    const report = validateAssistantSchema(candidate, { materialManifest: manifest })
+
+    expect(report.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'MODEL_SCHEMA_ENUM', path: 'elements.txt-title.model/mode' }),
+      expect.objectContaining({ code: 'MODEL_SCHEMA_ONE_OF', path: 'elements.txt-title.model/rows/0' }),
+      expect.objectContaining({ code: 'BINDING_SCHEMA_ADDITIONAL_PROPERTIES', path: 'elements.txt-title.bindings/a~1b' }),
+    ]))
+  })
+
+  it('rejects invalid portable schemas and accepts empty required model pointers', () => {
+    const invalid = materialManifest('text')
+    invalid.materials[0]!.generation.modelSchema = { type: 'invalid' }
+    expect(AssistantMaterialManifestSchema.safeParse(invalid).success).toBe(false)
+
+    const root = materialManifest('text')
+    root.materials[0]!.generation.requiredModelPaths = ['']
+    expect(validateAssistantSchema(schema, { materialManifest: root }).errors)
+      .not
+      .toContainEqual(expect.objectContaining({ code: 'MATERIAL_PROPS_MISSING' }))
+  })
+
   it('requires planned page-level text watermarks to use page layers', () => {
     const issues = collectDeterministicErrors(schema, {
       pageRenderLayers: [{ kind: 'watermark', type: 'text', text: 'DRAFT' }],

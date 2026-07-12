@@ -178,6 +178,26 @@ export function cloneJsonValue<T extends JsonValue>(value: T, options: JsonValue
   return root as T
 }
 
+export function deepFreezeJsonValue<T extends JsonValue>(value: T): T {
+  assertJsonValue(value)
+  if (value === null || typeof value !== 'object')
+    return value
+  const stack: Array<{ value: JsonArray | JsonObject, leaving: boolean }> = [{ value, leaving: false }]
+  while (stack.length > 0) {
+    const frame = stack.pop()!
+    if (frame.leaving) {
+      Object.freeze(frame.value)
+      continue
+    }
+    stack.push({ value: frame.value, leaving: true })
+    for (const child of Object.values(frame.value)) {
+      if (child !== null && typeof child === 'object')
+        stack.push({ value: child, leaving: false })
+    }
+  }
+  return value
+}
+
 function createCloneContainer(value: JsonArray | JsonObject): JsonArray | JsonObject {
   return Array.isArray(value) ? [] : Object.create(null) as JsonObject
 }

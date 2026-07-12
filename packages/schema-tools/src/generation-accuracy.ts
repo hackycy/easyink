@@ -1,9 +1,9 @@
 import type { CompiledMaterialProfile } from '@easyink/core'
 import type { BindingRef, DocumentSchema, MaterialNode } from '@easyink/schema'
-import type { AIGenerationPlan, JsonObject } from '@easyink/shared'
+import type { AIGenerationPlan, JsonObject, Rfc6901Pointer } from '@easyink/shared'
 import { loadDocumentWithProfile, validateDocumentWithProfile, walkMaterialNodes, writePointer } from '@easyink/core'
 import { traverseNodes } from '@easyink/schema'
-import { deepClone, FIELD_PATH_SEPARATOR } from '@easyink/shared'
+import { deepClone, FIELD_PATH_SEPARATOR, jsonPointerExists, jsonSchemaDiagnosticCode, validateJsonSchema } from '@easyink/shared'
 
 export interface GenerationRepairIssue {
   code: string
@@ -24,7 +24,7 @@ export interface GenerationAccuracyOptions {
   materialAliases?: Record<string, string>
   plan?: AIGenerationPlan
   profile?: CompiledMaterialProfile
-  generationContracts?: ReadonlyMap<string, { modelSchema: JsonObject, bindingShape: JsonObject, requiredModelPaths?: readonly string[] }>
+  generationContracts?: ReadonlyMap<string, { modelSchema: JsonObject, bindingShape: JsonObject, requiredModelPaths?: readonly Rfc6901Pointer[] }>
 }
 
 export function repairGeneratedSchema(
@@ -177,61 +177,6 @@ function collectProfileDiagnostics(schema: DocumentSchema, profile: CompiledMate
   }
 }
 
-function pointerExists(root: unknown, pointer: string): boolean {
-  let current = root
-  for (const token of pointer.slice(1).split('/').map(part => part.replaceAll('~1', '/').replaceAll('~0', '~'))) {
-    if (!current || typeof current !== 'object' || !Object.hasOwn(current, token))
-      return false
-    current = (current as Record<string, unknown>)[token]
-  }
-  return true
-}
-
-function validatePortableSchema(value: unknown, schema: JsonObject): boolean {
-  if (schema.const !== undefined && value !== schema.const)
-    return false
-  if (schema.type === 'object') {
-    if (!value || typeof value !== 'object' || Array.isArray(value))
-      return false
-    const required = Array.isArray(schema.required) ? schema.required : []
-    if (required.some(key => typeof key !== 'string' || !Object.hasOwn(value, key)))
-      return false
-    const properties = schema.properties && typeof schema.properties === 'object' && !Array.isArray(schema.properties)
-      ? schema.properties as JsonObject
-      : {}
-    const patterns = schema.patternProperties && typeof schema.patternProperties === 'object' && !Array.isArray(schema.patternProperties)
-      ? schema.patternProperties as JsonObject
-      : {}
-    for (const [key, item] of Object.entries(value)) {
-      const child = properties[key]
-        ?? Object.entries(patterns).find(([source]) => new RegExp(source, 'u').test(key))?.[1]
-        ?? (schema.additionalProperties && typeof schema.additionalProperties === 'object' && !Array.isArray(schema.additionalProperties)
-          ? schema.additionalProperties
-          : undefined)
-      if (child && typeof child === 'object' && !Array.isArray(child) && !validatePortableSchema(item, child)) {
-        return false
-      }
-      if (child === undefined && schema.additionalProperties === false)
-        return false
-    }
-  }
-  if (schema.type === 'array') {
-    if (!Array.isArray(value))
-      return false
-    if (schema.items && typeof schema.items === 'object' && !Array.isArray(schema.items)
-      && value.some(item => !validatePortableSchema(item, schema.items as JsonObject))) {
-      return false
-    }
-  }
-  if (schema.type === 'string' && typeof value !== 'string')
-    return false
-  if (schema.type === 'number' && typeof value !== 'number')
-    return false
-  if (schema.type === 'boolean' && typeof value !== 'boolean')
-    return false
-  return true
-}
-
 function validateElements(
   elements: MaterialNode[],
   options: GenerationAccuracyOptions,
@@ -251,15 +196,15 @@ function validateElements(
     }
 
     const contract = options.generationContracts?.get(element.type)
-    if (contract && !validatePortableSchema(element.model, contract.modelSchema)) {
+    for (const issue of contract ? validateJsonSchema(contract.modelSchema, element.model) : []) {
       issues.push({
-        code: 'MATERIAL_MODEL_SCHEMA_INVALID',
-        message: `Material model for "${element.type}" does not match its portable generation schema.`,
-        path: `${elementPath}.model`,
+        code: jsonSchemaDiagnosticCode('MODEL', issue.keyword),
+        message: issue.message,
+        path: `${elementPath}.model${issue.instancePath}`,
       })
     }
     for (const path of contract?.requiredModelPaths ?? []) {
-      if (!pointerExists(element.model, path)) {
+      if (!jsonPointerExists(element.model, path)) {
         issues.push({
           code: 'MATERIAL_REQUIRED_MODEL_PATH_MISSING',
           message: `Material model for "${element.type}" is missing required path "${path}".`,
@@ -267,11 +212,11 @@ function validateElements(
         })
       }
     }
-    if (contract && !validatePortableSchema(element.bindings, contract.bindingShape)) {
+    for (const issue of contract ? validateJsonSchema(contract.bindingShape, element.bindings) : []) {
       issues.push({
-        code: 'MATERIAL_BINDING_SHAPE_INVALID',
-        message: `Material bindings for "${element.type}" do not match its portable generation shape.`,
-        path: `${elementPath}.bindings`,
+        code: jsonSchemaDiagnosticCode('BINDING', issue.keyword),
+        message: issue.message,
+        path: `${elementPath}.bindings${issue.instancePath}`,
       })
     }
     for (const [slot, children] of Object.entries(element.slots))

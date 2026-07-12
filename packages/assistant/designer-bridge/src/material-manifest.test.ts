@@ -41,6 +41,10 @@ describe('assistant material manifest bridge', () => {
           },
         }],
       },
+      facets: {
+        ...base.facets,
+        ai: { ...base.facets.ai!, descriptor: { description: 'portable' } },
+      },
     })
 
     const projected = createAssistantMaterialManifest(createTestCompiledMaterialProfile([manifest]))
@@ -54,5 +58,25 @@ describe('assistant material manifest bridge', () => {
     expect(JSON.stringify(projected)).not.toContain('visible')
     expect(JSON.stringify(projected)).not.toContain('disabled')
     expect(JSON.stringify(projected)).not.toContain('accessor')
+    expect(Object.isFrozen(projected.materials[0]?.common.properties[0]?.targetPaths)).toBe(true)
+    expect(Object.isFrozen(projected.materials[0]?.descriptor)).toBe(true)
+  })
+
+  it('deep freezes a detached portable projection', () => {
+    const source = createTestMaterialManifest({ type: 'frozen', designer: true, viewer: true, ai: true })
+    const projected = createAssistantMaterialManifest(createTestCompiledMaterialProfile([source]))
+    const entry = projected.materials[0]!
+
+    expect(Object.isFrozen(projected)).toBe(true)
+    expect(Object.isFrozen(projected.materials)).toBe(true)
+    expect(Object.isFrozen(entry)).toBe(true)
+    expect(Object.isFrozen(entry.common)).toBe(true)
+    expect(Object.isFrozen(entry.generation)).toBe(true)
+    expect(Object.isFrozen(entry.generation.examples)).toBe(true)
+    expect(entry.common.defaultNode.model).not.toBe(source.common.defaultNode.model)
+    expect(entry.generation.examples[0]).not.toBe(source.facets.ai?.generation.examples[0])
+    expect(() => projected.materials.push(entry)).toThrow()
+    expect(() => (entry.generation.examples[0] as Record<string, unknown>).value = 'changed').toThrow()
+    expect(source.facets.ai?.generation.examples[0]).toEqual({ value: 'example' })
   })
 })

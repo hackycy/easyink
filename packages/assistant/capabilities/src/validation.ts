@@ -3,6 +3,7 @@ import type { DocumentSchema, ExpectedDataSource, ExpectedField } from '@easyink
 import type { AssistantMaterialManifest, AssistantValidationIssue, AssistantValidationReport } from './types'
 import { traverseNodes, validateSchemaIssues } from '@easyink/schema'
 import { DataSourceAligner, normalizeAllFieldPaths, SchemaValidator } from '@easyink/schema-tools'
+import { jsonPointerExists, jsonSchemaDiagnosticCode, validateJsonSchema } from '@easyink/shared'
 
 export interface ValidateAssistantSchemaOptions {
   materialManifest?: AssistantMaterialManifest
@@ -134,7 +135,7 @@ export function collectDeterministicErrors(schema: unknown, options: Determinist
     }
     const binding = (node as { binding?: { fieldPath?: string } }).binding
     if (material)
-      issues.push(...validateNodeBindingAgainstMaterial(node, material))
+      issues.push(...validateNodeGenerationContract(node, material))
     if (binding?.fieldPath && bindingPaths && !bindingPaths.has(binding.fieldPath)) {
       issues.push({
         code: 'BINDING_PATH_INVALID',
@@ -208,71 +209,26 @@ function validatePageRenderLayerIntents(
   }
 }
 
-function validateNodeBindingAgainstMaterial(
+function validateNodeGenerationContract(
   node: DocumentSchema['elements'][number],
   material: AssistantMaterialManifest['materials'][number],
 ): AssistantValidationIssue[] {
-  return validatePortableJsonSchema(node.bindings, material.generation.bindingShape)
-    ? []
-    : [{
-        code: 'BINDING_SHAPE_INVALID',
-        message: `Element "${node.id}" bindings do not match the portable generation binding shape.`,
-        path: `elements.${node.id}.bindings`,
-      }]
-}
-
-function validatePortableJsonSchema(value: unknown, schema: Record<string, unknown>): boolean {
-  if (schema.const !== undefined && value !== schema.const)
-    return false
-  if (schema.type === 'string' && typeof value !== 'string')
-    return false
-  if (schema.type === 'number' && typeof value !== 'number')
-    return false
-  if (schema.type === 'boolean' && typeof value !== 'boolean')
-    return false
-  if (schema.type === 'array') {
-    if (!Array.isArray(value))
-      return false
-    if (isRecord(schema.items) && value.some(item => !validatePortableJsonSchema(item, schema.items as Record<string, unknown>)))
-      return false
+  const issues: AssistantValidationIssue[] = []
+  for (const issue of validateJsonSchema(material.generation.modelSchema, node.model)) {
+    issues.push({
+      code: jsonSchemaDiagnosticCode('MODEL', issue.keyword),
+      message: issue.message,
+      path: `elements.${node.id}.model${issue.instancePath}`,
+    })
   }
-  if (schema.type === 'object') {
-    if (!value || typeof value !== 'object' || Array.isArray(value))
-      return false
-    const record = value as Record<string, unknown>
-    const properties = isRecord(schema.properties) ? schema.properties : {}
-    const patterns = isRecord(schema.patternProperties) ? schema.patternProperties : {}
-    for (const required of Array.isArray(schema.required) ? schema.required : []) {
-      if (typeof required !== 'string' || !Object.hasOwn(record, required))
-        return false
-    }
-    for (const [key, item] of Object.entries(record)) {
-      const exact = properties[key]
-      const pattern = Object.entries(patterns).find(([source]) => new RegExp(source, 'u').test(key))?.[1]
-      const child = exact ?? pattern ?? (isRecord(schema.additionalProperties) ? schema.additionalProperties : undefined)
-      if (child !== undefined && isRecord(child) && !validatePortableJsonSchema(item, child))
-        return false
-      if (child === undefined && schema.additionalProperties === false)
-        return false
-    }
+  for (const issue of validateJsonSchema(material.generation.bindingShape, node.bindings)) {
+    issues.push({
+      code: jsonSchemaDiagnosticCode('BINDING', issue.keyword),
+      message: issue.message,
+      path: `elements.${node.id}.bindings${issue.instancePath}`,
+    })
   }
-  return true
-}
-
-function jsonPointerExists(root: unknown, pointer: string): boolean {
-  let current = root
-  for (const token of pointer.slice(1).split('/').map(part => part.replaceAll('~1', '/').replaceAll('~0', '~'))) {
-    if (!isRecord(current) && !Array.isArray(current))
-      return false
-    if (!Object.hasOwn(current, token))
-      return false
-    current = (current as Record<string, unknown>)[token]
-  }
-  return true
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
+  return issues
 }
 
 function collectFieldPaths(fields: ExpectedField[]): Set<string> {
@@ -336,7 +292,7 @@ function validateSchemaMaterialTypes(schema: unknown, manifest: AssistantMateria
     }
     const material = materialByType.get(node.type)
     if (material)
-      issues.push(...validateNodeBindingAgainstMaterial(node, material))
+      issues.push(...validateNodeGenerationContract(node, material))
   })
   return issues
 }

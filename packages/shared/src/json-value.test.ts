@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { assertJsonValue, cloneJsonValue, JsonValueValidationError } from './json-value'
+import { assertJsonValue, cloneJsonValue, deepFreezeJsonValue, JsonValueValidationError } from './json-value'
 
 describe('strict JSON values', () => {
   it.each([
@@ -120,5 +120,13 @@ describe('strict JSON values', () => {
     cyclic.self = cyclic
     expect(() => cloneJsonValue(cyclic as never))
       .toThrowError(expect.objectContaining({ code: 'JSON_VALUE_CYCLE', path: '/self' }))
+  })
+
+  it('deep freezes every JSON container', () => {
+    const value = { nested: [{ value: 1 }] }
+    expect(deepFreezeJsonValue(value)).toBe(value)
+    expect(Object.isFrozen(value)).toBe(true)
+    expect(Object.isFrozen(value.nested)).toBe(true)
+    expect(Object.isFrozen(value.nested[0])).toBe(true)
   })
 })

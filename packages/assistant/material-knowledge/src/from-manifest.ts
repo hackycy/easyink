@@ -1,4 +1,4 @@
-import type { AIMaterialDescriptor, JsonObject, MaterialKnowledgeDescriptor } from '@easyink/shared'
+import type { AIMaterialDescriptor, JsonObject, JsonValue, MaterialKnowledgeDescriptor } from '@easyink/shared'
 import type { FieldType, MaterialBindingSpec, MaterialKnowledge, MaterialPropertySpec } from './types'
 import { MaterialKnowledgeRegistry } from './registry'
 
@@ -12,7 +12,7 @@ export interface ManifestEntry {
     binding: ManifestMaterialBindingDefinition
     properties: ManifestMaterialProp[]
   }
-  generation: { bindingShape: JsonObject, modelSchema: JsonObject, examples: JsonObject[] }
+  generation: { bindingShape: JsonObject, modelSchema: JsonObject, examples: JsonValue[] }
   descriptor?: JsonObject
 }
 

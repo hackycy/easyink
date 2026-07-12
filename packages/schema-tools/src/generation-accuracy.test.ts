@@ -1,6 +1,6 @@
 import type { SchemaAdapter } from '@easyink/core'
 import type { DocumentSchema } from '@easyink/schema'
-import type { AIGenerationPlan } from '@easyink/shared'
+import type { AIGenerationPlan, JsonObject } from '@easyink/shared'
 import { recordSchemaAdapter } from '@easyink/core'
 import { createTestCompiledMaterialProfile, createTestMaterialManifest } from '@easyink/core/testing'
 import { describe, expect, it } from 'vitest'
@@ -100,7 +100,7 @@ describe('generated schema accuracy', () => {
     })
 
     expect(issues.map(issue => issue.code)).toEqual(expect.arrayContaining([
-      'MATERIAL_MODEL_SCHEMA_INVALID',
+      'MODEL_SCHEMA_REQUIRED',
       'MATERIAL_REQUIRED_MODEL_PATH_MISSING',
     ]))
   })
@@ -137,5 +137,42 @@ describe('generated schema accuracy', () => {
     })
 
     expect(issues).toContainEqual(expect.objectContaining({ code: 'LOCAL_MODEL_INVALID', path: '/elements/0/model/valid' }))
+  })
+
+  it('uses complete shared schema semantics for nested model and binding diagnostics', () => {
+    const schema = makeSchema({ elements: [{
+      id: 'custom',
+      type: 'custom',
+      x: 0,
+      y: 0,
+      width: 10,
+      height: 10,
+      modelVersion: 1,
+      model: { mode: false, rows: [{ 'a/b': true }] },
+      slots: {},
+      bindings: { extra: { sourceId: 'data', fieldPath: 'value' } },
+      output: { visibility: 'include' },
+    }] })
+    const issues = validateGeneratedSchemaAccuracy(schema, {
+      allowedMaterialTypes: new Set(['custom']),
+      generationContracts: new Map([['custom', {
+        modelSchema: {
+          type: 'object',
+          properties: {
+            mode: { type: ['string', 'number'] },
+            rows: { type: 'array', items: { oneOf: [{ type: 'number' }, { type: 'object', additionalProperties: false }] } },
+          },
+        } as JsonObject,
+        bindingShape: { type: 'object', properties: {}, additionalProperties: false },
+        requiredModelPaths: [''],
+      }]]),
+    })
+
+    expect(issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'MODEL_SCHEMA_TYPE', path: 'elements[0].model/mode' }),
+      expect.objectContaining({ code: 'MODEL_SCHEMA_ADDITIONAL_PROPERTIES', path: 'elements[0].model/rows/0/a~1b' }),
+      expect.objectContaining({ code: 'BINDING_SCHEMA_ADDITIONAL_PROPERTIES', path: 'elements[0].bindings/extra' }),
+    ]))
+    expect(issues).not.toContainEqual(expect.objectContaining({ code: 'MATERIAL_REQUIRED_MODEL_PATH_MISSING' }))
   })
 })
