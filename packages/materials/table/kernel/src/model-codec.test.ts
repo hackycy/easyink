@@ -1,8 +1,27 @@
 import { describe, expect, it } from 'vitest'
 import { assertValidTableModel, createTableModel } from './model'
-import { decodeTableModelV1 } from './model-codec'
+import { decodeCanonicalBindingExpression, decodeTableModelV1 } from './model-codec'
 
 describe('table model codec', () => {
+  it('decodes the exact canonical binding format variants', () => {
+    const base = { sourceId: 'source', fieldPath: 'value' }
+    for (const format of [
+      { prefix: '$', suffix: ' USD', fallback: '-', extensions: { owner: 'test' } },
+      { mode: 'custom', custom: { source: '(value) => String(value)' } },
+      { mode: 'preset', preset: { type: 'number', minimumFractionDigits: 1, maximumFractionDigits: 2 } },
+    ]) {
+      expect(decodeCanonicalBindingExpression({ ...base, format })).toEqual({ ...base, format })
+    }
+    for (const format of [
+      { surprise: true },
+      { mode: 'custom', custom: { source: 'x', surprise: true } },
+      { mode: 'preset', preset: { type: 'number', minimumFractionDigits: 2, maximumFractionDigits: 1 } },
+      { mode: 'unknown' },
+    ]) {
+      expect(decodeCanonicalBindingExpression({ ...base, format })).toBeUndefined()
+    }
+  })
+
   it.each([null, false, 0, 'model'])('rejects a non-record root: %j', (raw) => {
     expect(decodeTableModelV1(raw, '/model').issues).toContainEqual(expect.objectContaining({
       code: 'TABLE_MODEL_STRUCTURE_INVALID',

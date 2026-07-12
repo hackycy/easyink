@@ -12,7 +12,7 @@ import type { TableModel, TableStyle } from './model'
 import { cloneJsonValue, convertUnit } from '@easyink/shared'
 import { migrateLegacyTableV0ToV1, validateLegacyTableV0Input } from './legacy-migration'
 import { assertValidTableModel, isValidTableStableToken } from './model'
-import { decodeTableModelV1 } from './model-codec'
+import { decodeCanonicalBindingExpression, decodeTableModelV1 } from './model-codec'
 
 const NODE_KEYS = [
   'id',
@@ -33,28 +33,6 @@ const NODE_KEYS = [
   'extensions',
   'compat',
 ] as const
-const BINDING_EXPRESSION_KEYS = new Set([
-  'sourceId',
-  'sourceName',
-  'sourceTag',
-  'fieldPath',
-  'fieldKey',
-  'fieldLabel',
-  'format',
-  'required',
-  'extensions',
-])
-const BINDING_PRESET_KEYS = new Set([
-  'type',
-  'pattern',
-  'locale',
-  'timeZone',
-  'weekdayStyle',
-  'minimumFractionDigits',
-  'maximumFractionDigits',
-  'currency',
-])
-const BINDING_PRESET_TYPES = new Set(['datetime', 'weekday', 'chinese-money', 'number', 'currency', 'percent'])
 const TABLE_UNITS = new Set<UnitType>(['mm', 'pt', 'px', 'inch'])
 const MAX_ENVELOPE_KEYS = 100_000
 const MAX_ENVELOPE_DESCRIPTOR_WORK = 128_000
@@ -270,7 +248,7 @@ function snapshotIntrospectionEnvelope(node: MaterialNode): TableIntrospectionEn
   for (const [key, value] of Object.entries(rawBindings.value)) {
     if (!isValidTableStableToken(key))
       return undefined
-    const expression = decodeBindingExpression(value)
+    const expression = decodeCanonicalBindingExpression(value)
     if (!expression)
       return undefined
     bindings[key] = expression
@@ -531,91 +509,8 @@ function ownData(node: object, key: string): { ok: true, value: unknown } | { ok
   }
 }
 
-function plainRecord(value: unknown): value is Record<string, unknown> {
-  try {
-    if (typeof value !== 'object' || value === null || Array.isArray(value))
-      return false
-    const prototype = Object.getPrototypeOf(value)
-    return prototype === Object.prototype || prototype === null
-  }
-  catch {
-    return false
-  }
-}
-
 function isBindingExpression(value: unknown): value is MaterialIntrospection['bindings'][number]['value'] {
-  return decodeBindingExpression(value) !== undefined
-}
-
-function decodeBindingExpression(value: unknown): BindingExpression | undefined {
-  let snapshot: unknown
-  try {
-    snapshot = cloneJsonValue(value as JsonValue, {
-      maxDepth: 128,
-      maxNodes: 100_000,
-      maxStringBytes: 4 * 1024 * 1024,
-    })
-  }
-  catch {
-    return undefined
-  }
-  if (!plainRecord(snapshot) || !hasOnlyKeys(snapshot, BINDING_EXPRESSION_KEYS))
-    return undefined
-  if (!nonemptyTrimmedString(snapshot.sourceId) || !nonemptyTrimmedString(snapshot.fieldPath))
-    return undefined
-  if (!optionalStrings(snapshot, ['sourceName', 'sourceTag', 'fieldKey', 'fieldLabel']))
-    return undefined
-  if (snapshot.required !== undefined && typeof snapshot.required !== 'boolean')
-    return undefined
-  if (snapshot.extensions !== undefined && !plainRecord(snapshot.extensions))
-    return undefined
-  if (snapshot.format !== undefined && !isBindingFormat(snapshot.format))
-    return undefined
-  return snapshot as unknown as BindingExpression
-}
-
-function isBindingFormat(value: unknown): boolean {
-  if (!plainRecord(value))
-    return false
-  if (!optionalStrings(value, ['prefix', 'suffix', 'fallback']))
-    return false
-  if (value.extensions !== undefined && !plainRecord(value.extensions))
-    return false
-  return value.mode === 'preset' && isBindingPreset(value.preset)
-}
-
-function isBindingPreset(value: unknown): boolean {
-  if (!plainRecord(value) || !hasOnlyKeys(value, BINDING_PRESET_KEYS))
-    return false
-  if (typeof value.type !== 'string' || !BINDING_PRESET_TYPES.has(value.type))
-    return false
-  if (!optionalStrings(value, ['pattern', 'locale', 'timeZone', 'currency']))
-    return false
-  if (value.weekdayStyle !== undefined && !['long', 'short', 'narrow'].includes(value.weekdayStyle as string))
-    return false
-  for (const key of ['minimumFractionDigits', 'maximumFractionDigits']) {
-    const candidate = value[key]
-    if (candidate !== undefined && (!Number.isInteger(candidate) || (candidate as number) < 0))
-      return false
-  }
-  if (typeof value.minimumFractionDigits === 'number'
-    && typeof value.maximumFractionDigits === 'number'
-    && value.minimumFractionDigits > value.maximumFractionDigits) {
-    return false
-  }
-  return true
-}
-
-function hasOnlyKeys(value: Record<string, unknown>, allowed: ReadonlySet<string>): boolean {
-  return Object.keys(value).every(key => allowed.has(key))
-}
-
-function optionalStrings(value: Record<string, unknown>, keys: readonly string[]): boolean {
-  return keys.every(key => value[key] === undefined || typeof value[key] === 'string')
-}
-
-function nonemptyTrimmedString(value: unknown): value is string {
-  return typeof value === 'string' && value.length > 0 && value.trim() === value
+  return decodeCanonicalBindingExpression(value) !== undefined
 }
 
 function issue(code: string, path: `/${string}`, message: string): MaterialSchemaIssue {

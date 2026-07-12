@@ -1,4 +1,4 @@
-import type { MaterialSchemaIssue } from '@easyink/core'
+import type { BindingExpression, MaterialSchemaIssue } from '@easyink/core'
 import type {
   TableCellContent,
   TableModel,
@@ -43,6 +43,104 @@ const TYPOGRAPHY_KEYS = new Set([
   'verticalAlign',
 ])
 const BORDER_SIDES = new Set(['blockStart', 'inlineEnd', 'blockEnd', 'inlineStart'])
+const BINDING_KEYS = new Set([
+  'sourceId',
+  'sourceName',
+  'sourceTag',
+  'fieldPath',
+  'fieldKey',
+  'fieldLabel',
+  'format',
+  'required',
+  'extensions',
+])
+const FORMAT_KEYS = new Set(['prefix', 'suffix', 'fallback', 'mode', 'preset', 'custom', 'extensions'])
+const CUSTOM_KEYS = new Set(['source'])
+const PRESET_KEYS = new Set([
+  'type',
+  'pattern',
+  'locale',
+  'timeZone',
+  'weekdayStyle',
+  'minimumFractionDigits',
+  'maximumFractionDigits',
+  'currency',
+])
+const PRESET_TYPES = new Set(['datetime', 'weekday', 'chinese-money', 'number', 'currency', 'percent'])
+
+export function decodeCanonicalBindingExpression(raw: unknown): BindingExpression | undefined {
+  const snapshot = snapshotStrictJson(raw, '/bindings/value')
+  if (snapshot.issues.length > 0 || !plain(snapshot.value))
+    return undefined
+  const value = snapshot.value
+  if (!only(value, BINDING_KEYS)
+    || !trimmed(value.sourceId)
+    || !trimmed(value.fieldPath)
+    || !optionalStringFields(value, ['sourceName', 'sourceTag', 'fieldKey', 'fieldLabel'])
+    || (value.required !== undefined && typeof value.required !== 'boolean')
+    || (value.extensions !== undefined && !plain(value.extensions))
+    || (value.format !== undefined && !canonicalFormat(value.format))) {
+    return undefined
+  }
+  return value as unknown as BindingExpression
+}
+
+function canonicalFormat(raw: unknown): boolean {
+  if (!plain(raw)
+    || !only(raw, FORMAT_KEYS)
+    || !optionalStringFields(raw, ['prefix', 'suffix', 'fallback'])
+    || (raw.extensions !== undefined && !plain(raw.extensions))) {
+    return false
+  }
+  if (raw.mode === undefined)
+    return raw.preset === undefined && raw.custom === undefined
+  if (raw.mode === 'preset')
+    return raw.custom === undefined && canonicalPreset(raw.preset)
+  if (raw.mode === 'custom')
+    return raw.preset === undefined && canonicalCustom(raw.custom)
+  return false
+}
+
+function canonicalCustom(raw: unknown): boolean {
+  return plain(raw) && only(raw, CUSTOM_KEYS) && typeof raw.source === 'string'
+}
+
+function canonicalPreset(raw: unknown): boolean {
+  if (!plain(raw)
+    || !only(raw, PRESET_KEYS)
+    || typeof raw.type !== 'string'
+    || !PRESET_TYPES.has(raw.type)
+    || !optionalStringFields(raw, ['pattern', 'locale', 'timeZone', 'currency'])
+    || (raw.weekdayStyle !== undefined && !['long', 'short', 'narrow'].includes(raw.weekdayStyle as string))) {
+    return false
+  }
+  for (const key of ['minimumFractionDigits', 'maximumFractionDigits']) {
+    if (raw[key] !== undefined && (!Number.isInteger(raw[key]) || (raw[key] as number) < 0))
+      return false
+  }
+  return !(typeof raw.minimumFractionDigits === 'number'
+    && typeof raw.maximumFractionDigits === 'number'
+    && raw.minimumFractionDigits > raw.maximumFractionDigits)
+}
+
+function plain(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value))
+    return false
+  const prototype = Object.getPrototypeOf(value)
+  return prototype === Object.prototype || prototype === null
+}
+
+function only(value: Record<string, unknown>, keys: ReadonlySet<string>): boolean {
+  return Object.keys(value).every(key => keys.has(key))
+}
+
+function optionalStringFields(value: Record<string, unknown>, keys: readonly string[]): boolean {
+  return keys.every(key => value[key] === undefined || typeof value[key] === 'string')
+}
+
+function trimmed(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && value.trim() === value
+}
 
 export function decodeTableModelV1(raw: unknown, root: `/${string}` = '/model'): TableModelDecodeResult {
   const snapshot = snapshotStrictJson(raw, root)

@@ -296,6 +296,99 @@ describe('legacy table v0 migration', () => {
     expect(tableSchemaAdapter.validateInput({ ...legacy(), modelVersion: 1 }, context)).not.toEqual([])
   })
 
+  it('requires exact v0 admission and never reinterprets an already migrated node', () => {
+    const source = legacy()
+    source.modelVersion = 2
+    expect(validateLegacyTableV0Input(source, context)).toContainEqual(expect.objectContaining({
+      code: 'TABLE_LEGACY_VERSION_INVALID',
+      path: '/model',
+    }))
+    expect(() => migrateLegacyTableV0ToV1.migrate(source, context)).toThrow(/TABLE_LEGACY_VERSION_INVALID/)
+    const v0 = legacy()
+    const v1 = migrateLegacyTableV0ToV1.migrate(v0, context)
+    const before = cloneJsonValue(v1 as any)
+    expect(() => migrateLegacyTableV0ToV1.migrate(v1, context)).toThrow(/TABLE_LEGACY_VERSION_INVALID/)
+    expect(v1).toEqual(before)
+  })
+
+  it('pre-rejects malformed or colliding owned compat without losing other namespaces', () => {
+    for (const compat of [
+      'invalid',
+      { materials: 'invalid' },
+      { materials: { 'table-static': 'invalid' } },
+    ]) {
+      const source = legacy()
+      source.compat = compat as any
+      expect(validateLegacyTableV0Input(source, context)).toContainEqual(expect.objectContaining({
+        code: 'TABLE_LEGACY_COMPAT_INVALID',
+      }))
+    }
+    const collision = legacy()
+    collision.compat = { vendor: { keep: true }, materials: { 'other': { keep: true }, 'table-static': { v0: { different: true } } } }
+    expect(validateLegacyTableV0Input(collision, context)).toContainEqual(expect.objectContaining({
+      code: 'TABLE_LEGACY_ENVELOPE_COLLISION',
+      path: '/compat/materials/table-static/v0',
+    }))
+    const raw = cloneJsonValue(collision.model as any)
+    collision.compat = { vendor: { keep: true }, materials: { 'other': { keep: true }, 'table-static': { v0: raw } } }
+    const migrated = migrateLegacyTableV0ToV1.migrate(collision, context)
+    expect(migrated.compat).toMatchObject({ vendor: { keep: true }, materials: { 'other': { keep: true }, 'table-static': { v0: raw } } })
+  })
+
+  it('migrates the complete canonical binding format surface', () => {
+    for (const format of [
+      { prefix: '$', suffix: ' USD', fallback: '-' },
+      { mode: 'custom', custom: { source: '(value) => String(value)' }, prefix: '#' },
+      { mode: 'preset', preset: { type: 'number', minimumFractionDigits: 1, maximumFractionDigits: 2 } },
+    ]) {
+      const source = legacy()
+      const cell = (source.model as any).table.topology.rows[0].cells[0]
+      cell.content = { text: 'bound' }
+      cell.colSpan = 1
+      cell.staticBinding.format = format
+      const migrated = migrateLegacyTableV0ToV1.migrate(source, context)
+      expect(Object.values(migrated.bindings!)[0]).toMatchObject({ format })
+      expect(tableSchemaAdapter.validate(migrated, context)).toEqual([])
+    }
+    const invalid = legacy()
+    const cell = (invalid.model as any).table.topology.rows[0].cells[0]
+    cell.content = { text: 'bound' }
+    cell.colSpan = 1
+    cell.staticBinding.format = { mode: 'preset', preset: { type: 'number', minimumFractionDigits: 3, maximumFractionDigits: 2 } }
+    expect(validateLegacyTableV0Input(invalid, context)).toContainEqual(expect.objectContaining({ code: 'TABLE_LEGACY_BINDING_INVALID' }))
+  })
+
+  it('caps hostile structure diagnostics and migrates a large grid with direct cell lookup', () => {
+    const hostile = legacy()
+    const topology = (hostile.model as any).table.topology
+    topology.columns = Array.from({ length: 100 }, () => ({}))
+    topology.rows = Array.from({ length: 100 }, () => ({
+      cells: Array.from({ length: 100 }, () => ({ border: { top: 'invalid' } })),
+    }))
+    const issues = validateLegacyTableV0Input(hostile, context)
+    expect(issues.length).toBeLessThanOrEqual(256)
+    expect(issues.at(-1)).toMatchObject({ code: 'TABLE_LEGACY_ISSUES_TRUNCATED' })
+    const profile = createTestCompiledMaterialProfile([createTestMaterialManifest({
+      type: 'table-static',
+      schemaAdapter: tableSchemaAdapter,
+    })])
+    const loaded = loadDocumentWithProfile({
+      unit: 'mm',
+      page: { mode: 'fixed', width: 100, height: 100 },
+      elements: [hostile],
+    }, profile)
+    expect(loaded.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'MATERIAL_ADAPTER_ISSUES_INVALID' }))
+    expect(loaded.nodeStates.get(hostile.id)).toMatchObject({ status: 'quarantined', stage: 'validate-input' })
+
+    for (const row of topology.rows) {
+      for (const entry of row.cells)
+        delete entry.border
+    }
+    const migrated = migrateLegacyTableV0ToV1.migrate(hostile, context)
+    expect((migrated.model as any).bands[0].rows).toHaveLength(100)
+    expect((migrated.model as any).bands[0].rows[99].cells).toHaveLength(100)
+  })
+
   it('loads an admitted v0 node through the core migration pipeline', () => {
     const source = legacy()
     const cell = (source.model as any).table.topology.rows[0].cells[0]

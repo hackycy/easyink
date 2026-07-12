@@ -19,7 +19,7 @@ import type {
 } from './model'
 import { cloneJsonValue, JsonValueValidationError } from '@easyink/shared'
 import { assertValidTableModel, isValidTableStableToken } from './model'
-import { decodeTableModelV1 } from './model-codec'
+import { decodeCanonicalBindingExpression, decodeTableModelV1 } from './model-codec'
 
 type RecordValue = Record<string, unknown>
 
@@ -58,22 +58,37 @@ const TYPOGRAPHY_KEYS = new Set([
   'verticalAlign',
 ])
 const BORDER_TYPES = new Set(['none', 'solid', 'dashed', 'dotted', 'double'])
-const BINDING_PRESET_KEYS = new Set([
-  'type',
-  'pattern',
-  'locale',
-  'timeZone',
-  'weekdayStyle',
-  'minimumFractionDigits',
-  'maximumFractionDigits',
-  'currency',
-])
-const BINDING_PRESET_TYPES = new Set(['datetime', 'weekday', 'chinese-money', 'number', 'currency', 'percent'])
 
 class LegacyMigrationError extends Error {
   constructor(readonly code: string, readonly path: `/${string}`, message: string) {
     super(message)
     this.name = 'LegacyMigrationError'
+  }
+}
+
+const MAX_LEGACY_ISSUES = 256
+
+class LegacyIssueList extends Array<MaterialSchemaIssue> {
+  override push(...items: MaterialSchemaIssue[]): number {
+    for (const item of items) {
+      if (this.full)
+        break
+      if (this.length === MAX_LEGACY_ISSUES - 1) {
+        super.push(issue(
+          'TABLE_LEGACY_ISSUES_TRUNCATED',
+          '/model',
+          'Legacy table diagnostics were truncated at the issue budget',
+        ))
+        break
+      }
+      super.push(item)
+    }
+    return this.length
+  }
+
+  get full(): boolean {
+    return this.length >= MAX_LEGACY_ISSUES
+      || this.at(-1)?.code === 'TABLE_LEGACY_ISSUES_TRUNCATED'
   }
 }
 
@@ -92,7 +107,7 @@ export function validateLegacyTableV0Input(
   node: AdaptableMaterialNode,
   context: SchemaAdapterContext,
 ): readonly MaterialSchemaIssue[] {
-  return admitLegacyTableV0(node, context).issues
+  return Array.from(admitLegacyTableV0(node, context).issues)
 }
 
 function admitLegacyTableV0(
@@ -103,7 +118,7 @@ function admitLegacyTableV0(
   if (!captured.value)
     return { issues: captured.issues }
   const snapshot = captured.value
-  const issues = captured.issues
+  const issues = new LegacyIssueList(...captured.issues)
   validateLegacyStructure(snapshot, context, issues)
   if (issues.length === 0) {
     try {
@@ -134,6 +149,11 @@ function snapshotLegacy(node: AdaptableMaterialNode): { value?: LegacySnapshot, 
   catch (error) {
     const path = error instanceof JsonValueValidationError && error.path ? error.path : '/model'
     return { issues: [issue('TABLE_LEGACY_STRUCTURE_INVALID', path as `/${string}`, errorMessage(error))] }
+  }
+  if (clone.modelVersion !== 0) {
+    return {
+      issues: [issue('TABLE_LEGACY_VERSION_INVALID', '/model', 'Legacy table migration requires modelVersion 0')],
+    }
   }
   const model = recordAt(clone.model, '/model')
   if (!model.ok)
@@ -177,16 +197,18 @@ function snapshotLegacy(node: AdaptableMaterialNode): { value?: LegacySnapshot, 
   return { value: { node: clone, model: model.value, table: table.value, columns, rows, cells }, issues: [] }
 }
 
-function validateLegacyStructure(snapshot: LegacySnapshot, context: SchemaAdapterContext, issues: MaterialSchemaIssue[]): void {
+function validateLegacyStructure(snapshot: LegacySnapshot, context: SchemaAdapterContext, issues: LegacyIssueList): void {
   const { table, columns, rows, cells } = snapshot
+  validateLegacyCompat(snapshot, issues)
   if (columns.length === 0)
     issues.push(issue('TABLE_LEGACY_STRUCTURE_INVALID', '/model/table/topology/columns', 'Legacy columns must be non-empty'))
   if (rows.length === 0)
     issues.push(issue('TABLE_LEGACY_STRUCTURE_INVALID', '/model/table/topology/rows', 'Legacy rows must be non-empty'))
-  columns.forEach((column, index) => {
+  for (let index = 0; index < columns.length && !issues.full; index++) {
+    const column = columns[index]!
     if (Object.hasOwn(column, 'ratio') && (!finite(column.ratio) || column.ratio <= 0))
       issues.push(issue('TABLE_LEGACY_STRUCTURE_INVALID', `/model/table/topology/columns/${index}/ratio`, 'Column ratio must be positive and finite'))
-  })
+  }
   const kind = expectedKind(snapshot, context)
   if (table.kind !== undefined && table.kind !== kind)
     issues.push(issue('TABLE_MODEL_KIND_MISMATCH', '/model/table/kind', 'Legacy table kind does not match its material type'))
@@ -196,7 +218,8 @@ function validateLegacyStructure(snapshot: LegacySnapshot, context: SchemaAdapte
     issues.push(issue('TABLE_LEGACY_STRUCTURE_INVALID', '/model/table/showFooter', 'showFooter must be boolean'))
 
   let details = 0
-  rows.forEach((row, rowIndex) => {
+  for (let rowIndex = 0; rowIndex < rows.length && !issues.full; rowIndex++) {
+    const row = rows[rowIndex]!
     const base = `/model/table/topology/rows/${rowIndex}` as const
     if (Object.hasOwn(row, 'height') && (!finite(row.height) || row.height < 0))
       issues.push(issue('TABLE_LEGACY_STRUCTURE_INVALID', `${base}/height`, 'Row height must be non-negative and finite'))
@@ -208,10 +231,13 @@ function validateLegacyStructure(snapshot: LegacySnapshot, context: SchemaAdapte
     }
     if (cells[rowIndex]!.length !== columns.length)
       issues.push(issue('TABLE_LEGACY_CELL_COVERAGE_INVALID', `${base}/cells`, 'Every legacy row must retain one cell payload per column'))
-    cells[rowIndex]!.forEach((cell, columnIndex) => validateCell(cell, rowIndex, columnIndex, issues))
-  })
+    for (let columnIndex = 0; columnIndex < cells[rowIndex]!.length && !issues.full; columnIndex++)
+      validateCell(cells[rowIndex]![columnIndex]!, rowIndex, columnIndex, issues)
+  }
   if (kind === 'data' && details !== 1)
     issues.push(issue('TABLE_LEGACY_DETAIL_TEMPLATE_COUNT', '/model/table/topology/rows', 'Data tables require exactly one repeat-template row'))
+  if (issues.full)
+    return
   if (kind === 'data') {
     const ranks = rows.map(row => row.role === 'header' ? 0 : row.role === 'repeat-template' ? 1 : 2)
     if (ranks.some((rank, index) => index > 0 && ranks[index - 1]! > rank))
@@ -219,6 +245,50 @@ function validateLegacyStructure(snapshot: LegacySnapshot, context: SchemaAdapte
   }
   validateSpans(snapshot, kind, issues)
   validateOuterStyle(snapshot, issues)
+}
+
+function validateLegacyCompat(snapshot: LegacySnapshot, issues: MaterialSchemaIssue[]): void {
+  const compat = snapshot.node.compat
+  if (compat === undefined)
+    return
+  if (!plainRecordValue(compat)) {
+    issues.push(issue('TABLE_LEGACY_COMPAT_INVALID', '/compat', 'Legacy compat must be a plain record'))
+    return
+  }
+  if (compat.materials === undefined)
+    return
+  if (!plainRecordValue(compat.materials)) {
+    issues.push(issue('TABLE_LEGACY_COMPAT_INVALID', '/compat/materials', 'Legacy compat materials must be a plain record'))
+    return
+  }
+  for (const type of Object.keys(compat.materials)) {
+    if (issueLimitReached(issues))
+      return
+    const payload = compat.materials[type]
+    if (!plainRecordValue(payload)) {
+      issues.push(issue(
+        'TABLE_LEGACY_COMPAT_INVALID',
+        `/compat/materials/${escapePointer(type)}`,
+        'Legacy material compat namespaces must be plain records',
+      ))
+      return
+    }
+  }
+  const owned = compat.materials[snapshot.node.type]
+  if (owned === undefined)
+    return
+  const ownedPath = `/compat/materials/${escapePointer(snapshot.node.type)}` as const
+  if (!plainRecordValue(owned)) {
+    issues.push(issue('TABLE_LEGACY_COMPAT_INVALID', ownedPath, 'Legacy owned compat namespace must be a plain record'))
+    return
+  }
+  if (Object.hasOwn(owned, 'v0') && stableStringify(owned.v0) !== stableStringify(snapshot.model)) {
+    issues.push(issue(
+      'TABLE_LEGACY_ENVELOPE_COLLISION',
+      `${ownedPath}/v0`,
+      'Legacy owned compat v0 contains a different payload',
+    ))
+  }
 }
 
 function validateCell(cell: RecordValue, rowIndex: number, columnIndex: number, issues: MaterialSchemaIssue[]): void {
@@ -240,6 +310,8 @@ function validateCell(cell: RecordValue, rowIndex: number, columnIndex: number, 
     }
     else {
       for (const key of Object.keys(content.value)) {
+        if (issueLimitReached(issues))
+          break
         if (key !== 'text' && key !== 'elements')
           issues.push(issue('TABLE_LEGACY_STRUCTURE_INVALID', `${base}/content/${escapePointer(key)}`, `Unknown legacy content key: ${key}`))
       }
@@ -258,8 +330,8 @@ function validateCell(cell: RecordValue, rowIndex: number, columnIndex: number, 
 function validateSpans(snapshot: LegacySnapshot, kind: TableModel['kind'], issues: MaterialSchemaIssue[]): void {
   const occupied = new Map<string, { row: number, column: number }>()
   const roles = snapshot.rows.map(row => canonicalRole(row.role, kind))
-  for (let row = 0; row < snapshot.rows.length; row++) {
-    for (let column = 0; column < snapshot.columns.length; column++) {
+  for (let row = 0; row < snapshot.rows.length && !issueLimitReached(issues); row++) {
+    for (let column = 0; column < snapshot.columns.length && !issueLimitReached(issues); column++) {
       const cell = snapshot.cells[row]?.[column]
       if (!cell)
         continue
@@ -297,6 +369,7 @@ function convert(snapshot: LegacySnapshot, context: SchemaAdapterContext): Adapt
   const kind = expectedKind(snapshot, context)
   const ids = new StableIds(snapshot.node.id)
   const style = convertTableStyle(snapshot)
+  const legacyCellById = new Map<string, RecordValue>()
   const columns: TableColumn[] = snapshot.columns.map((column, index) => ({
     id: ids.id('column', `/model/table/topology/columns/${index}`, column) as TableColumn['id'],
     track: { kind: 'fr', weight: finite(column.ratio) && column.ratio > 0 ? column.ratio : 1 },
@@ -304,7 +377,15 @@ function convert(snapshot: LegacySnapshot, context: SchemaAdapterContext): Adapt
   const allRows: TableRow[] = snapshot.rows.map((row, rowIndex) => ({
     id: ids.id('row', `/model/table/topology/rows/${rowIndex}`, row) as TableRow['id'],
     minHeight: finite(row.height) ? row.height : 0,
-    cells: snapshot.cells[rowIndex]!.map((cell, columnIndex) => convertCell(cell, rowIndex, columnIndex, columns, ids, style)),
+    cells: snapshot.cells[rowIndex]!.map((cell, columnIndex) => convertCell(
+      cell,
+      rowIndex,
+      columnIndex,
+      columns,
+      ids,
+      style,
+      legacyCellById,
+    )),
   }))
   const roleRows = allRows.map((row, index) => ({ row, role: canonicalRole(snapshot.rows[index]!.role, kind), index }))
   const visible = roleRows.filter(({ role }) => !(
@@ -336,7 +417,7 @@ function convert(snapshot: LegacySnapshot, context: SchemaAdapterContext): Adapt
   for (const band of bands) {
     for (const row of band.rows) {
       for (const cell of row.cells) {
-        const source = sourceCellFor(snapshot, cell, allRows, columns)
+        const source = legacyCellById.get(cell.id)!
         const content = recordOrEmpty(source.content)
         const elements = Array.isArray(content.elements) ? content.elements : []
         if (elements.length > 0) {
@@ -353,8 +434,8 @@ function convert(snapshot: LegacySnapshot, context: SchemaAdapterContext): Adapt
     }
   }
   const compat = cloneRecord(snapshot.node.compat ?? {})
-  const materials = cloneRecord(recordOrEmpty(compat.materials))
-  const owned = cloneRecord(recordOrEmpty(materials[snapshot.node.type]))
+  const materials = cloneRecord(compat.materials ?? {})
+  const owned = cloneRecord(materials[snapshot.node.type] ?? {})
   addWithoutCollision(owned, 'v0', cloneJsonValue(snapshot.model as JsonValue), `/compat/materials/${escapePointer(snapshot.node.type)}`)
   materials[snapshot.node.type] = owned
   compat.materials = materials
@@ -375,6 +456,7 @@ function convertCell(
   columns: TableColumn[],
   ids: StableIds,
   tableStyle: TableStyle,
+  legacyCellById: Map<string, RecordValue>,
 ): TableCell {
   const id = ids.id('cell', `/model/table/topology/rows/${row}/cells/${column}`, cell) as TableCell['id']
   const content = recordOrEmpty(cell.content)
@@ -389,6 +471,7 @@ function convertCell(
   const style = convertCellStyle(cell, tableStyle)
   if (Object.keys(style).length > 0)
     result.style = style
+  legacyCellById.set(id, cell)
   return result
 }
 
@@ -434,12 +517,6 @@ function convertMerges(
     }
   }
   return merges
-}
-
-function sourceCellFor(snapshot: LegacySnapshot, cell: TableCell, rows: TableRow[], columns: TableColumn[]): RecordValue {
-  const row = rows.findIndex(item => item.cells.some(candidate => candidate.id === cell.id))
-  const column = columns.findIndex(item => item.id === cell.columnId)
-  return snapshot.cells[row]![column]!
 }
 
 function convertCellStyle(cell: RecordValue, tableStyle: TableStyle): TableStyle {
@@ -521,6 +598,8 @@ function validateCellBorder(value: unknown, path: `/${string}`, issues: Material
     return
   }
   for (const key of Object.keys(record.value)) {
+    if (issueLimitReached(issues))
+      break
     if (!['top', 'right', 'bottom', 'left'].includes(key)) {
       issues.push(issue('TABLE_LEGACY_STRUCTURE_INVALID', `${path}/${escapePointer(key)}`, `Unknown cell border key: ${key}`))
       continue
@@ -547,6 +626,8 @@ function validateConvertedEnvelope(node: AdaptableMaterialNode, model: TableMode
     expectedBindings.add(model.data.collectionPort)
   const slots = recordOrEmpty(node.slots)
   for (const key of Object.keys(slots)) {
+    if (issueLimitReached(issues))
+      return
     const path = `/slots/${escapePointer(key)}` as const
     if (!expectedSlots.has(key))
       issues.push(issue('TABLE_SLOT_ORPHAN', path, `Legacy slot cannot be represented by the canonical table: ${key}`))
@@ -555,6 +636,8 @@ function validateConvertedEnvelope(node: AdaptableMaterialNode, model: TableMode
   }
   const bindings = recordOrEmpty(node.bindings)
   for (const key of Object.keys(bindings)) {
+    if (issueLimitReached(issues))
+      return
     const path = `/bindings/${escapePointer(key)}` as const
     if (!isValidTableStableToken(key))
       issues.push(issue('TABLE_BINDING_PORT_INVALID', path, 'Binding port must be a stable table token'))
@@ -577,6 +660,8 @@ function validatePadding(value: unknown, path: `/${string}`, issues: MaterialSch
     return
   }
   for (const key of Object.keys(record.value)) {
+    if (issueLimitReached(issues))
+      break
     if (!['top', 'right', 'bottom', 'left'].includes(key) || !finite(record.value[key]) || (record.value[key] as number) < 0)
       issues.push(issue('TABLE_LEGACY_STRUCTURE_INVALID', `${path}/${escapePointer(key)}`, 'Padding sides must be non-negative finite numbers'))
   }
@@ -589,6 +674,8 @@ function validateTypography(value: unknown, path: `/${string}`, issues: Material
     return
   }
   for (const key of Object.keys(record.value)) {
+    if (issueLimitReached(issues))
+      break
     if (!TYPOGRAPHY_KEYS.has(key))
       issues.push(issue('TABLE_LEGACY_STRUCTURE_INVALID', `${path}/${escapePointer(key)}`, `Unknown typography key: ${key}`))
   }
@@ -616,6 +703,8 @@ function validateBinding(value: unknown, path: `/${string}`, issues: MaterialSch
     return
   }
   for (const key of Object.keys(record.value)) {
+    if (issueLimitReached(issues))
+      break
     if (!BINDING_KEYS.has(key))
       issues.push(issue('TABLE_LEGACY_BINDING_INVALID', `${path}/${escapePointer(key)}`, `Unknown binding key: ${key}`))
   }
@@ -625,6 +714,8 @@ function validateBinding(value: unknown, path: `/${string}`, issues: MaterialSch
     issues.push(issue('TABLE_LEGACY_BINDING_INVALID', `${path}/fieldPath`, 'Binding fieldPath must be a non-empty trimmed string'))
   if (record.value.bindIndex !== undefined && (!Number.isSafeInteger(record.value.bindIndex) || record.value.bindIndex < 0))
     issues.push(issue('TABLE_LEGACY_BINDING_INVALID', `${path}/bindIndex`, 'Binding bindIndex must be a non-negative safe integer'))
+  if (!decodeCanonicalBindingExpression(canonicalBinding(record.value)))
+    issues.push(issue('TABLE_LEGACY_BINDING_INVALID', path, 'Binding expression or display format is invalid'))
 }
 
 function canonicalBinding(value: unknown): unknown {
@@ -634,55 +725,7 @@ function canonicalBinding(value: unknown): unknown {
 }
 
 function isCanonicalBinding(value: unknown): boolean {
-  const record = recordOrEmpty(value)
-  if (record === value && Object.keys(record).every(key => BINDING_KEYS.has(key) && key !== 'bindIndex')) {
-    if (typeof record.sourceId !== 'string' || record.sourceId.length === 0 || record.sourceId.trim() !== record.sourceId)
-      return false
-    if (typeof record.fieldPath !== 'string' || record.fieldPath.length === 0 || record.fieldPath.trim() !== record.fieldPath)
-      return false
-    for (const key of ['sourceName', 'sourceTag', 'fieldKey', 'fieldLabel']) {
-      if (record[key] !== undefined && typeof record[key] !== 'string')
-        return false
-    }
-    if (record.required !== undefined && typeof record.required !== 'boolean')
-      return false
-    if (record.extensions !== undefined && recordOrEmpty(record.extensions) !== record.extensions)
-      return false
-    return record.format === undefined || isCanonicalBindingFormat(record.format)
-  }
-  return false
-}
-
-function isCanonicalBindingFormat(value: unknown): boolean {
-  const format = recordOrEmpty(value)
-  if (format !== value || format.mode !== 'preset')
-    return false
-  if (!Object.keys(format).every(key => ['mode', 'preset', 'prefix', 'suffix', 'fallback', 'extensions'].includes(key)))
-    return false
-  for (const key of ['prefix', 'suffix', 'fallback']) {
-    if (format[key] !== undefined && typeof format[key] !== 'string')
-      return false
-  }
-  if (format.extensions !== undefined && recordOrEmpty(format.extensions) !== format.extensions)
-    return false
-  const preset = recordOrEmpty(format.preset)
-  if (preset !== format.preset || !Object.keys(preset).every(key => BINDING_PRESET_KEYS.has(key)))
-    return false
-  if (typeof preset.type !== 'string' || !BINDING_PRESET_TYPES.has(preset.type))
-    return false
-  for (const key of ['pattern', 'locale', 'timeZone', 'currency']) {
-    if (preset[key] !== undefined && typeof preset[key] !== 'string')
-      return false
-  }
-  if (preset.weekdayStyle !== undefined && !['long', 'short', 'narrow'].includes(preset.weekdayStyle as string))
-    return false
-  for (const key of ['minimumFractionDigits', 'maximumFractionDigits']) {
-    if (preset[key] !== undefined && (!Number.isInteger(preset[key]) || (preset[key] as number) < 0))
-      return false
-  }
-  return !(typeof preset.minimumFractionDigits === 'number'
-    && typeof preset.maximumFractionDigits === 'number'
-    && preset.minimumFractionDigits > preset.maximumFractionDigits)
+  return decodeCanonicalBindingExpression(value) !== undefined
 }
 
 function normalizePadding(value: unknown): TableStyle['padding'] {
@@ -788,6 +831,13 @@ function recordOrEmpty(value: unknown): RecordValue {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as RecordValue : {}
 }
 
+function plainRecordValue(value: unknown): value is RecordValue {
+  if (typeof value !== 'object' || value === null || Array.isArray(value))
+    return false
+  const prototype = Object.getPrototypeOf(value)
+  return prototype === Object.prototype || prototype === null
+}
+
 function recordAt(value: unknown, path: `/${string}`): { ok: true, value: RecordValue } | { ok: false, issue: MaterialSchemaIssue } {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? { ok: true, value: value as RecordValue }
@@ -809,6 +859,11 @@ function finite(value: unknown): value is number {
 
 function issue(code: string, path: `/${string}`, message: string): MaterialSchemaIssue {
   return { code, severity: 'error', path, message }
+}
+
+function issueLimitReached(issues: MaterialSchemaIssue[]): boolean {
+  return issues.length >= MAX_LEGACY_ISSUES
+    || issues.at(-1)?.code === 'TABLE_LEGACY_ISSUES_TRUNCATED'
 }
 
 function escapePointer(value: string): string {
