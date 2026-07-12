@@ -326,7 +326,7 @@ export class DesignerStore {
   setExtension(key: string, value: unknown): void {
     this.documentTransactions.transact((draft) => {
       draft.extensions = { ...(draft.extensions ?? {}), [key]: value }
-    }, { label: `Set extension ${key}`, operation: { kind: 'extension.set', sessionPath: [], targetIds: [], fieldPaths: [`/extensions/${key}`], selectionLineage: null, structural: false } })
+    }, { label: `Set extension ${key}`, operation: { kind: 'extension.set', sessionPath: [], targetIds: ['document'], fieldPaths: [`/extensions/${escapeJsonPointerToken(key)}`], selectionLineage: null, structural: false } })
   }
 
   /** Delete an extension value by key. */
@@ -337,7 +337,7 @@ export class DesignerStore {
       const next = { ...draft.extensions }
       delete next[key]
       draft.extensions = next
-    }, { label: `Delete extension ${key}`, operation: { kind: 'extension.delete', sessionPath: [], targetIds: [], fieldPaths: [`/extensions/${key}`], selectionLineage: null, structural: false } })
+    }, { label: `Delete extension ${key}`, operation: { kind: 'extension.delete', sessionPath: [], targetIds: ['document'], fieldPaths: [`/extensions/${escapeJsonPointerToken(key)}`], selectionLineage: null, structural: false } })
   }
 
   // ─── Element operations ───────────────────────────────────────
@@ -629,4 +629,8 @@ function stripUndefined<T>(value: T): T {
     return result as T
   }
   return value
+}
+
+function escapeJsonPointerToken(value: string): string {
+  return value.replaceAll('~', '~0').replaceAll('/', '~1')
 }

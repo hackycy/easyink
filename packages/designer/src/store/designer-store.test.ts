@@ -292,6 +292,19 @@ describe('designer store schema initialization', () => {
     await Promise.resolve()
     expect(store.getMaterialNodeState('box')).toBe(committedState)
   })
+
+  it('records escaped extension writes as document transactions with undo', () => {
+    const store = new DesignerStore()
+    const before = store.schema
+    store.setExtension('vendor/a~b', { enabled: true })
+    expect(store.schema).not.toBe(before)
+    expect(store.getExtension('vendor/a~b')).toEqual({ enabled: true })
+    expect(store.documentTransactions.historyEntries.at(-1)?.description).toBe('Set extension vendor/a~b')
+    store.deleteExtension('vendor/a~b')
+    expect(store.getExtension('vendor/a~b')).toBeUndefined()
+    store.documentTransactions.undo()
+    expect(store.getExtension('vendor/a~b')).toEqual({ enabled: true })
+  })
 })
 
 function boxProfile() {
