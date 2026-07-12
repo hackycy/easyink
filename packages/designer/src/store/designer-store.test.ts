@@ -275,6 +275,19 @@ describe('designer store schema initialization', () => {
     expect(store.getElementById('x')?.id).toBe('x')
     expect(store.documentStore.index.getNode('x')?.id).toBe('x')
   })
+
+  it('keeps committed sidecars while a preview obscures the document view', async () => {
+    const store = unknownAndBoxStore()
+    store.documentTransactions.run('box', draft => { draft.model.value = 1 }, { label: 'Commit' })
+    const committedState = store.documentStore.materialNodeStates.get('box')
+    const preview = store.documentTransactions.beginPreview({ label: 'Preview', operation: { kind: 'material.property', sessionPath: [], targetIds: ['node:box'], fieldPaths: ['/model/value'], selectionLineage: null, structural: false } })
+    preview.run('box', draft => { draft.model.value = 2 })
+    await Promise.resolve()
+    expect(store.getMaterialNodeState('box')).toBe(committedState)
+    preview.cancel()
+    await Promise.resolve()
+    expect(store.getMaterialNodeState('box')).toBe(committedState)
+  })
 })
 
 function boxProfile() {
