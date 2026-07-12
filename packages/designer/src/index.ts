@@ -11,15 +11,7 @@ export type {
   ToolbarActionDescriptor,
 } from './contributions'
 export { DesignerInteractionService } from './interactions'
-export { builtinCatalogGroupLabels, builtinMaterialIcons, prepareDesignerMaterialBundle } from './material-host'
-export type { PreparedDesignerMaterialBundle } from './material-host'
-export { registerMaterialBundle, tableSectionFilter } from './materials/registry'
-export type {
-  DesignerCatalogGroupRegistration,
-  DesignerCatalogRegistration,
-  DesignerMaterialBundle,
-  DesignerMaterialRegistration,
-} from './materials/registry'
+export { builtinCatalogGroupLabels, builtinMaterialIcons } from './material-host'
 export { PropertyEditorRegistry, PropertyEditorRegistryError } from './properties/property-editor-registry'
 export type { PropertyEditorRegistration } from './properties/property-editor-registry'
 export type {

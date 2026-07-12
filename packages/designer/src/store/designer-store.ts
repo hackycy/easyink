@@ -2,7 +2,7 @@ import type { CompiledMaterialProfile, EphemeralPanelDef, FacetInstance, FontLoa
 import type { DocumentSchema, DocumentSchemaInput, ElementGroupSchema, MaterialNode } from '@easyink/schema'
 import type { PaperPreset } from '@easyink/shared'
 import type { DesignerRuntimeConfig } from '../runtime-config'
-import type { DesignerInteractionProvider, LazyMaterialExtensionFactory, LocaleMessageRegistration, LocaleMessages, MaterialCatalogEntry, MaterialCatalogGroup, MaterialDefinition, MaterialDesignerExtension, MaterialExtensionFactory, PreferenceProvider, SnapLine, StatusBarState } from '../types'
+import type { DesignerInteractionProvider, LocaleMessageRegistration, LocaleMessages, PreferenceProvider, SnapLine, StatusBarState } from '../types'
 import { CommandManager, MaterialFacetHost as CoreMaterialFacetHost, loadDocumentWithProfile, SelectionModel, validateDocumentWithProfile } from '@easyink/core'
 import { DataSourceRegistry } from '@easyink/datasource'
 import { findNodeById } from '@easyink/schema'
@@ -14,7 +14,6 @@ import { PropertyEditorRegistry } from '../properties/property-editor-registry'
 import { resolveDesignerMaterialProfile } from '../runtime-config'
 import { DiagnosticsChannel } from './diagnostics'
 import { FontService } from './font-service'
-import { MaterialRegistry } from './material-registry'
 import { PaperRegistry } from './paper-registry'
 import { applyPersistedWorkbench, loadWorkbenchPreferences } from './preference-persistence'
 import { SaveStatusManager } from './save-status-manager'
@@ -73,7 +72,6 @@ export class DesignerStore {
   snapActiveLines: readonly SnapLine[] = []
   materialExtensionRevision = 0
 
-  readonly materialRegistry: MaterialRegistry
   readonly paperRegistry: PaperRegistry
 
   // ─── Editing Session Manager ─────────────────────────────────────
@@ -105,7 +103,6 @@ export class DesignerStore {
     this._materialNodeStates = loaded.nodeStates
     this.fontService = new FontService(this.diagnostics)
     this.materialTransaction = markRaw(createTransactionService(id => this.getElementById(id), this.commands, this.diagnostics))
-    this.materialRegistry = new MaterialRegistry()
     this.paperRegistry = new PaperRegistry(runtimeConfig?.paper)
     this.applyRuntimeDefaults(runtimeConfig, schema)
     this.setInteractionProvider(interactionProvider)
@@ -359,62 +356,7 @@ export class DesignerStore {
   }
 
   // ─── Material registry ────────────────────────────────────────
-
-  registerMaterial(definition: MaterialDefinition): () => void {
-    return this.materialRegistry.registerMaterial(definition)
-  }
-
-  getMaterial(type: string): MaterialDefinition | undefined {
-    const manifest = this.materialProfile.getManifest(type)
-    if (manifest && !this.materialRegistry.getMaterial(type))
-      return undefined
-    return this.materialRegistry.getMaterial(type)
-  }
-
-  activateDesignerFacet(type: string) {
-    return this.materialFacetHost.activate(this.materialProfile, type, 'designer').then((instance) => {
-      this.designerFacetCache.set(type, instance)
-      return instance
-    })
-  }
-
-  peekDesignerFacet(type: string) {
-    return this.designerFacetCache.get(type)
-  }
-
-  getManifest(type: string) {
-    return this.materialProfile.getManifest(type)
-  }
-
-  getMaterialManifest(type: string) {
-    return this.materialProfile.getManifest(type)
-  }
-
-  listEditableMaterialTypes(): readonly string[] {
-    return [...this.materialProfile.editableTypes]
-  }
-
-  listEditableMaterialManifests() {
-    return this.listEditableMaterialTypes().map(type => this.materialProfile.getManifest(type)!).filter(Boolean)
-  }
-
-  listMaterials(): MaterialDefinition[] {
-    return this.materialRegistry.listMaterials()
-  }
-
-  registerCatalogGroup(group: MaterialCatalogGroup): () => void {
-    return this.materialRegistry.registerCatalogGroup(group)
-  }
-
-  getCatalog(): MaterialCatalogEntry[] {
-    return this.materialRegistry.getCatalog()
-  }
-
-  getCatalogGroups(): MaterialCatalogGroup[] {
-    return this.materialRegistry.getCatalogGroups()
-  }
-
-  // ─── Paper registry ───────────────────────────────────────────
+  // ─── Paper registry ───────────────────────────────────────────
 
   listPaperPresets(): PaperPreset[] {
     return this.paperRegistry.listPresets()
@@ -431,23 +373,7 @@ export class DesignerStore {
   getPaperPresetBySize(width: number, height: number): PaperPreset | undefined {
     return this.paperRegistry.resolveBySize(width, height)
   }
-
-  // ─── Extension Factory Registry ─────────────────────────────────
-
-  registerDesignerFactory(type: string, factory: MaterialExtensionFactory): () => void {
-    return this.materialRegistry.registerDesignerFactory(type, factory)
-  }
-
-  registerLazyDesignerFactory(type: string, loader: LazyMaterialExtensionFactory): () => void {
-    return this.materialRegistry.registerLazyDesignerFactory(type, loader)
-  }
-
-  /** Get or lazily instantiate an extension from its factory. */
-  getDesignerExtension(type: string): MaterialDesignerExtension | undefined {
-    return this.materialRegistry.getDesignerExtension(type, this)
-  }
-
-  notifyMaterialExtensionLoaded(): void {
+  notifyMaterialExtensionLoaded(): void {
     this.materialExtensionRevision += 1
   }
 
@@ -560,7 +486,6 @@ export class DesignerStore {
     this.selection.clear()
     this.dataSourceRegistry.clear()
     this.fontService.clear()
-    this.materialRegistry.clear()
     this.paperRegistry.clear()
     this.clipboard = []
     this._propertyOverlay = null
