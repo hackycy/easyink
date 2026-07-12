@@ -18,6 +18,7 @@ describe('documentIndexSnapshot', () => {
     expect(index.getAddress('child')?.ancestors.at(-1)).toMatchObject({ ownerNodeId: 'owner', slot: 'content', index: 0 })
     expect(index.getParentNodeId('child')).toBe('owner')
     expect(index.getSlot('owner', 'content')).toMatchObject({ coordinateSpace: 'owner', reparent: 'allowed' })
+    expect(Object.isFrozen(index)).toBe(true)
   })
 
   it('rejects duplicate node IDs before publishing a snapshot', () => {
@@ -51,6 +52,12 @@ describe('documentIndexSnapshot', () => {
     expect(result.index.getAddress('owner')).toBe(ownerAddress)
     expect(result.impact.affectedNodeIds).toEqual(['child'])
     expect(result.impact.changedPathsByNodeId.get('child')).toEqual(['/model/value'])
+    expect(Object.isFrozen(result)).toBe(true)
+    expect(Object.isFrozen(result.index)).toBe(true)
+    expect(Object.isFrozen(result.impact)).toBe(true)
+    expect(Object.isFrozen(result.impact.affectedNodeIds)).toBe(true)
+    expect(Object.isFrozen(result.impact.changedDocumentPaths)).toBe(true)
+    expect(Object.isFrozen(result.impact.changedPathsByNodeId)).toBe(true)
   })
 
   it('updates a root node field without traversing unrelated candidate nodes', () => {
@@ -142,14 +149,51 @@ describe('documentIndexSnapshot', () => {
     const before = DocumentIndexSnapshot.build(schema, profile, 1)
     const secondAddress = before.getAddress('second')
     const inserted = profile.createNode('box', { id: 'inserted' })
-    const next = create(schema, (draft) => {
-      draft.elements.unshift(inserted)
-    })
+    const clonedSecond = { ...second }
+    const next = { ...schema, elements: [inserted, first, clonedSecond] }
     const result = forkDocumentIndexSnapshot(before, next, profile, 2, [{ op: 'add', path: ['elements', 0], value: next.elements[0] }], [{ op: 'remove', path: ['elements', 0] }])
     expect(result.index.getAddress('second')).not.toBe(secondAddress)
     expect(result.index.getAddress('second')?.ancestors).toEqual([])
     expect(result.index.resolveNode(next, 'second')).toBe(next.elements[2])
+    expect(result.index.getNode('second')).toBe(clonedSecond)
     expect(result.impact.affectedNodeIds).toEqual(['inserted'])
+  })
+
+  it('publishes cloned sibling nodes during reorder without marking them affected', () => {
+    const profile = createTestCompiledMaterialProfile()
+    const [a, b, c] = ['a', 'b', 'c'].map(id => profile.createNode('box', { id }))
+    const schema = { ...createDefaultSchema(), elements: [a!, b!, c!] }
+    const before = DocumentIndexSnapshot.build(schema, profile, 1)
+    const clonedC = { ...c! }
+    const next = { ...schema, elements: [b!, a!, clonedC] }
+    const result = forkDocumentIndexSnapshot(before, next, profile, 2, [
+      { op: 'replace', path: ['elements'], value: next.elements },
+    ], [
+      { op: 'replace', path: ['elements'], value: schema.elements },
+    ])
+
+    expect(result.index.getNode('c')).toBe(clonedC)
+    expect(result.index.resolveNode(next, 'c')).toBe(clonedC)
+    expect(result.impact.affectedNodeIds).toEqual(['a', 'b'])
+  })
+
+  it('marks only inversion participants in a large sibling group', () => {
+    const profile = createTestCompiledMaterialProfile()
+    const elements = Array.from({ length: 2_000 }, (_, index) => profile.createNode('box', { id: `node-${index}` }))
+    const schema = { ...createDefaultSchema(), elements }
+    const before = DocumentIndexSnapshot.build(schema, profile, 1)
+    const nextElements = [...elements]
+    const first = nextElements[999]!
+    nextElements[999] = nextElements[1000]!
+    nextElements[1000] = first
+    const next = { ...schema, elements: nextElements }
+    const result = forkDocumentIndexSnapshot(before, next, profile, 2, [
+      { op: 'replace', path: ['elements'], value: nextElements },
+    ], [
+      { op: 'replace', path: ['elements'], value: elements },
+    ])
+
+    expect(new Set(result.impact.affectedNodeIds)).toEqual(new Set(['node-999', 'node-1000']))
   })
 
   it('updates slot addresses after insertion without affecting shifted siblings', () => {

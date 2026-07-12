@@ -47,7 +47,10 @@ export class DocumentIndexSnapshot {
   private constructor(
     readonly revision: number,
     internals: SnapshotInternals,
-  ) { snapshotInternals.set(this, internals) }
+  ) {
+    snapshotInternals.set(this, Object.freeze(internals))
+    Object.freeze(this)
+  }
 
   static build(document: DocumentSchema, profile: CompiledMaterialProfile, revision: number): DocumentIndexSnapshot {
     const nodes = new Map<string, MaterialNode>()
@@ -199,14 +202,14 @@ export function forkDocumentIndexSnapshot(
   const frozenPaths = new Map<string, readonly `/${string}`[]>()
   for (const [id, paths] of changedPathsByNodeId)
     frozenPaths.set(id, Object.freeze([...paths].sort()))
-  return { index, impact: Object.freeze({
+  return Object.freeze({ index, impact: Object.freeze({
     baseRevision: base.revision,
     candidateRevision: revision,
     affectedNodeIds: Object.freeze(orderedAffected),
     changedPathsByNodeId: readonlyMap(frozenPaths),
     changedDocumentPaths: Object.freeze(changedDocumentPaths.map(formatPath)),
     structural,
-  }) }
+  }) })
 }
 
 export function requireDocumentNode(document: DocumentSchema, _profile: CompiledMaterialProfile, nodeId: string): MaterialNode {
@@ -578,37 +581,41 @@ function uniquePaths(paths: Path[]): Path[] {
 
 function collectStructuralImpact(base: DocumentIndexSnapshot, candidate: DocumentIndexSnapshot, affected: Set<string>): void {
   const surviving = base.nodeIds().filter(id => candidate.hasNode(id))
+  const beforePositions = new Map<string, { group: string, order: number }>()
+  const afterPositions = new Map<string, { group: string, order: number }>()
+  const groupMembers = new Map<string, string[]>()
   for (const id of surviving) {
     const beforeNode = base.getNode(id)!
     const afterNode = candidate.getNode(id)!
     if (beforeNode.type !== afterNode.type || !sameStrings(Object.keys(beforeNode.slots), Object.keys(afterNode.slots)))
       affected.add(id)
-  }
-
-  const groups = new Set<string>()
-  for (const id of surviving) {
     const before = siblingPosition(base, id)
     const after = siblingPosition(candidate, id)
+    beforePositions.set(id, before)
+    afterPositions.set(id, after)
     if (before.group !== after.group) {
       affected.add(id)
       continue
     }
-    groups.add(before.group)
+    const members = groupMembers.get(before.group) ?? []
+    members.push(id)
+    groupMembers.set(before.group, members)
   }
-  for (const group of groups) {
-    const common = surviving.filter(id => siblingPosition(base, id).group === group && siblingPosition(candidate, id).group === group)
-    const before = common.toSorted((left, right) => siblingPosition(base, left).order - siblingPosition(base, right).order)
-    const after = common.toSorted((left, right) => siblingPosition(candidate, left).order - siblingPosition(candidate, right).order)
-    const afterPositions = new Map(after.map((id, index) => [id, index]))
-    for (let left = 0; left < before.length; left += 1) {
-      for (let right = left + 1; right < before.length; right += 1) {
-        const leftId = before[left]!
-        const rightId = before[right]!
-        if ((afterPositions.get(leftId) ?? -1) > (afterPositions.get(rightId) ?? -1)) {
-          affected.add(leftId)
-          affected.add(rightId)
-        }
-      }
+  for (const members of groupMembers.values()) {
+    const beforeOrder = members.toSorted((left, right) => beforePositions.get(left)!.order - beforePositions.get(right)!.order)
+    const afterOrder = beforeOrder.map(id => afterPositions.get(id)!.order)
+    const suffixMin = [...afterOrder].fill(Number.POSITIVE_INFINITY)
+    let minimum = Number.POSITIVE_INFINITY
+    for (let index = afterOrder.length - 1; index >= 0; index -= 1) {
+      suffixMin[index] = minimum
+      minimum = Math.min(minimum, afterOrder[index]!)
+    }
+    let prefixMax = Number.NEGATIVE_INFINITY
+    for (let index = 0; index < beforeOrder.length; index += 1) {
+      const order = afterOrder[index]!
+      if (prefixMax > order || order > suffixMin[index]!)
+        affected.add(beforeOrder[index]!)
+      prefixMax = Math.max(prefixMax, order)
     }
   }
 }
@@ -659,13 +666,17 @@ function createStructuralOverlay(base: DocumentIndexSnapshot, candidate: Documen
         slotChanges.set(slotKeyValue, after.slots.get(slotKeyValue))
     }
   }
+  const allNodeIds = new Set([...base.nodeIds(), ...candidate.nodeIds()])
+  const nodeChanged = new Set<string>()
   const pathChanged = new Set<string>()
-  for (const id of new Set([...base.nodeIds(), ...candidate.nodeIds()])) {
+  for (const id of allNodeIds) {
+    if (before.nodes.get(id) !== after.nodes.get(id))
+      nodeChanged.add(id)
     if (!samePath(before.paths.get(id), after.paths.get(id)))
       pathChanged.add(id)
   }
   return createSnapshot(candidate.revision, {
-    nodes: overlay(before.nodes, after.nodes, affected, candidate.revision > base.revision),
+    nodes: overlay(before.nodes, after.nodes, nodeChanged, candidate.revision > base.revision),
     addresses: overlay(before.addresses, after.addresses, pathChanged, candidate.revision > base.revision),
     slots: overlayValues(before.slots, slotChanges, candidate.revision > base.revision),
     paths: overlay(before.paths, after.paths, pathChanged, candidate.revision > base.revision),
@@ -694,6 +705,7 @@ class PersistentMap<K, V> implements ReadonlyMap<K, V> {
   readonly depth: number
   constructor(private readonly base: ReadonlyMap<K, V>, private readonly changes: ReadonlyMap<K, V | undefined>) {
     this.depth = base instanceof PersistentMap ? base.depth + 1 : 1
+    Object.freeze(this)
   }
 
   get size(): number {
