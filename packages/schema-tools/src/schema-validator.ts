@@ -1,6 +1,6 @@
 import type { BindingRef, DocumentSchema, MaterialNode } from '@easyink/schema'
-import { getBindingRefs } from '@easyink/schema'
 import { BLOCKED_PATH_KEYS, deepClone, FIELD_PATH_SEPARATOR, generateId } from '@easyink/shared'
+import { mapMaterialBindingRefs, visitMaterialBindingRefs } from './binding-ref'
 
 /**
  * Validation error.
@@ -312,31 +312,10 @@ export class SchemaValidator {
 
     const traverse = (elements: MaterialNode[]): void => {
       for (const element of elements) {
-        if (element.bindings.value) {
-          bindings.push(...getBindingRefs(element.bindings.value))
-        }
-
-        // Check table cells
-        if ('table' in element) {
-          const table = element as MaterialNode & { table: { topology?: { rows?: Array<{ cells?: Array<{ binding?: BindingRef, staticBinding?: BindingRef }> }> } } }
-          if (table.table?.topology?.rows) {
-            for (const row of table.table.topology.rows) {
-              if (row.cells) {
-                for (const cell of row.cells) {
-                  if (cell.binding)
-                    bindings.push(cell.binding)
-                  if (cell.staticBinding)
-                    bindings.push(cell.staticBinding)
-                }
-              }
-            }
-          }
-        }
-
-        // Traverse children
-        if (element.slots.default) {
-          traverse(element.slots.default)
-        }
+        for (const binding of Object.values(element.bindings))
+          visitMaterialBindingRefs(binding, item => bindings.push(item))
+        for (const children of Object.values(element.slots))
+          traverse(children)
       }
     }
 
@@ -398,38 +377,14 @@ export function normalizeAllFieldPaths(schema: DocumentSchema): DocumentSchema {
 
   const traverse = (elements: MaterialNode[]): void => {
     for (const element of elements) {
-      // Fix binding paths
-      if (element.bindings.value) {
-        const bindings = getBindingRefs(element.bindings.value)
-        for (const binding of bindings) {
-          if (binding.fieldPath && binding.fieldPath.includes('.')) {
-            binding.fieldPath = binding.fieldPath.replace(/\./g, FIELD_PATH_SEPARATOR)
-          }
-        }
+      for (const [port, binding] of Object.entries(element.bindings)) {
+        element.bindings[port] = mapMaterialBindingRefs(binding, item => ({
+          ...item,
+          fieldPath: item.fieldPath.replace(/\./g, FIELD_PATH_SEPARATOR),
+        }))
       }
-
-      // Fix table cells
-      if ('table' in element) {
-        const table = element as MaterialNode & { table: { topology?: { rows?: Array<{ cells?: Array<{ binding?: BindingRef, staticBinding?: BindingRef }> }> } } }
-        if (table.table?.topology?.rows) {
-          for (const row of table.table.topology.rows) {
-            if (row.cells) {
-              for (const cell of row.cells) {
-                if (cell.binding?.fieldPath && cell.binding.fieldPath.includes('.')) {
-                  cell.binding.fieldPath = cell.binding.fieldPath.replace(/\./g, FIELD_PATH_SEPARATOR)
-                }
-                if (cell.staticBinding?.fieldPath && cell.staticBinding.fieldPath.includes('.')) {
-                  cell.staticBinding.fieldPath = cell.staticBinding.fieldPath.replace(/\./g, FIELD_PATH_SEPARATOR)
-                }
-              }
-            }
-          }
-        }
-      }
-
-      if (element.slots.default) {
-        traverse(element.slots.default)
-      }
+      for (const children of Object.values(element.slots))
+        traverse(children)
     }
   }
 

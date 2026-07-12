@@ -1,9 +1,9 @@
-import type { AddressedMaterialBindingSlot, CompiledMaterialProfile, JsonPointer, MaterialNodeAddress } from '@easyink/core'
+import type { AddressedMaterialBindingSlot, CompiledMaterialProfile, JsonPointer, MaterialLoadDiagnostic, MaterialNodeAddress } from '@easyink/core'
 import type { DataFieldNode, DataSourceDescriptor } from '@easyink/datasource'
 import type { BindingRef, DocumentSchema } from '@easyink/schema'
-import type { JsonValue } from '@easyink/shared'
 import { loadDocumentWithProfile, readPointer, walkMaterialNodes, writePointer } from '@easyink/core'
-import { cloneJsonValue, deepClone, deepFreezeJsonValue, FIELD_PATH_SEPARATOR } from '@easyink/shared'
+import { deepClone, FIELD_PATH_SEPARATOR } from '@easyink/shared'
+import { cloneAndFreezeBindingRef, visitMaterialBindingRefs } from './binding-ref'
 
 /**
  * Alignment result.
@@ -147,11 +147,9 @@ export class DataSourceAligner {
     const bindings: DocumentBindingSlot[] = []
     if (profile) {
       const loaded = loadDocumentWithProfile(schema, profile)
-      const quarantinedPaths = loaded.diagnostics
-        .filter(diagnostic => diagnostic.severity === 'error' && diagnostic.stage !== 'graph')
-        .map(diagnostic => diagnostic.path)
+      const quarantinedNodeIds = collectAdapterQuarantinedNodeIds(loaded.diagnostics)
       walkMaterialNodes(schema, profile, (_node, address, introspection) => {
-        if (quarantinedPaths.some(path => path === address.path || path.startsWith(`${address.path}/`)))
+        if (quarantinedNodeIds.has(address.nodeId))
           return
         for (const slot of introspection.bindings)
           bindings.push(Object.freeze({ binding: slot.value, nodeAddress: address, path: slot.path }))
@@ -291,7 +289,8 @@ export class DataSourceAligner {
       const current = readAddressedBinding(node, path, nodeAddress.path)
       if (JSON.stringify(current) !== JSON.stringify(binding))
         throw new Error(`DATASOURCE_ALIGNMENT_ADDRESS_STALE:${nodeAddress.path}${path}`)
-      writePointer(node, path, { ...binding, fieldPath: match.path })
+      const updated = cloneAndFreezeBindingRef({ ...binding, fieldPath: match.path } satisfies BindingRef)
+      writePointer(node, path, updated)
     }
     return fixedSchema
   }
@@ -300,11 +299,9 @@ export class DataSourceAligner {
 export function collectDocumentBindingSlots(schema: DocumentSchema, profile: CompiledMaterialProfile): readonly AddressedMaterialBindingSlot[] {
   const slots: AddressedMaterialBindingSlot[] = []
   const loaded = loadDocumentWithProfile(schema, profile)
-  const quarantinedPaths = loaded.diagnostics
-    .filter(diagnostic => diagnostic.severity === 'error' && diagnostic.stage !== 'graph')
-    .map(diagnostic => diagnostic.path)
+  const quarantinedNodeIds = collectAdapterQuarantinedNodeIds(loaded.diagnostics)
   walkMaterialNodes(schema, profile, (_node, address, introspection) => {
-    if (quarantinedPaths.some(path => path === address.path || path.startsWith(`${address.path}/`)))
+    if (quarantinedNodeIds.has(address.nodeId))
       return
     for (const slot of introspection.bindings)
       slots.push(Object.freeze({ ...slot, nodeAddress: address }))
@@ -312,29 +309,15 @@ export function collectDocumentBindingSlots(schema: DocumentSchema, profile: Com
   return Object.freeze(slots)
 }
 
-function collectPortableBindingRefs(
-  value: unknown,
-  nodeAddress: MaterialNodeAddress,
-  path: JsonPointer,
-  result: DocumentBindingSlot[],
-): void {
-  if (!value || typeof value !== 'object')
-    return
-  if (!Array.isArray(value)
-    && typeof (value as Record<string, unknown>).sourceId === 'string'
-    && typeof (value as Record<string, unknown>).fieldPath === 'string') {
-    const binding = deepFreezeJsonValue(cloneJsonValue(value as JsonValue)) as BindingRef
-    result.push(Object.freeze({ binding, nodeAddress, path }))
-    return
-  }
-  for (const [key, item] of Object.entries(value))
-    collectPortableBindingRefs(item, nodeAddress, `${path}/${escapePointerToken(key)}`, result)
-}
-
 function collectPortableDocumentBindings(schema: DocumentSchema, result: DocumentBindingSlot[]): void {
   const visit = (node: DocumentSchema['elements'][number], path: JsonPointer, ancestors: MaterialNodeAddress['ancestors']): void => {
     const address = Object.freeze({ nodeId: node.id, path, ancestors: Object.freeze([...ancestors]) })
-    collectPortableBindingRefs(node.bindings, address, '/bindings', result)
+    for (const [port, binding] of Object.entries(node.bindings)) {
+      visitMaterialBindingRefs(binding, (item, index) => {
+        const bindingPath = `/bindings/${escapePointerToken(port)}${index === undefined ? '' : `/${index}`}` as JsonPointer
+        result.push(Object.freeze({ binding: cloneAndFreezeBindingRef(item), nodeAddress: address, path: bindingPath }))
+      })
+    }
     for (const [slot, children] of Object.entries(node.slots)) {
       children.forEach((child, index) => visit(
         child,
@@ -344,6 +327,16 @@ function collectPortableDocumentBindings(schema: DocumentSchema, result: Documen
     }
   }
   schema.elements.forEach((node, index) => visit(node, `/elements/${index}`, []))
+}
+
+function collectAdapterQuarantinedNodeIds(
+  diagnostics: readonly MaterialLoadDiagnostic[],
+): ReadonlySet<string> {
+  return new Set(diagnostics.flatMap(diagnostic => (
+    diagnostic.severity === 'error' && diagnostic.stage !== 'graph' && diagnostic.nodeId
+      ? [diagnostic.nodeId]
+      : []
+  )))
 }
 
 function resolveAddressedNode(schema: DocumentSchema, address: MaterialNodeAddress): DocumentSchema['elements'][number] {

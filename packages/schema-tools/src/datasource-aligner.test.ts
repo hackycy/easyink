@@ -2,8 +2,9 @@ import type { SchemaAdapter } from '@easyink/core'
 import type { DocumentSchema } from '@easyink/schema'
 import { recordSchemaAdapter } from '@easyink/core'
 import { createTestCompiledMaterialProfile, createTestMaterialManifest } from '@easyink/core/testing'
+import { isBindingRef } from '@easyink/schema'
 import { describe, expect, it } from 'vitest'
-import { DataSourceAligner } from './datasource-aligner'
+import { collectDocumentBindingSlots, DataSourceAligner } from './datasource-aligner'
 
 describe('dataSourceAligner material introspection', () => {
   it('discovers and writes escaped custom binding ports in nested slots', () => {
@@ -21,13 +22,28 @@ describe('dataSourceAligner material introspection', () => {
           role: 'display',
           valueShape: 'scalar',
           modelPath: '/model/value',
-          formatEditor: false,
+          formatEditor: { tabs: ['preset'], presetTypes: ['number'] },
         }] },
       }),
     ])
     const child = profile.createNode('custom-binding', {
       id: 'child',
-      bindings: { 'a/b~c': { sourceId: 'data', fieldPath: 'legacy.name' } },
+      bindings: { 'a/b~c': {
+        sourceId: 'data',
+        sourceName: 'Customers',
+        sourceTag: 'primary',
+        fieldPath: 'legacy.name',
+        fieldKey: 'name',
+        fieldLabel: 'Customer name',
+        required: true,
+        extensions: { plugin: { enabled: true } },
+        format: {
+          mode: 'preset',
+          prefix: '#',
+          preset: { type: 'number', minimumFractionDigits: 2 },
+          extensions: { formatter: true },
+        },
+      } },
     })
     const owner = profile.createNode('owner', { id: 'owner', slots: { content: [child] } })
     const schema: DocumentSchema = {
@@ -45,7 +61,22 @@ describe('dataSourceAligner material introspection', () => {
     const fixed = aligner.applyAlignment(schema, alignment, profile)
 
     expect(slots).toEqual([expect.objectContaining({ nodeAddress: expect.objectContaining({ nodeId: 'child', path: '/elements/0/slots/content/0' }), path: '/bindings/a~1b~0c' })])
-    expect(fixed.elements[0]?.slots.content?.[0]?.bindings['a/b~c']).toMatchObject({ fieldPath: 'customer/name' })
+    const fixedBinding = fixed.elements[0]?.slots.content?.[0]?.bindings['a/b~c']
+    expect(fixedBinding).toMatchObject({
+      sourceName: 'Customers',
+      sourceTag: 'primary',
+      fieldPath: 'customer/name',
+      fieldKey: 'name',
+      fieldLabel: 'Customer name',
+      required: true,
+      extensions: { plugin: { enabled: true } },
+      format: { mode: 'preset', prefix: '#', preset: { type: 'number', minimumFractionDigits: 2 } },
+    })
+    if (!isBindingRef(fixedBinding))
+      throw new Error('Expected a BindingRef')
+    expect(Object.isFrozen(fixedBinding)).toBe(true)
+    expect(Object.isFrozen(fixedBinding.format)).toBe(true)
+    expect(Object.isFrozen(fixedBinding.extensions)).toBe(true)
     expect(schema.elements[0]?.slots.content?.[0]?.bindings['a/b~c']).toMatchObject({ fieldPath: 'legacy.name' })
   })
 
@@ -88,6 +119,70 @@ describe('dataSourceAligner material introspection', () => {
     const schema = makeSchema([profile.createNode('custom-binding', { id: 'bound', bindings: { value: { sourceId: 'data', fieldPath: 'legacy.name' } } })])
     const alignment = aligner.align(schema, { id: 'data', name: 'data', fields: [{ name: 'name', path: 'customer/name' }] }, profile)
     expect(() => aligner.applyAlignment(makeSchema([]), alignment, profile)).toThrowError('DATASOURCE_ALIGNMENT_ADDRESS_STALE:/elements/0')
+  })
+
+  it('skips only the exact quarantined node and retains healthy relatives', () => {
+    const invalidAdapter: SchemaAdapter = {
+      ...recordSchemaAdapter(1),
+      validate: () => [{ code: 'INVALID_CHILD', severity: 'error', path: '/model', message: 'invalid' }],
+    }
+    const warningAdapter: SchemaAdapter = {
+      ...recordSchemaAdapter(1),
+      validate: () => [{ code: 'CHILD_WARNING', severity: 'warning', path: '/model', message: 'warning' }],
+    }
+    const profile = createTestCompiledMaterialProfile([
+      createTestMaterialManifest({
+        type: 'bound-owner',
+        defaultModel: { value: '' },
+        binding: bindingDefinition(),
+        slots: [{ id: 'content', key: { kind: 'exact', value: 'content' }, coordinateSpace: 'owner', layoutParticipation: 'owner', reparent: 'allowed' }],
+      }),
+      createTestMaterialManifest({ type: 'invalid-child', defaultModel: { value: '' }, schemaAdapter: invalidAdapter, binding: bindingDefinition() }),
+      createTestMaterialManifest({ type: 'warning-child', defaultModel: { value: '' }, schemaAdapter: warningAdapter, binding: bindingDefinition() }),
+      createTestMaterialManifest({ type: 'healthy', defaultModel: { value: '' }, binding: bindingDefinition() }),
+    ])
+    const badChild = { ...profile.createNode('healthy', { id: 'bad-child', bindings: { value: { sourceId: 'data', fieldPath: 'bad.child' } } }), type: 'invalid-child' }
+    const warningChild = { ...profile.createNode('healthy', { id: 'warning-child', bindings: { value: { sourceId: 'data', fieldPath: 'warning.child' } } }), type: 'warning-child' }
+    const owner = profile.createNode('bound-owner', {
+      id: 'owner',
+      bindings: { value: { sourceId: 'data', fieldPath: 'owner.value' } },
+      slots: { content: [badChild, warningChild] },
+    })
+    const roots = Array.from({ length: 10 }, (_, index) => profile.createNode('healthy', {
+      id: `healthy-${index}`,
+      bindings: { value: { sourceId: 'data', fieldPath: `healthy.${index}` } },
+    }))
+    roots[1] = { ...profile.createNode('healthy', { id: 'bad-owner', bindings: { value: { sourceId: 'data', fieldPath: 'bad.owner' } } }), type: 'invalid-child' }
+    const schema = makeSchema([owner, ...roots])
+
+    const slots = new DataSourceAligner().extractBindings(schema, profile)
+    const collected = collectDocumentBindingSlots(schema, profile)
+
+    expect(slots.map(slot => slot.nodeAddress.nodeId)).toEqual([
+      'owner',
+      'warning-child',
+      'healthy-0',
+      'healthy-2',
+      'healthy-3',
+      'healthy-4',
+      'healthy-5',
+      'healthy-6',
+      'healthy-7',
+      'healthy-8',
+      'healthy-9',
+    ])
+    expect(slots.map(slot => slot.nodeAddress.path)).toContain('/elements/10')
+    expect(collected.map(slot => slot.nodeAddress.nodeId)).toEqual(slots.map(slot => slot.nodeAddress.nodeId))
+  })
+
+  it('keeps duplicate-ID bindings when quarantine is graph-only', () => {
+    const profile = createProfile()
+    const first = profile.createNode('custom-binding', { id: 'same', bindings: { value: { sourceId: 'data', fieldPath: 'first.value' } } })
+    const second = profile.createNode('custom-binding', { id: 'same', bindings: { value: { sourceId: 'data', fieldPath: 'second.value' } } })
+
+    const slots = new DataSourceAligner().extractBindings(makeSchema([first, second]), profile)
+
+    expect(slots.map(slot => slot.nodeAddress.path)).toEqual(['/elements/0', '/elements/1'])
   })
 })
 
