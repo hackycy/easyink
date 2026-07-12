@@ -3,6 +3,7 @@ import type { MaterialNode } from '@easyink/schema'
 import { resolvePropertyAccessor, validatePropertyDescriptors } from '@easyink/core'
 import { commitMaterialPropertyPreview, MaterialPropertyPreviewSession } from '@easyink/designer/testing'
 import { assertValidTableModel, createTableCellSelectionType, getTableMaterialModel } from '@easyink/material-table-kernel'
+import { deepClone } from '@easyink/shared'
 import { describe, expect, it } from 'vitest'
 import { tableDataDesignerPropSchemas } from './prop-schemas'
 import { createDefaultDataTableModel } from './schema'
@@ -77,7 +78,7 @@ describe('table-data band descriptors', () => {
     headerCells[1]!.content = { kind: 'materials', slotId }
     source.bindings['header:value'] = { sourceId: 'source', fieldPath: 'header' }
     source.slots[slotId] = []
-    const baseline = structuredClone(source)
+    const baseline = deepClone(source)
     const preview = new MaterialPropertyPreviewSession()
 
     preview.preview(source, descriptor, draft => showHeader.write(draft, false))
@@ -120,7 +121,7 @@ describe('table-data band descriptors', () => {
     { key: 'showFooter', selectedRow: 2, expectedRow: 1 },
   ])('returns topology rebase data when $key removes the selected band', ({ key, selectedRow, expectedRow }) => {
     const source = node()
-    const before = structuredClone(source)
+    const before = deepClone(source)
     const selection: Selection<{ row: number, col: number }> = {
       type: 'table.cell',
       nodeId: source.id,
