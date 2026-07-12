@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { MaterialDesignerRenderContext, MaterialDesignerRenderContextSignal } from '@easyink/core'
+import type { FacetInstance, MaterialDesignerFacet, MaterialDesignerRenderContext, MaterialDesignerRenderContextSignal } from '@easyink/core'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useDesignerStore } from '../composables'
 import { createNodeSignal } from '../materials/create-node-signal'
@@ -13,6 +13,7 @@ const store = useDesignerStore()
 const containerRef = ref<HTMLElement | null>(null)
 
 let cleanup: (() => void) | null = null
+let activation = 0
 const renderContextSubscribers = new Set<(context: MaterialDesignerRenderContext) => void>()
 
 const renderContextSignal: MaterialDesignerRenderContextSignal = {
@@ -27,7 +28,8 @@ const renderContextSignal: MaterialDesignerRenderContextSignal = {
   },
 }
 
-function mount() {
+async function mount() {
+  const current = ++activation
   unmount()
   const container = containerRef.value
   if (!container)
@@ -36,13 +38,18 @@ function mount() {
   const node = store.getElementById(props.nodeId)
   if (!node)
     return
-
-  const ext = store.getDesignerExtension(node.type)
-  if (!ext)
+  container.textContent = 'Loading'
+  const instance = await store.activateDesignerFacet(node.type) as FacetInstance<MaterialDesignerFacet>
+  if (current !== activation)
     return
+  if (instance.state !== 'active' || !instance.value) {
+    container.textContent = instance.diagnostic?.code ?? 'MATERIAL_FACET_NOT_DECLARED'
+    return
+  }
 
   const nodeSignal = createNodeSignal(store, props.nodeId)
-  cleanup = ext.renderContent(nodeSignal, container, renderContextSignal)
+  container.replaceChildren()
+  cleanup = instance.value.extension.renderContent(nodeSignal, container, renderContextSignal)
 }
 
 function unmount() {
@@ -54,7 +61,7 @@ function unmount() {
 }
 
 onMounted(() => {
-  mount()
+  void mount()
 })
 
 watch(
@@ -69,10 +76,11 @@ watch(
 
 watch(
   () => [props.nodeId, store.materialExtensionRevision],
-  () => mount(),
+  () => void mount(),
 )
 
 onBeforeUnmount(() => {
+  activation += 1
   unmount()
 })
 </script>
