@@ -51,7 +51,6 @@ describe('tableDataFragmentPaginator', () => {
   it('reuses canonical detail slots for every expanded record without shifting footer identities', () => {
     const node = createNode()
     const model = node.model as ReturnType<typeof createDefaultDataTableModel>
-    const header = model.bands.find(band => band.role === 'header')!.rows[0]!
     const detail = model.bands.find(band => band.role === 'detail')!.rows[0]!
     const footer = model.bands.find(band => band.role === 'footer')!.rows[0]!
     const hosted = detail.cells[0]!
@@ -71,11 +70,15 @@ describe('tableDataFragmentPaginator', () => {
     const json = JSON.stringify(output)
 
     expect(json.match(/HOSTED/g)).toHaveLength(2)
-    expect(findElements(output, 'td').filter(cell => String(cell.attributes.id).includes(hosted.id))).toHaveLength(2)
-    for (const cell of findElements(output, 'td').filter(cell => String(cell.attributes.id).includes(hosted.id)))
-      expect(cell.attributes.headers).toContain(header.cells[0]!.id)
-    for (const cell of footer.cells)
-      expect(json).toContain(`table-data-cell-${cell.id}`)
+    const headerIds = findElements(output, 'th').map(cell => String(cell.attributes.id))
+    const bodyCells = findElements(output, 'tbody').flatMap(body => findElements(body, 'td'))
+    const footerCells = findElements(output, 'tfoot').flatMap(footerTree => findElements(footerTree, 'td'))
+    expect(new Set(findElements(output, 'tr').concat(findElements(output, 'th'), findElements(output, 'td')).map(element => element.attributes.id)).size)
+      .toBe(findElements(output, 'tr').length + findElements(output, 'th').length + findElements(output, 'td').length)
+    expect(bodyCells.filter(cell => JSON.stringify(cell).includes('HOSTED'))).toHaveLength(2)
+    bodyCells.forEach((cell, index) => expect(cell.attributes.headers).toBe(headerIds[index % headerIds.length]))
+    expect(footerCells).toHaveLength(footer.cells.length)
+    expect(footerCells.every(cell => !bodyCells.some(body => body.attributes.id === cell.attributes.id))).toBe(true)
   })
 })
 

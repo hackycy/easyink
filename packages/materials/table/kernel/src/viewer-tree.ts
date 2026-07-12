@@ -7,6 +7,10 @@ import { getTableMaterialModel } from './model'
 import { TABLE_BASE_DEFAULTS, TABLE_TYPOGRAPHY_DEFAULTS } from './types'
 import { resolveCellTypography } from './typography'
 
+const TABLE_DOM_ID_COMPONENT_MAX_BYTES = 256
+const UTF8_ENCODER = new TextEncoder()
+const HEX_DIGITS = '0123456789abcdef'
+
 export interface RenderTableTreeOptions {
   node: MaterialNode<unknown>
   topology: TableTopologySchema
@@ -41,7 +45,7 @@ export function renderTableTree(options: RenderTableTreeOptions): ViewerRenderTr
     const sourceRowKey = options.sourceRowKeys?.[ri]
     const instanceKey = sourceRowKey && sourceRowKey !== canonicalRow?.id ? sourceRowKey : undefined
     return viewerElement('tr', {
-      attributes: { id: `${node.id}-row-${stableDomToken(sourceRowKey ?? canonicalRow?.id ?? String(ri))}` },
+      attributes: { id: rowId(node.id, sourceRowKey ?? canonicalRow?.id ?? String(ri)) },
       style: { height: `${row.height * scale}${unit}` },
     }, row.cells.flatMap((cell, ci) => {
       if (spanned.has(`${ri}:${ci}`))
@@ -137,10 +141,26 @@ function coveredCells(topology: TableTopologySchema): Set<string> {
 }
 
 function cellId(nodeId: string, canonicalId: string | undefined, rowIndex: number, columnIndex: number, instanceKey?: string): string {
-  const base = `${nodeId}-cell-${canonicalId || `${rowIndex}-${columnIndex}`}`
-  return instanceKey ? `${base}--${stableDomToken(instanceKey)}` : base
+  const components = [
+    'ei-cell',
+    encodeDomIdComponent(nodeId),
+    encodeDomIdComponent(canonicalId ?? `${rowIndex}:${columnIndex}`),
+  ]
+  if (instanceKey !== undefined)
+    components.push(encodeDomIdComponent(instanceKey))
+  return components.join('-')
 }
 
-function stableDomToken(value: string): string {
-  return value.replace(/[^\w.-]/g, '_')
+function rowId(nodeId: string, sourceRowKey: string): string {
+  return `ei-row-${encodeDomIdComponent(nodeId)}-${encodeDomIdComponent(sourceRowKey)}`
+}
+
+function encodeDomIdComponent(value: string): string {
+  const bytes = UTF8_ENCODER.encode(value)
+  if (bytes.length === 0 || bytes.length > TABLE_DOM_ID_COMPONENT_MAX_BYTES)
+    throw new Error('TABLE_VIEWER_DOM_ID_COMPONENT_INVALID')
+  let encoded = ''
+  for (const byte of bytes)
+    encoded += HEX_DIGITS[byte >> 4] + HEX_DIGITS[byte & 0x0F]
+  return encoded
 }
