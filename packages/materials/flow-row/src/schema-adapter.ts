@@ -100,12 +100,48 @@ function migrateColumn(value: unknown, index: number, bindings: Record<string, B
   const column = isRecord(value) ? value : {}
   const { binding, ...layout } = column
   const id = typeof column.id === 'string' && column.id ? column.id : `legacy-${index}`
-  const bindingPort = typeof column.bindingPort === 'string' && column.bindingPort
+  const requestedBindingPort = typeof column.bindingPort === 'string' && column.bindingPort
     ? column.bindingPort
     : isRecord(binding) ? `flow-port:legacy-${index}` : undefined
-  if (bindingPort && isBinding(binding))
+  const bindingPort = requestedBindingPort && isBinding(binding)
+    ? allocateBindingPort(requestedBindingPort, binding, bindings)
+    : requestedBindingPort
+  if (bindingPort && isBinding(binding) && !Object.hasOwn(bindings, bindingPort))
     bindings[bindingPort] = cloneBinding(binding)
   return { ...layout, id, ...(bindingPort ? { bindingPort } : {}) }
+}
+
+function allocateBindingPort(
+  requested: string,
+  binding: BindingExpression,
+  bindings: Record<string, BindingExpression>,
+): string {
+  let candidate = requested
+  let suffix = 0
+  while (Object.hasOwn(bindings, candidate)) {
+    if (sameValue(bindings[candidate], binding))
+      return candidate
+    suffix += 1
+    candidate = `${requested}:${suffix}`
+  }
+  return candidate
+}
+
+function sameValue(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right))
+    return true
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return Array.isArray(left)
+      && Array.isArray(right)
+      && left.length === right.length
+      && left.every((value, index) => sameValue(value, right[index]))
+  }
+  if (!isRecord(left) || !isRecord(right))
+    return false
+  const leftKeys = Object.keys(left).sort()
+  const rightKeys = Object.keys(right).sort()
+  return leftKeys.length === rightKeys.length
+    && leftKeys.every((key, index) => key === rightKeys[index] && sameValue(left[key], right[key]))
 }
 
 function normalizeColumn(value: unknown, index: number): FlowColumnDef {

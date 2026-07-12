@@ -33,6 +33,57 @@ describe('flowRowSchemaAdapter', () => {
     expect(flowRowSchemaAdapter.validate(first, context)).toEqual([])
   })
 
+  it('reuses an occupied generated port when it already contains the same binding', () => {
+    const binding = { sourceId: 'source', fieldPath: 'items/value' }
+    const legacy = node(0, { columns: [{ binding }] }, { 'flow-port:legacy-0': { ...binding } })
+    const before = structuredClone(legacy)
+
+    const migrated = flowRowSchemaAdapter.migrations[0]!.migrate(legacy, context)
+
+    expect((migrated.model.columns as Record<string, unknown>[])[0]!.bindingPort).toBe('flow-port:legacy-0')
+    expect(migrated.bindings).toEqual({ 'flow-port:legacy-0': binding })
+    expect(migrated.bindings['flow-port:legacy-0']).toBe(legacy.bindings['flow-port:legacy-0'])
+    expect(legacy).toEqual(before)
+  })
+
+  it('allocates the first unused suffix without overwriting conflicting bindings', () => {
+    const legacy = node(0, {
+      columns: [{ binding: { sourceId: 'new', fieldPath: 'items/new' } }],
+    }, {
+      'flow-port:legacy-0': { sourceId: 'old-0', fieldPath: 'items/old-0' },
+      'flow-port:legacy-0:1': { sourceId: 'old-1', fieldPath: 'items/old-1' },
+      'flow-port:legacy-0:2': { sourceId: 'old-2', fieldPath: 'items/old-2' },
+    })
+
+    const migrated = flowRowSchemaAdapter.migrations[0]!.migrate(legacy, context)
+
+    expect((migrated.model.columns as Record<string, unknown>[])[0]!.bindingPort).toBe('flow-port:legacy-0:3')
+    expect(migrated.bindings).toMatchObject({
+      'flow-port:legacy-0': { sourceId: 'old-0' },
+      'flow-port:legacy-0:1': { sourceId: 'old-1' },
+      'flow-port:legacy-0:2': { sourceId: 'old-2' },
+      'flow-port:legacy-0:3': { sourceId: 'new', fieldPath: 'items/new' },
+    })
+  })
+
+  it('allocates escaped explicit ports immutably and remains idempotent', () => {
+    const legacy = node(0, {
+      columns: [{ bindingPort: 'flow-port:a/b~c', binding: { sourceId: 'new', fieldPath: 'items/new' } }],
+    }, {
+      'flow-port:a/b~c': { sourceId: 'old', fieldPath: 'items/old' },
+    })
+    const before = structuredClone(legacy)
+
+    const first = flowRowSchemaAdapter.migrations[0]!.migrate(legacy, context)
+    const second = flowRowSchemaAdapter.migrations[0]!.migrate(first, context)
+
+    expect((first.model.columns as Record<string, unknown>[])[0]!.bindingPort).toBe('flow-port:a/b~c:1')
+    expect(first.bindings['flow-port:a/b~c']).toEqual({ sourceId: 'old', fieldPath: 'items/old' })
+    expect(first.bindings['flow-port:a/b~c:1']).toEqual({ sourceId: 'new', fieldPath: 'items/new' })
+    expect(second).toEqual(first)
+    expect(legacy).toEqual(before)
+  })
+
   it('rejects missing and orphan flow ports', () => {
     const missing = flowRowSchemaAdapter.normalize(node(1, {
       columns: [{ id: 'a', bindingPort: 'flow-port:a' }],
