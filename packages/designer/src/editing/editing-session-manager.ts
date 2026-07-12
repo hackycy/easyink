@@ -6,7 +6,6 @@ import { applySelectionIntent } from '../interactions/selection-intent'
 import { EditingSession } from './editing-session'
 import { createGeometryService } from './geometry-service'
 import { createSelectionStore } from './selection-store'
-import { createTransactionService } from './transaction-service'
 
 /**
  * Manages the lifecycle of editing sessions.
@@ -24,14 +23,9 @@ export class EditingSessionManager {
     this._store = store
   }
 
-  /**
-   * Re-target the manager at a different store reference (typically the
-   * Vue reactive proxy of the same DesignerStore instance). Required so
-   * that mutations through the EditingSession's TransactionAPI go through
-   * the reactive proxy and trigger Vue re-renders.
-   */
-  setStore(store: DesignerStore): void {
-    this._store = store
+  /** @deprecated Sessions are permanently bound to the raw DesignerStore. */
+  setStore(_store: DesignerStore): void {
+    // Kept as a source-compatible no-op for hosts compiled against older APIs.
   }
 
   get activeSession(): EditingSession | null {
@@ -72,11 +66,7 @@ export class EditingSessionManager {
 
     const selectionStore = createSelectionStore(this._store.diagnostics)
     const geometry = createGeometryService(this._store)
-    const tx = createTransactionService(
-      id => this._store.getElementById(id),
-      this._store.commands,
-      this._store.diagnostics,
-    )
+    const tx = this._store.documentTransactions
 
     const session = new EditingSession({
       nodeId,

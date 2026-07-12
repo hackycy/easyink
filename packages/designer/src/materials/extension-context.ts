@@ -34,7 +34,7 @@ export function createMaterialExtensionContext(store: DesignerStore): MaterialEx
       store.commands.execute(command)
     },
 
-    tx: store.materialTransaction,
+    tx: store.documentTransactions,
 
     requestPropertyPanel(overlay: PropertyPanelOverlay | null) {
       store.setPropertyOverlay(overlay)

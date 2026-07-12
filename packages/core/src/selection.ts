@@ -89,8 +89,8 @@ export class SelectionModel {
   /**
    * Filter selection to only include IDs that match existing nodes.
    */
-  reconcile(nodes: MaterialNode[]): void {
-    const existing = new Set(nodes.map(n => n.id))
+  reconcile(nodes: readonly string[]): void {
+    const existing = new Set(nodes)
     const stale: string[] = []
     for (const id of this._ids) {
       if (!existing.has(id))

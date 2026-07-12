@@ -1,15 +1,14 @@
-import type { CompiledMaterialProfile, EphemeralPanelDef, FacetInstance, FontLoadRequest, FontLoadStatus, FontManager, FontProvider, MaterialDesignerFacet, MaterialFacetHost, MaterialLoadDiagnostic, MaterialNodeLoadState, PropertyPanelOverlay, TransactionAPI } from '@easyink/core'
+import type { CompiledMaterialProfile, EphemeralPanelDef, FacetInstance, FontLoadRequest, FontLoadStatus, FontManager, FontProvider, MaterialDesignerFacet, MaterialFacetHost, MaterialLoadDiagnostic, MaterialNodeLoadState, PropertyPanelOverlay, TransactionAPI, DocumentStore, DocumentTransactionEngine } from '@easyink/core'
 import type { DocumentSchema, DocumentSchemaInput, ElementGroupSchema, MaterialNode } from '@easyink/schema'
 import type { PaperPreset } from '@easyink/shared'
 import type { Component } from 'vue'
 import type { DesignerRuntimeConfig } from '../runtime-config'
 import type { DesignerInteractionProvider, LocaleMessageRegistration, LocaleMessages, PreferenceProvider, SnapLine, StatusBarState } from '../types'
-import { CommandManager, MaterialFacetHost as CoreMaterialFacetHost, loadDocumentWithProfile, SelectionModel, validateDocumentWithProfile } from '@easyink/core'
+import { CommandManager, DocumentStore as CoreDocumentStore, DocumentTransactionEngine as CoreDocumentTransactionEngine, MaterialFacetHost as CoreMaterialFacetHost, loadDocumentWithProfile, SelectionModel, validateDocumentWithProfile } from '@easyink/core'
 import { DataSourceRegistry } from '@easyink/datasource'
 import { findNodeById } from '@easyink/schema'
 import { markRaw } from 'vue'
 import { EditingSessionManager } from '../editing/editing-session-manager'
-import { createTransactionService } from '../editing/transaction-service'
 import { DesignerInteractionService } from '../interactions/interaction-service'
 import { builtinMaterialGroupLabels, resolveBuiltinMaterialIcon } from '../material-host'
 import { prepareDesignerFacetMetadata } from '../materials/designer-facet-metadata'
@@ -37,13 +36,15 @@ export class DesignerStore {
   private readonly designerFacetLocaleDisposers = new WeakMap<object, () => void>()
   private readonly designerFacetLocaleCleanups = new Set<() => void>()
   // ─── Template state (enters Schema + command history) ─────────
-  private _schema: DocumentSchema
+  private documentViewRevision = 0
   private _materialDiagnostics: readonly MaterialLoadDiagnostic[] = Object.freeze([])
   private _materialNodeStates: ReadonlyMap<string, MaterialNodeLoadState> = new Map()
 
   // ─── Core services ────────────────────────────────────────────
   readonly commands = new CommandManager()
   readonly selection = new SelectionModel()
+  readonly documentStore: DocumentStore
+  readonly documentTransactions: DocumentTransactionEngine
   readonly dataSourceRegistry = new DataSourceRegistry()
   readonly interactions = markRaw(new DesignerInteractionService())
   readonly materialTransaction: TransactionAPI
@@ -106,6 +107,7 @@ export class DesignerStore {
     this.runtimeConfig = runtimeConfig
     this.materialIcons = markRaw({ ...runtimeConfig?.materials?.icons })
     this.materialProfile = resolveDesignerMaterialProfile(runtimeConfig?.materials)
+    this.paperRegistry = new PaperRegistry(runtimeConfig?.paper)
     this.materialFacetHost = markRaw(new CoreMaterialFacetHost({
       getActivationServices: () => Object.assign(createMaterialExtensionContext(this), {
         propertyEditorRegistry: this.propertyEditorRegistry,
@@ -117,17 +119,27 @@ export class DesignerStore {
       prepareValue: (value, _profile, _materialType, surface) => prepareDesignerFacetMetadata(value, surface),
     }))
     const loaded = loadDocumentWithProfile(schema, this.materialProfile)
-    this._schema = loaded.schema
+    this.applyRuntimeDefaults(runtimeConfig, schema, loaded.schema)
+    this.documentStore = markRaw(new CoreDocumentStore(stripUndefined(loaded.schema), this.materialProfile, { nodeStates: loaded.nodeStates }))
+    this.documentTransactions = markRaw(new CoreDocumentTransactionEngine(this.documentStore))
     this._materialDiagnostics = loaded.diagnostics
     this._materialNodeStates = loaded.nodeStates
     this.fontService = new FontService(this.diagnostics, this.materialProfile)
-    this.materialTransaction = markRaw(createTransactionService(id => this.getElementById(id), this.commands, this.diagnostics))
-    this.paperRegistry = new PaperRegistry(runtimeConfig?.paper)
-    this.applyRuntimeDefaults(runtimeConfig, schema)
+    this.materialTransaction = this.documentTransactions
     this.setInteractionProvider(interactionProvider)
     // Mark editing session manager as raw: it owns Vue refs internally and
     // must not be auto-unwrapped by the surrounding reactive(store) proxy.
     this.editingSession = markRaw(new EditingSessionManager(this))
+    this.documentStore.subscribe((event) => {
+      this.documentViewRevision += 1
+      if (event.kind !== 'preview' && event.kind !== 'preview-cancel')
+        this.selection.reconcile(this.documentStore.index.nodeIds() as string[])
+      if (event.validationReport) {
+        this._materialDiagnostics = event.validationReport.diagnostics
+        this._materialNodeStates = event.validationReport.nodeStates
+      }
+    })
+    this.selection.onChange(() => this.documentTransactions.markHistoryBarrier())
     markRaw(this.dataSourceRegistry)
     markRaw(this.diagnostics)
 
@@ -143,7 +155,8 @@ export class DesignerStore {
   // ─── Schema access ────────────────────────────────────────────
 
   get schema(): DocumentSchema {
-    return this._schema
+    void this.documentViewRevision
+    return this.documentStore.document
   }
 
   get materialDiagnostics(): readonly MaterialLoadDiagnostic[] {
@@ -156,11 +169,10 @@ export class DesignerStore {
 
   setSchema(schema?: DocumentSchemaInput): void {
     const loaded = loadDocumentWithProfile(schema, this.materialProfile)
-    this._schema = loaded.schema
+    this.documentTransactions.reset(loaded.schema, loaded.nodeStates)
     this._materialDiagnostics = loaded.diagnostics
     this._materialNodeStates = loaded.nodeStates
     this.selection.clear()
-    this.commands.clear()
     this.editingSession.exit()
     void this.preloadDocumentFonts()
   }
@@ -173,7 +185,7 @@ export class DesignerStore {
     })
     if (!report.valid)
       return false
-    this._schema = candidate
+    this.documentTransactions.reset(candidate, report.nodeStates)
     this._materialDiagnostics = report.diagnostics
     this._materialNodeStates = report.nodeStates
     return true
@@ -183,23 +195,23 @@ export class DesignerStore {
     const report = validateDocumentWithProfile(candidate, this.materialProfile, { mode: 'history-restore', targetNodeStates })
     if (!report.valid)
       return false
-    this._schema = candidate
+    this.documentTransactions.reset(candidate, report.nodeStates)
     this._materialDiagnostics = report.diagnostics
     this._materialNodeStates = report.nodeStates
     return true
   }
 
-  private applyRuntimeDefaults(config: DesignerRuntimeConfig | undefined, input: DocumentSchemaInput | undefined): void {
+  private applyRuntimeDefaults(config: DesignerRuntimeConfig | undefined, input: DocumentSchemaInput | undefined, target: DocumentSchema): void {
     const defaults = config?.defaults
     if (defaults?.document)
-      Object.assign(this._schema, defaults.document)
+      Object.assign(target, defaults.document)
 
     const defaultPreset = this.paperRegistry.getDefaultPreset()
     if (defaultPreset && !hasExplicitPageSize(input)) {
-      Object.assign(this._schema.page, {
+      Object.assign(target.page, {
         width: defaultPreset.width,
         height: defaultPreset.height,
-        pageModel: syncPageModelPaper(this._schema.page, {
+        pageModel: syncPageModelPaper(target.page, {
           width: defaultPreset.width,
           height: defaultPreset.height,
         }),
@@ -207,9 +219,9 @@ export class DesignerStore {
     }
 
     if (defaults?.page) {
-      Object.assign(this._schema.page, defaults.page)
+      Object.assign(target.page, defaults.page)
       if (defaults.page.width != null || defaults.page.height != null)
-        this._schema.page.pageModel = syncPageModelPaper(this._schema.page, defaults.page)
+        target.page.pageModel = syncPageModelPaper(target.page, defaults.page)
     }
   }
 
@@ -260,7 +272,7 @@ export class DesignerStore {
   }
 
   async preloadDocumentFonts(): Promise<void> {
-    await this.fontService.preloadDocumentFonts(this._schema)
+    await this.fontService.preloadDocumentFonts(this.schema)
   }
 
   // ─── Template Save Status ─────────────────────────────────────
@@ -303,32 +315,34 @@ export class DesignerStore {
 
   /** Get an extension value by key. */
   getExtension<T = unknown>(key: string): T | undefined {
-    return this._schema.extensions?.[key] as T | undefined
+    return this.schema.extensions?.[key] as T | undefined
   }
 
   /** Set an extension value by key (mutates current schema reactively). */
   setExtension(key: string, value: unknown): void {
-    if (!this._schema.extensions) {
-      this._schema.extensions = {}
-    }
-    this._schema.extensions[key] = value
+    this.documentTransactions.transact((draft) => {
+      draft.extensions = { ...(draft.extensions ?? {}), [key]: value }
+    }, { label: `Set extension ${key}`, operation: { kind: 'extension.set', sessionPath: [], targetIds: [], fieldPaths: [`/extensions/${key}`], selectionLineage: null, structural: false } })
   }
 
   /** Delete an extension value by key. */
   deleteExtension(key: string): void {
-    if (this._schema.extensions) {
-      delete this._schema.extensions[key]
-    }
+    this.documentTransactions.transact((draft) => {
+      if (!draft.extensions) return
+      const next = { ...draft.extensions }
+      delete next[key]
+      draft.extensions = next
+    }, { label: `Delete extension ${key}`, operation: { kind: 'extension.delete', sessionPath: [], targetIds: [], fieldPaths: [`/extensions/${key}`], selectionLineage: null, structural: false } })
   }
 
   // ─── Element operations ───────────────────────────────────────
 
   getElements(): MaterialNode[] {
-    return this._schema.elements
+    return this.schema.elements
   }
 
   getElementGroups(): ElementGroupSchema[] {
-    return this._schema.groups ?? []
+    return this.schema.groups ?? []
   }
 
   getElementGroupById(groupId: string): ElementGroupSchema | undefined {
@@ -340,38 +354,33 @@ export class DesignerStore {
   }
 
   getElementById(id: string): MaterialNode | undefined {
-    return findNodeById(this._schema, id)
+    return this.documentStore.index.getNode(id)
   }
 
   addElement(node: MaterialNode): void {
-    this._schema.elements.push(node)
+    this.documentTransactions.transact(draft => { draft.elements.push(node) }, { label: 'Add element', operation: { kind: 'structure.insert', sessionPath: [], targetIds: [`node:${node.id}`], fieldPaths: ['/elements'], selectionLineage: null, structural: true } })
   }
 
   removeElement(id: string): MaterialNode | undefined {
-    const idx = this._schema.elements.findIndex(el => el.id === id)
+    const idx = this.schema.elements.findIndex(el => el.id === id)
     if (idx < 0)
       return undefined
-    const [removed] = this._schema.elements.splice(idx, 1)
-    if (this._schema.groups) {
-      this._schema.groups = this._schema.groups
-        .map(group => ({
-          ...group,
-          memberIds: group.memberIds.filter(memberId => memberId !== id),
-        }))
-        .filter(group => group.memberIds.length >= 2)
-    }
+    const removed = this.schema.elements[idx]
+    this.documentTransactions.transact(draft => {
+      draft.elements.splice(idx, 1)
+      if (draft.groups) {
+        draft.groups = draft.groups.map(group => ({ ...group, memberIds: group.memberIds.filter(memberId => memberId !== id) })).filter(group => group.memberIds.length >= 2)
+      }
+    }, { label: 'Remove element', operation: { kind: 'structure.remove', sessionPath: [], targetIds: [`node:${id}`], fieldPaths: ['/elements'], selectionLineage: null, structural: true } })
     this.selection.remove(id)
-    if (this.editingSession.activeNodeId === id) {
-      this.editingSession.exit()
-    }
+    if (this.editingSession.activeNodeId === id) this.editingSession.exit()
     return removed
   }
 
   updateElement(id: string, updates: Partial<MaterialNode>): void {
-    const el = this.getElementById(id)
-    if (!el)
+    if (!this.getElementById(id))
       return
-    Object.assign(el, updates)
+    this.documentTransactions.run(id, draft => { Object.assign(draft, updates) }, { label: 'Update element', operation: { kind: 'material.property', sessionPath: [], targetIds: [`node:${id}`], fieldPaths: Object.keys(updates).map(key => `/${key}`) as any, selectionLineage: null, structural: false } })
   }
 
   async activateDesignerFacet(type: string) {
@@ -596,4 +605,18 @@ function syncPageModelPaper(page: DocumentSchema['page'], updates: Partial<Docum
       ...(updates.height != null ? { height: updates.height } : {}),
     },
   }
+}
+
+function stripUndefined<T>(value: T): T {
+  if (Array.isArray(value))
+    return value.map(item => stripUndefined(item)).filter(item => item !== undefined) as T
+  if (value && typeof value === 'object') {
+    const result: Record<string, unknown> = {}
+    for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+      if (item !== undefined)
+        result[key] = stripUndefined(item)
+    }
+    return result as T
+  }
+  return value
 }

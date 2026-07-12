@@ -46,10 +46,6 @@ const store = reactive(new DesignerStore(
 if (store.schema !== props.schema) {
   emit('update:schema', store.schema)
 }
-// EditingSessionManager was constructed before the reactive proxy existed;
-// re-target it at the proxy so mutations made through tx.run trigger Vue
-// reactivity (otherwise patches mutate the raw store and templates stay stale).
-store.editingSession.setStore(store)
 store.setFontProvider(props.fontProvider)
 props.setupStore?.(store)
 provideDesignerStore(store)
