@@ -55,7 +55,7 @@ describe('documentIndexSnapshot', () => {
     const profile = createTestCompiledMaterialProfile()
     const schema = { ...createDefaultSchema(), elements: [profile.createNode('box', { id: 'a' })] }
     const index = DocumentIndexSnapshot.build(schema, profile, 1)
-    expect(() => forkDocumentIndexSnapshot(index, schema, profile, 2, [{ op: 'replace', path: ['groups', 0, 'name'], value: 'x' }], [])).toThrow(/canonical elements/u)
+    expect(() => forkDocumentIndexSnapshot(index, schema, profile, 2, [{ op: 'replace', path: ['datasources', 0, 'name'], value: 'x' }], [])).toThrow(/canonical elements/u)
   })
 
   it('keeps unaffected sibling records by identity when a root insertion shifts indexes', () => {
@@ -68,7 +68,53 @@ describe('documentIndexSnapshot', () => {
     const next = structuredClone(schema)
     next.elements.unshift(profile.createNode('box', { id: 'inserted' }))
     const result = forkDocumentIndexSnapshot(before, next, profile, 2, [{ op: 'add', path: ['elements', 0], value: next.elements[0] }], [{ op: 'remove', path: ['elements', 0] }])
-    expect(result.index.getAddress('second')).toBe(secondAddress)
+    expect(result.index.getAddress('second')).not.toBe(secondAddress)
+    expect(result.index.getAddress('second')?.ancestors).toEqual([])
+    expect(result.index.resolveNode(next, 'second')).toBe(next.elements[2])
     expect(result.impact.affectedNodeIds).toEqual(['inserted'])
+  })
+
+  it('updates slot addresses after insertion without affecting shifted siblings', () => {
+    const profile = createTestCompiledMaterialProfile()
+    const a = profile.createNode('box', { id: 'a' })
+    const b = profile.createNode('box', { id: 'b' })
+    const owner = profile.createNode('container', { id: 'owner', slots: { content: [a, b] } })
+    const schema = { ...createDefaultSchema(), elements: [owner] }
+    const before = DocumentIndexSnapshot.build(schema, profile, 1)
+    const next = structuredClone(schema)
+    next.elements[0]!.slots.content!.splice(0, 0, profile.createNode('box', { id: 'inserted-slot' }))
+    const result = forkDocumentIndexSnapshot(before, next, profile, 2, [{ op: 'add', path: ['elements', 0, 'slots', 'content', 0], value: next.elements[0]!.slots.content[0] }], [{ op: 'remove', path: ['elements', 0, 'slots', 'content', 0] }])
+    expect(result.index.getAddress('b')?.ancestors.at(-1)?.index).toBe(2)
+    expect(result.index.resolveNode(next, 'b')).toBe(next.elements[0]!.slots.content[2])
+    expect(result.impact.affectedNodeIds).toEqual(['inserted-slot'])
+  })
+
+  it('does not treat a moved node as an inversion against former siblings', () => {
+    const profile = createTestCompiledMaterialProfile()
+    const children = ['a', 'b', 'c'].map(id => profile.createNode('box', { id }))
+    const left = profile.createNode('container', { id: 'left', slots: { content: children } })
+    const right = profile.createNode('container', { id: 'right', slots: { content: [] } })
+    const schema = { ...createDefaultSchema(), elements: [left, right] }
+    const before = DocumentIndexSnapshot.build(schema, profile, 1)
+    const next = structuredClone(schema)
+    const moved = next.elements[0]!.slots.content.pop()!
+    next.elements[1]!.slots.content.push(moved)
+    const result = forkDocumentIndexSnapshot(before, next, profile, 2, [
+      { op: 'remove', path: ['elements', 0, 'slots', 'content', 2] },
+      { op: 'add', path: ['elements', 1, 'slots', 'content', 0], value: moved },
+    ], [
+      { op: 'remove', path: ['elements', 1, 'slots', 'content', 0] },
+      { op: 'add', path: ['elements', 0, 'slots', 'content', 2], value: moved },
+    ])
+    expect(result.impact.affectedNodeIds).toEqual(['c'])
+  })
+
+  it('records legal document metadata patches outside the material graph', () => {
+    const profile = createTestCompiledMaterialProfile()
+    const schema = { ...createDefaultSchema(), elements: [profile.createNode('box', { id: 'a' })] }
+    const index = DocumentIndexSnapshot.build(schema, profile, 1)
+    const result = forkDocumentIndexSnapshot(index, schema, profile, 2, [{ op: 'replace', path: ['page', 'width'], value: 200 }], [{ op: 'replace', path: ['page', 'width'], value: 100 }])
+    expect(result.impact.changedDocumentPaths).toEqual(['/page/width'])
+    expect(result.impact.affectedNodeIds).toEqual([])
   })
 })

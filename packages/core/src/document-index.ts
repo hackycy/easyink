@@ -2,7 +2,7 @@ import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import type { Patch } from 'mutative'
 import type { MaterialNodeAddress, MaterialStructureSlot } from './material-introspection'
 import type { CompiledMaterialProfile } from './material-profile'
-import { walkMaterialNodes } from './material-introspection'
+import { inspectMaterialNode, walkMaterialNodes } from './material-introspection'
 
 export interface DocumentSlotPolicySnapshot {
   readonly ownerNodeId: string
@@ -108,7 +108,7 @@ export function forkDocumentIndexSnapshot(
   forward: readonly Patch[],
   inverse: readonly Patch[],
 ): DocumentIndexForkResult {
-  const candidate = DocumentIndexSnapshot.build(document, profile, revision)
+  const candidate = forkCandidateIndex(base, document, profile, revision)
   const baseData = getSnapshotInternals(base)
   const candidateData = getSnapshotInternals(candidate)
   const allPatches = [...forward, ...inverse]
@@ -118,8 +118,13 @@ export function forkDocumentIndexSnapshot(
   let structural = false
 
   for (const path of changedDocumentPaths) {
-    if (path.length === 0 || path[0] !== 'elements')
+    if (path.length === 0)
+      throw new Error('Document patch path is invalid')
+    if (path[0] !== 'elements') {
+      if (['meta', 'page', 'guides', 'groups', 'extensions', 'compat', 'version', 'unit'].includes(String(path[0])))
+        continue
       throw new Error('Document patch path is outside canonical elements')
+    }
     const beforeOwner = ownerForPath(baseData.paths, path)
     const afterOwner = ownerForPath(candidateData.paths, path)
     const owner = beforeOwner ?? afterOwner
@@ -180,10 +185,10 @@ export function forkDocumentIndexSnapshot(
   const index = structural
     ? createStructuralOverlay(base, candidate, affected)
     : createSnapshot(revision, {
-        nodes: overlay(baseData.nodes, candidateData.nodes, affected),
+        nodes: overlay(baseData.nodes, candidateData.nodes, affected, revision > base.revision),
         addresses: baseData.addresses,
         slots: baseData.slots,
-        paths: overlay(baseData.paths, candidateData.paths, affected),
+        paths: overlay(baseData.paths, candidateData.paths, affected, revision > base.revision),
       })
   const orderedAffected = [...affected].sort()
   const frozenPaths = new Map<string, readonly `/${string}`[]>()
@@ -209,6 +214,92 @@ export function requireDocumentNode(document: DocumentSchema, _profile: Compiled
       pending.push(...children)
   }
   throw new Error(`Document node "${nodeId}" not found`)
+}
+
+function forkCandidateIndex(
+  base: DocumentIndexSnapshot,
+  document: DocumentSchema,
+  profile: CompiledMaterialProfile,
+  revision: number,
+): DocumentIndexSnapshot {
+  const before = getSnapshotInternals(base)
+  const records = collectCanonicalRecords(document)
+  const nodeChanges = new Map<string, MaterialNode | undefined>()
+  const addressChanges = new Map<string, MaterialNodeAddress | undefined>()
+  const pathChanges = new Map<string, Path | undefined>()
+  const slotChanges = new Map<string, DocumentSlotPolicySnapshot | undefined>()
+  const allIds = new Set([...base.nodeIds(), ...records.nodes.keys()])
+  for (const id of allIds) {
+    const node = records.nodes.get(id)
+    if (before.nodes.get(id) !== node)
+      nodeChanges.set(id, node)
+    if (!samePath(before.paths.get(id), records.paths.get(id))) {
+      pathChanges.set(id, records.paths.get(id))
+      addressChanges.set(id, records.addresses.get(id))
+    }
+    const oldNode = before.nodes.get(id)
+    if (!node || !oldNode || node.type !== oldNode.type || !sameStrings(Object.keys(node.slots), Object.keys(oldNode.slots))) {
+      for (const key of before.slots.keys()) {
+        if (key.startsWith(`${id}\u0000`))
+          slotChanges.set(key, undefined)
+      }
+      if (node) {
+        for (const structure of inspectMaterialNode(node, profile).introspection.structures) {
+          slotChanges.set(slotKey(id, structure.slot), Object.freeze({
+            ownerNodeId: id,
+            slot: structure.slot,
+            policyId: structure.policyId,
+            coordinateSpace: structure.coordinateSpace,
+            layoutParticipation: structure.layoutParticipation,
+            reparent: structure.reparent,
+          }))
+        }
+      }
+    }
+  }
+  return createSnapshot(revision, {
+    nodes: overlayValues(before.nodes, nodeChanges),
+    addresses: overlayValues(before.addresses, addressChanges),
+    slots: overlayValues(before.slots, slotChanges),
+    paths: overlayValues(before.paths, pathChanges),
+  })
+}
+
+function collectCanonicalRecords(document: DocumentSchema): {
+  nodes: Map<string, MaterialNode>
+  addresses: Map<string, MaterialNodeAddress>
+  paths: Map<string, Path>
+} {
+  const nodes = new Map<string, MaterialNode>()
+  const addresses = new Map<string, MaterialNodeAddress>()
+  const paths = new Map<string, Path>()
+  // Explicit stack keeps each child's actual slot index in its address.
+  interface Entry { node: MaterialNode, path: Path, ancestors: MaterialNodeAddress['ancestors'] }
+  const stack: Entry[] = document.elements.map((node, index) => ({ node, path: ['elements', index], ancestors: [] })).reverse()
+  while (stack.length > 0) {
+    const { node, path, ancestors } = stack.pop()!
+    if (nodes.has(node.id))
+      throw new DuplicateDocumentNodeIdError(node.id)
+    nodes.set(node.id, node)
+    paths.set(node.id, Object.freeze([...path]))
+    addresses.set(node.id, freezeAddress({ nodeId: node.id, path: formatPath(path), ancestors }))
+    const slots = Object.keys(node.slots).sort().reverse()
+    for (const slot of slots) {
+      const children = node.slots[slot]!
+      for (let index = children.length - 1; index >= 0; index -= 1) {
+        stack.push({
+          node: children[index]!,
+          path: [...path, 'slots', slot, index],
+          ancestors: [...ancestors, { ownerNodeId: node.id, slot, index }],
+        })
+      }
+    }
+  }
+  return { nodes, addresses, paths }
+}
+
+function samePath(left: Path | undefined, right: Path | undefined): boolean {
+  return left?.length === right?.length && left?.every((value, index) => value === right?.[index]) === true
 }
 
 function collectCanonicalNodePaths(document: DocumentSchema): Map<string, Path> {
@@ -301,8 +392,9 @@ function collectStructuralImpact(base: DocumentIndexSnapshot, candidate: Documen
     groups.add(before.group)
   }
   for (const group of groups) {
-    const before = surviving.filter(id => siblingPosition(base, id).group === group)
-    const after = surviving.filter(id => siblingPosition(candidate, id).group === group)
+    const common = surviving.filter(id => siblingPosition(base, id).group === group && siblingPosition(candidate, id).group === group)
+    const before = common.toSorted((left, right) => siblingPosition(base, left).order - siblingPosition(base, right).order)
+    const after = common.toSorted((left, right) => siblingPosition(candidate, left).order - siblingPosition(candidate, right).order)
     const afterPositions = new Map(after.map((id, index) => [id, index]))
     for (let left = 0; left < before.length; left += 1) {
       for (let right = left + 1; right < before.length; right += 1) {
@@ -363,11 +455,16 @@ function createStructuralOverlay(base: DocumentIndexSnapshot, candidate: Documen
         slotChanges.set(slotKeyValue, after.slots.get(slotKeyValue))
     }
   }
+  const pathChanged = new Set<string>()
+  for (const id of base.nodeIds()) {
+    if (JSON.stringify(before.paths.get(id)) !== JSON.stringify(after.paths.get(id)))
+      pathChanged.add(id)
+  }
   return createSnapshot(candidate.revision, {
-    nodes: overlay(before.nodes, after.nodes, affected),
-    addresses: overlay(before.addresses, after.addresses, affected),
-    slots: overlayValues(before.slots, slotChanges),
-    paths: overlay(before.paths, after.paths, affected),
+    nodes: overlay(before.nodes, after.nodes, affected, candidate.revision > base.revision),
+    addresses: overlay(before.addresses, after.addresses, pathChanged, candidate.revision > base.revision),
+    slots: overlayValues(before.slots, slotChanges, candidate.revision > base.revision),
+    paths: overlay(before.paths, after.paths, pathChanged, candidate.revision > base.revision),
   })
 }
 
@@ -375,18 +472,26 @@ function createSnapshot(revision: number, internals: SnapshotInternals): Documen
   return Reflect.construct(DocumentIndexSnapshot, [revision, internals]) as DocumentIndexSnapshot
 }
 
-function overlay<K, V>(base: ReadonlyMap<K, V>, candidate: ReadonlyMap<K, V>, ids: Set<string>): ReadonlyMap<K, V> {
+function overlay<K, V>(base: ReadonlyMap<K, V>, candidate: ReadonlyMap<K, V>, ids: Set<string>, committed: boolean): ReadonlyMap<K, V> {
   const changes = new Map<K, V | undefined>()
   for (const id of ids) changes.set(id as unknown as K, candidate.get(id as unknown as K))
-  return overlayValues(base, changes)
+  return overlayValues(base, changes, committed)
 }
-function overlayValues<K, V>(base: ReadonlyMap<K, V>, changes: ReadonlyMap<K, V | undefined>): ReadonlyMap<K, V> {
-  return new PersistentMap(base, changes)
+function overlayValues<K, V>(base: ReadonlyMap<K, V>, changes: ReadonlyMap<K, V | undefined>, committed = false): ReadonlyMap<K, V> {
+  const overlay = new PersistentMap(base, changes)
+  const changedFraction = changes.size / Math.max(1, base.size)
+  return committed && (overlay.depth > 8 || changedFraction > 0.4)
+    ? readonlyMap(new Map(overlay))
+    : overlay
 }
 
 class PersistentMap<K, V> implements ReadonlyMap<K, V> {
   readonly [Symbol.toStringTag] = 'ReadonlyMap'
-  constructor(private readonly base: ReadonlyMap<K, V>, private readonly changes: ReadonlyMap<K, V | undefined>) {}
+  readonly depth: number
+  constructor(private readonly base: ReadonlyMap<K, V>, private readonly changes: ReadonlyMap<K, V | undefined>) {
+    this.depth = base instanceof PersistentMap ? base.depth + 1 : 1
+  }
+
   get size(): number {
     let size = this.base.size
     for (const [key, value] of this.changes)
