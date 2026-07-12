@@ -108,11 +108,14 @@ export function forkDocumentIndexSnapshot(
   forward: readonly Patch[],
   inverse: readonly Patch[],
 ): DocumentIndexForkResult {
-  const candidate = forkCandidateIndex(base, document, profile, revision)
   const baseData = getSnapshotInternals(base)
-  const candidateData = getSnapshotInternals(candidate)
   const allPatches = [...forward, ...inverse]
   const changedDocumentPaths = uniquePaths(allPatches.map(patch => toPath(patch.path)))
+  const replacedDocumentPaths = new Set(forward.filter(patch => patch.op === 'replace').map(patch => JSON.stringify(toPath(patch.path))))
+  for (const path of changedDocumentPaths)
+    validatePatchPath(base, path)
+  const candidate = forkCandidateIndex(base, document, profile, revision, changedDocumentPaths)
+  const candidateData = getSnapshotInternals(candidate)
   const changedPathsByNodeId = new Map<string, Set<`/${string}`>>()
   const affected = new Set<string>()
   let structural = false
@@ -136,6 +139,8 @@ export function forkDocumentIndexSnapshot(
         || relative.length === 0 || typeof first === 'number'
       if (pathIsStructural) {
         structural = true
+        if (relative.length === 0 && replacedDocumentPaths.has(JSON.stringify(path)))
+          affected.add(owner.nodeId)
       }
       else {
         const pointer = `/${relative.map(escapePointer).join('/')}`
@@ -221,14 +226,25 @@ function forkCandidateIndex(
   document: DocumentSchema,
   profile: CompiledMaterialProfile,
   revision: number,
+  patchPaths: readonly Path[],
 ): DocumentIndexSnapshot {
   const before = getSnapshotInternals(base)
-  const records = collectCanonicalRecords(document)
+  const touchedRoots = collectTouchedArrayRoots(base, patchPaths)
+  const records = collectTouchedRecords(document, touchedRoots)
   const nodeChanges = new Map<string, MaterialNode | undefined>()
   const addressChanges = new Map<string, MaterialNodeAddress | undefined>()
   const pathChanges = new Map<string, Path | undefined>()
   const slotChanges = new Map<string, DocumentSlotPolicySnapshot | undefined>()
-  const allIds = new Set([...base.nodeIds(), ...records.nodes.keys()])
+  const removedIds = new Set<string>()
+  for (const [id, path] of before.paths) {
+    if (touchedRoots.some(root => isPrefix(root, path)))
+      removedIds.add(id)
+  }
+  const allIds = new Set([...removedIds, ...records.nodes.keys()])
+  for (const id of records.nodes.keys()) {
+    if (!removedIds.has(id) && before.nodes.has(id))
+      throw new DuplicateDocumentNodeIdError(id)
+  }
   for (const id of allIds) {
     const node = records.nodes.get(id)
     if (before.nodes.get(id) !== node)
@@ -265,7 +281,7 @@ function forkCandidateIndex(
   })
 }
 
-function collectCanonicalRecords(document: DocumentSchema): {
+function collectTouchedRecords(document: DocumentSchema, roots: readonly Path[]): {
   nodes: Map<string, MaterialNode>
   addresses: Map<string, MaterialNodeAddress>
   paths: Map<string, Path>
@@ -275,7 +291,18 @@ function collectCanonicalRecords(document: DocumentSchema): {
   const paths = new Map<string, Path>()
   // Explicit stack keeps each child's actual slot index in its address.
   interface Entry { node: MaterialNode, path: Path, ancestors: MaterialNodeAddress['ancestors'] }
-  const stack: Entry[] = document.elements.map((node, index) => ({ node, path: ['elements', index], ancestors: [] })).reverse()
+  const stack: Entry[] = []
+  for (const root of roots) {
+    const items = readNodeArray(document, root)
+    const owner = ownerAddressForArray(document, root)
+    for (let index = items.length - 1; index >= 0; index -= 1) {
+      stack.push({
+        node: items[index]!,
+        path: [...root, index],
+        ancestors: owner ? [...owner.ancestors, { ownerNodeId: owner.nodeId, slot: String(root.at(-1)), index }] : [],
+      })
+    }
+  }
   while (stack.length > 0) {
     const { node, path, ancestors } = stack.pop()!
     if (nodes.has(node.id))
@@ -300,6 +327,109 @@ function collectCanonicalRecords(document: DocumentSchema): {
 
 function samePath(left: Path | undefined, right: Path | undefined): boolean {
   return left?.length === right?.length && left?.every((value, index) => value === right?.[index]) === true
+}
+
+const CANONICAL_NODE_FIELDS = new Set([
+  'id',
+  'type',
+  'x',
+  'y',
+  'width',
+  'height',
+  'rotation',
+  'alpha',
+  'zIndex',
+  'modelVersion',
+  'model',
+  'slots',
+  'bindings',
+  'editorState',
+  'output',
+  'extensions',
+  'compat',
+])
+const OPAQUE_NODE_FIELDS = new Set(['model', 'bindings', 'extensions', 'compat'])
+
+function validatePatchPath(base: DocumentIndexSnapshot, path: Path): void {
+  if (path[0] !== 'elements')
+    return
+  const data = getSnapshotInternals(base)
+  const owner = ownerForPath(data.paths, path)
+  if (!owner) {
+    if (path.length === 1 || (path.length === 2 && typeof path[1] === 'number'))
+      return
+    throw new Error('Document patch path ownership cannot be proven')
+  }
+  const relative = path.slice(owner.path.length)
+  if (relative.length === 0)
+    return
+  const field = relative[0]
+  if (typeof field !== 'string' || !CANONICAL_NODE_FIELDS.has(field))
+    throw new Error('Document patch path crosses a non-canonical material field')
+  if (OPAQUE_NODE_FIELDS.has(field))
+    return
+  if (field !== 'slots') {
+    if (relative.length > 1)
+      throw new Error('Document patch path crosses a non-canonical material container')
+    return
+  }
+  const slot = relative[1]
+  if (typeof slot !== 'string' || !base.getNode(owner.nodeId)?.slots[slot])
+    throw new Error('Document patch slot ownership cannot be proven')
+  if (relative.length === 2 || (relative.length === 3 && typeof relative[2] === 'number'))
+    return
+  throw new Error('Document patch path crosses a non-canonical slot container')
+}
+
+function collectTouchedArrayRoots(base: DocumentIndexSnapshot, paths: readonly Path[]): Path[] {
+  const roots: Path[] = []
+  const data = getSnapshotInternals(base)
+  for (const path of paths) {
+    if (path[0] !== 'elements')
+      continue
+    const owner = ownerForPath(data.paths, path)
+    if (!owner) {
+      roots.push(['elements'])
+      continue
+    }
+    const relative = path.slice(owner.path.length)
+    if (relative.length > 0 && relative[0] !== 'slots') {
+      roots.push(owner.path.slice(0, -1))
+      continue
+    }
+    if (relative.length === 0)
+      roots.push(owner.path.slice(0, -1))
+    else if (relative[0] === 'slots')
+      roots.push([...owner.path, 'slots', relative[1]!])
+  }
+  const unique = uniquePaths(roots)
+  return unique.filter(root => !unique.some(other => other.length < root.length && isPrefix(other, root)))
+}
+
+function readNodeArray(document: DocumentSchema, path: Path): readonly MaterialNode[] {
+  let value: unknown = document
+  for (const segment of path)
+    value = (value as Record<string | number, unknown>)[segment]
+  if (!Array.isArray(value))
+    throw new Error('Document patch node array is invalid')
+  return value as MaterialNode[]
+}
+
+function ownerAddressForArray(document: DocumentSchema, path: Path): MaterialNodeAddress | undefined {
+  if (path.length === 1)
+    return undefined
+  const ownerPath = path.slice(0, -2)
+  let value: unknown = document
+  for (const segment of ownerPath)
+    value = (value as Record<string | number, unknown>)[segment]
+  const owner = value as MaterialNode
+  const ancestors: MaterialNodeAddress['ancestors'] = []
+  for (let index = 1; index < ownerPath.length; index += 4) {
+    if (ownerPath[index + 1] !== 'slots')
+      break
+    ancestors.push({ ownerNodeId: '', slot: String(ownerPath[index + 2]), index: Number(ownerPath[index + 3]) })
+  }
+  return { nodeId: owner.id, path: formatPath(ownerPath), ancestors }
 }
 
 function collectCanonicalNodePaths(document: DocumentSchema): Map<string, Path> {

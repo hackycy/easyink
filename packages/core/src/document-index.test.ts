@@ -117,4 +117,27 @@ describe('documentIndexSnapshot', () => {
     expect(result.impact.changedDocumentPaths).toEqual(['/page/width'])
     expect(result.impact.affectedNodeIds).toEqual([])
   })
+
+  it('updates and affects a stable node replaced as a whole', () => {
+    const profile = createTestCompiledMaterialProfile()
+    const schema = { ...createDefaultSchema(), elements: [profile.createNode('box', { id: 'stable', x: 1 })] }
+    const before = DocumentIndexSnapshot.build(schema, profile, 1)
+    const next = structuredClone(schema)
+    next.elements[0]!.x = 9
+    const result = forkDocumentIndexSnapshot(before, next, profile, 2, [{ op: 'replace', path: ['elements', 0], value: next.elements[0] }], [{ op: 'replace', path: ['elements', 0], value: schema.elements[0] }])
+    expect(result.index.getNode('stable')).toBe(next.elements[0])
+    expect(result.impact.affectedNodeIds).toEqual(['stable'])
+  })
+
+  it.each([
+    ['elements', 0, 'slots', 'missing', 0],
+    ['elements', 0, 'slots', 'content', 'oops'],
+    ['elements', 0, 'bogus', 'x'],
+  ])('rejects unprovable canonical ownership at %j', (...path) => {
+    const profile = createTestCompiledMaterialProfile()
+    const owner = profile.createNode('container', { id: 'owner', slots: { content: [] } })
+    const schema = { ...createDefaultSchema(), elements: [owner] }
+    const index = DocumentIndexSnapshot.build(schema, profile, 1)
+    expect(() => forkDocumentIndexSnapshot(index, schema, profile, 2, [{ op: 'replace', path, value: null }], [])).toThrow(/ownership|non-canonical/u)
+  })
 })
