@@ -103,6 +103,66 @@ describe('legacy table v0 migration', () => {
     expect(tableSchemaAdapter.validate(migrated, context)).toEqual([])
   })
 
+  it('migrates root table typography with field-level table and layout precedence', () => {
+    const source = legacy()
+    ;(source.model as any).typography = {
+      fontFamily: 'Root Sans',
+      fontSize: 9,
+      color: '#111111',
+      fontWeight: 'bold',
+      fontStyle: 'italic',
+      lineHeight: 1.4,
+      letterSpacing: 0.2,
+      textAlign: 'left',
+      verticalAlign: 'bottom',
+    }
+    ;(source.model as any).table.typography = { color: '#222222', textAlign: 'right' }
+    ;(source.model as any).table.layout = { typography: { fontSize: 11 } }
+    const migrated = migrateLegacyTableV0ToV1.migrate(source, context)
+    expect((migrated.model as any).style.typography).toEqual({
+      fontFamily: 'Root Sans',
+      fontSize: 11,
+      color: '#222222',
+      fontWeight: 'bold',
+      fontStyle: 'italic',
+      lineHeight: 1.4,
+      letterSpacing: 0.2,
+      textAlign: 'end',
+      verticalAlign: 'bottom',
+    })
+    expect((migrated.compat as any).materials['table-static'].v0.typography.textAlign).toBe('left')
+    expect(JSON.parse(JSON.stringify(migrated))).toEqual(migrated)
+    expect(tableSchemaAdapter.validate(migrated, context)).toEqual([])
+  })
+
+  it('maps mixed physical cell border visibility to exact logical edges without losing other cell styles', () => {
+    const source = legacy()
+    const cell = (source.model as any).table.topology.rows[0].cells[0]
+    cell.border = { top: true, right: false, bottom: true, left: false }
+    const migrated = migrateLegacyTableV0ToV1.migrate(source, context)
+    const style = (migrated.model as any).bands[0].rows[0].cells[0].style
+    expect(style.padding).toEqual({ top: 1, right: 2, bottom: 3, left: 4 })
+    expect(style.typography).toMatchObject({ fontSize: 10, textAlign: 'center' })
+    expect(style.border).toEqual({
+      blockStart: { width: 1, style: 'dashed', color: '#123456' },
+      inlineEnd: { width: 0, style: 'none', color: '#123456' },
+      blockEnd: { width: 1, style: 'dashed', color: '#123456' },
+      inlineStart: { width: 0, style: 'none', color: '#123456' },
+    })
+    expect((migrated.compat as any).materials['table-static'].v0.table.topology.rows[0].cells[0].border).toEqual(cell.border)
+
+    cell.border = { diagonal: true }
+    expect(validateLegacyTableV0Input(source, context)).toContainEqual(expect.objectContaining({
+      code: 'TABLE_LEGACY_STRUCTURE_INVALID',
+      path: '/model/table/topology/rows/0/cells/0/border/diagonal',
+    }))
+    cell.border = { top: 'yes' }
+    expect(validateLegacyTableV0Input(source, context)).toContainEqual(expect.objectContaining({
+      code: 'TABLE_LEGACY_STRUCTURE_INVALID',
+      path: '/model/table/topology/rows/0/cells/0/border/top',
+    }))
+  })
+
   it('is deterministic across object key order and generates globally unique bounded IDs', () => {
     const first = legacy()
     const second = cloneJsonValue(first as any) as AdaptableMaterialNode

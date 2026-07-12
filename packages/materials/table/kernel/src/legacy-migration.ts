@@ -231,6 +231,8 @@ function validateCell(cell: RecordValue, rowIndex: number, columnIndex: number, 
     validatePadding(cell.padding, `${base}/padding`, issues)
   if (Object.hasOwn(cell, 'typography'))
     validateTypography(cell.typography, `${base}/typography`, issues)
+  if (Object.hasOwn(cell, 'border'))
+    validateCellBorder(cell.border, `${base}/border`, issues)
   if (Object.hasOwn(cell, 'content')) {
     const content = recordAt(cell.content, `${base}/content`)
     if (!content.ok) {
@@ -294,6 +296,7 @@ function validateSpans(snapshot: LegacySnapshot, kind: TableModel['kind'], issue
 function convert(snapshot: LegacySnapshot, context: SchemaAdapterContext): AdaptableMaterialNode {
   const kind = expectedKind(snapshot, context)
   const ids = new StableIds(snapshot.node.id)
+  const style = convertTableStyle(snapshot)
   const columns: TableColumn[] = snapshot.columns.map((column, index) => ({
     id: ids.id('column', `/model/table/topology/columns/${index}`, column) as TableColumn['id'],
     track: { kind: 'fr', weight: finite(column.ratio) && column.ratio > 0 ? column.ratio : 1 },
@@ -301,7 +304,7 @@ function convert(snapshot: LegacySnapshot, context: SchemaAdapterContext): Adapt
   const allRows: TableRow[] = snapshot.rows.map((row, rowIndex) => ({
     id: ids.id('row', `/model/table/topology/rows/${rowIndex}`, row) as TableRow['id'],
     minHeight: finite(row.height) ? row.height : 0,
-    cells: snapshot.cells[rowIndex]!.map((cell, columnIndex) => convertCell(cell, rowIndex, columnIndex, columns, ids)),
+    cells: snapshot.cells[rowIndex]!.map((cell, columnIndex) => convertCell(cell, rowIndex, columnIndex, columns, ids, style)),
   }))
   const roleRows = allRows.map((row, index) => ({ row, role: canonicalRole(snapshot.rows[index]!.role, kind), index }))
   const visible = roleRows.filter(({ role }) => !(
@@ -323,7 +326,6 @@ function convert(snapshot: LegacySnapshot, context: SchemaAdapterContext): Adapt
     }
   }
   const merges = convertMerges(snapshot, allRows, columns, ids, visible.map(item => item.index))
-  const style = convertTableStyle(snapshot)
   const model: TableModel = kind === 'data'
     ? { kind, columns, bands, merges, style, data: { collectionPort: collectionPort(snapshot.node.bindings) } }
     : { kind, columns, bands, merges, style }
@@ -366,7 +368,14 @@ function convert(snapshot: LegacySnapshot, context: SchemaAdapterContext): Adapt
   }
 }
 
-function convertCell(cell: RecordValue, row: number, column: number, columns: TableColumn[], ids: StableIds): TableCell {
+function convertCell(
+  cell: RecordValue,
+  row: number,
+  column: number,
+  columns: TableColumn[],
+  ids: StableIds,
+  tableStyle: TableStyle,
+): TableCell {
   const id = ids.id('cell', `/model/table/topology/rows/${row}/cells/${column}`, cell) as TableCell['id']
   const content = recordOrEmpty(cell.content)
   const elements = Array.isArray(content.elements) ? content.elements : []
@@ -377,7 +386,7 @@ function convertCell(cell: RecordValue, row: number, column: number, columns: Ta
       ? { kind: 'materials', slotId: `cell:${id}` }
       : { kind: 'text', text: typeof content.text === 'string' ? content.text : '' },
   }
-  const style = convertCellStyle(cell)
+  const style = convertCellStyle(cell, tableStyle)
   if (Object.keys(style).length > 0)
     result.style = style
   return result
@@ -433,12 +442,25 @@ function sourceCellFor(snapshot: LegacySnapshot, cell: TableCell, rows: TableRow
   return snapshot.cells[row]![column]!
 }
 
-function convertCellStyle(cell: RecordValue): TableStyle {
+function convertCellStyle(cell: RecordValue, tableStyle: TableStyle): TableStyle {
   const style: TableStyle = {}
   if (cell.padding !== undefined)
     style.padding = normalizePadding(cell.padding)
   if (cell.typography !== undefined)
     style.typography = normalizeTypography(recordOrEmpty(cell.typography))
+  if (cell.border !== undefined) {
+    const visibility = recordOrEmpty(cell.border)
+    const base = tableStyle.border?.blockStart ?? { width: 0, style: 'solid', color: '' }
+    const edge = (visible: unknown): TableBorderStyle => visible !== false
+      ? { ...base }
+      : { width: 0, style: 'none', color: base.color }
+    style.border = {
+      blockStart: edge(visibility.top),
+      inlineEnd: edge(visibility.right),
+      blockEnd: edge(visibility.bottom),
+      inlineStart: edge(visibility.left),
+    }
+  }
   return style
 }
 
@@ -459,6 +481,14 @@ function convertTableStyle(snapshot: LegacySnapshot): TableStyle {
     } as TableBorderStyle
     style.border = { blockStart: border, inlineEnd: { ...border }, blockEnd: { ...border }, inlineStart: { ...border } }
   }
+  const rootTypography = recordOrEmpty(snapshot.model.typography)
+  const tableTypography = recordOrEmpty(snapshot.table.typography)
+  const layoutTypography = recordOrEmpty(layout.typography)
+  if (Object.keys(rootTypography).length > 0
+    || Object.keys(tableTypography).length > 0
+    || Object.keys(layoutTypography).length > 0) {
+    style.typography = normalizeTypography({ ...rootTypography, ...tableTypography, ...layoutTypography })
+  }
   return style
 }
 
@@ -476,6 +506,28 @@ function validateOuterStyle(snapshot: LegacySnapshot, issues: MaterialSchemaIssu
   const padding = firstDefined(recordOrEmpty(layout).padding, source.cellPadding)
   if (padding !== undefined)
     validatePadding(padding, '/model/table/layout/padding', issues)
+  if (snapshot.model.typography !== undefined)
+    validateTypography(snapshot.model.typography, '/model/typography', issues)
+  if (snapshot.table.typography !== undefined)
+    validateTypography(snapshot.table.typography, '/model/table/typography', issues)
+  if (recordOrEmpty(layout).typography !== undefined)
+    validateTypography(recordOrEmpty(layout).typography, '/model/table/layout/typography', issues)
+}
+
+function validateCellBorder(value: unknown, path: `/${string}`, issues: MaterialSchemaIssue[]): void {
+  const record = recordAt(value, path)
+  if (!record.ok) {
+    issues.push(record.issue)
+    return
+  }
+  for (const key of Object.keys(record.value)) {
+    if (!['top', 'right', 'bottom', 'left'].includes(key)) {
+      issues.push(issue('TABLE_LEGACY_STRUCTURE_INVALID', `${path}/${escapePointer(key)}`, `Unknown cell border key: ${key}`))
+      continue
+    }
+    if (typeof record.value[key] !== 'boolean')
+      issues.push(issue('TABLE_LEGACY_STRUCTURE_INVALID', `${path}/${key}`, 'Cell border visibility must be boolean'))
+  }
 }
 
 function validateConvertedEnvelope(node: AdaptableMaterialNode, model: TableModel, issues: MaterialSchemaIssue[]): void {
