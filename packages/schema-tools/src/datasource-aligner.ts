@@ -1,6 +1,8 @@
+import type { CompiledMaterialProfile, JsonPointer, MaterialBindingSlot } from '@easyink/core'
 import type { DataFieldNode, DataSourceDescriptor } from '@easyink/datasource'
-import type { BindingRef, DocumentSchema, MaterialNode } from '@easyink/schema'
-import { getBindingRefs } from '@easyink/schema'
+import type { BindingRef, DocumentSchema } from '@easyink/schema'
+import { walkMaterialNodes, writePointer } from '@easyink/core'
+import { traverseNodes } from '@easyink/schema'
 import { deepClone, FIELD_PATH_SEPARATOR } from '@easyink/shared'
 
 /**
@@ -45,6 +47,7 @@ export class DataSourceAligner {
   align(
     schema: DocumentSchema,
     dataSource: DataSourceDescriptor,
+    profile?: CompiledMaterialProfile,
   ): AlignmentResult {
     const warnings: string[] = []
     const unalignedBindings: UnalignedBinding[] = []
@@ -53,7 +56,7 @@ export class DataSourceAligner {
     const dsFieldPaths = this.extractFieldPaths(dataSource.fields)
 
     // Extract all bindings from the schema
-    const schemaBindings = this.extractBindings(schema)
+    const schemaBindings = this.extractBindings(schema, profile)
 
     // Check each binding against available fields
     for (const { binding, elementId } of schemaBindings) {
@@ -128,64 +131,17 @@ export class DataSourceAligner {
   /**
    * Extract all bindings from a schema.
    */
-  extractBindings(schema: DocumentSchema): Array<{ binding: BindingRef, elementId: string }> {
-    const bindings: Array<{ binding: BindingRef, elementId: string }> = []
-
-    const traverse = (elements: MaterialNode[]): void => {
-      for (const element of elements) {
-        // Direct binding
-        if (element.bindings.value) {
-          const refs = getBindingRefs(element.bindings.value)
-          for (const ref of refs) {
-            bindings.push({ binding: ref, elementId: element.id })
-          }
-        }
-
-        // Table cell bindings
-        if ('table' in element) {
-          const table = element as MaterialNode & {
-            table: {
-              topology?: {
-                rows?: Array<{
-                  cells?: Array<{
-                    binding?: BindingRef
-                    staticBinding?: BindingRef
-                  }>
-                }>
-              }
-            }
-          }
-
-          if (table.table?.topology?.rows) {
-            for (const row of table.table.topology.rows) {
-              if (row.cells) {
-                for (let colIdx = 0; colIdx < row.cells.length; colIdx++) {
-                  const cell = row.cells[colIdx]
-                  if (cell.binding) {
-                    bindings.push({
-                      binding: cell.binding,
-                      elementId: `${element.id}:cell[${colIdx}]`,
-                    })
-                  }
-                  if (cell.staticBinding) {
-                    bindings.push({
-                      binding: cell.staticBinding,
-                      elementId: `${element.id}:cell[${colIdx}]:static`,
-                    })
-                  }
-                }
-              }
-            }
-          }
-        }
-
-        if (element.slots.default) {
-          traverse(element.slots.default)
-        }
-      }
+  extractBindings(schema: DocumentSchema, profile?: CompiledMaterialProfile): Array<{ binding: BindingRef, elementId: string, path: JsonPointer }> {
+    const bindings: Array<{ binding: BindingRef, elementId: string, path: JsonPointer }> = []
+    if (profile) {
+      walkMaterialNodes(schema, profile, (node, _address, introspection) => {
+        for (const slot of introspection.bindings)
+          bindings.push({ binding: slot.value, elementId: node.id, path: slot.path })
+      })
     }
-
-    traverse(schema.elements)
+    else {
+      traverseNodes(schema, node => collectPortableBindingRefs(node.bindings, node.id, '/bindings', bindings))
+    }
     return bindings
   }
 
@@ -302,6 +258,7 @@ export class DataSourceAligner {
   applyAlignment(
     schema: DocumentSchema,
     alignment: AlignmentResult,
+    profile?: CompiledMaterialProfile,
   ): DocumentSchema {
     if (alignment.warnings.length === 0) {
       return schema
@@ -312,61 +269,43 @@ export class DataSourceAligner {
     // Extract available paths
     const dsFieldPaths = this.extractFieldPaths(alignment.dataSource.fields)
 
-    const traverse = (elements: MaterialNode[]): void => {
-      for (const element of elements) {
-        if (element.bindings.value) {
-          const refs = getBindingRefs(element.bindings.value)
-          for (const ref of refs) {
-            const match = this.findFuzzyMatch(ref.fieldPath, dsFieldPaths)
-            if (match && match.confidence === 'high') {
-              ref.fieldPath = match.path
-            }
-          }
-        }
-
-        if ('table' in element) {
-          const table = element as MaterialNode & {
-            table: {
-              topology?: {
-                rows?: Array<{
-                  cells?: Array<{
-                    binding?: BindingRef
-                    staticBinding?: BindingRef
-                  }>
-                }>
-              }
-            }
-          }
-
-          if (table.table?.topology?.rows) {
-            for (const row of table.table.topology.rows) {
-              if (row.cells) {
-                for (const cell of row.cells) {
-                  if (cell.binding) {
-                    const match = this.findFuzzyMatch(cell.binding.fieldPath, dsFieldPaths)
-                    if (match && match.confidence === 'high') {
-                      cell.binding.fieldPath = match.path
-                    }
-                  }
-                  if (cell.staticBinding) {
-                    const match = this.findFuzzyMatch(cell.staticBinding.fieldPath, dsFieldPaths)
-                    if (match && match.confidence === 'high') {
-                      cell.staticBinding.fieldPath = match.path
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-
-        if (element.slots.default) {
-          traverse(element.slots.default)
-        }
-      }
+    for (const { binding, elementId, path } of this.extractBindings(fixedSchema, profile)) {
+      const match = this.findFuzzyMatch(binding.fieldPath, dsFieldPaths)
+      if (match?.confidence !== 'high')
+        continue
+      traverseNodes(fixedSchema, (node) => {
+        if (node.id === elementId)
+          writePointer(node, path, { ...binding, fieldPath: match.path })
+      })
     }
-
-    traverse(fixedSchema.elements)
     return fixedSchema
   }
+}
+
+export function collectDocumentBindingSlots(schema: DocumentSchema, profile: CompiledMaterialProfile): MaterialBindingSlot[] {
+  const slots: MaterialBindingSlot[] = []
+  walkMaterialNodes(schema, profile, (_node, _address, introspection) => slots.push(...introspection.bindings))
+  return slots
+}
+
+function collectPortableBindingRefs(
+  value: unknown,
+  elementId: string,
+  path: JsonPointer,
+  result: Array<{ binding: BindingRef, elementId: string, path: JsonPointer }>,
+): void {
+  if (!value || typeof value !== 'object')
+    return
+  if (!Array.isArray(value)
+    && typeof (value as Record<string, unknown>).sourceId === 'string'
+    && typeof (value as Record<string, unknown>).fieldPath === 'string') {
+    result.push({ binding: value as BindingRef, elementId, path })
+    return
+  }
+  for (const [key, item] of Object.entries(value))
+    collectPortableBindingRefs(item, elementId, `${path}/${escapePointerToken(key)}`, result)
+}
+
+function escapePointerToken(value: string): string {
+  return value.replaceAll('~', '~0').replaceAll('/', '~1')
 }

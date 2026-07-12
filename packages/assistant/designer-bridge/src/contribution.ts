@@ -131,7 +131,7 @@ export function createAssistantContribution(options: CreateAssistantContribution
             return ctx.store.schema
           },
           get 'materialManifest'() {
-            return createAssistantMaterialManifest(ctx.store)
+            return createAssistantMaterialManifest(ctx.store.materialProfile)
           },
           't': (key: string) => ctx.store.t(key),
           'onApply': (result: AssistantResult) => {

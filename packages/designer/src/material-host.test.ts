@@ -166,7 +166,7 @@ describe('designerStore material facet host', () => {
     expect(store.peekDesignerFacet('editable')).toBeUndefined()
     await expect(store.activateDesignerFacet('editable')).resolves.toMatchObject({ state: 'active', value: { extension } })
     expect(store.peekDesignerFacet('editable')?.value?.extension).toBe(extension)
-    expect(store.listEditableMaterialTypes()).toEqual(['editable'])
+    expect([...store.materialProfile.editableTypes]).toEqual(['editable'])
   })
 
   it('quarantines preparation failures without caching a usable value', async () => {

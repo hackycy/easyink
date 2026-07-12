@@ -40,7 +40,9 @@ export function useMaterialDrop(ctx: MaterialDropContext) {
       return
 
     const { store } = ctx
-    const manifest = store.listEditableMaterialManifests().find(entry => entry.type === dragData)
+    const manifest = store.materialProfile.editableTypes.has(dragData)
+      ? store.materialProfile.getManifest(dragData)
+      : undefined
     if (!manifest)
       return
 

@@ -735,7 +735,7 @@ function normalizeMaterialRouterResult(
     })
   }
 
-  const materialManifest = selectMaterialManifest(manifest, [...selectedTypes]) ?? { materials: [] }
+  const materialManifest = selectMaterialManifest(manifest, [...selectedTypes]) ?? { ...manifest, materials: [] }
   if (!materialManifest.materials.length)
     warnings.push('Material Router did not select any usable registered materials.')
 

@@ -1,4 +1,4 @@
-export { DataSourceAligner } from './datasource-aligner'
+export { collectDocumentBindingSlots, DataSourceAligner } from './datasource-aligner'
 export type { AlignmentResult, UnalignedBinding } from './datasource-aligner'
 export { buildDataSourceDescriptor } from './datasource-descriptor'
 export type { BuildDataSourceDescriptorOptions } from './datasource-descriptor'

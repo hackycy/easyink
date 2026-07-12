@@ -633,6 +633,33 @@ describe('defineMaterialManifest', () => {
     example.facets = { ai: { generation: { enabled: false, examples: [1 as never] } } }
     expect(() => defineMaterialManifest(example)).toThrowError('MATERIAL_AI_GENERATION_INVALID')
   })
+
+  it('requires complete enabled AI generation contracts', () => {
+    const missingSchema = validManifest()
+    missingSchema.facets = { ai: { generation: { enabled: true, examples: [{}], bindingShape: {} } } }
+    expect(() => defineMaterialManifest(missingSchema)).toThrowError('MATERIAL_AI_MODEL_SCHEMA_REQUIRED')
+
+    const missingBinding = validManifest()
+    missingBinding.facets = { ai: { generation: { enabled: true, examples: [{}], modelSchema: {} } } }
+    expect(() => defineMaterialManifest(missingBinding)).toThrowError('MATERIAL_AI_BINDING_SHAPE_REQUIRED')
+
+    const missingExample = validManifest()
+    missingExample.facets = { ai: { generation: { enabled: true, examples: [], modelSchema: {}, bindingShape: {} } } }
+    expect(() => defineMaterialManifest(missingExample)).toThrowError('MATERIAL_AI_EXAMPLE_REQUIRED')
+  })
+
+  it('requires every enabled AI example to contain escaped model-relative paths', () => {
+    const input = validManifest()
+    input.facets = { ai: { generation: {
+      enabled: true,
+      modelSchema: {},
+      bindingShape: {},
+      requiredModelPaths: ['/plain', '/a~1b/~0key'],
+      examples: [{ 'plain': null, 'a/b': { '~key': 1 } }, { 'plain': false, 'a/b': {} }],
+    } } }
+
+    expect(() => defineMaterialManifest(input)).toThrowError('MATERIAL_AI_REQUIRED_PATH_MISSING:1:/a~1b/~0key')
+  })
 })
 
 describe('material binding value policies', () => {

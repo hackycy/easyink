@@ -32,9 +32,11 @@
     "@easyink/assistant-plugins": "workspace:*",
     "@easyink/assistant-store": "workspace:*",
     "@easyink/assistant-ui": "workspace:*",
+    "@easyink/core": "workspace:*",
     "@easyink/designer": "workspace:*",
     "@easyink/icons": "workspace:*",
     "@easyink/schema": "workspace:*",
+    "@easyink/shared": "workspace:*",
     "vue": "catalog:framework"
   }
 }

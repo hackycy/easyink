@@ -550,6 +550,34 @@ function validateAI(ai: MaterialAIFacet | undefined): void {
     if (!isJsonPointer(path) || path === '/model' || path.startsWith('/model/'))
       fail('MATERIAL_AI_MODEL_PATH_INVALID')
   }
+  if (!generation.enabled)
+    return
+  if (generation.modelSchema === undefined)
+    fail('MATERIAL_AI_MODEL_SCHEMA_REQUIRED')
+  if (generation.bindingShape === undefined)
+    fail('MATERIAL_AI_BINDING_SHAPE_REQUIRED')
+  if (generation.examples.length === 0)
+    fail('MATERIAL_AI_EXAMPLE_REQUIRED')
+  for (let index = 0; index < generation.examples.length; index += 1) {
+    for (const path of generation.requiredModelPaths ?? []) {
+      if (!jsonPointerExists(generation.examples[index], path))
+        fail(`MATERIAL_AI_REQUIRED_PATH_MISSING:${index}:${path}`)
+    }
+  }
+}
+
+function jsonPointerExists(root: unknown, pointer: string): boolean {
+  let value = root
+  for (const encoded of pointer.slice(1).split('/')) {
+    const token = encoded.replaceAll('~1', '/').replaceAll('~0', '~')
+    if (UNSAFE_STRUCTURE_KEYS.has(token) || !value || typeof value !== 'object')
+      return false
+    const descriptor = Object.getOwnPropertyDescriptor(value, token)
+    if (!descriptor || !('value' in descriptor))
+      return false
+    value = descriptor.value
+  }
+  return true
 }
 
 function validatePropertyDescriptor(descriptor: PropertyDescriptor): void {

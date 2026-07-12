@@ -416,14 +416,6 @@ export class DesignerStore {
     return builtinMaterialGroupLabels[groupId as keyof typeof builtinMaterialGroupLabels] ?? groupId
   }
 
-  listEditableMaterialTypes(): readonly string[] {
-    return [...this.materialProfile.editableTypes]
-  }
-
-  listEditableMaterialManifests() {
-    return this.listEditableMaterialTypes().map(type => this.materialProfile.getManifest(type)!).filter(Boolean)
-  }
-
   // ─── Material registry ────────────────────────────────────────
 
   // ─── Paper registry ───────────────────────────────────────────

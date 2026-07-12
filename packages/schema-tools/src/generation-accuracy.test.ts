@@ -1,5 +1,8 @@
+import type { SchemaAdapter } from '@easyink/core'
 import type { DocumentSchema } from '@easyink/schema'
 import type { AIGenerationPlan } from '@easyink/shared'
+import { recordSchemaAdapter } from '@easyink/core'
+import { createTestCompiledMaterialProfile, createTestMaterialManifest } from '@easyink/core/testing'
 import { describe, expect, it } from 'vitest'
 import { repairGeneratedSchema, validateGeneratedSchemaAccuracy } from './generation-accuracy'
 
@@ -69,7 +72,7 @@ describe('generated schema accuracy', () => {
     ]))
   })
 
-  it('rejects invalid canonical table models instead of repairing structure silently', () => {
+  it('validates private models through portable generation contracts without type branches', () => {
     const schema = makeSchema({
       elements: [{
         id: 'items',
@@ -86,8 +89,53 @@ describe('generated schema accuracy', () => {
       }],
     })
 
-    const issues = validateGeneratedSchemaAccuracy(schema, { allowedMaterialTypes, materialAliases })
+    const issues = validateGeneratedSchemaAccuracy(schema, {
+      allowedMaterialTypes,
+      materialAliases,
+      generationContracts: new Map([['table-data', {
+        modelSchema: { type: 'object', required: ['kind'], properties: { kind: { const: 'data' } } },
+        bindingShape: { type: 'object' },
+        requiredModelPaths: ['/kind'],
+      }]]),
+    })
 
-    expect(issues.map(issue => issue.code)).toContain('INVALID_TABLE_DATA_SCHEMA')
+    expect(issues.map(issue => issue.code)).toEqual(expect.arrayContaining([
+      'MATERIAL_MODEL_SCHEMA_INVALID',
+      'MATERIAL_REQUIRED_MODEL_PATH_MISSING',
+    ]))
+  })
+
+  it('returns stable local profile quarantine diagnostics to the repair loop', () => {
+    const adapter: SchemaAdapter = {
+      ...recordSchemaAdapter(1),
+      validate: node => node.model && typeof node.model === 'object' && (node.model as Record<string, unknown>).valid === true
+        ? []
+        : [{ code: 'LOCAL_MODEL_INVALID', severity: 'error' as const, path: '/model/valid' as const, message: 'valid must be true' }],
+    }
+    const profile = createTestCompiledMaterialProfile([
+      createTestMaterialManifest({ type: 'private', schemaAdapter: adapter }),
+    ])
+    const schema = makeSchema({
+      elements: [{
+        id: 'private',
+        type: 'private',
+        x: 0,
+        y: 0,
+        width: 10,
+        height: 10,
+        modelVersion: 1,
+        model: { valid: false },
+        slots: {},
+        bindings: {},
+        output: { visibility: 'include' },
+      }],
+    })
+
+    const issues = validateGeneratedSchemaAccuracy(schema, {
+      allowedMaterialTypes: new Set(['private']),
+      profile,
+    })
+
+    expect(issues).toContainEqual(expect.objectContaining({ code: 'LOCAL_MODEL_INVALID', path: '/elements/0/model/valid' }))
   })
 })

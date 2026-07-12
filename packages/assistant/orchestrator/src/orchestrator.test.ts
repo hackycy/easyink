@@ -1023,41 +1023,54 @@ function payloadWithTextWatermark(payload: ReturnType<typeof defaultSchemaAgentP
 
 function textMaterialManifest(): AssistantMaterialManifest {
   return {
+    version: 1,
+    profileId: 'test',
+    engineVersion: '0.0.30',
     materials: [
-      {
+      portableMaterial('text', {
         type: 'text',
-        name: 'Text',
-        capabilities: { bindable: true },
-        binding: { kind: 'ordinary', primaryProp: 'content', formatEditor: { tabs: ['preset', 'custom'], defaultTab: 'preset' } },
-        ai: {
-          type: 'text',
-          description: 'Designer-registered text material.',
-          properties: ['content', 'fontSize', 'fontWeight', 'textAlign', 'verticalAlign', 'color'],
-          bindings: 'single' as const,
-        },
-      },
+        description: 'Designer-registered text material.',
+        properties: ['content', 'fontSize', 'fontWeight', 'textAlign', 'verticalAlign', 'color'],
+        bindings: 'single' as const,
+      }),
     ],
   }
 }
 
 function multiMaterialManifest(): AssistantMaterialManifest {
   return {
+    version: 1,
+    profileId: 'test',
+    engineVersion: '0.0.30',
     materials: [
       ...textMaterialManifest().materials,
-      {
+      portableMaterial('barcode', {
         type: 'barcode',
-        name: 'Barcode',
-        capabilities: { bindable: true },
-        binding: { kind: 'ordinary', primaryProp: 'value', formatEditor: false },
-        ai: {
-          type: 'barcode',
-          description: 'Designer-registered barcode material.',
-          properties: ['value', 'format', 'displayValue'],
-          bindings: 'single' as const,
-          usage: ['Render barcode values.'],
-        },
-      },
+        description: 'Designer-registered barcode material.',
+        properties: ['value', 'format', 'displayValue'],
+        bindings: 'single' as const,
+        usage: ['Render barcode values.'],
+      }),
     ],
+  }
+}
+
+function portableMaterial(type: string, descriptor: NonNullable<AssistantMaterialManifest['materials'][number]['descriptor']>): AssistantMaterialManifest['materials'][number] {
+  return {
+    type,
+    modelVersion: 1,
+    common: {
+      nameKey: `materials.${type}.name`,
+      category: 'test',
+      defaultNode: { width: 50, height: 20, unit: 'mm', model: {} },
+      interaction: { rotatable: true, resizable: true },
+      binding: { kind: 'ports', ports: [{ id: 'value', key: { kind: 'exact', value: 'value' }, role: 'display', valueShape: 'scalar', formatEditor: false }] },
+      layout: { intrinsicSize: 'none', fragmentation: 'none', pageRepeat: 'none', overflow: 'clip' },
+      structure: { slots: [] },
+      properties: [],
+    },
+    generation: { enabled: true, modelSchema: {}, bindingShape: { type: 'object' }, examples: [{}] },
+    descriptor,
   }
 }
 

@@ -1,7 +1,9 @@
+import type { CompiledMaterialProfile } from '@easyink/core'
 import type { BindingRef, DocumentSchema, MaterialNode } from '@easyink/schema'
-import type { AIGenerationPlan } from '@easyink/shared'
-import { getBindingRefs } from '@easyink/schema'
-import { deepClone, FIELD_PATH_SEPARATOR, isObject } from '@easyink/shared'
+import type { AIGenerationPlan, JsonObject } from '@easyink/shared'
+import { loadDocumentWithProfile, validateDocumentWithProfile, walkMaterialNodes, writePointer } from '@easyink/core'
+import { traverseNodes } from '@easyink/schema'
+import { deepClone, FIELD_PATH_SEPARATOR } from '@easyink/shared'
 
 export interface GenerationRepairIssue {
   code: string
@@ -21,6 +23,8 @@ export interface GenerationAccuracyOptions {
   allowedMaterialTypes: Set<string>
   materialAliases?: Record<string, string>
   plan?: AIGenerationPlan
+  profile?: CompiledMaterialProfile
+  generationContracts?: ReadonlyMap<string, { modelSchema: JsonObject, bindingShape: JsonObject, requiredModelPaths?: readonly string[] }>
 }
 
 export function repairGeneratedSchema(
@@ -32,6 +36,7 @@ export function repairGeneratedSchema(
 
   applyPagePlan(fixed, options.plan, issues)
   repairElements(fixed.elements, options, issues, 'elements')
+  normalizeBindings(fixed, options.profile, issues)
 
   return { schema: fixed, issues }
 }
@@ -42,6 +47,8 @@ export function validateGeneratedSchemaAccuracy(
 ): GenerationAccuracyIssue[] {
   const issues: GenerationAccuracyIssue[] = []
   validateElements(schema.elements, options, issues, 'elements')
+  if (options.profile)
+    collectProfileDiagnostics(schema, options.profile, issues)
   return issues
 }
 
@@ -101,32 +108,128 @@ function repairElements(
       element.type = canonicalType
     }
 
-    normalizeBindings(element, issues, elementPath)
-
-    if (element.slots.default)
-      repairElements(element.slots.default, options, issues, `${elementPath}.children`)
+    for (const [slot, children] of Object.entries(element.slots))
+      repairElements(children, options, issues, `${elementPath}.slots.${slot}`)
   }
 }
 
 function normalizeBindings(
-  element: MaterialNode,
+  schema: DocumentSchema,
+  profile: CompiledMaterialProfile | undefined,
   issues: GenerationRepairIssue[],
-  elementPath: string,
 ): void {
-  const bindings = getElementBindings(element)
-  for (const { binding, path } of bindings) {
-    if (binding.fieldPath.includes('.')) {
-      const fixedPath = binding.fieldPath.replace(/\./g, FIELD_PATH_SEPARATOR)
-      issues.push({
-        code: 'BINDING_PATH_NORMALIZED',
-        message: 'Normalized binding fieldPath from dot notation to slash notation.',
-        path: `${elementPath}.${path}.fieldPath`,
-        original: binding.fieldPath,
-        fixed: fixedPath,
-      })
-      binding.fieldPath = fixedPath
+  const visit = (node: MaterialNode, binding: BindingRef, path: string): void => {
+    if (!binding.fieldPath.includes('.'))
+      return
+    const fixedPath = binding.fieldPath.replace(/\./g, FIELD_PATH_SEPARATOR)
+    issues.push({
+      code: 'BINDING_PATH_NORMALIZED',
+      message: 'Normalized binding fieldPath from dot notation to slash notation.',
+      path: `${node.id}${path}/fieldPath`,
+      original: binding.fieldPath,
+      fixed: fixedPath,
+    })
+    writePointer(node, path as `/${string}`, { ...binding, fieldPath: fixedPath })
+  }
+  if (profile) {
+    walkMaterialNodes(schema, profile, (node, _address, introspection) => {
+      for (const slot of introspection.bindings)
+        visit(node, slot.value, slot.path)
+    })
+  }
+  else {
+    traverseNodes(schema, (node) => {
+      for (const slot of collectBindingRefs(node.bindings, '/bindings'))
+        visit(node, slot.binding, slot.path)
+    })
+  }
+}
+
+function collectBindingRefs(value: unknown, path: `/${string}`): Array<{ binding: BindingRef, path: `/${string}` }> {
+  if (!value || typeof value !== 'object')
+    return []
+  if (!Array.isArray(value)
+    && typeof (value as Record<string, unknown>).sourceId === 'string'
+    && typeof (value as Record<string, unknown>).fieldPath === 'string') {
+    return [{ binding: value as BindingRef, path }]
+  }
+  const result: Array<{ binding: BindingRef, path: `/${string}` }> = []
+  for (const [key, item] of Object.entries(value)) {
+    result.push(...collectBindingRefs(item, `${path}/${key.replaceAll('~', '~0').replaceAll('/', '~1')}`))
+  }
+  return result
+}
+
+function collectProfileDiagnostics(schema: DocumentSchema, profile: CompiledMaterialProfile, issues: GenerationAccuracyIssue[]): void {
+  const loaded = loadDocumentWithProfile(schema, profile)
+  const validated = validateDocumentWithProfile(loaded.schema, profile)
+  const seen = new Set<string>()
+  for (const diagnostic of [...loaded.diagnostics, ...validated.diagnostics]) {
+    const key = `${diagnostic.code}:${diagnostic.path}:${diagnostic.nodeId ?? ''}`
+    if (seen.has(key))
+      continue
+    seen.add(key)
+    issues.push({
+      code: diagnostic.code,
+      message: diagnostic.message,
+      path: diagnostic.path,
+    })
+  }
+}
+
+function pointerExists(root: unknown, pointer: string): boolean {
+  let current = root
+  for (const token of pointer.slice(1).split('/').map(part => part.replaceAll('~1', '/').replaceAll('~0', '~'))) {
+    if (!current || typeof current !== 'object' || !Object.hasOwn(current, token))
+      return false
+    current = (current as Record<string, unknown>)[token]
+  }
+  return true
+}
+
+function validatePortableSchema(value: unknown, schema: JsonObject): boolean {
+  if (schema.const !== undefined && value !== schema.const)
+    return false
+  if (schema.type === 'object') {
+    if (!value || typeof value !== 'object' || Array.isArray(value))
+      return false
+    const required = Array.isArray(schema.required) ? schema.required : []
+    if (required.some(key => typeof key !== 'string' || !Object.hasOwn(value, key)))
+      return false
+    const properties = schema.properties && typeof schema.properties === 'object' && !Array.isArray(schema.properties)
+      ? schema.properties as JsonObject
+      : {}
+    const patterns = schema.patternProperties && typeof schema.patternProperties === 'object' && !Array.isArray(schema.patternProperties)
+      ? schema.patternProperties as JsonObject
+      : {}
+    for (const [key, item] of Object.entries(value)) {
+      const child = properties[key]
+        ?? Object.entries(patterns).find(([source]) => new RegExp(source, 'u').test(key))?.[1]
+        ?? (schema.additionalProperties && typeof schema.additionalProperties === 'object' && !Array.isArray(schema.additionalProperties)
+          ? schema.additionalProperties
+          : undefined)
+      if (child && typeof child === 'object' && !Array.isArray(child) && !validatePortableSchema(item, child)) {
+        return false
+      }
+      if (child === undefined && schema.additionalProperties === false)
+        return false
     }
   }
+  if (schema.type === 'array') {
+    if (!Array.isArray(value))
+      return false
+    if (schema.items && typeof schema.items === 'object' && !Array.isArray(schema.items)
+      && value.some(item => !validatePortableSchema(item, schema.items as JsonObject))) {
+      return false
+    }
+  }
+  if (schema.type === 'string' && typeof value !== 'string')
+    return false
+  if (schema.type === 'number' && typeof value !== 'number')
+    return false
+  if (schema.type === 'boolean' && typeof value !== 'boolean')
+    return false
+  return true
 }
 
 function validateElements(
@@ -147,90 +250,31 @@ function validateElements(
       })
     }
 
-    const elementRecord = element as MaterialNode & Record<string, unknown>
-    if (hasOwn(elementRecord, 'staticBinding')) {
+    const contract = options.generationContracts?.get(element.type)
+    if (contract && !validatePortableSchema(element.model, contract.modelSchema)) {
       issues.push({
-        code: 'STATIC_BINDING_ON_ELEMENT',
-        message: 'staticBinding is only valid on table-static cells. Use props.content for static text elements.',
-        path: `${elementPath}.staticBinding`,
+        code: 'MATERIAL_MODEL_SCHEMA_INVALID',
+        message: `Material model for "${element.type}" does not match its portable generation schema.`,
+        path: `${elementPath}.model`,
       })
     }
-
-    if (element.type === 'table-data')
-      validateTableData(elementRecord, issues, elementPath)
-
-    if (element.type === 'table-static')
-      validateTableStatic(elementRecord, issues, elementPath)
-
-    if (element.slots.default)
-      validateElements(element.slots.default, options, issues, `${elementPath}.children`)
-  }
-}
-
-function validateTableData(
-  element: MaterialNode & Record<string, unknown>,
-  issues: GenerationAccuracyIssue[],
-  elementPath: string,
-): void {
-  const props = isObject(element.model) ? element.model : {}
-  for (const legacyKey of ['columns', 'repeatTemplate', 'headerStyle', 'rowStyle', 'borderStyle']) {
-    if (hasOwn(props, legacyKey)) {
+    for (const path of contract?.requiredModelPaths ?? []) {
+      if (!pointerExists(element.model, path)) {
+        issues.push({
+          code: 'MATERIAL_REQUIRED_MODEL_PATH_MISSING',
+          message: `Material model for "${element.type}" is missing required path "${path}".`,
+          path: `${elementPath}.model${path}`,
+        })
+      }
+    }
+    if (contract && !validatePortableSchema(element.bindings, contract.bindingShape)) {
       issues.push({
-        code: 'LEGACY_TABLE_SCHEMA',
-        message: `table-data must use table.topology/table.layout, not props.${legacyKey}.`,
-        path: `${elementPath}.props.${legacyKey}`,
+        code: 'MATERIAL_BINDING_SHAPE_INVALID',
+        message: `Material bindings for "${element.type}" do not match its portable generation shape.`,
+        path: `${elementPath}.bindings`,
       })
     }
+    for (const [slot, children] of Object.entries(element.slots))
+      validateElements(children, options, issues, `${elementPath}.slots.${slot}`)
   }
-
-  const table = isObject(element.model) ? element.model : undefined
-  const topology = isObject(table?.topology) ? table.topology : undefined
-  const rows = Array.isArray(topology?.rows) ? topology.rows : []
-  const columns = Array.isArray(topology?.columns) ? topology.columns : []
-
-  if (!table || table.kind !== 'data')
-    issues.push({ code: 'INVALID_TABLE_DATA_SCHEMA', message: 'table-data must include table.kind = data.', path: `${elementPath}.table.kind` })
-  if (columns.length === 0)
-    issues.push({ code: 'INVALID_TABLE_DATA_SCHEMA', message: 'table-data must include table.topology.columns.', path: `${elementPath}.table.topology.columns` })
-  if (!rows.some(row => isObject(row) && row.role === 'repeat-template'))
-    issues.push({ code: 'INVALID_TABLE_DATA_SCHEMA', message: 'table-data must include a repeat-template row for array data.', path: `${elementPath}.table.topology.rows` })
-}
-
-function validateTableStatic(
-  element: MaterialNode & Record<string, unknown>,
-  issues: GenerationAccuracyIssue[],
-  elementPath: string,
-): void {
-  const table = isObject(element.model) ? element.model : undefined
-  const topology = isObject(table?.topology) ? table.topology : undefined
-  if (!table || table.kind !== 'static')
-    issues.push({ code: 'INVALID_TABLE_STATIC_SCHEMA', message: 'table-static must include table.kind = static.', path: `${elementPath}.table.kind` })
-  if (!Array.isArray(topology?.columns) || !Array.isArray(topology?.rows))
-    issues.push({ code: 'INVALID_TABLE_STATIC_SCHEMA', message: 'table-static must include table.topology.columns and rows.', path: `${elementPath}.table.topology` })
-}
-
-function getElementBindings(element: MaterialNode): Array<{ binding: BindingRef, path: string }> {
-  const result: Array<{ binding: BindingRef, path: string }> = []
-
-  if (element.bindings.value) {
-    const bindings = getBindingRefs(element.bindings.value)
-    bindings.forEach((binding, index) => result.push({ binding, path: `binding${bindings.length > 1 ? `[${index}]` : ''}` }))
-  }
-
-  const tableRecord = element as MaterialNode & { table?: { topology?: { rows?: Array<{ cells?: Array<{ binding?: BindingRef, staticBinding?: BindingRef }> }> } } }
-  const rows = tableRecord.table?.topology?.rows ?? []
-  rows.forEach((row, rowIndex) => {
-    row.cells?.forEach((cell, cellIndex) => {
-      if (cell.binding)
-        result.push({ binding: cell.binding, path: `table.topology.rows[${rowIndex}].cells[${cellIndex}].binding` })
-      if (cell.staticBinding)
-        result.push({ binding: cell.staticBinding, path: `table.topology.rows[${rowIndex}].cells[${cellIndex}].staticBinding` })
-    })
-  })
-
-  return result
-}
-
-function hasOwn(value: Record<string, unknown>, key: string): boolean {
-  return Object.hasOwn(value, key)
 }

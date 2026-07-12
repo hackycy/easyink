@@ -141,7 +141,7 @@ describe('designer store schema initialization', () => {
     const store = new DesignerStore(undefined, undefined, undefined, runtimeWith(profile))
 
     expect(store.materialProfile).toBe(profile)
-    expect(store.listEditableMaterialTypes()).toEqual(['box'])
+    expect([...store.materialProfile.editableTypes]).toEqual(['box'])
     expect(Object.isFrozen(profile.editableTypes)).toBe(true)
     expect('registerMaterial' in store).toBe(false)
   })

@@ -1,25 +1,31 @@
-import type { AIMaterialDescriptor, MaterialKnowledgeDescriptor } from '@easyink/shared'
+import type { AIMaterialDescriptor, JsonObject, MaterialKnowledgeDescriptor } from '@easyink/shared'
 import type { FieldType, MaterialBindingSpec, MaterialKnowledge, MaterialPropertySpec } from './types'
 import { MaterialKnowledgeRegistry } from './registry'
 
 export interface ManifestEntry {
   type: string
-  name?: string
-  ai?: AIMaterialDescriptor
-  knowledge?: MaterialKnowledgeDescriptor
-  binding?: ManifestMaterialBindingDefinition
-  props?: ManifestMaterialProp[]
+  modelVersion: number
+  common: {
+    nameKey: string
+    category: string
+    defaultNode: { width: number, height: number }
+    binding: ManifestMaterialBindingDefinition
+    properties: ManifestMaterialProp[]
+  }
+  generation: { bindingShape: JsonObject, modelSchema: JsonObject, examples: JsonObject[] }
+  descriptor?: JsonObject
 }
 
 export interface ManifestLike {
+  version: 1
+  profileId: string
+  engineVersion: string
   materials: ManifestEntry[]
 }
 
 export type ManifestMaterialBindingDefinition
   = | { kind: 'none' }
-    | { kind: 'ordinary', primaryProp: string, indexedProps?: Record<string | number, string>, formatEditor: ManifestBindingFormatEditorDefinition | false }
-    | { kind: 'data-contract', contract: ManifestMaterialDataContract, formatEditor: ManifestBindingFormatEditorDefinition | false }
-    | { kind: 'custom' }
+    | { kind: 'ports', ports: Array<{ role: 'semantic' | 'display', valueShape: 'scalar' | 'record' | 'record-array' | 'json' }>, dataContract?: ManifestMaterialDataContract }
 
 export interface ManifestBindingFormatEditorDefinition {
   tabs: readonly string[]
@@ -53,11 +59,12 @@ export function createRegistryFromManifest(manifest: ManifestLike): MaterialKnow
     if (REMOVED_MATERIAL_TYPES.has(entry.type))
       continue
 
-    const descriptor = entry.knowledge ?? entry.ai?.knowledge
+    const ai = entry.descriptor as AIMaterialDescriptor | undefined
+    const descriptor = ai?.knowledge as MaterialKnowledgeDescriptor | undefined
     if (descriptor) {
       registry.register({
         type: entry.type,
-        description: entry.ai?.description ?? entry.name ?? entry.type,
+        description: ai?.description ?? entry.common.nameKey,
         category: descriptor.category,
         constraints: [],
         composability: descriptor.composability,
@@ -68,24 +75,24 @@ export function createRegistryFromManifest(manifest: ManifestLike): MaterialKnow
         sizing: descriptor.sizing,
         fitness: descriptor.fitness ?? [],
         properties: descriptor.properties ?? [],
-        requiredProps: entry.ai?.requiredProps ?? [],
+        requiredProps: ai?.requiredProps ?? [],
       })
     }
-    else if (entry.ai) {
-      registry.register(synthesizeFromDescriptor(entry.type, entry.ai))
+    else if (ai) {
+      registry.register(synthesizeFromDescriptor(entry, ai))
     }
-    else if (entry.binding) {
+    else {
       registry.register(synthesizeFromManifest(entry))
     }
   }
   return registry
 }
 
-function synthesizeFromDescriptor(type: string, ai: AIMaterialDescriptor): MaterialKnowledge {
+function synthesizeFromDescriptor(entry: ManifestEntry, ai: AIMaterialDescriptor): MaterialKnowledge {
   return {
-    type,
+    type: entry.type,
     description: ai.description,
-    category: inferCategory(type),
+    category: normalizeCategory(entry.common.category, entry.type),
     constraints: [],
     composability: {
       canBeChildOf: ['*'],
@@ -118,7 +125,7 @@ function synthesizeFromDescriptor(type: string, ai: AIMaterialDescriptor): Mater
       },
       examples: [],
     },
-    sizing: { minWidth: 10, minHeight: 10, defaultSize: { width: 50, height: 20 } },
+    sizing: defaultSizing(entry),
     fitness: [],
     properties: ai.properties.map(key => ({
       key,
@@ -132,8 +139,8 @@ function synthesizeFromDescriptor(type: string, ai: AIMaterialDescriptor): Mater
 function synthesizeFromManifest(entry: ManifestEntry): MaterialKnowledge {
   return {
     type: entry.type,
-    description: entry.name ?? entry.type,
-    category: inferCategory(entry.type),
+    description: entry.common.nameKey,
+    category: normalizeCategory(entry.common.category, entry.type),
     constraints: [],
     composability: {
       canBeChildOf: ['*'],
@@ -141,10 +148,10 @@ function synthesizeFromManifest(entry: ManifestEntry): MaterialKnowledge {
       exclusiveWith: [],
       preferredCompanions: [],
     },
-    bindingSpec: synthesizeBindingSpec(entry.binding),
-    sizing: { minWidth: 10, minHeight: 10, defaultSize: { width: 50, height: 20 } },
+    bindingSpec: synthesizeBindingSpec(entry.common.binding),
+    sizing: defaultSizing(entry),
     fitness: [],
-    properties: (entry.props ?? []).map(synthesizePropertySpec),
+    properties: entry.common.properties.map(synthesizePropertySpec),
     requiredProps: [],
   }
 }
@@ -159,20 +166,22 @@ function synthesizeBindingSpec(binding: ManifestMaterialBindingDefinition | unde
     }
   }
 
-  if (binding.kind === 'ordinary') {
+  const semantic = binding.ports.filter(port => port.role === 'semantic')
+  const display = binding.ports.filter(port => port.role === 'display')
+  if (!binding.dataContract && semantic.length === 0 && display.every(port => port.valueShape === 'scalar')) {
     return {
-      mode: binding.indexedProps ? 'multi-scalar' : 'scalar',
+      mode: display.length > 1 ? 'multi-scalar' : 'scalar',
       accepts: { types: ['string', 'number', 'boolean', 'date', 'image-url'] },
       produces: {
-        kind: binding.indexedProps ? 'multi-field' : 'scalar-field',
-        fieldCount: binding.indexedProps ? 'multiple' : 'single',
+        kind: display.length > 1 ? 'multi-field' : 'scalar-field',
+        fieldCount: display.length > 1 ? 'multiple' : 'single',
       },
       examples: [],
     }
   }
 
-  if (binding.kind === 'data-contract') {
-    const fields = Object.entries(binding.contract.model.fields)
+  if (binding.dataContract) {
+    const fields = Object.entries(binding.dataContract.model.fields)
     return {
       mode: 'collection',
       accepts: {
@@ -233,4 +242,21 @@ function inferCategory(type: string): MaterialKnowledge['category'] {
   if (type === 'chart' || type.startsWith('chart-'))
     return 'visualization'
   return 'typography'
+}
+
+function normalizeCategory(category: string, type: string): MaterialKnowledge['category'] {
+  return ['data', 'layout', 'decoration', 'typography', 'visualization'].includes(category)
+    ? category as MaterialKnowledge['category']
+    : inferCategory(type)
+}
+
+function defaultSizing(entry: ManifestEntry): MaterialKnowledge['sizing'] {
+  return {
+    minWidth: 1,
+    minHeight: 1,
+    defaultSize: {
+      width: entry.common.defaultNode.width,
+      height: entry.common.defaultNode.height,
+    },
+  }
 }

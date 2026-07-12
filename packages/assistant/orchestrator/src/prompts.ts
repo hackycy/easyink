@@ -1,7 +1,4 @@
-import type { AssistantMaterialManifest } from '@easyink/assistant-capabilities'
-
-const MATERIAL_BINDING_KEY = 'binding'
-const MATERIAL_PROPS_KEY = 'props'
+import type { AssistantAIMaterialDescriptor, AssistantMaterialManifest } from '@easyink/assistant-capabilities'
 
 export interface PromptContext {
   unit: 'mm' | 'px' | 'pt'
@@ -21,14 +18,14 @@ export function buildMaterialIndexContext(manifest: AssistantMaterialManifest | 
   ]
 
   for (const material of manifest.materials) {
-    const ai = material.ai
+    const ai = material.descriptor as AssistantAIMaterialDescriptor | undefined
     const knowledge = ai?.knowledge
-    const description = ai?.description ?? material.name
+    const description = ai?.description ?? material.common.nameKey
     const categories = [
       knowledge?.category ? `category: ${knowledge.category}` : undefined,
-      `binding: ${material[MATERIAL_BINDING_KEY].kind}`,
-      material.capabilities.supportsChildren ? 'supports children' : undefined,
-      material.capabilities.bindable ? 'bindable' : undefined,
+      `binding: ${material.common.binding.kind}`,
+      material.common.structure.slots.length > 0 ? 'supports children' : undefined,
+      material.common.binding.kind !== 'none' ? 'bindable' : undefined,
     ].filter(Boolean).join(', ')
     lines.push(`- ${material.type}: ${description} (${categories})`)
 
@@ -60,6 +57,9 @@ export function selectMaterialManifest(
     return undefined
   const selected = new Set(selectedTypes)
   return {
+    version: manifest.version,
+    profileId: manifest.profileId,
+    engineVersion: manifest.engineVersion,
     materials: manifest.materials.filter(material => selected.has(material.type)),
   }
 }
@@ -73,15 +73,15 @@ export function buildMaterialContext(manifest: AssistantMaterialManifest | undef
 
   lines.push('## Available Material Types')
   for (const material of materials) {
-    const ai = material.ai
+    const ai = material.descriptor as AssistantAIMaterialDescriptor | undefined
     const knowledge = ai?.knowledge
     lines.push(`### ${material.type}`)
-    lines.push(`- ${ai?.description ?? material.name}`)
+    lines.push(`- ${ai?.description ?? material.common.nameKey}`)
     if (knowledge?.category)
       lines.push(`- Category: ${knowledge.category}`)
     const properties = ai?.properties?.length
       ? ai.properties
-      : material[MATERIAL_PROPS_KEY]?.map(prop => prop.key) ?? []
+      : material.common.properties.map(prop => prop.key)
     if (properties.length)
       lines.push(`- Properties: ${properties.join(', ')}`)
     if (ai?.requiredProps?.length)
@@ -128,20 +128,11 @@ export function buildMaterialContext(manifest: AssistantMaterialManifest | undef
 }
 
 function formatMaterialBinding(material: AssistantMaterialManifest['materials'][number]): string {
-  const binding = material[MATERIAL_BINDING_KEY]
-  if (binding.kind === 'ordinary') {
-    const indexed = binding.indexedProps ? `, indexed props: ${JSON.stringify(binding.indexedProps)}` : ''
-    return `- Binding: ordinary BindingRef; bindIndex 0 writes props.${binding.primaryProp}${indexed}`
-  }
-  if (binding.kind === 'data-contract') {
-    const fields = Object.entries(binding.contract.model.fields)
-      .map(([id, field]) => `${id}:${field.type}${field.required ? ':required' : ''}${field.format ? `:${field.format}` : ''}`)
-      .join(', ')
-    return `- Binding: data-contract; target fields: ${fields}`
-  }
-  if (binding.kind === 'custom')
-    return '- Binding: custom material-owned binding; follow this material examples and schema rules exactly.'
-  return '- Binding: none'
+  const binding = material.common.binding
+  if (binding.kind === 'none')
+    return '- Binding: none'
+  const ports = binding.ports.map(port => `${port.id}:${port.role}:${port.valueShape}`).join(', ')
+  return `- Binding ports: ${ports}; generated bindings must match ${JSON.stringify(material.generation.bindingShape)}`
 }
 
 // --- Prompt segment builders ---
@@ -443,12 +434,12 @@ export function buildLayoutMaterialContext(manifest: AssistantMaterialManifest |
     return ''
   const lines: string[] = ['Available materials (use ONLY these types):']
   for (const material of manifest.materials) {
-    const ai = material.ai
+    const ai = material.descriptor as AssistantAIMaterialDescriptor | undefined
     const knowledge = ai?.knowledge
-    const binding = material[MATERIAL_BINDING_KEY].kind
-    const children = material.capabilities?.supportsChildren ? ', supports children' : ''
+    const binding = material.common.binding.kind
+    const children = material.common.structure.slots.length > 0 ? ', supports children' : ''
     const sizing = knowledge?.sizing ? `, default ${knowledge.sizing.defaultSize.width}x${knowledge.sizing.defaultSize.height}` : ''
-    lines.push(`- ${material.type}: ${ai?.description ?? material.name} (binding: ${binding}${children}${sizing})`)
+    lines.push(`- ${material.type}: ${ai?.description ?? material.common.nameKey} (binding: ${binding}${children}${sizing})`)
   }
   return lines.join('\n')
 }

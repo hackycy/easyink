@@ -1,10 +1,8 @@
 import type { DataSourceDescriptor } from '@easyink/datasource'
 import type { DocumentSchema, ExpectedDataSource, ExpectedField } from '@easyink/schema'
 import type { AssistantMaterialManifest, AssistantValidationIssue, AssistantValidationReport } from './types'
-import { getBindingRefs, isDataContractBinding, traverseNodes, validateSchemaIssues } from '@easyink/schema'
+import { traverseNodes, validateSchemaIssues } from '@easyink/schema'
 import { DataSourceAligner, normalizeAllFieldPaths, SchemaValidator } from '@easyink/schema-tools'
-
-const MATERIAL_BINDING_KEY = 'binding'
 
 export interface ValidateAssistantSchemaOptions {
   materialManifest?: AssistantMaterialManifest
@@ -114,11 +112,6 @@ export function collectDeterministicErrors(schema: unknown, options: Determinist
     ? new Set(options.materialManifest.materials.map(material => material.type))
     : undefined
   const materialByType = new Map(options.materialManifest?.materials.map(material => [material.type, material]))
-  const requiredProps = new Map<string, string[]>()
-  for (const material of options.materialManifest?.materials ?? []) {
-    if (material.ai?.requiredProps?.length)
-      requiredProps.set(material.type, material.ai.requiredProps)
-  }
   const bindingPaths = options.expectedDataSource ? collectFieldPaths(options.expectedDataSource.fields) : undefined
 
   traverseNodes(doc, (node) => {
@@ -129,22 +122,17 @@ export function collectDeterministicErrors(schema: unknown, options: Determinist
         path: `elements.${node.id}`,
       })
     }
-    const required = requiredProps.get(node.type)
-    if (required?.length) {
-      const props = (node as { props?: Record<string, unknown> }).props ?? {}
-      for (const key of required) {
-        const value = props[key]
-        if (value === undefined || value === null || value === '') {
-          issues.push({
-            code: 'MATERIAL_PROPS_MISSING',
-            message: `Element "${node.id}" of type "${node.type}" is missing required prop "${key}".`,
-            path: `elements.${node.id}.props.${key}`,
-          })
-        }
+    const material = materialByType.get(node.type)
+    for (const path of material?.generation.requiredModelPaths ?? []) {
+      if (!jsonPointerExists(node.model, path)) {
+        issues.push({
+          code: 'MATERIAL_PROPS_MISSING',
+          message: `Element "${node.id}" of type "${node.type}" is missing required model path "${path}".`,
+          path: `elements.${node.id}.model${path}`,
+        })
       }
     }
     const binding = (node as { binding?: { fieldPath?: string } }).binding
-    const material = materialByType.get(node.type)
     if (material)
       issues.push(...validateNodeBindingAgainstMaterial(node, material))
     if (binding?.fieldPath && bindingPaths && !bindingPaths.has(binding.fieldPath)) {
@@ -224,62 +212,67 @@ function validateNodeBindingAgainstMaterial(
   node: DocumentSchema['elements'][number],
   material: AssistantMaterialManifest['materials'][number],
 ): AssistantValidationIssue[] {
-  const issues: AssistantValidationIssue[] = []
-  const binding = node.bindings.value
-  const definition = material[MATERIAL_BINDING_KEY]
-  if (!binding)
-    return issues
+  return validatePortableJsonSchema(node.bindings, material.generation.bindingShape)
+    ? []
+    : [{
+        code: 'BINDING_SHAPE_INVALID',
+        message: `Element "${node.id}" bindings do not match the portable generation binding shape.`,
+        path: `elements.${node.id}.bindings`,
+      }]
+}
 
-  if (definition.kind === 'none') {
-    issues.push({
-      code: 'BINDING_NOT_SUPPORTED',
-      message: `Element "${node.id}" of type "${node.type}" declares a binding, but the registered material binding is "none".`,
-      path: `elements.${node.id}.binding`,
-    })
-    return issues
+function validatePortableJsonSchema(value: unknown, schema: Record<string, unknown>): boolean {
+  if (schema.const !== undefined && value !== schema.const)
+    return false
+  if (schema.type === 'string' && typeof value !== 'string')
+    return false
+  if (schema.type === 'number' && typeof value !== 'number')
+    return false
+  if (schema.type === 'boolean' && typeof value !== 'boolean')
+    return false
+  if (schema.type === 'array') {
+    if (!Array.isArray(value))
+      return false
+    if (isRecord(schema.items) && value.some(item => !validatePortableJsonSchema(item, schema.items as Record<string, unknown>)))
+      return false
   }
-
-  if (definition.kind === 'ordinary') {
-    if (isDataContractBinding(binding)) {
-      issues.push({
-        code: 'BINDING_KIND_INVALID',
-        message: `Element "${node.id}" of type "${node.type}" must use ordinary BindingRef, not data-contract binding.`,
-        path: `elements.${node.id}.binding`,
-      })
+  if (schema.type === 'object') {
+    if (!value || typeof value !== 'object' || Array.isArray(value))
+      return false
+    const record = value as Record<string, unknown>
+    const properties = isRecord(schema.properties) ? schema.properties : {}
+    const patterns = isRecord(schema.patternProperties) ? schema.patternProperties : {}
+    for (const required of Array.isArray(schema.required) ? schema.required : []) {
+      if (typeof required !== 'string' || !Object.hasOwn(record, required))
+        return false
     }
-    return issues
-  }
-
-  if (definition.kind === 'data-contract') {
-    if (!isDataContractBinding(binding)) {
-      issues.push({
-        code: 'BINDING_KIND_INVALID',
-        message: `Element "${node.id}" of type "${node.type}" must use binding.kind = "data-contract".`,
-        path: `elements.${node.id}.binding`,
-      })
-      return issues
+    for (const [key, item] of Object.entries(record)) {
+      const exact = properties[key]
+      const pattern = Object.entries(patterns).find(([source]) => new RegExp(source, 'u').test(key))?.[1]
+      const child = exact ?? pattern ?? (isRecord(schema.additionalProperties) ? schema.additionalProperties : undefined)
+      if (child !== undefined && isRecord(child) && !validatePortableJsonSchema(item, child))
+        return false
+      if (child === undefined && schema.additionalProperties === false)
+        return false
     }
-    const allowedFields = new Set(Object.keys(definition.contract.model.fields))
-    for (const fieldId of Object.keys(binding.mappings)) {
-      if (!allowedFields.has(fieldId)) {
-        issues.push({
-          code: 'BINDING_TARGET_FIELD_INVALID',
-          message: `Element "${node.id}" maps unknown data-contract target field "${fieldId}".`,
-          path: `elements.${node.id}.binding.mappings.${fieldId}`,
-        })
-      }
-    }
-    return issues
   }
+  return true
+}
 
-  if (definition.kind === 'custom' && getBindingRefs(binding).length > 0) {
-    issues.push({
-      code: 'BINDING_KIND_INVALID',
-      message: `Element "${node.id}" of type "${node.type}" uses material-owned custom binding and cannot receive a whole-element BindingRef.`,
-      path: `elements.${node.id}.binding`,
-    })
+function jsonPointerExists(root: unknown, pointer: string): boolean {
+  let current = root
+  for (const token of pointer.slice(1).split('/').map(part => part.replaceAll('~1', '/').replaceAll('~0', '~'))) {
+    if (!isRecord(current) && !Array.isArray(current))
+      return false
+    if (!Object.hasOwn(current, token))
+      return false
+    current = (current as Record<string, unknown>)[token]
   }
-  return issues
+  return true
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function collectFieldPaths(fields: ExpectedField[]): Set<string> {

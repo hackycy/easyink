@@ -3,6 +3,7 @@ import type { DocumentSchema } from '@easyink/schema'
 import type { AssistantMaterialManifest } from './types'
 import { describe, expect, it } from 'vitest'
 import { collectDeterministicErrors, createAssistantPreview, repairAssistantSchema, validateAssistantSchema } from './index'
+import { AssistantMaterialManifestSchema } from './types'
 
 const schema: DocumentSchema = {
   version: '1.0.0',
@@ -33,6 +34,29 @@ const dataSource: DataSourceDescriptor = {
   }],
 }
 
+function materialManifest(type: string): AssistantMaterialManifest {
+  return {
+    version: 1,
+    profileId: 'test',
+    engineVersion: '0.0.30',
+    materials: [{
+      type,
+      modelVersion: 1,
+      common: {
+        nameKey: `materials.${type}.name`,
+        category: 'test',
+        defaultNode: { width: 10, height: 10, unit: 'mm', model: {} },
+        interaction: { rotatable: true, resizable: true },
+        binding: { kind: 'none' },
+        layout: { intrinsicSize: 'none', fragmentation: 'none', pageRepeat: 'none', overflow: 'clip' },
+        structure: { slots: [] },
+        properties: [],
+      },
+      generation: { enabled: true, modelSchema: {}, bindingShape: {}, examples: [{}] },
+    }],
+  }
+}
+
 describe('assistant capabilities', () => {
   it('validates schema candidates and creates previews', () => {
     const report = validateAssistantSchema(schema)
@@ -54,29 +78,26 @@ describe('assistant capabilities', () => {
   })
 
   it('accepts schema elements registered in the active material manifest', () => {
-    const materialManifest: AssistantMaterialManifest = {
-      materials: [
-        { type: 'text', name: 'Text', capabilities: {}, binding: { kind: 'ordinary', primaryProp: 'content', formatEditor: { tabs: ['preset', 'custom'], defaultTab: 'preset' } }, props: [] },
-      ],
-    }
-    const report = validateAssistantSchema(schema, { materialManifest })
+    const report = validateAssistantSchema(schema, { materialManifest: materialManifest('text') })
 
     expect(report.valid).toBe(true)
   })
 
   it('keeps repair validation scoped to the active material manifest', () => {
-    const materialManifest: AssistantMaterialManifest = {
-      materials: [
-        { type: 'image', name: 'Image', capabilities: {}, binding: { kind: 'ordinary', primaryProp: 'src', formatEditor: { tabs: ['preset', 'custom'], defaultTab: 'preset' } }, props: [] },
-      ],
-    }
-
-    const repair = repairAssistantSchema(schema, { materialManifest })
+    const repair = repairAssistantSchema(schema, { materialManifest: materialManifest('image') })
 
     expect(repair.validation.valid).toBe(false)
     expect(repair.validation.errors).toContainEqual(expect.objectContaining({
       code: 'UNREGISTERED_MATERIAL_TYPE',
     }))
+  })
+
+  it('strictly validates versioned portable manifests at every declared object boundary', () => {
+    expect(AssistantMaterialManifestSchema.safeParse(materialManifest('text')).success).toBe(true)
+    expect(AssistantMaterialManifestSchema.safeParse({ ...materialManifest('text'), extra: true }).success).toBe(false)
+    const nested = materialManifest('text')
+    ;(nested.materials[0]!.common.interaction as Record<string, unknown>).extra = true
+    expect(AssistantMaterialManifestSchema.safeParse(nested).success).toBe(false)
   })
 
   it('requires planned page-level text watermarks to use page layers', () => {

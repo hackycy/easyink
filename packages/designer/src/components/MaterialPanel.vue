@@ -16,7 +16,7 @@ interface MaterialPanelGroup {
 
 const visibleMaterialGroups = computed<MaterialPanelGroup[]>(() => {
   const groups = new Map<string, MaterialPanelGroup>()
-  for (const type of store.listEditableMaterialTypes()) {
+  for (const type of store.materialProfile.editableTypes) {
     const manifest = store.getManifest(type)
     if (!manifest)
       continue

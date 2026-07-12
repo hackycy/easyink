@@ -164,7 +164,9 @@ export function compileMaterialProfile(input: CompileMaterialProfileInput): Comp
   const materialTypes = Object.freeze([...manifests.keys()].sort())
   const editableTypes = readonlySet(materialTypes.filter(type => manifests.get(type)!.facets.designer !== undefined))
   const renderableTypes = readonlySet(materialTypes.filter(type => manifests.get(type)!.facets.viewer !== undefined))
-  const generatableTypes = readonlySet(materialTypes.filter(type => manifests.get(type)!.facets.ai?.generation.enabled === true))
+  const generatableTypes = readonlySet(materialTypes.filter(type => editableTypes.has(type)
+    && renderableTypes.has(type)
+    && manifests.get(type)!.facets.ai?.generation.enabled === true))
 
   return Object.freeze({
     id: snapshot.id,

@@ -906,7 +906,9 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
   }
 
   function resolveCatalogEntry(dragData: string): MaterialDragEntry | undefined {
-    const manifest = ctx.store.listEditableMaterialManifests().find(entry => entry.type === dragData)
+    const manifest = ctx.store.materialProfile.editableTypes.has(dragData)
+      ? ctx.store.materialProfile.getManifest(dragData)
+      : undefined
     return manifest && { id: manifest.type, groupId: manifest.common.category, label: manifest.common.nameKey, icon: IconRect, materialType: manifest.type }
   }
 

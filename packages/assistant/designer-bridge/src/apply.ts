@@ -1,6 +1,8 @@
 import type { AssistantPatchOperation, AssistantResult } from '@easyink/assistant-capabilities'
 import type { ContributionContext } from '@easyink/designer'
+import type { DocumentSchemaInput } from '@easyink/schema'
 import { applyAssistantPatch, selectAssistantPatchOperationsForElements } from '@easyink/assistant-capabilities'
+import { loadDocumentWithProfile, validateDocumentWithProfile } from '@easyink/core'
 
 interface AssistantDesignerExtension {
   lastResultId?: string
@@ -14,7 +16,8 @@ export function applyAssistantResultToDesigner(
   result: AssistantResult,
 ): void {
   const beforeApplySchema = cloneJson(store.schema)
-  store.setSchema(result.schema)
+  const schema = admitAssistantSchema(store, result.schema)
+  store.setSchema(schema)
   if (result.dataSource) {
     store.dataSourceRegistry.registerSource(result.dataSource)
   }
@@ -22,7 +25,7 @@ export function applyAssistantResultToDesigner(
     lastResultId: result.id,
     appliedAt: Date.now(),
     beforeApplySchema,
-    afterApplySchema: cloneJson(result.schema),
+    afterApplySchema: cloneJson(schema),
   })
   store.markDraftModified()
 }
@@ -35,12 +38,13 @@ export function applyAssistantPatchToDesigner(
     return false
   const beforeApplySchema = cloneJson(store.schema)
   const nextSchema = applyAssistantPatch(beforeApplySchema as unknown as Record<string, unknown>, operations)
-  store.setSchema(nextSchema)
+  const schema = admitAssistantSchema(store, nextSchema)
+  store.setSchema(schema)
   store.setExtension('assistant', {
     ...store.getExtension<AssistantDesignerExtension>('assistant'),
     appliedAt: Date.now(),
     beforeApplySchema,
-    afterApplySchema: cloneJson(nextSchema),
+    afterApplySchema: cloneJson(schema),
   })
   store.markDraftModified()
   return true
@@ -85,4 +89,16 @@ export function rollbackAssistantDesigner(store: ContributionContext['store']): 
 
 function cloneJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
+}
+
+function admitAssistantSchema(store: ContributionContext['store'], schema: unknown) {
+  const loaded = loadDocumentWithProfile(schema as DocumentSchemaInput, store.materialProfile)
+  const report = validateDocumentWithProfile(loaded.schema, store.materialProfile)
+  if (loaded.diagnostics.some(item => item.severity === 'error') || !report.valid) {
+    const diagnostics = [...new Set([...loaded.diagnostics, ...report.diagnostics]
+      .map(item => `${item.code}:${item.path}`))]
+      .join('\n')
+    throw new Error(`ASSISTANT_SCHEMA_PROFILE_INVALID\n${diagnostics}`)
+  }
+  return cloneJson(loaded.schema)
 }

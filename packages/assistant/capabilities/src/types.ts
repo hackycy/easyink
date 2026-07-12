@@ -1,6 +1,8 @@
 import type { DataSourceDescriptor } from '@easyink/datasource'
 import type { DocumentSchema } from '@easyink/schema'
+import type { JsonObject, JsonValue } from '@easyink/shared'
 import { AssistantPluginSelectionSchema } from '@easyink/assistant-plugins'
+import { assertJsonValue } from '@easyink/shared'
 import { z } from 'zod'
 
 export const AssistantWorkflowStepSchema = z.enum([
@@ -36,50 +38,45 @@ export const AssistantSourceInputSchema = z.object({
 
 export type AssistantSourceInput = z.infer<typeof AssistantSourceInputSchema>
 
-export const AssistantMaterialCapabilitiesSchema = z.object({
-  bindable: z.boolean().optional(),
-  rotatable: z.boolean().optional(),
-  resizable: z.boolean().optional(),
-  supportsChildren: z.boolean().optional(),
-  supportsAnimation: z.boolean().optional(),
-  supportsUnionDrop: z.boolean().optional(),
-  pageAware: z.boolean().optional(),
-  multiBinding: z.boolean().optional(),
-  keepAspectRatio: z.boolean().optional(),
-})
+const JsonValueSchema = z.custom<JsonValue>((value) => {
+  try {
+    assertJsonValue(value)
+    return true
+  }
+  catch {
+    return false
+  }
+}, 'Expected a JSON value')
 
-export type AssistantMaterialCapabilities = z.infer<typeof AssistantMaterialCapabilitiesSchema>
+const JsonObjectSchema = JsonValueSchema.refine(
+  (value): value is JsonObject => typeof value === 'object' && value !== null && !Array.isArray(value),
+  'Expected a JSON object',
+)
 
 export const AssistantMaterialPropSchema = z.object({
   key: z.string(),
   label: z.string(),
   type: z.string(),
   group: z.string().optional(),
-  default: z.unknown().optional(),
-  enum: z.array(z.object({ label: z.string(), value: z.unknown() })).optional(),
+  default: JsonValueSchema.optional(),
+  enum: z.array(z.object({ label: z.string(), value: JsonValueSchema }).strict()).optional(),
   min: z.number().optional(),
   max: z.number().optional(),
   step: z.number().optional(),
   nullable: z.boolean().optional(),
   editor: z.string().optional(),
-  editorOptions: z.record(z.unknown()).optional(),
-})
+  editorOptions: JsonObjectSchema.optional(),
+  targetPaths: z.array(z.string()).optional(),
+}).strict()
 
 export type AssistantMaterialProp = z.infer<typeof AssistantMaterialPropSchema>
 
-export const AssistantBindingFormatEditorSchema = z.object({
-  tabs: z.array(z.string()),
-  defaultTab: z.string().optional(),
+const AssistantBindingFormatEditorSchema = z.object({
+  tabs: z.tuple([z.literal('preset')]),
   presetTypes: z.array(z.string()).optional(),
-})
+}).strict()
 
-export interface AssistantBindingFormatEditor {
-  tabs: string[]
-  defaultTab?: string
-  presetTypes?: string[]
-}
-
-export const AssistantMaterialDataContractSchema = z.object({
+const AssistantMaterialDataContractSchema = z.object({
   version: z.literal(3),
   model: z.object({
     kind: z.literal('tabular'),
@@ -88,46 +85,33 @@ export const AssistantMaterialDataContractSchema = z.object({
       type: z.enum(['string', 'number', 'boolean', 'date', 'object', 'array']),
       required: z.boolean().optional(),
       format: z.enum(['display', 'raw']).optional(),
-      formatEditor: z.union([AssistantBindingFormatEditorSchema, z.literal(false)]).optional(),
-    })),
-  }),
-})
+      formatEditor: z.union([z.literal(false), AssistantBindingFormatEditorSchema]).optional(),
+    }).strict()),
+  }).strict(),
+}).strict()
 
-export interface AssistantMaterialDataContract {
-  version: 3
-  model: {
-    kind: 'tabular'
-    fields: Record<string, {
-      labelKey: string
-      type: 'string' | 'number' | 'boolean' | 'date' | 'object' | 'array'
-      required?: boolean
-      format?: 'display' | 'raw'
-      formatEditor?: AssistantBindingFormatEditor | false
-    }>
-  }
-}
+const AssistantMaterialBindingPortSchema = z.object({
+  id: z.string(),
+  key: z.union([
+    z.object({ kind: z.enum(['exact', 'prefix']), value: z.string() }).strict(),
+    z.object({ kind: z.literal('model'), paths: z.array(z.string()) }).strict(),
+  ]),
+  role: z.enum(['semantic', 'display']),
+  valueShape: z.enum(['scalar', 'record', 'record-array', 'json']),
+  modelPath: z.string().optional(),
+  formatEditor: z.union([z.literal(false), AssistantBindingFormatEditorSchema]),
+}).strict()
 
 export const AssistantMaterialBindingDefinitionSchema = z.union([
-  z.object({ kind: z.literal('none') }),
+  z.object({ kind: z.literal('none') }).strict(),
   z.object({
-    kind: z.literal('ordinary'),
-    primaryProp: z.string(),
-    indexedProps: z.record(z.string()).optional(),
-    formatEditor: z.union([AssistantBindingFormatEditorSchema, z.literal(false)]),
-  }),
-  z.object({
-    kind: z.literal('data-contract'),
-    contract: AssistantMaterialDataContractSchema,
-    formatEditor: z.union([AssistantBindingFormatEditorSchema, z.literal(false)]),
-  }),
-  z.object({ kind: z.literal('custom') }),
+    kind: z.literal('ports'),
+    ports: z.array(AssistantMaterialBindingPortSchema),
+    dataContract: AssistantMaterialDataContractSchema.optional(),
+  }).strict(),
 ])
 
-export type AssistantMaterialBindingDefinition
-  = | { kind: 'none' }
-    | { kind: 'ordinary', primaryProp: string, indexedProps?: Record<string, string>, formatEditor: AssistantBindingFormatEditor | false }
-    | { kind: 'data-contract', contract: AssistantMaterialDataContract, formatEditor: AssistantBindingFormatEditor | false }
-    | { kind: 'custom' }
+export type AssistantMaterialBindingDefinition = z.infer<typeof AssistantMaterialBindingDefinitionSchema>
 
 export const AssistantAIMaterialDescriptorSchema = z.object({
   type: z.string(),
@@ -190,29 +174,84 @@ export const AssistantAIMaterialDescriptorSchema = z.object({
 
 export type AssistantAIMaterialDescriptor = z.infer<typeof AssistantAIMaterialDescriptorSchema>
 
+const AssistantMaterialDefaultNodeSchema = z.object({
+  width: z.number(),
+  height: z.number(),
+  unit: z.enum(['mm', 'pt', 'px', 'inch']),
+  model: JsonObjectSchema,
+  bindings: JsonObjectSchema.optional(),
+  output: JsonObjectSchema.optional(),
+}).strict()
+
+const AssistantMaterialInteractionSchema = z.object({
+  rotatable: z.boolean(),
+  resizable: z.boolean(),
+  keepAspectRatio: z.boolean().optional(),
+  supportsAnimation: z.boolean().optional(),
+  supportsUnionDrop: z.boolean().optional(),
+}).strict()
+
+const AssistantMaterialLayoutSchema = z.object({
+  intrinsicSize: z.enum(['none', 'width', 'height', 'both']),
+  fragmentation: z.enum(['none', 'break-opportunities']),
+  pageRepeat: z.enum(['none', 'every-output-page']),
+  overflow: z.enum(['visible', 'clip']),
+}).strict()
+
+const AssistantMaterialStructureSchema = z.object({
+  slots: z.array(z.object({
+    id: z.string(),
+    key: z.object({ kind: z.enum(['exact', 'prefix']), value: z.string() }).strict(),
+    coordinateSpace: z.enum(['document', 'owner', 'slot']),
+    layoutParticipation: z.enum(['independent', 'owner']),
+    reparent: z.enum(['allowed', 'same-material', 'forbidden']),
+  }).strict()),
+}).strict()
+
+const AssistantMaterialGenerationSchema = z.object({
+  enabled: z.literal(true),
+  modelSchema: JsonObjectSchema,
+  bindingShape: JsonObjectSchema,
+  requiredModelPaths: z.array(z.string()).optional(),
+  examples: z.array(JsonObjectSchema).min(1),
+}).strict()
+
 export const AssistantMaterialManifestEntrySchema = z.object({
   type: z.string(),
-  name: z.string(),
-  capabilities: AssistantMaterialCapabilitiesSchema,
-  binding: AssistantMaterialBindingDefinitionSchema,
-  props: z.array(AssistantMaterialPropSchema).optional(),
-  ai: AssistantAIMaterialDescriptorSchema.optional(),
-})
+  modelVersion: z.number().int().nonnegative(),
+  common: z.object({
+    nameKey: z.string(),
+    category: z.string(),
+    defaultNode: AssistantMaterialDefaultNodeSchema,
+    interaction: AssistantMaterialInteractionSchema,
+    binding: AssistantMaterialBindingDefinitionSchema,
+    layout: AssistantMaterialLayoutSchema,
+    structure: AssistantMaterialStructureSchema,
+    properties: z.array(AssistantMaterialPropSchema),
+  }).strict(),
+  generation: AssistantMaterialGenerationSchema,
+  descriptor: JsonObjectSchema.optional(),
+}).strict()
 
 export interface AssistantMaterialManifestEntry {
   type: string
-  name: string
-  capabilities: AssistantMaterialCapabilities
-  binding: AssistantMaterialBindingDefinition
-  props?: AssistantMaterialProp[]
-  ai?: AssistantAIMaterialDescriptor
+  modelVersion: number
+  common: z.infer<typeof AssistantMaterialManifestEntrySchema>['common']
+  generation: z.infer<typeof AssistantMaterialGenerationSchema>
+  descriptor?: JsonObject
 }
 
 export const AssistantMaterialManifestSchema = z.object({
+  version: z.literal(1),
+  profileId: z.string(),
+  engineVersion: z.string(),
   materials: z.array(AssistantMaterialManifestEntrySchema),
-})
+}).strict()
 
 export interface AssistantMaterialManifest {
+  version: 1
+  profileId: string
+  engineVersion: string
   materials: AssistantMaterialManifestEntry[]
 }
 

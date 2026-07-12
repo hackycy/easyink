@@ -1,4 +1,5 @@
 import type { AssistantPatchOperation, AssistantResult } from '@easyink/assistant-capabilities'
+import { createTestCompiledMaterialProfile, createTestMaterialManifest } from '@easyink/core/testing'
 import { DesignerStore } from '@easyink/designer'
 import { describe, expect, it } from 'vitest'
 import {
@@ -11,7 +12,7 @@ import {
 
 describe('assistant designer bridge apply', () => {
   it('applies patch operations and rolls back to the previous schema', () => {
-    const store = new DesignerStore(createSchema([{ id: 'title', model: { text: 'Old' } }]))
+    const store = createStore(createSchema([{ id: 'title', model: { text: 'Old' } }]))
 
     const applied = applyAssistantPatchToDesigner(store, [
       { op: 'replace', path: '/elements/0/model/text', value: 'New' },
@@ -24,7 +25,7 @@ describe('assistant designer bridge apply', () => {
   })
 
   it('applies only operations targeting the current selection', () => {
-    const store = new DesignerStore(createSchema([
+    const store = createStore(createSchema([
       { id: 'title', model: { text: 'Old' } },
       { id: 'total', model: { text: 'Old total' } },
     ]))
@@ -41,7 +42,7 @@ describe('assistant designer bridge apply', () => {
   })
 
   it('registers datasource-only results without replacing schema', () => {
-    const store = new DesignerStore(createSchema([{ id: 'title', model: { text: 'Old' } }]))
+    const store = createStore(createSchema([{ id: 'title', model: { text: 'Old' } }]))
     const result = createResult()
 
     applyAssistantDataSourceToDesigner(store, result.dataSource!)
@@ -51,7 +52,7 @@ describe('assistant designer bridge apply', () => {
   })
 
   it('applies full results with datasource registration', () => {
-    const store = new DesignerStore(createSchema([]))
+    const store = createStore(createSchema([]))
     const result = createResult()
 
     applyAssistantResultToDesigner(store, result)
@@ -61,9 +62,16 @@ describe('assistant designer bridge apply', () => {
   })
 })
 
+function createStore(schema: ReturnType<typeof createSchema>): DesignerStore {
+  const profile = createTestCompiledMaterialProfile([
+    createTestMaterialManifest({ type: 'text', designer: true, viewer: true, ai: true }),
+  ])
+  return new DesignerStore(schema, undefined, undefined, { materials: { profile } })
+}
+
 function createSchema(elements: Array<{ id: string, model: Record<string, unknown> }>) {
   return {
-    version: '1',
+    version: '1.0.0',
     unit: 'mm' as const,
     page: { mode: 'fixed' as const, width: 80, height: 120 },
     guides: { x: [], y: [], groups: [] },
