@@ -11,7 +11,11 @@ function viewerFacet(): MaterialViewerFacet {
 export const descendantSpawnManifest = createTestMaterialManifest({
   type: 'fixture-descendant-spawn',
   viewer: () => {
-    const sentinelPath = process.env.EASYINK_CONFORMANCE_SENTINEL_PATH
+    const forbiddenEnvironment = ['EASYINK_TEST_SECRET', 'NODE_OPTIONS', 'NODE_PATH', 'NODE_REPL_EXTERNAL_MODULE', 'NODE_V8_COVERAGE', 'LD_PRELOAD']
+    const leaked = [...forbiddenEnvironment.filter(key => process.env[key]), ...Object.keys(process.env).filter(key => key.startsWith('TSX_') || key.startsWith('DYLD_'))]
+    if (leaked.length > 0)
+      throw new Error(`CONFORMANCE_ISOLATED_ENVIRONMENT_LEAKED:${leaked.join(',')}`)
+    const sentinelPath = process.argv.find(argument => argument.startsWith('--sentinel='))?.slice('--sentinel='.length)
     spawn(process.execPath, ['-e', `require('node:fs').writeFileSync(${JSON.stringify(sentinelPath)}, 'escaped')`], {
       stdio: 'ignore',
       windowsHide: true,

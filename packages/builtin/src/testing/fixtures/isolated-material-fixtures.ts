@@ -34,7 +34,7 @@ const scheduledAfterReport = createTestMaterialManifest({
   viewer: () => {
     setTimeout(() => {
       void Promise.resolve().then(() => {
-        const sentinelPath = process.env.EASYINK_CONFORMANCE_SENTINEL_PATH
+        const sentinelPath = process.argv.find(argument => argument.startsWith('--sentinel='))?.slice('--sentinel='.length)
         if (sentinelPath)
           writeFileSync(sentinelPath, 'escaped')
         while (true)

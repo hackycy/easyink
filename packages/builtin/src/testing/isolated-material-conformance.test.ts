@@ -7,7 +7,7 @@ import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createAuthenticatedResultReceiver, runIsolatedMaterialConformance } from './isolated-material-conformance'
-import { cloneAndFreezeMaterialConformanceReports, createAuthenticatedResultMessage, createHandshakeMessage, createIsolatedConformanceSession } from './isolated-material-conformance-protocol'
+import { boundAndFreezeMaterialConformanceReports, cloneAndFreezeMaterialConformanceReports, createAuthenticatedResultMessage, createHandshakeMessage, createIsolatedConformanceSession, MAX_ISSUES_PER_REPORT, MAX_TOTAL_ISSUES } from './isolated-material-conformance-protocol'
 
 const fixtureModule = pathToFileURL(join(process.cwd(), 'packages/builtin/src/testing/fixtures/isolated-material-fixtures.ts')).href
 const invalidIpcModule = pathToFileURL(join(process.cwd(), 'packages/builtin/src/testing/fixtures/invalid-ipc-fixture.ts')).href
@@ -54,9 +54,9 @@ describe('isolated material conformance process', () => {
       moduleSpecifier: fixtureModule,
       exportName: 'isolatedMaterialFixturePackage',
       materialType: 'fixture-scheduled-after-report',
+      arguments: [`--sentinel=${sentinelPath}`],
     }, {
       deadlineMs: 5_000,
-      environment: { EASYINK_CONFORMANCE_SENTINEL_PATH: sentinelPath },
       onSpawn: childPid => pid = childPid,
     })
     expect(reports).toEqual([expect.objectContaining({ materialType: 'fixture-scheduled-after-report', valid: true })])
@@ -98,23 +98,43 @@ describe('isolated material conformance process', () => {
   it('denies descendant processes and leaves no sentinel', async () => {
     const sentinelPath = join(tmpdir(), `easyink-descendant-${randomUUID()}`)
     cleanupPaths.push(sentinelPath)
-    const reports = await runIsolatedMaterialConformance({
-      moduleSpecifier: descendantSpawnModule,
-      exportName: 'descendantSpawnManifest',
-      materialType: 'fixture-descendant-spawn',
-    }, {
-      deadlineMs: 5_000,
-      environment: { EASYINK_CONFORMANCE_SENTINEL_PATH: sentinelPath },
-    })
-    expect(reports[0]).toEqual(expect.objectContaining({
-      valid: false,
-      issues: expect.arrayContaining([expect.objectContaining({
-        code: 'CONFORMANCE_VIEWER_FAILED',
-        message: expect.stringMatching(/permission|access denied|ERR_ACCESS_DENIED/i),
-      })]),
-    }))
-    await new Promise(resolve => setTimeout(resolve, 250))
-    expect(existsSync(sentinelPath)).toBe(false)
+    const poisoned = {
+      EASYINK_TEST_SECRET: 'must-not-leak',
+      NODE_OPTIONS: '--allow-child-process --require=easyink-forbidden-preload',
+      NODE_PATH: 'easyink-forbidden-node-path',
+      NODE_REPL_EXTERNAL_MODULE: 'easyink-forbidden-repl',
+      NODE_V8_COVERAGE: sentinelPath,
+      TSX_TSCONFIG_PATH: 'easyink-forbidden-tsx',
+      LD_PRELOAD: 'easyink-forbidden-preload',
+      DYLD_INSERT_LIBRARIES: 'easyink-forbidden-dyld',
+    }
+    const originals = Object.fromEntries(Object.keys(poisoned).map(key => [key, process.env[key]]))
+    try {
+      Object.assign(process.env, poisoned)
+      const reports = await runIsolatedMaterialConformance({
+        moduleSpecifier: descendantSpawnModule,
+        exportName: 'descendantSpawnManifest',
+        materialType: 'fixture-descendant-spawn',
+        arguments: [`--sentinel=${sentinelPath}`],
+      }, { deadlineMs: 5_000 })
+      expect(reports[0]).toEqual(expect.objectContaining({
+        valid: false,
+        issues: expect.arrayContaining([expect.objectContaining({
+          code: 'CONFORMANCE_VIEWER_FAILED',
+          message: expect.stringMatching(/permission|access denied|ERR_ACCESS_DENIED/i),
+        })]),
+      }))
+      await new Promise(resolve => setTimeout(resolve, 250))
+      expect(existsSync(sentinelPath)).toBe(false)
+    }
+    finally {
+      for (const [key, value] of Object.entries(originals)) {
+        if (value === undefined)
+          delete process.env[key]
+        else
+          process.env[key] = value
+      }
+    }
   }, 10_000)
 
   it('cleans up and returns a stable runner error when onSpawn throws', async () => {
@@ -222,6 +242,57 @@ describe('isolated material conformance process', () => {
     for (const value of malformed)
       expect(() => cloneAndFreezeMaterialConformanceReports(value)).toThrow('CONFORMANCE_ISOLATED_EXECUTION_REPORT_INVALID')
     expect(getterCalls).toBe(0)
+  })
+
+  it('keeps independent per-report and total issue budgets', () => {
+    const reports = Array.from({ length: 2 }, (_, reportIndex) => ({
+      materialType: `material-${reportIndex}`,
+      valid: false,
+      issues: Array.from({ length: 300 }, (_, issueIndex) => ({ code: `E${issueIndex}`, path: '', message: 'failed' })),
+    }))
+    const cloned = cloneAndFreezeMaterialConformanceReports(reports)
+    expect(cloned.map(report => report.issues.length)).toEqual([300, 300])
+    expect(Object.isFrozen(cloned[1]?.issues[299])).toBe(true)
+
+    const packageReports = Array.from({ length: 25 }, (_, reportIndex) => ({
+      materialType: `builtin-${reportIndex}`,
+      valid: false,
+      issues: Array.from({ length: MAX_ISSUES_PER_REPORT }, (_, issueIndex) => ({ code: `E${issueIndex}`, path: '', message: '' })),
+    }))
+    const bounded = boundAndFreezeMaterialConformanceReports(packageReports)
+    expect(bounded).toHaveLength(25)
+    expect(bounded.reduce((total, report) => total + report.issues.length, 0)).toBe(25 * MAX_ISSUES_PER_REPORT)
+    expect(25 * MAX_ISSUES_PER_REPORT).toBeLessThanOrEqual(MAX_TOTAL_ISSUES)
+  })
+
+  it('fairly bounds 1000 reports without losing material identity', () => {
+    const reports = Array.from({ length: 1_000 }, (_, reportIndex) => ({
+      materialType: `material-${reportIndex}`,
+      valid: false,
+      issues: Array.from({ length: 100 }, (_, issueIndex) => ({ code: `E${issueIndex}`, path: '', message: 'failed' })),
+    }))
+    const bounded = boundAndFreezeMaterialConformanceReports(reports)
+    expect(bounded).toHaveLength(1_000)
+    expect(bounded[999]?.materialType).toBe('material-999')
+    expect(bounded.every(report => report.issues.length === Math.floor(MAX_TOTAL_ISSUES / 1_000))).toBe(true)
+    expect(bounded.every(report => report.issues.filter(issue => issue.code === 'CONFORMANCE_ISSUES_TRUNCATED').length === 1)).toBe(true)
+  })
+
+  it('uses the serialized byte budget without wiping healthy reports', () => {
+    const hugeIssue = { code: 'E', path: `/${'p'.repeat(4_094)}`, message: 'm'.repeat(1_024) }
+    const reports = [
+      ...Array.from({ length: 4 }, (_, index) => ({
+        materialType: `malicious-${index}`,
+        valid: false,
+        issues: Array.from({ length: MAX_ISSUES_PER_REPORT }).fill(hugeIssue),
+      })),
+      { materialType: 'healthy', valid: true, issues: [] },
+    ]
+    expect(() => cloneAndFreezeMaterialConformanceReports(reports)).toThrow('CONFORMANCE_ISOLATED_EXECUTION_REPORT_BUDGET_EXCEEDED')
+    const bounded = boundAndFreezeMaterialConformanceReports(reports)
+    expect(bounded).toHaveLength(5)
+    expect(bounded[4]).toEqual({ materialType: 'healthy', valid: true, issues: [] })
+    expect(bounded.slice(0, 4).every(report => report.issues.some(issue => issue.code === 'CONFORMANCE_ISSUES_TRUNCATED'))).toBe(true)
   })
 })
 

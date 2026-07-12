@@ -11,6 +11,7 @@ export interface IsolatedConformanceSession {
 const arrayIsArray = Array.isArray
 const arrayPrototype = Array.prototype
 const bufferFrom = Buffer.from.bind(Buffer)
+const bufferByteLength = Buffer.byteLength.bind(Buffer)
 const capturedCreateHmac = createHmac
 const capturedRandomBytes = randomBytes
 const capturedTimingSafeEqual = timingSafeEqual
@@ -29,8 +30,10 @@ const ownKeys = Reflect.ownKeys
 const reflectApply = Reflect.apply
 const isProxy = utilTypes.isProxy.bind(utilTypes)
 
-const MAX_REPORTS = 1_000
-const MAX_ISSUES = 512
+export const MAX_REPORTS = 1_000
+export const MAX_ISSUES_PER_REPORT = 512
+export const MAX_TOTAL_ISSUES = 16_384
+export const MAX_SERIALIZED_REPORT_BYTES = 8 * 1024 * 1024
 const MAX_MATERIAL_TYPE_LENGTH = 1_024
 const MAX_CODE_LENGTH = 256
 const MAX_PATH_LENGTH = 4_096
@@ -103,6 +106,37 @@ export function parseAuthenticatedResultMessage(
 }
 
 export function cloneAndFreezeMaterialConformanceReports(value: unknown): readonly MaterialConformanceReport[] {
+  return cloneReports(value, MAX_ISSUES_PER_REPORT, MAX_TOTAL_ISSUES, true)
+}
+
+export function boundAndFreezeMaterialConformanceReports(value: unknown): readonly MaterialConformanceReport[] {
+  const reports = cloneReports(value, MAX_ISSUES_PER_REPORT, MAX_REPORTS * MAX_ISSUES_PER_REPORT, false)
+  if (reports.length === 0)
+    return reports
+  const countQuota = Math.max(1, Math.min(MAX_ISSUES_PER_REPORT, Math.floor(MAX_TOTAL_ISSUES / reports.length)))
+  let low = 1
+  let high = countQuota
+  let bounded = boundReports(reports, 1)
+  while (low <= high) {
+    const quota = low + Math.floor((high - low) / 2)
+    const candidate = boundReports(reports, quota)
+    if (serializedReportBytes(candidate) <= MAX_SERIALIZED_REPORT_BYTES) {
+      bounded = candidate
+      low = quota + 1
+    }
+    else {
+      high = quota - 1
+    }
+  }
+  return bounded
+}
+
+function cloneReports(
+  value: unknown,
+  maxIssuesPerReport: number,
+  maxTotalIssues: number,
+  enforceSerializedBytes: boolean,
+): readonly MaterialConformanceReport[] {
   const reportValues = strictArray(value, MAX_REPORTS)
   let issueCount = 0
   const reports: MaterialConformanceReport[] = []
@@ -114,8 +148,10 @@ export function cloneAndFreezeMaterialConformanceReports(value: unknown): readon
     const valid = dataValue(reportValue, 'valid')
     if (typeof valid !== 'boolean')
       throw new Error('CONFORMANCE_ISOLATED_EXECUTION_REPORT_INVALID')
-    const issueValues = strictArray(dataValue(reportValue, 'issues'), MAX_ISSUES - issueCount)
+    const issueValues = strictArray(dataValue(reportValue, 'issues'), maxIssuesPerReport)
     issueCount += issueValues.length
+    if (issueCount > maxTotalIssues)
+      throw new Error('CONFORMANCE_ISOLATED_EXECUTION_REPORT_BUDGET_EXCEEDED')
     const issues: MaterialConformanceIssue[] = []
     for (let issueIndex = 0; issueIndex < issueValues.length; issueIndex++) {
       const issueValue = issueValues[issueIndex]
@@ -130,7 +166,38 @@ export function cloneAndFreezeMaterialConformanceReports(value: unknown): readon
     }
     reports[reports.length] = freeze({ materialType, valid, issues: freeze(issues) })
   }
-  return freeze(reports)
+  const frozen = freeze(reports)
+  if (enforceSerializedBytes && serializedReportBytes(frozen) > MAX_SERIALIZED_REPORT_BYTES)
+    throw new Error('CONFORMANCE_ISOLATED_EXECUTION_REPORT_BUDGET_EXCEEDED')
+  return frozen
+}
+
+function boundReports(reports: readonly MaterialConformanceReport[], quota: number): readonly MaterialConformanceReport[] {
+  const bounded: MaterialConformanceReport[] = []
+  for (let reportIndex = 0; reportIndex < reports.length; reportIndex++) {
+    const report = reports[reportIndex]!
+    if (report.issues.length <= quota) {
+      bounded[bounded.length] = report
+      continue
+    }
+    const issues: MaterialConformanceIssue[] = []
+    for (let issueIndex = 0; issueIndex < report.issues.length && issues.length < quota - 1; issueIndex++) {
+      const issue = report.issues[issueIndex]!
+      if (issue.code !== 'CONFORMANCE_ISSUES_TRUNCATED')
+        issues[issues.length] = issue
+    }
+    issues[issues.length] = freeze({
+      code: 'CONFORMANCE_ISSUES_TRUNCATED',
+      path: '',
+      message: `material issues exceeded fair quota ${quota}`,
+    })
+    bounded[bounded.length] = freeze({ materialType: report.materialType, valid: false, issues: freeze(issues) })
+  }
+  return freeze(bounded)
+}
+
+function serializedReportBytes(reports: readonly MaterialConformanceReport[]): number {
+  return bufferByteLength(canonicalReports(reports), 'utf8')
 }
 
 function reportsAuth(session: IsolatedConformanceSession, reports: readonly MaterialConformanceReport[]): string {

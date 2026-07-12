@@ -5,7 +5,7 @@ import { createBrowserDomCapabilities, renderViewerTree } from '@easyink/browser
 import { runMaterialConformance } from '@easyink/core'
 import { Window } from 'happy-dom'
 // @ts-expect-error Node's native TypeScript loader requires the explicit extension.
-import { createAuthenticatedResultMessage, createHandshakeMessage, createIsolatedConformanceSession } from './isolated-material-conformance-protocol.ts'
+import { boundAndFreezeMaterialConformanceReports, createAuthenticatedResultMessage, createHandshakeMessage, createIsolatedConformanceSession } from './isolated-material-conformance-protocol.ts'
 
 interface RunMessage {
   kind: 'run'
@@ -13,6 +13,7 @@ interface RunMessage {
     moduleSpecifier: string
     exportName: string
     materialType?: string
+    arguments?: readonly string[]
   }
 }
 
@@ -22,15 +23,26 @@ const capturedReflectApply = Reflect.apply
 const capturedSend = process.send?.bind(process)
 const capturedStringSlice = String.prototype.slice
 
+sanitizeProcessEnvironment()
+
 process.once('message', (message: unknown) => {
   void run(message)
 })
+
+function sanitizeProcessEnvironment(): void {
+  for (const key of Object.keys(process.env)) {
+    if (key.startsWith('NODE_') || key.startsWith('TSX_') || key === 'LD_PRELOAD' || key.startsWith('DYLD_'))
+      delete process.env[key]
+  }
+}
 
 async function run(message: unknown): Promise<void> {
   if (!isRunMessage(message))
     return
   const session = createIsolatedConformanceSession()
   capturedSend?.(createHandshakeMessage(session))
+  if (message.source.arguments)
+    process.argv = [process.argv[0]!, process.argv[1]!, ...message.source.arguments]
   let reports: readonly MaterialConformanceReport[]
   try {
     const imported = await import(message.source.moduleSpecifier) as Record<string, unknown>
@@ -53,7 +65,7 @@ async function run(message: unknown): Promise<void> {
   }
   let resultMessage: unknown
   try {
-    resultMessage = createAuthenticatedResultMessage(session, reports)
+    resultMessage = createAuthenticatedResultMessage(session, boundAndFreezeMaterialConformanceReports(reports))
   }
   catch {
     resultMessage = createAuthenticatedResultMessage(session, [{
@@ -141,6 +153,8 @@ function isRunMessage(value: unknown): value is RunMessage {
     && typeof value.source.moduleSpecifier === 'string'
     && typeof value.source.exportName === 'string'
     && (value.source.materialType === undefined || typeof value.source.materialType === 'string')
+    && (value.source.arguments === undefined
+      || (Array.isArray(value.source.arguments) && value.source.arguments.every(argument => typeof argument === 'string' && argument.length <= 4_096)))
 }
 
 function stableError(error: unknown): string {

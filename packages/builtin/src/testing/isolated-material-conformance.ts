@@ -10,11 +10,11 @@ export interface MaterialConformanceSourceDescriptor {
   moduleSpecifier: string
   exportName: string
   materialType?: string
+  arguments?: readonly string[]
 }
 
 export interface IsolatedMaterialConformanceOptions {
   deadlineMs?: number
-  environment?: Readonly<Record<string, string>>
   onSpawn?: (pid: number) => void
 }
 
@@ -36,7 +36,7 @@ export async function runIsolatedMaterialConformance(
   const workspaceRoot = process.cwd()
   const child = fork(CHILD_ENTRY, [], {
     detached: process.platform !== 'win32',
-    env: { ...process.env, ...options.environment },
+    env: isolatedProcessEnvironment(),
     execArgv: ['--permission', `--allow-fs-read=${workspaceRoot}`],
     serialization: 'advanced',
     stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
@@ -83,6 +83,19 @@ export async function runIsolatedMaterialConformance(
         void finish([failureReport(source, 'CONFORMANCE_ISOLATED_EXECUTION_CRASH', 'isolated conformance request could not be sent')])
     })
   })
+}
+
+function isolatedProcessEnvironment(): NodeJS.ProcessEnv {
+  const allowed = process.platform === 'win32'
+    ? ['SystemRoot', 'WINDIR', 'TEMP', 'TMP']
+    : ['HOME', 'TMPDIR', 'TEMP', 'TMP', 'LANG', 'LC_ALL']
+  const environment: NodeJS.ProcessEnv = {}
+  for (const key of allowed) {
+    const value = process.env[key]
+    if (value !== undefined)
+      environment[key] = value
+  }
+  return environment
 }
 
 export function createAuthenticatedResultReceiver(): AuthenticatedResultReceiver {

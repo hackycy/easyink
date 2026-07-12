@@ -287,8 +287,8 @@ describe('material conformance', () => {
     expect(second.issues).toEqual(first.issues)
   })
 
-  it('bounds changed-pointer traversal for a near-limit fixture', async () => {
-    const large = Array.from({ length: 80_000 }).fill(0)
+  it('bounds changed-pointer traversal just above the operation limit', async () => {
+    const large = Array.from({ length: 12_000 }).fill(0)
     const manifest = createTestMaterialManifest({
       type: 'changed-pointer-budget',
       defaultModel: { large },
