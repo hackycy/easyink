@@ -1,4 +1,4 @@
-import type { FontLoadRequest, FontLoadStatus, FontProvider } from '@easyink/core'
+import type { CompiledMaterialProfile, FontLoadRequest, FontLoadStatus, FontProvider } from '@easyink/core'
 import type { DocumentSchema } from '@easyink/schema'
 import type { DiagnosticsChannel } from './diagnostics'
 import { collectFontFamilies, FontManager } from '@easyink/core'
@@ -16,7 +16,10 @@ export class FontService {
   private preloadGeneration = 0
   private diagnosticKeys = markRaw(new Set<string>())
 
-  constructor(private readonly diagnostics: DiagnosticsChannel) {}
+  constructor(
+    private readonly diagnostics: DiagnosticsChannel,
+    private readonly materialProfile: CompiledMaterialProfile,
+  ) {}
 
   setProvider(provider?: FontProvider): void {
     this.manager.setProvider(provider)
@@ -80,7 +83,7 @@ export class FontService {
     const generation = ++this.preloadGeneration
     if (!this.target || !this.manager.provider)
       return
-    const families = collectFontFamilies(schema)
+    const families = collectFontFamilies(schema, this.materialProfile)
     if (families.size === 0)
       return
     await Promise.all([...families].map(family =>

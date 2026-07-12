@@ -7,7 +7,6 @@ import type {
   EmitTableDataInput,
   EmitTableStaticInput,
   SchemaBuilderContext,
-  TableColumnInput,
 } from './types'
 import { ConstraintEngine } from '@easyink/assistant-constraint-engine'
 
@@ -33,59 +32,124 @@ export class SchemaBuilder {
       ...c,
       ratio: total > 0 ? c.ratio / total : 1 / input.columns.length,
     }))
-    const topology = this.tableDataTopology(cols, input.headerRow !== false)
     const s = input.style ?? {}
-    const node = this.mk(input.id, 'table-data', input.region, {
-      typography: { fontSize: s.fontSize ?? 3.18 },
-      borderWidth: s.borderWidth ?? 0.3,
-      cellPadding: s.cellPadding ?? 1,
-      headerBackground: s.headerBg ?? '#f5f5f5',
-      stripedRows: s.stripedRows ?? false,
-      stripedColor: s.stripedColor,
-      table: { kind: 'data', topology, layout: this.tableLayout(s) },
+    const columns = cols.map((column, index) => ({
+      id: `${input.id}:column:${index}`,
+      track: { kind: 'fr', weight: column.ratio },
+    }))
+    const bindings: MaterialNode['bindings'] = {
+      records: this.bindingRef({
+        fieldPath: input.collectionField ?? inferCollectionField(cols.map(column => column.field)),
+        fieldLabel: input.collectionField,
+      }),
+    }
+    const headerRows = input.headerRow === false
+      ? []
+      : [{
+          id: `${input.id}:header:row:0`,
+          minHeight: 8,
+          cells: columns.map((column, index) => ({
+            id: `${input.id}:header:cell:${index}`,
+            columnId: column.id,
+            content: { kind: 'text', text: cols[index]!.label },
+            style: {
+              background: s.headerBg ?? '#f5f5f5',
+              typography: { textAlign: cols[index]!.align ?? 'start', fontWeight: 'bold' },
+            },
+          })),
+        }]
+    const detailCells = columns.map((column, index) => {
+      const port = `cell:${column.id}`
+      bindings[port] = this.bindingRef({ fieldPath: cols[index]!.field, fieldLabel: cols[index]!.label })
+      return {
+        id: `${input.id}:detail:cell:${index}`,
+        columnId: column.id,
+        content: { kind: 'text', text: '', bindingPort: port },
+        style: { typography: { textAlign: cols[index]!.align ?? 'start' } },
+      }
     })
+    const bands = [
+      ...(headerRows.length > 0 ? [{ id: `${input.id}:band:header`, role: 'header', rows: headerRows }] : []),
+      { id: `${input.id}:band:detail`, role: 'detail', rows: [{ id: `${input.id}:detail:row:0`, minHeight: 7, cells: detailCells }] },
+    ]
+    const node = this.mk(input.id, 'table-data', input.region, {
+      kind: 'data',
+      columns,
+      bands,
+      merges: [],
+      style: this.tableStyle(s),
+      data: { collectionPort: 'records' },
+    }, bindings)
     return this.pushValidated(node)
   }
 
   emitTableStatic(input: EmitTableStaticInput) {
     const maxCols = Math.max(...input.rows.map(r => r.cells.reduce((sum, c) => sum + (c.colSpan ?? 1), 0)))
-    const columns = Array.from({ length: maxCols }, () => ({ width: 1 / maxCols }))
+    const columnCount = Math.max(1, maxCols)
+    const columns = Array.from({ length: columnCount }, (_, index) => ({ id: `${input.id}:column:${index}`, track: { kind: 'fr', weight: 1 } }))
     const s = input.style ?? {}
-    const rows = input.rows.map((row) => {
-      const cells = row.cells.map((cell) => {
-        const c: Record<string, unknown> = {}
-        if (cell.colSpan)
-          c.colSpan = cell.colSpan
-        if (cell.rowSpan)
-          c.rowSpan = cell.rowSpan
-        if (cell.bg)
-          c.background = cell.bg
-        if (cell.align || cell.bold) {
-          c.typography = {
-            ...(cell.align ? { textAlign: cell.align } : {}),
-            ...(cell.bold ? { fontWeight: 'bold' } : {}),
+    const bindings: MaterialNode['bindings'] = {}
+    const rows = input.rows.map((row, rowIndex) => ({
+      id: `${input.id}:row:${rowIndex}`,
+      minHeight: row.height ?? 8,
+      cells: columns.map((column, columnIndex) => ({
+        id: `${input.id}:cell:${rowIndex}:${columnIndex}`,
+        columnId: column.id,
+        content: { kind: 'text', text: '' } as { kind: 'text', text: string, bindingPort?: string },
+        style: {} as Record<string, unknown>,
+      })),
+    }))
+    const occupied = rows.map(() => columns.map(() => false))
+    const merges: Array<{ id: string, rowIds: string[], columnIds: string[], anchorCellId: string, inactiveCellIds: string[] }> = []
+    input.rows.forEach((row, rowIndex) => {
+      let columnIndex = 0
+      row.cells.forEach((cell, cellIndex) => {
+        while (columnIndex < columnCount && occupied[rowIndex]![columnIndex])
+          columnIndex++
+        if (columnIndex >= columnCount)
+          return
+        const colSpan = Math.min(Math.max(1, cell.colSpan ?? 1), columnCount - columnIndex)
+        const rowSpan = Math.min(Math.max(1, cell.rowSpan ?? 1), rows.length - rowIndex)
+        const anchor = rows[rowIndex]!.cells[columnIndex]!
+        anchor.content.text = cell.text ?? ''
+        anchor.style = {
+          ...(cell.bg ? { background: cell.bg } : {}),
+          ...(cell.align || cell.bold
+            ? { typography: { ...(cell.align ? { textAlign: cell.align } : {}), ...(cell.bold ? { fontWeight: 'bold' } : {}) } }
+            : {}),
+        }
+        if (cell.valueBinding) {
+          const port = `cell:${anchor.id}`
+          anchor.content.bindingPort = port
+          bindings[port] = this.bindingRef(cell.valueBinding)
+        }
+        const covered = []
+        for (let rowOffset = 0; rowOffset < rowSpan; rowOffset++) {
+          for (let columnOffset = 0; columnOffset < colSpan; columnOffset++) {
+            occupied[rowIndex + rowOffset]![columnIndex + columnOffset] = true
+            if (rowOffset !== 0 || columnOffset !== 0)
+              covered.push(rows[rowIndex + rowOffset]!.cells[columnIndex + columnOffset]!.id)
           }
         }
-        if (cell.text)
-          c.content = { text: cell.text }
-        if (cell.binding) {
-          c.staticBinding = {
-            sourceId: this.context.dataSourceName,
-            sourceName: this.context.dataSourceName,
-            fieldPath: cell.binding.fieldPath,
-            fieldLabel: cell.binding.fieldLabel,
-          }
+        if (covered.length > 0) {
+          merges.push({
+            id: `${input.id}:merge:${rowIndex}:${cellIndex}`,
+            rowIds: rows.slice(rowIndex, rowIndex + rowSpan).map(candidate => candidate.id),
+            columnIds: columns.slice(columnIndex, columnIndex + colSpan).map(candidate => candidate.id),
+            anchorCellId: anchor.id,
+            inactiveCellIds: covered,
+          })
         }
-        return c
+        columnIndex += colSpan
       })
-      return { height: row.height ?? 8, role: 'normal', cells }
     })
     const node = this.mk(input.id, 'table-static', input.region, {
-      typography: { fontSize: s.fontSize ?? 3.18 },
-      borderWidth: s.borderWidth ?? 0.3,
-      cellPadding: s.cellPadding ?? 1,
-      table: { kind: 'static', topology: { columns, rows }, layout: this.tableLayout(s) },
-    })
+      kind: 'static',
+      columns,
+      bands: [{ id: `${input.id}:band:body`, role: 'body', rows }],
+      merges,
+      style: this.tableStyle(s),
+    }, bindings)
     return this.pushValidated(node)
   }
 
@@ -93,11 +157,11 @@ export class SchemaBuilder {
     id: string
     region: { x: number, y: number, width: number, height: number }
     content: string
-    binding?: EmitBindingInput
+    valueBinding?: EmitBindingInput
     style?: { fontSize?: number, fontWeight?: string, textAlign?: string, color?: string }
   }) {
     const st = input.style ?? {}
-    const props: Record<string, unknown> = {
+    const model: Record<string, unknown> = {
       content: input.content,
       fontSize: st.fontSize ?? 3.5,
       fontWeight: st.fontWeight ?? 'normal',
@@ -105,8 +169,8 @@ export class SchemaBuilder {
       verticalAlign: 'middle',
       color: st.color ?? '#000000',
     }
-    const binding = input.binding ? this.bindingRef(input.binding) : undefined
-    const node = { ...this.mk(input.id, 'text', input.region, props), ...(binding ? { binding } : {}) } as MaterialNode
+    const bindings = input.valueBinding ? { value: this.bindingRef(input.valueBinding) } : undefined
+    const node = this.mk(input.id, 'text', input.region, model, bindings)
     this.elements.push(node)
     return { element: node, valid: true, errors: [] as string[] }
   }
@@ -159,12 +223,11 @@ export class SchemaBuilder {
     return { element: final, valid: result.passed, errors: result.errors.map(e => e.message) }
   }
 
-  private mk(id: string, type: string, region: { x: number, y: number, width: number, height: number }, props: Record<string, unknown>): MaterialNode {
-    return { id, type, x: region.x, y: region.y, width: region.width, height: region.height, modelVersion: 1, model: props, slots: {}, bindings: {}, output: { visibility: 'include' } }
+  private mk(id: string, type: string, region: { x: number, y: number, width: number, height: number }, model: Record<string, unknown>, bindings: MaterialNode['bindings'] = {}): MaterialNode {
+    return { id, type, x: region.x, y: region.y, width: region.width, height: region.height, modelVersion: 1, model, slots: {}, bindings, output: { visibility: 'include' } }
   }
 
   private buildNode(input: EmitElementInput): MaterialNode {
-    const binding = input.binding ? this.materialBinding(input.binding) : undefined
     return {
       id: input.id,
       type: input.type,
@@ -173,9 +236,9 @@ export class SchemaBuilder {
       width: input.region.width,
       height: input.region.height,
       modelVersion: 1,
-      model: input.props ?? {},
-      slots: input.children ? { default: input.children.map(c => this.buildNode(c)) } : {},
-      bindings: binding ? { value: binding } : {},
+      model: input.model ?? {},
+      slots: Object.fromEntries(Object.entries(input.slots ?? {}).map(([slot, children]) => [slot, children.map(child => this.buildNode(child))])),
+      bindings: Object.fromEntries(Object.entries(input.bindings ?? {}).map(([port, binding]) => [port, this.materialBinding(binding)])),
       output: { visibility: 'include' },
     }
   }
@@ -184,9 +247,7 @@ export class SchemaBuilder {
     return { sourceId: this.context.dataSourceName, sourceName: this.context.dataSourceName, fieldPath: b.fieldPath, fieldLabel: b.fieldLabel }
   }
 
-  private materialBinding(binding: EmitElementInput['binding']): MaterialBinding | undefined {
-    if (!binding)
-      return undefined
+  private materialBinding(binding: EmitBindingInput | EmitDataContractBindingInput): MaterialBinding {
     if (isDataContractBindingInput(binding)) {
       return {
         kind: 'data-contract',
@@ -208,23 +269,33 @@ export class SchemaBuilder {
     return this.bindingRef(binding)
   }
 
-  private tableLayout(s: { borderWidth?: number, borderColor?: string }) {
-    return { borderAppearance: 'all', borderWidth: s.borderWidth ?? 0.3, borderType: 'solid', borderColor: s.borderColor ?? '#000000' }
-  }
-
-  private tableDataTopology(cols: TableColumnInput[], hasHeader: boolean) {
-    const topCols = cols.map(c => ({ width: c.ratio }))
-    const rows: Record<string, unknown>[] = []
-    if (hasHeader) {
-      rows.push({ height: 8, role: 'header', cells: cols.map(c => ({ content: { text: c.label }, typography: { textAlign: c.align ?? 'left', fontWeight: 'bold' } })) })
+  private tableStyle(s: { fontSize?: number, borderWidth?: number, borderColor?: string, cellPadding?: number }) {
+    const border = { width: s.borderWidth ?? 0.3, style: 'solid', color: s.borderColor ?? '#000000' }
+    const padding = s.cellPadding ?? 1
+    return {
+      typography: { fontSize: s.fontSize ?? 3.18 },
+      padding: { top: padding, right: padding, bottom: padding, left: padding },
+      border: { blockStart: border, inlineEnd: border, blockEnd: border, inlineStart: border },
     }
-    rows.push({ height: 7, role: 'repeat-template', cells: cols.map(c => ({ binding: this.bindingRef({ fieldPath: c.field, fieldLabel: c.label }), typography: { textAlign: c.align ?? 'left' } })) })
-    return { columns: topCols, rows }
   }
 
   private ctx(): ConstraintContext {
     return { pageWidth: this.context.pageWidth, pageHeight: this.context.pageHeight, pageMode: this.context.pageMode, unit: this.context.unit, siblingTypes: this.elements.map(e => e.type) }
   }
+}
+
+function inferCollectionField(fields: readonly string[]): string {
+  const segments = fields.map(field => field.split('/').filter(Boolean))
+  if (segments.length === 0)
+    return 'records'
+  const prefix: string[] = []
+  for (let index = 0; index < Math.min(...segments.map(value => value.length)); index++) {
+    const candidate = segments[0]![index]
+    if (!candidate || !segments.every(value => value[index] === candidate))
+      break
+    prefix.push(candidate)
+  }
+  return prefix.length > 0 && prefix.length < segments[0]!.length ? prefix.join('/') : 'records'
 }
 
 function isDataContractBindingInput(

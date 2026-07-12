@@ -5,72 +5,65 @@ export const tableDataConstraints: MaterialConstraint[] = [
   {
     id: 'table-data-kind',
     severity: 'error',
-    message: 'table-data element must have table.kind = "data"',
+    message: 'table-data element must have model.kind = "data"',
+    check: (node: MaterialNode) => ({ passed: modelOf(node).kind === 'data' }),
+    autoFix: (node: MaterialNode) => ({ ...node, model: { ...modelOf(node), kind: 'data' } }),
+  },
+  {
+    id: 'table-data-column-tracks',
+    severity: 'error',
+    message: 'table-data columns must use positive fixed or fractional tracks',
     check: (node: MaterialNode) => {
-      const table = (node.model as Record<string, unknown>)?.table as Record<string, unknown> | undefined
-      return { passed: table?.kind === 'data' }
-    },
-    autoFix: (node: MaterialNode) => {
-      const props = { ...(node.model as Record<string, unknown>) }
-      const table = { ...(props.table as Record<string, unknown> ?? {}) }
-      table.kind = 'data'
-      props.table = table
-      return { ...node, props } as MaterialNode
+      const columns = arrayOfRecords(modelOf(node).columns)
+      const passed = columns.length > 0 && columns.every((column) => {
+        const track = recordOf(column.track)
+        return track.kind === 'fixed'
+          ? positive(track.size)
+          : track.kind === 'fr' && positive(track.weight)
+      })
+      return { passed, details: passed ? undefined : 'No valid column tracks defined' }
     },
   },
   {
-    id: 'table-data-columns-ratio',
+    id: 'table-data-has-detail-band',
     severity: 'error',
-    message: 'Column width ratios must sum to 1',
+    message: 'table-data must have at least one detail band row',
     check: (node: MaterialNode) => {
-      const table = (node.model as Record<string, unknown>)?.table as Record<string, unknown> | undefined
-      const topology = table?.topology as Record<string, unknown> | undefined
-      const columns = topology?.columns as Array<{ width: number }> | undefined
-      if (!columns || columns.length === 0)
-        return { passed: false, details: 'No columns defined' }
-      const sum = columns.reduce((s, c) => s + (c.width ?? 0), 0)
-      return { passed: Math.abs(sum - 1) < 0.01, details: `Sum is ${sum}` }
-    },
-    autoFix: (node: MaterialNode) => {
-      const props = { ...(node.model as Record<string, unknown>) }
-      const table = { ...(props.table as Record<string, unknown> ?? {}) }
-      const topology = { ...(table.topology as Record<string, unknown> ?? {}) }
-      const columns = [...(topology.columns as Array<{ width: number }> ?? [])]
-      if (columns.length === 0)
-        return null
-      const sum = columns.reduce((s, c) => s + (c.width ?? 0), 0)
-      if (sum === 0)
-        return null
-      topology.columns = columns.map(c => ({ ...c, width: (c.width ?? 0) / sum }))
-      table.topology = topology
-      props.table = table
-      return { ...node, props } as MaterialNode
+      const bands = arrayOfRecords(modelOf(node).bands)
+      const passed = bands.some(band => band.role === 'detail' && arrayOfRecords(band.rows).length > 0)
+      return { passed, details: passed ? undefined : 'No detail band rows defined' }
     },
   },
   {
-    id: 'table-data-has-repeat-template',
+    id: 'table-data-canonical-resources',
     severity: 'error',
-    message: 'table-data must have at least one repeat-template row',
+    message: 'table-data must declare canonical style and collection binding resources',
     check: (node: MaterialNode) => {
-      const table = (node.model as Record<string, unknown>)?.table as Record<string, unknown> | undefined
-      const topology = table?.topology as Record<string, unknown> | undefined
-      const rows = topology?.rows as Array<{ role: string }> | undefined
-      if (!rows)
-        return { passed: false, details: 'No rows defined' }
-      return { passed: rows.some(r => r.role === 'repeat-template') }
-    },
-  },
-  {
-    id: 'table-data-has-layout',
-    severity: 'error',
-    message: 'table-data must include table.layout with borderAppearance, borderWidth, borderType, borderColor',
-    check: (node: MaterialNode) => {
-      const table = (node.model as Record<string, unknown>)?.table as Record<string, unknown> | undefined
-      const layout = table?.layout as Record<string, unknown> | undefined
-      if (!layout)
-        return { passed: false, details: 'No table.layout' }
-      const hasRequired = 'borderWidth' in layout && 'borderType' in layout && 'borderColor' in layout
-      return { passed: hasRequired }
+      const model = modelOf(node)
+      const data = recordOf(model.data)
+      const collectionPort = typeof data.collectionPort === 'string' ? data.collectionPort : ''
+      const passed = isRecord(model.style) && collectionPort.length > 0 && Object.hasOwn(node.bindings, collectionPort)
+      return { passed, details: passed ? undefined : 'Missing model.style, data.collectionPort, or matching node.bindings port' }
     },
   },
 ]
+
+function modelOf(node: MaterialNode): Record<string, unknown> {
+  return recordOf(node.model)
+}
+
+function recordOf(value: unknown): Record<string, unknown> {
+  return isRecord(value) ? value : {}
+}
+
+function arrayOfRecords(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value) ? value.filter(isRecord) : []
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function positive(value: unknown): boolean {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
+}

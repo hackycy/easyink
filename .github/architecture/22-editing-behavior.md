@@ -413,8 +413,8 @@ const tableExt: MaterialDesignerExtension = {
 
 `MaterialDesignerExtension` 上还有两个与"编辑期"相关、但**不**走 behavior 中间件总线的扩展点；它们的设计动机与本章一致——把物料特化逻辑收敛到物料包内、保持 `@easyink/core` 与 PropertiesPanel 的中立：
 
-- **`resize?: MaterialResizeAdapter`**（详见 [11.6.1](./11-element-system.md#1161-resize-协议)）：覆盖 element resize handle 期间的物料私有数据同步（如表格行高），并通过 `MaterialResizeSideEffect` 与 `ResizeMaterialCommand` 一起进入 history。
-- **`PropSchema.read / commit`**（详见 [11.4.1](./11-element-system.md#1141-propschemaread--commit-钩子)）：覆盖属性面板的取值与提交。`commit` 接收的 `PropCommitContext` 提供 `flushPendingEdits / activeEditingSession / exitEditingSession`，所以例如"隐藏表头时退出当前 cell 编辑会话"这类副作用由物料自己声明，不再让 PropertiesPanel 硬编码 `if (isTableNode) ...`。
+- **`resize?: MaterialResizeAdapter`**（定义见 [`material-extension.ts`](../../packages/core/src/material-extension.ts)）：覆盖 element resize handle 期间的物料私有数据同步（如表格行高），并通过 `MaterialResizeSideEffect` 与 `ResizeMaterialCommand` 一起进入 history。
+- **`PropertyDescriptor.accessor`**（合同见 [11.3](./11-element-system.md#113-属性访问器)）：基础属性通过声明的 canonical paths 读写 transaction draft。deep-editing 子对象则使用本章 `SubPropertySchema.read / write`；当前合同不存在额外的 property commit callback 或 commit context。
 
 ## 22.6 Surfaces：声明式叠加层
 

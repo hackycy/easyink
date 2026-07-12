@@ -101,7 +101,7 @@ class CommandManager {
 #### `ResizeMaterialCommand` 与物料 side-effect
 
 `ResizeMaterialCommand` 只负责设置 `node.{x, y, width, height}`，不感知任何物料私有数据。
-当物料需要在缩放时同步修改私有字段（例如表格行高），由该物料的 `MaterialResizeAdapter`（[11.6.1](./11-element-system.md#1161-resize-协议)）在 commit 阶段产出 `MaterialResizeSideEffect { apply, undo }`，命令在构造时持有该 side-effect：
+当物料需要在缩放时同步修改私有字段（例如表格行高），由该物料的 [`MaterialResizeAdapter`](../../packages/core/src/material-extension.ts) 在 commit 阶段产出 `MaterialResizeSideEffect { apply, undo }`，命令在构造时持有该 side-effect：
 
 - `execute()` 先写入新几何，然后调用 `sideEffect.apply(node)`；
 - `undo()` 先恢复旧几何，然后调用 `sideEffect.undo(node)`；
@@ -127,7 +127,7 @@ class CommandManager {
 
 原有独立命令的操作语义（insert-row, remove-col, merge-cells, bind-cell 等）现在由 `table.command-handler` behavior 中间件和 `DatasourceDropHandler.onDrop` 内的 `tx.run()` 实现。
 
-仍以传统命令形式存在的表格命令（例如 `UpdateTableVisibilityCommand` 对应 `showHeader/showFooter` 切换、`validateMerge` 校验函数）已从 `@easyink/core` 移出，**位于 `@easyink/material-table-kernel`**。`@easyink/core` 不再包含任何表格特化的命令、类型或字符串前缀；属性面板对这些命令的调用通过 [`PropSchema.commit`](./11-element-system.md#1141-propschemaread--commit-钩子) 钩子完成，PropertiesPanel 不再硬编码 `import { isTableNode }` 或 `'table:'` 前缀分支。
+`@easyink/core` 不包含表格特化的命令、类型或字符串前缀。表格 command behavior 位于 `@easyink/material-table-kernel` 并通过 `tx.run()` 修改 direct `TableModel`；`validateMerge` 是 kernel 的纯校验函数，不是 Command。`showHeader/showFooter` 等属性由物料自己的 `PropertyDescriptor` accessor（例如 `createBandVisibilityAccessor`）读写 canonical model，PropertiesPanel 只按 accessor 声明的路径提交 transaction。
 
 
 ### 组合命令

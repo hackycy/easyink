@@ -10,9 +10,9 @@ export interface EmitElementInput {
   id: string
   type: string
   region: { x: number, y: number, width: number, height: number }
-  props?: Record<string, unknown>
-  binding?: EmitBindingInput | EmitDataContractBindingInput
-  children?: EmitElementInput[]
+  model?: Record<string, unknown>
+  bindings?: Record<string, EmitBindingInput | EmitDataContractBindingInput>
+  slots?: Record<string, EmitElementInput[]>
 }
 
 export interface EmitBindingInput {
@@ -39,6 +39,7 @@ export interface EmitTableDataInput {
   id: string
   region: { x: number, y: number, width: number, height: number }
   columns: TableColumnInput[]
+  collectionField?: string
   style?: TableStyleInput
   headerRow?: boolean
 }
@@ -75,7 +76,7 @@ export interface TableStaticRowInput {
 
 export interface TableStaticCellInput {
   text?: string
-  binding?: EmitBindingInput
+  valueBinding?: EmitBindingInput
   colSpan?: number
   rowSpan?: number
   align?: 'left' | 'center' | 'right'

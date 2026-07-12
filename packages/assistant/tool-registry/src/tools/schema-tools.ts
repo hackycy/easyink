@@ -1,4 +1,4 @@
-import type { SchemaBuilder } from '@easyink/assistant-schema-builder'
+import type { SchemaBuilder, TableStaticCellInput, TableStaticRowInput } from '@easyink/assistant-schema-builder'
 import type { ToolDefinition } from '../types'
 import { z } from 'zod'
 
@@ -17,6 +17,9 @@ const dataContractBindingSchema = z.object({
     kind: z.enum(['auto', 'record', 'index']),
   }).optional(),
 })
+
+type ToolStaticCellInput = TableStaticCellInput & { fieldPath?: string, fieldLabel?: string }
+type ToolStaticRowInput = Omit<TableStaticRowInput, 'cells'> & { cells: ToolStaticCellInput[] }
 
 export function createSchemaTools(builder: SchemaBuilder): ToolDefinition[] {
   return [
@@ -43,7 +46,7 @@ export function createSchemaTools(builder: SchemaBuilder): ToolDefinition[] {
           id: input.id,
           region: { x: input.x, y: input.y, width: input.width, height: input.height },
           content: input.content,
-          binding: input.fieldPath ? { fieldPath: input.fieldPath, fieldLabel: input.fieldLabel } : undefined,
+          valueBinding: input.fieldPath ? { fieldPath: input.fieldPath, fieldLabel: input.fieldLabel } : undefined,
           style: { fontSize: input.fontSize, fontWeight: input.fontWeight, textAlign: input.textAlign, color: input.color },
         })
       },
@@ -64,6 +67,7 @@ export function createSchemaTools(builder: SchemaBuilder): ToolDefinition[] {
           ratio: z.number(),
           align: z.enum(['left', 'center', 'right']).optional(),
         })),
+        collectionField: z.string().optional(),
         fontSize: z.number().optional(),
         headerBg: z.string().optional(),
         borderWidth: z.number().optional(),
@@ -73,6 +77,7 @@ export function createSchemaTools(builder: SchemaBuilder): ToolDefinition[] {
           id: input.id,
           region: { x: input.x, y: input.y, width: input.width, height: input.height },
           columns: input.columns,
+          collectionField: input.collectionField,
           style: { fontSize: input.fontSize, headerBg: input.headerBg, borderWidth: input.borderWidth },
         })
       },
@@ -104,11 +109,11 @@ export function createSchemaTools(builder: SchemaBuilder): ToolDefinition[] {
         return builder.emitTableStatic({
           id: input.id,
           region: { x: input.x, y: input.y, width: input.width, height: input.height },
-          rows: input.rows.map((r: any) => ({
+          rows: input.rows.map((r: ToolStaticRowInput) => ({
             ...r,
-            cells: r.cells.map((c: any) => ({
+            cells: r.cells.map((c: ToolStaticCellInput) => ({
               ...c,
-              binding: c.fieldPath ? { fieldPath: c.fieldPath, fieldLabel: c.fieldLabel } : undefined,
+              valueBinding: c.fieldPath ? { fieldPath: c.fieldPath, fieldLabel: c.fieldLabel } : undefined,
             })),
           })),
         })
@@ -116,7 +121,7 @@ export function createSchemaTools(builder: SchemaBuilder): ToolDefinition[] {
     },
     {
       name: 'emit_element',
-      description: 'Add a generic registered element. Use binding.kind="data-contract" only for materials whose manifest binding declares data-contract target fields.',
+      description: 'Add a generic registered element using canonical model and binding ports.',
       category: 'schema',
       parameters: z.object({
         id: z.string(),
@@ -125,18 +130,20 @@ export function createSchemaTools(builder: SchemaBuilder): ToolDefinition[] {
         y: z.number(),
         width: z.number(),
         height: z.number(),
-        props: z.record(z.unknown()).optional(),
+        model: z.record(z.unknown()).optional(),
         fieldPath: z.string().optional(),
         fieldLabel: z.string().optional(),
-        binding: dataContractBindingSchema.optional(),
+        valueBinding: dataContractBindingSchema.optional(),
       }),
       execute: (input) => {
         return builder.emitElement({
           id: input.id,
           type: input.type,
           region: { x: input.x, y: input.y, width: input.width, height: input.height },
-          props: input.props,
-          binding: input.binding ?? (input.fieldPath ? { fieldPath: input.fieldPath, fieldLabel: input.fieldLabel } : undefined),
+          model: input.model,
+          bindings: input.valueBinding || input.fieldPath
+            ? { value: input.valueBinding ?? { fieldPath: input.fieldPath!, fieldLabel: input.fieldLabel } }
+            : undefined,
         })
       },
     },

@@ -35,16 +35,19 @@ export interface DocumentIndexForkResult {
 }
 
 type Path = readonly (string | number)[]
+interface SnapshotInternals {
+  readonly nodes: ReadonlyMap<string, MaterialNode>
+  readonly addresses: ReadonlyMap<string, MaterialNodeAddress>
+  readonly slots: ReadonlyMap<string, DocumentSlotPolicySnapshot>
+  readonly paths: ReadonlyMap<string, Path>
+}
+const snapshotInternals = new WeakMap<DocumentIndexSnapshot, SnapshotInternals>()
 
 export class DocumentIndexSnapshot {
-  /** @internal */
-  constructor(
+  private constructor(
     readonly revision: number,
-    /** @internal */ readonly nodes: ReadonlyMap<string, MaterialNode>,
-    /** @internal */ readonly addresses: ReadonlyMap<string, MaterialNodeAddress>,
-    /** @internal */ readonly slots: ReadonlyMap<string, DocumentSlotPolicySnapshot>,
-    /** @internal */ readonly paths: ReadonlyMap<string, Path>,
-  ) {}
+    internals: SnapshotInternals,
+  ) { snapshotInternals.set(this, internals) }
 
   static build(document: DocumentSchema, profile: CompiledMaterialProfile, revision: number): DocumentIndexSnapshot {
     const nodes = new Map<string, MaterialNode>()
@@ -67,14 +70,19 @@ export class DocumentIndexSnapshot {
         }))
       }
     })
-    return new DocumentIndexSnapshot(revision, nodes, addresses, slots, paths)
+    return new DocumentIndexSnapshot(revision, {
+      nodes: readonlyMap(nodes),
+      addresses: readonlyMap(addresses),
+      slots: readonlyMap(slots),
+      paths: readonlyMap(paths),
+    })
   }
 
-  hasNode(nodeId: string): boolean { return this.nodes.has(nodeId) }
-  getNode(nodeId: string): MaterialNode | undefined { return this.nodes.get(nodeId) }
+  hasNode(nodeId: string): boolean { return snapshotInternals.get(this)!.nodes.has(nodeId) }
+  getNode(nodeId: string): MaterialNode | undefined { return snapshotInternals.get(this)!.nodes.get(nodeId) }
 
   resolveNode(document: DocumentSchema, nodeId: string): MaterialNode {
-    const path = this.paths.get(nodeId)
+    const path = snapshotInternals.get(this)!.paths.get(nodeId)
     if (!path)
       throw new Error(`Document node "${nodeId}" not found`)
     let value: unknown = document
@@ -85,10 +93,10 @@ export class DocumentIndexSnapshot {
     return value as MaterialNode
   }
 
-  getAddress(nodeId: string): MaterialNodeAddress | undefined { return this.addresses.get(nodeId) }
-  getParentNodeId(nodeId: string): string | null { return this.addresses.get(nodeId)?.ancestors.at(-1)?.ownerNodeId ?? null }
-  getSlot(ownerNodeId: string, slot: string): DocumentSlotPolicySnapshot | undefined { return this.slots.get(slotKey(ownerNodeId, slot)) }
-  nodeIds(): readonly string[] { return Object.freeze([...this.nodes.keys()]) }
+  getAddress(nodeId: string): MaterialNodeAddress | undefined { return snapshotInternals.get(this)!.addresses.get(nodeId) }
+  getParentNodeId(nodeId: string): string | null { return snapshotInternals.get(this)!.addresses.get(nodeId)?.ancestors.at(-1)?.ownerNodeId ?? null }
+  getSlot(ownerNodeId: string, slot: string): DocumentSlotPolicySnapshot | undefined { return snapshotInternals.get(this)!.slots.get(slotKey(ownerNodeId, slot)) }
+  nodeIds(): readonly string[] { return Object.freeze([...snapshotInternals.get(this)!.nodes.keys()]) }
 }
 
 /** Internal fork API; intentionally omitted from the core public barrel. */
@@ -101,6 +109,8 @@ export function forkDocumentIndexSnapshot(
   inverse: readonly Patch[],
 ): DocumentIndexForkResult {
   const candidate = DocumentIndexSnapshot.build(document, profile, revision)
+  const baseData = getSnapshotInternals(base)
+  const candidateData = getSnapshotInternals(candidate)
   const allPatches = [...forward, ...inverse]
   const changedDocumentPaths = uniquePaths(allPatches.map(patch => toPath(patch.path)))
   const changedPathsByNodeId = new Map<string, Set<`/${string}`>>()
@@ -108,8 +118,10 @@ export function forkDocumentIndexSnapshot(
   let structural = false
 
   for (const path of changedDocumentPaths) {
-    const beforeOwner = ownerForPath(base.paths, path)
-    const afterOwner = ownerForPath(candidate.paths, path)
+    if (path.length === 0 || path[0] !== 'elements')
+      throw new Error('Document patch path is outside canonical elements')
+    const beforeOwner = ownerForPath(baseData.paths, path)
+    const afterOwner = ownerForPath(candidateData.paths, path)
     const owner = beforeOwner ?? afterOwner
     let pathIsStructural = false
     if (owner) {
@@ -126,6 +138,16 @@ export function forkDocumentIndexSnapshot(
         paths.add(pointer as `/${string}`)
         changedPathsByNodeId.set(owner.nodeId, paths)
         affected.add(owner.nodeId)
+      }
+    }
+    else {
+      // The root element array and its item paths are structural. Any other
+      // unowned path crosses a non-canonical document container.
+      if (path.length === 1 && path[0] === 'elements') {
+        structural = true
+      }
+      else {
+        throw new Error('Document patch path crosses a non-canonical container')
       }
     }
   }
@@ -156,8 +178,13 @@ export function forkDocumentIndexSnapshot(
     collectStructuralImpact(base, candidate, affected)
 
   const index = structural
-    ? candidate
-    : new DocumentIndexSnapshot(revision, overlay(base.nodes, candidate.nodes, affected), base.addresses, base.slots, overlay(base.paths, candidate.paths, affected))
+    ? createStructuralOverlay(base, candidate, affected)
+    : createSnapshot(revision, {
+        nodes: overlay(baseData.nodes, candidateData.nodes, affected),
+        addresses: baseData.addresses,
+        slots: baseData.slots,
+        paths: overlay(baseData.paths, candidateData.paths, affected),
+      })
   const orderedAffected = [...affected].sort()
   const frozenPaths = new Map<string, readonly `/${string}`[]>()
   for (const [id, paths] of changedPathsByNodeId)
@@ -294,7 +321,7 @@ function siblingPosition(index: DocumentIndexSnapshot, nodeId: string): { group:
   const entry = index.getAddress(nodeId)?.ancestors.at(-1)
   return entry
     ? { group: `${entry.ownerNodeId}\u0000${entry.slot}`, order: entry.index }
-    : { group: '\u0000root', order: Number(index.paths.get(nodeId)?.at(-1) ?? -1) }
+    : { group: '\u0000root', order: Number(getSnapshotInternals(index).paths.get(nodeId)?.at(-1) ?? -1) }
 }
 
 function sameStrings(left: readonly string[], right: readonly string[]): boolean {
@@ -302,14 +329,90 @@ function sameStrings(left: readonly string[], right: readonly string[]): boolean
   const b = [...right].sort()
   return a.length === b.length && a.every((value, index) => value === b[index])
 }
-function overlay<K, V>(base: ReadonlyMap<K, V>, candidate: ReadonlyMap<K, V>, ids: Set<string>): ReadonlyMap<K, V> {
-  const result = new Map(base)
-  for (const id of ids) {
-    if (candidate.has(id as unknown as K))
-      result.set(id as unknown as K, candidate.get(id as unknown as K)!)
-    else result.delete(id as unknown as K)
+function getSnapshotInternals(snapshot: DocumentIndexSnapshot): SnapshotInternals {
+  const value = snapshotInternals.get(snapshot)
+  if (!value)
+    throw new Error('Document index snapshot is not initialized')
+  return value
+}
+
+function createStructuralOverlay(base: DocumentIndexSnapshot, candidate: DocumentIndexSnapshot, affected: Set<string>): DocumentIndexSnapshot {
+  const before = getSnapshotInternals(base)
+  const after = getSnapshotInternals(candidate)
+  const changedSlots = new Set<string>()
+  for (const id of affected) {
+    const address = candidate.getAddress(id) ?? base.getAddress(id)
+    const ancestor = address?.ancestors.at(-1)
+    if (ancestor)
+      changedSlots.add(slotKey(ancestor.ownerNodeId, ancestor.slot))
+    changedSlots.add(`${id}\u0000*`)
   }
-  return result
+  const slotChanges = new Map<string, DocumentSlotPolicySnapshot | undefined>()
+  for (const key of changedSlots) {
+    if (!key.endsWith('\u0000*')) {
+      slotChanges.set(key, after.slots.get(key))
+      continue
+    }
+    const owner = key.slice(0, -2)
+    for (const slotKeyValue of before.slots.keys()) {
+      if (slotKeyValue.startsWith(`${owner}\u0000`))
+        slotChanges.set(slotKeyValue, after.slots.get(slotKeyValue))
+    }
+    for (const slotKeyValue of after.slots.keys()) {
+      if (slotKeyValue.startsWith(`${owner}\u0000`))
+        slotChanges.set(slotKeyValue, after.slots.get(slotKeyValue))
+    }
+  }
+  return createSnapshot(candidate.revision, {
+    nodes: overlay(before.nodes, after.nodes, affected),
+    addresses: overlay(before.addresses, after.addresses, affected),
+    slots: overlayValues(before.slots, slotChanges),
+    paths: overlay(before.paths, after.paths, affected),
+  })
+}
+
+function createSnapshot(revision: number, internals: SnapshotInternals): DocumentIndexSnapshot {
+  return Reflect.construct(DocumentIndexSnapshot, [revision, internals]) as DocumentIndexSnapshot
+}
+
+function overlay<K, V>(base: ReadonlyMap<K, V>, candidate: ReadonlyMap<K, V>, ids: Set<string>): ReadonlyMap<K, V> {
+  const changes = new Map<K, V | undefined>()
+  for (const id of ids) changes.set(id as unknown as K, candidate.get(id as unknown as K))
+  return overlayValues(base, changes)
+}
+function overlayValues<K, V>(base: ReadonlyMap<K, V>, changes: ReadonlyMap<K, V | undefined>): ReadonlyMap<K, V> {
+  return new PersistentMap(base, changes)
+}
+
+class PersistentMap<K, V> implements ReadonlyMap<K, V> {
+  readonly [Symbol.toStringTag] = 'ReadonlyMap'
+  constructor(private readonly base: ReadonlyMap<K, V>, private readonly changes: ReadonlyMap<K, V | undefined>) {}
+  get size(): number {
+    let size = this.base.size
+    for (const [key, value] of this.changes)
+      size += this.base.has(key) ? (value === undefined ? -1 : 0) : (value === undefined ? 0 : 1)
+    return size
+  }
+
+  has(key: K): boolean { return this.changes.has(key) ? this.changes.get(key) !== undefined : this.base.has(key) }
+  get(key: K): V | undefined { return this.changes.has(key) ? this.changes.get(key) : this.base.get(key) }
+  * entries(): MapIterator<[K, V]> {
+    const seen = new Set<K>()
+    for (const [key, value] of this.changes) {
+      seen.add(key)
+      if (value !== undefined)
+        yield [key, value]
+    }
+    for (const [key, value] of this.base) {
+      if (!seen.has(key))
+        yield [key, value]
+    }
+  }
+
+  * keys(): MapIterator<K> { for (const [key] of this.entries()) yield key }
+  * values(): MapIterator<V> { for (const [, value] of this.entries()) yield value }
+  forEach(callbackfn: (value: V, key: K, map: ReadonlyMap<K, V>) => void, thisArg?: unknown): void { for (const [key, value] of this.entries()) callbackfn.call(thisArg, value, key, this) }
+  [Symbol.iterator](): MapIterator<[K, V]> { return this.entries() }
 }
 function readonlyMap<K, V>(source: ReadonlyMap<K, V>): ReadonlyMap<K, V> {
   const snapshot = new Map(source)

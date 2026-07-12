@@ -1,6 +1,7 @@
 import type { MaterialNode } from '@easyink/schema'
 import { describe, expect, it } from 'vitest'
 import { commonConstraints } from './common'
+import { tableDataConstraints } from './table-data'
 import { tableStaticConstraints } from './table-static'
 
 function tableNode(model: Record<string, unknown>): MaterialNode {
@@ -41,5 +42,27 @@ describe('canonical material constraints', () => {
 
     expect(structure.check(tableNode(model), {} as never)).toEqual({ passed: true })
     expect(structure.check(tableNode({ ...model, bands: [] }), {} as never)).toEqual({ passed: false })
+  })
+
+  it('validates data tables through direct bands, tracks, and canonical binding ports', () => {
+    const model = {
+      kind: 'data',
+      columns: [{ id: 'c1', track: { kind: 'fr', weight: 1 } }],
+      bands: [{ id: 'detail', role: 'detail', rows: [{ id: 'r1', cells: [] }] }],
+      merges: [],
+      style: {},
+      data: { collectionPort: 'records' },
+    }
+    const node = { ...tableNode(model), type: 'table-data', bindings: { records: { sourceId: 'report', fieldPath: 'items' } } }
+
+    expect(tableDataConstraints.every(constraint => constraint.check(node, {} as never).passed)).toBe(true)
+  })
+
+  it('repairs table-data kind inside model without creating compatibility roots', () => {
+    const kind = tableDataConstraints.find(constraint => constraint.id === 'table-data-kind')!
+    const repaired = kind.autoFix!({ ...tableNode({ kind: 'static' }), type: 'table-data' }, {} as never)!
+
+    expect(repaired.model).toMatchObject({ kind: 'data' })
+    expect(Object.hasOwn(repaired, 'props')).toBe(false)
   })
 })

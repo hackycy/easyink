@@ -50,4 +50,25 @@ describe('documentIndexSnapshot', () => {
     expect(result.impact.affectedNodeIds).toEqual(['child'])
     expect(result.impact.changedPathsByNodeId.get('child')).toEqual(['/model/value'])
   })
+
+  it('rejects patches outside the canonical elements graph', () => {
+    const profile = createTestCompiledMaterialProfile()
+    const schema = { ...createDefaultSchema(), elements: [profile.createNode('box', { id: 'a' })] }
+    const index = DocumentIndexSnapshot.build(schema, profile, 1)
+    expect(() => forkDocumentIndexSnapshot(index, schema, profile, 2, [{ op: 'replace', path: ['groups', 0, 'name'], value: 'x' }], [])).toThrow(/canonical elements/u)
+  })
+
+  it('keeps unaffected sibling records by identity when a root insertion shifts indexes', () => {
+    const profile = createTestCompiledMaterialProfile()
+    const first = profile.createNode('box', { id: 'first' })
+    const second = profile.createNode('box', { id: 'second' })
+    const schema = { ...createDefaultSchema(), elements: [first, second] }
+    const before = DocumentIndexSnapshot.build(schema, profile, 1)
+    const secondAddress = before.getAddress('second')
+    const next = structuredClone(schema)
+    next.elements.unshift(profile.createNode('box', { id: 'inserted' }))
+    const result = forkDocumentIndexSnapshot(before, next, profile, 2, [{ op: 'add', path: ['elements', 0], value: next.elements[0] }], [{ op: 'remove', path: ['elements', 0] }])
+    expect(result.index.getAddress('second')).toBe(secondAddress)
+    expect(result.impact.affectedNodeIds).toEqual(['inserted'])
+  })
 })

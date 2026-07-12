@@ -120,7 +120,7 @@ export class DesignerStore {
     this._schema = loaded.schema
     this._materialDiagnostics = loaded.diagnostics
     this._materialNodeStates = loaded.nodeStates
-    this.fontService = new FontService(this.diagnostics)
+    this.fontService = new FontService(this.diagnostics, this.materialProfile)
     this.materialTransaction = markRaw(createTransactionService(id => this.getElementById(id), this.commands, this.diagnostics))
     this.paperRegistry = new PaperRegistry(runtimeConfig?.paper)
     this.applyRuntimeDefaults(runtimeConfig, schema)
