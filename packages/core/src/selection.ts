@@ -21,8 +21,8 @@ export class SelectionModel {
   private _ids: Set<string> = new Set()
   private _listeners: Array<() => void> = []
 
-  get ids(): string[] {
-    return [...this._ids]
+  get ids(): readonly string[] {
+    return Object.freeze([...this._ids])
   }
 
   get count(): number {

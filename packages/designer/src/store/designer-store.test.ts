@@ -251,6 +251,18 @@ describe('designer store schema initialization', () => {
     expect(store.getFontStatuses(['Inter'], store.fontRevision)).toEqual({ Inter: 'loaded' })
     expect(store.fontRevision).toBeGreaterThan(revision)
   })
+
+  it('reconciles selection from each event snapshot and keeps reset sidecars current', async () => {
+    const store = unknownAndBoxStore()
+    store.selection.select('box')
+    store.documentTransactions.transact((draft) => {
+      draft.elements = draft.elements.filter(node => node.id !== 'box')
+    }, { label: 'Remove', operation: { kind: 'structure.remove', sessionPath: [], targetIds: ['node:box'], fieldPaths: ['/elements'], selectionLineage: null, structural: true } })
+    store.setSchema({ elements: [createNode('replacement', 'missing')] })
+    await Promise.resolve()
+    expect(store.selection.isEmpty).toBe(true)
+    expect(store.getMaterialNodeState('replacement')?.status).toBe('quarantined')
+  })
 })
 
 function boxProfile() {

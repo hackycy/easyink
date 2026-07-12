@@ -132,8 +132,8 @@ export class DesignerStore {
     this.documentStore.subscribe((event) => {
       this.documentViewRevision += 1
       if (event.kind !== 'preview' && event.kind !== 'preview-cancel')
-        this.selection.reconcile(this.documentStore.index.nodeIds() as any)
-      if (event.validationReport) {
+        this.selection.reconcile(event.index.nodeIds())
+      if (event.validationReport && event.document === this.documentStore.document) {
         this._materialDiagnostics = event.validationReport.diagnostics
         this._materialNodeStates = event.validationReport.nodeStates
       }
@@ -164,6 +164,10 @@ export class DesignerStore {
 
   get materialNodeStates(): ReadonlyMap<string, MaterialNodeLoadState> {
     return this._materialNodeStates
+  }
+
+  getMaterialNodeState(nodeId: string): MaterialNodeLoadState | undefined {
+    return this._materialNodeStates.get(nodeId)
   }
 
   setSchema(schema?: DocumentSchemaInput): void {

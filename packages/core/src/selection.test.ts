@@ -72,10 +72,7 @@ describe('selectionModel', () => {
   it('reconcile removes ids not in nodes', () => {
     const sel = new SelectionModel()
     sel.selectMultiple(['a', 'b', 'c'])
-    sel.reconcile([
-      { id: 'a', type: 'text', x: 0, y: 0, width: 10, height: 10, modelVersion: 1, model: {}, slots: {}, bindings: {}, output: { visibility: 'include' } },
-      { id: 'c', type: 'text', x: 0, y: 0, width: 10, height: 10, modelVersion: 1, model: {}, slots: {}, bindings: {}, output: { visibility: 'include' } },
-    ])
+    sel.reconcile(['a', 'c'] as const)
     expect(sel.has('b')).toBe(false)
     expect(sel.count).toBe(2)
   })
@@ -136,11 +133,14 @@ describe('selectionModel', () => {
       const { sel, calls } = trackedSelection()
       sel.selectMultiple(['a', 'b'])
       expect(calls()).toBe(1)
-      sel.reconcile([
-        { id: 'a', type: 'text', x: 0, y: 0, width: 10, height: 10, modelVersion: 1, model: {}, slots: {}, bindings: {}, output: { visibility: 'include' } },
-        { id: 'b', type: 'text', x: 0, y: 0, width: 10, height: 10, modelVersion: 1, model: {}, slots: {}, bindings: {}, output: { visibility: 'include' } },
-      ])
+      sel.reconcile(['a', 'b'] as const)
       expect(calls()).toBe(1)
     })
+  })
+
+  it('uses canonical editor state for interaction eligibility', async () => {
+    const { isInteractable } = await import('./selection')
+    expect(isInteractable({ editorState: { locked: true } } as any)).toBe(false)
+    expect(isInteractable({ editorState: { hidden: true } } as any)).toBe(false)
   })
 })
