@@ -133,7 +133,7 @@ export class DesignerStore {
     this.documentStore.subscribe((event) => {
       this.documentViewRevision += 1
       if (event.kind !== 'preview' && event.kind !== 'preview-cancel')
-        this.selection.reconcile(this.documentStore.index.nodeIds() as string[])
+        this.selection.reconcile(this.documentStore.index.nodeIds() as any)
       if (event.validationReport) {
         this._materialDiagnostics = event.validationReport.diagnostics
         this._materialNodeStates = event.validationReport.nodeStates
@@ -169,7 +169,8 @@ export class DesignerStore {
 
   setSchema(schema?: DocumentSchemaInput): void {
     const loaded = loadDocumentWithProfile(schema, this.materialProfile)
-    this.documentTransactions.reset(loaded.schema, loaded.nodeStates)
+    this.documentTransactions.reset(stripUndefined(loaded.schema), loaded.nodeStates)
+    this.commands.clear()
     this._materialDiagnostics = loaded.diagnostics
     this._materialNodeStates = loaded.nodeStates
     this.selection.clear()

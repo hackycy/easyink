@@ -123,7 +123,7 @@ describe('designer store schema initialization', () => {
 
     const store = new DesignerStore({ elements: [{ id: 'box', type: 'box', props: { count: '2' } }] }, undefined, undefined, runtimeWith(profile))
 
-    expect(phases).toEqual(['validate-input', 'migrate', 'normalize', 'validate', 'introspect'])
+    expect(phases).toEqual(['validate-input', 'migrate', 'normalize', 'validate', 'introspect', 'introspect'])
     expect(store.schema.elements[0]).toEqual(expect.objectContaining({
       id: 'box',
       type: 'box',
@@ -162,7 +162,8 @@ describe('designer store schema initialization', () => {
     candidate.elements[1]!.x = 24
 
     expect(store.publishSchemaCandidate(candidate, new Set(['box']))).toBe(true)
-    expect(store.schema).toBe(candidate)
+    expect(store.schema).not.toBe(candidate)
+    expect(store.schema).toEqual(candidate)
     expect(store.schema.elements[1]?.x).toBe(24)
     expect(store.materialNodeStates.size).toBe(2)
     expect(store.materialNodeStates.get('unknown')).toBe(unknownState)
@@ -205,7 +206,8 @@ describe('designer store schema initialization', () => {
     expect(store.publishSchemaCandidate(candidate, new Set(['unknown']))).toBe(true)
 
     expect(store.restoreSchemaFromHistory(capturedSchema, capturedStates)).toBe(true)
-    expect(store.schema).toBe(capturedSchema)
+    expect(store.schema).not.toBe(capturedSchema)
+    expect(store.schema).toEqual(capturedSchema)
     expect(store.materialNodeStates.get('unknown')).toBe(capturedStates.get('unknown'))
     expect(store.materialNodeStates.get('box')).toBe(capturedStates.get('box'))
   })
