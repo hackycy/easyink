@@ -1,4 +1,5 @@
 import type { MaterialNodeInput } from '@easyink/schema'
+import type { PreviewTransaction } from './preview-transaction'
 import { createDefaultSchema } from '@easyink/schema'
 import { JsonValueValidationError } from '@easyink/shared'
 import { create, markSimpleObject } from 'mutative'
@@ -409,5 +410,90 @@ describe('previewTransaction', () => {
     expect(preview.validationReport).toMatchObject({ valid: true, complete: false })
     preview.commit()
     expect(fullValidate).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['cancel', 'commit', 'beginPreview', 'transact'] as const)(
+    'contains %s reentrancy from a preview validation hook',
+    (entryPoint) => {
+      let engine!: DocumentTransactionEngine
+      let preview!: PreviewTransaction
+      let armed = true
+      const base = recordSchemaAdapter(1)
+      const profile = createTestCompiledMaterialProfile([createTestMaterialManifest({
+        type: 'box',
+        schemaAdapter: {
+          ...base,
+          validatePreview: () => {
+            if (!armed)
+              return []
+            armed = false
+            if (entryPoint === 'cancel')
+              preview.cancel()
+            else if (entryPoint === 'commit')
+              preview.commit()
+            else if (entryPoint === 'beginPreview')
+              engine.beginPreview({ label: 'Nested', operation: moveOperation })
+            else
+              engine.transact(() => {}, { label: 'Nested', operation: moveOperation })
+            return []
+          },
+        },
+      })])
+      const schema = createCanonicalDefaultSchema()
+      schema.elements = [profile.createNode('box', { id: 'a', model: { value: 1 } })]
+      const store = new DocumentStore(schema, profile)
+      engine = new DocumentTransactionEngine(store)
+      preview = engine.beginPreview({ label: 'Outer', operation: moveOperation })
+
+      preview.run('a', (draft) => {
+        draft.model.value = 2
+      })
+
+      expect(preview.isOpen).toBe(true)
+      expect(preview.validationReport?.diagnostics).toContainEqual(expect.objectContaining({ code: 'MATERIAL_ADAPTER_THROW' }))
+      expect(store.document.elements[0]!.model.value).toBe(2)
+      expect(store.committedDocument.elements[0]!.model.value).toBe(1)
+      expect(engine.totalCount).toBe(0)
+      preview.cancel()
+      expect(store.document).toBe(store.committedDocument)
+
+      const second = engine.beginPreview({ label: 'Second', operation: moveOperation })
+      second.run('a', (draft) => {
+        draft.model.value = 3
+      })
+      expect(store.document.elements[0]!.model.value).toBe(3)
+      second.cancel()
+      expect(store.document).toBe(store.committedDocument)
+    },
+  )
+
+  it('contains hostile thrown proxies from preview validation hooks', () => {
+    const thrown = new Proxy({}, {
+      get: () => { throw new Error('get trap') },
+      getOwnPropertyDescriptor: () => { throw new Error('descriptor trap') },
+      getPrototypeOf: () => { throw new Error('prototype trap') },
+    })
+    const base = recordSchemaAdapter(1)
+    const profile = createTestCompiledMaterialProfile([createTestMaterialManifest({
+      type: 'box',
+      schemaAdapter: { ...base, validatePreview: () => { throw thrown } },
+    })])
+    const schema = createCanonicalDefaultSchema()
+    schema.elements = [profile.createNode('box', { id: 'a', model: { value: 1 } })]
+    const store = new DocumentStore(schema, profile)
+    const engine = new DocumentTransactionEngine(store)
+    const preview = engine.beginPreview({ label: 'Hostile throw', operation: moveOperation })
+
+    expect(() => preview.run('a', (draft) => {
+      draft.model.value = 2
+    })).not.toThrow()
+    const diagnostic = preview.validationReport?.diagnostics[0]
+    expect(diagnostic).toMatchObject({
+      code: 'MATERIAL_ADAPTER_THROW',
+      cause: { message: 'Unknown error' },
+    })
+    expect(Object.isFrozen(diagnostic)).toBe(true)
+    expect(Object.isFrozen(diagnostic?.cause)).toBe(true)
+    preview.cancel()
   })
 })

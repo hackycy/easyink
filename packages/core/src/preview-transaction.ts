@@ -46,6 +46,7 @@ export class PreviewTransaction implements TransactionAPI {
     })
     const candidate = next as unknown as DocumentSchema
     const report = this.publish({ document: candidate, forward, inverse })
+    this.assertOpen()
     this.current = candidate
     this.forward = forward
     this.inverse = inverse

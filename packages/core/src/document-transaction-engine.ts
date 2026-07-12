@@ -68,6 +68,7 @@ export class DocumentTransactionEngine implements TransactionAPI {
   private readonly previewValidationCache = new RevisionPreviewValidationCache()
 
   private barrierGeneration = 0
+  private previewDispatchDepth = 0
   private transactionDepth = 0
   private readonly now: () => number
   private readonly createId: () => string
@@ -284,6 +285,7 @@ export class DocumentTransactionEngine implements TransactionAPI {
   }
 
   private publishPreview(owner: PreviewTransaction, payload: PreviewPublishPayload): PreviewValidationReport {
+    this.assertNoPreviewDispatch()
     this.assertPreviewOwner(owner)
     assertPatchScopedJsonCandidate(payload.document, payload.forward, this.store.jsonValidation)
     const [analysisForward, analysisInverse] = normalizeAnalysisPatches(
@@ -301,20 +303,31 @@ export class DocumentTransactionEngine implements TransactionAPI {
       analysisInverse,
     )
     this.previewValidationCache.reset(this.store.revision)
-    const report = validatePreviewWithProfile({
-      document: payload.document,
-      beforeIndex: this.store.committedIndex,
-      index: fork.index,
-      impact: fork.impact,
-      profile: this.store.profile,
-      baselineNodeStates: this.store.materialNodeStates,
-      cache: this.previewValidationCache,
-    })
+    this.previewDispatchDepth += 1
+    let report: PreviewValidationReport
+    try {
+      report = validatePreviewWithProfile({
+        document: payload.document,
+        beforeIndex: this.store.committedIndex,
+        index: fork.index,
+        impact: fork.impact,
+        profile: this.store.profile,
+        baselineNodeStates: this.store.materialNodeStates,
+        cache: this.previewValidationCache,
+      })
+    }
+    finally {
+      this.previewDispatchDepth -= 1
+    }
+    this.assertPreviewOwner(owner)
+    if (!owner.isOpen)
+      throw new Error('PreviewTransaction is closed')
     this.store[DOCUMENT_STORE_WRITER]({ kind: 'preview', document: payload.document, index: fork.index })
     return report
   }
 
   private finalizePreview(owner: PreviewTransaction, payload: PreviewCommitPayload | null): void {
+    this.assertNoPreviewDispatch()
     this.assertPreviewOwner(owner)
     if (!payload) {
       this.activePreview = null
@@ -395,8 +408,14 @@ export class DocumentTransactionEngine implements TransactionAPI {
   }
 
   private assertNoActivePreview(): void {
+    this.assertNoPreviewDispatch()
     if (this.activePreview)
       throw new Error('A preview transaction is active')
+  }
+
+  private assertNoPreviewDispatch(): void {
+    if (this.previewDispatchDepth > 0)
+      throw new Error('Document mutation is not allowed during preview validation')
   }
 
   private withTransactionGuard<T>(fn: () => T): T {

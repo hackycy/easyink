@@ -5,6 +5,7 @@ import type { DocumentIndexSnapshot, DocumentPatchImpact } from './document-inde
 import type { CompiledMaterialProfile } from './material-profile'
 import type { MaterialLoadDiagnostic, MaterialNodeLoadState, MaterialSchemaIssue, SchemaAdapter, SchemaAdapterPreviewContext } from './schema-adapter'
 import { JsonValueValidationError } from '@easyink/shared'
+import { safeError } from './schema-adapter'
 
 export interface PreviewValidationReport {
   readonly valid: boolean
@@ -366,12 +367,6 @@ function formatPath(path: readonly unknown[]): `/${string}` | '' {
 
 function freezeDiagnostic(diagnostic: MaterialLoadDiagnostic): MaterialLoadDiagnostic {
   return Object.freeze({ ...diagnostic, ...(diagnostic.cause ? { cause: Object.freeze({ ...diagnostic.cause }) } : {}) })
-}
-
-function safeError(error: unknown): Readonly<{ name?: string, message: string }> {
-  return Object.freeze(error instanceof Error
-    ? { name: error.name, message: error.message }
-    : { message: String(error) })
 }
 
 function fail(code: string, path: `/${string}` | '', message: string): never {

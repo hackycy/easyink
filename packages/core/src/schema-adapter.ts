@@ -1445,7 +1445,7 @@ function readVisibility(value: unknown): MaterialNode['output']['visibility'] | 
   return value === 'include' || value === 'remove' || value === 'reserve' ? value : undefined
 }
 
-function safeError(error: unknown): { name?: string, message: string } {
+export function safeError(error: unknown): { name?: string, message: string } {
   let name: unknown
   let message: unknown
   const objectLike = (typeof error === 'object' && error !== null) || typeof error === 'function'
