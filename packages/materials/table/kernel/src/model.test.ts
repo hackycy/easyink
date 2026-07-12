@@ -22,6 +22,7 @@ import {
   createSequentialTableIdentityAllocator,
   createTableModel,
   encodeTableOpaqueIdPart,
+  encodeTableOpaqueIdPartBounded,
   isValidTableStableToken,
   projectTableTopology,
 } from './model'
@@ -153,6 +154,12 @@ describe('table identity allocation', () => {
     expect(() => encodeTableOpaqueIdPart('\uD800')).toThrow(/surrogate|well-formed/i)
     expect(() => encodeTableOpaqueIdPart('\uD801')).toThrow(/surrogate|well-formed/i)
     expect(encodeTableOpaqueIdPart('\uFFFD')).toBe('3:efbfbd')
+  })
+
+  it('enforces an optional UTF-8 byte bound before opaque hex construction', () => {
+    expect(encodeTableOpaqueIdPartBounded('\u{1F600}'.repeat(64), 256)).toMatch(/^256:/)
+    expect(() => encodeTableOpaqueIdPartBounded(`${'x'.repeat(253)}\u{1F600}`, 256)).toThrow(/byte limit/i)
+    expect(() => encodeTableOpaqueIdPartBounded('x', 0)).toThrow(/byte limit/i)
   })
 
   it('fast-rejects stable tokens longer than the accepted ASCII byte bound', () => {

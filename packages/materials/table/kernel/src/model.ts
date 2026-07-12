@@ -334,8 +334,20 @@ function getReadonlyOccupiedView(occupied: Set<string>): ReadonlySet<string> {
 export const allocateTableId = allocateTableIdentity
 
 export function encodeTableOpaqueIdPart(value: string): string {
+  return encodeTableOpaqueIdPartInternal(value)
+}
+
+export function encodeTableOpaqueIdPartBounded(value: string, maxBytes: number): string {
+  if (!Number.isSafeInteger(maxBytes) || maxBytes < 1)
+    throw new Error('Opaque table ID part byte limit must be a positive safe integer')
+  return encodeTableOpaqueIdPartInternal(value, maxBytes)
+}
+
+function encodeTableOpaqueIdPartInternal(value: string, maxBytes?: number): string {
   assertWellFormedUtf16(value)
   const bytes = textEncoder.encode(value)
+  if (maxBytes !== undefined && bytes.byteLength > maxBytes)
+    throw new Error('Opaque table ID part exceeds its byte limit')
   let hex = ''
   for (const byte of bytes)
     hex += byte.toString(16).padStart(2, '0')

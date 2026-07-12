@@ -3,7 +3,7 @@ import type { MaterialNode, TableCellSchema, TableRowSchema, TableTopologySchema
 import type { TableBaseProps } from './types'
 import { viewerElement, viewerText } from '@easyink/core'
 import { computeRowScaleWithVirtualRows } from './geometry'
-import { encodeTableOpaqueIdPart, getTableMaterialModel } from './model'
+import { encodeTableOpaqueIdPartBounded, getTableMaterialModel } from './model'
 import { TABLE_BASE_DEFAULTS, TABLE_TYPOGRAPHY_DEFAULTS } from './types'
 import { resolveCellTypography } from './typography'
 
@@ -156,7 +156,7 @@ function rowId(nodeId: string, sourceRowKey: string): string {
 function encodeDomIdComponent(value: string): string {
   let opaque: string
   try {
-    opaque = encodeTableOpaqueIdPart(value)
+    opaque = encodeTableOpaqueIdPartBounded(value, TABLE_DOM_ID_COMPONENT_MAX_BYTES)
   }
   catch {
     throw new Error('TABLE_VIEWER_DOM_ID_COMPONENT_INVALID')
@@ -164,7 +164,7 @@ function encodeDomIdComponent(value: string): string {
   const separator = opaque.indexOf(':')
   const byteLength = Number.parseInt(opaque.slice(0, separator), 10)
   const encoded = opaque.slice(separator + 1)
-  if (separator < 1 || !Number.isSafeInteger(byteLength) || byteLength < 1 || byteLength > TABLE_DOM_ID_COMPONENT_MAX_BYTES)
+  if (separator < 1 || !Number.isSafeInteger(byteLength) || byteLength < 1)
     throw new Error('TABLE_VIEWER_DOM_ID_COMPONENT_INVALID')
   return encoded
 }
