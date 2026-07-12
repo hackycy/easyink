@@ -423,11 +423,15 @@ function ownerAddressForArray(document: DocumentSchema, path: Path): MaterialNod
   for (const segment of ownerPath)
     value = (value as Record<string | number, unknown>)[segment]
   const owner = value as MaterialNode
-  const ancestors: MaterialNodeAddress['ancestors'] = []
+  const ancestors: Array<{ ownerNodeId: string, slot: string, index: number }> = []
   for (let index = 1; index < ownerPath.length; index += 4) {
     if (ownerPath[index + 1] !== 'slots')
       break
-    ancestors.push({ ownerNodeId: '', slot: String(ownerPath[index + 2]), index: Number(ownerPath[index + 3]) })
+    const ancestorPath = ownerPath.slice(0, index + 1)
+    let ancestor: unknown = document
+    for (const segment of ancestorPath)
+      ancestor = (ancestor as Record<string | number, unknown>)[segment]
+    ancestors.push({ ownerNodeId: (ancestor as MaterialNode).id, slot: String(ownerPath[index + 2]), index: Number(ownerPath[index + 3]) })
   }
   return { nodeId: owner.id, path: formatPath(ownerPath), ancestors }
 }
@@ -586,8 +590,8 @@ function createStructuralOverlay(base: DocumentIndexSnapshot, candidate: Documen
     }
   }
   const pathChanged = new Set<string>()
-  for (const id of base.nodeIds()) {
-    if (JSON.stringify(before.paths.get(id)) !== JSON.stringify(after.paths.get(id)))
+  for (const id of new Set([...base.nodeIds(), ...candidate.nodeIds()])) {
+    if (!samePath(before.paths.get(id), after.paths.get(id)))
       pathChanged.add(id)
   }
   return createSnapshot(candidate.revision, {

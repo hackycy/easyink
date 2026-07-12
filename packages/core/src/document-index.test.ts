@@ -1,5 +1,6 @@
 import type { DocumentSchema } from '@easyink/schema'
 import { createDefaultSchema } from '@easyink/schema'
+import { create } from 'mutative'
 import { describe, expect, it } from 'vitest'
 import { DocumentIndexSnapshot, DuplicateDocumentNodeIdError, forkDocumentIndexSnapshot } from './document-index'
 import { createTestCompiledMaterialProfile } from './testing/material-profile'
@@ -36,8 +37,9 @@ describe('documentIndexSnapshot', () => {
     const schema = { ...createDefaultSchema(), elements: [owner] }
     const before = DocumentIndexSnapshot.build(schema, profile, 4)
     const ownerAddress = before.getAddress('owner')
-    const next = structuredClone(schema)
-    next.elements[0]!.slots.content[0]!.model.value = 2
+    const next = create(schema, (draft) => {
+      draft.elements[0]!.slots.content[0]!.model.value = 2
+    })
     const path = ['elements', 0, 'slots', 'content', 0, 'model', 'value'] as const
     const forward = [{ op: 'replace' as const, path: [...path], value: 2 }]
     const inverse = [{ op: 'replace' as const, path: [...path], value: 1 }]
@@ -65,8 +67,10 @@ describe('documentIndexSnapshot', () => {
     const schema = { ...createDefaultSchema(), elements: [first, second] }
     const before = DocumentIndexSnapshot.build(schema, profile, 1)
     const secondAddress = before.getAddress('second')
-    const next = structuredClone(schema)
-    next.elements.unshift(profile.createNode('box', { id: 'inserted' }))
+    const inserted = profile.createNode('box', { id: 'inserted' })
+    const next = create(schema, (draft) => {
+      draft.elements.unshift(inserted)
+    })
     const result = forkDocumentIndexSnapshot(before, next, profile, 2, [{ op: 'add', path: ['elements', 0], value: next.elements[0] }], [{ op: 'remove', path: ['elements', 0] }])
     expect(result.index.getAddress('second')).not.toBe(secondAddress)
     expect(result.index.getAddress('second')?.ancestors).toEqual([])
@@ -81,12 +85,82 @@ describe('documentIndexSnapshot', () => {
     const owner = profile.createNode('container', { id: 'owner', slots: { content: [a, b] } })
     const schema = { ...createDefaultSchema(), elements: [owner] }
     const before = DocumentIndexSnapshot.build(schema, profile, 1)
-    const next = structuredClone(schema)
-    next.elements[0]!.slots.content!.splice(0, 0, profile.createNode('box', { id: 'inserted-slot' }))
+    const inserted = profile.createNode('box', { id: 'inserted-slot' })
+    const next = create(schema, (draft) => {
+      draft.elements[0]!.slots.content!.splice(0, 0, inserted)
+    })
     const result = forkDocumentIndexSnapshot(before, next, profile, 2, [{ op: 'add', path: ['elements', 0, 'slots', 'content', 0], value: next.elements[0]!.slots.content[0] }], [{ op: 'remove', path: ['elements', 0, 'slots', 'content', 0] }])
     expect(result.index.getAddress('b')?.ancestors.at(-1)?.index).toBe(2)
     expect(result.index.resolveNode(next, 'b')).toBe(next.elements[0]!.slots.content[2])
     expect(result.impact.affectedNodeIds).toEqual(['inserted-slot'])
+  })
+
+  it('reuses records outside a touched slot subtree', () => {
+    const profile = createTestCompiledMaterialProfile()
+    const changedOwner = profile.createNode('container', { id: 'changed-owner', slots: { content: [] } })
+    const untouchedChild = profile.createNode('box', { id: 'untouched-child' })
+    const untouchedOwner = profile.createNode('container', { id: 'untouched-owner', slots: { content: [untouchedChild] } })
+    const schema = { ...createDefaultSchema(), elements: [changedOwner, untouchedOwner] }
+    const before = DocumentIndexSnapshot.build(schema, profile, 1)
+    const untouchedNode = before.getNode('untouched-child')
+    const untouchedAddress = before.getAddress('untouched-child')
+    const inserted = profile.createNode('box', { id: 'inserted' })
+    const next = { ...schema, elements: [
+      { ...changedOwner, slots: { ...changedOwner.slots, content: [inserted] } },
+      untouchedOwner,
+    ] }
+
+    const result = forkDocumentIndexSnapshot(before, next, profile, 2, [
+      { op: 'add', path: ['elements', 0, 'slots', 'content', 0], value: inserted },
+    ], [
+      { op: 'remove', path: ['elements', 0, 'slots', 'content', 0] },
+    ])
+
+    expect(result.index.getNode('untouched-child')).toBe(untouchedNode)
+    expect(result.index.getAddress('untouched-child')).toBe(untouchedAddress)
+  })
+
+  it('rejects a touched subtree ID that duplicates an unchanged base record', () => {
+    const profile = createTestCompiledMaterialProfile()
+    const existing = profile.createNode('box', { id: 'duplicate' })
+    const owner = profile.createNode('container', { id: 'owner', slots: { content: [] } })
+    const schema = { ...createDefaultSchema(), elements: [existing, owner] }
+    const before = DocumentIndexSnapshot.build(schema, profile, 1)
+    const duplicate = profile.createNode('box', { id: 'duplicate' })
+    const next = { ...schema, elements: [
+      existing,
+      { ...owner, slots: { ...owner.slots, content: [duplicate] } },
+    ] }
+
+    expect(() => forkDocumentIndexSnapshot(before, next, profile, 2, [
+      { op: 'add', path: ['elements', 1, 'slots', 'content', 0], value: duplicate },
+    ], [
+      { op: 'remove', path: ['elements', 1, 'slots', 'content', 0] },
+    ])).toThrow(DuplicateDocumentNodeIdError)
+  })
+
+  it('preserves real ancestor owner IDs when reindexing a nested slot', () => {
+    const profile = createTestCompiledMaterialProfile()
+    const inner = profile.createNode('container', { id: 'inner', slots: { content: [] } })
+    const outer = profile.createNode('container', { id: 'outer', slots: { content: [inner] } })
+    const schema = { ...createDefaultSchema(), elements: [outer] }
+    const before = DocumentIndexSnapshot.build(schema, profile, 1)
+    const inserted = profile.createNode('box', { id: 'nested' })
+    const nextInner = { ...inner, slots: { ...inner.slots, content: [inserted] } }
+    const next = { ...schema, elements: [
+      { ...outer, slots: { ...outer.slots, content: [nextInner] } },
+    ] }
+
+    const result = forkDocumentIndexSnapshot(before, next, profile, 2, [
+      { op: 'add', path: ['elements', 0, 'slots', 'content', 0, 'slots', 'content', 0], value: inserted },
+    ], [
+      { op: 'remove', path: ['elements', 0, 'slots', 'content', 0, 'slots', 'content', 0] },
+    ])
+
+    expect(result.index.getAddress('nested')?.ancestors).toEqual([
+      { ownerNodeId: 'outer', slot: 'content', index: 0 },
+      { ownerNodeId: 'inner', slot: 'content', index: 0 },
+    ])
   })
 
   it('does not treat a moved node as an inversion against former siblings', () => {
@@ -96,9 +170,10 @@ describe('documentIndexSnapshot', () => {
     const right = profile.createNode('container', { id: 'right', slots: { content: [] } })
     const schema = { ...createDefaultSchema(), elements: [left, right] }
     const before = DocumentIndexSnapshot.build(schema, profile, 1)
-    const next = structuredClone(schema)
-    const moved = next.elements[0]!.slots.content.pop()!
-    next.elements[1]!.slots.content.push(moved)
+    const next = create(schema, (draft) => {
+      draft.elements[1]!.slots.content.push(draft.elements[0]!.slots.content.pop()!)
+    })
+    const moved = next.elements[1]!.slots.content[0]!
     const result = forkDocumentIndexSnapshot(before, next, profile, 2, [
       { op: 'remove', path: ['elements', 0, 'slots', 'content', 2] },
       { op: 'add', path: ['elements', 1, 'slots', 'content', 0], value: moved },
@@ -122,8 +197,9 @@ describe('documentIndexSnapshot', () => {
     const profile = createTestCompiledMaterialProfile()
     const schema = { ...createDefaultSchema(), elements: [profile.createNode('box', { id: 'stable', x: 1 })] }
     const before = DocumentIndexSnapshot.build(schema, profile, 1)
-    const next = structuredClone(schema)
-    next.elements[0]!.x = 9
+    const next = create(schema, (draft) => {
+      draft.elements[0]!.x = 9
+    })
     const result = forkDocumentIndexSnapshot(before, next, profile, 2, [{ op: 'replace', path: ['elements', 0], value: next.elements[0] }], [{ op: 'replace', path: ['elements', 0], value: schema.elements[0] }])
     expect(result.index.getNode('stable')).toBe(next.elements[0])
     expect(result.impact.affectedNodeIds).toEqual(['stable'])
