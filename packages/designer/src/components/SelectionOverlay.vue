@@ -21,7 +21,7 @@ const activeDecorations = computed<SelectionDecorationDef[]>(() => {
   if (!session.value || !node.value)
     return []
 
-  const ext = store.getDesignerExtension(node.value.type)
+  const ext = store.peekDesignerFacet(node.value.type)?.value?.extension
   if (!ext?.decorations)
     return []
 
@@ -47,7 +47,7 @@ const decorationRects = computed(() => {
   if (!sel)
     return []
 
-  const ext = store.getDesignerExtension(node.value.type)
+  const ext = store.peekDesignerFacet(node.value.type)?.value?.extension
   if (!ext?.geometry)
     return []
 

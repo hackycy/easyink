@@ -47,7 +47,7 @@ export function useElementResize(ctx: ElementResizeContext) {
     if (!canResizeHandle(store, node, handle))
       return
 
-    const designerExt = store.getDesignerExtension(node.type)
+    const designerExt = store.peekDesignerFacet(node.type)?.value?.extension
     const resizeAdapter = designerExt?.resize
 
     const zoom = store.workbench.viewport.zoom

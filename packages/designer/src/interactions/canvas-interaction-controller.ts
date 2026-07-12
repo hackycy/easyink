@@ -168,7 +168,7 @@ export function useCanvasInteractionController(ctx: CanvasInteractionControllerC
     if (!node || !isInteractable(node))
       return
 
-    const ext = store.getDesignerExtension(node.type)
+    const ext = store.peekDesignerFacet(node.type)?.value?.extension
     // Uniform dblclick entry: any material that declares a `geometry`
     // protocol (table / chart / svg / custom nested materials) is openable
     // via dblclick. Materials without geometry have nothing to edit and remain
