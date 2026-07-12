@@ -432,7 +432,7 @@ function applyPolicyAttributes(
   for (const [name, value] of entries) {
     const serialized = String(value)
     const lowerName = name.toLowerCase()
-    if (lowerName.startsWith('on') || lowerName === 'style' || !state.policy.globalAttributes.has(name))
+    if (lowerName.startsWith('on') || lowerName === 'style' || !isAllowedAttribute(state.policy, name))
       throw new ViewerTreePolicyError('VIEWER_TREE_ATTRIBUTE_REJECTED')
     if (state.policy.urlAttributes.has(name) && !state.policy.allowUrl(serialized, state.document.baseURI || undefined))
       throw new ViewerTreePolicyError('VIEWER_TREE_URL_REJECTED')
@@ -561,9 +561,9 @@ function sanitizeSvgElement(
     const lowerName = name.toLowerCase()
     // Sanitized SVG is an explicit capability boundary. Drop active styling
     // attributes before applying the same geometry/URL allowlists as trees.
-    if (lowerName.startsWith('on') || lowerName === 'style')
+    if (lowerName.startsWith('on') || lowerName === 'style' || lowerName.startsWith('ecmeta_'))
       continue
-    if (!policy.globalAttributes.has(name))
+    if (!isAllowedAttribute(policy, name))
       throw new ViewerTreePolicyError('VIEWER_TREE_ATTRIBUTE_REJECTED')
     if (policy.urlAttributes.has(name) && !policy.allowUrl(attribute.value, baseUrl))
       throw new ViewerTreePolicyError('VIEWER_TREE_URL_REJECTED')
@@ -600,6 +600,10 @@ function sanitizeSvgElement(
     attributes: Object.freeze(attributes),
     children: Object.freeze(children),
   })
+}
+
+function isAllowedAttribute(policy: ViewerTreePolicy, name: string): boolean {
+  return policy.globalAttributes.has(name) || /^data-[a-z0-9_.:-]+$/u.test(name)
 }
 
 function renderSanitizedNode(node: SanitizedSvgNode, state: RenderState, quota: RenderQuota, depth: number): Node {

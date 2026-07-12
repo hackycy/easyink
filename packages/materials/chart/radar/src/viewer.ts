@@ -14,6 +14,9 @@ export function renderChartRadar(node: MaterialNode, context: ViewerRenderContex
   for (const diagnostic of resolvedData.diagnostics)
     context.reportDiagnostic?.({ ...diagnostic, nodeId: node.id })
 
+  if (resolvedData.data.length === 0)
+    return { tree: viewerElement('div', { style: { width: '100%', height: '100%', overflow: 'hidden' } }) }
+
   const option = createChartRadarRuntimeOptionFromData(props, resolvedData.data)
   const pxFactor = 96 / (UNIT_FACTOR[context.unit ?? 'mm'] ?? 25.4)
   const svg = renderEChartsSvg(option, node.width * pxFactor, node.height * pxFactor)

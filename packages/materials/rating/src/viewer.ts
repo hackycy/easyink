@@ -36,10 +36,8 @@ export function renderRating(node: MaterialNode, context?: ViewerRenderContext) 
         'font-size': `${props.characterSize}${unit}`,
         'line-height': '1',
         'background': `linear-gradient(90deg,${props.activeColor} 0%,${props.activeColor} ${fill.fillPercent}%,${props.backgroundColor} ${fill.fillPercent}%,${props.backgroundColor} 100%)`,
-        '-webkit-background-clip': 'text',
         'background-clip': 'text',
         'color': 'transparent',
-        '-webkit-text-fill-color': 'transparent',
       },
     }, [viewerText(props.character)]))),
   }

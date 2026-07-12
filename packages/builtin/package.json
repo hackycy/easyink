@@ -68,5 +68,9 @@
     "@easyink/material-text": "workspace:*",
     "@easyink/schema": "workspace:*",
     "@easyink/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@easyink/browser-dom": "workspace:*",
+    "@easyink/core": "workspace:*"
   }
 }

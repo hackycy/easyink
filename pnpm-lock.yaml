@@ -758,6 +758,10 @@ importers:
       '@easyink/shared':
         specifier: workspace:*
         version: link:../shared
+    devDependencies:
+      '@easyink/browser-dom':
+        specifier: workspace:*
+        version: link:../browser-dom
 
   packages/core:
     dependencies:

@@ -153,6 +153,8 @@ const globalAttributes = [
 ]
 const urlAttributes = ['src', 'href', 'xlink:href']
 const cssProperties = [
+  'background',
+  'background-clip',
   'display',
   'position',
   'left',

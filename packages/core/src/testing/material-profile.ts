@@ -1,5 +1,6 @@
 import type { MaterialBindingDefinition } from '../material-binding'
 import type { MaterialAIFacet, MaterialFacetFactory, MaterialManifest, MaterialStructureSlotPolicy } from '../material-manifest'
+import type { PropertyDescriptor } from '../material-properties'
 import type { SchemaAdapter } from '../schema-adapter'
 import { defineMaterialManifest } from '../material-manifest'
 import { compileMaterialProfile } from '../material-profile'
@@ -11,6 +12,7 @@ export function createTestMaterialManifest(options: {
   schemaAdapter?: SchemaAdapter
   defaultModel?: Record<string, unknown>
   binding?: MaterialBindingDefinition
+  properties?: readonly PropertyDescriptor[]
   designer?: boolean | MaterialFacetFactory<unknown>
   viewer?: boolean | MaterialFacetFactory<unknown>
   ai?: boolean | MaterialAIFacet
@@ -30,7 +32,7 @@ export function createTestMaterialManifest(options: {
       binding: options.binding ?? { kind: 'none' },
       layout: { intrinsicSize: 'none', fragmentation: 'none', pageRepeat: 'none', overflow: 'clip' },
       structure: { slots: options.slots ?? [] },
-      properties: [],
+      properties: options.properties ?? [],
     },
     schemaAdapter: options.schemaAdapter ?? recordSchemaAdapter(1),
     facets: {

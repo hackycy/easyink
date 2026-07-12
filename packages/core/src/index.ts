@@ -157,6 +157,8 @@ export type {
 } from './material-binding'
 export { assertMaterialBindingValue, resolveMaterialBindingPortPolicy } from './material-binding'
 
+export { assertMaterialConformance, runMaterialConformance } from './material-conformance'
+export type { MaterialConformanceIssue, MaterialConformanceOptions, MaterialConformanceReport } from './material-conformance'
 export {
   applyMaterialDataFieldMapping,
   canBindMaterialDataField,
