@@ -1,4 +1,4 @@
-import type { CompiledMaterialProfile, EphemeralPanelDef, FontLoadRequest, FontLoadStatus, FontManager, FontProvider, MaterialFacetHost, MaterialLoadDiagnostic, MaterialNodeLoadState, PropertyPanelOverlay, TransactionAPI } from '@easyink/core'
+import type { CompiledMaterialProfile, EphemeralPanelDef, FacetInstance, FontLoadRequest, FontLoadStatus, FontManager, FontProvider, MaterialFacetHost, MaterialLoadDiagnostic, MaterialNodeLoadState, PropertyPanelOverlay, TransactionAPI } from '@easyink/core'
 import type { DocumentSchema, DocumentSchemaInput, ElementGroupSchema, MaterialNode } from '@easyink/schema'
 import type { PaperPreset } from '@easyink/shared'
 import type { DesignerRuntimeConfig } from '../runtime-config'
@@ -28,6 +28,7 @@ export class DesignerStore {
   readonly materialProfile: CompiledMaterialProfile
   readonly propertyEditorRegistry = markRaw(new PropertyEditorRegistry())
   readonly materialFacetHost: MaterialFacetHost
+  private readonly designerFacetCache = new Map<string, FacetInstance<any>>()
   // ─── Template state (enters Schema + command history) ─────────
   private _schema: DocumentSchema
   private _materialDiagnostics: readonly MaterialLoadDiagnostic[] = Object.freeze([])
@@ -371,10 +372,21 @@ export class DesignerStore {
   }
 
   activateDesignerFacet(type: string) {
-    return this.materialFacetHost.activate(this.materialProfile, type, 'designer')
+    return this.materialFacetHost.activate(this.materialProfile, type, 'designer').then((instance) => {
+      this.designerFacetCache.set(type, instance)
+      return instance
+    })
+  }
+
+  peekDesignerFacet(type: string) {
+    return this.designerFacetCache.get(type)
   }
 
   getManifest(type: string) {
+    return this.materialProfile.getManifest(type)
+  }
+
+  getMaterialManifest(type: string) {
     return this.materialProfile.getManifest(type)
   }
 

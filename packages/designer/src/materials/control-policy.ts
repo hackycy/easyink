@@ -21,7 +21,7 @@ function normalizeControlState(input: MaterialControlState | MaterialControlStat
 }
 
 function getControlPolicy(store: DesignerStore, node: MaterialNode): MaterialControlPolicy | undefined {
-  const ext = store.getDesignerExtension(node.type)
+  const ext = store.peekDesignerFacet(node.type)?.value?.extension
   if (!ext?.resolveControlPolicy)
     return undefined
   return ext.resolveControlPolicy(node, {
@@ -48,8 +48,8 @@ export function getResizeHandleControlState(
   node: MaterialNode,
   handle: MaterialResizeHandle,
 ): MaterialControlState {
-  const material = store.getMaterial(node.type)
-  if (material?.capabilities.resizable === false)
+  const material = store.getMaterialManifest(node.type)
+  if (material?.common.interaction.resizable === false)
     return { state: 'hidden' }
 
   const policy = getControlPolicy(store, node)
