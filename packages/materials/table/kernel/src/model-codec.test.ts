@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createTableModel } from './model'
+import { assertValidTableModel, createTableModel } from './model'
 import { decodeTableModelV1 } from './model-codec'
 
 describe('table model codec', () => {
@@ -17,6 +17,13 @@ describe('table model codec', () => {
     expect(result.value).toEqual(model)
     expect(result.value).not.toBe(model)
     expect(result.value!.columns).not.toBe(model.columns)
+  })
+
+  it('decodes the exact factory JSON-node boundary and preserves the factory rejection above it', () => {
+    const boundary = createTableModel({ kind: 'static', columnCount: 1, rowCount: 9_998 })
+    expect(() => assertValidTableModel(boundary)).not.toThrow()
+    expect(decodeTableModelV1(boundary, '/model').issues).toEqual([])
+    expect(() => createTableModel({ kind: 'static', columnCount: 1, rowCount: 9_999 })).toThrow(/budget/i)
   })
 
   it('accumulates stable exact structural paths', () => {

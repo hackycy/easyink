@@ -1,5 +1,6 @@
 import type {
   AdaptableMaterialNode,
+  BindingExpression,
   MaterialIntrospection,
   MaterialSchemaIssue,
   SchemaAdapter,
@@ -53,6 +54,10 @@ const BINDING_PRESET_KEYS = new Set([
   'currency',
 ])
 const BINDING_PRESET_TYPES = new Set(['datetime', 'weekday', 'chinese-money', 'number', 'currency', 'percent'])
+const TABLE_UNITS = new Set<UnitType>(['mm', 'pt', 'px', 'inch'])
+const MAX_ENVELOPE_KEYS = 100_000
+const MAX_ENVELOPE_DESCRIPTOR_WORK = 128_000
+const MAX_ENVELOPE_ISSUES = 256
 
 export const tableSchemaAdapter: SchemaAdapter = {
   currentModelVersion: 1,
@@ -107,12 +112,14 @@ export const tableSchemaAdapter: SchemaAdapter = {
     return issues
   },
   introspect(node) {
-    const decoded = decodeTableModelV1(node.model, '/model')
-    if (!decoded.value)
+    const snapshot = snapshotIntrospectionEnvelope(node)
+    if (!snapshot)
       return emptyIntrospection()
-    return introspectTable(node, decoded.value)
+    return introspectTable(snapshot, snapshot.model)
   },
   convertModelUnits(model, from, to) {
+    if (!TABLE_UNITS.has(from) || !TABLE_UNITS.has(to))
+      throw new Error('TABLE_MODEL_UNIT_INVALID')
     const decoded = decodeTableModelV1(model, '/model')
     if (!decoded.value)
       throw new Error('TABLE_MODEL_STRUCTURE_INVALID')
@@ -162,46 +169,133 @@ function validateEnvelope(node: AdaptableMaterialNode, model: TableModel, issues
   const slots = ownRecord(node, 'slots', '/slots', issues)
   if (slots) {
     for (const slot of expectedSlots.keys()) {
+      if (envelopeIssuesTruncated(issues))
+        return
       if (!Object.hasOwn(slots, slot))
-        issues.push(issue('TABLE_SLOT_MISSING', pointer('/slots', slot), `Required table cell slot is missing: ${slot}`))
+        appendEnvelopeIssue(issues, issue('TABLE_SLOT_MISSING', pointer('/slots', slot), `Required table cell slot is missing: ${slot}`))
     }
     for (const key of Object.keys(slots)) {
-      const descriptor = Object.getOwnPropertyDescriptor(slots, key)
-      if (!descriptor || !('value' in descriptor) || !Array.isArray(descriptor.value)
+      if (envelopeIssuesTruncated(issues))
+        return
+      const value = slots[key]
+      if (!Array.isArray(value)
         || !expectedSlots.has(key) || key.length > 256) {
-        issues.push(issue('TABLE_SLOT_ORPHAN', pointer('/slots', key), `Table slot is orphaned or malformed: ${key}`))
+        appendEnvelopeIssue(issues, issue('TABLE_SLOT_ORPHAN', pointer('/slots', key), `Table slot is orphaned or malformed: ${key}`))
       }
     }
   }
   else {
-    for (const slot of expectedSlots.keys())
-      issues.push(issue('TABLE_SLOT_MISSING', pointer('/slots', slot), `Required table cell slot is missing: ${slot}`))
+    for (const slot of expectedSlots.keys()) {
+      if (envelopeIssuesTruncated(issues))
+        return
+      appendEnvelopeIssue(issues, issue('TABLE_SLOT_MISSING', pointer('/slots', slot), `Required table cell slot is missing: ${slot}`))
+    }
   }
 
   const bindings = ownRecord(node, 'bindings', '/bindings', issues)
   if (!bindings)
     return
   for (const key of Object.keys(bindings)) {
+    if (envelopeIssuesTruncated(issues))
+      return
     const path = pointer('/bindings', key)
-    const descriptor = Object.getOwnPropertyDescriptor(bindings, key)
+    const value = bindings[key]
     if (!isValidTableStableToken(key))
-      issues.push(issue('TABLE_BINDING_PORT_INVALID', path, `Binding port is not a stable table token: ${key}`))
+      appendEnvelopeIssue(issues, issue('TABLE_BINDING_PORT_INVALID', path, `Binding port is not a stable table token: ${key}`))
     if (!ports.has(key))
-      issues.push(issue('TABLE_BINDING_ORPHAN', path, `Binding port is not declared by the table model: ${key}`))
-    if (!descriptor || !('value' in descriptor)) {
-      issues.push(issue('TABLE_BINDING_INVALID', path, 'Table binding must be an own data property'))
+      appendEnvelopeIssue(issues, issue('TABLE_BINDING_ORPHAN', path, `Binding port is not declared by the table model: ${key}`))
+    if (Array.isArray(value)) {
+      appendEnvelopeIssue(issues, issue('TABLE_BINDING_SCALAR_REQUIRED', path, 'Table named binding ports require a scalar binding expression'))
       continue
     }
-    if (Array.isArray(descriptor.value)) {
-      issues.push(issue('TABLE_BINDING_SCALAR_REQUIRED', path, 'Table named binding ports require a scalar binding expression'))
-      continue
-    }
-    if (!isBindingExpression(descriptor.value))
-      issues.push(issue('TABLE_BINDING_INVALID', path, 'Table binding expression is invalid'))
+    if (!isBindingExpression(value))
+      appendEnvelopeIssue(issues, issue('TABLE_BINDING_INVALID', path, 'Table binding expression is invalid'))
   }
 }
 
-function introspectTable(node: MaterialNode, model: TableModel): MaterialIntrospection {
+function snapshotIntrospectionEnvelope(node: MaterialNode): TableIntrospectionEnvelope | undefined {
+  const modelProperty = ownData(node, 'model')
+  const slotsProperty = ownData(node, 'slots')
+  const bindingsProperty = ownData(node, 'bindings')
+  if (!modelProperty.ok || !slotsProperty.ok || !bindingsProperty.ok)
+    return undefined
+  const decoded = decodeTableModelV1(modelProperty.value, '/model')
+  if (!decoded.value)
+    return undefined
+
+  const budget = { used: 0 }
+  const rawSlots = snapshotRecord(slotsProperty.value, budget)
+  const rawBindings = snapshotRecord(bindingsProperty.value, budget)
+  if (rawSlots.status !== 'ok' || rawBindings.status !== 'ok')
+    return undefined
+
+  const slots: Record<string, readonly MaterialNode[]> = {}
+  for (const [key, value] of Object.entries(rawSlots.value)) {
+    const children = snapshotChildren(value, budget)
+    if (!children)
+      return undefined
+    slots[key] = children
+  }
+  const bindings: Record<string, BindingExpression> = {}
+  for (const [key, value] of Object.entries(rawBindings.value)) {
+    if (!isValidTableStableToken(key))
+      return undefined
+    const expression = decodeBindingExpression(value)
+    if (!expression)
+      return undefined
+    bindings[key] = expression
+  }
+  return { model: decoded.value, slots, bindings }
+}
+
+function snapshotChildren(value: unknown, budget: DescriptorBudget): readonly MaterialNode[] | undefined {
+  try {
+    if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype)
+      return undefined
+    const keys = Reflect.ownKeys(value)
+    if (keys.length > MAX_ENVELOPE_KEYS || keys.length > MAX_ENVELOPE_DESCRIPTOR_WORK - budget.used)
+      return undefined
+    budget.used += keys.length
+    const descriptors = new Map<PropertyKey, PropertyDescriptor>()
+    for (const key of keys) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, key)
+      if (!descriptor || !('value' in descriptor))
+        return undefined
+      descriptors.set(key, descriptor)
+    }
+    const length = descriptors.get('length')?.value
+    if (!Number.isSafeInteger(length) || length < 0 || keys.length !== length + 1)
+      return undefined
+    const children: MaterialNode[] = []
+    for (const key of keys) {
+      if (key === 'length')
+        continue
+      if (typeof key !== 'string' || !isArrayIndex(key, length))
+        return undefined
+      const descriptor = descriptors.get(key)!
+      if (!descriptor.enumerable)
+        return undefined
+      children[Number(key)] = descriptor.value as MaterialNode
+    }
+    return children
+  }
+  catch {
+    return undefined
+  }
+}
+
+function isArrayIndex(key: string, length: number): boolean {
+  const index = Number(key)
+  return Number.isInteger(index) && index >= 0 && index < length && String(index) === key
+}
+
+interface TableIntrospectionEnvelope {
+  model: TableModel
+  slots: Record<string, readonly MaterialNode[]>
+  bindings: Record<string, BindingExpression>
+}
+
+function introspectTable(node: TableIntrospectionEnvelope, model: TableModel): MaterialIntrospection {
   const identities: MaterialIntrospection['identities'][number][] = []
   const references: MaterialIntrospection['references'][number][] = []
   const structures: MaterialIntrospection['structures'][number][] = []
@@ -262,13 +356,10 @@ function introspectTable(node: MaterialNode, model: TableModel): MaterialIntrosp
   collectFont(model.style, '/model/style', resources)
 
   const namedPorts = declaredPorts(model)
-  const bindingMap = ownData(node, 'bindings')
   for (const port of [...namedPorts].sort()) {
-    if (!bindingMap.ok || !plainRecord(bindingMap.value))
-      break
-    const expression = ownData(bindingMap.value, port)
-    if (expression.ok && isBindingExpression(expression.value))
-      bindings.push({ path: pointer('/bindings', port), value: expression.value, port })
+    const expression = node.bindings[port]
+    if (expression)
+      bindings.push({ path: pointer('/bindings', port), value: expression, port })
   }
   return { identities, structures, references, resources, bindings }
 }
@@ -327,7 +418,10 @@ function convertStyle(style: TableStyle | undefined, from: UnitType, to: UnitTyp
 }
 
 function length(value: number, from: UnitType, to: UnitType): number {
-  return convertUnit(value, from, to)
+  const converted = convertUnit(value, from, to)
+  if (!Number.isFinite(converted))
+    throw new Error('TABLE_MODEL_UNIT_CONVERSION_INVALID')
+  return converted
 }
 
 function expectedKindFor(node: AdaptableMaterialNode, context: SchemaAdapterContext): TableModel['kind'] | undefined {
@@ -343,35 +437,57 @@ function expectedKindFor(node: AdaptableMaterialNode, context: SchemaAdapterCont
 function ownRecord(node: object, key: string, path: `/${string}`, issues: MaterialSchemaIssue[]): Record<string, unknown> | undefined {
   const property = ownData(node, key)
   if (!property.ok) {
-    issues.push(issue(key === 'slots' ? 'TABLE_SLOT_ORPHAN' : 'TABLE_BINDING_INVALID', path, `${key} must be a plain record`))
+    appendEnvelopeIssue(issues, issue(key === 'slots' ? 'TABLE_SLOT_ORPHAN' : 'TABLE_BINDING_INVALID', path, `${key} must be a plain record`))
     return undefined
   }
+  const result = snapshotRecord(property.value, { used: 0 })
+  if (result.status === 'ok')
+    return result.value
+  if (result.status === 'budget') {
+    appendEnvelopeIssue(issues, issue('TABLE_ENVELOPE_BUDGET_EXCEEDED', path, `${key} exceeds the envelope key/descriptor budget`))
+    return undefined
+  }
+  appendEnvelopeIssue(issues, issue(key === 'slots' ? 'TABLE_SLOT_ORPHAN' : 'TABLE_BINDING_INVALID', path, `${key} must be a plain record of enumerable data properties`))
+  return undefined
+}
+
+interface DescriptorBudget {
+  used: number
+}
+
+type RecordSnapshotResult
+  = | { status: 'ok', value: Record<string, unknown> }
+    | { status: 'invalid' | 'budget' }
+
+function snapshotRecord(value: unknown, budget: DescriptorBudget): RecordSnapshotResult {
   try {
-    if (typeof property.value !== 'object' || property.value === null || Array.isArray(property.value))
-      throw new Error('record required')
-    const prototype = Object.getPrototypeOf(property.value)
+    if (typeof value !== 'object' || value === null || Array.isArray(value))
+      return { status: 'invalid' }
+    const prototype = Object.getPrototypeOf(value)
     if (prototype !== Object.prototype && prototype !== null)
-      throw new Error('plain record required')
-    const descriptors = Object.getOwnPropertyDescriptors(property.value)
+      return { status: 'invalid' }
+    const keys = Reflect.ownKeys(value)
+    if (keys.length > MAX_ENVELOPE_KEYS || keys.length > MAX_ENVELOPE_DESCRIPTOR_WORK - budget.used)
+      return { status: 'budget' }
+    budget.used += keys.length
     const snapshot: Record<string, unknown> = {}
-    for (const token of Reflect.ownKeys(descriptors)) {
-      if (typeof token !== 'string' || ['__proto__', 'prototype', 'constructor'].includes(token))
-        throw new Error('unsafe record key')
-      const descriptor = Object.getOwnPropertyDescriptor(descriptors, token)?.value as PropertyDescriptor | undefined
+    for (const key of keys) {
+      if (typeof key !== 'string' || ['__proto__', 'prototype', 'constructor'].includes(key))
+        return { status: 'invalid' }
+      const descriptor = Object.getOwnPropertyDescriptor(value, key)
       if (!descriptor || !('value' in descriptor) || !descriptor.enumerable)
-        throw new Error('data property required')
-      Object.defineProperty(snapshot, token, {
+        return { status: 'invalid' }
+      Object.defineProperty(snapshot, key, {
         value: descriptor.value,
         enumerable: true,
         configurable: true,
         writable: true,
       })
     }
-    return snapshot
+    return { status: 'ok', value: snapshot }
   }
   catch {
-    issues.push(issue(key === 'slots' ? 'TABLE_SLOT_ORPHAN' : 'TABLE_BINDING_INVALID', path, `${key} must be a plain record of data properties`))
-    return undefined
+    return { status: 'invalid' }
   }
 }
 
@@ -398,6 +514,10 @@ function plainRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isBindingExpression(value: unknown): value is MaterialIntrospection['bindings'][number]['value'] {
+  return decodeBindingExpression(value) !== undefined
+}
+
+function decodeBindingExpression(value: unknown): BindingExpression | undefined {
   let snapshot: unknown
   try {
     snapshot = cloneJsonValue(value as JsonValue, {
@@ -407,19 +527,21 @@ function isBindingExpression(value: unknown): value is MaterialIntrospection['bi
     })
   }
   catch {
-    return false
+    return undefined
   }
   if (!plainRecord(snapshot) || !hasOnlyKeys(snapshot, BINDING_EXPRESSION_KEYS))
-    return false
+    return undefined
   if (!nonemptyTrimmedString(snapshot.sourceId) || !nonemptyTrimmedString(snapshot.fieldPath))
-    return false
+    return undefined
   if (!optionalStrings(snapshot, ['sourceName', 'sourceTag', 'fieldKey', 'fieldLabel']))
-    return false
+    return undefined
   if (snapshot.required !== undefined && typeof snapshot.required !== 'boolean')
-    return false
+    return undefined
   if (snapshot.extensions !== undefined && !plainRecord(snapshot.extensions))
-    return false
-  return snapshot.format === undefined || isBindingFormat(snapshot.format)
+    return undefined
+  if (snapshot.format !== undefined && !isBindingFormat(snapshot.format))
+    return undefined
+  return snapshot as unknown as BindingExpression
 }
 
 function isBindingFormat(value: unknown): boolean {
@@ -468,6 +590,24 @@ function nonemptyTrimmedString(value: unknown): value is string {
 
 function issue(code: string, path: `/${string}`, message: string): MaterialSchemaIssue {
   return { code, severity: 'error', path, message }
+}
+
+function appendEnvelopeIssue(issues: MaterialSchemaIssue[], next: MaterialSchemaIssue): void {
+  if (envelopeIssuesTruncated(issues))
+    return
+  if (issues.length < MAX_ENVELOPE_ISSUES - 1) {
+    issues.push(next)
+    return
+  }
+  issues.push(issue(
+    'TABLE_ENVELOPE_ISSUES_TRUNCATED',
+    next.path,
+    'Table envelope diagnostics were truncated at the issue budget',
+  ))
+}
+
+function envelopeIssuesTruncated(issues: readonly MaterialSchemaIssue[]): boolean {
+  return issues[issues.length - 1]?.code === 'TABLE_ENVELOPE_ISSUES_TRUNCATED'
 }
 
 function pointer(root: `/${string}`, token: string): `/${string}` {

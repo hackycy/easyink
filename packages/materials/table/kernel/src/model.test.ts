@@ -253,6 +253,28 @@ describe('assertValidTableModel', () => {
 
     cell.content = { kind: 'text', text: '', bindingPort: '  \t' }
     expectInvalid(model, /bindingPort/i)
+
+    cell.content = { kind: 'text', text: '', bindingPort: 'bad/port' }
+    expectInvalid(model, /bindingPort/i)
+
+    cell.content = { kind: 'text', text: '', bindingPort: 'x'.repeat(129) }
+    expectInvalid(model, /bindingPort/i)
+  })
+
+  it('shares strict typography and data-port primitives with the codec', () => {
+    for (const typography of [{ fontSize: 0 }, { lineHeight: 0 }]) {
+      const model = createTableModel({ kind: 'static', columnCount: 1, rowCount: 1 })
+      model.style.typography = typography
+      expectInvalid(model, /typography/i)
+    }
+
+    for (const field of ['collectionPort', 'detailKeyPort'] as const) {
+      const model = createTableModel({ kind: 'data', columnCount: 1, rowCount: 1 })
+      model.data[field] = 'bad/port'
+      expectInvalid(model, /port|data config/i)
+      model.data[field] = 'x'.repeat(129)
+      expectInvalid(model, /port|data config/i)
+    }
   })
 
   it('accepts canonical partial padding, typography, accessibility, and data config', () => {

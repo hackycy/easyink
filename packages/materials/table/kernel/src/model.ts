@@ -464,8 +464,8 @@ function validateCellContent(content: Record<string, unknown>, cellId: string): 
   if (content.kind === 'text') {
     if (typeof content.text !== 'string')
       failModel(`cell ${cellId} text content is invalid`)
-    if (content.bindingPort !== undefined && (typeof content.bindingPort !== 'string' || content.bindingPort.trim().length === 0))
-      failModel(`cell ${cellId} bindingPort must be non-empty`)
+    if (content.bindingPort !== undefined && !isValidTableStableToken(content.bindingPort))
+      failModel(`cell ${cellId} bindingPort must be a stable token`)
     return
   }
   if (content.kind === 'materials') {
@@ -485,11 +485,11 @@ function validateModelKind(value: Record<string, unknown>, bands: TableBand[]): 
     return
   }
 
-  if (!isRecord(value.data) || typeof value.data.collectionPort !== 'string' || value.data.collectionPort.trim().length === 0)
-    failModel('data table model must have a non-empty collectionPort data config')
+  if (!isRecord(value.data) || !isValidTableStableToken(value.data.collectionPort))
+    failModel('data table model must have a stable collectionPort data config')
   if (value.data.detailKeyPort !== undefined
-    && (typeof value.data.detailKeyPort !== 'string' || value.data.detailKeyPort.trim().length === 0)) {
-    failModel('data table model detailKeyPort must be non-empty when present')
+    && !isValidTableStableToken(value.data.detailKeyPort)) {
+    failModel('data table model detailKeyPort must be a stable token when present')
   }
   if (bands.some(band => band.role === 'body'))
     failModel('data table model must not contain a body band')
@@ -603,7 +603,7 @@ function validateOptionalStyle(value: unknown, owner: string): void {
 
 function validateTypography(value: Record<string, unknown>, owner: string): void {
   if ((value.fontFamily !== undefined && typeof value.fontFamily !== 'string')
-    || (value.fontSize !== undefined && !isNonNegativeFinite(value.fontSize))
+    || (value.fontSize !== undefined && !isPositiveFinite(value.fontSize))
     || (value.fontWeight !== undefined && value.fontWeight !== 'normal' && value.fontWeight !== 'bold')
     || (value.fontStyle !== undefined && value.fontStyle !== 'normal' && value.fontStyle !== 'italic')
     || (value.color !== undefined && typeof value.color !== 'string')

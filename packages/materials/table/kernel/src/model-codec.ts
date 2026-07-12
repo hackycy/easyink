@@ -24,6 +24,8 @@ interface SnapshotResult {
 const MAX_DEPTH = 128
 const MAX_ISSUES = 256
 const MAX_STRING_BYTES = 4 * 1024 * 1024
+const MAX_KEYS_PER_OBJECT = 100_000
+const MAX_DESCRIPTOR_WORK = 128_000
 const ISSUE_TRUNCATED_MESSAGE = 'Table model diagnostics were truncated at the issue budget'
 const UNSAFE_KEYS = new Set(['__proto__', 'prototype', 'constructor'])
 const MODEL_KEYS = new Set(['kind', 'columns', 'bands', 'merges', 'style', 'data', 'accessibility'])
@@ -294,24 +296,26 @@ function validateAccessibility(value: unknown, path: `/${string}`, issues: Mater
 function snapshotStrictJson(raw: unknown, root: `/${string}`): SnapshotResult {
   const issues: MaterialSchemaIssue[] = []
   const clones = new WeakMap<object, unknown>()
+  const completedMetrics = new WeakMap<object, { nodes: number, stringBytes: number }>()
   const active = new WeakSet<object>()
-  let work = 0
+  let nodes = 0
+  let descriptorWork = 0
   let stringBytes = 0
   let stopped = false
 
-  const takeWork = (path: `/${string}`): boolean => {
+  const takeNode = (path: `/${string}`): boolean => {
     if (stopped)
       return false
-    work += 1
-    if (work <= TABLE_MODEL_MAX_JSON_NODES)
+    nodes += 1
+    if (nodes <= TABLE_MODEL_MAX_JSON_NODES)
       return true
     stopped = true
-    budgetInvalid(path, issues, 'Table model exceeds the JSON node/key work budget')
+    budgetInvalid(path, issues, 'Table model exceeds the JSON value node budget')
     return false
   }
 
   const visit = (value: unknown, path: `/${string}`, depth: number): unknown => {
-    if (!takeWork(path))
+    if (!takeNode(path))
       return null
     if (depth > MAX_DEPTH) {
       invalid(path, issues, 'Table model exceeds the depth budget')
@@ -341,8 +345,26 @@ function snapshotStrictJson(raw: unknown, root: `/${string}`): SnapshotResult {
       invalid(path, issues, 'Cyclic table models are forbidden')
       return null
     }
-    if (clones.has(value))
+    if (clones.has(value)) {
+      const metrics = completedMetrics.get(value)
+      if (!metrics)
+        return clones.get(value)
+      if (nodes + metrics.nodes - 1 > TABLE_MODEL_MAX_JSON_NODES) {
+        stopped = true
+        budgetInvalid(path, issues, 'Table model exceeds the JSON value node budget')
+        return null
+      }
+      nodes += metrics.nodes - 1
+      if (stringBytes + metrics.stringBytes > MAX_STRING_BYTES) {
+        stopped = true
+        budgetInvalid(path, issues, 'Table model exceeds the JSON string byte budget')
+        return null
+      }
+      stringBytes += metrics.stringBytes
       return clones.get(value)
+    }
+    const subtreeNodeStart = nodes
+    const subtreeStringStart = stringBytes
     let prototype: object | null
     let keys: PropertyKey[]
     try {
@@ -358,13 +380,12 @@ function snapshotStrictJson(raw: unknown, root: `/${string}`): SnapshotResult {
       invalid(path, issues, 'Records and arrays must use plain prototypes')
       return null
     }
-    const remaining = TABLE_MODEL_MAX_JSON_NODES - work
-    if (keys.length > remaining) {
+    if (keys.length > MAX_KEYS_PER_OBJECT || keys.length > MAX_DESCRIPTOR_WORK - descriptorWork) {
       stopped = true
-      budgetInvalid(path, issues, 'Table model exceeds the JSON node/key work budget')
+      budgetInvalid(path, issues, 'Table model exceeds the descriptor work budget')
       return null
     }
-    work += keys.length
+    descriptorWork += keys.length
 
     const descriptors = new Map<PropertyKey, PropertyDescriptor>()
     for (const key of keys) {
@@ -443,6 +464,12 @@ function snapshotStrictJson(raw: unknown, root: `/${string}`): SnapshotResult {
       }
     }
     active.delete(value)
+    if (!stopped) {
+      completedMetrics.set(value, {
+        nodes: nodes - subtreeNodeStart + 1,
+        stringBytes: stringBytes - subtreeStringStart,
+      })
+    }
     return target
   }
   const value = visit(raw, root, 0)

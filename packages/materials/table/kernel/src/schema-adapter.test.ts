@@ -226,4 +226,102 @@ describe('table schema adapter', () => {
       expect(tableSchemaAdapter.introspect(input as MaterialNode, context).bindings).toEqual([])
     }
   })
+
+  it('bounds hostile envelope maps before and during descriptor capture', () => {
+    const entries = Object.fromEntries(Array.from({ length: 100_000 }, (_, index) => [
+      `orphan:${index}`,
+      { sourceId: 'source', fieldPath: 'value' },
+    ]))
+    let descriptors = 0
+    let gets = 0
+    const bindings = new Proxy(entries, {
+      getOwnPropertyDescriptor(target, key) {
+        descriptors += 1
+        return Reflect.getOwnPropertyDescriptor(target, key)
+      },
+      get(target, key, receiver) {
+        gets += 1
+        return Reflect.get(target, key, receiver)
+      },
+    })
+    const input = node()
+    input.bindings = bindings
+    const issues = tableSchemaAdapter.validate(input, context)
+    expect(issues.length).toBeLessThanOrEqual(256)
+    expect(issues).toContainEqual(expect.objectContaining({ code: 'TABLE_ENVELOPE_ISSUES_TRUNCATED' }))
+    expect(descriptors).toBeLessThanOrEqual(100_000)
+    expect(gets).toBe(0)
+
+    descriptors = 0
+    const oversized = new Proxy({ ...entries, extra: { sourceId: 'source', fieldPath: 'value' } }, {
+      getOwnPropertyDescriptor(target, key) {
+        descriptors += 1
+        return Reflect.getOwnPropertyDescriptor(target, key)
+      },
+    })
+    input.bindings = oversized
+    expect(tableSchemaAdapter.validate(input, context)).toContainEqual(expect.objectContaining({
+      code: 'TABLE_ENVELOPE_BUDGET_EXCEEDED',
+      path: '/bindings',
+    }))
+    expect(descriptors).toBe(0)
+  })
+
+  it('introspects one detached descriptor-safe envelope snapshot', () => {
+    const model = createTableModel({ kind: 'static', columnCount: 1, rowCount: 1 })
+    const cell = model.bands[0]!.rows[0]!.cells[0]!
+    cell.content = { kind: 'materials', slotId: `cell:${cell.id}` }
+    const child = node() as MaterialNode
+    let gets = 0
+    const children = new Proxy([child], {
+      get(target, key, receiver) {
+        gets += 1
+        return Reflect.get(target, key, receiver)
+      },
+    })
+    const slots = new Proxy({ [`cell:${cell.id}`]: children }, {
+      get(target, key, receiver) {
+        gets += 1
+        return Reflect.get(target, key, receiver)
+      },
+    })
+    const source = node(model) as MaterialNode
+    source.slots = slots
+    const hostile = new Proxy(source, {
+      get(target, key, receiver) {
+        gets += 1
+        return Reflect.get(target, key, receiver)
+      },
+    })
+    const result = tableSchemaAdapter.introspect(hostile, context)
+    expect(gets).toBe(0)
+    expect(result.structures).toContainEqual(expect.objectContaining({
+      slot: `cell:${cell.id}`,
+      children: [child],
+    }))
+
+    let modelReads = 0
+    Object.defineProperty(source, 'model', {
+      enumerable: true,
+      get() {
+        modelReads += 1
+        return model
+      },
+    })
+    expect(tableSchemaAdapter.introspect(source, context)).toEqual({
+      identities: [],
+      structures: [],
+      references: [],
+      resources: [],
+      bindings: [],
+    })
+    expect(modelReads).toBe(0)
+  })
+
+  it('rejects unknown units and non-finite conversion results', () => {
+    const model = createTableModel({ kind: 'static', columnCount: 1, rowCount: 1 })
+    expect(() => tableSchemaAdapter.convertModelUnits!(model as any, 'cm' as any, 'px')).toThrow(/TABLE_MODEL_UNIT_INVALID/)
+    model.columns[0]!.track = { kind: 'fixed', size: Number.MAX_VALUE }
+    expect(() => tableSchemaAdapter.convertModelUnits!(model as any, 'mm', 'px')).toThrow(/TABLE_MODEL_UNIT_CONVERSION_INVALID/)
+  })
 })
