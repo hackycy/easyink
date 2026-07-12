@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { SubPropertySchema } from '@easyink/core'
+import type { Selection, SubPropertySchema } from '@easyink/core'
 import type { BindingRef, DataContractBinding, DocumentSchema, MaterialNode, PageSchema } from '@easyink/schema'
 import type { BindingDisplayFormat } from '@easyink/shared'
 import type { Component } from 'vue'
@@ -10,7 +10,7 @@ import { createLayoutBehaviorPropSchemas, groupPropSchemas } from '@easyink/prop
 import { getBindingRefs } from '@easyink/schema'
 import { deepClone } from '@easyink/shared'
 import { EiNumberInput, EiPanel, EiSwitch } from '@easyink/ui'
-import { computed, shallowRef, watchEffect } from 'vue'
+import { computed, onUnmounted, shallowRef, watch, watchEffect } from 'vue'
 import { useDesignerStore } from '../composables'
 import { createTransactionService } from '../editing/transaction-service'
 import { resolveDataContractFieldFormatEditor, resolveOrdinaryFormatEditor } from '../materials/binding-format-editor'
@@ -19,6 +19,7 @@ import { canEditGeometry, isPropSchemaDisabled as isMaterialPropSchemaDisabled }
 import { createPagePropertyDescriptors, defaultDocumentPatch, defaultPagePatch, filterVisible, groupDescriptors, readPageProperty, splitPatch } from '../page-properties'
 import BindingSection from './BindingSection.vue'
 import ConditionEditor from './ConditionEditor.vue'
+import { commitMaterialPropertyPreview, MaterialPropertyPreviewSession } from './material-property-preview'
 import MaterialDataBindingEditor from './MaterialDataBindingEditor.vue'
 import PagePropertyEditor from './PagePropertyEditor.vue'
 import PropSchemaEditor from './PropSchemaEditor.vue'
@@ -454,7 +455,29 @@ function groupLabel(group: string): string {
 
 // ─── Material prop preview/commit ──────────────────────────────
 
-const propSnapshots = new Map<string, unknown>()
+interface PropertyPreviewContext {
+  sessionNodeId?: string
+  selection: Selection | null
+}
+
+const propertyPreview = new MaterialPropertyPreviewSession<PropertyPreviewContext>({
+  captureContext: () => ({
+    sessionNodeId: store.editingSession.activeSession?.nodeId,
+    selection: deepClone(store.editingSession.activeSession?.selectionStore.selection ?? null),
+  }),
+  restoreContext: (context) => {
+    const session = store.editingSession.activeSession
+    if (session && session.nodeId === context.sessionNodeId)
+      session.selectionStore.set(deepClone(context.selection))
+  },
+})
+
+watch(() => selectedElement.value?.id, (nodeId, previousNodeId) => {
+  if (nodeId !== previousNodeId)
+    propertyPreview.cancel()
+})
+
+onUnmounted(() => propertyPreview.cancel())
 
 function writePropertyWithSelectionRebase(accessor: ReturnType<typeof resolvePropertyAccessor>, node: MaterialNode, value: unknown) {
   const before = deepClone(node)
@@ -472,12 +495,8 @@ function previewProp(key: string, value: unknown) {
     return
   if (schema?.type === 'font')
     return
-  // Snapshot before first preview
-  if (!propSnapshots.has(key)) {
-    propSnapshots.set(key, deepClone(resolvePropertyAccessor(schema).read(el)))
-  }
-  // Direct mutation for preview (no command)
-  writePropertyWithSelectionRebase(resolvePropertyAccessor(schema), el, value)
+  const accessor = resolvePropertyAccessor(schema)
+  propertyPreview.preview(el, key, node => writePropertyWithSelectionRebase(accessor, node, value))
 }
 
 async function updateProp(key: string, value: unknown) {
@@ -496,13 +515,8 @@ async function updateProp(key: string, value: unknown) {
   if (!schema)
     return
   const accessor = resolvePropertyAccessor(schema)
-  const hadPreview = propSnapshots.has(key)
-  const oldValue = propSnapshots.get(key)
-  propSnapshots.delete(key)
-  if (hadPreview)
-    writePropertyWithSelectionRebase(accessor, el, oldValue)
-  const before = deepClone(el)
-  const result = propertyTx.run(el.id, draft => accessor.write(draft, value), { mergeKey: `property:${key}`, label: 'designer.history.updateProperty' })
+  const { before, result } = commitMaterialPropertyPreview(propertyPreview, el, key, () =>
+    propertyTx.run(el.id, draft => accessor.write(draft, value), { mergeKey: `property:${key}`, label: 'designer.history.updateProperty' }))
   const updated = store.getElementById(el.id)
   if (updated)
     store.editingSession.rebaseSelection(before, updated, result)
@@ -510,13 +524,9 @@ async function updateProp(key: string, value: unknown) {
 
 function rollbackPropPreview(key: string) {
   const el = selectedElement.value
-  if (!el || !propSnapshots.has(key))
+  if (!el || !propertyPreview.isActive(el.id, key))
     return
-  const oldValue = propSnapshots.get(key)
-  propSnapshots.delete(key)
-  const schema = materialSchemas.value.find(item => item.key === key)
-  if (schema)
-    writePropertyWithSelectionRebase(resolvePropertyAccessor(schema), el, oldValue)
+  propertyPreview.cancel()
 }
 
 function updateImagePropFromPicker(key: string, result: DesignerResolvedAsset) {
@@ -525,11 +535,8 @@ function updateImagePropFromPicker(key: string, result: DesignerResolvedAsset) {
     return
 
   const updates: Record<string, unknown> = { [key]: result.url }
+  propertyPreview.restoreForCommit(el, key)
   const oldValues: Record<string, unknown> = {}
-  const oldValue = propSnapshots.get(key)
-  if (oldValue !== undefined)
-    oldValues[key] = oldValue
-  propSnapshots.delete(key)
 
   if (key === 'src' && result.alt && isBlankAlt(el.model.alt)) {
     updates.alt = result.alt
