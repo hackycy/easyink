@@ -38,6 +38,11 @@ describe('documentChangeSet', () => {
     expect(() => createDocumentChangeSet({ ...change('a'), operation: { ...operation, targetIds: [] } })).toThrow()
   })
 
+  it('does not copy transient operation fields into the public descriptor', () => {
+    const result = createDocumentChangeSet({ ...change('a'), operation: { ...operation, patches: [{ path: '/x' }] } as typeof operation & { patches: unknown[] } })
+    expect(result.operation).not.toHaveProperty('patches')
+  })
+
   it('coalesces only when every stable operation identity field matches', () => {
     const merged = mergeDocumentChangeSets(change('a'), change('b'))!
     expect(merged).toMatchObject({ baseRevision: 0, committedRevision: 2, affectedNodeIds: ['a'] })

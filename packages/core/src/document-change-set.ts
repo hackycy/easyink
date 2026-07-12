@@ -106,7 +106,14 @@ function normalizeOperation(operation: DocumentOperationDescriptor): DocumentOpe
     throw new TypeError('Document operation selection lineage is invalid')
   if (typeof operation.structural !== 'boolean')
     throw new TypeError('Document operation structural flag is invalid')
-  return Object.freeze({ ...operation, sessionPath: Object.freeze([...operation.sessionPath]), targetIds: Object.freeze([...new Set(operation.targetIds)].sort()), fieldPaths: Object.freeze([...new Set(operation.fieldPaths)].sort()) })
+  return Object.freeze({
+    kind: operation.kind,
+    sessionPath: Object.freeze([...operation.sessionPath]),
+    targetIds: Object.freeze([...new Set(operation.targetIds)].sort()),
+    fieldPaths: Object.freeze([...new Set(operation.fieldPaths)].sort()),
+    selectionLineage: operation.selectionLineage,
+    structural: operation.structural,
+  })
 }
 
 function sameStrings(left: readonly string[], right: readonly string[]): boolean {
