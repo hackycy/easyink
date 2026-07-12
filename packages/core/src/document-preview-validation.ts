@@ -153,6 +153,8 @@ function assertSafePatchPathAndCandidateContainers(
       const present = Object.hasOwn(current, segment as number)
       if (!final && !present)
         fail('JSON_VALUE_ARRAY_SPARSE', formatPath(path.slice(0, offset + 1)), 'Document patch path crosses a sparse array')
+      if (final && operation === 'remove' && !present && (segment as number) < current.length)
+        fail('JSON_VALUE_ARRAY_SPARSE', formatPath(path.slice(0, offset + 1)), 'Document patch remove leaf is sparse')
       if (final && operation !== 'remove' && (!present || (segment as number) >= current.length))
         fail('JSON_VALUE_PATH', formatPath(path.slice(0, offset + 1)), 'Document patch array leaf is out of range')
       if (final && !present)

@@ -307,6 +307,21 @@ describe('previewTransaction', () => {
     ], store.jsonValidation)).toThrowError(expect.objectContaining({ code: 'JSON_VALUE_PATH' }))
   })
 
+  it('allows only the removed former tail to be absent from an array candidate', () => {
+    const sparseElements: unknown[] = []
+    sparseElements.length = 1
+    const sparseCandidate = { elements: sparseElements } as ReturnType<typeof createCanonicalDefaultSchema>
+    expect(() => assertPatchScopedJsonCandidate(sparseCandidate, [
+      { op: 'remove', path: ['elements', 0] },
+    ], {})).toThrowError(expect.objectContaining({ code: 'JSON_VALUE_ARRAY_SPARSE' }))
+    expect(() => assertPatchScopedJsonCandidate(sparseCandidate, [
+      { op: 'remove', path: ['elements', 1] },
+    ], {})).not.toThrow()
+    expect(() => assertPatchScopedJsonCandidate(sparseCandidate, [
+      { op: 'remove', path: ['elements', 2] },
+    ], {})).toThrowError(expect.objectContaining({ code: 'JSON_VALUE_PATH' }))
+  })
+
   it('keys preview validation cache by revision, node identity, and sorted path set', () => {
     const cache = new RevisionPreviewValidationCache()
     const firstNode = {}
