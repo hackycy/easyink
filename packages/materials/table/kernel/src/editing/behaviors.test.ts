@@ -74,6 +74,18 @@ describe('canonical table editing behaviors', () => {
     expect(model.bands[0]!.rows[0]!.cells[0]!.content).toMatchObject({ kind: 'text', text: 'edited' })
   })
 
+  it('rebases cell selection when row or column removal deletes the selected cell', async () => {
+    const rowNode = createNode()
+    const rowContext = context(rowNode, 'remove-row')
+    await createTableCommandHandlerBehavior(delegate(rowNode)).middleware(rowContext as never, async () => {})
+    expect(rowContext.selectionStore.set).toHaveBeenCalledWith(expect.objectContaining({ payload: { row: 0, col: 0 } }))
+
+    const columnNode = createNode()
+    const columnContext = context(columnNode, 'remove-col')
+    await createTableCommandHandlerBehavior(delegate(columnNode)).middleware(columnContext as never, async () => {})
+    expect(columnContext.selectionStore.set).toHaveBeenCalledWith(expect.objectContaining({ payload: { row: 0, col: 0 } }))
+  })
+
   it('resizes canonical row and column tracks', async () => {
     const node = createNode()
     const behavior = createTableResizeBehavior(delegate(node))

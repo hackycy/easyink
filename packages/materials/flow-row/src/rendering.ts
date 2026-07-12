@@ -38,12 +38,11 @@ export interface FlowRuntimeContext {
 
 export function getFlowRowProps(node: MaterialNode): FlowRowProps {
   const raw = getNodeModel<Partial<FlowRowProps>>(node)
-  const { padding: legacyPadding, ...rawProps } = raw as Partial<FlowRowProps> & { padding?: number }
   return {
     ...FLOW_ROW_DEFAULTS,
-    ...rawProps,
-    paddingX: raw.paddingX ?? legacyPadding ?? FLOW_ROW_DEFAULTS.paddingX,
-    paddingY: raw.paddingY ?? legacyPadding ?? FLOW_ROW_DEFAULTS.paddingY,
+    ...raw,
+    paddingX: raw.paddingX ?? FLOW_ROW_DEFAULTS.paddingX,
+    paddingY: raw.paddingY ?? FLOW_ROW_DEFAULTS.paddingY,
     typography: {
       ...FLOW_ROW_TYPOGRAPHY_DEFAULTS,
       ...(raw.typography ?? {}),

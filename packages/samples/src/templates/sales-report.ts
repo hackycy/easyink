@@ -18,7 +18,6 @@ export const salesReportDemoData: Record<string, unknown> = {
     { month: '6月', revenue: 116 },
   ],
 }
-
 export const salesReportDataSource: DataSourceDescriptor = {
   id: 'sales-report',
   name: 'sales-report',
@@ -45,7 +44,6 @@ export const salesReportDataSource: DataSourceDescriptor = {
     },
   ],
 }
-
 export const salesReportTemplate: DocumentSchema = {
   version: SCHEMA_VERSION,
   unit: 'mm',
@@ -62,26 +60,31 @@ export const salesReportTemplate: DocumentSchema = {
     {
       id: 'sales_report_bg',
       type: 'rect',
+      modelVersion: 1,
       x: 8,
       y: 8,
       width: 194,
       height: 132,
-      props: {
+      model: {
         fillColor: '#ffffff',
         borderWidth: 0.4,
         borderColor: '#d9e0ea',
         borderType: 'solid',
         borderRadius: 3,
       },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'sales_report_title',
       type: 'text',
+      modelVersion: 1,
       x: 18,
       y: 16,
       width: 110,
       height: 12,
-      props: {
+      model: {
         content: '{#报表标题}',
         fontSize: 7.06,
         fontWeight: 'bold',
@@ -89,55 +92,69 @@ export const salesReportTemplate: DocumentSchema = {
         textAlign: 'left',
         verticalAlign: 'middle',
       },
-      binding: {
-        sourceId: 'sales-report',
-        fieldPath: 'title',
-        fieldLabel: '报表标题',
+      bindings: {
+        value: {
+          sourceId: 'sales-report',
+          fieldPath: 'title',
+          fieldLabel: '报表标题',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'sales_report_meta',
       type: 'text',
+      modelVersion: 1,
       x: 18,
       y: 29,
       width: 72,
       height: 6,
-      props: {
+      model: {
         content: '{#报表日期}',
         fontSize: 3.18,
         color: '#6b7280',
         textAlign: 'left',
         verticalAlign: 'middle',
       },
-      binding: {
-        sourceId: 'sales-report',
-        fieldPath: 'reportDate',
-        fieldLabel: '报表日期',
+      bindings: {
+        value: {
+          sourceId: 'sales-report',
+          fieldPath: 'reportDate',
+          fieldLabel: '报表日期',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'sales_report_owner',
       type: 'text',
+      modelVersion: 1,
       x: 122,
       y: 16,
       width: 62,
       height: 6,
-      props: {
+      model: {
         content: '负责人',
         fontSize: 3.18,
         color: '#6b7280',
         textAlign: 'right',
         verticalAlign: 'middle',
       },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'sales_report_owner_value',
       type: 'text',
+      modelVersion: 1,
       x: 122,
       y: 23,
       width: 62,
       height: 7,
-      props: {
+      model: {
         content: '{#负责人}',
         fontSize: 4.23,
         fontWeight: 'bold',
@@ -145,35 +162,44 @@ export const salesReportTemplate: DocumentSchema = {
         textAlign: 'right',
         verticalAlign: 'middle',
       },
-      binding: {
-        sourceId: 'sales-report',
-        fieldPath: 'owner',
-        fieldLabel: '负责人',
+      bindings: {
+        value: {
+          sourceId: 'sales-report',
+          fieldPath: 'owner',
+          fieldLabel: '负责人',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'sales_report_region_label',
       type: 'text',
+      modelVersion: 1,
       x: 18,
       y: 42,
       width: 24,
       height: 6,
-      props: {
+      model: {
         content: '区域',
         fontSize: 3.18,
         color: '#6b7280',
         textAlign: 'left',
         verticalAlign: 'middle',
       },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'sales_report_region_value',
       type: 'text',
+      modelVersion: 1,
       x: 18,
       y: 48,
       width: 42,
       height: 8,
-      props: {
+      model: {
         content: '{#区域}',
         fontSize: 4.94,
         fontWeight: 'bold',
@@ -181,50 +207,63 @@ export const salesReportTemplate: DocumentSchema = {
         textAlign: 'left',
         verticalAlign: 'middle',
       },
-      binding: {
-        sourceId: 'sales-report',
-        fieldPath: 'region',
-        fieldLabel: '区域',
+      bindings: {
+        value: {
+          sourceId: 'sales-report',
+          fieldPath: 'region',
+          fieldLabel: '区域',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'sales_report_total_card',
       type: 'rect',
+      modelVersion: 1,
       x: 126,
       y: 40,
       width: 30,
       height: 20,
-      props: {
+      model: {
         fillColor: '#eef5ff',
         borderWidth: 0,
         borderColor: 'transparent',
         borderType: 'solid',
         borderRadius: 2,
       },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'sales_report_total_label',
       type: 'text',
+      modelVersion: 1,
       x: 130,
       y: 43,
       width: 22,
       height: 5,
-      props: {
+      model: {
         content: '总销售额',
         fontSize: 2.82,
         color: '#6b7280',
         textAlign: 'left',
         verticalAlign: 'middle',
       },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'sales_report_total_value',
       type: 'text',
+      modelVersion: 1,
       x: 130,
       y: 49,
       width: 22,
       height: 8,
-      props: {
+      model: {
         content: '{#总销售额}',
         fontSize: 3.18,
         fontWeight: 'bold',
@@ -232,50 +271,63 @@ export const salesReportTemplate: DocumentSchema = {
         textAlign: 'left',
         verticalAlign: 'middle',
       },
-      binding: {
-        sourceId: 'sales-report',
-        fieldPath: 'totalRevenue',
-        fieldLabel: '总销售额',
+      bindings: {
+        value: {
+          sourceId: 'sales-report',
+          fieldPath: 'totalRevenue',
+          fieldLabel: '总销售额',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'sales_report_completion_card',
       type: 'rect',
+      modelVersion: 1,
       x: 160,
       y: 40,
       width: 24,
       height: 20,
-      props: {
+      model: {
         fillColor: '#f3f9f1',
         borderWidth: 0,
         borderColor: 'transparent',
         borderType: 'solid',
         borderRadius: 2,
       },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'sales_report_completion_label',
       type: 'text',
+      modelVersion: 1,
       x: 163,
       y: 43,
       width: 18,
       height: 5,
-      props: {
+      model: {
         content: '达成率',
         fontSize: 2.82,
         color: '#6b7280',
         textAlign: 'left',
         verticalAlign: 'middle',
       },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'sales_report_completion_value',
       type: 'text',
+      modelVersion: 1,
       x: 163,
       y: 49,
       width: 18,
       height: 8,
-      props: {
+      model: {
         content: '{#目标达成率}',
         fontSize: 3.53,
         fontWeight: 'bold',
@@ -283,20 +335,25 @@ export const salesReportTemplate: DocumentSchema = {
         textAlign: 'left',
         verticalAlign: 'middle',
       },
-      binding: {
-        sourceId: 'sales-report',
-        fieldPath: 'targetCompletion',
-        fieldLabel: '目标达成率',
+      bindings: {
+        value: {
+          sourceId: 'sales-report',
+          fieldPath: 'targetCompletion',
+          fieldLabel: '目标达成率',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'sales_report_chart',
       type: 'chart-bar',
+      modelVersion: 1,
       x: 18,
       y: 68,
       width: 166,
       height: 58,
-      props: {
+      model: {
         barColor: '#2f80ed',
         backgroundColor: '#ffffff',
         axisColor: '#94a3b8',
@@ -308,28 +365,32 @@ export const salesReportTemplate: DocumentSchema = {
         showXAxisLine: true,
         showYAxisLine: true,
       },
-      binding: {
-        kind: 'data-contract',
-        relation: { kind: 'auto' },
-        mappings: {
-          category: {
-            sourceId: 'sales-report',
-            sourceName: 'sales-report',
-            select: {
-              path: 'monthlySales/month',
-              label: '月份',
+      bindings: {
+        value: {
+          kind: 'data-contract',
+          relation: { kind: 'auto' },
+          mappings: {
+            category: {
+              sourceId: 'sales-report',
+              sourceName: 'sales-report',
+              select: {
+                path: 'monthlySales/month',
+                label: '月份',
+              },
             },
-          },
-          value: {
-            sourceId: 'sales-report',
-            sourceName: 'sales-report',
-            select: {
-              path: 'monthlySales/revenue',
-              label: '销售额',
+            value: {
+              sourceId: 'sales-report',
+              sourceName: 'sales-report',
+              select: {
+                path: 'monthlySales/revenue',
+                label: '销售额',
+              },
             },
           },
         },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
   ],
 }

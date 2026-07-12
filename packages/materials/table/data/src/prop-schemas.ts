@@ -3,6 +3,7 @@ import type { TableBandRole } from '@easyink/material-table-kernel'
 import type { MaterialNode } from '@easyink/schema'
 import { createModelPropertyAccessor, createNodePropertyAccessor } from '@easyink/core'
 import {
+  applyTableTopologyResultToNode,
   createSequentialTableIdentityAllocator,
   createTableBorderPropertyAccessor,
   createTablePaddingPropertyAccessor,
@@ -21,12 +22,15 @@ const TABLE_TEXT_ALIGN_ACCESSOR = createNodePropertyAccessor<'left' | 'center' |
   readValue: value => value === 'start' ? 'left' : value === 'end' ? 'right' : 'center',
   writeValue: value => value === 'left' ? 'start' : value === 'right' ? 'end' : 'center',
 })
+const TABLE_DATA_BANDS_PATHS = Object.freeze(['/model/bands'] as const)
+const TABLE_DATA_BANDS_SHARING_GROUP = 'table-data-bands'
 
 function createBandVisibilityAccessor(role: 'header' | 'footer'): PropertyAccessor<boolean> {
-  return {
-    paths: ['/model/bands'],
-    read: node => getTableMaterialModel(node).bands.some(band => band.role === role),
-    write(draft, visible) {
+  return Object.freeze({
+    paths: TABLE_DATA_BANDS_PATHS,
+    pathSharingGroup: TABLE_DATA_BANDS_SHARING_GROUP,
+    read: (node: MaterialNode) => getTableMaterialModel(node).bands.some(band => band.role === role),
+    write(draft: MaterialNode, visible: boolean) {
       let model = getTableMaterialModel(draft)
       const matching = model.bands.filter(band => band.role === role)
       if (visible && matching.length === 0) {
@@ -39,18 +43,22 @@ function createBandVisibilityAccessor(role: 'header' | 'footer'): PropertyAccess
         })
       }
       else if (!visible) {
-        for (const band of matching)
-          model = TableTopologyEngine.removeBand(model, band.id).model
+        for (const band of matching) {
+          const result = TableTopologyEngine.removeBand(model, band.id)
+          applyTableTopologyResultToNode(draft, result)
+          model = result.model
+        }
       }
-      draft.model = model
+      draft.model = model as unknown as Record<string, unknown>
     },
-  }
+  })
 }
 
 function createBandBackgroundAccessor(role: TableBandRole): PropertyAccessor<string> {
-  return {
-    paths: ['/model/bands'],
-    read: node => getTableMaterialModel(node).bands.find(band => band.role === role)?.style?.background ?? '',
+  return Object.freeze({
+    paths: TABLE_DATA_BANDS_PATHS,
+    pathSharingGroup: TABLE_DATA_BANDS_SHARING_GROUP,
+    read: (node: MaterialNode) => getTableMaterialModel(node).bands.find(band => band.role === role)?.style?.background ?? '',
     write(draft: MaterialNode, value: string) {
       const band = getTableMaterialModel(draft).bands.find(candidate => candidate.role === role)
       if (!band)
@@ -58,7 +66,7 @@ function createBandBackgroundAccessor(role: TableBandRole): PropertyAccessor<str
       band.style ??= {}
       band.style.background = value
     },
-  }
+  })
 }
 
 export const tableDataBaseDesignerPropSchemas: PropertyDescriptor[] = [
@@ -85,8 +93,8 @@ export const tableDataBaseDesignerPropSchemas: PropertyDescriptor[] = [
  */
 export const tableDataDesignerPropSchemas: PropertyDescriptor[] = [
   ...tableDataBaseDesignerPropSchemas,
-  { key: 'showHeader', accessor: createBandVisibilityAccessor('header'), label: 'materials.tableData.property.showHeader', type: 'switch', group: 'table-appearance', default: true },
-  { key: 'showFooter', accessor: createBandVisibilityAccessor('footer'), label: 'materials.tableData.property.showFooter', type: 'switch', group: 'table-appearance', default: true },
-  { key: 'headerBackground', accessor: createBandBackgroundAccessor('header'), label: 'materials.tableData.property.headerBackground', type: 'color', group: 'table-appearance' },
-  { key: 'summaryBackground', accessor: createBandBackgroundAccessor('footer'), label: 'materials.tableData.property.summaryBackground', type: 'color', group: 'table-appearance' },
+  { key: 'showHeader', accessor: createBandVisibilityAccessor('header') as PropertyDescriptor['accessor'], label: 'materials.tableData.property.showHeader', type: 'switch', group: 'table-appearance', default: true },
+  { key: 'showFooter', accessor: createBandVisibilityAccessor('footer') as PropertyDescriptor['accessor'], label: 'materials.tableData.property.showFooter', type: 'switch', group: 'table-appearance', default: true },
+  { key: 'headerBackground', accessor: createBandBackgroundAccessor('header') as PropertyDescriptor['accessor'], label: 'materials.tableData.property.headerBackground', type: 'color', group: 'table-appearance' },
+  { key: 'summaryBackground', accessor: createBandBackgroundAccessor('footer') as PropertyDescriptor['accessor'], label: 'materials.tableData.property.summaryBackground', type: 'color', group: 'table-appearance' },
 ]

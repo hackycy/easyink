@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@easyink/datasource": "workspace:*",
+    "@easyink/material-table-kernel": "workspace:*",
     "@easyink/schema": "workspace:*",
     "@easyink/shared": "workspace:*"
   }

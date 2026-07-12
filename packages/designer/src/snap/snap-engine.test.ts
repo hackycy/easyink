@@ -3,7 +3,19 @@ import { describe, expect, it } from 'vitest'
 import { collectSnapCandidates, computeSnap, pickBestSnap } from './snap-engine'
 
 function elem(id: string, x: number, y: number, w: number, h: number): MaterialNode {
-  return { id, type: 'rect', x, y, width: w, height: h, props: {} } as MaterialNode
+  return {
+    id,
+    type: 'rect',
+    x,
+    y,
+    width: w,
+    height: h,
+    modelVersion: 1,
+    model: {},
+    slots: {},
+    bindings: {},
+    output: { visibility: 'include' },
+  }
 }
 
 const baseCtx = {

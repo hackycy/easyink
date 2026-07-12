@@ -1,6 +1,6 @@
 import { readTrustedViewerHtml } from '@easyink/core'
 import { describe, expect, it } from 'vitest'
-import { createTextNode } from './schema'
+import { createTextNode, migrateTextModelV0ToV1 } from './schema'
 import { getTextRenderSize, measureText, renderText } from './viewer'
 
 describe('renderText', () => {
@@ -37,18 +37,27 @@ describe('renderText', () => {
     expect(html).not.toContain('<b>unsafe</b>')
   })
 
-  it('maps legacy autoWrap false to the no-wrap layout mode', () => {
+  it('strips legacy autoWrap without changing the current wrap mode', () => {
     const node = createTextNode({
       model: {
         content: 'single line',
         autoWrap: false,
-      },
+      } as never,
     })
+    expect(node.model).not.toHaveProperty('autoWrap')
+    expect(node.model.wrapMode).toBe('anywhere')
+  })
 
-    const html = readTrustedViewerHtml(renderText(node).html!)
+  it('exports the v0 autoWrap migration for the Task 10 schema adapter', () => {
+    const source = createTextNode()
+    const migrated = migrateTextModelV0ToV1.migrate({
+      ...source,
+      modelVersion: 0,
+      model: { ...source.model, autoWrap: false, wrapMode: undefined },
+    }, undefined as never)
 
-    expect(html).toContain('white-space:pre')
-    expect(html).toContain('overflow-wrap:normal')
+    expect(migrated.model).not.toHaveProperty('autoWrap')
+    expect(migrated.model).toMatchObject({ wrapMode: 'nowrap' })
   })
 
   it('renders visible overflow as a visible wrapper footprint', () => {

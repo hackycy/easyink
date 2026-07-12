@@ -17,16 +17,12 @@ export const TABLE_DATA_TYPE = 'table-data'
 export interface TableDataProps extends TableBaseProps {
   headerBackground: string
   summaryBackground: string
-  stripedRows: boolean
-  stripedColor: string
 }
 
 export const TABLE_DATA_DEFAULTS: TableDataProps = {
   ...TABLE_BASE_DEFAULTS,
   headerBackground: '',
   summaryBackground: '',
-  stripedRows: false,
-  stripedColor: '#fafafa',
 }
 
 export function createDefaultDataTableModel(): DataTableModel {

@@ -1,11 +1,10 @@
 import type { DataSourceDescriptor } from '@easyink/datasource'
-import type { DocumentSchema, MaterialNode, TableDataSchema, TableNode } from '@easyink/schema'
+import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import { SCHEMA_VERSION } from '@easyink/shared'
-
+import { createSampleTableModel } from '../sample-table'
 // ---------------------------------------------------------------------------
 // Supermarket receipt data source
 // ---------------------------------------------------------------------------
-
 export const supermarketDataSource: DataSourceDescriptor = {
   id: 'supermarket',
   name: 'supermarket',
@@ -70,7 +69,6 @@ export const supermarketDataSource: DataSourceDescriptor = {
     { name: 'footer', title: '底部文字', path: 'footer', use: 'text' },
   ],
 }
-
 export const supermarketDemoData: Record<string, unknown> = {
   store: {
     name: '好又多超市',
@@ -105,95 +103,74 @@ export const supermarketDemoData: Record<string, unknown> = {
   qrUrl: 'https://example.com/receipt/TXN-20260423-1234',
   footer: '感谢您的惠顾，欢迎再次光临！',
 }
-
 // ---------------------------------------------------------------------------
 // Supermarket receipt template (80mm thermal paper, continuous paper + stack-flow layout)
 // ---------------------------------------------------------------------------
-
-function createReceiptItemsTable(): TableNode {
+function createReceiptItemsTable(): MaterialNode {
   return {
     id: 'smkt_items_table',
     type: 'table-data',
+    modelVersion: 1,
     x: 4,
     y: 52,
     width: 72,
     height: 24,
-    props: {
-      headerBackground: '#f5f5f5',
-      summaryBackground: '#fafafa',
-      stripedRows: false,
-      stripedColor: '#fafafa',
-      borderWidth: 0,
-      cellPadding: 0.35,
-      typography: {
-        fontSize: 2.82,
-        color: '#1a1a1a',
-        fontWeight: 'normal',
-        fontStyle: 'normal',
-        lineHeight: 1.2,
-        letterSpacing: 0,
-        textAlign: 'left',
-        verticalAlign: 'middle',
+    model: createSampleTableModel({
+      namespace: 'smkt-items',
+      kind: 'data',
+      columnWeights: [0.44, 0.12, 0.20, 0.24],
+      rows: [
+        { role: 'header', minHeight: 4, style: { background: '#f5f5f5' }, cells: [{ text: '品名' }, { text: '数量' }, { text: '单价' }, { text: '小计' }] },
+        { role: 'detail', minHeight: 4, cells: [{ bindingPort: 'items:name' }, { bindingPort: 'items:qty' }, { bindingPort: 'items:unitPrice' }, { bindingPort: 'items:subtotal' }] },
+      ],
+      collectionPort: 'records',
+      style: {
+        padding: { top: 0.35, right: 0.35, bottom: 0.35, left: 0.35 },
+        border: {},
+        typography: {
+          fontSize: 2.82,
+          color: '#1a1a1a',
+          fontWeight: 'normal',
+          fontStyle: 'normal',
+          lineHeight: 1.2,
+          letterSpacing: 0,
+          textAlign: 'start',
+          verticalAlign: 'middle',
+        },
       },
+    }) as unknown as Record<string, unknown>,
+    slots: {},
+    bindings: {
+      'records': { sourceId: 'supermarket', fieldPath: 'items', fieldLabel: '商品明细' },
+      'items:name': { sourceId: 'supermarket', fieldPath: 'items/name', fieldLabel: '品名' },
+      'items:qty': { sourceId: 'supermarket', fieldPath: 'items/qty', fieldLabel: '数量' },
+      'items:unitPrice': { sourceId: 'supermarket', fieldPath: 'items/unitPrice', fieldLabel: '单价' },
+      'items:subtotal': { sourceId: 'supermarket', fieldPath: 'items/subtotal', fieldLabel: '小计' },
     },
-    table: {
-      kind: 'data' as const,
-      showHeader: true,
-      showFooter: false,
-      topology: {
-        columns: [
-          { ratio: 0.44 },
-          { ratio: 0.12 },
-          { ratio: 0.20 },
-          { ratio: 0.24 },
-        ],
-        rows: [
-          {
-            height: 4,
-            role: 'header' as const,
-            cells: [
-              { content: { text: '品名' } },
-              { content: { text: '数量' } },
-              { content: { text: '单价' } },
-              { content: { text: '小计' } },
-            ],
-          },
-          {
-            height: 4,
-            role: 'repeat-template' as const,
-            cells: [
-              { binding: { sourceId: 'supermarket', fieldPath: 'items/name', fieldLabel: '品名' } },
-              { binding: { sourceId: 'supermarket', fieldPath: 'items/qty', fieldLabel: '数量' } },
-              { binding: { sourceId: 'supermarket', fieldPath: 'items/unitPrice', fieldLabel: '单价' } },
-              { binding: { sourceId: 'supermarket', fieldPath: 'items/subtotal', fieldLabel: '小计' } },
-            ],
-          },
-        ],
-      },
-      layout: {
-        borderAppearance: 'none' as const,
-        borderWidth: 0,
-        borderType: 'solid' as const,
-        borderColor: '#cccccc',
-      },
-    } as TableDataSchema,
+    output: { visibility: 'include' },
   }
 }
-
 function createReceiptItemsFlowRow(): MaterialNode {
   return {
     id: 'smkt_items_flow_row',
     type: 'flow-row',
+    modelVersion: 1,
     x: 4,
     y: 57,
     width: 72,
     height: 20,
-    binding: {
-      sourceId: 'supermarket',
-      fieldPath: 'items',
-      fieldLabel: '商品明细',
+    bindings: {
+      'value': {
+        sourceId: 'supermarket',
+        fieldPath: 'items',
+        fieldLabel: '商品明细',
+      },
+      'column:name:value': { sourceId: 'supermarket', fieldPath: 'items/name', fieldLabel: '品名' },
+      'column:qty:value': { sourceId: 'supermarket', fieldPath: 'items/qty', fieldLabel: '数量' },
+      'column:unit-price:value': { sourceId: 'supermarket', fieldPath: 'items/unitPrice', fieldLabel: '单价' },
+      'column:subtotal:value': { sourceId: 'supermarket', fieldPath: 'items/subtotal', fieldLabel: '小计' },
     },
-    props: {
+    model: {
       gap: 0.8,
       paddingX: 0.6,
       paddingY: 0.45,
@@ -210,127 +187,91 @@ function createReceiptItemsFlowRow(): MaterialNode {
       },
       columns: [
         {
+          id: 'name',
           ratio: 1,
           textAlign: 'left',
           verticalAlign: 'middle',
           wrapMode: 'block',
-          binding: {
-            sourceId: 'supermarket',
-            fieldPath: 'items/name',
-            fieldLabel: '品名',
-          },
+          bindingPort: 'column:name:value',
         },
         {
+          id: 'spacer',
           ratio: 0.40,
           textAlign: 'left',
           verticalAlign: 'middle',
           wrapMode: 'inline',
         },
         {
+          id: 'qty',
           ratio: 0.16,
           textAlign: 'center',
           verticalAlign: 'middle',
           wrapMode: 'inline',
-          binding: {
-            sourceId: 'supermarket',
-            fieldPath: 'items/qty',
-            fieldLabel: '数量',
-          },
+          bindingPort: 'column:qty:value',
         },
         {
+          id: 'unit-price',
           ratio: 0.20,
           textAlign: 'center',
           verticalAlign: 'middle',
           wrapMode: 'inline',
-          binding: {
-            sourceId: 'supermarket',
-            fieldPath: 'items/unitPrice',
-            fieldLabel: '单价',
-          },
+          bindingPort: 'column:unit-price:value',
         },
         {
+          id: 'subtotal',
           ratio: 0.24,
           textAlign: 'right',
           verticalAlign: 'middle',
           wrapMode: 'inline',
-          binding: {
-            sourceId: 'supermarket',
-            fieldPath: 'items/subtotal',
-            fieldLabel: '小计',
-          },
+          bindingPort: 'column:subtotal:value',
         },
       ],
     },
+    slots: {},
+    output: { visibility: 'include' },
   }
 }
-
-function createReceiptItemsStaticHeader(): TableNode {
+function createReceiptItemsStaticHeader(): MaterialNode {
   return {
     id: 'smkt_items_header_table',
     type: 'table-static',
+    modelVersion: 1,
     x: 4,
     y: 52,
     width: 72,
     height: 4,
-    props: {
-      headerBackground: '#f5f5f5',
-      summaryBackground: '#fafafa',
-      stripedRows: false,
-      stripedColor: '#fafafa',
-      borderWidth: 0,
-      cellPadding: 0.35,
-      typography: {
-        fontSize: 2.82,
-        color: '#1a1a1a',
-        fontWeight: 'normal',
-        fontStyle: 'normal',
-        lineHeight: 1.2,
-        letterSpacing: 0,
-        textAlign: 'left',
-        verticalAlign: 'middle',
+    model: createSampleTableModel({
+      namespace: 'smkt-header',
+      kind: 'static',
+      columnWeights: [0.44, 0.12, 0.20, 0.24],
+      rows: [{ role: 'body', minHeight: 4, style: { background: '#f5f5f5' }, cells: [
+        { text: '品名' },
+        { text: '数量' },
+        { text: '单价', style: { typography: { textAlign: 'center' } } },
+        { text: '小计', style: { typography: { textAlign: 'end' } } },
+      ] }],
+      style: {
+        padding: { top: 0.35, right: 0.35, bottom: 0.35, left: 0.35 },
+        typography: {
+          fontSize: 2.82,
+          color: '#1a1a1a',
+          fontWeight: 'normal',
+          fontStyle: 'normal',
+          lineHeight: 1.2,
+          letterSpacing: 0,
+          textAlign: 'start',
+          verticalAlign: 'middle',
+        },
       },
-    },
-    table: {
-      kind: 'static' as const,
-      topology: {
-        columns: [
-          { ratio: 0.44 },
-          { ratio: 0.12 },
-          { ratio: 0.20 },
-          { ratio: 0.24 },
-        ],
-        rows: [
-          {
-            height: 4,
-            role: 'normal' as const,
-            cells: [
-              { content: { text: '品名' } },
-              { content: { text: '数量' } },
-              { content: { text: '单价' }, typography: { textAlign: 'center' } },
-              {
-                content: { text: '小计' },
-                typography: {
-                  textAlign: 'right',
-                },
-              },
-            ],
-          },
-        ],
-      },
-      layout: {
-        borderAppearance: 'none' as const,
-        borderWidth: 0,
-        borderType: 'solid' as const,
-        borderColor: '#cccccc',
-      },
-    },
+    }) as unknown as Record<string, unknown>,
+    slots: {},
+    bindings: {},
+    output: { visibility: 'include' },
   }
 }
-
 function cloneJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
 }
-
 export const supermarketReceiptTemplate: DocumentSchema = {
   version: SCHEMA_VERSION,
   unit: 'mm',
@@ -350,11 +291,12 @@ export const supermarketReceiptTemplate: DocumentSchema = {
     {
       id: 'smkt_store_name',
       type: 'text',
+      modelVersion: 1,
       x: 4,
       y: 4,
       width: 72,
       height: 8,
-      props: {
+      model: {
         content: '{#店铺名称}',
         fontSize: 5.64,
         fontWeight: 'bold',
@@ -362,60 +304,78 @@ export const supermarketReceiptTemplate: DocumentSchema = {
         verticalAlign: 'middle',
         color: '#1a1a1a',
       },
-      binding: {
-        sourceId: 'supermarket',
-        fieldPath: 'store/name',
-        fieldLabel: '店铺名称',
+      bindings: {
+        value: {
+          sourceId: 'supermarket',
+          fieldPath: 'store/name',
+          fieldLabel: '店铺名称',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'smkt_store_address',
       type: 'text',
+      modelVersion: 1,
       x: 4,
       y: 14,
       width: 72,
       height: 5,
-      props: {
+      model: {
         content: '{#地址}',
         fontSize: 2.82,
         textAlign: 'center',
         verticalAlign: 'middle',
         color: '#666666',
       },
-      binding: {
-        sourceId: 'supermarket',
-        fieldPath: 'store/address',
-        fieldLabel: '地址',
+      bindings: {
+        value: {
+          sourceId: 'supermarket',
+          fieldPath: 'store/address',
+          fieldLabel: '地址',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'smkt_store_phone',
       type: 'text',
+      modelVersion: 1,
       x: 4,
       y: 20,
       width: 72,
       height: 5,
-      props: {
+      model: {
         content: '{#电话}',
         fontSize: 2.82,
         textAlign: 'center',
         verticalAlign: 'middle',
         color: '#666666',
       },
-      binding: {
-        sourceId: 'supermarket',
-        fieldPath: 'store/phone',
-        fieldLabel: '电话',
+      bindings: {
+        value: {
+          sourceId: 'supermarket',
+          fieldPath: 'store/phone',
+          fieldLabel: '电话',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'smkt_sep1',
       type: 'line',
+      modelVersion: 1,
       x: 4,
       y: 27,
       width: 72,
       height: 0.5,
-      props: { lineColor: '#333333', lineType: 'dashed' },
+      model: { lineColor: '#333333', lineType: 'dashed' },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     // -----------------------------------------------------------------------
     // 交易信息
@@ -423,91 +383,115 @@ export const supermarketReceiptTemplate: DocumentSchema = {
     {
       id: 'smkt_txn_no',
       type: 'text',
+      modelVersion: 1,
       x: 4,
       y: 30,
       width: 72,
       height: 5,
-      props: {
+      model: {
         content: '单号: {#流水号}',
         fontSize: 2.82,
         textAlign: 'left',
         verticalAlign: 'middle',
         color: '#333333',
       },
-      binding: {
-        sourceId: 'supermarket',
-        fieldPath: 'transaction/no',
-        fieldLabel: '流水号',
+      bindings: {
+        value: {
+          sourceId: 'supermarket',
+          fieldPath: 'transaction/no',
+          fieldLabel: '流水号',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'smkt_txn_date',
       type: 'text',
+      modelVersion: 1,
       x: 4,
       y: 36,
       width: 35,
       height: 5,
-      props: {
+      model: {
         content: '{#日期}',
         fontSize: 2.82,
         textAlign: 'left',
         verticalAlign: 'middle',
         color: '#333333',
       },
-      binding: {
-        sourceId: 'supermarket',
-        fieldPath: 'transaction/date',
-        fieldLabel: '日期',
+      bindings: {
+        value: {
+          sourceId: 'supermarket',
+          fieldPath: 'transaction/date',
+          fieldLabel: '日期',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'smkt_txn_time',
       type: 'text',
+      modelVersion: 1,
       x: 39,
       y: 36,
       width: 37,
       height: 5,
-      props: {
+      model: {
         content: '{#时间}',
         fontSize: 2.82,
         textAlign: 'right',
         verticalAlign: 'middle',
         color: '#333333',
       },
-      binding: {
-        sourceId: 'supermarket',
-        fieldPath: 'transaction/time',
-        fieldLabel: '时间',
+      bindings: {
+        value: {
+          sourceId: 'supermarket',
+          fieldPath: 'transaction/time',
+          fieldLabel: '时间',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'smkt_txn_cashier',
       type: 'text',
+      modelVersion: 1,
       x: 4,
       y: 42,
       width: 72,
       height: 5,
-      props: {
+      model: {
         content: '收银员: {#收银员}',
         fontSize: 2.82,
         textAlign: 'left',
         verticalAlign: 'middle',
         color: '#333333',
       },
-      binding: {
-        sourceId: 'supermarket',
-        fieldPath: 'transaction/cashier',
-        fieldLabel: '收银员',
+      bindings: {
+        value: {
+          sourceId: 'supermarket',
+          fieldPath: 'transaction/cashier',
+          fieldLabel: '收银员',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'smkt_sep2',
       type: 'line',
+      modelVersion: 1,
       x: 4,
       y: 49,
       width: 72,
       height: 0.5,
-      props: { lineColor: '#333333', lineType: 'dashed' },
+      model: { lineColor: '#333333', lineType: 'dashed' },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     // -----------------------------------------------------------------------
     // 商品明细表格
@@ -519,134 +503,170 @@ export const supermarketReceiptTemplate: DocumentSchema = {
     {
       id: 'smkt_sep3',
       type: 'line',
+      modelVersion: 1,
       x: 4,
       y: 79,
       width: 72,
       height: 0.5,
-      props: { lineColor: '#333333', lineType: 'dashed' },
+      model: { lineColor: '#333333', lineType: 'dashed' },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'smkt_subtotal_label',
       type: 'text',
+      modelVersion: 1,
       x: 4,
       y: 82,
       width: 40,
       height: 5,
-      props: {
+      model: {
         content: '商品合计',
         fontSize: 3.18,
         textAlign: 'left',
         verticalAlign: 'middle',
         color: '#666666',
       },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'smkt_subtotal_value',
       type: 'text',
+      modelVersion: 1,
       x: 44,
       y: 82,
       width: 32,
       height: 5,
-      props: {
+      model: {
         content: '{#商品合计}',
         fontSize: 3.18,
         textAlign: 'right',
         verticalAlign: 'middle',
         color: '#333333',
       },
-      binding: {
-        sourceId: 'supermarket',
-        fieldPath: 'subtotal',
-        fieldLabel: '商品合计',
+      bindings: {
+        value: {
+          sourceId: 'supermarket',
+          fieldPath: 'subtotal',
+          fieldLabel: '商品合计',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'smkt_discount_label',
       type: 'text',
+      modelVersion: 1,
       x: 4,
       y: 88,
       width: 40,
       height: 5,
-      props: {
+      model: {
         content: '商品折扣',
         fontSize: 3.18,
         textAlign: 'left',
         verticalAlign: 'middle',
         color: '#666666',
       },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'smkt_discount_value',
       type: 'text',
+      modelVersion: 1,
       x: 44,
       y: 88,
       width: 32,
       height: 5,
-      props: {
+      model: {
         content: '-{#商品折扣}',
         fontSize: 3.18,
         textAlign: 'right',
         verticalAlign: 'middle',
         color: '#e04545',
       },
-      binding: {
-        sourceId: 'supermarket',
-        fieldPath: 'itemDiscount',
-        fieldLabel: '商品折扣',
+      bindings: {
+        value: {
+          sourceId: 'supermarket',
+          fieldPath: 'itemDiscount',
+          fieldLabel: '商品折扣',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'smkt_coupon_label',
       type: 'text',
+      modelVersion: 1,
       x: 4,
       y: 94,
       width: 40,
       height: 5,
-      props: {
+      model: {
         content: '优惠券减免',
         fontSize: 3.18,
         textAlign: 'left',
         verticalAlign: 'middle',
         color: '#666666',
       },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'smkt_coupon_value',
       type: 'text',
+      modelVersion: 1,
       x: 44,
       y: 94,
       width: 32,
       height: 5,
-      props: {
+      model: {
         content: '-{#优惠券减免}',
         fontSize: 3.18,
         textAlign: 'right',
         verticalAlign: 'middle',
         color: '#e04545',
       },
-      binding: {
-        sourceId: 'supermarket',
-        fieldPath: 'couponAmount',
-        fieldLabel: '优惠券减免',
+      bindings: {
+        value: {
+          sourceId: 'supermarket',
+          fieldPath: 'couponAmount',
+          fieldLabel: '优惠券减免',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'smkt_sep4',
       type: 'line',
+      modelVersion: 1,
       x: 4,
       y: 101,
       width: 72,
       height: 0.5,
-      props: { lineColor: '#333333', lineType: 'solid' },
+      model: { lineColor: '#333333', lineType: 'solid' },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'smkt_total_label',
       type: 'text',
+      modelVersion: 1,
       x: 4,
       y: 104,
       width: 40,
       height: 8,
-      props: {
+      model: {
         content: '实付金额',
         fontSize: 4.23,
         fontWeight: 'bold',
@@ -654,15 +674,19 @@ export const supermarketReceiptTemplate: DocumentSchema = {
         verticalAlign: 'middle',
         color: '#1a1a1a',
       },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'smkt_total_value',
       type: 'text',
+      modelVersion: 1,
       x: 44,
       y: 104,
       width: 32,
       height: 8,
-      props: {
+      model: {
         content: '{#实付金额}',
         fontSize: 4.94,
         fontWeight: 'bold',
@@ -670,20 +694,28 @@ export const supermarketReceiptTemplate: DocumentSchema = {
         verticalAlign: 'middle',
         color: '#1a1a1a',
       },
-      binding: {
-        sourceId: 'supermarket',
-        fieldPath: 'grandTotal',
-        fieldLabel: '实付金额',
+      bindings: {
+        value: {
+          sourceId: 'supermarket',
+          fieldPath: 'grandTotal',
+          fieldLabel: '实付金额',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'smkt_sep5',
       type: 'line',
+      modelVersion: 1,
       x: 4,
       y: 114,
       width: 72,
       height: 0.5,
-      props: { lineColor: '#333333', lineType: 'dashed' },
+      model: { lineColor: '#333333', lineType: 'dashed' },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     // -----------------------------------------------------------------------
     // 付款信息
@@ -691,116 +723,147 @@ export const supermarketReceiptTemplate: DocumentSchema = {
     {
       id: 'smkt_pay_method_label',
       type: 'text',
+      modelVersion: 1,
       x: 4,
       y: 117,
       width: 40,
       height: 5,
-      props: {
+      model: {
         content: '付款方式',
         fontSize: 3.18,
         textAlign: 'left',
         verticalAlign: 'middle',
         color: '#666666',
       },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'smkt_pay_method_value',
       type: 'text',
+      modelVersion: 1,
       x: 44,
       y: 117,
       width: 32,
       height: 5,
-      props: {
+      model: {
         content: '{#付款方式}',
         fontSize: 3.18,
         textAlign: 'right',
         verticalAlign: 'middle',
         color: '#333333',
       },
-      binding: {
-        sourceId: 'supermarket',
-        fieldPath: 'transaction/paymentMethod',
-        fieldLabel: '付款方式',
+      bindings: {
+        value: {
+          sourceId: 'supermarket',
+          fieldPath: 'transaction/paymentMethod',
+          fieldLabel: '付款方式',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'smkt_amount_paid_label',
       type: 'text',
+      modelVersion: 1,
       x: 4,
       y: 123,
       width: 40,
       height: 5,
-      props: {
+      model: {
         content: '付款金额',
         fontSize: 3.18,
         textAlign: 'left',
         verticalAlign: 'middle',
         color: '#666666',
       },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'smkt_amount_paid_value',
       type: 'text',
+      modelVersion: 1,
       x: 44,
       y: 123,
       width: 32,
       height: 5,
-      props: {
+      model: {
         content: '{#付款金额}',
         fontSize: 3.18,
         textAlign: 'right',
         verticalAlign: 'middle',
         color: '#333333',
       },
-      binding: {
-        sourceId: 'supermarket',
-        fieldPath: 'amountPaid',
-        fieldLabel: '付款金额',
+      bindings: {
+        value: {
+          sourceId: 'supermarket',
+          fieldPath: 'amountPaid',
+          fieldLabel: '付款金额',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'smkt_change_label',
       type: 'text',
+      modelVersion: 1,
       x: 4,
       y: 129,
       width: 40,
       height: 5,
-      props: {
+      model: {
         content: '找零',
         fontSize: 3.18,
         textAlign: 'left',
         verticalAlign: 'middle',
         color: '#666666',
       },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'smkt_change_value',
       type: 'text',
+      modelVersion: 1,
       x: 44,
       y: 129,
       width: 32,
       height: 5,
-      props: {
+      model: {
         content: '{#找零}',
         fontSize: 3.18,
         textAlign: 'right',
         verticalAlign: 'middle',
         color: '#333333',
       },
-      binding: {
-        sourceId: 'supermarket',
-        fieldPath: 'change',
-        fieldLabel: '找零',
+      bindings: {
+        value: {
+          sourceId: 'supermarket',
+          fieldPath: 'change',
+          fieldLabel: '找零',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'smkt_sep6',
       type: 'line',
+      modelVersion: 1,
       x: 4,
       y: 136,
       width: 72,
       height: 0.5,
-      props: { lineColor: '#333333', lineType: 'dashed' },
+      model: { lineColor: '#333333', lineType: 'dashed' },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     // -----------------------------------------------------------------------
     // 会员信息
@@ -808,116 +871,147 @@ export const supermarketReceiptTemplate: DocumentSchema = {
     {
       id: 'smkt_member_no_label',
       type: 'text',
+      modelVersion: 1,
       x: 4,
       y: 139,
       width: 40,
       height: 5,
-      props: {
+      model: {
         content: '会员号',
         fontSize: 3.18,
         textAlign: 'left',
         verticalAlign: 'middle',
         color: '#666666',
       },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'smkt_member_no_value',
       type: 'text',
+      modelVersion: 1,
       x: 44,
       y: 139,
       width: 32,
       height: 5,
-      props: {
+      model: {
         content: '{#会员号}',
         fontSize: 3.18,
         textAlign: 'right',
         verticalAlign: 'middle',
         color: '#333333',
       },
-      binding: {
-        sourceId: 'supermarket',
-        fieldPath: 'member/no',
-        fieldLabel: '会员号',
+      bindings: {
+        value: {
+          sourceId: 'supermarket',
+          fieldPath: 'member/no',
+          fieldLabel: '会员号',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'smkt_member_pts_label',
       type: 'text',
+      modelVersion: 1,
       x: 4,
       y: 145,
       width: 40,
       height: 5,
-      props: {
+      model: {
         content: '本次积分',
         fontSize: 3.18,
         textAlign: 'left',
         verticalAlign: 'middle',
         color: '#666666',
       },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'smkt_member_pts_value',
       type: 'text',
+      modelVersion: 1,
       x: 44,
       y: 145,
       width: 32,
       height: 5,
-      props: {
+      model: {
         content: '+{#本次积分}',
         fontSize: 3.18,
         textAlign: 'right',
         verticalAlign: 'middle',
         color: '#1677ff',
       },
-      binding: {
-        sourceId: 'supermarket',
-        fieldPath: 'member/earnedPoints',
-        fieldLabel: '本次积分',
+      bindings: {
+        value: {
+          sourceId: 'supermarket',
+          fieldPath: 'member/earnedPoints',
+          fieldLabel: '本次积分',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'smkt_member_total_label',
       type: 'text',
+      modelVersion: 1,
       x: 4,
       y: 151,
       width: 40,
       height: 5,
-      props: {
+      model: {
         content: '累计积分',
         fontSize: 3.18,
         textAlign: 'left',
         verticalAlign: 'middle',
         color: '#666666',
       },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'smkt_member_total_value',
       type: 'text',
+      modelVersion: 1,
       x: 44,
       y: 151,
       width: 32,
       height: 5,
-      props: {
+      model: {
         content: '{#累计积分}',
         fontSize: 3.18,
         textAlign: 'right',
         verticalAlign: 'middle',
         color: '#333333',
       },
-      binding: {
-        sourceId: 'supermarket',
-        fieldPath: 'member/totalPoints',
-        fieldLabel: '累计积分',
+      bindings: {
+        value: {
+          sourceId: 'supermarket',
+          fieldPath: 'member/totalPoints',
+          fieldLabel: '累计积分',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'smkt_sep7',
       type: 'line',
+      modelVersion: 1,
       x: 4,
       y: 158,
       width: 72,
       height: 0.5,
-      props: { lineColor: '#333333', lineType: 'dashed' },
+      model: { lineColor: '#333333', lineType: 'dashed' },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     // -----------------------------------------------------------------------
     // 二维码 + 底部文字
@@ -925,50 +1019,57 @@ export const supermarketReceiptTemplate: DocumentSchema = {
     {
       id: 'smkt_qrcode',
       type: 'qrcode',
+      modelVersion: 1,
       x: 30,
       y: 161,
       width: 20,
       height: 20,
-      props: {
+      model: {
         value: 'https://example.com/receipt',
         cellSize: 3,
         margin: 1,
         foreground: '#333333',
       },
-      binding: {
-        sourceId: 'supermarket',
-        fieldPath: 'qrUrl',
-        fieldLabel: '二维码链接',
+      bindings: {
+        value: {
+          sourceId: 'supermarket',
+          fieldPath: 'qrUrl',
+          fieldLabel: '二维码链接',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'smkt_footer',
       type: 'text',
+      modelVersion: 1,
       x: 4,
       y: 184,
       width: 72,
       height: 5,
-      props: {
+      model: {
         content: '{#底部文字}',
         fontSize: 2.82,
         textAlign: 'center',
         verticalAlign: 'middle',
         color: '#999999',
       },
-      binding: {
-        sourceId: 'supermarket',
-        fieldPath: 'footer',
-        fieldLabel: '底部文字',
+      bindings: {
+        value: {
+          sourceId: 'supermarket',
+          fieldPath: 'footer',
+          fieldLabel: '底部文字',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
   ],
 }
-
 export const supermarketFlexRowReceiptTemplate: DocumentSchema = {
   ...cloneJson(supermarketReceiptTemplate),
-  elements: supermarketReceiptTemplate.elements.flatMap(element =>
-    element.id === 'smkt_items_table'
-      ? [createReceiptItemsStaticHeader(), createReceiptItemsFlowRow()]
-      : [cloneJson(element)],
-  ),
+  elements: supermarketReceiptTemplate.elements.flatMap(element => element.id === 'smkt_items_table'
+    ? [createReceiptItemsStaticHeader(), createReceiptItemsFlowRow()]
+    : [cloneJson(element)]),
 }

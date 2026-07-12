@@ -2,56 +2,21 @@ import type { DocumentSchema } from '@easyink/schema'
 import { SCHEMA_VERSION } from '@easyink/shared'
 import { flowInvoiceTemplate } from './datasources'
 import { badgeDemoData, badgeTemplate } from './templates/badge'
-import {
-  certificateDemoData,
-  certificateTemplate,
-} from './templates/certificate'
+import { certificateDemoData, certificateTemplate } from './templates/certificate'
 import { conditionalQrcodeDemoData, conditionalQrcodeTemplate } from './templates/conditional-qrcode'
-import {
-  salesReportDemoData,
-  salesReportTemplate,
-} from './templates/sales-report'
-import {
-  supermarketDemoData,
-  supermarketFlexRowReceiptTemplate,
-  supermarketReceiptTemplate,
-} from './templates/supermarket-receipt'
+import { salesReportDemoData, salesReportTemplate } from './templates/sales-report'
+import { supermarketDemoData, supermarketFlexRowReceiptTemplate, supermarketReceiptTemplate } from './templates/supermarket-receipt'
 import { vatElectronicInvoiceTemplate } from './templates/vat-electronic-invoice'
-import {
-  verticalMixedTextDemoData,
-  verticalMixedTextTemplate,
-} from './templates/vertical-mixed-text'
+import { verticalMixedTextDemoData, verticalMixedTextTemplate } from './templates/vertical-mixed-text'
 
 export * from './datasources'
-export {
-  badgeDataSource,
-  badgeDemoData,
-  badgeTemplate,
-} from './templates/badge'
-export {
-  certificateDataSource,
-  certificateDemoData,
-  certificateTemplate,
-} from './templates/certificate'
+export { badgeDataSource, badgeDemoData, badgeTemplate } from './templates/badge'
+export { certificateDataSource, certificateDemoData, certificateTemplate } from './templates/certificate'
 export { conditionalQrcodeDemoData, conditionalQrcodeTemplate } from './templates/conditional-qrcode'
-export {
-  salesReportDataSource,
-  salesReportDemoData,
-  salesReportTemplate,
-} from './templates/sales-report'
-export {
-  supermarketDataSource,
-  supermarketDemoData,
-  supermarketFlexRowReceiptTemplate,
-  supermarketReceiptTemplate,
-} from './templates/supermarket-receipt'
+export { salesReportDataSource, salesReportDemoData, salesReportTemplate } from './templates/sales-report'
+export { supermarketDataSource, supermarketDemoData, supermarketFlexRowReceiptTemplate, supermarketReceiptTemplate } from './templates/supermarket-receipt'
 export { vatElectronicInvoiceTemplate } from './templates/vat-electronic-invoice'
-export {
-  verticalMixedTextDataSource,
-  verticalMixedTextDemoData,
-  verticalMixedTextTemplate,
-} from './templates/vertical-mixed-text'
-
+export { verticalMixedTextDataSource, verticalMixedTextDemoData, verticalMixedTextTemplate } from './templates/vertical-mixed-text'
 export interface SampleTemplateEntry {
   id: string
   name: string
@@ -60,7 +25,6 @@ export interface SampleTemplateEntry {
   schema: DocumentSchema
   demoData?: Record<string, unknown>
 }
-
 /**
  * A4 空白模板。
  */
@@ -75,7 +39,6 @@ export const blankA4Template: DocumentSchema = {
   guides: { x: [], y: [] },
   elements: [],
 }
-
 /**
  * 简单发票模板，含标题文本和数据表格占位。
  */
@@ -95,11 +58,12 @@ export const simpleInvoiceTemplate: DocumentSchema = {
     {
       id: 'invoice_title',
       type: 'text',
+      modelVersion: 1,
       x: 60,
       y: 15,
       width: 90,
       height: 12,
-      props: {
+      model: {
         content: '发票',
         fontSize: 8.47,
         fontWeight: 'bold',
@@ -107,40 +71,50 @@ export const simpleInvoiceTemplate: DocumentSchema = {
         verticalAlign: 'middle',
         color: '#333333',
       },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'invoice_date',
       type: 'text',
+      modelVersion: 1,
       x: 140,
       y: 35,
       width: 60,
       height: 6,
-      props: {
+      model: {
         content: '日期：____',
         fontSize: 3.53,
         textAlign: 'right',
         verticalAlign: 'middle',
         color: '#666666',
       },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'invoice_no',
       type: 'text',
+      modelVersion: 1,
       x: 10,
       y: 35,
       width: 60,
       height: 6,
-      props: {
+      model: {
         content: '编号：____',
         fontSize: 3.53,
         textAlign: 'left',
         verticalAlign: 'middle',
         color: '#666666',
       },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
   ],
 }
-
 /**
  * 收据模板（连续纸 + 流式布局）。
  */
@@ -160,32 +134,39 @@ export const receiptTemplate: DocumentSchema = {
     {
       id: 'receipt_header',
       type: 'text',
+      modelVersion: 1,
       x: 5,
       y: 5,
       width: 70,
       height: 8,
-      props: {
+      model: {
         content: '收据',
         fontSize: 5.64,
         fontWeight: 'bold',
         textAlign: 'center',
       },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'receipt_line',
       type: 'line',
+      modelVersion: 1,
       x: 5,
       y: 16,
       width: 70,
       height: 1,
-      props: {
+      model: {
         lineColor: '#000000',
         lineType: 'dashed',
       },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
   ],
 }
-
 /**
  * 发票示例数据。
  */
@@ -211,7 +192,6 @@ export const invoiceDemoData: Record<string, unknown> = {
   grandTotal: 600.0,
   notes: '请于30天内付款。谢谢惠顾！',
 }
-
 /**
  * 全部示例模板。
  */

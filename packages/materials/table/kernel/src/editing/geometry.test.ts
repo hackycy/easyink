@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { createTableModel } from '../model'
 import { computeCellRectWithPlaceholders, createTableGeometry, hitTestWithPlaceholders } from './geometry'
 
-function node(): MaterialNode<unknown> {
+function node(): MaterialNode {
   return {
     id: 'table',
     type: 'table-static',
@@ -13,7 +13,7 @@ function node(): MaterialNode<unknown> {
     width: 90,
     height: 30,
     modelVersion: 1,
-    model: createTableModel({ kind: 'static', columnCount: 3, rowCount: 3 }),
+    model: createTableModel({ kind: 'static', columnCount: 3, rowCount: 3 }) as unknown as Record<string, unknown>,
     slots: {},
     bindings: {},
     output: { visibility: 'include' },

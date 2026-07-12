@@ -20,82 +20,54 @@ function makeNode(id: string, overrides: Partial<MaterialNode> = {}): MaterialNo
   }
 }
 
-function makeTableNode(id: string, overrides: Record<string, unknown> = {}): MaterialNode<unknown> {
-  const legacy = {
+function makeTableNode(id: string, overrides: Record<string, unknown> = {}): MaterialNode {
+  const columns = [
+    { id: 'column-0', track: { kind: 'fr' as const, weight: 0.5 } },
+    { id: 'column-1', track: { kind: 'fr' as const, weight: 0.5 } },
+  ]
+  return {
     id,
     type: 'table-data',
     x: 0,
     y: 0,
     width: 80,
     height: 24,
-    props: {},
-    table: {
+    modelVersion: 1,
+    model: {
       kind: 'data',
-      showHeader: true,
-      showFooter: true,
-      topology: {
-        columns: [{ ratio: 0.5 }, { ratio: 0.5 }],
-        rows: [
-          {
-            height: 8,
-            role: 'header',
-            cells: [{ content: { text: '名称' } }, { content: { text: '数量' } }],
-          },
-          {
-            height: 8,
-            role: 'repeat-template',
-            cells: [
-              { binding: { sourceId: 'invoice', fieldPath: 'items/name', fieldLabel: '名称' } },
-              { binding: { sourceId: 'invoice', fieldPath: 'items/qty', fieldLabel: '数量' } },
-            ],
-          },
-          {
-            height: 8,
-            role: 'footer',
-            cells: [{ content: { text: '合计' } }, { content: { text: '3' } }],
-          },
-        ],
-      },
-      layout: {},
-    } as TableNode['table'],
+      columns,
+      bands: [
+        tableBand('header', 0, ['名称', '数量'], columns),
+        tableBand('detail', 1, ['', ''], columns, ['items:name', 'items:qty']),
+        tableBand('footer', 2, ['合计', '3'], columns),
+      ],
+      merges: [],
+      style: {},
+      data: { collectionPort: 'records' },
+    } as unknown as Record<string, unknown>,
+    slots: {},
+    bindings: {
+      'items:name': { sourceId: 'invoice', fieldPath: 'items/name', fieldLabel: '名称' },
+      'items:qty': { sourceId: 'invoice', fieldPath: 'items/qty', fieldLabel: '数量' },
+    },
+    output: { visibility: 'include' },
     ...overrides,
   }
-  return canonicalTableFixture(legacy)
 }
 
-function canonicalTableFixture(legacy: any): MaterialNode<unknown> {
-  const bindings: MaterialNode['bindings'] = {}
-  const columns = legacy.table.topology.columns.map((column: any, index: number) => ({ id: `column-${index}`, track: { kind: 'fr', weight: column.ratio } }))
-  const bands = legacy.table.topology.rows.map((row: any, rowIndex: number) => ({
+function tableBand(role: 'header' | 'detail' | 'footer', rowIndex: number, text: string[], columns: Array<{ id: string }>, ports: string[] = []) {
+  return {
     id: `band-${rowIndex}`,
-    role: row.role === 'repeat-template' ? 'detail' : row.role === 'normal' ? 'body' : row.role,
+    role,
     rows: [{
       id: `row-${rowIndex}`,
-      minHeight: row.height,
-      cells: row.cells.map((cell: any, columnIndex: number) => {
-        const port = cell.binding ? `cell-${rowIndex}-${columnIndex}` : undefined
-        if (port)
-          bindings[port] = cell.binding
-        return {
-          id: `cell-${rowIndex}-${columnIndex}`,
-          columnId: columns[columnIndex].id,
-          content: { kind: 'text', text: cell.content?.text ?? '', ...(port ? { bindingPort: port } : {}) },
-        }
-      }),
+      minHeight: 8,
+      cells: columns.map((column, columnIndex) => ({
+        id: `cell-${rowIndex}-${columnIndex}`,
+        columnId: column.id,
+        content: { kind: 'text' as const, text: text[columnIndex] ?? '', ...(ports[columnIndex] ? { bindingPort: ports[columnIndex] } : {}) },
+      })),
     }],
-  }))
-  return {
-    id: legacy.id,
-    type: legacy.type,
-    x: legacy.x,
-    y: legacy.y,
-    width: legacy.width,
-    height: legacy.height,
-    modelVersion: 1,
-    model: { kind: 'data', columns, bands, merges: [], style: {}, data: { collectionPort: 'records' } },
-    slots: {},
-    bindings,
-    output: { visibility: 'include' },
   }
 }
 

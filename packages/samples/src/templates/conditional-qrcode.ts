@@ -5,7 +5,6 @@ export const conditionalQrcodeDemoData: Record<string, unknown> = {
   parentQrcode: 'https://easyink.example/parent',
   qrCode: 'https://easyink.example/fallback',
 }
-
 export const conditionalQrcodeTemplate: DocumentSchema = {
   version: SCHEMA_VERSION,
   unit: 'mm',
@@ -15,35 +14,49 @@ export const conditionalQrcodeTemplate: DocumentSchema = {
     {
       id: 'parent-qrcode',
       type: 'qrcode',
+      modelVersion: 1,
       x: 25,
       y: 15,
       width: 30,
       height: 30,
-      props: { value: '', size: 30, errorCorrectionLevel: 'M', foreground: '#111111', background: '#ffffff', borderWidth: 0, borderColor: '#000000', borderType: 'solid' },
-      binding: { sourceId: 'demo', fieldPath: 'parentQrcode', fieldLabel: '主二维码' },
-      renderCondition: {
-        whenMatched: 'show',
-        whenHidden: 'remove',
-        groups: [{ conditions: [{ source: { path: 'parentQrcode', fieldLabel: '主二维码' }, operator: { compare: 'exists' } }] }],
+      model: { value: '', size: 30, errorCorrectionLevel: 'M', foreground: '#111111', background: '#ffffff', borderWidth: 0, borderColor: '#000000', borderType: 'solid' },
+      bindings: {
+        value: { sourceId: 'demo', fieldPath: 'parentQrcode', fieldLabel: '主二维码' },
       },
+      output: {
+        visibility: 'include',
+        renderCondition: {
+          whenMatched: 'show',
+          whenHidden: 'remove',
+          groups: [{ conditions: [{ source: { path: 'parentQrcode', fieldLabel: '主二维码' }, operator: { compare: 'exists' } }] }],
+        },
+      },
+      slots: {},
     },
     {
       id: 'fallback-qrcode',
       type: 'qrcode',
+      modelVersion: 1,
       x: 25,
       y: 15,
       width: 30,
       height: 30,
-      props: { value: '', size: 30, errorCorrectionLevel: 'M', foreground: '#1677ff', background: '#ffffff', borderWidth: 0, borderColor: '#000000', borderType: 'solid' },
-      binding: { sourceId: 'demo', fieldPath: 'qrCode', fieldLabel: '备用二维码' },
-      renderCondition: {
-        whenMatched: 'show',
-        whenHidden: 'remove',
-        groups: [{ conditions: [
-          { source: { path: 'parentQrcode', fieldLabel: '主二维码' }, operator: { compare: 'notExists' } },
-          { source: { path: 'qrCode', fieldLabel: '备用二维码' }, operator: { compare: 'exists' } },
-        ] }],
+      model: { value: '', size: 30, errorCorrectionLevel: 'M', foreground: '#1677ff', background: '#ffffff', borderWidth: 0, borderColor: '#000000', borderType: 'solid' },
+      bindings: {
+        value: { sourceId: 'demo', fieldPath: 'qrCode', fieldLabel: '备用二维码' },
       },
+      output: {
+        visibility: 'include',
+        renderCondition: {
+          whenMatched: 'show',
+          whenHidden: 'remove',
+          groups: [{ conditions: [
+            { source: { path: 'parentQrcode', fieldLabel: '主二维码' }, operator: { compare: 'notExists' } },
+            { source: { path: 'qrCode', fieldLabel: '备用二维码' }, operator: { compare: 'exists' } },
+          ] }],
+        },
+      },
+      slots: {},
     },
   ],
 }

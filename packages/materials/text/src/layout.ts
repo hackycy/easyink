@@ -24,12 +24,10 @@ export function getTextProps(node: MaterialNode): ResolvedTextProps {
   return resolveTextProps(getNodeModel<Partial<TextProps>>(node))
 }
 
-export function resolveTextProps(raw: Partial<TextProps> & { autoWrap?: boolean } = {}): ResolvedTextProps {
+export function resolveTextProps(raw: Partial<TextProps> = {}): ResolvedTextProps {
   const wrapMode = raw.wrapMode === 'wrap' || raw.wrapMode === 'nowrap' || raw.wrapMode === 'anywhere'
     ? raw.wrapMode
-    : raw.autoWrap === false
-      ? 'nowrap'
-      : 'anywhere'
+    : TEXT_DEFAULTS.wrapMode
 
   return {
     ...TEXT_DEFAULTS,

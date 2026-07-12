@@ -4,7 +4,19 @@ import { describe, expect, it, vi } from 'vitest'
 import { dispatchBehaviorEvent } from './behavior-dispatcher'
 
 function makeNode(): MaterialNode {
-  return { id: 'n1', type: 'test', x: 0, y: 0, width: 100, height: 50, props: {} } as MaterialNode
+  return {
+    id: 'n1',
+    type: 'test',
+    x: 0,
+    y: 0,
+    width: 100,
+    height: 50,
+    modelVersion: 1,
+    model: {},
+    slots: {},
+    bindings: {},
+    output: { visibility: 'include' },
+  }
 }
 
 function makeContext(selection: { type: string, nodeId: string, payload: unknown } | null = null): Omit<BehaviorContext, 'event' | 'meta'> {

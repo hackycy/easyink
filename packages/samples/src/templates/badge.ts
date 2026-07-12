@@ -1,11 +1,9 @@
 import type { DataSourceDescriptor } from '@easyink/datasource'
 import type { DocumentSchema } from '@easyink/schema'
 import { SCHEMA_VERSION } from '@easyink/shared'
-
 // ---------------------------------------------------------------------------
 // Badge data source
 // ---------------------------------------------------------------------------
-
 export const badgeDataSource: DataSourceDescriptor = {
   id: 'badge',
   name: 'badge',
@@ -20,7 +18,6 @@ export const badgeDataSource: DataSourceDescriptor = {
     { name: 'company', title: '公司', path: 'company', use: 'text' },
   ],
 }
-
 export const badgeDemoData: Record<string, unknown> = {
   photo: 'https://via.placeholder.com/120x160/e8e8e8/999999?text=Photo',
   name: '张三',
@@ -29,11 +26,9 @@ export const badgeDemoData: Record<string, unknown> = {
   employeeId: 'EMP-20260001',
   company: '示例科技有限公司',
 }
-
 // ---------------------------------------------------------------------------
 // Badge template (card size 86x54mm, fixed mode)
 // ---------------------------------------------------------------------------
-
 export const badgeTemplate: DocumentSchema = {
   version: SCHEMA_VERSION,
   unit: 'mm',
@@ -51,26 +46,31 @@ export const badgeTemplate: DocumentSchema = {
     {
       id: 'badge_header_bg',
       type: 'rect',
+      modelVersion: 1,
       x: 0,
       y: 0,
       width: 86,
       height: 12,
-      props: {
+      model: {
         fillColor: '#1677ff',
         borderWidth: 0,
         borderColor: 'transparent',
         borderRadius: 0,
       },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     // Company name
     {
       id: 'badge_company',
       type: 'text',
+      modelVersion: 1,
       x: 3,
       y: 1,
       width: 80,
       height: 10,
-      props: {
+      model: {
         content: '{#公司}',
         fontSize: 3.53,
         fontWeight: 'bold',
@@ -78,39 +78,49 @@ export const badgeTemplate: DocumentSchema = {
         verticalAlign: 'middle',
         color: '#ffffff',
       },
-      binding: {
-        sourceId: 'badge',
-        fieldPath: 'company',
-        fieldLabel: '公司',
+      bindings: {
+        value: {
+          sourceId: 'badge',
+          fieldPath: 'company',
+          fieldLabel: '公司',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     // Photo placeholder
     {
       id: 'badge_photo',
       type: 'image',
+      modelVersion: 1,
       x: 4,
       y: 15,
       width: 18,
       height: 24,
-      props: {
+      model: {
         src: 'https://via.placeholder.com/120x160/e8e8e8/999999?text=Photo',
         fit: 'cover',
       },
-      binding: {
-        sourceId: 'badge',
-        fieldPath: 'photo',
-        fieldLabel: '照片',
+      bindings: {
+        value: {
+          sourceId: 'badge',
+          fieldPath: 'photo',
+          fieldLabel: '照片',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     // Name (bound)
     {
       id: 'badge_name',
       type: 'text',
+      modelVersion: 1,
       x: 26,
       y: 15,
       width: 56,
       height: 10,
-      props: {
+      model: {
         content: '{#姓名}',
         fontSize: 5.64,
         fontWeight: 'bold',
@@ -118,74 +128,93 @@ export const badgeTemplate: DocumentSchema = {
         verticalAlign: 'middle',
         color: '#1a1a1a',
       },
-      binding: {
-        sourceId: 'badge',
-        fieldPath: 'name',
-        fieldLabel: '姓名',
+      bindings: {
+        value: {
+          sourceId: 'badge',
+          fieldPath: 'name',
+          fieldLabel: '姓名',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     // Department (bound)
     {
       id: 'badge_dept',
       type: 'text',
+      modelVersion: 1,
       x: 26,
       y: 26,
       width: 56,
       height: 6,
-      props: {
+      model: {
         content: '{#部门}',
         fontSize: 3.18,
         textAlign: 'left',
         verticalAlign: 'middle',
         color: '#666666',
       },
-      binding: {
-        sourceId: 'badge',
-        fieldPath: 'department',
-        fieldLabel: '部门',
+      bindings: {
+        value: {
+          sourceId: 'badge',
+          fieldPath: 'department',
+          fieldLabel: '部门',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     // Title (bound)
     {
       id: 'badge_title',
       type: 'text',
+      modelVersion: 1,
       x: 26,
       y: 33,
       width: 56,
       height: 6,
-      props: {
+      model: {
         content: '{#职位}',
         fontSize: 3.18,
         textAlign: 'left',
         verticalAlign: 'middle',
         color: '#666666',
       },
-      binding: {
-        sourceId: 'badge',
-        fieldPath: 'title',
-        fieldLabel: '职位',
+      bindings: {
+        value: {
+          sourceId: 'badge',
+          fieldPath: 'title',
+          fieldLabel: '职位',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     // Barcode (bound)
     {
       id: 'badge_barcode',
       type: 'barcode',
+      modelVersion: 1,
       x: 8,
       y: 42,
       width: 70,
       height: 10,
-      props: {
+      model: {
         value: 'EMP-20260001',
         format: 'CODE128',
         showText: true,
         fontSize: 2.47,
         lineColor: '#333333',
       },
-      binding: {
-        sourceId: 'badge',
-        fieldPath: 'employeeId',
-        fieldLabel: '工号',
+      bindings: {
+        value: {
+          sourceId: 'badge',
+          fieldPath: 'employeeId',
+          fieldLabel: '工号',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
   ],
 }

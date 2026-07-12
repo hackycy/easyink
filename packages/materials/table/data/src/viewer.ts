@@ -206,9 +206,6 @@ export function renderTableData(node: MaterialNode<unknown>, context?: ViewerRen
       const bg = getTableMaterialModel(node).bands.find(band => band.role === modelRole)?.style?.background ?? ''
       if (bg)
         return { cellStyle: `;background:${bg}` }
-      // Striped rows: apply to non-header/footer rows at odd indices
-      if (props.stripedRows && props.stripedColor && row.role !== 'header' && row.role !== 'footer' && ri % 2 === 1)
-        return { cellStyle: `;background:${props.stripedColor}` }
       return {}
     },
   })

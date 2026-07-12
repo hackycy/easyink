@@ -1,11 +1,9 @@
 import type { DataSourceDescriptor } from '@easyink/datasource'
 import type { DocumentSchema } from '@easyink/schema'
 import { SCHEMA_VERSION } from '@easyink/shared'
-
 // ---------------------------------------------------------------------------
 // Certificate data source
 // ---------------------------------------------------------------------------
-
 export const certificateDataSource: DataSourceDescriptor = {
   id: 'certificate',
   name: 'certificate',
@@ -21,7 +19,6 @@ export const certificateDataSource: DataSourceDescriptor = {
     { name: 'organization', title: '颁发机构', path: 'organization', use: 'text' },
   ],
 }
-
 export const certificateDemoData: Record<string, unknown> = {
   name: '李明',
   course: 'Vue.js 高级开发实战',
@@ -31,11 +28,9 @@ export const certificateDemoData: Record<string, unknown> = {
   instructor: '王老师',
   organization: '示例培训学院',
 }
-
 // ---------------------------------------------------------------------------
 // Certificate template (A4 landscape, fixed mode)
 // ---------------------------------------------------------------------------
-
 export const certificateTemplate: DocumentSchema = {
   version: SCHEMA_VERSION,
   unit: 'mm',
@@ -53,54 +48,67 @@ export const certificateTemplate: DocumentSchema = {
     {
       id: 'cert_border_outer',
       type: 'rect',
+      modelVersion: 1,
       x: 8,
       y: 8,
       width: 281,
       height: 194,
-      props: {
+      model: {
         fillColor: 'transparent',
         borderWidth: 0.53,
         borderColor: '#c5a55a',
         borderRadius: 0,
       },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     // Decorative border (inner)
     {
       id: 'cert_border_inner',
       type: 'rect',
+      modelVersion: 1,
       x: 12,
       y: 12,
       width: 273,
       height: 186,
-      props: {
+      model: {
         fillColor: 'transparent',
         borderWidth: 0.13,
         borderColor: '#c5a55a',
         borderRadius: 0,
       },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     // Decorative top line
     {
       id: 'cert_line_top',
       type: 'line',
+      modelVersion: 1,
       x: 40,
       y: 55,
       width: 217,
       height: 0.5,
-      props: {
+      model: {
         lineColor: '#c5a55a',
         lineType: 'solid',
       },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     // Title
     {
       id: 'cert_title',
       type: 'text',
+      modelVersion: 1,
       x: 48,
       y: 28,
       width: 201,
       height: 22,
-      props: {
+      model: {
         content: '培训完成证书',
         fontSize: 11.29,
         fontWeight: 'bold',
@@ -109,16 +117,20 @@ export const certificateTemplate: DocumentSchema = {
         color: '#333333',
         letterSpacing: 1.41,
       },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     // Subtitle
     {
       id: 'cert_subtitle',
       type: 'text',
+      modelVersion: 1,
       x: 48,
       y: 58,
       width: 201,
       height: 10,
-      props: {
+      model: {
         content: 'CERTIFICATE OF COMPLETION',
         fontSize: 3.53,
         textAlign: 'center',
@@ -126,32 +138,40 @@ export const certificateTemplate: DocumentSchema = {
         color: '#999999',
         letterSpacing: 1.06,
       },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     // "This is to certify that" text
     {
       id: 'cert_preamble',
       type: 'text',
+      modelVersion: 1,
       x: 48,
       y: 76,
       width: 201,
       height: 8,
-      props: {
+      model: {
         content: '兹证明',
         fontSize: 4.23,
         textAlign: 'center',
         verticalAlign: 'middle',
         color: '#666666',
       },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     // Name (bound)
     {
       id: 'cert_name',
       type: 'text',
+      modelVersion: 1,
       x: 48,
       y: 88,
       width: 201,
       height: 16,
-      props: {
+      model: {
         content: '{#姓名}',
         fontSize: 9.88,
         fontWeight: 'bold',
@@ -159,50 +179,63 @@ export const certificateTemplate: DocumentSchema = {
         verticalAlign: 'middle',
         color: '#1a1a1a',
       },
-      binding: {
-        sourceId: 'certificate',
-        fieldPath: 'name',
-        fieldLabel: '姓名',
+      bindings: {
+        value: {
+          sourceId: 'certificate',
+          fieldPath: 'name',
+          fieldLabel: '姓名',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     // Name underline
     {
       id: 'cert_name_line',
       type: 'line',
+      modelVersion: 1,
       x: 80,
       y: 104,
       width: 137,
       height: 0.5,
-      props: {
+      model: {
         lineColor: '#333333',
         lineType: 'solid',
       },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     // Course description
     {
       id: 'cert_course_label',
       type: 'text',
+      modelVersion: 1,
       x: 48,
       y: 110,
       width: 201,
       height: 8,
-      props: {
+      model: {
         content: '已成功完成以下课程',
         fontSize: 3.88,
         textAlign: 'center',
         verticalAlign: 'middle',
         color: '#666666',
       },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     // Course name (bound)
     {
       id: 'cert_course',
       type: 'text',
+      modelVersion: 1,
       x: 48,
       y: 120,
       width: 201,
       height: 12,
-      props: {
+      model: {
         content: '{#课程名称}',
         fontSize: 5.64,
         fontWeight: 'bold',
@@ -210,173 +243,218 @@ export const certificateTemplate: DocumentSchema = {
         verticalAlign: 'middle',
         color: '#333333',
       },
-      binding: {
-        sourceId: 'certificate',
-        fieldPath: 'course',
-        fieldLabel: '课程名称',
+      bindings: {
+        value: {
+          sourceId: 'certificate',
+          fieldPath: 'course',
+          fieldLabel: '课程名称',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     // Date (bound)
     {
       id: 'cert_date',
       type: 'text',
+      modelVersion: 1,
       x: 20,
       y: 160,
       width: 80,
       height: 8,
-      props: {
+      model: {
         content: '{#颁发日期}',
         fontSize: 3.53,
         textAlign: 'center',
         verticalAlign: 'middle',
         color: '#666666',
       },
-      binding: {
-        sourceId: 'certificate',
-        fieldPath: 'date',
-        fieldLabel: '颁发日期',
+      bindings: {
+        value: {
+          sourceId: 'certificate',
+          fieldPath: 'date',
+          fieldLabel: '颁发日期',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     // Date underline
     {
       id: 'cert_date_line',
       type: 'line',
+      modelVersion: 1,
       x: 20,
       y: 158,
       width: 80,
       height: 0.5,
-      props: {
+      model: {
         lineColor: '#333333',
         lineType: 'solid',
       },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     // Date label
     {
       id: 'cert_date_label',
       type: 'text',
+      modelVersion: 1,
       x: 20,
       y: 170,
       width: 80,
       height: 6,
-      props: {
+      model: {
         content: '日期',
         fontSize: 3.18,
         textAlign: 'center',
         verticalAlign: 'middle',
         color: '#999999',
       },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     // Instructor (bound)
     {
       id: 'cert_instructor',
       type: 'text',
+      modelVersion: 1,
       x: 108,
       y: 160,
       width: 80,
       height: 8,
-      props: {
+      model: {
         content: '{#讲师}',
         fontSize: 3.53,
         textAlign: 'center',
         verticalAlign: 'middle',
         color: '#666666',
       },
-      binding: {
-        sourceId: 'certificate',
-        fieldPath: 'instructor',
-        fieldLabel: '讲师',
+      bindings: {
+        value: {
+          sourceId: 'certificate',
+          fieldPath: 'instructor',
+          fieldLabel: '讲师',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     // Instructor underline
     {
       id: 'cert_instructor_line',
       type: 'line',
+      modelVersion: 1,
       x: 108,
       y: 158,
       width: 80,
       height: 0.5,
-      props: {
+      model: {
         lineColor: '#333333',
         lineType: 'solid',
       },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     // Instructor label
     {
       id: 'cert_instructor_label',
       type: 'text',
+      modelVersion: 1,
       x: 108,
       y: 170,
       width: 80,
       height: 6,
-      props: {
+      model: {
         content: '讲师签名',
         fontSize: 3.18,
         textAlign: 'center',
         verticalAlign: 'middle',
         color: '#999999',
       },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     // Certificate number (bound)
     {
       id: 'cert_no',
       type: 'text',
+      modelVersion: 1,
       x: 197,
       y: 160,
       width: 80,
       height: 8,
-      props: {
+      model: {
         content: '{#证书编号}',
         fontSize: 3.18,
         textAlign: 'center',
         verticalAlign: 'middle',
         color: '#999999',
       },
-      binding: {
-        sourceId: 'certificate',
-        fieldPath: 'certNo',
-        fieldLabel: '证书编号',
+      bindings: {
+        value: {
+          sourceId: 'certificate',
+          fieldPath: 'certNo',
+          fieldLabel: '证书编号',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     // QR code for verification (bound)
     {
       id: 'cert_qrcode',
       type: 'qrcode',
+      modelVersion: 1,
       x: 247,
       y: 140,
       width: 28,
       height: 28,
-      props: {
+      model: {
         value: 'https://example.com/verify',
         cellSize: 3,
         margin: 1,
         foreground: '#333333',
       },
-      binding: {
-        sourceId: 'certificate',
-        fieldPath: 'verifyUrl',
-        fieldLabel: '验证链接',
+      bindings: {
+        value: {
+          sourceId: 'certificate',
+          fieldPath: 'verifyUrl',
+          fieldLabel: '验证链接',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     // Organization (bound)
     {
       id: 'cert_org',
       type: 'text',
+      modelVersion: 1,
       x: 48,
       y: 140,
       width: 201,
       height: 8,
-      props: {
+      model: {
         content: '{#颁发机构}',
         fontSize: 3.88,
         textAlign: 'center',
         verticalAlign: 'middle',
         color: '#666666',
       },
-      binding: {
-        sourceId: 'certificate',
-        fieldPath: 'organization',
-        fieldLabel: '颁发机构',
+      bindings: {
+        value: {
+          sourceId: 'certificate',
+          fieldPath: 'organization',
+          fieldLabel: '颁发机构',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
   ],
 }

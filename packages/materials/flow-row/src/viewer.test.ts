@@ -1,3 +1,4 @@
+import type { MaterialNode } from '@easyink/schema'
 import type { FlowRowProps } from './schema'
 import { readTrustedViewerHtml } from '@easyink/core'
 import { describe, expect, it } from 'vitest'
@@ -32,6 +33,28 @@ describe('flow-row viewer', () => {
     expect(props.paddingY).toBeGreaterThan(2)
     expect(props.gap).toBe(2)
     expect(props.typography.fontSize).toBe(9)
+  })
+
+  it('strips legacy padding and private column bindings from v1 factory input', () => {
+    const node = createFlowRowNode({
+      model: {
+        padding: 9,
+        columns: [{
+          id: 'legacy',
+          ratio: 1,
+          textAlign: 'left',
+          wrapMode: 'block',
+          binding: { sourceId: 'receipt', fieldPath: 'items/name' },
+        }],
+      } as never,
+    })
+    const props = node.model as unknown as FlowRowProps
+
+    expect(props).not.toHaveProperty('padding')
+    expect(props.paddingX).toBe(FLOW_ROW_DEFAULTS.paddingX)
+    expect(props.paddingY).toBe(FLOW_ROW_DEFAULTS.paddingY)
+    expect(props.columns[0]).not.toHaveProperty('binding')
+    expect(node.bindings).toEqual({})
   })
 
   it('renders block columns before following inline groups', () => {
@@ -107,20 +130,33 @@ describe('flow-row viewer', () => {
     expect(html).toContain('font-family:FlowFont')
   })
 
-  it('reads legacy padding as both horizontal and vertical padding', () => {
+  it('migrates legacy padding before current rendering', () => {
     const source = createFlowRowNode()
     const node = migrateFlowRowModelV0ToV1.migrate({
       ...source,
       modelVersion: 0,
-      model: { ...source.model, padding: 4, paddingX: undefined, paddingY: undefined },
-    })
+      model: {
+        ...source.model,
+        padding: 4,
+        paddingX: undefined,
+        paddingY: undefined,
+        columns: [{
+          ratio: 1,
+          textAlign: 'left',
+          wrapMode: 'block',
+          binding: { sourceId: 'receipt', fieldPath: 'items/name' },
+        }],
+      },
+    }, undefined as never)
     const props = node.model as unknown as FlowRowProps
-    const html = renderFlowRowsHtml(node, {
+    const html = renderFlowRowsHtml(node as MaterialNode, {
       rows: [props.columns.map((column, index) => ({ column, index, text: column.content ?? '' }))],
     }, viewerContext.unit)
 
     expect(props.paddingX).toBe(4)
     expect(props.paddingY).toBe(4)
+    expect(props.columns[0]).toMatchObject({ id: 'default-1', bindingPort: 'column:default-1:value' })
+    expect(node.bindings['column:default-1:value']).toEqual({ sourceId: 'receipt', fieldPath: 'items/name' })
     expect(html).toContain('padding:4mm 4mm')
   })
 

@@ -250,16 +250,50 @@ export function createTableCommandHandlerBehavior(delegate: TableEditingDelegate
           transact(draft => replaceTableModel(draft, insertTableRow(draft, row, event.command.endsWith('above') ? 'before' : 'after', height)), `materials.table.history.${event.command.endsWith('above') ? 'insertRowAbove' : 'insertRowBelow'}`)
           break
         }
-        case 'remove-row':
-          transact(draft => replaceTableModel(draft, removeTableRow(draft, row)), 'materials.table.history.removeRow')
+        case 'remove-row': {
+          const selectedCellId = cellAt(node, row, col)?.id
+          const removal: { current: ReturnType<typeof removeTableRow> } = { current: undefined }
+          transact((draft) => {
+            removal.current = removeTableRow(draft, row)
+          }, 'materials.table.history.removeRow')
+          const removed = removal.current
+          if (selectedCellId && removed?.effects.removedCellIds.includes(selectedCellId)) {
+            const nextRowCount = removed.model.bands.reduce((count, band) => count + band.rows.length, 0)
+            ctx.selectionStore.set({
+              type: 'table.cell',
+              nodeId: node.id,
+              payload: {
+                row: Math.min(row, nextRowCount - 1),
+                col: Math.min(col, removed.model.columns.length - 1),
+              },
+            })
+          }
           break
+        }
         case 'insert-col-left':
         case 'insert-col-right':
           transact(draft => replaceTableModel(draft, insertTableColumn(draft, col, event.command.endsWith('left') ? 'before' : 'after')), `materials.table.history.${event.command.endsWith('left') ? 'insertColLeft' : 'insertColRight'}`)
           break
-        case 'remove-col':
-          transact(draft => replaceTableModel(draft, removeTableColumn(draft, col)), 'materials.table.history.removeCol')
+        case 'remove-col': {
+          const selectedCellId = cellAt(node, row, col)?.id
+          const removal: { current: ReturnType<typeof removeTableColumn> } = { current: undefined }
+          transact((draft) => {
+            removal.current = removeTableColumn(draft, col)
+          }, 'materials.table.history.removeCol')
+          const removed = removal.current
+          if (selectedCellId && removed?.effects.removedCellIds.includes(selectedCellId)) {
+            const nextRowCount = removed.model.bands.reduce((count, band) => count + band.rows.length, 0)
+            ctx.selectionStore.set({
+              type: 'table.cell',
+              nodeId: node.id,
+              payload: {
+                row: Math.min(row, nextRowCount - 1),
+                col: Math.min(col, removed.model.columns.length - 1),
+              },
+            })
+          }
           break
+        }
         case 'merge-right':
         case 'merge-down': {
           const rowSpan = projectedCell?.rowSpan ?? 1

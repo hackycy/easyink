@@ -1343,6 +1343,9 @@ importers:
       '@easyink/datasource':
         specifier: workspace:*
         version: link:../datasource
+      '@easyink/material-table-kernel':
+        specifier: workspace:*
+        version: link:../materials/table/kernel
       '@easyink/schema':
         specifier: workspace:*
         version: link:../schema

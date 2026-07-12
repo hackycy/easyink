@@ -1,6 +1,7 @@
 import type { MaterialNode } from '@easyink/schema'
 import type { TableColumnId, TableModel, TableRowId } from './model'
-import { cellAt, tableModel, tableProjection } from './editing/canonical'
+import type { TableTopologyResult } from './topology-engine'
+import { applyTableTopologyResultToNode, cellAt, tableModel, tableProjection } from './editing/canonical'
 import { createSequentialTableIdentityAllocator } from './model'
 import { TableTopologyEngine } from './topology-engine'
 
@@ -43,10 +44,10 @@ export function insertTableRow(
   })
 }
 
-export function removeTableRow(node: MaterialNode<unknown>, rowIndex: number): TableModel {
+export function removeTableRow(node: MaterialNode<unknown>, rowIndex: number): TableTopologyResult | undefined {
   const source = tableModel(node)
   const rowId = tableProjection(node).rowIds[rowIndex]
-  return rowId ? TableTopologyEngine.removeRow(source, rowId).model : source
+  return rowId ? applyTableTopologyResultToNode(node, TableTopologyEngine.removeRow(source, rowId)) : undefined
 }
 
 export function insertTableColumn(
@@ -66,10 +67,10 @@ export function insertTableColumn(
   })
 }
 
-export function removeTableColumn(node: MaterialNode<unknown>, columnIndex: number): TableModel {
+export function removeTableColumn(node: MaterialNode<unknown>, columnIndex: number): TableTopologyResult | undefined {
   const source = tableModel(node)
   const columnId = tableProjection(node).columnIds[columnIndex]
-  return columnId ? TableTopologyEngine.removeColumn(source, columnId).model : source
+  return columnId ? applyTableTopologyResultToNode(node, TableTopologyEngine.removeColumn(source, columnId)) : undefined
 }
 
 export function mergeTableCells(

@@ -3,7 +3,7 @@ import type { AIMaterialDescriptor } from '@easyink/shared'
 export const tableDataAIMaterialDescriptor = {
   type: 'table-data',
   description: 'Dynamic data table for arrays such as receipt items, invoice lines, and order details. Composed of header row (column titles), a single repeat-template row (expands to N records at runtime), and an optional footer row (summaries/totals).',
-  properties: ['headerBackground', 'summaryBackground', 'stripedRows', 'stripedColor', 'borderWidth', 'cellPadding', 'typography'],
+  properties: ['headerBackground', 'summaryBackground', 'borderWidth', 'cellPadding', 'typography'],
   requiredProps: ['typography', 'borderWidth', 'cellPadding'],
   binding: 'multi',
   usage: [

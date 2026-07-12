@@ -84,16 +84,17 @@ export const migrateFlowRowModelV0ToV1: SchemaMigration = {
   from: 0,
   to: 1,
   migrate(node: AdaptableMaterialNode): AdaptableMaterialNode {
-    const source = node.model as Partial<FlowRowProps> & { padding?: number, columns?: LegacyFlowColumn[] }
+    const source = node.model as Omit<Partial<FlowRowProps>, 'columns'> & { padding?: number, columns?: LegacyFlowColumn[] }
     const { padding, columns: sourceColumns, ...sourceModel } = source
     const bindings = { ...node.bindings }
     const columns = (sourceColumns ?? FLOW_ROW_DEFAULT_COLUMNS).map((column, index): FlowColumnDef => {
+      const legacyColumn = column as LegacyFlowColumn
       const id = typeof column.id === 'string' && column.id ? column.id : `default-${index + 1}`
       const bindingPort = typeof column.bindingPort === 'string' && column.bindingPort
         ? column.bindingPort
-        : column.binding ? `column:${id}:value` : undefined
-      if (bindingPort && column.binding)
-        bindings[bindingPort] = { ...column.binding }
+        : legacyColumn.binding ? `column:${id}:value` : undefined
+      if (bindingPort && legacyColumn.binding)
+        bindings[bindingPort] = { ...legacyColumn.binding }
       return {
         id,
         ratio: typeof column.ratio === 'number' ? column.ratio : 1,

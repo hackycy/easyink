@@ -1,6 +1,7 @@
 export * from './cell-schemas'
 export * from './commands'
 export * from './editing/behaviors'
+export * from './editing/canonical'
 export * from './editing/cell-decoration'
 export * from './editing/cell-property'
 export * from './editing/geometry'

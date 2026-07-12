@@ -85,8 +85,7 @@ function buildHtml(node: MaterialNode<unknown>, unit: UnitType, context: Materia
     rowDecorator: (index) => {
       const role = projection.topology.rows[index]?.role
       const modelRole = role === 'repeat-template' ? 'detail' : role === 'normal' ? 'body' : role
-      const background = getTableMaterialModel(node).bands.find(band => band.role === modelRole)?.style?.background
-        ?? (props.stripedRows && index % 2 === 1 ? props.stripedColor : '')
+      const background = getTableMaterialModel(node).bands.find(band => band.role === modelRole)?.style?.background ?? ''
       return background ? { cellStyle: `;background:${background}` } : {}
     },
   })

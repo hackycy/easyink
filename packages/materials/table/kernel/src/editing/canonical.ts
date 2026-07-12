@@ -1,5 +1,6 @@
 import type { MaterialNode } from '@easyink/schema'
 import type { TableCell, TableColumnId, TableModel, TableRow, TableRowId } from '../model'
+import type { TableTopologyResult } from '../topology-engine'
 import { getTableMaterialModel, projectTableTopology } from '../model'
 
 export function isEditableTableNode(node: MaterialNode<unknown>): boolean {
@@ -33,4 +34,16 @@ export function cellByIds(model: TableModel, rowId: TableRowId, columnId: TableC
 
 export function replaceTableModel(node: MaterialNode<unknown>, model: TableModel): void {
   node.model = model
+}
+
+export function applyTableTopologyResultToNode(
+  node: MaterialNode<unknown>,
+  result: TableTopologyResult,
+): TableTopologyResult {
+  node.model = result.model
+  for (const port of result.effects.releasedBindingPorts)
+    delete node.bindings[port]
+  for (const slotId of result.effects.releasedSlotIds)
+    delete node.slots[slotId]
+  return result
 }

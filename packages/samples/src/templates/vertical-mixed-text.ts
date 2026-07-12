@@ -16,7 +16,6 @@ export const verticalMixedTextDataSource: DataSourceDescriptor = {
     { name: 'footer', title: '落款', path: 'footer', use: 'text' },
   ],
 }
-
 export const verticalMixedTextDemoData: Record<string, unknown> = {
   headline: '新茶饮 Cold Brew 2026',
   subheadline: '限定批次 Batch-07',
@@ -25,7 +24,6 @@ export const verticalMixedTextDemoData: Record<string, unknown> = {
   details: '风味说明 Flavor Notes: 白桃Peach、茉莉Jasmine、冷萃12h，建议饮用温度 4-6C。',
   footer: '出品 EasyInk Lab 2026',
 }
-
 export const verticalMixedTextTemplate: DocumentSchema = {
   version: SCHEMA_VERSION,
   unit: 'mm',
@@ -42,26 +40,31 @@ export const verticalMixedTextTemplate: DocumentSchema = {
     {
       id: 'vertical_mixed_bg',
       type: 'rect',
+      modelVersion: 1,
       x: 5,
       y: 5,
       width: 90,
       height: 130,
-      props: {
+      model: {
         fillColor: '#fffdf7',
         borderWidth: 1,
         borderColor: '#3f3a34',
         borderType: 'solid',
         borderRadius: 0,
       },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'vertical_mixed_headline',
       type: 'text',
+      modelVersion: 1,
       x: 66,
       y: 12,
       width: 20,
       height: 108,
-      props: {
+      model: {
         content: '{#主标题}',
         writingMode: 'vertical',
         fontSize: 6.35,
@@ -74,20 +77,25 @@ export const verticalMixedTextTemplate: DocumentSchema = {
         autoWrap: true,
         overflow: 'hidden',
       },
-      binding: {
-        sourceId: 'vertical-mixed-text',
-        fieldPath: 'headline',
-        fieldLabel: '主标题',
+      bindings: {
+        value: {
+          sourceId: 'vertical-mixed-text',
+          fieldPath: 'headline',
+          fieldLabel: '主标题',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'vertical_mixed_subheadline',
       type: 'text',
+      modelVersion: 1,
       x: 50,
       y: 16,
       width: 12,
       height: 96,
-      props: {
+      model: {
         content: '{#副标题}',
         writingMode: 'vertical',
         fontSize: 3.88,
@@ -99,35 +107,44 @@ export const verticalMixedTextTemplate: DocumentSchema = {
         autoWrap: true,
         overflow: 'hidden',
       },
-      binding: {
-        sourceId: 'vertical-mixed-text',
-        fieldPath: 'subheadline',
-        fieldLabel: '副标题',
+      bindings: {
+        value: {
+          sourceId: 'vertical-mixed-text',
+          fieldPath: 'subheadline',
+          fieldLabel: '副标题',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'vertical_mixed_badge_bg',
       type: 'rect',
+      modelVersion: 1,
       x: 16,
       y: 14,
       width: 18,
       height: 28,
-      props: {
+      model: {
         fillColor: '#2c5f5d',
         borderWidth: 0,
         borderColor: 'transparent',
         borderType: 'solid',
         borderRadius: 0,
       },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'vertical_mixed_badge',
       type: 'text',
+      modelVersion: 1,
       x: 18,
       y: 16,
       width: 14,
       height: 24,
-      props: {
+      model: {
         content: '{#标识}',
         writingMode: 'vertical',
         fontSize: 3.18,
@@ -140,20 +157,25 @@ export const verticalMixedTextTemplate: DocumentSchema = {
         autoWrap: true,
         overflow: 'hidden',
       },
-      binding: {
-        sourceId: 'vertical-mixed-text',
-        fieldPath: 'badge',
-        fieldLabel: '标识',
+      bindings: {
+        value: {
+          sourceId: 'vertical-mixed-text',
+          fieldPath: 'badge',
+          fieldLabel: '标识',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'vertical_mixed_code',
       type: 'text',
+      modelVersion: 1,
       x: 38,
       y: 18,
       width: 8,
       height: 72,
-      props: {
+      model: {
         content: '{#编码}',
         writingMode: 'vertical',
         fontSize: 2.82,
@@ -165,20 +187,25 @@ export const verticalMixedTextTemplate: DocumentSchema = {
         autoWrap: false,
         overflow: 'hidden',
       },
-      binding: {
-        sourceId: 'vertical-mixed-text',
-        fieldPath: 'code',
-        fieldLabel: '编码',
+      bindings: {
+        value: {
+          sourceId: 'vertical-mixed-text',
+          fieldPath: 'code',
+          fieldLabel: '编码',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'vertical_mixed_details',
       type: 'text',
+      modelVersion: 1,
       x: 18,
       y: 52,
       width: 24,
       height: 64,
-      props: {
+      model: {
         content: '{#说明}',
         writingMode: 'vertical',
         fontSize: 3,
@@ -194,20 +221,25 @@ export const verticalMixedTextTemplate: DocumentSchema = {
         borderColor: '#000000',
         borderType: 'solid',
       },
-      binding: {
-        sourceId: 'vertical-mixed-text',
-        fieldPath: 'details',
-        fieldLabel: '说明',
+      bindings: {
+        value: {
+          sourceId: 'vertical-mixed-text',
+          fieldPath: 'details',
+          fieldLabel: '说明',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     {
       id: 'vertical_mixed_footer',
       type: 'text',
+      modelVersion: 1,
       x: 10,
       y: 118,
       width: 78,
       height: 10,
-      props: {
+      model: {
         content: '{#落款}',
         fontSize: 2.82,
         color: '#6e655c',
@@ -218,11 +250,15 @@ export const verticalMixedTextTemplate: DocumentSchema = {
         autoWrap: false,
         overflow: 'hidden',
       },
-      binding: {
-        sourceId: 'vertical-mixed-text',
-        fieldPath: 'footer',
-        fieldLabel: '落款',
+      bindings: {
+        value: {
+          sourceId: 'vertical-mixed-text',
+          fieldPath: 'footer',
+          fieldLabel: '落款',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
   ],
 }

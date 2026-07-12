@@ -1,6 +1,7 @@
 import type { DataFieldDisplayFormatConfig, DataSourceDescriptor } from '@easyink/datasource'
-import type { DocumentSchema, TableDataSchema, TableNode } from '@easyink/schema'
+import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import { SCHEMA_VERSION } from '@easyink/shared'
+import { createSampleTableModel } from './sample-table'
 import { badgeDataSource } from './templates/badge'
 import { certificateDataSource } from './templates/certificate'
 import { salesReportDataSource } from './templates/sales-report'
@@ -32,7 +33,6 @@ const invoiceMoneyDisplayFormat: DataFieldDisplayFormatConfig = {
     },
   ],
 }
-
 const invoiceDateDisplayFormat: DataFieldDisplayFormatConfig = {
   defaultCustomTemplateId: 'invoice-date-cn',
   customTemplates: [
@@ -50,7 +50,6 @@ const invoiceDateDisplayFormat: DataFieldDisplayFormatConfig = {
     },
   ],
 }
-
 const invoiceTaxRateDisplayFormat: DataFieldDisplayFormatConfig = {
   defaultCustomTemplateId: 'invoice-tax-rate',
   customTemplates: [
@@ -66,12 +65,10 @@ const invoiceTaxRateDisplayFormat: DataFieldDisplayFormatConfig = {
     },
   ],
 }
-
 // ---------------------------------------------------------------------------
 // A. 发票数据源
 // Covers: scalar text/image, nested groups, collection for table-data binding
 // ---------------------------------------------------------------------------
-
 export const invoiceDataSource: DataSourceDescriptor = {
   id: 'invoice',
   name: 'invoice',
@@ -131,12 +128,10 @@ export const invoiceDataSource: DataSourceDescriptor = {
     { name: 'notes', title: '备注', path: 'notes', use: 'rich-text' },
   ],
 }
-
 // ---------------------------------------------------------------------------
 // B. 商品数据源
 // Covers: barcode, qrcode, image, union binding
 // ---------------------------------------------------------------------------
-
 export const productDataSource: DataSourceDescriptor = {
   id: 'product',
   name: 'product',
@@ -171,12 +166,10 @@ export const productDataSource: DataSourceDescriptor = {
     },
   ],
 }
-
 // ---------------------------------------------------------------------------
 // C. 订单列表数据源
 // Covers: flat collection for table-data, multi-level nesting, headless
 // ---------------------------------------------------------------------------
-
 export const orderListDataSource: DataSourceDescriptor = {
   id: 'order-list',
   name: 'order-list',
@@ -213,11 +206,9 @@ export const orderListDataSource: DataSourceDescriptor = {
     { name: 'totalRevenue', title: '总收入', path: 'totalRevenue', use: 'text' },
   ],
 }
-
 // ---------------------------------------------------------------------------
 // All datasources
 // ---------------------------------------------------------------------------
-
 export const sampleDataSources: DataSourceDescriptor[] = [
   invoiceDataSource,
   productDataSource,
@@ -228,102 +219,72 @@ export const sampleDataSources: DataSourceDescriptor[] = [
   supermarketDataSource,
   verticalMixedTextDataSource,
 ]
-
 // ---------------------------------------------------------------------------
 // Invoice template with pre-bound text elements and table-data element
 // ---------------------------------------------------------------------------
-
-function createInvoiceTableNode(): TableNode {
+function createInvoiceTableNode(): MaterialNode {
   return {
     id: 'inv_items_table',
     type: 'table-data',
+    modelVersion: 1,
     x: 10,
     y: 56,
     width: 190,
     height: 40,
-    props: {
-      headerBackground: '#f5f5f5',
-      summaryBackground: '#fafafa',
-      stripedRows: false,
-      stripedColor: '#fafafa',
-      borderWidth: 0,
-      cellPadding: 0.53,
-      typography: {
-        fontSize: 3.18,
-        color: '#000000',
-        fontWeight: 'normal',
-        fontStyle: 'normal',
-        lineHeight: 1.2,
-        letterSpacing: 0,
-        textAlign: 'left',
-        verticalAlign: 'middle',
+    model: createSampleTableModel({
+      namespace: 'invoice-items',
+      kind: 'data',
+      columnWeights: [0.4, 0.15, 0.2, 0.25],
+      rows: [
+        { role: 'header', minHeight: 8, style: { background: '#f5f5f5' }, cells: [{ text: '品名' }, { text: '数量' }, { text: '单价' }, { text: '金额' }] },
+        { role: 'detail', minHeight: 8, cells: [{ bindingPort: 'items:name' }, { bindingPort: 'items:qty' }, { bindingPort: 'items:price' }, { bindingPort: 'items:amount' }] },
+        { role: 'footer', minHeight: 8, style: { background: '#fafafa' }, cells: [{ text: '合计', colSpan: 3 }, {}, {}, { bindingPort: 'total:value' }] },
+      ],
+      collectionPort: 'records',
+      style: {
+        padding: { top: 0.53, right: 0.53, bottom: 0.53, left: 0.53 },
+        border: {
+          blockStart: { width: 0.13, style: 'solid', color: '#cccccc' },
+          inlineEnd: { width: 0.13, style: 'solid', color: '#cccccc' },
+          blockEnd: { width: 0.13, style: 'solid', color: '#cccccc' },
+          inlineStart: { width: 0.13, style: 'solid', color: '#cccccc' },
+        },
+        typography: {
+          fontSize: 3.18,
+          color: '#000000',
+          fontWeight: 'normal',
+          fontStyle: 'normal',
+          lineHeight: 1.2,
+          letterSpacing: 0,
+          textAlign: 'start',
+          verticalAlign: 'middle',
+        },
       },
+    }) as unknown as Record<string, unknown>,
+    slots: {},
+    bindings: {
+      'records': { sourceId: 'invoice', fieldPath: 'items', fieldLabel: '明细' },
+      'items:name': { sourceId: 'invoice', fieldPath: 'items/name', fieldLabel: '品名' },
+      'items:qty': { sourceId: 'invoice', fieldPath: 'items/qty', fieldLabel: '数量' },
+      'items:price': { sourceId: 'invoice', fieldPath: 'items/price', fieldLabel: '单价' },
+      'items:amount': { sourceId: 'invoice', fieldPath: 'items/amount', fieldLabel: '金额' },
+      'total:value': { sourceId: 'invoice', fieldPath: 'grandTotal', fieldLabel: '合计' },
     },
-    table: {
-      kind: 'data' as const,
-      showHeader: true,
-      showFooter: true,
-      topology: {
-        columns: [
-          { ratio: 0.4 },
-          { ratio: 0.15 },
-          { ratio: 0.2 },
-          { ratio: 0.25 },
-        ],
-        rows: [
-          {
-            height: 8,
-            role: 'header' as const,
-            cells: [
-              { content: { text: '品名' } },
-              { content: { text: '数量' } },
-              { content: { text: '单价' } },
-              { content: { text: '金额' } },
-            ],
-          },
-          {
-            height: 8,
-            role: 'repeat-template' as const,
-            cells: [
-              { binding: { sourceId: 'invoice', fieldPath: 'items/name', fieldLabel: '品名' } },
-              { binding: { sourceId: 'invoice', fieldPath: 'items/qty', fieldLabel: '数量' } },
-              { binding: { sourceId: 'invoice', fieldPath: 'items/price', fieldLabel: '单价' } },
-              { binding: { sourceId: 'invoice', fieldPath: 'items/amount', fieldLabel: '金额' } },
-            ],
-          },
-          {
-            height: 8,
-            role: 'footer' as const,
-            cells: [
-              { content: { text: '合计' }, colSpan: 3 },
-              {},
-              {},
-              { staticBinding: { sourceId: 'invoice', fieldPath: 'grandTotal', fieldLabel: '合计' } },
-            ],
-          },
-        ],
-      },
-      layout: {
-        borderAppearance: 'all' as const,
-        borderWidth: 0.13,
-        borderType: 'solid' as const,
-        borderColor: '#cccccc',
-      },
-    } as TableDataSchema,
+    output: { visibility: 'include' },
   }
 }
-
 function createInvoiceElements(): DocumentSchema['elements'] {
   return [
     // 公司名称（绑定）
     {
       id: 'inv_company',
       type: 'text',
+      modelVersion: 1,
       x: 10,
       y: 10,
       width: 100,
       height: 10,
-      props: {
+      model: {
         content: '{#公司名称}',
         fontSize: 6.35,
         fontWeight: 'bold',
@@ -331,42 +292,52 @@ function createInvoiceElements(): DocumentSchema['elements'] {
         verticalAlign: 'middle',
         textAlign: 'left',
       },
-      binding: {
-        sourceId: 'invoice',
-        fieldPath: 'company/name',
-        fieldLabel: '公司名称',
+      bindings: {
+        value: {
+          sourceId: 'invoice',
+          fieldPath: 'company/name',
+          fieldLabel: '公司名称',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     // 公司地址（绑定）
     {
       id: 'inv_address',
       type: 'text',
+      modelVersion: 1,
       x: 10,
       y: 22,
       width: 100,
       height: 6,
-      props: {
+      model: {
         content: '{#地址}',
         fontSize: 3.18,
         color: '#666666',
         verticalAlign: 'middle',
         textAlign: 'left',
       },
-      binding: {
-        sourceId: 'invoice',
-        fieldPath: 'company/address',
-        fieldLabel: '地址',
+      bindings: {
+        value: {
+          sourceId: 'invoice',
+          fieldPath: 'company/address',
+          fieldLabel: '地址',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     // 发票标题
     {
       id: 'inv_title',
       type: 'text',
+      modelVersion: 1,
       x: 140,
       y: 10,
       width: 60,
       height: 10,
-      props: {
+      model: {
         content: '发票',
         fontSize: 7.76,
         fontWeight: 'bold',
@@ -374,82 +345,104 @@ function createInvoiceElements(): DocumentSchema['elements'] {
         color: '#1a1a1a',
         verticalAlign: 'middle',
       },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     // 发票编号（绑定）
     {
       id: 'inv_number',
       type: 'text',
+      modelVersion: 1,
       x: 140,
       y: 22,
       width: 60,
       height: 6,
-      props: {
+      model: {
         content: '{#发票编号}',
         fontSize: 3.18,
         textAlign: 'right',
         color: '#666666',
         verticalAlign: 'middle',
       },
-      binding: {
-        sourceId: 'invoice',
-        fieldPath: 'invoice/number',
-        fieldLabel: '发票编号',
+      bindings: {
+        value: {
+          sourceId: 'invoice',
+          fieldPath: 'invoice/number',
+          fieldLabel: '发票编号',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     // 开票日期（绑定）
     {
       id: 'inv_date',
       type: 'text',
+      modelVersion: 1,
       x: 140,
       y: 29,
       width: 60,
       height: 6,
-      props: {
+      model: {
         content: '{#开票日期}',
         fontSize: 3.18,
         textAlign: 'right',
         color: '#666666',
         verticalAlign: 'middle',
       },
-      binding: {
-        sourceId: 'invoice',
-        fieldPath: 'invoice/date',
-        fieldLabel: '开票日期',
+      bindings: {
+        value: {
+          sourceId: 'invoice',
+          fieldPath: 'invoice/date',
+          fieldLabel: '开票日期',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     // 分隔线
     {
       id: 'inv_line',
       type: 'line',
+      modelVersion: 1,
       x: 10,
       y: 40,
       width: 190,
       height: 0.5,
-      props: {
+      model: {
         lineColor: '#cccccc',
         lineType: 'solid',
       },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
     },
     // 客户信息（绑定）
     {
       id: 'inv_customer',
       type: 'text',
+      modelVersion: 1,
       x: 10,
       y: 44,
       width: 100,
       height: 6,
-      props: {
+      model: {
         content: '致：{#客户名称}',
         fontSize: 3.53,
         color: '#333333',
         verticalAlign: 'middle',
         textAlign: 'left',
       },
-      binding: {
-        sourceId: 'invoice',
-        fieldPath: 'customer/name',
-        fieldLabel: '客户名称',
+      bindings: {
+        value: {
+          sourceId: 'invoice',
+          fieldPath: 'customer/name',
+          fieldLabel: '客户名称',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     // 明细表格（table-data 绑定）
     createInvoiceTableNode(),
@@ -457,11 +450,12 @@ function createInvoiceElements(): DocumentSchema['elements'] {
     {
       id: 'inv_grand_total',
       type: 'text',
+      modelVersion: 1,
       x: 140,
       y: 100,
       width: 60,
       height: 8,
-      props: {
+      model: {
         content: '合计：{#合计}',
         fontSize: 4.94,
         fontWeight: 'bold',
@@ -469,36 +463,44 @@ function createInvoiceElements(): DocumentSchema['elements'] {
         color: '#1a1a1a',
         verticalAlign: 'middle',
       },
-      binding: {
-        sourceId: 'invoice',
-        fieldPath: 'grandTotal',
-        fieldLabel: '合计',
+      bindings: {
+        value: {
+          sourceId: 'invoice',
+          fieldPath: 'grandTotal',
+          fieldLabel: '合计',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
     // 备注（富文本绑定）
     {
       id: 'inv_notes',
       type: 'text',
+      modelVersion: 1,
       x: 10,
       y: 110,
       width: 190,
       height: 12,
-      props: {
+      model: {
         content: '{#备注}',
         fontSize: 3.18,
         color: '#999999',
         verticalAlign: 'middle',
         textAlign: 'left',
       },
-      binding: {
-        sourceId: 'invoice',
-        fieldPath: 'notes',
-        fieldLabel: '备注',
+      bindings: {
+        value: {
+          sourceId: 'invoice',
+          fieldPath: 'notes',
+          fieldLabel: '备注',
+        },
       },
+      slots: {},
+      output: { visibility: 'include' },
     },
   ]
 }
-
 function createInvoiceTemplate(mode: DocumentSchema['page']['mode']): DocumentSchema {
   return {
     version: SCHEMA_VERSION,
@@ -512,9 +514,7 @@ function createInvoiceTemplate(mode: DocumentSchema['page']['mode']): DocumentSc
     elements: createInvoiceElements(),
   }
 }
-
 export const invoiceWithTableTemplate: DocumentSchema = createInvoiceTemplate('fixed')
-
 export const flowInvoiceTemplate: DocumentSchema = {
   ...createInvoiceTemplate('continuous'),
   page: {
