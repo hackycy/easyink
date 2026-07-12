@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { AssetUrlPropertyValueInput, PropertyValueInput, TextFilePropertyValueInput } from '@easyink/core'
 import type { CodeEditorLanguage } from '@easyink/ui'
-import type { Component } from 'vue'
 import type { DesignerResolvedAsset, PropSchema } from '../types'
 import { IconImport, IconLoader } from '@easyink/icons'
 import { EiBorderToggle, EiCheckbox, EiCodeEditor, EiColorPicker, EiFontPicker, EiIcon, EiInput, EiNumberInput, EiSelect, EiSwitch, EiTextarea } from '@easyink/ui'
@@ -16,8 +15,6 @@ const props = defineProps<{
   fonts?: Array<{ family: string, displayName: string }>
   fontStatuses?: Record<string, 'unloaded' | 'loading' | 'loaded' | 'error'>
   t: (key: string) => string
-  /** Custom editor component map: key = schema.editor value */
-  customEditors?: Record<string, Component>
 }>()
 
 const emit = defineEmits<{
@@ -82,12 +79,13 @@ const canImportTextFile = computed(() => supportsTextFileImport.value && textFil
 const textFileImportTitle = computed(() => props.t(textFileValueInput.value?.pickTitle ?? 'designer.action.importFile'))
 
 /** Resolve the custom editor component if schema.editor is set */
-const customEditorComponent = computed<Component | undefined>(() => {
+const customEditorComponent = computed(() => {
   const editorKey = props.schema.editor
-  if (!editorKey || !props.customEditors)
+  if (!editorKey)
     return undefined
-  return props.customEditors[editorKey]
+  return store.propertyEditorRegistry.get(editorKey)
 })
+const unknownCustomEditor = computed(() => Boolean(props.schema.editor && !customEditorComponent.value))
 
 function resolveValue(val: unknown): unknown {
   let resolved = val
@@ -298,6 +296,10 @@ function constrainStringValue(value: string): string {
         @change="(key: string, val: unknown) => emit('change', key, val)"
       />
     </template>
+
+    <div v-else-if="unknownCustomEditor" class="ei-prop-editor__diagnostic" role="status">
+      {{ label }}: PROPERTY_EDITOR_NOT_FOUND ({{ schema.editor }})
+    </div>
 
     <!-- string / image -->
     <template v-else>

@@ -9,6 +9,7 @@ import { findNodeById, normalizeDocumentSchema } from '@easyink/schema'
 import { markRaw } from 'vue'
 import { EditingSessionManager } from '../editing/editing-session-manager'
 import { DesignerInteractionService } from '../interactions/interaction-service'
+import { PropertyEditorRegistry } from '../properties/property-editor-registry'
 import { resolveDesignerMaterialProfile } from '../runtime-config'
 import { DiagnosticsChannel } from './diagnostics'
 import { FontService } from './font-service'
@@ -24,6 +25,7 @@ import { createDefaultSaveBranchMenu, createDefaultWorkbenchState } from './work
  */
 export class DesignerStore {
   readonly materialProfile: CompiledMaterialProfile
+  readonly propertyEditorRegistry = markRaw(new PropertyEditorRegistry())
   readonly materialFacetHost: MaterialFacetHost
   // ─── Template state (enters Schema + command history) ─────────
   private _schema: DocumentSchema
