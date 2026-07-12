@@ -319,12 +319,13 @@ export function assertCanonicalMaterialBindingMap(
     validateBindingPolicy(policy)
   const resolvePolicy = createMaterialBindingPortPolicyResolver(definition, model)
   for (const [key, binding] of Object.entries(bindings ?? {})) {
-    let policy: MaterialBindingPortPolicy
+    let policy: MaterialBindingPortPolicy | undefined
     try {
       policy = resolvePolicy(key)
     }
-    catch {
-      fail('MATERIAL_BINDING_KEY_UNMATCHED')
+    catch (error) {
+      if (!(error instanceof Error) || error.message !== 'MATERIAL_BINDING_POLICY_AMBIGUOUS')
+        fail('MATERIAL_BINDING_KEY_UNMATCHED')
     }
     validateBindingExpression(binding)
     const format = binding.format
@@ -336,9 +337,9 @@ export function assertCanonicalMaterialBindingMap(
       fail('MATERIAL_BINDING_FORMAT_POLICY_INVALID')
     if (format?.mode === 'custom')
       fail('MATERIAL_BINDING_CUSTOM_FORMAT_UNSUPPORTED')
-    if (policy.role === 'semantic' && format !== undefined)
+    if (policy?.role === 'semantic' && format !== undefined)
       fail('MATERIAL_BINDING_ROLE_INVALID')
-    if (policy.role === 'display' && format !== undefined) {
+    if (policy?.role === 'display' && format !== undefined) {
       if (policy.formatEditor === false
         || format.mode !== 'preset') {
         fail('MATERIAL_BINDING_FORMAT_POLICY_INVALID')

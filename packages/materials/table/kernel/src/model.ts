@@ -130,6 +130,11 @@ export interface TableDataConfig {
   detailKeyPort?: string
 }
 
+export interface TableBindingPortRoleCollision {
+  port: string
+  path: `/${string}`
+}
+
 export interface TableAccessibility {
   caption?: string
   description?: string
@@ -598,6 +603,35 @@ function validateModelKind(value: Record<string, unknown>, bands: TableBand[]): 
     if (rank[previous] > rank[current])
       failModel('data table bands must be ordered header, detail, footer')
   }
+  const collision = findTableBindingPortRoleCollisions(value as unknown as TableModel)[0]
+  if (collision)
+    failModel(`binding port ${collision.port} must not be shared across collection, detail-key, or cell roles`)
+}
+
+export function findTableBindingPortRoleCollisions(model: TableModel): TableBindingPortRoleCollision[] {
+  if (model.kind !== 'data')
+    return []
+  const collisions: TableBindingPortRoleCollision[] = []
+  const semanticPorts = new Set([model.data.collectionPort])
+  if (model.data.detailKeyPort) {
+    if (semanticPorts.has(model.data.detailKeyPort)) {
+      collisions.push({
+        port: model.data.detailKeyPort,
+        path: '/data/detailKeyPort',
+      })
+    }
+    semanticPorts.add(model.data.detailKeyPort)
+  }
+  model.bands.forEach((band, bandIndex) => band.rows.forEach((row, rowIndex) => row.cells.forEach((cell, cellIndex) => {
+    const port = cell.content.kind === 'text' ? cell.content.bindingPort : undefined
+    if (port && semanticPorts.has(port)) {
+      collisions.push({
+        port,
+        path: `/bands/${bandIndex}/rows/${rowIndex}/cells/${cellIndex}/content/bindingPort`,
+      })
+    }
+  })))
+  return collisions
 }
 
 function validateMerge(

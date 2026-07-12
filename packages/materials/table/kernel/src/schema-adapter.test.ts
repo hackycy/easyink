@@ -61,6 +61,25 @@ describe('table schema adapter', () => {
       .toContainEqual(expect.objectContaining({ code: 'TABLE_MODEL_KIND_MISMATCH', path: '/model/kind' }))
   })
 
+  it('rejects semantic port collisions without normalizing them away', () => {
+    const model = createTableModel({ kind: 'data', columnCount: 1, rowCount: 1 })
+    model.data.detailKeyPort = model.data.collectionPort
+    const input = node(model)
+    input.type = 'table-data'
+    const dataContext = { ...context, materialType: 'table-data' }
+
+    expect(tableSchemaAdapter.validateInput(input, dataContext)).toEqual([expect.objectContaining({
+      code: 'TABLE_MODEL_STRUCTURE_INVALID',
+      path: '/model/data/detailKeyPort',
+    })])
+    const normalized = tableSchemaAdapter.normalize(input, dataContext)
+    expect((normalized.model as any).data).toEqual({ collectionPort: 'records', detailKeyPort: 'records' })
+    expect(tableSchemaAdapter.validate(normalized, dataContext)).toEqual([expect.objectContaining({
+      code: 'TABLE_MODEL_STRUCTURE_INVALID',
+      path: '/model/data/detailKeyPort',
+    })])
+  })
+
   it('introspects dynamic cells, references, named bindings, and fonts', () => {
     const model = createTableModel({ kind: 'static', columnCount: 1, rowCount: 1 })
     const cell = model.bands[0]!.rows[0]!.cells[0]!

@@ -4,7 +4,7 @@ import type {
   TableModel,
   TableStyle,
 } from './model'
-import { isValidTableStableToken, TABLE_MODEL_MAX_JSON_NODES } from './model'
+import { findTableBindingPortRoleCollisions, isValidTableStableToken, TABLE_MODEL_MAX_JSON_NODES } from './model'
 
 export interface TableModelDecodeResult {
   value?: TableModel
@@ -166,6 +166,11 @@ export function decodeTableModelV1(raw: unknown, root: `/${string}` = '/model'):
       invalid(at(root, 'data'), issues, 'Data table models require data')
     else
       validateData(model.data, at(root, 'data'), issues)
+  }
+  if (issues.length === 0) {
+    for (const collision of findTableBindingPortRoleCollisions(model as unknown as TableModel)) {
+      invalid(`${root}${collision.path}`, issues, `Binding port ${collision.port} must not be shared across collection, detail-key, or cell roles`)
+    }
   }
   return issues.length === 0 ? { value: model as unknown as TableModel, issues } : { issues }
 }

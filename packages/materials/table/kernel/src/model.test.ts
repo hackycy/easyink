@@ -326,6 +326,25 @@ describe('assertValidTableModel', () => {
     expect(() => assertValidTableModel(model)).not.toThrow()
   })
 
+  it('rejects binding ports shared across semantic roles while allowing cell sharing', () => {
+    const semantic = createTableModel({ kind: 'data', columnCount: 2, rowCount: 1 })
+    semantic.data.detailKeyPort = semantic.data.collectionPort
+    expectInvalid(semantic, /binding port.*role|semantic/i)
+
+    for (const semanticPort of ['collection', 'detail'] as const) {
+      const model = createTableModel({ kind: 'data', columnCount: 2, rowCount: 1 })
+      model.data.detailKeyPort = 'detailKey'
+      const port = semanticPort === 'collection' ? model.data.collectionPort : model.data.detailKeyPort
+      model.bands[0]!.rows[0]!.cells[0]!.content = { kind: 'text', text: '', bindingPort: port }
+      expectInvalid(model, /binding port.*role|semantic/i)
+    }
+
+    const sharedCells = createTableModel({ kind: 'data', columnCount: 2, rowCount: 1 })
+    for (const cell of sharedCells.bands[0]!.rows[0]!.cells)
+      cell.content = { kind: 'text', text: '', bindingPort: 'shared-cell' }
+    expect(() => assertValidTableModel(sharedCells)).not.toThrow()
+  })
+
   it('rejects non-canonical text alignment and overflow values', () => {
     const justified = createTableModel({ kind: 'static', columnCount: 1, rowCount: 1 })
     justified.style.typography = { textAlign: 'justify' } as unknown as typeof justified.style.typography

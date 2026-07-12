@@ -139,6 +139,25 @@ describe('table model codec', () => {
     ]))
   })
 
+  it.each([
+    ['collection-detail', (model: any) => { model.data.detailKeyPort = model.data.collectionPort }, '/model/data/detailKeyPort'],
+    ['collection-cell', (model: any) => { model.bands[0].rows[0].cells[0].content.bindingPort = model.data.collectionPort }, '/model/bands/0/rows/0/cells/0/content/bindingPort'],
+    ['detail-cell', (model: any) => {
+      model.data.detailKeyPort = 'detailKey'
+      model.bands[0].rows[0].cells[0].content.bindingPort = 'detailKey'
+    }, '/model/bands/0/rows/0/cells/0/content/bindingPort'],
+  ])('reports %s port collisions at the conflicting model path', (_name, mutate, path) => {
+    const model = createTableModel({ kind: 'data', columnCount: 1, rowCount: 1 }) as any
+    mutate(model)
+
+    expect(decodeTableModelV1(model, '/model').issues).toContainEqual({
+      code: 'TABLE_MODEL_STRUCTURE_INVALID',
+      severity: 'error',
+      path,
+      message: expect.stringMatching(/binding port.*role|semantic/i),
+    })
+  })
+
   it('bounds structural work and diagnostics for oversized exact records', () => {
     const model = createTableModel({ kind: 'static', columnCount: 1, rowCount: 1 }) as any
     model.style = Object.fromEntries(Array.from({ length: 110_000 }, (_, index) => [`unknown${index}`, true]))
