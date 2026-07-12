@@ -44,7 +44,12 @@ export class DocumentTransactionEngine implements TransactionAPI {
   private undoStack: DocumentHistoryEntry[] = []
   private redoStack: DocumentHistoryEntry[] = []
   private listeners = new Set<() => void>()
-  private batchRecipes: Array<{ recipe: DocumentRecipe, options: DocumentTransactionOptions }> | null = null
+  private batchRecipes: Array<{
+    recipe: DocumentRecipe
+    options: DocumentTransactionOptions
+    createsBarrier: boolean
+  }> | null = null
+
   private barrierGeneration = 0
   private readonly now: () => number
   private readonly createId: () => string
@@ -77,23 +82,28 @@ export class DocumentTransactionEngine implements TransactionAPI {
     return this.commitCandidate(next as unknown as DocumentSchema, forward, inverse, options)
   }
 
-  run<TNode extends MaterialNode = MaterialNode>(nodeId: string, mutator: (draft: TNode) => void, options?: TxOptions): void {
-    if (!options?.operation)
-      this.markHistoryBarrier()
+  run<TNode extends MaterialNode = MaterialNode, TResult = void>(
+    nodeId: string,
+    mutator: (draft: TNode) => TResult,
+    options?: TxOptions,
+  ): TResult | void {
+    const createsBarrier = !options?.operation
     const transactionOptions: DocumentTransactionOptions = {
       label: options?.label ?? 'Edit',
       mergeKey: options?.mergeKey,
       mergeWindowMs: options?.mergeWindowMs,
       operation: options?.operation ?? opaqueNodeOperation(nodeId),
     }
+    let result: TResult | undefined
     const recipe: DocumentRecipe = (draft) => {
-      mutator(requireDocumentNode(draft, this.store.profile, nodeId) as TNode)
+      result = mutator(requireDocumentNode(draft, this.store.profile, nodeId) as TNode)
     }
     if (this.batchRecipes) {
-      this.batchRecipes.push({ recipe, options: transactionOptions })
+      this.batchRecipes.push({ recipe, options: transactionOptions, createsBarrier })
       return
     }
-    this.transact(recipe, transactionOptions)
+    this.transactWithOptionalBarrier(recipe, transactionOptions, createsBarrier)
+    return result
   }
 
   batch<T>(fn: () => T): T {
@@ -105,13 +115,13 @@ export class DocumentTransactionEngine implements TransactionAPI {
       const entries = this.batchRecipes
       this.batchRecipes = null
       if (entries.length > 0) {
-        this.transact((draft) => {
+        this.transactWithOptionalBarrier((draft) => {
           for (const entry of entries)
             entry.recipe(draft)
         }, {
           label: entries.at(-1)!.options.label,
           operation: combineStableOperationDescriptors('batch', entries.map(entry => entry.options.operation)),
-        })
+        }, entries.some(entry => entry.createsBarrier))
       }
       return result
     }
@@ -144,12 +154,12 @@ export class DocumentTransactionEngine implements TransactionAPI {
   }
 
   reset(document: DocumentSchema, nodeStates?: ReadonlyMap<string, MaterialNodeLoadState>): void {
-    this.markHistoryBarrier()
     assertJsonValue(document, this.store.jsonValidation)
     const report = nodeStates
       ? validateDocumentWithProfile(document, this.store.profile, { mode: 'history-restore', targetNodeStates: nodeStates })
       : validateDocumentWithProfile(document, this.store.profile, { affectedNodeIds: 'all' })
     assertValidReport(report)
+    this.markHistoryBarrier()
     this.store[DOCUMENT_STORE_WRITER]({ kind: 'reset', document, validationReport: report })
     this.clear()
   }
@@ -198,6 +208,26 @@ export class DocumentTransactionEngine implements TransactionAPI {
     this.redoStack = []
     this.notify()
     return changeSet
+  }
+
+  private transactWithOptionalBarrier(
+    recipe: DocumentRecipe,
+    options: DocumentTransactionOptions,
+    createsBarrier: boolean,
+  ): DocumentChangeSet | null {
+    const priorGeneration = this.barrierGeneration
+    if (createsBarrier)
+      this.barrierGeneration = priorGeneration + 1
+    try {
+      const changeSet = this.transact(recipe, options)
+      if (!changeSet)
+        this.barrierGeneration = priorGeneration
+      return changeSet
+    }
+    catch (error) {
+      this.barrierGeneration = priorGeneration
+      throw error
+    }
   }
 
   private validateCandidate(next: DocumentSchema, forward: readonly Patch[], inverse: readonly Patch[]) {

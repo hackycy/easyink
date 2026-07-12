@@ -252,6 +252,86 @@ describe('documentTransactionEngine', () => {
     expect(engine.store.document.elements[0]!.x).toBe(1)
   })
 
+  it.each([
+    ['no-op', (engine: DocumentTransactionEngine) => engine.run('a', () => {}, { mergeKey: 'legacy' })],
+    ['throw', (engine: DocumentTransactionEngine) => expect(() => engine.run('a', () => {
+      throw new Error('abort')
+    }, { mergeKey: 'legacy' })).toThrow('abort')],
+  ])('rolls back an omitted-operation barrier after a %s recipe', (_case, fail) => {
+    const profile = createTestCompiledMaterialProfile()
+    const schema = createCanonicalDefaultSchema()
+    schema.elements = [profile.createNode('box', { id: 'a', x: 0 })]
+    const engine = new DocumentTransactionEngine(new DocumentStore(schema, profile), { now: () => 10 })
+    const operation = { ...moveOperation, targetIds: ['node:a'] }
+
+    engine.run('a', (draft) => {
+      draft.x = 1
+    }, { mergeKey: 'move:a', operation })
+    fail(engine)
+    engine.run('a', (draft) => {
+      draft.x = 2
+    }, { mergeKey: 'move:a', operation })
+
+    expect(engine.totalCount).toBe(1)
+    engine.undo()
+    expect(engine.store.document.elements[0]!.x).toBe(0)
+  })
+
+  it('rolls back omitted-operation and reset barriers when validation fails', () => {
+    const baseAdapter = recordSchemaAdapter(1)
+    const profile = createTestCompiledMaterialProfile([createTestMaterialManifest({
+      type: 'box',
+      schemaAdapter: {
+        ...baseAdapter,
+        validate: node => node.model.value === -1
+          ? [{ code: 'BOX_INVALID', severity: 'error', path: '/model/value', message: 'invalid value' }]
+          : [],
+      },
+    })])
+    const schema = createCanonicalDefaultSchema()
+    schema.elements = [profile.createNode('box', { id: 'a', model: { value: 0 } })]
+    const engine = new DocumentTransactionEngine(new DocumentStore(schema, profile), { now: () => 10 })
+    const operation = {
+      kind: 'material.property',
+      sessionPath: [],
+      targetIds: ['node:a'],
+      fieldPaths: ['/model/value'],
+      selectionLineage: null,
+      structural: false,
+    } as const
+
+    engine.run('a', (draft) => {
+      draft.model.value = 1
+    }, { mergeKey: 'value:a', operation })
+    expect(() => engine.run('a', (draft) => {
+      draft.model.value = -1
+    })).toThrow(DocumentValidationError)
+    const invalidReset = { ...createCanonicalDefaultSchema(), meta: { invalid: undefined } }
+    expect(() => engine.reset(invalidReset as never)).toThrow()
+    engine.run('a', (draft) => {
+      draft.model.value = 2
+    }, { mergeKey: 'value:a', operation })
+
+    expect(engine.totalCount).toBe(1)
+    engine.undo()
+    expect(engine.store.document.elements[0]!.model.value).toBe(0)
+  })
+
+  it('returns a non-batch mutator result', () => {
+    const profile = createTestCompiledMaterialProfile()
+    const schema = createCanonicalDefaultSchema()
+    schema.elements = [profile.createNode('box', { id: 'a', x: 0 })]
+    const engine = new DocumentTransactionEngine(new DocumentStore(schema, profile))
+
+    const result = engine.run('a', (draft) => {
+      draft.x = 1
+      return 'updated'
+    })
+
+    expect(result).toBe('updated')
+    expect(engine.store.document.elements[0]!.x).toBe(1)
+  })
+
   it('batches nested edits atomically and abandons recipes when the batch throws', () => {
     const profile = createTestCompiledMaterialProfile()
     const schema = createCanonicalDefaultSchema()
