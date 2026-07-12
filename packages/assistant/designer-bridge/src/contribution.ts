@@ -91,7 +91,7 @@ export function createAssistantContribution(options: CreateAssistantContribution
         handler: (_args, commandCtx) => rollbackAssistantDesigner(commandCtx.store),
       })
 
-      ctx.registerCommand<void, { selectedIds: string[], schema: unknown, dataSources: unknown[] }>({
+      ctx.registerCommand<void, { selectedIds: readonly string[], schema: unknown, dataSources: unknown[] }>({
         id: 'assistant.attachCurrentSelection',
         handler: (_args, commandCtx) => ({
           selectedIds: commandCtx.store.selection.ids,

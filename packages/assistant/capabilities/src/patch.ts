@@ -57,7 +57,7 @@ export function selectAssistantPatchOperations(
 export function selectAssistantPatchOperationsForElements(
   operations: AssistantPatchOperation[],
   schema: DocumentSchema,
-  elementIds: string[],
+  elementIds: readonly string[],
 ): AssistantPatchOperation[] {
   const selected = new Set(elementIds)
   if (!selected.size)
