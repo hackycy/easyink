@@ -1,11 +1,11 @@
-import type { CompiledMaterialProfile, EphemeralPanelDef, FontLoadRequest, FontLoadStatus, FontManager, FontProvider, MaterialFacetHost, PropertyPanelOverlay } from '@easyink/core'
+import type { CompiledMaterialProfile, EphemeralPanelDef, FontLoadRequest, FontLoadStatus, FontManager, FontProvider, MaterialFacetHost, MaterialLoadDiagnostic, MaterialNodeLoadState, PropertyPanelOverlay } from '@easyink/core'
 import type { DocumentSchema, DocumentSchemaInput, ElementGroupSchema, MaterialNode } from '@easyink/schema'
 import type { PaperPreset } from '@easyink/shared'
 import type { DesignerRuntimeConfig } from '../runtime-config'
 import type { DesignerInteractionProvider, LazyMaterialExtensionFactory, LocaleMessageRegistration, LocaleMessages, MaterialCatalogEntry, MaterialCatalogGroup, MaterialDefinition, MaterialDesignerExtension, MaterialExtensionFactory, PreferenceProvider, SnapLine, StatusBarState } from '../types'
-import { CommandManager, MaterialFacetHost as CoreMaterialFacetHost, SelectionModel } from '@easyink/core'
+import { CommandManager, MaterialFacetHost as CoreMaterialFacetHost, loadDocumentWithProfile, SelectionModel, validateDocumentWithProfile } from '@easyink/core'
 import { DataSourceRegistry } from '@easyink/datasource'
-import { findNodeById, normalizeDocumentSchema } from '@easyink/schema'
+import { findNodeById } from '@easyink/schema'
 import { markRaw } from 'vue'
 import { EditingSessionManager } from '../editing/editing-session-manager'
 import { DesignerInteractionService } from '../interactions/interaction-service'
@@ -29,6 +29,8 @@ export class DesignerStore {
   readonly materialFacetHost: MaterialFacetHost
   // ─── Template state (enters Schema + command history) ─────────
   private _schema: DocumentSchema
+  private _materialDiagnostics: readonly MaterialLoadDiagnostic[] = Object.freeze([])
+  private _materialNodeStates: ReadonlyMap<string, MaterialNodeLoadState> = new Map()
 
   // ─── Core services ────────────────────────────────────────────
   readonly commands = new CommandManager()
@@ -94,7 +96,10 @@ export class DesignerStore {
   ) {
     this.materialProfile = resolveDesignerMaterialProfile(runtimeConfig?.materials)
     this.materialFacetHost = markRaw(new CoreMaterialFacetHost())
-    this._schema = normalizeDocumentSchema(schema)
+    const loaded = loadDocumentWithProfile(schema, this.materialProfile)
+    this._schema = loaded.schema
+    this._materialDiagnostics = loaded.diagnostics
+    this._materialNodeStates = loaded.nodeStates
     this.fontService = new FontService(this.diagnostics)
     this.materialRegistry = new MaterialRegistry()
     this.paperRegistry = new PaperRegistry(runtimeConfig?.paper)
@@ -121,12 +126,47 @@ export class DesignerStore {
     return this._schema
   }
 
+  get materialDiagnostics(): readonly MaterialLoadDiagnostic[] {
+    return this._materialDiagnostics
+  }
+
+  get materialNodeStates(): ReadonlyMap<string, MaterialNodeLoadState> {
+    return this._materialNodeStates
+  }
+
   setSchema(schema?: DocumentSchemaInput): void {
-    this._schema = normalizeDocumentSchema(schema)
+    const loaded = loadDocumentWithProfile(schema, this.materialProfile)
+    this._schema = loaded.schema
+    this._materialDiagnostics = loaded.diagnostics
+    this._materialNodeStates = loaded.nodeStates
     this.selection.clear()
     this.commands.clear()
     this.editingSession.exit()
     void this.preloadDocumentFonts()
+  }
+
+  publishSchemaCandidate(candidate: DocumentSchema, affectedNodeIds: 'all' | ReadonlySet<string>): boolean {
+    const report = validateDocumentWithProfile(candidate, this.materialProfile, {
+      mode: 'edit',
+      baselineNodeStates: this._materialNodeStates,
+      affectedNodeIds,
+    })
+    if (!report.valid)
+      return false
+    this._schema = candidate
+    this._materialDiagnostics = report.diagnostics
+    this._materialNodeStates = report.nodeStates
+    return true
+  }
+
+  restoreSchemaFromHistory(candidate: DocumentSchema, targetNodeStates: ReadonlyMap<string, MaterialNodeLoadState>): boolean {
+    const report = validateDocumentWithProfile(candidate, this.materialProfile, { mode: 'history-restore', targetNodeStates })
+    if (!report.valid)
+      return false
+    this._schema = candidate
+    this._materialDiagnostics = report.diagnostics
+    this._materialNodeStates = report.nodeStates
+    return true
   }
 
   private applyRuntimeDefaults(config: DesignerRuntimeConfig | undefined, input: DocumentSchemaInput | undefined): void {
