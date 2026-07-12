@@ -1,14 +1,18 @@
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import type { Patch } from 'mutative'
 import type { DocumentChangeSet, DocumentOperationDescriptor } from './document-change-set'
+import type { PreviewValidationReport } from './document-preview-validation'
 import type { DocumentStore } from './document-store'
 import type { TransactionAPI, TxOptions } from './editing-session'
+import type { PreviewCommitPayload, PreviewPublishPayload } from './preview-transaction'
 import type { MaterialDocumentValidationReport, MaterialLoadDiagnostic, MaterialNodeLoadState } from './schema-adapter'
 import { assertJsonValue, generateId } from '@easyink/shared'
 import { apply, create, markSimpleObject } from 'mutative'
 import { combineStableOperationDescriptors, createDocumentChangeSet, mergeDocumentChangeSets } from './document-change-set'
 import { forkDocumentIndexSnapshot, requireDocumentNode } from './document-index'
+import { assertPatchScopedJsonCandidate, RevisionPreviewValidationCache, validatePreviewWithProfile } from './document-preview-validation'
 import { DOCUMENT_STORE_WRITER } from './document-store-internal'
+import { PreviewTransaction } from './preview-transaction'
 import { validateDocumentWithProfile } from './schema-adapter'
 
 const DOCUMENT_MUTATIVE_MARK = markSimpleObject
@@ -60,6 +64,9 @@ export class DocumentTransactionEngine implements TransactionAPI {
     createsBarrier: boolean
   }> | null = null
 
+  private activePreview: PreviewTransaction | null = null
+  private readonly previewValidationCache = new RevisionPreviewValidationCache()
+
   private barrierGeneration = 0
   private transactionDepth = 0
   private readonly now: () => number
@@ -83,6 +90,7 @@ export class DocumentTransactionEngine implements TransactionAPI {
   }
 
   transact(recipe: DocumentRecipe, options: DocumentTransactionOptions): DocumentChangeSet | null {
+    this.assertNoActivePreview()
     this.assertHistoryMutationAllowed()
     return this.withTransactionGuard(() => {
       const [next, forward, inverse] = create(this.store.committedDocument, recipe, {
@@ -123,6 +131,7 @@ export class DocumentTransactionEngine implements TransactionAPI {
   }
 
   batch<T>(fn: () => T): T {
+    this.assertNoActivePreview()
     if (this.transactionDepth > 0)
       throw new DocumentTransactionReentrancyError()
     if (this.batchRecipes)
@@ -150,21 +159,31 @@ export class DocumentTransactionEngine implements TransactionAPI {
   }
 
   undo(): void {
+    this.assertNoActivePreview()
     this.assertHistoryMutationAllowed()
-    this.withTransactionGuard(() => this.applyHistory('undo'))
+    this.withTransactionGuard(() => {
+      this.barrierGeneration += 1
+      this.applyHistory('undo')
+    })
   }
 
   redo(): void {
+    this.assertNoActivePreview()
     this.assertHistoryMutationAllowed()
-    this.withTransactionGuard(() => this.applyHistory('redo'))
+    this.withTransactionGuard(() => {
+      this.barrierGeneration += 1
+      this.applyHistory('redo')
+    })
   }
 
   markHistoryBarrier(): void {
+    this.assertNoActivePreview()
     this.assertHistoryMutationAllowed()
     this.barrierGeneration += 1
   }
 
   goTo(index: number): void {
+    this.assertNoActivePreview()
     this.assertHistoryMutationAllowed()
     if (!Number.isInteger(index) || index < 0 || index > this.totalCount)
       throw new RangeError(`History index ${index} is out of range`)
@@ -177,6 +196,7 @@ export class DocumentTransactionEngine implements TransactionAPI {
   }
 
   clear(): void {
+    this.assertNoActivePreview()
     this.assertHistoryMutationAllowed()
     this.withTransactionGuard(() => this.clearHistory())
   }
@@ -188,6 +208,7 @@ export class DocumentTransactionEngine implements TransactionAPI {
   }
 
   reset(document: DocumentSchema, nodeStates?: ReadonlyMap<string, MaterialNodeLoadState>): void {
+    this.assertNoActivePreview()
     this.assertHistoryMutationAllowed()
     this.withTransactionGuard(() => {
       assertJsonValue(document, this.store.jsonValidation)
@@ -204,6 +225,21 @@ export class DocumentTransactionEngine implements TransactionAPI {
   onChange(listener: () => void): () => void {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
+  }
+
+  beginPreview(options: DocumentTransactionOptions): PreviewTransaction {
+    this.assertNoActivePreview()
+    this.assertHistoryMutationAllowed()
+    this.barrierGeneration += 1
+    const preview: PreviewTransaction = new PreviewTransaction(
+      this.store.committedDocument,
+      this.store.committedIndex,
+      options,
+      payload => this.publishPreview(preview, payload),
+      payload => this.finalizePreview(preview, payload),
+    )
+    this.activePreview = preview
+    return preview
   }
 
   private commitCandidate(
@@ -247,6 +283,87 @@ export class DocumentTransactionEngine implements TransactionAPI {
     return changeSet
   }
 
+  private publishPreview(owner: PreviewTransaction, payload: PreviewPublishPayload): PreviewValidationReport {
+    this.assertPreviewOwner(owner)
+    assertPatchScopedJsonCandidate(payload.document, payload.forward, this.store.jsonValidation)
+    const [analysisForward, analysisInverse] = normalizeAnalysisPatches(
+      payload.forward,
+      payload.inverse,
+      this.store.committedDocument,
+      payload.document,
+    )
+    const fork = forkDocumentIndexSnapshot(
+      this.store.committedIndex,
+      payload.document,
+      this.store.profile,
+      this.store.revision,
+      analysisForward,
+      analysisInverse,
+    )
+    this.previewValidationCache.reset(this.store.revision)
+    const report = validatePreviewWithProfile({
+      document: payload.document,
+      beforeIndex: this.store.committedIndex,
+      index: fork.index,
+      impact: fork.impact,
+      profile: this.store.profile,
+      baselineNodeStates: this.store.materialNodeStates,
+      cache: this.previewValidationCache,
+    })
+    this.store[DOCUMENT_STORE_WRITER]({ kind: 'preview', document: payload.document, index: fork.index })
+    return report
+  }
+
+  private finalizePreview(owner: PreviewTransaction, payload: PreviewCommitPayload | null): void {
+    this.assertPreviewOwner(owner)
+    if (!payload) {
+      this.activePreview = null
+      this.store[DOCUMENT_STORE_WRITER]({ kind: 'preview-cancel' })
+      return
+    }
+    this.withTransactionGuard(() => {
+      const { nextIndex, affectedNodeIds, report } = this.validateCandidate(
+        payload.document,
+        payload.forward,
+        payload.inverse,
+      )
+      const beforeNodeStates = this.store.materialNodeStates
+      const timestamp = this.now()
+      const changeSet = createDocumentChangeSet({
+        id: this.createId(),
+        label: payload.options.label,
+        baseRevision: this.store.revision,
+        committedRevision: this.store.revision + 1,
+        startedAt: timestamp,
+        updatedAt: timestamp,
+        mergeKey: payload.options.mergeKey,
+        mergeWindowMs: payload.options.mergeWindowMs ?? 300,
+        barrierGeneration: this.barrierGeneration,
+        affectedNodeIds,
+        operation: payload.options.operation,
+      })
+      const entry: DocumentHistoryEntry = {
+        changeSet,
+        forward: freezePatches(payload.forward),
+        inverse: freezePatches(payload.inverse),
+        beforeNodeStates,
+        afterNodeStates: report.nodeStates,
+      }
+      this.store[DOCUMENT_STORE_WRITER]({
+        kind: 'commit',
+        document: payload.document,
+        index: nextIndex,
+        changeSet,
+        validationReport: report,
+      })
+      this.recordHistory(entry)
+      this.redoStack = []
+      this.activePreview = null
+      this.previewValidationCache.reset(this.store.revision)
+      this.notify()
+    })
+  }
+
   private transactWithOptionalBarrier(
     recipe: DocumentRecipe,
     options: DocumentTransactionOptions,
@@ -270,6 +387,16 @@ export class DocumentTransactionEngine implements TransactionAPI {
   private assertHistoryMutationAllowed(): void {
     if (this.transactionDepth > 0 || this.batchRecipes)
       throw new DocumentTransactionReentrancyError()
+  }
+
+  private assertPreviewOwner(owner: PreviewTransaction): void {
+    if (this.activePreview !== owner)
+      throw new Error('PreviewTransaction is not owned by this engine')
+  }
+
+  private assertNoActivePreview(): void {
+    if (this.activePreview)
+      throw new Error('A preview transaction is active')
   }
 
   private withTransactionGuard<T>(fn: () => T): T {

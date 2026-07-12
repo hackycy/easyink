@@ -355,6 +355,8 @@ export { applyJsonPatches, PatchCommand } from './patch-command'
 
 export type { PatchCommandOptions } from './patch-command'
 
+export { PreviewTransaction } from './preview-transaction'
+
 export { runFlowYReflow } from './reflow-engine'
 export type { ReflowEngineInput, ReflowEngineResult } from './reflow-engine'
 
@@ -369,6 +371,7 @@ export type {
   MaterialSchemaIssue,
   SchemaAdapter,
   SchemaAdapterContext,
+  SchemaAdapterPreviewContext,
   SchemaAdapterStage,
   SchemaMigration,
   SchemaMigrationFixture,

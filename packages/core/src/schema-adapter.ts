@@ -16,6 +16,11 @@ export interface SchemaAdapterContext {
   materialType: string
 }
 
+export interface SchemaAdapterPreviewContext extends SchemaAdapterContext {
+  readonly previousNode: MaterialNode | undefined
+  readonly changedPaths: readonly `/${string}`[]
+}
+
 export interface MaterialSchemaIssue {
   code: string
   severity: 'error' | 'warning'
@@ -52,6 +57,10 @@ export interface SchemaAdapter {
   validateInput: (node: AdaptableMaterialNode, context: SchemaAdapterContext) => readonly MaterialSchemaIssue[]
   normalize: (node: AdaptableMaterialNode, context: SchemaAdapterContext) => AdaptableMaterialNode
   validate: (node: AdaptableMaterialNode, context: SchemaAdapterContext) => readonly MaterialSchemaIssue[]
+  validatePreview?: (
+    node: AdaptableMaterialNode,
+    context: SchemaAdapterPreviewContext,
+  ) => readonly MaterialSchemaIssue[]
   introspect: (node: MaterialNode, context: SchemaAdapterContext) => MaterialIntrospection
   convertModelUnits?: (
     model: Readonly<Record<string, unknown>>,
