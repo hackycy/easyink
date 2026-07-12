@@ -67,6 +67,12 @@ export type {
 
 // ─── Editing Behavior Architecture (Chapter 22) ───────────────────
 
+export { DocumentIndexSnapshot, DuplicateDocumentNodeIdError, requireDocumentNode } from './document-index'
+
+// ─── Core Services ────────────────────────────────────────────────
+
+export type { DocumentSlotPolicySnapshot } from './document-index'
+
 export type {
   BehaviorContext,
   BehaviorEvent,
@@ -91,8 +97,6 @@ export type {
   TxOptions,
 } from './editing-session'
 
-// ─── Core Services ────────────────────────────────────────────────
-
 export {
   createEditorSurfacePlan,
   findPageForDocumentY,
@@ -101,10 +105,10 @@ export {
   projectDocumentPointToEditorSurface,
   projectEditorSurfacePointToDocument,
 } from './editor-surface-plan'
-
 export type { EditorSurfacePagePlan, EditorSurfacePlan, EditorSurfacePointProjection } from './editor-surface-plan'
 
 export { collectFontFamilies, FontManager } from './font'
+
 export type {
   FontBatchLoadOptions,
   FontBatchLoadResult,
@@ -138,12 +142,11 @@ export type { Point, Rect, Size } from './geometry'
 export { AsyncHook, createInternalHooks, SyncHook, SyncWaterfallHook } from './hooks'
 
 export type { CommandRecord, InternalHooks, MaterialRenderPayload, PagePlanningContext, ViewerDiagnosticEvent } from './hooks'
-
 export { createFragmentFromNode, readNodeFlowConstraints, readNodeRepeatScope } from './layout-plan'
 
 export type { FlowBreakConstraints, LayoutDiagnostic, LayoutDocument, LayoutFragment, OutputPagePlan } from './layout-plan'
-export { runLayoutPipeline } from './layout-strategy'
 
+export { runLayoutPipeline } from './layout-strategy'
 export type { RunLayoutPipelineOptions } from './layout-strategy'
 
 export type {
@@ -156,7 +159,6 @@ export type {
   MaterialPortsBindingDefinition,
 } from './material-binding'
 export { assertMaterialBindingValue, resolveMaterialBindingPortPolicy } from './material-binding'
-
 export { assertMaterialConformance, runMaterialConformance } from './material-conformance'
 export type { MaterialConformanceIssue, MaterialConformanceOptions, MaterialConformanceReport } from './material-conformance'
 export {
