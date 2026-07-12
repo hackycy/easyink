@@ -1,5 +1,6 @@
 import type { MaterialNode } from '@easyink/schema'
 import type { BindingDisplayFormat, UnitType } from '@easyink/shared'
+import type { DocumentOperationDescriptor } from './document-change-set'
 import type { Point, Rect } from './geometry'
 import type { BindingExpression } from './material-binding'
 import type { DatasourceFieldInfo, PropertyDescriptorLike } from './material-extension'
@@ -168,11 +169,11 @@ export interface EphemeralPanelDef {
 
 // ─── Transaction ────────────────────────────────────────────────────
 
-/** Transaction API for draft-based mutations. */
+/** Single-writer transaction API for validated document mutations. */
 export interface TransactionAPI {
-  /** Run a mutation on a node. Generates patches and creates a PatchCommand. */
+  /** Run a node mutation through the document transaction engine. */
   run: <TNode extends MaterialNode = MaterialNode, TResult = void>(nodeId: string, mutator: (draft: TNode) => TResult, options?: TxOptions) => TResult | void
-  /** Batch multiple run() calls into a single Command. */
+  /** Batch multiple run() calls into one barriered DocumentChangeSet. */
   batch: <T>(fn: () => T) => T
 }
 
@@ -183,6 +184,8 @@ export interface TxOptions {
   mergeWindowMs?: number
   /** Description for history panel */
   label?: string
+  /** Stable operation metadata for history and integrations; patches remain authoritative for validation scope. */
+  operation?: DocumentOperationDescriptor
 }
 
 // ─── SelectionStore ─────────────────────────────────────────────────

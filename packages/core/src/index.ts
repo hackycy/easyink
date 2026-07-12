@@ -72,10 +72,12 @@ export type { DocumentChangeSet, DocumentFieldPath, DocumentOperationDescriptor 
 export { DocumentIndexSnapshot, DuplicateDocumentNodeIdError, requireDocumentNode } from './document-index'
 export type { DocumentSlotPolicySnapshot } from './document-index'
 export { DocumentStore } from './document-store'
+export type { DocumentStoreEvent, DocumentStoreEventKind, DocumentStoreOptions } from './document-store'
+export { DocumentTransactionEngine, DocumentValidationError } from './document-transaction-engine'
 
 // ─── Core Services ────────────────────────────────────────────────
 
-export type { DocumentStoreEvent, DocumentStoreEventKind, DocumentStoreOptions } from './document-store'
+export type { DocumentRecipe, DocumentTransactionEngineOptions, DocumentTransactionOptions } from './document-transaction-engine'
 
 export type {
   BehaviorContext,
