@@ -87,7 +87,7 @@ function makeCtx(store: FakeStore): { ctx: MarqueeSelectContext, marqueeRef: Ret
   document.body.appendChild(pageEl)
   return {
     ctx: {
-      store: store as MarqueeSelectContext['store'],
+      store: store as unknown as MarqueeSelectContext['store'],
       getPageEl: () => pageEl,
       marqueeRef,
     },
