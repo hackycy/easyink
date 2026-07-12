@@ -78,9 +78,9 @@ export function rollbackAssistantDesigner(store: ContributionContext['store']): 
   if (!assistant?.beforeApplySchema)
     return false
   store.setSchema(assistant.beforeApplySchema)
+  const { afterApplySchema: _afterApplySchema, ...rest } = assistant
   store.setExtension('assistant', {
-    ...assistant,
-    afterApplySchema: undefined,
+    ...rest,
     appliedAt: Date.now(),
   })
   store.markDraftModified()
