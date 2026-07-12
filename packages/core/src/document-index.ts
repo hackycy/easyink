@@ -113,7 +113,7 @@ export function forkDocumentIndexSnapshot(
   const changedDocumentPaths = uniquePaths(allPatches.map(patch => toPath(patch.path)))
   const replacedDocumentPaths = new Set(forward.filter(patch => patch.op === 'replace').map(patch => JSON.stringify(toPath(patch.path))))
   for (const path of changedDocumentPaths)
-    validatePatchPath(base, path)
+    validatePatchPath(base, document, profile, path)
   const candidate = forkCandidateIndex(base, document, profile, revision, changedDocumentPaths)
   const candidateData = getSnapshotInternals(candidate)
   const changedPathsByNodeId = new Map<string, Set<`/${string}`>>()
@@ -229,7 +229,8 @@ function forkCandidateIndex(
   patchPaths: readonly Path[],
 ): DocumentIndexSnapshot {
   const before = getSnapshotInternals(base)
-  const touchedRoots = collectTouchedArrayRoots(base, patchPaths)
+  const structuralPaths = patchPaths.filter(path => isStructuralNodePath(before.paths, path))
+  const touchedRoots = collectTouchedArrayRoots(base, structuralPaths)
   const records = collectTouchedRecords(document, touchedRoots)
   const nodeChanges = new Map<string, MaterialNode | undefined>()
   const addressChanges = new Map<string, MaterialNodeAddress | undefined>()
@@ -270,6 +271,42 @@ function forkCandidateIndex(
             reparent: structure.reparent,
           }))
         }
+      }
+    }
+  }
+  const directNodeIds = new Set<string>()
+  for (const path of patchPaths) {
+    if (path[0] !== 'elements')
+      continue
+    const owner = ownerForPath(before.paths, path)
+    const relative = owner ? path.slice(owner.path.length) : []
+    if (owner && !removedIds.has(owner.nodeId)
+      && (!isStructuralNodePath(before.paths, path) || relative[0] === 'slots')) {
+      directNodeIds.add(owner.nodeId)
+    }
+  }
+  for (const id of directNodeIds) {
+    const path = before.paths.get(id)!
+    const node = readNode(document, path)
+    if (node.id !== id)
+      throw new Error(`Indexed path for document node "${id}" is stale`)
+    if (before.nodes.get(id) !== node)
+      nodeChanges.set(id, node)
+    const oldNode = before.nodes.get(id)!
+    if (node.type !== oldNode.type || !sameStrings(Object.keys(node.slots), Object.keys(oldNode.slots))) {
+      for (const key of before.slots.keys()) {
+        if (key.startsWith(`${id}\u0000`))
+          slotChanges.set(key, undefined)
+      }
+      for (const structure of inspectMaterialNode(node, profile).introspection.structures) {
+        slotChanges.set(slotKey(id, structure.slot), Object.freeze({
+          ownerNodeId: id,
+          slot: structure.slot,
+          policyId: structure.policyId,
+          coordinateSpace: structure.coordinateSpace,
+          layoutParticipation: structure.layoutParticipation,
+          reparent: structure.reparent,
+        }))
       }
     }
   }
@@ -350,7 +387,12 @@ const CANONICAL_NODE_FIELDS = new Set([
 ])
 const OPAQUE_NODE_FIELDS = new Set(['model', 'bindings', 'extensions', 'compat'])
 
-function validatePatchPath(base: DocumentIndexSnapshot, path: Path): void {
+function validatePatchPath(
+  base: DocumentIndexSnapshot,
+  document: DocumentSchema,
+  profile: CompiledMaterialProfile,
+  path: Path,
+): void {
   if (path[0] !== 'elements')
     return
   const data = getSnapshotInternals(base)
@@ -374,11 +416,25 @@ function validatePatchPath(base: DocumentIndexSnapshot, path: Path): void {
     return
   }
   const slot = relative[1]
-  if (typeof slot !== 'string' || !base.getNode(owner.nodeId)?.slots[slot])
+  const candidateOwner = readNode(document, owner.path)
+  const candidatePolicy = candidateOwner.id === owner.nodeId
+    ? inspectMaterialNode(candidateOwner, profile).introspection.structures.some(structure => structure.slot === slot)
+    : false
+  if (typeof slot !== 'string' || (!base.getSlot(owner.nodeId, slot) && !candidatePolicy))
     throw new Error('Document patch slot ownership cannot be proven')
   if (relative.length === 2 || (relative.length === 3 && typeof relative[2] === 'number'))
     return
   throw new Error('Document patch path crosses a non-canonical slot container')
+}
+
+function isStructuralNodePath(paths: ReadonlyMap<string, Path>, path: Path): boolean {
+  if (path[0] !== 'elements')
+    return false
+  const owner = ownerForPath(paths, path)
+  if (!owner)
+    return true
+  const relative = path.slice(owner.path.length)
+  return relative.length === 0 || relative[0] === 'id' || relative[0] === 'type' || relative[0] === 'slots'
 }
 
 function collectTouchedArrayRoots(base: DocumentIndexSnapshot, paths: readonly Path[]): Path[] {
@@ -410,9 +466,20 @@ function readNodeArray(document: DocumentSchema, path: Path): readonly MaterialN
   let value: unknown = document
   for (const segment of path)
     value = (value as Record<string | number, unknown>)[segment]
+  if (value === undefined)
+    return []
   if (!Array.isArray(value))
     throw new Error('Document patch node array is invalid')
   return value as MaterialNode[]
+}
+
+function readNode(document: DocumentSchema, path: Path): MaterialNode {
+  let value: unknown = document
+  for (const segment of path)
+    value = (value as Record<string | number, unknown>)[segment]
+  if (!value || typeof value !== 'object')
+    throw new Error('Document patch node is invalid')
+  return value as MaterialNode
 }
 
 function ownerAddressForArray(document: DocumentSchema, path: Path): MaterialNodeAddress | undefined {
@@ -458,8 +525,11 @@ function slotKey(ownerNodeId: string, slot: string): string {
 function toPath(path: string | readonly (string | number)[]): Path {
   if (typeof path !== 'string') {
     for (const segment of path) {
-      if ((typeof segment !== 'string' && typeof segment !== 'number') || isUnsafeSegment(segment))
+      if ((typeof segment !== 'string' && typeof segment !== 'number')
+        || (typeof segment === 'number' && (!Number.isInteger(segment) || segment < 0))
+        || isUnsafeSegment(segment)) {
         throw new Error('Document patch path is unsafe')
+      }
     }
     return path
   }

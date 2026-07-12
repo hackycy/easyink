@@ -3,7 +3,7 @@ import { createDefaultSchema } from '@easyink/schema'
 import { create } from 'mutative'
 import { describe, expect, it } from 'vitest'
 import { DocumentIndexSnapshot, DuplicateDocumentNodeIdError, forkDocumentIndexSnapshot } from './document-index'
-import { createTestCompiledMaterialProfile } from './testing/material-profile'
+import { createTestCompiledMaterialProfile, createTestMaterialManifest } from './testing/material-profile'
 
 describe('documentIndexSnapshot', () => {
   it('indexes root and nested slot nodes by stable ID', () => {
@@ -51,6 +51,80 @@ describe('documentIndexSnapshot', () => {
     expect(result.index.getAddress('owner')).toBe(ownerAddress)
     expect(result.impact.affectedNodeIds).toEqual(['child'])
     expect(result.impact.changedPathsByNodeId.get('child')).toEqual(['/model/value'])
+  })
+
+  it('updates a root node field without traversing unrelated candidate nodes', () => {
+    const profile = createTestCompiledMaterialProfile()
+    const changed = profile.createNode('box', { id: 'changed', x: 1 })
+    const unrelated = profile.createNode('box', { id: 'unrelated' })
+    const schema = { ...createDefaultSchema(), elements: [changed, unrelated] }
+    const before = DocumentIndexSnapshot.build(schema, profile, 1)
+    Object.defineProperty(unrelated, 'slots', {
+      configurable: true,
+      get: () => { throw new Error('unrelated subtree traversed') },
+    })
+    const next = { ...schema, elements: [{ ...changed, x: 2 }, unrelated] }
+
+    const result = forkDocumentIndexSnapshot(before, next, profile, 2, [
+      { op: 'replace', path: ['elements', 0, 'x'], value: 2 },
+    ], [
+      { op: 'replace', path: ['elements', 0, 'x'], value: 1 },
+    ])
+
+    expect(result.index.getNode('changed')).toBe(next.elements[0])
+    expect(result.index.getNode('unrelated')).toBe(unrelated)
+    expect(result.impact.affectedNodeIds).toEqual(['changed'])
+  })
+
+  it('adds and deletes a profile-proven dynamic slot key locally', () => {
+    const profile = createTestCompiledMaterialProfile([
+      createTestMaterialManifest({
+        type: 'dynamic-container',
+        slots: [{
+          id: 'cell',
+          key: { kind: 'prefix', value: 'cell:' },
+          coordinateSpace: 'slot',
+          layoutParticipation: 'owner',
+          reparent: 'allowed',
+        }],
+      }),
+      createTestMaterialManifest({ type: 'box' }),
+    ])
+    const owner = profile.createNode('dynamic-container', { id: 'owner', slots: {} })
+    const schema = { ...createDefaultSchema(), elements: [owner] }
+    const before = DocumentIndexSnapshot.build(schema, profile, 1)
+    const child = profile.createNode('box', { id: 'child' })
+    const addedDocument = { ...schema, elements: [
+      { ...owner, slots: { 'cell:a': [child] } },
+    ] }
+    const added = forkDocumentIndexSnapshot(before, addedDocument, profile, 2, [
+      { op: 'add', path: ['elements', 0, 'slots', 'cell:a'], value: [child] },
+    ], [
+      { op: 'remove', path: ['elements', 0, 'slots', 'cell:a'] },
+    ])
+
+    expect(added.index.getSlot('owner', 'cell:a')).toMatchObject({ policyId: 'cell' })
+    expect(added.index.getParentNodeId('child')).toBe('owner')
+
+    const removedDocument = { ...schema, elements: [{ ...owner, slots: {} }] }
+    const removed = forkDocumentIndexSnapshot(added.index, removedDocument, profile, 3, [
+      { op: 'remove', path: ['elements', 0, 'slots', 'cell:a'] },
+    ], [
+      { op: 'add', path: ['elements', 0, 'slots', 'cell:a'], value: [child] },
+    ])
+
+    expect(removed.index.getSlot('owner', 'cell:a')).toBeUndefined()
+    expect(removed.index.hasNode('child')).toBe(false)
+  })
+
+  it.each([-1, 0.5, Number.NaN, Number.POSITIVE_INFINITY])('rejects invalid numeric patch segment %s', (segment) => {
+    const profile = createTestCompiledMaterialProfile()
+    const schema = { ...createDefaultSchema(), elements: [profile.createNode('box', { id: 'a' })] }
+    const index = DocumentIndexSnapshot.build(schema, profile, 1)
+
+    expect(() => forkDocumentIndexSnapshot(index, schema, profile, 2, [
+      { op: 'replace', path: ['elements', segment], value: null },
+    ], [])).toThrow(/unsafe/u)
   })
 
   it('rejects patches outside the canonical elements graph', () => {
