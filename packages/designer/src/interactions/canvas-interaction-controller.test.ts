@@ -11,7 +11,7 @@
  * 4. Right-click MUST NOT enter editing-session and MUST NOT start a drag.
  *
  * From .github/audit/202605011431.md:
- * 5. Editing-session entry is dblclick-only â€” pointerdown on a material
+ * 5. Editing-session entry is dblclick-only â€?pointerdown on a material
  *    with `geometry` MUST NOT enter the session.
  * 6. dblclick on a material with `geometry` opens the editing session.
  * 7. Background pointerdown exits an active editing session before the
@@ -144,7 +144,7 @@ describe('useCanvasInteractionController', () => {
     window.dispatchEvent(pdEvent('pointerup', 110, 10, { meta: true }))
     controller.handleElementClick(clickEvent(110, 10, { meta: true }), 'b')
 
-    expect(store.selection.ids.sort()).toEqual(['a', 'b'])
+    expect(store.selection.ids.slice().sort()).toEqual(['a', 'b'])
   })
 
   it('cmd-click on already-selected element toggles it off', async () => {
@@ -168,7 +168,7 @@ describe('useCanvasInteractionController', () => {
     window.dispatchEvent(pdEvent('pointerup', 30, 30))
     controller.handleElementClick(clickEvent(30, 30), 'a')
 
-    expect(store.selection.ids.sort()).toEqual(['a', 'b'])
+    expect(store.selection.ids.slice().sort()).toEqual(['a', 'b'])
   })
 
   it('right-click preserves an existing multi-selection', async () => {
@@ -177,7 +177,7 @@ describe('useCanvasInteractionController', () => {
 
     pdOn('a', pdEvent('pointerdown', 10, 10, { button: 2 }))
 
-    expect(store.selection.ids.sort()).toEqual(['a', 'b'])
+    expect(store.selection.ids.slice().sort()).toEqual(['a', 'b'])
   })
 
   it('right-click on an unselected element collapses to that element', async () => {
@@ -197,7 +197,7 @@ describe('useCanvasInteractionController', () => {
     window.dispatchEvent(pdEvent('pointerup', 10, 10))
     controller.handleElementClick(clickEvent(10, 10), 'a')
 
-    expect(store.selection.ids.sort()).toEqual(['a', 'b'])
+    expect(store.selection.ids.slice().sort()).toEqual(['a', 'b'])
   })
 
   it('drags every logical group member through existing multi-selection move', async () => {

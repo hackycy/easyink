@@ -278,7 +278,7 @@ export interface MaterialExtensionContext {
 }
 
 export interface SelectionSnapshot {
-  ids: string[]
+  ids: readonly string[]
   count: number
   isEmpty: boolean
 }
