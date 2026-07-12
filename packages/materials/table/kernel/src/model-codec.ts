@@ -344,13 +344,13 @@ function snapshotStrictJson(raw: unknown, root: `/${string}`): SnapshotResult {
     if (clones.has(value))
       return clones.get(value)
     let prototype: object | null
-    let descriptors: PropertyDescriptorMap
+    let keys: PropertyKey[]
     try {
       prototype = Object.getPrototypeOf(value)
-      descriptors = Object.getOwnPropertyDescriptors(value)
+      keys = Reflect.ownKeys(value)
     }
     catch {
-      invalid(path, issues, 'Object descriptors could not be captured')
+      invalid(path, issues, 'Object keys could not be captured')
       return null
     }
     const array = Array.isArray(value)
@@ -358,29 +358,50 @@ function snapshotStrictJson(raw: unknown, root: `/${string}`): SnapshotResult {
       invalid(path, issues, 'Records and arrays must use plain prototypes')
       return null
     }
+    const remaining = TABLE_MODEL_MAX_JSON_NODES - work
+    if (keys.length > remaining) {
+      stopped = true
+      budgetInvalid(path, issues, 'Table model exceeds the JSON node/key work budget')
+      return null
+    }
+    work += keys.length
+
+    const descriptors = new Map<PropertyKey, PropertyDescriptor>()
+    for (const key of keys) {
+      let descriptor: PropertyDescriptor | undefined
+      try {
+        descriptor = Object.getOwnPropertyDescriptor(value, key)
+      }
+      catch {
+        invalid(typeof key === 'string' ? at(path, key) : path, issues, 'Object descriptor could not be captured')
+        return null
+      }
+      if (!descriptor) {
+        invalid(typeof key === 'string' ? at(path, key) : path, issues, 'Object descriptor disappeared during capture')
+        return null
+      }
+      descriptors.set(key, descriptor)
+    }
+
     const target: unknown[] | Record<string, unknown> = array ? [] : {}
     clones.set(value, target)
     active.add(value)
-    const descriptorKeys = Reflect.ownKeys(descriptors)
     if (array) {
-      const lengthDescriptor = descriptorFromMap(descriptors, 'length')
+      const lengthDescriptor = descriptors.get('length')
       const length = lengthDescriptor && Object.hasOwn(lengthDescriptor, 'value') ? lengthDescriptor.value : -1
       if (!Number.isSafeInteger(length) || length < 0 || length > TABLE_MODEL_MAX_JSON_NODES) {
         invalid(path, issues, 'Array length is invalid')
       }
       else {
-        const expected = new Set<PropertyKey>(['length', ...Array.from({ length }, (_, index) => String(index))])
-        for (const key of descriptorKeys) {
-          if (!takeWork(at(path, String(key))))
-            break
-          if (!expected.has(key))
+        if (keys.length !== length + 1)
+          invalid(path, issues, 'Arrays must contain every dense indexed value exactly once')
+        for (const key of keys) {
+          if (key !== 'length' && (typeof key !== 'string' || !isCanonicalArrayIndex(key, length)))
             invalid(at(path, String(key)), issues, 'Arrays must contain only dense indexed values')
         }
         for (let index = 0; index < length; index++) {
           const key = String(index)
-          if (!takeWork(at(path, key)))
-            break
-          const descriptor = descriptorFromMap(descriptors, key)
+          const descriptor = descriptors.get(key)
           if (!descriptor) {
             invalid(at(path, key), issues, 'Sparse arrays are forbidden')
             continue
@@ -394,10 +415,7 @@ function snapshotStrictJson(raw: unknown, root: `/${string}`): SnapshotResult {
       }
     }
     else {
-      for (const key of descriptorKeys) {
-        const candidatePath = typeof key === 'string' ? at(path, key) : path
-        if (!takeWork(candidatePath))
-          break
+      for (const key of keys) {
         if (typeof key !== 'string') {
           invalid(path, issues, 'Symbol keys are forbidden')
           continue
@@ -407,7 +425,7 @@ function snapshotStrictJson(raw: unknown, root: `/${string}`): SnapshotResult {
           invalid(keyPath, issues, 'Unsafe record keys are forbidden')
           continue
         }
-        const descriptor = descriptorFromMap(descriptors, key)!
+        const descriptor = descriptors.get(key)!
         if (!Object.hasOwn(descriptor, 'value')) {
           invalid(keyPath, issues, 'Accessors are forbidden')
           continue
@@ -431,8 +449,9 @@ function snapshotStrictJson(raw: unknown, root: `/${string}`): SnapshotResult {
   return { value, issues }
 }
 
-function descriptorFromMap(map: PropertyDescriptorMap, key: PropertyKey): PropertyDescriptor | undefined {
-  return Object.getOwnPropertyDescriptor(map, key)?.value as PropertyDescriptor | undefined
+function isCanonicalArrayIndex(key: string, length: number): boolean {
+  const index = Number(key)
+  return Number.isInteger(index) && index >= 0 && index < length && String(index) === key
 }
 
 function countUtf8BytesUntil(value: string, limit: number): number {

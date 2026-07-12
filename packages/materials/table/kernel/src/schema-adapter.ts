@@ -42,7 +42,6 @@ const BINDING_EXPRESSION_KEYS = new Set([
   'required',
   'extensions',
 ])
-const BINDING_FORMAT_KEYS = new Set(['prefix', 'suffix', 'fallback', 'mode', 'preset', 'custom', 'extensions'])
 const BINDING_PRESET_KEYS = new Set([
   'type',
   'pattern',
@@ -412,9 +411,9 @@ function isBindingExpression(value: unknown): value is MaterialIntrospection['bi
   }
   if (!plainRecord(snapshot) || !hasOnlyKeys(snapshot, BINDING_EXPRESSION_KEYS))
     return false
-  if (!boundedNonemptyString(snapshot.sourceId) || !boundedNonemptyString(snapshot.fieldPath))
+  if (!nonemptyTrimmedString(snapshot.sourceId) || !nonemptyTrimmedString(snapshot.fieldPath))
     return false
-  if (!optionalBoundedStrings(snapshot, ['sourceName', 'sourceTag', 'fieldKey', 'fieldLabel']))
+  if (!optionalStrings(snapshot, ['sourceName', 'sourceTag', 'fieldKey', 'fieldLabel']))
     return false
   if (snapshot.required !== undefined && typeof snapshot.required !== 'boolean')
     return false
@@ -424,24 +423,13 @@ function isBindingExpression(value: unknown): value is MaterialIntrospection['bi
 }
 
 function isBindingFormat(value: unknown): boolean {
-  if (!plainRecord(value) || !hasOnlyKeys(value, BINDING_FORMAT_KEYS))
+  if (!plainRecord(value))
     return false
-  if (!optionalBoundedStrings(value, ['prefix', 'suffix', 'fallback']))
-    return false
-  if (value.mode !== undefined && !boundedNonemptyString(value.mode, 128))
+  if (!optionalStrings(value, ['prefix', 'suffix', 'fallback']))
     return false
   if (value.extensions !== undefined && !plainRecord(value.extensions))
     return false
-  if (value.preset !== undefined && !isBindingPreset(value.preset))
-    return false
-  if (value.custom !== undefined) {
-    if (!plainRecord(value.custom)
-      || !hasOnlyKeys(value.custom, new Set(['source']))
-      || !boundedNonemptyString(value.custom.source, 1_000_000)) {
-      return false
-    }
-  }
-  return true
+  return value.mode === 'preset' && isBindingPreset(value.preset)
 }
 
 function isBindingPreset(value: unknown): boolean {
@@ -449,14 +437,19 @@ function isBindingPreset(value: unknown): boolean {
     return false
   if (typeof value.type !== 'string' || !BINDING_PRESET_TYPES.has(value.type))
     return false
-  if (!optionalBoundedStrings(value, ['pattern', 'locale', 'timeZone', 'currency']))
+  if (!optionalStrings(value, ['pattern', 'locale', 'timeZone', 'currency']))
     return false
   if (value.weekdayStyle !== undefined && !['long', 'short', 'narrow'].includes(value.weekdayStyle as string))
     return false
   for (const key of ['minimumFractionDigits', 'maximumFractionDigits']) {
     const candidate = value[key]
-    if (candidate !== undefined && (!Number.isSafeInteger(candidate) || (candidate as number) < 0))
+    if (candidate !== undefined && (!Number.isInteger(candidate) || (candidate as number) < 0))
       return false
+  }
+  if (typeof value.minimumFractionDigits === 'number'
+    && typeof value.maximumFractionDigits === 'number'
+    && value.minimumFractionDigits > value.maximumFractionDigits) {
+    return false
   }
   return true
 }
@@ -465,16 +458,12 @@ function hasOnlyKeys(value: Record<string, unknown>, allowed: ReadonlySet<string
   return Object.keys(value).every(key => allowed.has(key))
 }
 
-function optionalBoundedStrings(value: Record<string, unknown>, keys: readonly string[]): boolean {
-  return keys.every(key => value[key] === undefined || boundedString(value[key]))
+function optionalStrings(value: Record<string, unknown>, keys: readonly string[]): boolean {
+  return keys.every(key => value[key] === undefined || typeof value[key] === 'string')
 }
 
-function boundedNonemptyString(value: unknown, max = 16_384): value is string {
-  return typeof value === 'string' && value.length > 0 && value.length <= max
-}
-
-function boundedString(value: unknown, max = 16_384): value is string {
-  return typeof value === 'string' && value.length <= max
+function nonemptyTrimmedString(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && value.trim() === value
 }
 
 function issue(code: string, path: `/${string}`, message: string): MaterialSchemaIssue {

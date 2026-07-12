@@ -129,6 +129,29 @@ describe('table model codec', () => {
     }))
   })
 
+  it('rejects oversized proxy key sets before reading any property descriptor', () => {
+    const model = createTableModel({ kind: 'static', columnCount: 1, rowCount: 1 }) as any
+    const style = Object.fromEntries(Array.from({ length: 110_000 }, (_, index) => [`unknown${index}`, true]))
+    let ownKeys = 0
+    let descriptors = 0
+    model.style = new Proxy(style, {
+      ownKeys(target) {
+        ownKeys += 1
+        return Reflect.ownKeys(target)
+      },
+      getOwnPropertyDescriptor(target, key) {
+        descriptors += 1
+        return Reflect.getOwnPropertyDescriptor(target, key)
+      },
+    })
+    const result = decodeTableModelV1(model, '/model')
+    expect(result.value).toBeUndefined()
+    expect(result.issues.length).toBeLessThanOrEqual(256)
+    expect(result.issues).toContainEqual(expect.objectContaining({ message: expect.stringMatching(/budget/i) }))
+    expect(ownKeys).toBe(1)
+    expect(descriptors).toBe(0)
+  })
+
   it('allows one million text characters and rejects the next character', () => {
     const model = createTableModel({ kind: 'static', columnCount: 1, rowCount: 1 }) as any
     model.bands[0].rows[0].cells[0].content.text = 'x'.repeat(16_385)

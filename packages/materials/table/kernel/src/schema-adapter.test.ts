@@ -195,4 +195,35 @@ describe('table schema adapter', () => {
     expect(tableSchemaAdapter.introspect(input as MaterialNode, context).bindings)
       .toContainEqual(expect.objectContaining({ port: 'value', path: '/bindings/value' }))
   })
+
+  it('mirrors canonical binding whitespace, length, and preset fraction rules', () => {
+    const model = createTableModel({ kind: 'static', columnCount: 1, rowCount: 1 })
+    model.bands[0]!.rows[0]!.cells[0]!.content = { kind: 'text', text: '', bindingPort: 'value' }
+
+    const long = node(model)
+    long.bindings = { value: { sourceId: 's'.repeat(16_385), fieldPath: 'value' } }
+    expect(tableSchemaAdapter.validate(long, context)).toEqual([])
+    expect(tableSchemaAdapter.introspect(long as MaterialNode, context).bindings).toHaveLength(1)
+
+    for (const expression of [
+      { sourceId: ' source', fieldPath: 'value' },
+      { sourceId: 'source', fieldPath: 'value ' },
+      {
+        sourceId: 'source',
+        fieldPath: 'value',
+        format: {
+          mode: 'preset',
+          preset: { type: 'number', minimumFractionDigits: 3, maximumFractionDigits: 2 },
+        },
+      },
+    ]) {
+      const input = node(model)
+      input.bindings = { value: expression as any }
+      expect(tableSchemaAdapter.validate(input, context)).toContainEqual(expect.objectContaining({
+        code: 'TABLE_BINDING_INVALID',
+        path: '/bindings/value',
+      }))
+      expect(tableSchemaAdapter.introspect(input as MaterialNode, context).bindings).toEqual([])
+    }
+  })
 })
