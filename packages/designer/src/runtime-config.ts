@@ -1,9 +1,11 @@
+import type { CompiledMaterialProfile } from '@easyink/core'
 import type { DocumentSchema, PageSchema } from '@easyink/schema'
 import type { PaperPreset } from '@easyink/shared'
 import type { DesignerMaterialBundle } from './materials/registry'
 
 export interface DesignerMaterialConfig {
   bundles?: DesignerMaterialBundle[]
+  profiles?: CompiledMaterialProfile[]
 }
 
 export interface DesignerPaperConfig {

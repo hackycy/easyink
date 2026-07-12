@@ -6,7 +6,7 @@ import { createAssistantContribution, createBrowserAssistantLLMConfigService } f
 import { placeholderImagesPlugin } from '@easyink/assistant-plugin-placeholder-images'
 import { prototypeDesignerPlugin } from '@easyink/assistant-plugin-prototype-designer'
 import { receiptDesignerPlugin } from '@easyink/assistant-plugin-receipt-designer'
-import { builtinDesignerMaterialBundle } from '@easyink/builtin/all'
+import { compileBuiltinMaterialProfile } from '@easyink/builtin/all'
 import { createLocalStoragePreferenceProvider, EasyInkDesigner } from '@easyink/designer'
 import { enUS, zhCN } from '@easyink/designer/locale'
 import { blankA4Template, flowInvoiceTemplate, invoiceDemoData, sampleDataSources } from '@easyink/samples'
@@ -26,7 +26,7 @@ const schema = ref<DocumentSchema>(blankA4Template)
 const preferenceProvider = createLocalStoragePreferenceProvider()
 const runtimeConfig = {
   materials: {
-    bundles: [builtinDesignerMaterialBundle],
+    profiles: [compileBuiltinMaterialProfile('all')],
   },
 } satisfies DesignerRuntimeConfig
 

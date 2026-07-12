@@ -87,11 +87,15 @@ export function defineStandardMaterialManifest(input: StandardMaterialManifestIn
     },
     schemaAdapter: input.schemaAdapter,
     facets: {
-      designer: context => ({
-        extension: input.designerFactory(context.services as MaterialExtensionContext),
-        catalog: { group: input.category, order: input.catalogOrder },
-        localeMessages: input.localeMessages,
-      }),
+      designer: (context) => {
+        const extension = input.designerFactory(context.services as MaterialExtensionContext)
+        return {
+          extension,
+          catalog: { group: input.category, order: input.catalogOrder },
+          localeMessages: input.localeMessages,
+          ...(extension.dispose ? { dispose: () => extension.dispose!() } : {}),
+        }
+      },
       viewer: () => ({ extension: input.viewerExtension, capabilities: input.viewerCapabilities ?? {} }),
       ai: {
         generation,

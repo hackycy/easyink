@@ -54,6 +54,8 @@ export interface MaterialDesignerRenderContextSignal {
  * Material designer extension contract.
  */
 export interface MaterialDesignerExtension {
+  /** Releases extension-owned resources when its manifest facet is deactivated. */
+  dispose?: () => void | Promise<void>
   /**
    * Mount content into the provided DOM container using the reactive NodeSignal.
    * Returns a cleanup function called when the element is removed from the canvas.
@@ -341,6 +343,7 @@ export interface MaterialDesignerFacet {
     messages?: Record<string, unknown>
     locales?: Record<string, Record<string, unknown>>
   }
+  dispose?: () => void | Promise<void>
 }
 
 // (Old deep editing FSM protocol removed — replaced by Chapter 22 Editing Behavior Architecture)
