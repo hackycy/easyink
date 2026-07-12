@@ -68,10 +68,12 @@ export type {
 // ─── Editing Behavior Architecture (Chapter 22) ───────────────────
 
 export { DocumentIndexSnapshot, DuplicateDocumentNodeIdError, requireDocumentNode } from './document-index'
+export type { DocumentSlotPolicySnapshot } from './document-index'
+export { DocumentStore } from './document-store'
 
 // ─── Core Services ────────────────────────────────────────────────
 
-export type { DocumentSlotPolicySnapshot } from './document-index'
+export type { DocumentStoreEvent, DocumentStoreEventKind, DocumentStoreOptions } from './document-store'
 
 export type {
   BehaviorContext,
