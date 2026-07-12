@@ -40,10 +40,8 @@ export function useMaterialDrop(ctx: MaterialDropContext) {
       return
 
     const { store } = ctx
-    const catalogEntry = store.getCatalog().find(entry => entry.dragData === dragData || entry.materialType === dragData)
-    const materialType = catalogEntry?.materialType ?? dragData
-    const definition = store.getMaterial(materialType)
-    if (!definition)
+    const manifest = store.listEditableMaterialManifests().find(entry => entry.type === dragData)
+    if (!manifest)
       return
 
     const pageEl = ctx.getPageEl()
@@ -52,7 +50,7 @@ export function useMaterialDrop(ctx: MaterialDropContext) {
 
     const dropPoint = geometry.screenToDocument({ x: e.clientX, y: e.clientY })
 
-    const node = (catalogEntry?.createDefaultNode ?? definition.createDefaultNode)({
+    const node = store.materialProfile.createNode(manifest.type, {
       x: Math.max(0, dropPoint.x),
       y: Math.max(0, dropPoint.y),
     }, store.schema.unit)

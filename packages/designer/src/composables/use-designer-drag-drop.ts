@@ -374,7 +374,7 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
     if (!hit)
       return null
 
-    const ext = ctx.store.getDesignerExtension(hit.type)
+    const ext = ctx.store.peekDesignerFacet(hit.type)?.value?.extension
     const elementSize = ctx.store.getElementSize(hit)
     const localPoint = geometry.documentToLocal(target.docPoint, hit)
     if (ext?.datasourceDrop) {
@@ -390,7 +390,7 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
       }
     }
 
-    const material = ctx.store.getMaterial(hit.type)
+    const material = ctx.store.getMaterialManifest(hit.type)
     if (material?.binding.kind === 'data-contract') {
       const plan = resolveMaterialDataDropPlan(material[MATERIAL_BINDING_KEY].contract, hit, data)
       if (!plan)
@@ -452,7 +452,7 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
       return
     }
 
-    const ext = ctx.store.getDesignerExtension(resolved.target.type)
+    const ext = ctx.store.peekDesignerFacet(resolved.target.type)?.value?.extension
     const fieldData = session?.kind === 'datasource' ? session.data : null
     if (!fieldData)
       return
@@ -463,7 +463,7 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
       return
     }
 
-    const material = ctx.store.getMaterial(resolved.target.type)
+    const material = ctx.store.getMaterialManifest(resolved.target.type)
     if (material?.binding.kind === 'data-contract') {
       const plan = resolveMaterialDataDropPlan(material[MATERIAL_BINDING_KEY].contract, resolved.target, fieldData)
       if (!plan || plan.status !== 'accepted')
@@ -625,7 +625,7 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
       const elementSize = ctx.store.getElementSize(element)
       const localPoint = geometry.documentToLocal({ x: docX, y: docY }, element)
       if (pointInRect(localPoint, { x: 0, y: 0, width: elementSize.width, height: elementSize.height })) {
-        const material = ctx.store.getMaterial(element.type)
+        const material = ctx.store.getMaterialManifest(element.type)
         if (material?.capabilities.bindable === false)
           continue
         return element
@@ -894,11 +894,11 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
   }
 
   function resolveCatalogEntry(dragData: string): MaterialCatalogEntry | undefined {
-    return ctx.store.getCatalog().find(entry => entry.dragData === dragData || entry.materialType === dragData)
+    return ctx.store.listEditableMaterialManifests().find(entry => entry.dragData === dragData || entry.materialType === dragData)
   }
 
   function createMaterialNodeDraft(entry: MaterialCatalogEntry): MaterialNode | null {
-    const definition = ctx.store.getMaterial(entry.materialType)
+    const definition = ctx.store.getMaterialManifest(entry.materialType)
     if (!definition)
       return null
     const createNode = entry.createDefaultNode ?? definition.createDefaultNode

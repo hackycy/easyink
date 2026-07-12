@@ -188,7 +188,7 @@ export function useDatasourceDrop(ctx: DatasourceDropContext) {
       const elementSize = store.getElementSize(el)
       const localPoint = documentPointToElementLocal({ x: docX, y: docY }, el)
       if (pointInRect(localPoint, { x: 0, y: 0, width: elementSize.width, height: elementSize.height })) {
-        const mat = store.getMaterial(el.type)
+        const mat = store.getMaterialManifest(el.type)
         if (mat && (mat.capabilities.bindable === false || mat.binding.kind === 'data-contract'))
           continue
         return el
@@ -222,7 +222,7 @@ export function useDatasourceDrop(ctx: DatasourceDropContext) {
     }
 
     // Get extension for custom drop handler
-    const ext = store.getDesignerExtension(target.type)
+    const ext = store.peekDesignerFacet(target.type)?.value?.extension
     const elementSize = store.getElementSize(target)
     const localPoint = documentPointToElementLocal({ x: docX, y: docY }, target)
     if (ext?.datasourceDrop) {
@@ -283,7 +283,7 @@ export function useDatasourceDrop(ctx: DatasourceDropContext) {
       return
 
     // Check for custom handler
-    const ext = store.getDesignerExtension(target.type)
+    const ext = store.peekDesignerFacet(target.type)?.value?.extension
     if (ext?.datasourceDrop) {
       const localPoint = documentPointToElementLocal({ x: docX, y: docY }, target)
       ext.datasourceDrop.onDrop(toFieldInfo(fieldData), localPoint, target)
