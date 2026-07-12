@@ -561,6 +561,25 @@ describe('defineMaterialManifest', () => {
     expect(() => defineMaterialManifest(skipped)).toThrowError('MATERIAL_ADAPTER_MIGRATIONS_INVALID')
   })
 
+  it('validates and freezes detached migration conformance fixtures', () => {
+    const valid = defineMaterialManifest(validManifest())
+    expect(Object.isFrozen(valid.schemaAdapter.migrations[0]!.conformance?.fixtures[0])).toBe(true)
+    expect(Object.isFrozen(valid.schemaAdapter.migrations[0]!.conformance?.declaredWritePaths)).toBe(true)
+
+    const malformed = validManifest()
+    malformed.schemaAdapter = {
+      ...recordSchemaAdapter(1),
+      migrations: [{
+        from: 0,
+        to: 1,
+        migrate: node => ({ ...node, modelVersion: 1 }),
+        conformance: { fixtures: [], declaredWritePaths: ['/model'] },
+      }],
+    }
+    expect(() => defineMaterialManifest(malformed))
+      .toThrowError('MATERIAL_ADAPTER_MIGRATION_CONFORMANCE_INVALID')
+  })
+
   it('requires valid model-relative RFC 6901 paths', () => {
     const binding = validManifest()
     binding.common.binding = {

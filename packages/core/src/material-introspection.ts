@@ -206,6 +206,32 @@ export function readPointer(root: unknown, pointer: JsonPointer): unknown {
   return value
 }
 
+export function decodeMaterialSemanticPointerValue(
+  root: unknown,
+  entry: Pick<MaterialIdentitySlot, 'path' | 'location' | 'encoding'>,
+): string {
+  const encoded = entry.location === 'key'
+    ? readPointerKey(root, entry.path)
+    : readPointer(root, entry.path)
+  if (typeof encoded !== 'string')
+    throw new Error('MATERIAL_INTROSPECTION_ENCODED_VALUE_INVALID')
+  const prefix = entry.encoding?.prefix ?? ''
+  const suffix = entry.encoding?.suffix ?? ''
+  if (!encoded.startsWith(prefix)
+    || !encoded.endsWith(suffix)
+    || encoded.length < prefix.length + suffix.length) {
+    throw new Error('MATERIAL_INTROSPECTION_ENCODING_MISMATCH')
+  }
+  return encoded.slice(prefix.length, suffix.length === 0 ? undefined : -suffix.length)
+}
+
+function readPointerKey(root: unknown, pointer: JsonPointer): string {
+  const { parent, token } = pointerParent(root, pointer)
+  if (!Object.hasOwn(parent, token))
+    throw new Error('MATERIAL_POINTER_MISSING')
+  return token
+}
+
 function pointerParent(root: unknown, pointer: JsonPointer): {
   parent: Record<string, unknown> | unknown[]
   token: string
@@ -633,17 +659,9 @@ function validateEntries(
     }
     let matches = false
     try {
-      if (entry.location === 'key') {
-        const { parent, token } = pointerParent(node, entry.path)
-        matches = Object.hasOwn(parent, token)
-          && token === `${entry.encoding?.prefix ?? ''}${String(entry.value)}${entry.encoding?.suffix ?? ''}`
-      }
-      else {
-        const expected = entry.location === 'value' && typeof entry.value === 'string'
-          ? encodeIdentity(entry.value, entry.encoding)
-          : entry.value
-        matches = semanticValuesEqual(readPointer(node, entry.path), expected)
-      }
+      matches = entry.location !== undefined && typeof entry.value === 'string'
+        ? decodeMaterialSemanticPointerValue(node, entry as MaterialIdentitySlot) === entry.value
+        : semanticValuesEqual(readPointer(node, entry.path), entry.value)
     }
     catch {
       matches = false

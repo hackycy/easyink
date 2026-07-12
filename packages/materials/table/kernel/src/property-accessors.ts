@@ -3,12 +3,11 @@ import type { MaterialNode } from '@easyink/schema'
 import type { TableBorderStyle, TableModel } from './model'
 import { TABLE_BASE_DEFAULTS } from './types'
 
-const BORDER_SIDES = ['blockStart', 'inlineEnd', 'blockEnd', 'inlineStart'] as const
-
 export function createTableBorderPropertyAccessor<K extends keyof TableBorderStyle>(field: K): PropertyAccessor<TableBorderStyle[K]> {
-  const paths = Object.freeze(BORDER_SIDES.map(side => `/model/style/border/${side}/${field}` as const))
+  const paths = Object.freeze(['/model/style/border'] as const)
   return Object.freeze({
     paths,
+    pathSharingGroup: 'table-border',
     read(node: MaterialNode): TableBorderStyle[K] {
       return (node.model as unknown as TableModel).style.border?.blockStart?.[field] ?? defaultBorder()[field]
     },
@@ -26,7 +25,7 @@ export function createTableBorderPropertyAccessor<K extends keyof TableBorderSty
 }
 
 export function createTablePaddingPropertyAccessor(): PropertyAccessor<number> {
-  const paths = Object.freeze(['top', 'right', 'bottom', 'left'].map(side => `/model/style/padding/${side}` as const))
+  const paths = Object.freeze(['/model/style/padding'] as const)
   return Object.freeze({
     paths,
     read(node: MaterialNode): number {

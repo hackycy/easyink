@@ -8,6 +8,18 @@ export const flowRowSchemaAdapter: SchemaAdapter = {
   migrations: [{
     from: 0,
     to: 1,
+    conformance: {
+      fixtures: [{
+        id: 'flow-row-v0-padding-binding',
+        input: {
+          model: {
+            padding: 2,
+            columns: [{ ratio: 1, binding: { sourceId: 'fixture', fieldPath: 'name' } }],
+          },
+        },
+      }],
+      declaredWritePaths: ['/bindings', '/model', '/modelVersion'],
+    },
     migrate(node) {
       const { padding, ...model } = node.model as Record<string, unknown>
       const legacyPadding = finiteOrUndefined(padding)

@@ -1,4 +1,5 @@
 import type { BrowserDomCapabilities } from '@easyink/browser-dom'
+import { runInNewContext } from 'node:vm'
 import { createBrowserDomCapabilities, renderViewerTree } from '@easyink/browser-dom'
 import { assertMaterialConformance } from '@easyink/core'
 import { describe, it } from 'vitest'
@@ -9,6 +10,9 @@ describe('builtin material conformance', () => {
     it(manifest.type, async () => {
       let capabilities: BrowserDomCapabilities | undefined
       await assertMaterialConformance(manifest, {
+        hardTimeoutExecutor: {
+          execute: (hook, args, timeoutMs) => runInNewContext('hook(...args)', { args, hook }, { timeout: timeoutMs }),
+        },
         createRenderCapabilities: (facet) => {
           capabilities = createBrowserDomCapabilities({
             document,

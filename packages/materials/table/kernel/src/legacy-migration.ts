@@ -95,12 +95,43 @@ class LegacyIssueList extends Array<MaterialSchemaIssue> {
 export const migrateLegacyTableV0ToV1: SchemaMigration = {
   from: 0,
   to: 1,
+  conformance: {
+    fixtures: [
+      legacyConformanceFixture('table-static', 'static'),
+      legacyConformanceFixture('table-data', 'data'),
+    ],
+    declaredWritePaths: ['/bindings', '/compat', '/model', '/modelVersion', '/slots'],
+  },
   migrate(node, context) {
     const admission = admitLegacyTableV0(node, context)
     if (!admission.value)
       throw new Error(`${admission.issues[0]!.code}: ${admission.issues[0]!.path}`)
     return admission.value
   },
+}
+
+function legacyConformanceFixture(materialType: 'table-static' | 'table-data', kind: 'static' | 'data') {
+  return {
+    id: `${materialType}-v0`,
+    materialType,
+    input: {
+      model: {
+        table: {
+          kind,
+          showHeader: true,
+          showFooter: true,
+          topology: {
+            columns: [{ ratio: 1 }],
+            rows: [{
+              height: 8,
+              ...(kind === 'data' ? { role: 'repeat-template' } : {}),
+              cells: [{ content: { text: 'fixture' } }],
+            }],
+          },
+        },
+      },
+    },
+  }
 }
 
 export function validateLegacyTableV0Input(

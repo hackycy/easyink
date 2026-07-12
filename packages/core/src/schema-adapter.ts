@@ -31,6 +31,18 @@ export interface SchemaMigration {
   from: number
   to: number
   migrate: (node: AdaptableMaterialNode, context: SchemaAdapterContext) => AdaptableMaterialNode
+  conformance?: {
+    fixtures: readonly SchemaMigrationFixture[]
+    declaredWritePaths: readonly `/${string}`[]
+  }
+}
+
+export interface SchemaMigrationFixture {
+  id: string
+  materialType?: string
+  input: Omit<Partial<AdaptableMaterialNode>, 'type' | 'modelVersion'> & {
+    model: Record<string, unknown>
+  }
 }
 
 export interface SchemaAdapter {
@@ -154,6 +166,10 @@ export function recordSchemaAdapter(currentModelVersion: number): SchemaAdapter 
     migrations: Array.from({ length: currentModelVersion }, (_, from) => ({
       from,
       to: from + 1,
+      conformance: {
+        fixtures: [{ id: `record-v${from}`, input: { model: {} } }],
+        declaredWritePaths: ['/modelVersion'],
+      },
       migrate: node => ({ ...node, modelVersion: from + 1 }),
     })),
     validateInput: () => [],

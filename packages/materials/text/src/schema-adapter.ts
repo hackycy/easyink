@@ -10,6 +10,10 @@ export const textSchemaAdapter: SchemaAdapter = {
   migrations: [{
     from: 0,
     to: 1,
+    conformance: {
+      fixtures: [{ id: 'text-v0-auto-wrap', input: { model: { content: 'fixture', autoWrap: false } } }],
+      declaredWritePaths: ['/model', '/modelVersion'],
+    },
     migrate(node) {
       const { autoWrap, ...model } = node.model as Record<string, unknown>
       const wrapMode = isWrapMode(model.wrapMode)

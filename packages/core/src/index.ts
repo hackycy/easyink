@@ -158,7 +158,7 @@ export type {
 export { assertMaterialBindingValue, resolveMaterialBindingPortPolicy } from './material-binding'
 
 export { assertMaterialConformance, runMaterialConformance } from './material-conformance'
-export type { MaterialConformanceIssue, MaterialConformanceOptions, MaterialConformanceReport } from './material-conformance'
+export type { MaterialConformanceHardTimeoutExecutor, MaterialConformanceIssue, MaterialConformanceOptions, MaterialConformanceReport } from './material-conformance'
 export {
   applyMaterialDataFieldMapping,
   canBindMaterialDataField,
@@ -253,6 +253,7 @@ export {
   cloneMaterialGraph,
   cloneMaterialSubgraph,
   createDefaultGraphIdentity,
+  decodeMaterialSemanticPointerValue,
   evaluateMaterialSlotReparent,
   formatMaterialIdentityKey,
   formatMaterialNodeAddress,
@@ -361,6 +362,7 @@ export type {
   SchemaAdapterContext,
   SchemaAdapterStage,
   SchemaMigration,
+  SchemaMigrationFixture,
 } from './schema-adapter'
 export { isInteractable, isSelectable, SelectionModel } from './selection'
 export { defineStandardMaterialManifest } from './standard-material-manifest'

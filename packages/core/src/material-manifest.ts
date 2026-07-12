@@ -155,6 +155,8 @@ const BINDING_EXPRESSION_KEYS = new Set([
   'required',
   'extensions',
 ])
+const MIGRATION_CONFORMANCE_KEYS = new Set(['fixtures', 'declaredWritePaths'])
+const MIGRATION_FIXTURE_KEYS = new Set(['id', 'materialType', 'input'])
 
 export function defineMaterialManifest<TDesigner, TViewer>(
   manifest: MaterialManifest<TDesigner, TViewer>,
@@ -292,6 +294,34 @@ function validateAdapter(adapter: SchemaAdapter): void {
       || typeof migration.migrate !== 'function') {
       fail('MATERIAL_ADAPTER_MIGRATIONS_INVALID')
     }
+    validateMigrationConformance(migration.conformance)
+  }
+}
+
+function validateMigrationConformance(value: unknown): void {
+  if (value === undefined)
+    return
+  if (!isPlainRecord(value)
+    || !hasOnlyKeys(value, MIGRATION_CONFORMANCE_KEYS)
+    || !Array.isArray(value.fixtures)
+    || !Array.isArray(value.declaredWritePaths)
+    || value.fixtures.length === 0
+    || value.declaredWritePaths.length === 0
+    || value.declaredWritePaths.some(path => !isRfc6901Pointer(path))) {
+    fail('MATERIAL_ADAPTER_MIGRATION_CONFORMANCE_INVALID')
+  }
+  for (const fixture of value.fixtures) {
+    if (!isPlainRecord(fixture)
+      || !hasOnlyKeys(fixture, MIGRATION_FIXTURE_KEYS)
+      || !isNonemptyString(fixture.id)
+      || (fixture.materialType !== undefined && !MATERIAL_TYPE_PATTERN.test(String(fixture.materialType)))
+      || !isPlainRecord(fixture.input)
+      || !isPlainRecord(fixture.input.model)
+      || Object.hasOwn(fixture.input, 'type')
+      || Object.hasOwn(fixture.input, 'modelVersion')) {
+      fail('MATERIAL_ADAPTER_MIGRATION_CONFORMANCE_INVALID')
+    }
+    assertJsonValue(fixture.input)
   }
 }
 
