@@ -5,7 +5,8 @@ export function resolveOrdinaryFormatEditor(
 ): BindingFormatEditorDefinition | false {
   if (binding?.kind !== 'ports')
     return false
-  return binding.ports[0]?.formatEditor ?? false
+  const editor = binding.ports[0]?.formatEditor
+  return editor ? { ...editor, presetTypes: editor.presetTypes ? [...editor.presetTypes] : undefined } : false
 }
 
 export function resolveDataContractFieldFormatEditor(
@@ -17,5 +18,6 @@ export function resolveDataContractFieldFormatEditor(
   const field = binding.dataContract.model.fields[fieldId]
   if (!field)
     return false
-  return field.formatEditor ?? binding.ports[0]?.formatEditor ?? false
+  const editor = field.formatEditor ?? binding.ports[0]?.formatEditor
+  return editor ? { ...editor, presetTypes: editor.presetTypes ? [...editor.presetTypes] : undefined } : false
 }

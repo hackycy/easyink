@@ -72,12 +72,12 @@ function elementStyle(element: MinimapElementFrame) {
 
 function isElementHidden(element: MinimapElementFrame): boolean {
   const { hidden } = element
-  return hidden
+  return hidden === true
 }
 
 function isElementLocked(element: MinimapElementFrame): boolean {
   const { locked } = element
-  return locked
+  return locked === true
 }
 
 function handlePointerDown(event: PointerEvent) {

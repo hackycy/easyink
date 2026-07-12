@@ -15,7 +15,7 @@ describe('resolveMinimapLayout', () => {
         pages: 3,
       },
       elements: [
-        { id: 'a', type: 'text', x: 10, y: 90, width: 20, height: 10, props: {} },
+        { id: 'a', type: 'text', x: 10, y: 90, width: 20, height: 10, model: {} },
       ],
     })
 
@@ -38,7 +38,7 @@ describe('resolveMinimapLayout', () => {
         reflow: { strategy: 'flow-y', preserveTrailingGap: true },
       },
       elements: [
-        { id: 'a', type: 'text', x: 5, y: 175, width: 20, height: 25, props: {} },
+        { id: 'a', type: 'text', x: 5, y: 175, width: 20, height: 25, model: {} },
       ],
     })
 
@@ -61,7 +61,7 @@ describe('resolveMinimapLayout', () => {
         reflow: { strategy: 'flow-y', preserveTrailingGap: true },
       },
       elements: [
-        { id: 'a', type: 'text', x: 0, y: 180, width: 10, height: 20, props: {} },
+        { id: 'a', type: 'text', x: 0, y: 180, width: 10, height: 20, model: {} },
       ],
     })
 
@@ -80,7 +80,7 @@ describe('resolveMinimapLayout', () => {
         pages: 2,
       },
       elements: [
-        { id: 'a', type: 'text', x: 90, y: 95, width: 20, height: 10, props: {} },
+        { id: 'a', type: 'text', x: 90, y: 95, width: 20, height: 10, model: {} },
       ],
     })
 
