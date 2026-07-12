@@ -278,10 +278,10 @@ describe('designer store schema initialization', () => {
 
   it('keeps committed sidecars while a preview obscures the document view', async () => {
     const store = unknownAndBoxStore()
-    store.documentTransactions.run('box', draft => { draft.model.value = 1 }, { label: 'Commit' })
+    store.documentTransactions.run('box', (draft) => { draft.model.value = 1 }, { label: 'Commit' })
     const committedState = store.documentStore.materialNodeStates.get('box')
     const preview = store.documentTransactions.beginPreview({ label: 'Preview', operation: { kind: 'material.property', sessionPath: [], targetIds: ['node:box'], fieldPaths: ['/model/value'], selectionLineage: null, structural: false } })
-    preview.run('box', draft => { draft.model.value = 2 })
+    preview.run('box', (draft) => { draft.model.value = 2 })
     await Promise.resolve()
     expect(store.getMaterialNodeState('box')).toBe(committedState)
     preview.cancel()
