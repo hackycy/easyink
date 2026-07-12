@@ -11,7 +11,7 @@ import { markRaw } from 'vue'
 import { EditingSessionManager } from '../editing/editing-session-manager'
 import { createTransactionService } from '../editing/transaction-service'
 import { DesignerInteractionService } from '../interactions/interaction-service'
-import { resolveBuiltinMaterialIcon } from '../material-host'
+import { builtinMaterialGroupLabels, resolveBuiltinMaterialIcon } from '../material-host'
 import { createMaterialExtensionContext } from '../materials/extension-context'
 import { PropertyEditorRegistry } from '../properties/property-editor-registry'
 import { resolveDesignerMaterialProfile } from '../runtime-config'
@@ -408,6 +408,10 @@ export class DesignerStore {
 
   resolveMaterialIcon(iconKey: string): Component {
     return this.materialIcons[iconKey] ?? resolveBuiltinMaterialIcon(iconKey)
+  }
+
+  resolveMaterialGroupLabelKey(groupId: string): string {
+    return builtinMaterialGroupLabels[groupId as keyof typeof builtinMaterialGroupLabels] ?? groupId
   }
 
   listEditableMaterialTypes(): readonly string[] {

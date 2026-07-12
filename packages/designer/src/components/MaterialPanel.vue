@@ -11,7 +11,6 @@ const dragDrop = inject(DESIGNER_DRAG_DROP_KEY, null)
 
 interface MaterialPanelGroup {
   id: string
-  label: string
   items: MaterialDragEntry[]
 }
 
@@ -22,7 +21,7 @@ const visibleMaterialGroups = computed<MaterialPanelGroup[]>(() => {
     if (!manifest)
       continue
     const id = manifest.common.category
-    const group = groups.get(id) ?? { id, label: id, items: [] }
+    const group = groups.get(id) ?? { id, items: [] }
     group.items.push({
       id: type,
       groupId: id,
@@ -86,7 +85,7 @@ function handleKeyAdd(e: KeyboardEvent, entry: MaterialDragEntry) {
       class="ei-material-panel__section"
     >
       <div class="ei-material-panel__section-title">
-        {{ store.t(group.label) }}
+        {{ store.t(store.resolveMaterialGroupLabelKey(group.id)) }}
       </div>
       <div class="ei-material-panel__grid">
         <button
