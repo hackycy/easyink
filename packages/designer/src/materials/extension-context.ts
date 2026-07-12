@@ -2,7 +2,6 @@ import type { PropertyPanelOverlay } from '@easyink/core'
 import type { BindingRef } from '@easyink/schema'
 import type { DesignerStore } from '../store/designer-store'
 import type { MaterialExtensionContext } from '../types'
-import { createTransactionService } from '../editing/transaction-service'
 
 /**
  * Create a MaterialExtensionContext that delegates to the DesignerStore.
@@ -10,11 +9,6 @@ import { createTransactionService } from '../editing/transaction-service'
  */
 export function createMaterialExtensionContext(store: DesignerStore): MaterialExtensionContext {
   const listeners = new Map<string, Set<(...args: unknown[]) => void>>()
-
-  const tx = createTransactionService(
-    id => store.getElementById(id),
-    store.commands,
-  )
 
   return {
     getSchema() {
@@ -40,7 +34,7 @@ export function createMaterialExtensionContext(store: DesignerStore): MaterialEx
       store.commands.execute(command)
     },
 
-    tx,
+    tx: store.materialTransaction,
 
     requestPropertyPanel(overlay: PropertyPanelOverlay | null) {
       store.setPropertyOverlay(overlay)
