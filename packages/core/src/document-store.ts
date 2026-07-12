@@ -1,5 +1,6 @@
 import type { DocumentSchema } from '@easyink/schema'
 import type { JsonValue, JsonValueValidationOptions } from '@easyink/shared'
+import type { DocumentChangeSet } from './document-change-set'
 import type { CompiledMaterialProfile } from './material-profile'
 import type { MaterialDocumentValidationReport, MaterialNodeLoadState } from './schema-adapter'
 import { assertJsonValue, cloneJsonValue } from '@easyink/shared'
@@ -16,13 +17,14 @@ export interface DocumentStoreEvent {
   document: DocumentSchema
   index: DocumentIndexSnapshot
   validationReport?: MaterialDocumentValidationReport
+  changeSet?: DocumentChangeSet
 }
 
 export type DocumentStoreWrite
   = | { kind: 'preview', document: DocumentSchema, index: DocumentIndexSnapshot }
     | { kind: 'preview-cancel' }
-    | { kind: Exclude<DocumentStoreEventKind, 'preview' | 'preview-cancel' | 'reset'>, document: DocumentSchema, index: DocumentIndexSnapshot, validationReport: MaterialDocumentValidationReport }
-    | { kind: 'reset', document: DocumentSchema, validationReport: MaterialDocumentValidationReport }
+    | { kind: Exclude<DocumentStoreEventKind, 'preview' | 'preview-cancel' | 'reset'>, document: DocumentSchema, index: DocumentIndexSnapshot, validationReport: MaterialDocumentValidationReport, changeSet?: DocumentChangeSet }
+    | { kind: 'reset', document: DocumentSchema, validationReport: MaterialDocumentValidationReport, changeSet?: DocumentChangeSet }
 
 export interface DocumentStoreOptions {
   nodeStates?: ReadonlyMap<string, MaterialNodeLoadState>
@@ -106,6 +108,8 @@ export class DocumentStore {
     }
     if ('validationReport' in write)
       event.validationReport = write.validationReport
+    if ('changeSet' in write && write.changeSet)
+      event.changeSet = write.changeSet
     Object.freeze(event)
     this.eventQueue.push({ event, listeners: [...this.listeners] })
     this.scheduleEventDispatch()

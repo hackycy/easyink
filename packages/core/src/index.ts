@@ -67,6 +67,8 @@ export type {
 
 // ─── Editing Behavior Architecture (Chapter 22) ───────────────────
 
+export { canCoalesceDocumentChanges, combineStableOperationDescriptors, createDocumentChangeSet, mergeDocumentChangeSets } from './document-change-set'
+export type { DocumentChangeSet, DocumentFieldPath, DocumentOperationDescriptor } from './document-change-set'
 export { DocumentIndexSnapshot, DuplicateDocumentNodeIdError, requireDocumentNode } from './document-index'
 export type { DocumentSlotPolicySnapshot } from './document-index'
 export { DocumentStore } from './document-store'
