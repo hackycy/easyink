@@ -123,7 +123,7 @@ class CommandManager {
 >
 > - behavior 中间件通过 `ctx.tx.run(nodeId, draft => { ... })` 修改 draft
 > - DatasourceDrop 通过 `context.tx.run(nodeId, draft => { ... })` 修改 draft
-> - `TransactionAPI` 自动生成 `PatchCommand` 进入历史栈
+> - 当前 Designer 的 `createTransactionService` 会为这类局部 node mutation 生成 `PatchCommand` 并交给现有 `CommandManager`
 
 原有独立命令的操作语义（insert-row, remove-col, merge-cells, bind-cell 等）现在由 `table.command-handler` behavior 中间件和 `DatasourceDropHandler.onDrop` 内的 `tx.run()` 实现。
 
@@ -181,12 +181,12 @@ class CompositeCommand implements Command {
 
 ## 12.7 PatchCommand 与 TransactionAPI
 
-22 章编辑行为架构引入了 `TransactionAPI`，它是 behavior 中间件修改文档的标准方式。
+22 章编辑行为架构引入了 `TransactionAPI`，它是 behavior 中间件执行局部 node mutation 的标准方式。当前 `createTransactionService` 能把这些 mutation 转成现有 command/patch history；document candidate admission、sidecar publish/restore 与完整 command/undo/redo 原子接线仍属于后续 Transaction 计划。
 
 ### 工作流程
 
 ```
-ctx.tx.run(nodeId, draft => { draft.props.color = 'red' })
+ctx.tx.run(nodeId, (draft) => { draft.model.color = 'red' })
        |
        v
   mutative create(state, recipe, { enablePatches: true })
@@ -216,10 +216,16 @@ class PatchCommand implements Command {
 连续的同类操作（如拖拽 resize 每帧产生一次 `tx.run`）通过 `mergeKey` 合并为一条历史记录：
 
 ```typescript
+import { getTableMaterialModel } from '@easyink/material-table-kernel'
+
 ctx.tx.run(nodeId, draft => {
-  draft.table.topology.columns[colIndex].ratio = newRatio
+  const column = getTableMaterialModel(draft).columns[colIndex]
+  if (column)
+    column.track = { kind: 'fr', weight: newWeight }
 }, { mergeKey: `resize-col-${colIndex}`, mergeWindowMs: 300 })
 ```
+
+Canonical bindings and child graphs are edited through the node draft's `bindings[port]` and `slots[slot]`; they are never projected back to root compatibility fields. Table v1 stores its direct `TableModel` in `draft.model`, and table-kernel helpers expose that typed model without adding a core table branch.
 
 ### batch
 
@@ -227,7 +233,7 @@ ctx.tx.run(nodeId, draft => {
 
 ### 与旧 Command 类的关系
 
-所有表格 Command 类（InsertTableRow, MergeTableCells, BindStaticCellCommand, UpdateTableCellCommand 等）已全部迁移至 `tx.run()` 调用——behavior 中间件使用 `ctx.tx.run()`，DatasourceDrop 使用 `context.tx.run()`。
+表格 behavior 与 DatasourceDrop 的局部编辑已迁移至 `tx.run()` 调用。这里描述的是现有 node patch/history 行为，不代表 document candidate admission、quarantine sidecar publication、undo/redo restore 已完成统一原子接线；该全链路由后续 Transaction 计划完成。
 
 ## 12.8 `@easyink/ui` 表单组件事件协议
 

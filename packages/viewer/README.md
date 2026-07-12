@@ -10,7 +10,7 @@ Viewer runtime for EasyInk preview, print, and export.
 import { compileBuiltinMaterialProfile } from '@easyink/builtin/all'
 import { createBrowserViewerHost, createViewer } from '@easyink/viewer'
 
-const host = createBrowserViewerHost({ container })
+const host = createBrowserViewerHost(container)
 const viewer = createViewer({
   host,
   profile: compileBuiltinMaterialProfile('all'),

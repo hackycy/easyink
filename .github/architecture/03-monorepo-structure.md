@@ -210,12 +210,14 @@ playground ── designer + viewer + export-runtime + samples + schema
 
 ```typescript
 import { EasyInkDesigner } from '@easyink/designer'
+import { compileBuiltinMaterialProfile } from '@easyink/builtin/all'
 import { createViewer } from '@easyink/viewer'
 
 // Vue template
 // <EasyInkDesigner v-model:schema="schema" />
 
-const viewer = createViewer({ mode: 'fixed' })
+const profile = compileBuiltinMaterialProfile('all')
+const viewer = createViewer({ profile, mode: 'fixed' })
 await viewer.open({ schema, data })
 ```
 

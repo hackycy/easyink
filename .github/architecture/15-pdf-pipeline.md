@@ -113,7 +113,11 @@ interface SaveBranchMenuState {
 ## 15.7 业务侧推荐组合方式
 
 ```typescript
-const viewer = createViewer({ mode: 'fixed' })
+import { compileBuiltinMaterialProfile } from '@easyink/builtin/all'
+import { createViewer } from '@easyink/viewer'
+
+const profile = compileBuiltinMaterialProfile('all')
+const viewer = createViewer({ profile, mode: 'fixed' })
 const exportRuntime = createExportRuntime()
 
 await viewer.open({ schema, data })

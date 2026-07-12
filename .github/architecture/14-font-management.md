@@ -126,9 +126,9 @@ FontPicker 的状态展示是单一状态槽：加载中、可加载、已选中
 
 ## 14.5 Viewer 字体策略
 
-Viewer 通过 `createViewer({ fontProvider })` 接入同一个 FontProvider 约定。每次 render 的前序阶段会：
+Viewer 通过 `createViewer({ profile, fontProvider })` 接入同一个 FontProvider 约定；`profile` 是宿主预先编译的必填 `CompiledMaterialProfile`。每次 render 的前序阶段会：
 
-1. 调用 `collectFontFamilies(schema)` 收集当前模板引用。
+1. 调用 `collectFontFamilies(schema, profile)` 收集当前模板引用。
 2. 对每个字体调用 `fontManager.ensureFontLoaded({ family }, host.document)`。
 3. 对 provider 字体将 `@font-face` 注入 Viewer host 的 document 或 shadow root；系统字体跳过注入。
 4. 字体失败以 `FONT_LOAD_FAILED` 诊断暴露，不阻断整份文档渲染。
@@ -194,8 +194,13 @@ const fontProvider: FontProvider = {
 在 Viewer 中：
 
 ```ts
+import { compileBuiltinMaterialProfile } from '@easyink/builtin/all'
+import { createViewer } from '@easyink/viewer'
+
+const profile = compileBuiltinMaterialProfile('all')
 const viewer = createViewer({
   host,
+  profile,
   fontProvider,
 })
 ```
