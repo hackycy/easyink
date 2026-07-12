@@ -4,7 +4,7 @@ import type { MaterialNode, PageBackground, PageSchema } from '@easyink/schema'
 import type { UnitType } from '@easyink/shared'
 import type { ProfileMaterialRuntime } from './material-runtime'
 import type { ViewerDiagnosticEvent, ViewerRenderContext, ViewerRenderSize } from './types'
-import { createBrowserDomCapabilities, createBrowserDomHostMount, renderViewerTree } from '@easyink/browser-dom'
+import { createBrowserDomCapabilities, createBrowserDomFallbackCapabilities, createBrowserDomHostMount, renderViewerTree } from '@easyink/browser-dom'
 import { groupPageLayerPlansByPlacement, inspectMaterialNode, PAGE_CONTENT_LAYER_STACK_INDEX, resolvePageLayerPlans, resolvePageLayerStackIndex, viewerElement, viewerText } from '@easyink/core'
 import { UNIT_FACTOR } from '@easyink/shared'
 import { safeSummarizeThrown } from './safe-thrown'
@@ -283,13 +283,14 @@ function renderMaterialFallback(
   browserDom: RenderSurfaceOptions['browserDom'],
   diagnostics: ViewerDiagnosticEvent[],
 ): ViewerTreeMount {
-  const capabilities = createBrowserDomCapabilities({
+  const fallbackTree = materialRenderFallbackTree(node)
+  const capabilities = createBrowserDomFallbackCapabilities({
     document: host.ownerDocument,
     policy: browserDom?.policy,
     maxNodes: browserDom?.maxNodes,
-  })
+  }, fallbackTree)
   try {
-    const mount = renderViewerTree(host, materialRenderFallbackTree(node), {
+    const mount = renderViewerTree(host, fallbackTree, {
       document: host.ownerDocument,
       capabilities,
       maxNodes: browserDom?.maxNodes,

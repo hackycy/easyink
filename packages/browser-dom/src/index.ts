@@ -6,6 +6,7 @@ export {
 export type { ViewerTreePolicy, ViewerTreeReadonlySet } from './policy'
 export {
   createBrowserDomCapabilities,
+  createBrowserDomFallbackCapabilities,
   createBrowserDomHostMount,
   renderViewerTree,
   SANITIZED_MARKUP_MAX_ATTRIBUTE_BYTES,

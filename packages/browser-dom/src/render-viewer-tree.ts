@@ -27,6 +27,7 @@ import {
 } from './policy'
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
+const VALIDATION_WORK_FACTOR = 4
 export const SANITIZED_MARKUP_MAX_SOURCE_BYTES = VIEWER_TREE_ABSOLUTE_MAX_TEXT_BYTES
 export const SANITIZED_MARKUP_MAX_ATTRIBUTE_BYTES = 256 * 1024
 const SVG_PRESENTATION_ATTRIBUTES = new Set([
@@ -63,6 +64,8 @@ interface CapabilityStore {
   readonly tokens: WeakMap<SanitizedMarkup, SanitizedSvgTree>
   readonly imperativeDom: ViewerTreeReadonlySet<string>
   readonly hostMounts: WeakMap<ViewerHostMountReference, HostMountRecord>
+  readonly fallbackValidation: boolean
+  readonly fallbackTree?: ViewerRenderTree
   disposed: boolean
 }
 
@@ -114,6 +117,12 @@ interface RenderState {
 interface SharedRenderBudget {
   remainingNodes: number
   textBytes: number
+  validationNodes: number
+  validationTextBytes: number
+  validationTextCodeUnits: number
+  fallbackValidationNodes: number
+  fallbackValidationTextBytes: number
+  fallbackValidationTextCodeUnits: number
   readonly maxTextBytes: number
   readonly maxDepth: number
 }
@@ -136,6 +145,18 @@ interface RenderScope {
 }
 
 export function createBrowserDomCapabilities(options: BrowserDomCapabilitiesOptions): BrowserDomCapabilities {
+  return createCapabilities(options)
+}
+
+export function createBrowserDomFallbackCapabilities(
+  options: BrowserDomCapabilitiesOptions,
+  fallbackTree: ViewerRenderTree,
+): BrowserDomCapabilities {
+  return createCapabilities(options, fallbackTree)
+}
+
+function createCapabilities(options: BrowserDomCapabilitiesOptions, fallbackTree?: ViewerRenderTree): BrowserDomCapabilities {
+  const fallbackValidation = fallbackTree !== undefined
   const policy = snapshotViewerTreePolicy(options.policy ?? DEFAULT_VIEWER_TREE_POLICY)
   assertPolicyLimits(policy)
   const maxNodes = options.maxNodes ?? VIEWER_TREE_ABSOLUTE_MAX_NODES
@@ -160,7 +181,7 @@ export function createBrowserDomCapabilities(options: BrowserDomCapabilitiesOpti
       return token
     },
   })
-  capabilityStores.set(capabilities, { document: options.document, policy, tokens, imperativeDom, hostMounts: new WeakMap(), disposed: false })
+  capabilityStores.set(capabilities, { document: options.document, policy, tokens, imperativeDom, hostMounts: new WeakMap(), fallbackValidation, fallbackTree, disposed: false })
   return capabilities
 }
 
@@ -195,10 +216,11 @@ export function renderViewerTree(
     throw new ViewerTreePolicyError('VIEWER_CAPABILITIES_DISPOSED')
   if (store.document !== document)
     throw new ViewerTreePolicyError('VIEWER_CAPABILITIES_DOCUMENT_MISMATCH')
+  if (store.fallbackTree !== undefined && store.fallbackTree !== tree)
+    throw new ViewerTreePolicyError('VIEWER_FALLBACK_TREE_INVALID')
   const policy = options.policy ? snapshotViewerTreePolicy(options.policy) : store.policy
   assertPolicyLimits(policy)
   const maxNodes = options.maxNodes ?? VIEWER_TREE_ABSOLUTE_MAX_NODES
-  assertViewerRenderTree(tree, { maxNodes })
   const inherited = activeHostRenderContexts.get(host)
   if (inherited && inherited.document !== document)
     throw new ViewerTreePolicyError('VIEWER_HOST_MOUNT_DOCUMENT_MISMATCH')
@@ -206,9 +228,37 @@ export function renderViewerTree(
   const shared = inherited?.shared ?? {
     remainingNodes: maxNodes,
     textBytes: 0,
+    validationNodes: maxNodes * VALIDATION_WORK_FACTOR,
+    validationTextBytes: policy.maxTextBytes * VALIDATION_WORK_FACTOR,
+    validationTextCodeUnits: policy.maxTextBytes * VALIDATION_WORK_FACTOR,
+    fallbackValidationNodes: 16,
+    fallbackValidationTextBytes: 4096,
+    fallbackValidationTextCodeUnits: 4096,
     maxTextBytes: policy.maxTextBytes,
     maxDepth: policy.maxDepth,
   }
+  const validationNodes = store.fallbackValidation ? shared.fallbackValidationNodes : shared.validationNodes
+  const validationTextBytes = store.fallbackValidation ? shared.fallbackValidationTextBytes : shared.validationTextBytes
+  const validationTextCodeUnits = store.fallbackValidation ? shared.fallbackValidationTextCodeUnits : shared.validationTextCodeUnits
+  const effectiveMaxNodes = Math.min(maxNodes, shared.remainingNodes, validationNodes)
+  if (effectiveMaxNodes < 1)
+    throw new ViewerTreePolicyError('VIEWER_TREE_NODE_LIMIT_EXCEEDED')
+  const effectiveMaxDepth = Math.min(policy.maxDepth, shared.maxDepth - baseDepth)
+  if (effectiveMaxDepth < 0)
+    throw new ViewerTreePolicyError('VIEWER_TREE_DEPTH_EXCEEDED')
+  const effectiveMaxTextBytes = Math.max(0, Math.min(
+    policy.maxTextBytes,
+    shared.maxTextBytes - shared.textBytes,
+    validationTextBytes,
+    validationTextCodeUnits,
+  ))
+  assertViewerRenderTree(tree, {
+    maxNodes: effectiveMaxNodes,
+    maxDepth: effectiveMaxDepth,
+    maxTextBytes: effectiveMaxTextBytes,
+    onVisitNode: () => consumeValidationNode(shared, store.fallbackValidation),
+    onVisitText: value => consumeValidationText(shared, store.fallbackValidation, value),
+  })
 
   const state: RenderState = {
     document,
@@ -287,10 +337,25 @@ function renderInto(
           const requested = nestedOptions.maxNodes
           if (requested !== undefined)
             assertNodeBudget(requested)
-          if (quota.remaining < 1)
-            throw new Error('VIEWER_TREE_NODE_LIMIT_EXCEEDED')
-          const effectiveMax = Math.min(requested ?? quota.remaining, quota.remaining)
-          assertViewerRenderTree(nestedTree, { maxNodes: effectiveMax })
+          const effectiveMax = Math.min(requested ?? quota.remaining, quota.remaining, state.shared.remainingNodes, state.shared.validationNodes)
+          if (effectiveMax < 1)
+            throw new ViewerTreePolicyError('VIEWER_TREE_NODE_LIMIT_EXCEEDED')
+          const effectiveDepth = Math.min(state.policy.maxDepth, state.shared.maxDepth - depth - 1)
+          if (effectiveDepth < 0)
+            throw new ViewerTreePolicyError('VIEWER_TREE_DEPTH_EXCEEDED')
+          const effectiveTextBytes = Math.max(0, Math.min(
+            state.policy.maxTextBytes - state.textBytes,
+            state.shared.maxTextBytes - state.shared.textBytes,
+            state.shared.validationTextBytes,
+            state.shared.validationTextCodeUnits,
+          ))
+          assertViewerRenderTree(nestedTree, {
+            maxNodes: effectiveMax,
+            maxDepth: effectiveDepth,
+            maxTextBytes: effectiveTextBytes,
+            onVisitNode: () => consumeValidationNode(state.shared, false),
+            onVisitText: value => consumeValidationText(state.shared, false, value),
+          })
           const nestedScope = createScope(imperativeElement)
           const nestedQuota: RenderQuota = { remaining: effectiveMax, parent: quota }
           const quotaSnapshot = snapshotQuotaChain(quota)
@@ -538,8 +603,10 @@ function sanitizeSvgElement(
 }
 
 function renderSanitizedNode(node: SanitizedSvgNode, state: RenderState, quota: RenderQuota, depth: number): Node {
+  consumeValidationNode(state.shared, state.store.fallbackValidation)
   consumeNode(state, quota, depth)
   if (node.type === 'text') {
+    consumeValidationText(state.shared, state.store.fallbackValidation, node.value)
     consumeText(state, node.value)
     return state.document.createTextNode(node.value)
   }
@@ -616,6 +683,58 @@ function snapshotSharedBudget(budget: SharedRenderBudget): readonly [number, num
 function restoreSharedBudget(budget: SharedRenderBudget, snapshot: readonly [number, number]): void {
   budget.remainingNodes = snapshot[0]
   budget.textBytes = snapshot[1]
+}
+
+function consumeValidationNode(budget: SharedRenderBudget, fallback: boolean): void {
+  const key = fallback ? 'fallbackValidationNodes' : 'validationNodes'
+  if (budget[key] < 1)
+    throw new ViewerTreePolicyError('VIEWER_TREE_NODE_LIMIT_EXCEEDED')
+  budget[key]--
+}
+
+function consumeValidationText(budget: SharedRenderBudget, fallback: boolean, value: string): void {
+  const codeUnitKey = fallback ? 'fallbackValidationTextCodeUnits' : 'validationTextCodeUnits'
+  const byteKey = fallback ? 'fallbackValidationTextBytes' : 'validationTextBytes'
+  if (value.length > budget[codeUnitKey]) {
+    budget[codeUnitKey] = 0
+    throw new ViewerTreePolicyError('VIEWER_TREE_TEXT_EXCEEDED')
+  }
+  budget[codeUnitKey] -= value.length
+  const bytes = boundedUtf8ByteLength(value, budget[byteKey])
+  if (bytes > budget[byteKey]) {
+    budget[byteKey] = 0
+    throw new ViewerTreePolicyError('VIEWER_TREE_TEXT_EXCEEDED')
+  }
+  budget[byteKey] -= bytes
+}
+
+function boundedUtf8ByteLength(value: string, remaining: number): number {
+  if (value.length > remaining)
+    return remaining + 1
+  let bytes = 0
+  for (let index = 0; index < value.length; index++) {
+    const code = value.charCodeAt(index)
+    if (code <= 0x7F) {
+      bytes += 1
+    }
+    else if (code <= 0x7FF) {
+      bytes += 2
+    }
+    else if (code >= 0xD800 && code <= 0xDBFF && index + 1 < value.length && isLowSurrogate(value.charCodeAt(index + 1))) {
+      bytes += 4
+      index++
+    }
+    else {
+      bytes += 3
+    }
+    if (bytes > remaining)
+      return remaining + 1
+  }
+  return bytes
+}
+
+function isLowSurrogate(code: number): boolean {
+  return code >= 0xDC00 && code <= 0xDFFF
 }
 
 function snapshotQuotaChain(quota: RenderQuota): Array<readonly [RenderQuota, number]> {

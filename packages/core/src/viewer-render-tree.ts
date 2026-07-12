@@ -116,49 +116,86 @@ export function viewerImperativeDom(
   })
 }
 
-interface WalkFrame {
+interface NodeFrame {
+  kind: 'node'
   node: unknown
   depth: number
-  exit: boolean
 }
+
+interface ChildrenFrame {
+  kind: 'children'
+  children: readonly unknown[]
+  index: number
+  length: number
+  depth: number
+}
+
+interface ExitFrame {
+  kind: 'exit'
+  node: object
+}
+
+type WalkFrame = NodeFrame | ChildrenFrame | ExitFrame
 
 export function assertViewerRenderTree(
   tree: ViewerRenderTree,
-  options: { maxNodes?: number } = {},
+  options: {
+    maxNodes?: number
+    maxDepth?: number
+    maxTextBytes?: number
+    onVisitNode?: () => void
+    onVisitText?: (value: string) => void
+  } = {},
 ): asserts tree is ViewerRenderTree {
   const maxNodes = options.maxNodes ?? VIEWER_TREE_ABSOLUTE_MAX_NODES
+  const maxDepth = options.maxDepth ?? VIEWER_TREE_ABSOLUTE_MAX_DEPTH
+  const maxTextBytes = options.maxTextBytes ?? VIEWER_TREE_ABSOLUTE_MAX_TEXT_BYTES
   if (!Number.isFinite(maxNodes) || !Number.isInteger(maxNodes) || maxNodes < 1 || maxNodes > VIEWER_TREE_ABSOLUTE_MAX_NODES)
+    fail('VIEWER_TREE_BUDGET_INVALID')
+  if (!Number.isFinite(maxDepth) || !Number.isInteger(maxDepth) || maxDepth < 0 || maxDepth > VIEWER_TREE_ABSOLUTE_MAX_DEPTH)
+    fail('VIEWER_TREE_BUDGET_INVALID')
+  if (!Number.isFinite(maxTextBytes) || !Number.isInteger(maxTextBytes) || maxTextBytes < 0 || maxTextBytes > VIEWER_TREE_ABSOLUTE_MAX_TEXT_BYTES)
     fail('VIEWER_TREE_BUDGET_INVALID')
 
   const active = new WeakSet<object>()
-  const stack: WalkFrame[] = [{ node: tree, depth: 0, exit: false }]
-  const encoder = new TextEncoder()
+  const stack: WalkFrame[] = [{ kind: 'node', node: tree, depth: 0 }]
   let nodes = 0
   let textBytes = 0
 
   while (stack.length > 0) {
     const frame = stack.pop()!
-    if (!isRecord(frame.node))
-      fail('VIEWER_TREE_KIND_INVALID')
-    if (frame.exit) {
+    if (frame.kind === 'exit') {
       active.delete(frame.node)
       continue
     }
-    if (active.has(frame.node))
-      fail('VIEWER_TREE_CYCLE')
-    if (frame.depth > VIEWER_TREE_ABSOLUTE_MAX_DEPTH)
-      fail('VIEWER_TREE_DEPTH_EXCEEDED')
+    if (frame.kind === 'children') {
+      if (frame.index < frame.length) {
+        stack.push({ ...frame, index: frame.index + 1 })
+        stack.push({ kind: 'node', node: frame.children[frame.index], depth: frame.depth })
+      }
+      continue
+    }
+    options.onVisitNode?.()
     if (++nodes > maxNodes)
       fail('VIEWER_TREE_NODE_LIMIT_EXCEEDED')
+    if (!isRecord(frame.node))
+      fail('VIEWER_TREE_KIND_INVALID')
+    if (active.has(frame.node))
+      fail('VIEWER_TREE_CYCLE')
+    if (frame.depth > maxDepth)
+      fail('VIEWER_TREE_DEPTH_EXCEEDED')
 
     active.add(frame.node)
-    stack.push({ ...frame, exit: true })
+    stack.push({ kind: 'exit', node: frame.node })
     switch (frame.node.kind) {
       case 'text':
         if (typeof frame.node.value !== 'string')
           fail('VIEWER_TREE_VALUE_INVALID')
-        textBytes += encoder.encode(frame.node.value).byteLength
+        options.onVisitText?.(frame.node.value)
+        textBytes += boundedUtf8ByteLength(frame.node.value, maxTextBytes - textBytes)
         if (textBytes > VIEWER_TREE_ABSOLUTE_MAX_TEXT_BYTES)
+          fail('VIEWER_TREE_TEXT_EXCEEDED')
+        if (textBytes > maxTextBytes)
           fail('VIEWER_TREE_TEXT_EXCEEDED')
         break
       case 'element': {
@@ -170,15 +207,20 @@ export function assertViewerRenderTree(
           fail('VIEWER_TREE_ATTRIBUTES_EXCEEDED')
         if (!Array.isArray(frame.node[VIEWER_CHILDREN_KEY]))
           fail('VIEWER_TREE_VALUE_INVALID')
-        for (let index = frame.node[VIEWER_CHILDREN_KEY].length - 1; index >= 0; index--)
-          stack.push({ node: frame.node[VIEWER_CHILDREN_KEY][index], depth: frame.depth + 1, exit: false })
+        const children = frame.node[VIEWER_CHILDREN_KEY]
+        stack.push({ kind: 'children', children, index: 0, length: children.length, depth: frame.depth + 1 })
         break
       }
       case 'fragment':
         if (!Array.isArray(frame.node[VIEWER_CHILDREN_KEY]))
           fail('VIEWER_TREE_VALUE_INVALID')
-        for (let index = frame.node[VIEWER_CHILDREN_KEY].length - 1; index >= 0; index--)
-          stack.push({ node: frame.node[VIEWER_CHILDREN_KEY][index], depth: frame.depth + 1, exit: false })
+        stack.push({
+          kind: 'children',
+          children: frame.node[VIEWER_CHILDREN_KEY],
+          index: 0,
+          length: frame.node[VIEWER_CHILDREN_KEY].length,
+          depth: frame.depth + 1,
+        })
         break
       case 'sanitized-markup':
         if (!isRecord(frame.node.markup))
@@ -196,6 +238,37 @@ export function assertViewerRenderTree(
         fail('VIEWER_TREE_KIND_INVALID')
     }
   }
+}
+
+function boundedUtf8ByteLength(value: string, remaining: number): number {
+  if (value.length > remaining)
+    return remaining + 1
+  let bytes = 0
+  for (let index = 0; index < value.length; index++) {
+    const code = value.charCodeAt(index)
+    if (code <= 0x7F) {
+      bytes += 1
+    }
+    else if (code <= 0x7FF) {
+      bytes += 2
+    }
+    else if (code >= 0xD800 && code <= 0xDBFF && index + 1 < value.length) {
+      const next = value.charCodeAt(index + 1)
+      if (next >= 0xDC00 && next <= 0xDFFF) {
+        bytes += 4
+        index++
+      }
+      else {
+        bytes += 3
+      }
+    }
+    else {
+      bytes += 3
+    }
+    if (bytes > remaining)
+      return remaining + 1
+  }
+  return bytes
 }
 
 function assertScalarRecord(

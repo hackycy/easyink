@@ -3,6 +3,7 @@ import { viewerElement, viewerFragment, viewerImperativeDom, viewerSanitizedMark
 import { describe, expect, it, vi } from 'vitest'
 import {
   createBrowserDomCapabilities,
+  createBrowserDomFallbackCapabilities,
   createBrowserDomHostMount,
   DEFAULT_VIEWER_TREE_POLICY,
   renderViewerTree,
@@ -426,7 +427,9 @@ describe('renderViewerTree', () => {
         return renderViewerTree(host, viewerElement('div', {}, [viewerText('too many')]), { capabilities: child, maxNodes: 1 })
       }
       catch {
-        return renderViewerTree(host, viewerText('fallback'), { capabilities: child })
+        const fallbackTree = viewerText('fallback')
+        const fallback = createBrowserDomFallbackCapabilities({ document }, fallbackTree)
+        return renderViewerTree(host, fallbackTree, { capabilities: fallback })
       }
     })
     const healthy = createBrowserDomHostMount(owner, host => renderViewerTree(host, viewerText('healthy'), { capabilities: child }))
@@ -474,5 +477,73 @@ describe('renderViewerTree', () => {
 
     expect(() => renderViewerTree(document.createElement('div'), tree, { capabilities: capabilities[0] }))
       .toThrowError('VIEWER_TREE_DEPTH_EXCEEDED')
+  })
+
+  it('bounds validation visits across repeated oversized sibling attempts', () => {
+    const owner = createBrowserDomCapabilities({ document })
+    const child = createBrowserDomCapabilities({ document })
+    let childReads = 0
+    const oversizedChildren = new Proxy(
+      Array.from({ length: 50_000 }, () => viewerText('x')),
+      {
+        get(target, key, receiver) {
+          if (typeof key === 'string' && /^\d+$/.test(key))
+            childReads++
+          return Reflect.get(target, key, receiver)
+        },
+      },
+    )
+    const oversizedTree = { kind: 'fragment', children: oversizedChildren } as const
+    const siblings = Array.from({ length: 1000 }, () => createBrowserDomHostMount(owner, (host) => {
+      try {
+        return renderViewerTree(host, oversizedTree, { capabilities: child })
+      }
+      catch {
+        const fallbackTree = viewerText('!')
+        const fallback = createBrowserDomFallbackCapabilities({ document }, fallbackTree)
+        try {
+          return renderViewerTree(host, fallbackTree, { capabilities: fallback })
+        }
+        catch {
+          fallback.dispose()
+          return Object.freeze({ nodes: Object.freeze([]), dispose() {} })
+        }
+      }
+    }))
+
+    renderViewerTree(document.createElement('div'), viewerFragment(siblings), { capabilities: owner, maxNodes: 5000 })
+    expect(childReads).toBeLessThanOrEqual(20_000)
+  })
+
+  it('rejects repeated huge text before unbounded UTF-8 encoding', () => {
+    const owner = createBrowserDomCapabilities({ document })
+    const child = createBrowserDomCapabilities({ document })
+    const hugeText = viewerText('x'.repeat(2 * 1024 * 1024))
+    let encodedCodeUnits = 0
+    const originalEncode = TextEncoder.prototype.encode
+    const encode = vi.spyOn(TextEncoder.prototype, 'encode').mockImplementation(function (value = '') {
+      encodedCodeUnits += value.length
+      return originalEncode.call(this, value)
+    })
+    const siblings = Array.from({ length: 100 }, () => createBrowserDomHostMount(owner, (host) => {
+      try {
+        return renderViewerTree(host, hugeText, { capabilities: child })
+      }
+      catch {
+        const fallbackTree = viewerText('!')
+        const fallback = createBrowserDomFallbackCapabilities({ document }, fallbackTree)
+        try {
+          return renderViewerTree(host, fallbackTree, { capabilities: fallback })
+        }
+        catch {
+          fallback.dispose()
+          return Object.freeze({ nodes: Object.freeze([]), dispose() {} })
+        }
+      }
+    }))
+
+    renderViewerTree(document.createElement('div'), viewerFragment(siblings), { capabilities: owner, maxNodes: 500 })
+    expect(encodedCodeUnits).toBeLessThan(1024)
+    encode.mockRestore()
   })
 })
