@@ -60,7 +60,42 @@ describe('table viewer DOM identities', () => {
       cellText: () => '',
     })).toThrowError('TABLE_VIEWER_DOM_ID_COMPONENT_INVALID')
   })
+
+  it.each(['\uD800', '\uD801', '\uDC00'])('rejects unpaired UTF-16 surrogate %j', (sourceRowKey) => {
+    expect(() => renderWithSourceKeys(['row:a:b', sourceRowKey, 'valid']))
+      .toThrowError('TABLE_VIEWER_DOM_ID_COMPONENT_INVALID')
+  })
+
+  it('keeps U+FFFD and a valid surrogate pair distinct and stable', () => {
+    const first = renderWithSourceKeys(['row:a:b', '\uFFFD', '\u{1F600}'])
+    const second = renderWithSourceKeys(['row:a:b', '\uFFFD', '\u{1F600}'])
+    expect(second).toEqual(first)
+    const rowIds = findElements(first, ['tr']).map(row => row.attributes.id)
+    expect(rowIds).toHaveLength(3)
+    expect(new Set(rowIds).size).toBe(3)
+  })
 })
+
+function renderWithSourceKeys(sourceRowKeys: readonly [string, string, string]): ViewerRenderTree {
+  return renderTableTree({
+    node: createNode(),
+    topology: {
+      columns: [{ ratio: 1 }, { ratio: 1 }],
+      rows: [
+        { role: 'header', height: 5, cells: [{}, {}] },
+        { role: 'normal', height: 5, cells: [{}, {}] },
+        { role: 'normal', height: 5, cells: [{}, {}] },
+      ],
+    },
+    props: TABLE_BASE_DEFAULTS,
+    unit: 'mm',
+    elementHeight: 15,
+    canonicalRowIds: ['row:a:b', 'row:a_b', 'row:a_b'],
+    canonicalColumnIds: ['column:a:b', 'column:a_b'],
+    sourceRowKeys,
+    cellText: () => '',
+  })
+}
 
 function createNode(): MaterialNode<unknown> {
   const model: TableModel = {

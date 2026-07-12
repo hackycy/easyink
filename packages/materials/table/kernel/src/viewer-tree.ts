@@ -3,13 +3,11 @@ import type { MaterialNode, TableCellSchema, TableRowSchema, TableTopologySchema
 import type { TableBaseProps } from './types'
 import { viewerElement, viewerText } from '@easyink/core'
 import { computeRowScaleWithVirtualRows } from './geometry'
-import { getTableMaterialModel } from './model'
+import { encodeTableOpaqueIdPart, getTableMaterialModel } from './model'
 import { TABLE_BASE_DEFAULTS, TABLE_TYPOGRAPHY_DEFAULTS } from './types'
 import { resolveCellTypography } from './typography'
 
 const TABLE_DOM_ID_COMPONENT_MAX_BYTES = 256
-const UTF8_ENCODER = new TextEncoder()
-const HEX_DIGITS = '0123456789abcdef'
 
 export interface RenderTableTreeOptions {
   node: MaterialNode<unknown>
@@ -156,11 +154,17 @@ function rowId(nodeId: string, sourceRowKey: string): string {
 }
 
 function encodeDomIdComponent(value: string): string {
-  const bytes = UTF8_ENCODER.encode(value)
-  if (bytes.length === 0 || bytes.length > TABLE_DOM_ID_COMPONENT_MAX_BYTES)
+  let opaque: string
+  try {
+    opaque = encodeTableOpaqueIdPart(value)
+  }
+  catch {
     throw new Error('TABLE_VIEWER_DOM_ID_COMPONENT_INVALID')
-  let encoded = ''
-  for (const byte of bytes)
-    encoded += HEX_DIGITS[byte >> 4] + HEX_DIGITS[byte & 0x0F]
+  }
+  const separator = opaque.indexOf(':')
+  const byteLength = Number.parseInt(opaque.slice(0, separator), 10)
+  const encoded = opaque.slice(separator + 1)
+  if (separator < 1 || !Number.isSafeInteger(byteLength) || byteLength < 1 || byteLength > TABLE_DOM_ID_COMPONENT_MAX_BYTES)
+    throw new Error('TABLE_VIEWER_DOM_ID_COMPONENT_INVALID')
   return encoded
 }
