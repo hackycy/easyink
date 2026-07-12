@@ -10,6 +10,7 @@ import type { MaterialNode } from '@easyink/schema'
 import type { JsonValue, UnitType } from '@easyink/shared'
 import type { TableModel, TableStyle } from './model'
 import { cloneJsonValue, convertUnit } from '@easyink/shared'
+import { migrateLegacyTableV0ToV1, validateLegacyTableV0Input } from './legacy-migration'
 import { assertValidTableModel, isValidTableStableToken } from './model'
 import { decodeTableModelV1 } from './model-codec'
 
@@ -62,8 +63,15 @@ const MAX_ENVELOPE_ISSUES = 256
 export const tableSchemaAdapter: SchemaAdapter = {
   currentModelVersion: 1,
   modelUnitPolicy: 'convertible',
-  migrations: [],
-  validateInput(node) {
+  migrations: [migrateLegacyTableV0ToV1],
+  validateInput(node, context) {
+    const version = ownData(node, 'modelVersion')
+    if (!version.ok)
+      return [issue('TABLE_MODEL_STRUCTURE_INVALID', '/model', 'Table modelVersion must be an own data property')]
+    if (version.value === 0)
+      return validateLegacyTableV0Input(node, context)
+    if (version.value !== 1)
+      return [issue('TABLE_MODEL_VERSION_UNSUPPORTED', '/model', 'Table modelVersion must be 0 or 1')]
     const model = ownData(node, 'model')
     if (!model.ok)
       return [issue('TABLE_MODEL_STRUCTURE_INVALID', '/model', 'Table model must be an own data property')]
