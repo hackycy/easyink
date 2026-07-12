@@ -20,7 +20,7 @@ export function createMaterialExtensionContext(store: DesignerStore): MaterialEx
 
     getSelection() {
       return {
-        ids: store.selection.ids,
+        ids: [...store.selection.ids],
         count: store.selection.count,
         isEmpty: store.selection.isEmpty,
       }
