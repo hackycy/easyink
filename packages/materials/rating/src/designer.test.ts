@@ -21,6 +21,7 @@ function createContext(overrides: Partial<MaterialExtensionContext> = {}): Mater
     getBindingLabel: binding => binding.fieldLabel || binding.fieldPath,
     commitCommand: () => {},
     tx: {
+      getOperationContext: () => ({ sessionPath: [], selectionLineage: 'selection-test' }),
       run: () => {},
       batch: fn => fn(),
     },

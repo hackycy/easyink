@@ -1,5 +1,6 @@
 import type { MaterialControlPolicy, MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
+import { createTransactionOperationDescriptor } from '@easyink/core'
 import { getBindingRefs } from '@easyink/schema'
 import { escapeHtml } from '@easyink/shared'
 import { getTextProps, isTextAutoHeight, measureTextNode } from './layout'
@@ -73,6 +74,7 @@ function syncAutoHeight(node: MaterialNode, context: MaterialExtensionContext): 
   }, {
     mergeKey: `text:auto-height:${node.id}`,
     label: 'materials.text.history.updateHeight',
+    operation: createTransactionOperationDescriptor(context.tx, { kind: 'text.layout', targetIds: [`node:${node.id}`], fieldPaths: ['/height'], structural: false }),
   })
 }
 

@@ -79,6 +79,7 @@ export { DocumentTransactionEngine, DocumentValidationError } from './document-t
 
 export type { DocumentRecipe, DocumentTransactionEngineOptions, DocumentTransactionOptions } from './document-transaction-engine'
 
+export { createTransactionOperationDescriptor } from './editing-session'
 export type {
   BehaviorContext,
   BehaviorEvent,
@@ -101,6 +102,8 @@ export type {
   SubPropertySchema,
   SurfacesAPI,
   TransactionAPI,
+  TransactionOperationContext,
+  TransactionOperationInput,
   TxOptions,
 } from './editing-session'
 

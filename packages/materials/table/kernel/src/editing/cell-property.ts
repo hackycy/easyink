@@ -3,6 +3,7 @@ import type { MaterialNode } from '@easyink/schema'
 import type { BindingDisplayFormat } from '@easyink/shared'
 import type { TableTypography } from '../model'
 import type { TableCellPayload, TableEditingDelegate } from './types'
+import { createTransactionOperationDescriptor } from '@easyink/core'
 import { getBindingRefs } from '@easyink/schema'
 import { CELL_PROP_SCHEMAS } from '../cell-schemas'
 import { cellAt, isEditableTableNode, tableModel } from './canonical'
@@ -91,7 +92,7 @@ export function createCellSubPropertySchema(
         }
         cell.style.typography ??= {}
         writeTypographyValue(cell.style.typography, key, value)
-      }, { label: 'materials.table.history.updateCell' })
+      }, { label: 'materials.table.history.updateCell', operation: createTransactionOperationDescriptor(tx, { kind: 'table.cell.property', targetIds: [`node:${sel.nodeId}`], fieldPaths: ['/model/bands'], structural: false }) })
     },
     get binding() {
       const current = getNode()
@@ -108,7 +109,7 @@ export function createCellSubPropertySchema(
           delete draft.bindings[target]
         if (cell?.content.kind === 'text' && cell.content.bindingPort === target)
           delete cell.content.bindingPort
-      }, { label: 'designer.history.clearBinding' })
+      }, { label: 'designer.history.clearBinding', operation: createTransactionOperationDescriptor(tx, { kind: 'table.cell.binding', targetIds: [`node:${sel.nodeId}`], fieldPaths: ['/model/bands', '/bindings'], structural: false }) })
     },
     updateBindingFormat(tx: TransactionAPI, format: BindingDisplayFormat | undefined, port?: string) {
       tx.run(sel.nodeId, (draft) => {
@@ -117,7 +118,7 @@ export function createCellSubPropertySchema(
         const binding = target ? getBindingRefs(draft.bindings[target])[0] : undefined
         if (binding)
           binding.format = format
-      }, { label: 'materials.table.history.updateCell' })
+      }, { label: 'materials.table.history.updateCell', operation: createTransactionOperationDescriptor(tx, { kind: 'table.cell.binding', targetIds: [`node:${sel.nodeId}`], fieldPaths: ['/bindings'], structural: false }) })
     },
   }
 }

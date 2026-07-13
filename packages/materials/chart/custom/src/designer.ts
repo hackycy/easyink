@@ -1,6 +1,7 @@
 import type { DatasourceDropHandler, MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
 import type { BindingRef, MaterialNode } from '@easyink/schema'
 import type { ChartCustomProps } from './schema'
+import { createTransactionOperationDescriptor } from '@easyink/core'
 import { createChartDesignerRenderHost, mountFullECharts } from '@easyink/material-chart-kernel/full'
 import { getBindingRefs, getNodeModel } from '@easyink/schema'
 import { resolveChartCustomOption, resolveChartCustomProps } from './options'
@@ -54,7 +55,7 @@ function createDatasourceDropHandler(context: MaterialExtensionContext): Datasou
       const binding = createBinding(field)
       context.tx.run<MaterialNode>(node.id, (draft) => {
         draft.bindings.value = binding
-      }, { label: 'designer.history.bindField' })
+      }, { label: 'designer.history.bindField', operation: createTransactionOperationDescriptor(context.tx, { kind: 'chart.binding', targetIds: [`node:${node.id}`], fieldPaths: ['/bindings/value'], structural: false }) })
     },
   }
 }

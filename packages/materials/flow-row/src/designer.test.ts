@@ -12,6 +12,7 @@ const context = {
   getBindingLabel: () => '',
   commitCommand: () => {},
   tx: {
+    getOperationContext: () => ({ sessionPath: ['flow'], selectionLineage: 'selection-flow' }),
     run: () => {},
     batch: () => {},
   },

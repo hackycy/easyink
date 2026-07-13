@@ -3,6 +3,7 @@ import { createDefaultSchema } from '@easyink/schema'
 import { describe, expect, it, vi } from 'vitest'
 import { DocumentStore } from './document-store'
 import { DocumentTransactionEngine, DocumentValidationError } from './document-transaction-engine'
+import { createTransactionOperationDescriptor } from './editing-session'
 import { loadDocumentWithProfile, recordSchemaAdapter } from './schema-adapter'
 import { createTestCompiledMaterialProfile, createTestMaterialManifest } from './testing/material-profile'
 
@@ -109,6 +110,34 @@ describe('documentTransactionEngine', () => {
     engine.redo()
     expect(store.document.elements[0]!.x).toBe(2)
     expect(store.materialNodeStates.get('a')).toBe(coalescedNodeState)
+  })
+
+  it('does not coalesce material operations after the selection lineage changes', () => {
+    let lineage = 'selection-1'
+    const profile = createTestCompiledMaterialProfile()
+    const schema = createCanonicalDefaultSchema()
+    schema.elements = [profile.createNode('box', { id: 'a', x: 0 })]
+    const store = new DocumentStore(schema, profile)
+    const engine = new DocumentTransactionEngine(store, {
+      now: () => 100,
+      getOperationContext: () => ({ sessionPath: ['a'], selectionLineage: lineage }),
+    })
+    const operation = () => createTransactionOperationDescriptor(engine, {
+      kind: 'material.property',
+      targetIds: ['node:a'],
+      fieldPaths: ['/x'],
+      structural: false,
+    })
+
+    engine.run('a', (draft) => {
+      draft.x = 1
+    }, { mergeKey: 'material:a:x', operation: operation() })
+    lineage = 'selection-2'
+    engine.run('a', (draft) => {
+      draft.x = 2
+    }, { mergeKey: 'material:a:x', operation: operation() })
+
+    expect(engine.totalCount).toBe(2)
   })
 
   it('rejects an invalid adapter result atomically with stable diagnostic code and path', () => {

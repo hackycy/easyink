@@ -38,7 +38,7 @@ function context(node: MaterialNode<unknown>, command: string, payload?: unknown
     node,
     selection: { type: 'table.cell', nodeId: node.id, payload: { row: 0, col: 0 } },
     event: { kind: 'command', command, payload },
-    tx: { run: (_id: string, mutate: (draft: MaterialNode<unknown>) => void) => mutate(node) },
+    tx: { getOperationContext: () => ({ sessionPath: ['table'], selectionLineage: 'selection-table' }), run: (_id: string, mutate: (draft: MaterialNode<unknown>) => void) => mutate(node) },
     selectionStore: { set: vi.fn() },
     session: { setSelectionScopedMeta: vi.fn() },
   }

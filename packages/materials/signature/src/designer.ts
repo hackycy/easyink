@@ -12,7 +12,7 @@ import type { MaterialNode } from '@easyink/schema'
 import type { JsonObject, UnitType } from '@easyink/shared'
 import type SignaturePad from 'signature_pad'
 import type { SignaturePointGroup } from './schema'
-import { UnitManager } from '@easyink/core'
+import { createTransactionOperationDescriptor, UnitManager } from '@easyink/core'
 import { IconClear, IconFilePen } from '@easyink/icons/svg-strings'
 import {
   materialToolbarButtonStyle,
@@ -111,7 +111,7 @@ function createSignatureBehavior(context: MaterialExtensionContext): BehaviorReg
           ctx.tx.run<MaterialNode>(ctx.node.id, (draft) => {
             const props = getSignatureProps(draft)
             draft.model = { ...props, data: [] }
-          }, { label: 'materials.signature.history.clear' })
+          }, { label: 'materials.signature.history.clear', operation: createTransactionOperationDescriptor(ctx.tx, { kind: 'signature.data.clear', targetIds: [`node:${ctx.node.id}`], fieldPaths: ['/model/data'], structural: false }) })
           ctx.session.setMeta('drawEnabled', false)
           context.emit('signature:draw-mode', { nodeId: ctx.node.id, enabled: false })
           return
@@ -551,7 +551,7 @@ export function createSignatureExtension(context: MaterialExtensionContext): Mat
         context.tx.run<MaterialNode>(node.id, (draft) => {
           const props = getSignatureProps(draft)
           draft.model = { ...props, data }
-        }, { label, mergeKey: `${node.id}:signature-data`, mergeWindowMs: 1000 })
+        }, { label, mergeKey: `${node.id}:signature-data`, mergeWindowMs: 1000, operation: createTransactionOperationDescriptor(context.tx, { kind: 'signature.data.update', targetIds: [`node:${node.id}`], fieldPaths: ['/model/data'], structural: false }) })
       }
 
       async function mountPad() {

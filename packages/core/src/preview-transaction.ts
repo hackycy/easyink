@@ -3,7 +3,7 @@ import type { Patch } from 'mutative'
 import type { DocumentIndexSnapshot } from './document-index'
 import type { PreviewValidationReport } from './document-preview-validation'
 import type { DocumentRecipe, DocumentTransactionOptions } from './document-transaction-engine'
-import type { TransactionAPI, TxOptions } from './editing-session'
+import type { TransactionAPI, TransactionOperationContext, TxOptions } from './editing-session'
 import { create, markSimpleObject } from 'mutative'
 
 export interface PreviewPublishPayload {
@@ -36,6 +36,13 @@ export class PreviewTransaction implements TransactionAPI {
 
   get isOpen(): boolean { return !this.closed }
   get validationReport(): PreviewValidationReport | null { return this.report }
+
+  getOperationContext(): TransactionOperationContext {
+    return {
+      sessionPath: this.options.operation.sessionPath,
+      selectionLineage: this.options.operation.selectionLineage,
+    }
+  }
 
   replace(recipe: DocumentRecipe): void {
     this.assertOpen()

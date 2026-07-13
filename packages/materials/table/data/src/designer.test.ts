@@ -29,6 +29,7 @@ function createContext(node: MaterialNode<unknown>) {
     getBindingLabel: () => '',
     commitCommand: () => {},
     tx: {
+      getOperationContext: () => ({ sessionPath: [], selectionLineage: 'selection-data' }),
       run: (_id: string, mutate: (draft: MaterialNode<unknown>) => void) => mutate(node),
       batch: <T>(fn: () => T) => fn(),
     },

@@ -21,6 +21,7 @@ function createContext(overrides: Partial<MaterialExtensionContext> = {}): Mater
     getBindingLabel: binding => binding.fieldLabel || binding.fieldPath,
     commitCommand: () => {},
     tx: {
+      getOperationContext: () => ({ sessionPath: [], selectionLineage: 'selection-test' }),
       run: () => {},
       batch: fn => fn(),
     },
@@ -98,6 +99,7 @@ describe('createTextExtension', () => {
     })
     const extension = createTextExtension(createContext({
       tx: {
+        getOperationContext: () => ({ sessionPath: [], selectionLineage: 'selection-test' }),
         run: <TNode extends MaterialNode>(_id: string, fn: (draft: TNode) => void) => {
           const draft = { ...node } as TNode
           fn(draft)

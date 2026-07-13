@@ -123,7 +123,14 @@ export class DesignerStore {
     const loaded = loadDocumentWithProfile(schema, this.materialProfile)
     this.applyRuntimeDefaults(runtimeConfig, schema, loaded.schema)
     this.documentStore = markRaw(new CoreDocumentStore(stripUndefined(loaded.schema), this.materialProfile, { nodeStates: loaded.nodeStates }))
-    this.documentTransactions = markRaw(new CoreDocumentTransactionEngine(this.documentStore))
+    this.documentTransactions = markRaw(new CoreDocumentTransactionEngine(this.documentStore, {
+      getOperationContext: () => {
+        const session = this.editingSession?.activeSession
+        return session
+          ? { sessionPath: [session.nodeId], selectionLineage: session.selectionStore.lineageId }
+          : { sessionPath: [], selectionLineage: this.selection.lineageId }
+      },
+    }))
     this._materialDiagnostics = loaded.diagnostics
     this._materialNodeStates = loaded.nodeStates
     this.fontService = new FontService(this.diagnostics, this.materialProfile)

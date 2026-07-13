@@ -7,7 +7,7 @@ describe('chart custom designer extension', () => {
     const txRun = vi.fn()
     const extension = createChartCustomExtension({
       t: (key: string) => key,
-      tx: { run: txRun },
+      tx: { getOperationContext: () => ({ sessionPath: [], selectionLineage: 'selection-chart' }), run: txRun },
     } as never)
     const node = createChartCustomNode({ id: 'chart-1' })
 
@@ -17,7 +17,17 @@ describe('chart custom designer extension', () => {
       title: 'Option',
     } as never, { x: 1, y: 1 }, node)
 
-    expect(txRun).toHaveBeenCalledWith('chart-1', expect.any(Function), { label: 'designer.history.bindField' })
+    expect(txRun).toHaveBeenCalledWith('chart-1', expect.any(Function), {
+      label: 'designer.history.bindField',
+      operation: {
+        kind: 'chart.binding',
+        sessionPath: [],
+        targetIds: ['node:chart-1'],
+        fieldPaths: ['/bindings/value'],
+        selectionLineage: 'selection-chart',
+        structural: false,
+      },
+    })
     const draft = createChartCustomNode({ id: 'chart-1' })
     txRun.mock.calls[0][1](draft)
     expect(draft.bindings.value).toEqual({

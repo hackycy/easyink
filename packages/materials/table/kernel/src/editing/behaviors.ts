@@ -1,6 +1,7 @@
 import type { BehaviorRegistration } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { TableCellPayload, TableEditingDelegate } from './types'
+import { createTransactionOperationDescriptor } from '@easyink/core'
 import { convertUnit } from '@easyink/shared'
 import {
   insertTableColumn,
@@ -88,7 +89,7 @@ export function createTableKeyboardNavBehavior(delegate: TableEditingDelegate): 
           const cell = cellAt(draft, payload.row, payload.col)
           if (cell?.content.kind === 'text' && !cell.content.bindingPort)
             cell.content.text = ''
-        }, { label: 'materials.table.history.updateCell' })
+        }, { label: 'materials.table.history.updateCell', operation: createTransactionOperationDescriptor(ctx.tx, { kind: 'table.cell.property', targetIds: [`node:${node.id}`], fieldPaths: ['/model/bands'], structural: false }) })
         return
       }
       if (!['Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key))
@@ -192,7 +193,7 @@ export function createTableResizeBehavior(delegate: TableEditingDelegate): Behav
           if (column)
             column.track = { kind: 'fixed', size: nextWidth }
           draft.width += nextWidth - width
-        }, { mergeKey: `resize-col-${input.index}`, label: 'materials.table.history.resizeColumn' })
+        }, { mergeKey: `resize-col-${input.index}`, label: 'materials.table.history.resizeColumn', operation: createTransactionOperationDescriptor(ctx.tx, { kind: 'table.column.resize', targetIds: [`node:${node.id}`, `column:${columnId}`], fieldPaths: ['/model/columns', '/width'], structural: false }) })
         return
       }
       if (delegate.canResizeRow?.(node, input.index) === false)
@@ -209,7 +210,7 @@ export function createTableResizeBehavior(delegate: TableEditingDelegate): Behav
             row.minHeight = result.rowHeights[index]!
         })
         draft.height = result.totalHeight
-      }, { mergeKey: `resize-row-${input.index}`, label: 'materials.table.history.resizeRow' })
+      }, { mergeKey: `resize-row-${input.index}`, label: 'materials.table.history.resizeRow', operation: createTransactionOperationDescriptor(ctx.tx, { kind: 'table.row.resize', targetIds: [`node:${node.id}`], fieldPaths: ['/model/bands', '/height'], structural: false }) })
     },
   }
 }
@@ -228,7 +229,7 @@ export function createTableCommandHandlerBehavior(delegate: TableEditingDelegate
       const { row, col } = ctx.selection.payload as TableCellPayload
       const projection = tableProjection(node)
       const projectedCell = projection.topology.rows[row]?.cells[col]
-      const transact = (recipe: (draft: MaterialNode<unknown>) => void, label: string) => ctx.tx.run(node.id, recipe, { label })
+      const transact = (recipe: (draft: MaterialNode<unknown>) => void, label: string, operation: { kind: string, fieldPaths: readonly `/${string}`[], structural: boolean } = { kind: 'table.cell.property', fieldPaths: ['/model/bands'], structural: false }) => ctx.tx.run(node.id, recipe, { label, operation: createTransactionOperationDescriptor(ctx.tx, { ...operation, targetIds: [`node:${node.id}`] }) })
       switch (event.command) {
         case 'commit-cell-text': {
           const input = event.payload as { row: number, col: number, text: string }
@@ -247,7 +248,7 @@ export function createTableCommandHandlerBehavior(delegate: TableEditingDelegate
           if (role === 'repeat-template')
             break
           const height = projection.topology.rows[row]?.height ?? convertUnit(8, 'mm', delegate.getUnit())
-          transact(draft => replaceTableModel(draft, insertTableRow(draft, row, event.command.endsWith('above') ? 'before' : 'after', height)), `materials.table.history.${event.command.endsWith('above') ? 'insertRowAbove' : 'insertRowBelow'}`)
+          transact(draft => replaceTableModel(draft, insertTableRow(draft, row, event.command.endsWith('above') ? 'before' : 'after', height)), `materials.table.history.${event.command.endsWith('above') ? 'insertRowAbove' : 'insertRowBelow'}`, { kind: 'table.row.insert', fieldPaths: ['/model/bands'], structural: true })
           break
         }
         case 'remove-row': {
@@ -255,7 +256,7 @@ export function createTableCommandHandlerBehavior(delegate: TableEditingDelegate
           const removal: { current: ReturnType<typeof removeTableRow> } = { current: undefined }
           transact((draft) => {
             removal.current = removeTableRow(draft, row)
-          }, 'materials.table.history.removeRow')
+          }, 'materials.table.history.removeRow', { kind: 'table.row.remove', fieldPaths: ['/model/bands'], structural: true })
           const removed = removal.current
           if (selectedCellId && removed?.effects.removedCellIds.includes(selectedCellId)) {
             const nextRowCount = removed.model.bands.reduce((count, band) => count + band.rows.length, 0)
@@ -272,14 +273,14 @@ export function createTableCommandHandlerBehavior(delegate: TableEditingDelegate
         }
         case 'insert-col-left':
         case 'insert-col-right':
-          transact(draft => replaceTableModel(draft, insertTableColumn(draft, col, event.command.endsWith('left') ? 'before' : 'after')), `materials.table.history.${event.command.endsWith('left') ? 'insertColLeft' : 'insertColRight'}`)
+          transact(draft => replaceTableModel(draft, insertTableColumn(draft, col, event.command.endsWith('left') ? 'before' : 'after')), `materials.table.history.${event.command.endsWith('left') ? 'insertColLeft' : 'insertColRight'}`, { kind: 'table.column.insert', fieldPaths: ['/model/columns'], structural: true })
           break
         case 'remove-col': {
           const selectedCellId = cellAt(node, row, col)?.id
           const removal: { current: ReturnType<typeof removeTableColumn> } = { current: undefined }
           transact((draft) => {
             removal.current = removeTableColumn(draft, col)
-          }, 'materials.table.history.removeCol')
+          }, 'materials.table.history.removeCol', { kind: 'table.column.remove', fieldPaths: ['/model/columns'], structural: true })
           const removed = removal.current
           if (selectedCellId && removed?.effects.removedCellIds.includes(selectedCellId)) {
             const nextRowCount = removed.model.bands.reduce((count, band) => count + band.rows.length, 0)
@@ -305,11 +306,11 @@ export function createTableCommandHandlerBehavior(delegate: TableEditingDelegate
           transact((draft) => {
             replaceTableModel(draft, splitTableCell(draft, row, col))
             replaceTableModel(draft, mergeTableCells(draft, row, col, nextRows, nextColumns))
-          }, `materials.table.history.${event.command === 'merge-right' ? 'mergeRight' : 'mergeDown'}`)
+          }, `materials.table.history.${event.command === 'merge-right' ? 'mergeRight' : 'mergeDown'}`, { kind: 'table.cell.merge', fieldPaths: ['/model/bands'], structural: true })
           break
         }
         case 'split-cell':
-          transact(draft => replaceTableModel(draft, splitTableCell(draft, row, col)), 'materials.table.history.splitCell')
+          transact(draft => replaceTableModel(draft, splitTableCell(draft, row, col)), 'materials.table.history.splitCell', { kind: 'table.cell.split', fieldPaths: ['/model/bands'], structural: true })
           break
         case 'align-left':
         case 'align-center':

@@ -29,7 +29,7 @@ function context(source: MaterialNode<unknown>) {
     getZoom: () => 1,
     getPageEl: () => null,
     t: (key: string) => key,
-    tx: { run: (_id: string, mutate: (draft: MaterialNode<unknown>) => void) => mutate(source), batch: <T>(fn: () => T) => fn() },
+    tx: { getOperationContext: () => ({ sessionPath: [], selectionLineage: 'selection-static' }), run: (_id: string, mutate: (draft: MaterialNode<unknown>) => void) => mutate(source), batch: <T>(fn: () => T) => fn() },
   }
 }
 

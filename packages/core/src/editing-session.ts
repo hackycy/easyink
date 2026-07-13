@@ -185,10 +185,31 @@ export interface EphemeralPanelDef {
 
 /** Single-writer transaction API for validated document mutations. */
 export interface TransactionAPI {
+  /** Dynamic editing context captured when an operation descriptor is created. */
+  getOperationContext: () => TransactionOperationContext
   /** Run a node mutation through the document transaction engine. */
   run: <TNode extends MaterialNode = MaterialNode, TResult = void>(nodeId: string, mutator: (draft: TNode) => TResult, options?: TxOptions) => TResult | void
   /** Batch multiple run() calls into one barriered DocumentChangeSet. */
   batch: <T>(fn: () => T) => T
+}
+
+export interface TransactionOperationContext {
+  readonly sessionPath: readonly string[]
+  readonly selectionLineage: string | null
+}
+
+export type TransactionOperationInput = Omit<DocumentOperationDescriptor, 'sessionPath' | 'selectionLineage'>
+
+export function createTransactionOperationDescriptor(
+  tx: TransactionAPI,
+  input: TransactionOperationInput,
+): DocumentOperationDescriptor {
+  const context = tx.getOperationContext()
+  return {
+    ...input,
+    sessionPath: context.sessionPath,
+    selectionLineage: context.selectionLineage,
+  }
 }
 
 export interface TxOptions {

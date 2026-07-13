@@ -3,7 +3,7 @@ import type { Patch } from 'mutative'
 import type { DocumentChangeSet, DocumentOperationDescriptor } from './document-change-set'
 import type { PreviewValidationReport } from './document-preview-validation'
 import type { DocumentStore } from './document-store'
-import type { TransactionAPI, TxOptions } from './editing-session'
+import type { TransactionAPI, TransactionOperationContext, TxOptions } from './editing-session'
 import type { PreviewCommitPayload, PreviewPublishPayload } from './preview-transaction'
 import type { MaterialDocumentValidationReport, MaterialLoadDiagnostic, MaterialNodeLoadState } from './schema-adapter'
 import { assertJsonValue, generateId } from '@easyink/shared'
@@ -37,6 +37,7 @@ export interface DocumentTransactionOptions extends TxOptions {
 export interface DocumentTransactionEngineOptions {
   now?: () => number
   createId?: () => string
+  getOperationContext?: () => TransactionOperationContext
 }
 
 export class DocumentValidationError extends Error {
@@ -72,10 +73,16 @@ export class DocumentTransactionEngine implements TransactionAPI {
   private transactionDepth = 0
   private readonly now: () => number
   private readonly createId: () => string
+  private readonly resolveOperationContext: () => TransactionOperationContext
 
   constructor(readonly store: DocumentStore, options: DocumentTransactionEngineOptions = {}) {
     this.now = options.now ?? Date.now
     this.createId = options.createId ?? (() => generateId('change'))
+    this.resolveOperationContext = options.getOperationContext ?? (() => ({ sessionPath: [], selectionLineage: null }))
+  }
+
+  getOperationContext(): TransactionOperationContext {
+    return this.resolveOperationContext()
   }
 
   get canUndo(): boolean { return this.undoStack.length > 0 }

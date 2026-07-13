@@ -360,6 +360,30 @@ describe('designer store schema initialization', () => {
     expect(event?.changeSet?.operation.selectionLineage).toBe(lineage)
   })
 
+  it('provides dynamic top-level and editing-session operation context to materials', () => {
+    const store = new DesignerStore({ elements: [createNode('box')] }, undefined, undefined, runtimeWith(boxProfile()))
+    store.selection.select('box')
+    expect(store.documentTransactions.getOperationContext()).toEqual({
+      sessionPath: [],
+      selectionLineage: store.selection.lineageId,
+    })
+
+    const extension: MaterialDesignerExtension = {
+      renderContent: () => () => {},
+      geometry: {
+        getContentLayout: () => ({ contentBox: { x: 0, y: 0, width: 10, height: 10 } }),
+        resolveLocation: () => [],
+        hitTest: () => null,
+      },
+    }
+    const session = store.editingSession.enter('box', extension)!
+    session.selectionStore.set({ type: 'box.part', nodeId: 'box', payload: { partId: 'a' } })
+    expect(store.documentTransactions.getOperationContext()).toEqual({
+      sessionPath: ['box'],
+      selectionLineage: session.selectionStore.lineageId,
+    })
+  })
+
   it('unsubscribes document and selection listeners on destroy', () => {
     const store = unknownAndBoxStore()
     const tx = store.documentTransactions

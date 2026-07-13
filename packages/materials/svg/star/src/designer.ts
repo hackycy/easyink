@@ -1,7 +1,7 @@
 import type { BehaviorRegistration, EditingSessionRef, MaterialDesignerExtension, MaterialExtensionContext, MaterialGeometry, Rect, Selection, SelectionType, SubPropertySchema, TransactionAPI } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { SvgStarControlSelection, SvgStarProps } from './schema'
-import { undoBoundaryMiddleware } from '@easyink/core'
+import { createTransactionOperationDescriptor, undoBoundaryMiddleware } from '@easyink/core'
 import { getNodeModel } from '@easyink/schema'
 import { createPointerGesture } from '@easyink/shared'
 import { computed, defineComponent, h, onUnmounted } from 'vue'
@@ -102,6 +102,7 @@ function createStarSubPropertySchema(_selection: Selection<SvgStarControlSelecti
       }, {
         mergeKey: `svg-star:property:${key}`,
         label: 'materials.svgStar.history.update',
+        operation: createTransactionOperationDescriptor(tx, { kind: 'svg-star.control.property', targetIds: [`node:${node.id}`], fieldPaths: [`/model/${key}`], structural: false }),
       })
     },
   }
@@ -160,6 +161,7 @@ function createStarHandleBehavior(): BehaviorRegistration {
         }, {
           mergeKey: `svg-star:${payload.handle}`,
           label: 'materials.svgStar.history.update',
+          operation: createTransactionOperationDescriptor(ctx.tx, { kind: 'svg-star.control.adjust', targetIds: [`node:${ctx.node.id}`], fieldPaths: ['/model/starInnerRatio'], structural: false }),
         })
         ctx.session.setMeta('starInnerRatio', nextProps.starInnerRatio)
         return

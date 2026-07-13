@@ -4,6 +4,7 @@ import type { BindingRef, MaterialNode } from '@easyink/schema'
 import type { UnitType } from '@easyink/shared'
 import type { TableDataProps } from './schema'
 import {
+  createTransactionOperationDescriptor,
   keyboardCursorMiddleware,
   selectionMiddleware,
   undoBoundaryMiddleware,
@@ -133,7 +134,7 @@ function createDatasourceDropHandler(context: MaterialExtensionContext): Datasou
           : `cell:${target.id}:value`
         draft.bindings[port] = binding
         target.content = { kind: 'text', text: '', bindingPort: port }
-      }, { label: 'designer.history.bindField' })
+      }, { label: 'designer.history.bindField', operation: createTransactionOperationDescriptor(context.tx, { kind: 'table.cell.binding', targetIds: [`node:${node.id}`], fieldPaths: ['/model/bands', '/bindings'], structural: false }) })
     },
   }
 }

@@ -16,7 +16,7 @@ import type { BindingRef, MaterialNode } from '@easyink/schema'
 import type { BindingDisplayFormat, JsonObject } from '@easyink/shared'
 import type { FlowColumnLayoutRect } from './rendering'
 import type { FlowColumnDef } from './schema'
-import { keyboardCursorMiddleware, selectionMiddleware, undoBoundaryMiddleware } from '@easyink/core'
+import { createTransactionOperationDescriptor, keyboardCursorMiddleware, selectionMiddleware, undoBoundaryMiddleware } from '@easyink/core'
 import {
   IconAlignBottom,
   IconAlignMiddle,
@@ -326,7 +326,7 @@ function createColumnSubPropertySchema(
         }
         draft.model = { ...props, columns: props.columns }
         applyDesignerAutoHeight(draft)
-      }, { label: 'materials.flowRow.history.updateColumn' })
+      }, { label: 'materials.flowRow.history.updateColumn', operation: createTransactionOperationDescriptor(tx, { kind: 'flow-row.column.property', targetIds: [`node:${sel.nodeId}`], fieldPaths: ['/model/columns', '/height', '/bindings'], structural: false }) })
     },
     get binding() {
       const current = context.getNode(sel.nodeId) ?? node
@@ -340,7 +340,7 @@ function createColumnSubPropertySchema(
         if (column)
           clearFlowColumnBinding(draft, column)
         draft.model = { ...props, columns: props.columns }
-      }, { label: 'designer.history.clearBinding' })
+      }, { label: 'designer.history.clearBinding', operation: createTransactionOperationDescriptor(tx, { kind: 'flow-row.column.binding', targetIds: [`node:${sel.nodeId}`], fieldPaths: ['/model/columns', '/bindings'], structural: false }) })
     },
     updateBindingFormat(tx: TransactionAPI, format: BindingDisplayFormat | undefined) {
       tx.run<MaterialNode>(sel.nodeId, (draft) => {
@@ -350,7 +350,7 @@ function createColumnSubPropertySchema(
         if (binding)
           binding.format = format
         draft.model = { ...props, columns: props.columns }
-      }, { label: 'materials.flowRow.history.updateColumn' })
+      }, { label: 'materials.flowRow.history.updateColumn', operation: createTransactionOperationDescriptor(tx, { kind: 'flow-row.column.binding', targetIds: [`node:${sel.nodeId}`], fieldPaths: ['/bindings'], structural: false }) })
     },
   }
 }
@@ -422,7 +422,7 @@ function createColumnKeyboardBehavior(): BehaviorRegistration {
           }
           draft.model = { ...draftProps, columns: draftProps.columns }
           applyDesignerAutoHeight(draft)
-        }, { label: 'materials.flowRow.history.updateColumn' })
+        }, { label: 'materials.flowRow.history.updateColumn', operation: createTransactionOperationDescriptor(ctx.tx, { kind: 'flow-row.column.property', targetIds: [`node:${ctx.node.id}`], fieldPaths: ['/model/columns', '/height', '/bindings'], structural: false }) })
         return
       }
 
@@ -466,7 +466,7 @@ function createColumnCommandBehavior(): BehaviorRegistration {
           })
           draft.model = { ...props, columns: props.columns }
           applyDesignerAutoHeight(draft)
-        }, { label: 'materials.flowRow.history.insertColumn' })
+        }, { label: 'materials.flowRow.history.insertColumn', operation: createTransactionOperationDescriptor(ctx.tx, { kind: 'flow-row.column.insert', targetIds: [`node:${ctx.node.id}`], fieldPaths: ['/model/columns', '/height'], structural: true }) })
         ctx.selectionStore.set({
           type: FLOW_COLUMN_SELECTION_TYPE,
           nodeId: ctx.node.id,
@@ -487,7 +487,7 @@ function createColumnCommandBehavior(): BehaviorRegistration {
           props.columns.splice(payload.index, 1)
           draft.model = { ...props, columns: props.columns }
           applyDesignerAutoHeight(draft)
-        }, { label: 'materials.flowRow.history.removeColumn' })
+        }, { label: 'materials.flowRow.history.removeColumn', operation: createTransactionOperationDescriptor(ctx.tx, { kind: 'flow-row.column.remove', targetIds: [`node:${ctx.node.id}`], fieldPaths: ['/model/columns', '/height', '/bindings'], structural: true }) })
         ctx.selectionStore.set({
           type: FLOW_COLUMN_SELECTION_TYPE,
           nodeId: ctx.node.id,
@@ -508,7 +508,7 @@ function createColumnCommandBehavior(): BehaviorRegistration {
           }
           draft.model = { ...props, columns: props.columns }
           applyDesignerAutoHeight(draft)
-        }, { label: 'materials.flowRow.history.updateColumn' })
+        }, { label: 'materials.flowRow.history.updateColumn', operation: createTransactionOperationDescriptor(ctx.tx, { kind: 'flow-row.column.property', targetIds: [`node:${ctx.node.id}`], fieldPaths: ['/model/columns', '/height', '/bindings'], structural: false }) })
         return
       }
 
@@ -527,6 +527,7 @@ function createColumnCommandBehavior(): BehaviorRegistration {
         }, {
           mergeKey: `flow-row:resize-column:${p.index}`,
           label: 'materials.flowRow.history.resizeColumn',
+          operation: createTransactionOperationDescriptor(ctx.tx, { kind: 'flow-row.column.resize', targetIds: [`node:${ctx.node.id}`], fieldPaths: ['/model/columns', '/height'], structural: false }),
         })
         return
       }
@@ -558,7 +559,7 @@ function createColumnCommandBehavior(): BehaviorRegistration {
             column.verticalAlign = 'bottom'
           draft.model = { ...props, columns: props.columns }
           applyDesignerAutoHeight(draft)
-        }, { label: 'materials.flowRow.history.updateColumn' })
+        }, { label: 'materials.flowRow.history.updateColumn', operation: createTransactionOperationDescriptor(ctx.tx, { kind: 'flow-row.column.property', targetIds: [`node:${ctx.node.id}`], fieldPaths: ['/model/columns', '/height'], structural: false }) })
         return
       }
 
@@ -603,7 +604,7 @@ function createDatasourceDropHandler(context: MaterialExtensionContext): Datasou
         }
         draft.model = { ...props, columns: props.columns }
         applyDesignerAutoHeight(draft)
-      }, { label: 'designer.history.bindField' })
+      }, { label: 'designer.history.bindField', operation: createTransactionOperationDescriptor(context.tx, { kind: 'flow-row.column.binding', targetIds: [`node:${node.id}`], fieldPaths: ['/model/columns', '/bindings', '/height'], structural: false }) })
     },
   }
 }
@@ -890,6 +891,7 @@ export function createFlowRowExtension(context: MaterialExtensionContext): Mater
           }, {
             mergeKey: `flow-row:auto-height:${node.id}`,
             label: 'materials.flowRow.history.updateHeight',
+            operation: createTransactionOperationDescriptor(context.tx, { kind: 'flow-row.layout', targetIds: [`node:${node.id}`], fieldPaths: ['/height'], structural: false }),
           })
         }
       }
