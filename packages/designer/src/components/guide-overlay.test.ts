@@ -84,4 +84,32 @@ describe('guide overlay guide drag', () => {
     expect(store.schema.guides.y).toEqual([])
     app.unmount()
   })
+
+  it('commits a new guide at pointerdown when there is no pointermove', async () => {
+    const { store, overlay, ruler, app } = await mountOverlay()
+    overlay.onGuideDragStart('x', pointer('pointerdown', 64, 0, ruler))
+
+    expect(store.schema.guides.x).toEqual([64])
+    expect(store.documentStore.committedDocument.guides.x).toEqual([])
+
+    window.dispatchEvent(pointer('pointerup', 64, 0))
+    expect(store.schema.guides.x).toEqual([64])
+    expect(store.documentTransactions.cursor).toBe(1)
+
+    store.documentTransactions.undo()
+    expect(store.schema.guides.x).toEqual([])
+    app.unmount()
+  })
+
+  it('cancels a new guide after pointerdown without history', async () => {
+    const { store, overlay, ruler, app } = await mountOverlay()
+    overlay.onGuideDragStart('y', pointer('pointerdown', 0, 72, ruler))
+
+    expect(store.schema.guides.y).toEqual([72])
+    window.dispatchEvent(pointer('pointercancel', 0, 72))
+
+    expect(store.schema.guides.y).toEqual([])
+    expect(store.documentTransactions.cursor).toBe(0)
+    app.unmount()
+  })
 })

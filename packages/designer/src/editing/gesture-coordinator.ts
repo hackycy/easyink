@@ -9,6 +9,8 @@ export interface BeginGestureOptions {
   mergeKey?: string
   operation: DocumentOperationDescriptor
   update: (event: PointerEvent, preview: PreviewTransaction) => void
+  /** Apply one preview frame immediately from the initiating pointerdown. */
+  initialUpdate?: boolean
   onFinish?: (reason: 'commit' | 'cancel') => void
 }
 
@@ -106,8 +108,23 @@ export class GestureCoordinator {
         },
         onEnd: (_event, reason) => finish(reason),
       })
-      if (!active)
+      if (!active) {
         pointer.abort()
+      }
+      else if (options.initialUpdate) {
+        try {
+          options.update(options.event, preview)
+        }
+        catch (error) {
+          try {
+            ownership.abort()
+          }
+          catch {
+            // Preserve the initial update error while teardown remains best-effort.
+          }
+          throw error
+        }
+      }
     }
     catch (error) {
       if (active) {

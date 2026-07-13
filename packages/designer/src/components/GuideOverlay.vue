@@ -139,6 +139,7 @@ function startDrag(axis: 'x' | 'y', index: number, e: PointerEvent, isNew: boole
       selectionLineage: context.selectionLineage,
       structural: false,
     },
+    initialUpdate: true,
     update(ev, preview) {
       const position = rulerClientPointToUnit(activeCoordinateContext, axis === 'x' ? 'horizontal' : 'vertical', ev.clientX, ev.clientY)
       preview.replace((draft) => {
