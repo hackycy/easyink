@@ -134,6 +134,15 @@ interface MeasuredInstanceTree {
   }>[]
 }
 
+interface CachedMeasuredArtifact {
+  readonly own: MeasuredInstanceTree['entries'][number]
+  readonly descendants: readonly Readonly<{
+    instanceKey: string
+    plan: WeakRef<MaterialLayoutPlan>
+    instance: WeakRef<RuntimeMaterialInstancePlan>
+  }>[]
+}
+
 export function createLayoutRuntime(deps: LayoutRuntimeDependencies): Readonly<{
   plan: (input: LayoutRuntimeInput, signal: AbortSignal) => Promise<CommittedPagePlan>
 }> {
@@ -174,7 +183,7 @@ export function createMaterialMeasureNodes(
   deps: MaterialMeasureNodesDependencies,
 ): MaterialMeasureNodes {
   assertMeasurementDependencies(deps)
-  let artifacts = new WeakMap<MaterialLayoutPlan, MeasuredInstanceTree>()
+  let artifacts = new WeakMap<MaterialLayoutPlan, CachedMeasuredArtifact>()
   let disposed = false
 
   const measureNodes = async (input: Parameters<LayoutRuntimeDependencies['measureNodes']>[0], signal: AbortSignal): Promise<MeasuredMaterialSet> => {
@@ -207,6 +216,7 @@ export function createMaterialMeasureNodes(
         signal,
         ancestorNodeIds: new Set(),
         artifacts,
+        artifactRetryAvailable: true,
       })
     }, signal)
     throwIfAborted(signal)
@@ -282,7 +292,8 @@ async function measureInstance(context: {
   readonly constraints: LayoutConstraints
   readonly signal: AbortSignal
   readonly ancestorNodeIds: ReadonlySet<string>
-  readonly artifacts: WeakMap<MaterialLayoutPlan, MeasuredInstanceTree>
+  readonly artifacts: WeakMap<MaterialLayoutPlan, CachedMeasuredArtifact>
+  readonly artifactRetryAvailable: boolean
 }): Promise<MeasuredInstanceTree> {
   const { deps, input, node, instanceKey, scope, model, constraints, signal } = context
   throwIfAborted(signal)
@@ -418,6 +429,7 @@ async function measureInstance(context: {
                 signal: measureSignal,
                 ancestorNodeIds,
                 artifacts: context.artifacts,
+                artifactRetryAvailable: true,
               })
             }, measureSignal)
             for (const childTree of childTrees)
@@ -437,10 +449,13 @@ async function measureInstance(context: {
   })
   const committedPlan = plan as MaterialLayoutPlan
   if (!callbackRan) {
-    const cached = context.artifacts.get(committedPlan)
-    if (!cached)
-      throw new Error('MATERIAL_MEASURE_SUBTREE_ARTIFACT_MISSING')
-    return cached
+    const cached = materializeArtifact(context.artifacts.get(committedPlan), context.deps.measureService)
+    if (cached)
+      return cached
+    if (!context.artifactRetryAvailable)
+      throw new Error('MATERIAL_MEASURE_SUBTREE_ARTIFACT_STALE')
+    context.deps.measureService.invalidateNode(node.id)
+    return measureInstance({ ...context, artifactRetryAvailable: false })
   }
   const instance: RuntimeMaterialInstancePlan = Object.freeze({
     instanceKey,
@@ -460,8 +475,41 @@ async function measureInstance(context: {
     instance,
     entries: Object.freeze([ownEntry, ...descendants]),
   })
-  context.artifacts.set(committedPlan, tree)
+  context.artifacts.set(committedPlan, createCachedArtifact(tree))
   return tree
+}
+
+function createCachedArtifact(tree: MeasuredInstanceTree): CachedMeasuredArtifact {
+  const [own, ...descendants] = tree.entries
+  return Object.freeze({
+    own: own!,
+    descendants: Object.freeze(descendants.map(entry => Object.freeze({
+      instanceKey: entry.instanceKey,
+      plan: new WeakRef(entry.plan),
+      instance: new WeakRef(entry.instance),
+    }))),
+  })
+}
+
+function materializeArtifact(
+  artifact: CachedMeasuredArtifact | undefined,
+  measureService: MeasureService,
+): MeasuredInstanceTree | undefined {
+  if (!artifact || !measureService.hasCachedPlan(artifact.own.plan))
+    return undefined
+  const entries: MeasuredInstanceTree['entries'][number][] = [artifact.own]
+  for (const weak of artifact.descendants) {
+    const plan = weak.plan.deref()
+    const instance = weak.instance.deref()
+    if (!plan || !instance || instance.layoutPlan !== plan || !measureService.hasCachedPlan(plan))
+      return undefined
+    entries.push(Object.freeze({ instanceKey: weak.instanceKey, plan, instance }))
+  }
+  return Object.freeze({
+    plan: artifact.own.plan,
+    instance: artifact.own.instance,
+    entries: Object.freeze(entries),
+  })
 }
 
 function unionPlanBounds(plans: readonly MaterialLayoutPlan[]): Readonly<{ x: number, y: number, width: number, height: number }> {

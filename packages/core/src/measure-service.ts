@@ -29,6 +29,7 @@ export class MeasureService {
   private readonly maxEntries: number
   private readonly activeOperations = new Map<string, Set<MeasureOperationToken>>()
   private readonly cache = new Map<string, CacheEntry>()
+  private cachedPlans = new WeakSet<MaterialLayoutPlan<unknown>>()
   private readonly profileTokens = new WeakMap<CompiledMaterialProfile, number>()
   private nextProfileToken = 1
 
@@ -40,6 +41,10 @@ export class MeasureService {
 
   get size(): number {
     return this.cache.size
+  }
+
+  hasCachedPlan(plan: MaterialLayoutPlan<unknown>): boolean {
+    return this.cachedPlans.has(plan)
   }
 
   async measure(request: MeasureRequest): Promise<MaterialLayoutPlan<unknown>> {
@@ -84,11 +89,16 @@ export class MeasureService {
 
       const plan = freezeMaterialLayoutPlan(measured)
       if (operation.canPublish) {
+        const replaced = this.cache.get(key)
+        if (replaced)
+          this.cachedPlans.delete(replaced.plan)
         this.cache.set(key, { nodeId: request.nodeId, plan })
+        this.cachedPlans.add(plan)
         while (this.cache.size > this.maxEntries) {
           const oldestKey = this.cache.keys().next().value
           if (oldestKey === undefined)
             break
+          this.cachedPlans.delete(this.cache.get(oldestKey)!.plan)
           this.cache.delete(oldestKey)
         }
       }
@@ -105,8 +115,10 @@ export class MeasureService {
     for (const operation of this.activeOperations.get(nodeId) ?? [])
       operation.canPublish = false
     for (const [key, entry] of this.cache) {
-      if (entry.nodeId === nodeId)
+      if (entry.nodeId === nodeId) {
+        this.cachedPlans.delete(entry.plan)
         this.cache.delete(key)
+      }
     }
   }
 
@@ -116,6 +128,7 @@ export class MeasureService {
         operation.canPublish = false
     }
     this.cache.clear()
+    this.cachedPlans = new WeakSet()
   }
 
   private registerOperation(nodeId: string): MeasureOperationToken {

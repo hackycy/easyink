@@ -392,6 +392,73 @@ describe('measureService', () => {
     expect(service.size).toBe(1)
   })
 
+  it('tracks published plan membership through LRU eviction and node invalidation', async () => {
+    const service = new MeasureService({ maxEntries: 1 })
+    const profile = createTestCompiledMaterialProfile()
+    const first = createRequest(profile, { nodeId: 'first' })
+    const second = createRequest(profile, { nodeId: 'second' })
+
+    const firstPlan = await service.measure(first)
+    expect(service.hasCachedPlan(firstPlan)).toBe(true)
+
+    const secondPlan = await service.measure(second)
+    expect(service.hasCachedPlan(firstPlan)).toBe(false)
+    expect(service.hasCachedPlan(secondPlan)).toBe(true)
+
+    service.invalidateNode('second')
+    expect(service.hasCachedPlan(secondPlan)).toBe(false)
+  })
+
+  it('removes membership on clear and never marks invalidated in-flight results', async () => {
+    const service = new MeasureService({ maxEntries: 2 })
+    const profile = createTestCompiledMaterialProfile()
+    const cached = await service.measure(createRequest(profile, { nodeId: 'cached' }))
+    let resolveMeasure!: (plan: MaterialLayoutPlan<unknown>) => void
+    const pendingResult = new Promise<MaterialLayoutPlan<unknown>>((resolve) => {
+      resolveMeasure = resolve
+    })
+    const pendingRequest = createRequest(profile, {
+      nodeId: 'pending',
+      measure: vi.fn(async () => pendingResult),
+    })
+    const pending = service.measure(pendingRequest)
+    service.invalidateNode('pending')
+    resolveMeasure(createPlan({ nodeId: 'pending' }))
+    const unpublished = await pending
+
+    expect(service.hasCachedPlan(unpublished)).toBe(false)
+    service.clear()
+    expect(service.hasCachedPlan(cached)).toBe(false)
+  })
+
+  it('keeps membership only for the latest concurrent publication of one exact key', async () => {
+    const service = new MeasureService({ maxEntries: 2 })
+    let resolveFirst!: (plan: MaterialLayoutPlan<unknown>) => void
+    let resolveSecond!: (plan: MaterialLayoutPlan<unknown>) => void
+    const firstResult = new Promise<MaterialLayoutPlan<unknown>>((resolve) => {
+      resolveFirst = resolve
+    })
+    const secondResult = new Promise<MaterialLayoutPlan<unknown>>((resolve) => {
+      resolveSecond = resolve
+    })
+    const request = createRequest(createTestCompiledMaterialProfile(), {
+      measure: vi.fn()
+        .mockImplementationOnce(async () => firstResult)
+        .mockImplementationOnce(async () => secondResult),
+    })
+    const firstPending = service.measure(request)
+    const secondPending = service.measure(request)
+    resolveFirst(createPlan({ payload: { publication: 'first' } }))
+    const first = await firstPending
+    expect(service.hasCachedPlan(first)).toBe(true)
+
+    resolveSecond(createPlan({ payload: { publication: 'second' } }))
+    const second = await secondPending
+
+    expect(service.hasCachedPlan(first)).toBe(false)
+    expect(service.hasCachedPlan(second)).toBe(true)
+  })
+
   it('invalidates every cached revision and surface for one node only', async () => {
     const service = new MeasureService({ maxEntries: 8 })
     const firstProfile = createTestCompiledMaterialProfile()

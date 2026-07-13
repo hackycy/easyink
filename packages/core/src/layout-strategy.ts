@@ -3,7 +3,7 @@ import type { LayoutDocument, LayoutFragment } from './layout-plan'
 import type { MaterialLayoutPlan } from './material-layout-plan'
 import { rectsIntersect } from './geometry'
 import { createFragmentFromNode } from './layout-plan'
-import { freezeMaterialLayoutPlan } from './material-layout-plan'
+import { createLayoutConstraintKey, createNonFragmentingMaterialPlans, freezeMaterialLayoutPlan } from './material-layout-plan'
 import { resolvePageModel } from './page-model'
 
 export interface RunLayoutPipelineOptions {
@@ -15,7 +15,7 @@ export function runLayoutPipeline(
   schema: DocumentSchema,
   options: RunLayoutPipelineOptions = {},
 ): LayoutDocument {
-  const plans = options.plans ?? new Map()
+  const plans = options.plans ?? createDefaultPlans(schema)
   const reflowStrategy = schema.page.reflow?.strategy ?? inferReflowStrategy(schema)
   const elements = schema.elements.filter(node => plans.has(node.id))
   const originalElements = (options.originalSchema?.elements ?? schema.elements)
@@ -95,6 +95,27 @@ function reflowPlans(
     }
   }
   return { plans, diagnostics }
+}
+
+function createDefaultPlans(schema: DocumentSchema): ReadonlyMap<string, MaterialLayoutPlan> {
+  const constraintKey = createLayoutConstraintKey({
+    availableWidth: schema.page.width,
+    availableHeight: schema.page.height,
+    unit: schema.unit,
+    writingMode: 'horizontal-tb',
+  })
+  return new Map(schema.elements.map((node) => {
+    const borderBox = { x: node.x, y: node.y, width: node.width, height: node.height }
+    return [node.id, createNonFragmentingMaterialPlans({
+      instanceKey: node.id,
+      nodeId: node.id,
+      nodeRevision: 0,
+      constraintKey,
+      pageIndex: 0,
+      borderBox,
+      fragmentBox: borderBox,
+    }).layoutPlan]
+  }))
 }
 
 function translatePlanBlock(plan: MaterialLayoutPlan, delta: number): MaterialLayoutPlan {

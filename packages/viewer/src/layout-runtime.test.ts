@@ -237,6 +237,69 @@ describe('createLayoutRuntime', () => {
 })
 
 describe('plan-backed core layout', () => {
+  it('creates canonical fallback plans only when plans are omitted', () => {
+    const source = node({ y: 70, height: 10 })
+    const schema = document([source])
+
+    const omitted = runLayoutPipeline(schema)
+    const explicitEmpty = runLayoutPipeline(schema, { plans: new Map() })
+
+    expect(omitted.fragments).toHaveLength(1)
+    expect(omitted.fragments[0]!.plan).toMatchObject({
+      instanceKey: 'n1',
+      nodeId: 'n1',
+      nodeRevision: 0,
+      constraintKey: '80:60:mm:horizontal-tb',
+      borderBox: { x: 2, y: 70, width: 10, height: 10 },
+    })
+    expect(omitted.height).toBe(80)
+    expect(explicitEmpty.fragments).toEqual([])
+    expect(explicitEmpty.height).toBe(60)
+  })
+
+  it('preserves flow-y reflow for omitted defaults and explicit measured plans', () => {
+    const first = node({ id: 'first', y: 0, height: 10 })
+    const second = node({ id: 'second', y: 10, height: 10 })
+    const schema: DocumentSchema = {
+      ...document([first, second]),
+      page: {
+        mode: 'fixed',
+        width: 80,
+        height: 60,
+        layout: { strategy: 'stack-flow', flowAxis: 'y' },
+        reflow: { strategy: 'flow-y' },
+      },
+    }
+    const measuredFirstBox = { x: first.x, y: first.y, width: first.width, height: 20 }
+    const secondBox = { x: second.x, y: second.y, width: second.width, height: second.height }
+    const plans = new Map([
+      ['first', createNonFragmentingMaterialPlans({
+        instanceKey: 'first',
+        nodeId: 'first',
+        nodeRevision: 1,
+        constraintKey: '80:60:mm:horizontal-tb',
+        pageIndex: 0,
+        borderBox: measuredFirstBox,
+        fragmentBox: measuredFirstBox,
+      }).layoutPlan],
+      ['second', createNonFragmentingMaterialPlans({
+        instanceKey: 'second',
+        nodeId: 'second',
+        nodeRevision: 1,
+        constraintKey: '80:60:mm:horizontal-tb',
+        pageIndex: 0,
+        borderBox: secondBox,
+        fragmentBox: secondBox,
+      }).layoutPlan],
+    ])
+
+    const omitted = runLayoutPipeline(schema)
+    const measured = runLayoutPipeline(schema, { plans })
+
+    expect(omitted.fragments.map(fragment => fragment.plan.borderBox.y)).toEqual([0, 10])
+    expect(measured.fragments.map(fragment => fragment.plan.borderBox.y)).toEqual([0, 20])
+  })
+
   it('uses plan geometry without mutating measured width or height into schema nodes', () => {
     const source = node({ width: 10, height: 7 })
     const schema = document([source])
@@ -626,6 +689,16 @@ describe('material measurement integration', () => {
   it('does not reuse stale subtree artifacts after invalidation or LRU eviction', async () => {
     const child = node({ id: 'child', type: 'artifact-child' })
     const owner = node({ id: 'owner', type: 'artifact-owner', slots: { content: [child] } })
+    const other = node({ id: 'other', type: 'artifact-other' })
+    const weakTargets: object[] = []
+    const NativeWeakRef = globalThis.WeakRef
+    class RecordingWeakRef<T extends object> extends NativeWeakRef<T> {
+      constructor(target: T) {
+        super(target)
+        weakTargets.push(target)
+      }
+    }
+    vi.stubGlobal('WeakRef', RecordingWeakRef)
     const childMeasure = vi.fn(async (request: MaterialMeasureRequest): Promise<MaterialLayoutPlan> => ({
       instanceKey: request.instanceKey,
       nodeId: request.node.id,
@@ -652,6 +725,17 @@ describe('material measurement integration', () => {
         diagnostics: [],
       }
     })
+    const otherMeasure = vi.fn(async (request: MaterialMeasureRequest): Promise<MaterialLayoutPlan> => ({
+      instanceKey: request.instanceKey,
+      nodeId: request.node.id,
+      nodeRevision: request.nodeRevision,
+      constraintKey: '10:60:mm:horizontal-tb',
+      borderBox: { x: 0, y: 0, width: 10, height: 1 },
+      contentBox: { x: 0, y: 0, width: 10, height: 1 },
+      slotBoxes: [],
+      breakOpportunities: [],
+      diagnostics: [],
+    }))
     const harness = await measurementHarness({
       measureCacheEntries: 2,
       manifests: [
@@ -661,23 +745,45 @@ describe('material measurement integration', () => {
           viewer: createViewerFacet(ownerMeasure),
         }),
         createTestMaterialManifest({ type: 'artifact-child', viewer: createViewerFacet(childMeasure) }),
+        createTestMaterialManifest({ type: 'artifact-other', viewer: createViewerFacet(otherMeasure) }),
       ],
     })
     const models = new Map([['owner', readyModel(owner, { instanceKey: 'owner', nodeId: 'owner' })]])
     const base = measureInput([owner], models, 9)
 
-    const first = await harness.measureNodes(base, new AbortController().signal)
-    harness.measureService.invalidateNode('owner')
-    const afterInvalidation = await harness.measureNodes(base, new AbortController().signal)
-    await harness.measureNodes(measureInput([owner], models, 10), new AbortController().signal)
-    const afterEviction = await harness.measureNodes(base, new AbortController().signal)
+    try {
+      const first = await harness.measureNodes(base, new AbortController().signal)
+      const childKey = [...first.plans.keys()].find(key => key !== 'owner')!
+      const childPlan = first.plans.get(childKey)!
+      const childInstance = first.instances.get(childKey)!
+      expect(weakTargets).toEqual(expect.arrayContaining([childPlan, childInstance]))
+      expect(weakTargets).not.toContain(first.plans.get('owner'))
+      expect(weakTargets).not.toContain(first.instances.get('owner'))
 
-    expect(ownerMeasure).toHaveBeenCalledTimes(4)
-    expect(childMeasure).toHaveBeenCalledTimes(3)
-    expect(first.plans.get('owner')?.borderBox.height).toBe(1)
-    expect(afterInvalidation.instances.size).toBe(2)
-    expect(afterEviction.plans.get('owner')?.borderBox.height).toBe(3)
-    expect(afterEviction.instances.size).toBe(2)
+      harness.measureService.invalidateNode('owner')
+      const afterOwnerInvalidation = await harness.measureNodes(base, new AbortController().signal)
+      expect(afterOwnerInvalidation.instances.size).toBe(2)
+      expect(ownerMeasure).toHaveBeenCalledTimes(2)
+      expect(childMeasure).toHaveBeenCalledTimes(1)
+
+      harness.measureService.invalidateNode('child')
+      const afterChildInvalidation = await harness.measureNodes(base, new AbortController().signal)
+      expect(afterChildInvalidation.plans.get('owner')?.borderBox.height).toBe(2)
+      expect(afterChildInvalidation.instances.size).toBe(2)
+
+      const otherModels = new Map([['other', readyModel(other, { instanceKey: 'other', nodeId: 'other' })]])
+      await harness.measureNodes(measureInput([other], otherModels, 9), new AbortController().signal)
+      const afterChildEviction = await harness.measureNodes(base, new AbortController().signal)
+
+      expect(ownerMeasure).toHaveBeenCalledTimes(4)
+      expect(childMeasure).toHaveBeenCalledTimes(3)
+      expect(otherMeasure).toHaveBeenCalledTimes(1)
+      expect(afterChildEviction.plans.get('owner')?.borderBox.height).toBe(3)
+      expect(afterChildEviction.instances.size).toBe(2)
+    }
+    finally {
+      vi.unstubAllGlobals()
+    }
   })
 
   it('skips removed slot children while preserving reserved child measurement and budget isolation', async () => {
