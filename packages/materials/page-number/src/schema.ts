@@ -53,7 +53,6 @@ export function createPageNumberNode(partial?: Partial<MaterialNode>, unit?: str
       ...output,
       visibility: 'include',
       placement: { mode: 'fixed' },
-      repeat: { scope: 'every-output-page' },
     },
   })
 }
@@ -64,6 +63,5 @@ export const PAGE_NUMBER_CAPABILITIES = {
   resizable: true,
   supportsChildren: false,
   supportsAnimation: false,
-  pageAware: true,
   multiBinding: false,
 }

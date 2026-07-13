@@ -15,7 +15,7 @@ import type {
 } from './types'
 import type { ViewerHost } from './viewer-host'
 import { snapshotViewerTreePolicy } from '@easyink/browser-dom'
-import { createInternalHooks, createLayoutConstraintKey, createNonFragmentingMaterialPlans, FontManager, loadDocumentWithProfile, runLayoutPipeline, runPagination, VIEWER_TREE_ABSOLUTE_MAX_NODES, walkMaterialNodes } from '@easyink/core'
+import { createInternalHooks, createLayoutConstraintKey, createNonFragmentingMaterialPlans, FontManager, loadDocumentWithProfile, planRepeatedOverlays, runLayoutPipeline, runPagination, VIEWER_TREE_ABSOLUTE_MAX_NODES, walkMaterialNodes } from '@easyink/core'
 import { deepClone, UNIT_FACTOR } from '@easyink/shared'
 import { applyBindingsToProps, projectBindings, walkProfileMaterialNodes } from './binding-projector'
 import { resolveConditionalSchema } from './conditional-schema'
@@ -157,6 +157,9 @@ export class ViewerRuntime {
     // elements are overlays resolved after pagination, so they must not
     // contribute to flow, document height, or page count.
     const repeatedElements = this.collectRepeatedPageElements(runtimeSchema.elements)
+    const paintableRepeatedIds = new Set(repeatedElements
+      .filter(node => !node.editorState?.hidden && node.output.visibility === 'include')
+      .map(node => node.id))
     const layoutSchema = repeatedElements.length > 0
       ? { ...runtimeSchema, elements: runtimeSchema.elements.filter(el => !repeatedElements.includes(el)) }
       : runtimeSchema
@@ -170,8 +173,8 @@ export class ViewerRuntime {
     })
     const pagination = runPagination(layoutSchema, layoutDocument, {
       originalSchema: layoutSchema,
-      resolveFragmentPaginator: fragment => this.isNodeReady(fragment.node) ? this._materials.getFragmentPaginator(fragment.node) : undefined,
-      retainBlankPage: repeatedElements.some(el => !el.editorState?.hidden) ? () => true : undefined,
+      resolveFragmentAdapter: fragment => this.isNodeReady(fragment.node) ? this._materials.getFragmentAdapter(fragment.node.type) : undefined,
+      retainBlankPage: paintableRepeatedIds.size > 0 ? () => true : undefined,
     })
     const plan = toPagePlan(pagination)
 
@@ -185,7 +188,7 @@ export class ViewerRuntime {
     }
 
     // Stage 4.5: Resolve per-page overlays (e.g., page-number)
-    this.resolveRepeatedPageElements(plan, resolvedPropsMap, repeatedElements)
+    this.resolveRepeatedPageElements(plan, resolvedPropsMap, repeatedElements, paintableRepeatedIds)
 
     // Stage 5: DOM rendering
     const pages = plan.pages.map(p => ({
@@ -483,8 +486,8 @@ export class ViewerRuntime {
   // ---------------------------------------------------------------------------
 
   private collectRepeatedPageElements(elements: MaterialNode[]): MaterialNode[] {
-    return elements.filter(el =>
-      this._materials.isPageRepeated(el.type),
+    return elements.filter(node =>
+      this._options.profile.getManifest(node.type)?.common.layout.pageRepeat === 'every-output-page',
     )
   }
 
@@ -497,31 +500,41 @@ export class ViewerRuntime {
     plan: PagePlan,
     resolvedPropsMap: Map<string, Record<string, unknown>>,
     repeatedElements: MaterialNode[],
+    paintableNodeIds: ReadonlySet<string>,
   ): void {
     if (repeatedElements.length === 0)
       return
 
     const totalPages = plan.pages.length
+    const byId = new Map(repeatedElements.map(node => [node.id, node]))
+    const placements = planRepeatedOverlays({
+      nodes: repeatedElements,
+      profile: this._options.profile,
+      pageCount: totalPages,
+      paintableNodeIds,
+    })
 
-    for (const page of plan.pages) {
-      for (const el of repeatedElements) {
-        const virtualId = `${el.id}__p${page.index}`
-        const virtualNode = {
-          ...deepClone(el),
-          id: virtualId,
-          sourceNodeId: el.id,
-          sourceAdmissionStatus: this._nodeStates.get(el.id)?.status ?? 'missing',
-          y: page.yOffset + resolveRepeatedElementLocalY(el, page.height),
-        }
-        page.elements.push(virtualNode)
-
-        const baseProps = resolvedPropsMap.get(el.id) ?? el.model
-        resolvedPropsMap.set(virtualId, {
-          ...baseProps,
-          __pageNumber: page.index + 1,
-          __totalPages: totalPages,
-        })
+    for (const placement of placements) {
+      const page = plan.pages[placement.pageIndex]
+      const el = byId.get(placement.nodeId)
+      if (!page || !el)
+        continue
+      const virtualId = `${el.id}__p${page.index}`
+      const virtualNode = {
+        ...deepClone(el),
+        id: virtualId,
+        sourceNodeId: el.id,
+        sourceAdmissionStatus: this._nodeStates.get(el.id)?.status ?? 'missing',
+        y: page.yOffset + resolveRepeatedElementLocalY(el, page.height),
       }
+      page.elements.push(virtualNode)
+
+      const baseProps = resolvedPropsMap.get(el.id) ?? el.model
+      resolvedPropsMap.set(virtualId, {
+        ...baseProps,
+        __pageNumber: page.index + 1,
+        __totalPages: totalPages,
+      })
     }
   }
 

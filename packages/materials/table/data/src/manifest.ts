@@ -6,7 +6,7 @@ import { createTableDataExtension } from './designer'
 import { tableDataLocaleMessages } from './locale'
 import { tableDataDesignerPropSchemas } from './prop-schemas'
 import { createDefaultDataTableModel, TABLE_DATA_TYPE } from './schema'
-import { measureTableData, renderTableData, tableDataFragmentPaginator } from './viewer'
+import { measureTableData, renderTableData, tableDataFragmentAdapter } from './viewer'
 
 export const tableDataMaterialManifest = defineStandardMaterialManifest({
   type: TABLE_DATA_TYPE,
@@ -27,7 +27,8 @@ export const tableDataMaterialManifest = defineStandardMaterialManifest({
   schemaAdapter: tableSchemaAdapter,
   designerFactory: createTableDataExtension,
   localeMessages: tableDataLocaleMessages,
-  viewerExtension: { render: renderTableData, measure: measureTableData, fragmentPaginator: tableDataFragmentPaginator },
+  viewerExtension: { render: renderTableData, measure: measureTableData },
+  viewerLayout: { fragment: tableDataFragmentAdapter },
   aiDescriptor: tableDataAIMaterialDescriptor,
   generation: { enabled: true, modelSchema: 'infer-from-default', bindingShape: 'infer-from-binding', examples: 'default-model', requiredModelPaths: ['/columns', '/bands', '/data/collectionPort'] },
 })

@@ -29,8 +29,38 @@ function makeSchema(pageOverrides: Partial<DocumentSchema['page']>, elements: Ma
   }
 }
 
+function repeatedPageNumberOptions(nodeId = 'page-number') {
+  return {
+    profile: {
+      getManifest: (type: string) => ({ common: { layout: { pageRepeat: type === 'page-number' ? 'every-output-page' : 'none' } } }),
+    } as never,
+    paintableNodeIds: new Set([nodeId]),
+  }
+}
+
 describe('createPagePlan', () => {
   describe('fixed mode', () => {
+    it('excludes manifest-repeated nodes from ordinary content and paints each page once', () => {
+      const repeated = makeNode('page-number', { type: 'page-number', y: 280, height: 10 })
+      const schema = makeSchema({
+        mode: 'fixed',
+        pages: 2,
+        pageModel: { kind: 'paged-paper', paper: { width: 210, height: 297 } },
+        pagination: { strategy: 'fixed-sheets', pageCount: 2 },
+      }, [makeNode('content', { y: 20 }), repeated])
+      const profile = {
+        getManifest: (type: string) => ({ common: { layout: { pageRepeat: type === 'page-number' ? 'every-output-page' : 'none' } } }),
+      } as never
+
+      const plan = createPagePlan(schema, {
+        profile,
+        paintableNodeIds: new Set(['content', 'page-number']),
+      })
+
+      expect(plan.pages[0]!.elements.map(node => node.id)).toEqual(['content', 'page-number__p0'])
+      expect(plan.pages[1]!.elements.map(node => node.id)).toEqual(['page-number__p1'])
+    })
+
     it('creates a single page with all elements', () => {
       const schema = makeSchema(
         { mode: 'fixed' },
@@ -72,13 +102,13 @@ describe('createPagePlan', () => {
       }, [
         makeNode('content', { y: 20 }),
         makeNode('page-number', {
+          type: 'page-number',
           y: 280,
           height: 10,
-          output: { visibility: 'include', repeat: { scope: 'every-output-page' } },
         }),
       ])
 
-      const plan = createPagePlan(schema)
+      const plan = createPagePlan(schema, repeatedPageNumberOptions())
 
       expect(plan.pages).toHaveLength(2)
       expect(plan.pages[0]!.elements.map(el => el.id)).toEqual(['content', 'page-number__p0'])
@@ -95,13 +125,13 @@ describe('createPagePlan', () => {
         pagination: { strategy: 'fixed-sheets', pageCount: 2 },
       }, [
         makeNode('page-number', {
+          type: 'page-number',
           y: 280,
           height: 10,
-          output: { visibility: 'include', repeat: { scope: 'every-output-page' } },
         }),
       ])
 
-      const plan = createPagePlan(schema)
+      const plan = createPagePlan(schema, repeatedPageNumberOptions())
 
       expect(plan.pages).toHaveLength(2)
       expect(plan.pages[0]!.elements.map(el => el.id)).toEqual(['page-number__p0'])

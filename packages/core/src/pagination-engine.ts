@@ -1,14 +1,23 @@
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
-import type { PageMode } from '@easyink/shared'
+import type { JsonValue, PageMode } from '@easyink/shared'
 import type { LayoutDiagnostic, LayoutDocument, LayoutFragment, OutputPagePlan } from './layout-plan'
-import type { FragmentPaginator } from './material-viewer'
+import type {
+  LayoutPlanDiagnostic,
+  MaterialBreakOpportunity,
+  MaterialFragmentAdapter,
+  MaterialFragmentContribution,
+  MaterialFragmentPlan,
+  MaterialFragmentRequest,
+  MaterialLayoutPlan,
+} from './material-layout-plan'
+import { assertJsonValue } from '@easyink/shared'
 import { readNodeFlowConstraints } from './layout-plan'
-import { freezeMaterialLayoutPlan } from './material-layout-plan'
+import { freezeMaterialFragmentPlan, validateMaterialLayoutPlan } from './material-layout-plan'
 import { resolvePageModel } from './page-model'
 
 export interface PaginationOptions {
   originalSchema?: DocumentSchema
-  resolveFragmentPaginator?: (fragment: LayoutFragment) => FragmentPaginator | undefined
+  resolveFragmentAdapter?: (fragment: LayoutFragment) => MaterialFragmentAdapter | undefined
   retainBlankPage?: (page: OutputPagePlan) => boolean
 }
 
@@ -16,6 +25,115 @@ export interface PaginationResult {
   mode: PageMode
   pages: OutputPagePlan[]
   diagnostics: LayoutDiagnostic[]
+}
+
+const FRAGMENT_SIZE_TOLERANCE = 1e-9
+const LEGACY_FRAGMENT_FIELDS = new Set([
+  'availableHeight',
+  'box',
+  'continuation',
+  'currentPage',
+  'fragment',
+  'id',
+  'nextPage',
+  'page',
+  'pageContext',
+  'pageIndex',
+  'pageNumber',
+  'pages',
+  'repeat',
+  'sheetIndex',
+  'sourceInstanceKey',
+  'sourceNodeId',
+  'totalPages',
+  'yOffset',
+])
+
+export function chooseBreak(
+  plan: MaterialLayoutPlan<unknown>,
+  startBlockOffset: number,
+  availableHeight: number,
+): MaterialBreakOpportunity | { id: '$end', blockOffset: number, penalty: number } | undefined {
+  assertValidPaginationPlan(plan)
+  const height = plan.borderBox.height
+  if (!Number.isFinite(startBlockOffset) || startBlockOffset < 0 || startBlockOffset > height
+    || !Number.isFinite(availableHeight) || availableHeight < 0) {
+    throw new Error('MATERIAL_BREAK_INPUT_INVALID')
+  }
+
+  const limit = Math.min(startBlockOffset + availableHeight, height)
+  if (height <= limit)
+    return { id: '$end', blockOffset: height, penalty: 0 }
+
+  let chosen: MaterialBreakOpportunity | undefined
+  for (const candidate of plan.breakOpportunities) {
+    if (candidate.blockOffset <= startBlockOffset)
+      continue
+    if (candidate.blockOffset > limit)
+      break
+    if (!chosen || candidate.penalty < chosen.penalty
+      || (candidate.penalty === chosen.penalty && candidate.blockOffset > chosen.blockOffset)) {
+      chosen = candidate
+    }
+  }
+  return chosen
+}
+
+export function fragmentRangeMadeProgress(
+  requested: Readonly<{ startBlockOffset: number, endBlockOffset: number }>,
+  returned: Readonly<{ startBlockOffset: number, endBlockOffset: number }>,
+): boolean {
+  return returned.startBlockOffset === requested.startBlockOffset
+    && returned.endBlockOffset === requested.endBlockOffset
+    && returned.endBlockOffset > returned.startBlockOffset
+}
+
+export function commitMaterialFragment(
+  inputRequest: MaterialFragmentRequest,
+  contribution: MaterialFragmentContribution,
+  inputPlacement: Readonly<{ x: number, y: number }>,
+): MaterialFragmentPlan {
+  const request = readFragmentRequest(inputRequest)
+  const placement = readFragmentPlacement(inputPlacement)
+  validateFragmentRequest(request)
+  const facts = readFragmentContribution(contribution)
+
+  if (!fragmentRangeMadeProgress(request, facts.consumedRange))
+    throw new Error('MATERIAL_FRAGMENT_RANGE_MISMATCH')
+
+  const expectedBlockSize = request.endBlockOffset - request.startBlockOffset
+  if (!Number.isFinite(facts.inlineSize) || !Number.isFinite(facts.blockSize)
+    || facts.inlineSize < 0 || facts.blockSize < 0
+    || Math.abs(facts.inlineSize - request.plan.borderBox.width) > FRAGMENT_SIZE_TOLERANCE
+    || Math.abs(facts.blockSize - expectedBlockSize) > FRAGMENT_SIZE_TOLERANCE) {
+    throw new Error('MATERIAL_FRAGMENT_BOX_INVALID')
+  }
+
+  validateFragmentDiagnostics(facts.diagnostics, request.plan)
+  if (facts.renderPayload !== undefined) {
+    try {
+      assertJsonValue(facts.renderPayload)
+    }
+    catch {
+      throw new Error('MATERIAL_FRAGMENT_RENDER_PAYLOAD_INVALID')
+    }
+  }
+
+  return freezeMaterialFragmentPlan({
+    id: JSON.stringify([
+      'material-fragment',
+      request.plan.instanceKey,
+      request.pageIndex,
+      request.startBlockOffset,
+      request.endBlockOffset,
+    ]),
+    sourceInstanceKey: request.plan.instanceKey,
+    sourceNodeId: request.plan.nodeId,
+    box: { x: placement.x, y: placement.y, width: facts.inlineSize, height: facts.blockSize },
+    consumedRange: facts.consumedRange,
+    ...(facts.renderPayload === undefined ? {} : { renderPayload: facts.renderPayload }),
+    diagnostics: facts.diagnostics,
+  })
 }
 
 export function runPagination(
@@ -142,50 +260,60 @@ function createAutoSheets(
     if (fragmentFlow.pageBreakBefore && currentFragments.length > 0)
       pushCurrent()
 
-    let nextFragment: LayoutFragment | undefined = fragment
-    while (nextFragment) {
-      const box = nextFragment.plan.borderBox
-      const flow = readNodeFlowConstraints(nextFragment.node as MaterialNode)
-      const relativeTop = Math.max(box.y - currentPageStart, 0)
-      const relativeBottom = box.y + box.height - currentPageStart
-      if (currentFragments.length > 0 && relativeBottom > pageHeight) {
-        if (flow.keepTogether || box.height <= pageHeight) {
-          pushCurrent()
-          nextFragment = moveFragmentToY(nextFragment, Math.max(box.y, currentPageStart))
-          continue
-        }
+    const box = fragment.plan.borderBox
+    if (box.height === 0) {
+      currentFragments.push(fragment)
+      if (fragmentFlow.pageBreakAfter)
+        pushCurrent()
+      continue
+    }
+
+    let startBlockOffset = 0
+    let firstPlacement = true
+    const fragmentAdapter = options.resolveFragmentAdapter?.(fragment)
+    while (startBlockOffset < box.height) {
+      let relativeTop = firstPlacement ? Math.max(box.y - currentPageStart, 0) : 0
+      const remainingHeight = box.height - startBlockOffset
+      if (firstPlacement && currentFragments.length > 0 && relativeTop + remainingHeight > pageHeight
+        && (fragmentFlow.keepTogether || remainingHeight <= pageHeight)) {
+        pushCurrent()
+        relativeTop = 0
       }
 
-      if (relativeTop + box.height > pageHeight) {
-        const paginator = options.resolveFragmentPaginator?.(nextFragment)
-        if (paginator) {
-          const split = paginator.paginateFragment({
-            fragment: nextFragment,
-            availableHeight: Math.max(pageHeight - relativeTop, 0),
-            pageContext: { pageIndex: pages.length },
-          })
-          diagnostics.push(...split.diagnostics)
-          currentFragments.push(split.currentPage)
-          if (split.nextPage) {
-            pushCurrent()
-            nextFragment = moveFragmentToY(split.nextPage, currentPageStart)
-            continue
-          }
-          nextFragment = undefined
-          continue
-        }
-
+      const availableHeight = Math.max(pageHeight - relativeTop, 0)
+      const selected = chooseBreak(fragment.plan, startBlockOffset, availableHeight)
+      const endBlockOffset = selected?.blockOffset ?? firstLaterBoundaryOrEnd(fragment.plan, startBlockOffset)
+      const overflow = endBlockOffset - startBlockOffset > availableHeight
+      if (overflow) {
         diagnostics.push({
-          code: 'AUTO_SHEETS_FRAGMENT_OVERFLOW',
+          code: 'MATERIAL_FRAGMENT_OVERFLOW',
           severity: 'warning',
-          message: `Fragment ${nextFragment.plan.nodeId} is taller than one output page.`,
+          message: `Fragment ${fragment.plan.nodeId} has no break boundary within the available page height.`,
           stage: 'pagination',
-          sourceNodeId: nextFragment.plan.nodeId,
+          sourceNodeId: fragment.plan.nodeId,
+          detail: { startBlockOffset, endBlockOffset, availableHeight, pageIndex: pages.length },
         })
       }
 
-      currentFragments.push(nextFragment)
-      nextFragment = undefined
+      const request: MaterialFragmentRequest = {
+        plan: fragment.plan,
+        startBlockOffset,
+        endBlockOffset,
+        availableHeight,
+        pageIndex: pages.length,
+      }
+      const contribution = fragmentAdapter?.createFragment(request) ?? createDefaultContribution(request, fragment.fragmentPlan)
+      const fragmentPlan = commitMaterialFragment(request, contribution, {
+        x: box.x,
+        y: currentPageStart + relativeTop,
+      })
+      diagnostics.push(...fragmentPlan.diagnostics.map(toPaginationDiagnostic))
+      currentFragments.push({ ...fragment, fragmentPlan })
+      startBlockOffset = endBlockOffset
+      firstPlacement = false
+
+      if (startBlockOffset < box.height)
+        pushCurrent()
     }
 
     if (fragmentFlow.pageBreakAfter)
@@ -295,26 +423,181 @@ function applyPageCopies(pages: OutputPagePlan[], copies: number): OutputPagePla
   return result
 }
 
-function moveFragmentToY(fragment: LayoutFragment, y: number): LayoutFragment {
-  const plan = fragment.plan
-  if (plan.borderBox.y === y)
-    return fragment
-  const delta = y - plan.borderBox.y
-  return {
-    node: fragment.node,
-    plan: freezeMaterialLayoutPlan({
-      ...plan,
-      borderBox: { ...plan.borderBox, y },
-      contentBox: { ...plan.contentBox, y: plan.contentBox.y + delta },
-      slotBoxes: plan.slotBoxes.map(slot => ({ ...slot, box: { ...slot.box, y: slot.box.y + delta } })),
-    }),
-  }
-}
-
 function resolveTotalPages(pages: OutputPagePlan[]): void {
   for (const page of pages) {
     page.pageContext.totalPages = pages.length
     page.pageContext.pageNumber = page.index + 1
+  }
+}
+
+function assertValidPaginationPlan(plan: MaterialLayoutPlan<unknown>): void {
+  if (validateMaterialLayoutPlan(plan).some(diagnostic => diagnostic.severity === 'error'))
+    throw new Error('MATERIAL_LAYOUT_PLAN_INVALID')
+}
+
+function validateFragmentRequest(request: MaterialFragmentRequest): void {
+  assertValidPaginationPlan(request.plan)
+  const height = request.plan.borderBox.height
+  if (!Number.isSafeInteger(request.pageIndex) || request.pageIndex < 0
+    || !Number.isFinite(request.startBlockOffset) || !Number.isFinite(request.endBlockOffset)
+    || request.startBlockOffset < 0 || request.endBlockOffset < request.startBlockOffset
+    || request.endBlockOffset > height
+    || !Number.isFinite(request.availableHeight) || request.availableHeight < 0) {
+    throw new Error('MATERIAL_FRAGMENT_REQUEST_INVALID')
+  }
+}
+
+function readFragmentRequest(input: MaterialFragmentRequest): MaterialFragmentRequest {
+  if (!isRecord(input))
+    throw new Error('MATERIAL_FRAGMENT_REQUEST_INVALID')
+  const plan = readOwnData(input, 'plan', 'MATERIAL_FRAGMENT_REQUEST_INVALID')
+  const startBlockOffset = readOwnData(input, 'startBlockOffset', 'MATERIAL_FRAGMENT_REQUEST_INVALID')
+  const endBlockOffset = readOwnData(input, 'endBlockOffset', 'MATERIAL_FRAGMENT_REQUEST_INVALID')
+  const availableHeight = readOwnData(input, 'availableHeight', 'MATERIAL_FRAGMENT_REQUEST_INVALID')
+  const pageIndex = readOwnData(input, 'pageIndex', 'MATERIAL_FRAGMENT_REQUEST_INVALID')
+  if (!isRecord(plan) || typeof startBlockOffset !== 'number' || typeof endBlockOffset !== 'number'
+    || typeof availableHeight !== 'number' || typeof pageIndex !== 'number') {
+    throw new Error('MATERIAL_FRAGMENT_REQUEST_INVALID')
+  }
+  return { plan: plan as unknown as MaterialLayoutPlan<unknown>, startBlockOffset, endBlockOffset, availableHeight, pageIndex }
+}
+
+function readFragmentPlacement(input: Readonly<{ x: number, y: number }>): Readonly<{ x: number, y: number }> {
+  if (!isRecord(input))
+    throw new Error('MATERIAL_FRAGMENT_PLACEMENT_INVALID')
+  const x = readOwnData(input, 'x', 'MATERIAL_FRAGMENT_PLACEMENT_INVALID')
+  const y = readOwnData(input, 'y', 'MATERIAL_FRAGMENT_PLACEMENT_INVALID')
+  if (typeof x !== 'number' || typeof y !== 'number' || !Number.isFinite(x) || !Number.isFinite(y))
+    throw new Error('MATERIAL_FRAGMENT_PLACEMENT_INVALID')
+  return { x, y }
+}
+
+function readFragmentContribution(
+  contribution: MaterialFragmentContribution,
+): {
+  inlineSize: number
+  blockSize: number
+  consumedRange: Readonly<{ startBlockOffset: number, endBlockOffset: number }>
+  renderPayload?: JsonValue
+  diagnostics: readonly LayoutPlanDiagnostic[]
+} {
+  if (!isRecord(contribution))
+    throw new Error('MATERIAL_FRAGMENT_CONTRIBUTION_INVALID')
+  if (Object.getOwnPropertyNames(contribution).some(field => LEGACY_FRAGMENT_FIELDS.has(field)))
+    throw new Error('MATERIAL_FRAGMENT_LEGACY_FIELD')
+
+  const inlineSize = readOwnData(contribution, 'inlineSize', 'MATERIAL_FRAGMENT_CONTRIBUTION_INVALID')
+  const blockSize = readOwnData(contribution, 'blockSize', 'MATERIAL_FRAGMENT_CONTRIBUTION_INVALID')
+  const consumedRange = readOwnData(contribution, 'consumedRange', 'MATERIAL_FRAGMENT_CONTRIBUTION_INVALID')
+  const diagnostics = readOwnData(contribution, 'diagnostics', 'MATERIAL_FRAGMENT_CONTRIBUTION_INVALID')
+  const renderPayload = readOwnData(contribution, 'renderPayload', 'MATERIAL_FRAGMENT_CONTRIBUTION_INVALID', true)
+  if (typeof inlineSize !== 'number' || typeof blockSize !== 'number'
+    || !isRecord(consumedRange) || !Array.isArray(diagnostics)) {
+    throw new Error('MATERIAL_FRAGMENT_CONTRIBUTION_INVALID')
+  }
+  const startBlockOffset = readOwnData(consumedRange, 'startBlockOffset', 'MATERIAL_FRAGMENT_CONTRIBUTION_INVALID')
+  const endBlockOffset = readOwnData(consumedRange, 'endBlockOffset', 'MATERIAL_FRAGMENT_CONTRIBUTION_INVALID')
+  if (typeof startBlockOffset !== 'number' || typeof endBlockOffset !== 'number')
+    throw new Error('MATERIAL_FRAGMENT_CONTRIBUTION_INVALID')
+
+  return {
+    inlineSize,
+    blockSize,
+    consumedRange: { startBlockOffset, endBlockOffset },
+    ...(renderPayload === undefined ? {} : { renderPayload: renderPayload as JsonValue }),
+    diagnostics: diagnostics as unknown as readonly LayoutPlanDiagnostic[],
+  }
+}
+
+function validateFragmentDiagnostics(
+  diagnostics: readonly LayoutPlanDiagnostic[],
+  plan: MaterialLayoutPlan<unknown>,
+): void {
+  const allowedFields = new Set(['code', 'severity', 'message', 'instanceKey', 'nodeId', 'detail'])
+  for (const candidate of diagnostics) {
+    if (!isRecord(candidate) || Object.getOwnPropertyNames(candidate).some(field => !allowedFields.has(field)))
+      throw new Error('MATERIAL_FRAGMENT_DIAGNOSTIC_INVALID')
+    const code = readOwnData(candidate, 'code', 'MATERIAL_FRAGMENT_DIAGNOSTIC_INVALID')
+    const severity = readOwnData(candidate, 'severity', 'MATERIAL_FRAGMENT_DIAGNOSTIC_INVALID')
+    const message = readOwnData(candidate, 'message', 'MATERIAL_FRAGMENT_DIAGNOSTIC_INVALID')
+    const instanceKey = readOwnData(candidate, 'instanceKey', 'MATERIAL_FRAGMENT_DIAGNOSTIC_INVALID')
+    const nodeId = readOwnData(candidate, 'nodeId', 'MATERIAL_FRAGMENT_DIAGNOSTIC_INVALID')
+    const detail = readOwnData(candidate, 'detail', 'MATERIAL_FRAGMENT_DIAGNOSTIC_INVALID', true)
+    if (typeof code !== 'string' || code.length === 0
+      || (severity !== 'info' && severity !== 'warning' && severity !== 'error')
+      || typeof message !== 'string' || message.length === 0
+      || instanceKey !== plan.instanceKey || nodeId !== plan.nodeId) {
+      throw new Error('MATERIAL_FRAGMENT_DIAGNOSTIC_INVALID')
+    }
+    try {
+      if (detail !== undefined)
+        assertJsonValue(detail)
+    }
+    catch {
+      throw new Error('MATERIAL_FRAGMENT_DIAGNOSTIC_INVALID')
+    }
+  }
+}
+
+function readOwnData(value: object, field: string, errorCode: string, optional = false): unknown {
+  const descriptor = Object.getOwnPropertyDescriptor(value, field)
+  if (!descriptor)
+    return optional ? undefined : invalidStructure(errorCode)
+  if (!('value' in descriptor))
+    return invalidStructure(errorCode)
+  return descriptor.value
+}
+
+function invalidStructure(errorCode: string): never {
+  throw new Error(errorCode)
+}
+
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function firstLaterBoundaryOrEnd(plan: MaterialLayoutPlan<unknown>, startBlockOffset: number): number {
+  return plan.breakOpportunities.find(candidate => candidate.blockOffset > startBlockOffset)?.blockOffset
+    ?? plan.borderBox.height
+}
+
+function createDefaultContribution(
+  request: MaterialFragmentRequest,
+  embedded?: MaterialFragmentPlan,
+): MaterialFragmentContribution {
+  if (embedded
+    && embedded.sourceInstanceKey === request.plan.instanceKey
+    && embedded.sourceNodeId === request.plan.nodeId
+    && fragmentRangeMadeProgress(request, embedded.consumedRange)
+    && Math.abs(embedded.box.width - request.plan.borderBox.width) <= FRAGMENT_SIZE_TOLERANCE
+    && Math.abs(embedded.box.height - (request.endBlockOffset - request.startBlockOffset)) <= FRAGMENT_SIZE_TOLERANCE) {
+    return {
+      inlineSize: embedded.box.width,
+      blockSize: embedded.box.height,
+      consumedRange: embedded.consumedRange,
+      ...(embedded.renderPayload === undefined ? {} : { renderPayload: embedded.renderPayload }),
+      diagnostics: embedded.diagnostics,
+    }
+  }
+  return {
+    inlineSize: request.plan.borderBox.width,
+    blockSize: request.endBlockOffset - request.startBlockOffset,
+    consumedRange: {
+      startBlockOffset: request.startBlockOffset,
+      endBlockOffset: request.endBlockOffset,
+    },
+    diagnostics: [],
+  }
+}
+
+function toPaginationDiagnostic(diagnostic: LayoutPlanDiagnostic): LayoutDiagnostic {
+  return {
+    code: diagnostic.code,
+    severity: diagnostic.severity,
+    message: diagnostic.message,
+    stage: 'pagination',
+    sourceNodeId: diagnostic.nodeId,
+    ...(diagnostic.detail === undefined ? {} : { detail: diagnostic.detail }),
   }
 }
 

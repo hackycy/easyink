@@ -278,7 +278,9 @@ export function createDefaultLayoutRuntime(
     prepareResources: deps.prepareResources,
     measureNodes,
     layoutDocument: (document, plans) => runLayoutPipeline(document, { plans }),
-    paginateDocument: (document, layout) => runPagination(document, layout),
+    paginateDocument: (document, layout) => runPagination(document, layout, {
+      resolveFragmentAdapter: fragment => deps.materials.getFragmentAdapter(fragment.node.type),
+    }),
   })
 }
 
@@ -624,6 +626,7 @@ function freezeCommittedPages(pages: PaginationResult['pages']): readonly Pagina
     fragments: Object.freeze(page.fragments.map(fragment => Object.freeze({
       node: copyAndFreezeJson(fragment.node) as unknown as Readonly<MaterialNode>,
       plan: freezeMaterialLayoutPlan(fragment.plan),
+      ...(fragment.fragmentPlan === undefined ? {} : { fragmentPlan: freezeMaterialFragmentPlan(fragment.fragmentPlan) }),
     }))),
     pageContext: Object.freeze({ ...page.pageContext }),
   })))

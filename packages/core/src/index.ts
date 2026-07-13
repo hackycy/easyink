@@ -127,7 +127,7 @@ export type { Point, Rect, Size } from './geometry'
 export { AsyncHook, createInternalHooks, SyncHook, SyncWaterfallHook } from './hooks'
 
 export type { CommandRecord, InternalHooks, MaterialRenderPayload, PagePlanningContext, ViewerDiagnosticEvent } from './hooks'
-export { createFragmentFromNode, readNodeFlowConstraints, readNodeRepeatScope } from './layout-plan'
+export { createFragmentFromNode, readNodeFlowConstraints } from './layout-plan'
 
 export type { FlowBreakConstraints, LayoutDiagnostic, LayoutDocument, LayoutFragment, OutputPagePlan } from './layout-plan'
 
@@ -350,9 +350,6 @@ export type {
 } from './material-properties'
 
 export type {
-  FragmentPaginateInput,
-  FragmentPaginateResult,
-  FragmentPaginator,
   MaterialViewerExtension,
   MaterialViewerFacet,
   ViewerFacetCapabilities,
@@ -375,8 +372,8 @@ export type { Matrix2D } from './matrix-chain'
 export { MeasureService } from './measure-service'
 export type { MeasureRequest } from './measure-service'
 
-export { groupPageLayerPlansByPlacement, PAGE_CONTENT_LAYER_STACK_INDEX, resolvePageLayerPlans, resolvePageLayers, resolvePageLayerStackIndex } from './page-layers'
-export type { PageLayerRenderPlan, PageLayerRenderPlanBuckets, PageLayerTile, ResolvedPageLayer, ResolvedTextWatermarkPageLayer, ResolvePageLayerPlansOptions, TextWatermarkPageLayerPlan } from './page-layers'
+export { groupPageLayerPlansByPlacement, PAGE_CONTENT_LAYER_STACK_INDEX, planRepeatedOverlays, resolvePageLayerPlans, resolvePageLayers, resolvePageLayerStackIndex } from './page-layers'
+export type { PageLayerRenderPlan, PageLayerRenderPlanBuckets, PageLayerTile, RepeatedOverlayPlacement, ResolvedPageLayer, ResolvedTextWatermarkPageLayer, ResolvePageLayerPlansOptions, TextWatermarkPageLayerPlan } from './page-layers'
 
 export { resolvePageModel } from './page-model'
 export type { ResolvedPageModel } from './page-model'
@@ -384,7 +381,7 @@ export type { ResolvedPageModel } from './page-model'
 export { createPagePlan } from './page-planner'
 export type { PagePlan, PagePlanDiagnostic, PagePlanEntry, PagePlanOptions } from './page-planner'
 
-export { runPagination } from './pagination-engine'
+export { chooseBreak, commitMaterialFragment, fragmentRangeMadeProgress, runPagination } from './pagination-engine'
 export type { PaginationOptions, PaginationResult } from './pagination-engine'
 
 export { PreviewTransaction } from './preview-transaction'

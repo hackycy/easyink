@@ -3,6 +3,7 @@ import type { JsonObject, JsonValue } from '@easyink/shared'
 import type { MaterialConditionCapability } from './condition'
 import type { CanonicalMaterialBindingMap, MaterialBindingDefinition } from './material-binding'
 import type { MaterialDesignerFacet, MaterialExtensionContext, MaterialExtensionFactory } from './material-extension'
+import type { MaterialViewerLayoutFacet } from './material-layout-plan'
 import type { MaterialAIFacet, MaterialLayoutFacet, MaterialStructureFacet } from './material-manifest'
 import type { PropertyDescriptor } from './material-properties'
 import type { MaterialViewerExtension, MaterialViewerFacet, ViewerFacetCapabilities } from './material-viewer'
@@ -32,6 +33,7 @@ export interface StandardMaterialManifestInput {
   designerFactory: MaterialExtensionFactory
   localeMessages?: MaterialDesignerFacet['localeMessages']
   viewerExtension: MaterialViewerExtension
+  viewerLayout?: MaterialViewerLayoutFacet
   viewerCapabilities?: ViewerFacetCapabilities
   aiDescriptor: Record<string, unknown>
   generation: StandardMaterialGenerationDeclaration
@@ -96,7 +98,11 @@ export function defineStandardMaterialManifest(input: StandardMaterialManifestIn
           ...(extension.dispose ? { dispose: () => extension.dispose!() } : {}),
         }
       }),
-      viewer: defineMaterialFacetFactory('sync', () => ({ extension: input.viewerExtension, capabilities: input.viewerCapabilities ?? {} })),
+      viewer: defineMaterialFacetFactory('sync', () => ({
+        extension: input.viewerExtension,
+        ...(input.viewerLayout ? { layout: input.viewerLayout } : {}),
+        capabilities: input.viewerCapabilities ?? {},
+      })),
       ai: {
         generation,
         descriptor: input.aiDescriptor as JsonObject,

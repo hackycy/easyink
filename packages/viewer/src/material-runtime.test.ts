@@ -80,7 +80,8 @@ describe('profileMaterialRuntime', () => {
 
   it('publishes an isolated layout snapshot without freezing the material source', async () => {
     const resolveRuntimeModel = vi.fn(() => ({ value: 1 }))
-    const layout = { resolveRuntimeModel }
+    const createFragment = vi.fn()
+    const layout = { resolveRuntimeModel, fragment: { createFragment } }
     const profile = createTestCompiledMaterialProfile([
       createTestMaterialManifest({
         type: 'good',
@@ -98,6 +99,7 @@ describe('profileMaterialRuntime', () => {
     const published = runtime.get('good')?.value?.layout
     expect(published).not.toBe(layout)
     expect(published?.resolveRuntimeModel).toBe(resolveRuntimeModel)
+    expect(runtime.getFragmentAdapter('good')?.createFragment).toBe(createFragment)
     expect(Object.isFrozen(published)).toBe(true)
     expect(Object.isFrozen(layout)).toBe(false)
   })

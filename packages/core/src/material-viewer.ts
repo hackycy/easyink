@@ -2,7 +2,6 @@ import type { MaterialNode } from '@easyink/schema'
 import type { BindingFormatDiagnostic } from './binding-format'
 import type { MaterialConditionCapability } from './condition'
 import type { Rect } from './geometry'
-import type { LayoutDiagnostic, LayoutFragment } from './layout-plan'
 import type {
   LayoutConstraints,
   MaterialFragmentPlan,
@@ -144,30 +143,10 @@ export interface ViewerMeasureResult {
   overflow?: boolean
 }
 
-export interface FragmentPaginateInput {
-  fragment: LayoutFragment
-  availableHeight: number
-  pageContext: {
-    pageIndex: number
-  }
-}
-
-export interface FragmentPaginateResult {
-  currentPage: LayoutFragment
-  nextPage?: LayoutFragment
-  diagnostics: LayoutDiagnostic[]
-}
-
-export interface FragmentPaginator {
-  canPaginate: (node: MaterialNode) => boolean
-  paginateFragment: (input: FragmentPaginateInput) => FragmentPaginateResult
-}
-
 export interface MaterialViewerExtension {
   render: (node: MaterialNode, context: ViewerRenderContext) => ViewerRenderOutput
   measure?: (node: MaterialNode, context: ViewerMeasureContext) => ViewerMeasureResult
   getRenderSize?: (node: MaterialNode, context: ViewerRenderContext) => Partial<ViewerRenderSize>
-  fragmentPaginator?: FragmentPaginator
   condition?: MaterialConditionCapability
 }
 

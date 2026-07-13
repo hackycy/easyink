@@ -1,10 +1,10 @@
 import type { ViewerElementTree, ViewerRenderTree } from '@easyink/core'
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
-import { createFragmentFromNode, createLayoutConstraintKey, createNonFragmentingMaterialPlans, runLayoutPipeline, runPagination, viewerText } from '@easyink/core'
+import { createFragmentFromNode, createLayoutConstraintKey, createNonFragmentingMaterialPlans, freezeMaterialLayoutPlan, runLayoutPipeline, runPagination, viewerText } from '@easyink/core'
 import { createTestViewerRenderContext } from '@easyink/core/testing'
 import { describe, expect, it } from 'vitest'
 import { createDefaultDataTableModel } from './schema'
-import { measureTableData, renderTableData, tableDataFragmentPaginator } from './viewer'
+import { measureTableData, renderTableData, tableDataFragmentAdapter } from './viewer'
 
 function createNode(): MaterialNode {
   return {
@@ -22,17 +22,37 @@ function createNode(): MaterialNode {
   }
 }
 
-describe('tableDataFragmentPaginator', () => {
-  it('paginates 200 records recursively with stable bounded identities across 50+ pages', () => {
-    const first = paginateAndRender(200)
-    const second = paginateAndRender(200)
+describe('tableDataFragmentAdapter', () => {
+  it('contributes only the exact range requested by core', () => {
+    const plan = createTestFragment(createNode()).plan
+    const contribution = tableDataFragmentAdapter.createFragment({
+      plan,
+      startBlockOffset: 4,
+      endBlockOffset: 12,
+      availableHeight: 8,
+      pageIndex: 1,
+    })
 
-    expect(first.pageTrees.length).toBeGreaterThan(50)
+    expect(contribution).toEqual({
+      inlineSize: plan.borderBox.width,
+      blockSize: 8,
+      consumedRange: { startBlockOffset: 4, endBlockOffset: 12 },
+      renderPayload: { startBlockOffset: 4, endBlockOffset: 12 },
+      diagnostics: [],
+    })
+    expect(contribution).not.toHaveProperty('box')
+    expect(contribution).not.toHaveProperty('pageIndex')
+  })
+
+  it('lets core commit 200 monotonic ranges with stable identities across 50+ pages', () => {
+    const first = paginateWithCore(200)
+    const second = paginateWithCore(200)
+
+    expect(first.pageCount).toBeGreaterThan(50)
     expect(first.diagnostics).toEqual([])
-    expect(first.sourceNodeIds.every(id => id === 'table-data')).toBe(true)
-    expect(first.fragmentIds).toEqual(first.fragmentIds.map((_, index) => `table-data__p${index}`))
+    expect(first.sourceInstanceKeys.every(id => id === 'table-data')).toBe(true)
     expect(new Set(first.fragmentIds).size).toBe(first.fragmentIds.length)
-    expect(new Set(first.domIds).size).toBe(first.domIds.length)
+    expect(first.ranges.every((range, index) => index === 0 || range.startBlockOffset === first.ranges[index - 1]!.endBlockOffset)).toBe(true)
     expect(second).toEqual(first)
   })
 
@@ -62,15 +82,16 @@ describe('tableDataFragmentPaginator', () => {
       data: { items: [{ name: 'A', qty: 1 }, { name: 'B', qty: 2 }, { name: 'C', qty: 3 }] },
       unit: 'mm',
     })
-    const result = tableDataFragmentPaginator.paginateFragment({
-      fragment: createTestFragment(node),
+    const plan = createTestFragment(node).plan
+    const result = tableDataFragmentAdapter.createFragment({
+      plan,
+      startBlockOffset: 0,
+      endBlockOffset: 20,
       availableHeight: 20,
-      pageContext: { pageIndex: 0 },
+      pageIndex: 0,
     })
 
-    expect(result.nextPage).toBeDefined()
-    expect(result.currentPage.node.id).toContain('__p0')
-    expect(result.nextPage!.node.id).toContain('__p1')
+    expect(result.consumedRange).toEqual({ startBlockOffset: 0, endBlockOffset: 20 })
     expect(model).toEqual(before)
   })
 
@@ -142,7 +163,7 @@ describe('tableDataFragmentPaginator', () => {
     ])
   })
 
-  it('preserves keyed row metadata across pagination', () => {
+  it('does not disturb keyed row metadata while contributing a range', () => {
     const node = createNode()
     const model = tableModel(node)
     model.data.detailKeyPort = 'detailKey'
@@ -150,17 +171,19 @@ describe('tableDataFragmentPaginator', () => {
     node.bindings.detailKey = { sourceId: 'invoice', fieldPath: 'items/id' }
     const data = { items: [{ id: 'a' }, { id: 'b' }, { id: 'c' }] }
     measureTableData(node, { data, unit: 'mm' })
+    const before = bodyRows(renderTableData(node, renderContext(data)).tree).map(row => row.attributes.id)
+    const plan = createTestFragment(node).plan
 
-    const pages = tableDataFragmentPaginator.paginateFragment({
-      fragment: createTestFragment(node),
+    tableDataFragmentAdapter.createFragment({
+      plan,
+      startBlockOffset: 0,
+      endBlockOffset: 20,
       availableHeight: 20,
-      pageContext: { pageIndex: 0 },
+      pageIndex: 0,
     })
-    expect(pages.nextPage).toBeDefined()
-    const rendered = [pages.currentPage, pages.nextPage!]
-      .flatMap(page => bodyRows(renderTableData(page.node, renderContext(data)).tree))
+    const after = bodyRows(renderTableData(node, renderContext(data)).tree).map(row => row.attributes.id)
 
-    expect(new Set(rendered.map(row => row.attributes.id)).size).toBe(rendered.length)
+    expect(after).toEqual(before)
   })
 })
 
@@ -193,22 +216,17 @@ function createTestFragment(node: MaterialNode) {
   return createFragmentFromNode(node, plan)
 }
 
-function paginateAndRender(recordCount: number) {
+function paginateWithCore(recordCount: number) {
   const node = createNode()
-  const model = tableModel(node)
-  model.data.detailKeyPort = 'detailKey'
-  node.bindings.records = { sourceId: 'invoice', fieldPath: 'items' }
-  node.bindings.detailKey = { sourceId: 'invoice', fieldPath: 'items/id' }
-  const data = { items: Array.from({ length: recordCount }, (_, index) => ({ id: `record-${index}` })) }
-  const measurement = measureTableData(node, { data, unit: 'mm' })
+  node.height = recordCount
   const schema: DocumentSchema = {
     version: '1.0.0',
     unit: 'mm',
     page: {
       mode: 'fixed',
       width: 100,
-      height: 20,
-      pageModel: { kind: 'paged-paper', paper: { width: 100, height: 20 } },
+      height: 3,
+      pageModel: { kind: 'paged-paper', paper: { width: 100, height: 3 } },
       layout: { strategy: 'absolute' },
       reflow: { strategy: 'measure-only' },
       pagination: { strategy: 'auto-sheets' },
@@ -217,8 +235,8 @@ function paginateAndRender(recordCount: number) {
     elements: [node],
   }
   const constraints = { availableWidth: schema.page.width, availableHeight: schema.page.height, unit: schema.unit, writingMode: 'horizontal-tb' as const }
-  const borderBox = { x: node.x, y: node.y, width: measurement.width, height: measurement.height }
-  const measuredPlan = createNonFragmentingMaterialPlans({
+  const borderBox = { x: node.x, y: node.y, width: node.width, height: recordCount }
+  const fallbackPlan = createNonFragmentingMaterialPlans({
     instanceKey: node.id,
     nodeId: node.id,
     nodeRevision: 0,
@@ -227,21 +245,25 @@ function paginateAndRender(recordCount: number) {
     borderBox,
     fragmentBox: borderBox,
   }).layoutPlan
+  const measuredPlan = freezeMaterialLayoutPlan({
+    ...fallbackPlan,
+    breakOpportunities: Array.from({ length: recordCount - 1 }, (_, index) => ({
+      id: `row-${index + 1}`,
+      blockOffset: index + 1,
+      penalty: 0,
+    })),
+  })
   const layout = runLayoutPipeline(schema, { plans: new Map([[node.id, measuredPlan]]) })
   const pagination = runPagination(schema, layout, {
-    resolveFragmentPaginator: fragment => fragment.node.type === 'table-data' ? tableDataFragmentPaginator : undefined,
+    resolveFragmentAdapter: fragment => fragment.node.type === 'table-data' ? tableDataFragmentAdapter : undefined,
   })
   const fragments = pagination.pages.flatMap(page => page.fragments)
-  const pageTrees = fragments.map((fragment, pageIndex) => renderTableData(fragment.node, {
-    ...renderContext(data),
-    pageIndex,
-  }).tree)
   return {
     diagnostics: pagination.diagnostics,
-    fragmentIds: fragments.map(fragment => fragment.plan.instanceKey),
-    sourceNodeIds: fragments.map(fragment => fragment.plan.nodeId),
-    domIds: pageTrees.flatMap(tree => findElements(tree, 'tr').concat(findElements(tree, 'th'), findElements(tree, 'td')).map(element => String(element.attributes.id))),
-    pageTrees,
+    pageCount: pagination.pages.length,
+    fragmentIds: fragments.map(fragment => fragment.fragmentPlan!.id),
+    sourceInstanceKeys: fragments.map(fragment => fragment.fragmentPlan!.sourceInstanceKey),
+    ranges: fragments.map(fragment => fragment.fragmentPlan!.consumedRange),
   }
 }
 

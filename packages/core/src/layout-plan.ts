@@ -1,5 +1,5 @@
 import type { MaterialNode } from '@easyink/schema'
-import type { MaterialLayoutPlan } from './material-layout-plan'
+import type { MaterialFragmentPlan, MaterialLayoutPlan } from './material-layout-plan'
 
 export interface LayoutDiagnostic {
   code: string
@@ -21,6 +21,7 @@ export interface FlowBreakConstraints {
 export interface LayoutFragment {
   readonly node: Readonly<MaterialNode<unknown>>
   readonly plan: MaterialLayoutPlan
+  readonly fragmentPlan?: MaterialFragmentPlan
 }
 
 export interface LayoutDocument {
@@ -43,7 +44,6 @@ export interface OutputPagePlan {
     copyIndex?: number
   }
 }
-
 export function createFragmentFromNode(
   node: MaterialNode<unknown>,
   plan: MaterialLayoutPlan,
@@ -65,8 +65,4 @@ export function readNodeFlowConstraints(node: MaterialNode<unknown>): FlowBreakC
     pageBreakBefore: participates && (breakConfig?.before === 'page' || model.pageBreakBefore === true),
     pageBreakAfter: participates && (breakConfig?.after === 'page' || model.pageBreakAfter === true),
   }
-}
-
-export function readNodeRepeatScope(node: MaterialNode<unknown>): 'none' | 'every-output-page' {
-  return node.output.repeat?.scope === 'every-output-page' ? 'every-output-page' : 'none'
 }

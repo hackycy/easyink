@@ -1,7 +1,50 @@
 import { describe, expect, it } from 'vitest'
-import { groupPageLayerPlansByPlacement, PAGE_CONTENT_LAYER_STACK_INDEX, resolvePageLayerPlans, resolvePageLayers, resolvePageLayerStackIndex } from './page-layers'
+import { groupPageLayerPlansByPlacement, PAGE_CONTENT_LAYER_STACK_INDEX, planRepeatedOverlays, resolvePageLayerPlans, resolvePageLayers, resolvePageLayerStackIndex } from './page-layers'
 
 describe('page layers', () => {
+  it('plans paintable output-page repeats only from compiled manifest declarations', () => {
+    const profile = {
+      getManifest: (type: string) => ({ common: { layout: { pageRepeat: type === 'page-number' ? 'every-output-page' : 'none' } } }),
+    } as never
+    const nodes = [
+      { id: 'page', type: 'page-number', output: { visibility: 'include' } },
+      { id: 'removed', type: 'page-number', output: { visibility: 'include' } },
+      { id: 'legacy-only', type: 'text', output: { visibility: 'include', repeat: { scope: 'every-output-page' } } },
+    ] as never
+
+    const placements = planRepeatedOverlays({
+      nodes,
+      profile,
+      pageCount: 2,
+      paintableNodeIds: new Set(['page', 'legacy-only']),
+    })
+
+    expect(placements).toEqual([
+      { nodeId: 'page', pageIndex: 0 },
+      { nodeId: 'page', pageIndex: 1 },
+    ])
+    expect(Object.isFrozen(placements)).toBe(true)
+    expect(placements.every(Object.isFrozen)).toBe(true)
+  })
+
+  it('returns no repeated overlays for zero pages', () => {
+    expect(planRepeatedOverlays({
+      nodes: [{ id: 'page', type: 'page-number' }] as never,
+      profile: { getManifest: () => ({ common: { layout: { pageRepeat: 'every-output-page' } } }) } as never,
+      pageCount: 0,
+      paintableNodeIds: new Set(['page']),
+    })).toEqual([])
+  })
+
+  it.each([-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER + 1])('rejects invalid page count %s', (pageCount) => {
+    expect(() => planRepeatedOverlays({
+      nodes: [],
+      profile: { getManifest: () => undefined } as never,
+      pageCount,
+      paintableNodeIds: new Set(),
+    })).toThrow('REPEATED_OVERLAY_PAGE_COUNT_INVALID')
+  })
+
   it('resolves text watermark layer defaults without enabling output implicitly', () => {
     expect(resolvePageLayers({
       layers: [{ id: 'page-watermark', kind: 'watermark', type: 'text' }],

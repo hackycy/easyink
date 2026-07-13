@@ -1,10 +1,11 @@
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import type { PageMode } from '@easyink/shared'
 import type { LayoutDiagnostic } from './layout-plan'
+import type { CompiledMaterialProfile } from './material-profile'
 import { deepClone } from '@easyink/shared'
-import { readNodeRepeatScope } from './layout-plan'
 import { runLayoutPipeline } from './layout-strategy'
 import { createLayoutConstraintKey, createNonFragmentingMaterialPlans } from './material-layout-plan'
+import { planRepeatedOverlays } from './page-layers'
 import { runPagination } from './pagination-engine'
 
 /**
@@ -38,10 +39,14 @@ export interface PagePlanDiagnostic {
 
 export interface PagePlanOptions {
   originalSchema?: DocumentSchema
+  profile?: CompiledMaterialProfile
+  paintableNodeIds?: ReadonlySet<string>
 }
 
 export function createPagePlan(schema: DocumentSchema, options: PagePlanOptions = {}): PagePlan {
-  const repeatedElements = schema.elements.filter(el => readNodeRepeatScope(el) === 'every-output-page')
+  const repeatedElements = options.profile
+    ? schema.elements.filter(node => options.profile!.getManifest(node.type)?.common.layout.pageRepeat === 'every-output-page')
+    : []
   const layoutSchema = repeatedElements.length > 0
     ? { ...schema, elements: schema.elements.filter(el => !repeatedElements.includes(el)) }
     : schema
@@ -54,8 +59,31 @@ export function createPagePlan(schema: DocumentSchema, options: PagePlanOptions 
   const document = runLayoutPipeline(layoutSchema, { plans: createLegacyNodePlans(layoutSchema) })
   const result = runPagination(layoutSchema, document, {
     originalSchema,
-    retainBlankPage: repeatedElements.some(el => !el.editorState?.hidden) ? () => true : undefined,
+    retainBlankPage: repeatedElements.some(node => options.paintableNodeIds?.has(node.id)) ? () => true : undefined,
   })
+  const repeatedById = new Map(repeatedElements.map(node => [node.id, node]))
+  const overlayPlacements = options.profile
+    ? planRepeatedOverlays({
+        nodes: repeatedElements,
+        profile: options.profile,
+        pageCount: result.pages.length,
+        paintableNodeIds: options.paintableNodeIds ?? new Set(),
+      })
+    : []
+  const overlaysByPage = new Map<number, MaterialNode[]>()
+  for (const placement of overlayPlacements) {
+    const node = repeatedById.get(placement.nodeId)
+    const page = result.pages[placement.pageIndex]
+    if (!node || !page)
+      continue
+    const overlays = overlaysByPage.get(placement.pageIndex) ?? []
+    overlays.push({
+      ...deepClone(node),
+      id: `${node.id}__p${placement.pageIndex}`,
+      y: page.yOffset + resolveRepeatedElementLocalY(node, page.height),
+    })
+    overlaysByPage.set(placement.pageIndex, overlays)
+  }
 
   return {
     mode: result.mode,
@@ -65,11 +93,7 @@ export function createPagePlan(schema: DocumentSchema, options: PagePlanOptions 
       height: page.height,
       elements: [
         ...page.fragments.map(fragment => fragment.node),
-        ...repeatedElements.map(node => ({
-          ...deepClone(node),
-          id: `${node.id}__p${page.index}`,
-          y: page.yOffset + resolveRepeatedElementLocalY(node, page.height),
-        })),
+        ...(overlaysByPage.get(page.index) ?? []),
       ],
       copyIndex: page.pageContext.copyIndex,
       yOffset: page.yOffset,

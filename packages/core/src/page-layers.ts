@@ -1,4 +1,5 @@
-import type { PageLayerConfig, PageLayerPlacement, PageSchema, TextWatermarkPageLayerConfig } from '@easyink/schema'
+import type { MaterialNode, PageLayerConfig, PageLayerPlacement, PageSchema, TextWatermarkPageLayerConfig } from '@easyink/schema'
+import type { CompiledMaterialProfile } from './material-profile'
 import { DEFAULT_TEXT_WATERMARK_PAGE_LAYER, PAGE_LAYER_MAX_Z_INDEX, PAGE_LAYER_MIN_Z_INDEX } from '@easyink/schema'
 
 export interface ResolvedPageLayerBase {
@@ -75,6 +76,32 @@ const PAGE_LAYER_PLAN_RESOLVERS: Record<string, PageLayerPlanResolver> = {
   'watermark:text': (layer, pageSize, options) => layer.kind === 'watermark' && layer.type === 'text'
     ? resolveTextWatermarkLayerPlan(layer, pageSize, options)
     : undefined,
+}
+
+export interface RepeatedOverlayPlacement {
+  readonly nodeId: string
+  readonly pageIndex: number
+}
+
+export function planRepeatedOverlays(input: {
+  readonly nodes: readonly MaterialNode[]
+  readonly profile: CompiledMaterialProfile
+  readonly pageCount: number
+  readonly paintableNodeIds: ReadonlySet<string>
+}): readonly RepeatedOverlayPlacement[] {
+  if (!Number.isSafeInteger(input.pageCount) || input.pageCount < 0)
+    throw new Error('REPEATED_OVERLAY_PAGE_COUNT_INVALID')
+
+  const placements: RepeatedOverlayPlacement[] = []
+  for (const node of input.nodes) {
+    if (!input.paintableNodeIds.has(node.id)
+      || input.profile.getManifest(node.type)?.common.layout.pageRepeat !== 'every-output-page') {
+      continue
+    }
+    for (let pageIndex = 0; pageIndex < input.pageCount; pageIndex++)
+      placements.push(Object.freeze({ nodeId: node.id, pageIndex }))
+  }
+  return Object.freeze(placements)
 }
 
 export function resolvePageLayers(page: Pick<PageSchema, 'layers'>): ResolvedPageLayer[] {

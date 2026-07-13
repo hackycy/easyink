@@ -1,8 +1,8 @@
-import type { FragmentPaginator, LayoutFragment, ViewerMeasureContext, ViewerMeasureResult, ViewerRenderContext, ViewerRenderOutput } from '@easyink/core'
+import type { MaterialFragmentAdapter, ViewerMeasureContext, ViewerMeasureResult, ViewerRenderContext, ViewerRenderOutput } from '@easyink/core'
 import type { TableCellSchema, TableRowSchema } from '@easyink/material-table-kernel'
 import type { BindingRef, MaterialNode } from '@easyink/schema'
 import type { TableDataProps } from './schema'
-import { formatBindingDisplayValue, freezeMaterialLayoutPlan, resolveBindingValue, resolveFieldFromRecord, viewerElement, viewerText } from '@easyink/core'
+import { formatBindingDisplayValue, resolveBindingValue, resolveFieldFromRecord, viewerElement, viewerText } from '@easyink/core'
 import { computeAutoRowHeights, computeRowScaleWithVirtualRows, getTableMaterialModel, projectTableTopology, renderTableTree, resolveTableBaseProps } from '@easyink/material-table-kernel'
 import { TABLE_DATA_PLACEHOLDER_ROW_COUNT } from './layout'
 import { TABLE_DATA_DEFAULTS } from './schema'
@@ -44,7 +44,6 @@ interface ResolvedRuntimeLayout {
 }
 
 const runtimeLayoutCache = new WeakMap<object, ResolvedRuntimeLayout>()
-const fragmentIdEncoder = new TextEncoder()
 
 /**
  * Resolve the visible row sequence + per-row heights for a data table
@@ -118,42 +117,19 @@ export function measureTableData(node: MaterialNode<unknown>, context: ViewerMea
   return { width: node.width, height: layout.totalHeight }
 }
 
-export const tableDataFragmentPaginator: FragmentPaginator = {
-  canPaginate(node) {
-    return node.type === 'table-data'
-  },
-  paginateFragment(input) {
-    const node = input.fragment.node
-    if (node.type !== 'table-data') {
-      return { currentPage: input.fragment, diagnostics: [] }
-    }
-    const tableNode = node
-
-    const cached = runtimeLayoutCache.get(runtimeLayoutKey(tableNode))
-    if (!cached || input.availableHeight >= cached.totalHeight) {
-      return { currentPage: input.fragment, diagnostics: [] }
-    }
-
-    const split = splitRuntimeRows(cached.rows, cached.rowSources, cached.rowHeights, input.availableHeight)
-    if (!split) {
-      return {
-        currentPage: input.fragment,
-        diagnostics: [{
-          code: 'TABLE_DATA_FRAGMENT_OVERFLOW',
-          severity: 'warning',
-          message: `Table ${tableNode.id} cannot fit even one body row into the available page height.`,
-          stage: 'pagination',
-          sourceNodeId: input.fragment.plan.nodeId,
-        }],
-      }
-    }
-
-    const current = createVirtualTableFragment(input.fragment, tableNode, split.currentRows, split.currentSources, cached.columnIds, split.currentHeights, split.currentHeight, input.pageContext.pageIndex)
-    const next = createVirtualTableFragment(input.fragment, tableNode, split.nextRows, split.nextSources, cached.columnIds, split.nextHeights, split.nextHeight, input.pageContext.pageIndex + 1)
-
+export const tableDataFragmentAdapter: MaterialFragmentAdapter = {
+  createFragment(request) {
     return {
-      currentPage: current,
-      nextPage: next,
+      inlineSize: request.plan.borderBox.width,
+      blockSize: request.endBlockOffset - request.startBlockOffset,
+      consumedRange: {
+        startBlockOffset: request.startBlockOffset,
+        endBlockOffset: request.endBlockOffset,
+      },
+      renderPayload: {
+        startBlockOffset: request.startBlockOffset,
+        endBlockOffset: request.endBlockOffset,
+      },
       diagnostics: [],
     }
   },
@@ -357,102 +333,8 @@ function hashKey(value: string, seed: number): string {
   return hash.toString(36)
 }
 
-function splitRuntimeRows(
-  rows: TableRowSchema[],
-  rowSources: Array<{ canonicalRowId: string, sourceRowKey: string }>,
-  rowHeights: number[],
-  availableHeight: number,
-): { currentRows: TableRowSchema[], currentSources: Array<{ canonicalRowId: string, sourceRowKey: string }>, currentHeights: number[], currentHeight: number, nextRows: TableRowSchema[], nextSources: Array<{ canonicalRowId: string, sourceRowKey: string }>, nextHeights: number[], nextHeight: number } | null {
-  interface Entry {
-    row: TableRowSchema
-    source: { canonicalRowId: string, sourceRowKey: string }
-    height: number
-  }
-  const header: Entry[] = []
-  const body: Entry[] = []
-  const footer: Entry[] = []
-
-  rows.forEach((row, index) => {
-    const entry = { row, source: rowSources[index]!, height: rowHeights[index] ?? row.height }
-    if (row.role === 'header')
-      header.push(entry)
-    else if (row.role === 'footer')
-      footer.push(entry)
-    else
-      body.push(entry)
-  })
-
-  const headerHeight = sumHeights(header)
-  let currentHeight = headerHeight
-  let bodyCut = 0
-  while (bodyCut < body.length && currentHeight + body[bodyCut]!.height <= availableHeight) {
-    currentHeight += body[bodyCut]!.height
-    bodyCut++
-  }
-
-  if (bodyCut === 0)
-    return null
-
-  const currentEntries = [...header, ...body.slice(0, bodyCut)]
-  const nextEntries = [...header, ...body.slice(bodyCut), ...footer]
-  return {
-    currentRows: currentEntries.map(entry => entry.row),
-    currentSources: currentEntries.map(entry => entry.source),
-    currentHeights: currentEntries.map(entry => entry.height),
-    currentHeight: sumHeights(currentEntries),
-    nextRows: nextEntries.map(entry => entry.row),
-    nextSources: nextEntries.map(entry => entry.source),
-    nextHeights: nextEntries.map(entry => entry.height),
-    nextHeight: sumHeights(nextEntries),
-  }
-}
-
-function createVirtualTableFragment(
-  source: LayoutFragment,
-  node: MaterialNode<unknown>,
-  rows: TableRowSchema[],
-  rowSources: Array<{ canonicalRowId: string, sourceRowKey: string }>,
-  columnIds: string[],
-  rowHeights: number[],
-  height: number,
-  pageIndex: number,
-): LayoutFragment {
-  const id = createTableFragmentId(source.plan.nodeId, pageIndex)
-  const virtualNode: MaterialNode<unknown> = {
-    ...node,
-    id,
-    height,
-    model: { ...node.model as Record<string, unknown> },
-  }
-  runtimeLayoutCache.set(runtimeLayoutKey(virtualNode), { rows, rowSources, columnIds, rowHeights, totalHeight: height })
-  return {
-    node: virtualNode,
-    plan: freezeMaterialLayoutPlan({
-      ...source.plan,
-      instanceKey: id,
-      borderBox: { ...source.plan.borderBox, height },
-      contentBox: { ...source.plan.contentBox, height },
-    }),
-  }
-}
-
 function runtimeLayoutKey(node: MaterialNode<unknown>): object {
   return typeof node.model === 'object' && node.model !== null ? node.model : node
-}
-
-function createTableFragmentId(sourceNodeId: string, pageIndex: number): string {
-  const suffix = `__p${pageIndex}`
-  const literal = `${sourceNodeId}${suffix}`
-  if (fragmentIdEncoder.encode(literal).byteLength <= 256)
-    return literal
-  return `table-fragment-${sourceNodeId.length.toString(36)}-${hashKey(sourceNodeId, 0x811C9DC5)}-${hashKey(sourceNodeId, 0x9E3779B9)}${suffix}`
-}
-
-function sumHeights(entries: Array<{ height: number }>): number {
-  let total = 0
-  for (const entry of entries)
-    total += entry.height
-  return total
 }
 
 /**

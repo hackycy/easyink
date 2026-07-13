@@ -2,8 +2,8 @@ import type {
   CompiledMaterialProfile,
   FacetDiagnostic,
   FacetInstance,
-  FragmentPaginator,
   MaterialConditionDefinition,
+  MaterialFragmentAdapter,
   MaterialViewerExtension,
   MaterialViewerFacet,
   MaterialViewerLayoutFacet,
@@ -69,9 +69,9 @@ export class ProfileMaterialRuntime {
     return { width: size?.width ?? node.width, height: size?.height ?? node.height }
   }
 
-  getFragmentPaginator(node: MaterialNode<unknown>): FragmentPaginator | undefined {
-    const paginator = this.getExtension(node.type)?.fragmentPaginator
-    return paginator?.canPaginate(node as MaterialNode) ? paginator : undefined
+  getFragmentAdapter(type: string): MaterialFragmentAdapter | undefined {
+    const instance = this.get(type)
+    return instance?.state === 'active' ? instance.value?.layout?.fragment : undefined
   }
 
   getBinding(type: string) {
@@ -80,10 +80,6 @@ export class ProfileMaterialRuntime {
 
   getCondition(type: string): MaterialConditionDefinition | undefined {
     return resolveMaterialConditionCapability(this.profile.getManifest(type)?.common.condition)
-  }
-
-  isPageRepeated(type: string): boolean {
-    return this.profile.getManifest(type)?.common.layout.pageRepeat === 'every-output-page'
   }
 
   dispose(): Promise<readonly FacetDiagnostic[]> {
