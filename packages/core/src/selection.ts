@@ -1,4 +1,5 @@
 import type { MaterialNode } from '@easyink/schema'
+import { generateId } from '@easyink/shared'
 
 /**
  * Single source of truth for "can this node be modified through direct canvas
@@ -20,9 +21,14 @@ export function isSelectable(node: MaterialNode): boolean {
 export class SelectionModel {
   private _ids: Set<string> = new Set()
   private _listeners: Array<() => void> = []
+  private _lineageId = generateId('selection')
 
   get ids(): readonly string[] {
     return Object.freeze([...this._ids])
+  }
+
+  get lineageId(): string {
+    return this._lineageId
   }
 
   get count(): number {
@@ -38,7 +44,7 @@ export class SelectionModel {
       return
     this._ids.clear()
     this._ids.add(id)
-    this.notify()
+    this.notify(true)
   }
 
   selectMultiple(ids: string[]): void {
@@ -48,7 +54,7 @@ export class SelectionModel {
     for (const id of ids) {
       this._ids.add(id)
     }
-    this.notify()
+    this.notify(true)
   }
 
   toggle(id: string): void {
@@ -58,21 +64,21 @@ export class SelectionModel {
     else {
       this._ids.add(id)
     }
-    this.notify()
+    this.notify(true)
   }
 
   add(id: string): void {
     if (this._ids.has(id))
       return
     this._ids.add(id)
-    this.notify()
+    this.notify(true)
   }
 
   remove(id: string): void {
     if (!this._ids.has(id))
       return
     this._ids.delete(id)
-    this.notify()
+    this.notify(true)
   }
 
   has(id: string): boolean {
@@ -83,7 +89,7 @@ export class SelectionModel {
     if (this._ids.size === 0)
       return
     this._ids.clear()
-    this.notify()
+    this.notify(true)
   }
 
   /**
@@ -100,7 +106,7 @@ export class SelectionModel {
       return
     for (const id of stale)
       this._ids.delete(id)
-    this.notify()
+    this.notify(this._ids.size === 0)
   }
 
   onChange(listener: () => void): () => void {
@@ -119,7 +125,9 @@ export class SelectionModel {
     }
   }
 
-  private notify(): void {
+  private notify(changeLineage: boolean): void {
+    if (changeLineage)
+      this._lineageId = generateId('selection')
     for (const listener of this._listeners) {
       listener()
     }
@@ -127,14 +135,12 @@ export class SelectionModel {
 }
 
 function sameSet(set: Set<string>, ids: readonly string[]): boolean {
-  if (set.size !== ids.length)
+  const candidate = new Set(ids)
+  if (set.size !== candidate.size)
     return false
-  for (const id of ids) {
+  for (const id of candidate) {
     if (!set.has(id))
       return false
   }
-  // Guard against duplicates in `ids` masking a real change (e.g. set has [a]
-  // and ids is [a, a] — same length & every element present, but the resulting
-  // set after replacement would still be {a}, so equality holds anyway).
   return true
 }

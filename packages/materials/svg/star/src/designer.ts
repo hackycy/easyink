@@ -312,7 +312,7 @@ export function createSvgStarExtension(context: MaterialExtensionContext): Mater
       return nodeSignal.subscribe(render)
     },
     geometry: createStarGeometry(),
-    selectionTypes: [createStarSelectionType() as SelectionType<unknown>],
+    selectionTypes: [createStarSelectionType() as unknown as SelectionType],
     behaviors: [
       undoBoundaryMiddleware({ groupBy: 'svg-star-control' }),
       createStarHandleBehavior(),

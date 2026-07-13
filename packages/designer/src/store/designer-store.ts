@@ -136,8 +136,10 @@ export class DesignerStore {
       if (this.destroyed)
         return
       this.documentViewRevision += 1
-      if (event.kind !== 'preview' && event.kind !== 'preview-cancel' && event.document === this.documentStore.committedDocument)
+      if (event.kind !== 'preview' && event.kind !== 'preview-cancel' && event.document === this.documentStore.committedDocument) {
+        this.editingSession.rebaseDocumentSelection(event)
         this.selection.reconcile(event.index.nodeIds())
+      }
       if (event.validationReport && event.document === this.documentStore.committedDocument) {
         this._materialDiagnostics = event.validationReport.diagnostics
         this._materialNodeStates = event.validationReport.nodeStates
@@ -374,7 +376,7 @@ export class DesignerStore {
   addElement(node: MaterialNode): void {
     this.documentTransactions.transact((draft) => {
       draft.elements.push(node)
-    }, { label: 'Add element', operation: { kind: 'structure.insert', sessionPath: [], targetIds: [`node:${node.id}`], fieldPaths: ['/elements'], selectionLineage: null, structural: true } })
+    }, { label: 'Add element', operation: { kind: 'structure.insert', sessionPath: [], targetIds: [`node:${node.id}`], fieldPaths: ['/elements'], selectionLineage: this.selection.lineageId, structural: true } })
   }
 
   removeElement(id: string): MaterialNode | undefined {
@@ -387,7 +389,7 @@ export class DesignerStore {
       if (draft.groups) {
         draft.groups = draft.groups.map(group => ({ ...group, memberIds: group.memberIds.filter(memberId => memberId !== id) })).filter(group => group.memberIds.length >= 2)
       }
-    }, { label: 'Remove element', operation: { kind: 'structure.remove', sessionPath: [], targetIds: [`node:${id}`], fieldPaths: ['/elements'], selectionLineage: null, structural: true } })
+    }, { label: 'Remove element', operation: { kind: 'structure.remove', sessionPath: [], targetIds: [`node:${id}`], fieldPaths: ['/elements'], selectionLineage: this.selection.lineageId, structural: true } })
     this.selection.remove(id)
     if (this.editingSession.activeNodeId === id)
       this.editingSession.exit()
@@ -399,7 +401,7 @@ export class DesignerStore {
       return
     this.documentTransactions.run(id, (draft) => {
       Object.assign(draft, updates)
-    }, { label: 'Update element', operation: { kind: 'material.property', sessionPath: [], targetIds: [`node:${id}`], fieldPaths: Object.keys(updates).map(key => `/${key}`) as any, selectionLineage: null, structural: false } })
+    }, { label: 'Update element', operation: { kind: 'material.property', sessionPath: [], targetIds: [`node:${id}`], fieldPaths: Object.keys(updates).map(key => `/${key}`) as any, selectionLineage: this.selection.lineageId, structural: false } })
   }
 
   async activateDesignerFacet(type: string) {

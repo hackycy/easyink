@@ -1,4 +1,4 @@
-import type { BehaviorEvent, MaterialDesignerExtension, PropertyWriteResult } from '@easyink/core'
+import type { BehaviorEvent, DocumentStoreEvent, MaterialDesignerExtension, PropertyWriteResult } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { DesignerStore } from '../store/designer-store'
 import { shallowRef } from 'vue'
@@ -116,5 +116,23 @@ export class EditingSessionManager {
 
   rebaseSelection(before: MaterialNode, after: MaterialNode, result?: PropertyWriteResult | void): void {
     this._activeSession.value?.rebaseSelection(before, after, result?.selectionRebase)
+  }
+
+  rebaseDocumentSelection(event: DocumentStoreEvent): void {
+    const session = this._activeSession.value
+    const selection = session?.selectionStore.selection
+    if (!session || !selection)
+      return
+    if (!event.changeSet) {
+      if (!event.index.hasNode(selection.nodeId))
+        session.selectionStore.set(null)
+      return
+    }
+    const type = session.extension.selectionTypes?.find(candidate => candidate.id === selection.type)
+    session.selectionStore.rebase({
+      changeSet: event.changeSet,
+      before: event.previousIndex,
+      after: event.index,
+    }, type)
   }
 }

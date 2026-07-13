@@ -1,4 +1,4 @@
-import type { FontProvider, SchemaAdapter } from '@easyink/core'
+import type { DocumentStoreEvent, FontProvider, MaterialDesignerExtension, SchemaAdapter } from '@easyink/core'
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import { createTestMaterialManifest } from '@easyink/core/testing'
 import { describe, expect, it, vi } from 'vitest'
@@ -301,6 +301,63 @@ describe('designer store schema initialization', () => {
     store.selection.select('box')
     await Promise.resolve()
     expect(store.selection.ids).toEqual(['box'])
+  })
+
+  it('rebases editing selections with the exact document event indexes and change set', async () => {
+    const store = new DesignerStore({ elements: [createNode('box')] }, undefined, undefined, runtimeWith(boxProfile()))
+    const rebase = vi.fn(selection => ({ ...selection, payload: { cellId: 'b' } }))
+    const extension: MaterialDesignerExtension = {
+      renderContent: () => () => {},
+      geometry: {
+        getContentLayout: () => ({ contentBox: { x: 0, y: 0, width: 10, height: 10 } }),
+        resolveLocation: () => [],
+        hitTest: () => null,
+      },
+      selectionTypes: [{ id: 'box.part', resolveLocation: () => [], rebase }],
+    }
+    const session = store.editingSession.enter('box', extension)!
+    session.selectionStore.set({ type: 'box.part', nodeId: 'box', payload: { cellId: 'a' } })
+    const lineage = session.selectionStore.lineageId
+    let event: DocumentStoreEvent | undefined
+    store.documentStore.subscribe((value) => {
+      event = value
+    })
+
+    store.documentTransactions.run('box', (draft) => {
+      draft.model.value = 1
+    }, { label: 'Edit', operation: {
+      kind: 'material.property',
+      sessionPath: [],
+      targetIds: ['node:box'],
+      fieldPaths: ['/model/value'],
+      selectionLineage: lineage,
+      structural: false,
+    } })
+    await Promise.resolve()
+
+    expect(event).toBeDefined()
+    expect(rebase).toHaveBeenCalledWith(expect.objectContaining({ payload: { cellId: 'a' } }), {
+      changeSet: event!.changeSet,
+      before: event!.previousIndex,
+      after: event!.index,
+    })
+    expect(session.selectionStore.selection?.payload).toEqual({ cellId: 'b' })
+    expect(session.selectionStore.lineageId).toBe(lineage)
+  })
+
+  it('copies the applicable top-level selection lineage into element operations', async () => {
+    const store = new DesignerStore({ elements: [createNode('box')] }, undefined, undefined, runtimeWith(boxProfile()))
+    store.selection.select('box')
+    const lineage = store.selection.lineageId
+    let event: DocumentStoreEvent | undefined
+    store.documentStore.subscribe((value) => {
+      event = value
+    })
+
+    store.updateElement('box', { x: 2 })
+    await Promise.resolve()
+
+    expect(event?.changeSet?.operation.selectionLineage).toBe(lineage)
   })
 
   it('unsubscribes document and selection listeners on destroy', () => {

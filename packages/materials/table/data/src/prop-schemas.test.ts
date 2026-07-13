@@ -91,7 +91,7 @@ describe('table-data band descriptors', () => {
     preview.preview(source, descriptor, draft => showHeader.write(draft, false))
     const committed = commitMaterialPropertyPreview(preview, source, descriptor.key, () => showHeader.write(source, false))
     const selection: Selection<{ row: number, col: number }> = { type: 'table.cell', nodeId: source.id, payload: { row: 0, col: 0 } }
-    const rebased = tableCellSelectionType.rebase?.(
+    const rebased = tableCellSelectionType.rebasePropertyChange?.(
       selection,
       committed.before,
       source,
@@ -130,7 +130,7 @@ describe('table-data band descriptors', () => {
 
     const result = accessor(key).write(source as MaterialNode, false)
     expect(result?.selectionRebase?.type).toBe('table.cell')
-    const rebased = tableCellSelectionType.rebase?.(
+    const rebased = tableCellSelectionType.rebasePropertyChange?.(
       selection,
       before,
       source,

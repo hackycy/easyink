@@ -1,4 +1,5 @@
 import type { MaterialNode } from '@easyink/schema'
+import type { JsonObject } from '@easyink/shared'
 import { canonicalizeMaterialNode } from '@easyink/schema'
 import { convertUnit, generateId } from '@easyink/shared'
 
@@ -13,7 +14,7 @@ export interface SvgStarProps {
   starRotation: number
 }
 
-export interface SvgStarControlSelection {
+export interface SvgStarControlSelection extends JsonObject {
   handle: 'inner-radius'
   index: number
 }

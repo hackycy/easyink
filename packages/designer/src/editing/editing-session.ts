@@ -133,9 +133,9 @@ export class EditingSession implements EditingSessionRef {
     if (!selection || !rebase || rebase.type !== selection.type)
       return
     const selectionType = this.extension.selectionTypes?.find(candidate => candidate.id === selection.type)
-    if (!selectionType?.rebase)
+    if (!selectionType?.rebasePropertyChange)
       return
-    const outcome = selectionType.rebase(selection, before, after, rebase.hint)
+    const outcome = selectionType.rebasePropertyChange(selection, before, after, rebase.hint)
     if (isSelectionRebaseResult(outcome)) {
       if (outcome.identityChanged) {
         const event: SelectionInvalidation = { reason: 'identity-changed' }

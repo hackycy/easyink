@@ -20,7 +20,7 @@ export function createTableCellSelectionType(delegate: TableEditingDelegate): Se
       return typeof p.row === 'number' && typeof p.col === 'number'
     },
 
-    rebase(selection, before, after, hint) {
+    rebasePropertyChange(selection, before, after, hint) {
       return rebaseTableCellSelection(selection, before, after, hint)
     },
 

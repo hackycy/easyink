@@ -9,7 +9,7 @@ import type {
   SelectionType,
 } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
-import type { UnitType } from '@easyink/shared'
+import type { JsonObject, UnitType } from '@easyink/shared'
 import type SignaturePad from 'signature_pad'
 import type { SignaturePointGroup } from './schema'
 import { UnitManager } from '@easyink/core'
@@ -28,7 +28,7 @@ import { getSignatureProps } from './schema'
 const SIGNATURE_SELECTION_TYPE = 'signature.canvas'
 const signatureOriginalRectKey: unique symbol = Symbol('easyink.signature.originalRect')
 
-interface SignatureSelectionPayload {
+interface SignatureSelectionPayload extends JsonObject {
   target: 'canvas'
 }
 

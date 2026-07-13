@@ -51,12 +51,14 @@ function createContext(hit: Selection | null): BehaviorContext {
     tx: {} as BehaviorContext['tx'],
     geometry,
     selectionStore: {
+      lineageId: 'selection-1',
       get selection() {
         return currentSelection
       },
       set(selection) {
         currentSelection = selection
       },
+      rebase() {},
     },
     surfaces: {} as BehaviorContext['surfaces'],
     session: {} as BehaviorContext['session'],

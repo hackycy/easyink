@@ -77,6 +77,21 @@ describe('selectionModel', () => {
     expect(sel.count).toBe(2)
   })
 
+  it('changes lineage for user changes but preserves it when reconcile retains a stable ID', () => {
+    const sel = new SelectionModel()
+    const initial = sel.lineageId
+    sel.selectMultiple(['a', 'b'])
+    const selected = sel.lineageId
+    expect(selected).not.toBe(initial)
+
+    sel.reconcile(['b'])
+    expect(sel.ids).toEqual(['b'])
+    expect(sel.lineageId).toBe(selected)
+
+    sel.reconcile([])
+    expect(sel.lineageId).not.toBe(selected)
+  })
+
   describe('change notification short-circuit', () => {
     function trackedSelection() {
       const sel = new SelectionModel()
@@ -101,6 +116,15 @@ describe('selectionModel', () => {
       expect(calls()).toBe(1)
       sel.selectMultiple(['b', 'a'])
       expect(calls()).toBe(1)
+    })
+
+    it('selectMultiple with duplicate IDs does not change an equivalent selection or lineage', () => {
+      const { sel, calls } = trackedSelection()
+      sel.select('a')
+      const lineage = sel.lineageId
+      sel.selectMultiple(['a', 'a'])
+      expect(calls()).toBe(1)
+      expect(sel.lineageId).toBe(lineage)
     })
 
     it('selectMultiple([]) on empty selection does not notify', () => {

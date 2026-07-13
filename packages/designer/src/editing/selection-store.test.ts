@@ -1,3 +1,4 @@
+import type { SelectionType } from '@easyink/core'
 import { describe, expect, it, vi } from 'vitest'
 import { createSelectionStore } from './selection-store'
 
@@ -32,21 +33,23 @@ describe('createSelectionStore', () => {
     }).not.toThrow()
   })
 
-  it('silently strips non-JSON-safe properties (function/Symbol) during round-trip', () => {
+  it.each([
+    ['nested function', { nested: { fn: () => {} } }],
+    ['nested undefined', { nested: { value: undefined } }],
+    ['class instance', { nested: new (class Payload { value = 1 })() }],
+    ['non-finite number', { nested: { value: Number.POSITIVE_INFINITY } }],
+  ])('rejects %s and preserves the last valid selection and lineage', (_label, payload) => {
     const store = createSelectionStore()
-    // JSON.stringify silently drops functions and Symbols, producing '{}'.
-    // The round-trip is consistent so validateJsonSafe does not throw.
-    // This is by design: the validation ensures consistency, not completeness.
-    expect(() => {
-      store.set({
-        type: 'test',
-        nodeId: 'n1',
-        payload: { fn: () => {}, s: Symbol('x') },
-      })
-    }).not.toThrow()
-    // But the stored payload has lost the non-serializable fields
-    const stored = store.selection!.payload as Record<string, unknown>
-    expect(JSON.parse(JSON.stringify(stored))).toEqual({})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    store.set({ type: 'test', nodeId: 'n1', payload: { ok: true } })
+    const lineage = store.lineageId
+
+    store.set({ type: 'test', nodeId: 'n1', payload: payload as never })
+
+    expect(store.selection).toEqual({ type: 'test', nodeId: 'n1', payload: { ok: true } })
+    expect(store.lineageId).toBe(lineage)
+    expect(errSpy).toHaveBeenCalled()
+    errSpy.mockRestore()
   })
 
   it('rejects circular reference payload (rolls back to last valid + emits diagnostic, never throws)', () => {
@@ -64,7 +67,7 @@ describe('createSelectionStore', () => {
       store.set({
         type: 'test',
         nodeId: 'n1',
-        payload: circular,
+        payload: circular as never,
       })
     }).not.toThrow()
     expect(store.selection).toEqual({ type: 'test', nodeId: 'n1', payload: { ok: true } })
@@ -94,7 +97,7 @@ describe('createSelectionStore', () => {
         type: 'table.cell',
         nodeId: 'n1',
         payload: { row: 0, col: 0 },
-        anchor: circular,
+        anchor: circular as never,
       })
     }).not.toThrow()
     expect(store.selection).toBeNull()
@@ -123,5 +126,82 @@ describe('createSelectionStore', () => {
     dispose?.()
 
     expect(calls).toEqual(['table.cell', null])
+  })
+
+  it('changes lineage only for accepted selection changes', () => {
+    const store = createSelectionStore()
+    const initial = store.lineageId
+    const selection = { type: 'table.cell', nodeId: 'n1', payload: { row: 0, col: 0 } } as const
+    store.set(selection)
+    const selected = store.lineageId
+    expect(selected).not.toBe(initial)
+
+    store.set(selection)
+    expect(store.lineageId).toBe(selected)
+
+    store.set(null)
+    expect(store.lineageId).not.toBe(selected)
+  })
+
+  it('rebases against exact indexes and preserves lineage when selection survives', () => {
+    const store = createSelectionStore()
+    store.set({ type: 'table.cell', nodeId: 'n1', payload: { cellId: 'a' }, anchor: { cellId: 'a' } })
+    const lineage = store.lineageId
+    const before = { hasNode: vi.fn(() => true) }
+    const after = { hasNode: vi.fn(() => true) }
+    const changeSet = { id: 'change-1' }
+    const rebase = vi.fn(selection => ({ ...selection, payload: { cellId: 'b' }, anchor: { cellId: 'b' } }))
+    const type: SelectionType<{ cellId: string }> = { id: 'table.cell', resolveLocation: () => [], rebase }
+
+    store.rebase({ changeSet, before, after } as never, type)
+
+    expect(rebase).toHaveBeenCalledWith(store.selection && expect.objectContaining({ payload: { cellId: 'a' } }), {
+      changeSet,
+      before,
+      after,
+    })
+    expect(store.selection?.payload).toEqual({ cellId: 'b' })
+    expect(store.lineageId).toBe(lineage)
+  })
+
+  it('clears missing nodes and creates a new lineage without calling the type', () => {
+    const store = createSelectionStore()
+    store.set({ type: 'table.cell', nodeId: 'deleted', payload: { cellId: 'a' } })
+    const lineage = store.lineageId
+    const rebase = vi.fn(selection => selection)
+    const type: SelectionType<{ cellId: string }> = { id: 'table.cell', resolveLocation: () => [], rebase }
+
+    store.rebase({
+      changeSet: { id: 'change-1' },
+      before: { hasNode: () => true },
+      after: { hasNode: () => false },
+    } as never, type)
+
+    expect(store.selection).toBeNull()
+    expect(store.lineageId).not.toBe(lineage)
+    expect(rebase).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['throws', () => { throw new Error('rebase failed') }],
+    ['returns invalid payload', (selection: any) => ({ ...selection, payload: { nested: { fn: () => {} } } })],
+    ['returns invalid anchor', (selection: any) => ({ ...selection, anchor: { nested: undefined } })],
+  ])('keeps the last valid selection and lineage when rebase %s', (_label, rebase) => {
+    const store = createSelectionStore()
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    store.set({ type: 'table.cell', nodeId: 'n1', payload: { cellId: 'a' } })
+    const selection = store.selection
+    const lineage = store.lineageId
+
+    store.rebase({
+      changeSet: { id: 'change-1' },
+      before: { hasNode: () => true },
+      after: { hasNode: () => true },
+    } as never, { id: 'table.cell', resolveLocation: () => [], rebase } as never)
+
+    expect(store.selection).toBe(selection)
+    expect(store.lineageId).toBe(lineage)
+    expect(errSpy).toHaveBeenCalled()
+    errSpy.mockRestore()
   })
 })

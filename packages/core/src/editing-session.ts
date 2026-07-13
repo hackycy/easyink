@@ -1,6 +1,7 @@
 import type { MaterialNode } from '@easyink/schema'
-import type { BindingDisplayFormat, UnitType } from '@easyink/shared'
-import type { DocumentOperationDescriptor } from './document-change-set'
+import type { BindingDisplayFormat, JsonValue, UnitType } from '@easyink/shared'
+import type { DocumentChangeSet, DocumentOperationDescriptor } from './document-change-set'
+import type { DocumentIndexSnapshot } from './document-index'
 import type { Point, Rect } from './geometry'
 import type { BindingExpression } from './material-binding'
 import type { DatasourceFieldInfo, PropertyDescriptorLike } from './material-extension'
@@ -8,7 +9,7 @@ import type { DatasourceFieldInfo, PropertyDescriptorLike } from './material-ext
 // ─── Selection ──────────────────────────────────────────────────────
 
 /** Typed, JSON-safe selection within an editing session. */
-export interface Selection<T = unknown> {
+export interface Selection<T extends JsonValue = JsonValue> {
   /** Selection type, namespaced by material type (e.g. 'table.cell', 'svg.anchor') */
   type: string
   /** Node ID of the material owning this selection */
@@ -20,7 +21,7 @@ export interface Selection<T = unknown> {
 }
 
 /** Selection reconciliation with an explicit semantic-identity signal. */
-export interface SelectionRebaseResult<T = unknown> {
+export interface SelectionRebaseResult<T extends JsonValue = JsonValue> {
   selection: Selection<T> | null
   /** True when the returned coordinates identify a different logical entity. */
   identityChanged?: boolean
@@ -33,7 +34,13 @@ export interface SelectionInvalidation {
 // ─── SelectionType ──────────────────────────────────────────────────
 
 /** Material registers selection types to declare sub-element selection semantics. */
-export interface SelectionType<T = unknown> {
+export interface SelectionRebaseContext {
+  changeSet: DocumentChangeSet
+  before: DocumentIndexSnapshot
+  after: DocumentIndexSnapshot
+}
+
+export interface SelectionType<T extends JsonValue = JsonValue> {
   /** Unique type name, must be prefixed with material type (e.g. 'table.cell') */
   id: string
   /** Derive a sub-property schema for the properties panel when this type is selected */
@@ -42,8 +49,15 @@ export interface SelectionType<T = unknown> {
   resolveLocation: (sel: Selection<T>, node: MaterialNode) => Rect[]
   /** Validate payload shape (default: JSON round-trip check) */
   validate?: (payload: unknown) => payload is T
-  /** Reconcile a selection after a property write changes material topology. */
-  rebase?: (sel: Selection<T>, before: MaterialNode, after: MaterialNode, hint: unknown) => Selection<T> | SelectionRebaseResult<T> | null
+  /** Reconcile a selection against stable IDs after a document change. */
+  rebase?: (selection: Selection<T>, context: SelectionRebaseContext) => Selection<T> | null
+  /** @deprecated Property writers should express topology changes through document changes. */
+  rebasePropertyChange?: (
+    selection: Selection<T>,
+    before: MaterialNode,
+    after: MaterialNode,
+    hint: unknown,
+  ) => Selection<T> | SelectionRebaseResult<T> | null
 }
 
 // ─── MaterialGeometry ───────────────────────────────────────────────
@@ -194,8 +208,12 @@ export interface TxOptions {
 export interface SelectionStore {
   /** Current selection (reactive) */
   readonly selection: Selection | null
+  /** Identity of the current logical selection across internal rebases. */
+  readonly lineageId: string
   /** Set selection with JSON-safe validation */
   set: (selection: Selection | null) => void
+  /** Reconcile the current selection after a committed document change. */
+  rebase: <T extends JsonValue>(context: SelectionRebaseContext, type?: SelectionType<T>) => void
   /** Subscribe to selection changes. Optional for lightweight mocks. */
   onChange?: (listener: () => void) => () => void
 }

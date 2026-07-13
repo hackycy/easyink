@@ -1,7 +1,8 @@
 import type { MaterialNode } from '@easyink/schema'
+import type { JsonObject } from '@easyink/shared'
 
 /** Selection payload for table cell selection. */
-export interface TableCellPayload {
+export interface TableCellPayload extends JsonObject {
   row: number
   col: number
 }

@@ -1,4 +1,4 @@
-import type { BehaviorContext, BehaviorEvent, BehaviorRegistration, EditingSessionRef, GeometryService, MaterialGeometry, SelectionStore, SurfacesAPI, TransactionAPI } from '@easyink/core'
+import type { BehaviorContext, BehaviorEvent, BehaviorRegistration, EditingSessionRef, GeometryService, MaterialGeometry, Selection, SelectionStore, SurfacesAPI, TransactionAPI } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import { describe, expect, it, vi } from 'vitest'
 import { dispatchBehaviorEvent } from './behavior-dispatcher'
@@ -19,8 +19,8 @@ function makeNode(): MaterialNode {
   }
 }
 
-function makeContext(selection: { type: string, nodeId: string, payload: unknown } | null = null): Omit<BehaviorContext, 'event' | 'meta'> {
-  const selectionStore: SelectionStore = { selection, set: vi.fn() }
+function makeContext(selection: Selection | null = null): Omit<BehaviorContext, 'event' | 'meta'> {
+  const selectionStore: SelectionStore = { selection, lineageId: 'selection-1', set: vi.fn(), rebase: vi.fn() }
   return {
     selection,
     node: makeNode(),

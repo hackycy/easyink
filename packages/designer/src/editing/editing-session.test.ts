@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { EditingSession } from './editing-session'
 import { createSelectionStore } from './selection-store'
 
-function makeSession(selectionTypes?: SelectionType<unknown>[]) {
+function makeSession(selectionTypes?: SelectionType[]) {
   const node: MaterialNode = {
     id: 'n1',
     type: 'test',
@@ -76,10 +76,10 @@ describe('editingSession', () => {
       ...selection,
       payload: { row: 0, col: 0 },
     }))
-    const selectionType: SelectionType<unknown> = {
+    const selectionType: SelectionType = {
       id: 'table.cell',
       resolveLocation: () => [],
-      rebase,
+      rebasePropertyChange: rebase,
     }
     const { session, selectionStore } = makeSession([selectionType])
     const before = { id: 'n1' } as MaterialNode
@@ -100,10 +100,10 @@ describe('editingSession', () => {
   })
 
   it('keeps selection-scoped meta when semantic identity and coordinates are preserved', () => {
-    const selectionType: SelectionType<unknown> = {
+    const selectionType: SelectionType = {
       id: 'table.cell',
       resolveLocation: () => [],
-      rebase: selection => ({ ...selection }),
+      rebasePropertyChange: selection => ({ ...selection }),
     }
     const { session, selectionStore } = makeSession([selectionType])
     const selection = { type: 'table.cell', nodeId: 'n1', payload: { row: 0, col: 0 } }
@@ -120,10 +120,10 @@ describe('editingSession', () => {
   })
 
   it('clears selection-scoped meta when semantic identity changes at the same coordinates', () => {
-    const selectionType: SelectionType<unknown> = {
+    const selectionType: SelectionType = {
       id: 'table.cell',
       resolveLocation: () => [],
-      rebase: selection => ({ selection: { ...selection }, identityChanged: true }),
+      rebasePropertyChange: selection => ({ selection: { ...selection }, identityChanged: true }),
     }
     const { session, selectionStore } = makeSession([selectionType])
     const selection = { type: 'table.cell', nodeId: 'n1', payload: { row: 0, col: 0 } }

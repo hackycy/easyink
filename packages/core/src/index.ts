@@ -94,6 +94,7 @@ export type {
   Selection,
   SelectionDecorationDef,
   SelectionInvalidation,
+  SelectionRebaseContext,
   SelectionRebaseResult,
   SelectionStore,
   SelectionType,
@@ -377,6 +378,8 @@ export type {
   SchemaMigrationFixture,
 } from './schema-adapter'
 export { isInteractable, isSelectable, SelectionModel } from './selection'
+export { rebaseStableIdSelectionRegion } from './selection-region'
+export type { StableIdSelectionRegion } from './selection-region'
 export { defineStandardMaterialManifest } from './standard-material-manifest'
 
 export type { StandardMaterialManifestInput } from './standard-material-manifest'

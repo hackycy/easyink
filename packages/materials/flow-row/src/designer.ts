@@ -13,7 +13,7 @@ import type {
   TransactionAPI,
 } from '@easyink/core'
 import type { BindingRef, MaterialNode } from '@easyink/schema'
-import type { BindingDisplayFormat } from '@easyink/shared'
+import type { BindingDisplayFormat, JsonObject } from '@easyink/shared'
 import type { FlowColumnLayoutRect } from './rendering'
 import type { FlowColumnDef } from './schema'
 import { keyboardCursorMiddleware, selectionMiddleware, undoBoundaryMiddleware } from '@easyink/core'
@@ -73,7 +73,7 @@ const RUNTIME_HEIGHT_CONTROL_POLICY: MaterialControlPolicy = {
   },
 }
 
-interface FlowColumnSelectionPayload {
+interface FlowColumnSelectionPayload extends JsonObject {
   index: number
 }
 
@@ -903,7 +903,7 @@ export function createFlowRowExtension(context: MaterialExtensionContext): Mater
     },
     resolveControlPolicy: () => RUNTIME_HEIGHT_CONTROL_POLICY,
     geometry,
-    selectionTypes: [selectionType as SelectionType<unknown>],
+    selectionTypes: [selectionType as unknown as SelectionType],
     behaviors: [
       selectionMiddleware(),
       undoBoundaryMiddleware({ groupBy: 'flow-row-column' }),

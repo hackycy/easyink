@@ -1,5 +1,5 @@
 import type { BindingRef, DocumentSchema, MaterialNode } from '@easyink/schema'
-import type { BindingDisplayFormat } from '@easyink/shared'
+import type { BindingDisplayFormat, JsonValue } from '@easyink/shared'
 import type { Command } from './command'
 import type { BehaviorRegistration, MaterialGeometry, SelectionDecorationDef, SelectionType, TransactionAPI } from './editing-session'
 import type { BindingExpression } from './material-binding'
@@ -83,7 +83,7 @@ export interface MaterialDesignerExtension {
   /** Geometry protocol: material declares hit-test, layout, and selection-to-rect mapping. */
   geometry?: MaterialGeometry
   /** Selection types this material supports (e.g. 'table.cell'). */
-  selectionTypes?: SelectionType<unknown>[]
+  selectionTypes?: SelectionType<JsonValue>[]
   /** Behavior middleware chain (Koa-style). */
   behaviors?: BehaviorRegistration[]
   /** Selection decoration definitions (framework auto-renders). */

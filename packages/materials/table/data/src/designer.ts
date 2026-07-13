@@ -149,7 +149,7 @@ export function createTableDataExtension(context: MaterialExtensionContext): Mat
       return nodeSignal.subscribe(render)
     },
     geometry: createTableGeometry(delegate),
-    selectionTypes: [createTableCellSelectionType(delegate) as SelectionType<unknown>],
+    selectionTypes: [createTableCellSelectionType(delegate) as unknown as SelectionType],
     behaviors: [
       selectionMiddleware(),
       undoBoundaryMiddleware({ groupBy: 'cell' }),
