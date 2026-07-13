@@ -13,13 +13,17 @@ export class RenderTaskCoordinator {
       throw new Error('RenderTaskCoordinator is disposed')
     if (this.generation >= Number.MAX_SAFE_INTEGER)
       throw new Error('RENDER_TASK_GENERATION_EXHAUSTED')
-    this.controller?.abort('superseded')
-    this.controller = new AbortController()
-    this.generation++
-    return Object.freeze({
-      generation: this.generation,
-      signal: this.controller.signal,
+    const previous = this.controller
+    const controller = new AbortController()
+    const generation = this.generation + 1
+    this.controller = controller
+    this.generation = generation
+    const token = Object.freeze({
+      generation,
+      signal: controller.signal,
     })
+    previous?.abort('superseded')
+    return token
   }
 
   isCurrent(generation: number): boolean {

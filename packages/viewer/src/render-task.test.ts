@@ -20,16 +20,40 @@ describe('renderTaskCoordinator', () => {
     first.signal.addEventListener('abort', () => firstAbortEvents++)
 
     const second = tasks.begin()
+    let secondAbortEvents = 0
+    second.signal.addEventListener('abort', () => secondAbortEvents++)
     const third = tasks.begin()
 
     expect(first.signal.aborted).toBe(true)
     expect(first.signal.reason).toBe('superseded')
     expect(firstAbortEvents).toBe(1)
+    expect(second.signal.aborted).toBe(true)
+    expect(second.signal.reason).toBe('superseded')
+    expect(secondAbortEvents).toBe(1)
     expect(second.generation).toBe(2)
     expect(third.generation).toBe(3)
     expect(tasks.isCurrent(first.generation)).toBe(false)
     expect(tasks.isCurrent(second.generation)).toBe(false)
     expect(tasks.isCurrent(third.generation)).toBe(true)
+  })
+
+  it('aborts every stale token when supersession reenters begin', () => {
+    const tasks = new RenderTaskCoordinator()
+    const first = tasks.begin()
+    let nestedTask: ReturnType<RenderTaskCoordinator['begin']> | undefined
+    first.signal.addEventListener('abort', () => {
+      nestedTask = tasks.begin()
+    })
+
+    const outerTask = tasks.begin()
+    expect(nestedTask).toBeDefined()
+    const nested = nestedTask!
+
+    for (const task of [first, nested, outerTask]) {
+      expect(task.signal.aborted).toBe(!tasks.isCurrent(task.generation))
+    }
+    expect(outerTask.generation).toBe(2)
+    expect(nested.generation).toBe(3)
   })
 
   it('returns a frozen token without freezing or exposing control of its signal', () => {
@@ -49,7 +73,18 @@ describe('renderTaskCoordinator', () => {
     const staleTask = tasks.begin()
     const task = tasks.begin()
     let abortEvents = 0
-    task.signal.addEventListener('abort', () => abortEvents++)
+    let currentDuringAbort: boolean | undefined
+    let reentryError: unknown
+    task.signal.addEventListener('abort', () => {
+      abortEvents++
+      currentDuringAbort = tasks.isCurrent(task.generation)
+      try {
+        tasks.begin()
+      }
+      catch (cause) {
+        reentryError = cause
+      }
+    })
 
     tasks.dispose()
     tasks.dispose()
@@ -57,6 +92,8 @@ describe('renderTaskCoordinator', () => {
     expect(task.signal.aborted).toBe(true)
     expect(task.signal.reason).toBe('disposed')
     expect(abortEvents).toBe(1)
+    expect(currentDuringAbort).toBe(false)
+    expect(reentryError).toEqual(new Error('RenderTaskCoordinator is disposed'))
     expect(tasks.isCurrent(staleTask.generation)).toBe(false)
     expect(tasks.isCurrent(task.generation)).toBe(false)
     expect(tasks.isCurrent(0)).toBe(false)
