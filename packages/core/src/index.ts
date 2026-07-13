@@ -368,6 +368,8 @@ export {
   nodeLocalMatrix,
 } from './matrix-chain'
 export type { Matrix2D } from './matrix-chain'
+export { MeasureService } from './measure-service'
+export type { MeasureRequest } from './measure-service'
 
 export { groupPageLayerPlansByPlacement, PAGE_CONTENT_LAYER_STACK_INDEX, resolvePageLayerPlans, resolvePageLayers, resolvePageLayerStackIndex } from './page-layers'
 export type { PageLayerRenderPlan, PageLayerRenderPlanBuckets, PageLayerTile, ResolvedPageLayer, ResolvedTextWatermarkPageLayer, ResolvePageLayerPlansOptions, TextWatermarkPageLayerPlan } from './page-layers'
