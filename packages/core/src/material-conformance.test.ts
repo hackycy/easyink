@@ -1,5 +1,6 @@
+import type { MaterialNode } from '@easyink/schema'
 import type { MaterialConformanceOptions } from './material-conformance'
-import type { MaterialViewerFacet } from './material-viewer'
+import type { MaterialViewerFacet, ViewerRenderContext } from './material-viewer'
 import { describe, expect, it, vi } from 'vitest'
 import { assertMaterialConformance, compareMaterialConformanceIssues, runMaterialConformance } from './material-conformance'
 import { defineMaterialFacetFactory } from './material-manifest'
@@ -102,6 +103,41 @@ describe('material conformance', () => {
     await expect(assertMaterialConformance(valid, options())).resolves.toBeUndefined()
     const invalid = createTestMaterialManifest({ type: 'no-viewer', viewer: false })
     await expect(assertMaterialConformance(invalid, options())).rejects.toThrow(/CONFORMANCE_VIEWER_REQUIRED \/facets\/viewer:/)
+  })
+
+  it('provides a complete frozen Task 1 render context to viewer conformance', async () => {
+    const manifest = createTestMaterialManifest({
+      type: 'layout-context',
+      defaultModel: { value: 'resolved' },
+      viewer: () => ({
+        capabilities: {},
+        extension: {
+          render: (node: MaterialNode, context: ViewerRenderContext) => {
+            const slot = context.renderSlot('missing')
+            context.renderBudget.reserveNodes('text', 1)
+            if (!Object.isFrozen(context)
+              || context.instanceKey !== node.id
+              || context.layoutPlan.instanceKey !== context.instanceKey
+              || context.layoutPlan.nodeId !== node.id
+              || context.fragmentPlan.sourceInstanceKey !== context.instanceKey
+              || context.fragmentPlan.sourceNodeId !== node.id
+              || context.resolvedModel.value !== 'resolved'
+              || context.pageIndex !== 0
+              || context.unit !== 'mm'
+              || context.renderBudget.nodesUsed !== 1
+              || slot.kind !== 'fragment'
+              || slot.children.length !== 0) {
+              throw new Error('incomplete viewer render context')
+            }
+            return { tree: viewerText('ok') }
+          },
+        },
+      }),
+    })
+
+    const report = await runMaterialConformance(manifest, options())
+
+    expect(report.issues.map(issue => issue.code)).not.toContain('CONFORMANCE_VIEWER_FAILED')
   })
 
   it('reports mount and repeated disposer failures with stable codes', async () => {

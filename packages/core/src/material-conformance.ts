@@ -10,6 +10,7 @@ import { cloneJsonValue } from '@easyink/shared'
 import { cloneMaterialSubgraph, decodeMaterialSemanticPointerValue, formatMaterialIdentityKey, readPointer } from './material-introspection'
 import { compileMaterialProfile, EASYINK_ENGINE_VERSION } from './material-profile'
 import { resolvePropertyAccessor } from './material-properties'
+import { createFallbackViewerRenderContext } from './material-viewer'
 import { assertViewerRenderTree } from './viewer-render-tree'
 
 export interface MaterialConformanceIssue {
@@ -486,14 +487,21 @@ async function checkViewer(state: State): Promise<void> {
       ? await invokeHook(state, state.options.createRenderCapabilities, [facet], state.options) as ViewerRenderCapabilities
       : fallbackCapabilities()
     const node = state.node ?? await normalizedNode(state)
-    const output = await invokeHook(state, facet.extension.render, [node, {
-      data: {},
-      resolvedModel: snapshot(node.model),
+    const context = createFallbackViewerRenderContext({
+      nodeId: node.id,
+      nodeRevision: node.modelVersion,
+      instanceKey: node.id,
+      resolvedModel: snapshot(node.model as Record<string, unknown>),
       pageIndex: 0,
       unit: UNIT,
+      width: node.width,
+      height: node.height,
+      fragmentBox: { x: node.x, y: node.y, width: node.width, height: node.height },
+      data: {},
       zoom: 1,
       capabilities,
-    }], facet.extension) as { tree: ViewerRenderTree }
+    })
+    const output = await invokeHook(state, facet.extension.render, [node, context], facet.extension) as { tree: ViewerRenderTree }
     try {
       await invokeHook(state, validateConformanceViewerTree, [output?.tree])
     }

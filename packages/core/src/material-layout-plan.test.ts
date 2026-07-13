@@ -220,6 +220,50 @@ describe('material layout plan', () => {
     ]))
   })
 
+  it.each([
+    {
+      field: 'slotBoxes',
+      value: { slotId: 'content', slotInstanceKey: 'slot-1', box: { x: 0, y: 0, width: 10, height: 10 }, ownership: 'managed', clip: true },
+    },
+    {
+      field: 'diagnostics',
+      value: { code: 'INFO', severity: 'info', message: 'Valid diagnostic.', instanceKey: 'n1', nodeId: 'n1' },
+    },
+    {
+      field: 'breakOpportunities',
+      value: { id: 'b1', blockOffset: 10, penalty: 0 },
+    },
+  ] as const)('rejects a non-array $field collection even when its content is valid', ({ field, value }) => {
+    const malformed = createPlan({ [field]: value } as never)
+
+    expect(validateMaterialLayoutPlan(malformed)).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: 'LAYOUT_PLAN_COLLECTION_INVALID',
+        severity: 'error',
+        detail: { field },
+      }),
+    ]))
+  })
+
+  it.each([
+    {
+      field: 'slotBoxes',
+      value: { slotId: 'content', slotInstanceKey: 'slot-1', box: { x: 0, y: 0, width: 10, height: 10 }, ownership: 'managed', clip: true },
+    },
+    {
+      field: 'diagnostics',
+      value: { code: 'INFO', severity: 'info', message: 'Valid diagnostic.', instanceKey: 'n1', nodeId: 'n1' },
+    },
+    {
+      field: 'breakOpportunities',
+      value: { id: 'b1', blockOffset: 10, penalty: 0 },
+    },
+  ] as const)('rejects direct freeze of a non-array $field collection with a domain error', ({ field, value }) => {
+    const malformed = createPlan({ [field]: value } as never)
+
+    expect(() => freezeMaterialLayoutPlan(malformed)).toThrowError('MATERIAL_LAYOUT_PLAN_COLLECTION_INVALID')
+  })
+
   it('publishes a recursively frozen isolated copy of material facts', () => {
     const source = {
       instanceKey: 'n1',

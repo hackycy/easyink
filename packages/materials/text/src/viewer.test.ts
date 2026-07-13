@@ -1,4 +1,5 @@
 import type { ViewerElementTree, ViewerTextTree } from '@easyink/core'
+import { createTestViewerRenderContext } from '@easyink/core/testing'
 import { describe, expect, it } from 'vitest'
 import { createTextNode, migrateTextModelV0ToV1 } from './schema'
 import { getTextRenderSize, measureText, renderText } from './viewer'
@@ -33,6 +34,24 @@ describe('renderText', () => {
     const tree = renderText(node).tree as ViewerElementTree
     const span = tree.children[0] as ViewerElementTree
     expect((span.children[0] as ViewerTextTree).value).toBe('<b>unsafe</b>')
+  })
+
+  it('uses the unit from a real viewer render context', () => {
+    const node = createTextNode({
+      model: {
+        fontSize: 12,
+        borderWidth: 1,
+        borderType: 'solid',
+        borderColor: '#000000',
+      },
+    })
+    const context = createTestViewerRenderContext({ unit: 'pt' })
+
+    const tree = renderText(node, context).tree as ViewerElementTree
+    const span = tree.children[0] as ViewerElementTree
+
+    expect(tree.style?.border).toBe('1pt solid #000000')
+    expect(span.style?.['font-size']).toBe('12pt')
   })
 
   it('strips legacy autoWrap without changing the current wrap mode', () => {

@@ -70,5 +70,7 @@ export function getTextRenderSize(node: MaterialNode, _context?: ViewerRenderCon
 }
 
 function isViewerRenderContext(value: unknown): value is ViewerRenderContext {
-  return typeof value === 'object' && value !== null && 'unit' in value && 'resolvedProps' in value
+  return typeof value === 'object' && value !== null
+    && 'unit' in value && typeof value.unit === 'string'
+    && 'data' in value && typeof value.data === 'object' && value.data !== null
 }

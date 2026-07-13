@@ -326,7 +326,7 @@ export function validateMaterialLayoutPlan<TPayload>(plan: MaterialLayoutPlan<TP
   validateBox(plan, diagnostics, 'contentBox', plan.contentBox)
 
   const slotInstanceKeys = new Set<string>()
-  const slotBoxes: readonly unknown[] = Array.isArray(plan.slotBoxes) ? plan.slotBoxes : [plan.slotBoxes]
+  const slotBoxes = readPlanCollection(plan, 'slotBoxes', diagnostics)
   for (const candidate of slotBoxes) {
     const slot = isRecord(candidate) ? candidate : {}
     const slotId = slot.slotId
@@ -370,7 +370,7 @@ export function validateMaterialLayoutPlan<TPayload>(plan: MaterialLayoutPlan<TP
     }
   }
 
-  const planDiagnostics: readonly unknown[] = Array.isArray(plan.diagnostics) ? plan.diagnostics : [plan.diagnostics]
+  const planDiagnostics = readPlanCollection(plan, 'diagnostics', diagnostics)
   for (const candidate of planDiagnostics) {
     const diagnostic = isRecord(candidate) ? candidate : {}
     try {
@@ -393,9 +393,7 @@ export function validateMaterialLayoutPlan<TPayload>(plan: MaterialLayoutPlan<TP
 
   let previous = Number.NEGATIVE_INFINITY
   const breakIds = new Set<string>()
-  const breakOpportunities: readonly unknown[] = Array.isArray(plan.breakOpportunities)
-    ? plan.breakOpportunities
-    : [plan.breakOpportunities]
+  const breakOpportunities = readPlanCollection(plan, 'breakOpportunities', diagnostics)
   for (const candidate of breakOpportunities) {
     const opportunity = isRecord(candidate) ? candidate : {}
     const id = opportunity.id
@@ -435,6 +433,7 @@ export function validateMaterialLayoutPlan<TPayload>(plan: MaterialLayoutPlan<TP
 export function freezeMaterialLayoutPlan<TPayload = JsonValue>(
   plan: MaterialLayoutPlan<TPayload>,
 ): MaterialLayoutPlan<TPayload> {
+  assertMaterialLayoutPlanCollections(plan)
   assertDiagnosticDetails(plan.diagnostics)
   const payload = plan.payload === undefined
     ? {}
@@ -484,6 +483,31 @@ function validateBox(
     `${name} contains a non-finite value or negative size.`,
     { name, values: readBoxValues(box).map(String) },
   ))
+}
+
+type MaterialLayoutPlanCollectionField = 'slotBoxes' | 'diagnostics' | 'breakOpportunities'
+
+function readPlanCollection<TPayload>(
+  plan: MaterialLayoutPlan<TPayload>,
+  field: MaterialLayoutPlanCollectionField,
+  diagnostics: LayoutPlanDiagnostic[],
+): readonly unknown[] {
+  const value: unknown = plan[field]
+  if (Array.isArray(value))
+    return value
+
+  diagnostics.push(createDiagnostic(
+    plan,
+    'LAYOUT_PLAN_COLLECTION_INVALID',
+    'Layout plan collections must be arrays.',
+    { field },
+  ))
+  return []
+}
+
+function assertMaterialLayoutPlanCollections<TPayload>(plan: MaterialLayoutPlan<TPayload>): void {
+  if (!Array.isArray(plan.slotBoxes) || !Array.isArray(plan.diagnostics) || !Array.isArray(plan.breakOpportunities))
+    throw new Error('MATERIAL_LAYOUT_PLAN_COLLECTION_INVALID')
 }
 
 function isValidBox(box: unknown): box is Readonly<Rect> {

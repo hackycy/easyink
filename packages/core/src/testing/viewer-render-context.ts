@@ -1,10 +1,5 @@
-import type { MaterialRenderBudgetToken, MaterialRenderNodeKind } from '../material-layout-plan'
 import type { ViewerRenderContext } from '../material-viewer'
-import {
-  createLayoutConstraintKey,
-  createNonFragmentingMaterialPlans,
-} from '../material-layout-plan'
-import { viewerFragment } from '../viewer-render-tree'
+import { createFallbackViewerRenderContext } from '../material-viewer'
 
 const DEFAULT_MAX_NODES = 10_000
 
@@ -14,56 +9,33 @@ export function createTestViewerRenderContext(
   const resolvedModel = overrides.resolvedModel ?? {}
   const instanceKey = overrides.instanceKey ?? 'test-instance'
   const pageIndex = overrides.pageIndex ?? 0
-  const plans = createNonFragmentingMaterialPlans({
+  const unit = resolveLayoutUnit(overrides.unit ?? 'mm')
+  const context = createFallbackViewerRenderContext({
     instanceKey,
     nodeId: 'test-node',
     nodeRevision: 0,
-    constraintKey: createLayoutConstraintKey({
-      availableWidth: 1,
-      availableHeight: 1,
-      unit: 'mm',
-      writingMode: 'horizontal-tb',
-    }),
-    pageIndex,
-    borderBox: { x: 0, y: 0, width: 1, height: 1 },
-    fragmentBox: { x: 0, y: 0, width: 1, height: 1 },
-  })
-  const context: ViewerRenderContext = {
-    data: {},
     resolvedModel,
-    instanceKey,
-    layoutPlan: plans.layoutPlan,
-    fragmentPlan: plans.fragmentPlan,
-    renderSlot: slotInstanceKey => viewerFragment(
-      context.layoutPlan.slotBoxes.some(slot => slot.slotInstanceKey === slotInstanceKey)
-        ? context.slotOutputs?.[slotInstanceKey] ?? []
-        : [],
-    ),
-    renderBudget: createTestRenderBudget(),
     pageIndex,
-    unit: 'mm',
+    unit,
+    width: 1,
+    height: 1,
+    fragmentBox: { x: 0, y: 0, width: 1, height: 1 },
+    data: overrides.data ?? {},
     zoom: 1,
-    capabilities: {
+    capabilities: overrides.capabilities ?? {
       sanitizeMarkup() {
         throw new Error('TEST_VIEWER_SANITIZED_MARKUP_NOT_CONFIGURED')
       },
     },
-    ...overrides,
-  }
-  return context
+    maxNodes: DEFAULT_MAX_NODES,
+    slotOutputs: overrides.slotOutputs,
+    reportDiagnostic: overrides.reportDiagnostic,
+  })
+  return Object.freeze({ ...context, ...overrides })
 }
 
-function createTestRenderBudget(): MaterialRenderBudgetToken {
-  let nodesUsed = 0
-  return Object.freeze({
-    maxNodes: DEFAULT_MAX_NODES,
-    get nodesUsed() {
-      return nodesUsed
-    },
-    reserveNodes(_kind: MaterialRenderNodeKind, count: number) {
-      if (!Number.isSafeInteger(count) || count < 0 || nodesUsed + count > DEFAULT_MAX_NODES)
-        throw new Error('TEST_VIEWER_RENDER_BUDGET_EXCEEDED')
-      nodesUsed += count
-    },
-  })
+function resolveLayoutUnit(unit: string): 'mm' | 'pt' | 'px' | 'inch' {
+  if (unit === 'mm' || unit === 'pt' || unit === 'px' || unit === 'inch')
+    return unit
+  throw new Error(`TEST_VIEWER_LAYOUT_UNIT_UNSUPPORTED: ${unit}`)
 }
