@@ -171,6 +171,7 @@ export type {
   MaterialPortsBindingDefinition,
 } from './material-binding'
 export { assertMaterialBindingValue, resolveMaterialBindingPortPolicy } from './material-binding'
+
 export { assertMaterialConformance, runMaterialConformance } from './material-conformance'
 export type { MaterialConformanceIssue, MaterialConformanceOptions, MaterialConformanceReport } from './material-conformance'
 export {
@@ -279,7 +280,6 @@ export {
   walkMaterialNodes,
   writePointer,
 } from './material-introspection'
-
 export { deepFreezeManifest, defineMaterialFacetFactory, defineMaterialManifest, MATERIAL_API_VERSION, MATERIAL_MANIFEST_VERSION } from './material-manifest'
 export type {
   MaterialAIFacet,
@@ -330,6 +330,7 @@ export type {
   PropertyWriteResult,
   TextFilePropertyValueInput,
 } from './material-properties'
+
 export type {
   FragmentPaginateInput,
   FragmentPaginateResult,
@@ -344,6 +345,15 @@ export type {
   ViewerRenderOutput,
   ViewerRenderSize,
 } from './material-viewer'
+export {
+  applyMatrixToPoint,
+  IDENTITY_MATRIX,
+  invertMatrix,
+  matrixToNodeGeometry,
+  multiplyMatrix,
+  nodeLocalMatrix,
+} from './matrix-chain'
+export type { Matrix2D } from './matrix-chain'
 
 export { groupPageLayerPlansByPlacement, PAGE_CONTENT_LAYER_STACK_INDEX, resolvePageLayerPlans, resolvePageLayers, resolvePageLayerStackIndex } from './page-layers'
 export type { PageLayerRenderPlan, PageLayerRenderPlanBuckets, PageLayerTile, ResolvedPageLayer, ResolvedTextWatermarkPageLayer, ResolvePageLayerPlansOptions, TextWatermarkPageLayerPlan } from './page-layers'
