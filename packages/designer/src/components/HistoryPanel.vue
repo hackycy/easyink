@@ -3,9 +3,21 @@ import { nextTick, ref, watchEffect } from 'vue'
 import { useDesignerStore } from '../composables'
 
 const store = useDesignerStore()
-interface HistoryEntry { id: string, type: string, description: string }
+interface HistoryEntry { id: string, type: string, description: string, operationKind?: string }
 
 const TYPE_TO_LOCALE: Record<string, string> = {
+  'material.insert': 'designer.history.addMaterial',
+  'material.drop': 'designer.history.addMaterial',
+  'drag.material': 'designer.history.addMaterial',
+  'clipboard.delete': 'designer.history.removeMaterial',
+  'clipboard.cut': 'designer.history.removeMaterial',
+  'material.delete': 'designer.history.removeMaterial',
+  'toolbar.align': 'designer.history.moveMaterial',
+  'toolbar.distribute': 'designer.history.moveMaterial',
+  'toolbar.layer-up': 'designer.history.updateGeometry',
+  'toolbar.layer-down': 'designer.history.updateGeometry',
+  'toolbar.group': 'designer.history.addElementGroup',
+  'toolbar.ungroup': 'designer.history.removeElementGroup',
   'add-material': 'designer.history.addMaterial',
   'remove-material': 'designer.history.removeMaterial',
   'add-element-group': 'designer.history.addElementGroup',
@@ -39,7 +51,7 @@ function localizeEntry(entry: HistoryEntry): string {
   if (localizedDescription !== entry.description)
     return localizedDescription
 
-  const key = TYPE_TO_LOCALE[entry.type]
+  const key = TYPE_TO_LOCALE[entry.operationKind ?? entry.type]
   return store.t(key ?? entry.description)
 }
 

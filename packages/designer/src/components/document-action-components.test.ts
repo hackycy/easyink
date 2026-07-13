@@ -104,7 +104,7 @@ describe('document action component recipes', () => {
       removeDraftElementGroups(draft, ['missing'])
     }, { label: 'Pure helpers', operation: createDesignerDocumentOperation(store, 'test.helpers', ['node:a', 'node:b', 'node:c'], ['/x', '/zIndex', '/groups'], true) })
 
-    expect(store.getElementById('a')).toMatchObject({ x: 0, zIndex: 2 })
+    expect(store.getElementById('a')).toMatchObject({ x: 0, zIndex: 1 })
     expect(store.getElementById('b')?.x).toBe(0)
     expect(store.schema.groups).toEqual([{ id: 'group', memberIds: ['a', 'b'] }])
   })
@@ -119,11 +119,16 @@ describe('document action component recipes', () => {
     store.documentTransactions.transact((draft) => {
       moveDraftNodesLayer(draft, store, ['a', 'b', 'c'], 'up')
     }, { label: 'Layer up', operation: createDesignerDocumentOperation(store, 'test.layer-up', ['node:a', 'node:b', 'node:c'], ['/zIndex'], false) })
-    expect(store.schema.elements.map(node => node.zIndex)).toEqual([2, 3, 2])
+    expect(store.schema.elements.map(node => node.zIndex)).toEqual([0, 1, 2])
     store.documentTransactions.undo()
     store.documentTransactions.transact((draft) => {
       moveDraftNodesLayer(draft, store, ['a', 'b', 'c'], 'down')
     }, { label: 'Layer down', operation: createDesignerDocumentOperation(store, 'test.layer-down', ['node:a', 'node:b', 'node:c'], ['/zIndex'], false) })
-    expect(store.schema.elements.map(node => node.zIndex)).toEqual([0, -1, 0])
+    expect(store.schema.elements.map(node => node.zIndex)).toEqual([0, 1, 2])
+
+    store.documentTransactions.transact((draft) => {
+      moveDraftNodesLayer(draft, store, ['a', 'b'], 'up')
+    }, { label: 'Block up', operation: createDesignerDocumentOperation(store, 'test.block-up', ['node:a', 'node:b'], ['/zIndex'], false) })
+    expect(store.schema.elements.map(node => node.zIndex)).toEqual([1, 2, 0])
   })
 })

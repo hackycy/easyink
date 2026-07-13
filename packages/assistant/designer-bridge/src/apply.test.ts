@@ -1,7 +1,7 @@
 import type { AssistantPatchOperation, AssistantResult } from '@easyink/assistant-capabilities'
 import { createTestCompiledMaterialProfile, createTestMaterialManifest } from '@easyink/core/testing'
 import { DesignerStore } from '@easyink/designer'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   applyAssistantDataSourceToDesigner,
   applyAssistantPatchToDesigner,
@@ -60,11 +60,16 @@ describe('assistant designer bridge apply', () => {
     const initial = Object.assign(createSchema([]), { meta: { title: 'old' }, compat: { legacy: true }, extensions: { stale: true } })
     const store = createStore(initial)
     const before = structuredClone(store.schema)
+    const cancelGestures = vi.fn()
+    const exitEditing = vi.fn()
+    Object.assign(store, { gestures: { cancelActive: cancelGestures }, editingSession: { exitAll: exitEditing } })
     const result = createResult()
 
     applyAssistantResultToDesigner(store, result)
 
     expect(store.schema.elements[0]?.id).toBe('title')
+    expect(cancelGestures).toHaveBeenCalledOnce()
+    expect(exitEditing).toHaveBeenCalledOnce()
     expect(store.schema.meta).toBeUndefined()
     expect(store.schema.compat).toBeUndefined()
     expect(store.schema.extensions).toMatchObject({ assistant: expect.any(Object) })
@@ -72,6 +77,7 @@ describe('assistant designer bridge apply', () => {
     expect(store.dataSourceRegistry.getSources()[0]?.id).toBe('orders')
     expect(rollbackAssistantDesigner(store)).toBe(true)
     expect(store.schema).toEqual(before)
+    expect(store.dataSourceRegistry.getSourceSync('orders')).toBeUndefined()
   })
 
   it('does not undo an ordinary edit when assistant rollback is no longer the top history entry', () => {
@@ -83,6 +89,28 @@ describe('assistant designer bridge apply', () => {
 
     expect(rollbackAssistantDesigner(store)).toBe(false)
     expect(store.schema.elements[0]?.model.text).toBe('Ordinary')
+  })
+
+  it('replays datasource registration across undo and redo and restores overwritten descriptors', async () => {
+    const store = createStore(createSchema([]))
+    const previous = { id: 'orders', name: 'Previous orders', fields: [] }
+    store.dataSourceRegistry.registerSource(previous)
+    applyAssistantDataSourceToDesigner(store, createResult().dataSource!)
+    expect(store.dataSourceRegistry.getSourceSync('orders')?.name).toBe('orders')
+    store.documentTransactions.undo()
+    await Promise.resolve()
+    expect(store.dataSourceRegistry.getSourceSync('orders')).toBe(previous)
+    store.documentTransactions.redo()
+    await Promise.resolve()
+    expect(store.dataSourceRegistry.getSourceSync('orders')?.name).toBe('orders')
+  })
+
+  it('does not mutate datasource registry when an active preview rejects apply', () => {
+    const store = createStore(createSchema([]))
+    const preview = store.documentTransactions.beginPreview({ label: 'Preview', operation: { kind: 'test.preview', sessionPath: [], targetIds: ['document'], fieldPaths: ['/page'], selectionLineage: null, structural: false } })
+    expect(() => applyAssistantDataSourceToDesigner(store, createResult().dataSource!)).toThrow()
+    expect(store.dataSourceRegistry.getSourceSync('orders')).toBeUndefined()
+    preview.cancel()
   })
 })
 

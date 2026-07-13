@@ -44,7 +44,7 @@ describe('documentTransactionEngine', () => {
     }, { label: 'Move selection', operation: moveOperation })
 
     expect(store.document.elements.map(node => node.x)).toEqual([20, 25])
-    expect(engine.historyEntries).toEqual([{ id: 'change-1', type: 'document-change', description: 'Move selection' }])
+    expect(engine.historyEntries).toEqual([{ id: 'change-1', type: 'document-change', description: 'Move selection', operationKind: 'geometry.move' }])
     engine.undo()
     expect(store.document.elements.map(node => node.x)).toEqual([0, 5])
     engine.redo()

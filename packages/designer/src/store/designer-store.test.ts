@@ -2,10 +2,28 @@ import type { DocumentStoreEvent, FontProvider, MaterialDesignerExtension, Schem
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import { createTestMaterialManifest } from '@easyink/core/testing'
 import { describe, expect, it, vi } from 'vitest'
+import { computed, reactive } from 'vue'
 import { createDesignerTestManifest, createDesignerTestProfile } from '../testing/material-profile'
 import { DesignerStore } from './designer-store'
 
 describe('designer store schema initialization', () => {
+  it('invalidates Vue computed reads for commit, undo, and redo without selection changes', async () => {
+    const store = reactive(new DesignerStore({ elements: [createNode('node')] }, undefined, undefined, runtimeWith(boxProfile()))) as unknown as DesignerStore
+    const x = computed(() => store.getElementById('node')?.x)
+    expect(x.value).toBe(0)
+    store.documentTransactions.transact((draft) => {
+      draft.elements[0]!.x = 12
+    }, { label: 'Move', operation: { kind: 'test.move', sessionPath: [], targetIds: ['node:node'], fieldPaths: ['/x'], selectionLineage: null, structural: false } })
+    await Promise.resolve()
+    expect(x.value).toBe(12)
+    store.documentTransactions.undo()
+    await Promise.resolve()
+    expect(x.value).toBe(0)
+    store.documentTransactions.redo()
+    await Promise.resolve()
+    expect(x.value).toBe(12)
+  })
+
   it('normalizes an empty schema input to a complete document schema', () => {
     const store = new DesignerStore({})
 

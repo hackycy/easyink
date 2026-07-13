@@ -6,7 +6,7 @@ import type { DesignerRuntimeConfig } from '../runtime-config'
 import type { DesignerInteractionProvider, LocaleMessageRegistration, LocaleMessages, PreferenceProvider, SnapLine, StatusBarState } from '../types'
 import { DocumentStore as CoreDocumentStore, DocumentTransactionEngine as CoreDocumentTransactionEngine, MaterialFacetHost as CoreMaterialFacetHost, loadDocumentWithProfile, SelectionModel, validateDocumentWithProfile } from '@easyink/core'
 import { DataSourceRegistry } from '@easyink/datasource'
-import { markRaw } from 'vue'
+import { markRaw, shallowReactive } from 'vue'
 import { EditingSessionManager } from '../editing/editing-session-manager'
 import { GestureCoordinator } from '../editing/gesture-coordinator'
 import { DesignerInteractionService } from '../interactions/interaction-service'
@@ -36,7 +36,7 @@ export class DesignerStore {
   private readonly designerFacetLocaleDisposers = new WeakMap<object, () => void>()
   private readonly designerFacetLocaleCleanups = new Set<() => void>()
   // ─── Template state (enters Schema + command history) ─────────
-  private documentViewRevision = 0
+  private readonly documentViewSignal = shallowReactive({ revision: 0 })
   private _materialDiagnostics: readonly MaterialLoadDiagnostic[] = Object.freeze([])
   private _materialNodeStates: ReadonlyMap<string, MaterialNodeLoadState> = new Map()
   private disposeDocumentSubscription?: () => void
@@ -145,7 +145,7 @@ export class DesignerStore {
     this.disposeDocumentSubscription = this.documentStore.subscribe((event) => {
       if (this.destroyed)
         return
-      this.documentViewRevision += 1
+      this.documentViewSignal.revision += 1
       if (event.kind !== 'preview' && event.kind !== 'preview-cancel' && event.document === this.documentStore.committedDocument) {
         this.selection.reconcile(event.index.nodeIds())
       }
@@ -174,7 +174,7 @@ export class DesignerStore {
   // ─── Schema access ────────────────────────────────────────────
 
   get schema(): DocumentSchema {
-    void this.documentViewRevision
+    void this.documentViewSignal.revision
     return this.documentStore.document
   }
 
@@ -383,6 +383,7 @@ export class DesignerStore {
   }
 
   getElementById(id: string): MaterialNode | undefined {
+    void this.documentViewSignal.revision
     return this.documentStore.index.getNode(id)
   }
 

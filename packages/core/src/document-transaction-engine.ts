@@ -94,6 +94,7 @@ export class DocumentTransactionEngine implements TransactionAPI {
       id: entry.changeSet.id,
       type: 'document-change' as const,
       description: entry.changeSet.label,
+      operationKind: entry.changeSet.operation.kind,
     }))
   }
 

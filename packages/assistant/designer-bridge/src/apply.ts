@@ -13,6 +13,10 @@ interface AssistantDesignerExtension {
 }
 
 const lastAssistantApplyChangeIds = new WeakMap<object, string>()
+type AssistantDataSource = NonNullable<AssistantResult['dataSource']>
+interface DataSourceHistoryEntry { sourceId: string, before?: AssistantDataSource, after: AssistantDataSource }
+const dataSourceHistory = new WeakMap<object, Map<string, DataSourceHistoryEntry>>()
+const dataSourceSubscriptions = new WeakSet<object>()
 
 export function applyAssistantResultToDesigner(
   store: ContributionContext['store'],
@@ -21,6 +25,7 @@ export function applyAssistantResultToDesigner(
   const beforeApplySchema = cloneJson(store.schema)
   const schema = admitAssistantSchema(store, result.schema)
   const applyToken = `${result.id}:${Date.now()}`
+  prepareAssistantReplacement(store)
   store.documentTransactions.markHistoryBarrier()
   const change = store.documentTransactions.transact((draft) => {
     replaceDraftDocument(draft, schema)
@@ -40,9 +45,8 @@ export function applyAssistantResultToDesigner(
   })
   if (change)
     lastAssistantApplyChangeIds.set(store, change.id)
-  if (result.dataSource) {
-    store.dataSourceRegistry.registerSource(result.dataSource)
-  }
+  if (result.dataSource && change)
+    recordDataSourceChange(store, change.id, result.dataSource)
   store.markDraftModified()
 }
 
@@ -56,6 +60,7 @@ export function applyAssistantPatchToDesigner(
   const nextSchema = applyAssistantPatch(beforeApplySchema as unknown as Record<string, unknown>, operations)
   const schema = admitAssistantSchema(store, nextSchema)
   const applyToken = `patch:${Date.now()}`
+  prepareAssistantReplacement(store)
   store.documentTransactions.markHistoryBarrier()
   const change = store.documentTransactions.transact((draft) => {
     replaceDraftDocument(draft, schema)
@@ -92,8 +97,7 @@ export function applyAssistantDataSourceToDesigner(
   dataSource: NonNullable<AssistantResult['dataSource']>,
 ): void {
   const beforeApplySchema = cloneJson(store.schema)
-  store.dataSourceRegistry.registerSource(dataSource)
-  store.documentTransactions.transact((draft) => {
+  const change = store.documentTransactions.transact((draft) => {
     draft.extensions = {
       ...(draft.extensions ?? {}),
       assistant: {
@@ -107,6 +111,8 @@ export function applyAssistantDataSourceToDesigner(
     label: 'Assistant data source',
     operation: { kind: 'assistant.data-source', sessionPath: [], targetIds: ['document'], fieldPaths: ['/extensions/assistant'], selectionLineage: null, structural: false },
   })
+  if (change)
+    recordDataSourceChange(store, change.id, dataSource)
   store.markDraftModified()
 }
 
@@ -121,6 +127,7 @@ export function rollbackAssistantDesigner(store: ContributionContext['store']): 
   if (!top || !expectedChangeId || top.id !== expectedChangeId)
     return false
   store.documentTransactions.undo()
+  restoreDataSourceForChange(store, expectedChangeId, 'undo')
   lastAssistantApplyChangeIds.delete(store)
   store.markDraftModified()
   return true
@@ -131,6 +138,40 @@ function replaceDraftDocument(draft: DocumentSchemaInput, schema: DocumentSchema
   for (const key of Object.keys(target))
     delete target[key]
   Object.assign(target, cloneJson(schema))
+}
+
+function recordDataSourceChange(store: ContributionContext['store'], changeId: string, source: AssistantDataSource): void {
+  const history = dataSourceHistory.get(store) ?? new Map<string, DataSourceHistoryEntry>()
+  dataSourceHistory.set(store, history)
+  history.set(changeId, { sourceId: source.id, before: store.dataSourceRegistry.getSourceSync(source.id) as AssistantDataSource | undefined, after: source })
+  store.dataSourceRegistry.registerSource(source)
+  if (dataSourceSubscriptions.has(store))
+    return
+  dataSourceSubscriptions.add(store)
+  store.documentStore.subscribe((event) => {
+    if ((event.kind === 'undo' || event.kind === 'redo') && event.changeSet)
+      restoreDataSourceForChange(store, event.changeSet.id, event.kind)
+  })
+}
+
+function prepareAssistantReplacement(store: ContributionContext['store']): void {
+  const lifecycle = store as ContributionContext['store'] & {
+    gestures?: { cancelActive: () => void }
+    editingSession?: { exitAll: () => void }
+  }
+  lifecycle.gestures?.cancelActive()
+  lifecycle.editingSession?.exitAll()
+}
+
+function restoreDataSourceForChange(store: ContributionContext['store'], changeId: string, direction: 'undo' | 'redo'): void {
+  const entry = dataSourceHistory.get(store)?.get(changeId)
+  if (!entry)
+    return
+  const source = direction === 'undo' ? entry.before : entry.after
+  if (source)
+    store.dataSourceRegistry.registerSource(source)
+  else
+    store.dataSourceRegistry.unregisterSource(entry.sourceId)
 }
 
 function cloneJson<T>(value: T): T {

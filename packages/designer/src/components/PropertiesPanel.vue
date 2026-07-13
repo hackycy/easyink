@@ -518,7 +518,7 @@ function previewGeometry(key: string, value: number) {
   propertyPreview.preview(`geometry:${key}`, {
     label: key,
     mergeKey: `geometry:${el.id}:${key}`,
-    operation: { kind: 'geometry.property', sessionPath: [], targetIds: [`node:${el.id}`], fieldPaths: [`/${key}`], selectionLineage: null, structural: false },
+    operation: createDesignerDocumentOperation(store, 'geometry.property', [`node:${el.id}`], [`/${key}`], false),
   }, (preview) => {
     if (!preview.replaceNode)
       throw new Error('Preview transaction does not support node-scoped replacement')

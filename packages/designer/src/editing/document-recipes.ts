@@ -162,18 +162,25 @@ export function distributeDraftNodesHorizontally(draft: DocumentSchema, store: P
 }
 
 export function moveDraftNodesLayer(draft: DocumentSchema, store: Pick<DesignerStore, 'materialProfile'>, nodeIds: readonly string[], direction: 'up' | 'down'): void {
-  const zById = new Map(draft.elements.map(item => [item.id, item.zIndex ?? 0]))
-  const updates = new Map<string, number>()
-  for (const id of nodeIds) {
-    requireDocumentNode(draft, store.materialProfile, id)
-    const current = zById.get(id) ?? 0
-    const candidates = draft.elements.filter(item => direction === 'up' ? (item.zIndex ?? 0) > current : (item.zIndex ?? 0) < current)
-      .sort((left, right) => direction === 'up' ? (left.zIndex ?? 0) - (right.zIndex ?? 0) : (right.zIndex ?? 0) - (left.zIndex ?? 0))
-    if (candidates[0])
-      updates.set(id, (zById.get(candidates[0].id) ?? 0) + (direction === 'up' ? 1 : -1))
-  }
-  for (const [id, zIndex] of updates)
-    requireDocumentNode(draft, store.materialProfile, id).zIndex = zIndex
+  const selectedIds = new Set(nodeIds)
+  nodeIds.forEach(id => requireDocumentNode(draft, store.materialProfile, id))
+  const ordered = draft.elements.map((node, index) => ({ node, index }))
+    .sort((left, right) => (left.node.zIndex ?? 0) - (right.node.zIndex ?? 0) || left.index - right.index)
+  const selected = ordered.filter(item => selectedIds.has(item.node.id))
+  if (selected.length === 0)
+    return
+  const firstSelectedIndex = ordered.findIndex(item => selectedIds.has(item.node.id))
+  const unselected = ordered.filter(item => !selectedIds.has(item.node.id))
+  const unselectedBefore = ordered.slice(0, firstSelectedIndex).filter(item => !selectedIds.has(item.node.id)).length
+  const insertionIndex = Math.max(0, Math.min(unselected.length, unselectedBefore + (direction === 'up' ? 1 : -1)))
+  const nextOrder = [...unselected]
+  nextOrder.splice(insertionIndex, 0, ...selected)
+  const levels = ordered.map(item => item.node.zIndex ?? 0)
+  for (let index = 1; index < levels.length; index++)
+    levels[index] = Math.max(levels[index]!, levels[index - 1]! + 1)
+  nextOrder.forEach((item, index) => {
+    item.node.zIndex = levels[index]
+  })
 }
 
 export function addDraftElementGroup(draft: DocumentSchema, group: NonNullable<DocumentSchema['groups']>[number]): void {

@@ -76,7 +76,7 @@ export function createClipboardActions(
   }
 
   function copySelection() {
-    const nodes = snapshotSelectedNodes().filter(isInteractable)
+    const nodes = normalizeDocumentNodeRoots(snapshotSelectedNodes().filter(isInteractable))
     if (nodes.length === 0)
       return
     store.clipboard = cloneNodes(nodes, false)
@@ -120,7 +120,7 @@ export function createClipboardActions(
   }
 
   function duplicateSelection() {
-    const nodes = snapshotSelectedNodes().filter(isInteractable)
+    const nodes = normalizeDocumentNodeRoots(snapshotSelectedNodes().filter(isInteractable))
     if (nodes.length === 0)
       return
 

@@ -27,7 +27,6 @@ describe('properties panel canonical binding ports', () => {
     const node = profile.createNode(type, { id: type })
     node.bindings[port] = { sourceId: 'orders', sourceName: 'Orders', fieldPath: 'customer/name', fieldLabel: 'Customer Name' }
     const store = storeWith(profile, node)
-    const liveNode = store.getElementById(type)!
     const mounted = mountWithStore(store, PropertiesPanel)
 
     expect(mounted.host.textContent).toContain('Orders')
@@ -38,14 +37,14 @@ describe('properties panel canonical binding ports', () => {
     presetButton(document.body, '1,235').click()
     buttonByText(document.body, 'OK').click()
     await nextTick()
-    expect(liveNode.bindings[port]).toMatchObject({ format: { mode: 'preset', preset: { type: 'number', maximumFractionDigits: 0 } } })
+    expect(store.getElementById(type)!.bindings[port]).toMatchObject({ format: { mode: 'preset', preset: { type: 'number', maximumFractionDigits: 0 } } })
 
     buttonByText(mounted.host, 'Unbind').click()
-    expect(liveNode.bindings[port]).toBeUndefined()
+    expect(store.getElementById(type)!.bindings[port]).toBeUndefined()
     if (port !== 'value')
-      expect(liveNode.bindings.value).toBeUndefined()
+      expect(store.getElementById(type)!.bindings.value).toBeUndefined()
     store.documentTransactions.undo()
-    expect(liveNode.bindings[port]).toBeDefined()
+    expect(store.getElementById(type)!.bindings[port]).toBeDefined()
     expect(validateDocumentWithProfile(store.schema, profile).valid).toBe(true)
     mounted.unmount()
   })
@@ -72,24 +71,23 @@ describe('properties panel canonical binding ports', () => {
       mappings: { value: { sourceId: 'sales', sourceName: 'Sales', select: { path: 'rows/amount', label: 'Amount' } } },
     }
     const store = storeWith(profile, node)
-    const liveNode = store.getElementById('chart')!
     const mounted = mountWithStore(store, PropertiesPanel)
 
     expect(mounted.host.textContent).toContain('Sales')
     expect(mounted.host.textContent).toContain('Amount')
-    expect(liveNode.bindings.value).toBeUndefined()
+    expect(store.getElementById('chart')!.bindings.value).toBeUndefined()
 
     configureButton(mounted.host).click()
     await nextTick()
     presetButton(document.body, '1,235').click()
     buttonByText(document.body, 'OK').click()
     await nextTick()
-    expect(liveNode.bindings.dataset).toMatchObject({ mappings: { value: { format: { mode: 'preset', preset: { type: 'number' } } } } })
+    expect(store.getElementById('chart')!.bindings.dataset).toMatchObject({ mappings: { value: { format: { mode: 'preset', preset: { type: 'number' } } } } })
 
     buttonByText(mounted.host, 'Clear').click()
-    expect(liveNode.bindings.dataset).toBeUndefined()
+    expect(store.getElementById('chart')!.bindings.dataset).toBeUndefined()
     store.documentTransactions.undo()
-    expect(liveNode.bindings.dataset).toBeDefined()
+    expect(store.getElementById('chart')!.bindings.dataset).toBeDefined()
     expect(validateDocumentWithProfile(store.schema, profile).valid).toBe(true)
     mounted.unmount()
   })
