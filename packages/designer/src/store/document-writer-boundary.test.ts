@@ -1,8 +1,11 @@
-// @ts-expect-error The Designer package runtime test intentionally uses Node filesystem APIs.
+// eslint-disable-next-line ts/ban-ts-comment -- Root and package typechecks have different Node type visibility.
+// @ts-ignore The Designer package runtime test intentionally uses Node filesystem APIs.
 import { readdirSync, readFileSync } from 'node:fs'
-// @ts-expect-error The Designer package runtime test intentionally uses Node path APIs.
+// eslint-disable-next-line ts/ban-ts-comment -- Root and package typechecks have different Node type visibility.
+// @ts-ignore The Designer package runtime test intentionally uses Node path APIs.
 import { dirname, extname, relative, resolve } from 'node:path'
-// @ts-expect-error The Designer package runtime test intentionally uses Node URL APIs.
+// eslint-disable-next-line ts/ban-ts-comment -- Root and package typechecks have different Node type visibility.
+// @ts-ignore The Designer package runtime test intentionally uses Node URL APIs.
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
@@ -47,6 +50,21 @@ describe('document writer boundary', () => {
       .sort()
 
     expect(importers).toEqual(['document-store.ts', 'document-transaction-engine.ts'])
+  })
+
+  it('does not expose a legacy document writer through public barrels', () => {
+    const core = readFileSync(resolve(CORE_SRC, 'index.ts'), 'utf8')
+    expect(core).not.toMatch(
+      /from\s+['"]\.\/(?:command|commands|patch-command)['"]/,
+    )
+    expect(core).not.toMatch(/\b(?:CommandManager|PatchCommand|AddMaterialCommand|UpdateDocumentCommand|DOCUMENT_STORE_WRITER)\b/)
+
+    for (const file of [resolve(DESIGNER_SRC, 'types.ts'), resolve(DESIGNER_SRC, 'index.ts')]) {
+      const source = readFileSync(file, 'utf8')
+      expect(source).not.toMatch(/\b(?:CommandManager|PatchCommand|createTransactionService|DOCUMENT_STORE_WRITER)\b/)
+      expect(source).not.toMatch(/export[^\n]+commands?/i)
+      expect(source).not.toMatch(/export[^\n]+(?:patches|DocumentStoreWriter|DocumentWriter)/i)
+    }
   })
 })
 

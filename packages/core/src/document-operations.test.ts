@@ -28,8 +28,8 @@ describe('removeDocumentNode', () => {
       ...createDefaultSchema(),
       elements: [owner],
       groups: [
-        { id: 'keep', name: 'Keep', memberIds: ['owner', 'sibling'] },
-        { id: 'prune', name: 'Prune', memberIds: ['nested', 'descendant'] },
+        { id: 'keep', memberIds: ['owner', 'sibling'] },
+        { id: 'prune', memberIds: ['nested', 'descendant'] },
       ],
     }
 
@@ -39,7 +39,7 @@ describe('removeDocumentNode', () => {
     expect(document.elements).toEqual([owner])
     expect(owner.slots.content).toEqual([])
     expect(owner.slots.header).toEqual([sibling])
-    expect(document.groups).toEqual([{ id: 'keep', name: 'Keep', memberIds: ['owner', 'sibling'] }])
+    expect(document.groups).toEqual([{ id: 'keep', memberIds: ['owner', 'sibling'] }])
   })
 
   it('throws without changing the document when the node is missing', () => {
