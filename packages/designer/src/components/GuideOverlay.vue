@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { EditorSurfacePlan } from '@easyink/core'
 import type { RulerCoordinateContext } from './ruler-coordinate'
-import { UpdateGuidesCommand } from '@easyink/core'
 import { computed, ref } from 'vue'
 import { useDesignerStore } from '../composables'
 import {
@@ -86,20 +85,7 @@ const draggingGuide = ref<{
 
 function onGuideDragStart(direction: 'x' | 'y', e: PointerEvent) {
   e.preventDefault()
-
-  // Create a new guide by dragging from ruler
-  const guides = direction === 'x' ? [...guidesX.value] : [...guidesY.value]
-  const newIndex = guides.length
-  guides.push(0)
-
-  // Temporarily add the guide
-  if (direction === 'x') {
-    store.schema.guides.x = guides
-  }
-  else {
-    store.schema.guides.y = guides
-  }
-
+  const newIndex = direction === 'x' ? guidesX.value.length : guidesY.value.length
   draggingGuide.value = { axis: direction, index: newIndex, isNew: true }
   startDrag(direction, newIndex, e, true)
 }
@@ -115,68 +101,57 @@ function onGuidePointerDown(axis: 'x' | 'y', index: number, e: PointerEvent) {
  * Create a guide at a specific position (used for click-on-ruler).
  */
 function createGuideAt(axis: 'x' | 'y', position: number) {
-  const newGuides = { x: [...store.schema.guides.x], y: [...store.schema.guides.y] }
-  if (axis === 'x') {
-    newGuides.x.push(position)
-  }
-  else {
-    newGuides.y.push(position)
-  }
-  const cmd = new UpdateGuidesCommand(store.schema, newGuides)
-  store.commands.execute(cmd)
+  const context = store.documentTransactions.getOperationContext()
+  store.documentTransactions.transact((draft) => {
+    draft.guides[axis].push(position)
+  }, {
+    label: 'Add guide',
+    mergeKey: `guide.add:${axis}`,
+    operation: {
+      kind: 'guide.add',
+      sessionPath: [...context.sessionPath],
+      targetIds: ['document'],
+      fieldPaths: [`/guides/${axis}`],
+      selectionLineage: context.selectionLineage,
+      structural: false,
+    },
+  })
 }
 
 function startDrag(axis: 'x' | 'y', index: number, e: PointerEvent, isNew: boolean) {
-  const el = (e.currentTarget || e.target) as HTMLElement
-  el.setPointerCapture(e.pointerId)
-
-  const origGuides = { x: [...store.schema.guides.x], y: [...store.schema.guides.y] }
-  if (isNew) {
-    if (axis === 'x') {
-      origGuides.x = origGuides.x.slice(0, -1)
-    }
-    else {
-      origGuides.y = origGuides.y.slice(0, -1)
-    }
-  }
-
   const coordinateContext = getRulerCoordinateContext()
   if (!coordinateContext) {
-    store.schema.guides.x = [...origGuides.x]
-    store.schema.guides.y = [...origGuides.y]
     draggingGuide.value = null
     return
   }
   const activeCoordinateContext = coordinateContext
-
-  updateGuidePosition(e)
-
-  function onMove(ev: PointerEvent) {
-    updateGuidePosition(ev)
-  }
-
-  function onUp() {
-    el.removeEventListener('pointermove', onMove)
-    el.removeEventListener('pointerup', onUp)
-
-    draggingGuide.value = null
-
-    const newGuides = { x: [...store.schema.guides.x], y: [...store.schema.guides.y] }
-    store.schema.guides.x = [...origGuides.x]
-    store.schema.guides.y = [...origGuides.y]
-
-    const cmd = new UpdateGuidesCommand(store.schema, newGuides)
-    store.commands.execute(cmd)
-  }
-
-  el.addEventListener('pointermove', onMove)
-  el.addEventListener('pointerup', onUp)
-
-  function updateGuidePosition(ev: PointerEvent) {
-    const position = rulerClientPointToUnit(activeCoordinateContext, axis === 'x' ? 'horizontal' : 'vertical', ev.clientX, ev.clientY)
-    const guides = axis === 'x' ? store.schema.guides.x : store.schema.guides.y
-    guides[index] = position
-  }
+  const context = store.documentTransactions.getOperationContext()
+  store.gestures.begin({
+    target: window as unknown as HTMLElement,
+    event: e,
+    label: isNew ? 'Add guide' : 'Move guide',
+    mergeKey: `guide.${isNew ? 'add' : 'move'}:${axis}:${index}`,
+    operation: {
+      kind: isNew ? 'guide.add' : 'guide.move',
+      sessionPath: [...context.sessionPath],
+      targetIds: ['document'],
+      fieldPaths: [`/guides/${axis}`],
+      selectionLineage: context.selectionLineage,
+      structural: false,
+    },
+    update(ev, preview) {
+      const position = rulerClientPointToUnit(activeCoordinateContext, axis === 'x' ? 'horizontal' : 'vertical', ev.clientX, ev.clientY)
+      preview.replace((draft) => {
+        if (isNew)
+          draft.guides[axis].push(position)
+        else
+          draft.guides[axis][index] = position
+      })
+    },
+    onFinish() {
+      draggingGuide.value = null
+    },
+  })
 }
 
 function getRulerCoordinateContext(): RulerCoordinateContext | null {

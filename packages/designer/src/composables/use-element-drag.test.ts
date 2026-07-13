@@ -3,10 +3,18 @@
  */
 import type { MaterialNode, PageSchema } from '@easyink/schema'
 import type { ElementDragContext } from './use-element-drag'
-import { MoveMaterialCommand } from '@easyink/core'
-import { describe, expect, it, vi } from 'vitest'
+import { createTestMaterialManifest } from '@easyink/core/testing'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DesignerStore } from '../store/designer-store'
+import { createDesignerTestProfile } from '../testing/material-profile'
 import { useElementDrag } from './use-element-drag'
+
+const profile = createDesignerTestProfile([createTestMaterialManifest({ type: 'rect' })])
+
+afterEach(() => {
+  window.dispatchEvent(pdEvent('pointercancel', 0, 0))
+  document.body.replaceChildren()
+})
 
 function makeNode(id: string, x: number, y: number, w = 50, h = 50): MaterialNode {
   return {
@@ -30,17 +38,13 @@ function makeStore(elements: MaterialNode[], selected: string[], page: PageSchem
     page,
     guides: { x: [], y: [] },
     elements,
-  })
+  }, undefined, undefined, { materials: { profile } })
   store.workbench.snap.enabled = true
   store.workbench.snap.gridSnap = false
   store.workbench.snap.guideSnap = false
   store.workbench.snap.elementSnap = false
   store.workbench.snap.threshold = 3
   store.selection.selectMultiple(selected)
-  vi.spyOn(store.commands, 'execute')
-  vi.spyOn(store.commands, 'beginTransaction')
-  vi.spyOn(store.commands, 'commitTransaction')
-  vi.spyOn(store.commands, 'rollbackTransaction')
   return store
 }
 
@@ -108,8 +112,9 @@ describe('useElementDrag', () => {
     expect(live(store, 'n1').y).toBe(60)
 
     window.dispatchEvent(pdEvent('pointerup', 30, 40))
-    expect(store.commands.execute).toHaveBeenCalledOnce()
-    expect(vi.mocked(store.commands.execute).mock.calls[0]![0]).toBeInstanceOf(MoveMaterialCommand)
+    expect(store.documentTransactions.cursor).toBe(1)
+    store.documentTransactions.undo()
+    expect(live(store, 'n1')).toMatchObject({ x: 10, y: 20 })
   })
 
   it('multi-selection moves every selected node by the same delta', () => {
@@ -213,10 +218,15 @@ describe('useElementDrag', () => {
     window.dispatchEvent(pdEvent('pointermove', 10, 10))
     window.dispatchEvent(pdEvent('pointerup', 10, 10))
 
-    // Three MoveMaterialCommand executions, but exactly one undo entry.
-    expect(store.commands.beginTransaction).toHaveBeenCalledOnce()
-    expect(store.commands.commitTransaction).toHaveBeenCalledOnce()
-    expect(store.commands.execute).toHaveBeenCalledTimes(3)
+    expect(store.documentTransactions.cursor).toBe(1)
+    expect(live(store, 'a')).toMatchObject({ x: 10, y: 10 })
+    expect(live(store, 'b')).toMatchObject({ x: 110, y: 110 })
+    expect(live(store, 'c')).toMatchObject({ x: 210, y: 210 })
+
+    store.documentTransactions.undo()
+    expect(live(store, 'a')).toMatchObject({ x: 0, y: 0 })
+    expect(live(store, 'b')).toMatchObject({ x: 100, y: 100 })
+    expect(live(store, 'c')).toMatchObject({ x: 200, y: 200 })
   })
 
   it('drag without movement does not open a transaction', () => {
@@ -231,8 +241,7 @@ describe('useElementDrag', () => {
     startDrag(target, drag, 0, 0)
     window.dispatchEvent(pdEvent('pointerup', 0, 0))
 
-    expect(store.commands.beginTransaction).not.toHaveBeenCalled()
-    expect(store.commands.execute).not.toHaveBeenCalled()
+    expect(store.documentTransactions.cursor).toBe(0)
   })
 
   it('fires onDragMoved exactly once per drag, on first real movement', () => {
@@ -339,7 +348,7 @@ describe('useElementDrag', () => {
     expect(live(store, 'n1').x).toBe(10)
     expect(live(store, 'n1').y).toBe(20)
     expect(store.snapActiveLines).toHaveLength(0)
-    expect(store.commands.execute).not.toHaveBeenCalled()
+    expect(store.documentTransactions.cursor).toBe(0)
   })
 
   it('does not mutate selection on pointerdown (selection is the controller\'s job)', () => {

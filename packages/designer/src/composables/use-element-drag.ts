@@ -1,6 +1,6 @@
 import type { MaterialNode } from '@easyink/schema'
 import type { DesignerStore } from '../store/designer-store'
-import { createEditorSurfacePlan, isInteractable, MoveMaterialCommand } from '@easyink/core'
+import { createEditorSurfacePlan, isInteractable, requireDocumentNode } from '@easyink/core'
 import { markRaw } from 'vue'
 import { createGeometryService } from '../editing/geometry-service'
 import { collectSnapCandidates, computeSnap, getSelectionBox } from '../snap'
@@ -37,8 +37,8 @@ export interface ElementDragContext {
  * - Selection bounding box uses schema element width / height.
  * - Threshold is normalized for zoom: `snapState.threshold / max(zoom, ε)`.
  * - Hold Cmd / Ctrl during drag to bypass snapping for the current frame.
- * - Pointer events are bound on `window` so dragging continues across canvas
- *   boundaries; `pointercancel` rolls back geometry and skips command commit.
+ * - Pointer events continue across canvas boundaries through GestureCoordinator;
+ *   `pointercancel` cancels the preview without adding history.
  */
 export function useElementDrag(ctx: ElementDragContext) {
   const geometry = createGeometryService(ctx.store, { getPageEl: ctx.getPageEl })
@@ -100,142 +100,92 @@ export function useElementDrag(ctx: ElementDragContext) {
     })
 
     let moved = false
-    const pointerId = e.pointerId
-    const el = e.currentTarget as HTMLElement
-    el.setPointerCapture(pointerId)
+    const operationContext = store.documentTransactions.getOperationContext()
+    store.gestures.begin({
+      target: window as unknown as HTMLElement,
+      event: e,
+      label: 'Move',
+      mergeKey: `geometry.move:${origPositions.map(item => item.id).join(',')}`,
+      operation: {
+        kind: 'geometry.move',
+        sessionPath: [...operationContext.sessionPath],
+        targetIds: origPositions.map(item => `node:${item.id}`),
+        fieldPaths: ['/x', '/y'],
+        selectionLineage: operationContext.selectionLineage,
+        structural: false,
+      },
+      update(ev, preview) {
+        const currentPoint = geometry.screenToDocument({ x: ev.clientX, y: ev.clientY })
 
-    function teardown() {
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
-      window.removeEventListener('pointercancel', onCancel)
-      try {
-        el.releasePointerCapture(pointerId)
-      }
-      catch {
-        // capture may already be released by the browser
-      }
-    }
+        let dx = currentPoint.x - startPoint.x
+        let dy = currentPoint.y - startPoint.y
 
-    function onMove(ev: PointerEvent) {
-      if (ev.pointerId !== pointerId)
-        return
+        if (dx === 0 && dy === 0 && !moved)
+          return
 
-      const currentPoint = geometry.screenToDocument({ x: ev.clientX, y: ev.clientY })
-
-      let dx = currentPoint.x - startPoint.x
-      let dy = currentPoint.y - startPoint.y
-
-      if (dx === 0 && dy === 0)
-        return
-
-      if (!moved) {
-        moved = true
-        ctx.onDragMoved?.()
-      }
-
-      const snapState = store.workbench.snap
-      const bypassSnap = ev.metaKey || ev.ctrlKey
-
-      const snapResult = (!bypassSnap && snapState.enabled)
-        ? computeSnap(
-            {
-              page: store.schema.page,
-              pageRects,
-              guidesX: store.schema.guides.x,
-              guidesY: store.schema.guides.y,
-              otherNodes,
-              getElementSize: n => store.getElementSize(n),
-              enabled: snapState.enabled,
-              gridSnap: snapState.gridSnap,
-              guideSnap: snapState.guideSnap,
-              elementSnap: snapState.elementSnap,
-            },
-            {
-              selectionBox: selectionBox!,
-              dx,
-              dy,
-              threshold: snapState.threshold / Math.max(zoom, 0.0001),
-              precomputedCandidates: snapCandidates,
-            },
-          )
-        : { dx, dy, lines: [] }
-
-      dx = snapResult.dx
-      dy = snapResult.dy
-      // markRaw on the new array prevents the surrounding reactive(store)
-      // proxy from deep-walking each SnapLine; only the property write
-      // itself is reactive (sufficient for the overlay).
-      store.snapActiveLines = markRaw(snapResult.lines)
-
-      for (const orig of origPositions) {
-        const n = store.getElementById(orig.id)
-        if (!n)
-          continue
-        n.x = orig.x + dx
-        n.y = orig.y + dy
-      }
-    }
-
-    function rollback() {
-      for (const orig of origPositions) {
-        const n = store.getElementById(orig.id)
-        if (!n)
-          continue
-        n.x = orig.x
-        n.y = orig.y
-      }
-    }
-
-    function onCancel(ev: PointerEvent) {
-      if (ev.pointerId !== pointerId)
-        return
-      teardown()
-      store.snapActiveLines = []
-      rollback()
-    }
-
-    function onUp(ev: PointerEvent) {
-      if (ev.pointerId !== pointerId)
-        return
-      teardown()
-      store.snapActiveLines = []
-
-      if (!moved)
-        return
-
-      // Group every per-node MoveMaterialCommand into a single undo step so
-      // multi-selection moves are reversed by one Cmd+Z. Single-selection
-      // drags also benefit (the batch wraps a single command, which the
-      // command manager collapses transparently).
-      store.commands.beginTransaction('Move')
-      try {
-        for (const orig of origPositions) {
-          const n = store.getElementById(orig.id)
-          if (!n)
-            continue
-          const finalX = n.x
-          const finalY = n.y
-          n.x = orig.x
-          n.y = orig.y
-          const cmd = new MoveMaterialCommand(store.schema.elements, orig.id, { x: finalX, y: finalY })
-          store.commands.execute(cmd)
+        if (dx === 0 && dy === 0) {
+          store.snapActiveLines = []
+          preview.replace((draft) => {
+            for (const orig of origPositions) {
+              const draftNode = requireDocumentNode(draft, store.materialProfile, orig.id)
+              draftNode.x = orig.x
+              draftNode.y = orig.y
+            }
+          })
+          return
         }
-        store.commands.commitTransaction()
-      }
-      catch (err) {
-        store.commands.rollbackTransaction()
-        // Boundary policy (see 22-editing-behavior.md): user-driven errors
-        // must not bubble back into the DOM event loop in a half-applied
-        // state. Rollback already restored geometry; surface the diagnostic
-        // and stop. A throw here previously left the snap-line overlay
-        // state inconsistent with the model.
-        console.error('[useElementDrag] Move transaction failed; rolled back.', err)
-      }
-    }
 
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
-    window.addEventListener('pointercancel', onCancel)
+        if (!moved) {
+          moved = true
+          ctx.onDragMoved?.()
+        }
+
+        const snapState = store.workbench.snap
+        const bypassSnap = ev.metaKey || ev.ctrlKey
+
+        const snapResult = (!bypassSnap && snapState.enabled)
+          ? computeSnap(
+              {
+                page: store.schema.page,
+                pageRects,
+                guidesX: store.schema.guides.x,
+                guidesY: store.schema.guides.y,
+                otherNodes,
+                getElementSize: n => store.getElementSize(n),
+                enabled: snapState.enabled,
+                gridSnap: snapState.gridSnap,
+                guideSnap: snapState.guideSnap,
+                elementSnap: snapState.elementSnap,
+              },
+              {
+                selectionBox: selectionBox!,
+                dx,
+                dy,
+                threshold: snapState.threshold / Math.max(zoom, 0.0001),
+                precomputedCandidates: snapCandidates,
+              },
+            )
+          : { dx, dy, lines: [] }
+
+        dx = snapResult.dx
+        dy = snapResult.dy
+        // markRaw on the new array prevents the surrounding reactive(store)
+        // proxy from deep-walking each SnapLine; only the property write
+        // itself is reactive (sufficient for the overlay).
+        store.snapActiveLines = markRaw(snapResult.lines)
+
+        preview.replace((draft) => {
+          for (const orig of origPositions) {
+            const draftNode = requireDocumentNode(draft, store.materialProfile, orig.id)
+            draftNode.x = orig.x + dx
+            draftNode.y = orig.y + dy
+          }
+        })
+      },
+      onFinish() {
+        store.snapActiveLines = []
+      },
+    })
   }
 
   return { onPointerDown }

@@ -1,5 +1,5 @@
 import type { DesignerStore } from '../store/designer-store'
-import { isInteractable, normalizeRotation, RotateMaterialCommand } from '@easyink/core'
+import { isInteractable, normalizeRotation, requireDocumentNode } from '@easyink/core'
 import { createGeometryService } from '../editing/geometry-service'
 import { isElementRotatable } from '../materials/capabilities'
 
@@ -45,51 +45,40 @@ export function useElementRotate(ctx: ElementRotateContext) {
     const startAngle = Math.atan2(e.clientY - centerScreen.y, e.clientX - centerScreen.x)
 
     let moved = false
+    const operationContext = store.documentTransactions.getOperationContext()
+    store.gestures.begin({
+      target: window as unknown as HTMLElement,
+      event: e,
+      label: 'Rotate',
+      mergeKey: `geometry.rotate:${elementId}`,
+      operation: {
+        kind: 'geometry.rotate',
+        sessionPath: [...operationContext.sessionPath],
+        targetIds: [`node:${elementId}`],
+        fieldPaths: ['/rotation'],
+        selectionLineage: operationContext.selectionLineage,
+        structural: false,
+      },
+      update(ev, preview) {
+        const currentAngle = Math.atan2(ev.clientY - centerScreen.y, ev.clientX - centerScreen.x)
+        const delta = (currentAngle - startAngle) * (180 / Math.PI)
+        let newRotation = origRotation + delta
 
-    const el = e.currentTarget as HTMLElement
-    el.setPointerCapture(e.pointerId)
+        // Shift key: snap to 15-degree increments
+        if (ev.shiftKey) {
+          newRotation = Math.round(newRotation / 15) * 15
+        }
 
-    function onMove(ev: PointerEvent) {
-      const currentAngle = Math.atan2(ev.clientY - centerScreen.y, ev.clientX - centerScreen.x)
-      const delta = (currentAngle - startAngle) * (180 / Math.PI)
-      let newRotation = origRotation + delta
+        newRotation = normalizeRotation(newRotation)
 
-      // Shift key: snap to 15-degree increments
-      if (ev.shiftKey) {
-        newRotation = Math.round(newRotation / 15) * 15
-      }
-
-      newRotation = normalizeRotation(newRotation)
-
-      if (newRotation === (node!.rotation ?? 0))
-        return
-
-      moved = true
-      node!.rotation = newRotation
-    }
-
-    function onUp() {
-      el.removeEventListener('pointermove', onMove)
-      el.removeEventListener('pointerup', onUp)
-
-      if (!moved)
-        return
-
-      const finalRotation = node!.rotation ?? 0
-
-      // Reset to original before command
-      node!.rotation = origRotation
-
-      const cmd = new RotateMaterialCommand(
-        store.schema.elements,
-        elementId,
-        finalRotation,
-      )
-      store.commands.execute(cmd)
-    }
-
-    el.addEventListener('pointermove', onMove)
-    el.addEventListener('pointerup', onUp)
+        if (newRotation === origRotation && !moved)
+          return
+        moved = true
+        preview.replace((draft) => {
+          requireDocumentNode(draft, store.materialProfile, elementId).rotation = newRotation
+        })
+      },
+    })
   }
 
   return { onRotatePointerDown }

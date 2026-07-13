@@ -225,18 +225,20 @@ describe('useCanvasInteractionController', () => {
       draft.unit = 'px'
       draft.groups = [{ id: 'grp_1', memberIds: ['a', 'b'] }]
     }, { label: 'Set test group', operation: { kind: 'document.group', sessionPath: [], targetIds: ['group:grp_1'], fieldPaths: ['/groups', '/unit'], selectionLineage: store.selection.lineageId, structural: false } })
-    const a = store.getElementById('a')!
-    const b = store.getElementById('b')!
-
     pdOn('a', pdEvent('pointerdown', 10, 10))
     window.dispatchEvent(pdEvent('pointermove', 30, 40))
 
-    expect(a.x).toBe(20)
-    expect(a.y).toBe(30)
-    expect(b.x).toBe(120)
-    expect(b.y).toBe(30)
+    // Preview publication replaces the document snapshot, so query fresh
+    // nodes instead of retaining references from before the gesture.
+    expect(store.getElementById('a')).toMatchObject({ x: 20, y: 30 })
+    expect(store.getElementById('b')).toMatchObject({ x: 120, y: 30 })
 
     window.dispatchEvent(pdEvent('pointerup', 30, 40))
+    expect(store.documentTransactions.cursor).toBe(2)
+
+    store.documentTransactions.undo()
+    expect(store.getElementById('a')).toMatchObject({ x: 0, y: 0 })
+    expect(store.getElementById('b')).toMatchObject({ x: 100, y: 0 })
   })
 
   it('cmd-click toggles an entire logical group off', async () => {

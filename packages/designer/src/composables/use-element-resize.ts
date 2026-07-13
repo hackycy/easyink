@@ -1,7 +1,7 @@
 import type { MaterialResizeHandle } from '@easyink/core'
 import type { DesignerStore } from '../store/designer-store'
 import type { SnapLine } from '../types'
-import { createEditorSurfacePlan, isInteractable, ResizeMaterialCommand } from '@easyink/core'
+import { createEditorSurfacePlan, isInteractable, requireDocumentNode } from '@easyink/core'
 import { markRaw } from 'vue'
 import { createGeometryService } from '../editing/geometry-service'
 import { canResizeHandle } from '../materials/control-policy'
@@ -23,14 +23,11 @@ export interface ElementResizeContext {
  * - Threshold is normalized for zoom: `snapState.threshold / max(zoom, ε)`.
  * - Hold Cmd / Ctrl during resize to bypass snapping for the current frame.
  *
- * Lifecycle:
- * - Pointer events bound on `window` so resize continues across canvas boundaries.
- * - `pointercancel` rolls geometry back to origin and skips the command commit
- *   (no half-resize entry in undo history).
+ * Lifecycle is owned by GestureCoordinator. Pointer cancellation discards the
+ * preview, and pointerup commits the full geometry/model patch as one history item.
  *
- * Material-private side effects (e.g. table row height scaling) are delegated
- * to `MaterialDesignerExtension.resize` (MaterialResizeAdapter) — designer code
- * remains material-agnostic.
+ * Material-private resizing (e.g. table row height scaling) is delegated to
+ * `MaterialDesignerExtension.resize` (MaterialResizeAdapter) on the draft node.
  */
 export function useElementResize(ctx: ElementResizeContext) {
   const geometry = createGeometryService(ctx.store, { getPageEl: ctx.getPageEl })
@@ -81,11 +78,6 @@ export function useElementResize(ctx: ElementResizeContext) {
           ? 'max'
           : null
 
-    let moved = false
-    const pointerId = e.pointerId
-    const el = e.currentTarget as HTMLElement
-    el.setPointerCapture(pointerId)
-
     // Pre-compute snap candidates ONCE at pointerdown. The set of other
     // elements (and their geometry) doesn't change during a resize, so
     // re-collecting per pointermove would burn O(n) allocation each frame.
@@ -111,33 +103,6 @@ export function useElementResize(ctx: ElementResizeContext) {
       guideSnap: snapStateAtStart.guideSnap,
       elementSnap: snapStateAtStart.elementSnap,
     })
-
-    function teardown() {
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
-      window.removeEventListener('pointercancel', onCancel)
-      try {
-        el.releasePointerCapture(pointerId)
-      }
-      catch {
-        // capture may already be released by the browser
-      }
-    }
-
-    function rollback() {
-      node!.x = origX
-      node!.y = origY
-      node!.width = origW
-      node!.height = origH
-      if (resizeAdapter) {
-        resizeAdapter.applyResize(node!, adapterSnapshot, {
-          originalWidth: origW,
-          originalHeight: origH,
-          newWidth: origW,
-          newHeight: origH,
-        })
-      }
-    }
 
     function applySnap(dx: number, dy: number, ev: PointerEvent): { dx: number, dy: number, lines: SnapLine[] } {
       const snapState = store.workbench.snap
@@ -203,124 +168,104 @@ export function useElementResize(ctx: ElementResizeContext) {
       return { dx: outDx, dy: outDy, lines }
     }
 
-    function onMove(ev: PointerEvent) {
-      if (ev.pointerId !== pointerId)
-        return
+    let moved = false
+    const operationContext = store.documentTransactions.getOperationContext()
+    store.gestures.begin({
+      target: window as unknown as HTMLElement,
+      event: e,
+      label: 'Resize',
+      mergeKey: `geometry.resize:${elementId}:${handle}`,
+      operation: {
+        kind: 'geometry.resize',
+        sessionPath: [...operationContext.sessionPath],
+        targetIds: [`node:${elementId}`],
+        fieldPaths: ['/x', '/y', '/width', '/height', '/model'],
+        selectionLineage: operationContext.selectionLineage,
+        structural: false,
+      },
+      update(ev, preview) {
+        const point = geometry.screenToDocument({ x: ev.clientX, y: ev.clientY })
 
-      const point = geometry.screenToDocument({ x: ev.clientX, y: ev.clientY })
+        let dx = point.x - startPoint.x
+        let dy = point.y - startPoint.y
 
-      let dx = point.x - startPoint.x
-      let dy = point.y - startPoint.y
+        if (dx === 0 && dy === 0 && !moved)
+          return
 
-      if (dx === 0 && dy === 0)
-        return
-
-      moved = true
-
-      const snapped = applySnap(dx, dy, ev)
-      dx = snapped.dx
-      dy = snapped.dy
-      // markRaw avoids deep-tracking each SnapLine through the reactive
-      // store proxy; only the property reassignment is reactive.
-      store.snapActiveLines = markRaw(snapped.lines)
-
-      let newX = origX
-      let newY = origY
-      let newW = origW
-      let newH = origH
-
-      if (movingX === 'min') {
-        newX = origX + dx
-        newW = origW - dx
-        if (newW < MIN_SIZE) {
-          newW = MIN_SIZE
-          newX = origX + origW - MIN_SIZE
+        if (dx === 0 && dy === 0) {
+          store.snapActiveLines = []
+          preview.replace((draft) => {
+            const draftNode = requireDocumentNode(draft, store.materialProfile, elementId)
+            draftNode.x = origX
+            draftNode.y = origY
+            draftNode.width = origW
+            draftNode.height = origH
+          })
+          return
         }
-      }
-      else if (movingX === 'max') {
-        newW = origW + dx
-        if (newW < MIN_SIZE)
-          newW = MIN_SIZE
-      }
 
-      if (movingY === 'min') {
-        newY = origY + dy
-        newH = origH - dy
-        if (newH < MIN_SIZE) {
-          newH = MIN_SIZE
-          newY = origY + origH - MIN_SIZE
+        moved = true
+
+        const snapped = applySnap(dx, dy, ev)
+        dx = snapped.dx
+        dy = snapped.dy
+        // markRaw avoids deep-tracking each SnapLine through the reactive
+        // store proxy; only the property reassignment is reactive.
+        store.snapActiveLines = markRaw(snapped.lines)
+
+        let newX = origX
+        let newY = origY
+        let newW = origW
+        let newH = origH
+
+        if (movingX === 'min') {
+          newX = origX + dx
+          newW = origW - dx
+          if (newW < MIN_SIZE) {
+            newW = MIN_SIZE
+            newX = origX + origW - MIN_SIZE
+          }
         }
-      }
-      else if (movingY === 'max') {
-        newH = origH + dy
-        if (newH < MIN_SIZE)
-          newH = MIN_SIZE
-      }
+        else if (movingX === 'max') {
+          newW = origW + dx
+          if (newW < MIN_SIZE)
+            newW = MIN_SIZE
+        }
 
-      node!.x = newX
-      node!.y = newY
-      node!.width = newW
-      node!.height = newH
+        if (movingY === 'min') {
+          newY = origY + dy
+          newH = origH - dy
+          if (newH < MIN_SIZE) {
+            newH = MIN_SIZE
+            newY = origY + origH - MIN_SIZE
+          }
+        }
+        else if (movingY === 'max') {
+          newH = origH + dy
+          if (newH < MIN_SIZE)
+            newH = MIN_SIZE
+        }
 
-      if (resizeAdapter) {
-        resizeAdapter.applyResize(node!, adapterSnapshot, {
-          originalWidth: origW,
-          originalHeight: origH,
-          newWidth: node!.width,
-          newHeight: node!.height,
+        preview.replace((draft) => {
+          const draftNode = requireDocumentNode(draft, store.materialProfile, elementId)
+          draftNode.x = newX
+          draftNode.y = newY
+          draftNode.width = newW
+          draftNode.height = newH
+          if (resizeAdapter) {
+            resizeAdapter.applyResize(draftNode, adapterSnapshot, {
+              originalWidth: origW,
+              originalHeight: origH,
+              newWidth: draftNode.width,
+              newHeight: draftNode.height,
+            })
+          }
         })
-      }
-    }
-
-    function onCancel(ev: PointerEvent) {
-      if (ev.pointerId !== pointerId)
-        return
-      teardown()
-      store.snapActiveLines = []
-      rollback()
-    }
-
-    function onUp(ev: PointerEvent) {
-      if (ev.pointerId !== pointerId)
-        return
-      teardown()
-      store.snapActiveLines = []
-
-      if (!moved)
-        return
-
-      const finalX = node!.x
-      const finalY = node!.y
-      const finalW = node!.width
-      const finalH = node!.height
-
-      // Capture material-private side effect (e.g. row heights) before we reset
-      // node fields to original; commitResize must read post-resize state.
-      const sideEffect = resizeAdapter
-        ? resizeAdapter.commitResize(node!, adapterSnapshot)
-        : null
-
-      // Reset to original before command (the command re-applies geometry + side effect).
-      node!.x = origX
-      node!.y = origY
-      node!.width = origW
-      node!.height = origH
-
-      // Revert material-private state so command.execute() applies cleanly from origin.
-      sideEffect?.undo(node!)
-
-      const cmd = new ResizeMaterialCommand(
-        store.schema.elements,
-        elementId,
-        { x: finalX, y: finalY, width: finalW, height: finalH },
-        sideEffect,
-      )
-      store.commands.execute(cmd)
-    }
-
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
-    window.addEventListener('pointercancel', onCancel)
+      },
+      onFinish() {
+        store.snapActiveLines = []
+      },
+    })
   }
 
   return { onHandlePointerDown }
