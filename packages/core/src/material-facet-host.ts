@@ -456,7 +456,7 @@ function freezeContextualRequest(request: MaterialContextualPropertiesRequest): 
 }
 
 function validateContextualResult(value: unknown): MaterialContextualPropertiesResult | null {
-  if (!isPlainDataRecord(value) || Object.keys(value).some(key => !['contextKey', 'descriptors', 'values'].includes(key)))
+  if (!isPlainDataRecord(value) || !sameKeys(Object.keys(value), ['contextKey', 'descriptors', 'values']))
     return null
   const result = value as unknown as MaterialContextualPropertiesResult
   if (typeof result.contextKey !== 'string' || result.contextKey.length === 0 || !Array.isArray(result.descriptors) || !isPlainDataRecord(result.values))
@@ -511,10 +511,16 @@ function isPlainDataRecord(value: unknown): value is Record<string, unknown> {
   const prototype = Object.getPrototypeOf(value)
   if (prototype !== null && prototype !== Object.prototype)
     return false
-  return Object.keys(value).every((key) => {
+  return Reflect.ownKeys(value).every((key) => {
+    if (typeof key !== 'string')
+      return false
     const descriptor = Object.getOwnPropertyDescriptor(value, key)
     return descriptor?.enumerable === true && 'value' in descriptor
   })
+}
+
+function sameKeys(actual: readonly string[], expected: readonly string[]): boolean {
+  return actual.length === expected.length && expected.every(key => actual.includes(key))
 }
 
 function deepFreeze<T>(value: T): T {

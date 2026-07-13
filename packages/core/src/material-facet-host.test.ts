@@ -82,6 +82,10 @@ describe('material facet host', () => {
     ['missing descriptor value', () => ({ contextKey: 'bad', descriptors: [{ key: 'x', label: 'X', type: 'number' }], values: {} })],
     ['mixed value extras', () => ({ contextKey: 'bad', descriptors: [{ key: 'x', label: 'X', type: 'number' }], values: { x: { kind: 'mixed', value: 1 } } })],
     ['unavailable without readonly', () => ({ contextKey: 'bad', descriptors: [{ key: 'x', label: 'X', type: 'number' }], values: { x: { kind: 'unavailable' } } })],
+    ['non-enumerable outer field', () => Object.defineProperty({ contextKey: 'bad', descriptors: [], values: {} }, 'hidden', { value: true })],
+    ['inherited values container', () => ({ contextKey: 'bad', descriptors: [], values: Object.create({ inherited: { kind: 'mixed' } }) })],
+    ['accessor value kind', () => ({ contextKey: 'bad', descriptors: [{ key: 'x', label: 'X', type: 'number' }], values: { x: Object.defineProperty({}, 'kind', { enumerable: true, get: () => { throw new Error('kind getter') } }) } })],
+    ['symbol outer field', () => Object.assign({ contextKey: 'bad', descriptors: [], values: {} }, { [Symbol('hidden')]: true })],
   ])('quarantines only the failing designer facet after %s', async (_label, contextualProperties) => {
     const dispose = vi.fn()
     const profile = createTestCompiledMaterialProfile([

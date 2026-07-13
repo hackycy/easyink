@@ -141,12 +141,12 @@ async function updateSubProp(key: string, value: unknown) {
   const lineage = session.selectionStore.lineageId
   if (schema?.type === 'font' && typeof value === 'string') {
     const loaded = await store.ensureFontLoaded({ family: value })
+    if (requestToken !== contextualRequestToken || selectedElement.value?.id !== nodeId || store.editingSession.activeSession?.selectionStore.lineageId !== lineage)
+      return
     if (!loaded) {
       propertyPreview.cancel(`contextual:${contextual.contextKey}:${key}`)
       return
     }
-    if (requestToken !== contextualRequestToken || selectedElement.value?.id !== nodeId || store.editingSession.activeSession?.selectionStore.lineageId !== lineage)
-      return
   }
   previewSubProp(key, value)
   propertyPreview.commit(`contextual:${contextual.contextKey}:${key}`)
@@ -335,12 +335,12 @@ async function onPagePropertyChange(descriptor: PagePropertyDescriptor, value: u
   const requestSequence = committedContextSequence.value
   if (descriptor.editor === 'font' && typeof value === 'string') {
     const loaded = await store.ensureFontLoaded({ family: value })
+    if (selectedElement.value?.id !== selectedId || committedContextSequence.value !== requestSequence)
+      return
     if (!loaded) {
       rollbackPagePreview(descriptor.id)
       return
     }
-    if (selectedElement.value?.id !== selectedId || committedContextSequence.value !== requestSequence)
-      return
   }
   previewPageProperty(descriptor, value)
   propertyPreview.commit(`page:${descriptor.id}`)
@@ -467,12 +467,12 @@ async function updateProp(key: string, value: unknown) {
   const lineage = store.editingSession.activeSession?.selectionStore.lineageId ?? store.selection.lineageId
   if (schema?.type === 'font' && typeof value === 'string') {
     const loaded = await store.ensureFontLoaded({ family: value })
+    if (selectedElement.value?.id !== el.id || store.editingSession.path.map(frame => frame.nodeId).join('\u0000') !== sessionPath || (store.editingSession.activeSession?.selectionStore.lineageId ?? store.selection.lineageId) !== lineage)
+      return
     if (!loaded) {
       rollbackPropPreview(key)
       return
     }
-    if (selectedElement.value?.id !== el.id || store.editingSession.path.map(frame => frame.nodeId).join('\u0000') !== sessionPath || (store.editingSession.activeSession?.selectionStore.lineageId ?? store.selection.lineageId) !== lineage)
-      return
   }
 
   if (!schema)

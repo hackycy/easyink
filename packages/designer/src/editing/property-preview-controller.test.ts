@@ -78,4 +78,32 @@ describe('property preview controller', () => {
     expect(store.document.elements[0]!.model.font).toBeUndefined()
     expect(engine.totalCount).toBe(0)
   })
+
+  it('does not let a stale failed font load cancel a newer same-key preview', async () => {
+    const { store, engine } = harness()
+    const controller = new PropertyPreviewController(engine)
+    const fontDescriptor = { key: 'font', label: 'Font', type: 'font' as const, accessor: createModelPropertyAccessor<string>('/font') }
+    let resolveLoad!: (loaded: boolean) => void
+    const load = new Promise<boolean>((resolve) => {
+      resolveLoad = resolve
+    })
+    let contextToken = 1
+    controller.previewProperty('contextual:text:font', store.document.elements[0]!, fontDescriptor, 'Old Font', { sessionPath: ['box'], selectionLineage: 'old' })
+    const oldCompletion = (async () => {
+      const capturedToken = contextToken
+      const loaded = await load
+      if (capturedToken !== contextToken)
+        return
+      if (!loaded)
+        controller.cancel('contextual:text:font')
+    })()
+
+    contextToken += 1
+    controller.previewProperty('contextual:text:font', store.document.elements[0]!, fontDescriptor, 'New Font', { sessionPath: ['box'], selectionLineage: 'new' })
+    resolveLoad(false)
+    await oldCompletion
+    expect(store.document.elements[0]!.model.font).toBe('New Font')
+    controller.commit('contextual:text:font')
+    expect(engine.totalCount).toBe(1)
+  })
 })
