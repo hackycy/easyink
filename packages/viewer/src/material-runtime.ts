@@ -6,6 +6,7 @@ import type {
   MaterialConditionDefinition,
   MaterialViewerExtension,
   MaterialViewerFacet,
+  MaterialViewerLayoutFacet,
   ViewerMeasureContext,
   ViewerMeasureResult,
   ViewerRenderContext,
@@ -104,15 +105,37 @@ function assertViewerFacet(value: unknown): MaterialViewerFacet {
   if (sanitizedMarkup !== undefined && typeof sanitizedMarkup !== 'boolean')
     throw new Error('MATERIAL_VIEWER_FACET_CAPABILITIES_INVALID')
   Object.freeze(extension)
+  const layout = readOwnDataValue(value, 'layout')
+  if (layout !== undefined && !isRecord(layout))
+    throw new Error('MATERIAL_VIEWER_LAYOUT_FACET_INVALID')
+  const layoutSnapshot = layout ? snapshotViewerLayoutFacet(layout) : undefined
   const dispose = readOwnDataMethod(value, 'dispose')
   return Object.freeze({
     extension,
+    ...(layoutSnapshot ? { layout: layoutSnapshot } : {}),
     capabilities: Object.freeze({
       ...(sanitizedMarkup === undefined ? {} : { sanitizedMarkup }),
       ...(imperativeDom === undefined ? {} : { imperativeDom: Object.freeze([...imperativeDom]) }),
     }),
     ...(dispose ? { dispose: () => Reflect.apply(dispose, value, []) } : {}),
   }) as unknown as MaterialViewerFacet
+}
+
+function snapshotViewerLayoutFacet(value: Record<string, unknown>): MaterialViewerLayoutFacet {
+  const resolveRuntimeModel = readOptionalMethod(value, 'resolveRuntimeModel')
+  const measure = readOptionalMethod(value, 'measure')
+  const fragmentValue = readOwnDataValue(value, 'fragment')
+  if (fragmentValue !== undefined && !isRecord(fragmentValue))
+    throw new Error('MATERIAL_VIEWER_LAYOUT_FACET_INVALID')
+  const createFragment = fragmentValue ? readOptionalMethod(fragmentValue, 'createFragment') : undefined
+  if (fragmentValue && !createFragment)
+    throw new Error('MATERIAL_VIEWER_LAYOUT_FACET_INVALID')
+
+  return Object.freeze({
+    ...(resolveRuntimeModel ? { resolveRuntimeModel } : {}),
+    ...(measure ? { measure } : {}),
+    ...(createFragment ? { fragment: Object.freeze({ createFragment }) } : {}),
+  }) as MaterialViewerLayoutFacet
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -127,6 +150,13 @@ function readOwnDataValue(value: object, key: string): unknown {
 function readOwnDataMethod(value: object, key: string): ((...args: unknown[]) => unknown) | undefined {
   const candidate = readOwnDataValue(value, key)
   return typeof candidate === 'function' ? candidate as (...args: unknown[]) => unknown : undefined
+}
+
+function readOptionalMethod(value: object, key: string): ((...args: unknown[]) => unknown) | undefined {
+  const candidate = readOwnDataValue(value, key)
+  if (candidate !== undefined && typeof candidate !== 'function')
+    throw new Error('MATERIAL_VIEWER_LAYOUT_FACET_INVALID')
+  return candidate as ((...args: unknown[]) => unknown) | undefined
 }
 
 function renderUnavailableMaterial(node: MaterialNode<unknown>): ViewerRenderOutput {

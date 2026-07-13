@@ -172,7 +172,7 @@ export interface MaterialViewerExtension {
 }
 
 export interface MaterialViewerFacet {
-  extension: MaterialViewerExtension
-  layout?: MaterialViewerLayoutFacet
-  capabilities: ViewerFacetCapabilities
+  readonly extension: MaterialViewerExtension
+  readonly layout?: MaterialViewerLayoutFacet
+  readonly capabilities: ViewerFacetCapabilities
 }

@@ -111,8 +111,6 @@ export function evaluateCondition(groups: ConditionGroup[], data: Record<string,
 }
 
 export function resolveConditionalNode(node: MaterialNode, data: Record<string, unknown>): ConditionalNodeResolution {
-  if (node.editorState?.hidden)
-    return { state: 'reserve', value: true, diagnostics: [] }
   const condition = node.output.renderCondition
   if (!condition || condition.enabled === false)
     return { state: 'include', value: true, diagnostics: [] }

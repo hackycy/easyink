@@ -77,4 +77,28 @@ describe('profileMaterialRuntime', () => {
 
     expect(runtime.getCapabilities('good')?.imperativeDom).toEqual(['chart'])
   })
+
+  it('publishes an isolated layout snapshot without freezing the material source', async () => {
+    const resolveRuntimeModel = vi.fn(() => ({ value: 1 }))
+    const layout = { resolveRuntimeModel }
+    const profile = createTestCompiledMaterialProfile([
+      createTestMaterialManifest({
+        type: 'good',
+        viewer: () => ({
+          extension: { render: () => ({ tree: viewerText('good') }) },
+          layout,
+          capabilities: {},
+        }),
+      }),
+    ])
+    const runtime = new ProfileMaterialRuntime(profile)
+
+    await runtime.prepare(['good'])
+
+    const published = runtime.get('good')?.value?.layout
+    expect(published).not.toBe(layout)
+    expect(published?.resolveRuntimeModel).toBe(resolveRuntimeModel)
+    expect(Object.isFrozen(published)).toBe(true)
+    expect(Object.isFrozen(layout)).toBe(false)
+  })
 })

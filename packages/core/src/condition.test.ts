@@ -108,7 +108,7 @@ describe('condition evaluator', () => {
     expect(JSON.stringify(result.diagnostics)).not.toContain('secret')
   })
 
-  it('applies matched behavior, hidden effect, unknown policy, and static hidden priority', () => {
+  it('applies matched behavior and ignores editor-only hidden state', () => {
     const node = {
       id: 'n',
       type: 'text',
@@ -124,7 +124,7 @@ describe('condition evaluator', () => {
     } satisfies MaterialNode
     expect(resolveConditionalNode(node, {}).state).toBe('reserve')
     expect(resolveConditionalNode({ ...node, output: { ...node.output, renderCondition: { ...node.output.renderCondition, whenMatched: 'hide', groups: [] } } }, {}).state).toBe('reserve')
-    expect(resolveConditionalNode({ ...node, editorState: { hidden: true } }, {}).diagnostics).toEqual([])
+    expect(resolveConditionalNode({ ...node, editorState: { hidden: true }, output: { visibility: 'include' } }, {}).state).toBe('include')
   })
 
   it('validates datetime timezone rules through explicit types', () => {
