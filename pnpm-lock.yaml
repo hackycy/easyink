@@ -668,6 +668,9 @@ importers:
       '@easyink/core':
         specifier: workspace:*
         version: link:../core
+      '@easyink/shared':
+        specifier: workspace:*
+        version: link:../shared
 
   packages/builtin:
     dependencies:
