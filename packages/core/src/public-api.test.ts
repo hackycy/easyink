@@ -5,12 +5,14 @@ import type {
   DocumentStoreEvent,
   DocumentTransactionOptions,
   EditingSessionPath,
+  MaterialExtensionContext,
   SlotContentTransformSnapshot,
   SlotGeometrySidecarResolver,
   SlotReparentPlan,
   SlotReparentPlanInput,
   StableIdSelectionRegion,
 } from '@easyink/core'
+import * as core from '@easyink/core'
 import {
   combineStableOperationDescriptors,
   createSlotReparentPlan,
@@ -39,6 +41,12 @@ void noPublicPatchKeys
 type ForbiddenInsertionIndex = Extract<keyof DocumentSlotTarget, 'index'>
 const noPublicInsertionIndex: ForbiddenInsertionIndex extends never ? true : never = true
 void noPublicInsertionIndex
+type ForbiddenMaterialWriterKeys = Extract<
+  keyof MaterialExtensionContext,
+  'commitCommand' | 'commandManager' | 'commands' | 'patchCommand' | 'addMaterialCommand' | 'updateDocumentCommand'
+>
+const noPublicMaterialWriterKeys: ForbiddenMaterialWriterKeys extends never ? true : never = true
+void noPublicMaterialWriterKeys
 
 type ExpectedCoordinateSpace = 'document' | 'owner' | 'slot'
 type PublicCoordinateSpace = DocumentSlotPolicySnapshot['coordinateSpace']
@@ -68,5 +76,13 @@ describe('@easyink/core document editing exports', () => {
     expect(combineStableOperationDescriptors).toBeTypeOf('function')
     expect(createSlotReparentPlan).toBeTypeOf('function')
     expect(reparentNode).toBeTypeOf('function')
+  })
+
+  it('does not export legacy document writers', () => {
+    expect(core).not.toHaveProperty('CommandManager')
+    expect(core).not.toHaveProperty('PatchCommand')
+    expect(core).not.toHaveProperty('AddMaterialCommand')
+    expect(core).not.toHaveProperty('UpdateDocumentCommand')
+    expect(core).not.toHaveProperty('DOCUMENT_STORE_WRITER')
   })
 })

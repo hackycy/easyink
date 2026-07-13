@@ -41,7 +41,6 @@ function createContext(overrides: Partial<MaterialExtensionContext> = {}): Mater
     getNode: () => undefined,
     getSelection: () => ({ ids: [], count: 0, isEmpty: true }),
     getBindingLabel: binding => binding.fieldLabel || binding.fieldPath,
-    commitCommand: () => {},
     tx: {
       getOperationContext: () => ({ sessionPath: [], selectionLineage: 'selection-test' }),
       run: () => {},

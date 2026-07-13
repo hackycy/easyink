@@ -1,6 +1,5 @@
 import type { BindingRef, DocumentSchema, MaterialNode } from '@easyink/schema'
 import type { BindingDisplayFormat, JsonValue } from '@easyink/shared'
-import type { Command } from './command'
 import type { BehaviorRegistration, MaterialGeometry, SelectionDecorationDef, SelectionType, TransactionAPI } from './editing-session'
 import type { BindingExpression } from './material-binding'
 import type { PropertyAccessor, PropertyEditorOptions } from './material-properties'
@@ -67,7 +66,7 @@ export interface MaterialDesignerExtension {
   ) => () => void
   /**
    * Datasource drag-and-drop handler. Materials implement this to take over
-   * dragOver detection and drop binding instead of the default BindFieldCommand.
+   * dragOver detection and drop binding instead of the default binding transaction.
    * When absent, the designer falls back to default behavior (whole element as drop zone).
    */
   datasourceDrop?: DatasourceDropHandler
@@ -95,7 +94,7 @@ export interface MaterialDesignerExtension {
    * Resize adapter: lets a material participate in element resize operations.
    * The framework drives the geometry; the adapter mutates material-private
    * data (e.g. table row heights) in lockstep, and produces an undo-safe
-   * side-effect that bundles into ResizeMaterialCommand.
+   * side-effect that participates in the same resize transaction.
    */
   resize?: MaterialResizeAdapter
 
@@ -158,8 +157,8 @@ export interface MaterialControlPolicyContext {
  *      fields proportionally.
  *   3. at pointerup, designer calls `commitResize(node, snapshot)` which returns
  *      a `MaterialResizeSideEffect` describing how to re-apply / revert the
- *      mutation. The framework attaches it to ResizeMaterialCommand for
- *      undo-safe history; the adapter never hits ResizeMaterialCommand directly.
+ *      mutation. The framework records it with the resize transaction for
+ *      undo-safe history; the adapter never writes document state directly.
  *
  * Snapshot is typed `unknown` to keep the framework material-agnostic — each
  * adapter narrows it internally.
@@ -178,8 +177,8 @@ export interface MaterialResizeParams {
 }
 
 /**
- * Side-effect bundled into ResizeMaterialCommand. `apply()` runs after the
- * geometry change in `execute`; `undo()` runs after geometry restore in `undo`.
+ * Side-effect recorded with a resize transaction. `apply()` runs after the
+ * geometry change; `undo()` runs after geometry restoration.
  * Both must be deterministic and self-contained.
  */
 export interface MaterialResizeSideEffect {
@@ -237,7 +236,7 @@ export interface DatasourceDropHandler {
   ) => DatasourceDropZone | null
 
   /**
-   * Called on drop. Material executes the actual binding command.
+   * Called on drop. Material executes the actual binding transaction.
    * @param field - The datasource field being dropped
    * @param point - Drop position in material-local coordinates
    * @param point.x - Horizontal offset in material-local coordinates
@@ -257,14 +256,13 @@ export type MaterialExtensionFactory = (context: MaterialExtensionContext) => Ma
 /** Async designer factory loader. Used by heavyweight materials in Designer only. */
 export type LazyMaterialExtensionFactory = () => Promise<MaterialExtensionFactory>
 
-/** Context provided to material extension factories for querying state and issuing commands. */
+/** Context provided to material extension factories for querying state and writing through transactions. */
 export interface MaterialExtensionContext {
   getSchema: () => DocumentSchema
   getNode: (id: string) => MaterialNode | undefined
   getSelection: () => SelectionSnapshot
   getBindingLabel: (binding: BindingRef) => string
-  commitCommand: (command: Command) => void
-  /** Transaction API for draft-based mutations (generates PatchCommand). */
+  /** Transaction API for draft-based immutable document mutations. */
   tx: TransactionAPI
   requestPropertyPanel: (overlay: PropertyPanelOverlay | null) => void
   emit: (event: string, payload: unknown) => void
@@ -302,7 +300,7 @@ export interface PropertyPanelOverlay {
   descriptors: PropertyDescriptorLike[]
   /** Read property value; panel calls this on each render */
   readValue: (key: string) => unknown
-  /** Write property value; material handles command generation */
+  /** Write property value; material handles the transaction mutation. */
   writeValue: (key: string, value: unknown) => void
   /** Binding context: BindingExpression = show, null = hide, undefined = default element binding */
   binding?: BindingExpression | null

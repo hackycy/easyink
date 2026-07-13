@@ -10,7 +10,6 @@ const context = {
   getNode: () => undefined,
   getSelection: () => ({ ids: [], count: 0, isEmpty: true }),
   getBindingLabel: () => '',
-  commitCommand: () => {},
   tx: {
     getOperationContext: () => ({ sessionPath: ['flow'], selectionLineage: 'selection-flow' }),
     run: () => {},
