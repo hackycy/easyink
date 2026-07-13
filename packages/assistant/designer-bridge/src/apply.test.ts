@@ -121,6 +121,19 @@ describe('assistant designer bridge apply', () => {
     await Promise.resolve()
     expect(store.dataSourceRegistry.getSourceSync('orders')?.name).toBe('B')
   })
+
+  it('unwinds all datasource sidecars in reverse order on document reset', () => {
+    const store = createStore(createSchema([]))
+    const baseline = { id: 'orders', name: 'Baseline', fields: [] }
+    store.dataSourceRegistry.registerSource(baseline)
+    applyAssistantDataSourceToDesigner(store, { id: 'orders', name: 'A', fields: [] })
+    applyAssistantDataSourceToDesigner(store, { id: 'orders', name: 'B', fields: [] })
+    expect(store.dataSourceRegistry.getSourceSync('orders')?.name).toBe('B')
+    store.setSchema(createSchema([]))
+    expect(store.dataSourceRegistry.getSourceSync('orders')).toBe(baseline)
+    applyAssistantDataSourceToDesigner(store, { id: 'orders', name: 'C', fields: [] })
+    expect(store.dataSourceRegistry.getSourceSync('orders')?.name).toBe('C')
+  })
 })
 
 function createStore(schema: ReturnType<typeof createSchema>): DesignerStore {

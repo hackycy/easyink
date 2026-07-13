@@ -392,6 +392,7 @@ export class DocumentTransactionEngine implements TransactionAPI {
       })
       this.recordHistory(entry)
       this.redoStack = []
+      this.notifyHistoryMutation({ direction: 'commit', changeSet })
       this.activePreview = null
       this.previewValidationCache.reset(this.store.revision)
       this.notify()

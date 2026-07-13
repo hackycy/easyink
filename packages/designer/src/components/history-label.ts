@@ -21,19 +21,41 @@ export function resolveHistoryOperationLabel(operationKind: string | undefined):
     return exact
   if (/^(?:geometry|property\.geometry)\./.test(operationKind))
     return 'designer.history.updateGeometry'
+  if (/^keyboard\./.test(operationKind))
+    return 'designer.history.updateGeometry'
   if (/^clipboard\.(?:paste|duplicate)/.test(operationKind))
     return 'designer.history.addMaterial'
-  if (/^(?:structure\.(?:insert|group)|context\.group)/.test(operationKind))
+  if (/^structure\.insert/.test(operationKind))
+    return 'designer.history.addMaterial'
+  if (/^structure\.remove/.test(operationKind))
+    return 'designer.history.removeMaterial'
+  if (/^structure\.group|^context\.group/.test(operationKind))
     return 'designer.history.addElementGroup'
   if (/^(?:structure\.(?:remove|ungroup)|context\.ungroup)/.test(operationKind))
     return 'designer.history.removeElementGroup'
   if (/^(?:property\.(?:binding|render)|datasource\.|drag\.bind)/.test(operationKind))
     return 'designer.history.bindField'
+  if (/^property\.image/.test(operationKind))
+    return 'designer.history.updateProps'
+  if (/^property\.editor-state|^material\.editor-state|^context\.editor-state/.test(operationKind))
+    return 'designer.history.updateMeta'
+  if (/^material\.property/.test(operationKind))
+    return 'designer.history.updateProps'
+  if (/^material\./.test(operationKind))
+    return 'designer.history.updateProps'
   if (/^(?:page\.|document\.|assistant\.)/.test(operationKind))
+    return 'designer.history.updateDocument'
+  if (/^template\./.test(operationKind))
+    return 'designer.history.importTemplate'
+  if (/^extension\./.test(operationKind))
     return 'designer.history.updateDocument'
   if (/^(?:guide|toolbar\.guides)/.test(operationKind))
     return 'designer.history.updateGuides'
   if (/^toolbar\.(?:font|editor-state)/.test(operationKind))
     return 'designer.history.updateProps'
+  if (/^toolbar\./.test(operationKind))
+    return 'designer.history.updateDocument'
+  if (/^context\.layer/.test(operationKind))
+    return 'designer.history.updateGeometry'
   return undefined
 }

@@ -17,6 +17,7 @@ type AssistantDataSource = NonNullable<AssistantResult['dataSource']>
 interface DataSourceHistoryEntry { sourceId: string, before?: AssistantDataSource, after: AssistantDataSource }
 const dataSourceHistory = new WeakMap<object, Map<string, DataSourceHistoryEntry>>()
 const dataSourceParticipants = new WeakSet<object>()
+const dataSourceParticipantDisposers = new WeakMap<object, () => void>()
 
 export function applyAssistantResultToDesigner(
   store: ContributionContext['store'],
@@ -148,10 +149,21 @@ function recordDataSourceChange(store: ContributionContext['store'], changeId: s
   if (dataSourceParticipants.has(store))
     return
   dataSourceParticipants.add(store)
-  store.documentTransactions.onHistoryMutation((mutation) => {
-    if ((mutation.direction === 'undo' || mutation.direction === 'redo') && mutation.changeSet)
+  const dispose = store.documentTransactions.onHistoryMutation((mutation) => {
+    if ((mutation.direction === 'undo' || mutation.direction === 'redo') && mutation.changeSet) {
       restoreDataSourceForChange(store, mutation.changeSet.id, mutation.direction)
+    }
+    else if (mutation.direction === 'reset') {
+      const entries = [...(dataSourceHistory.get(store)?.values() ?? [])].reverse()
+      for (const entry of entries)
+        restoreDataSourceEntry(store, entry, 'undo')
+      dataSourceHistory.get(store)?.clear()
+      dataSourceParticipantDisposers.get(store)?.()
+      dataSourceParticipantDisposers.delete(store)
+      dataSourceParticipants.delete(store)
+    }
   })
+  dataSourceParticipantDisposers.set(store, dispose)
 }
 
 function prepareAssistantReplacement(store: ContributionContext['store']): void {
@@ -167,6 +179,10 @@ function restoreDataSourceForChange(store: ContributionContext['store'], changeI
   const entry = dataSourceHistory.get(store)?.get(changeId)
   if (!entry)
     return
+  restoreDataSourceEntry(store, entry, direction)
+}
+
+function restoreDataSourceEntry(store: ContributionContext['store'], entry: DataSourceHistoryEntry, direction: 'undo' | 'redo'): void {
   const source = direction === 'undo' ? entry.before : entry.after
   if (source)
     store.dataSourceRegistry.registerSource(source)

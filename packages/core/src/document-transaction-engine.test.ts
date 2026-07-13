@@ -31,6 +31,29 @@ function strictSchema<T>(schema: T): T {
 }
 
 describe('documentTransactionEngine', () => {
+  it('notifies history participants for preview commit before undo and redo', () => {
+    const profile = createTestCompiledMaterialProfile()
+    const schema = createCanonicalDefaultSchema()
+    schema.elements = [profile.createNode('box', { id: 'a', x: 0 })]
+    const store = new DocumentStore(schema, profile)
+    const engine = new DocumentTransactionEngine(store, { createId: () => 'preview-change' })
+    const mutations: string[] = []
+    engine.onHistoryMutation((mutation) => {
+      mutations.push(`${mutation.direction}:${mutation.changeSet?.id ?? 'none'}`)
+    })
+    const preview = engine.beginPreview({ label: 'Preview', operation: { kind: 'test.preview', sessionPath: [], targetIds: ['node:a'], fieldPaths: ['/x'], selectionLineage: null, structural: false } })
+    preview.replace((draft) => {
+      draft.elements[0]!.x = 9
+    })
+    preview.commit()
+    engine.undo()
+    engine.redo()
+    expect(mutations).toEqual(['commit:preview-change', 'undo:preview-change', 'redo:preview-change'])
+    mutations.length = 0
+    engine.beginPreview({ label: 'Cancel', operation: { kind: 'test.preview', sessionPath: [], targetIds: ['node:a'], fieldPaths: ['/x'], selectionLineage: null, structural: false } }).cancel()
+    expect(mutations).toEqual([])
+  })
+
   it('notifies synchronous history participants with direction and exact change IDs', () => {
     const profile = createTestCompiledMaterialProfile()
     const store = new DocumentStore(createCanonicalDefaultSchema(), profile)
