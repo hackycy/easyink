@@ -395,6 +395,17 @@ export type {
 export { isInteractable, isSelectable, SelectionModel } from './selection'
 export { rebaseStableIdSelectionRegion } from './selection-region'
 export type { StableIdSelectionRegion } from './selection-region'
+export { createSlotReparentPlan, reparentNode } from './slot-reparent'
+export type {
+  DocumentSlotAddress,
+  DocumentSlotTarget,
+  SlotContentTransformSnapshot,
+  SlotGeometrySidecarResolver,
+  SlotReparentOptions,
+  SlotReparentPlan,
+  SlotReparentPlanInput,
+  StableSlotInsertionAnchor,
+} from './slot-reparent'
 export { defineStandardMaterialManifest } from './standard-material-manifest'
 
 export type { StandardMaterialManifestInput } from './standard-material-manifest'
