@@ -467,6 +467,183 @@ describe('page DOM virtualizer', () => {
     expect(duplicateAcrossIndices).toHaveBeenCalledTimes(2)
   })
 
+  it.each([
+    'register',
+    'unregister',
+    'setMode',
+    'updateVisible',
+    'materializeAll',
+    'withMaterializedPages',
+    'dispose',
+  ] as const)('rejects reentrant %s from observer work before state changes', (operation) => {
+    for (const observerThrows of [false, true]) {
+      let virtualizer!: PageDomVirtualizer
+      let throwAfterMutation = observerThrows
+      const observed = new Set<Element>()
+      const reentrantErrors: unknown[] = []
+      const action = vi.fn()
+      const extra = createEntry(1)
+      const observerError = new Error('observer boom')
+      const observer = {
+        observe(target: Element) {
+          observed.add(target)
+          try {
+            if (operation === 'register')
+              virtualizer.register(extra.entry)
+            else if (operation === 'unregister')
+              virtualizer.unregister(0)
+            else if (operation === 'setMode')
+              virtualizer.setMode('print')
+            else if (operation === 'updateVisible')
+              virtualizer.updateVisible(0, 0, 0)
+            else if (operation === 'materializeAll')
+              virtualizer.materializeAll('print')
+            else if (operation === 'withMaterializedPages')
+              virtualizer.withMaterializedPages('print', action)
+            else
+              virtualizer.dispose()
+          }
+          catch (error) {
+            reentrantErrors.push(error)
+          }
+          if (throwAfterMutation)
+            throw observerError
+        },
+        unobserve(target: Element) {
+          observed.delete(target)
+        },
+        disconnect() {
+          observed.clear()
+        },
+      }
+      virtualizer = new PageDomVirtualizer({ createIntersectionObserver: () => observer })
+      const page = createEntry(0)
+
+      if (observerThrows)
+        expect(() => virtualizer.register(page.entry)).toThrow(observerError)
+      else
+        expect(() => virtualizer.register(page.entry)).not.toThrow()
+
+      expect(reentrantErrors).toHaveLength(1)
+      expect((reentrantErrors[0] as Error).message).toBe('PAGE_DOM_MUTATION_REENTRANT')
+      expect(action).not.toHaveBeenCalled()
+      expect(extra.mount).not.toHaveBeenCalled()
+      if (observerThrows) {
+        expect(observed).toEqual(new Set())
+        expect(page.mount).not.toHaveBeenCalled()
+        throwAfterMutation = false
+        virtualizer.register(page.entry)
+      }
+      expect(observed).toEqual(new Set([page.entry.wrapper]))
+      virtualizer.dispose()
+      expect(page.dispose).toHaveBeenCalledTimes(1)
+      expect(observed).toEqual(new Set())
+    }
+  })
+
+  it('prevents the same index from mounting twice during a reentrant mount callback', () => {
+    const virtualizer = new PageDomVirtualizer({ createIntersectionObserver: null })
+    const wrapper = document.createElement('div')
+    const dispose = vi.fn()
+    const reentrantErrors: unknown[] = []
+    const mount = vi.fn(() => {
+      try {
+        virtualizer.updateVisible(0, 0, 0)
+      }
+      catch (error) {
+        reentrantErrors.push(error)
+      }
+      wrapper.append('mounted')
+      return dispose
+    })
+
+    virtualizer.register({ index: 0, widthPx: 10, heightPx: 10, wrapper, mount })
+
+    expect(mount).toHaveBeenCalledTimes(1)
+    expect(reentrantErrors).toHaveLength(1)
+    expect((reentrantErrors[0] as Error).message).toBe('PAGE_DOM_MUTATION_REENTRANT')
+    virtualizer.dispose()
+    expect(dispose).toHaveBeenCalledTimes(1)
+
+    const retry = new PageDomVirtualizer({ createIntersectionObserver: null })
+    const retryWrapper = document.createElement('div')
+    let attempt = 0
+    expect(() => retry.register({
+      index: 0,
+      widthPx: 10,
+      heightPx: 10,
+      wrapper: retryWrapper,
+      mount() {
+        attempt++
+        if (attempt === 1)
+          throw new Error('mount boom')
+        return dispose
+      },
+    })).toThrow('mount boom')
+    retry.register({ index: 0, widthPx: 10, heightPx: 10, wrapper: retryWrapper, mount: () => dispose })
+    retry.dispose()
+  })
+
+  it('rejects dispose reentrancy from cleanup while retaining completed-dispose idempotence', () => {
+    const virtualizer = new PageDomVirtualizer({ createIntersectionObserver: null })
+    const wrapper = document.createElement('div')
+    const reentrantErrors: unknown[] = []
+    virtualizer.register({
+      index: 0,
+      widthPx: 10,
+      heightPx: 10,
+      wrapper,
+      mount: () => () => {
+        try {
+          virtualizer.dispose()
+        }
+        catch (error) {
+          reentrantErrors.push(error)
+        }
+      },
+    })
+
+    virtualizer.dispose()
+
+    expect(reentrantErrors).toHaveLength(1)
+    expect((reentrantErrors[0] as Error).message).toBe('PAGE_DOM_MUTATION_REENTRANT')
+    expect(() => virtualizer.dispose()).not.toThrow()
+  })
+
+  it('keeps mount failure primary when wrapper cleanup also fails', () => {
+    const virtualizer = new PageDomVirtualizer({ createIntersectionObserver: null })
+    const wrapper = document.createElement('div')
+    const primary = new Error('mount primary')
+    const cleanup = new Error('wrapper cleanup')
+    const originalReplaceChildren = wrapper.replaceChildren.bind(wrapper)
+    let cleanupAttempts = 0
+    wrapper.replaceChildren = () => {
+      cleanupAttempts++
+      if (cleanupAttempts <= 2)
+        throw cleanup
+      originalReplaceChildren()
+    }
+    let thrown: unknown
+    try {
+      virtualizer.register({
+        index: 0,
+        widthPx: 10,
+        heightPx: 10,
+        wrapper,
+        mount() {
+          throw primary
+        },
+      })
+    }
+    catch (error) {
+      thrown = error
+    }
+
+    expect(thrown).toBeInstanceOf(AggregateError)
+    expect((thrown as AggregateError).message).toBe('PAGE_DOM_REGISTER_FAILED')
+    expect(flattenAggregateErrors(thrown)).toEqual([primary, cleanup])
+  })
+
   it('rejects invalid entries before mutating wrappers or allocating observer state', () => {
     const virtualizer = new PageDomVirtualizer({ createIntersectionObserver: null })
     const wrapper = document.createElement('div')

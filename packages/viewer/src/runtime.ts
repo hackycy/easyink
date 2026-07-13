@@ -199,7 +199,7 @@ export class ViewerRuntime {
       elementCount: p.elements.length,
       element: undefined as HTMLElement | undefined,
     }))
-    this._renderedPageMetrics = pages.map(page => ({
+    const renderedPageMetrics = pages.map(page => ({
       index: page.index,
       width: page.width,
       height: page.height,
@@ -207,7 +207,7 @@ export class ViewerRuntime {
     }))
 
     if (this._host) {
-      this.disposePageMounts(diagnostics)
+      const previousPageVirtualizer = this._pageVirtualizer
       const pageVirtualizer = new PageDomVirtualizer()
       let pageDOMs: ReturnType<typeof renderPages>
       try {
@@ -236,10 +236,18 @@ export class ViewerRuntime {
         catch (cleanupError) {
           appendDisposeDiagnostics(diagnostics, cleanupError)
         }
-        this._host.mount.replaceChildren()
         throw error
       }
       this._pageVirtualizer = pageVirtualizer
+      this._renderedPageMetrics = renderedPageMetrics
+      if (previousPageVirtualizer) {
+        try {
+          previousPageVirtualizer.dispose()
+        }
+        catch (error) {
+          appendDisposeDiagnostics(diagnostics, error)
+        }
+      }
 
       for (const dom of pageDOMs) {
         const page = pages.find(p => p.index === dom.pageIndex)
@@ -250,6 +258,9 @@ export class ViewerRuntime {
 
       // Apply page-level viewport offset (preview only, not print)
       this.applyViewportOffset(this._host.mount)
+    }
+    else {
+      this._renderedPageMetrics = renderedPageMetrics
     }
 
     // Emit all diagnostics

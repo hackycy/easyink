@@ -125,6 +125,8 @@ export class PageDomVirtualizer {
   private activeRegistrationJournal?: RegistrationJournal
   private rollingBackRegistration = false
   private maximumRegisteredIndex = -1
+  private readonly mounting = new Map<number, object>()
+  private publicMutationActive = false
   private disposed = false
 
   constructor(options: PageDomVirtualizerOptions = {}) {
@@ -137,6 +139,10 @@ export class PageDomVirtualizer {
   }
 
   register(entry: VirtualPageEntry): void {
+    this.runPublicMutation(() => this.registerInternal(entry))
+  }
+
+  private registerInternal(entry: VirtualPageEntry): void {
     this.assertActive()
     assertEntry(entry)
     const existing = this.entries.get(entry.index)
@@ -178,8 +184,10 @@ export class PageDomVirtualizer {
     catch (error) {
       this.activeRegistrationJournal = undefined
       const cleanupErrors = this.rollbackRegistration(snapshot, entry, journal)
-      if (cleanupErrors.length > 0)
-        throw new AggregateError([error, ...cleanupErrors], 'PAGE_DOM_REGISTER_FAILED')
+      if (cleanupErrors.length > 0) {
+        const uniqueCleanup = excludeKnownErrors(error, cleanupErrors)
+        throw new AggregateError([error, ...uniqueCleanup], 'PAGE_DOM_REGISTER_FAILED')
+      }
       throw error
     }
     finally {
@@ -189,6 +197,10 @@ export class PageDomVirtualizer {
   }
 
   unregister(index: number): boolean {
+    return this.runPublicMutation(() => this.unregisterInternal(index))
+  }
+
+  private unregisterInternal(index: number): boolean {
     this.assertActive()
     assertRegisteredIndex(index)
     const entry = this.entries.get(index)
@@ -213,20 +225,28 @@ export class PageDomVirtualizer {
   }
 
   setMode(mode: PageMaterializationMode): void {
-    this.assertActive()
-    assertMode(mode)
-    this.mode = mode
-    this.reconcileCurrentRetention()
+    this.runPublicMutation(() => {
+      this.assertActive()
+      assertMode(mode)
+      this.mode = mode
+      this.reconcileCurrentRetention()
+    })
   }
 
   materializeAll(mode: 'print' | 'export'): void {
-    this.assertActive()
-    assertCaptureMode(mode)
-    this.mode = mode
-    this.reconcile(new Set(this.entries.keys()))
+    this.runPublicMutation(() => {
+      this.assertActive()
+      assertCaptureMode(mode)
+      this.mode = mode
+      this.reconcile(new Set(this.entries.keys()))
+    })
   }
 
   updateVisible(firstVisible: number, lastVisible: number, overscan = this.overscan): void {
+    this.runPublicMutation(() => this.updateVisibleInternal(firstVisible, lastVisible, overscan))
+  }
+
+  private updateVisibleInternal(firstVisible: number, lastVisible: number, overscan: number): void {
     this.assertActive()
     const pageCount = this.resolveDensePageCount()
     const retained = selectRetainedPages({
@@ -246,14 +266,14 @@ export class PageDomVirtualizer {
     if (typeof action !== 'function')
       throw new TypeError('PAGE_DOM_ACTION_INVALID')
     const scope = Object.freeze({ mode })
-    this.beginMaterialization(scope)
+    this.runPublicMutation(() => this.beginMaterialization(scope))
 
     let result: T
     try {
       result = action()
     }
     catch (error) {
-      this.finishAfterFailure(scope)
+      this.runPublicMutation(() => this.finishAfterFailure(scope))
       throw error
     }
 
@@ -264,28 +284,33 @@ export class PageDomVirtualizer {
         : undefined
     }
     catch (error) {
-      this.finishAfterFailure(scope)
+      this.runPublicMutation(() => this.finishAfterFailure(scope))
       throw error
     }
     if (typeof then !== 'function') {
-      this.finishMaterialization(scope)
+      this.runPublicMutation(() => this.finishMaterialization(scope))
       return result
     }
     return Promise.resolve(result).then(
       (value) => {
-        this.finishMaterialization(scope)
+        this.runPublicMutation(() => this.finishMaterialization(scope))
         return value
       },
       (error) => {
-        this.finishAfterFailure(scope)
+        this.runPublicMutation(() => this.finishAfterFailure(scope))
         throw error
       },
     ) as T
   }
 
   dispose(): void {
-    if (this.disposed)
-      return
+    this.runPublicMutation(() => {
+      if (!this.disposed)
+        this.disposeInternal()
+    })
+  }
+
+  private disposeInternal(): void {
     this.disposed = true
     const errors: unknown[] = []
     try {
@@ -515,7 +540,7 @@ export class PageDomVirtualizer {
       return
     }
     const indices = sortedIndices(this.visibleIndices)
-    this.updateVisible(indices[0]!, indices.at(-1)!, this.overscan)
+    this.updateVisibleInternal(indices[0]!, indices.at(-1)!, this.overscan)
   }
 
   private reconcileCurrentRetention(): void {
@@ -523,7 +548,7 @@ export class PageDomVirtualizer {
       this.reconcile(new Set(this.entries.keys()))
       return
     }
-    this.updateVisible(this.visibleRange.first, this.visibleRange.last, this.visibleRange.overscan)
+    this.updateVisibleInternal(this.visibleRange.first, this.visibleRange.last, this.visibleRange.overscan)
   }
 
   private reconcile(retained: ReadonlySet<number>): void {
@@ -561,7 +586,7 @@ export class PageDomVirtualizer {
   }
 
   private mountIndex(index: number): MountedPageRecord | undefined {
-    if (this.mounted.has(index))
+    if (this.mounted.has(index) || this.mounting.has(index))
       return undefined
     const entry = this.entries.get(index)
     if (!entry)
@@ -570,6 +595,10 @@ export class PageDomVirtualizer {
   }
 
   private mountEntry(index: number, entry: VirtualPageEntry): MountedPageRecord {
+    if (this.mounting.has(index))
+      throw new Error('PAGE_DOM_MOUNT_REENTRANT')
+    const operation = Object.freeze({})
+    this.mounting.set(index, operation)
     try {
       const dispose = entry.mount()
       if (typeof dispose !== 'function')
@@ -580,8 +609,20 @@ export class PageDomVirtualizer {
       return record
     }
     catch (error) {
-      entry.wrapper.replaceChildren()
+      const cleanupErrors: unknown[] = []
+      try {
+        entry.wrapper.replaceChildren()
+      }
+      catch (cleanupError) {
+        cleanupErrors.push(cleanupError)
+      }
+      if (cleanupErrors.length > 0)
+        throw new AggregateError([error, ...cleanupErrors], 'PAGE_DOM_MOUNT_FAILED')
       throw error
+    }
+    finally {
+      if (this.mounting.get(index) === operation)
+        this.mounting.delete(index)
     }
   }
 
@@ -643,6 +684,18 @@ export class PageDomVirtualizer {
     if (this.disposed)
       throw new Error('PAGE_DOM_VIRTUALIZER_DISPOSED')
   }
+
+  private runPublicMutation<T>(mutation: () => T): T {
+    if (this.publicMutationActive || this.mounting.size > 0)
+      throw new Error('PAGE_DOM_MUTATION_REENTRANT')
+    this.publicMutationActive = true
+    try {
+      return mutation()
+    }
+    finally {
+      this.publicMutationActive = false
+    }
+  }
 }
 
 function assertEntry(entry: VirtualPageEntry): void {
@@ -693,4 +746,15 @@ function resolveMaximumIndex(indices: Iterable<number>): number {
   for (const index of indices)
     maximum = Math.max(maximum, index)
   return maximum
+}
+
+function excludeKnownErrors(primary: unknown, cleanup: readonly unknown[]): unknown[] {
+  const known = new Set(flattenErrors(primary))
+  return cleanup.filter(error => !known.has(error))
+}
+
+function flattenErrors(error: unknown): unknown[] {
+  if (!(error instanceof AggregateError))
+    return [error]
+  return error.errors.flatMap(flattenErrors)
 }

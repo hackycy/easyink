@@ -5,7 +5,7 @@ import type { JsonValue, UnitType } from '@easyink/shared'
 import type { CommittedPagePlan, RuntimeMaterialInstancePlan } from './layout-runtime'
 import type { ProfileMaterialRuntime } from './material-runtime'
 import type { ViewerDiagnosticEvent, ViewerRenderContext, ViewerRenderSize } from './types'
-import { createBrowserDomCapabilities, createBrowserDomFallbackCapabilities, createBrowserDomHostMount, renderViewerTree } from '@easyink/browser-dom'
+import { createBrowserDomCapabilities, createBrowserDomFallbackCapabilities, createBrowserDomHostMount, renderViewerTree, snapshotViewerTreePolicy } from '@easyink/browser-dom'
 import { createLayoutConstraintKey, createNonFragmentingMaterialPlans, freezeMaterialFragmentPlan, freezeMaterialLayoutPlan, groupPageLayerPlansByPlacement, inspectMaterialNode, PAGE_CONTENT_LAYER_STACK_INDEX, resolvePageLayerPlans, resolvePageLayerStackIndex, VIEWER_TREE_ABSOLUTE_MAX_NODES, viewerElement, viewerFragment, viewerText } from '@easyink/core'
 import { cloneJsonValue, deepFreezeJsonValue, UNIT_FACTOR } from '@easyink/shared'
 import { PageDomVirtualizer } from './page-dom-virtualizer'
@@ -30,6 +30,20 @@ export interface RenderSurfaceOptions {
     policy?: ViewerTreePolicy
     imperativeDom?: Iterable<string>
     maxNodes: number
+  }
+}
+
+interface CommittedRenderSurfaceOptions {
+  readonly document: Document
+  readonly zoom: number
+  readonly unit: string
+  readonly data: Readonly<Record<string, unknown>>
+  readonly pageSchema: PageSchema
+  readonly nodeStates: ReadonlyMap<string, MaterialNodeLoadState>
+  readonly browserDom?: {
+    readonly policy?: ViewerTreePolicy
+    readonly imperativeDom: readonly string[]
+    readonly maxNodes: number
   }
 }
 
@@ -601,13 +615,15 @@ export function renderPages(
   diagnostics: ViewerDiagnosticEvent[],
   virtualizer?: PageDomVirtualizer,
 ): PageDOM[] {
-  const { container, document, zoom, unit, browserDom } = options
-  const nodeStates = options.nodeStates ?? new Map<string, MaterialNodeLoadState>()
+  const { container } = options
   const committedPages = pages.map(snapshotPageEntry)
-  const committedResolvedProps = snapshotResolvedProps(committedPages, options.resolvedPropsMap)
-  container.replaceChildren()
+  const relevantNodeIds = collectRelevantNodeIds(committedPages)
+  const committedResolvedProps = snapshotResolvedProps(relevantNodeIds, options.resolvedPropsMap)
+  const committedOptions = snapshotRenderSurfaceOptions(options, relevantNodeIds)
+  const { document, zoom, unit, browserDom } = committedOptions
 
   const pageDOMs: PageDOM[] = []
+  const candidateFragment = document.createDocumentFragment()
   const pageLayerBucketsBySize = new Map<string, PageLayerRenderPlanBuckets>()
   const hostImperativeDom = new Set(browserDom?.imperativeDom ?? [])
   const pageVirtualizer = virtualizer ?? new PageDomVirtualizer({ createIntersectionObserver: null })
@@ -630,10 +646,9 @@ export function renderPages(
           page,
           stableWrapper,
           materials,
-          options,
+          options: committedOptions,
           resolvedPropsMap: committedResolvedProps,
           diagnostics,
-          nodeStates,
           hostImperativeDom,
           pageLayerBucketsBySize,
         }),
@@ -678,16 +693,16 @@ export function renderPages(
           }
         },
       })
-      container.appendChild(stableWrapper)
+      candidateFragment.appendChild(stableWrapper)
     }
     if (ownsVirtualizer && remainingPages === 0)
       pageVirtualizer.dispose()
+    container.replaceChildren(candidateFragment)
   }
   catch (error) {
     const cleanupErrors: unknown[] = []
     for (let index = pageDOMs.length - 1; index >= 0; index--)
       pageDOMs[index]!.dispose(cleanupError => cleanupErrors.push(cleanupError))
-    container.replaceChildren()
     if (cleanupErrors.length > 0)
       throw new AggregateError([error, ...cleanupErrors], 'PAGE_DOM_RENDER_FAILED')
     throw error
@@ -700,17 +715,16 @@ interface LegacyPageMountInput {
   readonly page: PagePlanEntry
   readonly stableWrapper: HTMLElement
   readonly materials: ProfileMaterialRuntime
-  readonly options: RenderSurfaceOptions
+  readonly options: CommittedRenderSurfaceOptions
   readonly resolvedPropsMap: ReadonlyMap<string, Record<string, unknown>>
   readonly diagnostics: ViewerDiagnosticEvent[]
-  readonly nodeStates: ReadonlyMap<string, MaterialNodeLoadState>
   readonly hostImperativeDom: ReadonlySet<string>
   readonly pageLayerBucketsBySize: Map<string, PageLayerRenderPlanBuckets>
 }
 
 function mountLegacyPage(input: LegacyPageMountInput): () => void {
-  const { page, stableWrapper, materials, options, resolvedPropsMap, diagnostics, nodeStates, hostImperativeDom, pageLayerBucketsBySize } = input
-  const { document, zoom, unit, data, pageSchema, browserDom } = options
+  const { page, stableWrapper, materials, options, resolvedPropsMap, diagnostics, hostImperativeDom, pageLayerBucketsBySize } = input
+  const { document, zoom, unit, data, pageSchema, nodeStates, browserDom } = options
   const { wrapper, pageEl } = createPageElement(document, page, pageSchema, unit, zoom)
   wrapper.style.margin = '0'
   const contentLayer = createContentLayer(document)
@@ -890,9 +904,22 @@ function snapshotPageEntry(page: PagePlanEntry): PagePlanEntry {
 }
 
 function snapshotResolvedProps(
-  pages: readonly PagePlanEntry[],
+  relevantNodeIds: ReadonlySet<string>,
   source: ReadonlyMap<string, Record<string, unknown>>,
 ): ReadonlyMap<string, Record<string, unknown>> {
+  const snapshot = new Map<string, Record<string, unknown>>()
+  for (const nodeId of relevantNodeIds) {
+    if (!source.has(nodeId))
+      continue
+    const cloned = deepFreezeJsonValue(cloneJsonValue(source.get(nodeId) as unknown as JsonValue))
+    if (cloned === null || typeof cloned !== 'object' || Array.isArray(cloned))
+      throw new TypeError('PAGE_DOM_RESOLVED_PROPS_INVALID')
+    snapshot.set(nodeId, cloned as Record<string, unknown>)
+  }
+  return snapshot
+}
+
+function collectRelevantNodeIds(pages: readonly PagePlanEntry[]): ReadonlySet<string> {
   const relevantNodeIds = new Set<string>()
   const visit = (node: MaterialNode<unknown>): void => {
     if (relevantNodeIds.has(node.id))
@@ -909,17 +936,108 @@ function snapshotResolvedProps(
     for (const fragment of page.fragments ?? [])
       visit(fragment.node)
   }
+  return relevantNodeIds
+}
 
-  const snapshot = new Map<string, Record<string, unknown>>()
+function snapshotRenderSurfaceOptions(
+  options: RenderSurfaceOptions,
+  relevantNodeIds: ReadonlySet<string>,
+): CommittedRenderSurfaceOptions {
+  if (!Number.isFinite(options.zoom) || options.zoom <= 0)
+    throw new RangeError('PAGE_DOM_ZOOM_INVALID')
+  resolveLayoutUnit(options.unit)
+  const data = cloneAndFreezeRecord(options.data, 'PAGE_DOM_DATA_INVALID')
+  const pageSchema = snapshotPageSchema(options.pageSchema)
+  const nodeStates = new Map<string, MaterialNodeLoadState>()
   for (const nodeId of relevantNodeIds) {
-    if (!source.has(nodeId))
+    const state = options.nodeStates?.get(nodeId)
+    if (!state)
       continue
-    const cloned = deepFreezeJsonValue(cloneJsonValue(source.get(nodeId) as unknown as JsonValue))
-    if (cloned === null || typeof cloned !== 'object' || Array.isArray(cloned))
-      throw new TypeError('PAGE_DOM_RESOLVED_PROPS_INVALID')
-    snapshot.set(nodeId, cloned as Record<string, unknown>)
+    nodeStates.set(
+      nodeId,
+      deepFreezeJsonValue(cloneJsonValue(state as unknown as JsonValue)) as unknown as MaterialNodeLoadState,
+    )
   }
-  return snapshot
+  const browserDom = options.browserDom === undefined
+    ? undefined
+    : snapshotBrowserDomOptions(options.browserDom)
+  return Object.freeze({
+    document: options.document,
+    zoom: options.zoom,
+    unit: options.unit,
+    data,
+    pageSchema,
+    nodeStates,
+    ...(browserDom ? { browserDom } : {}),
+  })
+}
+
+function snapshotPageSchema(source: PageSchema): PageSchema {
+  const candidate: Record<string, unknown> = definedProperties({
+    mode: source.mode,
+    width: source.width,
+    height: source.height,
+    pages: source.pages,
+    scale: source.scale,
+    radius: source.radius,
+    offsetX: source.offsetX,
+    offsetY: source.offsetY,
+    copies: source.copies,
+    blankPolicy: source.blankPolicy,
+    font: source.font,
+  })
+  if (source.grid !== undefined)
+    candidate.grid = definedProperties({ ...source.grid })
+  if (source.background !== undefined)
+    candidate.background = definedProperties({ ...source.background })
+  if (source.layers !== undefined)
+    candidate.layers = source.layers.map(layer => definedProperties({ ...layer }))
+  if (source.print !== undefined)
+    candidate.print = definedProperties({ ...source.print })
+  if (source.pageModel !== undefined) {
+    candidate.pageModel = {
+      kind: source.pageModel.kind,
+      paper: definedProperties({ ...source.pageModel.paper }),
+    }
+  }
+  if (source.layout !== undefined)
+    candidate.layout = definedProperties({ ...source.layout })
+  if (source.pagination !== undefined)
+    candidate.pagination = definedProperties({ ...source.pagination })
+  if (source.reflow !== undefined)
+    candidate.reflow = definedProperties({ ...source.reflow })
+  if (source.extensions !== undefined)
+    candidate.extensions = source.extensions
+  return deepFreezeJsonValue(cloneJsonValue(candidate as JsonValue)) as unknown as PageSchema
+}
+
+function definedProperties(source: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(source).filter(([, value]) => value !== undefined))
+}
+
+function snapshotBrowserDomOptions(
+  options: NonNullable<RenderSurfaceOptions['browserDom']>,
+): NonNullable<CommittedRenderSurfaceOptions['browserDom']> {
+  if (!Number.isSafeInteger(options.maxNodes) || options.maxNodes < 1 || options.maxNodes > VIEWER_TREE_ABSOLUTE_MAX_NODES)
+    throw new RangeError('PAGE_DOM_MAX_NODES_INVALID')
+  const imperativeDom = Object.freeze([...(options.imperativeDom ?? [])])
+  if (!imperativeDom.every(value => typeof value === 'string'))
+    throw new TypeError('PAGE_DOM_IMPERATIVE_DOM_INVALID')
+  return Object.freeze({
+    maxNodes: options.maxNodes,
+    imperativeDom,
+    ...(options.policy ? { policy: snapshotViewerTreePolicy(options.policy) } : {}),
+  })
+}
+
+function cloneAndFreezeRecord(
+  value: Readonly<Record<string, unknown>>,
+  code: string,
+): Readonly<Record<string, unknown>> {
+  const cloned = deepFreezeJsonValue(cloneJsonValue(value as unknown as JsonValue))
+  if (cloned === null || typeof cloned !== 'object' || Array.isArray(cloned))
+    throw new TypeError(code)
+  return cloned as Readonly<Record<string, unknown>>
 }
 
 function createSlotMountOutputs(

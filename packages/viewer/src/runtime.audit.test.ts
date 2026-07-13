@@ -119,6 +119,61 @@ afterEach(() => {
 })
 
 describe('viewer audit risk regressions', () => {
+  it('keeps the active virtualized batch when a replacement DOM swap fails', async () => {
+    const container = document.createElement('div')
+    const viewer = createViewer({ container })
+    await viewer.open({ schema: fixedSchema([textNode('atomic-old', undefined, { content: 'old active' })]) })
+    const oldChildren = [...container.childNodes]
+    const state = viewer as unknown as { _pageVirtualizer?: { updateVisible: (first: number, last: number, overscan: number) => void } }
+    const oldVirtualizer = state._pageVirtualizer
+    expect(oldVirtualizer).toBeDefined()
+    const originalReplace = container.replaceChildren.bind(container)
+    const swapError = new Error('runtime swap boom')
+    let calls = 0
+    container.replaceChildren = (...nodes) => {
+      calls++
+      if (calls === 1)
+        throw swapError
+      originalReplace(...nodes)
+    }
+
+    await expect(viewer.updateData({ next: true })).rejects.toThrow(swapError)
+
+    expect([...container.childNodes]).toEqual(oldChildren)
+    expect(state._pageVirtualizer).toBe(oldVirtualizer)
+    expect(() => oldVirtualizer!.updateVisible(0, 0, 0)).not.toThrow()
+    container.replaceChildren = originalReplace
+    await viewer.destroy()
+  })
+
+  it('adopts a successful replacement before reporting old virtualizer cleanup errors', async () => {
+    const container = document.createElement('div')
+    const observed = collectDiagnostics()
+    const viewer = createViewer({ container })
+    await viewer.open({
+      schema: fixedSchema([textNode('atomic-cleanup', undefined, { content: 'active' })]),
+      onDiagnostic: observed.onDiagnostic,
+    })
+    const state = viewer as unknown as { _pageVirtualizer?: { dispose: () => void } }
+    const oldVirtualizer = state._pageVirtualizer!
+    const originalDispose = oldVirtualizer.dispose.bind(oldVirtualizer)
+    oldVirtualizer.dispose = () => {
+      originalDispose()
+      throw new Error('old cleanup boom')
+    }
+
+    await viewer.updateData({ next: true })
+
+    expect(state._pageVirtualizer).toBeDefined()
+    expect(state._pageVirtualizer).not.toBe(oldVirtualizer)
+    expect(container.querySelector('.ei-viewer-page')).not.toBeNull()
+    expect(observed.diagnostics).toContainEqual(expect.objectContaining({
+      code: 'MATERIAL_DISPOSE_ERROR',
+      message: 'old cleanup boom',
+    }))
+    await viewer.destroy()
+  })
+
   it('bounds configured viewer tree node budgets', () => {
     expect(() => createViewer({ browserDom: { maxNodes: 0 } })).toThrow('VIEWER_MAX_NODES_INVALID')
     expect(() => createViewer({ browserDom: { maxNodes: VIEWER_TREE_ABSOLUTE_MAX_NODES + 1 } })).toThrow('VIEWER_MAX_NODES_INVALID')

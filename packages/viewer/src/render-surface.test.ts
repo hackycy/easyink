@@ -1,8 +1,8 @@
-import type { MaterialManifest, MaterialViewerExtension, PagePlanEntry, ViewerFacetCapabilities, ViewerRenderContext } from '@easyink/core'
+import type { MaterialManifest, MaterialNodeLoadState, MaterialViewerExtension, PagePlanEntry, ViewerFacetCapabilities, ViewerRenderContext } from '@easyink/core'
 import type { MaterialNode, PageSchema } from '@easyink/schema'
 import type { CommittedPagePlan, RuntimeMaterialInstancePlan } from './layout-runtime'
 import type { ViewerDiagnosticEvent } from './types'
-import { createBrowserDomCapabilities } from '@easyink/browser-dom'
+import { createBrowserDomCapabilities, DEFAULT_VIEWER_TREE_POLICY } from '@easyink/browser-dom'
 import { defineMaterialManifest, freezeMaterialFragmentPlan, freezeMaterialLayoutPlan, viewerElement, viewerFragment, viewerImperativeDom, viewerSanitizedMarkup, viewerText } from '@easyink/core'
 import { createTestCompiledMaterialProfile, createTestMaterialManifest } from '@easyink/core/testing'
 import { describe, expect, it, vi } from 'vitest'
@@ -674,18 +674,54 @@ describe('renderPages', () => {
     let capturedContext: ViewerRenderContext | undefined
     const resolvedOriginal = { text: 'resolved original', nested: { text: 'resolved nested original' } }
     const resolvedPropsMap = new Map<string, Record<string, unknown>>([[elementNode.id, resolvedOriginal]])
+    const data = { nested: { text: 'data original' } }
+    const pageSchema: PageSchema = {
+      mode: 'fixed',
+      width: 80,
+      height: 60,
+      font: 'Snapshot Font',
+      background: { color: '#ffeeaa' },
+    }
+    const nodeStates = new Map<string, MaterialNodeLoadState>([[elementNode.id, { status: 'ready', diagnostics: [] }]])
+    const imperativeDom = ['chart']
+    const htmlTags = new Set(DEFAULT_VIEWER_TREE_POLICY.htmlTags)
+    const policy = {
+      ...DEFAULT_VIEWER_TREE_POLICY,
+      htmlTags,
+    }
+    const browserDom = { maxNodes: 10, imperativeDom, policy }
     const materials = await createMaterials({
       render(node, context) {
         capturedNode = node
         capturedContext = context
-        return { tree: viewerText('snapshot rendered') }
+        return {
+          tree: viewerFragment([
+            viewerElement('div', {}, [viewerText('snapshot rendered')]),
+            viewerImperativeDom('chart', (host) => {
+              const mount = host.render(viewerText('imperative original'))
+              return () => mount.dispose()
+            }),
+          ]),
+        }
       },
-    })
+    }, { imperativeDom: ['chart'] })
     const virtualizer = new PageDomVirtualizer({
       overscan: 0,
       createIntersectionObserver: () => ({ observe() {}, unobserve() {}, disconnect() {} }),
     })
+    const diagnostics: ViewerDiagnosticEvent[] = []
 
+    const options = {
+      container,
+      document,
+      zoom: 1,
+      unit: 'mm',
+      data,
+      resolvedPropsMap,
+      pageSchema,
+      nodeStates,
+      browserDom,
+    }
     renderPages([{
       index: 1,
       width: 80,
@@ -693,15 +729,7 @@ describe('renderPages', () => {
       elements: [elementNode],
       fragments: [{ node: fragmentNode, layoutPlan, fragmentPlan }],
       yOffset: 60,
-    }], materials, {
-      container,
-      document,
-      zoom: 1,
-      unit: 'mm',
-      data: {},
-      resolvedPropsMap,
-      pageSchema: { mode: 'fixed', width: 80, height: 60 },
-    }, [], virtualizer)
+    }], materials, options, diagnostics, virtualizer)
     expect(capturedNode).toBeUndefined()
 
     const elementModel = elementNode.model as { text: string }
@@ -713,10 +741,23 @@ describe('renderPages', () => {
     resolvedOriginal.text = 'resolved mutated'
     resolvedOriginal.nested.text = 'resolved nested mutated'
     resolvedPropsMap.set(elementNode.id, { text: 'resolved map replacement' })
+    data.nested.text = 'data mutated'
+    options.data = { nested: { text: 'data replacement' } }
+    options.zoom = 2
+    options.unit = 'pt'
+    pageSchema.font = 'Mutated Font'
+    pageSchema.background!.color = '#000000'
+    browserDom.maxNodes = 1
+    imperativeDom.splice(0)
+    htmlTags.clear()
+    nodeStates.set(elementNode.id, { status: 'quarantined', diagnostics: [] })
     virtualizer.updateVisible(1, 1, 0)
 
     expect(capturedNode?.model).toEqual({ text: 'resolved original', nested: { text: 'resolved nested original' } })
     expect(capturedContext?.resolvedModel).toEqual({ text: 'resolved original', nested: { text: 'resolved nested original' } })
+    expect(capturedContext?.data).toEqual({ nested: { text: 'data original' } })
+    expect(capturedContext?.zoom).toBe(1)
+    expect(capturedContext?.unit).toBe('mm')
     expect(capturedNode).not.toBe(elementNode)
     expect(capturedContext?.layoutPlan.payload).toEqual({ nested: { text: 'layout original' } })
     expect(capturedContext?.fragmentPlan.renderPayload).toEqual({ nested: { text: 'fragment plan original' } })
@@ -727,6 +768,12 @@ describe('renderPages', () => {
     expect(elementNode.model).toEqual({ text: 'element mutated' })
     expect(fragmentNode.model).toEqual({ text: 'fragment mutated' })
     expect(resolvedOriginal).toEqual({ text: 'resolved mutated', nested: { text: 'resolved nested mutated' } })
+    expect(diagnostics).toEqual([])
+    expect(container.querySelector('[data-element-id="snapshot-node"]')?.hasAttribute('data-render-error')).toBe(false)
+    expect(container.textContent).toContain('imperative original')
+    const pageElement = container.querySelector('.ei-viewer-page') as HTMLElement
+    expect(pageElement.style.fontFamily).toBe('"Snapshot Font"')
+    expect(pageElement.style.backgroundColor).toBe('#ffeeaa')
   })
 
   it('rejects invalid page snapshot data before replacing existing DOM', async () => {
@@ -767,6 +814,53 @@ describe('renderPages', () => {
     expect([...container.childNodes]).toEqual([previous])
   })
 
+  it.each([
+    {
+      name: 'data',
+      override: { data: { invalid: undefined } },
+    },
+    {
+      name: 'imperative DOM iterable',
+      override: { browserDom: { maxNodes: 10, imperativeDom: [1] as unknown as Iterable<string> } },
+    },
+    {
+      name: 'viewer tree policy',
+      override: {
+        browserDom: {
+          maxNodes: 10,
+          policy: { ...DEFAULT_VIEWER_TREE_POLICY, htmlTags: 1 } as never,
+        },
+      },
+    },
+  ])('rejects invalid $name before replacing existing DOM', async ({ override }) => {
+    const container = document.createElement('div')
+    const previous = document.createElement('span')
+    previous.textContent = 'previous'
+    container.appendChild(previous)
+    const replace = vi.spyOn(container, 'replaceChildren')
+    const materials = await createMaterials({ render: () => ({ tree: viewerText('unused') }) })
+
+    expect(() => renderPages([{
+      index: 0,
+      width: 80,
+      height: 60,
+      elements: [],
+      yOffset: 0,
+    }], materials, {
+      container,
+      document,
+      zoom: 1,
+      unit: 'mm',
+      data: {},
+      resolvedPropsMap: new Map(),
+      pageSchema: { mode: 'fixed', width: 80, height: 60 },
+      ...override,
+    }, [])).toThrow()
+
+    expect(replace).not.toHaveBeenCalled()
+    expect([...container.childNodes]).toEqual([previous])
+  })
+
   it('rolls back previously registered page wrappers when a later page is invalid', async () => {
     const container = document.createElement('div')
     const materials = await createMaterials({ render: () => ({ tree: viewerText('page') }) })
@@ -786,6 +880,110 @@ describe('renderPages', () => {
       { index: 1, width: Number.NaN, height: 60, elements: [], yOffset: 60 },
     ], materials, options, [], virtualizer)).toThrow('PAGE_DOM_DIMENSION_INVALID')
     expect(container.childNodes).toHaveLength(0)
+  })
+
+  it('keeps the active page batch untouched when a detached candidate fails', async () => {
+    const container = document.createElement('div')
+    const materials = await createMaterials({
+      render: node => ({ tree: viewerText(String((node.model as { text?: unknown }).text ?? 'page')) }),
+    })
+    const oldNode: MaterialNode = {
+      id: 'old-page',
+      type: 'custom',
+      x: 0,
+      y: 0,
+      width: 10,
+      height: 10,
+      modelVersion: 1,
+      model: { text: 'old active' },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
+    }
+    const options = {
+      container,
+      document,
+      zoom: 1,
+      unit: 'mm',
+      data: {},
+      resolvedPropsMap: new Map<string, Record<string, unknown>>(),
+      pageSchema: { mode: 'fixed' as const, width: 80, height: 60 },
+    }
+    const oldVirtualizer = new PageDomVirtualizer({ createIntersectionObserver: null })
+    renderPages([{ index: 0, width: 80, height: 60, elements: [oldNode], yOffset: 0 }], materials, options, [], oldVirtualizer)
+    const oldChildren = [...container.childNodes]
+    const replace = vi.spyOn(container, 'replaceChildren')
+    const candidateVirtualizer = new PageDomVirtualizer({ createIntersectionObserver: null })
+
+    expect(() => renderPages([
+      { index: 0, width: 80, height: 60, elements: [{ ...oldNode, id: 'candidate', model: { text: 'candidate' } }], yOffset: 0 },
+      { index: 1, width: Number.NaN, height: 60, elements: [], yOffset: 60 },
+    ], materials, options, [], candidateVirtualizer)).toThrow('PAGE_DOM_DIMENSION_INVALID')
+
+    expect(replace).not.toHaveBeenCalled()
+    expect([...container.childNodes]).toEqual(oldChildren)
+    expect(container.textContent).toContain('old active')
+    oldVirtualizer.updateVisible(0, 0, 0)
+    expect(container.textContent).toContain('old active')
+    candidateVirtualizer.dispose()
+    oldVirtualizer.dispose()
+  })
+
+  it('cleans a fully mounted candidate when the single atomic DOM swap throws', async () => {
+    const container = document.createElement('div')
+    container.textContent = 'old active'
+    const dispose = vi.fn()
+    const materials = await createMaterials({
+      render: () => ({
+        tree: viewerImperativeDom('chart', (host) => {
+          const mount = host.render(viewerText('candidate mounted'))
+          return () => {
+            mount.dispose()
+            dispose()
+          }
+        }),
+      }),
+    }, { imperativeDom: ['chart'] })
+    const node: MaterialNode = {
+      id: 'swap-candidate',
+      type: 'custom',
+      x: 0,
+      y: 0,
+      width: 10,
+      height: 10,
+      modelVersion: 1,
+      model: {},
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
+    }
+    const swapError = new Error('swap boom')
+    const originalReplace = container.replaceChildren.bind(container)
+    let replaceCalls = 0
+    container.replaceChildren = (...nodes) => {
+      replaceCalls++
+      if (replaceCalls === 1)
+        throw swapError
+      originalReplace(...nodes)
+    }
+    const virtualizer = new PageDomVirtualizer({ createIntersectionObserver: null })
+
+    expect(() => renderPages([{ index: 0, width: 80, height: 60, elements: [node], yOffset: 0 }], materials, {
+      container,
+      document,
+      zoom: 1,
+      unit: 'mm',
+      data: {},
+      resolvedPropsMap: new Map(),
+      pageSchema: { mode: 'fixed', width: 80, height: 60 },
+      browserDom: { maxNodes: 10, imperativeDom: ['chart'] },
+    }, [], virtualizer)).toThrow(swapError)
+
+    expect(replaceCalls).toBe(1)
+    expect(container.textContent).toBe('old active')
+    expect(dispose).toHaveBeenCalledTimes(1)
+    virtualizer.dispose()
+    expect(dispose).toHaveBeenCalledTimes(1)
   })
 
   it('provides frozen canonical fallback layout facts to legacy material renderers', async () => {
