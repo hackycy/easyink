@@ -39,6 +39,22 @@ interface MaterializationScope {
   readonly mode: 'print' | 'export'
 }
 
+interface WrapperSnapshot {
+  readonly children: readonly ChildNode[]
+  readonly width: string
+  readonly height: string
+}
+
+interface RegistrationSnapshot {
+  readonly index: number
+  readonly existing?: VirtualPageEntry
+  readonly mounted: ReadonlyMap<number, () => void>
+  readonly visibleIndices: ReadonlySet<number>
+  readonly observer?: PageIntersectionObserver
+  readonly observerResolved: boolean
+  readonly wrapper: WrapperSnapshot
+}
+
 export function selectRetainedPages(input: RetainedPageSelection): ReadonlySet<number> {
   assertPageCount(input.pageCount)
   assertPageIndex(input.firstVisible)
@@ -111,14 +127,22 @@ export class PageDomVirtualizer {
       applyWrapperDimensions(entry)
       return
     }
-    if (existing)
-      this.unregister(entry.index)
-
-    this.resolveObserver(entry.wrapper)
-    applyWrapperDimensions(entry)
-    this.entries.set(entry.index, entry)
-    this.indexByWrapper.set(entry.wrapper, entry.index)
+    const snapshot = this.captureRegistrationSnapshot(entry, existing)
     try {
+      if (existing) {
+        this.entries.delete(entry.index)
+        this.visibleIndices.delete(entry.index)
+        this.indexByWrapper.delete(existing.wrapper)
+        this.observer?.unobserve(existing.wrapper)
+        const errors = this.unmountIndex(entry.index, existing)
+        if (errors.length > 0)
+          throw new AggregateError(errors, 'PAGE_DOM_UNREGISTER_FAILED')
+      }
+
+      this.resolveObserver(entry.wrapper)
+      applyWrapperDimensions(entry)
+      this.entries.set(entry.index, entry)
+      this.indexByWrapper.set(entry.wrapper, entry.index)
       if (this.observer)
         this.observer.observe(entry.wrapper)
       else
@@ -127,20 +151,9 @@ export class PageDomVirtualizer {
         this.reconcileCurrentRetention()
     }
     catch (error) {
-      try {
-        this.observer?.unobserve(entry.wrapper)
-      }
-      catch {
-        // Preserve the registration failure as the primary error.
-      }
-      this.entries.delete(entry.index)
-      this.indexByWrapper.delete(entry.wrapper)
-      try {
-        entry.wrapper.replaceChildren()
-      }
-      catch {
-        // Preserve the registration failure as the primary error.
-      }
+      const cleanupErrors = this.rollbackRegistration(snapshot, entry)
+      if (cleanupErrors.length > 0)
+        throw new AggregateError([error, ...cleanupErrors], 'PAGE_DOM_REGISTER_FAILED')
       throw error
     }
   }
@@ -278,6 +291,110 @@ export class PageDomVirtualizer {
       this.finishAfterFailure(scope)
       throw error
     }
+  }
+
+  private captureRegistrationSnapshot(
+    candidate: VirtualPageEntry,
+    existing: VirtualPageEntry | undefined,
+  ): RegistrationSnapshot {
+    return Object.freeze({
+      index: candidate.index,
+      ...(existing ? { existing } : {}),
+      mounted: new Map(this.mounted),
+      visibleIndices: new Set(this.visibleIndices),
+      ...(this.observer ? { observer: this.observer } : {}),
+      observerResolved: this.observerResolved,
+      wrapper: Object.freeze({
+        children: Object.freeze([...candidate.wrapper.childNodes]),
+        width: candidate.wrapper.style.width,
+        height: candidate.wrapper.style.height,
+      }),
+    })
+  }
+
+  private rollbackRegistration(
+    snapshot: RegistrationSnapshot,
+    candidate: VirtualPageEntry,
+  ): unknown[] {
+    const errors: unknown[] = []
+    const currentEntry = this.entries.get(snapshot.index)
+
+    for (const index of sortedIndices(this.mounted.keys()).reverse()) {
+      const mountedEntry = this.entries.get(index)
+      if (snapshot.mounted.get(index) !== this.mounted.get(index))
+        errors.push(...this.unmountIndex(index, mountedEntry))
+    }
+
+    if (currentEntry !== snapshot.existing) {
+      try {
+        if (currentEntry)
+          this.observer?.unobserve(currentEntry.wrapper)
+      }
+      catch (error) {
+        errors.push(error)
+      }
+      if (currentEntry)
+        this.indexByWrapper.delete(currentEntry.wrapper)
+    }
+
+    if (this.observer !== snapshot.observer || this.observerResolved !== snapshot.observerResolved) {
+      if (this.observer !== snapshot.observer) {
+        try {
+          this.observer?.disconnect()
+        }
+        catch (error) {
+          errors.push(error)
+        }
+      }
+      this.observer = snapshot.observer
+      this.observerResolved = snapshot.observerResolved
+    }
+
+    this.entries.delete(snapshot.index)
+    if (snapshot.existing) {
+      this.entries.set(snapshot.index, snapshot.existing)
+      this.indexByWrapper.set(snapshot.existing.wrapper, snapshot.index)
+      if (currentEntry !== snapshot.existing) {
+        try {
+          this.observer?.observe(snapshot.existing.wrapper)
+        }
+        catch (error) {
+          errors.push(error)
+        }
+      }
+    }
+    this.visibleIndices.clear()
+    for (const index of snapshot.visibleIndices)
+      this.visibleIndices.add(index)
+
+    for (const index of sortedIndices(snapshot.mounted.keys())) {
+      if (this.mounted.has(index))
+        continue
+      try {
+        this.mountIndex(index)
+      }
+      catch (error) {
+        errors.push(error)
+      }
+    }
+
+    const candidateWasRegistered = snapshot.existing?.wrapper === candidate.wrapper
+    if (!candidateWasRegistered) {
+      try {
+        candidate.wrapper.replaceChildren(...snapshot.wrapper.children)
+      }
+      catch (error) {
+        errors.push(error)
+      }
+    }
+    try {
+      candidate.wrapper.style.width = snapshot.wrapper.width
+      candidate.wrapper.style.height = snapshot.wrapper.height
+    }
+    catch (error) {
+      errors.push(error)
+    }
+    return errors
   }
 
   private finishAfterFailure(scope: MaterializationScope): void {

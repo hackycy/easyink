@@ -1,13 +1,13 @@
 import type { BrowserDomCapabilities, RenderViewerTreeOptions, ViewerTreeMount, ViewerTreePolicy } from '@easyink/browser-dom'
 import type { LayoutConstraints, MaterialFragmentPlan, MaterialLayoutPlan, MaterialNodeLoadState, MaterialRenderBudgetToken, MaterialRenderNodeKind, PageLayerRenderPlan, PageLayerRenderPlanBuckets, PagePlanEntry, TextWatermarkPageLayerPlan, ViewerRenderTree } from '@easyink/core'
 import type { MaterialNode, PageBackground, PageSchema } from '@easyink/schema'
-import type { UnitType } from '@easyink/shared'
+import type { JsonValue, UnitType } from '@easyink/shared'
 import type { CommittedPagePlan, RuntimeMaterialInstancePlan } from './layout-runtime'
 import type { ProfileMaterialRuntime } from './material-runtime'
 import type { ViewerDiagnosticEvent, ViewerRenderContext, ViewerRenderSize } from './types'
 import { createBrowserDomCapabilities, createBrowserDomFallbackCapabilities, createBrowserDomHostMount, renderViewerTree } from '@easyink/browser-dom'
-import { createLayoutConstraintKey, createNonFragmentingMaterialPlans, groupPageLayerPlansByPlacement, inspectMaterialNode, PAGE_CONTENT_LAYER_STACK_INDEX, resolvePageLayerPlans, resolvePageLayerStackIndex, VIEWER_TREE_ABSOLUTE_MAX_NODES, viewerElement, viewerFragment, viewerText } from '@easyink/core'
-import { UNIT_FACTOR } from '@easyink/shared'
+import { createLayoutConstraintKey, createNonFragmentingMaterialPlans, freezeMaterialFragmentPlan, freezeMaterialLayoutPlan, groupPageLayerPlansByPlacement, inspectMaterialNode, PAGE_CONTENT_LAYER_STACK_INDEX, resolvePageLayerPlans, resolvePageLayerStackIndex, VIEWER_TREE_ABSOLUTE_MAX_NODES, viewerElement, viewerFragment, viewerText } from '@easyink/core'
+import { cloneJsonValue, deepFreezeJsonValue, UNIT_FACTOR } from '@easyink/shared'
 import { PageDomVirtualizer } from './page-dom-virtualizer'
 import { safeSummarizeThrown } from './safe-thrown'
 
@@ -603,6 +603,7 @@ export function renderPages(
 ): PageDOM[] {
   const { container, document, zoom, unit, browserDom } = options
   const nodeStates = options.nodeStates ?? new Map<string, MaterialNodeLoadState>()
+  const committedPages = pages.map(snapshotPageEntry)
   container.replaceChildren()
 
   const pageDOMs: PageDOM[] = []
@@ -614,8 +615,7 @@ export function renderPages(
   let remainingPages = 0
 
   try {
-    for (const sourcePage of pages) {
-      const page = snapshotPageEntry(sourcePage)
+    for (const page of committedPages) {
       if (pageIndices.has(page.index))
         throw new Error('PAGE_DOM_PAGE_INDEX_DUPLICATE')
       pageIndices.add(page.index)
@@ -840,10 +840,49 @@ function createVirtualPageWrapper(
 }
 
 function snapshotPageEntry(page: PagePlanEntry): PagePlanEntry {
+  const nodesByReference = new WeakMap<MaterialNode<unknown>, MaterialNode<unknown>>()
+  const nodesById = new Map<string, MaterialNode<unknown>>()
+  const layoutsByReference = new WeakMap<MaterialLayoutPlan, MaterialLayoutPlan>()
+  const fragmentsByReference = new WeakMap<MaterialFragmentPlan, MaterialFragmentPlan>()
+  const snapshotNode = (node: MaterialNode<unknown>): MaterialNode<unknown> => {
+    const existing = nodesByReference.get(node) ?? nodesById.get(node.id)
+    if (existing) {
+      nodesByReference.set(node, existing)
+      return existing
+    }
+    const cloned = deepFreezeJsonValue(cloneJsonValue(node as unknown as JsonValue)) as unknown as MaterialNode<unknown>
+    nodesByReference.set(node, cloned)
+    nodesById.set(node.id, cloned)
+    return cloned
+  }
+  const snapshotLayout = (plan: MaterialLayoutPlan): MaterialLayoutPlan => {
+    const existing = layoutsByReference.get(plan)
+    if (existing)
+      return existing
+    const frozen = freezeMaterialLayoutPlan(plan)
+    layoutsByReference.set(plan, frozen)
+    return frozen
+  }
+  const snapshotFragment = (plan: MaterialFragmentPlan): MaterialFragmentPlan => {
+    const existing = fragmentsByReference.get(plan)
+    if (existing)
+      return existing
+    const frozen = freezeMaterialFragmentPlan(plan)
+    fragmentsByReference.set(plan, frozen)
+    return frozen
+  }
+  const elements = Object.freeze(page.elements.map(snapshotNode))
+  const fragments = page.fragments === undefined
+    ? undefined
+    : Object.freeze(page.fragments.map(fragment => Object.freeze({
+        node: snapshotNode(fragment.node),
+        layoutPlan: snapshotLayout(fragment.layoutPlan),
+        fragmentPlan: snapshotFragment(fragment.fragmentPlan),
+      })))
   return Object.freeze({
     ...page,
-    elements: Object.freeze([...page.elements]),
-    ...(page.fragments ? { fragments: Object.freeze([...page.fragments]) } : {}),
+    elements,
+    ...(fragments === undefined ? {} : { fragments }),
   }) as PagePlanEntry
 }
 

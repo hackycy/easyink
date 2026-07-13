@@ -630,6 +630,136 @@ describe('mountCommittedMaterial', () => {
 })
 
 describe('renderPages', () => {
+  it('mounts an invisible page from registration-time immutable node and fragment facts', async () => {
+    const container = document.createElement('div')
+    const elementNode: MaterialNode = {
+      id: 'snapshot-node',
+      type: 'custom',
+      x: 5,
+      y: 60,
+      width: 30,
+      height: 20,
+      modelVersion: 1,
+      model: { text: 'element original' },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
+    }
+    const fragmentNode: MaterialNode = {
+      ...elementNode,
+      model: { text: 'fragment original' },
+    }
+    const layoutPlan = {
+      instanceKey: 'snapshot-instance',
+      nodeId: elementNode.id,
+      nodeRevision: 1,
+      constraintKey: '30:20:mm:horizontal-tb',
+      borderBox: { x: 5, y: 60, width: 30, height: 20 },
+      contentBox: { x: 5, y: 60, width: 30, height: 20 },
+      slotBoxes: [],
+      breakOpportunities: [],
+      diagnostics: [],
+      payload: { nested: { text: 'layout original' } },
+    }
+    const fragmentPlan = {
+      id: 'snapshot-fragment',
+      sourceInstanceKey: layoutPlan.instanceKey,
+      sourceNodeId: elementNode.id,
+      box: { x: 5, y: 0, width: 30, height: 20 },
+      consumedRange: { startBlockOffset: 0, endBlockOffset: 20 },
+      renderPayload: { nested: { text: 'fragment plan original' } },
+      diagnostics: [],
+    }
+    let capturedNode: Readonly<MaterialNode> | undefined
+    let capturedContext: ViewerRenderContext | undefined
+    const materials = await createMaterials({
+      render(node, context) {
+        capturedNode = node
+        capturedContext = context
+        return { tree: viewerText('snapshot rendered') }
+      },
+    })
+    const virtualizer = new PageDomVirtualizer({
+      overscan: 0,
+      createIntersectionObserver: () => ({ observe() {}, unobserve() {}, disconnect() {} }),
+    })
+
+    renderPages([{
+      index: 1,
+      width: 80,
+      height: 60,
+      elements: [elementNode],
+      fragments: [{ node: fragmentNode, layoutPlan, fragmentPlan }],
+      yOffset: 60,
+    }], materials, {
+      container,
+      document,
+      zoom: 1,
+      unit: 'mm',
+      data: {},
+      resolvedPropsMap: new Map(),
+      pageSchema: { mode: 'fixed', width: 80, height: 60 },
+    }, [], virtualizer)
+    expect(capturedNode).toBeUndefined()
+
+    const elementModel = elementNode.model as { text: string }
+    const fragmentModel = fragmentNode.model as { text: string }
+    elementModel.text = 'element mutated'
+    fragmentModel.text = 'fragment mutated'
+    layoutPlan.payload.nested.text = 'layout mutated'
+    fragmentPlan.renderPayload.nested.text = 'fragment plan mutated'
+    virtualizer.updateVisible(1, 1, 0)
+
+    expect(capturedNode?.model).toEqual({ text: 'element original' })
+    expect(capturedNode).not.toBe(elementNode)
+    expect(capturedContext?.layoutPlan.payload).toEqual({ nested: { text: 'layout original' } })
+    expect(capturedContext?.fragmentPlan.renderPayload).toEqual({ nested: { text: 'fragment plan original' } })
+    expect(capturedContext?.layoutPlan).not.toBe(layoutPlan)
+    expect(capturedContext?.fragmentPlan).not.toBe(fragmentPlan)
+    expect(Object.isFrozen(capturedContext?.layoutPlan.payload)).toBe(true)
+    expect(Object.isFrozen(capturedContext?.fragmentPlan.renderPayload)).toBe(true)
+    expect(elementNode.model).toEqual({ text: 'element mutated' })
+    expect(fragmentNode.model).toEqual({ text: 'fragment mutated' })
+  })
+
+  it('rejects invalid page snapshot data before replacing existing DOM', async () => {
+    const container = document.createElement('div')
+    const previous = document.createElement('span')
+    previous.textContent = 'previous'
+    container.appendChild(previous)
+    const materials = await createMaterials({ render: () => ({ tree: viewerText('unused') }) })
+    const invalidNode: MaterialNode = {
+      id: 'invalid-snapshot',
+      type: 'custom',
+      x: 0,
+      y: 0,
+      width: 10,
+      height: 10,
+      modelVersion: 1,
+      model: { invalid: undefined },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
+    }
+
+    expect(() => renderPages([{
+      index: 0,
+      width: 80,
+      height: 60,
+      elements: [invalidNode],
+      yOffset: 0,
+    }], materials, {
+      container,
+      document,
+      zoom: 1,
+      unit: 'mm',
+      data: {},
+      resolvedPropsMap: new Map(),
+      pageSchema: { mode: 'fixed', width: 80, height: 60 },
+    }, [])).toThrow()
+    expect([...container.childNodes]).toEqual([previous])
+  })
+
   it('rolls back previously registered page wrappers when a later page is invalid', async () => {
     const container = document.createElement('div')
     const materials = await createMaterials({ render: () => ({ tree: viewerText('page') }) })
@@ -778,8 +908,10 @@ describe('renderPages', () => {
     }, [])
 
     expect(captured?.instanceKey).toBe(layoutPlan.instanceKey)
-    expect(captured?.layoutPlan).toBe(layoutPlan)
-    expect(captured?.fragmentPlan).toBe(fragmentPlan)
+    expect(captured?.layoutPlan).toStrictEqual(layoutPlan)
+    expect(captured?.fragmentPlan).toStrictEqual(fragmentPlan)
+    expect(captured?.layoutPlan).not.toBe(layoutPlan)
+    expect(captured?.fragmentPlan).not.toBe(fragmentPlan)
     const wrapper = container.querySelector('[data-element-id="committed"]') as HTMLElement
     expect(wrapper.style.top).toBe('0mm')
     expect(wrapper.style.height).toBe('20mm')

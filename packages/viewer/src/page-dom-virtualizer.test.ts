@@ -209,6 +209,7 @@ describe('page DOM virtualizer', () => {
 
   it('preserves an observer mount error when rollback observation also throws', () => {
     const primary = new Error('observe boom')
+    const cleanup = new Error('unobserve cleanup boom')
     const page = createEntry(0)
     const virtualizer = new PageDomVirtualizer({
       createIntersectionObserver: () => ({
@@ -216,14 +217,128 @@ describe('page DOM virtualizer', () => {
           throw primary
         },
         unobserve() {
-          throw new Error('unobserve cleanup boom')
+          throw cleanup
         },
         disconnect() {},
       }),
     })
 
-    expect(() => virtualizer.register(page.entry)).toThrow(primary)
+    let thrown: unknown
+    try {
+      virtualizer.register(page.entry)
+    }
+    catch (error) {
+      thrown = error
+    }
+    expect(thrown).toBeInstanceOf(AggregateError)
+    expect((thrown as AggregateError).message).toBe('PAGE_DOM_REGISTER_FAILED')
+    expect(flattenAggregateErrors(thrown)).toEqual([primary, cleanup])
     expect(page.entry.wrapper.childNodes).toHaveLength(0)
+  })
+
+  it('rolls back every reconcile side effect when registration fails during unmount', () => {
+    const observer = createObserverHarness()
+    const virtualizer = new PageDomVirtualizer({ overscan: 0, createIntersectionObserver: observer.create })
+    const primary = new Error('retained release boom')
+    const rollbackCleanup = new Error('new release boom')
+    const releases: string[] = []
+    const retainedWrapper = document.createElement('div')
+    let retainedMountNumber = 0
+    const retainedMount = vi.fn(() => {
+      const mountNumber = ++retainedMountNumber
+      retainedWrapper.replaceChildren(`retained mount ${mountNumber}`)
+      return () => {
+        releases.push(`retained release ${mountNumber}`)
+        if (mountNumber === 1)
+          throw primary
+      }
+    })
+    virtualizer.register({ index: 1, widthPx: 10, heightPx: 20, wrapper: retainedWrapper, mount: retainedMount })
+    virtualizer.updateVisible(1, 1, 0)
+    virtualizer.updateVisible(2, 2, 0)
+
+    const nextWrapper = document.createElement('div')
+    const originalChild = document.createElement('span')
+    originalChild.textContent = 'original wrapper child'
+    nextWrapper.appendChild(originalChild)
+    nextWrapper.style.width = '7px'
+    nextWrapper.style.height = '8px'
+    let nextMountNumber = 0
+    const nextMount = vi.fn(() => {
+      const mountNumber = ++nextMountNumber
+      nextWrapper.append(`next mount ${mountNumber}`)
+      return () => {
+        releases.push(`next release ${mountNumber}`)
+        if (mountNumber === 1)
+          throw rollbackCleanup
+      }
+    })
+    let thrown: unknown
+    try {
+      virtualizer.register({ index: 2, widthPx: 30, heightPx: 40, wrapper: nextWrapper, mount: nextMount })
+    }
+    catch (error) {
+      thrown = error
+    }
+
+    expect(releases).toEqual(['retained release 1', 'next release 1'])
+    expect(retainedMount).toHaveBeenCalledTimes(2)
+    expect(retainedWrapper.textContent).toBe('retained mount 2')
+    expect([...nextWrapper.childNodes]).toEqual([originalChild])
+    expect(nextWrapper.style.width).toBe('7px')
+    expect(nextWrapper.style.height).toBe('8px')
+    expect(observer.observed).toEqual(new Set([retainedWrapper]))
+    expect(thrown).toBeInstanceOf(AggregateError)
+    expect((thrown as AggregateError).message).toBe('PAGE_DOM_REGISTER_FAILED')
+    expect(flattenAggregateErrors(thrown)).toEqual([primary, rollbackCleanup])
+
+    virtualizer.register({ index: 2, widthPx: 30, heightPx: 40, wrapper: nextWrapper, mount: nextMount })
+    expect(nextMount).toHaveBeenCalledTimes(2)
+    expect(nextWrapper.textContent).toBe('original wrapper childnext mount 2')
+    expect(observer.observed).toEqual(new Set([retainedWrapper, nextWrapper]))
+    virtualizer.dispose()
+    expect(releases).toEqual([
+      'retained release 1',
+      'next release 1',
+      'retained release 2',
+      'next release 2',
+    ])
+  })
+
+  it('restores unresolved platform observer state after fallback registration fails', () => {
+    const originalObserver = Object.getOwnPropertyDescriptor(window, 'IntersectionObserver')
+    Object.defineProperty(window, 'IntersectionObserver', { configurable: true, value: undefined })
+    try {
+      const virtualizer = new PageDomVirtualizer()
+      const failingWrapper = document.createElement('div')
+      expect(() => virtualizer.register({
+        index: 0,
+        widthPx: 10,
+        heightPx: 10,
+        wrapper: failingWrapper,
+        mount() {
+          throw new Error('fallback mount boom')
+        },
+      })).toThrow('fallback mount boom')
+
+      const observe = vi.fn()
+      class LateIntersectionObserver {
+        observe = observe
+        unobserve() {}
+        disconnect() {}
+      }
+      Object.defineProperty(window, 'IntersectionObserver', { configurable: true, value: LateIntersectionObserver })
+      const replacement = createEntry(0)
+      virtualizer.register(replacement.entry)
+
+      expect(observe).toHaveBeenCalledWith(replacement.entry.wrapper)
+    }
+    finally {
+      if (originalObserver)
+        Object.defineProperty(window, 'IntersectionObserver', originalObserver)
+      else
+        Reflect.deleteProperty(window, 'IntersectionObserver')
+    }
   })
 
   it('rejects invalid entries before mutating wrappers or allocating observer state', () => {
@@ -374,4 +489,10 @@ function mountedIndices(pages: ReturnType<typeof createEntry>[]): number[] {
 
 function currentMountedIndices(pages: ReturnType<typeof createEntry>[]): number[] {
   return pages.flatMap((page, index) => page.entry.wrapper.childNodes.length > 0 ? [index] : [])
+}
+
+function flattenAggregateErrors(error: unknown): unknown[] {
+  if (!(error instanceof AggregateError))
+    return [error]
+  return error.errors.flatMap(flattenAggregateErrors)
 }
