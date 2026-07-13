@@ -2,6 +2,7 @@ import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import type { LayoutFragment } from './layout-plan'
 import { describe, expect, it } from 'vitest'
 import { runLayoutPipeline } from './layout-strategy'
+import { freezeMaterialLayoutPlan } from './material-layout-plan'
 import { runPagination } from './pagination-engine'
 
 function makeNode(id: string, overrides: Partial<MaterialNode> = {}): MaterialNode {
@@ -42,13 +43,12 @@ function makeSchema(elements: MaterialNode[]): DocumentSchema {
 function resizeFragment(fragment: LayoutFragment, id: string, height: number): LayoutFragment {
   const node = { ...fragment.node, id, height }
   return {
-    ...fragment,
-    id,
     node,
-    box: {
-      ...fragment.box,
-      height,
-    },
+    plan: freezeMaterialLayoutPlan({
+      ...fragment.plan,
+      borderBox: { ...fragment.plan.borderBox, height },
+      contentBox: { ...fragment.plan.contentBox, height },
+    }),
   }
 }
 
@@ -73,7 +73,7 @@ describe('runPagination', () => {
     expect(result.pages).toHaveLength(2)
     expect(result.pages[0]!.fragments[0]!.node.id).toBe('table__p0')
     expect(result.pages[1]!.fragments[0]!.node.id).toBe('table__p1')
-    expect(result.pages[1]!.fragments[0]!.box.y).toBe(100)
+    expect(result.pages[1]!.fragments[0]!.plan.borderBox.y).toBe(100)
   })
 
   it('warns when fixed-sheets fragments overflow their owning page', () => {

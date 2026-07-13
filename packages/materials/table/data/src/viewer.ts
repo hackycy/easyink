@@ -2,7 +2,7 @@ import type { FragmentPaginator, LayoutFragment, ViewerMeasureContext, ViewerMea
 import type { TableCellSchema, TableRowSchema } from '@easyink/material-table-kernel'
 import type { BindingRef, MaterialNode } from '@easyink/schema'
 import type { TableDataProps } from './schema'
-import { createFragmentFromNode, formatBindingDisplayValue, resolveBindingValue, resolveFieldFromRecord, viewerElement, viewerText } from '@easyink/core'
+import { formatBindingDisplayValue, freezeMaterialLayoutPlan, resolveBindingValue, resolveFieldFromRecord, viewerElement, viewerText } from '@easyink/core'
 import { computeAutoRowHeights, computeRowScaleWithVirtualRows, getTableMaterialModel, projectTableTopology, renderTableTree, resolveTableBaseProps } from '@easyink/material-table-kernel'
 import { TABLE_DATA_PLACEHOLDER_ROW_COUNT } from './layout'
 import { TABLE_DATA_DEFAULTS } from './schema'
@@ -143,7 +143,7 @@ export const tableDataFragmentPaginator: FragmentPaginator = {
           severity: 'warning',
           message: `Table ${tableNode.id} cannot fit even one body row into the available page height.`,
           stage: 'pagination',
-          sourceNodeId: input.fragment.sourceNodeId,
+          sourceNodeId: input.fragment.plan.nodeId,
         }],
       }
     }
@@ -417,7 +417,7 @@ function createVirtualTableFragment(
   height: number,
   pageIndex: number,
 ): LayoutFragment {
-  const id = createTableFragmentId(source.sourceNodeId, pageIndex)
+  const id = createTableFragmentId(source.plan.nodeId, pageIndex)
   const virtualNode: MaterialNode<unknown> = {
     ...node,
     id,
@@ -426,9 +426,13 @@ function createVirtualTableFragment(
   }
   runtimeLayoutCache.set(runtimeLayoutKey(virtualNode), { rows, rowSources, columnIds, rowHeights, totalHeight: height })
   return {
-    ...createFragmentFromNode(virtualNode),
-    sourceNodeId: source.sourceNodeId,
-    flow: source.flow,
+    node: virtualNode,
+    plan: freezeMaterialLayoutPlan({
+      ...source.plan,
+      instanceKey: id,
+      borderBox: { ...source.plan.borderBox, height },
+      contentBox: { ...source.plan.contentBox, height },
+    }),
   }
 }
 

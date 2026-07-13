@@ -1,4 +1,4 @@
-import type { InternalHooks, MaterialLoadDiagnostic, MaterialNodeLoadState, PagePlan, PaginationResult, ViewerMeasureResult } from '@easyink/core'
+import type { InternalHooks, MaterialLayoutPlan, MaterialLoadDiagnostic, MaterialNodeLoadState, PagePlan, PaginationResult, ViewerMeasureResult } from '@easyink/core'
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import type {
   PrintDriver,
@@ -15,7 +15,7 @@ import type {
 } from './types'
 import type { ViewerHost } from './viewer-host'
 import { snapshotViewerTreePolicy } from '@easyink/browser-dom'
-import { createInternalHooks, FontManager, loadDocumentWithProfile, runLayoutPipeline, runPagination, VIEWER_TREE_ABSOLUTE_MAX_NODES, walkMaterialNodes } from '@easyink/core'
+import { createInternalHooks, createLayoutConstraintKey, createNonFragmentingMaterialPlans, FontManager, loadDocumentWithProfile, runLayoutPipeline, runPagination, VIEWER_TREE_ABSOLUTE_MAX_NODES, walkMaterialNodes } from '@easyink/core'
 import { deepClone, UNIT_FACTOR } from '@easyink/shared'
 import { applyBindingsToProps, projectBindings, walkProfileMaterialNodes } from './binding-projector'
 import { resolveConditionalSchema } from './conditional-schema'
@@ -166,7 +166,7 @@ export class ViewerRuntime {
       : this._schema
     const layoutDocument = runLayoutPipeline(layoutSchema, {
       originalSchema: layoutOriginalSchema,
-      measured: measurements,
+      plans: this.createLayoutPlans(layoutSchema, measurements),
     })
     const pagination = runPagination(layoutSchema, layoutDocument, {
       originalSchema: layoutSchema,
@@ -568,6 +568,37 @@ export class ViewerRuntime {
     }
 
     return { measurements, diagnostics }
+  }
+
+  private createLayoutPlans(
+    schema: DocumentSchema,
+    measurements: ReadonlyMap<string, ViewerMeasureResult>,
+  ): ReadonlyMap<string, MaterialLayoutPlan> {
+    const constraints = {
+      availableWidth: schema.page.width,
+      availableHeight: schema.page.height,
+      unit: schema.unit,
+      writingMode: 'horizontal-tb' as const,
+    }
+    const constraintKey = createLayoutConstraintKey(constraints)
+    return new Map(schema.elements.map((node) => {
+      const measured = measurements.get(node.id)
+      const borderBox = {
+        x: node.x,
+        y: node.y,
+        width: measured?.width ?? node.width,
+        height: measured?.height ?? node.height,
+      }
+      return [node.id, createNonFragmentingMaterialPlans({
+        instanceKey: node.id,
+        nodeId: node.id,
+        nodeRevision: 0,
+        constraintKey,
+        pageIndex: 0,
+        borderBox,
+        fragmentBox: borderBox,
+      }).layoutPlan]
+    }))
   }
 
   private async loadFonts(diagnostics: ViewerDiagnosticEvent[], schema: DocumentSchema): Promise<void> {

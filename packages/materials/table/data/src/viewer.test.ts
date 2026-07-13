@@ -1,6 +1,6 @@
 import type { ViewerElementTree, ViewerRenderTree } from '@easyink/core'
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
-import { createFragmentFromNode, runLayoutPipeline, runPagination, viewerText } from '@easyink/core'
+import { createFragmentFromNode, createLayoutConstraintKey, createNonFragmentingMaterialPlans, runLayoutPipeline, runPagination, viewerText } from '@easyink/core'
 import { createTestViewerRenderContext } from '@easyink/core/testing'
 import { describe, expect, it } from 'vitest'
 import { createDefaultDataTableModel } from './schema'
@@ -63,7 +63,7 @@ describe('tableDataFragmentPaginator', () => {
       unit: 'mm',
     })
     const result = tableDataFragmentPaginator.paginateFragment({
-      fragment: createFragmentFromNode(node),
+      fragment: createTestFragment(node),
       availableHeight: 20,
       pageContext: { pageIndex: 0 },
     })
@@ -152,7 +152,7 @@ describe('tableDataFragmentPaginator', () => {
     measureTableData(node, { data, unit: 'mm' })
 
     const pages = tableDataFragmentPaginator.paginateFragment({
-      fragment: createFragmentFromNode(node),
+      fragment: createTestFragment(node),
       availableHeight: 20,
       pageContext: { pageIndex: 0 },
     })
@@ -171,6 +171,26 @@ function renderContext(data: Record<string, unknown>, reportDiagnostic?: (diagno
     capabilities: { sanitizeMarkup: () => { throw new Error('unused') } },
     reportDiagnostic,
   })
+}
+
+function createTestFragment(node: MaterialNode) {
+  const constraints = {
+    availableWidth: node.width,
+    availableHeight: node.height,
+    unit: 'mm' as const,
+    writingMode: 'horizontal-tb' as const,
+  }
+  const borderBox = { x: node.x, y: node.y, width: node.width, height: node.height }
+  const plan = createNonFragmentingMaterialPlans({
+    instanceKey: node.id,
+    nodeId: node.id,
+    nodeRevision: 0,
+    constraintKey: createLayoutConstraintKey(constraints),
+    pageIndex: 0,
+    borderBox,
+    fragmentBox: borderBox,
+  }).layoutPlan
+  return createFragmentFromNode(node, plan)
 }
 
 function paginateAndRender(recordCount: number) {
@@ -196,7 +216,18 @@ function paginateAndRender(recordCount: number) {
     guides: { x: [], y: [] },
     elements: [node],
   }
-  const layout = runLayoutPipeline(schema, { measured: new Map([[node.id, measurement]]) })
+  const constraints = { availableWidth: schema.page.width, availableHeight: schema.page.height, unit: schema.unit, writingMode: 'horizontal-tb' as const }
+  const borderBox = { x: node.x, y: node.y, width: measurement.width, height: measurement.height }
+  const measuredPlan = createNonFragmentingMaterialPlans({
+    instanceKey: node.id,
+    nodeId: node.id,
+    nodeRevision: 0,
+    constraintKey: createLayoutConstraintKey(constraints),
+    pageIndex: 0,
+    borderBox,
+    fragmentBox: borderBox,
+  }).layoutPlan
+  const layout = runLayoutPipeline(schema, { plans: new Map([[node.id, measuredPlan]]) })
   const pagination = runPagination(schema, layout, {
     resolveFragmentPaginator: fragment => fragment.node.type === 'table-data' ? tableDataFragmentPaginator : undefined,
   })
@@ -207,8 +238,8 @@ function paginateAndRender(recordCount: number) {
   }).tree)
   return {
     diagnostics: pagination.diagnostics,
-    fragmentIds: fragments.map(fragment => fragment.id),
-    sourceNodeIds: fragments.map(fragment => fragment.sourceNodeId),
+    fragmentIds: fragments.map(fragment => fragment.plan.instanceKey),
+    sourceNodeIds: fragments.map(fragment => fragment.plan.nodeId),
     domIds: pageTrees.flatMap(tree => findElements(tree, 'tr').concat(findElements(tree, 'th'), findElements(tree, 'td')).map(element => String(element.attributes.id))),
     pageTrees,
   }

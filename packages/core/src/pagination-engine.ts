@@ -1,7 +1,9 @@
-import type { DocumentSchema } from '@easyink/schema'
+import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import type { PageMode } from '@easyink/shared'
 import type { LayoutDiagnostic, LayoutDocument, LayoutFragment, OutputPagePlan } from './layout-plan'
 import type { FragmentPaginator } from './material-viewer'
+import { readNodeFlowConstraints } from './layout-plan'
+import { freezeMaterialLayoutPlan } from './material-layout-plan'
 import { resolvePageModel } from './page-model'
 
 export interface PaginationOptions {
@@ -65,7 +67,7 @@ function createFixedSheets(
     const pageEnd = (i + 1) * pageHeight
     const fragments = pageCount === 1
       ? document.fragments
-      : document.fragments.filter(fragment => fragment.box.y >= pageStart && fragment.box.y < pageEnd)
+      : document.fragments.filter(fragment => fragment.plan.borderBox.y >= pageStart && fragment.plan.borderBox.y < pageEnd)
 
     entries.push(createPage(i, pageWidth, pageHeight, i * pageHeight, fragments))
   }
@@ -75,32 +77,34 @@ function createFixedSheets(
   resolveTotalPages(pages)
 
   for (const fragment of document.fragments) {
-    const pageIndex = Math.max(Math.min(Math.floor(fragment.box.y / pageHeight), pageCount - 1), 0)
+    const box = fragment.plan.borderBox
+    const flow = readNodeFlowConstraints(fragment.node as MaterialNode)
+    const pageIndex = Math.max(Math.min(Math.floor(box.y / pageHeight), pageCount - 1), 0)
     const pageStart = pageIndex * pageHeight
-    const overflowsX = fragment.box.x < 0 || fragment.box.x + fragment.box.width > pageWidth
-    const overflowsY = fragment.box.y < pageStart || fragment.box.y + fragment.box.height > pageStart + pageHeight
+    const overflowsX = box.x < 0 || box.x + box.width > pageWidth
+    const overflowsY = box.y < pageStart || box.y + box.height > pageStart + pageHeight
     if (overflowsX || overflowsY) {
       diagnostics.push({
         code: 'FIXED_SHEETS_FRAGMENT_OVERFLOW',
         severity: 'warning',
-        message: `Fragment ${fragment.sourceNodeId} overflows its fixed output page and may be clipped.`,
+        message: `Fragment ${fragment.plan.nodeId} overflows its fixed output page and may be clipped.`,
         stage: 'pagination',
-        sourceNodeId: fragment.sourceNodeId,
+        sourceNodeId: fragment.plan.nodeId,
         detail: {
           pageIndex,
           pageRect: { x: 0, y: pageStart, width: pageWidth, height: pageHeight },
-          fragmentBox: fragment.box,
+          fragmentBox: box,
         },
       })
     }
 
-    if (fragment.flow.pageBreakBefore || fragment.flow.pageBreakAfter) {
+    if (flow.pageBreakBefore || flow.pageBreakAfter) {
       diagnostics.push({
         code: 'FIXED_SHEETS_BREAK_CONSTRAINT_IGNORED',
         severity: 'info',
         message: 'Explicit page-break constraints are diagnostic-only for fixed-sheets pagination.',
         stage: 'pagination',
-        sourceNodeId: fragment.sourceNodeId,
+        sourceNodeId: fragment.plan.nodeId,
       })
     }
   }
@@ -122,9 +126,9 @@ function createAutoSheets(
   let currentPageStart = 0
 
   const ordered = [...document.fragments].sort((left, right) => {
-    if (left.box.y !== right.box.y)
-      return left.box.y - right.box.y
-    return left.box.x - right.box.x
+    if (left.plan.borderBox.y !== right.plan.borderBox.y)
+      return left.plan.borderBox.y - right.plan.borderBox.y
+    return left.plan.borderBox.x - right.plan.borderBox.x
   })
 
   function pushCurrent(): void {
@@ -134,22 +138,25 @@ function createAutoSheets(
   }
 
   for (const fragment of ordered) {
-    if (fragment.flow.pageBreakBefore && currentFragments.length > 0)
+    const fragmentFlow = readNodeFlowConstraints(fragment.node as MaterialNode)
+    if (fragmentFlow.pageBreakBefore && currentFragments.length > 0)
       pushCurrent()
 
     let nextFragment: LayoutFragment | undefined = fragment
     while (nextFragment) {
-      const relativeTop = Math.max(nextFragment.box.y - currentPageStart, 0)
-      const relativeBottom = nextFragment.box.y + nextFragment.box.height - currentPageStart
+      const box = nextFragment.plan.borderBox
+      const flow = readNodeFlowConstraints(nextFragment.node as MaterialNode)
+      const relativeTop = Math.max(box.y - currentPageStart, 0)
+      const relativeBottom = box.y + box.height - currentPageStart
       if (currentFragments.length > 0 && relativeBottom > pageHeight) {
-        if (nextFragment.flow.keepTogether || nextFragment.box.height <= pageHeight) {
+        if (flow.keepTogether || box.height <= pageHeight) {
           pushCurrent()
-          nextFragment = moveFragmentToY(nextFragment, Math.max(nextFragment.box.y, currentPageStart))
+          nextFragment = moveFragmentToY(nextFragment, Math.max(box.y, currentPageStart))
           continue
         }
       }
 
-      if (relativeTop + nextFragment.box.height > pageHeight) {
+      if (relativeTop + box.height > pageHeight) {
         const paginator = options.resolveFragmentPaginator?.(nextFragment)
         if (paginator) {
           const split = paginator.paginateFragment({
@@ -171,9 +178,9 @@ function createAutoSheets(
         diagnostics.push({
           code: 'AUTO_SHEETS_FRAGMENT_OVERFLOW',
           severity: 'warning',
-          message: `Fragment ${nextFragment.sourceNodeId} is taller than one output page.`,
+          message: `Fragment ${nextFragment.plan.nodeId} is taller than one output page.`,
           stage: 'pagination',
-          sourceNodeId: nextFragment.sourceNodeId,
+          sourceNodeId: nextFragment.plan.nodeId,
         })
       }
 
@@ -181,7 +188,7 @@ function createAutoSheets(
       nextFragment = undefined
     }
 
-    if (fragment.flow.pageBreakAfter)
+    if (fragmentFlow.pageBreakAfter)
       pushCurrent()
   }
 
@@ -199,13 +206,14 @@ function createContinuousSheet(
   originalSchema: DocumentSchema | undefined,
 ): OutputPagePlan[] {
   for (const fragment of document.fragments) {
-    if (fragment.flow.pageBreakBefore || fragment.flow.pageBreakAfter) {
+    const flow = readNodeFlowConstraints(fragment.node as MaterialNode)
+    if (flow.pageBreakBefore || flow.pageBreakAfter) {
       diagnostics.push({
         code: 'CONTINUOUS_BREAK_CONSTRAINT_IGNORED',
         severity: 'info',
         message: 'Explicit page-break constraints do not cut continuous-paper output.',
         stage: 'pagination',
-        sourceNodeId: fragment.sourceNodeId,
+        sourceNodeId: fragment.plan.nodeId,
       })
     }
   }
@@ -288,16 +296,18 @@ function applyPageCopies(pages: OutputPagePlan[], copies: number): OutputPagePla
 }
 
 function moveFragmentToY(fragment: LayoutFragment, y: number): LayoutFragment {
-  if (fragment.box.y === y)
+  const plan = fragment.plan
+  if (plan.borderBox.y === y)
     return fragment
-  const node = { ...fragment.node, y }
+  const delta = y - plan.borderBox.y
   return {
-    ...fragment,
-    node,
-    box: {
-      ...fragment.box,
-      y,
-    },
+    node: fragment.node,
+    plan: freezeMaterialLayoutPlan({
+      ...plan,
+      borderBox: { ...plan.borderBox, y },
+      contentBox: { ...plan.contentBox, y: plan.contentBox.y + delta },
+      slotBoxes: plan.slotBoxes.map(slot => ({ ...slot, box: { ...slot.box, y: slot.box.y + delta } })),
+    }),
   }
 }
 
@@ -311,6 +321,6 @@ function resolveTotalPages(pages: OutputPagePlan[]): void {
 function getContentBottom(fragments: LayoutFragment[]): number {
   let bottom = 0
   for (const fragment of fragments)
-    bottom = Math.max(bottom, fragment.box.y + fragment.box.height)
+    bottom = Math.max(bottom, fragment.plan.borderBox.y + fragment.plan.borderBox.height)
   return bottom
 }

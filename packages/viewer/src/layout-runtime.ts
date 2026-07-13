@@ -1,0 +1,596 @@
+import type {
+  CompiledMaterialProfile,
+  LayoutConstraints,
+  LayoutDocument,
+  MaterialFragmentPlan,
+  MaterialLayoutBudgetToken,
+  MaterialLayoutFactKind,
+  MaterialLayoutPlan,
+  MaterialMeasureRequest,
+  MaterialMeasureScheduler,
+  MaterialNodeLoadState,
+  MaterialRenderBudgetToken,
+  MaterialRenderNodeKind,
+  MaterialRuntimeScope,
+  MaterialSlotInstancePlan,
+  MaterialTextMeasureInput,
+  MaterialTextMeasureResult,
+  MeasureService,
+  PaginationResult,
+} from '@easyink/core'
+import type { DocumentSchema, MaterialNode } from '@easyink/schema'
+import type { JsonValue } from '@easyink/shared'
+import type { EffectiveOutputState } from './effective-output-state'
+import type { ProfileMaterialRuntime } from './material-runtime'
+import type { PreparedCollectionBudget, PreparedCollectionProvider } from './prepared-collections'
+import type { ResolvedRuntimeModel, RuntimeModelResolutionCache } from './runtime-model-resolver'
+import {
+  createLayoutConstraintKey,
+  createNonFragmentingMaterialPlans,
+  freezeMaterialFragmentPlan,
+  freezeMaterialLayoutPlan,
+  runLayoutPipeline,
+  runPagination,
+} from '@easyink/core'
+import { assertJsonValue, cloneJsonValue, deepFreezeJsonValue } from '@easyink/shared'
+import { createMaterialBindingResolver, createMaterialDisplayBindingResolver } from './binding-projector'
+import { resolveEffectiveOutputStates } from './effective-output-state'
+import { createMaterialCollectionOpener } from './prepared-collections'
+import { createReadonlyMap } from './readonly-map'
+import { resolveRuntimeModelInstance, resolveRuntimeModels } from './runtime-model-resolver'
+
+export interface LayoutRuntimeInput {
+  readonly document: DocumentSchema
+  readonly nodeStates: ReadonlyMap<string, MaterialNodeLoadState>
+  readonly documentRevision: number
+  readonly data: Readonly<Record<string, unknown>>
+  readonly dataRevision: number
+}
+
+export interface RuntimeMaterialInstancePlan {
+  readonly instanceKey: string
+  readonly nodeId: string
+  readonly node: Readonly<MaterialNode>
+  readonly scopeKey: string
+  readonly scopeData: Readonly<Record<string, unknown>>
+  readonly status: ResolvedRuntimeModel['status']
+  readonly diagnostic?: unknown
+  readonly resolvedModel: Readonly<Record<string, unknown>>
+  readonly layoutPlan: MaterialLayoutPlan
+  readonly embeddedFragmentPlan?: MaterialFragmentPlan
+}
+
+export interface MeasuredMaterialSet {
+  readonly plans: ReadonlyMap<string, MaterialLayoutPlan>
+  readonly instances: ReadonlyMap<string, RuntimeMaterialInstancePlan>
+}
+
+export interface CommittedPagePlan {
+  readonly documentRevision: number
+  readonly dataRevision: number
+  readonly resourceRevision: number
+  readonly pages: readonly PaginationResult['pages'][number][]
+  readonly outputStates: ReadonlyMap<string, EffectiveOutputState>
+  readonly runtimeInstances: ReadonlyMap<string, RuntimeMaterialInstancePlan>
+  readonly diagnostics: readonly unknown[]
+}
+
+export interface LayoutRuntimeDependencies {
+  readonly resolveEffectiveOutput: (input: LayoutRuntimeInput) => ReadonlyMap<string, EffectiveOutputState>
+  readonly resolveRuntimeModels: (input: LayoutRuntimeInput & {
+    readonly outputStates: ReadonlyMap<string, EffectiveOutputState>
+  }) => Promise<ReadonlyMap<string, ResolvedRuntimeModel>>
+  readonly prepareResources: (input: LayoutRuntimeInput & {
+    readonly runtimeModels: ReadonlyMap<string, ResolvedRuntimeModel>
+    readonly outputStates: ReadonlyMap<string, EffectiveOutputState>
+  }, signal: AbortSignal) => Promise<number>
+  readonly measureNodes: (input: LayoutRuntimeInput & {
+    readonly runtimeModels: ReadonlyMap<string, ResolvedRuntimeModel>
+    readonly outputStates: ReadonlyMap<string, EffectiveOutputState>
+    readonly resourceRevision: number
+  }, signal: AbortSignal) => Promise<MeasuredMaterialSet>
+  readonly layoutDocument: (document: DocumentSchema, plans: ReadonlyMap<string, MaterialLayoutPlan>) => LayoutDocument
+  readonly paginateDocument: (
+    document: DocumentSchema,
+    layout: LayoutDocument,
+    plans: ReadonlyMap<string, MaterialLayoutPlan>,
+  ) => PaginationResult
+}
+
+export interface MaterialMeasurementBudget extends PreparedCollectionBudget {}
+
+export interface MaterialMeasureNodesDependencies {
+  readonly profile: CompiledMaterialProfile
+  readonly materials: ProfileMaterialRuntime
+  readonly measureService: MeasureService
+  readonly runtimeModelCache: RuntimeModelResolutionCache
+  readonly scheduler: MaterialMeasureScheduler
+  readonly textMeasure: (
+    input: MaterialTextMeasureInput,
+    resourceRevision: number,
+    signal: AbortSignal,
+  ) => Promise<MaterialTextMeasureResult>
+  readonly budget: MaterialMeasurementBudget
+  readonly preparedCollections?: PreparedCollectionProvider
+  readonly reportDiagnostic: (diagnostic: unknown) => void
+}
+
+export interface DefaultLayoutRuntimeDependencies extends MaterialMeasureNodesDependencies {
+  readonly prepareResources: LayoutRuntimeDependencies['prepareResources']
+}
+
+interface MeasuredInstanceTree {
+  readonly plan: MaterialLayoutPlan
+  readonly instance: RuntimeMaterialInstancePlan
+  readonly entries: readonly Readonly<{
+    instanceKey: string
+    plan: MaterialLayoutPlan
+    instance: RuntimeMaterialInstancePlan
+  }>[]
+}
+
+export function createLayoutRuntime(deps: LayoutRuntimeDependencies): Readonly<{
+  plan: (input: LayoutRuntimeInput, signal: AbortSignal) => Promise<CommittedPagePlan>
+}> {
+  return Object.freeze({
+    async plan(input: LayoutRuntimeInput, signal: AbortSignal): Promise<CommittedPagePlan> {
+      assertRevision(input.documentRevision)
+      assertRevision(input.dataRevision)
+      throwIfAborted(signal)
+
+      const outputStates = deps.resolveEffectiveOutput(input)
+      throwIfAborted(signal)
+      const runtimeModels = await deps.resolveRuntimeModels({ ...input, outputStates })
+      throwIfAborted(signal)
+      const resourceRevision = await deps.prepareResources({ ...input, runtimeModels, outputStates }, signal)
+      throwIfAborted(signal)
+      assertRevision(resourceRevision)
+      const measured = await deps.measureNodes({ ...input, runtimeModels, outputStates, resourceRevision }, signal)
+      throwIfAborted(signal)
+      const layout = deps.layoutDocument(input.document, measured.plans)
+      throwIfAborted(signal)
+      const pagination = deps.paginateDocument(input.document, layout, measured.plans)
+      throwIfAborted(signal)
+
+      return Object.freeze({
+        documentRevision: input.documentRevision,
+        dataRevision: input.dataRevision,
+        resourceRevision,
+        pages: freezeCommittedPages(pagination.pages),
+        outputStates: freezeOutputStates(outputStates),
+        runtimeInstances: freezeRuntimeInstances(measured.instances),
+        diagnostics: freezeDiagnosticCopies([...layout.diagnostics, ...pagination.diagnostics]),
+      })
+    },
+  })
+}
+
+export function createMaterialMeasureNodes(
+  deps: MaterialMeasureNodesDependencies,
+): LayoutRuntimeDependencies['measureNodes'] {
+  assertMeasurementDependencies(deps)
+
+  return async (input, signal): Promise<MeasuredMaterialSet> => {
+    throwIfAborted(signal)
+    const scope: MaterialRuntimeScope = Object.freeze({
+      key: 'document',
+      data: copyAndFreezeRecord(input.data),
+    })
+    const roots = input.document.elements.filter(node => input.outputStates.get(node.id)?.shouldMeasure === true)
+    const trees = await deps.scheduler.mapOrdered(roots, async (node) => {
+      const model = input.runtimeModels.get(node.id)
+      if (!model)
+        throw new Error('MATERIAL_RUNTIME_MODEL_REQUIRED')
+      const constraints: LayoutConstraints = Object.freeze({
+        availableWidth: node.width,
+        availableHeight: input.document.page.height,
+        unit: input.document.unit,
+        writingMode: 'horizontal-tb',
+      })
+      return measureInstance({
+        deps,
+        input,
+        node,
+        instanceKey: model.instanceKey,
+        scope,
+        model,
+        constraints,
+        signal,
+        ancestorNodeIds: new Set(),
+      })
+    }, signal)
+    throwIfAborted(signal)
+
+    const plans = new Map<string, MaterialLayoutPlan>()
+    const instances = new Map<string, RuntimeMaterialInstancePlan>()
+    for (const tree of trees) {
+      for (const entry of tree.entries) {
+        plans.set(entry.instanceKey, entry.plan)
+        instances.set(entry.instanceKey, entry.instance)
+      }
+    }
+    return Object.freeze({
+      plans: createReadonlyMap(plans),
+      instances: createReadonlyMap(instances),
+    })
+  }
+}
+
+export function createDefaultLayoutRuntime(
+  deps: DefaultLayoutRuntimeDependencies,
+): ReturnType<typeof createLayoutRuntime> {
+  const measureNodes = createMaterialMeasureNodes(deps)
+  return createLayoutRuntime({
+    resolveEffectiveOutput: input => resolveEffectiveOutputStates(
+      input.document.elements,
+      input.data as Record<string, unknown>,
+      deps.profile,
+    ),
+    resolveRuntimeModels: async (input) => {
+      const nodes = flattenMeasurableNodes(input.document.elements, input.outputStates)
+      return resolveRuntimeModels({
+        nodes,
+        data: input.data,
+        dataRevision: input.dataRevision,
+        nodeRevisions: new Map(nodes.map(node => [node.id, input.documentRevision])),
+        nodeStates: input.nodeStates,
+        outputStates: input.outputStates,
+        profile: deps.profile,
+        materials: deps.materials,
+        cache: deps.runtimeModelCache,
+        reportDiagnostic: deps.reportDiagnostic,
+      })
+    },
+    prepareResources: deps.prepareResources,
+    measureNodes,
+    layoutDocument: (document, plans) => runLayoutPipeline(document, { plans }),
+    paginateDocument: (document, layout) => runPagination(document, layout),
+  })
+}
+
+async function measureInstance(context: {
+  readonly deps: MaterialMeasureNodesDependencies
+  readonly input: Parameters<LayoutRuntimeDependencies['measureNodes']>[0]
+  readonly node: MaterialNode
+  readonly instanceKey: string
+  readonly scope: MaterialRuntimeScope
+  readonly model: ResolvedRuntimeModel
+  readonly constraints: LayoutConstraints
+  readonly signal: AbortSignal
+  readonly ancestorNodeIds: ReadonlySet<string>
+}): Promise<MeasuredInstanceTree> {
+  const { deps, input, node, instanceKey, scope, model, constraints, signal } = context
+  throwIfAborted(signal)
+  if (context.ancestorNodeIds.has(node.id))
+    throw new Error('MATERIAL_SLOT_MEASURE_CYCLE')
+  const ancestorNodeIds = new Set(context.ancestorNodeIds)
+  ancestorNodeIds.add(node.id)
+  const nodeSnapshot = copyAndFreezeJson(node) as unknown as Readonly<MaterialNode>
+  const resolvedModel = copyAndFreezeRecord(model.value)
+  const manifest = deps.profile.getManifest(node.type)
+  if (!manifest)
+    throw new Error('MATERIAL_MANIFEST_REQUIRED')
+  const constraintKey = createLayoutConstraintKey(constraints)
+  const descendants: MeasuredInstanceTree['entries'][number][] = []
+  let embeddedFragmentPlan: MaterialFragmentPlan | undefined
+
+  const plan = await deps.measureService.measure({
+    mode: 'authoritative',
+    profile: deps.profile,
+    materialType: node.type,
+    instanceKey,
+    nodeId: node.id,
+    nodeRevision: model.nodeRevision,
+    dataRevision: input.dataRevision,
+    resourceRevision: input.resourceRevision,
+    constraintKey,
+    signal,
+    measure: async (measureSignal) => {
+      const budget = createMaterialLayoutBudgetToken({
+        maxRuntimeRows: deps.budget.maxRuntimeRows,
+        maxLayoutFacts: deps.budget.maxLayoutFacts,
+      })
+      const resolveBinding = createMaterialBindingResolver({
+        node: nodeSnapshot,
+        bindingDefinition: manifest.common.binding,
+        baseScope: scope,
+        reportDiagnostic: deps.reportDiagnostic,
+      })
+      const formatBinding = createMaterialDisplayBindingResolver({
+        node: nodeSnapshot,
+        bindingDefinition: manifest.common.binding,
+        baseScope: scope,
+        reportDiagnostic: deps.reportDiagnostic,
+      })
+      const collections = createMaterialCollectionOpener({
+        node: nodeSnapshot,
+        dataRevision: input.dataRevision,
+        resolveBinding,
+        provider: deps.preparedCollections,
+        budget: deps.budget,
+        reportDiagnostic: deps.reportDiagnostic,
+      })
+      try {
+        const facet = deps.materials.get(node.type)
+        const customMeasure = model.status === 'ready' && facet?.state === 'active'
+          ? facet.value?.layout?.measure
+          : undefined
+        if (!customMeasure) {
+          const fallback = createNonFragmentingMaterialPlans({
+            instanceKey,
+            nodeId: node.id,
+            nodeRevision: model.nodeRevision,
+            constraintKey,
+            pageIndex: 0,
+            borderBox: { x: node.x, y: node.y, width: node.width, height: node.height },
+            fragmentBox: { x: node.x, y: node.y, width: node.width, height: node.height },
+          })
+          embeddedFragmentPlan = fallback.fragmentPlan
+          return fallback.layoutPlan
+        }
+
+        return await customMeasure(Object.freeze({
+          mode: 'authoritative',
+          instanceKey,
+          node: nodeSnapshot,
+          scope,
+          resolvedModel,
+          nodeRevision: model.nodeRevision,
+          dataRevision: input.dataRevision,
+          resourceRevision: input.resourceRevision,
+          constraints,
+          signal: measureSignal,
+          budget,
+          resolveBinding,
+          formatBinding,
+          openCollection: collections.open,
+          schedule: deps.scheduler,
+          measureText: (text: MaterialTextMeasureInput) => deps.textMeasure(text, input.resourceRevision, measureSignal),
+          measureSlot: async (
+            slotInput: Parameters<MaterialMeasureRequest['measureSlot']>[0],
+            slotSignal: AbortSignal,
+          ): Promise<MaterialSlotInstancePlan> => {
+            throwIfAborted(measureSignal)
+            throwIfAborted(slotSignal)
+            if (slotSignal !== measureSignal)
+              throw new Error('MATERIAL_SLOT_MEASURE_SIGNAL_MISMATCH')
+            const children = node.slots[slotInput.slot] ?? []
+            const slotInstanceKey = JSON.stringify([
+              'material-slot',
+              instanceKey,
+              slotInput.slot,
+              slotInput.scope.key,
+            ])
+            const childTrees = await deps.scheduler.mapOrdered(children, async (child, index) => {
+              const childInstanceKey = JSON.stringify([
+                'material-slot-child',
+                slotInstanceKey,
+                index,
+                child.id,
+              ])
+              const childModel = resolveRuntimeModelInstance({
+                instanceKey: childInstanceKey,
+                scope: slotInput.scope,
+                node: child,
+                dataRevision: input.dataRevision,
+                nodeRevision: input.documentRevision,
+                admissionState: input.nodeStates.get(child.id),
+                cache: deps.runtimeModelCache,
+                materials: deps.materials,
+                reportDiagnostic: deps.reportDiagnostic,
+              })
+              return measureInstance({
+                deps,
+                input,
+                node: child,
+                instanceKey: childInstanceKey,
+                scope: slotInput.scope,
+                model: childModel,
+                constraints: slotInput.constraints,
+                signal: measureSignal,
+                ancestorNodeIds,
+              })
+            }, measureSignal)
+            for (const childTree of childTrees)
+              descendants.push(...childTree.entries)
+            return Object.freeze({
+              instanceKey: slotInstanceKey,
+              contentBounds: unionPlanBounds(childTrees.map(tree => tree.plan)),
+              childPlans: Object.freeze(childTrees.map(tree => tree.plan)),
+            })
+          },
+        }))
+      }
+      finally {
+        await collections.dispose()
+      }
+    },
+  })
+  const committedPlan = plan as MaterialLayoutPlan
+  const instance: RuntimeMaterialInstancePlan = Object.freeze({
+    instanceKey,
+    nodeId: node.id,
+    node: nodeSnapshot,
+    scopeKey: scope.key,
+    scopeData: scope.data,
+    status: model.status,
+    ...(model.diagnostic === undefined ? {} : { diagnostic: copyAndFreezeJson(model.diagnostic) }),
+    resolvedModel,
+    layoutPlan: committedPlan,
+    ...(embeddedFragmentPlan === undefined ? {} : { embeddedFragmentPlan }),
+  })
+  const ownEntry = Object.freeze({ instanceKey, plan: committedPlan, instance })
+  return Object.freeze({
+    plan: committedPlan,
+    instance,
+    entries: Object.freeze([ownEntry, ...descendants]),
+  })
+}
+
+function unionPlanBounds(plans: readonly MaterialLayoutPlan[]): Readonly<{ x: number, y: number, width: number, height: number }> {
+  if (plans.length === 0)
+    return Object.freeze({ x: 0, y: 0, width: 0, height: 0 })
+  let left = Number.POSITIVE_INFINITY
+  let top = Number.POSITIVE_INFINITY
+  let right = Number.NEGATIVE_INFINITY
+  let bottom = Number.NEGATIVE_INFINITY
+  for (const plan of plans) {
+    left = Math.min(left, plan.borderBox.x)
+    top = Math.min(top, plan.borderBox.y)
+    right = Math.max(right, plan.borderBox.x + plan.borderBox.width)
+    bottom = Math.max(bottom, plan.borderBox.y + plan.borderBox.height)
+  }
+  return Object.freeze({ x: left, y: top, width: right - left, height: bottom - top })
+}
+
+export function createMaterialLayoutBudgetToken(input: {
+  readonly maxRuntimeRows: number
+  readonly maxLayoutFacts: number
+}): MaterialLayoutBudgetToken {
+  if (![input.maxRuntimeRows, input.maxLayoutFacts].every(isPositiveSafeInteger))
+    throw new Error('MATERIAL_LAYOUT_BUDGET_INVALID')
+  let runtimeRowsUsed = 0
+  let layoutFactsUsed = 0
+  return Object.freeze({
+    maxRuntimeRows: input.maxRuntimeRows,
+    maxLayoutFacts: input.maxLayoutFacts,
+    get runtimeRowsUsed() { return runtimeRowsUsed },
+    get layoutFactsUsed() { return layoutFactsUsed },
+    reserveRuntimeRows(count: number): void {
+      assertReserveCount(count)
+      if (runtimeRowsUsed + count > input.maxRuntimeRows)
+        throw new Error('MATERIAL_LAYOUT_RUNTIME_ROW_LIMIT')
+      runtimeRowsUsed += count
+    },
+    reserveLayoutFacts(kind: MaterialLayoutFactKind, count: number): void {
+      if (!['row', 'cell', 'edge', 'slot', 'box', 'custom'].includes(kind))
+        throw new Error('MATERIAL_LAYOUT_FACT_KIND_INVALID')
+      assertReserveCount(count)
+      if (layoutFactsUsed + count > input.maxLayoutFacts)
+        throw new Error('MATERIAL_LAYOUT_FACT_LIMIT')
+      layoutFactsUsed += count
+    },
+  })
+}
+
+export function createMaterialRenderBudgetToken(maxNodes: number): MaterialRenderBudgetToken {
+  if (!isPositiveSafeInteger(maxNodes))
+    throw new Error('MATERIAL_RENDER_BUDGET_INVALID')
+  let nodesUsed = 0
+  return Object.freeze({
+    maxNodes,
+    get nodesUsed() { return nodesUsed },
+    reserveNodes(kind: MaterialRenderNodeKind, count: number): void {
+      if (!['element', 'text', 'fragment', 'markup', 'imperative'].includes(kind))
+        throw new Error('MATERIAL_RENDER_NODE_KIND_INVALID')
+      assertReserveCount(count)
+      if (nodesUsed + count > maxNodes)
+        throw new Error('MATERIAL_RENDER_NODE_LIMIT')
+      nodesUsed += count
+    },
+  })
+}
+
+export function flattenMeasurableNodes(
+  roots: readonly MaterialNode[],
+  outputStates: ReadonlyMap<string, EffectiveOutputState>,
+): MaterialNode[] {
+  const result: MaterialNode[] = []
+  const visit = (node: MaterialNode): void => {
+    if (outputStates.get(node.id)?.shouldMeasure !== true)
+      return
+    result.push(node)
+    for (const children of Object.values(node.slots)) {
+      for (const child of children)
+        visit(child)
+    }
+  }
+  for (const root of roots)
+    visit(root)
+  return result
+}
+
+function assertMeasurementDependencies(deps: MaterialMeasureNodesDependencies): void {
+  if (deps.materials.profile !== deps.profile || deps.runtimeModelCache.profile !== deps.profile)
+    throw new Error('MATERIAL_MEASURE_PROFILE_MISMATCH')
+  if (!Object.values(deps.budget).every(isPositiveSafeInteger))
+    throw new Error('MATERIAL_MEASURE_BUDGET_INVALID')
+}
+
+function assertReserveCount(count: number): void {
+  if (!Number.isSafeInteger(count) || count < 0)
+    throw new Error('MATERIAL_BUDGET_RESERVATION_INVALID')
+}
+
+function isPositiveSafeInteger(value: number): boolean {
+  return Number.isSafeInteger(value) && value > 0
+}
+
+function freezeCommittedPages(pages: PaginationResult['pages']): readonly PaginationResult['pages'][number][] {
+  return Object.freeze(pages.map(page => Object.freeze({
+    index: page.index,
+    sheetIndex: page.sheetIndex,
+    width: page.width,
+    height: page.height,
+    yOffset: page.yOffset,
+    fragments: Object.freeze(page.fragments.map(fragment => Object.freeze({
+      node: copyAndFreezeJson(fragment.node) as unknown as Readonly<MaterialNode>,
+      plan: freezeMaterialLayoutPlan(fragment.plan),
+    }))),
+    pageContext: Object.freeze({ ...page.pageContext }),
+  })))
+}
+
+function freezeOutputStates(source: ReadonlyMap<string, EffectiveOutputState>): ReadonlyMap<string, EffectiveOutputState> {
+  return createReadonlyMap(new Map([...source].map(([key, value]) => [key, Object.freeze({ ...value })])))
+}
+
+function freezeRuntimeInstances(
+  source: ReadonlyMap<string, RuntimeMaterialInstancePlan>,
+): ReadonlyMap<string, RuntimeMaterialInstancePlan> {
+  return createReadonlyMap(new Map([...source].map(([key, instance]) => [key, Object.freeze({
+    instanceKey: instance.instanceKey,
+    nodeId: instance.nodeId,
+    node: copyAndFreezeJson(instance.node) as unknown as Readonly<MaterialNode>,
+    scopeKey: instance.scopeKey,
+    scopeData: copyAndFreezeRecord(instance.scopeData),
+    status: instance.status,
+    ...(instance.diagnostic === undefined ? {} : { diagnostic: copyAndFreezeJson(instance.diagnostic) }),
+    resolvedModel: copyAndFreezeRecord(instance.resolvedModel),
+    layoutPlan: freezeMaterialLayoutPlan(instance.layoutPlan),
+    ...(instance.embeddedFragmentPlan === undefined
+      ? {}
+      : { embeddedFragmentPlan: freezeMaterialFragmentPlan(instance.embeddedFragmentPlan) }),
+  })])))
+}
+
+function freezeDiagnosticCopies(diagnostics: readonly unknown[]): readonly unknown[] {
+  try {
+    return Object.freeze(diagnostics.map(copyAndFreezeJson))
+  }
+  catch {
+    throw new Error('LAYOUT_RUNTIME_DIAGNOSTIC_INVALID')
+  }
+}
+
+function copyAndFreezeRecord(value: Readonly<Record<string, unknown>>): Readonly<Record<string, unknown>> {
+  const copied = copyAndFreezeJson(value)
+  if (copied === null || typeof copied !== 'object' || Array.isArray(copied))
+    throw new Error('LAYOUT_RUNTIME_RECORD_INVALID')
+  return copied as Readonly<Record<string, unknown>>
+}
+
+function copyAndFreezeJson(value: unknown): JsonValue {
+  assertJsonValue(value)
+  return deepFreezeJsonValue(cloneJsonValue(value))
+}
+
+function assertRevision(value: number): void {
+  if (!Number.isSafeInteger(value) || value < 0)
+    throw new Error('LAYOUT_RUNTIME_REVISION_INVALID')
+}
+
+function throwIfAborted(signal: AbortSignal): void {
+  if (signal.aborted)
+    throw signal.reason ?? new DOMException('The operation was aborted.', 'AbortError')
+}

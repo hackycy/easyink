@@ -1,5 +1,5 @@
 import type { MaterialNode } from '@easyink/schema'
-import type { ViewerMeasureResult } from './material-viewer'
+import type { MaterialLayoutPlan } from './material-layout-plan'
 
 export interface LayoutDiagnostic {
   code: string
@@ -19,19 +19,8 @@ export interface FlowBreakConstraints {
 }
 
 export interface LayoutFragment {
-  id: string
-  sourceNodeId: string
-  node: MaterialNode<unknown>
-  box: {
-    x: number
-    y: number
-    width: number
-    height: number
-  }
-  flow: FlowBreakConstraints & {
-    participates: boolean
-  }
-  measured?: ViewerMeasureResult
+  readonly node: Readonly<MaterialNode<unknown>>
+  readonly plan: MaterialLayoutPlan
 }
 
 export interface LayoutDocument {
@@ -47,7 +36,7 @@ export interface OutputPagePlan {
   width: number
   height: number
   yOffset: number
-  fragments: LayoutFragment[]
+  fragments: readonly LayoutFragment[]
   pageContext: {
     pageNumber: number
     totalPages: number
@@ -55,23 +44,17 @@ export interface OutputPagePlan {
   }
 }
 
-export function createFragmentFromNode(node: MaterialNode<unknown>, measured?: ViewerMeasureResult): LayoutFragment {
+export function createFragmentFromNode(
+  node: MaterialNode<unknown>,
+  plan: MaterialLayoutPlan,
+): LayoutFragment {
   return {
-    id: node.id,
-    sourceNodeId: node.id,
     node,
-    box: {
-      x: node.x,
-      y: node.y,
-      width: node.width,
-      height: node.height,
-    },
-    flow: readNodeFlowConstraints(node),
-    measured,
+    plan,
   }
 }
 
-export function readNodeFlowConstraints(node: MaterialNode<unknown>): LayoutFragment['flow'] {
+export function readNodeFlowConstraints(node: MaterialNode<unknown>): FlowBreakConstraints & { participates: boolean } {
   const model = node.model as Record<string, unknown>
   const placement = node.output.placement
   const breakConfig = node.output.break
