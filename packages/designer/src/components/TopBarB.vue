@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { MaterialNode } from '@easyink/schema'
 import type { Component } from 'vue'
-import { getBoundingRect, isInteractable, normalizeRotation } from '@easyink/core'
+import { isInteractable, normalizeRotation } from '@easyink/core'
 import {
   IconAlignCenter,
   IconAlignLeft,
@@ -48,7 +48,7 @@ import { EiNumberInput, EiPopover, EiSwitch } from '@easyink/ui'
 import { computed, inject, onMounted, onUnmounted, ref } from 'vue'
 import { useDesignerStore } from '../composables'
 import { CONTRIBUTION_REGISTRY_KEY } from '../contributions/injection'
-import { createDesignerDocumentOperation, replaceDraftDocument, updateDraftNodeEditorState, updateDraftNodeGeometry, updateDraftNodeModel } from '../editing/document-recipes'
+import { addDraftElementGroup, alignDraftNodes, createDesignerDocumentOperation, distributeDraftNodesHorizontally, moveDraftNodesLayer, removeDraftElementGroups, replaceDraftDocument, updateDraftNodeEditorState, updateDraftNodeGeometry, updateDraftNodeModel } from '../editing/document-recipes'
 import { createClipboardActions } from '../interactions/clipboard-actions'
 import { hasGroupedElement, selectedLogicalGroupIds } from '../interactions/logical-groups'
 import { selectMany } from '../interactions/selection-api'
@@ -306,21 +306,9 @@ function handleDistribute() {
   if (nodes.length < 3)
     return
 
-  const sorted = [...nodes].sort((a, b) => a.x - b.x)
-  const first = sorted[0]!
-  const last = sorted[sorted.length - 1]!
-  const totalSpan = (last.x + last.width) - first.x
-  const totalWidth = sorted.reduce((sum, n) => sum + n.width, 0)
-  const gap = (totalSpan - totalWidth) / (sorted.length - 1)
-
   store.documentTransactions.transact((draft) => {
-    let currentX = first.x + first.width + gap
-    for (let i = 1; i < sorted.length - 1; i++) {
-      const node = sorted[i]!
-      updateDraftNodeGeometry(draft, store, node.id, { x: currentX, y: node.y })
-      currentX += node.width + gap
-    }
-  }, { label: 'Distribute horizontally', operation: createDesignerDocumentOperation(store, 'toolbar.distribute', sorted.map(node => `node:${node.id}`), ['/x'], false) })
+    distributeDraftNodesHorizontally(draft, store, nodes.map(node => node.id))
+  }, { label: 'Distribute horizontally', operation: createDesignerDocumentOperation(store, 'toolbar.distribute', nodes.map(node => `node:${node.id}`), ['/x'], false) })
 }
 
 // ─── Align ───────────────────────────────────────────────────
@@ -329,21 +317,8 @@ function handleAlign(mode: 'left' | 'center' | 'right') {
   if (nodes.length < 2)
     return
 
-  const rects = nodes.map(n => ({ x: n.x, y: n.y, width: n.width, height: n.height }))
-  const bounds = getBoundingRect(rects)
-  if (!bounds)
-    return
-
   store.documentTransactions.transact((draft) => {
-    for (const node of nodes) {
-      const newX = mode === 'left'
-        ? bounds.x
-        : mode === 'center'
-          ? bounds.x + (bounds.width - node.width) / 2
-          : bounds.x + bounds.width - node.width
-      if (newX !== node.x)
-        updateDraftNodeGeometry(draft, store, node.id, { x: newX, y: node.y })
-    }
+    alignDraftNodes(draft, store, nodes.map(node => node.id), mode)
   }, { label: `Align ${mode}`, operation: createDesignerDocumentOperation(store, 'toolbar.align', nodes.map(node => `node:${node.id}`), ['/x'], false) })
 }
 
@@ -353,20 +328,9 @@ function handleLayerUp() {
   if (nodes.length === 0)
     return
 
-  const elements = store.schema.elements
-  const updates = new Map<string, number>()
-  for (const node of nodes) {
-    const currentZ = node.zIndex ?? 0
-    const above = elements
-      .filter(el => (el.zIndex ?? 0) > currentZ)
-      .sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0))
-    if (above.length > 0) {
-      const nextZ = above[0]!.zIndex ?? 0
-      updates.set(node.id, nextZ + 1)
-    }
-  }
-  if (updates.size > 0)
-    store.documentTransactions.transact((draft) => { for (const [id, zIndex] of updates) updateDraftNodeGeometry(draft, store, id, { zIndex }) }, { label: 'Layer up', operation: createDesignerDocumentOperation(store, 'toolbar.layer-up', [...updates.keys()].map(id => `node:${id}`), ['/zIndex'], false) })
+  store.documentTransactions.transact((draft) => {
+    moveDraftNodesLayer(draft, store, nodes.map(node => node.id), 'up')
+  }, { label: 'Layer up', operation: createDesignerDocumentOperation(store, 'toolbar.layer-up', nodes.map(node => `node:${node.id}`), ['/zIndex'], false) })
 }
 
 function handleLayerDown() {
@@ -374,20 +338,9 @@ function handleLayerDown() {
   if (nodes.length === 0)
     return
 
-  const elements = store.schema.elements
-  const updates = new Map<string, number>()
-  for (const node of nodes) {
-    const currentZ = node.zIndex ?? 0
-    const below = elements
-      .filter(el => (el.zIndex ?? 0) < currentZ)
-      .sort((a, b) => (b.zIndex ?? 0) - (a.zIndex ?? 0))
-    if (below.length > 0) {
-      const prevZ = below[0]!.zIndex ?? 0
-      updates.set(node.id, prevZ - 1)
-    }
-  }
-  if (updates.size > 0)
-    store.documentTransactions.transact((draft) => { for (const [id, zIndex] of updates) updateDraftNodeGeometry(draft, store, id, { zIndex }) }, { label: 'Layer down', operation: createDesignerDocumentOperation(store, 'toolbar.layer-down', [...updates.keys()].map(id => `node:${id}`), ['/zIndex'], false) })
+  store.documentTransactions.transact((draft) => {
+    moveDraftNodesLayer(draft, store, nodes.map(node => node.id), 'down')
+  }, { label: 'Layer down', operation: createDesignerDocumentOperation(store, 'toolbar.layer-down', nodes.map(node => `node:${node.id}`), ['/zIndex'], false) })
 }
 
 // ─── Group / Ungroup ─────────────────────────────────────────
@@ -401,7 +354,7 @@ function handleGroup() {
     memberIds: nodes.map(node => node.id),
   }
   store.documentTransactions.transact((draft) => {
-    draft.groups = [...(draft.groups ?? []), group]
+    addDraftElementGroup(draft, group)
   }, { label: 'Group', operation: createDesignerDocumentOperation(store, 'toolbar.group', group.memberIds.map(id => `node:${id}`), ['/groups'], true) })
 
   selectMany(store, group.memberIds)
@@ -420,7 +373,7 @@ function handleUngroup() {
   }
 
   store.documentTransactions.transact((draft) => {
-    draft.groups = (draft.groups ?? []).filter(group => !groupIds.includes(group.id))
+    removeDraftElementGroups(draft, groupIds)
   }, { label: 'Ungroup', operation: createDesignerDocumentOperation(store, 'toolbar.ungroup', groupIds.map(id => `group:${id}`), ['/groups'], true) })
 
   selectMany(store, memberIds)

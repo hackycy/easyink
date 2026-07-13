@@ -293,7 +293,9 @@ export function useDatasourceDrop(ctx: DatasourceDropContext) {
     const ext = store.peekDesignerFacet(target.type)?.value?.extension
     if (ext?.datasourceDrop) {
       const localPoint = documentPointToElementLocal({ x: docX, y: docY }, target)
-      ext.datasourceDrop.onDrop(toFieldInfo(fieldData), localPoint, target)
+      store.documentTransactions.batch(() => {
+        ext.datasourceDrop!.onDrop(toFieldInfo(fieldData), localPoint, target)
+      })
       selectOne(store, target.id)
       return
     }

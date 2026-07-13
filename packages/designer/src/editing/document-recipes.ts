@@ -24,6 +24,10 @@ export function createDesignerDocumentOperation(
   }
 }
 
+export function escapeDocumentPathToken(value: string): string {
+  return value.replaceAll('~', '~0').replaceAll('/', '~1')
+}
+
 export function appendDocumentNodes(draft: DocumentSchema, nodes: readonly MaterialNode[]): void {
   draft.elements.push(...nodes.map(node => deepClone(node)))
 }
@@ -118,6 +122,63 @@ export function updateDraftRenderCondition(
     output.renderCondition = deepClone(condition)
   else
     delete output.renderCondition
+}
+
+export function normalizeDocumentNodeRoots(nodes: readonly MaterialNode[]): MaterialNode[] {
+  return nodes.filter(node => !nodes.some((possibleAncestor) => {
+    if (possibleAncestor.id === node.id)
+      return false
+    const pending = Object.values(possibleAncestor.slots).flat()
+    while (pending.length > 0) {
+      const child = pending.pop()!
+      if (child.id === node.id)
+        return true
+      pending.push(...Object.values(child.slots).flat())
+    }
+    return false
+  }))
+}
+
+export function alignDraftNodes(draft: DocumentSchema, store: Pick<DesignerStore, 'materialProfile'>, nodeIds: readonly string[], mode: 'left' | 'center' | 'right'): void {
+  const nodes = nodeIds.map(id => requireDocumentNode(draft, store.materialProfile, id))
+  const left = Math.min(...nodes.map(node => node.x))
+  const right = Math.max(...nodes.map(node => node.x + node.width))
+  for (const node of nodes)
+    node.x = mode === 'left' ? left : mode === 'center' ? left + (right - left - node.width) / 2 : right - node.width
+}
+
+export function distributeDraftNodesHorizontally(draft: DocumentSchema, store: Pick<DesignerStore, 'materialProfile'>, nodeIds: readonly string[]): void {
+  const nodes = nodeIds.map(id => requireDocumentNode(draft, store.materialProfile, id)).sort((left, right) => left.x - right.x)
+  if (nodes.length < 3)
+    return
+  const first = nodes[0]!
+  const last = nodes.at(-1)!
+  const gap = ((last.x + last.width) - first.x - nodes.reduce((sum, node) => sum + node.width, 0)) / (nodes.length - 1)
+  let x = first.x + first.width + gap
+  for (const node of nodes.slice(1, -1)) {
+    node.x = x
+    x += node.width + gap
+  }
+}
+
+export function moveDraftNodesLayer(draft: DocumentSchema, store: Pick<DesignerStore, 'materialProfile'>, nodeIds: readonly string[], direction: 'up' | 'down'): void {
+  for (const id of nodeIds) {
+    const node = requireDocumentNode(draft, store.materialProfile, id)
+    const current = node.zIndex ?? 0
+    const candidates = draft.elements.filter(item => direction === 'up' ? (item.zIndex ?? 0) > current : (item.zIndex ?? 0) < current)
+      .sort((left, right) => direction === 'up' ? (left.zIndex ?? 0) - (right.zIndex ?? 0) : (right.zIndex ?? 0) - (left.zIndex ?? 0))
+    if (candidates[0])
+      node.zIndex = (candidates[0].zIndex ?? 0) + (direction === 'up' ? 1 : -1)
+  }
+}
+
+export function addDraftElementGroup(draft: DocumentSchema, group: NonNullable<DocumentSchema['groups']>[number]): void {
+  draft.groups = [...(draft.groups ?? []).filter(item => item.id !== group.id), deepClone(group)]
+}
+
+export function removeDraftElementGroups(draft: DocumentSchema, groupIds: readonly string[]): void {
+  const removed = new Set(groupIds)
+  draft.groups = (draft.groups ?? []).filter(group => !removed.has(group.id))
 }
 
 function writeDottedPath(target: Record<string, unknown>, path: string, value: unknown): void {

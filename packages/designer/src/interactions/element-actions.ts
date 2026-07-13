@@ -1,6 +1,6 @@
 import type { MaterialNode } from '@easyink/schema'
 import type { DesignerStore } from '../store/designer-store'
-import { createDesignerDocumentOperation, removeDocumentNodes, updateDraftNodeEditorState } from '../editing/document-recipes'
+import { createDesignerDocumentOperation, normalizeDocumentNodeRoots, removeDocumentNodes, updateDraftNodeEditorState } from '../editing/document-recipes'
 import { removeFromSelection } from './selection-api'
 
 type MaterialMetaUpdates = Partial<Record<'hidden' | 'locked', boolean | undefined>>
@@ -33,7 +33,7 @@ export function toggleMaterialHidden(store: DesignerStore, node: MaterialNode): 
 }
 
 export function deleteMaterialNodes(store: DesignerStore, nodes: readonly MaterialNode[]): number {
-  const deletableNodes = nodes.filter(node => !node.editorState?.locked)
+  const deletableNodes = normalizeDocumentNodeRoots(nodes.filter(node => !node.editorState?.locked))
   if (deletableNodes.length === 0)
     return 0
 
@@ -41,7 +41,7 @@ export function deleteMaterialNodes(store: DesignerStore, nodes: readonly Materi
     removeDocumentNodes(draft, deletableNodes.map(node => node.id))
   }, {
     label: 'Delete',
-    operation: createDesignerDocumentOperation(store, 'material.delete', deletableNodes.map(node => `node:${node.id}`), ['/elements'], true),
+    operation: createDesignerDocumentOperation(store, 'material.delete', deletableNodes.map(node => `node:${node.id}`), ['/elements', '/slots', '/groups'], true),
   })
 
   removeFromSelection(store, deletableNodes.map(node => node.id))

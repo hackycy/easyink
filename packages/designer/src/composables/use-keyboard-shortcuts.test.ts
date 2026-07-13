@@ -72,10 +72,15 @@ describe('useKeyboardShortcuts', () => {
     const container = document.createElement('div')
     const mounted = mountShortcuts(store, container)
     store.setFocusState('canvas')
+    const before = store.schema
 
     dispatchArrow(document.body, 'ArrowRight')
 
     expect(store.getElementById('a')?.x).toBe(11)
+    expect(store.schema).not.toBe(before)
+    expect(store.documentTransactions.historyEntries).toHaveLength(1)
+    store.documentTransactions.undo()
+    expect(store.getElementById('a')?.x).toBe(10)
     mounted.unmount()
   })
 

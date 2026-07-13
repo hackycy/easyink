@@ -57,13 +57,32 @@ describe('assistant designer bridge apply', () => {
   })
 
   it('applies full results with datasource registration', () => {
-    const store = createStore(createSchema([]))
+    const initial = Object.assign(createSchema([]), { meta: { title: 'old' }, compat: { legacy: true }, extensions: { stale: true } })
+    const store = createStore(initial)
+    const before = structuredClone(store.schema)
     const result = createResult()
 
     applyAssistantResultToDesigner(store, result)
 
     expect(store.schema.elements[0]?.id).toBe('title')
+    expect(store.schema.meta).toBeUndefined()
+    expect(store.schema.compat).toBeUndefined()
+    expect(store.schema.extensions).toMatchObject({ assistant: expect.any(Object) })
+    expect(store.schema.extensions?.stale).toBeUndefined()
     expect(store.dataSourceRegistry.getSources()[0]?.id).toBe('orders')
+    expect(rollbackAssistantDesigner(store)).toBe(true)
+    expect(store.schema).toEqual(before)
+  })
+
+  it('does not undo an ordinary edit when assistant rollback is no longer the top history entry', () => {
+    const store = createStore(createSchema([{ id: 'title', model: { text: 'Old' } }]))
+    expect(applyAssistantPatchToDesigner(store, [{ op: 'replace', path: '/elements/0/model/text', value: 'Assistant' }])).toBe(true)
+    store.documentTransactions.transact((draft) => {
+      draft.elements[0]!.model.text = 'Ordinary'
+    }, { label: 'Ordinary edit', operation: { kind: 'test.edit', sessionPath: [], targetIds: ['node:title'], fieldPaths: ['/model/text'], selectionLineage: null, structural: false } })
+
+    expect(rollbackAssistantDesigner(store)).toBe(false)
+    expect(store.schema.elements[0]?.model.text).toBe('Ordinary')
   })
 })
 

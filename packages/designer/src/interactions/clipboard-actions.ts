@@ -7,7 +7,7 @@ import {
   UnitManager,
 } from '@easyink/core'
 import { deepClone, generateId } from '@easyink/shared'
-import { appendDocumentNodes, createDesignerDocumentOperation, removeDocumentNodes } from '../editing/document-recipes'
+import { appendDocumentNodes, createDesignerDocumentOperation, normalizeDocumentNodeRoots, removeDocumentNodes } from '../editing/document-recipes'
 import { clearSelection, selectMany } from './selection-api'
 
 export interface ClipboardActions {
@@ -83,7 +83,7 @@ export function createClipboardActions(
   }
 
   function cutSelection() {
-    const nodes = snapshotSelectedNodes().filter(isInteractable)
+    const nodes = normalizeDocumentNodeRoots(snapshotSelectedNodes().filter(isInteractable))
     if (nodes.length === 0)
       return
 
@@ -93,7 +93,7 @@ export function createClipboardActions(
       removeDocumentNodes(draft, nodes.map(node => node.id))
     }, {
       label: 'Cut',
-      operation: createDesignerDocumentOperation(store, 'clipboard.cut', targetIds, ['/elements'], true),
+      operation: createDesignerDocumentOperation(store, 'clipboard.cut', targetIds, ['/elements', '/slots', '/groups'], true),
     })
 
     clearSelection(store)
@@ -141,7 +141,7 @@ export function createClipboardActions(
   }
 
   function deleteSelection() {
-    const nodes = snapshotSelectedNodes().filter(isInteractable)
+    const nodes = normalizeDocumentNodeRoots(snapshotSelectedNodes().filter(isInteractable))
     if (nodes.length === 0)
       return
 
@@ -149,7 +149,7 @@ export function createClipboardActions(
       removeDocumentNodes(draft, nodes.map(node => node.id))
     }, {
       label: 'Delete',
-      operation: createDesignerDocumentOperation(store, 'clipboard.delete', nodes.map(node => `node:${node.id}`), ['/elements'], true),
+      operation: createDesignerDocumentOperation(store, 'clipboard.delete', nodes.map(node => `node:${node.id}`), ['/elements', '/slots', '/groups'], true),
     })
 
     clearSelection(store)

@@ -22,7 +22,7 @@ import {
 import { generateId } from '@easyink/shared'
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { useDesignerStore } from '../composables'
-import { createDesignerDocumentOperation, updateDraftNodeEditorState } from '../editing/document-recipes'
+import { addDraftElementGroup, createDesignerDocumentOperation, moveDraftNodesLayer, removeDraftElementGroups, updateDraftNodeEditorState, updateDraftNodeGeometry } from '../editing/document-recipes'
 import { createClipboardActions } from '../interactions/clipboard-actions'
 import { hasGroupedElement, selectedLogicalGroupIds } from '../interactions/logical-groups'
 import { selectMany } from '../interactions/selection-api'
@@ -223,7 +223,7 @@ function handleAction(item: ContextMenuItem) {
       if (nodes.length === 1) {
         const node = nodes[0]!
         const maxZ = elements.reduce((m, el) => Math.max(m, el.zIndex ?? 0), 0)
-        store.updateElement(node.id, { zIndex: maxZ + 1 })
+        store.documentTransactions.transact(draft => updateDraftNodeGeometry(draft, store, node.id, { zIndex: maxZ + 1 }), { label: 'Bring front', operation: createDesignerDocumentOperation(store, 'context.layer-front', [`node:${node.id}`], ['/zIndex'], false) })
       }
       break
 
@@ -231,7 +231,7 @@ function handleAction(item: ContextMenuItem) {
       if (nodes.length === 1) {
         const node = nodes[0]!
         const minZ = elements.reduce((m, el) => Math.min(m, el.zIndex ?? 0), 0)
-        store.updateElement(node.id, { zIndex: minZ - 1 })
+        store.documentTransactions.transact(draft => updateDraftNodeGeometry(draft, store, node.id, { zIndex: minZ - 1 }), { label: 'Send back', operation: createDesignerDocumentOperation(store, 'context.layer-back', [`node:${node.id}`], ['/zIndex'], false) })
       }
       break
 
@@ -239,12 +239,8 @@ function handleAction(item: ContextMenuItem) {
       if (nodes.length === 1) {
         const node = nodes[0]!
         const currentZ = node.zIndex ?? 0
-        const above = elements
-          .filter(el => (el.zIndex ?? 0) > currentZ)
-          .sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0))
-        if (above.length > 0) {
-          const nextZ = above[0]!.zIndex ?? 0
-          store.updateElement(node.id, { zIndex: nextZ + 1 })
+        if (elements.some(el => (el.zIndex ?? 0) > currentZ)) {
+          store.documentTransactions.transact(draft => moveDraftNodesLayer(draft, store, [node.id], 'up'), { label: 'Layer up', operation: createDesignerDocumentOperation(store, 'context.layer-up', [`node:${node.id}`], ['/zIndex'], false) })
         }
       }
       break
@@ -253,12 +249,8 @@ function handleAction(item: ContextMenuItem) {
       if (nodes.length === 1) {
         const node = nodes[0]!
         const currentZ = node.zIndex ?? 0
-        const below = elements
-          .filter(el => (el.zIndex ?? 0) < currentZ)
-          .sort((a, b) => (b.zIndex ?? 0) - (a.zIndex ?? 0))
-        if (below.length > 0) {
-          const nextZ = below[0]!.zIndex ?? 0
-          store.updateElement(node.id, { zIndex: nextZ - 1 })
+        if (elements.some(el => (el.zIndex ?? 0) < currentZ)) {
+          store.documentTransactions.transact(draft => moveDraftNodesLayer(draft, store, [node.id], 'down'), { label: 'Layer down', operation: createDesignerDocumentOperation(store, 'context.layer-down', [`node:${node.id}`], ['/zIndex'], false) })
         }
       }
       break
@@ -267,7 +259,7 @@ function handleAction(item: ContextMenuItem) {
       if (nodes.length >= 2 && nodes.every(isInteractable) && !hasGroupedElement(store, nodes.map(node => node.id))) {
         const group = { id: generateId('grp'), memberIds: nodes.map(node => node.id) }
         store.documentTransactions.transact((draft) => {
-          draft.groups = [...(draft.groups ?? []), group]
+          addDraftElementGroup(draft, group)
         }, { label: 'Group', operation: createDesignerDocumentOperation(store, 'context.group', group.memberIds.map(id => `node:${id}`), ['/groups'], true) })
         selectMany(store, group.memberIds)
       }
@@ -282,7 +274,7 @@ function handleAction(item: ContextMenuItem) {
           memberIds.push(...group.memberIds)
       }
       store.documentTransactions.transact((draft) => {
-        draft.groups = (draft.groups ?? []).filter(group => !groupIds.includes(group.id))
+        removeDraftElementGroups(draft, groupIds)
       }, { label: 'Ungroup', operation: createDesignerDocumentOperation(store, 'context.ungroup', groupIds.map(id => `group:${id}`), ['/groups'], true) })
       selectMany(store, memberIds)
       break

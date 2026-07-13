@@ -9,7 +9,10 @@ interface AssistantDesignerExtension {
   appliedAt?: number
   beforeApplySchema?: unknown
   afterApplySchema?: unknown
+  applyToken?: string
 }
+
+const lastAssistantApplyChangeIds = new WeakMap<object, string>()
 
 export function applyAssistantResultToDesigner(
   store: ContributionContext['store'],
@@ -17,8 +20,9 @@ export function applyAssistantResultToDesigner(
 ): void {
   const beforeApplySchema = cloneJson(store.schema)
   const schema = admitAssistantSchema(store, result.schema)
+  const applyToken = `${result.id}:${Date.now()}`
   store.documentTransactions.markHistoryBarrier()
-  store.documentTransactions.transact((draft) => {
+  const change = store.documentTransactions.transact((draft) => {
     replaceDraftDocument(draft, schema)
     draft.extensions = {
       ...(draft.extensions ?? {}),
@@ -27,12 +31,15 @@ export function applyAssistantResultToDesigner(
         appliedAt: Date.now(),
         beforeApplySchema,
         afterApplySchema: cloneJson(schema),
+        applyToken,
       },
     }
   }, {
     label: 'Assistant apply',
     operation: { kind: 'assistant.apply', sessionPath: [], targetIds: ['document'], fieldPaths: [''], selectionLineage: null, structural: true },
   })
+  if (change)
+    lastAssistantApplyChangeIds.set(store, change.id)
   if (result.dataSource) {
     store.dataSourceRegistry.registerSource(result.dataSource)
   }
@@ -48,8 +55,9 @@ export function applyAssistantPatchToDesigner(
   const beforeApplySchema = cloneJson(store.schema)
   const nextSchema = applyAssistantPatch(beforeApplySchema as unknown as Record<string, unknown>, operations)
   const schema = admitAssistantSchema(store, nextSchema)
+  const applyToken = `patch:${Date.now()}`
   store.documentTransactions.markHistoryBarrier()
-  store.documentTransactions.transact((draft) => {
+  const change = store.documentTransactions.transact((draft) => {
     replaceDraftDocument(draft, schema)
     draft.extensions = {
       ...(draft.extensions ?? {}),
@@ -58,12 +66,15 @@ export function applyAssistantPatchToDesigner(
         appliedAt: Date.now(),
         beforeApplySchema,
         afterApplySchema: cloneJson(schema),
+        applyToken,
       },
     }
   }, {
     label: 'Assistant apply',
     operation: { kind: 'assistant.apply', sessionPath: [], targetIds: ['document'], fieldPaths: [''], selectionLineage: null, structural: true },
   })
+  if (change)
+    lastAssistantApplyChangeIds.set(store, change.id)
   store.markDraftModified()
   return true
 }
@@ -105,13 +116,21 @@ export function rollbackAssistantDesigner(store: ContributionContext['store']): 
     return false
   if (!store.documentTransactions.canUndo)
     return false
+  const expectedChangeId = lastAssistantApplyChangeIds.get(store)
+  const top = store.documentTransactions.historyEntries[store.documentTransactions.cursor - 1]
+  if (!top || !expectedChangeId || top.id !== expectedChangeId)
+    return false
   store.documentTransactions.undo()
+  lastAssistantApplyChangeIds.delete(store)
   store.markDraftModified()
   return true
 }
 
 function replaceDraftDocument(draft: DocumentSchemaInput, schema: DocumentSchemaInput): void {
-  Object.assign(draft, cloneJson(schema))
+  const target = draft as unknown as Record<string, unknown>
+  for (const key of Object.keys(target))
+    delete target[key]
+  Object.assign(target, cloneJson(schema))
 }
 
 function cloneJson<T>(value: T): T {

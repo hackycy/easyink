@@ -16,6 +16,7 @@ const FORBIDDEN_WRITER_PATTERNS: ReadonlyArray<readonly [string, RegExp]> = [
   ['legacy CommandManager', /\bCommandManager\b/],
   ['legacy command construction', /\bnew\s+[A-Z][A-Za-z0-9]*Command\b/],
   ['direct command execution', /\bcommand\.execute\s*\(/],
+  ['command-like execution', /\b[A-Za-z_$][\w$]*\.execute\s*\(/],
   ['internal document writer symbol', /\bDOCUMENT_STORE_WRITER\b/],
   ['direct schema assignment', /\b(?:ctx\.)?store\.schema(?:\??\.[A-Za-z_$][\w$]*|\[[^\]]+\])*\s*=(?!=)/],
   ['direct schema array mutation', /\b(?:ctx\.)?store\.schema(?:\??\.[A-Za-z_$][\w$]*|\[[^\]]+\])*\.(?:push|splice|pop|shift|unshift|sort|reverse)\s*\(/],
@@ -28,7 +29,10 @@ describe('document writer boundary', () => {
     const files = [...productionSources(DESIGNER_SRC), ASSISTANT_APPLY]
     const violations = files.flatMap((file) => {
       const source = readFileSync(file, 'utf8')
-      return FORBIDDEN_WRITER_PATTERNS
+      const patterns = file === ASSISTANT_APPLY
+        ? [...FORBIDDEN_WRITER_PATTERNS, ['assistant lifecycle schema reset', /\bstore\.setSchema\s*\(/] as const]
+        : FORBIDDEN_WRITER_PATTERNS
+      return patterns
         .filter(([, pattern]) => pattern.test(source))
         .map(([name]) => `${relative(REPO_ROOT, file)}: ${name}`)
     })

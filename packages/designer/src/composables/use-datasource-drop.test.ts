@@ -2,7 +2,9 @@
  * @vitest-environment happy-dom
  */
 import type { MaterialNode, PageSchema } from '@easyink/schema'
+import { createTestCompiledMaterialProfile, createTestMaterialManifest } from '@easyink/core/testing'
 import { describe, expect, it, vi } from 'vitest'
+import { DesignerStore } from '../store/designer-store'
 import { DATASOURCE_DRAG_MIME, useDatasourceDrop } from './use-datasource-drop'
 
 interface FakeStore {
@@ -125,5 +127,35 @@ describe('useDatasourceDrop', () => {
     expect(overlayRect?.style.height).toBe('20px')
 
     drop.cleanupOverlay()
+  })
+
+  it('batches two custom callback writes into one undoable history item', () => {
+    const profile = createTestCompiledMaterialProfile([createTestMaterialManifest({
+      type: 'custom',
+      designer: true,
+      binding: { kind: 'ports', ports: [{ id: 'value', key: { kind: 'exact', value: 'value' }, role: 'display', valueShape: 'scalar', modelPath: '/model/value', formatEditor: false }] },
+    })])
+    const node = profile.createNode('custom', { id: 'target', width: 100, height: 40 })
+    const store = new DesignerStore({ unit: 'px', page: makePage(), elements: [node] }, undefined, undefined, { materials: { profile } })
+    vi.spyOn(store, 'peekDesignerFacet').mockReturnValue({ value: { extension: { datasourceDrop: {
+      onDragOver: () => ({ status: 'accepted', rect: { x: 0, y: 0, w: 100, h: 40 } }),
+      onDrop: () => {
+        store.documentTransactions.run('target', (draft) => {
+          draft.model.first = true
+        }, { label: 'First', operation: { kind: 'custom.first', sessionPath: [], targetIds: ['node:target'], fieldPaths: ['/model/first'], selectionLineage: null, structural: false } })
+        store.documentTransactions.run('target', (draft) => {
+          draft.model.second = true
+        }, { label: 'Second', operation: { kind: 'custom.second', sessionPath: [], targetIds: ['node:target'], fieldPaths: ['/model/second'], selectionLineage: null, structural: false } })
+      },
+    } } } } as never)
+    const pageEl = document.createElement('div')
+    pageEl.getBoundingClientRect = () => ({ left: 0, top: 0, right: 500, bottom: 500, width: 500, height: 500, x: 0, y: 0, toJSON: () => ({}) })
+    const drop = useDatasourceDrop({ store, getPageEl: () => pageEl })
+    drop.onDrop({ clientX: 20, clientY: 20, preventDefault() {}, dataTransfer: { getData: () => JSON.stringify({ sourceId: 'source', fieldPath: 'field' }) } } as unknown as DragEvent)
+
+    expect(store.documentTransactions.historyEntries).toHaveLength(1)
+    expect(store.getElementById('target')?.model).toMatchObject({ first: true, second: true })
+    store.documentTransactions.undo()
+    expect(store.getElementById('target')?.model).not.toMatchObject({ first: true, second: true })
   })
 })

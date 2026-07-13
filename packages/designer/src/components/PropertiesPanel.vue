@@ -11,7 +11,7 @@ import { getBindingRefs } from '@easyink/schema'
 import { EiNumberInput, EiPanel, EiSwitch } from '@easyink/ui'
 import { computed, onUnmounted, shallowRef, watch, watchEffect } from 'vue'
 import { useDesignerStore } from '../composables'
-import { createDesignerDocumentOperation, updateDraftBindingFormat, updateDraftNodeBinding, updateDraftNodeEditorState, updateDraftNodeModel, updateDraftRenderCondition } from '../editing/document-recipes'
+import { createDesignerDocumentOperation, escapeDocumentPathToken, updateDraftBindingFormat, updateDraftNodeBinding, updateDraftNodeEditorState, updateDraftNodeModel, updateDraftRenderCondition } from '../editing/document-recipes'
 import { PropertyPreviewController } from '../editing/property-preview-controller'
 import { resolveDataContractFieldFormatEditor, resolveOrdinaryFormatEditor } from '../materials/binding-format-editor'
 import { resolveBindingPanelPort, resolveDataContractBindingPort } from '../materials/binding-port'
@@ -567,7 +567,7 @@ function updateRenderCondition(condition: MaterialNode['output']['renderConditio
 function clearBinding(nodeId: string, port: string) {
   store.documentTransactions.transact((draft) => {
     updateDraftNodeBinding(draft, store, nodeId, port, undefined)
-  }, { label: 'Clear binding', operation: createDesignerDocumentOperation(store, 'property.binding.clear', [`node:${nodeId}`], [`/bindings/${port}`], false) })
+  }, { label: 'Clear binding', operation: createDesignerDocumentOperation(store, 'property.binding.clear', [`node:${nodeId}`], [`/bindings/${escapeDocumentPathToken(port)}`], false) })
 }
 
 function updateBindingFormat(format: BindingDisplayFormat | undefined, port: string | undefined, bindIndex?: number) {
@@ -583,7 +583,7 @@ function updateBindingFormat(format: BindingDisplayFormat | undefined, port: str
   const id = selectedElement.value.id
   store.documentTransactions.transact((draft) => {
     updateDraftBindingFormat(draft, store, id, port, format, bindIndex)
-  }, { label: 'Update binding format', operation: createDesignerDocumentOperation(store, 'property.binding.format', [`node:${id}`], [`/bindings/${port}`], false) })
+  }, { label: 'Update binding format', operation: createDesignerDocumentOperation(store, 'property.binding.format', [`node:${id}`], [`/bindings/${escapeDocumentPathToken(port)}`], false) })
 }
 
 function updateMaterialDataBinding(binding: DataContractBinding | undefined) {
@@ -595,7 +595,7 @@ function updateMaterialDataBinding(binding: DataContractBinding | undefined) {
     return
   store.documentTransactions.transact((draft) => {
     updateDraftNodeBinding(draft, store, el.id, port, binding)
-  }, { label: 'Update material binding', operation: createDesignerDocumentOperation(store, 'property.binding.update', [`node:${el.id}`], [`/bindings/${port}`], false) })
+  }, { label: 'Update material binding', operation: createDesignerDocumentOperation(store, 'property.binding.update', [`node:${el.id}`], [`/bindings/${escapeDocumentPathToken(port)}`], false) })
 }
 
 function getBindingDataSource(sourceId: string) {

@@ -475,7 +475,9 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
       return
     const localPoint = geometry.documentToLocal(resolved.docPoint, resolved.target)
     if (ext?.datasourceDrop) {
-      ext.datasourceDrop.onDrop(toFieldInfo(fieldData), localPoint, resolved.target)
+      ctx.store.documentTransactions.batch(() => {
+        ext.datasourceDrop!.onDrop(toFieldInfo(fieldData), localPoint, resolved.target)
+      })
       selectOne(ctx.store, resolved.target.id)
       return
     }

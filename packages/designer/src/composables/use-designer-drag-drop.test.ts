@@ -6,6 +6,7 @@ import type { MaterialNode, PageSchema } from '@easyink/schema'
 import { validateDocumentWithProfile } from '@easyink/core'
 import { createTestMaterialManifest } from '@easyink/core/testing'
 import { describe, expect, it, vi } from 'vitest'
+import { DesignerStore } from '../store/designer-store'
 import { createDesignerTestProfile } from '../testing/material-profile'
 import { DATASOURCE_DRAG_MIME, MATERIAL_DRAG_MIME, useDesignerDragDrop } from './use-designer-drag-drop'
 
@@ -142,6 +143,7 @@ function makeStore(
     },
     documentTransactions: {
       transact: vi.fn((recipe: (draft: typeof schema) => void) => recipe(schema)),
+      batch: vi.fn((run: () => unknown) => run()),
       getOperationContext: () => ({ sessionPath: [], selectionLineage: null }),
     },
     selection: {
@@ -158,6 +160,23 @@ function makeStore(
 }
 
 describe('useDesignerDragDrop', () => {
+  it('commits a real immutable document transaction and one undo restores the material drop', () => {
+    const profile = createDesignerTestProfile([createTestMaterialManifest({ type: 'text', designer: true })])
+    const store = new DesignerStore({ unit: 'px', page: makePage(), elements: [] }, undefined, undefined, { materials: { profile } })
+    const pageEl = makePageEl()
+    const drag = useDesignerDragDrop({ store, getPageEl: () => pageEl })
+    const before = store.schema
+    drag.startMaterialDrag(makeDragEvent(10, 10, []), { id: 'text', groupId: 'basic', label: 'Text', icon: {}, materialType: 'text' })
+    drag.onCanvasDrop(makeDragEvent(200, 200, [MATERIAL_DRAG_MIME], { [MATERIAL_DRAG_MIME]: 'text' }))
+
+    expect(store.schema).not.toBe(before)
+    expect(store.documentTransactions.historyEntries).toHaveLength(1)
+    expect(store.schema.elements).toHaveLength(1)
+    store.documentTransactions.undo()
+    expect(store.schema.elements).toHaveLength(0)
+    drag.cleanup()
+  })
+
   it('creates a material at the same rect shown by the centered preview', () => {
     const pageEl = makePageEl()
     const elements: MaterialNode[] = []
@@ -574,6 +593,7 @@ describe('useDesignerDragDrop', () => {
     expect(table.bindings).toEqual({})
     expect(tableStore.documentTransactions.transact).not.toHaveBeenCalled()
     expect(onDrop).toHaveBeenCalledOnce()
+    expect(customStore.documentTransactions.batch).toHaveBeenCalledOnce()
     expect(custom.bindings.value).toBeUndefined()
     tableDrag.cleanup()
     customDrag.cleanup()

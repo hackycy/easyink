@@ -160,4 +160,19 @@ describe('createClipboardActions', () => {
     expect(store.documentTransactions.historyEntries).toHaveLength(0)
     expect(store.schema.elements).toEqual([])
   })
+
+  it('normalizes ancestor and descendant selections into one structural delete and undo', () => {
+    const profile = createTestCompiledMaterialProfile()
+    const child = profile.createNode('box', { id: 'child' })
+    const owner = profile.createNode('container', { id: 'owner', slots: { content: [child] } })
+    const store = makeStore([owner], ['owner', 'child'], undefined, profile)
+    const actions = createClipboardActions(store, () => [store.getElementById('owner')!, store.getElementById('child')!], profile)
+
+    actions.deleteSelection()
+
+    expect(store.schema.elements).toEqual([])
+    expect(store.documentTransactions.historyEntries).toHaveLength(1)
+    store.documentTransactions.undo()
+    expect(store.getElementById('owner')?.slots.content[0]?.id).toBe('child')
+  })
 })
