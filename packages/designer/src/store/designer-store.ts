@@ -179,14 +179,17 @@ export class DesignerStore {
   }
 
   get materialDiagnostics(): readonly MaterialLoadDiagnostic[] {
+    void this.documentViewSignal.revision
     return this._materialDiagnostics
   }
 
   get materialNodeStates(): ReadonlyMap<string, MaterialNodeLoadState> {
+    void this.documentViewSignal.revision
     return this._materialNodeStates
   }
 
   getMaterialNodeState(nodeId: string): MaterialNodeLoadState | undefined {
+    void this.documentViewSignal.revision
     return this._materialNodeStates.get(nodeId)
   }
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { nextTick, ref, watchEffect } from 'vue'
 import { useDesignerStore } from '../composables'
+import { resolveHistoryOperationLabel } from './history-label'
 
 const store = useDesignerStore()
 interface HistoryEntry { id: string, type: string, description: string, operationKind?: string }
@@ -51,7 +52,7 @@ function localizeEntry(entry: HistoryEntry): string {
   if (localizedDescription !== entry.description)
     return localizedDescription
 
-  const key = TYPE_TO_LOCALE[entry.operationKind ?? entry.type]
+  const key = resolveHistoryOperationLabel(entry.operationKind) ?? TYPE_TO_LOCALE[entry.operationKind ?? entry.type]
   return store.t(key ?? entry.description)
 }
 

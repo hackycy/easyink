@@ -16,7 +16,7 @@ const lastAssistantApplyChangeIds = new WeakMap<object, string>()
 type AssistantDataSource = NonNullable<AssistantResult['dataSource']>
 interface DataSourceHistoryEntry { sourceId: string, before?: AssistantDataSource, after: AssistantDataSource }
 const dataSourceHistory = new WeakMap<object, Map<string, DataSourceHistoryEntry>>()
-const dataSourceSubscriptions = new WeakSet<object>()
+const dataSourceParticipants = new WeakSet<object>()
 
 export function applyAssistantResultToDesigner(
   store: ContributionContext['store'],
@@ -145,12 +145,12 @@ function recordDataSourceChange(store: ContributionContext['store'], changeId: s
   dataSourceHistory.set(store, history)
   history.set(changeId, { sourceId: source.id, before: store.dataSourceRegistry.getSourceSync(source.id) as AssistantDataSource | undefined, after: source })
   store.dataSourceRegistry.registerSource(source)
-  if (dataSourceSubscriptions.has(store))
+  if (dataSourceParticipants.has(store))
     return
-  dataSourceSubscriptions.add(store)
-  store.documentStore.subscribe((event) => {
-    if ((event.kind === 'undo' || event.kind === 'redo') && event.changeSet)
-      restoreDataSourceForChange(store, event.changeSet.id, event.kind)
+  dataSourceParticipants.add(store)
+  store.documentTransactions.onHistoryMutation((mutation) => {
+    if ((mutation.direction === 'undo' || mutation.direction === 'redo') && mutation.changeSet)
+      restoreDataSourceForChange(store, mutation.changeSet.id, mutation.direction)
   })
 }
 

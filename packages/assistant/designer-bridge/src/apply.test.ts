@@ -112,6 +112,15 @@ describe('assistant designer bridge apply', () => {
     expect(store.dataSourceRegistry.getSourceSync('orders')).toBeUndefined()
     preview.cancel()
   })
+
+  it('keeps a newer datasource apply after immediate undo and microtask flushing', async () => {
+    const store = createStore(createSchema([]))
+    applyAssistantDataSourceToDesigner(store, { id: 'orders', name: 'A', fields: [] })
+    store.documentTransactions.undo()
+    applyAssistantDataSourceToDesigner(store, { id: 'orders', name: 'B', fields: [] })
+    await Promise.resolve()
+    expect(store.dataSourceRegistry.getSourceSync('orders')?.name).toBe('B')
+  })
 })
 
 function createStore(schema: ReturnType<typeof createSchema>): DesignerStore {

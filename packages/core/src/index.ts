@@ -78,7 +78,7 @@ export { DocumentTransactionEngine, DocumentValidationError } from './document-t
 
 // ─── Core Services ────────────────────────────────────────────────
 
-export type { DocumentRecipe, DocumentTransactionEngineOptions, DocumentTransactionOptions } from './document-transaction-engine'
+export type { DocumentHistoryMutation, DocumentRecipe, DocumentTransactionEngineOptions, DocumentTransactionOptions } from './document-transaction-engine'
 
 export { createTransactionOperationDescriptor } from './editing-session'
 export type {

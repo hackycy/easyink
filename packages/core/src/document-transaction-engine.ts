@@ -40,6 +40,11 @@ export interface DocumentTransactionEngineOptions {
   getOperationContext?: () => TransactionOperationContext
 }
 
+export interface DocumentHistoryMutation {
+  readonly direction: 'commit' | 'undo' | 'redo' | 'reset'
+  readonly changeSet?: DocumentChangeSet
+}
+
 export class DocumentValidationError extends Error {
   constructor(readonly diagnostics: readonly MaterialLoadDiagnostic[]) {
     super(diagnostics.map(item => `${item.code} ${item.path}: ${item.message}`).join('\n'))
@@ -59,6 +64,7 @@ export class DocumentTransactionEngine implements TransactionAPI {
   private undoStack: DocumentHistoryEntry[] = []
   private redoStack: DocumentHistoryEntry[] = []
   private listeners = new Set<() => void>()
+  private historyMutationListeners = new Set<(mutation: DocumentHistoryMutation) => void>()
   private batchRecipes: Array<{
     recipe: DocumentRecipe
     options: DocumentTransactionOptions
@@ -228,12 +234,18 @@ export class DocumentTransactionEngine implements TransactionAPI {
       this.barrierGeneration += 1
       this.store[DOCUMENT_STORE_WRITER]({ kind: 'reset', document, validationReport: report })
       this.clearHistory()
+      this.notifyHistoryMutation({ direction: 'reset' })
     })
   }
 
   onChange(listener: () => void): () => void {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
+  }
+
+  onHistoryMutation(listener: (mutation: DocumentHistoryMutation) => void): () => void {
+    this.historyMutationListeners.add(listener)
+    return () => this.historyMutationListeners.delete(listener)
   }
 
   beginPreview(options: DocumentTransactionOptions): PreviewTransaction {
@@ -288,6 +300,7 @@ export class DocumentTransactionEngine implements TransactionAPI {
       afterNodeStates: report.nodeStates,
     })
     this.redoStack = []
+    this.notifyHistoryMutation({ direction: 'commit', changeSet })
     this.notify()
     return changeSet
   }
@@ -519,7 +532,17 @@ export class DocumentTransactionEngine implements TransactionAPI {
     })
     source.pop()
     destination.push(entry)
+    this.notifyHistoryMutation({ direction, changeSet: entry.changeSet })
     this.notify()
+  }
+
+  private notifyHistoryMutation(mutation: DocumentHistoryMutation): void {
+    for (const listener of [...this.historyMutationListeners]) {
+      try {
+        listener(mutation)
+      }
+      catch { /* History participants cannot roll back a published mutation. */ }
+    }
   }
 
   private notify(): void {

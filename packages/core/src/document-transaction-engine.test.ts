@@ -31,6 +31,22 @@ function strictSchema<T>(schema: T): T {
 }
 
 describe('documentTransactionEngine', () => {
+  it('notifies synchronous history participants with direction and exact change IDs', () => {
+    const profile = createTestCompiledMaterialProfile()
+    const store = new DocumentStore(createCanonicalDefaultSchema(), profile)
+    const engine = new DocumentTransactionEngine(store, { createId: () => 'history-change' })
+    const mutations: string[] = []
+    engine.onHistoryMutation((mutation) => {
+      mutations.push(`${mutation.direction}:${mutation.changeSet?.id ?? 'none'}`)
+    })
+    engine.transact((draft) => {
+      draft.page.width = 101
+    }, { label: 'History', operation: { kind: 'test.history', sessionPath: [], targetIds: ['document'], fieldPaths: ['/page/width'], selectionLineage: null, structural: false } })
+    engine.undo()
+    engine.redo()
+    expect(mutations).toEqual(['commit:history-change', 'undo:history-change', 'redo:history-change'])
+  })
+
   it('edits multiple nodes atomically and undoes the resulting data change set', () => {
     const profile = createTestCompiledMaterialProfile()
     const schema = createCanonicalDefaultSchema()
