@@ -27,6 +27,13 @@ export interface PaginationResult {
   diagnostics: LayoutDiagnostic[]
 }
 
+interface PreparedFragmentPagination {
+  readonly fragment: LayoutFragment
+  readonly adapter?: MaterialFragmentAdapter
+  readonly adapterPlan: MaterialLayoutPlan
+  readonly embeddedFragmentPlan?: MaterialFragmentPlan
+}
+
 const FRAGMENT_SIZE_TOLERANCE = 1e-9
 const LEGACY_FRAGMENT_FIELDS = new Set([
   'availableHeight',
@@ -100,9 +107,18 @@ export function commitMaterialFragment(
   contribution: MaterialFragmentContribution,
   inputPlacement: Readonly<{ x: number, y: number }>,
 ): MaterialFragmentPlan {
+  return commitMaterialFragmentInternal(inputRequest, contribution, inputPlacement, false)
+}
+
+function commitMaterialFragmentInternal(
+  inputRequest: MaterialFragmentRequest,
+  contribution: MaterialFragmentContribution,
+  inputPlacement: Readonly<{ x: number, y: number }>,
+  planIsValidated: boolean,
+): MaterialFragmentPlan {
   const request = readFragmentRequest(inputRequest)
   const placement = readFragmentPlacement(inputPlacement)
-  validateFragmentRequest(request)
+  validateFragmentRequest(request, planIsValidated)
   const facts = readFragmentContribution(contribution)
 
   if (!fragmentRangeMadeProgress(request, facts.consumedRange))
@@ -197,7 +213,7 @@ function createFixedSheets(
 
     let startBlockOffset = 0
     let firstPlacement = true
-    const fragmentAdapter = options.resolveFragmentAdapter?.(fragment)
+    const prepared = prepareFragmentPagination(fragment, options.resolveFragmentAdapter?.(fragment))
     while (startBlockOffset < box.height) {
       const pageStart = pageIndex * pageHeight
       const relativeTop = firstPlacement ? Math.max(box.y - pageStart, 0) : 0
@@ -218,8 +234,7 @@ function createFixedSheets(
       }
 
       pageFragments[pageIndex]!.push(commitFragmentRange(
-        fragment,
-        fragmentAdapter,
+        prepared,
         startBlockOffset,
         endBlockOffset,
         availableHeight,
@@ -318,7 +333,7 @@ function createAutoSheets(
 
     let startBlockOffset = 0
     let firstPlacement = true
-    const fragmentAdapter = options.resolveFragmentAdapter?.(fragment)
+    const prepared = prepareFragmentPagination(fragment, options.resolveFragmentAdapter?.(fragment))
     while (startBlockOffset < box.height) {
       let relativeTop = firstPlacement ? Math.max(box.y - currentPageStart, 0) : 0
       const remainingHeight = box.height - startBlockOffset
@@ -343,8 +358,7 @@ function createAutoSheets(
       }
 
       currentFragments.push(commitFragmentRange(
-        fragment,
-        fragmentAdapter,
+        prepared,
         startBlockOffset,
         endBlockOffset,
         availableHeight,
@@ -399,8 +413,7 @@ function createContinuousSheet(
     if (box.height === 0)
       return fragment
     return commitFragmentRange(
-      fragment,
-      options.resolveFragmentAdapter?.(fragment),
+      prepareFragmentPagination(fragment, options.resolveFragmentAdapter?.(fragment)),
       0,
       box.height,
       height,
@@ -493,8 +506,9 @@ function assertValidPaginationPlan(plan: MaterialLayoutPlan<unknown>): void {
     throw new Error('MATERIAL_LAYOUT_PLAN_INVALID')
 }
 
-function validateFragmentRequest(request: MaterialFragmentRequest): void {
-  assertValidPaginationPlan(request.plan)
+function validateFragmentRequest(request: MaterialFragmentRequest, planIsValidated = false): void {
+  if (!planIsValidated)
+    assertValidPaginationPlan(request.plan)
   const height = request.plan.borderBox.height
   if (!Number.isSafeInteger(request.pageIndex) || request.pageIndex < 0
     || !Number.isFinite(request.startBlockOffset) || !Number.isFinite(request.endBlockOffset)
@@ -670,8 +684,7 @@ function createDefaultContribution(
 }
 
 function commitFragmentRange(
-  fragment: LayoutFragment,
-  adapter: MaterialFragmentAdapter | undefined,
+  prepared: PreparedFragmentPagination,
   startBlockOffset: number,
   endBlockOffset: number,
   availableHeight: number,
@@ -679,26 +692,42 @@ function commitFragmentRange(
   placement: Readonly<{ x: number, y: number }>,
   diagnostics: LayoutDiagnostic[],
 ): LayoutFragment {
+  const { adapterPlan, fragment } = prepared
   const privateRequest: MaterialFragmentRequest = {
-    plan: fragment.plan,
+    plan: adapterPlan,
     startBlockOffset,
     endBlockOffset,
     availableHeight,
     pageIndex,
   }
-  validateFragmentRequest(privateRequest)
   const adapterRequest = Object.freeze({
-    plan: freezeMaterialLayoutPlan(fragment.plan),
+    plan: adapterPlan,
     startBlockOffset,
     endBlockOffset,
     availableHeight,
     pageIndex,
   })
-  const contribution = adapter?.createFragment(adapterRequest)
-    ?? createDefaultContribution(privateRequest, fragment.fragmentPlan)
-  const fragmentPlan = commitMaterialFragment(privateRequest, contribution, placement)
+  const contribution = prepared.adapter?.createFragment(adapterRequest)
+    ?? createDefaultContribution(privateRequest, prepared.embeddedFragmentPlan)
+  const fragmentPlan = commitMaterialFragmentInternal(privateRequest, contribution, placement, true)
   diagnostics.push(...fragmentPlan.diagnostics.map(toPaginationDiagnostic))
   return { ...fragment, fragmentPlan }
+}
+
+function prepareFragmentPagination(
+  fragment: LayoutFragment,
+  adapter: MaterialFragmentAdapter | undefined,
+): PreparedFragmentPagination {
+  const adapterPlan = freezeMaterialLayoutPlan(fragment.plan)
+  assertValidPaginationPlan(adapterPlan)
+  return Object.freeze({
+    fragment,
+    adapterPlan,
+    ...(adapter === undefined ? {} : { adapter }),
+    ...(fragment.fragmentPlan === undefined
+      ? {}
+      : { embeddedFragmentPlan: freezeMaterialFragmentPlan(fragment.fragmentPlan) }),
+  })
 }
 
 function createFragmentOverflowDiagnostic(

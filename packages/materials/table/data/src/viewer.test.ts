@@ -1,4 +1,4 @@
-import type { MaterialMeasureRequest, ViewerElementTree, ViewerRenderTree } from '@easyink/core'
+import type { MaterialLayoutPlan, MaterialMeasureRequest, ViewerElementTree, ViewerRenderTree } from '@easyink/core'
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import { createFragmentFromNode, createLayoutConstraintKey, createNonFragmentingMaterialPlans, freezeMaterialLayoutPlan, runLayoutPipeline, runPagination, viewerText } from '@easyink/core'
 import { createTestViewerRenderContext } from '@easyink/core/testing'
@@ -51,6 +51,8 @@ describe('tableDataFragmentAdapter', () => {
       payload: {
         kind: 'table-data-layout',
         columnIds: ['column-a'],
+        rowStartOffsets: [0, 4, 12],
+        rowEndOffsets: [4, 12, 16],
         rows: [
           { rowIndex: 0, canonicalRowId: 'header', sourceRowKey: 'header', bandRole: 'header', startBlockOffset: 0, endBlockOffset: 4 },
           { rowIndex: 1, canonicalRowId: 'detail', sourceRowKey: 'detail:key-a', bandRole: 'detail', startBlockOffset: 4, endBlockOffset: 12 },
@@ -75,6 +77,89 @@ describe('tableDataFragmentAdapter', () => {
         { rowIndex: 1, canonicalRowId: 'detail', sourceRowKey: 'detail:key-a', bandRole: 'detail', startBlockOffset: 4, endBlockOffset: 12 },
       ],
     })
+  })
+
+  it.each([
+    ['header', 0, 4, [0]],
+    ['nonzero detail', 4, 12, [1]],
+    ['footer', 12, 16, [2]],
+    ['empty at start', 0, 0, []],
+    ['empty at internal boundary', 12, 12, []],
+    ['empty at end', 16, 16, []],
+  ] as const)('selects the exact %s boundary range', (_label, startBlockOffset, endBlockOffset, rowIndices) => {
+    const plan = createIndexedFragmentPlan(3)
+
+    const contribution = tableDataFragmentAdapter.createFragment({
+      plan,
+      startBlockOffset,
+      endBlockOffset,
+      availableHeight: endBlockOffset - startBlockOffset,
+      pageIndex: 0,
+    })
+
+    expect((contribution.renderPayload as { rows: Array<{ rowIndex: number }> }).rows.map(row => row.rowIndex))
+      .toEqual(rowIndices)
+  })
+
+  it.each([
+    [1, 4],
+    [4, 15.5],
+    [1, 15.5],
+  ])('rejects a requested range outside row boundaries: %s..%s', (startBlockOffset, endBlockOffset) => {
+    expect(() => tableDataFragmentAdapter.createFragment({
+      plan: createIndexedFragmentPlan(16),
+      startBlockOffset,
+      endBlockOffset,
+      availableHeight: endBlockOffset - startBlockOffset,
+      pageIndex: 0,
+    })).toThrow('TABLE_FRAGMENT_RANGE_BOUNDARY_INVALID')
+  })
+
+  it('looks up one range in 2048 rows with logarithmically bounded indexed reads', () => {
+    const rowCount = 2_048
+    let indexedReads = 0
+    const observe = <T>(values: T[]): T[] => new Proxy(values, {
+      get(target, property, receiver) {
+        if (typeof property === 'string' && /^(?:0|[1-9]\d*)$/.test(property))
+          indexedReads += 1
+        return Reflect.get(target, property, receiver)
+      },
+    })
+    const rows = observe(Array.from({ length: rowCount }, (_, rowIndex) => ({
+      rowIndex,
+      canonicalRowId: `row-${rowIndex}`,
+      sourceRowKey: `row-${rowIndex}`,
+      bandRole: rowIndex === 0 ? 'header' : rowIndex === rowCount - 1 ? 'footer' : 'detail',
+      startBlockOffset: rowIndex,
+      endBlockOffset: rowIndex + 1,
+    })))
+    const starts = observe(Array.from({ length: rowCount }, (_, index) => index))
+    const ends = observe(Array.from({ length: rowCount }, (_, index) => index + 1))
+    const base = createTestFragment(createNode()).plan
+    const plan = {
+      ...base,
+      borderBox: { ...base.borderBox, height: rowCount },
+      contentBox: { ...base.contentBox, height: rowCount },
+      payload: {
+        kind: 'table-data-layout',
+        columnIds: ['column-a'],
+        rowStartOffsets: starts,
+        rowEndOffsets: ends,
+        rows,
+      },
+    } as MaterialLayoutPlan
+
+    const contribution = tableDataFragmentAdapter.createFragment({
+      plan,
+      startBlockOffset: 1_024,
+      endBlockOffset: 1_025,
+      availableHeight: 1,
+      pageIndex: 1_024,
+    })
+
+    expect((contribution.renderPayload as { rows: Array<{ rowIndex: number }> }).rows.map(row => row.rowIndex))
+      .toEqual([1_024])
+    expect(indexedReads).toBeLessThanOrEqual(32)
   })
 
   it('keeps authoring-preview measurement independent from runtime collection expansion', async () => {
@@ -113,7 +198,16 @@ describe('tableDataFragmentAdapter', () => {
     const plan = await tableDataViewerLayout.measure!(request)
 
     expect(openCollection).not.toHaveBeenCalled()
-    expect((plan.payload as { rows: unknown[] }).rows).toHaveLength(3)
+    const payload = plan.payload as {
+      rows: Array<{ startBlockOffset: number, endBlockOffset: number }>
+      rowStartOffsets: number[]
+      rowEndOffsets: number[]
+    }
+    expect(payload.rows).toHaveLength(3)
+    expect(payload.rowStartOffsets).toEqual(payload.rows.map(row => row.startBlockOffset))
+    expect(payload.rowEndOffsets).toEqual(payload.rows.map(row => row.endBlockOffset))
+    expect(payload.rowStartOffsets.every((offset, index) => index === 0 || offset > payload.rowStartOffsets[index - 1]!)).toBe(true)
+    expect(payload.rowEndOffsets.every((offset, index) => index === 0 || offset > payload.rowEndOffsets[index - 1]!)).toBe(true)
     expect(Object.isFrozen(plan)).toBe(true)
   })
 
@@ -287,6 +381,32 @@ function createTestFragment(node: MaterialNode) {
     fragmentBox: borderBox,
   }).layoutPlan
   return createFragmentFromNode(node, plan)
+}
+
+function createIndexedFragmentPlan(rowCount: number): MaterialLayoutPlan {
+  const base = createTestFragment(createNode()).plan
+  const rows = Array.from({ length: rowCount }, (_, rowIndex) => ({
+    rowIndex,
+    canonicalRowId: `row-${rowIndex}`,
+    sourceRowKey: `row-${rowIndex}`,
+    bandRole: rowIndex === 0 ? 'header' : rowIndex === rowCount - 1 ? 'footer' : 'detail',
+    startBlockOffset: rowIndex === 0 ? 0 : rowIndex === 1 ? 4 : 12 + (rowIndex - 2),
+    endBlockOffset: rowIndex === 0 ? 4 : rowIndex === 1 ? 12 : 13 + (rowIndex - 2),
+  }))
+  if (rowCount === 3)
+    rows[2]!.endBlockOffset = 16
+  return freezeMaterialLayoutPlan({
+    ...base,
+    borderBox: { ...base.borderBox, height: rows.at(-1)?.endBlockOffset ?? 0 },
+    contentBox: { ...base.contentBox, height: rows.at(-1)?.endBlockOffset ?? 0 },
+    payload: {
+      kind: 'table-data-layout',
+      columnIds: ['column-a'],
+      rowStartOffsets: rows.map(row => row.startBlockOffset),
+      rowEndOffsets: rows.map(row => row.endBlockOffset),
+      rows,
+    },
+  })
 }
 
 function paginateWithCore(recordCount: number) {

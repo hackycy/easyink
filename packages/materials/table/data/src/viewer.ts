@@ -126,7 +126,11 @@ export function measureTableData(node: MaterialNode<unknown>, context: ViewerMea
 
 export const tableDataFragmentAdapter: MaterialFragmentAdapter = {
   createFragment(request) {
-    const rows = readTableLayoutRows(request.plan.payload)
+    const index = readTableLayoutIndex(request.plan.payload)
+    const indexedRows = index
+      ? selectTableLayoutRows(index, request.startBlockOffset, request.endBlockOffset)
+      : undefined
+    const rows = indexedRows ?? readTableLayoutRows(request.plan.payload)
     const renderPayload: JsonValue = rows
       ? {
           kind: 'table-data-fragment',
@@ -401,6 +405,8 @@ function createTableLayoutFacts(layout: ResolvedRuntimeLayout) {
     payload: {
       kind: 'table-data-layout' as const,
       columnIds: layout.columnIds,
+      rowStartOffsets: rows.map(row => row.startBlockOffset),
+      rowEndOffsets: rows.map(row => row.endBlockOffset),
       rows,
     },
   }
@@ -413,6 +419,78 @@ interface TableLayoutRowFact extends Record<string, string | number> {
   bandRole: string
   startBlockOffset: number
   endBlockOffset: number
+}
+
+interface TableLayoutRangeIndex {
+  readonly rows: readonly unknown[]
+  readonly rowStartOffsets: readonly unknown[]
+  readonly rowEndOffsets: readonly unknown[]
+}
+
+function readTableLayoutIndex(payload: unknown): TableLayoutRangeIndex | undefined {
+  if (!isRecord(payload)
+    || payload.kind !== 'table-data-layout'
+    || !Array.isArray(payload.rows)
+    || !Array.isArray(payload.rowStartOffsets)
+    || !Array.isArray(payload.rowEndOffsets)
+    || payload.rows.length !== payload.rowStartOffsets.length
+    || payload.rows.length !== payload.rowEndOffsets.length) {
+    return undefined
+  }
+  return {
+    rows: payload.rows,
+    rowStartOffsets: payload.rowStartOffsets,
+    rowEndOffsets: payload.rowEndOffsets,
+  }
+}
+
+function selectTableLayoutRows(
+  index: TableLayoutRangeIndex,
+  startBlockOffset: number,
+  endBlockOffset: number,
+): TableLayoutRowFact[] {
+  if (!Number.isFinite(startBlockOffset) || !Number.isFinite(endBlockOffset) || endBlockOffset < startBlockOffset)
+    throw new Error('TABLE_FRAGMENT_RANGE_BOUNDARY_INVALID')
+
+  const startIndex = lowerBoundOffset(index.rowStartOffsets, startBlockOffset)
+  const endIndex = lowerBoundOffset(index.rowEndOffsets, endBlockOffset)
+  const exactStart = readOffset(index.rowStartOffsets, startIndex) === startBlockOffset
+  const exactEnd = readOffset(index.rowEndOffsets, endIndex) === endBlockOffset
+
+  if (startBlockOffset === endBlockOffset) {
+    const isOuterStart = startBlockOffset === 0 && startIndex === 0
+    if (!isOuterStart && !exactStart && !exactEnd)
+      throw new Error('TABLE_FRAGMENT_RANGE_BOUNDARY_INVALID')
+    return []
+  }
+  if (!exactStart || !exactEnd || endIndex < startIndex)
+    throw new Error('TABLE_FRAGMENT_RANGE_BOUNDARY_INVALID')
+  return index.rows.slice(startIndex, endIndex + 1) as TableLayoutRowFact[]
+}
+
+function lowerBoundOffset(offsets: readonly unknown[], target: number): number {
+  let low = 0
+  let high = offsets.length
+  while (low < high) {
+    const middle = low + Math.floor((high - low) / 2)
+    const value = readOffset(offsets, middle)
+    if (value === undefined)
+      throw new Error('TABLE_LAYOUT_RANGE_INDEX_INVALID')
+    if (value < target)
+      low = middle + 1
+    else
+      high = middle
+  }
+  return low
+}
+
+function readOffset(offsets: readonly unknown[], index: number): number | undefined {
+  if (index >= offsets.length)
+    return undefined
+  const value = offsets[index]
+  if (typeof value !== 'number' || !Number.isFinite(value))
+    throw new Error('TABLE_LAYOUT_RANGE_INDEX_INVALID')
+  return value
 }
 
 function readTableLayoutRows(payload: unknown): TableLayoutRowFact[] | undefined {

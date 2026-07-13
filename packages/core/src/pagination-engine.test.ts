@@ -264,6 +264,80 @@ describe('pagination ownership helpers', () => {
 })
 
 describe('runPagination', () => {
+  it.each([
+    ['auto-sheets', 'fixed', 2_000],
+    ['fixed-sheets', 'fixed', 2_000],
+    ['none', 'continuous', 1],
+  ] as const)('prepares one isolated adapter plan for all %s ranges', (strategy, mode, rangeCount) => {
+    const node = makeNode('table', { y: 0, height: rangeCount })
+    const schema: DocumentSchema = {
+      ...makeSchema([node]),
+      page: {
+        ...makeSchema([]).page,
+        mode,
+        height: 1,
+        pageModel: mode === 'continuous'
+          ? { kind: 'continuous-paper', paper: { width: 80, height: 1 } }
+          : { kind: 'paged-paper', paper: { width: 80, height: 1 } },
+        layout: { strategy: 'absolute' },
+        reflow: { strategy: 'measure-only' },
+        pagination: strategy === 'fixed-sheets'
+          ? { strategy, pageCount: rangeCount }
+          : { strategy },
+      },
+    }
+    const payload = { rows: Array.from({ length: rangeCount }, (_, index) => ({ index })) }
+    const sourcePlan: MaterialLayoutPlan = {
+      instanceKey: 'table:mutable',
+      nodeId: node.id,
+      nodeRevision: 1,
+      constraintKey: '80:1:mm:horizontal-tb',
+      borderBox: { x: 0, y: 0, width: 80, height: rangeCount },
+      contentBox: { x: 0, y: 0, width: 80, height: rangeCount },
+      slotBoxes: [],
+      breakOpportunities: Array.from({ length: rangeCount - 1 }, (_, index) => ({
+        id: `row-${index + 1}`,
+        blockOffset: index + 1,
+        penalty: 0,
+      })),
+      diagnostics: [],
+      payload,
+    }
+    const document = {
+      width: 80,
+      height: rangeCount,
+      fragments: [{ node, plan: sourcePlan }],
+      diagnostics: [],
+    }
+    const adapterPlans: MaterialLayoutPlan<unknown>[] = []
+
+    runPagination(schema, document, {
+      resolveFragmentAdapter: () => ({
+        createFragment(request) {
+          adapterPlans.push(request.plan)
+          return {
+            inlineSize: request.plan.borderBox.width,
+            blockSize: request.endBlockOffset - request.startBlockOffset,
+            consumedRange: {
+              startBlockOffset: request.startBlockOffset,
+              endBlockOffset: request.endBlockOffset,
+            },
+            diagnostics: [],
+          }
+        },
+      }),
+    })
+
+    expect(adapterPlans).toHaveLength(rangeCount)
+    expect(new Set(adapterPlans).size).toBe(1)
+    expect(adapterPlans[0]).not.toBe(sourcePlan)
+    expect(adapterPlans[0]!.payload).not.toBe(payload)
+    expect(Object.isFrozen(adapterPlans[0])).toBe(true)
+    expect(Object.isFrozen(adapterPlans[0]!.payload)).toBe(true)
+    expect(Object.isFrozen(sourcePlan)).toBe(false)
+    expect(Object.isFrozen(payload)).toBe(false)
+  })
+
   it('isolates the committed request from adapter mutation', () => {
     const schema = makeSchema([makeNode('table', { height: 90 })])
     const plan = makePlan(90)
