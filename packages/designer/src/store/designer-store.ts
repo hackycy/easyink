@@ -8,6 +8,7 @@ import { CommandManager, DocumentStore as CoreDocumentStore, DocumentTransaction
 import { DataSourceRegistry } from '@easyink/datasource'
 import { markRaw } from 'vue'
 import { EditingSessionManager } from '../editing/editing-session-manager'
+import { GestureCoordinator } from '../editing/gesture-coordinator'
 import { DesignerInteractionService } from '../interactions/interaction-service'
 import { builtinMaterialGroupLabels, resolveBuiltinMaterialIcon } from '../material-host'
 import { prepareDesignerFacetMetadata } from '../materials/designer-facet-metadata'
@@ -47,6 +48,7 @@ export class DesignerStore {
   readonly selection = new SelectionModel()
   readonly documentStore: DocumentStore
   readonly documentTransactions: DocumentTransactionEngine
+  readonly gestures: GestureCoordinator
   readonly dataSourceRegistry = new DataSourceRegistry()
   readonly interactions = markRaw(new DesignerInteractionService())
   readonly materialTransaction: TransactionAPI
@@ -131,6 +133,7 @@ export class DesignerStore {
           : { sessionPath: [], selectionLineage: this.selection.lineageId }
       },
     }))
+    this.gestures = markRaw(new GestureCoordinator(this.documentTransactions))
     this._materialDiagnostics = loaded.diagnostics
     this._materialNodeStates = loaded.nodeStates
     this.fontService = new FontService(this.diagnostics, this.materialProfile)
@@ -139,6 +142,7 @@ export class DesignerStore {
     // Mark editing session manager as raw: it owns Vue refs internally and
     // must not be auto-unwrapped by the surrounding reactive(store) proxy.
     this.editingSession = markRaw(new EditingSessionManager(this))
+    this.editingSession.setCancelActiveGesture(() => this.gestures.cancelActive())
     this.disposeDocumentSubscription = this.documentStore.subscribe((event) => {
       if (this.destroyed)
         return
@@ -188,6 +192,7 @@ export class DesignerStore {
   }
 
   setSchema(schema?: DocumentSchemaInput): void {
+    this.gestures.cancelActive()
     this.editingSession.exitAll()
     const loaded = loadDocumentWithProfile(schema, this.materialProfile)
     this.documentTransactions.reset(stripUndefined(loaded.schema), loaded.nodeStates)
@@ -598,6 +603,7 @@ export class DesignerStore {
   destroy(): void {
     if (this.destroyed)
       return
+    this.gestures.cancelActive()
     this.destroyed = true
     this.disposeDocumentSubscription?.()
     this.disposeDocumentSubscription = undefined
