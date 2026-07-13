@@ -85,6 +85,8 @@ describe('material facet host', () => {
     ['non-enumerable outer field', () => Object.defineProperty({ contextKey: 'bad', descriptors: [], values: {} }, 'hidden', { value: true })],
     ['inherited values container', () => ({ contextKey: 'bad', descriptors: [], values: Object.create({ inherited: { kind: 'mixed' } }) })],
     ['accessor value kind', () => ({ contextKey: 'bad', descriptors: [{ key: 'x', label: 'X', type: 'number' }], values: { x: Object.defineProperty({}, 'kind', { enumerable: true, get: () => { throw new Error('kind getter') } }) } })],
+    ['inherited value kind', () => ({ contextKey: 'bad', descriptors: [{ key: 'x', label: 'X', type: 'number' }], values: { x: Object.create({ kind: 'mixed' }) } })],
+    ['inherited unavailable readonly', () => ({ contextKey: 'bad', descriptors: [{ key: 'x', label: 'X', type: 'number' }], values: { x: Object.assign(Object.create({ readOnly: true }), { kind: 'unavailable' }) } })],
     ['symbol outer field', () => Object.assign({ contextKey: 'bad', descriptors: [], values: {} }, { [Symbol('hidden')]: true })],
   ])('quarantines only the failing designer facet after %s', async (_label, contextualProperties) => {
     const dispose = vi.fn()

@@ -477,21 +477,32 @@ function validateContextualResult(value: unknown): MaterialContextualPropertiesR
     if (!keys.has(key))
       return null
     const entry = result.values[key]
-    if (!isPlainDataRecord(entry) || !['single', 'mixed', 'unavailable'].includes(entry.kind))
+    if (!isPlainDataRecord(entry))
       return null
-    if (entry.kind === 'single') {
+    const kindDescriptor = Object.getOwnPropertyDescriptor(entry, 'kind')
+    if (!kindDescriptor || !kindDescriptor.enumerable || !('value' in kindDescriptor) || !['single', 'mixed', 'unavailable'].includes(String(kindDescriptor.value)))
+      return null
+    const kind = kindDescriptor.value
+    const fields = Reflect.ownKeys(entry)
+    if (kind === 'single') {
+      if (!sameKeys(fields, ['kind', 'value']))
+        return null
+      const valueDescriptor = Object.getOwnPropertyDescriptor(entry, 'value')!
       try {
-        assertJsonValue(entry.value)
+        assertJsonValue(valueDescriptor.value)
       }
       catch { return null }
     }
-    const fields = Object.keys(entry as Record<string, unknown>)
-    if (entry.kind === 'single' && (fields.length !== 2 || !fields.includes('value')))
+    if (kind === 'mixed' && !sameKeys(fields, ['kind']))
       return null
-    if (entry.kind === 'mixed' && fields.some(field => field !== 'kind'))
-      return null
-    if (entry.kind === 'unavailable' && ((entry as Record<string, unknown>).readOnly !== true || (entry.reason !== undefined && typeof entry.reason !== 'string') || fields.some(field => !['kind', 'reason', 'readOnly'].includes(field))))
-      return null
+    if (kind === 'unavailable') {
+      if (!sameKeys(fields, ['kind', 'readOnly']) && !sameKeys(fields, ['kind', 'readOnly', 'reason']))
+        return null
+      const readOnlyDescriptor = Object.getOwnPropertyDescriptor(entry, 'readOnly')!
+      const reasonDescriptor = Object.getOwnPropertyDescriptor(entry, 'reason')
+      if (readOnlyDescriptor.value !== true || (reasonDescriptor && typeof reasonDescriptor.value !== 'string'))
+        return null
+    }
   }
   if (keys.size !== Object.keys(result.values).length)
     return null
@@ -519,7 +530,7 @@ function isPlainDataRecord(value: unknown): value is Record<string, unknown> {
   })
 }
 
-function sameKeys(actual: readonly string[], expected: readonly string[]): boolean {
+function sameKeys(actual: readonly PropertyKey[], expected: readonly string[]): boolean {
   return actual.length === expected.length && expected.every(key => actual.includes(key))
 }
 
