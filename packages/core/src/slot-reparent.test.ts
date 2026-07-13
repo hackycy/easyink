@@ -199,6 +199,34 @@ describe('slot reparent plans', () => {
     expect(engine.totalCount).toBe(count)
   })
 
+  it('rejects a revision-zero plan after reset replaces the document with reused IDs', () => {
+    const profile = createTestCompiledMaterialProfile()
+    const store = new DocumentStore(documentWith([
+      profile.createNode('container', { id: 'owner', slots: { content: [profile.createNode('box', { id: 'anchor' })] } }),
+      profile.createNode('box', { id: 'child', x: 10 }),
+    ]), profile)
+    const engine = new DocumentTransactionEngine(store)
+    const plan = createSlotReparentPlan(store, {
+      nodeId: 'child',
+      preserveWorldPose: true,
+      target: { kind: 'node-slot', ownerNodeId: 'owner', slot: 'content', beforeNodeId: 'anchor' },
+    })
+    const replacement = documentWith([
+      profile.createNode('container', { id: 'owner', slots: { content: [profile.createNode('box', { id: 'anchor', x: 30 })] } }),
+      profile.createNode('box', { id: 'child', x: 900 }),
+    ])
+
+    engine.reset(replacement)
+    const replacementCommitted = store.committedDocument
+    expect(store.revision).toBe(0)
+    expect(store.eventSequence).toBe(1)
+    expect(() => engine.transact(draft => plan.apply(draft), { label: 'Stale after reset', operation: plan.operation })).toThrow(/stale/)
+    expect(store.committedDocument).toBe(replacementCommitted)
+    expect(store.committedDocument.elements.map(node => node.id)).toEqual(['owner', 'child'])
+    expect(store.committedDocument.elements[1]).toMatchObject({ id: 'child', x: 900 })
+    expect(engine.totalCount).toBe(0)
+  })
+
   it.each([
     ['before', { beforeNodeId: 'c' }, ['b', 'a', 'c']],
     ['after', { afterNodeId: 'c' }, ['b', 'c', 'a']],
@@ -261,9 +289,17 @@ describe('slot reparent plans', () => {
     expect(engine.totalCount).toBe(0)
 
     reparentNode(engine, 'child', { kind: 'node-slot', ownerNodeId: 'first', slot: 'alternate', atEnd: true })
+    expect(requireDocumentNode(store.document, profile, 'first').slots.content.map(node => node.id)).toEqual(['sibling'])
+    expect(requireDocumentNode(store.document, profile, 'first').slots.alternate.map(node => node.id)).toEqual(['child'])
     engine.undo()
+    expect(requireDocumentNode(store.document, profile, 'first').slots.content.map(node => node.id)).toEqual(['child', 'sibling'])
+    expect(requireDocumentNode(store.document, profile, 'first').slots.alternate).toEqual([])
     reparentNode(engine, 'child', { kind: 'node-slot', ownerNodeId: 'second', slot: 'content', atEnd: true })
+    expect(requireDocumentNode(store.document, profile, 'first').slots.content.map(node => node.id)).toEqual(['sibling'])
+    expect(requireDocumentNode(store.document, profile, 'second').slots.content.map(node => node.id)).toEqual(['child'])
     engine.undo()
+    expect(requireDocumentNode(store.document, profile, 'first').slots.content.map(node => node.id)).toEqual(['child', 'sibling'])
+    expect(requireDocumentNode(store.document, profile, 'second').slots.content).toEqual([])
     expect(() => reparentNode(engine, 'child', { kind: 'node-slot', ownerNodeId: 'other', slot: 'content', atEnd: true })).toThrow(/same material type/)
     expect(() => reparentNode(engine, 'child', { kind: 'root', slot: 'elements', atEnd: true })).toThrow(/document root/)
 

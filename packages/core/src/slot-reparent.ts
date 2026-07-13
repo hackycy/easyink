@@ -73,6 +73,7 @@ export function createSlotReparentPlan(store: DocumentStore, input: SlotReparent
   const ensureTargetSlot = input.ensureTargetSlot === true
   const geometry = input.geometry
   const plannedRevision = store.revision
+  const plannedEventSequence = store.eventSequence
   const index = store.committedIndex
   const sourceNode = index.getNode(nodeId)
   if (!sourceNode)
@@ -122,7 +123,7 @@ export function createSlotReparentPlan(store: DocumentStore, input: SlotReparent
   return Object.freeze({
     operation,
     apply(draft: DocumentSchema): void {
-      if (store.revision !== plannedRevision)
+      if (store.revision !== plannedRevision || store.eventSequence !== plannedEventSequence)
         throw new Error('Slot reparent plan is stale')
       assertSlotGeometryFresh(geometry, capturedGeometry)
 
