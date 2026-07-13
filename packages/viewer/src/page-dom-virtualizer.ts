@@ -45,13 +45,27 @@ interface WrapperSnapshot {
   readonly height: string
 }
 
+interface MountedPageRecord {
+  readonly token: object
+  readonly dispose: () => void
+}
+
+type RegistrationMountMutation
+  = | Readonly<{ kind: 'mounted', index: number, entry: VirtualPageEntry, record: MountedPageRecord }>
+    | Readonly<{ kind: 'unmounted', index: number, entry: VirtualPageEntry, record: MountedPageRecord }>
+
+interface RegistrationJournal {
+  readonly mountMutations: RegistrationMountMutation[]
+  readonly visibleBefore: Map<number, boolean>
+}
+
 interface RegistrationSnapshot {
   readonly index: number
   readonly existing?: VirtualPageEntry
-  readonly mounted: ReadonlyMap<number, () => void>
-  readonly visibleIndices: ReadonlySet<number>
   readonly observer?: PageIntersectionObserver
   readonly observerResolved: boolean
+  readonly visibleRange: Readonly<{ first: number, last: number, overscan: number }>
+  readonly maximumRegisteredIndex: number
   readonly wrapper: WrapperSnapshot
 }
 
@@ -97,7 +111,7 @@ function addRange(target: Set<number>, start: number, end: number): void {
 
 export class PageDomVirtualizer {
   private readonly entries = new Map<number, VirtualPageEntry>()
-  private readonly mounted = new Map<number, () => void>()
+  private readonly mounted = new Map<number, MountedPageRecord>()
   private readonly visibleIndices = new Set<number>()
   private readonly indexByWrapper = new WeakMap<Element, number>()
   private readonly overscan: number
@@ -108,6 +122,9 @@ export class PageDomVirtualizer {
   private mode: PageMaterializationMode = 'interactive'
   private restoreSnapshot?: RetentionSnapshot
   private visibleRange: Readonly<{ first: number, last: number, overscan: number }> = Object.freeze({ first: 0, last: 0, overscan: 0 })
+  private activeRegistrationJournal?: RegistrationJournal
+  private rollingBackRegistration = false
+  private maximumRegisteredIndex = -1
   private disposed = false
 
   constructor(options: PageDomVirtualizerOptions = {}) {
@@ -127,11 +144,18 @@ export class PageDomVirtualizer {
       applyWrapperDimensions(entry)
       return
     }
+    if (this.activeRegistrationJournal)
+      throw new Error('PAGE_DOM_REGISTER_REENTRANT')
     const snapshot = this.captureRegistrationSnapshot(entry, existing)
+    const journal: RegistrationJournal = {
+      mountMutations: [],
+      visibleBefore: new Map(),
+    }
+    this.activeRegistrationJournal = journal
     try {
       if (existing) {
         this.entries.delete(entry.index)
-        this.visibleIndices.delete(entry.index)
+        this.setVisibleIndex(entry.index, false)
         this.indexByWrapper.delete(existing.wrapper)
         this.observer?.unobserve(existing.wrapper)
         const errors = this.unmountIndex(entry.index, existing)
@@ -142,6 +166,7 @@ export class PageDomVirtualizer {
       this.resolveObserver(entry.wrapper)
       applyWrapperDimensions(entry)
       this.entries.set(entry.index, entry)
+      this.maximumRegisteredIndex = Math.max(this.maximumRegisteredIndex, entry.index)
       this.indexByWrapper.set(entry.wrapper, entry.index)
       if (this.observer)
         this.observer.observe(entry.wrapper)
@@ -151,10 +176,15 @@ export class PageDomVirtualizer {
         this.reconcileCurrentRetention()
     }
     catch (error) {
-      const cleanupErrors = this.rollbackRegistration(snapshot, entry)
+      this.activeRegistrationJournal = undefined
+      const cleanupErrors = this.rollbackRegistration(snapshot, entry, journal)
       if (cleanupErrors.length > 0)
         throw new AggregateError([error, ...cleanupErrors], 'PAGE_DOM_REGISTER_FAILED')
       throw error
+    }
+    finally {
+      if (this.activeRegistrationJournal === journal)
+        this.activeRegistrationJournal = undefined
     }
   }
 
@@ -165,6 +195,8 @@ export class PageDomVirtualizer {
     if (!entry)
       return false
     this.entries.delete(index)
+    if (index === this.maximumRegisteredIndex)
+      this.maximumRegisteredIndex = resolveMaximumIndex(this.entries.keys())
     this.visibleIndices.delete(index)
     this.indexByWrapper.delete(entry.wrapper)
     const errors: unknown[] = []
@@ -205,7 +237,7 @@ export class PageDomVirtualizer {
       mode: this.observer ? this.mode : (this.mode === 'interactive' ? 'print' : this.mode),
     })
     this.visibleRange = Object.freeze({ first: firstVisible, last: lastVisible, overscan })
-    this.reconcile(new Set([...this.entries.keys()].filter(index => retained.has(index))))
+    this.reconcile(retained)
   }
 
   withMaterializedPages<T>(mode: 'print' | 'export', action: () => T): T {
@@ -267,6 +299,7 @@ export class PageDomVirtualizer {
       errors.push(...this.unmountIndex(index, entry))
     }
     this.entries.clear()
+    this.maximumRegisteredIndex = -1
     this.visibleIndices.clear()
     this.activeScopes.length = 0
     this.restoreSnapshot = undefined
@@ -300,10 +333,10 @@ export class PageDomVirtualizer {
     return Object.freeze({
       index: candidate.index,
       ...(existing ? { existing } : {}),
-      mounted: new Map(this.mounted),
-      visibleIndices: new Set(this.visibleIndices),
       ...(this.observer ? { observer: this.observer } : {}),
       observerResolved: this.observerResolved,
+      visibleRange: this.visibleRange,
+      maximumRegisteredIndex: this.maximumRegisteredIndex,
       wrapper: Object.freeze({
         children: Object.freeze([...candidate.wrapper.childNodes]),
         width: candidate.wrapper.style.width,
@@ -315,84 +348,100 @@ export class PageDomVirtualizer {
   private rollbackRegistration(
     snapshot: RegistrationSnapshot,
     candidate: VirtualPageEntry,
+    journal: RegistrationJournal,
   ): unknown[] {
     const errors: unknown[] = []
     const currentEntry = this.entries.get(snapshot.index)
-
-    for (const index of sortedIndices(this.mounted.keys()).reverse()) {
-      const mountedEntry = this.entries.get(index)
-      if (snapshot.mounted.get(index) !== this.mounted.get(index))
-        errors.push(...this.unmountIndex(index, mountedEntry))
-    }
-
-    if (currentEntry !== snapshot.existing) {
-      try {
-        if (currentEntry)
-          this.observer?.unobserve(currentEntry.wrapper)
-      }
-      catch (error) {
-        errors.push(error)
-      }
-      if (currentEntry)
-        this.indexByWrapper.delete(currentEntry.wrapper)
-    }
-
-    if (this.observer !== snapshot.observer || this.observerResolved !== snapshot.observerResolved) {
-      if (this.observer !== snapshot.observer) {
-        try {
-          this.observer?.disconnect()
-        }
-        catch (error) {
-          errors.push(error)
-        }
-      }
-      this.observer = snapshot.observer
-      this.observerResolved = snapshot.observerResolved
-    }
-
-    this.entries.delete(snapshot.index)
-    if (snapshot.existing) {
-      this.entries.set(snapshot.index, snapshot.existing)
-      this.indexByWrapper.set(snapshot.existing.wrapper, snapshot.index)
+    this.rollingBackRegistration = true
+    try {
       if (currentEntry !== snapshot.existing) {
         try {
-          this.observer?.observe(snapshot.existing.wrapper)
+          if (currentEntry)
+            this.observer?.unobserve(currentEntry.wrapper)
+        }
+        catch (error) {
+          errors.push(error)
+        }
+        if (currentEntry)
+          this.indexByWrapper.delete(currentEntry.wrapper)
+      }
+
+      if (this.observer !== snapshot.observer || this.observerResolved !== snapshot.observerResolved) {
+        if (this.observer !== snapshot.observer) {
+          try {
+            this.observer?.disconnect()
+          }
+          catch (error) {
+            errors.push(error)
+          }
+        }
+        this.observer = snapshot.observer
+        this.observerResolved = snapshot.observerResolved
+      }
+
+      this.entries.delete(snapshot.index)
+      if (snapshot.existing) {
+        this.entries.set(snapshot.index, snapshot.existing)
+        this.indexByWrapper.set(snapshot.existing.wrapper, snapshot.index)
+        if (currentEntry !== snapshot.existing) {
+          try {
+            this.observer?.observe(snapshot.existing.wrapper)
+          }
+          catch (error) {
+            errors.push(error)
+          }
+        }
+      }
+
+      const restoredRecords = new Map<object, MountedPageRecord>()
+      for (let index = journal.mountMutations.length - 1; index >= 0; index--) {
+        const mutation = journal.mountMutations[index]!
+        if (mutation.kind === 'mounted') {
+          const expected = restoredRecords.get(mutation.record.token) ?? mutation.record
+          if (this.mounted.get(mutation.index)?.token === expected.token)
+            errors.push(...this.releaseMountedRecord(mutation.index, mutation.entry, expected))
+          restoredRecords.delete(mutation.record.token)
+          continue
+        }
+        if (this.mounted.has(mutation.index))
+          continue
+        try {
+          const restored = this.mountEntry(mutation.index, mutation.entry)
+          restoredRecords.set(mutation.record.token, restored)
         }
         catch (error) {
           errors.push(error)
         }
       }
-    }
-    this.visibleIndices.clear()
-    for (const index of snapshot.visibleIndices)
-      this.visibleIndices.add(index)
 
-    for (const index of sortedIndices(snapshot.mounted.keys())) {
-      if (this.mounted.has(index))
-        continue
+      for (const [index, wasVisible] of journal.visibleBefore) {
+        if (wasVisible)
+          this.visibleIndices.add(index)
+        else
+          this.visibleIndices.delete(index)
+      }
+      this.visibleRange = snapshot.visibleRange
+      this.maximumRegisteredIndex = snapshot.maximumRegisteredIndex
+
+      const candidateWasRegistered = snapshot.existing?.wrapper === candidate.wrapper
+      if (!candidateWasRegistered) {
+        try {
+          candidate.wrapper.replaceChildren(...snapshot.wrapper.children)
+        }
+        catch (error) {
+          errors.push(error)
+        }
+      }
       try {
-        this.mountIndex(index)
+        candidate.wrapper.style.width = snapshot.wrapper.width
+        candidate.wrapper.style.height = snapshot.wrapper.height
       }
       catch (error) {
         errors.push(error)
       }
     }
-
-    const candidateWasRegistered = snapshot.existing?.wrapper === candidate.wrapper
-    if (!candidateWasRegistered) {
-      try {
-        candidate.wrapper.replaceChildren(...snapshot.wrapper.children)
-      }
-      catch (error) {
-        errors.push(error)
-      }
-    }
-    try {
-      candidate.wrapper.style.width = snapshot.wrapper.width
-      candidate.wrapper.style.height = snapshot.wrapper.height
-    }
-    catch (error) {
-      errors.push(error)
+    finally {
+      this.rollingBackRegistration = false
     }
     return errors
   }
@@ -449,16 +498,16 @@ export class PageDomVirtualizer {
   }
 
   private handleIntersections(entries: readonly IntersectionObserverEntry[]): void {
-    if (this.disposed)
+    if (this.disposed || this.rollingBackRegistration)
       return
     for (const observed of entries) {
       const index = this.indexByWrapper.get(observed.target)
       if (index === undefined || this.entries.get(index)?.wrapper !== observed.target)
         continue
       if (observed.isIntersecting)
-        this.visibleIndices.add(index)
+        this.setVisibleIndex(index, true)
       else
-        this.visibleIndices.delete(index)
+        this.setVisibleIndex(index, false)
     }
     if (this.visibleIndices.size === 0) {
       if (this.mode === 'interactive')
@@ -478,18 +527,24 @@ export class PageDomVirtualizer {
   }
 
   private reconcile(retained: ReadonlySet<number>): void {
-    const mountedBefore = new Set(this.mounted.keys())
+    const mountedThisPass: Array<Readonly<{ index: number, entry: VirtualPageEntry, record: MountedPageRecord }>> = []
     try {
-      for (const index of sortedIndices(this.entries.keys())) {
-        if (retained.has(index))
-          this.mountIndex(index)
+      for (const index of sortedIndices(retained)) {
+        if (!retained.has(index))
+          continue
+        const entry = this.entries.get(index)
+        const record = this.mountIndex(index)
+        if (entry && record && !this.activeRegistrationJournal)
+          mountedThisPass.push(Object.freeze({ index, entry, record }))
       }
     }
     catch (error) {
+      if (this.activeRegistrationJournal)
+        throw error
       const cleanupErrors: unknown[] = []
-      for (const index of sortedIndices(this.mounted.keys()).reverse()) {
-        if (!mountedBefore.has(index))
-          cleanupErrors.push(...this.unmountIndex(index, this.entries.get(index)))
+      for (let index = mountedThisPass.length - 1; index >= 0; index--) {
+        const mounted = mountedThisPass[index]!
+        cleanupErrors.push(...this.releaseMountedRecord(mounted.index, mounted.entry, mounted.record))
       }
       if (cleanupErrors.length > 0)
         throw new AggregateError([error, ...cleanupErrors], 'PAGE_DOM_MOUNT_FAILED')
@@ -505,17 +560,24 @@ export class PageDomVirtualizer {
       throw new AggregateError(errors, 'PAGE_DOM_UNMOUNT_FAILED')
   }
 
-  private mountIndex(index: number): void {
+  private mountIndex(index: number): MountedPageRecord | undefined {
     if (this.mounted.has(index))
-      return
+      return undefined
     const entry = this.entries.get(index)
     if (!entry)
-      return
+      return undefined
+    return this.mountEntry(index, entry)
+  }
+
+  private mountEntry(index: number, entry: VirtualPageEntry): MountedPageRecord {
     try {
       const dispose = entry.mount()
       if (typeof dispose !== 'function')
         throw new TypeError('PAGE_DOM_DISPOSER_INVALID')
-      this.mounted.set(index, dispose)
+      const record: MountedPageRecord = Object.freeze({ token: Object.freeze({}), dispose })
+      this.mounted.set(index, record)
+      this.activeRegistrationJournal?.mountMutations.push(Object.freeze({ kind: 'mounted', index, entry, record }))
+      return record
     }
     catch (error) {
       entry.wrapper.replaceChildren()
@@ -524,11 +586,32 @@ export class PageDomVirtualizer {
   }
 
   private unmountIndex(index: number, entry?: VirtualPageEntry): unknown[] {
-    const dispose = this.mounted.get(index)
+    const record = this.mounted.get(index)
+    if (!record) {
+      try {
+        entry?.wrapper.replaceChildren()
+        return []
+      }
+      catch (error) {
+        return [error]
+      }
+    }
+    if (entry)
+      this.activeRegistrationJournal?.mountMutations.push(Object.freeze({ kind: 'unmounted', index, entry, record }))
+    return this.releaseMountedRecord(index, entry, record)
+  }
+
+  private releaseMountedRecord(
+    index: number,
+    entry: VirtualPageEntry | undefined,
+    record: MountedPageRecord,
+  ): unknown[] {
+    if (this.mounted.get(index)?.token !== record.token)
+      return []
     this.mounted.delete(index)
     const errors: unknown[] = []
     try {
-      dispose?.()
+      record.dispose()
     }
     catch (error) {
       errors.push(error)
@@ -542,11 +625,18 @@ export class PageDomVirtualizer {
     return errors
   }
 
+  private setVisibleIndex(index: number, visible: boolean): void {
+    const journal = this.activeRegistrationJournal
+    if (journal && !journal.visibleBefore.has(index))
+      journal.visibleBefore.set(index, this.visibleIndices.has(index))
+    if (visible)
+      this.visibleIndices.add(index)
+    else
+      this.visibleIndices.delete(index)
+  }
+
   private resolveDensePageCount(): number {
-    let maximum = -1
-    for (const index of this.entries.keys())
-      maximum = Math.max(maximum, index)
-    return maximum + 1
+    return this.maximumRegisteredIndex + 1
   }
 
   private assertActive(): void {
@@ -596,4 +686,11 @@ function applyWrapperDimensions(entry: VirtualPageEntry): void {
 
 function sortedIndices(indices: Iterable<number>): number[] {
   return [...indices].sort((left, right) => left - right)
+}
+
+function resolveMaximumIndex(indices: Iterable<number>): number {
+  let maximum = -1
+  for (const index of indices)
+    maximum = Math.max(maximum, index)
+  return maximum
 }

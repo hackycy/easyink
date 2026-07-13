@@ -672,6 +672,8 @@ describe('renderPages', () => {
     }
     let capturedNode: Readonly<MaterialNode> | undefined
     let capturedContext: ViewerRenderContext | undefined
+    const resolvedOriginal = { text: 'resolved original', nested: { text: 'resolved nested original' } }
+    const resolvedPropsMap = new Map<string, Record<string, unknown>>([[elementNode.id, resolvedOriginal]])
     const materials = await createMaterials({
       render(node, context) {
         capturedNode = node
@@ -697,7 +699,7 @@ describe('renderPages', () => {
       zoom: 1,
       unit: 'mm',
       data: {},
-      resolvedPropsMap: new Map(),
+      resolvedPropsMap,
       pageSchema: { mode: 'fixed', width: 80, height: 60 },
     }, [], virtualizer)
     expect(capturedNode).toBeUndefined()
@@ -708,9 +710,13 @@ describe('renderPages', () => {
     fragmentModel.text = 'fragment mutated'
     layoutPlan.payload.nested.text = 'layout mutated'
     fragmentPlan.renderPayload.nested.text = 'fragment plan mutated'
+    resolvedOriginal.text = 'resolved mutated'
+    resolvedOriginal.nested.text = 'resolved nested mutated'
+    resolvedPropsMap.set(elementNode.id, { text: 'resolved map replacement' })
     virtualizer.updateVisible(1, 1, 0)
 
-    expect(capturedNode?.model).toEqual({ text: 'element original' })
+    expect(capturedNode?.model).toEqual({ text: 'resolved original', nested: { text: 'resolved nested original' } })
+    expect(capturedContext?.resolvedModel).toEqual({ text: 'resolved original', nested: { text: 'resolved nested original' } })
     expect(capturedNode).not.toBe(elementNode)
     expect(capturedContext?.layoutPlan.payload).toEqual({ nested: { text: 'layout original' } })
     expect(capturedContext?.fragmentPlan.renderPayload).toEqual({ nested: { text: 'fragment plan original' } })
@@ -720,6 +726,7 @@ describe('renderPages', () => {
     expect(Object.isFrozen(capturedContext?.fragmentPlan.renderPayload)).toBe(true)
     expect(elementNode.model).toEqual({ text: 'element mutated' })
     expect(fragmentNode.model).toEqual({ text: 'fragment mutated' })
+    expect(resolvedOriginal).toEqual({ text: 'resolved mutated', nested: { text: 'resolved nested mutated' } })
   })
 
   it('rejects invalid page snapshot data before replacing existing DOM', async () => {
@@ -736,7 +743,7 @@ describe('renderPages', () => {
       width: 10,
       height: 10,
       modelVersion: 1,
-      model: { invalid: undefined },
+      model: { valid: true },
       slots: {},
       bindings: {},
       output: { visibility: 'include' },
@@ -754,7 +761,7 @@ describe('renderPages', () => {
       zoom: 1,
       unit: 'mm',
       data: {},
-      resolvedPropsMap: new Map(),
+      resolvedPropsMap: new Map([[invalidNode.id, { invalid: undefined }]]),
       pageSchema: { mode: 'fixed', width: 80, height: 60 },
     }, [])).toThrow()
     expect([...container.childNodes]).toEqual([previous])
@@ -823,7 +830,9 @@ describe('renderPages', () => {
     }, [])
 
     expect(captured).toBeDefined()
-    expect(captured!.resolvedModel).toBe(resolvedModel)
+    expect(captured!.resolvedModel).toEqual(resolvedModel)
+    expect(captured!.resolvedModel).not.toBe(resolvedModel)
+    expect(Object.isFrozen(captured!.resolvedModel)).toBe(true)
     expect(captured!.instanceKey).toBe(node.id)
     expect(captured!.layoutPlan).toMatchObject({
       instanceKey: node.id,

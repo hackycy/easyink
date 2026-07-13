@@ -604,6 +604,7 @@ export function renderPages(
   const { container, document, zoom, unit, browserDom } = options
   const nodeStates = options.nodeStates ?? new Map<string, MaterialNodeLoadState>()
   const committedPages = pages.map(snapshotPageEntry)
+  const committedResolvedProps = snapshotResolvedProps(committedPages, options.resolvedPropsMap)
   container.replaceChildren()
 
   const pageDOMs: PageDOM[] = []
@@ -630,6 +631,7 @@ export function renderPages(
           stableWrapper,
           materials,
           options,
+          resolvedPropsMap: committedResolvedProps,
           diagnostics,
           nodeStates,
           hostImperativeDom,
@@ -699,6 +701,7 @@ interface LegacyPageMountInput {
   readonly stableWrapper: HTMLElement
   readonly materials: ProfileMaterialRuntime
   readonly options: RenderSurfaceOptions
+  readonly resolvedPropsMap: ReadonlyMap<string, Record<string, unknown>>
   readonly diagnostics: ViewerDiagnosticEvent[]
   readonly nodeStates: ReadonlyMap<string, MaterialNodeLoadState>
   readonly hostImperativeDom: ReadonlySet<string>
@@ -706,8 +709,8 @@ interface LegacyPageMountInput {
 }
 
 function mountLegacyPage(input: LegacyPageMountInput): () => void {
-  const { page, stableWrapper, materials, options, diagnostics, nodeStates, hostImperativeDom, pageLayerBucketsBySize } = input
-  const { document, zoom, unit, data, resolvedPropsMap, pageSchema, browserDom } = options
+  const { page, stableWrapper, materials, options, resolvedPropsMap, diagnostics, nodeStates, hostImperativeDom, pageLayerBucketsBySize } = input
+  const { document, zoom, unit, data, pageSchema, browserDom } = options
   const { wrapper, pageEl } = createPageElement(document, page, pageSchema, unit, zoom)
   wrapper.style.margin = '0'
   const contentLayer = createContentLayer(document)
@@ -884,6 +887,39 @@ function snapshotPageEntry(page: PagePlanEntry): PagePlanEntry {
     elements,
     ...(fragments === undefined ? {} : { fragments }),
   }) as PagePlanEntry
+}
+
+function snapshotResolvedProps(
+  pages: readonly PagePlanEntry[],
+  source: ReadonlyMap<string, Record<string, unknown>>,
+): ReadonlyMap<string, Record<string, unknown>> {
+  const relevantNodeIds = new Set<string>()
+  const visit = (node: MaterialNode<unknown>): void => {
+    if (relevantNodeIds.has(node.id))
+      return
+    relevantNodeIds.add(node.id)
+    for (const children of Object.values(node.slots)) {
+      for (const child of children)
+        visit(child)
+    }
+  }
+  for (const page of pages) {
+    for (const node of page.elements)
+      visit(node)
+    for (const fragment of page.fragments ?? [])
+      visit(fragment.node)
+  }
+
+  const snapshot = new Map<string, Record<string, unknown>>()
+  for (const nodeId of relevantNodeIds) {
+    if (!source.has(nodeId))
+      continue
+    const cloned = deepFreezeJsonValue(cloneJsonValue(source.get(nodeId) as unknown as JsonValue))
+    if (cloned === null || typeof cloned !== 'object' || Array.isArray(cloned))
+      throw new TypeError('PAGE_DOM_RESOLVED_PROPS_INVALID')
+    snapshot.set(nodeId, cloned as Record<string, unknown>)
+  }
+  return snapshot
 }
 
 function createSlotMountOutputs(

@@ -98,6 +98,57 @@ describe('page DOM virtualizer', () => {
     expect(first.entry.wrapper.childNodes).toHaveLength(0)
   })
 
+  it('does not copy historical collections when fallback registration mounts one page', () => {
+    const virtualizer = new PageDomVirtualizer({ createIntersectionObserver: null })
+    for (let index = 0; index < 24; index++)
+      virtualizer.register(createEntry(index).entry)
+    const internals = virtualizer as unknown as {
+      entries: Map<number, unknown>
+      mounted: Map<number, unknown>
+      visibleIndices: Set<number>
+    }
+    const entries = iterationStats()
+    const mounted = iterationStats()
+    const visible = iterationStats()
+    Reflect.set(virtualizer, 'entries', instrumentIteration(internals.entries, entries))
+    Reflect.set(virtualizer, 'mounted', instrumentIteration(internals.mounted, mounted))
+    Reflect.set(virtualizer, 'visibleIndices', instrumentIteration(internals.visibleIndices, visible))
+
+    virtualizer.register(createEntry(24).entry)
+
+    expect({ entries, mounted, visible }).toEqual({
+      entries: { iteratorCalls: 0, itemVisits: 0 },
+      mounted: { iteratorCalls: 0, itemVisits: 0 },
+      visible: { iteratorCalls: 0, itemVisits: 0 },
+    })
+    virtualizer.dispose()
+  })
+
+  it('limits observer registration iteration to the currently retained delta', () => {
+    const observer = createObserverHarness()
+    const virtualizer = new PageDomVirtualizer({ overscan: 0, createIntersectionObserver: observer.create })
+    for (let index = 0; index < 24; index++)
+      virtualizer.register(createEntry(index).entry)
+    const internals = virtualizer as unknown as {
+      entries: Map<number, unknown>
+      mounted: Map<number, unknown>
+      visibleIndices: Set<number>
+    }
+    const entries = iterationStats()
+    const mounted = iterationStats()
+    const visible = iterationStats()
+    Reflect.set(virtualizer, 'entries', instrumentIteration(internals.entries, entries))
+    Reflect.set(virtualizer, 'mounted', instrumentIteration(internals.mounted, mounted))
+    Reflect.set(virtualizer, 'visibleIndices', instrumentIteration(internals.visibleIndices, visible))
+
+    virtualizer.register(createEntry(24).entry)
+
+    expect(entries.itemVisits).toBe(0)
+    expect(mounted.itemVisits).toBeLessThanOrEqual(1)
+    expect(visible.itemVisits).toBe(0)
+    virtualizer.dispose()
+  })
+
   it('uses actual sparse indices and does not mount the same retained page twice', () => {
     const observer = createObserverHarness()
     const virtualizer = new PageDomVirtualizer({
@@ -341,6 +392,81 @@ describe('page DOM virtualizer', () => {
     }
   })
 
+  it('distinguishes mount records when replacement mounts return the same disposer', () => {
+    let callback: IntersectionObserverCallback | undefined
+    let replacementWrapper: HTMLElement | undefined
+    const observed = new Set<Element>()
+    const primary = new Error('replacement observe boom')
+    const sharedDispose = vi.fn()
+    const observer = {
+      observe(target: Element) {
+        observed.add(target)
+        callback?.([intersection(target, true)], observer as unknown as IntersectionObserver)
+        if (target === replacementWrapper) {
+          callback?.([intersection(target, false)], observer as unknown as IntersectionObserver)
+          callback?.([intersection(target, true)], observer as unknown as IntersectionObserver)
+          throw primary
+        }
+      },
+      unobserve(target: Element) {
+        observed.delete(target)
+      },
+      disconnect() {
+        observed.clear()
+      },
+    }
+    const virtualizer = new PageDomVirtualizer({
+      overscan: 0,
+      createIntersectionObserver(nextCallback) {
+        callback = nextCallback
+        return observer
+      },
+    })
+    const oldWrapper = document.createElement('div')
+    let oldMountCount = 0
+    const oldMount = vi.fn(() => {
+      oldWrapper.replaceChildren(`old mount ${++oldMountCount}`)
+      return sharedDispose
+    })
+    virtualizer.register({ index: 0, widthPx: 10, heightPx: 20, wrapper: oldWrapper, mount: oldMount })
+    expect(oldMount).toHaveBeenCalledTimes(1)
+
+    replacementWrapper = document.createElement('div')
+    replacementWrapper.textContent = 'replacement original'
+    const replacementMount = vi.fn(() => {
+      replacementWrapper!.replaceChildren('replacement mounted')
+      return sharedDispose
+    })
+    expect(() => virtualizer.register({
+      index: 0,
+      widthPx: 30,
+      heightPx: 40,
+      wrapper: replacementWrapper,
+      mount: replacementMount,
+    })).toThrow(primary)
+
+    expect(sharedDispose).toHaveBeenCalledTimes(4)
+    expect(replacementMount).toHaveBeenCalledTimes(3)
+    expect(oldMount).toHaveBeenCalledTimes(2)
+    expect(oldWrapper.textContent).toBe('old mount 2')
+    expect(replacementWrapper.textContent).toBe('replacement original')
+    expect(observed).toEqual(new Set([oldWrapper]))
+    expect(virtualizer.unregister(0)).toBe(true)
+    expect(sharedDispose).toHaveBeenCalledTimes(5)
+    virtualizer.dispose()
+    expect(sharedDispose).toHaveBeenCalledTimes(5)
+
+    const duplicateAcrossIndices = vi.fn()
+    const fallback = new PageDomVirtualizer({ createIntersectionObserver: null })
+    for (const index of [0, 1]) {
+      const wrapper = document.createElement('div')
+      fallback.register({ index, widthPx: 10, heightPx: 10, wrapper, mount: () => duplicateAcrossIndices })
+    }
+    fallback.unregister(0)
+    fallback.dispose()
+    expect(duplicateAcrossIndices).toHaveBeenCalledTimes(2)
+  })
+
   it('rejects invalid entries before mutating wrappers or allocating observer state', () => {
     const virtualizer = new PageDomVirtualizer({ createIntersectionObserver: null })
     const wrapper = document.createElement('div')
@@ -495,4 +621,37 @@ function flattenAggregateErrors(error: unknown): unknown[] {
   if (!(error instanceof AggregateError))
     return [error]
   return error.errors.flatMap(flattenAggregateErrors)
+}
+
+interface IterationStats {
+  iteratorCalls: number
+  itemVisits: number
+}
+
+function iterationStats(): IterationStats {
+  return { iteratorCalls: 0, itemVisits: 0 }
+}
+
+function instrumentIteration<T extends Map<unknown, unknown> | Set<unknown>>(target: T, stats: IterationStats): T {
+  const track = function* (items: Iterable<unknown>) {
+    stats.iteratorCalls++
+    for (const item of items) {
+      stats.itemVisits++
+      yield item
+    }
+  }
+  return new Proxy(target, {
+    get(collection, property) {
+      if (property === Symbol.iterator) {
+        return function* () {
+          yield* track(collection)
+        }
+      }
+      if (property === 'keys' || property === 'values' || property === 'entries') {
+        return () => track((collection as Map<unknown, unknown>)[property]())
+      }
+      const value = Reflect.get(collection, property, collection) as unknown
+      return typeof value === 'function' ? value.bind(collection) : value
+    },
+  })
 }
