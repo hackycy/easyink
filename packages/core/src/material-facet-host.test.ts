@@ -4,6 +4,43 @@ import { compileMaterialProfile } from './material-profile'
 import { createTestCompiledMaterialProfile, createTestMaterialManifest } from './testing/material-profile'
 
 describe('material facet host', () => {
+  it('shares exactly-once disposal when contextual quarantine races host shutdown', async () => {
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const dispose = vi.fn(async () => {})
+    const provider = vi.fn(async () => {
+      await gate
+      throw new Error('late contextual failure')
+    })
+    const profile = createTestCompiledMaterialProfile([
+      createTestMaterialManifest({ type: 'race', designer: async () => ({ contextualProperties: provider, dispose }) }),
+    ])
+    const host = new MaterialFacetHost()
+    const instance = await host.activate(profile, 'race', 'designer')
+    const contextual = host.contextualProperties(profile, 'race', { node: { id: 'n', type: 'race', width: 1, height: 1, unit: 'mm', model: {} } as any, sessionPath: [], selection: null, lineage: null })
+    const shutdown = host.dispose()
+    release()
+    await contextual
+    await shutdown
+    await instance.dispose()
+    expect(dispose).toHaveBeenCalledOnce()
+  })
+
+  it('rejects accessor-backed contextual providers during facet preparation', async () => {
+    const getter = vi.fn(() => () => null)
+    const profile = createTestCompiledMaterialProfile([
+      createTestMaterialManifest({ type: 'getter', designer: async () => Object.defineProperty({ catalog: { group: 'test', order: 0 }, extension: {} }, 'contextualProperties', { enumerable: true, get: getter }) }),
+    ])
+    const host = new MaterialFacetHost()
+    const instance = await host.activate(profile, 'getter', 'designer')
+    await host.contextualProperties(profile, 'getter', { node: { id: 'n', type: 'getter', width: 1, height: 1, unit: 'mm', model: {} } as any, sessionPath: [], selection: null, lineage: null })
+    expect(instance.state).toBe('quarantined')
+    expect(instance.diagnostic?.code).toBe('MATERIAL_FACET_ACTIVATION_FAILED')
+    expect(getter).not.toHaveBeenCalled()
+  })
+
   it('invokes contextual properties through the designer facet with immutable data and no writer', async () => {
     let received!: any
     const contextualProperties = vi.fn((request: any) => {

@@ -174,12 +174,16 @@ export class MaterialFacetHost {
     request: MaterialContextualPropertiesRequest,
   ): Promise<T | null> {
     const instance = await this.activate<unknown>(profile, materialType, 'designer')
-    const provider = (instance.value as { contextualProperties?: unknown } | undefined)?.contextualProperties
-    if (instance.state !== 'active' || typeof provider !== 'function')
+    if (instance.state !== 'active')
       return null
     try {
+      const provider = readContextualProvider(instance.value)
+      if (provider === undefined)
+        return null
       const frozen = freezeContextualRequest(request)
-      const result = await (provider as (request: MaterialContextualPropertiesRequest) => unknown)(frozen)
+      const result = await provider(frozen)
+      if (instance.state !== 'active' || this.peek(profile, materialType, 'designer') !== instance || this.shutdownPromise)
+        return null
       if (result === null)
         return null
       const validated = validateContextualResult(result)
@@ -350,6 +354,42 @@ export class MaterialFacetHost {
     let diagnostic: FacetDiagnostic | undefined
     let disposePromise: Promise<void> | undefined
     let invokingValueDisposer = false
+    let lifecycleNotified = false
+    const notifyDisposed = (instance: FacetInstance<T>) => {
+      if (lifecycleNotified)
+        return
+      lifecycleNotified = true
+      this.active.delete(instance as FacetInstance<unknown>)
+      try {
+        this.onInstanceDisposed?.(instance as FacetInstance<unknown>)
+      }
+      catch {
+        // Host lifecycle observers must not change facet disposal semantics.
+      }
+    }
+    const disposeValueOnce = (instance: FacetInstance<T>): Promise<void> => {
+      if (disposePromise)
+        return invokingValueDisposer ? Promise.resolve() : disposePromise
+      const deferred = createDeferred<void>()
+      disposePromise = deferred.promise
+      void (async () => {
+        try {
+          invokingValueDisposer = true
+          const valueDisposal = disposeFacetValue(value)
+          invokingValueDisposer = false
+          await valueDisposal
+          deferred.resolve(undefined)
+        }
+        catch (error) {
+          deferred.reject(error)
+        }
+        finally {
+          invokingValueDisposer = false
+          notifyDisposed(instance)
+        }
+      })()
+      return disposePromise
+    }
     const instance: FacetInstance<T> = Object.freeze({
       profile,
       materialType,
@@ -363,59 +403,41 @@ export class MaterialFacetHost {
         state = 'quarantined'
         diagnostic = failure
         try {
-          await disposeFacetValue(value)
+          await disposeValueOnce(instance)
         }
         catch {
           // Preserve the contextual provider failure as the primary diagnostic.
         }
-        this.active.delete(instance as FacetInstance<unknown>)
-        try {
-          this.onInstanceDisposed?.(instance as FacetInstance<unknown>)
-        }
-        catch {
-          // Host lifecycle observers must not change quarantine semantics.
-        }
       },
       dispose: () => {
-        if (disposePromise) {
-          if (invokingValueDisposer)
-            return Promise.resolve()
+        if (invokingValueDisposer)
+          return Promise.resolve()
+        if (disposePromise)
           return disposePromise
-        }
         state = 'disposed'
         cache.pending.delete(key)
         cache.instances.delete(key)
-        const deferred = createDeferred<void>()
-        disposePromise = deferred.promise
-        const completeDisposal = async () => {
-          try {
-            invokingValueDisposer = true
-            const valueDisposal = disposeFacetValue(value)
-            invokingValueDisposer = false
-            await valueDisposal
-            deferred.resolve(undefined)
-          }
-          catch (error) {
-            diagnostic = createDiagnostic(profile, materialType, surface, 'MATERIAL_FACET_DISPOSE_FAILED', error)
-            deferred.reject(new FacetDisposalError(diagnostic))
-          }
-          finally {
-            invokingValueDisposer = false
-            this.active.delete(instance as FacetInstance<unknown>)
-            try {
-              this.onInstanceDisposed?.(instance as FacetInstance<unknown>)
-            }
-            catch {
-              // Host lifecycle observers must not change facet disposal semantics.
-            }
-          }
-        }
-        void completeDisposal()
+        const cleanup = disposeValueOnce(instance)
+        disposePromise = cleanup.catch((error) => {
+          diagnostic = createDiagnostic(profile, materialType, surface, 'MATERIAL_FACET_DISPOSE_FAILED', error)
+          throw new FacetDisposalError(diagnostic)
+        })
         return disposePromise
       },
     })
     return instance
   }
+}
+
+function readContextualProvider(value: unknown): ((request: MaterialContextualPropertiesRequest) => unknown) | undefined {
+  if ((typeof value !== 'object' || value === null) && typeof value !== 'function')
+    return undefined
+  const descriptor = Object.getOwnPropertyDescriptor(value, 'contextualProperties')
+  if (!descriptor)
+    return undefined
+  if (!descriptor.enumerable || !('value' in descriptor) || typeof descriptor.value !== 'function')
+    throw new Error('Invalid contextual properties provider')
+  return descriptor.value as (request: MaterialContextualPropertiesRequest) => unknown
 }
 
 function freezeContextualRequest(request: MaterialContextualPropertiesRequest): MaterialContextualPropertiesRequest {
@@ -434,10 +456,10 @@ function freezeContextualRequest(request: MaterialContextualPropertiesRequest): 
 }
 
 function validateContextualResult(value: unknown): MaterialContextualPropertiesResult | null {
-  if (value === null || typeof value !== 'object')
+  if (!isPlainDataRecord(value) || Object.keys(value).some(key => !['contextKey', 'descriptors', 'values'].includes(key)))
     return null
-  const result = value as MaterialContextualPropertiesResult
-  if (typeof result.contextKey !== 'string' || result.contextKey.length === 0 || !Array.isArray(result.descriptors) || !result.values)
+  const result = value as unknown as MaterialContextualPropertiesResult
+  if (typeof result.contextKey !== 'string' || result.contextKey.length === 0 || !Array.isArray(result.descriptors) || !isPlainDataRecord(result.values))
     return null
   if (validatePropertyDescriptors(result.descriptors).length > 0)
     return null
@@ -455,7 +477,7 @@ function validateContextualResult(value: unknown): MaterialContextualPropertiesR
     if (!keys.has(key))
       return null
     const entry = result.values[key]
-    if (!entry || !['single', 'mixed', 'unavailable'].includes(entry.kind))
+    if (!isPlainDataRecord(entry) || !['single', 'mixed', 'unavailable'].includes(entry.kind))
       return null
     if (entry.kind === 'single') {
       try {
@@ -473,7 +495,26 @@ function validateContextualResult(value: unknown): MaterialContextualPropertiesR
   }
   if (keys.size !== Object.keys(result.values).length)
     return null
-  return deepFreeze(deepClone(result))
+  const values = Object.create(null) as Record<string, unknown>
+  for (const [key, entry] of Object.entries(result.values))
+    values[key] = deepClone(entry)
+  return deepFreeze({
+    contextKey: result.contextKey,
+    descriptors: result.descriptors.map(descriptor => deepClone(descriptor)),
+    values,
+  }) as unknown as MaterialContextualPropertiesResult
+}
+
+function isPlainDataRecord(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value))
+    return false
+  const prototype = Object.getPrototypeOf(value)
+  if (prototype !== null && prototype !== Object.prototype)
+    return false
+  return Object.keys(value).every((key) => {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key)
+    return descriptor?.enumerable === true && 'value' in descriptor
+  })
 }
 
 function deepFreeze<T>(value: T): T {

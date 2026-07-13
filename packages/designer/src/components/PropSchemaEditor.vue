@@ -13,6 +13,7 @@ const props = defineProps<{
   value: unknown
   disabled?: boolean
   mixed?: boolean
+  unavailableReason?: string
   fonts?: Array<{ family: string, displayName: string }>
   fontStatuses?: Record<string, 'unloaded' | 'loading' | 'loaded' | 'error'>
   t: (key: string) => string
@@ -107,6 +108,8 @@ function resolveValue(val: unknown): unknown {
 }
 
 function onPreview(val: unknown) {
+  if (props.disabled)
+    return
   const resolved = resolveValue(val)
   if (resolved === undefined)
     return
@@ -114,6 +117,8 @@ function onPreview(val: unknown) {
 }
 
 function onCommit(val: unknown) {
+  if (props.disabled)
+    return
   const resolved = resolveValue(val)
   if (resolved === undefined)
     return
@@ -121,6 +126,8 @@ function onCommit(val: unknown) {
 }
 
 function onImagePicked(result: DesignerResolvedAsset) {
+  if (props.disabled)
+    return
   emit('imagePick', props.schema.key, result)
 }
 
@@ -284,6 +291,7 @@ function constrainStringValue(value: string): string {
 <template>
   <div class="ei-prop-editor" :data-value-state="mixed ? 'mixed' : undefined">
     <span v-if="mixed" class="ei-prop-editor__value-state">{{ t('designer.property.mixed') }}</span>
+    <span v-if="disabled && unavailableReason" class="ei-prop-editor__value-state" role="status">{{ unavailableReason }}</span>
     <!-- Custom editor component -->
     <template v-if="customEditorComponent">
       <component
@@ -436,6 +444,7 @@ function constrainStringValue(value: string): string {
         v-else-if="schema.type === 'color'"
         :label="label"
         :model-value="(value as string) ?? '#000000'"
+        :disabled="disabled"
         @update:model-value="onPreview"
         @commit="onCommit"
       />

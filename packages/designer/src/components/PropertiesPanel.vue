@@ -24,8 +24,10 @@ import PagePropertyEditor from './PagePropertyEditor.vue'
 import PropSchemaEditor from './PropSchemaEditor.vue'
 
 const store = useDesignerStore()
+const visibleDocumentSequence = shallowRef(0)
 
 const selectedElements = computed(() => {
+  void visibleDocumentSequence.value
   const ids = store.selection.ids
   return ids.map(id => store.getElementById(id)).filter(Boolean)
 })
@@ -38,6 +40,7 @@ const propertyPreview = new PropertyPreviewController(store.documentTransactions
 const contextualProperties = shallowRef<MaterialContextualPropertiesResult | null>(null)
 const committedContextSequence = shallowRef(0)
 const disposeCommittedContextSubscription = store.documentStore.subscribe((event) => {
+  visibleDocumentSequence.value = event.sequence
   if (!['commit', 'undo', 'redo', 'reset'].includes(event.kind))
     return
   propertyPreview.cancelActive()
@@ -48,7 +51,8 @@ watchEffect((onCleanup) => {
   if (contextualRequestToken > 0)
     propertyPreview.cancelActive()
   const committedSequence = committedContextSequence.value
-  const node = selectedElement.value
+  const selectedId = store.selection.ids.length === 1 ? store.selection.ids[0] : undefined
+  const node = selectedId ? store.documentStore.committedIndex.getNode(selectedId) : undefined
   const session = store.editingSession.activeSession
   const selection = session?.selectionStore.selection
   const token = ++contextualRequestToken
@@ -105,6 +109,11 @@ function readSubValue(schema: PropSchema): unknown {
   return state?.kind === 'single' ? state.value : undefined
 }
 
+function readUnavailableReason(key: string): string | undefined {
+  const state = contextualProperties.value?.values[key]
+  return state?.kind === 'unavailable' ? state.reason : undefined
+}
+
 function previewSubProp(_key: string, value: unknown) {
   const session = store.editingSession.activeSession
   const node = selectedElement.value
@@ -127,13 +136,19 @@ async function updateSubProp(key: string, value: unknown) {
   if (!session || !contextual)
     return
   const schema = contextual.descriptors.find(s => s.key === key)
+  const requestToken = contextualRequestToken
+  const nodeId = selectedElement.value?.id
+  const lineage = session.selectionStore.lineageId
   if (schema?.type === 'font' && typeof value === 'string') {
     const loaded = await store.ensureFontLoaded({ family: value })
     if (!loaded) {
       propertyPreview.cancel(`contextual:${contextual.contextKey}:${key}`)
       return
     }
+    if (requestToken !== contextualRequestToken || selectedElement.value?.id !== nodeId || store.editingSession.activeSession?.selectionStore.lineageId !== lineage)
+      return
   }
+  previewSubProp(key, value)
   propertyPreview.commit(`contextual:${contextual.contextKey}:${key}`)
 }
 
@@ -279,9 +294,13 @@ function isGeometryKey(key: string): key is GeometryKey {
   return key === 'x' || key === 'y' || key === 'width' || key === 'height' || key === 'rotation' || key === 'alpha'
 }
 
-function propertyFieldPath(descriptor: PagePropertyDescriptor): DocumentFieldPath {
-  const path = descriptor.path.split('.').map(segment => segment.replaceAll('~', '~0').replaceAll('/', '~1')).join('/')
-  return (descriptor.source === 'page' ? `/page/${path}` : `/${path}`) as DocumentFieldPath
+function collectFieldPaths(value: unknown, prefix: string): DocumentFieldPath[] {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const entries = Object.entries(value as Record<string, unknown>)
+    if (entries.length > 0)
+      return entries.flatMap(([key, child]) => collectFieldPaths(child, `${prefix}/${key.replaceAll('~', '~0').replaceAll('/', '~1')}`))
+  }
+  return prefix ? [prefix as DocumentFieldPath] : []
 }
 
 function previewPageProperty(descriptor: PagePropertyDescriptor, value: unknown) {
@@ -291,13 +310,19 @@ function previewPageProperty(descriptor: PagePropertyDescriptor, value: unknown)
     : descriptor.source === 'document'
       ? defaultDocumentPatch(descriptor.path, value)
       : defaultPagePatch(descriptor.path, value)
+  const { pageUpdates, documentUpdates } = splitPatch(patch)
+  const fieldPaths = [...new Set([
+    ...collectFieldPaths(pageUpdates, '/page'),
+    ...collectFieldPaths(documentUpdates, ''),
+  ])].sort()
+  if (fieldPaths.length === 0)
+    return
 
   propertyPreview.preview(`page:${descriptor.id}`, {
     label: descriptor.label,
     mergeKey: `page:${descriptor.id}`,
-    operation: { kind: descriptor.source === 'document' ? 'document.property' : 'page.property', sessionPath: [], targetIds: ['document'], fieldPaths: [propertyFieldPath(descriptor)], selectionLineage: null, structural: false },
+    operation: { kind: descriptor.source === 'document' ? 'document.property' : 'page.property', sessionPath: [], targetIds: ['document'], fieldPaths, selectionLineage: null, structural: false },
   }, preview => preview.replace((draft) => {
-    const { pageUpdates, documentUpdates } = splitPatch(patch)
     if (pageUpdates)
       Object.assign(draft.page, pageUpdates)
     if (documentUpdates)
@@ -306,12 +331,16 @@ function previewPageProperty(descriptor: PagePropertyDescriptor, value: unknown)
 }
 
 async function onPagePropertyChange(descriptor: PagePropertyDescriptor, value: unknown) {
+  const selectedId = selectedElement.value?.id
+  const requestSequence = committedContextSequence.value
   if (descriptor.editor === 'font' && typeof value === 'string') {
     const loaded = await store.ensureFontLoaded({ family: value })
     if (!loaded) {
       rollbackPagePreview(descriptor.id)
       return
     }
+    if (selectedElement.value?.id !== selectedId || committedContextSequence.value !== requestSequence)
+      return
   }
   previewPageProperty(descriptor, value)
   propertyPreview.commit(`page:${descriptor.id}`)
@@ -434,12 +463,16 @@ async function updateProp(key: string, value: unknown) {
   if (!el)
     return
   const schema = materialSchemas.value.find(s => s.key === key)
+  const sessionPath = store.editingSession.path.map(frame => frame.nodeId).join('\u0000')
+  const lineage = store.editingSession.activeSession?.selectionStore.lineageId ?? store.selection.lineageId
   if (schema?.type === 'font' && typeof value === 'string') {
     const loaded = await store.ensureFontLoaded({ family: value })
     if (!loaded) {
       rollbackPropPreview(key)
       return
     }
+    if (selectedElement.value?.id !== el.id || store.editingSession.path.map(frame => frame.nodeId).join('\u0000') !== sessionPath || (store.editingSession.activeSession?.selectionStore.lineageId ?? store.selection.lineageId) !== lineage)
+      return
   }
 
   if (!schema)
@@ -702,6 +735,7 @@ function isPropInputDisabled(schema: PropSchema): boolean {
               :value="readSubValue(schema)"
               :disabled="contextualProperties.values[schema.key]?.kind === 'unavailable'"
               :mixed="contextualProperties.values[schema.key]?.kind === 'mixed'"
+              :unavailable-reason="readUnavailableReason(schema.key)"
               :custom-editors="subCustomEditors"
               :fonts="fontList"
               :font-statuses="fontStatuses"

@@ -79,6 +79,7 @@ describe('properties panel preview behavior', () => {
     if (!input)
       throw new Error('Expected a page number property input')
     const before = store.documentTransactions.totalCount
+    const beginPreview = vi.spyOn(store.documentTransactions, 'beginPreview')
     input.value = String(Number(input.value || 0) + 1)
     input.dispatchEvent(new Event('input', { bubbles: true }))
     input.dispatchEvent(new Event('change', { bubbles: true }))
@@ -87,6 +88,8 @@ describe('properties panel preview behavior', () => {
     await Promise.resolve()
 
     expect(store.documentTransactions.totalCount).toBe(before + 1)
+    const fieldPaths = beginPreview.mock.calls[0]?.[0].operation.fieldPaths ?? []
+    expect(fieldPaths.every(path => path !== '/')).toBe(true)
     app.unmount()
     host.remove()
   })
@@ -135,6 +138,19 @@ describe('properties panel preview behavior', () => {
     controller.cancel('y')
     expect(store.document.elements[0]!.y).toBe(0)
     expect(engine.totalCount).toBe(0)
+  })
+
+  it('handles change-only contextual image/custom editors as one undoable edit', () => {
+    const { store, engine } = setup()
+    const controller = new PropertyPreviewController(engine)
+    const node = store.document.elements[0]!
+    const descriptor = { key: 'src', label: 'Source', type: 'image' as const }
+    controller.previewProperty('contextual:text:src', node, descriptor, 'asset://next', { sessionPath: ['box'], selectionLineage: 'selection' })
+    controller.commit('contextual:text:src')
+    expect(engine.totalCount).toBe(1)
+    expect(store.document.elements[0]!.model.src).toBe('asset://next')
+    engine.undo()
+    expect(store.document.elements[0]!.model.src).toBeUndefined()
   })
 })
 
