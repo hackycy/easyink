@@ -95,6 +95,27 @@ describe('browserTextMeasureService', () => {
     expect(document.querySelector('[data-easyink-text-measure]')).toBeNull()
   })
 
+  it('uses one cache entry for omitted and explicit CSS defaults', async () => {
+    const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockReturnValue({ width: 10, height: 5 } as DOMRect)
+    const service = new BrowserTextMeasureService(document, { maxEntries: 2 })
+    const style = {
+      fontFamily: 'Invoice Sans',
+      fontSize: 4,
+      lineHeight: 1.5,
+      whiteSpace: 'normal' as const,
+      overflowWrap: 'normal' as const,
+    }
+
+    const omitted = await service.measure(createInput({ style }), 0, new AbortController().signal)
+    const explicit = await service.measure(createInput({
+      style: { ...style, fontWeight: 'normal', fontStyle: 'normal', letterSpacing: 0 },
+    }), 0, new AbortController().signal)
+
+    expect(explicit).toBe(omitted)
+    expect(rect).toHaveBeenCalledOnce()
+  })
+
   it('mounts an offscreen plain-text probe with the declared wrapping CSS', async () => {
     const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect')
       .mockImplementation(function (this: HTMLElement) {
@@ -211,6 +232,26 @@ describe('browserTextMeasureService', () => {
     expect(document.querySelector('[data-easyink-text-measure]')).toBeNull()
     await expect(service.measure(input, 0, new AbortController().signal)).resolves.toBeDefined()
     expect(rect).toHaveBeenCalledTimes(2)
+  })
+
+  it.each([
+    ['availableWidth', { availableWidth: Number.MAX_VALUE }],
+    ['fontSize', { style: { ...createInput().style, fontSize: Number.MAX_VALUE } }],
+    ['letterSpacing', { style: { ...createInput().style, letterSpacing: Number.MAX_VALUE } }],
+  ])('rejects %s conversion overflow without measuring or caching', async (_field, override) => {
+    const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockReturnValue({ width: 10, height: 5 } as DOMRect)
+    const service = new BrowserTextMeasureService(document, { maxEntries: 2 })
+    const input = createInput({ unit: 'inch', ...override } as never)
+
+    await expect(service.measure(input, 0, new AbortController().signal))
+      .rejects
+      .toThrowError('BROWSER_TEXT_MEASURE_CONVERSION_INVALID')
+    await expect(service.measure(input, 0, new AbortController().signal))
+      .rejects
+      .toThrowError('BROWSER_TEXT_MEASURE_CONVERSION_INVALID')
+    expect(rect).not.toHaveBeenCalled()
+    expect(document.querySelector('[data-easyink-text-measure]')).toBeNull()
   })
 
   it.each([

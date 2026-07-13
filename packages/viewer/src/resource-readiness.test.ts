@@ -206,13 +206,178 @@ describe('createFontPreparationAdapter', () => {
     }
     const manager = new FontManager(provider)
     const prepareFont = createFontPreparationAdapter(manager, document)
+    const restoreFonts = installDocumentFonts(document, {
+      load: vi.fn(async () => [{} as FontFace]),
+      ready: Promise.resolve({} as FontFaceSet),
+    })
 
-    await expect(prepareFont('Brand', new AbortController().signal))
-      .resolves
-      .toEqual({ state: 'ready' })
-    await expect(prepareFont('Missing', new AbortController().signal))
-      .resolves
-      .toEqual({ state: 'failed', message: 'not found' })
-    expect(document.head.querySelector('style[data-easyink-font="Brand|normal|normal"]')).not.toBeNull()
+    try {
+      await expect(prepareFont('Brand', new AbortController().signal))
+        .resolves
+        .toEqual({ state: 'ready' })
+      await expect(prepareFont('Missing', new AbortController().signal))
+        .resolves
+        .toEqual({ state: 'failed', message: 'not found' })
+      expect(document.head.querySelector('style[data-easyink-font="Brand|normal|normal"]')).not.toBeNull()
+    }
+    finally {
+      restoreFonts()
+    }
+  })
+
+  it('waits for both fonts.load and fonts.ready before reporting ready', async () => {
+    let resolveLoad: ((faces: FontFace[]) => void) | undefined
+    let resolveReady: ((fontSet: FontFaceSet) => void) | undefined
+    const load = vi.fn(() => new Promise<FontFace[]>((resolve) => {
+      resolveLoad = resolve
+    }))
+    const ready = new Promise<FontFaceSet>((resolve) => {
+      resolveReady = resolve
+    })
+    const restoreFonts = installDocumentFonts(document, { load, ready })
+    const manager = new FontManager({
+      listFonts: async () => [],
+      loadFont: async () => '/fonts/brand.woff2',
+    })
+    const prepareFont = createFontPreparationAdapter(manager, document)
+    let settled = false
+
+    try {
+      const pending = prepareFont('Brand', new AbortController().signal)
+        .finally(() => {
+          settled = true
+        })
+      await vi.waitFor(() => expect(load).toHaveBeenCalledOnce())
+      expect(settled).toBe(false)
+
+      resolveLoad?.([{} as FontFace])
+      await Promise.resolve()
+      expect(settled).toBe(false)
+
+      resolveReady?.({} as FontFaceSet)
+      await expect(pending).resolves.toEqual({ state: 'ready' })
+    }
+    finally {
+      restoreFonts()
+    }
+  })
+
+  it.each([
+    ['rejects', vi.fn(async () => { throw new Error('font decode failed') }), 'font decode failed'],
+    ['returns no faces', vi.fn(async () => []), 'VIEWER_FONT_LOAD_EMPTY'],
+  ])('reports failed when fonts.load %s', async (_case, load, message) => {
+    const restoreFonts = installDocumentFonts(document, {
+      load,
+      ready: Promise.resolve({} as FontFaceSet),
+    })
+    const manager = new FontManager({
+      listFonts: async () => [],
+      loadFont: async () => '/fonts/brand.woff2',
+    })
+
+    try {
+      await expect(createFontPreparationAdapter(manager, document)('Brand', new AbortController().signal))
+        .resolves
+        .toEqual({ state: 'failed', message })
+    }
+    finally {
+      restoreFonts()
+    }
+  })
+
+  it('reports failed when the Font Loading API is unavailable', async () => {
+    const restoreFonts = installDocumentFonts(document, undefined)
+    const manager = new FontManager({
+      listFonts: async () => [{
+        family: 'Arial',
+        displayName: 'Arial',
+        weights: ['400'],
+        styles: ['normal'],
+        source: 'system',
+      }],
+      loadFont: async () => ({ type: 'system' }),
+    })
+
+    try {
+      await expect(createFontPreparationAdapter(manager, document)('Arial', new AbortController().signal))
+        .resolves
+        .toEqual({ state: 'failed', message: 'VIEWER_FONT_LOADING_API_UNAVAILABLE' })
+    }
+    finally {
+      restoreFonts()
+    }
+  })
+
+  it('does not publish readiness when aborted during fonts.load', async () => {
+    let resolveLoad: ((faces: FontFace[]) => void) | undefined
+    const load = vi.fn(() => new Promise<FontFace[]>((resolve) => {
+      resolveLoad = resolve
+    }))
+    const restoreFonts = installDocumentFonts(document, {
+      load,
+      ready: Promise.resolve({} as FontFaceSet),
+    })
+    const controller = new AbortController()
+    const reason = new DOMException('stale font task', 'AbortError')
+    const manager = new FontManager({
+      listFonts: async () => [],
+      loadFont: async () => '/fonts/brand.woff2',
+    })
+    const coordinator = createResourceReadinessCoordinator({
+      prepareFont: createFontPreparationAdapter(manager, document),
+      prepareAsset: async () => ({ state: 'ready' as const }),
+    })
+
+    try {
+      const pending = coordinator.prepare([{ kind: 'font', value: 'Brand' }], controller.signal)
+      await vi.waitFor(() => expect(load).toHaveBeenCalledOnce())
+      controller.abort(reason)
+      resolveLoad?.([{} as FontFace])
+
+      await expect(pending).rejects.toBe(reason)
+      expect(coordinator.resourceRevision).toBe(0)
+    }
+    finally {
+      restoreFonts()
+    }
+  })
+
+  it('uses a ShadowRoot owner document and a safely escaped font shorthand', async () => {
+    const load = vi.fn(async () => [{} as FontFace])
+    const restoreFonts = installDocumentFonts(document, {
+      load,
+      ready: Promise.resolve({} as FontFaceSet),
+    })
+    const host = document.createElement('div')
+    const shadow = host.attachShadow({ mode: 'open' })
+    const family = 'Brand" \\ Sans'
+    const manager = new FontManager({
+      listFonts: async () => [],
+      loadFont: async () => '/fonts/brand.woff2',
+    })
+
+    try {
+      await expect(createFontPreparationAdapter(manager, shadow)(family, new AbortController().signal))
+        .resolves
+        .toEqual({ state: 'ready' })
+      expect(load).toHaveBeenCalledWith('16px "Brand\\" \\\\ Sans"')
+    }
+    finally {
+      restoreFonts()
+    }
   })
 })
+
+function installDocumentFonts(
+  target: Document,
+  fonts: Pick<FontFaceSet, 'load' | 'ready'> | undefined,
+): () => void {
+  const previous = Object.getOwnPropertyDescriptor(target, 'fonts')
+  Object.defineProperty(target, 'fonts', { configurable: true, value: fonts })
+  return () => {
+    if (previous)
+      Object.defineProperty(target, 'fonts', previous)
+    else
+      Reflect.deleteProperty(target, 'fonts')
+  }
+}

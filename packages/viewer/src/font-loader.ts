@@ -14,6 +14,16 @@ export function createFontPreparationAdapter(
     try {
       await fontManager.ensureFontLoaded({ family: value }, target)
       throwIfAborted(signal)
+      const document = getFontOwnerDocument(target)
+      const fontSet = document.fonts
+      if (!fontSet || typeof fontSet.load !== 'function' || !fontSet.ready)
+        throw new Error('VIEWER_FONT_LOADING_API_UNAVAILABLE')
+      const loaded = await fontSet.load(createFontLoadShorthand(value))
+      throwIfAborted(signal)
+      if (!Array.isArray(loaded) || loaded.length === 0)
+        throw new Error('VIEWER_FONT_LOAD_EMPTY')
+      await fontSet.ready
+      throwIfAborted(signal)
       return Object.freeze({ state: 'ready' })
     }
     catch (cause) {
@@ -64,6 +74,26 @@ export async function loadAndInjectFonts(
   })
 
   return diagnostics
+}
+
+function getFontOwnerDocument(target: Document | ShadowRoot): Document {
+  const document = target.nodeType === 9 ? target as Document : target.ownerDocument
+  if (!document)
+    throw new Error('VIEWER_FONT_OWNER_DOCUMENT_UNAVAILABLE')
+  return document
+}
+
+function createFontLoadShorthand(family: string): string {
+  return `16px "${escapeCssString(family)}"`
+}
+
+function escapeCssString(value: string): string {
+  return value
+    .replaceAll('\\', '\\\\')
+    .replaceAll('"', '\\"')
+    .replaceAll('\n', '\\a ')
+    .replaceAll('\r', '\\d ')
+    .replaceAll('\f', '\\c ')
 }
 
 function throwIfAborted(signal: AbortSignal): void {

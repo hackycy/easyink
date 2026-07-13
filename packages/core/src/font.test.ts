@@ -85,6 +85,75 @@ describe('fontManager', () => {
     expect(callCount).toBe(1)
   })
 
+  it('does not publish a stale catalog after setProvider', async () => {
+    let resolveOldList: ((fonts: FontDescriptor[]) => void) | undefined
+    const oldProvider: FontProvider = {
+      listFonts: () => new Promise((resolve) => {
+        resolveOldList = resolve
+      }),
+      loadFont: async () => '/fonts/old.woff2',
+    }
+    const newLoad = vi.fn(async () => '/fonts/new.woff2')
+    const manager = new FontManager(oldProvider)
+    const stale = manager.listFonts()
+
+    manager.setProvider({
+      listFonts: async () => [{ family: 'Brand', displayName: 'Brand', weights: ['400'], styles: ['normal'] }],
+      loadFont: newLoad,
+    })
+    resolveOldList?.([{
+      family: 'Brand',
+      displayName: 'Brand',
+      weights: ['400'],
+      styles: ['normal'],
+      source: 'system',
+    }])
+
+    await expect(stale).rejects.toThrow('Font provider changed while listing fonts')
+    await expect(manager.listFonts()).resolves.toEqual([
+      { family: 'Brand', displayName: 'Brand', weights: ['400'], styles: ['normal'] },
+    ])
+    await manager.loadFont('Brand')
+    expect(newLoad).toHaveBeenCalledOnce()
+    expect(manager.resourceRevision).toBe(1)
+  })
+
+  it('does not publish a stale catalog after clear', async () => {
+    let resolveOldList: ((fonts: FontDescriptor[]) => void) | undefined
+    let listCalls = 0
+    const loadFont = vi.fn(async () => '/fonts/current.woff2')
+    const manager = new FontManager({
+      listFonts: () => {
+        listCalls++
+        if (listCalls === 1) {
+          return new Promise((resolve) => {
+            resolveOldList = resolve
+          })
+        }
+        return Promise.resolve([
+          { family: 'Brand', displayName: 'Brand', weights: ['400'], styles: ['normal'] },
+        ])
+      },
+      loadFont,
+    })
+    const stale = manager.listFonts()
+
+    manager.clear()
+    resolveOldList?.([{
+      family: 'Brand',
+      displayName: 'Brand',
+      weights: ['400'],
+      styles: ['normal'],
+      source: 'system',
+    }])
+
+    await expect(stale).rejects.toThrow('Font provider changed while listing fonts')
+    await manager.listFonts()
+    await manager.loadFont('Brand')
+    expect(loadFont).toHaveBeenCalledOnce()
+    expect(manager.resourceRevision).toBe(1)
+  })
+
   it('increments resourceRevision once for a repeated provider-backed load', async () => {
     const mgr = new FontManager(createMockProvider())
 

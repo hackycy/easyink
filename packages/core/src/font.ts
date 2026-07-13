@@ -121,10 +121,15 @@ export class FontManager {
   async listFonts(): Promise<FontDescriptor[]> {
     if (this._fontList)
       return this._fontList
-    if (!this._provider)
+    const provider = this._provider
+    if (!provider)
       return []
-    this._fontList = await this._provider.listFonts()
-    return this._fontList
+    const generation = this._generation
+    const fonts = await provider.listFonts()
+    if (this._generation !== generation || this._provider !== provider)
+      throw new Error('Font provider changed while listing fonts')
+    this._fontList = fonts
+    return fonts
   }
 
   async loadFont(family: string, weight?: string, style?: string): Promise<FontSource> {

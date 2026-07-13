@@ -19,6 +19,12 @@ interface ValidatedTextMeasureInput {
   }
 }
 
+interface CssTextMeasureDimensions {
+  readonly availableWidth: number
+  readonly fontSize: number
+  readonly letterSpacing: number
+}
+
 export class BrowserTextMeasureService {
   private readonly cache = new Map<string, MaterialTextMeasureResult>()
   private readonly maxEntries: number
@@ -56,9 +62,10 @@ export class BrowserTextMeasureService {
       return result
     }
 
+    const cssDimensions = convertInputDimensions(validated)
     const element = this.document.createElement('div')
     try {
-      configureProbe(element, validated)
+      configureProbe(element, validated, cssDimensions)
       const parent = this.document.body ?? this.document.documentElement
       if (!parent)
         throw new Error('BROWSER_TEXT_MEASURE_DOCUMENT_INVALID')
@@ -97,7 +104,11 @@ export class BrowserTextMeasureService {
   }
 }
 
-function configureProbe(element: HTMLElement, input: ValidatedTextMeasureInput): void {
+function configureProbe(
+  element: HTMLElement,
+  input: ValidatedTextMeasureInput,
+  dimensions: CssTextMeasureDimensions,
+): void {
   element.dataset.easyinkTextMeasure = ''
   element.textContent = input.text
   element.style.position = 'fixed'
@@ -107,15 +118,27 @@ function configureProbe(element: HTMLElement, input: ValidatedTextMeasureInput):
   element.style.pointerEvents = 'none'
   element.style.contain = 'layout style paint'
   element.style.boxSizing = 'border-box'
-  element.style.width = `${convertUnit(input.availableWidth, input.unit, 'px')}px`
+  element.style.width = `${dimensions.availableWidth}px`
   element.style.fontFamily = input.style.fontFamily
-  element.style.fontSize = `${convertUnit(input.style.fontSize, input.unit, 'px')}px`
+  element.style.fontSize = `${dimensions.fontSize}px`
   element.style.fontWeight = String(input.style.fontWeight ?? 'normal')
   element.style.fontStyle = input.style.fontStyle ?? 'normal'
   element.style.lineHeight = String(input.style.lineHeight)
-  element.style.letterSpacing = `${convertUnit(input.style.letterSpacing ?? 0, input.unit, 'px')}px`
+  element.style.letterSpacing = `${dimensions.letterSpacing}px`
   element.style.whiteSpace = input.style.whiteSpace
   element.style.overflowWrap = input.style.overflowWrap
+}
+
+function convertInputDimensions(input: ValidatedTextMeasureInput): CssTextMeasureDimensions {
+  const availableWidth = convertUnit(input.availableWidth, input.unit, 'px')
+  const fontSize = convertUnit(input.style.fontSize, input.unit, 'px')
+  const letterSpacing = convertUnit(input.style.letterSpacing ?? 0, input.unit, 'px')
+  if (!Number.isFinite(availableWidth) || availableWidth < 0
+    || !Number.isFinite(fontSize) || fontSize < 0
+    || !Number.isFinite(letterSpacing)) {
+    throw new Error('BROWSER_TEXT_MEASURE_CONVERSION_INVALID')
+  }
+  return { availableWidth, fontSize, letterSpacing }
 }
 
 function textMeasureKey(input: ValidatedTextMeasureInput, resourceRevision: number): string {
@@ -176,10 +199,10 @@ function validateInput(input: unknown): ValidatedTextMeasureInput {
       style: {
         fontFamily,
         fontSize,
-        ...(fontWeight === undefined ? {} : { fontWeight }),
-        ...(fontStyle === undefined ? {} : { fontStyle }),
+        fontWeight: fontWeight ?? 'normal',
+        fontStyle: fontStyle ?? 'normal',
         lineHeight,
-        ...(letterSpacing === undefined ? {} : { letterSpacing }),
+        letterSpacing: letterSpacing ?? 0,
         whiteSpace,
         overflowWrap,
       },
