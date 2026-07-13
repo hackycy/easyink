@@ -55,7 +55,6 @@ export interface NonFragmentingMaterialPlansInput {
   readonly borderBox: Readonly<Rect>
   readonly contentBox?: Readonly<Rect>
   readonly fragmentBox: Readonly<Rect>
-  readonly fragmentId?: string
 }
 
 export interface NonFragmentingMaterialPlans {
@@ -269,7 +268,7 @@ export function createNonFragmentingMaterialPlans(
     diagnostics,
   })
   const fragmentPlan = freezeMaterialFragmentPlan({
-    id: input.fragmentId ?? JSON.stringify([
+    id: JSON.stringify([
       'material-fragment',
       input.instanceKey,
       input.pageIndex,

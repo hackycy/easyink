@@ -87,6 +87,22 @@ describe('material layout plan', () => {
     ]))
   })
 
+  it('reserves fallback fragment identity for core minting', () => {
+    const published = createNonFragmentingMaterialPlans({
+      instanceKey: 'n1',
+      nodeId: 'n1',
+      nodeRevision: 2,
+      constraintKey: '10:20:mm:horizontal-tb',
+      borderBox: { x: 0, y: 0, width: 10, height: 20 },
+      fragmentBox: { x: 3, y: 4, width: 10, height: 20 },
+      pageIndex: 4,
+      // @ts-expect-error Fragment identity is core-owned and is not accepted from callers.
+      fragmentId: 'caller-owned',
+    })
+
+    expect(published.fragmentPlan.id).not.toBe('caller-owned')
+  })
+
   it('rejects non-finite geometry, invalid identity, duplicate slot instances, and invalid break order', () => {
     expect(validateMaterialLayoutPlan(createPlan({
       instanceKey: '',
