@@ -86,6 +86,8 @@ export type {
   BehaviorMiddleware,
   BehaviorRegistration,
   ContentLayout,
+  EditingSessionPath,
+  EditingSessionPathEntry,
   EditingSessionRef,
   EphemeralPanelDef,
   GeometryService,

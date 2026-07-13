@@ -21,6 +21,16 @@ export interface CanvasInteractionControllerContext {
   onCanvasBackgroundPointerDown?: (e: PointerEvent) => void
 }
 
+export function handleCanvasEditingKeyDown(store: DesignerStore, event: KeyboardEvent): void {
+  if (!store.editingSession.isActive)
+    return
+  store.editingSession.dispatch({ kind: 'key-down', key: event.key, originalEvent: event })
+  if (event.key === 'Escape' && !event.defaultPrevented && store.editingSession.isActive) {
+    store.editingSession.pop()
+    event.preventDefault()
+  }
+}
+
 /**
  * CanvasInteractionController — the single decision point that translates
  * raw pointer / click events on the canvas into explicit intents.
@@ -101,7 +111,7 @@ export function useCanvasInteractionController(ctx: CanvasInteractionControllerC
     // Editing another element: exit before reinterpreting this gesture so the
     // session lifecycle is independent of selection mutation order.
     if (store.editingSession.isActive && activeNodeId !== elementId) {
-      store.editingSession.exit()
+      store.editingSession.exitAll()
     }
 
     // Decide top-level selection BEFORE handing off to the drag executor.
@@ -192,7 +202,7 @@ export function useCanvasInteractionController(ctx: CanvasInteractionControllerC
     currentGesture.value = createGestureContext(null, e)
 
     if (store.editingSession.isActive)
-      store.editingSession.exit()
+      store.editingSession.exitAll()
 
     ctx.onCanvasBackgroundPointerDown?.(e)
   }

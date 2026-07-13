@@ -1,4 +1,4 @@
-export { useCanvasInteractionController } from './canvas-interaction-controller'
+export { handleCanvasEditingKeyDown, useCanvasInteractionController } from './canvas-interaction-controller'
 export type { CanvasInteractionControllerContext } from './canvas-interaction-controller'
 export { createGestureContext, type GestureContext } from './gesture-context'
 export { DesignerInteractionService } from './interaction-service'

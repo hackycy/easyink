@@ -1,6 +1,7 @@
 import type {
   BehaviorEvent,
   BehaviorRegistration,
+  EditingSessionPath,
   EditingSessionRef,
   EphemeralPanelDef,
   GeometryService,
@@ -28,6 +29,7 @@ function selectionSignature(selection: Selection | null): string {
  */
 export class EditingSession implements EditingSessionRef {
   readonly nodeId: string
+  private _path: EditingSessionPath
   readonly selectionStore: SelectionStore
   readonly geometry: GeometryService
   readonly materialGeometry: MaterialGeometry
@@ -49,6 +51,7 @@ export class EditingSession implements EditingSessionRef {
 
   constructor(opts: {
     nodeId: string
+    path: EditingSessionPath
     extension: MaterialDesignerExtension
     selectionStore: SelectionStore
     geometry: GeometryService
@@ -59,6 +62,7 @@ export class EditingSession implements EditingSessionRef {
     diagnostics?: DiagnosticsChannel
   }) {
     this.nodeId = opts.nodeId
+    this._path = opts.path
     this.extension = opts.extension
     this.selectionStore = opts.selectionStore
     this.geometry = opts.geometry
@@ -121,6 +125,14 @@ export class EditingSession implements EditingSessionRef {
     this.meta[key] = value
     this._selectionScopedMeta.set(key, selectionSignature(selection))
     this.pruneSelectionScopedMeta()
+  }
+
+  get path(): EditingSessionPath {
+    return this._path
+  }
+
+  updatePath(path: EditingSessionPath): void {
+    this._path = path
   }
 
   onSelectionInvalidated(listener: (event: SelectionInvalidation) => void): () => void {

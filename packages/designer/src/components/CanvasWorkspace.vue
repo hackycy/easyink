@@ -20,7 +20,7 @@ import { useElementResize } from '../composables/use-element-resize'
 import { useElementRotate } from '../composables/use-element-rotate'
 import { useKeyboardShortcuts } from '../composables/use-keyboard-shortcuts'
 import { useMarqueeSelect } from '../composables/use-marquee-select'
-import { useCanvasInteractionController } from '../interactions'
+import { handleCanvasEditingKeyDown, useCanvasInteractionController } from '../interactions'
 import { isElementRotatable } from '../materials/capabilities'
 import { getVisibleResizeHandles } from '../materials/control-policy'
 import { getSelectionBox } from '../snap'
@@ -380,18 +380,7 @@ function handleMouseLeave() {
 }
 
 function handleKeyDown(e: KeyboardEvent) {
-  if (store.editingSession.isActive) {
-    store.editingSession.dispatch({
-      kind: 'key-down',
-      key: e.key,
-      originalEvent: e,
-    })
-    // Workbench fallback: Escape exits editing session only if not consumed by behaviors
-    if (e.key === 'Escape' && !e.defaultPrevented && store.editingSession.isActive) {
-      store.editingSession.exit()
-      e.preventDefault()
-    }
-  }
+  handleCanvasEditingKeyDown(store, e)
 }
 
 function handleRulerHover(hover: { axis: 'x' | 'y', position: number } | null) {

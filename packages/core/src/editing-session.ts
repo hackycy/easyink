@@ -276,9 +276,19 @@ export interface LocalCoordinateOptions {
 // ─── EditingSessionRef ──────────────────────────────────────────────
 
 /** Reference to an active editing session, exposed to decorations and toolbar. */
+export interface EditingSessionPathEntry {
+  readonly nodeId: string
+  readonly parentNodeId: string | null
+  readonly slot: string | null
+}
+
+export type EditingSessionPath = readonly EditingSessionPathEntry[]
+
 export interface EditingSessionRef {
   /** Node ID of the material being edited */
   readonly nodeId: string
+  /** Stable document-address path to the material being edited. */
+  readonly path: EditingSessionPath
   /** Current selection */
   readonly selection: Selection | null
   /** Shared reactive metadata (for decoration <-> middleware communication) */

@@ -11,7 +11,7 @@
  * 4. Right-click MUST NOT enter editing-session and MUST NOT start a drag.
  *
  * From .github/audit/202605011431.md:
- * 5. Editing-session entry is dblclick-only â€?pointerdown on a material
+ * 5. Editing-session entry is dblclick-only ?pointerdown on a material
  *    with `geometry` MUST NOT enter the session.
  * 6. dblclick on a material with `geometry` opens the editing session.
  * 7. Background pointerdown exits an active editing session before the
@@ -25,10 +25,11 @@
  * against.
  */
 import type { MaterialDesignerExtension } from '@easyink/core'
+import { createTestMaterialManifest } from '@easyink/core/testing'
 import { describe, expect, it, vi } from 'vitest'
 import { DesignerStore } from '../store/designer-store'
 import { createDesignerTestManifest, createDesignerTestProfile } from '../testing/material-profile'
-import { useCanvasInteractionController } from './canvas-interaction-controller'
+import { handleCanvasEditingKeyDown, useCanvasInteractionController } from './canvas-interaction-controller'
 
 function plainExtension(): MaterialDesignerExtension {
   return {
@@ -95,13 +96,20 @@ async function setup(opts: { onBgPointerDown?: (e: PointerEvent) => void } = {})
   const profile = createDesignerTestProfile([
     createDesignerTestManifest({ type: 'rect', extension: plainExtension() }),
     createDesignerTestManifest({ type: 'cell-table', extension: geometryExtension() }),
+    createTestMaterialManifest({
+      type: 'container',
+      slots: [{ id: 'content', key: { kind: 'exact', value: 'content' }, coordinateSpace: 'owner', layoutParticipation: 'owner', reparent: 'allowed' }],
+      designer: () => ({ extension: geometryExtension(), catalog: { group: 'test', order: 0 } }),
+    }),
   ])
-  const store = new DesignerStore(undefined, undefined, undefined, { materials: { profile } })
-  await Promise.all([store.activateDesignerFacet('rect'), store.activateDesignerFacet('cell-table')])
-  store.schema.elements.push(
+  const child = profile.createNode('container', { id: 'child' })
+  const owner = profile.createNode('container', { id: 'owner', slots: { content: [child] } })
+  const store = new DesignerStore({ elements: [
     canonicalNode('a', 'rect', 0),
     canonicalNode('b', 'rect', 100),
-  )
+    owner,
+  ] }, undefined, undefined, { materials: { profile } })
+  await Promise.all([store.activateDesignerFacet('rect'), store.activateDesignerFacet('cell-table'), store.activateDesignerFacet('container')])
   const pageEl = makePageEl()
   const target = document.createElement('div')
   document.body.appendChild(target)
@@ -116,6 +124,15 @@ async function setup(opts: { onBgPointerDown?: (e: PointerEvent) => void } = {})
     controller.handleElementPointerDown(e, elementId)
   }
   return { store, controller, pdOn, pageEl }
+}
+
+function addNodes(store: DesignerStore, ...nodes: ReturnType<typeof canonicalNode>[]) {
+  store.documentTransactions.transact((draft) => {
+    draft.elements.push(...nodes)
+  }, {
+    label: 'Add test nodes',
+    operation: { kind: 'structure.insert', sessionPath: [], targetIds: nodes.map(node => `node:${node.id}`), fieldPaths: ['/elements'], selectionLineage: store.selection.lineageId, structural: true },
+  })
 }
 
 function canonicalNode(id: string, type: string, x: number) {
@@ -191,7 +208,9 @@ describe('useCanvasInteractionController', () => {
 
   it('selects every logical group member when one member is clicked', async () => {
     const { store, controller, pdOn } = await setup()
-    store.schema.groups = [{ id: 'grp_1', memberIds: ['a', 'b'] }]
+    store.documentTransactions.transact((draft) => {
+      draft.groups = [{ id: 'grp_1', memberIds: ['a', 'b'] }]
+    }, { label: 'Set test group', operation: { kind: 'document.group', sessionPath: [], targetIds: ['group:grp_1'], fieldPaths: ['/groups'], selectionLineage: store.selection.lineageId, structural: false } })
 
     pdOn('a', pdEvent('pointerdown', 10, 10))
     window.dispatchEvent(pdEvent('pointerup', 10, 10))
@@ -202,8 +221,10 @@ describe('useCanvasInteractionController', () => {
 
   it('drags every logical group member through existing multi-selection move', async () => {
     const { store, pdOn } = await setup()
-    store.schema.unit = 'px'
-    store.schema.groups = [{ id: 'grp_1', memberIds: ['a', 'b'] }]
+    store.documentTransactions.transact((draft) => {
+      draft.unit = 'px'
+      draft.groups = [{ id: 'grp_1', memberIds: ['a', 'b'] }]
+    }, { label: 'Set test group', operation: { kind: 'document.group', sessionPath: [], targetIds: ['group:grp_1'], fieldPaths: ['/groups', '/unit'], selectionLineage: store.selection.lineageId, structural: false } })
     const a = store.getElementById('a')!
     const b = store.getElementById('b')!
 
@@ -220,7 +241,9 @@ describe('useCanvasInteractionController', () => {
 
   it('cmd-click toggles an entire logical group off', async () => {
     const { store, controller, pdOn } = await setup()
-    store.schema.groups = [{ id: 'grp_1', memberIds: ['a', 'b'] }]
+    store.documentTransactions.transact((draft) => {
+      draft.groups = [{ id: 'grp_1', memberIds: ['a', 'b'] }]
+    }, { label: 'Set test group', operation: { kind: 'document.group', sessionPath: [], targetIds: ['group:grp_1'], fieldPaths: ['/groups'], selectionLineage: store.selection.lineageId, structural: false } })
     store.selection.selectMultiple(['a', 'b'])
 
     pdOn('a', pdEvent('pointerdown', 10, 10, { meta: true }))
@@ -243,9 +266,7 @@ describe('useCanvasInteractionController', () => {
 
   it('pointerdown on a material with geometry does NOT enter editing-session (dblclick is uniform entry)', async () => {
     const { store, pdOn } = await setup()
-    store.schema.elements.push(
-      canonicalNode('t', 'cell-table', 200),
-    )
+    addNodes(store, canonicalNode('t', 'cell-table', 200))
 
     pdOn('t', pdEvent('pointerdown', 210, 10))
 
@@ -255,9 +276,7 @@ describe('useCanvasInteractionController', () => {
 
   it('dblclick on a material with geometry opens the editing-session and selects the hit sub-element', async () => {
     const { store, controller } = await setup()
-    store.schema.elements.push(
-      canonicalNode('t', 'cell-table', 200),
-    )
+    addNodes(store, canonicalNode('t', 'cell-table', 200))
     const dispatchSpy = vi.spyOn(store.editingSession, 'dispatch')
 
     controller.handleElementDblClick(dblClickEvent(210, 10), 't')
@@ -274,9 +293,7 @@ describe('useCanvasInteractionController', () => {
 
   it('second dblclick inside an active editing-session explicitly enters sub-element edit mode', async () => {
     const { store, controller } = await setup()
-    store.schema.elements.push(
-      canonicalNode('t', 'cell-table', 200),
-    )
+    addNodes(store, canonicalNode('t', 'cell-table', 200))
 
     controller.handleElementDblClick(dblClickEvent(210, 10), 't')
     const dispatchSpy = vi.spyOn(store.editingSession, 'dispatch')
@@ -288,9 +305,7 @@ describe('useCanvasInteractionController', () => {
 
   it('within an active session, pointerdown on the active element routes into session and does NOT start a drag', async () => {
     const { store, controller, pdOn } = await setup()
-    store.schema.elements.push(
-      canonicalNode('t', 'cell-table', 200),
-    )
+    addNodes(store, canonicalNode('t', 'cell-table', 200))
     controller.handleElementDblClick(dblClickEvent(210, 10), 't')
     expect(store.editingSession.isActive).toBe(true)
 
@@ -303,15 +318,29 @@ describe('useCanvasInteractionController', () => {
     )
   })
 
+  it('escape pops only the deepest nested editing frame', async () => {
+    const { store } = await setup()
+    const extension = geometryExtension()
+    store.editingSession.enter('owner', extension)
+    store.editingSession.push('child', extension)
+
+    const event = new KeyboardEvent('keydown', { key: 'Escape', cancelable: true })
+    handleCanvasEditingKeyDown(store, event)
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(store.editingSession.activeNodeId).toBe('owner')
+  })
+
   it('background pointerdown exits an active editing-session before the marquee hook fires', async () => {
     const calls: string[] = []
     const { store, controller, pageEl } = await setup({
       onBgPointerDown: () => calls.push(`bg|active=${store.editingSession.isActive}`),
     })
-    store.schema.elements.push(
-      canonicalNode('t', 'cell-table', 200),
-    )
-    controller.handleElementDblClick(dblClickEvent(210, 10), 't')
+    const extension = geometryExtension()
+    const owner = store.editingSession.enter('owner', extension)!
+    const child = store.editingSession.push('child', extension)!
+    const ownerDestroy = vi.spyOn(owner, 'destroy')
+    const childDestroy = vi.spyOn(child, 'destroy')
     expect(store.editingSession.isActive).toBe(true)
 
     const evt = pdEvent('pointerdown', 500, 500)
@@ -319,6 +348,8 @@ describe('useCanvasInteractionController', () => {
     controller.handleScrollPointerDown(evt)
 
     expect(store.editingSession.isActive).toBe(false)
+    expect(childDestroy).toHaveBeenCalledOnce()
+    expect(ownerDestroy).toHaveBeenCalledOnce()
     expect(calls).toEqual(['bg|active=false'])
   })
 })

@@ -127,7 +127,7 @@ export class DesignerStore {
       getOperationContext: () => {
         const session = this.editingSession?.activeSession
         return session
-          ? { sessionPath: [session.nodeId], selectionLineage: session.selectionStore.lineageId }
+          ? { sessionPath: this.editingSession.path.map(frame => frame.nodeId), selectionLineage: session.selectionStore.lineageId }
           : { sessionPath: [], selectionLineage: this.selection.lineageId }
       },
     }))
@@ -144,7 +144,6 @@ export class DesignerStore {
         return
       this.documentViewRevision += 1
       if (event.kind !== 'preview' && event.kind !== 'preview-cancel' && event.document === this.documentStore.committedDocument) {
-        this.editingSession.rebaseDocumentSelection(event)
         this.selection.reconcile(event.index.nodeIds())
       }
       if (event.validationReport && event.document === this.documentStore.committedDocument) {
@@ -189,13 +188,13 @@ export class DesignerStore {
   }
 
   setSchema(schema?: DocumentSchemaInput): void {
+    this.editingSession.exitAll()
     const loaded = loadDocumentWithProfile(schema, this.materialProfile)
     this.documentTransactions.reset(stripUndefined(loaded.schema), loaded.nodeStates)
     this.commands.clear()
     this._materialDiagnostics = loaded.diagnostics
     this._materialNodeStates = loaded.nodeStates
     this.selection.clear()
-    this.editingSession.exit()
     void this.preloadDocumentFonts()
   }
 
@@ -399,7 +398,7 @@ export class DesignerStore {
     }, { label: 'Remove element', operation: { kind: 'structure.remove', sessionPath: [], targetIds: [`node:${id}`], fieldPaths: ['/elements'], selectionLineage: this.selection.lineageId, structural: true } })
     this.selection.remove(id)
     if (this.editingSession.activeNodeId === id)
-      this.editingSession.exit()
+      this.editingSession.exitAll()
     return removed
   }
 
@@ -618,7 +617,7 @@ export class DesignerStore {
     this.setInteractionProvider(undefined)
     this.interactions.setFallbackProvider(undefined)
     this.refreshInteractionAvailability()
-    this.editingSession.exit()
+    this.editingSession.destroy()
   }
 }
 
