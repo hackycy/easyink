@@ -12,6 +12,7 @@ const props = defineProps<{
   schema: PropSchema
   value: unknown
   disabled?: boolean
+  mixed?: boolean
   fonts?: Array<{ family: string, displayName: string }>
   fontStatuses?: Record<string, 'unloaded' | 'loading' | 'loaded' | 'error'>
   t: (key: string) => string
@@ -281,7 +282,8 @@ function constrainStringValue(value: string): string {
 </script>
 
 <template>
-  <div class="ei-prop-editor">
+  <div class="ei-prop-editor" :data-value-state="mixed ? 'mixed' : undefined">
+    <span v-if="mixed" class="ei-prop-editor__value-state">{{ t('designer.property.mixed') }}</span>
     <!-- Custom editor component -->
     <template v-if="customEditorComponent">
       <component

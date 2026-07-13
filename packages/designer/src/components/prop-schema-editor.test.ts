@@ -15,6 +15,19 @@ afterEach(() => {
 })
 
 describe('prop schema editor text file import', () => {
+  it('renders an explicit mixed contextual value state', () => {
+    const store = createStore()
+    const mounted = mountWithStore(store, PropSchemaEditor, {
+      schema: { key: 'value', label: 'designer.property.content', type: 'string' },
+      value: undefined,
+      mixed: true,
+      t: store.t.bind(store),
+    })
+
+    expect(mounted.host.querySelector('[data-value-state="mixed"]')).not.toBeNull()
+    mounted.unmount()
+  })
+
   it('limits string input by schema min and max character counts', async () => {
     const store = createStore()
     const events = {
