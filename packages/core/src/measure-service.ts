@@ -21,12 +21,15 @@ interface CacheEntry {
   readonly plan: MaterialLayoutPlan<unknown>
 }
 
+interface MeasureOperationToken {
+  canPublish: boolean
+}
+
 export class MeasureService {
   private readonly maxEntries: number
+  private readonly activeOperations = new Map<string, Set<MeasureOperationToken>>()
   private readonly cache = new Map<string, CacheEntry>()
-  private readonly nodeGenerations = new Map<string, bigint>()
   private readonly profileTokens = new WeakMap<CompiledMaterialProfile, number>()
-  private globalGeneration = 0n
   private nextProfileToken = 1
 
   constructor(options: { maxEntries: number }) {
@@ -49,23 +52,21 @@ export class MeasureService {
       this.cache.set(key, cached)
       return cached.plan
     }
-    const globalGeneration = this.globalGeneration
-    const nodeGeneration = this.nodeGenerations.get(request.nodeId) ?? 0n
-
-    const controller = new AbortController()
+    const operation = this.registerOperation(request.nodeId)
     const sourceSignal = request.signal
     let abortListener: (() => void) | undefined
-    if (sourceSignal) {
-      if (sourceSignal.aborted) {
-        controller.abort(sourceSignal.reason)
-      }
-      else {
-        abortListener = () => controller.abort(sourceSignal.reason)
-        sourceSignal.addEventListener('abort', abortListener, { once: true })
-      }
-    }
 
     try {
+      const controller = new AbortController()
+      if (sourceSignal) {
+        if (sourceSignal.aborted) {
+          controller.abort(sourceSignal.reason)
+        }
+        else {
+          abortListener = () => controller.abort(sourceSignal.reason)
+          sourceSignal.addEventListener('abort', abortListener, { once: true })
+        }
+      }
       const measured = await request.measure(controller.signal)
       throwIfAborted(controller.signal)
       if (measured.instanceKey !== request.instanceKey
@@ -82,8 +83,7 @@ export class MeasureService {
       }
 
       const plan = freezeMaterialLayoutPlan(measured)
-      if (this.globalGeneration === globalGeneration
-        && (this.nodeGenerations.get(request.nodeId) ?? 0n) === nodeGeneration) {
+      if (operation.canPublish) {
         this.cache.set(key, { nodeId: request.nodeId, plan })
         while (this.cache.size > this.maxEntries) {
           const oldestKey = this.cache.keys().next().value
@@ -97,11 +97,13 @@ export class MeasureService {
     finally {
       if (abortListener)
         sourceSignal?.removeEventListener('abort', abortListener)
+      this.unregisterOperation(request.nodeId, operation)
     }
   }
 
   invalidateNode(nodeId: string): void {
-    this.nodeGenerations.set(nodeId, (this.nodeGenerations.get(nodeId) ?? 0n) + 1n)
+    for (const operation of this.activeOperations.get(nodeId) ?? [])
+      operation.canPublish = false
     for (const [key, entry] of this.cache) {
       if (entry.nodeId === nodeId)
         this.cache.delete(key)
@@ -109,9 +111,31 @@ export class MeasureService {
   }
 
   clear(): void {
-    this.globalGeneration += 1n
+    for (const operations of this.activeOperations.values()) {
+      for (const operation of operations)
+        operation.canPublish = false
+    }
     this.cache.clear()
-    this.nodeGenerations.clear()
+  }
+
+  private registerOperation(nodeId: string): MeasureOperationToken {
+    const operation = { canPublish: true }
+    let operations = this.activeOperations.get(nodeId)
+    if (!operations) {
+      operations = new Set()
+      this.activeOperations.set(nodeId, operations)
+    }
+    operations.add(operation)
+    return operation
+  }
+
+  private unregisterOperation(nodeId: string, operation: MeasureOperationToken): void {
+    const operations = this.activeOperations.get(nodeId)
+    if (!operations)
+      return
+    operations.delete(operation)
+    if (operations.size === 0)
+      this.activeOperations.delete(nodeId)
   }
 
   private createKey(request: MeasureRequest): string {

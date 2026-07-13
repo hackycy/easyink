@@ -43,6 +43,20 @@ function createRequest(
   }
 }
 
+interface MeasureServiceInternals {
+  readonly activeOperations?: ReadonlyMap<string, ReadonlySet<unknown>>
+  readonly nodeGenerations?: ReadonlyMap<string, unknown>
+}
+
+function readActiveBucketCount(service: MeasureService): number {
+  return (service as unknown as MeasureServiceInternals).activeOperations?.size ?? 0
+}
+
+function readInvalidationMetadataSize(service: MeasureService): number {
+  const internals = service as unknown as MeasureServiceInternals
+  return (internals.activeOperations?.size ?? 0) + (internals.nodeGenerations?.size ?? 0)
+}
+
 describe('measureService', () => {
   it('is exported from the core public entrypoint', () => {
     expect(PublicMeasureService).toBe(MeasureService)
@@ -416,6 +430,77 @@ describe('measureService', () => {
     expect(untouched.measure).toHaveBeenCalledTimes(1)
   })
 
+  it('does not retain invalidation metadata for historical node IDs', () => {
+    const service = new MeasureService({ maxEntries: 1 })
+
+    for (let index = 0; index < 1_000; index += 1)
+      service.invalidateNode(`historical-${index}`)
+
+    expect(service.size).toBe(0)
+    expect(readInvalidationMetadataSize(service)).toBe(0)
+  })
+
+  it('cleans the active operation bucket after successful settlement', async () => {
+    const service = new MeasureService({ maxEntries: 1 })
+    let resolveMeasure!: (plan: MaterialLayoutPlan<unknown>) => void
+    const result = new Promise<MaterialLayoutPlan<unknown>>((resolve) => {
+      resolveMeasure = resolve
+    })
+    const request = createRequest(createTestCompiledMaterialProfile(), {
+      measure: vi.fn(async () => result),
+    })
+
+    const pending = service.measure(request)
+    const activeWhilePending = readActiveBucketCount(service)
+    resolveMeasure(createPlan())
+    await pending
+
+    expect(activeWhilePending).toBe(1)
+    expect(readActiveBucketCount(service)).toBe(0)
+  })
+
+  it('cleans the active operation bucket after callback rejection', async () => {
+    const service = new MeasureService({ maxEntries: 1 })
+    const failure = new Error('measure failed')
+    let rejectMeasure!: (error: Error) => void
+    const result = new Promise<MaterialLayoutPlan<unknown>>((_, reject) => {
+      rejectMeasure = reject
+    })
+    const request = createRequest(createTestCompiledMaterialProfile(), {
+      measure: vi.fn(async () => result),
+    })
+
+    const pending = service.measure(request)
+    const activeWhilePending = readActiveBucketCount(service)
+    rejectMeasure(failure)
+    await expect(pending).rejects.toBe(failure)
+
+    expect(activeWhilePending).toBe(1)
+    expect(readActiveBucketCount(service)).toBe(0)
+  })
+
+  it('cleans the active operation bucket after abort', async () => {
+    const service = new MeasureService({ maxEntries: 1 })
+    const source = new AbortController()
+    let resolveMeasure!: (plan: MaterialLayoutPlan<unknown>) => void
+    const result = new Promise<MaterialLayoutPlan<unknown>>((resolve) => {
+      resolveMeasure = resolve
+    })
+    const request = createRequest(createTestCompiledMaterialProfile(), {
+      signal: source.signal,
+      measure: vi.fn(async () => result),
+    })
+
+    const pending = service.measure(request)
+    const activeWhilePending = readActiveBucketCount(service)
+    source.abort()
+    resolveMeasure(createPlan())
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+
+    expect(activeWhilePending).toBe(1)
+    expect(readActiveBucketCount(service)).toBe(0)
+  })
+
   it('prevents all in-flight measurements for an invalidated node from writing back', async () => {
     const service = new MeasureService({ maxEntries: 4 })
     const profile = createTestCompiledMaterialProfile()
@@ -454,6 +539,35 @@ describe('measureService', () => {
     expect(second.measure).toHaveBeenCalledTimes(2)
   })
 
+  it('keeps a newer post-invalidation result when the older operation settles last', async () => {
+    const service = new MeasureService({ maxEntries: 1 })
+    let resolveOld!: (plan: MaterialLayoutPlan<unknown>) => void
+    let resolveNew!: (plan: MaterialLayoutPlan<unknown>) => void
+    const oldResult = new Promise<MaterialLayoutPlan<unknown>>((resolve) => {
+      resolveOld = resolve
+    })
+    const newResult = new Promise<MaterialLayoutPlan<unknown>>((resolve) => {
+      resolveNew = resolve
+    })
+    const request = createRequest(createTestCompiledMaterialProfile(), {
+      measure: vi.fn()
+        .mockImplementationOnce(async () => oldResult)
+        .mockImplementationOnce(async () => newResult),
+    })
+    const oldPending = service.measure(request)
+    service.invalidateNode('node')
+    const newPending = service.measure(request)
+    resolveNew(createPlan({ payload: { version: 'new' } }))
+    const publishedNew = await newPending
+    resolveOld(createPlan({ payload: { version: 'old' } }))
+    await oldPending
+
+    const cached = await service.measure(request)
+    expect(cached).toBe(publishedNew)
+    expect(cached.payload).toEqual({ version: 'new' })
+    expect(request.measure).toHaveBeenCalledTimes(2)
+  })
+
   it('clears all cached plans', async () => {
     const service = new MeasureService({ maxEntries: 2 })
     const profile = createTestCompiledMaterialProfile()
@@ -487,6 +601,35 @@ describe('measureService', () => {
 
     expect(service.size).toBe(0)
     await service.measure(request)
+    expect(request.measure).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps a newer post-clear result when the older operation settles last', async () => {
+    const service = new MeasureService({ maxEntries: 1 })
+    let resolveOld!: (plan: MaterialLayoutPlan<unknown>) => void
+    let resolveNew!: (plan: MaterialLayoutPlan<unknown>) => void
+    const oldResult = new Promise<MaterialLayoutPlan<unknown>>((resolve) => {
+      resolveOld = resolve
+    })
+    const newResult = new Promise<MaterialLayoutPlan<unknown>>((resolve) => {
+      resolveNew = resolve
+    })
+    const request = createRequest(createTestCompiledMaterialProfile(), {
+      measure: vi.fn()
+        .mockImplementationOnce(async () => oldResult)
+        .mockImplementationOnce(async () => newResult),
+    })
+    const oldPending = service.measure(request)
+    service.clear()
+    const newPending = service.measure(request)
+    resolveNew(createPlan({ payload: { version: 'new' } }))
+    const publishedNew = await newPending
+    resolveOld(createPlan({ payload: { version: 'old' } }))
+    await oldPending
+
+    const cached = await service.measure(request)
+    expect(cached).toBe(publishedNew)
+    expect(cached.payload).toEqual({ version: 'new' })
     expect(request.measure).toHaveBeenCalledTimes(2)
   })
 })
