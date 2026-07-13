@@ -1,5 +1,5 @@
 import type { JsonValue } from '@easyink/shared'
-import type { MaterialFragmentPlan, MaterialLayoutPlan } from './material-layout-plan'
+import type { MaterialFragmentPlan, MaterialLayoutPlan, MaterialViewerLayoutFacet, NonFragmentingMaterialPlansInput } from './material-layout-plan'
 import { describe, expect, it } from 'vitest'
 import {
   createLayoutConstraintKey,
@@ -24,6 +24,21 @@ function createPlan(overrides: Partial<MaterialLayoutPlan> = {}): MaterialLayout
     slotBoxes: [],
     breakOpportunities: [],
     diagnostics: [],
+    ...overrides,
+  }
+}
+
+function createFallbackInput(
+  overrides: Partial<NonFragmentingMaterialPlansInput> = {},
+): NonFragmentingMaterialPlansInput {
+  return {
+    instanceKey: 'n1',
+    nodeId: 'n1',
+    nodeRevision: 2,
+    constraintKey: '10:20:mm:horizontal-tb',
+    borderBox: { x: 0, y: 0, width: 10, height: 20 },
+    fragmentBox: { x: 3, y: 4, width: 10, height: 20 },
+    pageIndex: 4,
     ...overrides,
   }
 }
@@ -103,6 +118,35 @@ describe('material layout plan', () => {
     expect(published.fragmentPlan.id).not.toBe('caller-owned')
   })
 
+  it.each([
+    { name: 'NaN page index', overrides: { pageIndex: Number.NaN } },
+    { name: 'infinite page index', overrides: { pageIndex: Number.POSITIVE_INFINITY } },
+    { name: 'negative page index', overrides: { pageIndex: -1 } },
+    { name: 'fractional page index', overrides: { pageIndex: 1.5 } },
+    { name: 'unsafe page index', overrides: { pageIndex: Number.MAX_SAFE_INTEGER + 1 } },
+    { name: 'negative node revision', overrides: { nodeRevision: -1 } },
+    { name: 'unsafe node revision', overrides: { nodeRevision: Number.MAX_SAFE_INTEGER + 1 } },
+    { name: 'empty instance identity', overrides: { instanceKey: '' } },
+    { name: 'empty node identity', overrides: { nodeId: '' } },
+    { name: 'empty constraint identity', overrides: { constraintKey: '' } },
+    { name: 'non-finite border coordinate', overrides: { borderBox: { x: Number.NaN, y: 0, width: 10, height: 20 } } },
+    { name: 'negative border dimension', overrides: { borderBox: { x: 0, y: 0, width: -1, height: 20 } } },
+    { name: 'invalid content box', overrides: { contentBox: { x: 0, y: 0, width: 10, height: Number.POSITIVE_INFINITY } } },
+    { name: 'non-finite fragment coordinate', overrides: { fragmentBox: { x: 0, y: Number.NEGATIVE_INFINITY, width: 10, height: 20 } } },
+    { name: 'negative fragment dimension', overrides: { fragmentBox: { x: 0, y: 0, width: 10, height: -1 } } },
+    { name: 'fragment width mismatch', overrides: { fragmentBox: { x: 0, y: 0, width: 9, height: 20 } } },
+    { name: 'fragment range mismatch', overrides: { fragmentBox: { x: 0, y: 0, width: 10, height: 19 } } },
+  ] satisfies Array<{ name: string, overrides: Partial<NonFragmentingMaterialPlansInput> }>)('rejects invalid fallback input: $name', ({ overrides }) => {
+    expect(() => createNonFragmentingMaterialPlans(createFallbackInput(overrides)))
+      .toThrowError('NON_FRAGMENTING_MATERIAL_PLANS_INPUT_INVALID')
+  })
+
+  it('accepts finite negative page-relative fragment coordinates', () => {
+    expect(() => createNonFragmentingMaterialPlans(createFallbackInput({
+      fragmentBox: { x: -3, y: -4, width: 10, height: 20 },
+    }))).not.toThrow()
+  })
+
   it('rejects non-finite geometry, invalid identity, duplicate slot instances, and invalid break order', () => {
     expect(validateMaterialLayoutPlan(createPlan({
       instanceKey: '',
@@ -121,6 +165,56 @@ describe('material layout plan', () => {
       expect.objectContaining({ code: 'LAYOUT_PLAN_NON_FINITE_BOX' }),
       expect.objectContaining({ code: 'LAYOUT_PLAN_IDENTITY_INVALID' }),
       expect.objectContaining({ code: 'LAYOUT_PLAN_SLOT_INSTANCE_DUPLICATE' }),
+      expect.objectContaining({ code: 'LAYOUT_PLAN_BREAK_INVALID' }),
+      expect.objectContaining({ code: 'LAYOUT_PLAN_BREAK_ORDER' }),
+    ]))
+  })
+
+  it('rejects invalid runtime scalar and discriminant values', () => {
+    const diagnostics = validateMaterialLayoutPlan(createPlan({
+      instanceKey: 42 as never,
+      nodeId: true as never,
+      constraintKey: [] as never,
+      slotBoxes: [{
+        slotId: 42,
+        slotInstanceKey: [],
+        box: { x: 0, y: 0, width: 10, height: 10 },
+        ownership: 'borrowed',
+        clip: 'yes',
+      } as never],
+      diagnostics: [{
+        code: 42,
+        severity: 'fatal',
+        message: '',
+        instanceKey: 42,
+        nodeId: true,
+      } as never],
+      breakOpportunities: [{ id: 42, blockOffset: '5', penalty: '0' } as never],
+    }))
+
+    expect(diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'LAYOUT_PLAN_IDENTITY_INVALID' }),
+      expect.objectContaining({ code: 'LAYOUT_PLAN_SLOT_IDENTITY_INVALID' }),
+      expect.objectContaining({ code: 'LAYOUT_PLAN_SLOT_DISCRIMINANT_INVALID' }),
+      expect.objectContaining({ code: 'LAYOUT_PLAN_DIAGNOSTIC_INVALID' }),
+      expect.objectContaining({ code: 'LAYOUT_PLAN_BREAK_INVALID' }),
+      expect.objectContaining({ code: 'LAYOUT_PLAN_BREAK_ORDER' }),
+    ]))
+  })
+
+  it('returns diagnostics instead of throwing for malformed runtime entries', () => {
+    const malformed = createPlan({
+      slotBoxes: [null as never],
+      diagnostics: [null as never],
+      breakOpportunities: [null as never],
+    })
+
+    expect(() => validateMaterialLayoutPlan(malformed)).not.toThrow()
+    expect(validateMaterialLayoutPlan(malformed)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'LAYOUT_PLAN_SLOT_IDENTITY_INVALID' }),
+      expect.objectContaining({ code: 'LAYOUT_PLAN_SLOT_DISCRIMINANT_INVALID' }),
+      expect.objectContaining({ code: 'LAYOUT_PLAN_SLOT_BOX_INVALID' }),
+      expect.objectContaining({ code: 'LAYOUT_PLAN_DIAGNOSTIC_INVALID' }),
       expect.objectContaining({ code: 'LAYOUT_PLAN_BREAK_INVALID' }),
       expect.objectContaining({ code: 'LAYOUT_PLAN_BREAK_ORDER' }),
     ]))
@@ -180,6 +274,18 @@ describe('material layout plan', () => {
     expect(published.payload?.rows[0]?.id).toBe('r1')
     expect(Object.isFrozen(published.payload?.rows)).toBe(true)
     expect(Object.isFrozen(source.payload?.rows)).toBe(false)
+  })
+
+  it('allows a layout facet to measure a named JSON-safe payload interface', () => {
+    const measure: NonNullable<MaterialViewerLayoutFacet['measure']> = async () => {
+      const plan: MaterialLayoutPlan<InterfacePayload> = {
+        ...createPlan(),
+        payload: { rows: [{ id: 'r1' }] },
+      }
+      return plan
+    }
+
+    expect(measure).toBeTypeOf('function')
   })
 
   it('rejects non-JSON payloads and diagnostic details', () => {

@@ -138,6 +138,111 @@ describe('renderPages', () => {
     expect(options.container.textContent).not.toContain('legacy child')
   })
 
+  it('keeps committed slot authorization host-owned and freezes the assembled context', async () => {
+    let captured: ViewerRenderContext | undefined
+    let layoutPlanReplacementAccepted: boolean | undefined
+    let slotOutputsReplacementAccepted: boolean | undefined
+    let childFrozen: boolean | undefined
+    let childLayoutPlanReplacementAccepted: boolean | undefined
+    let renderedSlot: ReturnType<ViewerRenderContext['renderSlot']> = viewerFragment([])
+    const ownerExtension: MaterialViewerExtension = {
+      render: (_node, context) => {
+        captured = context
+        const legacyContent = context.slotOutputs?.content ?? []
+        layoutPlanReplacementAccepted = Reflect.set(context, 'layoutPlan', {
+          ...context.layoutPlan,
+          slotBoxes: [{
+            slotId: 'content',
+            slotInstanceKey: 'content',
+            box: { x: 0, y: 0, width: 10, height: 10 },
+            ownership: 'managed',
+            clip: true,
+          }],
+        })
+        slotOutputsReplacementAccepted = Reflect.set(context, 'slotOutputs', {
+          content: [viewerText('forged slot')],
+        })
+        renderedSlot = context.renderSlot('content')
+        return { tree: viewerFragment(legacyContent) }
+      },
+    }
+    const { materials, owner, options } = await createNestedSurface({
+      ownerExtension,
+      children: [{
+        type: 'child',
+        extension: {
+          render: (_node, context) => {
+            childFrozen = Object.isFrozen(context)
+            childLayoutPlanReplacementAccepted = Reflect.set(context, 'layoutPlan', context.layoutPlan)
+            return { tree: viewerText('legacy child') }
+          },
+        },
+      }],
+    })
+
+    renderPages(pageWith(owner), materials, options, [])
+
+    expect({
+      frozen: Object.isFrozen(captured),
+      layoutPlanReplacementAccepted,
+      slotOutputsReplacementAccepted,
+      childFrozen,
+      childLayoutPlanReplacementAccepted,
+      renderedSlot,
+    }).toEqual({
+      frozen: true,
+      layoutPlanReplacementAccepted: false,
+      slotOutputsReplacementAccepted: false,
+      childFrozen: true,
+      childLayoutPlanReplacementAccepted: false,
+      renderedSlot: viewerFragment([]),
+    })
+  })
+
+  it('mints stable injective nested instance and fragment identities', async () => {
+    const first: Array<Pick<ViewerRenderContext, 'instanceKey' | 'fragmentPlan'>> = []
+    const firstSurface = await createNestedSurface({
+      ownerId: 'a/b',
+      children: [{
+        id: 'c',
+        type: 'first-child',
+        extension: {
+          render: (_node, context) => {
+            first.push({ instanceKey: context.instanceKey, fragmentPlan: context.fragmentPlan })
+            return { tree: viewerText('first') }
+          },
+        },
+      }],
+    })
+    renderPages(pageWith(firstSurface.owner), firstSurface.materials, firstSurface.options, [])
+    renderPages(pageWith(firstSurface.owner), firstSurface.materials, firstSurface.options, [])
+
+    let second: Pick<ViewerRenderContext, 'instanceKey' | 'fragmentPlan'> | undefined
+    const secondSurface = await createNestedSurface({
+      ownerId: 'a',
+      children: [{
+        id: 'b/c',
+        type: 'second-child',
+        extension: {
+          render: (_node, context) => {
+            second = { instanceKey: context.instanceKey, fragmentPlan: context.fragmentPlan }
+            return { tree: viewerText('second') }
+          },
+        },
+      }],
+    })
+    renderPages(pageWith(secondSurface.owner), secondSurface.materials, secondSurface.options, [])
+
+    expect(first).toHaveLength(2)
+    expect(second).toBeDefined()
+    expect(first[0]!.instanceKey).toBe(first[1]!.instanceKey)
+    expect(first[0]!.fragmentPlan.id).toBe(first[1]!.fragmentPlan.id)
+    expect(first[0]!.fragmentPlan.sourceInstanceKey).toBe(first[0]!.instanceKey)
+    expect(second!.fragmentPlan.sourceInstanceKey).toBe(second!.instanceKey)
+    expect(first[0]!.instanceKey).not.toBe(second!.instanceKey)
+    expect(first[0]!.fragmentPlan.id).not.toBe(second!.fragmentPlan.id)
+  })
+
   it('uses the registered render-size callback for wrapper dimensions', async () => {
     const container = document.createElement('div')
     const node: MaterialNode = {
@@ -517,12 +622,14 @@ async function createMaterials(extension: MaterialViewerExtension, capabilities:
 }
 
 interface NestedChildSpec {
+  id?: string
   type: string
   extension: MaterialViewerExtension
   capabilities?: ViewerFacetCapabilities
 }
 
 async function createNestedSurface(input: {
+  ownerId?: string
   ownerExtension?: MaterialViewerExtension
   ownerCapabilities?: ViewerFacetCapabilities
   children: NestedChildSpec[]
@@ -548,7 +655,7 @@ async function createNestedSurface(input: {
   const materials = new ProfileMaterialRuntime(profile)
   await materials.prepare(['owner', ...input.children.map(child => child.type)])
   const children = input.children.map((child, index): MaterialNode => ({
-    id: child.type,
+    id: child.id ?? child.type,
     type: child.type,
     x: 0,
     y: 0,
@@ -562,7 +669,7 @@ async function createNestedSurface(input: {
     zIndex: index,
   }))
   const owner: MaterialNode = {
-    id: 'owner',
+    id: input.ownerId ?? 'owner',
     type: 'owner',
     x: 0,
     y: 0,

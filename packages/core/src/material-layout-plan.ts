@@ -63,7 +63,7 @@ export interface NonFragmentingMaterialPlans {
 }
 
 export interface MaterialFragmentRequest {
-  readonly plan: MaterialLayoutPlan
+  readonly plan: MaterialLayoutPlan<unknown>
   readonly startBlockOffset: number
   readonly endBlockOffset: number
   readonly availableHeight: number
@@ -205,7 +205,7 @@ export interface MaterialRenderBudgetToken {
 export interface MaterialSlotInstancePlan {
   readonly instanceKey: string
   readonly contentBounds: Readonly<Rect>
-  readonly childPlans: readonly MaterialLayoutPlan[]
+  readonly childPlans: readonly MaterialLayoutPlan<unknown>[]
 }
 
 export interface MaterialMeasureRequest {
@@ -243,7 +243,7 @@ export interface MaterialViewerLayoutFacet {
     resolveBinding: MaterialBindingResolver,
     reportDiagnostic: (diagnostic: unknown) => void,
   ) => Readonly<Record<string, unknown>>
-  readonly measure?: (request: MaterialMeasureRequest) => Promise<MaterialLayoutPlan>
+  readonly measure?: (request: MaterialMeasureRequest) => Promise<MaterialLayoutPlan<unknown>>
   readonly fragment?: MaterialFragmentAdapter
 }
 
@@ -256,7 +256,7 @@ export function createNonFragmentingMaterialPlans(
   input: NonFragmentingMaterialPlansInput,
 ): NonFragmentingMaterialPlans {
   const diagnostics = Object.freeze([]) as readonly LayoutPlanDiagnostic[]
-  const layoutPlan = freezeMaterialLayoutPlan({
+  const layoutFacts: MaterialLayoutPlan = {
     instanceKey: input.instanceKey,
     nodeId: input.nodeId,
     nodeRevision: input.nodeRevision,
@@ -266,7 +266,17 @@ export function createNonFragmentingMaterialPlans(
     slotBoxes: Object.freeze([]),
     breakOpportunities: Object.freeze([]),
     diagnostics,
-  })
+  }
+  const fragmentBoxValid = isValidBox(input.fragmentBox)
+    && input.fragmentBox.width === input.borderBox.width
+    && input.fragmentBox.height === input.borderBox.height
+  if (!Number.isSafeInteger(input.pageIndex) || input.pageIndex < 0
+    || validateMaterialLayoutPlan(layoutFacts).some(diagnostic => diagnostic.severity === 'error')
+    || !fragmentBoxValid) {
+    throw new Error('NON_FRAGMENTING_MATERIAL_PLANS_INPUT_INVALID')
+  }
+
+  const layoutPlan = freezeMaterialLayoutPlan(layoutFacts)
   const fragmentPlan = freezeMaterialFragmentPlan({
     id: JSON.stringify([
       'material-fragment',
@@ -291,7 +301,7 @@ export function createNonFragmentingMaterialPlans(
 export function validateMaterialLayoutPlan<TPayload>(plan: MaterialLayoutPlan<TPayload>): LayoutPlanDiagnostic[] {
   const diagnostics: LayoutPlanDiagnostic[] = []
 
-  if (!plan.instanceKey || !plan.nodeId || !plan.constraintKey
+  if (!isNonEmptyString(plan.instanceKey) || !isNonEmptyString(plan.nodeId) || !isNonEmptyString(plan.constraintKey)
     || !Number.isSafeInteger(plan.nodeRevision) || plan.nodeRevision < 0) {
     diagnostics.push(createDiagnostic(
       plan,
@@ -316,33 +326,61 @@ export function validateMaterialLayoutPlan<TPayload>(plan: MaterialLayoutPlan<TP
   validateBox(plan, diagnostics, 'contentBox', plan.contentBox)
 
   const slotInstanceKeys = new Set<string>()
-  for (const slot of plan.slotBoxes) {
-    if (!slot.slotId || !slot.slotInstanceKey || slotInstanceKeys.has(slot.slotInstanceKey)) {
+  const slotBoxes: readonly unknown[] = Array.isArray(plan.slotBoxes) ? plan.slotBoxes : [plan.slotBoxes]
+  for (const candidate of slotBoxes) {
+    const slot = isRecord(candidate) ? candidate : {}
+    const slotId = slot.slotId
+    const slotInstanceKey = slot.slotInstanceKey
+    const slotIdentityValid = isNonEmptyString(slotId) && isNonEmptyString(slotInstanceKey)
+    if (!slotIdentityValid) {
+      diagnostics.push(createDiagnostic(
+        plan,
+        'LAYOUT_PLAN_SLOT_IDENTITY_INVALID',
+        'Each measured slot instance must have non-empty string IDs.',
+        { slotId: String(slotId), slotInstanceKey: String(slotInstanceKey) },
+      ))
+    }
+    else if (slotInstanceKeys.has(slotInstanceKey)) {
       diagnostics.push(createDiagnostic(
         plan,
         'LAYOUT_PLAN_SLOT_INSTANCE_DUPLICATE',
-        'Each measured slot instance must have non-empty IDs and appear exactly once in a material plan.',
-        { slotId: slot.slotId, slotInstanceKey: slot.slotInstanceKey },
+        'Each measured slot instance must appear exactly once in a material plan.',
+        { slotId, slotInstanceKey },
       ))
     }
-    slotInstanceKeys.add(slot.slotInstanceKey)
+    if (isNonEmptyString(slotInstanceKey))
+      slotInstanceKeys.add(slotInstanceKey)
+
+    if ((slot.ownership !== 'free' && slot.ownership !== 'managed') || typeof slot.clip !== 'boolean') {
+      diagnostics.push(createDiagnostic(
+        plan,
+        'LAYOUT_PLAN_SLOT_DISCRIMINANT_INVALID',
+        'Slot ownership and clipping values must use the declared runtime discriminants.',
+        { ownership: String(slot.ownership), clip: String(slot.clip) },
+      ))
+    }
 
     if (!isValidBox(slot.box)) {
       diagnostics.push(createDiagnostic(
         plan,
         'LAYOUT_PLAN_SLOT_BOX_INVALID',
         'A measured slot box must contain finite coordinates and non-negative dimensions.',
-        { slotId: slot.slotId, slotInstanceKey: slot.slotInstanceKey },
+        { slotId: String(slotId), slotInstanceKey: String(slotInstanceKey) },
       ))
     }
   }
 
-  for (const diagnostic of plan.diagnostics) {
+  const planDiagnostics: readonly unknown[] = Array.isArray(plan.diagnostics) ? plan.diagnostics : [plan.diagnostics]
+  for (const candidate of planDiagnostics) {
+    const diagnostic = isRecord(candidate) ? candidate : {}
     try {
       if (diagnostic.detail !== undefined)
         assertJsonValue(diagnostic.detail)
-      if (diagnostic.instanceKey !== plan.instanceKey || diagnostic.nodeId !== plan.nodeId)
-        throw new Error('identity mismatch')
+      if (!isNonEmptyString(diagnostic.code) || !isNonEmptyString(diagnostic.message)
+        || (diagnostic.severity !== 'info' && diagnostic.severity !== 'warning' && diagnostic.severity !== 'error')
+        || diagnostic.instanceKey !== plan.instanceKey || diagnostic.nodeId !== plan.nodeId) {
+        throw new Error('invalid diagnostic')
+      }
     }
     catch {
       diagnostics.push(createDiagnostic(
@@ -355,28 +393,40 @@ export function validateMaterialLayoutPlan<TPayload>(plan: MaterialLayoutPlan<TP
 
   let previous = Number.NEGATIVE_INFINITY
   const breakIds = new Set<string>()
-  for (const opportunity of plan.breakOpportunities) {
-    if (!opportunity.id || breakIds.has(opportunity.id)
-      || !Number.isFinite(opportunity.penalty) || opportunity.penalty < 0) {
+  const breakOpportunities: readonly unknown[] = Array.isArray(plan.breakOpportunities)
+    ? plan.breakOpportunities
+    : [plan.breakOpportunities]
+  for (const candidate of breakOpportunities) {
+    const opportunity = isRecord(candidate) ? candidate : {}
+    const id = opportunity.id
+    const blockOffset = opportunity.blockOffset
+    const penalty = opportunity.penalty
+    const breakIdentityValid = isNonEmptyString(id)
+    if (!breakIdentityValid || (isNonEmptyString(id) && breakIds.has(id))
+      || !Number.isFinite(penalty) || (typeof penalty === 'number' && penalty < 0)) {
       diagnostics.push(createDiagnostic(
         plan,
         'LAYOUT_PLAN_BREAK_INVALID',
         'Break IDs must be unique and penalties must be finite non-negative values.',
-        { id: opportunity.id, penalty: String(opportunity.penalty) },
+        { id: String(id), penalty: String(penalty) },
       ))
     }
-    breakIds.add(opportunity.id)
+    if (isNonEmptyString(id))
+      breakIds.add(id)
 
-    if (!Number.isFinite(opportunity.blockOffset) || opportunity.blockOffset <= previous
-      || opportunity.blockOffset <= 0 || opportunity.blockOffset >= plan.borderBox.height) {
+    const borderHeight = readBoxHeight(plan.borderBox)
+    if (!Number.isFinite(blockOffset) || (typeof blockOffset === 'number' && blockOffset <= previous)
+      || (typeof blockOffset === 'number' && blockOffset <= 0)
+      || (typeof blockOffset === 'number' && blockOffset >= borderHeight)) {
       diagnostics.push(createDiagnostic(
         plan,
         'LAYOUT_PLAN_BREAK_ORDER',
         'Internal break opportunities must have finite, strictly increasing offsets inside the border box.',
-        { id: opportunity.id, blockOffset: String(opportunity.blockOffset) },
+        { id: String(id), blockOffset: String(blockOffset) },
       ))
     }
-    previous = opportunity.blockOffset
+    if (typeof blockOffset === 'number' && Number.isFinite(blockOffset))
+      previous = blockOffset
   }
 
   return diagnostics
@@ -420,10 +470,10 @@ export function freezeMaterialFragmentPlan(plan: MaterialFragmentPlan): Material
 }
 
 function validateBox(
-  plan: Pick<MaterialLayoutPlan, 'instanceKey' | 'nodeId'>,
+  plan: { readonly instanceKey: unknown, readonly nodeId: unknown },
   diagnostics: LayoutPlanDiagnostic[],
   name: 'borderBox' | 'contentBox',
-  box: Readonly<Rect>,
+  box: unknown,
 ): void {
   if (isValidBox(box))
     return
@@ -432,18 +482,37 @@ function validateBox(
     plan,
     'LAYOUT_PLAN_NON_FINITE_BOX',
     `${name} contains a non-finite value or negative size.`,
-    { name, values: [box.x, box.y, box.width, box.height].map(String) },
+    { name, values: readBoxValues(box).map(String) },
   ))
 }
 
-function isValidBox(box: Readonly<Rect>): boolean {
-  return [box.x, box.y, box.width, box.height].every(Number.isFinite)
+function isValidBox(box: unknown): box is Readonly<Rect> {
+  return isRecord(box)
+    && [box.x, box.y, box.width, box.height].every(Number.isFinite)
+    && typeof box.width === 'number'
+    && typeof box.height === 'number'
     && box.width >= 0
     && box.height >= 0
 }
 
+function readBoxValues(box: unknown): unknown[] {
+  return isRecord(box) ? [box.x, box.y, box.width, box.height] : [box]
+}
+
+function readBoxHeight(box: unknown): number {
+  return isRecord(box) && typeof box.height === 'number' ? box.height : Number.NaN
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0
+}
+
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 function createDiagnostic(
-  plan: Pick<MaterialLayoutPlan, 'instanceKey' | 'nodeId'>,
+  plan: { readonly instanceKey: unknown, readonly nodeId: unknown },
   code: string,
   message: string,
   detail?: JsonValue,
@@ -452,8 +521,8 @@ function createDiagnostic(
     code,
     severity: 'error',
     message,
-    instanceKey: plan.instanceKey,
-    nodeId: plan.nodeId,
+    instanceKey: typeof plan.instanceKey === 'string' ? plan.instanceKey : '',
+    nodeId: typeof plan.nodeId === 'string' ? plan.nodeId : '',
     ...(detail === undefined ? {} : { detail }),
   }
 }

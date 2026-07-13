@@ -7,7 +7,7 @@ import { formatPageNumberDisplay } from './rendering'
 
 export function renderPageNumber(node: MaterialNode, context: ViewerRenderContext) {
   const props = getNodeModel<PageNumberProps>(node)
-  const resolved = context.resolvedProps
+  const resolved = context.resolvedModel
 
   const current = (resolved.__pageNumber as number) ?? 1
   const total = (resolved.__totalPages as number) ?? 1

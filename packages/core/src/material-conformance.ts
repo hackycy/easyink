@@ -488,7 +488,7 @@ async function checkViewer(state: State): Promise<void> {
     const node = state.node ?? await normalizedNode(state)
     const output = await invokeHook(state, facet.extension.render, [node, {
       data: {},
-      resolvedProps: snapshot(node.model),
+      resolvedModel: snapshot(node.model),
       pageIndex: 0,
       unit: UNIT,
       zoom: 1,

@@ -24,23 +24,21 @@ export interface ViewerFacetCapabilities {
  * Provides document-level unit and zoom for physical unit calculations.
  */
 export interface ViewerRenderContext {
-  data: Readonly<Record<string, unknown>>
-  resolvedModel: Readonly<Record<string, unknown>>
-  instanceKey: string
-  layoutPlan: MaterialLayoutPlan
-  fragmentPlan: MaterialFragmentPlan
-  renderSlot: (slotInstanceKey: string) => ViewerRenderTree
-  renderBudget: MaterialRenderBudgetToken
-  /** @deprecated Use resolvedModel. */
-  resolvedProps: Record<string, unknown>
-  pageIndex: number
+  readonly data: Readonly<Record<string, unknown>>
+  readonly resolvedModel: Readonly<Record<string, unknown>>
+  readonly instanceKey: string
+  readonly layoutPlan: MaterialLayoutPlan
+  readonly fragmentPlan: MaterialFragmentPlan
+  readonly renderSlot: (slotInstanceKey: string) => ViewerRenderTree
+  readonly renderBudget: MaterialRenderBudgetToken
+  readonly pageIndex: number
   /** Document unit: 'mm' | 'pt' | 'px'. CSS unit suffix equals this value. */
-  unit: string
-  zoom: number
-  capabilities: ViewerRenderCapabilities
+  readonly unit: string
+  readonly zoom: number
+  readonly capabilities: ViewerRenderCapabilities
   /** Host-rendered slot output keyed by the manifest slot key. */
-  slotOutputs?: Readonly<Record<string, readonly ViewerRenderTree[]>>
-  reportDiagnostic?: (diagnostic: BindingFormatDiagnostic & { nodeId?: string }) => void
+  readonly slotOutputs?: Readonly<Record<string, readonly ViewerRenderTree[]>>
+  readonly reportDiagnostic?: (diagnostic: BindingFormatDiagnostic & { nodeId?: string }) => void
 }
 
 export interface ViewerRenderOutput {

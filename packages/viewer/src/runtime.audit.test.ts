@@ -266,7 +266,7 @@ describe('viewer audit risk regressions', () => {
       output: { visibility: 'include' },
     })
     const markerExtension = {
-      render: (_node: MaterialNode, context: any) => ({ tree: viewerText(String(context.resolvedProps.__pageNumber ?? 'legacy')) }),
+      render: (_node: MaterialNode, context: any) => ({ tree: viewerText(String(context.resolvedModel.__pageNumber ?? 'legacy')) }),
     }
     const viewer = createViewer({ container, profile: createTestCompiledMaterialProfile([
       viewerManifest('legacy-marker', markerExtension, 'every-output-page'),

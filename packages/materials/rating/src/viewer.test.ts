@@ -6,7 +6,7 @@ import { renderRating } from './viewer'
 
 describe('renderRating', () => {
   it('renders resolved value and characters semantically', () => {
-    const tree = renderRating(createRatingNode({ model: { character: '<x>' } }), { resolvedProps: { value: 80 } } as never).tree as ViewerElementTree
+    const tree = renderRating(createRatingNode({ model: { character: '<x>' } }), { resolvedModel: { value: 80 } } as never).tree as ViewerElementTree
     expect(tree.attributes['aria-label']).toBe('80/100')
     expect((tree.children[0] as ViewerElementTree).children[0]).toMatchObject({ kind: 'text', value: '<' } satisfies Partial<ViewerTextTree>)
   })

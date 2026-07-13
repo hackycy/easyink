@@ -11,7 +11,7 @@ export function renderChartCustom(node: MaterialNode, context: ViewerRenderConte
   const props = resolveChartCustomProps(getNodeModel<ChartCustomProps>(node))
   const result = resolveChartCustomOption(props, {
     data: context.data ?? {},
-    boundOption: context.resolvedProps?.option,
+    boundOption: context.resolvedModel.option,
     hasBinding: getBindingRefs(node.bindings.value).length > 0,
     node,
     width: node.width,

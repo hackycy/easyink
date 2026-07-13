@@ -85,7 +85,7 @@ describe('tableDataFragmentPaginator', () => {
 
     const output = renderTableData(node, createTestViewerRenderContext({
       data: { items: [{ name: 'A' }, { name: 'B' }] },
-      resolvedProps: {},
+      resolvedModel: {},
       capabilities: { sanitizeMarkup: () => { throw new Error('unused') } },
       slotOutputs: { [`cell:${hosted.id}`]: [viewerText('HOSTED')] },
     })).tree
@@ -167,7 +167,7 @@ describe('tableDataFragmentPaginator', () => {
 function renderContext(data: Record<string, unknown>, reportDiagnostic?: (diagnostic: any) => void) {
   return createTestViewerRenderContext({
     data,
-    resolvedProps: {},
+    resolvedModel: {},
     capabilities: { sanitizeMarkup: () => { throw new Error('unused') } },
     reportDiagnostic,
   })

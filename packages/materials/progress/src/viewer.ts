@@ -6,7 +6,7 @@ import { getNodeModel } from '@easyink/schema'
 import { formatProgressValue, normalizeProgressValue, resolveProgressProps } from './rendering'
 
 export function renderProgress(node: MaterialNode, context?: ViewerRenderContext) {
-  const props = resolveProgressProps({ ...getNodeModel<ProgressProps>(node), ...(context?.resolvedProps ?? {}) })
+  const props = resolveProgressProps({ ...getNodeModel<ProgressProps>(node), ...(context?.resolvedModel ?? {}) })
   const unit = context?.unit ?? 'mm'
   const text = `${formatProgressValue(props.value)}${props.suffix}`
   const bar = viewerElement('div', { style: {

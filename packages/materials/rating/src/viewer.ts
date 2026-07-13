@@ -8,7 +8,7 @@ import { formatRatingValue, getRatingCharacterFills, resolveRatingProps } from '
 export function renderRating(node: MaterialNode, context?: ViewerRenderContext) {
   const props = resolveRatingProps({
     ...getNodeModel<RatingProps>(node),
-    ...(context?.resolvedProps ?? {}),
+    ...(context?.resolvedModel ?? {}),
   })
   const unit = context?.unit ?? 'mm'
   const label = `${formatRatingValue(props.value)}/100`

@@ -121,10 +121,11 @@ export function renderPages(
           }
         }
         context.slotOutputs = admitted
-          ? createSlotMountOutputs(nodeForRender, materials, context, capabilities, page, nodeStates, resolvedPropsMap, hostImperativeDom, browserDom, diagnostics)
+          ? createSlotMountOutputs(nodeForRender, materials, context, capabilities, nodeStates, resolvedPropsMap, hostImperativeDom, browserDom, diagnostics)
           : undefined
-        const output = materials.render(nodeForRender, context, admitted)
-        const renderSize = admitted ? materials.getRenderSize(nodeForRender, context) : { width: node.width, height: node.height }
+        const renderContext: ViewerRenderContext = Object.freeze(context)
+        const output = materials.render(nodeForRender, renderContext, admitted)
+        const renderSize = admitted ? materials.getRenderSize(nodeForRender, renderContext) : { width: node.width, height: node.height }
         const elWrapper = createElementWrapper(document, nodeForRender, page, unit, renderSize)
         const mount = renderViewerTree(elWrapper, output.tree, {
           document,
@@ -163,7 +164,6 @@ function createSlotMountOutputs(
   materials: ProfileMaterialRuntime,
   context: ViewerRenderContext,
   ownerCapabilities: BrowserDomCapabilities,
-  page: PagePlanEntry,
   nodeStates: ReadonlyMap<string, MaterialNodeLoadState>,
   resolvedPropsMap: ReadonlyMap<string, Record<string, unknown>>,
   hostImperativeDom: ReadonlySet<string>,
@@ -186,7 +186,6 @@ function createSlotMountOutputs(
       node,
       materials,
       context,
-      page,
       nodeStates,
       resolvedPropsMap,
       hostImperativeDom,
@@ -201,7 +200,6 @@ function mountSlotMaterial(
   node: MaterialNode<unknown>,
   materials: ProfileMaterialRuntime,
   parentContext: ViewerRenderContext,
-  page: PagePlanEntry,
   nodeStates: ReadonlyMap<string, MaterialNodeLoadState>,
   resolvedPropsMap: ReadonlyMap<string, Record<string, unknown>>,
   hostImperativeDom: ReadonlySet<string>,
@@ -215,7 +213,7 @@ function mountSlotMaterial(
   const childContext = createLegacyRenderContext({
     node,
     resolvedModel,
-    instanceKey: `${parentContext.instanceKey}/${node.id}`,
+    instanceKey: createNestedMaterialInstanceKey(parentContext.instanceKey, node.id),
     fragmentBox: {
       x: parentContext.fragmentPlan.box.x + node.x,
       y: parentContext.fragmentPlan.box.y + node.y,
@@ -233,11 +231,12 @@ function mountSlotMaterial(
   const childForRender = { ...node, model: resolvedModel }
   try {
     childContext.slotOutputs = admitted
-      ? createSlotMountOutputs(childForRender, materials, childContext, capabilities, page, nodeStates, resolvedPropsMap, hostImperativeDom, browserDom, diagnostics)
+      ? createSlotMountOutputs(childForRender, materials, childContext, capabilities, nodeStates, resolvedPropsMap, hostImperativeDom, browserDom, diagnostics)
       : undefined
-    const output = materials.render(childForRender, childContext, admitted)
+    const renderContext: ViewerRenderContext = Object.freeze(childContext)
+    const output = materials.render(childForRender, renderContext, admitted)
     if (admitted)
-      materials.getRenderSize(childForRender, childContext)
+      materials.getRenderSize(childForRender, renderContext)
     const mount = renderViewerTree(host, output.tree, {
       document: host.ownerDocument,
       capabilities,
@@ -283,7 +282,13 @@ interface LegacyRenderContextInput {
   reportDiagnostic?: ViewerRenderContext['reportDiagnostic']
 }
 
-function createLegacyRenderContext(input: LegacyRenderContextInput): ViewerRenderContext {
+type Mutable<T> = { -readonly [K in keyof T]: T[K] }
+
+function createNestedMaterialInstanceKey(parentInstanceKey: string, childNodeId: string): string {
+  return JSON.stringify(['material-instance', parentInstanceKey, childNodeId])
+}
+
+function createLegacyRenderContext(input: LegacyRenderContextInput): Mutable<ViewerRenderContext> {
   const { node } = input
   const layoutUnit = resolveLayoutUnit(input.unit)
   const plans = createNonFragmentingMaterialPlans({
@@ -300,19 +305,19 @@ function createLegacyRenderContext(input: LegacyRenderContextInput): ViewerRende
     borderBox: { x: 0, y: 0, width: node.width, height: node.height },
     fragmentBox: input.fragmentBox,
   })
-  const context: ViewerRenderContext = {
+  const committedSlotInstanceKeys = new Set(plans.layoutPlan.slotBoxes.map(slot => slot.slotInstanceKey))
+  const context: Mutable<ViewerRenderContext> = {
     data: input.data,
     resolvedModel: input.resolvedModel,
     instanceKey: input.instanceKey,
     layoutPlan: plans.layoutPlan,
     fragmentPlan: plans.fragmentPlan,
     renderSlot: slotInstanceKey => viewerFragment(
-      context.layoutPlan.slotBoxes.some(slot => slot.slotInstanceKey === slotInstanceKey)
+      committedSlotInstanceKeys.has(slotInstanceKey)
         ? context.slotOutputs?.[slotInstanceKey] ?? []
         : [],
     ),
     renderBudget: createRenderBudget(input.maxNodes),
-    resolvedProps: input.resolvedModel,
     pageIndex: input.pageIndex,
     unit: input.unit,
     zoom: input.zoom,

@@ -15,7 +15,7 @@ describe('chart custom viewer', () => {
     })
     let source = ''
     const output = renderChartCustom(node, createTestViewerRenderContext({
-      resolvedProps: node.model,
+      resolvedModel: node.model,
       capabilities: { sanitizeMarkup(input) {
         source = input.source
         return {} as SanitizedMarkup

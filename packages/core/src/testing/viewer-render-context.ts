@@ -11,7 +11,7 @@ const DEFAULT_MAX_NODES = 10_000
 export function createTestViewerRenderContext(
   overrides: Partial<ViewerRenderContext> = {},
 ): ViewerRenderContext {
-  const resolvedModel = overrides.resolvedModel ?? overrides.resolvedProps ?? {}
+  const resolvedModel = overrides.resolvedModel ?? {}
   const instanceKey = overrides.instanceKey ?? 'test-instance'
   const pageIndex = overrides.pageIndex ?? 0
   const plans = createNonFragmentingMaterialPlans({
@@ -40,7 +40,6 @@ export function createTestViewerRenderContext(
         : [],
     ),
     renderBudget: createTestRenderBudget(),
-    resolvedProps: resolvedModel,
     pageIndex,
     unit: 'mm',
     zoom: 1,
