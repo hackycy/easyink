@@ -499,6 +499,18 @@ function createFullRangeEmbeddedFragment(
   plan: MaterialLayoutPlan,
   adapter: MaterialFragmentAdapter | undefined,
 ): MaterialFragmentPlan {
+  if (plan.borderBox.height === 0) {
+    return createNonFragmentingMaterialPlans({
+      instanceKey: plan.instanceKey,
+      nodeId: plan.nodeId,
+      nodeRevision: plan.nodeRevision,
+      constraintKey: plan.constraintKey,
+      pageIndex: 0,
+      borderBox: plan.borderBox,
+      contentBox: plan.contentBox,
+      fragmentBox: plan.borderBox,
+    }).fragmentPlan
+  }
   const request = Object.freeze({
     plan,
     startBlockOffset: 0,

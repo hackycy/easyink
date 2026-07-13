@@ -758,8 +758,11 @@ describe('material measurement integration', () => {
     expect(measured.instances.get(slotResult!.childPlans[0]!.instanceKey)?.slotChildren).toEqual({})
   })
 
-  it('renders a custom-measured slot child from its measurement-time committed fragment', async () => {
-    const child = node({ id: 'render-child', type: 'render-child', x: 0, y: 0, width: 8, height: 4 })
+  it.each([
+    { label: 'positive-height', childHeight: 4, fragmentCalls: 1, renderedText: 'measurement-fragment' },
+    { label: 'zero-height', childHeight: 0, fragmentCalls: 0, renderedText: 'zero-height-child' },
+  ])('renders a $label custom-measured slot child from its measurement-time committed fragment', async ({ childHeight, fragmentCalls, renderedText }) => {
+    const child = node({ id: 'render-child', type: 'render-child', x: 0, y: 0, width: 8, height: childHeight })
     const owner = node({ id: 'render-owner', type: 'render-owner', x: 0, y: 0, width: 20, height: 10, slots: { content: [child] } })
     let slotInstanceKey = ''
     let childRenderContext: ViewerRenderContext | undefined
@@ -778,8 +781,8 @@ describe('material measurement integration', () => {
       nodeId: request.node.id,
       nodeRevision: request.nodeRevision,
       constraintKey: createLayoutConstraintKey(request.constraints),
-      borderBox: { x: 0, y: 0, width: 8, height: 4 },
-      contentBox: { x: 0, y: 0, width: 8, height: 4 },
+      borderBox: { x: 0, y: 0, width: 8, height: childHeight },
+      contentBox: { x: 0, y: 0, width: 8, height: childHeight },
       slotBoxes: [],
       breakOpportunities: [],
       diagnostics: [],
@@ -797,7 +800,7 @@ describe('material measurement integration', () => {
         slotBoxes: [{
           slotId: 'content',
           slotInstanceKey: slot.instanceKey,
-          box: { x: 0, y: 0, width: 8, height: 4 },
+          box: { x: 0, y: 0, width: 8, height: childHeight },
           ownership: 'managed',
           clip: true,
         }],
@@ -824,7 +827,7 @@ describe('material measurement integration', () => {
             const source = payload !== null && typeof payload === 'object' && !Array.isArray(payload)
               ? payload.source
               : undefined
-            return { tree: viewerText(String(source)) }
+            return { tree: viewerText(childHeight === 0 ? 'zero-height-child' : String(source)) }
           } },
           capabilities: {},
           layout: { measure: childMeasure, fragment: { createFragment: childFragment } },
@@ -852,12 +855,15 @@ describe('material measurement integration', () => {
       diagnostics,
     })
 
-    expect(childFragment).toHaveBeenCalledTimes(1)
-    expect(childFragment.mock.calls[0]![0].plan).toBe(childInstance.layoutPlan)
+    expect(childFragment).toHaveBeenCalledTimes(fragmentCalls)
+    if (childHeight > 0)
+      expect(childFragment.mock.calls[0]![0].plan).toBe(childInstance.layoutPlan)
     expect(ownerInstance.embeddedFragmentPlan).toBeDefined()
     expect(childInstance.embeddedFragmentPlan).toBeDefined()
+    expect(childInstance.embeddedFragmentPlan?.box.height).toBe(childHeight)
+    expect(childInstance.embeddedFragmentPlan?.consumedRange).toEqual({ startBlockOffset: 0, endBlockOffset: childHeight })
     expect(childRenderContext?.fragmentPlan).toBe(childInstance.embeddedFragmentPlan)
-    expect(host.textContent).toBe('measurement-fragment')
+    expect(host.textContent).toBe(renderedText)
     expect(diagnostics).toEqual([])
   })
 
