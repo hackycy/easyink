@@ -4,6 +4,7 @@ import type { LayoutDiagnostic } from './layout-plan'
 import { deepClone } from '@easyink/shared'
 import { readNodeRepeatScope } from './layout-plan'
 import { runLayoutPipeline } from './layout-strategy'
+import { createLayoutConstraintKey, createNonFragmentingMaterialPlans } from './material-layout-plan'
 import { runPagination } from './pagination-engine'
 
 /**
@@ -50,7 +51,7 @@ export function createPagePlan(schema: DocumentSchema, options: PagePlanOptions 
         elements: options.originalSchema.elements.filter(el => !repeatedElements.some(repeated => repeated.id === el.id)),
       }
     : undefined
-  const document = runLayoutPipeline(layoutSchema)
+  const document = runLayoutPipeline(layoutSchema, { plans: createLegacyNodePlans(layoutSchema) })
   const result = runPagination(layoutSchema, document, {
     originalSchema,
     retainBlankPage: repeatedElements.some(el => !el.editorState?.hidden) ? () => true : undefined,
@@ -75,6 +76,27 @@ export function createPagePlan(schema: DocumentSchema, options: PagePlanOptions 
     })),
     diagnostics: result.diagnostics.map(toPagePlanDiagnostic),
   }
+}
+
+function createLegacyNodePlans(schema: DocumentSchema) {
+  const constraintKey = createLayoutConstraintKey({
+    availableWidth: schema.page.width,
+    availableHeight: schema.page.height,
+    unit: schema.unit,
+    writingMode: 'horizontal-tb',
+  })
+  return new Map(schema.elements.map((node) => {
+    const borderBox = { x: node.x, y: node.y, width: node.width, height: node.height }
+    return [node.id, createNonFragmentingMaterialPlans({
+      instanceKey: node.id,
+      nodeId: node.id,
+      nodeRevision: 0,
+      constraintKey,
+      pageIndex: 0,
+      borderBox,
+      fragmentBox: borderBox,
+    }).layoutPlan]
+  }))
 }
 
 function resolveRepeatedElementLocalY(node: MaterialNode<unknown>, pageHeight: number): number {

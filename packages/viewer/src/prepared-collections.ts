@@ -198,19 +198,23 @@ async function prepareProviderCursor(
     ...(source.declaredRowCount === undefined ? {} : { declaredRowCount: source.declaredRowCount }),
     keyMultiplicity: snapshotKeyMultiplicity(source.keyMultiplicity),
     async readNext(limit: number, signal: AbortSignal) {
-      if (!Number.isSafeInteger(limit) || limit <= 0)
-        throw new Error('PREPARED_COLLECTION_READ_LIMIT_INVALID')
-      throwIfAborted(ownerSignal)
-      throwIfAborted(signal)
-      if (terminal)
-        return emptyTerminalChunk()
-
-      let chunk: Awaited<ReturnType<MaterialCollectionCursor['readNext']>>
+      const onReadAbort = (): void => {
+        void closeOnce().catch(() => undefined)
+      }
+      if (!signal.aborted)
+        signal.addEventListener('abort', onReadAbort, { once: true })
       try {
-        chunk = await source.readNext(limit, signal)
+        if (!Number.isSafeInteger(limit) || limit <= 0)
+          throw new Error('PREPARED_COLLECTION_READ_LIMIT_INVALID')
         throwIfAborted(ownerSignal)
         throwIfAborted(signal)
-        const published = validateAndSnapshotChunk(chunk, usage, input.budget, source.declaredRowCount)
+        if (terminal)
+          return emptyTerminalChunk()
+
+        const chunk = await source.readNext(limit, signal)
+        throwIfAborted(ownerSignal)
+        throwIfAborted(signal)
+        const published = validateAndSnapshotChunk(chunk, limit, usage, input.budget, source.declaredRowCount)
         if (published.done) {
           terminal = true
           if (source.declaredRowCount !== undefined && usage.rows !== source.declaredRowCount)
@@ -223,8 +227,11 @@ async function prepareProviderCursor(
         const code = stableCollectionCode(cause)
         if (code.startsWith('PREPARED_COLLECTION_'))
           report(input, port, code)
-        await closeOnce()
+        await closeOnce().catch(() => undefined)
         throw cause
+      }
+      finally {
+        signal.removeEventListener('abort', onReadAbort)
       }
     },
     close: closeOnce,
@@ -297,12 +304,15 @@ class ReadonlyMapSnapshot<K, V> implements ReadonlyMap<K, V> {
 
 function validateAndSnapshotChunk(
   chunk: unknown,
+  requestedLimit: number,
   usage: CollectionUsage,
   budget: PreparedCollectionBudget,
   declaredRowCount: number | undefined,
 ): Readonly<{ records: readonly Readonly<Record<string, unknown>>[], done: boolean }> {
   if (!isPlainRecord(chunk) || !Array.isArray(chunk.records) || typeof chunk.done !== 'boolean')
     throw new Error('PREPARED_COLLECTION_CHUNK_INVALID')
+  if (chunk.records.length > requestedLimit)
+    throw new Error('PREPARED_COLLECTION_CHUNK_LIMIT_EXCEEDED')
   if (chunk.records.length === 0 && !chunk.done)
     throw new Error('PREPARED_COLLECTION_DONE_NOT_MONOTONIC')
   const snapshot = snapshotRecords(chunk.records, {

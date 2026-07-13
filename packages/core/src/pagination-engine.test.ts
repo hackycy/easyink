@@ -2,7 +2,7 @@ import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import type { LayoutFragment } from './layout-plan'
 import { describe, expect, it } from 'vitest'
 import { runLayoutPipeline } from './layout-strategy'
-import { freezeMaterialLayoutPlan } from './material-layout-plan'
+import { createLayoutConstraintKey, createNonFragmentingMaterialPlans, freezeMaterialLayoutPlan } from './material-layout-plan'
 import { runPagination } from './pagination-engine'
 
 function makeNode(id: string, overrides: Partial<MaterialNode> = {}): MaterialNode {
@@ -55,7 +55,7 @@ function resizeFragment(fragment: LayoutFragment, id: string, height: number): L
 describe('runPagination', () => {
   it('uses a fragment paginator for auto-sheets overflow instead of clipping one tall fragment', () => {
     const schema = makeSchema([makeNode('table')])
-    const document = runLayoutPipeline(schema)
+    const document = createLayoutDocument(schema)
 
     const result = runPagination(schema, document, {
       resolveFragmentPaginator: () => ({
@@ -89,7 +89,7 @@ describe('runPagination', () => {
         pagination: { strategy: 'fixed-sheets' as const, pageCount: 1 },
       },
     }
-    const document = runLayoutPipeline(schema)
+    const document = createLayoutDocument(schema)
 
     const result = runPagination(schema, document)
 
@@ -99,3 +99,25 @@ describe('runPagination', () => {
     ])
   })
 })
+
+function createLayoutDocument(schema: DocumentSchema) {
+  const constraintKey = createLayoutConstraintKey({
+    availableWidth: schema.page.width,
+    availableHeight: schema.page.height,
+    unit: schema.unit,
+    writingMode: 'horizontal-tb',
+  })
+  const plans = new Map(schema.elements.map((node) => {
+    const borderBox = { x: node.x, y: node.y, width: node.width, height: node.height }
+    return [node.id, createNonFragmentingMaterialPlans({
+      instanceKey: node.id,
+      nodeId: node.id,
+      nodeRevision: 0,
+      constraintKey,
+      pageIndex: 0,
+      borderBox,
+      fragmentBox: borderBox,
+    }).layoutPlan]
+  }))
+  return runLayoutPipeline(schema, { plans })
+}

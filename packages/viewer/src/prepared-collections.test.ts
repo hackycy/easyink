@@ -284,6 +284,112 @@ describe('createMaterialCollectionOpener', () => {
     expect(provider.open).not.toHaveBeenCalled()
   })
 
+  it('closes before rejecting an invalid read limit without entering the provider', async () => {
+    const close = vi.fn()
+    const readNext = vi.fn(async () => ({ records: [], done: true }))
+    const managed = createMaterialCollectionOpener({
+      node: collectionNode(),
+      dataRevision: 1,
+      resolveBinding: resolved([]),
+      provider: { open: async () => ({ keyMultiplicity: 'unknown', readNext, close }) },
+      budget,
+      reportDiagnostic: vi.fn(),
+    })
+    const opened = await managed.open('rows', scope, new AbortController().signal)
+    expect(opened.status).toBe('opened')
+    if (opened.status !== 'opened')
+      return
+
+    await expect(opened.cursor.readNext(0, new AbortController().signal))
+      .rejects
+      .toThrow('PREPARED_COLLECTION_READ_LIMIT_INVALID')
+    expect(readNext).not.toHaveBeenCalled()
+    expect(close).toHaveBeenCalledTimes(1)
+  })
+
+  it('closes before rejecting a pre-aborted independent read signal', async () => {
+    const close = vi.fn()
+    const readNext = vi.fn(async () => ({ records: [], done: true }))
+    const managed = createMaterialCollectionOpener({
+      node: collectionNode(),
+      dataRevision: 1,
+      resolveBinding: resolved([]),
+      provider: { open: async () => ({ keyMultiplicity: 'unknown', readNext, close }) },
+      budget,
+      reportDiagnostic: vi.fn(),
+    })
+    const opened = await managed.open('rows', scope, new AbortController().signal)
+    const controller = new AbortController()
+    const reason = new Error('read superseded')
+    controller.abort(reason)
+    expect(opened.status).toBe('opened')
+    if (opened.status !== 'opened')
+      return
+
+    await expect(opened.cursor.readNext(1, controller.signal)).rejects.toBe(reason)
+    expect(readNext).not.toHaveBeenCalled()
+    expect(close).toHaveBeenCalledTimes(1)
+  })
+
+  it('promptly closes when an independent read aborts while the provider ignores its signal', async () => {
+    const close = vi.fn()
+    let resolveRead!: (chunk: { records: Array<{ id: number }>, done: boolean }) => void
+    const pendingRead = new Promise<{ records: Array<{ id: number }>, done: boolean }>((resolve) => {
+      resolveRead = resolve
+    })
+    const managed = createMaterialCollectionOpener({
+      node: collectionNode(),
+      dataRevision: 1,
+      resolveBinding: resolved([]),
+      provider: { open: async () => ({ keyMultiplicity: 'unknown', readNext: async () => pendingRead, close }) },
+      budget,
+      reportDiagnostic: vi.fn(),
+    })
+    const opened = await managed.open('rows', scope, new AbortController().signal)
+    const controller = new AbortController()
+    const reason = new Error('read aborted in flight')
+    expect(opened.status).toBe('opened')
+    if (opened.status !== 'opened')
+      return
+
+    const reading = opened.cursor.readNext(1, controller.signal)
+    await Promise.resolve()
+    controller.abort(reason)
+    await Promise.resolve()
+    expect(close).toHaveBeenCalledTimes(1)
+    resolveRead({ records: [{ id: 1 }], done: true })
+    await expect(reading).rejects.toBe(reason)
+    expect(close).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects an oversized provider chunk before publishing records and closes once', async () => {
+    const close = vi.fn()
+    const managed = createMaterialCollectionOpener({
+      node: collectionNode(),
+      dataRevision: 1,
+      resolveBinding: resolved([]),
+      provider: {
+        open: async () => ({
+          declaredRowCount: 2,
+          keyMultiplicity: 'unknown',
+          readNext: async () => ({ records: [{ id: 1 }, { id: 2 }], done: true }),
+          close,
+        }),
+      },
+      budget,
+      reportDiagnostic: vi.fn(),
+    })
+    const opened = await managed.open('rows', scope, new AbortController().signal)
+    expect(opened.status).toBe('opened')
+    if (opened.status !== 'opened')
+      return
+
+    await expect(opened.cursor.readNext(1, new AbortController().signal))
+      .rejects
+      .toThrow('PREPARED_COLLECTION_CHUNK_LIMIT_EXCEEDED')
+    expect(close).toHaveBeenCalledTimes(1)
+  })
+
   it('closes a cursor returned after the owner signal aborted during provider open', async () => {
     const close = vi.fn()
     let resolveCursor!: (cursor: MaterialCollectionCursor) => void

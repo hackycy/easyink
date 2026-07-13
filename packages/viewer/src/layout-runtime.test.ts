@@ -1,8 +1,9 @@
 import type { LayoutDocument, MaterialLayoutPlan, MaterialMeasureRequest, PaginationResult } from '@easyink/core'
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
+import type { EffectiveOutputState } from './effective-output-state'
 import type { LayoutRuntimeDependencies, MaterialMeasurementBudget, RuntimeMaterialInstancePlan } from './layout-runtime'
 import type { ResolvedRuntimeModel } from './runtime-model-resolver'
-import { createNonFragmentingMaterialPlans, MeasureService, viewerText } from '@easyink/core'
+import { createNonFragmentingMaterialPlans, MeasureService, runPagination, viewerText } from '@easyink/core'
 import { createTestCompiledMaterialProfile, createTestMaterialManifest } from '@easyink/core/testing'
 import { describe, expect, it, vi } from 'vitest'
 import { runLayoutPipeline } from '../../core/src/layout-strategy'
@@ -253,6 +254,39 @@ describe('plan-backed core layout', () => {
     expect(source.width).toBe(10)
     expect(source.height).toBe(7)
   })
+
+  it('skips missing removed plans without expanding continuous layout while reserved plans retain space', () => {
+    const removed = node({ id: 'removed', y: 1_000, height: 100 })
+    const reserved = node({ id: 'reserved', y: 10, height: 20, output: { visibility: 'reserve' } })
+    const schema: DocumentSchema = {
+      ...document([removed, reserved]),
+      page: {
+        mode: 'continuous',
+        width: 80,
+        height: 60,
+        pagination: { strategy: 'none' },
+        reflow: { strategy: 'measure-only', preserveTrailingGap: false },
+      },
+    }
+    const reservedBox = { x: reserved.x, y: reserved.y, width: reserved.width, height: reserved.height }
+    const reservedPlan = createNonFragmentingMaterialPlans({
+      instanceKey: 'reserved',
+      nodeId: 'reserved',
+      nodeRevision: 1,
+      constraintKey: '80:60:mm:horizontal-tb',
+      pageIndex: 0,
+      borderBox: reservedBox,
+      fragmentBox: reservedBox,
+    }).layoutPlan
+
+    const layout = runLayoutPipeline(schema, { plans: new Map([['reserved', reservedPlan]]) })
+    const pagination = runPagination(schema, layout)
+
+    expect(layout.fragments.map(fragment => fragment.plan.nodeId)).toEqual(['reserved'])
+    expect(layout.height).toBe(60)
+    expect(pagination.pages).toHaveLength(1)
+    expect(pagination.pages[0]!.height).toBe(60)
+  })
 })
 
 const measurementBudget: MaterialMeasurementBudget = {
@@ -288,13 +322,14 @@ function createViewerFacet(measure?: (request: MaterialMeasureRequest) => Promis
 async function measurementHarness(input: {
   manifests: ReturnType<typeof createTestMaterialManifest>[]
   maxInFlight?: number
+  measureCacheEntries?: number
   budget?: MaterialMeasurementBudget
   provider?: Parameters<typeof createMaterialMeasureNodes>[0]['preparedCollections']
 }) {
   const profile = createTestCompiledMaterialProfile(input.manifests)
   const materials = new ProfileMaterialRuntime(profile)
   await materials.prepare(input.manifests.map(manifest => manifest.type))
-  const measureService = new MeasureService({ maxEntries: 32 })
+  const measureService = new MeasureService({ maxEntries: input.measureCacheEntries ?? 32 })
   const reportDiagnostic = vi.fn()
   const measureNodes = createMaterialMeasureNodes({
     profile,
@@ -311,13 +346,22 @@ async function measurementHarness(input: {
 }
 
 function measureInput(nodes: MaterialNode[], runtimeModels: ReadonlyMap<string, ResolvedRuntimeModel>, resourceRevision = 9) {
+  const outputStates = new Map<string, EffectiveOutputState>()
+  const visit = (item: MaterialNode): void => {
+    outputStates.set(item.id, { visibility: 'include', shouldMeasure: true, shouldPaint: true })
+    for (const children of Object.values(item.slots)) {
+      for (const child of children)
+        visit(child)
+    }
+  }
+  nodes.forEach(visit)
   return {
     document: document(nodes),
     nodeStates: new Map(),
     documentRevision: 5,
     data: { title: 'bound', rows: [{ id: 1 }] },
     dataRevision: 2,
-    outputStates: new Map(nodes.map(item => [item.id, { visibility: 'include' as const, shouldMeasure: true, shouldPaint: true }])),
+    outputStates,
     runtimeModels,
     resourceRevision,
   }
@@ -427,6 +471,46 @@ describe('material measurement integration', () => {
     expect(measured.instances.get('bad')?.status).toBe('quarantined')
   })
 
+  it('restores fallback embedded fragments on a cache hit and clears paired artifacts with the measurement runtime', async () => {
+    const source = node({ id: 'fallback', type: 'fallback' })
+    const harness = await measurementHarness({
+      manifests: [createTestMaterialManifest({ type: 'fallback', viewer: createViewerFacet() })],
+    })
+    const input = measureInput([source], new Map([
+      ['fallback', readyModel(source, { instanceKey: 'fallback', nodeId: 'fallback' })],
+    ]))
+
+    const first = await harness.measureNodes(input, new AbortController().signal)
+    const second = await harness.measureNodes(input, new AbortController().signal)
+
+    expect(first.instances.get('fallback')?.embeddedFragmentPlan).toBeDefined()
+    expect(second.instances.get('fallback')?.embeddedFragmentPlan).toEqual(
+      first.instances.get('fallback')?.embeddedFragmentPlan,
+    )
+
+    harness.measureNodes.clear()
+    const afterClear = await harness.measureNodes(input, new AbortController().signal)
+    expect(afterClear.instances.get('fallback')?.embeddedFragmentPlan).toBeDefined()
+  })
+
+  it('disposes the paired plan and artifact caches and rejects later measurement', async () => {
+    const source = node({ id: 'disposed', type: 'disposed' })
+    const harness = await measurementHarness({
+      manifests: [createTestMaterialManifest({ type: 'disposed', viewer: createViewerFacet() })],
+    })
+    const input = measureInput([source], new Map([
+      ['disposed', readyModel(source, { instanceKey: 'disposed', nodeId: 'disposed' })],
+    ]))
+    await harness.measureNodes(input, new AbortController().signal)
+
+    await harness.measureNodes.dispose()
+
+    expect(harness.measureService.size).toBe(0)
+    await expect(harness.measureNodes(input, new AbortController().signal))
+      .rejects
+      .toThrow('MATERIAL_MEASURE_RUNTIME_DISPOSED')
+  })
+
   it('measures nested slots with injective identities, fresh budgets, shared services, and union content bounds', async () => {
     const childA = node({ id: 'a', type: 'child', x: 2, y: 3, width: 5, height: 7 })
     const childB = node({ id: 'b', type: 'child', x: 10, y: 1, width: 2, height: 4 })
@@ -484,6 +568,176 @@ describe('material measurement integration', () => {
     expect(slotResult?.instanceKey).not.toBe(slotResult?.childPlans[0]?.instanceKey)
     expect(new Set(budgets).size).toBe(3)
     expect([...measured.instances.keys()]).toEqual(expect.arrayContaining(['owner', slotResult!.childPlans[0]!.instanceKey, slotResult!.childPlans[1]!.instanceKey]))
+  })
+
+  it('restores a frozen custom slot subtree on cache hits without rerunning material callbacks', async () => {
+    const child = node({ id: 'child', type: 'cached-child', model: { nested: { values: [1] } } })
+    const owner = node({ id: 'owner', type: 'cached-owner', slots: { content: [child] } })
+    const childMeasure = vi.fn(async (request: MaterialMeasureRequest): Promise<MaterialLayoutPlan> => ({
+      instanceKey: request.instanceKey,
+      nodeId: request.node.id,
+      nodeRevision: request.nodeRevision,
+      constraintKey: request.constraints.availableWidth === 10 ? '10:60:mm:horizontal-tb' : `${request.constraints.availableWidth}:60:mm:horizontal-tb`,
+      borderBox: { x: request.node.x, y: request.node.y, width: request.node.width, height: request.node.height },
+      contentBox: { x: request.node.x, y: request.node.y, width: request.node.width, height: request.node.height },
+      slotBoxes: [],
+      breakOpportunities: [],
+      diagnostics: [],
+    }))
+    const ownerMeasure = vi.fn(async (request: MaterialMeasureRequest): Promise<MaterialLayoutPlan> => {
+      await request.measureSlot({ slot: 'content', scope: request.scope, constraints: request.constraints }, request.signal)
+      return {
+        instanceKey: request.instanceKey,
+        nodeId: request.node.id,
+        nodeRevision: request.nodeRevision,
+        constraintKey: '10:60:mm:horizontal-tb',
+        borderBox: { x: request.node.x, y: request.node.y, width: request.node.width, height: request.node.height },
+        contentBox: { x: request.node.x, y: request.node.y, width: request.node.width, height: request.node.height },
+        slotBoxes: [],
+        breakOpportunities: [],
+        diagnostics: [],
+      }
+    })
+    const harness = await measurementHarness({ manifests: [
+      createTestMaterialManifest({
+        type: 'cached-owner',
+        slots: [{ id: 'content', key: { kind: 'exact', value: 'content' }, coordinateSpace: 'owner', layoutParticipation: 'owner', reparent: 'allowed' }],
+        viewer: createViewerFacet(ownerMeasure),
+      }),
+      createTestMaterialManifest({ type: 'cached-child', viewer: createViewerFacet(childMeasure) }),
+    ] })
+    const input = measureInput([owner], new Map([
+      ['owner', readyModel(owner, { instanceKey: 'owner', nodeId: 'owner' })],
+    ]))
+
+    const first = await harness.measureNodes(input, new AbortController().signal)
+    child.model.nested = { values: [9] }
+    const second = await harness.measureNodes(input, new AbortController().signal)
+    const nestedKey = [...first.instances.keys()].find(key => key !== 'owner')!
+
+    expect(ownerMeasure).toHaveBeenCalledTimes(1)
+    expect(childMeasure).toHaveBeenCalledTimes(1)
+    expect(second.instances.has(nestedKey)).toBe(true)
+    expect(second.instances.get(nestedKey)?.resolvedModel).toEqual({ nested: { values: [1] } })
+    expect(Object.isFrozen(second.instances.get(nestedKey)?.resolvedModel.nested as object)).toBe(true)
+    expect(Object.isFrozen(child.model)).toBe(false)
+  })
+
+  it('does not reuse stale subtree artifacts after invalidation or LRU eviction', async () => {
+    const child = node({ id: 'child', type: 'artifact-child' })
+    const owner = node({ id: 'owner', type: 'artifact-owner', slots: { content: [child] } })
+    const childMeasure = vi.fn(async (request: MaterialMeasureRequest): Promise<MaterialLayoutPlan> => ({
+      instanceKey: request.instanceKey,
+      nodeId: request.node.id,
+      nodeRevision: request.nodeRevision,
+      constraintKey: '10:60:mm:horizontal-tb',
+      borderBox: { x: 0, y: 0, width: 10, height: childMeasure.mock.calls.length },
+      contentBox: { x: 0, y: 0, width: 10, height: childMeasure.mock.calls.length },
+      slotBoxes: [],
+      breakOpportunities: [],
+      diagnostics: [],
+    }))
+    const ownerMeasure = vi.fn(async (request: MaterialMeasureRequest): Promise<MaterialLayoutPlan> => {
+      const slot = await request.measureSlot({ slot: 'content', scope: request.scope, constraints: request.constraints }, request.signal)
+      const height = slot.childPlans[0]!.borderBox.height
+      return {
+        instanceKey: request.instanceKey,
+        nodeId: request.node.id,
+        nodeRevision: request.nodeRevision,
+        constraintKey: '10:60:mm:horizontal-tb',
+        borderBox: { x: 0, y: 0, width: 10, height },
+        contentBox: { x: 0, y: 0, width: 10, height },
+        slotBoxes: [],
+        breakOpportunities: [],
+        diagnostics: [],
+      }
+    })
+    const harness = await measurementHarness({
+      measureCacheEntries: 2,
+      manifests: [
+        createTestMaterialManifest({
+          type: 'artifact-owner',
+          slots: [{ id: 'content', key: { kind: 'exact', value: 'content' }, coordinateSpace: 'owner', layoutParticipation: 'owner', reparent: 'allowed' }],
+          viewer: createViewerFacet(ownerMeasure),
+        }),
+        createTestMaterialManifest({ type: 'artifact-child', viewer: createViewerFacet(childMeasure) }),
+      ],
+    })
+    const models = new Map([['owner', readyModel(owner, { instanceKey: 'owner', nodeId: 'owner' })]])
+    const base = measureInput([owner], models, 9)
+
+    const first = await harness.measureNodes(base, new AbortController().signal)
+    harness.measureService.invalidateNode('owner')
+    const afterInvalidation = await harness.measureNodes(base, new AbortController().signal)
+    await harness.measureNodes(measureInput([owner], models, 10), new AbortController().signal)
+    const afterEviction = await harness.measureNodes(base, new AbortController().signal)
+
+    expect(ownerMeasure).toHaveBeenCalledTimes(4)
+    expect(childMeasure).toHaveBeenCalledTimes(3)
+    expect(first.plans.get('owner')?.borderBox.height).toBe(1)
+    expect(afterInvalidation.instances.size).toBe(2)
+    expect(afterEviction.plans.get('owner')?.borderBox.height).toBe(3)
+    expect(afterEviction.instances.size).toBe(2)
+  })
+
+  it('skips removed slot children while preserving reserved child measurement and budget isolation', async () => {
+    const removed = node({ id: 'removed', type: 'output-child' })
+    const reserved = node({ id: 'reserved', type: 'output-child' })
+    const owner = node({ id: 'owner', type: 'output-owner', slots: { content: [removed, reserved] } })
+    const childMeasure = vi.fn(async (request: MaterialMeasureRequest): Promise<MaterialLayoutPlan> => {
+      request.budget.reserveRuntimeRows(1)
+      return {
+        instanceKey: request.instanceKey,
+        nodeId: request.node.id,
+        nodeRevision: request.nodeRevision,
+        constraintKey: '10:60:mm:horizontal-tb',
+        borderBox: { x: 0, y: 0, width: 10, height: 1 },
+        contentBox: { x: 0, y: 0, width: 10, height: 1 },
+        slotBoxes: [],
+        breakOpportunities: [],
+        diagnostics: [],
+      }
+    })
+    const ownerMeasure = async (request: MaterialMeasureRequest): Promise<MaterialLayoutPlan> => {
+      const slot = await request.measureSlot({ slot: 'content', scope: request.scope, constraints: request.constraints }, request.signal)
+      return {
+        instanceKey: request.instanceKey,
+        nodeId: request.node.id,
+        nodeRevision: request.nodeRevision,
+        constraintKey: '10:60:mm:horizontal-tb',
+        borderBox: { x: 0, y: 0, width: 10, height: slot.childPlans.length },
+        contentBox: { x: 0, y: 0, width: 10, height: slot.childPlans.length },
+        slotBoxes: [],
+        breakOpportunities: [],
+        diagnostics: [],
+      }
+    }
+    const harness = await measurementHarness({
+      budget: { ...measurementBudget, maxRuntimeRows: 1 },
+      manifests: [
+        createTestMaterialManifest({
+          type: 'output-owner',
+          slots: [{ id: 'content', key: { kind: 'exact', value: 'content' }, coordinateSpace: 'owner', layoutParticipation: 'owner', reparent: 'allowed' }],
+          viewer: createViewerFacet(ownerMeasure),
+        }),
+        createTestMaterialManifest({ type: 'output-child', viewer: createViewerFacet(childMeasure) }),
+      ],
+    })
+    const input = measureInput([owner], new Map([
+      ['owner', readyModel(owner, { instanceKey: 'owner', nodeId: 'owner' })],
+    ]))
+    input.outputStates = new Map([
+      ['owner', { visibility: 'include', shouldMeasure: true, shouldPaint: true }],
+      ['removed', { visibility: 'remove', shouldMeasure: false, shouldPaint: false }],
+      ['reserved', { visibility: 'reserve', shouldMeasure: true, shouldPaint: false }],
+    ])
+
+    const measured = await harness.measureNodes(input, new AbortController().signal)
+
+    expect(childMeasure).toHaveBeenCalledTimes(1)
+    expect(childMeasure.mock.calls[0]![0].node.id).toBe('reserved')
+    expect(measured.plans.get('owner')?.borderBox.height).toBe(1)
+    expect([...measured.instances.values()].map(instance => instance.nodeId)).toEqual(['owner', 'reserved'])
   })
 
   it('detects a repeated node identity in recursive slot measurement', async () => {

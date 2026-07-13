@@ -3,7 +3,7 @@ import type { LayoutDocument, LayoutFragment } from './layout-plan'
 import type { MaterialLayoutPlan } from './material-layout-plan'
 import { rectsIntersect } from './geometry'
 import { createFragmentFromNode } from './layout-plan'
-import { createLayoutConstraintKey, createNonFragmentingMaterialPlans, freezeMaterialLayoutPlan } from './material-layout-plan'
+import { freezeMaterialLayoutPlan } from './material-layout-plan'
 import { resolvePageModel } from './page-model'
 
 export interface RunLayoutPipelineOptions {
@@ -15,14 +15,16 @@ export function runLayoutPipeline(
   schema: DocumentSchema,
   options: RunLayoutPipelineOptions = {},
 ): LayoutDocument {
-  const plans = resolvePlans(schema, options)
+  const plans = options.plans ?? new Map()
   const reflowStrategy = schema.page.reflow?.strategy ?? inferReflowStrategy(schema)
-  const originalElements = options.originalSchema?.elements ?? schema.elements
+  const elements = schema.elements.filter(node => plans.has(node.id))
+  const originalElements = (options.originalSchema?.elements ?? schema.elements)
+    .filter(node => plans.has(node.id))
   const reflowResult = reflowStrategy === 'flow-y'
-    ? reflowPlans(originalElements, schema.elements, plans)
+    ? reflowPlans(originalElements, elements, plans)
     : { plans, diagnostics: [] }
   const pageModel = resolvePageModel(schema)
-  const fragments = schema.elements.map(node => createFragmentFromNode(node, reflowResult.plans.get(node.id)!))
+  const fragments = elements.map(node => createFragmentFromNode(node, reflowResult.plans.get(node.id)!))
 
   return {
     width: pageModel.width,
@@ -30,33 +32,6 @@ export function runLayoutPipeline(
     fragments,
     diagnostics: reflowResult.diagnostics,
   }
-}
-
-function resolvePlans(schema: DocumentSchema, options: RunLayoutPipelineOptions): ReadonlyMap<string, MaterialLayoutPlan> {
-  const plans = new Map<string, MaterialLayoutPlan>()
-  for (const node of schema.elements) {
-    const supplied = options.plans?.get(node.id)
-    if (supplied) {
-      plans.set(node.id, supplied)
-      continue
-    }
-    const constraints = {
-      availableWidth: schema.page.width,
-      availableHeight: schema.page.height,
-      unit: schema.unit,
-      writingMode: 'horizontal-tb' as const,
-    }
-    plans.set(node.id, createNonFragmentingMaterialPlans({
-      instanceKey: node.id,
-      nodeId: node.id,
-      nodeRevision: 0,
-      constraintKey: createLayoutConstraintKey(constraints),
-      pageIndex: 0,
-      borderBox: { x: node.x, y: node.y, width: node.width, height: node.height },
-      fragmentBox: { x: node.x, y: node.y, width: node.width, height: node.height },
-    }).layoutPlan)
-  }
-  return plans
 }
 
 function reflowPlans(

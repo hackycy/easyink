@@ -119,6 +119,11 @@ export interface DefaultLayoutRuntimeDependencies extends MaterialMeasureNodesDe
   readonly prepareResources: LayoutRuntimeDependencies['prepareResources']
 }
 
+export type MaterialMeasureNodes = LayoutRuntimeDependencies['measureNodes'] & Readonly<{
+  readonly clear: () => void
+  readonly dispose: () => Promise<void>
+}>
+
 interface MeasuredInstanceTree {
   readonly plan: MaterialLayoutPlan
   readonly instance: RuntimeMaterialInstancePlan
@@ -167,10 +172,14 @@ export function createLayoutRuntime(deps: LayoutRuntimeDependencies): Readonly<{
 
 export function createMaterialMeasureNodes(
   deps: MaterialMeasureNodesDependencies,
-): LayoutRuntimeDependencies['measureNodes'] {
+): MaterialMeasureNodes {
   assertMeasurementDependencies(deps)
+  let artifacts = new WeakMap<MaterialLayoutPlan, MeasuredInstanceTree>()
+  let disposed = false
 
-  return async (input, signal): Promise<MeasuredMaterialSet> => {
+  const measureNodes = async (input: Parameters<LayoutRuntimeDependencies['measureNodes']>[0], signal: AbortSignal): Promise<MeasuredMaterialSet> => {
+    if (disposed)
+      throw new Error('MATERIAL_MEASURE_RUNTIME_DISPOSED')
     throwIfAborted(signal)
     const scope: MaterialRuntimeScope = Object.freeze({
       key: 'document',
@@ -197,6 +206,7 @@ export function createMaterialMeasureNodes(
         constraints,
         signal,
         ancestorNodeIds: new Set(),
+        artifacts,
       })
     }, signal)
     throwIfAborted(signal)
@@ -214,6 +224,20 @@ export function createMaterialMeasureNodes(
       instances: createReadonlyMap(instances),
     })
   }
+
+  return Object.freeze(Object.assign(measureNodes, {
+    clear(): void {
+      deps.measureService.clear()
+      artifacts = new WeakMap()
+    },
+    async dispose(): Promise<void> {
+      if (disposed)
+        return
+      disposed = true
+      deps.measureService.clear()
+      artifacts = new WeakMap()
+    },
+  }))
 }
 
 export function createDefaultLayoutRuntime(
@@ -258,6 +282,7 @@ async function measureInstance(context: {
   readonly constraints: LayoutConstraints
   readonly signal: AbortSignal
   readonly ancestorNodeIds: ReadonlySet<string>
+  readonly artifacts: WeakMap<MaterialLayoutPlan, MeasuredInstanceTree>
 }): Promise<MeasuredInstanceTree> {
   const { deps, input, node, instanceKey, scope, model, constraints, signal } = context
   throwIfAborted(signal)
@@ -273,6 +298,7 @@ async function measureInstance(context: {
   const constraintKey = createLayoutConstraintKey(constraints)
   const descendants: MeasuredInstanceTree['entries'][number][] = []
   let embeddedFragmentPlan: MaterialFragmentPlan | undefined
+  let callbackRan = false
 
   const plan = await deps.measureService.measure({
     mode: 'authoritative',
@@ -286,6 +312,7 @@ async function measureInstance(context: {
     constraintKey,
     signal,
     measure: async (measureSignal) => {
+      callbackRan = true
       const budget = createMaterialLayoutBudgetToken({
         maxRuntimeRows: deps.budget.maxRuntimeRows,
         maxLayoutFacts: deps.budget.maxLayoutFacts,
@@ -354,7 +381,8 @@ async function measureInstance(context: {
             throwIfAborted(slotSignal)
             if (slotSignal !== measureSignal)
               throw new Error('MATERIAL_SLOT_MEASURE_SIGNAL_MISMATCH')
-            const children = node.slots[slotInput.slot] ?? []
+            const children = (node.slots[slotInput.slot] ?? [])
+              .filter(child => input.outputStates.get(child.id)?.shouldMeasure === true)
             const slotInstanceKey = JSON.stringify([
               'material-slot',
               instanceKey,
@@ -389,6 +417,7 @@ async function measureInstance(context: {
                 constraints: slotInput.constraints,
                 signal: measureSignal,
                 ancestorNodeIds,
+                artifacts: context.artifacts,
               })
             }, measureSignal)
             for (const childTree of childTrees)
@@ -407,6 +436,12 @@ async function measureInstance(context: {
     },
   })
   const committedPlan = plan as MaterialLayoutPlan
+  if (!callbackRan) {
+    const cached = context.artifacts.get(committedPlan)
+    if (!cached)
+      throw new Error('MATERIAL_MEASURE_SUBTREE_ARTIFACT_MISSING')
+    return cached
+  }
   const instance: RuntimeMaterialInstancePlan = Object.freeze({
     instanceKey,
     nodeId: node.id,
@@ -420,11 +455,13 @@ async function measureInstance(context: {
     ...(embeddedFragmentPlan === undefined ? {} : { embeddedFragmentPlan }),
   })
   const ownEntry = Object.freeze({ instanceKey, plan: committedPlan, instance })
-  return Object.freeze({
+  const tree = Object.freeze({
     plan: committedPlan,
     instance,
     entries: Object.freeze([ownEntry, ...descendants]),
   })
+  context.artifacts.set(committedPlan, tree)
+  return tree
 }
 
 function unionPlanBounds(plans: readonly MaterialLayoutPlan[]): Readonly<{ x: number, y: number, width: number, height: number }> {
