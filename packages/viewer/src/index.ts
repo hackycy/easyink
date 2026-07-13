@@ -15,6 +15,7 @@ export type { ViewerFacetServices } from './material-runtime'
 export { PrintPolicyError, resolvePrintPolicy } from './print-policy'
 export { mountCommittedMaterial, mountMaterialTree, renderPages, RenderSurface } from './render-surface'
 export type {
+  AtomicRenderSurfaceOptions,
   MountCommittedMaterialOptions,
   MountMaterialTreeOptions,
   PageDOM,

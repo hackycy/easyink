@@ -51,6 +51,10 @@ export interface RenderSurfaceTransaction {
   readonly checkpoint: () => void
 }
 
+export interface AtomicRenderSurfaceOptions {
+  readonly onDiagnostic?: (diagnostic: ViewerDiagnosticEvent) => void
+}
+
 export type RenderSurfaceBuild = (
   root: HTMLElement,
   transaction: RenderSurfaceTransaction,
@@ -93,13 +97,15 @@ export function mountMaterialTree(
 
 export class RenderSurface {
   readonly host: HTMLElement
+  private readonly onDiagnostic?: AtomicRenderSurfaceOptions['onDiagnostic']
   private generation = 0
   private disposed = false
   private currentRoot?: HTMLElement
   private currentDisposers: RenderSurfaceDisposer[] = []
 
-  constructor(host: HTMLElement) {
+  constructor(host: HTMLElement, options: AtomicRenderSurfaceOptions = {}) {
     this.host = host
+    this.onDiagnostic = options.onDiagnostic
   }
 
   async commitAtomically(build: RenderSurfaceBuild, signal: AbortSignal): Promise<HTMLElement> {
@@ -134,7 +140,7 @@ export class RenderSurface {
 
     try {
       checkpoint()
-      registerBuildResult(await build(root, transaction), register)
+      registerBuildResult(await build(root, transaction), registered, disposers)
       checkpoint()
     }
     catch (error) {
@@ -163,8 +169,8 @@ export class RenderSurface {
     this.currentDisposers = disposers
     oldRoot?.remove()
     const cleanupErrors = disposeRenderSurfaceDisposers(oldDisposers)
-    if (cleanupErrors.length > 0)
-      throw new AggregateError(cleanupErrors, 'RENDER_SURFACE_DISPOSE_FAILED')
+    for (const error of cleanupErrors)
+      this.reportCleanupError(error)
     return root
   }
 
@@ -181,6 +187,23 @@ export class RenderSurface {
     const errors = disposeRenderSurfaceDisposers(disposers)
     if (errors.length > 0)
       throw new AggregateError(errors, 'RENDER_SURFACE_DISPOSE_FAILED')
+  }
+
+  private reportCleanupError(error: unknown): void {
+    const thrown = safeSummarizeThrown(error)
+    try {
+      this.onDiagnostic?.(Object.freeze({
+        category: 'viewer',
+        severity: 'warning',
+        code: 'MATERIAL_DISPOSE_ERROR',
+        message: thrown.message,
+        scope: 'material',
+        cause: thrown.cause,
+      }))
+    }
+    catch {
+      // A diagnostic observer cannot invalidate an already committed root.
+    }
   }
 }
 
@@ -205,6 +228,7 @@ interface CommittedMaterialRenderState {
   readonly maxNodes: number
   readonly renderBudget: CommittedRenderBudgetController
   readonly hostImperativeDom: ReadonlySet<string>
+  readonly declaredSlotKeys: WeakMap<RuntimeMaterialInstancePlan, ReadonlySet<string>>
 }
 
 interface CommittedRenderBudgetController {
@@ -223,6 +247,7 @@ export function mountCommittedMaterial(
     maxNodes,
     renderBudget: createCommittedRenderBudget(maxNodes),
     hostImperativeDom: new Set(input.browserDom?.imperativeDom ?? []),
+    declaredSlotKeys: new WeakMap<RuntimeMaterialInstancePlan, ReadonlySet<string>>(),
   })
   return mountCommittedInstance(
     host,
@@ -341,14 +366,16 @@ function renderCommittedSlot(
   state: CommittedMaterialRenderState,
   ancestors: ReadonlySet<string>,
 ): ViewerRenderTree {
-  const declared = owner.layoutPlan.slotBoxes.some(slot => slot.slotInstanceKey === slotInstanceKey)
+  const declared = getDeclaredSlotKeys(owner, state).has(slotInstanceKey)
   const mapped = Object.hasOwn(owner.slotChildren, slotInstanceKey)
   if (!declared || !mapped) {
     reportSlotMissing(state, owner, slotInstanceKey)
-    state.renderBudget.token.reserveNodes('fragment', 2)
+    state.renderBudget.token.reserveNodes('fragment', 1)
+    state.renderBudget.token.reserveNodes('text', 1)
     return viewerFragment([viewerText('[slot unavailable]')])
   }
 
+  state.renderBudget.token.reserveNodes('fragment', 1)
   const trees: ViewerRenderTree[] = []
   for (const childInstanceKey of owner.slotChildren[slotInstanceKey]!) {
     const child = state.input.committedPlan.runtimeInstances.get(childInstanceKey)
@@ -359,14 +386,17 @@ function renderCommittedSlot(
         nodeId: owner.nodeId,
         detail: { slotInstanceKey, childInstanceKey },
       })
+      state.renderBudget.token.reserveNodes('text', 1)
       trees.push(viewerText('[slot unavailable]'))
       continue
     }
     if (!child || !child.embeddedFragmentPlan || !hasCommittedIdentity(childInstanceKey, child, child.embeddedFragmentPlan)) {
       reportSlotMissing(state, owner, slotInstanceKey, childInstanceKey)
+      state.renderBudget.token.reserveNodes('text', 1)
       trees.push(viewerText('[slot unavailable]'))
       continue
     }
+    state.renderBudget.token.reserveNodes('imperative', 1)
     trees.push(createBrowserDomHostMount(ownerCapabilities, childHost => mountCommittedInstance(
       childHost,
       childInstanceKey,
@@ -375,8 +405,21 @@ function renderCommittedSlot(
       ancestors,
     )))
   }
-  state.renderBudget.token.reserveNodes('fragment', trees.length + 1)
   return viewerFragment(trees)
+}
+
+function getDeclaredSlotKeys(
+  owner: RuntimeMaterialInstancePlan,
+  state: CommittedMaterialRenderState,
+): ReadonlySet<string> {
+  const cached = state.declaredSlotKeys.get(owner)
+  if (cached)
+    return cached
+  const keys = new Set<string>()
+  for (const slot of owner.layoutPlan.slotBoxes)
+    keys.add(slot.slotInstanceKey)
+  state.declaredSlotKeys.set(owner, keys)
+  return keys
 }
 
 function mountCommittedSentinel(
@@ -496,16 +539,30 @@ function reportCommittedDiagnostic(
 
 function registerBuildResult(
   result: RenderSurfaceBuildResult,
-  register: (disposer: RenderSurfaceDisposer) => void,
+  registered: Set<RenderSurfaceDisposer>,
+  disposers: RenderSurfaceDisposer[],
 ): void {
   if (result === undefined)
     return
-  if (Array.isArray(result)) {
-    for (const disposer of result)
-      register(disposer)
-    return
+  const candidates = Array.isArray(result) ? result : [result as RenderSurfaceDisposer]
+  let firstError: unknown
+  for (const candidate of candidates) {
+    try {
+      if (!isRenderSurfaceDisposer(candidate)) {
+        firstError ??= new TypeError('RENDER_SURFACE_DISPOSER_INVALID')
+        continue
+      }
+      if (!registered.has(candidate)) {
+        registered.add(candidate)
+        disposers.push(candidate)
+      }
+    }
+    catch (error) {
+      firstError ??= error
+    }
   }
-  register(result as RenderSurfaceDisposer)
+  if (firstError)
+    throw firstError
 }
 
 function isRenderSurfaceDisposer(value: unknown): value is RenderSurfaceDisposer {
