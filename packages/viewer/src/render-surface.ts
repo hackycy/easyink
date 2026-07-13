@@ -629,7 +629,9 @@ export function renderPages(
   const pageVirtualizer = virtualizer ?? new PageDomVirtualizer({ createIntersectionObserver: null })
   const ownsVirtualizer = virtualizer === undefined
   const pageIndices = new Set<number>()
+  const previousChildren = Object.freeze([...container.childNodes])
   let remainingPages = 0
+  let swapStarted = false
 
   try {
     for (const page of committedPages) {
@@ -697,14 +699,24 @@ export function renderPages(
     }
     if (ownsVirtualizer && remainingPages === 0)
       pageVirtualizer.dispose()
+    swapStarted = true
     container.replaceChildren(candidateFragment)
   }
   catch (error) {
     const cleanupErrors: unknown[] = []
     for (let index = pageDOMs.length - 1; index >= 0; index--)
       pageDOMs[index]!.dispose(cleanupError => cleanupErrors.push(cleanupError))
-    if (cleanupErrors.length > 0)
-      throw new AggregateError([error, ...cleanupErrors], 'PAGE_DOM_RENDER_FAILED')
+    const restoreErrors: unknown[] = []
+    if (swapStarted) {
+      try {
+        container.replaceChildren(...previousChildren)
+      }
+      catch (restoreError) {
+        restoreErrors.push(restoreError)
+      }
+    }
+    if (cleanupErrors.length > 0 || restoreErrors.length > 0)
+      throw new AggregateError([error, ...cleanupErrors, ...restoreErrors], 'PAGE_DOM_RENDER_FAILED')
     throw error
   }
 
@@ -857,6 +869,23 @@ function createVirtualPageWrapper(
 }
 
 function snapshotPageEntry(page: PagePlanEntry): PagePlanEntry {
+  if (!page || typeof page !== 'object')
+    throw new TypeError('PAGE_DOM_PAGE_INVALID')
+  const { index, width, height, yOffset, copyIndex, isBlank, elements: sourceElements, fragments: sourceFragments } = page
+  if (!Number.isSafeInteger(index) || index < 0)
+    throw new RangeError('PAGE_DOM_PAGE_INDEX_INVALID')
+  if (!Number.isFinite(width) || width < 0 || !Number.isFinite(height) || height < 0)
+    throw new RangeError('PAGE_DOM_DIMENSION_INVALID')
+  if (!Number.isFinite(yOffset))
+    throw new RangeError('PAGE_DOM_Y_OFFSET_INVALID')
+  if (copyIndex !== undefined && (!Number.isSafeInteger(copyIndex) || copyIndex < 0))
+    throw new RangeError('PAGE_DOM_COPY_INDEX_INVALID')
+  if (isBlank !== undefined && typeof isBlank !== 'boolean')
+    throw new TypeError('PAGE_DOM_IS_BLANK_INVALID')
+  if (!Array.isArray(sourceElements))
+    throw new TypeError('PAGE_DOM_ELEMENTS_INVALID')
+  if (sourceFragments !== undefined && !Array.isArray(sourceFragments))
+    throw new TypeError('PAGE_DOM_FRAGMENTS_INVALID')
   const nodesByReference = new WeakMap<MaterialNode<unknown>, MaterialNode<unknown>>()
   const nodesById = new Map<string, MaterialNode<unknown>>()
   const layoutsByReference = new WeakMap<MaterialLayoutPlan, MaterialLayoutPlan>()
@@ -888,18 +917,23 @@ function snapshotPageEntry(page: PagePlanEntry): PagePlanEntry {
     fragmentsByReference.set(plan, frozen)
     return frozen
   }
-  const elements = Object.freeze(page.elements.map(snapshotNode))
-  const fragments = page.fragments === undefined
+  const elements = Object.freeze(sourceElements.map(snapshotNode))
+  const fragments = sourceFragments === undefined
     ? undefined
-    : Object.freeze(page.fragments.map(fragment => Object.freeze({
+    : Object.freeze(sourceFragments.map(fragment => Object.freeze({
         node: snapshotNode(fragment.node),
         layoutPlan: snapshotLayout(fragment.layoutPlan),
         fragmentPlan: snapshotFragment(fragment.fragmentPlan),
       })))
   return Object.freeze({
-    ...page,
+    index,
+    width,
+    height,
     elements,
     ...(fragments === undefined ? {} : { fragments }),
+    ...(isBlank === undefined ? {} : { isBlank }),
+    ...(copyIndex === undefined ? {} : { copyIndex }),
+    yOffset,
   }) as PagePlanEntry
 }
 

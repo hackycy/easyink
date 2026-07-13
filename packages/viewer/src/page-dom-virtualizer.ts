@@ -525,6 +525,10 @@ export class PageDomVirtualizer {
   private handleIntersections(entries: readonly IntersectionObserverEntry[]): void {
     if (this.disposed || this.rollingBackRegistration)
       return
+    this.runPublicMutation(() => this.handleIntersectionsInternal(entries))
+  }
+
+  private handleIntersectionsInternal(entries: readonly IntersectionObserverEntry[]): void {
     for (const observed of entries) {
       const index = this.indexByWrapper.get(observed.target)
       if (index === undefined || this.entries.get(index)?.wrapper !== observed.target)

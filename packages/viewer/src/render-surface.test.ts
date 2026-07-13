@@ -861,6 +861,74 @@ describe('renderPages', () => {
     expect([...container.childNodes]).toEqual([previous])
   })
 
+  it.each([
+    { name: 'negative index', override: { index: -1 }, error: 'PAGE_DOM_PAGE_INDEX_INVALID' },
+    { name: 'fractional index', override: { index: 0.5 }, error: 'PAGE_DOM_PAGE_INDEX_INVALID' },
+    { name: 'unsafe index', override: { index: Number.MAX_SAFE_INTEGER + 1 }, error: 'PAGE_DOM_PAGE_INDEX_INVALID' },
+    { name: 'NaN width', override: { width: Number.NaN }, error: 'PAGE_DOM_DIMENSION_INVALID' },
+    { name: 'infinite height', override: { height: Number.POSITIVE_INFINITY }, error: 'PAGE_DOM_DIMENSION_INVALID' },
+    { name: 'negative width', override: { width: -1 }, error: 'PAGE_DOM_DIMENSION_INVALID' },
+    { name: 'non-number height', override: { height: '60' }, error: 'PAGE_DOM_DIMENSION_INVALID' },
+    { name: 'NaN yOffset', override: { yOffset: Number.NaN }, error: 'PAGE_DOM_Y_OFFSET_INVALID' },
+    { name: 'infinite yOffset', override: { yOffset: Number.NEGATIVE_INFINITY }, error: 'PAGE_DOM_Y_OFFSET_INVALID' },
+    { name: 'negative copyIndex', override: { copyIndex: -1 }, error: 'PAGE_DOM_COPY_INDEX_INVALID' },
+    { name: 'fractional copyIndex', override: { copyIndex: 1.5 }, error: 'PAGE_DOM_COPY_INDEX_INVALID' },
+    { name: 'non-boolean isBlank', override: { isBlank: 'false' }, error: 'PAGE_DOM_IS_BLANK_INVALID' },
+    { name: 'non-array elements', override: { elements: null }, error: 'PAGE_DOM_ELEMENTS_INVALID' },
+    { name: 'non-array fragments', override: { fragments: {} }, error: 'PAGE_DOM_FRAGMENTS_INVALID' },
+  ])('rejects page plan $name before replacing existing DOM', async ({ override, error }) => {
+    const container = document.createElement('div')
+    const previous = document.createElement('span')
+    previous.textContent = 'previous'
+    container.appendChild(previous)
+    const replace = vi.spyOn(container, 'replaceChildren')
+    const materials = await createMaterials({ render: () => ({ tree: viewerText('unused') }) })
+    const page = {
+      index: 0,
+      width: 80,
+      height: 60,
+      elements: [],
+      yOffset: 0,
+      ...override,
+    } as unknown as PagePlanEntry
+
+    expect(() => renderPages([page], materials, {
+      container,
+      document,
+      zoom: 1,
+      unit: 'mm',
+      data: {},
+      resolvedPropsMap: new Map(),
+      pageSchema: { mode: 'fixed', width: 80, height: 60 },
+    }, [])).toThrow(error)
+
+    expect(replace).not.toHaveBeenCalled()
+    expect([...container.childNodes]).toEqual([previous])
+  })
+
+  it('ignores unknown caller page fields without evaluating them', async () => {
+    const container = document.createElement('div')
+    const materials = await createMaterials({ render: () => ({ tree: viewerText('page') }) })
+    const page: PagePlanEntry = { index: 0, width: 80, height: 60, elements: [], yOffset: 0 }
+    Object.defineProperty(page, 'sheetIndex', {
+      enumerable: true,
+      get() {
+        throw new Error('unknown field evaluated')
+      },
+    })
+
+    expect(() => renderPages([page], materials, {
+      container,
+      document,
+      zoom: 1,
+      unit: 'mm',
+      data: {},
+      resolvedPropsMap: new Map(),
+      pageSchema: { mode: 'fixed', width: 80, height: 60 },
+    }, [])).not.toThrow()
+    expect(container.querySelector('[data-page-slot-index="0"]')).not.toBeNull()
+  })
+
   it('rolls back previously registered page wrappers when a later page is invalid', async () => {
     const container = document.createElement('div')
     const materials = await createMaterials({ render: () => ({ tree: viewerText('page') }) })
@@ -979,11 +1047,140 @@ describe('renderPages', () => {
       browserDom: { maxNodes: 10, imperativeDom: ['chart'] },
     }, [], virtualizer)).toThrow(swapError)
 
-    expect(replaceCalls).toBe(1)
+    expect(replaceCalls).toBe(2)
     expect(container.textContent).toBe('old active')
     expect(dispose).toHaveBeenCalledTimes(1)
     virtualizer.dispose()
     expect(dispose).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([0, 2])('restores %i old nodes when the atomic swap mutates before throwing', async (oldNodeCount) => {
+    const container = document.createElement('div')
+    const oldChildren = Array.from({ length: oldNodeCount }, (_, index) => {
+      const child = document.createElement('span')
+      child.textContent = `old ${index}`
+      container.appendChild(child)
+      return child
+    })
+    const dispose = vi.fn()
+    const materials = await createMaterials({
+      render: () => ({
+        tree: viewerImperativeDom('chart', (host) => {
+          const mount = host.render(viewerText('candidate mounted'))
+          return () => {
+            mount.dispose()
+            dispose()
+          }
+        }),
+      }),
+    }, { imperativeDom: ['chart'] })
+    const node: MaterialNode = {
+      id: 'post-swap-candidate',
+      type: 'custom',
+      x: 0,
+      y: 0,
+      width: 10,
+      height: 10,
+      modelVersion: 1,
+      model: {},
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
+    }
+    const swapError = new Error('post-swap boom')
+    const originalReplace = container.replaceChildren.bind(container)
+    let replaceCalls = 0
+    container.replaceChildren = (...nodes) => {
+      replaceCalls++
+      originalReplace(...nodes)
+      if (replaceCalls === 1)
+        throw swapError
+    }
+    const virtualizer = new PageDomVirtualizer({ createIntersectionObserver: null })
+
+    expect(() => renderPages([{ index: 0, width: 80, height: 60, elements: [node], yOffset: 0 }], materials, {
+      container,
+      document,
+      zoom: 1,
+      unit: 'mm',
+      data: {},
+      resolvedPropsMap: new Map(),
+      pageSchema: { mode: 'fixed', width: 80, height: 60 },
+      browserDom: { maxNodes: 10, imperativeDom: ['chart'] },
+    }, [], virtualizer)).toThrow(swapError)
+
+    expect(replaceCalls).toBe(2)
+    expect([...container.childNodes]).toEqual(oldChildren)
+    expect(dispose).toHaveBeenCalledTimes(1)
+    virtualizer.dispose()
+    expect(dispose).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps swap primary before candidate cleanup and restore errors', async () => {
+    const container = document.createElement('div')
+    const oldChild = document.createElement('span')
+    oldChild.textContent = 'old active'
+    container.appendChild(oldChild)
+    const swapError = new Error('post-swap primary')
+    const cleanupError = new Error('candidate cleanup')
+    const restoreError = new Error('old restore')
+    const materials = await createMaterials({
+      render: () => ({
+        tree: viewerImperativeDom('chart', (host) => {
+          host.render(viewerText('candidate mounted'))
+          return () => {
+            throw cleanupError
+          }
+        }),
+      }),
+    }, { imperativeDom: ['chart'] })
+    const node: MaterialNode = {
+      id: 'aggregate-swap-candidate',
+      type: 'custom',
+      x: 0,
+      y: 0,
+      width: 10,
+      height: 10,
+      modelVersion: 1,
+      model: {},
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
+    }
+    const originalReplace = container.replaceChildren.bind(container)
+    let replaceCalls = 0
+    container.replaceChildren = (...nodes) => {
+      replaceCalls++
+      if (replaceCalls === 1) {
+        originalReplace(...nodes)
+        throw swapError
+      }
+      throw restoreError
+    }
+    const virtualizer = new PageDomVirtualizer({ createIntersectionObserver: null })
+    let thrown: unknown
+
+    try {
+      renderPages([{ index: 0, width: 80, height: 60, elements: [node], yOffset: 0 }], materials, {
+        container,
+        document,
+        zoom: 1,
+        unit: 'mm',
+        data: {},
+        resolvedPropsMap: new Map(),
+        pageSchema: { mode: 'fixed', width: 80, height: 60 },
+        browserDom: { maxNodes: 10, imperativeDom: ['chart'] },
+      }, [], virtualizer)
+    }
+    catch (error) {
+      thrown = error
+    }
+
+    expect(thrown).toBeInstanceOf(AggregateError)
+    expect((thrown as AggregateError).message).toBe('PAGE_DOM_RENDER_FAILED')
+    expect(flattenErrorLeaves(thrown)).toEqual([swapError, cleanupError, restoreError])
+    expect(replaceCalls).toBe(2)
+    virtualizer.dispose()
   })
 
   it('provides frozen canonical fallback layout facts to legacy material renderers', async () => {
@@ -1845,4 +2042,10 @@ async function createNestedSurface(input: {
 
 function pageWith(node: MaterialNode): PagePlanEntry[] {
   return [{ index: 0, width: 80, height: 60, elements: [node], yOffset: 0 }]
+}
+
+function flattenErrorLeaves(error: unknown): unknown[] {
+  if (!(error instanceof AggregateError))
+    return [error]
+  return error.errors.flatMap(flattenErrorLeaves)
 }

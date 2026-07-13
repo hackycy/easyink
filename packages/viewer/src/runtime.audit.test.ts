@@ -132,14 +132,17 @@ describe('viewer audit risk regressions', () => {
     let calls = 0
     container.replaceChildren = (...nodes) => {
       calls++
-      if (calls === 1)
+      if (calls === 1) {
+        originalReplace(...nodes)
         throw swapError
+      }
       originalReplace(...nodes)
     }
 
     await expect(viewer.updateData({ next: true })).rejects.toThrow(swapError)
 
     expect([...container.childNodes]).toEqual(oldChildren)
+    expect(calls).toBe(2)
     expect(state._pageVirtualizer).toBe(oldVirtualizer)
     expect(() => oldVirtualizer!.updateVisible(0, 0, 0)).not.toThrow()
     container.replaceChildren = originalReplace

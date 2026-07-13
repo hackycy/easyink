@@ -393,68 +393,62 @@ describe('page DOM virtualizer', () => {
   })
 
   it('distinguishes mount records when replacement mounts return the same disposer', () => {
-    let callback: IntersectionObserverCallback | undefined
-    let replacementWrapper: HTMLElement | undefined
-    const observed = new Set<Element>()
-    const primary = new Error('replacement observe boom')
-    const sharedDispose = vi.fn()
-    const observer = {
-      observe(target: Element) {
-        observed.add(target)
-        callback?.([intersection(target, true)], observer as unknown as IntersectionObserver)
-        if (target === replacementWrapper) {
-          callback?.([intersection(target, false)], observer as unknown as IntersectionObserver)
-          callback?.([intersection(target, true)], observer as unknown as IntersectionObserver)
-          throw primary
-        }
-      },
-      unobserve(target: Element) {
-        observed.delete(target)
-      },
-      disconnect() {
-        observed.clear()
-      },
+    const observer = createObserverHarness()
+    const virtualizer = new PageDomVirtualizer({ overscan: 0, createIntersectionObserver: observer.create })
+    const primary = new Error('retained release boom')
+    let disposeCalls = 0
+    const sharedDispose = vi.fn(() => {
+      disposeCalls++
+      if (disposeCalls === 1)
+        throw primary
+    })
+    const retainedWrapper = document.createElement('div')
+    let retainedMountCount = 0
+    const retainedMount = vi.fn(() => {
+      retainedWrapper.replaceChildren(`retained mount ${++retainedMountCount}`)
+      return sharedDispose
+    })
+    virtualizer.register({ index: 1, widthPx: 10, heightPx: 20, wrapper: retainedWrapper, mount: retainedMount })
+    virtualizer.updateVisible(1, 1, 0)
+    virtualizer.updateVisible(2, 2, 0)
+    expect(retainedMount).toHaveBeenCalledTimes(1)
+
+    const candidateWrapper = document.createElement('div')
+    candidateWrapper.textContent = 'candidate original'
+    const candidateMount = vi.fn(() => {
+      candidateWrapper.replaceChildren('candidate mounted')
+      return sharedDispose
+    })
+    let thrown: unknown
+    try {
+      virtualizer.register({
+        index: 2,
+        widthPx: 30,
+        heightPx: 40,
+        wrapper: candidateWrapper,
+        mount: candidateMount,
+      })
     }
-    const virtualizer = new PageDomVirtualizer({
-      overscan: 0,
-      createIntersectionObserver(nextCallback) {
-        callback = nextCallback
-        return observer
-      },
-    })
-    const oldWrapper = document.createElement('div')
-    let oldMountCount = 0
-    const oldMount = vi.fn(() => {
-      oldWrapper.replaceChildren(`old mount ${++oldMountCount}`)
-      return sharedDispose
-    })
-    virtualizer.register({ index: 0, widthPx: 10, heightPx: 20, wrapper: oldWrapper, mount: oldMount })
-    expect(oldMount).toHaveBeenCalledTimes(1)
+    catch (error) {
+      thrown = error
+    }
 
-    replacementWrapper = document.createElement('div')
-    replacementWrapper.textContent = 'replacement original'
-    const replacementMount = vi.fn(() => {
-      replacementWrapper!.replaceChildren('replacement mounted')
-      return sharedDispose
-    })
-    expect(() => virtualizer.register({
-      index: 0,
-      widthPx: 30,
-      heightPx: 40,
-      wrapper: replacementWrapper,
-      mount: replacementMount,
-    })).toThrow(primary)
+    expect(thrown).toBeInstanceOf(AggregateError)
+    expect((thrown as AggregateError).message).toBe('PAGE_DOM_UNMOUNT_FAILED')
+    expect(flattenAggregateErrors(thrown)).toEqual([primary])
+    expect(sharedDispose).toHaveBeenCalledTimes(2)
+    expect(candidateMount).toHaveBeenCalledTimes(1)
+    expect(retainedMount).toHaveBeenCalledTimes(2)
+    expect(retainedWrapper.textContent).toBe('retained mount 2')
+    expect(candidateWrapper.textContent).toBe('candidate original')
+    expect(observer.observed).toEqual(new Set([retainedWrapper]))
 
-    expect(sharedDispose).toHaveBeenCalledTimes(4)
-    expect(replacementMount).toHaveBeenCalledTimes(3)
-    expect(oldMount).toHaveBeenCalledTimes(2)
-    expect(oldWrapper.textContent).toBe('old mount 2')
-    expect(replacementWrapper.textContent).toBe('replacement original')
-    expect(observed).toEqual(new Set([oldWrapper]))
-    expect(virtualizer.unregister(0)).toBe(true)
-    expect(sharedDispose).toHaveBeenCalledTimes(5)
+    virtualizer.register({ index: 2, widthPx: 30, heightPx: 40, wrapper: candidateWrapper, mount: candidateMount })
+    expect(candidateMount).toHaveBeenCalledTimes(2)
+    expect(sharedDispose).toHaveBeenCalledTimes(3)
+    expect(observer.observed).toEqual(new Set([retainedWrapper, candidateWrapper]))
     virtualizer.dispose()
-    expect(sharedDispose).toHaveBeenCalledTimes(5)
+    expect(sharedDispose).toHaveBeenCalledTimes(4)
 
     const duplicateAcrossIndices = vi.fn()
     const fallback = new PageDomVirtualizer({ createIntersectionObserver: null })
@@ -540,6 +534,86 @@ describe('page DOM virtualizer', () => {
       expect(observed).toEqual(new Set())
     }
   })
+
+  it('rolls back registration when observe synchronously enters the observer callback', async () => {
+    let callback!: IntersectionObserverCallback
+    let emitSynchronously = true
+    const observed = new Set<Element>()
+    const observer = {
+      observe(target: Element) {
+        observed.add(target)
+        if (emitSynchronously)
+          callback([intersection(target, true)], observer as unknown as IntersectionObserver)
+      },
+      unobserve(target: Element) {
+        observed.delete(target)
+      },
+      disconnect() {
+        observed.clear()
+      },
+    }
+    const virtualizer = new PageDomVirtualizer({
+      createIntersectionObserver(nextCallback) {
+        callback = nextCallback
+        return observer
+      },
+    })
+    const page = createEntry(0)
+
+    expect(() => virtualizer.register(page.entry)).toThrow('PAGE_DOM_MUTATION_REENTRANT')
+    expect(observed).toEqual(new Set())
+    expect(page.mount).not.toHaveBeenCalled()
+
+    emitSynchronously = false
+    virtualizer.register(page.entry)
+    await Promise.resolve()
+    expect(() => callback(
+      [intersection(page.entry.wrapper, false)],
+      observer as unknown as IntersectionObserver,
+    )).not.toThrow()
+    expect(page.dispose).toHaveBeenCalledTimes(1)
+    virtualizer.dispose()
+  })
+
+  it.each(['dispose', 'unregister', 'updateVisible'] as const)(
+    'rejects reentrant %s from async observer-driven cleanup without corrupting state',
+    async (operation) => {
+      const observer = createObserverHarness()
+      let virtualizer!: PageDomVirtualizer
+      const reentrantErrors: unknown[] = []
+      const first = createEntry(0, 10, 20, () => {
+        try {
+          if (operation === 'dispose')
+            virtualizer.dispose()
+          else if (operation === 'unregister')
+            virtualizer.unregister(1)
+          else
+            virtualizer.updateVisible(1, 1, 0)
+        }
+        catch (error) {
+          reentrantErrors.push(error)
+        }
+      })
+      const second = createEntry(1)
+      virtualizer = new PageDomVirtualizer({ overscan: 0, createIntersectionObserver: observer.create })
+      virtualizer.register(first.entry)
+      virtualizer.register(second.entry)
+      await Promise.resolve()
+
+      observer.emit([
+        intersection(first.entry.wrapper, false),
+        intersection(second.entry.wrapper, true),
+      ])
+
+      expect(reentrantErrors).toHaveLength(1)
+      expect((reentrantErrors[0] as Error).message).toBe('PAGE_DOM_MUTATION_REENTRANT')
+      expect(first.dispose).toHaveBeenCalledTimes(1)
+      expect(currentMountedIndices([first, second])).toEqual([1])
+      expect(() => virtualizer.updateVisible(1, 1, 0)).not.toThrow()
+      virtualizer.dispose()
+      expect(second.dispose).toHaveBeenCalledTimes(1)
+    },
+  )
 
   it('prevents the same index from mounting twice during a reentrant mount callback', () => {
     const virtualizer = new PageDomVirtualizer({ createIntersectionObserver: null })
