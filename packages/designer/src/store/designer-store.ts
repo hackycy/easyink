@@ -206,6 +206,7 @@ export class DesignerStore {
     })
     if (!report.valid)
       return false
+    this.editingSession.exitAll()
     this.documentTransactions.reset(candidate, report.nodeStates)
     this._materialDiagnostics = report.diagnostics
     this._materialNodeStates = report.nodeStates
@@ -216,6 +217,7 @@ export class DesignerStore {
     const report = validateDocumentWithProfile(candidate, this.materialProfile, { mode: 'history-restore', targetNodeStates })
     if (!report.valid)
       return false
+    this.editingSession.exitAll()
     this.documentTransactions.reset(candidate, report.nodeStates)
     this._materialDiagnostics = report.diagnostics
     this._materialNodeStates = report.nodeStates

@@ -187,6 +187,11 @@ export function useCanvasInteractionController(ctx: CanvasInteractionControllerC
       const initialPoint = pointToDocument(e)
       if (!initialPoint)
         return
+      if (store.editingSession.isActive
+        && store.documentStore.committedIndex.getParentNodeId(elementId) === store.editingSession.activeNodeId) {
+        store.editingSession.push(elementId, ext, initialPoint)
+        return
+      }
       store.editingSession.enter(elementId, ext, initialPoint)
     }
   }

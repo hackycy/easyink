@@ -319,10 +319,10 @@ describe('useCanvasInteractionController', () => {
   })
 
   it('escape pops only the deepest nested editing frame', async () => {
-    const { store } = await setup()
-    const extension = geometryExtension()
-    store.editingSession.enter('owner', extension)
-    store.editingSession.push('child', extension)
+    const { store, controller } = await setup()
+    controller.handleElementDblClick(dblClickEvent(10, 10), 'owner')
+    controller.handleElementDblClick(dblClickEvent(10, 10), 'child')
+    expect(store.editingSession.activeNodeId).toBe('child')
 
     const event = new KeyboardEvent('keydown', { key: 'Escape', cancelable: true })
     handleCanvasEditingKeyDown(store, event)

@@ -1,4 +1,4 @@
-import type { BehaviorEvent, DocumentIndexSnapshot, DocumentStoreEvent, EditingSessionPath, MaterialDesignerExtension, PropertyWriteResult } from '@easyink/core'
+import type { BehaviorEvent, DocumentIndexSnapshot, DocumentStoreEvent, EditingSessionPath, EphemeralPanelDef, MaterialDesignerExtension, PropertyWriteResult } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { DesignerStore } from '../store/designer-store'
 import { shallowRef } from 'vue'
@@ -14,6 +14,8 @@ export class EditingSessionManager {
   private _sessions = shallowRef<readonly EditingSession[]>(Object.freeze([]))
   private readonly _store: DesignerStore
   private readonly disposeDocumentSubscription: () => void
+  private readonly frameCreationRevision = new WeakMap<EditingSession, number>()
+  private readonly frameCreationIndex = new WeakMap<EditingSession, DocumentIndexSnapshot>()
   private cancelActiveGesture?: () => void
 
   constructor(store: DesignerStore) {
@@ -49,11 +51,17 @@ export class EditingSessionManager {
     if (!extension.geometry || !this._store.documentStore.committedIndex.hasNode(nodeId))
       return null
 
-    this.beforeTransition()
-    this.destroySuffix(0)
+    this.cancelActiveGesture?.()
+    const selectionAlreadyOwner = this._store.selection.count === 1 && this._store.selection.has(nodeId)
     applySelectionIntent(this._store, { kind: 'collapse-to-session-owner', elementId: nodeId })
+    if (selectionAlreadyOwner)
+      this._store.documentTransactions.markHistoryBarrier()
+    this.destroySuffix(0)
     const session = this.createSession(nodeId, extension, initialPoint)
+    this.frameCreationRevision.set(session, this._store.documentStore.revision)
+    this.frameCreationIndex.set(session, this._store.documentStore.committedIndex)
     this._sessions.value = Object.freeze([session])
+    this.syncActivePanel()
     return session
   }
 
@@ -65,7 +73,10 @@ export class EditingSessionManager {
 
     this.beforeTransition()
     const session = this.createSession(nodeId, extension, initialPoint)
+    this.frameCreationRevision.set(session, this._store.documentStore.revision)
+    this.frameCreationIndex.set(session, this._store.documentStore.committedIndex)
     this._sessions.value = Object.freeze([...this._sessions.value, session])
+    this.syncActivePanel()
     return session
   }
 
@@ -97,12 +108,25 @@ export class EditingSessionManager {
   }
 
   rebaseDocumentSelection(event: DocumentStoreEvent): void {
-    if (!['commit', 'undo', 'redo'].includes(event.kind) || !this.isActive)
+    if (!this.isActive)
+      return
+    if (event.kind === 'reset') {
+      if (this.frameCreationIndex.get(this._sessions.value[0]!) === event.index)
+        return
+      this.cancelActiveGesture?.()
+      this.destroySuffix(0)
+      return
+    }
+    if (!['commit', 'undo', 'redo'].includes(event.kind))
       return
 
     const sessions = this._sessions.value
+    const applicableCount = sessions.findIndex(session => (this.frameCreationRevision.get(session) ?? Number.POSITIVE_INFINITY) >= event.index.revision)
+    const eventFrameCount = applicableCount < 0 ? sessions.length : applicableCount
+    if (eventFrameCount === 0)
+      return
     let keep = 0
-    for (let index = 0; index < sessions.length; index += 1) {
+    for (let index = 0; index < eventFrameCount; index += 1) {
       const session = sessions[index]!
       if (!event.index.hasNode(session.nodeId))
         break
@@ -110,10 +134,10 @@ export class EditingSessionManager {
         break
       keep += 1
     }
-    if (keep < sessions.length)
+    if (keep < eventFrameCount)
       this.destroySuffix(keep)
 
-    const survivors = this._sessions.value
+    const survivors = this._sessions.value.slice(0, keep)
     for (const session of survivors) {
       const selection = session.selectionStore.selection
       if (selection && event.changeSet) {
@@ -152,7 +176,7 @@ export class EditingSessionManager {
       materialGeometry: extension.geometry!,
       tx: this._store.documentTransactions,
       getNode: () => this._store.getElementById(nodeId),
-      onEphemeralPanelChange: panel => this._store.setEphemeralPanel(panel),
+      onEphemeralPanelChange: panel => this.handlePanelChange(session, panel),
       diagnostics: this._store.diagnostics,
     })
     if (initialPoint) {
@@ -169,8 +193,16 @@ export class EditingSessionManager {
     for (let index = sessions.length - 1; index >= from; index -= 1)
       sessions[index]!.destroy()
     this._sessions.value = Object.freeze(sessions.slice(0, from))
-    if (this._sessions.value.length === 0)
-      this._store.setEphemeralPanel(null)
+    this.syncActivePanel()
+  }
+
+  private handlePanelChange(session: EditingSession, panel: EphemeralPanelDef | null): void {
+    if (this.activeSession === session)
+      this._store.setEphemeralPanel(panel)
+  }
+
+  private syncActivePanel(): void {
+    this._store.setEphemeralPanel(this.activeSession?.ephemeralPanel ?? null)
   }
 }
 

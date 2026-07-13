@@ -227,6 +227,79 @@ describe('editingSession', () => {
     expect(contexts[4]).toMatchObject({ changeSet: events[2]!.changeSet, before: events[2]!.previousIndex, after: events[2]!.index })
   })
 
+  it('does not apply queued stale events to frames created after those events', async () => {
+    const { store, extension } = editingStore()
+    store.documentTransactions.transact((draft) => {
+      draft.elements[0]!.slots.content.splice(0, 1)
+    }, { label: 'Delete child', operation: {
+      kind: 'structure.remove',
+      sessionPath: [],
+      targetIds: ['node:child'],
+      fieldPaths: ['/slots/content'],
+      selectionLineage: store.selection.lineageId,
+      structural: true,
+    } })
+    store.documentTransactions.undo()
+    store.editingSession.enter('owner', extension)
+    store.editingSession.push('child', extension)
+
+    await Promise.resolve()
+
+    expect(store.editingSession.activeNodeId).toBe('child')
+  })
+
+  it('exits sessions through every document replacement entry point', () => {
+    for (const replace of ['set', 'publish', 'restore'] as const) {
+      const { store, extension } = editingStore()
+      store.editingSession.enter('owner', extension)
+      const candidate = structuredClone(store.schema)
+      if (replace === 'set')
+        store.setSchema(candidate)
+      else if (replace === 'publish')
+        expect(store.publishSchemaCandidate(candidate, 'all')).toBe(true)
+      else
+        expect(store.restoreSchemaFromHistory(candidate, store.materialNodeStates)).toBe(true)
+      expect(store.editingSession.isActive, replace).toBe(false)
+    }
+  })
+
+  it('fails closed when a reset reaches the manager directly', async () => {
+    const { store, extension } = editingStore()
+    store.editingSession.enter('owner', extension)
+
+    store.documentTransactions.reset(structuredClone(store.schema), store.materialNodeStates)
+    await Promise.resolve()
+
+    expect(store.editingSession.isActive).toBe(false)
+  })
+
+  it('does not apply a queued reset to a replacement frame created from its result', async () => {
+    const { store, extension } = editingStore()
+    store.editingSession.enter('owner', extension)
+    store.documentTransactions.reset(structuredClone(store.schema), store.materialNodeStates)
+    store.editingSession.enter('owner', extension)
+
+    await Promise.resolve()
+
+    expect(store.editingSession.activeNodeId).toBe('owner')
+  })
+
+  it('shows panels only for the active frame and restores the parent panel on pop', () => {
+    const { store, extension } = editingStore()
+    const root = store.editingSession.enter('owner', extension)!
+    root.surfaces.requestPanel({ id: 'root-panel', position: { anchor: 'root' }, component: {} })
+    expect(store.ephemeralPanel?.id).toBe('root-panel')
+
+    const child = store.editingSession.push('child', extension)!
+    expect(store.ephemeralPanel).toBeNull()
+    child.surfaces.requestPanel({ id: 'child-panel', position: { anchor: 'child' }, component: {} })
+    root.surfaces.requestPanel({ id: 'updated-root-panel', position: { anchor: 'root' }, component: {} })
+    expect(store.ephemeralPanel?.id).toBe('child-panel')
+
+    store.editingSession.pop()
+    expect(store.ephemeralPanel?.id).toBe('updated-root-panel')
+  })
+
   it('marks barriers and cancels gestures before every successful stack transition', () => {
     const { store, extension } = editingStore()
     store.selection.select('owner')
@@ -241,6 +314,15 @@ describe('editingSession', () => {
 
     expect(cancel).toHaveBeenCalledTimes(4)
     expect(barrier).toHaveBeenCalledTimes(4)
+  })
+
+  it('marks only one barrier when enter also collapses top-level selection', () => {
+    const { store, extension } = editingStore()
+    const barrier = vi.spyOn(store.documentTransactions, 'markHistoryBarrier')
+
+    store.editingSession.enter('owner', extension)
+
+    expect(barrier).toHaveBeenCalledOnce()
   })
   it('clears selection-scoped meta after the selection changes away', () => {
     const { session, selectionStore } = makeSession()
