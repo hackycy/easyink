@@ -12,7 +12,7 @@ import type {
 } from './material-layout-plan'
 import { assertJsonValue } from '@easyink/shared'
 import { readNodeFlowConstraints } from './layout-plan'
-import { freezeMaterialFragmentPlan, validateMaterialLayoutPlan } from './material-layout-plan'
+import { freezeMaterialFragmentPlan, freezeMaterialLayoutPlan, validateMaterialLayoutPlan } from './material-layout-plan'
 import { resolvePageModel } from './page-model'
 
 export interface PaginationOptions {
@@ -47,6 +47,13 @@ const LEGACY_FRAGMENT_FIELDS = new Set([
   'sourceNodeId',
   'totalPages',
   'yOffset',
+])
+const FRAGMENT_CONTRIBUTION_FIELDS = new Set([
+  'inlineSize',
+  'blockSize',
+  'consumedRange',
+  'renderPayload',
+  'diagnostics',
 ])
 
 export function chooseBreak(
@@ -149,7 +156,7 @@ export function runPagination(
   if (strategy === 'auto-sheets')
     return { mode: schema.page.mode, pages: createAutoSheets(schema, document, diagnostics, options), diagnostics }
   if (strategy === 'none')
-    return { mode: schema.page.mode, pages: createContinuousSheet(schema, document, diagnostics, options.originalSchema), diagnostics }
+    return { mode: schema.page.mode, pages: createContinuousSheet(schema, document, diagnostics, options), diagnostics }
 
   diagnostics.push({
     code: 'UNKNOWN_PAGINATION_STRATEGY',
@@ -178,17 +185,58 @@ function createFixedSheets(
   const pageWidth = pageModel.width
   const pageHeight = pageModel.height
   const pageCount = Math.max(page.pagination?.pageCount ?? page.pages ?? 1, 1)
-  const entries: OutputPagePlan[] = []
+  const pageFragments = Array.from({ length: pageCount }, () => [] as LayoutFragment[])
 
-  for (let i = 0; i < pageCount; i++) {
-    const pageStart = i * pageHeight
-    const pageEnd = (i + 1) * pageHeight
-    const fragments = pageCount === 1
-      ? document.fragments
-      : document.fragments.filter(fragment => fragment.plan.borderBox.y >= pageStart && fragment.plan.borderBox.y < pageEnd)
+  for (const fragment of document.fragments) {
+    const box = fragment.plan.borderBox
+    let pageIndex = Math.max(Math.min(Math.floor(box.y / pageHeight), pageCount - 1), 0)
+    if (box.height === 0) {
+      pageFragments[pageIndex]!.push(fragment)
+      continue
+    }
 
-    entries.push(createPage(i, pageWidth, pageHeight, i * pageHeight, fragments))
+    let startBlockOffset = 0
+    let firstPlacement = true
+    const fragmentAdapter = options.resolveFragmentAdapter?.(fragment)
+    while (startBlockOffset < box.height) {
+      const pageStart = pageIndex * pageHeight
+      const relativeTop = firstPlacement ? Math.max(box.y - pageStart, 0) : 0
+      const availableHeight = Math.max(pageHeight - relativeTop, 0)
+      const selected = chooseBreak(fragment.plan, startBlockOffset, availableHeight)
+      let endBlockOffset = selected?.blockOffset ?? firstLaterBoundaryOrEnd(fragment.plan, startBlockOffset)
+      if (pageIndex === pageCount - 1 && endBlockOffset < box.height)
+        endBlockOffset = box.height
+
+      if (endBlockOffset - startBlockOffset > availableHeight) {
+        diagnostics.push(createFragmentOverflowDiagnostic(
+          fragment,
+          startBlockOffset,
+          endBlockOffset,
+          availableHeight,
+          pageIndex,
+        ))
+      }
+
+      pageFragments[pageIndex]!.push(commitFragmentRange(
+        fragment,
+        fragmentAdapter,
+        startBlockOffset,
+        endBlockOffset,
+        availableHeight,
+        pageIndex,
+        { x: box.x, y: pageStart + relativeTop },
+        diagnostics,
+      ))
+      startBlockOffset = endBlockOffset
+      firstPlacement = false
+      if (startBlockOffset < box.height)
+        pageIndex += 1
+    }
   }
+
+  const entries = pageFragments.map((fragments, index) => (
+    createPage(index, pageWidth, pageHeight, index * pageHeight, fragments)
+  ))
 
   let pages = applyBlankPolicy(entries, page.blankPolicy, options.retainBlankPage)
   pages = applyPageCopies(pages, Math.max(page.copies ?? 1, 1))
@@ -285,30 +333,25 @@ function createAutoSheets(
       const endBlockOffset = selected?.blockOffset ?? firstLaterBoundaryOrEnd(fragment.plan, startBlockOffset)
       const overflow = endBlockOffset - startBlockOffset > availableHeight
       if (overflow) {
-        diagnostics.push({
-          code: 'MATERIAL_FRAGMENT_OVERFLOW',
-          severity: 'warning',
-          message: `Fragment ${fragment.plan.nodeId} has no break boundary within the available page height.`,
-          stage: 'pagination',
-          sourceNodeId: fragment.plan.nodeId,
-          detail: { startBlockOffset, endBlockOffset, availableHeight, pageIndex: pages.length },
-        })
+        diagnostics.push(createFragmentOverflowDiagnostic(
+          fragment,
+          startBlockOffset,
+          endBlockOffset,
+          availableHeight,
+          pages.length,
+        ))
       }
 
-      const request: MaterialFragmentRequest = {
-        plan: fragment.plan,
+      currentFragments.push(commitFragmentRange(
+        fragment,
+        fragmentAdapter,
         startBlockOffset,
         endBlockOffset,
         availableHeight,
-        pageIndex: pages.length,
-      }
-      const contribution = fragmentAdapter?.createFragment(request) ?? createDefaultContribution(request, fragment.fragmentPlan)
-      const fragmentPlan = commitMaterialFragment(request, contribution, {
-        x: box.x,
-        y: currentPageStart + relativeTop,
-      })
-      diagnostics.push(...fragmentPlan.diagnostics.map(toPaginationDiagnostic))
-      currentFragments.push({ ...fragment, fragmentPlan })
+        pages.length,
+        { x: box.x, y: currentPageStart + relativeTop },
+        diagnostics,
+      ))
       startBlockOffset = endBlockOffset
       firstPlacement = false
 
@@ -331,7 +374,7 @@ function createContinuousSheet(
   schema: DocumentSchema,
   document: LayoutDocument,
   diagnostics: LayoutDiagnostic[],
-  originalSchema: DocumentSchema | undefined,
+  options: PaginationOptions,
 ): OutputPagePlan[] {
   for (const fragment of document.fragments) {
     const flow = readNodeFlowConstraints(fragment.node as MaterialNode)
@@ -348,10 +391,25 @@ function createContinuousSheet(
 
   const trailingGap = schema.page.reflow?.preserveTrailingGap === false
     ? 0
-    : getTrailingGap(originalSchema)
+    : getTrailingGap(options.originalSchema)
   const pageModel = resolvePageModel(schema)
   const height = Math.max(pageModel.height, getContentBottom(document.fragments) + trailingGap)
-  const page = createPage(0, pageModel.width, height, 0, document.fragments)
+  const fragments = document.fragments.map((fragment) => {
+    const box = fragment.plan.borderBox
+    if (box.height === 0)
+      return fragment
+    return commitFragmentRange(
+      fragment,
+      options.resolveFragmentAdapter?.(fragment),
+      0,
+      box.height,
+      height,
+      0,
+      { x: box.x, y: box.y },
+      diagnostics,
+    )
+  })
+  const page = createPage(0, pageModel.width, height, 0, fragments)
   resolveTotalPages([page])
   return [page]
 }
@@ -483,8 +541,19 @@ function readFragmentContribution(
 } {
   if (!isRecord(contribution))
     throw new Error('MATERIAL_FRAGMENT_CONTRIBUTION_INVALID')
-  if (Object.getOwnPropertyNames(contribution).some(field => LEGACY_FRAGMENT_FIELDS.has(field)))
+  const ownKeys = Reflect.ownKeys(contribution)
+  const ownNames = ownKeys.filter((key): key is string => typeof key === 'string')
+  if (ownNames.some(field => LEGACY_FRAGMENT_FIELDS.has(field)))
     throw new Error('MATERIAL_FRAGMENT_LEGACY_FIELD')
+  if (ownKeys.some(key => typeof key === 'symbol') || ownNames.some(field => !FRAGMENT_CONTRIBUTION_FIELDS.has(field)))
+    throw new Error('MATERIAL_FRAGMENT_CONTRIBUTION_INVALID')
+
+  const prototype = Object.getPrototypeOf(contribution)
+  if (prototype !== null && prototype !== Object.prototype) {
+    if (prototypeHasLegacyFragmentField(prototype))
+      throw new Error('MATERIAL_FRAGMENT_LEGACY_FIELD')
+    throw new Error('MATERIAL_FRAGMENT_CONTRIBUTION_INVALID')
+  }
 
   const inlineSize = readOwnData(contribution, 'inlineSize', 'MATERIAL_FRAGMENT_CONTRIBUTION_INVALID')
   const blockSize = readOwnData(contribution, 'blockSize', 'MATERIAL_FRAGMENT_CONTRIBUTION_INVALID')
@@ -552,6 +621,16 @@ function invalidStructure(errorCode: string): never {
   throw new Error(errorCode)
 }
 
+function prototypeHasLegacyFragmentField(value: object): boolean {
+  let current: object | null = value
+  while (current !== null && current !== Object.prototype) {
+    if (Reflect.ownKeys(current).some(key => typeof key === 'string' && LEGACY_FRAGMENT_FIELDS.has(key)))
+      return true
+    current = Object.getPrototypeOf(current)
+  }
+  return false
+}
+
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -587,6 +666,55 @@ function createDefaultContribution(
       endBlockOffset: request.endBlockOffset,
     },
     diagnostics: [],
+  }
+}
+
+function commitFragmentRange(
+  fragment: LayoutFragment,
+  adapter: MaterialFragmentAdapter | undefined,
+  startBlockOffset: number,
+  endBlockOffset: number,
+  availableHeight: number,
+  pageIndex: number,
+  placement: Readonly<{ x: number, y: number }>,
+  diagnostics: LayoutDiagnostic[],
+): LayoutFragment {
+  const privateRequest: MaterialFragmentRequest = {
+    plan: fragment.plan,
+    startBlockOffset,
+    endBlockOffset,
+    availableHeight,
+    pageIndex,
+  }
+  validateFragmentRequest(privateRequest)
+  const adapterRequest = Object.freeze({
+    plan: freezeMaterialLayoutPlan(fragment.plan),
+    startBlockOffset,
+    endBlockOffset,
+    availableHeight,
+    pageIndex,
+  })
+  const contribution = adapter?.createFragment(adapterRequest)
+    ?? createDefaultContribution(privateRequest, fragment.fragmentPlan)
+  const fragmentPlan = commitMaterialFragment(privateRequest, contribution, placement)
+  diagnostics.push(...fragmentPlan.diagnostics.map(toPaginationDiagnostic))
+  return { ...fragment, fragmentPlan }
+}
+
+function createFragmentOverflowDiagnostic(
+  fragment: LayoutFragment,
+  startBlockOffset: number,
+  endBlockOffset: number,
+  availableHeight: number,
+  pageIndex: number,
+): LayoutDiagnostic {
+  return {
+    code: 'MATERIAL_FRAGMENT_OVERFLOW',
+    severity: 'warning',
+    message: `Fragment ${fragment.plan.nodeId} has no break boundary within the available page height.`,
+    stage: 'pagination',
+    sourceNodeId: fragment.plan.nodeId,
+    detail: { startBlockOffset, endBlockOffset, availableHeight, pageIndex },
   }
 }
 

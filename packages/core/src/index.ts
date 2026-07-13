@@ -379,7 +379,7 @@ export { resolvePageModel } from './page-model'
 export type { ResolvedPageModel } from './page-model'
 
 export { createPagePlan } from './page-planner'
-export type { PagePlan, PagePlanDiagnostic, PagePlanEntry, PagePlanOptions } from './page-planner'
+export type { PagePlan, PagePlanDiagnostic, PagePlanEntry, PagePlanFragmentEntry, PagePlanOptions } from './page-planner'
 
 export { chooseBreak, commitMaterialFragment, fragmentRangeMadeProgress, runPagination } from './pagination-engine'
 export type { PaginationOptions, PaginationResult } from './pagination-engine'

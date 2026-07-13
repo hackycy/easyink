@@ -1,7 +1,7 @@
 import type { MaterialManifest, MaterialViewerExtension, PagePlanEntry, ViewerFacetCapabilities, ViewerRenderContext } from '@easyink/core'
 import type { MaterialNode, PageSchema } from '@easyink/schema'
 import type { ViewerDiagnosticEvent } from './types'
-import { defineMaterialManifest, viewerElement, viewerFragment, viewerImperativeDom, viewerSanitizedMarkup, viewerText } from '@easyink/core'
+import { defineMaterialManifest, freezeMaterialFragmentPlan, freezeMaterialLayoutPlan, viewerElement, viewerFragment, viewerImperativeDom, viewerSanitizedMarkup, viewerText } from '@easyink/core'
 import { createTestCompiledMaterialProfile, createTestMaterialManifest } from '@easyink/core/testing'
 import { describe, expect, it } from 'vitest'
 import { ProfileMaterialRuntime } from './material-runtime'
@@ -71,6 +71,75 @@ describe('renderPages', () => {
     expect(captured!.renderBudget.maxNodes).toBe(12)
     captured!.renderBudget.reserveNodes('text', 2)
     expect(captured!.renderBudget.nodesUsed).toBe(2)
+  })
+
+  it('passes committed pagination facts through to rendering and fragment geometry', async () => {
+    const container = document.createElement('div')
+    const node: MaterialNode = {
+      id: 'committed',
+      type: 'custom',
+      x: 5,
+      y: 0,
+      width: 30,
+      height: 40,
+      modelVersion: 1,
+      model: {},
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
+    }
+    const layoutPlan = freezeMaterialLayoutPlan({
+      instanceKey: 'committed:instance',
+      nodeId: node.id,
+      nodeRevision: 1,
+      constraintKey: '30:20:mm:horizontal-tb',
+      borderBox: { x: 5, y: 0, width: 30, height: 40 },
+      contentBox: { x: 5, y: 0, width: 30, height: 40 },
+      slotBoxes: [],
+      breakOpportunities: [{ id: 'row-1', blockOffset: 20, penalty: 0 }],
+      diagnostics: [],
+      payload: { measured: true },
+    })
+    const fragmentPlan = freezeMaterialFragmentPlan({
+      id: 'committed-fragment-2',
+      sourceInstanceKey: layoutPlan.instanceKey,
+      sourceNodeId: node.id,
+      box: { x: 5, y: 20, width: 30, height: 20 },
+      consumedRange: { startBlockOffset: 20, endBlockOffset: 40 },
+      renderPayload: { rows: [1] },
+      diagnostics: [],
+    })
+    let captured: ViewerRenderContext | undefined
+    const materials = await createMaterials({
+      render: (_node, context) => {
+        captured = context
+        return { tree: viewerText('committed') }
+      },
+    })
+
+    renderPages([{
+      index: 1,
+      width: 80,
+      height: 20,
+      elements: [node],
+      fragments: [{ node, layoutPlan, fragmentPlan }],
+      yOffset: 20,
+    }], materials, {
+      container,
+      document,
+      zoom: 1,
+      unit: 'mm',
+      data: {},
+      resolvedPropsMap: new Map(),
+      pageSchema: { mode: 'fixed', width: 80, height: 20 },
+    }, [])
+
+    expect(captured?.instanceKey).toBe(layoutPlan.instanceKey)
+    expect(captured?.layoutPlan).toBe(layoutPlan)
+    expect(captured?.fragmentPlan).toBe(fragmentPlan)
+    const wrapper = container.querySelector('[data-element-id="committed"]') as HTMLElement
+    expect(wrapper.style.top).toBe('0mm')
+    expect(wrapper.style.height).toBe('20mm')
   })
 
   it('mints distinct fallback fragment identities for repeated output pages', async () => {

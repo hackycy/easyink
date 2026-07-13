@@ -15,7 +15,7 @@ import type {
 } from './types'
 import type { ViewerHost } from './viewer-host'
 import { snapshotViewerTreePolicy } from '@easyink/browser-dom'
-import { createInternalHooks, createLayoutConstraintKey, createNonFragmentingMaterialPlans, FontManager, loadDocumentWithProfile, planRepeatedOverlays, runLayoutPipeline, runPagination, VIEWER_TREE_ABSOLUTE_MAX_NODES, walkMaterialNodes } from '@easyink/core'
+import { createInternalHooks, createLayoutConstraintKey, createNonFragmentingMaterialPlans, FontManager, freezeMaterialLayoutPlan, loadDocumentWithProfile, planRepeatedOverlays, runLayoutPipeline, runPagination, VIEWER_TREE_ABSOLUTE_MAX_NODES, walkMaterialNodes } from '@easyink/core'
 import { deepClone, UNIT_FACTOR } from '@easyink/shared'
 import { applyBindingsToProps, projectBindings, walkProfileMaterialNodes } from './binding-projector'
 import { resolveConditionalSchema } from './conditional-schema'
@@ -602,7 +602,7 @@ export class ViewerRuntime {
         width: measured?.width ?? node.width,
         height: measured?.height ?? node.height,
       }
-      return [node.id, createNonFragmentingMaterialPlans({
+      const fallback = createNonFragmentingMaterialPlans({
         instanceKey: node.id,
         nodeId: node.id,
         nodeRevision: 0,
@@ -610,7 +610,14 @@ export class ViewerRuntime {
         pageIndex: 0,
         borderBox,
         fragmentBox: borderBox,
-      }).layoutPlan]
+      }).layoutPlan
+      return [node.id, measured?.breakOpportunities || measured?.payload !== undefined
+        ? freezeMaterialLayoutPlan({
+            ...fallback,
+            breakOpportunities: measured.breakOpportunities ?? [],
+            ...(measured.payload === undefined ? {} : { payload: measured.payload }),
+          })
+        : fallback]
     }))
   }
 
@@ -820,6 +827,9 @@ function toPagePlan(result: PaginationResult): PagePlan {
       width: page.width,
       height: page.height,
       elements: page.fragments.map(fragment => fragment.node),
+      fragments: page.fragments.flatMap(fragment => fragment.fragmentPlan
+        ? [{ node: fragment.node as MaterialNode<unknown>, layoutPlan: fragment.plan, fragmentPlan: fragment.fragmentPlan }]
+        : []),
       copyIndex: page.pageContext.copyIndex,
       yOffset: page.yOffset,
     })),

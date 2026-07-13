@@ -1,10 +1,10 @@
-import type { ViewerElementTree, ViewerRenderTree } from '@easyink/core'
+import type { MaterialMeasureRequest, ViewerElementTree, ViewerRenderTree } from '@easyink/core'
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import { createFragmentFromNode, createLayoutConstraintKey, createNonFragmentingMaterialPlans, freezeMaterialLayoutPlan, runLayoutPipeline, runPagination, viewerText } from '@easyink/core'
 import { createTestViewerRenderContext } from '@easyink/core/testing'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createDefaultDataTableModel } from './schema'
-import { measureTableData, renderTableData, tableDataFragmentAdapter } from './viewer'
+import { measureTableData, renderTableData, tableDataFragmentAdapter, tableDataViewerLayout } from './viewer'
 
 function createNode(): MaterialNode {
   return {
@@ -42,6 +42,79 @@ describe('tableDataFragmentAdapter', () => {
     })
     expect(contribution).not.toHaveProperty('box')
     expect(contribution).not.toHaveProperty('pageIndex')
+  })
+
+  it('selects measured row identities wholly contained in the requested range', () => {
+    const base = createTestFragment(createNode()).plan
+    const plan = freezeMaterialLayoutPlan({
+      ...base,
+      payload: {
+        kind: 'table-data-layout',
+        columnIds: ['column-a'],
+        rows: [
+          { rowIndex: 0, canonicalRowId: 'header', sourceRowKey: 'header', bandRole: 'header', startBlockOffset: 0, endBlockOffset: 4 },
+          { rowIndex: 1, canonicalRowId: 'detail', sourceRowKey: 'detail:key-a', bandRole: 'detail', startBlockOffset: 4, endBlockOffset: 12 },
+          { rowIndex: 2, canonicalRowId: 'footer', sourceRowKey: 'footer', bandRole: 'footer', startBlockOffset: 12, endBlockOffset: 16 },
+        ],
+      },
+    })
+
+    const contribution = tableDataFragmentAdapter.createFragment({
+      plan,
+      startBlockOffset: 4,
+      endBlockOffset: 12,
+      availableHeight: 8,
+      pageIndex: 1,
+    })
+
+    expect(contribution.renderPayload).toEqual({
+      kind: 'table-data-fragment',
+      startBlockOffset: 4,
+      endBlockOffset: 12,
+      rows: [
+        { rowIndex: 1, canonicalRowId: 'detail', sourceRowKey: 'detail:key-a', bandRole: 'detail', startBlockOffset: 4, endBlockOffset: 12 },
+      ],
+    })
+  })
+
+  it('keeps authoring-preview measurement independent from runtime collection expansion', async () => {
+    const node = createNode()
+    node.bindings.records = { sourceId: 'invoice', fieldPath: 'items' }
+    const openCollection = vi.fn(() => {
+      throw new Error('preview must not open runtime records')
+    })
+    const request = {
+      mode: 'authoring-preview',
+      instanceKey: node.id,
+      node,
+      scope: { key: 'document', data: { items: Array.from({ length: 10 }, () => ({})) } },
+      resolvedModel: node.model,
+      nodeRevision: 1,
+      dataRevision: 1,
+      resourceRevision: 1,
+      constraints: { availableWidth: 100, availableHeight: 100, unit: 'mm', writingMode: 'horizontal-tb' },
+      signal: new AbortController().signal,
+      budget: {
+        maxRuntimeRows: 10,
+        maxLayoutFacts: 10,
+        runtimeRowsUsed: 0,
+        layoutFactsUsed: 0,
+        reserveRuntimeRows: vi.fn(),
+        reserveLayoutFacts: vi.fn(),
+      },
+      resolveBinding: () => ({ status: 'missing' }),
+      formatBinding: () => ({ status: 'missing' }),
+      openCollection,
+      schedule: {} as never,
+      measureText: vi.fn(),
+      measureSlot: vi.fn(),
+    } as unknown as MaterialMeasureRequest
+
+    const plan = await tableDataViewerLayout.measure!(request)
+
+    expect(openCollection).not.toHaveBeenCalled()
+    expect((plan.payload as { rows: unknown[] }).rows).toHaveLength(3)
+    expect(Object.isFrozen(plan)).toBe(true)
   })
 
   it('lets core commit 200 monotonic ranges with stable identities across 50+ pages', () => {

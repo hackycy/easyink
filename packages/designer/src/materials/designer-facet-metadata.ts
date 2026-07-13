@@ -8,6 +8,7 @@ export function prepareDesignerFacetMetadata(value: unknown, surface: RuntimeMat
   const extension = readOwnEnumerableData(value, 'extension', true)
   const catalog = readOwnEnumerableData(value, 'catalog', true)
   const localeMessages = readOwnEnumerableData(value, 'localeMessages', false)
+  const layout = readOwnEnumerableData(value, 'layout', false)
   const dispose = readOwnEnumerableData(value, 'dispose', false)
   const contextualProperties = readOwnEnumerableData(value, 'contextualProperties', false)
   if (dispose !== undefined && typeof dispose !== 'function')
@@ -19,6 +20,7 @@ export function prepareDesignerFacetMetadata(value: unknown, surface: RuntimeMat
     extension: extension as MaterialDesignerFacet['extension'],
     catalog: catalog as MaterialDesignerFacet['catalog'],
     ...(localeMessages === undefined ? {} : { localeMessages: cloneLocaleRegistration(localeMessages) }),
+    ...(layout === undefined ? {} : { layout: layout as MaterialDesignerFacet['layout'] }),
     ...(typeof dispose === 'function' ? { dispose: () => Reflect.apply(dispose, value, []) as void | Promise<void> } : {}),
     ...(typeof contextualProperties === 'function' ? { contextualProperties: request => Reflect.apply(contextualProperties, value, [request]) } : {}),
   }

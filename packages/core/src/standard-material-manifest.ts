@@ -95,6 +95,7 @@ export function defineStandardMaterialManifest(input: StandardMaterialManifestIn
           extension,
           catalog: { group: input.category, order: input.catalogOrder },
           localeMessages: input.localeMessages,
+          ...(input.viewerLayout ? { layout: input.viewerLayout } : {}),
           ...(extension.dispose ? { dispose: () => extension.dispose!() } : {}),
         }
       }),

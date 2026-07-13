@@ -1,5 +1,5 @@
 import type { BrowserDomCapabilities, ViewerTreeMount, ViewerTreePolicy } from '@easyink/browser-dom'
-import type { LayoutConstraints, MaterialNodeLoadState, MaterialRenderBudgetToken, MaterialRenderNodeKind, PageLayerRenderPlan, PageLayerRenderPlanBuckets, PagePlanEntry, TextWatermarkPageLayerPlan } from '@easyink/core'
+import type { LayoutConstraints, MaterialFragmentPlan, MaterialLayoutPlan, MaterialNodeLoadState, MaterialRenderBudgetToken, MaterialRenderNodeKind, PageLayerRenderPlan, PageLayerRenderPlanBuckets, PagePlanEntry, TextWatermarkPageLayerPlan } from '@easyink/core'
 import type { MaterialNode, PageBackground, PageSchema } from '@easyink/schema'
 import type { UnitType } from '@easyink/shared'
 import type { ProfileMaterialRuntime } from './material-runtime'
@@ -66,10 +66,13 @@ export function renderPages(
     pageEl.appendChild(contentLayer)
 
     // Sort elements by zIndex for proper layering
-    const sorted = [...page.elements].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0))
+    const sorted = page.elements.map(node => ({
+      node,
+      fragment: page.fragments?.find(candidate => candidate.node === node || candidate.node.id === node.id),
+    })).sort((a, b) => (a.node.zIndex ?? 0) - (b.node.zIndex ?? 0))
 
     const mounts: ViewerTreeMount[] = []
-    for (const node of sorted) {
+    for (const { node, fragment } of sorted) {
       if (node.editorState?.hidden)
         continue
 
@@ -82,7 +85,9 @@ export function renderPages(
         const context = createLegacyRenderContext({
           node: nodeForRender,
           resolvedModel: resolved,
-          instanceKey: node.id,
+          instanceKey: fragment?.layoutPlan.instanceKey ?? node.id,
+          layoutPlan: fragment?.layoutPlan,
+          fragmentPlan: fragment?.fragmentPlan,
           fragmentBox: {
             x: node.x,
             y: node.y - page.yOffset,
@@ -126,7 +131,7 @@ export function renderPages(
         const renderContext: ViewerRenderContext = Object.freeze(context)
         const output = materials.render(nodeForRender, renderContext, admitted)
         const renderSize = admitted ? materials.getRenderSize(nodeForRender, renderContext) : { width: node.width, height: node.height }
-        const elWrapper = createElementWrapper(document, nodeForRender, page, unit, renderSize)
+        const elWrapper = createElementWrapper(document, nodeForRender, page, unit, renderSize, fragment?.fragmentPlan)
         const mount = renderViewerTree(elWrapper, output.tree, {
           document,
           capabilities,
@@ -138,7 +143,7 @@ export function renderPages(
       catch (error) {
         capabilities?.dispose()
         diagnostics.push(materialRenderDiagnostic(node, error))
-        const fallbackWrapper = createElementWrapper(document, nodeForRender, page, unit, { width: node.width, height: node.height })
+        const fallbackWrapper = createElementWrapper(document, nodeForRender, page, unit, { width: node.width, height: node.height }, fragment?.fragmentPlan)
         fallbackWrapper.setAttribute('data-render-error', 'true')
         mounts.push(renderMaterialFallback(fallbackWrapper, node, browserDom, diagnostics))
         contentLayer.appendChild(fallbackWrapper)
@@ -272,6 +277,8 @@ interface LegacyRenderContextInput {
   node: MaterialNode<unknown>
   resolvedModel: Record<string, unknown>
   instanceKey: string
+  layoutPlan?: MaterialLayoutPlan
+  fragmentPlan?: MaterialFragmentPlan
   fragmentBox: Readonly<{ x: number, y: number, width: number, height: number }>
   pageIndex: number
   unit: string
@@ -291,20 +298,22 @@ function createNestedMaterialInstanceKey(parentInstanceKey: string, childNodeId:
 function createLegacyRenderContext(input: LegacyRenderContextInput): Mutable<ViewerRenderContext> {
   const { node } = input
   const layoutUnit = resolveLayoutUnit(input.unit)
-  const plans = createNonFragmentingMaterialPlans({
-    instanceKey: input.instanceKey,
-    nodeId: node.id,
-    nodeRevision: node.modelVersion,
-    constraintKey: createLayoutConstraintKey({
-      availableWidth: node.width,
-      availableHeight: node.height,
-      unit: layoutUnit,
-      writingMode: 'horizontal-tb',
-    }),
-    pageIndex: input.pageIndex,
-    borderBox: { x: 0, y: 0, width: node.width, height: node.height },
-    fragmentBox: input.fragmentBox,
-  })
+  const plans = input.layoutPlan && input.fragmentPlan
+    ? { layoutPlan: input.layoutPlan, fragmentPlan: input.fragmentPlan }
+    : createNonFragmentingMaterialPlans({
+        instanceKey: input.instanceKey,
+        nodeId: node.id,
+        nodeRevision: node.modelVersion,
+        constraintKey: createLayoutConstraintKey({
+          availableWidth: node.width,
+          availableHeight: node.height,
+          unit: layoutUnit,
+          writingMode: 'horizontal-tb',
+        }),
+        pageIndex: input.pageIndex,
+        borderBox: { x: 0, y: 0, width: node.width, height: node.height },
+        fragmentBox: input.fragmentBox,
+      })
   const committedSlotInstanceKeys = new Set(plans.layoutPlan.slotBoxes.map(slot => slot.slotInstanceKey))
   const context: Mutable<ViewerRenderContext> = {
     data: input.data,
@@ -685,6 +694,7 @@ function createElementWrapper(
   page: PagePlanEntry,
   unit: string,
   renderSize: ViewerRenderSize,
+  fragmentPlan?: MaterialFragmentPlan,
 ): HTMLElement {
   const wrapper = document.createElement('div')
   wrapper.className = 'ei-viewer-element'
@@ -692,13 +702,14 @@ function createElementWrapper(
   wrapper.setAttribute('data-element-type', node.type)
 
   // Compute position relative to page
-  const relativeY = node.y - page.yOffset
+  const box = fragmentPlan?.box
+  const relativeY = (box?.y ?? node.y) - page.yOffset
 
   wrapper.style.position = 'absolute'
-  wrapper.style.left = `${node.x}${unit}`
+  wrapper.style.left = `${box?.x ?? node.x}${unit}`
   wrapper.style.top = `${relativeY}${unit}`
-  wrapper.style.width = `${renderSize.width}${unit}`
-  wrapper.style.height = `${renderSize.height}${unit}`
+  wrapper.style.width = `${box?.width ?? renderSize.width}${unit}`
+  wrapper.style.height = `${box?.height ?? renderSize.height}${unit}`
   wrapper.style.overflow = 'hidden'
   wrapper.style.zIndex = String(node.zIndex ?? 0)
 

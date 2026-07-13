@@ -1,6 +1,7 @@
 import type { MaterialNode, PageLayerConfig, PageLayerPlacement, PageSchema, TextWatermarkPageLayerConfig } from '@easyink/schema'
 import type { CompiledMaterialProfile } from './material-profile'
 import { DEFAULT_TEXT_WATERMARK_PAGE_LAYER, PAGE_LAYER_MAX_Z_INDEX, PAGE_LAYER_MIN_Z_INDEX } from '@easyink/schema'
+import { VIEWER_TREE_ABSOLUTE_MAX_NODES } from './viewer-render-tree'
 
 export interface ResolvedPageLayerBase {
   id: string
@@ -92,12 +93,20 @@ export function planRepeatedOverlays(input: {
   if (!Number.isSafeInteger(input.pageCount) || input.pageCount < 0)
     throw new Error('REPEATED_OVERLAY_PAGE_COUNT_INVALID')
 
+  if (input.pageCount === 0)
+    return Object.freeze([])
+
+  const repeatedNodes = input.nodes.filter(node => (
+    input.paintableNodeIds.has(node.id)
+    && input.profile.getManifest(node.type)?.common.layout.pageRepeat === 'every-output-page'
+  ))
+  if (repeatedNodes.length === 0)
+    return Object.freeze([])
+  if (input.pageCount > Math.floor(VIEWER_TREE_ABSOLUTE_MAX_NODES / repeatedNodes.length))
+    throw new Error('PAGE_REPEAT_OVERLAY_BUDGET_EXCEEDED')
+
   const placements: RepeatedOverlayPlacement[] = []
-  for (const node of input.nodes) {
-    if (!input.paintableNodeIds.has(node.id)
-      || input.profile.getManifest(node.type)?.common.layout.pageRepeat !== 'every-output-page') {
-      continue
-    }
+  for (const node of repeatedNodes) {
     for (let pageIndex = 0; pageIndex < input.pageCount; pageIndex++)
       placements.push(Object.freeze({ nodeId: node.id, pageIndex }))
   }

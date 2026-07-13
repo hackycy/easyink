@@ -74,6 +74,22 @@ describe('createPagePlan', () => {
       expect(plan.pages[0]!.height).toBe(297)
     })
 
+    it('preserves committed layout and fragment facts in the compatibility page plan', () => {
+      const schema = makeSchema({ mode: 'fixed' }, [makeNode('committed')])
+
+      const plan = createPagePlan(schema)
+
+      expect(plan.pages[0]!.fragments).toHaveLength(1)
+      expect(plan.pages[0]!.fragments![0]).toMatchObject({
+        node: { id: 'committed' },
+        layoutPlan: { nodeId: 'committed' },
+        fragmentPlan: {
+          sourceNodeId: 'committed',
+          consumedRange: { startBlockOffset: 0, endBlockOffset: 50 },
+        },
+      })
+    })
+
     it('creates empty page plan for no elements', () => {
       const schema = makeSchema({ mode: 'fixed' })
       const plan = createPagePlan(schema)

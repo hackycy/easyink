@@ -1,8 +1,9 @@
-import type { MaterialFragmentAdapter, ViewerMeasureContext, ViewerMeasureResult, ViewerRenderContext, ViewerRenderOutput } from '@easyink/core'
+import type { MaterialFragmentAdapter, MaterialMeasureRequest, MaterialViewerLayoutFacet, ViewerMeasureContext, ViewerMeasureResult, ViewerRenderContext, ViewerRenderOutput } from '@easyink/core'
 import type { TableCellSchema, TableRowSchema } from '@easyink/material-table-kernel'
 import type { BindingRef, MaterialNode } from '@easyink/schema'
+import type { JsonValue } from '@easyink/shared'
 import type { TableDataProps } from './schema'
-import { formatBindingDisplayValue, resolveBindingValue, resolveFieldFromRecord, viewerElement, viewerText } from '@easyink/core'
+import { createLayoutConstraintKey, formatBindingDisplayValue, freezeMaterialLayoutPlan, resolveBindingValue, resolveFieldFromRecord, viewerElement, viewerText } from '@easyink/core'
 import { computeAutoRowHeights, computeRowScaleWithVirtualRows, getTableMaterialModel, projectTableTopology, renderTableTree, resolveTableBaseProps } from '@easyink/material-table-kernel'
 import { TABLE_DATA_PLACEHOLDER_ROW_COUNT } from './layout'
 import { TABLE_DATA_DEFAULTS } from './schema'
@@ -114,11 +115,32 @@ export function measureTableData(node: MaterialNode<unknown>, context: ViewerMea
   // Cache so render() reuses the exact same per-row heights without
   // re-deriving baseline scale from the (about to be overwritten) node.height.
   runtimeLayoutCache.set(runtimeLayoutKey(tableNode), layout)
-  return { width: node.width, height: layout.totalHeight }
+  const facts = createTableLayoutFacts(layout)
+  return {
+    width: node.width,
+    height: layout.totalHeight,
+    breakOpportunities: facts.breakOpportunities,
+    payload: facts.payload,
+  }
 }
 
 export const tableDataFragmentAdapter: MaterialFragmentAdapter = {
   createFragment(request) {
+    const rows = readTableLayoutRows(request.plan.payload)
+    const renderPayload: JsonValue = rows
+      ? {
+          kind: 'table-data-fragment',
+          startBlockOffset: request.startBlockOffset,
+          endBlockOffset: request.endBlockOffset,
+          rows: rows.filter(row => (
+            row.startBlockOffset >= request.startBlockOffset
+            && row.endBlockOffset <= request.endBlockOffset
+          )),
+        }
+      : {
+          startBlockOffset: request.startBlockOffset,
+          endBlockOffset: request.endBlockOffset,
+        }
     return {
       inlineSize: request.plan.borderBox.width,
       blockSize: request.endBlockOffset - request.startBlockOffset,
@@ -126,14 +148,43 @@ export const tableDataFragmentAdapter: MaterialFragmentAdapter = {
         startBlockOffset: request.startBlockOffset,
         endBlockOffset: request.endBlockOffset,
       },
-      renderPayload: {
-        startBlockOffset: request.startBlockOffset,
-        endBlockOffset: request.endBlockOffset,
-      },
+      renderPayload,
       diagnostics: [],
     }
   },
 }
+
+export const tableDataViewerLayout: MaterialViewerLayoutFacet = Object.freeze({
+  async measure(request: MaterialMeasureRequest) {
+    const node = { ...request.node, model: request.resolvedModel } as MaterialNode<unknown>
+    const data = request.mode === 'authoritative'
+      ? await createMeasureDataSnapshot(request, node)
+      : {}
+    const layout = resolveRuntimeLayout(node, data, request.node.height)
+    request.budget.reserveRuntimeRows(layout.rows.length)
+    request.budget.reserveLayoutFacts('row', layout.rows.length)
+    const facts = createTableLayoutFacts(layout)
+    const borderBox = {
+      x: request.node.x,
+      y: request.node.y,
+      width: request.node.width,
+      height: layout.totalHeight,
+    }
+    return freezeMaterialLayoutPlan({
+      instanceKey: request.instanceKey,
+      nodeId: request.node.id,
+      nodeRevision: request.nodeRevision,
+      constraintKey: createLayoutConstraintKey(request.constraints),
+      borderBox,
+      contentBox: borderBox,
+      slotBoxes: [],
+      breakOpportunities: facts.breakOpportunities,
+      diagnostics: [],
+      payload: facts.payload,
+    })
+  },
+  fragment: tableDataFragmentAdapter,
+})
 
 export function renderTableData(node: MaterialNode<unknown>, context?: ViewerRenderContext): ViewerRenderOutput {
   if (node.type !== 'table-data') {
@@ -151,8 +202,15 @@ export function renderTableData(node: MaterialNode<unknown>, context?: ViewerRen
   // from it here. Fall back to a direct compute when render is called
   // without a prior measure (e.g. unit tests).
   const cached = runtimeLayoutCache.get(runtimeLayoutKey(tableNode))
-  const { rows: visibleRows, rowSources, columnIds, rowHeights, totalHeight } = cached
+  const { rows: runtimeRows, rowSources: runtimeRowSources, columnIds, rowHeights: runtimeRowHeights, totalHeight } = cached
     ?? resolveRuntimeLayout(tableNode, data, node.height, context?.reportDiagnostic)
+
+  const fragmentRows = readTableFragmentRows(context?.fragmentPlan.renderPayload)
+  const selectedIndices = fragmentRows?.map(row => row.rowIndex)
+    ?? runtimeRows.map((_, index) => index)
+  const visibleRows = selectedIndices.flatMap(index => runtimeRows[index] ? [runtimeRows[index]!] : [])
+  const rowSources = selectedIndices.flatMap(index => runtimeRowSources[index] ? [runtimeRowSources[index]!] : [])
+  const rowHeights = selectedIndices.flatMap(index => runtimeRowHeights[index] === undefined ? [] : [runtimeRowHeights[index]!])
 
   const sizedRows: TableRowSchema[] = visibleRows.map((row, i) => ({
     ...row,
@@ -164,7 +222,7 @@ export function renderTableData(node: MaterialNode<unknown>, context?: ViewerRen
     topology: { columns: projectTableTopology(node).topology.columns, rows: sizedRows },
     props,
     unit: context?.unit ?? 'mm',
-    elementHeight: totalHeight,
+    elementHeight: fragmentRows ? context!.fragmentPlan.box.height : totalHeight,
     slotOutputs: context?.slotOutputs,
     canonicalRowIds: rowSources.map(source => source.canonicalRowId),
     canonicalColumnIds: columnIds,
@@ -247,6 +305,143 @@ function expandRepeatTemplateRows(
 function bindingAt(node: MaterialNode<unknown>, port: string): BindingRef | undefined {
   const binding = node.bindings[port]
   return binding && !Array.isArray(binding) ? binding as BindingRef : undefined
+}
+
+async function createMeasureDataSnapshot(
+  request: MaterialMeasureRequest,
+  node: MaterialNode<unknown>,
+): Promise<Record<string, unknown>> {
+  const data: Record<string, unknown> = {}
+  const model = getTableMaterialModel(node)
+  const collectionPort = model.kind === 'data' ? model.data.collectionPort : undefined
+  const collectionBinding = collectionPort ? bindingAt(node, collectionPort) : undefined
+  let records: readonly Readonly<Record<string, unknown>>[] = []
+
+  if (collectionPort && collectionBinding) {
+    const opened = await request.openCollection(collectionPort, request.scope, request.signal)
+    if (opened.status === 'opened') {
+      const collected: Readonly<Record<string, unknown>>[] = []
+      try {
+        let done = false
+        while (!done) {
+          const chunk = await opened.cursor.readNext(256, request.signal)
+          collected.push(...chunk.records)
+          done = chunk.done
+        }
+      }
+      finally {
+        await opened.cursor.close()
+      }
+      records = collected
+    }
+    setDataPath(data, collectionBinding.fieldPath, records)
+  }
+
+  for (const [port, candidate] of Object.entries(node.bindings)) {
+    if (port === collectionPort || !candidate || Array.isArray(candidate) || 'kind' in candidate)
+      continue
+    const binding = candidate as BindingRef
+    if (collectionBinding && binding.fieldPath.startsWith(`${collectionBinding.fieldPath}/`))
+      continue
+    const resolved = request.resolveBinding(port, request.scope)
+    if (resolved.status === 'resolved')
+      setDataPath(data, binding.fieldPath, resolved.value)
+  }
+  return data
+}
+
+function setDataPath(root: Record<string, unknown>, path: string, value: unknown): void {
+  const segments = path.split('/').filter(Boolean)
+  if (segments.length === 0 || segments.some(segment => ['__proto__', 'prototype', 'constructor'].includes(segment)))
+    return
+  let current = root
+  for (const segment of segments.slice(0, -1)) {
+    const child = current[segment]
+    if (typeof child === 'object' && child !== null && !Array.isArray(child)) {
+      current = child as Record<string, unknown>
+    }
+    else {
+      const next: Record<string, unknown> = {}
+      current[segment] = next
+      current = next
+    }
+  }
+  current[segments.at(-1)!] = value
+}
+
+function tableBandRole(row: TableRowSchema): string {
+  if (row.role === 'repeat-template')
+    return 'detail'
+  if (row.role === 'normal')
+    return 'body'
+  return row.role
+}
+
+function createTableLayoutFacts(layout: ResolvedRuntimeLayout) {
+  let blockOffset = 0
+  const rows = layout.rows.map((row, rowIndex) => {
+    const startBlockOffset = blockOffset
+    blockOffset += layout.rowHeights[rowIndex] ?? row.height
+    const source = layout.rowSources[rowIndex]!
+    return {
+      rowIndex,
+      canonicalRowId: source.canonicalRowId,
+      sourceRowKey: source.sourceRowKey,
+      bandRole: tableBandRole(row),
+      startBlockOffset,
+      endBlockOffset: blockOffset,
+    }
+  })
+  return {
+    breakOpportunities: rows.slice(0, -1).map(row => ({
+      id: `table-row:${row.rowIndex}:${row.sourceRowKey}`,
+      blockOffset: row.endBlockOffset,
+      penalty: 0,
+    })),
+    payload: {
+      kind: 'table-data-layout' as const,
+      columnIds: layout.columnIds,
+      rows,
+    },
+  }
+}
+
+interface TableLayoutRowFact extends Record<string, string | number> {
+  rowIndex: number
+  canonicalRowId: string
+  sourceRowKey: string
+  bandRole: string
+  startBlockOffset: number
+  endBlockOffset: number
+}
+
+function readTableLayoutRows(payload: unknown): TableLayoutRowFact[] | undefined {
+  if (!isRecord(payload) || payload.kind !== 'table-data-layout' || !Array.isArray(payload.rows))
+    return undefined
+  const rows: TableLayoutRowFact[] = []
+  for (const candidate of payload.rows) {
+    if (!isRecord(candidate)
+      || !Number.isSafeInteger(candidate.rowIndex)
+      || typeof candidate.canonicalRowId !== 'string'
+      || typeof candidate.sourceRowKey !== 'string'
+      || typeof candidate.bandRole !== 'string'
+      || typeof candidate.startBlockOffset !== 'number'
+      || typeof candidate.endBlockOffset !== 'number') {
+      return undefined
+    }
+    rows.push(candidate as unknown as TableLayoutRowFact)
+  }
+  return rows
+}
+
+function readTableFragmentRows(payload: unknown): TableLayoutRowFact[] | undefined {
+  if (!isRecord(payload) || payload.kind !== 'table-data-fragment' || !Array.isArray(payload.rows))
+    return undefined
+  return readTableLayoutRows({ kind: 'table-data-layout', rows: payload.rows })
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function relativeRecordPath(fieldPath: string, collectionPath: string): string {

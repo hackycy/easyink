@@ -1,6 +1,7 @@
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import type { PageMode } from '@easyink/shared'
 import type { LayoutDiagnostic } from './layout-plan'
+import type { MaterialFragmentPlan, MaterialLayoutPlan } from './material-layout-plan'
 import type { CompiledMaterialProfile } from './material-profile'
 import { deepClone } from '@easyink/shared'
 import { runLayoutPipeline } from './layout-strategy'
@@ -25,6 +26,7 @@ export interface PagePlanEntry {
   width: number
   height: number
   elements: MaterialNode<unknown>[]
+  fragments?: PagePlanFragmentEntry[]
   isBlank?: boolean
   copyIndex?: number
   /** Y offset in document coordinates -- used by the render surface to position elements within the page. */
@@ -41,6 +43,12 @@ export interface PagePlanOptions {
   originalSchema?: DocumentSchema
   profile?: CompiledMaterialProfile
   paintableNodeIds?: ReadonlySet<string>
+}
+
+export interface PagePlanFragmentEntry {
+  node: MaterialNode<unknown>
+  layoutPlan: MaterialLayoutPlan
+  fragmentPlan: MaterialFragmentPlan
 }
 
 export function createPagePlan(schema: DocumentSchema, options: PagePlanOptions = {}): PagePlan {
@@ -95,6 +103,9 @@ export function createPagePlan(schema: DocumentSchema, options: PagePlanOptions 
         ...page.fragments.map(fragment => fragment.node),
         ...(overlaysByPage.get(page.index) ?? []),
       ],
+      fragments: page.fragments.flatMap(fragment => fragment.fragmentPlan
+        ? [{ node: fragment.node as MaterialNode<unknown>, layoutPlan: fragment.plan, fragmentPlan: fragment.fragmentPlan }]
+        : []),
       copyIndex: page.pageContext.copyIndex,
       yOffset: page.yOffset,
     })),

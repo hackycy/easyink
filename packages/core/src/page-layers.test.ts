@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { groupPageLayerPlansByPlacement, PAGE_CONTENT_LAYER_STACK_INDEX, planRepeatedOverlays, resolvePageLayerPlans, resolvePageLayers, resolvePageLayerStackIndex } from './page-layers'
+import { VIEWER_TREE_ABSOLUTE_MAX_NODES } from './viewer-render-tree'
 
 describe('page layers', () => {
   it('plans paintable output-page repeats only from compiled manifest declarations', () => {
@@ -34,6 +35,23 @@ describe('page layers', () => {
       pageCount: 0,
       paintableNodeIds: new Set(['page']),
     })).toEqual([])
+  })
+
+  it('enforces the shared viewer node budget before allocating repeated overlays', () => {
+    const input = {
+      nodes: [{ id: 'page', type: 'page-number' }] as never,
+      profile: { getManifest: () => ({ common: { layout: { pageRepeat: 'every-output-page' } } }) } as never,
+      paintableNodeIds: new Set(['page']),
+    }
+
+    expect(planRepeatedOverlays({
+      ...input,
+      pageCount: VIEWER_TREE_ABSOLUTE_MAX_NODES,
+    })).toHaveLength(VIEWER_TREE_ABSOLUTE_MAX_NODES)
+    expect(() => planRepeatedOverlays({
+      ...input,
+      pageCount: VIEWER_TREE_ABSOLUTE_MAX_NODES + 1,
+    })).toThrow('PAGE_REPEAT_OVERLAY_BUDGET_EXCEEDED')
   })
 
   it.each([-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER + 1])('rejects invalid page count %s', (pageCount) => {

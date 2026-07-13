@@ -141,6 +141,8 @@ export interface ViewerMeasureResult {
   width: number
   height: number
   overflow?: boolean
+  breakOpportunities?: MaterialLayoutPlan['breakOpportunities']
+  payload?: MaterialLayoutPlan['payload']
 }
 
 export interface MaterialViewerExtension {

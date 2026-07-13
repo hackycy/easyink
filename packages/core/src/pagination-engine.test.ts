@@ -171,6 +171,33 @@ describe('pagination ownership helpers', () => {
     }, contribution as unknown as MaterialFragmentContribution, { x: 0, y: 0 })).toThrow('MATERIAL_FRAGMENT_LEGACY_FIELD')
   })
 
+  it('accepts only the exact contribution data shape', () => {
+    const request = {
+      plan: makePlan(50),
+      startBlockOffset: 0,
+      endBlockOffset: 50,
+      availableHeight: 50,
+      pageIndex: 0,
+    }
+    const base = {
+      inlineSize: 80,
+      blockSize: 50,
+      consumedRange: { startBlockOffset: 0, endBlockOffset: 50 },
+      diagnostics: [],
+    }
+    const extra = { ...base, materialPage: 9 }
+    const symbolic = { ...base, [Symbol('authority')]: 9 }
+    const accessor = { ...base }
+    Object.defineProperty(accessor, 'materialPage', { get: () => 9 })
+    const inherited = Object.assign(Object.create({ pageIndex: 9 }), base)
+
+    expect(() => commitMaterialFragment(request, extra as MaterialFragmentContribution, { x: 0, y: 0 })).toThrow('MATERIAL_FRAGMENT_CONTRIBUTION_INVALID')
+    expect(() => commitMaterialFragment(request, symbolic as MaterialFragmentContribution, { x: 0, y: 0 })).toThrow('MATERIAL_FRAGMENT_CONTRIBUTION_INVALID')
+    expect(() => commitMaterialFragment(request, accessor as MaterialFragmentContribution, { x: 0, y: 0 })).toThrow('MATERIAL_FRAGMENT_CONTRIBUTION_INVALID')
+    expect(() => commitMaterialFragment(request, inherited as MaterialFragmentContribution, { x: 0, y: 0 })).toThrow('MATERIAL_FRAGMENT_LEGACY_FIELD')
+    expect(() => commitMaterialFragment(request, base, { x: 0, y: 0 })).not.toThrow()
+  })
+
   it('rejects invalid range, size, diagnostic identity, JSON, request, and placement facts', () => {
     const plan = makePlan(50)
     const base: MaterialFragmentContribution = {
@@ -237,6 +264,131 @@ describe('pagination ownership helpers', () => {
 })
 
 describe('runPagination', () => {
+  it('isolates the committed request from adapter mutation', () => {
+    const schema = makeSchema([makeNode('table', { height: 90 })])
+    const plan = makePlan(90)
+    const document = runLayoutPipeline(schema, { plans: new Map([['table', plan]]) })
+    const mutationResults: boolean[] = []
+
+    const result = runPagination(schema, document, {
+      resolveFragmentAdapter: () => ({
+        createFragment(request) {
+          mutationResults.push(
+            Reflect.set(request, 'startBlockOffset', 40),
+            Reflect.set(request.plan.borderBox, 'height', 1),
+          )
+          expect(() => Object.defineProperty(request, 'endBlockOffset', { get: () => 1 })).toThrow()
+          return {
+            inlineSize: request.plan.borderBox.width,
+            blockSize: request.endBlockOffset - request.startBlockOffset,
+            consumedRange: {
+              startBlockOffset: request.startBlockOffset,
+              endBlockOffset: request.endBlockOffset,
+            },
+            diagnostics: [],
+          }
+        },
+      }),
+    })
+
+    expect(mutationResults).toEqual([false, false])
+    expect(result.pages[0]!.fragments[0]!.fragmentPlan).toMatchObject({
+      sourceInstanceKey: 'table:instance',
+      consumedRange: { startBlockOffset: 0, endBlockOffset: 90 },
+    })
+  })
+
+  it.each([
+    ['fixed-sheets', 'fixed'],
+    ['none', 'continuous'],
+  ] as const)('commits adapter contributions for %s pagination', (strategy, mode) => {
+    const base = makeSchema([makeNode('table', { y: 0, height: 50 })])
+    const schema: DocumentSchema = {
+      ...base,
+      page: {
+        ...base.page,
+        mode,
+        pageModel: mode === 'continuous'
+          ? { kind: 'continuous-paper', paper: { width: 80, height: 100 } }
+          : base.page.pageModel,
+        pagination: { strategy },
+      },
+    }
+    const basePlan = makePlan(50)
+    const plan = freezeMaterialLayoutPlan({
+      ...basePlan,
+      borderBox: { ...basePlan.borderBox, y: 0 },
+      contentBox: { ...basePlan.contentBox, y: 0 },
+    })
+    const document = runLayoutPipeline(schema, { plans: new Map([['table', plan]]) })
+    const requests: Array<[number, number, number]> = []
+
+    const result = runPagination(schema, document, {
+      resolveFragmentAdapter: () => ({
+        createFragment(request) {
+          requests.push([request.startBlockOffset, request.endBlockOffset, request.pageIndex])
+          return {
+            inlineSize: request.plan.borderBox.width,
+            blockSize: request.endBlockOffset - request.startBlockOffset,
+            consumedRange: {
+              startBlockOffset: request.startBlockOffset,
+              endBlockOffset: request.endBlockOffset,
+            },
+            renderPayload: { strategy },
+            diagnostics: [],
+          }
+        },
+      }),
+    })
+
+    expect(requests).toEqual([[0, 50, 0]])
+    expect(result.pages[0]!.fragments[0]!.fragmentPlan).toMatchObject({
+      consumedRange: { startBlockOffset: 0, endBlockOffset: 50 },
+      renderPayload: { strategy },
+    })
+  })
+
+  it('commits monotonic fixed-sheet ranges for a fragment crossing page boundaries', () => {
+    const base = makeSchema([makeNode('table', { y: 10, height: 240 })])
+    const schema: DocumentSchema = {
+      ...base,
+      page: {
+        ...base.page,
+        layout: { strategy: 'absolute' },
+        reflow: { strategy: 'measure-only' },
+        pagination: { strategy: 'fixed-sheets', pageCount: 3 },
+      },
+    }
+    const plan = makePlan(240, [{ offset: 90 }, { offset: 180 }])
+    const document = runLayoutPipeline(schema, { plans: new Map([['table', plan]]) })
+    const requested: Array<[number, number]> = []
+
+    const result = runPagination(schema, document, {
+      resolveFragmentAdapter: () => ({
+        createFragment(request) {
+          requested.push([request.startBlockOffset, request.endBlockOffset])
+          return {
+            inlineSize: request.plan.borderBox.width,
+            blockSize: request.endBlockOffset - request.startBlockOffset,
+            consumedRange: {
+              startBlockOffset: request.startBlockOffset,
+              endBlockOffset: request.endBlockOffset,
+            },
+            diagnostics: [],
+          }
+        },
+      }),
+    })
+
+    expect(requested).toEqual([[0, 90], [90, 180], [180, 240]])
+    expect(result.pages.map(page => page.fragments[0]?.fragmentPlan?.consumedRange)).toEqual([
+      { startBlockOffset: 0, endBlockOffset: 90 },
+      { startBlockOffset: 90, endBlockOffset: 180 },
+      { startBlockOffset: 180, endBlockOffset: 240 },
+    ])
+    expect(result.diagnostics.filter(diagnostic => diagnostic.code === 'MATERIAL_FRAGMENT_OVERFLOW')).toHaveLength(0)
+  })
+
   it('owns a monotonic multi-page cursor and commits adapter contributions', () => {
     const schema = makeSchema([makeNode('table', { height: 240 })])
     const plan = makePlan(240, [{ offset: 90 }, { offset: 180 }])
