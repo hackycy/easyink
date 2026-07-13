@@ -11,6 +11,8 @@ import { validateDocumentWithProfile } from './schema-adapter'
 export type DocumentStoreEventKind = 'commit' | 'preview' | 'preview-cancel' | 'undo' | 'redo' | 'reset'
 
 export interface DocumentStoreEvent {
+  /** Monotonic write order for the lifetime of this store; reset never rewinds it. */
+  readonly sequence: number
   kind: DocumentStoreEventKind
   previousDocument: DocumentSchema
   previousIndex: DocumentIndexSnapshot
@@ -43,6 +45,7 @@ export class DocumentStore {
   private eventDispatchScheduled = false
   private readonly onListenerError?: (error: unknown, event: DocumentStoreEvent) => void
   private revisionValue = 0
+  private eventSequenceValue = 0
   readonly jsonValidation: Readonly<JsonValueValidationOptions>
 
   constructor(initial: DocumentSchema, readonly profile: CompiledMaterialProfile, options: DocumentStoreOptions = {}) {
@@ -65,6 +68,7 @@ export class DocumentStore {
   get committedIndex(): DocumentIndexSnapshot { return this.committedIndexValue }
   get materialNodeStates(): ReadonlyMap<string, MaterialNodeLoadState> { return this.materialNodeStatesValue }
   get revision(): number { return this.revisionValue }
+  get eventSequence(): number { return this.eventSequenceValue }
 
   createIndex(document: DocumentSchema, revision: number): DocumentIndexSnapshot {
     return DocumentIndexSnapshot.build(document, this.profile, revision)
@@ -100,6 +104,7 @@ export class DocumentStore {
       this.materialNodeStatesValue = write.validationReport.nodeStates
     }
     const event: DocumentStoreEvent = {
+      sequence: ++this.eventSequenceValue,
       kind: write.kind,
       previousDocument,
       previousIndex,

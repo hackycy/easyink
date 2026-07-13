@@ -61,6 +61,23 @@ describe('documentStore', () => {
     expect(events).toEqual(['preview:1->2', 'preview-cancel:2->1', 'commit:1->3'])
   })
 
+  it('assigns every write a monotonic event sequence that reset never rewinds', async () => {
+    const { profile, schema } = schemaWithX(1)
+    const store = new DocumentStore(schema, profile)
+    const sequences: number[] = []
+    store.subscribe(event => sequences.push(event.sequence))
+    const report = { valid: true, diagnostics: [], nodeStates: store.materialNodeStates } as any
+    const reset = schemaWithX(2).schema
+
+    ;(store as any)[DOCUMENT_STORE_WRITER]({ kind: 'reset', document: reset, validationReport: report })
+    ;(store as any)[DOCUMENT_STORE_WRITER]({ kind: 'reset', document: schema, validationReport: report })
+    await Promise.resolve()
+
+    expect(sequences).toEqual([1, 2])
+    expect(store.eventSequence).toBe(2)
+    expect(store.revision).toBe(0)
+  })
+
   it('resets with a clone and revision zero, and rejects unfrozen candidates', () => {
     const { profile, schema } = schemaWithX(1)
     const store = new DocumentStore(schema, profile)

@@ -284,6 +284,32 @@ describe('editingSession', () => {
     expect(store.editingSession.activeNodeId).toBe('owner')
   })
 
+  it('isolates a new stack from queued commit and reset events in the same tick', async () => {
+    const { store, extension } = editingStore()
+    store.documentTransactions.run('owner', (draft) => {
+      draft.x = 10
+    }, { label: 'Move owner' })
+    store.documentTransactions.reset(structuredClone(store.schema), store.materialNodeStates)
+    store.editingSession.enter('owner', extension)
+    store.editingSession.push('child', extension)
+
+    await Promise.resolve()
+
+    expect(store.editingSession.activeNodeId).toBe('child')
+  })
+
+  it('isolates a new stack from multiple queued resets in the same tick', async () => {
+    const { store, extension } = editingStore()
+    store.documentTransactions.reset(structuredClone(store.schema), store.materialNodeStates)
+    store.documentTransactions.reset(structuredClone(store.schema), store.materialNodeStates)
+    store.editingSession.enter('owner', extension)
+    store.editingSession.push('child', extension)
+
+    await Promise.resolve()
+
+    expect(store.editingSession.activeNodeId).toBe('child')
+  })
+
   it('shows panels only for the active frame and restores the parent panel on pop', () => {
     const { store, extension } = editingStore()
     const root = store.editingSession.enter('owner', extension)!

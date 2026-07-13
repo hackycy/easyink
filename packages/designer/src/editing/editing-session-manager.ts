@@ -14,8 +14,7 @@ export class EditingSessionManager {
   private _sessions = shallowRef<readonly EditingSession[]>(Object.freeze([]))
   private readonly _store: DesignerStore
   private readonly disposeDocumentSubscription: () => void
-  private readonly frameCreationRevision = new WeakMap<EditingSession, number>()
-  private readonly frameCreationIndex = new WeakMap<EditingSession, DocumentIndexSnapshot>()
+  private readonly frameCreationSequence = new WeakMap<EditingSession, number>()
   private cancelActiveGesture?: () => void
 
   constructor(store: DesignerStore) {
@@ -58,8 +57,7 @@ export class EditingSessionManager {
       this._store.documentTransactions.markHistoryBarrier()
     this.destroySuffix(0)
     const session = this.createSession(nodeId, extension, initialPoint)
-    this.frameCreationRevision.set(session, this._store.documentStore.revision)
-    this.frameCreationIndex.set(session, this._store.documentStore.committedIndex)
+    this.frameCreationSequence.set(session, this._store.documentStore.eventSequence)
     this._sessions.value = Object.freeze([session])
     this.syncActivePanel()
     return session
@@ -73,8 +71,7 @@ export class EditingSessionManager {
 
     this.beforeTransition()
     const session = this.createSession(nodeId, extension, initialPoint)
-    this.frameCreationRevision.set(session, this._store.documentStore.revision)
-    this.frameCreationIndex.set(session, this._store.documentStore.committedIndex)
+    this.frameCreationSequence.set(session, this._store.documentStore.eventSequence)
     this._sessions.value = Object.freeze([...this._sessions.value, session])
     this.syncActivePanel()
     return session
@@ -110,9 +107,12 @@ export class EditingSessionManager {
   rebaseDocumentSelection(event: DocumentStoreEvent): void {
     if (!this.isActive)
       return
+    const sessions = this._sessions.value
+    const firstNewFrame = sessions.findIndex(session => (this.frameCreationSequence.get(session) ?? Number.POSITIVE_INFINITY) >= event.sequence)
+    const eventFrameCount = firstNewFrame < 0 ? sessions.length : firstNewFrame
+    if (eventFrameCount === 0)
+      return
     if (event.kind === 'reset') {
-      if (this.frameCreationIndex.get(this._sessions.value[0]!) === event.index)
-        return
       this.cancelActiveGesture?.()
       this.destroySuffix(0)
       return
@@ -120,11 +120,6 @@ export class EditingSessionManager {
     if (!['commit', 'undo', 'redo'].includes(event.kind))
       return
 
-    const sessions = this._sessions.value
-    const applicableCount = sessions.findIndex(session => (this.frameCreationRevision.get(session) ?? Number.POSITIVE_INFINITY) >= event.index.revision)
-    const eventFrameCount = applicableCount < 0 ? sessions.length : applicableCount
-    if (eventFrameCount === 0)
-      return
     let keep = 0
     for (let index = 0; index < eventFrameCount; index += 1) {
       const session = sessions[index]!
