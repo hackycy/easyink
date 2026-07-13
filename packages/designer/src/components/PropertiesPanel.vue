@@ -36,16 +36,23 @@ const selectedElement = computed(() =>
 
 const propertyPreview = new PropertyPreviewController(store.documentTransactions)
 const contextualProperties = shallowRef<MaterialContextualPropertiesResult | null>(null)
+const committedContextSequence = shallowRef(0)
+const disposeCommittedContextSubscription = store.documentStore.subscribe((event) => {
+  if (!['commit', 'undo', 'redo', 'reset'].includes(event.kind))
+    return
+  propertyPreview.cancelActive()
+  committedContextSequence.value = event.sequence
+})
 let contextualRequestToken = 0
 watchEffect((onCleanup) => {
   if (contextualRequestToken > 0)
     propertyPreview.cancelActive()
-  const topology = store.schema.elements.map(node => node.id).join('\u0000')
+  const committedSequence = committedContextSequence.value
   const node = selectedElement.value
   const session = store.editingSession.activeSession
   const selection = session?.selectionStore.selection
   const token = ++contextualRequestToken
-  void topology
+  void committedSequence
   contextualProperties.value = null
   if (!node || !session || !selection)
     return
@@ -65,6 +72,8 @@ watchEffect((onCleanup) => {
       contextualProperties.value = result
   })
 })
+
+onUnmounted(disposeCommittedContextSubscription)
 
 const selectedElementRotatable = computed(() =>
   isElementRotatable(store, selectedElement.value),
