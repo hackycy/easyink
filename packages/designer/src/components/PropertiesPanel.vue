@@ -38,6 +38,8 @@ const propertyPreview = new PropertyPreviewController(store.documentTransactions
 const contextualProperties = shallowRef<MaterialContextualPropertiesResult | null>(null)
 let contextualRequestToken = 0
 watchEffect((onCleanup) => {
+  if (contextualRequestToken > 0)
+    propertyPreview.cancelActive()
   const topology = store.schema.elements.map(node => node.id).join('\u0000')
   const node = selectedElement.value
   const session = store.editingSession.activeSession
@@ -50,6 +52,8 @@ watchEffect((onCleanup) => {
   let cancelled = false
   onCleanup(() => {
     cancelled = true
+    if (token === contextualRequestToken)
+      propertyPreview.cancelActive()
   })
   void store.materialFacetHost.contextualProperties(store.materialProfile, node.type, {
     node,
@@ -116,8 +120,10 @@ async function updateSubProp(key: string, value: unknown) {
   const schema = contextual.descriptors.find(s => s.key === key)
   if (schema?.type === 'font' && typeof value === 'string') {
     const loaded = await store.ensureFontLoaded({ family: value })
-    if (!loaded)
+    if (!loaded) {
+      propertyPreview.cancel(`contextual:${contextual.contextKey}:${key}`)
       return
+    }
   }
   propertyPreview.commit(`contextual:${contextual.contextKey}:${key}`)
 }

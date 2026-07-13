@@ -38,7 +38,7 @@ describe('previewTransaction', () => {
   it('scopes replaceNode patches, supports RFC6901 paths, and remains usable after rejection', () => {
     const profile = createTestCompiledMaterialProfile()
     const schema = createCanonicalDefaultSchema()
-    schema.elements = [profile.createNode('box', { id: 'a', x: 0, model: { 'a/b': 1 } })]
+    schema.elements = [profile.createNode('box', { id: 'a', x: 0, model: { '': 0, 'a/b': 1 } })]
     const store = new DocumentStore(schema, profile)
     const engine = new DocumentTransactionEngine(store)
     const preview = engine.beginPreview({ label: 'Node', operation: moveOperation })
@@ -47,6 +47,10 @@ describe('previewTransaction', () => {
       ;(draft.model as Record<string, number>)['a/b'] = 2
     })
     expect(store.document.elements[0]!.model['a/b']).toBe(2)
+    preview.replaceNode('a', ['/model/'], (draft) => {
+      ;(draft.model as Record<string, number>)[''] = 3
+    })
+    expect(store.document.elements[0]!.model['']).toBe(3)
     expect(() => preview.replaceNode('a', ['/x'], (draft) => {
       draft.y = 10
     })).toThrow(/outside declared property paths/)

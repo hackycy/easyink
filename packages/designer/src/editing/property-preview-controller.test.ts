@@ -63,4 +63,19 @@ describe('property preview controller', () => {
     controller.commit('value')
     expect(store.document.elements[0]!.model.value).toBe(4)
   })
+
+  it('restores a contextual font preview when loading fails', async () => {
+    const { store, engine } = harness()
+    const controller = new PropertyPreviewController(engine)
+    const fontDescriptor = { key: 'font', label: 'Font', type: 'font' as const, accessor: createModelPropertyAccessor<string>('/font') }
+    controller.previewProperty('contextual:text:font', store.document.elements[0]!, fontDescriptor, 'Missing Font', { sessionPath: ['box'], selectionLineage: 'selection' })
+    expect(store.document.elements[0]!.model.font).toBe('Missing Font')
+
+    const loaded = await Promise.resolve(false)
+    if (!loaded)
+      controller.cancel('contextual:text:font')
+
+    expect(store.document.elements[0]!.model.font).toBeUndefined()
+    expect(engine.totalCount).toBe(0)
+  })
 })

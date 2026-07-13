@@ -188,7 +188,7 @@ function decodePointer(path: string): string[] {
     if (/~(?:[^01]|$)/u.test(token))
       throw new PreviewMutationScopeError([])
     const decoded = token.replaceAll('~1', '/').replaceAll('~0', '~')
-    if (decoded === '' || decoded === '__proto__' || decoded === 'prototype' || decoded === 'constructor')
+    if (decoded === '__proto__' || decoded === 'prototype' || decoded === 'constructor')
       throw new PreviewMutationScopeError([])
     return decoded
   })

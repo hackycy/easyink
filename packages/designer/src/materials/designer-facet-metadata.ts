@@ -9,14 +9,18 @@ export function prepareDesignerFacetMetadata(value: unknown, surface: RuntimeMat
   const catalog = readOwnEnumerableData(value, 'catalog', true)
   const localeMessages = readOwnEnumerableData(value, 'localeMessages', false)
   const dispose = readOwnEnumerableData(value, 'dispose', false)
+  const contextualProperties = readOwnEnumerableData(value, 'contextualProperties', false)
   if (dispose !== undefined && typeof dispose !== 'function')
     throw new Error('MATERIAL_DESIGNER_FACET_DISPOSE_INVALID')
+  if (contextualProperties !== undefined && typeof contextualProperties !== 'function')
+    throw new Error('MATERIAL_DESIGNER_FACET_CONTEXTUAL_PROPERTIES_INVALID')
 
   const prepared: MaterialDesignerFacet = {
     extension: extension as MaterialDesignerFacet['extension'],
     catalog: catalog as MaterialDesignerFacet['catalog'],
     ...(localeMessages === undefined ? {} : { localeMessages: cloneLocaleRegistration(localeMessages) }),
     ...(typeof dispose === 'function' ? { dispose: () => Reflect.apply(dispose, value, []) as void | Promise<void> } : {}),
+    ...(typeof contextualProperties === 'function' ? { contextualProperties: request => Reflect.apply(contextualProperties, value, [request]) } : {}),
   }
   return Object.freeze(prepared)
 }
