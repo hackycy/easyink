@@ -1,5 +1,5 @@
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
-import type { MaterialFragmentContribution, MaterialLayoutPlan } from './material-layout-plan'
+import type { MaterialBreakOpportunity, MaterialFragmentContribution, MaterialLayoutPlan } from './material-layout-plan'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -88,6 +88,22 @@ describe('pagination ownership helpers', () => {
     expect(chooseBreak(plan, 40, 60)?.blockOffset).toBe(90)
     expect(chooseBreak(plan, 90, 50)).toEqual({ id: '$end', blockOffset: 140, penalty: 0 })
     expect(chooseBreak(plan, 90, 20)).toBeUndefined()
+  })
+
+  it('keeps penalty semantics across changing windows and nonzero starts', () => {
+    const plan = makePlan(50, [
+      { offset: 10, penalty: 0 },
+      { offset: 20, penalty: 5 },
+      { offset: 30, penalty: 1 },
+      { offset: 40, penalty: 1 },
+    ])
+
+    expect(chooseBreak(plan, 0, 15)?.blockOffset).toBe(10)
+    expect(chooseBreak(plan, 0, 35)?.blockOffset).toBe(10)
+    expect(chooseBreak(plan, 10, 15)?.blockOffset).toBe(20)
+    expect(chooseBreak(plan, 20, 5)).toBeUndefined()
+    expect(chooseBreak(plan, 20, 20)?.blockOffset).toBe(40)
+    expect(chooseBreak(plan, 40, 10)).toEqual({ id: '$end', blockOffset: 50, penalty: 0 })
   })
 
   it.each([
@@ -336,6 +352,55 @@ describe('runPagination', () => {
     expect(Object.isFrozen(adapterPlans[0]!.payload)).toBe(true)
     expect(Object.isFrozen(sourcePlan)).toBe(false)
     expect(Object.isFrozen(payload)).toBe(false)
+  })
+
+  it('bounds total break entry reads across 2048 one-row pages', () => {
+    const pageCount = 2_048
+    let breakEntryReads = 0
+    const breaks = new Proxy(Array.from({ length: pageCount - 1 }, (_, index): MaterialBreakOpportunity => ({
+      id: `row-${index + 1}`,
+      blockOffset: index + 1,
+      penalty: index === 0 ? 0 : (index % 7) + 1,
+    })), {
+      get(target, property, receiver) {
+        if (typeof property === 'string' && /^(?:0|[1-9]\d*)$/.test(property))
+          breakEntryReads += 1
+        return Reflect.get(target, property, receiver)
+      },
+    })
+    const node = makeNode('table', { y: 0, height: pageCount })
+    const schema: DocumentSchema = {
+      ...makeSchema([node]),
+      page: {
+        ...makeSchema([]).page,
+        height: 1,
+        pageModel: { kind: 'paged-paper', paper: { width: 80, height: 1 } },
+        layout: { strategy: 'absolute' },
+        reflow: { strategy: 'measure-only' },
+        pagination: { strategy: 'auto-sheets' },
+      },
+    }
+    const sourcePlan: MaterialLayoutPlan = {
+      instanceKey: 'table:indexed-breaks',
+      nodeId: node.id,
+      nodeRevision: 1,
+      constraintKey: '80:1:mm:horizontal-tb',
+      borderBox: { x: 0, y: 0, width: 80, height: pageCount },
+      contentBox: { x: 0, y: 0, width: 80, height: pageCount },
+      slotBoxes: [],
+      breakOpportunities: breaks,
+      diagnostics: [],
+    }
+
+    const result = runPagination(schema, {
+      width: 80,
+      height: pageCount,
+      fragments: [{ node, plan: sourcePlan }],
+      diagnostics: [],
+    })
+
+    expect(result.pages).toHaveLength(pageCount)
+    expect(breakEntryReads).toBeLessThanOrEqual(breaks.length + pageCount * 24)
   })
 
   it('isolates the committed request from adapter mutation', () => {

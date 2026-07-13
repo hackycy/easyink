@@ -32,6 +32,15 @@ interface PreparedFragmentPagination {
   readonly adapter?: MaterialFragmentAdapter
   readonly adapterPlan: MaterialLayoutPlan
   readonly embeddedFragmentPlan?: MaterialFragmentPlan
+  readonly breakSelector: PreparedBreakSelector
+}
+
+interface PreparedBreakSelector {
+  choose: (
+    startBlockOffset: number,
+    availableHeight: number,
+  ) => MaterialBreakOpportunity | { id: '$end', blockOffset: number, penalty: number } | undefined
+  firstLaterBoundaryOrEnd: (startBlockOffset: number) => number
 }
 
 const FRAGMENT_SIZE_TOLERANCE = 1e-9
@@ -69,28 +78,91 @@ export function chooseBreak(
   availableHeight: number,
 ): MaterialBreakOpportunity | { id: '$end', blockOffset: number, penalty: number } | undefined {
   assertValidPaginationPlan(plan)
-  const height = plan.borderBox.height
+  return prepareBreakSelector(plan).choose(startBlockOffset, availableHeight)
+}
+
+function validateBreakInput(height: number, startBlockOffset: number, availableHeight: number): void {
   if (!Number.isFinite(startBlockOffset) || startBlockOffset < 0 || startBlockOffset > height
     || !Number.isFinite(availableHeight) || availableHeight < 0) {
     throw new Error('MATERIAL_BREAK_INPUT_INVALID')
   }
+}
 
-  const limit = Math.min(startBlockOffset + availableHeight, height)
-  if (height <= limit)
-    return { id: '$end', blockOffset: height, penalty: 0 }
+function prepareBreakSelector(plan: MaterialLayoutPlan<unknown>): PreparedBreakSelector {
+  const height = plan.borderBox.height
+  const candidates = plan.breakOpportunities
+  const offsets = new Float64Array(candidates.length)
+  const penalties = new Float64Array(candidates.length)
+  let treeSize = 1
+  while (treeSize < candidates.length)
+    treeSize *= 2
+  const tree = new Int32Array(treeSize * 2)
+  tree.fill(-1)
 
-  let chosen: MaterialBreakOpportunity | undefined
-  for (const candidate of plan.breakOpportunities) {
-    if (candidate.blockOffset <= startBlockOffset)
-      continue
-    if (candidate.blockOffset > limit)
-      break
-    if (!chosen || candidate.penalty < chosen.penalty
-      || (candidate.penalty === chosen.penalty && candidate.blockOffset > chosen.blockOffset)) {
-      chosen = candidate
-    }
+  for (let index = 0; index < candidates.length; index++) {
+    const candidate = candidates[index]!
+    offsets[index] = candidate.blockOffset
+    penalties[index] = candidate.penalty
+    tree[treeSize + index] = index
   }
-  return chosen
+
+  const betterIndex = (left: number, right: number): number => {
+    if (left < 0)
+      return right
+    if (right < 0)
+      return left
+    if (penalties[left]! !== penalties[right]!)
+      return penalties[left]! < penalties[right]! ? left : right
+    return left > right ? left : right
+  }
+  for (let index = treeSize - 1; index > 0; index--)
+    tree[index] = betterIndex(tree[index * 2]!, tree[index * 2 + 1]!)
+
+  const upperBound = (value: number): number => {
+    let low = 0
+    let high = offsets.length
+    while (low < high) {
+      const middle = low + Math.floor((high - low) / 2)
+      if (offsets[middle]! <= value)
+        low = middle + 1
+      else
+        high = middle
+    }
+    return low
+  }
+
+  const bestInRange = (start: number, end: number): number => {
+    let left = start + treeSize
+    let right = end + treeSize
+    let best = -1
+    while (left < right) {
+      if (left % 2 === 1)
+        best = betterIndex(best, tree[left++]!)
+      if (right % 2 === 1)
+        best = betterIndex(best, tree[--right]!)
+      left = Math.floor(left / 2)
+      right = Math.floor(right / 2)
+    }
+    return best
+  }
+
+  return Object.freeze({
+    choose(startBlockOffset: number, availableHeight: number) {
+      validateBreakInput(height, startBlockOffset, availableHeight)
+      const limit = Math.min(startBlockOffset + availableHeight, height)
+      if (height <= limit)
+        return { id: '$end', blockOffset: height, penalty: 0 }
+
+      const first = upperBound(startBlockOffset)
+      const last = upperBound(limit)
+      const selectedIndex = bestInRange(first, last)
+      return selectedIndex < 0 ? undefined : candidates[selectedIndex]
+    },
+    firstLaterBoundaryOrEnd(startBlockOffset: number) {
+      const index = upperBound(startBlockOffset)
+      return index < offsets.length ? offsets[index]! : height
+    },
+  })
 }
 
 export function fragmentRangeMadeProgress(
@@ -218,8 +290,9 @@ function createFixedSheets(
       const pageStart = pageIndex * pageHeight
       const relativeTop = firstPlacement ? Math.max(box.y - pageStart, 0) : 0
       const availableHeight = Math.max(pageHeight - relativeTop, 0)
-      const selected = chooseBreak(fragment.plan, startBlockOffset, availableHeight)
-      let endBlockOffset = selected?.blockOffset ?? firstLaterBoundaryOrEnd(fragment.plan, startBlockOffset)
+      const selected = prepared.breakSelector.choose(startBlockOffset, availableHeight)
+      let endBlockOffset = selected?.blockOffset
+        ?? prepared.breakSelector.firstLaterBoundaryOrEnd(startBlockOffset)
       if (pageIndex === pageCount - 1 && endBlockOffset < box.height)
         endBlockOffset = box.height
 
@@ -344,8 +417,9 @@ function createAutoSheets(
       }
 
       const availableHeight = Math.max(pageHeight - relativeTop, 0)
-      const selected = chooseBreak(fragment.plan, startBlockOffset, availableHeight)
-      const endBlockOffset = selected?.blockOffset ?? firstLaterBoundaryOrEnd(fragment.plan, startBlockOffset)
+      const selected = prepared.breakSelector.choose(startBlockOffset, availableHeight)
+      const endBlockOffset = selected?.blockOffset
+        ?? prepared.breakSelector.firstLaterBoundaryOrEnd(startBlockOffset)
       const overflow = endBlockOffset - startBlockOffset > availableHeight
       if (overflow) {
         diagnostics.push(createFragmentOverflowDiagnostic(
@@ -649,11 +723,6 @@ function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-function firstLaterBoundaryOrEnd(plan: MaterialLayoutPlan<unknown>, startBlockOffset: number): number {
-  return plan.breakOpportunities.find(candidate => candidate.blockOffset > startBlockOffset)?.blockOffset
-    ?? plan.borderBox.height
-}
-
 function createDefaultContribution(
   request: MaterialFragmentRequest,
   embedded?: MaterialFragmentPlan,
@@ -723,6 +792,7 @@ function prepareFragmentPagination(
   return Object.freeze({
     fragment,
     adapterPlan,
+    breakSelector: prepareBreakSelector(adapterPlan),
     ...(adapter === undefined ? {} : { adapter }),
     ...(fragment.fragmentPlan === undefined
       ? {}
