@@ -3,10 +3,15 @@ import type { MaterialFragmentPlan, MaterialLayoutPlan } from './material-layout
 import { describe, expect, it } from 'vitest'
 import {
   createLayoutConstraintKey,
+  createNonFragmentingMaterialPlans,
   freezeMaterialFragmentPlan,
   freezeMaterialLayoutPlan,
   validateMaterialLayoutPlan,
 } from './material-layout-plan'
+
+interface InterfacePayload {
+  rows: Array<{ id: string }>
+}
 
 function createPlan(overrides: Partial<MaterialLayoutPlan> = {}): MaterialLayoutPlan {
   return {
@@ -31,6 +36,55 @@ describe('material layout plan', () => {
       unit: 'mm',
       writingMode: 'horizontal-tb',
     })).toBe('210:297:mm:horizontal-tb')
+  })
+
+  it('creates a frozen non-fragmenting fallback with one full consumed range', () => {
+    const published = createNonFragmentingMaterialPlans({
+      instanceKey: 'n1',
+      nodeId: 'n1',
+      nodeRevision: 2,
+      constraintKey: '10:20:mm:horizontal-tb',
+      borderBox: { x: 0, y: 0, width: 10, height: 20 },
+      fragmentBox: { x: 3, y: 4, width: 10, height: 20 },
+      pageIndex: 4,
+    })
+
+    expect(published.layoutPlan.breakOpportunities).toEqual([])
+    expect(published.fragmentPlan).toMatchObject({
+      id: JSON.stringify(['material-fragment', 'n1', 4, 0, 20]),
+      sourceInstanceKey: 'n1',
+      sourceNodeId: 'n1',
+      consumedRange: { startBlockOffset: 0, endBlockOffset: 20 },
+    })
+    expect(validateMaterialLayoutPlan(published.layoutPlan)).toEqual([])
+    expect(Object.isFrozen(published)).toBe(true)
+    expect(Object.isFrozen(published.layoutPlan)).toBe(true)
+    expect(Object.isFrozen(published.fragmentPlan)).toBe(true)
+  })
+
+  it('mints stable injective fallback fragment identities across output pages', () => {
+    const createFragmentId = (instanceKey: string, pageIndex: number) => createNonFragmentingMaterialPlans({
+      instanceKey,
+      nodeId: 'source-node',
+      nodeRevision: 2,
+      constraintKey: '10:20:mm:horizontal-tb',
+      borderBox: { x: 0, y: 0, width: 10, height: 20 },
+      fragmentBox: { x: 3, y: 4, width: 10, height: 20 },
+      pageIndex,
+    }).fragmentPlan.id
+
+    const delimiterLikeInstanceKey = 'owner/child:[",":full]'
+    const first = createFragmentId(delimiterLikeInstanceKey, 4)
+
+    expect(first).toBe(createFragmentId(delimiterLikeInstanceKey, 4))
+    expect(first).not.toBe(createFragmentId(delimiterLikeInstanceKey, 5))
+    expect(first).toBe(JSON.stringify([
+      'material-fragment',
+      delimiterLikeInstanceKey,
+      4,
+      0,
+      20,
+    ]))
   })
 
   it('rejects non-finite geometry, invalid identity, duplicate slot instances, and invalid break order', () => {
@@ -97,6 +151,19 @@ describe('material layout plan', () => {
     expect(Object.isFrozen(source.slotBoxes[0]!.box)).toBe(false)
     expect(Object.isFrozen(source.diagnostics[0]!.detail)).toBe(false)
     expect(Object.isFrozen(source.payload.rows)).toBe(false)
+  })
+
+  it('preserves a JSON-safe interface payload without requiring an index signature', () => {
+    const source: MaterialLayoutPlan<InterfacePayload> = {
+      ...createPlan(),
+      payload: { rows: [{ id: 'r1' }] },
+    }
+
+    const published = freezeMaterialLayoutPlan(source)
+
+    expect(published.payload?.rows[0]?.id).toBe('r1')
+    expect(Object.isFrozen(published.payload?.rows)).toBe(true)
+    expect(Object.isFrozen(source.payload?.rows)).toBe(false)
   })
 
   it('rejects non-JSON payloads and diagnostic details', () => {

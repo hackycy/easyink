@@ -1,11 +1,11 @@
 import type { BrowserDomCapabilities, ViewerTreeMount, ViewerTreePolicy } from '@easyink/browser-dom'
-import type { MaterialNodeLoadState, PageLayerRenderPlan, PageLayerRenderPlanBuckets, PagePlanEntry, TextWatermarkPageLayerPlan } from '@easyink/core'
+import type { LayoutConstraints, MaterialNodeLoadState, MaterialRenderBudgetToken, MaterialRenderNodeKind, PageLayerRenderPlan, PageLayerRenderPlanBuckets, PagePlanEntry, TextWatermarkPageLayerPlan } from '@easyink/core'
 import type { MaterialNode, PageBackground, PageSchema } from '@easyink/schema'
 import type { UnitType } from '@easyink/shared'
 import type { ProfileMaterialRuntime } from './material-runtime'
 import type { ViewerDiagnosticEvent, ViewerRenderContext, ViewerRenderSize } from './types'
 import { createBrowserDomCapabilities, createBrowserDomFallbackCapabilities, createBrowserDomHostMount, renderViewerTree } from '@easyink/browser-dom'
-import { groupPageLayerPlansByPlacement, inspectMaterialNode, PAGE_CONTENT_LAYER_STACK_INDEX, resolvePageLayerPlans, resolvePageLayerStackIndex, viewerElement, viewerText } from '@easyink/core'
+import { createLayoutConstraintKey, createNonFragmentingMaterialPlans, groupPageLayerPlansByPlacement, inspectMaterialNode, PAGE_CONTENT_LAYER_STACK_INDEX, resolvePageLayerPlans, resolvePageLayerStackIndex, VIEWER_TREE_ABSOLUTE_MAX_NODES, viewerElement, viewerFragment, viewerText } from '@easyink/core'
 import { UNIT_FACTOR } from '@easyink/shared'
 import { safeSummarizeThrown } from './safe-thrown'
 
@@ -65,24 +65,6 @@ export function renderPages(
     appendPageLayers(document, pageEl, pageLayerBuckets.underContent, page, unit, diagnostics)
     pageEl.appendChild(contentLayer)
 
-    const context: ViewerRenderContext = {
-      data,
-      resolvedProps: {},
-      pageIndex: page.index,
-      unit,
-      zoom,
-      capabilities: deniedRenderCapabilities,
-      reportDiagnostic: diagnostic => diagnostics.push({
-        category: 'datasource',
-        severity: diagnostic.severity,
-        code: diagnostic.code,
-        message: diagnostic.message,
-        nodeId: diagnostic.nodeId,
-        scope: 'datasource',
-        cause: diagnostic.cause,
-      }),
-    }
-
     // Sort elements by zIndex for proper layering
     const sorted = [...page.elements].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0))
 
@@ -92,14 +74,37 @@ export function renderPages(
         continue
 
       const resolved = resolvedPropsMap.get(node.id) ?? node.model as Record<string, unknown>
-      context.resolvedProps = resolved
-
       const nodeForRender: MaterialNode<unknown> = { ...node, model: resolved }
       let capabilities: BrowserDomCapabilities | undefined
       try {
         const facetCapabilities = materials.getCapabilities(node.type)
         capabilities = createNodeCapabilities(document, facetCapabilities, hostImperativeDom, browserDom?.policy, browserDom?.maxNodes)
-        context.capabilities = facetCapabilities?.sanitizedMarkup ? capabilities : deniedRenderCapabilities
+        const context = createLegacyRenderContext({
+          node: nodeForRender,
+          resolvedModel: resolved,
+          instanceKey: node.id,
+          fragmentBox: {
+            x: node.x,
+            y: node.y - page.yOffset,
+            width: node.width,
+            height: node.height,
+          },
+          pageIndex: page.index,
+          unit,
+          zoom,
+          data,
+          capabilities: facetCapabilities?.sanitizedMarkup ? capabilities : deniedRenderCapabilities,
+          maxNodes: browserDom?.maxNodes,
+          reportDiagnostic: diagnostic => diagnostics.push({
+            category: 'datasource',
+            severity: diagnostic.severity,
+            code: diagnostic.code,
+            message: diagnostic.message,
+            nodeId: diagnostic.nodeId,
+            scope: 'datasource',
+            cause: diagnostic.cause,
+          }),
+        })
         const admitted = isNodeAdmitted(node, nodeStates)
         if (!admitted) {
           const sourceNodeId = readVirtualSourceNodeId(node)
@@ -116,7 +121,7 @@ export function renderPages(
           }
         }
         context.slotOutputs = admitted
-          ? createSlotMountOutputs(nodeForRender, materials, context, capabilities, nodeStates, resolvedPropsMap, hostImperativeDom, browserDom, diagnostics)
+          ? createSlotMountOutputs(nodeForRender, materials, context, capabilities, page, nodeStates, resolvedPropsMap, hostImperativeDom, browserDom, diagnostics)
           : undefined
         const output = materials.render(nodeForRender, context, admitted)
         const renderSize = admitted ? materials.getRenderSize(nodeForRender, context) : { width: node.width, height: node.height }
@@ -158,6 +163,7 @@ function createSlotMountOutputs(
   materials: ProfileMaterialRuntime,
   context: ViewerRenderContext,
   ownerCapabilities: BrowserDomCapabilities,
+  page: PagePlanEntry,
   nodeStates: ReadonlyMap<string, MaterialNodeLoadState>,
   resolvedPropsMap: ReadonlyMap<string, Record<string, unknown>>,
   hostImperativeDom: ReadonlySet<string>,
@@ -180,6 +186,7 @@ function createSlotMountOutputs(
       node,
       materials,
       context,
+      page,
       nodeStates,
       resolvedPropsMap,
       hostImperativeDom,
@@ -194,6 +201,7 @@ function mountSlotMaterial(
   node: MaterialNode<unknown>,
   materials: ProfileMaterialRuntime,
   parentContext: ViewerRenderContext,
+  page: PagePlanEntry,
   nodeStates: ReadonlyMap<string, MaterialNodeLoadState>,
   resolvedPropsMap: ReadonlyMap<string, Record<string, unknown>>,
   hostImperativeDom: ReadonlySet<string>,
@@ -203,16 +211,29 @@ function mountSlotMaterial(
   const facetCapabilities = materials.getCapabilities(node.type)
   const capabilities = createNodeCapabilities(host.ownerDocument, facetCapabilities, hostImperativeDom, browserDom?.policy, browserDom?.maxNodes)
   const admitted = isNodeAdmitted(node, nodeStates)
-  const childContext: ViewerRenderContext = {
-    ...parentContext,
-    resolvedProps: resolvedPropsMap.get(node.id) ?? node.model as Record<string, unknown>,
+  const resolvedModel = resolvedPropsMap.get(node.id) ?? node.model as Record<string, unknown>
+  const childContext = createLegacyRenderContext({
+    node,
+    resolvedModel,
+    instanceKey: `${parentContext.instanceKey}/${node.id}`,
+    fragmentBox: {
+      x: parentContext.fragmentPlan.box.x + node.x,
+      y: parentContext.fragmentPlan.box.y + node.y,
+      width: node.width,
+      height: node.height,
+    },
+    pageIndex: parentContext.pageIndex,
+    unit: parentContext.unit,
+    zoom: parentContext.zoom,
+    data: parentContext.data,
     capabilities: facetCapabilities?.sanitizedMarkup ? capabilities : deniedRenderCapabilities,
-    slotOutputs: undefined,
-  }
-  const childForRender = { ...node, model: childContext.resolvedProps }
+    maxNodes: browserDom?.maxNodes,
+    reportDiagnostic: parentContext.reportDiagnostic,
+  })
+  const childForRender = { ...node, model: resolvedModel }
   try {
     childContext.slotOutputs = admitted
-      ? createSlotMountOutputs(childForRender, materials, childContext, capabilities, nodeStates, resolvedPropsMap, hostImperativeDom, browserDom, diagnostics)
+      ? createSlotMountOutputs(childForRender, materials, childContext, capabilities, page, nodeStates, resolvedPropsMap, hostImperativeDom, browserDom, diagnostics)
       : undefined
     const output = materials.render(childForRender, childContext, admitted)
     if (admitted)
@@ -246,6 +267,88 @@ function createNodeCapabilities(
     maxNodes,
     imperativeDom: facetCapabilities?.imperativeDom?.filter(capability => hostImperativeDom.has(capability)) ?? [],
   })
+}
+
+interface LegacyRenderContextInput {
+  node: MaterialNode<unknown>
+  resolvedModel: Record<string, unknown>
+  instanceKey: string
+  fragmentBox: Readonly<{ x: number, y: number, width: number, height: number }>
+  pageIndex: number
+  unit: string
+  zoom: number
+  data: Readonly<Record<string, unknown>>
+  capabilities: ViewerRenderContext['capabilities']
+  maxNodes?: number
+  reportDiagnostic?: ViewerRenderContext['reportDiagnostic']
+}
+
+function createLegacyRenderContext(input: LegacyRenderContextInput): ViewerRenderContext {
+  const { node } = input
+  const layoutUnit = resolveLayoutUnit(input.unit)
+  const plans = createNonFragmentingMaterialPlans({
+    instanceKey: input.instanceKey,
+    nodeId: node.id,
+    nodeRevision: node.modelVersion,
+    constraintKey: createLayoutConstraintKey({
+      availableWidth: node.width,
+      availableHeight: node.height,
+      unit: layoutUnit,
+      writingMode: 'horizontal-tb',
+    }),
+    pageIndex: input.pageIndex,
+    borderBox: { x: 0, y: 0, width: node.width, height: node.height },
+    fragmentBox: input.fragmentBox,
+  })
+  const context: ViewerRenderContext = {
+    data: input.data,
+    resolvedModel: input.resolvedModel,
+    instanceKey: input.instanceKey,
+    layoutPlan: plans.layoutPlan,
+    fragmentPlan: plans.fragmentPlan,
+    renderSlot: slotInstanceKey => viewerFragment(
+      context.layoutPlan.slotBoxes.some(slot => slot.slotInstanceKey === slotInstanceKey)
+        ? context.slotOutputs?.[slotInstanceKey] ?? []
+        : [],
+    ),
+    renderBudget: createRenderBudget(input.maxNodes),
+    resolvedProps: input.resolvedModel,
+    pageIndex: input.pageIndex,
+    unit: input.unit,
+    zoom: input.zoom,
+    capabilities: input.capabilities,
+    reportDiagnostic: input.reportDiagnostic,
+  }
+  return context
+}
+
+function createRenderBudget(configuredMaxNodes?: number): MaterialRenderBudgetToken {
+  const configuredLimit = configuredMaxNodes !== undefined
+    && Number.isSafeInteger(configuredMaxNodes)
+    && configuredMaxNodes >= 0
+    ? configuredMaxNodes
+    : VIEWER_TREE_ABSOLUTE_MAX_NODES
+  const maxNodes = Math.min(configuredLimit, VIEWER_TREE_ABSOLUTE_MAX_NODES)
+  let nodesUsed = 0
+  return Object.freeze({
+    maxNodes,
+    get nodesUsed() {
+      return nodesUsed
+    },
+    reserveNodes(_kind: MaterialRenderNodeKind, count: number) {
+      if (!Number.isSafeInteger(count) || count < 0)
+        throw new Error('VIEWER_RENDER_BUDGET_RESERVATION_INVALID')
+      if (nodesUsed + count > maxNodes)
+        throw new Error('VIEWER_RENDER_BUDGET_EXCEEDED')
+      nodesUsed += count
+    },
+  })
+}
+
+function resolveLayoutUnit(unit: string): LayoutConstraints['unit'] {
+  if (unit === 'mm' || unit === 'pt' || unit === 'px' || unit === 'inch')
+    return unit
+  throw new Error(`VIEWER_LAYOUT_UNIT_UNSUPPORTED: ${unit}`)
 }
 
 function disposeMounts(mounts: readonly ViewerTreeMount[], onError?: (error: unknown) => void): void {

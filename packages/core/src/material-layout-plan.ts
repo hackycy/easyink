@@ -33,7 +33,7 @@ export interface MaterialBreakOpportunity {
   readonly penalty: number
 }
 
-export interface MaterialLayoutPlan<TPayload extends JsonValue = JsonValue> {
+export interface MaterialLayoutPlan<TPayload = JsonValue> {
   readonly instanceKey: string
   readonly nodeId: string
   readonly nodeRevision: number
@@ -44,6 +44,23 @@ export interface MaterialLayoutPlan<TPayload extends JsonValue = JsonValue> {
   readonly breakOpportunities: readonly MaterialBreakOpportunity[]
   readonly diagnostics: readonly LayoutPlanDiagnostic[]
   readonly payload?: TPayload
+}
+
+export interface NonFragmentingMaterialPlansInput {
+  readonly instanceKey: string
+  readonly nodeId: string
+  readonly nodeRevision: number
+  readonly constraintKey: string
+  readonly pageIndex: number
+  readonly borderBox: Readonly<Rect>
+  readonly contentBox?: Readonly<Rect>
+  readonly fragmentBox: Readonly<Rect>
+  readonly fragmentId?: string
+}
+
+export interface NonFragmentingMaterialPlans {
+  readonly layoutPlan: MaterialLayoutPlan
+  readonly fragmentPlan: MaterialFragmentPlan
 }
 
 export interface MaterialFragmentRequest {
@@ -235,7 +252,44 @@ export function createLayoutConstraintKey(input: LayoutConstraints): string {
   return [input.availableWidth, input.availableHeight, input.unit, input.writingMode].join(':')
 }
 
-export function validateMaterialLayoutPlan(plan: MaterialLayoutPlan): LayoutPlanDiagnostic[] {
+/** Builds core-owned fallback facts for materials without a layout adapter. */
+export function createNonFragmentingMaterialPlans(
+  input: NonFragmentingMaterialPlansInput,
+): NonFragmentingMaterialPlans {
+  const diagnostics = Object.freeze([]) as readonly LayoutPlanDiagnostic[]
+  const layoutPlan = freezeMaterialLayoutPlan({
+    instanceKey: input.instanceKey,
+    nodeId: input.nodeId,
+    nodeRevision: input.nodeRevision,
+    constraintKey: input.constraintKey,
+    borderBox: input.borderBox,
+    contentBox: input.contentBox ?? input.borderBox,
+    slotBoxes: Object.freeze([]),
+    breakOpportunities: Object.freeze([]),
+    diagnostics,
+  })
+  const fragmentPlan = freezeMaterialFragmentPlan({
+    id: input.fragmentId ?? JSON.stringify([
+      'material-fragment',
+      input.instanceKey,
+      input.pageIndex,
+      0,
+      input.borderBox.height,
+    ]),
+    sourceInstanceKey: input.instanceKey,
+    sourceNodeId: input.nodeId,
+    box: input.fragmentBox,
+    consumedRange: {
+      startBlockOffset: 0,
+      endBlockOffset: input.borderBox.height,
+    },
+    diagnostics,
+  })
+
+  return Object.freeze({ layoutPlan, fragmentPlan })
+}
+
+export function validateMaterialLayoutPlan<TPayload>(plan: MaterialLayoutPlan<TPayload>): LayoutPlanDiagnostic[] {
   const diagnostics: LayoutPlanDiagnostic[] = []
 
   if (!plan.instanceKey || !plan.nodeId || !plan.constraintKey
@@ -329,13 +383,13 @@ export function validateMaterialLayoutPlan(plan: MaterialLayoutPlan): LayoutPlan
   return diagnostics
 }
 
-export function freezeMaterialLayoutPlan<TPayload extends JsonValue = JsonValue>(
+export function freezeMaterialLayoutPlan<TPayload = JsonValue>(
   plan: MaterialLayoutPlan<TPayload>,
 ): MaterialLayoutPlan<TPayload> {
   assertDiagnosticDetails(plan.diagnostics)
   const payload = plan.payload === undefined
     ? {}
-    : { payload: cloneAndFreezeJson(plan.payload) }
+    : { payload: cloneAndFreezePersistedValue(plan.payload) }
 
   return Object.freeze({
     ...plan,
@@ -348,7 +402,7 @@ export function freezeMaterialLayoutPlan<TPayload extends JsonValue = JsonValue>
     breakOpportunities: Object.freeze(plan.breakOpportunities.map(item => Object.freeze({ ...item }))),
     diagnostics: freezeDiagnostics(plan.diagnostics),
     ...payload,
-  })
+  }) as MaterialLayoutPlan<TPayload>
 }
 
 export function freezeMaterialFragmentPlan(plan: MaterialFragmentPlan): MaterialFragmentPlan {
@@ -367,7 +421,7 @@ export function freezeMaterialFragmentPlan(plan: MaterialFragmentPlan): Material
 }
 
 function validateBox(
-  plan: MaterialLayoutPlan,
+  plan: Pick<MaterialLayoutPlan, 'instanceKey' | 'nodeId'>,
   diagnostics: LayoutPlanDiagnostic[],
   name: 'borderBox' | 'contentBox',
   box: Readonly<Rect>,
@@ -421,4 +475,9 @@ function freezeDiagnostics(diagnostics: readonly LayoutPlanDiagnostic[]): readon
 
 function cloneAndFreezeJson<T extends JsonValue>(value: T): T {
   return deepFreezeJsonValue(cloneJsonValue(value))
+}
+
+function cloneAndFreezePersistedValue<T>(value: T): T {
+  assertJsonValue(value)
+  return cloneAndFreezeJson(value) as unknown as T
 }

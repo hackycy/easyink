@@ -1,4 +1,4 @@
-import type { MaterialManifest, MaterialViewerExtension, PagePlanEntry, ViewerFacetCapabilities } from '@easyink/core'
+import type { MaterialManifest, MaterialViewerExtension, PagePlanEntry, ViewerFacetCapabilities, ViewerRenderContext } from '@easyink/core'
 import type { MaterialNode, PageSchema } from '@easyink/schema'
 import type { ViewerDiagnosticEvent } from './types'
 import { defineMaterialManifest, viewerElement, viewerFragment, viewerImperativeDom, viewerSanitizedMarkup, viewerText } from '@easyink/core'
@@ -8,6 +8,136 @@ import { ProfileMaterialRuntime } from './material-runtime'
 import { renderPages } from './render-surface'
 
 describe('renderPages', () => {
+  it('provides frozen canonical fallback layout facts to legacy material renderers', async () => {
+    const container = document.createElement('div')
+    const resolvedModel = { text: 'resolved' }
+    const node: MaterialNode = {
+      id: 'custom-1',
+      type: 'custom',
+      x: 5,
+      y: 75,
+      width: 30,
+      height: 20,
+      modelVersion: 2,
+      model: { text: 'source' },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
+    }
+    let captured: ViewerRenderContext | undefined
+    const materials = await createMaterials({
+      render: (_node, context) => {
+        captured = context
+        return { tree: viewerText('captured') }
+      },
+    })
+
+    renderPages([{
+      index: 1,
+      width: 80,
+      height: 60,
+      elements: [node],
+      yOffset: 60,
+    }], materials, {
+      container,
+      document,
+      zoom: 1,
+      unit: 'mm',
+      data: {},
+      resolvedPropsMap: new Map([[node.id, resolvedModel]]),
+      pageSchema: { mode: 'fixed', width: 80, height: 60 },
+      browserDom: { maxNodes: 12 },
+    }, [])
+
+    expect(captured).toBeDefined()
+    expect(captured!.resolvedModel).toBe(resolvedModel)
+    expect(captured!.instanceKey).toBe(node.id)
+    expect(captured!.layoutPlan).toMatchObject({
+      instanceKey: node.id,
+      nodeId: node.id,
+      nodeRevision: 2,
+      constraintKey: '30:20:mm:horizontal-tb',
+      borderBox: { x: 0, y: 0, width: 30, height: 20 },
+      breakOpportunities: [],
+    })
+    expect(captured!.fragmentPlan).toMatchObject({
+      id: JSON.stringify(['material-fragment', 'custom-1', 1, 0, 20]),
+      box: { x: 5, y: 15, width: 30, height: 20 },
+      consumedRange: { startBlockOffset: 0, endBlockOffset: 20 },
+    })
+    expect(Object.isFrozen(captured!.layoutPlan)).toBe(true)
+    expect(Object.isFrozen(captured!.fragmentPlan)).toBe(true)
+    expect(captured!.renderSlot('missing')).toEqual(viewerFragment([]))
+    expect(captured!.renderBudget.maxNodes).toBe(12)
+    captured!.renderBudget.reserveNodes('text', 2)
+    expect(captured!.renderBudget.nodesUsed).toBe(2)
+  })
+
+  it('mints distinct fallback fragment identities for repeated output pages', async () => {
+    const container = document.createElement('div')
+    const node: MaterialNode = {
+      id: 'repeated-node',
+      type: 'custom',
+      x: 5,
+      y: 15,
+      width: 30,
+      height: 20,
+      modelVersion: 1,
+      model: {},
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
+    }
+    const fragmentIds: string[] = []
+    const materials = await createMaterials({
+      render: (_node, context) => {
+        fragmentIds.push(context.fragmentPlan.id)
+        return { tree: viewerText('repeated') }
+      },
+    })
+
+    renderPages([
+      { index: 2, width: 80, height: 60, elements: [node], yOffset: 0 },
+      { index: 3, width: 80, height: 60, elements: [node], yOffset: 0 },
+    ], materials, {
+      container,
+      document,
+      zoom: 1,
+      unit: 'mm',
+      data: {},
+      resolvedPropsMap: new Map(),
+      pageSchema: { mode: 'fixed', width: 80, height: 60 },
+    }, [])
+
+    expect(fragmentIds).toHaveLength(2)
+    expect(new Set(fragmentIds).size).toBe(2)
+  })
+
+  it('does not expose legacy manifest slot keys as committed slot instances', async () => {
+    let legacyContentOutputs: ViewerRenderContext['slotOutputs']
+    let committedContent: ReturnType<ViewerRenderContext['renderSlot']> = viewerFragment([])
+    let missing: ReturnType<ViewerRenderContext['renderSlot']> = viewerFragment([])
+    const ownerExtension: MaterialViewerExtension = {
+      render: (_node, context) => {
+        legacyContentOutputs = context.slotOutputs
+        committedContent = context.renderSlot('content')
+        missing = context.renderSlot('missing')
+        return { tree: committedContent }
+      },
+    }
+    const { materials, owner, options } = await createNestedSurface({
+      ownerExtension,
+      children: [{ type: 'child', extension: { render: () => ({ tree: viewerText('legacy child') }) } }],
+    })
+
+    renderPages(pageWith(owner), materials, options, [])
+
+    expect(legacyContentOutputs?.content).toHaveLength(1)
+    expect(committedContent).toEqual(viewerFragment([]))
+    expect(missing).toEqual(viewerFragment([]))
+    expect(options.container.textContent).not.toContain('legacy child')
+  })
+
   it('uses the registered render-size callback for wrapper dimensions', async () => {
     const container = document.createElement('div')
     const node: MaterialNode = {

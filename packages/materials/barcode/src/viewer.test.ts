@@ -1,4 +1,5 @@
 import type { SanitizedMarkup, ViewerRenderContext } from '@easyink/core'
+import { createTestViewerRenderContext } from '@easyink/core/testing'
 import { describe, expect, it } from 'vitest'
 import { createBarcodeNode } from './schema'
 import { renderBarcode } from './viewer'
@@ -15,10 +16,10 @@ describe('renderBarcode', () => {
 })
 
 function viewerContext(capture: (source: string) => void): ViewerRenderContext {
-  return { data: {}, resolvedProps: {}, pageIndex: 0, unit: 'mm', zoom: 1, capabilities: {
+  return createTestViewerRenderContext({ capabilities: {
     sanitizeMarkup({ source }) {
       capture(source)
       return {} as SanitizedMarkup
     },
-  } }
+  } })
 }

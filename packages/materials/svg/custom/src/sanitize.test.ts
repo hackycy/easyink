@@ -1,4 +1,5 @@
 import type { SanitizedMarkup, ViewerElementTree, ViewerRenderContext } from '@easyink/core'
+import { createTestViewerRenderContext } from '@easyink/core/testing'
 import { describe, expect, it, vi } from 'vitest'
 import { svgCustomDesignerPropSchemas } from './prop-schemas'
 import { buildSvgCustomMarkup, isRemoteSvgSource } from './rendering'
@@ -8,17 +9,12 @@ import { renderSvgCustom } from './viewer'
 
 function renderSanitizedSource(node: ReturnType<typeof createSvgCustomNode>): string {
   let source = ''
-  const context = {
-    data: {},
-    resolvedProps: {},
-    pageIndex: 0,
-    unit: 'mm',
-    zoom: 1,
+  const context = createTestViewerRenderContext({
     capabilities: { sanitizeMarkup(input: { format: 'svg', source: string }) {
       source = input.source
       return {} as SanitizedMarkup
     } },
-  } satisfies ViewerRenderContext
+  }) satisfies ViewerRenderContext
   expect(renderSvgCustom(node, context).tree.kind).toBe('sanitized-markup')
   return source
 }
@@ -172,14 +168,9 @@ describe('renderSvgCustom', () => {
       },
     })
 
-    const context = {
-      data: {},
-      resolvedProps: {},
-      pageIndex: 0,
-      unit: 'mm',
-      zoom: 1,
+    const context = createTestViewerRenderContext({
       capabilities: { sanitizeMarkup: vi.fn() },
-    } satisfies ViewerRenderContext
+    }) satisfies ViewerRenderContext
     const output = renderSvgCustom(node, context).tree as ViewerElementTree
 
     expect(output.tag).toBe('div')
@@ -190,14 +181,9 @@ describe('renderSvgCustom', () => {
 
   it('fails closed when sanitized markup capability is unavailable', () => {
     const node = createSvgCustomNode({ model: { content: '<circle r="5" />' } })
-    const context = {
-      data: {},
-      resolvedProps: {},
-      pageIndex: 0,
-      unit: 'mm',
-      zoom: 1,
+    const context = createTestViewerRenderContext({
       capabilities: { sanitizeMarkup: () => { throw new Error('capability unavailable') } },
-    } satisfies ViewerRenderContext
+    }) satisfies ViewerRenderContext
 
     expect(() => renderSvgCustom(node, context)).not.toThrow()
     const output = renderSvgCustom(node, context).tree as ViewerElementTree

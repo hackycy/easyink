@@ -260,6 +260,7 @@ export {
 } from './material-introspection'
 export {
   createLayoutConstraintKey,
+  createNonFragmentingMaterialPlans,
   freezeMaterialFragmentPlan,
   freezeMaterialLayoutPlan,
   validateMaterialLayoutPlan,
@@ -290,6 +291,8 @@ export type {
   MaterialTextMeasureInput,
   MaterialTextMeasureResult,
   MaterialViewerLayoutFacet,
+  NonFragmentingMaterialPlans,
+  NonFragmentingMaterialPlansInput,
 } from './material-layout-plan'
 export { deepFreezeManifest, defineMaterialFacetFactory, defineMaterialManifest, MATERIAL_API_VERSION, MATERIAL_MANIFEST_VERSION } from './material-manifest'
 export type {

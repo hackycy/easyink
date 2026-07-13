@@ -1,6 +1,7 @@
 import type { ViewerElementTree, ViewerRenderTree } from '@easyink/core'
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import { createFragmentFromNode, runLayoutPipeline, runPagination, viewerText } from '@easyink/core'
+import { createTestViewerRenderContext } from '@easyink/core/testing'
 import { describe, expect, it } from 'vitest'
 import { createDefaultDataTableModel } from './schema'
 import { measureTableData, renderTableData, tableDataFragmentPaginator } from './viewer'
@@ -82,15 +83,12 @@ describe('tableDataFragmentPaginator', () => {
     hosted.content = { kind: 'materials', slotId: `cell:${hosted.id}` }
     node.bindings.records = { sourceId: 'invoice', fieldPath: 'items' }
 
-    const output = renderTableData(node, {
+    const output = renderTableData(node, createTestViewerRenderContext({
       data: { items: [{ name: 'A' }, { name: 'B' }] },
       resolvedProps: {},
-      pageIndex: 0,
-      unit: 'mm',
-      zoom: 1,
       capabilities: { sanitizeMarkup: () => { throw new Error('unused') } },
       slotOutputs: { [`cell:${hosted.id}`]: [viewerText('HOSTED')] },
-    }).tree
+    })).tree
     const json = JSON.stringify(output)
 
     expect(json.match(/HOSTED/g)).toHaveLength(2)
@@ -167,15 +165,12 @@ describe('tableDataFragmentPaginator', () => {
 })
 
 function renderContext(data: Record<string, unknown>, reportDiagnostic?: (diagnostic: any) => void) {
-  return {
+  return createTestViewerRenderContext({
     data,
     resolvedProps: {},
-    pageIndex: 0,
-    unit: 'mm',
-    zoom: 1,
     capabilities: { sanitizeMarkup: () => { throw new Error('unused') } },
     reportDiagnostic,
-  }
+  })
 }
 
 function paginateAndRender(recordCount: number) {

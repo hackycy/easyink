@@ -1,4 +1,5 @@
 import type { SanitizedMarkup, ViewerRenderContext } from '@easyink/core'
+import { createTestViewerRenderContext } from '@easyink/core/testing'
 import { describe, expect, it } from 'vitest'
 import {
   createSignaturePadRectForClientPoint,
@@ -59,12 +60,12 @@ describe('signature material', () => {
 
   it('viewer routes SVG through the sanitizer capability', () => {
     let source = ''
-    const context = { data: {}, resolvedProps: {}, pageIndex: 0, unit: 'mm', zoom: 1, capabilities: {
+    const context = createTestViewerRenderContext({ capabilities: {
       sanitizeMarkup(input: { format: 'svg', source: string }) {
         source = input.source
         return {} as SanitizedMarkup
       },
-    } } satisfies ViewerRenderContext
+    } }) satisfies ViewerRenderContext
     const output = renderSignature(createSignatureNode(), context)
 
     expect(output.tree.kind).toBe('sanitized-markup')

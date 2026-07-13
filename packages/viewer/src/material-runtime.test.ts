@@ -1,7 +1,7 @@
-import type { MaterialViewerFacet, ViewerRenderContext } from '@easyink/core'
+import type { MaterialViewerFacet } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import { viewerText } from '@easyink/core'
-import { createTestCompiledMaterialProfile, createTestMaterialManifest } from '@easyink/core/testing'
+import { createTestCompiledMaterialProfile, createTestMaterialManifest, createTestViewerRenderContext } from '@easyink/core/testing'
 import { describe, expect, it, vi } from 'vitest'
 import { ProfileMaterialRuntime } from './material-runtime'
 
@@ -18,14 +18,7 @@ const node: MaterialNode = {
   bindings: {},
   output: { visibility: 'include' },
 }
-const context: ViewerRenderContext = {
-  data: {},
-  resolvedProps: {},
-  pageIndex: 0,
-  unit: 'mm',
-  zoom: 1,
-  capabilities: { sanitizeMarkup: () => { throw new Error('unused') } },
-}
+const context = createTestViewerRenderContext()
 
 describe('profileMaterialRuntime', () => {
   it('prepares unique types and isolates failed activation behind a sentinel', async () => {

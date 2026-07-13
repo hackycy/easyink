@@ -1,9 +1,10 @@
 import type { ViewerElementTree, ViewerRenderContext, ViewerRenderTree } from '@easyink/core'
+import { createTestViewerRenderContext } from '@easyink/core/testing'
 import { describe, expect, it } from 'vitest'
 import { createFlowRowNode } from './schema'
 import { measureFlowRow, renderFlowRow } from './viewer'
 
-const context = { data: {}, resolvedProps: {}, pageIndex: 0, unit: 'mm', zoom: 1, capabilities: {} as never } satisfies ViewerRenderContext
+const context = createTestViewerRenderContext({ capabilities: {} as never }) satisfies ViewerRenderContext
 
 describe('flow-row viewer', () => {
   it('renders block and inline columns as semantic text in order', () => {
