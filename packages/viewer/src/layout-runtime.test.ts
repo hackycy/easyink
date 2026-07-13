@@ -1,9 +1,10 @@
-import type { LayoutDocument, MaterialLayoutPlan, MaterialMeasureRequest, MaterialRuntimeScope, MaterialViewerFacet, PaginationResult } from '@easyink/core'
+import type { LayoutDocument, MaterialLayoutPlan, MaterialMeasureRequest, MaterialRuntimeScope, MaterialViewerFacet, PaginationResult, ViewerRenderContext } from '@easyink/core'
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import type { EffectiveOutputState } from './effective-output-state'
 import type { LayoutRuntimeDependencies, MaterialMeasurementBudget, RuntimeMaterialInstancePlan } from './layout-runtime'
 import type { ResolvedRuntimeModel } from './runtime-model-resolver'
-import { createNonFragmentingMaterialPlans, MeasureService, runPagination, viewerText } from '@easyink/core'
+import type { ViewerDiagnosticEvent } from './types'
+import { createLayoutConstraintKey, createNonFragmentingMaterialPlans, MeasureService, runPagination, viewerText } from '@easyink/core'
 import { createTestCompiledMaterialProfile, createTestMaterialManifest } from '@easyink/core/testing'
 import { describe, expect, it, vi } from 'vitest'
 import { runLayoutPipeline } from '../../core/src/layout-strategy'
@@ -18,6 +19,7 @@ import {
 } from './layout-runtime'
 import { ProfileMaterialRuntime } from './material-runtime'
 import { createBoundedMeasureScheduler } from './measure-scheduler'
+import { mountCommittedMaterial } from './render-surface'
 import { createRuntimeModelResolutionCache } from './runtime-model-resolver'
 
 function node(overrides: Partial<MaterialNode> = {}): MaterialNode {
@@ -754,6 +756,109 @@ describe('material measurement integration', () => {
     expect(Object.isFrozen(measured.instances.get('owner')?.slotChildren)).toBe(true)
     expect(Object.isFrozen(measured.instances.get('owner')?.slotChildren[slotResult!.instanceKey])).toBe(true)
     expect(measured.instances.get(slotResult!.childPlans[0]!.instanceKey)?.slotChildren).toEqual({})
+  })
+
+  it('renders a custom-measured slot child from its measurement-time committed fragment', async () => {
+    const child = node({ id: 'render-child', type: 'render-child', x: 0, y: 0, width: 8, height: 4 })
+    const owner = node({ id: 'render-owner', type: 'render-owner', x: 0, y: 0, width: 20, height: 10, slots: { content: [child] } })
+    let slotInstanceKey = ''
+    let childRenderContext: ViewerRenderContext | undefined
+    const childFragment = vi.fn((request: Parameters<NonNullable<NonNullable<MaterialViewerFacet['layout']>['fragment']>['createFragment']>[0]) => ({
+      inlineSize: request.plan.borderBox.width,
+      blockSize: request.endBlockOffset - request.startBlockOffset,
+      consumedRange: {
+        startBlockOffset: request.startBlockOffset,
+        endBlockOffset: request.endBlockOffset,
+      },
+      renderPayload: { source: 'measurement-fragment' },
+      diagnostics: [],
+    }))
+    const childMeasure = async (request: MaterialMeasureRequest): Promise<MaterialLayoutPlan> => ({
+      instanceKey: request.instanceKey,
+      nodeId: request.node.id,
+      nodeRevision: request.nodeRevision,
+      constraintKey: createLayoutConstraintKey(request.constraints),
+      borderBox: { x: 0, y: 0, width: 8, height: 4 },
+      contentBox: { x: 0, y: 0, width: 8, height: 4 },
+      slotBoxes: [],
+      breakOpportunities: [],
+      diagnostics: [],
+    })
+    const ownerMeasure = async (request: MaterialMeasureRequest): Promise<MaterialLayoutPlan> => {
+      const slot = await request.measureSlot({ slot: 'content', scope: request.scope, constraints: request.constraints }, request.signal)
+      slotInstanceKey = slot.instanceKey
+      return {
+        instanceKey: request.instanceKey,
+        nodeId: request.node.id,
+        nodeRevision: request.nodeRevision,
+        constraintKey: createLayoutConstraintKey(request.constraints),
+        borderBox: { x: 0, y: 0, width: 20, height: 10 },
+        contentBox: { x: 0, y: 0, width: 20, height: 10 },
+        slotBoxes: [{
+          slotId: 'content',
+          slotInstanceKey: slot.instanceKey,
+          box: { x: 0, y: 0, width: 8, height: 4 },
+          ownership: 'managed',
+          clip: true,
+        }],
+        breakOpportunities: [],
+        diagnostics: [],
+      }
+    }
+    const harness = await measurementHarness({ manifests: [
+      createTestMaterialManifest({
+        type: owner.type,
+        slots: [{ id: 'content', key: { kind: 'exact', value: 'content' }, coordinateSpace: 'owner', layoutParticipation: 'owner', reparent: 'allowed' }],
+        viewer: () => ({
+          extension: { render: (_node: MaterialNode, context: ViewerRenderContext) => ({ tree: context.renderSlot(slotInstanceKey) }) },
+          capabilities: {},
+          layout: { measure: ownerMeasure },
+        }),
+      }),
+      createTestMaterialManifest({
+        type: child.type,
+        viewer: () => ({
+          extension: { render: (_node: MaterialNode, context: ViewerRenderContext) => {
+            childRenderContext = context
+            const payload = context.fragmentPlan.renderPayload
+            const source = payload !== null && typeof payload === 'object' && !Array.isArray(payload)
+              ? payload.source
+              : undefined
+            return { tree: viewerText(String(source)) }
+          } },
+          capabilities: {},
+          layout: { measure: childMeasure, fragment: { createFragment: childFragment } },
+        }),
+      }),
+    ] })
+    const input = measureInput([owner], new Map([['render-owner', readyModel(owner)]]))
+    const measured = await harness.measureNodes(input, new AbortController().signal)
+    const schema = document([owner])
+    const layout = runLayoutPipeline(schema, { plans: measured.plans })
+    const pagination = runPagination(schema, layout)
+    const rootFragment = pagination.pages[0]!.fragments[0]!.fragmentPlan!
+    const ownerInstance = measured.instances.get(owner.id)!
+    const childInstance = [...measured.instances.values()].find(instance => instance.nodeId === child.id)!
+    const diagnostics: ViewerDiagnosticEvent[] = []
+    const host = globalThis.document.createElement('div')
+
+    mountCommittedMaterial(host, {
+      committedPlan: { runtimeInstances: measured.instances },
+      fragmentPlan: rootFragment,
+      materials: harness.materials,
+      pageIndex: 0,
+      unit: 'mm',
+      zoom: 1,
+      diagnostics,
+    })
+
+    expect(childFragment).toHaveBeenCalledTimes(1)
+    expect(childFragment.mock.calls[0]![0].plan).toBe(childInstance.layoutPlan)
+    expect(ownerInstance.embeddedFragmentPlan).toBeDefined()
+    expect(childInstance.embeddedFragmentPlan).toBeDefined()
+    expect(childRenderContext?.fragmentPlan).toBe(childInstance.embeddedFragmentPlan)
+    expect(host.textContent).toBe('measurement-fragment')
+    expect(diagnostics).toEqual([])
   })
 
   it('restores a frozen custom slot subtree on cache hits without rerunning material callbacks', async () => {

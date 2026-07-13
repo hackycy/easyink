@@ -2,6 +2,7 @@ import type {
   CompiledMaterialProfile,
   LayoutConstraints,
   LayoutDocument,
+  MaterialFragmentAdapter,
   MaterialFragmentPlan,
   MaterialLayoutBudgetToken,
   MaterialLayoutFactKind,
@@ -25,6 +26,7 @@ import type { ProfileMaterialRuntime } from './material-runtime'
 import type { PreparedCollectionBudget, PreparedCollectionProvider } from './prepared-collections'
 import type { ResolvedRuntimeModel, RuntimeModelResolutionCache } from './runtime-model-resolver'
 import {
+  commitMaterialFragment,
   createLayoutConstraintKey,
   createNonFragmentingMaterialPlans,
   freezeMaterialFragmentPlan,
@@ -313,6 +315,7 @@ async function measureInstance(context: {
   const descendants: MeasuredInstanceTree['entries'][number][] = []
   const slotChildren: Record<string, readonly string[]> = {}
   let embeddedFragmentPlan: MaterialFragmentPlan | undefined
+  let fragmentAdapter: MaterialFragmentAdapter | undefined
   let callbackRan = false
 
   if (model.status === 'quarantined' && model.diagnostic?.code === 'MATERIAL_BINDING_SCOPE_INVALID')
@@ -373,6 +376,8 @@ async function measureInstance(context: {
           embeddedFragmentPlan = fallback.fragmentPlan
           return fallback.layoutPlan
         }
+
+        fragmentAdapter = facet?.value?.layout?.fragment
 
         return await customMeasure(Object.freeze({
           mode: 'authoritative',
@@ -465,6 +470,8 @@ async function measureInstance(context: {
     context.deps.measureService.invalidateNode(node.id)
     return measureInstance({ ...context, artifactRetryAvailable: false })
   }
+  throwIfAborted(signal)
+  embeddedFragmentPlan ??= createFullRangeEmbeddedFragment(committedPlan, fragmentAdapter)
   const instance: RuntimeMaterialInstancePlan = Object.freeze({
     instanceKey,
     nodeId: node.id,
@@ -486,6 +493,32 @@ async function measureInstance(context: {
   })
   context.artifacts.set(committedPlan, createCachedArtifact(tree))
   return tree
+}
+
+function createFullRangeEmbeddedFragment(
+  plan: MaterialLayoutPlan,
+  adapter: MaterialFragmentAdapter | undefined,
+): MaterialFragmentPlan {
+  const request = Object.freeze({
+    plan,
+    startBlockOffset: 0,
+    endBlockOffset: plan.borderBox.height,
+    availableHeight: plan.borderBox.height,
+    pageIndex: 0,
+  })
+  const contribution = adapter?.createFragment(request) ?? Object.freeze({
+    inlineSize: plan.borderBox.width,
+    blockSize: plan.borderBox.height,
+    consumedRange: Object.freeze({
+      startBlockOffset: 0,
+      endBlockOffset: plan.borderBox.height,
+    }),
+    diagnostics: Object.freeze([]),
+  })
+  return commitMaterialFragment(request, contribution, {
+    x: plan.borderBox.x,
+    y: plan.borderBox.y,
+  })
 }
 
 function createCachedArtifact(tree: MeasuredInstanceTree): CachedMeasuredArtifact {

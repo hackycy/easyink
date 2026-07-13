@@ -143,6 +143,30 @@ describe('renderSurface', () => {
       .toThrowError('RENDER_SURFACE_DISPOSED')
   })
 
+  it('checkpoints immediately after each registered mount and stops later synchronous mounts', async () => {
+    const host = document.createElement('div')
+    const surface = new RenderSurface(host)
+    const disposed: string[] = []
+    await surface.commitAtomically((root) => {
+      root.textContent = 'committed'
+    }, new AbortController().signal)
+    const controller = new AbortController()
+    const reason = new Error('aborted between mounts')
+    let continued = false
+
+    await expect(surface.commitAtomically((_root, transaction) => {
+      transaction.register(() => disposed.push('first'))
+      controller.abort(reason)
+      transaction.register(() => disposed.push('second'))
+      continued = true
+      transaction.register(() => disposed.push('third'))
+    }, controller.signal)).rejects.toBe(reason)
+
+    expect(continued).toBe(false)
+    expect(disposed).toEqual(['second', 'first'])
+    expect(host.textContent).toBe('committed')
+  })
+
   it('continues reverse disposal and reports errors in stable order', async () => {
     const host = document.createElement('div')
     const surface = new RenderSurface(host)

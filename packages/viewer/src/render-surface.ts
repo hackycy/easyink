@@ -128,6 +128,7 @@ export class RenderSurface {
         registered.add(disposer)
         disposers.push(disposer)
       }
+      checkpoint()
     }
     const transaction: RenderSurfaceTransaction = Object.freeze({ signal, register, checkpoint })
 
