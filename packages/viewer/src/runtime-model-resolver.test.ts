@@ -43,6 +43,104 @@ function activeProfile(resolveRuntimeModel?: NonNullable<MaterialViewerFacet['la
 }
 
 describe('resolveRuntimeModels', () => {
+  it('isolates and freezes node and full scope inputs before calling material projection', async () => {
+    const mutationResults: Record<string, boolean> = {}
+    const project = vi.fn((node: Readonly<MaterialNode>, scope: MaterialRuntimeScope) => {
+      mutationResults.modelSet = Reflect.set(node.model as object, 'title', 'mutated')
+      mutationResults.bindingDelete = Reflect.deleteProperty(node.bindings, 'title')
+      mutationResults.scopeSet = Reflect.set(scope.data as object, 'invoice', { title: 'mutated' })
+      mutationResults.parentDelete = Reflect.deleteProperty(scope.parent!.data, 'parent')
+      for (const [key, values] of [
+        ['modelPush', (node.model as { values: number[] }).values],
+        ['scopePush', (scope.data as { values: number[] }).values],
+        ['parentPush', (scope.parent!.data as { values: number[] }).values],
+      ] as const) {
+        try {
+          values.push(2)
+          mutationResults[key] = true
+        }
+        catch {
+          mutationResults[key] = false
+        }
+      }
+      return {
+        modelTitle: (node.model as { title: string }).title,
+        hasBinding: Object.hasOwn(node.bindings, 'title'),
+        scopeTitle: (scope.data.invoice as { title: string }).title,
+        parentTitle: (scope.parent!.data.parent as { title: string }).title,
+        frozen: [node, node.model, node.bindings, scope, scope.data, scope.parent, scope.parent!.data].every(Object.isFrozen),
+      }
+    })
+    const profile = activeProfile(project)
+    const materials = new ProfileMaterialRuntime(profile)
+    await materials.prepare(['invoice'])
+    const node = makeNode('n1', { title: 'original', values: [1] })
+    const parentData = { parent: { title: 'parent' }, values: [1] }
+    const data = { invoice: { title: 'current' }, values: [1] }
+    const parent: MaterialRuntimeScope = { key: 'parent', data: parentData }
+    const scope: MaterialRuntimeScope = { key: 'row', data, parent }
+
+    const result = resolveRuntimeModelInstance({
+      instanceKey: 'n1/row',
+      scope,
+      node,
+      dataRevision: 1,
+      nodeRevision: 1,
+      cache: createRuntimeModelResolutionCache(profile),
+      materials,
+      reportDiagnostic: vi.fn(),
+    })
+
+    expect(mutationResults).toEqual({
+      modelSet: false,
+      bindingDelete: false,
+      scopeSet: false,
+      parentDelete: false,
+      modelPush: false,
+      scopePush: false,
+      parentPush: false,
+    })
+    expect(result).toMatchObject({
+      status: 'ready',
+      value: {
+        modelTitle: 'original',
+        hasBinding: true,
+        scopeTitle: 'current',
+        parentTitle: 'parent',
+        frozen: true,
+      },
+    })
+    expect(node.model).toEqual({ title: 'original', values: [1] })
+    expect(node.bindings).toHaveProperty('title')
+    expect(data).toEqual({ invoice: { title: 'current' }, values: [1] })
+    expect(parentData).toEqual({ parent: { title: 'parent' }, values: [1] })
+    expect([node, node.model, node.bindings, scope, data, parent, parentData].every(value => !Object.isFrozen(value))).toBe(true)
+  })
+
+  it('quarantines invalid scope chains before entering material projection', async () => {
+    const project = vi.fn(() => ({}))
+    const profile = activeProfile(project)
+    const materials = new ProfileMaterialRuntime(profile)
+    await materials.prepare(['invoice'])
+    const scope: MaterialRuntimeScope = { key: 'row', data: {} }
+    ;(scope as { parent?: MaterialRuntimeScope }).parent = scope
+
+    const result = resolveRuntimeModelInstance({
+      instanceKey: 'n1/row',
+      scope,
+      node: makeNode('n1'),
+      dataRevision: 1,
+      nodeRevision: 1,
+      cache: createRuntimeModelResolutionCache(profile),
+      materials,
+      reportDiagnostic: vi.fn(),
+    })
+
+    expect(result).toMatchObject({ status: 'quarantined', diagnostic: { code: 'RUNTIME_MODEL_RESOLVE_FAILED', message: 'MATERIAL_BINDING_SCOPE_INVALID' } })
+    expect(project).not.toHaveBeenCalled()
+    expect(Object.isFrozen(scope)).toBe(false)
+  })
+
   it('uses the shared active facet once and isolates deeply aliased projection results', async () => {
     const nested = { values: [1] }
     const source = Object.freeze({ title: 'INV-1', nested })

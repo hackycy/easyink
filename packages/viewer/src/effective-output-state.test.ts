@@ -1,5 +1,7 @@
 import type { MaterialNode } from '@easyink/schema'
+import type { JsonValue } from '@easyink/shared'
 import { createTestCompiledMaterialProfile, createTestMaterialManifest } from '@easyink/core/testing'
+import { cloneJsonValue } from '@easyink/shared'
 import { describe, expect, it } from 'vitest'
 import { resolveEffectiveOutputStates } from './effective-output-state'
 
@@ -81,7 +83,7 @@ describe('resolveEffectiveOutputStates', () => {
     const shared = node('shared')
     const root = node('root', 'reserve', [shared])
     root.slots.second = [shared]
-    const snapshot = structuredClone(root)
+    const snapshot = cloneJsonValue(root as unknown as JsonValue)
 
     const states = resolveEffectiveOutputStates([root], {}, profile)
 

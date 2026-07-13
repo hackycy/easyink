@@ -91,16 +91,18 @@ export function resolveRuntimeModelInstance(input: {
     const manifest = input.cache.profile.getManifest(input.node.type)
     if (!manifest)
       throw new Error('MATERIAL_MANIFEST_REQUIRED')
+    const nodeSnapshot = createRuntimeNodeSnapshot(input.node)
+    const scopeSnapshot = createRuntimeScopeSnapshot(input.scope)
     const resolveBinding = createMaterialBindingResolver({
-      node: input.node,
+      node: nodeSnapshot,
       bindingDefinition: manifest.common.binding,
-      baseScope: input.scope,
+      baseScope: scopeSnapshot,
       reportDiagnostic: input.reportDiagnostic,
     })
     const facet = facetInstance.value as MaterialViewerFacet
     const projected = facet.layout?.resolveRuntimeModel
-      ? facet.layout.resolveRuntimeModel(input.node, input.scope, resolveBinding, input.reportDiagnostic)
-      : projectMaterialRuntimeModel(input.node, manifest.common.binding, resolveBinding, input.reportDiagnostic)
+      ? facet.layout.resolveRuntimeModel(nodeSnapshot, scopeSnapshot, resolveBinding, input.reportDiagnostic)
+      : projectMaterialRuntimeModel(nodeSnapshot, manifest.common.binding, resolveBinding, input.reportDiagnostic)
     assertJsonValue(projected)
     if (projected === null || typeof projected !== 'object' || Array.isArray(projected))
       throw new Error('RUNTIME_MODEL_RECORD_REQUIRED')
@@ -180,8 +182,60 @@ function requireCacheState(cache: RuntimeModelResolutionCache): CacheState {
 }
 
 function copyAndFreezeRecord(value: Readonly<Record<string, unknown>>): Readonly<Record<string, unknown>> {
+  if (value === null || typeof value !== 'object' || Array.isArray(value))
+    throw new Error('RUNTIME_MODEL_RECORD_REQUIRED')
   const copy = cloneJsonValue(value as JsonValue)
   return deepFreezeJsonValue(copy) as Readonly<Record<string, unknown>>
+}
+
+function createRuntimeNodeSnapshot(node: MaterialNode): Readonly<MaterialNode> {
+  try {
+    assertJsonValue(node)
+    return deepFreezeJsonValue(cloneJsonValue(node as unknown as JsonValue)) as unknown as Readonly<MaterialNode>
+  }
+  catch {
+    throw new Error('MATERIAL_RUNTIME_NODE_INVALID')
+  }
+}
+
+function createRuntimeScopeSnapshot(scope: MaterialRuntimeScope): MaterialRuntimeScope {
+  const chain: MaterialRuntimeScope[] = []
+  const seen = new Set<MaterialRuntimeScope>()
+  const dataByKey = new Map<string, Readonly<Record<string, unknown>>>()
+  let cursor: MaterialRuntimeScope | undefined = scope
+  while (cursor) {
+    if (chain.length >= 32 || seen.has(cursor) || typeof cursor.key !== 'string')
+      throw new Error('MATERIAL_BINDING_SCOPE_INVALID')
+    const prior = dataByKey.get(cursor.key)
+    if (prior !== undefined && prior !== cursor.data)
+      throw new Error('MATERIAL_BINDING_SCOPE_INVALID')
+    seen.add(cursor)
+    dataByKey.set(cursor.key, cursor.data)
+    chain.push(cursor)
+    cursor = cursor.parent
+  }
+
+  const dataSnapshots = new Map<Readonly<Record<string, unknown>>, Readonly<Record<string, unknown>>>()
+  let parent: MaterialRuntimeScope | undefined
+  for (let index = chain.length - 1; index >= 0; index--) {
+    const source = chain[index]!
+    let data = dataSnapshots.get(source.data)
+    if (!data) {
+      try {
+        data = copyAndFreezeRecord(source.data)
+      }
+      catch {
+        throw new Error('MATERIAL_BINDING_SCOPE_DATA_INVALID')
+      }
+      dataSnapshots.set(source.data, data)
+    }
+    parent = Object.freeze({
+      key: source.key,
+      data,
+      ...(parent ? { parent } : {}),
+    })
+  }
+  return parent!
 }
 
 function quarantineAndCache(
