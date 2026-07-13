@@ -15,7 +15,7 @@ import {
 } from '@easyink/core'
 import { IconRect } from '@easyink/icons'
 import { deepClone } from '@easyink/shared'
-import { appendDocumentNodes, createDesignerDocumentOperation, updateDraftNodeBinding } from '../editing/document-recipes'
+import { appendDocumentNodes, createDesignerDocumentOperation, escapeDocumentPathToken, updateDraftNodeBinding } from '../editing/document-recipes'
 import { createGeometryService } from '../editing/geometry-service'
 import { selectMany, selectOne } from '../interactions/selection-api'
 import { resolveDataContractBindingPort, resolveDefaultDatasourceBindingPort } from '../materials/binding-port'
@@ -501,7 +501,7 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
         updateDraftNodeBinding(draft, ctx.store, resolved.target.id, port, nextBinding)
       }, {
         label: 'Bind field',
-        operation: createDesignerDocumentOperation(ctx.store, 'drag.bind-data-contract', [`node:${resolved.target.id}`], [`/bindings/${port}`], false),
+        operation: createDesignerDocumentOperation(ctx.store, 'drag.bind-data-contract', [`node:${resolved.target.id}`], [`/bindings/${escapeDocumentPathToken(port)}`], false),
       })
       selectOne(ctx.store, resolved.target.id)
       return
@@ -515,7 +515,7 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
       updateDraftNodeBinding(draft, ctx.store, resolved.target.id, port, createBinding(fieldData))
     }, {
       label: 'Bind field',
-      operation: createDesignerDocumentOperation(ctx.store, 'drag.bind', [`node:${resolved.target.id}`], [`/bindings/${port}`], false),
+      operation: createDesignerDocumentOperation(ctx.store, 'drag.bind', [`node:${resolved.target.id}`], [`/bindings/${escapeDocumentPathToken(port)}`], false),
     })
     selectOne(ctx.store, resolved.target.id)
   }

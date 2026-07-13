@@ -3,7 +3,7 @@ import type { BindingRef } from '@easyink/schema'
 import type { BindingDisplayFormat } from '@easyink/shared'
 import type { DesignerStore } from '../store/designer-store'
 import { pointInRect } from '@easyink/core'
-import { createDesignerDocumentOperation, updateDraftNodeBinding } from '../editing/document-recipes'
+import { createDesignerDocumentOperation, escapeDocumentPathToken, updateDraftNodeBinding } from '../editing/document-recipes'
 import { createGeometryService } from '../editing/geometry-service'
 import { selectOne } from '../interactions/selection-api'
 import { resolveDefaultDatasourceBindingPort } from '../materials/binding-port'
@@ -319,7 +319,7 @@ export function useDatasourceDrop(ctx: DatasourceDropContext) {
       updateDraftNodeBinding(draft, store, target.id, port, binding)
     }, {
       label: 'Bind field',
-      operation: createDesignerDocumentOperation(store, 'datasource.bind', [`node:${target.id}`], [`/bindings/${port}`], false),
+      operation: createDesignerDocumentOperation(store, 'datasource.bind', [`node:${target.id}`], [`/bindings/${escapeDocumentPathToken(port)}`], false),
     })
     selectOne(store, target.id)
   }

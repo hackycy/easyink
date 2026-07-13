@@ -133,11 +133,12 @@ describe('useDatasourceDrop', () => {
     const profile = createTestCompiledMaterialProfile([createTestMaterialManifest({
       type: 'custom',
       designer: true,
-      binding: { kind: 'ports', ports: [{ id: 'value', key: { kind: 'exact', value: 'value' }, role: 'display', valueShape: 'scalar', modelPath: '/model/value', formatEditor: false }] },
+      binding: { kind: 'ports', ports: [{ id: 'flow-port:a/b~c', key: { kind: 'exact', value: 'flow-port:a/b~c' }, role: 'display', valueShape: 'scalar', modelPath: '/model/value', formatEditor: false }] },
     })])
     const node = profile.createNode('custom', { id: 'target', width: 100, height: 40 })
     const store = new DesignerStore({ unit: 'px', page: makePage(), elements: [node] }, undefined, undefined, { materials: { profile } })
-    vi.spyOn(store, 'peekDesignerFacet').mockReturnValue({ value: { extension: { datasourceDrop: {
+    const transact = vi.spyOn(store.documentTransactions, 'transact')
+    const facet = vi.spyOn(store, 'peekDesignerFacet').mockReturnValue({ value: { extension: { datasourceDrop: {
       onDragOver: () => ({ status: 'accepted', rect: { x: 0, y: 0, w: 100, h: 40 } }),
       onDrop: () => {
         store.documentTransactions.run('target', (draft) => {
@@ -155,6 +156,12 @@ describe('useDatasourceDrop', () => {
 
     expect(store.documentTransactions.historyEntries).toHaveLength(1)
     expect(store.getElementById('target')?.model).toMatchObject({ first: true, second: true })
+    facet.mockReturnValue(undefined)
+    drop.onDrop({ clientX: 20, clientY: 20, preventDefault() {}, dataTransfer: { getData: () => JSON.stringify({ sourceId: 'source', fieldPath: 'field' }) } } as unknown as DragEvent)
+    expect(store.documentTransactions.historyEntries).toHaveLength(2)
+    expect(transact.mock.calls.at(-1)?.[1].operation.fieldPaths).toEqual(['/bindings/flow-port:a~1b~0c'])
+    store.documentTransactions.undo()
+    expect(store.getElementById('target')?.bindings['flow-port:a/b~c']).toBeUndefined()
     store.documentTransactions.undo()
     expect(store.getElementById('target')?.model).not.toMatchObject({ first: true, second: true })
   })

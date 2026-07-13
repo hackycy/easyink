@@ -162,14 +162,18 @@ export function distributeDraftNodesHorizontally(draft: DocumentSchema, store: P
 }
 
 export function moveDraftNodesLayer(draft: DocumentSchema, store: Pick<DesignerStore, 'materialProfile'>, nodeIds: readonly string[], direction: 'up' | 'down'): void {
+  const zById = new Map(draft.elements.map(item => [item.id, item.zIndex ?? 0]))
+  const updates = new Map<string, number>()
   for (const id of nodeIds) {
-    const node = requireDocumentNode(draft, store.materialProfile, id)
-    const current = node.zIndex ?? 0
+    requireDocumentNode(draft, store.materialProfile, id)
+    const current = zById.get(id) ?? 0
     const candidates = draft.elements.filter(item => direction === 'up' ? (item.zIndex ?? 0) > current : (item.zIndex ?? 0) < current)
       .sort((left, right) => direction === 'up' ? (left.zIndex ?? 0) - (right.zIndex ?? 0) : (right.zIndex ?? 0) - (left.zIndex ?? 0))
     if (candidates[0])
-      node.zIndex = (candidates[0].zIndex ?? 0) + (direction === 'up' ? 1 : -1)
+      updates.set(id, (zById.get(candidates[0].id) ?? 0) + (direction === 'up' ? 1 : -1))
   }
+  for (const [id, zIndex] of updates)
+    requireDocumentNode(draft, store.materialProfile, id).zIndex = zIndex
 }
 
 export function addDraftElementGroup(draft: DocumentSchema, group: NonNullable<DocumentSchema['groups']>[number]): void {

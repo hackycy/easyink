@@ -56,15 +56,17 @@ describe('document action component recipes', () => {
     const child = profile.createNode('box', { id: 'child' })
     const owner = profile.createNode('container', { id: 'owner', slots: { content: [child] } })
     const store = new DesignerStore({ elements: [owner], groups: [{ id: 'group', memberIds: ['owner', 'child'] }] }, undefined, undefined, { materials: { profile } })
+    const transact = vi.spyOn(store.documentTransactions, 'transact')
 
     store.documentTransactions.transact((draft) => {
       removeDocumentNodes(draft, ['child'])
     }, {
       label: 'Delete nested node',
-      operation: createDesignerDocumentOperation(store, 'component.delete', ['node:child'], ['/elements'], true),
+      operation: createDesignerDocumentOperation(store, 'component.delete', ['node:child'], ['/elements', '/slots', '/groups'], true),
     })
 
     expect(store.documentTransactions.historyEntries).toHaveLength(1)
+    expect(transact.mock.calls[0]?.[1].operation.fieldPaths).toEqual(['/elements', '/slots', '/groups'])
     expect(store.getElementById('child')).toBeUndefined()
     expect(store.schema.groups).toEqual([])
     store.documentTransactions.undo()
@@ -105,5 +107,23 @@ describe('document action component recipes', () => {
     expect(store.getElementById('a')).toMatchObject({ x: 0, zIndex: 2 })
     expect(store.getElementById('b')?.x).toBe(0)
     expect(store.schema.groups).toEqual([{ id: 'group', memberIds: ['a', 'b'] }])
+  })
+
+  it('computes multi-selection layer updates from the immutable pre-mutation snapshot', () => {
+    const profile = createTestCompiledMaterialProfile([createTestMaterialManifest({ type: 'rect' })])
+    const store = new DesignerStore({ elements: [
+      profile.createNode('rect', { id: 'a', zIndex: 0 }),
+      profile.createNode('rect', { id: 'b', zIndex: 1 }),
+      profile.createNode('rect', { id: 'c', zIndex: 2 }),
+    ] }, undefined, undefined, { materials: { profile } })
+    store.documentTransactions.transact((draft) => {
+      moveDraftNodesLayer(draft, store, ['a', 'b', 'c'], 'up')
+    }, { label: 'Layer up', operation: createDesignerDocumentOperation(store, 'test.layer-up', ['node:a', 'node:b', 'node:c'], ['/zIndex'], false) })
+    expect(store.schema.elements.map(node => node.zIndex)).toEqual([2, 3, 2])
+    store.documentTransactions.undo()
+    store.documentTransactions.transact((draft) => {
+      moveDraftNodesLayer(draft, store, ['a', 'b', 'c'], 'down')
+    }, { label: 'Layer down', operation: createDesignerDocumentOperation(store, 'test.layer-down', ['node:a', 'node:b', 'node:c'], ['/zIndex'], false) })
+    expect(store.schema.elements.map(node => node.zIndex)).toEqual([0, -1, 0])
   })
 })
