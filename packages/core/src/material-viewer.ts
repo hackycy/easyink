@@ -2,6 +2,12 @@ import type { MaterialNode } from '@easyink/schema'
 import type { BindingFormatDiagnostic } from './binding-format'
 import type { MaterialConditionCapability } from './condition'
 import type { LayoutDiagnostic, LayoutFragment } from './layout-plan'
+import type {
+  MaterialFragmentPlan,
+  MaterialLayoutPlan,
+  MaterialRenderBudgetToken,
+  MaterialViewerLayoutFacet,
+} from './material-layout-plan'
 import type { SanitizedMarkup, ViewerRenderTree } from './viewer-render-tree'
 
 export interface ViewerRenderCapabilities {
@@ -18,7 +24,14 @@ export interface ViewerFacetCapabilities {
  * Provides document-level unit and zoom for physical unit calculations.
  */
 export interface ViewerRenderContext {
-  data: Record<string, unknown>
+  data: Readonly<Record<string, unknown>>
+  resolvedModel: Readonly<Record<string, unknown>>
+  instanceKey: string
+  layoutPlan: MaterialLayoutPlan
+  fragmentPlan: MaterialFragmentPlan
+  renderSlot: (slotInstanceKey: string) => ViewerRenderTree
+  renderBudget: MaterialRenderBudgetToken
+  /** @deprecated Use resolvedModel. */
   resolvedProps: Record<string, unknown>
   pageIndex: number
   /** Document unit: 'mm' | 'pt' | 'px'. CSS unit suffix equals this value. */
@@ -80,5 +93,6 @@ export interface MaterialViewerExtension {
 
 export interface MaterialViewerFacet {
   extension: MaterialViewerExtension
+  layout?: MaterialViewerLayoutFacet
   capabilities: ViewerFacetCapabilities
 }

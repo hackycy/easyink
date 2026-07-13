@@ -258,6 +258,39 @@ export {
   walkMaterialNodes,
   writePointer,
 } from './material-introspection'
+export {
+  createLayoutConstraintKey,
+  freezeMaterialFragmentPlan,
+  freezeMaterialLayoutPlan,
+  validateMaterialLayoutPlan,
+} from './material-layout-plan'
+export type {
+  LayoutConstraints,
+  LayoutPlanDiagnostic,
+  MaterialBindingResolution,
+  MaterialBindingResolver,
+  MaterialBreakOpportunity,
+  MaterialCollectionCursor,
+  MaterialCollectionOpener,
+  MaterialDisplayBindingResolver,
+  MaterialFragmentAdapter,
+  MaterialFragmentContribution,
+  MaterialFragmentPlan,
+  MaterialFragmentRequest,
+  MaterialLayoutBudgetToken,
+  MaterialLayoutFactKind,
+  MaterialLayoutPlan,
+  MaterialMeasureRequest,
+  MaterialMeasureScheduler,
+  MaterialRenderBudgetToken,
+  MaterialRenderNodeKind,
+  MaterialRuntimeScope,
+  MaterialSlotBox,
+  MaterialSlotInstancePlan,
+  MaterialTextMeasureInput,
+  MaterialTextMeasureResult,
+  MaterialViewerLayoutFacet,
+} from './material-layout-plan'
 export { deepFreezeManifest, defineMaterialFacetFactory, defineMaterialManifest, MATERIAL_API_VERSION, MATERIAL_MANIFEST_VERSION } from './material-manifest'
 export type {
   MaterialAIFacet,

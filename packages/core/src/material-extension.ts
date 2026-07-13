@@ -2,6 +2,7 @@ import type { BindingRef, DocumentSchema, MaterialNode } from '@easyink/schema'
 import type { BindingDisplayFormat, JsonValue } from '@easyink/shared'
 import type { BehaviorRegistration, MaterialGeometry, SelectionDecorationDef, SelectionType, TransactionAPI } from './editing-session'
 import type { BindingExpression } from './material-binding'
+import type { MaterialViewerLayoutFacet } from './material-layout-plan'
 import type { PropertyAccessor, PropertyEditorOptions } from './material-properties'
 
 // ─── Material Extensions ───────────────────────────────────────────
@@ -365,6 +366,7 @@ export interface MaterialDesignerFacet {
     messages?: Record<string, unknown>
     locales?: Record<string, Record<string, unknown>>
   }
+  layout?: MaterialViewerLayoutFacet
   dispose?: () => void | Promise<void>
   contextualProperties?: MaterialContextualPropertiesProvider
 }
