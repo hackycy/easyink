@@ -1,3 +1,4 @@
+export { BrowserTextMeasureService } from './measure-text'
 export {
   DEFAULT_VIEWER_TREE_POLICY,
   snapshotViewerTreePolicy,

@@ -71,6 +71,8 @@ interface FontCacheEntry {
   loaded: boolean
 }
 
+type FontTerminalState = 'ready' | 'failed'
+
 export interface SystemFontSource {
   type: 'system'
 }
@@ -86,8 +88,10 @@ export class FontManager {
   private _cache = new Map<string, FontCacheEntry>()
   private _inflight = new Map<string, Promise<FontSource>>()
   private _failures = new Map<string, FontLoadFailure>()
+  private _terminalStates = new Map<string, FontTerminalState>()
   private _fontList?: FontDescriptor[]
   private _generation = 0
+  private _resourceRevision = 0
   private _injectedTargets = new WeakMap<Document | ShadowRoot, Map<string, HTMLStyleElement>>()
   private _injectedTargetRefs = new Set<Document | ShadowRoot>()
 
@@ -99,12 +103,17 @@ export class FontManager {
     return this._provider
   }
 
+  get resourceRevision(): number {
+    return this._resourceRevision
+  }
+
   setProvider(provider?: FontProvider): void {
     this._provider = provider
     this._generation++
     this._cache.clear()
     this._inflight.clear()
     this._failures.clear()
+    this._terminalStates.clear()
     this._fontList = undefined
     this.clearInjectedFonts()
   }
@@ -144,11 +153,13 @@ export class FontManager {
           throw new Error(`Font provider changed while loading font: ${family}`)
         this._cache.set(key, { source, loaded: true })
         this._failures.delete(key)
+        this.recordTerminalState(key, 'ready')
         return source
       })
       .catch((err) => {
         if (this._generation === generation && this._provider === provider) {
           this._failures.set(key, toFontLoadFailure({ family, weight, style }, err))
+          this.recordTerminalState(key, 'failed')
         }
         throw err
       })
@@ -264,6 +275,7 @@ export class FontManager {
     this._cache.clear()
     this._inflight.clear()
     this._failures.clear()
+    this._terminalStates.clear()
     this._fontList = undefined
     this.clearInjectedFonts()
   }
@@ -322,7 +334,15 @@ export class FontManager {
   private markSystemFontLoaded(key: string): FontSource {
     this._cache.set(key, { source: SYSTEM_FONT_SOURCE, loaded: true })
     this._failures.delete(key)
+    this.recordTerminalState(key, 'ready')
     return SYSTEM_FONT_SOURCE
+  }
+
+  private recordTerminalState(key: string, state: FontTerminalState): void {
+    if (this._terminalStates.get(key) === state)
+      return
+    this._terminalStates.set(key, state)
+    this._resourceRevision++
   }
 }
 

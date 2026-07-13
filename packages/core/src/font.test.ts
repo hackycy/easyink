@@ -85,6 +85,55 @@ describe('fontManager', () => {
     expect(callCount).toBe(1)
   })
 
+  it('increments resourceRevision once for a repeated provider-backed load', async () => {
+    const mgr = new FontManager(createMockProvider())
+
+    expect(mgr.resourceRevision).toBe(0)
+    await mgr.loadFont('Arial')
+    expect(mgr.resourceRevision).toBe(1)
+
+    await mgr.loadFont('Arial')
+    expect(mgr.resourceRevision).toBe(1)
+  })
+
+  it('increments resourceRevision once for a repeated system-font load', async () => {
+    const provider: FontProvider = {
+      listFonts: async () => [
+        { family: 'Arial', displayName: 'Arial', weights: ['400'], styles: ['normal'], source: 'system' },
+      ],
+      loadFont: async () => '/fonts/should-not-load.woff2',
+    }
+    const mgr = new FontManager(provider)
+    await mgr.listFonts()
+
+    await mgr.loadFont('Arial')
+    await mgr.loadFont('Arial')
+
+    expect(mgr.resourceRevision).toBe(1)
+  })
+
+  it('versions repeated failures once and a later ready transition again', async () => {
+    let shouldFail = true
+    const provider: FontProvider = {
+      listFonts: async () => [],
+      loadFont: async () => {
+        if (shouldFail)
+          throw new Error('missing')
+        return '/fonts/recovered.woff2'
+      },
+    }
+    const mgr = new FontManager(provider)
+
+    await expect(mgr.loadFont('Brand')).rejects.toThrow('missing')
+    expect(mgr.resourceRevision).toBe(1)
+    await expect(mgr.loadFont('Brand')).rejects.toThrow('missing')
+    expect(mgr.resourceRevision).toBe(1)
+
+    shouldFail = false
+    await expect(mgr.loadFont('Brand')).resolves.toBe('/fonts/recovered.woff2')
+    expect(mgr.resourceRevision).toBe(2)
+  })
+
   it('loadFont reuses in-flight requests for the same font', async () => {
     let callCount = 0
     let resolveLoad: ((value: string) => void) | undefined
@@ -107,6 +156,7 @@ describe('fontManager', () => {
 
     await expect(Promise.all([first, second])).resolves.toEqual(['data:Arial', 'data:Arial'])
     expect(mgr.isLoaded('Arial')).toBe(true)
+    expect(mgr.resourceRevision).toBe(1)
   })
 
   it('loadFont throws when no provider', async () => {
@@ -218,6 +268,7 @@ describe('fontManager', () => {
 
     await expect(request).rejects.toThrow('Font provider changed')
     expect(document.head.querySelector('style[data-easyink-font="Brand|normal|normal"]')).toBeNull()
+    expect(mgr.resourceRevision).toBe(0)
   })
 
   it('collectFontFamilies reads the public page font without guessing a private model', () => {
