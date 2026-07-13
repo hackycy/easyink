@@ -2,6 +2,7 @@ import type { MaterialContextualPropertiesRequest, MaterialContextualPropertiesR
 import type { MaterialFacetFactory } from './material-manifest'
 import type { CompiledMaterialProfile } from './material-profile'
 import { assertJsonValue, deepClone } from '@easyink/shared'
+import { validatePropertyDescriptors } from './material-properties'
 
 export type RuntimeMaterialSurface = 'designer' | 'viewer'
 export type FacetState = 'active' | 'quarantined' | 'disposed'
@@ -63,6 +64,11 @@ interface Deferred<T> {
   readonly promise: Promise<T>
   readonly resolve: (value: T) => void
   readonly reject: (reason: unknown) => void
+}
+
+const quarantineFacet = Symbol('quarantineFacet')
+type QuarantinableFacetInstance = FacetInstance<unknown> & {
+  [quarantineFacet]: (diagnostic: FacetDiagnostic) => Promise<void>
 }
 
 class FacetDisposalError extends Error {
@@ -174,9 +180,22 @@ export class MaterialFacetHost {
     try {
       const frozen = freezeContextualRequest(request)
       const result = await (provider as (request: MaterialContextualPropertiesRequest) => unknown)(frozen)
-      return validateContextualResult(result) as T | null
+      if (result === null)
+        return null
+      const validated = validateContextualResult(result)
+      if (!validated)
+        throw new Error('Invalid contextual properties result')
+      return validated as T
     }
-    catch {
+    catch (error) {
+      const diagnostic = createDiagnostic(
+        profile,
+        materialType,
+        'designer',
+        'MATERIAL_FACET_ACTIVATION_FAILED',
+        error,
+      )
+      await (instance as QuarantinableFacetInstance)[quarantineFacet](diagnostic)
       return null
     }
   }
@@ -338,6 +357,25 @@ export class MaterialFacetHost {
       get state() { return state },
       value,
       get diagnostic() { return diagnostic },
+      [quarantineFacet]: async (failure: FacetDiagnostic) => {
+        if (state !== 'active')
+          return
+        state = 'quarantined'
+        diagnostic = failure
+        try {
+          await disposeFacetValue(value)
+        }
+        catch {
+          // Preserve the contextual provider failure as the primary diagnostic.
+        }
+        this.active.delete(instance as FacetInstance<unknown>)
+        try {
+          this.onInstanceDisposed?.(instance as FacetInstance<unknown>)
+        }
+        catch {
+          // Host lifecycle observers must not change quarantine semantics.
+        }
+      },
       dispose: () => {
         if (disposePromise) {
           if (invokingValueDisposer)
@@ -381,7 +419,12 @@ export class MaterialFacetHost {
 }
 
 function freezeContextualRequest(request: MaterialContextualPropertiesRequest): MaterialContextualPropertiesRequest {
+  assertJsonValue(request.node)
   assertJsonValue(request.selection)
+  if (!Array.isArray(request.sessionPath) || request.sessionPath.some(segment => typeof segment !== 'string'))
+    throw new Error('Invalid contextual properties session path')
+  if (request.lineage !== null && typeof request.lineage !== 'string')
+    throw new Error('Invalid contextual properties lineage')
   return deepFreeze({
     node: deepFreeze(deepClone(request.node)),
     sessionPath: Object.freeze([...request.sessionPath]),
@@ -394,7 +437,9 @@ function validateContextualResult(value: unknown): MaterialContextualPropertiesR
   if (value === null || typeof value !== 'object')
     return null
   const result = value as MaterialContextualPropertiesResult
-  if (typeof result.contextKey !== 'string' || !Array.isArray(result.descriptors) || !result.values)
+  if (typeof result.contextKey !== 'string' || result.contextKey.length === 0 || !Array.isArray(result.descriptors) || !result.values)
+    return null
+  if (validatePropertyDescriptors(result.descriptors).length > 0)
     return null
   const keys = new Set<string>()
   for (const descriptor of result.descriptors) {
@@ -418,7 +463,16 @@ function validateContextualResult(value: unknown): MaterialContextualPropertiesR
       }
       catch { return null }
     }
+    const fields = Object.keys(entry as Record<string, unknown>)
+    if (entry.kind === 'single' && (fields.length !== 2 || !fields.includes('value')))
+      return null
+    if (entry.kind === 'mixed' && fields.some(field => field !== 'kind'))
+      return null
+    if (entry.kind === 'unavailable' && ((entry as Record<string, unknown>).readOnly !== true || (entry.reason !== undefined && typeof entry.reason !== 'string') || fields.some(field => !['kind', 'reason', 'readOnly'].includes(field))))
+      return null
   }
+  if (keys.size !== Object.keys(result.values).length)
+    return null
   return deepFreeze(deepClone(result))
 }
 

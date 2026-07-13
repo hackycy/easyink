@@ -51,6 +51,8 @@ describe('previewTransaction', () => {
       draft.y = 10
     })).toThrow(/outside declared property paths/)
     expect(store.document.elements[0]!.y).toBe(0)
+    expect(() => preview.replaceNode('a', ['/model/a~2b'], () => {})).toThrow(/outside declared property paths/)
+    expect(() => preview.replaceNode('a', ['/model/__proto__'], () => {})).toThrow(/outside declared property paths/)
 
     preview.replaceNode('a', ['/x'], (draft) => {
       draft.x = 8

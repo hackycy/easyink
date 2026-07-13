@@ -10,7 +10,7 @@ describe('material facet host', () => {
       received = request
       return {
         contextKey: 'selection:text',
-        descriptors: [{ key: 'weight', label: 'Weight', type: 'number', accessor: { paths: ['/model/weight'] } }],
+        descriptors: [{ key: 'weight', label: 'Weight', type: 'number' }],
         values: { weight: { kind: 'single', value: 400 } },
       }
     })
@@ -36,6 +36,58 @@ describe('material facet host', () => {
       received.node.model.weight = 500
     }).toThrow()
     expect(node.model.weight).toBe(400)
+  })
+
+  it.each([
+    ['provider throw', () => { throw new Error('context failed') }],
+    ['malformed result', () => ({ contextKey: 'bad', descriptors: [], values: { orphan: { kind: 'mixed' } } })],
+    ['malformed descriptor path', () => ({ contextKey: 'bad', descriptors: [{ key: 'x', label: 'X', type: 'number', accessor: { paths: Object.freeze(['/model/a~2']), read: () => 1, write: () => {} } }], values: { x: { kind: 'single', value: 1 } } })],
+    ['missing descriptor value', () => ({ contextKey: 'bad', descriptors: [{ key: 'x', label: 'X', type: 'number' }], values: {} })],
+    ['mixed value extras', () => ({ contextKey: 'bad', descriptors: [{ key: 'x', label: 'X', type: 'number' }], values: { x: { kind: 'mixed', value: 1 } } })],
+    ['unavailable without readonly', () => ({ contextKey: 'bad', descriptors: [{ key: 'x', label: 'X', type: 'number' }], values: { x: { kind: 'unavailable' } } })],
+  ])('quarantines only the failing designer facet after %s', async (_label, contextualProperties) => {
+    const dispose = vi.fn()
+    const profile = createTestCompiledMaterialProfile([
+      createTestMaterialManifest({ type: 'bad', designer: async () => ({ contextualProperties, dispose }), viewer: async () => ({ ok: true }) }),
+      createTestMaterialManifest({ type: 'good', designer: async () => ({ contextualProperties: () => null }) }),
+    ])
+    const host = new MaterialFacetHost()
+    const request = { node: { id: 'n1', type: 'bad', width: 1, height: 1, unit: 'mm', model: {} } as any, sessionPath: [], selection: null, lineage: null }
+    const viewer = await host.activate(profile, 'bad', 'viewer')
+    const good = await host.activate(profile, 'good', 'designer')
+    const activatedBad = await host.activate(profile, 'bad', 'designer')
+
+    await expect(host.contextualProperties(profile, 'bad', request)).resolves.toBeNull()
+
+    const bad = host.peek(profile, 'bad', 'designer')
+    expect(bad).toBe(activatedBad)
+    expect(bad?.state).toBe('quarantined')
+    expect(bad?.diagnostic?.code).toBe('MATERIAL_FACET_ACTIVATION_FAILED')
+    expect(bad?.diagnostic?.cause?.message).toEqual(expect.any(String))
+    expect(dispose).toHaveBeenCalledOnce()
+    expect(viewer.state).toBe('active')
+    expect(good.state).toBe('active')
+  })
+
+  it('quarantines a designer facet before invocation when the contextual request is malformed', async () => {
+    const provider = vi.fn(() => null)
+    const profile = createTestCompiledMaterialProfile([
+      createTestMaterialManifest({ type: 'bad-request', designer: async () => ({ contextualProperties: provider }) }),
+    ])
+    const host = new MaterialFacetHost()
+    const active = await host.activate(profile, 'bad-request', 'designer')
+
+    await host.contextualProperties(profile, 'bad-request', {
+      node: { id: 'n1', type: 'bad-request', width: 1, height: 1, unit: 'mm', model: { invalid: undefined } } as any,
+      sessionPath: [],
+      selection: null,
+      lineage: null,
+    })
+
+    expect(host.peek(profile, 'bad-request', 'designer')).toBe(active)
+    expect(active.state).toBe('quarantined')
+    expect(active.diagnostic?.code).toBe('MATERIAL_FACET_ACTIVATION_FAILED')
+    expect(provider).not.toHaveBeenCalled()
   })
 
   it('deduplicates concurrent activation and disposes an active value exactly once', async () => {

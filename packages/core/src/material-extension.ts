@@ -347,7 +347,7 @@ export interface MaterialContextualPropertiesRequest {
 export type MaterialContextualValue
   = | { readonly kind: 'single', readonly value: JsonValue }
     | { readonly kind: 'mixed' }
-    | { readonly kind: 'unavailable', readonly reason?: string }
+    | { readonly kind: 'unavailable', readonly readOnly: true, readonly reason?: string }
 
 export interface MaterialContextualPropertiesResult {
   readonly contextKey: string

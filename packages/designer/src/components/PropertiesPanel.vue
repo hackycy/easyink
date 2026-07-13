@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { MaterialContextualPropertiesResult, SubPropertySchema } from '@easyink/core'
+import type { DocumentFieldPath, MaterialContextualPropertiesResult, SubPropertySchema } from '@easyink/core'
 import type { BindingRef, DataContractBinding, MaterialNode } from '@easyink/schema'
 import type { BindingDisplayFormat } from '@easyink/shared'
 import type { Component } from 'vue'
@@ -34,6 +34,34 @@ const selectedElement = computed(() =>
   selectedElements.value.length === 1 ? selectedElements.value[0] : undefined,
 )
 
+const propertyPreview = new PropertyPreviewController(store.documentTransactions)
+const contextualProperties = shallowRef<MaterialContextualPropertiesResult | null>(null)
+let contextualRequestToken = 0
+watchEffect((onCleanup) => {
+  const topology = store.schema.elements.map(node => node.id).join('\u0000')
+  const node = selectedElement.value
+  const session = store.editingSession.activeSession
+  const selection = session?.selectionStore.selection
+  const token = ++contextualRequestToken
+  void topology
+  contextualProperties.value = null
+  if (!node || !session || !selection)
+    return
+  let cancelled = false
+  onCleanup(() => {
+    cancelled = true
+  })
+  void store.materialFacetHost.contextualProperties(store.materialProfile, node.type, {
+    node,
+    sessionPath: store.editingSession.path.map(frame => frame.nodeId),
+    selection: selection as unknown as import('@easyink/shared').JsonValue,
+    lineage: session.selectionStore.lineageId,
+  }).then((result) => {
+    if (!cancelled && token === contextualRequestToken)
+      contextualProperties.value = result
+  })
+})
+
 const selectedElementRotatable = computed(() =>
   isElementRotatable(store, selectedElement.value),
 )
@@ -50,78 +78,48 @@ const showLockedSwitch = computed(() => true)
 
 // ─── Sub-Property Schema (auto-derived from editing session selection) ──
 
-const subPropertySchema = computed<SubPropertySchema | null>(() => {
-  // eslint-disable-next-line ts/no-use-before-define
-  const contextual = contextualProperties.value
-  const contextualNode = selectedElement.value
-  if (contextual && contextualNode) {
-    return {
-      title: contextual.contextKey,
-      descriptors: contextual.descriptors as unknown as SubPropertySchema['descriptors'],
-      read: (key: string) => contextual.values[key]?.kind === 'single' ? contextual.values[key].value : undefined,
-      write: (key: string, value: unknown) => {
-        const descriptor = contextual.descriptors.find(item => item.key === key)
-        if (descriptor)
-          // eslint-disable-next-line ts/no-use-before-define
-          propertyPreview.previewProperty(key, contextualNode, descriptor as never, value as never, { sessionPath: [], selectionLineage: null, label: descriptor.label })
-      },
-    } as unknown as SubPropertySchema
-  }
-  const session = store.editingSession.activeSession
-  if (!session)
-    return null
-
-  const sel = session.selectionStore.selection
-  if (!sel)
-    return null
-
-  const legacyNode = store.getElementById(sel.nodeId)
-  if (!legacyNode)
-    return null
-
-  const ext = store.peekDesignerFacet(legacyNode.type)?.value?.extension
-  if (!ext?.selectionTypes)
-    return null
-
-  const selType = ext.selectionTypes.find((t: any) => t.id === sel.type)
-  if (!selType?.getPropertySchema)
-    return null
-
-  return selType.getPropertySchema(sel, legacyNode)
-})
+const subPropertySchema = computed<SubPropertySchema | null>(() => null)
 
 // Sub-property schemas grouped by group field
 const subGroupedSchemas = computed(() => {
-  if (!subPropertySchema.value)
+  if (!contextualProperties.value)
     return new Map<string, PropSchema[]>()
-  return groupPropSchemas(subPropertySchema.value.descriptors as PropSchema[])
+  return groupPropSchemas(contextualProperties.value.descriptors as PropSchema[])
 })
 
 function readSubValue(schema: PropSchema): unknown {
-  return subPropertySchema.value?.read(schema.key)
+  const state = contextualProperties.value?.values[schema.key]
+  return state?.kind === 'single' ? state.value : undefined
 }
 
 function previewSubProp(_key: string, value: unknown) {
   const session = store.editingSession.activeSession
-  if (!session || !subPropertySchema.value)
+  const node = selectedElement.value
+  const contextual = contextualProperties.value
+  if (!session || !node || !contextual)
     return
-  const schema = subPropertySchema.value.descriptors.find(s => s.key === _key)
-  if (schema?.type === 'font')
+  const schema = contextual.descriptors.find(s => s.key === _key)
+  if (!schema || contextual.values[_key]?.kind === 'unavailable')
     return
-  subPropertySchema.value.write(_key, value, session.tx)
+  propertyPreview.previewProperty(`contextual:${contextual.contextKey}:${_key}`, node, schema, value, {
+    sessionPath: store.editingSession.path.map(frame => frame.nodeId),
+    selectionLineage: session.selectionStore.lineageId,
+    label: schema.label,
+  })
 }
 
 async function updateSubProp(key: string, value: unknown) {
   const session = store.editingSession.activeSession
-  if (!session || !subPropertySchema.value)
+  const contextual = contextualProperties.value
+  if (!session || !contextual)
     return
-  const schema = subPropertySchema.value.descriptors.find(s => s.key === key)
+  const schema = contextual.descriptors.find(s => s.key === key)
   if (schema?.type === 'font' && typeof value === 'string') {
     const loaded = await store.ensureFontLoaded({ family: value })
     if (!loaded)
       return
   }
-  subPropertySchema.value.write(key, value, session.tx)
+  propertyPreview.commit(`contextual:${contextual.contextKey}:${key}`)
 }
 
 function updateSubImagePropFromPicker(key: string, result: DesignerResolvedAsset) {
@@ -260,42 +258,18 @@ function pageGroupLabel(group: PagePropertyGroup): string {
 
 // ─── Page property preview/commit snapshots ─────────────────────
 
-const propertyPreview = new PropertyPreviewController(store.documentTransactions)
-const contextualProperties = shallowRef<MaterialContextualPropertiesResult | null>(null)
-let contextualRequestToken = 0
-watchEffect((onCleanup) => {
-  const node = selectedElement.value
-  const session = store.editingSession.activeSession
-  const selection = session?.selectionStore.selection
-  const token = ++contextualRequestToken
-  contextualProperties.value = null
-  if (!node || !session || !selection)
-    return
-  let cancelled = false
-  onCleanup(() => {
-    cancelled = true
-  })
-  void store.materialFacetHost.contextualProperties(store.materialProfile, node.type, {
-    node,
-    sessionPath: store.editingSession.path.map(frame => frame.nodeId),
-    selection: selection as unknown as import('@easyink/shared').JsonValue,
-    lineage: session.selectionStore.lineageId,
-  }).then((result) => {
-    if (!cancelled && token === contextualRequestToken)
-      contextualProperties.value = result
-  })
-})
-
 type GeometryKey = 'x' | 'y' | 'width' | 'height' | 'rotation' | 'alpha'
 
 function isGeometryKey(key: string): key is GeometryKey {
   return key === 'x' || key === 'y' || key === 'width' || key === 'height' || key === 'rotation' || key === 'alpha'
 }
 
-function previewPageProperty(descriptor: PagePropertyDescriptor, value: unknown) {
-  if (descriptor.editor === 'font')
-    return
+function propertyFieldPath(descriptor: PagePropertyDescriptor): DocumentFieldPath {
+  const path = descriptor.path.split('.').map(segment => segment.replaceAll('~', '~0').replaceAll('/', '~1')).join('/')
+  return (descriptor.source === 'page' ? `/page/${path}` : `/${path}`) as DocumentFieldPath
+}
 
+function previewPageProperty(descriptor: PagePropertyDescriptor, value: unknown) {
   const ctx = pagePropertyContext.value
   const patch = descriptor.normalize
     ? descriptor.normalize(value, ctx)
@@ -306,7 +280,7 @@ function previewPageProperty(descriptor: PagePropertyDescriptor, value: unknown)
   propertyPreview.preview(`page:${descriptor.id}`, {
     label: descriptor.label,
     mergeKey: `page:${descriptor.id}`,
-    operation: { kind: descriptor.source === 'document' ? 'document.property' : 'page.property', sessionPath: [], targetIds: ['document'], fieldPaths: [`/${descriptor.source}/${descriptor.path}`], selectionLineage: null, structural: false },
+    operation: { kind: descriptor.source === 'document' ? 'document.property' : 'page.property', sessionPath: [], targetIds: ['document'], fieldPaths: [propertyFieldPath(descriptor)], selectionLineage: null, structural: false },
   }, preview => preview.replace((draft) => {
     const { pageUpdates, documentUpdates } = splitPatch(patch)
     if (pageUpdates)
@@ -324,6 +298,7 @@ async function onPagePropertyChange(descriptor: PagePropertyDescriptor, value: u
       return
     }
   }
+  previewPageProperty(descriptor, value)
   propertyPreview.commit(`page:${descriptor.id}`)
 }
 
@@ -433,8 +408,8 @@ function previewProp(key: string, value: unknown) {
     return
   const session = store.editingSession.activeSession
   propertyPreview.previewProperty(key, el, schema, value, {
-    sessionPath: session?.nodeId ? [`node:${session.nodeId}`] : [],
-    selectionLineage: session?.selectionStore.selection?.type ?? null,
+    sessionPath: store.editingSession.path.map(frame => frame.nodeId),
+    selectionLineage: session?.selectionStore.lineageId ?? store.selection.lineageId,
     label: schema.label,
   })
 }
@@ -454,6 +429,7 @@ async function updateProp(key: string, value: unknown) {
 
   if (!schema)
     return
+  previewProp(key, value)
   propertyPreview.commit(key)
 }
 
@@ -695,11 +671,11 @@ function isPropInputDisabled(schema: PropSchema): boolean {
       </template>
 
       <!-- Sub-property layer: auto-derived from editing session selection -->
-      <template v-if="canEditSelectedElement && subPropertySchema && isSectionVisible('overlay')">
+      <template v-if="canEditSelectedElement && contextualProperties && isSectionVisible('overlay')">
         <EiPanel
           v-for="[group, schemas] in subGroupedSchemas"
           :key="`sub-${group}`"
-          :title="subPropertySchema.title ? `${store.t(subPropertySchema.title)} - ${groupLabel(group)}` : groupLabel(group)"
+          :title="`${store.t(contextualProperties.contextKey)} - ${groupLabel(group)}`"
           collapsible
           flat
         >
@@ -709,6 +685,8 @@ function isPropInputDisabled(schema: PropSchema): boolean {
               :key="schema.key"
               :schema="schema"
               :value="readSubValue(schema)"
+              :disabled="contextualProperties.values[schema.key]?.kind === 'unavailable'"
+              :mixed="contextualProperties.values[schema.key]?.kind === 'mixed'"
               :custom-editors="subCustomEditors"
               :fonts="fontList"
               :font-statuses="fontStatuses"

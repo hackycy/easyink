@@ -182,11 +182,16 @@ function startsWithSegments(path: readonly (string | number)[], prefix: readonly
 }
 
 function decodePointer(path: string): string[] {
-  if (path === '')
-    return []
-  if (!path.startsWith('/'))
+  if (path === '' || !path.startsWith('/'))
     throw new PreviewMutationScopeError([])
-  return path.slice(1).split('/').map(token => token.replaceAll('~1', '/').replaceAll('~0', '~'))
+  return path.slice(1).split('/').map((token) => {
+    if (/~(?:[^01]|$)/u.test(token))
+      throw new PreviewMutationScopeError([])
+    const decoded = token.replaceAll('~1', '/').replaceAll('~0', '~')
+    if (decoded === '' || decoded === '__proto__' || decoded === 'prototype' || decoded === 'constructor')
+      throw new PreviewMutationScopeError([])
+    return decoded
+  })
 }
 
 function encodePointer(path: readonly (string | number)[]): string {
