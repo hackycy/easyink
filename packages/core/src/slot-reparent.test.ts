@@ -231,7 +231,7 @@ describe('slot reparent plans', () => {
     expect(store.revision).toBe(0)
   })
 
-  it('enforces forbidden and same-material policies while same-owner moves and same-slot reorders remain allowed', () => {
+  it('enforces forbidden policies in both directions and bypasses them only for same-slot reorder', () => {
     const slot = (id: string, reparent: 'allowed' | 'same-material' | 'forbidden') => ({
       id,
       key: { kind: 'exact' as const, value: id },
@@ -245,22 +245,30 @@ describe('slot reparent plans', () => {
       createTestMaterialManifest({ type: 'peer', slots: [slot('content', 'same-material'), slot('alternate', 'same-material')] }),
       createTestMaterialManifest({ type: 'other', slots: [slot('content', 'allowed')] }),
     ])
-    const locked = profile.createNode('locked', { id: 'locked', slots: { content: [profile.createNode('box', { id: 'locked-child' })] } })
+    const locked = profile.createNode('locked', { id: 'locked', slots: { content: [
+      profile.createNode('box', { id: 'locked-child' }),
+      profile.createNode('box', { id: 'locked-sibling' }),
+    ] } })
     const first = profile.createNode('peer', { id: 'first', slots: { content: [profile.createNode('box', { id: 'child' }), profile.createNode('box', { id: 'sibling' })], alternate: [] } })
     const second = profile.createNode('peer', { id: 'second', slots: { content: [], alternate: [] } })
-    const other = profile.createNode('other', { id: 'other', slots: { content: [] } })
+    const other = profile.createNode('other', { id: 'other', slots: { content: [profile.createNode('box', { id: 'open-child' })] } })
     const store = new DocumentStore(documentWith([locked, first, second, other]), profile)
     const engine = new DocumentTransactionEngine(store)
 
     expect(() => reparentNode(engine, 'locked-child', { kind: 'node-slot', ownerNodeId: 'other', slot: 'content', atEnd: true })).toThrow(/forbids reparenting/)
-    reparentNode(engine, 'child', { kind: 'node-slot', ownerNodeId: 'first', slot: 'content', afterNodeId: 'sibling' })
-    engine.undo()
+    expect(() => reparentNode(engine, 'open-child', { kind: 'node-slot', ownerNodeId: 'locked', slot: 'content', atEnd: true })).toThrow(/forbids reparenting/)
+    expect(store.revision).toBe(0)
+    expect(engine.totalCount).toBe(0)
+
     reparentNode(engine, 'child', { kind: 'node-slot', ownerNodeId: 'first', slot: 'alternate', atEnd: true })
     engine.undo()
     reparentNode(engine, 'child', { kind: 'node-slot', ownerNodeId: 'second', slot: 'content', atEnd: true })
     engine.undo()
     expect(() => reparentNode(engine, 'child', { kind: 'node-slot', ownerNodeId: 'other', slot: 'content', atEnd: true })).toThrow(/same material type/)
     expect(() => reparentNode(engine, 'child', { kind: 'root', slot: 'elements', atEnd: true })).toThrow(/document root/)
+
+    reparentNode(engine, 'locked-child', { kind: 'node-slot', ownerNodeId: 'locked', slot: 'content', afterNodeId: 'locked-sibling' })
+    expect(store.document.elements[0]!.slots.content.map(node => node.id)).toEqual(['locked-sibling', 'locked-child'])
   })
 
   it('ensures a prospective dynamic slot inside one composed transaction and one undo item', () => {
