@@ -53,15 +53,36 @@ export class GestureCoordinator {
       active = false
       if (this.active === ownership)
         this.active = null
+
+      let primaryError: unknown
+      let failed = false
       try {
         if (reason === 'commit')
           preview.commit()
         else
           preview.cancel()
       }
-      finally {
+      catch (error) {
+        primaryError = error
+        failed = true
+        try {
+          preview.cancel()
+        }
+        catch {
+          // Preserve the original finalization error.
+        }
+      }
+      try {
         options.onFinish?.(reason)
       }
+      catch (error) {
+        if (!failed) {
+          primaryError = error
+          failed = true
+        }
+      }
+      if (failed)
+        throw primaryError
     }
 
     this.active = ownership
@@ -69,15 +90,34 @@ export class GestureCoordinator {
       pointer = createPointerGesture({
         target: options.target,
         event: options.event,
-        onMove: event => options.update(event, preview),
+        onMove: (event) => {
+          try {
+            options.update(event, preview)
+          }
+          catch (error) {
+            try {
+              ownership.abort()
+            }
+            catch {
+              // Preserve the update error while teardown remains best-effort.
+            }
+            throw error
+          }
+        },
         onEnd: (_event, reason) => finish(reason),
       })
       if (!active)
         pointer.abort()
     }
     catch (error) {
-      if (active)
-        finish('cancel')
+      if (active) {
+        try {
+          finish('cancel')
+        }
+        catch {
+          // Preserve the pointer setup error.
+        }
+      }
       throw error
     }
 

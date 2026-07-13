@@ -225,6 +225,141 @@ describe('gesture coordinator', () => {
     expect(store.schema.elements[0]!.x).toBe(4)
   })
 
+  it('cancels and releases the engine when an update throws', () => {
+    const store = storeWithBox()
+    const element = target()
+    const updateError = new Error('update failed')
+    const onFinish = vi.fn()
+    const handle = store.gestures.begin({
+      target: element,
+      event: pointerEvent('pointerdown'),
+      label: 'Move box',
+      operation,
+      update: (event, preview) => {
+        preview.run('box', (draft) => {
+          draft.x = event.clientX
+        })
+        throw updateError
+      },
+      onFinish,
+    })
+
+    expect(() => element.dispatchEvent(pointerEvent('pointermove', 9))).toThrow(updateError)
+    expect(store.schema.elements[0]!.x).toBe(0)
+    expect(handle.isActive()).toBe(false)
+    expect(onFinish).toHaveBeenCalledOnce()
+    expect(onFinish).toHaveBeenCalledWith('cancel')
+
+    const next = store.documentTransactions.beginPreview({ label: 'Next', operation })
+    next.cancel()
+  })
+
+  it('cancels a real preview after commit throws and preserves the commit error', () => {
+    const store = storeWithBox()
+    const element = target()
+    const commitError = new Error('commit failed')
+    const beginPreview = store.documentTransactions.beginPreview.bind(store.documentTransactions)
+    vi.spyOn(store.documentTransactions, 'beginPreview').mockImplementation((options) => {
+      const preview = beginPreview(options)
+      vi.spyOn(preview, 'commit').mockImplementationOnce(() => {
+        throw commitError
+      })
+      return preview
+    })
+    const onFinish = vi.fn()
+    const handle = store.gestures.begin({
+      target: element,
+      event: pointerEvent('pointerdown'),
+      label: 'Move box',
+      operation,
+      update: (event, preview) => preview.run('box', (draft) => { draft.x = event.clientX }),
+      onFinish,
+    })
+    element.dispatchEvent(pointerEvent('pointermove', 11))
+
+    expect(() => element.dispatchEvent(pointerEvent('pointerup', 11))).toThrow(commitError)
+    expect(store.schema.elements[0]!.x).toBe(0)
+    expect(handle.isActive()).toBe(false)
+    expect(onFinish).toHaveBeenCalledOnce()
+    expect(onFinish).toHaveBeenCalledWith('commit')
+
+    const next = beginPreview({ label: 'Next', operation })
+    next.cancel()
+  })
+
+  it('preserves a cancel error over onFinish while releasing the real engine', () => {
+    const store = storeWithBox()
+    const element = target()
+    const cancelError = new Error('cancel failed')
+    const finishError = new Error('finish failed')
+    const beginPreview = store.documentTransactions.beginPreview.bind(store.documentTransactions)
+    vi.spyOn(store.documentTransactions, 'beginPreview').mockImplementation((options) => {
+      const preview = beginPreview(options)
+      const cancel = preview.cancel.bind(preview)
+      vi.spyOn(preview, 'cancel')
+        .mockImplementationOnce(() => { throw cancelError })
+        .mockImplementation(cancel)
+      return preview
+    })
+    const onFinish = vi.fn(() => {
+      throw finishError
+    })
+    const handle = store.gestures.begin({
+      target: element,
+      event: pointerEvent('pointerdown'),
+      label: 'Move box',
+      operation,
+      update: () => {},
+      onFinish,
+    })
+
+    expect(() => element.dispatchEvent(pointerEvent('pointercancel'))).toThrow(cancelError)
+    expect(handle.isActive()).toBe(false)
+    expect(onFinish).toHaveBeenCalledOnce()
+
+    const next = beginPreview({ label: 'Next', operation })
+    next.cancel()
+  })
+
+  it('keeps ownership released when only onFinish throws', () => {
+    const store = storeWithBox()
+    const element = target()
+    const finishError = new Error('finish failed')
+    const handle = store.gestures.begin({
+      target: element,
+      event: pointerEvent('pointerdown'),
+      label: 'Move box',
+      operation,
+      update: () => {},
+      onFinish: () => { throw finishError },
+    })
+
+    expect(() => element.dispatchEvent(pointerEvent('pointercancel'))).toThrow(finishError)
+    expect(handle.isActive()).toBe(false)
+
+    const next = store.documentTransactions.beginPreview({ label: 'Next', operation })
+    next.cancel()
+  })
+
+  it('cancels ordinary gestures before candidate publish and history restore', () => {
+    const store = storeWithBox()
+    const publishHandle = beginMove(store)
+    const published = structuredClone(store.documentStore.committedDocument)
+    published.elements[0]!.x = 20
+
+    expect(store.publishSchemaCandidate(published, new Set(['box']))).toBe(true)
+    expect(publishHandle.isActive()).toBe(false)
+    expect(store.schema.elements[0]!.x).toBe(20)
+
+    const restoreHandle = beginMove(store)
+    const restored = structuredClone(store.documentStore.committedDocument)
+    restored.elements[0]!.x = 30
+
+    expect(store.restoreSchemaFromHistory(restored, store.materialNodeStates)).toBe(true)
+    expect(restoreHandle.isActive()).toBe(false)
+    expect(store.schema.elements[0]!.x).toBe(30)
+  })
+
   it('cancels gestures before store schema, editing-session, and destroy transitions', () => {
     const store = storeWithBox()
     const extension = editableExtension()
