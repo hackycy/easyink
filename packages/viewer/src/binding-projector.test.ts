@@ -4,6 +4,16 @@ import { createTestCompiledMaterialProfile, createTestMaterialManifest } from '@
 import { describe, expect, it, vi } from 'vitest'
 import { createMaterialBindingResolver, createMaterialDisplayBindingResolver, projectBindings, walkProfileMaterialNodes } from './binding-projector'
 
+const mocks = vi.hoisted(() => ({
+  formatBindingDisplayValue: vi.fn(),
+}))
+
+vi.mock('@easyink/core', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@easyink/core')>()
+  mocks.formatBindingDisplayValue.mockImplementation(original.formatBindingDisplayValue)
+  return { ...original, formatBindingDisplayValue: mocks.formatBindingDisplayValue }
+})
+
 const bindingDefinition: MaterialBindingDefinition = {
   kind: 'ports',
   ports: [
@@ -101,6 +111,25 @@ describe('projectBindings', () => {
 })
 
 describe('material binding resolvers', () => {
+  it.each([
+    ['present', true],
+    ['missing', false],
+  ])('rejects an unmatched bound port before reading %s data', (_case, present) => {
+    const getter = vi.fn((_target: object, key: PropertyKey) => present && key === 'value' ? 'must-not-be-read' : undefined)
+    const data = new Proxy({}, { get: getter })
+    const report = vi.fn()
+    const resolve = createMaterialBindingResolver({
+      node: bindingNode({ unmatched: { sourceId: 'invoice', fieldPath: 'value' } }),
+      bindingDefinition,
+      baseScope: { key: 'document', data },
+      reportDiagnostic: report,
+    })
+
+    expect(resolve('unmatched')).toEqual({ status: 'invalid', code: 'MATERIAL_BINDING_POLICY_UNMATCHED' })
+    expect(getter).not.toHaveBeenCalled()
+    expect(report).toHaveBeenCalledWith(expect.objectContaining({ code: 'MATERIAL_BINDING_POLICY_UNMATCHED', port: 'unmatched' }))
+  })
+
   it('keeps unbound, missing, invalid, and resolved raw states distinct', () => {
     const report = vi.fn()
     const source = { nested: [1] }
@@ -187,6 +216,7 @@ describe('material binding resolvers', () => {
   })
 
   it('formats only display ports and never converts collection or identity ports to text', () => {
+    mocks.formatBindingDisplayValue.mockClear()
     const report = vi.fn()
     const node = bindingNode({
       title: { sourceId: 'invoice', fieldPath: 'amount', format: { prefix: '$', suffix: ' USD', mode: 'preset', preset: { type: 'number', minimumFractionDigits: 2 } } },
@@ -203,6 +233,77 @@ describe('material binding resolvers', () => {
     expect(format('title')).toEqual({ status: 'resolved', text: '$12.00 USD' })
     expect(format('rows')).toEqual({ status: 'invalid' })
     expect(format('key')).toEqual({ status: 'invalid' })
+    expect(mocks.formatBindingDisplayValue).toHaveBeenCalledTimes(1)
     expect(report).toHaveBeenCalledWith(expect.objectContaining({ code: 'MATERIAL_BINDING_DISPLAY_ROLE_REQUIRED', port: 'rows' }))
+  })
+
+  it('rejects persisted formatting when the display policy disables its editor', () => {
+    mocks.formatBindingDisplayValue.mockClear()
+    const report = vi.fn()
+    const format = createMaterialDisplayBindingResolver({
+      node: bindingNode({ title: { sourceId: 'invoice', fieldPath: 'amount', format: { mode: 'preset', preset: { type: 'number' } } } }),
+      bindingDefinition: {
+        kind: 'ports',
+        ports: [{ id: 'title', key: { kind: 'exact', value: 'title' }, role: 'display', valueShape: 'scalar', modelPath: '/model/title', formatEditor: false }],
+      },
+      baseScope: { key: 'document', data: { amount: 12 } },
+      reportDiagnostic: report,
+    })
+
+    expect(format('title')).toEqual({ status: 'invalid' })
+    expect(report).toHaveBeenCalledWith(expect.objectContaining({ code: 'MATERIAL_BINDING_FORMAT_POLICY_INVALID', port: 'title' }))
+    expect(mocks.formatBindingDisplayValue).not.toHaveBeenCalled()
+  })
+
+  it('rejects disallowed presets before formatting and permits allowlisted presets', () => {
+    mocks.formatBindingDisplayValue.mockClear()
+    const report = vi.fn()
+    const policy: MaterialBindingDefinition = {
+      kind: 'ports',
+      ports: [{
+        id: 'title',
+        key: { kind: 'exact', value: 'title' },
+        role: 'display',
+        valueShape: 'scalar',
+        modelPath: '/model/title',
+        formatEditor: { tabs: ['preset'], presetTypes: ['currency'] },
+      }],
+    }
+    const create = (type: 'number' | 'currency') => createMaterialDisplayBindingResolver({
+      node: bindingNode({ title: { sourceId: 'invoice', fieldPath: 'amount', format: { mode: 'preset', preset: { type, currency: 'USD', locale: 'en-US' } } } }),
+      bindingDefinition: policy,
+      baseScope: { key: 'document', data: { amount: 12 } },
+      reportDiagnostic: report,
+    })
+
+    expect(create('number')('title')).toEqual({ status: 'invalid' })
+    expect(mocks.formatBindingDisplayValue).not.toHaveBeenCalled()
+    expect(create('currency')('title')).toEqual({ status: 'resolved', text: '$12.00' })
+    expect(mocks.formatBindingDisplayValue).toHaveBeenCalledTimes(1)
+  })
+
+  it('allows raw-to-text with no persisted format and keeps custom source disabled', () => {
+    mocks.formatBindingDisplayValue.mockClear()
+    const report = vi.fn()
+    const noFormat = createMaterialDisplayBindingResolver({
+      node: bindingNode({ title: { sourceId: 'invoice', fieldPath: 'amount' } }),
+      bindingDefinition: {
+        kind: 'ports',
+        ports: [{ id: 'title', key: { kind: 'exact', value: 'title' }, role: 'display', valueShape: 'scalar', modelPath: '/model/title', formatEditor: false }],
+      },
+      baseScope: { key: 'document', data: { amount: 12 } },
+      reportDiagnostic: report,
+    })
+    const custom = createMaterialDisplayBindingResolver({
+      node: bindingNode({ title: { sourceId: 'invoice', fieldPath: 'amount', format: { mode: 'custom', custom: { source: 'globalThis.__runtimeCustomExecuted = true' } } } }),
+      bindingDefinition,
+      baseScope: { key: 'document', data: { amount: 12 } },
+      reportDiagnostic: report,
+    })
+
+    expect(noFormat('title')).toEqual({ status: 'resolved', text: '12' })
+    expect(custom('title')).toEqual({ status: 'resolved', text: '12' })
+    expect(report).toHaveBeenCalledWith(expect.objectContaining({ code: 'BINDING_FORMAT_CUSTOM_DISABLED', port: 'title' }))
+    expect((globalThis as Record<string, unknown>).__runtimeCustomExecuted).toBeUndefined()
   })
 })

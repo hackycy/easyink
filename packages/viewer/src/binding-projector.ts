@@ -1,19 +1,21 @@
 import type {
   CompiledMaterialProfile,
   MaterialBindingDefinition,
+  MaterialBindingPortPolicy,
   MaterialBindingResolver,
   MaterialDisplayBindingResolver,
   MaterialRuntimeScope,
 } from '@easyink/core'
-import type { DocumentSchema, MaterialNode } from '@easyink/schema'
+import type { BindingRef, DocumentSchema, MaterialNode } from '@easyink/schema'
 import type { JsonValue } from '@easyink/shared'
 import type { ProjectedBinding } from './types'
 import {
+  assertMaterialBindingValue,
   formatBindingDisplayValue,
   hasBindingFormat,
   inspectMaterialNode,
   resolveBindingValue,
-  resolveMaterialBindingPortPolicy,
+  resolveMaterialBindingPortPolicyDefinition,
 } from '@easyink/core'
 import { getBindingRefs, isDataContractBinding } from '@easyink/schema'
 import { assertJsonValue, cloneJsonValue, deepFreezeJsonValue } from '@easyink/shared'
@@ -80,6 +82,13 @@ export function createMaterialBindingResolver(input: MaterialBindingResolverInpu
     const binding = input.node.bindings[port]
     if (!binding)
       return Object.freeze({ status: 'unbound' as const })
+    let policy: MaterialBindingPortPolicy
+    try {
+      policy = resolveMaterialBindingPortPolicyDefinition(input.bindingDefinition, port, input.node.model)
+    }
+    catch (error) {
+      return invalidBinding(input, port, stableBindingCode(error))
+    }
     if (Array.isArray(binding) || isDataContractBinding(binding))
       return invalidBinding(input, port, 'MATERIAL_BINDING_PORT_KIND_UNSUPPORTED')
 
@@ -103,7 +112,7 @@ export function createMaterialBindingResolver(input: MaterialBindingResolverInpu
       return invalidBinding(input, port, 'MATERIAL_BINDING_RESULT_NOT_JSON')
     }
     try {
-      resolveMaterialBindingPortPolicy(input.bindingDefinition, port, value, input.node.model)
+      assertMaterialBindingValue(value, policy.valueShape)
     }
     catch (error) {
       return invalidBinding(input, port, stableBindingCode(error))
@@ -117,27 +126,34 @@ export function createMaterialBindingResolver(input: MaterialBindingResolverInpu
 export function createMaterialDisplayBindingResolver(input: MaterialBindingResolverInput): MaterialDisplayBindingResolver {
   const resolveRaw = createMaterialBindingResolver(input)
   return (port, scope = input.baseScope) => {
-    const raw = resolveRaw(port, scope)
-    if (raw.status !== 'resolved')
-      return raw.status === 'invalid' ? Object.freeze({ status: 'invalid' as const }) : raw
-
-    let policy
+    const binding = input.node.bindings[port]
+    if (!binding)
+      return Object.freeze({ status: 'unbound' as const })
+    let policy: MaterialBindingPortPolicy
     try {
-      policy = resolveMaterialBindingPortPolicy(input.bindingDefinition, port, raw.value, input.node.model)
+      policy = resolveMaterialBindingPortPolicyDefinition(input.bindingDefinition, port, input.node.model)
     }
     catch (error) {
       invalidBinding(input, port, stableBindingCode(error))
+      return Object.freeze({ status: 'invalid' as const })
+    }
+    if (Array.isArray(binding) || isDataContractBinding(binding)) {
+      reportBindingDiagnostic(input, port, 'MATERIAL_BINDING_PORT_KIND_UNSUPPORTED')
       return Object.freeze({ status: 'invalid' as const })
     }
     if (policy.role !== 'display') {
       reportBindingDiagnostic(input, port, 'MATERIAL_BINDING_DISPLAY_ROLE_REQUIRED')
       return Object.freeze({ status: 'invalid' as const })
     }
-    const binding = input.node.bindings[port]
-    if (!binding || Array.isArray(binding) || isDataContractBinding(binding)) {
-      reportBindingDiagnostic(input, port, 'MATERIAL_BINDING_PORT_KIND_UNSUPPORTED')
+    const formatPolicyCode = validateDisplayFormatPolicy(binding, policy)
+    if (formatPolicyCode) {
+      reportBindingDiagnostic(input, port, formatPolicyCode)
       return Object.freeze({ status: 'invalid' as const })
     }
+
+    const raw = resolveRaw(port, scope)
+    if (raw.status !== 'resolved')
+      return raw.status === 'invalid' ? Object.freeze({ status: 'invalid' as const }) : raw
 
     const formatted = formatBindingDisplayValue(raw.value, binding, { data: scope.data as Record<string, unknown> })
     for (const diagnostic of formatted.diagnostics)
@@ -155,12 +171,9 @@ export function projectMaterialRuntimeModel(
   assertJsonValue(node.model)
   const model = cloneJsonValue(node.model as JsonValue) as Record<string, unknown>
   for (const port of Object.keys(node.bindings)) {
-    const raw = resolveBinding(port)
-    if (raw.status !== 'resolved')
-      continue
-    let policy
+    let policy: MaterialBindingPortPolicy
     try {
-      policy = resolveMaterialBindingPortPolicy(bindingDefinition, port, raw.value, node.model)
+      policy = resolveMaterialBindingPortPolicyDefinition(bindingDefinition, port, node.model)
     }
     catch (error) {
       reportDiagnostic(Object.freeze({ code: stableBindingCode(error), nodeId: node.id, port }))
@@ -170,6 +183,14 @@ export function projectMaterialRuntimeModel(
       continue
     const binding = node.bindings[port]
     if (!binding || Array.isArray(binding) || isDataContractBinding(binding))
+      continue
+    const formatPolicyCode = validateDisplayFormatPolicy(binding, policy)
+    if (formatPolicyCode) {
+      reportDiagnostic(Object.freeze({ code: formatPolicyCode, nodeId: node.id, port }))
+      continue
+    }
+    const raw = resolveBinding(port)
+    if (raw.status !== 'resolved')
       continue
     const formatted = formatBindingDisplayValue(raw.value, binding)
     for (const diagnostic of formatted.diagnostics)
@@ -255,4 +276,15 @@ function stableBindingCode(error: unknown): string {
   return error instanceof Error && /^MATERIAL_BINDING_[A-Z_]+$/.test(error.message)
     ? error.message
     : 'MATERIAL_BINDING_POLICY_INVALID'
+}
+
+function validateDisplayFormatPolicy(binding: BindingRef, policy: MaterialBindingPortPolicy): string | undefined {
+  const format = binding.format
+  if (!format || format.mode === 'custom')
+    return undefined
+  if (policy.formatEditor === false || format.mode !== 'preset' || !format.preset)
+    return 'MATERIAL_BINDING_FORMAT_POLICY_INVALID'
+  if (policy.formatEditor.presetTypes && !policy.formatEditor.presetTypes.includes(format.preset.type))
+    return 'MATERIAL_BINDING_FORMAT_POLICY_INVALID'
+  return undefined
 }
