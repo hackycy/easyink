@@ -1,5 +1,5 @@
 import type { DesignerStore } from '../store/designer-store'
-import { AddMaterialCommand } from '@easyink/core'
+import { appendDocumentNodes, createDesignerDocumentOperation } from '../editing/document-recipes'
 import { createGeometryService } from '../editing/geometry-service'
 import { selectOne } from '../interactions/selection-api'
 
@@ -57,8 +57,12 @@ export function useMaterialDrop(ctx: MaterialDropContext) {
       y: Math.max(0, dropPoint.y),
     }, store.schema.unit)
 
-    const cmd = new AddMaterialCommand(store.schema.elements, node)
-    store.commands.execute(cmd)
+    store.documentTransactions.transact((draft) => {
+      appendDocumentNodes(draft, [node])
+    }, {
+      label: 'Add material',
+      operation: createDesignerDocumentOperation(store, 'material.drop', [`node:${node.id}`], ['/elements'], true),
+    })
     selectOne(store, node.id)
   }
 

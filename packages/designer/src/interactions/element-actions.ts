@@ -1,22 +1,9 @@
 import type { MaterialNode } from '@easyink/schema'
 import type { DesignerStore } from '../store/designer-store'
-import { RemoveMaterialCommand, UpdateMaterialEditorStateCommand } from '@easyink/core'
+import { createDesignerDocumentOperation, removeDocumentNodes, updateDraftNodeEditorState } from '../editing/document-recipes'
 import { removeFromSelection } from './selection-api'
 
 type MaterialMetaUpdates = Partial<Record<'hidden' | 'locked', boolean | undefined>>
-
-function runTransaction<T>(store: DesignerStore, label: string, fn: () => T): T {
-  store.commands.beginTransaction(label)
-  try {
-    const result = fn()
-    store.commands.commitTransaction()
-    return result
-  }
-  catch (error) {
-    store.commands.rollbackTransaction()
-    throw error
-  }
-}
 
 export function updateMaterialMeta(
   store: DesignerStore,
@@ -27,9 +14,12 @@ export function updateMaterialMeta(
   if (nodes.length === 0)
     return 0
 
-  runTransaction(store, label, () => {
+  store.documentTransactions.transact((draft) => {
     for (const node of nodes)
-      store.commands.execute(new UpdateMaterialEditorStateCommand(store.schema.elements, node.id, updates))
+      updateDraftNodeEditorState(draft, store, node.id, updates)
+  }, {
+    label,
+    operation: createDesignerDocumentOperation(store, 'material.editor-state', nodes.map(node => `node:${node.id}`), ['/editorState'], false),
   })
   return nodes.length
 }
@@ -47,9 +37,11 @@ export function deleteMaterialNodes(store: DesignerStore, nodes: readonly Materi
   if (deletableNodes.length === 0)
     return 0
 
-  runTransaction(store, 'Delete', () => {
-    for (const node of deletableNodes)
-      store.commands.execute(new RemoveMaterialCommand(store.schema.elements, node.id, store.schema))
+  store.documentTransactions.transact((draft) => {
+    removeDocumentNodes(draft, deletableNodes.map(node => node.id))
+  }, {
+    label: 'Delete',
+    operation: createDesignerDocumentOperation(store, 'material.delete', deletableNodes.map(node => `node:${node.id}`), ['/elements'], true),
   })
 
   removeFromSelection(store, deletableNodes.map(node => node.id))

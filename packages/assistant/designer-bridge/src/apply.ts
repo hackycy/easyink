@@ -17,16 +17,25 @@ export function applyAssistantResultToDesigner(
 ): void {
   const beforeApplySchema = cloneJson(store.schema)
   const schema = admitAssistantSchema(store, result.schema)
-  store.setSchema(schema)
+  store.documentTransactions.markHistoryBarrier()
+  store.documentTransactions.transact((draft) => {
+    replaceDraftDocument(draft, schema)
+    draft.extensions = {
+      ...(draft.extensions ?? {}),
+      assistant: {
+        lastResultId: result.id,
+        appliedAt: Date.now(),
+        beforeApplySchema,
+        afterApplySchema: cloneJson(schema),
+      },
+    }
+  }, {
+    label: 'Assistant apply',
+    operation: { kind: 'assistant.apply', sessionPath: [], targetIds: ['document'], fieldPaths: [''], selectionLineage: null, structural: true },
+  })
   if (result.dataSource) {
     store.dataSourceRegistry.registerSource(result.dataSource)
   }
-  store.setExtension('assistant', {
-    lastResultId: result.id,
-    appliedAt: Date.now(),
-    beforeApplySchema,
-    afterApplySchema: cloneJson(schema),
-  })
   store.markDraftModified()
 }
 
@@ -39,12 +48,21 @@ export function applyAssistantPatchToDesigner(
   const beforeApplySchema = cloneJson(store.schema)
   const nextSchema = applyAssistantPatch(beforeApplySchema as unknown as Record<string, unknown>, operations)
   const schema = admitAssistantSchema(store, nextSchema)
-  store.setSchema(schema)
-  store.setExtension('assistant', {
-    ...store.getExtension<AssistantDesignerExtension>('assistant'),
-    appliedAt: Date.now(),
-    beforeApplySchema,
-    afterApplySchema: cloneJson(schema),
+  store.documentTransactions.markHistoryBarrier()
+  store.documentTransactions.transact((draft) => {
+    replaceDraftDocument(draft, schema)
+    draft.extensions = {
+      ...(draft.extensions ?? {}),
+      assistant: {
+        ...store.getExtension<AssistantDesignerExtension>('assistant'),
+        appliedAt: Date.now(),
+        beforeApplySchema,
+        afterApplySchema: cloneJson(schema),
+      },
+    }
+  }, {
+    label: 'Assistant apply',
+    operation: { kind: 'assistant.apply', sessionPath: [], targetIds: ['document'], fieldPaths: [''], selectionLineage: null, structural: true },
   })
   store.markDraftModified()
   return true
@@ -64,11 +82,19 @@ export function applyAssistantDataSourceToDesigner(
 ): void {
   const beforeApplySchema = cloneJson(store.schema)
   store.dataSourceRegistry.registerSource(dataSource)
-  store.setExtension('assistant', {
-    ...store.getExtension<AssistantDesignerExtension>('assistant'),
-    appliedAt: Date.now(),
-    beforeApplySchema,
-    afterApplySchema: cloneJson(store.schema),
+  store.documentTransactions.transact((draft) => {
+    draft.extensions = {
+      ...(draft.extensions ?? {}),
+      assistant: {
+        ...store.getExtension<AssistantDesignerExtension>('assistant'),
+        appliedAt: Date.now(),
+        beforeApplySchema,
+        afterApplySchema: cloneJson(store.schema),
+      },
+    }
+  }, {
+    label: 'Assistant data source',
+    operation: { kind: 'assistant.data-source', sessionPath: [], targetIds: ['document'], fieldPaths: ['/extensions/assistant'], selectionLineage: null, structural: false },
   })
   store.markDraftModified()
 }
@@ -77,14 +103,15 @@ export function rollbackAssistantDesigner(store: ContributionContext['store']): 
   const assistant = store.getExtension<AssistantDesignerExtension>('assistant')
   if (!assistant?.beforeApplySchema)
     return false
-  store.setSchema(assistant.beforeApplySchema)
-  const { afterApplySchema: _afterApplySchema, ...rest } = assistant
-  store.setExtension('assistant', {
-    ...rest,
-    appliedAt: Date.now(),
-  })
+  if (!store.documentTransactions.canUndo)
+    return false
+  store.documentTransactions.undo()
   store.markDraftModified()
   return true
+}
+
+function replaceDraftDocument(draft: DocumentSchemaInput, schema: DocumentSchemaInput): void {
+  Object.assign(draft, cloneJson(schema))
 }
 
 function cloneJson<T>(value: T): T {

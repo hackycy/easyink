@@ -4,7 +4,7 @@ import type { PaperPreset } from '@easyink/shared'
 import type { Component } from 'vue'
 import type { DesignerRuntimeConfig } from '../runtime-config'
 import type { DesignerInteractionProvider, LocaleMessageRegistration, LocaleMessages, PreferenceProvider, SnapLine, StatusBarState } from '../types'
-import { CommandManager, DocumentStore as CoreDocumentStore, DocumentTransactionEngine as CoreDocumentTransactionEngine, MaterialFacetHost as CoreMaterialFacetHost, loadDocumentWithProfile, SelectionModel, validateDocumentWithProfile } from '@easyink/core'
+import { DocumentStore as CoreDocumentStore, DocumentTransactionEngine as CoreDocumentTransactionEngine, MaterialFacetHost as CoreMaterialFacetHost, loadDocumentWithProfile, SelectionModel, validateDocumentWithProfile } from '@easyink/core'
 import { DataSourceRegistry } from '@easyink/datasource'
 import { markRaw } from 'vue'
 import { EditingSessionManager } from '../editing/editing-session-manager'
@@ -44,7 +44,6 @@ export class DesignerStore {
   private destroyed = false
 
   // ─── Core services ────────────────────────────────────────────
-  readonly commands = new CommandManager()
   readonly selection = new SelectionModel()
   readonly documentStore: DocumentStore
   readonly documentTransactions: DocumentTransactionEngine
@@ -196,7 +195,6 @@ export class DesignerStore {
     this.editingSession.exitAll()
     const loaded = loadDocumentWithProfile(schema, this.materialProfile)
     this.documentTransactions.reset(stripUndefined(loaded.schema), loaded.nodeStates)
-    this.commands.clear()
     this._materialDiagnostics = loaded.diagnostics
     this._materialNodeStates = loaded.nodeStates
     this.selection.clear()
@@ -616,7 +614,6 @@ export class DesignerStore {
     this.designerFacetLocaleCleanups.clear()
     this.designerFacetCache.clear()
     void this.materialFacetHost.dispose()
-    this.commands.clear()
     this.selection.clear()
     this.dataSourceRegistry.clear()
     this.fontService.clear()

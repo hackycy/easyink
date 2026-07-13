@@ -124,7 +124,7 @@ describe('designerStore material facet host', () => {
       liveFlow,
     )
     expect(Object.keys(liveFlow.bindings)).toContainEqual(expect.stringMatching(/^column:/))
-    expect(store.commands.canUndo).toBe(true)
+    expect(store.documentTransactions.canUndo).toBe(true)
     store.destroy()
   })
 

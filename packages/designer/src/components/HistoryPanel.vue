@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import type { HistoryEntry } from '@easyink/core'
 import { nextTick, ref, watchEffect } from 'vue'
 import { useDesignerStore } from '../composables'
 
 const store = useDesignerStore()
+interface HistoryEntry { id: string, type: string, description: string }
 
 const TYPE_TO_LOCALE: Record<string, string> = {
   'add-material': 'designer.history.addMaterial',
@@ -43,13 +43,13 @@ function localizeEntry(entry: HistoryEntry): string {
   return store.t(key ?? entry.description)
 }
 
-const entries = ref<HistoryEntry[]>([])
+const entries = ref(store.documentTransactions.historyEntries)
 const cursor = ref(0)
 const listEl = ref<HTMLElement>()
 
 function sync() {
-  entries.value = store.commands.historyEntries
-  cursor.value = store.commands.cursor
+  entries.value = store.documentTransactions.historyEntries
+  cursor.value = store.documentTransactions.cursor
   nextTick(scrollToCursor)
 }
 
@@ -62,10 +62,10 @@ function scrollToCursor() {
 }
 
 function handleClick(index: number) {
-  store.commands.goTo(index)
+  store.documentTransactions.goTo(index)
 }
 
-const dispose = store.commands.onChange(sync)
+const dispose = store.documentTransactions.onChange(sync)
 sync()
 
 watchEffect((onCleanup) => {

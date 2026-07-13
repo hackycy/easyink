@@ -1,11 +1,8 @@
 import type { MaterialNode } from '@easyink/schema'
 import type { DesignerStore } from '../store/designer-store'
-import {
-  isInteractable,
-  MoveMaterialCommand,
-  UnitManager,
-} from '@easyink/core'
+import { isInteractable, UnitManager } from '@easyink/core'
 import { onMounted, onUnmounted } from 'vue'
+import { createDesignerDocumentOperation, updateDraftNodeGeometry } from '../editing/document-recipes'
 import { createClipboardActions } from '../interactions/clipboard-actions'
 import { selectMany } from '../interactions/selection-api'
 
@@ -83,23 +80,13 @@ export function useKeyboardShortcuts(ctx: KeyboardShortcutsContext) {
     const nodes = selectedNodes().filter(isInteractable)
     if (nodes.length === 0)
       return
-    const elements = store.schema.elements
-    store.commands.beginTransaction('Nudge')
-    try {
-      for (const node of nodes) {
-        store.commands.execute(
-          new MoveMaterialCommand(elements, node.id, {
-            x: node.x + dx,
-            y: node.y + dy,
-          }),
-        )
-      }
-      store.commands.commitTransaction()
-    }
-    catch (err) {
-      store.commands.rollbackTransaction()
-      throw err
-    }
+    store.documentTransactions.transact((draft) => {
+      for (const node of nodes)
+        updateDraftNodeGeometry(draft, store, node.id, { x: node.x + dx, y: node.y + dy })
+    }, {
+      label: 'Nudge',
+      operation: createDesignerDocumentOperation(store, 'keyboard.nudge', nodes.map(node => `node:${node.id}`), ['/x', '/y'], false),
+    })
   }
 
   function onKeyDown(e: KeyboardEvent) {

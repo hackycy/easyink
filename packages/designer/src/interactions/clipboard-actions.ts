@@ -2,13 +2,12 @@ import type { CompiledMaterialProfile } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { DesignerStore } from '../store/designer-store'
 import {
-  AddMaterialCommand,
   cloneMaterialGraph,
   isInteractable,
-  RemoveMaterialCommand,
   UnitManager,
 } from '@easyink/core'
 import { deepClone, generateId } from '@easyink/shared'
+import { appendDocumentNodes, createDesignerDocumentOperation, removeDocumentNodes } from '../editing/document-recipes'
 import { clearSelection, selectMany } from './selection-api'
 
 export interface ClipboardActions {
@@ -76,19 +75,6 @@ export function createClipboardActions(
     return new UnitManager(store.schema.unit).fromPixels(10, 96, 1)
   }
 
-  function runTransaction<T>(label: string, fn: () => T): T {
-    store.commands.beginTransaction(label)
-    try {
-      const result = fn()
-      store.commands.commitTransaction()
-      return result
-    }
-    catch (error) {
-      store.commands.rollbackTransaction()
-      throw error
-    }
-  }
-
   function copySelection() {
     const nodes = snapshotSelectedNodes().filter(isInteractable)
     if (nodes.length === 0)
@@ -102,11 +88,12 @@ export function createClipboardActions(
       return
 
     store.clipboard = cloneNodes(nodes, false)
-    const elements = store.schema.elements
-
-    runTransaction('Cut', () => {
-      for (const node of nodes)
-        store.commands.execute(new RemoveMaterialCommand(elements, node.id, store.schema))
+    const targetIds = nodes.map(node => `node:${node.id}`)
+    store.documentTransactions.transact((draft) => {
+      removeDocumentNodes(draft, nodes.map(node => node.id))
+    }, {
+      label: 'Cut',
+      operation: createDesignerDocumentOperation(store, 'clipboard.cut', targetIds, ['/elements'], true),
     })
 
     clearSelection(store)
@@ -116,21 +103,17 @@ export function createClipboardActions(
     if (store.clipboard.length === 0)
       return
 
-    const elements = store.schema.elements
     const offset = pasteOffset()
     const newIds: string[] = []
     const cloned = cloneNodes(store.clipboard, true)
 
-    runTransaction('Paste', () => {
-      for (const node of cloned) {
-        const pasted: MaterialNode = {
-          ...node,
-          x: node.x + offset,
-          y: node.y + offset,
-        }
-        store.commands.execute(new AddMaterialCommand(elements, pasted))
-        newIds.push(pasted.id)
-      }
+    const pasted = cloned.map(node => ({ ...node, x: node.x + offset, y: node.y + offset }))
+    newIds.push(...pasted.map(node => node.id))
+    store.documentTransactions.transact((draft) => {
+      appendDocumentNodes(draft, pasted)
+    }, {
+      label: 'Paste',
+      operation: createDesignerDocumentOperation(store, 'clipboard.paste', pasted.map(node => `node:${node.id}`), ['/elements'], true),
     })
 
     selectMany(store, newIds)
@@ -141,21 +124,17 @@ export function createClipboardActions(
     if (nodes.length === 0)
       return
 
-    const elements = store.schema.elements
     const offset = pasteOffset()
     const newIds: string[] = []
     const cloned = cloneNodes(nodes, true)
 
-    runTransaction('Duplicate', () => {
-      for (const node of cloned) {
-        const duplicate: MaterialNode = {
-          ...node,
-          x: node.x + offset,
-          y: node.y + offset,
-        }
-        store.commands.execute(new AddMaterialCommand(elements, duplicate))
-        newIds.push(duplicate.id)
-      }
+    const duplicates = cloned.map(node => ({ ...node, x: node.x + offset, y: node.y + offset }))
+    newIds.push(...duplicates.map(node => node.id))
+    store.documentTransactions.transact((draft) => {
+      appendDocumentNodes(draft, duplicates)
+    }, {
+      label: 'Duplicate',
+      operation: createDesignerDocumentOperation(store, 'clipboard.duplicate', duplicates.map(node => `node:${node.id}`), ['/elements'], true),
     })
 
     selectMany(store, newIds)
@@ -166,11 +145,11 @@ export function createClipboardActions(
     if (nodes.length === 0)
       return
 
-    const elements = store.schema.elements
-
-    runTransaction('Delete', () => {
-      for (const node of nodes)
-        store.commands.execute(new RemoveMaterialCommand(elements, node.id, store.schema))
+    store.documentTransactions.transact((draft) => {
+      removeDocumentNodes(draft, nodes.map(node => node.id))
+    }, {
+      label: 'Delete',
+      operation: createDesignerDocumentOperation(store, 'clipboard.delete', nodes.map(node => `node:${node.id}`), ['/elements'], true),
     })
 
     clearSelection(store)

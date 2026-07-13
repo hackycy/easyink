@@ -1,18 +1,7 @@
 <script setup lang="ts">
 import type { MaterialNode } from '@easyink/schema'
 import type { Component } from 'vue'
-import {
-  AddElementGroupCommand,
-  getBoundingRect,
-  isInteractable,
-  MoveMaterialCommand,
-  normalizeRotation,
-  RemoveElementGroupCommand,
-  RotateMaterialCommand,
-  UpdateGuidesCommand,
-  UpdateMaterialEditorStateCommand,
-  UpdateMaterialModelCommand,
-} from '@easyink/core'
+import { getBoundingRect, isInteractable, normalizeRotation } from '@easyink/core'
 import {
   IconAlignCenter,
   IconAlignLeft,
@@ -59,6 +48,7 @@ import { EiNumberInput, EiPopover, EiSwitch } from '@easyink/ui'
 import { computed, inject, onMounted, onUnmounted, ref } from 'vue'
 import { useDesignerStore } from '../composables'
 import { CONTRIBUTION_REGISTRY_KEY } from '../contributions/injection'
+import { createDesignerDocumentOperation, replaceDraftDocument, updateDraftNodeEditorState, updateDraftNodeGeometry, updateDraftNodeModel } from '../editing/document-recipes'
 import { createClipboardActions } from '../interactions/clipboard-actions'
 import { hasGroupedElement, selectedLogicalGroupIds } from '../interactions/logical-groups'
 import { selectMany } from '../interactions/selection-api'
@@ -182,11 +172,11 @@ onUnmounted(() => {
 
 // ─── Undo / Redo ─────────────────────────────────────────────
 function handleUndo() {
-  store.commands.undo()
+  store.documentTransactions.undo()
 }
 
 function handleRedo() {
-  store.commands.redo()
+  store.documentTransactions.redo()
 }
 
 // ─── Toolbar Manager ─────────────────────────────────────────
@@ -213,7 +203,11 @@ async function handleNewTemplate() {
   })
   if (!confirmed)
     return
-  store.setSchema(createDefaultSchema())
+  store.gestures.cancelActive()
+  store.editingSession.exitAll()
+  store.documentTransactions.transact((draft) => {
+    replaceDraftDocument(draft, createDefaultSchema())
+  }, { label: 'New template', operation: createDesignerDocumentOperation(store, 'template.new', ['document'], [''], true) })
 }
 
 async function handleClear() {
@@ -232,7 +226,11 @@ async function handleClear() {
   })
   if (!confirmed)
     return
-  store.setSchema(createDefaultSchema())
+  store.gestures.cancelActive()
+  store.editingSession.exitAll()
+  store.documentTransactions.transact((draft) => {
+    replaceDraftDocument(draft, createDefaultSchema())
+  }, { label: 'Clear template', operation: createDesignerDocumentOperation(store, 'template.clear', ['document'], [''], true) })
 }
 
 // ─── Font Style (bold / italic / underline) ──────────────────
@@ -240,26 +238,17 @@ function toggleFontProp(prop: 'fontWeight' | 'fontStyle' | 'textDecoration') {
   const nodes = editableSelectedNodes.value
   if (nodes.length === 0)
     return
-
-  const elements = store.schema.elements
-  store.commands.beginTransaction(`Toggle ${prop}`)
-  for (const node of nodes) {
-    const current = node.model[prop]
-    let next: unknown
-    if (prop === 'fontWeight') {
-      next = current === 'bold' ? 'normal' : 'bold'
+  store.documentTransactions.transact((draft) => {
+    for (const node of nodes) {
+      const current = node.model[prop]
+      const next = prop === 'fontWeight'
+        ? (current === 'bold' ? 'normal' : 'bold')
+        : prop === 'fontStyle'
+          ? (current === 'italic' ? 'normal' : 'italic')
+          : (current === 'underline' ? 'none' : 'underline')
+      updateDraftNodeModel(draft, store, node.id, { [prop]: next })
     }
-    else if (prop === 'fontStyle') {
-      next = current === 'italic' ? 'normal' : 'italic'
-    }
-    else {
-      next = current === 'underline' ? 'none' : 'underline'
-    }
-    store.commands.execute(
-      new UpdateMaterialModelCommand(elements, node.id, { [prop]: next }),
-    )
-  }
-  store.commands.commitTransaction()
+  }, { label: `Toggle ${prop}`, operation: createDesignerDocumentOperation(store, 'toolbar.font', nodes.map(node => `node:${node.id}`), [`/model/${prop}`], false) })
 }
 
 function handleBold() {
@@ -278,15 +267,10 @@ function handleRotation() {
   if (nodes.length === 0)
     return
 
-  const elements = store.schema.elements
-  store.commands.beginTransaction('Rotate +90')
-  for (const node of nodes) {
-    const next = normalizeRotation((node.rotation ?? 0) + 90)
-    store.commands.execute(
-      new RotateMaterialCommand(elements, node.id, next),
-    )
-  }
-  store.commands.commitTransaction()
+  store.documentTransactions.transact((draft) => {
+    for (const node of nodes)
+      updateDraftNodeGeometry(draft, store, node.id, { rotation: normalizeRotation((node.rotation ?? 0) + 90) })
+  }, { label: 'Rotate +90', operation: createDesignerDocumentOperation(store, 'toolbar.rotate', nodes.map(node => `node:${node.id}`), ['/rotation'], false) })
 }
 
 // ─── Visibility ──────────────────────────────────────────────
@@ -329,17 +313,14 @@ function handleDistribute() {
   const totalWidth = sorted.reduce((sum, n) => sum + n.width, 0)
   const gap = (totalSpan - totalWidth) / (sorted.length - 1)
 
-  const elements = store.schema.elements
-  store.commands.beginTransaction('Distribute horizontally')
-  let currentX = first.x + first.width + gap
-  for (let i = 1; i < sorted.length - 1; i++) {
-    const node = sorted[i]!
-    store.commands.execute(
-      new MoveMaterialCommand(elements, node.id, { x: currentX, y: node.y }),
-    )
-    currentX += node.width + gap
-  }
-  store.commands.commitTransaction()
+  store.documentTransactions.transact((draft) => {
+    let currentX = first.x + first.width + gap
+    for (let i = 1; i < sorted.length - 1; i++) {
+      const node = sorted[i]!
+      updateDraftNodeGeometry(draft, store, node.id, { x: currentX, y: node.y })
+      currentX += node.width + gap
+    }
+  }, { label: 'Distribute horizontally', operation: createDesignerDocumentOperation(store, 'toolbar.distribute', sorted.map(node => `node:${node.id}`), ['/x'], false) })
 }
 
 // ─── Align ───────────────────────────────────────────────────
@@ -353,26 +334,17 @@ function handleAlign(mode: 'left' | 'center' | 'right') {
   if (!bounds)
     return
 
-  const elements = store.schema.elements
-  store.commands.beginTransaction(`Align ${mode}`)
-  for (const node of nodes) {
-    let newX = node.x
-    if (mode === 'left') {
-      newX = bounds.x
+  store.documentTransactions.transact((draft) => {
+    for (const node of nodes) {
+      const newX = mode === 'left'
+        ? bounds.x
+        : mode === 'center'
+          ? bounds.x + (bounds.width - node.width) / 2
+          : bounds.x + bounds.width - node.width
+      if (newX !== node.x)
+        updateDraftNodeGeometry(draft, store, node.id, { x: newX, y: node.y })
     }
-    else if (mode === 'center') {
-      newX = bounds.x + (bounds.width - node.width) / 2
-    }
-    else {
-      newX = bounds.x + bounds.width - node.width
-    }
-    if (newX !== node.x) {
-      store.commands.execute(
-        new MoveMaterialCommand(elements, node.id, { x: newX, y: node.y }),
-      )
-    }
-  }
-  store.commands.commitTransaction()
+  }, { label: `Align ${mode}`, operation: createDesignerDocumentOperation(store, 'toolbar.align', nodes.map(node => `node:${node.id}`), ['/x'], false) })
 }
 
 // ─── Layer ───────────────────────────────────────────────────
@@ -382,6 +354,7 @@ function handleLayerUp() {
     return
 
   const elements = store.schema.elements
+  const updates = new Map<string, number>()
   for (const node of nodes) {
     const currentZ = node.zIndex ?? 0
     const above = elements
@@ -389,9 +362,11 @@ function handleLayerUp() {
       .sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0))
     if (above.length > 0) {
       const nextZ = above[0]!.zIndex ?? 0
-      store.updateElement(node.id, { zIndex: nextZ + 1 })
+      updates.set(node.id, nextZ + 1)
     }
   }
+  if (updates.size > 0)
+    store.documentTransactions.transact((draft) => { for (const [id, zIndex] of updates) updateDraftNodeGeometry(draft, store, id, { zIndex }) }, { label: 'Layer up', operation: createDesignerDocumentOperation(store, 'toolbar.layer-up', [...updates.keys()].map(id => `node:${id}`), ['/zIndex'], false) })
 }
 
 function handleLayerDown() {
@@ -400,6 +375,7 @@ function handleLayerDown() {
     return
 
   const elements = store.schema.elements
+  const updates = new Map<string, number>()
   for (const node of nodes) {
     const currentZ = node.zIndex ?? 0
     const below = elements
@@ -407,9 +383,11 @@ function handleLayerDown() {
       .sort((a, b) => (b.zIndex ?? 0) - (a.zIndex ?? 0))
     if (below.length > 0) {
       const prevZ = below[0]!.zIndex ?? 0
-      store.updateElement(node.id, { zIndex: prevZ - 1 })
+      updates.set(node.id, prevZ - 1)
     }
   }
+  if (updates.size > 0)
+    store.documentTransactions.transact((draft) => { for (const [id, zIndex] of updates) updateDraftNodeGeometry(draft, store, id, { zIndex }) }, { label: 'Layer down', operation: createDesignerDocumentOperation(store, 'toolbar.layer-down', [...updates.keys()].map(id => `node:${id}`), ['/zIndex'], false) })
 }
 
 // ─── Group / Ungroup ─────────────────────────────────────────
@@ -422,7 +400,9 @@ function handleGroup() {
     id: generateId('grp'),
     memberIds: nodes.map(node => node.id),
   }
-  store.commands.execute(new AddElementGroupCommand(store.schema, group))
+  store.documentTransactions.transact((draft) => {
+    draft.groups = [...(draft.groups ?? []), group]
+  }, { label: 'Group', operation: createDesignerDocumentOperation(store, 'toolbar.group', group.memberIds.map(id => `node:${id}`), ['/groups'], true) })
 
   selectMany(store, group.memberIds)
 }
@@ -439,11 +419,9 @@ function handleUngroup() {
       memberIds.push(...group.memberIds)
   }
 
-  store.commands.beginTransaction('Ungroup')
-  for (const groupId of groupIds) {
-    store.commands.execute(new RemoveElementGroupCommand(store.schema, groupId))
-  }
-  store.commands.commitTransaction()
+  store.documentTransactions.transact((draft) => {
+    draft.groups = (draft.groups ?? []).filter(group => !groupIds.includes(group.id))
+  }, { label: 'Ungroup', operation: createDesignerDocumentOperation(store, 'toolbar.ungroup', groupIds.map(id => `group:${id}`), ['/groups'], true) })
 
   selectMany(store, memberIds)
 }
@@ -461,16 +439,10 @@ function handleLock() {
 function runMetaTransaction(label: string, nodes: MaterialNode[], updates: Partial<Record<'hidden' | 'locked', boolean | undefined>>) {
   if (nodes.length === 0)
     return
-  store.commands.beginTransaction(label)
-  try {
+  store.documentTransactions.transact((draft) => {
     for (const node of nodes)
-      store.commands.execute(new UpdateMaterialEditorStateCommand(store.schema.elements, node.id, updates))
-    store.commands.commitTransaction()
-  }
-  catch (err) {
-    store.commands.rollbackTransaction()
-    throw err
-  }
+      updateDraftNodeEditorState(draft, store, node.id, updates)
+  }, { label, operation: createDesignerDocumentOperation(store, 'toolbar.editor-state', nodes.map(node => `node:${node.id}`), ['/editorState'], false) })
 }
 
 // ─── Clipboard ───────────────────────────────────────────────
@@ -491,7 +463,9 @@ function handleGuideToggle() {
   const enabled = !store.workbench.guide.enabled
   store.workbench.guide.enabled = enabled
   if (!enabled && (store.schema.guides.x.length > 0 || store.schema.guides.y.length > 0)) {
-    store.commands.execute(new UpdateGuidesCommand(store.schema, { x: [], y: [] }))
+    store.documentTransactions.transact((draft) => {
+      draft.guides = { ...draft.guides, x: [], y: [] }
+    }, { label: 'Clear guides', operation: createDesignerDocumentOperation(store, 'toolbar.guides.clear', ['document'], ['/guides/x', '/guides/y'], false) })
   }
 }
 
@@ -561,7 +535,7 @@ function toggleSnapMenu(ev: MouseEvent) {
         <div v-if="group.id === 'undo-redo'" class="ei-topbar-b__group">
           <button
             class="ei-topbar-b__btn"
-            :disabled="!store.commands.canUndo"
+            :disabled="!store.documentTransactions.canUndo"
             :title="store.t('designer.toolbar.undo')"
             @click="handleUndo"
           >
@@ -569,7 +543,7 @@ function toggleSnapMenu(ev: MouseEvent) {
           </button>
           <button
             class="ei-topbar-b__btn"
-            :disabled="!store.commands.canRedo"
+            :disabled="!store.documentTransactions.canRedo"
             :title="store.t('designer.toolbar.redo')"
             @click="handleRedo"
           >

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { MaterialNode } from '@easyink/schema'
 import type { Component } from 'vue'
-import { AddElementGroupCommand, isInteractable, RemoveElementGroupCommand, UpdateMaterialEditorStateCommand } from '@easyink/core'
+import { isInteractable } from '@easyink/core'
 import {
   IconCopy,
   IconCopyPlus,
@@ -22,6 +22,7 @@ import {
 import { generateId } from '@easyink/shared'
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { useDesignerStore } from '../composables'
+import { createDesignerDocumentOperation, updateDraftNodeEditorState } from '../editing/document-recipes'
 import { createClipboardActions } from '../interactions/clipboard-actions'
 import { hasGroupedElement, selectedLogicalGroupIds } from '../interactions/logical-groups'
 import { selectMany } from '../interactions/selection-api'
@@ -265,7 +266,9 @@ function handleAction(item: ContextMenuItem) {
     case 'group':
       if (nodes.length >= 2 && nodes.every(isInteractable) && !hasGroupedElement(store, nodes.map(node => node.id))) {
         const group = { id: generateId('grp'), memberIds: nodes.map(node => node.id) }
-        store.commands.execute(new AddElementGroupCommand(store.schema, group))
+        store.documentTransactions.transact((draft) => {
+          draft.groups = [...(draft.groups ?? []), group]
+        }, { label: 'Group', operation: createDesignerDocumentOperation(store, 'context.group', group.memberIds.map(id => `node:${id}`), ['/groups'], true) })
         selectMany(store, group.memberIds)
       }
       break
@@ -278,16 +281,9 @@ function handleAction(item: ContextMenuItem) {
         if (group)
           memberIds.push(...group.memberIds)
       }
-      store.commands.beginTransaction('Ungroup')
-      try {
-        for (const groupId of groupIds)
-          store.commands.execute(new RemoveElementGroupCommand(store.schema, groupId))
-        store.commands.commitTransaction()
-      }
-      catch (err) {
-        store.commands.rollbackTransaction()
-        throw err
-      }
+      store.documentTransactions.transact((draft) => {
+        draft.groups = (draft.groups ?? []).filter(group => !groupIds.includes(group.id))
+      }, { label: 'Ungroup', operation: createDesignerDocumentOperation(store, 'context.ungroup', groupIds.map(id => `group:${id}`), ['/groups'], true) })
       selectMany(store, memberIds)
       break
     }
@@ -319,16 +315,10 @@ function handleAction(item: ContextMenuItem) {
 function runMetaTransaction(label: string, nodes: MaterialNode[], updates: Partial<Record<'hidden' | 'locked', boolean | undefined>>) {
   if (nodes.length === 0)
     return
-  store.commands.beginTransaction(label)
-  try {
+  store.documentTransactions.transact((draft) => {
     for (const node of nodes)
-      store.commands.execute(new UpdateMaterialEditorStateCommand(store.schema.elements, node.id, updates))
-    store.commands.commitTransaction()
-  }
-  catch (err) {
-    store.commands.rollbackTransaction()
-    throw err
-  }
+      updateDraftNodeEditorState(draft, store, node.id, updates)
+  }, { label, operation: createDesignerDocumentOperation(store, 'context.editor-state', nodes.map(node => `node:${node.id}`), ['/editorState'], false) })
 }
 
 // Use pointerdown in capture phase -- fires before workspace clears selection

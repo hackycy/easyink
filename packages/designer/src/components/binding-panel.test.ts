@@ -44,7 +44,7 @@ describe('properties panel canonical binding ports', () => {
     expect(liveNode.bindings[port]).toBeUndefined()
     if (port !== 'value')
       expect(liveNode.bindings.value).toBeUndefined()
-    store.commands.undo()
+    store.documentTransactions.undo()
     expect(liveNode.bindings[port]).toBeDefined()
     expect(validateDocumentWithProfile(store.schema, profile).valid).toBe(true)
     mounted.unmount()
@@ -88,7 +88,7 @@ describe('properties panel canonical binding ports', () => {
 
     buttonByText(mounted.host, 'Clear').click()
     expect(liveNode.bindings.dataset).toBeUndefined()
-    store.commands.undo()
+    store.documentTransactions.undo()
     expect(liveNode.bindings.dataset).toBeDefined()
     expect(validateDocumentWithProfile(store.schema, profile).valid).toBe(true)
     mounted.unmount()

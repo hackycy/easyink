@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import type { MaterialDragEntry } from '../composables/use-designer-drag-drop'
-import { AddMaterialCommand } from '@easyink/core'
 import { computed, inject } from 'vue'
 import { useDesignerStore } from '../composables'
 import { DESIGNER_DRAG_DROP_KEY } from '../composables/use-designer-drag-drop'
+import { appendDocumentNodes, createDesignerDocumentOperation } from '../editing/document-recipes'
 import { selectOne } from '../interactions/selection-api'
 
 const store = useDesignerStore()
@@ -45,8 +45,12 @@ function handleAddMaterial(entry: MaterialDragEntry) {
     x: 50,
     y: 50,
   }, store.schema.unit)
-  const cmd = new AddMaterialCommand(store.schema.elements, node)
-  store.commands.execute(cmd)
+  store.documentTransactions.transact((draft) => {
+    appendDocumentNodes(draft, [node])
+  }, {
+    label: 'Add material',
+    operation: createDesignerDocumentOperation(store, 'material.insert', [`node:${node.id}`], ['/elements'], true),
+  })
   selectOne(store, node.id)
 }
 

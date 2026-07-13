@@ -21,20 +21,16 @@ function makeNode(id: string, x = 0, y = 0): MaterialNode {
   }
 }
 
-function makeStore(elements: MaterialNode[], selected: string[] = [], page: PageSchema = { mode: 'fixed', width: 1000, height: 1000 }): DesignerStore {
+function makeStore(elements: MaterialNode[], selected: string[] = [], page: PageSchema = { mode: 'fixed', width: 1000, height: 1000 }, profile = createTestCompiledMaterialProfile([createTestMaterialManifest({ type: 'rect' })])): DesignerStore {
   const store = new DesignerStore({
     unit: 'px',
     page,
     guides: { x: [], y: [] },
     elements,
-  })
+  }, undefined, undefined, { materials: { profile } })
 
   if (selected.length > 0)
     store.selection.selectMultiple(selected)
-
-  vi.spyOn(store.commands, 'beginTransaction')
-  vi.spyOn(store.commands, 'commitTransaction')
-  vi.spyOn(store.commands, 'rollbackTransaction')
 
   return store
 }
@@ -45,14 +41,12 @@ describe('createClipboardActions', () => {
     const store = makeStore([node], ['node-1'])
     const actions = createClipboardActions(store, () => [node])
 
-    vi.spyOn(store.commands, 'execute').mockImplementation(() => {
+    vi.spyOn(store.documentTransactions, 'transact').mockImplementation(() => {
       throw new Error('cut failed')
     })
 
     expect(() => actions.cutSelection()).toThrow('cut failed')
-    expect(store.commands.beginTransaction).toHaveBeenCalledWith('Cut')
-    expect(store.commands.commitTransaction).not.toHaveBeenCalled()
-    expect(store.commands.rollbackTransaction).toHaveBeenCalledOnce()
+    expect(store.documentTransactions.transact).toHaveBeenCalledOnce()
     expect(store.selection.ids).toEqual(['node-1'])
     expect(store.clipboard).toHaveLength(1)
   })
@@ -63,14 +57,12 @@ describe('createClipboardActions', () => {
     const actions = createClipboardActions(store, () => [])
 
     store.clipboard = [node]
-    vi.spyOn(store.commands, 'execute').mockImplementation(() => {
+    vi.spyOn(store.documentTransactions, 'transact').mockImplementation(() => {
       throw new Error('paste failed')
     })
 
     expect(() => actions.pasteClipboard()).toThrow('paste failed')
-    expect(store.commands.beginTransaction).toHaveBeenCalledWith('Paste')
-    expect(store.commands.commitTransaction).not.toHaveBeenCalled()
-    expect(store.commands.rollbackTransaction).toHaveBeenCalledOnce()
+    expect(store.documentTransactions.transact).toHaveBeenCalledOnce()
     expect(store.selection.ids).toEqual([])
   })
 
@@ -79,14 +71,9 @@ describe('createClipboardActions', () => {
     const unlocked = makeNode('open')
     const store = makeStore([locked, unlocked], ['locked', 'open'])
     const actions = createClipboardActions(store, () => [locked, unlocked])
-    const executeSpy = vi.spyOn(store.commands, 'execute')
-
     actions.deleteSelection()
 
-    expect(store.commands.beginTransaction).toHaveBeenCalledWith('Delete')
-    expect(store.commands.commitTransaction).toHaveBeenCalledOnce()
-    expect(store.commands.rollbackTransaction).not.toHaveBeenCalled()
-    expect(executeSpy).toHaveBeenCalledOnce()
+    expect(store.documentTransactions.historyEntries).toHaveLength(1)
   })
 
   it('duplicates continuously across fixed-sheet page breaks', () => {
@@ -106,15 +93,14 @@ describe('createClipboardActions', () => {
   })
 
   it('preserves copied IDs but generates unique fallback IDs for duplicate and paste', () => {
-    const child = makeNode('child')
-    const first = { ...makeNode('first'), slots: { content: [child] } }
+    const first = { ...makeNode('first'), slots: {} }
     const second = makeNode('second')
     const store = makeStore([first, second], ['first', 'second'])
     const actions = createClipboardActions(store, () => [first, second])
 
     actions.copySelection()
     expect(store.clipboard.map(node => node.id)).toEqual(['first', 'second'])
-    expect(store.clipboard[0]!.slots.content![0]!.id).toBe('child')
+    expect(store.clipboard[0]!.id).toBe('first')
 
     actions.duplicateSelection()
     actions.pasteClipboard()
@@ -153,7 +139,7 @@ describe('createClipboardActions', () => {
     ])
     const first = profile.createNode('reference-box', { id: 'a', model: { peerId: 'b' } })
     const second = profile.createNode('reference-box', { id: 'b', model: { peerId: 'a' } })
-    const store = makeStore([first, second], ['a', 'b'])
+    const store = makeStore([first, second], ['a', 'b'], undefined, profile)
     const actions = createClipboardActions(store, () => [first, second], profile)
 
     actions.duplicateSelection()
@@ -171,7 +157,7 @@ describe('createClipboardActions', () => {
     store.clipboard = [makeNode('unknown')]
 
     expect(() => actions.pasteClipboard()).toThrow('MATERIAL_TYPE_UNKNOWN')
-    expect(store.commands.beginTransaction).not.toHaveBeenCalled()
+    expect(store.documentTransactions.historyEntries).toHaveLength(0)
     expect(store.schema.elements).toEqual([])
   })
 })

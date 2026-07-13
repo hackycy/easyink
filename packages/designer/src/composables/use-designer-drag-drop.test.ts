@@ -133,11 +133,16 @@ function makeStore(
   const createNode = vi.fn((type: string, partial?: Parameters<typeof profile.createNode>[1]) => options.textCreateDefaultNode && type === 'text'
     ? options.textCreateDefaultNode(partial)
     : profile.createNode(type, partial))
+  const schema = { unit: 'px' as const, page: options.page ?? makePage(), elements, groups: [] }
   return {
-    schema: { unit: 'px', page: options.page ?? makePage(), elements, groups: [] },
+    schema,
     workbench: { viewport: { zoom: 1, scrollLeft: 0, scrollTop: 0 } },
     commands: {
       execute: vi.fn((command: { execute: () => void }) => command.execute()),
+    },
+    documentTransactions: {
+      transact: vi.fn((recipe: (draft: typeof schema) => void) => recipe(schema)),
+      getOperationContext: () => ({ sessionPath: [], selectionLineage: null }),
     },
     selection: {
       clear: vi.fn(),
@@ -496,7 +501,7 @@ describe('useDesignerDragDrop', () => {
     drag.onCanvasDrop(makeDragEvent(40, 60, [DATASOURCE_DRAG_MIME], { [DATASOURCE_DRAG_MIME]: JSON.stringify(field) }))
 
     expect(elements).toHaveLength(0)
-    expect(store.commands.execute).not.toHaveBeenCalled()
+    expect(store.documentTransactions.transact).not.toHaveBeenCalled()
     drag.cleanup()
   })
 
@@ -567,7 +572,7 @@ describe('useDesignerDragDrop', () => {
     customDrag.onCanvasDrop(makeDragEvent(170, 20, [DATASOURCE_DRAG_MIME], { [DATASOURCE_DRAG_MIME]: JSON.stringify(field) }))
 
     expect(table.bindings).toEqual({})
-    expect(tableStore.commands.execute).not.toHaveBeenCalled()
+    expect(tableStore.documentTransactions.transact).not.toHaveBeenCalled()
     expect(onDrop).toHaveBeenCalledOnce()
     expect(custom.bindings.value).toBeUndefined()
     tableDrag.cleanup()
@@ -736,7 +741,7 @@ describe('useDesignerDragDrop', () => {
         }),
       },
     })
-    expect(store.commands.execute).toHaveBeenCalledTimes(2)
+    expect(store.documentTransactions.transact).toHaveBeenCalledTimes(2)
     drag.cleanup()
   })
 
@@ -790,7 +795,7 @@ describe('useDesignerDragDrop', () => {
         }),
       },
     })
-    expect(store.commands.execute).toHaveBeenCalledTimes(1)
+    expect(store.documentTransactions.transact).toHaveBeenCalledTimes(1)
     drag.cleanup()
   })
 })

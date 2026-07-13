@@ -18,8 +18,10 @@ describe('designer store schema initialization', () => {
   it('normalizes partial schema replacements and clears selection and history', () => {
     const store = new DesignerStore({ elements: [createNode('old')] }, undefined, undefined, runtimeWith(boxProfile()))
     store.selection.select('old')
-    store.commands.execute(command())
-    store.commands.undo()
+    store.documentTransactions.transact((draft) => {
+      draft.page.width += 1
+    }, { label: 'test', operation: { kind: 'test', sessionPath: [], targetIds: ['document'], fieldPaths: ['/page/width'], selectionLineage: null, structural: false } })
+    store.documentTransactions.undo()
 
     store.setSchema({ page: { width: 80 }, elements: [createNode('fresh')] })
 
@@ -28,7 +30,7 @@ describe('designer store schema initialization', () => {
     expect(store.schema.elements.map(node => node.id)).toEqual(['fresh'])
     expect(store.materialNodeStates.get('fresh')?.status).toBe('ready')
     expect(store.selection.isEmpty).toBe(true)
-    expect(store.commands).toMatchObject({ canUndo: false, canRedo: false, cursor: 0, totalCount: 0 })
+    expect(store.documentTransactions).toMatchObject({ canUndo: false, canRedo: false, cursor: 0, totalCount: 0 })
   })
 
   it('uses EasyInk paper presets by default', () => {
@@ -172,8 +174,10 @@ describe('designer store schema initialization', () => {
 
   it('atomically rejects moving an unknown node without changing history or sidecars', () => {
     const store = unknownAndBoxStore()
-    store.commands.execute(command())
-    store.commands.undo()
+    store.documentTransactions.transact((draft) => {
+      draft.elements[1]!.x += 1
+    }, { label: 'test', operation: { kind: 'test', sessionPath: [], targetIds: ['node:box'], fieldPaths: ['/x'], selectionLineage: null, structural: false } })
+    store.documentTransactions.undo()
     const schema = store.schema
     const states = store.materialNodeStates
     const diagnostics = store.materialDiagnostics
@@ -184,7 +188,7 @@ describe('designer store schema initialization', () => {
     expect(store.schema).toBe(schema)
     expect(store.materialNodeStates).toBe(states)
     expect(store.materialDiagnostics).toBe(diagnostics)
-    expect(store.commands).toMatchObject({ cursor: 0, canRedo: true, totalCount: 1 })
+    expect(store.documentTransactions).toMatchObject({ cursor: 0, canRedo: true, totalCount: 1 })
   })
 
   it('allows deleting an unknown node', () => {
@@ -421,7 +425,6 @@ describe('designer store schema initialization', () => {
 function boxProfile() {
   return createDesignerTestProfile([createDesignerTestManifest({ type: 'box' })])
 }
-
 function runtimeWith(profile: ReturnType<typeof boxProfile>) {
   return { materials: { profile } }
 }
@@ -444,8 +447,4 @@ function createNode(id: string, type = 'box'): MaterialNode {
     bindings: {},
     output: { visibility: 'include' },
   }
-}
-
-function command() {
-  return { id: 'test', type: 'test', description: 'test', execute: vi.fn(), undo: vi.fn() }
 }

@@ -13,15 +13,20 @@ import {
 describe('assistant designer bridge apply', () => {
   it('applies patch operations and rolls back to the previous schema', () => {
     const store = createStore(createSchema([{ id: 'title', model: { text: 'Old' } }]))
+    const before = store.schema
 
     const applied = applyAssistantPatchToDesigner(store, [
       { op: 'replace', path: '/elements/0/model/text', value: 'New' },
     ])
 
     expect(applied).toBe(true)
+    expect(store.schema).not.toBe(before)
+    expect(store.documentTransactions.historyEntries).toHaveLength(1)
+    expect(store.documentTransactions.historyEntries[0]?.description).toBe('Assistant apply')
     expect(store.schema.elements[0]?.model).toMatchObject({ text: 'New' })
     expect(rollbackAssistantDesigner(store)).toBe(true)
     expect(store.schema.elements[0]?.model).toMatchObject({ text: 'Old' })
+    expect(store.documentTransactions.cursor).toBe(0)
   })
 
   it('applies only operations targeting the current selection', () => {

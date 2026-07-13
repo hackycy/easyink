@@ -77,8 +77,6 @@ describe('createGeometryService', () => {
       bindings: {},
       output: { visibility: 'include' },
     }
-    store.schema.elements.push(node)
-
     const geometry = createGeometryService(store)
     const centerLocal = geometry.documentToLocal({ x: 60, y: 45 }, node)
     expectPointClose(centerLocal, { x: 50, y: 25 })

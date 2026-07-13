@@ -30,8 +30,8 @@ export function createMaterialExtensionContext(store: DesignerStore): MaterialEx
       return binding.fieldLabel || binding.fieldPath || ''
     },
 
-    commitCommand(command) {
-      store.commands.execute(command)
+    commitCommand(_command) {
+      throw new Error('Material extensions must use the transaction API (context.tx)')
     },
 
     tx: store.documentTransactions,

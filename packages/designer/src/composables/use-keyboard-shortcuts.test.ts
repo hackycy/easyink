@@ -1,3 +1,4 @@
+import { createTestCompiledMaterialProfile, createTestMaterialManifest } from '@easyink/core/testing'
 /**
  * @vitest-environment happy-dom
  */
@@ -31,18 +32,24 @@ function mountShortcuts(store: DesignerStore, container: HTMLElement) {
 }
 
 function makeStore(): DesignerStore {
-  const store = new DesignerStore()
-  store.schema.unit = 'px'
-  store.schema.elements.push({
-    id: 'a',
-    type: 'rect',
-    x: 10,
-    y: 20,
-    width: 50,
-    height: 40,
-    rotation: 0,
-    props: {},
-  } as never)
+  const profile = createTestCompiledMaterialProfile([createTestMaterialManifest({ type: 'rect' })])
+  const store = new DesignerStore({
+    unit: 'px',
+    elements: [{
+      id: 'a',
+      type: 'rect',
+      x: 10,
+      y: 20,
+      width: 50,
+      height: 40,
+      rotation: 0,
+      modelVersion: 1,
+      model: {},
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
+    } as never],
+  }, undefined, undefined, { materials: { profile } })
   store.selection.select('a')
   return store
 }

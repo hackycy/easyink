@@ -1,5 +1,6 @@
 import type { MaterialNode } from '@easyink/schema'
-import { describe, expect, it, vi } from 'vitest'
+import { createTestCompiledMaterialProfile, createTestMaterialManifest } from '@easyink/core/testing'
+import { describe, expect, it } from 'vitest'
 import { DesignerStore } from '../store/designer-store'
 import { deleteMaterialNodes, toggleMaterialHidden } from './element-actions'
 
@@ -21,17 +22,15 @@ function makeNode(id: string, input: Partial<MaterialNode> = {}): MaterialNode {
 }
 
 function makeStore(elements: MaterialNode[], selected: string[] = []): DesignerStore {
+  const profile = createTestCompiledMaterialProfile([createTestMaterialManifest({ type: 'rect' })])
   const store = new DesignerStore({
     unit: 'px',
     page: { mode: 'fixed', width: 100, height: 100 },
     guides: { x: [], y: [] },
     elements,
-  })
+  }, undefined, undefined, { materials: { profile } })
   if (selected.length > 0)
     store.selection.selectMultiple(selected)
-  vi.spyOn(store.commands, 'beginTransaction')
-  vi.spyOn(store.commands, 'commitTransaction')
-  vi.spyOn(store.commands, 'rollbackTransaction')
   return store
 }
 
@@ -43,10 +42,10 @@ describe('element actions', () => {
 
     expect(toggleMaterialHidden(store, liveNode)).toBe(true)
 
-    expect(liveNode.editorState?.hidden).toBe(true)
-    expect(store.commands.beginTransaction).toHaveBeenCalledWith('Hide')
-    store.commands.undo()
-    expect(liveNode.editorState?.hidden).toBeUndefined()
+    expect(store.getElementById('a')?.editorState?.hidden).toBe(true)
+    expect(store.documentTransactions.historyEntries).toHaveLength(1)
+    store.documentTransactions.undo()
+    expect(store.getElementById('a')?.editorState?.hidden).toBeUndefined()
   })
 
   it('deletes hidden unlocked nodes and removes them from selection', () => {
@@ -58,7 +57,6 @@ describe('element actions', () => {
 
     expect(store.schema.elements.map(node => node.id)).toEqual(['locked'])
     expect(store.selection.ids).toEqual(['locked'])
-    expect(store.commands.beginTransaction).toHaveBeenCalledWith('Delete')
-    expect(store.commands.rollbackTransaction).not.toHaveBeenCalled()
+    expect(store.documentTransactions.historyEntries).toHaveLength(1)
   })
 })

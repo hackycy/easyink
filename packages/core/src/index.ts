@@ -71,6 +71,7 @@ export { canCoalesceDocumentChanges, combineStableOperationDescriptors, createDo
 export type { DocumentChangeSet, DocumentFieldPath, DocumentOperationDescriptor } from './document-change-set'
 export { DocumentIndexSnapshot, DuplicateDocumentNodeIdError, requireDocumentNode } from './document-index'
 export type { DocumentSlotPolicySnapshot } from './document-index'
+export { removeDocumentNode } from './document-operations'
 export { DocumentStore } from './document-store'
 export type { DocumentStoreEvent, DocumentStoreEventKind, DocumentStoreOptions } from './document-store'
 export { DocumentTransactionEngine, DocumentValidationError } from './document-transaction-engine'

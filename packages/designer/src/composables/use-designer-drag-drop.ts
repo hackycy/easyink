@@ -5,19 +5,17 @@ import type { BindingDisplayFormat } from '@easyink/shared'
 import type { Component, InjectionKey } from 'vue'
 import type { DesignerStore } from '../store/designer-store'
 import {
-  AddMaterialCommand,
   applyMaterialDataFieldMapping,
-  BindFieldCommand,
   canBindMaterialDataField,
   createEditorSurfacePlan,
   findMaterialDataFieldMapping,
   pointInRect,
   projectEditorSurfacePointToDocument,
   UnitManager,
-  UpdateMaterialBindingCommand,
 } from '@easyink/core'
 import { IconRect } from '@easyink/icons'
 import { deepClone } from '@easyink/shared'
+import { appendDocumentNodes, createDesignerDocumentOperation, updateDraftNodeBinding } from '../editing/document-recipes'
 import { createGeometryService } from '../editing/geometry-service'
 import { selectMany, selectOne } from '../interactions/selection-api'
 import { resolveDataContractBindingPort, resolveDefaultDatasourceBindingPort } from '../materials/binding-port'
@@ -461,8 +459,12 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
     }
 
     if (resolved.kind === 'create-material') {
-      const command = new AddMaterialCommand(ctx.store.schema.elements, resolved.nodes[0]!)
-      ctx.store.commands.execute(command)
+      ctx.store.documentTransactions.transact((draft) => {
+        appendDocumentNodes(draft, resolved.nodes)
+      }, {
+        label: 'Add material',
+        operation: createDesignerDocumentOperation(ctx.store, 'drag.material', resolved.nodes.map(node => `node:${node.id}`), ['/elements'], true),
+      })
       selectMany(ctx.store, resolved.nodes.map(node => node.id))
       return
     }
@@ -493,7 +495,12 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
         fieldData,
         plan.fieldId,
       )
-      ctx.store.commands.execute(new UpdateMaterialBindingCommand(ctx.store.schema.elements, resolved.target.id, nextBinding, port))
+      ctx.store.documentTransactions.transact((draft) => {
+        updateDraftNodeBinding(draft, ctx.store, resolved.target.id, port, nextBinding)
+      }, {
+        label: 'Bind field',
+        operation: createDesignerDocumentOperation(ctx.store, 'drag.bind-data-contract', [`node:${resolved.target.id}`], [`/bindings/${port}`], false),
+      })
       selectOne(ctx.store, resolved.target.id)
       return
     }
@@ -502,8 +509,12 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
     if (!port)
       return
 
-    const cmd = new BindFieldCommand(ctx.store.schema.elements, resolved.target.id, createBinding(fieldData), port)
-    ctx.store.commands.execute(cmd)
+    ctx.store.documentTransactions.transact((draft) => {
+      updateDraftNodeBinding(draft, ctx.store, resolved.target.id, port, createBinding(fieldData))
+    }, {
+      label: 'Bind field',
+      operation: createDesignerDocumentOperation(ctx.store, 'drag.bind', [`node:${resolved.target.id}`], [`/bindings/${port}`], false),
+    })
     selectOne(ctx.store, resolved.target.id)
   }
 

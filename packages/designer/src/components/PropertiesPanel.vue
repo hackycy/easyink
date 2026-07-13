@@ -5,12 +5,13 @@ import type { BindingDisplayFormat } from '@easyink/shared'
 import type { Component } from 'vue'
 import type { PagePropertyContext, PagePropertyDescriptor, PagePropertyGroup } from '../page-properties'
 import type { DesignerResolvedAsset, PanelSectionId, PropSchema } from '../types'
-import { ClearBindingCommand, resolveMaterialConditionCapability, resolvePropertyAccessor, UpdateBindingFormatCommand, UpdateMaterialBindingCommand, UpdateMaterialEditorStateCommand, UpdateMaterialModelCommand, UpdateRenderConditionCommand } from '@easyink/core'
+import { resolveMaterialConditionCapability, resolvePropertyAccessor } from '@easyink/core'
 import { createLayoutBehaviorPropSchemas, groupPropSchemas } from '@easyink/prop-schemas'
 import { getBindingRefs } from '@easyink/schema'
 import { EiNumberInput, EiPanel, EiSwitch } from '@easyink/ui'
 import { computed, onUnmounted, shallowRef, watch, watchEffect } from 'vue'
 import { useDesignerStore } from '../composables'
+import { createDesignerDocumentOperation, updateDraftBindingFormat, updateDraftNodeBinding, updateDraftNodeEditorState, updateDraftNodeModel, updateDraftRenderCondition } from '../editing/document-recipes'
 import { PropertyPreviewController } from '../editing/property-preview-controller'
 import { resolveDataContractFieldFormatEditor, resolveOrdinaryFormatEditor } from '../materials/binding-format-editor'
 import { resolveBindingPanelPort, resolveDataContractBindingPort } from '../materials/binding-port'
@@ -492,20 +493,12 @@ function updateImagePropFromPicker(key: string, result: DesignerResolvedAsset) {
 
   const updates: Record<string, unknown> = { [key]: result.url }
   propertyPreview.cancelActive()
-  const oldValues: Record<string, unknown> = {}
-
   if (key === 'src' && result.alt && isBlankAlt(el.model.alt)) {
     updates.alt = result.alt
-    oldValues.alt = el.model.alt
   }
-
-  const cmd = new UpdateMaterialModelCommand(
-    store.schema.elements,
-    el.id,
-    updates,
-    Object.keys(oldValues).length > 0 ? oldValues : undefined,
-  )
-  store.commands.execute(cmd)
+  store.documentTransactions.transact((draft) => {
+    updateDraftNodeModel(draft, store, el.id, updates)
+  }, { label: 'Update image', operation: createDesignerDocumentOperation(store, 'property.image', [`node:${el.id}`], Object.keys(updates).map(key => `/model/${key}`) as `/${string}`[], false) })
 }
 
 function isBlankAlt(value: unknown): boolean {
@@ -554,31 +547,27 @@ function updateElementMeta(key: string, value: unknown) {
   if (key !== 'hidden' && key !== 'locked')
     return
   const boolValue = value === true
-  const cmd = new UpdateMaterialEditorStateCommand(
-    store.schema.elements,
-    selectedElement.value.id,
-    { [key]: boolValue },
-  )
-  store.commands.execute(cmd)
+  const id = selectedElement.value.id
+  store.documentTransactions.transact((draft) => {
+    updateDraftNodeEditorState(draft, store, id, { [key]: boolValue })
+  }, { label: `Update ${key}`, operation: createDesignerDocumentOperation(store, 'property.editor-state', [`node:${id}`], [`/editorState/${key}`], false) })
 }
 
 function updateRenderCondition(condition: MaterialNode['output']['renderCondition'], mergeKey?: string) {
   const element = selectedElement.value
   if (!element)
     return
-  store.commands.execute(new UpdateRenderConditionCommand(
-    store.schema.elements,
-    element.id,
-    condition,
-    mergeKey ? `condition:${element.id}:${mergeKey}` : undefined,
-  ))
+  store.documentTransactions.transact((draft) => {
+    updateDraftRenderCondition(draft, store, element.id, condition)
+  }, { label: 'Update render condition', mergeKey: mergeKey ? `condition:${element.id}:${mergeKey}` : undefined, operation: createDesignerDocumentOperation(store, 'property.render-condition', [`node:${element.id}`], ['/output/renderCondition'], false) })
 }
 
 // ─── Binding ────────────────────────────────────────────────────
 
 function clearBinding(nodeId: string, port: string) {
-  const cmd = new ClearBindingCommand(store.schema.elements, nodeId, port)
-  store.commands.execute(cmd)
+  store.documentTransactions.transact((draft) => {
+    updateDraftNodeBinding(draft, store, nodeId, port, undefined)
+  }, { label: 'Clear binding', operation: createDesignerDocumentOperation(store, 'property.binding.clear', [`node:${nodeId}`], [`/bindings/${port}`], false) })
 }
 
 function updateBindingFormat(format: BindingDisplayFormat | undefined, port: string | undefined, bindIndex?: number) {
@@ -591,8 +580,10 @@ function updateBindingFormat(format: BindingDisplayFormat | undefined, port: str
   }
   if (!selectedElement.value || !port)
     return
-  const cmd = new UpdateBindingFormatCommand(store.schema.elements, selectedElement.value.id, format, bindIndex, port)
-  store.commands.execute(cmd)
+  const id = selectedElement.value.id
+  store.documentTransactions.transact((draft) => {
+    updateDraftBindingFormat(draft, store, id, port, format, bindIndex)
+  }, { label: 'Update binding format', operation: createDesignerDocumentOperation(store, 'property.binding.format', [`node:${id}`], [`/bindings/${port}`], false) })
 }
 
 function updateMaterialDataBinding(binding: DataContractBinding | undefined) {
@@ -602,8 +593,9 @@ function updateMaterialDataBinding(binding: DataContractBinding | undefined) {
   const port = selectedDataContractPort.value
   if (!port)
     return
-  const cmd = new UpdateMaterialBindingCommand(store.schema.elements, el.id, binding, port)
-  store.commands.execute(cmd)
+  store.documentTransactions.transact((draft) => {
+    updateDraftNodeBinding(draft, store, el.id, port, binding)
+  }, { label: 'Update material binding', operation: createDesignerDocumentOperation(store, 'property.binding.update', [`node:${el.id}`], [`/bindings/${port}`], false) })
 }
 
 function getBindingDataSource(sourceId: string) {
