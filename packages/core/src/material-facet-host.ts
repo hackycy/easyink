@@ -1,5 +1,7 @@
+import type { MaterialContextualPropertiesRequest, MaterialContextualPropertiesResult } from './material-extension'
 import type { MaterialFacetFactory } from './material-manifest'
 import type { CompiledMaterialProfile } from './material-profile'
+import { assertJsonValue, deepClone } from '@easyink/shared'
 
 export type RuntimeMaterialSurface = 'designer' | 'viewer'
 export type FacetState = 'active' | 'quarantined' | 'disposed'
@@ -157,6 +159,26 @@ export class MaterialFacetHost {
     const key = facetKey(materialType, surface)
     const shutdownInstance = this.shutdownPromise ? cache?.shutdownInstances.get(key) : undefined
     return (shutdownInstance ?? cache?.instances.get(key)) as FacetInstance<T> | undefined
+  }
+
+  /** Invoke the contextual-properties surface with an immutable, validated request. */
+  async contextualProperties<T extends MaterialContextualPropertiesResult = MaterialContextualPropertiesResult>(
+    profile: CompiledMaterialProfile,
+    materialType: string,
+    request: MaterialContextualPropertiesRequest,
+  ): Promise<T | null> {
+    const instance = await this.activate<unknown>(profile, materialType, 'designer')
+    const provider = (instance.value as { contextualProperties?: unknown } | undefined)?.contextualProperties
+    if (instance.state !== 'active' || typeof provider !== 'function')
+      return null
+    try {
+      const frozen = freezeContextualRequest(request)
+      const result = await (provider as (request: MaterialContextualPropertiesRequest) => unknown)(frozen)
+      return validateContextualResult(result) as T | null
+    }
+    catch {
+      return null
+    }
   }
 
   dispose(): Promise<readonly FacetDiagnostic[]> {
@@ -356,6 +378,57 @@ export class MaterialFacetHost {
     })
     return instance
   }
+}
+
+function freezeContextualRequest(request: MaterialContextualPropertiesRequest): MaterialContextualPropertiesRequest {
+  assertJsonValue(request.selection)
+  return deepFreeze({
+    node: deepFreeze(deepClone(request.node)),
+    sessionPath: Object.freeze([...request.sessionPath]),
+    selection: request.selection === null ? null : deepFreeze(deepClone(request.selection)),
+    lineage: request.lineage,
+  })
+}
+
+function validateContextualResult(value: unknown): MaterialContextualPropertiesResult | null {
+  if (value === null || typeof value !== 'object')
+    return null
+  const result = value as MaterialContextualPropertiesResult
+  if (typeof result.contextKey !== 'string' || !Array.isArray(result.descriptors) || !result.values)
+    return null
+  const keys = new Set<string>()
+  for (const descriptor of result.descriptors) {
+    if (!descriptor || typeof descriptor.key !== 'string' || keys.has(descriptor.key) || !Array.isArray(descriptor.accessor?.paths ?? []))
+      return null
+    keys.add(descriptor.key)
+    for (const path of descriptor.accessor?.paths ?? []) {
+      if (typeof path !== 'string' || !path.startsWith('/'))
+        return null
+    }
+  }
+  for (const key of Object.keys(result.values)) {
+    if (!keys.has(key))
+      return null
+    const entry = result.values[key]
+    if (!entry || !['single', 'mixed', 'unavailable'].includes(entry.kind))
+      return null
+    if (entry.kind === 'single') {
+      try {
+        assertJsonValue(entry.value)
+      }
+      catch { return null }
+    }
+  }
+  return deepFreeze(deepClone(result))
+}
+
+function deepFreeze<T>(value: T): T {
+  if (!value || typeof value !== 'object' || Object.isFrozen(value))
+    return value
+  Object.freeze(value)
+  for (const child of Object.values(value as Record<string, unknown>))
+    deepFreeze(child)
+  return value
 }
 
 function createQuarantinedInstance<T>(

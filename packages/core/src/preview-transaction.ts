@@ -16,6 +16,14 @@ export interface PreviewCommitPayload extends PreviewPublishPayload {
   options: DocumentTransactionOptions
 }
 
+/** Internal error raised when a node-scoped preview recipe escapes its declared paths. */
+class PreviewMutationScopeError extends Error {
+  constructor(path: readonly (string | number)[]) {
+    super(`Preview mutation is outside declared property paths at ${encodePointer(path) || '/'}`)
+    this.name = 'PreviewMutationScopeError'
+  }
+}
+
 export class PreviewTransaction implements TransactionAPI {
   private current: DocumentSchema
   private forward: readonly Patch[] = []
@@ -51,6 +59,35 @@ export class PreviewTransaction implements TransactionAPI {
       enableAutoFreeze: true,
       mark: markSimpleObject,
     })
+    const candidate = next as unknown as DocumentSchema
+    const report = this.publish({ document: candidate, forward, inverse })
+    this.assertOpen()
+    this.current = candidate
+    this.forward = forward
+    this.inverse = inverse
+    this.report = report
+  }
+
+  /** Replace the current preview with a mutation constrained to one node and its declared paths. */
+  replaceNode(
+    nodeId: string,
+    paths: readonly `/${string}`[] | readonly string[],
+    writer: (node: MaterialNode) => void,
+  ): void {
+    this.assertOpen()
+    const nodePath = this.baseIndex.getNodePath(nodeId)
+    if (!nodePath)
+      throw new Error(`Document node "${nodeId}" not found`)
+    const declared = paths.map(decodePointer)
+    const [next, forward, inverse] = create(this.base, (draft) => {
+      writer(this.baseIndex.resolveNode(draft as DocumentSchema, nodeId))
+    }, {
+      enablePatches: true,
+      enableAutoFreeze: true,
+      mark: markSimpleObject,
+    })
+    validateScopedPatches(forward, nodePath, declared)
+    validateScopedPatches(inverse, nodePath, declared)
     const candidate = next as unknown as DocumentSchema
     const report = this.publish({ document: candidate, forward, inverse })
     this.assertOpen()
@@ -123,4 +160,35 @@ export class PreviewTransaction implements TransactionAPI {
     if (this.closed)
       throw new Error('PreviewTransaction is closed')
   }
+}
+
+function validateScopedPatches(
+  patches: readonly Patch[],
+  nodePath: readonly (string | number)[],
+  declared: readonly (readonly string[])[],
+): void {
+  for (const patch of patches) {
+    const path = Array.isArray(patch.path) ? patch.path : decodePointer(String(patch.path))
+    if (!startsWithSegments(path, nodePath))
+      throw new PreviewMutationScopeError(path)
+    const relative = path.slice(nodePath.length)
+    if (!declared.some(scope => startsWithSegments(relative, scope)))
+      throw new PreviewMutationScopeError(path)
+  }
+}
+
+function startsWithSegments(path: readonly (string | number)[], prefix: readonly (string | number)[]): boolean {
+  return prefix.length <= path.length && prefix.every((segment, index) => String(segment) === String(path[index]))
+}
+
+function decodePointer(path: string): string[] {
+  if (path === '')
+    return []
+  if (!path.startsWith('/'))
+    throw new PreviewMutationScopeError([])
+  return path.slice(1).split('/').map(token => token.replaceAll('~1', '/').replaceAll('~0', '~'))
+}
+
+function encodePointer(path: readonly (string | number)[]): string {
+  return path.length === 0 ? '' : `/${path.map(segment => String(segment).replaceAll('~', '~0').replaceAll('/', '~1')).join('/')}`
 }

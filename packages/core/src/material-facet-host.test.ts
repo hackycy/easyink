@@ -4,6 +4,40 @@ import { compileMaterialProfile } from './material-profile'
 import { createTestCompiledMaterialProfile, createTestMaterialManifest } from './testing/material-profile'
 
 describe('material facet host', () => {
+  it('invokes contextual properties through the designer facet with immutable data and no writer', async () => {
+    let received!: any
+    const contextualProperties = vi.fn((request: any) => {
+      received = request
+      return {
+        contextKey: 'selection:text',
+        descriptors: [{ key: 'weight', label: 'Weight', type: 'number', accessor: { paths: ['/model/weight'] } }],
+        values: { weight: { kind: 'single', value: 400 } },
+      }
+    })
+    const profile = createTestCompiledMaterialProfile([
+      createTestMaterialManifest({ type: 'text', designer: async () => ({ contextualProperties }) }),
+    ])
+    const host = new MaterialFacetHost()
+    const node = { id: 'n1', type: 'text', width: 10, height: 10, unit: 'mm', model: { weight: 400 } } as any
+
+    const result = await host.contextualProperties(profile, 'text', {
+      node,
+      sessionPath: ['n1'],
+      selection: { type: 'glyph' },
+      lineage: 'lineage-1',
+    })
+
+    expect(result?.contextKey).toBe('selection:text')
+    expect(Object.isFrozen(received)).toBe(true)
+    expect(Object.isFrozen(received.node)).toBe(true)
+    expect(Object.isFrozen(result)).toBe(true)
+    expect((received as any).writer).toBeUndefined()
+    expect(() => {
+      received.node.model.weight = 500
+    }).toThrow()
+    expect(node.model.weight).toBe(400)
+  })
+
   it('deduplicates concurrent activation and disposes an active value exactly once', async () => {
     let release!: () => void
     const gate = new Promise<void>((resolve) => {

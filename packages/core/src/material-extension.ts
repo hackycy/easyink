@@ -335,6 +335,30 @@ export interface PropertyDescriptorLike {
   accessor?: PropertyAccessor
 }
 
+export type DeepReadonly<T> = T extends (...args: never[]) => unknown ? T : T extends readonly (infer U)[] ? readonly DeepReadonly<U>[] : T extends object ? { readonly [K in keyof T]: DeepReadonly<T[K]> } : T
+
+export interface MaterialContextualPropertiesRequest {
+  readonly node: DeepReadonly<MaterialNode>
+  readonly sessionPath: readonly string[]
+  readonly selection: DeepReadonly<JsonValue> | null
+  readonly lineage: string | null
+}
+
+export type MaterialContextualValue
+  = | { readonly kind: 'single', readonly value: JsonValue }
+    | { readonly kind: 'mixed' }
+    | { readonly kind: 'unavailable', readonly reason?: string }
+
+export interface MaterialContextualPropertiesResult {
+  readonly contextKey: string
+  readonly descriptors: readonly import('./material-properties').PropertyDescriptor[]
+  readonly values: Readonly<Record<string, MaterialContextualValue>>
+}
+
+export type MaterialContextualPropertiesProvider = (
+  request: MaterialContextualPropertiesRequest,
+) => MaterialContextualPropertiesResult | null | Promise<MaterialContextualPropertiesResult | null>
+
 /** Framework-neutral Designer facet activated from a material manifest. */
 export interface MaterialDesignerFacet {
   extension: MaterialDesignerExtension
@@ -344,6 +368,7 @@ export interface MaterialDesignerFacet {
     locales?: Record<string, Record<string, unknown>>
   }
   dispose?: () => void | Promise<void>
+  contextualProperties?: MaterialContextualPropertiesProvider
 }
 
 // (Old deep editing FSM protocol removed — replaced by Chapter 22 Editing Behavior Architecture)

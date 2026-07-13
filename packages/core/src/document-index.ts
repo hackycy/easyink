@@ -84,6 +84,12 @@ export class DocumentIndexSnapshot {
   hasNode(nodeId: string): boolean { return snapshotInternals.get(this)!.nodes.has(nodeId) }
   getNode(nodeId: string): MaterialNode | undefined { return snapshotInternals.get(this)!.nodes.get(nodeId) }
 
+  /** Canonical document path for a node. Exposed for scoped preview validation. */
+  getNodePath(nodeId: string): readonly (string | number)[] | undefined {
+    const path = snapshotInternals.get(this)!.paths.get(nodeId)
+    return path ? Object.freeze([...path]) : undefined
+  }
+
   resolveNode(document: DocumentSchema, nodeId: string): MaterialNode {
     const path = snapshotInternals.get(this)!.paths.get(nodeId)
     if (!path)

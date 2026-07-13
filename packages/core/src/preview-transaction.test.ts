@@ -35,6 +35,30 @@ function strictSchema<T>(schema: T): T {
 }
 
 describe('previewTransaction', () => {
+  it('scopes replaceNode patches, supports RFC6901 paths, and remains usable after rejection', () => {
+    const profile = createTestCompiledMaterialProfile()
+    const schema = createCanonicalDefaultSchema()
+    schema.elements = [profile.createNode('box', { id: 'a', x: 0, model: { 'a/b': 1 } })]
+    const store = new DocumentStore(schema, profile)
+    const engine = new DocumentTransactionEngine(store)
+    const preview = engine.beginPreview({ label: 'Node', operation: moveOperation })
+
+    preview.replaceNode('a', ['/model/a~1b'], (draft) => {
+      ;(draft.model as Record<string, number>)['a/b'] = 2
+    })
+    expect(store.document.elements[0]!.model['a/b']).toBe(2)
+    expect(() => preview.replaceNode('a', ['/x'], (draft) => {
+      draft.y = 10
+    })).toThrow(/outside declared property paths/)
+    expect(store.document.elements[0]!.y).toBe(0)
+
+    preview.replaceNode('a', ['/x'], (draft) => {
+      draft.x = 8
+    })
+    expect(store.document.elements[0]!.x).toBe(8)
+    preview.cancel()
+  })
+
   it('replaces preview from the committed base and commits one history entry', () => {
     const profile = createTestCompiledMaterialProfile()
     const schema = createCanonicalDefaultSchema()

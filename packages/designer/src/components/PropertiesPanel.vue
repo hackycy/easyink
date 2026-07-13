@@ -1,17 +1,17 @@
 <script setup lang="ts">
-import type { Selection, SubPropertySchema } from '@easyink/core'
-import type { BindingRef, DataContractBinding, DocumentSchema, MaterialNode, PageSchema } from '@easyink/schema'
+import type { MaterialContextualPropertiesResult, SubPropertySchema } from '@easyink/core'
+import type { BindingRef, DataContractBinding, MaterialNode } from '@easyink/schema'
 import type { BindingDisplayFormat } from '@easyink/shared'
 import type { Component } from 'vue'
 import type { PagePropertyContext, PagePropertyDescriptor, PagePropertyGroup } from '../page-properties'
 import type { DesignerResolvedAsset, PanelSectionId, PropSchema } from '../types'
-import { ClearBindingCommand, resolveMaterialConditionCapability, resolvePropertyAccessor, UpdateBindingFormatCommand, UpdateDocumentCommand, UpdateGeometryCommand, UpdateMaterialBindingCommand, UpdateMaterialEditorStateCommand, UpdateMaterialModelCommand, UpdatePageCommand, UpdateRenderConditionCommand } from '@easyink/core'
+import { ClearBindingCommand, resolveMaterialConditionCapability, resolvePropertyAccessor, UpdateBindingFormatCommand, UpdateMaterialBindingCommand, UpdateMaterialEditorStateCommand, UpdateMaterialModelCommand, UpdateRenderConditionCommand } from '@easyink/core'
 import { createLayoutBehaviorPropSchemas, groupPropSchemas } from '@easyink/prop-schemas'
 import { getBindingRefs } from '@easyink/schema'
-import { deepClone } from '@easyink/shared'
 import { EiNumberInput, EiPanel, EiSwitch } from '@easyink/ui'
 import { computed, onUnmounted, shallowRef, watch, watchEffect } from 'vue'
 import { useDesignerStore } from '../composables'
+import { PropertyPreviewController } from '../editing/property-preview-controller'
 import { resolveDataContractFieldFormatEditor, resolveOrdinaryFormatEditor } from '../materials/binding-format-editor'
 import { resolveBindingPanelPort, resolveDataContractBindingPort } from '../materials/binding-port'
 import { isElementRotatable } from '../materials/capabilities'
@@ -19,13 +19,11 @@ import { canEditGeometry, isPropSchemaDisabled as isMaterialPropSchemaDisabled }
 import { createPagePropertyDescriptors, defaultDocumentPatch, defaultPagePatch, filterVisible, groupDescriptors, readPageProperty, splitPatch } from '../page-properties'
 import BindingSection from './BindingSection.vue'
 import ConditionEditor from './ConditionEditor.vue'
-import { commitMaterialPropertyPreview, MaterialPropertyPreviewSession } from './material-property-preview'
 import MaterialDataBindingEditor from './MaterialDataBindingEditor.vue'
 import PagePropertyEditor from './PagePropertyEditor.vue'
 import PropSchemaEditor from './PropSchemaEditor.vue'
 
 const store = useDesignerStore()
-const propertyTx = store.materialTransaction
 
 const selectedElements = computed(() => {
   const ids = store.selection.ids
@@ -53,6 +51,22 @@ const showLockedSwitch = computed(() => true)
 // ─── Sub-Property Schema (auto-derived from editing session selection) ──
 
 const subPropertySchema = computed<SubPropertySchema | null>(() => {
+  // eslint-disable-next-line ts/no-use-before-define
+  const contextual = contextualProperties.value
+  const contextualNode = selectedElement.value
+  if (contextual && contextualNode) {
+    return {
+      title: contextual.contextKey,
+      descriptors: contextual.descriptors as unknown as SubPropertySchema['descriptors'],
+      read: (key: string) => contextual.values[key]?.kind === 'single' ? contextual.values[key].value : undefined,
+      write: (key: string, value: unknown) => {
+        const descriptor = contextual.descriptors.find(item => item.key === key)
+        if (descriptor)
+          // eslint-disable-next-line ts/no-use-before-define
+          propertyPreview.previewProperty(key, contextualNode, descriptor as never, value as never, { sessionPath: [], selectionLineage: null, label: descriptor.label })
+      },
+    } as unknown as SubPropertySchema
+  }
   const session = store.editingSession.activeSession
   if (!session)
     return null
@@ -61,11 +75,11 @@ const subPropertySchema = computed<SubPropertySchema | null>(() => {
   if (!sel)
     return null
 
-  const node = store.getElementById(sel.nodeId)
-  if (!node)
+  const legacyNode = store.getElementById(sel.nodeId)
+  if (!legacyNode)
     return null
 
-  const ext = store.peekDesignerFacet(node.type)?.value?.extension
+  const ext = store.peekDesignerFacet(legacyNode.type)?.value?.extension
   if (!ext?.selectionTypes)
     return null
 
@@ -73,7 +87,7 @@ const subPropertySchema = computed<SubPropertySchema | null>(() => {
   if (!selType?.getPropertySchema)
     return null
 
-  return selType.getPropertySchema(sel, node)
+  return selType.getPropertySchema(sel, legacyNode)
 })
 
 // Sub-property schemas grouped by group field
@@ -246,42 +260,36 @@ function pageGroupLabel(group: PagePropertyGroup): string {
 
 // ─── Page property preview/commit snapshots ─────────────────────
 
-type DocumentPageSnapshot = Partial<Pick<DocumentSchema, 'unit' | 'meta' | 'extensions' | 'compat'>>
-
-const pageSnapshots = new Map<string, { page?: Partial<PageSchema>, document?: DocumentPageSnapshot }>()
+const propertyPreview = new PropertyPreviewController(store.documentTransactions)
+const contextualProperties = shallowRef<MaterialContextualPropertiesResult | null>(null)
+let contextualRequestToken = 0
+watchEffect((onCleanup) => {
+  const node = selectedElement.value
+  const session = store.editingSession.activeSession
+  const selection = session?.selectionStore.selection
+  const token = ++contextualRequestToken
+  contextualProperties.value = null
+  if (!node || !session || !selection)
+    return
+  let cancelled = false
+  onCleanup(() => {
+    cancelled = true
+  })
+  void store.materialFacetHost.contextualProperties(store.materialProfile, node.type, {
+    node,
+    sessionPath: store.editingSession.path.map(frame => frame.nodeId),
+    selection: selection as unknown as import('@easyink/shared').JsonValue,
+    lineage: session.selectionStore.lineageId,
+  }).then((result) => {
+    if (!cancelled && token === contextualRequestToken)
+      contextualProperties.value = result
+  })
+})
 
 type GeometryKey = 'x' | 'y' | 'width' | 'height' | 'rotation' | 'alpha'
-type DocumentPageSnapshotKey = keyof DocumentPageSnapshot
-
-function readPageSnapshotValue<K extends keyof PageSchema>(page: PageSchema, key: K): PageSchema[K] {
-  return page[key]
-}
-
-function readDocumentSnapshotValue<K extends DocumentPageSnapshotKey>(schema: DocumentSchema, key: K): DocumentPageSnapshot[K] {
-  return schema[key] as DocumentPageSnapshot[K]
-}
-
-function setPageSnapshotValue<K extends keyof PageSchema>(snapshot: Partial<PageSchema>, key: K, value: PageSchema[K]) {
-  snapshot[key] = value
-}
-
-function setDocumentSnapshotValue<K extends DocumentPageSnapshotKey>(snapshot: DocumentPageSnapshot, key: K, value: DocumentPageSnapshot[K]) {
-  snapshot[key] = value
-}
 
 function isGeometryKey(key: string): key is GeometryKey {
   return key === 'x' || key === 'y' || key === 'width' || key === 'height' || key === 'rotation' || key === 'alpha'
-}
-
-function readGeometryValue(node: MaterialNode, key: GeometryKey): number | undefined {
-  switch (key) {
-    case 'x': return node.x
-    case 'y': return node.y
-    case 'width': return node.width
-    case 'height': return node.height
-    case 'rotation': return node.rotation
-    case 'alpha': return node.alpha
-  }
 }
 
 function previewPageProperty(descriptor: PagePropertyDescriptor, value: unknown) {
@@ -295,33 +303,17 @@ function previewPageProperty(descriptor: PagePropertyDescriptor, value: unknown)
       ? defaultDocumentPatch(descriptor.path, value)
       : defaultPagePatch(descriptor.path, value)
 
-  const { pageUpdates, documentUpdates } = splitPatch(patch)
-
-  // Snapshot before first preview
-  if (!pageSnapshots.has(descriptor.id)) {
-    const snapshot: { page?: Partial<PageSchema>, document?: DocumentPageSnapshot } = {}
-    if (pageUpdates && Object.keys(pageUpdates).length > 0) {
-      snapshot.page = {}
-      for (const key of Object.keys(pageUpdates) as Array<keyof PageSchema>) {
-        setPageSnapshotValue(snapshot.page, key, deepClone(readPageSnapshotValue(store.schema.page, key)))
-      }
-    }
-    if (documentUpdates && Object.keys(documentUpdates).length > 0) {
-      snapshot.document = {}
-      for (const key of Object.keys(documentUpdates) as DocumentPageSnapshotKey[]) {
-        setDocumentSnapshotValue(snapshot.document, key, deepClone(readDocumentSnapshotValue(store.schema, key)))
-      }
-    }
-    pageSnapshots.set(descriptor.id, snapshot)
-  }
-
-  // Direct mutation for preview
-  if (pageUpdates && Object.keys(pageUpdates).length > 0) {
-    Object.assign(store.schema.page, pageUpdates)
-  }
-  if (documentUpdates && Object.keys(documentUpdates).length > 0) {
-    Object.assign(store.schema, documentUpdates)
-  }
+  propertyPreview.preview(`page:${descriptor.id}`, {
+    label: descriptor.label,
+    mergeKey: `page:${descriptor.id}`,
+    operation: { kind: descriptor.source === 'document' ? 'document.property' : 'page.property', sessionPath: [], targetIds: ['document'], fieldPaths: [`/${descriptor.source}/${descriptor.path}`], selectionLineage: null, structural: false },
+  }, preview => preview.replace((draft) => {
+    const { pageUpdates, documentUpdates } = splitPatch(patch)
+    if (pageUpdates)
+      Object.assign(draft.page, pageUpdates)
+    if (documentUpdates)
+      Object.assign(draft, documentUpdates)
+  }))
 }
 
 async function onPagePropertyChange(descriptor: PagePropertyDescriptor, value: unknown) {
@@ -332,47 +324,11 @@ async function onPagePropertyChange(descriptor: PagePropertyDescriptor, value: u
       return
     }
   }
-  const ctx = pagePropertyContext.value
-  const patch = descriptor.normalize
-    ? descriptor.normalize(value, ctx)
-    : descriptor.source === 'document'
-      ? defaultDocumentPatch(descriptor.path, value)
-      : defaultPagePatch(descriptor.path, value)
-
-  const { pageUpdates, documentUpdates } = splitPatch(patch)
-  const snapshot = pageSnapshots.get(descriptor.id)
-  pageSnapshots.delete(descriptor.id)
-
-  if (pageUpdates && Object.keys(pageUpdates).length > 0) {
-    const cmd = new UpdatePageCommand(
-      store.schema.page,
-      pageUpdates,
-      snapshot?.page,
-    )
-    store.commands.execute(cmd)
-  }
-
-  if (documentUpdates && Object.keys(documentUpdates).length > 0) {
-    const cmd = new UpdateDocumentCommand(
-      store.schema,
-      documentUpdates,
-      snapshot?.document,
-    )
-    store.commands.execute(cmd)
-  }
+  propertyPreview.commit(`page:${descriptor.id}`)
 }
 
 function rollbackPagePreview(descriptorId: string) {
-  const snapshot = pageSnapshots.get(descriptorId)
-  if (!snapshot)
-    return
-  pageSnapshots.delete(descriptorId)
-  if (snapshot.page) {
-    Object.assign(store.schema.page, snapshot.page)
-  }
-  if (snapshot.document) {
-    Object.assign(store.schema, snapshot.document)
-  }
+  propertyPreview.cancel(`page:${descriptorId}`)
 }
 
 // ─── Element PropSchema ──────────────────────────────────────────
@@ -456,38 +412,17 @@ function groupLabel(group: string): string {
 
 // ─── Material prop preview/commit ──────────────────────────────
 
-interface PropertyPreviewContext {
-  session: object | null
-  sessionNodeId?: string
-  selection: Selection | null
-}
-
-const propertyPreview = new MaterialPropertyPreviewSession<PropertyPreviewContext>({
-  captureContext: () => ({
-    session: store.editingSession.activeSession,
-    sessionNodeId: store.editingSession.activeSession?.nodeId,
-    selection: deepClone(store.editingSession.activeSession?.selectionStore.selection ?? null),
-  }),
-  restoreContext: (context) => {
-    const session = store.editingSession.activeSession
-    if (session && session === context.session && session.nodeId === context.sessionNodeId)
-      session.selectionStore.set(deepClone(context.selection))
-  },
-})
-
 watch(() => selectedElement.value?.id, (nodeId, previousNodeId) => {
   if (nodeId !== previousNodeId)
-    propertyPreview.cancel()
+    propertyPreview.cancelActive()
 })
 
-onUnmounted(() => propertyPreview.cancel())
+watch(() => store.editingSession.activeSession?.nodeId, (nodeId, previousNodeId) => {
+  if (nodeId !== previousNodeId)
+    propertyPreview.cancelActive()
+})
 
-function writePropertyWithSelectionRebase(accessor: ReturnType<typeof resolvePropertyAccessor>, node: MaterialNode, value: unknown) {
-  const before = deepClone(node)
-  const result = accessor.write(node, value)
-  store.editingSession.rebaseSelection(before, node, result)
-  return result
-}
+onUnmounted(() => propertyPreview.cancelActive())
 
 function previewProp(key: string, value: unknown) {
   const el = selectedElement.value
@@ -496,10 +431,12 @@ function previewProp(key: string, value: unknown) {
   const schema = materialSchemas.value.find(s => s.key === key)
   if (!schema)
     return
-  if (schema?.type === 'font')
-    return
-  const accessor = resolvePropertyAccessor(schema)
-  propertyPreview.preview(el, schema, node => writePropertyWithSelectionRebase(accessor, node, value))
+  const session = store.editingSession.activeSession
+  propertyPreview.previewProperty(key, el, schema, value, {
+    sessionPath: session?.nodeId ? [`node:${session.nodeId}`] : [],
+    selectionLineage: session?.selectionStore.selection?.type ?? null,
+    label: schema.label,
+  })
 }
 
 async function updateProp(key: string, value: unknown) {
@@ -517,19 +454,11 @@ async function updateProp(key: string, value: unknown) {
 
   if (!schema)
     return
-  const accessor = resolvePropertyAccessor(schema)
-  const { before, result } = commitMaterialPropertyPreview(propertyPreview, el, key, () =>
-    propertyTx.run(el.id, draft => accessor.write(draft, value), { mergeKey: `property:${el.id}:${key}`, label: schema.label }))
-  const updated = store.getElementById(el.id)
-  if (updated)
-    store.editingSession.rebaseSelection(before, updated, result)
+  propertyPreview.commit(key)
 }
 
 function rollbackPropPreview(key: string) {
-  const el = selectedElement.value
-  if (!el || !propertyPreview.isActive(el.id, key))
-    return
-  propertyPreview.cancel()
+  propertyPreview.cancel(key)
 }
 
 function updateImagePropFromPicker(key: string, result: DesignerResolvedAsset) {
@@ -538,7 +467,7 @@ function updateImagePropFromPicker(key: string, result: DesignerResolvedAsset) {
     return
 
   const updates: Record<string, unknown> = { [key]: result.url }
-  propertyPreview.restoreForCommit(el, key)
+  propertyPreview.cancelActive()
   const oldValues: Record<string, unknown> = {}
 
   if (key === 'src' && result.alt && isBlankAlt(el.model.alt)) {
@@ -561,8 +490,6 @@ function isBlankAlt(value: unknown): boolean {
 
 // ─── Geometry preview/commit ────────────────────────────────────
 
-const geoSnapshots = new Map<string, number>()
-
 function previewGeometry(key: string, value: number) {
   if (!selectedElement.value || !isGeometryKey(key))
     return
@@ -570,13 +497,21 @@ function previewGeometry(key: string, value: number) {
     return
   if (!canEditGeometry(store, selectedElement.value, key))
     return
-  if (!geoSnapshots.has(key)) {
-    geoSnapshots.set(key, readGeometryValue(selectedElement.value, key) ?? 0)
-  }
-  store.updateElement(selectedElement.value.id, { [key]: value })
+  const el = selectedElement.value
+  propertyPreview.preview(`geometry:${key}`, {
+    label: key,
+    mergeKey: `geometry:${el.id}:${key}`,
+    operation: { kind: 'geometry.property', sessionPath: [], targetIds: [`node:${el.id}`], fieldPaths: [`/${key}`], selectionLineage: null, structural: false },
+  }, (preview) => {
+    if (!preview.replaceNode)
+      throw new Error('Preview transaction does not support node-scoped replacement')
+    preview.replaceNode(el.id, [`/${key}`], (draft) => {
+      (draft as unknown as Record<GeometryKey, number>)[key] = value
+    })
+  })
 }
 
-function commitGeometry(key: string, value: number) {
+function commitGeometry(key: string, _value: number) {
   const el = selectedElement.value
   if (!el || !isGeometryKey(key))
     return
@@ -584,14 +519,7 @@ function commitGeometry(key: string, value: number) {
     return
   if (!canEditGeometry(store, el, key))
     return
-  const oldValue = geoSnapshots.get(key)
-  geoSnapshots.delete(key)
-  if (oldValue !== undefined && oldValue === value)
-    return
-  const updates: Partial<Record<GeometryKey, number>> = { [key]: value }
-  const olds: Partial<Record<GeometryKey, number>> | undefined = oldValue !== undefined ? { [key]: oldValue } : undefined
-  const cmd = new UpdateGeometryCommand(store.schema.elements, el.id, updates, olds)
-  store.commands.execute(cmd)
+  propertyPreview.commit(`geometry:${key}`)
 }
 
 // ─── Element meta (hidden/locked) ──────────────────────────────
