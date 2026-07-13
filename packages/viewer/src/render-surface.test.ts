@@ -1,11 +1,437 @@
 import type { MaterialManifest, MaterialViewerExtension, PagePlanEntry, ViewerFacetCapabilities, ViewerRenderContext } from '@easyink/core'
 import type { MaterialNode, PageSchema } from '@easyink/schema'
+import type { CommittedPagePlan, RuntimeMaterialInstancePlan } from './layout-runtime'
 import type { ViewerDiagnosticEvent } from './types'
+import { createBrowserDomCapabilities } from '@easyink/browser-dom'
 import { defineMaterialManifest, freezeMaterialFragmentPlan, freezeMaterialLayoutPlan, viewerElement, viewerFragment, viewerImperativeDom, viewerSanitizedMarkup, viewerText } from '@easyink/core'
 import { createTestCompiledMaterialProfile, createTestMaterialManifest } from '@easyink/core/testing'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { mountCommittedMaterial, mountMaterialTree, renderPages, RenderSurface } from './index'
 import { ProfileMaterialRuntime } from './material-runtime'
-import { renderPages } from './render-surface'
+
+describe('mountMaterialTree', () => {
+  it('renders raw text as text and leaves a later mount intact when an old disposer runs', () => {
+    const host = document.createElement('div')
+    const first = mountMaterialTree(host, viewerText('<img src=x onerror=alert(1)>'), { document, maxNodes: 2 })
+    const second = mountMaterialTree(host, viewerText('second'), { document, maxNodes: 2 })
+
+    first.dispose()
+
+    expect(host.children).toHaveLength(0)
+    expect(host.textContent).toBe('second')
+    second.dispose()
+    expect(host.textContent).toBe('')
+  })
+
+  it('rolls back a failed mount and disposes its owned capabilities', () => {
+    const host = document.createElement('div')
+    host.textContent = 'previous'
+    const capabilities = createBrowserDomCapabilities({ document, maxNodes: 1 })
+
+    expect(() => mountMaterialTree(host, viewerFragment([
+      viewerText('one'),
+      viewerText('two'),
+    ]), { document, capabilities, maxNodes: 1 })).toThrowError('VIEWER_TREE_NODE_LIMIT_EXCEEDED')
+
+    expect(host.textContent).toBe('previous')
+    expect(() => capabilities.sanitizeMarkup({ format: 'svg', source: '<svg />' }))
+      .toThrowError('VIEWER_CAPABILITIES_DISPOSED')
+  })
+})
+
+describe('renderSurface', () => {
+  it('preserves the committed root and disposers when a replacement build fails', async () => {
+    const host = document.createElement('div')
+    const surface = new RenderSurface(host)
+    const disposed: string[] = []
+    await surface.commitAtomically((root, transaction) => {
+      root.textContent = 'old'
+      transaction.register(() => disposed.push('old'))
+    }, new AbortController().signal)
+
+    await expect(surface.commitAtomically((root, transaction) => {
+      root.textContent = 'new'
+      transaction.register(() => disposed.push('new'))
+      throw new Error('build failed')
+    }, new AbortController().signal)).rejects.toThrowError('build failed')
+
+    expect(host.textContent).toBe('old')
+    expect(disposed).toEqual(['new'])
+  })
+
+  it('swaps once before disposing old mounts in reverse order', async () => {
+    const host = document.createElement('div')
+    const surface = new RenderSurface(host)
+    const events: string[] = []
+    await surface.commitAtomically((root, transaction) => {
+      root.textContent = 'old'
+      transaction.register(() => events.push(`first:${host.textContent}`))
+      transaction.register(() => events.push(`second:${host.textContent}`))
+    }, new AbortController().signal)
+
+    await surface.commitAtomically((root) => {
+      root.textContent = 'new'
+    }, new AbortController().signal)
+
+    expect(host.textContent).toBe('new')
+    expect(events).toEqual(['second:new', 'first:new'])
+  })
+
+  it('prevents an earlier async build from overwriting a newer commit', async () => {
+    const host = document.createElement('div')
+    const surface = new RenderSurface(host)
+    let release!: () => void
+    const blocked = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const disposed: string[] = []
+    const earlier = surface.commitAtomically(async (root, transaction) => {
+      root.textContent = 'earlier'
+      transaction.register(() => disposed.push('earlier'))
+      await blocked
+      transaction.checkpoint()
+    }, new AbortController().signal)
+
+    await surface.commitAtomically((root) => {
+      root.textContent = 'newer'
+    }, new AbortController().signal)
+    release()
+
+    await expect(earlier).rejects.toThrowError('RENDER_SURFACE_COMMIT_SUPERSEDED')
+    expect(host.textContent).toBe('newer')
+    expect(disposed).toEqual(['earlier'])
+  })
+
+  it('lets a reentrant inner commit win and cleans the superseded outer build', async () => {
+    const host = document.createElement('div')
+    const surface = new RenderSurface(host)
+    const disposed: string[] = []
+
+    await expect(surface.commitAtomically(async (root, transaction) => {
+      root.textContent = 'outer'
+      transaction.register(() => disposed.push('outer'))
+      await surface.commitAtomically((innerRoot) => {
+        innerRoot.textContent = 'inner'
+      }, new AbortController().signal)
+    }, new AbortController().signal)).rejects.toThrowError('RENDER_SURFACE_COMMIT_SUPERSEDED')
+
+    expect(host.textContent).toBe('inner')
+    expect(disposed).toEqual(['outer'])
+  })
+
+  it('checks abort after awaited work, cleans only new mounts, and makes dispose idempotent', async () => {
+    const host = document.createElement('div')
+    const surface = new RenderSurface(host)
+    const controller = new AbortController()
+    const reason = new Error('cancelled')
+    const disposed: string[] = []
+
+    const commit = surface.commitAtomically(async (root, transaction) => {
+      root.textContent = 'aborted'
+      transaction.register(() => disposed.push('new'))
+      await Promise.resolve()
+      controller.abort(reason)
+    }, controller.signal)
+
+    await expect(commit).rejects.toBe(reason)
+    expect(host.textContent).toBe('')
+    expect(disposed).toEqual(['new'])
+    surface.dispose()
+    surface.dispose()
+    await expect(surface.commitAtomically(() => {}, new AbortController().signal))
+      .rejects
+      .toThrowError('RENDER_SURFACE_DISPOSED')
+  })
+
+  it('continues reverse disposal and reports errors in stable order', async () => {
+    const host = document.createElement('div')
+    const surface = new RenderSurface(host)
+    const calls: string[] = []
+    const first = new Error('first')
+    const second = new Error('second')
+    await surface.commitAtomically((_root, transaction) => {
+      transaction.register(() => {
+        calls.push('first')
+        throw first
+      })
+      transaction.register(() => {
+        calls.push('second')
+        throw second
+      })
+    }, new AbortController().signal)
+
+    let caught: unknown
+    try {
+      await surface.commitAtomically(() => {}, new AbortController().signal)
+    }
+    catch (error) {
+      caught = error
+    }
+
+    expect(calls).toEqual(['second', 'first'])
+    expect(caught).toBeInstanceOf(AggregateError)
+    expect((caught as AggregateError).errors).toEqual([second, first])
+    expect(host.childNodes).toHaveLength(1)
+  })
+
+  it('cleans the detached build and preserves the old commit when the atomic swap throws', async () => {
+    const host = document.createElement('div')
+    const surface = new RenderSurface(host)
+    const disposed: string[] = []
+    await surface.commitAtomically((root, transaction) => {
+      root.textContent = 'old'
+      transaction.register(() => disposed.push('old'))
+    }, new AbortController().signal)
+    const swapError = new Error('swap failed')
+    vi.spyOn(host, 'replaceChildren').mockImplementationOnce(() => {
+      throw swapError
+    })
+
+    await expect(surface.commitAtomically((root, transaction) => {
+      root.textContent = 'new'
+      transaction.register(() => disposed.push('new'))
+    }, new AbortController().signal)).rejects.toBe(swapError)
+
+    expect(host.textContent).toBe('old')
+    expect(disposed).toEqual(['new'])
+  })
+})
+
+describe('mountCommittedMaterial', () => {
+  it('renders ready instances from exact frozen committed facts and the current page fragment', async () => {
+    const node = committedNode('ready', 'committed-ready')
+    const facts = committedFacts('ready-instance', node)
+    let captured: ViewerRenderContext | undefined
+    let capturedNode: Readonly<MaterialNode> | undefined
+    const materials = await createCommittedMaterials([{ type: node.type, extension: {
+      render: (renderNode, context) => {
+        capturedNode = renderNode
+        captured = context
+        return { tree: viewerText(String(context.resolvedModel.label)) }
+      },
+    } }])
+    const host = document.createElement('div')
+    const diagnostics: ViewerDiagnosticEvent[] = []
+
+    const mount = mountCommittedMaterial(host, {
+      committedPlan: committedPagePlan([facts.instance]),
+      fragmentPlan: facts.fragmentPlan,
+      materials,
+      pageIndex: 2,
+      unit: 'mm',
+      zoom: 1.5,
+      viewerMaxNodes: 20,
+      browserDom: { maxNodes: 15 },
+      diagnostics,
+    })
+
+    expect(host.textContent).toBe('ready-instance')
+    expect(capturedNode).toBe(facts.instance.node)
+    expect(captured).toMatchObject({ instanceKey: 'ready-instance', pageIndex: 2, unit: 'mm', zoom: 1.5 })
+    expect(captured?.data).toBe(facts.instance.scopeData)
+    expect(captured?.resolvedModel).toBe(facts.instance.resolvedModel)
+    expect(captured?.layoutPlan).toBe(facts.instance.layoutPlan)
+    expect(captured?.fragmentPlan).toBe(facts.fragmentPlan)
+    expect(captured?.renderBudget.maxNodes).toBe(15)
+    expect('snapshot' in captured!.renderBudget).toBe(false)
+    expect('restore' in captured!.renderBudget).toBe(false)
+    expect(() => captured!.renderBudget.reserveNodes('text', Number.MAX_SAFE_INTEGER))
+      .toThrowError('VIEWER_RENDER_BUDGET_EXCEEDED')
+    expect(captured?.renderBudget.nodesUsed).toBe(0)
+    expect(Object.isFrozen(captured)).toBe(true)
+    expect(diagnostics).toEqual([])
+    mount.dispose()
+    expect(() => mountCommittedMaterial(document.createElement('div'), {
+      committedPlan: committedPagePlan([facts.instance]),
+      fragmentPlan: facts.fragmentPlan,
+      materials,
+      pageIndex: 2,
+      unit: 'mm',
+      zoom: 1,
+      viewerMaxNodes: 0,
+      diagnostics: [],
+    })).toThrowError('VIEWER_COMMITTED_RENDER_BUDGET_INVALID')
+  })
+
+  it('does not enter quarantined or identity-mismatched material extensions', async () => {
+    const quarantinedNode = committedNode('quarantined', 'committed-quarantined')
+    const quarantined = committedFacts('quarantined-instance', quarantinedNode, { status: 'quarantined' })
+    const mismatchedNode = committedNode('mismatched', 'committed-mismatched')
+    const mismatched = committedFacts('mismatched-instance', mismatchedNode)
+    const render = vi.fn(() => ({ tree: viewerText('unsafe') }))
+    const materials = await createCommittedMaterials([
+      { type: quarantinedNode.type, extension: { render } },
+      { type: mismatchedNode.type, extension: { render } },
+    ])
+    const diagnostics: ViewerDiagnosticEvent[] = []
+
+    const quarantinedHost = document.createElement('div')
+    mountCommittedMaterial(quarantinedHost, {
+      committedPlan: committedPagePlan([quarantined.instance]),
+      fragmentPlan: quarantined.fragmentPlan,
+      materials,
+      pageIndex: 0,
+      unit: 'mm',
+      zoom: 1,
+      diagnostics,
+    })
+    const mismatchedHost = document.createElement('div')
+    mountCommittedMaterial(mismatchedHost, {
+      committedPlan: committedPagePlan([mismatched.instance]),
+      fragmentPlan: freezeMaterialFragmentPlan({ ...mismatched.fragmentPlan, sourceNodeId: 'foreign-node' }),
+      materials,
+      pageIndex: 0,
+      unit: 'mm',
+      zoom: 1,
+      diagnostics,
+    })
+
+    expect(render).not.toHaveBeenCalled()
+    expect(quarantinedHost.textContent).toContain('quarantined')
+    expect(mismatchedHost.textContent).toContain('unavailable')
+    expect(diagnostics.map(item => item.code)).toEqual([
+      'VIEWER_MATERIAL_INSTANCE_QUARANTINED',
+      'VIEWER_MATERIAL_INSTANCE_IDENTITY_MISMATCH',
+    ])
+  })
+
+  it('recursively renders only parent-mapped slot children with shared budget and child fragments', async () => {
+    const childA = committedFacts('child-a-instance', committedNode('child-a', 'committed-child-a'), { embedded: true })
+    const childB = committedFacts('child-b-instance', committedNode('child-b', 'committed-child-b'), { embedded: true })
+    const slotInstanceKey = 'slot:content:instance'
+    const owner = committedFacts('owner-instance', committedNode('owner', 'committed-owner'), {
+      slotChildren: { [slotInstanceKey]: [childA.instance.instanceKey, childB.instance.instanceKey] },
+      slotInstanceKeys: [slotInstanceKey],
+    })
+    const budgets: ViewerRenderContext['renderBudget'][] = []
+    const fragments: string[] = []
+    const materials = await createCommittedMaterials([
+      { type: owner.instance.node.type, extension: { render: (_node, context) => {
+        budgets.push(context.renderBudget)
+        return { tree: context.renderSlot(slotInstanceKey) }
+      } } },
+      { type: childA.instance.node.type, extension: { render: (_node, context) => {
+        budgets.push(context.renderBudget)
+        fragments.push(context.fragmentPlan.id)
+        return { tree: viewerText('A') }
+      } } },
+      { type: childB.instance.node.type, extension: { render: (_node, context) => {
+        budgets.push(context.renderBudget)
+        fragments.push(context.fragmentPlan.id)
+        return { tree: viewerText('B') }
+      } } },
+    ])
+    const host = document.createElement('div')
+    const diagnostics: ViewerDiagnosticEvent[] = []
+
+    mountCommittedMaterial(host, {
+      committedPlan: committedPagePlan([owner.instance, childA.instance, childB.instance]),
+      fragmentPlan: owner.fragmentPlan,
+      materials,
+      pageIndex: 0,
+      unit: 'mm',
+      zoom: 1,
+      viewerMaxNodes: 12,
+      browserDom: { maxNodes: 10 },
+      diagnostics,
+    })
+
+    expect(host.textContent).toBe('AB')
+    expect(new Set(budgets).size).toBe(1)
+    expect(budgets[0]?.maxNodes).toBe(10)
+    expect(budgets[0]?.nodesUsed).toBe(3)
+    expect(fragments).toEqual([childA.instance.embeddedFragmentPlan!.id, childB.instance.embeddedFragmentPlan!.id])
+    expect(diagnostics).toEqual([])
+  })
+
+  it('diagnoses absent, foreign, and cyclic slot references with safe sentinels', async () => {
+    const missingSlotKey = 'slot:missing-child'
+    const cycleSlotKey = 'slot:cycle'
+    const owner = committedFacts('cycle-owner', committedNode('cycle-owner', 'committed-cycle-owner'), {
+      embedded: true,
+      slotChildren: {
+        [missingSlotKey]: ['foreign-child'],
+        [cycleSlotKey]: ['cycle-owner'],
+      },
+      slotInstanceKeys: [missingSlotKey, cycleSlotKey],
+    })
+    const materials = await createCommittedMaterials([{ type: owner.instance.node.type, extension: {
+      render: (_node, context) => ({ tree: viewerFragment([
+        context.renderSlot('slot:absent'),
+        context.renderSlot(missingSlotKey),
+        context.renderSlot(cycleSlotKey),
+      ]) }),
+    } }])
+    const host = document.createElement('div')
+    const diagnostics: ViewerDiagnosticEvent[] = []
+
+    mountCommittedMaterial(host, {
+      committedPlan: committedPagePlan([owner.instance]),
+      fragmentPlan: owner.fragmentPlan,
+      materials,
+      pageIndex: 0,
+      unit: 'mm',
+      zoom: 1,
+      diagnostics,
+    })
+
+    expect(host.textContent).toContain('slot unavailable')
+    expect(diagnostics.map(item => item.code)).toEqual([
+      'VIEWER_SLOT_INSTANCE_MISSING',
+      'VIEWER_SLOT_INSTANCE_MISSING',
+      'VIEWER_SLOT_INSTANCE_CYCLE',
+    ])
+  })
+
+  it('isolates extension and browser-boundary failures and disposes per-material capabilities', async () => {
+    const throwing = committedFacts('throwing-instance', committedNode('throwing', 'committed-throwing'))
+    const oversized = committedFacts('oversized-instance', committedNode('oversized', 'committed-oversized'))
+    let throwingCapabilities: ViewerRenderContext['capabilities'] | undefined
+    const materials = await createCommittedMaterials([
+      { type: throwing.instance.node.type, capabilities: { sanitizedMarkup: true }, extension: { render: (_node, context) => {
+        throwingCapabilities = context.capabilities
+        context.capabilities.sanitizeMarkup({ format: 'svg', source: '<svg />' })
+        context.renderBudget.reserveNodes('text', context.renderBudget.maxNodes)
+        throw new Error('extension failed')
+      } } },
+      { type: oversized.instance.node.type, extension: { render: () => ({
+        tree: viewerFragment(Array.from({ length: 8 }, () => viewerText('x'))),
+      }) } },
+    ])
+    const diagnostics: ViewerDiagnosticEvent[] = []
+    const throwingHost = document.createElement('div')
+    mountCommittedMaterial(throwingHost, {
+      committedPlan: committedPagePlan([throwing.instance]),
+      fragmentPlan: throwing.fragmentPlan,
+      materials,
+      pageIndex: 0,
+      unit: 'mm',
+      zoom: 1,
+      diagnostics,
+    })
+    const oversizedHost = document.createElement('div')
+    mountCommittedMaterial(oversizedHost, {
+      committedPlan: committedPagePlan([oversized.instance]),
+      fragmentPlan: oversized.fragmentPlan,
+      materials,
+      pageIndex: 0,
+      unit: 'mm',
+      zoom: 1,
+      viewerMaxNodes: 4,
+      browserDom: { maxNodes: 4 },
+      diagnostics,
+    })
+
+    expect(throwingHost.textContent).toContain('unavailable')
+    expect(oversizedHost.textContent).toContain('unavailable')
+    expect(() => throwingCapabilities!.sanitizeMarkup({ format: 'svg', source: '<svg />' }))
+      .toThrowError('VIEWER_CAPABILITIES_DISPOSED')
+    expect(diagnostics.map(item => item.code)).toEqual([
+      'VIEWER_MATERIAL_RENDER_ERROR',
+      'VIEWER_MATERIAL_MOUNT_ERROR',
+    ])
+  })
+})
 
 describe('renderPages', () => {
   it('provides frozen canonical fallback layout facts to legacy material renderers', async () => {
@@ -679,6 +1105,101 @@ describe('renderPages', () => {
 
 function emptyMaterials(): ProfileMaterialRuntime {
   return new ProfileMaterialRuntime(createTestCompiledMaterialProfile([]))
+}
+
+function committedNode(id: string, type: string): Readonly<MaterialNode> {
+  return Object.freeze({
+    id,
+    type,
+    x: 0,
+    y: 0,
+    width: 20,
+    height: 10,
+    modelVersion: 1,
+    model: Object.freeze({ source: id }),
+    slots: Object.freeze({}),
+    bindings: Object.freeze({}),
+    output: Object.freeze({ visibility: 'include' as const }),
+  })
+}
+
+function committedFacts(
+  instanceKey: string,
+  sourceNode: Readonly<MaterialNode>,
+  options: {
+    status?: RuntimeMaterialInstancePlan['status']
+    embedded?: boolean
+    slotChildren?: Readonly<Record<string, readonly string[]>>
+    slotInstanceKeys?: readonly string[]
+  } = {},
+): { instance: RuntimeMaterialInstancePlan, fragmentPlan: ReturnType<typeof freezeMaterialFragmentPlan> } {
+  const layoutPlan = freezeMaterialLayoutPlan({
+    instanceKey,
+    nodeId: sourceNode.id,
+    nodeRevision: 1,
+    constraintKey: '20:10:mm:horizontal-tb',
+    borderBox: { x: 0, y: 0, width: 20, height: 10 },
+    contentBox: { x: 0, y: 0, width: 20, height: 10 },
+    slotBoxes: (options.slotInstanceKeys ?? []).map((slotInstanceKey, index) => ({
+      slotId: `slot-${index}`,
+      slotInstanceKey,
+      box: { x: 0, y: 0, width: 20, height: 10 },
+      ownership: 'managed' as const,
+      clip: true,
+    })),
+    breakOpportunities: [],
+    diagnostics: [],
+  })
+  const fragmentPlan = freezeMaterialFragmentPlan({
+    id: `fragment:${instanceKey}`,
+    sourceInstanceKey: instanceKey,
+    sourceNodeId: sourceNode.id,
+    box: { x: 0, y: 0, width: 20, height: 10 },
+    consumedRange: { startBlockOffset: 0, endBlockOffset: 10 },
+    diagnostics: [],
+  })
+  const slotChildren = Object.freeze(Object.fromEntries(
+    Object.entries(options.slotChildren ?? {}).map(([key, children]) => [key, Object.freeze([...children])]),
+  ))
+  const instance: RuntimeMaterialInstancePlan = Object.freeze({
+    instanceKey,
+    nodeId: sourceNode.id,
+    node: sourceNode,
+    scopeKey: `scope:${instanceKey}`,
+    scopeData: Object.freeze({ label: instanceKey }),
+    status: options.status ?? 'ready',
+    resolvedModel: Object.freeze({ label: instanceKey }),
+    layoutPlan,
+    ...(options.embedded ? { embeddedFragmentPlan: fragmentPlan } : {}),
+    slotChildren,
+  })
+  return { instance, fragmentPlan }
+}
+
+function committedPagePlan(instances: readonly RuntimeMaterialInstancePlan[]): CommittedPagePlan {
+  return Object.freeze({
+    documentRevision: 1,
+    dataRevision: 1,
+    resourceRevision: 1,
+    pages: Object.freeze([]),
+    outputStates: new Map(),
+    runtimeInstances: new Map(instances.map(instance => [instance.instanceKey, instance])),
+    diagnostics: Object.freeze([]),
+  })
+}
+
+async function createCommittedMaterials(specs: readonly {
+  type: string
+  extension: MaterialViewerExtension
+  capabilities?: ViewerFacetCapabilities
+}[]): Promise<ProfileMaterialRuntime> {
+  const profile = createTestCompiledMaterialProfile(specs.map(spec => createTestMaterialManifest({
+    type: spec.type,
+    viewer: () => ({ extension: spec.extension, capabilities: spec.capabilities ?? {} }),
+  })))
+  const materials = new ProfileMaterialRuntime(profile)
+  await materials.prepare(specs.map(spec => spec.type))
+  return materials
 }
 
 async function createMaterials(extension: MaterialViewerExtension, capabilities: ViewerFacetCapabilities = {}): Promise<ProfileMaterialRuntime> {

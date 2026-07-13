@@ -174,6 +174,7 @@ describe('createLayoutRuntime', () => {
       status: 'ready',
       resolvedModel: { nested: { values: [1] } },
       layoutPlan: plan,
+      slotChildren: { 'slot:content': ['child:1'] },
     }
     const fragment = {
       node: sourceNode,
@@ -201,6 +202,7 @@ describe('createLayoutRuntime', () => {
     sourceNode.model.nested = { values: [9] }
     ;(instance.scopeData.rows as Array<{ value: number }>)[0]!.value = 9
     ;((instance.resolvedModel.nested as { values: number[] }).values)[0] = 9
+    ;(instance.slotChildren['slot:content'] as string[]).push('child:2')
     ;(pagination.pages[0]!.pageContext as { totalPages: number }).totalPages = 9
     ;((layout.diagnostics[0]!.detail as { nested: number[] }).nested)[0] = 9
 
@@ -208,6 +210,7 @@ describe('createLayoutRuntime', () => {
     expect(committed.pages[0]!.fragments[0]!.node.model).toEqual({ nested: { values: [1] } })
     expect(committed.runtimeInstances.get('n1')?.scopeData).toEqual({ rows: [{ value: 1 }] })
     expect(committed.runtimeInstances.get('n1')?.resolvedModel).toEqual({ nested: { values: [1] } })
+    expect(committed.runtimeInstances.get('n1')?.slotChildren).toEqual({ 'slot:content': ['child:1'] })
     expect(committed.diagnostics).toEqual([
       expect.objectContaining({ detail: { nested: [1] } }),
       expect.objectContaining({ detail: { values: [2] } }),
@@ -215,6 +218,8 @@ describe('createLayoutRuntime', () => {
     expect(Object.isFrozen((committed.pages[0]!.fragments[0]!.node.model as { nested: object }).nested)).toBe(true)
     expect(Object.isFrozen(committed.runtimeInstances.get('n1')?.scopeData.rows as unknown[])).toBe(true)
     expect(Object.isFrozen(committed.runtimeInstances.get('n1')?.resolvedModel.nested as object)).toBe(true)
+    expect(Object.isFrozen(committed.runtimeInstances.get('n1')?.slotChildren)).toBe(true)
+    expect(Object.isFrozen(committed.runtimeInstances.get('n1')?.slotChildren['slot:content'])).toBe(true)
     expect('set' in committed.outputStates).toBe(false)
     expect('set' in committed.runtimeInstances).toBe(false)
     expect(Object.isFrozen(sourceNode.model)).toBe(false)
@@ -743,6 +748,12 @@ describe('material measurement integration', () => {
     expect(slotResult?.instanceKey).not.toBe(slotResult?.childPlans[0]?.instanceKey)
     expect(new Set(budgets).size).toBe(3)
     expect([...measured.instances.keys()]).toEqual(expect.arrayContaining(['owner', slotResult!.childPlans[0]!.instanceKey, slotResult!.childPlans[1]!.instanceKey]))
+    expect(measured.instances.get('owner')?.slotChildren[slotResult!.instanceKey]).toEqual(
+      slotResult!.childPlans.map(plan => plan.instanceKey),
+    )
+    expect(Object.isFrozen(measured.instances.get('owner')?.slotChildren)).toBe(true)
+    expect(Object.isFrozen(measured.instances.get('owner')?.slotChildren[slotResult!.instanceKey])).toBe(true)
+    expect(measured.instances.get(slotResult!.childPlans[0]!.instanceKey)?.slotChildren).toEqual({})
   })
 
   it('restores a frozen custom slot subtree on cache hits without rerunning material callbacks', async () => {
@@ -794,6 +805,9 @@ describe('material measurement integration', () => {
     expect(childMeasure).toHaveBeenCalledTimes(1)
     expect(second.instances.has(nestedKey)).toBe(true)
     expect(second.instances.get(nestedKey)?.resolvedModel).toEqual({ nested: { values: [1] } })
+    expect(second.instances.get('owner')?.slotChildren).toEqual(first.instances.get('owner')?.slotChildren)
+    expect(Object.isFrozen(second.instances.get('owner')?.slotChildren)).toBe(true)
+    expect(Object.isFrozen(Object.values(second.instances.get('owner')!.slotChildren)[0])).toBe(true)
     expect(Object.isFrozen(second.instances.get(nestedKey)?.resolvedModel.nested as object)).toBe(true)
     expect(Object.isFrozen(child.model)).toBe(false)
   })
@@ -1021,6 +1035,9 @@ describe('material measurement integration', () => {
     expect(childMeasure.mock.calls[0]![0].node.id).toBe('reserved')
     expect(measured.plans.get('owner')?.borderBox.height).toBe(1)
     expect([...measured.instances.values()].map(instance => instance.nodeId)).toEqual(['owner', 'reserved'])
+    const committedChildKeys = Object.values(measured.instances.get('owner')!.slotChildren).flat()
+    expect(committedChildKeys).toHaveLength(1)
+    expect(measured.instances.get(committedChildKeys[0]!)?.nodeId).toBe('reserved')
   })
 
   it('detects a repeated node identity in recursive slot measurement', async () => {

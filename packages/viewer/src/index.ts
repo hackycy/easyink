@@ -9,11 +9,21 @@ export { applyBindingsToProps, projectBindings, walkProfileMaterialNodes } from 
 export { resolveConditionalSchema } from './conditional-schema'
 export type { ConditionalSchemaResolution } from './conditional-schema'
 export { collectFontFamilies, loadAndInjectFonts } from './font-loader'
+export type { CommittedPagePlan, RuntimeMaterialInstancePlan } from './layout-runtime'
 export { ProfileMaterialRuntime } from './material-runtime'
 export type { ViewerFacetServices } from './material-runtime'
 export { PrintPolicyError, resolvePrintPolicy } from './print-policy'
-export { renderPages } from './render-surface'
-export type { PageDOM, RenderSurfaceOptions } from './render-surface'
+export { mountCommittedMaterial, mountMaterialTree, renderPages, RenderSurface } from './render-surface'
+export type {
+  MountCommittedMaterialOptions,
+  MountMaterialTreeOptions,
+  PageDOM,
+  RenderSurfaceBuild,
+  RenderSurfaceBuildResult,
+  RenderSurfaceDisposer,
+  RenderSurfaceOptions,
+  RenderSurfaceTransaction,
+} from './render-surface'
 export { ViewerRuntime } from './runtime'
 export { createThumbnails } from './thumbnail-pipeline'
 export * from './types'

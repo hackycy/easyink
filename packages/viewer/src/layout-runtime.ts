@@ -58,6 +58,7 @@ export interface RuntimeMaterialInstancePlan {
   readonly resolvedModel: Readonly<Record<string, unknown>>
   readonly layoutPlan: MaterialLayoutPlan
   readonly embeddedFragmentPlan?: MaterialFragmentPlan
+  readonly slotChildren: Readonly<Record<string, readonly string[]>>
 }
 
 export interface MeasuredMaterialSet {
@@ -310,6 +311,7 @@ async function measureInstance(context: {
     throw new Error('MATERIAL_MANIFEST_REQUIRED')
   const constraintKey = createLayoutConstraintKey(constraints)
   const descendants: MeasuredInstanceTree['entries'][number][] = []
+  const slotChildren: Record<string, readonly string[]> = {}
   let embeddedFragmentPlan: MaterialFragmentPlan | undefined
   let callbackRan = false
 
@@ -439,6 +441,7 @@ async function measureInstance(context: {
             }, measureSignal)
             for (const childTree of childTrees)
               descendants.push(...childTree.entries)
+            slotChildren[slotInstanceKey] = Object.freeze(childTrees.map(tree => tree.instance.instanceKey))
             return Object.freeze({
               instanceKey: slotInstanceKey,
               contentBounds: unionPlanBounds(childTrees.map(tree => tree.plan)),
@@ -473,6 +476,7 @@ async function measureInstance(context: {
     resolvedModel,
     layoutPlan: committedPlan,
     ...(embeddedFragmentPlan === undefined ? {} : { embeddedFragmentPlan }),
+    slotChildren: freezeSlotChildren(slotChildren),
   })
   const ownEntry = Object.freeze({ instanceKey, plan: committedPlan, instance })
   const tree = Object.freeze({
@@ -652,7 +656,19 @@ function freezeRuntimeInstances(
     ...(instance.embeddedFragmentPlan === undefined
       ? {}
       : { embeddedFragmentPlan: freezeMaterialFragmentPlan(instance.embeddedFragmentPlan) }),
+    slotChildren: freezeSlotChildren(instance.slotChildren),
   })])))
+}
+
+function freezeSlotChildren(
+  source: Readonly<Record<string, readonly string[]>>,
+): Readonly<Record<string, readonly string[]>> {
+  return Object.freeze(Object.fromEntries(
+    Object.entries(source).map(([slotInstanceKey, childInstanceKeys]) => [
+      slotInstanceKey,
+      Object.freeze([...childInstanceKeys]),
+    ]),
+  ))
 }
 
 function freezeDiagnosticCopies(diagnostics: readonly unknown[]): readonly unknown[] {

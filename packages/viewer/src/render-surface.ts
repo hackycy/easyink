@@ -1,13 +1,20 @@
-import type { BrowserDomCapabilities, ViewerTreeMount, ViewerTreePolicy } from '@easyink/browser-dom'
-import type { LayoutConstraints, MaterialFragmentPlan, MaterialLayoutPlan, MaterialNodeLoadState, MaterialRenderBudgetToken, MaterialRenderNodeKind, PageLayerRenderPlan, PageLayerRenderPlanBuckets, PagePlanEntry, TextWatermarkPageLayerPlan } from '@easyink/core'
+import type { BrowserDomCapabilities, RenderViewerTreeOptions, ViewerTreeMount, ViewerTreePolicy } from '@easyink/browser-dom'
+import type { LayoutConstraints, MaterialFragmentPlan, MaterialLayoutPlan, MaterialNodeLoadState, MaterialRenderBudgetToken, MaterialRenderNodeKind, PageLayerRenderPlan, PageLayerRenderPlanBuckets, PagePlanEntry, TextWatermarkPageLayerPlan, ViewerRenderTree } from '@easyink/core'
 import type { MaterialNode, PageBackground, PageSchema } from '@easyink/schema'
 import type { UnitType } from '@easyink/shared'
+import type { CommittedPagePlan, RuntimeMaterialInstancePlan } from './layout-runtime'
 import type { ProfileMaterialRuntime } from './material-runtime'
 import type { ViewerDiagnosticEvent, ViewerRenderContext, ViewerRenderSize } from './types'
 import { createBrowserDomCapabilities, createBrowserDomFallbackCapabilities, createBrowserDomHostMount, renderViewerTree } from '@easyink/browser-dom'
 import { createLayoutConstraintKey, createNonFragmentingMaterialPlans, groupPageLayerPlansByPlacement, inspectMaterialNode, PAGE_CONTENT_LAYER_STACK_INDEX, resolvePageLayerPlans, resolvePageLayerStackIndex, VIEWER_TREE_ABSOLUTE_MAX_NODES, viewerElement, viewerFragment, viewerText } from '@easyink/core'
 import { UNIT_FACTOR } from '@easyink/shared'
 import { safeSummarizeThrown } from './safe-thrown'
+
+const deniedRenderCapabilities: ViewerRenderContext['capabilities'] = Object.freeze({
+  sanitizeMarkup() {
+    throw new Error('VIEWER_SANITIZED_MARKUP_NOT_DECLARED')
+  },
+})
 
 export interface RenderSurfaceOptions {
   container: HTMLElement
@@ -31,11 +38,496 @@ export interface PageDOM {
   dispose: (onError?: (error: unknown) => void) => void
 }
 
-const deniedRenderCapabilities: ViewerRenderContext['capabilities'] = Object.freeze({
-  sanitizeMarkup() {
-    throw new Error('VIEWER_SANITIZED_MARKUP_NOT_DECLARED')
-  },
-})
+export interface MountMaterialTreeOptions extends RenderViewerTreeOptions {
+  readonly capabilities?: BrowserDomCapabilities
+}
+
+export type RenderSurfaceDisposer = (() => void) | Readonly<{ dispose: () => void }>
+export type RenderSurfaceBuildResult = void | RenderSurfaceDisposer | readonly RenderSurfaceDisposer[]
+
+export interface RenderSurfaceTransaction {
+  readonly signal: AbortSignal
+  readonly register: (disposer: RenderSurfaceDisposer) => void
+  readonly checkpoint: () => void
+}
+
+export type RenderSurfaceBuild = (
+  root: HTMLElement,
+  transaction: RenderSurfaceTransaction,
+) => RenderSurfaceBuildResult | Promise<RenderSurfaceBuildResult>
+
+export function mountMaterialTree(
+  host: HTMLElement,
+  tree: ViewerRenderTree,
+  options: MountMaterialTreeOptions = {},
+): ViewerTreeMount {
+  const document = options.document ?? host.ownerDocument
+  const capabilities = options.capabilities ?? createBrowserDomCapabilities({
+    document,
+    policy: options.policy,
+    maxNodes: options.maxNodes,
+  })
+  try {
+    const mount = renderViewerTree(host, tree, { ...options, document, capabilities })
+    let disposed = false
+    return Object.freeze({
+      nodes: mount.nodes,
+      dispose() {
+        if (disposed)
+          return
+        disposed = true
+        try {
+          mount.dispose()
+        }
+        finally {
+          capabilities.dispose()
+        }
+      },
+    })
+  }
+  catch (error) {
+    capabilities.dispose()
+    throw error
+  }
+}
+
+export class RenderSurface {
+  readonly host: HTMLElement
+  private generation = 0
+  private disposed = false
+  private currentRoot?: HTMLElement
+  private currentDisposers: RenderSurfaceDisposer[] = []
+
+  constructor(host: HTMLElement) {
+    this.host = host
+  }
+
+  async commitAtomically(build: RenderSurfaceBuild, signal: AbortSignal): Promise<HTMLElement> {
+    if (this.disposed)
+      throw new Error('RENDER_SURFACE_DISPOSED')
+    const generation = ++this.generation
+    const root = this.host.ownerDocument.createElement('div')
+    root.setAttribute('data-render-surface-root', '')
+    const disposers: RenderSurfaceDisposer[] = []
+    const registered = new Set<RenderSurfaceDisposer>()
+    let acceptingDisposers = true
+    const checkpoint = (): void => {
+      if (signal.aborted)
+        throw signal.reason ?? new DOMException('The operation was aborted.', 'AbortError')
+      if (this.disposed)
+        throw new Error('RENDER_SURFACE_DISPOSED')
+      if (generation !== this.generation)
+        throw new Error('RENDER_SURFACE_COMMIT_SUPERSEDED')
+    }
+    const register = (disposer: RenderSurfaceDisposer): void => {
+      if (!isRenderSurfaceDisposer(disposer))
+        throw new TypeError('RENDER_SURFACE_DISPOSER_INVALID')
+      if (!acceptingDisposers)
+        throw new Error('RENDER_SURFACE_COMMIT_CLOSED')
+      if (!registered.has(disposer)) {
+        registered.add(disposer)
+        disposers.push(disposer)
+      }
+    }
+    const transaction: RenderSurfaceTransaction = Object.freeze({ signal, register, checkpoint })
+
+    try {
+      checkpoint()
+      registerBuildResult(await build(root, transaction), register)
+      checkpoint()
+    }
+    catch (error) {
+      acceptingDisposers = false
+      root.remove()
+      const cleanupErrors = disposeRenderSurfaceDisposers(disposers)
+      if (cleanupErrors.length > 0)
+        throw new AggregateError([error, ...cleanupErrors], 'RENDER_SURFACE_COMMIT_FAILED')
+      throw error
+    }
+
+    acceptingDisposers = false
+    const oldRoot = this.currentRoot
+    const oldDisposers = this.currentDisposers
+    try {
+      this.host.replaceChildren(root)
+    }
+    catch (error) {
+      root.remove()
+      const cleanupErrors = disposeRenderSurfaceDisposers(disposers)
+      if (cleanupErrors.length > 0)
+        throw new AggregateError([error, ...cleanupErrors], 'RENDER_SURFACE_COMMIT_FAILED')
+      throw error
+    }
+    this.currentRoot = root
+    this.currentDisposers = disposers
+    oldRoot?.remove()
+    const cleanupErrors = disposeRenderSurfaceDisposers(oldDisposers)
+    if (cleanupErrors.length > 0)
+      throw new AggregateError(cleanupErrors, 'RENDER_SURFACE_DISPOSE_FAILED')
+    return root
+  }
+
+  dispose(): void {
+    if (this.disposed)
+      return
+    this.disposed = true
+    this.generation++
+    const root = this.currentRoot
+    const disposers = this.currentDisposers
+    this.currentRoot = undefined
+    this.currentDisposers = []
+    root?.remove()
+    const errors = disposeRenderSurfaceDisposers(disposers)
+    if (errors.length > 0)
+      throw new AggregateError(errors, 'RENDER_SURFACE_DISPOSE_FAILED')
+  }
+}
+
+export interface MountCommittedMaterialOptions {
+  readonly committedPlan: Pick<CommittedPagePlan, 'runtimeInstances'>
+  readonly fragmentPlan: MaterialFragmentPlan
+  readonly materials: ProfileMaterialRuntime
+  readonly pageIndex: number
+  readonly unit: string
+  readonly zoom: number
+  readonly viewerMaxNodes?: number
+  readonly browserDom?: {
+    readonly policy?: ViewerTreePolicy
+    readonly imperativeDom?: Iterable<string>
+    readonly maxNodes?: number
+  }
+  readonly diagnostics: ViewerDiagnosticEvent[]
+}
+
+interface CommittedMaterialRenderState {
+  readonly input: MountCommittedMaterialOptions
+  readonly maxNodes: number
+  readonly renderBudget: CommittedRenderBudgetController
+  readonly hostImperativeDom: ReadonlySet<string>
+}
+
+interface CommittedRenderBudgetController {
+  readonly token: MaterialRenderBudgetToken
+  readonly snapshot: () => number
+  readonly restore: (snapshot: number) => void
+}
+
+export function mountCommittedMaterial(
+  host: HTMLElement,
+  input: MountCommittedMaterialOptions,
+): ViewerTreeMount {
+  const maxNodes = resolveCommittedNodeLimit(input.viewerMaxNodes, input.browserDom?.maxNodes)
+  const state: CommittedMaterialRenderState = Object.freeze({
+    input,
+    maxNodes,
+    renderBudget: createCommittedRenderBudget(maxNodes),
+    hostImperativeDom: new Set(input.browserDom?.imperativeDom ?? []),
+  })
+  return mountCommittedInstance(
+    host,
+    input.fragmentPlan.sourceInstanceKey,
+    input.fragmentPlan,
+    state,
+    new Set(),
+  )
+}
+
+function mountCommittedInstance(
+  host: HTMLElement,
+  instanceKey: string,
+  fragmentPlan: MaterialFragmentPlan,
+  state: CommittedMaterialRenderState,
+  ancestors: ReadonlySet<string>,
+): ViewerTreeMount {
+  const { input } = state
+  const instance = input.committedPlan.runtimeInstances.get(instanceKey)
+  if (!instance || !hasCommittedIdentity(instanceKey, instance, fragmentPlan)) {
+    reportCommittedDiagnostic(state, {
+      code: 'VIEWER_MATERIAL_INSTANCE_IDENTITY_MISMATCH',
+      message: `Committed material instance "${instanceKey}" is unavailable`,
+      nodeId: instance?.nodeId ?? fragmentPlan.sourceNodeId,
+    })
+    return mountCommittedSentinel(host, state, '[material unavailable]')
+  }
+  if (instance.status === 'quarantined') {
+    reportCommittedDiagnostic(state, {
+      code: 'VIEWER_MATERIAL_INSTANCE_QUARANTINED',
+      message: `Committed material instance "${instanceKey}" is quarantined`,
+      nodeId: instance.nodeId,
+      detail: instance.diagnostic,
+    })
+    return mountCommittedSentinel(host, state, '[material quarantined]')
+  }
+  if (ancestors.has(instanceKey)) {
+    reportCommittedDiagnostic(state, {
+      code: 'VIEWER_SLOT_INSTANCE_CYCLE',
+      message: `Committed slot cycle reached instance "${instanceKey}"`,
+      nodeId: instance.nodeId,
+    })
+    return mountCommittedSentinel(host, state, '[slot unavailable]')
+  }
+
+  const facetCapabilities = input.materials.getCapabilities(instance.node.type)
+  const budgetSnapshot = state.renderBudget.snapshot()
+  const capabilities = createNodeCapabilities(
+    host.ownerDocument,
+    facetCapabilities,
+    state.hostImperativeDom,
+    input.browserDom?.policy,
+    state.maxNodes,
+  )
+  const nextAncestors = new Set(ancestors)
+  nextAncestors.add(instanceKey)
+  const context: ViewerRenderContext = Object.freeze({
+    data: instance.scopeData,
+    resolvedModel: instance.resolvedModel,
+    instanceKey: instance.instanceKey,
+    layoutPlan: instance.layoutPlan,
+    fragmentPlan,
+    renderSlot: (slotInstanceKey: string) => renderCommittedSlot(
+      instance,
+      slotInstanceKey,
+      capabilities,
+      state,
+      nextAncestors,
+    ),
+    renderBudget: state.renderBudget.token,
+    pageIndex: input.pageIndex,
+    unit: input.unit,
+    zoom: input.zoom,
+    capabilities: facetCapabilities?.sanitizedMarkup ? capabilities : deniedRenderCapabilities,
+    reportDiagnostic: (diagnostic: Parameters<NonNullable<ViewerRenderContext['reportDiagnostic']>>[0]) => input.diagnostics.push({
+      category: 'datasource',
+      severity: diagnostic.severity,
+      code: diagnostic.code,
+      message: diagnostic.message,
+      nodeId: diagnostic.nodeId,
+      scope: 'datasource',
+      cause: diagnostic.cause,
+    }),
+  })
+
+  let tree: ViewerRenderTree
+  try {
+    tree = input.materials.render(instance.node as MaterialNode<unknown>, context, true).tree
+  }
+  catch (error) {
+    capabilities.dispose()
+    state.renderBudget.restore(budgetSnapshot)
+    reportCommittedFailure(state, 'VIEWER_MATERIAL_RENDER_ERROR', instance, error)
+    return mountCommittedSentinel(host, state, '[material unavailable]')
+  }
+
+  try {
+    return mountMaterialTree(host, tree, {
+      document: host.ownerDocument,
+      policy: input.browserDom?.policy,
+      capabilities,
+      maxNodes: state.maxNodes,
+    })
+  }
+  catch (error) {
+    state.renderBudget.restore(budgetSnapshot)
+    reportCommittedFailure(state, 'VIEWER_MATERIAL_MOUNT_ERROR', instance, error)
+    return mountCommittedSentinel(host, state, '[material unavailable]')
+  }
+}
+
+function renderCommittedSlot(
+  owner: RuntimeMaterialInstancePlan,
+  slotInstanceKey: string,
+  ownerCapabilities: BrowserDomCapabilities,
+  state: CommittedMaterialRenderState,
+  ancestors: ReadonlySet<string>,
+): ViewerRenderTree {
+  const declared = owner.layoutPlan.slotBoxes.some(slot => slot.slotInstanceKey === slotInstanceKey)
+  const mapped = Object.hasOwn(owner.slotChildren, slotInstanceKey)
+  if (!declared || !mapped) {
+    reportSlotMissing(state, owner, slotInstanceKey)
+    state.renderBudget.token.reserveNodes('fragment', 2)
+    return viewerFragment([viewerText('[slot unavailable]')])
+  }
+
+  const trees: ViewerRenderTree[] = []
+  for (const childInstanceKey of owner.slotChildren[slotInstanceKey]!) {
+    const child = state.input.committedPlan.runtimeInstances.get(childInstanceKey)
+    if (ancestors.has(childInstanceKey)) {
+      reportCommittedDiagnostic(state, {
+        code: 'VIEWER_SLOT_INSTANCE_CYCLE',
+        message: `Committed slot "${slotInstanceKey}" cycles to instance "${childInstanceKey}"`,
+        nodeId: owner.nodeId,
+        detail: { slotInstanceKey, childInstanceKey },
+      })
+      trees.push(viewerText('[slot unavailable]'))
+      continue
+    }
+    if (!child || !child.embeddedFragmentPlan || !hasCommittedIdentity(childInstanceKey, child, child.embeddedFragmentPlan)) {
+      reportSlotMissing(state, owner, slotInstanceKey, childInstanceKey)
+      trees.push(viewerText('[slot unavailable]'))
+      continue
+    }
+    trees.push(createBrowserDomHostMount(ownerCapabilities, childHost => mountCommittedInstance(
+      childHost,
+      childInstanceKey,
+      child.embeddedFragmentPlan!,
+      state,
+      ancestors,
+    )))
+  }
+  state.renderBudget.token.reserveNodes('fragment', trees.length + 1)
+  return viewerFragment(trees)
+}
+
+function mountCommittedSentinel(
+  host: HTMLElement,
+  state: CommittedMaterialRenderState,
+  message: string,
+): ViewerTreeMount {
+  const tree = viewerText(message)
+  state.renderBudget.token.reserveNodes('text', 1)
+  const capabilities = createBrowserDomFallbackCapabilities({
+    document: host.ownerDocument,
+    policy: state.input.browserDom?.policy,
+    maxNodes: state.maxNodes,
+  }, tree)
+  return mountMaterialTree(host, tree, {
+    document: host.ownerDocument,
+    capabilities,
+    maxNodes: state.maxNodes,
+  })
+}
+
+function hasCommittedIdentity(
+  instanceKey: string,
+  instance: RuntimeMaterialInstancePlan,
+  fragmentPlan: MaterialFragmentPlan,
+): boolean {
+  return instance.instanceKey === instanceKey
+    && instance.nodeId === instance.node.id
+    && instance.layoutPlan.instanceKey === instanceKey
+    && instance.layoutPlan.nodeId === instance.nodeId
+    && fragmentPlan.sourceInstanceKey === instanceKey
+    && fragmentPlan.sourceNodeId === instance.nodeId
+}
+
+function resolveCommittedNodeLimit(viewerLimit?: number, browserLimit?: number): number {
+  for (const limit of [viewerLimit, browserLimit]) {
+    if (limit !== undefined && (!Number.isSafeInteger(limit) || limit < 1))
+      throw new Error('VIEWER_COMMITTED_RENDER_BUDGET_INVALID')
+  }
+  return Math.min(
+    viewerLimit ?? VIEWER_TREE_ABSOLUTE_MAX_NODES,
+    browserLimit ?? VIEWER_TREE_ABSOLUTE_MAX_NODES,
+    VIEWER_TREE_ABSOLUTE_MAX_NODES,
+  )
+}
+
+function createCommittedRenderBudget(maxNodes: number): CommittedRenderBudgetController {
+  let nodesUsed = 0
+  const token: MaterialRenderBudgetToken = Object.freeze({
+    maxNodes,
+    get nodesUsed() {
+      return nodesUsed
+    },
+    reserveNodes(kind: MaterialRenderNodeKind, count: number): void {
+      if (!['element', 'text', 'fragment', 'markup', 'imperative'].includes(kind))
+        throw new Error('VIEWER_RENDER_NODE_KIND_INVALID')
+      if (!Number.isSafeInteger(count) || count < 0)
+        throw new Error('VIEWER_RENDER_BUDGET_RESERVATION_INVALID')
+      if (count > maxNodes - nodesUsed)
+        throw new Error('VIEWER_RENDER_BUDGET_EXCEEDED')
+      nodesUsed += count
+    },
+  })
+  return Object.freeze({
+    token,
+    snapshot: () => nodesUsed,
+    restore(snapshot: number): void {
+      if (!Number.isSafeInteger(snapshot) || snapshot < 0 || snapshot > nodesUsed)
+        throw new Error('VIEWER_RENDER_BUDGET_SNAPSHOT_INVALID')
+      nodesUsed = snapshot
+    },
+  })
+}
+
+function reportSlotMissing(
+  state: CommittedMaterialRenderState,
+  owner: RuntimeMaterialInstancePlan,
+  slotInstanceKey: string,
+  childInstanceKey?: string,
+): void {
+  reportCommittedDiagnostic(state, {
+    code: 'VIEWER_SLOT_INSTANCE_MISSING',
+    message: childInstanceKey
+      ? `Committed child "${childInstanceKey}" is unavailable for slot "${slotInstanceKey}"`
+      : `Committed slot "${slotInstanceKey}" is unavailable`,
+    nodeId: owner.nodeId,
+    detail: { slotInstanceKey, ...(childInstanceKey ? { childInstanceKey } : {}) },
+  })
+}
+
+function reportCommittedFailure(
+  state: CommittedMaterialRenderState,
+  code: string,
+  instance: RuntimeMaterialInstancePlan,
+  error: unknown,
+): void {
+  const thrown = safeSummarizeThrown(error)
+  reportCommittedDiagnostic(state, {
+    code,
+    message: `${code} for node "${instance.nodeId}": ${thrown.message}`,
+    nodeId: instance.nodeId,
+    cause: thrown.cause,
+  })
+}
+
+function reportCommittedDiagnostic(
+  state: CommittedMaterialRenderState,
+  diagnostic: Pick<ViewerDiagnosticEvent, 'code' | 'message'> & Partial<ViewerDiagnosticEvent>,
+): void {
+  state.input.diagnostics.push({
+    category: 'viewer',
+    severity: 'error',
+    scope: 'material',
+    ...diagnostic,
+  })
+}
+
+function registerBuildResult(
+  result: RenderSurfaceBuildResult,
+  register: (disposer: RenderSurfaceDisposer) => void,
+): void {
+  if (result === undefined)
+    return
+  if (Array.isArray(result)) {
+    for (const disposer of result)
+      register(disposer)
+    return
+  }
+  register(result as RenderSurfaceDisposer)
+}
+
+function isRenderSurfaceDisposer(value: unknown): value is RenderSurfaceDisposer {
+  return typeof value === 'function'
+    || (typeof value === 'object' && value !== null && typeof (value as { dispose?: unknown }).dispose === 'function')
+}
+
+function disposeRenderSurfaceDisposers(disposers: readonly RenderSurfaceDisposer[]): unknown[] {
+  const errors: unknown[] = []
+  for (let index = disposers.length - 1; index >= 0; index--) {
+    try {
+      const disposer = disposers[index]!
+      if (typeof disposer === 'function')
+        disposer()
+      else
+        disposer.dispose()
+    }
+    catch (error) {
+      errors.push(error)
+    }
+  }
+  return errors
+}
 
 /**
  * Render all pages into the container element.
