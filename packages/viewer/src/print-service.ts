@@ -85,6 +85,11 @@ ${pageSizeCSS}    margin: 0;
     height: auto !important;
     overflow: visible !important;
   }
+  .ei-viewer-page-slot {
+    width: auto !important;
+    height: auto !important;
+    margin: 0 !important;
+  }
   .ei-viewer-page {
     box-shadow: none !important;
     margin: 0 !important;
@@ -95,7 +100,7 @@ ${pageSizeCSS}    margin: 0;
     print-color-adjust: exact !important;
     ${offsetCSS}
   }
-  .ei-viewer-page:last-child {
+  .ei-viewer-page-slot:last-child .ei-viewer-page {
     break-after: auto;
   }
 }`

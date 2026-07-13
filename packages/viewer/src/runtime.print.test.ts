@@ -121,6 +121,29 @@ function createFixedSchema(): DocumentSchema {
   }
 }
 
+function createThreePageFixedSchema(): DocumentSchema {
+  return {
+    ...createFixedSchema(),
+    page: {
+      ...createFixedSchema().page,
+      pagination: { strategy: 'fixed-sheets', pageCount: 3 },
+    },
+    elements: [10, 70, 130].map((y, index): MaterialNode => ({
+      id: `page-line-${index}`,
+      type: 'line',
+      x: 5,
+      y,
+      width: 70,
+      height: 5,
+      modelVersion: 1,
+      model: { lineColor: '#000000', lineType: 'solid' },
+      slots: {},
+      bindings: {},
+      output: { visibility: 'include' },
+    })),
+  }
+}
+
 function createData(): Record<string, unknown> {
   return {
     items: Array.from({ length: 10 }, (_, index) => ({ name: `Item ${index + 1}`, qty: index + 1 })),
@@ -157,6 +180,7 @@ function mockWindowPrint(implementation: () => void = () => {}): ReturnType<type
 afterEach(() => {
   vi.restoreAllMocks()
   Reflect.deleteProperty(window, 'print')
+  Reflect.deleteProperty(window, 'IntersectionObserver')
   document.body.innerHTML = ''
 })
 
@@ -253,6 +277,8 @@ describe('viewer runtime print policy', () => {
     expect(printStyles).not.toContain('size: landscape;')
     expect(printStyles).toContain('break-after: page;')
     expect(printStyles).toContain('break-inside: avoid;')
+    expect(printStyles).toContain('.ei-viewer-page-slot:last-child .ei-viewer-page')
+    expect(printStyles).toContain('width: auto !important;\n    height: auto !important;\n    margin: 0 !important;')
   })
 
   it('keeps configured orientation in fixed-size print policy without changing sheet sizing', () => {
@@ -287,6 +313,51 @@ describe('viewer runtime print policy', () => {
 })
 
 describe('viewer runtime print behavior', () => {
+  it('materializes every virtualized page before browser print and restores interactive retention', async () => {
+    const observer = installControlledIntersectionObserver()
+    const container = document.createElement('div')
+    const viewer = createViewer({ container })
+    await viewer.open({ schema: createThreePageFixedSchema() })
+    const wrappers = [...container.children] as HTMLElement[]
+    expect(wrappers).toHaveLength(3)
+
+    observer.emit([{ target: wrappers[0]!, isIntersecting: true } as unknown as IntersectionObserverEntry])
+    expect(container.querySelectorAll('.ei-viewer-page')).toHaveLength(2)
+
+    const printSpy = mockWindowPrint(() => {
+      expect(container.querySelectorAll('.ei-viewer-page')).toHaveLength(3)
+      expect(container.querySelectorAll('.ei-viewer-element')).toHaveLength(3)
+    })
+    await viewer.print({ throwOnError: true })
+
+    expect(printSpy).toHaveBeenCalledTimes(1)
+    expect(container.querySelectorAll('.ei-viewer-page')).toHaveLength(2)
+    expect(observer.disconnect).not.toHaveBeenCalled()
+    await viewer.destroy()
+    expect(observer.disconnect).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps every page materialized through an asynchronous custom print driver', async () => {
+    const observer = installControlledIntersectionObserver()
+    const container = document.createElement('div')
+    const viewer = createViewer({ container })
+    viewer.registerPrintDriver({
+      id: 'capture-all-pages',
+      async print() {
+        expect(container.querySelectorAll('.ei-viewer-page')).toHaveLength(3)
+        await Promise.resolve()
+        expect(container.querySelectorAll('.ei-viewer-element')).toHaveLength(3)
+      },
+    })
+    await viewer.open({ schema: createThreePageFixedSchema() })
+    const wrappers = [...container.children] as HTMLElement[]
+    observer.emit([{ target: wrappers[2]!, isIntersecting: true } as unknown as IntersectionObserverEntry])
+
+    await viewer.print({ driverId: 'capture-all-pages', throwOnError: true })
+
+    expect(container.querySelectorAll('.ei-viewer-page')).toHaveLength(2)
+  })
+
   it('passes resolved print policy to print drivers', async () => {
     const container = document.createElement('div')
     const viewer = createViewer({ container })
@@ -464,6 +535,32 @@ describe('viewer runtime print behavior', () => {
 })
 
 describe('viewer runtime export behavior', () => {
+  it('keeps every page materialized through exporter preparation and capture', async () => {
+    const observer = installControlledIntersectionObserver()
+    const container = document.createElement('div')
+    const viewer = createViewer({ container })
+    viewer.registerExporter({
+      id: 'capture-all-pages',
+      format: 'pdf',
+      async prepare() {
+        expect(container.querySelectorAll('.ei-viewer-page')).toHaveLength(3)
+        await Promise.resolve()
+      },
+      async export() {
+        expect(container.querySelectorAll('.ei-viewer-element')).toHaveLength(3)
+        return new Blob(['all pages'])
+      },
+    })
+    await viewer.open({ schema: createThreePageFixedSchema() })
+    const wrappers = [...container.children] as HTMLElement[]
+    observer.emit([{ target: wrappers[0]!, isIntersecting: true } as unknown as IntersectionObserverEntry])
+    expect(container.querySelectorAll('.ei-viewer-page')).toHaveLength(2)
+
+    await viewer.exportDocument({ format: 'pdf', throwOnError: true })
+
+    expect(container.querySelectorAll('.ei-viewer-page')).toHaveLength(2)
+  })
+
   it('passes rendered pages, container, and diagnostics callback to exporters', async () => {
     const container = document.createElement('div')
     const viewer = createViewer({ container })
@@ -550,3 +647,29 @@ describe('viewer runtime export behavior', () => {
     expect(calls).toEqual(['new'])
   })
 })
+
+function installControlledIntersectionObserver() {
+  let callback: IntersectionObserverCallback | undefined
+  const disconnect = vi.fn()
+  class ControlledIntersectionObserver {
+    constructor(nextCallback: IntersectionObserverCallback) {
+      callback = nextCallback
+    }
+
+    observe() {}
+    unobserve() {}
+    disconnect() {
+      disconnect()
+    }
+  }
+  Object.defineProperty(window, 'IntersectionObserver', {
+    configurable: true,
+    value: ControlledIntersectionObserver,
+  })
+  return {
+    disconnect,
+    emit(entries: IntersectionObserverEntry[]) {
+      callback?.(entries, {} as IntersectionObserver)
+    },
+  }
+}

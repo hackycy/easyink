@@ -12,6 +12,8 @@ export { collectFontFamilies, loadAndInjectFonts } from './font-loader'
 export type { CommittedPagePlan, RuntimeMaterialInstancePlan } from './layout-runtime'
 export { ProfileMaterialRuntime } from './material-runtime'
 export type { ViewerFacetServices } from './material-runtime'
+export { PageDomVirtualizer, selectRetainedPages } from './page-dom-virtualizer'
+export type { PageDomVirtualizerOptions, PageIntersectionObserver, PageMaterializationMode, RetainedPageSelection, VirtualPageEntry } from './page-dom-virtualizer'
 export { PrintPolicyError, resolvePrintPolicy } from './print-policy'
 export { mountCommittedMaterial, mountMaterialTree, renderPages, RenderSurface } from './render-surface'
 export type {

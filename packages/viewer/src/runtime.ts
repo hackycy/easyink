@@ -21,6 +21,7 @@ import { applyBindingsToProps, projectBindings, walkProfileMaterialNodes } from 
 import { resolveConditionalSchema } from './conditional-schema'
 import { collectFontFamilies, loadAndInjectFonts } from './font-loader'
 import { ProfileMaterialRuntime } from './material-runtime'
+import { PageDomVirtualizer } from './page-dom-virtualizer'
 import { resolvePrintPolicy } from './print-policy'
 import { runPrintWithIsolation } from './print-service'
 import { renderPages } from './render-surface'
@@ -44,7 +45,7 @@ export class ViewerRuntime {
   private _renderedPageMetrics: ViewerPageMetrics[] = []
   private _destroyed = false
   private _emittingHookFailure = false
-  private _pageDisposers: Array<(onError?: (error: unknown) => void) => void> = []
+  private _pageVirtualizer?: PageDomVirtualizer
   private _operation = 0
 
   constructor(options: ViewerOptions) {
@@ -207,23 +208,38 @@ export class ViewerRuntime {
 
     if (this._host) {
       this.disposePageMounts(diagnostics)
-      const pageDOMs = renderPages(
-        plan.pages,
-        this._materials,
-        {
-          container: this._host.mount,
-          document: this._host.document,
-          zoom: this.resolveZoom(),
-          unit: runtimeSchema.unit,
-          data: this._data,
-          resolvedPropsMap,
-          pageSchema: runtimeSchema.page,
-          nodeStates: this._nodeStates,
-          browserDom: this._options.browserDom as Required<NonNullable<ViewerOptions['browserDom']>>,
-        },
-        diagnostics,
-      )
-      this._pageDisposers = pageDOMs.map(page => page.dispose)
+      const pageVirtualizer = new PageDomVirtualizer()
+      let pageDOMs: ReturnType<typeof renderPages>
+      try {
+        pageDOMs = renderPages(
+          plan.pages,
+          this._materials,
+          {
+            container: this._host.mount,
+            document: this._host.document,
+            zoom: this.resolveZoom(),
+            unit: runtimeSchema.unit,
+            data: this._data,
+            resolvedPropsMap,
+            pageSchema: runtimeSchema.page,
+            nodeStates: this._nodeStates,
+            browserDom: this._options.browserDom as Required<NonNullable<ViewerOptions['browserDom']>>,
+          },
+          diagnostics,
+          pageVirtualizer,
+        )
+      }
+      catch (error) {
+        try {
+          pageVirtualizer.dispose()
+        }
+        catch (cleanupError) {
+          appendDisposeDiagnostics(diagnostics, cleanupError)
+        }
+        this._host.mount.replaceChildren()
+        throw error
+      }
+      this._pageVirtualizer = pageVirtualizer
 
       for (const dom of pageDOMs) {
         const page = pages.find(p => p.index === dom.pageIndex)
@@ -273,19 +289,21 @@ export class ViewerRuntime {
     if (!shouldUseBrowser) {
       const customDriver = driver!
       try {
-        options.onPhase?.({ phase: 'preparing', message: customDriver.id })
-        await customDriver.print({
-          schema: this._schema,
-          data: this._data,
-          entry: 'preview',
-          printPolicy,
-          renderedPages: this.renderedPages,
-          container: this._host?.mount,
-          onPhase: options.onPhase,
-          onProgress: options.onProgress,
-          onDiagnostic: event => this.emitTaskDiagnostic(event, options.onDiagnostic),
+        await this.withMaterializedPages('print', async () => {
+          options.onPhase?.({ phase: 'preparing', message: customDriver.id })
+          await customDriver.print({
+            schema: this._schema!,
+            data: this._data,
+            entry: 'preview',
+            printPolicy,
+            renderedPages: this.renderedPages,
+            container: this._host?.mount,
+            onPhase: options.onPhase,
+            onProgress: options.onProgress,
+            onDiagnostic: event => this.emitTaskDiagnostic(event, options.onDiagnostic),
+          })
+          options.onPhase?.({ phase: 'completed', message: customDriver.id })
         })
-        options.onPhase?.({ phase: 'completed', message: customDriver.id })
       }
       catch (err) {
         this.emitPrintError(err, options.onDiagnostic)
@@ -300,7 +318,7 @@ export class ViewerRuntime {
     if (fallbackWindow) {
       if (this._host) {
         try {
-          runPrintWithIsolation(this._host, printPolicy)
+          this.withMaterializedPages('print', () => runPrintWithIsolation(this._host!, printPolicy))
         }
         catch (err) {
           this.emitPrintError(err, options.onDiagnostic)
@@ -395,15 +413,17 @@ export class ViewerRuntime {
     }
 
     try {
-      if (exporter.prepare) {
-        options.onPhase?.({ phase: 'preparing', message: exporter.id })
-        await exporter.prepare(context)
-      }
+      return await this.withMaterializedPages('export', async () => {
+        if (exporter.prepare) {
+          options.onPhase?.({ phase: 'preparing', message: exporter.id })
+          await exporter.prepare(context)
+        }
 
-      options.onPhase?.({ phase: 'exporting', message: exporter.id })
-      const result = await exporter.export(context)
-      options.onPhase?.({ phase: 'completed', message: exporter.id })
-      return result
+        options.onPhase?.({ phase: 'exporting', message: exporter.id })
+        const result = await exporter.export(context)
+        options.onPhase?.({ phase: 'completed', message: exporter.id })
+        return result
+      })
     }
     catch (err) {
       this.emitExportError(exporter.id, format, err, options.onDiagnostic)
@@ -699,15 +719,21 @@ export class ViewerRuntime {
   }
 
   private disposePageMounts(diagnostics: ViewerDiagnosticEvent[]): void {
-    for (let index = this._pageDisposers.length - 1; index >= 0; index--) {
+    const pageVirtualizer = this._pageVirtualizer
+    this._pageVirtualizer = undefined
+    if (pageVirtualizer) {
       try {
-        this._pageDisposers[index]!(error => diagnostics.push(disposeDiagnostic(error)))
+        pageVirtualizer.dispose()
       }
       catch (error) {
-        diagnostics.push(disposeDiagnostic(error))
+        appendDisposeDiagnostics(diagnostics, error)
       }
     }
-    this._pageDisposers = []
+  }
+
+  private withMaterializedPages<T>(mode: 'print' | 'export', action: () => T): T {
+    const pageVirtualizer = this._pageVirtualizer
+    return pageVirtualizer ? pageVirtualizer.withMaterializedPages(mode, action) : action()
   }
 
   private ensureNotDestroyed(): void {
@@ -864,6 +890,15 @@ function disposeDiagnostic(error: unknown): ViewerDiagnosticEvent {
     scope: 'material',
     cause: thrown.cause,
   }
+}
+
+function appendDisposeDiagnostics(diagnostics: ViewerDiagnosticEvent[], error: unknown): void {
+  if (error instanceof AggregateError) {
+    for (const nested of error.errors)
+      appendDisposeDiagnostics(diagnostics, nested)
+    return
+  }
+  diagnostics.push(disposeDiagnostic(error))
 }
 
 function loadDiagnosticToViewer(diagnostic: MaterialLoadDiagnostic): ViewerDiagnosticEvent {

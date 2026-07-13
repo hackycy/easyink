@@ -6,7 +6,7 @@ import { createBrowserDomCapabilities } from '@easyink/browser-dom'
 import { defineMaterialManifest, freezeMaterialFragmentPlan, freezeMaterialLayoutPlan, viewerElement, viewerFragment, viewerImperativeDom, viewerSanitizedMarkup, viewerText } from '@easyink/core'
 import { createTestCompiledMaterialProfile, createTestMaterialManifest } from '@easyink/core/testing'
 import { describe, expect, it, vi } from 'vitest'
-import { mountCommittedMaterial, mountMaterialTree, renderPages, RenderSurface } from './index'
+import { mountCommittedMaterial, mountMaterialTree, PageDomVirtualizer, renderPages, RenderSurface } from './index'
 import { ProfileMaterialRuntime } from './material-runtime'
 
 describe('mountMaterialTree', () => {
@@ -630,6 +630,27 @@ describe('mountCommittedMaterial', () => {
 })
 
 describe('renderPages', () => {
+  it('rolls back previously registered page wrappers when a later page is invalid', async () => {
+    const container = document.createElement('div')
+    const materials = await createMaterials({ render: () => ({ tree: viewerText('page') }) })
+    const virtualizer = new PageDomVirtualizer({ createIntersectionObserver: null })
+    const options = {
+      container,
+      document,
+      zoom: 1,
+      unit: 'mm',
+      data: {},
+      resolvedPropsMap: new Map<string, Record<string, unknown>>(),
+      pageSchema: { mode: 'fixed' as const, width: 80, height: 60 },
+    }
+
+    expect(() => renderPages([
+      { index: 0, width: 80, height: 60, elements: [], yOffset: 0 },
+      { index: 1, width: Number.NaN, height: 60, elements: [], yOffset: 60 },
+    ], materials, options, [], virtualizer)).toThrow('PAGE_DOM_DIMENSION_INVALID')
+    expect(container.childNodes).toHaveLength(0)
+  })
+
   it('provides frozen canonical fallback layout facts to legacy material renderers', async () => {
     const container = document.createElement('div')
     const resolvedModel = { text: 'resolved' }

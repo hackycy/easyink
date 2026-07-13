@@ -8,6 +8,7 @@ import type { ViewerDiagnosticEvent, ViewerRenderContext, ViewerRenderSize } fro
 import { createBrowserDomCapabilities, createBrowserDomFallbackCapabilities, createBrowserDomHostMount, renderViewerTree } from '@easyink/browser-dom'
 import { createLayoutConstraintKey, createNonFragmentingMaterialPlans, groupPageLayerPlansByPlacement, inspectMaterialNode, PAGE_CONTENT_LAYER_STACK_INDEX, resolvePageLayerPlans, resolvePageLayerStackIndex, VIEWER_TREE_ABSOLUTE_MAX_NODES, viewerElement, viewerFragment, viewerText } from '@easyink/core'
 import { UNIT_FACTOR } from '@easyink/shared'
+import { PageDomVirtualizer } from './page-dom-virtualizer'
 import { safeSummarizeThrown } from './safe-thrown'
 
 const deniedRenderCapabilities: ViewerRenderContext['capabilities'] = Object.freeze({
@@ -598,34 +599,131 @@ export function renderPages(
   materials: ProfileMaterialRuntime,
   options: RenderSurfaceOptions,
   diagnostics: ViewerDiagnosticEvent[],
+  virtualizer?: PageDomVirtualizer,
 ): PageDOM[] {
-  const { container, document, zoom, unit, data, resolvedPropsMap, pageSchema, browserDom } = options
+  const { container, document, zoom, unit, browserDom } = options
   const nodeStates = options.nodeStates ?? new Map<string, MaterialNodeLoadState>()
   container.replaceChildren()
 
   const pageDOMs: PageDOM[] = []
   const pageLayerBucketsBySize = new Map<string, PageLayerRenderPlanBuckets>()
   const hostImperativeDom = new Set(browserDom?.imperativeDom ?? [])
+  const pageVirtualizer = virtualizer ?? new PageDomVirtualizer({ createIntersectionObserver: null })
+  const ownsVirtualizer = virtualizer === undefined
+  const pageIndices = new Set<number>()
+  let remainingPages = 0
 
-  for (const page of pages) {
-    const { wrapper, pageEl } = createPageElement(document, page, pageSchema, unit, zoom)
-    const contentLayer = createContentLayer(document)
-    const pageLayerBuckets = resolveCachedPageLayerBuckets(pageLayerBucketsBySize, pageSchema, page)
+  try {
+    for (const sourcePage of pages) {
+      const page = snapshotPageEntry(sourcePage)
+      if (pageIndices.has(page.index))
+        throw new Error('PAGE_DOM_PAGE_INDEX_DUPLICATE')
+      pageIndices.add(page.index)
+      const stableWrapper = createVirtualPageWrapper(document, page)
+      pageVirtualizer.register({
+        index: page.index,
+        widthPx: page.width * getPxFactorForLayout(unit) * zoom,
+        heightPx: page.height * getPxFactorForLayout(unit) * zoom,
+        wrapper: stableWrapper,
+        mount: () => mountLegacyPage({
+          page,
+          stableWrapper,
+          materials,
+          options,
+          diagnostics,
+          nodeStates,
+          hostImperativeDom,
+          pageLayerBucketsBySize,
+        }),
+      })
+      remainingPages++
+      let released = false
+      pageDOMs.push({
+        pageIndex: page.index,
+        element: stableWrapper,
+        dispose: (onError) => {
+          if (released)
+            return
+          released = true
+          const errors: unknown[] = []
+          try {
+            pageVirtualizer.unregister(page.index)
+          }
+          catch (error) {
+            errors.push(error)
+          }
+          try {
+            stableWrapper.remove()
+          }
+          catch (error) {
+            errors.push(error)
+          }
+          remainingPages--
+          if (ownsVirtualizer && remainingPages === 0) {
+            try {
+              pageVirtualizer.dispose()
+            }
+            catch (error) {
+              errors.push(error)
+            }
+          }
+          if (onError) {
+            for (const error of errors)
+              onError(error)
+          }
+          else if (errors.length > 0) {
+            throw new AggregateError(errors, 'PAGE_DOM_PAGE_DISPOSE_FAILED')
+          }
+        },
+      })
+      container.appendChild(stableWrapper)
+    }
+    if (ownsVirtualizer && remainingPages === 0)
+      pageVirtualizer.dispose()
+  }
+  catch (error) {
+    const cleanupErrors: unknown[] = []
+    for (let index = pageDOMs.length - 1; index >= 0; index--)
+      pageDOMs[index]!.dispose(cleanupError => cleanupErrors.push(cleanupError))
+    container.replaceChildren()
+    if (cleanupErrors.length > 0)
+      throw new AggregateError([error, ...cleanupErrors], 'PAGE_DOM_RENDER_FAILED')
+    throw error
+  }
 
+  return pageDOMs
+}
+
+interface LegacyPageMountInput {
+  readonly page: PagePlanEntry
+  readonly stableWrapper: HTMLElement
+  readonly materials: ProfileMaterialRuntime
+  readonly options: RenderSurfaceOptions
+  readonly diagnostics: ViewerDiagnosticEvent[]
+  readonly nodeStates: ReadonlyMap<string, MaterialNodeLoadState>
+  readonly hostImperativeDom: ReadonlySet<string>
+  readonly pageLayerBucketsBySize: Map<string, PageLayerRenderPlanBuckets>
+}
+
+function mountLegacyPage(input: LegacyPageMountInput): () => void {
+  const { page, stableWrapper, materials, options, diagnostics, nodeStates, hostImperativeDom, pageLayerBucketsBySize } = input
+  const { document, zoom, unit, data, resolvedPropsMap, pageSchema, browserDom } = options
+  const { wrapper, pageEl } = createPageElement(document, page, pageSchema, unit, zoom)
+  wrapper.style.margin = '0'
+  const contentLayer = createContentLayer(document)
+  const pageLayerBuckets = resolveCachedPageLayerBuckets(pageLayerBucketsBySize, pageSchema, page)
+  const mounts: ViewerTreeMount[] = []
+  try {
     appendPageLayers(document, pageEl, pageLayerBuckets.underContent, page, unit, diagnostics)
     pageEl.appendChild(contentLayer)
-
-    // Sort elements by zIndex for proper layering
     const sorted = page.elements.map(node => ({
       node,
       fragment: page.fragments?.find(candidate => candidate.node === node || candidate.node.id === node.id),
     })).sort((a, b) => (a.node.zIndex ?? 0) - (b.node.zIndex ?? 0))
 
-    const mounts: ViewerTreeMount[] = []
     for (const { node, fragment } of sorted) {
       if (node.editorState?.hidden)
         continue
-
       const resolved = resolvedPropsMap.get(node.id) ?? node.model as Record<string, unknown>
       const nodeForRender: MaterialNode<unknown> = { ...node, model: resolved }
       let capabilities: BrowserDomCapabilities | undefined
@@ -702,16 +800,51 @@ export function renderPages(
 
     appendPageLayers(document, pageEl, pageLayerBuckets.overContent, page, unit, diagnostics)
     appendPageLayers(document, pageEl, pageLayerBuckets.top, page, unit, diagnostics)
-
-    container.appendChild(wrapper)
-    pageDOMs.push({
-      pageIndex: page.index,
-      element: pageEl,
-      dispose: onError => disposeMounts(mounts, onError),
-    })
+    stableWrapper.appendChild(wrapper)
+  }
+  catch (error) {
+    disposeMounts(mounts, () => {})
+    wrapper.remove()
+    throw error
   }
 
-  return pageDOMs
+  let disposed = false
+  return () => {
+    if (disposed)
+      return
+    disposed = true
+    const errors: unknown[] = []
+    disposeMounts(mounts, error => errors.push(error))
+    try {
+      wrapper.remove()
+    }
+    catch (error) {
+      errors.push(error)
+    }
+    if (errors.length > 0)
+      throw new AggregateError(errors, 'PAGE_DOM_MOUNTS_DISPOSE_FAILED')
+  }
+}
+
+function createVirtualPageWrapper(
+  document: Document,
+  page: Pick<PagePlanEntry, 'index'>,
+): HTMLElement {
+  const wrapper = document.createElement('div')
+  wrapper.className = 'ei-viewer-page-slot'
+  wrapper.setAttribute('data-page-slot-index', String(page.index))
+  wrapper.style.margin = '0 auto 16px auto'
+  wrapper.style.boxSizing = 'border-box'
+  wrapper.style.position = 'relative'
+  return wrapper
+}
+
+function snapshotPageEntry(page: PagePlanEntry): PagePlanEntry {
+  return Object.freeze({
+    ...page,
+    elements: Object.freeze([...page.elements]),
+    ...(page.fragments ? { fragments: Object.freeze([...page.fragments]) } : {}),
+  }) as PagePlanEntry
 }
 
 function createSlotMountOutputs(
