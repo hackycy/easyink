@@ -173,7 +173,7 @@ export function createLayoutRuntime(deps: LayoutRuntimeDependencies): Readonly<{
         pages: freezeCommittedPages(pagination.pages),
         outputStates: freezeOutputStates(outputStates),
         runtimeInstances: freezeRuntimeInstances(measured.instances),
-        diagnostics: freezeDiagnosticCopies([...layout.diagnostics, ...pagination.diagnostics]),
+        diagnostics: freezeDiagnosticCopies(mergeStageDiagnostics(layout.diagnostics, pagination.diagnostics)),
       })
     },
   })
@@ -310,6 +310,9 @@ async function measureInstance(context: {
   const descendants: MeasuredInstanceTree['entries'][number][] = []
   let embeddedFragmentPlan: MaterialFragmentPlan | undefined
   let callbackRan = false
+
+  if (model.status === 'quarantined' && model.diagnostic?.code === 'MATERIAL_BINDING_SCOPE_INVALID')
+    deps.measureService.invalidateNode(node.id)
 
   const plan = await deps.measureService.measure({
     mode: 'authoritative',
@@ -656,6 +659,11 @@ function freezeDiagnosticCopies(diagnostics: readonly unknown[]): readonly unkno
   catch {
     throw new Error('LAYOUT_RUNTIME_DIAGNOSTIC_INVALID')
   }
+}
+
+function mergeStageDiagnostics(layout: readonly unknown[], pagination: readonly unknown[]): readonly unknown[] {
+  const layoutReferences = new Set(layout)
+  return [...layout, ...pagination.filter(diagnostic => !layoutReferences.has(diagnostic))]
 }
 
 function copyAndFreezeRecord(value: Readonly<Record<string, unknown>>): Readonly<Record<string, unknown>> {

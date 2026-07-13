@@ -18,8 +18,7 @@ export function runLayoutPipeline(
   const plans = options.plans ?? createDefaultPlans(schema)
   const reflowStrategy = schema.page.reflow?.strategy ?? inferReflowStrategy(schema)
   const elements = schema.elements.filter(node => plans.has(node.id))
-  const originalElements = (options.originalSchema?.elements ?? schema.elements)
-    .filter(node => plans.has(node.id))
+  const originalElements = options.originalSchema?.elements ?? schema.elements
   const reflowResult = reflowStrategy === 'flow-y'
     ? reflowPlans(originalElements, elements, plans)
     : { plans, diagnostics: [] }
@@ -59,7 +58,7 @@ function reflowPlans(
     const participates = readParticipates(entry.node)
     translations.set(entry.node.id, participates ? accumulatedDelta : 0)
     if (participates)
-      pendingBandDelta += (plan?.borderBox.height ?? entry.node.height) - entry.node.height
+      pendingBandDelta += (plan?.borderBox.height ?? 0) - entry.node.height
   }
 
   const plans = new Map<string, MaterialLayoutPlan>()

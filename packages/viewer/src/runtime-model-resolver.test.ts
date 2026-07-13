@@ -136,7 +136,7 @@ describe('resolveRuntimeModels', () => {
       reportDiagnostic: vi.fn(),
     })
 
-    expect(result).toMatchObject({ status: 'quarantined', diagnostic: { code: 'RUNTIME_MODEL_RESOLVE_FAILED', message: 'MATERIAL_BINDING_SCOPE_INVALID' } })
+    expect(result).toMatchObject({ status: 'quarantined', diagnostic: { code: 'MATERIAL_BINDING_SCOPE_INVALID', message: 'MATERIAL_BINDING_SCOPE_INVALID' } })
     expect(project).not.toHaveBeenCalled()
     expect(Object.isFrozen(scope)).toBe(false)
   })
@@ -307,6 +307,98 @@ describe('resolveRuntimeModels', () => {
     expect(resolve('a', 'b|c')).not.toBe(collision)
     expect(resolve('a|b', 'c', 2)).not.toBe(first)
     expect(resolve('a|b', 'c', 2, 2)).not.toBe(resolve('a|b', 'c', 2, 1))
+  })
+
+  it('allows a cache hit for a semantically equal new scope chain regardless of object key order', async () => {
+    const project = vi.fn(() => ({ projected: true }))
+    const profile = activeProfile(project)
+    const materials = new ProfileMaterialRuntime(profile)
+    await materials.prepare(['invoice'])
+    const cache = createRuntimeModelResolutionCache(profile)
+    const resolve = (scope: MaterialRuntimeScope) => resolveRuntimeModelInstance({
+      instanceKey: 'n1/row',
+      scope,
+      node: makeNode('n1'),
+      dataRevision: 1,
+      nodeRevision: 1,
+      cache,
+      materials,
+      reportDiagnostic: vi.fn(),
+    })
+
+    const first = resolve({
+      key: 'row',
+      data: { record: { alpha: 1, beta: 2 } },
+      parent: { key: 'document', data: { tenant: 'a', locale: 'en' } },
+    })
+    const second = resolve({
+      key: 'row',
+      data: { record: { beta: 2, alpha: 1 } },
+      parent: { key: 'document', data: { locale: 'en', tenant: 'a' } },
+    })
+
+    expect(second).toBe(first)
+    expect(project).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    ['current data', { key: 'row', data: { record: 'B' }, parent: { key: 'document', data: { tenant: 'a' } } }],
+    ['parent data', { key: 'row', data: { record: 'A' }, parent: { key: 'document', data: { tenant: 'b' } } }],
+  ] as const)('quarantines changed %s before cache lookup without calling an resolver-agnostic hook', async (_case, changedScope) => {
+    const project = vi.fn(() => ({ projected: true }))
+    const profile = activeProfile(project)
+    const materials = new ProfileMaterialRuntime(profile)
+    await materials.prepare(['invoice'])
+    const cache = createRuntimeModelResolutionCache(profile)
+    const report = vi.fn()
+    const common = {
+      instanceKey: 'n1/row',
+      node: makeNode('n1'),
+      dataRevision: 1,
+      nodeRevision: 1,
+      cache,
+      materials,
+      reportDiagnostic: report,
+    }
+    const first = resolveRuntimeModelInstance({
+      ...common,
+      scope: { key: 'row', data: { record: 'A' }, parent: { key: 'document', data: { tenant: 'a' } } },
+    })
+
+    const changed = resolveRuntimeModelInstance({ ...common, scope: changedScope })
+
+    expect(first.status).toBe('ready')
+    expect(changed).toMatchObject({
+      status: 'quarantined',
+      diagnostic: { code: 'MATERIAL_BINDING_SCOPE_INVALID' },
+    })
+    expect(project).toHaveBeenCalledTimes(1)
+    expect(report).toHaveBeenLastCalledWith(expect.objectContaining({ code: 'MATERIAL_BINDING_SCOPE_INVALID' }))
+  })
+
+  it('validates a cyclic scope before returning an otherwise matching cache hit', async () => {
+    const project = vi.fn(() => ({ projected: true }))
+    const profile = activeProfile(project)
+    const materials = new ProfileMaterialRuntime(profile)
+    await materials.prepare(['invoice'])
+    const cache = createRuntimeModelResolutionCache(profile)
+    const common = {
+      instanceKey: 'n1/row',
+      node: makeNode('n1'),
+      dataRevision: 1,
+      nodeRevision: 1,
+      cache,
+      materials,
+      reportDiagnostic: vi.fn(),
+    }
+    resolveRuntimeModelInstance({ ...common, scope: { key: 'row', data: {} } })
+    const cyclic: MaterialRuntimeScope = { key: 'row', data: {} }
+    ;(cyclic as { parent?: MaterialRuntimeScope }).parent = cyclic
+
+    const result = resolveRuntimeModelInstance({ ...common, scope: cyclic })
+
+    expect(result).toMatchObject({ status: 'quarantined', diagnostic: { code: 'MATERIAL_BINDING_SCOPE_INVALID' } })
+    expect(project).toHaveBeenCalledTimes(1)
   })
 
   it('rejects invalid limits, revisions, profile/cache mismatches, and material/profile mismatches', async () => {

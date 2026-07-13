@@ -33,6 +33,7 @@ interface CacheState {
 }
 
 const cacheStates = new WeakMap<RuntimeModelResolutionCache, CacheState>()
+const resolvedModelScopes = new WeakMap<ResolvedRuntimeModel, MaterialRuntimeScope>()
 
 export function createRuntimeModelResolutionCache(
   profile: CompiledMaterialProfile,
@@ -62,15 +63,32 @@ export function resolveRuntimeModelInstance(input: {
   if (input.materials.profile !== input.cache.profile)
     throw new Error('RUNTIME_MODEL_MATERIAL_PROFILE_MISMATCH')
 
-  const key = JSON.stringify([
-    input.instanceKey,
-    input.node.id,
-    input.nodeRevision,
-    input.scope.key,
-    input.dataRevision,
-  ])
+  let scopeSnapshot: MaterialRuntimeScope
+  try {
+    scopeSnapshot = createRuntimeScopeSnapshot(input.scope)
+  }
+  catch (cause) {
+    if (typeof input.scope.key === 'string')
+      cacheState.entries.delete(runtimeModelCacheKey(input, input.scope.key))
+    return quarantineWithoutCache(input, frozenDiagnostic({
+      code: 'MATERIAL_BINDING_SCOPE_INVALID',
+      nodeId: input.node.id,
+      message: readErrorMessage(cause),
+    }))
+  }
+
+  const key = runtimeModelCacheKey(input, scopeSnapshot.key)
   const cached = cacheState.entries.get(key)
   if (cached) {
+    const cachedScope = resolvedModelScopes.get(cached)
+    if (!cachedScope || !runtimeScopesSemanticallyEqual(cachedScope, scopeSnapshot)) {
+      cacheState.entries.delete(key)
+      return quarantineWithoutCache(input, frozenDiagnostic({
+        code: 'MATERIAL_BINDING_SCOPE_INVALID',
+        nodeId: input.node.id,
+        message: 'Runtime scope data changed without a matching revision change.',
+      }))
+    }
     cacheState.entries.delete(key)
     cacheState.entries.set(key, cached)
     return cached
@@ -78,13 +96,13 @@ export function resolveRuntimeModelInstance(input: {
 
   const facetInstance = input.materials.get(input.node.type)
   if (input.admissionState?.status === 'quarantined') {
-    return quarantineAndCache(input, cacheState, key, diagnosticFromAdmission(input.node.id, input.admissionState))
+    return quarantineAndCache(input, cacheState, key, scopeSnapshot, diagnosticFromAdmission(input.node.id, input.admissionState))
   }
   if (facetInstance?.state !== 'active' || !facetInstance.value) {
     const diagnostic = facetInstance?.diagnostic
       ? frozenDiagnostic({ code: facetInstance.diagnostic.code, nodeId: input.node.id, message: facetInstance.diagnostic.message })
       : frozenDiagnostic({ code: 'VIEWER_FACET_UNAVAILABLE', nodeId: input.node.id, message: 'Viewer facet is unavailable.' })
-    return quarantineAndCache(input, cacheState, key, diagnostic)
+    return quarantineAndCache(input, cacheState, key, scopeSnapshot, diagnostic)
   }
 
   try {
@@ -92,7 +110,6 @@ export function resolveRuntimeModelInstance(input: {
     if (!manifest)
       throw new Error('MATERIAL_MANIFEST_REQUIRED')
     const nodeSnapshot = createRuntimeNodeSnapshot(input.node)
-    const scopeSnapshot = createRuntimeScopeSnapshot(input.scope)
     const resolveBinding = createMaterialBindingResolver({
       node: nodeSnapshot,
       bindingDefinition: manifest.common.binding,
@@ -116,7 +133,7 @@ export function resolveRuntimeModelInstance(input: {
       status: 'ready' as const,
       value,
     })
-    cacheRuntimeModel(input.cache, cacheState, key, resolved)
+    cacheRuntimeModel(input.cache, cacheState, key, resolved, scopeSnapshot)
     return resolved
   }
   catch (cause) {
@@ -125,7 +142,7 @@ export function resolveRuntimeModelInstance(input: {
       nodeId: input.node.id,
       message: readErrorMessage(cause),
     })
-    return quarantineAndCache(input, cacheState, key, diagnostic)
+    return quarantineAndCache(input, cacheState, key, scopeSnapshot, diagnostic)
   }
 }
 
@@ -201,21 +218,17 @@ function createRuntimeNodeSnapshot(node: MaterialNode): Readonly<MaterialNode> {
 function createRuntimeScopeSnapshot(scope: MaterialRuntimeScope): MaterialRuntimeScope {
   const chain: MaterialRuntimeScope[] = []
   const seen = new Set<MaterialRuntimeScope>()
-  const dataByKey = new Map<string, Readonly<Record<string, unknown>>>()
   let cursor: MaterialRuntimeScope | undefined = scope
   while (cursor) {
     if (chain.length >= 32 || seen.has(cursor) || typeof cursor.key !== 'string')
       throw new Error('MATERIAL_BINDING_SCOPE_INVALID')
-    const prior = dataByKey.get(cursor.key)
-    if (prior !== undefined && prior !== cursor.data)
-      throw new Error('MATERIAL_BINDING_SCOPE_INVALID')
     seen.add(cursor)
-    dataByKey.set(cursor.key, cursor.data)
     chain.push(cursor)
     cursor = cursor.parent
   }
 
   const dataSnapshots = new Map<Readonly<Record<string, unknown>>, Readonly<Record<string, unknown>>>()
+  const dataByKey = new Map<string, Readonly<Record<string, unknown>>>()
   let parent: MaterialRuntimeScope | undefined
   for (let index = chain.length - 1; index >= 0; index--) {
     const source = chain[index]!
@@ -229,6 +242,10 @@ function createRuntimeScopeSnapshot(scope: MaterialRuntimeScope): MaterialRuntim
       }
       dataSnapshots.set(source.data, data)
     }
+    const prior = dataByKey.get(source.key)
+    if (prior !== undefined && !jsonSemanticallyEqual(prior, data))
+      throw new Error('MATERIAL_BINDING_SCOPE_INVALID')
+    dataByKey.set(source.key, data)
     parent = Object.freeze({
       key: source.key,
       data,
@@ -242,10 +259,20 @@ function quarantineAndCache(
   input: Parameters<typeof resolveRuntimeModelInstance>[0],
   cacheState: CacheState,
   key: string,
+  scopeSnapshot: MaterialRuntimeScope,
+  diagnostic: Readonly<Record<string, unknown>>,
+): ResolvedRuntimeModel {
+  const quarantined = quarantineWithoutCache(input, diagnostic)
+  cacheRuntimeModel(input.cache, cacheState, key, quarantined, scopeSnapshot)
+  return quarantined
+}
+
+function quarantineWithoutCache(
+  input: Parameters<typeof resolveRuntimeModelInstance>[0],
   diagnostic: Readonly<Record<string, unknown>>,
 ): ResolvedRuntimeModel {
   input.reportDiagnostic(diagnostic)
-  const quarantined = Object.freeze({
+  return Object.freeze({
     instanceKey: input.instanceKey,
     nodeId: input.node.id,
     scopeKey: input.scope.key,
@@ -255,8 +282,6 @@ function quarantineAndCache(
     diagnostic,
     value: Object.freeze({}),
   })
-  cacheRuntimeModel(input.cache, cacheState, key, quarantined)
-  return quarantined
 }
 
 function cacheRuntimeModel(
@@ -264,13 +289,61 @@ function cacheRuntimeModel(
   state: CacheState,
   key: string,
   value: ResolvedRuntimeModel,
+  scopeSnapshot: MaterialRuntimeScope,
 ): void {
+  resolvedModelScopes.set(value, scopeSnapshot)
   state.entries.set(key, value)
   while (state.entries.size > cache.maxEntries) {
     const oldest = state.entries.keys().next().value
     if (oldest !== undefined)
       state.entries.delete(oldest)
   }
+}
+
+function runtimeModelCacheKey(
+  input: Parameters<typeof resolveRuntimeModelInstance>[0],
+  scopeKey: string,
+): string {
+  return JSON.stringify([
+    input.instanceKey,
+    input.node.id,
+    input.nodeRevision,
+    scopeKey,
+    input.dataRevision,
+  ])
+}
+
+function runtimeScopesSemanticallyEqual(left: MaterialRuntimeScope, right: MaterialRuntimeScope): boolean {
+  let leftCursor: MaterialRuntimeScope | undefined = left
+  let rightCursor: MaterialRuntimeScope | undefined = right
+  while (leftCursor && rightCursor) {
+    if (leftCursor.key !== rightCursor.key || !jsonSemanticallyEqual(leftCursor.data, rightCursor.data))
+      return false
+    leftCursor = leftCursor.parent
+    rightCursor = rightCursor.parent
+  }
+  return leftCursor === undefined && rightCursor === undefined
+}
+
+function jsonSemanticallyEqual(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right))
+    return true
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return Array.isArray(left)
+      && Array.isArray(right)
+      && left.length === right.length
+      && left.every((value, index) => jsonSemanticallyEqual(value, right[index]))
+  }
+  if (left === null || right === null || typeof left !== 'object' || typeof right !== 'object')
+    return false
+
+  const leftRecord = left as Readonly<Record<string, unknown>>
+  const rightRecord = right as Readonly<Record<string, unknown>>
+  const leftKeys = Object.keys(leftRecord)
+  const rightKeys = Object.keys(rightRecord)
+  return leftKeys.length === rightKeys.length
+    && leftKeys.every(key => Object.hasOwn(rightRecord, key)
+      && jsonSemanticallyEqual(leftRecord[key], rightRecord[key]))
 }
 
 function diagnosticFromAdmission(nodeId: string, state: MaterialNodeLoadState): Readonly<Record<string, unknown>> {

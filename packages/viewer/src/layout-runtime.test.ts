@@ -1,4 +1,4 @@
-import type { LayoutDocument, MaterialLayoutPlan, MaterialMeasureRequest, PaginationResult } from '@easyink/core'
+import type { LayoutDocument, MaterialLayoutPlan, MaterialMeasureRequest, MaterialRuntimeScope, MaterialViewerFacet, PaginationResult } from '@easyink/core'
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import type { EffectiveOutputState } from './effective-output-state'
 import type { LayoutRuntimeDependencies, MaterialMeasurementBudget, RuntimeMaterialInstancePlan } from './layout-runtime'
@@ -234,6 +234,21 @@ describe('createLayoutRuntime', () => {
       .rejects
       .toThrow('LAYOUT_RUNTIME_DIAGNOSTIC_INVALID')
   })
+
+  it('deduplicates merged stage diagnostics by identity while preserving distinct equal objects', async () => {
+    const shared = { code: 'SHARED', severity: 'warning' as const, message: 'shared', stage: 'pagination' as const }
+    const equalButDistinct = { ...shared }
+    const deps: LayoutRuntimeDependencies = {
+      ...pipelineDependencies(),
+      layoutDocument: () => ({ width: 80, height: 60, fragments: [], diagnostics: [shared] }),
+      paginateDocument: () => ({ mode: 'fixed', pages: [], diagnostics: [shared, equalButDistinct] }),
+    }
+
+    const committed = await createLayoutRuntime(deps).plan(runtimeInput, new AbortController().signal)
+
+    expect(committed.diagnostics).toHaveLength(2)
+    expect(committed.diagnostics).toEqual([shared, equalButDistinct])
+  })
 })
 
 describe('plan-backed core layout', () => {
@@ -300,6 +315,87 @@ describe('plan-backed core layout', () => {
     expect(measured.fragments.map(fragment => fragment.plan.borderBox.y)).toEqual([0, 20])
   })
 
+  it('subtracts a removed flow band while preserving measured header growth', () => {
+    const header = node({ id: 'header', y: 0, height: 10 })
+    const optional = node({ id: 'optional', y: 10, height: 10 })
+    const summary = node({ id: 'summary', y: 20, height: 8 })
+    const schema: DocumentSchema = {
+      ...document([header, optional, summary]),
+      page: {
+        mode: 'fixed',
+        width: 80,
+        height: 60,
+        layout: { strategy: 'stack-flow', flowAxis: 'y' },
+        reflow: { strategy: 'flow-y' },
+      },
+    }
+    const plans = new Map([
+      ['header', planForNode(header, 28)],
+      ['summary', planForNode(summary, 8)],
+    ])
+
+    const layout = runLayoutPipeline(schema, { plans })
+
+    expect(layout.fragments.map(fragment => fragment.plan.nodeId)).toEqual(['header', 'summary'])
+    expect(layout.fragments.find(fragment => fragment.plan.nodeId === 'summary')?.plan.borderBox.y).toBe(28)
+  })
+
+  it('accumulates multiple removed flow bands but never subtracts a removed fixed node', () => {
+    const header = node({ id: 'header', y: 0, height: 10 })
+    const removedA = node({ id: 'removed-a', y: 10, height: 5 })
+    const removedB = node({ id: 'removed-b', y: 15, height: 5 })
+    const fixed = node({
+      id: 'fixed',
+      y: 15,
+      height: 50,
+      output: { visibility: 'include', placement: { mode: 'fixed' } },
+    })
+    const summary = node({ id: 'summary', y: 20, height: 8 })
+    const schema: DocumentSchema = {
+      ...document([header, removedA, removedB, fixed, summary]),
+      page: {
+        mode: 'fixed',
+        width: 80,
+        height: 60,
+        layout: { strategy: 'stack-flow', flowAxis: 'y' },
+        reflow: { strategy: 'flow-y' },
+      },
+    }
+    const plans = new Map([
+      ['header', planForNode(header, 20)],
+      ['summary', planForNode(summary, 8)],
+    ])
+
+    const layout = runLayoutPipeline(schema, { plans })
+
+    expect(layout.fragments.find(fragment => fragment.plan.nodeId === 'summary')?.plan.borderBox.y).toBe(20)
+  })
+
+  it('keeps a reserved plan in flow delta accounting', () => {
+    const header = node({ id: 'header', y: 0, height: 10 })
+    const reserved = node({ id: 'reserved', y: 10, height: 10, output: { visibility: 'reserve' } })
+    const summary = node({ id: 'summary', y: 20, height: 8 })
+    const schema: DocumentSchema = {
+      ...document([header, reserved, summary]),
+      page: {
+        mode: 'fixed',
+        width: 80,
+        height: 60,
+        layout: { strategy: 'stack-flow', flowAxis: 'y' },
+        reflow: { strategy: 'flow-y' },
+      },
+    }
+    const plans = new Map([
+      ['header', planForNode(header, 20)],
+      ['reserved', planForNode(reserved, 15)],
+      ['summary', planForNode(summary, 8)],
+    ])
+
+    const layout = runLayoutPipeline(schema, { plans })
+
+    expect(layout.fragments.find(fragment => fragment.plan.nodeId === 'summary')?.plan.borderBox.y).toBe(35)
+  })
+
   it('uses plan geometry without mutating measured width or height into schema nodes', () => {
     const source = node({ width: 10, height: 7 })
     const schema = document([source])
@@ -352,6 +448,19 @@ describe('plan-backed core layout', () => {
   })
 })
 
+function planForNode(source: MaterialNode, height: number): MaterialLayoutPlan {
+  const borderBox = { x: source.x, y: source.y, width: source.width, height }
+  return createNonFragmentingMaterialPlans({
+    instanceKey: source.id,
+    nodeId: source.id,
+    nodeRevision: 1,
+    constraintKey: '80:60:mm:horizontal-tb',
+    pageIndex: 0,
+    borderBox,
+    fragmentBox: borderBox,
+  }).layoutPlan
+}
+
 const measurementBudget: MaterialMeasurementBudget = {
   maxRuntimeRows: 4,
   maxLayoutFacts: 8,
@@ -374,11 +483,14 @@ function readyModel(source: MaterialNode, overrides: Partial<ResolvedRuntimeMode
   }
 }
 
-function createViewerFacet(measure?: (request: MaterialMeasureRequest) => Promise<MaterialLayoutPlan>) {
+function createViewerFacet(
+  measure?: (request: MaterialMeasureRequest) => Promise<MaterialLayoutPlan>,
+  resolveRuntimeModel?: NonNullable<MaterialViewerFacet['layout']>['resolveRuntimeModel'],
+) {
   return () => ({
     extension: { render: () => ({ tree: viewerText('material') }) },
     capabilities: {},
-    ...(measure ? { layout: { measure } } : {}),
+    ...(measure || resolveRuntimeModel ? { layout: { ...(measure ? { measure } : {}), ...(resolveRuntimeModel ? { resolveRuntimeModel } : {}) } } : {}),
   })
 }
 
@@ -684,6 +796,71 @@ describe('material measurement integration', () => {
     expect(second.instances.get(nestedKey)?.resolvedModel).toEqual({ nested: { values: [1] } })
     expect(Object.isFrozen(second.instances.get(nestedKey)?.resolvedModel.nested as object)).toBe(true)
     expect(Object.isFrozen(child.model)).toBe(false)
+  })
+
+  it('does not reuse a child measurement plan after a same-key runtime scope conflict', async () => {
+    const child = node({ id: 'child', type: 'scope-child', height: 7 })
+    const owner = node({ id: 'owner', type: 'scope-owner', slots: { content: [child] } })
+    const resolveChildModel = vi.fn((_node: Readonly<MaterialNode>, scope: MaterialRuntimeScope) => ({
+      version: scope.data.version,
+    }))
+    const childMeasure = vi.fn(async (request: MaterialMeasureRequest): Promise<MaterialLayoutPlan> => ({
+      instanceKey: request.instanceKey,
+      nodeId: request.node.id,
+      nodeRevision: request.nodeRevision,
+      constraintKey: '10:60:mm:horizontal-tb',
+      borderBox: { x: 0, y: 0, width: 10, height: 99 },
+      contentBox: { x: 0, y: 0, width: 10, height: 99 },
+      slotBoxes: [],
+      breakOpportunities: [],
+      diagnostics: [],
+    }))
+    const ownerMeasure = vi.fn(async (request: MaterialMeasureRequest): Promise<MaterialLayoutPlan> => {
+      const version = ownerMeasure.mock.calls.length === 1 ? 'A' : 'B'
+      const slot = await request.measureSlot({
+        slot: 'content',
+        scope: { key: 'row', data: { version }, parent: request.scope },
+        constraints: request.constraints,
+      }, request.signal)
+      const height = slot.childPlans[0]!.borderBox.height
+      return {
+        instanceKey: request.instanceKey,
+        nodeId: request.node.id,
+        nodeRevision: request.nodeRevision,
+        constraintKey: '10:60:mm:horizontal-tb',
+        borderBox: { x: 0, y: 0, width: 10, height },
+        contentBox: { x: 0, y: 0, width: 10, height },
+        slotBoxes: [],
+        breakOpportunities: [],
+        diagnostics: [],
+      }
+    })
+    const harness = await measurementHarness({ manifests: [
+      createTestMaterialManifest({
+        type: 'scope-owner',
+        slots: [{ id: 'content', key: { kind: 'exact', value: 'content' }, coordinateSpace: 'owner', layoutParticipation: 'owner', reparent: 'allowed' }],
+        viewer: createViewerFacet(ownerMeasure),
+      }),
+      createTestMaterialManifest({
+        type: 'scope-child',
+        viewer: createViewerFacet(childMeasure, resolveChildModel),
+      }),
+    ] })
+    const input = measureInput([owner], new Map([['owner', readyModel(owner, { instanceKey: 'owner', nodeId: 'owner' })]]))
+
+    const first = await harness.measureNodes(input, new AbortController().signal)
+    harness.measureService.invalidateNode('owner')
+    const second = await harness.measureNodes(input, new AbortController().signal)
+    const secondChild = [...second.instances.values()].find(instance => instance.nodeId === 'child')
+
+    expect(first.plans.get('owner')?.borderBox.height).toBe(99)
+    expect(second.plans.get('owner')?.borderBox.height).toBe(7)
+    expect(secondChild).toMatchObject({
+      status: 'quarantined',
+      diagnostic: { code: 'MATERIAL_BINDING_SCOPE_INVALID' },
+    })
+    expect(resolveChildModel).toHaveBeenCalledTimes(1)
+    expect(childMeasure).toHaveBeenCalledTimes(1)
   })
 
   it('does not reuse stale subtree artifacts after invalidation or LRU eviction', async () => {
