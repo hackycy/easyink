@@ -9,7 +9,6 @@ import {
   groupPageLayerPlansByPlacement,
   PAGE_CONTENT_LAYER_STACK_INDEX,
   projectDocumentPointToEditorSurface,
-  readNodeRepeatScope,
   resolvePageLayerPlans,
   resolvePageLayerStackIndex,
 } from '@easyink/core'
@@ -444,8 +443,7 @@ function createPageSizeKey(width: number, height: number): string {
 }
 
 function isRepeatedEveryPage(node: ReturnType<typeof store.getElements>[number]): boolean {
-  return readNodeRepeatScope(node) === 'every-output-page'
-    || store.getMaterialManifest(node.type)?.common.layout.pageRepeat === 'every-output-page'
+  return store.materialProfile.getManifest(node.type)?.common.layout.pageRepeat === 'every-output-page'
 }
 
 function createPageRenderContext(pageIndex: number, totalPages: number): MaterialDesignerRenderContext {
