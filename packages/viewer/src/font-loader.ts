@@ -1,4 +1,4 @@
-import type { FontManager } from '@easyink/core'
+import type { FontManager, SystemFontSource } from '@easyink/core'
 import type { ResourcePreparationTerminal } from './resource-readiness'
 import type { ViewerDiagnosticEvent } from './types'
 import { safeSummarizeThrown } from './safe-thrown'
@@ -12,17 +12,24 @@ export function createFontPreparationAdapter(
   return async (value, signal) => {
     throwIfAborted(signal)
     try {
-      await fontManager.ensureFontLoaded({ family: value }, target)
+      const loaded = await fontManager.ensureFontLoaded({ family: value }, target)
       throwIfAborted(signal)
       const document = getFontOwnerDocument(target)
       const fontSet = document.fonts
       if (!fontSet || typeof fontSet.load !== 'function' || !fontSet.ready)
         throw new Error('VIEWER_FONT_LOADING_API_UNAVAILABLE')
-      const loaded = await fontSet.load(createFontLoadShorthand(value))
+      const systemFont = isSystemFontSource(loaded.source)
+      if (systemFont && typeof fontSet.check !== 'function')
+        throw new Error('VIEWER_FONT_LOADING_API_UNAVAILABLE')
+      const shorthand = createFontLoadShorthand(value)
+      const loadedFaces = await fontSet.load(shorthand)
       throwIfAborted(signal)
-      if (!Array.isArray(loaded) || loaded.length === 0)
+      if (!systemFont && (!Array.isArray(loadedFaces) || loadedFaces.length === 0))
         throw new Error('VIEWER_FONT_LOAD_EMPTY')
       await fontSet.ready
+      throwIfAborted(signal)
+      if (systemFont && !fontSet.check(shorthand))
+        throw new Error('VIEWER_SYSTEM_FONT_UNAVAILABLE')
       throwIfAborted(signal)
       return Object.freeze({ state: 'ready' })
     }
@@ -74,6 +81,13 @@ export async function loadAndInjectFonts(
   })
 
   return diagnostics
+}
+
+function isSystemFontSource(source: unknown): source is SystemFontSource {
+  if (source instanceof ArrayBuffer || typeof source !== 'object' || source === null)
+    return false
+  const descriptor = Object.getOwnPropertyDescriptor(source, 'type')
+  return !!descriptor && 'value' in descriptor && descriptor.value === 'system'
 }
 
 function getFontOwnerDocument(target: Document | ShadowRoot): Document {

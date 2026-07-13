@@ -266,9 +266,11 @@ describe('createFontPreparationAdapter', () => {
     ['rejects', vi.fn(async () => { throw new Error('font decode failed') }), 'font decode failed'],
     ['returns no faces', vi.fn(async () => []), 'VIEWER_FONT_LOAD_EMPTY'],
   ])('reports failed when fonts.load %s', async (_case, load, message) => {
+    const check = vi.fn(() => true)
     const restoreFonts = installDocumentFonts(document, {
       load,
       ready: Promise.resolve({} as FontFaceSet),
+      check,
     })
     const manager = new FontManager({
       listFonts: async () => [],
@@ -279,6 +281,44 @@ describe('createFontPreparationAdapter', () => {
       await expect(createFontPreparationAdapter(manager, document)('Brand', new AbortController().signal))
         .resolves
         .toEqual({ state: 'failed', message })
+      expect(check).not.toHaveBeenCalled()
+    }
+    finally {
+      restoreFonts()
+    }
+  })
+
+  it.each([
+    [true, { state: 'ready' }],
+    [false, { state: 'failed', message: 'VIEWER_SYSTEM_FONT_UNAVAILABLE' }],
+  ])('uses fonts.check for a system font with check result %s', async (available, expected) => {
+    const family = 'System" \\ Sans'
+    const shorthand = '16px "System\\" \\\\ Sans"'
+    const load = vi.fn(async () => [])
+    const check = vi.fn(() => available)
+    const restoreFonts = installDocumentFonts(document, {
+      load,
+      ready: Promise.resolve({} as FontFaceSet),
+      check,
+    })
+    const manager = new FontManager({
+      listFonts: async () => [{
+        family,
+        displayName: family,
+        weights: ['400'],
+        styles: ['normal'],
+        source: 'system',
+      }],
+      loadFont: async () => ({ type: 'system' }),
+    })
+
+    try {
+      await expect(createFontPreparationAdapter(manager, document)(family, new AbortController().signal))
+        .resolves
+        .toEqual(expected)
+      expect(load).toHaveBeenCalledWith(shorthand)
+      expect(check).toHaveBeenCalledWith(shorthand)
+      expect(load.mock.invocationCallOrder[0]).toBeLessThan(check.mock.invocationCallOrder[0]!)
     }
     finally {
       restoreFonts()
@@ -370,7 +410,7 @@ describe('createFontPreparationAdapter', () => {
 
 function installDocumentFonts(
   target: Document,
-  fonts: Pick<FontFaceSet, 'load' | 'ready'> | undefined,
+  fonts: Pick<FontFaceSet, 'load' | 'ready'> & Partial<Pick<FontFaceSet, 'check'>> | undefined,
 ): () => void {
   const previous = Object.getOwnPropertyDescriptor(target, 'fonts')
   Object.defineProperty(target, 'fonts', { configurable: true, value: fonts })
