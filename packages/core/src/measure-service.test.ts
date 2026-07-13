@@ -61,6 +61,25 @@ describe('measureService', () => {
     },
   )
 
+  it.each(
+    (['nodeRevision', 'dataRevision', 'resourceRevision'] as const).flatMap(field => [
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+      -1,
+      1.5,
+      Number.MAX_SAFE_INTEGER + 1,
+      Number.MIN_SAFE_INTEGER - 1,
+    ].map(value => [field, value] as const)),
+  )('rejects invalid %s %s before measuring', async (field, value) => {
+    const service = new MeasureService({ maxEntries: 2 })
+    const request = createRequest(createTestCompiledMaterialProfile(), { [field]: value })
+
+    await expect(service.measure(request)).rejects.toThrowError('MEASURE_REVISION_INVALID')
+    expect(request.measure).not.toHaveBeenCalled()
+    expect(service.size).toBe(0)
+  })
+
   it('measures an exact request once and returns the cached plan', async () => {
     const service = new MeasureService({ maxEntries: 2 })
     const request = createRequest(createTestCompiledMaterialProfile())
@@ -84,6 +103,20 @@ describe('measureService', () => {
 
     expect(first.measure).toHaveBeenCalledTimes(1)
     expect(second.measure).toHaveBeenCalledTimes(1)
+  })
+
+  it('misses when only resourceRevision changes', async () => {
+    const service = new MeasureService({ maxEntries: 2 })
+    const profile = createTestCompiledMaterialProfile()
+    const first = createRequest(profile)
+    const second = createRequest(profile, { resourceRevision: 2 })
+
+    await service.measure(first)
+    await service.measure(second)
+
+    expect(first.measure).toHaveBeenCalledTimes(1)
+    expect(second.measure).toHaveBeenCalledTimes(1)
+    expect(service.size).toBe(2)
   })
 
   it('uses exact profile object identity rather than profile content', async () => {
@@ -145,14 +178,31 @@ describe('measureService', () => {
     expect(service.size).toBe(0)
   })
 
+  it('reports identity mismatch before validator errors', async () => {
+    const service = new MeasureService({ maxEntries: 2 })
+    const request = createRequest(createTestCompiledMaterialProfile(), {
+      measure: vi.fn(async () => createPlan({
+        nodeId: 'other-node',
+        borderBox: { x: 0, y: 0, width: -1, height: 10 },
+      })),
+    })
+
+    await expect(service.measure(request)).rejects.toThrowError('MEASURE_RESULT_IDENTITY_MISMATCH')
+    expect(service.size).toBe(0)
+  })
+
   it('rejects validator errors without caching', async () => {
     const service = new MeasureService({ maxEntries: 2 })
     const request = createRequest(createTestCompiledMaterialProfile(), {
       measure: vi.fn(async () => createPlan({ borderBox: { x: 0, y: 0, width: -1, height: 10 } })),
     })
 
-    await expect(service.measure(request)).rejects.toThrowError('MEASURE_RESULT_INVALID')
-    await expect(service.measure(request)).rejects.toThrowError('MEASURE_RESULT_INVALID')
+    await expect(service.measure(request)).rejects.toThrowError(
+      'MEASURE_RESULT_INVALID:LAYOUT_PLAN_NON_FINITE_BOX',
+    )
+    await expect(service.measure(request)).rejects.toThrowError(
+      'MEASURE_RESULT_INVALID:LAYOUT_PLAN_NON_FINITE_BOX',
+    )
     expect(request.measure).toHaveBeenCalledTimes(2)
     expect(service.size).toBe(0)
   })
@@ -231,6 +281,7 @@ describe('measureService', () => {
   it('links in-flight source abort and rejects a later callback resolution without caching', async () => {
     const service = new MeasureService({ maxEntries: 2 })
     const source = new AbortController()
+    const abortReason = new Error('source aborted')
     const addListener = vi.spyOn(source.signal, 'addEventListener')
     const removeListener = vi.spyOn(source.signal, 'removeEventListener')
     let receivedSignal: AbortSignal | undefined
@@ -248,15 +299,46 @@ describe('measureService', () => {
 
     const pending = service.measure(request)
     await vi.waitFor(() => expect(request.measure).toHaveBeenCalledTimes(1))
-    source.abort()
+    source.abort(abortReason)
     resolveMeasure(createPlan())
 
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
     expect(receivedSignal).not.toBe(source.signal)
     expect(receivedSignal?.aborted).toBe(true)
+    expect(receivedSignal?.reason).toBe(abortReason)
     expect(addListener).toHaveBeenCalledTimes(1)
     expect(removeListener).toHaveBeenCalledWith('abort', addListener.mock.calls[0]?.[1])
     expect(service.size).toBe(0)
+  })
+
+  it('removes the source abort listener after successful measurement', async () => {
+    const service = new MeasureService({ maxEntries: 2 })
+    const source = new AbortController()
+    const addListener = vi.spyOn(source.signal, 'addEventListener')
+    const removeListener = vi.spyOn(source.signal, 'removeEventListener')
+    const request = createRequest(createTestCompiledMaterialProfile(), { signal: source.signal })
+
+    await service.measure(request)
+
+    expect(addListener).toHaveBeenCalledTimes(1)
+    expect(removeListener).toHaveBeenCalledWith('abort', addListener.mock.calls[0]?.[1])
+  })
+
+  it('removes the source abort listener after callback rejection', async () => {
+    const service = new MeasureService({ maxEntries: 2 })
+    const source = new AbortController()
+    const addListener = vi.spyOn(source.signal, 'addEventListener')
+    const removeListener = vi.spyOn(source.signal, 'removeEventListener')
+    const failure = new Error('measure failed')
+    const request = createRequest(createTestCompiledMaterialProfile(), {
+      signal: source.signal,
+      measure: vi.fn(async () => { throw failure }),
+    })
+
+    await expect(service.measure(request)).rejects.toBe(failure)
+
+    expect(addListener).toHaveBeenCalledTimes(1)
+    expect(removeListener).toHaveBeenCalledWith('abort', addListener.mock.calls[0]?.[1])
   })
 
   it('evicts the least recently used entry and promotes cache hits', async () => {
@@ -278,6 +360,22 @@ describe('measureService', () => {
     expect(second.measure).toHaveBeenCalledTimes(2)
     expect(third.measure).toHaveBeenCalledTimes(1)
     expect(service.size).toBe(2)
+  })
+
+  it('remains bounded when maxEntries is one', async () => {
+    const service = new MeasureService({ maxEntries: 1 })
+    const profile = createTestCompiledMaterialProfile()
+    const first = createRequest(profile, { nodeId: 'first' })
+    const second = createRequest(profile, { nodeId: 'second' })
+
+    await service.measure(first)
+    await service.measure(second)
+    expect(service.size).toBe(1)
+    await service.measure(first)
+
+    expect(first.measure).toHaveBeenCalledTimes(2)
+    expect(second.measure).toHaveBeenCalledTimes(1)
+    expect(service.size).toBe(1)
   })
 
   it('invalidates every cached revision and surface for one node only', async () => {
@@ -318,6 +416,44 @@ describe('measureService', () => {
     expect(untouched.measure).toHaveBeenCalledTimes(1)
   })
 
+  it('prevents all in-flight measurements for an invalidated node from writing back', async () => {
+    const service = new MeasureService({ maxEntries: 4 })
+    const profile = createTestCompiledMaterialProfile()
+    let resolveFirst!: (plan: MaterialLayoutPlan<unknown>) => void
+    let resolveSecond!: (plan: MaterialLayoutPlan<unknown>) => void
+    const firstResult = new Promise<MaterialLayoutPlan<unknown>>((resolve) => {
+      resolveFirst = resolve
+    })
+    const secondResult = new Promise<MaterialLayoutPlan<unknown>>((resolve) => {
+      resolveSecond = resolve
+    })
+    const first = createRequest(profile, {
+      nodeId: 'target',
+      measure: vi.fn(async () => firstResult),
+    })
+    const second = createRequest(profile, {
+      nodeId: 'target',
+      dataRevision: 2,
+      measure: vi.fn(async () => secondResult),
+    })
+    const firstPending = service.measure(first)
+    const secondPending = service.measure(second)
+    await vi.waitFor(() => {
+      expect(first.measure).toHaveBeenCalledTimes(1)
+      expect(second.measure).toHaveBeenCalledTimes(1)
+    })
+
+    service.invalidateNode('target')
+    resolveFirst(createPlan({ nodeId: 'target' }))
+    resolveSecond(createPlan({ nodeId: 'target' }))
+    await Promise.all([firstPending, secondPending])
+
+    expect(service.size).toBe(0)
+    await Promise.all([service.measure(first), service.measure(second)])
+    expect(first.measure).toHaveBeenCalledTimes(2)
+    expect(second.measure).toHaveBeenCalledTimes(2)
+  })
+
   it('clears all cached plans', async () => {
     const service = new MeasureService({ maxEntries: 2 })
     const profile = createTestCompiledMaterialProfile()
@@ -331,5 +467,26 @@ describe('measureService', () => {
     expect(service.size).toBe(0)
     await service.measure(first)
     expect(first.measure).toHaveBeenCalledTimes(2)
+  })
+
+  it('prevents an in-flight measurement from writing back after clear', async () => {
+    const service = new MeasureService({ maxEntries: 2 })
+    let resolveMeasure!: (plan: MaterialLayoutPlan<unknown>) => void
+    const result = new Promise<MaterialLayoutPlan<unknown>>((resolve) => {
+      resolveMeasure = resolve
+    })
+    const request = createRequest(createTestCompiledMaterialProfile(), {
+      measure: vi.fn(async () => result),
+    })
+    const pending = service.measure(request)
+    await vi.waitFor(() => expect(request.measure).toHaveBeenCalledTimes(1))
+
+    service.clear()
+    resolveMeasure(createPlan())
+    await pending
+
+    expect(service.size).toBe(0)
+    await service.measure(request)
+    expect(request.measure).toHaveBeenCalledTimes(2)
   })
 })
