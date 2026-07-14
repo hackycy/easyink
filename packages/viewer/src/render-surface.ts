@@ -297,7 +297,13 @@ interface CommittedRenderBudgetState {
   coreReservedNodes: number
   nextSequence: number
   readonly reservations: CommittedRenderBudgetReservation[]
-  readonly coreTrees: WeakSet<object>
+  readonly coreTreeCredits: WeakMap<object, number>
+  readonly coreTreeCreditBatches: CommittedCoreTreeCreditBatch[]
+}
+
+interface CommittedCoreTreeCreditBatch {
+  readonly sequence: number
+  readonly occurrences: readonly object[]
 }
 
 const committedRenderBudgetStates = new WeakMap<MaterialRenderBudgetToken, CommittedRenderBudgetState>()
@@ -485,8 +491,7 @@ function renderCommittedSlot(
     reportSlotMissing(state, owner, slotInstanceKey)
     state.renderBudget.reserveFor(owner, 'fragment', 1)
     state.renderBudget.reserveFor(owner, 'text', 1)
-    const sentinel = state.renderBudget.markCoreTree(viewerText('[slot unavailable]'))
-    return state.renderBudget.markCoreTree(viewerFragment([sentinel]))
+    return state.renderBudget.markCoreTree(viewerFragment([viewerText('[slot unavailable]')]))
   }
 
   state.renderBudget.reserveFor(owner, 'fragment', 1)
@@ -501,13 +506,13 @@ function renderCommittedSlot(
         detail: { slotInstanceKey, childInstanceKey },
       })
       state.renderBudget.reserveFor(owner, 'text', 1)
-      trees.push(state.renderBudget.markCoreTree(viewerText('[slot unavailable]')))
+      trees.push(viewerText('[slot unavailable]'))
       continue
     }
     if (!child || !child.embeddedFragmentPlan || !hasCommittedIdentity(childInstanceKey, child, child.embeddedFragmentPlan)) {
       reportSlotMissing(state, owner, slotInstanceKey, childInstanceKey)
       state.renderBudget.reserveFor(owner, 'text', 1)
-      trees.push(state.renderBudget.markCoreTree(viewerText('[slot unavailable]')))
+      trees.push(viewerText('[slot unavailable]'))
       continue
     }
     const fallbackReservation = state.renderBudget.reserveFallback(child)
@@ -515,7 +520,7 @@ function renderCommittedSlot(
       break
     if (isRenderBudgetQuarantined(state.input.committedPlan, childInstanceKey)) {
       fallbackReservation.consume()
-      trees.push(state.renderBudget.markCoreTree(viewerText('[material unavailable]')))
+      trees.push(viewerText('[material unavailable]'))
       continue
     }
     try {
@@ -525,17 +530,17 @@ function renderCommittedSlot(
       if (!isRenderBudgetExceeded(error))
         throw error
       fallbackReservation.consume()
-      trees.push(state.renderBudget.markCoreTree(viewerText('[material unavailable]')))
+      trees.push(viewerText('[material unavailable]'))
       continue
     }
-    trees.push(state.renderBudget.markCoreTree(createBrowserDomHostMount(ownerCapabilities, childHost => mountCommittedInstance(
+    trees.push(createBrowserDomHostMount(ownerCapabilities, childHost => mountCommittedInstance(
       childHost,
       childInstanceKey,
       child.embeddedFragmentPlan!,
       state,
       ancestors,
       fallbackReservation,
-    ))))
+    )))
   }
   return state.renderBudget.markCoreTree(viewerFragment(trees))
 }
@@ -615,7 +620,8 @@ function createCommittedRenderBudget(
     coreReservedNodes: 0,
     nextSequence: 0,
     reservations: [],
-    coreTrees: new WeakSet(),
+    coreTreeCredits: new WeakMap(),
+    coreTreeCreditBatches: [],
   }
   const reserve = (
     identity: CommittedRenderBudgetIdentity,
@@ -685,6 +691,7 @@ function createCommittedRenderBudget(
         const reservation = state.reservations.pop()!
         releaseCommittedRenderReservation(state, reservation)
       }
+      discardCommittedCoreTreeCreditsAfter(state, snapshot.sequence)
     },
     runWithIdentity<T>(identity: CommittedRenderBudgetIdentity, callback: () => T): T {
       const previous = currentIdentity
@@ -726,19 +733,39 @@ function createCommittedRenderBudget(
       })
     },
     markCoreTree<T extends ViewerRenderTree>(tree: T): T {
-      state.coreTrees.add(tree)
+      const occurrences: object[] = []
+      assertViewerRenderTree(tree, {
+        maxNodes: VIEWER_TREE_ABSOLUTE_MAX_NODES,
+        onVisitNode: (node) => {
+          if (typeof node === 'object' && node !== null)
+            occurrences.push(node)
+        },
+      })
+      for (const node of occurrences)
+        state.coreTreeCredits.set(node, (state.coreTreeCredits.get(node) ?? 0) + 1)
+      state.coreTreeCreditBatches.push(Object.freeze({
+        sequence: state.nextSequence,
+        occurrences: Object.freeze(occurrences),
+      }))
       return tree
     },
     auditTree(identity: CommittedRenderBudgetIdentity, tree: ViewerRenderTree, snapshot: CommittedRenderBudgetSnapshot): void {
       let observed = 0
+      const consumedCoreTreeCredits = new WeakMap<object, number>()
       const materialReported = state.materialReportedNodes - snapshot.materialReportedNodes
       const proofLimit = materialReported + maxNodes - state.totalNodesUsed
       try {
         assertViewerRenderTree(tree, {
           maxNodes: VIEWER_TREE_ABSOLUTE_MAX_NODES,
           onVisitNode: (node) => {
-            if (typeof node === 'object' && node !== null && state.coreTrees.has(node))
-              return
+            if (typeof node === 'object' && node !== null) {
+              const consumed = consumedCoreTreeCredits.get(node) ?? 0
+              const available = state.coreTreeCredits.get(node) ?? 0
+              if (consumed < available) {
+                consumedCoreTreeCredits.set(node, consumed + 1)
+                return
+              }
+            }
             observed++
             if (observed > proofLimit)
               throw new RenderBudgetAuditExceeded(observed)
@@ -757,11 +784,30 @@ function createCommittedRenderBudget(
         })
         throw new Error('VIEWER_RENDER_TREE_BUDGET_EXCEEDED')
       }
+      discardCommittedCoreTreeCreditsAfter(state, snapshot.sequence)
       const missing = observed - materialReported
       if (missing > 0)
         reserve(identity, 'fragment', missing, 'core')
     },
   })
+}
+
+function discardCommittedCoreTreeCreditsAfter(
+  state: CommittedRenderBudgetState,
+  sequence: number,
+): void {
+  while (state.coreTreeCreditBatches.length > 0 && state.coreTreeCreditBatches.at(-1)!.sequence > sequence) {
+    const batch = state.coreTreeCreditBatches.pop()!
+    for (const node of batch.occurrences) {
+      const credits = state.coreTreeCredits.get(node)
+      if (credits === undefined)
+        throw new Error('VIEWER_RENDER_CORE_TREE_CREDIT_MISSING')
+      if (credits === 1)
+        state.coreTreeCredits.delete(node)
+      else
+        state.coreTreeCredits.set(node, credits - 1)
+    }
+  }
 }
 
 function readCommittedRenderBudgetState(token: MaterialRenderBudgetToken): CommittedRenderBudgetState {

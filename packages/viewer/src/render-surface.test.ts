@@ -447,6 +447,195 @@ describe('mountCommittedMaterial', () => {
     expect(diagnostics).toEqual([])
   })
 
+  it('charges material-owned aliases beyond one core slot occurrence credit', async () => {
+    const owner = committedFacts('aliased-slot-owner-instance', committedNode('aliased-slot-owner', 'committed-aliased-slot-owner'))
+    let budget: ViewerRenderContext['renderBudget'] | undefined
+    const materials = await createCommittedMaterials([{ type: owner.instance.node.type, extension: {
+      render: (_node, context) => {
+        budget = context.renderBudget
+        const slot = context.renderSlot('slot:missing')
+        return { tree: viewerFragment([slot, slot]) }
+      },
+    } }])
+    const diagnostics: ViewerDiagnosticEvent[] = []
+    const host = document.createElement('div')
+
+    mountCommittedMaterial(host, {
+      committedPlan: committedPagePlan([owner.instance]),
+      fragmentPlan: owner.fragmentPlan,
+      materials,
+      pageIndex: 0,
+      unit: 'mm',
+      zoom: 1,
+      viewerMaxNodes: 5,
+      browserDom: { maxNodes: 5 },
+      diagnostics,
+    })
+
+    expect(host.textContent).toBe('[slot unavailable][slot unavailable]')
+    expect(budget?.nodesUsed).toBe(5)
+    expect(diagnostics.map(item => item.code)).toEqual(['VIEWER_SLOT_INSTANCE_MISSING'])
+  })
+
+  it('quarantines an over-budget core slot alias before browser mount', async () => {
+    const owner = committedFacts('aliased-slot-overflow-owner-instance', committedNode('aliased-slot-overflow-owner', 'committed-aliased-slot-overflow-owner'))
+    const render = vi.fn((_node: MaterialNode, context: ViewerRenderContext) => {
+      const slot = context.renderSlot('slot:missing')
+      return { tree: viewerFragment([slot, slot]) }
+    })
+    const materials = await createCommittedMaterials([{ type: owner.instance.node.type, extension: { render } }])
+    const committedPlan = committedPagePlan([owner.instance])
+    const diagnostics: ViewerDiagnosticEvent[] = []
+    const mount = (): HTMLElement => {
+      const host = document.createElement('div')
+      mountCommittedMaterial(host, {
+        committedPlan,
+        fragmentPlan: owner.fragmentPlan,
+        materials,
+        pageIndex: 0,
+        unit: 'mm',
+        zoom: 1,
+        viewerMaxNodes: 4,
+        browserDom: { maxNodes: 4 },
+        diagnostics,
+      })
+      return host
+    }
+
+    expect(mount().textContent).toBe('[material unavailable]')
+    expect(mount().textContent).toBe('[material unavailable]')
+    expect(render).toHaveBeenCalledTimes(1)
+    expect(diagnostics.map(item => item.code)).toEqual([
+      'VIEWER_SLOT_INSTANCE_MISSING',
+      'VIEWER_RENDER_TREE_BUDGET_EXCEEDED',
+    ])
+    expect(diagnostics.some(item => item.code === 'VIEWER_MATERIAL_RENDER_ERROR')).toBe(false)
+    expect(diagnostics.some(item => item.code === 'VIEWER_MATERIAL_MOUNT_ERROR')).toBe(false)
+  })
+
+  it('credits two separately produced core slot trees once each', async () => {
+    const owner = committedFacts('separate-slot-owner-instance', committedNode('separate-slot-owner', 'committed-separate-slot-owner'))
+    let budget: ViewerRenderContext['renderBudget'] | undefined
+    const materials = await createCommittedMaterials([{ type: owner.instance.node.type, extension: {
+      render: (_node, context) => {
+        budget = context.renderBudget
+        return { tree: viewerFragment([
+          context.renderSlot('slot:missing'),
+          context.renderSlot('slot:missing'),
+        ]) }
+      },
+    } }])
+    const diagnostics: ViewerDiagnosticEvent[] = []
+    const host = document.createElement('div')
+
+    mountCommittedMaterial(host, {
+      committedPlan: committedPagePlan([owner.instance]),
+      fragmentPlan: owner.fragmentPlan,
+      materials,
+      pageIndex: 0,
+      unit: 'mm',
+      zoom: 1,
+      viewerMaxNodes: 5,
+      browserDom: { maxNodes: 5 },
+      diagnostics,
+    })
+
+    expect(host.textContent).toBe('[slot unavailable][slot unavailable]')
+    expect(budget?.nodesUsed).toBe(5)
+    expect(diagnostics.map(item => item.code)).toEqual([
+      'VIEWER_SLOT_INSTANCE_MISSING',
+      'VIEWER_SLOT_INSTANCE_MISSING',
+    ])
+  })
+
+  it('does not carry unused core occurrence credits into a later child audit', async () => {
+    const child = committedFacts('unused-credit-child-instance', committedNode('unused-credit-child', 'committed-unused-credit-child'), { embedded: true })
+    const slotInstanceKey = 'slot:unused-credit'
+    const owner = committedFacts('unused-credit-owner-instance', committedNode('unused-credit-owner', 'committed-unused-credit-owner'), {
+      slotChildren: { [slotInstanceKey]: [child.instance.instanceKey] },
+      slotInstanceKeys: [slotInstanceKey],
+    })
+    let captured: ViewerRenderTree | undefined
+    let budget: ViewerRenderContext['renderBudget'] | undefined
+    const materials = await createCommittedMaterials([
+      { type: owner.instance.node.type, extension: { render: (_node, context) => {
+        captured = context.renderSlot('slot:missing')
+        return { tree: context.renderSlot(slotInstanceKey) }
+      } } },
+      { type: child.instance.node.type, extension: { render: (_node, context) => {
+        budget = context.renderBudget
+        return { tree: viewerFragment([captured!, captured!]) }
+      } } },
+    ])
+    const diagnostics: ViewerDiagnosticEvent[] = []
+    const host = document.createElement('div')
+
+    mountCommittedMaterial(host, {
+      committedPlan: committedPagePlan([owner.instance, child.instance]),
+      fragmentPlan: owner.fragmentPlan,
+      materials,
+      pageIndex: 0,
+      unit: 'mm',
+      zoom: 1,
+      viewerMaxNodes: 10,
+      browserDom: { maxNodes: 10 },
+      diagnostics,
+    })
+
+    expect(host.textContent).toBe('[slot unavailable][slot unavailable]')
+    expect(budget?.nodesUsed).toBe(9)
+    expect(diagnostics.map(item => item.code)).toEqual(['VIEWER_SLOT_INSTANCE_MISSING'])
+  })
+
+  it('discards rolled-back core occurrence credits before a later sibling audit', async () => {
+    const failed = committedFacts('rollback-credit-failed-instance', committedNode('rollback-credit-failed', 'committed-rollback-credit-failed'), { embedded: true })
+    const later = committedFacts('rollback-credit-later-instance', committedNode('rollback-credit-later', 'committed-rollback-credit-later'), { embedded: true })
+    const slotInstanceKey = 'slot:rollback-credit'
+    const owner = committedFacts('rollback-credit-owner-instance', committedNode('rollback-credit-owner', 'committed-rollback-credit-owner'), {
+      slotChildren: { [slotInstanceKey]: [failed.instance.instanceKey, later.instance.instanceKey] },
+      slotInstanceKeys: [slotInstanceKey],
+    })
+    let captured: ViewerRenderTree | undefined
+    let budget: ViewerRenderContext['renderBudget'] | undefined
+    const materials = await createCommittedMaterials([
+      { type: owner.instance.node.type, extension: { render: (_node, context) => ({ tree: context.renderSlot(slotInstanceKey) }) } },
+      { type: failed.instance.node.type, extension: { render: (_node, context) => {
+        captured = context.renderSlot('slot:missing')
+        try {
+          context.renderBudget.reserveNodes('element', 20)
+        }
+        catch {}
+        return { tree: viewerText('unsafe failed child') }
+      } } },
+      { type: later.instance.node.type, extension: { render: (_node, context) => {
+        budget = context.renderBudget
+        return { tree: viewerFragment([captured!, captured!]) }
+      } } },
+    ])
+    const diagnostics: ViewerDiagnosticEvent[] = []
+    const host = document.createElement('div')
+
+    mountCommittedMaterial(host, {
+      committedPlan: committedPagePlan([owner.instance, failed.instance, later.instance]),
+      fragmentPlan: owner.fragmentPlan,
+      materials,
+      pageIndex: 0,
+      unit: 'mm',
+      zoom: 1,
+      viewerMaxNodes: 10,
+      browserDom: { maxNodes: 10 },
+      diagnostics,
+    })
+
+    expect(host.textContent).toBe('[material unavailable][slot unavailable][slot unavailable]')
+    expect(budget?.nodesUsed).toBe(9)
+    expect(diagnostics.map(item => item.code)).toEqual([
+      'VIEWER_SLOT_INSTANCE_MISSING',
+      'VIEWER_RENDER_TREE_BUDGET_EXCEEDED',
+    ])
+    expect(diagnostics.some(item => item.code === 'VIEWER_MATERIAL_MOUNT_ERROR')).toBe(false)
+  })
+
   it('does not let core slot reservations hide an owner under-reported returned tree', async () => {
     const child = committedFacts('underreported-child-instance', committedNode('underreported-child', 'committed-underreported-child'), { embedded: true })
     const healthy = committedFacts('underreported-healthy-instance', committedNode('underreported-healthy', 'committed-underreported-healthy'))
