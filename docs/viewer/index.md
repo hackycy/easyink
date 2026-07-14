@@ -26,7 +26,7 @@ await viewer.open({
   },
 })
 
-viewer.destroy()
+await viewer.destroy()
 ```
 
 这段代码做了三件事：
@@ -220,10 +220,10 @@ viewer.registerExporter({
 Viewer 是有状态运行时。组件卸载或页面离开时，我们建议你显式销毁。
 
 ```ts
-viewer.destroy()
+await viewer.destroy()
 ```
 
-`destroy()` 会把实例标记为已销毁，清理当前 Schema、数据、物料注册表、打印驱动、导出器、字体缓存和 Host 挂载内容。
+`destroy()` 会把实例标记为已销毁，等待活动 reader lease 结束，再释放 render surface、layout runtime、compiled profile 的 facet runtime、资源就绪状态、打印驱动、导出器、字体与文本测量缓存，以及 Host 挂载内容。调用方应 `await` 这个 Promise，确保异步 facet disposer 已完成。
 
 关于 Viewer，目前知道这些就够用了。接下来可以继续看：
 

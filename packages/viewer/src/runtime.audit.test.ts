@@ -7,10 +7,11 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { relative, resolve } from 'node:path'
 import { DEFAULT_VIEWER_TREE_POLICY } from '@easyink/browser-dom'
 import { compileBuiltinMaterialProfile } from '@easyink/builtin'
-import { createLayoutConstraintKey, createModelPropertyAccessor, defineMaterialFacetFactory, defineMaterialManifest, freezeMaterialLayoutPlan, VIEWER_TREE_ABSOLUTE_MAX_NODES, viewerElement, viewerFragment, viewerImperativeDom, viewerSanitizedMarkup, viewerText } from '@easyink/core'
+import { compileMaterialProfile, createLayoutConstraintKey, createModelPropertyAccessor, defineMaterialFacetFactory, defineMaterialManifest, EASYINK_ENGINE_VERSION, freezeMaterialLayoutPlan, VIEWER_TREE_ABSOLUTE_MAX_NODES, viewerElement, viewerFragment, viewerImperativeDom, viewerSanitizedMarkup, viewerText } from '@easyink/core'
 import { createTestCompiledMaterialProfile, createTestMaterialManifest } from '@easyink/core/testing'
 import { convertUnit } from '@easyink/shared'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { auditTypeScriptSource } from './architecture-source-audit'
 import { createCustomViewerHost, createIframeViewerHost, createViewer as createProfileViewer } from './index'
 
 const builtinProfile = compileBuiltinMaterialProfile('all')
@@ -172,35 +173,37 @@ describe('viewer architecture source guards', () => {
   it('contains no legacy Viewer rendering or schema mutation path', () => {
     const coreSources = productionSources('packages/core/src')
     const viewerSources = productionSources('packages/viewer/src')
-    const architectureSources = [
-      '.github/architecture/README.md',
-      '.github/architecture/24-page-layout-orthogonal-system.md',
-      '.github/architecture/26-conditional-rendering.md',
-      'skills/easyink-material-dev/references/architecture.md',
-    ].map(sourceFile)
-    const allSources = [...coreSources, ...viewerSources, ...architectureSources]
+    const materialSources = productionSources('packages/materials')
 
-    expectForbiddenSources(allSources, [
-      'TrustedViewerHtml',
-      'trustedViewerHtml',
-      'normalizeDocumentSchema(',
-      'renderLegacy',
-      'renderPages(',
-      'from \'./conditional-schema\'',
-      'FragmentPaginator',
-      'fragmentPaginator',
-      'paginateFragment',
-      'resolveFragmentPaginator',
-      'conditional schema resolution',
-      'material measure()',
-      'temporary node',
-      'MaterialRendererRegistry',
-      'viewer.registerMaterial(',
-      '派生运行时 Schema',
-      'resolveConditionalSchema(',
-      '运行时 `hidden: true`',
-    ])
-    expectForbiddenSources(viewerSources.filter(source => source.path.endsWith('render-surface.ts')), ['innerHTML'])
+    expectTypeScriptSourcesClean([...coreSources, ...viewerSources, ...materialSources], {
+      forbiddenIdentifiers: [
+        'TrustedViewerHtml',
+        'trustedViewerHtml',
+        'normalizeDocumentSchema',
+        'renderLegacy',
+        'renderPages',
+        'FragmentPaginator',
+        'fragmentPaginator',
+        'paginateFragment',
+        'resolveFragmentPaginator',
+        'MaterialRendererRegistry',
+        'registerBuiltinViewerMaterials',
+        'resolveConditionalSchema',
+        'ViewerMeasureContext',
+        'ViewerMeasureResult',
+        'ViewerRenderSize',
+        'getRenderSize',
+        'measureTableData',
+        'measureFlowRow',
+      ],
+      forbiddenProperties: [],
+      forbiddenImportSources: ['./conditional-schema'],
+    })
+    expectTypeScriptSourcesClean(viewerSources, {
+      forbiddenIdentifiers: [],
+      forbiddenProperties: ['innerHTML'],
+      forbiddenImportSources: [],
+    })
   })
 
   it('keeps Viewer output state independent from Designer hidden state', () => {
@@ -208,39 +211,6 @@ describe('viewer architecture source guards', () => {
 
     expectForbiddenSources([outputState], ['editorState.hidden', 'editorState?.hidden'])
     expect(outputState.text, `${outputState.path}:/.hidden\\b/`).not.toMatch(/\.hidden\b/)
-  })
-
-  it('contains no synchronous Viewer measurement or render-size compatibility contract', () => {
-    const sources = [
-      'packages/core/src/material-viewer.ts',
-      'packages/viewer/src/material-runtime.ts',
-      'packages/viewer/src/types.ts',
-      'packages/materials/text/src/viewer.ts',
-      'packages/materials/text/src/manifest.ts',
-      'packages/materials/flow-row/src/viewer.ts',
-      'packages/materials/flow-row/src/manifest.ts',
-      'packages/materials/table/data/src/viewer.ts',
-      'packages/materials/table/data/src/manifest.ts',
-      'packages/materials/line/src/viewer.ts',
-      'docs/api/index.md',
-      'docs/advanced/custom-materials.md',
-      '.github/architecture/README.md',
-      '.github/architecture/24-page-layout-orthogonal-system.md',
-      '.github/architecture/26-conditional-rendering.md',
-      'skills/easyink-material-dev/references/architecture.md',
-    ].map(sourceFile)
-
-    expectForbiddenSources(sources, [
-      'ViewerMeasureContext',
-      'ViewerMeasureResult',
-      'ViewerRenderSize',
-      'getRenderSize',
-      'measureTableData',
-      'export function measureFlowRow(',
-      'measureText(node',
-      'viewerExtension.measure',
-      'MaterialViewerExtension.render / measure',
-    ])
   })
 
   it('documents immutable Viewer profile bootstrap without a mutable material registry', () => {
@@ -251,36 +221,11 @@ describe('viewer architecture source guards', () => {
       ...markdownSources('skills/easyink-material-dev'),
     ]
 
-    expectForbiddenSources(sources, [
-      'viewer.registerMaterial(',
-      'MaterialRendererRegistry',
-      'registerBuiltinViewerMaterials',
-      'resolveConditionalSchema(',
-      'beforeSchemaNormalize',
-      'renderPages(',
-      'ViewerMeasureContext',
-      'ViewerMeasureResult',
-      'ViewerRenderSize',
-      'getRenderSize(',
-      'createViewer({ container })',
-      'createViewer({ host })',
-      'createViewer({ container: containerElement })',
-      'createViewer({ iframe: iframeElement })',
-      'createViewer({ host: customHost })',
-      'createViewer().open(',
-      'Viewer `measure()`',
-      '`MaterialDefinition.binding`',
-      '`packages/builtin/src/designer.ts`',
-      '`packages/builtin/src/viewer.ts`',
-      '`packages/builtin/src/bindings.ts`',
-      'Viewer registration helpers',
-      'legacy aliases',
-      '`collectFontFamilies(schema)`',
-      '`loadAndInjectFonts()`',
-      '`runLayoutPipeline()` to create measured fragments',
-      'Return document-unit width and height.',
-      'Report diagnostics through `context.reportDiagnostic`.',
-    ])
+    expectLegacyDocumentationFree(sources)
+    expectDocumentationPatternsFree(
+      markdownSources('skills/easyink-material-dev'),
+      LEGACY_MATERIAL_SKILL_PATTERNS,
+    )
   })
 
   it('admits documents through the compiled profile and owns one Viewer material runtime', () => {
@@ -307,12 +252,15 @@ function productionSources(directoryPath: string): AuditedSource[] {
     const current = stack.pop()!
     for (const entry of readdirSync(current, { withFileTypes: true })) {
       const path = resolve(current, entry.name)
-      if (entry.isDirectory()) {
+      if (entry.isDirectory() && entry.name !== 'dist' && entry.name !== 'node_modules' && entry.name !== '__tests__') {
         stack.push(path)
         continue
       }
-      if (entry.isFile() && path.endsWith('.ts') && !path.endsWith('.test.ts'))
+      if (entry.isFile()
+        && /\.tsx?$/.test(path)
+        && !/\.(?:test|spec)(?:-helper)?\.tsx?$/.test(path)) {
         files.push({ path: relative(resolve(), path).replaceAll('\\', '/'), text: readFileSync(path, 'utf8') })
+      }
     }
   }
   return files
@@ -346,6 +294,64 @@ function expectForbiddenSources(sources: readonly AuditedSource[], symbols: read
   const violations = sources.flatMap(source => symbols
     .filter(symbol => source.text.includes(symbol))
     .map(symbol => `${source.path}:${symbol}`))
+  expect(violations, violations.join('\n')).toEqual([])
+}
+
+const LEGACY_DOCUMENTATION_PATTERNS: readonly Readonly<{ label: string, pattern: RegExp }>[] = [
+  { label: 'viewer.registerMaterial', pattern: /viewer\s*\.\s*registerMaterial\s*\(/i },
+  { label: 'MaterialRendererRegistry', pattern: /\bMaterialRendererRegistry\b/ },
+  { label: 'registerBuiltinViewerMaterials', pattern: /\bregisterBuiltinViewerMaterials\b/ },
+  { label: 'resolveConditionalSchema', pattern: /\bresolveConditionalSchema\s*\(/ },
+  { label: 'beforeSchemaNormalize', pattern: /\bbeforeSchemaNormalize\b/ },
+  { label: 'renderPages', pattern: /\brenderPages\s*\(/ },
+  { label: 'ViewerMeasureContext', pattern: /\bViewerMeasureContext\b/ },
+  { label: 'ViewerMeasureResult', pattern: /\bViewerMeasureResult\b/ },
+  { label: 'ViewerRenderSize', pattern: /\bViewerRenderSize\b/ },
+  { label: 'getRenderSize', pattern: /\bgetRenderSize\s*\(/ },
+  { label: 'profile-less createViewer container', pattern: /createViewer\s*\(\s*\{\s*container\s*(?:\}|\))/ },
+  { label: 'profile-less createViewer host', pattern: /createViewer\s*\(\s*\{\s*host\s*(?:\}|\))/ },
+  { label: 'profile-less createViewer iframe', pattern: /createViewer\s*\(\s*\{\s*iframe\s*(?:\}|\))/ },
+  { label: 'profile-less createViewer open', pattern: /createViewer\s*\(\s*\)\s*\.\s*open\s*\(/ },
+  { label: 'Viewer measure', pattern: /Viewer\s+`measure\(\)`/ },
+  { label: 'MaterialDefinition.binding', pattern: /`MaterialDefinition\.binding`/ },
+  { label: 'legacy builtin source split', pattern: /`packages\/builtin\/src\/(?:designer|viewer|bindings)\.ts`/ },
+  { label: 'Viewer registration helpers', pattern: /Viewer registration helpers/i },
+  { label: 'legacy aliases', pattern: /legacy aliases/i },
+  { label: 'collectFontFamilies schema', pattern: /`collectFontFamilies\(schema\)`/ },
+  { label: 'loadAndInjectFonts', pattern: /`loadAndInjectFonts\(\)`/ },
+  { label: 'runLayoutPipeline measured fragments', pattern: /`runLayoutPipeline\(\)` to create measured fragments/ },
+  { label: 'legacy measure width and height', pattern: /Return document-unit width and height\./ },
+  { label: 'paint-time diagnostic path', pattern: /Report diagnostics through `context\.reportDiagnostic`\./ },
+  { label: 'unawaited viewer destroy', pattern: /(?:^|\n)\s*viewer\.destroy\(\)/ },
+]
+
+const LEGACY_MATERIAL_SKILL_PATTERNS: readonly Readonly<{ label: string, pattern: RegExp }>[] = [
+  { label: 'node.props', pattern: /\bnode\.props\b/ },
+  { label: 'node.binding', pattern: /\bnode\.binding\b/ },
+  { label: 'independent Viewer registration', pattern: /\bViewer registration\b/i },
+  { label: 'unknown material sentinel', pattern: /\[Unknown: type\]/ },
+]
+
+function expectTypeScriptSourcesClean(
+  sources: readonly AuditedSource[],
+  rules: Parameters<typeof auditTypeScriptSource>[1],
+): void {
+  const violations = sources.flatMap(source => auditTypeScriptSource(source, rules))
+  const messages = violations.map(violation => `${violation.path}:${violation.line}:${violation.column} ${violation.kind} ${violation.symbol}`)
+  expect(violations, messages.join('\n')).toEqual([])
+}
+
+function expectLegacyDocumentationFree(sources: readonly AuditedSource[]): void {
+  expectDocumentationPatternsFree(sources, LEGACY_DOCUMENTATION_PATTERNS)
+}
+
+function expectDocumentationPatternsFree(
+  sources: readonly AuditedSource[],
+  patterns: readonly Readonly<{ label: string, pattern: RegExp }>[],
+): void {
+  const violations = sources.flatMap(source => patterns
+    .filter(({ pattern }) => pattern.test(source.text))
+    .map(({ label }) => `${source.path}:${label}`))
   expect(violations, violations.join('\n')).toEqual([])
 }
 
@@ -2205,6 +2211,82 @@ describe('viewer audit risk regressions', () => {
     expect(container.textContent).toContain('Paper')
     expect(container.textContent).toContain('Ink')
     expect(container.textContent).not.toContain('Wrong Nested')
+  })
+
+  it('renders provider-only table-data rows through committed paginated fragments', async () => {
+    const tableManifest = builtinProfile.getManifest('table-data')!
+    const profile = compileMaterialProfile({
+      id: 'provider-table-data-e2e',
+      engineVersion: EASYINK_ENGINE_VERSION,
+      packages: [{
+        packageId: '@easyink/provider-table-data-e2e',
+        kind: 'builtin',
+        required: true,
+        manifests: [tableManifest],
+      }],
+    })
+    const handles: Parameters<NonNullable<ViewerOptions['preparedCollections']>['open']>[0][] = []
+    const close = vi.fn(async () => {})
+    const readNext = vi.fn(async () => ({
+      records: [{ name: 'Provider Alpha' }, { name: 'Provider Beta' }, { name: 'Provider Gamma' }],
+      done: true,
+    }))
+    const preparedCollections: NonNullable<ViewerOptions['preparedCollections']> = {
+      open: vi.fn(async (handle) => {
+        handles.push(handle)
+        return {
+          declaredRowCount: 3,
+          keyMultiplicity: 'unknown' as const,
+          readNext,
+          close,
+        }
+      }),
+    }
+    const table = tableNode()
+    table.x = 0
+    table.y = 0
+    table.width = 80
+    const schema = fixedSchema([table])
+    schema.page.height = 8
+    schema.page.pageModel = { kind: 'paged-paper', paper: { width: 80, height: 8 } }
+    schema.page.layout = { strategy: 'absolute' }
+    schema.page.reflow = { strategy: 'measure-only' }
+    schema.page.pagination = { strategy: 'auto-sheets' }
+    const container = document.createElement('div')
+    const viewer = createViewer({ container, profile, preparedCollections })
+    let exportedPageTexts: string[] = []
+    let exportedFragmentCount = 0
+    viewer.registerExporter({
+      id: 'provider-table-data-e2e',
+      format: 'provider-table-data-e2e',
+      async export(context) {
+        const exportContainer = context.container
+        if (!exportContainer)
+          throw new Error('TEST_PROVIDER_TABLE_DATA_EXPORT_CONTAINER_REQUIRED')
+        const exportedPages = [...exportContainer.querySelectorAll('.ei-viewer-page')]
+        exportedPageTexts = exportedPages.map(page => page.textContent ?? '')
+        exportedFragmentCount = exportContainer.querySelectorAll('[data-element-id="items"]').length
+        return new Blob(['provider table data'])
+      },
+    })
+
+    await viewer.open({ schema, data: { paintOnly: 'provider rows are not inline' }, dataRevision: 7 })
+    await viewer.exportDocument({ format: 'provider-table-data-e2e', throwOnError: true })
+
+    expect(viewer.renderedPages).toHaveLength(3)
+    expect(exportedFragmentCount).toBe(3)
+    expect(exportedPageTexts).toEqual(['Provider Alpha', 'Provider Beta', 'Provider Gamma'])
+    expect(viewer.data).toEqual({ paintOnly: 'provider rows are not inline' })
+    expect(viewer.currentRevisions.dataRevision).toBe(7)
+    expect(preparedCollections.open).toHaveBeenCalledOnce()
+    expect(readNext).toHaveBeenCalledOnce()
+    expect(handles).toHaveLength(1)
+    expect(handles[0]).toMatchObject({ nodeId: 'items', port: 'records', fieldPath: 'items', dataRevision: 7 })
+    expect(Object.isFrozen(handles[0])).toBe(true)
+    expect(close).toHaveBeenCalledOnce()
+
+    await viewer.destroy()
+    expect(close).toHaveBeenCalledOnce()
   })
 
   it('returns one thumbnail entry per rendered page', async () => {

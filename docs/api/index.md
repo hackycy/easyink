@@ -43,7 +43,7 @@ description: EasyInk API 索引：快速定位公开能力的包入口，涵盖 
 
 字体相关类型导出：`FontDescriptor`, `FontProvider`, `FontSource`, `FontLoadRequest`, `FontLoadStatus`, `FontLoadState`, `FontLoadSuccess`, `FontLoadFailure`, `FontBatchLoadOptions`, `FontBatchLoadResult`, `FontPreloadResult`
 
-物料扩展类型导出：`MaterialDesignerExtension`, `MaterialExtensionFactory`, `LazyMaterialExtensionFactory`, `MaterialBindingDefinition`, `MaterialViewerExtension`, `MaterialViewerLayoutFacet`, `ViewerRenderContext`, `PropSchema`
+物料扩展类型导出：`MaterialDesignerExtension`, `MaterialExtensionFactory`, `LazyMaterialExtensionFactory`, `MaterialBindingDefinition`, `MaterialViewerExtension`, `MaterialViewerLayoutFacet`, `ViewerRenderContext`, `PropertyDescriptor`
 
 ## @easyink/viewer
 
