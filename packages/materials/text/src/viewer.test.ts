@@ -2,7 +2,7 @@ import type { MaterialTextMeasureInput, ViewerElementTree, ViewerTextTree } from
 import { createTestViewerRenderContext } from '@easyink/core/testing'
 import { describe, expect, it, vi } from 'vitest'
 import { createTextNode, migrateTextModelV0ToV1 } from './schema'
-import { getTextRenderSize, measureText, renderText, textViewerLayout } from './viewer'
+import { renderText, textViewerLayout } from './viewer'
 
 describe('renderText', () => {
   it('renders vertical writing mode with native vertical styles', () => {
@@ -77,7 +77,7 @@ describe('renderText', () => {
     expect(migrated.model).toMatchObject({ wrapMode: 'nowrap' })
   })
 
-  it('renders visible overflow as a visible wrapper footprint', () => {
+  it('renders visible overflow on the material tree', () => {
     const node = createTextNode({
       width: 12,
       height: 4,
@@ -91,53 +91,8 @@ describe('renderText', () => {
     })
 
     const tree = renderText(node).tree as ViewerElementTree
-    const renderSize = getTextRenderSize(node)
 
     expect(tree.style.overflow).toBe('visible')
-    expect(renderSize.height).toBeGreaterThan(node.height)
-  })
-
-  it('measures auto-height text from its content and constraints', () => {
-    const node = createTextNode({
-      width: 12,
-      height: 4,
-      model: {
-        content: 'abcdefghijabcdefghij',
-        heightMode: 'auto',
-        wrapMode: 'anywhere',
-        fontSize: 4,
-        lineHeight: 1,
-        minHeight: 6,
-        maxHeight: 10,
-      },
-    })
-
-    const measured = measureText(node)
-
-    expect(measured.width).toBe(12)
-    expect(measured.height).toBe(10)
-    expect(measured.overflow).toBe(true)
-  })
-
-  it('leaves auto-height constraints unset by default while measuring as unbounded', () => {
-    const node = createTextNode({
-      width: 12,
-      height: 4,
-      model: {
-        content: 'abcdefghijabcdefghij',
-        heightMode: 'auto',
-        wrapMode: 'anywhere',
-        fontSize: 4,
-        lineHeight: 1,
-      },
-    })
-
-    const measured = measureText(node)
-
-    expect(node.model.minHeight).toBeNull()
-    expect(node.model.maxHeight).toBeNull()
-    expect(measured.height).toBeGreaterThan(10)
-    expect(measured.overflow).toBe(false)
   })
 
   it('uses the authoritative text measurement service for auto-height layout', async () => {

@@ -609,37 +609,17 @@ viewer.registerMaterial('sales-chart', {
 - `formatEditor` 是物料注册能力声明，决定属性面板显示哪些格式 tab；Schema 里的 `BindingDisplayFormat` 只保存实际格式配置。
 - svg、chart 这类非普通文本值投影的物料应优先声明 `formatEditor: { tabs: ['custom'], defaultTab: 'custom' }`，只在运行时确实消费预设格式时才开放 `preset`。
 
-## 何时实现 measure {#measure}
+## 何时实现 viewerLayout {#measure}
 
-固定尺寸物料不需要 `measure()`。只有最终尺寸依赖运行时内容时才加：
+固定尺寸物料不需要自定义布局。只有最终尺寸依赖运行时内容时，才在 material manifest 的 `viewerLayout` 中实现异步 `MaterialViewerLayoutFacet.measure(request)`，并返回 `MaterialLayoutPlan`。文本测量使用 `request.measureText()`，嵌套物料使用 `request.measureSlot()`；分页断点通过 `breakOpportunities` 发布，由 core 统一选择。
 
-```ts
-viewer.registerMaterial(PRICE_TAG_TYPE, {
-  kind: 'ordinary',
-  primaryProp: 'amount',
-  formatEditor: { tabs: ['preset', 'custom'], defaultTab: 'preset' },
-}, {
-  render(_node, context) {
-    return {
-      tree: viewerElement('div', {}, [viewerText(String(context.resolvedModel.amount ?? ''))]),
-    }
-  },
-  measure(node) {
-    return {
-      width: node.width,
-      height: node.height,
-    }
-  },
-})
-```
-
-上面只是接口形状。对于固定宽高的价格签，删掉 `measure()` 更合适。
-
-适合实现 `measure()` 的场景通常是：
+适合实现 `viewerLayout` 的场景通常是：
 
 - 文本根据内容自动增高。
 - 表格根据数据行数增高。
 - 容器根据子项数量展开。
+
+`viewerExtension` 只负责从已提交的 runtime model 和 layout facts 生成 `ViewerRenderTree`，不承担同步测量或 render-size 推断。
 
 ## 何时使用每页重复 {#page-aware}
 

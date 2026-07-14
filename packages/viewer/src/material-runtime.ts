@@ -7,11 +7,8 @@ import type {
   MaterialViewerExtension,
   MaterialViewerFacet,
   MaterialViewerLayoutFacet,
-  ViewerMeasureContext,
-  ViewerMeasureResult,
   ViewerRenderContext,
   ViewerRenderOutput,
-  ViewerRenderSize,
 } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import { MaterialFacetHost, resolveMaterialConditionCapability, viewerElement, viewerText } from '@easyink/core'
@@ -62,15 +59,6 @@ export class ProfileMaterialRuntime {
     return admitted
       ? this.getExtension(node.type)?.render(renderNode as MaterialNode, context) ?? renderUnavailableMaterial(renderNode)
       : renderUnavailableMaterial(node)
-  }
-
-  measure(node: MaterialNode<unknown>, context: ViewerMeasureContext): ViewerMeasureResult | null {
-    return this.getExtension(node.type)?.measure?.(node as MaterialNode, context) ?? null
-  }
-
-  getRenderSize(node: MaterialNode<unknown>, context: ViewerRenderContext): ViewerRenderSize {
-    const size = this.getExtension(node.type)?.getRenderSize?.(node as MaterialNode, context)
-    return { width: size?.width ?? node.width, height: size?.height ?? node.height }
   }
 
   getFragmentAdapter(type: string): MaterialFragmentAdapter | undefined {

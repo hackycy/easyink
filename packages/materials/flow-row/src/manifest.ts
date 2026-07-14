@@ -5,7 +5,7 @@ import { flowRowLocaleMessages } from './locale'
 import { flowRowDesignerPropSchemas } from './prop-schemas'
 import { createFlowRowNode, FLOW_ROW_TYPE } from './schema'
 import { flowRowSchemaAdapter } from './schema-adapter'
-import { flowRowViewerLayout, measureFlowRow, renderFlowRow } from './viewer'
+import { flowRowViewerLayout, renderFlowRow } from './viewer'
 
 export const flowRowMaterialManifest = defineStandardMaterialManifest({
   type: FLOW_ROW_TYPE,
@@ -24,7 +24,7 @@ export const flowRowMaterialManifest = defineStandardMaterialManifest({
   schemaAdapter: flowRowSchemaAdapter,
   designerFactory: createFlowRowExtension,
   localeMessages: flowRowLocaleMessages,
-  viewerExtension: { render: renderFlowRow, measure: measureFlowRow },
+  viewerExtension: { render: renderFlowRow },
   viewerLayout: flowRowViewerLayout,
   aiDescriptor: flowRowAIMaterialDescriptor,
   generation: { enabled: true, modelSchema: 'infer-from-default', bindingShape: 'infer-from-binding', examples: 'default-model', requiredModelPaths: ['/columns'] },

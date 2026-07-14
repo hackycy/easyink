@@ -126,29 +126,8 @@ export interface ViewerRenderOutput {
   tree: ViewerRenderTree
 }
 
-export interface ViewerRenderSize {
-  width: number
-  height: number
-}
-
-export interface ViewerMeasureContext {
-  data: Record<string, unknown>
-  unit: string
-  reportDiagnostic?: (diagnostic: BindingFormatDiagnostic & { nodeId?: string }) => void
-}
-
-export interface ViewerMeasureResult {
-  width: number
-  height: number
-  overflow?: boolean
-  breakOpportunities?: MaterialLayoutPlan['breakOpportunities']
-  payload?: MaterialLayoutPlan['payload']
-}
-
 export interface MaterialViewerExtension {
   render: (node: MaterialNode, context: ViewerRenderContext) => ViewerRenderOutput
-  measure?: (node: MaterialNode, context: ViewerMeasureContext) => ViewerMeasureResult
-  getRenderSize?: (node: MaterialNode, context: ViewerRenderContext) => Partial<ViewerRenderSize>
   condition?: MaterialConditionCapability
 }
 

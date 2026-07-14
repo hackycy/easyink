@@ -353,12 +353,9 @@ export type {
   MaterialViewerExtension,
   MaterialViewerFacet,
   ViewerFacetCapabilities,
-  ViewerMeasureContext,
-  ViewerMeasureResult,
   ViewerRenderCapabilities,
   ViewerRenderContext,
   ViewerRenderOutput,
-  ViewerRenderSize,
 } from './material-viewer'
 export {
   applyMatrixToPoint,

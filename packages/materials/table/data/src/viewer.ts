@@ -1,4 +1,4 @@
-import type { MaterialFragmentAdapter, MaterialLayoutBudgetToken, MaterialMeasureRequest, MaterialViewerLayoutFacet, ViewerMeasureContext, ViewerMeasureResult, ViewerRenderContext, ViewerRenderOutput } from '@easyink/core'
+import type { MaterialFragmentAdapter, MaterialLayoutBudgetToken, MaterialMeasureRequest, MaterialViewerLayoutFacet, ViewerRenderContext, ViewerRenderOutput } from '@easyink/core'
 import type { TableCellSchema, TableRowSchema } from '@easyink/material-table-kernel'
 import type { BindingRef, MaterialNode } from '@easyink/schema'
 import type { JsonValue } from '@easyink/shared'
@@ -27,15 +27,6 @@ function filterVisibleRows(rows: RuntimeTableRow[], showHeader: boolean, showFoo
   })
 }
 
-/**
- * Cache resolved runtime layout per table-data schema instance, keyed by
- * `node.model` (object identity). Render needs the same per-row heights
- * the measure pass produced, but ViewerRuntime overwrites `node.height`
- * after measure — so re-deriving the baseline scale from the post-measure
- * `node.height` would multiply the heights again. The runtime preserves
- * `node.model` by reference across the spread, so this WeakMap survives
- * the measure→render hop with zero schema mutation.
- */
 interface ResolvedRuntimeLayout {
   rows: TableRowSchema[]
   rowSources: Array<{ canonicalRowId: string, sourceRowKey: string }>
@@ -43,8 +34,6 @@ interface ResolvedRuntimeLayout {
   rowHeights: number[]
   totalHeight: number
 }
-
-const runtimeLayoutCache = new WeakMap<object, ResolvedRuntimeLayout>()
 
 /**
  * Resolve the visible row sequence + per-row heights for a data table
@@ -112,25 +101,6 @@ function resolveRuntimeLayout(
  * designer's static layout.
  * Architecture ref: 07-layout-engine.md §7.3
  */
-export function measureTableData(node: MaterialNode<unknown>, context: ViewerMeasureContext): ViewerMeasureResult {
-  if (node.type !== 'table-data') {
-    return { width: node.width, height: node.height }
-  }
-  const data = context.data ?? {}
-  const tableNode = node
-  const layout = resolveRuntimeLayout(tableNode, data, node.height, context.reportDiagnostic)
-  // Cache so render() reuses the exact same per-row heights without
-  // re-deriving baseline scale from the (about to be overwritten) node.height.
-  runtimeLayoutCache.set(runtimeLayoutKey(tableNode), layout)
-  const facts = createTableLayoutFacts(layout)
-  return {
-    width: node.width,
-    height: layout.totalHeight,
-    breakOpportunities: facts.breakOpportunities,
-    payload: facts.payload,
-  }
-}
-
 export const tableDataFragmentAdapter: MaterialFragmentAdapter = {
   createFragment(request) {
     const index = readTableLayoutIndex(request.plan.payload)
@@ -221,13 +191,12 @@ export function renderTableData(node: MaterialNode<unknown>, context?: ViewerRen
   const data = context?.data ?? {}
   const tableNode = node
 
-  // Prefer the layout produced by measure() — `node.height` has been
-  // overwritten by ViewerRuntime, so we cannot recompute baseline scale
-  // from it here. Fall back to a direct compute when render is called
-  // without a prior measure (e.g. unit tests).
-  const cached = runtimeLayoutCache.get(runtimeLayoutKey(tableNode))
-  const { rows: runtimeRows, rowSources: runtimeRowSources, columnIds, rowHeights: runtimeRowHeights, totalHeight } = cached
-    ?? resolveRuntimeLayout(tableNode, data, node.height, context?.reportDiagnostic)
+  const { rows: runtimeRows, rowSources: runtimeRowSources, columnIds, rowHeights: runtimeRowHeights, totalHeight } = resolveRuntimeLayout(
+    tableNode,
+    data,
+    node.height,
+    context?.reportDiagnostic,
+  )
 
   const fragmentRows = readTableFragmentRows(context?.fragmentPlan.renderPayload)
   const selectedIndices = fragmentRows?.map(row => row.rowIndex)
@@ -625,10 +594,6 @@ function hashKey(value: string, seed: number): string {
     hash = Math.imul(hash, 0x01000193) >>> 0
   }
   return hash.toString(36)
-}
-
-function runtimeLayoutKey(node: MaterialNode<unknown>): object {
-  return typeof node.model === 'object' && node.model !== null ? node.model : node
 }
 
 /**

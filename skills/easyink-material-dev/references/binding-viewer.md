@@ -151,9 +151,9 @@ When implementing a measured material:
 
 `table-data` measurement is the runtime source of truth:
 
-- `measureTableData()` resolves visible runtime rows, computes baseline row heights from original schema height, runs auto-row-height calculation, caches the layout in a WeakMap keyed by `node.table`, and returns runtime height.
-- `renderTableData()` reuses the cached layout because Viewer has already applied measured height to the render node.
-- The cache is runtime-only and must not be serialized.
+- `tableDataViewerLayout.measure()` resolves visible runtime rows, computes baseline row heights, and publishes break opportunities plus frozen payload facts.
+- `renderTableData()` consumes the committed runtime model and fragment payload; no sync-measure compatibility cache mutates or keys off Schema objects.
+- `MeasureService` owns the bounded dependency-keyed cache.
 
 ## Fragment Contribution
 
@@ -198,10 +198,6 @@ Designer behavior:
 - The source repeated node remains the only interactive node.
 - Repeat previews on other visual pages are non-interactive.
 - Preview clones must not participate in selection, snapping, drag, resize, or command history.
-
-## Render Size
-
-Use `getRenderSize()` when wrapper dimensions should differ from schema `width` and `height`. This is uncommon; prefer normal width/height or `measure()` unless wrapper size must diverge at render time.
 
 ## Exporter and Print Driver Boundary
 

@@ -41,8 +41,8 @@ Designer complexity:
 
 Viewer complexity:
 
-- `measureTableData()` expands runtime rows and computes auto heights before layout/reflow/pagination.
-- `renderTableData()` reuses measured layout through a WeakMap because the render node has the measured height.
+- `tableDataViewerLayout.measure()` expands runtime rows, computes auto heights, and publishes bounded layout facts before core layout/pagination.
+- `renderTableData()` consumes committed runtime and fragment facts without a sync-measure WeakMap compatibility path.
 - Empty arrays render a single placeholder row; they do not mutate Schema.
 - Static rows resolve `staticBinding` and repeat rows resolve item-level `binding`.
 - The table fragment adapter contributes the exact row range requested by core for `auto-sheets`, preserving instance identity and keeping source schema untouched.
@@ -97,7 +97,7 @@ Key rules:
 
 - Schema type is `flow-row`.
 - Columns live in `node.props.columns`; column selection uses `flow-row.column`.
-- Viewer can expand collection-bound data and `measureFlowRow()` computes runtime height.
+- Viewer can expand collection-bound data and `flowRowViewerLayout.measure()` computes runtime height.
 - Designer declares fixed runtime height through `resolveControlPolicy()`, even when current sample content is static.
 - Width remains editable so columns can reflow; height is runtime-owned.
 

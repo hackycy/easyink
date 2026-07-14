@@ -1,5 +1,5 @@
 import type { ViewerTreePolicy } from '@easyink/browser-dom'
-import type { BindingFormatDiagnostic, CompiledMaterialProfile, FontProvider, MaterialViewerExtension, ViewerMeasureContext, ViewerMeasureResult, ViewerRenderContext, ViewerRenderOutput, ViewerRenderSize } from '@easyink/core'
+import type { CompiledMaterialProfile, FontProvider, MaterialViewerExtension, ViewerRenderContext, ViewerRenderOutput } from '@easyink/core'
 import type { DocumentSchema, DocumentSchemaInput } from '@easyink/schema'
 import type { DiagnosticCategory, DiagnosticSeverity, ExportEntry, ExportFormat, ExportPhase } from '@easyink/shared'
 import type { PreparedCollectionProvider } from './prepared-collections'
@@ -8,7 +8,7 @@ import type { ViewerHost } from './viewer-host'
 export * from '@easyink/schema'
 
 // Re-export viewer-material contract types from core so host code can import from one place.
-export type { MaterialViewerExtension, ViewerMeasureContext, ViewerMeasureResult, ViewerRenderContext, ViewerRenderOutput, ViewerRenderSize }
+export type { MaterialViewerExtension, ViewerRenderContext, ViewerRenderOutput }
 
 // ---------------------------------------------------------------------------
 // Viewer options & input
@@ -204,14 +204,4 @@ export interface PrintDriver {
     pageSizeMode?: ViewerPrintPageSizeMode
   }
   print: (context: ViewerPrintContext) => Promise<void>
-}
-
-// ---------------------------------------------------------------------------
-// Binding projection
-// ---------------------------------------------------------------------------
-
-export interface ProjectedBinding {
-  port: string
-  value: unknown
-  diagnostics?: BindingFormatDiagnostic[]
 }

@@ -5,7 +5,7 @@ import { textLocaleMessages } from './locale'
 import { textDesignerPropSchemas } from './prop-schemas'
 import { createTextNode, TEXT_CONDITION, TEXT_TYPE } from './schema'
 import { textSchemaAdapter } from './schema-adapter'
-import { getTextRenderSize, measureText, renderText, textViewerLayout } from './viewer'
+import { renderText, textViewerLayout } from './viewer'
 
 export const textMaterialManifest = defineStandardMaterialManifest({
   type: TEXT_TYPE,
@@ -22,7 +22,7 @@ export const textMaterialManifest = defineStandardMaterialManifest({
   schemaAdapter: textSchemaAdapter,
   designerFactory: createTextExtension,
   localeMessages: textLocaleMessages,
-  viewerExtension: { render: renderText, measure: measureText, getRenderSize: getTextRenderSize },
+  viewerExtension: { render: renderText },
   viewerLayout: textViewerLayout,
   aiDescriptor: textAIMaterialDescriptor,
   generation: { enabled: true, modelSchema: 'infer-from-default', bindingShape: 'infer-from-binding', examples: 'default-model', requiredModelPaths: ['/content'] },

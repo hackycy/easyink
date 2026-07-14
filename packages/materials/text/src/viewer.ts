@@ -1,7 +1,7 @@
-import type { MaterialMeasureRequest, MaterialViewerLayoutFacet, ViewerMeasureContext, ViewerRenderContext, ViewerRenderSize } from '@easyink/core'
+import type { MaterialMeasureRequest, MaterialViewerLayoutFacet, ViewerRenderContext } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import { createLayoutConstraintKey, createNonFragmentingMaterialPlans, viewerElement, viewerText } from '@easyink/core'
-import { getTextDisplayValue, getTextProps, isTextAutoHeight, measureTextNode } from './layout'
+import { getTextDisplayValue, getTextProps } from './layout'
 
 export function renderText(node: MaterialNode, contextOrData?: ViewerRenderContext | Record<string, unknown>, unit = 'mm') {
   const props = getTextProps(node)
@@ -43,29 +43,6 @@ export function renderText(node: MaterialNode, contextOrData?: ViewerRenderConte
       'overflow-wrap': wrappingCss.overflowWrap,
       ...(effectiveOverflow === 'ellipsis' ? { 'overflow': 'hidden', 'text-overflow': 'ellipsis' } : { overflow }),
     } }, [viewerText(display || '\u00A0')])]),
-  }
-}
-
-export function measureText(node: MaterialNode, _context?: ViewerMeasureContext) {
-  if (!isTextAutoHeight(node))
-    return { width: node.width, height: node.height }
-  const measured = measureTextNode(node)
-  return {
-    width: node.width,
-    height: measured.height,
-    overflow: measured.overflow,
-  }
-}
-
-export function getTextRenderSize(node: MaterialNode, _context?: ViewerRenderContext): Partial<ViewerRenderSize> {
-  const props = getTextProps(node)
-  if (props.overflow !== 'visible')
-    return {}
-
-  const measured = measureTextNode(node, getTextDisplayValue(props))
-  return {
-    width: props.wrapMode === 'nowrap' ? Math.max(node.width, measured.contentWidth) : node.width,
-    height: Math.max(node.height, measured.contentHeight),
   }
 }
 

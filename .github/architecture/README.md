@@ -16,7 +16,7 @@
 - `table`、`chart`、`svg` 都是一级结构系统
 - 属性面板在同一窗口壳层中互斥展示"元素属性"与"页面属性"，支持 PropertyPanelOverlay 动态叠加层
 - 画布中的每个物料必须根据 props 展示近似真实的视觉效果（设计态渲染）
-- 设计态渲染（`MaterialDesignerExtension.renderContent`）与 Viewer 渲染（`MaterialViewerExtension.render / measure / getRenderSize / fragmentPaginator`）是两套独立实现
+- Designer 与 Viewer 分别激活各自 facet；Viewer 通过 `MaterialViewerExtension.render` 生成渲染树，通过 `MaterialViewerLayoutFacet` 接入权威测量和片段创建
 - 页面属性面板区分"规范字段 / benchmark 兼容字段 / 派生 UI 字段"
 - 工作台状态、模板状态、运行时状态明确分层
 - `viewer` 的 `exportDocument()` 走 `ViewerExporter` 注册表，独立 `@easyink/export-runtime` 负责格式插件运行时；第三方导出依赖通过对应插件或导出器按需装载

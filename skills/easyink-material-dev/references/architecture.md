@@ -33,14 +33,14 @@ If one link is missing, the failure mode is usually direct: no Designer registra
 
 Do not move transient runtime details into Schema. Examples to keep out of Schema: active cell selection, pointer gesture state, virtual preview rows, handle positions, measurement caches, output page fragments, repeated overlay clones, DOM refs, active editing metadata, font sources, font load states, and injected `@font-face` CSS.
 
-## Schema Input and Normalization
+## Schema Input and Admission
 
-Host apps may pass a loose `DocumentSchemaInput` into Designer or Viewer. Required top-level fields, `page`, `guides`, and `elements` may be missing. The framework fills them with `normalizeDocumentSchema()`, and internal Designer, Viewer, autosave, print, and export flows should operate on a complete `DocumentSchema`.
+Viewer accepts `DocumentSchemaInput` only through `loadDocumentWithProfile(input, compiledProfile)`. This boundary canonicalizes and admits the document against the immutable compiled profile, then publishes a complete `DocumentSchema` plus node admission states. Viewer, print, and export consume that admitted canonical document; there is no pre-profile normalization path.
 
 Rules:
 
-- Normalize before assuming `schema.page`, `schema.guides`, and `schema.elements` are complete.
-- Use schema validation for complete internal schemas, not as a replacement for input normalization.
+- Compile the material profile before loading a Viewer document.
+- Do not normalize Viewer input separately from profile-aware admission.
 - Preserve `DocumentSchema.extensions` and `MaterialNode.extensions` for host/plugin-owned serializable data.
 - New material semantics belong in explicit schema fields, material props, or namespaced `extensions`.
 
@@ -153,8 +153,7 @@ The Viewer contract is in `packages/core/src/material-viewer.ts`.
 Implement `MaterialViewerExtension` with:
 
 - `render(node, context)`: return `{ tree: ViewerRenderTree }`.
-- `measure(node, context)`: optional pre-layout sizing for content-driven dimensions.
-- `getRenderSize(node, context)`: optional wrapper size override.
+- `MaterialViewerLayoutFacet.measure(request)`: optional authoritative sizing for content-driven dimensions.
 - layout break opportunities and a fragment adapter: optional split contribution for `auto-sheets`; core selects the break.
 - manifest `common.layout.pageRepeat`: default repeated overlay behavior for materials such as page numbers.
 

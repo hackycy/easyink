@@ -43,7 +43,7 @@ description: EasyInk API 索引：快速定位公开能力的包入口，涵盖 
 
 字体相关类型导出：`FontDescriptor`, `FontProvider`, `FontSource`, `FontLoadRequest`, `FontLoadStatus`, `FontLoadState`, `FontLoadSuccess`, `FontLoadFailure`, `FontBatchLoadOptions`, `FontBatchLoadResult`, `FontPreloadResult`
 
-物料扩展类型导出：`MaterialDesignerExtension`, `MaterialExtensionFactory`, `LazyMaterialExtensionFactory`, `MaterialBindingDefinition`, `MaterialViewerExtension`, `ViewerRenderContext`, `ViewerMeasureContext`, `PropSchema`
+物料扩展类型导出：`MaterialDesignerExtension`, `MaterialExtensionFactory`, `LazyMaterialExtensionFactory`, `MaterialBindingDefinition`, `MaterialViewerExtension`, `MaterialViewerLayoutFacet`, `ViewerRenderContext`, `PropSchema`
 
 ## @easyink/viewer
 
@@ -65,7 +65,7 @@ description: EasyInk API 索引：快速定位公开能力的包入口，涵盖 
 | `createIframeViewerHost` | Function | Iframe Host |
 | `createCustomViewerHost` | Function | Custom Host |
 
-类型导出：`ViewerHost`, `ViewerOptions`, `ViewerOpenInput`, `ViewerRenderResult`, `ViewerDiagnosticEvent`, `PrintDriver`, `ViewerPrintOptions`, `ViewerPrintPolicy`, `ViewerPrintContext`, `ViewerExporter`, `ViewerExportContext`, `ViewerExportOptions`, `ViewerTaskCallbacks`, `ViewerTaskPhaseEvent`, `ViewerTaskProgressEvent`, `MaterialViewerExtension`, `ViewerRenderContext`, `ViewerMeasureContext`, `FontDescriptor`, `FontProvider`
+类型导出：`ViewerHost`, `ViewerOptions`, `ViewerOpenInput`, `ViewerRenderResult`, `ViewerDiagnosticEvent`, `PrintDriver`, `ViewerPrintOptions`, `ViewerPrintPolicy`, `ViewerPrintContext`, `ViewerExporter`, `ViewerExportContext`, `ViewerExportOptions`, `ViewerTaskCallbacks`, `ViewerTaskPhaseEvent`, `ViewerTaskProgressEvent`, `MaterialViewerExtension`, `ViewerRenderContext`, `FontDescriptor`, `FontProvider`
 
 ## @easyink/builtin
 

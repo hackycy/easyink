@@ -1,4 +1,4 @@
-import type { MaterialMeasureRequest, MaterialViewerLayoutFacet, ViewerMeasureContext, ViewerRenderContext } from '@easyink/core'
+import type { MaterialMeasureRequest, MaterialViewerLayoutFacet, ViewerRenderContext } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import { createLayoutConstraintKey, createNonFragmentingMaterialPlans, viewerElement, viewerText } from '@easyink/core'
 import { buildSegments, getFlowRowProps, measureFlowRows, resolveFlowRows } from './rendering'
@@ -66,18 +66,6 @@ export function renderFlowRow(node: MaterialNode, context: ViewerRenderContext) 
     'color': props.typography.color,
     ...(props.backgroundColor ? { background: props.backgroundColor } : {}),
   } }, children) }
-}
-
-export function measureFlowRow(node: MaterialNode, context: ViewerMeasureContext) {
-  const model = resolveFlowRows(node, {
-    data: context.data ?? {},
-    nodeId: node.id,
-    reportDiagnostic: context.reportDiagnostic,
-  })
-  return {
-    width: node.width,
-    height: Math.max(node.height, measureFlowRows(node, model)),
-  }
 }
 
 export const flowRowViewerLayout: MaterialViewerLayoutFacet = Object.freeze({

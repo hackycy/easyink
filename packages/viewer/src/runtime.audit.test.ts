@@ -170,7 +170,12 @@ describe('viewer architecture source guards', () => {
   it('contains no legacy Viewer rendering or schema mutation path', () => {
     const coreSources = productionSources('packages/core/src')
     const viewerSources = productionSources('packages/viewer/src')
-    const allSources = [...coreSources, ...viewerSources]
+    const architectureSources = [
+      '.github/architecture/README.md',
+      '.github/architecture/24-page-layout-orthogonal-system.md',
+      'skills/easyink-material-dev/references/architecture.md',
+    ].map(sourceFile)
+    const allSources = [...coreSources, ...viewerSources, ...architectureSources]
 
     expectForbiddenSources(allSources, [
       'TrustedViewerHtml',
@@ -192,6 +197,38 @@ describe('viewer architecture source guards', () => {
 
     expectForbiddenSources([outputState], ['editorState.hidden', 'editorState?.hidden'])
     expect(outputState.text, `${outputState.path}:/.hidden\\b/`).not.toMatch(/\.hidden\b/)
+  })
+
+  it('contains no synchronous Viewer measurement or render-size compatibility contract', () => {
+    const sources = [
+      'packages/core/src/material-viewer.ts',
+      'packages/viewer/src/material-runtime.ts',
+      'packages/viewer/src/types.ts',
+      'packages/materials/text/src/viewer.ts',
+      'packages/materials/text/src/manifest.ts',
+      'packages/materials/flow-row/src/viewer.ts',
+      'packages/materials/flow-row/src/manifest.ts',
+      'packages/materials/table/data/src/viewer.ts',
+      'packages/materials/table/data/src/manifest.ts',
+      'packages/materials/line/src/viewer.ts',
+      'docs/api/index.md',
+      'docs/advanced/custom-materials.md',
+      '.github/architecture/README.md',
+      '.github/architecture/24-page-layout-orthogonal-system.md',
+      'skills/easyink-material-dev/references/architecture.md',
+    ].map(sourceFile)
+
+    expectForbiddenSources(sources, [
+      'ViewerMeasureContext',
+      'ViewerMeasureResult',
+      'ViewerRenderSize',
+      'getRenderSize',
+      'measureTableData',
+      'export function measureFlowRow(',
+      'measureText(node',
+      'viewerExtension.measure',
+      'MaterialViewerExtension.render / measure',
+    ])
   })
 
   it('admits documents through the compiled profile and owns one Viewer material runtime', () => {
@@ -1705,7 +1742,7 @@ describe('viewer audit risk regressions', () => {
   it('isolates every material render stage and continues rendering healthy nodes', async () => {
     const container = document.createElement('div')
     const diagnostics: ViewerDiagnosticEvent[] = []
-    const badTypes = ['throw-render', 'throw-size', 'bad-url', 'bad-tag', 'bad-css', 'bad-token', 'oversized']
+    const badTypes = ['throw-render', 'bad-url', 'bad-tag', 'bad-css', 'bad-token', 'oversized']
     const nodes = ['good', ...badTypes].map((type, index): MaterialNode => ({
       id: `${type}-node`,
       type,
@@ -1722,7 +1759,6 @@ describe('viewer audit risk regressions', () => {
     const extensions: Record<string, MaterialViewerExtension> = {
       'good': { render: () => ({ tree: viewerElement('div', {}, [viewerText('healthy sibling')]) }) },
       'throw-render': { render: () => { throw new Error('render failed') } },
-      'throw-size': { render: () => ({ tree: viewerText('unmounted') }), getRenderSize: () => { throw new Error('size failed') } },
       'bad-url': { render: () => ({ tree: viewerElement('a', { attributes: { href: 'javascript:alert(1)' } }, [viewerText('unsafe')]) }) },
       'bad-tag': { render: () => ({ tree: viewerElement('script', {}, [viewerText('unsafe')]) }) },
       'bad-css': { render: () => ({ tree: viewerElement('div', { style: { behavior: 'url(x)' } }, []) }) },
@@ -1740,7 +1776,7 @@ describe('viewer audit risk regressions', () => {
     })).resolves.toBeUndefined()
 
     expect(container.textContent).toContain('healthy sibling')
-    const failingTypes = badTypes.filter(type => type !== 'throw-size')
+    const failingTypes = badTypes
     expect(container.querySelectorAll('[data-render-error="true"]')).toHaveLength(failingTypes.length)
     expect(diagnostics
       .filter(item => item.code === 'VIEWER_MATERIAL_RENDER_ERROR'

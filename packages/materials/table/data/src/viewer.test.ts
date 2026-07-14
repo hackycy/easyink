@@ -4,7 +4,7 @@ import { createFragmentFromNode, createLayoutConstraintKey, createNonFragmenting
 import { createTestViewerRenderContext } from '@easyink/core/testing'
 import { describe, expect, it, vi } from 'vitest'
 import { createDefaultDataTableModel } from './schema'
-import { measureTableData, renderTableData, tableDataFragmentAdapter, tableDataViewerLayout } from './viewer'
+import { renderTableData, tableDataFragmentAdapter, tableDataViewerLayout } from './viewer'
 
 function createNode(): MaterialNode {
   return {
@@ -248,10 +248,6 @@ describe('tableDataFragmentAdapter', () => {
     node.bindings['detail:qty'] = { sourceId: 'invoice', fieldPath: 'items/qty' }
     const before = structuredClone(model)
 
-    measureTableData(node, {
-      data: { items: [{ name: 'A', qty: 1 }, { name: 'B', qty: 2 }, { name: 'C', qty: 3 }] },
-      unit: 'mm',
-    })
     const plan = createTestFragment(node).plan
     const result = tableDataFragmentAdapter.createFragment({
       plan,
@@ -340,7 +336,6 @@ describe('tableDataFragmentAdapter', () => {
     node.bindings.records = { sourceId: 'invoice', fieldPath: 'items' }
     node.bindings.detailKey = { sourceId: 'invoice', fieldPath: 'items/id' }
     const data = { items: [{ id: 'a' }, { id: 'b' }, { id: 'c' }] }
-    measureTableData(node, { data, unit: 'mm' })
     const before = bodyRows(renderTableData(node, renderContext(data)).tree).map(row => row.attributes.id)
     const plan = createTestFragment(node).plan
 

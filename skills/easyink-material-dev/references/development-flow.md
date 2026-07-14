@@ -107,11 +107,10 @@ Build a `ViewerRenderTree` with `viewerText()`, `viewerElement()`, and `viewerFr
 - The committed renderer passes the exact frozen runtime model, layout plan, and fragment plan for the instance.
 - Put runtime strings in `viewerText()`; raw HTML strings are not a Viewer output.
 - Keep Viewer output print/export stable because print and export reuse the Viewer result.
-- Add `measure()` only when runtime content changes physical size.
+- Add `MaterialViewerLayoutFacet.measure(request)` only when runtime content changes physical size.
 - Publish monotonic break opportunities and a fragment adapter only when measured content can split across `auto-sheets`.
-- Use `getRenderSize()` only when the wrapper dimensions must differ from schema `width` and `height`.
 
-`measure()` runs before layout/reflow/pagination. It should return document-unit size and must not mutate the source schema. `render()` must use the same layout assumptions as `measure()`.
+The layout facet runs before document layout and pagination. It returns frozen document-unit facts without mutating source Schema; `render()` consumes the exact committed plan and fragment.
 
 Font-dependent Viewer behavior:
 

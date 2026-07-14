@@ -1,4 +1,4 @@
-import type { MaterialViewerExtension, ViewerRenderContext, ViewerRenderSize } from '@easyink/core'
+import type { MaterialViewerExtension, ViewerRenderContext } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { LineProps } from './schema'
 import { viewerElement } from '@easyink/core'
@@ -32,12 +32,6 @@ function resolveLineRenderHeight(node: MaterialNode): number {
   return Math.max(0.1, getLineThickness(node))
 }
 
-export function getLineRenderSize(node: MaterialNode): Partial<ViewerRenderSize> {
-  return {
-    height: resolveLineRenderHeight(node),
-  }
-}
-
 export function renderLine(node: MaterialNode, _context: ViewerRenderContext) {
   const p = getNodeModel<Partial<LineProps>>(node)
   const lineColor = p.lineColor || '#000000'
@@ -55,6 +49,5 @@ export function renderLine(node: MaterialNode, _context: ViewerRenderContext) {
 export function createLineViewerExtension(): MaterialViewerExtension {
   return {
     render: (node, context) => renderLine(node, context),
-    getRenderSize: node => getLineRenderSize(node),
   }
 }

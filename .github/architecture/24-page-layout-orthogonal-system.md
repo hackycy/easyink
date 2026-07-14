@@ -6,20 +6,23 @@
 
 - 合法 `PageMode` 只有 `fixed | continuous`。
 - 连续纸模板使用 `continuous + continuous-paper + stack-flow + flow-y + none`。
-- `page.pageModel / page.layout / page.reflow / page.pagination` 是策略语义来源，`normalizeDocumentSchema()` 会按 `mode` 补齐默认层。
+- `page.pageModel / page.layout / page.reflow / page.pagination` 是策略语义来源；Viewer 只消费经过 compiled profile admission 的 canonical document。
 - `page.layers` 是页面级渲染层数组，和上述布局策略字段不是同一类概念；它用于整页水印等非 MaterialNode 的页面装饰。
-- Viewer 运行期通过 `runLayoutPipeline()` 与 `runPagination()` 生成 `LayoutDocument` 和 `OutputPagePlan[]`；`page-planner.ts` 只保留兼容 facade。
+- Viewer 运行期先生成 `MaterialLayoutPlan`，再由 core document layout 和 pagination 生成 `LayoutDocument` 与 `OutputPagePlan[]`。
 - Designer 编辑态通过 `EditorSurfacePlan` 描述纸张和连续画布，不直接复用 Viewer 的输出页计划。
 
 ## 24.2 四个维度
 
 ```text
-DocumentSchema
-  -> Page Model
-  -> Layout + Reflow
-  -> Pagination
+Compiled Profile + Document Input
+  -> Profile Admission
+  -> Effective Output + Runtime Model
+  -> Resource Readiness + MeasureService
+  -> MaterialLayoutPlan
+  -> Document Layout + Core Pagination
   -> Page Overlays
-  -> Render Surface / Editor Surface
+  -> ViewerRenderTree / Imperative Host
+  -> Browser DOM
 ```
 
 | 维度 | 回答的问题 | 当前实现 |
@@ -95,7 +98,7 @@ interface TextWatermarkPageLayerConfig {
 | `fixed` | `paged-paper` | `absolute` | `measure-only` | `fixed-sheets` |
 | `continuous` | `continuous-paper` | `stack-flow` | `flow-y` | `none` |
 
-Schema validation 只接受已声明的页面介质；`normalizeDocumentSchema()` 对 loose input 的未知 mode 只按默认模式回退，不做历史输入改写。
+Profile admission 只接受已声明的页面介质和 canonical material envelope；Viewer 不在 layout 阶段补齐、迁移或改写输入。
 
 ### 24.3.1 页面级渲染层
 
@@ -112,28 +115,27 @@ Designer 和 Viewer 都通过 `@easyink/core` 的 `resolvePageLayerPlans()`、`g
 
 ViewerRuntime 当前主流程：
 
-1. 迁移 legacy schema，并执行 schema validation。
-2. 执行 schema normalize hook，保存规范 schema。
-3. 加载字体。
-4. 投影数据绑定，包含 table-data/table-static 的单元格预解析。
-5. 调用物料 `measure()`，把运行态尺寸写入 `measurements` map。
-6. `runLayoutPipeline()` 根据 `reflow.strategy` 生成 `LayoutDocument`。
-7. `runPagination()` 根据 `pagination.strategy` 生成输出页，并通过 `FragmentPaginator` 处理可拆分页物料。
-8. 将 `repeat.scope='every-output-page'` 或 material 默认 page-aware 的元素按输出页复制为 page overlay，并注入页码上下文。
-9. `RenderSurface` 按页面尺寸解析并缓存 `page.layers` 的 render buckets，在内容层前后插入 `under-content / over-content / top` 层。
-10. 渲染 DOM，缓存 `ViewerPageMetrics` 供打印策略使用。
+1. 编译 material profile，并通过 `loadDocumentWithProfile()` 执行 document admission。
+2. 解析 effective output state，再激活 Viewer facet 并解析 runtime model。
+3. 等待字体和资源 revision 就绪。
+4. `MeasureService` 以明确 revision/constraint dependency keys 调用 `MaterialViewerLayoutFacet`，提交 `MaterialLayoutPlan`。
+5. core document layout 根据 `reflow.strategy` 生成 `LayoutDocument`，不回写 Schema。
+6. core pagination 从已提交的 break opportunities 选择断点；material fragment adapter 只按选择结果创建片段，不决定页面。
+7. 在 pagination 之后生成 page overlays，并注入页码上下文。
+8. 生成 `ViewerRenderTree` 或受能力约束的 imperative host mount，交给 render surface 提交 browser DOM。
+9. 缓存已提交的 `ViewerPageMetrics` 供打印策略使用。
 
-`RenderSurface` 只消费页面计划和物料 registry，不根据 `page.mode` 或物料类型重新判断分页策略。
+`RenderSurface` 只消费已提交的页面和渲染计划，不根据 `page.mode` 或物料类型重新判断布局或分页策略。
 
 ## 24.5 分页策略语义
 
 | 策略 | 行为 |
 | --- | --- |
 | `fixed-sheets` | 按 `pagination.pageCount ?? page.pages ?? 1` 生成固定页；元素按文档 Y 坐标归页；支持 `blankPolicy='remove'` 与 `copies`；显式 page break 只输出 info 诊断。 |
-| `auto-sheets` | 按页面高度自动切页；支持 `pageBreakBefore / pageBreakAfter / keepTogether`；元素过高时优先调用 `FragmentPaginator`，否则输出 overflow 诊断。 |
+| `auto-sheets` | 按页面高度自动切页；支持 `pageBreakBefore / pageBreakAfter / keepTogether`；core 从物料发布的 break opportunities 选择合法断点，否则输出 overflow 诊断。 |
 | `none` | 连续纸只输出一张 sheet；高度为内容底边加尾部留白，且不因 page break 约束切成固定页。 |
 
-分页控制字段从 `node.output.placement` 与 `node.output.break` 读取并投影为 `LayoutFragment.flow`。旧输入由 load adapter 归一化为 canonical envelope，不作为 layout 阶段的第二套合同。当前约定：`output.placement.mode !== 'fixed'` 的节点参与 flow；固定节点不会被 `flow-y` 推移，也不触发分页 break；若回流后与 flow 节点新增重叠，输出 `FLOW_Y_FIXED_OVERLAP`。
+分页控制字段从 admitted canonical document 的 `node.output.placement` 与 `node.output.break` 读取并投影为 `LayoutFragment.flow`，layout 阶段只有这一套合同。当前约定：`output.placement.mode !== 'fixed'` 的节点参与 flow；固定节点不会被 `flow-y` 推移，也不触发分页 break；若回流后与 flow 节点新增重叠，输出 `FLOW_Y_FIXED_OVERLAP`。
 
 ## 24.5.1 节点局部行为
 
@@ -159,20 +161,9 @@ Designer 属性面板按页面策略注入行为项：
 
 ## 24.6 可分页物料
 
-`MaterialViewerExtension` 支持可选 `fragmentPaginator`：
+可分页物料通过 `MaterialViewerLayoutFacet.measure()` 返回 `MaterialLayoutPlan.breakOpportunities` 和只读 payload。core pagination 统一选择断点；可选 `MaterialFragmentAdapter.createFragment()` 只消费已选范围并创建对应 fragment，不能返回页面或自行决定分页。
 
-```ts
-interface FragmentPaginator {
-  canPaginate(node: MaterialNode): boolean
-  paginateFragment(input: FragmentPaginateInput): FragmentPaginateResult
-}
-```
-
-`table-data` 已经实现首个分页器：
-
-- `measureTableData()` 展开 repeat-template 行、处理 header/footer 显隐、计算运行态行高，并把结果缓存在 table schema 对象上。
-- `tableDataFragmentPaginator` 在 `auto-sheets` 中按可用高度拆分行，当前页保留 header，后续页继续带 header，footer 进入剩余片段。
-- 分页生成虚拟 table fragment，保留 `sourceNodeId`，不改写原始 `table.topology.rows`。
+`table-data` 的 layout facet 展开运行时记录、计算行高并发布 break opportunities。测量结果属于 runtime layout state，由 `MeasureService` 按 dependency keys 缓存；它不写回或依赖 Schema mutation。fragment adapter 根据 core 选定的行范围保留 header/footer 和稳定 source identity。
 
 ## 24.7 Designer 编辑表面
 
@@ -206,9 +197,7 @@ Designer 不直接读取 `page.width/page.height` 渲染唯一页面，而是消
 - `@easyink/core`：页面模型解析、回流、分页、编辑表面计划、页面增删命令、页面 layer plan 与层级规则。
 - `@easyink/viewer`：编排字体、绑定、测量、layout/pagination、page overlay 复制、页面 layer 渲染、打印策略。
 - `@easyink/designer`：消费 `EditorSurfacePlan` 做编辑态投影、重复预览、页面 layer 预览和页面工具栏。
-- `@easyink/material-*`：只提供渲染、测量和局部分页能力，不决定全局页面模型。
-
-`packages/viewer/src/stack-flow-layout.ts` 仍作为历史 helper 和测试资产存在；ViewerRuntime 的主路径已经使用 `@easyink/core` 的正交 layout/pagination pipeline。
+- `@easyink/material-*`：只提供渲染、layout facet 和 fragment adapter，不决定全局页面模型或分页断点。
 
 ## 24.9 后续扩展边界
 
@@ -216,7 +205,7 @@ Designer 不直接读取 `page.width/page.height` 渲染唯一页面，而是消
 
 - 多区域布局走 `layout.strategy='region-flow'`。
 - 固定纸长文档自动分页走 `pagination.strategy='auto-sheets'`。
-- 更多可分页结构物料实现 `FragmentPaginator`。
+- 更多可分页结构物料发布 break opportunities，并按需实现 fragment adapter。
 - 打印和导出继续消费 Viewer 输出页和 `ViewerPageMetrics`，不从 DOM 反推尺寸。
 
 任何扩展都要保持三条底线：schema 表达稳定语义；运行态计划不回写 schema；不支持的自动行为必须输出诊断。

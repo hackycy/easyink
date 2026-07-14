@@ -2,7 +2,7 @@ import type { MaterialMeasureRequest, MaterialRenderBudgetToken, ViewerElementTr
 import { createTestViewerRenderContext } from '@easyink/core/testing'
 import { describe, expect, it, vi } from 'vitest'
 import { createFlowRowNode } from './schema'
-import { flowRowViewerLayout, measureFlowRow, renderFlowRow } from './viewer'
+import { flowRowViewerLayout, renderFlowRow } from './viewer'
 
 const context = createTestViewerRenderContext({ capabilities: {} as never }) satisfies ViewerRenderContext
 
@@ -98,14 +98,37 @@ describe('flow-row viewer', () => {
     expect(cell.style).toMatchObject({ 'padding': '3mm 2mm', 'text-align': 'center', 'justify-content': 'flex-end' })
   })
 
-  it('expands canonical collection bindings and measures intrinsic height', () => {
+  it('expands canonical collection bindings and measures intrinsic height through the layout facet', async () => {
     const node = createFlowRowNode({ model: { columns: [{ id: 'a', ratio: 1, textAlign: 'left', wrapMode: 'block', bindingPort: 'flow-port:a' }] } })
     node.bindings.value = { sourceId: 's', fieldPath: 'items' }
     node.bindings['flow-port:a'] = { sourceId: 's', fieldPath: 'items/name' }
-    const runtime = { ...context, data: { items: [{ name: '<A>' }, { name: 'B' }] } }
+    const data = { items: [{ name: '<A>' }, { name: 'B' }] }
+    const runtime = { ...context, data }
     const tree = renderFlowRow(node, runtime).tree
+    const plan = await flowRowViewerLayout.measure!({
+      mode: 'authoritative',
+      instanceKey: node.id,
+      node,
+      scope: { key: 'document', data },
+      resolvedModel: node.model,
+      nodeRevision: 1,
+      dataRevision: 1,
+      resourceRevision: 1,
+      constraints: { availableWidth: 100, availableHeight: 100, unit: 'mm', writingMode: 'horizontal-tb' },
+      signal: new AbortController().signal,
+      budget: {
+        maxRuntimeRows: 10,
+        maxLayoutFacts: 10,
+        runtimeRowsUsed: 0,
+        layoutFactsUsed: 0,
+        reserveRuntimeRows: vi.fn(),
+        reserveLayoutFacts: vi.fn(),
+      },
+    } as unknown as MaterialMeasureRequest)
+
     expect(textValues(tree)).toEqual(['<A>', 'B'])
-    expect(measureFlowRow(node, runtime).height).toBeGreaterThanOrEqual(node.height)
+    expect(plan.borderBox).toMatchObject({ width: node.width, height: expect.any(Number) })
+    expect(plan.borderBox.height).toBeGreaterThanOrEqual(node.height)
   })
 })
 
