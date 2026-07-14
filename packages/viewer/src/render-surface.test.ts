@@ -447,6 +447,63 @@ describe('mountCommittedMaterial', () => {
     expect(diagnostics).toEqual([])
   })
 
+  it('does not let core slot reservations hide an owner under-reported returned tree', async () => {
+    const child = committedFacts('underreported-child-instance', committedNode('underreported-child', 'committed-underreported-child'), { embedded: true })
+    const healthy = committedFacts('underreported-healthy-instance', committedNode('underreported-healthy', 'committed-underreported-healthy'))
+    const slotInstanceKey = 'slot:underreported'
+    const owner = committedFacts('underreported-owner-instance', committedNode('underreported-owner', 'committed-underreported-owner'), {
+      slotChildren: { [slotInstanceKey]: [child.instance.instanceKey] },
+      slotInstanceKeys: [slotInstanceKey],
+    })
+    const childRender = vi.fn(() => ({ tree: viewerText('unsafe child') }))
+    const healthyRender = vi.fn(() => ({ tree: viewerText('healthy sibling') }))
+    const materials = await createCommittedMaterials([
+      { type: owner.instance.node.type, extension: { render: (_node, context) => ({
+        tree: viewerFragment([viewerText('unsafe owner'), context.renderSlot(slotInstanceKey)]),
+      }) } },
+      { type: child.instance.node.type, extension: { render: childRender } },
+      { type: healthy.instance.node.type, extension: { render: healthyRender } },
+    ])
+    const committedPlan = committedPagePlan([owner.instance, child.instance, healthy.instance])
+    const diagnostics: ViewerDiagnosticEvent[] = []
+    const ownerHost = document.createElement('div')
+    const healthyHost = document.createElement('div')
+
+    mountCommittedMaterial(ownerHost, {
+      committedPlan,
+      fragmentPlan: owner.fragmentPlan,
+      materials,
+      pageIndex: 0,
+      unit: 'mm',
+      zoom: 1,
+      viewerMaxNodes: 4,
+      browserDom: { maxNodes: 4 },
+      diagnostics,
+    })
+    mountCommittedMaterial(healthyHost, {
+      committedPlan,
+      fragmentPlan: healthy.fragmentPlan,
+      materials,
+      pageIndex: 0,
+      unit: 'mm',
+      zoom: 1,
+      viewerMaxNodes: 4,
+      browserDom: { maxNodes: 4 },
+      diagnostics,
+    })
+
+    expect(ownerHost.textContent).toBe('[material unavailable]')
+    expect(ownerHost.textContent).not.toContain('unsafe owner')
+    expect(childRender).not.toHaveBeenCalled()
+    expect(healthyHost.textContent).toBe('healthy sibling')
+    expect(healthyRender).toHaveBeenCalledTimes(1)
+    expect(diagnostics.filter(item => item.code === 'VIEWER_RENDER_TREE_BUDGET_EXCEEDED')).toEqual([
+      expect.objectContaining({ nodeId: owner.instance.nodeId }),
+    ])
+    expect(diagnostics.some(item => item.code === 'VIEWER_MATERIAL_RENDER_ERROR')).toBe(false)
+    expect(diagnostics.some(item => item.code === 'VIEWER_MATERIAL_MOUNT_ERROR')).toBe(false)
+  })
+
   it('consumes a reserved child fallback without escalating a maxNodes=2 overflow to the owner', async () => {
     const child = committedFacts('fallback-child-instance', committedNode('fallback-child', 'committed-fallback-child'), { embedded: true })
     const healthy = committedFacts('fallback-healthy-instance', committedNode('fallback-healthy', 'committed-fallback-healthy'))
@@ -610,6 +667,69 @@ describe('mountCommittedMaterial', () => {
 
     expect(childRender).toHaveBeenCalledTimes(2)
     expect(diagnostics.filter(item => item.code === 'VIEWER_RENDER_TREE_BUDGET_EXCEEDED')).toHaveLength(2)
+  })
+
+  it('continues past multiple same-plan quarantined children to later healthy siblings', async () => {
+    const badA = committedFacts('continue-bad-a-instance', committedNode('continue-bad-a', 'committed-continue-bad'), { embedded: true })
+    const badB = committedFacts('continue-bad-b-instance', committedNode('continue-bad-b', 'committed-continue-bad'), { embedded: true })
+    const healthyA = committedFacts('continue-healthy-a-instance', committedNode('continue-healthy-a', 'committed-continue-healthy'), { embedded: true })
+    const healthyB = committedFacts('continue-healthy-b-instance', committedNode('continue-healthy-b', 'committed-continue-healthy'), { embedded: true })
+    const slotInstanceKey = 'slot:continue-quarantine'
+    const owner = committedFacts('continue-owner-instance', committedNode('continue-owner', 'committed-continue-owner'), {
+      slotChildren: {
+        [slotInstanceKey]: [
+          badA.instance.instanceKey,
+          healthyA.instance.instanceKey,
+          badB.instance.instanceKey,
+          healthyB.instance.instanceKey,
+        ],
+      },
+      slotInstanceKeys: [slotInstanceKey],
+    })
+    const badRender = vi.fn((_node, context: ViewerRenderContext) => {
+      context.renderBudget.reserveNodes('element', 20)
+      return { tree: viewerText('unsafe bad') }
+    })
+    const healthyRender = vi.fn((node: MaterialNode) => ({ tree: viewerText(node.id) }))
+    const materials = await createCommittedMaterials([
+      { type: owner.instance.node.type, extension: { render: (_node, context) => ({ tree: context.renderSlot(slotInstanceKey) }) } },
+      { type: badA.instance.node.type, extension: { render: badRender } },
+      { type: healthyA.instance.node.type, extension: { render: healthyRender } },
+    ])
+    const committedPlan = committedPagePlan([
+      owner.instance,
+      badA.instance,
+      healthyA.instance,
+      badB.instance,
+      healthyB.instance,
+    ])
+    const diagnostics: ViewerDiagnosticEvent[] = []
+    const mount = (): HTMLElement => {
+      const host = document.createElement('div')
+      mountCommittedMaterial(host, {
+        committedPlan,
+        fragmentPlan: owner.fragmentPlan,
+        materials,
+        pageIndex: 0,
+        unit: 'mm',
+        zoom: 1,
+        viewerMaxNodes: 20,
+        browserDom: { maxNodes: 20 },
+        diagnostics,
+      })
+      return host
+    }
+
+    const firstHost = mount()
+    const secondHost = mount()
+
+    expect(firstHost.textContent).toBe('[material unavailable]continue-healthy-a[material unavailable]continue-healthy-b')
+    expect(secondHost.textContent).toBe(firstHost.textContent)
+    expect(badRender).toHaveBeenCalledTimes(2)
+    expect(healthyRender).toHaveBeenCalledTimes(4)
+    expect(diagnostics.filter(item => item.code === 'VIEWER_RENDER_TREE_BUDGET_EXCEEDED')).toHaveLength(2)
+    expect(diagnostics.some(item => item.code === 'VIEWER_MATERIAL_RENDER_ERROR')).toBe(false)
+    expect(diagnostics.some(item => item.code === 'VIEWER_MATERIAL_MOUNT_ERROR')).toBe(false)
   })
 
   it('quarantines a swallowed root overflow before auditing or mounting its returned tree', async () => {
@@ -787,7 +907,7 @@ describe('mountCommittedMaterial', () => {
       diagnostics,
     })
 
-    expect(childKeyReads).toBeLessThanOrEqual(2)
+    expect(childKeyReads).toBe(2)
     expect(childRender).not.toHaveBeenCalled()
     expect(host.textContent).toContain('material unavailable')
     expect(diagnostics).toEqual([expect.objectContaining({ code: 'VIEWER_RENDER_TREE_BUDGET_EXCEEDED' })])

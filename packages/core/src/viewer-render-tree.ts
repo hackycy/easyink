@@ -143,7 +143,7 @@ export function assertViewerRenderTree(
     maxNodes?: number
     maxDepth?: number
     maxTextBytes?: number
-    onVisitNode?: () => void
+    onVisitNode?: (node: unknown) => void
     onVisitText?: (value: string) => void
   } = {},
 ): asserts tree is ViewerRenderTree {
@@ -175,7 +175,7 @@ export function assertViewerRenderTree(
       }
       continue
     }
-    options.onVisitNode?.()
+    options.onVisitNode?.(frame.node)
     if (++nodes > maxNodes)
       fail('VIEWER_TREE_NODE_LIMIT_EXCEEDED')
     if (!isRecord(frame.node))

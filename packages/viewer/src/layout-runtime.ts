@@ -597,7 +597,6 @@ async function measureInstance(context: {
     const diagnostic = stickyFailure?.diagnostic ?? budgetFailure
     if (!diagnostic || (!stickyFailure && !isRuntimeBudgetExceeded(error)))
       throw error
-    deps.measureService.invalidateNode(node.id)
     return createBudgetQuarantinedTree({
       instanceKey,
       node,
@@ -911,28 +910,88 @@ function auditMaterialLayoutPlan(
     'slotBoxes',
     'breakOpportunities',
   ])
-  const seen = new WeakSet<object>()
-  const stack: Array<Readonly<{ key?: string, value: unknown }>> = [{ value: plan.payload }]
+  const countedFactValues = new WeakSet<object>()
+  const countedRows = new WeakSet<object>()
+  const expanded = new WeakSet<object>()
+  const stack: unknown[] = [plan.payload]
   while (stack.length > 0) {
-    const { key, value } = stack.pop()!
-    if (typeof value !== 'object' || value === null || seen.has(value))
+    const value = stack.pop()!
+    if (typeof value !== 'object' || value === null || expanded.has(value))
       continue
-    seen.add(value)
+    expanded.add(value)
     if (Array.isArray(value)) {
-      if (key === 'rows')
-        runtimeRows += value.length
-      if (key !== undefined && factArrayKeys.has(key))
-        layoutFacts += value.length
-      if (runtimeRows > limits.maxRuntimeRows || layoutFacts > limits.maxLayoutFacts)
-        break
-      for (let index = value.length - 1; index >= 0; index--)
-        stack.push({ value: value[index] })
+      const length = readAuditArrayLength(value)
+      for (let index = length - 1; index >= 0; index--) {
+        const child = readAuditDataProperty(value, String(index))
+        if (child.found)
+          stack.push(child.value)
+      }
       continue
     }
-    for (const [childKey, child] of Object.entries(value))
-      stack.push({ key: childKey, value: child })
+    for (const [childKey, child] of readAuditDataEntries(value)) {
+      if (typeof child === 'object' && child !== null) {
+        const semanticCount = Array.isArray(child) ? readAuditArrayLength(child) : 1
+        if (childKey === 'rows' && !countedRows.has(child)) {
+          countedRows.add(child)
+          runtimeRows += semanticCount
+        }
+        if (factArrayKeys.has(childKey) && !countedFactValues.has(child)) {
+          countedFactValues.add(child)
+          layoutFacts += semanticCount
+        }
+      }
+      if (runtimeRows > limits.maxRuntimeRows || layoutFacts > limits.maxLayoutFacts)
+        break
+      stack.push(child)
+    }
+    if (runtimeRows > limits.maxRuntimeRows || layoutFacts > limits.maxLayoutFacts)
+      break
   }
   return Object.freeze({ runtimeRows, layoutFacts })
+}
+
+function readAuditArrayLength(value: readonly unknown[]): number {
+  try {
+    const descriptor = Object.getOwnPropertyDescriptor(value, 'length')
+    return descriptor && 'value' in descriptor && Number.isSafeInteger(descriptor.value) && descriptor.value >= 0
+      ? descriptor.value as number
+      : 0
+  }
+  catch {
+    return 0
+  }
+}
+
+function readAuditDataProperty(
+  value: object,
+  key: string,
+): Readonly<{ found: true, value: unknown }> | Readonly<{ found: false }> {
+  try {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key)
+    return descriptor?.enumerable === true && 'value' in descriptor
+      ? Object.freeze({ found: true, value: descriptor.value })
+      : Object.freeze({ found: false })
+  }
+  catch {
+    return Object.freeze({ found: false })
+  }
+}
+
+function readAuditDataEntries(value: object): ReadonlyArray<readonly [string, unknown]> {
+  let keys: string[]
+  try {
+    keys = Object.keys(value)
+  }
+  catch {
+    return []
+  }
+  const entries: Array<readonly [string, unknown]> = []
+  for (const key of keys) {
+    const child = readAuditDataProperty(value, key)
+    if (child.found)
+      entries.push([key, child.value])
+  }
+  return entries
 }
 
 function createBudgetQuarantinedTree(input: {

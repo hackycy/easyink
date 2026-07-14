@@ -923,6 +923,129 @@ describe('material measurement integration', () => {
     expect(Object.isFrozen(child.model)).toBe(false)
   })
 
+  it('keeps healthy scoped measurements publishable when a sibling scope exceeds its budget', async () => {
+    const child = node({ id: 'scoped-child', type: 'budget-scoped-child', height: 7 })
+    const owner = node({ id: 'scoped-owner', type: 'budget-scoped-owner', slots: { content: [child] } })
+    let healthyStartedResolve!: () => void
+    let releaseHealthyResolve!: () => void
+    const healthyStarted = new Promise<void>((resolve) => {
+      healthyStartedResolve = resolve
+    })
+    const releaseHealthy = new Promise<void>((resolve) => {
+      releaseHealthyResolve = resolve
+    })
+    let badMeasures = 0
+    let healthyMeasures = 0
+    const childMeasure = vi.fn(async (request: MaterialMeasureRequest): Promise<MaterialLayoutPlan> => {
+      const kind = request.scope.data.kind
+      if (kind === 'bad') {
+        badMeasures++
+        if (request.dataRevision === 2) {
+          await healthyStarted
+          request.budget.reserveRuntimeRows(5)
+        }
+      }
+      else {
+        healthyMeasures++
+        if (healthyMeasures === 1) {
+          healthyStartedResolve()
+          await releaseHealthy
+        }
+      }
+      return {
+        instanceKey: request.instanceKey,
+        nodeId: request.node.id,
+        nodeRevision: request.nodeRevision,
+        constraintKey: createLayoutConstraintKey(request.constraints),
+        borderBox: { x: 0, y: 0, width: 10, height: 7 },
+        contentBox: { x: 0, y: 0, width: 10, height: 7 },
+        slotBoxes: [],
+        breakOpportunities: [],
+        diagnostics: [],
+      }
+    })
+    const ownerMeasure = vi.fn(async (request: MaterialMeasureRequest): Promise<MaterialLayoutPlan> => {
+      const slots = await Promise.all(['bad', 'healthy'].map(kind => request.measureSlot({
+        slot: 'content',
+        scope: { key: `scope:${kind}`, data: { kind }, parent: request.scope },
+        constraints: request.constraints,
+      }, request.signal)))
+      return {
+        instanceKey: request.instanceKey,
+        nodeId: request.node.id,
+        nodeRevision: request.nodeRevision,
+        constraintKey: createLayoutConstraintKey(request.constraints),
+        borderBox: { x: 0, y: 0, width: 10, height: 14 },
+        contentBox: { x: 0, y: 0, width: 10, height: 14 },
+        slotBoxes: slots.map((slot, index) => ({
+          slotId: 'content',
+          slotInstanceKey: slot.instanceKey,
+          box: { x: 0, y: index * 7, width: 10, height: 7 },
+          ownership: 'managed' as const,
+          clip: true,
+        })),
+        breakOpportunities: [],
+        diagnostics: [],
+      }
+    })
+    const harness = await measurementHarness({
+      measureCacheEntries: 8,
+      manifests: [
+        createTestMaterialManifest({
+          type: owner.type,
+          slots: [{ id: 'content', key: { kind: 'exact', value: 'content' }, coordinateSpace: 'owner', layoutParticipation: 'owner', reparent: 'allowed' }],
+          viewer: createViewerFacet(ownerMeasure),
+        }),
+        createTestMaterialManifest({ type: child.type, viewer: createViewerFacet(childMeasure) }),
+      ],
+    })
+    const models = new Map([[owner.id, readyModel(owner, { instanceKey: owner.id, nodeId: owner.id })]])
+    const input = measureInput([owner], models)
+
+    const firstPending = harness.measureNodes(input, new AbortController().signal)
+    await healthyStarted
+    await vi.waitFor(() => expect(harness.reportDiagnostic).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'VIEWER_RUNTIME_ROW_BUDGET_EXCEEDED' }),
+    ))
+    releaseHealthyResolve()
+    const first = await firstPending
+
+    expect([...first.instances.values()].find(instance => instance.scopeKey === 'scope:bad'))
+      .toMatchObject({ status: 'quarantined' })
+    expect([...first.instances.values()].find(instance => instance.scopeKey === 'scope:healthy'))
+      .toMatchObject({ status: 'ready' })
+    expect(harness.measureService.size).toBe(2)
+
+    harness.measureService.invalidateNode(owner.id)
+    const sameRevision = await harness.measureNodes(input, new AbortController().signal)
+
+    expect([...sameRevision.instances.values()].find(instance => instance.scopeKey === 'scope:bad'))
+      .toMatchObject({ status: 'quarantined' })
+    expect([...sameRevision.instances.values()].find(instance => instance.scopeKey === 'scope:healthy'))
+      .toMatchObject({ status: 'ready' })
+    expect(badMeasures).toBe(2)
+    expect(healthyMeasures).toBe(1)
+    expect(harness.measureService.size).toBe(2)
+
+    const nextModels = new Map([[owner.id, readyModel(owner, {
+      instanceKey: owner.id,
+      nodeId: owner.id,
+      dataRevision: 3,
+    })]])
+    const nextRevision = await harness.measureNodes({
+      ...measureInput([owner], nextModels),
+      dataRevision: 3,
+    }, new AbortController().signal)
+
+    expect([...nextRevision.instances.values()].find(instance => instance.scopeKey === 'scope:bad'))
+      .toMatchObject({ status: 'ready' })
+    expect([...nextRevision.instances.values()].find(instance => instance.scopeKey === 'scope:healthy'))
+      .toMatchObject({ status: 'ready' })
+    expect(badMeasures).toBe(3)
+    expect(healthyMeasures).toBe(2)
+    expect(harness.measureService.size).toBe(5)
+  })
+
   it('does not reuse a child measurement plan after a same-key runtime scope conflict', async () => {
     const child = node({ id: 'child', type: 'scope-child', height: 7 })
     const owner = node({ id: 'owner', type: 'scope-owner', slots: { content: [child] } })

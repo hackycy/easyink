@@ -490,6 +490,122 @@ describe('layout budget integration', () => {
     expect(harness.measureService.size).toBe(0)
   })
 
+  it.each(['semantic-first', 'metadata-first'] as const)(
+    'counts an aliased fact array once when the %s property is declared first',
+    async (propertyOrder) => {
+      const source = materialNode('aliased-facts', `aliased-facts-${propertyOrder}`)
+      const shared = [{ id: 1 }, { id: 2 }, { id: 3 }]
+      const payload = propertyOrder === 'semantic-first'
+        ? { facts: shared, metadata: shared }
+        : { metadata: shared, facts: shared }
+      const harness = await measurementHarness({
+        facets: {
+          [`aliased-facts-${propertyOrder}`]: async request => ({
+            ...plan(request, 0),
+            payload,
+          }),
+        },
+        budget: measurementBudget,
+      })
+
+      const measured = await harness.measureNodes(measureInput([source], 7), new AbortController().signal)
+
+      expect(measured.instances.get(source.id)).toMatchObject({
+        status: 'quarantined',
+        diagnostic: {
+          code: 'VIEWER_LAYOUT_FACT_BUDGET_EXCEEDED',
+          detail: { observed: 3, limit: 2 },
+        },
+      })
+      expect(harness.measureService.size).toBe(0)
+    },
+  )
+
+  it.each(['semantic-first', 'metadata-first'] as const)(
+    'counts an aliased row array once when the %s property is declared first',
+    async (propertyOrder) => {
+      const source = materialNode('aliased-rows', `aliased-rows-${propertyOrder}`)
+      const shared = [{ id: 1 }, { id: 2 }, { id: 3 }]
+      const payload = propertyOrder === 'semantic-first'
+        ? { rows: shared, metadata: shared }
+        : { metadata: shared, rows: shared }
+      const harness = await measurementHarness({
+        facets: {
+          [`aliased-rows-${propertyOrder}`]: async request => ({
+            ...plan(request, 0),
+            payload,
+          }),
+        },
+        budget: measurementBudget,
+      })
+
+      const measured = await harness.measureNodes(measureInput([source], 7), new AbortController().signal)
+
+      expect(measured.instances.get(source.id)).toMatchObject({
+        status: 'quarantined',
+        diagnostic: {
+          code: 'VIEWER_RUNTIME_ROW_BUDGET_EXCEEDED',
+          detail: { observed: 3, limit: 2 },
+        },
+      })
+      expect(harness.measureService.size).toBe(0)
+    },
+  )
+
+  it('does not double-count one array exposed through two semantic fact aliases', async () => {
+    const source = materialNode('double-fact-alias', 'double-fact-alias-layout')
+    const shared = [{ id: 1 }, { id: 2 }, { id: 3 }]
+    const harness = await measurementHarness({
+      facets: {
+        'double-fact-alias-layout': async request => ({
+          ...plan(request, 0),
+          payload: { facts: shared, cells: shared },
+        }),
+      },
+      budget: { ...measurementBudget, maxLayoutFacts: 3 },
+    })
+
+    const measured = await harness.measureNodes(measureInput([source], 7), new AbortController().signal)
+
+    expect(measured.instances.get(source.id)).toMatchObject({ status: 'ready' })
+    expect(harness.measureService.size).toBe(1)
+  })
+
+  it('counts semantic aliases without invoking getters and terminates cyclic expansion', async () => {
+    const source = materialNode('hostile-alias', 'hostile-alias-layout')
+    const shared = [{ id: 1 }, { id: 2 }, { id: 3 }]
+    let getterReads = 0
+    const payload: Record<string, unknown> = {}
+    Object.defineProperty(payload, 'hostile', {
+      enumerable: true,
+      get() {
+        getterReads++
+        throw new Error('hostile getter entered')
+      },
+    })
+    payload.metadata = shared
+    payload.facts = shared
+    payload.self = payload
+    const harness = await measurementHarness({
+      facets: {
+        'hostile-alias-layout': async request => ({ ...plan(request, 0), payload }),
+      },
+      budget: measurementBudget,
+    })
+
+    const measured = await harness.measureNodes(measureInput([source], 7), new AbortController().signal)
+
+    expect(measured.instances.get(source.id)).toMatchObject({
+      status: 'quarantined',
+      diagnostic: {
+        code: 'VIEWER_LAYOUT_FACT_BUDGET_EXCEEDED',
+        detail: { observed: 3, limit: 2 },
+      },
+    })
+    expect(getterReads).toBe(0)
+    expect(harness.measureService.size).toBe(0)
+  })
+
   it.each(['return', 'abort'] as const)(
     'contains a swallowed layout budget failure when the facet later chooses to %s',
     async (afterCatch) => {
